@@ -1,0 +1,13 @@
+# 開発 session の作業記憶（/ready-compaction が退避・/rebrief が消費）
+/.claude-session/
+
+# git worktree は ephemeral・commit しない
+/.worktrees/
+
+# folio の caller-marker（session-local）・review の playwright 生成物
+.folio/
+.playwright-mcp/
+
+# Claude Code の project 設定は settings.json だけを tracked にする
+.claude/*
+!.claude/settings.json
