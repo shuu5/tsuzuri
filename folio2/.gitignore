@@ -17,3 +17,10 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# bd 台帳（Dolt が SSOT）の生成物と machine-local な telemetry
+# （scribe2 / folio v1 とも tracked にしない＝作業ツリーを汚さない）
+/.beads/issues.jsonl
+/.beads/interactions.jsonl
+/.beads/events.jsonl
+/.beads/bdw-timing.log*
