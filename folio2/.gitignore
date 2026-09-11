@@ -11,3 +11,9 @@
 # Claude Code の project 設定は settings.json だけを tracked にする
 .claude/*
 !.claude/settings.json
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
