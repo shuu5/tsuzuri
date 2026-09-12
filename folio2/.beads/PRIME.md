@@ -26,7 +26,7 @@
 - **R6** acceptance は field を正とする（description の写しを機械が読むことはない）。検証は「base で RED になる test」で表す。
 
 ## write の形
-- 本 repo の台帳は remote（`.beads/.env` の `BD_SYNC_REMOTE`・tracked config へは書かない）へ同期する。**write は `scripts/bdw` 経由**（flock 直列化・実体は host の beads-bdw に path 解決）。`bd dolt push` は session の終端で 1 回。
+- 本 repo の台帳は remote（`.beads/.env` の `BD_SYNC_REMOTE`・tracked config へは書かない）へ同期する。**write は `scripts/bdw` 経由**（flock 直列化・実体は host の beads-bdw に path 解決）。`scripts/bdw dolt push` は session の終端で 1 回（bare `bd dolt push` / `bd dolt pull` は guard が bdw へ funnel する＝flock 迂回 race の封鎖）。
 - 破壊的な bd 操作（台帳の削除・強制 import 等）は host の guard が止める。止められたら回避策を打たず、guard が返す代替ルートに従う。
 - `bd edit` は使わない（$EDITOR を開き agent をブロックする）。
 
@@ -43,6 +43,6 @@
 - 探す: `bd --readonly ready --limit 0` / `bd --readonly list --limit 0` / `bd --readonly show <id>` / `bd --readonly search <query>` / `bd --readonly dep tree <id>`
 - 作る/更新: `scripts/bdw create --title="..." --body-file F --type=task|bug|feature --priority=2 --parent <epic>` / `scripts/bdw update <id> --claim` / `scripts/bdw update <id> --acceptance "$(cat F)" --append-notes "..."`
 - 完了/依存: `scripts/bdw close <id> --reason="..."` / `scripts/bdw dep add <issue> <depends-on>`
-- 同期/健全: `bd dolt push` / `bd dolt pull` / `bd --readonly stats` / `bd doctor`
+- 同期/健全: `scripts/bdw dolt push` / `scripts/bdw dolt pull` / `bd --readonly stats`（`bd doctor` は **embedded mode 未対応**で使えない＝bdw 経由でも `not yet supported in embedded mode` を返す・実測 2026-09-12。健全性は `bd --readonly stats` と `ls -la .beads/embeddeddolt/` で見る）
 
 <!-- beads-init-template v:2 — このファイルは scribe:setup（旧 beads-init）skill 由来。skill はこの marker の `v:N` バージョン番号で「我々の版か」と「role 中立版か」を判定する。この行（特に `v:N`）を残せば手動編集しても上書きされない。folio2 は v1 plugin を積まないので本 PRIME が唯一の SSOT（role 別注入は無い）。 -->
