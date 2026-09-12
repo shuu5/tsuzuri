@@ -1,0 +1,16 @@
+
+:root{--ink:#e8eef2;--ink2:#a9b7c1;--paper:#0d171e;--paper2:#15222b;--line:#273947;--brand:#7db8e8;--warn:#d6a94e;--warn-bg:#312a13;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--ink:#08131a;--ink2:#3e4c55;--paper:#fff;--paper2:#f3f6f8;--line:#d3dbe1;--brand:#2a4d6e;--warn:#8a5f1c;--warn-bg:#fdf8e6;color-scheme:light}}
+*{box-sizing:border-box}body{margin:0;background:var(--paper2);color:var(--ink);font-family:"Noto Sans CJK JP","Noto Sans JP",system-ui,sans-serif;line-height:1.7;font-size:15px}
+.page{max-width:1100px;margin:0 auto;background:var(--paper);padding:28px 40px 60px}@media(max-width:680px){.page{padding:16px 16px 40px}}
+h1{font-size:24px;margin:0 0 6px}h2{font-size:21px;margin:40px 0 10px;border-bottom:2px solid var(--brand);padding-bottom:6px}h3{font-size:18px;margin:26px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}h4{font-size:16px;margin:0 0 6px}
+.sub{color:var(--ink2);margin:0 0 14px}.note{background:var(--warn-bg);border-left:4px solid var(--warn);padding:10px 14px;border-radius:8px;margin:12px 0}
+.art{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:14px 0;background:var(--paper2)}
+.gid{display:inline-block;font-family:ui-monospace,monospace;font-weight:800;color:var(--brand);border:1px solid var(--line);border-radius:999px;padding:0 10px;margin-right:8px;font-size:13px}
+.tier{display:inline-block;font-size:12px;border-radius:999px;padding:0 9px;color:#fff;margin-left:8px}.bind{float:right;font-size:12px;color:var(--ink2)}
+.st{margin:6px 0;padding:8px 12px;background:var(--paper);border-left:3px solid var(--brand);border-radius:6px}.st .sid{font-family:ui-monospace,monospace;color:var(--brand);margin-right:8px}.st .str{font-size:12px;color:var(--ink2);margin-left:8px}
+.plain{margin:8px 0;padding:8px 12px;border:1px dashed var(--line);border-radius:8px}.plain b{color:var(--ink2);font-size:12.5px}
+dl{display:grid;grid-template-columns:8em 1fr;gap:4px 12px;margin:8px 0 0;font-size:13.5px}dt{color:var(--ink2)}dd{margin:0;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}th{background:var(--paper2)}
+.wrap{overflow-x:auto}code{font-family:ui-monospace,monospace;font-size:.92em;background:var(--paper2);border:1px solid var(--line);border-radius:5px;padding:.05em .4em}
+nav.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 12px;font-size:13.5px;margin:8px 0}nav.toc a{color:var(--brand);text-decoration:none}

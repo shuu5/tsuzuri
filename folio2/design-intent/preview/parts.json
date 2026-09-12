@@ -1,0 +1,268 @@
+{
+  "version": "v0 2026-09-12 (hand-baked mock v4)",
+  "note": "部品目録（parts catalog）の写し。将来は emitter の部品 enum から生成する。data-component の値域と、面ごとの variant を宣言する。",
+  "components": {
+    "freshness-stamp": {
+      "role": "chrome",
+      "faces": [
+        "index",
+        "constitution",
+        "srs"
+      ]
+    },
+    "hub-cover": {
+      "role": "cover",
+      "faces": [
+        "index"
+      ]
+    },
+    "doc-cover-band": {
+      "role": "cover",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "approval-block": {
+      "role": "cover",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "figure-panel": {
+      "role": "diagram-shell",
+      "faces": [
+        "index",
+        "constitution",
+        "srs"
+      ],
+      "requires": [
+        "figcaption",
+        ".ver",
+        "data-role=diagram"
+      ]
+    },
+    "doc-shelf": {
+      "role": "index+diagram",
+      "faces": [
+        "index"
+      ]
+    },
+    "shelf-card": {
+      "role": "index",
+      "faces": [
+        "index"
+      ]
+    },
+    "shelf-link": {
+      "role": "index",
+      "faces": [
+        "index"
+      ]
+    },
+    "status-line": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "intake-line": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "intake-callout": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "reader-lane": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "lane-chip": {
+      "role": "wayfinding",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "chapter-deck-band": {
+      "role": "chapter",
+      "faces": [
+        "index",
+        "constitution",
+        "srs"
+      ],
+      "density": [
+        "full",
+        "slim"
+      ]
+    },
+    "section-lead-callout": {
+      "role": "body",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "rtm-grid": {
+      "role": "body",
+      "faces": [
+        "srs"
+      ]
+    },
+    "glossary-term-table": {
+      "role": "body",
+      "faces": [
+        "constitution"
+      ]
+    },
+    "glossary-links": {
+      "role": "body",
+      "faces": [
+        "srs"
+      ]
+    },
+    "ac-state-chip": {
+      "role": "body",
+      "faces": [
+        "srs"
+      ]
+    },
+    "item-row": {
+      "role": "item",
+      "faces": [
+        "constitution",
+        "srs"
+      ],
+      "slots": [
+        "ir-head",
+        "norm",
+        "plain",
+        "meta",
+        "history?",
+        "machine?"
+      ]
+    },
+    "principle-amendment-history": {
+      "role": "item",
+      "faces": [
+        "constitution"
+      ]
+    },
+    "pipeline-rail": {
+      "role": "diagram",
+      "faces": [
+        "constitution",
+        "srs"
+      ],
+      "max_nodes": 7
+    },
+    "rail-node": {
+      "role": "diagram",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "context-band": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ],
+      "max_per_band": 4
+    },
+    "band-node": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ]
+    },
+    "state-strip": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ],
+      "max_nodes": 4
+    },
+    "state-node": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ]
+    },
+    "stepper": {
+      "role": "body",
+      "faces": [
+        "constitution"
+      ]
+    },
+    "amendment-example": {
+      "role": "body",
+      "faces": [
+        "constitution"
+      ]
+    },
+    "font-size-control": {
+      "role": "chrome",
+      "faces": [
+        "index",
+        "constitution",
+        "srs"
+      ]
+    }
+  },
+  "audience_values": [
+    "machine"
+  ],
+  "audience_sites": [
+    "details.machine",
+    "footer provenance"
+  ],
+  "style_props_allowed": [
+    "--rail-n",
+    "--band-n",
+    "--state-n",
+    "--shelf-n"
+  ],
+  "nowrap_allowlist": [
+    ".site-bar nav a",
+    "[data-component=\"freshness-stamp\"]",
+    ".site-bar .here",
+    ".vh",
+    ".fig-req .no",
+    ".hint-body",
+    ".fs-btn"
+  ],
+  "figure_type_enum": [
+    "pipeline-rail",
+    "context-band",
+    "state-strip",
+    "doc-shelf"
+  ],
+  "micro_parts": {
+    "hint": "説明の小窓（label+checkbox+hint-body・ホバー/タップ・右端/下端で反転・入れ子可・狭幅は画面下のシート・JS 無効は CSS anchor positioning で反転）",
+    "note": "details.note 補足（畳み）",
+    "meta-chips": "item-row の根拠/関係/撤退条件/確かめ方 chip 行",
+    "legend-line": "凡例の 1 行（hint 内に本体）",
+    "zoom-btn/zoom-close": "図の拡大 2 状態",
+    "shelf-minimap": "≤680px の棚ミニ地図",
+    "shelf-here": "入口=現在地 chip",
+    "fs-btn": "文字の大きさ（Aa・押すたびに 標準→大→特大→標準・localStorage に記憶・JS 無効では出さない）",
+    "sc-hit": "棚カードの全面リンク（実アンカー・aria-hidden・カード内の他リンクは z-index で上）",
+    "hint-close": "小窓の「閉じる ✕」（狭幅シートでだけ表示・JS が差し込む）",
+    "hint.term": "用語の小窓（点線語をホバー / タップで定義 + 用語集リンク・印刷では出さない）",
+    "hint.tier": "段バッジの小窓（外すのに要るもの + §1 リンク・印刷では出さない）"
+  },
+  "rules": {
+    "hint-container": "小窓（.hint）を置く容器は overflow:visible（overflow:hidden の容器は小窓を切る）。装飾は clip でなく要素側で閉じ込める（章帯の透かしは .num 自身の max-height / 表の角丸は角セルの border-radius / card の色帯は ::before の border-radius）",
+    "font-size-units": "font-size は rem（root 基準）・文字を入れる箱の高さも rem。px の font-size は装飾（章帯の透かし .num）だけに許す。文字サイズ切替は html[data-fs] で root の font-size を変える",
+    "print": "印刷は全展開（小窓・details）。幅の media query は印刷で効かないので、縦積みが要る部品（棚）は @media print にも同じ規則を置く。名札（根拠: 等）は紙に残す・つづき / ? / 用語 / 段は出さない"
+  }
+}

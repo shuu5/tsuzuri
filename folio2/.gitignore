@@ -24,3 +24,6 @@
 /.beads/interactions.jsonl
 /.beads/events.jsonl
 /.beads/bdw-timing.log*
+
+# Python の生成物
+__pycache__/

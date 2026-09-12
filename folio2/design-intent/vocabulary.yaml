@@ -1,0 +1,61 @@
+# folio2 語彙 — 正本（v1.0・発効 2026-09-12）
+# G11=A: データの正本はこの file・読者が引く場所は憲法 §7（HTML は生成物）・要件書 §8 は見出し + リンク。
+# 床 = R-9（本文に出る専門語のうち語彙に無いもの 0）。目標は 20 語前後だが v0.2 は「未定義 0」を優先して 31 語（承認要求の論点）。
+# 3 節: terms = 読者が引く語 / field_terms = 欄の名前（機械層・定義済みとして数える）/ identifiers = 英字の識別子（file 名・命令名・製品名・code の語）。R-9 は terms・field_terms・identifiers のどれにも無い英字の語を数える。
+# 各語: id（slug・append only）/ term（見出し語）/ en（原語・無ければ null）/ short（1 行の平易な言い換え）/ def（定義）/ note（任意）。
+# 定義文の中の専門語は、同じ語彙の別項か日本語の言い換えで閉じる（定義の閉包）。
+
+terms:
+  - {id: source-of-truth, term: 正本・生成物・生成器, en: source of truth / generated artifact / emitter, short: 元になる唯一のファイルと、そこから機械が作る写しと、作る係, def: 正本 = 元になる唯一のファイル（文書 1 つにつき 1 つ）。生成物 = 正本から機械が作ったもの（手で直さない）。生成器 = それを作る係。直したいときは正本を直す。}
+  - {id: presentation-layer, term: 提示層, en: presentation layer, short: 人が読むページとその見た目の層, def: 人が読むページと、その見た目（部品・色・字の大きさ）をまとめた層。folio2 では 1 つの生成器だけが持つ（P-2）。}
+  - {id: typed-data, term: 型付きデータ, en: typed data, short: 欄と値の型が決まった表, def: 欄と値の型が決まった表（憲法の正本 YAML・rules 行・部品目録）。機械が読んで検査できる。文章に書いた規則と違い、守らせられる（P-5）。}
+  - {id: design-intent, term: 設計文書（design-intent）, en: design-intent, short: 憲法・判断の記録・要件書の 3 つ, def: folio2 の開発を拘束する文書の集まり = 憲法・判断の記録（ADR）・要件書。原則と決定の正本はここ（P-13）。}
+  - {id: floor-ceiling, term: 床・天井, en: floor / ceiling, short: 機械が数える検査と、AI が意味を見る検査, def: 床 = 機械が決定的に（何度やっても同じ結果になる形で）検査する層。合格は「壊れていない」の意味。天井 = AI が意味を検査する層（P-3）。}
+  - {id: fail-closed, term: 黙って飛ばさない（fail-closed）, en: fail-closed, short: 確かめられなかったら「合格」にしない, def: 確かめられなかったら「合格」にしない、という安全側の倒し方。分からないときは「まだ分からない」と表示する（P-4）。}
+  - {id: frozen-anchor, term: 凍結 anchor（固定の fixture）, en: frozen anchor / fixture, short: 検査のための動かない基準, def: 作る側からも検査する側からも独立した、動かない基準（固定の見本データ）。生成物どうしの見比べだけを合格にしないために置く（P-10）。}
+  - {id: design-token, term: design token, en: design token, short: 色・字の大きさ・余白の元の値, def: 色・字の大きさ・余白などの元の値。1 か所で決めて全ページが使う（P-2）。}
+  - {id: parts-catalog, term: 部品目録, en: parts catalog, short: ページを組み立てる部品の一覧, def: ページを組み立てる部品（表紙・章帯・カード・図）の閉じた一覧。ここに無い部品は使えない。図の型と密度 profile もここに載る（P-2）。}
+  - {id: profile, term: 密度 profile, en: density profile, short: 文書の種類ごとの見せ方の設定, def: 文書の種類ごとの見せ方の設定（どれくらい詰めて見せるか・使う図の型）。係を増やさず、設定で違いを表す（P-5.3・N-5）。}
+  - {id: adr, term: 判断の記録（ADR）, en: ADR, short: 戻せない判断を理由つきで残す 1 枚, def: 戻せない判断を、理由・退けた案・撤退条件つきで残す 1 枚。憲法の改訂にも必ず要る（P-8・A-2）。}
+  - {id: retreat, term: 撤退条件, en: retreat condition, short: その判断を捨てる条件, def: その判断を捨てる条件。決めるときに一緒に書く（P-8）。}
+  - {id: ruling-id, term: 裁定 id, en: ruling id, short: 持ち主が決めた記録の番号, def: 持ち主が決めたことを指す番号（台帳の notes の逐語と日付）。rules 行や改訂には必ず付く（P-17・N-4）。}
+  - {id: verbatim, term: 逐語, en: verbatim, short: 言葉どおりの引用, def: 人の発言を言い換えずそのまま引用すること。承認は逐語で残す（P-12）。機械が写しを「忠実に作る」ことは「逐語で（忠実に）生成」と書き分ける（P-6）。}
+  - {id: dialogue-surface, term: 対話面, en: dialogue surface, short: 承認を受け取る決まった会話の場所, def: 持ち主の承認を受け取る、決まった 1 つの会話の場所（rules 行 R-8 が指す）。ここを通らない「OK」は承認にならない（P-12）。}
+  - {id: ledger, term: 台帳（bd）, en: ledger (bd), short: タスクと裁定を記帳する帳簿, def: タスクと持ち主の裁定を記帳する帳簿（道具の名前は bd）。規則は置かない（P-5.4）。}
+  - {id: hook-guard, term: 自動の仕掛け（hook）・止める仕掛け（guard）, en: hook / guard, short: 出来事のときに自動で走る仕掛けと、逸脱を止める仕掛け, def: 自動の仕掛け（hook）= ある出来事のときに自動で走る仕掛け。便利だが、それだけでは守られる保証にならない（P-15）。止める仕掛け（guard）= 決まりに反する編集や操作を止める仕掛けと検査の総称。壊れたときに「通す／止める」の極性と「その場／後で」の別を持つ（P-18）。}
+  - {id: polarity, term: 極性, en: polarity, short: 「する／しない」と「通す／止める」の向き, def: 規範文なら「〜する」（必ず守る）か「〜しない」（決してしない）か。止める仕掛けなら、壊れたときに「通す」か「止める」か。1 つにつき 1 つの向き（P-18）。}
+  - {id: machine-layer, term: 機械のための面, en: machine layer, short: AI が正確に読むための短い表, def: AI が正確に読むための短い表。人は開かなくてよい。}
+  - {id: generated-block, term: 生成区間, en: generated block, short: CLAUDE.md の中で機械が書き換える範囲, def: CLAUDE.md の中で、機械が書き換える印のついた範囲。手で直さない（P-14）。}
+  - {id: inject, term: 注入, en: inject, short: 憲法の守らせる条を AI の手元へ写すこと, def: 憲法の規範文を持つ条を CLAUDE.md の生成区間へ写すこと。書き込み（--write）と検査（--check）がある（P-14）。}
+  - {id: intake, term: 相談窓口（intake）と支度表, en: intake / preparation sheet, short: 何の文書が要るかを決める入口と、その結果の 1 枚, def: 相談窓口 = どの文書を持つかを易しい質問で決める入口。支度表 = その結果（持つ文書・推奨で進めた項目）を 1 枚にしたもの（要件書 FR1）。}
+  - {id: delivery, term: 便, en: delivery, short: 変更を 1 まとまりで運ぶ単位, def: 変更を 1 まとまりで運ぶ単位（契約〔何を作るかの約束・台帳に書く〕→ 実装 → 検査 → 取り込み）。運ぶ器は scribe2（CON6）。}
+  - {id: spike, term: spike, en: spike, short: 決める前に小さく試して測ること, def: 決める前に小さく試して測ること。}
+  - {id: tailnet, term: tailnet, en: tailnet, short: 自分の端末どうしだけがつながる私設ネット, def: 自分の端末どうしだけがつながる私設ネット。見せる先はここだけ（N-6）。}
+  - {id: self-host, term: 自分で自分を作る（self-host）, en: self-host, short: folio が folio 自身の文書やコードを作る運用, def: folio が folio 自身の文書やコードを自分の道具で作る運用。文書は最初から自分で作るが、コードの変更を自分の便で運ぶのは最後（P-13・A-4）。}
+  - {id: oracle, term: 物差し役（oracle）, en: oracle, short: 何が正しいかを決める役, def: 何が正しいかを決める役。前の版（folio v1）にはこの役を持たせない（P-13）。}
+  - {id: reversible, term: 取り消せる・取り消せない（3 クラス）, en: reversible / irreversible, short: 元に戻せる操作と、戻せない 3 種類の操作, def: 取り消せない操作 = 消す・外へ出す（公開・送信・公開 repo への commit と push）・外の道具や鍵を使う（課金を含む） の 3 クラス（A-1）。取り込み（merge）・公開へ出ない便（自分の repo の中で閉じる変更）・外の部品を増やさない変更は取り消せる側（A-4.3）。}
+  - {id: managed-object, term: 管理下の対象, en: managed object, short: folio が預かっているもの, def: folio が預かっているもの = 正本・生成物・支度表・台帳の記帳。取り消せない削除をしない対象（N-1）。}
+  - {id: deterministic, term: 決定的（に検査する・に導出する）, en: deterministic, short: 何度やっても同じ結果になる形で, def: 同じ入力なら何度やっても同じ結果になる形で（機械が数える検査・生成区間の導出はこの形で行う。P-3・P-14）。}
+  - {id: seat, term: 席, en: seat, short: AI が作業する場所（planner 席など）, def: AI が作業する場所（tmux の窓 1 つ）。設計判断を下す席は最上位のモデルで動かす（P-16）。}
+
+# 欄の名前（機械層・読者は引かない・R-9 の母集団外）
+field_terms:
+  - {id: tier, term: 段, en: tier, def: 条の実行時の扱い。いつも守る（道具も AI も守る）／確認してから変える（実行前に持ち主へ聞く）／絶対にやらない（やろうとしたら機械が拒む）。}
+  - {id: normative-statement, term: 規範文, en: normative statement, def: 条の中の、守るべきことを書いた文。型（いつ守るか）と強度を欄に持ち、1 文 1 極性。}
+  - {id: plain-text, term: やさしく言うと, en: plain reading, def: 規範文を非エンジニア向けに言い換えた文。規範文に無い義務を足さず、落とさない（受入 (f)・R-10）。}
+  - {id: strength, term: 強度, en: strength, def: must（必ず守る）／ must-not（決してしない）／ should（既定・外すなら理由を残す）。文末と一致する（R-11）。}
+  - {id: pattern, term: 型（いつ守るか）, en: pattern, def: つねに／〜のとき／〜のあいだ／〜になったら／〜ならば の 5 型。}
+  - {id: mechanism, term: 機構, en: mechanism, def: 条をどう守らせるか。reject（機械が操作を拒む）／ build-check（生成時の検査で落とす）／ human-review（人が見る）／ none（無し・理由必須）と、いつ実在するか（live）。}
+  - {id: binds, term: 縛る相手, en: binds, def: 条が縛る相手。tool（道具の作り）／ practice（作る側の作法）／ both。}
+
+# v0.1 からの変更: 外した語 = なし（段・極性・規範文・やさしく言うと は field_terms へ移動）。足した語 = 提示層・型付きデータ・設計文書・密度 profile・逐語・対話面・台帳・止める仕掛け・注入・相談窓口・取り消せる／取り消せない・管理下の対象。
+# 統合 = 正本 + 生成物・生成器 / hook + guard / 相談窓口 + 支度表。「自己開発」は self-host に統一。「決定的に」は本文で「何度やっても同じ結果になる形で」と言い換えて添える。
+
+# 英字の識別子（R-9 の免除一覧・型付きデータ）。語彙の語ではなく「固有名・命令・code の語」。日本語の言い換えは不要だが、増やすときは行に理由を付ける。
+identifiers:
+  - {group: file と形式, words: [yaml, html, css, js, json, md, claude.md, file, path, repo], why: file 名・形式名・置き場の呼び名}
+  - {group: 道具と製品, words: [folio, folio2, bd, scribe2, cargo, deny, tmux, python3, opus, sonnet, xhigh, mcp, playwright, chrome, github], why: 固有名。可変のモデル名は要件書 CON5 が持つ}
+  - {group: 命令と旗, words: [inject, serve, build, merge, write, check, print, commit, push, retire], why: folio の命令名と git の操作名}
+  - {group: code の語, words: [crate, class, data-component, token, plugin, skill, script, workflow, agent, lens, spawn, effort, notes, url, ip, id, ai, ok, rules, byte, hook, guard, fixture, anchor, profile, oracle, self-host, spike, tailnet, adr, design-intent, git, ci, m0, m1, v1, v2, v3, v4, subcommand, in-loop, post, schema, sources, srs], why: 語彙の見出し語の原語か、code・道具の語。日本語を先に添えて使う}
+  - {group: 席と言語, words: [planner, admin, fable, high, bash, rust], why: 席の名前・現行のモデル名と念入りさ（要件書 CON5 が持つ）・言語名}
+

@@ -1,0 +1,426 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>folio2 — day-1 文書 v1.0（憲法・rules・語彙・要件書）</title><style>
+:root{--ink:#e8eef2;--ink2:#a9b7c1;--paper:#0d171e;--paper2:#15222b;--line:#273947;--brand:#7db8e8;--warn:#d6a94e;--warn-bg:#312a13;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--ink:#08131a;--ink2:#3e4c55;--paper:#fff;--paper2:#f3f6f8;--line:#d3dbe1;--brand:#2a4d6e;--warn:#8a5f1c;--warn-bg:#fdf8e6;color-scheme:light}}
+*{box-sizing:border-box}body{margin:0;background:var(--paper2);color:var(--ink);font-family:"Noto Sans CJK JP","Noto Sans JP",system-ui,sans-serif;line-height:1.7;font-size:15px}
+.page{max-width:1100px;margin:0 auto;background:var(--paper);padding:28px 40px 60px}@media(max-width:680px){.page{padding:16px 16px 40px}}
+h1{font-size:24px;margin:0 0 6px}h2{font-size:21px;margin:40px 0 10px;border-bottom:2px solid var(--brand);padding-bottom:6px}h3{font-size:18px;margin:26px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}h4{font-size:16px;margin:0 0 6px}
+.sub{color:var(--ink2);margin:0 0 14px}.note{background:var(--warn-bg);border-left:4px solid var(--warn);padding:10px 14px;border-radius:8px;margin:12px 0}
+.art{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:14px 0;background:var(--paper2)}
+.gid{display:inline-block;font-family:ui-monospace,monospace;font-weight:800;color:var(--brand);border:1px solid var(--line);border-radius:999px;padding:0 10px;margin-right:8px;font-size:13px}
+.tier{display:inline-block;font-size:12px;border-radius:999px;padding:0 9px;color:#fff;margin-left:8px}.bind{float:right;font-size:12px;color:var(--ink2)}
+.st{margin:6px 0;padding:8px 12px;background:var(--paper);border-left:3px solid var(--brand);border-radius:6px}.st .sid{font-family:ui-monospace,monospace;color:var(--brand);margin-right:8px}.st .str{font-size:12px;color:var(--ink2);margin-left:8px}
+.plain{margin:8px 0;padding:8px 12px;border:1px dashed var(--line);border-radius:8px}.plain b{color:var(--ink2);font-size:12.5px}
+dl{display:grid;grid-template-columns:8em 1fr;gap:4px 12px;margin:8px 0 0;font-size:13.5px}dt{color:var(--ink2)}dd{margin:0;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}th{background:var(--paper2)}
+.wrap{overflow-x:auto}code{font-family:ui-monospace,monospace;font-size:.92em;background:var(--paper2);border:1px solid var(--line);border-radius:5px;padding:.05em .4em}
+nav.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 12px;font-size:13.5px;margin:8px 0}nav.toc a{color:var(--brand);text-decoration:none}
+</style></head><body><div class="page">
+<h1>folio2 — day-1 文書 v1.0</h1><p class="sub">正本 4 file（<code>constitution.yaml</code> / <code>rules.yaml</code> / <code>vocabulary.yaml</code> / <code>srs.yaml</code>）を <code>render-draft.py</code> で読み物にしたもの。この HTML は手で直さない。状態: <b>未承認・拘束力なし</b>（binding: True）。G1〜G16・P1〜P5 の裁定を反映。敵対レビュー（<code>review/summary.md</code>）の生存指摘を畳んだ版。</p>
+<nav class="toc"><a href="#const">憲法（27 条）</a><a href="#rules">rules（閾値 13・開発規律 9）</a><a href="#vocab">語彙（31 語 + 欄 7）</a><a href="#srs">要件書 M0（FR 8・NFR 3・AC 6・CON 7）</a></nav>
+<details open><summary>v0.2 からの変更（2 件）</summary><ul><li>回帰レビュー（review-v0.2）の生存指摘を畳んだ: schema に top_level / meta / precedence / mechanism の欄集合と stage・polarity を追加（N-3 の検査を全節へ・P-18 の極性一覧を型から計算）/ A-2・N-4 の母集合を schema 節・前文・条文 5 欄で統一 / A-4.3 の「自分の repo への便」を「公開へ出ない便」へ（G14）/ P-14.1 に前文を明記 / R-4 の母集合を内部 3 空間へ戻し散文の欄まで数える / R-9 の識別子の免除を語彙の identifiers 節（型付きデータ）へ移動 / render に --check・inject_check に区間外の規範語行の検査 / P-17.4（deny 行の値を緩めるときは A-2.3 を前置・scribe2 A2）と R-13（編集時 guard の下限）を追加 / Never の平易文に「機械が止める」を戻し A-2 の平易文に逐語・日付・裁定 id を復帰</li><li>user 裁定 2026-09-12（v0.2 の 7 論点はすべて推奨・条件 = CLAUDE.md には憲法のみ・各条は簡潔に）を受け、規範文 30 本を短くした（意味・極性は不変）</li></ul></details>
+<details><summary>v0.1 からの変更（13 件）</summary><ul><li>schema 節を正本の実データとして新設（受入 (a) の出所を正本の内側へ・prose-only-rules-03）</li><li>P-9（一致は導出で作る）を P-6 へ畳んだ（P-6.3 / P-6.4・5 lens 一致）。P-9 は欠番</li><li>P-18「逸脱は編集の時点で止める」を新設（scribe2 C8.2 / C16 / C16.2 / C11.2 の写し落ち・裁定</li><li>N-2.1 を 2 極性に分割・N-2 の機構を写し元と同じ向き（生成物の中の手書き規範文 0）へ</li><li>P-3 を置き場の条へ弱め（G15）、P-10.3・A-2.3・A-4.3・P-5.5・P-17.3 を追加</li><li>P-6 / P-9 / P-11 / P-14 の出所の誤り（byte 数・日数・型）を一次資料の実測へ訂正</li><li>P-2 の改訂来歴を supersedes_v1 へ移動（folio2 自身の改訂ではない）</li><li>mechanism に live 欄（いつ実在するか）を追加し、発効時点で動かない検査を正直に書いた</li><li>N-6.2 の射程を配信面に絞り、版管理へ載せる生成物の公開は A-1「出す」で扱う（G14 との整合）</li><li>relations を型付き（reqs / rules / articles / sections）に変え、rules 行から条への逆参照を全行に付けた</li><li>規範文の削除 2 件: P-3.2 の後段「天井を実装しない版では…まだ分からない」（P-4.2 と重複）と P-13.4 の後段「それまでは v1 の生成器と手作業を道具として使う」（CON4 と重複・note へ）</li><li>rules 側: R-9〜R-12（受入 (e)(f)(g) と G10 の床）・D-8〜D-9 を新設、行に ruled_at と stage を追加、R-1 の母集団を folio2 所有分に限定</li><li>語彙側: 段・極性・規範文・やさしく言うと を欄語（field_terms）へ移し、提示層・型付きデータ・設計文書・密度 profile・逐語・対話面・台帳・止める仕掛け・注入・相談窓口・取り消せる／取り消せない・管理下の対象・決定的 を追加、識別子の免除一覧（identifiers）を型付きデータで新設</li></ul></details>
+<h2 id="const">憲法（27 条 = いつも守る 17 ／ 確認してから変える 4 ／ 絶対にやらない 6）</h2>
+<h3>00 北極星</h3><p><b>非エンジニアが AI と相談しながら、必要な設計文書だけを、同じ見た目で迷わず持てる</b></p><p>誰のため: 持ち主（非エンジニア）と、それを読む AI。同じページを両方が読む。人には「やさしく言うと」、AI には機械のための面。<br>達成の判定: 要件書 §5 受入基準</p>
+<h3>前文 — 順位（条ではない・全条に先立つ）</h3><div class="st">条どうしが衝突したら「網羅より揃い ／ 速さより黙らないこと ／ 賢さより戻せること」の順で解き、段どうしが衝突したら「絶対にやらない ＞ 確認してから ＞ いつも守る」の順で解く。</div><p class="plain"><b>やさしく言うと</b><br>迷ったら「全部そろえる」より「そろっている」、「早い」より「黙って飛ばさない」、「賢い」より「元に戻せる」を選びます。段が食い違ったら、強い段（絶対にやらない）が勝ちます。</p><p class="sub">縛る相手: 両方 ／ 機構: なし — 判断の規則であって機械では検査できない。生成区間（P-14）の先頭に写す。</p>
+<nav class="toc"><a href="#P-1">P-1 判断する道具を作らない</a><a href="#P-2">P-2 提示層は単一の生成器が所有する</a><a href="#P-3">P-3 検査は二層 — 機械の床と AI の天井</a><a href="#P-4">P-4 黙って飛ばさない（fail-closed）</a><a href="#P-5">P-5 規則は型付きデータに置き、番号で呼ぶ</a><a href="#P-6">P-6 正本は 1 つ、ほかはそこから導出する</a><a href="#P-7">P-7 番号は増やすだけ（append only）</a><a href="#P-8">P-8 撤退条件を決定と同時に書く</a><a href="#P-10">P-10 検査の物差しを、検査されるものから独立に持つ</a><a href="#P-11">P-11 同じ穴が繰り返したら、止めて人へ渡す</a><a href="#P-12">P-12 承認は 1 つの面から、言葉どおりに残す</a><a href="#P-13">P-13 拘束するのは設計文書、前の版は道具、自分を作るのは最後</a><a href="#P-14">P-14 憲法を AI の手元へ写す（注入）</a><a href="#P-15">P-15 自動の仕掛けに寄りかからない</a><a href="#P-16">P-16 設計判断を下す席は、その時点で最上位のモデルで動かす</a><a href="#P-17">P-17 数値の表を変えるときは、裁定 id を行に付ける</a><a href="#P-18">P-18 逸脱は編集の時点で止める（極性一覧）</a><a href="#A-1">A-1 消す・外へ出す・使う は確認してから</a><a href="#A-2">A-2 憲法の条文を変えるとき</a><a href="#A-3">A-3 依存する外部ソフトの増減</a><a href="#A-4">A-4 自分で自分を作ること（self-host）は既定で許可、取り消せない操作だけ確認</a><a href="#N-1">N-1 取り消せない削除をしない</a><a href="#N-2">N-2 文章にしか無い規則を、規則として扱わない</a><a href="#N-3">N-3 例外の仕組みを作らない</a><a href="#N-4">N-4 判断の記録と裁定 id を伴わない改憲をしない</a><a href="#N-5">N-5 文書の種類ごとに専用の AI 係を作らない</a><a href="#N-6">N-6 見せる先を tailnet の外へ広げない</a></nav>
+<h3>いつも守る（道具も AI も守る）</h3>
+<section class="art" id="P-1"><h4><span class="gid">P-1</span>判断する道具を作らない<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-1.1</span>folio は文書を生成し、機械で検査し、結果を知らせるところまでを担う。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-1.2</span>folio は要否・採否の最終判断を代行する機能を持たない。<span class="str">つねに・決してしない</span></div>
+<p class="plain"><b>やさしく言うと</b><br>道具は、書類を作って、間違いを見つけて、知らせるところまで。「これでいいか」を決める機能は、道具の側に作りません。決めるのはあなたです。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: research/document-discipline-engine-design §11（判断は人間・「判断する engine」を作らない）<br><b>持ち主の裁定</b>: 裁定 #1（推奨で進み、支度表で覆す）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（M0 で動く）— 公開する命令（subcommand）の一覧を閉じた一覧で持ち、採否を決める口が無いことを検査する。支度表は「推奨で進めた項目」を別枠に出す（FR2・AC1）。</dd>
+<dt>関係</dt><dd>要件: FR1・FR2・AC1</dd>
+</dl></section>
+<section class="art" id="P-2"><h4><span class="gid">P-2</span>提示層は単一の生成器が所有する<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-2.1</span>人が読むページはすべて 1 つの生成器から出力する。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-2.2</span>手書きのページを配信先と入口の導線に置かない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-2.3</span>色・字の大きさ・余白の元の値（design token）は 1 か所で定義する。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-2.4</span>部品・図の型・密度 profile は閉じた一覧（部品目録）で持ち、追加には判断の記録を要する。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>見た目を作る係は 1 つだけ。誰かが手でページを書き足すと、そこから見た目が割れていくので、入口からも締め出します。色や字の元の値も 1 か所。使える部品は決まった一覧にあるものだけで、一覧に足すときは理由の記録が要ります。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: 提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）<br><b>持ち主の裁定</b>: 裁定 #4（v1 P-2 を置換）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（いま動く）— 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、token 由来 100%、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。day-1 は見本の検品道具（check-v4 / probe-v4）で動く。</dd>
+<dt>撤退条件</dt><dd>[spike] 単一生成器で v1 要件書相当の密度が出せない（spike 5）なら再検討する。</dd>
+<dt>関係</dt><dd>要件: FR4・NFR2・AC2 ／ rules 行: R-3・R-5</dd>
+<dt>v1 から置き換えた条</dt><dd>folio v1 憲章「P-2: format は HTML + common.css のみ」（裁定 #4）<br>理由: 見た目が割れた原因は形式（HTML か Markdown か）ではなく、所有者が 2 つあったこと。</dd>
+</dl></section>
+<section class="art" id="P-3"><h4><span class="gid">P-3</span>検査は二層 — 機械の床と AI の天井<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-3.1</span>機械で決定的に検査できる項目は床に置く。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-3.2</span>意味の検査（読みやすさ・忠実さ）は AI の天井に置く。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-3.3</span>床の合格を、完成や天井の合格として扱わない。<span class="str">つねに・決してしない</span></div>
+<p class="plain"><b>やさしく言うと</b><br>機械が数えられること（部品が揃っているか等）は機械の側に、意味（分かりやすいか等）は AI の側に置きます。機械の合格は「壊れていない」であって「良い」ではありません。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）<br><b>持ち主の裁定</b>: 裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（M0 で動く）— 検査の一覧が床・天井のどちらかの層を持つことを検査する。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。</dd>
+<dt>関係</dt><dd>要件: FR5・AC3 ／ 条: P-4</dd>
+</dl></section>
+<section class="art" id="P-4"><h4><span class="gid">P-4</span>黙って飛ばさない（fail-closed）<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-4.1</span>検査・生成が実行できなかった結果を「異常なし」として扱わない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-4.2</span>判定できないものは「まだ分からない」として表に出す。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>できなかったことを「問題なし」に化けさせません。分からないときは「分からない」と表示します。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: engine-design §12 ②（parser-differential に 2 連続で敗北 → 受理域を絞る fail-closed へ転換）・ADR-0045 no silent skip</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（M0 で動く）— 床を故意に壊した状態で「まだ分からない」になり、合格にならない（AC3）。判定の値域は 合格 / 不合格 / まだ分からない の 3 値。</dd>
+<dt>関係</dt><dd>要件: FR5・AC3 ／ rules 行: D-5</dd>
+</dl></section>
+<section class="art" id="P-5"><h4><span class="gid">P-5</span>規則は型付きデータに置き、番号で呼ぶ<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 両方</span></h4>
+<div class="st"><span class="sid">P-5.1</span>規則・閾値・型の一覧は型付きデータ（正本 YAML・rules 行・部品目録）に置く。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-5.2</span>文書と台帳（bd）からは、規則を id で参照する。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-5.3</span>文書の種類による違いは、汎用の検査と密度 profile のデータで表す。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-5.4</span>台帳（bd）はタスクと裁定の記帳先であり、規則を置かない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-5.5</span>原則と裁定の正本は設計文書、機械が執行する規則の正本は型付きデータとし、置き場をこの 2 面に限る。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: C1（規則はデータ）・C14（規律は文書とデータの 2 面）・C15 / C15.2（台帳はタスク専用・id 参照）。C1 の「値は 1 file」は G14=A により folio2 では憲法 / rules / 語彙 / 要件書の 4 file に分ける（意図的な逸脱）<br><b>v1 の実害</b>: folio/CLAUDE.md:18「本 hook は tier-2 shaping であって guarantee ではない」＝規則が散文にしか無い・rules.html 248KB の散文<br><b>持ち主の裁定</b>: G2=C（二層: 憲法は道具の折れない線・開発規律は型付きデータ）・G14=A</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（いま動く）— 参照 id の未解決 0（R-4・双方向・NFR3）。rules 表の各行に裁定 id 列（P-17）。散文だけの規則は N-2 が落とす。day-1 は draft の検査 script（check_draft.py）で動く。</dd>
+<dt>関係</dt><dd>要件: NFR3・AC6 ／ rules 行: R-4・R-9・R-10・R-11 ／ 条: N-2・P-17</dd>
+</dl></section>
+<section class="art" id="P-6"><h4><span class="gid">P-6</span>正本は 1 つ、ほかはそこから導出する<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-6.1</span>folio が生成する各文書の正本は YAML 1 file であり、人が読むページはそこから逐語で生成する。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-6.2</span>生成物を手で直さない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-6.3</span>同じ内容を 2 つの面が持つとき、一方を正本とし、他方は導出する。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-6.4</span>2 つの面を人が書き、一致を検査で強制する設計を採らない。<span class="str">つねに・決してしない</span></div>
+<p class="plain"><b>やさしく言うと</b><br>文書 1 つにつき「元のファイル」は 1 つ。見えているページはそこから作った写しなので、直したいときは元を直し、写しを手で直してはいけません。同じことが 2 か所に要るときは片方から自動で作り、「両方を手で書いて合っているか見張る」形は採りません。</p><dl>
+<dt>出所</dt><dd><b>持ち主の裁定</b>: 裁定 #4（正本 YAML・HTML は生成物）<br><b>v1 の実害</b>: v1 憲法の正本が手書き HTML（origin 22,748 byte）で、消費側（scribe2）が 834 行の HTML parser を自作した（ADR-0051 層分離・ADR-0045 逐語 extract）。生成物は 90,122 byte<br><b>v1 の実害</b>: ADR-0033 §2.3 で Option B（両面手書き + gate）を選び、45 日後（2026-05-29 → 07-13）の ADR-0050 で Option A&#x27;（正本から derive）へ全面転換。ADR-0052（手動同鏡は人の規律に依存し実際に drift）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（いま動く）— 正本から再生成して差分 0 でなければ落とす（render の --check と inject_check の --check・対象は読み物と CLAUDE.md 生成区間）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。</dd>
+<dt>撤退条件</dt><dd>[spike] 憲法の改訂表現（del/ins・amended_by）が YAML で表せないと spike 1 で分かったら、憲法だけ二正本 + byte 束縛へ退避する。</dd>
+<dt>関係</dt><dd>要件: FR4・FR6 ／ 条: P-14</dd>
+</dl></section>
+<section class="art" id="P-7"><h4><span class="gid">P-7</span>番号は増やすだけ（append only）<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 両方</span></h4>
+<div class="st"><span class="sid">P-7.1</span>要件・条文・判断・受入基準の id を再利用・改番しない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-7.2</span>廃止は状態（status）で表し、番号は空けたままにする。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>一度つけた番号は、消したり付け替えたりしません。「3 番は廃止」と書いて、3 番の番号は空けたままにします。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: ADR-0034 §2.2。v1 では append-only は守られた側で、実害は逆＝48 ADR が全部 accepted で「取り消した決定」を機械で引けない（→ P-7.2）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（便 0 で動く）— meta.binding が true の直近版を baseline に取り、id の消失・意味の差し替えを落とす。発効前（binding false）は baseline が無いので検査対象外＝散文の適用除外ではなく機構の定義。</dd>
+<dt>関係</dt><dd>要件: NFR3</dd>
+</dl></section>
+<section class="art" id="P-8"><h4><span class="gid">P-8</span>撤退条件を決定と同時に書く<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 作法</span></h4>
+<div class="st"><span class="sid">P-8.1</span>取り消しにくい判断（ADR）には、それを捨てる条件を同時に書く。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>理由の記録（ADR）を書くときは、「うまくいかなかったら、こうなった時点でやめる」も一緒に書きます。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: ADR-0047 §2.4（confirmed 偽陽性 1 件で warn へ戻す・判断者は user）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（ADR 正本の schema 後）— 判断の記録（ADR）の正本 schema で retreat 欄を必須にする（空なら生成が落ちる）。ADR の正本 schema が置かれるまでは動かない。</dd>
+<dt>関係</dt><dd>節: §6</dd>
+</dl></section>
+<section class="art" id="P-10"><h4><span class="gid">P-10</span>検査の物差しを、検査されるものから独立に持つ<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-10.1</span>検査は、生成側からも検査側からも独立した凍結 anchor（固定の fixture）を 1 本以上持つ。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-10.2</span>生成物どうしの突き合わせを唯一の合格判定にしない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-10.3</span>anchor が維持できなくなった検査の結果は「まだ分からない」に落とす。<span class="str">〜になったら・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>「自分で作ったものと自分で作ったものを見比べて OK」は、何でも OK になってしまうので、それだけでは合格にしません。作る側からも検査する側からも独立した、動かない基準を 1 つ別に置きます。その基準が保てなくなった検査は「まだ分からない」に戻します。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: ADR-0053（flip 後 ORIG==生成物 で自己比較恒真化・任意値 PASS → 凍結 literal census + round-trip + 敵対 test の三本柱へ。再発ハザードへの予防的退役・user 裁定 2026-07-18）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（M0 で動く）— 凍結 fixture を検査の入力に持ち、fixture 不在は「まだ分からない」、fixture との不一致は「不合格」に落とす。</dd>
+<dt>関係</dt><dd>条: P-3・P-4</dd>
+</dl></section>
+<section class="art" id="P-11"><h4><span class="gid">P-11</span>同じ穴が繰り返したら、止めて人へ渡す<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 両方</span></h4>
+<div class="st"><span class="sid">P-11.1</span>同じ種類の失敗が rules 行 R-7 の回数を超えたとき、自動の修正を続けず、止めて持ち主へ渡す。<span class="str">〜のとき・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>同じ穴に何度もはまるなら、機械が粘るのをやめて人に相談します。「何度まで」は表（R-7 行）で決めます。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: engine-design §12（parser-differential の whack-a-mole を round 1 / round 2 の 2 連続で実証 → user 判断で fail-closed へ転換）</dd>
+<dt>どう守らせるか</dt><dd><b>機械が落とす</b>（便 0 で動く）— 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。folio が数える面を持つのは便 0 以降。</dd>
+<dt>関係</dt><dd>rules 行: R-7・D-4 ／ 条: P-1</dd>
+</dl></section>
+<section class="art" id="P-12"><h4><span class="gid">P-12</span>承認は 1 つの面から、言葉どおりに残す<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 作法</span></h4>
+<div class="st"><span class="sid">P-12.1</span>持ち主の承認は、rules 行 R-8 が指す 1 つの対話面を通ったものだけを受け取る。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-12.2</span>受け取った承認は、逐語と日付を添えて台帳の notes と文書の承認欄に記帳する。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-12.3</span>会話の記憶を承認の根拠にしない。<span class="str">つねに・決してしない</span></div>
+<p class="plain"><b>やさしく言うと</b><br>「OK と言った」は、決まった 1 つの場所（対話面）を通ったものだけ。言葉どおりに、日付つきで、台帳と文書の承認欄の両方に残します。「前に OK と言っていたはず」という記憶は承認の代わりになりません。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: C7 / C7.2（対話面は 1 つ・逐語で記帳）<br><b>持ち主の裁定</b>: G8=A（C7 を足す）・運用実績（G1〜G16・P1〜P5 の裁定はすべて bd notes の逐語）・受入 (c)</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（M0 で動く）— 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。</dd>
+<dt>関係</dt><dd>rules 行: R-8 ／ 節: §6</dd>
+</dl></section>
+<section class="art" id="P-13"><h4><span class="gid">P-13</span>拘束するのは設計文書、前の版は道具、自分を作るのは最後<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 作法</span></h4>
+<div class="st"><span class="sid">P-13.1</span>folio2 の開発を拘束するのは設計文書（design-intent）である。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-13.2</span>前の版（folio v1）を、受入の物差し役にも停止権の持ち主にもしない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-13.3</span>設計文書の変更は、判断の記録か版付きの文書として残す。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-13.4</span>自分のコードの変更を自分の便で運ぶ運用（self-host）は、外部の利用者で受入が通った後に始める。<span class="str">〜のあいだ・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>何が正しいかを決めるのは設計文書で、前の道具ではありません。前の道具（folio v1）は使ってよいが、正しさの物差しにも止める権限にもしません。設計文書を変えたら、その記録（理由の記録か新しい版）を残します。自分の便で自分のコードを運ぶのは、よそで使ってもらって合格した後＝いちばん最後です。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: C8 / C8.3（前の版を物差しにしない・design-intent の変更は ADR か版付き文書）。C8.2 は P-18 へ<br><b>v1 の実害</b>: self-host の層解釈と oracle 死角に ADR 6 本（0044 / 0045 / 0050 / 0051 / 0053 / 0056）<br><b>持ち主の裁定</b>: G7=A（C8 を移行条項つきで写す）・G6=A（順序は別条）・要件書 CON4（v1 は読むだけ）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（M0 で動く）— folio2 の生成器・検査器が v1 の path に書き込み口を持たない（CON4）ことを test で固定する。v1 側の guard 設定の目視は開発規律 D-9。</dd>
+<dt>関係</dt><dd>要件: CON1・CON4 ／ rules 行: D-7・D-9 ／ 条: A-4・P-18</dd>
+<dt>planner 注</dt><dd>scribe2 は ADR-0003 で「成熟宣言 + user go」の解禁 gate を廃止した。folio2 が P-13.4 の順序を残すのは G6=A（順序は別条）の裁定による。それまでは v1 の生成器と手作業を道具として使う（CON4）。</dd>
+</dl></section>
+<section class="art" id="P-14"><h4><span class="gid">P-14</span>憲法を AI の手元へ写す（注入）<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-14.1</span>folio inject --write を実行したとき、憲法の前文と規範文を持つ条を CLAUDE.md の生成区間へ決定的に導出して書く。<span class="str">〜のとき・必ず守る</span></div>
+<div class="st"><span class="sid">P-14.2</span>folio inject --check は生成区間と正本の差分を検出し、差があれば失敗（非 0）で終える。<span class="str">〜のとき・必ず守る</span></div>
+<div class="st"><span class="sid">P-14.3</span>生成区間の総バイト数は rules 行 R-2 以下に収める。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>憲法の前文と「守らせる条」を、AI が毎回読む場所（CLAUDE.md）に写します。ずれていたら検査が失敗して止まります。写す量には上限（R-2 行）があります。</p><dl>
+<dt>出所</dt><dd><b>持ち主の裁定</b>: 受入 (b)・注入の所有（規格は folio・呼ぶのは consumer・pointer 化は却下）・G9=A（上限は rules 行）・G13=A（母集団は規範文を持つ条）<br><b>scribe2 の条</b>: C1.2（人が読む規則の文書は型から生成し、手書きの規範文は 0 行）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（いま動く）— --check の byte 一致（AC4）。R-2 超過は落とす。生成と検査は同じ導出関数（day-1 は inject_check.py・M0 で folio inject）。注入する欄は R-2 行の projection 欄が定める。同型の実装は scribe2 の xtask gen-claude-md / check claude-md-constitution（条ではなく実装）。</dd>
+<dt>関係</dt><dd>要件: FR6・AC4・NFR1 ／ rules 行: R-2・R-12 ／ 条: P-6</dd>
+</dl></section>
+<section class="art" id="P-15"><h4><span class="gid">P-15</span>自動の仕掛けに寄りかからない<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-15.1</span>自動で走る仕掛け（hook）を「守られる保証」として設計しない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-15.2</span>編集の時点で止める仕掛けを持つときは、その判定の式を事後の検査が同じ関数で確かめる。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。止める仕掛けを置くなら、後から確かめる検査も同じ物差し（同じ判定の式）で見ます。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: folio/CLAUDE.md:18 逐語「本 hook は tier-2 shaping であって guarantee ではない」・ADR-0043 §2.3<br><b>v1 の実害</b>: plugin-lib.sh:238 / check-content-boundary.sh:55（hook と事後検査が 2 実装の人間同期＝drift の実体）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（M1 で動く）— 編集時の判定の式と事後検査が同一関数であることを test で固定する（advisory ⊆ guarantee）。folio2 に hook が置かれるまでは対象が無い。</dd>
+<dt>関係</dt><dd>rules 行: D-6 ／ 条: P-18</dd>
+<dt>planner 注</dt><dd>見本 v4 では N-1（Never）。G3 の軸（Never = 機械が拒む）では拒む形にできないため Always へ移した。「止める仕掛けを持つこと」自体の義務は P-18。</dd>
+</dl></section>
+<section class="art" id="P-16"><h4><span class="gid">P-16</span>設計判断を下す席は、その時点で最上位のモデルで動かす<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 作法</span></h4>
+<div class="st"><span class="sid">P-16.1</span>folio の設計判断を下す席は、その時点で最上位の AI モデルで動かす。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-16.2</span>道具（並列実行・便・作業者）の内側には最上位のモデルを求めない。<span class="str">つねに・決してしない</span></div>
+<p class="plain"><b>やさしく言うと</b><br>設計を考える席には、そのとき一番賢い AI を使います。手足として動く道具の中まで同じにする必要はありません。</p><dl>
+<dt>出所</dt><dd><b>持ち主の裁定</b>: user 2026-09-12 15:49 前提 (2)・17:1x 裁定 1 / 4（席のみ・道具の内側は opus まで）・4 層の置き場（憲法 = 性質のみ）<br><b>v1 の実害</b>: ADR-0021（不変原則に可変の固有名を書くと下流の更新のたびに改憲を強いられる → 現行のモデル名は要件書 CON5 へ）</dd>
+<dt>どう守らせるか</dt><dd><b>人が目で確かめる</b>（いま動く）— 席の起動時に model と effort を見る。機械可読な根拠（席の transcript の assistant.model）があるのでそれを見る（目視で取り違えた実績が f2-648.1 notes にある）。現行の該当（モデル名・effort）は要件書 CON5 が持つ。</dd>
+<dt>撤退条件</dt><dd>[ruling] 「最上位」の判定が割れて運用が止まるなら、要件書 CON で名指しする形へ退避する。</dd>
+<dt>関係</dt><dd>要件: CON5 ／ rules 行: D-1・D-2</dd>
+</dl></section>
+<section class="art" id="P-17"><h4><span class="gid">P-17</span>数値の表を変えるときは、裁定 id を行に付ける<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 両方</span></h4>
+<div class="st"><span class="sid">P-17.1</span>rules 表（R-n・D-n）の行の追加・変更は、裁定 id と時刻を行に付ける。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-17.2</span>裁定 id の無い rules 行の変更があったら、検査がそれを落とす。<span class="str">〜になったら・必ず守る</span></div>
+<div class="st"><span class="sid">P-17.3</span>初版の行は、この憲法の発効の承認を裁定とみなし、発効時にその id と時刻を全行に付ける。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-17.4</span>folio の振る舞いを縛る閾値行（deny 種別）の値を緩めるとき、A-2.3 の検証を前置する。<span class="str">〜のとき・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>数値や作法の表を変えるときは、どの決定（裁定の番号）でいつ変えたかを行に書きます。書いていない変更は機械が止めます。最初の表は、この憲法の承認をその決定として扱い、承認のときに番号と日付を全部の行に入れます。機械が止めるための上限をゆるめるときは、改訂と同じように反対側から確かめてからにします。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）<br><b>持ち主の裁定</b>: G5=A（A-2 を条文改訂と rules 数値に分割）</dd>
+<dt>どう守らせるか</dt><dd><b>機械が落とす</b>（便 0 で動く）— rules 行の diff に裁定 id と時刻が無ければ落とす（CI は便 0 以降・それまでは PR の diff を人が見る）。</dd>
+<dt>関係</dt><dd>rules 行: R-1・R-2・R-3・R-4・R-5・R-6・R-7・R-8・R-9・R-10・R-11・D-3・D-5・D-8 ／ 条: A-2</dd>
+</dl></section>
+<section class="art" id="P-18"><h4><span class="gid">P-18</span>逸脱は編集の時点で止める（極性一覧）<span class="tier" style="background:#1e7b65">いつも守る</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">P-18.1</span>編集が設計文書か rules と食い違うとき、その編集を編集の時点で止める。<span class="str">〜のとき・必ず守る</span></div>
+<div class="st"><span class="sid">P-18.2</span>事後の検査を、編集の時点で止めることの代わりにしない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">P-18.3</span>止める仕掛け（guard）は「開く／閉じる」の極性と「編集時／事後」の別を型で持ち、その一覧（極性一覧）を生成時に出す。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">P-18.4</span>編集の時点で止める guard が 1 本も無い構成なら、検査がそれを落とす。<span class="str">〜になったら・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>決まりに反する書き換えは、書き換えたその場で止めます。「後で検査するから」は、その場で止めることの代わりになりません。止める仕掛けと検査には「壊れたら通す／止める」「その場／後で」の札を付けて一覧にし、その場で止める仕掛けが 1 つも無い状態は検査で落とします。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: C8.2（design-intent と食い違う編集は編集時に止める）・C16 / C16.2（事後検証を代替にしない・編集時 guard 0 の構成を CI が拒む）・C11.2（極性の型と build 時の極性一覧）<br><b>持ち主の裁定</b>: 裁定 #3（scribe2 の機構条のうち「極性一覧」を写す）・G3=A（撤去コストは共通 1 行）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（便 0 で動く）— 各条の mechanism の stage / polarity 欄と rules 行の stage 列から極性一覧を生成し、編集時（in-loop）の本数が rules 行 R-13 の下限を割れば不合格（day-1 は check_draft.py が一覧を出す）。便 0 で最初の編集時 guard（契約の書き込み範囲の外への編集を止める・scribe2 提供）が入るまでは「まだ分からない」。</dd>
+<dt>関係</dt><dd>rules 行: R-13 ／ 条: P-15・P-13・P-4</dd>
+<dt>planner 注</dt><dd>v0.1 では P-15.2 の条件節（「持つときは」）に潰れ、scribe2 C16 が課す義務が落ちていた（敵対レビュー scribe2-consistency-02・-04）。</dd>
+</dl></section>
+<h3>確認してから変える（実行前に持ち主へ聞く）</h3>
+<section class="art" id="A-1"><h4><span class="gid">A-1</span>消す・外へ出す・使う は確認してから<span class="tier" style="background:#916626">確認してから変える</span><span class="bind">縛る相手: 両方</span></h4>
+<div class="st"><span class="sid">A-1.1</span>既存の文書やデータを消す、外へ出す、外部の道具や鍵を使う（課金を含む）操作を行うとき、実行前に rules 行 R-8 の対話面で持ち主の確認を得る。<span class="str">〜のとき・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>「消す」「外に出す（公開の場所へ置くことを含む）」「外の道具や鍵を使う（お金がかかるものを含む）」の 3 つは、道具が勝手にやらず、決まった対話の場所であなたに確認してからにします。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: A1（3 クラスの操作・C7 の対話面を通す）<br><b>持ち主の裁定</b>: G8=A・G14=A（承認済み生成物の PUBLIC repo への commit は「出す」＝人手 commit 1 本を確認の上で）</dd>
+<dt>どう守らせるか</dt><dd><b>人が目で確かめる</b>（いま動く）— 会話面で確認し逐語を記帳（P-12）。便 0 以降は契約の自己申告（3 クラス）で便が止まり、承認の記帳で再開する（scribe2 の仕組み）。N-1 / N-6 が拒む操作は確認の対象にならない（拒まれる）。</dd>
+<dt>関係</dt><dd>rules 行: R-8 ／ 条: N-1・N-6・P-12・A-4</dd>
+</dl></section>
+<section class="art" id="A-2"><h4><span class="gid">A-2</span>憲法の条文を変えるとき<span class="tier" style="background:#916626">確認してから変える</span><span class="bind">縛る相手: 作法</span></h4>
+<div class="st"><span class="sid">A-2.1</span>条文を改訂するとき、判断の記録と撤退条件を先に書き、持ち主の承認（逐語・日付・裁定 id）を得てから版を上げる。<span class="str">〜のとき・必ず守る</span></div>
+<div class="st"><span class="sid">A-2.2</span>条文（id・見出し・規範文・段・縛る相手）と schema 節・前文が 1 文字も変わらない変更を改訂として扱わない。<span class="str">つねに・決してしない</span></div>
+<div class="st"><span class="sid">A-2.3</span>改訂の前に、その改訂が主張する利益を敵対的に検証し（grill）、記録を判断の記録に添える。<span class="str">〜のとき・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>この文書は勝手に書き換えません。理由と撤退条件を書き、その改訂が本当に良いかを反対側から確かめてその記録を理由の記録に添え、あなたの OK（言葉どおり・日付・裁定の番号）を残してから版を上げます。条の番号・見出し・守らせる文・段・縛る相手と、決まりの型（schema）・前文のどれ 1 つも変わらない直しは「改訂」ではありません。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: A2（主張された利益の grill 検証を前置 → user 裁定）<br><b>v1 の実害</b>: ADR-0056 §2.1（宣言内容を 1 文字も変えない生成経路の flip だけが「変更」に該当しない。宣言文・段・id・見出しの変更は対象）<br><b>持ち主の裁定</b>: G5=A（rules 数値の変更は P-17 へ分離）・G8=A（M4 は但し書き）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（ADR 正本の schema 後）— 正本の baseline diff — 母集合は schema 節・前文・各条の id / title / statements / tier / binds（amendment_scope）。差分には対応する amended_by（adr・date・approved_by・ruling・previous_text・rationale）が要り、amended_by.adr が指す判断の記録の実在も同じ検査が確かめる（R-4 の母集合＝内部 3 空間は変えない・G15）。差分 0 なら A-2.2 の非改訂（自己申告では適用しない）。無ければ N-4 が落とす。</dd>
+<dt>関係</dt><dd>rules 行: R-4 ／ 条: N-4・P-8・P-17 ／ 節: §6</dd>
+</dl></section>
+<section class="art" id="A-3"><h4><span class="gid">A-3</span>依存する外部ソフトの増減<span class="tier" style="background:#916626">確認してから変える</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">A-3.1</span>外部ライブラリを増やす・減らすとき、予算（rules 行 R-6）と使ってよい条件（ライセンス）に照らし、持ち主の確認を得る。<span class="str">〜のとき・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>他人の作った部品を増やすときも減らすときも、本数の上限（R-6 行・まだ未定）と使ってよい条件（ライセンス）を見て、確認してから行います。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: A3 / C13（依存の予算・値は folio2 専用）<br><b>持ち主の裁定</b>: 裁定 #3（依存予算は folio2 専用値）・G7=A（裁定 #3 の根拠「C8」は「C13」の誤りとして訂正）</dd>
+<dt>どう守らせるか</dt><dd><b>機械が落とす</b>（M1 で動く）— cargo deny + R-6 の予算（Rust が入ってから）。それまでは人が確かめる。</dd>
+<dt>関係</dt><dd>要件: CON2 ／ rules 行: R-6</dd>
+</dl></section>
+<section class="art" id="A-4"><h4><span class="gid">A-4</span>自分で自分を作ること（self-host）は既定で許可、取り消せない操作だけ確認<span class="tier" style="background:#916626">確認してから変える</span><span class="bind">縛る相手: 作法</span></h4>
+<div class="st"><span class="sid">A-4.1</span>folio が folio 自身の文書・コードを変える運用は、既定で許可する。<span class="str">つねに・必ず守る</span></div>
+<div class="st"><span class="sid">A-4.2</span>その操作が取り消せない（消す・出す・使う）とき、A-1 として持ち主に確認する。<span class="str">〜のとき・必ず守る</span></div>
+<div class="st"><span class="sid">A-4.3</span>取り込み（merge）・公開へ出ない便・外部依存を増やさない変更は、A-4.2 の判定で「取り消せる」と扱う。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>道具が自分自身を作り変えるのは既定で OK。ただし取り消せない操作（消す・外に出す・外の道具や鍵を使う）だけは先に聞きます。取り込み・公開へ出ない便・外の部品を増やさない変更は「取り消せる」側で、公開の場所へ出す便は「出す」として A-1 で聞きます。順番（自分を作るのは最後）は P-13 が決めます。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: A4 / A4.3（現行: 既定で許可・不可逆だけ Ask-first・可逆の定義・ADR-0003）<br><b>持ち主の裁定</b>: G6=A（見本の A-4 は改訂前の写しで逆だった・現 A4 に揃える）・G8=A（M6 は A-4 の分割先）</dd>
+<dt>どう守らせるか</dt><dd><b>人が目で確かめる</b>（いま動く）— A-1 と同じ経路。便 0 以降は契約の自己申告（3 クラス）が A-4.3 の分類を機械で持つ。</dd>
+<dt>関係</dt><dd>条: A-1・P-13</dd>
+</dl></section>
+<h3>絶対にやらない（やろうとしたら機械が拒む）</h3>
+<section class="art" id="N-1"><h4><span class="gid">N-1</span>取り消せない削除をしない<span class="tier" style="background:#b22323">絶対にやらない</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">N-1.1</span>操作が管理下の対象を回復不能に削除するなら、folio はそれを拒む。<span class="str">〜になったら・必ず守る</span></div>
+<div class="st"><span class="sid">N-1.2</span>退役（廃止）は可逆な移動としてのみ行う。<span class="str">つねに・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>folio が預かっているもの（元のファイル・作ったページ・支度表・台帳の記録）を、元に戻せない形では消しません（機械が止めます）。片づけるときは、戻せる形（移動）だけ。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: N1 / N1.2<br><b>持ち主の裁定</b>: G8=A（不可逆な削除は Never）</dd>
+<dt>どう守らせるか</dt><dd><b>機械が落とす</b>（M0 で動く）— 削除の経路を実装せず、退役は可逆な移動（retire）だけを公開する。削除の呼び出しが無いことを test で固定する。</dd>
+<dt>関係</dt><dd>条: A-1・P-7</dd>
+</dl></section>
+<section class="art" id="N-2"><h4><span class="gid">N-2</span>文章にしか無い規則を、規則として扱わない<span class="tier" style="background:#b22323">絶対にやらない</span><span class="bind">縛る相手: 両方</span></h4>
+<div class="st"><span class="sid">N-2.1</span>変更が、散文・記憶・会話にしか無い規則を持ち込むなら、それを規則として扱わない。<span class="str">〜になったら・決してしない</span></div>
+<div class="st"><span class="sid">N-2.2</span>変更が、散文・記憶・会話にしか無い規則を持ち込むなら、検査がそれを落とす。<span class="str">〜になったら・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>「文章に書いてあるから」「前に話したから」「覚えているから」はルールになりません。表に載せて番号で呼ぶ（P-5）まで、機械は守ってくれませんし、そういう変更は検査で落とします。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: N2 / C1.2（規則を散文・memory・chat にだけ置かない・生成された文書の中の手書き規範文は 0 行）<br><b>v1 の実害</b>: folio/CLAUDE.md:18 の散文 hook 規則・rules.html 248KB</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（いま動く）— ① folio が生成する文書（読み物・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = render / inject_check の --check）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（inject_check の --check が数える）。検査対象は folio2 が所有する文書に限る。</dd>
+<dt>関係</dt><dd>条: P-5・P-14・P-17</dd>
+<dt>planner 注</dt><dd>見本 v4 の P-5（Always）に含まれていた禁止側を Never へ置いた（G12 の改番）。</dd>
+</dl></section>
+<section class="art" id="N-3"><h4><span class="gid">N-3</span>例外の仕組みを作らない<span class="tier" style="background:#b22323">絶対にやらない</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">N-3.1</span>変更が規則の例外機構（無効化の旗・「今回だけ」の口）を足すなら、それを拒む。<span class="str">〜になったら・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>「今回だけ特別」のスイッチを足す変更は、機械が止めます。変えたいときは正式に改訂します。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: ADR-0047 §2.2（例外機構を導入しない＝逃げ道と規律を一致させる）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（いま動く）— 正本と rules の全節（top_level・meta・前文・条・規範文・mechanism・rules 行）で未知の欄を schema 検査が落とす（day-1 は check_draft.py）。</dd>
+<dt>関係</dt><dd>条: A-2 ／ 節: §6</dd>
+<dt>planner 注</dt><dd>scribe2 N3（host 固有の分岐を code に焼かない）とは別の条。番号の一致は意図していない。</dd>
+</dl></section>
+<section class="art" id="N-4"><h4><span class="gid">N-4</span>判断の記録と裁定 id を伴わない改憲をしない<span class="tier" style="background:#b22323">絶対にやらない</span><span class="bind">縛る相手: 作法</span></h4>
+<div class="st"><span class="sid">N-4.1</span>条文の改訂が、判断の記録・裁定 id・承認の逐語のいずれかを欠くなら、それを拒む。<span class="str">〜になったら・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>理由の記録・決定の番号（裁定 id）・あなたの OK の言葉、この 3 つが揃っていない書き換えは、機械が止めます。</p><dl>
+<dt>出所</dt><dd><b>scribe2 の条</b>: N4 / N4.2（新 ADR + delta marker + 裁定 id）<br><b>持ち主の裁定</b>: G5=A（N-4 新設）</dd>
+<dt>どう守らせるか</dt><dd><b>生成時の検査</b>（ADR 正本の schema 後）— A-2 と同じ検査関数・同じ母集合（schema 節・前文・各条の id / title / statements / tier / binds）。対応する amended_by が無ければ落とす（A-2 は手続き・N-4 はその拒否）。</dd>
+<dt>関係</dt><dd>条: A-2 ／ 節: §6</dd>
+</dl></section>
+<section class="art" id="N-5"><h4><span class="gid">N-5</span>文書の種類ごとに専用の AI 係を作らない<span class="tier" style="background:#b22323">絶対にやらない</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">N-5.1</span>変更が文書の型ごとの AI 係（agent）や検査の観点（lens）を増設するなら、それを拒む。<span class="str">〜になったら・必ず守る</span></div>
+<p class="plain"><b>やさしく言うと</b><br>文書の種類が増えるたびに専用の係を増やすことは、機械が拒みます。違いは設定の表（P-5.3）で表します。係が増えると AI が毎回読む説明文が膨らんで、遅く・高くなるからです（v1 では 36 係になりました）。</p><dl>
+<dt>出所</dt><dd><b>v1 の実害</b>: agent 36 本・description 合計 29,027 字・ADR-0007 → 0055（Tier 1 → Tier 0 pointer digest へ降格）</dd>
+<dt>どう守らせるか</dt><dd><b>機械が落とす</b>（M0 で動く）— AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0。常時注入の総量は R-1 の上限で落とす（母集団は folio2 が所有する係と skill）。</dd>
+<dt>関係</dt><dd>要件: NFR1 ／ rules 行: R-1・D-3 ／ 条: P-5</dd>
+</dl></section>
+<section class="art" id="N-6"><h4><span class="gid">N-6</span>見せる先を tailnet の外へ広げない<span class="tier" style="background:#b22323">絶対にやらない</span><span class="bind">縛る相手: 道具</span></h4>
+<div class="st"><span class="sid">N-6.1</span>配信（serve）の接続先（bind 先）が tailnet の外なら、起動を拒む。<span class="str">〜になったら・必ず守る</span></div>
+<div class="st"><span class="sid">N-6.2</span>配信の出力と、支度表・台帳の中身を、認証なしの公開ネットに晒さない。<span class="str">つねに・決してしない</span></div>
+<p class="plain"><b>やさしく言うと</b><br>見せる先は自分の端末どうしの私設ネット（tailnet）だけで、外へ向けた配信は機械が起動を止めます。配信で見せるページや、支度表・台帳の中身を、認証なしの公開の場所に出しません。承認済みの文書を版管理（公開 repo）へ置くのは別の話で、A-1 の「出す」として確認します。</p><dl>
+<dt>出所</dt><dd><b>持ち主の裁定</b>: 要件書 CON3（tailnet のみ）・FR7・G8=A（出す（公開）の Never）・G14=A（承認済み HTML は design-intent/preview/ へ・生 IP は除去）<br><b>v1 の実害</b>: tailnet-serve の下限（tailnet の住所が無いと起動を拒む）</dd>
+<dt>どう守らせるか</dt><dd><b>機械が落とす</b>（いま動く）— tailnet の住所が無いとき serve が起動を拒む（FR7 の確かめ方・day-1 は tailnet-serve script）。</dd>
+<dt>関係</dt><dd>要件: CON3・FR7 ／ rules 行: D-8 ／ 条: A-1</dd>
+<dt>planner 注</dt><dd>CON3 の強さは Never 相当なのに見本では A-1（Ask-first）に対応していたねじれを解いた。v0.1 の「生成物」は G14=A（PUBLIC repo への commit）と矛盾したため配信面に絞った。</dd>
+</dl></section>
+<h3>06 改訂</h3><p class="note">本章は新しい規則を持たない。手続きの正本は P-8（撤退条件）・P-7（差分と番号）・A-2（検証と承認）・N-4（裁定なしの改憲は拒む）・P-14（再注入）・P-17（rules 行）である。</p><ol><li><b>1</b>（AI）— 理由を書く — 判断の記録（ADR）を 1 本起こし、撤退条件も同時に書く　<span class="sub">条: P-8・A-2</span></li><li><b>2</b>（AI）— 反対側から確かめる — 主張する利益を敵対的に検証し記録を添える　<span class="sub">条: A-2</span></li><li><b>3</b>（AI）— 差分で表す — 現行文を残し amended_by に previous_text を対で記録する。番号は変えない　<span class="sub">条: P-7</span></li><li><b>4</b>（持ち主）— 承認する — 逐語と日付と裁定 id を残す。ここを通らなければ変わらない　<span class="sub">条: A-2・N-4・P-12</span></li><li><b>5</b>（機械）— 版を上げ、再注入する — CLAUDE.md の生成区間を作り直し、差分が無いことを確かめる　<span class="sub">条: P-14</span></li></ol><p>発効: 初回の発効 — meta.approval に who / date / ruling / verbatim を置き、meta.binding を true・meta.baseline を発効 commit にする（G15）</p>
+<h3>08 出所</h3><ol><li><b>v1 が自分で到達していた教訓</b> — 報告 §2「v2 の憲法候補」・facet v1-lessons（実害と 1 対 1・数値は一次資料で再確認済み）</li><li><b>scribe2 憲法の機構条（裁定 #3）</b> — 裁定 #3 の逐語「機構条だけ写す（極性一覧・散文規則禁止・id 参照・C8。依存予算は folio2 専用値）」= C11.2 / C16.2（P-18）・N2 / C1.2（N-2）・C15.2（P-5）・C8 / C8.2 / C8.3（P-13・P-18）・C13 の値（A-3・R-6）</li><li><b>scribe2 憲法から足した条（裁定 #3 の外・各裁定で追加）</b> — G8=A: C7（P-12）・N1（N-1）・A2 / N4（A-2・N-4）・公開 Never（N-6）・注入条（P-14）／ G5=A: C5（P-17）／ G6=A: A4 / A4.3（A-4）／ G7=A: C13（A-3）／ C14（P-5.5・G2=C の二層の写し）</li><li><b>持ち主の裁定</b> — 裁定 9 点（2026-09-11〜12）・G1〜G16・P1〜P5（2026-09-12・逐語は bd f2-648 / f2-648.1 notes）</li><li><b>敵対レビュー</b> — review/summary.md（wf_5e659fc9-0ed・生存 17 + 未反証 34 の追加反証・2026-09-12）</li></ol>
+<h2 id="rules">rules — 閾値の行（数値は条文に書かない）</h2><div class="wrap"><table><tr><th>id</th><th>条</th><th>何の数値か</th><th>値</th><th>種別</th><th>状態</th><th>裁定</th><th>時刻</th><th>注</th></tr>
+<tr><td>R-1</td><td>N-5</td><td>AI へ常時渡す説明文の合計（folio2 が所有する AI 係と skill の名前 + 説明）</td><td>2,000 字 以下</td><td>deny</td><td>仮</td><td>発効承認 2026-09-12（f2-648.1 notes・P-17.3）</td><td>2026-09-12</td><td><b>population</b>: folio2 が所有する係と skill だけ。口座共通（home 配下）の分は数えて記録する（detect）が落とさない<br><b>note</b>: 測り方を凍結してから再計測（spike 2）。day-0 は folio2 の settings が v1 plugin（agent 36 本）を載せているため大きく超過＝M0 で v1 plugin を外してから測る</td></tr>
+<tr><td>R-2</td><td>P-14</td><td>CLAUDE.md 生成区間の本文の総バイト数</td><td>8,000 byte 以下</td><td>deny</td><td>凍結</td><td>G9=A・user 2026-09-12（CLAUDE.md として適切な長さ）・発効承認 2026-09-12</td><td>2026-09-12</td><td><b>projection</b>: 前文（順位）+ 各条の規範文（id と本文）だけを注入する。mechanism・plain・rationale は入れない（inject_check の導出関数と同一）<br><b>basis</b>: 実測 7,630 byte（v1.0・規範文 66 + 前文）。上限 8,000 は CLAUDE.md を憲法だけにする前提の「適切な長さ」（user 2026-09-12）<br><b>note</b>: 発効時に凍結。v0.1 の仮 8,000 は規範文 55 本の見積だった</td></tr>
+<tr><td>R-3</td><td>P-2</td><td>部品目録に無い class の数 ／ 色や字の大きさが design token 由来の割合</td><td>0 ／ 100%</td><td>build-check</td><td>凍結</td><td>申告 D + F（見た目の承認・user 逐語 2026-09-12「承認するけど…」）</td><td>2026-09-12</td><td><b>note</b>: M0 受入条件（AC2）</td></tr>
+<tr><td>R-4</td><td>P-5</td><td>参照 id（要件書の id・条 id・rules 行 id の内部 3 空間）の未解決の数 ／ どの条からも参照されない rules 行の数</td><td>0 ／ 0</td><td>build-check</td><td>凍結</td><td>申告 F</td><td>2026-09-12</td><td><b>population</b>: 正本 4 file の全欄（規範文・平易文・関係・機構の注・出所・rules 行の注・語彙の定義）<br><b>note</b>: M0 受入条件（AC6）・双方向（条 → 行・行 → 条）</td></tr>
+<tr><td>R-5</td><td>P-2</td><td>密度 profile と図の型の数</td><td>有限の一覧（図は 3 型）</td><td>build-check</td><td>凍結</td><td>申告 B</td><td>2026-09-12</td><td><b>note</b>: 一覧への追加は判断の記録（P-2.4）</td></tr>
+<tr><td>R-6</td><td>A-3</td><td>外部ライブラリの予算（直接／間接の本数・ライセンスの許可一覧）</td><td>未定</td><td>deny</td><td>未定</td><td>発効承認 2026-09-12（f2-648.1 notes・P-17.3）</td><td>2026-09-12</td><td><b>note</b>: cargo deny の実測後に決める（spike 4）。A-3 の確認は値が未定でも要る</td></tr>
+<tr><td>R-7</td><td>P-11</td><td>同じ種類の失敗の繰り返し上限（超えたら止めて人へ）</td><td>2 回</td><td>deny</td><td>仮</td><td>発効承認 2026-09-12（f2-648.1 notes・P-17.3）</td><td>2026-09-12</td><td><b>same_failure</b>: （検査の id・判定・対象の path）の 3 つ組が一致する失敗を「同じ種類」とする<br><b>note</b>: 値の根拠は v1 の 2 連続実証（engine-design §12）。便 0 で実測して凍結</td></tr>
+<tr><td>R-8</td><td>P-12</td><td>承認の対話面（どの対話面を通った承認を受け取るか）</td><td>持ち主と planner 席の対話面（記帳先 = 台帳 bd の notes の逐語 + 文書の承認欄）</td><td>build-check</td><td>凍結</td><td>運用実績 2026-09-12</td><td>2026-09-12</td><td><b>note</b>: 閾値ではなく定義の行。承認欄の schema がこの値を要求する</td></tr>
+<tr><td>R-9</td><td>P-5</td><td>本文（条の見出し・規範文・平易文・rules 行の内容欄）に出る専門語のうち、語彙に定義が無いものの数</td><td>0</td><td>build-check</td><td>凍結</td><td>G11=A・G16=A（受入 (e)）</td><td>2026-09-12</td><td><b>population</b>: 憲法（見出し・規範文・平易文・前文）・rules（what）・要件書（見出し・規範文・平易文・制約）<br><b>note</b>: 機械は「語彙の見出し語・原語に無い英字の語」を数える。識別子（file 名・条 id・命令名・製品名）の免除一覧は語彙の identifiers 節（型付きデータ）が持つ。日本語の専門語の判定は敵対レビュー（天井）</td></tr>
+<tr><td>R-10</td><td>P-5</td><td>平易文（plain）の無い条の数 ／ 平易文が規範文の枝番を落とした・足した数</td><td>0 ／ 0</td><td>build-check</td><td>凍結</td><td>G16=A（受入 (f)）</td><td>2026-09-12</td><td><b>note</b>: 機械は plain の有無だけ数える。落とし・足しの判定は敵対レビュー（天井）</td></tr>
+<tr><td>R-11</td><td>P-5</td><td>強度欄（must / must-not / should）と規範文の文末（「〜ない。」）の不一致の数</td><td>0</td><td>build-check</td><td>凍結</td><td>G16=A（受入 (g)）</td><td>2026-09-12</td><td><b>note</b>: must-not ⇔ 文末が「〜ない。」</td></tr>
+<tr><td>R-12</td><td>P-14</td><td>規範文と平易文に出る、日本語の言い換えを伴わない英語キーワードの数</td><td>0</td><td>build-check</td><td>仮</td><td>G10=A</td><td>2026-09-12</td><td><b>note</b>: 「日本語（原語）」の形か語彙の原語列にある語は数えない。識別子（file 名・条 id・命令名）は除く</td></tr>
+<tr><td>R-13</td><td>P-18</td><td>編集の時点で止める guard（極性一覧で stage = in-loop）の本数の下限</td><td>1 本以上</td><td>deny</td><td>仮</td><td>発効承認 2026-09-12（f2-648.1 notes・P-17.3）</td><td>2026-09-12</td><td><b>note</b>: 極性一覧は各条の mechanism（stage / polarity）と rules 行の stage から生成する（day-1 は check_draft.py）。便 0 で編集時 guard が入るまで判定は「まだ分からない」（live delivery-0）</td></tr>
+</table></div><p class="sub">置かない数値: 時間（「60 分以内」） ／ 費用（「300k token 以下」）（測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。）</p>
+<h3>開発規律の行（人が守る作法・条から id で参照）</h3><div class="wrap"><table><tr><th>id</th><th>条</th><th>内容</th><th>状態</th><th>裁定</th><th>時刻</th><th>注</th></tr>
+<tr><td>D-1</td><td>P-16</td><td>並列実行・便・spawn した作業者の内側で使う AI は opus まで。件数に応じて増える側（1 件ずつの判定）は sonnet 可。並列実行の内側で xhigh を使わない</td><td>凍結</td><td>user 2026-09-12 17:1x 裁定 1 / 4</td><td>2026-09-12</td><td>—</td></tr>
+<tr><td>D-2</td><td>P-16</td><td>並列で AI を起動する全ての起動点で、使うモデルと念入りさ（effort）を明示する（席の設定を継承させない）</td><td>凍結</td><td>user 2026-09-12 17:1x 裁定 4</td><td>2026-09-12</td><td>—</td></tr>
+<tr><td>D-3</td><td>N-5</td><td>v1 の並列実行の骨格（凍結骨格 6 本）は使わない。並列は素の Agent の同時起動か、その場で書く Workflow script で組み、v1 plugin は積まない</td><td>凍結</td><td>user 2026-09-12（s2-07l.42 notes・PR #764）</td><td>2026-09-12</td><td>—</td></tr>
+<tr><td>D-4</td><td>P-11</td><td>その場で書く Workflow は予算を明示する（出力 token の上限を script 内で検査し、超えたら止める）。agent 数の上限も script に書く。1 回の実行は 1 論点</td><td>凍結</td><td>user 2026-09-12（budget 明示）</td><td>2026-09-12</td><td>—</td></tr>
+<tr><td>D-5</td><td>P-4</td><td>並列実行の返り値は file に落とし、通知は要約だけにする（通知は切れる前提・agent は読み取り専用で自分の出力 file だけ書く）</td><td>仮</td><td>発効承認 2026-09-12（f2-648.1 notes・P-17.3）</td><td>2026-09-12</td><td>planner 実測 2026-09-12</td></tr>
+<tr><td>D-6</td><td>P-15</td><td>並列の agent に MCP（playwright 等の外部道具の接続）を共有させない（自前の Chrome / 自前の playwright）</td><td>仮</td><td>発効承認 2026-09-12（f2-648.1 notes・P-17.3）</td><td>2026-09-12</td><td>planner 実測 2026-09-12・v3/v4 検証で干渉</td></tr>
+<tr><td>D-7</td><td>P-13</td><td>scribe2 は限定利用 — 便は便 0 以降（s2-07l.149 の裁定後）・作業記憶の退避と復元は当面 v1 の共通 skill（global skill）・並列便は使わない</td><td>凍結</td><td>user 2026-09-12 17:1x 裁定 3 / 5 + s2 planner 返信</td><td>2026-09-12</td><td>—</td></tr>
+<tr><td>D-8</td><td>N-6</td><td>版管理へ載せる file に tailnet の住所・機器名（host 名）・口座名を書かない。承認済みの見本 HTML を repo へ置くときは生 IP 9 行と「見本 v4」表記を除去し「暫定・M0 で置換」と明記する</td><td>凍結</td><td>G14=A</td><td>2026-09-12</td><td>—</td></tr>
+<tr><td>D-9</td><td>P-13</td><td>folio v1 側の guard（PreToolUse の hook）が folio2 の設計文書を止める設定を持たないことを、席の起動時に人が確かめる</td><td>仮</td><td>発効承認 2026-09-12（f2-648.1 notes・P-17.3）</td><td>2026-09-12</td><td>v0.1 では P-13 の mechanism note に混ざっていた</td></tr>
+</table></div>
+<h2 id="vocab">語彙（31 語・正本 vocabulary.yaml・読者が引く場所は憲法 §7）</h2><div class="wrap"><table><tr><th>語</th><th>原語</th><th>ひとことで</th><th>定義</th></tr>
+<tr><td id="v-source-of-truth"><b>正本・生成物・生成器</b></td><td>source of truth / generated artifact / emitter</td><td>元になる唯一のファイルと、そこから機械が作る写しと、作る係</td><td>正本 = 元になる唯一のファイル（文書 1 つにつき 1 つ）。生成物 = 正本から機械が作ったもの（手で直さない）。生成器 = それを作る係。直したいときは正本を直す。</td></tr>
+<tr><td id="v-presentation-layer"><b>提示層</b></td><td>presentation layer</td><td>人が読むページとその見た目の層</td><td>人が読むページと、その見た目（部品・色・字の大きさ）をまとめた層。folio2 では 1 つの生成器だけが持つ（P-2）。</td></tr>
+<tr><td id="v-typed-data"><b>型付きデータ</b></td><td>typed data</td><td>欄と値の型が決まった表</td><td>欄と値の型が決まった表（憲法の正本 YAML・rules 行・部品目録）。機械が読んで検査できる。文章に書いた規則と違い、守らせられる（P-5）。</td></tr>
+<tr><td id="v-design-intent"><b>設計文書（design-intent）</b></td><td>design-intent</td><td>憲法・判断の記録・要件書の 3 つ</td><td>folio2 の開発を拘束する文書の集まり = 憲法・判断の記録（ADR）・要件書。原則と決定の正本はここ（P-13）。</td></tr>
+<tr><td id="v-floor-ceiling"><b>床・天井</b></td><td>floor / ceiling</td><td>機械が数える検査と、AI が意味を見る検査</td><td>床 = 機械が決定的に（何度やっても同じ結果になる形で）検査する層。合格は「壊れていない」の意味。天井 = AI が意味を検査する層（P-3）。</td></tr>
+<tr><td id="v-fail-closed"><b>黙って飛ばさない（fail-closed）</b></td><td>fail-closed</td><td>確かめられなかったら「合格」にしない</td><td>確かめられなかったら「合格」にしない、という安全側の倒し方。分からないときは「まだ分からない」と表示する（P-4）。</td></tr>
+<tr><td id="v-frozen-anchor"><b>凍結 anchor（固定の fixture）</b></td><td>frozen anchor / fixture</td><td>検査のための動かない基準</td><td>作る側からも検査する側からも独立した、動かない基準（固定の見本データ）。生成物どうしの見比べだけを合格にしないために置く（P-10）。</td></tr>
+<tr><td id="v-design-token"><b>design token</b></td><td>design token</td><td>色・字の大きさ・余白の元の値</td><td>色・字の大きさ・余白などの元の値。1 か所で決めて全ページが使う（P-2）。</td></tr>
+<tr><td id="v-parts-catalog"><b>部品目録</b></td><td>parts catalog</td><td>ページを組み立てる部品の一覧</td><td>ページを組み立てる部品（表紙・章帯・カード・図）の閉じた一覧。ここに無い部品は使えない。図の型と密度 profile もここに載る（P-2）。</td></tr>
+<tr><td id="v-profile"><b>密度 profile</b></td><td>density profile</td><td>文書の種類ごとの見せ方の設定</td><td>文書の種類ごとの見せ方の設定（どれくらい詰めて見せるか・使う図の型）。係を増やさず、設定で違いを表す（P-5.3・N-5）。</td></tr>
+<tr><td id="v-adr"><b>判断の記録（ADR）</b></td><td>ADR</td><td>戻せない判断を理由つきで残す 1 枚</td><td>戻せない判断を、理由・退けた案・撤退条件つきで残す 1 枚。憲法の改訂にも必ず要る（P-8・A-2）。</td></tr>
+<tr><td id="v-retreat"><b>撤退条件</b></td><td>retreat condition</td><td>その判断を捨てる条件</td><td>その判断を捨てる条件。決めるときに一緒に書く（P-8）。</td></tr>
+<tr><td id="v-ruling-id"><b>裁定 id</b></td><td>ruling id</td><td>持ち主が決めた記録の番号</td><td>持ち主が決めたことを指す番号（台帳の notes の逐語と日付）。rules 行や改訂には必ず付く（P-17・N-4）。</td></tr>
+<tr><td id="v-verbatim"><b>逐語</b></td><td>verbatim</td><td>言葉どおりの引用</td><td>人の発言を言い換えずそのまま引用すること。承認は逐語で残す（P-12）。機械が写しを「忠実に作る」ことは「逐語で（忠実に）生成」と書き分ける（P-6）。</td></tr>
+<tr><td id="v-dialogue-surface"><b>対話面</b></td><td>dialogue surface</td><td>承認を受け取る決まった会話の場所</td><td>持ち主の承認を受け取る、決まった 1 つの会話の場所（rules 行 R-8 が指す）。ここを通らない「OK」は承認にならない（P-12）。</td></tr>
+<tr><td id="v-ledger"><b>台帳（bd）</b></td><td>ledger (bd)</td><td>タスクと裁定を記帳する帳簿</td><td>タスクと持ち主の裁定を記帳する帳簿（道具の名前は bd）。規則は置かない（P-5.4）。</td></tr>
+<tr><td id="v-hook-guard"><b>自動の仕掛け（hook）・止める仕掛け（guard）</b></td><td>hook / guard</td><td>出来事のときに自動で走る仕掛けと、逸脱を止める仕掛け</td><td>自動の仕掛け（hook）= ある出来事のときに自動で走る仕掛け。便利だが、それだけでは守られる保証にならない（P-15）。止める仕掛け（guard）= 決まりに反する編集や操作を止める仕掛けと検査の総称。壊れたときに「通す／止める」の極性と「その場／後で」の別を持つ（P-18）。</td></tr>
+<tr><td id="v-polarity"><b>極性</b></td><td>polarity</td><td>「する／しない」と「通す／止める」の向き</td><td>規範文なら「〜する」（必ず守る）か「〜しない」（決してしない）か。止める仕掛けなら、壊れたときに「通す」か「止める」か。1 つにつき 1 つの向き（P-18）。</td></tr>
+<tr><td id="v-machine-layer"><b>機械のための面</b></td><td>machine layer</td><td>AI が正確に読むための短い表</td><td>AI が正確に読むための短い表。人は開かなくてよい。</td></tr>
+<tr><td id="v-generated-block"><b>生成区間</b></td><td>generated block</td><td>CLAUDE.md の中で機械が書き換える範囲</td><td>CLAUDE.md の中で、機械が書き換える印のついた範囲。手で直さない（P-14）。</td></tr>
+<tr><td id="v-inject"><b>注入</b></td><td>inject</td><td>憲法の守らせる条を AI の手元へ写すこと</td><td>憲法の規範文を持つ条を CLAUDE.md の生成区間へ写すこと。書き込み（--write）と検査（--check）がある（P-14）。</td></tr>
+<tr><td id="v-intake"><b>相談窓口（intake）と支度表</b></td><td>intake / preparation sheet</td><td>何の文書が要るかを決める入口と、その結果の 1 枚</td><td>相談窓口 = どの文書を持つかを易しい質問で決める入口。支度表 = その結果（持つ文書・推奨で進めた項目）を 1 枚にしたもの（要件書 FR1）。</td></tr>
+<tr><td id="v-delivery"><b>便</b></td><td>delivery</td><td>変更を 1 まとまりで運ぶ単位</td><td>変更を 1 まとまりで運ぶ単位（契約〔何を作るかの約束・台帳に書く〕→ 実装 → 検査 → 取り込み）。運ぶ器は scribe2（CON6）。</td></tr>
+<tr><td id="v-spike"><b>spike</b></td><td>spike</td><td>決める前に小さく試して測ること</td><td>決める前に小さく試して測ること。</td></tr>
+<tr><td id="v-tailnet"><b>tailnet</b></td><td>tailnet</td><td>自分の端末どうしだけがつながる私設ネット</td><td>自分の端末どうしだけがつながる私設ネット。見せる先はここだけ（N-6）。</td></tr>
+<tr><td id="v-self-host"><b>自分で自分を作る（self-host）</b></td><td>self-host</td><td>folio が folio 自身の文書やコードを作る運用</td><td>folio が folio 自身の文書やコードを自分の道具で作る運用。文書は最初から自分で作るが、コードの変更を自分の便で運ぶのは最後（P-13・A-4）。</td></tr>
+<tr><td id="v-oracle"><b>物差し役（oracle）</b></td><td>oracle</td><td>何が正しいかを決める役</td><td>何が正しいかを決める役。前の版（folio v1）にはこの役を持たせない（P-13）。</td></tr>
+<tr><td id="v-reversible"><b>取り消せる・取り消せない（3 クラス）</b></td><td>reversible / irreversible</td><td>元に戻せる操作と、戻せない 3 種類の操作</td><td>取り消せない操作 = 消す・外へ出す（公開・送信・公開 repo への commit と push）・外の道具や鍵を使う（課金を含む） の 3 クラス（A-1）。取り込み（merge）・公開へ出ない便（自分の repo の中で閉じる変更）・外の部品を増やさない変更は取り消せる側（A-4.3）。</td></tr>
+<tr><td id="v-managed-object"><b>管理下の対象</b></td><td>managed object</td><td>folio が預かっているもの</td><td>folio が預かっているもの = 正本・生成物・支度表・台帳の記帳。取り消せない削除をしない対象（N-1）。</td></tr>
+<tr><td id="v-deterministic"><b>決定的（に検査する・に導出する）</b></td><td>deterministic</td><td>何度やっても同じ結果になる形で</td><td>同じ入力なら何度やっても同じ結果になる形で（機械が数える検査・生成区間の導出はこの形で行う。P-3・P-14）。</td></tr>
+<tr><td id="v-seat"><b>席</b></td><td>seat</td><td>AI が作業する場所（planner 席など）</td><td>AI が作業する場所（tmux の窓 1 つ）。設計判断を下す席は最上位のモデルで動かす（P-16）。</td></tr>
+</table></div>
+<h3>欄の名前（機械層・読者は引かない）</h3><div class="wrap"><table><tr><th>欄</th><th>原語</th><th>定義</th></tr><tr><td><b>段</b></td><td>tier</td><td>条の実行時の扱い。いつも守る（道具も AI も守る）／確認してから変える（実行前に持ち主へ聞く）／絶対にやらない（やろうとしたら機械が拒む）。</td></tr><tr><td><b>規範文</b></td><td>normative statement</td><td>条の中の、守るべきことを書いた文。型（いつ守るか）と強度を欄に持ち、1 文 1 極性。</td></tr><tr><td><b>やさしく言うと</b></td><td>plain reading</td><td>規範文を非エンジニア向けに言い換えた文。規範文に無い義務を足さず、落とさない（受入 (f)・R-10）。</td></tr><tr><td><b>強度</b></td><td>strength</td><td>must（必ず守る）／ must-not（決してしない）／ should（既定・外すなら理由を残す）。文末と一致する（R-11）。</td></tr><tr><td><b>型（いつ守るか）</b></td><td>pattern</td><td>つねに／〜のとき／〜のあいだ／〜になったら／〜ならば の 5 型。</td></tr><tr><td><b>機構</b></td><td>mechanism</td><td>条をどう守らせるか。reject（機械が操作を拒む）／ build-check（生成時の検査で落とす）／ human-review（人が見る）／ none（無し・理由必須）と、いつ実在するか（live）。</td></tr><tr><td><b>縛る相手</b></td><td>binds</td><td>条が縛る相手。tool（道具の作り）／ practice（作る側の作法）／ both。</td></tr></table></div>
+<h2 id="srs">要件書 M0 — 要件書（M0・最初に動く形）</h2><p class="note">持ち主が易しい質問 5 つに答える（答えなくても推奨で進む）と、入口・憲法・要件書の 3 枚が同じ見た目で生成され、機械検査の結果が必ず表示される。</p>
+<h3>01 ゴール</h3><ul><li><b>GOAL1 相談して決められる</b> — 「どの文書が要るか分からない」を無くす。最初と途中の両方に窓口がある。</li><li><b>GOAL2 見た目が揃う</b> — 入口も要件書も同じ品質・同じ様式。割れたページを作れない。</li><li><b>GOAL3 AI が自分で動き出す</b> — 持ち主が道具を起動しなくても、AI が必要なときに folio を使う。</li><li><b>GOAL4 壊れにくい道具</b> — 寄せ集めの script をやめ、1 つの実装に置き換える。検査は黙らない。実装の手段は CON7 が決める。</li></ul>
+<h3>02 範囲</h3><p><b>M0 で作る</b>: 相談窓口（intake）と支度表 ／ 3 面（入口・憲法・要件書）の生成 ／ 形の検査（床）と 3 値の判定 ／ セッション開始の 1 行 ／ 憲法を AI の手元へ写す（inject） ／ 組み立てて見せる（build と serve）</p><p><b>M0 では作らない</b>: 判断の記録（ADR）と設計ノートの生成 ／ 「番号が実在するか」を機械で追う仕組みの完成形（M0 は参照 id の未解決 0 を数えるだけ） ／ 何が変わったかの検出器 ／ 読みやすさの AI 検査（天井）と見た目の AI 検査（P-3.2: 「まだ分からない」として表に出す）</p>
+<h3>図 2 folio が 1 回で通す 7 段</h3><ol><li><b>相談して決める</b>（持ち主）— 要件: FR1・FR2・FR3・FR8</li><li><b>支度表が出る</b>（folio）— 要件: FR1・FR8</li><li><b>あなたが決める（採否）</b>（持ち主）— 要件: （この段を定める要件は無い）　<span class="sub">この段を定める要件は無い（判断は道具の外・憲法 P-1）。承認の受け方は P-12、確認が要る操作は A-1 / A-2。</span></li><li><b>3 枚を出す</b>（folio）— 要件: FR4・NFR2</li><li><b>床の検査</b>（folio）— 要件: FR5</li><li><b>AI の手元へ配る</b>（folio）— 要件: FR6・NFR1</li><li><b>組み立てて、見せる</b>（folio）— 要件: FR7</li></ol>
+<h3>03 機能要件（8）</h3>
+<section class="art" id="FR1"><h4><span class="gid">FR1</span>相談窓口（intake）<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">〜のとき</span>持ち主が folio intake を実行したとき → folio は 5 問以下の易しい質問を推奨回答つきで提示し、回答から文書の集合を写像して支度表 1 枚を生成する。</div>
+<p class="plain"><b>やさしく言うと</b><br>「何の文書が要るか」を AI と決める入口。質問は 5 つまで、どれにも「おすすめ」がついています。結果は支度表 1 枚。</p><dl>
+<dt>根拠（条）</dt><dd>P-1</dd><dt>確かめ方</dt><dd>test: 決まった回答 5 つを入れ、支度表が期待どおりか比較する（受入: AC1）</dd><dt>ゴール</dt><dd>GOAL1</dd>
+<dt>planner 注</dt><dd>回答 → 文書集合の写像表は rules / annex 側に置く（G15 D11）。</dd>
+</dl></section>
+<section class="art" id="FR2"><h4><span class="gid">FR2</span>答えが無くても止まらない<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">〜になったら</span>質問への回答が得られないとき → folio は推奨回答で進み、支度表に「推奨で進めた項目」を別枠で明示する。</div>
+<p class="plain"><b>やさしく言うと</b><br>忙しくて答えられなくても作業は止まりません。ただし「おすすめで決めた所」は支度表で分かるようにします。</p><dl>
+<dt>根拠（条）</dt><dd>P-1</dd><dt>確かめ方</dt><dd>test: 無回答で実行し、別枠に全項目が出ることを見る（受入: AC1）</dd><dt>ゴール</dt><dd>GOAL1</dd>
+</dl></section>
+<section class="art" id="FR3"><h4><span class="gid">FR3</span>気づかせる 1 行<span class="tier" style="background:#2a4d6e">既定（外すなら理由）</span></h4>
+<div class="st"><span class="sid">〜のあいだ</span>design-intent が未整備であるあいだ → セッション開始時に folio は 1 行だけ案内を出す。止める設定は 1 つ、プロジェクト 1 つにつき 1 回のみ。</div>
+<p class="plain"><b>やさしく言うと</b><br>文書がまだ無いプロジェクトでは、AI のセッションが始まったときに一言だけ知らせます。うるさければ「止める設定」1 か所で切れます。</p><dl>
+<dt>根拠（条）</dt><dd>P-1</dd><dt>確かめ方</dt><dd>test: 未整備 / 整備済 / 止める設定 の 3 状態で出力行数を数える（受入: —）</dd><dt>ゴール</dt><dd>GOAL3</dd>
+</dl></section>
+<section class="art" id="FR4"><h4><span class="gid">FR4</span>3 枚を 1 つの生成器で出す<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">つねに</span>つねに → folio は正本（YAML）から入口・憲法・要件書の 3 面を、単一の生成器と単一の design token で生成する。</div>
+<p class="plain"><b>やさしく言うと</b><br>3 枚とも同じ係が同じ材料（色や字の大きさの元の値と、決まった部品）で作るので、見た目が割れません。</p><dl>
+<dt>根拠（条）</dt><dd>P-2・P-6</dd><dt>確かめ方</dt><dd>test+inspection: 目で見て確かめ、NFR2 の数値で判定する（受入: AC2・AC5）</dd><dt>ゴール</dt><dd>GOAL2</dd>
+</dl></section>
+<section class="art" id="FR5"><h4><span class="gid">FR5</span>検査結果を必ず返す<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">つねに</span>つねに → folio は生成のたびに構造の床を実行し、結果を合格・不合格・まだ分からない の 3 値で返す。実行できなかった検査を合格と表示しない。</div>
+<p class="plain"><b>やさしく言うと</b><br>「合格・不合格・まだ分からない」の 3 つのどれかを必ず表示します。「分からない」を「合格」にすり替えません。</p><dl>
+<dt>根拠（条）</dt><dd>P-3・P-4</dd><dt>確かめ方</dt><dd>test: 床を故意に壊して「まだ分からない」になることを見る（受入: AC3）</dd><dt>ゴール</dt><dd>GOAL4</dd>
+</dl></section>
+<section class="art" id="FR6"><h4><span class="gid">FR6</span>憲法を AI の手元に届ける（inject）<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">〜のとき</span>folio inject --write が実行されたとき → folio は憲法の規範文を持つ条を CLAUDE.md の生成区間へ書き込む。--check は区間と正本の差分を検出し、差があれば非 0 で終了する。</div>
+<p class="plain"><b>やさしく言うと</b><br>憲法の「機械が守るべき条」を、AI が毎回読む場所（CLAUDE.md）に写します。ずれたら知らせます。</p><dl>
+<dt>根拠（条）</dt><dd>P-14・P-6</dd><dt>確かめ方</dt><dd>test: 区間を 1 字変えて --check が非 0 になることを見る（受入: AC4）</dd><dt>ゴール</dt><dd>GOAL3・GOAL4</dd>
+<dt>planner 注</dt><dd>見本の根拠「P-5」は誤参照（P-5 は規則の置き場）。正しくは P-14（注入の条）と P-6（正本から導出）。</dd>
+</dl></section>
+<section class="art" id="FR7"><h4><span class="gid">FR7</span>組み立てて、見せる（build / serve）<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">〜のとき</span>folio build が実行されたとき → folio は全面を配信先へ生成する。folio serve は tailnet 上でのみ配信し、公開ネットへ接続（bind）しない。</div>
+<p class="plain"><b>やさしく言うと</b><br>「作る」と「見せる」の 2 つの命令。見せる先は自分の端末どうしの私設ネット（tailnet）だけ。</p><dl>
+<dt>根拠（条）</dt><dd>N-6</dd><dt>確かめ方</dt><dd>test+inspection: tailnet の住所が無いとき起動を拒むことを見る（受入: —）</dd><dt>ゴール</dt><dd>GOAL2</dd>
+</dl></section>
+<section class="art" id="FR8"><h4><span class="gid">FR8</span>途中で足す窓口<span class="tier" style="background:#2a4d6e">既定（外すなら理由）</span></h4>
+<div class="st"><span class="sid">〜のとき</span>持ち主が文書の追加・削除を求めたとき → folio は差分だけを対象に intake を再実行し、支度表を更新する。</div>
+<p class="plain"><b>やさしく言うと</b><br>あとから「やっぱりこの文書も」となっても、最初からやり直さず、差分だけ相談します。</p><dl>
+<dt>根拠（条）</dt><dd>P-1</dd><dt>確かめ方</dt><dd>test: 既存の支度表 + 追加 1 型で、質問が差分だけになることを見る（受入: —）</dd><dt>ゴール</dt><dd>GOAL1</dd>
+</dl></section>
+<h3>04 非機能要件（3）</h3>
+<section class="art" id="NFR1"><h4><span class="gid">NFR1</span>AI へ常時渡す説明文の上限<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">つねに</span>つねに → folio が常時注入する説明文（agent と skill の名前 + 説明）の合計は rules 行 R-1 の値以下にする。</div>
+<p class="plain"><b>やさしく言うと</b><br>AI が毎回読まされる「道具の説明文」の量に上限を置きます。v1 ではこれが膨らんで遅く高くなりました。</p><dl>
+<dt>根拠（条）</dt><dd>N-5・P-14</dd><dt>確かめ方</dt><dd>test: 計測 script が数え、R-1 と比べる（値はここに再掲しない）（受入: —）</dd><dt>ゴール</dt><dd>GOAL3・GOAL4</dd>
+<dt>rules 行</dt><dd>R-1</dd>
+</dl></section>
+<section class="art" id="NFR2"><h4><span class="gid">NFR2</span>見た目の材料は 1 か所から<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">つねに</span>つねに → 全生成面の design token は単一の定義に由来し、部品目録に無い class は rules 行 R-3 の値（0）、床が掛からない HTML 面は 0 にする。</div>
+<p class="plain"><b>やさしく言うと</b><br>どのページも、色や字の大きさ・部品を同じ 1 か所から取ります。「このページだけの飾り」は 0 個。検査（床）が掛からないページも 0 枚。</p><dl>
+<dt>根拠（条）</dt><dd>P-2</dd><dt>確かめ方</dt><dd>test: 全面の class を部品目録と突合する（受入: AC2）</dd><dt>ゴール</dt><dd>GOAL2</dd>
+<dt>rules 行</dt><dd>R-3・R-5</dd>
+</dl></section>
+<section class="art" id="NFR3"><h4><span class="gid">NFR3</span>参照は必ずつながる<span class="tier" style="background:#2a4d6e">必ず守る</span></h4>
+<div class="st"><span class="sid">つねに</span>つねに → 文書間の参照 id（要件 id・条 id・rules 行 id の内部 3 空間）の未解決は rules 行 R-4 の値（0）にする。外部への参照（報告 HTML 等）は sources 欄に置き、母集合に入れない。</div>
+<p class="plain"><b>やさしく言うと</b><br>「FR3 を見よ」「P-2 による」と書いたら、その番号は必ず実在します。行き先の無い番号は 0 個。</p><dl>
+<dt>根拠（条）</dt><dd>P-5・P-7</dd><dt>確かめ方</dt><dd>test: 参照 id を全部集め、実在を数える（受入: AC6）</dd><dt>ゴール</dt><dd>GOAL4</dd>
+<dt>rules 行</dt><dd>R-4</dd>
+</dl></section>
+<h3>05 受入基準（6）</h3>
+<section class="art" id="AC1"><h4><span class="gid">AC1</span>決まった 5 つの回答で支度表ができ、未回答の項目は別枠に出る</h4><p class="plain"><b>やさしく言うと</b><br>決まった答えを 5 つ入れると「何を作るか」の表が出て、答えなかった項目は別の枠に分けて出る。それを見せてもらえたら OK。</p><dl><dt>確かめる要件</dt><dd>FR1・FR2</dd><dt>RED になる test</dt><dd>固定回答 5 つの fixture を入れ、期待の支度表と一致し、無回答では全項目が別枠に出る<br><code>tests/fixtures/intake/answers-5.yaml</code></dd></dl></section>
+<section class="art" id="AC2"><h4><span class="gid">AC2</span>3 面のすべての class が部品目録に存在し、目録に無い class は 0</h4><p class="plain"><b>やさしく言うと</b><br>3 枚のページに、部品表に載っていない飾りや、決まった材料以外の色が 1 つも無いことを、機械が数えて見せる。</p><dl><dt>確かめる要件</dt><dd>FR4・NFR2</dd><dt>RED になる test</dt><dd>目録外 class を 1 つ足した fixture で不合格になり、見本 3 面では合格になる<br><code>tests/fixtures/floor/parts-catalog.json</code></dd></dl></section>
+<section class="art" id="AC3"><h4><span class="gid">AC3</span>床を壊した状態で「まだ分からない」が表示され、合格にならない</h4><p class="plain"><b>やさしく言うと</b><br>わざと検査を壊した状態で道具を走らせ、「まだ分からない」と表示されて「合格」にならないことを見せる。</p><dl><dt>確かめる要件</dt><dd>FR5</dd><dt>RED になる test</dt><dd>床の実行体を無効にした fixture で verdict が Pending になり Pass にならない<br><code>tests/fixtures/floor/broken-floor/</code></dd></dl></section>
+<section class="art" id="AC4"><h4><span class="gid">AC4</span>CLAUDE.md の生成区間を 1 字変えると --check が非 0 で終わる</h4><p class="plain"><b>やさしく言うと</b><br>AI の手元にある憲法の写しを 1 文字だけ書き換えて道具を走らせ、道具が「ずれている」と言って止まることを見せる。</p><dl><dt>確かめる要件</dt><dd>FR6</dd><dt>RED になる test</dt><dd>生成区間を 1 byte 変えた CLAUDE.md で --check の終了コードが非 0 になる<br><code>tests/fixtures/inject/claude-md-drift/</code></dd></dl></section>
+<section class="art" id="AC5"><h4><span class="gid">AC5</span>見本 3 面（入口・憲法・要件書）を持ち主が実際に開いて読み（walk）承認済み</h4><p class="plain"><b>やさしく言うと</b><br>3 枚のページを実際に開いて見て、持ち主が「これでよい」と言った記録（言葉どおり・日付つき）がある。</p><dl><dt>確かめる要件</dt><dd>FR4</dd><dt>RED になる test</dt><dd>承認の逐語と日付が台帳（f2-648 notes）と承認欄にある<br><code>bd f2-648 notes（user 逐語 2026-09-12「承認するけど…」）</code></dd><dt>注</dt><dd>付帯条件（user 直命）を受入に含める（G16=A・受入 (d)）。</dd></dl></section>
+<section class="art" id="AC6"><h4><span class="gid">AC6</span>内部 3 空間の参照 id の未解決が 0</h4><p class="plain"><b>やさしく言うと</b><br>要件・条文・数値の表の番号を全部集めて、行き先の無い番号が 0 個であることを機械が数えて見せる。</p><dl><dt>確かめる要件</dt><dd>NFR3</dd><dt>RED になる test</dt><dd>存在しない id を 1 つ書いた fixture で未解決 1 が報告され、正本 4 file では 0 になる<br><code>tests/fixtures/refs/dangling-1.yaml</code></dd></dl></section>
+<p class="sub">「60 分以内にできる」「300k token 以下」は、ここには書かない。測定の仕組みが違うので、M1 の実地試験（非エンジニア 1 回）で初めて数値を決める。</p>
+<h3>06 制約（7）</h3><div class="wrap"><table><tr><th>id</th><th>制約</th><th>中身</th><th>根拠（条）</th><th>出所</th></tr>
+<tr><td>CON1</td><td>順序</td><td>実装本体は scribe2 の骨格（台帳 s2-07l）の現行の出口（要件書の受入基準 ∧ rules 表に持ち主の裁定）が出来てから。文書・裁定・小さな試し（spike）・便 0 の準備は先に進めてよい。</td><td>P-13</td><td>持ち主の裁定 2026-09-10（s2-07l.42 notes）・2026-09-12（P5）</td></tr>
+<tr><td>CON2</td><td>確認</td><td>外部ライブラリを増減するときは、予算（R-6）と使ってよい条件（ライセンス）を見て確認してから。</td><td>A-3</td><td>憲法 A-3</td></tr>
+<tr><td>CON3</td><td>公開</td><td>見せる先は tailnet だけ。認証なしで公開ネットに晒さない。</td><td>N-6</td><td>憲法 N-6・tailnet-serve の下限</td></tr>
+<tr><td>CON4</td><td>移行元</td><td>folio v1 の HTML 72 面は凍結。参照するが書かない。v1 は道具として使い、正しさの物差しにも停止権にもしない。</td><td>P-13</td><td>報告 軸 5・憲法 P-13</td></tr>
+<tr><td>CON5</td><td>席のモデル</td><td>folio の設計判断を下す席（planner 席）は、現行では fable 5.1・effort は high または xhigh で動かす。high と xhigh の切替は持ち主が /effort で手動で行い、folio2 は既定の仕組みを持たない。並列実行・便・作業者の内側は opus まで。</td><td>P-16</td><td>持ち主の裁定 2026-09-12 17:1x（P1 / P4）</td></tr>
+<tr><td>CON6</td><td>scribe2 の限定利用</td><td>便は便 0 以降（s2-07l.149 の裁定後）・作業記憶の退避と復元は当面 v1 の共通 skill（global skill）・並列便は使わない。v1 の並列実行の骨格は使わず、並列は素の Agent の同時起動か、その場で書く Workflow（予算を明示）。</td><td>P-13・P-16</td><td>持ち主の裁定 2026-09-12（P3 / P5・s2 経由 18:1x）</td></tr>
+<tr><td>CON7</td><td>実装の手段</td><td>folio v2 は Rust の単一 crate として実装する（bash の寄せ集めをやめる）。</td><td>—</td><td>裁定 s2-07l.42（folio v2 Rust 化・3 択決定）。GOAL4 から移した（G15 D10）。</td></tr>
+</table></div>
+<h3>07 対応表（要件 × ゴール × 受入 × 図・正本から導出）</h3><div class="wrap"><table><tr><th>要件</th><th>GOAL1</th><th>GOAL2</th><th>GOAL3</th><th>GOAL4</th><th>受入</th><th>図</th></tr>
+<tr><td>FR1 相談窓口（intake）</td><td>●</td><td></td><td></td><td></td><td>AC1</td><td>図2-1・図2-2・図1</td></tr>
+<tr><td>FR2 答えが無くても止まらない</td><td>●</td><td></td><td></td><td></td><td>AC1</td><td>図2-1</td></tr>
+<tr><td>FR3 気づかせる 1 行</td><td></td><td></td><td>●</td><td></td><td>—</td><td>図2-1・図1</td></tr>
+<tr><td>FR4 3 枚を 1 つの生成器で出す</td><td></td><td>●</td><td></td><td></td><td>AC2・AC5</td><td>図2-4・図1</td></tr>
+<tr><td>FR5 検査結果を必ず返す</td><td></td><td></td><td></td><td>●</td><td>AC3</td><td>図2-5・図1・図3</td></tr>
+<tr><td>FR6 憲法を AI の手元に届ける（inject）</td><td></td><td></td><td>●</td><td>●</td><td>AC4</td><td>図2-6</td></tr>
+<tr><td>FR7 組み立てて、見せる（build / serve）</td><td></td><td>●</td><td></td><td></td><td>—</td><td>図2-7</td></tr>
+<tr><td>FR8 途中で足す窓口</td><td>●</td><td></td><td></td><td></td><td>—</td><td>図2-1・図2-2</td></tr>
+<tr><td>NFR1 AI へ常時渡す説明文の上限</td><td></td><td></td><td>●</td><td>●</td><td>—</td><td>図2-6</td></tr>
+<tr><td>NFR2 見た目の材料は 1 か所から</td><td></td><td>●</td><td></td><td></td><td>AC2</td><td>図2-4</td></tr>
+<tr><td>NFR3 参照は必ずつながる</td><td></td><td></td><td></td><td>●</td><td>AC6</td><td>全段</td></tr>
+</table></div>
+<h3>承認欄</h3><ul><li>作成: planner 席（AI・fable 5.1） — 2026-09-12（起草）</li><li>レビュー: 敵対レビュー（ad-hoc WF wf_5e659fc9-0ed・7 観点・反証 24 + 追加反証 34） — 2026-09-12（review/summary.md）</li><li>承認: 持ち主（shuu5） — 2026-09-12（発効（f2-648.1 notes 20:2x））</li></ul><p class="sub">承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。</p>
+<p class="sub">この文書の所属: folio2 / day-1 の相談（f2-648.1）/ v1.0 の読み物。<a href="index.html">入口へ戻る</a></p></div></body></html>

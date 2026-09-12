@@ -1,0 +1,217 @@
+# folio2 要件書 M0 — 正本（v1.0・発効 2026-09-12・planner 席）
+# 位置: f2-648.1 の中身 3（要件書 M0 の正本）。見本 v4 の srs.html（walk 承認済みの提示層）を起点に G15=A を反映:
+#   分離緩め（憲法の根拠文と数値は生成器が正本から差し込む＝ここには id だけ書く・値を再掲しない）/ 参照の母集合は内部 3 空間
+#   （要件 id・条 id・rules 行 id）で外部 pointer は sources 欄 / P-3 は置き場条へ弱めた（憲法側）/ AC 4→6 / RED test は文 + fixture path /
+#   approval ブロック + 発効の 1 段 / GOAL 4 の実装手段（Rust）は CON へ / intake の写像表は rules・annex 側。
+# 規範文は日本語だけ（G10）: when = いつ守るか（型）/ shall = 何をするか・しないか。強度は欄。
+# 状態: 発効（持ち主の承認 2026-09-12「承認する」）。
+
+meta:
+  id: folio2-srs-m0
+  title: 要件書（M0・最初に動く形）
+  version: v1.0
+  status: effective
+  generated: 2026-09-12
+  promise: 持ち主が易しい質問 5 つに答える（答えなくても推奨で進む）と、入口・憲法・要件書の 3 枚が同じ見た目で生成され、機械検査の結果が必ず表示される。
+  counts: {fr: 8, nfr: 3, ac: 6, con: 7}
+  approval:
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-12, stamp: 起草}
+    - {role: レビュー, who: 敵対レビュー（ad-hoc WF wf_5e659fc9-0ed・7 観点・反証 24 + 追加反証 34）, when: 2026-09-12, stamp: review/summary.md}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-12, stamp: "発効（f2-648.1 notes 20:2x）", verbatim: 承認する}
+  effective: 承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。
+
+goals:
+  - {id: GOAL1, title: 相談して決められる, text: 「どの文書が要るか分からない」を無くす。最初と途中の両方に窓口がある。}
+  - {id: GOAL2, title: 見た目が揃う, text: 入口も要件書も同じ品質・同じ様式。割れたページを作れない。}
+  - {id: GOAL3, title: AI が自分で動き出す, text: 持ち主が道具を起動しなくても、AI が必要なときに folio を使う。}
+  - {id: GOAL4, title: 壊れにくい道具, text: 寄せ集めの script をやめ、1 つの実装に置き換える。検査は黙らない。実装の手段は CON7 が決める。}
+
+scope:
+  build:
+    - 相談窓口（intake）と支度表
+    - 3 面（入口・憲法・要件書）の生成
+    - 形の検査（床）と 3 値の判定
+    - セッション開始の 1 行
+    - 憲法を AI の手元へ写す（inject）
+    - 組み立てて見せる（build と serve）
+  not_build:
+    - 判断の記録（ADR）と設計ノートの生成
+    - 「番号が実在するか」を機械で追う仕組みの完成形（M0 は参照 id の未解決 0 を数えるだけ）
+    - 何が変わったかの検出器
+    - "読みやすさの AI 検査（天井）と見た目の AI 検査（P-3.2: 「まだ分からない」として表に出す）"
+
+actors:
+  - {id: owner, name: 持ち主（非エンジニア）, role: 答える・決める}
+  - {id: ai-session, name: AI セッション（Claude Code）, role: 起動する}
+  - {id: scribe2, name: scribe2（変更を運ぶ器）, role: 中で動かす}
+  - {id: folio-v1, name: folio v1（移行元・読み取りのみ）, role: 読み取る}
+  - {id: folio-v2, name: folio v2, role: 道具}
+outputs:
+  - {id: prep-sheet, name: 支度表, from: FR1}
+  - {id: three-faces, name: 3 面（入口・憲法・要件書）, from: FR4}
+  - {id: verdict, name: 検査の結果（3 値）, from: FR5}
+
+# 図 2「folio が 1 回で通す 7 段」の正本（段 3 の空欄を解く: 承認は P-12 と A-1 / A-2 が定める）
+rail:
+  - {n: 1, who: 持ち主, what: 相談して決める, reqs: [FR1, FR2, FR3, FR8]}
+  - {n: 2, who: folio, what: 支度表が出る, reqs: [FR1, FR8]}
+  - {n: 3, who: 持ち主, what: あなたが決める（採否）, reqs: [], basis: [P-1, P-12], note: この段を定める要件は無い（判断は道具の外・憲法 P-1）。承認の受け方は P-12、確認が要る操作は A-1 / A-2。}
+  - {n: 4, who: folio, what: 3 枚を出す, reqs: [FR4, NFR2]}
+  - {n: 5, who: folio, what: 床の検査, reqs: [FR5]}
+  - {n: 6, who: folio, what: AI の手元へ配る, reqs: [FR6, NFR1]}
+  - {n: 7, who: folio, what: 組み立てて、見せる, reqs: [FR7]}
+
+requirements:
+  - id: FR1
+    title: 相談窓口（intake）
+    pattern: event
+    strength: must
+    when: 持ち主が folio intake を実行したとき
+    shall: folio は 5 問以下の易しい質問を推奨回答つきで提示し、回答から文書の集合を写像して支度表 1 枚を生成する。
+    plain: 「何の文書が要るか」を AI と決める入口。質問は 5 つまで、どれにも「おすすめ」がついています。結果は支度表 1 枚。
+    basis: [P-1]
+    verify: {method: test, how: 決まった回答 5 つを入れ、支度表が期待どおりか比較する, ac: [AC1]}
+    goals: [GOAL1]
+    figures: [図2-1, 図2-2, 図1]
+    note: 回答 → 文書集合の写像表は rules / annex 側に置く（G15 D11）。
+  - id: FR2
+    title: 答えが無くても止まらない
+    pattern: unwanted
+    strength: must
+    when: 質問への回答が得られないとき
+    shall: folio は推奨回答で進み、支度表に「推奨で進めた項目」を別枠で明示する。
+    plain: 忙しくて答えられなくても作業は止まりません。ただし「おすすめで決めた所」は支度表で分かるようにします。
+    basis: [P-1]
+    verify: {method: test, how: 無回答で実行し、別枠に全項目が出ることを見る, ac: [AC1]}
+    goals: [GOAL1]
+    figures: [図2-1]
+  - id: FR3
+    title: 気づかせる 1 行
+    pattern: state
+    strength: should
+    when: design-intent が未整備であるあいだ
+    shall: セッション開始時に folio は 1 行だけ案内を出す。止める設定は 1 つ、プロジェクト 1 つにつき 1 回のみ。
+    plain: 文書がまだ無いプロジェクトでは、AI のセッションが始まったときに一言だけ知らせます。うるさければ「止める設定」1 か所で切れます。
+    basis: [P-1]
+    verify: {method: test, how: 未整備 / 整備済 / 止める設定 の 3 状態で出力行数を数える, ac: []}
+    goals: [GOAL3]
+    figures: [図2-1, 図1]
+  - id: FR4
+    title: 3 枚を 1 つの生成器で出す
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    shall: folio は正本（YAML）から入口・憲法・要件書の 3 面を、単一の生成器と単一の design token で生成する。
+    plain: 3 枚とも同じ係が同じ材料（色や字の大きさの元の値と、決まった部品）で作るので、見た目が割れません。
+    basis: [P-2, P-6]
+    verify: {method: test+inspection, how: 目で見て確かめ、NFR2 の数値で判定する, ac: [AC2, AC5]}
+    goals: [GOAL2]
+    figures: [図2-4, 図1]
+  - id: FR5
+    title: 検査結果を必ず返す
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    shall: folio は生成のたびに構造の床を実行し、結果を合格・不合格・まだ分からない の 3 値で返す。実行できなかった検査を合格と表示しない。
+    plain: 「合格・不合格・まだ分からない」の 3 つのどれかを必ず表示します。「分からない」を「合格」にすり替えません。
+    basis: [P-3, P-4]
+    verify: {method: test, how: 床を故意に壊して「まだ分からない」になることを見る, ac: [AC3]}
+    goals: [GOAL4]
+    figures: [図2-5, 図1, 図3]
+  - id: FR6
+    title: 憲法を AI の手元に届ける（inject）
+    pattern: event
+    strength: must
+    when: folio inject --write が実行されたとき
+    shall: folio は憲法の規範文を持つ条を CLAUDE.md の生成区間へ書き込む。--check は区間と正本の差分を検出し、差があれば非 0 で終了する。
+    plain: 憲法の「機械が守るべき条」を、AI が毎回読む場所（CLAUDE.md）に写します。ずれたら知らせます。
+    basis: [P-14, P-6]
+    verify: {method: test, how: 区間を 1 字変えて --check が非 0 になることを見る, ac: [AC4]}
+    goals: [GOAL3, GOAL4]
+    figures: [図2-6]
+    note: 見本の根拠「P-5」は誤参照（P-5 は規則の置き場）。正しくは P-14（注入の条）と P-6（正本から導出）。
+  - id: FR7
+    title: 組み立てて、見せる（build / serve）
+    pattern: event
+    strength: must
+    when: folio build が実行されたとき
+    shall: folio は全面を配信先へ生成する。folio serve は tailnet 上でのみ配信し、公開ネットへ接続（bind）しない。
+    plain: 「作る」と「見せる」の 2 つの命令。見せる先は自分の端末どうしの私設ネット（tailnet）だけ。
+    basis: [N-6]
+    verify: {method: test+inspection, how: tailnet の住所が無いとき起動を拒むことを見る, ac: []}
+    goals: [GOAL2]
+    figures: [図2-7]
+  - id: FR8
+    title: 途中で足す窓口
+    pattern: event
+    strength: should
+    when: 持ち主が文書の追加・削除を求めたとき
+    shall: folio は差分だけを対象に intake を再実行し、支度表を更新する。
+    plain: あとから「やっぱりこの文書も」となっても、最初からやり直さず、差分だけ相談します。
+    basis: [P-1]
+    verify: {method: test, how: 既存の支度表 + 追加 1 型で、質問が差分だけになることを見る, ac: []}
+    goals: [GOAL1]
+    figures: [図2-1, 図2-2]
+
+nonfunctional:
+  - id: NFR1
+    title: AI へ常時渡す説明文の上限
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    shall: folio が常時注入する説明文（agent と skill の名前 + 説明）の合計は rules 行 R-1 の値以下にする。
+    plain: AI が毎回読まされる「道具の説明文」の量に上限を置きます。v1 ではこれが膨らんで遅く高くなりました。
+    basis: [N-5, P-14]
+    rules: [R-1]
+    verify: {method: test, how: 計測 script が数え、R-1 と比べる（値はここに再掲しない）, ac: []}
+    goals: [GOAL3, GOAL4]
+    figures: [図2-6]
+  - id: NFR2
+    title: 見た目の材料は 1 か所から
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    shall: 全生成面の design token は単一の定義に由来し、部品目録に無い class は rules 行 R-3 の値（0）、床が掛からない HTML 面は 0 にする。
+    plain: どのページも、色や字の大きさ・部品を同じ 1 か所から取ります。「このページだけの飾り」は 0 個。検査（床）が掛からないページも 0 枚。
+    basis: [P-2]
+    rules: [R-3, R-5]
+    verify: {method: test, how: 全面の class を部品目録と突合する, ac: [AC2]}
+    goals: [GOAL2]
+    figures: [図2-4]
+  - id: NFR3
+    title: 参照は必ずつながる
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    shall: 文書間の参照 id（要件 id・条 id・rules 行 id の内部 3 空間）の未解決は rules 行 R-4 の値（0）にする。外部への参照（報告 HTML 等）は sources 欄に置き、母集合に入れない。
+    plain: 「FR3 を見よ」「P-2 による」と書いたら、その番号は必ず実在します。行き先の無い番号は 0 個。
+    basis: [P-5, P-7]
+    rules: [R-4]
+    verify: {method: test, how: 参照 id を全部集め、実在を数える, ac: [AC6]}
+    goals: [GOAL4]
+    figures: [全段]
+
+acceptance:
+  - {id: AC1, title: 決まった 5 つの回答で支度表ができ、未回答の項目は別枠に出る, plain: 決まった答えを 5 つ入れると「何を作るか」の表が出て、答えなかった項目は別の枠に分けて出る。それを見せてもらえたら OK。, verifies: [FR1, FR2], red_test: {sentence: 固定回答 5 つの fixture を入れ、期待の支度表と一致し、無回答では全項目が別枠に出る, fixture: tests/fixtures/intake/answers-5.yaml}}
+  - {id: AC2, title: 3 面のすべての class が部品目録に存在し、目録に無い class は 0, plain: 3 枚のページに、部品表に載っていない飾りや、決まった材料以外の色が 1 つも無いことを、機械が数えて見せる。, verifies: [FR4, NFR2], red_test: {sentence: 目録外 class を 1 つ足した fixture で不合格になり、見本 3 面では合格になる, fixture: tests/fixtures/floor/parts-catalog.json}}
+  - {id: AC3, title: 床を壊した状態で「まだ分からない」が表示され、合格にならない, plain: わざと検査を壊した状態で道具を走らせ、「まだ分からない」と表示されて「合格」にならないことを見せる。, verifies: [FR5], red_test: {sentence: 床の実行体を無効にした fixture で verdict が Pending になり Pass にならない, fixture: tests/fixtures/floor/broken-floor/}}
+  - {id: AC4, title: CLAUDE.md の生成区間を 1 字変えると --check が非 0 で終わる, plain: AI の手元にある憲法の写しを 1 文字だけ書き換えて道具を走らせ、道具が「ずれている」と言って止まることを見せる。, verifies: [FR6], red_test: {sentence: 生成区間を 1 byte 変えた CLAUDE.md で --check の終了コードが非 0 になる, fixture: tests/fixtures/inject/claude-md-drift/}}
+  - {id: AC5, title: 見本 3 面（入口・憲法・要件書）を持ち主が実際に開いて読み（walk）承認済み, plain: 3 枚のページを実際に開いて見て、持ち主が「これでよい」と言った記録（言葉どおり・日付つき）がある。, verifies: [FR4], red_test: {sentence: 承認の逐語と日付が台帳（f2-648 notes）と承認欄にある, fixture: bd f2-648 notes（user 逐語 2026-09-12「承認するけど…」）}, note: 付帯条件（user 直命）を受入に含める（G16=A・受入 (d)）。}
+  - {id: AC6, title: 内部 3 空間の参照 id の未解決が 0, plain: 要件・条文・数値の表の番号を全部集めて、行き先の無い番号が 0 個であることを機械が数えて見せる。, verifies: [NFR3], red_test: {sentence: 存在しない id を 1 つ書いた fixture で未解決 1 が報告され、正本 4 file では 0 になる, fixture: tests/fixtures/refs/dangling-1.yaml}}
+
+not_frozen: 「60 分以内にできる」「300k token 以下」は、ここには書かない。測定の仕組みが違うので、M1 の実地試験（非エンジニア 1 回）で初めて数値を決める。
+
+constraints:
+  - {id: CON1, title: 順序, text: 実装本体は scribe2 の骨格（台帳 s2-07l）の現行の出口（要件書の受入基準 ∧ rules 表に持ち主の裁定）が出来てから。文書・裁定・小さな試し（spike）・便 0 の準備は先に進めてよい。, basis: [P-13], source: 持ち主の裁定 2026-09-10（s2-07l.42 notes）・2026-09-12（P5）}
+  - {id: CON2, title: 確認, text: 外部ライブラリを増減するときは、予算（R-6）と使ってよい条件（ライセンス）を見て確認してから。, basis: [A-3], source: 憲法 A-3}
+  - {id: CON3, title: 公開, text: 見せる先は tailnet だけ。認証なしで公開ネットに晒さない。, basis: [N-6], source: 憲法 N-6・tailnet-serve の下限}
+  - {id: CON4, title: 移行元, text: folio v1 の HTML 72 面は凍結。参照するが書かない。v1 は道具として使い、正しさの物差しにも停止権にもしない。, basis: [P-13], source: 報告 軸 5・憲法 P-13}
+  - {id: CON5, title: 席のモデル, text: folio の設計判断を下す席（planner 席）は、現行では fable 5.1・effort は high または xhigh で動かす。high と xhigh の切替は持ち主が /effort で手動で行い、folio2 は既定の仕組みを持たない。並列実行・便・作業者の内側は opus まで。, basis: [P-16], source: 持ち主の裁定 2026-09-12 17:1x（P1 / P4）, rules: [D-1, D-2]}
+  - {id: CON6, title: scribe2 の限定利用, text: 便は便 0 以降（s2-07l.149 の裁定後）・作業記憶の退避と復元は当面 v1 の共通 skill（global skill）・並列便は使わない。v1 の並列実行の骨格は使わず、並列は素の Agent の同時起動か、その場で書く Workflow（予算を明示）。, basis: [P-13, P-16], source: 持ち主の裁定 2026-09-12（P3 / P5・s2 経由 18:1x）, rules: [D-3, D-4, D-7]}
+  - {id: CON7, title: 実装の手段, text: folio v2 は Rust の単一 crate として実装する（bash の寄せ集めをやめる）。, basis: [], source: 裁定 s2-07l.42（folio v2 Rust 化・3 択決定）。GOAL4 から移した（G15 D10）。}
+
+sources:
+  - {id: report-v2-shape, name: 報告「folio2 — v2 の形」, where: .claude-session/reports/2026-09-12-v2-shape/index.html（gitignored・参照の母集合に入れない）}
+  - {id: mockup-v4, name: 見本 v4（承認済み提示層）, where: .claude-session/reports/2026-09-12-mockup-3faces-v4/}
+
+glossary_pointer: vocabulary.yaml（要件書 §8 は見出し + リンクだけ・定義はここに写さない）
