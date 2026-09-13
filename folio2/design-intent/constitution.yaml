@@ -274,7 +274,7 @@ articles:
       - {kind: scribe2-article, ref: "C7 / C7.2（対話面は 1 つ・逐語で記帳）"}
       - {kind: folio2-ruling, ref: "G8=A（C7 を足す）・運用実績（G1〜G16・P1〜P5 の裁定はすべて bd notes の逐語）・受入 (c)"}
     mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
-    relations: {rules: [R-8], sections: [§6]}
+    relations: {rules: [R-8, D-10], sections: [§6]}
 
   - id: P-13
     title: 拘束するのは設計文書、前の版は道具、自分を作るのは最後
