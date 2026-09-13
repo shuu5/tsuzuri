@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
-"""正本 4 file（constitution / rules / vocabulary / srs の draft YAML）→ 読み物 HTML 1 面。手で直さない（再生成する）。"""
-import yaml,html,sys,os
+"""正本 4 file（constitution / rules / vocabulary / srs）+ 判断の記録（adr/ADR-n.yaml）→ 読み物 HTML 1 面。手で直さない（再生成する）。"""
+import yaml,html,sys,os,glob
 import argparse
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from strict_yaml import load as _yload   # 重複キーを拒む loader（床 check_draft.py と共有・後勝ちで黙って描かない）
 _ap=argparse.ArgumentParser(); _ap.add_argument('--check',action='store_true'); _ap.add_argument('--write',action='store_true'); _ap.add_argument('--dir',default='design-intent'); _ap.add_argument('--out',default='preview/readable.html'); _a=_ap.parse_args(); os.chdir(_a.dir)
 E=html.escape
-c=yaml.safe_load(open('constitution.yaml',encoding='utf-8')); r=yaml.safe_load(open('rules.yaml',encoding='utf-8'))
-v=yaml.safe_load(open('vocabulary.yaml',encoding='utf-8')); s=yaml.safe_load(open('srs.yaml',encoding='utf-8'))
+def _rd(p): return _yload(open(p,encoding='utf-8').read())
+c=_rd('constitution.yaml'); r=_rd('rules.yaml')
+v=_rd('vocabulary.yaml'); s=_rd('srs.yaml')
 VER=c['meta']['version']
+ADRS=sorted((_rd(p) for p in glob.glob('adr/ADR-*.yaml')),key=lambda d:int(str(d['id']).split('-')[1]))
+ANCH=[str(e.get('version')) for e in (_rd('anchors/index.yaml') or {}).get('entries',[])] if os.path.exists('anchors/index.yaml') else []
+ADRTERM=next((t for t in v['terms'] if t.get('id')=='adr'),None)
+AST={'proposed':('提案中・拘束力なし','#916626'),'accepted':('発効','#1e7b65'),'retired':('廃止','#666666')}
+VERD={'adopted':'採用','rejected':'退けた'}
+DOCST={'effective':'発効・拘束力あり','draft':'未承認・拘束力なし'}
 TIER={'always':('いつも守る','#1e7b65'),'ask-first':('確認してから変える','#916626'),'never':('絶対にやらない','#b22323')}
 STR={'must':'必ず守る','must-not':'決してしない','should':'既定（外すなら理由）'}
 MECH={'reject':'機械が落とす','build-check':'生成時の検査','human-review':'人が目で確かめる','none':'なし'}
@@ -14,10 +23,10 @@ LIVE={'now':'いま動く','M0':'M0 で動く','delivery-0':'便 0 で動く','M
 BIND={'tool':'道具','practice':'作法','both':'両方'}; KIND={'v1-incident':'v1 の実害','scribe2-article':'scribe2 の条','folio2-ruling':'持ち主の裁定'}
 PAT={'ubiquitous':'つねに','event':'〜のとき','state':'〜のあいだ','unwanted':'〜になったら','optional':'〜ならば'}
 css=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'render-preview.css'),encoding='utf-8').read()
-o=['<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>folio2 — day-1 文書 %s（憲法・rules・語彙・要件書）</title><style>'%E(VER)+css+'</style></head><body><div class="page">']
+o=['<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>folio2 — day-1 文書 %s（憲法・rules・語彙・要件書・判断の記録）</title><style>'%E(VER)+css+'</style></head><body><div class="page">']
 m=c['meta']; cnt=m['counts']
-o.append('<h1>folio2 — day-1 文書 %s</h1><p class="sub">正本 4 file（<code>constitution.yaml</code> / <code>rules.yaml</code> / <code>vocabulary.yaml</code> / <code>srs.yaml</code>）を <code>render-draft.py</code> で読み物にしたもの。この HTML は手で直さない。状態: <b>未承認・拘束力なし</b>（binding: %s）。G1〜G16・P1〜P5 の裁定を反映。敵対レビュー（<code>review/summary.md</code>）の生存指摘を畳んだ版。</p>'%(E(VER),E(str(m.get('binding')))))
-o.append('<nav class="toc"><a href="#const">憲法（%d 条）</a><a href="#rules">rules（閾値 %d・開発規律 %d）</a><a href="#vocab">語彙（%d 語 + 欄 %d）</a><a href="#srs">要件書 M0（FR %d・NFR %d・AC %d・CON %d）</a></nav>'%(len(c['articles']),len(r['thresholds']),len(r['discipline']),len(v['terms']),len(v.get('field_terms',[])),len(s['requirements']),len(s['nonfunctional']),len(s['acceptance']),len(s['constraints'])))
+o.append('<h1>folio2 — day-1 文書 %s</h1><p class="sub">正本 4 file（<code>constitution.yaml</code> / <code>rules.yaml</code> / <code>vocabulary.yaml</code> / <code>srs.yaml</code>）と判断の記録（<code>adr/ADR-n.yaml</code>）を <code>render_preview.py</code> で読み物にしたもの。この HTML は手で直さない。状態: <b>%s</b>（binding: %s）。G1〜G16・P1〜P5 の裁定を反映。敵対レビュー（<code>review/summary.md</code>）の生存指摘を畳んだ版。</p>'%(E(VER),E(DOCST.get(m.get('status'),str(m.get('status')))),E(str(m.get('binding')))))
+o.append('<nav class="toc"><a href="#const">憲法（%d 条）</a><a href="#rules">rules（閾値 %d・開発規律 %d）</a><a href="#vocab">語彙（%d 語 + 欄 %d）</a><a href="#srs">要件書 M0（FR %d・NFR %d・AC %d・CON %d）</a><a href="#adr">判断の記録（%d）</a></nav>'%(len(c['articles']),len(r['thresholds']),len(r['discipline']),len(v['terms']),len(v.get('field_terms',[])),len(s['requirements']),len(s['nonfunctional']),len(s['acceptance']),len(s['constraints']),len(ADRS)))
 if m.get('changes_from_v0_2'):
     o.append('<details open><summary>v0.2 からの変更（%d 件）</summary><ul>'%len(m['changes_from_v0_2'])+''.join('<li>%s</li>'%E(str(x)) for x in m['changes_from_v0_2'])+'</ul></details>')
 if m.get('changes_from_v0_1'):
@@ -96,6 +105,23 @@ for x in s['requirements']+s['nonfunctional']:
     o.append('<tr><td>%s %s</td>'%(x['id'],E(x['title']))+''.join('<td>%s</td>'%('●' if g['id'] in x['goals'] else '') for g in s['goals'])+'<td>%s</td><td>%s</td></tr>'%(E('・'.join(acmap.get(x['id'],[])) or '—'),E('・'.join(x['figures']))))
 o.append('</table></div>')
 o.append('<h3>承認欄</h3><ul>'+''.join('<li>%s: %s — %s%s</li>'%(E(ap['role']),E(str(ap['who'])),E(str(ap.get('when') or '未')),('（%s）'%E(str(ap['stamp'])) if ap.get('stamp') else '')) for ap in sm['approval'])+'</ul><p class="sub">%s</p>'%E(sm['effective']))
+# ── 判断の記録（ADR・正本 adr/ADR-n.yaml・schema は adr/schema.yaml・M0 の生成器は無いので day-1 の暫定）
+o.append('<h2 id="adr">判断の記録（ADR・%d 件・正本 <code>adr/ADR-n.yaml</code>・欄の決まりは <code>adr/schema.yaml</code>）</h2><p class="note">%s 凍結 anchor（差分検査の比較元・索引 <code>anchors/index.yaml</code> の列・古い順）: %s</p>'%(len(ADRS),E((ADRTERM or {}).get('def','')),E(' → '.join(ANCH)) if ANCH else '<b>なし（または索引が空）＝差分検査は「まだ分からない」</b>'))
+for d in ADRS:
+    sn,scol=AST[d['status']]
+    o.append('<section class="art" id="%s"><h4><span class="gid">%s</span>%s<span class="tier" style="background:%s">%s</span><span class="bind">%s</span></h4>'%(E(d['id']),E(d['id']),E(d['title']),scol,sn,E(str(d['date']))))
+    o.append('<p class="plain"><b>やさしく言うと</b><br>%s</p><dl>'%E(d['plain']))
+    o.append('<dt>何が問題か</dt><dd>%s</dd><dt>何を決めたか</dt><dd>%s</dd>'%(E(d['context']),E(d['decision'])))
+    o.append('<dt>案（採用は 1 つ）</dt><dd>'+'<br>'.join('<b>%s</b>〔%s〕 %s — %s'%(E(x['name']),VERD[x['verdict']],E(x['text']),E(x['reason'])) for x in d['options'])+'</dd>')
+    o.append('<dt>根拠</dt><dd>%s</dd><dt>撤退条件</dt><dd>[%s] %s</dd>'%(E('・'.join(map(str,d['basis']))),E(d['retreat']['kind']),E(d['retreat']['condition'])))
+    if d.get('amends'): o.append('<dt>改訂する条文（版・欄）</dt><dd>'+'<br>'.join('<b>%s</b> %s.%s: 「%s」→「%s」'%(E(str(e.get('version'))),E(str(e['target'])),E(str(e.get('field'))),E(str(e['previous_text'])),E(str(e['new_text']))) for e in d['amends'])+'</dd>')
+    if d.get('grill'): g=d['grill']; o.append('<dt>反対側からの確認（grill）</dt><dd>%s・%s・%s<br>%s</dd>'%(E(str(g['when'])),E(str(g['who'])),E(str(g['where'])),E(str(g['summary']))))
+    if d.get('consequences'): o.append('<dt>この判断で変わること</dt><dd>%s</dd>'%'<br>'.join(E(str(x)) for x in d['consequences']))
+    ap=d.get('approval'); o.append('<dt>承認</dt><dd>%s</dd>'%(E('%s・%s・裁定 %s・「%s」（対話面 = rules 行 %s）'%(ap['who'],ap['date'],ap['ruling'],ap['verbatim'],ap['surface'])) if ap else '未（提案中・持ち主の逐語と日付が入ると発効）'))
+    for k,lab in (('supersedes','置き換えた判断'),('superseded_by','後継の判断')):
+        if d.get(k): o.append('<dt>%s</dt><dd>%s</dd>'%(lab,E(str(d[k]))))
+    if d.get('note'): o.append('<dt>planner 注</dt><dd>%s</dd>'%E(str(d['note'])))
+    o.append('</dl></section>')
 o.append('<p class="sub">この文書の所属: folio2 / day-1 の相談（f2-648.1）/ %s の読み物。<a href="index.html">入口へ戻る</a></p></div></body></html>'%E(VER))
 out='\n'.join(o); mode='--check' if _a.check else '--write'; OUT=_a.out
 if mode=='--check':

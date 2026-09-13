@@ -232,7 +232,7 @@ articles:
     plain: 理由の記録（ADR）を書くときは、「うまくいかなかったら、こうなった時点でやめる」も一緒に書きます。
     rationale:
       - {kind: v1-incident, ref: "ADR-0047 §2.4（confirmed 偽陽性 1 件で warn へ戻す・判断者は user）"}
-    mechanism: {kind: build-check, live: adr, stage: post, polarity: fail-closed, note: 判断の記録（ADR）の正本 schema で retreat 欄を必須にする（空なら生成が落ちる）。ADR の正本 schema が置かれるまでは動かない。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 判断の記録（ADR）の正本 schema で retreat 欄を必須にする（空なら生成が落ちる）。ADR の正本 schema が置かれるまでは動かない。}
     relations: {sections: [§6]}
 
   - id: P-10
@@ -399,7 +399,7 @@ articles:
       - {kind: scribe2-article, ref: "A2（主張された利益の grill 検証を前置 → user 裁定）"}
       - {kind: v1-incident, ref: "ADR-0056 §2.1（宣言内容を 1 文字も変えない生成経路の flip だけが「変更」に該当しない。宣言文・段・id・見出しの変更は対象）"}
       - {kind: folio2-ruling, ref: "G5=A（rules 数値の変更は P-17 へ分離）・G8=A（M4 は但し書き）"}
-    mechanism: {kind: build-check, live: adr, stage: post, polarity: fail-closed, note: 正本の baseline diff — 母集合は schema 節・前文・各条の id / title / statements / tier / binds（amendment_scope）。差分には対応する amended_by（adr・date・approved_by・ruling・previous_text・rationale）が要り、amended_by.adr が指す判断の記録の実在も同じ検査が確かめる（R-4 の母集合＝内部 3 空間は変えない・G15）。差分 0 なら A-2.2 の非改訂（自己申告では適用しない）。無ければ N-4 が落とす。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本の baseline diff — 母集合は schema 節・前文・各条の id / title / statements / tier / binds（amendment_scope）。差分には対応する amended_by（adr・date・approved_by・ruling・previous_text・rationale）が要り、amended_by.adr が指す判断の記録の実在も同じ検査が確かめる（R-4 の母集合＝内部 3 空間は変えない・G15）。差分 0 なら A-2.2 の非改訂（自己申告では適用しない）。無ければ N-4 が落とす。}
     relations: {rules: [R-4], articles: [N-4, P-8, P-17], sections: [§6]}
 
   - id: A-3
@@ -483,7 +483,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "N4 / N4.2（新 ADR + delta marker + 裁定 id）"}
       - {kind: folio2-ruling, ref: "G5=A（N-4 新設）"}
-    mechanism: {kind: build-check, live: adr, stage: post, polarity: fail-closed, note: A-2 と同じ検査関数・同じ母集合（schema 節・前文・各条の id / title / statements / tier / binds）。対応する amended_by が無ければ落とす（A-2 は手続き・N-4 はその拒否）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: A-2 と同じ検査関数・同じ母集合（schema 節・前文・各条の id / title / statements / tier / binds）。対応する amended_by が無ければ落とす（A-2 は手続き・N-4 はその拒否）。}
     relations: {articles: [A-2], sections: [§6]}
 
   - id: N-5
