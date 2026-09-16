@@ -91,8 +91,8 @@ if s.get('scope_m1'):
     sm1=s['scope_m1']; o.append('<p><b>M1 で作る</b>: %s</p><p><b>M1 では作らない</b>: %s</p>%s'%(E(' ／ '.join(sm1.get('build',[]))),E(' ／ '.join(sm1.get('not_build',[]))),('<p class="sub">%s</p>'%E(str(sm1['note']))) if sm1.get('note') else ''))
 o.append('<h3>図 2 folio が 1 回で通す 7 段</h3><ol>'+''.join('<li><b>%s</b>（%s）— 要件: %s%s</li>'%(E(st['what']),E(st['who']),E('・'.join(st['reqs']) or '（この段を定める要件は無い）'),('　<span class="sub">%s</span>'%E(st['note'])) if st.get('note') else '') for st in s['rail'])+'</ol>')
 def req(x):
-    o.append('<section class="art" id="%s"><h4><span class="gid">%s</span>%s<span class="tier" style="background:#2a4d6e">%s</span>%s</h4>'%(x['id'],x['id'],E(x['title']),STR[x['strength']],('<span class="bind">段: %s</span>'%E(str(x['milestone']))) if x.get('milestone') else ''))
-    o.append('<div class="st"><span class="sid">%s</span>%s → %s</div>'%(PAT[x['pattern']],E(x['when']),E(x['shall'])))
+    # 要件の見出しと規範文（when → shall）は **同じ 1 行**に出す: 器（scribe2）の審査は要件面の id="FRn" を含む行 1 本を材料に読む（review.rs requirement_row・.vessel.toml requirements = この読み物）。見た目は変えない
+    o.append('<section class="art" id="%s"><h4><span class="gid">%s</span>%s<span class="tier" style="background:#2a4d6e">%s</span>%s</h4><div class="st"><span class="sid">%s</span>%s → %s</div>'%(x['id'],x['id'],E(x['title']),STR[x['strength']],('<span class="bind">段: %s</span>'%E(str(x['milestone']))) if x.get('milestone') else '',PAT[x['pattern']],E(x['when']),E(x['shall'])))
     o.append('<p class="plain"><b>やさしく言うと</b><br>%s</p><dl>'%E(x['plain']))
     o.append('<dt>根拠（条）</dt><dd>%s</dd><dt>確かめ方</dt><dd>%s: %s（受入: %s）</dd><dt>ゴール</dt><dd>%s</dd>'%(E('・'.join(x['basis']) or '—'),E(x['verify']['method']),E(x['verify']['how']),E('・'.join(x['verify'].get('ac',[])) or '—'),E('・'.join(x['goals']))))
     if x.get('rules'): o.append('<dt>rules 行</dt><dd>%s</dd>'%E('・'.join(x['rules'])))
