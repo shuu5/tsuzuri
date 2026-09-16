@@ -1,0 +1,11 @@
+# folio check の歯の fixture（4 file 形・crates/folio/tests/check.rs）。正本の形だけを持つ最小の要件書。
+meta:
+  id: fixture-srs
+  version: v1.0
+goals:
+  - {id: GOAL1, title: 相談して決められる, text: 窓口がある。}
+requirements:
+  - id: FR5
+    title: 検査結果を必ず返す
+    shall: folio は結果を 3 値で返す。
+    plain: 3 つのどれかを必ず表示します。

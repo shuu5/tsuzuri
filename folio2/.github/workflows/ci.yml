@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain（rust-toolchain.toml）
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: taiki-e/install-action@nextest
+      # parity の歯が day-1 の床（scripts/check_draft.py）を回す
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyyaml
+      - run: cargo nextest run --workspace --no-tests=fail --no-fail-fast
+      - run: cargo clippy --workspace --all-targets -- -D warnings

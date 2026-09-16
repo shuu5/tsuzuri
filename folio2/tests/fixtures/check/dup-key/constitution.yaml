@@ -1,0 +1,16 @@
+# folio check の歯の fixture（4 file 形・crates/folio/tests/check.rs）。正本の形だけを持つ最小の憲法。parity の入力にはしない。
+schema:
+  top_level: [schema, meta, precedence, articles]
+meta:
+  id: fixture-constitution
+  version: v1.0
+precedence:
+  text: 条どうしが衝突したら揃いを選ぶ。
+  plain: 迷ったら揃っている方を選びます。
+articles:
+  - id: P-1
+    title: 判断する道具を作らない
+    tier: always
+    statements:
+      - {id: P-1.1, pattern: ubiquitous, strength: must, text: folio は文書を生成する。}
+    plain: 道具は書類を作るところまで。

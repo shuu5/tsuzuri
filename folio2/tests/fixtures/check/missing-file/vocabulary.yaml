@@ -1,0 +1,7 @@
+# folio check の歯の fixture（4 file 形・crates/folio/tests/check.rs）。正本の形だけを持つ最小の語彙。
+terms:
+  - {id: floor, term: 床, en: floor, short: 機械が数える検査, def: 機械が決定的に検査する層。}
+field_terms:
+  - {id: tier, term: 段, en: tier, def: 条の実行時の扱い。}
+identifiers:
+  - {group: 道具と製品, words: [folio], why: 固有名}

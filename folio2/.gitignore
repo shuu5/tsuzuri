@@ -27,3 +27,6 @@
 
 # Python の生成物
 __pycache__/
+
+# Rust の生成物（cargo の build 出力）
+/target/

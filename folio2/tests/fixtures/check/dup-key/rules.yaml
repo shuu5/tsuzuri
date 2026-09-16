@@ -1,0 +1,11 @@
+# folio check の歯の fixture（4 file 形・crates/folio/tests/check.rs）。変異 = 行 R-1 の表にキー value を 2 度書く → 1。
+schema:
+  top_level: [schema, thresholds, discipline]
+thresholds:
+  - id: R-1
+    article: P-1
+    what: 説明文の合計
+    value: "2,000 字 以下"
+    value: "3,000 字 以下"
+discipline:
+  - {id: D-1, article: P-1, what: 並列の内側は opus まで}
