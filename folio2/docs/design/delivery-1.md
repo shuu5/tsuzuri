@@ -17,6 +17,10 @@
 
 読めない file・型が違う節は「まだ分からない」（終了コード 2・合格にしない）。
 
+便 0 が置いた形（admin 席の実測・main 8f7f238）: `crates/folio/` は bin だけで `lib.rs` は無く、`src/main.rs` が `mod check; mod verdict; mod yaml;` を宣言する。便 1 は `mod refs;` を `main.rs` に足し、`check.rs` の `check_dir` から `refs` を呼ぶ。integration test は binary 経由（`Command::new(env!("CARGO_BIN_EXE_folio"))`・`tests/check.rs` と `tests/parity.rs` と同じ形）で、`tests/refs.rs` も同じ形にする。外部 crate は増やさない（`Cargo.toml` の依存は clap と yaml-rust2 の 2 つのまま・`Cargo.toml` と `Cargo.lock` は触らない）。参照 id の形は正規表現を使わず文字の走査で判定する。新規の fixture dir（`tests/fixtures/refs/` の 3 組）は file を 1 本ずつ `+` で write-set に列挙してあり、器の受付はそれで通る（dir 項目は受けない）。
+
+「正本で合格（終了コード 0）」を測る歯は、便 0 の parity の入力 (1)（変異なし → 床 0 / folio 0・`tests/parity.rs` の `parity_unmutated_passes`）で、便 1 でも同じ file の便 0 の歯 5 本（(1) 変異なし 0 / (2) rules.yaml の重複キー 1 / (3) constitution.yaml の未知の節 1 / (4) constitution.yaml の条の plain 空 1 / (5) constitution.yaml を欠く 2）をそのまま残す。便 1 が足す parity の入力 (6)〜(9) は期待がすべて 1 で、それだけでよい。
+
 突き合わせの歯（`crates/folio/tests/parity.rs`・便 0 の 5 入力に足す）: 歯の中で design-intent の写し全部（adr/ と anchors/ を含む）を一時 dir に作り `git init` と 1 commit を行い、変異を 1 つだけ当てて `python3 scripts/check_draft.py --dir <写し>` と `folio check --dir <写し>` の終了コードが一致することを見る。足す入力と期待の終了コード: (6) `srs.yaml` の FR1 の basis に実在しない条 id を 1 つ足す → 1 / (7) `rules.yaml` の R-3 の article を実在しない条 id にする → 1 / (8) `constitution.yaml` の P-2 の relations.rules から R-3 を外す → 1 / (9) `constitution.yaml` の meta.counts.always を実数と違う値にする → 1。要件書と語彙の欄の非空には変異を当てない（床が数えないため）。
 
 `folio check` 自身の歯（`crates/folio/tests/refs.rs`）の fixture は `tests/fixtures/refs/` の 4 file 形（正本 4 file の写しに変異 1 つ・parity の入力にはしない）。変異先と期待: `dangling-id/` = srs.yaml の FR1 の basis に実在しない条 id → 1 / `orphan-rule/` = constitution.yaml の P-2 の relations.rules から R-3 を外す → 1 / `bad-counts/` = constitution.yaml の meta.counts.always を実数と違う値に → 1。
