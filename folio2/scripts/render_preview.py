@@ -9,7 +9,12 @@ E=html.escape
 def _rd(p): return _yload(open(p,encoding='utf-8').read())
 c=_rd('constitution.yaml'); r=_rd('rules.yaml')
 v=_rd('vocabulary.yaml'); s=_rd('srs.yaml')
-VER=c['meta']['version']
+VER=c['meta']['version']; SVER=s['meta']['version']   # 憲法の版・要件書の版（title / 見出し / 脚注はここから導出・固定文字を置かない）
+def val(x,d=0):   # 欄の値の読める形（R-16 のような一覧型・表型の値を python の repr で描かない）。表 = 欄ごとに改行（入れ子は 1 字下げ）・一覧 = 「」で括って「・」区切り・null は型付きデータの値としてそのまま見せる
+    if isinstance(x,dict): return '<br>'.join('%s<b>%s</b>: %s'%('　'*d,E(str(k)),('<br>'+val(vv,d+1)) if isinstance(vv,dict) else val(vv,d+1)) for k,vv in x.items())
+    if isinstance(x,list): return '・'.join(('「%s」'%E(str(i)) if isinstance(i,str) else val(i,d)) for i in x)
+    if x is None: return '<code>null</code>'
+    return E(str(x))
 ADRS=sorted((_rd(p) for p in glob.glob('adr/ADR-*.yaml')),key=lambda d:int(str(d['id']).split('-')[1]))
 ANCH=[str(e.get('version')) for e in (_rd('anchors/index.yaml') or {}).get('entries',[])] if os.path.exists('anchors/index.yaml') else []
 ADRTERM=next((t for t in v['terms'] if t.get('id')=='adr'),None)
@@ -23,10 +28,11 @@ LIVE={'now':'いま動く','M0':'M0 で動く','delivery-0':'便 0 で動く','M
 BIND={'tool':'道具','practice':'作法','both':'両方'}; KIND={'v1-incident':'v1 の実害','scribe2-article':'scribe2 の条','folio2-ruling':'持ち主の裁定'}
 PAT={'ubiquitous':'つねに','event':'〜のとき','state':'〜のあいだ','unwanted':'〜になったら','optional':'〜ならば'}
 css=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'render-preview.css'),encoding='utf-8').read()
-o=['<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>folio2 — day-1 文書 %s（憲法・rules・語彙・要件書・判断の記録）</title><style>'%E(VER)+css+'</style></head><body><div class="page">']
+o=['<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>folio2 — 設計文書の読み物（憲法 %s・要件書 %s・判断の記録 %d 件）</title><style>'%(E(VER),E(SVER),len(ADRS))+css+'</style></head><body><div class="page">']
 m=c['meta']; cnt=m['counts']
-o.append('<h1>folio2 — day-1 文書 %s</h1><p class="sub">正本 4 file（<code>constitution.yaml</code> / <code>rules.yaml</code> / <code>vocabulary.yaml</code> / <code>srs.yaml</code>）と判断の記録（<code>adr/ADR-n.yaml</code>）を <code>render_preview.py</code> で読み物にしたもの。この HTML は手で直さない。状態: <b>%s</b>（binding: %s）。G1〜G16・P1〜P5 の裁定を反映。敵対レビュー（<code>review/summary.md</code>）の生存指摘を畳んだ版。</p>'%(E(VER),E(DOCST.get(m.get('status'),str(m.get('status')))),E(str(m.get('binding')))))
-o.append('<nav class="toc"><a href="#const">憲法（%d 条）</a><a href="#rules">rules（閾値 %d・開発規律 %d）</a><a href="#vocab">語彙（%d 語 + 欄 %d）</a><a href="#srs">要件書 M0（FR %d・NFR %d・AC %d・CON %d）</a><a href="#adr">判断の記録（%d）</a></nav>'%(len(c['articles']),len(r['thresholds']),len(r['discipline']),len(v['terms']),len(v.get('field_terms',[])),len(s['requirements']),len(s['nonfunctional']),len(s['acceptance']),len(s['constraints']),len(ADRS)))
+sm=s['meta']
+o.append('<h1>folio2 — 設計文書の読み物（憲法 %s・要件書 %s）</h1><p class="sub">正本 4 file（<code>constitution.yaml</code> / <code>rules.yaml</code> / <code>vocabulary.yaml</code> / <code>srs.yaml</code>）と判断の記録（<code>adr/ADR-n.yaml</code>）を <code>render_preview.py</code> で読み物にしたもの。この HTML は手で直さない。憲法 %s: <b>%s</b>（binding: %s）／ 要件書 %s: <b>%s</b>%s</p>'%(E(VER),E(SVER),E(VER),E(DOCST.get(m.get('status'),str(m.get('status')))),E(str(m.get('binding'))),E(SVER),E(DOCST.get(sm.get('status'),str(sm.get('status')))),('（%s）'%E(str(sm['status_note']))) if sm.get('status_note') else ''))
+o.append('<nav class="toc"><a href="#const">憲法（%d 条）</a><a href="#rules">rules（閾値 %d・開発規律 %d）</a><a href="#vocab">語彙（%d 語 + 欄 %d）</a><a href="#srs">要件書 %s（FR %d・NFR %d・AC %d・CON %d）</a><a href="#adr">判断の記録（%d）</a></nav>'%(len(c['articles']),len(r['thresholds']),len(r['discipline']),len(v['terms']),len(v.get('field_terms',[])),E(SVER),len(s['requirements']),len(s['nonfunctional']),len(s['acceptance']),len(s['constraints']),len(ADRS)))
 if m.get('changes_from_v0_2'):
     o.append('<details open><summary>v0.2 からの変更（%d 件）</summary><ul>'%len(m['changes_from_v0_2'])+''.join('<li>%s</li>'%E(str(x)) for x in m['changes_from_v0_2'])+'</ul></details>')
 if m.get('changes_from_v0_1'):
@@ -64,7 +70,7 @@ o.append('<h3>08 出所</h3><ol>'+''.join('<li><b>%s</b> — %s</li>'%(E(x['name
 o.append('<h2 id="rules">rules — 閾値の行（数値は条文に書かない）</h2><div class="wrap"><table><tr><th>id</th><th>条</th><th>何の数値か</th><th>値</th><th>種別</th><th>状態</th><th>裁定</th><th>時刻</th><th>注</th></tr>')
 for x in r['thresholds']:
     extra='<br>'.join('<b>%s</b>: %s'%(k,E(str(x[k]))) for k in ('projection','basis','same_failure','population','note') if x.get(k))
-    o.append('<tr>'+''.join('<td>%s</td>'%E(str(x.get(k) if x.get(k) is not None else '—')) for k in ('id','article','what','value','kind','status','ruling','ruled_at'))+'<td>%s</td></tr>'%extra)
+    o.append('<tr>'+''.join('<td>%s</td>'%(val(x[k]) if k=='value' and isinstance(x.get(k),(dict,list)) else E(str(x.get(k) if x.get(k) is not None else '—'))) for k in ('id','article','what','value','kind','status','ruling','ruled_at'))+'<td>%s</td></tr>'%extra)
 o.append('</table></div><p class="sub">置かない数値: %s（%s）</p>'%(E(' ／ '.join(r['schema']['excluded']['what'])),E(r['schema']['excluded']['why'])))
 o.append('<h3>開発規律の行（人が守る作法・条から id で参照）</h3><div class="wrap"><table><tr><th>id</th><th>条</th><th>内容</th><th>状態</th><th>裁定</th><th>時刻</th><th>注</th></tr>')
 for x in r['discipline']: o.append('<tr>'+''.join('<td>%s</td>'%E(str(x.get(k) if x.get(k) is not None else '—')) for k in ('id','article','what','status','ruling','ruled_at','note'))+'</tr>')
@@ -76,12 +82,16 @@ o.append('</table></div>')
 if v.get('field_terms'):
     o.append('<h3>欄の名前（機械層・読者は引かない）</h3><div class="wrap"><table><tr><th>欄</th><th>原語</th><th>定義</th></tr>'+''.join('<tr><td><b>%s</b></td><td>%s</td><td>%s</td></tr>'%(E(t['term']),E(str(t.get('en') or '')),E(t['def'])) for t in v['field_terms'])+'</table></div>')
 # ── 要件書
-sm=s['meta']; o.append('<h2 id="srs">要件書 M0 — %s</h2><p class="note">%s</p>'%(E(sm['title']),E(sm['promise'])))
+o.append('<h2 id="srs">%s — %s</h2><p class="note">%s</p>'%(E(sm['title']),E(SVER),E(sm['promise'])))
+for k in sorted(k for k in sm if str(k).startswith('changes_from_')):   # 版ごとの変更点（憲法の changes_from_v0_x と同じ扱い・欄が増えれば追従）
+    o.append('<details><summary>%s からの変更（%d 件）</summary><ul>'%(E(str(k)[len('changes_from_'):].replace('_','.')),len(sm[k]))+''.join('<li>%s</li>'%E(str(x)) for x in sm[k])+'</ul></details>')
 o.append('<h3>01 ゴール</h3><ul>'+''.join('<li><b>%s %s</b> — %s</li>'%(g['id'],E(g['title']),E(g['text'])) for g in s['goals'])+'</ul>')
 o.append('<h3>02 範囲</h3><p><b>M0 で作る</b>: %s</p><p><b>M0 では作らない</b>: %s</p>'%(E(' ／ '.join(s['scope']['build'])),E(' ／ '.join(s['scope']['not_build']))))
+if s.get('scope_m1'):
+    sm1=s['scope_m1']; o.append('<p><b>M1 で作る</b>: %s</p><p><b>M1 では作らない</b>: %s</p>%s'%(E(' ／ '.join(sm1.get('build',[]))),E(' ／ '.join(sm1.get('not_build',[]))),('<p class="sub">%s</p>'%E(str(sm1['note']))) if sm1.get('note') else ''))
 o.append('<h3>図 2 folio が 1 回で通す 7 段</h3><ol>'+''.join('<li><b>%s</b>（%s）— 要件: %s%s</li>'%(E(st['what']),E(st['who']),E('・'.join(st['reqs']) or '（この段を定める要件は無い）'),('　<span class="sub">%s</span>'%E(st['note'])) if st.get('note') else '') for st in s['rail'])+'</ol>')
 def req(x):
-    o.append('<section class="art" id="%s"><h4><span class="gid">%s</span>%s<span class="tier" style="background:#2a4d6e">%s</span></h4>'%(x['id'],x['id'],E(x['title']),STR[x['strength']]))
+    o.append('<section class="art" id="%s"><h4><span class="gid">%s</span>%s<span class="tier" style="background:#2a4d6e">%s</span>%s</h4>'%(x['id'],x['id'],E(x['title']),STR[x['strength']],('<span class="bind">段: %s</span>'%E(str(x['milestone']))) if x.get('milestone') else ''))
     o.append('<div class="st"><span class="sid">%s</span>%s → %s</div>'%(PAT[x['pattern']],E(x['when']),E(x['shall'])))
     o.append('<p class="plain"><b>やさしく言うと</b><br>%s</p><dl>'%E(x['plain']))
     o.append('<dt>根拠（条）</dt><dd>%s</dd><dt>確かめ方</dt><dd>%s: %s（受入: %s）</dd><dt>ゴール</dt><dd>%s</dd>'%(E('・'.join(x['basis']) or '—'),E(x['verify']['method']),E(x['verify']['how']),E('・'.join(x['verify'].get('ac',[])) or '—'),E('・'.join(x['goals']))))
@@ -104,7 +114,7 @@ for a in s['acceptance']:
 for x in s['requirements']+s['nonfunctional']:
     o.append('<tr><td>%s %s</td>'%(x['id'],E(x['title']))+''.join('<td>%s</td>'%('●' if g['id'] in x['goals'] else '') for g in s['goals'])+'<td>%s</td><td>%s</td></tr>'%(E('・'.join(acmap.get(x['id'],[])) or '—'),E('・'.join(x['figures']))))
 o.append('</table></div>')
-o.append('<h3>承認欄</h3><ul>'+''.join('<li>%s: %s — %s%s</li>'%(E(ap['role']),E(str(ap['who'])),E(str(ap.get('when') or '未')),('（%s）'%E(str(ap['stamp'])) if ap.get('stamp') else '')) for ap in sm['approval'])+'</ul><p class="sub">%s</p>'%E(sm['effective']))
+o.append('<h3>承認欄</h3><ul>'+''.join('<li>%s%s: %s — %s%s%s</li>'%(('<b>%s</b> '%E(str(ap['version']))) if ap.get('version') else '',E(ap['role']),E(str(ap['who'])),E(str(ap.get('when') or '未')),('・逐語「%s」'%E(str(ap['verbatim']))) if ap.get('verbatim') else '',('（%s）'%E(str(ap['stamp'])) if ap.get('stamp') else '')) for ap in sm['approval'])+'</ul><p class="sub">%s</p>'%E(sm['effective']))
 # ── 判断の記録（ADR・正本 adr/ADR-n.yaml・schema は adr/schema.yaml・M0 の生成器は無いので day-1 の暫定）
 o.append('<h2 id="adr">判断の記録（ADR・%d 件・正本 <code>adr/ADR-n.yaml</code>・欄の決まりは <code>adr/schema.yaml</code>）</h2><p class="note">%s 凍結 anchor（差分検査の比較元・索引 <code>anchors/index.yaml</code> の列・古い順）: %s</p>'%(len(ADRS),E((ADRTERM or {}).get('def','')),E(' → '.join(ANCH)) if ANCH else '<b>なし（または索引が空）＝差分検査は「まだ分からない」</b>'))
 for d in ADRS:
@@ -122,7 +132,7 @@ for d in ADRS:
         if d.get(k): o.append('<dt>%s</dt><dd>%s</dd>'%(lab,E(str(d[k]))))
     if d.get('note'): o.append('<dt>planner 注</dt><dd>%s</dd>'%E(str(d['note'])))
     o.append('</dl></section>')
-o.append('<p class="sub">この文書の所属: folio2 / day-1 の相談（f2-648.1）/ %s の読み物。<a href="index.html">入口へ戻る</a></p></div></body></html>'%E(VER))
+o.append('<p class="sub">この文書の所属: folio2 / 設計文書（design-intent）の読み物 — 憲法 %s・要件書 %s。<a href="index.html">入口へ戻る</a></p></div></body></html>'%(E(VER),E(SVER)))
 out='\n'.join(o); mode='--check' if _a.check else '--write'; OUT=_a.out
 if mode=='--check':
     if not os.path.exists(OUT): print('render: 読み物が無い（未生成）',file=sys.stderr); sys.exit(2)
