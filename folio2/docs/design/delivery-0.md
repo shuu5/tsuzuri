@@ -24,7 +24,7 @@ folio v2 の最初の便。Rust の workspace を起こし、命令 `folio check
 
 ## 4. 検査（歯）
 
-- `check` の歯 = 正本 4 file で合格 / 重複キーを 1 つ足した写しで不合格 / file を 1 つ欠いた写しで「まだ分からない」。fixture は `tests/fixtures/check/` に置く（凍結 anchor・P-10.1）。
+- `check` の歯 = 正本 4 file で合格 / 重複キーを 1 つ足した写し（`tests/fixtures/check/dup-key/` の 4 file・rules.yaml に重複キー）で不合格 / 憲法を欠いた写し（`tests/fixtures/check/missing-file/` の 3 file）で「まだ分からない」。fixture は file 1 本ずつ名指す（器の受付は新規 dir を受けない・凍結 anchor・P-10.1）。
 - 共通の検証 = `.vessel.toml` の common-verify。
 
 ## 5. 依存（A-3.1 の確認の対象）
@@ -39,7 +39,7 @@ id = "a"
 title = "cargo workspace の骨格と folio check（正本の形の床・3 値）を置く"
 req = ["FR5", "FR9", "NFR3"]
 section = "1"
-creates = ["Cargo.toml", "rust-toolchain.toml", "crates/folio/Cargo.toml", "crates/folio/src/main.rs", "crates/folio/src/check.rs", "crates/folio/src/yaml.rs", "crates/folio/src/verdict.rs", "crates/folio/tests/check.rs", "tests/fixtures/check/dup-key.yaml", "tests/fixtures/check/missing-file/", ".github/workflows/ci.yml"]
+creates = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/folio/Cargo.toml", "crates/folio/src/main.rs", "crates/folio/src/check.rs", "crates/folio/src/yaml.rs", "crates/folio/src/verdict.rs", "crates/folio/tests/check.rs", "tests/fixtures/check/dup-key/constitution.yaml", "tests/fixtures/check/dup-key/rules.yaml", "tests/fixtures/check/dup-key/vocabulary.yaml", "tests/fixtures/check/dup-key/srs.yaml", "tests/fixtures/check/missing-file/rules.yaml", "tests/fixtures/check/missing-file/vocabulary.yaml", "tests/fixtures/check/missing-file/srs.yaml", ".github/workflows/ci.yml"]
 tests = ["crates/folio/tests/check.rs"]
 also = [".vessel.toml"]
 verify = ["cargo nextest run -p folio check", "cargo clippy --workspace --all-targets -- -D warnings"]
