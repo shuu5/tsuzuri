@@ -56,5 +56,4 @@ tests = ["crates/folio/tests/refs.rs", "crates/folio/tests/parity.rs"]
 verify = ["cargo nextest run -p folio refs", "cargo nextest run -p folio parity", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
 done = "folio check --dir design-intent が正本で合格（0）を返し、tests/fixtures/refs/ の 3 組で不合格（1）を返し、refs の歯 3 本と parity の歯（便 0 の 5 入力 + §1 の 4 入力 = 9 入力で day-1 の床と終了コードが一致）が緑で CI が通る"
-depends = []
 <!-- contracts:end -->
