@@ -7,7 +7,7 @@
 
 ## 1. 目的
 
-folio v2 の最初の便。Rust の workspace を起こし、命令 `folio check` を 1 本だけ置く。`folio check` は design-intent の正本 4 file（憲法・rules・語彙・要件書）を読み、正本の形（重複キー・未知の節・欄の非空）を数えて、結果を 3 値（合格・不合格・まだ分からない）で返す。読めない・実行できなかった検査を合格と表示しない（FR5）。day-1 の床 `scripts/check_draft.py` はこの便では触らず、両方が同じ fixture で同じ判定を出すことを歯で確かめる（生成物どうしの突き合わせだけを合格にしない・P-10.2・fixture = `tests/floor_cases.yaml` の写し）。
+folio v2 の最初の便。Rust の workspace を起こし、命令 `folio check` を 1 本だけ置く。`folio check` は design-intent の正本 4 file（憲法・rules・語彙・要件書）を読み、正本の形（重複キー・未知の節・欄の非空）を数えて、結果を 3 値（合格・不合格・まだ分からない）で返す。読めない・実行できなかった検査を合格と表示しない（FR5）。day-1 の床 `scripts/check_draft.py` はこの便では触らず、両方が同じ入力で同じ終了コードを出すことを突き合わせの歯（parity）で確かめる（生成物どうしの突き合わせだけを合格にしない・P-10.2）。day-1 の床の振る舞い（admin 席の実測 2026-09-17・main 9bc577e）: `python3 scripts/check_draft.py --dir <写し>` で受け、写しは design-intent の全部（adr/ と anchors/ を含む）でかつ版管理（git の 1 commit）の中に在ること。4 file だけの写し・版管理の無い写しは「まだ分からない」（終了コード 2）。終了コードは 合格 0 / 違反 1 / 読めない・測れない 2。床が数える「未知の節・欄の非空」は憲法と判断の記録の側で、要件書・語彙の未知の節や空の欄は数えない。
 
 ## 2. 範囲
 
@@ -25,7 +25,7 @@ folio v2 の最初の便。Rust の workspace を起こし、命令 `folio check
 ## 4. 検査（歯）
 
 - `check` の歯 = 正本 4 file で合格 / 重複キーを 1 つ足した写し（`tests/fixtures/check/dup-key/` の 4 file・rules.yaml に重複キー）で不合格 / 未知の節を足した写し（`tests/fixtures/check/unknown-section/` の 4 file・constitution.yaml に top_level に無い節）で不合格 / 欄を空にした写し（`tests/fixtures/check/empty-field/` の 4 file・vocabulary.yaml の 1 語の def を空）で不合格 / 憲法を欠いた写し（`tests/fixtures/check/missing-file/` の 3 file）で「まだ分からない」。fixture は file 1 本ずつ名指す（器の受付は新規 dir を受けない・凍結 anchor・P-10.1）。
-- 突き合わせの歯（`crates/folio/tests/parity.rs`）= 同じ 3 つの入力（正本・dup-key・missing-file）に day-1 の床 `python3 scripts/check_draft.py --dir <入力>` と `folio check --dir <入力>` を掛け、終了コードが一致することを見る（生成物どうしの突き合わせだけを合格にしない・P-10.2 の第 2 の物差し）。入力は 5 つ（正本・dup-key・unknown-section・empty-field・missing-file）。
+- 突き合わせの歯（`crates/folio/tests/parity.rs`）= 歯の中で design-intent の写し全部を一時 dir に作り（`git init` + 1 commit・`tests/run_floor_cases.py` と同じ作り）、変異を 1 つ当てた 5 入力それぞれに day-1 の床 `python3 scripts/check_draft.py --dir <写し>` と `folio check --dir <写し>` を掛け、終了コードが一致することを見る（P-10.2 の第 2 の物差し）。5 入力と期待の終了コード = (1) 変異なし → 0 / (2) rules.yaml に重複キー → 1 / (3) constitution.yaml に top_level に無い節 → 1 / (4) constitution.yaml の条の plain を空 → 1 / (5) constitution.yaml を欠く → 2。`tests/fixtures/check/` の 4 file 形の fixture は `folio check` 自身の歯（check.rs）にだけ使い、parity の入力にはしない（床は 4 file の写しを受けない）。
 - 共通の検証 = `.vessel.toml` の common-verify。
 
 ## 5. 依存（A-3.1 の確認の対象）
@@ -45,5 +45,5 @@ tests = ["crates/folio/tests/check.rs", "crates/folio/tests/parity.rs"]
 also = [".vessel.toml", ".gitignore"]
 verify = ["cargo nextest run -p folio check", "cargo nextest run -p folio parity", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
-done = "folio check --dir design-intent が正本 4 file で合格（終了コード 0）を返し、fixture の写し 3 組で不合格（1）・憲法を欠いた写しで「まだ分からない」（2）を返し、check の歯 5 本と parity の歯（day-1 の床 check_draft.py と同じ 5 入力で終了コードが一致）が緑で CI が通り、target/ が版管理に入らない"
+done = "folio check --dir design-intent が正本で合格（終了コード 0）を返し、tests/fixtures/check/ の写し 3 組で不合格（1）・憲法を欠いた写しで「まだ分からない」（2）を返し、check の歯 5 本と parity の歯（design-intent の写し全部に変異 1 つを当てた 5 入力で day-1 の床 scripts/check_draft.py --dir と終了コード 0 / 1 / 1 / 1 / 2 が一致・§4）が緑で CI が通り、target/ が版管理に入らない"
 <!-- contracts:end -->
