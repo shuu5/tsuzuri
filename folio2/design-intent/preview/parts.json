@@ -1,6 +1,6 @@
 {
-  "version": "v0 2026-09-12 (hand-baked mock v4)",
-  "note": "部品目録（parts catalog）の写し。将来は emitter の部品 enum から生成する。data-component の値域と、面ごとの variant を宣言する。",
+  "version": "v0.1 2026-09-16 (hand-baked mock v4 + ADR-4 figure types)",
+  "note": "部品目録（parts catalog）の写し。将来は emitter の部品 enum から生成する。data-component の値域と、面ごとの variant を宣言する。 2026-09-16（ADR-4・R-5 = 8 型）: figure_type_enum に図の道具（archify）の 5 型を足し、図の本体（SVG）の意味を表す class を figure_body_classes に載せた。doc-shelf は棚（index）であって図の型に数えない（R-5 の 3 型 = pipeline-rail / context-band / state-strip）。",
   "components": {
     "freshness-stamp": {
       "role": "chrome",
@@ -244,8 +244,83 @@
     "pipeline-rail",
     "context-band",
     "state-strip",
-    "doc-shelf"
+    "doc-shelf",
+    "archify-architecture",
+    "archify-workflow",
+    "archify-sequence",
+    "archify-dataflow",
+    "archify-lifecycle"
   ],
+  "figure_body_classes": {
+    "source": "ADR-4 / R-5 / R-15。図の道具（archify 2.16.0）の出力から図の本体（SVG）だけを抜いたときに残る意味 class。実測 = 報告 2026-09-15-archify/samples/ja-round4.svg（構成図・showcase・行内の様式 0・色の直書き 0）。色・字の大きさ・線の太さは folio の design token をこれらの class に掛けて定義する（P-2.3）",
+    "type_ids": {
+      "archify-architecture": "構成図（architecture）",
+      "archify-workflow": "手順図（workflow）",
+      "archify-sequence": "順序図（sequence）",
+      "archify-dataflow": "流れ図（dataflow）",
+      "archify-lifecycle": "状態図（lifecycle）"
+    },
+    "node_kind": [
+      "c-backend",
+      "c-cloud",
+      "c-database",
+      "c-external",
+      "c-frontend",
+      "c-messagebus",
+      "c-security",
+      "c-lane",
+      "c-grid",
+      "c-mask"
+    ],
+    "edge_kind": [
+      "a-default",
+      "a-emphasis",
+      "a-dashed",
+      "a-security"
+    ],
+    "arrowhead": [
+      "m-default",
+      "m-emphasis",
+      "m-dashed",
+      "m-security"
+    ],
+    "text_role": [
+      "t-primary",
+      "t-muted",
+      "t-dim",
+      "t-backend",
+      "t-messagebus",
+      "t-security"
+    ],
+    "sigil": [
+      "semantic-sigil",
+      "sigil-fill",
+      "s-backend",
+      "s-cloud",
+      "s-database",
+      "s-external",
+      "s-frontend",
+      "s-messagebus",
+      "s-security"
+    ],
+    "semantic_attrs": [
+      "data-node-id",
+      "data-node-kind",
+      "data-node-label",
+      "data-node-sublabel",
+      "data-node-context",
+      "data-edge-from",
+      "data-edge-to",
+      "data-edge-key",
+      "data-edge-label",
+      "data-quality-profile",
+      "data-legend-*",
+      "data-detail",
+      "data-detail-anchor",
+      "data-composition-points"
+    ],
+    "note": "class は 4 群（箱 c-* / 線 a-* / 矢じり m-* / 文字 t-*）+ 印（s-* / sigil）。data-node-* / data-edge-* は folio 自身の閲覧の部品（強調・経路の追跡）が読む材料（ADR-4 決定 (3)）。この一覧が道具の版上げで変わったら凍結 anchor が落ちる（R-15）"
+  },
   "micro_parts": {
     "hint": "説明の小窓（label+checkbox+hint-body・ホバー/タップ・右端/下端で反転・入れ子可・狭幅は画面下のシート・JS 無効は CSS anchor positioning で反転）",
     "note": "details.note 補足（畳み）",

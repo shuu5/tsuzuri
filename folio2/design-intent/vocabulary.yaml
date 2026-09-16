@@ -37,6 +37,11 @@ terms:
   - {id: managed-object, term: 管理下の対象, en: managed object, short: folio が預かっているもの, def: folio が預かっているもの = 正本・生成物・支度表・台帳の記帳。取り消せない削除をしない対象（N-1）。}
   - {id: deterministic, term: 決定的（に検査する・に導出する）, en: deterministic, short: 何度やっても同じ結果になる形で, def: 同じ入力なら何度やっても同じ結果になる形で（機械が数える検査・生成区間の導出はこの形で行う。P-3・P-14）。}
   - {id: seat, term: 席, en: seat, short: AI が作業する場所（planner 席など）, def: AI が作業する場所（tmux の窓 1 つ）。設計判断を下す席は最上位のモデルで動かす（P-16）。}
+  - {id: figure-tool, term: 図の道具（archify）, en: archify, short: AI が型付きの記述で図を書き、機械が検査して描く外の道具, def: 図を型付き記述で書かせ、欄の決まり・配置・描画・仕上がりの検査を掛けて図の本体を出す公開の道具（OSS）。folio2 は組み立て器として借り、閲覧の仕掛けは捨てる（判断の記録 ADR-4）。}
+  - {id: typed-figure-spec, term: 型付き記述（図の）, en: typed figure spec (JSON), short: 図の中身を欄と値で書いた正本, def: 図の箱・線・名札・座標を欄と値（JSON）で書いたもの。図の正本はこの形で、その図を載せる文書の正本 YAML の図の節に置く（ADR-4）。}
+  - {id: figure-body, term: 図の本体（SVG）, en: figure body (SVG), short: 道具の出力から取り出す、図の線と箱だけ, def: 図の道具の出力のうち、線と箱と文字だけを持つ部分（SVG）。意味を表す class だけで描かれ、色・字の大きさ・線の太さは folio の design token で塗る。folio のページに埋める部品はこれだけ（ADR-4）。}
+  - {id: viewer-chrome, term: 閲覧の仕掛け, en: viewer, short: 図を見る画面の飾りと動き, def: 図の道具が図の本体に付けてくる閲覧の画面（様式・動き・字体・検索・書き出し）。folio2 は捨て、要るものだけを部品目録の部品として持ち直す（ADR-4）。}
+  - {id: compiler, term: 組み立て器（compiler）, en: compiler, short: 記述を検査して 1 枚に組み立てる係, def: 型付きの記述を検査し、何度やっても同じ結果になる形で 1 枚の出力へ組み立てる道具。folio2 では図の道具をこの役でだけ使い、人が読むページの生成器は folio 1 つのまま（P-2.1）。}
 
 # 欄の名前（機械層・読者は引かない・R-9 の母集団外）
 field_terms:
@@ -53,9 +58,9 @@ field_terms:
 
 # 英字の識別子（R-9 の免除一覧・型付きデータ）。語彙の語ではなく「固有名・命令・code の語」。日本語の言い換えは不要だが、増やすときは行に理由を付ける。
 identifiers:
-  - {group: file と形式, words: [yaml, html, css, js, json, md, claude.md, file, path, repo], why: file 名・形式名・置き場の呼び名}
-  - {group: 道具と製品, words: [folio, folio2, bd, scribe2, cargo, deny, tmux, python3, opus, sonnet, xhigh, mcp, playwright, chrome, github], why: 固有名。可変のモデル名は要件書 CON5 が持つ}
+  - {group: file と形式, words: [yaml, html, css, js, json, md, claude.md, file, path, repo, svg], why: file 名・形式名・置き場の呼び名}
+  - {group: 道具と製品, words: [folio, folio2, bd, scribe2, cargo, deny, tmux, python3, opus, sonnet, xhigh, mcp, playwright, chrome, github, archify, node.js, oss], why: 固有名。可変のモデル名は要件書 CON5 が持つ}
   - {group: 命令と旗, words: [inject, serve, build, merge, write, check, print, commit, push, retire], why: folio の命令名と git の操作名}
-  - {group: code の語, words: [crate, class, data-component, token, plugin, skill, script, workflow, agent, lens, spawn, effort, notes, url, ip, id, ai, ok, rules, byte, hook, guard, fixture, anchor, profile, oracle, self-host, spike, tailnet, adr, design-intent, git, ci, m0, m1, v1, v2, v3, v4, subcommand, in-loop, post, schema, sources, srs], why: 語彙の見出し語の原語か、code・道具の語。日本語を先に添えて使う}
+  - {group: code の語, words: [crate, class, data-component, token, plugin, skill, script, workflow, agent, lens, spawn, effort, notes, url, ip, id, ai, ok, rules, byte, hook, guard, fixture, anchor, profile, oracle, self-host, spike, tailnet, adr, design-intent, git, ci, m0, m1, v1, v2, v3, v4, subcommand, in-loop, post, schema, sources, srs, showcase], why: 語彙の見出し語の原語か、code・道具の語。日本語を先に添えて使う}
   - {group: 席と言語, words: [planner, admin, fable, high, bash, rust], why: 席の名前・現行のモデル名と念入りさ（要件書 CON5 が持つ）・言語名}
 

@@ -172,7 +172,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "engine-design §12 ②（parser-differential に 2 連続で敗北 → 受理域を絞る fail-closed へ転換）・ADR-0045 no silent skip"}
     mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 床を故意に壊した状態で「まだ分からない」になり、合格にならない（AC3）。判定の値域は 合格 / 不合格 / まだ分からない の 3 値。}
-    relations: {reqs: [FR5, AC3], rules: [D-5]}
+    relations: {reqs: [FR5, AC3], rules: [D-5, R-14]}
 
   - id: P-5
     title: 規則は型付きデータに置き、番号で呼ぶ
@@ -413,7 +413,7 @@ articles:
       - {kind: scribe2-article, ref: "A3 / C13（依存の予算・値は folio2 専用）"}
       - {kind: folio2-ruling, ref: "裁定 #3（依存予算は folio2 専用値）・G7=A（裁定 #3 の根拠「C8」は「C13」の誤りとして訂正）"}
     mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: cargo deny + R-6 の予算（Rust が入ってから）。それまでは人が確かめる。}
-    relations: {reqs: [CON2], rules: [R-6]}
+    relations: {reqs: [CON2], rules: [R-6, R-15]}
 
   - id: A-4
     title: 自分で自分を作ること（self-host）は既定で許可、取り消せない操作だけ確認
