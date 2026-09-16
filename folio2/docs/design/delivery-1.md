@@ -25,7 +25,9 @@
 
 突き合わせの歯（`crates/folio/tests/parity.rs`・便 0 の 5 入力に足す）: 歯の中で design-intent の写し全部（adr/ と anchors/ を含む）を一時 dir に作り `git init` と 1 commit を行い、変異を 1 つだけ当てて `python3 scripts/check_draft.py --dir <写し>` と `folio check --dir <写し>` の終了コードが一致することを見る。足す入力と期待の終了コード: (6) `srs.yaml` の FR1 の basis に実在しない条 id を 1 つ足す → 1 / (7) `rules.yaml` の R-3 の article を実在しない条 id にする → 1 / (8) `constitution.yaml` の P-2 の relations.rules から R-3 を外す → 1 / (9) `constitution.yaml` の meta.counts.always を実数と違う値にする → 1。要件書と語彙の欄の非空には変異を当てない（床が数えないため）。
 
-`folio check` 自身の歯（`crates/folio/tests/refs.rs`）の fixture は `tests/fixtures/refs/` の 4 file 形（正本 4 file の写しに変異 1 つ・parity の入力にはしない）。変異先と期待: `dangling-id/` = srs.yaml の FR1 の basis に実在しない条 id → 1 / `orphan-rule/` = constitution.yaml の P-2 の relations.rules から R-3 を外す → 1 / `bad-counts/` = constitution.yaml の meta.counts.always を実数と違う値に → 1。
+`folio check` 自身の歯（`crates/folio/tests/refs.rs`）の fixture は `tests/fixtures/refs/` の 4 file 形で、便 0 の `tests/fixtures/check/` と同じ最小の手書き（(a)(b)(c) の解決に要る欄だけを持ち、各 file は数十行・正本の写しは使わない）に変異を 1 つ当てる。parity の入力にはしない。正本の写し 3 組は差分が審査の読める上限を超えた（run …T232412Z・INCONCLUSIVE）ので採らない。変異先と期待: `dangling-id/` = srs.yaml の FR1 の basis に実在しない条 id → 1 / `orphan-rule/` = constitution.yaml の P-2 の relations.rules から R-3 を外す → 1 / `bad-counts/` = constitution.yaml の meta.counts.always を実数と違う値に → 1。
+
+実装の下書き: commit 42c1505（run …T232412Z の branch・verify 6 段 rc 0）の `refs.rs`・`tests/refs.rs`・parity の追加・便 0 の fixture 3 file への追記は写してよい。作り直すのは `tests/fixtures/refs/` の 3 組だけ。
 
 ## 2. 範囲
 
