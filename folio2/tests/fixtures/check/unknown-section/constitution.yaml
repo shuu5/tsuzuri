@@ -4,6 +4,7 @@ schema:
 meta:
   id: fixture-constitution
   version: v1.0
+  counts: {always: 1, ask-first: 0, never: 0}
 precedence:
   text: 条どうしが衝突したら揃いを選ぶ。
   plain: 迷ったら揃っている方を選びます。
@@ -14,3 +15,4 @@ articles:
     statements:
       - {id: P-1.1, pattern: ubiquitous, strength: must, text: folio は文書を生成する。}
     plain: 道具は書類を作るところまで。
+    relations: {rules: [R-1, D-1]}

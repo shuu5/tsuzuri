@@ -1,6 +1,7 @@
 //! folio v2 の命令の入口。便 0 は `folio check` だけを持つ。
 
 mod check;
+mod refs;
 mod verdict;
 mod yaml;
 

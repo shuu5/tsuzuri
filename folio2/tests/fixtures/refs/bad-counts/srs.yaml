@@ -1,0 +1,12 @@
+# folio check の歯の fixture（4 file 形・crates/folio/tests/refs.rs）。参照 id の解決に要る欄だけを持つ最小の要件書。
+meta:
+  id: fixture-srs
+  version: v1.0
+goals:
+  - {id: GOAL1, title: 相談して決められる, text: 窓口がある。}
+requirements:
+  - id: FR1
+    title: 文書を生成する
+    shall: folio は文書を生成する。
+    plain: 書類を作ります。
+    basis: [P-1]

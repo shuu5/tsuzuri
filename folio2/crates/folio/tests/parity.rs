@@ -158,3 +158,77 @@ fn parity_constitution_missing_is_unknown() {
         fs::remove_file(work.join("constitution.yaml")).unwrap();
     });
 }
+
+/// `text` の中で、`block` の行から始まる区間の最初の `field` 行を `f` で書き換える（便 1 の変異の共通形）。
+fn edit_line_in_block(
+    text: &str,
+    block: &str,
+    field: &str,
+    f: impl FnOnce(&str) -> String,
+) -> String {
+    let at = text
+        .find(block)
+        .unwrap_or_else(|| panic!("区間 {block:?} が無い"));
+    let start = at
+        + text[at..]
+            .find(field)
+            .unwrap_or_else(|| panic!("{block:?} の {field:?} が無い"))
+        + 1;
+    let end = start + text[start..].find('\n').unwrap();
+    format!("{}{}{}", &text[..start], f(&text[start..end]), &text[end..])
+}
+
+/// (6) 要件書 FR1 の basis に実在しない条 id を 1 つ足す（参照 id の解決・便 1）。
+#[test]
+fn parity_srs_dangling_article_id_fails() {
+    parity("srs-dangling-article-id", 1, |work| {
+        edit(&work.join("srs.yaml"), |text| {
+            edit_line_in_block(text, "\n  - id: FR1\n", "\n    basis: [", |line| {
+                line.replacen("basis: [", "basis: [P-99, ", 1)
+            })
+        });
+    });
+}
+
+/// (7) rules 行 R-3 の article を実在しない条 id にする。
+#[test]
+fn parity_rules_article_dangling_fails() {
+    parity("rules-article-dangling", 1, |work| {
+        edit(&work.join("rules.yaml"), |text| {
+            edit_line_in_block(text, "\n  - {id: R-3,", "\n  - {id: R-3,", |line| {
+                let from =
+                    line.find("article: ").expect("R-3 の article が無い") + "article: ".len();
+                let to = from + line[from..].find(',').unwrap();
+                format!("{}P-99{}", &line[..from], &line[to..])
+            })
+        });
+    });
+}
+
+/// (8) 憲法 P-2 の relations.rules から R-3 を外す（逆参照・便 1）。
+#[test]
+fn parity_constitution_orphan_rule_fails() {
+    parity("constitution-orphan-rule", 1, |work| {
+        edit(&work.join("constitution.yaml"), |text| {
+            edit_line_in_block(text, "\n  - id: P-2\n", "\n    relations: ", |line| {
+                line.replacen("R-3, ", "", 1)
+            })
+        });
+    });
+}
+
+/// (9) 憲法 meta.counts.always を実数と違う値にする（件数・便 1）。
+#[test]
+fn parity_constitution_bad_counts_fails() {
+    parity("constitution-bad-counts", 1, |work| {
+        edit(&work.join("constitution.yaml"), |text| {
+            edit_line_in_block(text, "\n  counts:\n", "\n    always: ", |line| {
+                let n: usize = line["    always: ".len()..]
+                    .trim()
+                    .parse()
+                    .expect("always が数でない");
+                format!("    always: {}", n + 1)
+            })
+        });
+    });
+}
