@@ -1,0 +1,110 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "folio が 1 回で通す 7 段",
+  "quality_profile": "showcase"
+ },
+ "components": [
+  {
+   "id": "owner",
+   "type": "external",
+   "label": "持ち主",
+   "sublabel": "質問に答える・承認する",
+   "row": 0,
+   "col": 0
+  },
+  {
+   "id": "planner",
+   "type": "frontend",
+   "label": "planner 席",
+   "sublabel": "支度表を作る",
+   "row": 0,
+   "col": 1
+  },
+  {
+   "id": "gen",
+   "type": "backend",
+   "label": "生成器",
+   "sublabel": "正本 YAML から逐語で生成",
+   "row": 0,
+   "col": 2
+  },
+  {
+   "id": "floor",
+   "type": "security",
+   "label": "床の検査",
+   "sublabel": "決定的な検査・fail-closed",
+   "row": 0,
+   "col": 3
+  },
+  {
+   "id": "ceiling",
+   "type": "cloud",
+   "label": "天井の検査",
+   "sublabel": "意味の検査（AI）",
+   "row": 0,
+   "col": 4
+  },
+  {
+   "id": "ledger",
+   "type": "database",
+   "label": "台帳（bd）",
+   "sublabel": "タスクと裁定の記帳先",
+   "row": 1,
+   "col": 1
+  },
+  {
+   "id": "serve",
+   "type": "messagebus",
+   "label": "配信",
+   "sublabel": "tailnet の内側だけ",
+   "row": 1,
+   "col": 4
+  }
+ ],
+ "connections": [
+  {
+   "from": "owner",
+   "to": "planner",
+   "label": "回答・承認の逐語",
+   "variant": "emphasis"
+  },
+  {
+   "from": "planner",
+   "to": "gen",
+   "label": "支度表"
+  },
+  {
+   "from": "gen",
+   "to": "floor",
+   "label": "生成物"
+  },
+  {
+   "from": "floor",
+   "to": "ceiling",
+   "label": "床の合格"
+  },
+  {
+   "from": "ceiling",
+   "to": "serve",
+   "label": "まだ分からない を含む結果",
+   "labelDy": 24
+  },
+  {
+   "from": "planner",
+   "to": "ledger",
+   "label": "裁定の記帳",
+   "variant": "dashed",
+   "labelDy": 24
+  }
+ ],
+ "layout": {
+  "mode": "grid",
+  "cols": 5,
+  "gapX": 70,
+  "gapY": 110,
+  "cellW": 160,
+  "cellH": 70
+ }
+}
