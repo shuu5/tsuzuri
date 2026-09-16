@@ -1,0 +1,10 @@
+precedence:
+  text: 揃いを  速さより先に置く。
+articles:
+  - id: P-1
+    statements:
+      - {id: P-1.1, strength: must, text: 文書を生成する。}
+      - {id: P-1.2, strength: must-not, text: 判断を代行しない。}
+  - id: P-2
+    statements:
+      - {id: P-2.1, strength: should, text: 検査の結果を知らせる。}

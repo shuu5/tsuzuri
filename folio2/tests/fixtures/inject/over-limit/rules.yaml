@@ -1,0 +1,2 @@
+thresholds:
+  - {id: R-2, value: "10 byte 以下"}
