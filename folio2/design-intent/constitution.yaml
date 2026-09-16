@@ -353,7 +353,7 @@ articles:
       - {kind: scribe2-article, ref: "C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）"}
       - {kind: folio2-ruling, ref: "G5=A（A-2 を条文改訂と rules 数値に分割）"}
     mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: rules 行の diff に裁定 id と時刻が無ければ落とす（CI は便 0 以降・それまでは PR の diff を人が見る）。}
-    relations: {rules: [R-1, R-2, R-3, R-4, R-5, R-6, R-7, R-8, R-9, R-10, R-11, D-3, D-5, D-8], articles: [A-2]}
+    relations: {rules: [R-1, R-2, R-3, R-4, R-5, R-6, R-7, R-8, R-9, R-10, R-11, R-12, R-13, R-14, R-15, R-16, D-3, D-5, D-8], articles: [A-2]}
 
   - id: P-18
     title: 逸脱は編集の時点で止める（極性一覧）
@@ -458,7 +458,7 @@ articles:
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18 の散文 hook 規則・rules.html 248KB"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: ① folio が生成する文書（読み物・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = render / inject_check の --check）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（inject_check の --check が数える）。検査対象は folio2 が所有する文書に限る。}
     note: 見本 v4 の P-5（Always）に含まれていた禁止側を Never へ置いた（G12 の改番）。
-    relations: {articles: [P-5, P-14, P-17]}
+    relations: {rules: [R-16], articles: [P-5, P-14, P-17]}
 
   - id: N-3
     title: 例外の仕組みを作らない

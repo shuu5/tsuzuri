@@ -1,24 +1,33 @@
-# folio2 要件書 M0 — 正本（v1.0・発効 2026-09-12・planner 席）
+# folio2 要件書 — 正本（v1.1・M0 = v1.0 発効 2026-09-12・M1 の要件を 2026-09-16 に append・planner 席）
 # 位置: f2-648.1 の中身 3（要件書 M0 の正本）。見本 v4 の srs.html（walk 承認済みの提示層）を起点に G15=A を反映:
 #   分離緩め（憲法の根拠文と数値は生成器が正本から差し込む＝ここには id だけ書く・値を再掲しない）/ 参照の母集合は内部 3 空間
 #   （要件 id・条 id・rules 行 id）で外部 pointer は sources 欄 / P-3 は置き場条へ弱めた（憲法側）/ AC 4→6 / RED test は文 + fixture path /
 #   approval ブロック + 発効の 1 段 / GOAL 4 の実装手段（Rust）は CON へ / intake の写像表は rules・annex 側。
 # 規範文は日本語だけ（G10）: when = いつ守るか（型）/ shall = 何をするか・しないか。強度は欄。
-# 状態: 発効（持ち主の承認 2026-09-12「承認する」）。
+# 状態: v1.0 は発効（持ち主の承認 2026-09-12「承認する」）。v1.1（M1 の要件 FR9〜FR15・AC7〜AC13・CON8〜CON9・ADR-3 / ADR-4 の帰結）は 2026-09-16 に発効（承認欄の v1.1 の行・逐語「いずれも推奨で進めて」）。P-13.3・P-7.2 = 番号は新規・NFR3 / AC6 は据え置き。
 
 meta:
   id: folio2-srs-m0
-  title: 要件書（M0・最初に動く形）
-  version: v1.0
+  title: 要件書（M0・最初に動く形 ＋ M1・設計ノートと契約表と図の生成）
+  version: v1.1
   status: effective
+  effective_version: v1.1
+  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（承認欄の v1.1 の行・逐語「いずれも推奨で進めて」・裁定 id f2-648 notes 2026-09-16 23:5x JST）
   generated: 2026-09-12
   promise: 持ち主が易しい質問 5 つに答える（答えなくても推奨で進む）と、入口・憲法・要件書の 3 枚が同じ見た目で生成され、機械検査の結果が必ず表示される。
-  counts: {fr: 8, nfr: 3, ac: 6, con: 7}
+  counts: {fr: 15, nfr: 3, ac: 13, con: 9}
   approval:
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-12, stamp: 起草}
     - {role: レビュー, who: 敵対レビュー（ad-hoc WF wf_5e659fc9-0ed・7 観点・反証 24 + 追加反証 34）, when: 2026-09-12, stamp: review/summary.md}
-    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-12, stamp: "発効（f2-648.1 notes 20:2x）", verbatim: 承認する}
-  effective: 承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-12, stamp: "発効（f2-648.1 notes 20:2x）", verbatim: 承認する, version: v1.0}
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-16, stamp: "v1.1 起草（f2-648.4）・敵対レビュー（読み取り専用 opus 2 本・忠実性 / 憲法整合）を反映", version: v1.1}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-16, stamp: "発効（f2-648 notes 2026-09-16 23:5x JST・対話面 R-8・草案と敵対レビュー 2 本の結果を入口ページで提示した後）", verbatim: いずれも推奨で進めて, version: v1.1}
+  effective: 承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。版ごとに承認の行を足し、前の版の行は書き換えない。
+  changes_from_v1_0:
+    - M1 の要件を新しい番号で足した（FR9〜FR15・AC7〜AC13・CON8〜CON9）。M0 の要件（FR1〜FR8・NFR1〜NFR3・AC1〜AC6・CON1〜CON7）は据え置き（P-7.2）。NFR3 と AC6 の母集団（内部 3 空間）は広げない（ADR-3 決定 (6)）
+    - 出所 = 判断の記録 ADR-3（契約表の所有と境界・2026-09-16 発効）と ADR-4（図の道具・2026-09-16 発効）の帰結。M1 の範囲 = 設計ノート（1 型・任意の型付き節）・契約表（外部の欄の決まりを参照する節）・導出物と差分 0・散文の門・要件の追跡表の測定値・id の索引・図の生成
+    - FR1 に rules 行 D-10（持ち主への問いは対話面の散文で）の参照を足した（D-10 の note の予告どおり）
+    - 承認欄は版ごとに行を持つ（v1.0 の行は書き換えない）。v1.1 の承認の行は持ち主の逐語（2026-09-16「いずれも推奨で進めて」）が入って発効した（それまでは status draft で置いていた）
 
 goals:
   - {id: GOAL1, title: 相談して決められる, text: 「どの文書が要るか分からない」を無くす。最初と途中の両方に窓口がある。}
@@ -35,10 +44,24 @@ scope:
     - 憲法を AI の手元へ写す（inject）
     - 組み立てて見せる（build と serve）
   not_build:
-    - 判断の記録（ADR）と設計ノートの生成
+    - 判断の記録（ADR）と設計ノートの生成（設計ノートは M1 で建てる = scope_m1）
     - 「番号が実在するか」を機械で追う仕組みの完成形（M0 は参照 id の未解決 0 を数えるだけ）
     - 何が変わったかの検出器
     - "読みやすさの AI 検査（天井）と見た目の AI 検査（P-3.2: 「まだ分からない」として表に出す）"
+
+scope_m1:
+  build:
+    - 設計ノートの生成（1 つの型・任意の型付き節・節の型は閉じた一覧）
+    - 契約表の節（器 scribe2 の型から導出した欄の決まりを読む）と導出物の生成・差分 0 の検査
+    - 散文の門（規範の印を持つ文だけ）
+    - 要件の追跡表の測定値（着地の印・3 値・出所付き）と id の索引
+    - 図の生成（図の道具の型付き記述 → 図の本体を部品として埋める）
+  not_build:
+    - 他の repo の要件 id・契約 id・便の id を参照 id の床（R-4）で解決すること（測定値に留める・ADR-3 決定 (6)）
+    - 契約表の意味の検査（行の id の一意・要件と節の実在・依存の解決と輪の無さ・閉包）— 器（scribe2）の編集時の止める仕掛けが持つ（ADR-3 決定 (3)）
+    - 図の道具の閲覧の仕掛け（検索・強調・経路の追跡・発表の動き・書き出し）をそのまま置くこと（要るものは部品として持ち直す・ADR-4 決定 (3)）
+    - 図の自動配置（座標は AI が書く・ADR-4）
+  note: M1 の実装の着手は CON1 の順序に従う。設計文書（scribe2 の docs/design）を YAML 正本へ移す範囲は CON8 の別の論点。
 
 actors:
   - {id: owner, name: 持ち主（非エンジニア）, role: 答える・決める}
@@ -73,7 +96,8 @@ requirements:
     verify: {method: test, how: 決まった回答 5 つを入れ、支度表が期待どおりか比較する, ac: [AC1]}
     goals: [GOAL1]
     figures: [図2-1, 図2-2, 図1]
-    note: 回答 → 文書集合の写像表は rules / annex 側に置く（G15 D11）。
+    rules: [D-10]
+    note: 回答 → 文書集合の写像表は rules / annex 側に置く（G15 D11）。質問と推奨回答は対話面の散文で出し、選択式の窓を使わない（D-10・v1.1 で参照を足した）。
   - id: FR2
     title: 答えが無くても止まらない
     pattern: unwanted
@@ -153,6 +177,101 @@ requirements:
     goals: [GOAL1]
     figures: [図2-1, 図2-2]
 
+  - id: FR9
+    title: 設計ノートを 1 つの型で生成する
+    pattern: event
+    strength: must
+    when: 設計ノートの正本（YAML）から生成が求められたとき
+    shall: folio は設計ノートを 1 つの型（密度 profile の 1 行）として生成し、節は閉じた一覧にある型（部品の表・口の表・欄の表・歯の表・契約表など）だけを許し、一覧に無い型の節を持つ正本は生成せずに落とす。正本の形（重複キー・未知の欄・欄の非空）は構造の床（FR5）で数える。
+    plain: 「どう作るか」を書く設計の文書は 1 種類だけ。中の節（部品の表・契約表など）は決まった種類から選び、知らない種類の節があれば作らずに止めます。前の道具のように文書の種類ごとに係を増やしません。
+    basis: [P-5, P-2, N-5]
+    verify: {method: test, how: 閉じた一覧に無い節の型を 1 つ持つ fixture で生成が落ち、一覧内だけの fixture で通ることを見る, ac: [AC7]}
+    goals: [GOAL2, GOAL4]
+    figures: []
+    milestone: M1
+    note: 判断の記録 ADR-3 決定 (1)。何が folio2 の開発を拘束するかは語彙の設計文書の項と P-13 が決め、密度 profile は見せ方だけを持つ。
+  - id: FR10
+    title: 契約表の欄は器の導出 file から読む
+    pattern: event
+    strength: must
+    when: 設計ノートの節の型が「外部の欄の決まりを参照する型」（契約表）であるとき
+    shall: folio は器（scribe2）が自分の型から導出した型付き file（欄の集合と値域）を読んで節の欄を登録し、欄の一覧を自分の型にも散文にも持たない。導出 file が読めないときは「まだ分からない」と出し、合格にしない。
+    plain: 便の約束を書く表（契約表）の「どんな欄があるか」は scribe2 の機械が決めていて、folio はその写し（file）を読むだけ。欄が増えても folio 側に判断の記録は要りません。写しが読めなければ「まだ分からない」と言います。
+    basis: [P-5, P-6, N-2, P-4]
+    verify: {method: test, how: 導出 file を 1 欄変えた fixture で節の欄が追従し、導出 file を欠いた fixture で「まだ分からない」になることを見る, ac: [AC8, AC13]}
+    goals: [GOAL4]
+    figures: []
+    milestone: M1
+    note: 判断の記録 ADR-3 決定 (2)・(3)。契約表の意味の検査（行の id の一意・要件と節の実在・依存の解決と輪の無さ・閉包）は器の 1 つの関数が編集時に持ち、folio は持たない。
+  - id: FR11
+    title: 導出物を生成し、差分 0 を数える
+    pattern: event
+    strength: must
+    when: folio build --check が実行されたとき
+    shall: folio は設計ノートの契約表から器の形（表の形式の契約の配列・各行に節の本文の逐語・空の一覧は欄名を省く・先頭に版の宣言・器の値の文法〔文字列・文字列の一覧・数・真偽〕を共有する）の導出物を生成し、版管理に置かれた導出物との差分を数えて、差があれば非 0 で終了する。この検査は事後の検出であり、編集の時点で止める仕掛けの代わりにしない。
+    plain: 契約表から scribe2 が読む形の file を機械が作り、repo に置いてある file と 1 字でもずれていれば「ずれている」と言って止まります。ただしこれは後から数える検査で、書いた瞬間に止める仕掛けの代わりではありません。
+    basis: [P-6, P-18, P-10]
+    verify: {method: test, how: 手書きの契約表と期待される導出物の対を凍結 anchor（生成器から独立した固定の fixture）として置き、導出物を 1 字変えた fixture で --check が非 0 になり、anchor と一致する fixture で 0 になることを見る（生成物どうしの突き合わせだけを合格にしない）, ac: [AC9]}
+    goals: [GOAL4]
+    figures: []
+    milestone: M1
+    note: 判断の記録 ADR-3 決定 (4)。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。
+  - id: FR12
+    title: 散文の門（規範の印を持つ文だけ）
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    shall: folio は設計ノートの散文のうち、規範の印（rules 行 R-16 の一覧）を持つ文が、同じ文の中に参照 id（条 id・rules 行 id・要件 id・契約 id）を持ち、数と単位（rules 行 R-16 の一覧）を持たないことを床で数え、違反があれば落とす。記述の文は数えない。
+    plain: 設計の説明文の中で「〜しなければならない」のような決まりの言い方をした文には、必ず番号（条・数値の表の行・要件・契約のどれか）を添え、「30 秒」のような単位のついた数を書かないことを機械が数えます（単位の無い数や普通の説明文は自由です）。普通の説明の文は自由です。
+    basis: [N-2, P-5, P-10]
+    rules: [R-16]
+    verify: {method: test, how: 印を持つ文に参照 id が無い fixture と数と単位を持つ fixture で違反が数えられ、記述の文だけの fixture で 0 になることを見る（凍結 anchor を持つ）, ac: [AC10]}
+    goals: [GOAL4]
+    figures: []
+    milestone: M1
+    note: 判断の記録 ADR-3 決定 (7)。M1 まで器（scribe2）が同じ式を暫定で持ち、M1 が引き取ったら撤去する。意味だけで規範になる文は床の外（天井）。数と単位を散文から一律に排する床は採らない（偽陽性）。
+  - id: FR13
+    title: 着地は印だけから読み、無ければ「まだ分からない」
+    pattern: event
+    strength: must
+    when: 要件の追跡表を生成するとき
+    shall: folio は各契約の着地を、統合先の commit の末尾の印（器が書く契約 id と要件 id）だけから読み、印が在れば着地（印の commit の要約値（sha））、無ければ「まだ分からない」と出し「未着地」とは言わない。他の repo の要件 id・契約 id・便の id は参照 id の床（rules 行 R-4）の母集団に入れず、出所付きの測定値（3 値）として扱う。
+    plain: 「その便は本当に入ったか」は、scribe2 が commit の末尾に書く印だけを見て答えます。印があれば「入った」、無ければ「まだ分からない」と言い、「入っていない」とは言いません。scribe2 側の番号が実在するかは folio の検査で追わず、測った値として見せるだけです。
+    basis: [P-4, P-7, P-10, P-13]
+    rules: [R-4]
+    verify: {method: test, how: 印の無い commit の契約が「まだ分からない」と出て「未着地」と出ないこと、印の在る commit で sha が出ることを見る, ac: [AC11]}
+    goals: [GOAL4]
+    figures: []
+    milestone: M1
+    note: 判断の記録 ADR-3 決定 (5)・(6)。自分の repo への取り込みの要求で終わる形（印も記録も持たない）は恒久に「まだ分からない」。器の記録の書き出しは出所付きの測定値として補助に留める。
+  - id: FR14
+    title: 機械が読む id の索引を出す
+    pattern: event
+    strength: should
+    when: folio build が実行されたとき
+    shall: folio は機械が読む id の索引（文書・要件・契約の id と 1 行の題）を出す。中身を席へ届ける経路は CON9 のとおり器が持つ。
+    plain: AI が「どんな文書・要件・契約があるか」を番号と 1 行の題で引ける一覧を出します。中身を AI の手元に届けるのは scribe2 の役目です（CON9）。
+    basis: [P-14, P-5]
+    verify: {method: test, how: 索引の id の集合が正本の id の集合と一致することを見る, ac: []}
+    goals: [GOAL3]
+    figures: []
+    milestone: M1
+    note: 判断の記録 ADR-3 決定 (9)。
+  - id: FR15
+    title: 図は型付き記述から生成し、通らない図は出さない
+    pattern: event
+    strength: must
+    when: 文書を生成するとき、正本の図の節に図の道具の型付き記述（rules 行 R-5 の一覧のうち道具の 5 型）があれば
+    shall: folio は図の道具（archify）を子の処理として呼び、検査と描画を仕上がりの段（rules 行 R-14）で掛け、出力から図の本体（SVG）だけを部品として埋め、図の本体の意味の属性（箱の id・種別・名札、線の始点と終点と名札）は落とさない。図の正本を別 file にも散文にも持たない。道具の通信する命令（製品の印の取り込み）は使わない。検査を通らなかった図は生成せず、前の生成物も上書きしない。凍結 anchor（型付き記述 1 本と図の本体の写し）が落ちたら判定を「まだ分からない」に落とす。同じ図の修正の往復が rules 行 R-7 の上限を超えたら止めて持ち主へ渡す。
+    plain: 図は AI が決まった書き方（型付きの記述）で書き、外の道具が検査して描きます。folio は描かれた図の線と箱だけをページに埋め（箱や線の名前と番号は残します）、道具の付けてくる画面は捨て、道具が外と通信する機能は使いません。図の元の記述は文書の正本の中にだけ置きます。検査に通らない図は出さず、前の図も消しません。基準の図（凍結 anchor）と合わなくなったら「まだ分からない」と言います。直す往復が決めた回数を超えたら止めてあなたに渡します。
+    basis: [P-2, P-4, P-11, A-3, P-10]
+    rules: [R-5, R-7, R-14, R-15]
+    verify: {method: test, how: 仕上がりの段の検査を通らない型付き記述の fixture で図が生成されず前の生成物が残ること、通る fixture で図の本体が部品目録の class だけで埋まることを見る（凍結 anchor = 型付き記述 1 本と図の本体の写し）, ac: [AC12]}
+    goals: [GOAL2, GOAL4]
+    figures: []
+    milestone: M1
+    note: 判断の記録 ADR-4。依存（実行環境 Node.js と道具の版・rules 行 R-15）を実際に足す便では A-3.1 の確認を別に取る（CON2）。往復の件数は台帳に記帳し、撤退条件の測定に使う。
+
 nonfunctional:
   - id: NFR1
     title: AI へ常時渡す説明文の上限
@@ -166,6 +285,7 @@ nonfunctional:
     verify: {method: test, how: 計測 script が数え、R-1 と比べる（値はここに再掲しない）, ac: []}
     goals: [GOAL3, GOAL4]
     figures: [図2-6]
+    note: 図の道具（archify）は AI 向けの説明（skill）として載せない＝R-1 の母集団に入れない（判断の記録 ADR-4 決定 (5)・v1.1 で注を足した）。
   - id: NFR2
     title: 見た目の材料は 1 か所から
     pattern: ubiquitous
@@ -199,6 +319,14 @@ acceptance:
   - {id: AC5, title: 見本 3 面（入口・憲法・要件書）を持ち主が実際に開いて読み（walk）承認済み, plain: 3 枚のページを実際に開いて見て、持ち主が「これでよい」と言った記録（言葉どおり・日付つき）がある。, verifies: [FR4], red_test: {sentence: 承認の逐語と日付が台帳（f2-648 notes）と承認欄にある, fixture: bd f2-648 notes（user 逐語 2026-09-12「承認するけど…」）}, note: 付帯条件（user 直命）を受入に含める（G16=A・受入 (d)）。}
   - {id: AC6, title: 内部 3 空間の参照 id の未解決が 0, plain: 要件・条文・数値の表の番号を全部集めて、行き先の無い番号が 0 個であることを機械が数えて見せる。, verifies: [NFR3], red_test: {sentence: 存在しない id を 1 つ書いた fixture で未解決 1 が報告され、正本 4 file では 0 になる, fixture: tests/fixtures/refs/dangling-1.yaml}}
 
+  - {id: AC7, title: 設計ノートが閉じた一覧の節の型だけで生成され、一覧に無い節の型は落ちる, plain: 設計の文書を機械が作れて、知らない種類の節があると作らずに止まることを見せる。, verifies: [FR9], red_test: {sentence: 一覧に無い節の型を 1 つ持つ fixture で生成が落ち、一覧内だけの fixture で通る, fixture: tests/fixtures/design-note/section-types/（落ちる側と通る側の 2 本）}, milestone: M1}
+  - {id: AC8, title: 器の導出 file が無いと「まだ分からない」になり、合格にならない, plain: 契約表の「欄の決まり」の写しが無い状態で走らせ、「まだ分からない」と出て「合格」にならないことを見せる。, verifies: [FR10], red_test: {sentence: 導出 file を欠いた fixture で判定が「まだ分からない」になり合格にならない, fixture: tests/fixtures/design-note/schema-missing/}, milestone: M1}
+  - {id: AC9, title: 導出物を 1 字変えると --check が非 0 で終わる, plain: scribe2 が読む形の file を 1 文字だけ書き換えて走らせ、「ずれている」と言って止まることを見せる。, verifies: [FR11], red_test: {sentence: 導出物を 1 byte 変えた fixture で --check の終了コードが非 0 になる, fixture: tests/fixtures/contracts/（凍結 anchor = 契約表と期待導出物の対 + 1 字ずらした導出物）}, milestone: M1}
+  - {id: AC10, title: 規範の印を持つ文の違反が数えられ、記述の文は数えられない, plain: 「〜しなければならない」と書いたのに番号が無い文・数値を書いた文が違反として出て、普通の説明文は出ないことを見せる。, verifies: [FR12], red_test: {sentence: 参照 id の無い印付きの文 1 つと数と単位を持つ印付きの文 1 つの fixture で違反 2 が報告され、記述の文だけの fixture で 0 になる, fixture: tests/fixtures/prose-gate/}, milestone: M1}
+  - {id: AC11, title: 印の無い commit の契約は「まだ分からない」と出て「未着地」と出ない, plain: 便が入ったかを示す印が無いとき、「まだ分からない」と表示され「入っていない」とは表示されないことを見せる。, verifies: [FR13], red_test: {sentence: 印の無い commit の fixture で「まだ分からない」が出て「未着地」が出ず、印の在る fixture で要約値（sha）が出る, fixture: tests/fixtures/rtm/（印の無い commit と印の在る commit の 2 本）}, milestone: M1}
+  - {id: AC13, title: 器の導出 file を 1 欄変えると契約表の節の欄が追従する, plain: scribe2 側の「欄の決まり」の写しに欄を 1 つ足すと、folio の契約表にもその欄が現れ、folio 側の記録を直さなくてよいことを見せる。, verifies: [FR10], red_test: {sentence: 導出 file に欄を 1 つ足した fixture で契約表の節にその欄が登録され、folio 側の型に欄の一覧が無い, fixture: tests/fixtures/design-note/schema-plus-one/}, milestone: M1}
+  - {id: AC12, title: 検査を通らない図は生成されず、前の生成物が残る, plain: わざと崩れた図の記述を入れて走らせ、図が作られず前の図がそのまま残ることを見せる。, verifies: [FR15], red_test: {sentence: 前の生成物を置いた上で、仕上がりの段の検査を通らない型付き記述の fixture を入れると図が生成されず前の生成物の要約値が変わらない, fixture: tests/fixtures/figure/（前の生成物 + 通らない記述 + 通る記述の 3 本）}, milestone: M1}
+
 not_frozen: 「60 分以内にできる」「300k token 以下」は、ここには書かない。測定の仕組みが違うので、M1 の実地試験（非エンジニア 1 回）で初めて数値を決める。
 
 constraints:
@@ -209,6 +337,9 @@ constraints:
   - {id: CON5, title: 席のモデル, text: folio の設計判断を下す席（planner 席）は、現行では fable 5.1・effort は high または xhigh で動かす。high と xhigh の切替は持ち主が /effort で手動で行い、folio2 は既定の仕組みを持たない。並列実行・便・作業者の内側は opus まで。, basis: [P-16], source: 持ち主の裁定 2026-09-12 17:1x（P1 / P4）, rules: [D-1, D-2]}
   - {id: CON6, title: scribe2 の限定利用, text: 便は便 0 以降（s2-07l.149 の裁定後）・作業記憶の退避と復元は当面 v1 の共通 skill（global skill）・並列便は使わない。v1 の並列実行の骨格は使わず、並列は素の Agent の同時起動か、その場で書く Workflow（予算を明示）。, basis: [P-13, P-16], source: 持ち主の裁定 2026-09-12（P3 / P5・s2 経由 18:1x）, rules: [D-3, D-4, D-7]}
   - {id: CON7, title: 実装の手段, text: folio v2 は Rust の単一 crate として実装する（bash の寄せ集めをやめる）。, basis: [], source: 裁定 s2-07l.42（folio v2 Rust 化・3 択決定）。GOAL4 から移した（G15 D10）。}
+
+  - {id: CON8, title: M1 の順序と移す範囲, text: 契約表は今の形（scribe2 の設計文書の中の機械が読む区間）で着地させ、folio2 の M1 で設計ノートの YAML 正本と導出物へ移す。scribe2 の設計文書のどこまでを YAML へ移すかは、本版（v1.1）の承認時に持ち主へ出す別の論点とし、その裁定 = 最初の範囲は契約表を持つ設計文書だけ（他の設計文書の移行は M1 の後に改めて問う）。, basis: [P-13, P-6], source: 判断の記録 ADR-3 決定 (8)・scribe2 planner の裁定（s2-07l.197 notes 2026-09-13）・持ち主の裁定 2026-09-16「いずれも推奨で進めて」（f2-648 notes 23:5x JST・推奨 = 契約表を持つ文書だけ）}
+  - {id: CON9, title: 席へ届く経路, text: 設計ノートや要件書の中身が席の文脈へ届く経路は器（scribe2）の役割の注入が持つ。憲法の注入（FR6）は憲法専用のまま広げない。folio が出すのは機械が読む id の索引（FR14）まで。, basis: [P-14, P-13], source: 判断の記録 ADR-3 決定 (9)}
 
 sources:
   - {id: report-v2-shape, name: 報告「folio2 — v2 の形」, where: .claude-session/reports/2026-09-12-v2-shape/index.html（gitignored・参照の母集合に入れない）}
