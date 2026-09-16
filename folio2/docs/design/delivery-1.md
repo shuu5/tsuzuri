@@ -3,7 +3,7 @@
 - 要件: NFR3（参照は必ずつながる・内部 3 空間の未解決 0）/ AC6（未解決が 0）/ FR5（3 値・実行できなかった検査を合格にしない）
 - 判断の記録: ADR-3 決定 (6)（参照 id の床の母集団は正本 4 file・内部 3 空間・広げない）
 - 前提: 便 0（main 53b4c83・`folio check` = 正本の形の床）。裁定: 持ち主 2026-09-17「進めて良い」と前もっての確認（f2-648 notes）。
-- 置き場: この文書は folio2 の設計ノート（M1 で YAML 正本へ移す）。契約表は末尾の区間。審査の材料は行 b が指す §1 だけなので、判定に要る材料は §1 に全部置く。
+- 置き場: この文書は folio2 の設計ノート（M1 で YAML 正本へ移す）。契約表は末尾の区間。審査の材料は行 b が指す §1 だけなので、判定に要る材料は §1 に全部置く。write-set は手書き（Declared 形・新規は `+`）: 器の touches の閉包は閉じた enum + const slice + 網羅 match の形にしか効かず、folio の素の struct（Report）では 0 file になる（審査 FAIL 2026-09-17・run …T230924Z）。
 
 ## 1. 目的と中身
 
@@ -50,9 +50,7 @@ id = "b"
 title = "folio check に参照 id の解決（R-4）と憲法の件数を足す"
 req = ["NFR3", "FR5"]
 section = "1"
-touches = ["crate::verdict::Report"]
-creates = ["crates/folio/src/refs.rs", "crates/folio/tests/refs.rs", "tests/fixtures/refs/dangling-id/constitution.yaml", "tests/fixtures/refs/dangling-id/rules.yaml", "tests/fixtures/refs/dangling-id/vocabulary.yaml", "tests/fixtures/refs/dangling-id/srs.yaml", "tests/fixtures/refs/orphan-rule/constitution.yaml", "tests/fixtures/refs/orphan-rule/rules.yaml", "tests/fixtures/refs/orphan-rule/vocabulary.yaml", "tests/fixtures/refs/orphan-rule/srs.yaml", "tests/fixtures/refs/bad-counts/constitution.yaml", "tests/fixtures/refs/bad-counts/rules.yaml", "tests/fixtures/refs/bad-counts/vocabulary.yaml", "tests/fixtures/refs/bad-counts/srs.yaml"]
-tests = ["crates/folio/tests/refs.rs", "crates/folio/tests/parity.rs"]
+write-set = ["+crates/folio/src/refs.rs", "crates/folio/src/main.rs", "crates/folio/src/check.rs", "crates/folio/src/verdict.rs", "+crates/folio/tests/refs.rs", "crates/folio/tests/parity.rs", "+tests/fixtures/refs/dangling-id/constitution.yaml", "+tests/fixtures/refs/dangling-id/rules.yaml", "+tests/fixtures/refs/dangling-id/vocabulary.yaml", "+tests/fixtures/refs/dangling-id/srs.yaml", "+tests/fixtures/refs/orphan-rule/constitution.yaml", "+tests/fixtures/refs/orphan-rule/rules.yaml", "+tests/fixtures/refs/orphan-rule/vocabulary.yaml", "+tests/fixtures/refs/orphan-rule/srs.yaml", "+tests/fixtures/refs/bad-counts/constitution.yaml", "+tests/fixtures/refs/bad-counts/rules.yaml", "+tests/fixtures/refs/bad-counts/vocabulary.yaml", "+tests/fixtures/refs/bad-counts/srs.yaml"]
 verify = ["cargo nextest run -p folio refs", "cargo nextest run -p folio parity", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
 done = "folio check --dir design-intent が正本で合格（0）を返し、tests/fixtures/refs/ の 3 組で不合格（1）を返し、refs の歯 3 本と parity の歯（便 0 の 5 入力 + §1 の 4 入力 = 9 入力で day-1 の床と終了コードが一致）が緑で CI が通る"
