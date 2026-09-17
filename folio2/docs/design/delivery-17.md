@@ -34,7 +34,7 @@ planner の実測（2026-09-18・main 38601e5）: 3 面の生成器は `crates/f
 
 (c) 本便の「まだ分からない」（2）と「拒む」（1）はここに挙げたものだけ: build = (a) の 導出できない・様式が読めない・親 dir が無い・check の無い（2）と DRIFT（1）／serve = (b) の 1.〜5. のとおり（1 = 版管理か台帳が在る・tailnet の外・tailnet の住所が無い／2 = 配信先が無い・入口が無い・IPv4 でない・bind できない）。
 
-(d) 歯。新規 2 本（`crates/folio/tests/site.rs` = build の歯・関数名はすべて site を含める／`crates/folio/tests/serve.rs` = serve の歯・関数名はすべて serve を含める＝verify の filter 語）。binary 経由（`CARGO_BIN_EXE_folio`）。版管理の `design-intent/preview/` は書き換えない（出力は必ず一時 dir）。
+(d) 歯。新規 2 本（`crates/folio/tests/site.rs` = build の歯・関数名はすべて site を含める／`crates/folio/tests/serve.rs` = serve の歯・関数名はすべて serve を含める＝verify の filter 語）。binary 経由（`CARGO_BIN_EXE_folio`）。歯の置き場のため既存の歯 `crates/folio/tests/vocab.rs` を write-set に載せるが本文も期待も変えない（filter 語 site / serve を名に含む歯が base に 0 本で、受付の門が既存の歯の file を置き場として要るため・filter 語 vocab は base で `tests/vocab.rs` の 2 本に解け、`src/vocab.rs` の unit 3 本は名に vocab を含まないが module の名で同じ filter に回る＝どちらも触らない・期待不変）。版管理の `design-intent/preview/` は書き換えない（出力は必ず一時 dir）。
 - 凍結 fixture との byte 一致（P-10.1）: `tests/fixtures/face/` の正本 5 file と `adr/` を一時 dir の `src/` へ写し、`src/preview/` を作って本便で足す最小の様式 `tests/fixtures/face/folio.css`・`tests/fixtures/face/folio-ui.js` を写す。`build --dir <src> --out <site> --write` = 0 ∧ 5 本が在る ∧ `index.html` = `expected-index.html`・`constitution.html` = `expected.html`・`srs.html` = `expected-srs.html`・様式 2 本 = fixture の 2 本（byte 一致）∧ 標準出力の N が 5 本の合計。
 - check の 3 値: write の直後の `--check` = 0 ／ `srs.html` を 1 byte 変えて 1 かつ標準エラーに DRIFT と srs.html ／ `folio.css` を消して 2 かつ標準エラーに folio.css ／ 空の dir を `--out` にして 2。
 - 実の正本（AC2 の機構）: `build --dir design-intent --out <一時 dir> --write` = 0 ∧ `folio parts --check --dir design-intent --page index=<site>/index.html --page constitution=<site>/constitution.html --page srs=<site>/srs.html` = 0 ∧ 各面の `folio face --face <面> --dir design-intent --out <site>/<面>.html --check` = 0（build と face の出力が同じ）。
@@ -46,7 +46,7 @@ planner の実測（2026-09-18・main 38601e5）: 3 面の生成器は `crates/f
 - 凍結 fixture に足すもの（最小の手書き・正本の写しは置かない）: `tests/fixtures/face/folio.css`（1 行の注釈と 1 つの規則だけ）と `tests/fixtures/face/folio-ui.js`（1 行の注釈だけ）。期待の面 3 本は変えない。
 - 版管理へ書かないもの（D-8）: この host の tailnet の住所・機器名・口座名。歯に書く住所は loopback・範囲の境界の値・公開の例の住所（8.8.8.8・192.168.0.1）だけ。
 
-(e) 便 16 までの形との接続: 新規は `crates/folio/src/site.rs`（build）・`crates/folio/src/serve.rs`・歯 2 本・fixture 2 本。`crates/folio/src/main.rs` は `mod site;`・`mod serve;` の 2 行と Command の 2 つの variant（Build・Serve）とその分岐だけ（既存の variant と分岐は触らない）。`face.rs`・`face_*.rs`・`parts.rs`・`render.rs`・他の src・`build.rs`・`Cargo.toml`・`Cargo.lock`・`scripts/`・`.github/workflows/`・`design-intent/` は触らない。外部 crate は増えない。正規表現は使わない。size は S = 中身を変える既存の file 1 本あたりの増分の見積（`main.rs` の増分は variant 2 つと分岐で 100 行未満・新規の 2 module と歯と fixture は増分に数えない）。
+(e) 便 16 までの形との接続: 新規は `crates/folio/src/site.rs`（build）・`crates/folio/src/serve.rs`・歯 2 本・fixture 2 本。`crates/folio/tests/vocab.rs` は置き場として write-set に在るだけで触らない。`crates/folio/src/main.rs` は `mod site;`・`mod serve;` の 2 行と Command の 2 つの variant（Build・Serve）とその分岐だけ（既存の variant と分岐は触らない）。`face.rs`・`face_*.rs`・`parts.rs`・`render.rs`・他の src・`build.rs`・`Cargo.toml`・`Cargo.lock`・`scripts/`・`.github/workflows/`・`design-intent/` は触らない。外部 crate は増えない。正規表現は使わない。size は S = 中身を変える既存の file 1 本あたりの増分の見積（`main.rs` の増分は variant 2 つと分岐で 100 行未満・新規の 2 module と歯と fixture は増分に数えない）。
 
 ## 2. 範囲
 
@@ -78,8 +78,8 @@ id = "r"
 title = "3 面と様式を配信先へ組み立てる folio build と、tailnet の内側だけで見せる folio serve"
 req = ["FR7"]
 section = "1"
-write-set = ["+crates/folio/src/site.rs", "+crates/folio/src/serve.rs", "crates/folio/src/main.rs", "+crates/folio/tests/site.rs", "+crates/folio/tests/serve.rs", "+tests/fixtures/face/folio.css", "+tests/fixtures/face/folio-ui.js"]
-verify = ["cargo nextest run -p folio site", "cargo nextest run -p folio serve", "cargo clippy --workspace --all-targets -- -D warnings"]
+write-set = ["+crates/folio/src/site.rs", "+crates/folio/src/serve.rs", "crates/folio/src/main.rs", "+crates/folio/tests/site.rs", "+crates/folio/tests/serve.rs", "+tests/fixtures/face/folio.css", "+tests/fixtures/face/folio-ui.js", "crates/folio/tests/vocab.rs"]
+verify = ["cargo nextest run -p folio site", "cargo nextest run -p folio serve", "cargo nextest run -p folio vocab", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "site の歯（凍結 fixture との byte 一致・check の 3 値・実の正本で parts --check と face --check に合格・全部か無しか・消さない・unit）が緑、serve の歯（拒む 3 種と tailnet の住所の無い起動の拒否・loopback での配信 11 要求・unit）が緑、clippy が 0 警告で CI が通る"
+done = "site の歯（凍結 fixture との byte 一致・check の 3 値・実の正本で parts --check と face --check に合格・全部か無しか・消さない・unit）が緑、serve の歯（拒む 3 種と tailnet の住所の無い起動の拒否・loopback での配信 11 要求・unit）が緑、vocab の歯が期待不変で緑（置き場として write-set に在るだけ）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
