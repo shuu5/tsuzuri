@@ -4,6 +4,7 @@ mod check;
 mod inject;
 mod refs;
 mod verdict;
+mod vocab;
 mod yaml;
 
 use std::path::PathBuf;

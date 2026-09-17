@@ -1,0 +1,8 @@
+# folio check の歯の fixture（4 file 形・crates/folio/tests/vocab.rs）。参照 id・逆参照の解決に要る欄だけを持つ最小の rules。
+schema:
+  top_level: [schema, thresholds, discipline]
+thresholds:
+  - {id: R-1, article: P-1, what: 説明文の合計, value: "2,000 字 以下"}
+  - {id: R-3, article: P-2, what: 1 枚の説明文, value: "400 字 以下"}
+discipline:
+  - {id: D-1, article: P-1, what: 並列の内側は opus まで}

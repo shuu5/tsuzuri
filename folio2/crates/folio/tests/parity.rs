@@ -2,7 +2,7 @@
 //! design-intent の写し全部（adr/ と anchors/ を含む）を一時 dir に作り、git init と 1 commit を行い
 //! （tests/run_floor_cases.py と同じ作り）、変異を 1 つだけ当てて、day-1 の床 `python3 scripts/check_draft.py --dir <写し>` と
 //! `folio check --dir <写し>` の終了コードが一致することを見る。期待の終了コードも §1 の値で pin する
-//! （両方が同じ理由で起動できずに揃った、を緑にしない）。要件書と語彙には変異を当てない（床が数えないため）。
+//! （両方が同じ理由で起動できずに揃った、を緑にしない）。語彙には変異を当てない。要件書への変異は便 1 以降（参照 id・語彙の検査）。
 
 use std::ffi::OsStr;
 use std::fs;
@@ -228,6 +228,56 @@ fn parity_constitution_bad_counts_fails() {
                     .parse()
                     .expect("always が数でない");
                 format!("    always: {}", n + 1)
+            })
+        });
+    });
+}
+
+/// (10) 憲法 P-1 の plain の末尾に語彙に無い英字の語 zzzz を足す（語彙の検査 R-9・便 4）。
+#[test]
+fn parity_constitution_unknown_word_fails() {
+    parity("constitution-unknown-word", 1, |work| {
+        edit(&work.join("constitution.yaml"), |text| {
+            edit_line_in_block(text, "\n  - id: P-1\n", "\n    plain: ", |line| {
+                format!("{line}zzzz")
+            })
+        });
+    });
+}
+
+/// (11) 要件書 FR1 の shall の末尾に zzzz を足す。
+#[test]
+fn parity_srs_unknown_word_fails() {
+    parity("srs-unknown-word", 1, |work| {
+        edit(&work.join("srs.yaml"), |text| {
+            edit_line_in_block(text, "\n  - id: FR1\n", "\n    shall: ", |line| {
+                format!("{line}zzzz")
+            })
+        });
+    });
+}
+
+/// (12) rules 行 R-2 の what の末尾に zzzz を足す。
+#[test]
+fn parity_rules_unknown_word_fails() {
+    parity("rules-unknown-word", 1, |work| {
+        edit(&work.join("rules.yaml"), |text| {
+            edit_line_in_block(text, "\n  - {id: R-2,", "\n  - {id: R-2,", |line| {
+                let from = line.find("what: ").expect("R-2 の what が無い");
+                let to = from + line[from..].find(',').unwrap();
+                format!("{}zzzz{}", &line[..to], &line[to..])
+            })
+        });
+    });
+}
+
+/// (13) 憲法 P-1 の plain の末尾に「型付きの表（zzzz）」を足す（「日本語（原語）」の形は免除 → 0）。
+#[test]
+fn parity_constitution_glossed_word_passes() {
+    parity("constitution-glossed-word", 0, |work| {
+        edit(&work.join("constitution.yaml"), |text| {
+            edit_line_in_block(text, "\n  - id: P-1\n", "\n    plain: ", |line| {
+                format!("{line}型付きの表（zzzz）")
             })
         });
     });

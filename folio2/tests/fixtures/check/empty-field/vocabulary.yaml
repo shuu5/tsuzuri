@@ -4,4 +4,4 @@ terms:
 field_terms:
   - {id: tier, term: 段, en: tier, def: 条の実行時の扱い。}
 identifiers:
-  - {group: 道具と製品, words: [folio], why: 固有名}
+  - {group: 道具と製品, words: [folio, opus], why: 固有名}

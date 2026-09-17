@@ -1,6 +1,6 @@
 //! `folio check` — design-intent の正本 4 file（憲法・rules・語彙・要件書）の形の床（FR5 / FR9）。
-//! 数えるのは 重複キー・未知の節・欄の非空（便 0）と、参照 id の解決・rules 行の逆参照・憲法の件数（便 1・refs）。
-//! 語彙・判断の記録・anchor は便 2 以降。
+//! 数えるのは 重複キー・未知の節・欄の非空（便 0）と、参照 id の解決・rules 行の逆参照・憲法の件数（便 1・refs）と、語彙の検査 R-9（便 4・vocab）。
+//! 判断の記録・anchor は便 5 以降。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
 use std::collections::HashSet;
@@ -9,6 +9,7 @@ use std::path::Path;
 
 use crate::refs;
 use crate::verdict::Report;
+use crate::vocab;
 use crate::yaml::{self, Node};
 
 /// 正本 4 file（読む順）。
@@ -52,6 +53,13 @@ pub fn check_dir(dir: &Path) -> Report {
             check_vocabulary(&src.vocabulary, &mut report);
             check_srs(&src.srs, &mut report);
             refs::check_refs(
+                &src.constitution,
+                &src.rules,
+                &src.vocabulary,
+                &src.srs,
+                &mut report,
+            );
+            vocab::check_vocab(
                 &src.constitution,
                 &src.rules,
                 &src.vocabulary,
