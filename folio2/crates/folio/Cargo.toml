@@ -8,3 +8,6 @@ publish.workspace = true
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 yaml-rust2 = "0.10"
+
+[build-dependencies]
+yaml-rust2 = "0.10"

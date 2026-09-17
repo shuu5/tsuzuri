@@ -9,6 +9,7 @@ mod gitcheck;
 mod inject;
 mod lineage;
 mod link;
+mod parts;
 mod refs;
 mod render;
 mod sha256;
@@ -78,6 +79,25 @@ enum Command {
         /// 出力先と導出の byte 一致を検査する（無い 2・不一致 1・一致 0）
         #[arg(long)]
         check: bool,
+    },
+    /// 部品目録から組み立て時に導出した一覧を出す（--print）・面の class と部品の名札と行内の様式を部品目録と突き合わせる（--check）
+    #[command(group(ArgGroup::new("mode").required(true).args(["check", "print"])))]
+    Parts {
+        /// 正本の置き場（preview/parts.json を読む）
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 様式の定義（既定は --dir の下の preview/folio.css）
+        #[arg(long)]
+        css: Option<PathBuf>,
+        /// 面の名と path（<面の名>=<path>・何度でも・1 つも無ければ --dir の下の preview/ の index / constitution / srs）
+        #[arg(long = "page", value_name = "FACE=PATH")]
+        pages: Vec<String>,
+        /// 部品目録との一致・class・部品の名札・行内の様式を検査する（合格 0・不合格 1・まだ分からない 2）
+        #[arg(long)]
+        check: bool,
+        /// 導出した一覧を JSON の 1 行で標準出力へ書く
+        #[arg(long)]
+        print: bool,
     },
 }
 
@@ -174,6 +194,32 @@ fn main() -> ExitCode {
                 eprintln!("{line}");
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Parts {
+            dir,
+            css,
+            pages,
+            check: _,
+            print,
+        } => {
+            if print {
+                print!("{}", parts::print_catalog());
+                return ExitCode::from(0);
+            }
+            let report = parts::check(&dir, css.as_deref(), &pages);
+            for (kind, msg) in &report.violations {
+                println!("[{kind}] {msg}");
+            }
+            for msg in report.unknowns.iter().chain(&report.pendings) {
+                eprintln!("# まだ分からない: {msg}");
+            }
+            let verdict = report.verdict();
+            println!(
+                "folio parts: {verdict}（違反 {}・まだ分からない {}）",
+                report.violations.len(),
+                report.unknowns.len() + report.pendings.len()
+            );
+            ExitCode::from(verdict.exit_code() as u8)
         }
     }
 }
