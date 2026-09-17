@@ -330,7 +330,7 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
         report.violation(
             "anchor",
             format!(
-                "anchors/{name} は版管理の HEAD にあるが作業ツリーに無い（anchor と索引は消さない）"
+                "anchors/{name} は版管理（HEAD）にあるが作業ツリーに無い（anchor と索引は消さない）"
             ),
         );
     }

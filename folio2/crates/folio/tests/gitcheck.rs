@@ -133,7 +133,7 @@ fn gitcheck_anchor_removed_from_worktree_fails() {
     assert!(v.len() >= 2, "{v:?}");
     assert_eq!(
         v.iter()
-            .filter(|l| l.contains("HEAD にあるが作業ツリーに無い"))
+            .filter(|l| l.contains("にあるが作業ツリーに無い"))
             .count(),
         1,
         "{v:?}"

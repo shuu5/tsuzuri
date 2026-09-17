@@ -267,16 +267,15 @@ fn read(path: &Path) -> Result<yaml::Doc, String> {
     yaml::parse(&text)
 }
 
-fn duplicates(file: &str, doc: &yaml::Doc, report: &mut Report) {
+/// 重複キーは床の読み手と同じく「読めない」（まだ分からない）。在れば true。
+fn duplicates(file: &str, doc: &yaml::Doc, report: &mut Report) -> bool {
     for dup in &doc.duplicates {
-        report.violation(
-            "重複キー",
-            format!(
-                "{file} {} 行: 同じ表にキー「{}」を 2 度書いている",
-                dup.line, dup.key
-            ),
-        );
+        report.unknown(format!(
+            "{file} {} 行: 読めない（重複キー「{}」＝同じ表に 2 度書いている）",
+            dup.line, dup.key
+        ));
     }
+    !doc.duplicates.is_empty()
 }
 
 /// (a) 欄の決まりの file。読めない・形が違う は「まだ分からない」。
@@ -301,7 +300,9 @@ fn load_schema(adr_dir: &Path, report: &mut Report) -> Option<Node> {
             return None;
         }
     };
-    duplicates(SCHEMA_FILE, &doc, report);
+    if duplicates(SCHEMA_FILE, &doc, report) {
+        return None;
+    }
     let sections_ok = doc.root.as_map().is_some_and(|m| {
         m.iter()
             .all(|(k, _)| matches!(k.as_str(), "meta" | "schema" | "plain"))
@@ -429,7 +430,9 @@ fn load_records(dir: &Path, adr_dir: &Path, report: &mut Report) -> Vec<(String,
                 continue;
             }
         };
-        duplicates(&format!("adr/{name}"), &doc, report);
+        if duplicates(&format!("adr/{name}"), &doc, report) {
+            continue;
+        }
         let d = doc.root;
         if d.as_map().is_none() {
             report.violation("adr", format!("{name}: 判断の記録が欄の表でない"));

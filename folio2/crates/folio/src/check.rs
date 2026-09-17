@@ -230,6 +230,34 @@ fn duplicate_ids<'a>(file: &str, rows: impl IntoIterator<Item = &'a Node>, repor
     }
 }
 
+/// 条 id の形（P・A・N のどれか + 「-」+ 数字列 の全体一致）。
+fn article_id_form(id: &str) -> bool {
+    id.strip_prefix(['P', 'A', 'N'])
+        .and_then(|r| r.strip_prefix('-'))
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// 規範文 id の重複を床の字面（種別 schema・重複した id の一覧を末尾に）で数える。
+fn duplicate_statement_ids<'a>(rows: impl IntoIterator<Item = &'a Node>, report: &mut Report) {
+    let mut seen = HashSet::new();
+    let mut dups: Vec<String> = Vec::new();
+    for row in rows {
+        let id = row_id(row);
+        if id != "?" && !seen.insert(id.clone()) && !dups.contains(&id) {
+            dups.push(id);
+        }
+    }
+    if !dups.is_empty() {
+        report.violation(
+            "schema",
+            format!(
+                "規範文 id が重複（同じ id の規範文が 2 本以上＝欄単位の消し込みが id で潰れる・P-7.1）: [{}]",
+                dups.join(", ")
+            ),
+        );
+    }
+}
+
 fn check_constitution(root: &Node, report: &mut Report) {
     const FILE: &str = "constitution.yaml";
     if let Some(top) = schema_top_level(FILE, root, report) {
@@ -245,13 +273,24 @@ fn check_constitution(root: &Node, report: &mut Report) {
     let articles = rows(FILE, root, "articles", report);
     for article in &articles {
         let id = row_id(article);
+        let shown = article.get("id").and_then(Node::as_str).unwrap_or("None");
+        if !article_id_form(shown) {
+            report.violation(
+                "schema",
+                format!("{shown}: 条 id の形（P-n / A-n / N-n）でない"),
+            );
+        }
         non_empty(
             FILE,
             &format!("条 {id}"),
             article,
-            &["id", "title", "plain", "statements"],
+            &["id", "title", "statements"],
             report,
         );
+        // 条の plain だけは床の字面（種別 R-10）で出す
+        if article.get("plain").is_none_or(Node::is_blank) {
+            report.violation("R-10", format!("{id}: plain が無い"));
+        }
         let statements = rows(FILE, article, "statements", report);
         for st in &statements {
             non_empty(
@@ -262,7 +301,7 @@ fn check_constitution(root: &Node, report: &mut Report) {
                 report,
             );
         }
-        duplicate_ids(FILE, statements, report);
+        duplicate_statement_ids(statements, report);
     }
     duplicate_ids(FILE, articles, report);
 }

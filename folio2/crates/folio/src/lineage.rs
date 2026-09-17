@@ -24,87 +24,193 @@ fn marker(name: &str) -> &'static str {
     adr::floor_val(&["amends_entry", name]).unwrap_or_default()
 }
 
-/// json の数の字面か。
-fn json_number(s: &str) -> bool {
-    let b = s.as_bytes();
-    let mut i = usize::from(b.first() == Some(&b'-'));
-    let digits = |i: &mut usize| {
-        let start = *i;
-        while *i < b.len() && b[*i].is_ascii_digit() {
-            *i += 1;
-        }
-        *i > start
+/// json の受理器（床の json.loads が読めるか）。全体が 1 値（前後の空白は許す）。
+fn json_text(s: &str) -> bool {
+    let mut p = Json {
+        b: s.as_bytes(),
+        i: 0,
     };
-    match b.get(i) {
-        Some(b'0') => i += 1,
-        Some(b'1'..=b'9') => {
-            digits(&mut i);
-        }
-        _ => return false,
+    p.ws();
+    if !p.value(0) {
+        return false;
     }
-    if b.get(i) == Some(&b'.') {
-        i += 1;
-        if !digits(&mut i) {
-            return false;
-        }
-    }
-    if matches!(b.get(i), Some(b'e' | b'E')) {
-        i += 1;
-        if matches!(b.get(i), Some(b'+' | b'-')) {
-            i += 1;
-        }
-        if !digits(&mut i) {
-            return false;
-        }
-    }
-    i == b.len()
+    p.ws();
+    p.i == p.b.len()
 }
 
-/// json の文字列の字面（二重引用符で囲み、中は正しい escape だけ）か。
-fn json_string(s: &str) -> bool {
-    let Some(body) = s.strip_prefix('"') else {
-        return false;
-    };
-    let mut chars = body.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => return chars.as_str().is_empty(),
-            '\\' => match chars.next() {
-                Some('"' | '\\' | '/' | 'b' | 'f' | 'n' | 'r' | 't') => {}
-                Some('u') => {
-                    for _ in 0..4 {
-                        if !chars.next().is_some_and(|h| h.is_ascii_hexdigit()) {
-                            return false;
-                        }
-                    }
-                }
-                _ => return false,
-            },
-            c if (c as u32) < 0x20 => return false,
-            _ => {}
+struct Json<'a> {
+    b: &'a [u8],
+    i: usize,
+}
+
+impl Json<'_> {
+    fn peek(&self) -> Option<u8> {
+        self.b.get(self.i).copied()
+    }
+
+    fn eat(&mut self, c: u8) -> bool {
+        if self.peek() == Some(c) {
+            self.i += 1;
+            true
+        } else {
+            false
         }
     }
-    false
+
+    fn lit(&mut self, word: &str) -> bool {
+        if self.b[self.i..].starts_with(word.as_bytes()) {
+            self.i += word.len();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn ws(&mut self) {
+        while matches!(self.peek(), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+            self.i += 1;
+        }
+    }
+
+    fn digits(&mut self) -> bool {
+        let start = self.i;
+        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+            self.i += 1;
+        }
+        self.i > start
+    }
+
+    /// 値 1 つ（入れ子の深さは床の読み手の再帰の上限の手前で打ち切る）。
+    fn value(&mut self, depth: usize) -> bool {
+        if depth > 900 {
+            return false;
+        }
+        match self.peek() {
+            Some(b'n') => self.lit("null"),
+            Some(b't') => self.lit("true"),
+            Some(b'f') => self.lit("false"),
+            Some(b'N') => self.lit("NaN"),
+            Some(b'I') => self.lit("Infinity"),
+            Some(b'"') => self.string(),
+            Some(b'[') => self.array(depth),
+            Some(b'{') => self.object(depth),
+            Some(b'-') if self.b[self.i..].starts_with(b"-Infinity") => self.lit("-Infinity"),
+            Some(b'-' | b'0'..=b'9') => self.number(),
+            _ => false,
+        }
+    }
+
+    fn number(&mut self) -> bool {
+        self.eat(b'-');
+        match self.peek() {
+            Some(b'0') => self.i += 1,
+            Some(b'1'..=b'9') => {
+                self.digits();
+            }
+            _ => return false,
+        }
+        if self.eat(b'.') && !self.digits() {
+            return false;
+        }
+        if matches!(self.peek(), Some(b'e' | b'E')) {
+            self.i += 1;
+            if matches!(self.peek(), Some(b'+' | b'-')) {
+                self.i += 1;
+            }
+            if !self.digits() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// 二重引用符で囲み、中は正しい escape だけ（生の制御文字は認めない）。
+    fn string(&mut self) -> bool {
+        if !self.eat(b'"') {
+            return false;
+        }
+        while let Some(c) = self.peek() {
+            self.i += 1;
+            match c {
+                b'"' => return true,
+                b'\\' => match self.peek() {
+                    Some(b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't') => self.i += 1,
+                    Some(b'u') => {
+                        self.i += 1;
+                        for _ in 0..4 {
+                            if !self.peek().is_some_and(|h| h.is_ascii_hexdigit()) {
+                                return false;
+                            }
+                            self.i += 1;
+                        }
+                    }
+                    _ => return false,
+                },
+                c if c < 0x20 => return false,
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn array(&mut self, depth: usize) -> bool {
+        self.i += 1;
+        self.ws();
+        if self.eat(b']') {
+            return true;
+        }
+        loop {
+            self.ws();
+            if !self.value(depth + 1) {
+                return false;
+            }
+            self.ws();
+            if self.eat(b']') {
+                return true;
+            }
+            if !self.eat(b',') {
+                return false;
+            }
+        }
+    }
+
+    fn object(&mut self, depth: usize) -> bool {
+        self.i += 1;
+        self.ws();
+        if self.eat(b'}') {
+            return true;
+        }
+        loop {
+            self.ws();
+            if !self.string() {
+                return false;
+            }
+            self.ws();
+            if !self.eat(b':') {
+                return false;
+            }
+            self.ws();
+            if !self.value(depth + 1) {
+                return false;
+            }
+            self.ws();
+            if self.eat(b'}') {
+                return true;
+            }
+            if !self.eat(b',') {
+                return false;
+            }
+        }
+    }
 }
 
 /// 欄の値の型付きの表現（床の render_val）。文字列はそのまま（json として読める字面は引用符付き）・空文字は印・
-/// 文字列以外は正規化の字面。「[」か「{」で始まる文字列は測れない（fail-closed）。
+/// 文字列以外は正規化の字面。json として読めるかは床の json.loads と同じ受理器で決める。
 fn render_val(x: &Value, at: &str) -> Result<String, Fail> {
     match x {
         Value::Str(s) if s.is_empty() => Ok(marker("empty_marker").to_string()),
         Value::Str(s) => {
-            let t = s.trim_matches([' ', '\t', '\n', '\r']);
-            if t.starts_with(['[', '{']) {
-                return Err(Fail::Pending(format!(
-                    "正規化できない値（欄の道 {at}・「[」か「{{」で始まる文字列）"
-                )));
-            }
-            let json_like = matches!(
-                t,
-                "null" | "true" | "false" | "NaN" | "Infinity" | "-Infinity"
-            ) || json_number(t)
-                || json_string(t);
-            if json_like {
+            if json_text(s) {
                 yaml::canonical(x).map_err(|e| Fail::Pending(format!("正規化できない値（{e}）")))
             } else {
                 Ok(s.clone())
@@ -698,11 +804,32 @@ mod tests {
     }
 
     #[test]
-    fn lineage_bracket_strings_are_pending() {
-        let cur = "schema: {v: '[1]'}\nprecedence: {text: 前文}\narticles: []\n";
-        let r = run(cur, "  []\n", C_POINTED);
-        assert!(r.violations.is_empty(), "{r:?}");
-        assert!(r.pendings.iter().any(|m| m.contains("schema.v")), "{r:?}");
+    fn lineage_bracket_strings_follow_json_loads() {
+        for s in [
+            "[1]",
+            " [1, \"a\", {\"k\": [null, true]}] ",
+            "{}",
+            "{\"a\": -0.5e+2}",
+            "[\"\\u00e9\"]",
+        ] {
+            assert!(
+                render_val(&Value::Str(s.into()), "x")
+                    .unwrap()
+                    .starts_with('"'),
+                "{s}"
+            );
+        }
+        for s in [
+            "[reject, build-check, human-review, none]",
+            "[1,]",
+            "{a: 1}",
+            "{\"a\" 1}",
+            "[1] x",
+            "[\"\\x\"]",
+            "[01]",
+        ] {
+            assert_eq!(render_val(&Value::Str(s.into()), "x").unwrap(), s);
+        }
     }
 
     #[test]
