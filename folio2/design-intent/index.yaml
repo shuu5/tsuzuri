@@ -3,17 +3,18 @@
 # 数と日付（条の数・要件の数・判断の記録の本数・更新日・文書が在るか無いか）はここに書かない＝生成のたびに他の正本から数えて出す（P-6.3）。
 # 見出し・凡例・読む順番・相談窓口の文は 2026-09-12 に持ち主が見た目を承認した見本の入口から起こし、今の正本に合わせて直した。
 # v0.2（2026-09-17・便 16）: 相談窓口に命令の字面（command）を足した。読む順番の行き先（stops）の節の id（at・憲法面と要件書面の anchor）は便 16 が足す（便 12 の歯の変異の当て先の行と一緒に変える）。
-# 状態: 下書き。発効は、生成した入口の面を持ち主が開いて読んで承認したとき（要件書 AC5 の形）に承認欄へ逐語を置いて行う。
+# 状態: 発効（持ち主の承認 2026-09-18「確認した　大体これで良い」・生成した 3 面を開いて読んだ後・要件書 AC5 の形・逐語は f2-648 notes と meta.approval）。改訂は判断の記録と持ち主の承認で行う。
 
 meta:
   id: folio2-index
   title: 設計文書の入口
   version: v0.2
-  status: draft
+  status: effective
   generated: 2026-09-17
   approval:
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-17, stamp: 起草（f2-648.23・ADR-5 決定 (2)）}
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-17, stamp: v0.2（f2-648.27・intake の command・stops の at は便 16 で）}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-18, stamp: "発効（f2-648 notes 2026-09-18 00:2x JST・対話面 R-8・AC5 の walk・生成した 3 面〔入口・憲法・要件書・main f9d02af〕を tailnet で開いて読んだ後）", verbatim: 確認した　大体これで良い, version: v0.2}
 
 audience:
   label: 誰のための文書か
