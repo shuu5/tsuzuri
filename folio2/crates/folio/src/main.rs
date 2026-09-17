@@ -4,6 +4,8 @@ mod adr;
 mod anchor;
 mod check;
 mod entrance;
+mod face;
+mod face_constitution;
 mod freeze;
 mod gitcheck;
 mod inject;
@@ -98,6 +100,25 @@ enum Command {
         /// 導出した一覧を JSON の 1 行で標準出力へ書く
         #[arg(long)]
         print: bool,
+    },
+    /// 正本から見本 3 面の 1 面を導出して書く（--write）・検査する（--check）。本便で生成器を持つのは憲法の面だけ
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
+    Face {
+        /// 面の名（index・constitution・srs）
+        #[arg(long)]
+        face: String,
+        /// 正本の置き場
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 出力先（既定なし・相対なら --dir からの相対・絶対ならそのまま）
+        #[arg(long)]
+        out: PathBuf,
+        /// 導出した面を出力先へ書く
+        #[arg(long)]
+        write: bool,
+        /// 出力先と導出の byte 一致を検査する（無い 2・不一致 1・一致 0）
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -220,6 +241,27 @@ fn main() -> ExitCode {
                 report.unknowns.len() + report.pendings.len()
             );
             ExitCode::from(verdict.exit_code() as u8)
+        }
+        Command::Face {
+            face,
+            dir,
+            out,
+            write,
+            check: _,
+        } => {
+            let mode = if write {
+                face::Mode::Write
+            } else {
+                face::Mode::Check
+            };
+            let outcome = face::run(&face, &dir, &out, mode);
+            if let Some(line) = &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
         }
     }
 }

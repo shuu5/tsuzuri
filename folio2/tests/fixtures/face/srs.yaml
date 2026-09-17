@@ -1,0 +1,10 @@
+# folio face の凍結 fixture（便 14・P-10.1）— 要件書の正本の最小形。手書き・design-intent/ の写しではない。
+# 憲法の面が読むのは 5 節の id と title だけ（条の関係の欄が指す要件の見出し）。
+
+goals: []
+requirements:
+  - id: FR1
+    title: 相談して決められる
+nonfunctional: []
+acceptance: []
+constraints: []
