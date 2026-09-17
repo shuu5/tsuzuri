@@ -26,7 +26,7 @@
 
 `folio check` 自身の歯（`crates/folio/tests/adr.rs`・binary 経由・`tests/refs.rs` と同じ形で種別と文言を名指して 1 違反を見る）の fixture は `tests/fixtures/adr/` の 3 組。各組は上の 8 組と同じ最小の 4 file（違反 0・識別子は folio と opus）+ `adr/schema.yaml` + `adr/ADR-1.yaml` の 6 file で、変異を 1 つ当てる: `schema-drift/` = adr/schema.yaml の options_rule.min を 3 にする → 1（種別 adr・文言に options_rule.min）／`two-adopted/` = ADR-1 の案 2 つを両方 adopted にする → 1（種別 adr・文言に 採用の案）／`effective-no-approval/` = ADR-1 の status を accepted にし approval を持たない → 1（種別 N-4・文言に approval）。parity の入力にはしない。
 
-突き合わせの歯（`crates/folio/tests/parity.rs`・便 4 の 13 入力に足す・写し全部 + git 1 commit + 変異 1 つ・床と folio の終了コードの一致）: (14) `adr/ADR-1.yaml` の retreat の condition を空にする → 1／(15) `adr/ADR-1.yaml` の rejected の案 1 つを adopted にする → 1／(16) `adr/schema.yaml` の options_rule の min を 3 にする → 1／(17) `adr/ADR-1.yaml` の approval の行を消す（accepted のまま）→ 1。既存の 13 入力は変えない。
+突き合わせの歯（crates/folio/tests/parity.rs（2026-09-18 に scripts/retired/ へ退役）・便 4 の 13 入力に足す・写し全部 + git 1 commit + 変異 1 つ・床と folio の終了コードの一致）: (14) `adr/ADR-1.yaml` の retreat の condition を空にする → 1／(15) `adr/ADR-1.yaml` の rejected の案 1 つを adopted にする → 1／(16) `adr/schema.yaml` の options_rule の min を 3 にする → 1／(17) `adr/ADR-1.yaml` の approval の行を消す（accepted のまま）→ 1。既存の 13 入力は変えない。
 
 便 4 が置いた形との接続: `crates/folio/src/main.rs` に `mod adr;` を足し、実装は新規 `crates/folio/src/adr.rs` に置き、`check.rs` の `check_dir` から `vocab` の次に呼ぶ（`<dir>` の path と Report を渡す・4 file の Node は渡さない）。YAML は既存の `crates/folio/src/yaml.rs` の読み手を使う（欄の取り出しの補助を足してよい）。3 値は既存の `crates/folio/src/verdict.rs` の型を使い、変えない（違反の種別は文字列で渡す）。外部 crate は増やさない（clap と yaml-rust2 のまま・`Cargo.toml` と `Cargo.lock` は触らない）。正規表現は使わない。便 2・便 3 の歯と fixture は触らない。
 

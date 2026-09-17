@@ -36,7 +36,7 @@
 
 `folio check` 自身の歯（`crates/folio/tests/vocab.rs`・binary 経由・`tests/refs.rs` と同じ形で種別 R-9 と語を名指して 1 違反を見る）の fixture は `tests/fixtures/vocab/` の 2 組・4 file 形・`tests/fixtures/refs/dangling-id/` と同じ最小の手書き（basis の実在しない id は持たず・識別子は folio と opus）。`unknown-word/` = 憲法の P-1 の plain の末尾に語彙に無い英字の語 widget を 1 つ置く → 1（違反の文言に widget と P-1 plain）／`exemptions/` = 憲法の P-1 の plain に免除の 5 形（id の形 FR1・既知の語 folio・「型付きの表（gloss）」の形・英字 1 字の x・旗 --check）と語彙に無い語 widget を並べる → 1（違反は widget の 1 件だけ・5 形は数えない）。parity の入力にはしない。
 
-突き合わせの歯（`crates/folio/tests/parity.rs`・便 1 の 9 入力に足す・写し全部 + git 1 commit + 変異 1 つ・床と folio の終了コードの一致）: (10) `constitution.yaml` の P-1 の plain の末尾に語彙に無い英字の語 zzzz を足す → 1／(11) `srs.yaml` の FR1 の shall の末尾に zzzz を足す → 1／(12) `rules.yaml` の R-2 の what の末尾に zzzz を足す → 1／(13) `constitution.yaml` の P-1 の plain の末尾に「型付きの表（zzzz）」を足す → 0（「日本語（原語）」の形は免除・plain は凍結 anchor の写しの欄ではないので anchor の検査に触れない）。既存の 9 入力は変えない。
+突き合わせの歯（crates/folio/tests/parity.rs（2026-09-18 に scripts/retired/ へ退役）・便 1 の 9 入力に足す・写し全部 + git 1 commit + 変異 1 つ・床と folio の終了コードの一致）: (10) `constitution.yaml` の P-1 の plain の末尾に語彙に無い英字の語 zzzz を足す → 1／(11) `srs.yaml` の FR1 の shall の末尾に zzzz を足す → 1／(12) `rules.yaml` の R-2 の what の末尾に zzzz を足す → 1／(13) `constitution.yaml` の P-1 の plain の末尾に「型付きの表（zzzz）」を足す → 0（「日本語（原語）」の形は免除・plain は凍結 anchor の写しの欄ではないので anchor の検査に触れない）。既存の 9 入力は変えない。
 
 実装の下書き: commit e4f8806（run f2-648.14-20260917T005039Z の branch・verify 8 段 rc 0・gate は §1 の字面の食い違いで INCONCLUSIVE）の `vocab.rs`・`tests/vocab.rs`・parity の追加・fixture は写してよい（(iii)(v) の実装は床と同じで、直したのは §1 の字面）。
 
