@@ -1,5 +1,5 @@
 //! `folio parts` の歯（便 13・docs/design/delivery-13.md §1 (c)）。
-//! 見本 3 面で合格・目録外の class / 部品 / 面に置けない部品 / 許されない行内の様式で不合格（変異は写しに 1 つずつ）・
+//! 生成した 3 面（folio build を一時 dir へ・手書きの見本は退役済み 2026-09-18）で合格・目録外の class / 部品 / 面に置けない部品 / 許されない行内の様式で不合格（変異は写しに 1 つずつ）・
 //! 読めない入力 6 つで終了 2・独立した凍結 fixture（tests/fixtures/floor/）の合格と不合格と --print の byte 一致。
 
 use std::fs;
@@ -54,11 +54,26 @@ fn temp_dir(case: &str) -> PathBuf {
     td
 }
 
+/// 実の正本から入口の面を一時 dir へ生成する（手書きの見本は退役済み・生成器の出力が唯一の面）。戻り値 = 面の path。
+fn generated_index(td: &Path) -> PathBuf {
+    let page = td.join("generated-index.html");
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .args(["face", "--face", "index", "--dir"])
+        .arg(design_intent())
+        .arg("--out")
+        .arg(&page)
+        .arg("--write")
+        .output()
+        .expect("folio を起動できない");
+    assert_eq!(code(&out), 0, "入口の面を生成できない: {}{}", stdout(&out), stderr(&out));
+    page
+}
+
 /// 入口の面の写しに変異を 1 つ当て、`--page index=<写し>` で撃つ。戻り値は folio の出力。
 fn mutated_index(case: &str, mutate: impl FnOnce(&str) -> String) -> Output {
     let td = temp_dir(case);
     let page = td.join("index.html");
-    let before = fs::read_to_string(design_intent().join("preview/index.html")).unwrap();
+    let before = fs::read_to_string(generated_index(&td)).unwrap();
     let after = mutate(&before);
     assert_ne!(before, after, "{case}: 変異が当たっていない");
     fs::write(&page, after).unwrap();
@@ -83,11 +98,38 @@ fn assert_fail_with(out: &Output, case: &str, wording: &str) {
 // ── 見本 3 面 ──
 
 #[test]
-fn parts_check_passes_on_the_three_sample_faces() {
-    let out = parts_check(&design_intent(), &[]);
+fn parts_check_passes_on_the_three_generated_faces() {
+    let td = temp_dir("three-faces");
+    let site = td.join("site");
+    let built = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .args(["build", "--dir"])
+        .arg(design_intent())
+        .arg("--out")
+        .arg(&site)
+        .arg("--write")
+        .output()
+        .expect("folio を起動できない");
+    assert_eq!(code(&built), 0, "{}{}", stdout(&built), stderr(&built));
+    let pages: Vec<String> = ["index", "constitution", "srs"]
+        .iter()
+        .map(|f| format!("{f}={}", site.join(format!("{f}.html")).display()))
+        .collect();
+    let mut args = Vec::new();
+    for p in &pages {
+        args.push("--page");
+        args.push(p.as_str());
+    }
+    let out = parts_check(&design_intent(), &args);
+    let _ = fs::remove_dir_all(&td);
     let text = stdout(&out);
     assert_eq!(code(&out), 0, "{text}{}", stderr(&out));
     assert!(text.contains("違反 0"), "{text}");
+}
+
+#[test]
+fn parts_check_is_unknown_without_pages_now_that_the_samples_are_retired() {
+    let out = parts_check(&design_intent(), &[]);
+    assert_unknown(&out, "no-pages", "読めない");
 }
 
 // ── 変異 1 つで不合格 ──
@@ -225,11 +267,13 @@ fn parts_check_is_unknown_when_css_is_missing() {
 
 #[test]
 fn parts_check_is_unknown_when_the_face_name_is_not_one_of_three() {
-    let page = design_intent().join("preview/index.html");
+    let td = temp_dir("bad-face");
+    let page = generated_index(&td);
     let out = parts_check(
         &design_intent(),
         &["--page", &format!("hub={}", page.display())],
     );
+    let _ = fs::remove_dir_all(&td);
     assert_unknown(&out, "bad-face", "面の名「hub」");
 }
 
