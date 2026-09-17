@@ -366,7 +366,7 @@ fn structural_diff(
 }
 
 /// 列の区間 1 つ（前の anchor → 版 `ver` の写し）の差分を、その版を名指す発効した判断の amends と 1:1 に消し込む。
-/// 余りも不足も落とす。`c` は現行の憲法（amended_by を引く）。
+/// 余りも不足も落とす。`c` は現行の憲法（amended_by を引く）。比べられたら差分を返す（便 9 の凍結が使う）。
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn verify_pair(
     prev_doc: &Value,
@@ -377,21 +377,15 @@ pub(crate) fn verify_pair(
     c: &Value,
     adr: &Adr,
     report: &mut Report,
-) {
+) -> Option<Changed> {
     let pv = prev_doc
         .get("version")
         .map_or_else(|| "None".to_string(), Value::py_str);
     let (changed, lost) = match structural_diff(prev_doc, cur_content, cur_scope, label, report) {
         Ok(x) => x,
-        Err(Fail::Unknown(m)) => {
-            report.unknown(format!("anchor {pv} と {label} を比べられない: {m}"));
-            return;
-        }
-        Err(Fail::Pending(m)) => {
-            report.pending(format!(
-                "anchor {pv} と {label} の区間を消し込めない（まだ分からない）: {m}"
-            ));
-            return;
+        Err(e) => {
+            fail_report(e, &pv, label, report);
+            return None;
         }
     };
     let names_ver = |d: &Node| anchor::amends_list(d).any(|e| node_str(e.get("version")) == ver);
@@ -484,6 +478,42 @@ pub(crate) fn verify_pair(
                     "{t} が anchor {pv} から変わったが（{label}）、その版（{ver}）の判断の記録を指す amended_by が無い"
                 ),
             );
+        }
+    }
+    Some(changed)
+}
+
+fn fail_report(e: Fail, pv: &str, label: &str, report: &mut Report) {
+    match e {
+        Fail::Unknown(m) => report.unknown(format!("anchor {pv} と {label} を比べられない: {m}")),
+        Fail::Pending(m) => report.pending(format!(
+            "anchor {pv} と {label} の区間を消し込めない（まだ分からない）: {m}"
+        )),
+    }
+}
+
+/// 最新 anchor の content と現行の写しの欄単位の差分（便 9 の `--emit-amends`・検査は足さない）。
+/// 比べられなければ「読めない」か「測れない」を立てて None。
+pub(crate) fn diff_with(
+    prev_doc: &Value,
+    cur_content: &Value,
+    cur_scope: &[String],
+    report: &mut Report,
+) -> Option<Changed> {
+    let prev_scope = anchor::str_items(prev_doc.get("projection").and_then(|p| p.get("scope")));
+    match diff_targets(
+        prev_doc.get("content").unwrap_or(&Value::Null),
+        &prev_scope,
+        cur_content,
+        cur_scope,
+    ) {
+        Ok(ch) => Some(ch),
+        Err(e) => {
+            let pv = prev_doc
+                .get("version")
+                .map_or_else(|| "None".to_string(), Value::py_str);
+            fail_report(e, &pv, "現行", report);
+            None
         }
     }
 }

@@ -10,6 +10,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::adr::{self, Adr};
+use crate::freeze::{Flag, State};
 use crate::gitcheck;
 use crate::lineage;
 use crate::sha256;
@@ -109,7 +110,7 @@ fn anchor_names(anchors: &Path) -> std::io::Result<Vec<String>> {
 }
 
 /// file を型付きで読む。読めない・重複キー（床の読み手は読めない）・この便で解かない scalar は「まだ分からない」。
-fn read_typed(path: &Path, file: &str, report: &mut Report) -> Option<Value> {
+pub(crate) fn read_typed(path: &Path, file: &str, report: &mut Report) -> Option<Value> {
     if !path.is_file() {
         report.unknown(format!("{file}: file でない"));
         return None;
@@ -174,7 +175,7 @@ fn canon(value: &Value, what: &str, report: &mut Report) -> Option<String> {
 }
 
 /// digest 欄を除く全欄の正規化の sha256。
-fn digest_of(doc: &Value) -> Result<String, String> {
+pub(crate) fn digest_of(doc: &Value) -> Result<String, String> {
     let body: Vec<(Value, Value)> = doc
         .as_map()
         .unwrap_or_default()
@@ -379,16 +380,21 @@ pub(crate) fn amends_list(d: &Node) -> impl Iterator<Item = &Node> {
 }
 
 /// (e)〜(i) を掛ける。`history` は (j) の列に在った id（`history_ids`）。
-pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &mut Report) {
-    let Some(c) = read_typed(&dir.join("constitution.yaml"), "constitution.yaml", report) else {
-        return;
-    };
+/// `flag` が `--freeze-anchor` のときは (i) を掛けず（凍結の前提の検査が替わる・便 9）、列の結果を `freeze.rs` へ返す。
+pub fn check_anchor(
+    dir: &Path,
+    adr: &Adr,
+    history: &HashSet<String>,
+    flag: Flag,
+    report: &mut Report,
+) -> Option<State> {
+    let c = read_typed(&dir.join("constitution.yaml"), "constitution.yaml", report)?;
     let scope = amendment_scope(&c);
     let cur_proj = match project(&c, &scope) {
         Ok(p) => p,
         Err(e) => {
             report.unknown(format!("constitution.yaml: 現行の写しを取れない: {e}"));
-            return;
+            return None;
         }
     };
     let marks = [
@@ -424,7 +430,7 @@ pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &m
                 "anchors/ が dir でない（symlink か file）: {}",
                 anch.display()
             ));
-            return;
+            return None;
         }
         let index_path = anch.join(index_file);
         if index_path.exists()
@@ -443,7 +449,7 @@ pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &m
             Ok(n) => n,
             Err(e) => {
                 report.unknown(format!("anchors/: 読めない: {e}"));
-                return;
+                return None;
             }
         };
         for name in names {
@@ -652,8 +658,10 @@ pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &m
         }
     }
 
-    // (i) 現行との一致
-    if index.is_none() && anchors.is_empty() && !records_exist {
+    // (i) 現行との一致（`--freeze-anchor` では凍結の前提の検査に替わる）
+    if flag == Flag::FreezeAnchor {
+        // freeze.rs の (c) が受け持つ
+    } else if index.is_none() && anchors.is_empty() && !records_exist {
         report.pending(format!(
             "凍結 anchor が 0 本（{}）＝A-2 / N-4 の差分検査は「まだ分からない」（P-10.3）。発効版で --freeze-anchor を実行する",
             anch.display()
@@ -684,6 +692,20 @@ pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &m
             );
         }
     }
+    let newest_doc = newest_anchor.map(|a| a.doc.clone());
+    Some(State {
+        seen_in_git: git.as_ref().is_some_and(gitcheck::Tracked::seen),
+        c,
+        scope,
+        cur_proj,
+        cur_ver,
+        meta_approval,
+        index,
+        newest,
+        newest_doc,
+        records_exist,
+        anchors_dir: anch,
+    })
 }
 
 /// (i) 版を上げて未凍結の間も測る: 条の消失と規範文の改番（P-7）。

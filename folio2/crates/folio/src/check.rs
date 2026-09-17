@@ -10,6 +10,7 @@ use std::path::Path;
 
 use crate::adr;
 use crate::anchor;
+use crate::freeze::{self, After, Flag};
 use crate::link;
 use crate::refs;
 use crate::verdict::Report;
@@ -47,9 +48,11 @@ struct Sources {
     srs: Node,
 }
 
-/// `dir` の正本 4 file を検査する。
-pub fn check_dir(dir: &Path) -> Report {
+/// `dir` の正本 4 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を `freeze.rs` へ渡す）。
+pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
     let mut report = Report::default();
+    let mut state = None;
+    let mut adr_records = None;
     match load_all(dir, &mut report) {
         Some(src) => {
             let history = anchor::history_ids(dir);
@@ -82,12 +85,14 @@ pub fn check_dir(dir: &Path) -> Report {
                     &records,
                     &mut report,
                 );
-                anchor::check_anchor(dir, &records, &history, &mut report);
+                state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
+                adr_records = Some(records);
             }
         }
         None => debug_assert!(!report.unknowns.is_empty()),
     }
-    report
+    let after = freeze::after(dir, flag, state.as_ref(), adr_records.as_ref(), &mut report);
+    (report, after)
 }
 
 fn load_all(dir: &Path, report: &mut Report) -> Option<Sources> {

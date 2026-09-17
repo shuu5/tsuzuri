@@ -3,6 +3,7 @@
 mod adr;
 mod anchor;
 mod check;
+mod freeze;
 mod gitcheck;
 mod inject;
 mod lineage;
@@ -18,6 +19,8 @@ use std::process::ExitCode;
 
 use clap::{ArgGroup, Parser, Subcommand};
 
+use crate::freeze::{After, Flag};
+
 #[derive(Parser)]
 #[command(name = "folio", version, about = "folio v2 — 設計文書の生成と検査")]
 struct Cli {
@@ -32,6 +35,12 @@ enum Command {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
+        /// 最新 anchor と現行の欄単位の差分を amends にそのまま貼れる形で標準出力へ書く（違反は標準エラーへ）
+        #[arg(long, conflicts_with = "freeze_anchor")]
+        emit_amends: bool,
+        /// 全検査が 0 違反で測れないも無いときだけ、現行の写しを新しい版の anchor として書き索引に追記する
+        #[arg(long)]
+        freeze_anchor: bool,
     },
     /// 憲法の前文と規範文を CLAUDE.md の生成区間へ書く（--write）・検査する（--check）・出す（--print）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "print"])))]
@@ -57,20 +66,52 @@ enum Command {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
-        Command::Check { dir } => {
-            let report = check::check_dir(&dir);
+        Command::Check {
+            dir,
+            emit_amends,
+            freeze_anchor,
+        } => {
+            let flag = if emit_amends {
+                Flag::EmitAmends
+            } else if freeze_anchor {
+                Flag::FreezeAnchor
+            } else {
+                Flag::None
+            };
+            let (report, after) = check::check_dir(&dir, flag);
+            if let After::Refused(msg) = &after {
+                eprintln!("folio check: {msg}");
+                return ExitCode::from(1);
+            }
+            // --emit-amends では標準出力を貼れる差分だけにし、違反は標準エラーへ
+            let out = |line: String| {
+                if flag == Flag::EmitAmends {
+                    eprintln!("{line}");
+                } else {
+                    println!("{line}");
+                }
+            };
             for (kind, msg) in &report.violations {
-                println!("[{kind}] {msg}");
+                out(format!("[{kind}] {msg}"));
             }
             for msg in report.unknowns.iter().chain(&report.pendings) {
                 eprintln!("# まだ分からない: {msg}");
             }
             let verdict = report.verdict();
-            println!(
+            out(format!(
                 "folio check: {verdict}（違反 {}・まだ分からない {}）",
                 report.violations.len(),
                 report.unknowns.len() + report.pendings.len()
-            );
+            ));
+            match after {
+                After::Emit(lines) => {
+                    for line in lines {
+                        println!("{line}");
+                    }
+                }
+                After::Freeze(msg) => eprintln!("folio check: {msg}"),
+                After::Nothing | After::Refused(_) => {}
+            }
             ExitCode::from(verdict.exit_code() as u8)
         }
         Command::Inject {

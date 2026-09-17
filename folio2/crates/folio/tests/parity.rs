@@ -5,6 +5,14 @@
 //! （両方が同じ理由で起動できずに揃った、を緑にしない）。語彙には変異を当てない。要件書への変異は便 1 以降（参照 id・語彙の検査）。
 //! 判断の記録（adr/）への変異は便 5 以降（欄の決まりの検査）。判断の記録と正本 4 file の突き合わせの変異は便 6（(18)〜(22)）。
 //! 凍結 anchor の列（版管理を見ない部分）の変異は便 7（(23)〜(27)）。版管理との照合の変異は便 8（(28)〜(31)）。
+//! `--emit-amends` と `--freeze-anchor` は便 9（(32)〜(34)・凍結した anchor は型付きの読み手で比べる＝書き手の字面は比べない）。
+
+#[allow(dead_code)]
+#[path = "../src/sha256.rs"]
+mod sha256;
+#[allow(dead_code)]
+#[path = "../src/yaml.rs"]
+mod yaml;
 
 use std::ffi::OsStr;
 use std::fs;
@@ -482,5 +490,183 @@ fn parity_git_anchors_ignored_fails() {
 fn parity_git_repository_removed_is_unknown() {
     parity("git-repository-removed", 2, |work| {
         fs::remove_dir_all(work.parent().unwrap().join(".git")).unwrap();
+    });
+}
+
+// ── 便 9: --emit-amends と --freeze-anchor（(32)〜(34)）──
+
+const OLD_TITLE: &str = "判断する道具を作らない";
+const NEW_TITLE: &str = "判断する道具を作らない（改訂）";
+const RULING: &str = "f2-648.19 notes 2026-09-17（合成した改訂の承認）";
+
+/// 写しを作って commit する（`parity` と同じ作り）。design-intent の path を返す。
+fn fresh_copy(case: &str) -> PathBuf {
+    let td = std::env::temp_dir().join(format!("folio-parity-{case}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&td);
+    let work = td.join("design-intent");
+    copy_tree(&repo_root().join("design-intent"), &work);
+    git(&td, &["init", "-q"]);
+    commit(&work);
+    work
+}
+
+fn commit(work: &Path) {
+    let td = work.parent().unwrap();
+    git(td, &["add", "-A"]);
+    git(td, &["commit", "-q", "--allow-empty", "-m", "fixture"]);
+}
+
+/// 床か folio を旗つきで掛ける（終了コード・標準出力・標準エラー）。
+fn run_with(folio: bool, work: &Path, flags: &[&str]) -> (i32, Vec<u8>, String) {
+    let mut cmd = if folio {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_folio"));
+        c.arg("check");
+        c
+    } else {
+        let mut c = Command::new("python3");
+        c.arg(repo_root().join("scripts/check_draft.py"));
+        c
+    };
+    let out = cmd
+        .arg("--dir")
+        .arg(work)
+        .args(flags)
+        .output()
+        .expect("起動できない");
+    (
+        out.status.code().expect("signal で終わった"),
+        out.stdout,
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// 憲法の P-1 の title を新しい題にし、meta.version を v1.1 にする（freeze の歯 (1) と同じ変異）。
+fn bump_title(work: &Path) {
+    edit(&work.join("constitution.yaml"), |text| {
+        let text = text.replacen(
+            &format!("  - id: P-1\n    title: {OLD_TITLE}\n"),
+            &format!("  - id: P-1\n    title: {NEW_TITLE}\n"),
+            1,
+        );
+        edit_line_in_block(&text, "\nmeta:\n", "\n  version: ", |line| {
+            line.replacen("v1.0", "v1.1", 1)
+        })
+    });
+}
+
+/// 合成した改訂（freeze の歯 (4) と同じ形）。
+fn synthetic_amendment(work: &Path) {
+    bump_title(work);
+    let adr = format!(
+        "# 合成した改訂の判断の記録（歯の中で作る）。\n\
+id: ADR-5\n\
+title: 条 P-1 の見出しを改める\n\
+status: accepted\n\
+date: 2026-09-17\n\
+context: 条 P-1 の見出しを改める必要が生じた。\n\
+decision: 条 P-1 の見出しの末尾に「（改訂）」を足す。\n\
+options:\n\
+  - {{id: a, name: 改める, text: 見出しを改める。, verdict: adopted, reason: 改訂の手順を通すため。}}\n\
+  - {{id: b, name: 改めない, text: 見出しをそのままにする。, verdict: rejected, reason: 改訂の手順を通せない。}}\n\
+basis: [A-2]\n\
+retreat: {{kind: ruling, condition: 持ち主が取り消したら元へ戻す。}}\n\
+plain: 条 P-1 の見出しを少しだけ改めます。\n\
+approval: {{who: 持ち主, date: 2026-09-17, ruling: \"{RULING}\", verbatim: 承認する, surface: R-8}}\n\
+grill: {{when: 2026-09-17, who: 持ち主, where: 対話面, summary: 反対側からの確認をした。}}\n\
+amends:\n\
+  - {{target: P-1, field: title, version: v1.1, previous_text: {OLD_TITLE}, new_text: {NEW_TITLE}}}\n"
+    );
+    fs::write(work.join("adr/ADR-5.yaml"), adr).unwrap();
+    edit(&work.join("constitution.yaml"), |text| {
+        text.replacen(
+            &format!("  - id: P-1\n    title: {NEW_TITLE}\n"),
+            &format!(
+                "  - id: P-1\n    title: {NEW_TITLE}\n    amended_by: [{{adr: ADR-5, date: 2026-09-17, approved_by: 持ち主, ruling: \"{RULING}\", previous_text: {OLD_TITLE}, rationale: 改訂の手順を通すため。}}]\n"
+            ),
+            1,
+        )
+    });
+}
+
+fn typed(path: &Path) -> yaml::Value {
+    let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    yaml::parse_typed(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+/// (32) (1) と同じ変異で `--emit-amends` → 両方 1・標準出力が byte で一致する。
+#[test]
+fn parity_emit_amends_stdout_matches() {
+    let work = fresh_copy("emit-amends");
+    bump_title(&work);
+    let floor = run_with(false, &work, &["--emit-amends"]);
+    let folio = run_with(true, &work, &["--emit-amends"]);
+    let _ = fs::remove_dir_all(work.parent().unwrap());
+    assert_eq!(
+        (floor.0, folio.0),
+        (1, 1),
+        "床 {}\nfolio {}",
+        floor.2,
+        folio.2
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&floor.1),
+        String::from_utf8_lossy(&folio.1)
+    );
+    assert_eq!(floor.1, folio.1);
+}
+
+/// 合成した改訂を 2 つの写しに当てて commit し、片方を床・もう片方を folio で凍結して `check` に掛ける（写しは後で消す）。
+fn freeze_both(case: &str, check: impl FnOnce(&Path, &Path, i32, i32, &str)) {
+    let a = fresh_copy(&format!("{case}-floor"));
+    let b = fresh_copy(&format!("{case}-folio"));
+    for w in [&a, &b] {
+        synthetic_amendment(w);
+        commit(w);
+    }
+    let floor = run_with(false, &a, &["--freeze-anchor"]);
+    let folio = run_with(true, &b, &["--freeze-anchor"]);
+    let what = format!("床 {}\nfolio {}", floor.2, folio.2);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        check(&a, &b, floor.0, folio.0, &what)
+    }));
+    let _ = fs::remove_dir_all(a.parent().unwrap());
+    let _ = fs::remove_dir_all(b.parent().unwrap());
+    if let Err(e) = result {
+        std::panic::resume_unwind(e);
+    }
+}
+
+/// (33) 合成した改訂の凍結 → 両方 0・書かれた anchor の型付きの木と digest・索引の entries が等しい。
+#[test]
+fn parity_freeze_anchor_writes_the_same_tree() {
+    freeze_both("freeze-tree", |a, b, floor, folio, what| {
+        assert_eq!((floor, folio), (0, 0), "{what}");
+        let (ta, tb) = (
+            typed(&a.join("anchors/constitution-v1.1.yaml")),
+            typed(&b.join("anchors/constitution-v1.1.yaml")),
+        );
+        assert_eq!(ta, tb);
+        let digest = |t: &yaml::Value| {
+            t.get("digest")
+                .and_then(yaml::Value::as_str)
+                .map(String::from)
+        };
+        assert!(digest(&ta).is_some_and(|d| d.len() == 64), "{ta:?}");
+        assert_eq!(digest(&ta), digest(&tb));
+        let entries = |w: &Path| typed(&w.join("anchors/index.yaml")).get("entries").cloned();
+        assert_eq!(entries(a), entries(b));
+    });
+}
+
+/// (34) (33) の後に両方の写しで床と folio を旗なしで掛け → 全部 0。
+#[test]
+fn parity_freeze_anchor_then_check_passes() {
+    freeze_both("freeze-then-check", |a, b, floor, folio, what| {
+        assert_eq!((floor, folio), (0, 0), "{what}");
+        let after: Vec<i32> = [a, b]
+            .iter()
+            .flat_map(|w| [run_with(false, w, &[]).0, run_with(true, w, &[]).0])
+            .collect();
+        assert_eq!(after, [0, 0, 0, 0]);
     });
 }

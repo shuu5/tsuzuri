@@ -89,10 +89,16 @@ fn git<S: AsRef<OsStr>>(cwd: &Path, args: &[S]) -> Option<Out> {
 /// 版管理と照合できた anchors/ の集合（未追跡の検査は列の最新の版が決まってから回す）。
 pub(crate) struct Tracked {
     tracked: BTreeSet<String>,
+    ever: BTreeSet<String>,
     present: BTreeSet<String>,
 }
 
 impl Tracked {
+    /// 版管理の HEAD か履歴に anchors/ の file が在った（便 9 の凍結が列の始め直しを断るのに読む）。
+    pub(crate) fn seen(&self) -> bool {
+        !self.tracked.is_empty() || !self.ever.is_empty()
+    }
+
     /// 作業ツリーに在って HEAD に無い anchor file（索引を除く）のうち最新の版の file でないもの。
     pub(crate) fn untracked(&self, newest: Option<&str>, report: &mut Report) {
         let index_file = floor(&["anchor", "index_file"]);
@@ -362,7 +368,11 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
             }
         }
     }
-    Some(Tracked { tracked, present })
+    Some(Tracked {
+        tracked,
+        ever,
+        present,
+    })
 }
 
 #[cfg(test)]

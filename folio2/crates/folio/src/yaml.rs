@@ -589,7 +589,8 @@ fn float_text(f: f64) -> Option<String> {
     Some(s)
 }
 
-fn json_str(s: &str, out: &mut String) {
+/// json の文字列の字面（床の json.dumps の既定・ensure_ascii=False と同じ escape）。
+pub(crate) fn json_str(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -664,9 +665,226 @@ fn write_canonical(value: &Value, at: &str, out: &mut String) -> Result<(), Stri
     Ok(())
 }
 
+/// yaml の書き手（便 9 (d)）。型付きの木を、PyYAML の既定の読み手と `parse_typed` の両方で同じ型付きの木に読める字面で書く。
+/// 表は各欄を 1 行「キー: 値」（入れ子は 2 空白の字下げ）・一覧の各要素は「- 」・空の一覧は「[]」・空の表は「{}」・
+/// 文字列（キーを含む）は必ず二重引用符で囲む。1 行目に `header`（「# 」で始まる注釈）を置く。
+/// 書けない値（指数表記になる浮動小数）は Err（欄の道つき）。
+pub fn write(value: &Value, header: &str) -> Result<String, String> {
+    let mut out = String::new();
+    out.push_str(header);
+    out.push('\n');
+    match value {
+        Value::Seq(items) if !items.is_empty() => write_block(value, 0, "", &mut out)?,
+        Value::Map(entries) if !entries.is_empty() => write_block(value, 0, "", &mut out)?,
+        other => {
+            write_scalar(other, "", &mut out)?;
+            out.push('\n');
+        }
+    }
+    Ok(out)
+}
+
+/// 空でない一覧・表を `indent` 空白の字下げで 1 行ずつ書く。
+fn write_block(value: &Value, indent: usize, at: &str, out: &mut String) -> Result<(), String> {
+    let pad = " ".repeat(indent);
+    match value {
+        Value::Seq(items) => {
+            for (i, item) in items.iter().enumerate() {
+                let here = format!("{at}[{i}]");
+                if is_block(item) {
+                    // 子の区間を indent + 2 で書き、1 行目の字下げを「- 」に替える
+                    let mut child = String::new();
+                    write_block(item, indent + 2, &here, &mut child)?;
+                    out.push_str(&pad);
+                    out.push_str("- ");
+                    out.push_str(&child[indent + 2..]);
+                } else {
+                    out.push_str(&pad);
+                    out.push_str("- ");
+                    write_scalar(item, &here, out)?;
+                    out.push('\n');
+                }
+            }
+        }
+        Value::Map(entries) => {
+            for (k, v) in entries {
+                let Value::Str(key) = k else {
+                    return Err(format!(
+                        "書けない値（文字列でないキー「{}」・欄の道 {at}）",
+                        k.py_str()
+                    ));
+                };
+                let here = format!("{at}.{key}");
+                out.push_str(&pad);
+                quoted(key, out);
+                out.push(':');
+                if is_block(v) {
+                    out.push('\n');
+                    write_block(v, indent + 2, &here, out)?;
+                } else {
+                    out.push(' ');
+                    write_scalar(v, &here, out)?;
+                    out.push('\n');
+                }
+            }
+        }
+        other => {
+            out.push_str(&pad);
+            write_scalar(other, at, out)?;
+            out.push('\n');
+        }
+    }
+    Ok(())
+}
+
+/// 空でない一覧・表（区間として書くもの）か。
+fn is_block(value: &Value) -> bool {
+    match value {
+        Value::Seq(items) => !items.is_empty(),
+        Value::Map(entries) => !entries.is_empty(),
+        _ => false,
+    }
+}
+
+/// 1 行に収まる値（scalar・空の一覧・空の表）。
+fn write_scalar(value: &Value, at: &str, out: &mut String) -> Result<(), String> {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Int(s) => out.push_str(s),
+        Value::Float(f) => match float_text(*f) {
+            Some(s) => out.push_str(&s),
+            None => return Err(format!("書けない値「{f}」（欄の道 {at}）")),
+        },
+        Value::Date(s) => out.push_str(s),
+        Value::Str(s) => quoted(s, out),
+        Value::Seq(_) => out.push_str("[]"),
+        Value::Map(_) => out.push_str("{}"),
+    }
+    Ok(())
+}
+
+/// yaml の二重引用符の字面。二重引用符と逆斜線は逆斜線を前置・改行は \n・他の制御文字（と yaml が改行や
+/// 読めない字とみなす字）は \u + 4 桁・他はそのまま。
+fn quoted(s: &str, out: &mut String) {
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c if (c as u32) < 0x20
+                || ('\u{7f}'..='\u{9f}').contains(&c)
+                || matches!(
+                    c,
+                    '\u{2028}' | '\u{2029}' | '\u{feff}' | '\u{fffe}' | '\u{ffff}'
+                ) =>
+            {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 書いて読み直すと同じ型付きの木（と同じ正規化）になる。
+    fn round_trip(v: &Value) {
+        let text = write(v, "# 注釈").unwrap();
+        assert!(text.starts_with("# 注釈\n"), "{text}");
+        let back = parse_typed(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+        assert_eq!(&back, v, "{text}");
+        assert_eq!(canonical(&back).unwrap(), canonical(v).unwrap());
+        assert!(parse(&text).unwrap().duplicates.is_empty());
+    }
+
+    #[test]
+    fn yaml_writer_round_trips_the_main_anchor() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../design-intent/anchors/constitution-v1.0.yaml"
+        );
+        let text = std::fs::read_to_string(path).unwrap();
+        let v = parse_typed(&text).unwrap();
+        round_trip(&v);
+        let digest = |v: &Value| {
+            let body: Vec<(Value, Value)> = v
+                .as_map()
+                .unwrap()
+                .iter()
+                .filter(|(k, _)| k.as_str() != Some("digest"))
+                .cloned()
+                .collect();
+            crate::sha256::hex(canonical(&Value::Map(body)).unwrap().as_bytes())
+        };
+        let back = parse_typed(&write(&v, "# x").unwrap()).unwrap();
+        assert_eq!(digest(&back), digest(&v));
+        assert_eq!(
+            Some(digest(&back).as_str()),
+            v.get("digest").and_then(Value::as_str)
+        );
+    }
+
+    #[test]
+    fn yaml_writer_round_trips_awkward_strings() {
+        let s = |x: &str| Value::Str(x.to_string());
+        let v = Value::Map(vec![
+            (s("q\"k"), s("二重\"引用符")),
+            (s("back\\slash"), s("C:\\dir\\")),
+            (s("nl"), s("一行目\n二行目\r\t\u{1}\u{7f}\u{85}\u{2028}")),
+            (
+                s("truthy"),
+                Value::Seq(vec![
+                    s("true"),
+                    s("no"),
+                    s("null"),
+                    s("~"),
+                    s("1"),
+                    s("1.5"),
+                    s("2026-09-17"),
+                    s(""),
+                    s("- x"),
+                    s("# 注釈"),
+                    s("a: b"),
+                    s("[1]"),
+                    s("{a: 1}"),
+                    s("&x"),
+                    s("*x"),
+                    s(" 前後の空白 "),
+                ]),
+            ),
+            (
+                s("typed"),
+                Value::Seq(vec![
+                    Value::Null,
+                    Value::Bool(true),
+                    Value::Bool(false),
+                    Value::Int("-12".into()),
+                    Value::Float(1.5),
+                    Value::Date("2026-09-17".into()),
+                    Value::Seq(vec![]),
+                    Value::Map(vec![]),
+                ]),
+            ),
+            (
+                s("nested"),
+                Value::Seq(vec![
+                    Value::Map(vec![
+                        (s("a"), Value::Seq(vec![s("x"), Value::Seq(vec![s("y")])])),
+                        (s("b"), Value::Map(vec![(s("c"), Value::Null)])),
+                    ]),
+                    Value::Seq(vec![Value::Map(vec![(s("d"), s("e"))]), s("f")]),
+                ]),
+            ),
+            (s("empty"), Value::Map(vec![])),
+        ]);
+        round_trip(&v);
+        assert!(write(&Value::Float(1e20), "# x").is_err());
+    }
 
     #[test]
     fn typed_plain_scalars_follow_the_floor_reader() {
