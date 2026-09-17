@@ -1,7 +1,8 @@
-//! `folio check` — design-intent の正本 4 file（憲法・rules・語彙・要件書）の形の床（FR5 / FR9）。
+//! `folio check` — design-intent の正本 5 file（憲法・rules・語彙・要件書・入口）の形の床（FR5 / FR9）。
 //! 数えるのは 重複キー・未知の節・欄の非空（便 0）と、参照 id の解決・rules 行の逆参照・憲法の件数（便 1・refs）と、語彙の検査 R-9（便 4・vocab）と、
 //! 判断の記録（adr/）の欄の決まり（便 5・adr）と、判断の記録と正本 4 file・凍結 anchor の列の突き合わせ（便 6・link）と、
-//! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）。
+//! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）と、入口の正本の形（便 12・entrance）。
+//! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
 use std::collections::HashSet;
@@ -10,6 +11,7 @@ use std::path::Path;
 
 use crate::adr;
 use crate::anchor;
+use crate::entrance;
 use crate::freeze::{self, After, Flag};
 use crate::link;
 use crate::refs;
@@ -17,8 +19,8 @@ use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::{self, Node};
 
-/// 正本 4 file（読む順）。
-pub const FILES: [&str; 4] = ["constitution", "rules", "vocabulary", "srs"];
+/// 正本 5 file（読む順）。
+pub const FILES: [&str; 5] = ["constitution", "rules", "vocabulary", "srs", "index"];
 
 /// 要件書の節の閉じた一覧（要件書は schema 節を持たないので床の定数で持つ）。
 pub const SRS_TOP_LEVEL: [&str; 14] = [
@@ -46,9 +48,10 @@ struct Sources {
     rules: Node,
     vocabulary: Node,
     srs: Node,
+    index: Node,
 }
 
-/// `dir` の正本 4 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を `freeze.rs` へ渡す）。
+/// `dir` の正本 5 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を `freeze.rs` へ渡す）。
 pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
     let mut report = Report::default();
     let mut state = None;
@@ -60,6 +63,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
             check_rules(&src.rules, &mut report);
             check_vocabulary(&src.vocabulary, &mut report);
             check_srs(&src.srs, &mut report);
+            entrance::check_entrance(&src.index, &src.vocabulary, &mut report);
             refs::check_refs(
                 &src.constitution,
                 &src.rules,
@@ -108,6 +112,8 @@ fn load_all(dir: &Path, report: &mut Report) -> Option<Sources> {
         return None;
     }
     let mut roots: Vec<Option<Node>> = FILES.iter().map(|name| load(dir, name, report)).collect();
+    // 一覧の末尾から取り出す＝入口を先に取り、4 本の割り当てはずらさない
+    let index = roots.pop()??;
     let srs = roots.pop()??;
     let vocabulary = roots.pop()??;
     let rules = roots.pop()??;
@@ -117,6 +123,7 @@ fn load_all(dir: &Path, report: &mut Report) -> Option<Sources> {
         rules,
         vocabulary,
         srs,
+        index,
     })
 }
 
@@ -166,7 +173,7 @@ fn load(dir: &Path, name: &str, report: &mut Report) -> Option<Node> {
 }
 
 /// 最上位の節が閉じた一覧に在るか。
-fn unknown_sections(file: &str, root: &Node, allowed: &[&str], report: &mut Report) {
+pub(crate) fn unknown_sections(file: &str, root: &Node, allowed: &[&str], report: &mut Report) {
     for (key, _) in root.as_map().unwrap_or_default() {
         if !allowed.contains(&key.as_str()) {
             report.violation("未知の節", format!("{file}: 未知の節「{key}」"));
@@ -190,7 +197,12 @@ fn schema_top_level<'a>(file: &str, root: &'a Node, report: &mut Report) -> Opti
 }
 
 /// 行の一覧の節を読む。無い・null は 0 行、一覧でない・行が表でないは「まだ分からない」。
-fn rows<'a>(file: &str, root: &'a Node, section: &str, report: &mut Report) -> Vec<&'a Node> {
+pub(crate) fn rows<'a>(
+    file: &str,
+    root: &'a Node,
+    section: &str,
+    report: &mut Report,
+) -> Vec<&'a Node> {
     match root.get(section) {
         None | Some(Node::Null) => Vec::new(),
         Some(Node::Seq(items)) if items.iter().all(|n| n.as_map().is_some()) => {
@@ -204,7 +216,13 @@ fn rows<'a>(file: &str, root: &'a Node, section: &str, report: &mut Report) -> V
 }
 
 /// 行の欄が空でないか。
-fn non_empty(file: &str, where_: &str, row: &Node, fields: &[&str], report: &mut Report) {
+pub(crate) fn non_empty(
+    file: &str,
+    where_: &str,
+    row: &Node,
+    fields: &[&str],
+    report: &mut Report,
+) {
     for field in fields {
         if row.get(field).is_none_or(Node::is_blank) {
             report.violation("欄の非空", format!("{file}: {where_} の {field} が空"));
@@ -212,7 +230,7 @@ fn non_empty(file: &str, where_: &str, row: &Node, fields: &[&str], report: &mut
     }
 }
 
-fn row_id(row: &Node) -> String {
+pub(crate) fn row_id(row: &Node) -> String {
     row.get("id")
         .and_then(Node::as_str)
         .unwrap_or("?")
@@ -220,7 +238,11 @@ fn row_id(row: &Node) -> String {
 }
 
 /// 行 id の重複（行の表のキー）を数える。
-fn duplicate_ids<'a>(file: &str, rows: impl IntoIterator<Item = &'a Node>, report: &mut Report) {
+pub(crate) fn duplicate_ids<'a>(
+    file: &str,
+    rows: impl IntoIterator<Item = &'a Node>,
+    report: &mut Report,
+) {
     let mut seen = HashSet::new();
     for row in rows {
         let id = row_id(row);

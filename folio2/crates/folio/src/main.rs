@@ -3,6 +3,7 @@
 mod adr;
 mod anchor;
 mod check;
+mod entrance;
 mod freeze;
 mod gitcheck;
 mod inject;
@@ -31,7 +32,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// design-intent の正本 4 file の形を検査し、合格 0 / 不合格 1 / まだ分からない 2 で終わる
+    /// design-intent の正本 5 file の形を検査し、合格 0 / 不合格 1 / まだ分からない 2 で終わる
     Check {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]

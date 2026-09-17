@@ -1,0 +1,22 @@
+meta: {id: fixture-index, title: 入口, version: v0.1, status: draft}
+audience: {label: 誰のためか, short: 持ち主, text: 持ち主が読む。}
+shelf:
+  title: 文書
+  explain: 文書の一覧。
+  legend:
+    - {id: readable, text: 読める}
+  documents:
+    - {id: constitution, type: 憲法, use: 譲らない線。, absent: null}
+  annexes: []
+  relations: []
+lanes:
+  title: 読み方
+  lead: 読む順番。
+  rows:
+    - {id: first, mark: 初, who: はじめて読む人, why: つかむ, minutes: 10, stops: [{doc: constitution, label: はじめに}]}
+intake:
+  title: 相談窓口
+  lead: 相談して決める。
+  heading: 頼み方
+  text: 質問に答える。
+  steps: [質問, 承認]
