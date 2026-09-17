@@ -3,7 +3,7 @@
 //! （tests/run_floor_cases.py と同じ作り）、変異を 1 つだけ当てて、day-1 の床 `python3 scripts/check_draft.py --dir <写し>` と
 //! `folio check --dir <写し>` の終了コードが一致することを見る。期待の終了コードも §1 の値で pin する
 //! （両方が同じ理由で起動できずに揃った、を緑にしない）。語彙には変異を当てない。要件書への変異は便 1 以降（参照 id・語彙の検査）。
-//! 判断の記録（adr/）への変異は便 5 以降（欄の決まりの検査）。
+//! 判断の記録（adr/）への変異は便 5 以降（欄の決まりの検査）。判断の記録と正本 4 file の突き合わせの変異は便 6（(18)〜(22)）。
 
 use std::ffi::OsStr;
 use std::fs;
@@ -329,6 +329,64 @@ fn parity_adr_accepted_without_approval_fails() {
                 .filter(|l| !l.starts_with("approval: "))
                 .map(|l| format!("{l}\n"))
                 .collect()
+        });
+    });
+}
+
+/// (18) 憲法の schema.enums.retreat_kind から ruling を外す（床の定数と食い違う・便 6）。
+#[test]
+fn parity_constitution_retreat_kind_drift_fails() {
+    parity("constitution-retreat-kind-drift", 1, |work| {
+        edit(&work.join("constitution.yaml"), |text| {
+            edit_line_in_block(text, "\n  enums:\n", "\n    retreat_kind: ", |line| {
+                line.replacen(", ruling]", "]", 1)
+            })
+        });
+    });
+}
+
+/// (19) ADR-1 の basis に実在しない判断の記録の id ADR-9 を足す。
+#[test]
+fn parity_adr_basis_dangling_adr_id_fails() {
+    parity("adr-basis-dangling-adr-id", 1, |work| {
+        edit(&work.join("adr/ADR-1.yaml"), |text| {
+            text.replacen("\nbasis: [", "\nbasis: [ADR-9, ", 1)
+        });
+    });
+}
+
+/// (20) ADR-1 の title の末尾に語彙に無い英字の語 zzzz を足す（判断の記録の本文の英字語）。
+#[test]
+fn parity_adr_title_unknown_word_fails() {
+    parity("adr-title-unknown-word", 1, |work| {
+        edit(&work.join("adr/ADR-1.yaml"), |text| {
+            edit_line_in_block(text, "\ntitle: ", "\ntitle: ", |line| format!("{line}zzzz"))
+        });
+    });
+}
+
+/// (21) 要件書 FR1 の plain の末尾に実在しない判断の記録の id ADR-9 を足す（正本 4 file の判断の記録の参照）。
+#[test]
+fn parity_srs_dangling_adr_id_fails() {
+    parity("srs-dangling-adr-id", 1, |work| {
+        edit(&work.join("srs.yaml"), |text| {
+            edit_line_in_block(text, "\n  - id: FR1\n", "\n    plain: ", |line| {
+                format!("{line}ADR-9")
+            })
+        });
+    });
+}
+
+/// (22) ADR-1 の amends に実在しない条 P-99 を対象にした項を 1 つ足す（amends の対象）。
+#[test]
+fn parity_adr_amends_unknown_target_fails() {
+    parity("adr-amends-unknown-target", 1, |work| {
+        edit(&work.join("adr/ADR-1.yaml"), |text| {
+            text.replacen(
+                "\namends: []\n",
+                "\namends: [{target: P-99, field: title, version: v1.1, previous_text: 前, new_text: 今}]\n",
+                1,
+            )
         });
     });
 }

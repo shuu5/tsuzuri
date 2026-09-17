@@ -4,5 +4,6 @@ schema:
 thresholds:
   - {id: R-1, article: P-1, what: 説明文の合計, value: "2,000 字 以下"}
   - {id: R-3, article: P-2, what: 1 枚の説明文, value: "400 字 以下"}
+  - {id: R-8, article: P-2, what: 持ち主との対話面, value: 対話面}
 discipline:
   - {id: D-1, article: P-1, what: 並列の内側は opus まで}

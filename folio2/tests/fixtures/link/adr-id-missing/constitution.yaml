@@ -1,0 +1,27 @@
+# folio check の歯の fixture（4 file 形・crates/folio/tests/link.rs）。違反 0 の最小の憲法（変異は adr/ADR-1.yaml の側に 1 つ）。parity の入力にはしない。
+schema:
+  top_level: [schema, meta, precedence, articles]
+  enums: {retreat_kind: [spike, measure, ruling]}
+  amendment_scope: [schema, precedence, articles]
+meta:
+  id: fixture-constitution
+  version: v1.0
+  counts: {always: 1, ask-first: 1, never: 0}
+precedence:
+  text: 条どうしが衝突したら揃いを選ぶ。
+  plain: 迷ったら揃っている方を選びます。
+articles:
+  - id: P-1
+    title: 判断する道具を作らない
+    tier: always
+    statements:
+      - {id: P-1.1, pattern: ubiquitous, strength: must, text: folio は文書を生成する。}
+    plain: 道具は書類を作るところまで。
+    relations: {reqs: [FR1], rules: [R-1, D-1]}
+  - id: P-2
+    title: 床は数える
+    tier: ask-first
+    statements:
+      - {id: P-2.1, pattern: ubiquitous, strength: must, text: 説明文は行 R-3 の上限に収める。}
+    plain: 上限を超えたら相談します。
+    relations: {articles: [P-1], rules: [R-3, R-8]}

@@ -1,6 +1,7 @@
 //! `folio check` — design-intent の正本 4 file（憲法・rules・語彙・要件書）の形の床（FR5 / FR9）。
 //! 数えるのは 重複キー・未知の節・欄の非空（便 0）と、参照 id の解決・rules 行の逆参照・憲法の件数（便 1・refs）と、語彙の検査 R-9（便 4・vocab）と、
-//! 判断の記録（adr/）の欄の決まり（便 5・adr）。anchor は便 6 以降。
+//! 判断の記録（adr/）の欄の決まり（便 5・adr）と、判断の記録と正本 4 file・凍結 anchor の列の突き合わせ（便 6・link）。
+//! 凍結 anchor の列そのものは便 7。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
 use std::collections::HashSet;
@@ -8,6 +9,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::adr;
+use crate::link;
 use crate::refs;
 use crate::verdict::Report;
 use crate::vocab;
@@ -67,7 +69,17 @@ pub fn check_dir(dir: &Path) -> Report {
                 &src.srs,
                 &mut report,
             );
-            adr::check_adr(dir, &mut report);
+            if let Some(records) = adr::check_adr(dir, &mut report) {
+                link::check_link(
+                    dir,
+                    &src.constitution,
+                    &src.rules,
+                    &src.vocabulary,
+                    &src.srs,
+                    &records,
+                    &mut report,
+                );
+            }
         }
         None => debug_assert!(!report.unknowns.is_empty()),
     }

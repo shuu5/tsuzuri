@@ -3,6 +3,7 @@
 mod adr;
 mod check;
 mod inject;
+mod link;
 mod refs;
 mod verdict;
 mod vocab;

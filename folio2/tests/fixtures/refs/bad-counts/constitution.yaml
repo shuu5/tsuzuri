@@ -1,6 +1,8 @@
 # folio check の歯の fixture（4 file 形・crates/folio/tests/refs.rs）。変異 = meta.counts.always を実数 1 と違う 2 にする → 1。parity の入力にはしない。
 schema:
   top_level: [schema, meta, precedence, articles]
+  enums: {retreat_kind: [spike, measure, ruling]}
+  amendment_scope: [schema, precedence, articles]
 meta:
   id: fixture-constitution
   version: v1.0
@@ -22,4 +24,4 @@ articles:
     statements:
       - {id: P-2.1, pattern: ubiquitous, strength: must, text: 説明文は行 R-3 の上限に収める。}
     plain: 上限を超えたら相談します。
-    relations: {articles: [P-1], rules: [R-3]}
+    relations: {articles: [P-1], rules: [R-3, R-8]}

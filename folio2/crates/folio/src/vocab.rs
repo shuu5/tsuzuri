@@ -1,6 +1,7 @@
 //! 語彙の検査（rules 行 R-9・便 4・docs/design/delivery-4.md §1）。
 //! day-1 の床（scripts/check_draft.py の vocab）と同じ式。正規表現は使わず文字の走査で判定する。
-//! 判断の記録（adr/）の本文と凍結 anchor は母集団に入れない（便 5 以降）。
+//! 判断の記録（adr/）の本文と凍結 anchor は R-9 の母集団に入れない。判断の記録の本文は便 6 の `link.rs` が
+//! 同じ切り出し・既知の集合・免除（`known_words`・`unknown_words`）で数える（種別は adr）。
 
 use std::collections::{BTreeSet, HashSet};
 
@@ -11,7 +12,7 @@ use crate::yaml::Node;
 const ID_PREFIXES: [&str; 10] = ["P", "A", "N", "FR", "NFR", "AC", "CON", "GOAL", "R", "D"];
 
 /// 本文の対（場所, 文字列）。
-type Body = Vec<(String, String)>;
+pub(crate) type Body = Vec<(String, String)>;
 
 /// (a)〜(e) を掛ける。
 pub fn check_vocab(
@@ -23,8 +24,15 @@ pub fn check_vocab(
 ) {
     let known = known_words(vocabulary, report);
     let body = population(constitution, rules, vocabulary, srs, report);
+    for (lw, at) in unknown_words(&body, &known) {
+        report.violation("R-9", format!("{at}: 語彙に無い英字の語「{lw}」"));
+    }
+}
+
+/// (d) 免除されない語を (小文字の語, 場所) で重ねずに並べる。
+pub(crate) fn unknown_words(body: &Body, known: &HashSet<String>) -> BTreeSet<(String, String)> {
     let mut unknown: BTreeSet<(String, String)> = BTreeSet::new();
-    for (at, text) in &body {
+    for (at, text) in body {
         let glossed: HashSet<String> = glosses(text)
             .iter()
             .flat_map(|g| words(g))
@@ -42,9 +50,7 @@ pub fn check_vocab(
             }
         }
     }
-    for (lw, at) in unknown {
-        report.violation("R-9", format!("{at}: 語彙に無い英字の語「{lw}」"));
-    }
+    unknown
 }
 
 fn id_of(row: &Node) -> &str {
@@ -66,7 +72,7 @@ fn text<'a>(row: &'a Node, field: &str) -> &'a str {
 }
 
 /// (c) 既知の集合。
-fn known_words(vocabulary: &Node, report: &mut Report) -> HashSet<String> {
+pub(crate) fn known_words(vocabulary: &Node, report: &mut Report) -> HashSet<String> {
     const FILE: &str = "vocabulary.yaml";
     let mut known = HashSet::new();
     for section in ["terms", "field_terms"] {

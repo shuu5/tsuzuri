@@ -1,7 +1,8 @@
 //! `folio check` の判断の記録（`adr/`）の欄の決まりの検査（便 5・docs/design/delivery-5.md §1）。
 //! day-1 の床 `scripts/check_draft.py` の adr の節のうち、判断の記録の file と欄の決まりの file だけで閉じる検査を同じ式で写す。
 //! 憲法・rules・anchor と突き合わせる検査（amends の対象の実在・amended_by との双方向・対話面の行の実在・
-//! 判断の記録の id の参照・本文の英字語・凍結 anchor の列）は便 6 以降。
+//! 判断の記録の id の参照・本文の英字語）は便 6 の `link.rs` で、読んだ欄の決まりと判断の記録（`Adr`）と床の定数（`floor_strs`）を渡す。
+//! 凍結 anchor の列そのものは便 7。
 //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、adr/schema.yaml の schema 節はその写し（N-3.1）。
 //! パターンの文字列は定数として字面で持つだけで、形の判定は字の走査で行う（正規表現は使わない）。
 
@@ -25,7 +26,7 @@ enum Floor {
 }
 
 /// 欄の集合（required / optional）。
-struct Keys {
+pub(crate) struct Keys {
     required: &'static [&'static str],
     optional: &'static [&'static str],
 }
@@ -78,7 +79,7 @@ const APPROVAL: Keys = Keys {
     required: &["who", "date", "ruling", "verbatim", "surface"],
     optional: &[],
 };
-const AMENDED_BY_ENTRY: Keys = Keys {
+pub(crate) const AMENDED_BY_ENTRY: Keys = Keys {
     required: &[
         "adr",
         "date",
@@ -184,21 +185,43 @@ const FLOOR: Floor = Floor::Map(&[
     ),
 ]);
 
+/// 床の定数の値の一覧を欄の道で読む（便 6 の突き合わせの読み口・値は変えない）。道が一覧に着かなければ空。
+pub(crate) fn floor_strs(path: &[&str]) -> &'static [&'static str] {
+    let mut cur = &FLOOR;
+    for key in path {
+        let Floor::Map(fields) = cur else {
+            return &[];
+        };
+        let Some((_, next)) = fields.iter().find(|(k, _)| k == key) else {
+            return &[];
+        };
+        cur = next;
+    }
+    match cur {
+        Floor::Strs(items) => items,
+        _ => &[],
+    }
+}
+
 const SCHEMA_FILE: &str = "adr/schema.yaml";
 
-/// `dir/adr/` の欄の決まりと判断の記録を検査する。
-pub fn check_adr(dir: &Path, report: &mut Report) {
+/// 読めた欄の決まり（adr/schema.yaml の木）と判断の記録（id と木の組・名前順）。
+pub(crate) struct Adr {
+    pub schema: Node,
+    pub records: Vec<(String, Node)>,
+}
+
+/// `dir/adr/` の欄の決まりと判断の記録を検査する。欄の決まりが読めなければ None（「まだ分からない」は立ててある）。
+pub fn check_adr(dir: &Path, report: &mut Report) -> Option<Adr> {
     let adr_dir = dir.join("adr");
     if adr_dir.is_symlink() || !adr_dir.is_dir() {
         report.unknown(format!(
             "adr/ が dir でない（symlink・file・不在）: {}",
             adr_dir.display()
         ));
-        return;
+        return None;
     }
-    let Some(schema) = load_schema(&adr_dir, report) else {
-        return;
-    };
+    let schema = load_schema(&adr_dir, report)?;
     let mut drift = Vec::new();
     floor_diff(
         &strip_notes(schema.get("schema").unwrap_or(&Node::Null)),
@@ -217,6 +240,7 @@ pub fn check_adr(dir: &Path, report: &mut Report) {
     let records = load_records(dir, &adr_dir, report);
     check_between(&records, report);
     check_decided_by(&schema, &records, report);
+    Some(Adr { schema, records })
 }
 
 fn read(path: &Path) -> Result<yaml::Doc, String> {
@@ -732,7 +756,13 @@ fn find<'a>(records: &'a [(String, Node)], id: &str) -> Option<&'a Node> {
 }
 
 /// 欄の集合が keys と一致するか（required の欠落・未知の欄を 1 件ずつ）。表でなければ false。
-fn check_keys(kind: &str, at: &str, node: &Node, keys: &Keys, report: &mut Report) -> bool {
+pub(crate) fn check_keys(
+    kind: &str,
+    at: &str,
+    node: &Node,
+    keys: &Keys,
+    report: &mut Report,
+) -> bool {
     let Some(entries) = node.as_map() else {
         report.violation(kind, format!("{at}: 型が違う（欄の表でない）"));
         return false;
@@ -761,15 +791,15 @@ fn check_keys(kind: &str, at: &str, node: &Node, keys: &Keys, report: &mut Repor
 }
 
 /// 欄が在って値を持つ（null でない）。
-fn present<'a>(node: &'a Node, key: &str) -> Option<&'a Node> {
+pub(crate) fn present<'a>(node: &'a Node, key: &str) -> Option<&'a Node> {
     node.get(key).filter(|v| !matches!(v, Node::Null))
 }
 
-fn scalar(node: Option<&Node>) -> Option<&str> {
+pub(crate) fn scalar(node: Option<&Node>) -> Option<&str> {
     node.and_then(Node::as_str)
 }
 
-fn show(node: Option<&Node>) -> String {
+pub(crate) fn show(node: Option<&Node>) -> String {
     match node {
         Some(Node::Scalar(s)) => s.clone(),
         Some(Node::Seq(_)) => "（一覧）".to_string(),
@@ -778,12 +808,12 @@ fn show(node: Option<&Node>) -> String {
     }
 }
 
-fn in_enum(node: Option<&Node>, values: &[&str]) -> bool {
+pub(crate) fn in_enum(node: Option<&Node>, values: &[&str]) -> bool {
     scalar(node).is_some_and(|s| values.contains(&s))
 }
 
 /// 前後の空白を落として空でない（null と空白だけの文字列が空）。
-fn non_empty(node: Option<&Node>) -> bool {
+pub(crate) fn non_empty(node: Option<&Node>) -> bool {
     match node {
         None | Some(Node::Null) => false,
         Some(Node::Scalar(s)) => !s.trim().is_empty(),
@@ -791,7 +821,7 @@ fn non_empty(node: Option<&Node>) -> bool {
     }
 }
 
-fn check_date(kind: &str, at: &str, node: Option<&Node>, report: &mut Report) {
+pub(crate) fn check_date(kind: &str, at: &str, node: Option<&Node>, report: &mut Report) {
     if !scalar(node).is_some_and(is_date) {
         report.violation(kind, format!("{at}「{}」が年-月-日でない", show(node)));
     }
@@ -837,7 +867,7 @@ fn is_basis_id(s: &str) -> bool {
 }
 
 /// 小文字の英字 1 字 + 数字 1 字 + 「-」+ 小文字の英字か数字 1 字 の並びを含む（ruling_pattern の search）。
-fn has_ledger_id(s: &str) -> bool {
+pub(crate) fn has_ledger_id(s: &str) -> bool {
     let chars: Vec<char> = s.chars().collect();
     chars.windows(4).any(|w| {
         w[0].is_ascii_lowercase()
