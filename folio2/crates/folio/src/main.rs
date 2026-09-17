@@ -1,10 +1,12 @@
 //! folio v2 の命令の入口。便 0・便 1 の `folio check` と便 2 の `folio inject` を持つ。
 
 mod adr;
+mod anchor;
 mod check;
 mod inject;
 mod link;
 mod refs;
+mod sha256;
 mod verdict;
 mod vocab;
 mod yaml;
@@ -58,14 +60,14 @@ fn main() -> ExitCode {
             for (kind, msg) in &report.violations {
                 println!("[{kind}] {msg}");
             }
-            for msg in &report.unknowns {
+            for msg in report.unknowns.iter().chain(&report.pendings) {
                 eprintln!("# まだ分からない: {msg}");
             }
             let verdict = report.verdict();
             println!(
                 "folio check: {verdict}（違反 {}・まだ分からない {}）",
                 report.violations.len(),
-                report.unknowns.len()
+                report.unknowns.len() + report.pendings.len()
             );
             ExitCode::from(verdict.exit_code() as u8)
         }

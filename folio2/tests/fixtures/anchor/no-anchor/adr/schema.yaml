@@ -1,0 +1,42 @@
+# folio check の歯の fixture（adr/・crates/folio/tests/anchor.rs）。欄の決まりの最小の写し（schema 節 = 床の定数・*_note の欄は持たない）。
+meta: {id: fixture-adr-schema, version: 1, date: 2026-09-17, decided_by: [ADR-1]}
+schema:
+  id_pattern: '^ADR-[1-9][0-9]*$'
+  date_format: '^\d{4}-\d{2}-\d{2}$'
+  ruling_pattern: '[a-z]\d-[0-9a-z]+(\.\d+)?'
+  owner: 持ち主
+  required: [id, title, status, date, context, decision, options, basis, retreat, plain]
+  optional: [amends, grill, approval, consequences, supersedes, superseded_by, note]
+  non_empty: [title, context, decision, plain]
+  enums:
+    status: [proposed, accepted, retired]
+    verdict: [adopted, rejected]
+    retreat_kind: [spike, measure, ruling]
+    approver: [持ち主, planner 席]
+    surface: [R-8]
+  effective_status: [accepted, retired]
+  option: {required: [id, name, text, verdict, reason], optional: []}
+  options_rule: {min: 2, adopted: 1}
+  retreat: {required: [kind, condition], optional: []}
+  amends_entry:
+    required: [target, field, version, previous_text, new_text]
+    optional: []
+    new_article_marker: （新設）
+    deleted_marker: （削除）
+    empty_marker: （空）
+  grill: {required: [when, who, where, summary], optional: []}
+  approval: {required: [who, date, ruling, verbatim, surface], optional: []}
+  amended_by_entry: {required: [adr, date, approved_by, ruling, previous_text, rationale], optional: []}
+  anchor:
+    dir: anchors
+    file_name: 'constitution-<version>.yaml'
+    index_file: index.yaml
+    first_version: v1.0
+    root_digest: acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed
+    version_pattern: '^v[0-9]+\.[0-9]+$'
+    digest_algo: sha256-json-1
+    file_keys: [kind, digest_algo, version, previous, projection, meta_approval, approvals, content, digest]
+    projection_article_fields: [id, title, tier, binds, statements]
+    statement_fields: [id, text, pattern, strength]
+    scope_minimum: [schema, precedence, articles]
+plain: 判断の記録の書き方の決まりです。

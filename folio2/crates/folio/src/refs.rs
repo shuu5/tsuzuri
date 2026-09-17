@@ -1,6 +1,6 @@
 //! 参照 id の解決（rules 行 R-4・NFR3 / AC6）と rules 行の逆参照・憲法の件数（便 1・docs/design/delivery-1.md §1）。
 //! day-1 の床（scripts/check_draft.py の refs / counts）と同じ式。正規表現は使わず文字の走査で判定する。
-//! 判断の記録の id（ADR-n）と凍結 anchor に在った過去の id は解かない（便 2 以降）。
+//! 判断の記録の id（ADR-n）は解かない（便 6 の link.rs）。凍結 anchor の列に在った過去の id は解決先に足す（便 7 (j)）。
 
 use std::collections::{HashMap, HashSet};
 
@@ -33,6 +33,7 @@ pub fn check_refs(
     rules: &Node,
     vocabulary: &Node,
     srs: &Node,
+    history: &HashSet<String>,
     report: &mut Report,
 ) {
     let articles = seq_of_maps("constitution.yaml", constitution, "articles", report);
@@ -41,7 +42,8 @@ pub fn check_refs(
         .flat_map(|s| seq_of_maps("rules.yaml", rules, s, report))
         .collect();
 
-    let known = known_ids(&articles, &rule_rows, srs, report);
+    let mut known = known_ids(&articles, &rule_rows, srs, report);
+    known.extend(history.iter().cloned());
     resolve(
         "constitution.yaml",
         &population_constitution(constitution),

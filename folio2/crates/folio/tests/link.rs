@@ -1,6 +1,7 @@
 //! `folio check` の判断の記録と正本 4 file・凍結 anchor の列の突き合わせの歯（便 6・docs/design/delivery-6.md §1）。
 //! tests/fixtures/link/ の 3 組（違反 0 の最小の手書き 4 file + adr/schema.yaml + adr/ADR-1.yaml に変異 1 つ）で 不合格 1。
 //! 各組の違反はちょうど 1 件で、その種類と文言まで見る（別の理由で落ちた組を緑にしない）。
+//! ただし `amended-by-orphan/` は便 7 の凍結 anchor の列の検査で「anchor が消された」が足されて 2 件。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -59,7 +60,33 @@ fn link_adr_id_missing_fails() {
     assert_single_violation("adr-id-missing", "adr", "ADR-9");
 }
 
+/// 改訂の記録（amended_by）が在るのに anchors/ が無いので、便 7 の列の検査が「anchor が消された」を足す＝違反 2 件。
 #[test]
 fn link_amended_by_orphan_fails() {
-    assert_single_violation("amended-by-orphan", "N-4", "発効していない");
+    let name = "amended-by-orphan";
+    let out = folio_check(&repo_root().join("tests/fixtures/link").join(name));
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{name}: {}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = violations(&out);
+    assert_eq!(
+        v.len(),
+        2,
+        "{name}: 発効していない + anchor が消された の 2 件のはず: {v:?}"
+    );
+    assert!(
+        v.iter()
+            .any(|l| l.starts_with("[N-4] ") && l.contains("発効していない")),
+        "{name}: {v:?}"
+    );
+    assert!(
+        v.iter()
+            .any(|l| l.starts_with("[N-4] ") && l.contains("anchor が消された")),
+        "{name}: {v:?}"
+    );
+    assert!(stdout(&out).contains("不合格"), "{name}");
 }

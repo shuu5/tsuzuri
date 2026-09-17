@@ -4,6 +4,7 @@
 //! `folio check --dir <写し>` の終了コードが一致することを見る。期待の終了コードも §1 の値で pin する
 //! （両方が同じ理由で起動できずに揃った、を緑にしない）。語彙には変異を当てない。要件書への変異は便 1 以降（参照 id・語彙の検査）。
 //! 判断の記録（adr/）への変異は便 5 以降（欄の決まりの検査）。判断の記録と正本 4 file の突き合わせの変異は便 6（(18)〜(22)）。
+//! 凍結 anchor の列（版管理を見ない部分）の変異は便 7（(23)〜(27)）。
 
 use std::ffi::OsStr;
 use std::fs;
@@ -387,6 +388,67 @@ fn parity_adr_amends_unknown_target_fails() {
                 "\namends: [{target: P-99, field: title, version: v1.1, previous_text: 前, new_text: 今}]\n",
                 1,
             )
+        });
+    });
+}
+
+/// (23) 憲法 P-1 の title を変える（現行の写しが凍結 anchor と一致しない・便 7）。
+#[test]
+fn parity_constitution_title_drift_fails() {
+    parity("constitution-title-drift", 1, |work| {
+        edit(&work.join("constitution.yaml"), |text| {
+            edit_line_in_block(text, "\n  - id: P-1\n", "\n    title: ", |line| {
+                format!("{line}（変異）")
+            })
+        });
+    });
+}
+
+/// (24) anchors/index.yaml の digest の末尾 1 字を変える（索引と anchor・床の定数との食い違い）。
+#[test]
+fn parity_anchor_index_digest_drift_fails() {
+    parity("anchor-index-digest-drift", 1, |work| {
+        edit(&work.join("anchors/index.yaml"), |text| {
+            edit_line_in_block(text, "\n- version: v1.0\n", "\n  digest: ", |line| {
+                let last = line.chars().last().expect("digest が空");
+                let swapped = if last == '0' { '1' } else { '0' };
+                format!("{}{swapped}", &line[..line.len() - last.len_utf8()])
+            })
+        });
+    });
+}
+
+/// (25) anchors/constitution-v1.0.yaml の content の P-1.1 の text の 1 字を変える（digest と現行の写しの食い違い）。
+#[test]
+fn parity_anchor_content_text_drift_fails() {
+    parity("anchor-content-text-drift", 1, |work| {
+        edit(&work.join("anchors/constitution-v1.0.yaml"), |text| {
+            edit_line_in_block(text, "\n    - id: P-1.1\n", "\n      text: ", |line| {
+                line.replacen("folio は", "folio が", 1)
+            })
+        });
+    });
+}
+
+/// (26) 憲法 meta.version を v1.1 にする（版を上げたのに凍結していない）。
+#[test]
+fn parity_constitution_version_bump_fails() {
+    parity("constitution-version-bump", 1, |work| {
+        edit(&work.join("constitution.yaml"), |text| {
+            edit_line_in_block(text, "\nmeta:\n", "\n  version: ", |line| {
+                line.replacen("v1.0", "v1.1", 1)
+            })
+        });
+    });
+}
+
+/// (27) anchors/index.yaml の entries を空の一覧にする（列の外の anchor が残る）。
+#[test]
+fn parity_anchor_index_entries_emptied_fails() {
+    parity("anchor-index-entries-emptied", 1, |work| {
+        edit(&work.join("anchors/index.yaml"), |text| {
+            let at = text.find("\nentries:\n").expect("entries が無い");
+            format!("{}\nentries: []\n", &text[..at])
         });
     });
 }

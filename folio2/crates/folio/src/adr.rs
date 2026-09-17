@@ -187,20 +187,39 @@ const FLOOR: Floor = Floor::Map(&[
 
 /// 床の定数の値の一覧を欄の道で読む（便 6 の突き合わせの読み口・値は変えない）。道が一覧に着かなければ空。
 pub(crate) fn floor_strs(path: &[&str]) -> &'static [&'static str] {
-    let mut cur = &FLOOR;
-    for key in path {
-        let Floor::Map(fields) = cur else {
-            return &[];
-        };
-        let Some((_, next)) = fields.iter().find(|(k, _)| k == key) else {
-            return &[];
-        };
-        cur = next;
-    }
-    match cur {
-        Floor::Strs(items) => items,
+    match floor_at(path) {
+        Some(Floor::Strs(items)) => items,
         _ => &[],
     }
+}
+
+/// 床の定数の値を欄の道で読む（便 7 の凍結 anchor の読み口・値は変えない）。道が値に着かなければ None。
+pub(crate) fn floor_val(path: &[&str]) -> Option<&'static str> {
+    match floor_at(path) {
+        Some(Floor::Val(v)) => Some(v),
+        _ => None,
+    }
+}
+
+/// 床の定数の数を欄の道で読む（同上）。道が数に着かなければ None。
+/// 便 7 の検査は数型を読まない（読み口として置く）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn floor_num(path: &[&str]) -> Option<usize> {
+    match floor_at(path) {
+        Some(Floor::Num(n)) => Some(*n),
+        _ => None,
+    }
+}
+
+fn floor_at(path: &[&str]) -> Option<&'static Floor> {
+    let mut cur: &'static Floor = &FLOOR;
+    for key in path {
+        let Floor::Map(fields) = cur else {
+            return None;
+        };
+        cur = &fields.iter().find(|(k, _)| k == key)?.1;
+    }
+    Some(cur)
 }
 
 const SCHEMA_FILE: &str = "adr/schema.yaml";
@@ -895,6 +914,20 @@ mod tests {
         assert!(!has_ledger_id("F2-648"));
         assert!(is_date("2026-09-17"));
         assert!(!is_date("2026-9-17"));
+    }
+
+    #[test]
+    fn floor_values_and_numbers_are_read_through_the_floor() {
+        assert_eq!(
+            floor_val(&["anchor", "root_digest"]),
+            Some("acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed")
+        );
+        assert_eq!(floor_val(&["anchor", "first_version"]), Some("v1.0"));
+        assert_eq!(floor_val(&["amends_entry", "empty_marker"]), Some("（空）"));
+        assert_eq!(floor_val(&["anchor", "file_keys"]), None);
+        assert_eq!(floor_num(&["options_rule", "min"]), Some(2));
+        assert_eq!(floor_num(&["options_rule", "adopted"]), Some(1));
+        assert_eq!(floor_num(&["owner"]), None);
     }
 
     #[test]
