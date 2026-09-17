@@ -4,7 +4,7 @@
 //! `folio check --dir <写し>` の終了コードが一致することを見る。期待の終了コードも §1 の値で pin する
 //! （両方が同じ理由で起動できずに揃った、を緑にしない）。語彙には変異を当てない。要件書への変異は便 1 以降（参照 id・語彙の検査）。
 //! 判断の記録（adr/）への変異は便 5 以降（欄の決まりの検査）。判断の記録と正本 4 file の突き合わせの変異は便 6（(18)〜(22)）。
-//! 凍結 anchor の列（版管理を見ない部分）の変異は便 7（(23)〜(27)）。
+//! 凍結 anchor の列（版管理を見ない部分）の変異は便 7（(23)〜(27)）。版管理との照合の変異は便 8（(28)〜(31)）。
 
 use std::ffi::OsStr;
 use std::fs;
@@ -450,5 +450,37 @@ fn parity_anchor_index_entries_emptied_fails() {
             let at = text.find("\nentries:\n").expect("entries が無い");
             format!("{}\nentries: []\n", &text[..at])
         });
+    });
+}
+
+/// (28) 写しの anchors/ を丸ごと消す（版管理の HEAD にあるが作業ツリーに無い・便 8）。
+#[test]
+fn parity_git_anchors_dir_removed_fails() {
+    parity("git-anchors-dir-removed", 1, |work| {
+        fs::remove_dir_all(work.join("anchors")).unwrap();
+    });
+}
+
+/// (29) 写しの anchors/constitution-v1.0.yaml だけを消す（索引は残す）。
+#[test]
+fn parity_git_anchor_file_removed_fails() {
+    parity("git-anchor-file-removed", 1, |work| {
+        fs::remove_file(work.join("anchors/constitution-v1.0.yaml")).unwrap();
+    });
+}
+
+/// (30) 写しの版管理の根に .gitignore を作り anchors/ を書く（版管理から除外）。
+#[test]
+fn parity_git_anchors_ignored_fails() {
+    parity("git-anchors-ignored", 1, |work| {
+        fs::write(work.parent().unwrap().join(".gitignore"), "anchors/\n").unwrap();
+    });
+}
+
+/// (31) 写しの .git を消す（版管理が無い＝測れない・違反 0）。
+#[test]
+fn parity_git_repository_removed_is_unknown() {
+    parity("git-repository-removed", 2, |work| {
+        fs::remove_dir_all(work.parent().unwrap().join(".git")).unwrap();
     });
 }

@@ -3,7 +3,9 @@
 mod adr;
 mod anchor;
 mod check;
+mod gitcheck;
 mod inject;
+mod lineage;
 mod link;
 mod refs;
 mod sha256;

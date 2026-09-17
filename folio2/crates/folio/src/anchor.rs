@@ -1,7 +1,8 @@
-//! `folio check` の凍結 anchor の列（`anchors/`）の検査のうち版管理（git）を見ない部分（便 7・docs/design/delivery-7.md §1）。
+//! `folio check` の凍結 anchor の列（`anchors/`）の検査（便 7・docs/design/delivery-7.md §1）。
 //! day-1 の床 `scripts/check_draft.py` の anchor の節と同じ式で写す: 現行の写し（(e)）・anchor の file と索引（(f)）・
-//! 列（(g)）・版と記録（(h)）・現行との一致（(i)）。版管理との照合・列の区間の amends の消し込み・`--freeze-anchor`・
-//! `--emit-amends` は便 8。値は型付きの木（`yaml::Value`）で読み、digest は正規化（`yaml::canonical`）の sha256。
+//! 列（(g)）・版と記録（(h)）・現行との一致（(i)）。版管理との照合（`gitcheck.rs`）と列の区間の amends の消し込み
+//! （`lineage.rs`）は便 8 で、ここから呼ぶ。`--freeze-anchor`・`--emit-amends` は便 9。
+//! 値は型付きの木（`yaml::Value`）で読み、digest は正規化（`yaml::canonical`）の sha256。
 //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs` / `adr::floor_val`）で読み、値は持ち直さない。正規表現は使わない。
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -9,6 +10,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::adr::{self, Adr};
+use crate::gitcheck;
+use crate::lineage;
 use crate::sha256;
 use crate::verdict::Report;
 use crate::yaml::{self, Node, Value};
@@ -72,7 +75,7 @@ fn node_rows<'a>(root: &'a Node, section: &str) -> impl Iterator<Item = &'a Node
 }
 
 /// 床の `str(x)` の写し（Node の側・無い・null は None）。
-fn node_str(node: Option<&Node>) -> String {
+pub(crate) fn node_str(node: Option<&Node>) -> String {
     match node {
         Some(Node::Scalar(s)) => s.clone(),
         Some(Node::Null) | None => "None".to_string(),
@@ -191,7 +194,7 @@ fn is_version(s: &str) -> bool {
 }
 
 /// 一覧の各項が文字列で、並びが `want` と同じか（床の `list(x or []) == want`）。
-fn str_list_eq(value: Option<&Value>, want: &[&str]) -> bool {
+pub(crate) fn str_list_eq(value: Option<&Value>, want: &[&str]) -> bool {
     let items: &[Value] = match value {
         None | Some(Value::Null) => &[],
         Some(Value::Seq(items)) => items,
@@ -201,7 +204,7 @@ fn str_list_eq(value: Option<&Value>, want: &[&str]) -> bool {
 }
 
 /// 一覧の各項の `str(x)`（一覧でなければ空）。
-fn str_items(value: Option<&Value>) -> Vec<String> {
+pub(crate) fn str_items(value: Option<&Value>) -> Vec<String> {
     value
         .and_then(Value::as_seq)
         .unwrap_or_default()
@@ -219,7 +222,10 @@ fn non_empty(value: Option<&Value>) -> bool {
     }
 }
 
-fn value_rows<'a>(root: Option<&'a Value>, section: &str) -> impl Iterator<Item = &'a Value> {
+pub(crate) fn value_rows<'a>(
+    root: Option<&'a Value>,
+    section: &str,
+) -> impl Iterator<Item = &'a Value> {
     root.and_then(|r| r.get(section))
         .and_then(Value::as_seq)
         .unwrap_or_default()
@@ -359,12 +365,12 @@ fn amendment_scope(c: &Value) -> Vec<String> {
 }
 
 /// 発効した判断（status が effective_status で approval が表）。
-fn is_effective(d: &Node) -> bool {
+pub(crate) fn is_effective(d: &Node) -> bool {
     adr::in_enum(d.get("status"), adr::floor_strs(&["effective_status"]))
         && matches!(d.get("approval"), Some(Node::Map(_)))
 }
 
-fn amends_list(d: &Node) -> impl Iterator<Item = &Node> {
+pub(crate) fn amends_list(d: &Node) -> impl Iterator<Item = &Node> {
     d.get("amends")
         .and_then(Node::as_seq)
         .unwrap_or_default()
@@ -453,6 +459,8 @@ pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &m
             }
         }
     }
+    // (a) 版管理との照合（便 8）
+    let git = gitcheck::check_git(dir, report);
     let find = |v: &str| anchors.iter().find(|a| a.version == v);
 
     // (g) 列
@@ -572,6 +580,9 @@ pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &m
             "改訂の記録（amended_by か発効した判断の amends）があるのに anchor が 1 本も無い＝anchor が消された（列の始め直しは認めない）",
         );
     }
+    if let Some(g) = &git {
+        g.untracked(newest.as_deref(), report);
+    }
 
     // (h) 版と記録
     let root_ver = chain_versions.first().map_or(first_ver, String::as_str);
@@ -621,6 +632,22 @@ pub fn check_anchor(dir: &Path, adr: &Adr, history: &HashSet<String>, report: &m
                 format!(
                     "{i}: 過去の版の anchor に在って最新 anchor {v} に無い番号の再利用（廃止した番号は空けたまま・P-7.1）"
                 ),
+            );
+        }
+    }
+
+    // 列の全区間（便 8 (b)）: 隣り合う anchor の差分は、その版を名指す発効した判断の記録と 1:1
+    for pair in chain_versions.windows(2) {
+        if let (Some(pa), Some(ca)) = (find(&pair[0]), find(&pair[1])) {
+            lineage::verify_pair(
+                &pa.doc,
+                ca.doc.get("content").unwrap_or(&Value::Null),
+                &str_items(ca.doc.get("projection").and_then(|p| p.get("scope"))),
+                &ca.version,
+                &format!("anchor {}", ca.version),
+                &c,
+                adr,
+                report,
             );
         }
     }
