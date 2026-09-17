@@ -2,13 +2,14 @@
 //! 入れ子・class の並び）に、正本 4 file（constitution・rules・vocabulary・srs）の値を escape して差し込む。
 //! 生成物の文字列は 正本の値（α）・名札の表（β・`face.rs`）・正本から数えた数（γ）のどれかで、部品の名札は
 //! 部品目録から組み立て時に導出した `Component` の関数 name からだけ出す（ADR-5 決定 (3)）。
+//! 面に依らない口（head と site-bar・章の帯・card・toc・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ（便 15）。
 
 use std::path::Path;
 
 use crate::face::{
-    self, BINDS, DOC_STATUS, LIVE, MECH_KIND, PATTERN, POLARITY, R, RETREAT_KIND, RULE_KIND,
-    RULE_STATUS, STAGE, STRENGTH, TIERS, Tier, X, anchor, esc, hint, hint_q, rationale,
-    section_anchor, split_dash, tier_of, val,
+    self, BINDS, DOC_STATUS, Frame, LIVE, MAX_RAIL_NODES, MECH_KIND, PATTERN, POLARITY, R,
+    RETREAT_KIND, RULE_KIND, RULE_STATUS, STAGE, STRENGTH, TIERS, Tier, X, anchor, card, esc, hint,
+    hint_q, rationale, section_anchor, split_dash, tier_of, val,
 };
 use crate::parts::catalog::Component;
 
@@ -29,12 +30,6 @@ pub const PARTS: [Component; 14] = [
     Component::GlossaryTermTable,
     Component::ApprovalBlock,
 ];
-
-/// 改訂の段の上限（部品目録の pipeline-rail の max_nodes）。
-pub const MAX_RAIL_NODES: usize = 7;
-
-/// 章の数（00〜08 と承認欄）。
-const CHAPTERS: usize = 10;
 
 /// 章 00〜08 の帯の class と kicker の絵記号（見本の各章の字面）。
 const BANDS: [(&str, &str); 9] = [
@@ -70,16 +65,22 @@ const BANDS: [(&str, &str); 9] = [
     ),
 ];
 
-const FAVICON: &str = "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e7b65'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E憲%3C/text%3E%3C/svg%3E\">";
+/// 憲法の面の骨格。
+const FRAME: Frame = Frame {
+    name: "憲法",
+    source: "constitution.yaml",
+    favicon: "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e7b65'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E憲%3C/text%3E%3C/svg%3E\">",
+    current: 1,
+    first: 0,
+    bands: &BANDS,
+    prev: ("index.html", "入口"),
+    next: ("srs.html", "要件書"),
+    parts: &PARTS,
+};
 
-/// 属性 data-component（名札は部品目録の一覧からだけ出す）。
+/// 属性 data-component（名札は憲法の面の部品の一覧からだけ出す）。
 fn dc(c: Component) -> String {
-    debug_assert!(
-        PARTS.contains(&c),
-        "{} は憲法の面の部品の一覧に無い",
-        c.name()
-    );
-    format!("data-component=\"{}\"", c.name())
+    FRAME.dc(c)
 }
 
 /// 条 1 つ（id・escape した title・段）。
@@ -254,37 +255,13 @@ fn chapter_name(ctx: &Ctx<'_>, i: usize) -> &'static str {
 fn head(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
-    o.push("<!DOCTYPE html>".to_string());
-    o.push("<html lang=\"ja\" class=\"no-js\">".to_string());
-    o.push("<head>".to_string());
-    o.push("<meta charset=\"utf-8\">".to_string());
-    o.push("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".to_string());
-    o.push(format!(
-        "<title>folio2 — 憲法（不変原則・{version}）</title>"
-    ));
-    o.push(FAVICON.to_string());
-    o.push("<link rel=\"stylesheet\" href=\"folio.css\">".to_string());
-    o.push("<script src=\"folio-ui.js\"></script>".to_string());
-    o.push("</head>".to_string());
-    o.push("<body>".to_string());
-    o.push("<a class=\"skip-link\" href=\"#main\">本文へ移動</a>".to_string());
-    o.push("<header class=\"site-bar\">".to_string());
-    o.push("<span class=\"brand\"><span class=\"long\">folio2</span><span class=\"short\">f2</span></span>".to_string());
-    o.push("<nav aria-label=\"読める面\"><a href=\"index.html\">入口</a><a href=\"constitution.html\" aria-current=\"page\">憲法</a><a href=\"srs.html\">要件書</a></nav>".to_string());
-    o.push(format!(
-        "<span {}><button type=\"button\" class=\"fs-btn\" aria-label=\"文字の大きさを切り替える（いま: 標準）\" title=\"押すたびに 標準 → 大 → 特大 → 標準 と切り替わります\"><span class=\"aa\">Aa</span><span class=\"fs-k\">文字の大きさ</span><span class=\"fs-now\">標準</span></button></span>",
-        dc(Component::FontSizeControl)
-    ));
-    o.push(format!(
-        "<span class=\"here\"><b>憲法</b><span class=\"here-doc\"> ▸ 全 {CHAPTERS} 章 — </span><a href=\"#toc\">目次へ</a></span>"
-    ));
-    o.push(format!(
-        "<span {}>生成 <b>{}</b> · <b>{version}</b>（{status}）</span>",
-        dc(Component::FreshnessStamp),
-        m.ef("generated")?
-    ));
-    o.push("</header>".to_string());
-    o.push("<main id=\"main\" class=\"page\">".to_string());
+    FRAME.head(
+        o,
+        &format!("folio2 — 憲法（不変原則・{version}）"),
+        &m.ef("generated")?,
+        &version,
+        status,
+    );
     Ok(())
 }
 
@@ -369,42 +346,11 @@ fn chapter_h2(ctx: &Ctx<'_>, i: usize, c: &X<'_>, r: &X<'_>) -> R<String> {
 }
 
 fn toc(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, r: &X<'_>) -> R<()> {
-    o.push("<nav class=\"toc\" id=\"toc\" aria-label=\"目次\"><h2>目次</h2><ol>".to_string());
-    for i in 0..BANDS.len() {
-        o.push(format!(
-            "<li><a href=\"#s{i}\"><span class=\"n\">{i:02}</span><span class=\"k\">{}</span><span class=\"t\">{}</span></a></li>",
-            chapter_name(ctx, i),
-            chapter_h2(ctx, i, c, r)?
-        ));
-    }
-    o.push("<li><a href=\"#approval\"><span class=\"n\">—</span><span class=\"k\">承認欄</span><span class=\"t\">作成 / 承認</span></a></li>".to_string());
-    o.push("</ol></nav>".to_string());
+    let heads = (0..BANDS.len())
+        .map(|i| Ok((chapter_name(ctx, i).to_string(), chapter_h2(ctx, i, c, r)?)))
+        .collect::<R<Vec<_>>>()?;
+    FRAME.toc(o, &heads, "作成 / 承認");
     Ok(())
-}
-
-/// 章の帯（section）。`lead` は組み立て済みの HTML。
-fn band(o: &mut Vec<String>, i: usize, name: &str, h2: &str, lead: Option<&str>) {
-    let (class, svg) = BANDS[i];
-    o.push(format!(
-        "<section id=\"s{i}\" {} class=\"{class}\"><span class=\"num\">{i:02}</span>",
-        dc(Component::ChapterDeckBand)
-    ));
-    o.push(format!(
-        "<p class=\"crumb\"><b>憲法</b><span>›</span><span>{i:02} {name} {}/{CHAPTERS}</span></p>",
-        i + 1
-    ));
-    o.push(format!(
-        "<span class=\"kicker\"><svg class=\"ico\" viewBox=\"0 0 24 24\">{svg}</svg>{name}</span>"
-    ));
-    o.push(format!("<h2>{h2}</h2>"));
-    if let Some(lead) = lead {
-        o.push(format!("<p class=\"lead\">{lead}</p>"));
-    }
-    o.push("</section>".to_string());
-}
-
-fn card(class: &str, cid: &str, body: &str) -> String {
-    format!("<div class=\"{class}\"><div class=\"cid\">{cid}</div>{body}</div>")
 }
 
 // ── 章 ──
@@ -413,7 +359,7 @@ fn north_star(o: &mut Vec<String>, c: &X<'_>) -> R<()> {
     let ns = c.f("north_star")?;
     let pr = c.f("precedence")?;
     let lead = format!("達成の判定: {}", ns.ef("judged_by")?);
-    band(
+    FRAME.band(
         o,
         0,
         "北極星",
@@ -427,16 +373,19 @@ fn north_star(o: &mut Vec<String>, c: &X<'_>) -> R<()> {
     ));
     o.push(card(
         "card accent brand",
+        None,
         "北極星（1 文）",
         &format!("<p class=\"ct\">{}</p>", ns.ef("statement")?),
     ));
     o.push(card(
         "card accent",
+        None,
         "誰のため",
         &format!("<p class=\"ct\">{}</p>", ns.ef("for_whom")?),
     ));
     o.push(card(
         "card accent",
+        None,
         "迷ったらどちらへ倒すか（前文）",
         &format!(
             "<p class=\"ct\">{}</p><p class=\"cd\">{}</p><p class=\"meta-chips\">{}</p>",
@@ -461,7 +410,7 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
         }
     }
     let h2 = format!("{} 段の意味 — {}", ctx.tiers.len(), tier_names(ctx));
-    band(o, 1, "読み方", &h2, lead.as_deref());
+    FRAME.band(o, 1, "読み方", &h2, lead.as_deref());
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<div {} style=\"--band-n:{}\">",
@@ -471,6 +420,7 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
     for (_, t) in &ctx.tiers {
         o.push(card(
             &format!("card accent {}", t.color),
+            None,
             &format!("{}（{}）", t.name, t.en),
             &format!(
                 "<p class=\"ct\">{}</p><p class=\"cd-req\"><b>外すのに要るもの:</b> {}</p>",
@@ -485,7 +435,7 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
 
 fn tier_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, i: usize, key: &str, tier: &Tier) -> R<()> {
     let h2 = format!("{} つの原則", tier_count(ctx, key));
-    band(o, i + 2, tier.name, &h2, Some(tier.meaning));
+    FRAME.band(o, i + 2, tier.name, &h2, Some(tier.meaning));
     o.push("<div class=\"chapbody\">".to_string());
     o.push("<div class=\"stack\">".to_string());
     for art in ctx.arts.iter().filter(|a| a.tier_key == key) {
@@ -694,7 +644,7 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
         thresholds.len(),
         discipline.len()
     );
-    band(
+    FRAME.band(
         o,
         5,
         "数値の表（rules）",
@@ -870,7 +820,7 @@ fn amendment_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>) -
     let count = steps.len();
 
     let h2 = format!("変えるときの手続き — {count} 段");
-    band(o, 6, "改訂", &h2, Some(&am.ef("declaration")?));
+    FRAME.band(o, 6, "改訂", &h2, Some(&am.ef("declaration")?));
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<figure {} data-role=\"diagram\" id=\"fig-amend-flow\">",
@@ -1025,7 +975,7 @@ fn amendment_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>) -
 }
 
 fn glossary_chapter(o: &mut Vec<String>, c: &X<'_>, v: &X<'_>) -> R<()> {
-    band(
+    FRAME.band(
         o,
         7,
         "用語集",
@@ -1059,7 +1009,7 @@ fn glossary_chapter(o: &mut Vec<String>, c: &X<'_>, v: &X<'_>) -> R<()> {
 
 fn sources_chapter(o: &mut Vec<String>, c: &X<'_>) -> R<()> {
     let sources = c.f("sources")?.seq()?;
-    band(o, 8, "出所", "この憲法はどこから来たか", None);
+    FRAME.band(o, 8, "出所", "この憲法はどこから来たか", None);
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<div {} style=\"--band-n:{}\">",
@@ -1069,6 +1019,7 @@ fn sources_chapter(o: &mut Vec<String>, c: &X<'_>) -> R<()> {
     for x in &sources {
         o.push(card(
             "card accent",
+            None,
             &format!("出所 {}", x.ef("n")?),
             &format!(
                 "<p class=\"ct\">{}</p><p class=\"cd\">{}</p>",
@@ -1090,14 +1041,7 @@ fn approval(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
     } else {
         "<span class=\"stamp todo\">未承認</span>"
     };
-    o.push(format!(
-        "<section id=\"approval\" {} class=\"band-3 slim\">",
-        dc(Component::ChapterDeckBand)
-    ));
-    o.push("<span class=\"kicker\">承認欄</span>".to_string());
-    o.push("<h2>作成 / 承認</h2>".to_string());
-    o.push(format!("<p class=\"lead\">{status}</p>"));
-    o.push("</section>".to_string());
+    FRAME.approval_band(o, "作成 / 承認", status);
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!("<div {}>", dc(Component::ApprovalBlock)));
     o.push(format!(
@@ -1121,11 +1065,6 @@ fn approval(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
 fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let version = m.ef("version")?;
     let generated = m.ef("generated")?;
-    o.push("<nav class=\"prevnext\"><a href=\"index.html\"><span class=\"k\">前</span>入口</a><a href=\"srs.html\"><span class=\"k\">次</span>要件書</a></nav>".to_string());
-    o.push("<footer class=\"foot\">".to_string());
-    o.push(format!(
-        "<p class=\"ft-plain\">このページは正本 constitution.yaml から folio が生成した · 憲法 {version}（{generated}）· 手で直さない</p>"
-    ));
     let mut dl = format!(
         "<dt>id</dt><dd>{}</dd><dt>version</dt><dd>{version}</dd><dt>status</dt><dd>{}</dd>",
         m.ef("id")?,
@@ -1143,14 +1082,7 @@ fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
         .collect::<Vec<_>>()
         .join(" / ");
     dl.push_str(&format!("<dt>items</dt><dd>{items}</dd>"));
-    o.push(format!(
-        "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl>{dl}</dl></details>"
-    ));
-    o.push("</footer>".to_string());
-    o.push("</main>".to_string());
-    o.push("<p class=\"doc-locator\">この文書の所属: 設計文書（design-intent）/ 憲法 — <a href=\"index.html\">入口へ戻る</a></p>".to_string());
-    o.push("</body>".to_string());
-    o.push("</html>".to_string());
+    FRAME.foot(o, &version, &generated, &dl);
     Ok(())
 }
 

@@ -1,14 +1,17 @@
 # folio face の凍結 fixture（便 14・P-10.1）— 語彙の正本の最小形。手書き・design-intent/ の写しではない。
 # 語 2 つ（1 つは定義に escape の要る字「<b>」「&」「二重引用符」を含む）と、id が tier の欄語 1 つ。
+# short は要件書の面（便 15）だけが読む（憲法の面は読まない）。
 
 terms:
   - id: seihon
     term: 正本
     en: source of truth
+    short: 元になる唯一のファイル
     def: 元になる唯一のファイル。
   - id: escape
     term: 字の置き換え
     en: null
+    short: 特別な字を安全な字面に置き換えること
     def: "<b>太字</b> と A & B と \"引用\" をそのまま書いた定義。"
     note: 注の定義。
 

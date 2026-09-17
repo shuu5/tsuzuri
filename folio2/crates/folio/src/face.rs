@@ -1,15 +1,17 @@
-//! `folio face`（便 14・docs/design/delivery-14.md §1 (a)(c)）。見本 3 面の 1 面を正本から導出して書く（--write）・
-//! 検査する（--check）。本便で生成器を持つのは憲法の面（`face_constitution.rs`）だけで、入口と要件書は「まだ分からない」。
+//! `folio face`（便 14・docs/design/delivery-14.md §1 (a)(c)／便 15・delivery-15.md §1 (b)）。見本 3 面の 1 面を正本から
+//! 導出して書く（--write）・検査する（--check）。生成器を持つのは憲法の面（`face_constitution.rs`）と要件書の面
+//! （`face_srs.rs`）で、入口は「まだ分からない」。
 //! この file は命令の口（面の名の解決・正本の読み・3 値と文言）と、生成器が共有する口（木を辿る型 X・escape・
-//! 名札の表・値の読める形・小窓）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
+//! 名札の表・値の読める形・小窓・面の骨格）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
 
 use std::fs;
 use std::path::Path;
 
-use crate::face_constitution;
 use crate::parts::FACES;
+use crate::parts::catalog::Component;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
+use crate::{face_constitution, face_srs};
 
 pub type R<T> = Result<T, String>;
 
@@ -40,6 +42,7 @@ impl Outcome {
 pub fn run(face: &str, dir: &Path, out: &Path, mode: Mode) -> Outcome {
     let derive: fn(&Path) -> R<String> = match face {
         "constitution" => face_constitution::derive,
+        "srs" => face_srs::derive,
         f if FACES.contains(&f) => {
             return Outcome::unknown(format!("面「{f}」の生成器はまだ無い"));
         }
@@ -484,6 +487,236 @@ pub const RULE_KIND: &[(&str, &str)] = &[
     ("detect", "記録のみ"),
     ("human-review", "人が守る作法"),
 ];
+/// 強度の意味（要件書の凡例）。
+pub const STRENGTH_MEANING: &[(&str, &str)] = &[
+    ("must", "必ず守る"),
+    ("must-not", "決してしない"),
+    ("should", "強い推奨（外すなら理由が要る）"),
+];
+/// 強度 → 色の class（prio）。
+pub const PRIO: &[(&str, &str)] = &[("must", "must"), ("must-not", "must"), ("should", "should")];
+/// 確かめ方の 1 語の名札（test+inspection は 2 つを「 + 」で繋ぐ・関数 method_label）。
+pub const METHOD: &[(&str, &str)] = &[
+    ("test", "実際に動かして確かめる（Test）"),
+    ("inspection", "目で見て確かめる（Inspection）"),
+];
+/// 図の色（class は tone-<値>・凡例の sw は sw <値>）。
+pub const TONE: &[(&str, &str)] = &[
+    ("ok", "tone-ok"),
+    ("bad", "tone-bad"),
+    ("neutral", "tone-neutral"),
+    ("warn", "tone-warn"),
+];
+
+/// 確かめ方（verify の method）の名札。表に無い値は Err。
+pub fn method_label(x: &X<'_>) -> R<String> {
+    if x.v.as_str() == Some("test+inspection") {
+        return Ok(METHOD
+            .iter()
+            .map(|(_, l)| *l)
+            .collect::<Vec<_>>()
+            .join(" + "));
+    }
+    Ok(x.lookup(METHOD, "確かめ方")?.to_string())
+}
+
+// ── 部品目録の上限（歯が parts.json と同値を確かめる）──
+
+/// pipeline-rail の max_nodes。
+pub const MAX_RAIL_NODES: usize = 7;
+/// state-strip の max_nodes。
+pub const MAX_STATE_NODES: usize = 4;
+/// context-band の max_per_band。
+pub const MAX_PER_BAND: usize = 4;
+
+// ── 面の骨格（面に依らない口・P-6.3）──
+
+/// 読める面の nav（href・名）。
+const NAV: [(&str, &str); 3] = [
+    ("index.html", "入口"),
+    ("constitution.html", "憲法"),
+    ("srs.html", "要件書"),
+];
+
+/// 面ごとの固定値。
+pub struct Frame {
+    /// 面の名（crumb・here・foot）
+    pub name: &'static str,
+    /// 正本の file 名（foot）
+    pub source: &'static str,
+    /// favicon の link 要素
+    pub favicon: &'static str,
+    /// nav の aria-current の位置（NAV の添字）
+    pub current: usize,
+    /// 最初の章の番号（憲法 00・要件書 01）
+    pub first: usize,
+    /// 章ごとの帯の class と kicker の絵記号（first から順に）
+    pub bands: &'static [(&'static str, &'static str)],
+    /// prevnext の前と次（href・名）
+    pub prev: (&'static str, &'static str),
+    pub next: (&'static str, &'static str),
+    /// 面が使う部品
+    pub parts: &'static [Component],
+}
+
+impl Frame {
+    /// 章の数（帯の章と承認欄）。
+    pub fn chapters(&self) -> usize {
+        self.bands.len() + 1
+    }
+
+    /// 属性 data-component（名札は部品目録の一覧からだけ出す）。
+    pub fn dc(&self, c: Component) -> String {
+        debug_assert!(
+            self.parts.contains(&c),
+            "{} は{}の面の部品の一覧に無い",
+            c.name(),
+            self.name
+        );
+        format!("data-component=\"{}\"", c.name())
+    }
+
+    /// head と site-bar（skip-link から main の開始まで）。値は escape 済み。
+    pub fn head(
+        &self,
+        o: &mut Vec<String>,
+        title: &str,
+        generated: &str,
+        version: &str,
+        status: &str,
+    ) {
+        o.push("<!DOCTYPE html>".to_string());
+        o.push("<html lang=\"ja\" class=\"no-js\">".to_string());
+        o.push("<head>".to_string());
+        o.push("<meta charset=\"utf-8\">".to_string());
+        o.push(
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".to_string(),
+        );
+        o.push(format!("<title>{title}</title>"));
+        o.push(self.favicon.to_string());
+        o.push("<link rel=\"stylesheet\" href=\"folio.css\">".to_string());
+        o.push("<script src=\"folio-ui.js\"></script>".to_string());
+        o.push("</head>".to_string());
+        o.push("<body>".to_string());
+        o.push("<a class=\"skip-link\" href=\"#main\">本文へ移動</a>".to_string());
+        o.push("<header class=\"site-bar\">".to_string());
+        o.push("<span class=\"brand\"><span class=\"long\">folio2</span><span class=\"short\">f2</span></span>".to_string());
+        let nav = NAV
+            .iter()
+            .enumerate()
+            .map(|(i, (href, name))| {
+                let cur = if i == self.current {
+                    " aria-current=\"page\""
+                } else {
+                    ""
+                };
+                format!("<a href=\"{href}\"{cur}>{name}</a>")
+            })
+            .collect::<String>();
+        o.push(format!("<nav aria-label=\"読める面\">{nav}</nav>"));
+        o.push(format!(
+            "<span {}><button type=\"button\" class=\"fs-btn\" aria-label=\"文字の大きさを切り替える（いま: 標準）\" title=\"押すたびに 標準 → 大 → 特大 → 標準 と切り替わります\"><span class=\"aa\">Aa</span><span class=\"fs-k\">文字の大きさ</span><span class=\"fs-now\">標準</span></button></span>",
+            self.dc(Component::FontSizeControl)
+        ));
+        o.push(format!(
+            "<span class=\"here\"><b>{}</b><span class=\"here-doc\"> ▸ 全 {} 章 — </span><a href=\"#toc\">目次へ</a></span>",
+            self.name,
+            self.chapters()
+        ));
+        o.push(format!(
+            "<span {}>生成 <b>{generated}</b> · <b>{version}</b>（{status}）</span>",
+            self.dc(Component::FreshnessStamp)
+        ));
+        o.push("</header>".to_string());
+        o.push("<main id=\"main\" class=\"page\">".to_string());
+    }
+
+    /// 目次。`heads` は章ごとの（章の名・h2 の字面）を first から順に。
+    pub fn toc(&self, o: &mut Vec<String>, heads: &[(String, String)], approval_t: &str) {
+        o.push("<nav class=\"toc\" id=\"toc\" aria-label=\"目次\"><h2>目次</h2><ol>".to_string());
+        for (i, (k, t)) in heads.iter().enumerate() {
+            o.push(toc_li(
+                &format!("s{}", self.first + i),
+                &format!("{:02}", self.first + i),
+                k,
+                t,
+            ));
+        }
+        o.push(toc_li("approval", "—", "承認欄", approval_t));
+        o.push("</ol></nav>".to_string());
+    }
+
+    /// 章の帯（section）。`n` は章の番号・`lead` は組み立て済みの HTML。
+    pub fn band(&self, o: &mut Vec<String>, n: usize, name: &str, h2: &str, lead: Option<&str>) {
+        let (class, svg) = self.bands[n - self.first];
+        o.push(format!(
+            "<section id=\"s{n}\" {} class=\"{class}\"><span class=\"num\">{n:02}</span>",
+            self.dc(Component::ChapterDeckBand)
+        ));
+        o.push(format!(
+            "<p class=\"crumb\"><b>{}</b><span>›</span><span>{n:02} {name} {}/{}</span></p>",
+            self.name,
+            n - self.first + 1,
+            self.chapters()
+        ));
+        o.push(format!(
+            "<span class=\"kicker\"><svg class=\"ico\" viewBox=\"0 0 24 24\">{svg}</svg>{name}</span>"
+        ));
+        o.push(format!("<h2>{h2}</h2>"));
+        if let Some(lead) = lead {
+            o.push(format!("<p class=\"lead\">{lead}</p>"));
+        }
+        o.push("</section>".to_string());
+    }
+
+    /// 承認欄の帯（slim）。
+    pub fn approval_band(&self, o: &mut Vec<String>, h2: &str, lead: &str) {
+        o.push(format!(
+            "<section id=\"approval\" {} class=\"band-3 slim\">",
+            self.dc(Component::ChapterDeckBand)
+        ));
+        o.push("<span class=\"kicker\">承認欄</span>".to_string());
+        o.push(format!("<h2>{h2}</h2>"));
+        o.push(format!("<p class=\"lead\">{lead}</p>"));
+        o.push("</section>".to_string());
+    }
+
+    /// prevnext・foot（ft-plain と機械のための面）・doc-locator・body と html の閉じ。`dl` は組み立て済みの HTML。
+    pub fn foot(&self, o: &mut Vec<String>, version: &str, generated: &str, dl: &str) {
+        o.push(format!(
+            "<nav class=\"prevnext\"><a href=\"{}\"><span class=\"k\">前</span>{}</a><a href=\"{}\"><span class=\"k\">次</span>{}</a></nav>",
+            self.prev.0, self.prev.1, self.next.0, self.next.1
+        ));
+        o.push("<footer class=\"foot\">".to_string());
+        o.push(format!(
+            "<p class=\"ft-plain\">このページは正本 {} から folio が生成した · {} {version}（{generated}）· 手で直さない</p>",
+            self.source, self.name
+        ));
+        o.push(format!(
+            "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl>{dl}</dl></details>"
+        ));
+        o.push("</footer>".to_string());
+        o.push("</main>".to_string());
+        o.push(format!(
+            "<p class=\"doc-locator\">この文書の所属: 設計文書（design-intent）/ {} — <a href=\"index.html\">入口へ戻る</a></p>",
+            self.name
+        ));
+        o.push("</body>".to_string());
+        o.push("</html>".to_string());
+    }
+}
+
+fn toc_li(href: &str, n: &str, k: &str, t: &str) -> String {
+    format!(
+        "<li><a href=\"#{href}\"><span class=\"n\">{n}</span><span class=\"k\">{k}</span><span class=\"t\">{t}</span></a></li>"
+    )
+}
+
+/// card（`id` が在れば属性 id）。`body` は組み立て済みの HTML。
+pub fn card(class: &str, id: Option<&str>, cid: &str, body: &str) -> String {
+    let id = id.map_or_else(String::new, |i| format!(" id=\"{i}\""));
+    format!("<div class=\"{class}\"{id}><div class=\"cid\">{cid}</div>{body}</div>")
+}
 
 #[cfg(test)]
 mod face_tests {

@@ -23,7 +23,7 @@ use crate::yaml::{self, Node};
 pub const FILES: [&str; 5] = ["constitution", "rules", "vocabulary", "srs", "index"];
 
 /// 要件書の節の閉じた一覧（要件書は schema 節を持たないので床の定数で持つ）。
-pub const SRS_TOP_LEVEL: [&str; 14] = [
+pub const SRS_TOP_LEVEL: [&str; 15] = [
     "meta",
     "goals",
     "scope",
@@ -31,6 +31,7 @@ pub const SRS_TOP_LEVEL: [&str; 14] = [
     "actors",
     "outputs",
     "rail",
+    "verdicts",
     "requirements",
     "nonfunctional",
     "acceptance",
@@ -386,25 +387,63 @@ fn check_srs(root: &Node, report: &mut Report) {
     let mut all = Vec::new();
     for section in [
         "goals",
+        "verdicts",
         "requirements",
         "nonfunctional",
         "acceptance",
         "constraints",
     ] {
         for row in rows(FILE, root, section, report) {
-            let mut fields = vec!["id", "title"];
-            if matches!(section, "requirements" | "nonfunctional") {
-                fields.extend(["shall", "plain"]);
-            }
+            let fields: &[&str] = match section {
+                // 図 3 の答えの行（tone の値域は面の生成器が数える）
+                "verdicts" => &["id", "name", "tone", "cond"],
+                "requirements" | "nonfunctional" => &["id", "title", "shall", "plain"],
+                _ => &["id", "title"],
+            };
             non_empty(
                 FILE,
                 &format!("{section} の {}", row_id(row)),
                 row,
-                &fields,
+                fields,
                 report,
             );
             all.push(row);
         }
     }
     duplicate_ids(FILE, all, report);
+}
+
+#[cfg(test)]
+mod check_tests {
+    use super::*;
+
+    const SRS: &str = "goals:\n  - {id: GOAL1, title: 相談}\nverdicts:\n  - {id: pass, name: 合格, tone: ok, cond: 違反が無い}\n  - {id: fail, name: 不合格, tone: bad, cond: 違反が在る}\n  - {id: pending, name: まだ分からない, tone: neutral, cond: 動かせない}\nacceptance:\n  - {id: AC1, title: 受入}\n";
+
+    fn srs_report(text: &str) -> Report {
+        let doc = yaml::parse(text).unwrap();
+        let mut report = Report::default();
+        check_srs(&doc.root, &mut report);
+        report
+    }
+
+    #[test]
+    fn check_srs_accepts_three_verdicts() {
+        let report = srs_report(SRS);
+        assert!(report.violations.is_empty(), "{:?}", report.violations);
+        assert!(report.unknowns.is_empty(), "{:?}", report.unknowns);
+    }
+
+    #[test]
+    fn check_srs_counts_an_empty_verdict_cond() {
+        let report = srs_report(&SRS.replacen("cond: 動かせない", "cond: \"\"", 1));
+        assert_eq!(report.violations.len(), 1, "{:?}", report.violations);
+        assert_eq!(report.violations[0].0, "欄の非空");
+    }
+
+    #[test]
+    fn check_srs_counts_a_verdict_id_shared_with_acceptance() {
+        let report = srs_report(&SRS.replacen("{id: fail,", "{id: AC1,", 1));
+        assert_eq!(report.violations.len(), 1, "{:?}", report.violations);
+        assert_eq!(report.violations[0].0, "重複キー");
+    }
 }

@@ -489,3 +489,362 @@ fn face_unknown_when_constitution_has_a_duplicate_key() {
 fn face_unknown_when_the_out_parent_dir_is_missing() {
     unknown("out-parent", |_| {}, |td| td.join("no-such-dir/never.html"));
 }
+
+// ── 要件書の面（便 15・docs/design/delivery-15.md §1 (e)）──
+
+/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
+fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
+    if written == frozen {
+        return;
+    }
+    let at = written
+        .iter()
+        .zip(frozen)
+        .position(|(a, b)| a != b)
+        .unwrap_or(written.len().min(frozen.len()));
+    let show = |b: &[u8]| {
+        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
+            .into_owned()
+    };
+    panic!(
+        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
+        written.len(),
+        frozen.len(),
+        show(written),
+        show(frozen)
+    );
+}
+
+#[test]
+fn face_srs_write_matches_the_frozen_fixture() {
+    let td = temp_dir("srs-anchor");
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &fixture(), &out, "--write");
+    let written = fs::read(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&run, "folio face --face srs --write"),
+        0,
+        "{}",
+        stderr(&run)
+    );
+    assert_eq!(
+        stdout(&run),
+        format!("folio face: 書いた（{} byte）\n", written.len())
+    );
+    let frozen = fs::read(fixture().join("expected-srs.html")).unwrap();
+    assert_same_bytes(&written, &frozen, "expected-srs.html");
+}
+
+#[test]
+fn face_srs_escapes_values_from_the_sources() {
+    let td = temp_dir("srs-escape");
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &fixture(), &out, "--write");
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --face srs"), 0, "{}", stderr(&run));
+    assert!(html.contains("&lt;b&gt;太字&lt;/b&gt; と A &amp; B と &quot;引用&quot;"));
+    assert!(
+        !html.contains("<b>太字</b>"),
+        "promise の <b> が escape されていない"
+    );
+}
+
+/// 実の正本から要件書の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
+fn real_srs(case: &str) -> (PathBuf, PathBuf, String) {
+    let td = temp_dir(case);
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &design_intent(), &out, "--write");
+    assert_eq!(
+        code(&run, "folio face --face srs --write"),
+        0,
+        "{}",
+        stderr(&run)
+    );
+    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
+    let html = fs::read_to_string(&out).unwrap();
+    (td, out, html)
+}
+
+#[test]
+fn face_srs_on_the_real_sources_passes_parts_check() {
+    let (td, out, _) = real_srs("srs-parts");
+    let check = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("parts")
+        .arg("--check")
+        .arg("--dir")
+        .arg(design_intent())
+        .arg("--page")
+        .arg(format!("srs={}", out.display()))
+        .output()
+        .unwrap();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&check, "folio parts --check"),
+        0,
+        "{}{}",
+        stdout(&check),
+        stderr(&check)
+    );
+    assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
+}
+
+/// `open` の後の最初の `close` までの字面。
+fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+    let start = html
+        .find(open)
+        .unwrap_or_else(|| panic!("「{open}」が無い"))
+        + open.len();
+    let end = html[start..]
+        .find(close)
+        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
+    &html[start..start + end]
+}
+
+#[test]
+fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
+    let (td, _, html) = real_srs("srs-census");
+    let _ = fs::remove_dir_all(&td);
+    let s = load_yaml("srs.yaml");
+    let v = load_yaml("vocabulary.yaml");
+
+    // 逐語
+    let fr = seq(&s["requirements"], "requirements");
+    let nfr = seq(&s["nonfunctional"], "nonfunctional");
+    for x in fr.iter().chain(nfr) {
+        for key in ["title", "shall", "plain"] {
+            let want = esc(text(x, key));
+            assert!(html.contains(&want), "{key} が面に無い: {want}");
+        }
+    }
+    let acs = seq(&s["acceptance"], "acceptance");
+    for x in acs {
+        for key in ["title", "plain"] {
+            let want = esc(text(x, key));
+            assert!(html.contains(&want), "受入の {key} が面に無い: {want}");
+        }
+    }
+    for x in seq(&s["constraints"], "constraints") {
+        let want = esc(text(x, "text"));
+        assert!(html.contains(&want), "制約の text が面に無い: {want}");
+    }
+
+    // 件数
+    let parts = components(&html);
+    let parts_of = |name: &str| parts.iter().filter(|p| **p == name).count();
+    assert_eq!(parts_of("item-row"), fr.len() + nfr.len(), "item-row の数");
+    assert_eq!(
+        parts_of("band-node"),
+        seq(&s["actors"], "actors").len() + seq(&s["outputs"], "outputs").len(),
+        "band-node の数"
+    );
+    assert_eq!(
+        parts_of("rail-node"),
+        seq(&s["rail"], "rail").len(),
+        "rail-node の数"
+    );
+    let rtm = between(&html, "<table class=\"rtm\">", "</tbody>");
+    assert_eq!(
+        rtm.matches("<tr>").count() - 1,
+        fr.len() + nfr.len(),
+        "対応表の tbody の tr の数（thead の 1 行を除く）"
+    );
+    let glossary = between(&html, "data-component=\"glossary-links\">", "\n</div>");
+    assert_eq!(
+        glossary.matches("<a href=").count(),
+        seq(&v["terms"], "terms").len() * 2,
+        "用語の一覧の a の数"
+    );
+    assert_eq!(parts_of("ac-state-chip"), acs.len(), "ac-state-chip の数");
+
+    // 部品の名札は 17 種の中だけ・lane-chip を含まない
+    const ALLOWED: [&str; 17] = [
+        "freshness-stamp",
+        "font-size-control",
+        "doc-cover-band",
+        "chapter-deck-band",
+        "section-lead-callout",
+        "figure-panel",
+        "context-band",
+        "band-node",
+        "pipeline-rail",
+        "rail-node",
+        "state-strip",
+        "state-node",
+        "item-row",
+        "ac-state-chip",
+        "rtm-grid",
+        "glossary-links",
+        "approval-block",
+    ];
+    assert!(!parts.is_empty());
+    for p in &parts {
+        assert!(ALLOWED.contains(p), "17 種に無い部品「{p}」");
+    }
+    assert!(!html.contains("lane-chip"));
+
+    // 図 3: verdicts の節が在れば答えの数だけ・無ければ 0 で「図 3」は字面だけ（FR5）
+    match s["verdicts"].as_vec() {
+        Some(verdicts) => {
+            assert_eq!(parts_of("state-strip"), 1);
+            assert_eq!(parts_of("state-node"), verdicts.len());
+        }
+        None => {
+            assert_eq!(parts_of("state-strip"), 0);
+            assert!(
+                !html.contains("#fig-verdicts"),
+                "verdicts が無いのに図 3 へのリンク"
+            );
+            let fr5 = between(
+                &html,
+                "<article data-component=\"item-row\" id=\"fr5\">",
+                "</article>",
+            );
+            assert_eq!(fr5.matches("図 3").count(), 1, "FR5 の「図 3」の字面");
+        }
+    }
+}
+
+#[test]
+fn face_srs_figure_3_appears_only_with_verdicts() {
+    let (td, work) = fixture_copy("srs-verdicts");
+    let out = td.join("srs.html");
+    let with = folio_face("srs", &work, &out, "--write");
+    let html_with = fs::read_to_string(&out).unwrap_or_default();
+    edit(&work.join("srs.yaml"), |t| {
+        let start = t.find("\nverdicts:\n").expect("verdicts の節が無い");
+        let end = t
+            .find("\nrequirements:\n")
+            .expect("requirements の節が無い");
+        format!("{}{}", &t[..start], &t[end..])
+    });
+    let without = folio_face("srs", &work, &out, "--write");
+    let html_without = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&with, "verdicts 在り"), 0, "{}", stderr(&with));
+    assert_eq!(code(&without, "verdicts 無し"), 0, "{}", stderr(&without));
+
+    // 在る側: state-node 3・図 3 へのリンク
+    let with_parts = components(&html_with);
+    assert_eq!(with_parts.iter().filter(|p| **p == "state-node").count(), 3);
+    assert!(html_with.contains("<a class=\"rq-where\" href=\"#fig-verdicts\">図 3</a>"));
+
+    // 無い側: state-strip 0・「図3」の参照は字面だけ・それ以外は同じ
+    assert!(!components(&html_without).contains(&"state-strip"));
+    assert!(!html_without.contains("#fig-verdicts"));
+    let figure_open =
+        "<figure data-component=\"figure-panel\" data-role=\"diagram\" id=\"fig-verdicts\">";
+    let start = html_with.find(figure_open).unwrap();
+    let end = start + html_with[start..].find("</figure>\n").unwrap() + "</figure>\n".len();
+    let expected = format!("{}{}", &html_with[..start], &html_with[end..])
+        .replacen(" · <a href=\"#fig-verdicts\">図 3</a>", "", 1)
+        .replace(
+            "<a class=\"rq-where\" href=\"#fig-verdicts\">図 3</a>",
+            "図 3",
+        )
+        .replace("<a class=\"fig\" href=\"#fig-verdicts\">図 3</a>", "図 3");
+    assert_same_bytes(
+        html_without.as_bytes(),
+        expected.as_bytes(),
+        "verdicts を消した面の期待",
+    );
+}
+
+#[test]
+fn face_srs_check_has_three_values() {
+    let (td, work) = fixture_copy("srs-check");
+    let out = td.join("srs.html");
+
+    let write = folio_face("srs", &work, &out, "--write");
+    let ok = folio_face("srs", &work, &out, "--check");
+    let mut bytes = fs::read(&out).unwrap();
+    bytes[0] ^= 0x20;
+    fs::write(&out, &bytes).unwrap();
+    let drift = folio_face("srs", &work, &out, "--check");
+    fs::remove_file(&out).unwrap();
+    let missing = folio_face("srs", &work, &out, "--check");
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&write, "write"), 0, "{}", stderr(&write));
+    assert_eq!(code(&ok, "check（一致）"), 0, "{}", stderr(&ok));
+    assert!(stdout(&ok).contains("folio face: OK"), "{}", stdout(&ok));
+    assert_eq!(code(&drift, "check（不一致）"), 1, "{}", stderr(&drift));
+    assert!(stderr(&drift).contains("DRIFT"), "{}", stderr(&drift));
+    assert_eq!(code(&missing, "check（無い）"), 2, "{}", stderr(&missing));
+    assert!(
+        stderr(&missing).contains("面が無い"),
+        "{}",
+        stderr(&missing)
+    );
+}
+
+/// 要件書の面で、fixture の写しの srs.yaml に変異を 1 つ当て、`--write` = 2 ∧「まだ分からない」∧ 出力先が出来ていない。
+fn srs_unknown(case: &str, from: &str, to: &str) {
+    let (td, work) = fixture_copy(&format!("srs-unknown-{case}"));
+    edit(&work.join("srs.yaml"), |t| t.replacen(from, to, 1));
+    let out = td.join("never.html");
+    let run = folio_face("srs", &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&run, "folio face --face srs"),
+        2,
+        "{case}: {}",
+        stderr(&run)
+    );
+    assert!(
+        stderr(&run).contains("まだ分からない"),
+        "{case}: {}",
+        stderr(&run)
+    );
+    assert!(!exists, "{case}: 導出できないのに出力先に書いた");
+}
+
+#[test]
+fn face_srs_unknown_when_counts_differ_from_the_rows() {
+    srs_unknown("counts", "counts: {fr: 2,", "counts: {fr: 3,");
+}
+
+#[test]
+fn face_srs_unknown_when_a_figure_names_a_missing_step() {
+    srs_unknown(
+        "figure-step",
+        "figures: [図2-1, 図1]",
+        "figures: [図2-9, 図1]",
+    );
+}
+
+#[test]
+fn face_srs_unknown_when_a_figure_is_outside_the_forms() {
+    srs_unknown(
+        "figure-form",
+        "figures: [全段, 図3]",
+        "figures: [全段, 図4]",
+    );
+}
+
+#[test]
+fn face_srs_unknown_when_a_step_names_a_missing_requirement() {
+    srs_unknown("step-req", "reqs: [FR1], note", "reqs: [FR9], note");
+}
+
+#[test]
+fn face_srs_unknown_when_basis_names_a_missing_article() {
+    srs_unknown("basis", "    basis: [P-1]\n", "    basis: [P-9]\n");
+}
+
+#[test]
+fn face_srs_unknown_when_a_verdict_tone_is_outside_the_table() {
+    srs_unknown("tone", "tone: neutral", "tone: purple");
+}
+
+#[test]
+fn face_srs_unknown_when_no_actor_is_the_tool() {
+    srs_unknown("tool-actor", "role: 道具}", "role: 作る}");
+}
+
+#[test]
+fn face_srs_unknown_when_a_pattern_is_outside_the_table() {
+    srs_unknown("pattern", "pattern: event", "pattern: sometimes");
+}
