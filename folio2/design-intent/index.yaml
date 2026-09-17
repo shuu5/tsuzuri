@@ -1,17 +1,19 @@
-# folio2 入口の面 — 正本（v0.1・下書き・planner 席）
+# folio2 入口の面 — 正本（v0.2・下書き・planner 席）
 # 位置: 判断の記録 ADR-5 決定 (2)。入口の面（設計文書の入口のページ）の案内文だけを持つ。
 # 数と日付（条の数・要件の数・判断の記録の本数・更新日・文書が在るか無いか）はここに書かない＝生成のたびに他の正本から数えて出す（P-6.3）。
 # 見出し・凡例・読む順番・相談窓口の文は 2026-09-12 に持ち主が見た目を承認した見本の入口から起こし、今の正本に合わせて直した。
+# v0.2（2026-09-17・便 16）: 読む順番の行き先（stops）に節の id（at・憲法面と要件書面の anchor）を足し、相談窓口に命令の字面（command）を足した。
 # 状態: 下書き。発効は、生成した入口の面を持ち主が開いて読んで承認したとき（要件書 AC5 の形）に承認欄へ逐語を置いて行う。
 
 meta:
   id: folio2-index
   title: 設計文書の入口
-  version: v0.1
+  version: v0.2
   status: draft
   generated: 2026-09-17
   approval:
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-17, stamp: 起草（f2-648.23・ADR-5 決定 (2)）}
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-17, stamp: v0.2（f2-648.27・stops の at と intake の command）}
 
 audience:
   label: 誰のための文書か
@@ -50,32 +52,33 @@ lanes:
       why: 「これは何のためのもの？」を 10 分でつかむ
       minutes: 10
       stops:
-        - {doc: constitution, label: 目指すことと誰のため}
-        - {doc: srs, label: ゴール}
-        - {doc: srs, label: 道具が 1 回で通す段の図}
+        - {doc: constitution, at: s0, label: 目指すことと誰のため}
+        - {doc: srs, at: s1, label: ゴール}
+        - {doc: srs, at: fig-rail, label: 道具が 1 回で通す段の図}
     - id: owner
       mark: 決
       who: 決める人（持ち主）
       why: 「何ができたら完成か」と「何を確認してから変えるか」
       minutes: 15
       stops:
-        - {doc: srs, label: 受入基準}
-        - {doc: constitution, label: 確認してから変える}
-        - {doc: constitution, label: 数値の表}
+        - {doc: srs, at: s5, label: 受入基準}
+        - {doc: constitution, at: s3, label: 確認してから変える}
+        - {doc: constitution, at: s5, label: 数値の表}
     - id: builder
       mark: 作
       who: 作る人（AI・エンジニア）
       why: 機械が守る形と数値の出どころ
       minutes: 20
       stops:
-        - {doc: constitution, label: いつも守る}
-        - {doc: constitution, label: 変えるときの手続き}
-        - {doc: srs, label: 対応表}
+        - {doc: constitution, at: s2, label: いつも守る}
+        - {doc: constitution, at: s6, label: 変えるときの手続き}
+        - {doc: srs, at: s7, label: 対応表}
 
 intake:
   title: 文書を足したい・減らしたいとき
   lead: どの文書が要るかは、最初に AI と相談して決める。途中で足すときも同じ窓口。
   heading: AI に「folio intake」と頼む
+  command: folio intake
   text: 易しい質問が 5 つまで出る。どの質問にも「おすすめ」がついているので、答えなくても止まらない。結果は支度表 1 枚。承認するのはここ 1 回だけ。
   steps:
     - 質問 5 つ（おすすめ付き）
