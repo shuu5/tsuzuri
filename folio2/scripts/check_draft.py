@@ -11,7 +11,6 @@
   rules   : rules schema（top_level / 行の欄 / enums / 凍結行の裁定 id）/ kind_map（R 行だけ）
   vocab   : 本文（憲法の見出し・規範文・平易文・前文 / rules の what / 要件書の見出し・規範文・平易文・制約）の英字の語のうち
             語彙（terms・field_terms の term / en・identifiers）に無いもの（R-9・R-12 の機械側）/ 語彙の定義の閉包（定義文の英字語も同じ母集団）
-  inject  : 注入の母集団（前文 + 規範文）の本数が inject_check.derive と一致
   polarity: 極性一覧（P-18.3）を mechanism の stage / polarity と rules 行の stage から生成し、in-loop の本数を出す
             （P-18.4「in-loop 0 なら落とす」は live: delivery-0 ゆえ発効時点では「まだ分からない」として出す）
   adr     : 判断の記録（adr/ADR-n.yaml・欄の決まりは adr/schema.yaml・ADR-1）の欄・値域・非空・退けた案（採用 1）・撤退条件（P-8.1）・承認欄（N-4・承認者・裁定 id の形・対話面 R-8）
@@ -683,15 +682,6 @@ def unknown_words(pairs):
     return unknown
 for (lw, where), n in sorted(unknown_words(body).items()): err('R-9', f"{where}: 語彙に無い英字の語「{lw}」")
 for (lw, where), n in sorted(unknown_words(adr_body).items()): err('adr', f"{where}: 語彙に無い英字の語「{lw}」（判断の記録の本文は「日本語（原語）」の形で書く）")
-
-# ── inject（母集団の本数が導出器と一致）──
-try:
-    import inject_check
-    _, n_inj = inject_check.derive(HERE / ('constitution' + SUF))
-    n_expect = sum(len(a['statements']) for a in c['articles']) + (1 if pr.get('text') else 0)
-    if n_inj != n_expect: err('inject', f"注入の本数 {n_inj} ≠ 前文 + 規範文 {n_expect}")
-except Exception as ex:
-    err('inject', f"inject_check.derive を呼べない: {ex}")
 
 # ── polarity（極性一覧・P-18.3）──
 pol = []

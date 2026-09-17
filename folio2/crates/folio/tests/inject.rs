@@ -1,6 +1,6 @@
 //! `folio inject` の歯（便 2・docs/design/delivery-2.md §1）。
 //! 正本と今の CLAUDE.md で --check 合格、tests/fixtures/inject/ の 5 組で §1 の期待の終了コード、drift の写しで --write の往復、
-//! day-1 の script `scripts/inject_check.py` との突き合わせ 6 入力（終了コードを §1 の値で pin する）。
+//! 正本の写しに変異を 1 つ当てる 6 入力（終了コードを便 2 の §1 の値で pin する・script は呼ばない・docs/design/delivery-3.md §1 (a)）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,20 +24,6 @@ fn folio_inject(dir: &Path, claude_md: &Path, mode: &str) -> Output {
         .arg(mode)
         .output()
         .expect("folio を起動できない")
-}
-
-fn script_inject(dir: &Path, claude_md: &Path, mode: &str) -> Output {
-    Command::new("python3")
-        .arg(repo_root().join("scripts/inject_check.py"))
-        .arg("--constitution")
-        .arg(dir.join("constitution.yaml"))
-        .arg("--claude-md")
-        .arg(claude_md)
-        .arg("--rules")
-        .arg(dir.join("rules.yaml"))
-        .arg(mode)
-        .output()
-        .expect("python3 scripts/inject_check.py を起動できない")
 }
 
 fn code(out: &Output, what: &str) -> i32 {
@@ -164,28 +150,31 @@ fn inject_mode_is_exactly_one() {
     }
 }
 
-/// 1 入力: 正本 2 file と CLAUDE.md を一時 dir へ写し、変異を 1 つ当て、script と folio を同じ mode で掛ける。
-fn parity(case: &str, mode: &str, expected: i32, mutate: impl FnOnce(&Path)) -> (Output, Output) {
+/// 1 入力: 正本 2 file と CLAUDE.md を一時 dir へ写し、変異を 1 つ当て、folio を掛けて §1 の終了コードと比べる。
+/// 戻り値は folio の出力と、掛けた後の写しの CLAUDE.md の byte 列。
+fn pinned(case: &str, mode: &str, expected: i32, mutate: impl FnOnce(&Path)) -> (Output, Vec<u8>) {
     let root = repo_root();
-    let td = temp_dir(&format!("parity-{case}"));
+    let td = temp_dir(&format!("pinned-{case}"));
     for name in ["constitution.yaml", "rules.yaml"] {
         fs::copy(root.join("design-intent").join(name), td.join(name)).unwrap();
     }
     fs::copy(root.join("CLAUDE.md"), td.join("CLAUDE.md")).unwrap();
     mutate(&td);
     let md = td.join("CLAUDE.md");
-    let script = script_inject(&td, &md, mode);
     let folio = folio_inject(&td, &md, mode);
+    let md_bytes = fs::read(&md).unwrap();
     let _ = fs::remove_dir_all(&td);
-    let (s, f) = (code(&script, "script"), code(&folio, "folio inject"));
     assert_eq!(
-        (s, f),
-        (expected, expected),
-        "{case}: script {s} / folio {f}（期待 {expected}）\nscript: {}\nfolio: {}",
-        stderr(&script),
+        code(&folio, "folio inject"),
+        expected,
+        "{case}: folio（期待 {expected}）\n{}",
         stderr(&folio)
     );
-    (script, folio)
+    (folio, md_bytes)
+}
+
+fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    hay.windows(needle.len()).position(|w| w == needle)
 }
 
 fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
@@ -197,22 +186,28 @@ fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
 
 /// (1) 変異なし --check。
 #[test]
-fn inject_parity_unmutated_passes() {
-    parity("unmutated", "--check", 0, |_| {});
+fn inject_pinned_unmutated_passes() {
+    pinned("unmutated", "--check", 0, |_| {});
 }
 
-/// (2) --print の標準出力が byte 一致。
+/// (2) 変異なし --print。区間の中身 = 改行 + 本文 + 改行・--print = 本文 + 改行。
 #[test]
-fn inject_parity_print_is_byte_identical() {
-    let (script, folio) = parity("print", "--print", 0, |_| {});
+fn inject_pinned_print_matches_region() {
+    let (folio, md) = pinned("print", "--print", 0, |_| {});
     assert!(!folio.stdout.is_empty());
-    assert_eq!(script.stdout, folio.stdout);
+    let begin = b"<!-- constitution:begin -->";
+    let end = b"<!-- constitution:end -->";
+    let start = find(&md, begin).expect("begin の印が無い") + begin.len();
+    let stop = start + find(&md[start..], end).expect("end の印が無い");
+    let mut expected = b"\n".to_vec();
+    expected.extend_from_slice(&folio.stdout);
+    assert_eq!(&md[start..stop], &expected[..]);
 }
 
 /// (3) 区間の本文の 1 文字を変える。
 #[test]
-fn inject_parity_region_char_changed_fails() {
-    parity("region-char", "--check", 1, |td| {
+fn inject_pinned_region_char_changed_fails() {
+    pinned("region-char", "--check", 1, |td| {
         edit(&td.join("CLAUDE.md"), |text| {
             text.replacen("P-1.1: ", "P-1.9: ", 1)
         });
@@ -221,8 +216,8 @@ fn inject_parity_region_char_changed_fails() {
 
 /// (4) end の marker を消す。
 #[test]
-fn inject_parity_end_marker_removed_is_unknown() {
-    parity("end-marker", "--check", 2, |td| {
+fn inject_pinned_end_marker_removed_is_unknown() {
+    pinned("end-marker", "--check", 2, |td| {
         edit(&td.join("CLAUDE.md"), |text| {
             text.replacen("<!-- constitution:end -->", "", 1)
         });
@@ -231,8 +226,8 @@ fn inject_parity_end_marker_removed_is_unknown() {
 
 /// (5) P-1 の最初の規範文の strength を maybe にする。
 #[test]
-fn inject_parity_strength_maybe_is_unknown() {
-    parity("strength-maybe", "--check", 2, |td| {
+fn inject_pinned_strength_maybe_is_unknown() {
+    pinned("strength-maybe", "--check", 2, |td| {
         edit(&td.join("constitution.yaml"), |text| {
             text.replacen(
                 "{id: P-1.1, pattern: ubiquitous, strength: must,",
@@ -245,8 +240,8 @@ fn inject_parity_strength_maybe_is_unknown() {
 
 /// (6) 区間の外の末尾に規範語で終わる 1 行を足す。
 #[test]
-fn inject_parity_normative_line_outside_fails() {
-    parity("outside", "--check", 1, |td| {
+fn inject_pinned_normative_line_outside_fails() {
+    pinned("outside", "--check", 1, |td| {
         edit(&td.join("CLAUDE.md"), |text| {
             format!("{text}これは規範とする。\n")
         });
