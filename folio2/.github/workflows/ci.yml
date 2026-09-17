@@ -13,7 +13,7 @@ jobs:
       - name: toolchain（rust-toolchain.toml）
         run: rustup show active-toolchain || rustup toolchain install
       - uses: taiki-e/install-action@nextest
-      # parity の歯が day-1 の床（scripts/check_draft.py）を回す
+      # render の歯が day-1 の script（scripts/render_preview.py）を物差しに回す（parity の歯と Python の床は 2026-09-18 に退役・scripts/retired/）
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
