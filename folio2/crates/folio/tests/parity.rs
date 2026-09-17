@@ -3,6 +3,7 @@
 //! （tests/run_floor_cases.py と同じ作り）、変異を 1 つだけ当てて、day-1 の床 `python3 scripts/check_draft.py --dir <写し>` と
 //! `folio check --dir <写し>` の終了コードが一致することを見る。期待の終了コードも §1 の値で pin する
 //! （両方が同じ理由で起動できずに揃った、を緑にしない）。語彙には変異を当てない。要件書への変異は便 1 以降（参照 id・語彙の検査）。
+//! 判断の記録（adr/）への変異は便 5 以降（欄の決まりの検査）。
 
 use std::ffi::OsStr;
 use std::fs;
@@ -279,6 +280,55 @@ fn parity_constitution_glossed_word_passes() {
             edit_line_in_block(text, "\n  - id: P-1\n", "\n    plain: ", |line| {
                 format!("{line}型付きの表（zzzz）")
             })
+        });
+    });
+}
+
+/// (14) 判断の記録 ADR-1 の retreat の condition を空にする（撤退条件の非空・便 5）。
+#[test]
+fn parity_adr_empty_retreat_condition_fails() {
+    parity("adr-empty-retreat-condition", 1, |work| {
+        edit(&work.join("adr/ADR-1.yaml"), |text| {
+            edit_line_in_block(text, "\nretreat: ", "\nretreat: ", |line| {
+                let at = line
+                    .find("condition: ")
+                    .expect("retreat の condition が無い")
+                    + "condition: ".len();
+                format!("{}\"\"}}", &line[..at])
+            })
+        });
+    });
+}
+
+/// (15) ADR-1 の rejected の案 1 つを adopted にする（採用の案は 1 つ）。
+#[test]
+fn parity_adr_second_adopted_option_fails() {
+    parity("adr-second-adopted-option", 1, |work| {
+        edit(&work.join("adr/ADR-1.yaml"), |text| {
+            text.replacen("verdict: rejected", "verdict: adopted", 1)
+        });
+    });
+}
+
+/// (16) adr/schema.yaml の options_rule の min を 3 にする（欄の決まりは床の定数の写し）。
+#[test]
+fn parity_adr_schema_options_min_drift_fails() {
+    parity("adr-schema-options-min-drift", 1, |work| {
+        edit(&work.join("adr/schema.yaml"), |text| {
+            text.replacen("options_rule: {min: 2,", "options_rule: {min: 3,", 1)
+        });
+    });
+}
+
+/// (17) ADR-1 の approval の行を消す（accepted のまま＝発効に承認欄が無い）。
+#[test]
+fn parity_adr_accepted_without_approval_fails() {
+    parity("adr-accepted-without-approval", 1, |work| {
+        edit(&work.join("adr/ADR-1.yaml"), |text| {
+            text.lines()
+                .filter(|l| !l.starts_with("approval: "))
+                .map(|l| format!("{l}\n"))
+                .collect()
         });
     });
 }

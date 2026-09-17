@@ -1,5 +1,6 @@
 //! folio v2 の命令の入口。便 0・便 1 の `folio check` と便 2 の `folio inject` を持つ。
 
+mod adr;
 mod check;
 mod inject;
 mod refs;

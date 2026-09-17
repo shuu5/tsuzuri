@@ -1,0 +1,13 @@
+# folio check の歯の fixture（adr/・便 5）。欄の決まりに沿う最小の判断の記録（proposed・承認欄なし・amends なし＝違反 0）。
+id: ADR-1
+title: 判断の記録は 1 判断を 1 file に置く
+status: proposed
+date: 2026-09-17
+context: 判断の置き場を決める。
+decision: 1 判断を 1 file に置く。
+options:
+  - {id: a, name: 1 file に 1 判断, text: 判断ごとに file を分ける。, verdict: adopted, reason: 書き手が衝突しない。}
+  - {id: b, name: 1 file に全部, text: 全部の判断を 1 file に並べる。, verdict: rejected, reason: 書き手が衝突する。}
+basis: [P-1]
+retreat: {kind: ruling, condition: 衝突が続いたら持ち主に問う。}
+plain: 決めたことを 1 枚ずつ残します。
