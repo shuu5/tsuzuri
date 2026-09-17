@@ -1,0 +1,46 @@
+# folio2 相談窓口（intake）の正本（v0.1・下書き・planner 席）
+# 位置: 判断の記録 ADR-6 決定 (1)〜(3)。質問・推奨回答・回答から文書の集合への写像・支度表の欄の決まりを持つ。
+# 状態: 下書き。発効は ADR-6 の発効と同時（承認欄へ逐語）。床（folio check）に入れるのは別の便（ADR-6 決定 (5)）。数と日付はここに書かない（P-6.3）。
+# 回答の受け方（ADR-6 決定 (4)）: 命令 folio intake は質問と推奨回答を対話面の散文で出し、回答は旗（answers）で渡す YAML の file から読む。file が無ければ全項目を推奨回答で進め、別枠に出す（FR2）。
+
+meta:
+  id: folio2-intake
+  title: 相談窓口（intake）
+  version: v0.1
+  status: draft
+  generated: 2026-09-18
+  approval:
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-18, stamp: 起草（ADR-6・持ち主の裁定 2026-09-18「承認するし質問も全て推奨で承認する」）}
+
+# 回答の値域と既定（推奨回答 = 各質問の recommend）
+answers:
+  values: [はい, いいえ]
+  default: recommend
+
+# 写像の行き先の閉じた一覧（入口の棚の文書 4 つ + 注入）
+targets:
+  - {id: constitution, type: 憲法, with: [vocabulary, rules], note: 付録の語彙と rules は憲法の中}
+  - {id: srs, type: 要件書, with: []}
+  - {id: adr, type: 判断の記録, with: [], note: 最初は 0 本の棚}
+  - {id: design-note, type: 設計ノート, with: [], note: 実装の直前に書く＝「まだ無い」の棚に置く}
+  - {id: inject, type: 憲法の注入（CLAUDE.md の生成区間）, with: []}
+
+# 質問 5 つ（どれも はい／いいえ・推奨回答は はい）。yes の行き先 = はい のとき持つもの・no の行き先 = いいえ のとき持つもの
+questions:
+  - {id: q1, ask: 何があっても守る線（憲法）を決めておきますか, recommend: はい, why: 守る線が無いと、道具も AI も「止まる基準」を持てない, yes: [constitution], no: []}
+  - {id: q2, ask: 「できた」の線（要件書）を先に書きますか, recommend: はい, why: 何ができたら完成かを先に書かないと、作ったものを測れない, yes: [srs], no: []}
+  - {id: q3, ask: 戻せない判断を 1 本ずつ記録に残しますか, recommend: はい, why: 後から「なぜそうしたか」を辿れる。最初は 0 本の棚を置くだけ, yes: [adr], no: []}
+  - {id: q4, ask: 作り方（設計ノート）は実装の直前に書くことにしますか, recommend: はい, why: 早く書くと実装と食い違う。棚には「まだ無い」と出す, yes: [design-note], no: []}
+  - {id: q5, ask: 憲法を AI の手元（CLAUDE.md）へ写しますか, recommend: はい, why: 写しておくと AI が毎回の作業で憲法を読む, yes: [inject], no: []}
+
+# 支度表（1 枚）の欄の決まり。正本は設計文書の置き場の intake-sheet.yaml（支度表の便で置く）
+sheet:
+  file: intake-sheet.yaml
+  title: 支度表
+  explain: 相談の結果として出る「何を持つか」の表。持つ文書と、答えなかったので推奨で進めた項目を別枠に出す。
+  sections:
+    - {id: meta, text: 版・生成日・状態（下書き／承認済み）}
+    - {id: documents, text: 持つ文書（行き先の id・型・どの質問から決まったか）}
+    - {id: recommended, text: 推奨で進めた項目（質問の id・文・推奨回答）＝答えの無かった質問だけ。別枠（FR2）}
+    - {id: answers, text: 受け取った回答（質問の id・値）}
+    - {id: approval, text: 持ち主の承認（逐語・日付）。承認するのはここ 1 回だけ}
