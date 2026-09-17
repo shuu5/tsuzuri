@@ -1,0 +1,85 @@
+# folio2 入口の面 — 正本（v0.1・下書き・planner 席）
+# 位置: 判断の記録 ADR-5 決定 (2)。入口の面（設計文書の入口のページ）の案内文だけを持つ。
+# 数と日付（条の数・要件の数・判断の記録の本数・更新日・文書が在るか無いか）はここに書かない＝生成のたびに他の正本から数えて出す（P-6.3）。
+# 見出し・凡例・読む順番・相談窓口の文は 2026-09-12 に持ち主が見た目を承認した見本の入口から起こし、今の正本に合わせて直した。
+# 状態: 下書き。発効は、生成した入口の面を持ち主が開いて読んで承認したとき（要件書 AC5 の形）に承認欄へ逐語を置いて行う。
+
+meta:
+  id: folio2-index
+  title: 設計文書の入口
+  version: v0.1
+  status: draft
+  generated: 2026-09-17
+  approval:
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-17, stamp: 起草（f2-648.23・ADR-5 決定 (2)）}
+
+audience:
+  label: 誰のための文書か
+  short: 持ち主（非エンジニア）と AI
+  text: 設計文書の持ち主（非エンジニア）と、その文書を読んで作業する AI。両方が同じページを読む。
+
+shelf:
+  title: このプロジェクトの文書
+  explain: 棚 = このプロジェクトが持つ文書の一覧と、文書どうしの関係。文書の枚数を言うのはこの見出しだけ（各文書の中身の数はカードに書く）。
+  legend:
+    - {id: readable, text: 読める}
+    - {id: absent, text: まだ無い}
+    - {id: binds, text: 矢印 = 縛る／順序（前のものが後のものを決める）}
+    - {id: inside, text: 点線 = 中にある（独立したページではない）}
+  documents:
+    - {id: constitution, type: 憲法, use: 譲らない線。何があっても守ること、確認してから変えること、絶対にやらないこと。, absent: null}
+    - {id: srs, type: 要件書, use: やること。何ができたら「完成」と言うか。, absent: null}
+    - {id: design-note, type: 設計ノート, use: 中の組み立て方。作り始める直前に書く。, absent: 実装の直前に書く}
+    - {id: adr, type: 判断の記録, use: あとから戻せない判断をしたときだけ、1 本ずつ書き足す記録。, absent: まだ戻せない判断は無い}
+  annexes:
+    - {id: vocabulary, type: 語彙, inside: constitution}
+    - {id: rules, type: 数値の表, inside: constitution}
+  relations:
+    - {id: binds, from: constitution, to: srs, label: 縛る, hint: 前のもの（憲法）が後のもの（要件書）を決める。要件は憲法に反せない}
+    - {id: before-build, from: srs, to: design-note, label: 実装の前に, hint: 要件書が決まってから、実装の直前に設計ノートを書く}
+    - {id: inside, from: constitution, to: vocabulary, label: 中にある, hint: 独立したページではなく、憲法の中の節（語彙と数値の表）}
+    - {id: amends, from: adr, to: constitution, label: 憲法を改訂する, hint: 憲法の文を変えるときは、判断の記録と持ち主の承認が先に要る}
+
+lanes:
+  title: あなたは誰？ — 3 つの読み方
+  lead: 全部読む必要はない。目的別に、どのページのどこから読めばよいかを示す。
+  rows:
+    - id: first
+      mark: 初
+      who: はじめて読む人
+      why: 「これは何のためのもの？」を 10 分でつかむ
+      minutes: 10
+      stops:
+        - {doc: constitution, label: 目指すことと誰のため}
+        - {doc: srs, label: ゴール}
+        - {doc: srs, label: 道具が 1 回で通す段の図}
+    - id: owner
+      mark: 決
+      who: 決める人（持ち主）
+      why: 「何ができたら完成か」と「何を確認してから変えるか」
+      minutes: 15
+      stops:
+        - {doc: srs, label: 受入基準}
+        - {doc: constitution, label: 確認してから変える}
+        - {doc: constitution, label: 数値の表}
+    - id: builder
+      mark: 作
+      who: 作る人（AI・エンジニア）
+      why: 機械が守る形と数値の出どころ
+      minutes: 20
+      stops:
+        - {doc: constitution, label: いつも守る}
+        - {doc: constitution, label: 変えるときの手続き}
+        - {doc: srs, label: 対応表}
+
+intake:
+  title: 文書を足したい・減らしたいとき
+  lead: どの文書が要るかは、最初に AI と相談して決める。途中で足すときも同じ窓口。
+  heading: AI に「folio intake」と頼む
+  text: 易しい質問が 5 つまで出る。どの質問にも「おすすめ」がついているので、答えなくても止まらない。結果は支度表 1 枚。承認するのはここ 1 回だけ。
+  steps:
+    - 質問 5 つ（おすすめ付き）
+    - 支度表 1 枚
+    - 承認（1 回）
+    - 3 面が生成される
+  note: 文書がまだ無いプロジェクトでは、AI の作業が始まったときに 1 行だけ知らせる（うるさければ設定 1 か所で切れる）。
