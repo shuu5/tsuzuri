@@ -43,7 +43,7 @@ day-1 の読み物 `design-intent/preview/readable.html`（正本 4 file と判�
 
 (d) script と揃えない点（ここに挙げたものだけ）: 正本が読めない・重複キー・必須の欄が無い・型が違う・表引きに無い値・repr の狭い写しが断る形・出力先の親 dir が無い は、script では traceback（終了 1）だが folio は 2「まだ分からない」（P-4.1・`folio check` の読めない側と同じ judgement）。空の文書（注釈だけの file を含む）は 4 file・判断の記録・索引のどれでも 2。`--write` と `--check` の両方無し・両方有りは clap の使い方の誤り（終了 2）。突き合わせの歯はこれらの入力を oracle に掛けない。
 
-(e) 便 10 までの形との接続: 新規は `crates/folio/src/render.rs` と歯 `crates/folio/tests/render.rs`。`crates/folio/src/main.rs` は `mod render;` と副命令 Render の追加だけ（Check と Inject の枝は 1 字も変えない）。使う口はすべて既に pub（`yaml::parse`・`yaml::parse_typed`・`yaml::Value`・`Value::py_str`・`verdict::Verdict`）で、可視性の変更は要らない。`yaml.rs`・`verdict.rs`・他の src は触らない。verify の filter render は base の歯の名に当たらない（`lineage.rs` の render_val は歯でない private の関数・実測）。`folio check` に render の検査を組み込まない（floor_cases の 134 case の写しは読み物を直さないので、組み込むと期待が化ける）。`scripts/render_preview.py`・`scripts/render-preview.css`・`scripts/strict_yaml.py`・`design-intent/` の下・`.github/workflows/` は触らない。外部 crate は増やさない（clap と yaml-rust2 のまま・`Cargo.toml` と `Cargo.lock` は触らない）。正規表現は使わない。
+(e) 便 10 までの形との接続: 新規は `crates/folio/src/render.rs` と歯 `crates/folio/tests/render.rs`。`crates/folio/src/main.rs` は `mod render;` と副命令 Render の追加だけ（Check と Inject の枝は 1 字も変えない）。使う口はすべて既に pub（`yaml::parse`・`yaml::parse_typed`・`yaml::Value`・`Value::py_str`・`verdict::Verdict`）で、可視性の変更は要らない。`yaml.rs`・`verdict.rs`・他の src は触らない。既存の歯 `crates/folio/tests/check.rs` は write-set に在るが 1 字も変えない（受付の門が歯の置き場を解くための既存の歯の file・期待は変えない）＝verify の 2 行目で便 0 の check の歯が期待不変で緑であることを回帰の門にする。verify の filter render は base の歯の名に当たらない（`lineage.rs` の render_val は歯でない private の関数・実測）。`folio check` に render の検査を組み込まない（floor_cases の 134 case の写しは読み物を直さないので、組み込むと期待が化ける）。`scripts/render_preview.py`・`scripts/render-preview.css`・`scripts/strict_yaml.py`・`design-intent/` の下・`.github/workflows/` は触らない。外部 crate は増やさない（clap と yaml-rust2 のまま・`Cargo.toml` と `Cargo.lock` は触らない）。正規表現は使わない。
 
 ## 2. 範囲
 
@@ -75,8 +75,8 @@ id = "l"
 title = "読み物の生成器を folio render に写し、出力を byte 一致させる"
 req = ["FR4", "FR5"]
 section = "1"
-write-set = ["+crates/folio/src/render.rs", "+crates/folio/tests/render.rs", "crates/folio/src/main.rs"]
-verify = ["cargo nextest run -p folio render", "cargo clippy --workspace --all-targets -- -D warnings"]
+write-set = ["+crates/folio/src/render.rs", "+crates/folio/tests/render.rs", "crates/folio/src/main.rs", "crates/folio/tests/check.rs"]
+verify = ["cargo nextest run -p folio render", "cargo nextest run -p folio check", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
-done = "render の歯（凍結 anchor との byte 一致・check の 3 値・script との突き合わせ 4 変異・導出できない入力 4 つ・unit）が緑、clippy が 0 警告で CI が通る"
+done = "render の歯（凍結 anchor との byte 一致・check の 3 値・script との突き合わせ 4 変異・導出できない入力 4 つ・unit）が緑、便 0 の check の歯が期待不変で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
