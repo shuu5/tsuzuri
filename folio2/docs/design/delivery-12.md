@@ -21,6 +21,8 @@
 - 語彙（入口の文の中の英字の語）: 上の非空の欄のうち文を持つ欄（id・from・to・inside・doc・version・status・minutes を除く全部と、intake の note と steps の各要素、shelf.documents の absent が文字列のとき）を、便 4 の語彙の検査と同じ関数（`vocab.rs` の既知の語の集合と、免除されない語を並べる関数・どちらも crate の中から呼べる）に通し、免除されない語 1 つごとに種別「index」の違反（文言「index.yaml 場所: 語彙に無い英字の語「語」」）。rules 行 R-9 の母集団（憲法・rules・要件書）は変えない＝種別 R-9 では数えない（判断の記録の本文を種別 adr で数えているのと同じ持ち方）。
 - 型が違う（節が欄の表でない・行の一覧が表の一覧でない・stops や steps が一覧でない）は「まだ分からない」。
 meta の approval・generated と、発効の状態の値域は本便では数えない（入口の面の発効の形は、生成した面の承認の便で決める）。
+既存の関数の所在: 非空の関数 non_empty・行 id の重複の関数 duplicate_ids・未知の節の関数 unknown_sections・行の一覧を読む関数 rows・行 id を読む関数 row_id は、どれも check.rs の中の private の関数である（check.rs は本便が中身を変える file＝閉包の中）。entrance.rs から呼ぶために、要るものだけ crate の中から呼べる可視性に広げる（式・文言・種別は 1 字も変えない）。yaml.rs には無いので yaml.rs の中身は変えない。
+正本が新しい検査を 0 件で通ることの実測（admin 席・2026-09-17・main ec87254 の index.yaml v0.1 に上の検査を当てた）: 最上位の節は 5 つだけで閉じた一覧と一致／上に挙げた非空の欄に空は 0（shelf.documents の absent は null と文字列の両方が在り、null は数えない）／行 id の重複は 4 つの空間とも 0／行き先（relations の from と to・annexes の inside・stops の doc）は全部棚の id に解けて違反 0／minutes は全行 1 以上の整数で違反 0／文を持つ欄 62 か所の英字の語は、便 4 と同じ式（既知 = 語彙の見出し語・原語・識別子／免除 = id の形・日本語（原語）の括弧の中・1 字・旗の形）で語彙に無い語 0。したがって (d) の「写しそのまま = 終了 0」と、`design-intent/` の丸ごとの写しを入力にする歯（parity・凍結 fixture の 134 case・render）の期待が変わらないことの前提は成り立つ。
 
 (c) 既存の歯の fixture: `tests/fixtures/` の下の、設計文書の置き場の形をした 17 組（check の 4 組・refs の 3 組・vocab の 2 組・adr の 3 組・link の 3 組・anchor の 2 組）に、同じ中身の最小の index.yaml を 1 本ずつ足す（新しい dir は作らない）。これらの組は入口の正本を持たないので、足さないと (a) により全部に「まだ分からない」が 1 件増えて期待が変わる。足した後、既存の歯の期待（終了コード・件数・文言）は 1 つも変えない＝既存の歯の file は 1 字も変えない。`tests/fixtures/check/missing-file/` にも足す（その組が「まだ分からない」になる理由を憲法が無いことだけに保つ）。inject の 5 組と figure の組は `folio check` を通らないので足さない。最小の index.yaml の中身（17 本とも同じ・英字の語は欄の名と id だけ）:
 
