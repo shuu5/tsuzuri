@@ -1,7 +1,7 @@
 # folio2 — project instructions
 
 本 file は folio2 の憲法（`design-intent/constitution.yaml` が正本）の前文と規範文を写した生成区間だけを持つ。作法の SSOT は `design-intent/`（憲法・rules・語彙・要件書 M0）と `.beads/PRIME.md`（台帳の運用）にある。
-生成区間は `folio inject --write`（正本 = `design-intent/constitution.yaml` と `design-intent/rules.yaml`）の生成物で、手で編集しない（`folio inject --check` が差分を落とす。day-1 の `scripts/inject_check.py` は同じ導出の暫定版で、削除は別の便）。
+生成区間は `folio inject --write`（正本 = `design-intent/constitution.yaml` と `design-intent/rules.yaml`）の生成物で、手で編集しない（`folio inject --check` が差分を落とす）。
 
 <!-- constitution:begin -->
 順位: 条どうしが衝突したら「網羅より揃い ／ 速さより黙らないこと ／ 賢さより戻せること」の順で解き、段どうしが衝突したら「絶対にやらない ＞ 確認してから ＞ いつも守る」の順で解く。
