@@ -21,12 +21,12 @@
 
 (c) 既知の集合 = 語彙の terms と field_terms の各語の term と en（無ければ空）を空白 1 つで繋いだ文字列から (b) で切り出した語を小文字にしたもの + identifiers の各組の words の各要素をそのまま小文字にしたもの（要素は切り出さず丸ごと 1 語・例 claude.md や design-intent）。
 
-(d) 免除（語ごと・(i) は元の大小文字で、他は小文字で見る）:
+(d) 免除（語ごと・(i) と (v) は元の大小文字のまま、(ii)(iii)(iv) は小文字にして見る）:
 (i) id の形: 先頭が P・A・N・FR・NFR・AC・CON・GOAL・R・D のどれかで、その直後に「-」が 0 個か 1 個あり、その次の 1 文字が数字（それより後ろは問わない）／ADR- の後に 1〜9 で始まる数字列だけが続いて終わる／ADR-n・R-n・D-n そのもの／台帳 id の形（小文字の英字 1 字 + 数字 1 字 + 「-」+ 小文字の英字か数字の列 + 任意で「.」+ 数字列 で終わる）。
 (ii) 小文字にした語が (c) の既知の集合にある。
-(iii) 同じ本文の中で「日本語（原語）」の形の括弧の中にある: 日本語の文字（ひらがな U+3040〜U+30FF・漢字 U+4E00〜U+9FFF）の直後から、丸括弧「（」「）」を含まない並びに続く全角の「（」から次の「）」までの中身を取り、そこから (b) で切り出した語の小文字の集合を作る。本文の語の小文字がこの集合にあれば免除。
+(iii) 同じ本文の中で「日本語（原語）」の形の括弧の中にある: 日本語の文字（ひらがな U+3040〜U+30FF・漢字 U+4E00〜U+9FFF）の直後から、丸括弧「（」「）」を含まない並びに続く全角の「（」から「）」までで、その中身に「（」も「）」も含まないものだけを括弧の中身とする（中に「（」が入る入れ子は括弧の中身にしない＝床の式と同じ。例: 「表（gloss）」の中身は gloss・「表（a（b）」は中身なし）。中身から (b) で切り出した語の小文字の集合を作り、本文の語の小文字がこの集合にあれば免除。
 (iv) 小文字にして英字 1 字。
-(v) 同じ本文の中に「--」+ その語 の並びがある（命令の旗）。
+(v) 同じ本文の中に「--」+ その語（元の大小文字のまま・小文字化しない）の並びがある（命令の旗・床の式と同じ）。
 
 (e) 違反 = 免除されない語 1 つにつき (小文字の語, 場所) の組で 1 件（同じ組は 1 件・種別 R-9・文言は 場所 + 語彙に無い英字の語 + 語）。読めない file・型が違う節は「まだ分からない」（終了コード 2・合格にしない）。正本 4 file（main）では違反 0（day-1 の床の実測・2026-09-17）。
 
@@ -37,6 +37,8 @@
 `folio check` 自身の歯（`crates/folio/tests/vocab.rs`・binary 経由・`tests/refs.rs` と同じ形で種別 R-9 と語を名指して 1 違反を見る）の fixture は `tests/fixtures/vocab/` の 2 組・4 file 形・`tests/fixtures/refs/dangling-id/` と同じ最小の手書き（basis の実在しない id は持たず・識別子は folio と opus）。`unknown-word/` = 憲法の P-1 の plain の末尾に語彙に無い英字の語 widget を 1 つ置く → 1（違反の文言に widget と P-1 plain）／`exemptions/` = 憲法の P-1 の plain に免除の 5 形（id の形 FR1・既知の語 folio・「型付きの表（gloss）」の形・英字 1 字の x・旗 --check）と語彙に無い語 widget を並べる → 1（違反は widget の 1 件だけ・5 形は数えない）。parity の入力にはしない。
 
 突き合わせの歯（`crates/folio/tests/parity.rs`・便 1 の 9 入力に足す・写し全部 + git 1 commit + 変異 1 つ・床と folio の終了コードの一致）: (10) `constitution.yaml` の P-1 の plain の末尾に語彙に無い英字の語 zzzz を足す → 1／(11) `srs.yaml` の FR1 の shall の末尾に zzzz を足す → 1／(12) `rules.yaml` の R-2 の what の末尾に zzzz を足す → 1／(13) `constitution.yaml` の P-1 の plain の末尾に「型付きの表（zzzz）」を足す → 0（「日本語（原語）」の形は免除・plain は凍結 anchor の写しの欄ではないので anchor の検査に触れない）。既存の 9 入力は変えない。
+
+実装の下書き: commit e4f8806（run f2-648.14-20260917T005039Z の branch・verify 8 段 rc 0・gate は §1 の字面の食い違いで INCONCLUSIVE）の `vocab.rs`・`tests/vocab.rs`・parity の追加・fixture は写してよい（(iii)(v) の実装は床と同じで、直したのは §1 の字面）。
 
 便 1 が置いた形との接続: `crates/folio/src/main.rs` に `mod vocab;` を足し、実装は新規 `crates/folio/src/vocab.rs` に置き、`check.rs` の `check_dir` から `refs` の次に呼ぶ（正本 4 file の Node を渡す）。YAML は既存の `crates/folio/src/yaml.rs` の読み手を使う。3 値は既存の `crates/folio/src/verdict.rs` の型を使い、変えない。外部 crate は増やさない（clap と yaml-rust2 のまま・`Cargo.toml` と `Cargo.lock` は触らない）。正規表現は使わない。便 2・便 3 の歯と fixture は触らない。
 
