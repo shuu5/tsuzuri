@@ -44,7 +44,7 @@ sheet:
 
 凍結 fixture `tests/floor_cases.yaml`（134 case）と、`design-intent/` を丸ごと写す歯（entrance・face・site・serve・floor_cases・render・freeze）は、写しに intake.yaml が自然に入る＝fixture も歯も期待も変えない。
 
-(d) 歯 `crates/folio/tests/intake.rs`（binary 経由・歯の関数名はすべて intake を含める＝verify の filter 語）。入力は便 12 の歯と同じ作り（`design-intent/` を丸ごと一時 dir へ写し git の 1 commit にしてから intake.yaml に変異を 1 つ当てて `folio check --dir` を回す）。
+(d) 歯 `crates/folio/tests/intake.rs`（binary 経由・歯の関数名はすべて intake を含める＝verify の filter 語）。verify の各行は歯の file を `--test <name>` で名指し filter 語を末尾に置く形（器の scope の旗）で、歯の置き場の解決を write-set の歯の file 6 本（intake・check・refs・vocab・adr・link・anchor）に狭める（filter 語が fn 名の一致で他の file へ広がるのを避ける・admin の実測 2026-09-18）。src の unit の歯は契約の verify の外だが common-verify（workspace 全体）で回る。入力は便 12 の歯と同じ作り（`design-intent/` を丸ごと一時 dir へ写し git の 1 commit にしてから intake.yaml に変異を 1 つ当てて `folio check --dir` を回す）。
 - 写しそのまま = 終了 0。
 - intake.yaml を消す = 終了 2 ∧ 出力に「intake.yaml: 正本が無い」。
 - 最上位に未知の節を足す = 終了 1 ∧「未知の節」。
@@ -92,7 +92,7 @@ title = "相談窓口の正本 intake.yaml を folio check の床に入れる（
 req = ["FR1", "FR5"]
 section = "1"
 write-set = ["+crates/folio/src/intake.rs", "+crates/folio/tests/intake.rs", "crates/folio/src/check.rs", "crates/folio/src/main.rs", "crates/folio/tests/check.rs", "crates/folio/tests/refs.rs", "crates/folio/tests/vocab.rs", "crates/folio/tests/adr.rs", "crates/folio/tests/link.rs", "crates/folio/tests/anchor.rs", "+tests/fixtures/check/dup-key/intake.yaml", "+tests/fixtures/check/empty-field/intake.yaml", "+tests/fixtures/check/missing-file/intake.yaml", "+tests/fixtures/check/unknown-section/intake.yaml", "+tests/fixtures/refs/bad-counts/intake.yaml", "+tests/fixtures/refs/dangling-id/intake.yaml", "+tests/fixtures/refs/orphan-rule/intake.yaml", "+tests/fixtures/vocab/exemptions/intake.yaml", "+tests/fixtures/vocab/unknown-word/intake.yaml", "+tests/fixtures/adr/effective-no-approval/intake.yaml", "+tests/fixtures/adr/schema-drift/intake.yaml", "+tests/fixtures/adr/two-adopted/intake.yaml", "+tests/fixtures/link/adr-id-missing/intake.yaml", "+tests/fixtures/link/amended-by-orphan/intake.yaml", "+tests/fixtures/link/retreat-kind-drift/intake.yaml", "+tests/fixtures/anchor/no-anchor/intake.yaml", "+tests/fixtures/anchor/root-digest-drift/intake.yaml"]
-verify = ["cargo nextest run -p folio intake", "cargo nextest run -p folio check", "cargo nextest run -p folio refs", "cargo nextest run -p folio vocab", "cargo nextest run -p folio adr", "cargo nextest run -p folio link", "cargo nextest run -p folio anchor", "cargo clippy --workspace --all-targets -- -D warnings"]
+verify = ["cargo nextest run -p folio --test intake intake", "cargo nextest run -p folio --test check check", "cargo nextest run -p folio --test refs refs", "cargo nextest run -p folio --test vocab vocab", "cargo nextest run -p folio --test adr adr", "cargo nextest run -p folio --test link link", "cargo nextest run -p folio --test anchor anchor", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "intake の歯（写しそのまま・intake.yaml 無し・未知の節・空の欄・行き先 4 つ・上限・行 id の重複・語彙 2 つ・型違い・重複キー・unit）が緑、便 0 の歯 check が期待不変で緑、便 1 の歯 refs が期待不変で緑、便 4 の歯 vocab が期待不変で緑、便 5 の歯 adr が期待不変で緑、便 6 の歯 link が期待不変で緑、便 7 の歯 anchor が期待不変で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
