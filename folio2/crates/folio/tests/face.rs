@@ -340,19 +340,20 @@ fn face_mode_is_exactly_one() {
 // ── 面の名 ──
 
 #[test]
-fn face_index_has_no_generator_yet() {
+fn face_index_face_is_writable() {
     let td = temp_dir("index");
     let out = td.join("index.html");
     let run = folio_face("index", &fixture(), &out, "--write");
     let exists = out.exists();
     let _ = fs::remove_dir_all(&td);
-    assert_eq!(code(&run, "folio face --face index"), 2, "{}", stderr(&run));
+    assert_eq!(code(&run, "folio face --face index"), 0, "{}", stderr(&run));
+    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
     assert!(
-        stderr(&run).contains("生成器はまだ無い"),
+        !stderr(&run).contains("生成器はまだ無い"),
         "{}",
         stderr(&run)
     );
-    assert!(!exists, "生成器が無いのに出力先に書いた");
+    assert!(exists, "入口の面を出力先に書いていない");
 }
 
 #[test]
@@ -847,4 +848,333 @@ fn face_srs_unknown_when_no_actor_is_the_tool() {
 #[test]
 fn face_srs_unknown_when_a_pattern_is_outside_the_table() {
     srs_unknown("pattern", "pattern: event", "pattern: sometimes");
+}
+
+// ── 入口の面（便 16・docs/design/delivery-16.md §1 (d)）──
+
+/// fixture の正本 4 file と index.yaml・adr/ADR-1.yaml を一時 dir の下の src/ へ写す（期待の面は写さない）。
+fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+    let (td, work) = fixture_copy(case);
+    fs::copy(fixture().join("index.yaml"), work.join("index.yaml")).unwrap();
+    fs::create_dir_all(work.join("adr")).unwrap();
+    fs::copy(
+        fixture().join("adr/ADR-1.yaml"),
+        work.join("adr/ADR-1.yaml"),
+    )
+    .unwrap();
+    (td, work)
+}
+
+#[test]
+fn face_index_write_matches_the_frozen_fixture() {
+    let td = temp_dir("index-anchor");
+    let out = td.join("index.html");
+    let run = folio_face("index", &fixture(), &out, "--write");
+    let written = fs::read(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&run, "folio face --face index --write"),
+        0,
+        "{}",
+        stderr(&run)
+    );
+    assert_eq!(
+        stdout(&run),
+        format!("folio face: 書いた（{} byte）\n", written.len())
+    );
+    let frozen = fs::read(fixture().join("expected-index.html")).unwrap();
+    assert_same_bytes(&written, &frozen, "expected-index.html");
+}
+
+/// 実の正本から入口の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
+fn real_index(case: &str) -> (PathBuf, PathBuf, String) {
+    let td = temp_dir(case);
+    let out = td.join("index.html");
+    let run = folio_face("index", &design_intent(), &out, "--write");
+    assert_eq!(
+        code(&run, "folio face --face index --write"),
+        0,
+        "{}",
+        stderr(&run)
+    );
+    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
+    let html = fs::read_to_string(&out).unwrap();
+    (td, out, html)
+}
+
+fn parts_check(pages: &[String]) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    cmd.arg("parts")
+        .arg("--check")
+        .arg("--dir")
+        .arg(design_intent());
+    for page in pages {
+        cmd.arg("--page").arg(page);
+    }
+    cmd.output().unwrap()
+}
+
+#[test]
+fn face_index_on_the_real_sources_passes_parts_check() {
+    let (td, out, _) = real_index("index-parts");
+    let check = parts_check(&[format!("index={}", out.display())]);
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&check, "folio parts --check"),
+        0,
+        "{}{}",
+        stdout(&check),
+        stderr(&check)
+    );
+    assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
+}
+
+#[test]
+fn face_all_three_faces_on_the_real_sources_pass_parts_check_together() {
+    let (td_i, index, _) = real_index("three-index");
+    let (td_c, constitution, _) = real_face("three-constitution");
+    let (td_s, srs, _) = real_srs("three-srs");
+    let check = parts_check(&[
+        format!("index={}", index.display()),
+        format!("constitution={}", constitution.display()),
+        format!("srs={}", srs.display()),
+    ]);
+    for td in [td_i, td_c, td_s] {
+        let _ = fs::remove_dir_all(&td);
+    }
+    assert_eq!(
+        code(&check, "folio parts --check（3 面）"),
+        0,
+        "{}{}",
+        stdout(&check),
+        stderr(&check)
+    );
+    assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
+}
+
+#[test]
+fn face_index_census_on_the_real_sources_counts_and_verbatims() {
+    let (td, _, html) = real_index("index-census");
+    let _ = fs::remove_dir_all(&td);
+    let i = load_yaml("index.yaml");
+    let c = load_yaml("constitution.yaml");
+    let s = load_yaml("srs.yaml");
+    let v = load_yaml("vocabulary.yaml");
+    let r = load_yaml("rules.yaml");
+
+    // 逐語
+    let mut wants = vec![text(&i["audience"], "text").to_string()];
+    let shelf = &i["shelf"];
+    for d in seq(&shelf["documents"], "documents") {
+        wants.push(text(d, "use").to_string());
+    }
+    for rel in seq(&shelf["relations"], "relations") {
+        wants.push(text(rel, "label").to_string());
+    }
+    let rows = seq(&i["lanes"]["rows"], "rows");
+    let mut stops = 0;
+    for row in rows {
+        wants.push(text(row, "who").to_string());
+        wants.push(text(row, "why").to_string());
+        for st in seq(&row["stops"], "stops") {
+            wants.push(text(st, "label").to_string());
+            let file = match text(st, "doc") {
+                "constitution" => "constitution.html",
+                "srs" => "srs.html",
+                other => panic!("面の無い行き先「{other}」"),
+            };
+            let href = format!("<li><a href=\"{file}#{}\">", text(st, "at"));
+            assert!(html.contains(&href), "行き先の href が無い: {href}");
+            stops += 1;
+        }
+    }
+    wants.push(text(&i["intake"], "text").to_string());
+    for step in seq(&i["intake"]["steps"], "steps") {
+        wants.push(step.as_str().unwrap().to_string());
+    }
+    for want in wants {
+        let want = esc(&want);
+        assert!(html.contains(&want), "面に無い: {want}");
+    }
+    let lanes = between(&html, "<div class=\"lane-grid\"", "\n</div>\n</div>");
+    assert_eq!(lanes.matches("<li><a href=\"").count(), stops, "行き先の数");
+
+    // 件数
+    let parts = components(&html);
+    let parts_of = |name: &str| parts.iter().filter(|p| **p == name).count();
+    assert_eq!(parts_of("shelf-card"), 4, "shelf-card の数");
+    assert_eq!(parts_of("shelf-link"), 4, "shelf-link の数");
+    assert_eq!(parts_of("reader-lane"), rows.len(), "reader-lane の数");
+    let articles = seq(&c["articles"], "articles").len();
+    let fr = seq(&s["requirements"], "requirements").len();
+    let terms = seq(&v["terms"], "terms").len();
+    let rules =
+        seq(&r["thresholds"], "thresholds").len() + seq(&r["discipline"], "discipline").len();
+    let adr = fs::read_dir(design_intent().join("adr"))
+        .unwrap()
+        .filter(|e| {
+            let name = e.as_ref().unwrap().file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("ADR-") && name.ends_with(".yaml")
+        })
+        .count();
+    for want in [
+        format!("{articles} 条"),
+        format!("機能 {fr}"),
+        format!("{terms} 語"),
+        format!("{rules} 行"),
+        format!("{adr} 本"),
+    ] {
+        assert!(html.contains(&want), "数の字面が無い: {want}");
+    }
+
+    // 部品の名札は 12 種の中だけ
+    const ALLOWED: [&str; 12] = [
+        "freshness-stamp",
+        "font-size-control",
+        "hub-cover",
+        "figure-panel",
+        "doc-shelf",
+        "shelf-card",
+        "shelf-link",
+        "status-line",
+        "intake-line",
+        "chapter-deck-band",
+        "reader-lane",
+        "intake-callout",
+    ];
+    assert!(!parts.is_empty());
+    for p in &parts {
+        assert!(ALLOWED.contains(p), "12 種に無い部品「{p}」");
+    }
+    assert!(!html.contains("layer-line"));
+}
+
+#[test]
+fn face_index_check_has_three_values() {
+    let (td, work) = index_fixture_copy("index-check");
+    let out = td.join("index.html");
+
+    let write = folio_face("index", &work, &out, "--write");
+    let ok = folio_face("index", &work, &out, "--check");
+    let mut bytes = fs::read(&out).unwrap();
+    bytes[0] ^= 0x20;
+    fs::write(&out, &bytes).unwrap();
+    let drift = folio_face("index", &work, &out, "--check");
+    fs::remove_file(&out).unwrap();
+    let missing = folio_face("index", &work, &out, "--check");
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&write, "write"), 0, "{}", stderr(&write));
+    assert_eq!(code(&ok, "check（一致）"), 0, "{}", stderr(&ok));
+    assert!(stdout(&ok).contains("folio face: OK"), "{}", stdout(&ok));
+    assert_eq!(code(&drift, "check（不一致）"), 1, "{}", stderr(&drift));
+    assert!(stderr(&drift).contains("DRIFT"), "{}", stderr(&drift));
+    assert_eq!(code(&missing, "check（無い）"), 2, "{}", stderr(&missing));
+    assert!(
+        stderr(&missing).contains("面が無い"),
+        "{}",
+        stderr(&missing)
+    );
+}
+
+/// 入口の面で、fixture の写しに変異を 1 つ当て、`--write` = 2 ∧「まだ分からない」∧ 出力先が出来ていない。
+fn index_unknown(case: &str, mutate: impl FnOnce(&Path)) {
+    let (td, work) = index_fixture_copy(&format!("index-unknown-{case}"));
+    mutate(&work);
+    let out = td.join("never.html");
+    let run = folio_face("index", &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&run, "folio face --face index"),
+        2,
+        "{case}: {}",
+        stderr(&run)
+    );
+    assert!(
+        stderr(&run).contains("まだ分からない"),
+        "{case}: {}",
+        stderr(&run)
+    );
+    assert!(!exists, "{case}: 導出できないのに出力先に書いた");
+}
+
+fn index_edit(from: &'static str, to: &'static str) -> impl FnOnce(&Path) {
+    move |w| edit(&w.join("index.yaml"), |t| t.replacen(from, to, 1))
+}
+
+#[test]
+fn face_index_unknown_when_a_document_is_missing() {
+    index_unknown(
+        "documents",
+        index_edit(
+            "    - {id: adr, type: 判断の記録, use: 戻せない判断の記録。, absent: まだ無い判断}\n",
+            "",
+        ),
+    );
+}
+
+#[test]
+fn face_index_unknown_when_a_relation_id_is_outside_the_table() {
+    index_unknown(
+        "relations",
+        index_edit("{id: before-build,", "{id: before,"),
+    );
+}
+
+#[test]
+fn face_index_unknown_when_a_third_annex_is_added() {
+    index_unknown(
+        "annexes",
+        index_edit(
+            "    - {id: rules, type: 数値の表, inside: constitution}\n",
+            "    - {id: rules, type: 数値の表, inside: constitution}\n    - {id: glossary, type: 用語, inside: constitution}\n",
+        ),
+    );
+}
+
+#[test]
+fn face_index_unknown_when_a_stop_anchor_is_outside_the_face() {
+    index_unknown(
+        "stop-at",
+        index_edit("at: s0, label: 目指すこと}", "at: s9, label: 目指すこと}"),
+    );
+}
+
+#[test]
+fn face_index_unknown_when_a_stop_names_a_document_without_a_face() {
+    index_unknown(
+        "stop-doc",
+        index_edit(
+            "{doc: srs, at: fig-rail,",
+            "{doc: design-note, at: fig-rail,",
+        ),
+    );
+}
+
+#[test]
+fn face_index_unknown_when_a_legend_id_is_outside_the_table() {
+    index_unknown(
+        "legend",
+        index_edit("{id: binds, text: 矢印}", "{id: arrow, text: 矢印}"),
+    );
+}
+
+#[test]
+fn face_index_unknown_when_constitution_counts_differ() {
+    index_unknown("counts", |w| {
+        edit(&w.join("constitution.yaml"), |t| {
+            t.replacen(
+                "{always: 1, ask-first: 1, never: 1}",
+                "{always: 2, ask-first: 1, never: 1}",
+                1,
+            )
+        })
+    });
+}
+
+#[test]
+fn face_index_unknown_when_the_adr_dir_is_missing() {
+    index_unknown("adr-dir", |w| fs::remove_dir_all(w.join("adr")).unwrap());
 }

@@ -52,27 +52,27 @@ lanes:
       why: 「これは何のためのもの？」を 10 分でつかむ
       minutes: 10
       stops:
-        - {doc: constitution, label: 目指すことと誰のため}
-        - {doc: srs, label: ゴール}
-        - {doc: srs, label: 道具が 1 回で通す段の図}
+        - {doc: constitution, at: s0, label: 目指すことと誰のため}
+        - {doc: srs, at: s1, label: ゴール}
+        - {doc: srs, at: fig-rail, label: 道具が 1 回で通す段の図}
     - id: owner
       mark: 決
       who: 決める人（持ち主）
       why: 「何ができたら完成か」と「何を確認してから変えるか」
       minutes: 15
       stops:
-        - {doc: srs, label: 受入基準}
-        - {doc: constitution, label: 確認してから変える}
-        - {doc: constitution, label: 数値の表}
+        - {doc: srs, at: s5, label: 受入基準}
+        - {doc: constitution, at: s3, label: 確認してから変える}
+        - {doc: constitution, at: s5, label: 数値の表}
     - id: builder
       mark: 作
       who: 作る人（AI・エンジニア）
       why: 機械が守る形と数値の出どころ
       minutes: 20
       stops:
-        - {doc: constitution, label: いつも守る}
-        - {doc: constitution, label: 変えるときの手続き}
-        - {doc: srs, label: 対応表}
+        - {doc: constitution, at: s2, label: いつも守る}
+        - {doc: constitution, at: s6, label: 変えるときの手続き}
+        - {doc: srs, at: s7, label: 対応表}
 
 intake:
   title: 文書を足したい・減らしたいとき

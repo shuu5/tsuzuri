@@ -6,6 +6,7 @@ mod check;
 mod entrance;
 mod face;
 mod face_constitution;
+mod face_index;
 mod face_srs;
 mod freeze;
 mod gitcheck;

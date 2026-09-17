@@ -1,17 +1,16 @@
 //! `folio face`（便 14・docs/design/delivery-14.md §1 (a)(c)／便 15・delivery-15.md §1 (b)）。見本 3 面の 1 面を正本から
-//! 導出して書く（--write）・検査する（--check）。生成器を持つのは憲法の面（`face_constitution.rs`）と要件書の面
-//! （`face_srs.rs`）で、入口は「まだ分からない」。
+//! 導出して書く（--write）・検査する（--check）。生成器は憲法の面（`face_constitution.rs`）・要件書の面
+//! （`face_srs.rs`）・入口の面（`face_index.rs`・便 16・delivery-16.md §1 (b)）の 3 つ。
 //! この file は命令の口（面の名の解決・正本の読み・3 値と文言）と、生成器が共有する口（木を辿る型 X・escape・
 //! 名札の表・値の読める形・小窓・面の骨格）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
 
 use std::fs;
 use std::path::Path;
 
-use crate::parts::FACES;
 use crate::parts::catalog::Component;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
-use crate::{face_constitution, face_srs};
+use crate::{face_constitution, face_index, face_srs};
 
 pub type R<T> = Result<T, String>;
 
@@ -41,11 +40,9 @@ impl Outcome {
 
 pub fn run(face: &str, dir: &Path, out: &Path, mode: Mode) -> Outcome {
     let derive: fn(&Path) -> R<String> = match face {
+        "index" => face_index::derive,
         "constitution" => face_constitution::derive,
         "srs" => face_srs::derive,
-        f if FACES.contains(&f) => {
-            return Outcome::unknown(format!("面「{f}」の生成器はまだ無い"));
-        }
         f => {
             return Outcome::unknown(format!(
                 "面の名「{f}」は index・constitution・srs のどれでもない"
@@ -507,6 +504,96 @@ pub const TONE: &[(&str, &str)] = &[
     ("neutral", "tone-neutral"),
     ("warn", "tone-warn"),
 ];
+
+/// 入口の棚の文書（便 16）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shelf {
+    /// 棚の置き場（見本の css の shelf-grid の class）
+    pub place: &'static str,
+    /// 読める面の file（面が無ければ None）
+    pub face: Option<&'static str>,
+    /// 原語の札
+    pub en: &'static str,
+    /// minimap でこの文書の前に置く区切り
+    pub sep: &'static str,
+}
+
+/// 文書の id → 棚（並びは棚の置き場の順）。
+pub const SHELF_DOCS: &[(&str, Shelf)] = &[
+    (
+        "constitution",
+        Shelf {
+            place: "shelf-c",
+            face: Some("constitution.html"),
+            en: "CONSTITUTION",
+            sep: "→",
+        },
+    ),
+    (
+        "srs",
+        Shelf {
+            place: "shelf-s",
+            face: Some("srs.html"),
+            en: "SRS",
+            sep: "→",
+        },
+    ),
+    (
+        "design-note",
+        Shelf {
+            place: "shelf-d",
+            face: None,
+            en: "DESIGN",
+            sep: "→",
+        },
+    ),
+    (
+        "adr",
+        Shelf {
+            place: "shelf-adr",
+            face: None,
+            en: "ADR",
+            sep: "｜",
+        },
+    ),
+];
+
+/// 関係の id → 棚の置き場（shelf-link の class）。
+pub const SHELF_RELATIONS: &[(&str, &str)] = &[
+    ("binds", "shelf-l1"),
+    ("before-build", "shelf-l2"),
+    ("inside", "shelf-branch branch"),
+    ("amends", "up"),
+];
+
+/// 付録の id → （憲法の章の番号・数の単位）。
+pub const ANNEXES: &[(&str, (u8, &str))] = &[("vocabulary", (7, "語")), ("rules", (5, "行"))];
+
+/// 棚の凡例の id → sw の class。
+pub const SHELF_LEGEND: &[(&str, &str)] = &[
+    ("readable", "sw ok"),
+    ("absent", "sw neutral"),
+    ("binds", "sw line"),
+    ("inside", "sw dash"),
+];
+
+/// 入口の状態の名札。
+pub const INDEX_STATUS: &[(&str, &str)] = &[("draft", "下書き・拘束力なし"), ("effective", "発効")];
+
+/// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図。
+pub fn stop_anchor(doc: &str, at: &str) -> R<()> {
+    let chapter = |from: u8| matches!(at.as_bytes(), [b's', d] if (b'0' + from..=b'8').contains(d));
+    let ok = match doc {
+        "constitution" => chapter(0),
+        "srs" => chapter(1) || matches!(at, "fig-context" | "fig-rail" | "fig-verdicts"),
+        _ => false,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("行き先「{doc}#{at}」はその面の節の id に無い"))
+    }
+}
 
 /// 確かめ方（verify の method）の名札。表に無い値は Err。
 pub fn method_label(x: &X<'_>) -> R<String> {

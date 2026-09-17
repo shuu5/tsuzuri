@@ -200,8 +200,8 @@ fn entrance_empty_field_fails() {
 fn entrance_stop_doc_not_on_shelf_fails() {
     let w = Work::new("stop-doc");
     w.mutate(
-        "        - {doc: constitution, label: 目指すことと誰のため}",
-        "        - {doc: nowhere, label: 目指すことと誰のため}",
+        "        - {doc: constitution, at: s0, label: 目指すことと誰のため}",
+        "        - {doc: nowhere, at: s0, label: 目指すことと誰のため}",
     );
     assert_single_violation(
         &w.check(),
