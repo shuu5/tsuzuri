@@ -16,7 +16,9 @@ mod link;
 mod parts;
 mod refs;
 mod render;
+mod serve;
 mod sha256;
+mod site;
 mod verdict;
 mod vocab;
 mod yaml;
@@ -121,6 +123,34 @@ enum Command {
         /// 出力先と導出の byte 一致を検査する（無い 2・不一致 1・一致 0）
         #[arg(long)]
         check: bool,
+    },
+    /// 3 面と様式 2 本を 1 つの配信先へまとめて出す（--write）・配信先と正本の一致を検査する（--check）
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
+    Build {
+        /// 正本の置き場
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 配信先（既定なし・相対なら --dir からの相対・絶対ならそのまま）
+        #[arg(long)]
+        out: PathBuf,
+        /// 5 本を配信先へ書く（全部か無しか）
+        #[arg(long)]
+        write: bool,
+        /// 配信先の 5 本と正本の byte 一致を検査する（無い 2・不一致 1・一致 0）
+        #[arg(long)]
+        check: bool,
+    },
+    /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
+    Serve {
+        /// 配信先（folio build の --out）
+        #[arg(long)]
+        dir: PathBuf,
+        /// bind 先の IPv4（既定なし = tailnet の住所を自分で解く）
+        #[arg(long)]
+        host: Option<String>,
+        /// bind 先の port（既定 0 = 空きを OS が選ぶ）
+        #[arg(long, default_value_t = 0)]
+        port: u16,
     },
 }
 
@@ -264,6 +294,30 @@ fn main() -> ExitCode {
                 eprintln!("{line}");
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Build {
+            dir,
+            out,
+            write,
+            check: _,
+        } => {
+            let mode = if write {
+                site::Mode::Write
+            } else {
+                site::Mode::Check
+            };
+            let outcome = site::run(&dir, &out, mode);
+            if let Some(line) = &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Serve { dir, host, port } => {
+            let verdict = serve::run(&dir, host.as_deref(), port);
+            ExitCode::from(verdict.exit_code() as u8)
         }
     }
 }
