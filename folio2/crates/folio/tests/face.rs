@@ -188,9 +188,13 @@ fn face_on_the_real_sources_passes_parts_check() {
     assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
 }
 
-fn load_yaml(name: &str) -> Yaml {
-    let text = fs::read_to_string(design_intent().join(name)).unwrap();
+fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
+    let text = fs::read_to_string(dir.join(name)).unwrap();
     YamlLoader::load_from_str(&text).unwrap().remove(0)
+}
+
+fn load_yaml(name: &str) -> Yaml {
+    load_yaml_at(&design_intent(), name)
 }
 
 fn seq<'a>(y: &'a Yaml, what: &str) -> &'a Vec<Yaml> {
@@ -852,10 +856,13 @@ fn face_srs_unknown_when_a_pattern_is_outside_the_table() {
 
 // ── 入口の面（便 16・docs/design/delivery-16.md §1 (d)）──
 
-/// fixture の正本 4 file と index.yaml・adr/ADR-1.yaml を一時 dir の下の src/ へ写す（期待の面は写さない）。
+/// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-1.yaml を一時 dir の下の src/ へ写す
+/// （支度表 intake-sheet.yaml と期待の面は写さない）。
 fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     let (td, work) = fixture_copy(case);
-    fs::copy(fixture().join("index.yaml"), work.join("index.yaml")).unwrap();
+    for name in ["index.yaml", "intake.yaml"] {
+        fs::copy(fixture().join(name), work.join(name)).unwrap();
+    }
     fs::create_dir_all(work.join("adr")).unwrap();
     fs::copy(
         fixture().join("adr/ADR-1.yaml"),
@@ -865,25 +872,55 @@ fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     (td, work)
 }
 
-#[test]
-fn face_index_write_matches_the_frozen_fixture() {
-    let td = temp_dir("index-anchor");
+/// 入口の写しに支度表（fixture の intake-sheet.yaml）も置く（便 20）。
+fn index_sheet_copy(case: &str) -> (PathBuf, PathBuf) {
+    let (td, work) = index_fixture_copy(case);
+    fs::copy(
+        fixture().join("intake-sheet.yaml"),
+        work.join("intake-sheet.yaml"),
+    )
+    .unwrap();
+    (td, work)
+}
+
+/// 写しから入口の面を一時 dir へ書く。戻り値 = (出力先, 面の本文)。
+fn index_from(case: &str, work: &Path, td: &Path) -> (PathBuf, String) {
     let out = td.join("index.html");
-    let run = folio_face("index", &fixture(), &out, "--write");
-    let written = fs::read(&out).unwrap_or_default();
-    let _ = fs::remove_dir_all(&td);
+    let run = folio_face("index", work, &out, "--write");
     assert_eq!(
         code(&run, "folio face --face index --write"),
         0,
-        "{}",
+        "{case}: {}",
         stderr(&run)
     );
+    let html = fs::read_to_string(&out).unwrap();
     assert_eq!(
         stdout(&run),
-        format!("folio face: 書いた（{} byte）\n", written.len())
+        format!("folio face: 書いた（{} byte）\n", html.len())
     );
-    let frozen = fs::read(fixture().join("expected-index.html")).unwrap();
-    assert_same_bytes(&written, &frozen, "expected-index.html");
+    (out, html)
+}
+
+/// 写しから入口の面を書き、凍結した期待の面と byte で比べる。
+fn index_frozen(case: &str, work: &Path, td: &Path, expected: &str) {
+    let (out, _) = index_from(case, work, td);
+    let written = fs::read(&out).unwrap();
+    let frozen = fs::read(fixture().join(expected)).unwrap();
+    assert_same_bytes(&written, &frozen, expected);
+}
+
+#[test]
+fn face_index_write_matches_the_frozen_fixture() {
+    let (td, work) = index_fixture_copy("index-anchor");
+    index_frozen("支度表なし", &work, &td, "expected-index.html");
+    let _ = fs::remove_dir_all(&td);
+}
+
+#[test]
+fn face_index_write_with_a_sheet_matches_the_frozen_fixture() {
+    let (td, work) = index_sheet_copy("index-anchor-sheet");
+    index_frozen("支度表あり", &work, &td, "expected-index-sheet.html");
+    let _ = fs::remove_dir_all(&td);
 }
 
 /// 実の正本から入口の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
@@ -1080,7 +1117,23 @@ fn face_index_check_has_three_values() {
 
 /// 入口の面で、fixture の写しに変異を 1 つ当て、`--write` = 2 ∧「まだ分からない」∧ 出力先が出来ていない。
 fn index_unknown(case: &str, mutate: impl FnOnce(&Path)) {
-    let (td, work) = index_fixture_copy(&format!("index-unknown-{case}"));
+    index_unknown_from(
+        index_fixture_copy(&format!("index-unknown-{case}")),
+        case,
+        mutate,
+    );
+}
+
+/// 同じ形を支度表の在る写しで（便 20）。
+fn index_unknown_with_a_sheet(case: &str, mutate: impl FnOnce(&Path)) {
+    index_unknown_from(
+        index_sheet_copy(&format!("index-unknown-{case}")),
+        case,
+        mutate,
+    );
+}
+
+fn index_unknown_from((td, work): (PathBuf, PathBuf), case: &str, mutate: impl FnOnce(&Path)) {
     mutate(&work);
     let out = td.join("never.html");
     let run = folio_face("index", &work, &out, "--write");
@@ -1177,4 +1230,178 @@ fn face_index_unknown_when_constitution_counts_differ() {
 #[test]
 fn face_index_unknown_when_the_adr_dir_is_missing() {
     index_unknown("adr-dir", |w| fs::remove_dir_all(w.join("adr")).unwrap());
+}
+
+// ── 入口の面の節「支度表」（便 20・docs/design/delivery-20.md §1 (d)）──
+
+/// 節「支度表」の字面（帯の始まりから chapbody の終わりまで）。
+fn sheet_section(html: &str) -> &str {
+    between(html, "<section id=\"s3\"", "\n</div>")
+}
+
+#[test]
+fn face_index_with_a_sheet_passes_parts_check() {
+    let (td, work) = index_sheet_copy("index-sheet-parts");
+    let (out, _) = index_from("支度表あり", &work, &td);
+    let check = parts_check(&[format!("index={}", out.display())]);
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&check, "folio parts --check"),
+        0,
+        "{}{}",
+        stdout(&check),
+        stderr(&check)
+    );
+    assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
+}
+
+#[test]
+fn face_index_census_of_the_sheet_section_without_a_sheet() {
+    let (td, _, html) = real_index("index-sheet-census");
+    let _ = fs::remove_dir_all(&td);
+    let n = load_yaml("intake.yaml");
+    let i = load_yaml("index.yaml");
+    assert!(
+        !design_intent().join(text(&n["sheet"], "file")).exists(),
+        "実の正本に支度表が在る（この歯は支度表なしの形を測る）"
+    );
+    let section = sheet_section(&html);
+    for want in [
+        esc(text(&n["sheet"], "title")),
+        esc(text(&n["sheet"], "explain")),
+        "まだ無い".to_string(),
+        format!(
+            "「{}」と AI に頼むと作られる",
+            esc(text(&i["intake"], "command"))
+        ),
+    ] {
+        assert!(section.contains(&want), "節「支度表」に無い: {want}");
+    }
+    // 部品は 2 つだけ（slim の帯と status-line）・行は 1 行
+    assert_eq!(
+        components(section),
+        ["chapter-deck-band", "status-line"],
+        "節「支度表」の部品"
+    );
+    assert_eq!(section.matches("<p class=\"st").count(), 1, "行の数");
+}
+
+#[test]
+fn face_index_census_of_the_sheet_section_with_a_sheet() {
+    let (td, work) = index_sheet_copy("index-sheet-census-with");
+    let (_, html) = index_from("支度表あり", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    let n = load_yaml_at(&fixture(), "intake.yaml");
+    let sheet = load_yaml_at(&fixture(), "intake-sheet.yaml");
+    let section = sheet_section(&html);
+
+    let documents = seq(&sheet["documents"], "documents");
+    let recommended = seq(&sheet["recommended"], "recommended");
+    for d in documents {
+        assert!(
+            section.contains(&esc(text(d, "type"))),
+            "持つ文書の型が節に無い: {}",
+            text(d, "type")
+        );
+    }
+    for r in recommended {
+        assert!(
+            section.contains(&esc(text(r, "ask"))),
+            "推奨で進めた項目の文が節に無い: {}",
+            text(r, "ask")
+        );
+    }
+    // 承認はまだ（支度表の approval が空）・正本の file 名は intake.yaml の sheet.file
+    assert!(seq(&sheet["approval"], "approval").is_empty());
+    assert!(section.contains("<span class=\"k\">承認</span><span class=\"v\">まだ（"));
+    assert!(section.contains(text(&n["sheet"], "file")));
+    assert_eq!(
+        components(section),
+        ["chapter-deck-band", "status-line"],
+        "節「支度表」の部品"
+    );
+    assert_eq!(
+        section.matches("<p class=\"st").count(),
+        4,
+        "行の数（持つ文書・推奨で進めた項目・承認・正本）"
+    );
+}
+
+// 導出できない 4 つ（どれも 2・出力先が出来ていない）
+
+#[test]
+fn face_index_unknown_when_the_intake_source_is_missing() {
+    index_unknown("intake-missing", |w| {
+        fs::remove_file(w.join("intake.yaml")).unwrap()
+    });
+}
+
+#[test]
+fn face_index_unknown_when_the_sheet_title_is_empty() {
+    index_unknown("sheet-title", |w| {
+        edit(&w.join("intake.yaml"), |t| {
+            t.replacen(
+                "  title: 見本の支度表 & <b>1 枚</b>\n",
+                "  title: \"\"\n",
+                1,
+            )
+        })
+    });
+}
+
+#[test]
+fn face_index_unknown_when_a_sheet_document_is_outside_the_targets() {
+    index_unknown_with_a_sheet("sheet-document", |w| {
+        edit(&w.join("intake-sheet.yaml"), |t| {
+            t.replacen("{id: constitution, type: 憲法", "{id: memo, type: 憲法", 1)
+        })
+    });
+}
+
+#[test]
+fn face_index_unknown_when_the_sheet_is_not_a_table() {
+    index_unknown_with_a_sheet("sheet-seq", |w| {
+        fs::write(w.join("intake-sheet.yaml"), "- 支度表\n- 一覧\n").unwrap()
+    });
+}
+
+// 字面の 2 case（binary 経由）
+
+#[test]
+fn face_index_sheet_document_without_an_annex_has_no_parentheses() {
+    let (td, work) = index_sheet_copy("index-sheet-with");
+    edit(&work.join("intake-sheet.yaml"), |t| {
+        t.replacen("with: [vocabulary]", "with: []", 1)
+    });
+    let (_, html) = index_from("付録なし", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    let sheet = load_yaml_at(&fixture(), "intake-sheet.yaml");
+    let ty = esc(text(&seq(&sheet["documents"], "documents")[0], "type"));
+    assert!(
+        sheet_section(&html).contains(&format!(
+            "<span class=\"k\">持つ文書</span><span class=\"v\">{ty}</span>"
+        )),
+        "{}",
+        sheet_section(&html)
+    );
+}
+
+#[test]
+fn face_index_sheet_approval_is_the_first_row_when_it_is_stamped() {
+    let (td, work) = index_sheet_copy("index-sheet-approval");
+    edit(&work.join("intake-sheet.yaml"), |t| {
+        t.replacen(
+            "approval: []\n",
+            "approval:\n  - {when: 2026-09-03, verbatim: 承認する}\n",
+            1,
+        )
+    });
+    let (_, html) = index_from("承認あり", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    assert!(
+        sheet_section(&html)
+            .contains("<span class=\"k\">承認</span><span class=\"v\">2026-09-03 承認する</span>"),
+        "{}",
+        sheet_section(&html)
+    );
 }

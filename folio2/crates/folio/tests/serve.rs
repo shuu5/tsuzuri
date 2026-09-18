@@ -51,6 +51,7 @@ fn built_site(case: &str) -> (PathBuf, PathBuf) {
         "vocabulary.yaml",
         "srs.yaml",
         "index.yaml",
+        "intake.yaml",
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }

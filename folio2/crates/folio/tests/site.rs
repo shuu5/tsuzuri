@@ -29,8 +29,8 @@ fn temp_dir(case: &str) -> PathBuf {
     td
 }
 
-/// 凍結 fixture の正本 5 file と adr/ を一時 dir の src/ へ写し、src/preview/ に最小の様式 2 本を置く。
-/// 戻り値 = (一時 dir, 正本の写し)。期待の面 3 本は写さない。
+/// 凍結 fixture の正本 6 file と adr/ を一時 dir の src/ へ写し、src/preview/ に最小の様式 2 本を置く。
+/// 戻り値 = (一時 dir, 正本の写し)。支度表 intake-sheet.yaml と期待の面 3 本は写さない。
 fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     let td = temp_dir(case);
     let work = td.join("src");
@@ -42,6 +42,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
         "vocabulary.yaml",
         "srs.yaml",
         "index.yaml",
+        "intake.yaml",
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }

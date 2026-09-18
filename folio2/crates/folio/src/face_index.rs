@@ -4,13 +4,15 @@
 //! 生成物の文字列は 正本の値（α）・名札の表（β・`face.rs`）・正本から数えた数（γ）のどれかで、見本の layer-line・
 //! 「次の一手」「まだ測っていない」の行は正本に無いので出さない。面に依らない口（head と site-bar・部品の名札・小窓）は
 //! `face.rs` を呼ぶ。入口は番号付きの章を持たないので、帯は slim だけ・目次と prevnext は出さない。
+//! 節「支度表」（便 20・delivery-20.md §1 (b)）は相談窓口の正本 `intake.yaml` の sheet の節と、在れば支度表
+//! `<dir>/<sheet.file>`（`folio intake` の生成物）から出す。支度表が無ければ「まだ無い」の 1 行（導出できないではない）。
 
 use std::fs;
 use std::path::Path;
 
 use crate::face::{
     self, ANNEXES, Frame, INDEX_STATUS, R, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf, TIERS,
-    X, hint, hint_q, stop_anchor, tier_of,
+    X, esc, hint, hint_q, stop_anchor, tier_of,
 };
 use crate::parts::catalog::Component;
 use crate::yaml::Value;
@@ -44,15 +46,31 @@ const FRAME: Frame = Frame {
     parts: &PARTS,
 };
 
-/// 読んだ正本（foot の sources）。
-const SOURCES: [&str; 6] = [
+/// 読んだ正本（foot の sources）。支度表は生成物なので載せない（節の中で file 名を出す）。
+const SOURCES: [&str; 7] = [
     "index.yaml",
     "constitution.yaml",
     "srs.yaml",
     "vocabulary.yaml",
     "rules.yaml",
     "adr/",
+    "intake.yaml",
 ];
+
+/// 相談窓口の正本（節「支度表」の見出しと説明・支度表の file 名・行き先の型の写像）。
+const INTAKE: &str = "intake.yaml";
+
+/// 節「支度表」の名札の表（β・本便）。数と日付は正本から数えたものだけ（ここには書かない）。
+const SHEET_KICKER: &str = "支度表";
+const SHEET_DOCUMENTS: &str = "持つ文書";
+const SHEET_RECOMMENDED: &str = "推奨で進めた項目";
+const SHEET_APPROVAL: &str = "承認";
+const SHEET_SOURCE: &str = "正本";
+const SHEET_ABSENT: &str = "まだ無い";
+const SHEET_NO_DOCUMENTS: &str = "なし";
+const SHEET_NO_RECOMMENDED: &str = "なし（全部に答えた）";
+const SHEET_NO_APPROVAL: &str = "まだ（対話面で承認したら台帳と承認欄に記帳する）";
+const SHEET_MADE_BY: &str = "（folio intake の生成物・手で直さない）";
 
 fn dc(c: Component) -> String {
     FRAME.dc(c)
@@ -126,14 +144,18 @@ pub fn derive(dir: &Path) -> R<String> {
     let s_doc = face::load(dir, "srs.yaml")?;
     let v_doc = face::load(dir, "vocabulary.yaml")?;
     let r_doc = face::load(dir, "rules.yaml")?;
+    let n_doc = face::load(dir, INTAKE)?;
     let adr = count_adr(dir)?;
     let i = X::root(&i_doc, "index.yaml");
     let c = X::root(&c_doc, "constitution.yaml");
     let s = X::root(&s_doc, "srs.yaml");
     let v = X::root(&v_doc, "vocabulary.yaml");
     let r = X::root(&r_doc, "rules.yaml");
+    let n = X::root(&n_doc, INTAKE);
 
     let ctx = context(&i, &c, &s, &v, &r, adr)?;
+    let sheet = sheet_head(&n)?;
+    let filled = sheet_body(dir, &n, &sheet)?;
     let m = i.f("meta")?;
 
     let mut o: Vec<String> = Vec::new();
@@ -144,6 +166,7 @@ pub fn derive(dir: &Path) -> R<String> {
     intake_line(&mut o, &i)?;
     lanes(&mut o, &ctx, &i)?;
     intake(&mut o, &i)?;
+    sheet_section(&mut o, &i, &sheet, filled.as_ref())?;
     foot(&mut o, &m)?;
     Ok(format!("{}\n", o.join("\n")))
 }
@@ -335,6 +358,107 @@ fn context(i: &X<'_>, c: &X<'_>, s: &X<'_>, v: &X<'_>, r: &X<'_>, adr: usize) ->
     }
     ctx.relations = relations;
     Ok(ctx)
+}
+
+// ── 相談窓口の正本と支度表 ──
+
+/// 相談窓口の正本の sheet の節（節の見出しと説明・支度表の file 名）。字面は escape する前。
+struct SheetHead {
+    file: String,
+    title: String,
+    explain: String,
+}
+
+/// 支度表 `<dir>/<sheet.file>` の読んだ中身（在るときだけ）。どの字面も escape 済み。
+struct SheetBody {
+    documents: Vec<String>,
+    recommended: Vec<String>,
+    approval: Option<String>,
+}
+
+/// 必須の欄の字面（無い・空は Err）。
+fn required(x: &X<'_>, key: &str) -> R<String> {
+    let f = x.f(key)?;
+    let text = f.text()?;
+    if text.is_empty() {
+        return Err(format!("{}: 空", f.at));
+    }
+    Ok(text)
+}
+
+fn sheet_head(n: &X<'_>) -> R<SheetHead> {
+    let sh = n.f("sheet")?;
+    Ok(SheetHead {
+        file: required(&sh, "file")?,
+        title: required(&sh, "title")?,
+        explain: required(&sh, "explain")?,
+    })
+}
+
+/// 写像の行き先（intake.yaml の targets）の id → 型（型は escape 済み）。
+fn targets(n: &X<'_>) -> R<Vec<(String, String)>> {
+    n.f("targets")?
+        .seq()?
+        .iter()
+        .map(|row| Ok((row.f("id")?.text()?, row.ef("type")?)))
+        .collect()
+}
+
+/// 行き先の id を targets の型に写す（表に無い id は Err）。
+fn target_type(targets: &[(String, String)], id: &str, at: &str) -> R<String> {
+    targets
+        .iter()
+        .find(|(k, _)| k == id)
+        .map(|(_, ty)| ty.clone())
+        .ok_or_else(|| format!("{at}: 行き先の id「{id}」が {INTAKE} の targets に無い"))
+}
+
+/// 支度表が在れば読む（無ければ None＝「まだ無い」・在るのに読めないは Err）。
+fn sheet_body(dir: &Path, n: &X<'_>, head: &SheetHead) -> R<Option<SheetBody>> {
+    if !dir.join(&head.file).exists() {
+        return Ok(None);
+    }
+    let doc = face::load(dir, &head.file)?;
+    let sheet = X::root(&doc, &head.file);
+    let targets = targets(n)?;
+
+    let mut documents = Vec::new();
+    for row in sheet.f("documents")?.seq()? {
+        let id_x = row.f("id")?;
+        target_type(&targets, &id_x.text()?, &id_x.at)?;
+        let ty = row.ef("type")?;
+        let mut with = Vec::new();
+        if let Some(list) = row.g("with")? {
+            for w in list.seq()? {
+                with.push(target_type(&targets, &w.text()?, &w.at)?);
+            }
+        }
+        documents.push(if with.is_empty() {
+            ty
+        } else {
+            format!("{ty}（付録の{}）", with.join("・"))
+        });
+    }
+
+    let mut recommended = Vec::new();
+    for row in sheet.f("recommended")?.seq()? {
+        recommended.push(format!(
+            "{}（おすすめ: {}）",
+            row.ef("ask")?,
+            row.ef("recommend")?
+        ));
+    }
+
+    let approval = match sheet.f("approval")?.seq()?.first() {
+        Some(row) => Some(format!("{} {}", row.ef("when")?, row.ef("verbatim")?)),
+        None => None,
+    };
+
+    Ok(Some(SheetBody {
+        documents,
+        recommended,
+        approval,
+    }))
 }
 
 // ── 骨格 ──
@@ -581,14 +705,25 @@ fn status_line(o: &mut Vec<String>, ctx: &Ctx) {
         "<section {} aria-label=\"いまの状態\">",
         dc(Component::StatusLine)
     ));
-    o.push(format!(
-        "<p class=\"st ok\"><span class=\"mark\">●</span><span class=\"k\">揃っている</span><span class=\"v\">{}が読める（付録の{annex_types}は憲法の中）</span></p>",
-        types(ctx.readable())
-    ));
-    o.push(format!(
-        "<p class=\"st\"><span class=\"mark\">○</span><span class=\"k\">まだ無い</span><span class=\"v\">{missing}</span></p>"
-    ));
+    st(
+        o,
+        " ok",
+        "●",
+        "揃っている",
+        &format!(
+            "{}が読める（付録の{annex_types}は憲法の中）",
+            types(ctx.readable())
+        ),
+    );
+    st(o, "", "○", "まだ無い", &missing);
     o.push("</section>".to_string());
+}
+
+/// status-line の 1 行（`class` は "" か " ok"・字面はすべて escape 済み）。
+fn st(o: &mut Vec<String>, class: &str, mark: &str, k: &str, v: &str) {
+    o.push(format!(
+        "<p class=\"st{class}\"><span class=\"mark\">{mark}</span><span class=\"k\">{k}</span><span class=\"v\">{v}</span></p>"
+    ));
 }
 
 fn steps(it: &X<'_>) -> R<Vec<String>> {
@@ -613,16 +748,21 @@ fn intake_line(o: &mut Vec<String>, i: &X<'_>) -> R<()> {
     Ok(())
 }
 
-/// slim の帯（読む順番・相談窓口）。
-fn slim_band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, x: &X<'_>) -> R<()> {
+/// slim の帯（読む順番・相談窓口・支度表）。字面はすべて escape 済み。
+fn band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, title: &str, lead: &str) {
     o.push(format!(
         "<section id=\"s{n}\" {} class=\"{class} slim\">",
         dc(Component::ChapterDeckBand)
     ));
     o.push(format!("<span class=\"kicker\">{kicker}</span>"));
-    o.push(format!("<h2>{}</h2>", x.ef("title")?));
-    o.push(format!("<p class=\"lead\">{}</p>", x.ef("lead")?));
+    o.push(format!("<h2>{title}</h2>"));
+    o.push(format!("<p class=\"lead\">{lead}</p>"));
     o.push("</section>".to_string());
+}
+
+/// 欄 title と lead を持つ節の slim の帯。
+fn slim_band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, x: &X<'_>) -> R<()> {
+    band(o, n, class, kicker, &x.ef("title")?, &x.ef("lead")?);
     Ok(())
 }
 
@@ -695,6 +835,71 @@ fn intake(o: &mut Vec<String>, i: &X<'_>) -> R<()> {
             note.e()?
         ));
     }
+    o.push("</div>".to_string());
+    Ok(())
+}
+
+/// 節「支度表」（章 02 の直後・foot の前）。相談窓口の結果が在ればその行を、無ければ「まだ無い」の 1 行を出す。
+fn sheet_section(
+    o: &mut Vec<String>,
+    i: &X<'_>,
+    head: &SheetHead,
+    body: Option<&SheetBody>,
+) -> R<()> {
+    band(
+        o,
+        3,
+        "band-4",
+        SHEET_KICKER,
+        &esc(&head.title),
+        &esc(&head.explain),
+    );
+    o.push("<div class=\"chapbody\">".to_string());
+    o.push(format!(
+        "<section {} aria-label=\"{SHEET_KICKER}\">",
+        dc(Component::StatusLine)
+    ));
+    match body {
+        Some(b) => {
+            let documents = if b.documents.is_empty() {
+                SHEET_NO_DOCUMENTS.to_string()
+            } else {
+                b.documents.join("・")
+            };
+            let recommended = if b.recommended.is_empty() {
+                SHEET_NO_RECOMMENDED.to_string()
+            } else {
+                b.recommended.join("／")
+            };
+            st(o, " ok", "●", SHEET_DOCUMENTS, &documents);
+            st(o, "", "○", SHEET_RECOMMENDED, &recommended);
+            st(
+                o,
+                "",
+                "○",
+                SHEET_APPROVAL,
+                b.approval.as_deref().unwrap_or(SHEET_NO_APPROVAL),
+            );
+            st(
+                o,
+                "",
+                "·",
+                SHEET_SOURCE,
+                &format!("{}{SHEET_MADE_BY}", esc(&head.file)),
+            );
+        }
+        None => st(
+            o,
+            "",
+            "○",
+            SHEET_ABSENT,
+            &format!(
+                "支度表はまだ無い。「{}」と AI に頼むと作られる",
+                i.f("intake")?.ef("command")?
+            ),
+        ),
+    }
+    o.push("</section>".to_string());
     o.push("</div>".to_string());
     Ok(())
 }

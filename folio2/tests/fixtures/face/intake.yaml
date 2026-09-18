@@ -1,0 +1,32 @@
+# folio face の凍結 fixture（便 20・P-10.1）— 相談窓口の正本の最小形。手書き・design-intent/ の写しではない。
+# 入口の面が読むのは sheet の節（節の見出しと説明・支度表の file 名）と targets（支度表の行き先の id → 型）だけ。
+# targets は支度表の documents の id と with の id の行き先を全部持つ（写せない id は「まだ分からない」）。
+# title に escape の要る字「&」「<b>」を含む。
+
+meta:
+  id: fixture-intake
+  title: 見本の相談窓口
+  version: v0.1
+  status: draft
+  generated: 2026-09-03
+
+answers:
+  values: [はい, いいえ]
+  default: recommend
+
+targets:
+  - {id: constitution, type: 憲法, with: [vocabulary]}
+  - {id: vocabulary, type: 語彙, with: []}
+  - {id: inject, type: 憲法の注入, with: []}
+
+questions:
+  - {id: q1, ask: 守る線を決めておきますか, recommend: はい, why: 止まる基準が要る, yes: [constitution], no: []}
+  - {id: q2, ask: 憲法を AI の手元へ写しますか, recommend: はい, why: AI が毎回読む, yes: [inject], no: []}
+
+sheet:
+  file: intake-sheet.yaml
+  title: 見本の支度表 & <b>1 枚</b>
+  explain: 相談の結果として出る「何を持つか」の表。
+  sections:
+    - {id: documents, text: 持つ文書}
+    - {id: recommended, text: 推奨で進めた項目}
