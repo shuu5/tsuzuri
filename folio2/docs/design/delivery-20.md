@@ -28,7 +28,7 @@ planner の実測（2026-09-18・main 67da80f）: 入口の面の節の並びは
 - census: 出力に section の id が s3 の帯・sheet.title・sheet.explain・「まだ無い」（支度表なし）／支度表ありでは documents の type・recommended の ask・「まだ」（承認）が含まれる。
 - 導出できない 4 つ（どれも 2・出力先が出来ていない）: intake.yaml を消す／sheet の title を空に／支度表の documents の id を targets に無い id に／支度表の最上位を一覧に。
 - 既存の歯の写しの一覧（index_fixture_copy）に intake.yaml を足す（他の期待は変えない）。`tests/site.rs` と `tests/serve.rs` の fixture_copy の 5 file の一覧に intake.yaml を足す（期待は expected-index.html の更新に追従・site の byte 一致の歯は同じ期待 file を読む・他は変えない）。
-- unit（`src/face_index.rs` の中・名に face を含む）: 持つ文書の行の字面（with の有無）・承認の行の字面（空／あり）。
+- 字面の 2 case（binary 経由・`tests/face.rs` に置く・unit は置かない＝verify の `--test face` の scope で測れる形）: fixture の支度表の写しの documents の constitution の with を空にして書く → 持つ文書の行が「憲法」だけ（付録の括弧が無い）／approval に 1 行（when と verbatim）を足して書く → 承認の行が「<when> <verbatim>」。
 
 (e) 便 19 までの形との接続: 変えるのは `crates/folio/src/face_index.rs`（SOURCES 7・derive の読み 2 つ・節 s3 の関数 1 つ・名札の表）と歯 3 file（face・site・serve の写しの一覧）と fixture 4 本（新規 3・更新 1）だけ。`face.rs`・`face_constitution.rs`・`face_srs.rs`・`parts.rs`・`site.rs`・`serve.rs`・便 19 の module（sheet.rs）・便 18 の module（intake.rs）・他の src・`build.rs`・`Cargo.toml`・`Cargo.lock`・`design-intent/preview/parts.json`・`folio.css`・`design-intent/*.yaml`・`.github/workflows/` は触らない。部品目録に部品も class も style の性質も足さない。外部 crate は増えない。正規表現は使わない。size は S = 中身を変える既存の file 1 本あたりの増分の見積（`face_index.rs` の増分は節の関数と名札で 120 行未満・歯の増分は一覧の 1 行と歯 8 本）。
 
@@ -65,5 +65,5 @@ section = "1"
 write-set = ["crates/folio/src/face_index.rs", "crates/folio/tests/face.rs", "crates/folio/tests/site.rs", "crates/folio/tests/serve.rs", "+tests/fixtures/face/intake.yaml", "+tests/fixtures/face/intake-sheet.yaml", "+tests/fixtures/face/expected-index-sheet.html", "tests/fixtures/face/expected-index.html"]
 verify = ["cargo nextest run -p folio --test face face", "cargo nextest run -p folio --test site site", "cargo nextest run -p folio --test serve serve", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "face の歯（支度表なし／ありの凍結 fixture との byte 一致・実の正本と支度表ありの写しで parts --check 合格・census・導出できない 4 つ・unit）が緑で便 14〜16 の歯は期待不変（期待の面の更新を除く）、site の歯が更新した期待で緑、serve の歯が期待不変で緑、clippy が 0 警告で CI が通る"
+done = "face の歯（支度表なし／ありの凍結 fixture との byte 一致・実の正本と支度表ありの写しで parts --check 合格・census・導出できない 4 つ・字面の 2 case）が緑で便 14〜16 の歯は期待不変（期待の面の更新を除く）、site の歯が更新した期待で緑、serve の歯が期待不変で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
