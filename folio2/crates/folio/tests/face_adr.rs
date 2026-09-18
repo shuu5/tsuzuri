@@ -109,6 +109,30 @@ fn mutated(case: &str, mutate: impl FnOnce(&str) -> String) -> (Output, String) 
     (run, html)
 }
 
+/// 写しの ADR-2 から面を組み、本文を返す（変異なし）。
+fn fixture_html(case: &str) -> String {
+    let (td, work) = fixture_copy(case);
+    let out = td.join("adr-2.html");
+    let run = folio_face("adr", Some("ADR-2"), &work, &out, "--write");
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    let html = fs::read_to_string(&out).unwrap();
+    let _ = fs::remove_dir_all(&td);
+    html
+}
+
+/// 写しの ADR-2 の context を差し替えて面を組む（章 01 の分かれ方を測る）。
+fn with_context(case: &str, body: &str) -> String {
+    let (run, html) = mutated(case, |t| {
+        t.replacen(
+            "context: 見本の面を出すのに、正本の欄だけで 1 枚を組めるかがまだ分からない。",
+            &format!("context: {body}"),
+            1,
+        )
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    html
+}
+
 /// 変異が導出できない入力なら `--write` = 2 ∧「まだ分からない」∧ 文言。
 fn unknown(case: &str, mutate: impl FnOnce(&str) -> String, wording: &str) {
     let (run, html) = mutated(case, mutate);
@@ -256,11 +280,15 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
         let a = load_yaml_at(&design_intent().join("adr"), &format!("{id}.yaml"));
         let count = |needle: &str| html.matches(needle).count();
 
-        // 逐語（h1 は title）
+        // 逐語（h1 は短い名・副題が title の逐語）
         let title = esc(a["title"].as_str().unwrap());
         assert!(
-            html.contains(&format!("<h1>{title}</h1>")),
-            "{id}: h1 が title の逐語でない"
+            html.contains(&format!("<h1>判断の記録 {id}</h1>")),
+            "{id}: h1 が「判断の記録 <id>」でない"
+        );
+        assert!(
+            html.contains(&format!("<p class=\"sub-title\">{title}</p>")),
+            "{id}: 副題が title の逐語でない"
         );
 
         // 件数（案・採用・根拠）
@@ -285,6 +313,13 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
             !html.contains("（まだ分からない）"),
             "{id}: 行き先の無い根拠が在る"
         );
+        // 根拠の群の一覧（li の数 = 根拠の数・li は行き先のリンクと題の span）
+        assert_eq!(
+            count("<li><a class=\"xref\""),
+            basis.len(),
+            "{id}: ul.basis の li の数"
+        );
+        assert_eq!(count("</a><span>"), basis.len(), "{id}: 題の span の数");
 
         // 状態の名札
         let label = match a["status"].as_str().unwrap() {
@@ -465,6 +500,128 @@ fn face_adr_resolves_a_statement_id_to_its_article() {
     assert!(
         html.contains("P-1.9（まだ分からない）"),
         "無い規範文に印が無い"
+    );
+}
+
+// ── 列挙の分割（便 27 §1 (b)）──
+
+#[test]
+fn face_adr_splits_the_head_of_sentence_enumeration_into_items() {
+    let html = with_context("items", "前置き。(1) あ。(2) い。");
+    assert_eq!(
+        html.matches("<p class=\"intro\">前置き。</p>").count(),
+        1,
+        "前置きの p が 1 つでない: {html}"
+    );
+    assert!(
+        html.contains("<ol class=\"items\">\n<li>あ。</li>\n<li>い。</li>\n</ol>"),
+        "列挙が li 2 つに分かれていない: {html}"
+    );
+}
+
+#[test]
+fn face_adr_keeps_an_enumeration_inside_one_sentence_as_a_paragraph() {
+    let html = with_context("items-inline", "(1) あ、(2) い。");
+    assert!(
+        html.contains("<p>(1) あ、(2) い。</p>"),
+        "文の中の列挙が段落のまま出ていない: {html}"
+    );
+    assert!(
+        !html.contains("ol class=\"items\""),
+        "文の中の列挙を分けた: {html}"
+    );
+}
+
+#[test]
+fn face_adr_keeps_a_skipping_enumeration_as_a_paragraph() {
+    let html = with_context("items-skip", "前置き。(1) あ。(3) い。");
+    assert!(
+        html.contains("<p>前置き。(1) あ。(3) い。</p>"),
+        "番号の飛ぶ列挙が段落のまま出ていない: {html}"
+    );
+    assert!(
+        !html.contains("ol class=\"items\""),
+        "印が 1 つなのに分けた: {html}"
+    );
+}
+
+// ── 根拠の 4 群（便 27 §1 (c)）──
+
+#[test]
+fn face_adr_groups_the_basis_ids_into_four_cards_with_titles() {
+    let html = fixture_html("groups");
+    assert_eq!(
+        html.matches("<div class=\"card\">").count(),
+        4,
+        "根拠の card が 4 枚でない: {html}"
+    );
+    assert!(
+        html.contains("style=\"--band-n:4\""),
+        "格子の列が 4 でない: {html}"
+    );
+    for cid in [
+        "憲法の条（2）",
+        "数値の表（1）",
+        "要件書（2）",
+        "判断の記録（1）",
+    ] {
+        assert!(
+            html.contains(&format!("<div class=\"cid\">{cid}</div>")),
+            "群の名札「{cid}」が無い: {html}"
+        );
+    }
+    assert!(
+        html.contains(
+            "<li><a class=\"xref\" href=\"constitution.html#p-1\">P-1</a><span>判断する道具を作らない</span></li>"
+        ),
+        "条の題が無い: {html}"
+    );
+    assert!(
+        html.contains(
+            "<li><a class=\"xref\" href=\"constitution.html#r-1\">R-1</a><span>AI へ常時渡す説明文の合計</span></li>"
+        ),
+        "数値の表の題（what）が無い: {html}"
+    );
+    // title の欄を持たない stub（adr/ADR-1.yaml）はリンクだけ・題の span を出さず面も 2 にしない
+    assert!(
+        html.contains("<li><a class=\"xref\" href=\"adr-1.html\">ADR-1</a></li>"),
+        "stub の判断の記録の li がリンクだけでない: {html}"
+    );
+    // 撤退条件の card は格子の外（callout を閉じた後）
+    let lines: Vec<&str> = html.lines().collect();
+    let callout = lines
+        .iter()
+        .position(|l| l.contains("data-component=\"section-lead-callout\""))
+        .expect("callout が無い");
+    let retreat = lines
+        .iter()
+        .position(|l| l.starts_with("<div class=\"card retreat\">"))
+        .expect("撤退条件の card が無い");
+    assert!(callout < retreat, "撤退条件が callout の前に在る");
+    assert_eq!(
+        lines[retreat - 1],
+        "</div>",
+        "撤退条件の card が callout の中に在る: {html}"
+    );
+}
+
+#[test]
+fn face_adr_shows_no_title_for_a_basis_id_without_a_target() {
+    let (run, html) = mutated("group-unresolved", |t| {
+        t.replacen(
+            "basis: [P-1, A-1, R-1, FR1, AC1, ADR-1]",
+            "basis: [P-1, A-1, R-1, FR1, AC1, ADR-1, FR9]",
+            1,
+        )
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert!(
+        html.contains("<div class=\"cid\">要件書（3）</div>"),
+        "要件書の群が 3 件でない: {html}"
+    );
+    assert!(
+        html.contains("<li>FR9（まだ分からない）</li>"),
+        "行き先の無い id の li が印だけでない: {html}"
     );
 }
 

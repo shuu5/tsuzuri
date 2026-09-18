@@ -3,6 +3,8 @@
 //! 名札の表（β・この file の表）・正本から数えた数（γ）のどれかで、案内の文は出さない。
 //! 面に依らない口（head と site-bar・章の帯・card・toc・承認欄の帯・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ。
 //! 章の h2 のうち契約が名指すのは 01・02 と承認欄だけなので、03〜05 は章の名をそのまま h2 に出す（新しい字面を持たない）。
+//! 見た目は便 27（delivery-27.md §1 (a)〜(c)）で直した: 表紙は h1 が短い名で title は副題・章 01/02 は文の頭の
+//! 列挙を ol へ・章 04 は根拠を 4 群の card（id + 行き先の題）にして撤退条件を格子の外へ出す。
 
 use std::path::Path;
 
@@ -101,16 +103,27 @@ struct Counts {
     amends: usize,
 }
 
-/// 根拠の id の行き先を解くための、他の正本の id の一覧。
+/// 根拠の id の行き先を解くための、他の正本の id と題の一覧。
 struct Ctx {
-    /// 条 id
-    articles: Vec<String>,
+    /// 条の（id・title）
+    articles: Vec<(String, String)>,
     /// 規範文 id → その条の id
     statements: Vec<(String, String)>,
-    /// rules 行の id
-    rules: Vec<String>,
-    /// 要件書の id（要件・非機能要件・受入基準・制約・ゴール）
-    reqs: Vec<String>,
+    /// rules 行の（id・what）
+    rules: Vec<(String, String)>,
+    /// 要件書の（id・title）（要件・非機能要件・受入基準・制約・ゴール）
+    reqs: Vec<(String, String)>,
+}
+
+/// 根拠の 4 群の名（順もこのとおり・便 27 §1 (c)）。
+const BASIS_GROUPS: [&str; 4] = ["憲法の条", "数値の表", "要件書", "判断の記録"];
+
+/// 根拠の id 1 つの行き先（群・href・題）。href が None なら行き先が無い。
+struct Target {
+    group: usize,
+    href: Option<String>,
+    /// 行き先の欄の題（読めなければ空・題の span を出さない）
+    title: String,
 }
 
 /// 正本 1 本 → 判断の記録の面の HTML（決定的）。
@@ -167,6 +180,14 @@ fn digits(s: &str) -> bool {
     !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
 }
 
+/// 行き先の欄の題（欄が無い・空・読めないときは空）。題は行き先の欄が読めるときだけ出す。
+fn field_title(x: &X<'_>, key: &str) -> String {
+    match x.g(key) {
+        Ok(Some(v)) => v.e().unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
 fn context(c: &X<'_>, r: &X<'_>, s: &X<'_>) -> R<Ctx> {
     let mut articles = Vec::new();
     let mut statements = Vec::new();
@@ -175,12 +196,12 @@ fn context(c: &X<'_>, r: &X<'_>, s: &X<'_>) -> R<Ctx> {
         for st in a.f("statements")?.seq()? {
             statements.push((st.f("id")?.id()?.to_string(), aid.clone()));
         }
-        articles.push(aid);
+        articles.push((aid, field_title(&a, "title")));
     }
     let mut rules = Vec::new();
     for section in ["thresholds", "discipline"] {
         for x in r.f(section)?.seq()? {
-            rules.push(x.f("id")?.id()?.to_string());
+            rules.push((x.f("id")?.id()?.to_string(), field_title(&x, "what")));
         }
     }
     let mut reqs = Vec::new();
@@ -192,7 +213,7 @@ fn context(c: &X<'_>, r: &X<'_>, s: &X<'_>) -> R<Ctx> {
         "goals",
     ] {
         for x in s.f(section)?.seq()? {
-            reqs.push(x.f("id")?.id()?.to_string());
+            reqs.push((x.f("id")?.id()?.to_string(), field_title(&x, "title")));
         }
     }
     Ok(Ctx {
@@ -203,20 +224,58 @@ fn context(c: &X<'_>, r: &X<'_>, s: &X<'_>) -> R<Ctx> {
     })
 }
 
-/// 根拠の id の行き先（在れば href・無ければ None）。4 形のどれでもない id は Err。
-fn resolve(dir: &Path, ctx: &Ctx, id: &str) -> R<Option<String>> {
+/// 判断の記録の題（file が無い・読めない・title の欄が無い・空なら空。面は 2 にしない）。
+fn record_title(dir: &Path, id: &str) -> String {
+    match face::load(dir, &format!("adr/{id}.yaml")) {
+        Ok(doc) => field_title(&X::root(&doc, id), "title"),
+        Err(_) => String::new(),
+    }
+}
+
+/// 根拠の id の群と行き先と題。4 形のどれでもない id は Err。
+fn resolve(dir: &Path, ctx: &Ctx, id: &str) -> R<Target> {
     let bad = || format!("根拠の id「{id}」は id の形でない（条・rules 行・要件・判断の記録）");
-    let found = |ids: &[String], href: String| ids.iter().any(|k| k == id).then_some(href);
+    let found = |pairs: &[(String, String)], group: usize, href: String| match pairs
+        .iter()
+        .find(|(k, _)| k == id)
+    {
+        Some((_, title)) => Target {
+            group,
+            href: Some(href),
+            title: title.clone(),
+        },
+        None => Target {
+            group,
+            href: None,
+            title: String::new(),
+        },
+    };
     if let Some(rest) = ["P-", "A-", "N-"].iter().find_map(|p| id.strip_prefix(p)) {
         return match rest.split_once('.') {
-            // 枝番付きの規範文 id は条の anchor へ（字は枝番付きのまま）
+            // 枝番付きの規範文 id は条の anchor へ（字は枝番付きのまま・題は条の title）
             Some((n, sub)) if digits(n) && digits(sub) => Ok(ctx
                 .statements
                 .iter()
                 .find(|(sid, _)| sid == id)
-                .map(|(_, aid)| format!("constitution.html#{}", anchor(aid)))),
+                .map_or_else(
+                    || Target {
+                        group: 0,
+                        href: None,
+                        title: String::new(),
+                    },
+                    |(_, aid)| Target {
+                        group: 0,
+                        href: Some(format!("constitution.html#{}", anchor(aid))),
+                        title: ctx
+                            .articles
+                            .iter()
+                            .find(|(k, _)| k == aid)
+                            .map_or_else(String::new, |(_, t)| t.clone()),
+                    },
+                )),
             None if digits(rest) => Ok(found(
                 &ctx.articles,
+                0,
                 format!("constitution.html#{}", anchor(id)),
             )),
             _ => Err(bad()),
@@ -226,6 +285,7 @@ fn resolve(dir: &Path, ctx: &Ctx, id: &str) -> R<Option<String>> {
         return if digits(rest) {
             Ok(found(
                 &ctx.rules,
+                1,
                 format!("constitution.html#{}", anchor(id)),
             ))
         } else {
@@ -237,7 +297,7 @@ fn resolve(dir: &Path, ctx: &Ctx, id: &str) -> R<Option<String>> {
         .find_map(|p| id.strip_prefix(p))
     {
         return if digits(rest) {
-            Ok(found(&ctx.reqs, format!("srs.html#{}", anchor(id))))
+            Ok(found(&ctx.reqs, 2, format!("srs.html#{}", anchor(id))))
         } else {
             Err(bad())
         };
@@ -245,7 +305,19 @@ fn resolve(dir: &Path, ctx: &Ctx, id: &str) -> R<Option<String>> {
     if let Some(rest) = id.strip_prefix("ADR-") {
         return if digits(rest) {
             let file = dir.join("adr").join(format!("{id}.yaml"));
-            Ok(file.is_file().then(|| format!("{}.html", anchor(id))))
+            Ok(if file.is_file() {
+                Target {
+                    group: 3,
+                    href: Some(format!("{}.html", anchor(id))),
+                    title: record_title(dir, id),
+                }
+            } else {
+                Target {
+                    group: 3,
+                    href: None,
+                    title: String::new(),
+                }
+            })
         } else {
             Err(bad())
         };
@@ -253,13 +325,18 @@ fn resolve(dir: &Path, ctx: &Ctx, id: &str) -> R<Option<String>> {
     Err(bad())
 }
 
+/// 行き先の字面（在ればリンク・無ければ「（まだ分からない）」）。
+fn link_text(t: &Target, id: &str) -> String {
+    match &t.href {
+        Some(href) => format!("<a class=\"xref\" href=\"{href}\">{id}</a>"),
+        None => format!("{id}（まだ分からない）"),
+    }
+}
+
 /// 根拠の id 1 つ（在ればリンク・無ければ「（まだ分からない）」）。
 fn id_link(dir: &Path, ctx: &Ctx, x: &X<'_>) -> R<String> {
     let id = x.id()?;
-    Ok(match resolve(dir, ctx, id)? {
-        Some(href) => format!("<a class=\"xref\" href=\"{href}\">{id}</a>"),
-        None => format!("{id}（まだ分からない）"),
-    })
+    Ok(link_text(&resolve(dir, ctx, id)?, id))
 }
 
 /// 状態の名札と状態の行。accepted に承認欄が無い・retired に後継が無い、は導出できない。
@@ -330,7 +407,9 @@ fn cover(o: &mut Vec<String>, a: &X<'_>, id: &str, st: &Status, n: &Counts) -> R
     o.push(format!(
         "<p class=\"cover-eyebrow\"><span class=\"doc-type\">判断の記録 (ADR)</span> <span>folio2 — {id}</span></p>"
     ));
-    o.push(format!("<h1>{}</h1>", a.ef("title")?));
+    // h1 は短い名（title は文の長さなので副題へ・便 27 §1 (a)）
+    o.push(format!("<h1>判断の記録 {id}</h1>"));
+    o.push(format!("<p class=\"sub-title\">{}</p>", a.ef("title")?));
     o.push(format!(
         "<div class=\"summary-card\"><span class=\"ic\">要</span><div><p class=\"lab\">やさしく言うと</p><p class=\"txt\">{}</p></div></div>",
         a.ef("plain")?
@@ -377,11 +456,56 @@ fn band(o: &mut Vec<String>, n: usize) {
 
 // ── 章 ──
 
-/// 章 01・02（帯 + chapbody に p 1 つ）。`body` は escape 済み。
+/// 文の頭の列挙の印「(k) 」の位置（開きの括弧の byte・印の直後の byte）。印と数えるのは、印の直前
+/// （末尾の空白を除く）が本文の先頭か句点で、かつ番号が 1 から 1 ずつ増えて続くときだけ（便 27 §1 (b)）。
+fn item_marks(body: &str) -> Vec<(usize, usize)> {
+    let b = body.as_bytes();
+    let mut marks = Vec::new();
+    let mut want = 1u32;
+    let mut i = 0;
+    while i < b.len() {
+        // 半角の開き括弧 + ASCII の数字 1 つ以上 + 半角の閉じ括弧 + 半角空白 1 つ
+        if b[i] == b'(' {
+            let mut j = i + 1;
+            while j < b.len() && b[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j > i + 1 && b.get(j) == Some(&b')') && b.get(j + 1) == Some(&b' ') {
+                let head = body[..i].trim_end();
+                let at_head = head.is_empty() || head.ends_with('。');
+                if at_head && body[i + 1..j].parse::<u32>() == Ok(want) {
+                    marks.push((i, j + 2));
+                    want += 1;
+                    i = j + 2;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    marks
+}
+
+/// 章 01・02（帯 + chapbody）。`body` は escape 済み。文の頭の印が 2 つ以上なら前置きの p と ol へ分け、
+/// 1 つ以下なら p 1 つ（便 27 §1 (b)）。
 fn prose_chapter(o: &mut Vec<String>, n: usize, body: &str) {
     band(o, n);
     o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!("<p>{body}</p>"));
+    let marks = item_marks(body);
+    if marks.len() < 2 {
+        o.push(format!("<p>{body}</p>"));
+    } else {
+        let intro = body[..marks[0].0].trim();
+        if !intro.is_empty() {
+            o.push(format!("<p class=\"intro\">{intro}</p>"));
+        }
+        o.push("<ol class=\"items\">".to_string());
+        for (k, (_, end)) in marks.iter().enumerate() {
+            let stop = marks.get(k + 1).map_or(body.len(), |(start, _)| *start);
+            o.push(format!("<li>{}</li>", body[*end..stop].trim()));
+        }
+        o.push("</ol>".to_string());
+    }
     o.push("</div>".to_string());
 }
 
@@ -416,22 +540,44 @@ fn options_chapter(o: &mut Vec<String>, a: &X<'_>) -> R<()> {
     Ok(())
 }
 
-/// 章 04（根拠の id の並びと撤退条件）。
+/// 章 04（根拠の 4 群と撤退条件・便 27 §1 (c)）。
 fn basis_chapter(o: &mut Vec<String>, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()> {
     band(o, 4);
     o.push("<div class=\"chapbody\">".to_string());
-    o.push("<ul>".to_string());
+    // 群の順は BASIS_GROUPS の順・群の中は basis の順
+    let mut groups: [Vec<String>; 4] = std::array::from_fn(|_| Vec::new());
     for b in a.f("basis")?.seq()? {
-        o.push(format!("<li>{}</li>", id_link(dir, ctx, &b)?));
+        let id = b.id()?;
+        let t = resolve(dir, ctx, id)?;
+        // 題は行き先の欄が読めるときだけ出す
+        let title = if t.href.is_some() && !t.title.is_empty() {
+            format!("<span>{}</span>", t.title)
+        } else {
+            String::new()
+        };
+        groups[t.group].push(format!("<li>{}{title}</li>", link_text(&t, id)));
     }
-    o.push("</ul>".to_string());
-    let rt = a.f("retreat")?;
     o.push(format!(
-        "<div {} style=\"--band-n:4\">",
-        dc(Component::SectionLeadCallout)
+        "<div {} style=\"--band-n:{}\">",
+        dc(Component::SectionLeadCallout),
+        groups.iter().filter(|g| !g.is_empty()).count()
     ));
+    for (k, g) in groups.iter().enumerate() {
+        if g.is_empty() {
+            continue;
+        }
+        o.push(card(
+            "card",
+            None,
+            &format!("{}（{}）", BASIS_GROUPS[k], g.len()),
+            &format!("<ul class=\"basis\">\n{}\n</ul>", g.join("\n")),
+        ));
+    }
+    o.push("</div>".to_string());
+    // 撤退条件は格子の外（1 列に潰さない）
+    let rt = a.f("retreat")?;
     o.push(card(
-        "card",
+        "card retreat",
         None,
         &format!(
             "撤退条件（{}）",
@@ -439,7 +585,6 @@ fn basis_chapter(o: &mut Vec<String>, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()>
         ),
         &format!("<p>{}</p>", rt.ef("condition")?),
     ));
-    o.push("</div>".to_string());
     o.push("</div>".to_string());
     Ok(())
 }

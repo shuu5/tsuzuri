@@ -108,6 +108,7 @@ ins{overflow-wrap:anywhere;color:var(--ok);background:var(--ok-tint);text-decora
 .cover-eyebrow .doc-type{background:var(--overlay-mid);padding:3px 10px;border-radius:6px;letter-spacing:.16em;border:1px solid var(--overlay-line)}
 [data-component="doc-cover-band"] h1{font-size:2.125rem;line-height:1.18;margin:0 0 8px;font-weight:800}
 .cover-sub{font-size:1rem;opacity:.9;margin:0 0 18px;font-weight:500}
+[data-component="doc-cover-band"] .sub-title{font-size:1.0625rem;line-height:1.65;font-weight:600;max-width:60rem;margin:0 0 18px}   /* 判断の記録の副題（題は文の長さ） */
 .summary-card{background:var(--overlay-weak);border:1px solid var(--overlay-line);border-radius:var(--radius-card);padding:16px 20px;display:flex;gap:16px;align-items:flex-start;max-width:55rem}
 .summary-card .ic{flex:0 0 auto;width:2.125rem;height:2.125rem;display:grid;place-items:center;border-radius:10px;background:var(--overlay-mid);color:var(--link-on-cover);font-weight:900;font-size:1.125rem}
 .summary-card .lab{font-size:.6875rem;font-weight:700;letter-spacing:.16em;opacity:.8;margin:0 0 4px}
@@ -230,6 +231,9 @@ ins{overflow-wrap:anywhere;color:var(--ok);background:var(--ok-tint);text-decora
 .band-1{background:var(--band-1)} .band-2{background:var(--band-2)} .band-3{background:var(--band-3)} .band-4{background:var(--band-4)} .band-5{background:var(--band-5)} .band-6{background:var(--band-6)}
 .chapbody{padding:22px var(--pad-x) 40px;background:var(--paper)}
 .chapbody>p{max-width:57.5rem}
+.chapbody p.intro{max-width:57.5rem}
+.chapbody ol.items{max-width:57.5rem;margin:0;padding-left:1.6em}
+.chapbody ol.items li{max-width:57.5rem;margin:8px 0;line-height:1.75}
 .chapbody h3{font-size:1rem;margin:22px 0 10px}
 .stack{display:flex;flex-direction:column;gap:12px}
 
@@ -242,6 +246,11 @@ ins{overflow-wrap:anywhere;color:var(--ok);background:var(--ok-tint);text-decora
 .card .ct{font-size:1.0312rem;font-weight:800;line-height:1.4;margin:0 0 6px}
 .card .cd{font-size:.8125rem;color:var(--ink-soft);margin:0}
 .card.legend{background:var(--paper-2)}
+/* 判断の記録の根拠の群（card の中の一覧・id + 題）と撤退条件（格子の外の card 1 枚） */
+ul.basis{list-style:none;margin:0;padding:0;font-size:.85rem}
+ul.basis li{display:flex;gap:10px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line-soft);line-height:1.55}
+ul.basis li .xref{flex:0 0 5.5rem;font-family:var(--font-mono)}
+.chapbody>.card.retreat{margin-top:16px;max-width:none}
 .tbl-wrap{border:1px solid var(--line);border-radius:var(--radius-box);box-shadow:var(--shadow)}
 .tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:.8125rem}
 .tbl th,.tbl td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
