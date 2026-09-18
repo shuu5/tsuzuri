@@ -18,7 +18,7 @@ planner の実測（2026-09-18・main 96346bb）: 設計ノートの正本は `d
 
 (c) 名札の表（β・表に無い値は 2）:
 - 節の型 → 章の名札: prose →「説明」・parts-table →「部品」・ports-table →「口」・fields-table →「欄」・teeth-table →「検査」・contract-table →「契約表」。一覧に無い型の節が 1 つでもあれば 2（「節の型「<型>」は閉じた一覧に無い」・FR9）。
-- 文書の状態 → 名札と状態の行: example →「見本」／「見本・拘束力なし」・draft →「下書き」／「未承認・拘束力なし → 持ち主の承認で発効」・effective →「発効」／「発効・拘束力あり（承認 <approval.date>）」（approval が無ければ 2）・retired →「廃止」／「廃止 → 後継 <superseded_by へのリンク note-<id>.html>」（superseded_by が無ければ 2）。
+- 文書の状態 → 名札と状態の行: example →「見本」／「見本・拘束力なし」・draft →「下書き」／「未承認・拘束力なし → 持ち主の承認で発効」・effective →「発効」／「発効・拘束力あり（承認 <approval.date>）」（approval が無ければ 2）・retired →「廃止」／「廃止 → 後継 <superseded_by へのリンク note-<id>.html>」（superseded_by が無ければ 2・後継のリンクは実在を確かめず `note-<superseded_by>.html` にする＝後継の実在は床が数える・便 25 の判断の記録の面が id_link で実在を見るのとは違う点）。
 - 欄の要否（need）→ pill: required →「必須」・optional →「任意」。欄の形（shape）→ pill: text →「文字」・list →「一覧」・number →「数」・bool →「真偽」・table →「表」。
 - 参照 id の行き先: 便 25 の 4 形（条・rules 行・要件・判断の記録）+ 契約 id `<文書 id>#<行 id>`（同じ文書の契約表の行なら `#<節の anchor>-<行 id>`・他の文書なら「（まだ分からない）」）。在れば a（class xref）、無ければ id の直後に「（まだ分からない）」。
 - 章の帯: 章 i（1 から）は band-<((i − 1) mod 6) + 1>・kicker の絵記号は要件書の面の BANDS の 6 つを同じ順で回す。
@@ -33,7 +33,7 @@ planner の実測（2026-09-18・main 96346bb）: 設計ノートの正本は `d
   - ports-table: item-row・norm は span（class ew）の札「入力」の後に input、同じ札「出力」の後に output（要件書の面の when の札と同じ字面）・plain（pk「断る」）は refuses（値が「なし」なら「断らない」）・meta-chips は根拠と注。
   - fields-table: item-row・badges は need の pill と shape の pill・norm は enum が在れば「値域: <各値を「・」で>」（無ければ norm を出さない）・meta-chips は注。
   - teeth-table: item-row・norm は red_when・plain（pk「固定の材料」）は fixture を code で・meta-chips は根拠と注。
-  - contract-table: item-row・rid は 行 id・rt は title・badges は size の pill・norm は done・plain（pk「節」）は section の値を「§<n>」の字で同じ文書の該当の節の章へのリンク（節が無ければ「§<n>（まだ分からない）」）・meta-chips は 要件の hint（req の各 id のリンク）・検証の hint（verify の各値を code・改行で）・それ以外の欄は器の導出 file の field の順に、行に在る欄だけを field の name をそのまま label にした hint（一覧は各値を code・「・」で・文字はそのまま）。行の欄のうち id・title・req・section・verify・size・done は固定の置き場、器の導出 file に無い欄が行に在れば 2（「契約表の欄「<欄>」は器の導出 file に無い」）。
+  - contract-table: item-row・rid は 行 id・rt は title・badges は size の pill・norm は done・plain（pk「節」）は section の値を「§<n>」の字で同じ文書の該当の節の章へのリンク（節が無ければ「§<n>（まだ分からない）」）・meta-chips は 要件の hint（req の各 id のリンク）・検証の hint（verify の各値を code・改行で）・それ以外の欄は器の導出 file の field の順に、行に在る欄だけを field の name をそのまま label にした hint（一覧は各値を code・「・」で・文字はそのまま）。値が空の一覧の欄は hint を出さない（実の example.yaml の行 a の depends = [] がこの形・admin の事前読み 2026-09-18）。行の欄のうち id・title・req・section・verify・size・done は固定の置き場、器の導出 file に無い欄が行に在れば 2（「契約表の欄「<欄>」は器の導出 file に無い」）。
 - 図の章（figures が 1 つ以上のとき、節の章の後）: 帯の h2「図 <数> 枚」・kicker「図」・chapbody に section-lead-callout（style は `--band-n:2`）の中に図ごとに card（class「card accent warn」・cid「<id> · <type>」・ct は caption・cd は「図の生成はまだ無い（要件書 FR15 の便で足す）＝まだ分からない。根拠: <refs の各 id のリンク>」・refs が無ければ「根拠:」以降を出さない）。spec の中身は出さない（図の生成は FR15 の便）。
 - 承認欄: Frame の approval_band（h2「承認」・lead は状態の名札）→ chapbody → approval-block。approval が在れば sign 1 つ（role「承認」・who・when は date・「逐語「<verbatim>」」・stamp は ruling）。無ければ approval-block の中に p: example →「見本（拘束力なし）は承認欄を持たない。」・それ以外 →「未（持ち主の逐語と日付が入ると発効）」。
 - foot: Frame の foot（version は「<id> <version>」・generated は meta.generated・機械のための面の dl は id / status / version / profile / sections（節の数）/ figures（図の数））。字下げ無し・部品ごとに改行 1 つ・末尾に改行 1 つ・escape と id の規則は便 14 と同じ。
@@ -46,7 +46,7 @@ planner の実測（2026-09-18・main 96346bb）: 設計ノートの正本は `d
 1. 写しで `--face note --id full --write` = 0 ∧ 出力が expected-note.html と byte 一致。
 2. title に `<b>` を入れた写し = 0 ∧ 出力に `&lt;b&gt;` が在り `<b>` が無い。
 3. 実の正本（example）を `--write` = 0 ∧ `folio parts --check --dir design-intent` に note の面を --page で渡して = 0 ∧ stdout に「違反 0」（NFR2）。
-4. 実の正本の census: h1「設計ノート example」・副題が title の逐語・章の帯が 7（節 6 + 図 1）・item-row の数が 5 つの表の節の行の合計（4 + 4 + 4 + 2 + 1 = 15）・契約表の行の hint に write-set が無く（example の行は write-set を持たない）verify が在る・図の card 1・「（まだ分からない）」は図の cd の 1 か所だけ。
+4. 実の正本の census: h1「設計ノート example」・副題が title の逐語・章の帯が 7（節 6 + 図 1）・item-row の数が 5 つの表の節の行の合計（4 + 4 + 4 + 2 + 1 = 15）・契約表の行の hint に write-set が無く（example の行は write-set を持たない）depends の hint も無く（値が空の一覧）verify が在る・図の card 1・「（まだ分からない）」は図の cd の 1 か所だけ。
 5. `--check` の 3 値: 面が無い 2・1 byte 変えた面 1・一致 0。
 6. `--face note` に --id 無し = 2 ∧「--id が無い」／`--id nope`（無い）= 2／`--face srs --id full` = 2 ∧「--id は面 adr と note にだけ付く」／`--id Full`（形でない）= 2。
 7. 写しの節の型を「recipe」に = 2 ∧「閉じた一覧に無い」（FR9・AC7）。
