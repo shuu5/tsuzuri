@@ -20,7 +20,7 @@ planner の実測（2026-09-18・main f3f300c）: 判断の記録の正本は AD
 - 状態（status）→ 名札と状態の行: proposed →「提案中・拘束力なし」／「提案中・拘束力なし → 持ち主の承認で発効」・accepted →「発効」／「発効・拘束力あり（承認 <approval.date>）」（approval が無ければ 2・「accepted に承認欄が無い」）・retired →「廃止」／「廃止 → 後継 <superseded_by へのリンク>」（superseded_by が無ければ 2）。
 - 案の判定（verdict）→ 名札: adopted →「採用」・rejected →「退けた」。
 - 撤退条件の種類（retreat.kind）→ 名札: spike →「小さな試し」・measure →「数えた値」・ruling →「持ち主の裁定」。
-- 根拠の id の種類 → 行き先: `P-<数>`・`A-<数>`・`N-<数>` → `constitution.html#<id を小文字に>`（constitution.yaml の articles の id に在ること）／`R-<数>`・`D-<数>` → `constitution.html#<小文字>`（rules.yaml の rows の id に在ること）／`FR<数>`・`NFR<数>`・`AC<数>`・`CON<数>`・`GOAL<数>` → `srs.html#<小文字>`（srs.yaml の requirements / nonfunctional / acceptance / constraints / goals の id に在ること）／`ADR-<数>` → `adr-<数>.html`（同じ dir の `adr/ADR-<数>.yaml` が在ること）。在れば a 要素（class は xref・href は行き先・字は id）、無ければ id の字の直後に「（まだ分からない）」（リンク無し・class 無し）。上の 4 形のどれでもない id は 2（「根拠の id の形でない」）。
+- 根拠の id の種類 → 行き先: `P-<数>`・`A-<数>`・`N-<数>` → `constitution.html#<id を小文字に>`（constitution.yaml の articles の id に在ること）／枝番付きの規範文 id `P-<数>.<数>`（A-・N- も同じ形）→ その規範文 id が constitution.yaml の該当の条の statements の id に在れば条の anchor `constitution.html#<条 id を小文字に>`（枝番は落とす・字は枝番付きの id のまま）、無ければ「（まだ分からない）」。床（adr.rs の basis の形の判定）は枝番付きの条 id を受けるので、面も 2 にせず解く。実の正本 7 本の basis に枝番付きの id は 0 本（実測 2026-09-18）／`R-<数>`・`D-<数>` → `constitution.html#<小文字>`（rules.yaml の rows の id に在ること）／`FR<数>`・`NFR<数>`・`AC<数>`・`CON<数>`・`GOAL<数>` → `srs.html#<小文字>`（srs.yaml の requirements / nonfunctional / acceptance / constraints / goals の id に在ること）／`ADR-<数>` → `adr-<数>.html`（同じ dir の `adr/ADR-<数>.yaml` が在ること）。在れば a 要素（class は xref・href は行き先・字は id）、無ければ id の字の直後に「（まだ分からない）」（リンク無し・class 無し）。上の 4 形のどれでもない id は 2（「根拠の id の形でない」）。
 - 章の名と帯: 01 問題（context）・02 決定（decision）・03 案（options）・04 根拠と撤退条件（basis・retreat）・05 改訂と帰結（amends・consequences・grill・supersedes・superseded_by・note）・承認欄（approval）。帯の class は band-1・band-2・band-3・band-4・band-5 の順、kicker の絵記号は要件書の面（face_srs.rs の BANDS）の章 01〜05 の svg を写す。
 
 (d) 面の組み立て（face_adr.rs）。骨格は要件書の面と同じ順で、便 15 で face.rs に寄せた共有の口（Frame の関数 head・toc・band・approval_band・foot・dc と関数 card・hint・esc・anchor）を使う。Frame は const で name「判断の記録」・source「adr/ADR-n.yaml」（字面そのまま・foot の 1 行に出る）・favicon は要件書の面の FRAME の favicon の字面を写す・current は NAV の要素数（3）＝どの nav にも aria-current が付かない（NAV は 3 のまま・face.rs は型を変えない）・first 1・bands は (c) の 5 本・prev は（srs.html・要件書）・next は（index.html・入口）・parts は (e) の一覧。
@@ -52,13 +52,14 @@ planner の実測（2026-09-18・main f3f300c）: 判断の記録の正本は AD
 11. 写しの status を accepted にし approval（who 持ち主・date・ruling・verbatim・surface R-8）を足す = 0 ∧ cover-status に「発効・拘束力あり（承認 <date>）」∧ approval-block に sign 1 つ／status を retired にし superseded_by ADR-1 を足す = 0 ∧「廃止」∧ `adr-1.html` へのリンク。
 12. `folio parts --check --dir design-intent --page adr=tests/fixtures/face/adr/extra-class.html` = 1 ∧ stdout に「部品目録に無い class「not-in-catalog」」（AC14 の赤・要件書 AC14 の red_test）。
 13. `--write` と `--check` を両方付ける = 2（clap の group・既存の面と同じ）。
+14. 写しの basis に P-1.1（fixture の憲法の P-1 の規範文）を足す = 0 ∧ 出力に字 P-1.1 で `constitution.html#p-1` へのリンク／P-1.9（無い規範文）を足す = 0 ∧「P-1.9（まだ分からない）」∧ リンク無し。
 - 既存の歯: `crates/folio/tests/parts.rs` は write-set に在るが本文は変えない（FACES が 4 になっても既存の歯は面 3 つの path しか渡さない）。期待のうち凍結目録の fixture だけ (e) のとおり 7 部品の faces に adr を足す。歯 face.rs（1,597 行・正規化）は write-set に載せず本文も fixture も触らない。unit は置かない。
 
-(h) 便 24 までの形との接続: 新規は `crates/folio/src/face_adr.rs`（見積 600〜800 行）・歯 `crates/folio/tests/face_adr.rs`・fixture 3 本。`crates/folio/src/face.rs` は run の引数 1 つと adr の腕と文言（数行）・`crates/folio/src/main.rs` は旗 --id と Face の doc の 1 行と run の呼び出し・`crates/folio/src/parts.rs` は FACES の 1 語と文言 1 行・`design-intent/preview/parts.json` は 7 部品の faces。`face_srs.rs`・`face_constitution.rs`・`face_index.rs`・`site.rs`（build の出力は 5 のまま）・`render.rs`・`adr.rs`・`build.rs`・`folio.css`・`folio-ui.js`・`Cargo.toml`・`.github/workflows/` は触らない。face_srs.rs の非公開の関数（item_row・cover・approval・article_link・xref・meta_span）は呼ばず、同じ字面を face_adr.rs に自前で持つ。外部 crate は増えない。正規表現は使わない。size は M = 中身を変える既存の file 1 本あたりの増分は小さい（face.rs 十数行・main.rs 数行・parts.rs 2 行・parts.json 7 行）が、新規の face_adr.rs が大きい。
+(h) 便 24 までの形との接続: 新規は `crates/folio/src/face_adr.rs`（見積 600〜800 行）・歯 `crates/folio/tests/face_adr.rs`・fixture 3 本。`crates/folio/src/face.rs` は run の引数 1 つと adr の腕と文言（数行）・`crates/folio/src/main.rs` は旗 --id と Face の doc の 1 行と run の呼び出しと `mod face_adr;` の 1 行（lib.rs は無く、module の宣言は main.rs が 27 行持つ・実測 2026-09-18）・`crates/folio/src/parts.rs` は FACES の 1 語と文言 1 行・`design-intent/preview/parts.json` は 7 部品の faces。`face_srs.rs`・`face_constitution.rs`・`face_index.rs`・`site.rs`（build の出力は 5 のまま）・`render.rs`・`adr.rs`・`build.rs`・`folio.css`・`folio-ui.js`・`Cargo.toml`・`.github/workflows/` は触らない。face_srs.rs の非公開の関数（item_row・cover・approval・article_link・xref・meta_span）は呼ばず、同じ字面を face_adr.rs に自前で持つ。外部 crate は増えない。正規表現は使わない。size は M = 中身を変える既存の file 1 本あたりの増分は小さい（face.rs 十数行・main.rs 数行・parts.rs 2 行・parts.json 7 行）が、新規の face_adr.rs が大きい。
 
 ## 2. 範囲
 
-- 入れる: 面 adr の生成器・--id の口・部品目録の faces・凍結 fixture・AC14 の赤 fixture・歯 13 本。
+- 入れる: 面 adr の生成器・--id の口・部品目録の faces・凍結 fixture・AC14 の赤 fixture・歯 14 本。
 - 入れない: 入口の棚から各ページへの導線と build / serve の出力への追加（便 26）・walk 承認（便 26 の後・AC5 の形）・図の型・css の変更・暫定の読み物（readable.html）の退役（器の s2-07l.467 の後に A-1 で問う）・欄の決まりの規則の二重化。
 
 ## 3. 部品
@@ -90,5 +91,5 @@ section = "1"
 write-set = ["+crates/folio/src/face_adr.rs", "+crates/folio/tests/face_adr.rs", "crates/folio/src/face.rs", "crates/folio/src/main.rs", "crates/folio/src/parts.rs", "crates/folio/tests/parts.rs", "design-intent/preview/parts.json", "tests/fixtures/floor/parts-catalog.json", "+tests/fixtures/face/adr/ADR-2.yaml", "+tests/fixtures/face/adr/extra-class.html", "+tests/fixtures/face/expected-adr.html"]
 verify = ["cargo nextest run -p folio --test face_adr face_adr", "cargo nextest run -p folio --test parts parts", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
-done = "face_adr の歯 13 本（凍結 fixture との byte 一致・escape・実の正本 7 本で parts 合格・census・check の 3 値・id の口 4 形・状態と判定の表外・basis の型・未解決の根拠の印・accepted と retired の状態・AC14 の赤 fixture・mode）が緑、parts の歯は本文不変・凍結目録の fixture に adr を足して緑、clippy が 0 警告で CI が通る"
+done = "face_adr の歯 14 本（凍結 fixture との byte 一致・escape・実の正本 7 本で parts 合格・census・check の 3 値・id の口 4 形・状態と判定の表外・basis の型・未解決の根拠の印・accepted と retired の状態・AC14 の赤 fixture・mode・枝番付きの条 id）が緑、parts の歯は本文不変・凍結目録の fixture に adr を足して緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
