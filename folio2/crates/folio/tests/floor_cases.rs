@@ -232,6 +232,22 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+fn copy_external_schema(root: &Path) -> Result<(), String> {
+    io(
+        fs::create_dir_all(root.join("contracts")),
+        "contracts/ を作れない",
+    )?;
+    io(
+        fs::copy(
+            repo_root().join("contracts/schema.toml"),
+            root.join("contracts/schema.toml"),
+        ),
+        "器の導出 file を写せない",
+    )?;
+    Ok(())
+}
+
 /// git を呼ぶ（環境変数 GIT_* は継承しない・失敗は例外）。
 fn git_raw(cwd: &Path, args: &[&str]) -> Result<(), String> {
     let mut cmd = Command::new("git");
@@ -426,6 +442,7 @@ impl State<'_> {
                     return Err("fresh/design-intent が既に在る".to_string());
                 }
                 copy_tree(&self.work, &fresh)?;
+                copy_external_schema(&fr)?;
                 let _ = fs::remove_dir_all(fresh.join("anchors"));
                 gitc(&fr, &["init", "-q"])?;
                 git_commit(&fr)?;
@@ -583,13 +600,15 @@ fn run_case(cs: &Value, td: &Path) -> Option<String> {
         last: None,
         note: String::new(),
     };
-    let prepared = copy_tree(&repo_root().join("design-intent"), &st.work).and_then(|()| {
-        if flag(cs, "no_git") {
-            Ok(())
-        } else {
-            gitc(td, &["init", "-q"]).and_then(|()| git_commit(td))
-        }
-    });
+    let prepared = copy_tree(&repo_root().join("design-intent"), &st.work)
+        .and_then(|()| copy_external_schema(td))
+        .and_then(|()| {
+            if flag(cs, "no_git") {
+                Ok(())
+            } else {
+                gitc(td, &["init", "-q"]).and_then(|()| git_commit(td))
+            }
+        });
     if let Err(e) = prepared.and_then(|()| st.apply(&muts)) {
         return Some(format!("FAIL {id}: fixture の適用で例外 {e}"));
     }

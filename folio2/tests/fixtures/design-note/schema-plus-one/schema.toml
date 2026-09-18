@@ -1,0 +1,88 @@
+# AC13 の fixture（凍結・要件書 AC13 の red_test）。器（scribe2）の導出 file contracts/schema.toml の写しに
+# optional・list の欄 `extra` を 1 つ足したもの。写しの根の contracts/schema.toml と差し替えて使う。
+schema = 1
+
+[[field]]
+name = "id"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "title"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "req"
+need = "required"
+shape = "list"
+
+[[field]]
+name = "section"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "touches"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "surfaces"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "write-set"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "creates"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "tests"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "also"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "verify"
+need = "required"
+shape = "list"
+
+[[field]]
+name = "size"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "done"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "depends"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "classes"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "opens"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "extra"
+need = "optional"
+shape = "list"

@@ -1,0 +1,21 @@
+# AC8 の fixture（凍結・要件書 AC8 の red_test）。設計ノートの置き場へ `note.yaml` として置く。
+# 契約表の節を持つ最小の設計ノート＝器（scribe2）の導出 file contracts/schema.toml を読む。
+# 導出 file が無ければ判定は「まだ分からない」（合格にならない）。
+meta:
+  id: note
+  title: 契約表の節を持つ最小の設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-18
+  profile: design-note
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: 契約表の節が在るときだけ器の導出 file を読むことを見せる。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - {id: a, title: 最小の便, req: [FR10], section: "1", verify: [cargo nextest run -p folio --test note note], size: S, done: 導出 file が読めないとき「まだ分からない」になる}

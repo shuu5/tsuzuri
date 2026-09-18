@@ -24,6 +24,16 @@ fn copy_tree(src: &Path, dst: &Path) {
     }
 }
 
+/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+fn copy_external_schema(root: &Path) {
+    fs::create_dir_all(root.join("contracts")).unwrap();
+    fs::copy(
+        repo_root().join("contracts/schema.toml"),
+        root.join("contracts/schema.toml"),
+    )
+    .unwrap();
+}
+
 /// git を呼ぶ。環境変数 GIT_* は継承しない。
 fn git(cwd: &Path, args: &[&str]) {
     let mut cmd = Command::new("git");
@@ -65,6 +75,7 @@ impl Work {
             &repo_root().join("design-intent"),
             &root.join("design-intent"),
         );
+        copy_external_schema(&root);
         git(&root, &["init", "-q"]);
         git(&root, &["add", "-A"]);
         git(&root, &["commit", "-q", "-m", "fixture"]);

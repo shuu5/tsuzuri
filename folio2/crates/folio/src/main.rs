@@ -15,6 +15,7 @@ mod inject;
 mod intake;
 mod lineage;
 mod link;
+mod note;
 mod parts;
 mod refs;
 mod render;

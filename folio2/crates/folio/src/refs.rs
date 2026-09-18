@@ -93,8 +93,8 @@ fn id_of(row: &Node) -> Option<&str> {
     row.get("id").and_then(Node::as_str)
 }
 
-/// 解決先 = 要件書の id・条 id と規範文 id・rules 行 id。
-fn known_ids(
+/// 解決先 = 要件書の id・条 id と規範文 id・rules 行 id（便 23 の設計ノートの id 空間も同じ式を crate の中から呼ぶ）。
+pub(crate) fn known_ids(
     articles: &[&Node],
     rule_rows: &[&Node],
     srs: &Node,

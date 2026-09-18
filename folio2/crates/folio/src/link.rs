@@ -248,6 +248,11 @@ fn known_ids(
     known
 }
 
+/// 読めた判断の記録の id の集合（便 23 の設計ノートの id 空間も同じ読みを crate の中から呼ぶ）。
+pub(crate) fn adr_ids(adr: &Adr) -> HashSet<&str> {
+    adr.records.iter().map(|(id, _)| id.as_str()).collect()
+}
+
 /// 全欄の文字列を欄の道つきで歩く（表のキーは数えない）。
 fn walk(node: &Node, at: &str, f: &mut dyn FnMut(&str, &str)) {
     match node {
@@ -309,7 +314,7 @@ fn references(
     known: &HashSet<String>,
     report: &mut Report,
 ) {
-    let adr_ids: HashSet<&str> = adr.records.iter().map(|(id, _)| id.as_str()).collect();
+    let adr_ids = adr_ids(adr);
     let sources: [(&str, Vec<(String, &Node)>); 4] = [
         ("constitution.yaml", population_constitution(constitution)),
         ("rules.yaml", population(rules, |k| k != "schema")),

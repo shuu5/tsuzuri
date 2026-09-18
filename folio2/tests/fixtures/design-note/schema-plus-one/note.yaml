@@ -1,0 +1,21 @@
+# AC13 の fixture（凍結・要件書 AC13 の red_test）。設計ノートの置き場へ `note.yaml` として置く。
+# 契約表の行が欄 `extra` を持つ＝同じ dir の schema.toml（実の導出 file + 欄 1 つ）でだけ通り、
+# 実の導出 file のままなら違反 1 件（欄の一覧は folio2 の型にも散文にも無い・FR10）。
+meta:
+  id: note
+  title: 器の導出 file の欄 1 つを使う契約表を持つ設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-18
+  profile: design-note
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: 器の導出 file に欄を 1 つ足すと契約表の節の欄が追従することを見せる。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - {id: a, title: 欄 1 つを足した便, req: [FR10], section: "1", verify: [cargo nextest run -p folio --test note note], size: S, done: 足した欄を持つ行が通る, extra: [器が足した欄の値]}

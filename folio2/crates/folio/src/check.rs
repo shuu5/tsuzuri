@@ -2,7 +2,7 @@
 //! 数えるのは 重複キー・未知の節・欄の非空（便 0）と、参照 id の解決・rules 行の逆参照・憲法の件数（便 1・refs）と、語彙の検査 R-9（便 4・vocab）と、
 //! 判断の記録（adr/）の欄の決まり（便 5・adr）と、判断の記録と正本 4 file・凍結 anchor の列の突き合わせ（便 6・link）と、
 //! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）と、入口の正本の形（便 12・entrance）と、
-//! 相談窓口の正本の形（便 18・intake）。
+//! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
@@ -16,6 +16,7 @@ use crate::entrance;
 use crate::freeze::{self, After, Flag};
 use crate::intake;
 use crate::link;
+use crate::note;
 use crate::refs;
 use crate::verdict::Report;
 use crate::vocab;
@@ -104,6 +105,14 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
                 state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
                 adr_records = Some(records);
             }
+            note::check_note(
+                dir,
+                &src.constitution,
+                &src.rules,
+                &src.srs,
+                adr_records.as_ref(),
+                &mut report,
+            );
         }
         None => debug_assert!(!report.unknowns.is_empty()),
     }
