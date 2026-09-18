@@ -85,7 +85,7 @@ const TYPES: [(&str, &str); 6] = [
 const CONTRACT_TABLE: &str = "contract-table";
 
 /// 文書の状態 → 名札（状態の行は関数 status）。
-const STATUS: &[(&str, &str)] = &[
+pub(crate) const STATUS: &[(&str, &str)] = &[
     ("draft", "下書き"),
     ("effective", "発効"),
     ("retired", "廃止"),
@@ -289,7 +289,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
 // ── 読みと解き ──
 
 /// 文書 id の形（欄の決まり id_pattern = 英小文字で始まり 英小文字・数字・ハイフン）。
-fn is_doc_id(s: &str) -> bool {
+pub(crate) fn is_doc_id(s: &str) -> bool {
     let mut cs = s.chars();
     cs.next().is_some_and(|c| c.is_ascii_lowercase())
         && cs.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')

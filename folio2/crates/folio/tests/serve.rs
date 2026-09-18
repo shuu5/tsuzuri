@@ -45,6 +45,8 @@ fn built_site(case: &str) -> (PathBuf, PathBuf) {
     let work = td.join("src");
     fs::create_dir_all(work.join("preview")).unwrap();
     fs::create_dir_all(work.join("adr")).unwrap();
+    fs::create_dir_all(work.join("design-note")).unwrap();
+    fs::create_dir_all(td.join("contracts")).unwrap();
     for name in [
         "constitution.yaml",
         "rules.yaml",
@@ -59,6 +61,18 @@ fn built_site(case: &str) -> (PathBuf, PathBuf) {
     fs::copy(
         fixture().join("adr/ADR-2.yaml"),
         work.join("adr/ADR-2.yaml"),
+    )
+    .unwrap();
+    // 組み立ては設計ノートの面も出す（便 29）ので、写す設計ノートは欄の揃った便 28 の 1 本。
+    // その面は契約表の節を持つので、器の導出 file を写しの src/ の親 dir へも置く
+    fs::copy(
+        fixture().join("design-note/full.yaml"),
+        work.join("design-note/full.yaml"),
+    )
+    .unwrap();
+    fs::copy(
+        repo_root().join("contracts/schema.toml"),
+        td.join("contracts/schema.toml"),
     )
     .unwrap();
     for name in ["folio.css", "folio-ui.js"] {
