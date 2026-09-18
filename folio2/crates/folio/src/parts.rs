@@ -20,7 +20,7 @@ pub mod catalog {
 use catalog::{Component, FigureType, ShelfType, StyleProp};
 
 /// 面の名（--page の左辺・部品目録の faces の値）。
-pub const FACES: [&str; 4] = ["index", "constitution", "srs", "adr"];
+pub const FACES: [&str; 5] = ["index", "constitution", "srs", "adr", "note"];
 
 /// 検査する 3 つの属性。
 const ATTRS: [&str; 3] = ["class", "style", "data-component"];
@@ -83,7 +83,7 @@ pub fn check(dir: &Path, css: Option<&Path>, pages: &[String]) -> Report {
             Some((face, path)) => match FACES.iter().find(|f| **f == face) {
                 Some(face) => faces.push((face, PathBuf::from(path))),
                 None => report.unknown(format!(
-                    "--page「{page}」: 面の名「{face}」は index・constitution・srs・adr のどれでもない"
+                    "--page「{page}」: 面の名「{face}」は index・constitution・srs・adr・note のどれでもない"
                 )),
             },
             None => report.unknown(format!("--page「{page}」: <面の名>=<path> の形でない")),

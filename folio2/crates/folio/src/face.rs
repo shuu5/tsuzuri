@@ -10,7 +10,7 @@ use std::path::Path;
 use crate::parts::catalog::Component;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
-use crate::{face_adr, face_constitution, face_index, face_srs};
+use crate::{face_adr, face_constitution, face_index, face_note, face_srs};
 
 pub type R<T> = Result<T, String>;
 
@@ -39,19 +39,22 @@ impl Outcome {
 // ── 命令の口 ──
 
 pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> Outcome {
-    if !matches!(face, "index" | "constitution" | "srs" | "adr") {
+    if !matches!(face, "index" | "constitution" | "srs" | "adr" | "note") {
         return Outcome::unknown(format!(
-            "面の名「{face}」は index・constitution・srs・adr のどれでもない"
+            "面の名「{face}」は index・constitution・srs・adr・note のどれでもない"
         ));
     }
-    // 判断の記録の面は 1 本 1 枚なので id が要る。ほかの面は id を取らない
-    if face != "adr" && id.is_some() {
-        return Outcome::unknown("--id は面 adr にだけ付く");
+    // 判断の記録の面と設計ノートの面は 1 本 1 枚なので id が要る。ほかの面は id を取らない
+    if !matches!(face, "adr" | "note") && id.is_some() {
+        return Outcome::unknown("--id は面 adr と note にだけ付く");
     }
-    let adr_id = match id {
+    let doc_id = match id {
         Some(id) => id,
         None if face == "adr" => {
             return Outcome::unknown("--id が無い（面 adr は判断の記録の id が要る）");
+        }
+        None if face == "note" => {
+            return Outcome::unknown("--id が無い（面 note は設計ノートの文書 id が要る）");
         }
         None => "",
     };
@@ -64,7 +67,8 @@ pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> 
         "index" => face_index::derive(dir),
         "constitution" => face_constitution::derive(dir),
         "srs" => face_srs::derive(dir),
-        _ => face_adr::derive(dir, adr_id),
+        "note" => face_note::derive(dir, doc_id),
+        _ => face_adr::derive(dir, doc_id),
     };
     let html = match derived {
         Ok(h) => h,

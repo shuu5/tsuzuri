@@ -8,7 +8,8 @@
         "index",
         "constitution",
         "srs",
-        "adr"
+        "adr",
+        "note"
       ]
     },
     "hub-cover": {
@@ -22,7 +23,8 @@
       "faces": [
         "constitution",
         "srs",
-        "adr"
+        "adr",
+        "note"
       ]
     },
     "approval-block": {
@@ -30,7 +32,8 @@
       "faces": [
         "constitution",
         "srs",
-        "adr"
+        "adr",
+        "note"
       ]
     },
     "figure-panel": {
@@ -101,7 +104,8 @@
         "index",
         "constitution",
         "srs",
-        "adr"
+        "adr",
+        "note"
       ],
       "density": [
         "full",
@@ -113,7 +117,8 @@
       "faces": [
         "constitution",
         "srs",
-        "adr"
+        "adr",
+        "note"
       ]
     },
     "rtm-grid": {
@@ -145,7 +150,8 @@
       "faces": [
         "constitution",
         "srs",
-        "adr"
+        "adr",
+        "note"
       ],
       "slots": [
         "ir-head",
@@ -221,7 +227,8 @@
         "index",
         "constitution",
         "srs",
-        "adr"
+        "adr",
+        "note"
       ]
     }
   },

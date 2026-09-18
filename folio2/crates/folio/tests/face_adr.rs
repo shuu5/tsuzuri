@@ -388,7 +388,7 @@ fn face_adr_id_is_required_and_only_on_the_adr_face() {
     assert_eq!(code(&missing, "無い id"), 2, "{}", stderr(&missing));
     assert_eq!(code(&on_srs, "面 srs に --id"), 2, "{}", stderr(&on_srs));
     assert!(
-        stderr(&on_srs).contains("--id は面 adr にだけ付く"),
+        stderr(&on_srs).contains("--id は面 adr と note にだけ付く"),
         "{}",
         stderr(&on_srs)
     );

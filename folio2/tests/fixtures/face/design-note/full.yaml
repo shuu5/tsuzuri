@@ -1,0 +1,64 @@
+# 設計ノートの面の凍結 fixture（便 28・最小の手書き）。生成器から独立した固定の材料（P-10.1）。
+# 節は閉じた一覧 6 つを 1 つずつ・図 1 枚。参照 id は同じ dir の憲法・rules・要件書の見本（P-1・A-1・R-1・FR1・AC1）だけを指す。
+meta:
+  id: full
+  title: 設計ノートの面の凍結 fixture
+  version: v0.1
+  status: draft
+  generated: 2026-09-18
+  profile: design-note
+  note: 手書きの見本。面の骨格だけを測る。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      面の骨格を 1 枚で測る。段落は空行で分かれ、段落の中の改行は空白 1 つになる。
+
+      前置き。(1) あ。(2) い。
+  - n: 2
+    type: parts-table
+    title: 部品
+    rows:
+      - {id: alpha, name: 甲の部品, role: 正本を読む, ref: [P-1, FR1]}
+      - {id: beta, name: 乙の部品, role: 面を組む, note: 注の見本}
+  - n: 3
+    type: ports-table
+    title: 口
+    note: 口の節の注の見本。
+    rows:
+      - {id: read, name: 読み, input: 正本 1 本, output: 型付きの木, refuses: 欄の足りない正本, ref: [A-1]}
+      - {id: count, name: 数え, input: 型付きの木, output: 節と図の数, refuses: なし}
+  - n: 4
+    type: fields-table
+    title: 欄
+    rows:
+      - {id: status, name: 文書の状態, need: required, shape: text, enum: [draft, effective, retired, example]}
+      - {id: figures, name: 図, need: optional, shape: list, note: 図の生成はまだ無い}
+  - n: 5
+    type: teeth-table
+    title: 検査
+    rows:
+      - {id: anchor, name: 凍結 fixture と byte 一致, red_when: 面の字面が 1 byte でも変わる, fixture: tests/fixtures/face/expected-note.html, ref: [R-1, AC1]}
+  - n: 6
+    type: contract-table
+    title: 契約表
+    rows:
+      - {id: a, title: 設計ノートの面を 1 便で置く, req: [FR1], section: "1", write-set: [crates/folio/src/face_note.rs], verify: ["cargo nextest run -p folio --test face_note face_note"], size: S, done: 凍結 fixture と byte 一致する面が 1 枚出る}
+
+figures:
+  - id: fig-1
+    type: archify-architecture
+    caption: 面の組み立ての見本
+    refs: [FR1]
+    spec:
+      schema_version: 1
+      diagram_type: architecture
+      meta: {title: 面の組み立て, quality_profile: showcase}
+      components:
+        - {id: src, type: external, label: 正本, row: 0, col: 0}
+        - {id: face, type: frontend, label: 面, row: 0, col: 1}
+      connections:
+        - {from: src, to: face, label: 導出}
+sources: []

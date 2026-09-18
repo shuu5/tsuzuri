@@ -8,6 +8,7 @@ mod face;
 mod face_adr;
 mod face_constitution;
 mod face_index;
+mod face_note;
 mod face_srs;
 mod freeze;
 mod gitcheck;
@@ -114,10 +115,10 @@ enum Command {
     /// 正本から見本 3 面の 1 面を導出して書く（--write）・検査する（--check）。本便で生成器を持つのは憲法の面だけ
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Face {
-        /// 面の名（index・constitution・srs・adr）
+        /// 面の名（index・constitution・srs・adr・note）
         #[arg(long)]
         face: String,
-        /// 判断の記録の id（面 adr にだけ付く・面 adr には要る）
+        /// 判断の記録の id・設計ノートの文書 id（面 adr と note に付く・その面には要る）
         #[arg(long)]
         id: Option<String>,
         /// 正本の置き場
