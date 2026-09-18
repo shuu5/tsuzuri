@@ -19,9 +19,9 @@ planner の実測（2026-09-18・main f54efaa）: intake.yaml は meta（id foli
 answers: {q1: はい, q2: いいえ}
 ```
 
-- 回答の解き方（決定的・順序は questions の順）: 質問ごとに 値 = 回答の file の値 → 無ければ 既存の支度表の answers の値 → 無ければ recommend（推奨回答）。出所（source）= answered（file か既存の支度表から）／recommended（推奨で進めた）。
+- 回答の解き方（決定的・順序は questions の順）: 質問ごとに 値 = 回答の file の値 → 無ければ 既存の支度表の answers のうち source が answered の行の値 → 無ければ recommend（推奨回答）。既存の支度表の source が recommended の行は値を持たないものとして扱う（＝また問う・FR8）。出所（source）= answered（file か既存の支度表の answered の行から）／recommended（推奨で進めた）。
 - 写像: 質問ごとに 値が はい なら yes の一覧・いいえ なら no の一覧 の行き先を、questions の順・一覧の順に集め、同じ id は最初の 1 回だけ持つ（from = その質問の id）。行き先の type と with は targets の行から写す。
-- `--print`: 答えの無い質問（回答の file も既存の支度表も値を持たない質問）だけを、質問 1 つにつき 1 行「<id>. <ask>（おすすめ: <recommend>）— <why>」で標準出力へ書く。先頭に 1 行「folio intake: 質問 <数> つ（答えは旗 answers の YAML の file で渡す・答えなくてもおすすめで進む）」。答えの無い質問が 0 なら 1 行「folio intake: 問う質問は無い（支度表 <file> が全部答え済み）」。終了 0。file は書かない。
+- `--print`: 答えの無い質問（回答の file も既存の支度表の source answered の行も値を持たない質問）だけを、質問 1 つにつき 1 行「<id>. <ask>（おすすめ: <recommend>）— <why>」で標準出力へ書く。先頭に 1 行「folio intake: 質問 <数> つ（答えは旗 answers の YAML の file で渡す・答えなくてもおすすめで進む）」。答えの無い質問が 0 なら 1 行「folio intake: 問う質問は無い（支度表 <file> が全部答え済み）」。終了 0。file は書かない。
 - `--write`: 上の解き方で支度表を組み、`<dir>/<sheet.file>` へ書く（在れば上書き＝生成物・P-6.2）。終了 0・標準出力「folio intake: 支度表を書いた（持つ文書 <数>・推奨で進めた項目 <数>・<path>）」。支度表の形（yaml.rs の write の字面・先頭の注釈は固定の 1 行「# folio2 支度表（folio intake の生成物・手で直さない・承認は対話面と台帳で）」・数と日付は書かない）:
 
 ```
@@ -41,13 +41,13 @@ approval: []
 
 (b) 実装 `crates/folio/src/sheet.rs`（新規・命令の口と解き方と書き手）。`crates/folio/src/main.rs` に `mod sheet;` と Command の variant（Intake・dir・answers・print・write）とその分岐。正規表現は使わない。外部 crate は足さない。`face.rs` の load と X はそのまま使う（変えない）。
 
-(c) 歯 `crates/folio/tests/sheet.rs`（binary 経由・関数名はすべて sheet を含める＝verify の filter 語）。歯の置き場のため既存の歯 `crates/folio/tests/vocab.rs` を write-set に載せるが本文も期待も変えない（便 17 と同じ形・filter 語 vocab は `tests/vocab.rs` の 2 本に解ける）。入力は `design-intent/` を丸ごと一時 dir へ写す（写しの intake-sheet.yaml は歯の中でだけ生まれる・版管理の design-intent には書かない）。
+(c) 歯 `crates/folio/tests/sheet.rs`（binary 経由・関数名はすべて sheet を含める＝verify の filter 語・verify の 1 行目は旗無しの filter で integration と src の unit〔module の道 sheet::tests〕の両方を回す・folio は bin crate で lib の的が無い）。歯の置き場のため既存の歯 `crates/folio/tests/vocab.rs` を write-set に載せるが本文も期待も変えない（便 17 と同じ形・filter 語 vocab は `tests/vocab.rs` の 2 本に解ける）。入力は `design-intent/` を丸ごと一時 dir へ写す（写しの intake-sheet.yaml は歯の中でだけ生まれる・版管理の design-intent には書かない）。
 - AC1（凍結 anchor・P-10.1）: 固定の回答 5 つ `tests/fixtures/intake/answers-5.yaml`（q1〜q5 = はい・いいえ・はい・はい・いいえ）で `--write` = 0 ∧ 書いた支度表が `tests/fixtures/intake/expected-sheet.yaml` と byte 一致（documents = constitution・adr・design-note の 3 行・recommended 0 行・answers 5 行 source answered）。回答の file 無しで `--write` = 0 ∧ `tests/fixtures/intake/expected-sheet-recommended.yaml` と byte 一致（documents 5 行・recommended 5 行・answers 5 行 source recommended）。期待の file は最初の 1 回は生成物を写して置いてよく、置いた後は歯が固定する。
 - FR8（差分）: 回答 3 つ `tests/fixtures/intake/answers-3.yaml`（q1・q3・q4 = はい）で `--write` → `--print` の出力が q2 と q5 の 2 行 + 先頭の 1 行だけ ∧ q1 の ask を含まない → q2・q5 の回答（いいえ・いいえ）だけを持つ file で `--write` → 支度表が `expected-sheet.yaml` と byte 一致（引き継ぎ + 上書きで同じ結果）。
 - `--print`（支度表なし）: 先頭の 1 行 + 5 行 ∧ 各行に ask と「おすすめ: はい」∧ file は書かれない。全部答え済みの後の `--print` = 「問う質問は無い」の 1 行。
 - 導出できない 6 つ（どれも 2 で支度表が出来ていない・在った支度表は変わらない）: 回答の質問の id が無い（q9）／値が values に無い／回答の file の最上位が一覧／intake.yaml の questions の recommend を values に無い値に変異／yes の行き先を targets に無い id に変異／既存の支度表の answers の value を values に無い値に変異。
 - 出力先の親 dir が無い `--dir` = 2。`--print` と `--write` の同時指定と両方無しは clap の使い方の誤り（終了 2）。
-- unit（`src/sheet.rs` の中・名に sheet を含む）: 回答の解き方（file → 既存 → 推奨 の順と source）・写像の重複の畳み（同じ id は最初の 1 回・from は最初の質問）。
+- unit（`src/sheet.rs` の中・名に sheet を含む）: 回答の解き方（file → 既存の answered の行 → 推奨 の順と source・既存の recommended の行は引き継がず値なしと扱う case を 1 つ）・写像の重複の畳み（同じ id は最初の 1 回・from は最初の質問）。
 
 (d) 便 18 までの形との接続: 新規は `crates/folio/src/sheet.rs`・歯 `crates/folio/tests/sheet.rs`・fixture 4 本（新規 dir `tests/fixtures/intake/`・要件書 AC1 の red_test が名指す path）。`crates/folio/src/main.rs` は `mod sheet;` と variant と分岐だけ。`face.rs`・便 18 の床の module（intake.rs）・`yaml.rs`・他の src・`build.rs`・`Cargo.toml`・`Cargo.lock`・`scripts/`・`.github/workflows/`・`design-intent/`・`.gitignore` は触らない（生成した支度表を版管理に置くかは支度表の承認の便で決める）。size は S = 中身を変える既存の file 1 本あたりの増分の見積（`main.rs` の増分は variant と分岐で 60 行未満・新規と fixture は増分に数えない）。
 
@@ -82,7 +82,7 @@ title = "命令 folio intake — 質問を散文で出し、回答から支度�
 req = ["FR1", "FR2", "FR8"]
 section = "1"
 write-set = ["+crates/folio/src/sheet.rs", "crates/folio/src/main.rs", "+crates/folio/tests/sheet.rs", "crates/folio/tests/vocab.rs", "+tests/fixtures/intake/answers-5.yaml", "+tests/fixtures/intake/answers-3.yaml", "+tests/fixtures/intake/expected-sheet.yaml", "+tests/fixtures/intake/expected-sheet-recommended.yaml"]
-verify = ["cargo nextest run -p folio --test sheet sheet", "cargo nextest run -p folio --test vocab vocab", "cargo clippy --workspace --all-targets -- -D warnings"]
+verify = ["cargo nextest run -p folio sheet", "cargo nextest run -p folio --test vocab vocab", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "sheet の歯（AC1 の凍結 anchor 2 本と byte 一致・FR8 の差分と引き継ぎ・print の 3 形・導出できない 6 つ・親 dir・unit）が緑、vocab の歯が期待不変で緑（置き場として write-set に在るだけ）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
