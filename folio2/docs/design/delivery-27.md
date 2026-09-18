@@ -22,7 +22,7 @@ planner の実測（2026-09-18・main eb239cb）: 判断の記録の正本 7 本
 
 (e) 凍結 fixture の再凍結: `tests/fixtures/face/expected-adr.html`（便 25・face_adr の歯の写し）と `tests/fixtures/face/expected-site-adr-2.html`（便 26・組み立ての歯の写し）を (a)〜(c) の形で凍結し直す（差分は表紙の h1 と副題・章 01/02 の段落か列挙・章 04 の群と撤退条件だけ）。fixture の ADR-2.yaml は触らない（その context / decision は列挙を持たないので p のまま・basis 6 = 憲法 2（P-1・A-1）・数値の表 1（R-1）・要件書 2（FR1・AC1）・判断の記録 1（ADR-1）→ card 4・`--band-n:4`）。
 
-(f) 歯 `crates/folio/tests/face_adr.rs`（関数名はすべて face_adr を含める・`--test face_adr` の scope）: 既存 14 本は (e) の再凍結と (a)(c) の字面に追従（census は h1 が「判断の記録 <id>」・副題が title の逐語・ul.basis の li の数が basis の数・各 li に題の span）。次を足す。
+(f) 歯 `crates/folio/tests/face_adr.rs`（関数名はすべて face_adr を含める・`--test face_adr` の scope）: 既存 14 本は (e) の再凍結と (a)(c) の字面に追従。census（歯 4・実の正本 7 本が対象）は h1 が「判断の記録 <id>」・副題が title の逐語・ul.basis の li の数が basis の数・各 li に題の span（実の正本の basis の行き先は全部題を持つ＝条の title・rules 行の what・要件の title・ADR-1〜7 の title）。写しの ADR-2 の basis の ADR-1（stub・題なし）は歯 18 だけが見る。次を足す。
 15. 写しの context を「前置き。(1) あ。(2) い。」に = 0 ∧ 章 01 に p.intro 1 と ol.items の li 2（字は「あ。」「い。」）。
 16. 写しの context を「(1) あ、(2) い。」に = 0 ∧ 章 01 は p 1 つで ol.items が無い。
 17. 写しの context を「前置き。(1) あ。(3) い。」に = 0 ∧ ol.items が無い（1 つ以下）。
