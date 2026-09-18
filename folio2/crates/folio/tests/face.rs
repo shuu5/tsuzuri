@@ -1405,3 +1405,180 @@ fn face_index_sheet_approval_is_the_first_row_when_it_is_stamped() {
         sheet_section(&html)
     );
 }
+
+// ── 支度表の付録は index.yaml の annexes に解く（便 22・docs/design/delivery-22.md §1 (c)）──
+
+fn copy_tree(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let to = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &to);
+        } else {
+            fs::copy(entry.path(), &to).unwrap();
+        }
+    }
+}
+
+/// 実の正本の写しで `folio intake --write`（`answers` が None なら全部おすすめ）→ 入口の面を書く。
+/// 戻り値 = (一時 dir, 出力先, 面の本文)。
+fn real_round_trip(case: &str, answers: Option<PathBuf>) -> (PathBuf, PathBuf, String) {
+    let td = temp_dir(case);
+    let work = td.join("design-intent");
+    copy_tree(&design_intent(), &work);
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    cmd.arg("intake").arg("--dir").arg(&work);
+    if let Some(path) = &answers {
+        cmd.arg("--answers").arg(path);
+    }
+    let intake = cmd.arg("--write").output().expect("folio を起動できない");
+    assert_eq!(
+        code(&intake, "folio intake --write"),
+        0,
+        "{case}: {}",
+        stderr(&intake)
+    );
+    let n = load_yaml("intake.yaml");
+    assert!(
+        work.join(text(&n["sheet"], "file")).exists(),
+        "{case}: 支度表が書かれていない"
+    );
+    let (out, html) = index_from(case, &work, &td);
+    (td, out, html)
+}
+
+/// 実の正本で憲法の行に出る付録の型（intake.yaml の constitution の with を index.yaml の annexes に解いたもの）。
+fn real_constitution_annex_types() -> Vec<String> {
+    let i = load_yaml("index.yaml");
+    let n = load_yaml("intake.yaml");
+    let annexes = seq(&i["shelf"]["annexes"], "annexes");
+    let target = seq(&n["targets"], "targets")
+        .iter()
+        .find(|t| text(t, "id") == "constitution")
+        .expect("intake.yaml の targets に constitution が無い");
+    let with = seq(&target["with"], "with");
+    assert!(!with.is_empty(), "憲法の行に付録が無い");
+    with.iter()
+        .map(|w| {
+            let id = w.as_str().expect("付録の id が文字列でない");
+            let a = annexes
+                .iter()
+                .find(|a| text(a, "id") == id)
+                .unwrap_or_else(|| panic!("付録「{id}」が index.yaml の annexes に無い"));
+            esc(text(a, "type"))
+        })
+        .collect()
+}
+
+/// 持つ文書の行の憲法の字面（付録は annexes の型を「・」で繋ぐ）。
+fn real_constitution_line() -> String {
+    let n = load_yaml("intake.yaml");
+    let ty = seq(&n["targets"], "targets")
+        .iter()
+        .find(|t| text(t, "id") == "constitution")
+        .map(|t| esc(text(t, "type")))
+        .expect("intake.yaml の targets に constitution が無い");
+    format!(
+        "{ty}（付録の{}）",
+        real_constitution_annex_types().join("・")
+    )
+}
+
+#[test]
+fn face_index_sheet_on_the_real_sources_round_trips_intake_and_parts_check() {
+    let answers = repo_root().join("tests/fixtures/intake/answers-5.yaml");
+    let (td, out, html) = real_round_trip("index-sheet-real", Some(answers));
+    let check = parts_check(&[format!("index={}", out.display())]);
+    let want = real_constitution_line();
+    let section = sheet_section(&html).to_string();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&check, "folio parts --check"),
+        0,
+        "{}{}",
+        stdout(&check),
+        stderr(&check)
+    );
+    assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
+    assert!(
+        section.contains(&want),
+        "節「支度表」に無い: {want}\n{section}"
+    );
+}
+
+#[test]
+fn face_index_sheet_on_the_real_sources_round_trips_with_the_recommended_answers() {
+    let (td, _, html) = real_round_trip("index-sheet-real-recommended", None);
+    let want = real_constitution_line();
+    let section = sheet_section(&html).to_string();
+    let _ = fs::remove_dir_all(&td);
+    let n = load_yaml("intake.yaml");
+    let questions = seq(&n["questions"], "questions");
+    assert_eq!(questions.len(), 5, "質問の数");
+    for q in questions {
+        let ask = esc(text(q, "ask"));
+        assert!(
+            section.contains(&ask),
+            "推奨で進めた項目に無い: {ask}\n{section}"
+        );
+    }
+    assert!(
+        section.contains(&want),
+        "節「支度表」に無い: {want}\n{section}"
+    );
+}
+
+#[test]
+fn face_index_unknown_when_a_sheet_annex_is_outside_the_annexes() {
+    let (td, work) = index_sheet_copy("index-unknown-sheet-annex");
+    edit(&work.join("intake-sheet.yaml"), |t| {
+        t.replacen("with: [vocabulary]", "with: [nowhere]", 1)
+    });
+    let out = td.join("never.html");
+    let run = folio_face("index", &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --face index"), 2, "{}", stderr(&run));
+    for want in [
+        "まだ分からない",
+        "intake-sheet.yaml.documents[0].with[0]",
+        "付録の id「nowhere」が index.yaml の annexes に無い",
+    ] {
+        assert!(
+            stderr(&run).contains(want),
+            "{want} が無い: {}",
+            stderr(&run)
+        );
+    }
+    assert!(!exists, "導出できないのに出力先に書いた");
+}
+
+#[test]
+fn face_index_sheet_annex_type_comes_from_the_index_annexes() {
+    let (td, work) = index_sheet_copy("index-sheet-annex-type");
+    edit(&work.join("intake-sheet.yaml"), |t| {
+        t.replacen("with: [vocabulary]", "with: [rules]", 1)
+    });
+    let (_, html) = index_from("付録 rules", &work, &td);
+    let section = sheet_section(&html).to_string();
+    let _ = fs::remove_dir_all(&td);
+    let n = load_yaml_at(&fixture(), "intake.yaml");
+    assert!(
+        seq(&n["targets"], "targets")
+            .iter()
+            .all(|t| text(t, "id") != "rules"),
+        "付録 rules は intake.yaml の targets に無いはず（型は annexes から来る）"
+    );
+    let i = load_yaml_at(&fixture(), "index.yaml");
+    let ty = seq(&i["shelf"]["annexes"], "annexes")
+        .iter()
+        .find(|a| text(a, "id") == "rules")
+        .map(|a| esc(text(a, "type")))
+        .expect("index.yaml の annexes に rules が無い");
+    let sheet = load_yaml_at(&fixture(), "intake-sheet.yaml");
+    let doc_ty = esc(text(&seq(&sheet["documents"], "documents")[0], "type"));
+    let want =
+        format!("<span class=\"k\">持つ文書</span><span class=\"v\">{doc_ty}（付録の{ty}）</span>");
+    assert!(section.contains(&want), "{want} が無い: {section}");
+}

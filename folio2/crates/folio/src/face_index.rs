@@ -6,6 +6,9 @@
 //! `face.rs` を呼ぶ。入口は番号付きの章を持たないので、帯は slim だけ・目次と prevnext は出さない。
 //! 節「支度表」（便 20・delivery-20.md §1 (b)）は相談窓口の正本 `intake.yaml` の sheet の節と、在れば支度表
 //! `<dir>/<sheet.file>`（`folio intake` の生成物）から出す。支度表が無ければ「まだ無い」の 1 行（導出できないではない）。
+//! 支度表の documents の各行の id は `intake.yaml` の targets に解き、with（付録の id）は入口の正本 `index.yaml` の
+//! shelf.annexes に解く（便 22・delivery-22.md §1 (a)）——付録は targets（行き先＝棚の文書 4 つと注入）には無く、
+//! 棚の付録の行にだけ在るので、便 18 の床（targets の with を annexes に解く）と同じ規則で読む。
 
 use std::fs;
 use std::path::Path;
@@ -115,6 +118,8 @@ struct Rel {
 struct Ctx {
     docs: Vec<Doc>,
     annexes: Vec<Annex>,
+    /// 棚の付録の id → 型（escape 済み・`index.yaml` の shelf.annexes の順）。
+    annex_types: Vec<(&'static str, String)>,
     relations: Vec<Rel>,
     adr: usize,
 }
@@ -155,7 +160,7 @@ pub fn derive(dir: &Path) -> R<String> {
 
     let ctx = context(&i, &c, &s, &v, &r, adr)?;
     let sheet = sheet_head(&n)?;
-    let filled = sheet_body(dir, &n, &sheet)?;
+    let filled = sheet_body(dir, &n, &sheet, &ctx.annex_types)?;
     let m = i.f("meta")?;
 
     let mut o: Vec<String> = Vec::new();
@@ -336,12 +341,13 @@ fn context(i: &X<'_>, c: &X<'_>, s: &X<'_>, v: &X<'_>, r: &X<'_>, adr: usize) ->
     let mut ctx = Ctx {
         docs,
         annexes,
+        annex_types,
         relations: Vec::new(),
         adr,
     };
     let type_of = |x: &X<'_>, ctx: &Ctx| -> R<String> {
         let id = x.text()?;
-        if let Some((_, ty)) = annex_types.iter().find(|(k, _)| *k == id) {
+        if let Some((_, ty)) = ctx.annex_types.iter().find(|(k, _)| *k == id) {
             return Ok(ty.clone());
         }
         Ok(ctx.doc(x)?.ty.clone())
@@ -413,8 +419,27 @@ fn target_type(targets: &[(String, String)], id: &str, at: &str) -> R<String> {
         .ok_or_else(|| format!("{at}: 行き先の id「{id}」が {INTAKE} の targets に無い"))
 }
 
+/// 付録の id を棚の付録（`index.yaml` の shelf.annexes）の型に写す（棚に無い id は Err）。
+fn annex_type(annexes: &[(&'static str, String)], id: &str, at: &str) -> R<String> {
+    annexes
+        .iter()
+        .find(|(k, _)| *k == id)
+        .map(|(_, ty)| ty.clone())
+        .ok_or_else(|| {
+            format!(
+                "{at}: 付録の id「{id}」が {} の annexes に無い",
+                FRAME.source
+            )
+        })
+}
+
 /// 支度表が在れば読む（無ければ None＝「まだ無い」・在るのに読めないは Err）。
-fn sheet_body(dir: &Path, n: &X<'_>, head: &SheetHead) -> R<Option<SheetBody>> {
+fn sheet_body(
+    dir: &Path,
+    n: &X<'_>,
+    head: &SheetHead,
+    annexes: &[(&'static str, String)],
+) -> R<Option<SheetBody>> {
     if !dir.join(&head.file).exists() {
         return Ok(None);
     }
@@ -430,7 +455,7 @@ fn sheet_body(dir: &Path, n: &X<'_>, head: &SheetHead) -> R<Option<SheetBody>> {
         let mut with = Vec::new();
         if let Some(list) = row.g("with")? {
             for w in list.seq()? {
-                with.push(target_type(&targets, &w.text()?, &w.at)?);
+                with.push(annex_type(annexes, &w.text()?, &w.at)?);
             }
         }
         documents.push(if with.is_empty() {

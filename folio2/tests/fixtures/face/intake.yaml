@@ -1,6 +1,8 @@
 # folio face の凍結 fixture（便 20・P-10.1）— 相談窓口の正本の最小形。手書き・design-intent/ の写しではない。
 # 入口の面が読むのは sheet の節（節の見出しと説明・支度表の file 名）と targets（支度表の行き先の id → 型）だけ。
-# targets は支度表の documents の id と with の id の行き先を全部持つ（写せない id は「まだ分からない」）。
+# targets は支度表の documents の id の行き先を持つ（写せない id は「まだ分からない」）。付録（vocabulary）は
+# 行き先ではないので targets には無く、支度表の with は入口の正本 index.yaml の shelf.annexes に解く（便 22）
+# ——実の正本 design-intent/intake.yaml と同じ形。
 # title に escape の要る字「&」「<b>」を含む。
 
 meta:
@@ -16,7 +18,6 @@ answers:
 
 targets:
   - {id: constitution, type: 憲法, with: [vocabulary]}
-  - {id: vocabulary, type: 語彙, with: []}
   - {id: inject, type: 憲法の注入, with: []}
 
 questions:
