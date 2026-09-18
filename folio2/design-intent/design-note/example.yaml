@@ -70,4 +70,5 @@ figures:
       connections:
         - {from: spec, to: tool, label: 検査}
         - {from: tool, to: body, label: 描画}
+      layout: {mode: grid, cols: 3, gapX: 70, gapY: 110, cellW: 160, cellH: 70}
 sources: []

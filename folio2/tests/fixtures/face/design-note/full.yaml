@@ -61,4 +61,5 @@ figures:
         - {id: face, type: frontend, label: 面, row: 0, col: 1}
       connections:
         - {from: src, to: face, label: 導出}
+      layout: {mode: grid, cols: 2, gapX: 70, gapY: 110, cellW: 160, cellH: 70}
 sources: []

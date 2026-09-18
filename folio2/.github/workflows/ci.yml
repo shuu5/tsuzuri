@@ -13,6 +13,10 @@ jobs:
       - name: toolchain（rust-toolchain.toml）
         run: rustup show active-toolchain || rustup toolchain install
       - uses: taiki-e/install-action@nextest
+      # 図の道具（vendor/archify・rules 行 R-15）の実行環境。歯が node を子の処理で呼ぶ（便 30・ADR-4）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       # render の歯が day-1 の script（scripts/render_preview.py）を物差しに回す（parity の歯と Python の床は 2026-09-18 に退役・scripts/retired/）
       - uses: actions/setup-python@v5
         with:
