@@ -10,6 +10,7 @@ mod face_constitution;
 mod face_index;
 mod face_note;
 mod face_srs;
+mod figure;
 mod freeze;
 mod gitcheck;
 mod hello;
@@ -128,6 +129,28 @@ enum Command {
         #[arg(long)]
         out: PathBuf,
         /// 導出した面を出力先へ書く
+        #[arg(long)]
+        write: bool,
+        /// 出力先と導出の byte 一致を検査する（無い 2・不一致 1・一致 0）
+        #[arg(long)]
+        check: bool,
+    },
+    /// 設計ノートの図 1 枚を型付き記述から図の道具（rules 行 R-15）で検査と描画に掛け、図の本体（SVG）を出力先へ書く（--write）・検査する（--check）
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
+    Figure {
+        /// 設計ノートの文書 id
+        #[arg(long)]
+        doc: String,
+        /// 図の id（figures の行の id）
+        #[arg(long)]
+        id: String,
+        /// 正本の置き場
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 出力先（既定なし・相対なら --dir からの相対・絶対ならそのまま）
+        #[arg(long)]
+        out: PathBuf,
+        /// 導出した図の本体を出力先へ書く
         #[arg(long)]
         write: bool,
         /// 出力先と導出の byte 一致を検査する（無い 2・不一致 1・一致 0）
@@ -323,6 +346,28 @@ fn main() -> ExitCode {
                 face::Mode::Check
             };
             let outcome = face::run(&face, id.as_deref(), &dir, &out, mode);
+            if let Some(line) = &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Figure {
+            doc,
+            id,
+            dir,
+            out,
+            write,
+            check: _,
+        } => {
+            let mode = if write {
+                figure::Mode::Write
+            } else {
+                figure::Mode::Check
+            };
+            let outcome = figure::run(&doc, &id, &dir, &out, mode);
             if let Some(line) = &outcome.stdout {
                 println!("{line}");
             }
