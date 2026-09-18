@@ -10,6 +10,7 @@ mod face_index;
 mod face_srs;
 mod freeze;
 mod gitcheck;
+mod hello;
 mod inject;
 mod intake;
 mod lineage;
@@ -157,6 +158,15 @@ enum Command {
         /// 支度表を <dir>/<sheet.file> へ書く（在れば上書き）
         #[arg(long)]
         write: bool,
+    },
+    /// 設計文書がまだ無いことを 1 行だけ知らせる（整備済み・止める設定・出した印のどれかが在れば何も出さない）
+    Hello {
+        /// 正本の置き場
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 印の置き場（既定は環境変数 XDG_STATE_HOME の下の folio・無ければ HOME の下の .local/state/folio）
+        #[arg(long)]
+        state: Option<PathBuf>,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -346,6 +356,16 @@ fn main() -> ExitCode {
             };
             let outcome = sheet::run(&dir, answers.as_deref(), mode);
             for line in &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Hello { dir, state } => {
+            let outcome = hello::run(&dir, state.as_deref());
+            if let Some(line) = &outcome.stdout {
                 println!("{line}");
             }
             if let Some(line) = &outcome.stderr {
