@@ -1,7 +1,7 @@
 # folio2 設計ノートの見本（status: example・拘束力なし・f2-648.7）。欄の決まりは design-note/schema.yaml。M1 の床の凍結 anchor（P-10.1）の材料＝生成器から独立した固定の見本。
 # 題材は判断の記録 ADR-4（図の生成）の組み立て。中身は要件書 FR15 の言い換えであって新しい決定を含まない（決定は ADR-4 が持つ）。
 meta:
-  id: example-figure-pipeline
+  id: example
   title: 設計ノートの見本 — 図の生成の組み立て（判断の記録 ADR-4）
   version: v0.1
   status: example
