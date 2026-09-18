@@ -17,6 +17,7 @@ mod lineage;
 mod link;
 mod note;
 mod parts;
+mod prose;
 mod refs;
 mod render;
 mod serve;

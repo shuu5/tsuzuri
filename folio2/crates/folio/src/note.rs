@@ -16,6 +16,7 @@ use crate::adr::Adr;
 use crate::check::{duplicate_ids, non_empty, row_id, unknown_sections};
 use crate::link;
 use crate::parts::catalog::FigureType;
+use crate::prose;
 use crate::refs;
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
@@ -24,8 +25,9 @@ use crate::yaml::{self, Node};
 const DIR: &str = "design-note";
 const SCHEMA_FILE: &str = "design-note/schema.yaml";
 
-/// 違反の種別（設計ノートの形）。
+/// 違反の種別（設計ノートの形・散文の門）。
 const KIND: &str = "note";
+const PROSE_GATE: &str = "prose-gate";
 
 // ── 床の定数（design-note/schema.yaml の schema 節の写し） ──
 
@@ -487,6 +489,10 @@ pub fn check_note(
     } else {
         None
     };
+    // 散文の門の一覧は検査のたびに rules 行 R-16 の value から読む（R-16 の note・P-5.1）
+    let gate = prose::gate(rules)
+        .inspect_err(|e| report.unknown(format!("rules.yaml: R-16 の value が読めない: {e}")))
+        .ok();
     let known = base_known_ids(constitution, rules, srs, adr);
     let requirements = requirement_ids(srs);
     let note_ids: HashSet<&str> = notes.iter().map(|n| n.id.as_str()).collect();
@@ -497,6 +503,7 @@ pub fn check_note(
             &known,
             &requirements,
             external.as_deref(),
+            gate.as_ref(),
             report,
         );
     }
@@ -847,12 +854,14 @@ fn requirement_ids(srs: &Node) -> HashSet<String> {
 
 // ── (c) 設計ノート 1 本 ──
 
+#[allow(clippy::too_many_arguments)]
 fn check_one(
     note: &NoteDoc,
     note_ids: &HashSet<&str>,
     base: &HashSet<String>,
     requirements: &HashSet<String>,
     external: Option<&[Field]>,
+    gate: Option<&prose::Gate>,
     report: &mut Report,
 ) {
     let file = format!("{DIR}/{}", note.file);
@@ -904,6 +913,7 @@ fn check_one(
             requirements,
             &prose_ns,
             external,
+            gate,
             report,
         );
     }
@@ -1027,6 +1037,7 @@ fn check_section(
     requirements: &HashSet<String>,
     prose_ns: &HashSet<&str>,
     external: Option<&[Field]>,
+    gate: Option<&prose::Gate>,
     report: &mut Report,
 ) {
     let shown = section.get("n").and_then(Node::as_str).unwrap_or("?");
@@ -1074,6 +1085,23 @@ fn check_section(
                     KIND,
                     format!("{file}: {at}: 節の型 {ty} に置けない欄「{key}」が在る"),
                 );
+            }
+        }
+        // 散文の門（FR12・R-16）。印を持つ文の参照 id は同じ母集団で解く
+        if let (Some(gate), Some(body)) = (gate, field(section, "body")) {
+            for m in prose::scan(body, gate) {
+                if let Some(why) = m.reason {
+                    report.violation(
+                        PROSE_GATE,
+                        format!("{file}: 節 {shown} 行 {}: {why} {}", m.line, m.head),
+                    );
+                }
+                for id in m.pointers.iter().filter(|id| !known.contains(*id)) {
+                    report.violation(
+                        KIND,
+                        format!("{file}: {at}: 散文の参照 id「{id}」が実在しない"),
+                    );
+                }
             }
         }
         return;

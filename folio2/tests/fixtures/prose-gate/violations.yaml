@@ -1,0 +1,20 @@
+# AC10 の落ちる側（凍結 fixture・要件書 AC10 の red_test）。設計ノートの置き場へ `violations.yaml` として置く。
+# 型 prose の節に、印を持つ文 2 つ（参照 id の無い文・参照 id を持つが「30 秒」を持つ文）と記述の文 2 つを置く
+# ＝散文の門（FR12・R-16）の違反は 2 件（no-pointer と number-with-unit）で、記述の文は 1 件も出ない。
+meta:
+  id: violations
+  title: 散文の門の違反を 2 つ持つ設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-18
+  profile: design-note
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      散文の門は規範の印を持つ文だけを数える。
+      生成器は検査を通らなかった図を上書きしてはならない。
+      検査は 30 秒 のうちに完了しなければならない（FR12）。
+      記述の文は数と単位を自由に書ける（この文にも 30 秒 と書いてある）。
