@@ -22,6 +22,10 @@ fn design_intent() -> PathBuf {
     repo_root().join("design-intent")
 }
 
+fn vendor() -> PathBuf {
+    repo_root().join("vendor/archify")
+}
+
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-site-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
@@ -29,9 +33,22 @@ fn temp_dir(case: &str) -> PathBuf {
     td
 }
 
+fn copy_dir(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&src, &dst);
+        } else {
+            fs::copy(&src, &dst).unwrap();
+        }
+    }
+}
+
 /// 凍結 fixture の正本 6 file と adr/・design-note/ を一時 dir の src/ へ写し、src/preview/ に最小の様式 2 本を、
-/// src/ の親 dir に器の導出 file を置く。戻り値 = (一時 dir, 正本の写し)。
-/// 支度表 intake-sheet.yaml と期待の面 3 本は写さない。
+/// src/ の親 dir に器の導出 file と図の道具（vendor/archify・便 31 の設計ノートの面が図ごとに撃つ）を置く。
+/// 戻り値 = (一時 dir, 正本の写し)。支度表 intake-sheet.yaml と期待の面 3 本は写さない。
 fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     let td = temp_dir(case);
     let work = td.join("src");
@@ -70,6 +87,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     for name in ["folio.css", "folio-ui.js"] {
         fs::copy(fixture().join(name), work.join("preview").join(name)).unwrap();
     }
+    copy_dir(&vendor(), &td.join("vendor/archify"));
     (td, work)
 }
 

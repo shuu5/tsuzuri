@@ -5,6 +5,7 @@
 //! 仕上がりの段は showcase 固定で、緩める旗を持たない（R-14）。検査を通らない図は生成せず、前の生成物も
 //! 上書きしない（P-4.1・AC12）。往復（座標を直して撃ち直す）は folio の外＝planner が台帳に記帳する
 //! （ADR-4 決定 (7)）。道具の他の命令（preview・brands capture・--open）は呼ばない。
+//! 図の行 1 つから本体を描く口（`render`）は設計ノートの面（便 31）と共有する。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -151,8 +152,17 @@ pub fn derive(dir: &Path, doc: &str, id: &str) -> R<String> {
             ));
         }
     };
-    let kind = figure_type(fig)?;
-    let spec = fig.f("spec")?;
+    let tx = fig.f("type")?;
+    let kind =
+        tx.v.as_str()
+            .ok_or_else(|| format!("{}: 図の型が文字列でない", tx.at))?;
+    render(dir, id, kind, &fig.f("spec")?)
+}
+
+/// 図の行 1 つ（型の字面と型付き記述）→ 図の本体（SVG）。型が表に無い・spec が表でない・道具が無い・道具が
+/// 通らないは Err（まだ分からない）。設計ノートの面（`face_note.rs`・便 31）も図ごとにここを呼ぶ。
+pub fn render(dir: &Path, id: &str, kind: &str, spec: &X<'_>) -> R<String> {
+    let kind = tool_type(kind)?;
     if spec.v.as_map().is_none() {
         return Err(format!("{}: 型付き記述（spec）が表でない", spec.at));
     }
@@ -161,12 +171,8 @@ pub fn derive(dir: &Path, doc: &str, id: &str) -> R<String> {
     deliver(&tool, kind, &json, id)
 }
 
-/// 図の型（閉じた表 β）。既存 3 型（pipeline-rail・context-band・state-strip）も道具の型でない。
-fn figure_type(fig: &X<'_>) -> R<&'static str> {
-    let x = fig.f("type")?;
-    let name =
-        x.v.as_str()
-            .ok_or_else(|| format!("{}: 図の型が文字列でない", x.at))?;
+/// 図の型（閉じた表 β）→ 図の道具の型。既存 3 型（pipeline-rail・context-band・state-strip）も道具の型でない。
+fn tool_type(name: &str) -> R<&'static str> {
     FIGURE_TYPES
         .iter()
         .find(|(k, _)| *k == name)
@@ -460,16 +466,39 @@ mod figure_tests {
 
     #[test]
     fn figure_type_table_has_the_five_tool_types() {
-        let row = |t: &str| {
-            let v = yaml::parse_typed(&format!("type: {t}\n")).unwrap();
-            figure_type(&X::root(&v, "fig")).map(str::to_string)
-        };
-        assert_eq!(row("archify-architecture").unwrap(), "architecture");
-        assert_eq!(row("archify-lifecycle").unwrap(), "lifecycle");
+        assert_eq!(tool_type("archify-architecture").unwrap(), "architecture");
+        assert_eq!(tool_type("archify-lifecycle").unwrap(), "lifecycle");
         assert_eq!(FIGURE_TYPES.len(), 5);
         assert_eq!(
-            row("pipeline-rail").unwrap_err(),
+            tool_type("pipeline-rail").unwrap_err(),
             "図の型「pipeline-rail」は図の道具の型でない"
+        );
+    }
+
+    #[test]
+    fn figure_render_refuses_a_spec_that_is_not_a_map_before_touching_the_tool() {
+        // 型の表 → spec の形 の順に見る（道具の不在より前に断る）
+        let v = yaml::parse_typed("spec: 表でない\n").unwrap();
+        let spec = X::root(&v, "fig").f("spec").unwrap();
+        assert_eq!(
+            render(
+                Path::new("/nonexistent/src"),
+                "fig-1",
+                "archify-architecture",
+                &spec
+            )
+            .unwrap_err(),
+            "fig.spec: 型付き記述（spec）が表でない"
+        );
+        assert_eq!(
+            render(
+                Path::new("/nonexistent/src"),
+                "fig-1",
+                "context-band",
+                &spec
+            )
+            .unwrap_err(),
+            "図の型「context-band」は図の道具の型でない"
         );
     }
 }

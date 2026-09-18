@@ -22,11 +22,28 @@ fn fixture() -> PathBuf {
     repo_root().join("tests/fixtures/face")
 }
 
+fn vendor() -> PathBuf {
+    repo_root().join("vendor/archify")
+}
+
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-serve-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
     fs::create_dir_all(&td).unwrap();
     td
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&src, &dst);
+        } else {
+            fs::copy(&src, &dst).unwrap();
+        }
+    }
 }
 
 fn stderr(out: &Output) -> String {
@@ -78,6 +95,8 @@ fn built_site(case: &str) -> (PathBuf, PathBuf) {
     for name in ["folio.css", "folio-ui.js"] {
         fs::copy(fixture().join(name), work.join("preview").join(name)).unwrap();
     }
+    // 設計ノートの面は図ごとに図の道具を撃つ（便 31）ので、repo の vendor/archify/ も親 dir へ写す
+    copy_dir(&vendor(), &td.join("vendor/archify"));
     let site = td.join("site");
     let build = Command::new(env!("CARGO_BIN_EXE_folio"))
         .arg("build")

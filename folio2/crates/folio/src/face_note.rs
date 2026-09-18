@@ -5,21 +5,24 @@
 //! 判断の記録の面（`face_adr.rs`）と違うのは 章が正本ごとに増える点で、章の数は節の数（+ 図の章）から数えて
 //! `Frame` を関数の中で組む。節の型は閉じた一覧 6 つで、一覧に無い型が 1 つでもあれば面を導出しない（要件書 FR9）。
 //! 契約表の節の欄は器（scribe2）の導出 file `contracts/schema.toml` の field の順に出し、欄の一覧を自前に持たない（FR10・P-6.4）。
+//! 図の章（便 31）は図ごとに図の枠（figure-panel）を置き、図の本体（SVG）は `figure.rs` の `render` が図の道具で描いたものを
+//! 逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか・FR15）。
 
 use std::fs;
 use std::path::Path;
 
-use crate::face::{self, Frame, R, X, anchor, card, esc, hint};
+use crate::face::{self, Frame, R, X, anchor, esc, hint};
+use crate::figure;
 use crate::parts::catalog::Component;
 
-/// 設計ノートの面が使う部品（7 種・判断の記録の面と同じ）。
+/// 設計ノートの面が使う部品（7 種・判断の記録の面の section-lead-callout の代わりに figure-panel）。
 pub const PARTS: [Component; 7] = [
     Component::FreshnessStamp,
     Component::FontSizeControl,
     Component::DocCoverBand,
     Component::ApprovalBlock,
     Component::ChapterDeckBand,
-    Component::SectionLeadCallout,
+    Component::FigurePanel,
     Component::ItemRow,
 ];
 
@@ -110,8 +113,15 @@ const REFUSES_NONE: &str = "なし";
 /// 契約表の行の固定の置き場（この 7 つは hint に回さない）。
 const CONTRACT_FIXED: [&str; 7] = ["id", "title", "req", "section", "verify", "size", "done"];
 
-/// 図の説明（図の生成はこの便に無い）。
-const FIGURE_CD: &str = "図の生成はまだ無い（要件書 FR15 の便で足す）＝まだ分からない。";
+/// 図の型（閉じた表 β・図の道具の 5 型）→ figcaption の名札。字面は部品目録 parts.json の
+/// figure_body_classes.type_ids と同じ（歯で突き合わせる）。表に無い型は `figure::render` が先に断る。
+const FIGURE_LABELS: [(&str, &str); 5] = [
+    ("archify-architecture", "構成図（architecture）"),
+    ("archify-workflow", "手順図（workflow）"),
+    ("archify-sequence", "順序図（sequence）"),
+    ("archify-dataflow", "流れ図（dataflow）"),
+    ("archify-lifecycle", "状態図（lifecycle）"),
+];
 
 // ── 器（scribe2）の導出 file の読み方（note.rs と同じ字面を自前に持つ）──
 
@@ -922,7 +932,9 @@ fn push_row(o: &mut Vec<String>, f: &Frame, r: &Row) {
     o.push("</article>".to_string());
 }
 
-/// 図の章（図の生成はこの便に無い＝型付き記述の中身は出さない）。
+/// 図の章。図ごとに図の枠（figure-panel・要件書の面の figure_open / figure_close と同じ字面・凡例は無し）を置き、
+/// 図の本体は `figure::render` の戻り値をそのまま 1 つの行として埋める（escape しない・道具の出力は変えない）。
+/// 図が 1 枚でも導出できなければ Err（面全体が「まだ分からない」・前の面は残る）。
 fn figures_chapter(
     o: &mut Vec<String>,
     f: &Frame,
@@ -932,30 +944,41 @@ fn figures_chapter(
 ) -> R<()> {
     f.band(o, idx, "図", &format!("図 {} 枚", figs.len()), None);
     o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!(
-        "<div {} style=\"--band-n:2\">",
-        f.dc(Component::SectionLeadCallout)
-    ));
-    for fig in figs {
+    for (i, fig) in figs.iter().enumerate() {
         let fid = fig.f("id")?.id()?;
-        let mut cd = FIGURE_CD.to_string();
+        let tx = fig.f("type")?;
+        let kind =
+            tx.v.as_str()
+                .ok_or_else(|| format!("{}: 図の型が文字列でない", tx.at))?;
+        let body = figure::render(env.dir, fid, kind, &fig.f("spec")?)?;
+        let label = FIGURE_LABELS
+            .iter()
+            .find(|(k, _)| *k == kind)
+            .map(|(_, l)| *l)
+            .ok_or_else(|| format!("図の型「{kind}」は図の道具の型でない"))?;
+        let fn_ = format!("図 {}", i + 1);
+        o.push(format!(
+            "<figure {} data-role=\"diagram\" id=\"{}\">",
+            f.dc(Component::FigurePanel),
+            esc(fid)
+        ));
+        o.push(format!(
+            "<div class=\"fig-title\"><span class=\"fn\">{fn_}</span>{} <span class=\"fig-tools\"><button class=\"zoom-btn\" type=\"button\">拡大</button></span><button class=\"zoom-close\" type=\"button\">✕ 閉じる</button></div>",
+            fig.ef("caption")?
+        ));
+        o.push(body);
+        let mut ver = format!("{fn_} · {label} · {}", esc(fid));
         if let Some(refs) = fig.g("refs")? {
             let ids = id_links(env, &refs)?;
             if !ids.is_empty() {
-                cd.push_str(&format!("根拠: {}", ids.join("・")));
+                ver.push_str(&format!(" · 根拠: {}", ids.join("・")));
             }
         }
-        o.push(card(
-            "card accent warn",
-            None,
-            &format!("{} · {}", esc(fid), fig.ef("type")?),
-            &format!(
-                "<p class=\"ct\">{}</p><p class=\"cd\">{cd}</p>",
-                fig.ef("caption")?
-            ),
+        o.push(format!(
+            "<figcaption><span class=\"ver\">{ver}</span></figcaption>"
         ));
+        o.push("</figure>".to_string());
     }
-    o.push("</div>".to_string());
     o.push("</div>".to_string());
     Ok(())
 }
@@ -994,4 +1017,27 @@ fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts) -> R
     );
     f.foot(o, &format!("{id} {version}"), &generated, &dl);
     Ok(())
+}
+
+#[cfg(test)]
+mod face_note_tests {
+    use super::*;
+    use yaml_rust2::YamlLoader;
+
+    /// 型の名札の表（β）は部品目録 parts.json の figure_body_classes.type_ids と字面が同じ（順も同じ）。
+    #[test]
+    fn face_note_figure_labels_match_the_parts_catalog_type_ids() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent/preview/parts.json");
+        let text = fs::read_to_string(&path).unwrap();
+        let doc = YamlLoader::load_from_str(&text).unwrap().remove(0);
+        let table = doc["figure_body_classes"]["type_ids"]
+            .as_hash()
+            .expect("figure_body_classes.type_ids が表でない");
+        let catalog: Vec<(&str, &str)> = table
+            .iter()
+            .map(|(k, v)| (k.as_str().unwrap(), v.as_str().unwrap()))
+            .collect();
+        assert_eq!(catalog, FIGURE_LABELS.to_vec());
+    }
 }

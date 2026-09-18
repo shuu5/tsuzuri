@@ -3,6 +3,8 @@
 //! - 実の正本（example）で `folio parts --check` に合格（NFR2）と逐語と件数の census（yaml-rust2 で正本を直に読む）
 //! - check の 3 値・id の口 4 形・節の型の閉じた一覧（FR9）・名札の表の外 2 つ・器の導出 file の欄と不在（FR10）・
 //!   未解決の参照・発効と廃止・列挙の分割・章の上限・mode
+//! - 図の章（便 31・FR15）: 図ごとの figure-panel と型の名札（parts.json の type_ids と突き合わせ）・図の class の母集団・
+//!   通らない図で 2 と前の面の保持・道具の不在・型外・図なし・決定的・図の章の外は不変
 //!
 //! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
 
@@ -24,6 +26,10 @@ fn design_intent() -> PathBuf {
     repo_root().join("design-intent")
 }
 
+fn vendor() -> PathBuf {
+    repo_root().join("vendor/archify")
+}
+
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-face-note-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
@@ -31,8 +37,22 @@ fn temp_dir(case: &str) -> PathBuf {
     td
 }
 
+fn copy_dir(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&src, &dst);
+        } else {
+            fs::copy(&src, &dst).unwrap();
+        }
+    }
+}
+
 /// fixture の正本 4 file と design-note/full.yaml を一時 dir の下の src/ へ、器の導出 file を親 dir の
-/// contracts/ へ写す。戻り値 = (一時 dir, 写し)。
+/// contracts/ へ、repo の vendor/archify/（図の道具・便 31 の面は図ごとに撃つ）を親 dir の vendor/archify/ へ写す。
+/// 戻り値 = (一時 dir, 写し)。
 fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     let td = temp_dir(case);
     let work = td.join("src");
@@ -52,6 +72,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
         td.join("contracts/schema.toml"),
     )
     .unwrap();
+    copy_dir(&vendor(), &td.join("vendor/archify"));
     (td, work)
 }
 
@@ -273,20 +294,335 @@ fn face_note_census_on_the_real_source_counts_and_verbatims() {
     assert!(!html.contains("depends"), "空の一覧の欄の hint が出ている");
     assert!(html.contains(">検証</span>"), "検証の hint が無い: {html}");
 
-    // 図の card と「まだ分からない」の 1 か所（図の cd の字面だけ＝行き先の無い参照は 1 つも無い）
-    assert_eq!(count("<div class=\"card accent warn\">"), 1, "図の card");
-    // 生成器が出す「まだ分からない」は図の cd の 1 か所だけ（行き先の無い参照は 1 つも無い。
-    // 正本の逐語の中の「まだ分からない」は α なので数えない）
+    // 図の章は図ごとの図の枠（便 31）＝便 28 の card と「図の生成はまだ無い」の cd は 0
     assert_eq!(
-        count("<p class=\"cd\">図の生成はまだ無い（要件書 FR15 の便で足す）＝まだ分からない。"),
-        1,
-        "図の cd が 1 つでない: {html}"
+        count("<div class=\"card accent warn\">"),
+        0,
+        "便 28 の図の card"
     );
+    assert_eq!(count("図の生成はまだ無い"), 0, "便 28 の図の cd");
+    assert_eq!(
+        count("data-component=\"figure-panel\""),
+        figures.len(),
+        "figure-panel の数"
+    );
+    assert_eq!(
+        count(" data-role=\"diagram\""),
+        figures.len(),
+        "data-role diagram の数"
+    );
+    assert_eq!(svg_bodies(&html), figures.len(), "図の本体の数");
+    // 生成器が出す「まだ分からない」は 0（行き先の無い参照は 1 つも無い。正本の逐語の中の「まだ分からない」は α なので数えない）
     assert_eq!(
         count("（まだ分からない）"),
         0,
         "行き先の無い参照が在る: {html}"
     );
+}
+
+// ── 図の章（便 31）──
+
+/// 部品目録 parts.json（yaml-rust2 で読む・JSON は YAML の流れの表）。
+fn parts_catalog() -> Yaml {
+    let text = fs::read_to_string(design_intent().join("preview/parts.json")).unwrap();
+    YamlLoader::load_from_str(&text)
+        .expect("parts.json を読めない")
+        .remove(0)
+}
+
+/// 部品目録の図の型 → 名札（figure_body_classes.type_ids・書かれた順）。
+fn parts_type_ids() -> Vec<(String, String)> {
+    let doc = parts_catalog();
+    doc["figure_body_classes"]["type_ids"]
+        .as_hash()
+        .expect("figure_body_classes.type_ids が表でない")
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.as_str().expect("型が文字列でない").to_string(),
+                v.as_str().expect("名札が文字列でない").to_string(),
+            )
+        })
+        .collect()
+}
+
+/// 部品目録の図の本体の意味 class の全一覧（5 群の和・data 属性の一覧は class でない）。
+fn parts_figure_classes() -> Vec<String> {
+    let doc = parts_catalog();
+    let table = &doc["figure_body_classes"];
+    let mut out = Vec::new();
+    for group in ["node_kind", "edge_kind", "arrowhead", "text_role", "sigil"] {
+        let list = table[group]
+            .as_vec()
+            .unwrap_or_else(|| panic!("figure_body_classes.{group} が一覧でない"));
+        for item in list {
+            out.push(item.as_str().expect("class が文字列でない").to_string());
+        }
+    }
+    assert_eq!(out.len(), 33, "図の class の一覧が 33 語でない: {out:?}");
+    out
+}
+
+/// 面の class の語（`class="…"` の中身を空白で割る）。
+fn classes(html: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(at) = rest.find("class=\"") {
+        let tail = &rest[at + "class=\"".len()..];
+        let end = tail.find('"').unwrap_or(tail.len());
+        for word in tail[..end].split_whitespace() {
+            out.push(word.to_string());
+        }
+        rest = &tail[end.min(tail.len())..];
+    }
+    out
+}
+
+/// `a` から `b` の直前までを切り取る（a が無ければそのまま・a の後の最初の b・b が無ければ末尾まで）。
+fn cut(html: &str, a: &str, b: &str) -> String {
+    let Some(start) = html.find(a) else {
+        return html.to_string();
+    };
+    let end = html[start..].find(b).map_or(html.len(), |e| start + e);
+    format!("{}{}", &html[..start], &html[end..])
+}
+
+/// `a` で始まる行を改行ごと切り取る（a が無ければそのまま）。
+fn cut_line(html: &str, a: &str) -> String {
+    let Some(start) = html.find(a) else {
+        return html.to_string();
+    };
+    let end = html[start..]
+        .find('\n')
+        .map_or(html.len(), |e| start + e + 1);
+    format!("{}{}", &html[..start], &html[end..])
+}
+
+/// 図の本体の数（章の帯の kicker の絵記号 `<svg class="ico"` は数えない）。
+fn svg_bodies(html: &str) -> usize {
+    html.matches("<svg").count() - html.matches("<svg class=\"ico\"").count()
+}
+
+/// 写しの figures を空の一覧にした面。
+fn figureless_html(case: &str) -> String {
+    let (run, html) = mutated(case, |t| {
+        let at = t.find("\nfigures:\n").expect("figures が無い");
+        let end = t.find("\nsources: []").expect("sources が無い");
+        format!("{}\nfigures: []{}", &t[..at], &t[end..])
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    html
+}
+
+#[test]
+fn face_note_on_the_real_source_embeds_each_figure_in_a_figure_panel() {
+    let td = temp_dir("figures");
+    let (_, html) = real_face(&td);
+    let _ = fs::remove_dir_all(&td);
+    let d = real_example();
+    let figures = d["figures"].as_vec().unwrap();
+    assert_eq!(figures.len(), 1, "実の正本の図の数");
+    let type_ids = parts_type_ids();
+    // 型の名札の表は 5 組（字面は契約表 §1 (b) の閉じた表・parts.json の type_ids と同じ）
+    let want: Vec<(String, String)> = [
+        ("archify-architecture", "構成図（architecture）"),
+        ("archify-workflow", "手順図（workflow）"),
+        ("archify-sequence", "順序図（sequence）"),
+        ("archify-dataflow", "流れ図（dataflow）"),
+        ("archify-lifecycle", "状態図（lifecycle）"),
+    ]
+    .iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    assert_eq!(type_ids, want, "parts.json の type_ids が 5 組の表と違う");
+
+    for (i, fig) in figures.iter().enumerate() {
+        let fid = fig["id"].as_str().unwrap();
+        let caption = esc(fig["caption"].as_str().unwrap());
+        let kind = fig["type"].as_str().unwrap();
+        let label = &type_ids
+            .iter()
+            .find(|(k, _)| k == kind)
+            .unwrap_or_else(|| panic!("型「{kind}」が type_ids に無い"))
+            .1;
+        assert!(
+            html.contains(&format!(
+                "<figure data-component=\"figure-panel\" data-role=\"diagram\" id=\"{fid}\">"
+            )),
+            "図 {fid} の figure-panel が無い"
+        );
+        assert!(
+            html.contains(&format!(
+                "<div class=\"fig-title\"><span class=\"fn\">図 {}</span>{caption} <span class=\"fig-tools\">",
+                i + 1
+            )),
+            "図 {fid} の fig-title に caption の逐語が無い"
+        );
+        assert!(
+            html.contains(&format!(
+                "<figcaption><span class=\"ver\">図 {} · {label} · {fid}",
+                i + 1
+            )),
+            "図 {fid} の figcaption に型の名札と id が無い: {html}"
+        );
+    }
+    assert_eq!(
+        svg_bodies(&html),
+        figures.len(),
+        "図の本体の数が図の数と違う"
+    );
+}
+
+#[test]
+fn face_note_on_the_real_source_uses_only_catalogued_figure_classes() {
+    let td = temp_dir("classes");
+    let (_, html) = real_face(&td);
+    let _ = fs::remove_dir_all(&td);
+    let allowed = parts_figure_classes();
+    let mut seen = 0;
+    for word in classes(&html) {
+        let figure_word = ["c-", "a-", "m-", "t-", "s-"]
+            .iter()
+            .any(|p| word.starts_with(p))
+            || word == "semantic-sigil"
+            || word == "sigil-fill";
+        if !figure_word {
+            continue;
+        }
+        seen += 1;
+        assert!(
+            allowed.contains(&word),
+            "図の class「{word}」が parts.json の figure_body_classes に無い"
+        );
+    }
+    assert!(seen > 0, "面に図の class が 1 つも無い");
+}
+
+#[test]
+fn face_note_unknown_when_a_figure_fails_the_tool_check_and_keeps_the_previous_face() {
+    let (td, work) = fixture_copy("fig-fails");
+    // layout を消すと道具の検査（showcase）に落ちる
+    edit(&work.join("design-note/full.yaml"), |t| {
+        t.replacen(
+            "      layout: {mode: grid, cols: 2, gapX: 70, gapY: 110, cellW: 160, cellH: 70}\n",
+            "",
+            1,
+        )
+    });
+    let out = td.join("note-full.html");
+    let before = "<!DOCTYPE html>\n前の面\n".as_bytes().to_vec();
+    fs::write(&out, &before).unwrap();
+    let run = folio_face("note", Some("full"), &work, &out, "--write");
+    let after = fs::read(&out).unwrap();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{}", stderr(&run));
+    assert!(
+        stderr(&run).contains("図の道具の検査を通らない"),
+        "{}",
+        stderr(&run)
+    );
+    assert_eq!(after, before, "図が通らないのに前の面を上書きした");
+}
+
+#[test]
+fn face_note_unknown_when_the_figure_tool_is_absent() {
+    let (td, work) = fixture_copy("no-tool");
+    fs::remove_file(td.join("vendor/archify/bin/archify.mjs")).unwrap();
+    let out = td.join("note-full.html");
+    let run = folio_face("note", Some("full"), &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{}", stderr(&run));
+    assert!(stderr(&run).contains("図の道具が無い"), "{}", stderr(&run));
+    assert!(!exists, "導出できないのに面を書いた");
+}
+
+#[test]
+fn face_note_unknown_when_a_figure_type_is_not_a_tool_type() {
+    unknown(
+        "fig-type",
+        |t| t.replacen("type: archify-architecture", "type: pipeline-rail", 1),
+        "図の道具の型でない",
+    );
+}
+
+#[test]
+fn face_note_without_figures_has_no_figure_chapter() {
+    let html = figureless_html("no-figures");
+    assert_eq!(
+        html.matches("data-component=\"figure-panel\"").count(),
+        0,
+        "図が無いのに figure-panel が在る"
+    );
+    assert!(
+        !html.contains("<section id=\"s7\""),
+        "図が無いのに図の章が在る"
+    );
+    assert_eq!(svg_bodies(&html), 0, "図が無いのに図の本体が在る");
+    assert!(
+        !html.contains("<li><a href=\"#s7\">")
+            && !html.contains("<span class=\"k\">図</span><span class=\"t\">"),
+        "図が無いのに toc に図の項が在る"
+    );
+    assert!(
+        html.contains("<span class=\"k\">図</span><span class=\"v\">0 枚</span>"),
+        "cover-meta の図が 0 枚でない"
+    );
+}
+
+#[test]
+fn face_note_write_twice_yields_the_same_bytes() {
+    let (td, work) = fixture_copy("twice");
+    let out = td.join("note-full.html");
+    let first = folio_face("note", Some("full"), &work, &out, "--write");
+    let a = fs::read(&out).unwrap_or_default();
+    let second = folio_face("note", Some("full"), &work, &out, "--write");
+    let b = fs::read(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&first, "1 回目"), 0, "{}", stderr(&first));
+    assert_eq!(code(&second, "2 回目"), 0, "{}", stderr(&second));
+    assert!(
+        String::from_utf8_lossy(&a).contains("<svg"),
+        "面に図の本体が無い"
+    );
+    assert_eq!(a, b, "2 度撃つと byte が違う（図を含めて決定的でない）");
+}
+
+#[test]
+fn face_note_figure_chapter_is_the_only_difference_from_the_figureless_face() {
+    let frozen = fs::read_to_string(fixture().join("expected-note.html")).unwrap();
+    let without = figureless_html("outside");
+    // 図の章（s7 の帯から承認欄の帯の直前まで）・cover-meta の図・toc の図の項 を両方から抜く
+    let strip = |html: &str| {
+        let h = cut(html, "<section id=\"s7\"", "<section id=\"approval\"");
+        let h = cut_line(&h, "<span class=\"m\"><span class=\"k\">図</span>");
+        cut_line(&h, "<li><a href=\"#s7\">")
+    };
+    let a = strip(&frozen);
+    let b = strip(&without);
+    // 章の数から数える字（全 N 章・k/N・機械のための面の figures）だけは正本から数えた数（γ）なので揃える
+    let a = a
+        .replace("全 8 章", "全 7 章")
+        .replace("/8</span>", "/7</span>")
+        .replace("<dt>figures</dt><dd>1</dd>", "<dt>figures</dt><dd>0</dd>");
+    if a != b {
+        let at = a
+            .bytes()
+            .zip(b.bytes())
+            .position(|(x, y)| x != y)
+            .unwrap_or(a.len().min(b.len()));
+        let show = |s: &str| {
+            String::from_utf8_lossy(&s.as_bytes()[at.saturating_sub(120)..(at + 200).min(s.len())])
+                .into_owned()
+        };
+        panic!(
+            "図の章の外が違う（最初の差 {at} byte 目）\n--- 凍結\n{}\n--- 図なし\n{}",
+            show(&a),
+            show(&b)
+        );
+    }
 }
 
 // ── check の 3 値 ──

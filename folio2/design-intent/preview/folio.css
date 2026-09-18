@@ -27,6 +27,18 @@
   --radius-card:14px; --radius-chip:999px; --radius-box:12px;
   --width-page:1280px; --pad-x:56px; --bar-h:2.5rem;
   color-scheme:dark;
+  /* 図の本体（SVG・便 31）の token。値は既存の token を指すだけなので light の :root には足さない（指した先が切り替わる） */
+  --fig-backend:var(--ok); --fig-backend-fill:var(--ok-tint);
+  --fig-frontend:var(--brand); --fig-frontend-fill:var(--brand-tint);
+  --fig-external:var(--neutral); --fig-external-fill:var(--neutral-tint);
+  --fig-database:var(--violet); --fig-database-fill:var(--violet-tint);
+  --fig-cloud:var(--warn); --fig-cloud-fill:var(--warn-tint);
+  --fig-messagebus:var(--ink-soft); --fig-messagebus-fill:var(--paper-3);
+  --fig-security:var(--bad); --fig-security-fill:var(--bad-tint);
+  --fig-lane:var(--line); --fig-lane-fill:var(--paper-2);
+  --fig-grid:var(--line-soft); --fig-mask:var(--paper-2);
+  --fig-arrow:var(--ink-soft); --fig-arrow-emphasis:var(--brand);
+  --fig-text:var(--ink); --fig-text-muted:var(--ink-soft); --fig-text-dim:var(--ink-faint);
 }
 @media (prefers-color-scheme: light){
   :root{
@@ -361,6 +373,47 @@ details.machine dt{color:var(--ink-faint)} details.machine dd{margin:0;color:var
 [data-component="figure-panel"] .zoom-hint{margin-left:auto;font-size:.75rem;font-weight:700;color:var(--ink-faint);border:1px solid var(--line);border-radius:6px;padding:1px 8px;background:var(--paper)}
 [data-component="figure-panel"] figcaption{margin-top:12px;font-size:.7812rem;color:var(--ink-soft);line-height:1.6}
 [data-component="figure-panel"] figcaption .ver{display:block;font-family:var(--font-mono);font-size:.75rem;color:var(--ink-faint);margin-top:4px}
+/* 図の本体（SVG・便 31）: 図の道具の意味 class 33 語（parts.json の figure_body_classes）を design token で塗る。色の直書きは 0 */
+[data-component="figure-panel"] svg{display:block;width:100%;height:auto}
+[data-component="figure-panel"] svg text{font-family:var(--font-sans)}
+/* 箱 c-* */
+[data-component="figure-panel"] .c-backend{fill:var(--fig-backend-fill);stroke:var(--fig-backend)}
+[data-component="figure-panel"] .c-cloud{fill:var(--fig-cloud-fill);stroke:var(--fig-cloud)}
+[data-component="figure-panel"] .c-database{fill:var(--fig-database-fill);stroke:var(--fig-database)}
+[data-component="figure-panel"] .c-external{fill:var(--fig-external-fill);stroke:var(--fig-external)}
+[data-component="figure-panel"] .c-frontend{fill:var(--fig-frontend-fill);stroke:var(--fig-frontend)}
+[data-component="figure-panel"] .c-messagebus{fill:var(--fig-messagebus-fill);stroke:var(--fig-messagebus)}
+[data-component="figure-panel"] .c-security{fill:var(--fig-security-fill);stroke:var(--fig-security)}
+[data-component="figure-panel"] .c-lane{fill:var(--fig-lane-fill);stroke:var(--fig-lane);stroke-dasharray:6,6}
+[data-component="figure-panel"] .c-grid{fill:none;stroke:var(--fig-grid)}
+[data-component="figure-panel"] .c-mask{fill:var(--fig-mask);stroke:none}
+/* 線 a-* */
+[data-component="figure-panel"] .a-default{fill:none;stroke:var(--fig-arrow)}
+[data-component="figure-panel"] .a-emphasis{fill:none;stroke:var(--fig-arrow-emphasis)}
+[data-component="figure-panel"] .a-dashed{fill:none;stroke:var(--fig-database);stroke-dasharray:4,4}
+[data-component="figure-panel"] .a-security{fill:none;stroke:var(--fig-security);stroke-dasharray:5,5}
+/* 矢じり m-* */
+[data-component="figure-panel"] .m-default{fill:var(--fig-arrow)}
+[data-component="figure-panel"] .m-emphasis{fill:var(--fig-arrow-emphasis)}
+[data-component="figure-panel"] .m-dashed{fill:var(--fig-database)}
+[data-component="figure-panel"] .m-security{fill:var(--fig-security)}
+/* 文字 t-* */
+[data-component="figure-panel"] .t-primary{fill:var(--fig-text)}
+[data-component="figure-panel"] .t-muted{fill:var(--fig-text-muted)}
+[data-component="figure-panel"] .t-dim{fill:var(--fig-text-dim)}
+[data-component="figure-panel"] .t-backend{fill:var(--fig-backend)}
+[data-component="figure-panel"] .t-messagebus{fill:var(--fig-messagebus)}
+[data-component="figure-panel"] .t-security{fill:var(--fig-security)}
+/* 印 s-* と sigil */
+[data-component="figure-panel"] .s-backend{color:var(--fig-backend)}
+[data-component="figure-panel"] .s-cloud{color:var(--fig-cloud)}
+[data-component="figure-panel"] .s-database{color:var(--fig-database)}
+[data-component="figure-panel"] .s-external{color:var(--fig-external)}
+[data-component="figure-panel"] .s-frontend{color:var(--fig-frontend)}
+[data-component="figure-panel"] .s-messagebus{color:var(--fig-messagebus)}
+[data-component="figure-panel"] .s-security{color:var(--fig-security)}
+[data-component="figure-panel"] .semantic-sigil{fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
+[data-component="figure-panel"] .semantic-sigil .sigil-fill{fill:currentColor;stroke:none}
 /* pipeline-rail */
 [data-component="pipeline-rail"]{display:grid;grid-template-columns:repeat(var(--rail-n,1),minmax(0,1fr));gap:0 6px;list-style:none;margin:0;padding:0}
 .rail-col{display:flex;flex-direction:column;gap:6px;min-width:0}

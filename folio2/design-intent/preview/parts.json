@@ -41,7 +41,8 @@
       "faces": [
         "index",
         "constitution",
-        "srs"
+        "srs",
+        "note"
       ],
       "requires": [
         "figcaption",
