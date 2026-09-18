@@ -27,7 +27,7 @@ planner の実測（2026-09-18・main e505f56）: 命令の一覧は check・inj
 - 1 回きり: 未整備で 2 回撃つ → 1 回目 1 行・2 回目 0 行・印は 1 つ。別の根（別の一時 dir）では改めて 1 行。
 - 印を書けない: `--state` を file にして撃つ → 1 行は出る ∧ 終了 2 ∧ 標準エラーに「印を書けない」。
 - 1 行の中身: 「folio intake」と「.folio-quiet」を含む。
-- unit（`src/hello.rs` の中・名に hello を含む）: 判定の順（止める設定 → 整備済み → 印 → 出す）・印の file 名（根の絶対 path の sha256）。
+- 判定の順と印の名（binary 経由・`tests/hello.rs` に置く・unit は置かない＝verify の `--test hello` の scope で測れる形）: 未整備 + 止める設定 = 0 行で印は出来ない（止める設定が先）／整備済み + 印なし = 0 行で印は出来ない（整備済みが先）／未整備で出した印の名は 64 桁の 16 進 1 本で、別の根では別の名。
 
 (d) 便 20 までの形との接続: 新規は `crates/folio/src/hello.rs`・歯 `crates/folio/tests/hello.rs`。`crates/folio/src/main.rs` は `mod hello;` と variant と分岐だけ。`sha256.rs`・他の src・`build.rs`・`Cargo.toml`・`Cargo.lock`・`design-intent/`・`.github/workflows/` は触らない。語彙の識別子への命令名の追加は正本を触るので planner の別 PR（本便の外）。size は S = 中身を変える既存の file 1 本あたりの増分の見積（`main.rs` の増分は variant と分岐で 40 行未満）。
 
@@ -63,5 +63,5 @@ section = "1"
 write-set = ["+crates/folio/src/hello.rs", "crates/folio/src/main.rs", "+crates/folio/tests/hello.rs", "crates/folio/tests/vocab.rs"]
 verify = ["cargo nextest run -p folio --test hello hello", "cargo nextest run -p folio --test vocab vocab", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "hello の歯（3 状態の行数・1 回きり・印を書けない・1 行の中身・unit）が緑、vocab の歯が期待不変で緑（置き場として write-set に在るだけ）、clippy が 0 警告で CI が通る"
+done = "hello の歯（3 状態の行数・1 回きり・印を書けない・1 行の中身・判定の順と印の名）が緑、vocab の歯が期待不変で緑（置き場として write-set に在るだけ）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
