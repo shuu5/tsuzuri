@@ -1,0 +1,50 @@
+# folio2 支度表（folio intake の生成物・手で直さない・承認は対話面と台帳で）
+"meta":
+  "id": "folio2-intake-sheet"
+  "version": "v0.1"
+  "status": "approved"
+"documents":
+  - "id": "constitution"
+    "type": "憲法"
+    "with":
+      - "vocabulary"
+      - "rules"
+    "from": "q1"
+  - "id": "srs"
+    "type": "要件書"
+    "with": []
+    "from": "q2"
+  - "id": "adr"
+    "type": "判断の記録"
+    "with": []
+    "from": "q3"
+  - "id": "design-note"
+    "type": "設計ノート"
+    "with": []
+    "from": "q4"
+  - "id": "inject"
+    "type": "憲法の注入（CLAUDE.md の生成区間）"
+    "with": []
+    "from": "q5"
+"recommended": []
+"answers":
+  - "q": "q1"
+    "value": "はい"
+    "source": "answered"
+  - "q": "q2"
+    "value": "はい"
+    "source": "answered"
+  - "q": "q3"
+    "value": "はい"
+    "source": "answered"
+  - "q": "q4"
+    "value": "はい"
+    "source": "answered"
+  - "q": "q5"
+    "value": "はい"
+    "source": "answered"
+"approval":
+  - "who": "持ち主（shuu5）"
+    "when": "2026-09-18"
+    "verbatim": "aで"
+    "ruling": "f2-648 notes 2026-09-18 16:1x JST（対話面 R-8・planner の提示 a/b/c への回答・a = 5 問すべて はい）"

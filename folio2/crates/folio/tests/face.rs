@@ -1257,14 +1257,23 @@ fn face_index_with_a_sheet_passes_parts_check() {
 
 #[test]
 fn face_index_census_of_the_sheet_section_without_a_sheet() {
-    let (td, _, html) = real_index("index-sheet-census");
-    let _ = fs::remove_dir_all(&td);
+    // 実の正本は支度表を持つ（持ち主の裁定 2026-09-18「aで」）ので、写しから支度表を外して「まだ無い」の形を測る
+    let td = temp_dir("index-sheet-census");
+    let work = td.join("design-intent");
+    copy_tree(&design_intent(), &work);
     let n = load_yaml("intake.yaml");
     let i = load_yaml("index.yaml");
-    assert!(
-        !design_intent().join(text(&n["sheet"], "file")).exists(),
-        "実の正本に支度表が在る（この歯は支度表なしの形を測る）"
+    let _ = fs::remove_file(work.join(text(&n["sheet"], "file")));
+    let out = td.join("index.html");
+    let run = folio_face("index", &work, &out, "--write");
+    assert_eq!(
+        code(&run, "folio face --face index --write"),
+        0,
+        "{}",
+        stderr(&run)
     );
+    let html = fs::read_to_string(&out).unwrap();
+    let _ = fs::remove_dir_all(&td);
     let section = sheet_section(&html);
     for want in [
         esc(text(&n["sheet"], "title")),
@@ -1427,6 +1436,9 @@ fn real_round_trip(case: &str, answers: Option<PathBuf>) -> (PathBuf, PathBuf, S
     let td = temp_dir(case);
     let work = td.join("design-intent");
     copy_tree(&design_intent(), &work);
+    // 実の正本の支度表（持ち主の裁定 2026-09-18「aで」）は写しから外し、1 周は支度表なしから始める
+    let n = load_yaml("intake.yaml");
+    let _ = fs::remove_file(work.join(text(&n["sheet"], "file")));
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
     cmd.arg("intake").arg("--dir").arg(&work);
     if let Some(path) = &answers {

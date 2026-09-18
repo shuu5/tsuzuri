@@ -25,6 +25,8 @@ fn work(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-sheet-{case}"));
     let _ = fs::remove_dir_all(&td);
     copy_tree(&repo_root().join("design-intent"), &td);
+    // 実の正本の支度表（持ち主の裁定 2026-09-18「aで」）は写しから外し、歯は支度表なしから始める
+    let _ = fs::remove_file(td.join(SHEET));
     td
 }
 
