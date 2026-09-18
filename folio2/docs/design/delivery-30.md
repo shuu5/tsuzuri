@@ -31,15 +31,15 @@ planner の実測（2026-09-19・main 8eb7b0e の上に受け皿 f2-648.45 を�
 4. --check の 3 値: 未生成 2「図が無い」・1 byte 変えて 1「DRIFT」・一致 0「OK」。
 5. 図の型を pipeline-rail に = 2 ∧「図の道具の型でない」／ --id を無い id に = 2 ∧「figures に無い」／ --doc を大文字始まりに = 2 ／ spec の鍵の 1 つを数字（`1: x`）に = 2 ∧「文字列でない」／ spec を文字列に = 2。
 6. 写しの親 dir の `vendor/archify/bin/archify.mjs` を消す = 2 ∧「図の道具が無い」／ 環境変数 PATH を空の dir だけにして撃つ = 2 ∧「起動できない」。
-7. 実の正本: `--doc example --id fig-1 --write` = 0 ∧ 図の本体に `<svg` が 1 つ ∧ 行内の様式（style の属性）が 0 ∧ 色の直書き（fill の属性の値が # で始まる）が 0（意味の class だけ・ADR-4 決定 (3)）∧ class の語が全部 design-intent/preview/parts.json の figure_body_classes の値（node_kind 等の全一覧の和）に在る（歯の中で parts.json を読む）。
+7. 実の正本: `--doc example --id fig-1 --write` = 0 ∧ 図の本体に `<svg` が 1 つ ∧ 行内の様式（style の属性）が 0 ∧ 色の直書き（fill の属性の値が # で始まる）が 0（意味の class だけ・ADR-4 決定 (3)）∧ class の語が全部 design-intent/preview/parts.json の figure_body_classes の値（node_kind 等の全一覧の和）に在る（歯の中で parts.json を読むだけ・write-set 外で変えない・figure_body_classes は base に在り鍵は source・type_ids・node_kind・edge_kind・arrowhead・text_role・sigil・semantic_attrs・note の 9 つで、class の一覧は node_kind・edge_kind・arrowhead・text_role・sigil の 5 つ（semantic_attrs は data 属性の一覧で class ではない）・planner の実測 2026-09-19）。
 8. 版の固定: `vendor/archify/package.json` の version の字が rules.yaml の R-15 の value に在る ∧ vendor/archify/ の全 file を path の byte 順に連結した byte 列の sha256（歯は `sha256sum` を子の処理で呼ぶ・無ければ panic でなく「まだ分からない」の形で失敗の理由を出す）の 16 進が R-15 の value に在る（R-15 の value は歯の中で yaml で読む）。
-9. figure.rs の unit（`--test figure` の外・cfg(test)）: to_json の 8 種（Null・Bool・Int・Float・Date・Str の escape（引用符・逆斜線・改行・制御文字・非 ASCII 逐語）・Seq・Map の順）と鍵が Str でない Map の Err、`<svg` の抽出（0 個・2 個は Err・1 個は byte そのまま）、error 欄の先頭 2 行の取り出し（escape された引用符を跨ぐ・escape された改行で行に分けて 2 行を空白 1 つで繋ぐ・1 行しか無ければその 1 行・欄が無いとき先頭 200 字）。
+9. figure.rs の unit（`--test figure` の外・cfg(test)・verify の外で CI の common-verify が回す・done には数えない＝振る舞いは歯 1〜6 が binary 経由で測る・便 23 の教訓）: to_json の 8 種（Null・Bool・Int・Float・Date・Str の escape（引用符・逆斜線・改行・制御文字・非 ASCII 逐語）・Seq・Map の順）と鍵が Str でない Map の Err、`<svg` の抽出（0 個・2 個は Err・1 個は byte そのまま）、error 欄の先頭 2 行の取り出し（escape された引用符を跨ぐ・escape された改行で行に分けて 2 行を空白 1 つで繋ぐ・1 行しか無ければその 1 行・欄が無いとき先頭 200 字）。
 
 (f) 便 29 までの形との接続: 新規は `crates/folio/src/figure.rs`（見積 350 行）と `crates/folio/tests/figure.rs`（見積 400 行）。`crates/folio/src/main.rs` は Command の追加と dispatch（+30 行）。`crates/folio/tests/note.rs` は本文も期待も変えない（器の受付が新しい filter 語の歯の置き場を base に在る歯の file で解くため write-set に載せる・便 27 の tests/site.rs と同じ「載せるが変えない」の形・admin の実測 2026-09-19）。`face.rs`・`face_note.rs`・`note.rs`・`parts.rs`・`parts.json`・`folio.css`・`sha256.rs`・`vendor/`・`tests/fixtures/figure/`・`.github/workflows/`・`.vessel.toml` は触らない。外部 crate は増えない（Node.js と道具の写しは受け皿で足した A-3.1 の依存であり、本便は crate を足さない）。正規表現は使わない。size は M = 新規 2 file の見積が中で、既存 file の増分は main.rs +30 だけ。
 
 ## 2. 範囲
 
-- 入れる: 命令 folio figure・型付き記述の JSON 書き出し・道具の子の処理・図の本体の抽出・3 値・歯（anchor・AC12・3 値・型と id と鍵の 2・道具と node の不在・実の正本・版の固定・unit）。
+- 入れる: 命令 folio figure・型付き記述の JSON 書き出し・道具の子の処理・図の本体の抽出・3 値・歯（anchor・AC12・3 値・型と id と鍵の 2・道具と node の不在・実の正本・版の固定）と verify の外の unit。
 - 入れない: 設計ノートの面への図の埋め込みと図の様式（便 31）・folio build への図の追加（便 31・面に埋まるので file は増えない）・座標の往復の自動化（AI が直す・往復の記録は planner が台帳に）・道具の版上げ・図の型の追加・既存 3 型の図の道具化。
 
 ## 3. 部品
@@ -70,5 +70,5 @@ section = "1"
 write-set = ["+crates/folio/src/figure.rs", "+crates/folio/tests/figure.rs", "crates/folio/src/main.rs", "crates/folio/tests/note.rs"]
 verify = ["cargo nextest run -p folio --test figure figure", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
-done = "figure の歯（anchor の byte 一致・決定的・AC12 の前の生成物・check の 3 値・型と id と鍵と spec の 2・道具と node の不在・実の正本の fig-1・版の固定 R-15・unit）が緑、clippy が 0 警告で CI が通る"
+done = "figure の歯（anchor の byte 一致・決定的・AC12 の前の生成物・check の 3 値・型と id と鍵と spec の 2・道具と node の不在・実の正本の fig-1・版の固定 R-15）が緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
