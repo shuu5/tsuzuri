@@ -19,6 +19,7 @@ mod refs;
 mod render;
 mod serve;
 mod sha256;
+mod sheet;
 mod site;
 mod verdict;
 mod vocab;
@@ -140,6 +141,22 @@ enum Command {
         /// 配信先の 5 本と正本の byte 一致を検査する（無い 2・不一致 1・一致 0）
         #[arg(long)]
         check: bool,
+    },
+    /// 相談窓口の答えの無い質問と推奨回答を散文で出す（--print）・回答から支度表 1 枚を書く（--write）
+    #[command(group(ArgGroup::new("mode").required(true).args(["print", "write"])))]
+    Intake {
+        /// 正本の置き場（intake.yaml と、在れば支度表を読む）
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 回答の file（相対なら --dir からの相対・絶対ならそのまま）
+        #[arg(long)]
+        answers: Option<PathBuf>,
+        /// 答えの無い質問を標準出力へ書く
+        #[arg(long)]
+        print: bool,
+        /// 支度表を <dir>/<sheet.file> へ書く（在れば上書き）
+        #[arg(long)]
+        write: bool,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -309,6 +326,26 @@ fn main() -> ExitCode {
             };
             let outcome = site::run(&dir, &out, mode);
             if let Some(line) = &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Intake {
+            dir,
+            answers,
+            print: _,
+            write,
+        } => {
+            let mode = if write {
+                sheet::Mode::Write
+            } else {
+                sheet::Mode::Print
+            };
+            let outcome = sheet::run(&dir, answers.as_deref(), mode);
+            for line in &outcome.stdout {
                 println!("{line}");
             }
             if let Some(line) = &outcome.stderr {

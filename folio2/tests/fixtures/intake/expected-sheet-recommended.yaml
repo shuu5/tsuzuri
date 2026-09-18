@@ -1,0 +1,61 @@
+# folio2 支度表（folio intake の生成物・手で直さない・承認は対話面と台帳で）
+"meta":
+  "id": "folio2-intake-sheet"
+  "version": "v0.1"
+  "status": "draft"
+"documents":
+  - "id": "constitution"
+    "type": "憲法"
+    "with":
+      - "vocabulary"
+      - "rules"
+    "from": "q1"
+  - "id": "srs"
+    "type": "要件書"
+    "with": []
+    "from": "q2"
+  - "id": "adr"
+    "type": "判断の記録"
+    "with": []
+    "from": "q3"
+  - "id": "design-note"
+    "type": "設計ノート"
+    "with": []
+    "from": "q4"
+  - "id": "inject"
+    "type": "憲法の注入（CLAUDE.md の生成区間）"
+    "with": []
+    "from": "q5"
+"recommended":
+  - "q": "q1"
+    "ask": "何があっても守る線（憲法）を決めておきますか"
+    "recommend": "はい"
+  - "q": "q2"
+    "ask": "「できた」の線（要件書）を先に書きますか"
+    "recommend": "はい"
+  - "q": "q3"
+    "ask": "戻せない判断を 1 本ずつ記録に残しますか"
+    "recommend": "はい"
+  - "q": "q4"
+    "ask": "作り方（設計ノート）は実装の直前に書くことにしますか"
+    "recommend": "はい"
+  - "q": "q5"
+    "ask": "憲法を AI の手元（CLAUDE.md）へ写しますか"
+    "recommend": "はい"
+"answers":
+  - "q": "q1"
+    "value": "はい"
+    "source": "recommended"
+  - "q": "q2"
+    "value": "はい"
+    "source": "recommended"
+  - "q": "q3"
+    "value": "はい"
+    "source": "recommended"
+  - "q": "q4"
+    "value": "はい"
+    "source": "recommended"
+  - "q": "q5"
+    "value": "はい"
+    "source": "recommended"
+"approval": []
