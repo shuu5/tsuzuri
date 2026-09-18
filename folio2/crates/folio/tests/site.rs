@@ -46,9 +46,10 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }
+    // 判断の記録の面も出す（便 26）ので、写す記録は欄の揃った便 25 の 1 本
     fs::copy(
-        fixture().join("adr/ADR-1.yaml"),
-        work.join("adr/ADR-1.yaml"),
+        fixture().join("adr/ADR-2.yaml"),
+        work.join("adr/ADR-2.yaml"),
     )
     .unwrap();
     for name in ["folio.css", "folio-ui.js"] {
@@ -86,13 +87,14 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
-/// 配信先へ出る 5 本（順もこのとおり）。
-const SITE_FILES: [&str; 5] = [
+/// 配信先へ出る 6 本（順もこのとおり・凍結 fixture の写しは判断の記録 1 本）。
+const SITE_FILES: [&str; 6] = [
     "index.html",
     "constitution.html",
     "srs.html",
     "folio.css",
     "folio-ui.js",
+    "adr-2.html",
 ];
 
 // ── 凍結 fixture ──
@@ -112,6 +114,8 @@ fn site_write_matches_the_frozen_fixture() {
         "expected-srs.html",
         "folio.css",
         "folio-ui.js",
+        // 組み立ての写しは ADR-2 だけなので、便 25 の expected-adr.html とは byte が違う（独立 anchor）
+        "expected-site-adr-2.html",
     ]
     .iter()
     .map(|name| fs::read(fixture().join(name)).unwrap())
@@ -122,7 +126,7 @@ fn site_write_matches_the_frozen_fixture() {
     let total: usize = got.iter().map(Vec::len).sum();
     assert_eq!(
         stdout(&run),
-        format!("folio build: 書いた（5 file・{total} byte）\n")
+        format!("folio build: 書いた（6 file・{total} byte）\n")
     );
     for (i, name) in SITE_FILES.iter().enumerate() {
         assert!(!got[i].is_empty(), "{name} が配信先に無い");
@@ -144,9 +148,11 @@ fn site_check_has_three_values() {
 
     let write = folio_build(&work, &site, "--write");
     let ok = folio_build(&work, &site, "--check");
-    let mut bytes = fs::read(site.join("srs.html")).unwrap();
-    bytes[0] ^= 0x20;
-    fs::write(site.join("srs.html"), &bytes).unwrap();
+    for name in ["srs.html", "adr-2.html"] {
+        let mut bytes = fs::read(site.join(name)).unwrap();
+        bytes[0] ^= 0x20;
+        fs::write(site.join(name), &bytes).unwrap();
+    }
     let drift = folio_build(&work, &site, "--check");
     let rewrite = folio_build(&work, &site, "--write");
     fs::remove_file(site.join("folio.css")).unwrap();
@@ -159,13 +165,14 @@ fn site_check_has_three_values() {
     assert_eq!(code(&write, "write"), 0, "{}", stderr(&write));
     assert_eq!(code(&ok, "check（一致）"), 0, "{}", stderr(&ok));
     assert!(
-        stdout(&ok).starts_with("folio build: OK — 配信先は正本と一致（5 file・"),
+        stdout(&ok).starts_with("folio build: OK — 配信先は正本と一致（6 file・"),
         "{}",
         stdout(&ok)
     );
     assert_eq!(code(&drift, "check（不一致）"), 1, "{}", stderr(&drift));
     assert!(stderr(&drift).contains("DRIFT"), "{}", stderr(&drift));
     assert!(stderr(&drift).contains("srs.html"), "{}", stderr(&drift));
+    assert!(stderr(&drift).contains("adr-2.html"), "{}", stderr(&drift));
     assert_eq!(code(&rewrite, "write（再）"), 0, "{}", stderr(&rewrite));
     assert_eq!(code(&missing, "check（無い）"), 2, "{}", stderr(&missing));
     assert!(
@@ -188,11 +195,31 @@ fn site_check_has_three_values() {
 
 // ── 実の正本（AC2 の機構）──
 
+/// 実の正本の判断の記録の数（`adr/` の下の `ADR-<数>.yaml` の本数）。
+fn real_records() -> usize {
+    fs::read_dir(design_intent().join("adr"))
+        .unwrap()
+        .filter(|e| {
+            let name = e.as_ref().unwrap().file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("ADR-") && name.ends_with(".yaml")
+        })
+        .count()
+}
+
 #[test]
 fn site_on_the_real_sources_passes_parts_check_and_face_check() {
     let td = temp_dir("real");
     let site = td.join("site");
     let build = folio_build(&design_intent(), &site, "--write");
+    let records = real_records();
+    // 3 面 + 様式 2 本 + 判断の記録の面（記録の数だけ）
+    let total = 3 + 2 + records;
+    let adr_pages: Vec<PathBuf> = (1..=records)
+        .map(|n| site.join(format!("adr-{n}.html")))
+        .collect();
+    let all_adr = adr_pages.iter().all(|p| p.is_file());
+    let last = format!("ADR-{records}");
     let mut pages = Command::new(env!("CARGO_BIN_EXE_folio"));
     pages
         .arg("parts")
@@ -200,16 +227,17 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
         .arg("--dir")
         .arg(design_intent());
     for (face, name) in [
-        ("index", "index.html"),
-        ("constitution", "constitution.html"),
-        ("srs", "srs.html"),
+        ("index", "index.html".to_string()),
+        ("constitution", "constitution.html".to_string()),
+        ("srs", "srs.html".to_string()),
+        ("adr", format!("adr-{records}.html")),
     ] {
         pages
             .arg("--page")
             .arg(format!("{face}={}", site.join(name).display()));
     }
     let parts = pages.output().unwrap();
-    let faces: Vec<(&str, Output)> = [
+    let mut faces: Vec<(&str, Output)> = [
         ("index", "index.html"),
         ("constitution", "constitution.html"),
         ("srs", "srs.html"),
@@ -230,6 +258,22 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
         (*face, out)
     })
     .collect();
+    faces.push((
+        "adr",
+        Command::new(env!("CARGO_BIN_EXE_folio"))
+            .arg("face")
+            .arg("--face")
+            .arg("adr")
+            .arg("--id")
+            .arg(&last)
+            .arg("--dir")
+            .arg(design_intent())
+            .arg("--out")
+            .arg(site.join(format!("adr-{records}.html")))
+            .arg("--check")
+            .output()
+            .unwrap(),
+    ));
     let _ = fs::remove_dir_all(&td);
 
     assert_eq!(
@@ -238,6 +282,12 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
         "{}",
         stderr(&build)
     );
+    assert!(
+        stdout(&build).starts_with(&format!("folio build: 書いた（{total} file・")),
+        "{}",
+        stdout(&build)
+    );
+    assert!(all_adr, "判断の記録の面が {records} 枚そろっていない");
     assert_eq!(
         code(&parts, "folio parts --check"),
         0,
@@ -319,5 +369,5 @@ fn site_write_keeps_the_other_files_in_the_out_dir() {
 
     assert_eq!(code(&run, "folio build --write"), 0, "{}", stderr(&run));
     assert_eq!(extra, "手で置いた file\n", "配信先の他の file を消した");
-    assert!(all, "5 本が揃っていない");
+    assert!(all, "6 本が揃っていない");
 }

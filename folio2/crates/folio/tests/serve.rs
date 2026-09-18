@@ -55,9 +55,10 @@ fn built_site(case: &str) -> (PathBuf, PathBuf) {
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }
+    // 組み立ては判断の記録の面も出す（便 26）ので、写す記録は欄の揃った便 25 の 1 本
     fs::copy(
-        fixture().join("adr/ADR-1.yaml"),
-        work.join("adr/ADR-1.yaml"),
+        fixture().join("adr/ADR-2.yaml"),
+        work.join("adr/ADR-2.yaml"),
     )
     .unwrap();
     for name in ["folio.css", "folio-ui.js"] {

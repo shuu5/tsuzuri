@@ -9,13 +9,16 @@
 //! 支度表の documents の各行の id は `intake.yaml` の targets に解き、with（付録の id）は入口の正本 `index.yaml` の
 //! shelf.annexes に解く（便 22・delivery-22.md §1 (a)）——付録は targets（行き先＝棚の文書 4 つと注入）には無く、
 //! 棚の付録の行にだけ在るので、便 18 の床（targets の with を annexes に解く）と同じ規則で読む。
+//! 棚の「判断の記録」の行は、記録が 1 本以上なら「読める」側（本数・状態ごとの数・各記録の面へのリンク）を出す
+//! （便 26・delivery-26.md §1 (a)）——面は 1 本につき 1 枚（`adr-<数>.html`・便 25 の生成器）なので、記録が在れば
+//! ページも在る。入口の正本 `index.yaml` は改訂しない（ADR-7 帰結・棚の行の読み方だけが変わる）。
 
 use std::fs;
 use std::path::Path;
 
 use crate::face::{
     self, ANNEXES, Frame, INDEX_STATUS, R, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf, TIERS,
-    X, esc, hint, hint_q, stop_anchor, tier_of,
+    X, anchor, esc, hint, hint_q, stop_anchor, tier_of,
 };
 use crate::parts::catalog::Component;
 use crate::yaml::Value;
@@ -63,6 +66,14 @@ const SOURCES: [&str; 7] = [
 /// 相談窓口の正本（節「支度表」の見出しと説明・支度表の file 名・行き先の型の写像）。
 const INTAKE: &str = "intake.yaml";
 
+/// 判断の記録の状態（status）→ 棚の card に出す名札（β・便 26）。3 値は便 25 の面の表と同じで、
+/// 名札は棚の要約に並べる短い字（要約はこの表の順に「0 でない種類」だけを並べる）。
+const ADR_STATUS: &[(&str, &str)] = &[
+    ("accepted", "発効"),
+    ("proposed", "提案中"),
+    ("retired", "廃止"),
+];
+
 /// 節「支度表」の名札の表（β・本便）。数と日付は正本から数えたものだけ（ここには書かない）。
 const SHEET_KICKER: &str = "支度表";
 const SHEET_DOCUMENTS: &str = "持つ文書";
@@ -79,9 +90,33 @@ fn dc(c: Component) -> String {
     FRAME.dc(c)
 }
 
-/// 読める面の数（入口 1 + 面が在る文書）。
-fn readable_faces() -> usize {
-    1 + SHELF_DOCS.iter().filter(|(_, s)| s.face.is_some()).count()
+/// 読める面の数（入口 1 + 面が在る文書 + 判断の記録の本数・記録 1 本につき面 1 枚）。
+fn readable_faces(adr: usize) -> usize {
+    1 + SHELF_DOCS.iter().filter(|(_, s)| s.face.is_some()).count() + adr
+}
+
+/// 判断の記録 1 本の読んだ中身（`records` が id の数の昇順に並べる）。
+pub struct Record {
+    /// id の数（`ADR-<数>` の数・並べ替えの鍵）
+    num: u64,
+    /// 正本の id（英数字と「-」「.」だけなので escape は要らない）
+    id: String,
+    /// 状態の名札（β・`ADR_STATUS`）
+    status: &'static str,
+    /// 日付（escape 済み）
+    date: String,
+}
+
+impl Record {
+    /// この記録の面の file（`adr-<数>.html`・便 25 の生成器の出す 1 枚）。
+    pub fn file(&self) -> String {
+        format!("{}.html", anchor(&self.id))
+    }
+
+    /// 正本の id（`folio face --face adr --id` に渡す字と同じ）。
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 }
 
 /// 読める文書の数えた中身（カードの数・更新）。
@@ -121,7 +156,8 @@ struct Ctx {
     /// 棚の付録の id → 型（escape 済み・`index.yaml` の shelf.annexes の順）。
     annex_types: Vec<(&'static str, String)>,
     relations: Vec<Rel>,
-    adr: usize,
+    /// 判断の記録（id の数の昇順・空なら棚の行は「まだ無い」側）
+    adr: Vec<Record>,
 }
 
 impl Ctx {
@@ -137,8 +173,26 @@ impl Ctx {
         self.docs.iter().filter(|d| d.shelf.face.is_some())
     }
 
+    /// まだ面が無い文書（記録が 1 本以上なら判断の記録は「これから増える」側から外す）。
     fn missing(&self) -> impl Iterator<Item = &Doc> {
-        self.docs.iter().filter(|d| d.shelf.face.is_none())
+        let absent_adr = self.adr.is_empty();
+        self.docs
+            .iter()
+            .filter(move |d| d.shelf.face.is_none() && (absent_adr || d.id != "adr"))
+    }
+
+    /// 棚の「判断の記録」の行（表に 1 つ在ることは `exact` が見ている）。
+    fn adr_doc(&self) -> Option<&Doc> {
+        self.docs.iter().find(|d| d.id == "adr")
+    }
+
+    /// いま読める文書の型の列挙。記録が 1 本以上なら判断の記録も足し、その型の後に `tail` を置く。
+    fn readable_types(&self, tail: &str) -> String {
+        let mut parts: Vec<String> = self.readable().map(|d| d.ty.clone()).collect();
+        if let Some(d) = self.adr_doc().filter(|_| !self.adr.is_empty()) {
+            parts.push(format!("{}{tail}", d.ty));
+        }
+        parts.join("・")
     }
 }
 
@@ -150,7 +204,7 @@ pub fn derive(dir: &Path) -> R<String> {
     let v_doc = face::load(dir, "vocabulary.yaml")?;
     let r_doc = face::load(dir, "rules.yaml")?;
     let n_doc = face::load(dir, INTAKE)?;
-    let adr = count_adr(dir)?;
+    let adr = records(dir)?;
     let i = X::root(&i_doc, "index.yaml");
     let c = X::root(&c_doc, "constitution.yaml");
     let s = X::root(&s_doc, "srs.yaml");
@@ -178,19 +232,58 @@ pub fn derive(dir: &Path) -> R<String> {
 
 // ── 読みと数え ──
 
-/// adr/ の下で名が ADR- で始まり .yaml で終わる file の本数（中身は読まない）。
-fn count_adr(dir: &Path) -> R<usize> {
+/// 判断の記録の id（`ADR-<数>`）の数（「-」で割った 2 番目・ASCII の数字列だけ・便 11 の render.rs と同じ）。
+fn adr_number(id: &str) -> Option<u64> {
+    let second = id.split('-').nth(1)?;
+    if second.is_empty() || !second.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    second.parse().ok()
+}
+
+/// `adr/` の下で名が ADR- で始まり .yaml で終わる正本を読み、id の数の昇順に並べる（便 11 の render.rs と同じ
+/// 並べ方・数字列でない id や同じ数が 2 本は導出できない）。欄 id・title・status・date は必須。
+pub fn records(dir: &Path) -> R<Vec<Record>> {
     let entries = fs::read_dir(dir.join("adr")).map_err(|e| format!("adr/: 読めない: {e}"))?;
-    let mut n = 0;
+    let mut names: Vec<String> = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|e| format!("adr/: 読めない: {e}"))?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if name.starts_with("ADR-") && name.ends_with(".yaml") {
-            n += 1;
+            names.push(format!("adr/{name}"));
         }
     }
-    Ok(n)
+    // 読む順を file 系の返す順に依らせない（並べ替えの前に名で揃える）
+    names.sort();
+
+    let mut docs = Vec::with_capacity(names.len());
+    for name in names {
+        let doc = face::load(dir, &name)?;
+        docs.push((name, doc));
+    }
+    let mut out = Vec::with_capacity(docs.len());
+    for (name, doc) in &docs {
+        let a = X::root(doc, name);
+        let id = a.f("id")?.id()?.to_string();
+        let num = adr_number(&id)
+            .ok_or_else(|| format!("{name}: id「{id}」の番号が ASCII の数字列でない"))?;
+        a.ef("title")?;
+        out.push(Record {
+            num,
+            status: a.f("status")?.lookup(ADR_STATUS, "判断の記録の状態")?,
+            date: a.ef("date")?,
+            id,
+        });
+    }
+    out.sort_by_key(|r| r.num);
+    if let Some(w) = out.windows(2).find(|w| w[0].num == w[1].num) {
+        return Err(format!(
+            "判断の記録の番号 {} が 2 本以上（{}・{}）",
+            w[0].num, w[0].id, w[1].id
+        ));
+    }
+    Ok(out)
 }
 
 /// 一覧の各行の id が表の id と過不足なく一致するか。戻り値は表の順の（id・値・行）。
@@ -285,7 +378,7 @@ fn updated(m: &X<'_>) -> R<String> {
     Ok(format!("{}・{}", m.ef("generated")?, m.ef("version")?))
 }
 
-fn context(i: &X<'_>, c: &X<'_>, s: &X<'_>, v: &X<'_>, r: &X<'_>, adr: usize) -> R<Ctx> {
+fn context(i: &X<'_>, c: &X<'_>, s: &X<'_>, v: &X<'_>, r: &X<'_>, adr: Vec<Record>) -> R<Ctx> {
     let sh = i.f("shelf")?;
 
     let mut docs = Vec::new();
@@ -561,8 +654,8 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
     o.push(format!(
         "<div class=\"fig-title\"><span class=\"fn\">棚</span>{} ── いま読めるのは <b>{} 面</b> ＝ このページ（入口）と、{} <span class=\"fig-tools\">{}{}<button class=\"zoom-btn\" type=\"button\">拡大</button></span><button class=\"zoom-close\" type=\"button\">✕ 閉じる</button></div>",
         sh.ef("title")?,
-        readable_faces(),
-        types(ctx.readable()),
+        readable_faces(ctx.adr.len()),
+        ctx.readable_types(""),
         hint("凡例", &legend),
         hint("図の説明", &explain)
     ));
@@ -575,7 +668,7 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
     let mut minimap =
         String::from("<p class=\"shelf-minimap\"><span class=\"state ok\">入口（いまここ）</span>");
     for d in &ctx.docs {
-        let class = if d.readable.is_some() {
+        let class = if d.readable.is_some() || (d.id == "adr" && !ctx.adr.is_empty()) {
             "state ok"
         } else {
             "state"
@@ -609,7 +702,13 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
                 up.label,
                 hint_q(&up.hint)
             ));
-            shelf_card(o, ctx, d, "is-absent");
+            // 棚の置き場（div の shelf-adr）は grid の外なので、card 自身の class だけが「読める」側で変わる
+            let class = if ctx.adr.is_empty() {
+                "is-absent"
+            } else {
+                d.shelf.place
+            };
+            shelf_card(o, ctx, d, class);
             o.push("</div>".to_string());
         } else {
             let class = if d.readable.is_some() {
@@ -631,9 +730,39 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
     Ok(())
 }
 
-/// 「<本数> 本・ページはまだ無い」の分岐: 判断の記録で本数が 1 以上なら Some(本数)（absent の文の代わりに出す）。
-fn pages_yet(ctx: &Ctx, d: &Doc) -> Option<usize> {
-    (d.id == "adr" && ctx.adr >= 1).then_some(ctx.adr)
+/// 判断の記録の card の 2 行（記録が 1 本以上のとき）。1 行目は本数と要約・2 行目は更新と各記録の面へのリンク。
+fn adr_rows(o: &mut Vec<String>, adr: &[Record]) {
+    let kinds = ADR_STATUS
+        .iter()
+        .filter_map(|(_, label)| {
+            let n = adr.iter().filter(|r| r.status == *label).count();
+            (n > 0).then(|| format!("{label} {n}"))
+        })
+        .collect::<Vec<_>>()
+        .join("・");
+    let first = &adr[0];
+    let last = &adr[adr.len() - 1];
+    o.push(format!(
+        "<p class=\"sc-row\"><span class=\"state ok\">● {} 本</span><span>{}〜{}（{kinds}）</span></p>",
+        adr.len(),
+        first.id,
+        last.id
+    ));
+    let links = adr
+        .iter()
+        .map(|r| format!("<a class=\"xref\" href=\"{}\">{}</a>", r.file(), r.id))
+        .collect::<Vec<_>>()
+        .join("・");
+    // 「開く →」と当たり判定は最も新しい番号の記録の面へ
+    let file = last.file();
+    let updated = adr
+        .iter()
+        .map(|r| r.date.as_str())
+        .max()
+        .unwrap_or_default();
+    o.push(format!(
+        "<p class=\"sc-row\"><span class=\"up\">更新 {updated}</span>{links}<a class=\"sc-open\" href=\"{file}\">開く →</a><a class=\"sc-hit\" href=\"{file}\" aria-hidden=\"true\" tabindex=\"-1\"></a></p>"
+    ));
 }
 
 fn shelf_card(o: &mut Vec<String>, ctx: &Ctx, d: &Doc, class: &str) {
@@ -659,16 +788,14 @@ fn shelf_card(o: &mut Vec<String>, ctx: &Ctx, d: &Doc, class: &str) {
                 rd.updated
             ));
         }
+        _ if d.id == "adr" && !ctx.adr.is_empty() => adr_rows(o, &ctx.adr),
         _ => {
             let state = if d.id == "adr" {
-                format!("○ {} 本", ctx.adr)
+                format!("○ {} 本", ctx.adr.len())
             } else {
                 "○ まだ無い".to_string()
             };
-            let text = match pages_yet(ctx, d) {
-                Some(_) => "ページはまだ無い".to_string(),
-                None => d.absent.clone().unwrap_or_default(),
-            };
+            let text = d.absent.clone().unwrap_or_default();
             o.push(format!(
                 "<p class=\"sc-row\"><span class=\"state\">{state}</span><span>{text}</span></p>"
             ));
@@ -717,15 +844,15 @@ fn status_line(o: &mut Vec<String>, ctx: &Ctx) {
         .join("・");
     let missing = ctx
         .missing()
-        .map(|d| {
-            let why = match pages_yet(ctx, d) {
-                Some(n) => format!("{n} 本・ページはまだ無い"),
-                None => d.absent.clone().unwrap_or_default(),
-            };
-            format!("{}（{why}）", d.ty)
-        })
+        .map(|d| format!("{}（{}）", d.ty, d.absent.clone().unwrap_or_default()))
         .collect::<Vec<_>>()
         .join("／");
+    // 判断の記録は本数を添えて読める側に並べる（記録が 0 本なら列挙にも出ない）
+    let adr_count = if ctx.adr.is_empty() {
+        String::new()
+    } else {
+        format!(" {} 本", ctx.adr.len())
+    };
     o.push(format!(
         "<section {} aria-label=\"いまの状態\">",
         dc(Component::StatusLine)
@@ -737,7 +864,7 @@ fn status_line(o: &mut Vec<String>, ctx: &Ctx) {
         "揃っている",
         &format!(
             "{}が読める（付録の{annex_types}は憲法の中）",
-            types(ctx.readable())
+            ctx.readable_types(&adr_count)
         ),
     );
     st(o, "", "○", "まだ無い", &missing);
@@ -1008,7 +1135,8 @@ mod face_index_tests {
 
     #[test]
     fn face_index_counts_readable_faces() {
-        assert_eq!(readable_faces(), 3);
+        assert_eq!(readable_faces(0), 3);
+        assert_eq!(readable_faces(7), 10);
     }
 
     #[test]
