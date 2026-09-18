@@ -1,0 +1,244 @@
+# folio2 設計ノートの見本 2（status: example・拘束力なし）。欄の決まりは design-note/schema.yaml。
+# 題材は図の道具（archify・判断の記録 ADR-4）が描ける図の型の見本。中身は要件書 FR15 の言い換えであって新しい決定を含まない。
+# 図の記述（型付き記述）は AI が座標も書き、道具の検査（仕上がりの段 showcase・rules 行 R-14）を通したものだけを置く。往復は台帳に記帳する（rules 行 R-7）。
+meta:
+  id: figures
+  title: 図の見本 — 図の道具が描く 3 つの型（手順図・順序図・構成図）
+  version: v0.1
+  status: example
+  generated: 2026-09-19
+  profile: design-note
+  note: 見本（status example）は承認欄を持たない。図の型ごとの見せ方を持ち主が見て決めるための材料。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      図の道具は 5 つの型（構成図・手順図・順序図・流れ図・状態図）を描ける。
+      この見本は、同じ題材（図が面に入るまで）を 3 つの型で描き、どの型がどの説明に向くかを見比べるためのもの。
+      構成図は「何が何と繋がるか」、手順図は「どの順で何が起こり、どこで分かれるか」、順序図は「誰と誰が何をやり取りするか」を表す。
+      図の記述は正本のこの file の図の節に置き、道具の検査を通らない図は生成されず、前の生成物も上書きされない（FR15）。
+
+figures:
+  - id: fig-flow
+    type: archify-workflow
+    caption: 手順図 — 図が面に入るまでと、通らないときの分岐
+    refs: [FR15, R-14]
+    spec:
+      schema_version: 2
+      diagram_type: workflow
+      meta:
+        title: 図が面に入るまで
+        subtitle: 型付き記述から図の本体が面に埋まるまでの手順と、通らないときの分岐
+        quality_profile: showcase
+      lanes:
+      - id: src
+        label: 正本
+      - id: folio
+        label: folio
+      - id: tool
+        label: 図の道具
+      - id: stop
+        label: 通らないとき
+      nodes:
+      - id: spec
+        lane: src
+        col: 0
+        type: external
+        label: 図の節
+        sublabel: 型付き記述
+      - id: json
+        lane: folio
+        col: 1
+        type: backend
+        label: 書き出し
+        sublabel: JSON 1 行
+      - id: validate
+        lane: tool
+        col: 2
+        type: security
+        label: 検査
+        sublabel: 仕上がりの段 showcase
+      - id: render
+        lane: tool
+        col: 3
+        type: backend
+        label: 描画
+        sublabel: html を 1 つ
+      - id: extract
+        lane: folio
+        col: 4
+        type: backend
+        label: 抜き出し
+        sublabel: svg だけ
+      - id: embed
+        lane: folio
+        col: 5
+        type: frontend
+        label: 面に埋める
+        sublabel: figure-panel
+      - id: keep
+        lane: stop
+        col: 3
+        type: security
+        label: 前の面を残す
+        sublabel: まだ分からない
+      edges:
+      - id: e1
+        from: spec
+        to: json
+        variant: default
+      - id: e2
+        from: json
+        to: validate
+        label: 撃つ
+        variant: emphasis
+      - id: e3
+        from: validate
+        to: render
+        label: 通る
+        variant: emphasis
+      - id: e4
+        from: validate
+        to: keep
+        label: 通らない
+        variant: security
+        role: error
+      - id: e5
+        from: render
+        to: extract
+        variant: default
+      - id: e6
+        from: extract
+        to: embed
+        variant: emphasis
+      mainPath:
+      - spec
+      - json
+      - validate
+      - render
+      - extract
+      - embed
+  - id: fig-seq
+    type: archify-sequence
+    caption: 順序図 — folio と実行環境と図の道具のやり取り
+    refs: [FR15, ADR-4]
+    spec:
+      schema_version: 1
+      diagram_type: sequence
+      meta:
+        title: folio と図の道具のやり取り
+        subtitle: 面を 1 枚作るときに folio が図の道具を子の処理で呼ぶ順序
+        quality_profile: showcase
+      participants:
+      - id: writer
+        type: external
+        label: 書き手
+        sublabel: AI か人
+      - id: folio
+        type: backend
+        label: folio
+        sublabel: 生成器
+      - id: node
+        type: cloud
+        label: 実行環境
+        sublabel: node
+      - id: tool
+        type: backend
+        label: 図の道具
+        sublabel: 検査と描画
+      - id: page
+        type: frontend
+        label: 面
+        sublabel: note-<id>.html
+      messages:
+      - from: writer
+        to: folio
+        y: 180
+        label: face --face note
+        variant: emphasis
+      - from: folio
+        to: node
+        y: 222
+        label: deliver を起動
+        variant: emphasis
+      - from: node
+        to: tool
+        y: 264
+        label: 型付き記述
+        variant: default
+      - from: tool
+        to: node
+        y: 306
+        label: 検査の結果と html
+        variant: return
+      - from: node
+        to: folio
+        y: 348
+        label: 終了 0 か 1
+        variant: return
+      - from: folio
+        to: page
+        y: 410
+        label: svg を埋めて書く
+        variant: emphasis
+      - from: folio
+        to: writer
+        y: 452
+        label: 通らないと 2（前の面を残す）
+        variant: dashed
+  - id: fig-arch
+    type: archify-architecture
+    caption: 構成図 — 図の生成の 3 つの口（凡例を日本語にした形）
+    refs: [FR15]
+    spec:
+      schema_version: 1
+      diagram_type: architecture
+      meta:
+        title: 図の生成の 3 つの口
+        quality_profile: showcase
+        subtitle: 型付き記述を図の道具が検査して描き、folio が図の本体だけを面に埋める
+        legend:
+          mode: auto
+          entries:
+            frontend:
+              label: 面
+            backend:
+              label: 道具
+            external:
+              label: 外の入力
+      components:
+      - id: spec
+        type: external
+        label: 型付き記述
+        sublabel: 文書の正本の図の節
+        row: 0
+        col: 0
+      - id: tool
+        type: backend
+        label: 図の道具
+        sublabel: 検査と描画
+        row: 0
+        col: 1
+      - id: body
+        type: frontend
+        label: 図の本体
+        sublabel: 部品として埋める
+        row: 0
+        col: 2
+      connections:
+      - from: spec
+        to: tool
+        label: 検査
+      - from: tool
+        to: body
+        label: 描画
+      layout:
+        mode: grid
+        cols: 3
+        gapX: 70
+        gapY: 110
+        cellW: 160
+        cellH: 70
+sources: []
