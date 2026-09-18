@@ -1,0 +1,513 @@
+//! 判断の記録の面（`folio face --face adr --id ADR-n`）の歯（便 25・docs/design/delivery-25.md §1 (g)）。binary 経由。
+//! - 凍結 fixture（tests/fixtures/face/expected-adr.html）との byte 一致（P-10.1）・escape
+//! - 実の正本の全本で `folio parts --check` に合格（AC14 の緑・NFR2）と逐語と件数の census（yaml-rust2 で正本を直に読む）
+//! - check の 3 値・id の口 4 形・名札の表の外 2 つ・基の型・未解決の根拠の印・accepted と retired の状態・
+//!   枝番付きの条 id・AC14 の赤の fixture・mode
+//!
+//! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+
+use yaml_rust2::{Yaml, YamlLoader};
+
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn fixture() -> PathBuf {
+    repo_root().join("tests/fixtures/face")
+}
+
+fn design_intent() -> PathBuf {
+    repo_root().join("design-intent")
+}
+
+fn temp_dir(case: &str) -> PathBuf {
+    let td = std::env::temp_dir().join(format!("folio-face-adr-{case}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&td);
+    fs::create_dir_all(&td).unwrap();
+    td
+}
+
+/// fixture の正本 4 file と adr/ADR-1.yaml・adr/ADR-2.yaml を一時 dir の下の src/ へ写す。戻り値 = (一時 dir, 写し)。
+fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+    let td = temp_dir(case);
+    let work = td.join("src");
+    fs::create_dir_all(work.join("adr")).unwrap();
+    for name in [
+        "constitution.yaml",
+        "rules.yaml",
+        "vocabulary.yaml",
+        "srs.yaml",
+        "adr/ADR-1.yaml",
+        "adr/ADR-2.yaml",
+    ] {
+        fs::copy(fixture().join(name), work.join(name)).unwrap();
+    }
+    (td, work)
+}
+
+/// `folio face --face <face> [--id <id>] --dir <dir> --out <out> <mode>`。
+fn folio_face(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: &str) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    cmd.arg("face").arg("--face").arg(face);
+    if let Some(id) = id {
+        cmd.arg("--id").arg(id);
+    }
+    cmd.arg("--dir")
+        .arg(dir)
+        .arg("--out")
+        .arg(out)
+        .arg(mode)
+        .output()
+        .expect("folio を起動できない")
+}
+
+fn code(out: &Output, what: &str) -> i32 {
+    out.status.code().unwrap_or_else(|| {
+        panic!(
+            "{what} が signal で終わった: {}",
+            String::from_utf8_lossy(&out.stderr)
+        )
+    })
+}
+
+fn stdout(out: &Output) -> String {
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+fn stderr(out: &Output) -> String {
+    String::from_utf8_lossy(&out.stderr).into_owned()
+}
+
+fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+    let before = fs::read_to_string(path).unwrap();
+    let after = f(&before);
+    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+    fs::write(path, after).unwrap();
+}
+
+/// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+fn esc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
+/// 写しの ADR-2 に変異を当て、`--write` の結果と面の本文を返す（面が出来ていなければ本文は空）。
+fn mutated(case: &str, mutate: impl FnOnce(&str) -> String) -> (Output, String) {
+    let (td, work) = fixture_copy(case);
+    edit(&work.join("adr/ADR-2.yaml"), mutate);
+    let out = td.join("adr-2.html");
+    let run = folio_face("adr", Some("ADR-2"), &work, &out, "--write");
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    (run, html)
+}
+
+/// 変異が導出できない入力なら `--write` = 2 ∧「まだ分からない」∧ 文言。
+fn unknown(case: &str, mutate: impl FnOnce(&str) -> String, wording: &str) {
+    let (run, html) = mutated(case, mutate);
+    assert_eq!(code(&run, "folio face"), 2, "{case}: {}", stderr(&run));
+    assert!(
+        stderr(&run).contains("まだ分からない"),
+        "{case}: {}",
+        stderr(&run)
+    );
+    assert!(
+        stderr(&run).contains(wording),
+        "{case}: 「{wording}」が無い: {}",
+        stderr(&run)
+    );
+    assert!(html.is_empty(), "{case}: 導出できないのに面を書いた");
+}
+
+// ── 凍結 fixture ──
+
+#[test]
+fn face_adr_write_matches_the_frozen_fixture() {
+    let (td, work) = fixture_copy("anchor");
+    let out = td.join("adr-2.html");
+    let run = folio_face("adr", Some("ADR-2"), &work, &out, "--write");
+    let written = fs::read(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert_eq!(
+        stdout(&run),
+        format!("folio face: 書いた（{} byte）\n", written.len())
+    );
+    let frozen = fs::read(fixture().join("expected-adr.html")).unwrap();
+    if written != frozen {
+        let at = written
+            .iter()
+            .zip(&frozen)
+            .position(|(a, b)| a != b)
+            .unwrap_or(written.len().min(frozen.len()));
+        let show = |b: &[u8]| {
+            String::from_utf8_lossy(&b[at.saturating_sub(120)..(at + 200).min(b.len())])
+                .into_owned()
+        };
+        panic!(
+            "expected-adr.html と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 凍結\n{}",
+            written.len(),
+            frozen.len(),
+            show(&written),
+            show(&frozen)
+        );
+    }
+}
+
+#[test]
+fn face_adr_escapes_values_from_the_source() {
+    let (run, html) = mutated("escape", |t| {
+        t.replacen(
+            "title: 見本の判断の記録",
+            "title: 見本の<b>判断</b>の記録",
+            1,
+        )
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert!(
+        html.contains("&lt;b&gt;判断&lt;/b&gt;"),
+        "title の山括弧が escape されていない"
+    );
+    assert!(
+        !html.contains("<b>判断</b>"),
+        "title の <b> が生のまま出ている"
+    );
+}
+
+// ── 実の正本 ──
+
+fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
+    let text = fs::read_to_string(dir.join(name)).unwrap();
+    YamlLoader::load_from_str(&text).unwrap().remove(0)
+}
+
+/// 実の判断の記録の id を file 名から集める（古い順）。
+fn real_ids() -> Vec<String> {
+    let mut ids: Vec<String> = fs::read_dir(design_intent().join("adr"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter_map(|n| {
+            n.strip_suffix(".yaml")
+                .filter(|s| s.starts_with("ADR-"))
+                .map(str::to_string)
+        })
+        .collect();
+    ids.sort_by_key(|id| id["ADR-".len()..].parse::<u32>().unwrap());
+    assert!(!ids.is_empty(), "実の判断の記録が 1 本も無い");
+    ids
+}
+
+/// 実の正本 1 本から一時 file へ書く。
+fn real_face(td: &Path, id: &str) -> (PathBuf, String) {
+    let out = td.join(format!("{}.html", id.to_ascii_lowercase()));
+    let run = folio_face("adr", Some(id), &design_intent(), &out, "--write");
+    assert_eq!(
+        code(&run, "folio face --write"),
+        0,
+        "{id}: {}",
+        stderr(&run)
+    );
+    let html = fs::read_to_string(&out).unwrap();
+    (out, html)
+}
+
+#[test]
+fn face_adr_on_the_real_sources_passes_parts_check() {
+    let td = temp_dir("parts");
+    for id in real_ids() {
+        let (out, _) = real_face(&td, &id);
+        let check = Command::new(env!("CARGO_BIN_EXE_folio"))
+            .arg("parts")
+            .arg("--check")
+            .arg("--dir")
+            .arg(design_intent())
+            .arg("--page")
+            .arg(format!("adr={}", out.display()))
+            .output()
+            .unwrap();
+        assert_eq!(
+            code(&check, "folio parts --check"),
+            0,
+            "{id}: {}{}",
+            stdout(&check),
+            stderr(&check)
+        );
+        assert!(
+            stdout(&check).contains("違反 0"),
+            "{id}: {}",
+            stdout(&check)
+        );
+    }
+    let _ = fs::remove_dir_all(&td);
+}
+
+#[test]
+fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
+    let td = temp_dir("census");
+    for id in real_ids() {
+        let (_, html) = real_face(&td, &id);
+        let a = load_yaml_at(&design_intent().join("adr"), &format!("{id}.yaml"));
+        let count = |needle: &str| html.matches(needle).count();
+
+        // 逐語（h1 は title）
+        let title = esc(a["title"].as_str().unwrap());
+        assert!(
+            html.contains(&format!("<h1>{title}</h1>")),
+            "{id}: h1 が title の逐語でない"
+        );
+
+        // 件数（案・採用・根拠）
+        let options = a["options"].as_vec().unwrap();
+        assert_eq!(
+            count("data-component=\"item-row\""),
+            options.len(),
+            "{id}: 案の数"
+        );
+        assert_eq!(
+            count("<span class=\"pill\">採用</span>"),
+            1,
+            "{id}: 採用は 1 つ"
+        );
+        let basis = a["basis"].as_vec().unwrap();
+        assert_eq!(
+            count("class=\"xref\""),
+            basis.len(),
+            "{id}: 根拠のリンクの数"
+        );
+        assert!(
+            !html.contains("（まだ分からない）"),
+            "{id}: 行き先の無い根拠が在る"
+        );
+
+        // 状態の名札
+        let label = match a["status"].as_str().unwrap() {
+            "proposed" => "提案中・拘束力なし",
+            "accepted" => "発効",
+            "retired" => "廃止",
+            other => panic!("{id}: 状態「{other}」は 3 つのどれでもない"),
+        };
+        let status_line = html
+            .lines()
+            .find(|l| l.contains("class=\"cover-status\""))
+            .unwrap_or_else(|| panic!("{id}: 状態の行が無い"));
+        assert!(
+            status_line.contains(label),
+            "{id}: 状態の行に名札「{label}」が無い: {status_line}"
+        );
+    }
+    let _ = fs::remove_dir_all(&td);
+}
+
+// ── check の 3 値 ──
+
+#[test]
+fn face_adr_check_has_three_values() {
+    let (td, work) = fixture_copy("check");
+    let out = td.join("adr-2.html");
+
+    let write = folio_face("adr", Some("ADR-2"), &work, &out, "--write");
+    let ok = folio_face("adr", Some("ADR-2"), &work, &out, "--check");
+    let mut bytes = fs::read(&out).unwrap();
+    bytes[0] ^= 0x20;
+    fs::write(&out, &bytes).unwrap();
+    let drift = folio_face("adr", Some("ADR-2"), &work, &out, "--check");
+    fs::remove_file(&out).unwrap();
+    let missing = folio_face("adr", Some("ADR-2"), &work, &out, "--check");
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&write, "write"), 0, "{}", stderr(&write));
+    assert_eq!(code(&ok, "check（一致）"), 0, "{}", stderr(&ok));
+    assert!(stdout(&ok).contains("folio face: OK"), "{}", stdout(&ok));
+    assert_eq!(code(&drift, "check（不一致）"), 1, "{}", stderr(&drift));
+    assert!(stderr(&drift).contains("DRIFT"), "{}", stderr(&drift));
+    assert_eq!(code(&missing, "check（無い）"), 2, "{}", stderr(&missing));
+    assert!(
+        stderr(&missing).contains("面が無い"),
+        "{}",
+        stderr(&missing)
+    );
+}
+
+// ── id の口 ──
+
+#[test]
+fn face_adr_id_is_required_and_only_on_the_adr_face() {
+    let (td, work) = fixture_copy("id");
+    let out = td.join("never.html");
+    let no_id = folio_face("adr", None, &work, &out, "--write");
+    let missing = folio_face("adr", Some("ADR-9"), &work, &out, "--write");
+    let on_srs = folio_face("srs", Some("ADR-2"), &work, &out, "--write");
+    let bad_shape = folio_face("adr", Some("foo"), &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&no_id, "--id 無し"), 2, "{}", stderr(&no_id));
+    assert!(stderr(&no_id).contains("--id が無い"), "{}", stderr(&no_id));
+    assert_eq!(code(&missing, "無い id"), 2, "{}", stderr(&missing));
+    assert_eq!(code(&on_srs, "面 srs に --id"), 2, "{}", stderr(&on_srs));
+    assert!(
+        stderr(&on_srs).contains("--id は面 adr にだけ付く"),
+        "{}",
+        stderr(&on_srs)
+    );
+    assert_eq!(
+        code(&bad_shape, "id の形でない"),
+        2,
+        "{}",
+        stderr(&bad_shape)
+    );
+    assert!(
+        stderr(&bad_shape).contains("id の形でない"),
+        "{}",
+        stderr(&bad_shape)
+    );
+    assert!(!exists, "導出できないのに出力先に書いた");
+}
+
+// ── 導出できない入力 ──
+
+#[test]
+fn face_adr_unknown_when_the_status_is_outside_the_table() {
+    unknown(
+        "status",
+        |t| t.replacen("status: proposed", "status: draft", 1),
+        "状態",
+    );
+}
+
+#[test]
+fn face_adr_unknown_when_a_verdict_is_outside_the_table() {
+    unknown(
+        "verdict",
+        |t| t.replacen("verdict: rejected", "verdict: maybe", 1),
+        "判定",
+    );
+}
+
+#[test]
+fn face_adr_unknown_when_basis_is_not_a_list() {
+    unknown(
+        "basis",
+        |t| t.replacen("basis: [P-1, A-1, R-1, FR1, AC1, ADR-1]", "basis: P-1", 1),
+        "一覧でない",
+    );
+}
+
+// ── 行き先の無い根拠・状態 ──
+
+#[test]
+fn face_adr_marks_a_basis_id_without_a_target() {
+    let (run, html) = mutated("unresolved", |t| {
+        t.replacen(
+            "basis: [P-1, A-1, R-1, FR1, AC1, ADR-1]",
+            "basis: [P-1, A-1, R-1, FR1, AC1, ADR-1, FR9]",
+            1,
+        )
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert!(
+        html.contains("FR9（まだ分からない）"),
+        "行き先の無い id に印が無い"
+    );
+    assert!(
+        !html.contains("srs.html#fr9"),
+        "行き先の無い id をリンクにした"
+    );
+}
+
+#[test]
+fn face_adr_shows_the_accepted_and_retired_states() {
+    let (accepted, html) = mutated("accepted", |t| {
+        t.replacen("status: proposed", "status: accepted", 1)
+            .replacen(
+                "amends: []",
+                "amends: []\napproval: {who: 持ち主, date: 2026-09-07, ruling: f2-648.40 notes 2026-09-07, verbatim: 承認する, surface: R-8}",
+                1,
+            )
+    });
+    assert_eq!(code(&accepted, "accepted"), 0, "{}", stderr(&accepted));
+    assert!(
+        html.contains("発効・拘束力あり（承認 2026-09-07）"),
+        "accepted の状態の行が無い"
+    );
+    assert_eq!(
+        html.matches("<div class=\"sign\">").count(),
+        1,
+        "承認欄の sign が 1 つでない"
+    );
+
+    let (retired, html) = mutated("retired", |t| {
+        t.replacen("status: proposed", "status: retired", 1)
+            .replacen("amends: []", "amends: []\nsuperseded_by: ADR-1", 1)
+    });
+    assert_eq!(code(&retired, "retired"), 0, "{}", stderr(&retired));
+    assert!(html.contains("廃止 → 後継 "), "retired の状態の行が無い");
+    assert!(html.contains("href=\"adr-1.html\""), "後継へのリンクが無い");
+}
+
+#[test]
+fn face_adr_resolves_a_statement_id_to_its_article() {
+    let (run, html) = mutated("statement", |t| {
+        t.replacen("basis: [P-1,", "basis: [P-1.1, P-1.9, P-1,", 1)
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert!(
+        html.contains("<a class=\"xref\" href=\"constitution.html#p-1\">P-1.1</a>"),
+        "枝番付きの id が条の anchor へ跳んでいない"
+    );
+    assert!(
+        html.contains("P-1.9（まだ分からない）"),
+        "無い規範文に印が無い"
+    );
+}
+
+// ── AC14 の赤 ──
+
+#[test]
+fn face_adr_parts_check_fails_on_the_red_fixture() {
+    let page = fixture().join("adr/extra-class.html");
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("parts")
+        .arg("--check")
+        .arg("--dir")
+        .arg(design_intent())
+        .arg("--page")
+        .arg(format!("adr={}", page.display()))
+        .output()
+        .unwrap();
+    assert_eq!(code(&out, "folio parts --check"), 1, "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("部品目録に無い class「not-in-catalog」"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+// ── mode ──
+
+#[test]
+fn face_adr_mode_is_exactly_one() {
+    for args in [&["--check", "--write"][..], &[][..]] {
+        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+            .arg("face")
+            .arg("--face")
+            .arg("adr")
+            .arg("--id")
+            .arg("ADR-2")
+            .arg("--dir")
+            .arg(fixture())
+            .arg("--out")
+            .arg(std::env::temp_dir().join("folio-face-adr-never-written.html"))
+            .args(args)
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {}", stderr(&out));
+    }
+}

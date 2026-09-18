@@ -1,0 +1,19 @@
+# folio face の凍結 fixture（便 25・P-10.1）— 判断の記録の正本の最小形。手書き・design-intent/adr/ の写しではない。
+# 提案中（承認欄なし）・案 2（採用 1・退けた 1）・根拠 6（条 2・rules 行 1・要件 2・判断の記録 1）・改訂なし・帰結 2。
+
+id: ADR-2
+title: 見本の判断の記録
+status: proposed
+date: 2026-09-06
+context: 見本の面を出すのに、正本の欄だけで 1 枚を組めるかがまだ分からない。
+decision: 見本の判断の記録を 1 本置き、面の生成器の凍結 fixture にする。
+options:
+  - {id: a, name: 最小の手書きの正本を置く, text: 欄の決まりの必須の欄だけを手で書く。, verdict: adopted, reason: 正本の写しにせず、面の骨格だけを測れる。}
+  - {id: b, name: 実の正本を写す, text: design-intent/adr/ の 1 本をそのまま写す。, verdict: rejected, reason: 正本が変わるたびに凍結 fixture が動く。}
+basis: [P-1, A-1, R-1, FR1, AC1, ADR-1]
+retreat: {kind: ruling, condition: 見本の欄が実の正本と離れたら、持ち主に問い直す。}
+amends: []
+plain: 見本の判断の記録です。決め方の形だけを見せます。
+consequences:
+  - 面の生成器は正本 1 本から 1 枚を組む。
+  - 凍結 fixture は手書きのまま置く。

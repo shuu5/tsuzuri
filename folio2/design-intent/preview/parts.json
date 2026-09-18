@@ -7,7 +7,8 @@
       "faces": [
         "index",
         "constitution",
-        "srs"
+        "srs",
+        "adr"
       ]
     },
     "hub-cover": {
@@ -20,14 +21,16 @@
       "role": "cover",
       "faces": [
         "constitution",
-        "srs"
+        "srs",
+        "adr"
       ]
     },
     "approval-block": {
       "role": "cover",
       "faces": [
         "constitution",
-        "srs"
+        "srs",
+        "adr"
       ]
     },
     "figure-panel": {
@@ -97,7 +100,8 @@
       "faces": [
         "index",
         "constitution",
-        "srs"
+        "srs",
+        "adr"
       ],
       "density": [
         "full",
@@ -108,7 +112,8 @@
       "role": "body",
       "faces": [
         "constitution",
-        "srs"
+        "srs",
+        "adr"
       ]
     },
     "rtm-grid": {
@@ -139,7 +144,8 @@
       "role": "item",
       "faces": [
         "constitution",
-        "srs"
+        "srs",
+        "adr"
       ],
       "slots": [
         "ir-head",
@@ -214,7 +220,8 @@
       "faces": [
         "index",
         "constitution",
-        "srs"
+        "srs",
+        "adr"
       ]
     }
   },

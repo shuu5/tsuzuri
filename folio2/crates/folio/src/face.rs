@@ -10,7 +10,7 @@ use std::path::Path;
 use crate::parts::catalog::Component;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
-use crate::{face_constitution, face_index, face_srs};
+use crate::{face_adr, face_constitution, face_index, face_srs};
 
 pub type R<T> = Result<T, String>;
 
@@ -38,23 +38,35 @@ impl Outcome {
 
 // ── 命令の口 ──
 
-pub fn run(face: &str, dir: &Path, out: &Path, mode: Mode) -> Outcome {
-    let derive: fn(&Path) -> R<String> = match face {
-        "index" => face_index::derive,
-        "constitution" => face_constitution::derive,
-        "srs" => face_srs::derive,
-        f => {
-            return Outcome::unknown(format!(
-                "面の名「{f}」は index・constitution・srs のどれでもない"
-            ));
+pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> Outcome {
+    if !matches!(face, "index" | "constitution" | "srs" | "adr") {
+        return Outcome::unknown(format!(
+            "面の名「{face}」は index・constitution・srs・adr のどれでもない"
+        ));
+    }
+    // 判断の記録の面は 1 本 1 枚なので id が要る。ほかの面は id を取らない
+    if face != "adr" && id.is_some() {
+        return Outcome::unknown("--id は面 adr にだけ付く");
+    }
+    let adr_id = match id {
+        Some(id) => id,
+        None if face == "adr" => {
+            return Outcome::unknown("--id が無い（面 adr は判断の記録の id が要る）");
         }
+        None => "",
     };
     // --out が相対なら --dir からの相対・絶対ならそのまま
     let out_path = dir.join(out);
     if !out_path.parent().is_some_and(Path::is_dir) {
         return Outcome::unknown(format!("{}: 出力先の親 dir が無い", out_path.display()));
     }
-    let html = match derive(dir) {
+    let derived = match face {
+        "index" => face_index::derive(dir),
+        "constitution" => face_constitution::derive(dir),
+        "srs" => face_srs::derive(dir),
+        _ => face_adr::derive(dir, adr_id),
+    };
+    let html = match derived {
         Ok(h) => h,
         Err(e) => return Outcome::unknown(e),
     };

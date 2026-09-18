@@ -5,6 +5,7 @@ mod anchor;
 mod check;
 mod entrance;
 mod face;
+mod face_adr;
 mod face_constitution;
 mod face_index;
 mod face_srs;
@@ -113,9 +114,12 @@ enum Command {
     /// 正本から見本 3 面の 1 面を導出して書く（--write）・検査する（--check）。本便で生成器を持つのは憲法の面だけ
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Face {
-        /// 面の名（index・constitution・srs）
+        /// 面の名（index・constitution・srs・adr）
         #[arg(long)]
         face: String,
+        /// 判断の記録の id（面 adr にだけ付く・面 adr には要る）
+        #[arg(long)]
+        id: Option<String>,
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
@@ -306,6 +310,7 @@ fn main() -> ExitCode {
         }
         Command::Face {
             face,
+            id,
             dir,
             out,
             write,
@@ -316,7 +321,7 @@ fn main() -> ExitCode {
             } else {
                 face::Mode::Check
             };
-            let outcome = face::run(&face, &dir, &out, mode);
+            let outcome = face::run(&face, id.as_deref(), &dir, &out, mode);
             if let Some(line) = &outcome.stdout {
                 println!("{line}");
             }
