@@ -34,7 +34,7 @@ planner の実測（2026-09-18・main f3f300c）: 判断の記録の正本は AD
 - 承認欄: Frame の approval_band（h2「承認」・lead は状態の名札）→ chapbody → approval-block（要件書の面の関数 approval と同じ字面の組 = sign / role / who / when / stamp）。approval が在れば sign 1 つ（role「承認」・who・when は date・when に「逐語「<verbatim>」」・stamp は ruling）、無ければ approval-block の中に p「未（提案中・持ち主の逐語と日付が入ると発効）」。
 - foot: Frame の foot（version は id・generated は date・機械のための面の dl は id / status / date / basis（「・」で連結）/ amends の数）。字下げ無し・部品ごとに改行 1 つ・末尾に改行 1 つ・escape と id の規則は便 14 と同じ。
 
-(e) 部品目録。`design-intent/preview/parts.json` の 8 部品の faces に adr を足す: freshness-stamp・font-size-control・doc-cover-band・approval-block・chapter-deck-band・section-lead-callout・item-row の 7 つ（+ 便 14〜16 の面が使う lane-chip は足さない）。部品は足さない（30 のまま・parts.rs の unit の歯の 30 は不変）。`crates/folio/src/parts.rs` の FACES を 4 つ（index・constitution・srs・adr）にし、`--page adr=<path>` を受ける（「どれでもない」の文言は 4 つの列挙に）。build.rs は触らない（部品目録から Component を組み立て時に導出する既存の仕組みが faces の追加を拾う）。face_adr.rs の PARTS はこの 7 つで、Frame の dc は一覧に無い部品を debug で止める（既存と同じ）。
+(e) 部品目録。`design-intent/preview/parts.json` の 7 部品の faces に adr を足す: freshness-stamp・font-size-control・doc-cover-band・approval-block・chapter-deck-band・section-lead-callout・item-row の 7 つ（+ 便 14〜16 の面が使う lane-chip は足さない）。部品は足さない（30 のまま・parts.rs の unit の歯の 30 は不変）。`crates/folio/src/parts.rs` の FACES を 4 つ（index・constitution・srs・adr）にし、`--page adr=<path>` を受ける（「どれでもない」の文言は 4 つの列挙に）。build.rs は触らない（部品目録から Component を組み立て時に導出する既存の仕組みが faces の追加を拾う）。`folio parts --print` は部品ごとの faces を出し、歯 parts.rs はその出力を凍結目録 `tests/fixtures/floor/parts-catalog.json` と byte 一致で比べるので、凍結目録の同じ 7 部品の faces にも adr を足す（それ以外の byte は変えない・admin の事前読み 2026-09-18）。face_adr.rs の PARTS はこの 7 つで、Frame の dc は一覧に無い部品を debug で止める（既存と同じ）。
 
 (f) 凍結 fixture（P-10.1・最小の手書き・正本の写しにしない）: `tests/fixtures/face/adr/ADR-2.yaml`（proposed・approval 無し・options 2 = a adopted / b rejected・basis = [P-1, A-1, R-1, FR1, AC1, ADR-1]（fixture の憲法・rules・要件書に在る id と、同じ dir の ADR-1）・retreat kind ruling・amends 空・consequences 2 項・本文は日本語だけ）と、その期待 `tests/fixtures/face/expected-adr.html`。既存の `tests/fixtures/face/adr/ADR-1.yaml`（2 行・入口の面の数え用）は触らない（入口の歯 face.rs は adr/ADR-1.yaml だけを写すので、ADR-2.yaml を足しても入口の期待は変わらない）。AC14 の赤の fixture `tests/fixtures/face/adr/extra-class.html`（手書き・数十行）: 判断の記録の面の骨格（site-bar・doc-cover-band・item-row 1 つ）に部品目録に無い class を 1 つ（`not-in-catalog`）持つ。
 
@@ -52,7 +52,7 @@ planner の実測（2026-09-18・main f3f300c）: 判断の記録の正本は AD
 11. 写しの status を accepted にし approval（who 持ち主・date・ruling・verbatim・surface R-8）を足す = 0 ∧ cover-status に「発効・拘束力あり（承認 <date>）」∧ approval-block に sign 1 つ／status を retired にし superseded_by ADR-1 を足す = 0 ∧「廃止」∧ `adr-1.html` へのリンク。
 12. `folio parts --check --dir design-intent --page adr=tests/fixtures/face/adr/extra-class.html` = 1 ∧ stdout に「部品目録に無い class「not-in-catalog」」（AC14 の赤・要件書 AC14 の red_test）。
 13. `--write` と `--check` を両方付ける = 2（clap の group・既存の面と同じ）。
-- 既存の歯: `crates/folio/tests/parts.rs` は write-set に在るが本文も期待も変えない（FACES が 4 になっても既存の歯は面 3 つの path しか渡さない）。歯 face.rs（1,597 行・正規化）は write-set に載せず本文も fixture も触らない。unit は置かない。
+- 既存の歯: `crates/folio/tests/parts.rs` は write-set に在るが本文は変えない（FACES が 4 になっても既存の歯は面 3 つの path しか渡さない）。期待のうち凍結目録の fixture だけ (e) のとおり 7 部品の faces に adr を足す。歯 face.rs（1,597 行・正規化）は write-set に載せず本文も fixture も触らない。unit は置かない。
 
 (h) 便 24 までの形との接続: 新規は `crates/folio/src/face_adr.rs`（見積 600〜800 行）・歯 `crates/folio/tests/face_adr.rs`・fixture 3 本。`crates/folio/src/face.rs` は run の引数 1 つと adr の腕と文言（数行）・`crates/folio/src/main.rs` は旗 --id と Face の doc の 1 行と run の呼び出し・`crates/folio/src/parts.rs` は FACES の 1 語と文言 1 行・`design-intent/preview/parts.json` は 7 部品の faces。`face_srs.rs`・`face_constitution.rs`・`face_index.rs`・`site.rs`（build の出力は 5 のまま）・`render.rs`・`adr.rs`・`build.rs`・`folio.css`・`folio-ui.js`・`Cargo.toml`・`.github/workflows/` は触らない。face_srs.rs の非公開の関数（item_row・cover・approval・article_link・xref・meta_span）は呼ばず、同じ字面を face_adr.rs に自前で持つ。外部 crate は増えない。正規表現は使わない。size は M = 中身を変える既存の file 1 本あたりの増分は小さい（face.rs 十数行・main.rs 数行・parts.rs 2 行・parts.json 7 行）が、新規の face_adr.rs が大きい。
 
@@ -87,8 +87,8 @@ id = "z"
 title = "判断の記録の面を正本から folio face --face adr --id ADR-n で生成する（4 面目・部品目録の faces・凍結 fixture）"
 req = ["FR16", "NFR2"]
 section = "1"
-write-set = ["+crates/folio/src/face_adr.rs", "+crates/folio/tests/face_adr.rs", "crates/folio/src/face.rs", "crates/folio/src/main.rs", "crates/folio/src/parts.rs", "crates/folio/tests/parts.rs", "design-intent/preview/parts.json", "+tests/fixtures/face/adr/ADR-2.yaml", "+tests/fixtures/face/adr/extra-class.html", "+tests/fixtures/face/expected-adr.html"]
+write-set = ["+crates/folio/src/face_adr.rs", "+crates/folio/tests/face_adr.rs", "crates/folio/src/face.rs", "crates/folio/src/main.rs", "crates/folio/src/parts.rs", "crates/folio/tests/parts.rs", "design-intent/preview/parts.json", "tests/fixtures/floor/parts-catalog.json", "+tests/fixtures/face/adr/ADR-2.yaml", "+tests/fixtures/face/adr/extra-class.html", "+tests/fixtures/face/expected-adr.html"]
 verify = ["cargo nextest run -p folio --test face_adr face_adr", "cargo nextest run -p folio --test parts parts", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
-done = "face_adr の歯 13 本（凍結 fixture との byte 一致・escape・実の正本 7 本で parts 合格・census・check の 3 値・id の口 4 形・状態と判定の表外・basis の型・未解決の根拠の印・accepted と retired の状態・AC14 の赤 fixture・mode）が緑、parts の歯が期待不変で緑、clippy が 0 警告で CI が通る"
+done = "face_adr の歯 13 本（凍結 fixture との byte 一致・escape・実の正本 7 本で parts 合格・census・check の 3 値・id の口 4 形・状態と判定の表外・basis の型・未解決の根拠の印・accepted と retired の状態・AC14 の赤 fixture・mode）が緑、parts の歯は本文不変・凍結目録の fixture に adr を足して緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
