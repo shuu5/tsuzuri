@@ -1,0 +1,13 @@
+meta: {id: fixture-intake, title: 相談窓口, version: v0.1, status: draft}
+answers: {values: [はい, いいえ], default: recommend}
+targets:
+  - {id: constitution, type: 憲法, with: []}
+  - {id: inject, type: 注入, with: []}
+questions:
+  - {id: q1, ask: 守る線を決めますか, recommend: はい, why: 基準になる。, yes: [constitution], no: []}
+sheet:
+  file: intake-sheet.yaml
+  title: 支度表
+  explain: 何を持つかの表。
+  sections:
+    - {id: documents, text: 持つ文書}
