@@ -7,6 +7,8 @@
 //! id の数の昇順・設計ノートの並びも入口の面と同じ読み（`face_index::notes`）で id の字の昇順。
 //! 全部か無しか: 出す file を先に全部 memory の上で用意し、1 つでも導出できなければ 2 で終わり、配信先に 1 byte も
 //! 書かない（配信先の dir も作らない・P-4.1）。配信先に在る他の file は消さない（N-1.1）。
+//! 天井の名札（便 40・delivery-40.md §1 (a)(d)）: 任意の旗 `--ceiling`（束の置き場・相対なら `--dir` からの相対）を
+//! 5 つの面の生成器へそのまま通す。`--write` でも `--check` でも同じ値を渡す（名札の中身も byte 一致の対象）。
 
 use std::fs;
 use std::path::Path;
@@ -59,10 +61,11 @@ impl Outcome {
 
 // ── 命令の口 ──
 
-pub fn run(dir: &Path, out: &Path, mode: Mode) -> Outcome {
-    // --out が相対なら --dir からの相対・絶対ならそのまま
+pub fn run(dir: &Path, out: &Path, ceiling: Option<&Path>, mode: Mode) -> Outcome {
+    // --out と --ceiling が相対なら --dir からの相対・絶対ならそのまま
     let out_dir = dir.join(out);
-    let built = match build_all(dir) {
+    let ceiling_dir = ceiling.map(|c| dir.join(c));
+    let built = match build_all(dir, ceiling_dir.as_deref()) {
         Ok(b) => b,
         Err(e) => return Outcome::unknown(e),
     };
@@ -73,12 +76,12 @@ pub fn run(dir: &Path, out: &Path, mode: Mode) -> Outcome {
     }
 }
 
-/// 出す file を全部 memory の上で用意する（1 本でも用意できなければ Err）。
-fn build_all(dir: &Path) -> R<Vec<(String, Vec<u8>)>> {
+/// 出す file を全部 memory の上で用意する（1 本でも用意できなければ Err）。`ceiling` = 天井の束の置き場（解決済み）。
+fn build_all(dir: &Path, ceiling: Option<&Path>) -> R<Vec<(String, Vec<u8>)>> {
     let mut built = Vec::with_capacity(OUTPUTS.len());
     for (name, source) in OUTPUTS {
         let bytes = match source {
-            Source::Face(face) => derive(face, dir)?.into_bytes(),
+            Source::Face(face) => derive(face, dir, ceiling)?.into_bytes(),
             Source::Style => {
                 let path = dir.join("preview").join(name);
                 fs::read(&path).map_err(|e| format!("{}: 読めない: {e}", path.display()))?
@@ -87,22 +90,22 @@ fn build_all(dir: &Path) -> R<Vec<(String, Vec<u8>)>> {
         built.push((name.to_string(), bytes));
     }
     for record in face_index::records(dir)? {
-        let html = face_adr::derive(dir, record.id())?;
+        let html = face_adr::derive(dir, record.id(), ceiling)?;
         built.push((record.file(), html.into_bytes()));
     }
     for note in face_index::notes(dir)? {
-        let html = face_note::derive(dir, note.id())?;
+        let html = face_note::derive(dir, note.id(), ceiling)?;
         built.push((note.file(), html.into_bytes()));
     }
     Ok(built)
 }
 
 /// 面の名 → 便 14〜16 の生成器（`face.rs` の run と同じ選び方）。
-fn derive(face: &str, dir: &Path) -> R<String> {
+fn derive(face: &str, dir: &Path, ceiling: Option<&Path>) -> R<String> {
     match face {
-        "index" => face_index::derive(dir),
-        "constitution" => face_constitution::derive(dir),
-        "srs" => face_srs::derive(dir),
+        "index" => face_index::derive(dir, ceiling),
+        "constitution" => face_constitution::derive(dir, ceiling),
+        "srs" => face_srs::derive(dir, ceiling),
         f => Err(format!(
             "面の名「{f}」は index・constitution・srs のどれでもない"
         )),
@@ -203,6 +206,6 @@ mod site_tests {
 
     #[test]
     fn site_derive_takes_only_the_three_face_names() {
-        assert!(derive("figure", Path::new("design-intent")).is_err());
+        assert!(derive("figure", Path::new("design-intent"), None).is_err());
     }
 }

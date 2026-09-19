@@ -4,6 +4,9 @@
 //! 所見の中身が正しいかは判定しない（P-1）。所見 file の名と外形（最上位の欄 3 つ）は床の定数で持ち、欄ごとの値域は
 //! 天井の正本（`bundle::load` が読む）から取る（P-5.1）。folio は所見 file を書かない。
 //! 終了 = 4 観点が全部 合格 のときだけ 0、まだ分からない が 1 つでも在れば 2、無くて 不合格 が在れば 1（P-4）。
+//! 名札（便 40・delivery-40.md §1 (b)・ADR-8 決定 (4)）: 面の生成器は `stamps` で観点ごとの 3 値を取る。同じ規則のうち
+//! 3（束が古い）だけを当てない——名札を載せた面そのものが次の束の入力（faces/）になるので、面の生成の中で「現在の面から
+//! 組んだ要約値」を求めると固定点が無い。束が古いかは `--check` が数える側の領分で、名札は代わりに要約値の先頭 8 字を出す。
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -35,6 +38,83 @@ struct Counted {
     findings: usize,
     /// 残る 止める の数（反証で退けたものは数えない）
     stops: usize,
+    /// 起動の記録の at（読めたときだけ・名札の日付）
+    at: Option<String>,
+    /// digest.txt の 16 進の先頭 8 字（読めたときだけ・名札の要約値）
+    digest: Option<String>,
+}
+
+impl Counted {
+    /// 束が無い（観点の dir が無い・置き場が無い）。
+    fn absent() -> Self {
+        Counted {
+            verdict: Verdict::Unknown,
+            reasons: vec!["束が無い".to_string()],
+            findings: 0,
+            stops: 0,
+            at: None,
+            digest: None,
+        }
+    }
+}
+
+/// 名札（便 40）のための観点 1 つの結果。理由は持たない（面は数えた結果だけ・理由は `--check` の標準エラー）。
+pub struct Stamp {
+    pub id: String,
+    pub verdict: Verdict,
+    /// 起動の記録の at（読めたときだけ）
+    pub at: Option<String>,
+    /// digest.txt の 16 進の先頭 8 字（読めたときだけ）
+    pub digest: Option<String>,
+}
+
+/// 観点ごとの 3 値を名札のために返す（便 40・§1 (b)）。`out` = 束の置き場（解決済み・None = 置き場なし）。
+/// 便 39 の規則 1・2・4〜10 をそのまま当て、3（束が古い）だけを当てない。置き場が無い・観点の dir が無い観点は
+/// まだ分からない（at と要約値は無し）。天井の正本の viewpoints の順に返す。天井の正本が読めなければ Err（面は導出できない）。
+pub fn stamps(dir: &Path, out: Option<&Path>) -> R<Vec<Stamp>> {
+    let ceiling = bundle::load(dir)?;
+    Ok(ceiling
+        .viewpoints
+        .iter()
+        .map(|vp| {
+            let counted = match out {
+                Some(out_dir) => count_viewpoint(dir, None, out_dir, &ceiling, vp),
+                None => Counted::absent(),
+            };
+            Stamp {
+                id: vp.id.clone(),
+                verdict: counted.verdict,
+                at: counted.at,
+                digest: counted.digest,
+            }
+        })
+        .collect())
+}
+
+/// 天井の正本 `<dir>/ceiling.yaml` の viewpoints の（id・name）を正本の順に（名札の観点の名は正本の逐語・P-6.3・
+/// `bundle::load` は name を外に出さない）。
+pub fn viewpoint_names(dir: &Path) -> R<Vec<(String, String)>> {
+    let text = fs::read_to_string(dir.join("ceiling.yaml"))
+        .map_err(|e| format!("ceiling.yaml: 読めない: {e}"))?;
+    let doc = yaml::parse(&text).map_err(|e| format!("ceiling.yaml: parse できない: {e}"))?;
+    let rows = doc
+        .root
+        .get("viewpoints")
+        .and_then(Node::as_seq)
+        .ok_or_else(|| "ceiling.yaml: viewpoints: 読めない".to_string())?;
+    rows.iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let field = |key: &str| {
+                row.get(key)
+                    .and_then(Node::as_str)
+                    .filter(|s| !s.trim().is_empty())
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("ceiling.yaml: viewpoints[{i}].{key}: 読めない"))
+            };
+            Ok((field("id")?, field("name")?))
+        })
+        .collect()
 }
 
 // ── 命令の口 ──
@@ -63,7 +143,7 @@ pub fn run(dir: &Path, faces: &Path, out: &Path) -> Outcome {
     let mut stderr = Vec::new();
     let (mut pass, mut fail, mut unknown) = (0, 0, 0);
     for vp in &ceiling.viewpoints {
-        let counted = count_viewpoint(dir, &faces_dir, &face_files, &out_dir, &ceiling, vp);
+        let counted = count_viewpoint(dir, Some((&faces_dir, &face_files)), &out_dir, &ceiling, vp);
         match counted.verdict {
             Verdict::Pass => pass += 1,
             Verdict::Fail => fail += 1,
@@ -106,10 +186,10 @@ fn before_viewpoints(reason: String) -> Outcome {
 
 // ── 観点ごとの 3 値（§1 (c)）──
 
+/// `faces` = `--check` の配信先（直下の名つき）。None なら 3（束が古い）を当てない（名札・便 40）。
 fn count_viewpoint(
     dir: &Path,
-    faces_dir: &Path,
-    face_files: &[(String, bool)],
+    faces: Option<(&Path, &[(String, bool)])>,
     out_dir: &Path,
     ceiling: &Ceiling,
     vp: &Viewpoint,
@@ -119,15 +199,11 @@ fn count_viewpoint(
 
     // 1. 束が無い
     if !bundle_present(&vp_dir) {
-        return Counted {
-            verdict: Verdict::Unknown,
-            reasons: vec!["束が無い".to_string()],
-            findings: 0,
-            stops: 0,
-        };
+        return Counted::absent();
     }
     let digest = fs::read(vp_dir.join(DIGEST_FILE)).unwrap_or_default();
     let digest = String::from_utf8_lossy(&digest).into_owned();
+    let digest8 = digest_head(&digest);
 
     // 2. 束が壊れている（置き場の file から測り直す）
     match measure(&vp_dir) {
@@ -137,17 +213,19 @@ fn count_viewpoint(
     }
 
     // 3. 束が古い（現在の正本から memory の上に組み直す）
-    match bundle::build_one(dir, faces_dir, face_files, ceiling, vp) {
-        Ok(files)
-            if files
-                .get(DIGEST_FILE)
-                .is_some_and(|d| *d == digest.as_bytes()) => {}
-        Ok(_) => reasons.push("束が古い（現在の正本から組んだ要約値と違う）".to_string()),
-        Err(e) => reasons.push(e),
+    if let Some((faces_dir, face_files)) = faces {
+        match bundle::build_one(dir, faces_dir, face_files, ceiling, vp) {
+            Ok(files)
+                if files
+                    .get(DIGEST_FILE)
+                    .is_some_and(|d| *d == digest.as_bytes()) => {}
+            Ok(_) => reasons.push("束が古い（現在の正本から組んだ要約値と違う）".to_string()),
+            Err(e) => reasons.push(e),
+        }
     }
 
     // 4.〜6. 所見 file
-    let (sheet, findings, stops) = match read_findings(&vp_dir) {
+    let (sheet, findings, stops, at) = match read_findings(&vp_dir) {
         Ok(Some(root)) => {
             let mut sheet = count_sheet(
                 &vp_dir,
@@ -161,15 +239,16 @@ fn count_viewpoint(
                 Some(sheet),
                 sheet_findings(&root),
                 sheet_stops(&root, &ceiling.rules),
+                record_at(&root),
             )
         }
         Ok(None) => {
             reasons.push("所見 file が無い".to_string());
-            (None, 0, 0)
+            (None, 0, 0, None)
         }
         Err(e) => {
             reasons.push(format!("所見 file: {e}"));
-            (None, 0, 0)
+            (None, 0, 0, None)
         }
     };
     if !reasons.is_empty() {
@@ -178,6 +257,8 @@ fn count_viewpoint(
             reasons,
             findings,
             stops,
+            at,
+            digest: digest8,
         };
     }
     let sheet = sheet.expect("理由が無ければ所見 file は読めている");
@@ -192,6 +273,8 @@ fn count_viewpoint(
             reasons,
             findings,
             stops,
+            at,
+            digest: digest8,
         };
     }
     // 8.〜10. file の verdict と残る所見
@@ -218,7 +301,30 @@ fn count_viewpoint(
         reasons,
         findings,
         stops,
+        at,
+        digest: digest8,
     }
+}
+
+/// digest.txt の 1 行「<規則の名> <16 進>」の 16 進の先頭 8 字（形が違えば None）。
+fn digest_head(digest: &str) -> Option<String> {
+    let mut words = digest.split_whitespace();
+    let (_, hex, None) = (words.next()?, words.next()?, words.next()) else {
+        return None;
+    };
+    let head = hex.get(..8)?;
+    head.bytes()
+        .all(|b| b.is_ascii_hexdigit())
+        .then(|| head.to_string())
+}
+
+/// 所見 file の起動の記録の at（空でない文のときだけ）。
+fn record_at(root: &Node) -> Option<String> {
+    root.get("record")
+        .and_then(|r| r.get("at"))
+        .and_then(Node::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
 }
 
 /// 観点の dir と 5 つの中身と digest.txt が全部在るか。

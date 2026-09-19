@@ -63,6 +63,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
         "rules.yaml",
         "vocabulary.yaml",
         "srs.yaml",
+        "ceiling.yaml",
         "design-note/full.yaml",
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();

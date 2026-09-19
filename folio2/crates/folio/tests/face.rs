@@ -62,6 +62,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
         "rules.yaml",
         "vocabulary.yaml",
         "srs.yaml",
+        "ceiling.yaml",
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }
@@ -287,9 +288,10 @@ fn face_census_on_the_real_sources_counts_and_verbatims() {
         "開発規律行の tr の数"
     );
 
-    // 部品の名札は 14 種の中だけ・lane-chip を含まない
-    const ALLOWED: [&str; 14] = [
+    // 部品の名札は 15 種の中だけ・lane-chip を含まない
+    const ALLOWED: [&str; 15] = [
         "freshness-stamp",
+        "ceiling-stamp",
         "font-size-control",
         "doc-cover-band",
         "chapter-deck-band",
@@ -306,7 +308,7 @@ fn face_census_on_the_real_sources_counts_and_verbatims() {
     ];
     assert!(!parts.is_empty());
     for p in &parts {
-        assert!(ALLOWED.contains(p), "14 種に無い部品「{p}」");
+        assert!(ALLOWED.contains(p), "15 種に無い部品「{p}」");
     }
     assert!(!html.contains("lane-chip"));
 }
@@ -706,9 +708,10 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
         "chapter-deck-band の数"
     );
 
-    // 部品の名札は 17 種の中だけ・lane-chip を含まない
-    const ALLOWED: [&str; 17] = [
+    // 部品の名札は 18 種の中だけ・lane-chip を含まない
+    const ALLOWED: [&str; 18] = [
         "freshness-stamp",
+        "ceiling-stamp",
         "font-size-control",
         "doc-cover-band",
         "chapter-deck-band",
@@ -728,7 +731,7 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
     ];
     assert!(!parts.is_empty());
     for p in &parts {
-        assert!(ALLOWED.contains(p), "17 種に無い部品「{p}」");
+        assert!(ALLOWED.contains(p), "18 種に無い部品「{p}」");
     }
     assert!(!html.contains("lane-chip"));
     assert!(

@@ -71,6 +71,7 @@ fn built_site(case: &str) -> (PathBuf, PathBuf) {
         "srs.yaml",
         "index.yaml",
         "intake.yaml",
+        "ceiling.yaml",
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }

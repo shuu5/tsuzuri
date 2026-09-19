@@ -61,6 +61,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
         "rules.yaml",
         "vocabulary.yaml",
         "srs.yaml",
+        "ceiling.yaml",
         "adr/ADR-1.yaml",
         "adr/ADR-2.yaml",
     ] {

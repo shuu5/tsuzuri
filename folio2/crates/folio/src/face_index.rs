@@ -26,9 +26,10 @@ use crate::face_note;
 use crate::parts::catalog::Component;
 use crate::yaml::Value;
 
-/// 入口の面が使う部品（12 種）。
-pub const PARTS: [Component; 12] = [
+/// 入口の面が使う部品（13 種・便 40 で ceiling-stamp を足した）。
+pub const PARTS: [Component; 13] = [
     Component::FreshnessStamp,
+    Component::CeilingStamp,
     Component::FontSizeControl,
     Component::HubCover,
     Component::FigurePanel,
@@ -247,8 +248,8 @@ impl Ctx {
     }
 }
 
-/// 正本 → 入口の面の HTML（決定的）。
-pub fn derive(dir: &Path) -> R<String> {
+/// 正本 → 入口の面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
+pub fn derive(dir: &Path, ceiling: Option<&Path>) -> R<String> {
     let i_doc = face::load(dir, "index.yaml")?;
     let c_doc = face::load(dir, "constitution.yaml")?;
     let s_doc = face::load(dir, "srs.yaml")?;
@@ -268,9 +269,10 @@ pub fn derive(dir: &Path) -> R<String> {
     let sheet = sheet_head(&n)?;
     let filled = sheet_body(dir, &n, &sheet, &ctx.annex_types)?;
     let m = i.f("meta")?;
+    let stamp = face::ceiling_stamp(dir, ceiling)?;
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &m)?;
+    head(&mut o, &m, &stamp)?;
     cover(&mut o, &i, &c)?;
     shelf(&mut o, &ctx, &i, &m)?;
     status_line(&mut o, &ctx);
@@ -694,7 +696,7 @@ fn sheet_body(
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
+fn head(o: &mut Vec<String>, m: &X<'_>, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(INDEX_STATUS, "入口の状態")?;
     m.f("id")?.text()?;
@@ -704,6 +706,7 @@ fn head(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
         &m.ef("generated")?,
         &version,
         status,
+        stamp,
     );
     // 入口は番号付きの章を持たないので、site-bar の here は「文書の一覧」
     if let Some(here) = o
@@ -1305,6 +1308,6 @@ mod face_index_tests {
         let mut names: Vec<&str> = PARTS.iter().map(|p| p.name()).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), 12);
+        assert_eq!(names.len(), 13);
     }
 }

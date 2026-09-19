@@ -15,9 +15,10 @@ use std::path::Path;
 use crate::face::{self, Frame, R, X, anchor, card};
 use crate::parts::catalog::Component;
 
-/// 判断の記録の面が使う部品（8 種・便 33 で figure-panel を足した）。
-pub const PARTS: [Component; 8] = [
+/// 判断の記録の面が使う部品（9 種・便 33 で figure-panel を・便 40 で ceiling-stamp を足した）。
+pub const PARTS: [Component; 9] = [
     Component::FreshnessStamp,
+    Component::CeilingStamp,
     Component::FontSizeControl,
     Component::DocCoverBand,
     Component::ApprovalBlock,
@@ -138,8 +139,8 @@ struct Target {
     title: String,
 }
 
-/// 正本 1 本 → 判断の記録の面の HTML（決定的）。
-pub fn derive(dir: &Path, id: &str) -> R<String> {
+/// 正本 1 本 → 判断の記録の面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
+pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
     check_id_shape(id)?;
     let name = format!("adr/{id}.yaml");
     let a_doc = face::load(dir, &name)?;
@@ -164,9 +165,10 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     };
     let counts = counts(&a, figs.len())?;
     let f = frame(CHAPTERS.len() + usize::from(!figs.is_empty()));
+    let stamp = face::ceiling_stamp(dir, ceiling)?;
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &f, &a, id, &st)?;
+    head(&mut o, &f, &a, id, &st, &stamp)?;
     cover(&mut o, &f, &a, id, &st, &counts)?;
     toc(&f, &mut o, figs.len());
     prose_chapter(&mut o, &f, 1, &a.ef("context")?);
@@ -408,13 +410,14 @@ fn counts(a: &X<'_>, figures: usize) -> R<Counts> {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status) -> R<()> {
+fn head(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, stamp: &str) -> R<()> {
     f.head(
         o,
         &format!("folio2 — 判断の記録 {id}（{}）", st.label),
         &a.ef("date")?,
         id,
         st.label,
+        stamp,
     );
     Ok(())
 }

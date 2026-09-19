@@ -15,9 +15,10 @@ use crate::face::{
 };
 use crate::parts::catalog::Component;
 
-/// 要件書の面が使う部品（17 種）。
-pub const PARTS: [Component; 17] = [
+/// 要件書の面が使う部品（18 種・便 40 で ceiling-stamp を足した）。
+pub const PARTS: [Component; 18] = [
     Component::FreshnessStamp,
+    Component::CeilingStamp,
     Component::FontSizeControl,
     Component::DocCoverBand,
     Component::ChapterDeckBand,
@@ -240,8 +241,8 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// 正本 → 要件書の面の HTML（決定的）。
-pub fn derive(dir: &Path) -> R<String> {
+/// 正本 → 要件書の面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
+pub fn derive(dir: &Path, ceiling: Option<&Path>) -> R<String> {
     let s_doc = face::load(dir, "srs.yaml")?;
     let c_doc = face::load(dir, "constitution.yaml")?;
     let r_doc = face::load(dir, "rules.yaml")?;
@@ -254,9 +255,10 @@ pub fn derive(dir: &Path) -> R<String> {
     let ctx = context(&s, &c, &r)?;
     let m = s.f("meta")?;
     check_counts(&ctx, &m.f("counts")?)?;
+    let stamp = face::ceiling_stamp(dir, ceiling)?;
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &ctx, &m)?;
+    head(&mut o, &ctx, &m, &stamp)?;
     cover(&mut o, &ctx, &m)?;
     toc(&mut o, &ctx);
     goals_chapter(&mut o, &ctx)?;
@@ -472,7 +474,7 @@ fn slots(owner: bool, node: &str) -> (String, String) {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
+fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     ctx.frame.head(
@@ -481,6 +483,7 @@ fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
         &m.ef("generated")?,
         &version,
         status,
+        stamp,
     );
     Ok(())
 }
@@ -1311,7 +1314,7 @@ mod face_srs_tests {
         let mut names: Vec<&str> = PARTS.iter().map(|p| p.name()).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), 17);
+        assert_eq!(names.len(), 18);
     }
 
     #[test]

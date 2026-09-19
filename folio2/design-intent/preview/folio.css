@@ -92,6 +92,8 @@ ins{overflow-wrap:anywhere;color:var(--ok);background:var(--ok-tint);text-decora
 .site-bar .here b{color:var(--ink-soft)}
 [data-component="freshness-stamp"]{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:.7188rem;font-weight:700;color:var(--ink-faint);border:1px solid var(--line);border-radius:var(--radius-chip);padding:3px 11px;background:var(--paper-2);white-space:nowrap}
 [data-component="freshness-stamp"] b{color:var(--ink-soft)}
+[data-component="ceiling-stamp"]{display:inline-flex;align-items:center;gap:7px;font-size:.7188rem;font-weight:700;color:var(--ink-faint);border:1px solid var(--line);border-radius:var(--radius-chip);padding:3px 11px;background:var(--paper-2);white-space:nowrap}   /* 天井の名札（便 40・ADR-8）: 床の名札と同じ値・直後に並ぶので margin-left:auto は持たない */
+[data-component="ceiling-stamp"] b{color:var(--ink-soft)}
 .layer-line{max-width:var(--width-page);margin:0 auto;padding:6px 22px 8px;font-size:.75rem;color:var(--ink-faint);display:flex;flex-wrap:wrap;gap:4px 16px}
 .layer-line b{color:var(--ink-soft)}
 .toc{padding:18px var(--pad-x) 6px;background:var(--paper)}
@@ -505,7 +507,7 @@ html.has-zoom{overflow:hidden}
 
 /* ---------- 12. responsive ---------- */
 @media (max-width:1000px){
-  .site-bar [data-component="freshness-stamp"],.fs-btn .fs-k{display:none}   /* 中幅: bar を 1 行に保つ（版スタンプは脚注に残る） */
+  .site-bar [data-component="freshness-stamp"],.site-bar [data-component="ceiling-stamp"],.fs-btn .fs-k{display:none}   /* 中幅: bar を 1 行に保つ（版スタンプは脚注に残る） */
   [data-component="hub-cover"]{padding:18px var(--pad-x) 14px}
   [data-component="hub-cover"] h1{font-size:1.5rem}
   [data-component="hub-cover"] .north-star{font-size:.8125rem;margin:0 0 6px}
@@ -539,7 +541,7 @@ html.has-zoom{overflow:hidden}
   .site-bar .brand .long{display:none} .site-bar .brand .short{display:inline}
   .site-bar .here b,.site-bar .here .here-doc{display:none}
   .site-bar .here{margin-left:auto;font-size:.7812rem}
-  .site-bar [data-component="freshness-stamp"]{display:none}
+  .site-bar [data-component="freshness-stamp"],.site-bar [data-component="ceiling-stamp"]{display:none}
   [data-component="doc-cover-band"] h1{font-size:1.625rem}
   [data-component="chapter-deck-band"] .num{font-size:92px}
   .cover-meta{flex-direction:column;gap:6px}

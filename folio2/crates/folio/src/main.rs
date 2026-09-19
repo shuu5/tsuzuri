@@ -132,6 +132,9 @@ enum Command {
         /// 出力先（既定なし・相対なら --dir からの相対・絶対ならそのまま）
         #[arg(long)]
         out: PathBuf,
+        /// 天井の束の置き場（folio ceiling の --out・相対なら --dir からの相対・絶対ならそのまま・無ければ名札は「未実施」）
+        #[arg(long)]
+        ceiling: Option<PathBuf>,
         /// 導出した面を出力先へ書く
         #[arg(long)]
         write: bool,
@@ -170,6 +173,9 @@ enum Command {
         /// 配信先（既定なし・相対なら --dir からの相対・絶対ならそのまま）
         #[arg(long)]
         out: PathBuf,
+        /// 天井の束の置き場（folio ceiling の --out・相対なら --dir からの相対・絶対ならそのまま・無ければ名札は「未実施」）
+        #[arg(long)]
+        ceiling: Option<PathBuf>,
         /// 3 面 + 判断の記録の面 + 設計ノートの面 + 様式 2 本を配信先へ書く（全部か無しか）
         #[arg(long)]
         write: bool,
@@ -360,6 +366,7 @@ fn main() -> ExitCode {
             id,
             dir,
             out,
+            ceiling,
             write,
             check: _,
         } => {
@@ -368,7 +375,7 @@ fn main() -> ExitCode {
             } else {
                 face::Mode::Check
             };
-            let outcome = face::run(&face, id.as_deref(), &dir, &out, mode);
+            let outcome = face::run(&face, id.as_deref(), &dir, &out, ceiling.as_deref(), mode);
             if let Some(line) = &outcome.stdout {
                 println!("{line}");
             }
@@ -402,6 +409,7 @@ fn main() -> ExitCode {
         Command::Build {
             dir,
             out,
+            ceiling,
             write,
             check: _,
         } => {
@@ -410,7 +418,7 @@ fn main() -> ExitCode {
             } else {
                 site::Mode::Check
             };
-            let outcome = site::run(&dir, &out, mode);
+            let outcome = site::run(&dir, &out, ceiling.as_deref(), mode);
             if let Some(line) = &outcome.stdout {
                 println!("{line}");
             }

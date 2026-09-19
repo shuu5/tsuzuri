@@ -15,9 +15,10 @@ use std::path::Path;
 use crate::face::{self, Frame, R, X, anchor, esc, hint};
 use crate::parts::catalog::Component;
 
-/// 設計ノートの面が使う部品（7 種・判断の記録の面の section-lead-callout の代わりに figure-panel）。
-pub const PARTS: [Component; 7] = [
+/// 設計ノートの面が使う部品（8 種・判断の記録の面の section-lead-callout の代わりに figure-panel・便 40 で ceiling-stamp を足した）。
+pub const PARTS: [Component; 8] = [
     Component::FreshnessStamp,
+    Component::CeilingStamp,
     Component::FontSizeControl,
     Component::DocCoverBand,
     Component::ApprovalBlock,
@@ -210,8 +211,8 @@ struct Row {
 
 // ── 入口 ──
 
-/// 正本 1 本 → 設計ノートの面の HTML（決定的）。
-pub fn derive(dir: &Path, id: &str) -> R<String> {
+/// 正本 1 本 → 設計ノートの面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
+pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
     check_id_shape(id)?;
     let name = format!("design-note/{id}.yaml");
     let n_doc = face::load(dir, &name)?;
@@ -257,6 +258,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     };
     let st = status(&meta)?;
     let counts = counts(&secs, figs.len())?;
+    let stamp = face::ceiling_stamp(dir, ceiling)?;
 
     let frame = Frame {
         name: "設計ノート",
@@ -272,7 +274,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     };
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &frame, &meta, id, &st)?;
+    head(&mut o, &frame, &meta, id, &st, &stamp)?;
     cover(&mut o, &frame, &meta, id, &st, &counts)?;
     toc(&frame, &mut o, &secs, figs.len());
     for s in &secs {
@@ -594,13 +596,14 @@ fn quoted_pair(line: &str) -> Option<(String, String)> {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, st: &Status) -> R<()> {
+fn head(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, st: &Status, stamp: &str) -> R<()> {
     f.head(
         o,
         &format!("folio2 — 設計ノート {id}（{}）", st.label),
         &meta.ef("generated")?,
         &format!("{id} {}", meta.ef("version")?),
         st.label,
+        stamp,
     );
     Ok(())
 }

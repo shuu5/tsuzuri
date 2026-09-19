@@ -13,9 +13,10 @@ use crate::face::{
 };
 use crate::parts::catalog::Component;
 
-/// 憲法の面が使う部品（14 種）。
-pub const PARTS: [Component; 14] = [
+/// 憲法の面が使う部品（15 種・便 40 で ceiling-stamp を足した）。
+pub const PARTS: [Component; 15] = [
     Component::FreshnessStamp,
+    Component::CeilingStamp,
     Component::FontSizeControl,
     Component::DocCoverBand,
     Component::ChapterDeckBand,
@@ -112,8 +113,8 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// 正本 → 憲法の面の HTML（決定的）。
-pub fn derive(dir: &Path) -> R<String> {
+/// 正本 → 憲法の面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
+pub fn derive(dir: &Path, ceiling: Option<&Path>) -> R<String> {
     let c_doc = face::load(dir, "constitution.yaml")?;
     let r_doc = face::load(dir, "rules.yaml")?;
     let v_doc = face::load(dir, "vocabulary.yaml")?;
@@ -126,9 +127,10 @@ pub fn derive(dir: &Path) -> R<String> {
     let ctx = context(&c, &r, &s)?;
     let m = c.f("meta")?;
     check_counts(&ctx, &m.f("counts")?)?;
+    let stamp = face::ceiling_stamp(dir, ceiling)?;
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &m)?;
+    head(&mut o, &m, &stamp)?;
     cover(&mut o, &ctx, &c, &m)?;
     toc(&mut o, &ctx, &c, &r)?;
     north_star(&mut o, &c)?;
@@ -252,7 +254,7 @@ fn chapter_name(ctx: &Ctx<'_>, i: usize) -> &'static str {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
+fn head(o: &mut Vec<String>, m: &X<'_>, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     FRAME.head(
@@ -261,6 +263,7 @@ fn head(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
         &m.ef("generated")?,
         &version,
         status,
+        stamp,
     );
     Ok(())
 }
@@ -1087,7 +1090,7 @@ mod face_constitution_tests {
         let mut names: Vec<&str> = PARTS.iter().map(|p| p.name()).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), 14);
+        assert_eq!(names.len(), 15);
     }
 
     #[test]

@@ -5,11 +5,15 @@
 //! 名札の表・値の読める形・小窓・面の骨格・図の枠）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
 //! 図の枠（便 34・P-2.1）: 図の節（figures）の 1 枚の枠（figure-panel・fig-title・図の本体・figcaption）は
 //! 設計ノート・判断の記録・要件書の 3 面が同じ字面で出すので、`figure_body` と `figure_panel` をここに 1 つ持つ。
+//! 天井の名札（便 40・delivery-40.md §1 (c)(d)・ADR-8 決定 (4)・P-3.3）: 5 面の site-bar に床の名札（freshness-stamp）の
+//! 直後に部品 ceiling-stamp を置く。字は `ceiling_stamp` の 1 つで組む（面ごとに組み直さない）ので 5 面で同じになる。
+//! 束の置き場は任意の旗 `--ceiling` で受け、無ければ 4 観点とも「まだ分からない」（未実施）を出す（P-4.2）。
 
 use std::fs;
 use std::path::Path;
 
 use crate::figure;
+use crate::findings;
 use crate::parts::catalog::Component;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
@@ -41,7 +45,15 @@ impl Outcome {
 
 // ── 命令の口 ──
 
-pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> Outcome {
+/// `--out` と `--ceiling` は相対なら `--dir` からの相対・絶対ならそのまま。
+pub fn run(
+    face: &str,
+    id: Option<&str>,
+    dir: &Path,
+    out: &Path,
+    ceiling: Option<&Path>,
+    mode: Mode,
+) -> Outcome {
     if !matches!(face, "index" | "constitution" | "srs" | "adr" | "note") {
         return Outcome::unknown(format!(
             "面の名「{face}」は index・constitution・srs・adr・note のどれでもない"
@@ -66,12 +78,14 @@ pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> 
     if !out_path.parent().is_some_and(Path::is_dir) {
         return Outcome::unknown(format!("{}: 出力先の親 dir が無い", out_path.display()));
     }
+    let ceiling_dir = ceiling.map(|c| dir.join(c));
+    let ceiling = ceiling_dir.as_deref();
     let derived = match face {
-        "index" => face_index::derive(dir),
-        "constitution" => face_constitution::derive(dir),
-        "srs" => face_srs::derive(dir),
-        "note" => face_note::derive(dir, doc_id),
-        _ => face_adr::derive(dir, doc_id),
+        "index" => face_index::derive(dir, ceiling),
+        "constitution" => face_constitution::derive(dir, ceiling),
+        "srs" => face_srs::derive(dir, ceiling),
+        "note" => face_note::derive(dir, doc_id, ceiling),
+        _ => face_adr::derive(dir, doc_id, ceiling),
     };
     let html = match derived {
         Ok(h) => h,
@@ -325,6 +339,49 @@ pub fn hint(label: &str, body: &str) -> String {
     format!(
         "<span class=\"hint\"><label><input type=\"checkbox\" class=\"vh\" aria-label=\"{label}を開く\"><span class=\"hint-btn\">{label}</span></label><span class=\"hint-body\">{body}</span></span>"
     )
+}
+
+/// 天井の名札の字（部品 ceiling-stamp の中身・便 40・§1 (c)）。`ceiling` = 束の置き場（解決済み・None = `--ceiling` なし）。
+/// 観点の名は天井の正本 `<dir>/ceiling.yaml` の viewpoints の name の逐語・順も正本のとおり（`findings::stamps`）。
+/// 置き場が在るとき「天井 <b>名 3 値</b> · …（<日付>・束 <8 字>/<8 字>/<8 字>/<8 字>）」——日付 = 4 観点の at のうち読めた
+/// ものの byte 順で最大の 1 つ（1 つも読めなければ「日付なし」）・読めない観点の要約値は「--------」。
+/// 置き場が無いとき「天井 <b>名 まだ分からない</b> · …（未実施）」。天井の正本が読めなければ Err（面は導出できない・P-4.1）。
+pub fn ceiling_stamp(dir: &Path, ceiling: Option<&Path>) -> R<String> {
+    let place = ceiling.filter(|p| p.is_dir());
+    let stamps = findings::stamps(dir, place)?;
+    let names = findings::viewpoint_names(dir)?;
+    let cells = stamps
+        .iter()
+        .map(|s| {
+            let name = names
+                .iter()
+                .find(|(id, _)| *id == s.id)
+                .map(|(_, name)| name.as_str())
+                .ok_or_else(|| format!("ceiling.yaml: viewpoints[{}].name: 読めない", s.id))?;
+            Ok(format!("<b>{} {}</b>", esc(name), s.verdict))
+        })
+        .collect::<R<Vec<_>>>()?
+        .join(" · ");
+    let tail = if place.is_some() {
+        let date = stamps
+            .iter()
+            .filter_map(|s| s.at.as_deref())
+            .max()
+            .map_or_else(|| "日付なし".to_string(), esc);
+        let digests = stamps
+            .iter()
+            .map(|s| {
+                s.digest
+                    .as_deref()
+                    .map_or_else(|| "--------".to_string(), esc)
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        format!("{date}・束 {digests}")
+    } else {
+        "未実施".to_string()
+    };
+    Ok(format!("天井 {cells}（{tail}）"))
 }
 
 /// 「?」の小窓。
@@ -682,7 +739,8 @@ impl Frame {
         format!("data-component=\"{}\"", c.name())
     }
 
-    /// head と site-bar（skip-link から main の開始まで）。値は escape 済み。
+    /// head と site-bar（skip-link から main の開始まで）。値は escape 済み。`ceiling` = 天井の名札の字（`ceiling_stamp` で
+    /// 組み立て済み・床の名札 freshness-stamp の直後に部品 ceiling-stamp として置く・便 40）。
     pub fn head(
         &self,
         o: &mut Vec<String>,
@@ -690,6 +748,7 @@ impl Frame {
         generated: &str,
         version: &str,
         status: &str,
+        ceiling: &str,
     ) {
         o.push("<!DOCTYPE html>".to_string());
         o.push("<html lang=\"ja\" class=\"no-js\">".to_string());
@@ -732,6 +791,10 @@ impl Frame {
         o.push(format!(
             "<span {}>生成 <b>{generated}</b> · <b>{version}</b>（{status}）</span>",
             self.dc(Component::FreshnessStamp)
+        ));
+        o.push(format!(
+            "<span {}>{ceiling}</span>",
+            self.dc(Component::CeilingStamp)
         ));
         o.push("</header>".to_string());
         o.push("<main id=\"main\" class=\"page\">".to_string());

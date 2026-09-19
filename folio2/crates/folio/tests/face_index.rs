@@ -42,6 +42,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
         "rules.yaml",
         "vocabulary.yaml",
         "srs.yaml",
+        "ceiling.yaml",
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }
@@ -856,9 +857,10 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
         "読める面の数"
     );
 
-    // 部品の名札は 12 種の中だけ
-    const ALLOWED: [&str; 12] = [
+    // 部品の名札は 13 種の中だけ
+    const ALLOWED: [&str; 13] = [
         "freshness-stamp",
+        "ceiling-stamp",
         "font-size-control",
         "hub-cover",
         "figure-panel",
@@ -873,7 +875,7 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
     ];
     assert!(!parts.is_empty());
     for p in &parts {
-        assert!(ALLOWED.contains(p), "12 種に無い部品「{p}」");
+        assert!(ALLOWED.contains(p), "13 種に無い部品「{p}」");
     }
     assert!(!html.contains("layer-line"));
 }

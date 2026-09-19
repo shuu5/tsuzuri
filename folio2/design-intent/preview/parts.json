@@ -1,8 +1,18 @@
 {
   "version": "v0.1 2026-09-16 (hand-baked mock v4 + ADR-4 figure types)",
-  "note": "部品目録（parts catalog）の写し。将来は emitter の部品 enum から生成する。data-component の値域と、面ごとの variant を宣言する。 2026-09-16（ADR-4・R-5 = 8 型）: figure_type_enum に図の道具（archify）の 5 型を足し、図の本体（SVG）の意味を表す class を figure_body_classes に載せた。棚（doc-shelf・入口の一覧）は shelf_type_enum に分けた＝figure_type_enum の要素数 8 が R-5 の値と一致する（既存 3 型 = pipeline-rail / context-band / state-strip）。 2026-09-19（便 36・f2-648.51）: glossary-links は退役（要件書の面の章 08 を憲法の面の章 07 と同じ形にし、glossary-term-table の faces を [constitution, srs] にした・版管理の履歴に残るので可逆・N-1.2）。",
+  "note": "部品目録（parts catalog）の写し。将来は emitter の部品 enum から生成する。data-component の値域と、面ごとの variant を宣言する。 2026-09-16（ADR-4・R-5 = 8 型）: figure_type_enum に図の道具（archify）の 5 型を足し、図の本体（SVG）の意味を表す class を figure_body_classes に載せた。棚（doc-shelf・入口の一覧）は shelf_type_enum に分けた＝figure_type_enum の要素数 8 が R-5 の値と一致する（既存 3 型 = pipeline-rail / context-band / state-strip）。 2026-09-19（便 36・f2-648.51）: glossary-links は退役（要件書の面の章 08 を憲法の面の章 07 と同じ形にし、glossary-term-table の faces を [constitution, srs] にした・版管理の履歴に残るので可逆・N-1.2）。 2026-09-19（便 40・f2-648.56）: 便 40 で ceiling-stamp を足した（ADR-8）——天井の結果（観点ごとの 3 値と日付・束の要約値の先頭 8 字）を 5 面の site-bar に freshness-stamp の直後に出す部品。",
   "components": {
     "freshness-stamp": {
+      "role": "chrome",
+      "faces": [
+        "index",
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ]
+    },
+    "ceiling-stamp": {
       "role": "chrome",
       "faces": [
         "index",
@@ -245,6 +255,7 @@
   "nowrap_allowlist": [
     ".site-bar nav a",
     "[data-component=\"freshness-stamp\"]",
+    "[data-component=\"ceiling-stamp\"]",
     ".site-bar .here",
     ".vh",
     ".fig-req .no",
