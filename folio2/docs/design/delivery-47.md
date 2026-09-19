@@ -65,5 +65,5 @@ section = "1"
 write-set = ["crates/folio/src/ceiling.rs", "crates/folio/src/bundle.rs", "crates/folio/src/findings.rs", "crates/folio/tests/ceiling.rs", "crates/folio/tests/bundle.rs", "crates/folio/tests/findings.rs"]
 verify = ["cargo nextest run -p folio --test ceiling ceiling", "cargo nextest run -p folio --test bundle bundle", "cargo nextest run -p folio --test findings findings", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "ceiling の歯（第 3 版の形が通る・生成区間の側のずれが違反 1 件・旧 4 節も schema も無ければ落ちる・既存は期待不変）が緑、bundle の歯（一覧を file から外しても凍結 anchor と同じ束・残りは期待不変）が緑、findings の歯が期待不変で緑、clippy が 0 警告で CI が通る"
+done = "ceiling の歯（第 3 版の形が通る・生成区間の側のずれが違反 1 件・旧 4 節も schema も無ければ落ちる・既存は期待不変）が緑、bundle の歯（fixture の天井の正本から一覧を外しても凍結 anchor と同じ束 = この fixture の reads は天井の正本を名指さず束に写されない・残りは期待不変）が緑、findings の歯が期待不変で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
