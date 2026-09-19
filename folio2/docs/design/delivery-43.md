@@ -17,7 +17,7 @@
 - faces/ の adr- で始まる file 数は、写しの adr/ のうち名が ADR- で始まり .yaml で終わる file の数と等しい
 の形にする。design-note の 3 と note-example.html / note-figures.html の固定は本便では触らない（提案の枝で design-note/ は変わらない・実測 3 file = example.yaml・figures.yaml・schema.yaml）。他の 10 本（凍結 anchor・byte 一致・決定性・まだ分からない 7 通り）は本文も期待も変えない。
 
-(c) 確かめ方（歯の中で正本を上げる写しは作らない・正本は main のまま）: 直した 2 本が main の正本で緑（ceiling 17 本・bundle 11 本・期待の意味は不変）。加えて、直した歯の本文に「v0.1」の字面と固定の 9 / 8 の数が無いことを grep で確かめる（版と本数への依存が消えた証）。提案の枝での緑は planner が着地後に自分の worktree を main に載せ直して測る（本便の verify には入れない）。
+(c) 確かめ方（歯の中で正本を上げる写しは作らない・正本は main のまま）: 直した 2 本が main の正本で緑（ceiling 17 本・bundle 11 本・期待の意味は不変）。加えて、直した歯の本文に「v0.1」の字面と固定の 9 / 8 の数が無いことは、着地後に admin が grep で測って台帳の notes に写す（verify の行では測れないので done には入れない）。提案の枝での緑は planner が着地後に自分の worktree を main に載せ直して測る（本便の verify には入れない）。
 
 (d) 便 42 までの形との接続: 新規 file は無い。src は触らない（findings.rs・bundle.rs・check.rs は不変）。write-set は歯の file 2 本だけ。verify は nextest の scope 旗で tests/ceiling.rs と tests/bundle.rs に閉じる（フィルタ語 ceiling / bundle は src の unit にも当たるが、--test の形で置き場を歯の file 2 本に限る）。size S = 2 本とも増分は 20 行未満（余地 ceiling 1,115・bundle 950）。
 
@@ -52,5 +52,5 @@ section = "1"
 write-set = ["crates/folio/tests/ceiling.rs", "crates/folio/tests/bundle.rs"]
 verify = ["cargo nextest run -p folio --test ceiling ceiling", "cargo nextest run -p folio --test bundle bundle", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "便 37 の歯 ceiling 17 本と便 38 の歯 bundle 11 本が main の正本で期待の意味不変で緑、直した 2 本の本文に v0.1 の字面と固定の 9 / 8 の数が無く、clippy が 0 警告で CI が通る"
+done = "便 37 の歯 ceiling 17 本と便 38 の歯 bundle 11 本が main の正本で期待の意味不変で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
