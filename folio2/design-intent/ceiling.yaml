@@ -1,23 +1,24 @@
-# folio2 天井の正本（v0.1・planner 席）
-# 位置: 判断の記録 ADR-8 決定 (1)(3)(4)。観点 4 つ（文書の型に依らない）・観点ごとの問いの文と読む欄・文書の一覧・所見の欄の決まり・起動の記録の欄・重さと 3 値の値域・材料の束の要約値の規則を持つ。
-# 状態: 発効（ADR-8 の発効と同時・持ち主の承認 2026-09-19「承認する」・逐語は f2-648.52 notes と meta.approval）。床（folio check）に入れるのは便 37（f2-648.53）。
+# folio2 天井の正本（v0.2・planner 席）
+# 位置: 判断の記録 ADR-8 決定 (1)(3)(4)・ADR-10（v0.2 = 1 周目の結果を受けた問いの文と読む欄の改訂）。観点 4 つ（文書の型に依らない）・観点ごとの問いの文と読む欄・文書の一覧・所見の欄の決まり・起動の記録の欄・重さと 3 値の値域・材料の束の要約値の規則を持つ。
+# 状態: v0.2 は提案中（持ち主の承認待ち・ADR-10 と同じ承認で発効）。v0.1 は発効（ADR-8 の発効と同時・持ち主の承認 2026-09-19「承認する」・逐語は f2-648.52 notes と meta.approval）。床（folio check）に入れたのは便 37（f2-648.53）。
 # 読み方: folio は AI を起動しない。観点ごとに材料の束（bundle）を組み、席か器が AI を回して所見（finding）と起動の記録（record）を同じ置き場へ書く。床は所見の形と記録の有無と束の要約値の一致だけを数え、所見の意味の当否は判定しない（P-1）。
 
 meta:
   id: folio2-ceiling
   title: 天井の正本（観点・所見の欄の決まり・起動の記録）
-  version: v0.1
+  version: v0.2
   status: effective
   generated: 2026-09-19
   approval:
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: 起草（判断の記録 ADR-8 決定 (1)(3)(4)・敵対検証の記録 docs/design/adr-8-grill.md を反映）}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648.52 notes 2026-09-19 13:1x JST・対話面 R-8・判断の記録 ADR-8 の発効と同時）", verbatim: 承認する, version: v0.1}
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: v0.2 の起草（判断の記録 ADR-10・1 周目の結果 = 重さの基準と領分を問いの文に・読む欄を揃える・束に語彙と規則の表）}
 
 # 観点ごとの 3 値（要件書 FR5 と同じ 3 つ・順も固定）。1 つでも「まだ分からない」なら天井は合格にならない（ADR-8 決定 (4)・P-4）
 verdicts:
   values: [合格, 不合格, まだ分からない]
 
-# 所見の重さ。refute に挙げた重さの所見だけ、別の文脈の AI が中立に反証する（ADR-8 決定 (3)）。反証が「まだ分からない」なら所見は残す
+# 所見の重さ。refute に挙げた重さの所見だけ、別の文脈の AI が中立に反証する（ADR-8 決定 (3)）。反証が「まだ分からない」なら所見は残す。重さの基準は各観点の問いの文が持つ（v0.2）
 weights:
   values: [止める, 直す, 参考]
   refute: [止める]
@@ -34,43 +35,51 @@ documents:
   - {id: design-note, file: design-note/, note: 設計ノート。1 本ずつ}
   - {id: ceiling, file: ceiling.yaml, note: この正本}
 
-# 観点 4 つ（文書の型に依らない・順も固定・ADR-8 決定 (1)）。reads = その観点で読む文書と欄（欄の名は正本の欄の名・機械の層）
+# 観点 4 つ（文書の型に依らない・順も固定・ADR-8 決定 (1)）。reads = その観点で読む文書と欄（欄の名は正本の欄の名・機械の層）。問いの文は重さの基準と床の領分を含む（v0.2・ADR-10）
 viewpoints:
   - id: fidelity
     name: 忠実さ
     reader: 元の文と平易文の両方を読み、意味の差だけを拾う編集者
-    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文・決定の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは元の語と同じものを指しているか。図の根拠が指す先は、図の中身と合っているか。判定できない箇所は「まだ分からない」と書く。
+    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文・決定の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは語彙の正本の同じ語を指しているか。平易文が引く規則の表の値は表の値と同じか。図の根拠が指す先は、図の中身と合っているか。重さ = 止める（言い換えが義務・要件・決定を変える）・直す（落としや足しはあるが義務は変わらない）・参考（提案）。参照 id の解決・欄の非空・件数は床の領分なので挙げない。判定できない箇所は「まだ分からない」と書く。
     reads:
       - {doc: constitution, fields: [articles.plain, articles.statements.text]}
-      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title]}
+      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: vocabulary, fields: [terms, field_terms]}
+      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs]}
+      - {doc: intake, fields: [questions]}
       - {doc: adr, fields: [plain, decision, options.text, figures.refs]}
       - {doc: design-note, fields: [sections, figures.refs]}
   - id: readability
     name: 読みやすさ
     reader: この道具を初めて見る非エンジニア
-    question: 入口から歩いて「何が決まりで・何ができたら完成で・なぜそう決めたか」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語、読み手を想定していない章を挙げる。見た目の崩れは見ない（床の領分）。
+    question: 入口から歩いて「何が決まりで・何ができたら完成で・なぜそう決めたか」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。
     reads:
-      - {doc: index, fields: [shelf, sections]}
-      - {doc: constitution, fields: [articles.title, articles.plain]}
-      - {doc: srs, fields: [goals, scope, requirements.title, requirements.plain]}
-      - {doc: adr, fields: [title, plain]}
+      - {doc: index, fields: [audience, shelf, lanes]}
+      - {doc: constitution, fields: [articles.title, articles.plain, precedence, sources]}
+      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: vocabulary, fields: [terms]}
+      - {doc: srs, fields: [goals, scope, requirements.title, requirements.plain, nonfunctional, constraints]}
+      - {doc: intake, fields: [questions]}
+      - {doc: adr, fields: [title, plain, decision]}
       - {doc: design-note, fields: [sections]}
   - id: coherence
     name: 文書どうしの整合
     reader: 4 種の文書を横に並べて矛盾を探す審査役
-    question: 憲法・要件書・判断の記録・設計ノートの間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く、判断の記録が規則を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。床が数える一致（参照 id の解決・欄の非空・番号）は見ない。
+    question: 憲法・規則の表・要件書・判断の記録・設計ノート・相談窓口・天井の正本の間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く、判断の記録が規則を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。判断の記録は決定だけでなく前提（context）と退けた案（options）も読む。重さ = 止める（2 つの文書が両立しない義務や決定を持つ = どちらかが誤り。条が名指す置き場を越えた記述〔台帳に規則・型付きデータに裁定 等〕もここ）・直す（二重の記述・条に反しない越境・意味のずれ・両立はする）・参考（提案）。床が数える一致（参照 id の解決・欄の非空・番号・件数）は挙げない。
     reads:
       - {doc: constitution, fields: [articles, precedence]}
-      - {doc: rules, fields: [rows]}
+      - {doc: rules, fields: [thresholds, discipline]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
-      - {doc: adr, fields: [decision, basis, consequences, retreat]}
+      - {doc: adr, fields: [context, decision, options, basis, consequences, retreat]}
       - {doc: design-note, fields: [sections]}
+      - {doc: intake, fields: [targets, questions]}
+      - {doc: ceiling, fields: [documents, viewpoints]}
   - id: reality
     name: 実態との整合
     reader: 設計文書と版管理の中身を突き合わせる実装者
-    question: 設計文書が言うこと（要件・決定・契約表の行・帰結）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、実装と違う決定、着地したのに文書が古いままの箇所を挙げる。床が数える一致（参照 id の解決・着地の印・欄の一致）は見ない。
+    question: 設計文書が言うこと（要件・非機能要件・決定・契約表の行・帰結）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、実装と違う決定、着地したのに文書が古いままの箇所、帰結に書いた後続が起きていない箇所を挙げる。重さ = 止める（文書が実態と逆のことを約束している）・直す（古い・欠けている記述）・参考（提案）。床が数える一致（参照 id の解決・着地の印・欄の一致）は挙げない。
     reads:
-      - {doc: srs, fields: [requirements, acceptance, constraints]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
       - {doc: adr, fields: [decision, consequences]}
       - {doc: design-note, fields: [sections]}
 
