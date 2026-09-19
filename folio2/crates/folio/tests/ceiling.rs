@@ -252,26 +252,62 @@ fn ceiling_verdict_order_fails() {
     );
 }
 
+/// 文書の一覧の欠けは違反 1 件。正本が自分自身を読む行（doc: ceiling）を持つ版では、
+/// その行き先も一覧から消えるので、行の数だけ違反が増える（読む観点の数に依らない・便 44）。
 #[test]
 fn ceiling_missing_document_fails() {
     let w = Work::new("document-missing");
+    let reads_ceiling = fs::read_to_string(w.ceiling())
+        .unwrap()
+        .lines()
+        .filter(|l| l.starts_with("      - {doc: ceiling,"))
+        .count();
     w.mutate(
         "  - {id: ceiling, file: ceiling.yaml, note: この正本}\n",
         "",
     );
-    assert_single_violation(
-        &w.check(),
-        "ceiling",
-        &["documents の id", "一覧", "（無い: ceiling）"],
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
     );
+    assert!(
+        stdout(&out).contains("folio check: 不合格（違反 "),
+        "{}",
+        stdout(&out)
+    );
+    let v = violations(&out);
+    assert_eq!(v.len(), 1 + reads_ceiling, "{v:?}");
+    assert!(
+        v.iter().all(|l| l.starts_with("[ceiling] ceiling.yaml")),
+        "{v:?}"
+    );
+    let missing = v
+        .iter()
+        .filter(|l| {
+            ["documents の id", "一覧", "（無い: ceiling）"]
+                .iter()
+                .all(|w| l.contains(w))
+        })
+        .count();
+    assert_eq!(missing, 1, "{v:?}");
+    let dangling = v
+        .iter()
+        .filter(|l| l.contains("行き先「ceiling」が一覧に無い"))
+        .count();
+    assert_eq!(dangling, reads_ceiling, "{v:?}");
 }
 
 #[test]
 fn ceiling_read_doc_not_a_document_fails() {
     let w = Work::new("read-doc");
+    // 針は行の先頭だけ（読む欄の一覧は含めない）。入口を読む観点は読みやすさだけなので当て先は 1 か所。
     w.mutate(
-        "      - {doc: index, fields: [shelf, sections]}",
-        "      - {doc: nowhere, fields: [shelf, sections]}",
+        "      - {doc: index, fields: [",
+        "      - {doc: nowhere, fields: [",
     );
     assert_single_violation(
         &w.check(),
