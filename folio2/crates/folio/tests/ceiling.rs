@@ -376,10 +376,14 @@ fn ceiling_viewpoints_not_a_list_of_rows_is_unknown() {
 #[test]
 fn ceiling_duplicate_key_fails() {
     let w = Work::new("dup-key");
-    w.mutate("  version: v0.1\n", "  version: v0.1\n  version: v0.1\n");
+    // 針は正本の版に依らない行（meta の id）にする。版が上がっても当て先は 1 か所のまま。
+    w.mutate(
+        "  id: folio2-ceiling\n",
+        "  id: folio2-ceiling\n  id: folio2-ceiling\n",
+    );
     assert_single_violation(
         &w.check(),
         "重複キー",
-        &["同じ表にキー「version」を 2 度書いている"],
+        &["同じ表にキー「id」を 2 度書いている"],
     );
 }

@@ -526,8 +526,10 @@ fn bundle_on_the_real_source_builds_four_bundles() {
     assert_eq!(top, want);
 
     let fidelity = out.join("fidelity");
+    // 固定の本数でなく、写した正本の adr/ の一覧と等しいことを言う（判断の記録が増えても歯は変わらない）。
+    let source_adrs = names(&dir.join("adr"));
     let adrs = names(&fidelity.join("sources/adr"));
-    assert_eq!(adrs.len(), 9, "sources/adr/: {adrs:?}");
+    assert_eq!(adrs, source_adrs, "sources/adr/ は写しの adr/ と同じ一覧");
     assert!(adrs.iter().all(|n| n.ends_with(".yaml")), "{adrs:?}");
     assert!(adrs.contains(&"schema.yaml".to_string()), "{adrs:?}");
     assert!(adrs.contains(&"ADR-8.yaml".to_string()), "{adrs:?}");
@@ -536,7 +538,11 @@ fn bundle_on_the_real_source_builds_four_bundles() {
     let faces = names(&fidelity.join("faces"));
     let adr_faces = faces.iter().filter(|n| n.starts_with("adr-")).count();
     let note_faces: Vec<&String> = faces.iter().filter(|n| n.starts_with("note-")).collect();
-    assert_eq!(adr_faces, 8, "faces/: {faces:?}");
+    let source_adr_faces = source_adrs
+        .iter()
+        .filter(|n| n.starts_with("ADR-") && n.ends_with(".yaml"))
+        .count();
+    assert_eq!(adr_faces, source_adr_faces, "faces/: {faces:?}");
     assert_eq!(note_faces, ["note-example.html", "note-figures.html"]);
     assert!(!faces.contains(&"folio.css".to_string()), "{faces:?}");
     let _ = fs::remove_dir_all(&td);
