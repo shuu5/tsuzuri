@@ -278,9 +278,18 @@ fn count_viewpoint(
         };
     }
     // 8.〜10. file の verdict と残る所見
+    // 9（便 41・delivery-41.md §1 (a)）: 止める が 1 件以上あって全部 退けた なら、verdict の 不合格 は反証の前の判断
+    // なので 合格 に読み替えず（P-1）、再判定待ち = まだ分からない。止める が元々 0 件の 不合格 は審査役の判定のまま。
     let verdict = match sheet.verdict.as_str() {
         "不合格" if findings == 0 => {
             reasons.push("不合格なのに所見が無い".to_string());
+            Verdict::Unknown
+        }
+        "不合格" if !sheet.refuted_stops.is_empty() && sheet.remaining_stops.is_empty() => {
+            reasons.push(format!(
+                "止める所見が全部退けられた（再判定待ち・{}）",
+                sheet.refuted_stops.join(", ")
+            ));
             Verdict::Unknown
         }
         "不合格" => Verdict::Fail,
@@ -405,6 +414,8 @@ struct Sheet {
     unrefuted: Vec<String>,
     /// 残る 止める の所見の id（refute が 退けた でないもの）
     remaining_stops: Vec<String>,
+    /// 反証で退けた 止める の所見の id（規則 9 の再判定待ち・便 41）
+    refuted_stops: Vec<String>,
 }
 
 fn count_sheet(vp_dir: &Path, root: &Node, rules: &Rules, vp: &Viewpoint, digest: &str) -> Sheet {
@@ -413,6 +424,7 @@ fn count_sheet(vp_dir: &Path, root: &Node, rules: &Rules, vp: &Viewpoint, digest
         verdict: String::new(),
         unrefuted: Vec::new(),
         remaining_stops: Vec::new(),
+        refuted_stops: Vec::new(),
     };
     let entries = root.as_map().expect("最上位は表と読んである");
     for (key, _) in entries {
@@ -635,7 +647,7 @@ fn count_findings(
         if rules.weight_refute.iter().any(|w| w == weight) {
             match refute {
                 None => sheet.unrefuted.push(id.clone()),
-                Some(Some(v)) if v == "退けた" => {}
+                Some(Some(v)) if v == "退けた" => sheet.refuted_stops.push(id.clone()),
                 Some(_) => sheet.remaining_stops.push(id.clone()),
             }
         }

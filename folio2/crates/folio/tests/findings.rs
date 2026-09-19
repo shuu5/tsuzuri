@@ -1,7 +1,7 @@
 //! `folio ceiling --check`（便 39・docs/design/delivery-39.md §1 (e)(f)）の歯。binary 経由。
 //! 束は便 38 の凍結 fixture（tests/fixtures/ceiling/bundle/）から `--write` で一時 dir に組み、
-//! 所見 file の凍結 fixture（tests/fixtures/ceiling/findings/・10 本・AC16 の red_test）を <観点>/findings.yaml に写してから撃つ。
-//! - 合格（4 観点 pass）・まだ分からない 11 種・不合格 4 種・束の側 4 種・混ざり 2 種・旗 2 種・実の正本
+//! 所見 file の凍結 fixture（tests/fixtures/ceiling/findings/・11 本・AC16 の red_test）を <観点>/findings.yaml に写してから撃つ。
+//! - 合格（4 観点 pass）・まだ分からない 12 種・不合格 4 種・再判定待ち（便 41・規則 9）2 本・束の側 4 種・混ざり 2 種・旗 2 種・実の正本
 //!
 //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
 
@@ -393,6 +393,73 @@ fn findings_fail_when_the_refute_is_undecided() {
     assert_eq!(
         first_line(&stdout(&run)),
         "fidelity: 不合格（所見 1・止める 1）"
+    );
+}
+
+// ── 3'. 再判定待ち（便 41・delivery-41.md §1 (a)(c)・規則 9 の場合分け）──
+
+#[test]
+fn findings_unknown_when_all_stop_findings_were_refuted_under_a_fail_verdict() {
+    let site = Site::passing("stop-refuted-fail");
+    site.put("fidelity", &findings_fixture("stop-refuted.yaml"));
+    let run = site.check();
+    site.done();
+    assert_outcome(
+        &run,
+        "stop-refuted",
+        2,
+        &["fidelity: ", "止める所見が全部退けられた（再判定待ち・F-1）"],
+    );
+    let out = stdout(&run);
+    assert_eq!(
+        first_line(&out),
+        "fidelity: まだ分からない（所見 1・止める 0）",
+        "{out}"
+    );
+    assert_eq!(
+        last_line(&out),
+        "folio ceiling: まだ分からない（観点 4・合格 3・不合格 0・まだ分からない 1）",
+        "{out}"
+    );
+}
+
+#[test]
+fn findings_rule_nine_leaves_the_other_verdicts_as_before() {
+    // 退けた で残る止めるが 0・verdict 合格 → 規則 10 の従来どおり 0
+    let site = Site::passing("stop-refuted-pass");
+    let text = mutated(
+        &findings_fixture("stop-refuted.yaml"),
+        "verdict: 不合格",
+        "verdict: 合格",
+    );
+    site.put("fidelity", &text);
+    let run = site.check();
+    site.done();
+    assert_outcome(&run, "stop-refuted + 合格", 0, &[]);
+    assert_eq!(
+        first_line(&stdout(&run)),
+        "fidelity: 合格（所見 1・止める 0）"
+    );
+
+    // 止める 0・直す 1 で verdict 不合格 → 審査役の不合格を代行しない 1
+    let site = Site::passing("fail-no-stops");
+    let text = mutated(
+        &findings_fixture("pass-fidelity.yaml"),
+        "verdict: 合格",
+        "verdict: 不合格",
+    );
+    site.put("fidelity", &text);
+    let run = site.check();
+    site.done();
+    assert_outcome(&run, "直す だけの 不合格", 1, &[]);
+    assert!(
+        !stderr(&run).contains("再判定待ち"),
+        "{}",
+        stderr(&run)
+    );
+    assert_eq!(
+        first_line(&stdout(&run)),
+        "fidelity: 不合格（所見 1・止める 0）"
     );
 }
 
