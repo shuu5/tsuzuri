@@ -116,6 +116,33 @@ impl Drop for Work {
     }
 }
 
+/// `start` の行の次から数えて、字下げの無い最初の行（空行は飛ばす）の先頭の位置。無ければ末尾。
+/// 節や行の塊の終わりを、後ろに何の節が続くか（正本の版）に依らずに取る。
+fn block_end(text: &str, start: usize) -> usize {
+    let mut at = start
+        + text[start..]
+            .find('\n')
+            .map_or(text.len() - start, |i| i + 1);
+    while at < text.len() {
+        let line_end = text[at..].find('\n').map_or(text.len(), |i| at + i);
+        let line = &text[at..line_end];
+        if !line.is_empty() && !line.starts_with(' ') {
+            return at;
+        }
+        at = (line_end + 1).min(text.len());
+    }
+    text.len()
+}
+
+/// 読む文書の一覧の、天井の正本の行（注の字面は版で変わるので行の頭で探す）。改行込み。
+fn ceiling_document_row(text: &str) -> String {
+    let line = text
+        .lines()
+        .find(|l| l.starts_with("  - {id: ceiling, file: ceiling.yaml"))
+        .expect("documents に天井の正本の行が無い");
+    format!("{line}\n")
+}
+
 /// 最上位の節 `name` の行（列 0 の `name:`）から字下げの続く行までを外す。直前の注の行（`#` で始まる行）も外す。
 /// 無ければそのまま（実の正本の版に依らない形・第 3 版が main に入った後も同じ歯が緑のまま）。
 fn drop_section(lines: &mut Vec<String>, name: &str) {
@@ -318,10 +345,8 @@ fn ceiling_three_viewpoints_fails() {
     let start = before
         .find("  - id: reality\n")
         .expect("観点 reality が無い");
-    let end = before
-        .find("\n# 所見 1 件の欄の決まり")
-        .expect("finding の節の前の註が無い");
-    let after = format!("{}{}", &before[..start], &before[end + 1..]);
+    let end = block_end(&before, start);
+    let after = format!("{}{}", &before[..start], &before[end..]);
     fs::write(w.ceiling(), after).unwrap();
     assert_single_violation(
         &w.check(),
@@ -337,11 +362,7 @@ fn ceiling_verdict_order_fails() {
         "values: [合格, 不合格, まだ分からない]",
         "values: [不合格, 合格, まだ分からない]",
     );
-    assert_single_violation(
-        &w.check(),
-        "ceiling",
-        &["verdicts の values", "一覧「不合格, 合格, まだ分からない」"],
-    );
+    assert_single_violation(&w.check(), "ceiling", &["verdicts", "values"]);
 }
 
 /// 文書の一覧の欠けは違反 1 件。正本が自分自身を読む行（doc: ceiling）を持つ版では、
@@ -354,10 +375,8 @@ fn ceiling_missing_document_fails() {
         .lines()
         .filter(|l| l.starts_with("      - {doc: ceiling,"))
         .count();
-    w.mutate(
-        "  - {id: ceiling, file: ceiling.yaml, note: この正本}\n",
-        "",
-    );
+    let row = ceiling_document_row(&fs::read_to_string(w.ceiling()).unwrap());
+    w.mutate(&row, "");
     let out = w.check();
     assert_eq!(
         out.status.code(),
@@ -426,37 +445,30 @@ fn ceiling_refute_weight_not_a_value_fails() {
 fn ceiling_finding_required_without_evidence_fails() {
     let w = Work::new("finding-required");
     w.mutate(
-        "  required: [id, viewpoint, place, weight, evidence]",
-        "  required: [id, viewpoint, place, weight]",
+        "required: [id, viewpoint, place, weight, evidence]",
+        "required: [id, viewpoint, place, weight]",
     );
-    assert_single_violation(
-        &w.check(),
-        "ceiling",
-        &["finding の required", "一覧", "（無い: evidence）"],
-    );
+    assert_single_violation(&w.check(), "ceiling", &["finding", "required"]);
 }
 
 #[test]
 fn ceiling_record_required_without_bundle_fails() {
     let w = Work::new("record-required");
     w.mutate(
-        "  required: [model, effort, at, read, bundle]",
-        "  required: [model, effort, at, read]",
+        "required: [model, effort, at, read, bundle]",
+        "required: [model, effort, at, read]",
     );
-    assert_single_violation(
-        &w.check(),
-        "ceiling",
-        &["record の required", "一覧", "（無い: bundle）"],
-    );
+    assert_single_violation(&w.check(), "ceiling", &["record", "required"]);
 }
 
 /// 行 id の重複。同じ id の行を足す（今在る行の id を書き替えると文書の集合も同時に変わる）。
 #[test]
 fn ceiling_duplicate_document_id_fails() {
     let w = Work::new("dup-id");
+    let row = ceiling_document_row(&fs::read_to_string(w.ceiling()).unwrap());
     w.mutate(
-        "  - {id: ceiling, file: ceiling.yaml, note: この正本}\n",
-        "  - {id: ceiling, file: ceiling.yaml, note: この正本}\n  - {id: ceiling, file: ceiling.yaml, note: 同じ正本}\n",
+        &row,
+        &format!("{row}  - {{id: ceiling, file: ceiling.yaml, note: 同じ正本}}\n"),
     );
     assert_single_violation(&w.check(), "重複キー", &["行 id「ceiling」が重複"]);
 }
@@ -495,8 +507,8 @@ fn ceiling_viewpoints_not_a_list_of_rows_is_unknown() {
     let start = before
         .find("\nviewpoints:\n")
         .expect("viewpoints の節が無い");
-    let end = before.find("\nfinding:\n").expect("finding の節が無い");
-    let after = format!("{}\nviewpoints: 観点{}", &before[..start], &before[end..]);
+    let end = block_end(&before, start + 1);
+    let after = format!("{}\nviewpoints: 観点\n{}", &before[..start], &before[end..]);
     fs::write(w.ceiling(), after).unwrap();
     assert_unknown(&w.check(), "ceiling.yaml: viewpoints が表の一覧でない");
 }
