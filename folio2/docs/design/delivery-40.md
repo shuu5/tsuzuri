@@ -34,9 +34,9 @@ planner の実測（2026-09-19・main d9f3d64）: 部品目録 design-intent/pre
 4. 一致: build --ceiling <束> --check → 0（--write と同じ入力で byte 一致）。--ceiling を変えて --check → 1（DRIFT）。
 5. 目録: parts --print が凍結目録と byte 一致 ∧ parts --check が 5 面で合格 0/0（ceiling-stamp が目録に在る）。
 6. 凍結: face --face index / constitution / srs / adr / note を fixture で --write して 7 本の期待と byte 一致（既存の歯の期待 = 更新した期待）。
-既存の歯 crates/folio/tests/site.rs（配信先の凍結・3 値・全部か無しか）と crates/folio/tests/findings.rs（便 39・3 値の規則）は本文不変で期待不変（verify に回帰を 1 行ずつ）。face_index.rs・face.rs・face_adr.rs・face_note.rs・face_srs.rs の凍結の歯は (e) の期待の更新で緑（本文は変えない・verify の common-verify が回す）。
+既存の歯 crates/folio/tests/site.rs（配信先の凍結・3 値・全部か無しか）と crates/folio/tests/findings.rs（便 39・3 値の規則）は本文不変で期待不変（verify に回帰を 1 行ずつ）。既存の歯 crates/folio/tests/face.rs と crates/folio/tests/face_index.rs は部品の名札の census（面の data-component が閉じた一覧 ALLOWED に在る）を持つので、一覧に ceiling-stamp を足す: face.rs の憲法の面 14 → 15・要件書の面 17 → 18・face_index.rs の入口の面 12 → 13（断りの文言の数も同じく）・他は 1 字も変えない。face_adr.rs・face_note.rs・face_srs.rs の凍結の歯は (e) の期待の更新で緑（本文は変えない・verify の common-verify が回す）。
 
-(g) 便 39 までの形との接続: 新規 file = crates/folio/tests/badge.rs（1 本）。既存 = findings.rs（結果を返す関数 1 つ）・face.rs（Frame の parts と head）・5 つの面の生成器・site.rs・main.rs・parts.rs（件数）・parts.json・folio.css・parts-catalog.json・面の凍結 fixture 7 本。天井の正本・rules・語彙は変えない。folio2 自身で 4 観点を 1 周回す手順 = build → ceiling --write → 席が AI を回して findings.yaml → ceiling --check → build --ceiling → serve。
+(g) 便 39 までの形との接続: 新規 file = crates/folio/tests/badge.rs（1 本）。既存 = findings.rs（結果を返す関数 1 つ）・face.rs（Frame の parts と head）・5 つの面の生成器・site.rs・main.rs・parts.rs（件数）・parts.json（行 1 つ・note に「便 40 で ceiling-stamp を足した（ADR-8）」の 1 行を添える）・folio.css・parts-catalog.json・面の凍結 fixture 7 本・census の歯 2 本（tests/face.rs・tests/face_index.rs）。src の増分は各 file 数行〜数十行で、余地の小さい face_srs.rs（117）・face_index.rs（176）でも収まる = size S。天井の正本・rules・語彙は変えない。folio2 自身で 4 観点を 1 周回す手順 = build → ceiling --write → 席が AI を回して findings.yaml → ceiling --check → build --ceiling → serve。
 
 ## 2. 範囲
 
@@ -52,7 +52,7 @@ planner の実測（2026-09-19・main d9f3d64）: 部品目録 design-intent/pre
 | faces | 面 | 5 つの生成器の parts と head の呼び・site.rs の通し |
 | catalog | 目録 | parts.json +1・parts.rs 30・parts-catalog.json・folio.css |
 | anchor | 凍結 | 面の凍結 fixture 7 本の更新 + (c) の逐語 + 歯 1 |
-| teeth | 歯 | tests/badge.rs 6 群 + 既存 site / findings の期待不変 |
+| teeth | 歯 | tests/badge.rs 6 群 + census の一覧 +1（face / face_index）+ 既存 site / findings の期待不変 |
 
 ## 4. 検査（歯）
 
@@ -70,8 +70,8 @@ id = "ao"
 title = "面に天井の名札を出す（部品 ceiling-stamp・folio face / build の --ceiling・観点 4 つの 3 値と日付と束の要約値の先頭・無ければ未実施・5 面の site-bar・目録 +1 と凍結物の更新）"
 req = ["FR18", "FR4", "FR16"]
 section = "1"
-write-set = ["+crates/folio/tests/badge.rs", "crates/folio/src/findings.rs", "crates/folio/src/face.rs", "crates/folio/src/face_index.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_srs.rs", "crates/folio/src/face_adr.rs", "crates/folio/src/face_note.rs", "crates/folio/src/site.rs", "crates/folio/src/main.rs", "crates/folio/src/parts.rs", "crates/folio/tests/site.rs", "crates/folio/tests/findings.rs", "design-intent/preview/parts.json", "design-intent/preview/folio.css", "tests/fixtures/floor/parts-catalog.json", "tests/fixtures/face/expected.html", "tests/fixtures/face/expected-srs.html", "tests/fixtures/face/expected-index.html", "tests/fixtures/face/expected-index-sheet.html", "tests/fixtures/face/expected-adr.html", "tests/fixtures/face/expected-note.html", "tests/fixtures/face/expected-site-adr-2.html"]
+write-set = ["+crates/folio/tests/badge.rs", "crates/folio/src/findings.rs", "crates/folio/src/face.rs", "crates/folio/src/face_index.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_srs.rs", "crates/folio/src/face_adr.rs", "crates/folio/src/face_note.rs", "crates/folio/src/site.rs", "crates/folio/src/main.rs", "crates/folio/src/parts.rs", "crates/folio/tests/site.rs", "crates/folio/tests/findings.rs", "crates/folio/tests/face.rs", "crates/folio/tests/face_index.rs", "design-intent/preview/parts.json", "design-intent/preview/folio.css", "tests/fixtures/floor/parts-catalog.json", "tests/fixtures/face/expected.html", "tests/fixtures/face/expected-srs.html", "tests/fixtures/face/expected-index.html", "tests/fixtures/face/expected-index-sheet.html", "tests/fixtures/face/expected-adr.html", "tests/fixtures/face/expected-note.html", "tests/fixtures/face/expected-site-adr-2.html"]
 verify = ["cargo nextest run -p folio --test badge badge", "cargo nextest run -p folio --test site site", "cargo nextest run -p folio --test findings findings", "cargo clippy --workspace --all-targets -- -D warnings"]
-size = "M"
+size = "S"
 done = "badge の歯（逐語 4 通り・未実施・5 面・一致と DRIFT・目録・凍結 7 本）が緑、便 17 以降の歯 site が期待不変で緑、便 39 の歯 findings が期待不変で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
