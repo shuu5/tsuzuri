@@ -1,0 +1,83 @@
+# folio face の凍結 fixture（便 14・P-10.1）— 憲法の正本の最小形。手書き・design-intent/ の写しではない。
+# 条は段ごとに 1 つ: P-1 は任意の欄（relations・retreat・supersedes_v1・note）を持ち、A-1 と N-1 は必須の欄だけ。
+
+schema:
+  enums:
+    tier: [always, ask-first, never]
+
+meta:
+  id: fixture-constitution
+  version: v0.9
+  status: draft
+  binding: false
+  generated: 2026-09-01
+  author: 起草の席（AI）
+  counts: {always: 1, ask-first: 1, never: 1}
+  approval: {who: 持ち主, date: 2026-09-02, ruling: 裁定 F-1, verbatim: まだ承認しない, surface: 対話面（R-1）}
+  changes_from_v0_1:
+    - 条を段ごとに 1 つへ絞った
+
+north_star:
+  statement: 見本の北極星の 1 文
+  for_whom: 持ち主と、それを読む AI
+  judged_by: 要件書の受入基準
+
+precedence:
+  text: 条どうしが衝突したら揃いを先に取る。
+  plain: 迷ったら、揃っている方を選びます。
+  rationale:
+    - {kind: folio2-ruling, ref: 裁定 F-1}
+
+articles:
+  - id: P-1
+    title: 判断する道具を作らない
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-1.1, pattern: ubiquitous, strength: must, text: 道具は検査の結果を知らせる。}
+      - {id: P-1.2, pattern: event, strength: must-not, text: 道具は判断を代わりに下さない。}
+    plain: 道具は知らせるところまでで、決めるのはあなたです。
+    rationale:
+      - {kind: v1-incident, ref: v1 の教訓}
+      - {kind: scribe2-article, ref: scribe2 憲法 C1}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 命令の一覧を検査する。}
+    retreat: {kind: spike, condition: 試して密度が出なければ戻す。}
+    supersedes_v1: {doc: v1 憲章, article: "P-1: 古い条文", ruling: 裁定 F-2, rationale: 古い条文は道具の都合だった。}
+    note: 注の文。
+    relations: {reqs: [FR1], rules: [R-1], articles: [A-1], sections: [§6]}
+
+  - id: A-1
+    title: 消す操作は確認してから
+    tier: ask-first
+    binds: practice
+    statements:
+      - {id: A-1.1, pattern: state, strength: should, text: 消す前に持ち主へ確認する。}
+    plain: 消す前に聞きます。
+    rationale:
+      - {kind: folio2-ruling, ref: 裁定 F-3}
+    mechanism: {kind: human-review, live: now}
+
+  - id: N-1
+    title: 例外の仕組みを作らない
+    tier: never
+    binds: both
+    statements:
+      - {id: N-1.1, pattern: unwanted, strength: must-not, text: 規則の例外の口を増やさない。}
+    plain: 今回だけ特別のスイッチは作りません。
+    rationale:
+      - {kind: v1-incident, ref: v1 の例外機構}
+    mechanism: {kind: reject, live: delivery-0, stage: in-loop, polarity: fail-open}
+
+rules_pointer: rules.yaml（閾値行と開発規律行）
+
+amendment:
+  declaration: 本章は新しい規則を持たない。
+  steps:
+    - {n: 1, who: AI, what: 理由を書く — 判断の記録を 1 本起こす, article: [P-1]}
+    - {n: 2, who: 持ち主, what: 承認する, article: [A-1, N-1]}
+  effective_step: {n: 0, who: 持ち主, what: 初回の発効 — 承認欄を埋める, article: [A-1]}
+
+glossary_pointer: vocabulary.yaml（語の正本）
+
+sources:
+  - {n: 1, name: v1 の教訓, ref: 報告 §2}

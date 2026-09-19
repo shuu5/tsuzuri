@@ -2,6 +2,7 @@
 
 mod adr;
 mod anchor;
+mod bundle;
 mod ceiling;
 mod check;
 mod entrance;
@@ -199,6 +200,22 @@ enum Command {
         /// 印の置き場（既定は環境変数 XDG_STATE_HOME の下の folio・無ければ HOME の下の .local/state/folio）
         #[arg(long)]
         state: Option<PathBuf>,
+    },
+    /// 天井の材料の束を観点ごとに置き場へ組む（--write）。AI は起動しない
+    #[command(group(ArgGroup::new("mode").required(true).args(["write"])))]
+    Ceiling {
+        /// 正本の置き場
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 配信先（folio build の --out・相対なら --dir からの相対・絶対ならそのまま）
+        #[arg(long)]
+        faces: PathBuf,
+        /// 束の置き場（既定なし・相対なら --dir からの相対・絶対ならそのまま）
+        #[arg(long)]
+        out: PathBuf,
+        /// 観点ごとの束（sources/・faces/・question.yaml・finding.yaml・reads.yaml・digest.txt）を置き場へ書く（全部か無しか）
+        #[arg(long)]
+        write: bool,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -420,6 +437,21 @@ fn main() -> ExitCode {
         }
         Command::Hello { dir, state } => {
             let outcome = hello::run(&dir, state.as_deref());
+            if let Some(line) = &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Ceiling {
+            dir,
+            faces,
+            out,
+            write: _,
+        } => {
+            let outcome = bundle::run(&dir, &faces, &out);
             if let Some(line) = &outcome.stdout {
                 println!("{line}");
             }
