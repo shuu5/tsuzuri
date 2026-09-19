@@ -34,7 +34,7 @@ planner の実測（2026-09-19・main d98fba2）: 要件書の正本には schem
 8. 既存の fixture 4 組の歯は不変。
 `crates/folio/tests/face_adr.rs`・`crates/folio/tests/face_note.rs`・`crates/folio/tests/site.rs`: 本文も期待も変えない（(b) の共有で出力が byte 不変なことをこれらの凍結の歯で見る・verify の scope として write-set に載せる）。
 
-(g) 便 33 までの形との接続: 新規 file は無い。`crates/folio/src/check.rs` は (a)（+60 行・余地 1,027）・`crates/folio/src/face.rs` は (b)（+60・余地 616）・`crates/folio/src/face_srs.rs` は (c)（+45・余地 130・共有の口を使うので図の枠の字面は持たない）・`crates/folio/src/face_adr.rs` と `crates/folio/src/face_note.rs` は (b) で縮む（-25 ずつ・write-set では中身を変える既存 file）・`crates/folio/src/adr.rs` は is_basis_id を pub(crate) にする 1 行・`tests/fixtures/face/srs.yaml` と `tests/fixtures/face/expected-srs.html` は (d)・`crates/folio/tests/face.rs` は (e)(f)（+150・余地 661）・`crates/folio/tests/check.rs` は (f)（+110）。`figure.rs`・`note.rs`・`site.rs`・`render.rs`・`parts.json`・`folio.css`・`vendor/`・実の要件書・`.github/workflows/` は触らない。外部 crate は増えない。正規表現は使わない。size は M。
+(g) 便 33 までの形との接続: 新規 file は無い。`crates/folio/src/check.rs` は (a)（+60 行・余地 1,027）・`crates/folio/src/face.rs` は (b)（+60・余地 616）・`crates/folio/src/face_srs.rs` は (c)（+45・余地 130・共有の口を使うので図の枠の字面は持たない）・`crates/folio/src/face_adr.rs` と `crates/folio/src/face_note.rs` は (b) で縮む（-25 ずつ・write-set では中身を変える既存 file）・`crates/folio/src/adr.rs` は is_basis_id を pub(crate) にする 1 行・`tests/fixtures/face/srs.yaml` と `tests/fixtures/face/expected-srs.html` は (d)・`crates/folio/tests/face.rs` は (e)(f)（+150・余地 661）・`crates/folio/tests/check.rs` は (f)（+110）。`figure.rs`・`note.rs`・`site.rs`・`render.rs`・`parts.json`・`folio.css`・`vendor/`・実の要件書・`.github/workflows/` は触らない。外部 crate は増えない。正規表現は使わない。size は S = 中身を変える既存の src の file 1 本あたりの増分は check.rs +60・face.rs +60・face_srs.rs +45・adr.rs +1 で、face_adr.rs と face_note.rs は縮む（器の受付は src の余地を size の見積と比べる: face_srs.rs の余地 130 は S の 100 以上・tests/ の増分は器の測りの外・admin の事前読み 2026-09-19）。
 
 ## 2. 範囲
 
@@ -68,6 +68,6 @@ req = ["FR15", "FR4", "NFR2"]
 section = "1"
 write-set = ["crates/folio/src/check.rs", "crates/folio/src/face.rs", "crates/folio/src/face_srs.rs", "crates/folio/src/face_adr.rs", "crates/folio/src/face_note.rs", "crates/folio/src/adr.rs", "tests/fixtures/face/srs.yaml", "tests/fixtures/face/expected-srs.html", "crates/folio/tests/face.rs", "crates/folio/tests/check.rs", "crates/folio/tests/face_adr.rs", "crates/folio/tests/face_note.rs", "crates/folio/tests/site.rs"]
 verify = ["cargo nextest run -p folio --test face face", "cargo nextest run -p folio --test check check", "cargo nextest run -p folio --test face_adr face_adr", "cargo nextest run -p folio --test face_note face_note", "cargo nextest run -p folio --test site site", "cargo clippy --workspace --all-targets -- -D warnings"]
-size = "M"
+size = "S"
 done = "face の歯（再凍結・章 09 と toc・図なしは不変・通らない図で 2 と前の面・型外と道具の不在・実の正本）が緑、check の歯（写しの figures の合格と違反 5 種・既存 4 組は不変）が緑、face_adr の歯が期待不変で緑、face_note の歯が期待不変で緑、site の歯が再凍結に追従して緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
