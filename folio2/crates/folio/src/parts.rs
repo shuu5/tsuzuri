@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn parts_catalog_names_are_derived_from_the_catalog() {
-        assert_eq!(Component::ALL.len(), 30);
+        assert_eq!(Component::ALL.len(), 29);
         assert_eq!(FigureType::ALL.len(), 8);
         assert_eq!(ShelfType::ALL.len(), 1);
         assert_eq!(StyleProp::ALL.len(), 4);

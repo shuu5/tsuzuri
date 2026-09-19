@@ -824,6 +824,33 @@ pub fn card(class: &str, id: Option<&str>, cid: &str, body: &str) -> String {
     format!("<div class=\"{class}\"{id}><div class=\"cid\">{cid}</div>{body}</div>")
 }
 
+// ── 用語集の語の行（憲法の面と要件書の面が共有する口・便 36）──
+
+/// 語彙の正本（`v` = vocabulary.yaml の根）の terms を正本の順に 1 語 1 行で出す（部品 glossary-term-table の中身）。
+/// 1 行 = div.grow〔id g-語の id〕・div.gword〔term + en が在れば span.en〕・div〔p.gdef の def + note が在れば
+/// p.gdef + a.back「目次へ」〕。目次へのリンクは同じ面の #toc。憲法の面の章 07 と要件書の面の章 08 が同じ字面で出す。
+pub(crate) fn glossary_rows(o: &mut Vec<String>, v: &X<'_>) -> R<()> {
+    for t in v.f("terms")?.seq()? {
+        let en = t.f("en")?;
+        let en = if matches!(en.v, Value::Null) {
+            String::new()
+        } else {
+            format!("<span class=\"en\">{}</span>", en.e()?)
+        };
+        let note = match t.g("note")? {
+            Some(n) => format!("<p class=\"gdef\">{}</p>", n.e()?),
+            None => String::new(),
+        };
+        o.push(format!(
+            "<div class=\"grow\" id=\"g-{}\"><div class=\"gword\">{}{en}</div><div><p class=\"gdef\">{}</p>{note}<a class=\"back\" href=\"#toc\">目次へ</a></div></div>",
+            t.f("id")?.id()?,
+            t.ef("term")?,
+            t.ef("def")?
+        ));
+    }
+    Ok(())
+}
+
 // ── 図の枠（3 面が共有する口・便 34）──
 
 /// 図の型（閉じた表 β・図の道具の 5 型）→ figcaption の名札。字面は部品目録 parts.json の

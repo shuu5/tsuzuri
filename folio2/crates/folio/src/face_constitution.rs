@@ -984,24 +984,8 @@ fn glossary_chapter(o: &mut Vec<String>, c: &X<'_>, v: &X<'_>) -> R<()> {
     );
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!("<div {}>", dc(Component::GlossaryTermTable)));
-    for t in v.f("terms")?.seq()? {
-        let en = t.f("en")?;
-        let en = if matches!(en.v, crate::yaml::Value::Null) {
-            String::new()
-        } else {
-            format!("<span class=\"en\">{}</span>", en.e()?)
-        };
-        let note = match t.g("note")? {
-            Some(n) => format!("<p class=\"gdef\">{}</p>", n.e()?),
-            None => String::new(),
-        };
-        o.push(format!(
-            "<div class=\"grow\" id=\"g-{}\"><div class=\"gword\">{}{en}</div><div><p class=\"gdef\">{}</p>{note}<a class=\"back\" href=\"#toc\">目次へ</a></div></div>",
-            t.f("id")?.id()?,
-            t.ef("term")?,
-            t.ef("def")?
-        ));
-    }
+    // 語の行は要件書の面の章 08 と共有（便 36・`face.rs`）
+    face::glossary_rows(o, v)?;
     o.push("</div>".to_string());
     o.push("</div>".to_string());
     Ok(())

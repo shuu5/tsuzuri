@@ -32,7 +32,7 @@ pub const PARTS: [Component; 17] = [
     Component::ItemRow,
     Component::AcStateChip,
     Component::RtmGrid,
-    Component::GlossaryLinks,
+    Component::GlossaryTermTable,
     Component::ApprovalBlock,
 ];
 
@@ -572,7 +572,7 @@ fn chapter_h2(ctx: &Ctx<'_>, n: usize) -> String {
         7 => {
             "どの要件が、どのゴールのためにあり、どの受入基準で確かめ、図のどこにあるか".to_string()
         }
-        _ => "この文書に出てくる専門語 → 説明は憲法 §7 で".to_string(),
+        _ => "本文に出てくる専門語のやさしい説明".to_string(),
     }
 }
 

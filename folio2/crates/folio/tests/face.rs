@@ -669,11 +669,33 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
         fr.len() + nfr.len(),
         "対応表の tbody の tr の数（thead の 1 行を除く）"
     );
-    let glossary = between(&html, "data-component=\"glossary-links\">", "\n</div>");
+    // 章 08 は憲法の面の章 07 と同じ形（便 36）: 語の行 = terms の数・目次へ = terms の数・id g-<語の id> が terms の順
+    let glossary = between(&html, "data-component=\"glossary-term-table\">", "\n</div>");
+    let terms = seq(&v["terms"], "terms");
     assert_eq!(
-        glossary.matches("<a href=").count(),
-        seq(&v["terms"], "terms").len() * 2,
-        "用語の一覧の a の数"
+        glossary.matches("<div class=\"grow\"").count(),
+        terms.len(),
+        "用語の行（div.grow）の数"
+    );
+    assert_eq!(
+        glossary
+            .matches("<a class=\"back\" href=\"#toc\">目次へ</a>")
+            .count(),
+        terms.len(),
+        "用語の行の目次へ（a.back）の数"
+    );
+    let ids = terms
+        .iter()
+        .map(|t| {
+            let needle = format!("<div class=\"grow\" id=\"g-{}\">", text(t, "id"));
+            glossary
+                .find(&needle)
+                .unwrap_or_else(|| panic!("語の行が無い: {needle}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        ids.windows(2).all(|w| w[0] < w[1]),
+        "語の行の id が terms の順でない"
     );
     assert_eq!(parts_of("ac-state-chip"), acs.len(), "ac-state-chip の数");
     // 章の帯は 8 章 + 図の章（正本の figures が 1 枚以上のときだけ・便 34）+ 承認欄
@@ -701,7 +723,7 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
         "item-row",
         "ac-state-chip",
         "rtm-grid",
-        "glossary-links",
+        "glossary-term-table",
         "approval-block",
     ];
     assert!(!parts.is_empty());
@@ -709,6 +731,10 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
         assert!(ALLOWED.contains(p), "17 種に無い部品「{p}」");
     }
     assert!(!html.contains("lane-chip"));
+    assert!(
+        !html.contains("glossary-links"),
+        "退役した glossary-links が面に在る"
+    );
 
     // 図 3: verdicts の節が在れば答えの数だけ・無ければ 0 で「図 3」は字面だけ（FR5）
     match s["verdicts"].as_vec() {
@@ -730,6 +756,66 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
             assert_eq!(fr5.matches("図 3").count(), 1, "FR5 の「図 3」の字面");
         }
     }
+}
+
+// ── 要件書の面の用語集（便 36・章 08 は憲法の面の章 07 と同じ形）──
+
+#[test]
+fn face_srs_glossary_rows_are_byte_identical_to_the_constitution_face() {
+    // 実の正本: 2 面の glossary-term-table の中身（語の行の区間）が byte で同じ（2 面とも vocabulary.yaml から導出）
+    let (td_c, _, constitution) = real_face("glossary-c");
+    let _ = fs::remove_dir_all(&td_c);
+    let (td_s, _, srs) = real_srs("glossary-s");
+    let _ = fs::remove_dir_all(&td_s);
+    let open = "data-component=\"glossary-term-table\">";
+    let rows_c = between(&constitution, open, "\n</div>");
+    let rows_s = between(&srs, open, "\n</div>");
+    assert!(
+        rows_c.contains("<div class=\"grow\""),
+        "憲法の面に語の行が無い"
+    );
+    assert_same_bytes(
+        rows_s.as_bytes(),
+        rows_c.as_bytes(),
+        "要件書の面の語の行（憲法の面の語の行）",
+    );
+    // 憲法の面の語彙へのリンク（constitution.html#g-…）は要件書の面から消えた
+    assert!(
+        !srs.contains("constitution.html#g-"),
+        "要件書の面に憲法の面の語彙へのリンクが残っている"
+    );
+}
+
+#[test]
+fn face_srs_glossary_chapter_has_the_constitution_h2_and_no_glossary_links() {
+    let (td, work) = fixture_copy("srs-glossary-h2");
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &work, &out, "--write");
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --face srs"), 0, "{}", stderr(&run));
+    assert!(
+        html.contains("<h2>本文に出てくる専門語のやさしい説明</h2>"),
+        "章 08 の h2 が憲法の面の章 07 と同じ字でない"
+    );
+    assert!(
+        html.contains("<span class=\"t\">本文に出てくる専門語のやさしい説明</span>"),
+        "toc の 08 の h2 が憲法の面の章 07 と同じ字でない"
+    );
+    assert!(
+        !html.contains("glossary-links"),
+        "glossary-links の字が面に在る"
+    );
+    assert!(
+        !html.contains("説明は憲法 §7 で"),
+        "便 35 までの章 08 の h2 の字が面に残っている"
+    );
+    assert_eq!(
+        html.matches("data-component=\"glossary-term-table\"")
+            .count(),
+        1,
+        "glossary-term-table が 1 つでない"
+    );
 }
 
 #[test]

@@ -1,11 +1,10 @@
-//! 要件書の面の章 07・08 の生成（便 35 で `face_srs.rs` から分けた・出力は不変）。章 07 は要件と根拠の対応
-//! （rtm-grid）・章 08 は用語集（glossary-links）。文脈（`Ctx`）と共有の口（band・xref・hint 等）は `face_srs.rs` の
-//! もので、字面（出力の HTML）は分ける前と 1 byte も変えない。
+//! 要件書の面の章 07・08 の生成（便 35 で `face_srs.rs` から分けた）。章 07 は要件と根拠の対応（rtm-grid）・
+//! 章 08 は用語集（glossary-term-table・便 36 で憲法の面の章 07 と同じ形にした・語の行は `face.rs` の共有の口）。
+//! 文脈（`Ctx`）と共有の口（band・xref・hint 等）は `face_srs.rs` のもの。
 
-use crate::face::{R, X, anchor, hint};
+use crate::face::{R, X, anchor, glossary_rows, hint};
 use crate::face_srs::{Ctx, band};
 use crate::parts::catalog::Component;
-use crate::yaml::Value;
 
 pub(crate) fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
     band(o, ctx, 7, None);
@@ -101,21 +100,12 @@ pub(crate) fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
 pub(crate) fn glossary_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, v: &X<'_>) -> R<()> {
     band(o, ctx, 8, Some(&s.ef("glossary_pointer")?));
     o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!("<div {}>", ctx.frame.dc(Component::GlossaryLinks)));
-    for t in v.f("terms")?.seq()? {
-        let href = format!("constitution.html#g-{}", t.f("id")?.id()?);
-        let en = t.f("en")?;
-        let en = if matches!(en.v, Value::Null) {
-            String::new()
-        } else {
-            format!(" <span class=\"en\">{}</span>", en.e()?)
-        };
-        o.push(format!(
-            "<span class=\"hint\"><a href=\"{href}\">{}{en}</a><label><input type=\"checkbox\" class=\"vh\" aria-label=\"説明を開く\"><span class=\"hint-btn q\">?</span></label><span class=\"hint-body\">{}<br><a href=\"{href}\">憲法 §7 の定義へ</a></span></span>",
-            t.ef("term")?,
-            t.ef("short")?
-        ));
-    }
+    o.push(format!(
+        "<div {}>",
+        ctx.frame.dc(Component::GlossaryTermTable)
+    ));
+    // 語の行は憲法の面の章 07 と同じ字面（便 36・`face.rs` の共有の口）
+    glossary_rows(o, v)?;
     o.push("</div>".to_string());
     o.push("</div>".to_string());
     Ok(())
