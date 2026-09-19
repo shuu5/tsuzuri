@@ -2,6 +2,8 @@
 # 憲法の面が読むのは 5 節の id と title だけ（条の関係の欄が指す要件の見出し・FR1 の title は変えない）。
 # 要件書の面（便 15）は全節を読む: rail 3 段（段 2 は持ち主で reqs が空・basis に P-1）・verdicts 3 行・要件 2・非機能要件 1・
 # 受入 1・制約 1。promise に escape の要る字「<b>」「&」「二重引用符」を含む。
+# 図の節（便 34・FR15）: 最上位の figures に 1 枚（design-note/full.yaml の fig-1 と同じ形の 2 箱の構成図・refs は FR1）。
+# 面の歯は写しの親 dir に図の道具（vendor/archify）を置いて撃つ。
 
 meta:
   id: fixture-srs
@@ -103,3 +105,19 @@ constraints:
   - {id: CON1, title: 順序, text: 実装は持ち主の裁定で着手する。, basis: [P-1], rules: [D-1], source: 持ち主の裁定 2026-09-01}
 
 glossary_pointer: vocabulary.yaml（定義はここに写さない）
+
+figures:
+  - id: fig-1
+    type: archify-architecture
+    caption: 見本の図
+    refs: [FR1]
+    spec:
+      schema_version: 1
+      diagram_type: architecture
+      meta: {title: 面の組み立て, quality_profile: showcase}
+      components:
+        - {id: src, type: external, label: 正本, row: 0, col: 0}
+        - {id: face, type: frontend, label: 面, row: 0, col: 1}
+      connections:
+        - {from: src, to: face, label: 導出}
+      layout: {mode: grid, cols: 2, gapX: 70, gapY: 110, cellW: 160, cellH: 70}

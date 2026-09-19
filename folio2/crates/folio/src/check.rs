@@ -17,6 +17,7 @@ use crate::freeze::{self, After, Flag};
 use crate::intake;
 use crate::link;
 use crate::note;
+use crate::parts::catalog::FigureType;
 use crate::refs;
 use crate::verdict::Report;
 use crate::vocab;
@@ -32,8 +33,8 @@ pub const FILES: [&str; 6] = [
     "intake",
 ];
 
-/// 要件書の節の閉じた一覧（要件書は schema 節を持たないので床の定数で持つ）。
-pub const SRS_TOP_LEVEL: [&str; 15] = [
+/// 要件書の節の閉じた一覧（要件書は schema 節を持たないので床の定数で持つ）。figures は任意の図の節（便 34・FR15）。
+pub const SRS_TOP_LEVEL: [&str; 16] = [
     "meta",
     "goals",
     "scope",
@@ -49,7 +50,12 @@ pub const SRS_TOP_LEVEL: [&str; 15] = [
     "constraints",
     "sources",
     "glossary_pointer",
+    "figures",
 ];
+
+/// 要件書の図の節の行の欄（判断の記録の figures.entry と同じ形・便 34）。
+const SRS_FIGURE_REQUIRED: [&str; 4] = ["id", "type", "caption", "spec"];
+const SRS_FIGURE_OPTIONAL: [&str; 2] = ["refs", "note"];
 
 /// 語彙の節の閉じた一覧（同上）。
 pub const VOCABULARY_TOP_LEVEL: [&str; 3] = ["terms", "field_terms", "identifiers"];
@@ -432,7 +438,64 @@ fn check_srs(root: &Node, report: &mut Report) {
             all.push(row);
         }
     }
+    // 任意の図の節（便 34）。図の id は他の節の id と重複しない
+    for fig in rows(FILE, root, "figures", report) {
+        check_srs_figure(fig, report);
+        all.push(fig);
+    }
     duplicate_ids(FILE, all, report);
+}
+
+/// 要件書の図の行 1 つ（便 34）。欄の集合・id と caption の非空（欠落も同じ形）・型は部品目録の図の型・spec は表・
+/// refs の各項は id の形（判断の記録の basis と同じ判定）。違反の種類は schema（他の要件書の欄と同じ床の字面）。
+fn check_srs_figure(fig: &Node, report: &mut Report) {
+    const FILE: &str = "srs.yaml";
+    let at = format!("figures の {}", row_id(fig));
+    for (key, _) in fig.as_map().unwrap_or_default() {
+        if !SRS_FIGURE_REQUIRED.contains(&key.as_str())
+            && !SRS_FIGURE_OPTIONAL.contains(&key.as_str())
+        {
+            report.violation("未知の欄", format!("{FILE}: {at} の未知の欄「{key}」"));
+        }
+    }
+    non_empty(FILE, &at, fig, &SRS_FIGURE_REQUIRED, report);
+    if let Some(t) = fig.get("type")
+        && !t.is_blank()
+        && !t
+            .as_str()
+            .is_some_and(|v| FigureType::from_name(v).is_some())
+    {
+        report.violation(
+            "schema",
+            format!(
+                "{FILE}: {at} の図の型「{}」が部品目録の一覧に無い",
+                t.as_str().unwrap_or("?")
+            ),
+        );
+    }
+    if let Some(spec) = fig.get("spec")
+        && !spec.is_blank()
+        && spec.as_map().is_none()
+    {
+        report.violation("schema", format!("{FILE}: {at} の spec が表でない"));
+    }
+    match fig.get("refs") {
+        None | Some(Node::Null) => {}
+        Some(Node::Seq(items)) => {
+            for r in items {
+                if !r.as_str().is_some_and(adr::is_basis_id) {
+                    report.violation(
+                        "schema",
+                        format!(
+                            "{FILE}: {at} の refs「{}」が id の形（条・要件・rules 行・判断の記録）でない",
+                            r.as_str().unwrap_or("?")
+                        ),
+                    );
+                }
+            }
+        }
+        Some(_) => report.violation("schema", format!("{FILE}: {at} の refs が一覧でない")),
+    }
 }
 
 #[cfg(test)]

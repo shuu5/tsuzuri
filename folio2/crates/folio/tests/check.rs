@@ -1,12 +1,138 @@
 //! `folio check` 自身の歯（便 0・docs/design/delivery-0.md §1 / §4）。
 //! 正本 4 file で合格、tests/fixtures/check/ の 4 組で 不合格 1 / 不合格 1 / 不合格 1 / まだ分からない 2。
 //! 各組は変異 1 つだけを持つ＝違反はちょうど 1 件で、その種類まで見る（別の理由で落ちた組を緑にしない）。
+//! 要件書の図の節（便 34・FR15）は design-intent の写し（copy_tree + git init・tests/adr.rs の Work と同じ形）の
+//! srs.yaml に図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複・未知の欄）で 不合格 1 を見る。
 
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn copy_tree(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let to = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &to);
+        } else {
+            fs::copy(entry.path(), &to).unwrap();
+        }
+    }
+}
+
+/// git を呼ぶ。環境変数 GIT_* は継承しない。
+fn git(cwd: &Path, args: &[&str]) {
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(key);
+        }
+    }
+    let out = cmd
+        .current_dir(cwd)
+        .args([
+            "-c",
+            "user.email=fx@example",
+            "-c",
+            "user.name=fx",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git を起動できない");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// 見本の図 1 枚（型 archify-architecture・欄そろい・refs は要件の id）。実の srs.yaml の末尾に足す。
+const FIGURE: &str = "figures:
+  - id: fig-1
+    type: archify-architecture
+    caption: 見本の図
+    refs: [FR1]
+    spec:
+      schema_version: 1
+      diagram_type: architecture
+      meta: {title: 面の組み立て, quality_profile: showcase}
+      components:
+        - {id: src, type: external, label: 正本, row: 0, col: 0}
+        - {id: face, type: frontend, label: 面, row: 0, col: 1}
+      connections:
+        - {from: src, to: face, label: 導出}
+      layout: {mode: grid, cols: 2, gapX: 70, gapY: 110, cellW: 160, cellH: 70}
+";
+
+/// design-intent の写しの一時 dir（歯の終わりに消す）。器（scribe2）の導出 file は写しの根の contracts/ に置く。
+struct Work {
+    root: PathBuf,
+}
+
+impl Work {
+    fn new(case: &str) -> Work {
+        let root = std::env::temp_dir().join(format!("folio-check-{case}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        copy_tree(
+            &repo_root().join("design-intent"),
+            &root.join("design-intent"),
+        );
+        fs::create_dir_all(root.join("contracts")).unwrap();
+        fs::copy(
+            repo_root().join("contracts/schema.toml"),
+            root.join("contracts/schema.toml"),
+        )
+        .unwrap();
+        git(&root, &["init", "-q"]);
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "fixture"]);
+        Work { root }
+    }
+
+    fn dir(&self) -> PathBuf {
+        self.root.join("design-intent")
+    }
+
+    /// 実の srs.yaml の写し。
+    fn srs(&self) -> PathBuf {
+        self.dir().join("srs.yaml")
+    }
+
+    /// 写しの srs.yaml の末尾に図 1 枚を足す。
+    fn with_figure(&self) {
+        let before = fs::read_to_string(self.srs()).unwrap();
+        assert!(!before.contains("\nfigures:"), "実の要件書が既に図を持つ");
+        let sep = if before.ends_with('\n') { "" } else { "\n" };
+        fs::write(self.srs(), format!("{before}{sep}{FIGURE}")).unwrap();
+    }
+
+    /// 写しの srs.yaml の字面の変異（1 か所だけ）。
+    fn mutate(&self, from: &str, to: &str) {
+        let before = fs::read_to_string(self.srs()).unwrap();
+        assert_eq!(
+            before.matches(from).count(),
+            1,
+            "変異の当て先が 1 か所でない: {from:?}"
+        );
+        fs::write(self.srs(), before.replacen(from, to, 1)).unwrap();
+    }
+
+    fn check(&self) -> Output {
+        folio_check(&self.dir())
+    }
+}
+
+impl Drop for Work {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
 }
 
 fn folio_check(dir: &Path) -> Output {
@@ -86,4 +212,95 @@ fn check_missing_file_is_unknown_not_pass() {
         s.contains("まだ分からない") && !s.contains("folio check: 合格"),
         "{s}"
     );
+}
+
+// ── 要件書の図の節（便 34） ──
+
+/// 写しの srs.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（srs.yaml の場所）で `words` を全部含む。
+fn assert_srs_figure_violation(w: &Work, words: &[&str]) {
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "違反は変異の 1 件だけのはず: {v:?}");
+    assert!(v[0].contains("srs.yaml"), "{v:?}");
+    for word in words {
+        assert!(v[0].contains(word), "「{word}」が無い: {v:?}");
+    }
+    assert!(
+        stdout(&out).contains("folio check: 不合格（違反 1・"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_srs_figure_with_all_fields_passes() {
+    let w = Work::new("figure-ok");
+    w.with_figure();
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    assert!(
+        stdout(&out).contains("folio check: 合格（違反 0・まだ分からない 0）"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn check_srs_figure_type_outside_the_catalog_fails() {
+    let w = Work::new("figure-type");
+    w.with_figure();
+    w.mutate(
+        "\n    type: archify-architecture\n",
+        "\n    type: mystery\n",
+    );
+    assert_srs_figure_violation(&w, &["図の型「mystery」が部品目録の一覧に無い"]);
+}
+
+#[test]
+fn check_srs_figure_without_caption_fails() {
+    let w = Work::new("figure-caption");
+    w.with_figure();
+    w.mutate("\n    caption: 見本の図\n", "\n");
+    assert_srs_figure_violation(&w, &["caption"]);
+}
+
+#[test]
+fn check_srs_figure_ref_not_an_id_fails() {
+    let w = Work::new("figure-refs");
+    w.with_figure();
+    w.mutate("\n    refs: [FR1]\n", "\n    refs: [FR]\n");
+    assert_srs_figure_violation(&w, &["refs「FR」が id の形"]);
+}
+
+#[test]
+fn check_srs_figure_id_shared_with_a_requirement_fails() {
+    let w = Work::new("figure-dup-id");
+    w.with_figure();
+    w.mutate("\n  - id: fig-1\n", "\n  - id: FR1\n");
+    assert_srs_figure_violation(&w, &["行 id「FR1」が重複"]);
+}
+
+#[test]
+fn check_srs_figure_with_an_unknown_field_fails() {
+    let w = Work::new("figure-extra");
+    w.with_figure();
+    w.mutate(
+        "\n    caption: 見本の図\n",
+        "\n    caption: 見本の図\n    extra: 余分\n",
+    );
+    assert_srs_figure_violation(&w, &["未知の欄", "extra"]);
 }

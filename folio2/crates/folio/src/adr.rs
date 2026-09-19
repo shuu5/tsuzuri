@@ -961,8 +961,8 @@ fn is_adr_id(s: &str) -> bool {
         .is_some_and(|n| digits(n) && !n.starts_with('0'))
 }
 
-/// basis の各項の id の形（条・要件・rules 行・判断の記録の全体一致）。
-fn is_basis_id(s: &str) -> bool {
+/// basis の各項の id の形（条・要件・rules 行・判断の記録の全体一致）。要件書の図の refs（`check.rs`・便 34）も同じ判定を呼ぶ。
+pub(crate) fn is_basis_id(s: &str) -> bool {
     let article = ["P-", "A-", "N-"].iter().any(|p| {
         s.strip_prefix(p)
             .is_some_and(|rest| match rest.split_once('.') {

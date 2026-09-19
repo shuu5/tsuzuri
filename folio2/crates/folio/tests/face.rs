@@ -5,6 +5,8 @@
 //! - check の 3 値・表に無い面の名・導出できない入力 8 つ・escape
 //!
 //! 入口の面（便 16・20〜22）の歯は `face_index.rs` へ移した（便 26・docs/design/delivery-26.md §1 (c)）。
+//! 図の章（便 34・FR15）: 写し（srs.yaml・図 1 枚）の toc の 09 と figure-panel と型の名札と根拠のリンク・図なしの面は
+//! 図の章の外が byte で同じ・通らない図で 2 と前の面の保持・型外・道具の不在・実の正本の figure-panel の数。
 //! 版管理の `design-intent/preview/constitution.html`（手書きの見本）は書き換えない（`--out` は必ず一時 dir の中）。
 
 use std::fs;
@@ -25,6 +27,10 @@ fn design_intent() -> PathBuf {
     repo_root().join("design-intent")
 }
 
+fn vendor() -> PathBuf {
+    repo_root().join("vendor/archify")
+}
+
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
@@ -32,7 +38,21 @@ fn temp_dir(case: &str) -> PathBuf {
     td
 }
 
-/// fixture の正本 4 file を一時 dir の下の src/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
+fn copy_dir(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&src, &dst);
+        } else {
+            fs::copy(&src, &dst).unwrap();
+        }
+    }
+}
+
+/// fixture の正本 4 file を一時 dir の下の src/ へ、repo の vendor/archify/（図の道具・便 34 の要件書の面は図ごとに
+/// 撃つ）を親 dir の vendor/archify/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
 fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     let td = temp_dir(case);
     let work = td.join("src");
@@ -45,6 +65,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     ] {
         fs::copy(fixture().join(name), work.join(name)).unwrap();
     }
+    copy_dir(&vendor(), &td.join("vendor/archify"));
     (td, work)
 }
 
@@ -506,9 +527,9 @@ fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
 
 #[test]
 fn face_srs_write_matches_the_frozen_fixture() {
-    let td = temp_dir("srs-anchor");
+    let (td, work) = fixture_copy("srs-anchor");
     let out = td.join("srs.html");
-    let run = folio_face("srs", &fixture(), &out, "--write");
+    let run = folio_face("srs", &work, &out, "--write");
     let written = fs::read(&out).unwrap_or_default();
     let _ = fs::remove_dir_all(&td);
     assert_eq!(
@@ -527,9 +548,9 @@ fn face_srs_write_matches_the_frozen_fixture() {
 
 #[test]
 fn face_srs_escapes_values_from_the_sources() {
-    let td = temp_dir("srs-escape");
+    let (td, work) = fixture_copy("srs-escape");
     let out = td.join("srs.html");
-    let run = folio_face("srs", &fixture(), &out, "--write");
+    let run = folio_face("srs", &work, &out, "--write");
     let html = fs::read_to_string(&out).unwrap_or_default();
     let _ = fs::remove_dir_all(&td);
     assert_eq!(code(&run, "folio face --face srs"), 0, "{}", stderr(&run));
@@ -558,7 +579,7 @@ fn real_srs(case: &str) -> (PathBuf, PathBuf, String) {
 
 #[test]
 fn face_srs_on_the_real_sources_passes_parts_check() {
-    let (td, out, _) = real_srs("srs-parts");
+    let (td, out, html) = real_srs("srs-parts");
     let check = Command::new(env!("CARGO_BIN_EXE_folio"))
         .arg("parts")
         .arg("--check")
@@ -577,6 +598,15 @@ fn face_srs_on_the_real_sources_passes_parts_check() {
         stderr(&check)
     );
     assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
+    // 図の枠の数 = 図 1〜3 の分（図 3 は verdicts の節が在るときだけ）+ 正本の図の節の数（便 34・実測 0）
+    let s = load_yaml("srs.yaml");
+    let builtin = 2 + usize::from(s["verdicts"].as_vec().is_some());
+    let figures = s["figures"].as_vec().map_or(0, Vec::len);
+    assert_eq!(
+        html.matches("data-component=\"figure-panel\"").count(),
+        builtin + figures,
+        "figure-panel の数が 図 1〜3 の分 + figures の数と違う"
+    );
 }
 
 /// `open` の後の最初の `close` までの字面。
@@ -646,6 +676,13 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
         "用語の一覧の a の数"
     );
     assert_eq!(parts_of("ac-state-chip"), acs.len(), "ac-state-chip の数");
+    // 章の帯は 8 章 + 図の章（正本の figures が 1 枚以上のときだけ・便 34）+ 承認欄
+    let figures = s["figures"].as_vec().map_or(0, Vec::len);
+    assert_eq!(
+        parts_of("chapter-deck-band"),
+        8 + usize::from(figures > 0) + 1,
+        "chapter-deck-band の数"
+    );
 
     // 部品の名札は 17 種の中だけ・lane-chip を含まない
     const ALLOWED: [&str; 17] = [
@@ -836,4 +873,203 @@ fn face_srs_unknown_when_no_actor_is_the_tool() {
 #[test]
 fn face_srs_unknown_when_a_pattern_is_outside_the_table() {
     srs_unknown("pattern", "pattern: event", "pattern: sometimes");
+}
+
+// ── 要件書の面の図の章（便 34・FR15）──
+
+/// 写しの srs.yaml に変異を当て、`--write` の結果と面の本文を返す（面が出来ていなければ本文は空）。
+fn srs_mutated(case: &str, mutate: impl FnOnce(&str) -> String) -> (Output, String) {
+    let (td, work) = fixture_copy(case);
+    edit(&work.join("srs.yaml"), mutate);
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &work, &out, "--write");
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    (run, html)
+}
+
+/// 写しの srs.yaml から図の節（figures 以降・末尾まで）を消した面（便 33 までの形）。
+fn srs_figureless_html(case: &str) -> String {
+    let (run, html) = srs_mutated(case, |t| {
+        let at = t.find("\nfigures:\n").expect("figures が無い");
+        format!("{}\n", &t[..at])
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    html
+}
+
+/// `a` から `b` の直前までを切り取る（a が無ければそのまま・a の後の最初の b・b が無ければ末尾まで）。
+fn cut(html: &str, a: &str, b: &str) -> String {
+    let Some(start) = html.find(a) else {
+        return html.to_string();
+    };
+    let end = html[start..].find(b).map_or(html.len(), |e| start + e);
+    format!("{}{}", &html[..start], &html[end..])
+}
+
+/// `a` で始まる行を改行ごと切り取る（a が無ければそのまま）。
+fn cut_line(html: &str, a: &str) -> String {
+    let Some(start) = html.find(a) else {
+        return html.to_string();
+    };
+    let end = html[start..]
+        .find('\n')
+        .map_or(html.len(), |e| start + e + 1);
+    format!("{}{}", &html[..start], &html[end..])
+}
+
+/// 図の本体の数（章の帯の kicker の絵記号 `<svg class="ico"` は数えない）。
+fn svg_bodies(html: &str) -> usize {
+    html.matches("<svg").count() - html.matches("<svg class=\"ico\"").count()
+}
+
+#[test]
+fn face_srs_embeds_the_figure_in_a_figure_panel_with_label_and_refs() {
+    let html = fs::read_to_string(fixture().join("expected-srs.html")).unwrap();
+    assert!(
+        html.contains(
+            "<li><a href=\"#s9\"><span class=\"n\">09</span><span class=\"k\">図</span><span class=\"t\">1 枚</span></a></li>"
+        ),
+        "toc に 09「図」が無い: {html}"
+    );
+    // 図の枠は 図 1〜3 の分（写しは verdicts を持つ）+ 図の節の 1 枚
+    assert_eq!(
+        html.matches("data-component=\"figure-panel\"").count(),
+        3 + 1,
+        "figure-panel が 図 1〜3 + 1 でない: {html}"
+    );
+    assert_eq!(
+        html.matches("<figure data-component=\"figure-panel\" data-role=\"diagram\" id=\"fig-1\">")
+            .count(),
+        1,
+        "図の節の figure-panel が 1 つでない: {html}"
+    );
+    assert_eq!(svg_bodies(&html), 1, "図の本体が 1 つでない");
+    assert!(
+        html.contains("<div class=\"fig-title\"><span class=\"fn\">図 1</span>見本の図 <span class=\"fig-tools\">"),
+        "fig-title に caption の逐語が無い: {html}"
+    );
+    // 根拠の要件書の id は同じ面の anchor（href が # で始まる）
+    assert!(
+        html.contains(
+            "<figcaption><span class=\"ver\">図 1 · 構成図（architecture） · fig-1 · 根拠: <a class=\"xref\" href=\"#fr1\">FR1</a></span></figcaption>"
+        ),
+        "figcaption に型の名札・id・根拠の同じ面へのリンクが無い: {html}"
+    );
+    // 章 09 の帯は用語集（08）の後・承認欄の前
+    let s8 = html.find("<section id=\"s8\"").expect("章 08 が無い");
+    let s9 = html.find("<section id=\"s9\"").expect("章 09 が無い");
+    let ap = html.find("<section id=\"approval\"").expect("承認欄が無い");
+    assert!(s8 < s9 && s9 < ap, "章 09 の置き場が違う");
+    assert!(
+        html.contains("<section id=\"s9\" data-component=\"chapter-deck-band\" class=\"band-3\">"),
+        "章 09 の帯が band-3 でない: {html}"
+    );
+    assert!(
+        html.contains("<h2>図 1 枚</h2>"),
+        "章 09 の h2 が「図 1 枚」でない: {html}"
+    );
+    assert!(
+        html.contains("<dt>figures</dt><dd>1</dd>"),
+        "機械のための面に figures が無い: {html}"
+    );
+}
+
+#[test]
+fn face_srs_without_figures_has_no_figure_chapter() {
+    let html = srs_figureless_html("srs-no-figures");
+    assert_eq!(
+        html.matches("data-component=\"figure-panel\"").count(),
+        3,
+        "図が無いのに 図 1〜3 の外に figure-panel が在る"
+    );
+    assert!(
+        !html.contains("<section id=\"s9\""),
+        "図が無いのに図の章が在る"
+    );
+    assert_eq!(svg_bodies(&html), 0, "図が無いのに図の本体が在る");
+    assert!(
+        !html.contains("<li><a href=\"#s9\">"),
+        "図が無いのに toc に 09 が在る"
+    );
+    assert!(
+        !html.contains("<dt>figures</dt>"),
+        "図が無いのに機械のための面に figures が在る"
+    );
+    assert!(html.contains("全 9 章"), "図なしの面が全 9 章でない");
+}
+
+#[test]
+fn face_srs_figure_chapter_is_the_only_difference_from_the_figureless_face() {
+    let frozen = fs::read_to_string(fixture().join("expected-srs.html")).unwrap();
+    let without = srs_figureless_html("srs-outside");
+    // 図の章（s9 の帯から承認欄の帯の直前まで）・toc の 09・foot の figures を図ありの面から抜く
+    let a = cut(&frozen, "<section id=\"s9\"", "<section id=\"approval\"");
+    let a = cut_line(&a, "<li><a href=\"#s9\">");
+    let a = a.replace("<dt>figures</dt><dd>1</dd>", "");
+    // 章の数から数える字（全 N 章・k/N）だけは正本から数えた数（γ）なので揃える
+    let a = a
+        .replace("全 10 章", "全 9 章")
+        .replace("/10</span>", "/9</span>");
+    assert_same_bytes(
+        without.as_bytes(),
+        a.as_bytes(),
+        "図の章を抜いた凍結（図なしの面の期待）",
+    );
+}
+
+#[test]
+fn face_srs_unknown_when_a_figure_fails_the_tool_check_and_keeps_the_previous_face() {
+    let (td, work) = fixture_copy("srs-fig-fails");
+    // layout を消すと道具の検査（showcase）に落ちる
+    edit(&work.join("srs.yaml"), |t| {
+        t.replacen(
+            "      layout: {mode: grid, cols: 2, gapX: 70, gapY: 110, cellW: 160, cellH: 70}\n",
+            "",
+            1,
+        )
+    });
+    let out = td.join("srs.html");
+    let before = "<!DOCTYPE html>\n前の面\n".as_bytes().to_vec();
+    fs::write(&out, &before).unwrap();
+    let run = folio_face("srs", &work, &out, "--write");
+    let after = fs::read(&out).unwrap();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{}", stderr(&run));
+    assert!(
+        stderr(&run).contains("図の道具の検査を通らない"),
+        "{}",
+        stderr(&run)
+    );
+    assert_eq!(after, before, "図が通らないのに前の面を上書きした");
+}
+
+#[test]
+fn face_srs_unknown_when_a_figure_type_is_not_a_tool_type() {
+    let (run, html) = srs_mutated("srs-fig-type", |t| {
+        t.replacen("type: archify-architecture", "type: pipeline-rail", 1)
+    });
+    assert_eq!(code(&run, "folio face"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{}", stderr(&run));
+    assert!(
+        stderr(&run).contains("図の道具の型でない"),
+        "{}",
+        stderr(&run)
+    );
+    assert!(html.is_empty(), "導出できないのに面を書いた");
+}
+
+#[test]
+fn face_srs_unknown_when_the_figure_tool_is_absent() {
+    let (td, work) = fixture_copy("srs-no-tool");
+    fs::remove_file(td.join("vendor/archify/bin/archify.mjs")).unwrap();
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{}", stderr(&run));
+    assert!(stderr(&run).contains("図の道具が無い"), "{}", stderr(&run));
+    assert!(!exists, "導出できないのに面を書いた");
 }

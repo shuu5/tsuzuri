@@ -2,11 +2,14 @@
 //! 導出して書く（--write）・検査する（--check）。生成器は憲法の面（`face_constitution.rs`）・要件書の面
 //! （`face_srs.rs`）・入口の面（`face_index.rs`・便 16・delivery-16.md §1 (b)）の 3 つ。
 //! この file は命令の口（面の名の解決・正本の読み・3 値と文言）と、生成器が共有する口（木を辿る型 X・escape・
-//! 名札の表・値の読める形・小窓・面の骨格）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
+//! 名札の表・値の読める形・小窓・面の骨格・図の枠）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
+//! 図の枠（便 34・P-2.1）: 図の節（figures）の 1 枚の枠（figure-panel・fig-title・図の本体・figcaption）は
+//! 設計ノート・判断の記録・要件書の 3 面が同じ字面で出すので、`figure_body` と `figure_panel` をここに 1 つ持つ。
 
 use std::fs;
 use std::path::Path;
 
+use crate::figure;
 use crate::parts::catalog::Component;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
@@ -819,6 +822,73 @@ fn toc_li(href: &str, n: &str, k: &str, t: &str) -> String {
 pub fn card(class: &str, id: Option<&str>, cid: &str, body: &str) -> String {
     let id = id.map_or_else(String::new, |i| format!(" id=\"{i}\""));
     format!("<div class=\"{class}\"{id}><div class=\"cid\">{cid}</div>{body}</div>")
+}
+
+// ── 図の枠（3 面が共有する口・便 34）──
+
+/// 図の型（閉じた表 β・図の道具の 5 型）→ figcaption の名札。字面は部品目録 parts.json の
+/// figure_body_classes.type_ids と同じ（`face_note.rs` の歯で突き合わせる）。表に無い型は `figure::render` が先に断る。
+pub(crate) const FIGURE_LABELS: [(&str, &str); 5] = [
+    ("archify-architecture", "構成図（architecture）"),
+    ("archify-workflow", "手順図（workflow）"),
+    ("archify-sequence", "順序図（sequence）"),
+    ("archify-dataflow", "流れ図（dataflow）"),
+    ("archify-lifecycle", "状態図（lifecycle）"),
+];
+
+/// 図の道具で描いた図 1 枚（図の id・図の本体・型の名札）。
+pub struct Figure<'a> {
+    pub id: &'a str,
+    /// 図の本体（SVG・`figure::render` の戻り値そのまま・escape しない）
+    pub body: String,
+    pub label: &'static str,
+}
+
+/// 図の行 1 つ → 図 1 枚（id・本体・型の名札）。型が表に無い・spec が表でない・道具が無い・道具が通らないは
+/// Err（面全体が「まだ分からない」）。
+pub fn figure_body<'a>(dir: &Path, fig: &X<'a>) -> R<Figure<'a>> {
+    let id = fig.f("id")?.id()?;
+    let tx = fig.f("type")?;
+    let kind =
+        tx.v.as_str()
+            .ok_or_else(|| format!("{}: 図の型が文字列でない", tx.at))?;
+    let body = figure::render(dir, id, kind, &fig.f("spec")?)?;
+    let label = FIGURE_LABELS
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, l)| *l)
+        .ok_or_else(|| format!("図の型「{kind}」は図の道具の型でない"))?;
+    Ok(Figure { id, body, label })
+}
+
+/// 図の枠 1 つ（figure-panel の開始タグ〜figcaption〜終了タグ・凡例は無し）。`i` は図の番号（1 から）・`caption` は
+/// escape 済み・`refs` は根拠の id ごとの組み立て済みのリンク（空なら「根拠:」以降を出さない）。
+pub fn figure_panel(
+    o: &mut Vec<String>,
+    f: &Frame,
+    i: usize,
+    fig: &Figure<'_>,
+    caption: &str,
+    refs: &[String],
+) {
+    let fn_ = format!("図 {i}");
+    o.push(format!(
+        "<figure {} data-role=\"diagram\" id=\"{}\">",
+        f.dc(Component::FigurePanel),
+        esc(fig.id)
+    ));
+    o.push(format!(
+        "<div class=\"fig-title\"><span class=\"fn\">{fn_}</span>{caption} <span class=\"fig-tools\"><button class=\"zoom-btn\" type=\"button\">拡大</button></span><button class=\"zoom-close\" type=\"button\">✕ 閉じる</button></div>"
+    ));
+    o.push(fig.body.clone());
+    let mut ver = format!("{fn_} · {} · {}", fig.label, esc(fig.id));
+    if !refs.is_empty() {
+        ver.push_str(&format!(" · 根拠: {}", refs.join("・")));
+    }
+    o.push(format!(
+        "<figcaption><span class=\"ver\">{ver}</span></figcaption>"
+    ));
+    o.push("</figure>".to_string());
 }
 
 #[cfg(test)]

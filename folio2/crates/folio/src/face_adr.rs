@@ -6,14 +6,13 @@
 //! 見た目は便 27（delivery-27.md §1 (a)〜(c)）で直した: 表紙は h1 が短い名で title は副題・章 01/02 は文の頭の
 //! 列挙を ol へ・章 04 は根拠を 4 群の card（id + 行き先の題）にして撤退条件を格子の外へ出す。
 //! 図の章（便 33・FR15）: 正本に任意の図の節（figures）が 1 枚以上あれば章 06「図」を「改訂と帰結」の後・承認欄の
-//! 前に置く。中身は設計ノートの面の図の章と同じ字面で、図の本体（SVG）は `figure.rs` の `render` が図の道具で描いた
-//! ものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか）。図が無い面は便 32 までと byte 不変。
+//! 前に置く。中身は設計ノートの面の図の章と同じ字面（便 34 からは `face.rs` の共有の図の枠）で、図の本体（SVG）は
+//! `figure.rs` の `render` が図の道具で描いたものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない
+//! （全部か無しか）。図が無い面は便 32 までと byte 不変。
 
 use std::path::Path;
 
-use crate::face::{self, Frame, R, X, anchor, card, esc};
-use crate::face_note::FIGURE_LABELS;
-use crate::figure;
+use crate::face::{self, Frame, R, X, anchor, card};
 use crate::parts::catalog::Component;
 
 /// 判断の記録の面が使う部品（8 種・便 33 で figure-panel を足した）。
@@ -676,8 +675,8 @@ fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &C
     Ok(())
 }
 
-/// 章 06（図・便 33）。設計ノートの面の図の章と同じ字面: 図ごとに図の枠（figure-panel）を置き、図の本体は
-/// `figure::render` の戻り値をそのまま 1 つの行として埋める（escape しない・道具の出力は変えない）。
+/// 章 06（図・便 33）。図ごとに共有の図の枠（`face::figure_panel`・便 34）を置き、図の本体は `face::figure_body` が
+/// 図の道具で描いたものをそのまま埋める（escape しない・道具の出力は変えない）。
 /// figcaption の根拠は refs の各 id を `id_link` で（無いか空なら「根拠:」以降を出さない）。
 /// 図が 1 枚でも導出できなければ Err（面全体が「まだ分からない」・前の面は残る）。
 fn figures_chapter(
@@ -697,43 +696,17 @@ fn figures_chapter(
     );
     o.push("<div class=\"chapbody\">".to_string());
     for (i, fig) in figs.iter().enumerate() {
-        let fid = fig.f("id")?.id()?;
-        let tx = fig.f("type")?;
-        let kind =
-            tx.v.as_str()
-                .ok_or_else(|| format!("{}: 図の型が文字列でない", tx.at))?;
-        let body = figure::render(dir, fid, kind, &fig.f("spec")?)?;
-        let label = FIGURE_LABELS
-            .iter()
-            .find(|(k, _)| *k == kind)
-            .map(|(_, l)| *l)
-            .ok_or_else(|| format!("図の型「{kind}」は図の道具の型でない"))?;
-        let fn_ = format!("図 {}", i + 1);
-        o.push(format!(
-            "<figure {} data-role=\"diagram\" id=\"{}\">",
-            f.dc(Component::FigurePanel),
-            esc(fid)
-        ));
-        o.push(format!(
-            "<div class=\"fig-title\"><span class=\"fn\">{fn_}</span>{} <span class=\"fig-tools\"><button class=\"zoom-btn\" type=\"button\">拡大</button></span><button class=\"zoom-close\" type=\"button\">✕ 閉じる</button></div>",
-            fig.ef("caption")?
-        ));
-        o.push(body);
-        let mut ver = format!("{fn_} · {label} · {}", esc(fid));
-        if let Some(refs) = fig.g("refs")? {
-            let ids = refs
+        let drawn = face::figure_body(dir, fig)?;
+        let caption = fig.ef("caption")?;
+        let refs = match fig.g("refs")? {
+            Some(rs) => rs
                 .seq()?
                 .iter()
                 .map(|q| id_link(dir, ctx, q))
-                .collect::<R<Vec<_>>>()?;
-            if !ids.is_empty() {
-                ver.push_str(&format!(" · 根拠: {}", ids.join("・")));
-            }
-        }
-        o.push(format!(
-            "<figcaption><span class=\"ver\">{ver}</span></figcaption>"
-        ));
-        o.push("</figure>".to_string());
+                .collect::<R<Vec<_>>>()?,
+            None => Vec::new(),
+        };
+        face::figure_panel(o, f, i + 1, &drawn, &caption, &refs);
     }
     o.push("</div>".to_string());
     Ok(())

@@ -3,6 +3,9 @@
 //! 生成物の文字列は 正本の値（α）・名札の表（β・`face.rs` とこの file の章の表）・正本から数えた数（γ）のどれかで、
 //! 見本にしか無い案内の文（副題・読者の札・lead と補足・lane-chip・図の説明の小窓）は出さない。
 //! 面に依らない口（head と site-bar・章の帯・card・toc・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ。
+//! 図の章（便 34・FR15）: 正本に任意の図の節（figures・最上位）が 1 枚以上あれば章 09「図」を用語集の後・承認欄の
+//! 前に置く。図の枠は `face.rs` の共有の口（`figure_body` / `figure_panel`）で、判断の記録・設計ノートの面と同じ字面。
+//! 図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか）。図が無い面は便 33 までと byte 不変。
 
 use std::path::Path;
 
@@ -46,8 +49,12 @@ const CHAPTERS: [&str; 8] = [
     "用語集",
 ];
 
-/// 章 01〜08 の帯の class と kicker の絵記号（見本の各章の字面）。
-const BANDS: [(&str, &str); 8] = [
+/// 章 09（図）の名（帯の kicker・目次の名）。
+const FIGURES_CHAPTER: &str = "図";
+
+/// 章 01〜09 の帯の class と kicker の絵記号（01〜08 は見本の各章の字面・09 は band-3 と 3 番目の絵記号）。
+/// 図の章の有無で 8 本か 9 本を先頭から切り出して `Frame` に渡す（`static` なので切り出しは 'static）。
+static BANDS: [(&str, &str); 9] = [
     (
         "band-1",
         "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
@@ -74,30 +81,29 @@ const BANDS: [(&str, &str); 8] = [
         "band-1",
         "<path d=\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\"/><path d=\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z\"/>",
     ),
+    ("band-3", "<path d=\"M20 6L9 17l-5-5\"/>"),
 ];
 
-/// 要件書の面の骨格。
-const FRAME: Frame = Frame {
-    name: "要件書",
-    source: "srs.yaml",
-    favicon: "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235f45a6'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E要%3C/text%3E%3C/svg%3E\">",
-    current: 2,
-    first: 1,
-    bands: &BANDS,
-    prev: ("constitution.html", "憲法"),
-    next: ("index.html", "入口"),
-    parts: &PARTS,
-};
+/// 要件書の面の骨格（章の数 = 8 + 図の章の有無）。
+fn frame(figures: bool) -> Frame {
+    Frame {
+        name: "要件書",
+        source: "srs.yaml",
+        favicon: "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235f45a6'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E要%3C/text%3E%3C/svg%3E\">",
+        current: 2,
+        first: 1,
+        bands: &BANDS[..CHAPTERS.len() + usize::from(figures)],
+        prev: ("constitution.html", "憲法"),
+        next: ("index.html", "入口"),
+        parts: &PARTS,
+    }
+}
 
 /// 段の担当のうち持ち主の手番の値。
 const OWNER: &str = "持ち主";
 
 /// 図 1 の真ん中の帯に置く actor の role。
 const TOOL_ROLE: &str = "道具";
-
-fn dc(c: Component) -> String {
-    FRAME.dc(c)
-}
 
 /// 見出しを持つ行（id・escape した title）。
 struct Item<'a> {
@@ -115,7 +121,7 @@ struct Step<'a> {
     what: String,
 }
 
-/// 導出の文脈（行・参照の先）。
+/// 導出の文脈（行・参照の先・骨格）。
 struct Ctx<'a> {
     goals: Vec<Item<'a>>,
     fr: Vec<Item<'a>>,
@@ -129,9 +135,64 @@ struct Ctx<'a> {
     /// 段の n → escape した what
     rail_what: Vec<(u64, String)>,
     verdicts: Option<Vec<X<'a>>>,
+    /// 任意の図の節の行（無ければ空）
+    figures: Vec<X<'a>>,
+    /// 面の骨格（章の数は図の章の有無で変わる）
+    frame: Frame,
 }
 
 impl<'a> Ctx<'a> {
+    /// 要件書の id（GOAL・FR・NFR・AC・CON + 数字）がどれかの節に在るか。
+    fn has_req(&self, id: &str) -> bool {
+        self.goals
+            .iter()
+            .chain(&self.fr)
+            .chain(&self.nfr)
+            .chain(&self.acs)
+            .chain(&self.cons)
+            .any(|i| i.id == id)
+    }
+
+    /// 図の根拠の id 1 つ（在ればリンク・無ければ id の直後に「（まだ分からない）」）。判断の記録の面の resolve と同じ
+    /// 4 形 + 判断の記録: 要件書の id は同じ面の anchor・条（枝番付きの規範文 id は条の anchor・字は枝番付きのまま）と
+    /// rules 行は憲法の面・判断の記録は `adr-<数>.html`。どの形でもない id は Err。
+    fn ref_link(&self, dir: &Path, x: &X<'_>) -> R<String> {
+        let id = x.id()?;
+        let bad = || {
+            format!(
+                "{}: 根拠の id「{id}」は id の形でない（条・rules 行・要件・判断の記録）",
+                x.at
+            )
+        };
+        let need = |ok: bool| ok.then_some(()).ok_or_else(bad);
+        let prefix = |ps: &[&str]| ps.iter().find_map(|p| id.strip_prefix(p));
+        let href = if let Some(rest) = prefix(&["P-", "A-", "N-"]) {
+            let aid = match rest.split_once('.') {
+                Some((n, sub)) if digits(n) && digits(sub) => &id[..id.len() - sub.len() - 1],
+                None if digits(rest) => id,
+                _ => return Err(bad()),
+            };
+            self.arts
+                .iter()
+                .any(|(k, _)| *k == aid)
+                .then(|| article_link(aid, id))
+        } else if let Some(rest) = prefix(&["R-", "D-"]) {
+            need(digits(rest))?;
+            self.rule_ids.contains(&id).then(|| article_link(id, id))
+        } else if let Some(rest) = prefix(&["FR", "NFR", "AC", "CON", "GOAL"]) {
+            need(digits(rest))?;
+            self.has_req(id).then(|| xref(id, id))
+        } else if let Some(rest) = id.strip_prefix("ADR-") {
+            need(digits(rest))?;
+            let file = dir.join("adr").join(format!("{id}.yaml"));
+            file.is_file()
+                .then(|| format!("<a class=\"xref\" href=\"{}.html\">{id}</a>", anchor(id)))
+        } else {
+            return Err(bad());
+        };
+        Ok(href.unwrap_or_else(|| format!("{id}（まだ分からない）")))
+    }
+
     fn req(&self, x: &X<'_>) -> R<&Item<'a>> {
         let id = x.id()?;
         self.fr
@@ -196,7 +257,7 @@ pub fn derive(dir: &Path) -> R<String> {
     check_counts(&ctx, &m.f("counts")?)?;
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &m)?;
+    head(&mut o, &ctx, &m)?;
     cover(&mut o, &ctx, &m)?;
     toc(&mut o, &ctx);
     goals_chapter(&mut o, &ctx)?;
@@ -207,12 +268,19 @@ pub fn derive(dir: &Path) -> R<String> {
     con_chapter(&mut o, &ctx)?;
     rtm_chapter(&mut o, &ctx)?;
     glossary_chapter(&mut o, &ctx, &s, &v)?;
-    approval(&mut o, &m)?;
+    if !ctx.figures.is_empty() {
+        figures_chapter(&mut o, &ctx, dir)?;
+    }
+    approval(&mut o, &ctx, &m)?;
     foot(&mut o, &ctx, &m)?;
     Ok(format!("{}\n", o.join("\n")))
 }
 
 // ── 読みと検査 ──
+
+fn digits(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
+}
 
 fn items<'a>(s: &X<'a>, section: &str) -> R<Vec<Item<'a>>> {
     s.f(section)?
@@ -278,6 +346,10 @@ fn context<'a>(s: &X<'a>, c: &X<'a>, r: &X<'a>) -> R<Ctx<'a>> {
         }
         None => None,
     };
+    // 任意の図の節（便 34）。無い・null は 0 枚
+    let figures = s
+        .g("figures")?
+        .map_or_else(|| Ok(Vec::new()), |x| x.seq())?;
 
     Ok(Ctx {
         goals: items(s, "goals")?,
@@ -290,6 +362,8 @@ fn context<'a>(s: &X<'a>, c: &X<'a>, r: &X<'a>) -> R<Ctx<'a>> {
         rail,
         rail_what,
         verdicts,
+        frame: frame(!figures.is_empty()),
+        figures,
     })
 }
 
@@ -399,10 +473,10 @@ fn slots(owner: bool, node: &str) -> (String, String) {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
+fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
-    FRAME.head(
+    ctx.frame.head(
         o,
         &format!("folio2 — 要件書（{version}）"),
         &m.ef("generated")?,
@@ -426,7 +500,10 @@ fn meta_span(k: &str, v: &str) -> String {
 
 fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let title = m.ef("title")?;
-    o.push(format!("<header {}>", dc(Component::DocCoverBand)));
+    o.push(format!(
+        "<header {}>",
+        ctx.frame.dc(Component::DocCoverBand)
+    ));
     o.push(format!(
         "<p class=\"cover-eyebrow\"><span class=\"doc-type\">要件書 (SRS)</span> <span>folio2 — {title}</span></p>"
     ));
@@ -501,20 +578,33 @@ fn chapter_h2(ctx: &Ctx<'_>, n: usize) -> String {
 }
 
 fn toc(o: &mut Vec<String>, ctx: &Ctx<'_>) {
-    let heads = (1..=CHAPTERS.len())
+    let mut heads = (1..=CHAPTERS.len())
         .map(|n| (CHAPTERS[n - 1].to_string(), chapter_h2(ctx, n)))
         .collect::<Vec<_>>();
-    FRAME.toc(o, &heads, "作成 / レビュー / 承認");
+    // 図の章は 1 枚以上のときだけ（図なしの面は便 33 までと byte 不変）
+    let n = ctx.figures.len();
+    if n > 0 {
+        heads.push((FIGURES_CHAPTER.to_string(), format!("{n} 枚")));
+    }
+    ctx.frame.toc(o, &heads, "作成 / レビュー / 承認");
 }
 
 fn band(o: &mut Vec<String>, ctx: &Ctx<'_>, n: usize, lead: Option<&str>) {
-    FRAME.band(o, n, CHAPTERS[n - 1], &chapter_h2(ctx, n), lead);
+    ctx.frame
+        .band(o, n, CHAPTERS[n - 1], &chapter_h2(ctx, n), lead);
 }
 
-fn figure_open(o: &mut Vec<String>, id: &str, fn_: &str, title: &str, legend: Option<&str>) {
+fn figure_open(
+    o: &mut Vec<String>,
+    ctx: &Ctx<'_>,
+    id: &str,
+    fn_: &str,
+    title: &str,
+    legend: Option<&str>,
+) {
     o.push(format!(
         "<figure {} data-role=\"diagram\" id=\"{id}\">",
-        dc(Component::FigurePanel)
+        ctx.frame.dc(Component::FigurePanel)
     ));
     let legend = legend.map_or_else(String::new, |l| hint("凡例", l));
     o.push(format!(
@@ -561,7 +651,7 @@ fn goals_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<div {} style=\"--band-n:{}\">",
-        dc(Component::SectionLeadCallout),
+        ctx.frame.dc(Component::SectionLeadCallout),
         ctx.goals.len()
     ));
     for g in &ctx.goals {
@@ -626,16 +716,16 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
 
     band(o, ctx, 2, None);
     o.push("<div class=\"chapbody\">".to_string());
-    figure_open(o, "fig-context", "図 1", "誰が使い、何が出るか", None);
+    figure_open(o, ctx, "fig-context", "図 1", "誰が使い、何が出るか", None);
     o.push(format!(
         "<div {} style=\"--band-n:3\">",
-        dc(Component::ContextBand)
+        ctx.frame.dc(Component::ContextBand)
     ));
     o.push("<div class=\"band\"><h4>入れる側</h4>".to_string());
     for a in &inputs {
         o.push(format!(
             "<div {} id=\"c-{}\"><p class=\"nt\">{}</p><span class=\"edge\"><span class=\"arrow\"></span>{}</span></div>",
-            dc(Component::BandNode),
+            ctx.frame.dc(Component::BandNode),
             a.f("id")?.id()?,
             a.ef("name")?,
             a.ef("role")?
@@ -647,7 +737,7 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
     for a in &tools {
         o.push(format!(
             "<div {} id=\"c-{}\"><p class=\"nt\">{}</p></div>",
-            dc(Component::BandNode),
+            ctx.frame.dc(Component::BandNode),
             a.f("id")?.id()?,
             a.ef("name")?
         ));
@@ -658,7 +748,7 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
     for x in &outputs {
         o.push(format!(
             "<div {} id=\"c-{}\"><p class=\"nt\">{}</p><p class=\"fig-reqs\">{}</p></div>",
-            dc(Component::BandNode),
+            ctx.frame.dc(Component::BandNode),
             x.f("id")?.id()?,
             x.ef("name")?,
             fig_req(ctx.req(&x.f("from")?)?)
@@ -680,7 +770,7 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
         };
         o.push(format!(
             "<div {} style=\"--band-n:2\">",
-            dc(Component::SectionLeadCallout)
+            ctx.frame.dc(Component::SectionLeadCallout)
         ));
         o.push(card(
             "card accent ok",
@@ -731,6 +821,7 @@ fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let legend = "<div class=\"fig-legend\"><span class=\"lg\"><span class=\"sw ok\"></span>あなたの手番</span><span class=\"lg\"><span class=\"sw neutral\"></span>folio がやる</span><span class=\"lg\"><span class=\"sw line\"></span>番号の順に進む</span><span class=\"lg\">枠線が点線 = 定める要件が無い段</span></div>";
     figure_open(
         o,
+        ctx,
         "fig-rail",
         "図 2",
         &format!("folio が 1 回で通す {count} 段 — 各段を決めている要件"),
@@ -738,7 +829,7 @@ fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     );
     o.push(format!(
         "<ol {} style=\"--rail-n:{count}\">",
-        dc(Component::PipelineRail)
+        ctx.frame.dc(Component::PipelineRail)
     ));
     for st in &ctx.rail {
         let x = &st.x;
@@ -775,7 +866,7 @@ fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
         };
         let node = format!(
             "<article {}{} id=\"rail-{}\"><span class=\"actor\">担当: {}</span><p class=\"nt\">{nt}</p><p class=\"fig-reqs\">{fig_reqs}</p></article>",
-            dc(Component::RailNode),
+            ctx.frame.dc(Component::RailNode),
             if st.owner { " class=\"tone-ok\"" } else { "" },
             st.n,
             st.who
@@ -811,13 +902,14 @@ fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
             ));
             nodes.push(format!(
                 "<li {} class=\"{class}\" id=\"v-{}\"><p class=\"nt\">{name}</p><span class=\"cond\">ここへ来る条件</span><p class=\"np\">{}</p></li>",
-                dc(Component::StateNode),
+                ctx.frame.dc(Component::StateNode),
                 v.f("id")?.id()?,
                 v.ef("cond")?
             ));
         }
         figure_open(
             o,
+            ctx,
             "fig-verdicts",
             "図 3",
             &format!(
@@ -828,7 +920,7 @@ fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
         );
         o.push(format!(
             "<ul {} style=\"--state-n:{}\">",
-            dc(Component::StateStrip),
+            ctx.frame.dc(Component::StateStrip),
             verdicts.len()
         ));
         o.extend(nodes);
@@ -862,7 +954,7 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, it: &Item<'_>, nfr: bool) -> R<(
     let milestone = x.g("milestone")?;
     o.push(format!(
         "<article {}{} id=\"{}\">",
-        dc(Component::ItemRow),
+        ctx.frame.dc(Component::ItemRow),
         if nfr { " class=\"kind-nfr\"" } else { "" },
         anchor(it.id)
     ));
@@ -960,7 +1052,7 @@ fn ac_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>) -> R<()> {
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<div {} style=\"--band-n:2\">",
-        dc(Component::SectionLeadCallout)
+        ctx.frame.dc(Component::SectionLeadCallout)
     ));
     for a in &ctx.acs {
         let x = &a.x;
@@ -968,7 +1060,7 @@ fn ac_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>) -> R<()> {
         let mut cid = format!(
             "{} <span {}>まだ分からない</span>",
             a.id,
-            dc(Component::AcStateChip)
+            ctx.frame.dc(Component::AcStateChip)
         );
         if let Some(ms) = x.g("milestone")? {
             cid.push_str(&format!(" <span class=\"pill\">{}</span>", ms.e()?));
@@ -1068,7 +1160,7 @@ fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
     ));
     o.push(format!(
         "<div {}><table class=\"rtm\">",
-        dc(Component::RtmGrid)
+        ctx.frame.dc(Component::RtmGrid)
     ));
     let heads = ctx
         .goals
@@ -1150,7 +1242,7 @@ fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
 fn glossary_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, v: &X<'_>) -> R<()> {
     band(o, ctx, 8, Some(&s.ef("glossary_pointer")?));
     o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!("<div {}>", dc(Component::GlossaryLinks)));
+    o.push(format!("<div {}>", ctx.frame.dc(Component::GlossaryLinks)));
     for t in v.f("terms")?.seq()? {
         let href = format!("constitution.html#g-{}", t.f("id")?.id()?);
         let en = t.f("en")?;
@@ -1170,15 +1262,43 @@ fn glossary_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, v: &X<'_>) ->
     Ok(())
 }
 
-fn approval(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
+/// 章 09（図・便 34）。用語集の後・承認欄の前。図ごとに共有の図の枠（`face::figure_panel`）を置き、根拠（refs）の
+/// リンクは `Ctx::ref_link` で解く。図が 1 枚でも導出できなければ Err（面全体が「まだ分からない」・前の面は残る）。
+fn figures_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
+    ctx.frame.band(
+        o,
+        CHAPTERS.len() + 1,
+        FIGURES_CHAPTER,
+        &format!("{FIGURES_CHAPTER} {} 枚", ctx.figures.len()),
+        None,
+    );
+    o.push("<div class=\"chapbody\">".to_string());
+    for (i, fig) in ctx.figures.iter().enumerate() {
+        let drawn = face::figure_body(dir, fig)?;
+        let caption = fig.ef("caption")?;
+        let refs = match fig.g("refs")? {
+            Some(rs) => rs
+                .seq()?
+                .iter()
+                .map(|q| ctx.ref_link(dir, q))
+                .collect::<R<Vec<_>>>()?,
+            None => Vec::new(),
+        };
+        face::figure_panel(o, &ctx.frame, i + 1, &drawn, &caption, &refs);
+    }
+    o.push("</div>".to_string());
+    Ok(())
+}
+
+fn approval(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     let lead = match m.g("status_note")? {
         Some(n) => format!("{status} — {}", n.e()?),
         None => status.to_string(),
     };
-    FRAME.approval_band(o, "作成 / レビュー / 承認", &lead);
+    ctx.frame.approval_band(o, "作成 / レビュー / 承認", &lead);
     o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!("<div {}>", dc(Component::ApprovalBlock)));
+    o.push(format!("<div {}>", ctx.frame.dc(Component::ApprovalBlock)));
     for row in m.f("approval")?.seq()? {
         let role = row.f("role")?;
         let mut sign = format!(
@@ -1233,7 +1353,11 @@ fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
         .collect::<Vec<_>>()
         .join(" / ");
     dl.push_str(&format!("<dt>items</dt><dd>{items}</dd>"));
-    FRAME.foot(o, &version, &generated, &dl);
+    // 図の数は 1 枚以上のときだけ（図なしの面は便 33 までと byte 不変）
+    if !ctx.figures.is_empty() {
+        dl.push_str(&format!("<dt>figures</dt><dd>{}</dd>", ctx.figures.len()));
+    }
+    ctx.frame.foot(o, &version, &generated, &dl);
     Ok(())
 }
 
