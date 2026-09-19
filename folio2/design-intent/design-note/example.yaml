@@ -62,7 +62,7 @@ figures:
     spec:
       schema_version: 1
       diagram_type: architecture
-      meta: {title: 図の生成の 3 つの口, quality_profile: showcase}
+      meta: {title: 図の生成の 3 つの口, quality_profile: showcase, subtitle: 型付き記述を図の道具が検査して描き、folio が図の本体だけを面に埋める, legend: {mode: auto, entries: {frontend: {label: 面}, backend: {label: 道具}, external: {label: 外の入力}}}}
       components:
         - {id: spec, type: external, label: 型付き記述, sublabel: 文書の正本の図の節, row: 0, col: 0}
         - {id: tool, type: backend, label: 図の道具, sublabel: 検査と描画, row: 0, col: 1}
