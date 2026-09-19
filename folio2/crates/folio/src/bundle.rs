@@ -9,7 +9,7 @@
 //! 書くときは各観点の sources/ と faces/ を消してから作り直す（古い写しが要約値に混ざらないため）。
 //! 席や器が書く所見 file・起動の記録は触らない。判定を持たないので 1（不合格）は返さない（FR5 の 3 値のうち 2 つ）。
 //! 便 39（`findings.rs`・`--check`）は正本の読み `load`・観点 1 つの組み立て `build_one`・要約値 `digest_text` を
-//! crate の中から呼ぶ（--write の振る舞いと文言は不変）。
+//! crate の中から呼ぶ（--write の振る舞いと文言は不変）。便 42（`--refute`）は `question_text` も呼ぶ。
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -433,8 +433,9 @@ pub fn read_dir_names(dir: &Path) -> R<Vec<(String, bool)>> {
     Ok(names)
 }
 
-/// question.yaml（6 行・reader と question は区間の文で 2 字下げ）。
-fn question_text(vp: &Viewpoint) -> String {
+/// question.yaml（6 行・reader と question は区間の文で 2 字下げ）。便 42（`findings::refute`）は反証の束の question.yaml の
+/// 頭 6 行としてこれを呼ぶ（振る舞い不変）。
+pub fn question_text(vp: &Viewpoint) -> String {
     let block = |text: &str| -> String {
         text.trim_end_matches('\n')
             .split('\n')

@@ -208,15 +208,16 @@ enum Command {
         #[arg(long)]
         state: Option<PathBuf>,
     },
-    /// 天井の材料の束を観点ごとに置き場へ組む（--write）・席か器が書いた所見 file を数えて観点ごとの 3 値を返す（--check）。AI は起動しない
-    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
+    /// 天井の材料の束を観点ごとに置き場へ組む（--write）・席か器が書いた所見 file を数えて観点ごとの 3 値を返す（--check）・
+    /// 止める の所見ごとに反証の材料の束を組む（--refute）。AI は起動しない
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "refute"])))]
     Ceiling {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
-        /// 配信先（folio build の --out・相対なら --dir からの相対・絶対ならそのまま・--check でも束が古くないかを測るのに要る）
+        /// 配信先（folio build の --out・相対なら --dir からの相対・絶対ならそのまま・--write と --check に要る〔--check でも束が古くないかを測る〕・--refute は読まない）
         #[arg(long)]
-        faces: PathBuf,
+        faces: Option<PathBuf>,
         /// 束の置き場（既定なし・相対なら --dir からの相対・絶対ならそのまま）
         #[arg(long)]
         out: PathBuf,
@@ -226,6 +227,9 @@ enum Command {
         /// 観点ごとの所見 file（findings.yaml）を天井の正本の欄の決まりで数える（4 観点が全部合格 0・不合格 1・まだ分からない 2）
         #[arg(long)]
         check: bool,
+        /// 反証が未の 止める の所見ごとに反証の材料の束（finding・question・reads・schema・sources.txt・digest.txt）を <out>/<観点>/refute/<所見の id>/ へ組む（全部か無しか）
+        #[arg(long)]
+        refute: bool,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -463,7 +467,26 @@ fn main() -> ExitCode {
             out,
             write,
             check: _,
+            refute,
         } => {
+            if refute {
+                let outcome = findings::refute(&dir, &out);
+                for line in &outcome.stdout {
+                    println!("{line}");
+                }
+                for line in &outcome.stderr {
+                    eprintln!("{line}");
+                }
+                return ExitCode::from(outcome.verdict.exit_code() as u8);
+            }
+            // --write と --check は配信先が要る（束が古くないかを測る）
+            let Some(faces) = faces else {
+                let outcome = bundle::Outcome::unknown("--faces が要る");
+                if let Some(line) = &outcome.stderr {
+                    eprintln!("{line}");
+                }
+                return ExitCode::from(outcome.verdict.exit_code() as u8);
+            };
             if write {
                 let outcome = bundle::run(&dir, &faces, &out);
                 if let Some(line) = &outcome.stdout {

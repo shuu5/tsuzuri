@@ -7,10 +7,14 @@
 //! 名札（便 40・delivery-40.md §1 (b)・ADR-8 決定 (4)）: 面の生成器は `stamps` で観点ごとの 3 値を取る。同じ規則のうち
 //! 3（束が古い）だけを当てない——名札を載せた面そのものが次の束の入力（faces/）になるので、面の生成の中で「現在の面から
 //! 組んだ要約値」を求めると固定点が無い。束が古いかは `--check` が数える側の領分で、名札は代わりに要約値の先頭 8 字を出す。
+//! 反証の束（便 42・delivery-42.md §1 (a)〜(d)・ADR-8 決定 (3)）: `--refute` は 止める の所見のうち反証が未のものごとに
+//! 反証の材料の束（finding.yaml・question.yaml・reads.yaml・schema.yaml・sources.txt + digest.txt）を
+//! `<out>/<観点>/refute/<所見の id>/` へ組む（所見 file は触らない・正本は写さず親の要約値 sources.txt で縛る・全部か無しか）。
+//! `--check` は同じ dir の result.yaml（反証役が書く）を欄の決まりで読み、その refute の値を所見の反証の結果として規則 7〜10 に渡す。
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::bundle::{self, CONTENTS, Ceiling, DIGEST_FILE, Files, Rules, Viewpoint};
 use crate::face::R;
@@ -22,6 +26,27 @@ pub const FINDINGS_FILE: &str = "findings.yaml";
 
 /// 所見 file の最上位の欄（床の定数・順は問わない・他の欄は違反）。
 pub const FINDINGS_TOP_LEVEL: [&str; 3] = ["verdict", "record", "findings"];
+
+/// 反証の束の置き場（床の定数・`<out>/<観点の id>/refute/<所見の id>/`）。
+pub const REFUTE_DIR: &str = "refute";
+
+/// 反証の束の中身（床の定数・名の byte 順・digest.txt と result.yaml は数えない）。
+pub const REFUTE_CONTENTS: [&str; 5] = [
+    "finding.yaml",
+    "question.yaml",
+    "reads.yaml",
+    "schema.yaml",
+    "sources.txt",
+];
+
+/// 反証役が書く結果の file（床の定数・反証の束と同じ dir）。
+pub const RESULT_FILE: &str = "result.yaml";
+
+/// 反証の結果の欄（床の定数・他の欄は違反・全部空でない文）。
+pub const RESULT_REQUIRED: [&str; 6] = ["id", "refute", "model", "effort", "at", "bundle"];
+
+/// 反証の規則の文（床の定数・逐語・天井の正本 v0.2 で正本へ移すかは持ち主の裁定の後）。
+pub const REFUTE_RULE: &str = "所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。";
 
 /// 1 回の実行の結果。`stdout` / `stderr` は 1 行ずつ。
 pub struct Outcome {
@@ -224,7 +249,7 @@ fn count_viewpoint(
         }
     }
 
-    // 4.〜6. 所見 file
+    // 4.〜6. 所見 file（止める の所見は反証役の result.yaml も読む・便 42）
     let (sheet, findings, stops, at) = match read_findings(&vp_dir) {
         Ok(Some(root)) => {
             let mut sheet = count_sheet(
@@ -233,14 +258,12 @@ fn count_viewpoint(
                 &ceiling.rules,
                 vp,
                 digest.trim_end_matches('\n'),
+                true,
             );
             reasons.append(&mut sheet.reasons);
-            (
-                Some(sheet),
-                sheet_findings(&root),
-                sheet_stops(&root, &ceiling.rules),
-                record_at(&root),
-            )
+            // 残る 止める の数 = 反証が未 + 反証が 退けた でないもの
+            let stops = sheet.unrefuted.len() + sheet.remaining_stops.len();
+            (Some(sheet), sheet_findings(&root), stops, record_at(&root))
         }
         Ok(None) => {
             reasons.push("所見 file が無い".to_string());
@@ -380,26 +403,31 @@ fn walk(dir: &Path, rel: &str, files: &mut Files) -> R<()> {
 
 /// `<vp_dir>/findings.yaml`。無い = Ok(None)・読めない / parse できない / 重複キー / 最上位が表でない = Err（file 名: 理由）。
 fn read_findings(vp_dir: &Path) -> R<Option<Node>> {
-    let path = vp_dir.join(FINDINGS_FILE);
+    read_table(&vp_dir.join(FINDINGS_FILE), FINDINGS_FILE)
+}
+
+/// 最上位が欄の表の yaml（所見 file・反証の結果 file）。無い = Ok(None)・読めない / parse できない / 重複キー /
+/// 最上位が表でない = Err（file 名: 理由）。
+fn read_table(path: &Path, name: &str) -> R<Option<Node>> {
     if path.is_symlink() {
-        return Err(format!("{FINDINGS_FILE}: symlink は認めない"));
+        return Err(format!("{name}: symlink は認めない"));
     }
     if !path.exists() {
         return Ok(None);
     }
     if !path.is_file() {
-        return Err(format!("{FINDINGS_FILE}: file でない"));
+        return Err(format!("{name}: file でない"));
     }
-    let text = fs::read_to_string(&path).map_err(|e| format!("{FINDINGS_FILE}: 読めない: {e}"))?;
-    let doc = yaml::parse(&text).map_err(|e| format!("{FINDINGS_FILE}: parse できない: {e}"))?;
+    let text = fs::read_to_string(path).map_err(|e| format!("{name}: 読めない: {e}"))?;
+    let doc = yaml::parse(&text).map_err(|e| format!("{name}: parse できない: {e}"))?;
     if let Some(d) = doc.duplicates.first() {
         return Err(format!(
-            "{FINDINGS_FILE}: {} 行: 同じ表に同じキー「{}」が 2 度ある",
+            "{name}: {} 行: 同じ表に同じキー「{}」が 2 度ある",
             d.line, d.key
         ));
     }
     if doc.root.as_map().is_none() {
-        return Err(format!("{FINDINGS_FILE}: 最上位が欄の表でない"));
+        return Err(format!("{name}: 最上位が欄の表でない"));
     }
     Ok(Some(doc.root))
 }
@@ -418,7 +446,16 @@ struct Sheet {
     refuted_stops: Vec<String>,
 }
 
-fn count_sheet(vp_dir: &Path, root: &Node, rules: &Rules, vp: &Viewpoint, digest: &str) -> Sheet {
+/// `results` = 止める の所見ごとに反証役の result.yaml も読む（`--check`・便 42 §1 (d)）。`--refute` は所見 file の欄の
+/// 決まりだけを数える（result.yaml は在るかどうかだけ見る）。
+fn count_sheet(
+    vp_dir: &Path,
+    root: &Node,
+    rules: &Rules,
+    vp: &Viewpoint,
+    digest: &str,
+    results: bool,
+) -> Sheet {
     let mut sheet = Sheet {
         reasons: Vec::new(),
         verdict: String::new(),
@@ -463,7 +500,15 @@ fn count_sheet(vp_dir: &Path, root: &Node, rules: &Rules, vp: &Viewpoint, digest
 
     // findings = 所見の一覧
     if let Some(findings) = root.get("findings") {
-        count_findings(vp_dir, findings, rules, vp, reads.as_ref(), &mut sheet);
+        count_findings(
+            vp_dir,
+            findings,
+            rules,
+            vp,
+            reads.as_ref(),
+            results,
+            &mut sheet,
+        );
     }
     sheet
 }
@@ -556,6 +601,7 @@ fn count_findings(
     rules: &Rules,
     vp: &Viewpoint,
     reads: Option<&BTreeSet<String>>,
+    results: bool,
     sheet: &mut Sheet,
 ) {
     let Some(items) = findings.as_seq() else {
@@ -645,6 +691,22 @@ fn count_findings(
             .and_then(Node::as_str)
             .unwrap_or_default();
         if rules.weight_refute.iter().any(|w| w == weight) {
+            // 反証役の result.yaml（便 42 §1 (d)）: 正しく読めればその値を所見の反証の結果にする。所見 file の refute の欄と
+            // 両方在れば同じ値だけ可
+            let result = if results && id != "?" {
+                read_result(vp_dir, &id, rules, &mut sheet.reasons)
+            } else {
+                None
+            };
+            if let (Some(r), Some(Some(f))) = (&result, &refute)
+                && r != f
+            {
+                sheet.reasons.push(format!("反証の結果が 2 つ（{id}）"));
+            }
+            let refute = match result {
+                Some(r) => Some(Some(r)),
+                None => refute,
+            };
             match refute {
                 None => sheet.unrefuted.push(id.clone()),
                 Some(Some(v)) if v == "退けた" => sheet.refuted_stops.push(id.clone()),
@@ -652,6 +714,110 @@ fn count_findings(
             }
         }
     }
+}
+
+// ── 反証の結果 file を読む（便 42・§1 (d)）──
+
+/// 反証の束の dir `<vp_dir>/refute/<所見の id>/`。id が dir の名にできない形（空・`.`・`..`・区切りを含む）なら None。
+fn refute_dir(vp_dir: &Path, id: &str) -> Option<PathBuf> {
+    let unsafe_name = id.is_empty()
+        || id == "."
+        || id == ".."
+        || id.contains('/')
+        || id.contains('\\')
+        || id.contains('\0');
+    (!unsafe_name).then(|| vp_dir.join(REFUTE_DIR).join(id))
+}
+
+/// `<vp_dir>/refute/<id>/result.yaml`。無い = None（反証が未）。在れば欄の決まりで読み、違反は全部
+/// 「反証の結果 file: <id>: <理由>」で `reasons` へ（そのときも None）。正しく読めたときだけ refute の値。
+fn read_result(
+    vp_dir: &Path,
+    id: &str,
+    rules: &Rules,
+    reasons: &mut Vec<String>,
+) -> Option<String> {
+    let dir = refute_dir(vp_dir, id)?;
+    let path = dir.join(RESULT_FILE);
+    if !path.exists() && !path.is_symlink() {
+        return None;
+    }
+    let mut why = Vec::new();
+    let value = count_result(&dir, id, rules, &mut why);
+    if why.is_empty() {
+        return value;
+    }
+    for w in why {
+        reasons.push(format!("反証の結果 file: {id}: {w}"));
+    }
+    None
+}
+
+/// result.yaml の欄の決まり: 最上位は表・欄は `RESULT_REQUIRED` の 6 つだけで全部空でない文・id は所見の id・refute は
+/// 天井の正本の値域・bundle は同じ dir の digest.txt（末尾の改行を除く）と同じ・digest.txt は 5 つの file から測り直した
+/// 要約値と同じ。理由は全部 `why` へ。
+fn count_result(dir: &Path, id: &str, rules: &Rules, why: &mut Vec<String>) -> Option<String> {
+    let root = match read_table(&dir.join(RESULT_FILE), RESULT_FILE) {
+        Ok(Some(root)) => root,
+        Ok(None) => return None,
+        Err(e) => {
+            why.push(e);
+            return None;
+        }
+    };
+    for (key, _) in root.as_map().expect("最上位は表と読んである") {
+        if !RESULT_REQUIRED.contains(&key.as_str()) {
+            why.push(format!("未知の欄「{key}」"));
+        }
+    }
+    let digest = fs::read_to_string(dir.join(DIGEST_FILE)).ok();
+    let mut refute = None;
+    for key in RESULT_REQUIRED {
+        let Some(node) = root.get(key) else {
+            why.push(format!("{key} が無い"));
+            continue;
+        };
+        let Some(value) = node.as_str() else {
+            why.push(format!("{key} が文でない"));
+            continue;
+        };
+        if value.trim().is_empty() {
+            why.push(format!("{key} が空"));
+            continue;
+        }
+        match key {
+            "id" if value != id => why.push(format!("id「{value}」が所見の id と違う")),
+            "refute" if !rules.refute_values.iter().any(|w| w == value) => {
+                why.push(format!("refute「{value}」が値域の外"));
+            }
+            "refute" => refute = Some(value.to_string()),
+            "bundle" => match &digest {
+                Some(d) if d.trim_end_matches('\n') == value => {}
+                Some(_) => why.push("bundle が digest.txt と違う（読んだ束が違う）".to_string()),
+                None => why.push(format!("{DIGEST_FILE}: 読めない")),
+            },
+            _ => {}
+        }
+    }
+    // 反証の束そのものが digest.txt のとおりか（5 つの file から測り直す）
+    if let Some(d) = &digest {
+        match measure_refute(dir) {
+            Ok(files) if bundle::digest_text(&files) == *d => {}
+            Ok(_) => why.push("反証の束が壊れている（要約値が digest.txt と違う）".to_string()),
+            Err(e) => why.push(format!("反証の束が壊れている（{e}）")),
+        }
+    }
+    refute
+}
+
+/// 反証の束の 5 つの file（digest.txt と result.yaml は数えない）。
+fn measure_refute(dir: &Path) -> R<Files> {
+    let mut files = Files::new();
+    for name in REFUTE_CONTENTS {
+        let bytes = fs::read(dir.join(name)).map_err(|e| format!("{name}: 読めない: {e}"))?;
+        files.insert(name.to_string(), bytes);
+    }
+    Ok(files)
 }
 
 /// place = {doc, at}。doc はその観点の reads.yaml に在る doc・at は空でない文。
@@ -736,23 +902,212 @@ fn sheet_findings(root: &Node) -> usize {
         .map_or(0, <[Node]>::len)
 }
 
-/// 標準出力に出す 残る 止める の数（weight が weights.refute のどれかで refute が 退けた でない所見）。
-fn sheet_stops(root: &Node, rules: &Rules) -> usize {
-    root.get("findings")
-        .and_then(Node::as_seq)
-        .map_or(0, |items| {
-            items
-                .iter()
-                .filter(|item| {
-                    let weight = item
-                        .get("weight")
-                        .and_then(Node::as_str)
-                        .unwrap_or_default();
-                    rules.weight_refute.iter().any(|w| w == weight)
-                        && item.get("refute").and_then(Node::as_str) != Some("退けた")
-                })
-                .count()
+// ── 反証の束を組む（便 42・§1 (a)〜(c)）──
+
+/// `folio ceiling --refute`。`--out` は相対なら `--dir` からの相対・絶対ならそのまま。天井の正本の viewpoints の順に
+/// 所見 file を読み、止める で refute の欄が無く result.yaml も無い所見ごとに反証の束を memory の上で用意し、
+/// 1 件でも用意できなければ何も書かず 2（全部か無しか）。対象が 0 件でも 0。判定を持たないので 1 は返さない。
+pub fn refute(dir: &Path, out: &Path) -> Outcome {
+    let out_dir = dir.join(out);
+    let ceiling = match bundle::load(dir) {
+        Ok(c) => c,
+        Err(e) => return before_viewpoints(e),
+    };
+    if !out_dir.is_dir() {
+        return before_viewpoints(format!("{}: 置き場が無い", out_dir.display()));
+    }
+    let mut stderr = Vec::new();
+    let mut bundles: Vec<(PathBuf, Files)> = Vec::new();
+    for vp in &ceiling.viewpoints {
+        match plan_refutes(&out_dir.join(&vp.id), &ceiling, vp) {
+            Ok(planned) => bundles.extend(planned),
+            Err(reasons) => stderr.extend(
+                reasons
+                    .into_iter()
+                    .map(|r| format!("folio ceiling: {}: {r}", vp.id)),
+            ),
+        }
+    }
+    if !stderr.is_empty() {
+        return Outcome {
+            verdict: Verdict::Unknown,
+            stdout: Vec::new(),
+            stderr,
+        };
+    }
+    let (mut count, mut total) = (0, 0);
+    for (target, files) in &bundles {
+        if let Err(e) = fs::create_dir_all(target) {
+            return before_viewpoints(format!("{}: 作れない: {e}", target.display()));
+        }
+        for (rel, bytes) in files {
+            let path = target.join(rel);
+            if let Err(e) = fs::write(&path, bytes) {
+                return before_viewpoints(format!("{}: 書けない: {e}", path.display()));
+            }
+            count += 1;
+            total += bytes.len();
+        }
+    }
+    Outcome {
+        verdict: Verdict::Pass,
+        stdout: vec![format!(
+            "folio ceiling: 反証の束を組んだ（所見 {}・file {count}・{total} byte）",
+            bundles.len()
+        )],
+        stderr: Vec::new(),
+    }
+}
+
+/// 反証の対象の所見 1 件（所見 file の欄の決まりを通った所見から取る）。
+struct Target {
+    id: String,
+    doc: String,
+    at: String,
+    weight: String,
+    evidence: String,
+    note: Option<String>,
+}
+
+impl Target {
+    /// 止める で refute の欄が無い所見だけ Some（欄は `count_sheet` を通っているので文で在る）。
+    fn from(item: &Node, rules: &Rules) -> Option<Target> {
+        let text = |node: Option<&Node>| node.and_then(Node::as_str).map(str::to_string);
+        let weight = text(item.get("weight"))?;
+        if !rules.weight_refute.contains(&weight) || item.get("refute").is_some() {
+            return None;
+        }
+        let place = item.get("place")?;
+        Some(Target {
+            id: text(item.get("id"))?,
+            doc: text(place.get("doc"))?,
+            at: text(place.get("at"))?,
+            weight,
+            evidence: text(item.get("evidence"))?,
+            note: text(item.get("note")),
         })
+    }
+}
+
+/// 観点 1 つの反証の束を memory の上で用意する。所見 file が無い観点は空。読めない・欄の決まりの違反・親の束が無い・
+/// id が dir の名にできないときは理由の列（Err）。戻り値 = (反証の束の dir, file) の列（所見の順）。
+fn plan_refutes(
+    vp_dir: &Path,
+    ceiling: &Ceiling,
+    vp: &Viewpoint,
+) -> Result<Vec<(PathBuf, Files)>, Vec<String>> {
+    let root = match read_findings(vp_dir) {
+        Ok(Some(root)) => root,
+        Ok(None) => return Ok(Vec::new()),
+        Err(e) => return Err(vec![format!("所見 file: {e}")]),
+    };
+    if !bundle_present(vp_dir) {
+        return Err(vec!["束が無い".to_string()]);
+    }
+    let parent_digest = fs::read_to_string(vp_dir.join(DIGEST_FILE))
+        .map_err(|e| vec![format!("{DIGEST_FILE}: 読めない: {e}")])?;
+    let sheet = count_sheet(
+        vp_dir,
+        &root,
+        &ceiling.rules,
+        vp,
+        parent_digest.trim_end_matches('\n'),
+        false,
+    );
+    if !sheet.reasons.is_empty() {
+        return Err(sheet
+            .reasons
+            .into_iter()
+            .map(|r| format!("所見 file: {r}"))
+            .collect());
+    }
+    let reads = fs::read(vp_dir.join("reads.yaml"))
+        .map_err(|e| vec![format!("reads.yaml: 読めない: {e}")])?;
+    let question = bundle::question_text(vp);
+    let mut planned = Vec::new();
+    for item in root.get("findings").and_then(Node::as_seq).unwrap_or(&[]) {
+        let Some(target) = Target::from(item, &ceiling.rules) else {
+            continue;
+        };
+        let Some(dir) = refute_dir(vp_dir, &target.id) else {
+            return Err(vec![format!(
+                "所見 {}: id を dir の名にできない",
+                target.id
+            )]);
+        };
+        // 反証役が結果を書いた dir は触らない
+        if dir.join(RESULT_FILE).exists() || dir.join(RESULT_FILE).is_symlink() {
+            continue;
+        }
+        let files = refute_files(
+            &target,
+            vp,
+            &question,
+            &reads,
+            &parent_digest,
+            &ceiling.rules,
+        );
+        planned.push((dir, files));
+    }
+    Ok(planned)
+}
+
+/// 反証の束の 5 つ + digest.txt（§1 (c)）。`question` = 観点の束の question.yaml（6 行）・`reads` = 観点の束の
+/// reads.yaml の byte・`parent_digest` = 観点の束の digest.txt の byte（sources.txt）。
+fn refute_files(
+    t: &Target,
+    vp: &Viewpoint,
+    question: &str,
+    reads: &[u8],
+    parent_digest: &str,
+    rules: &Rules,
+) -> Files {
+    let mut files = Files::new();
+    let mut finding = format!(
+        "id: {}\nviewpoint: {}\nplace: {{doc: {}, at: {}}}\nweight: {}\nevidence: |\n{}",
+        t.id,
+        vp.id,
+        t.doc,
+        t.at,
+        t.weight,
+        block(&t.evidence, "  ")
+    );
+    if let Some(note) = &t.note {
+        finding.push_str("note: |\n");
+        finding.push_str(&block(note, "  "));
+    }
+    files.insert("finding.yaml".to_string(), finding.into_bytes());
+    let values = rules.refute_values.join(", ");
+    files.insert(
+        "question.yaml".to_string(),
+        format!(
+            "{question}refute:\n  values: [{values}]\n  rule: |\n{}",
+            block(REFUTE_RULE, "    ")
+        )
+        .into_bytes(),
+    );
+    files.insert("reads.yaml".to_string(), reads.to_vec());
+    files.insert(
+        "schema.yaml".to_string(),
+        format!(
+            "# 反証の結果の欄の決まり（folio ceiling --refute が組んだ・結果は同じ dir の result.yaml に書く）\n\
+             result:\n  required: [{}]\n  values: [{values}]\n",
+            RESULT_REQUIRED.join(", ")
+        )
+        .into_bytes(),
+    );
+    files.insert("sources.txt".to_string(), parent_digest.as_bytes().to_vec());
+    let digest = bundle::digest_text(&files);
+    files.insert(DIGEST_FILE.to_string(), digest.into_bytes());
+    files
+}
+
+/// 区間の文（`|`）の本文: 末尾の改行を落として行ごとに `indent` を付け、各行を改行で閉じる。
+fn block(text: &str, indent: &str) -> String {
+    text.trim_end_matches('\n')
+        .split('\n')
+        .map(|line| format!("{indent}{line}\n"))
+        .collect()
 }
 
 #[cfg(test)]
@@ -767,5 +1122,23 @@ mod findings_tests {
         assert!(!verbatim(&files, b"1\nplain"));
         assert!(!verbatim(&files, b""));
         assert!(!verbatim(&files, b"abc"));
+    }
+
+    #[test]
+    fn findings_refute_dir_rejects_ids_that_cannot_name_a_dir() {
+        let vp = Path::new("out/fidelity");
+        assert_eq!(
+            refute_dir(vp, "F-1"),
+            Some(PathBuf::from("out/fidelity/refute/F-1"))
+        );
+        for id in ["", ".", "..", "a/b", "a\\b"] {
+            assert!(refute_dir(vp, id).is_none(), "{id:?}");
+        }
+    }
+
+    #[test]
+    fn findings_block_indents_every_line_and_ends_with_one_newline() {
+        assert_eq!(block("a", "  "), "  a\n");
+        assert_eq!(block("a\nb\n", "    "), "    a\n    b\n");
     }
 }
