@@ -1,8 +1,8 @@
-//! `folio check` — design-intent の正本 6 file（憲法・rules・語彙・要件書・入口・相談窓口）の形の床（FR5 / FR9）。
+//! `folio check` — design-intent の正本 7 file（憲法・rules・語彙・要件書・入口・相談窓口・天井）の形の床（FR5 / FR9）。
 //! 数えるのは 重複キー・未知の節・欄の非空（便 0）と、参照 id の解決・rules 行の逆参照・憲法の件数（便 1・refs）と、語彙の検査 R-9（便 4・vocab）と、
 //! 判断の記録（adr/）の欄の決まり（便 5・adr）と、判断の記録と正本 4 file・凍結 anchor の列の突き合わせ（便 6・link）と、
 //! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）と、入口の正本の形（便 12・entrance）と、
-//! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）。
+//! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）と、天井の正本の形（便 37・ceiling）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
@@ -12,6 +12,7 @@ use std::path::Path;
 
 use crate::adr;
 use crate::anchor;
+use crate::ceiling;
 use crate::entrance;
 use crate::freeze::{self, After, Flag};
 use crate::intake;
@@ -23,14 +24,15 @@ use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::{self, Node};
 
-/// 正本 6 file（読む順）。
-pub const FILES: [&str; 6] = [
+/// 正本 7 file（読む順）。
+pub const FILES: [&str; 7] = [
     "constitution",
     "rules",
     "vocabulary",
     "srs",
     "index",
     "intake",
+    "ceiling",
 ];
 
 /// 要件書の節の閉じた一覧（要件書は schema 節を持たないので床の定数で持つ）。figures は任意の図の節（便 34・FR15）。
@@ -67,9 +69,10 @@ struct Sources {
     srs: Node,
     index: Node,
     intake: Node,
+    ceiling: Node,
 }
 
-/// `dir` の正本 5 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を `freeze.rs` へ渡す）。
+/// `dir` の正本 7 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を `freeze.rs` へ渡す）。
 pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
     let mut report = Report::default();
     let mut state = None;
@@ -83,6 +86,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
             check_srs(&src.srs, &mut report);
             entrance::check_entrance(&src.index, &src.vocabulary, &mut report);
             intake::check_intake(&src.intake, &src.index, &src.vocabulary, &mut report);
+            ceiling::check_ceiling(&src.ceiling, &src.vocabulary, &mut report);
             refs::check_refs(
                 &src.constitution,
                 &src.rules,
@@ -139,7 +143,8 @@ fn load_all(dir: &Path, report: &mut Report) -> Option<Sources> {
         return None;
     }
     let mut roots: Vec<Option<Node>> = FILES.iter().map(|name| load(dir, name, report)).collect();
-    // 一覧の末尾から取り出す＝相談窓口を先に取り、5 本の割り当てはずらさない
+    // 一覧の末尾から取り出す＝天井を先に取り、6 本の割り当てはずらさない
+    let ceiling = roots.pop()??;
     let intake = roots.pop()??;
     let index = roots.pop()??;
     let srs = roots.pop()??;
@@ -153,6 +158,7 @@ fn load_all(dir: &Path, report: &mut Report) -> Option<Sources> {
         srs,
         index,
         intake,
+        ceiling,
     })
 }
 

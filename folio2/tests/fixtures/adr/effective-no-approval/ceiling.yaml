@@ -1,0 +1,21 @@
+meta: {id: fixture-ceiling, title: 天井, version: v0.1, status: draft}
+verdicts: {values: [合格, 不合格, まだ分からない]}
+weights: {values: [止める, 直す, 参考], refute: [止める]}
+documents:
+  - {id: constitution, file: constitution.yaml}
+  - {id: rules, file: rules.yaml}
+  - {id: vocabulary, file: vocabulary.yaml}
+  - {id: srs, file: srs.yaml}
+  - {id: index, file: index.yaml}
+  - {id: intake, file: intake.yaml}
+  - {id: adr, file: adr/}
+  - {id: design-note, file: design-note/}
+  - {id: ceiling, file: ceiling.yaml}
+viewpoints:
+  - {id: fidelity, name: 忠実さ, reader: 編集者, question: 意味を保っているか。, reads: [{doc: srs, fields: [requirements.plain]}]}
+  - {id: readability, name: 読みやすさ, reader: 非エンジニア, question: 読めるか。, reads: [{doc: index, fields: [shelf]}]}
+  - {id: coherence, name: 文書どうしの整合, reader: 審査役, question: 矛盾は無いか。, reads: [{doc: constitution, fields: [articles]}]}
+  - {id: reality, name: 実態との整合, reader: 実装者, question: 食い違いは無いか。, reads: [{doc: srs, fields: [requirements]}]}
+finding: {required: [id, viewpoint, place, weight, evidence], optional: [refute, note], place: {required: [doc, at]}, refute: {values: [支持, 退けた, まだ分からない]}}
+record: {required: [model, effort, at, read, bundle]}
+bundle: {contents: [sources, faces, question, finding, reads], digest: sha256-files-1}
