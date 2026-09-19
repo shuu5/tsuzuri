@@ -4,6 +4,8 @@
 //! 判断の記録の id の参照・本文の英字語）は便 6 の `link.rs` で、読んだ欄の決まりと判断の記録（`Adr`）と床の定数（`floor_strs`）を渡す。
 //! 凍結 anchor の列そのものは便 7。
 //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、adr/schema.yaml の schema 節はその写し（N-3.1）。
+//! 便 45（ADR-9）から schema 節は生成区間で、`folio schema --write` が `FLOOR` から導出する＝説明の注（`_note` で終わる欄）も
+//! `FLOOR` の側に file の順と字面のまま持つ（床の突き合わせは注を読まない）。床の機械（木の型・突き合わせ）は `schema.rs`。
 //! パターンの文字列は定数として字面で持つだけで、形の判定は字の走査で行う（正規表現は使わない）。
 //! 任意の図の節（figures・便 33）は設計ノートの図の節と同じ形（欄の集合・型は部品目録の一覧・spec は表・refs は
 //! basis と同じ id の形・図の id は 1 本の記録の中で一意）を見る。行き先の解決は床では数えない（面が「まだ分からない」で表す）。
@@ -12,21 +14,9 @@ use std::fs;
 use std::path::Path;
 
 use crate::parts::catalog::FigureType;
+use crate::schema::{Floor, floor_diff, keys_floor, strip_notes};
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
-
-/// 床の定数の木（adr/schema.yaml の schema 節と同じ形）。
-#[derive(Debug)]
-enum Floor {
-    /// 値（yaml の値の字面・引用符を除く）
-    Val(&'static str),
-    /// 数（字面で比べる＝2.0 と 2 は違う）
-    Num(usize),
-    /// 値の一覧
-    Strs(&'static [&'static str]),
-    /// 表（欄の順は schema 節の順）
-    Map(&'static [(&'static str, Floor)]),
-}
 
 /// 欄の集合（required / optional）。
 pub(crate) struct Keys {
@@ -102,24 +92,50 @@ const FIGURE_ENTRY: Keys = Keys {
 /// 図の型の一覧の置き場（部品目録の図の型・写しの字面）。
 const FIGURE_TYPE_ENUM_REF: &str = "design-intent/preview/parts.json figure_type_enum";
 
-macro_rules! keys_floor {
-    ($keys:expr) => {
-        Floor::Map(&[
-            ("required", Floor::Strs($keys.required)),
-            ("optional", Floor::Strs($keys.optional)),
-        ])
-    };
-}
-
-/// 床の定数（値は day-1 の床の FLOOR と同じ）。
-const FLOOR: Floor = Floor::Map(&[
+/// 床の定数（値は day-1 の床の FLOOR と同じ）。`_note` で終わる欄は人が読む説明の注（便 45・ADR-9）で、
+/// adr/schema.yaml の生成区間に在る順と字面のまま持つ＝床の突き合わせ（`floor_diff`）は読まず、`folio schema` の導出だけが使う。
+pub(crate) const FLOOR: Floor = Floor::Map(&[
+    (
+        "floor_note",
+        Floor::Val(
+            "以下の欄（*_note を除く）は床の定数の写し。型も値も違わないこと（2.0 と 2・true と 1 も別）＝1 字でも食い違えば床が落とす。変えるときは床の実装の定数を直し、folio schema --write で生成区間を書き直す（取り込みの審査で読む）",
+        ),
+    ),
     ("id_pattern", Floor::Val(ID_PATTERN)),
+    (
+        "id_pattern_note",
+        Floor::Val(
+            "folio2 の他の id（P-1・R-7・FR1）と同じくゼロ詰めしない。4 桁（ADR-0047）は前の版（v1）か scribe2 の記録＝外部の参照で、床は内部 id として数えない。file 名は id と同じ",
+        ),
+    ),
     ("date_format", Floor::Val(DATE_FORMAT)),
+    (
+        "date_format_note",
+        Floor::Val("date・approval.date・grill.when・amended_by.date は年-月-日"),
+    ),
     ("ruling_pattern", Floor::Val(RULING_PATTERN)),
+    (
+        "ruling_pattern_note",
+        Floor::Val(
+            "裁定 id は台帳の id（f2-648.2 / s2-07l.149 の形）を 1 つ以上含む。実在と本物かは人が台帳と突き合わせる（P-12.2）",
+        ),
+    ),
     ("owner", Floor::Val(OWNER)),
+    (
+        "owner_note",
+        Floor::Val(
+            "条文を改訂する発効した判断の承認者はこの値（N-4）。planner 席は条文を改訂しない判断だけを承認できる",
+        ),
+    ),
     ("required", Floor::Strs(RECORD.required)),
     ("optional", Floor::Strs(RECORD.optional)),
     ("non_empty", Floor::Strs(NON_EMPTY)),
+    (
+        "non_empty_note",
+        Floor::Val(
+            "ほかに床が非空を課す欄 = basis（空の一覧を落とす）・options の name / text / reason・retreat.condition・grill の who / where / summary・approval の ruling / verbatim・amends の field / version / previous_text / new_text・憲法の各条の amended_by の approved_by / ruling / previous_text / rationale・anchor の承認一覧の who / ruling / verbatim",
+        ),
+    ),
     (
         "enums",
         Floor::Map(&[
@@ -130,7 +146,57 @@ const FLOOR: Floor = Floor::Map(&[
             ("surface", Floor::Strs(SURFACE)),
         ]),
     ),
+    (
+        "enums_note",
+        Floor::Val(
+            "retreat_kind は憲法 schema.enums.retreat_kind と同じ（食い違えば落ちる）。surface は対話面を rules 行の id で指す（P-5.2・P-12.1 が名指す R-8 = 持ち主と planner 席の対話面）",
+        ),
+    ),
+    (
+        "status_note",
+        Floor::Map(&[
+            (
+                "proposed",
+                Floor::Val("提案中・拘束力なし（承認欄は空でよい）"),
+            ),
+            (
+                "accepted",
+                Floor::Val(
+                    "発効（承認欄が必須。条文を改訂する判断なら承認者は 持ち主・grill 必須）",
+                ),
+            ),
+            (
+                "retired",
+                Floor::Val(
+                    "廃止（番号は空けたまま・superseded_by に後継の id が必須・P-7.2）。承認欄を持つ retired は「発効していた」判断として amended_by から参照し続けられる。承認者の要求は retired にも掛かる。後継の列（superseded_by をたどる）は accepted に到達すること（輪・未発効の後継は落ちる）",
+                ),
+            ),
+        ]),
+    ),
     ("effective_status", Floor::Strs(EFFECTIVE_STATUS)),
+    (
+        "effective_status_note",
+        Floor::Val(
+            "「発効した判断」= この status かつ承認欄あり。amends が効くのは発効した判断だけ",
+        ),
+    ),
+    (
+        "retreat_kind_note",
+        Floor::Map(&[
+            (
+                "spike",
+                Floor::Val("小さな試し（spike）の結果が条件に当たったら捨てる"),
+            ),
+            (
+                "measure",
+                Floor::Val("数えた値（回数・件数・byte）が条件に達したら捨てる"),
+            ),
+            (
+                "ruling",
+                Floor::Val("持ち主の裁定で捨てる（条件は「何を持ち主に問うか」を書く）"),
+            ),
+        ]),
+    ),
     ("option", keys_floor!(OPTION)),
     (
         "options_rule",
@@ -139,7 +205,27 @@ const FLOOR: Floor = Floor::Map(&[
             ("adopted", Floor::Num(OPTIONS_ADOPTED)),
         ]),
     ),
+    (
+        "options_rule_note",
+        Floor::Val("退けた案を 1 つ以上含み、採用は 1 つ"),
+    ),
     ("retreat", keys_floor!(RETREAT)),
+    (
+        "retreat_note",
+        Floor::Val("P-8.1。床は非空と kind の値域を見る＝「誰が数えるか」は本文に書く（人が見る）"),
+    ),
+    (
+        "basis_note",
+        Floor::Val(
+            "条・要件・rules 行・判断の記録の id。各項は id の形（P-5.2）。条・要件・rules 行の未解決も判断の記録の未解決も欄の決まりの規則として床が落とす（rules 行 R-4 の行と母集団〔正本 4 file・内部 3 空間〕は変えない）",
+        ),
+    ),
+    (
+        "prose_note",
+        Floor::Val(
+            "本文（見出し・問題・決定・案・撤退条件・平易文・帰結）と本 file の平易文の英字語は「日本語（原語）」の形で書く。語彙に無い裸の英字語は欄の決まりの規則として床が落とす（rules 行 R-9 の行と母集団〔憲法・rules・要件書〕は変えない）",
+        ),
+    ),
     (
         "amends_entry",
         Floor::Map(&[
@@ -150,15 +236,84 @@ const FLOOR: Floor = Floor::Map(&[
             ("empty_marker", Floor::Val("（空）")),
         ]),
     ),
+    (
+        "amends_note",
+        Floor::Map(&[
+            (
+                "target",
+                Floor::Val(
+                    "条 id か、改訂の範囲の節（憲法 schema.amendment_scope の各節。articles は条の並び）。現行に無くても列（過去の版の anchor）に在った条 id・節名は名指せる（範囲を狭める改訂・過去の版の記録）。条 id は P-n / A-n / N-n の形で、節名とは衝突しない（衝突する憲法は落ちる）",
+                ),
+            ),
+            (
+                "version",
+                Floor::Val(
+                    "改訂で上がる憲法の版（meta.version の値・例 v1.1）。差分検査はその版を名指す amends だけを見る＝1 本の判断が後の版まで許すことはない",
+                ),
+            ),
+            (
+                "field",
+                Floor::Val(
+                    "欄の道。条 = title / tier / binds / statements.order（規範文の並び・共通の id だけ）/ statements.<規範文 id>.text|pattern|strength。節 = 節の中の欄の道（例 enums.tier・text・mechanism.note）。articles = order（条の並び・共通の id だけ）。写しの欄名は文字列で「.」を含まない（欄の道 a.b と欄名「a.b」の衝突を塞ぐ・含む憲法は落ちる）",
+                ),
+            ),
+            (
+                "value",
+                Floor::Val(
+                    r#"値は型付き。文字列はそのまま（json として読める文字列は引用符付き）、一覧・表・数・真偽・空（null）は json の 1 値（一覧は丸ごと 1 値・例 '["always","ask-first","never"]'・空（null）は null）、空文字は（空）の印、前に無かった欄は previous_text が（新設）、今に無い欄は new_text が（削除）。印を値として持つ欄は落ちる"#,
+                ),
+            ),
+            (
+                "matching",
+                Floor::Val(
+                    "直前 anchor と現行の差分を欄単位で全件並べ、amends と 1 対 1 に消し込む。previous_text は前の値と完全一致・new_text は今の値と完全一致。余った差分も余った記録も落とす。同じ消し込みを列の全区間（隣り合う anchor どうし）でも行う＝次の版を凍結した後に前の版の amends を書き換えても落ちる。`folio check --emit-amends` が最新 anchor との差分を amends にそのまま貼れる形（1 行 1 件の json・- {…}）で印字する（違反があれば stderr に出し、終了コードは素の床と同じ）",
+                ),
+            ),
+            (
+                "renumber",
+                Floor::Val(
+                    "規範文の改番（同じ本文を消して別の id で足す）と、過去の版の anchor に在って最新 anchor に無い番号の再利用は落ちる（P-7.1）。本文も変えて付け替えた改番は「削除 + 新設」と弁別できない（限界）",
+                ),
+            ),
+        ]),
+    ),
     ("grill", keys_floor!(GRILL)),
+    (
+        "grill_note",
+        Floor::Val("A-2.3 の記録（条文を改訂する発効した判断に必須）"),
+    ),
     ("approval", keys_floor!(APPROVAL)),
+    (
+        "approval_note",
+        Floor::Val(
+            "P-12.2（逐語・日付・裁定 id・対話面）。発効した判断に必須。床は逐語の非空・日付の形・裁定 id の形・承認者の値域・対話面の id を見る。凍結後は anchor の承認一覧と 1 字も違わないこと（凍結後の書き換えは落ちる）。台帳 notes の逐語との突合は人が行う",
+        ),
+    ),
     ("amended_by_entry", keys_floor!(AMENDED_BY_ENTRY)),
+    (
+        "amended_by_note",
+        Floor::Val(
+            "発効した判断が条を amends に持つとき、その条の amended_by にその判断を指す 1 件以上が要る（双方向）。amended_by.previous_text はその判断の amends（同じ条）の previous_text のどれかと一致。approved_by はその判断の承認者と一致。来歴は累積し、差分検査はその版の amends だけを見る",
+        ),
+    ),
+    (
+        "supersede_note",
+        Floor::Val(
+            "retired は superseded_by（後継）が必須。後継の supersedes と双方向。後継の列は accepted に到達すること。後継が proposed の間は supersedes を書かない（床は双方向と「後継は発効している」を同時に見るので、下書きは 1 手も置けない）＝承認のときに前の判断の status と superseded_by・後継の status と supersedes の 4 欄を同時に置く",
+        ),
+    ),
     (
         "figures",
         Floor::Map(&[
             ("entry", keys_floor!(FIGURE_ENTRY)),
             ("type_enum_ref", Floor::Val(FIGURE_TYPE_ENUM_REF)),
         ]),
+    ),
+    (
+        "figures_note",
+        Floor::Val(
+            "任意の図の節（便 33・ADR-4 決定 (1)）。図の正本は判断の記録の図の節に型付き記述（spec）で置き、面が図の道具で描く。型（type）は部品目録の図の道具の 5 型（archify-architecture・archify-workflow・archify-sequence・archify-dataflow・archify-lifecycle）。refs は basis と同じ id の形（条・要件・rules 行・判断の記録）で、行き先の解決は床では数えず面が「まだ分からない」で表す。図の id は 1 本の記録の中で一意。設計ノートと同じく、手順図（非エンジニア向け）と順序図（エンジニア向け）の対を指針とする",
+        ),
     ),
     (
         "anchor",
@@ -199,6 +354,46 @@ const FLOOR: Floor = Floor::Map(&[
                 "scope_minimum",
                 Floor::Strs(&["schema", "precedence", "articles"]),
             ),
+        ]),
+    ),
+    (
+        "anchor_note",
+        Floor::Strs(&[
+            "ADR-2 — A-2 / N-4 の差分検査の比較元（P-10.2 の限界を自認する）。file_name の version は憲法 meta.version の値そのまま（v1.0 → constitution-v1.0.yaml）。索引（index_file）は追記のみで、entries の順が列",
+            "projection_article_fields は A-2.2 が名指す条文の 5 欄そのもの（写しの取り方 = 下限）。statement_fields は規範文の写し（中身 = 本文・型・強度・id は欄の道）。他の欄（将来の status 等）は写しの外。scope_minimum は A-2.2 の範囲の下限で、憲法 schema.amendment_scope はこれを含む",
+            "digest = anchor の digest 以外の全欄を json（キー順固定・空白なし・ensure_ascii なし）に直列化した sha256。anchor の全欄（版・直前・範囲と取り方・発効の承認の写し・その版の承認一覧・写しの本体）を覆う。どこか 1 字でも手で変えると落ちる。方式（digest_algo）が床と違う anchor は digest を照合できない（まだ分からない）が、写しの内容の照合と版管理の履歴との照合は行う＝方式の欄を書き換えても改憲の違反は消えない",
+            "版の綴りは v<数>.<数>（version_pattern）。v1.0.0 のような同じ版の別綴りは列に並べない",
+            "現行の写し（憲法 schema.amendment_scope の各節・条は 5 欄）は最新 anchor と一致する（不一致 = 判断の記録と承認を伴わない改憲 → N-4）",
+            "最新 anchor の版は憲法 meta.version と同じ（違えば「版を上げたのに凍結していない」→ A-2。凍結するまで記録の消し込みは測らない＝執筆中に前の版の改訂を告発しない。ただし条の消失・規範文の改番・廃止した番号の再利用は執筆中も測る）",
+            "anchor は索引の entries の順に previous で列をなし、根は first_version で、根の anchor の digest は床の定数（root_digest）と一致する（根は 1 度きり＝別の写し〔別の版管理・根の無い枝・浅い写し・記録の無い版管理〕で同じ版を凍結し直して持ち帰っても落ちる。根を作り直すのは移行＝床の外の手順）。索引にある anchor file が無い（消された）・索引が在って entries が空、なら差分検査は「まだ分からない」（P-10.3・終了コード 2）——ただし版管理の履歴にその anchor が在れば「履歴に在ったが無い」の違反が先に立って終了コード 1 になる（2 になるのは履歴にも anchor が無い写しだけ）。索引に無い anchor・索引と違う digest・列の付け替え・索引だけの削除・索引を空にして anchor file が残る（列の外の anchor）は落とす（終了コード 1）",
+            "発効の承認の写し（meta_approval）は憲法 meta.approval と一致する。承認一覧（approvals）の各項はその判断の記録が実在し、承認欄（承認者・日付・裁定 id・逐語・対話面）と 1 字も違わない",
+            "直前 anchor との差分は欄単位で全件を、その版を名指す発効した判断の amends と 1 対 1 に消し込む（amends_note.matching）。変わった条には amended_by が要る。範囲（amendment_scope）の増減も欄単位の（新設）（削除）で記録する（狭めるときは列に在った節名を対象に名指す）。同じ消し込みを列の全区間（隣り合う anchor どうし）でも行う＝凍結後に過去の版の記録を書き換えても落ちる。発効した判断の amends が名指せる版は、列の根より後の版（隣り合う anchor の差分で消し込める）か執筆中の版（根でない）だけ＝列に無い版（最新版の anchor と索引の項を消して前の版へ戻した細工）も、列の根の版（改訂前が無いので突き合わせる差分が存在しない架空の記録）も落とす",
+            "anchor に在って現行に無い条は落とす（番号は消さない・P-7。条の廃止（status）の機構は day-1 の憲法 schema に無い＝M0 で決める）。規範文 id の重複・改番・廃止した番号の再利用・印を値に持つ欄も落とす",
+            "anchor が 0 本で改訂の記録も無ければ「まだ分からない」（P-10.3・終了コード 2。版管理の履歴に anchor が在れば「履歴に在ったが無い」で終了コード 1）。記録があるのに anchor が無ければ落とす",
+            "版管理（git）との照合＝環境変数（GIT_DIR / GIT_WORK_TREE 等）は継承せず、全ての参照（--all）の履歴を見る。落とすもの = 先頭（HEAD）に anchor があって作業ツリーに無い・履歴に一度でも在った anchor が無い（削除を commit しても）・履歴に在った同じ形式の anchor と中身が違う（差し替え・書き換え。固定の欄・digest の方式・写しの取り方が今と違う古い anchor は移行の痕跡として見ない）・anchors/ か anchor file が版管理から除外（ignore）されている（追跡済みでも、file の pattern でも）・最新版以外の anchor が追跡されていない（凍結した anchor は commit する）・design-intent 自体が版管理の根・版管理の根が design-intent の上に無い。「まだ分からない」（終了コード 2）にするもの = 版管理が無い・commit が 1 つも無い（HEAD 無し）・読めない写し、と anchor が 1 本も無い浅い写し（shallow・anchor が揃った浅い写しは残りの検査で進む）＝写しで回すときも git init + commit の中で回す。版管理は比較元ではなく「消された・差し替えられた anchor」を早く止める補助で、列の真偽は索引と digest と根の定数が受け持つ",
+            "同じ版の anchor は上書きしない・anchor と索引は消さない・空にしない。生成は folio check --freeze-anchor で、全検査が 0 違反かつ「まだ分からない」が無く、版が最新より新しく、差分とその版の発効した判断があるときだけ書く。列の始め直し（最初の版が first_version でない・版管理の先頭か履歴に anchor が在った・記録が在るのに anchor が無い・根の digest が床の定数と違う）は認めない",
+            "正本 4 file（憲法・rules・語彙・要件書）・anchors/・adr/ とその中の file・design-intent 自体は symlink でなく実体",
+        ]),
+    ),
+    (
+        "limits_note",
+        Floor::Strs(&[
+            "前文（precedence）と schema 節の差分は amended_by を持てない（憲法 schema の precedence.optional が空）ので、それを amends に持つ発効した判断の記録の実在と欄単位の対の一致だけを確かめる。前文に amended_by を足すのは A-2 の改訂で行う。",
+            "改番と番号の再利用は「同じ本文の付け替え」「過去の版に在って最新 anchor に無い番号の再登場」の 2 つの形だけを見る。本文も変えて付け替えた改番は弁別できない（削除 + 新設として通る）。",
+            "anchor・この file・床の実装 は同じ作業ツリーの書き込める file である。床が保証するのは「記録の無い改訂が黙って通らない」ことまでで、anchor と索引と憲法を揃えて書き換え digest を計算し直す改竄（発効の承認の逐語・承認一覧を含む）と、床の実装 の定数（写しの取り方・承認者・対話面・裁定 id の形）を書き換える細工は、版管理の履歴と取り込みの審査（PR）が受け持つ。床の実装 の差分は審査で必ず読む。",
+            "凍結と検査は同じ写しの関数を通る（生成物どうしの突き合わせ・P-10.2）。anchor は差分検査の比較元であって P-10.1 の「独立した凍結 anchor」ではない。P-10.1（live は M0）は未発効で、day-1 の代替として tests/floor_cases.yaml を置くが、床の入力ではない（fixture の不在は検出されない）＝M0 で床の入力に取り込む。",
+            "条の mechanism（live・kind・note）・plain・rationale・relations と、憲法 meta（approval を除く）・amendment 章は A-2.2 の条文の定義の外なので差分検査の対象でない。変えるときは P-13.3（設計文書の変更は判断の記録か版付きの文書で残す）に従う＝機械は見ない。",
+            "rules 行（rules.yaml）は本 anchor の外。P-17.2（裁定 id の無い rules 行の変更を落とす）と P-17.4（deny 行を緩めるときは A-2.3 を前置）の機構は憲法のとおり便 0 の検査（CI）で置く＝day-1 の床では効いていない。対話面 R-8 の中身（rules 行の what）も同じく anchor の外＝床は対話面を rules 行の id の実在と値域（surface）で見るだけで、行の本文の書き換えは止めない（便 0 の検査の領分）。",
+            "裁定 id・逐語の「本物か」は床では見ない（形だけ）。--emit-amends の出力を貼れば改訂欄は機械的に埋まるので、記録が在ること自体は判断の内容を保証しない。台帳との突合は人が行う（P-12.2）。",
+            "憲法 meta.approval は初回発効の承認で、以後の版では書き換えない（各版の承認は判断の記録の承認欄と anchor の承認一覧が持つ）。書き換えると全 anchor の写しと食い違って落ちる＝訂正するなら列の凍結し直しが要る。",
+            "写しの取り方（条の 5 欄・規範文の 4 欄）や anchor の形式（固定の欄・digest の方式・列の根）を変える移行は床の実装 の改訂で、既存 anchor と食い違うので「まだ分からない」に落ちる。旧 anchor を消して同じ版で凍結し直す道は版管理の履歴照合が塞ぐ（削除を commit しても認めない）ので、移行は床の外の手順＝旧列の退避先・新列の根・床の定数の変更を判断の記録に書き、取り込みの審査で床の差分と一緒に読む（day-1 では想定しない）。",
+            "「*_note」で終わる欄（この file の説明）は床が一切読まない（欄集合・語彙・参照 id の検査の外）。ここに書いた規則は「散文にしか無い規則」（N-2）であって規則ではない＝規則は *_note でない欄（床の定数の写し）と床の実装 にだけ置き、*_note はその説明に留める。",
+            "改訂来歴（amended_by）のうち床が照合するのは承認者（判断の承認欄と一致）と previous_text（判断の amends と一致）で、理由（rationale）・日付・裁定 id は非空と形だけ＝凍結後に来歴の理由の文を書き換えても落ちない。amends の側は列の全区間の消し込みで固定される。",
+            "条の廃止（status）の機構は day-1 の憲法 schema に無い（article の欄に status が無く、足しても写しの外）。条は消せず、廃止も表せない＝P-7.2「廃止は状態で」を条に適用する形は M0 で決める。",
+            "「日本語（原語）」の括弧の中身は丸ごと英字語の免除になる（機械側の限界）。日本語の専門語の判定は敵対レビュー（天井）。",
+            "終了コードは、違反（1）と「まだ分からない」（2）が同時に立てば 1。",
+            "版管理の見え方（別の版管理・根の無い枝・浅い写し・記録の無い版管理・環境変数）は床の外で選べる。床が応じるのは環境変数の遮断・全ての参照の照合・同じ形式の anchor の中身の照合・列の根の digest の固定まで。履歴ごと書き換える細工（強制の push・参照の付け替え）と、床の実装 の定数（根の digest・写しの取り方・承認者・対話面・裁定 id の形）を書き換える細工は床の外＝取り込みの審査と remote の保護が受け持つ。",
+            "列の根の digest は床の定数なので、床の実装 は folio2 の憲法 v1.0 の凍結に結び付いている。根を作り直す移行では床の定数を直す（取り込みの審査で読む）。",
         ]),
     ),
 ]);
@@ -332,76 +527,6 @@ fn load_schema(adr_dir: &Path, report: &mut Report) -> Option<Node> {
         return None;
     }
     Some(doc.root)
-}
-
-/// 名前が `_note` で終わる欄を（入れ子の表の中も含めて）落とす。
-fn strip_notes(node: &Node) -> Node {
-    match node {
-        Node::Map(entries) => Node::Map(
-            entries
-                .iter()
-                .filter(|(k, _)| !k.ends_with("_note"))
-                .map(|(k, v)| (k.clone(), strip_notes(v)))
-                .collect(),
-        ),
-        other => other.clone(),
-    }
-}
-
-/// 写しと床の定数の違いを欄の道で並べる。
-fn floor_diff(data: &Node, floor: &Floor, path: &str, out: &mut Vec<String>) {
-    match floor {
-        Floor::Map(fields) => {
-            let Some(entries) = data.as_map() else {
-                out.push(format!(
-                    "{}（欄の表でない）",
-                    if path.is_empty() { "schema" } else { path }
-                ));
-                return;
-            };
-            let mut keys: Vec<&str> = entries
-                .iter()
-                .map(|(k, _)| k.as_str())
-                .chain(fields.iter().map(|(k, _)| *k))
-                .collect();
-            keys.sort_unstable();
-            keys.dedup();
-            for key in keys {
-                let p = if path.is_empty() {
-                    key.to_string()
-                } else {
-                    format!("{path}.{key}")
-                };
-                match (fields.iter().find(|(k, _)| *k == key), data.get(key)) {
-                    (None, _) => out.push(format!(
-                        "{p}（未知の欄＝機械が読まない欄は *_note で終える）"
-                    )),
-                    (Some(_), None) => out.push(format!("{p}（欠落）")),
-                    (Some((_, f)), Some(d)) => floor_diff(d, f, &p, out),
-                }
-            }
-        }
-        Floor::Strs(items) => match data.as_seq() {
-            Some(seq) if seq.len() == items.len() => {
-                for (i, (d, v)) in seq.iter().zip(items.iter()).enumerate() {
-                    if d.as_str() != Some(v) {
-                        out.push(format!("{path}[{i}]"));
-                    }
-                }
-            }
-            _ => out.push(path.to_string()),
-        },
-        Floor::Val(v) => {
-            if data.as_str() != Some(v) {
-                out.push(path.to_string());
-            }
-        }
-        Floor::Num(n) => {
-            if data.as_str() != Some(n.to_string().as_str()) {
-                out.push(path.to_string());
-            }
-        }
-    }
 }
 
 /// (c) 判断の記録の file を名前順に読み、(d) の欄を見る。読めた記録を id と組で返す。
@@ -1024,27 +1149,19 @@ mod tests {
         assert_eq!(floor_num(&["owner"]), None);
     }
 
+    /// 床の突き合わせは FLOOR の説明の注（`_note`）を読まない＝注を持つ FLOOR と注の無い写しの差は 0。
     #[test]
-    fn floor_diff_compares_literally() {
-        let doc = yaml::parse("min: '2'\nadopted: 2.0\nextra: x\n").unwrap();
+    fn floor_notes_are_outside_the_diff() {
+        let Floor::Map(fields) = &FLOOR else {
+            unreachable!()
+        };
+        let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
+        assert_eq!(notes, 22);
         let mut out = Vec::new();
-        floor_diff(
-            &doc.root,
-            &Floor::Map(&[
-                ("min", Floor::Num(2)),
-                ("adopted", Floor::Num(1)),
-                ("x", Floor::Strs(&[])),
-            ]),
-            "options_rule",
-            &mut out,
-        );
-        assert_eq!(
-            out,
-            [
-                "options_rule.adopted",
-                "options_rule.extra（未知の欄＝機械が読まない欄は *_note で終える）",
-                "options_rule.x（欠落）"
-            ]
-        );
+        floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
+        // 空の写し = 値の欄が全部（欠落）・注は 1 本も立たない
+        assert_eq!(out.len(), fields.len() - notes, "{out:?}");
+        assert!(out.iter().all(|p| p.ends_with("（欠落）")), "{out:?}");
+        assert!(out.iter().all(|p| !p.contains("_note")), "{out:?}");
     }
 }

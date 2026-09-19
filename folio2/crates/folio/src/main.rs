@@ -1,4 +1,4 @@
-//! folio v2 の命令の入口。便 0・便 1 の `folio check` と便 2 の `folio inject` を持つ。
+//! folio v2 の命令の入口。便 0・便 1 の `folio check` と便 2 の `folio inject`・便 45 の `folio schema` ほかを持つ。
 
 mod adr;
 mod anchor;
@@ -27,6 +27,7 @@ mod parts;
 mod prose;
 mod refs;
 mod render;
+mod schema;
 mod serve;
 mod sha256;
 mod sheet;
@@ -230,6 +231,19 @@ enum Command {
         /// 反証が未の 止める の所見ごとに反証の材料の束（finding・question・reads・schema・sources.txt・digest.txt）を <out>/<観点>/refute/<所見の id>/ へ組む（全部か無しか）
         #[arg(long)]
         refute: bool,
+    },
+    /// 欄の決まりの file の schema 節（生成区間）を床の定数から導出して書く（--write）・検査する（--check）
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
+    Schema {
+        /// 設計文書の置き場（adr/schema.yaml を読む）
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 生成区間を導出で置き換えて書く（既に同じなら書かない・区間の外の byte は変えない）
+        #[arg(long)]
+        write: bool,
+        /// 生成区間と導出の byte 一致を検査する（読めない・印が 1 対でない 2・不一致 1・一致 0）
+        #[arg(long)]
+        check: bool,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -503,6 +517,25 @@ fn main() -> ExitCode {
             }
             for line in &outcome.stderr {
                 eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Schema {
+            dir,
+            write,
+            check: _,
+        } => {
+            let mode = if write {
+                schema::Mode::Write
+            } else {
+                schema::Mode::Check
+            };
+            let outcome = schema::run(&dir, mode);
+            for line in &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("folio schema: {line}");
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)
         }
