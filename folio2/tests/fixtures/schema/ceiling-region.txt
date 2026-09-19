@@ -1,0 +1,24 @@
+schema:
+  top_level: [meta, weights, documents, viewpoints, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。meta・weights・documents・viewpoints は人が書き、schema は生成区間
+  verdicts: {values: [合格, 不合格, まだ分からない]}
+  verdicts_note: 観点ごとの 3 値（順も固定）。1 つでも「まだ分からない」なら天井は合格にならない。何にするかの裁定の正本は要件書 FR5 と判断の記録 ADR-8 決定 (4)
+  viewpoints: [fidelity, readability, coherence, reality]
+  viewpoints_note: 観点の閉じた id の列（順も固定）。viewpoints の行はこの id に 1 つずつ要る。何にするかの裁定の正本は判断の記録 ADR-8 決定 (1)。観点を増やさないことは憲法 N-5
+  documents: [constitution, rules, vocabulary, srs, index, intake, ceiling, adr, design-note]
+  documents_note: 読む文書の閉じた id の集合（順は問わない）。documents の行はこの id に 1 つずつ要る。所見の場所の doc と観点の reads の doc はこの行に解く
+  finding:
+    required: [id, viewpoint, place, weight, evidence]
+    optional: [refute, note]
+    place: {required: [doc, at]}
+    refute: {values: [支持, 退けた, まだ分からない]}
+  finding_note: 所見 1 件の欄の決まり。place は documents の id と、欄か節か行の id。evidence は正本の逐語の引用（床が実在を照合する）。weight の値域と反証に回す重さは人が書く weights の節が持つ
+  record: {required: [model, effort, at, read, bundle]}
+  record_note: 起動の記録の欄（観点ごとに 1 つ・合格の観点にも必須）。1 つでも欠けるか bundle の要約値が束と合わなければ、床がその観点を「まだ分からない」に落とす（判断の記録 ADR-8 決定 (3)）
+  bundle: {contents: [sources, faces, question, finding, reads], digest: sha256-files-1}
+  bundle_note: 材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）
+  refute:
+    contents: [finding.yaml, question.yaml, reads.yaml, schema.yaml, sources.txt]
+    result_required: [id, refute, model, effort, at, bundle]
+    rule: 所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。
+  refute_note: 反証の束の中身（名の byte 順）・反証役が書く結果の file の欄（全部空でない文）・反証役へ渡す規則の文（逐語）
