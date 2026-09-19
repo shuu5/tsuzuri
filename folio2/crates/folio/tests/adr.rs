@@ -1,7 +1,7 @@
 //! `folio check` の判断の記録（adr/）の欄の決まりの歯（便 5・docs/design/delivery-5.md §1）。
 //! tests/fixtures/adr/ の 3 組（違反 0 の最小の手書き 4 file + adr/schema.yaml + adr/ADR-1.yaml に変異 1 つ）で 不合格 1。
 //! 各組の違反はちょうど 1 件で、その種類と場所と文言まで見る（別の理由で落ちた組を緑にしない）。
-//! 図の節（便 33）は design-intent の写し（copy_tree + git init・tests/note.rs の Work と同じ形）の ADR-4.yaml に
+//! 図の節（便 33）は design-intent の写し（copy_tree + git init・tests/note.rs の Work と同じ形）の ADR-1.yaml に
 //! 図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複）で 不合格 1 を見る。
 
 use std::fs;
@@ -53,7 +53,7 @@ fn git(cwd: &Path, args: &[&str]) {
     );
 }
 
-/// 見本の図 1 枚（型 archify-architecture・欄そろい・refs は要件の id）。実の ADR-4.yaml の末尾に足す。
+/// 見本の図 1 枚（型 archify-architecture・欄そろい・refs は要件の id）。実の ADR-1.yaml の末尾に足す。
 const FIGURE: &str = "figures:
   - id: fig-1
     type: archify-architecture
@@ -100,27 +100,27 @@ impl Work {
         self.root.join("design-intent")
     }
 
-    /// 実の ADR-4.yaml の写し。
-    fn adr4(&self) -> PathBuf {
-        self.dir().join("adr/ADR-4.yaml")
+    /// 実の ADR-1.yaml の写し。
+    fn adr1(&self) -> PathBuf {
+        self.dir().join("adr/ADR-1.yaml")
     }
 
-    /// 写しの ADR-4.yaml の末尾に図 1 枚を足す。
+    /// 写しの ADR-1.yaml の末尾に図 1 枚を足す。
     fn with_figure(&self) {
-        let before = fs::read_to_string(self.adr4()).unwrap();
-        assert!(!before.contains("\nfigures:"), "実の ADR-4 が既に図を持つ");
-        fs::write(self.adr4(), format!("{before}{FIGURE}")).unwrap();
+        let before = fs::read_to_string(self.adr1()).unwrap();
+        assert!(!before.contains("\nfigures:"), "実の ADR-1 が既に図を持つ");
+        fs::write(self.adr1(), format!("{before}{FIGURE}")).unwrap();
     }
 
-    /// 写しの ADR-4.yaml の字面の変異（1 か所だけ）。
+    /// 写しの ADR-1.yaml の字面の変異（1 か所だけ）。
     fn mutate(&self, from: &str, to: &str) {
-        let before = fs::read_to_string(self.adr4()).unwrap();
+        let before = fs::read_to_string(self.adr1()).unwrap();
         assert_eq!(
             before.matches(from).count(),
             1,
             "変異の当て先が 1 か所でない: {from:?}"
         );
-        fs::write(self.adr4(), before.replacen(from, to, 1)).unwrap();
+        fs::write(self.adr1(), before.replacen(from, to, 1)).unwrap();
     }
 
     fn check(&self) -> Output {
@@ -191,7 +191,7 @@ fn adr_effective_without_approval_fails() {
 
 // ── 図の節（便 33） ──
 
-/// 写しの ADR-4 に変異を当てた結果が 不合格 1・違反はちょうど 1 件（種別 adr・ADR-4 の場所）で `words` を全部含む。
+/// 写しの ADR-1 に変異を当てた結果が 不合格 1・違反はちょうど 1 件（種別 adr・ADR-1 の場所）で `words` を全部含む。
 fn assert_figure_violation(w: &Work, words: &[&str]) {
     let out = w.check();
     assert_eq!(
@@ -203,7 +203,7 @@ fn assert_figure_violation(w: &Work, words: &[&str]) {
     );
     let v = violations(&out);
     assert_eq!(v.len(), 1, "違反は変異の 1 件だけのはず: {v:?}");
-    assert!(v[0].starts_with("[adr] ADR-4"), "{v:?}");
+    assert!(v[0].starts_with("[adr] ADR-1"), "{v:?}");
     for word in words {
         assert!(v[0].contains(word), "「{word}」が無い: {v:?}");
     }
@@ -268,7 +268,7 @@ fn adr_figure_ids_must_be_unique_fails() {
     w.with_figure();
     // 同じ図をもう 1 枚（id も同じ）
     let second = FIGURE.strip_prefix("figures:\n").unwrap().to_string();
-    let before = fs::read_to_string(w.adr4()).unwrap();
-    fs::write(w.adr4(), format!("{before}{second}")).unwrap();
+    let before = fs::read_to_string(w.adr1()).unwrap();
+    fs::write(w.adr1(), format!("{before}{second}")).unwrap();
     assert_figure_violation(&w, &["図の id「fig-1」が重複"]);
 }

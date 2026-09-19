@@ -25,3 +25,187 @@ consequences:
   - 持ち主が 3 面を開いて読む承認（AC5 の形）は、生成した 3 面を tailnet の内側で見せて取り、逐語と日付を台帳と承認欄に記帳する（P-12.2）。
   - 本判断は条文を改訂しないので A-2.3 の対象外。発効の承認は持ち主から planner 席の対話面（R-8）で取り、承認欄と台帳 f2-648.22 に逐語で記帳する。
 note: 元になった持ち主の回答の逐語は台帳 f2-648 notes 2026-09-17（4 つの問いと、決定 (3) の撤退条件を書くようにという直命）。実測の値（73 行のうち 70 行・図 7 つ・外部の部品 2 本）は planner 席が main 300b61e で数えた。
+# 図の節（便 33 の欄・任意）: 手順図（非エンジニア向け）と順序図（エンジニア向け）の対（持ち主の裁定 2026-09-19・design-note/schema.yaml figures_note）。型付き記述は図の道具の検査（showcase・R-14）を通したもの。往復の回数は台帳 f2-648 notes に記帳。
+figures:
+- id: fig-plain
+  type: archify-workflow
+  caption: 手順図（非エンジニア向け）— ページができるまで。見た目は見本から、文章と数は正本から。名札が目録に無ければ書かない（決定 (1)(2)）
+  refs:
+  - FR4
+  - AC2
+  spec:
+    schema_version: 2
+    diagram_type: workflow
+    meta:
+      title: ページができるまで
+      subtitle: 見た目は見本から、文章と数は正本から。名札が目録に無ければ書かない。
+      quality_profile: showcase
+    lanes:
+    - id: writer
+      label: 書く人
+    - id: folio
+      label: folio
+    - id: checker
+      label: 確かめる係
+    - id: owner
+      label: 持ち主
+    - id: trouble
+      label: だめだったとき
+      variant: exception
+    nodes:
+    - id: write
+      lane: writer
+      col: 0
+      type: external
+      label: 正本を書く
+      sublabel: 決まった書き方で
+      width: 140
+    - id: read
+      lane: folio
+      col: 1
+      type: backend
+      label: 正本を読む
+      sublabel: 文章と数はここから
+      width: 140
+    - id: shape
+      lane: folio
+      col: 2
+      type: backend
+      label: 見本の形に流し込む
+      sublabel: 色・部品・並びは見本
+      width: 150
+    - id: names
+      lane: checker
+      col: 3
+      type: security
+      label: 部品の名札を照らす
+      sublabel: 目録に無い名札は止める
+      width: 150
+    - id: page
+      lane: folio
+      col: 4
+      type: frontend
+      label: ページを書く
+      sublabel: 全部か無しか
+      width: 140
+    - id: walk
+      lane: owner
+      col: 5
+      type: external
+      label: 歩いて読む
+      sublabel: 承認の言葉を記帳
+      width: 140
+    - id: stop
+      lane: trouble
+      col: 3
+      type: security
+      label: ページを書かない
+      sublabel: 何が違うかを知らせる
+      width: 150
+    edges:
+    - id: e1
+      from: write
+      to: read
+      variant: default
+    - id: e2
+      from: read
+      to: shape
+      variant: default
+    - id: e3
+      from: shape
+      to: names
+      label: 渡す
+      variant: emphasis
+    - id: e4
+      from: names
+      to: page
+      label: 合格
+      variant: emphasis
+    - id: e5
+      from: names
+      to: stop
+      label: 不合格
+      variant: security
+      role: error
+    - id: e6
+      from: page
+      to: walk
+      label: 見せる
+      variant: emphasis
+    mainPath:
+    - write
+    - read
+    - shape
+    - names
+    - page
+    - walk
+- id: fig-tech
+  type: archify-sequence
+  caption: 順序図（エンジニア向け）— folio face --face srs が 1 面を組む順序（正本の読み → 部品の表で組む → byte 一致の検査・決定 (3)）
+  refs:
+  - FR4
+  - NFR2
+  spec:
+    schema_version: 1
+    diagram_type: sequence
+    meta:
+      title: folio face --face srs が 1 面を組む順序
+      subtitle: 正本の読みから byte 一致の検査まで（面 index・constitution も同じ形）
+      quality_profile: showcase
+    participants:
+    - id: cli
+      type: external
+      label: 呼び手
+      sublabel: folio face / build
+    - id: face
+      type: backend
+      label: face_srs
+      sublabel: derive（手書き Rust）
+    - id: src
+      type: database
+      label: 正本
+      sublabel: srs.yaml ほか 3 file
+    - id: frame
+      type: backend
+      label: face::Frame
+      sublabel: 部品 enum・folio.css
+    - id: fs
+      type: database
+      label: 出力先
+      sublabel: srs.html
+    messages:
+    - from: cli
+      to: face
+      y: 180
+      label: --face srs --out <out> --write | --check
+      variant: emphasis
+    - from: face
+      to: src
+      y: 222
+      label: yaml-rust2 で読む（escape して差し込む）
+      variant: default
+    - from: src
+      to: face
+      y: 264
+      label: 節・要件・受入基準・数（α・γ）
+      variant: return
+    - from: face
+      to: frame
+      y: 306
+      label: head・章の帯・card・toc を部品 enum（β）で組む
+      variant: emphasis
+    - from: frame
+      to: face
+      y: 348
+      label: HTML の byte 列（見本の class をそのまま）
+      variant: return
+    - from: face
+      to: fs
+      y: 410
+      label: '--write: 書く ／ --check: byte 比較'
+      variant: emphasis
+    - from: face
+      to: cli
+      y: 452
+      label: rc 0 一致 ／ 1 不一致 ／ 2 無い・導出できない
+      variant: dashed

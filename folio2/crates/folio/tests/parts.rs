@@ -65,7 +65,13 @@ fn generated_index(td: &Path) -> PathBuf {
         .arg("--write")
         .output()
         .expect("folio を起動できない");
-    assert_eq!(code(&out), 0, "入口の面を生成できない: {}{}", stdout(&out), stderr(&out));
+    assert_eq!(
+        code(&out),
+        0,
+        "入口の面を生成できない: {}{}",
+        stdout(&out),
+        stderr(&out)
+    );
     page
 }
 

@@ -380,3 +380,186 @@ sources:
   - {id: mockup-v4, name: 見本 v4（承認済み提示層）, where: .claude-session/reports/2026-09-12-mockup-3faces-v4/}
 
 glossary_pointer: vocabulary.yaml（要件書 §8 は見出し + リンクだけ・定義はここに写さない）
+
+# 図の節（便 34 の欄・任意・最上位）: 手順図（非エンジニア向け）と順序図（エンジニア向け）の対（持ち主の裁定 2026-09-19）。型付き記述は図の道具の検査（showcase・R-14）を通したもの。要件の行の figures 欄（図1〜図3）は folio が自前で描く図で、この節とは別。往復の回数は台帳 f2-648 notes に記帳。
+figures:
+- id: fig-plain
+  type: archify-workflow
+  caption: 手順図（非エンジニア向け）— 文書が読める形になって届くまで。機械が確かめられなければ止めて知らせ、合格にすり替えない（FR5・FR7）
+  refs:
+  - GOAL2
+  - FR4
+  - FR5
+  - FR7
+  spec:
+    schema_version: 2
+    diagram_type: workflow
+    meta:
+      title: 文書が読める形になって届くまで
+      subtitle: 書く → 機械が確かめる → ページにする → 私設ネットの中だけで見せる。確かめられなければ止めて知らせる。
+      quality_profile: showcase
+    lanes:
+    - id: writer
+      label: 書く人
+    - id: folio
+      label: folio
+    - id: owner
+      label: 持ち主
+    - id: trouble
+      label: だめだったとき
+      variant: exception
+    nodes:
+    - id: write
+      lane: writer
+      col: 0
+      type: external
+      label: 正本を書く
+      sublabel: 決まった書き方で 1 file
+      width: 140
+    - id: check
+      lane: folio
+      col: 1
+      type: security
+      label: 形を確かめる
+      sublabel: 合格・不合格・まだ分からない
+      width: 150
+    - id: make
+      lane: folio
+      col: 2
+      type: backend
+      label: ページを作る
+      sublabel: 全部か無しか
+      width: 140
+    - id: show
+      lane: folio
+      col: 3
+      type: frontend
+      label: 私設ネットの中で見せる
+      sublabel: 公開ネットには出さない
+      width: 160
+    - id: walk
+      lane: owner
+      col: 4
+      type: external
+      label: 歩いて読む
+      sublabel: 承認の言葉を記帳
+      width: 140
+    - id: stop
+      lane: trouble
+      col: 2
+      type: security
+      label: 止めて知らせる
+      sublabel: 合格にすり替えない
+      width: 140
+    edges:
+    - id: e1
+      from: write
+      to: check
+      label: 渡す
+      variant: emphasis
+    - id: e2
+      from: check
+      to: make
+      label: 合格
+      variant: emphasis
+    - id: e3
+      from: check
+      to: stop
+      label: 不合格・まだ分からない
+      variant: security
+      role: error
+    - id: e4
+      from: make
+      to: show
+      variant: emphasis
+    - id: e5
+      from: show
+      to: walk
+      label: 見せる
+      variant: emphasis
+    mainPath:
+    - write
+    - check
+    - make
+    - show
+    - walk
+- id: fig-tech
+  type: archify-sequence
+  caption: 順序図（エンジニア向け）— folio check → build → serve の順序と終了コード（床の 3 値・全部か無しか・tailnet の外への bind の拒否）
+  refs:
+  - FR5
+  - FR7
+  - N-6
+  spec:
+    schema_version: 1
+    diagram_type: sequence
+    meta:
+      title: folio check → build → serve の順序と終了コード
+      subtitle: 床の 3 値、全部か無しかの書き出し、tailnet の外への bind の拒否
+      quality_profile: showcase
+    participants:
+    - id: cli
+      type: external
+      label: 呼び手
+      sublabel: AI か人
+    - id: check
+      type: security
+      label: check.rs
+      sublabel: 床
+    - id: site
+      type: backend
+      label: site.rs
+      sublabel: build
+    - id: faces
+      type: backend
+      label: face_*
+      sublabel: derive ×6 面
+    - id: fs
+      type: database
+      label: 配信先
+      sublabel: --out
+    - id: serve
+      type: cloud
+      label: serve.rs
+      sublabel: tailnet だけ
+    messages:
+    - from: cli
+      to: check
+      y: 180
+      label: folio check --dir design-intent
+      variant: emphasis
+    - from: check
+      to: cli
+      y: 222
+      label: rc 0 ／ 1 ／ 2（合格にすり替えない）
+      variant: return
+    - from: cli
+      to: site
+      y: 264
+      label: folio build --out <out> --write
+      variant: emphasis
+    - from: site
+      to: faces
+      y: 306
+      label: index・constitution・srs・adr ×n・note ×m を memory に導出
+      variant: default
+    - from: faces
+      to: site
+      y: 348
+      label: byte 列 ／ Err なら rc 2（1 byte も書かない）
+      variant: return
+    - from: site
+      to: fs
+      y: 390
+      label: 全部揃ってから書く（他の file は消さない）
+      variant: emphasis
+    - from: cli
+      to: serve
+      y: 452
+      label: folio serve --dir <out> [--host --port]
+      variant: emphasis
+    - from: serve
+      to: cli
+      y: 494
+      label: bind 先が loopback か 100.64.0.0/10 でなければ起動を拒む（N-6.1）
+      variant: dashed

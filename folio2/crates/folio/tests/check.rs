@@ -105,10 +105,14 @@ impl Work {
         self.dir().join("srs.yaml")
     }
 
-    /// 写しの srs.yaml の末尾に図 1 枚を足す。
+    /// 写しの srs.yaml の末尾に図 1 枚を足す。実の要件書が図の節を持つときは、その節（`figures:` 以降・末尾まで）を
+    /// 消してから足す（見る図は見本の 1 枚だけ）。
     fn with_figure(&self) {
         let before = fs::read_to_string(self.srs()).unwrap();
-        assert!(!before.contains("\nfigures:"), "実の要件書が既に図を持つ");
+        let before = match before.find("\nfigures:\n") {
+            Some(at) => format!("{}\n", &before[..at]),
+            None => before,
+        };
         let sep = if before.ends_with('\n') { "" } else { "\n" };
         fs::write(self.srs(), format!("{before}{sep}{FIGURE}")).unwrap();
     }

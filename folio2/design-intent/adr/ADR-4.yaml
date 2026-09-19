@@ -27,3 +27,185 @@ consequences:
   - 道具（archify）の閲覧側の機能のうち folio が捨てるもの（検索・箱の強調・経路の追跡・章立ての案内・発表の動き・画像と動画の書き出し・版管理の行への飛び先・生きた下見）は、要るものだけを folio の部品（部品目録に載せる）として持ち直す。図の本体の意味の属性がその材料になる。版どうしの差分は道具の機械が読める出力（receipt）を型付き記述の側で使う。
   - 本判断は条文を改訂しないので A-2.3 の対象外。発効の承認は持ち主から planner 席の対話面（R-8）で取り、承認欄と台帳 f2-648.5 に逐語で記帳する。
 note: 調査報告（版管理の外・session の記録）= 持ち主の設定の外の置き場 ~/.local/share/folio2/reports/2026-09-15-archify/index.html（tailnet の内側で配信）。実測の要点は台帳 f2-648 notes 2026-09-15。本家 = tt-a1i/archify（許諾 MIT・先頭 851b279・2026-09-14）。
+# 図の節（便 33 の欄・任意）: 手順図（非エンジニア向け）と順序図（エンジニア向け）の対（持ち主の裁定 2026-09-19・design-note/schema.yaml figures_note）。型付き記述は図の道具の検査（showcase・R-14）を通したもの。往復の回数は台帳 f2-648 notes に記帳。
+figures:
+- id: fig-plain
+  type: archify-workflow
+  caption: 手順図（非エンジニア向け）— 図がページに載るまで。folio が持つことと借りた道具に任せること。だめなら前の絵のまま
+  refs:
+  - FR15
+  - R-14
+  spec:
+    schema_version: 2
+    diagram_type: workflow
+    meta:
+      title: 図がページに載るまで
+      subtitle: folio が持つことと、借りた道具に任せること。だめなら前の絵のまま。
+      quality_profile: showcase
+    lanes:
+    - id: writer
+      label: 書く人
+    - id: folio
+      label: folio
+    - id: tool
+      label: 借りた道具
+    - id: trouble
+      label: だめだったとき
+      variant: exception
+    nodes:
+    - id: write
+      lane: writer
+      col: 0
+      type: external
+      label: 図の元を書く
+      sublabel: 文書の正本の中に
+      width: 140
+    - id: pack
+      lane: folio
+      col: 1
+      type: backend
+      label: 機械の形にする
+      sublabel: そのまま渡せる形
+      width: 140
+    - id: check
+      lane: tool
+      col: 2
+      type: security
+      label: 崩れを見る
+      sublabel: 字の重なり・線の交差
+      width: 140
+    - id: draw
+      lane: tool
+      col: 3
+      type: backend
+      label: 絵にする
+      sublabel: 線と箱だけ
+      width: 140
+    - id: pick
+      lane: folio
+      col: 4
+      type: backend
+      label: 絵だけ取り出す
+      sublabel: 色は folio が付ける
+      width: 140
+    - id: place
+      lane: folio
+      col: 5
+      type: frontend
+      label: ページに載せる
+      sublabel: 拡大もできる
+      width: 140
+    - id: keep
+      lane: trouble
+      col: 3
+      type: security
+      label: 前の絵のまま
+      sublabel: まだ分からない、と知らせる
+      width: 140
+    edges:
+    - id: e1
+      from: write
+      to: pack
+      variant: default
+    - id: e2
+      from: pack
+      to: check
+      label: 渡す
+      variant: emphasis
+    - id: e3
+      from: check
+      to: draw
+      label: 合格
+      variant: emphasis
+    - id: e4
+      from: check
+      to: keep
+      label: 不合格
+      variant: security
+      role: error
+    - id: e5
+      from: draw
+      to: pick
+      variant: default
+    - id: e6
+      from: pick
+      to: place
+      label: 載せる
+      variant: emphasis
+    mainPath:
+    - write
+    - pack
+    - check
+    - draw
+    - pick
+    - place
+- id: fig-tech
+  type: archify-sequence
+  caption: 順序図（エンジニア向け）— folio face が図の道具を子の処理で呼ぶ順序と終了コード（決定 (2)(3)(5) の境界）
+  refs:
+  - FR15
+  - R-15
+  spec:
+    schema_version: 1
+    diagram_type: sequence
+    meta:
+      title: folio face が図の道具を子の処理で呼ぶ順序
+      subtitle: 型付き記述の書き出しから終了コードの扱いまで（面 adr・note・srs で同じ）
+      quality_profile: showcase
+    participants:
+    - id: cli
+      type: external
+      label: 呼び手
+      sublabel: folio face / build
+    - id: folio
+      type: backend
+      label: figure.rs
+      sublabel: render
+    - id: node
+      type: cloud
+      label: node
+      sublabel: 18 以上
+    - id: tool
+      type: backend
+      label: archify.mjs
+      sublabel: vendor の写し
+    - id: fs
+      type: database
+      label: 出力先
+      sublabel: adr-<n>.html
+    messages:
+    - from: cli
+      to: folio
+      y: 180
+      label: --face adr --id ADR-n --write
+      variant: emphasis
+    - from: folio
+      to: node
+      y: 222
+      label: 'spawn: deliver <型> spec.json out.html --quality showcase --json'
+      variant: emphasis
+    - from: node
+      to: tool
+      y: 264
+      label: validate → render → check
+      variant: default
+    - from: tool
+      to: node
+      y: 306
+      label: 'rc 0: out.html ／ rc 1: JSON diagnostics'
+      variant: return
+    - from: node
+      to: folio
+      y: 348
+      label: exit status + stdout
+      variant: return
+    - from: folio
+      to: fs
+      y: 410
+      label: 'rc 0: <svg>…</svg> だけ抽出して面ごと書く'
+      variant: emphasis
+    - from: folio
+      to: cli
+      y: 452
+      label: 'rc 1: 終了 2「まだ分からない」・出力先は触らない'
+      variant: dashed

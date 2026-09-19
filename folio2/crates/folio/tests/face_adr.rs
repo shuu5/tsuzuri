@@ -369,10 +369,17 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
             "{id}: 採用は 1 つ"
         );
         let basis = a["basis"].as_vec().unwrap();
+        // 根拠のリンク = basis の数 + 図の節の refs の数（図の枠の「根拠:」も同じ xref・便 33）
+        let figures = a["figures"].as_vec().map_or(0, Vec::len);
+        let fig_refs: usize = a["figures"].as_vec().map_or(0, |v| {
+            v.iter()
+                .map(|f| f["refs"].as_vec().map_or(0, Vec::len))
+                .sum()
+        });
         assert_eq!(
             count("class=\"xref\""),
-            basis.len(),
-            "{id}: 根拠のリンクの数"
+            basis.len() + fig_refs,
+            "{id}: 根拠のリンクの数（basis + 図の refs）"
         );
         assert!(
             !html.contains("（まだ分からない）"),
@@ -387,7 +394,6 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
         assert_eq!(count("</a><span>"), basis.len(), "{id}: 題の span の数");
 
         // 章の帯（5 + 図の章の有無）と承認欄の帯
-        let figures = a["figures"].as_vec().map_or(0, Vec::len);
         assert_eq!(
             count("data-component=\"chapter-deck-band\""),
             5 + usize::from(figures > 0) + 1,
