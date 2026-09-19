@@ -141,7 +141,7 @@ schema:
     skill_listing: forbid
     retry_rules_row: R-7
     retry_record: ledger
-    figures_note: 図の正本は設計ノートの figures 節に型付き記述で置き、別 file にも散文にも持たない（ADR-4 決定 (1)）。生成は要件書 FR15（検査を通らない図は生成しない・前の生成物を上書きしない・凍結 anchor が落ちたら「まだ分からない」・決定 (2)(6)）。図の本体の意味の属性は捨てず（semantic_attrs = keep・決定 (3)）、閲覧の仕掛けは捨て（viewer_chrome = discard・決定 (3)）、意味を表す class は部品目録に載り色・字の大きさ・線の太さは design token で塗る（body_classes・R-3・決定 (3)）。道具の通信する命令は使わず（network_commands = forbid）、AI 向けの説明（skill）として載せない（skill_listing = forbid・R-1 の母集団外・決定 (5)）。修正の往復は R-7 が上限で、往復の記録は台帳に残し撤退条件の測定に使う（retry_record = ledger・決定 (7)）
+    figures_note: 図の正本は設計ノートの figures 節に型付き記述で置き、別 file にも散文にも持たない（ADR-4 決定 (1)）。生成は要件書 FR15（検査を通らない図は生成しない・前の生成物を上書きしない・凍結 anchor が落ちたら「まだ分からない」・決定 (2)(6)）。図の本体の意味の属性は捨てず（semantic_attrs = keep・決定 (3)）、閲覧の仕掛けは捨て（viewer_chrome = discard・決定 (3)）、意味を表す class は部品目録に載り色・字の大きさ・線の太さは design token で塗る（body_classes・R-3・決定 (3)）。道具の通信する命令は使わず（network_commands = forbid）、AI 向けの説明（skill）として載せない（skill_listing = forbid・R-1 の母集団外・決定 (5)）。修正の往復は R-7 が上限で、往復の記録は台帳に残し撤退条件の測定に使う（retry_record = ledger・決定 (7)）。図の対（持ち主の裁定 2026-09-19・f2-648 notes）＝設計ノートの図は、非エンジニア向けの手順図（専門の言葉を使わず「誰が・どの順で・何をして・だめならどうなるか」）と、エンジニア向けの順序図（命令の名・旗・終了コード・file 名をそのまま）を対で置く。見本は design-note/figures.yaml。これは書き方の指針であり床は数えない
   guards:
     in_loop: []
     post: [yaml-form, derived-diff-zero, own-id-space, prose-gate]
