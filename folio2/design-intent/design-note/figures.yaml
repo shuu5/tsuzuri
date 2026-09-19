@@ -41,6 +41,7 @@ figures:
         label: 絵を確かめる係
       - id: trouble
         label: だめだったとき
+        variant: exception
       nodes:
       - id: write
         lane: writer
