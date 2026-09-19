@@ -1,4 +1,4 @@
-# folio2 要件書 — 正本（v1.4・M0 = v1.0 発効 2026-09-12・M1 の要件 = v1.1 2026-09-16・CON1 の改訂 = v1.2 2026-09-17・図 3 の正本 verdicts = v1.3 2026-09-17・判断の記録の面 FR16 / AC14 = v1.4 2026-09-18・用語集の形 = v1.5 2026-09-19・planner 席）
+# folio2 要件書 — 正本（v1.4・M0 = v1.0 発効 2026-09-12・M1 の要件 = v1.1 2026-09-16・CON1 の改訂 = v1.2 2026-09-17・図 3 の正本 verdicts = v1.3 2026-09-17・判断の記録の面 FR16 / AC14 = v1.4 2026-09-18・用語集の形 = v1.5 2026-09-19・天井の要件 FR17 / FR18 = v1.6 2026-09-19・planner 席）
 # 位置: f2-648.1 の中身 3（要件書 M0 の正本）。見本 v4 の srs.html（walk 承認済みの提示層）を起点に G15=A を反映:
 #   分離緩め（憲法の根拠文と数値は生成器が正本から差し込む＝ここには id だけ書く・値を再掲しない）/ 参照の母集合は内部 3 空間
 #   （要件 id・条 id・rules 行 id）で外部 pointer は sources 欄 / P-3 は置き場条へ弱めた（憲法側）/ AC 4→6 / RED test は文 + fixture path /
@@ -9,13 +9,13 @@
 meta:
   id: folio2-srs-m0
   title: 要件書（M0・最初に動く形 ＋ M1・設計ノートと契約表と図の生成）
-  version: v1.5
+  version: v1.6
   status: effective
-  effective_version: v1.5
-  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）・v1.5 = 2026-09-19 発効（glossary_pointer の文言だけ = 要件書 §8 を憲法 §7 と同じ形に・逐語「各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う」・裁定 id f2-648 notes 2026-09-19）
+  effective_version: v1.6
+  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）・v1.5 = 2026-09-19 発効（glossary_pointer の文言だけ = 要件書 §8 を憲法 §7 と同じ形に・逐語「各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う」・裁定 id f2-648 notes 2026-09-19）・v1.6 = 2026-09-19 発効（天井の要件 FR17 / FR18 と受入基準 AC15 / AC16 の追加・逐語「承認する」・裁定 id f2-648.52 notes 2026-09-19・判断の記録 ADR-8）
   generated: 2026-09-12
   promise: 持ち主が易しい質問 5 つに答える（答えなくても推奨で進む）と、入口・憲法・要件書の 3 枚が同じ見た目で生成され、機械検査の結果が必ず表示される。
-  counts: {fr: 16, nfr: 3, ac: 14, con: 9}
+  counts: {fr: 18, nfr: 3, ac: 16, con: 9}
   approval:
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-12, stamp: 起草}
     - {role: レビュー, who: 敵対レビュー（ad-hoc WF wf_5e659fc9-0ed・7 観点・反証 24 + 追加反証 34）, when: 2026-09-12, stamp: review/summary.md}
@@ -30,6 +30,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-18, stamp: "発効（f2-648.39 notes 2026-09-18・対話面 R-8・判断の記録 ADR-7 の発効の承認要求〔要件書 v1.4 を同じ PR で運ぶと明記〕への回答）", verbatim: 承認する, version: v1.4}
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: "v1.5 起草（便 36 の前提）・glossary_pointer の文言だけ（要件書 §8 を憲法 §7 と同じ形にする・要件・受入基準・制約は据え置き）", version: v1.5}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648 notes 2026-09-19 13:1x JST・対話面 R-8・要件書と憲法の用語集の形の違いへの持ち主の指摘 = 裁定）", verbatim: 各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う, version: v1.5}
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: "v1.6 起草（f2-648.52・判断の記録 ADR-8 の草案と同じ PR）・天井の要件 FR17 / FR18 と受入基準 AC15 / AC16 の追加だけ（M0・M1 の要件と受入基準と制約は据え置き・発効は ADR-8 の承認と同時）", version: v1.6}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648.52 notes 2026-09-19 13:3x JST・対話面 R-8・判断の記録 ADR-8 の発効の承認要求〔要件書 v1.6 を同じ承認で運ぶと明記〕への回答）", verbatim: 承認する, version: v1.6}
   effective: 承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。版ごとに承認の行を足し、前の版の行は書き換えない。
   changes_from_v1_0:
     - M1 の要件を新しい番号で足した（FR9〜FR15・AC7〜AC13・CON8〜CON9）。M0 の要件（FR1〜FR8・NFR1〜NFR3・AC1〜AC6・CON1〜CON7）は据え置き（P-7.2）。NFR3 と AC6 の母集団（内部 3 空間）は広げない（ADR-3 決定 (6)）
@@ -307,6 +309,32 @@ requirements:
     milestone: M1
     note: 判断の記録 ADR-7 決定 (1)〜(4)。生成器は手書きのまま（判断の記録 ADR-5 決定 (3)・持ち主の裁定 2026-09-18「推奨で承認する」）。部品目録へ足す部品は最小で、図の型は増やさない。
 
+  - id: FR17
+    title: 天井の材料の束を観点ごとに組む
+    pattern: event
+    strength: must
+    when: 天井の材料を組む命令が実行されたとき
+    shall: folio は天井の正本の観点ごとに、正本の写し（基準）・生成した面の写し・その観点の問いの文・所見の欄の決まり・読む欄の一覧を 1 つの置き場へ決定的に組み、束の要約値を書く。AI は起動しない。
+    plain: AI に読ませる「材料の束」を観点ごとに機械が用意します。AI を動かすのは folio ではなく、いつも AI を動かしている席や器です。
+    basis: [P-3, P-5, P-10, N-5]
+    verify: {method: test, how: 欠陥を 1 つ仕込んだ最小の正本の fixture から束を組み、凍結した期待の束と要約値が一致することを見る, ac: [AC15]}
+    goals: [GOAL4]
+    figures: [図1]
+    milestone: M2
+    note: 判断の記録 ADR-8 決定 (1)(2)。観点は型に依らない 4 つ（忠実さ・読みやすさ・文書どうしの整合・実態との整合）で天井の正本に閉じる。
+  - id: FR18
+    title: 所見の形と天井の 3 値を床で数える
+    pattern: event
+    strength: must
+    when: 所見 file が置かれ、天井の検査が実行されたとき
+    shall: folio は所見 file の欄の決まり・観点の一覧の一致・根拠の逐語の実在・束の要約値の一致・起動の記録の有無を数え、観点ごとに 合格・不合格・まだ分からない を返す。「まだ分からない」の観点が 1 つでもあれば天井を合格にしない。所見の意味の当否は判定しない。
+    plain: AI が返した所見が「決まった形か・根拠が本当に文書にあるか・本当に材料を読んで動いたか」を機械が数えます。中身が正しいかは機械は決めません。1 つでも「まだ分からない」があれば合格にしません。
+    basis: [P-1, P-3, P-4, P-11]
+    verify: {method: test, how: 必須欄を 1 つ欠いた所見 file と要約値の合わない所見 file で「まだ分からない」になり、全観点が合格の fixture でだけ 0 で終わることを見る, ac: [AC16]}
+    goals: [GOAL4]
+    figures: [図1, 図3]
+    milestone: M2
+    note: 判断の記録 ADR-8 決定 (3)(4)(5)。止める所見の反証の 2 段目も同じ欄の決まりで受ける。
 nonfunctional:
   - id: NFR1
     title: AI へ常時渡す説明文の上限
@@ -363,6 +391,8 @@ acceptance:
   - {id: AC14, title: 判断の記録の面のすべての class が部品目録に存在し、目録に無い class は 0, plain: 判断の記録のページに、部品表に載っていない飾りが 1 つも無いことを、機械が数えて見せる。, verifies: [FR16], red_test: {sentence: 目録外 class を 1 つ足した判断の記録の fixture で不合格になり、実の正本の判断の記録では合格になる, fixture: tests/fixtures/face/adr/（最小の判断の記録 1 本 + 目録外 class を足した 1 本）}, milestone: M1}
   - {id: AC12, title: 検査を通らない図は生成されず、前の生成物が残る, plain: わざと崩れた図の記述を入れて走らせ、図が作られず前の図がそのまま残ることを見せる。, verifies: [FR15], red_test: {sentence: 前の生成物を置いた上で、仕上がりの段の検査を通らない型付き記述の fixture を入れると図が生成されず前の生成物の要約値が変わらない, fixture: tests/fixtures/figure/（前の生成物 + 通らない記述 + 通る記述の 3 本）}, milestone: M1}
 
+  - {id: AC15, title: 4 観点の材料の束が凍結 fixture から決定的に組め、束の要約値が期待と一致する, plain: 欠陥を 1 つ仕込んだ小さな文書から、機械が同じ材料の束を毎回同じ形で作れることを見せる。, verifies: [FR17], red_test: {sentence: 凍結 fixture の正本から組んだ束の要約値が期待の値と違えば不合格になり、期待と同じなら合格になる, fixture: tests/fixtures/ceiling/（欠陥を 1 つ仕込んだ最小の正本 4 file + 期待の束 4 つ）}, milestone: M2}
+  - {id: AC16, title: 所見 file の必須欄が欠けるか束の要約値が合わないと「まだ分からない」になり、その観点があると天井は合格にならない, plain: AI の返事が形を守っていない・材料を読まずに書いた、と機械が見抜いて「合格」にしないことを見せる。, verifies: [FR18], red_test: {sentence: 必須欄を 1 つ欠いた所見 file と束の要約値の合わない所見 file で 2 になり、4 観点が形どおりの所見 file でだけ 0 になる, fixture: tests/fixtures/ceiling/（所見 file の合格 4 本 + 欠け 1 本 + 要約値違い 1 本）}, milestone: M2}
 not_frozen: 「60 分以内にできる」「300k token 以下」は、ここには書かない。測定の仕組みが違うので、M1 の実地試験（非エンジニア 1 回）で初めて数値を決める。
 
 constraints:
