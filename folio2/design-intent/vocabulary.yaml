@@ -8,7 +8,7 @@
 terms:
   - {id: source-of-truth, term: 正本・生成物・生成器, en: source of truth / generated artifact / emitter, short: 元になる唯一のファイルと、そこから機械が作る写しと、作る係, def: 正本 = 元になる唯一のファイル（文書 1 つにつき 1 つ）。生成物 = 正本から機械が作ったもの（手で直さない）。生成器 = それを作る係。直したいときは正本を直す。}
   - {id: presentation-layer, term: 提示層, en: presentation layer, short: 人が読むページとその見た目の層, def: 人が読むページと、その見た目（部品・色・字の大きさ）をまとめた層。folio2 では 1 つの生成器だけが持つ（P-2）。}
-  - {id: typed-data, term: 型付きデータ, en: typed data, short: 欄と値の型が決まった表, def: 欄と値の型が決まった表（憲法の正本 YAML・rules 行・部品目録）。機械が読んで検査できる。文章に書いた規則と違い、守らせられる（P-5）。}
+  - {id: typed-data, term: 型付きデータ, en: typed data, short: 欄と値の型が決まった表, def: 欄と値の型が決まった表（憲法の正本 YAML・rules 行・部品目録・実装の型付きの定数）。機械が読んで検査できる。文章に書いた規則と違い、守らせられる（P-5）。実装の型付きの定数 = 道具の中に型を付けて書いた、機械の判定に使う値（欄の集合・値域・閉じた一覧・判定の式）で、これを規則の正本にしているあいだは、人が読める写しを設計文書の置き場の生成区間へ機械が導出する（P-5.6・判断の記録 ADR-9 / ADR-11）。どの定数に掛かり、どれに掛からないかは rules 行 D-11 が持つ。}
   - {id: design-intent, term: 設計文書（design-intent）, en: design-intent, short: 憲法・判断の記録・要件書の 3 つ, def: folio2 の開発を拘束する文書の集まり = 憲法・判断の記録（ADR）・要件書。原則と決定の正本はここ（P-13）。}
   - {id: floor-ceiling, term: 床・天井, en: floor / ceiling, short: 機械が数える検査と、AI が意味を見る検査, def: 床 = 機械が決定的に（何度やっても同じ結果になる形で）検査する層。合格は「壊れていない」の意味。天井 = AI が意味を検査する層（P-3）。}
   - {id: fail-closed, term: 黙って飛ばさない（fail-closed）, en: fail-closed, short: 確かめられなかったら「合格」にしない, def: 確かめられなかったら「合格」にしない、という安全側の倒し方。分からないときは「まだ分からない」と表示する（P-4）。}
@@ -25,7 +25,7 @@ terms:
   - {id: hook-guard, term: 自動の仕掛け（hook）・止める仕掛け（guard）, en: hook / guard, short: 出来事のときに自動で走る仕掛けと、逸脱を止める仕掛け, def: 自動の仕掛け（hook）= ある出来事のときに自動で走る仕掛け。便利だが、それだけでは守られる保証にならない（P-15）。止める仕掛け（guard）= 決まりに反する編集や操作を止める仕掛けと検査の総称。壊れたときに「通す／止める」の極性と「その場／後で」の別を持つ（P-18）。}
   - {id: polarity, term: 極性, en: polarity, short: 「する／しない」と「通す／止める」の向き, def: 規範文なら「〜する」（必ず守る）か「〜しない」（決してしない）か。止める仕掛けなら、壊れたときに「通す」か「止める」か。1 つにつき 1 つの向き（P-18）。}
   - {id: machine-layer, term: 機械のための面, en: machine layer, short: AI が正確に読むための短い表, def: AI が正確に読むための短い表。人は開かなくてよい。}
-  - {id: generated-block, term: 生成区間, en: generated block, short: CLAUDE.md の中で機械が書き換える範囲, def: CLAUDE.md の中で、機械が書き換える印のついた範囲。手で直さない（P-14）。}
+  - {id: generated-block, term: 生成区間, en: generated block, short: file の中で機械が書き換える印のついた範囲, def: file の中で、機械が書き換える印のついた範囲（CLAUDE.md の憲法の写し・欄の決まりの file の決まりの部分）。手で直さない（P-6.2・P-14）。正本は別に在り、機械がそこから導出して書く。}
   - {id: inject, term: 注入, en: inject, short: 憲法の守らせる条を AI の手元へ写すこと, def: 憲法の規範文を持つ条を CLAUDE.md の生成区間へ写すこと。書き込み（--write）と検査（--check）がある（P-14）。}
   - {id: intake, term: 相談窓口（intake）と支度表, en: intake / preparation sheet, short: 何の文書が要るかを決める入口と、その結果の 1 枚, def: 相談窓口 = どの文書を持つかを易しい質問で決める入口。支度表 = その結果（持つ文書・推奨で進めた項目）を 1 枚にしたもの（要件書 FR1）。}
   - {id: delivery, term: 便, en: delivery, short: 変更を 1 まとまりで運ぶ単位, def: 変更を 1 まとまりで運ぶ単位（契約〔何を作るかの約束・台帳に書く〕→ 実装 → 検査 → 取り込み）。運ぶ器は scribe2（CON6）。}
