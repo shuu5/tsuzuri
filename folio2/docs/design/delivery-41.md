@@ -10,11 +10,11 @@
 
 1 周目（2026-09-19・folio2 自身の設計文書）で、読みやすさの審査役が「止める」4 件を出して verdict を 不合格 と書き、反証役が 4 件とも 退けた と判定した後、床（便 39 の規則 9 = verdict が 不合格 で所見が 1 件以上なら 不合格）は「readability: 不合格（所見 13・止める 0）」を返した。止める所見が 1 つも残らないのに不合格が残るのは、審査役の verdict が反証の前の判断だからで、床がそれを 合格 に読み替えるのは最終判断の代行（P-1）になる。本便は、その状態を「止める所見が全部退けられた（再判定待ち）」として まだ分からない に落とし、席か器が審査役に反証の根拠を渡して verdict を書き直す（1 周目でそうした）手順を床の側から促す。
 
-planner の実測（2026-09-19・main 100774d）: crates/folio/src/findings.rs（正規化 759）の観点ごとの 3 値は便 39 の設計文書 §1 (c) の規則 1〜10 の順で、規則 9 の文言「不合格なのに所見が無い」・規則 10 の文言「止める所見が残っている（<id>）」・規則 8 の文言「AI が判定できなかった」を持つ。crates/folio/tests/findings.rs（歯 25 本・正規化 592）。凍結 fixture tests/fixtures/ceiling/findings/ は 10 本（pass-<観点> 4・missing-field・digest-mismatch・fabricated-evidence・stop-unrefuted・stop-upheld・fail-no-findings）で、stop-upheld.yaml は verdict 合格 + 止める F-1 + refute 支持。1 周目の実データ: readability の findings.yaml（verdict 不合格・止める 4 件に refute 退けた）で床が 不合格 を返した。
+planner の実測（2026-09-19・main 100774d・1 回目の run f2-648.57-20260919T073057Z は gate で連結の字〔全角の読点〕を指摘され退役 = 同じ種類の失敗 1 回目・本節はその字を明示した版）: crates/folio/src/findings.rs（正規化 759）の観点ごとの 3 値は便 39 の設計文書 §1 (c) の規則 1〜10 の順で、規則 9 の文言「不合格なのに所見が無い」・規則 10 の文言「止める所見が残っている（<id>）」・規則 8 の文言「AI が判定できなかった」を持つ。crates/folio/tests/findings.rs（歯 25 本・正規化 592）。凍結 fixture tests/fixtures/ceiling/findings/ は 10 本（pass-<観点> 4・missing-field・digest-mismatch・fabricated-evidence・stop-unrefuted・stop-upheld・fail-no-findings）で、stop-upheld.yaml は verdict 合格 + 止める F-1 + refute 支持。1 周目の実データ: readability の findings.yaml（verdict 不合格・止める 4 件に refute 退けた）で床が 不合格 を返した。
 
 (a) 規則 9 の場合分け（便 39 §1 (c) の 9 を次に置き換える・他の規則と文言は変えない）: verdict = 不合格 のとき、
 - 所見が 0 件 → まだ分からない「不合格なのに所見が無い」（従来どおり）。
-- 所見が 1 件以上で、重さが 止める の所見が 1 件以上あり、その全部が refute = 退けた（= 残る止めるが 0）→ まだ分からない「止める所見が全部退けられた（再判定待ち・<id の列・半角の読点で連結>）」。
+- 所見が 1 件以上で、重さが 止める の所見が 1 件以上あり、その全部が refute = 退けた（= 残る止めるが 0）→ まだ分からない「止める所見が全部退けられた（再判定待ち・<id の列>）」。id の列は、複数のときは半角の読点と半角の空白（, の 2 字・便 38 の bundle.rs の一覧と同じ）で連結し、全角の読点（、）は使わない。id が 1 件なら「F-1」の 4 字だけ。
 - それ以外（残る止めるが 1 件以上、または 止める の所見が元々 0 件で審査役が 直す・参考 だけで不合格と判定した）→ 不合格（従来どおり・審査役の判定を代行しない）。
 規則 7（止める に refute が無い → まだ分からない「反証が未」）は先に当たるので、退けた と未の混在は 7 で止まる（変えない）。規則 10（verdict = 合格 で残る止めるが在れば 不合格）は変えない。標準出力の観点の行「<id>: <3 値>（所見 <数>・止める <数>）」の「止める <数>」は残る止めるの数（従来どおり = 退けた は数えない）。
 
