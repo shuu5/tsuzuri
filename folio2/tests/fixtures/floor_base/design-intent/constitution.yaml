@@ -1,0 +1,539 @@
+# folio2 憲法 — 正本（v1.0・発効 2026-09-12・planner 席 fable 5.1）
+#
+# 位置: f2-648.1「day-1 文書」。v0.1（初稿）を敵対レビュー wf_5e659fc9-0ed（7 観点・反証 24 + 追加反証 34・review/summary.md）で
+# 直したもの。裁定 G1〜G16・P1〜P5 に従う。裁定に触れる変更は入れず、承認要求の「論点」として別枠で出す。
+# 読み方（規則ではない・規則は schema: 節と各条の欄が持つ）:
+#   - 規範文は日本語で書く（G10）。専門語は日本語を先に、原語は括弧で添える。型（pattern / strength）は欄に持つ。
+#   - 段（tier）は「実行時の扱い」（G3）。どの段の条も、外すには §6 の改訂（判断の記録 + 裁定 id + 持ち主の承認）が要る。
+#   - 各条は rationale / binds / mechanism を必ず持つ（G1=B / G2=C / G4=A）。数値は条文に書かず rules 行の id で呼ぶ（P-5）。
+#   - 発効前（v0.x）の変更は meta.changes_from_* に列挙してある（当時は binding: false ゆえ改番は P-7 に触れなかった）。以後の改訂は amended_by。
+# 状態: 発効（持ち主の承認 2026-09-12「承認する」・逐語は f2-648.1 notes と meta.approval）。改訂は §6（A-2 / N-4）。
+
+schema:
+  version: 1
+  top_level: [schema, meta, north_star, precedence, articles, rules_pointer, amendment, glossary_pointer, sources]   # 未知の節は検査で落とす（N-3）
+  meta:
+    required: [id, version, status, binding, baseline, generated, owner, author, counts, approval]
+    optional: [changes_from_v0_1, changes_from_v0_2]
+  precedence:
+    required: [text, plain, binds, mechanism, rationale]
+    optional: []
+  article:
+    required: [id, title, tier, binds, statements, plain, rationale, mechanism]
+    optional: [relations, retreat, amended_by, supersedes_v1, note]
+  mechanism:
+    required: [kind, live]
+    optional: [note, stage, polarity]
+    stage_polarity_required_for: [reject, build-check]   # 極性一覧（P-18.3）の元データ
+  amendment_scope: [schema, precedence, articles]         # A-2 / N-4 の baseline diff の母集合（条文 = 各条の id / title / statements / tier / binds）
+  statement:
+    required: [id, pattern, strength, text]
+    one_sentence: true            # 1 規範文 = 1 文（「。」1 つ）
+    one_polarity: true            # strength must-not ⇔ 文末が「〜ない。」／ must・should ⇔ それ以外
+    numbers: forbidden            # 数値は書かず rules 行の id で参照する（P-5）
+    language: ja-first            # 専門語は日本語を先・原語は括弧。裸の英語キーワードを置かない（G10）
+  plain:
+    required: true                # 全枝番の義務を落とさず・足さず・強度を変えない（受入 (f)・R-10）
+  enums:
+    tier: [always, ask-first, never]
+    binds: [tool, practice, both]
+    pattern: [ubiquitous, event, state, unwanted, optional]
+    strength: [must, must-not, should]
+    rationale_kind: [v1-incident, scribe2-article, folio2-ruling]
+    mechanism_kind: [reject, build-check, human-review, none]
+    mechanism_live: [now, M0, delivery-0, M1, adr]   # その機構がいつ実在するか
+    retreat_kind: [spike, measure, ruling]
+    stage: [in-loop, post]                             # 編集時に止める / 事後（生成時・検査時）
+    polarity: [fail-open, fail-closed]                 # 仕掛けが壊れたとき 通す / 止める
+  mechanism_live_meaning:
+    now: 発効（design-intent/ と CLAUDE.md の配置）の時点で、不合格を出せる検査が実在する
+    M0: 要件書 M0 の受入で実在する
+    delivery-0: 便 0（CI と編集時 guard）で実在する
+    M1: M1 で実在する
+    adr: 判断の記録（ADR）の正本 schema が置かれたときに実在する
+  mechanism_kind_meaning:
+    reject: 実行時に機械が操作そのものを拒む（操作は起きない）。操作の口を持たないこと（削除の経路が無い等）も含む
+    build-check: 生成・検査の時点で機械が判定し、不合格なら成果物を出さない
+    human-review: 人が目で確かめる（機械可読な根拠があればそれを見る）
+    none: 機構なし（note に理由が必須）
+  mechanism_live_rule: kind が reject / build-check でも live が now でない条は、その検査結果を「まだ分からない」として出す（P-4.2）。
+  tier_mechanism_allowed:         # G3「never = やろうとしたら機械が拒む」を検査できる形にした許容集合
+    always: [reject, build-check, human-review, none]
+    ask-first: [human-review, reject, build-check]   # 「聞いたか」を機械が確かめる形（A-2 の baseline diff）も座れる
+    never: [reject, build-check]
+  tier_precedence: [never, ask-first, always]   # 段どうしが衝突したときの優先（前文が言う）
+  preamble: precedence            # precedence は条ではなく全条に先立つ前文（scribe2 と同じ扱い・F9）
+
+meta:
+  id: folio2-constitution
+  version: v1.0
+  status: effective
+  binding: true                   # 発効済み。この版が P-7 / A-2 / N-4 の baseline
+  baseline: "初回発効の commit（hash は台帳 f2-648.1 notes に記帳。file は自分の commit hash を持てない）"
+  generated: 2026-09-12
+  owner: 持ち主（shuu5）
+  author: planner 席（AI・fable 5.1）
+  counts:
+    always: 17
+    ask-first: 4
+    never: 6
+  approval: {who: 持ち主（shuu5）, date: 2026-09-12, ruling: "f2-648.1 notes 2026-09-12 20:2x（発効承認）", verbatim: 承認する, surface: 持ち主と planner 席の対話面（R-8）}
+  changes_from_v0_2:
+    - "回帰レビュー（review-v0.2）の生存指摘を畳んだ: schema に top_level / meta / precedence / mechanism の欄集合と stage・polarity を追加（N-3 の検査を全節へ・P-18 の極性一覧を型から計算）/ A-2・N-4 の母集合を schema 節・前文・条文 5 欄で統一 / A-4.3 の「自分の repo への便」を「公開へ出ない便」へ（G14）/ P-14.1 に前文を明記 / R-4 の母集合を内部 3 空間へ戻し散文の欄まで数える / R-9 の識別子の免除を語彙の identifiers 節（型付きデータ）へ移動 / render に --check・inject_check に区間外の規範語行の検査 / P-17.4（deny 行の値を緩めるときは A-2.3 を前置・scribe2 A2）と R-13（編集時 guard の下限）を追加 / Never の平易文に「機械が止める」を戻し A-2 の平易文に逐語・日付・裁定 id を復帰"
+    - user 裁定 2026-09-12（v0.2 の 7 論点はすべて推奨・条件 = CLAUDE.md には憲法のみ・各条は簡潔に）を受け、規範文 30 本を短くした（意味・極性は不変）
+  changes_from_v0_1:
+    - schema 節を正本の実データとして新設（受入 (a) の出所を正本の内側へ・prose-only-rules-03）
+    - P-9（一致は導出で作る）を P-6 へ畳んだ（P-6.3 / P-6.4・5 lens 一致）。P-9 は欠番
+    - P-18「逸脱は編集の時点で止める」を新設（scribe2 C8.2 / C16 / C16.2 / C11.2 の写し落ち・裁定 #3 の「極性一覧」の受け皿）
+    - N-2.1 を 2 極性に分割・N-2 の機構を写し元と同じ向き（生成物の中の手書き規範文 0）へ
+    - P-3 を置き場の条へ弱め（G15）、P-10.3・A-2.3・A-4.3・P-5.5・P-17.3 を追加
+    - P-6 / P-9 / P-11 / P-14 の出所の誤り（byte 数・日数・型）を一次資料の実測へ訂正
+    - P-2 の改訂来歴を supersedes_v1 へ移動（folio2 自身の改訂ではない）
+    - mechanism に live 欄（いつ実在するか）を追加し、発効時点で動かない検査を正直に書いた
+    - N-6.2 の射程を配信面に絞り、版管理へ載せる生成物の公開は A-1「出す」で扱う（G14 との整合）
+    - relations を型付き（reqs / rules / articles / sections）に変え、rules 行から条への逆参照を全行に付けた
+    - "規範文の削除 2 件: P-3.2 の後段「天井を実装しない版では…まだ分からない」（P-4.2 と重複）と P-13.4 の後段「それまでは v1 の生成器と手作業を道具として使う」（CON4 と重複・note へ）"
+    - "rules 側: R-9〜R-12（受入 (e)(f)(g) と G10 の床）・D-8〜D-9 を新設、行に ruled_at と stage を追加、R-1 の母集団を folio2 所有分に限定"
+    - "語彙側: 段・極性・規範文・やさしく言うと を欄語（field_terms）へ移し、提示層・型付きデータ・設計文書・密度 profile・逐語・対話面・台帳・止める仕掛け・注入・相談窓口・取り消せる／取り消せない・管理下の対象・決定的 を追加、識別子の免除一覧（identifiers）を型付きデータで新設"
+
+north_star:
+  statement: 非エンジニアが AI と相談しながら、必要な設計文書だけを、同じ見た目で迷わず持てる
+  for_whom: 持ち主（非エンジニア）と、それを読む AI。同じページを両方が読む。人には「やさしく言うと」、AI には機械のための面。
+  judged_by: 要件書 §5 受入基準
+
+# 前文（条ではない・全条に先立つ・F9 は承認要求の論点）
+precedence:
+  text: 条どうしが衝突したら「網羅より揃い ／ 速さより黙らないこと ／ 賢さより戻せること」の順で解き、段どうしが衝突したら「絶対にやらない ＞ 確認してから ＞ いつも守る」の順で解く。
+  plain: 迷ったら「全部そろえる」より「そろっている」、「早い」より「黙って飛ばさない」、「賢い」より「元に戻せる」を選びます。段が食い違ったら、強い段（絶対にやらない）が勝ちます。
+  binds: both
+  mechanism: {kind: none, live: now, note: 判断の規則であって機械では検査できない。生成区間（P-14）の先頭に写す。}
+  rationale:
+    - {kind: folio2-ruling, ref: "見本 v4 §0「迷ったらどちらへ倒すか」（walk 承認済み・2026-09-12）"}
+    - {kind: scribe2-article, ref: "順位は条 id を持たず全条に先立つ（scribe2 憲法 §1）"}
+
+articles:
+
+  # ───────────────────────── Always（いつも守る）─────────────────────────
+  - id: P-1
+    title: 判断する道具を作らない
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-1.1, pattern: ubiquitous, strength: must, text: folio は文書を生成し、機械で検査し、結果を知らせるところまでを担う。}
+      - {id: P-1.2, pattern: ubiquitous, strength: must-not, text: folio は要否・採否の最終判断を代行する機能を持たない。}
+    plain: 道具は、書類を作って、間違いを見つけて、知らせるところまで。「これでいいか」を決める機能は、道具の側に作りません。決めるのはあなたです。
+    rationale:
+      - {kind: v1-incident, ref: "research/document-discipline-engine-design §11（判断は人間・「判断する engine」を作らない）"}
+      - {kind: folio2-ruling, ref: "裁定 #1（推奨で進み、支度表で覆す）"}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 公開する命令（subcommand）の一覧を閉じた一覧で持ち、採否を決める口が無いことを検査する。支度表は「推奨で進めた項目」を別枠に出す（FR2・AC1）。}
+    relations: {reqs: [FR1, FR2, AC1]}
+
+  - id: P-2
+    title: 提示層は単一の生成器が所有する
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-2.1, pattern: ubiquitous, strength: must, text: 人が読むページはすべて 1 つの生成器から出力する。}
+      - {id: P-2.2, pattern: ubiquitous, strength: must-not, text: 手書きのページを配信先と入口の導線に置かない。}
+      - {id: P-2.3, pattern: ubiquitous, strength: must, text: 色・字の大きさ・余白の元の値（design token）は 1 か所で定義する。}
+      - {id: P-2.4, pattern: ubiquitous, strength: must, text: 部品・図の型・密度 profile は閉じた一覧（部品目録）で持ち、追加には判断の記録を要する。}
+    plain: 見た目を作る係は 1 つだけ。誰かが手でページを書き足すと、そこから見た目が割れていくので、入口からも締め出します。色や字の元の値も 1 か所。使える部品は決まった一覧にあるものだけで、一覧に足すときは理由の記録が要ります。
+    rationale:
+      - {kind: v1-incident, ref: "提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）"}
+      - {kind: folio2-ruling, ref: "裁定 #4（v1 P-2 を置換）"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、token 由来 100%、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。day-1 は見本の検品道具（check-v4 / probe-v4）で動く。}
+    retreat: {kind: spike, condition: 単一生成器で v1 要件書相当の密度が出せない（spike 5）なら再検討する。}
+    supersedes_v1: {doc: folio v1 憲章, article: "P-2: format は HTML + common.css のみ", ruling: "裁定 #4", rationale: 見た目が割れた原因は形式（HTML か Markdown か）ではなく、所有者が 2 つあったこと。}
+    relations: {reqs: [FR4, NFR2, AC2], rules: [R-3, R-5]}
+
+  - id: P-3
+    title: 検査は二層 — 機械の床と AI の天井
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-3.1, pattern: ubiquitous, strength: must, text: 機械で決定的に検査できる項目は床に置く。}
+      - {id: P-3.2, pattern: ubiquitous, strength: must, text: 意味の検査（読みやすさ・忠実さ）は AI の天井に置く。}
+      - {id: P-3.3, pattern: ubiquitous, strength: must-not, text: 床の合格を、完成や天井の合格として扱わない。}
+    plain: 機械が数えられること（部品が揃っているか等）は機械の側に、意味（分かりやすいか等）は AI の側に置きます。機械の合格は「壊れていない」であって「良い」ではありません。
+    rationale:
+      - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
+      - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 検査の一覧が床・天井のどちらかの層を持つことを検査する。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
+    relations: {reqs: [FR5, AC3], articles: [P-4]}
+
+  - id: P-4
+    title: 黙って飛ばさない（fail-closed）
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-4.1, pattern: ubiquitous, strength: must-not, text: 検査・生成が実行できなかった結果を「異常なし」として扱わない。}
+      - {id: P-4.2, pattern: ubiquitous, strength: must, text: 判定できないものは「まだ分からない」として表に出す。}
+    plain: できなかったことを「問題なし」に化けさせません。分からないときは「分からない」と表示します。
+    rationale:
+      - {kind: v1-incident, ref: "engine-design §12 ②（parser-differential に 2 連続で敗北 → 受理域を絞る fail-closed へ転換）・ADR-0045 no silent skip"}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 床を故意に壊した状態で「まだ分からない」になり、合格にならない（AC3）。判定の値域は 合格 / 不合格 / まだ分からない の 3 値。}
+    relations: {reqs: [FR5, AC3], rules: [D-5, R-14]}
+
+  - id: P-5
+    title: 規則は型付きデータに置き、番号で呼ぶ
+    tier: always
+    binds: both
+    statements:
+      - {id: P-5.1, pattern: ubiquitous, strength: must, text: 規則・閾値・型の一覧は型付きデータ（正本 YAML・rules 行・部品目録）に置く。}
+      - {id: P-5.2, pattern: ubiquitous, strength: must, text: 文書と台帳（bd）からは、規則を id で参照する。}
+      - {id: P-5.3, pattern: ubiquitous, strength: must, text: 文書の種類による違いは、汎用の検査と密度 profile のデータで表す。}
+      - {id: P-5.4, pattern: ubiquitous, strength: must-not, text: 台帳（bd）はタスクと裁定の記帳先であり、規則を置かない。}
+      - {id: P-5.5, pattern: ubiquitous, strength: must, text: 原則と裁定の正本は設計文書、機械が執行する規則の正本は型付きデータとし、置き場をこの 2 面に限る。}
+    plain: 「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。
+    rationale:
+      - {kind: scribe2-article, ref: "C1（規則はデータ）・C14（規律は文書とデータの 2 面）・C15 / C15.2（台帳はタスク専用・id 参照）。C1 の「値は 1 file」は G14=A により folio2 では憲法 / rules / 語彙 / 要件書の 4 file に分ける（意図的な逸脱）"}
+      - {kind: v1-incident, ref: "folio/CLAUDE.md:18「本 hook は tier-2 shaping であって guarantee ではない」＝規則が散文にしか無い・rules.html 248KB の散文"}
+      - {kind: folio2-ruling, ref: "G2=C（二層: 憲法は道具の折れない線・開発規律は型付きデータ）・G14=A"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 参照 id の未解決 0（R-4・双方向・NFR3）。rules 表の各行に裁定 id 列（P-17）。散文だけの規則は N-2 が落とす。day-1 は draft の検査 script（check_draft.py）で動く。}
+    relations: {reqs: [NFR3, AC6], rules: [R-4, R-9, R-10, R-11], articles: [N-2, P-17]}
+
+  - id: P-6
+    title: 正本は 1 つ、ほかはそこから導出する
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-6.1, pattern: ubiquitous, strength: must, text: folio が生成する各文書の正本は YAML 1 file であり、人が読むページはそこから逐語で生成する。}
+      - {id: P-6.2, pattern: ubiquitous, strength: must-not, text: 生成物を手で直さない。}
+      - {id: P-6.3, pattern: ubiquitous, strength: must, text: 同じ内容を 2 つの面が持つとき、一方を正本とし、他方は導出する。}
+      - {id: P-6.4, pattern: ubiquitous, strength: must-not, text: 2 つの面を人が書き、一致を検査で強制する設計を採らない。}
+    plain: 文書 1 つにつき「元のファイル」は 1 つ。見えているページはそこから作った写しなので、直したいときは元を直し、写しを手で直してはいけません。同じことが 2 か所に要るときは片方から自動で作り、「両方を手で書いて合っているか見張る」形は採りません。
+    rationale:
+      - {kind: folio2-ruling, ref: "裁定 #4（正本 YAML・HTML は生成物）"}
+      - {kind: v1-incident, ref: "v1 憲法の正本が手書き HTML（origin 22,748 byte）で、消費側（scribe2）が 834 行の HTML parser を自作した（ADR-0051 層分離・ADR-0045 逐語 extract）。生成物は 90,122 byte"}
+      - {kind: v1-incident, ref: "ADR-0033 §2.3 で Option B（両面手書き + gate）を選び、45 日後（2026-05-29 → 07-13）の ADR-0050 で Option A'（正本から derive）へ全面転換。ADR-0052（手動同鏡は人の規律に依存し実際に drift）"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（render の --check と inject_check の --check・対象は読み物と CLAUDE.md 生成区間）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
+    retreat: {kind: spike, condition: 憲法の改訂表現（del/ins・amended_by）が YAML で表せないと spike 1 で分かったら、憲法だけ二正本 + byte 束縛へ退避する。}
+    relations: {reqs: [FR4, FR6], articles: [P-14]}
+
+  - id: P-7
+    title: 番号は増やすだけ（append only）
+    tier: always
+    binds: both
+    statements:
+      - {id: P-7.1, pattern: ubiquitous, strength: must-not, text: 要件・条文・判断・受入基準の id を再利用・改番しない。}
+      - {id: P-7.2, pattern: ubiquitous, strength: must, text: 廃止は状態（status）で表し、番号は空けたままにする。}
+    plain: 一度つけた番号は、消したり付け替えたりしません。「3 番は廃止」と書いて、3 番の番号は空けたままにします。
+    rationale:
+      - {kind: v1-incident, ref: "ADR-0034 §2.2。v1 では append-only は守られた側で、実害は逆＝48 ADR が全部 accepted で「取り消した決定」を機械で引けない（→ P-7.2）"}
+    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: meta.binding が true の直近版を baseline に取り、id の消失・意味の差し替えを落とす。発効前（binding false）は baseline が無いので検査対象外＝散文の適用除外ではなく機構の定義。}
+    relations: {reqs: [NFR3]}
+
+  - id: P-8
+    title: 撤退条件を決定と同時に書く
+    tier: always
+    binds: practice
+    statements:
+      - {id: P-8.1, pattern: ubiquitous, strength: must, text: 取り消しにくい判断（ADR）には、それを捨てる条件を同時に書く。}
+    plain: 理由の記録（ADR）を書くときは、「うまくいかなかったら、こうなった時点でやめる」も一緒に書きます。
+    rationale:
+      - {kind: v1-incident, ref: "ADR-0047 §2.4（confirmed 偽陽性 1 件で warn へ戻す・判断者は user）"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 判断の記録（ADR）の正本 schema で retreat 欄を必須にする（空なら生成が落ちる）。ADR の正本 schema が置かれるまでは動かない。}
+    relations: {sections: [§6]}
+
+  - id: P-10
+    title: 検査の物差しを、検査されるものから独立に持つ
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-10.1, pattern: ubiquitous, strength: must, text: 検査は、生成側からも検査側からも独立した凍結 anchor（固定の fixture）を 1 本以上持つ。}
+      - {id: P-10.2, pattern: ubiquitous, strength: must-not, text: 生成物どうしの突き合わせを唯一の合格判定にしない。}
+      - {id: P-10.3, pattern: unwanted, strength: must, text: anchor が維持できなくなった検査の結果は「まだ分からない」に落とす。}
+    plain: 「自分で作ったものと自分で作ったものを見比べて OK」は、何でも OK になってしまうので、それだけでは合格にしません。作る側からも検査する側からも独立した、動かない基準を 1 つ別に置きます。その基準が保てなくなった検査は「まだ分からない」に戻します。
+    rationale:
+      - {kind: v1-incident, ref: "ADR-0053（flip 後 ORIG==生成物 で自己比較恒真化・任意値 PASS → 凍結 literal census + round-trip + 敵対 test の三本柱へ。再発ハザードへの予防的退役・user 裁定 2026-07-18）"}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 凍結 fixture を検査の入力に持ち、fixture 不在は「まだ分からない」、fixture との不一致は「不合格」に落とす。}
+    relations: {articles: [P-3, P-4]}
+
+  - id: P-11
+    title: 同じ穴が繰り返したら、止めて人へ渡す
+    tier: always
+    binds: both
+    statements:
+      - {id: P-11.1, pattern: event, strength: must, text: 同じ種類の失敗が rules 行 R-7 の回数を超えたとき、自動の修正を続けず、止めて持ち主へ渡す。}
+    plain: 同じ穴に何度もはまるなら、機械が粘るのをやめて人に相談します。「何度まで」は表（R-7 行）で決めます。
+    rationale:
+      - {kind: v1-incident, ref: "engine-design §12（parser-differential の whack-a-mole を round 1 / round 2 の 2 連続で実証 → user 判断で fail-closed へ転換）"}
+    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。folio が数える面を持つのは便 0 以降。}
+    relations: {rules: [R-7, D-4], articles: [P-1]}
+
+  - id: P-12
+    title: 承認は 1 つの面から、言葉どおりに残す
+    tier: always
+    binds: practice
+    statements:
+      - {id: P-12.1, pattern: ubiquitous, strength: must, text: 持ち主の承認は、rules 行 R-8 が指す 1 つの対話面を通ったものだけを受け取る。}
+      - {id: P-12.2, pattern: ubiquitous, strength: must, text: 受け取った承認は、逐語と日付を添えて台帳の notes と文書の承認欄に記帳する。}
+      - {id: P-12.3, pattern: ubiquitous, strength: must-not, text: 会話の記憶を承認の根拠にしない。}
+    plain: 「OK と言った」は、決まった 1 つの場所（対話面）を通ったものだけ。言葉どおりに、日付つきで、台帳と文書の承認欄の両方に残します。「前に OK と言っていたはず」という記憶は承認の代わりになりません。
+    rationale:
+      - {kind: scribe2-article, ref: "C7 / C7.2（対話面は 1 つ・逐語で記帳）"}
+      - {kind: folio2-ruling, ref: "G8=A（C7 を足す）・運用実績（G1〜G16・P1〜P5 の裁定はすべて bd notes の逐語）・受入 (c)"}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
+    relations: {rules: [R-8, D-10], sections: [§6]}
+
+  - id: P-13
+    title: 拘束するのは設計文書、前の版は道具、自分を作るのは最後
+    tier: always
+    binds: practice
+    statements:
+      - {id: P-13.1, pattern: ubiquitous, strength: must, text: folio2 の開発を拘束するのは設計文書（design-intent）である。}
+      - {id: P-13.2, pattern: ubiquitous, strength: must-not, text: 前の版（folio v1）を、受入の物差し役にも停止権の持ち主にもしない。}
+      - {id: P-13.3, pattern: ubiquitous, strength: must, text: 設計文書の変更は、判断の記録か版付きの文書として残す。}
+      - {id: P-13.4, pattern: state, strength: must, text: 自分のコードの変更を自分の便で運ぶ運用（self-host）は、外部の利用者で受入が通った後に始める。}
+    plain: 何が正しいかを決めるのは設計文書で、前の道具ではありません。前の道具（folio v1）は使ってよいが、正しさの物差しにも止める権限にもしません。設計文書を変えたら、その記録（理由の記録か新しい版）を残します。自分の便で自分のコードを運ぶのは、よそで使ってもらって合格した後＝いちばん最後です。
+    rationale:
+      - {kind: scribe2-article, ref: "C8 / C8.3（前の版を物差しにしない・design-intent の変更は ADR か版付き文書）。C8.2 は P-18 へ"}
+      - {kind: v1-incident, ref: "self-host の層解釈と oracle 死角に ADR 6 本（0044 / 0045 / 0050 / 0051 / 0053 / 0056）"}
+      - {kind: folio2-ruling, ref: "G7=A（C8 を移行条項つきで写す）・G6=A（順序は別条）・要件書 CON4（v1 は読むだけ）"}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: folio2 の生成器・検査器が v1 の path に書き込み口を持たない（CON4）ことを test で固定する。v1 側の guard 設定の目視は開発規律 D-9。}
+    note: scribe2 は ADR-0003 で「成熟宣言 + user go」の解禁 gate を廃止した。folio2 が P-13.4 の順序を残すのは G6=A（順序は別条）の裁定による。それまでは v1 の生成器と手作業を道具として使う（CON4）。
+    relations: {reqs: [CON1, CON4], rules: [D-7, D-9], articles: [A-4, P-18]}
+
+  - id: P-14
+    title: 憲法を AI の手元へ写す（注入）
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-14.1, pattern: event, strength: must, text: folio inject --write を実行したとき、憲法の前文と規範文を持つ条を CLAUDE.md の生成区間へ決定的に導出して書く。}
+      - {id: P-14.2, pattern: event, strength: must, text: folio inject --check は生成区間と正本の差分を検出し、差があれば失敗（非 0）で終える。}
+      - {id: P-14.3, pattern: ubiquitous, strength: must, text: 生成区間の総バイト数は rules 行 R-2 以下に収める。}
+    plain: 憲法の前文と「守らせる条」を、AI が毎回読む場所（CLAUDE.md）に写します。ずれていたら検査が失敗して止まります。写す量には上限（R-2 行）があります。
+    rationale:
+      - {kind: folio2-ruling, ref: "受入 (b)・注入の所有（規格は folio・呼ぶのは consumer・pointer 化は却下）・G9=A（上限は rules 行）・G13=A（母集団は規範文を持つ条）"}
+      - {kind: scribe2-article, ref: "C1.2（人が読む規則の文書は型から生成し、手書きの規範文は 0 行）"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: --check の byte 一致（AC4）。R-2 超過は落とす。生成と検査は同じ導出関数（day-1 は inject_check.py・M0 で folio inject）。注入する欄は R-2 行の projection 欄が定める。同型の実装は scribe2 の xtask gen-claude-md / check claude-md-constitution（条ではなく実装）。}
+    relations: {reqs: [FR6, AC4, NFR1], rules: [R-2, R-12], articles: [P-6]}
+
+  - id: P-15
+    title: 自動の仕掛けに寄りかからない
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-15.1, pattern: ubiquitous, strength: must-not, text: 自動で走る仕掛け（hook）を「守られる保証」として設計しない。}
+      - {id: P-15.2, pattern: ubiquitous, strength: must, text: 編集の時点で止める仕掛けを持つときは、その判定の式を事後の検査が同じ関数で確かめる。}
+    plain: 「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。止める仕掛けを置くなら、後から確かめる検査も同じ物差し（同じ判定の式）で見ます。
+    rationale:
+      - {kind: v1-incident, ref: "folio/CLAUDE.md:18 逐語「本 hook は tier-2 shaping であって guarantee ではない」・ADR-0043 §2.3"}
+      - {kind: v1-incident, ref: "plugin-lib.sh:238 / check-content-boundary.sh:55（hook と事後検査が 2 実装の人間同期＝drift の実体）"}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 編集時の判定の式と事後検査が同一関数であることを test で固定する（advisory ⊆ guarantee）。folio2 に hook が置かれるまでは対象が無い。}
+    note: 見本 v4 では N-1（Never）。G3 の軸（Never = 機械が拒む）では拒む形にできないため Always へ移した。「止める仕掛けを持つこと」自体の義務は P-18。
+    relations: {rules: [D-6], articles: [P-18]}
+
+  - id: P-16
+    title: 設計判断を下す席は、その時点で最上位のモデルで動かす
+    tier: always
+    binds: practice
+    statements:
+      - {id: P-16.1, pattern: ubiquitous, strength: must, text: folio の設計判断を下す席は、その時点で最上位の AI モデルで動かす。}
+      - {id: P-16.2, pattern: ubiquitous, strength: must-not, text: 道具（並列実行・便・作業者）の内側には最上位のモデルを求めない。}
+    plain: 設計を考える席には、そのとき一番賢い AI を使います。手足として動く道具の中まで同じにする必要はありません。
+    rationale:
+      - {kind: folio2-ruling, ref: "user 2026-09-12 15:49 前提 (2)・17:1x 裁定 1 / 4（席のみ・道具の内側は opus まで）・4 層の置き場（憲法 = 性質のみ）"}
+      - {kind: v1-incident, ref: "ADR-0021（不変原則に可変の固有名を書くと下流の更新のたびに改憲を強いられる → 現行のモデル名は要件書 CON5 へ）"}
+    mechanism: {kind: human-review, live: now, note: 席の起動時に model と effort を見る。機械可読な根拠（席の transcript の assistant.model）があるのでそれを見る（目視で取り違えた実績が f2-648.1 notes にある）。現行の該当（モデル名・effort）は要件書 CON5 が持つ。}
+    retreat: {kind: ruling, condition: 「最上位」の判定が割れて運用が止まるなら、要件書 CON で名指しする形へ退避する。}
+    relations: {reqs: [CON5], rules: [D-1, D-2]}
+
+  - id: P-17
+    title: 数値の表を変えるときは、裁定 id を行に付ける
+    tier: always
+    binds: both
+    statements:
+      - {id: P-17.1, pattern: ubiquitous, strength: must, text: rules 表（R-n・D-n）の行の追加・変更は、裁定 id と時刻を行に付ける。}
+      - {id: P-17.2, pattern: unwanted, strength: must, text: 裁定 id の無い rules 行の変更があったら、検査がそれを落とす。}
+      - {id: P-17.3, pattern: ubiquitous, strength: must, text: 初版の行は、この憲法の発効の承認を裁定とみなし、発効時にその id と時刻を全行に付ける。}
+      - {id: P-17.4, pattern: event, strength: must, text: folio の振る舞いを縛る閾値行（deny 種別）の値を緩めるとき、A-2.3 の検証を前置する。}
+    plain: 数値や作法の表を変えるときは、どの決定（裁定の番号）でいつ変えたかを行に書きます。書いていない変更は機械が止めます。最初の表は、この憲法の承認をその決定として扱い、承認のときに番号と日付を全部の行に入れます。機械が止めるための上限をゆるめるときは、改訂と同じように反対側から確かめてからにします。
+    rationale:
+      - {kind: scribe2-article, ref: "C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）"}
+      - {kind: folio2-ruling, ref: "G5=A（A-2 を条文改訂と rules 数値に分割）"}
+    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: rules 行の diff に裁定 id と時刻が無ければ落とす（CI は便 0 以降・それまでは PR の diff を人が見る）。}
+    relations: {rules: [R-1, R-2, R-3, R-4, R-5, R-6, R-7, R-8, R-9, R-10, R-11, R-12, R-13, R-14, R-15, R-16, D-3, D-5, D-8], articles: [A-2]}
+
+  - id: P-18
+    title: 逸脱は編集の時点で止める（極性一覧）
+    tier: always
+    binds: tool
+    statements:
+      - {id: P-18.1, pattern: event, strength: must, text: 編集が設計文書か rules と食い違うとき、その編集を編集の時点で止める。}
+      - {id: P-18.2, pattern: ubiquitous, strength: must-not, text: 事後の検査を、編集の時点で止めることの代わりにしない。}
+      - {id: P-18.3, pattern: ubiquitous, strength: must, text: 止める仕掛け（guard）は「開く／閉じる」の極性と「編集時／事後」の別を型で持ち、その一覧（極性一覧）を生成時に出す。}
+      - {id: P-18.4, pattern: unwanted, strength: must, text: 編集の時点で止める guard が 1 本も無い構成なら、検査がそれを落とす。}
+    plain: 決まりに反する書き換えは、書き換えたその場で止めます。「後で検査するから」は、その場で止めることの代わりになりません。止める仕掛けと検査には「壊れたら通す／止める」「その場／後で」の札を付けて一覧にし、その場で止める仕掛けが 1 つも無い状態は検査で落とします。
+    rationale:
+      - {kind: scribe2-article, ref: "C8.2（design-intent と食い違う編集は編集時に止める）・C16 / C16.2（事後検証を代替にしない・編集時 guard 0 の構成を CI が拒む）・C11.2（極性の型と build 時の極性一覧）"}
+      - {kind: folio2-ruling, ref: "裁定 #3（scribe2 の機構条のうち「極性一覧」を写す）・G3=A（撤去コストは共通 1 行）"}
+    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: 各条の mechanism の stage / polarity 欄と rules 行の stage 列から極性一覧を生成し、編集時（in-loop）の本数が rules 行 R-13 の下限を割れば不合格（day-1 は check_draft.py が一覧を出す）。便 0 で最初の編集時 guard（契約の書き込み範囲の外への編集を止める・scribe2 提供）が入るまでは「まだ分からない」。}
+    note: v0.1 では P-15.2 の条件節（「持つときは」）に潰れ、scribe2 C16 が課す義務が落ちていた（敵対レビュー scribe2-consistency-02・-04）。
+    relations: {rules: [R-13], articles: [P-15, P-13, P-4]}
+
+  # ───────────────────────── Ask-first（実行前に持ち主へ聞く）─────────────────────────
+  - id: A-1
+    title: 消す・外へ出す・使う は確認してから
+    tier: ask-first
+    binds: both
+    statements:
+      - {id: A-1.1, pattern: event, strength: must, text: 既存の文書やデータを消す、外へ出す、外部の道具や鍵を使う（課金を含む）操作を行うとき、実行前に rules 行 R-8 の対話面で持ち主の確認を得る。}
+    plain: 「消す」「外に出す（公開の場所へ置くことを含む）」「外の道具や鍵を使う（お金がかかるものを含む）」の 3 つは、道具が勝手にやらず、決まった対話の場所であなたに確認してからにします。
+    rationale:
+      - {kind: scribe2-article, ref: "A1（3 クラスの操作・C7 の対話面を通す）"}
+      - {kind: folio2-ruling, ref: "G8=A・G14=A（承認済み生成物の PUBLIC repo への commit は「出す」＝人手 commit 1 本を確認の上で）"}
+    mechanism: {kind: human-review, live: now, note: 会話面で確認し逐語を記帳（P-12）。便 0 以降は契約の自己申告（3 クラス）で便が止まり、承認の記帳で再開する（scribe2 の仕組み）。N-1 / N-6 が拒む操作は確認の対象にならない（拒まれる）。}
+    relations: {rules: [R-8], articles: [N-1, N-6, P-12, A-4]}
+
+  - id: A-2
+    title: 憲法の条文を変えるとき
+    tier: ask-first
+    binds: practice
+    statements:
+      - {id: A-2.1, pattern: event, strength: must, text: 条文を改訂するとき、判断の記録と撤退条件を先に書き、持ち主の承認（逐語・日付・裁定 id）を得てから版を上げる。}
+      - {id: A-2.2, pattern: ubiquitous, strength: must-not, text: 条文（id・見出し・規範文・段・縛る相手）と schema 節・前文が 1 文字も変わらない変更を改訂として扱わない。}
+      - {id: A-2.3, pattern: event, strength: must, text: 改訂の前に、その改訂が主張する利益を敵対的に検証し（grill）、記録を判断の記録に添える。}
+    plain: この文書は勝手に書き換えません。理由と撤退条件を書き、その改訂が本当に良いかを反対側から確かめてその記録を理由の記録に添え、あなたの OK（言葉どおり・日付・裁定の番号）を残してから版を上げます。条の番号・見出し・守らせる文・段・縛る相手と、決まりの型（schema）・前文のどれ 1 つも変わらない直しは「改訂」ではありません。
+    rationale:
+      - {kind: scribe2-article, ref: "A2（主張された利益の grill 検証を前置 → user 裁定）"}
+      - {kind: v1-incident, ref: "ADR-0056 §2.1（宣言内容を 1 文字も変えない生成経路の flip だけが「変更」に該当しない。宣言文・段・id・見出しの変更は対象）"}
+      - {kind: folio2-ruling, ref: "G5=A（rules 数値の変更は P-17 へ分離）・G8=A（M4 は但し書き）"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本の baseline diff — 母集合は schema 節・前文・各条の id / title / statements / tier / binds（amendment_scope）。差分には対応する amended_by（adr・date・approved_by・ruling・previous_text・rationale）が要り、amended_by.adr が指す判断の記録の実在も同じ検査が確かめる（R-4 の母集合＝内部 3 空間は変えない・G15）。差分 0 なら A-2.2 の非改訂（自己申告では適用しない）。無ければ N-4 が落とす。}
+    relations: {rules: [R-4], articles: [N-4, P-8, P-17], sections: [§6]}
+
+  - id: A-3
+    title: 依存する外部ソフトの増減
+    tier: ask-first
+    binds: tool
+    statements:
+      - {id: A-3.1, pattern: event, strength: must, text: 外部ライブラリを増やす・減らすとき、予算（rules 行 R-6）と使ってよい条件（ライセンス）に照らし、持ち主の確認を得る。}
+    plain: 他人の作った部品を増やすときも減らすときも、本数の上限（R-6 行・まだ未定）と使ってよい条件（ライセンス）を見て、確認してから行います。
+    rationale:
+      - {kind: scribe2-article, ref: "A3 / C13（依存の予算・値は folio2 専用）"}
+      - {kind: folio2-ruling, ref: "裁定 #3（依存予算は folio2 専用値）・G7=A（裁定 #3 の根拠「C8」は「C13」の誤りとして訂正）"}
+    mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: cargo deny + R-6 の予算（Rust が入ってから）。それまでは人が確かめる。}
+    relations: {reqs: [CON2], rules: [R-6, R-15]}
+
+  - id: A-4
+    title: 自分で自分を作ること（self-host）は既定で許可、取り消せない操作だけ確認
+    tier: ask-first
+    binds: practice
+    statements:
+      - {id: A-4.1, pattern: ubiquitous, strength: must, text: folio が folio 自身の文書・コードを変える運用は、既定で許可する。}
+      - {id: A-4.2, pattern: event, strength: must, text: その操作が取り消せない（消す・出す・使う）とき、A-1 として持ち主に確認する。}
+      - {id: A-4.3, pattern: ubiquitous, strength: must, text: 取り込み（merge）・公開へ出ない便・外部依存を増やさない変更は、A-4.2 の判定で「取り消せる」と扱う。}
+    plain: 道具が自分自身を作り変えるのは既定で OK。ただし取り消せない操作（消す・外に出す・外の道具や鍵を使う）だけは先に聞きます。取り込み・公開へ出ない便・外の部品を増やさない変更は「取り消せる」側で、公開の場所へ出す便は「出す」として A-1 で聞きます。順番（自分を作るのは最後）は P-13 が決めます。
+    rationale:
+      - {kind: scribe2-article, ref: "A4 / A4.3（現行: 既定で許可・不可逆だけ Ask-first・可逆の定義・ADR-0003）"}
+      - {kind: folio2-ruling, ref: "G6=A（見本の A-4 は改訂前の写しで逆だった・現 A4 に揃える）・G8=A（M6 は A-4 の分割先）"}
+    mechanism: {kind: human-review, live: now, note: A-1 と同じ経路。便 0 以降は契約の自己申告（3 クラス）が A-4.3 の分類を機械で持つ。}
+    relations: {articles: [A-1, P-13]}
+
+  # ───────────────────────── Never（やろうとしたら機械が拒む）─────────────────────────
+  - id: N-1
+    title: 取り消せない削除をしない
+    tier: never
+    binds: tool
+    statements:
+      - {id: N-1.1, pattern: unwanted, strength: must, text: 操作が管理下の対象を回復不能に削除するなら、folio はそれを拒む。}
+      - {id: N-1.2, pattern: ubiquitous, strength: must, text: 退役（廃止）は可逆な移動としてのみ行う。}
+    plain: folio が預かっているもの（元のファイル・作ったページ・支度表・台帳の記録）を、元に戻せない形では消しません（機械が止めます）。片づけるときは、戻せる形（移動）だけ。
+    rationale:
+      - {kind: scribe2-article, ref: "N1 / N1.2"}
+      - {kind: folio2-ruling, ref: "G8=A（不可逆な削除は Never）"}
+    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: 削除の経路を実装せず、退役は可逆な移動（retire）だけを公開する。削除の呼び出しが無いことを test で固定する。}
+    relations: {articles: [A-1, P-7]}
+
+  - id: N-2
+    title: 文章にしか無い規則を、規則として扱わない
+    tier: never
+    binds: both
+    statements:
+      - {id: N-2.1, pattern: unwanted, strength: must-not, text: 変更が、散文・記憶・会話にしか無い規則を持ち込むなら、それを規則として扱わない。}
+      - {id: N-2.2, pattern: unwanted, strength: must, text: 変更が、散文・記憶・会話にしか無い規則を持ち込むなら、検査がそれを落とす。}
+    plain: 「文章に書いてあるから」「前に話したから」「覚えているから」はルールになりません。表に載せて番号で呼ぶ（P-5）まで、機械は守ってくれませんし、そういう変更は検査で落とします。
+    rationale:
+      - {kind: scribe2-article, ref: "N2 / C1.2（規則を散文・memory・chat にだけ置かない・生成された文書の中の手書き規範文は 0 行）"}
+      - {kind: v1-incident, ref: "folio/CLAUDE.md:18 の散文 hook 規則・rules.html 248KB"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: ① folio が生成する文書（読み物・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = render / inject_check の --check）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（inject_check の --check が数える）。検査対象は folio2 が所有する文書に限る。}
+    note: 見本 v4 の P-5（Always）に含まれていた禁止側を Never へ置いた（G12 の改番）。
+    relations: {rules: [R-16], articles: [P-5, P-14, P-17]}
+
+  - id: N-3
+    title: 例外の仕組みを作らない
+    tier: never
+    binds: tool
+    statements:
+      - {id: N-3.1, pattern: unwanted, strength: must, text: 変更が規則の例外機構（無効化の旗・「今回だけ」の口）を足すなら、それを拒む。}
+    plain: 「今回だけ特別」のスイッチを足す変更は、機械が止めます。変えたいときは正式に改訂します。
+    rationale:
+      - {kind: v1-incident, ref: "ADR-0047 §2.2（例外機構を導入しない＝逃げ道と規律を一致させる）"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本と rules の全節（top_level・meta・前文・条・規範文・mechanism・rules 行）で未知の欄を schema 検査が落とす（day-1 は check_draft.py）。}
+    note: scribe2 N3（host 固有の分岐を code に焼かない）とは別の条。番号の一致は意図していない。
+    relations: {articles: [A-2], sections: [§6]}
+
+  - id: N-4
+    title: 判断の記録と裁定 id を伴わない改憲をしない
+    tier: never
+    binds: practice
+    statements:
+      - {id: N-4.1, pattern: unwanted, strength: must, text: 条文の改訂が、判断の記録・裁定 id・承認の逐語のいずれかを欠くなら、それを拒む。}
+    plain: 理由の記録・決定の番号（裁定 id）・あなたの OK の言葉、この 3 つが揃っていない書き換えは、機械が止めます。
+    rationale:
+      - {kind: scribe2-article, ref: "N4 / N4.2（新 ADR + delta marker + 裁定 id）"}
+      - {kind: folio2-ruling, ref: "G5=A（N-4 新設）"}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: A-2 と同じ検査関数・同じ母集合（schema 節・前文・各条の id / title / statements / tier / binds）。対応する amended_by が無ければ落とす（A-2 は手続き・N-4 はその拒否）。}
+    relations: {articles: [A-2], sections: [§6]}
+
+  - id: N-5
+    title: 文書の種類ごとに専用の AI 係を作らない
+    tier: never
+    binds: tool
+    statements:
+      - {id: N-5.1, pattern: unwanted, strength: must, text: 変更が文書の型ごとの AI 係（agent）や検査の観点（lens）を増設するなら、それを拒む。}
+    plain: 文書の種類が増えるたびに専用の係を増やすことは、機械が拒みます。違いは設定の表（P-5.3）で表します。係が増えると AI が毎回読む説明文が膨らんで、遅く・高くなるからです（v1 では 36 係になりました）。
+    rationale:
+      - {kind: v1-incident, ref: "agent 36 本・description 合計 29,027 字・ADR-0007 → 0055（Tier 1 → Tier 0 pointer digest へ降格）"}
+    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0。常時注入の総量は R-1 の上限で落とす（母集団は folio2 が所有する係と skill）。}
+    relations: {reqs: [NFR1], rules: [R-1, D-3], articles: [P-5]}
+
+  - id: N-6
+    title: 見せる先を tailnet の外へ広げない
+    tier: never
+    binds: tool
+    statements:
+      - {id: N-6.1, pattern: unwanted, strength: must, text: 配信（serve）の接続先（bind 先）が tailnet の外なら、起動を拒む。}
+      - {id: N-6.2, pattern: ubiquitous, strength: must-not, text: 配信の出力と、支度表・台帳の中身を、認証なしの公開ネットに晒さない。}
+    plain: 見せる先は自分の端末どうしの私設ネット（tailnet）だけで、外へ向けた配信は機械が起動を止めます。配信で見せるページや、支度表・台帳の中身を、認証なしの公開の場所に出しません。承認済みの文書を版管理（公開 repo）へ置くのは別の話で、A-1 の「出す」として確認します。
+    rationale:
+      - {kind: folio2-ruling, ref: "要件書 CON3（tailnet のみ）・FR7・G8=A（出す（公開）の Never）・G14=A（承認済み HTML は design-intent/preview/ へ・生 IP は除去）"}
+      - {kind: v1-incident, ref: "tailnet-serve の下限（tailnet の住所が無いと起動を拒む）"}
+    mechanism: {kind: reject, live: now, stage: post, polarity: fail-closed, note: tailnet の住所が無いとき serve が起動を拒む（FR7 の確かめ方・day-1 は tailnet-serve script）。}
+    note: CON3 の強さは Never 相当なのに見本では A-1（Ask-first）に対応していたねじれを解いた。v0.1 の「生成物」は G14=A（PUBLIC repo への commit）と矛盾したため配信面に絞った。
+    relations: {reqs: [CON3, FR7], rules: [D-8], articles: [A-1]}
+
+# ───────────────────────── §5 rules（数値は条文に書かない）─────────────────────────
+rules_pointer: rules.yaml（G14=A で別 file。閾値行 R-n と開発規律行 D-n。条からは行 id で参照し、行からは article 欄で条を指す）
+
+# ───────────────────────── §6 改訂（本章は新しい規則を持たない）─────────────────────────
+amendment:
+  declaration: 本章は新しい規則を持たない。手続きの正本は P-8（撤退条件）・P-7（差分と番号）・A-2（検証と承認）・N-4（裁定なしの改憲は拒む）・P-14（再注入）・P-17（rules 行）である。
+  steps:
+    - {n: 1, who: AI, what: 理由を書く — 判断の記録（ADR）を 1 本起こし、撤退条件も同時に書く, article: [P-8, A-2]}
+    - {n: 2, who: AI, what: 反対側から確かめる — 主張する利益を敵対的に検証し記録を添える, article: [A-2]}
+    - {n: 3, who: AI, what: 差分で表す — 現行文を残し amended_by に previous_text を対で記録する。番号は変えない, article: [P-7]}
+    - {n: 4, who: 持ち主, what: 承認する — 逐語と日付と裁定 id を残す。ここを通らなければ変わらない, article: [A-2, N-4, P-12]}
+    - {n: 5, who: 機械, what: 版を上げ、再注入する — CLAUDE.md の生成区間を作り直し、差分が無いことを確かめる, article: [P-14]}
+  effective_step: {n: 0, who: 持ち主, what: 初回の発効 — meta.approval に who / date / ruling / verbatim を置き、meta.binding を true・meta.baseline を発効 commit にする（G15）, article: [P-12, P-17]}
+
+# ───────────────────────── §7 用語集（G11=A・vocabulary.yaml が正本）─────────────────────────
+glossary_pointer: vocabulary.yaml（読者が引く語の正本。未定義の専門語 0 は R-9 行が床。ここには写さない）
+
+# ───────────────────────── §8 出所 ─────────────────────────
+sources:
+  - {n: 1, name: v1 が自分で到達していた教訓, ref: 報告 §2「v2 の憲法候補」・facet v1-lessons（実害と 1 対 1・数値は一次資料で再確認済み）}
+  - {n: 2, name: "scribe2 憲法の機構条（裁定 #3）", ref: "裁定 #3 の逐語「機構条だけ写す（極性一覧・散文規則禁止・id 参照・C8。依存予算は folio2 専用値）」= C11.2 / C16.2（P-18）・N2 / C1.2（N-2）・C15.2（P-5）・C8 / C8.2 / C8.3（P-13・P-18）・C13 の値（A-3・R-6）"}
+  - {n: 3, name: "scribe2 憲法から足した条（裁定 #3 の外・各裁定で追加）", ref: "G8=A: C7（P-12）・N1（N-1）・A2 / N4（A-2・N-4）・公開 Never（N-6）・注入条（P-14）／ G5=A: C5（P-17）／ G6=A: A4 / A4.3（A-4）／ G7=A: C13（A-3）／ C14（P-5.5・G2=C の二層の写し）"}
+  - {n: 4, name: 持ち主の裁定, ref: 裁定 9 点（2026-09-11〜12）・G1〜G16・P1〜P5（2026-09-12・逐語は bd f2-648 / f2-648.1 notes）}
+  - {n: 5, name: 敵対レビュー, ref: review/summary.md（wf_5e659fc9-0ed・生存 17 + 未反証 34 の追加反証・2026-09-12）}

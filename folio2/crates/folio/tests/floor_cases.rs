@@ -1,5 +1,5 @@
 //! 凍結 fixture `tests/floor_cases.yaml`（134 case・f2-648.2 の受入・P-10.1）を `folio check` で回す歯（便 10・docs/design/delivery-10.md §1）。
-//! 規則は Python の runner `tests/run_floor_cases.py` の写し: case ごとに design-intent/ を一時 dir へ写し、既定で git の 1 commit にし、
+//! 規則は Python の runner `tests/run_floor_cases.py` の写し: case ごとに凍結した土台 `tests/fixtures/floor_base/design-intent/` を一時 dir へ写し、既定で git の 1 commit にし、
 //! mutate の段を順に当てて folio を回し、終了コード・出力の語・file の有無・違反件数を照合する。fixture は読むだけで書かない。
 //! 1 本の歯が全 case を回し、落ちた case を名指す。型付きの読み書きと digest は src の yaml.rs / sha256.rs を取り込んで使う。
 
@@ -600,15 +600,19 @@ fn run_case(cs: &Value, td: &Path) -> Option<String> {
         last: None,
         note: String::new(),
     };
-    let prepared = copy_tree(&repo_root().join("design-intent"), &st.work)
-        .and_then(|()| copy_external_schema(td))
-        .and_then(|()| {
-            if flag(cs, "no_git") {
-                Ok(())
-            } else {
-                gitc(td, &["init", "-q"]).and_then(|()| git_commit(td))
-            }
-        });
+    // 土台は凍結した写し（tests/fixtures/floor_base/）。実の置き場は版が上がるので、版と判断の記録の番号を字面で持つ case の土台にしない。
+    let prepared = copy_tree(
+        &repo_root().join("tests/fixtures/floor_base/design-intent"),
+        &st.work,
+    )
+    .and_then(|()| copy_external_schema(td))
+    .and_then(|()| {
+        if flag(cs, "no_git") {
+            Ok(())
+        } else {
+            gitc(td, &["init", "-q"]).and_then(|()| git_commit(td))
+        }
+    });
     if let Err(e) = prepared.and_then(|()| st.apply(&muts)) {
         return Some(format!("FAIL {id}: fixture の適用で例外 {e}"));
     }

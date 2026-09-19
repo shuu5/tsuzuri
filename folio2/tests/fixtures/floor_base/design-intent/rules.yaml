@@ -1,0 +1,56 @@
+# folio2 rules — 数値と開発規律の正本（v1.0・発効 2026-09-12・初版の全行の裁定 = 発効承認「承認する」f2-648.1 notes 20:2x・P-17.3）
+# G14=A: design-intent/rules.yaml。2 節: thresholds = 閾値行 R-n（機械が測って止める値）/ discipline = 開発規律行 D-n（人が守る作法・G2=C）。
+# 変更手続き: 行の追加・変更は P-17（裁定 id と時刻を行に付ける）。初版の行は憲法の発効の承認を裁定とみなす（P-17.3）＝ ruling / ruled_at が null の行は発効時に埋める。
+# 読み方は schema 節が持つ（コメントは規則ではない）。
+
+schema:
+  version: 1
+  top_level: [schema, thresholds, discipline]   # 未知の節は検査で落とす（N-3）
+  threshold_row:
+    required: [id, article, what, value, kind, status, ruling, ruled_at, stage]
+    optional: [basis, projection, same_failure, population, note]
+  discipline_row:
+    required: [id, article, what, kind, status, ruling, ruled_at]
+    optional: [note]
+  enums:
+    kind: [deny, build-check, detect, human-review]
+    status: [仮, 凍結, 未定]
+    stage: [in-loop, post]
+  kind_meaning:
+    deny: 機械が測って、超過なら落とす（憲法の reject / build-check に対応）
+    build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）
+    detect: 記録・起票のみ・止めない（憲法の none に対応）
+    human-review: 人が守る作法（憲法の human-review に対応・D 行）
+  kind_map_to_constitution: {deny: [reject, build-check], build-check: [build-check], detect: [none]}   # R 行にだけ適用する（D 行は作法＝条の機構とは別）
+  excluded: {what: [時間（「60 分以内」）, 費用（「300k token 以下」）], why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。}
+  reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。
+
+thresholds:
+  - {id: R-1, article: N-5, what: AI へ常時渡す説明文の合計（folio2 が所有する AI 係と skill の名前 + 説明）, value: "2,000 字 以下", kind: deny, status: 仮, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, stage: post, population: folio2 が所有する係と skill だけ。口座共通（home 配下）の分は数えて記録する（detect）が落とさない, note: "測り方を凍結してから再計測（spike 2）。day-0 は folio2 の settings が v1 plugin（agent 36 本）を載せているため大きく超過＝M0 で v1 plugin を外してから測る"}
+  - {id: R-2, article: P-14, what: CLAUDE.md 生成区間の本文の総バイト数, value: "8,000 byte 以下", kind: deny, status: 凍結, ruling: G9=A・user 2026-09-12（CLAUDE.md として適切な長さ）・発効承認 2026-09-12, ruled_at: 2026-09-12, stage: post, projection: 前文（順位）+ 各条の規範文（id と本文）だけを注入する。mechanism・plain・rationale は入れない（inject_check の導出関数と同一）, basis: "実測 7,630 byte（v1.0・規範文 66 + 前文）。上限 8,000 は CLAUDE.md を憲法だけにする前提の「適切な長さ」（user 2026-09-12）", note: "発効時に凍結。v0.1 の仮 8,000 は規範文 55 本の見積だった"}
+  - {id: R-3, article: P-2, what: 部品目録に無い class の数 ／ 色や字の大きさが design token 由来の割合, value: "0 ／ 100%", kind: build-check, status: 凍結, ruling: "申告 D + F（見た目の承認・user 逐語 2026-09-12「承認するけど…」）", ruled_at: 2026-09-12, stage: post, note: M0 受入条件（AC2）}
+  - {id: R-4, article: P-5, what: 参照 id（要件書の id・条 id・rules 行 id の内部 3 空間）の未解決の数 ／ どの条からも参照されない rules 行の数, value: "0 ／ 0", kind: build-check, status: 凍結, ruling: 申告 F, ruled_at: 2026-09-12, stage: post, population: 正本 4 file の全欄（規範文・平易文・関係・機構の注・出所・rules 行の注・語彙の定義）, note: M0 受入条件（AC6）・双方向（条 → 行・行 → 条）}
+  - {id: R-5, article: P-2, what: 密度 profile と図の型の数, value: 有限の一覧（図は 8 型 = 既存 3 型 + 図の道具（archify）の 5 型）, kind: build-check, status: 凍結, ruling: "申告 B（初版 2026-09-12）・ADR-4 発効承認 2026-09-16 22:5x JST（f2-648 notes・f2-648.6 notes・逐語「いずれも承認する」）", ruled_at: 2026-09-16, stage: post, note: 一覧への追加は判断の記録（P-2.4）。図は 3 型 → 8 型（ADR-4・2026-09-16）。8 型の内訳（既存 3 型 = 段の帯・文脈の帯・状態の帯、道具の 5 型 = 構成図・手順図・順序図・流れ図・状態図）は部品目録（preview/parts.json の figure_type_enum・要素数 = この行の値）が持つ。棚（doc-shelf）は入口の一覧の型で図の型に数えない（parts.json の shelf_type_enum）}
+  - {id: R-6, article: A-3, what: 外部ライブラリの予算（直接／間接の本数・ライセンスの許可一覧）, value: 未定, kind: deny, status: 未定, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, stage: post, note: cargo deny の実測後に決める（spike 4）。A-3 の確認は値が未定でも要る}
+  - {id: R-7, article: P-11, what: 同じ種類の失敗の繰り返し上限（超えたら止めて人へ）, value: "2 回", kind: deny, status: 仮, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, stage: post, same_failure: （検査の id・判定・対象の path）の 3 つ組が一致する失敗を「同じ種類」とする, note: 値の根拠は v1 の 2 連続実証（engine-design §12）。便 0 で実測して凍結}
+  - {id: R-8, article: P-12, what: 承認の対話面（どの対話面を通った承認を受け取るか）, value: 持ち主と planner 席の対話面（記帳先 = 台帳 bd の notes の逐語 + 文書の承認欄）, kind: build-check, status: 凍結, ruling: 運用実績 2026-09-12, ruled_at: 2026-09-12, stage: post, note: 閾値ではなく定義の行。承認欄の schema がこの値を要求する}
+  - {id: R-9, article: P-5, what: 本文（条の見出し・規範文・平易文・rules 行の内容欄）に出る専門語のうち、語彙に定義が無いものの数, value: 0, kind: build-check, status: 凍結, ruling: G11=A・G16=A（受入 (e)）, ruled_at: 2026-09-12, stage: post, population: 憲法（見出し・規範文・平易文・前文）・rules（what）・要件書（見出し・規範文・平易文・制約）, note: 機械は「語彙の見出し語・原語に無い英字の語」を数える。識別子（file 名・条 id・命令名・製品名）の免除一覧は語彙の identifiers 節（型付きデータ）が持つ。日本語の専門語の判定は敵対レビュー（天井）}
+  - {id: R-10, article: P-5, what: 平易文（plain）の無い条の数 ／ 平易文が規範文の枝番を落とした・足した数, value: "0 ／ 0", kind: build-check, status: 凍結, ruling: G16=A（受入 (f)）, ruled_at: 2026-09-12, stage: post, note: 機械は plain の有無だけ数える。落とし・足しの判定は敵対レビュー（天井）}
+  - {id: R-11, article: P-5, what: 強度欄（must / must-not / should）と規範文の文末（「〜ない。」）の不一致の数, value: 0, kind: build-check, status: 凍結, ruling: G16=A（受入 (g)）, ruled_at: 2026-09-12, stage: post, note: must-not ⇔ 文末が「〜ない。」}
+  - {id: R-12, article: P-14, what: 規範文と平易文に出る、日本語の言い換えを伴わない英語キーワードの数, value: 0, kind: build-check, status: 仮, ruling: G10=A, ruled_at: 2026-09-12, stage: post, note: 「日本語（原語）」の形か語彙の原語列にある語は数えない。識別子（file 名・条 id・命令名）は除く}
+  - {id: R-13, article: P-18, what: 編集の時点で止める guard（極性一覧で stage = in-loop）の本数の下限, value: "1 本以上", kind: deny, status: 仮, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, stage: post, note: "極性一覧は各条の mechanism（stage / polarity）と rules 行の stage から生成する（day-1 は check_draft.py）。便 0 で編集時 guard が入るまで判定は「まだ分からない」（live delivery-0）"}
+  - {id: R-14, article: P-4, what: 図の道具（archify）の検査に掛ける仕上がりの段（この段の検査を通らない図は生成しない）, value: 最上段（showcase）固定, kind: deny, status: 凍結, ruling: "ADR-4 発効承認 2026-09-16 22:5x JST（f2-648 notes・f2-648.6 notes・逐語「いずれも承認する」）", ruled_at: 2026-09-16, stage: post, note: 緩める口を持たない（N-3.1）。検査を通らなかった図は生成せず、前の生成物も上書きしない（P-4.1）。同じ図の修正の往復の上限は R-7（P-11.1）。folio が数える面を持つのは図の生成を実装した便以降}
+  - {id: R-15, article: A-3, what: 図の道具（archify）と実行環境（Node.js）の版の固定（版の番号・要約値）, value: "道具 2.16.0（2026-08-30 公開・commit c826e6c）・実行環境 18 以上・要約値（sha256）8e974e5dc0808408fc125ed8845ce339776dd6c2732baee69d2cc6fc5fdba8d4（vendor/archify/ の写し 43 file・規則 = path の byte 順に中身を連結）", kind: deny, status: 凍結, ruling: "ADR-4 発効承認 2026-09-16 22:5x JST（f2-648 notes・f2-648.6 notes・逐語「いずれも承認する」）・依存を足す A-3.1 の承認 2026-09-19 01:0x JST（f2-648 notes・逐語「承認する」・要約値の実測と凍結）", ruled_at: 2026-09-19, stage: post, note: 要約値は依存を足す便 30 の受け皿（f2-648.45・A-3.1 の確認・要件書 CON2）で実測して凍結した。写しの置き場は vendor/archify/（deliver に要る file だけ・vendor/README.md）。道具の版上げは凍結 anchor（ADR-4 帰結・図の型付き記述 1 本と図の本体の写し）が落ちて検出し「まだ分からない」に落とす（P-10.3）}
+  - {id: R-16, article: N-2, what: 設計ノートの散文の門（規範の印の一覧と、印を持つ文に許さない「数と単位」の単位の一覧）, value: {marks: [しなければならない, してはならない, してはいけない, SHALL, MUST], prohibition: {word: 禁止, clause_ends: ["。", "）", "・", "、", null]}, units: [秒, 分, 時間, 日, 件, 本, 行, byte, KB, MB, "%", s, ms]}, kind: build-check, status: 仮, ruling: "ADR-3 発効承認 2026-09-16 22:5x JST（f2-648 notes・f2-648.4 notes・逐語「いずれも承認する」）・式の出所 = 持ち主の裁定 2026-09-13T08:53Z（s2-07l.197 notes・G-e = (b)）", ruled_at: 2026-09-16, stage: post, population: 設計ノートの散文（code fence の内側・行頭が縦線の表の行・注釈の行を除く）。印を持つ文だけを数え、記述の文は自由。憲法・rules・要件書の規範文には掛けない（R-9 / R-12 の領分）。文の区切りは「。」か行末, note: 値は型付き（印 5 種 = 部分一致・英語は否定形も含む・副詞「必ず」は数えない／「禁止」は直後の文字が clause_ends のどれか〔null = 行末〕のときだけ印／単位 13 種 = 数字列の直後）。scribe2 の暫定床（xtask の散文の門・印 5・直後の文字 5・単位 13 の宣言順まで同じ）と同じ式（ADR-3 決定 (7)）。folio2 の M1 が引き取ったら scribe2 側を撤去する。生成側からも検査側からも独立した凍結 anchor を持つ（P-10.1・要件書 FR12）。値の一覧は M1 の実装で型付きデータ（この行）から読む＝散文に写さない}
+
+discipline:
+  - {id: D-1, article: P-16, what: 並列実行・便・spawn した作業者の内側で使う AI は opus まで。件数に応じて増える側（1 件ずつの判定）は sonnet 可。並列実行の内側で xhigh を使わない, kind: human-review, status: 凍結, ruling: "user 2026-09-12 17:1x 裁定 1 / 4", ruled_at: 2026-09-12}
+  - {id: D-2, article: P-16, what: 並列で AI を起動する全ての起動点で、使うモデルと念入りさ（effort）を明示する（席の設定を継承させない）, kind: human-review, status: 凍結, ruling: "user 2026-09-12 17:1x 裁定 4", ruled_at: 2026-09-12}
+  - {id: D-3, article: N-5, what: v1 の並列実行の骨格（凍結骨格 6 本）は使わない。並列は素の Agent の同時起動か、その場で書く Workflow script で組み、v1 plugin は積まない, kind: human-review, status: 凍結, ruling: "user 2026-09-12（s2-07l.42 notes・PR #764）", ruled_at: 2026-09-12}
+  - {id: D-4, article: P-11, what: その場で書く Workflow は予算を明示する（出力 token の上限を script 内で検査し、超えたら止める）。agent 数の上限も script に書く。1 回の実行は 1 論点, kind: human-review, status: 凍結, ruling: "user 2026-09-12（budget 明示）", ruled_at: 2026-09-12}
+  - {id: D-5, article: P-4, what: 並列実行の返り値は file に落とし、通知は要約だけにする（通知は切れる前提・agent は読み取り専用で自分の出力 file だけ書く）, kind: human-review, status: 仮, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, note: planner 実測 2026-09-12}
+  - {id: D-6, article: P-15, what: 並列の agent に MCP（playwright 等の外部道具の接続）を共有させない（自前の Chrome / 自前の playwright）, kind: human-review, status: 仮, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, note: planner 実測 2026-09-12・v3/v4 検証で干渉}
+  - {id: D-7, article: P-13, what: scribe2 は限定利用 — 便は便 0 以降（s2-07l.149 の裁定後）・作業記憶の退避と復元は当面 v1 の共通 skill（global skill）・並列便は使わない, kind: human-review, status: 凍結, ruling: "user 2026-09-12 17:1x 裁定 3 / 5 + s2 planner 返信", ruled_at: 2026-09-12}
+  - {id: D-8, article: N-6, what: 版管理へ載せる file に tailnet の住所・機器名（host 名）・口座名を書かない。承認済みの見本 HTML を repo へ置くときは生 IP 9 行と「見本 v4」表記を除去し「暫定・M0 で置換」と明記する, kind: human-review, status: 凍結, ruling: G14=A, ruled_at: 2026-09-12}
+  - {id: D-9, article: P-13, what: folio v1 側の guard（PreToolUse の hook）が folio2 の設計文書を止める設定を持たないことを、席の起動時に人が確かめる, kind: human-review, status: 仮, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, note: v0.1 では P-13 の mechanism note に混ざっていた}
+  - {id: D-10, article: P-12, what: 持ち主への問い（承認の要求・反対側からの確認（grill）・相談窓口の質問）は対話面（R-8）の散文で出し、選択式の問いの窓（AskUserQuestion）を使わない。相談窓口（FR1）の質問と推奨回答も文で提示する, kind: human-review, status: 凍結, ruling: "user 2026-09-13 18:0x（f2-648 notes・逐語「v2においてもask user questionは使わないような方向にするようにdesign-intentに記載して」）", ruled_at: 2026-09-13, note: "前の版（folio v1）の設計の係（folio-architect）は 1 問ずつ選択式の窓で問う規律を skill に持っていた。v2 は対話面の散文を既定にし、選択式の窓を持たない。要件書 FR1 への行参照は v1.1 で足す（P-5.2）"}

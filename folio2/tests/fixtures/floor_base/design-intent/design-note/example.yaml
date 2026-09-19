@@ -1,0 +1,74 @@
+# folio2 設計ノートの見本（status: example・拘束力なし・f2-648.7）。欄の決まりは design-note/schema.yaml。M1 の床の凍結 anchor（P-10.1）の材料＝生成器から独立した固定の見本。
+# 題材は判断の記録 ADR-4（図の生成）の組み立て。中身は要件書 FR15 の言い換えであって新しい決定を含まない（決定は ADR-4 が持つ）。
+meta:
+  id: example
+  title: 設計ノートの見本 — 図の生成の組み立て（判断の記録 ADR-4）
+  version: v0.1
+  status: example
+  generated: 2026-09-17
+  profile: design-note
+  note: 見本（status example）は承認欄を持たない（欄の決まり approval_required_when）。発効した設計ノートでは持ち主の逐語が入る。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      文書の正本の図の節にある型付き記述から、検査に通った図の本体（SVG）だけを部品として埋める。
+      検査を通らなかった図は生成せず、前の生成物も上書きしない（FR15・P-4.1）。
+      検査を通らなかった図の生成物は書き出してはならない（FR15）。
+      この節の文のうち規範の印を持つのは直前の 1 文だけで、参照 id を持ち数と単位を持たないので散文の門（R-16）を通る。
+  - n: 2
+    type: parts-table
+    title: 部品
+    rows:
+      - {id: spec, name: 型付き記述, role: 図の正本（文書の正本 YAML の図の節・JSON の 5 型の欄の決まりそのまま）, ref: [ADR-4, FR15]}
+      - {id: tool, name: 図の道具（archify）, role: 検査と描画を掛ける組み立て器（子の処理）, ref: [ADR-4, R-15]}
+      - {id: body, name: 図の本体（SVG）, role: 出力から取り出す線と箱と文字・意味を表す class だけ, ref: [ADR-4, R-3]}
+      - {id: anchor, name: 凍結 anchor, role: 型付き記述 1 本と期待される図の本体の写し, ref: [P-10, R-15]}
+  - n: 3
+    type: ports-table
+    title: 口
+    rows:
+      - {id: validate, name: 検査, input: 型付き記述 1 本, output: 診断（規則の id・対象・証拠・修正候補）, refuses: 仕上がりの段（R-14）を通らない記述, ref: [FR15, R-14]}
+      - {id: index, name: 索引, input: 正本の集合, output: 文書・要件・契約の id と 1 行の題, refuses: なし, ref: [FR14]}
+      - {id: render, name: 描画, input: 検査に通った型付き記述, output: 図の本体（SVG）, refuses: 検査を通っていない記述, ref: [FR15]}
+      - {id: embed, name: 埋め込み, input: 図の本体, output: 部品目録の class だけで塗られた図の部品, refuses: 部品目録に無い class を持つ本体（R-3）, ref: [FR15, R-3]}
+  - n: 4
+    type: fields-table
+    title: 図の節の欄
+    rows:
+      - {id: type, name: 図の型, need: required, shape: text, enum: [archify-architecture, archify-workflow, archify-sequence, archify-dataflow, archify-lifecycle]}
+      - {id: spec, name: 型付き記述, need: required, shape: table}
+      - {id: caption, name: 見出し, need: required, shape: text}
+      - {id: refs, name: 参照 id, need: optional, shape: list}
+  - n: 5
+    type: teeth-table
+    title: 検査
+    rows:
+      - {id: showcase-fail, name: 通らない図は生成されない, red_when: 仕上がりの段の検査を通らない記述で図が生成されるか前の生成物が変わる, fixture: tests/fixtures/figure/, ref: [AC12]}
+      - {id: anchor-drift, name: 道具の版上げを検出する, red_when: 凍結 anchor の図の本体と出力が違うのに判定が「まだ分からない」にならない, fixture: tests/fixtures/figure/anchor/, ref: [FR15, P-10]}
+  - n: 6
+    type: contract-table
+    title: 契約表
+    rows:
+      - {id: a, title: 図の生成の口 3 つを 1 便で置く, req: [FR15], section: "1", verify: [cargo nextest run -p folio figure], size: M, done: 型付き記述の見本 1 本が仕上がりの段を通り図の本体が部品として埋まる, depends: []}
+
+figures:
+  - id: fig-1
+    type: archify-architecture
+    caption: 図の生成の 3 つの口（見本）
+    refs: [FR15]
+    spec:
+      schema_version: 1
+      diagram_type: architecture
+      meta: {title: 図の生成の 3 つの口, quality_profile: showcase, subtitle: 型付き記述を図の道具が検査して描き、folio が図の本体だけを面に埋める, legend: {mode: auto, entries: {frontend: {label: 面}, backend: {label: 道具}, external: {label: 外の入力}}}}
+      components:
+        - {id: spec, type: external, label: 型付き記述, sublabel: 文書の正本の図の節, row: 0, col: 0}
+        - {id: tool, type: backend, label: 図の道具, sublabel: 検査と描画, row: 0, col: 1}
+        - {id: body, type: frontend, label: 図の本体, sublabel: 部品として埋める, row: 0, col: 2}
+      connections:
+        - {from: spec, to: tool, label: 検査}
+        - {from: tool, to: body, label: 描画}
+      layout: {mode: grid, cols: 3, gapX: 70, gapY: 110, cellW: 160, cellH: 70}
+sources: []

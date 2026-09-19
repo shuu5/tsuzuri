@@ -1,5 +1,5 @@
 # 床（scripts/check_draft.py）が RED になる fixture（凍結・f2-648.2 の受入・P-10.1 の day-1 代替＝床の入力ではない）。runner = tests/run_floor_cases.py。
-# 各 case は design-intent/ の写し（一時 dir）に mutate を順に当てて床を回す（正本は触らない）。段の種類と期待の欄は runner の冒頭を見る。
+# 各 case は凍結した土台 tests/fixtures/floor_base/design-intent/（憲法 v1.0・判断の記録 ADR-1〜ADR-10 の時点）の写し（一時 dir）に mutate を順に当てて床を回す（土台も正本も触らない）。段の種類と期待の欄は runner の冒頭を見る。
 # 敵対レビュー 1 周目（B1〜B3 / M1〜M7 / m1）・2 周目（fc-1〜fc-9 / fp-1〜fp-7 / loophole-1〜13 / content-1・2・5・11 / fixrun-1〜6）・
 # 3 周目（loophole-v3-1〜6・9〜11・15 / fp3-2・4〜7・9・10 / content-limits-1・2・6・13）・4 周目（loophole-v4-1〜5・7 / F-1〜F-3）・5 周目（doc-v5-1〜2 / loophole-v5-1〜9）の再現と、正の経路（欄の決まりの写し・範囲の増減・空の値・貼れる差分・改行入りの値・浅い写し）を含む。
 # 写しは既定で git の 1 commit（床は版管理の無い写しを「まだ分からない」に落とす）。no_git: true の case だけ版管理なし。

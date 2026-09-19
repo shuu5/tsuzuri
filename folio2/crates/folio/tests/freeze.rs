@@ -1,5 +1,5 @@
 //! `folio check --emit-amends` と `--freeze-anchor` の歯（便 9・docs/design/delivery-9.md §1）。
-//! fixture は増やさず、歯の中で design-intent の写し全部を一時 dir に作り git init と 1 commit を行う（便 0 の parity と同じ作り）。
+//! 歯の中で凍結した土台（tests/fixtures/floor_base/design-intent/・憲法 v1.0）の写し全部を一時 dir に作り git init と 1 commit を行う。
 //! (1) P-1 の title を変え版を v1.1 にして `--emit-amends` → 1・標準出力は見出しと差分 1 行だけ／(2) 変異なしで `--emit-amends` → 0・見出しだけ／
 //! (3) 変異なしで `--freeze-anchor` → 1・「新しくない」・anchors/ は不変／(4) 合成した改訂で `--freeze-anchor` → 0・v1.1 の anchor と索引の追記・続けて旗なし → 0／
 //! (5) (4) の amends の new_text を 1 字違えて `--freeze-anchor` → 1・「凍結しない」・v1.1 の anchor は作られない。
@@ -76,8 +76,9 @@ impl Work {
     fn new(case: &str) -> Work {
         let root = std::env::temp_dir().join(format!("folio-freeze-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
+        // 土台は凍結した写し（tests/fixtures/floor_base/）。実の置き場は版が上がるので、版を字面で持つ歯の土台にしない。
         copy_tree(
-            &repo_root().join("design-intent"),
+            &repo_root().join("tests/fixtures/floor_base/design-intent"),
             &root.join("design-intent"),
         );
         copy_external_schema(&root);

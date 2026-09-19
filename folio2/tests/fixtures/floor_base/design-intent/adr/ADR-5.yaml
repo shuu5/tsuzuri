@@ -1,0 +1,211 @@
+# folio2 判断の記録 ADR-5 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。読み物は preview/readable.html（生成物・手で直さない）。
+# 状態: accepted（発効 2026-09-17・持ち主の承認は approval 欄・裁定 id = f2-648.22 notes 2026-09-17）。条文の改訂ではない（amends は空）。
+# 位置: f2-648.22。元になった持ち主の裁定 = 2026-09-17 の 4 つの問いへの回答（台帳 f2-648 notes に逐語）。
+id: ADR-5
+title: 見本 3 面の生成器は、見た目（部品・design token・構造）を見本に合わせ、文章は今の正本から組み、外部の部品を足さずに folio 自身の言語（Rust）で手書きする
+status: accepted
+date: 2026-09-17
+context: 要件書 FR4 は、入口・憲法・要件書の 3 面を 1 つの生成器と 1 か所の見た目の値（design token）から出すことを求め、NFR2 と AC2 は 3 面のすべての部品の名札（class）が部品目録に在ることを機械が数えることを、AC5 は持ち主が 3 面を実際に開いて読んで承認することを求める。設計文書の置き場には 2026-09-12 に持ち主が承認した見本 3 面（手で書いた HTML）と、部品目録・見た目の値の様式・閲覧の仕掛けが在る。planner 席が 2026-09-17 に確かめた事実は次のとおり。(1) 見本の承認は見た目への承認であり、見本の文章は承認の後の改訂（要件書の 2 回の版上げ・判断の記録 4 本）より前のものである。入口の見本は本文 73 行のうち 70 行が正本 4 file のどこにも無い文で、憲法を 15 条と書いているが今の憲法は 27 条である。(2) 入口の案内文（誰のためか・棚の凡例・読む順番・相談窓口）は手書きの見本の中にしか無く、正本を持たない。(3) 見本 3 面が使う図は既存の 3 型だけで（憲法面に 1 つ・要件書面に 6 つ）、図の道具（archify）の図は 0、図の本体（SVG）の形をしているのは小さな絵記号だけである。(4) folio が使う外部の部品（crate）は 2 本で、外部の部品の予算（rules 行 R-6）は未定である。(5) 最初の日から在る読み物を folio に写す便（f2-648.21）は、外部の部品を足さずに HTML の字面を folio 自身の言語（Rust）で組む形で設計済みである。生成器の形には分岐が 4 つ在り、どれも後の便（入口の正本・3 面の生成・組み立てと配信）の契約と受入を決めるので、便を起こす前に持ち主に 1 つずつ問うた（2026-09-17・台帳 f2-648 notes）。
+decision: 見本 3 面の生成器の形を次のとおり定める。(1) 受入の物差し = 生成器は見本の部品・見た目の値（design token）・構造を保ち、文章と数は今の正本から組む。見本の HTML との 1 byte ごとの一致は求めない。受入は、3 面のすべての部品の名札（class）が部品目録に在ることを機械が数えること（AC2）と、生成した 3 面を持ち主が開いて読んで承認すること（AC5 の形・逐語と日付を記帳）の 2 つで行う。見本の HTML は生成器の出力に置き換わるまでの暫定であり、置き換えた後は手で直さない（P-6.2）。(2) 入口の案内文の正本 = 入口の面も 1 枚の文書として自分の正本（index.yaml・設計文書の置き場の直下）を持つ（P-6.1）。条の数・要件の数・更新日のような数と日付は入口の正本に書かず、生成のたびに他の正本から数えて出す（P-6.3）。床が見る正本を 4 file から 5 file へ広げる変更は別の便で運び、凍結 fixture の期待は変えない。(3) 組み立ての方法 = HTML の字面は folio 自身の言語（Rust）で手書きし、外部の部品（crate）を足さない。部品目録の部品・図の型・密度 profile は閉じた一覧（enum）として型で持ち、目録に無い部品を生成器が出せない作りにする（P-2.4 を検査だけでなく型でも守る）。部品目録（parts.json）と型の一覧の食い違いは検査が落とす。これは戻せる判断であり、捨てる条件は撤退条件の欄に書く。(4) 図 = 第 1 弾（M0）の 3 面は既存の 3 型の図だけを HTML の部品として出す。図の道具（archify）の 5 型は第 2 弾（M1）で、依存を実際に足す便の確認（A-3.1）と一緒に入れる。正本に図の道具（archify）の型の図が現れたら、生成器は黙って飛ばさず「まだ分からない」で止まり、何も書かない（P-4.1・P-4.2）。(5) 順序 = 読み物を写す便（f2-648.21）→ 入口の正本と部品目録の型 → 憲法面・要件書面・入口面の生成 → 持ち主の承認 → 組み立てと配信（tailnet の外への接続は拒む・N-6）。便は直列で運ぶ。
+options:
+  - {id: a, name: 見た目を見本に合わせ文章は正本から組み、外部の部品を足さず手書きする, text: 生成器は見本の部品・見た目の値（design token）・構造を保ち、文章と数は今の正本から組む。入口の案内文は新しい正本（index.yaml）に置く。HTML の字面は folio 自身の言語（Rust）で手書きし、部品目録を閉じた一覧（enum）として型で持つ。図は既存の 3 型だけを出す。, verdict: adopted, reason: 見本は見た目の約束であって文章の約束ではない（持ち主の裁定 2026-09-17）。文章を正本から組めば P-6.1 と P-6.3 を守ったまま見本の見た目を再現できる。外部の部品を足さないので A-3.1 の確認も未定の予算（R-6）も前置にならず、目録に無い部品を型が書かせないので P-2.4 と AC2 を生成の時点で守れる。読み物を写す便と同じ作り方なので道具立ても揃う。欠点は、HTML の字面が folio 自身の言語（Rust）の中に散り、見た目の直しのたびに便が要ることで、3 面・部品の数が限られる今は小さい。}
+  - {id: b, name: 外部の部品（テンプレートの crate）を足して HTML をテンプレートの file に書く, text: HTML をテンプレートの file に置き、外部の部品（テンプレートの crate）が正本の値を差し込む。, verdict: rejected, reason: 見た目の直しは楽になるが、依存が増え（A-3.1 の確認と、未定の予算 R-6 を先に決めることが前置になる）、テンプレートの中には好きな部品の名札（class）を書けるので「目録に無い部品 0」を守るのが事後の検査だけになる。3 面では利点が小さい。面が大きく増えたときの移り先として撤退条件に置く（持ち主の直命 2026-09-17）。}
+  - {id: c, name: 見本の HTML と 1 byte ごとに一致する出力を受入にする, text: 生成器の出力が承認済みの見本 3 面と 1 byte も違わないことを機械で確かめ、それを受入にする。, verdict: rejected, reason: 機械だけで判定できるが、見本の文章は今の正本より古く（入口は 73 行のうち 70 行が正本に無い・実測）、一致させるには正本を巻き戻すか見本を手で直すことになり、後者は P-6.2 に反する。見本の承認は見た目への承認であって文章への承認ではない。}
+  - {id: d, name: 入口の案内文を要件書の正本に足すか、生成器の中に固定で埋める, text: 入口の案内文を要件書の正本の付帯の欄に足す。または folio 自身の言語（Rust）の中に固定の文として埋める。, verdict: rejected, reason: 要件書に足すと、入口の文言を直すだけで要件書の版上げと承認が要り、要件でない文が要件書に混ざる。生成器の中に埋めると文が型付きデータの外に隠れ、P-5.1 と P-6.1 の趣旨に反する。}
+basis: [P-2, P-4, P-5, P-6, P-8, P-10, A-3, N-3, N-6, R-5, R-6, R-7, FR4, NFR2, AC2, AC5, CON2, ADR-1, ADR-4]
+retreat: {kind: ruling, condition: 決定 (3)（手書き）を捨てて案 b（外部の部品〔テンプレートの crate〕）へ移るかを持ち主に問う。問うのは planner 席で、時機は次の 2 つ。① 生成器が出す面の型が 3 面（入口・憲法・要件書）から増える便を設計するとき（そのつど、増えた後の面の型の数と、見た目だけを直した便の数を台帳から数えて添える）。② 見た目だけを直す便が、同じ部品について rules 行 R-7 の上限を超えて続いたとき。持ち主が移ると裁定したら、依存を足す確認（A-3.1）と予算（R-6）の決定を前置にし、部品目録の閉じた一覧を検査で守る形を新しい判断の記録に書いてから移る。決定 (1)（受入の物差し）・(2)（入口の正本）・(4)（図）は、持ち主が生成した 3 面の承認を拒んだとき、その理由に応じて持ち主に問い直す。}
+amends: []
+approval: {who: 持ち主, date: 2026-09-17, ruling: f2-648.22 notes 2026-09-17 16:4x JST（発効の承認）・f2-648 notes 2026-09-17（元になった 4 つの問いへの回答の逐語）, verbatim: 承認する, surface: R-8}
+plain: 3 枚のページ（入口・憲法・要件書）を folio に自動で作らせるときの形を決める記録です。あなたが承認した見本は「見た目の見本」なので、色・部品・並び方は見本と同じにし、文章と数は今の元の文書から機械が組みます。見本と 1 文字も違わないことは求めません。代わりに、機械が「部品表に無い飾りは 1 つも無い」と数え、最後にあなたが 3 枚を開いて読んで OK を出します。入口ページの案内文は今は手書きの見本の中にしか無いので、入口用の元の文書を 1 つ新しく作ります。ページの組み立ては外の道具を足さず、folio 自身の言葉で書きます。部品表に無い部品は、そもそも書けない作りにします。ただし、ページの種類が大きく増えて、この書き方の手間のほうが大きくなったら、外の道具（テンプレート）を使う形に移るかをあなたに問います。図は、今の 3 枚が使っている 3 種類だけを先に出し、図の道具（archify）の 5 種類は次の段で入れます。まだ描けない種類の図が元の文書に出てきたら、黙って飛ばさず「まだ分からない」と言って止まります。
+consequences:
+  - 入口の正本（index.yaml）を足す便では、床が見る正本を 5 file へ広げる。凍結 fixture（134 case）の期待は変えず、入口の正本の欄の決まりは憲法・要件書と同じく正本の schema 節に置く（P-5.1）。語彙に足す語が出れば同じ便で足す（R-9）。
+  - 部品目録（parts.json）と生成器の閉じた一覧（enum）の一致を検査に置く。片方だけに在る部品・図の型は落とす（P-2.4・P-6.3 により正本は部品目録の側）。
+  - 生成した 3 面が見本に置き換わる便で、手書きの見本 3 面は退役する（消さずに可逆な移動・N-1.2・持ち主の確認 A-1）。
+  - 受入の歯は、生成側からも検査側からも独立した凍結 anchor（小さい固定の正本の組と、期待される面の写し）を 1 本以上持つ（P-10.1）。今の正本から作った 3 面どうしの突き合わせを唯一の判定にしない（P-10.2）。
+  - 持ち主が 3 面を開いて読む承認（AC5 の形）は、生成した 3 面を tailnet の内側で見せて取り、逐語と日付を台帳と承認欄に記帳する（P-12.2）。
+  - 本判断は条文を改訂しないので A-2.3 の対象外。発効の承認は持ち主から planner 席の対話面（R-8）で取り、承認欄と台帳 f2-648.22 に逐語で記帳する。
+note: 元になった持ち主の回答の逐語は台帳 f2-648 notes 2026-09-17（4 つの問いと、決定 (3) の撤退条件を書くようにという直命）。実測の値（73 行のうち 70 行・図 7 つ・外部の部品 2 本）は planner 席が main 300b61e で数えた。
+# 図の節（便 33 の欄・任意）: 手順図（非エンジニア向け）と順序図（エンジニア向け）の対（持ち主の裁定 2026-09-19・design-note/schema.yaml figures_note）。型付き記述は図の道具の検査（showcase・R-14）を通したもの。往復の回数は台帳 f2-648 notes に記帳。
+figures:
+- id: fig-plain
+  type: archify-workflow
+  caption: 手順図（非エンジニア向け）— ページができるまで。見た目は見本から、文章と数は正本から。名札が目録に無ければ書かない（決定 (1)(2)）
+  refs:
+  - FR4
+  - AC2
+  spec:
+    schema_version: 2
+    diagram_type: workflow
+    meta:
+      title: ページができるまで
+      subtitle: 見た目は見本から、文章と数は正本から。名札が目録に無ければ書かない。
+      quality_profile: showcase
+    lanes:
+    - id: writer
+      label: 書く人
+    - id: folio
+      label: folio
+    - id: checker
+      label: 確かめる係
+    - id: owner
+      label: 持ち主
+    - id: trouble
+      label: だめだったとき
+      variant: exception
+    nodes:
+    - id: write
+      lane: writer
+      col: 0
+      type: external
+      label: 正本を書く
+      sublabel: 決まった書き方で
+      width: 140
+    - id: read
+      lane: folio
+      col: 1
+      type: backend
+      label: 正本を読む
+      sublabel: 文章と数はここから
+      width: 140
+    - id: shape
+      lane: folio
+      col: 2
+      type: backend
+      label: 見本の形に流し込む
+      sublabel: 色・部品・並びは見本
+      width: 150
+    - id: names
+      lane: checker
+      col: 3
+      type: security
+      label: 部品の名札を照らす
+      sublabel: 目録に無い名札は止める
+      width: 150
+    - id: page
+      lane: folio
+      col: 4
+      type: frontend
+      label: ページを書く
+      sublabel: 全部か無しか
+      width: 140
+    - id: walk
+      lane: owner
+      col: 5
+      type: external
+      label: 歩いて読む
+      sublabel: 承認の言葉を記帳
+      width: 140
+    - id: stop
+      lane: trouble
+      col: 3
+      type: security
+      label: ページを書かない
+      sublabel: 何が違うかを知らせる
+      width: 150
+    edges:
+    - id: e1
+      from: write
+      to: read
+      variant: default
+    - id: e2
+      from: read
+      to: shape
+      variant: default
+    - id: e3
+      from: shape
+      to: names
+      label: 渡す
+      variant: emphasis
+    - id: e4
+      from: names
+      to: page
+      label: 合格
+      variant: emphasis
+    - id: e5
+      from: names
+      to: stop
+      label: 不合格
+      variant: security
+      role: error
+    - id: e6
+      from: page
+      to: walk
+      label: 見せる
+      variant: emphasis
+    mainPath:
+    - write
+    - read
+    - shape
+    - names
+    - page
+    - walk
+- id: fig-tech
+  type: archify-sequence
+  caption: 順序図（エンジニア向け）— folio face --face srs が 1 面を組む順序（正本の読み → 部品の表で組む → byte 一致の検査・決定 (3)）
+  refs:
+  - FR4
+  - NFR2
+  spec:
+    schema_version: 1
+    diagram_type: sequence
+    meta:
+      title: folio face --face srs が 1 面を組む順序
+      subtitle: 正本の読みから byte 一致の検査まで（面 index・constitution も同じ形）
+      quality_profile: showcase
+    participants:
+    - id: cli
+      type: external
+      label: 呼び手
+      sublabel: folio face / build
+    - id: face
+      type: backend
+      label: face_srs
+      sublabel: derive（手書き Rust）
+    - id: src
+      type: database
+      label: 正本
+      sublabel: srs.yaml ほか 3 file
+    - id: frame
+      type: backend
+      label: face::Frame
+      sublabel: 部品 enum・folio.css
+    - id: fs
+      type: database
+      label: 出力先
+      sublabel: srs.html
+    messages:
+    - from: cli
+      to: face
+      y: 180
+      label: --face srs --out <out> --write | --check
+      variant: emphasis
+    - from: face
+      to: src
+      y: 222
+      label: yaml-rust2 で読む（escape して差し込む）
+      variant: default
+    - from: src
+      to: face
+      y: 264
+      label: 節・要件・受入基準・数（α・γ）
+      variant: return
+    - from: face
+      to: frame
+      y: 306
+      label: head・章の帯・card・toc を部品 enum（β）で組む
+      variant: emphasis
+    - from: frame
+      to: face
+      y: 348
+      label: HTML の byte 列（見本の class をそのまま）
+      variant: return
+    - from: face
+      to: fs
+      y: 410
+      label: '--write: 書く ／ --check: byte 比較'
+      variant: emphasis
+    - from: face
+      to: cli
+      y: 452
+      label: rc 0 一致 ／ 1 不一致 ／ 2 無い・導出できない
+      variant: dashed
