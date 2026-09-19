@@ -1,8 +1,8 @@
 # folio2 設計ノート — 欄の決まり（v1・2026-09-17・f2-648.7）
 # 設計ノート = 「どう作るか」を書く文書の 1 つの型（判断の記録 ADR-3 決定 (1)・要件書 FR9）。正本は YAML 1 file（P-6.1）で、置き場は design-intent/design-note/<doc id>.yaml（path は repo の根からの相対）。
-# この file は欄の決まりの型付きデータ（P-5.1）。機械の検査（床）はこの欄の決まりを M1 の folio が持つ（要件書 FR9〜FR12）＝それまで検査の結果は「まだ分からない」（P-10.3）。
-# day-1 の床（scripts/check_draft.py）は本 dir を読まない（母集団 = 正本 4 file・adr/・anchors/ のまま・ADR-3 決定 (6)）。
-# 読み方: schema 節のうち *_note で終わる欄は人が読む説明（規則ではない・N-2）。schema 節のそれ以外の欄が M1 の床の定数の写しになる（判断の記録の欄の決まり adr/schema.yaml と同じ形・ADR-1）。meta・mapping・plain は schema 節の外（床の定数ではない）。
+# この file は欄の決まりの型付きデータ（P-5.1）。機械の検査（床）は folio check が持つ（要件書 FR9〜FR12・便 23 で着地）。schema 節は生成区間で、床の定数から folio schema --write が導出する（人は直さない・判断の記録 ADR-9）。
+# day-1 の床（Python の script）は退役済みで、本 dir は folio check が読む（ADR-3 決定 (6) の移管の完了）。
+# 読み方: schema 節のうち *_note で終わる欄は人が読む説明（規則ではない・N-2）。schema 節のそれ以外の欄は床の定数からの導出物である（判断の記録の欄の決まり adr/schema.yaml と同じ形・ADR-1）。meta・mapping・plain は schema 節の外（床の定数ではない）。
 
 meta:
   id: folio2-design-note-schema
@@ -12,16 +12,17 @@ meta:
   requirements: [FR9, FR10, FR11, FR12, FR13, FR14, FR15]
   owner: 持ち主（shuu5）
   author: planner 席（AI・fable 5.1）
-  floor: {live: M1, until_then: まだ分からない}
-  floor_note: 床が実在するまで、この欄の決まりに照らした合格を名乗らない（P-4.1・P-10.3）。見本 example.yaml は生成器から独立した固定の材料で、M1 の凍結 anchor（P-10.1）の元になる候補（要件書の受入基準の fixture そのものではない）。
+  floor: {live: M1, landed: 便 23}
+  floor_note: 床は M1 の便 23 で着地した（folio check が設計ノートを数える）。見本 example.yaml は生成器から独立した固定の材料で、M1 の凍結 anchor（P-10.1）の元になる候補（要件書の受入基準の fixture そのものではない）。
   type_enum_ruling: {basis: [ADR-3, FR9, FR12], ruling: f2-648 notes 2026-09-17 06:53 JST（逐語「承認する」・対話面 R-8・f2-648.7 の取り込みの承認）, ruled_at: 2026-09-17}
   type_enum_ruling_note: 節の型の閉じた一覧（schema.section.type_enum）と文書の状態の値域（schema.doc_meta.status_enum の example）は、判断の記録 ADR-3 決定 (1) と要件書 FR9 が「など」で開いていた一覧を本 file が初めて閉じたもの（P-2.4）。ruling / ruled_at は本便の取り込みの承認（持ち主の逐語・2026-09-17）で埋めた（rules 行の初版と同じ手順・裁定前は null で置いていた・P-12.3）。P-2.4 の「判断の記録」は ADR-3 決定 (1) を出所とし、閉じた一覧そのものは ADR-3 の帰結として持ち主の承認で追認する（ADR は新しく起こさない）。以後の追加は判断の記録を要する。
 
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
 schema:
-  floor_note: 以下の欄（*_note を除く）は M1 の床の定数の写しになる。型も値も違わないこと（判断の記録の欄の決まりと同じ）。M1 まで床は無い＝この宣言は先取りで、実在は M1 の folio が持つ。
+  floor_note: 以下の欄は床の実装の定数からの導出物である（生成区間・判断の記録 ADR-9）。型も値も床の定数と違わないことを folio check が数える（判断の記録の欄の決まりと同じ）。変えるときは床の実装の定数を直し、folio schema --write で書き直す。
   path_base: repo-root
   path_base_note: 本 file と設計ノートの中の path（fixture・parts.json・導出物）は repo の根からの相対で書く。
-  date_format: '^\d{4}-\d{2}-\d{2}$'
+  date_format: ^\d{4}-\d{2}-\d{2}$
   doc:
     required: [meta, sections]
     optional: [figures, sources]
@@ -30,17 +31,21 @@ schema:
   doc_meta:
     required: [id, title, version, status, generated, profile]
     optional: [approval, supersedes, superseded_by, note]
-    id_pattern: '^[a-z][a-z0-9-]*$'
+    id_pattern: ^[a-z][a-z0-9-]*$
     id_note: 文書 id（doc id）= file 名の stem。append-only＝改名は「新しい id + 旧 id の廃止（status retired・superseded_by）」で表し、番号や名を再利用しない（P-7）。契約 id は「<doc id>#<row id>」の形で、前半がこの id（器 scribe2 の契約表と同じ形）
-    version_pattern: '^v[0-9]+\.[0-9]+$'
+    version_pattern: ^v[0-9]+\.[0-9]+$
     status_enum: [draft, effective, retired, example]
     effective_status: [effective, retired]
     approval_required_when: effective_status
-    status_note: {draft: 未承認・拘束力なし（承認欄は空でよい）, effective: 発効（承認欄に持ち主の逐語・日付・裁定 id・対話面が必須）, retired: 廃止（superseded_by 必須・P-7.2・承認欄を持つ）, example: 見本（拘束力なし・承認欄を持たない・凍結 anchor の材料）}
+    status_note:
+      draft: 未承認・拘束力なし（承認欄は空でよい）
+      effective: 発効（承認欄に持ち主の逐語・日付・裁定 id・対話面が必須）
+      retired: 廃止（superseded_by 必須・P-7.2・承認欄を持つ）
+      example: 見本（拘束力なし・承認欄を持たない・凍結 anchor の材料）
     profile_enum: [design-note]
     profile_note: 密度 profile は 1 行（見せ方だけを持つ・拘束の旗を置かない・ADR-3 決定 (1)・N-3）。文書の種類による違いは節の型で表す（P-5.3）
     approval: {required: [who, date, ruling, verbatim, surface], surface_enum: [R-8]}
-    approval_note: P-12.2。effective_status の文書にだけ必須（approval_required_when）。承認者の値域・裁定 id の形は判断の記録の欄の決まり（adr/schema.yaml）と同じ定数を M1 の床が持つ。持ち主との対話面（R-8）を通っていない記録に承認欄を置かない（P-12.3）
+    approval_note: P-12.2。effective_status の文書にだけ必須（approval_required_when）。承認者の値域・裁定 id の形は判断の記録の欄の決まり（adr/schema.yaml）と同じ定数を床が持つ。持ち主との対話面（R-8）を通っていない記録に承認欄を置かない（P-12.3）
   section:
     required: [n, type, title]
     optional: [body, rows, note]
@@ -148,6 +153,7 @@ schema:
     polarity_list_feed: true
     p18_4_judged_by: R-13
     guards_note: 設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）
+# folio:schema:end
 
 mapping:
   - {source: ADR-3 決定 (1), here: schema.doc_meta.profile_enum / schema.section.type_enum, requirement: FR9}
@@ -168,4 +174,4 @@ mapping:
   - {source: ADR-4 決定 (7), here: schema.figures.retry_rules_row / retry_record, requirement: FR15}
   - {source: folio2 の自前, here: schema.section.n_rule / schema.contract_table.row_id / schema.doc_meta.status_enum の example / schema.section.by_type.contract-table.section_ref_type, requirement: P-7・R-4（判断の記録・要件書には無い・裁定は meta.type_enum_ruling）}
 
-plain: 「どう作るか」を書く設計の文書（設計ノート）の書き方の決まりです。文書は 1 種類だけで、中は番号つきの節を並べます。節の種類は 6 つ（説明の文・部品の表・口の表・欄の表・検査の表・契約表）に限り、それ以外の節があれば機械が作らずに止めます。契約表（便 1 本ごとの約束の表）の「どんな欄があり、どんな値を取るか」は scribe2 の機械が持つ写しをそのまま読み、folio 側には書きません（知らない値が来たら「まだ分からない」と言います）。契約表から scribe2 が読む file を機械が作り、repo に置いた file とずれていれば「ずれている」と言います。便が本当に入ったかは commit の末尾の印だけを見て、無ければ「まだ分からない」と言い、「入っていない」とは言いません。説明の文の中で「〜しなければならない」と書いた文には番号を添え、単位のついた数を書きません。図は決まった書き方で書き、道具が外と通信する機能は使いません。発効した文書だけがあなたの OK の言葉を承認欄に持ち、見本は承認欄を持ちません。この決まりを機械で確かめる仕組みは M1 で作るので、それまでは「まだ分からない」のままです。
+plain: 「どう作るか」を書く設計の文書（設計ノート）の書き方の決まりです。文書は 1 種類だけで、中は番号つきの節を並べます。節の種類は 6 つ（説明の文・部品の表・口の表・欄の表・検査の表・契約表）に限り、それ以外の節があれば機械が作らずに止めます。契約表（便 1 本ごとの約束の表）の「どんな欄があり、どんな値を取るか」は scribe2 の機械が持つ写しをそのまま読み、folio 側には書きません（知らない値が来たら「まだ分からない」と言います）。契約表から scribe2 が読む file を機械が作り、repo に置いた file とずれていれば「ずれている」と言います。便が本当に入ったかは commit の末尾の印だけを見て、無ければ「まだ分からない」と言い、「入っていない」とは言いません。説明の文の中で「〜しなければならない」と書いた文には番号を添え、単位のついた数を書きません。図は決まった書き方で書き、道具が外と通信する機能は使いません。発効した文書だけがあなたの OK の言葉を承認欄に持ち、見本は承認欄を持ちません。この決まりは folio が機械で確かめます。決まりの部分は機械の中の決まりから folio が自動で書くので、手では直しません。
