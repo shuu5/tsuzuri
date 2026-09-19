@@ -25,10 +25,12 @@ pub const END: &str = "# folio:schema:end";
 /// 1 行の幅の上限（Unicode の字の数）。
 const WIDTH: usize = 100;
 
-/// 命令が扱う欄の決まりの file と、その schema 節の正本（床の定数）。この順に見て、最初に合格でない file で返す。
+/// 命令が扱う file と、その schema 節の正本（床の定数）。この順に見て、最初に合格でない file で返す。
+/// 3 本目は天井の正本（便 48・ADR-11 決定 (4)①・生成区間は file の末尾に 1 対）。
 const TARGETS: &[(&str, &Floor)] = &[
     ("adr/schema.yaml", &crate::adr::FLOOR),
     ("design-note/schema.yaml", &crate::note::FLOOR),
+    ("ceiling.yaml", &crate::ceiling::FLOOR),
 ];
 
 // ── 床の機械 ──

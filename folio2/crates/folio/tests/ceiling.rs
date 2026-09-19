@@ -3,7 +3,8 @@
 //! （版管理の無い写しは別の理由で「まだ分からない」になる）、ceiling.yaml に変異を 1 つ当てて `folio check --dir` を回す。
 //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる。
 //! 第 3 版の形（便 47・docs/design/delivery-47.md §1 (e)2〜4）: 旧 4 節を外し生成区間 schema（凍結 anchor
-//! tests/fixtures/schema/ceiling-region.txt の中身）を足した写しが通る・生成区間のずれは違反 1 件・旧 4 節も schema も無ければ落ちる。
+//! tests/fixtures/schema/ceiling-region.txt の中身）を足した写しが通る・生成区間のずれは違反 1 件。
+//! 締め（便 48・docs/design/delivery-48.md §1 (d)5）: schema の節が無ければ種別 ceiling の違反ちょうど 1 件・旧 4 節の名の節は未知の節で落ちる。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -275,7 +276,8 @@ fn ceiling_generated_region_drift_fails() {
     );
 }
 
-/// 旧 4 節も schema も無い正本は落ちる（緩む窓が無いこと・便 47 §1 (e)4）。
+/// 旧 4 節も schema も無い正本は落ちる（緩む窓が無いこと・便 47 §1 (e)4）。締め（便 48 §1 (d)5）: schema の節が無ければ
+/// 種別 ceiling の違反ちょうど 1 件で、文言は「schema の節が無い」を含む。
 #[test]
 fn ceiling_without_legacy_sections_and_schema_fails() {
     let w = Work::new("no-lists");
@@ -285,19 +287,17 @@ fn ceiling_without_legacy_sections_and_schema_fails() {
     let after: String = lines.iter().map(|l| format!("{l}\n")).collect();
     assert!(!after.contains("\nschema:\n"), "{after}");
     fs::write(w.ceiling(), after).unwrap();
-    let out = w.check();
-    assert_eq!(
-        out.status.code(),
-        Some(1),
-        "{}{}",
-        stdout(&out),
-        stderr(&out)
-    );
-    assert!(
-        stdout(&out).contains("folio check: 不合格（違反 "),
-        "{}",
-        stdout(&out)
-    );
+    assert_single_violation(&w.check(), "ceiling", &["ceiling.yaml: schema の節が無い"]);
+}
+
+/// 旧 4 節の名の節（第 2 版までの人が書いた一覧）を 1 つ足すと未知の節の違反 1 件（便 48 §1 (b)・受け口は無い）。
+#[test]
+fn ceiling_former_section_name_is_unknown() {
+    let w = Work::new("former-section");
+    let mut text = fs::read_to_string(w.ceiling()).unwrap();
+    text.push_str("\nverdicts:\n  values: [合格, 不合格, まだ分からない]\n");
+    fs::write(w.ceiling(), text).unwrap();
+    assert_single_violation(&w.check(), "未知の節", &["未知の節「verdicts」"]);
 }
 
 #[test]

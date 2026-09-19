@@ -1,16 +1,17 @@
 //! `folio check` の天井の正本（`ceiling.yaml`・ADR-8 決定 (1)(3)(4)）の形の検査（便 37・docs/design/delivery-37.md §1 (b)）。
 //! 数えるのは 未知の節・欄の非空・行 id の重複（便 0 と同じ関数・同じ種別・同じ文言の形）と、
-//! 固定の一覧（3 値・観点の列・文書の集合・所見と記録の欄の名・束の中身）・行き先の解決・天井の正本の文の英字の語（種別 ceiling）。
+//! 固定の一覧（観点の列・文書の集合）・生成区間 schema と床の木の突き合わせ・行き先の解決・天井の正本の文の英字の語（種別 ceiling）。
 //! 英字の語の切り出し・既知の集合・免除は便 4 の `vocab.rs` を共有し、rules 行 R-9 の母集団（憲法・rules・要件書）には入れない
-//! （相談窓口の正本を種別 intake で数える `intake.rs` と同じ持ち方）。fields の値と finding / record の欄の名は機械の層なので語彙に通さない。
-//! 節が欄の表でない・行の一覧が表の一覧でない・values や refute や required や contents や fields が一覧でない は「まだ分からない」。
-//! documents の note・finding の optional・meta の generated・approval は数えない。材料の束を組む命令・所見 file の検査・面の名札は後続の便。
+//! （相談窓口の正本を種別 intake で数える `intake.rs` と同じ持ち方）。fields の値と schema の欄の名は機械の層なので語彙に通さない。
+//! 節が欄の表でない・行の一覧が表の一覧でない・values や fields が一覧でない は「まだ分からない」。
+//! documents の note・meta の generated・approval は数えない。材料の束を組む命令は `bundle.rs`、所見 file の検査は `findings.rs`。
 //!
 //! 天井の床の定数は全部この 1 枚に置く（便 47・docs/design/delivery-47.md §1・ADR-11 決定 (4)①・P-5.1 / P-5.6）。床の木 `FLOOR` は
 //! 天井の正本の最上位の節 `schema`（生成区間）の正本で、葉は下の定数と同じ配列を指す（同じ一覧を 2 回書かない）。`_note` で終わる
 //! 欄は人が読む説明の注で、凍結 anchor tests/fixtures/schema/ceiling-region.txt の順と字面のまま持つ（`schema.rs` の `derive` が
 //! 書き、`floor_diff` は読まない）。束を組む命令（`bundle.rs`）と所見の検査（`findings.rs`）の読み手も一覧をここから取る。
-//! 節 `schema` が在れば `FLOOR` と突き合わせ、旧 4 節（verdicts・finding・record・bundle）は無くてもよい。無ければ今までどおり旧 4 節が必須。
+//! 節 `schema` は必須で `FLOOR` と突き合わせる（便 48・docs/design/delivery-48.md §1 (b)）。第 2 版までの人が書いた 4 節
+//! （verdicts・finding・record・bundle）の受け口は無く、その名の節は未知の節で落ちる。
 
 use std::collections::HashSet;
 
@@ -22,11 +23,8 @@ use crate::yaml::Node;
 
 const FILE: &str = "ceiling.yaml";
 
-/// 天井の正本の最上位の節の閉じた一覧（`FLOOR` の top_level・人が書く 4 節 + 生成区間 schema）。
+/// 天井の正本の最上位の節の閉じた一覧（`FLOOR` の top_level・人が書く 4 節 + 生成区間 schema・ほかの名は未知の節）。
 pub const CEILING_TOP_LEVEL: [&str; 5] = ["meta", "weights", "documents", "viewpoints", "schema"];
-
-/// 移行のあいだだけ許す旧 4 節（人が書いた一覧・第 3 版で生成区間 schema へ移る・便 48 で消す）。
-pub const LEGACY_SECTIONS: [&str; 4] = ["verdicts", "finding", "record", "bundle"];
 
 /// 観点ごとの 3 値（要件書 FR5 の 3 値・順も固定）。
 pub const VERDICT_VALUES: [&str; 3] = ["合格", "不合格", "まだ分からない"];
@@ -179,20 +177,17 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
 
 /// 天井の正本 `ceiling` の形を数える。`vocabulary` は既知の語の集合にだけ使う。
 pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
-    let allowed: Vec<&str> = CEILING_TOP_LEVEL
-        .iter()
-        .chain(LEGACY_SECTIONS.iter())
-        .copied()
-        .collect();
-    unknown_sections(FILE, ceiling, &allowed, report);
-    // 生成区間 schema が在れば床の木と突き合わせ、旧 4 節は無くてもよい（在れば今までどおり数える）
-    let generated = match ceiling.get("schema") {
-        Some(schema) => {
-            check_schema(schema, report);
-            true
-        }
-        None => false,
-    };
+    unknown_sections(FILE, ceiling, &CEILING_TOP_LEVEL, report);
+    // 決まりの部分は生成区間 schema が持つ（必須）。床の木と突き合わせる
+    match ceiling.get("schema") {
+        Some(schema) => check_schema(schema, report),
+        None => report.violation(
+            "ceiling",
+            format!(
+                "{FILE}: schema の節が無い（決まりの部分の生成区間・folio schema --write が書く）"
+            ),
+        ),
+    }
     let mut body: vocab::Body = Vec::new();
 
     if let Some(meta) = section(ceiling, "meta", report) {
@@ -204,18 +199,6 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
             report,
         );
         push_text(&mut body, "meta", meta, &["title"]);
-    }
-
-    if let Some(verdicts) = legacy(ceiling, "verdicts", generated, report) {
-        non_empty(FILE, "verdicts", verdicts, &["values"], report);
-        if let Some(values) = seq("verdicts", verdicts, "values", report) {
-            same_list(
-                "verdicts の values",
-                &strings(values),
-                &VERDICT_VALUES,
-                report,
-            );
-        }
     }
 
     // 反証に回す重さは重さの値域のどれか
@@ -271,70 +254,6 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
         duplicate_ids(FILE, viewpoints, report);
     }
 
-    if let Some(finding) = legacy(ceiling, "finding", generated, report) {
-        non_empty(
-            FILE,
-            "finding",
-            finding,
-            &["required", "place", "refute"],
-            report,
-        );
-        if let Some(required) = seq("finding", finding, "required", report) {
-            contains_all(
-                "finding の required",
-                &strings(required),
-                &FINDING_REQUIRED,
-                report,
-            );
-        }
-        if let Some(place) = section(finding, "place", report) {
-            non_empty(FILE, "finding.place", place, &["required"], report);
-            if let Some(required) = seq("finding.place", place, "required", report) {
-                contains_all(
-                    "finding.place の required",
-                    &strings(required),
-                    &PLACE_REQUIRED,
-                    report,
-                );
-            }
-        }
-        if let Some(refute) = section(finding, "refute", report) {
-            non_empty(FILE, "finding.refute", refute, &["values"], report);
-            if let Some(values) = seq("finding.refute", refute, "values", report) {
-                same_set(
-                    "finding.refute の values",
-                    &strings(values),
-                    &REFUTE_VALUES,
-                    report,
-                );
-            }
-        }
-    }
-
-    if let Some(record) = legacy(ceiling, "record", generated, report) {
-        non_empty(FILE, "record", record, &["required"], report);
-        if let Some(required) = seq("record", record, "required", report) {
-            contains_all(
-                "record の required",
-                &strings(required),
-                &RECORD_REQUIRED,
-                report,
-            );
-        }
-    }
-
-    if let Some(bundle) = legacy(ceiling, "bundle", generated, report) {
-        non_empty(FILE, "bundle", bundle, &["contents", "digest"], report);
-        if let Some(contents) = seq("bundle", bundle, "contents", report) {
-            contains_all(
-                "bundle の contents",
-                &strings(contents),
-                &BUNDLE_CONTENTS,
-                report,
-            );
-        }
-    }
-
     // 既知の集合が読めない件は便 4 の検査が「まだ分からない」に数えてある
     let known = vocab::known_words(vocabulary, &mut Report::default());
     for (lw, at) in vocab::unknown_words(&body, &known) {
@@ -346,8 +265,8 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
 }
 
 /// 生成区間 schema を床の木 `FLOOR` と突き合わせる（便 47 §1 (c)）。欄の表でなければ「まだ分からない」。食い違いの道 1 本につき
-/// 違反 1 件（文言は判断の記録・設計ノートの側と同じ型）。一覧の要素のずれ（`path[i]`）はその一覧 1 本の道に寄せる＝旧 4 節の
-/// 同じ一覧の検査（`same_list`）と同じく、順の入れ替えを 1 件で数える。
+/// 違反 1 件（文言は判断の記録・設計ノートの側と同じ型）。一覧の要素のずれ（`path[i]`）はその一覧 1 本の道に寄せる＝観点の id の
+/// 列の検査（`same_list`）と同じく、順の入れ替えを 1 件で数える。
 fn check_schema(schema: &Node, report: &mut Report) {
     if schema.as_map().is_none() {
         report.unknown(format!("{FILE}: schema が欄の表でない"));
@@ -368,20 +287,6 @@ fn check_schema(schema: &Node, report: &mut Report) {
     for field in fields {
         report.violation("ceiling", format!("{FILE}: 床の定数と違う: schema.{field}"));
     }
-}
-
-/// 旧 4 節（`LEGACY_SECTIONS`）。生成区間 schema が在るとき（`generated`）は無くてもよく、在れば今までどおり数える。
-/// 無いときは今までどおり必須（`section` が空の表として扱い、欄の非空が数える）。
-fn legacy<'a>(
-    root: &'a Node,
-    name: &str,
-    generated: bool,
-    report: &mut Report,
-) -> Option<&'a Node> {
-    if generated && root.get(name).is_none() {
-        return None;
-    }
-    section(root, name, report)
 }
 
 /// 欄の表の節。無い・null は空の表として扱い（欄の非空が数える）、表でなければ「まだ分からない」。
@@ -518,19 +423,6 @@ fn same_set(at: &str, actual: &[String], expected: &[&str], report: &mut Report)
     list_differs(at, actual, missing, extra, report);
 }
 
-/// 床の定数を全部含むか（余分は数えない）。空の一覧は欄の非空が数える。
-fn contains_all(at: &str, actual: &[String], expected: &[&str], report: &mut Report) {
-    let missing: Vec<&str> = expected
-        .iter()
-        .copied()
-        .filter(|e| !actual.iter().any(|a| a == e))
-        .collect();
-    if actual.is_empty() || missing.is_empty() {
-        return;
-    }
-    list_differs(at, actual, missing, Vec::new(), report);
-}
-
 /// 行き先の欄が `targets` に解けるか。空の欄は欄の非空が数えるのでここでは数えない。
 fn resolve(at: &str, row: &Node, field: &str, targets: &HashSet<String>, report: &mut Report) {
     let shown = match row.get(field) {
@@ -611,13 +503,12 @@ mod tests {
     }
 
     #[test]
-    fn ceiling_fixed_lists_count_order_set_and_containment_differently() {
+    fn ceiling_fixed_lists_count_order_and_set_differently() {
         let actual = |s: &[&str]| s.iter().map(|w| w.to_string()).collect::<Vec<_>>();
         let mut report = Report::default();
         same_list("a", &actual(&["y", "x"]), &["x", "y"], &mut report);
         same_set("b", &actual(&["y", "x"]), &["x", "y"], &mut report);
-        contains_all("c", &actual(&["x", "z"]), &["x", "y"], &mut report);
-        contains_all("d", &actual(&["y", "x", "z"]), &["x", "y"], &mut report);
+        same_set("c", &actual(&["x", "z"]), &["x", "y"], &mut report);
         assert_eq!(report.violations.len(), 2, "{:?}", report.violations);
         assert_eq!(
             report.violations[0].1,
@@ -625,7 +516,15 @@ mod tests {
         );
         assert_eq!(
             report.violations[1].1,
-            "ceiling.yaml: c: 一覧「x, z」が床の定数と違う（無い: y）"
+            "ceiling.yaml: c: 一覧「x, z」が床の定数と違う（無い: y）（余分: z）"
         );
+    }
+
+    /// 最上位の節は `FLOOR` の top_level だけ = 第 2 版までの 4 節の名は未知の節で落ちる（便 48 §1 (b)）。
+    #[test]
+    fn ceiling_top_level_has_no_room_for_the_former_sections() {
+        for former in ["verdicts", "finding", "record", "bundle"] {
+            assert!(!CEILING_TOP_LEVEL.contains(&former), "{former}");
+        }
     }
 }

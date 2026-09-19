@@ -12,6 +12,12 @@
 //! 9. 設計ノートの側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 10. 設計ノートの側の印: begin を消す → 2。
 //! 11. 設計ノートの側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致。
+//!
+//! 便 48（docs/design/delivery-48.md §1 (c)(d)）: 命令は 3 本目の file ceiling.yaml（天井の正本・生成区間は末尾）も順に見る（合格の標準出力は 3 行）。
+//! 12. 天井の正本の側の実の正本: --check → 0・3 行目に「ceiling.yaml」「2915 byte」・生成区間の要約値が (c) の値・行数 24。
+//! 13. 天井の正本の側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
+//! 14. 天井の正本の側の印: begin を消す → 2。
+//! 15. 天井の正本の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致（人が書く節も不変）。
 
 use std::fs;
 use std::io::Write;
@@ -28,8 +34,14 @@ const NOTE_REGION_LINES: usize = 135;
 const NOTE_REGION_BYTES: usize = 14618;
 const NOTE_REGION_SHA256: &str = "cae43ed2765884f8593aff4925ffae3cc0e69a0e18d376160d615853f437ce8e";
 
-/// 命令が見る欄の決まりの file の数（合格の標準出力の行数）。
-const TARGETS: usize = 2;
+/// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
+const CEILING_REGION_LINES: usize = 24;
+const CEILING_REGION_BYTES: usize = 2915;
+const CEILING_REGION_SHA256: &str =
+    "5ad2f19b7d8c4a197865c5280f4c82653f97ef6dc0b9b45186a2678539429fa2";
+
+/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本）。
+const TARGETS: usize = 3;
 
 const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
 const END: &str = "# folio:schema:end";
@@ -156,6 +168,14 @@ impl Work {
         fs::read_to_string(self.note_schema_yaml()).unwrap()
     }
 
+    fn ceiling_yaml(&self) -> PathBuf {
+        self.dir().join("ceiling.yaml")
+    }
+
+    fn read_ceiling(&self) -> String {
+        fs::read_to_string(self.ceiling_yaml()).unwrap()
+    }
+
     /// 写しの adr/schema.yaml の字面の変異（1 か所だけ）。
     fn mutate(&self, from: &str, to: &str) {
         mutate_file(&self.schema_yaml(), from, to);
@@ -164,6 +184,11 @@ impl Work {
     /// 写しの design-note/schema.yaml の字面の変異（1 か所だけ）。
     fn mutate_note(&self, from: &str, to: &str) {
         mutate_file(&self.note_schema_yaml(), from, to);
+    }
+
+    /// 写しの ceiling.yaml の字面の変異（1 か所だけ）。
+    fn mutate_ceiling(&self, from: &str, to: &str) {
+        mutate_file(&self.ceiling_yaml(), from, to);
     }
 
     fn schema(&self, flags: &[&str]) -> Output {
@@ -209,7 +234,7 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
-/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。合格の標準出力は file ごとの 1 行（2 行）。
+/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。合格の標準出力は file ごとの 1 行（`TARGETS` 行）。
 fn assert_outcome(out: &Output, code: i32, words: &[&str]) {
     let shown = format!("{}{}", stdout(out), stderr(out));
     assert_eq!(out.status.code(), Some(code), "{shown}");
@@ -435,7 +460,7 @@ fn schema_check_matches_the_real_design_note_file_and_its_frozen_digest() {
         ],
     );
     let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
-    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(lines.len(), TARGETS, "{lines:?}");
     assert!(lines[0].contains("adr/schema.yaml"), "{lines:?}");
     assert!(lines[1].contains("design-note/schema.yaml"), "{lines:?}");
     assert!(
@@ -526,5 +551,129 @@ fn schema_write_restores_the_design_note_region_and_is_idempotent() {
         &["変わらない", &format!("{NOTE_REGION_BYTES} byte")],
     );
     assert_eq!(w.read_note(), original);
+    assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
+}
+
+// ── 便 48: 天井の正本の側 ──
+
+/// 天井の正本の側の生成区間の変異（1 byte・束の要約値の規則の名）。
+const CEILING_DRIFT_FROM: &str = ", digest: sha256-files-1}\n";
+const CEILING_DRIFT_TO: &str = ", digest: sha256-files-2}\n";
+
+// ── 12. 天井の正本の側の実の正本 ──
+
+#[test]
+fn schema_check_matches_the_real_ceiling_file_and_its_frozen_digest() {
+    let w = Work::new("ceiling-real");
+    let out = w.schema(&["--check"]);
+    assert_outcome(
+        &out,
+        0,
+        &[
+            "一致",
+            "ceiling.yaml",
+            &format!("{CEILING_REGION_BYTES} byte"),
+        ],
+    );
+    let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), TARGETS, "{lines:?}");
+    assert!(lines[0].contains("adr/schema.yaml"), "{lines:?}");
+    assert!(lines[1].contains("design-note/schema.yaml"), "{lines:?}");
+    assert!(lines[2].contains("ceiling.yaml"), "{lines:?}");
+    assert!(
+        lines[2].contains(&format!("{CEILING_REGION_BYTES} byte")),
+        "{lines:?}"
+    );
+    let text = w.read_ceiling();
+    let cur = region(&text);
+    assert_eq!(cur.len(), CEILING_REGION_BYTES, "生成区間の byte 数");
+    assert_eq!(cur.lines().count(), CEILING_REGION_LINES, "生成区間の行数");
+    assert!(cur.starts_with("schema:\n"));
+    match sha256_hex(cur.as_bytes()) {
+        Ok(hex) => assert_eq!(hex, CEILING_REGION_SHA256, "sha256sum で測り直した要約値"),
+        Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
+    }
+    // 生成区間は file の末尾（end の印の行で終わる）
+    assert!(text.ends_with(&format!("\n{END}\n")), "{text}");
+    // 検査は file を書かない
+    assert_eq!(w.read_ceiling(), text);
+}
+
+// ── 13. 天井の正本の側のずれ ──
+
+#[test]
+fn schema_check_fails_on_one_byte_drift_inside_the_ceiling_region() {
+    let w = Work::new("ceiling-drift");
+    let adr = w.read();
+    let note = w.read_note();
+    w.mutate_ceiling(CEILING_DRIFT_FROM, CEILING_DRIFT_TO);
+    assert_outcome(
+        &w.schema(&["--check"]),
+        1,
+        &[
+            "ceiling.yaml",
+            "生成区間",
+            "≠ 導出",
+            &format!("{CEILING_REGION_BYTES} byte"),
+        ],
+    );
+    // 先の 2 本（合格）の行は、3 本目で落ちたときは出さない・file も触らない
+    assert_eq!(w.read(), adr);
+    assert_eq!(w.read_note(), note);
+}
+
+// ── 14. 天井の正本の側の印 ──
+
+#[test]
+fn schema_check_is_unknown_without_the_ceiling_begin_marker() {
+    let w = Work::new("ceiling-no-begin");
+    w.mutate_ceiling(&format!("{BEGIN}\n"), "");
+    assert_outcome(
+        &w.schema(&["--check"]),
+        2,
+        &["ceiling.yaml: 印が 1 対でない"],
+    );
+    assert_outcome(
+        &w.schema(&["--write"]),
+        2,
+        &["ceiling.yaml: 印が 1 対でない"],
+    );
+}
+
+// ── 15. 天井の正本の側の書き直し ──
+
+#[test]
+fn schema_write_restores_the_ceiling_region_and_is_idempotent() {
+    let w = Work::new("ceiling-write");
+    let original = w.read_ceiling();
+    let adr = w.read();
+    let note = w.read_note();
+    w.mutate_ceiling(CEILING_DRIFT_FROM, CEILING_DRIFT_TO);
+    assert_ne!(w.read_ceiling(), original);
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &[
+            "変わらない",
+            "adr/schema.yaml",
+            "design-note/schema.yaml",
+            "書いた",
+            "ceiling.yaml",
+            &format!("{CEILING_REGION_BYTES} byte"),
+        ],
+    );
+    assert_eq!(
+        w.read_ceiling(),
+        original,
+        "file 全体が元と byte 一致（人が書く節 meta・weights・documents・viewpoints も不変）"
+    );
+    assert_eq!(w.read(), adr, "判断の記録の側は触らない");
+    assert_eq!(w.read_note(), note, "設計ノートの側は触らない");
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &["変わらない", &format!("{CEILING_REGION_BYTES} byte")],
+    );
+    assert_eq!(w.read_ceiling(), original);
     assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
 }
