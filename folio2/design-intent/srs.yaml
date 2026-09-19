@@ -1,4 +1,4 @@
-# folio2 要件書 — 正本（v1.4・M0 = v1.0 発効 2026-09-12・M1 の要件 = v1.1 2026-09-16・CON1 の改訂 = v1.2 2026-09-17・図 3 の正本 verdicts = v1.3 2026-09-17・判断の記録の面 FR16 / AC14 = v1.4 2026-09-18・planner 席）
+# folio2 要件書 — 正本（v1.4・M0 = v1.0 発効 2026-09-12・M1 の要件 = v1.1 2026-09-16・CON1 の改訂 = v1.2 2026-09-17・図 3 の正本 verdicts = v1.3 2026-09-17・判断の記録の面 FR16 / AC14 = v1.4 2026-09-18・用語集の形 = v1.5 2026-09-19・planner 席）
 # 位置: f2-648.1 の中身 3（要件書 M0 の正本）。見本 v4 の srs.html（walk 承認済みの提示層）を起点に G15=A を反映:
 #   分離緩め（憲法の根拠文と数値は生成器が正本から差し込む＝ここには id だけ書く・値を再掲しない）/ 参照の母集合は内部 3 空間
 #   （要件 id・条 id・rules 行 id）で外部 pointer は sources 欄 / P-3 は置き場条へ弱めた（憲法側）/ AC 4→6 / RED test は文 + fixture path /
@@ -9,10 +9,10 @@
 meta:
   id: folio2-srs-m0
   title: 要件書（M0・最初に動く形 ＋ M1・設計ノートと契約表と図の生成）
-  version: v1.4
+  version: v1.5
   status: effective
-  effective_version: v1.4
-  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）
+  effective_version: v1.5
+  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）・v1.5 = 2026-09-19 発効（glossary_pointer の文言だけ = 要件書 §8 を憲法 §7 と同じ形に・逐語「各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う」・裁定 id f2-648 notes 2026-09-19）
   generated: 2026-09-12
   promise: 持ち主が易しい質問 5 つに答える（答えなくても推奨で進む）と、入口・憲法・要件書の 3 枚が同じ見た目で生成され、機械検査の結果が必ず表示される。
   counts: {fr: 16, nfr: 3, ac: 14, con: 9}
@@ -28,6 +28,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-17, stamp: "発効（f2-648 notes 2026-09-17・対話面 R-8・planner の「図 3 の正本が要件書に無い・案 A = v1.3 に節を足す（推奨）／案 B = 図 3 を落とす」の提示への回答）", verbatim: Aですすめてよい, version: v1.3}
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-18, stamp: "v1.4 起草（f2-648.39）・判断の記録の面の要件 FR16 と受入基準 AC14 の追加と scope の「作らない」の行の改訂だけ（M0・M1 の要件と受入基準と制約は据え置き）", version: v1.4}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-18, stamp: "発効（f2-648.39 notes 2026-09-18・対話面 R-8・判断の記録 ADR-7 の発効の承認要求〔要件書 v1.4 を同じ PR で運ぶと明記〕への回答）", verbatim: 承認する, version: v1.4}
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: "v1.5 起草（便 36 の前提）・glossary_pointer の文言だけ（要件書 §8 を憲法 §7 と同じ形にする・要件・受入基準・制約は据え置き）", version: v1.5}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648 notes 2026-09-19 13:1x JST・対話面 R-8・要件書と憲法の用語集の形の違いへの持ち主の指摘 = 裁定）", verbatim: 各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う, version: v1.5}
   effective: 承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。版ごとに承認の行を足し、前の版の行は書き換えない。
   changes_from_v1_0:
     - M1 の要件を新しい番号で足した（FR9〜FR15・AC7〜AC13・CON8〜CON9）。M0 の要件（FR1〜FR8・NFR1〜NFR3・AC1〜AC6・CON1〜CON7）は据え置き（P-7.2）。NFR3 と AC6 の母集団（内部 3 空間）は広げない（ADR-3 決定 (6)）
@@ -379,7 +381,7 @@ sources:
   - {id: report-v2-shape, name: 報告「folio2 — v2 の形」, where: .claude-session/reports/2026-09-12-v2-shape/index.html（gitignored・参照の母集合に入れない）}
   - {id: mockup-v4, name: 見本 v4（承認済み提示層）, where: .claude-session/reports/2026-09-12-mockup-3faces-v4/}
 
-glossary_pointer: vocabulary.yaml（要件書 §8 は見出し + リンクだけ・定義はここに写さない）
+glossary_pointer: vocabulary.yaml（読者が引く語の正本。要件書 §8 は憲法 §7 と同じ形で語と定義を出す・ここには写さない）
 
 # 図の節（便 34 の欄・任意・最上位）: 手順図（非エンジニア向け）と順序図（エンジニア向け）の対（持ち主の裁定 2026-09-19）。型付き記述は図の道具の検査（showcase・R-14）を通したもの。要件の行の figures 欄（図1〜図3）は folio が自前で描く図で、この節とは別。往復の回数は台帳 f2-648 notes に記帳。
 figures:
