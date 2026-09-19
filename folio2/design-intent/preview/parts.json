@@ -42,6 +42,7 @@
         "index",
         "constitution",
         "srs",
+        "adr",
         "note"
       ],
       "requires": [

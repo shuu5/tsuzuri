@@ -115,7 +115,7 @@ const CONTRACT_FIXED: [&str; 7] = ["id", "title", "req", "section", "verify", "s
 
 /// 図の型（閉じた表 β・図の道具の 5 型）→ figcaption の名札。字面は部品目録 parts.json の
 /// figure_body_classes.type_ids と同じ（歯で突き合わせる）。表に無い型は `figure::render` が先に断る。
-const FIGURE_LABELS: [(&str, &str); 5] = [
+pub(crate) const FIGURE_LABELS: [(&str, &str); 5] = [
     ("archify-architecture", "構成図（architecture）"),
     ("archify-workflow", "手順図（workflow）"),
     ("archify-sequence", "順序図（sequence）"),

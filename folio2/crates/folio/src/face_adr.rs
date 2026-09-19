@@ -5,20 +5,26 @@
 //! 章の h2 のうち契約が名指すのは 01・02 と承認欄だけなので、03〜05 は章の名をそのまま h2 に出す（新しい字面を持たない）。
 //! 見た目は便 27（delivery-27.md §1 (a)〜(c)）で直した: 表紙は h1 が短い名で title は副題・章 01/02 は文の頭の
 //! 列挙を ol へ・章 04 は根拠を 4 群の card（id + 行き先の題）にして撤退条件を格子の外へ出す。
+//! 図の章（便 33・FR15）: 正本に任意の図の節（figures）が 1 枚以上あれば章 06「図」を「改訂と帰結」の後・承認欄の
+//! 前に置く。中身は設計ノートの面の図の章と同じ字面で、図の本体（SVG）は `figure.rs` の `render` が図の道具で描いた
+//! ものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか）。図が無い面は便 32 までと byte 不変。
 
 use std::path::Path;
 
-use crate::face::{self, Frame, R, X, anchor, card};
+use crate::face::{self, Frame, R, X, anchor, card, esc};
+use crate::face_note::FIGURE_LABELS;
+use crate::figure;
 use crate::parts::catalog::Component;
 
-/// 判断の記録の面が使う部品（7 種）。
-pub const PARTS: [Component; 7] = [
+/// 判断の記録の面が使う部品（8 種・便 33 で figure-panel を足した）。
+pub const PARTS: [Component; 8] = [
     Component::FreshnessStamp,
     Component::FontSizeControl,
     Component::DocCoverBand,
     Component::ApprovalBlock,
     Component::ChapterDeckBand,
     Component::SectionLeadCallout,
+    Component::FigurePanel,
     Component::ItemRow,
 ];
 
@@ -34,8 +40,12 @@ const H2: [&str; 5] = [
     "改訂と帰結",
 ];
 
-/// 章 01〜05 の帯の class と kicker の絵記号（絵記号は要件書の面の章 01〜05 の写し）。
-const BANDS: [(&str, &str); 5] = [
+/// 章 06（図）の名（帯の kicker・目次の名）。
+const FIGURES_CHAPTER: &str = "図";
+
+/// 章 01〜06 の帯の class と kicker の絵記号（01〜05 は要件書の面の章 01〜05 の写し・06 は要件書の面の band-6 の写し）。
+/// 章の数だけ先頭から切り出して `Frame` に渡す（`static` なので切り出しは 'static）。
+static BANDS: [(&str, &str); 6] = [
     (
         "band-1",
         "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
@@ -50,20 +60,26 @@ const BANDS: [(&str, &str); 5] = [
         "band-5",
         "<path d=\"M9 11l3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>",
     ),
+    ("band-6", "<path d=\"M4 18h16M6 14V8M12 14V4M18 14v-4\"/>"),
 ];
 
-/// 判断の記録の面の骨格。nav の aria-current は付かない（読める面の nav に判断の記録は無い）。
-const FRAME: Frame = Frame {
-    name: "判断の記録",
-    source: "adr/ADR-n.yaml",
-    favicon: "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235f45a6'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E要%3C/text%3E%3C/svg%3E\">",
-    current: 3,
-    first: 1,
-    bands: &BANDS,
-    prev: ("srs.html", "要件書"),
-    next: ("index.html", "入口"),
-    parts: &PARTS,
-};
+/// 判断の記録の面の FRAME の favicon の字面。
+const FAVICON: &str = "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235f45a6'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E要%3C/text%3E%3C/svg%3E\">";
+
+/// 判断の記録の面の骨格（章の数 = 5 + 図の章の有無）。nav の aria-current は付かない（読める面の nav に判断の記録は無い）。
+fn frame(chapters: usize) -> Frame {
+    Frame {
+        name: "判断の記録",
+        source: "adr/ADR-n.yaml",
+        favicon: FAVICON,
+        current: 3,
+        first: 1,
+        bands: &BANDS[..chapters],
+        prev: ("srs.html", "要件書"),
+        next: ("index.html", "入口"),
+        parts: &PARTS,
+    }
+}
 
 // ── 名札の表（β・表に無い値は導出できない）──
 
@@ -84,10 +100,6 @@ const RETREAT_KIND: &[(&str, &str)] = &[
     ("ruling", "持ち主の裁定"),
 ];
 
-fn dc(c: Component) -> String {
-    FRAME.dc(c)
-}
-
 /// 状態の名札（短い）と状態の行（組み立て済みの HTML）。
 struct Status {
     label: &'static str,
@@ -101,6 +113,7 @@ struct Counts {
     rejected: usize,
     basis: usize,
     amends: usize,
+    figures: usize,
 }
 
 /// 根拠の id の行き先を解くための、他の正本の id と題の一覧。
@@ -146,19 +159,27 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         return Err(format!("{name}: 欄 id「{file_id}」が --id「{id}」と違う"));
     }
     let st = status(&a, dir, &ctx)?;
-    let counts = counts(&a)?;
+    let figs = match a.g("figures")? {
+        Some(x) => x.seq()?,
+        None => Vec::new(),
+    };
+    let counts = counts(&a, figs.len())?;
+    let f = frame(CHAPTERS.len() + usize::from(!figs.is_empty()));
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &a, id, &st)?;
-    cover(&mut o, &a, id, &st, &counts)?;
-    toc(&mut o);
-    prose_chapter(&mut o, 1, &a.ef("context")?);
-    prose_chapter(&mut o, 2, &a.ef("decision")?);
-    options_chapter(&mut o, &a)?;
-    basis_chapter(&mut o, &a, dir, &ctx)?;
-    amends_chapter(&mut o, &a, dir, &ctx)?;
-    approval_chapter(&mut o, &a, &st)?;
-    foot(&mut o, &a, id, &counts)?;
+    head(&mut o, &f, &a, id, &st)?;
+    cover(&mut o, &f, &a, id, &st, &counts)?;
+    toc(&f, &mut o, figs.len());
+    prose_chapter(&mut o, &f, 1, &a.ef("context")?);
+    prose_chapter(&mut o, &f, 2, &a.ef("decision")?);
+    options_chapter(&mut o, &f, &a)?;
+    basis_chapter(&mut o, &f, &a, dir, &ctx)?;
+    amends_chapter(&mut o, &f, &a, dir, &ctx)?;
+    if !figs.is_empty() {
+        figures_chapter(&mut o, &f, CHAPTERS.len() + 1, &figs, dir, &ctx)?;
+    }
+    approval_chapter(&mut o, &f, &a, &st)?;
+    foot(&mut o, &f, &a, id, &counts)?;
     Ok(format!("{}\n", o.join("\n")))
 }
 
@@ -361,7 +382,7 @@ fn status(a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<Status> {
     Ok(Status { label, line })
 }
 
-fn counts(a: &X<'_>) -> R<Counts> {
+fn counts(a: &X<'_>, figures: usize) -> R<Counts> {
     let options = a.f("options")?.seq()?;
     if options.is_empty() {
         return Err(format!("{}: 案が 1 つも無い", a.f("options")?.at));
@@ -382,13 +403,14 @@ fn counts(a: &X<'_>) -> R<Counts> {
         rejected: options.len() - adopted,
         basis: a.f("basis")?.seq()?.len(),
         amends,
+        figures,
     })
 }
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, a: &X<'_>, id: &str, st: &Status) -> R<()> {
-    FRAME.head(
+fn head(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status) -> R<()> {
+    f.head(
         o,
         &format!("folio2 — 判断の記録 {id}（{}）", st.label),
         &a.ef("date")?,
@@ -402,8 +424,8 @@ fn meta_span(k: &str, v: &str) -> String {
     format!("<span class=\"m\"><span class=\"k\">{k}</span><span class=\"v\">{v}</span></span>")
 }
 
-fn cover(o: &mut Vec<String>, a: &X<'_>, id: &str, st: &Status, n: &Counts) -> R<()> {
-    o.push(format!("<header {}>", dc(Component::DocCoverBand)));
+fn cover(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, n: &Counts) -> R<()> {
+    o.push(format!("<header {}>", f.dc(Component::DocCoverBand)));
     o.push(format!(
         "<p class=\"cover-eyebrow\"><span class=\"doc-type\">判断の記録 (ADR)</span> <span>folio2 — {id}</span></p>"
     ));
@@ -432,6 +454,10 @@ fn cover(o: &mut Vec<String>, a: &X<'_>, id: &str, st: &Status, n: &Counts) -> R
             .f("kind")?
             .lookup(RETREAT_KIND, "撤退条件の種類")?,
     ));
+    // 図は 1 枚以上のときだけ（図なしの面は便 32 までと byte 不変）
+    if n.figures > 0 {
+        o.push(meta_span(FIGURES_CHAPTER, &format!("{} 枚", n.figures)));
+    }
     o.push("</div>".to_string());
     o.push(format!(
         "<p class=\"cover-status\"><span class=\"k\">状態</span><span>{}（<a href=\"#approval\">承認欄へ</a>）</span></p>",
@@ -441,17 +467,20 @@ fn cover(o: &mut Vec<String>, a: &X<'_>, id: &str, st: &Status, n: &Counts) -> R
     Ok(())
 }
 
-fn toc(o: &mut Vec<String>) {
-    let heads = CHAPTERS
+fn toc(f: &Frame, o: &mut Vec<String>, figures: usize) {
+    let mut heads = CHAPTERS
         .iter()
         .zip(H2)
         .map(|(k, t)| ((*k).to_string(), t.to_string()))
         .collect::<Vec<_>>();
-    FRAME.toc(o, &heads, "承認");
+    if figures > 0 {
+        heads.push((FIGURES_CHAPTER.to_string(), format!("{figures} 枚")));
+    }
+    f.toc(o, &heads, "承認");
 }
 
-fn band(o: &mut Vec<String>, n: usize) {
-    FRAME.band(o, n, CHAPTERS[n - 1], H2[n - 1], None);
+fn band(o: &mut Vec<String>, f: &Frame, n: usize) {
+    f.band(o, n, CHAPTERS[n - 1], H2[n - 1], None);
 }
 
 // ── 章 ──
@@ -488,8 +517,8 @@ fn item_marks(body: &str) -> Vec<(usize, usize)> {
 
 /// 章 01・02（帯 + chapbody）。`body` は escape 済み。文の頭の印が 2 つ以上なら前置きの p と ol へ分け、
 /// 1 つ以下なら p 1 つ（便 27 §1 (b)）。
-fn prose_chapter(o: &mut Vec<String>, n: usize, body: &str) {
-    band(o, n);
+fn prose_chapter(o: &mut Vec<String>, f: &Frame, n: usize, body: &str) {
+    band(o, f, n);
     o.push("<div class=\"chapbody\">".to_string());
     let marks = item_marks(body);
     if marks.len() < 2 {
@@ -510,15 +539,15 @@ fn prose_chapter(o: &mut Vec<String>, n: usize, body: &str) {
 }
 
 /// 章 03（案・採用と退けた案を同じ形で）。
-fn options_chapter(o: &mut Vec<String>, a: &X<'_>) -> R<()> {
-    band(o, 3);
+fn options_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>) -> R<()> {
+    band(o, f, 3);
     o.push("<div class=\"chapbody\">".to_string());
     for opt in a.f("options")?.seq()? {
         let oid = opt.f("id")?.id()?;
         let verdict = opt.f("verdict")?;
         o.push(format!(
             "<article {} id=\"opt-{oid}\">",
-            dc(Component::ItemRow)
+            f.dc(Component::ItemRow)
         ));
         o.push(format!(
             "<div class=\"ir-head\"><span class=\"rid\">案 {oid}</span><h3 class=\"rt\">{}</h3><span class=\"badges\"><span class=\"pill\">{}</span></span></div>",
@@ -541,8 +570,8 @@ fn options_chapter(o: &mut Vec<String>, a: &X<'_>) -> R<()> {
 }
 
 /// 章 04（根拠の 4 群と撤退条件・便 27 §1 (c)）。
-fn basis_chapter(o: &mut Vec<String>, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()> {
-    band(o, 4);
+fn basis_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()> {
+    band(o, f, 4);
     o.push("<div class=\"chapbody\">".to_string());
     // 群の順は BASIS_GROUPS の順・群の中は basis の順
     let mut groups: [Vec<String>; 4] = std::array::from_fn(|_| Vec::new());
@@ -559,7 +588,7 @@ fn basis_chapter(o: &mut Vec<String>, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()>
     }
     o.push(format!(
         "<div {} style=\"--band-n:{}\">",
-        dc(Component::SectionLeadCallout),
+        f.dc(Component::SectionLeadCallout),
         groups.iter().filter(|g| !g.is_empty()).count()
     ));
     for (k, g) in groups.iter().enumerate() {
@@ -590,8 +619,8 @@ fn basis_chapter(o: &mut Vec<String>, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()>
 }
 
 /// 章 05（改訂・帰結・反対側からの確認・置き換え・注）。
-fn amends_chapter(o: &mut Vec<String>, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()> {
-    band(o, 5);
+fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()> {
+    band(o, f, 5);
     o.push("<div class=\"chapbody\">".to_string());
     let amends = match a.g("amends")? {
         Some(x) => x.seq()?,
@@ -647,10 +676,73 @@ fn amends_chapter(o: &mut Vec<String>, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()
     Ok(())
 }
 
-fn approval_chapter(o: &mut Vec<String>, a: &X<'_>, st: &Status) -> R<()> {
-    FRAME.approval_band(o, "承認", st.label);
+/// 章 06（図・便 33）。設計ノートの面の図の章と同じ字面: 図ごとに図の枠（figure-panel）を置き、図の本体は
+/// `figure::render` の戻り値をそのまま 1 つの行として埋める（escape しない・道具の出力は変えない）。
+/// figcaption の根拠は refs の各 id を `id_link` で（無いか空なら「根拠:」以降を出さない）。
+/// 図が 1 枚でも導出できなければ Err（面全体が「まだ分からない」・前の面は残る）。
+fn figures_chapter(
+    o: &mut Vec<String>,
+    f: &Frame,
+    n: usize,
+    figs: &[X<'_>],
+    dir: &Path,
+    ctx: &Ctx,
+) -> R<()> {
+    f.band(
+        o,
+        n,
+        FIGURES_CHAPTER,
+        &format!("{FIGURES_CHAPTER} {} 枚", figs.len()),
+        None,
+    );
     o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!("<div {}>", dc(Component::ApprovalBlock)));
+    for (i, fig) in figs.iter().enumerate() {
+        let fid = fig.f("id")?.id()?;
+        let tx = fig.f("type")?;
+        let kind =
+            tx.v.as_str()
+                .ok_or_else(|| format!("{}: 図の型が文字列でない", tx.at))?;
+        let body = figure::render(dir, fid, kind, &fig.f("spec")?)?;
+        let label = FIGURE_LABELS
+            .iter()
+            .find(|(k, _)| *k == kind)
+            .map(|(_, l)| *l)
+            .ok_or_else(|| format!("図の型「{kind}」は図の道具の型でない"))?;
+        let fn_ = format!("図 {}", i + 1);
+        o.push(format!(
+            "<figure {} data-role=\"diagram\" id=\"{}\">",
+            f.dc(Component::FigurePanel),
+            esc(fid)
+        ));
+        o.push(format!(
+            "<div class=\"fig-title\"><span class=\"fn\">{fn_}</span>{} <span class=\"fig-tools\"><button class=\"zoom-btn\" type=\"button\">拡大</button></span><button class=\"zoom-close\" type=\"button\">✕ 閉じる</button></div>",
+            fig.ef("caption")?
+        ));
+        o.push(body);
+        let mut ver = format!("{fn_} · {label} · {}", esc(fid));
+        if let Some(refs) = fig.g("refs")? {
+            let ids = refs
+                .seq()?
+                .iter()
+                .map(|q| id_link(dir, ctx, q))
+                .collect::<R<Vec<_>>>()?;
+            if !ids.is_empty() {
+                ver.push_str(&format!(" · 根拠: {}", ids.join("・")));
+            }
+        }
+        o.push(format!(
+            "<figcaption><span class=\"ver\">{ver}</span></figcaption>"
+        ));
+        o.push("</figure>".to_string());
+    }
+    o.push("</div>".to_string());
+    Ok(())
+}
+
+fn approval_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, st: &Status) -> R<()> {
+    f.approval_band(o, "承認", st.label);
+    o.push("<div class=\"chapbody\">".to_string());
+    o.push(format!("<div {}>", f.dc(Component::ApprovalBlock)));
     match a.g("approval")? {
         Some(ap) => o.push(format!(
             "<div class=\"sign\"><span class=\"role\">承認</span><span class=\"who\">{}</span><span class=\"when\">{}</span><span class=\"when\">逐語「{}」</span><span class=\"stamp\">{}</span></div>",
@@ -666,7 +758,7 @@ fn approval_chapter(o: &mut Vec<String>, a: &X<'_>, st: &Status) -> R<()> {
     Ok(())
 }
 
-fn foot(o: &mut Vec<String>, a: &X<'_>, id: &str, n: &Counts) -> R<()> {
+fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts) -> R<()> {
     let date = a.ef("date")?;
     let basis = a
         .f("basis")?
@@ -675,11 +767,15 @@ fn foot(o: &mut Vec<String>, a: &X<'_>, id: &str, n: &Counts) -> R<()> {
         .map(X::e)
         .collect::<R<Vec<_>>>()?
         .join("・");
-    let dl = format!(
+    let mut dl = format!(
         "<dt>id</dt><dd>{id}</dd><dt>status</dt><dd>{}</dd><dt>date</dt><dd>{date}</dd><dt>basis</dt><dd>{basis}</dd><dt>amends</dt><dd>{}</dd>",
         a.ef("status")?,
         n.amends
     );
-    FRAME.foot(o, id, &date, &dl);
+    // 図の数は 1 枚以上のときだけ（図なしの面は便 32 までと byte 不変）
+    if n.figures > 0 {
+        dl.push_str(&format!("<dt>figures</dt><dd>{}</dd>", n.figures));
+    }
+    f.foot(o, id, &date, &dl);
     Ok(())
 }

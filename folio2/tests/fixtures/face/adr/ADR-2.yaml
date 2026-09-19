@@ -1,5 +1,5 @@
 # folio face の凍結 fixture（便 25・P-10.1）— 判断の記録の正本の最小形。手書き・design-intent/adr/ の写しではない。
-# 提案中（承認欄なし）・案 2（採用 1・退けた 1）・根拠 6（条 2・rules 行 1・要件 2・判断の記録 1）・改訂なし・帰結 2。
+# 提案中（承認欄なし）・案 2（採用 1・退けた 1）・根拠 6（条 2・rules 行 1・要件 2・判断の記録 1）・改訂なし・帰結 2・図 1（便 33・構成図の最小形）。
 
 id: ADR-2
 title: 見本の判断の記録
@@ -17,3 +17,18 @@ plain: 見本の判断の記録です。決め方の形だけを見せます。
 consequences:
   - 面の生成器は正本 1 本から 1 枚を組む。
   - 凍結 fixture は手書きのまま置く。
+figures:
+  - id: fig-1
+    type: archify-architecture
+    caption: 見本の図
+    refs: [FR1]
+    spec:
+      schema_version: 1
+      diagram_type: architecture
+      meta: {title: 面の組み立て, quality_profile: showcase}
+      components:
+        - {id: src, type: external, label: 正本, row: 0, col: 0}
+        - {id: face, type: frontend, label: 面, row: 0, col: 1}
+      connections:
+        - {from: src, to: face, label: 導出}
+      layout: {mode: grid, cols: 2, gapX: 70, gapY: 110, cellW: 160, cellH: 70}

@@ -5,10 +5,13 @@
 //! 凍結 anchor の列そのものは便 7。
 //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、adr/schema.yaml の schema 節はその写し（N-3.1）。
 //! パターンの文字列は定数として字面で持つだけで、形の判定は字の走査で行う（正規表現は使わない）。
+//! 任意の図の節（figures・便 33）は設計ノートの図の節と同じ形（欄の集合・型は部品目録の一覧・spec は表・refs は
+//! basis と同じ id の形・図の id は 1 本の記録の中で一意）を見る。行き先の解決は床では数えない（面が「まだ分からない」で表す）。
 
 use std::fs;
 use std::path::Path;
 
+use crate::parts::catalog::FigureType;
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
 
@@ -48,6 +51,7 @@ const RECORD: Keys = Keys {
         "supersedes",
         "superseded_by",
         "note",
+        "figures",
     ],
 };
 const NON_EMPTY: &[&str] = &["title", "context", "decision", "plain"];
@@ -90,6 +94,13 @@ pub(crate) const AMENDED_BY_ENTRY: Keys = Keys {
     ],
     optional: &[],
 };
+/// 図の節の行の欄（設計ノートの欄の決まりの figures.entry と同じ形・便 33）。
+const FIGURE_ENTRY: Keys = Keys {
+    required: &["id", "type", "caption", "spec"],
+    optional: &["refs", "note"],
+};
+/// 図の型の一覧の置き場（部品目録の図の型・写しの字面）。
+const FIGURE_TYPE_ENUM_REF: &str = "design-intent/preview/parts.json figure_type_enum";
 
 macro_rules! keys_floor {
     ($keys:expr) => {
@@ -142,6 +153,13 @@ const FLOOR: Floor = Floor::Map(&[
     ("grill", keys_floor!(GRILL)),
     ("approval", keys_floor!(APPROVAL)),
     ("amended_by_entry", keys_floor!(AMENDED_BY_ENTRY)),
+    (
+        "figures",
+        Floor::Map(&[
+            ("entry", keys_floor!(FIGURE_ENTRY)),
+            ("type_enum_ref", Floor::Val(FIGURE_TYPE_ENUM_REF)),
+        ]),
+    ),
     (
         "anchor",
         Floor::Map(&[
@@ -593,6 +611,79 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
                 if !non_empty(grill.get(k)) {
                     report.violation("A-2", format!("{at}.{k} が空"));
                 }
+            }
+        }
+    }
+
+    check_figures(id, d, report);
+}
+
+/// (d) 任意の図の節（便 33）。欄の集合・id と caption の非空・型は部品目録の一覧・spec は表・refs は basis と同じ
+/// id の形・図の id は 1 本の記録の中で一意。行き先の解決は数えない。
+fn check_figures(id: &str, d: &Node, report: &mut Report) {
+    let figures: &[Node] = match present(d, "figures") {
+        None => &[],
+        Some(Node::Seq(items)) => items,
+        Some(_) => {
+            report.violation("adr", format!("{id}: figures が一覧でない"));
+            &[]
+        }
+    };
+    let mut seen: Vec<&str> = Vec::new();
+    for f in figures {
+        let at = format!("{id}.figures[{}]", show(f.get("id")));
+        if !check_keys("adr", &at, f, &FIGURE_ENTRY, report) {
+            continue;
+        }
+        // 欠落は check_keys が数えてあるので、非空は在る欄だけ見る
+        for k in ["id", "caption"] {
+            if f.get(k).is_some() && !non_empty(f.get(k)) {
+                report.violation("adr", format!("{at}.{k} が空"));
+            }
+        }
+        if let Some(t) = f.get("type")
+            && !t
+                .as_str()
+                .is_some_and(|v| FigureType::from_name(v).is_some())
+        {
+            report.violation(
+                "adr",
+                format!(
+                    "{at}: 図の型「{}」が部品目録の一覧に無い（{FIGURE_TYPE_ENUM_REF}）",
+                    show(Some(t))
+                ),
+            );
+        }
+        if let Some(spec) = f.get("spec")
+            && !matches!(spec, Node::Map(_))
+        {
+            report.violation("adr", format!("{at}: spec が表でない"));
+        }
+        match present(f, "refs") {
+            None => {}
+            Some(Node::Seq(items)) => {
+                for r in items {
+                    if !r.as_str().is_some_and(is_basis_id) {
+                        report.violation(
+                            "adr",
+                            format!(
+                                "{at}: refs「{}」が id の形（条・要件・rules 行・判断の記録）でない",
+                                show(Some(r))
+                            ),
+                        );
+                    }
+                }
+            }
+            Some(_) => report.violation("adr", format!("{at}: refs が一覧でない")),
+        }
+        if let Some(fid) = scalar(f.get("id")) {
+            if seen.contains(&fid) {
+                report.violation(
+                    "adr",
+                    format!("{id}: 図の id「{fid}」が重複（1 本の記録の中で一意）"),
+                );
+            } else {
+                seen.push(fid);
             }
         }
     }
