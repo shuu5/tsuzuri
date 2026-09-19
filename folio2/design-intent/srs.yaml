@@ -1,4 +1,4 @@
-# folio2 要件書 — 正本（v1.4・M0 = v1.0 発効 2026-09-12・M1 の要件 = v1.1 2026-09-16・CON1 の改訂 = v1.2 2026-09-17・図 3 の正本 verdicts = v1.3 2026-09-17・判断の記録の面 FR16 / AC14 = v1.4 2026-09-18・用語集の形 = v1.5 2026-09-19・天井の要件 FR17 / FR18 = v1.6 2026-09-19・導出物の要件 FR19 / AC17 = v1.7 2026-09-19・planner 席）
+# folio2 要件書 — 正本（v1.4・M0 = v1.0 発効 2026-09-12・M1 の要件 = v1.1 2026-09-16・CON1 の改訂 = v1.2 2026-09-17・図 3 の正本 verdicts = v1.3 2026-09-17・判断の記録の面 FR16 / AC14 = v1.4 2026-09-18・用語集の形 = v1.5 2026-09-19・天井の要件 FR17 / FR18 = v1.6 2026-09-19・導出物の要件 FR19 / AC17 = v1.7 2026-09-19・AC10 の平易文の直し = v1.8 2026-09-19・planner 席）
 # 位置: f2-648.1 の中身 3（要件書 M0 の正本）。見本 v4 の srs.html（walk 承認済みの提示層）を起点に G15=A を反映:
 #   分離緩め（憲法の根拠文と数値は生成器が正本から差し込む＝ここには id だけ書く・値を再掲しない）/ 参照の母集合は内部 3 空間
 #   （要件 id・条 id・rules 行 id）で外部 pointer は sources 欄 / P-3 は置き場条へ弱めた（憲法側）/ AC 4→6 / RED test は文 + fixture path /
@@ -9,10 +9,10 @@
 meta:
   id: folio2-srs-m0
   title: 要件書（M0・最初に動く形 ＋ M1・設計ノートと契約表と図の生成）
-  version: v1.7
+  version: v1.8
   status: effective
-  effective_version: v1.7
-  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）・v1.5 = 2026-09-19 発効（glossary_pointer の文言だけ = 要件書 §8 を憲法 §7 と同じ形に・逐語「各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う」・裁定 id f2-648 notes 2026-09-19）・v1.6 = 2026-09-19 発効（天井の要件 FR17 / FR18 と受入基準 AC15 / AC16 の追加・逐語「承認する」・裁定 id f2-648.52 notes 2026-09-19・判断の記録 ADR-8）・v1.7 = 2026-09-19 発効（導出物の要件 FR19 と受入基準 AC17 の追加・逐語「承認する」・裁定 id f2-648 notes 2026-09-19 20:50 JST・判断の記録 ADR-9）
+  effective_version: v1.8
+  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）・v1.5 = 2026-09-19 発効（glossary_pointer の文言だけ = 要件書 §8 を憲法 §7 と同じ形に・逐語「各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う」・裁定 id f2-648 notes 2026-09-19）・v1.6 = 2026-09-19 発効（天井の要件 FR17 / FR18 と受入基準 AC15 / AC16 の追加・逐語「承認する」・裁定 id f2-648.52 notes 2026-09-19・判断の記録 ADR-8）・v1.7 = 2026-09-19 発効（導出物の要件 FR19 と受入基準 AC17 の追加・逐語「承認する」・裁定 id f2-648 notes 2026-09-19 20:50 JST・判断の記録 ADR-9）・v1.8 = 2026-09-19 発効（受入基準 AC10 の平易文を規範の字面「数と単位」に合わせる直しだけ・天井の 2 周目の止める所見 忠実さ F-2〔反証 支持〕・逐語「１．推奨で」・裁定 id f2-648 notes 2026-09-19）
   generated: 2026-09-12
   promise: 持ち主が易しい質問 5 つに答える（答えなくても推奨で進む）と、入口・憲法・要件書の 3 枚が同じ見た目で生成され、機械検査の結果が必ず表示される。
   counts: {fr: 19, nfr: 3, ac: 17, con: 9}
@@ -34,6 +34,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648.52 notes 2026-09-19 13:3x JST・対話面 R-8・判断の記録 ADR-8 の発効の承認要求〔要件書 v1.6 を同じ承認で運ぶと明記〕への回答）", verbatim: 承認する, version: v1.6}
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: "v1.7 起草（f2-648・判断の記録 ADR-9 の帰結）・導出物の要件 FR19 と受入基準 AC17 の追加だけ（ほかの要件と受入基準と制約は据え置き）", version: v1.7}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648 notes 2026-09-19 20:50 JST・対話面 R-8・要件書 v1.7 の文面〔FR19 と AC17 の逐語〕を提示した承認要求への回答・判断の記録 ADR-9 の帰結）", verbatim: 承認する, version: v1.7}
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: "v1.8 起草（f2-648・天井の 2 周目の止める所見 忠実さ F-2）・受入基準 AC10 の平易文の 1 か所の直しだけ（要件・受入基準の規範の側と制約は据え置き）", version: v1.8}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648 notes 2026-09-19・対話面 R-8・天井の 2 周目の報告の裁定 3 点〔平易文の直し 2 か所を含む〕の提示への回答）", verbatim: １．推奨で, version: v1.8}
   effective: 承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。版ごとに承認の行を足し、前の版の行は書き換えない。
   changes_from_v1_0:
     - M1 の要件を新しい番号で足した（FR9〜FR15・AC7〜AC13・CON8〜CON9）。M0 の要件（FR1〜FR8・NFR1〜NFR3・AC1〜AC6・CON1〜CON7）は据え置き（P-7.2）。NFR3 と AC6 の母集団（内部 3 空間）は広げない（ADR-3 決定 (6)）
@@ -400,7 +402,7 @@ acceptance:
   - {id: AC7, title: 設計ノートが閉じた一覧の節の型だけで生成され、一覧に無い節の型は落ちる, plain: 設計の文書を機械が作れて、知らない種類の節があると作らずに止まることを見せる。, verifies: [FR9], red_test: {sentence: 一覧に無い節の型を 1 つ持つ fixture で生成が落ち、一覧内だけの fixture で通る, fixture: tests/fixtures/design-note/section-types/（落ちる側と通る側の 2 本）}, milestone: M1}
   - {id: AC8, title: 器の導出 file が無いと「まだ分からない」になり、合格にならない, plain: 契約表の「欄の決まり」の写しが無い状態で走らせ、「まだ分からない」と出て「合格」にならないことを見せる。, verifies: [FR10], red_test: {sentence: 導出 file を欠いた fixture で判定が「まだ分からない」になり合格にならない, fixture: tests/fixtures/design-note/schema-missing/}, milestone: M1}
   - {id: AC9, title: 導出物を 1 字変えると --check が非 0 で終わる, plain: scribe2 が読む形の file を 1 文字だけ書き換えて走らせ、「ずれている」と言って止まることを見せる。, verifies: [FR11], red_test: {sentence: 導出物を 1 byte 変えた fixture で --check の終了コードが非 0 になる, fixture: tests/fixtures/contracts/（凍結 anchor = 契約表と期待導出物の対 + 1 字ずらした導出物）}, milestone: M1}
-  - {id: AC10, title: 規範の印を持つ文の違反が数えられ、記述の文は数えられない, plain: 「〜しなければならない」と書いたのに番号が無い文・数値を書いた文が違反として出て、普通の説明文は出ないことを見せる。, verifies: [FR12], red_test: {sentence: 参照 id の無い印付きの文 1 つと数と単位を持つ印付きの文 1 つの fixture で違反 2 が報告され、記述の文だけの fixture で 0 になる, fixture: tests/fixtures/prose-gate/}, milestone: M1}
+  - {id: AC10, title: 規範の印を持つ文の違反が数えられ、記述の文は数えられない, plain: 「〜しなければならない」と書いたのに番号が無い文・数と単位を書いた文が違反として出て、普通の説明文は出ないことを見せる。, verifies: [FR12], red_test: {sentence: 参照 id の無い印付きの文 1 つと数と単位を持つ印付きの文 1 つの fixture で違反 2 が報告され、記述の文だけの fixture で 0 になる, fixture: tests/fixtures/prose-gate/}, milestone: M1}
   - {id: AC11, title: 印の無い commit の契約は「まだ分からない」と出て「未着地」と出ない, plain: 便が入ったかを示す印が無いとき、「まだ分からない」と表示され「入っていない」とは表示されないことを見せる。, verifies: [FR13], red_test: {sentence: 印の無い commit の fixture で「まだ分からない」が出て「未着地」が出ず、印の在る fixture で要約値（sha）が出る, fixture: tests/fixtures/rtm/（印の無い commit と印の在る commit の 2 本）}, milestone: M1}
   - {id: AC13, title: 器の導出 file を 1 欄変えると契約表の節の欄が追従する, plain: scribe2 側の「欄の決まり」の写しに欄を 1 つ足すと、folio の契約表にもその欄が現れ、folio 側の記録を直さなくてよいことを見せる。, verifies: [FR10], red_test: {sentence: 導出 file に欄を 1 つ足した fixture で契約表の節にその欄が登録され、folio 側の型に欄の一覧が無い, fixture: tests/fixtures/design-note/schema-plus-one/}, milestone: M1}
   - {id: AC14, title: 判断の記録の面のすべての class が部品目録に存在し、目録に無い class は 0, plain: 判断の記録のページに、部品表に載っていない飾りが 1 つも無いことを、機械が数えて見せる。, verifies: [FR16], red_test: {sentence: 目録外 class を 1 つ足した判断の記録の fixture で不合格になり、実の正本の判断の記録では合格になる, fixture: tests/fixtures/face/adr/（最小の判断の記録 1 本 + 目録外 class を足した 1 本）}, milestone: M1}
