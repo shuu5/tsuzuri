@@ -6,6 +6,12 @@
 //! 5. 旗: --write と --check の両方・どちらも無し → 2。
 //! 6. file が無い置き場 → 2・「読めない」。
 //! 7. 床は印を見ない: 印 2 本を消した写しに folio check → 合格（git init 済みの写し・tests/ceiling.rs の Work と同じ作り方）。
+//!
+//! 便 46（docs/design/delivery-46.md §1 (d)）: 命令は 2 本目の file design-note/schema.yaml も順に見る（合格の標準出力は 2 行）。
+//! 8. 設計ノートの側の実の正本: --check → 0・2 行目に「design-note/schema.yaml」「14618 byte」・生成区間の要約値が (c) の値。
+//! 9. 設計ノートの側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
+//! 10. 設計ノートの側の印: begin を消す → 2。
+//! 11. 設計ノートの側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致。
 
 use std::fs;
 use std::io::Write;
@@ -16,6 +22,14 @@ use std::process::{Command, Output, Stdio};
 const REGION_LINES: usize = 117;
 const REGION_BYTES: usize = 22182;
 const REGION_SHA256: &str = "8c53aa96fad9bddf83fb04d33113124b79bac036aea3fa2a12249e37f65ce998";
+
+/// 便 46 (c) 凍結 anchor: design-note/schema.yaml の生成区間（planner の独立の Python と admin の別の実装で byte 一致）。
+const NOTE_REGION_LINES: usize = 135;
+const NOTE_REGION_BYTES: usize = 14618;
+const NOTE_REGION_SHA256: &str = "cae43ed2765884f8593aff4925ffae3cc0e69a0e18d376160d615853f437ce8e";
+
+/// 命令が見る欄の決まりの file の数（合格の標準出力の行数）。
+const TARGETS: usize = 2;
 
 const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
 const END: &str = "# folio:schema:end";
@@ -130,19 +144,26 @@ impl Work {
         self.dir().join("adr/schema.yaml")
     }
 
+    fn note_schema_yaml(&self) -> PathBuf {
+        self.dir().join("design-note/schema.yaml")
+    }
+
     fn read(&self) -> String {
         fs::read_to_string(self.schema_yaml()).unwrap()
     }
 
+    fn read_note(&self) -> String {
+        fs::read_to_string(self.note_schema_yaml()).unwrap()
+    }
+
     /// 写しの adr/schema.yaml の字面の変異（1 か所だけ）。
     fn mutate(&self, from: &str, to: &str) {
-        let before = self.read();
-        assert_eq!(
-            before.matches(from).count(),
-            1,
-            "変異の当て先が 1 か所でない: {from:?}"
-        );
-        fs::write(self.schema_yaml(), before.replacen(from, to, 1)).unwrap();
+        mutate_file(&self.schema_yaml(), from, to);
+    }
+
+    /// 写しの design-note/schema.yaml の字面の変異（1 か所だけ）。
+    fn mutate_note(&self, from: &str, to: &str) {
+        mutate_file(&self.note_schema_yaml(), from, to);
     }
 
     fn schema(&self, flags: &[&str]) -> Output {
@@ -158,6 +179,17 @@ impl Drop for Work {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
+}
+
+/// file の字面の変異（当て先は 1 か所だけ）。
+fn mutate_file(path: &Path, from: &str, to: &str) {
+    let before = fs::read_to_string(path).unwrap();
+    assert_eq!(
+        before.matches(from).count(),
+        1,
+        "変異の当て先が 1 か所でない: {from:?}"
+    );
+    fs::write(path, before.replacen(from, to, 1)).unwrap();
 }
 
 fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
@@ -177,7 +209,7 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
-/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。
+/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。合格の標準出力は file ごとの 1 行（2 行）。
 fn assert_outcome(out: &Output, code: i32, words: &[&str]) {
     let shown = format!("{}{}", stdout(out), stderr(out));
     assert_eq!(out.status.code(), Some(code), "{shown}");
@@ -191,7 +223,7 @@ fn assert_outcome(out: &Output, code: i32, words: &[&str]) {
     }
     assert_eq!(
         stdout(out).lines().count(),
-        usize::from(code == 0),
+        if code == 0 { TARGETS } else { 0 },
         "{shown}"
     );
 }
@@ -379,4 +411,120 @@ fn schema_markers_are_invisible_to_folio_check() {
     );
     // 印が無いので folio schema は「まだ分からない」＝床の検査とは別の口
     assert_outcome(&w.schema(&["--check"]), 2, &["印が 1 対でない"]);
+}
+
+// ── 便 46: 設計ノートの側 ──
+
+/// 設計ノートの側の生成区間の変異（1 byte・n_rule の start）。
+const NOTE_DRIFT_FROM: &str = "\n    n_rule: {start: 1, order: ascending,";
+const NOTE_DRIFT_TO: &str = "\n    n_rule: {start: 2, order: ascending,";
+
+// ── 8. 設計ノートの側の実の正本 ──
+
+#[test]
+fn schema_check_matches_the_real_design_note_file_and_its_frozen_digest() {
+    let w = Work::new("note-real");
+    let out = w.schema(&["--check"]);
+    assert_outcome(
+        &out,
+        0,
+        &[
+            "一致",
+            "design-note/schema.yaml",
+            &format!("{NOTE_REGION_BYTES} byte"),
+        ],
+    );
+    let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(lines[0].contains("adr/schema.yaml"), "{lines:?}");
+    assert!(lines[1].contains("design-note/schema.yaml"), "{lines:?}");
+    assert!(
+        lines[1].contains(&format!("{NOTE_REGION_BYTES} byte")),
+        "{lines:?}"
+    );
+    let text = w.read_note();
+    let cur = region(&text);
+    assert_eq!(cur.len(), NOTE_REGION_BYTES, "生成区間の byte 数");
+    assert_eq!(cur.lines().count(), NOTE_REGION_LINES, "生成区間の行数");
+    assert!(cur.starts_with("schema:\n"));
+    match sha256_hex(cur.as_bytes()) {
+        Ok(hex) => assert_eq!(hex, NOTE_REGION_SHA256, "sha256sum で測り直した要約値"),
+        Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
+    }
+    // 検査は file を書かない
+    assert_eq!(w.read_note(), text);
+}
+
+// ── 9. 設計ノートの側のずれ ──
+
+#[test]
+fn schema_check_fails_on_one_byte_drift_inside_the_design_note_region() {
+    let w = Work::new("note-drift");
+    let adr = w.read();
+    w.mutate_note(NOTE_DRIFT_FROM, NOTE_DRIFT_TO);
+    assert_outcome(
+        &w.schema(&["--check"]),
+        1,
+        &[
+            "design-note/schema.yaml",
+            "生成区間",
+            "≠ 導出",
+            &format!("{NOTE_REGION_BYTES} byte"),
+        ],
+    );
+    // 1 本目（合格）の行は、2 本目で落ちたときは出さない
+    assert_eq!(w.read(), adr);
+}
+
+// ── 10. 設計ノートの側の印 ──
+
+#[test]
+fn schema_check_is_unknown_without_the_design_note_begin_marker() {
+    let w = Work::new("note-no-begin");
+    w.mutate_note(&format!("{BEGIN}\n"), "");
+    assert_outcome(
+        &w.schema(&["--check"]),
+        2,
+        &["design-note/schema.yaml: 印が 1 対でない"],
+    );
+    assert_outcome(
+        &w.schema(&["--write"]),
+        2,
+        &["design-note/schema.yaml: 印が 1 対でない"],
+    );
+}
+
+// ── 11. 設計ノートの側の書き直し ──
+
+#[test]
+fn schema_write_restores_the_design_note_region_and_is_idempotent() {
+    let w = Work::new("note-write");
+    let original = w.read_note();
+    let adr = w.read();
+    w.mutate_note(NOTE_DRIFT_FROM, NOTE_DRIFT_TO);
+    assert_ne!(w.read_note(), original);
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &[
+            "変わらない",
+            "adr/schema.yaml",
+            "書いた",
+            "design-note/schema.yaml",
+            &format!("{NOTE_REGION_BYTES} byte"),
+        ],
+    );
+    assert_eq!(
+        w.read_note(),
+        original,
+        "file 全体が元と byte 一致（対応表と平易文も不変）"
+    );
+    assert_eq!(w.read(), adr, "判断の記録の側は触らない");
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &["変わらない", &format!("{NOTE_REGION_BYTES} byte")],
+    );
+    assert_eq!(w.read_note(), original);
+    assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
 }

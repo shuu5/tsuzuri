@@ -2,8 +2,8 @@
 //! 床の定数から導出して書く（--write）・検査する（--check）。憲法の生成区間（`inject.rs`）と同じ型 = 印 2 本・区間を取る
 //! 関数・導出 1 関数を --write / --check が共有し、終了コードは 合格 0 / 不合格 1 / まだ分からない 2。
 //!
-//! 床の機械（床の木の型 `Floor`・マクロ `keys_floor`・`strip_notes`・`floor_diff`）もここに置き、`adr.rs` が使う
-//! （`note.rs` は便 46 で寄せる）。`folio check` の置き場ごとの検査は印を見ない（fixture の写しは印を持たない）。
+//! 床の機械（床の木の型 `Floor`・マクロ `keys_floor`・`strip_notes`・`floor_diff`）もここに置き、`adr.rs` と
+//! `note.rs`（便 46）が使う。`folio check` の置き場ごとの検査は印を見ない（fixture の写しは印を持たない）。
 //!
 //! 導出の体裁（§1 (c)・W = 100 字・字数は Unicode の字の数・行は字下げ込み）:
 //! 1. 表の block の子は「<字下げ><キー>: <値>」・字下げは深さ × 2・キーの順は FLOOR の順。
@@ -25,8 +25,11 @@ pub const END: &str = "# folio:schema:end";
 /// 1 行の幅の上限（Unicode の字の数）。
 const WIDTH: usize = 100;
 
-/// 命令が扱う欄の決まりの file と、その schema 節の正本（床の定数）。便 46 で design-note/schema.yaml を足す。
-const TARGETS: &[(&str, &Floor)] = &[("adr/schema.yaml", &crate::adr::FLOOR)];
+/// 命令が扱う欄の決まりの file と、その schema 節の正本（床の定数）。この順に見て、最初に合格でない file で返す。
+const TARGETS: &[(&str, &Floor)] = &[
+    ("adr/schema.yaml", &crate::adr::FLOOR),
+    ("design-note/schema.yaml", &crate::note::FLOOR),
+];
 
 // ── 床の機械 ──
 
@@ -39,8 +42,7 @@ pub(crate) enum Floor {
     Num(usize),
     /// 値の一覧
     Strs(&'static [&'static str]),
-    /// 木の一覧（順も比べる）。判断の記録の側の FLOOR には無く、便 46 で寄せる設計ノートの側が使う
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// 木の一覧（順も比べる）。設計ノートの側（landing.verdict_cases）が使う
     Seq(&'static [Floor]),
     /// 表（欄の順は schema 節の順）
     Map(&'static [(&'static str, Floor)]),
