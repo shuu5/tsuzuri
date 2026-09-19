@@ -274,11 +274,11 @@ fn face_note_census_on_the_real_source_counts_and_verbatims() {
         "副題が title の逐語でない"
     );
 
-    // 章の帯（節 6 + 図 1・承認欄は id=approval なので数えない）
+    // 章の帯（節 6 + 図の章 1・承認欄は id=approval なので数えない）。図の数は正本から数える（便 32・1 以上）
     let sections = d["sections"].as_vec().unwrap();
     let figures = d["figures"].as_vec().unwrap();
     assert_eq!(sections.len(), 6, "実の正本の節の数");
-    assert_eq!(figures.len(), 1, "実の正本の図の数");
+    assert!(!figures.is_empty(), "実の正本に図が無い");
     assert_eq!(count("<section id=\"s"), 7, "章の帯の数");
 
     // item-row（5 つの表の節の行の合計 = 4 + 4 + 4 + 2 + 1）
@@ -359,7 +359,21 @@ fn parts_figure_classes() -> Vec<String> {
             out.push(item.as_str().expect("class が文字列でない").to_string());
         }
     }
-    assert_eq!(out.len(), 33, "図の class の一覧が 33 語でない: {out:?}");
+    // 便 32: 道具の 5 型の見本の実測で 39 語に閉じた（便 31 の 33 語 + 6 語）
+    assert_eq!(out.len(), 39, "図の class の一覧が 39 語でない: {out:?}");
+    for added in [
+        "c-region",
+        "c-security-group",
+        "t-frontend",
+        "t-external",
+        "t-cloud",
+        "t-database",
+    ] {
+        assert!(
+            out.iter().any(|w| w == added),
+            "便 32 で足した class「{added}」が parts.json の figure_body_classes に無い"
+        );
+    }
     out
 }
 
@@ -421,7 +435,7 @@ fn face_note_on_the_real_source_embeds_each_figure_in_a_figure_panel() {
     let _ = fs::remove_dir_all(&td);
     let d = real_example();
     let figures = d["figures"].as_vec().unwrap();
-    assert_eq!(figures.len(), 1, "実の正本の図の数");
+    assert!(!figures.is_empty(), "実の正本に図が無い");
     let type_ids = parts_type_ids();
     // 型の名札の表は 5 組（字面は契約表 §1 (b) の閉じた表・parts.json の type_ids と同じ）
     let want: Vec<(String, String)> = [

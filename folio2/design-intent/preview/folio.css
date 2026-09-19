@@ -387,6 +387,8 @@ details.machine dt{color:var(--ink-faint)} details.machine dd{margin:0;color:var
 [data-component="figure-panel"] .c-lane{fill:var(--fig-lane-fill);stroke:var(--fig-lane);stroke-dasharray:6,6}
 [data-component="figure-panel"] .c-grid{fill:none;stroke:var(--fig-grid)}
 [data-component="figure-panel"] .c-mask{fill:var(--fig-mask);stroke:none}
+[data-component="figure-panel"] .c-region{fill:var(--fig-cloud-fill);stroke:var(--fig-cloud);stroke-dasharray:8,4}
+[data-component="figure-panel"] .c-security-group{fill:none;stroke:var(--fig-security);stroke-dasharray:4,4}
 /* 線 a-* */
 [data-component="figure-panel"] .a-default{fill:none;stroke:var(--fig-arrow)}
 [data-component="figure-panel"] .a-emphasis{fill:none;stroke:var(--fig-arrow-emphasis)}
@@ -404,6 +406,10 @@ details.machine dt{color:var(--ink-faint)} details.machine dd{margin:0;color:var
 [data-component="figure-panel"] .t-backend{fill:var(--fig-backend)}
 [data-component="figure-panel"] .t-messagebus{fill:var(--fig-messagebus)}
 [data-component="figure-panel"] .t-security{fill:var(--fig-security)}
+[data-component="figure-panel"] .t-frontend{fill:var(--fig-frontend)}
+[data-component="figure-panel"] .t-external{fill:var(--fig-external)}
+[data-component="figure-panel"] .t-cloud{fill:var(--fig-cloud)}
+[data-component="figure-panel"] .t-database{fill:var(--fig-database)}
 /* 印 s-* と sigil */
 [data-component="figure-panel"] .s-backend{color:var(--fig-backend)}
 [data-component="figure-panel"] .s-cloud{color:var(--fig-cloud)}

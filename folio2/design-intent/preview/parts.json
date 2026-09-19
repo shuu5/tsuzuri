@@ -269,7 +269,7 @@
     "doc-shelf"
   ],
   "figure_body_classes": {
-    "source": "ADR-4 / R-5 / R-15。図の道具（archify 2.16.0）の出力から図の本体（SVG）だけを抜いたときに残る意味 class。実測 = 報告 2026-09-15-archify/samples/ja-round4.svg（構成図・showcase・行内の様式 0・色の直書き 0）。色・字の大きさ・線の太さは folio の design token をこれらの class に掛けて定義する（P-2.3）",
+    "source": "ADR-4 / R-5 / R-15。図の道具（archify 2.16.0）の出力から図の本体（SVG）だけを抜いたときに残る意味 class。実測 = 報告 2026-09-15-archify/samples/ja-round4.svg（構成図・showcase・行内の様式 0・色の直書き 0）+ 道具の 5 型の見本 11 本と folio2 の見本 3 枚の出力（2026-09-19・39 語で閉じる・足した 6 語 = c-region / c-security-group / t-frontend / t-external / t-cloud / t-database）。色・字の大きさ・線の太さは folio の design token をこれらの class に掛けて定義する（P-2.3）",
     "type_ids": {
       "archify-architecture": "構成図（architecture）",
       "archify-workflow": "手順図（workflow）",
@@ -287,7 +287,9 @@
       "c-security",
       "c-lane",
       "c-grid",
-      "c-mask"
+      "c-mask",
+      "c-region",
+      "c-security-group"
     ],
     "edge_kind": [
       "a-default",
@@ -307,7 +309,11 @@
       "t-dim",
       "t-backend",
       "t-messagebus",
-      "t-security"
+      "t-security",
+      "t-frontend",
+      "t-external",
+      "t-cloud",
+      "t-database"
     ],
     "sigil": [
       "semantic-sigil",
