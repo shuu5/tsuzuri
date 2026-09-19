@@ -16,6 +16,7 @@ meta:
     - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-17, stamp: v0.2（f2-648.27・intake の command・stops の at は便 16 で）}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-18, stamp: "発効（f2-648 notes 2026-09-18 00:2x JST・対話面 R-8・AC5 の walk・生成した 3 面〔入口・憲法・要件書・main f9d02af〕を tailnet で開いて読んだ後）", verbatim: 確認した　大体これで良い, version: v0.2}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-18, stamp: "判断の記録の面（4 面目・便 25〜27・main 88d3d48）の walk 承認（f2-648 notes 2026-09-18 19:0x JST・対話面 R-8・AC5 の形・FR16 の verify・1 回目の拒否「見たがすべてひどすぎて全く意味わからん。ぐちゃぐちゃだ。見直せ」→ 見本 v2「まあいいだろう。これで進めて」→ 便 27 の後）", verbatim: 承認する, version: v0.2}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "設計ノートの面（5 面目・便 28〜31・main b12f805）と入口の棚の設計ノートの行、図の道具で描いた図（構成図・手順図・順序図・見本 example と figures）の walk 承認（f2-648 notes 2026-09-19 09:5x JST・対話面 R-8・AC5 の形・FR9 / FR15 / FR16 の verify・途中の裁定「設計ノートはさすがに図がないとだめだと思うが。」「承認する」〔A-3.1・図の道具〕「進めて」「手順図が非エンジニア二わかりやすいが順序図はエンジニアにわかりやすいのでそのように書いて両方あったらいいんじゃない？」の後）", verbatim: 承認する, version: v0.2}
 
 audience:
   label: 誰のための文書か
