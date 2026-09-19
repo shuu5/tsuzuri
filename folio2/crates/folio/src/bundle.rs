@@ -1,9 +1,11 @@
 //! `folio ceiling --write`（便 38・docs/design/delivery-38.md §1 (a)〜(d)）。天井（AI による意味の検査・ADR-8 決定 (2)・FR17）の
 //! 材料の束を観点ごとに 1 つの置き場へ組む。folio は AI を起動しない。束を読んで AI を回すのは席か器で、所見と起動の記録を
 //! 同じ置き場へ書く（便 39 がそれを数える）。
-//! 束の中身 = 天井の正本 `bundle.contents` の 5 つ（sources/・faces/・question.yaml・finding.yaml・reads.yaml）と要約値 digest.txt。
+//! 束の中身 = 床の定数 `ceiling::BUNDLE_CONTENTS` の 5 つ（sources/・faces/・question.yaml・finding.yaml・reads.yaml）と要約値 digest.txt。
 //! 要約値の規則 = 5 つの下の file を観点の dir からの相対 path の byte 順に並べ、中身を区切りなしに連結した byte 列の sha256
 //! （rules 行 R-15 の写しの要約値と同じ規則・`sha256::hex`）。
+//! 天井の正本から読むのは documents・viewpoints・weights だけで、所見の欄の決まりの残りは床の定数（`ceiling.rs`）から取る
+//! （便 47・ADR-11 決定 (3)(イ)・P-5.1）。file の側から束の形を変える経路は無い（正本の生成区間は床 `ceiling.rs` が突き合わせる）。
 //! 決定性: 同じ入力から byte まで同じ束が組める（時刻・絶対 path・環境の値をどの file にも書かない）。
 //! 全部か無しか: 4 観点の全 file を memory の上で先に用意し、1 本でも用意できなければ何も書かず 2（P-4.1）。
 //! 書くときは各観点の sources/ と faces/ を消してから作り直す（古い写しが要約値に混ざらないため）。
@@ -15,6 +17,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::ceiling::{
+    BUNDLE_DIGEST, FINDING_OPTIONAL, FINDING_REQUIRED, PLACE_REQUIRED, RECORD_REQUIRED,
+    REFUTE_VALUES, VERDICT_VALUES,
+};
 use crate::face::R;
 use crate::sha256;
 use crate::verdict::Verdict;
@@ -22,12 +28,6 @@ use crate::yaml::{self, Node};
 
 /// 天井の正本の file。
 const FILE: &str = "ceiling.yaml";
-
-/// 床が組める束の中身（天井の正本 `bundle.contents` の逐語・順も同じ）。
-pub const CONTENTS: [&str; 5] = ["sources", "faces", "question", "finding", "reads"];
-
-/// 要約値の規則の名（天井の正本 `bundle.digest` の逐語）。
-pub const DIGEST: &str = "sha256-files-1";
 
 /// 束の要約値の file（要約値の計算には数えない）。
 pub const DIGEST_FILE: &str = "digest.txt";
@@ -92,7 +92,7 @@ pub struct Ceiling {
     /// documents の各行（id・file）
     documents: Vec<(String, String)>,
     pub viewpoints: Vec<Viewpoint>,
-    /// 所見の欄の決まり（finding・weights・verdicts・record の値）
+    /// 所見の欄の決まり（weights は正本の値・残りは床の定数）
     pub rules: Rules,
     /// finding.yaml の本文（4 観点とも同じ）
     finding: String,
@@ -107,7 +107,8 @@ pub struct Viewpoint {
     pub reads: Vec<(String, Vec<String>)>,
 }
 
-/// 所見の欄の決まり（天井の正本 finding・weights・verdicts・record の写し・finding.yaml の材料と `--check` の値域）。
+/// 所見の欄の決まり（finding.yaml の材料と `--check` の値域）。weights の 2 本は天井の正本の写し（file が正本のまま・
+/// ADR-11 決定 (3)(ア)）、残り 6 本は床の定数 `ceiling.rs` の写し（便 47 §1 (d)）。
 pub struct Rules {
     pub finding_required: Vec<String>,
     pub finding_optional: Vec<String>,
@@ -196,12 +197,6 @@ pub fn load(dir: &Path) -> R<Ceiling> {
     }
     let rules = load_rules(&root)?;
     let finding = finding_text(&rules);
-    let bundle = table_of(&root, "bundle", "")?;
-    if list_of(bundle, "contents", "bundle")? != CONTENTS
-        || text_of(bundle, "digest", "bundle")? != DIGEST
-    {
-        return Err(format!("{FILE}: bundle: 床が組める形でない"));
-    }
     Ok(Ceiling {
         documents,
         viewpoints,
@@ -257,23 +252,19 @@ fn prefix(at: &str) -> String {
     }
 }
 
-/// 所見の欄の決まり（天井の正本の finding・weights・verdicts・record）。
+/// 所見の欄の決まり。天井の正本から読むのは weights の 2 本（values・refute）だけで、残りは床の定数から埋める。
 fn load_rules(root: &Node) -> R<Rules> {
-    let finding = table_of(root, "finding", "")?;
-    let place = table_of(finding, "place", "finding")?;
-    let refute = table_of(finding, "refute", "finding")?;
     let weights = table_of(root, "weights", "")?;
-    let verdicts = table_of(root, "verdicts", "")?;
-    let record = table_of(root, "record", "")?;
+    let floor = |items: &[&str]| items.iter().map(|s| s.to_string()).collect();
     Ok(Rules {
-        finding_required: list_of(finding, "required", "finding")?,
-        finding_optional: list_of(finding, "optional", "finding")?,
-        place_required: list_of(place, "required", "finding.place")?,
-        refute_values: list_of(refute, "values", "finding.refute")?,
+        finding_required: floor(&FINDING_REQUIRED),
+        finding_optional: floor(&FINDING_OPTIONAL),
+        place_required: floor(&PLACE_REQUIRED),
+        refute_values: floor(&REFUTE_VALUES),
         weight_values: list_of(weights, "values", "weights")?,
         weight_refute: list_of(weights, "refute", "weights")?,
-        verdict_values: list_of(verdicts, "values", "verdicts")?,
-        record_required: list_of(record, "required", "record")?,
+        verdict_values: floor(&VERDICT_VALUES),
+        record_required: floor(&RECORD_REQUIRED),
     })
 }
 
@@ -467,7 +458,7 @@ pub fn digest_text(files: &Files) -> String {
             bytes.extend_from_slice(body);
         }
     }
-    format!("{DIGEST} {}\n", sha256::hex(&bytes))
+    format!("{BUNDLE_DIGEST} {}\n", sha256::hex(&bytes))
 }
 
 // ── 置き場へ書く ──
@@ -543,6 +534,6 @@ mod bundle_tests {
         files.insert("faces/x.html".into(), b"ab".to_vec());
         files.insert(DIGEST_FILE.into(), b"junk".to_vec());
         let line = digest_text(&files);
-        assert_eq!(line, format!("{DIGEST} {}\n", sha256::hex(b"abcd")));
+        assert_eq!(line, format!("{BUNDLE_DIGEST} {}\n", sha256::hex(b"abcd")));
     }
 }

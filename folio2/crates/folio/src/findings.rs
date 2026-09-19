@@ -2,7 +2,7 @@
 //! 席か器が観点の束の dir へ書いた所見 file（`findings.yaml`）を天井の正本の欄の決まりで数え、観点ごとに 3 値を返す。
 //! 数えるのは形・実在・一致だけ（所見の外形と欄の決まり・根拠の逐語の実在・束の要約値の一致 3 方向・止める の反証の有無）で、
 //! 所見の中身が正しいかは判定しない（P-1）。所見 file の名と外形（最上位の欄 3 つ）は床の定数で持ち、欄ごとの値域は
-//! 天井の正本（`bundle::load` が読む）から取る（P-5.1）。folio は所見 file を書かない。
+//! `bundle::load` の型 `Rules`（weights は天井の正本・残りは床の定数 `ceiling.rs`・便 47）から取る（P-5.1）。folio は所見 file を書かない。
 //! 終了 = 4 観点が全部 合格 のときだけ 0、まだ分からない が 1 つでも在れば 2、無くて 不合格 が在れば 1（P-4）。
 //! 名札（便 40・delivery-40.md §1 (b)・ADR-8 決定 (4)）: 面の生成器は `stamps` で観点ごとの 3 値を取る。同じ規則のうち
 //! 3（束が古い）だけを当てない——名札を載せた面そのものが次の束の入力（faces/）になるので、面の生成の中で「現在の面から
@@ -16,7 +16,8 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::bundle::{self, CONTENTS, Ceiling, DIGEST_FILE, Files, Rules, Viewpoint};
+use crate::bundle::{self, Ceiling, DIGEST_FILE, Files, Rules, Viewpoint};
+use crate::ceiling::{BUNDLE_CONTENTS, REFUTE_CONTENTS, REFUTE_RULE, RESULT_REQUIRED};
 use crate::face::R;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
@@ -30,23 +31,8 @@ pub const FINDINGS_TOP_LEVEL: [&str; 3] = ["verdict", "record", "findings"];
 /// 反証の束の置き場（床の定数・`<out>/<観点の id>/refute/<所見の id>/`）。
 pub const REFUTE_DIR: &str = "refute";
 
-/// 反証の束の中身（床の定数・名の byte 順・digest.txt と result.yaml は数えない）。
-pub const REFUTE_CONTENTS: [&str; 5] = [
-    "finding.yaml",
-    "question.yaml",
-    "reads.yaml",
-    "schema.yaml",
-    "sources.txt",
-];
-
 /// 反証役が書く結果の file（床の定数・反証の束と同じ dir）。
 pub const RESULT_FILE: &str = "result.yaml";
-
-/// 反証の結果の欄（床の定数・他の欄は違反・全部空でない文）。
-pub const RESULT_REQUIRED: [&str; 6] = ["id", "refute", "model", "effort", "at", "bundle"];
-
-/// 反証の規則の文（床の定数・逐語・天井の正本 v0.2 で正本へ移すかは持ち主の裁定の後）。
-pub const REFUTE_RULE: &str = "所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。";
 
 /// 1 回の実行の結果。`stdout` / `stderr` は 1 行ずつ。
 pub struct Outcome {
@@ -372,7 +358,7 @@ fn bundle_present(vp_dir: &Path) -> bool {
 /// 置き場の束を --write と同じ規則で読み直す（sources/ と faces/ の下の全 file と 3 つの yaml・digest.txt と所見 file は数えない）。
 fn measure(vp_dir: &Path) -> R<Files> {
     let mut files = Files::new();
-    for name in CONTENTS {
+    for name in BUNDLE_CONTENTS {
         let path = vp_dir.join(name);
         if path.is_dir() {
             walk(&path, name, &mut files)?;
@@ -754,7 +740,7 @@ fn read_result(
 }
 
 /// result.yaml の欄の決まり: 最上位は表・欄は `RESULT_REQUIRED` の 6 つだけで全部空でない文・id は所見の id・refute は
-/// 天井の正本の値域・bundle は同じ dir の digest.txt（末尾の改行を除く）と同じ・digest.txt は 5 つの file から測り直した
+/// 床の値域・bundle は同じ dir の digest.txt（末尾の改行を除く）と同じ・digest.txt は 5 つの file から測り直した
 /// 要約値と同じ。理由は全部 `why` へ。
 fn count_result(dir: &Path, id: &str, rules: &Rules, why: &mut Vec<String>) -> Option<String> {
     let root = match read_table(&dir.join(RESULT_FILE), RESULT_FILE) {

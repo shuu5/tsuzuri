@@ -2,6 +2,8 @@
 //! fixture は増やさず、歯の中で design-intent の写し全部を一時 dir に作り git init と 1 commit を行い
 //! （版管理の無い写しは別の理由で「まだ分からない」になる）、ceiling.yaml に変異を 1 つ当てて `folio check --dir` を回す。
 //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる。
+//! 第 3 版の形（便 47・docs/design/delivery-47.md §1 (e)2〜4）: 旧 4 節を外し生成区間 schema（凍結 anchor
+//! tests/fixtures/schema/ceiling-region.txt の中身）を足した写しが通る・生成区間のずれは違反 1 件・旧 4 節も schema も無ければ落ちる。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -114,6 +116,42 @@ impl Drop for Work {
     }
 }
 
+/// 最上位の節 `name` の行（列 0 の `name:`）から字下げの続く行までを外す。直前の注の行（`#` で始まる行）も外す。
+/// 無ければそのまま（実の正本の版に依らない形・第 3 版が main に入った後も同じ歯が緑のまま）。
+fn drop_section(lines: &mut Vec<String>, name: &str) {
+    let Some(start) = lines.iter().position(|l| *l == format!("{name}:")) else {
+        return;
+    };
+    let mut end = start + 1;
+    while end < lines.len() && lines[end].starts_with(' ') {
+        end += 1;
+    }
+    let mut from = start;
+    while from > 0 && lines[from - 1].starts_with('#') {
+        from -= 1;
+    }
+    lines.drain(from..end);
+}
+
+/// 凍結 anchor（生成区間の本文・schema: の行から）。
+fn anchor() -> String {
+    fs::read_to_string(repo_root().join("tests/fixtures/schema/ceiling-region.txt")).unwrap()
+}
+
+/// 第 3 版の形: 旧 4 節（在るものだけ）を外し、最上位の節 schema が無ければ末尾に凍結 anchor の中身を足す。
+fn third_edition(text: &str) -> String {
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    for name in ["verdicts", "finding", "record", "bundle"] {
+        drop_section(&mut lines, name);
+    }
+    let mut out: String = lines.iter().map(|l| format!("{l}\n")).collect();
+    if !lines.iter().any(|l| *l == "schema:") {
+        out.push('\n');
+        out.push_str(&anchor());
+    }
+    out
+}
+
 fn stdout(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
@@ -179,6 +217,60 @@ fn assert_unknown(out: &Output, word: &str) {
 fn ceiling_canonical_copy_passes() {
     let w = Work::new("canonical");
     assert_passes(&w.check());
+}
+
+/// 第 3 版の形（旧 4 節を外し生成区間 schema を足した写し）は違反 0 で通る（便 47 §1 (e)2）。
+#[test]
+fn ceiling_third_edition_passes() {
+    let w = Work::new("third-edition");
+    let before = fs::read_to_string(w.ceiling()).unwrap();
+    let after = third_edition(&before);
+    assert!(after.contains("\nschema:\n  top_level: ["), "{after}");
+    assert!(!after.contains("\nbundle:\n"), "{after}");
+    fs::write(w.ceiling(), after).unwrap();
+    assert_passes(&w.check());
+}
+
+/// 生成区間の側のずれ（3 値の順の入れ替え）は種別 ceiling の違反ちょうど 1 件（便 47 §1 (e)3）。
+#[test]
+fn ceiling_generated_region_drift_fails() {
+    let w = Work::new("region-drift");
+    let before = fs::read_to_string(w.ceiling()).unwrap();
+    fs::write(w.ceiling(), third_edition(&before)).unwrap();
+    w.mutate(
+        "  verdicts: {values: [合格, 不合格, まだ分からない]}\n",
+        "  verdicts: {values: [不合格, 合格, まだ分からない]}\n",
+    );
+    assert_single_violation(
+        &w.check(),
+        "ceiling",
+        &["床の定数と違う", "schema.verdicts"],
+    );
+}
+
+/// 旧 4 節も schema も無い正本は落ちる（緩む窓が無いこと・便 47 §1 (e)4）。
+#[test]
+fn ceiling_without_legacy_sections_and_schema_fails() {
+    let w = Work::new("no-lists");
+    let before = fs::read_to_string(w.ceiling()).unwrap();
+    let mut lines: Vec<String> = third_edition(&before).lines().map(str::to_string).collect();
+    drop_section(&mut lines, "schema");
+    let after: String = lines.iter().map(|l| format!("{l}\n")).collect();
+    assert!(!after.contains("\nschema:\n"), "{after}");
+    fs::write(w.ceiling(), after).unwrap();
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    assert!(
+        stdout(&out).contains("folio check: 不合格（違反 "),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]

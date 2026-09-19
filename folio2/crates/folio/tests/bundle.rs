@@ -3,7 +3,9 @@
 //!   sha256sum で測り直した要約値も同じ（folio の code に依らない・P-10.2）
 //! - 写しの byte（正本と面は byte のまま・folio.css は写さない・観点ごとの面の有無・question / reads / finding の逐語）
 //! - 決定性と全部か無しか（2 度組んで byte 一致・sources/ と faces/ は作り直し・所見 file と起動の記録は触らない）
-//! - まだ分からない 7 種（正本が無い・面が無い・配信先が無い・親 dir が無い・床が組める形でない・行き先が一覧に無い）
+//! - まだ分からない 6 種（正本が無い・読む正本が無い・面が無い・配信先が無い・親 dir が無い・行き先が一覧に無い）
+//! - 読み手は一覧を床の定数から取る（便 47・delivery-47.md §1 (e)5）: fixture の天井の正本から旧 4 節を外し凍結 anchor
+//!   tests/fixtures/schema/ceiling-region.txt の中身を足しても、凍結 anchor と同じ束が組める
 //! - 実の正本（design-intent の写し・前段は folio build）
 //!
 //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
@@ -429,17 +431,71 @@ fn bundle_unknown_when_the_out_parent_is_missing() {
     assert_unknown(&run, "親 dir が無い", &["親 dir が無い"]);
 }
 
-#[test]
-fn bundle_unknown_when_the_bundle_contents_differ_from_the_floor() {
-    let (td, src, faces) = fixture_copy("contents");
-    mutate(
-        &src.join("ceiling.yaml"),
-        "contents: [sources, faces, question, finding, reads]",
-        "contents: [sources, faces, question, finding]",
+/// 最上位の節 `name` の行（列 0 の `name:`）から字下げの続く行までと、直前の注の行を外す（tests/ceiling.rs と同じ形）。
+fn drop_section(lines: &mut Vec<String>, name: &str) {
+    let Some(start) = lines.iter().position(|l| *l == format!("{name}:")) else {
+        return;
+    };
+    let mut end = start + 1;
+    while end < lines.len() && lines[end].starts_with(' ') {
+        end += 1;
+    }
+    let mut from = start;
+    while from > 0 && lines[from - 1].starts_with('#') {
+        from -= 1;
+    }
+    lines.drain(from..end);
+}
+
+/// 第 3 版の形: 旧 4 節（verdicts・finding・record・bundle）を外し、末尾に凍結 anchor（生成区間の本文）を足す。
+fn third_edition(text: &str) -> String {
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    for name in ["verdicts", "finding", "record", "bundle"] {
+        drop_section(&mut lines, name);
+    }
+    let mut out: String = lines.iter().map(|l| format!("{l}\n")).collect();
+    out.push('\n');
+    out.push_str(
+        &fs::read_to_string(repo_root().join("tests/fixtures/schema/ceiling-region.txt")).unwrap(),
     );
-    let run = folio_ceiling(&src, &faces, &td.join("bundle"));
+    out
+}
+
+/// 読み手が一覧を file でなく床の定数から取ること（便 47 §1 (d)(e)5）: fixture の天井の正本から旧 4 節を外し凍結 anchor の
+/// 中身を足しても、凍結 anchor と同じ束（file の一覧・要約値 4 本）が組める。この fixture の 4 観点の reads は天井の正本
+/// （doc の id は ceiling）を名指さないので、正本の file の byte を書き換えても束には写されない。
+#[test]
+fn bundle_reads_the_lists_from_the_floor_not_the_source_file() {
+    let (td, src, faces) = fixture_copy("floor-lists");
+    let ceiling = src.join("ceiling.yaml");
+    let before = fs::read_to_string(&ceiling).unwrap();
+    assert!(
+        !before.contains("{doc: ceiling,"),
+        "fixture の観点が天井の正本を読む＝要約値が正本の byte に依る"
+    );
+    let after = third_edition(&before);
+    assert!(!after.contains("\nbundle:\n"), "{after}");
+    assert!(!after.contains("\nfinding:\n"), "{after}");
+    assert!(after.contains("\nschema:\n  top_level: ["), "{after}");
+    fs::write(&ceiling, after).unwrap();
+    let out = td.join("bundle");
+    let run = folio_ceiling(&src, &faces, &out);
+    assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
+    for (id, files, concat_len, hex) in expected() {
+        let vp_dir = out.join(id);
+        let mut want: Vec<String> = files.iter().map(|f| f.to_string()).collect();
+        want.push("digest.txt".to_string());
+        want.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        let got: Vec<String> = tree(&vp_dir).into_keys().collect();
+        assert_eq!(got, want, "{id}: file の一覧");
+        assert_digest(&vp_dir, hex, concat_len);
+        assert_eq!(
+            fs::read_to_string(vp_dir.join("finding.yaml")).unwrap(),
+            FINDING,
+            "{id}: finding.yaml"
+        );
+    }
     let _ = fs::remove_dir_all(&td);
-    assert_unknown(&run, "bundle.contents", &["床が組める形でない"]);
 }
 
 #[test]

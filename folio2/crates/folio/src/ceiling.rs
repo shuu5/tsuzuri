@@ -5,27 +5,28 @@
 //! （相談窓口の正本を種別 intake で数える `intake.rs` と同じ持ち方）。fields の値と finding / record の欄の名は機械の層なので語彙に通さない。
 //! 節が欄の表でない・行の一覧が表の一覧でない・values や refute や required や contents や fields が一覧でない は「まだ分からない」。
 //! documents の note・finding の optional・meta の generated・approval は数えない。材料の束を組む命令・所見 file の検査・面の名札は後続の便。
+//!
+//! 天井の床の定数は全部この 1 枚に置く（便 47・docs/design/delivery-47.md §1・ADR-11 決定 (4)①・P-5.1 / P-5.6）。床の木 `FLOOR` は
+//! 天井の正本の最上位の節 `schema`（生成区間）の正本で、葉は下の定数と同じ配列を指す（同じ一覧を 2 回書かない）。`_note` で終わる
+//! 欄は人が読む説明の注で、凍結 anchor tests/fixtures/schema/ceiling-region.txt の順と字面のまま持つ（`schema.rs` の `derive` が
+//! 書き、`floor_diff` は読まない）。束を組む命令（`bundle.rs`）と所見の検査（`findings.rs`）の読み手も一覧をここから取る。
+//! 節 `schema` が在れば `FLOOR` と突き合わせ、旧 4 節（verdicts・finding・record・bundle）は無くてもよい。無ければ今までどおり旧 4 節が必須。
 
 use std::collections::HashSet;
 
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
+use crate::schema::{Floor, floor_diff, strip_notes};
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
 
 const FILE: &str = "ceiling.yaml";
 
-/// 天井の正本の節の閉じた一覧（床の定数・相談窓口と同じ持ち方）。
-pub const CEILING_TOP_LEVEL: [&str; 8] = [
-    "meta",
-    "verdicts",
-    "weights",
-    "documents",
-    "viewpoints",
-    "finding",
-    "record",
-    "bundle",
-];
+/// 天井の正本の最上位の節の閉じた一覧（`FLOOR` の top_level・人が書く 4 節 + 生成区間 schema）。
+pub const CEILING_TOP_LEVEL: [&str; 5] = ["meta", "weights", "documents", "viewpoints", "schema"];
+
+/// 移行のあいだだけ許す旧 4 節（人が書いた一覧・第 3 版で生成区間 schema へ移る・便 48 で消す）。
+pub const LEGACY_SECTIONS: [&str; 4] = ["verdicts", "finding", "record", "bundle"];
 
 /// 観点ごとの 3 値（要件書 FR5 の 3 値・順も固定）。
 pub const VERDICT_VALUES: [&str; 3] = ["合格", "不合格", "まだ分からない"];
@@ -49,6 +50,9 @@ pub const DOCUMENT_IDS: [&str; 9] = [
 /// 所見 1 件が必ず持つ欄。
 pub const FINDING_REQUIRED: [&str; 5] = ["id", "viewpoint", "place", "weight", "evidence"];
 
+/// 所見 1 件が持ってよい欄。
+pub const FINDING_OPTIONAL: [&str; 2] = ["refute", "note"];
+
 /// 所見の場所が必ず持つ欄。
 pub const PLACE_REQUIRED: [&str; 2] = ["doc", "at"];
 
@@ -58,12 +62,137 @@ pub const REFUTE_VALUES: [&str; 3] = ["支持", "退けた", "まだ分からな
 /// 起動の記録が必ず持つ欄。
 pub const RECORD_REQUIRED: [&str; 5] = ["model", "effort", "at", "read", "bundle"];
 
-/// 材料の束の中身。
+/// 材料の束の中身（順も同じ・`bundle.rs` が組む）。
 pub const BUNDLE_CONTENTS: [&str; 5] = ["sources", "faces", "question", "finding", "reads"];
+
+/// 束の要約値の規則の名（digest.txt の頭）。
+pub const BUNDLE_DIGEST: &str = "sha256-files-1";
+
+/// 反証の束の中身（名の byte 順・digest.txt と result.yaml は数えない・`findings.rs` が組む）。
+pub const REFUTE_CONTENTS: [&str; 5] = [
+    "finding.yaml",
+    "question.yaml",
+    "reads.yaml",
+    "schema.yaml",
+    "sources.txt",
+];
+
+/// 反証役が書く結果 file の欄（他の欄は違反・全部空でない文）。
+pub const RESULT_REQUIRED: [&str; 6] = ["id", "refute", "model", "effort", "at", "bundle"];
+
+/// 反証の規則の文（逐語・反証の束の question.yaml へ写す）。
+pub const REFUTE_RULE: &str = "所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。";
+
+/// 床の木（天井の正本の最上位の節 `schema` の正本・便 47 §1 (a)）。欄と順と字面は凍結 anchor
+/// tests/fixtures/schema/ceiling-region.txt のとおり（`derive` の結果が byte 一致・単体の歯が数える）。葉は上の定数と同じ配列。
+pub(crate) const FLOOR: Floor = Floor::Map(&[
+    ("top_level", Floor::Strs(&CEILING_TOP_LEVEL)),
+    (
+        "top_level_note",
+        Floor::Val(
+            "最上位の節の閉じた一覧（ほかの節は床が落とす）。meta・weights・documents・viewpoints は人が書き、schema は生成区間",
+        ),
+    ),
+    (
+        "verdicts",
+        Floor::Map(&[("values", Floor::Strs(&VERDICT_VALUES))]),
+    ),
+    (
+        "verdicts_note",
+        Floor::Val(
+            "観点ごとの 3 値（順も固定）。1 つでも「まだ分からない」なら天井は合格にならない。何にするかの裁定の正本は要件書 FR5 と判断の記録 ADR-8 決定 (4)",
+        ),
+    ),
+    ("viewpoints", Floor::Strs(&VIEWPOINT_IDS)),
+    (
+        "viewpoints_note",
+        Floor::Val(
+            "観点の閉じた id の列（順も固定）。viewpoints の行はこの id に 1 つずつ要る。何にするかの裁定の正本は判断の記録 ADR-8 決定 (1)。観点を増やさないことは憲法 N-5",
+        ),
+    ),
+    ("documents", Floor::Strs(&DOCUMENT_IDS)),
+    (
+        "documents_note",
+        Floor::Val(
+            "読む文書の閉じた id の集合（順は問わない）。documents の行はこの id に 1 つずつ要る。所見の場所の doc と観点の reads の doc はこの行に解く",
+        ),
+    ),
+    (
+        "finding",
+        Floor::Map(&[
+            ("required", Floor::Strs(&FINDING_REQUIRED)),
+            ("optional", Floor::Strs(&FINDING_OPTIONAL)),
+            (
+                "place",
+                Floor::Map(&[("required", Floor::Strs(&PLACE_REQUIRED))]),
+            ),
+            (
+                "refute",
+                Floor::Map(&[("values", Floor::Strs(&REFUTE_VALUES))]),
+            ),
+        ]),
+    ),
+    (
+        "finding_note",
+        Floor::Val(
+            "所見 1 件の欄の決まり。place は documents の id と、欄か節か行の id。evidence は正本の逐語の引用（床が実在を照合する）。weight の値域と反証に回す重さは人が書く weights の節が持つ",
+        ),
+    ),
+    (
+        "record",
+        Floor::Map(&[("required", Floor::Strs(&RECORD_REQUIRED))]),
+    ),
+    (
+        "record_note",
+        Floor::Val(
+            "起動の記録の欄（観点ごとに 1 つ・合格の観点にも必須）。1 つでも欠けるか bundle の要約値が束と合わなければ、床がその観点を「まだ分からない」に落とす（判断の記録 ADR-8 決定 (3)）",
+        ),
+    ),
+    (
+        "bundle",
+        Floor::Map(&[
+            ("contents", Floor::Strs(&BUNDLE_CONTENTS)),
+            ("digest", Floor::Val(BUNDLE_DIGEST)),
+        ]),
+    ),
+    (
+        "bundle_note",
+        Floor::Val(
+            "材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）",
+        ),
+    ),
+    (
+        "refute",
+        Floor::Map(&[
+            ("contents", Floor::Strs(&REFUTE_CONTENTS)),
+            ("result_required", Floor::Strs(&RESULT_REQUIRED)),
+            ("rule", Floor::Val(REFUTE_RULE)),
+        ]),
+    ),
+    (
+        "refute_note",
+        Floor::Val(
+            "反証の束の中身（名の byte 順）・反証役が書く結果の file の欄（全部空でない文）・反証役へ渡す規則の文（逐語）",
+        ),
+    ),
+]);
 
 /// 天井の正本 `ceiling` の形を数える。`vocabulary` は既知の語の集合にだけ使う。
 pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
-    unknown_sections(FILE, ceiling, &CEILING_TOP_LEVEL, report);
+    let allowed: Vec<&str> = CEILING_TOP_LEVEL
+        .iter()
+        .chain(LEGACY_SECTIONS.iter())
+        .copied()
+        .collect();
+    unknown_sections(FILE, ceiling, &allowed, report);
+    // 生成区間 schema が在れば床の木と突き合わせ、旧 4 節は無くてもよい（在れば今までどおり数える）
+    let generated = match ceiling.get("schema") {
+        Some(schema) => {
+            check_schema(schema, report);
+            true
+        }
+        None => false,
+    };
     let mut body: vocab::Body = Vec::new();
 
     if let Some(meta) = section(ceiling, "meta", report) {
@@ -77,7 +206,7 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
         push_text(&mut body, "meta", meta, &["title"]);
     }
 
-    if let Some(verdicts) = section(ceiling, "verdicts", report) {
+    if let Some(verdicts) = legacy(ceiling, "verdicts", generated, report) {
         non_empty(FILE, "verdicts", verdicts, &["values"], report);
         if let Some(values) = seq("verdicts", verdicts, "values", report) {
             same_list(
@@ -142,7 +271,7 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
         duplicate_ids(FILE, viewpoints, report);
     }
 
-    if let Some(finding) = section(ceiling, "finding", report) {
+    if let Some(finding) = legacy(ceiling, "finding", generated, report) {
         non_empty(
             FILE,
             "finding",
@@ -182,7 +311,7 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
         }
     }
 
-    if let Some(record) = section(ceiling, "record", report) {
+    if let Some(record) = legacy(ceiling, "record", generated, report) {
         non_empty(FILE, "record", record, &["required"], report);
         if let Some(required) = seq("record", record, "required", report) {
             contains_all(
@@ -194,7 +323,7 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
         }
     }
 
-    if let Some(bundle) = section(ceiling, "bundle", report) {
+    if let Some(bundle) = legacy(ceiling, "bundle", generated, report) {
         non_empty(FILE, "bundle", bundle, &["contents", "digest"], report);
         if let Some(contents) = seq("bundle", bundle, "contents", report) {
             contains_all(
@@ -214,6 +343,45 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
             format!("{FILE} {at}: 語彙に無い英字の語「{lw}」"),
         );
     }
+}
+
+/// 生成区間 schema を床の木 `FLOOR` と突き合わせる（便 47 §1 (c)）。欄の表でなければ「まだ分からない」。食い違いの道 1 本につき
+/// 違反 1 件（文言は判断の記録・設計ノートの側と同じ型）。一覧の要素のずれ（`path[i]`）はその一覧 1 本の道に寄せる＝旧 4 節の
+/// 同じ一覧の検査（`same_list`）と同じく、順の入れ替えを 1 件で数える。
+fn check_schema(schema: &Node, report: &mut Report) {
+    if schema.as_map().is_none() {
+        report.unknown(format!("{FILE}: schema が欄の表でない"));
+        return;
+    }
+    let mut drift = Vec::new();
+    floor_diff(&strip_notes(schema), &FLOOR, "", &mut drift);
+    let mut fields: Vec<String> = Vec::new();
+    for path in drift {
+        let field = match path.rfind('[') {
+            Some(i) if path.ends_with(']') => path[..i].to_string(),
+            _ => path,
+        };
+        if !fields.contains(&field) {
+            fields.push(field);
+        }
+    }
+    for field in fields {
+        report.violation("ceiling", format!("{FILE}: 床の定数と違う: schema.{field}"));
+    }
+}
+
+/// 旧 4 節（`LEGACY_SECTIONS`）。生成区間 schema が在るとき（`generated`）は無くてもよく、在れば今までどおり数える。
+/// 無いときは今までどおり必須（`section` が空の表として扱い、欄の非空が数える）。
+fn legacy<'a>(
+    root: &'a Node,
+    name: &str,
+    generated: bool,
+    report: &mut Report,
+) -> Option<&'a Node> {
+    if generated && root.get(name).is_none() {
+        return None;
+    }
+    section(root, name, report)
 }
 
 /// 欄の表の節。無い・null は空の表として扱い（欄の非空が数える）、表でなければ「まだ分からない」。
@@ -409,6 +577,31 @@ fn resolve_each(at: &str, row: &Node, field: &str, targets: &HashSet<String>, re
 mod tests {
     use super::*;
     use crate::check::FILES;
+
+    /// 床の木の導出は凍結 anchor（設計判断の席が独立の実装で組んだ・P-10.1）と byte 一致（便 47 §1 (e)1）。
+    #[test]
+    fn ceiling_floor_derives_the_frozen_anchor_byte_for_byte() {
+        let anchor = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/schema/ceiling-region.txt"
+        ))
+        .unwrap();
+        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+    }
+
+    /// 床の突き合わせは FLOOR の注（`_note`）を読まない＝注を持つ FLOOR と注の無い写しの差は 0。
+    #[test]
+    fn ceiling_floor_notes_are_outside_the_diff() {
+        let Floor::Map(fields) = &FLOOR else {
+            panic!("FLOOR は表");
+        };
+        let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
+        assert_eq!(notes, 8);
+        let mut out = Vec::new();
+        floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
+        assert_eq!(out.len(), fields.len() - notes, "{out:?}");
+        assert!(out.iter().all(|p| p.ends_with("（欠落）")), "{out:?}");
+    }
 
     #[test]
     fn ceiling_document_ids_are_the_seven_files_plus_adr_and_design_note() {
