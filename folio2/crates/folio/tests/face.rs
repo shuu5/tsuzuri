@@ -756,7 +756,7 @@ fn face_srs_figure_3_appears_only_with_verdicts() {
     assert_eq!(with_parts.iter().filter(|p| **p == "state-node").count(), 3);
     assert!(html_with.contains("<a class=\"rq-where\" href=\"#fig-verdicts\">図 3</a>"));
 
-    // 無い側: state-strip 0・「図3」の参照は字面だけ・それ以外は同じ
+    // 無い側: state-strip 0・「図3」の参照は字面だけ・章 09 の番号は 1 つ繰り上がる（図 4 → 図 3・便 35）・それ以外は同じ
     assert!(!components(&html_without).contains(&"state-strip"));
     assert!(!html_without.contains("#fig-verdicts"));
     let figure_open =
@@ -769,7 +769,17 @@ fn face_srs_figure_3_appears_only_with_verdicts() {
             "<a class=\"rq-where\" href=\"#fig-verdicts\">図 3</a>",
             "図 3",
         )
-        .replace("<a class=\"fig\" href=\"#fig-verdicts\">図 3</a>", "図 3");
+        .replace("<a class=\"fig\" href=\"#fig-verdicts\">図 3</a>", "図 3")
+        .replacen(
+            "<span class=\"fn\">図 4</span>",
+            "<span class=\"fn\">図 3</span>",
+            1,
+        )
+        .replacen(
+            "<span class=\"ver\">図 4 · ",
+            "<span class=\"ver\">図 3 · ",
+            1,
+        );
     assert_same_bytes(
         html_without.as_bytes(),
         expected.as_bytes(),
@@ -945,14 +955,15 @@ fn face_srs_embeds_the_figure_in_a_figure_panel_with_label_and_refs() {
         "図の節の figure-panel が 1 つでない: {html}"
     );
     assert_eq!(svg_bodies(&html), 1, "図の本体が 1 つでない");
+    // 章 09 の番号は自前の図（図 1〜3・写しは verdicts を持つ）の続き = 図 4（便 35）
     assert!(
-        html.contains("<div class=\"fig-title\"><span class=\"fn\">図 1</span>見本の図 <span class=\"fig-tools\">"),
+        html.contains("<div class=\"fig-title\"><span class=\"fn\">図 4</span>見本の図 <span class=\"fig-tools\">"),
         "fig-title に caption の逐語が無い: {html}"
     );
     // 根拠の要件書の id は同じ面の anchor（href が # で始まる）
     assert!(
         html.contains(
-            "<figcaption><span class=\"ver\">図 1 · 構成図（architecture） · fig-1 · 根拠: <a class=\"xref\" href=\"#fr1\">FR1</a></span></figcaption>"
+            "<figcaption><span class=\"ver\">図 4 · 構成図（architecture） · fig-1 · 根拠: <a class=\"xref\" href=\"#fr1\">FR1</a></span></figcaption>"
         ),
         "figcaption に型の名札・id・根拠の同じ面へのリンクが無い: {html}"
     );
@@ -1015,6 +1026,70 @@ fn face_srs_figure_chapter_is_the_only_difference_from_the_figureless_face() {
         without.as_bytes(),
         a.as_bytes(),
         "図の章を抜いた凍結（図なしの面の期待）",
+    );
+}
+
+/// fig-title の番号の札（`<span class="fn">図 N</span>`）の数。
+fn fig_labels(html: &str, n: usize) -> usize {
+    html.matches(&format!("<span class=\"fn\">図 {n}</span>"))
+        .count()
+}
+
+#[test]
+fn face_srs_figure_chapter_numbers_continue_from_the_own_figures() {
+    // 写しから verdicts の節を消す → 自前の図は 2 枚 → 章 09 は 図 3 から
+    let (run, html) = srs_mutated("srs-fig-numbering", |t| {
+        let start = t.find("\nverdicts:\n").expect("verdicts の節が無い");
+        let end = t
+            .find("\nrequirements:\n")
+            .expect("requirements の節が無い");
+        format!("{}{}", &t[..start], &t[end..])
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert_eq!(
+        html.matches("data-component=\"figure-panel\"").count(),
+        2 + 1,
+        "figure-panel が 図 1〜2 + 1 でない: {html}"
+    );
+    assert!(
+        html.contains("<div class=\"fig-title\"><span class=\"fn\">図 3</span>見本の図 <span class=\"fig-tools\">"),
+        "verdicts 無しの章 09 の fig-title が「図 3」でない: {html}"
+    );
+    assert!(
+        html.contains(
+            "<figcaption><span class=\"ver\">図 3 · 構成図（architecture） · fig-1 · 根拠: "
+        ),
+        "verdicts 無しの章 09 の figcaption が「図 3 ·」でない: {html}"
+    );
+    // 帯の h2・toc・foot の数は章 09 の図の数のまま
+    assert!(html.contains("<h2>図 1 枚</h2>"), "章 09 の h2 が変わった");
+    assert!(
+        html.contains("<dt>figures</dt><dd>1</dd>"),
+        "foot の figures が変わった"
+    );
+
+    // 実の正本（図の節 2 枚・verdicts あり）: 章 09 は 図 4・図 5 が 1 つずつ・「図 1」の札は自前の図の 1 つだけ
+    let (td, _, real) = real_srs("srs-fig-numbering-real");
+    let _ = fs::remove_dir_all(&td);
+    let s = load_yaml("srs.yaml");
+    assert!(s["verdicts"].as_vec().is_some(), "正本に verdicts が無い");
+    assert_eq!(
+        s["figures"].as_vec().map_or(0, Vec::len),
+        2,
+        "正本の図の節が 2 枚でない"
+    );
+    assert_eq!(
+        fig_labels(&real, 1),
+        1,
+        "「図 1」の札が自前の図の 1 つだけでない"
+    );
+    assert_eq!(fig_labels(&real, 4), 1, "「図 4」の札が 1 つでない");
+    assert_eq!(fig_labels(&real, 5), 1, "「図 5」の札が 1 つでない");
+    assert_eq!(fig_labels(&real, 6), 0, "「図 6」の札が在る");
+    assert!(
+        real.contains("<span class=\"ver\">図 4 · ")
+            && real.contains("<span class=\"ver\">図 5 · "),
+        "実の正本の figcaption の番号が 図 4・図 5 でない"
     );
 }
 

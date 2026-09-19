@@ -10,6 +10,7 @@ mod face_constitution;
 mod face_index;
 mod face_note;
 mod face_srs;
+mod face_srs_rtm;
 mod figure;
 mod freeze;
 mod gitcheck;

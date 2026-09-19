@@ -14,7 +14,6 @@ use crate::face::{
     R, STRENGTH, STRENGTH_MEANING, TONE, X, anchor, card, hint, hint_q, method_label,
 };
 use crate::parts::catalog::Component;
-use crate::yaml::Value;
 
 /// 要件書の面が使う部品（17 種）。
 pub const PARTS: [Component; 17] = [
@@ -106,10 +105,10 @@ const OWNER: &str = "持ち主";
 const TOOL_ROLE: &str = "道具";
 
 /// 見出しを持つ行（id・escape した title）。
-struct Item<'a> {
-    x: X<'a>,
-    id: &'a str,
-    title: String,
+pub(crate) struct Item<'a> {
+    pub(crate) x: X<'a>,
+    pub(crate) id: &'a str,
+    pub(crate) title: String,
 }
 
 /// rail の段 1 つ。
@@ -121,11 +120,11 @@ struct Step<'a> {
     what: String,
 }
 
-/// 導出の文脈（行・参照の先・骨格）。
-struct Ctx<'a> {
-    goals: Vec<Item<'a>>,
-    fr: Vec<Item<'a>>,
-    nfr: Vec<Item<'a>>,
+/// 導出の文脈（行・参照の先・骨格）。章 07・08 の生成（`face_srs_rtm.rs`）も読む。
+pub(crate) struct Ctx<'a> {
+    pub(crate) goals: Vec<Item<'a>>,
+    pub(crate) fr: Vec<Item<'a>>,
+    pub(crate) nfr: Vec<Item<'a>>,
     acs: Vec<Item<'a>>,
     cons: Vec<Item<'a>>,
     /// 条 id → escape した title
@@ -138,7 +137,7 @@ struct Ctx<'a> {
     /// 任意の図の節の行（無ければ空）
     figures: Vec<X<'a>>,
     /// 面の骨格（章の数は図の章の有無で変わる）
-    frame: Frame,
+    pub(crate) frame: Frame,
 }
 
 impl<'a> Ctx<'a> {
@@ -202,7 +201,7 @@ impl<'a> Ctx<'a> {
             .ok_or_else(|| format!("{}: 要件 id「{id}」が無い", x.at))
     }
 
-    fn goal(&self, x: &X<'_>) -> R<&Item<'a>> {
+    pub(crate) fn goal(&self, x: &X<'_>) -> R<&Item<'a>> {
         let id = x.id()?;
         self.goals
             .iter()
@@ -210,7 +209,7 @@ impl<'a> Ctx<'a> {
             .ok_or_else(|| format!("{}: ゴール id「{id}」が無い", x.at))
     }
 
-    fn ac(&self, x: &X<'_>) -> R<&Item<'a>> {
+    pub(crate) fn ac(&self, x: &X<'_>) -> R<&Item<'a>> {
         let id = x.id()?;
         self.acs
             .iter()
@@ -235,7 +234,7 @@ impl<'a> Ctx<'a> {
             .ok_or_else(|| format!("{}: rules 行 id「{id}」が無い", x.at))
     }
 
-    fn fig(&self, x: &X<'_>) -> R<Where> {
+    pub(crate) fn fig(&self, x: &X<'_>) -> R<Where> {
         resolve(&x.text()?, &self.rail_what, self.verdicts.is_some())
             .map_err(|e| format!("{}: {e}", x.at))
     }
@@ -266,8 +265,8 @@ pub fn derive(dir: &Path) -> R<String> {
     nfr_chapter(&mut o, &ctx)?;
     ac_chapter(&mut o, &ctx, &s)?;
     con_chapter(&mut o, &ctx)?;
-    rtm_chapter(&mut o, &ctx)?;
-    glossary_chapter(&mut o, &ctx, &s, &v)?;
+    crate::face_srs_rtm::rtm_chapter(&mut o, &ctx)?;
+    crate::face_srs_rtm::glossary_chapter(&mut o, &ctx, &s, &v)?;
     if !ctx.figures.is_empty() {
         figures_chapter(&mut o, &ctx, dir)?;
     }
@@ -415,10 +414,10 @@ fn parse_fig(s: &str) -> R<Fig> {
 
 /// 図の参照の行き先（href・item-row の字面・対応表の字面）。
 #[derive(Debug, PartialEq)]
-struct Where {
-    href: Option<String>,
+pub(crate) struct Where {
+    pub(crate) href: Option<String>,
     long: String,
-    short: String,
+    pub(crate) short: String,
 }
 
 /// 図の参照を解く。`rail` は段の n と escape した what・`verdicts` は verdicts の節が在るか。
@@ -589,7 +588,7 @@ fn toc(o: &mut Vec<String>, ctx: &Ctx<'_>) {
     ctx.frame.toc(o, &heads, "作成 / レビュー / 承認");
 }
 
-fn band(o: &mut Vec<String>, ctx: &Ctx<'_>, n: usize, lead: Option<&str>) {
+pub(crate) fn band(o: &mut Vec<String>, ctx: &Ctx<'_>, n: usize, lead: Option<&str>) {
     ctx.frame
         .band(o, n, CHAPTERS[n - 1], &chapter_h2(ctx, n), lead);
 }
@@ -1148,118 +1147,10 @@ fn con_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
     Ok(())
 }
 
-fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
-    band(o, ctx, 7, None);
-    o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!(
-        "<div class=\"legend-line\"><span>凡例:</span>{}</div>",
-        hint(
-            "読み方",
-            "● = この要件はそのゴールのためにある ／ AC = 受入基準で確かめる ／ — = 受入基準では直接確かめない"
-        )
-    ));
-    o.push(format!(
-        "<div {}><table class=\"rtm\">",
-        ctx.frame.dc(Component::RtmGrid)
-    ));
-    let heads = ctx
-        .goals
-        .iter()
-        .map(|g| format!("{} {}", g.id, g.title))
-        .collect::<Vec<_>>();
-    o.push(format!(
-        "<thead><tr><th>要件</th>{}<th>受入で確かめる</th><th>図のどこ</th></tr></thead>",
-        heads
-            .iter()
-            .map(|h| format!("<th class=\"grp\">{h}</th>"))
-            .collect::<String>()
-    ));
-    o.push("<tbody>".to_string());
-    for it in ctx.fr.iter().chain(&ctx.nfr) {
-        let x = &it.x;
-        let goals = x
-            .f("goals")?
-            .seq()?
-            .iter()
-            .map(|q| Ok(ctx.goal(q)?.id))
-            .collect::<R<Vec<_>>>()?;
-        let mut row = format!(
-            "<tr><th><a href=\"#{}\">{}</a><span class=\"lbl\">{}</span></th>",
-            anchor(it.id),
-            it.id,
-            it.title
-        );
-        for (g, h) in ctx.goals.iter().zip(&heads) {
-            if goals.contains(&g.id) {
-                row.push_str(&format!(
-                    "<td class=\"hit\" data-k=\"{h}\"><span class=\"dot\">●</span></td>"
-                ));
-            } else {
-                row.push_str(&format!("<td data-k=\"{h}\"></td>"));
-            }
-        }
-        let acs = x
-            .f("verify")?
-            .f("ac")?
-            .seq()?
-            .iter()
-            .map(|q| Ok(format!("<span class=\"dot ac\">{}</span>", ctx.ac(q)?.id)))
-            .collect::<R<Vec<_>>>()?;
-        if acs.is_empty() {
-            row.push_str("<td data-k=\"受入\">—</td>");
-        } else {
-            row.push_str(&format!(
-                "<td class=\"hit\" data-k=\"受入\">{}</td>",
-                acs.concat()
-            ));
-        }
-        let figs = x
-            .f("figures")?
-            .seq()?
-            .iter()
-            .map(|f| {
-                let w = ctx.fig(f)?;
-                Ok(match w.href {
-                    Some(h) => format!("<a class=\"fig\" href=\"{h}\">{}</a>", w.short),
-                    None => w.short,
-                })
-            })
-            .collect::<R<Vec<_>>>()?;
-        let figs = if figs.is_empty() {
-            "—".to_string()
-        } else {
-            figs.join(" · ")
-        };
-        row.push_str(&format!("<td data-k=\"図\">{figs}</td></tr>"));
-        o.push(row);
-    }
-    o.push("</tbody>".to_string());
-    o.push("</table></div>".to_string());
-    o.push("</div>".to_string());
-    Ok(())
-}
-
-fn glossary_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, v: &X<'_>) -> R<()> {
-    band(o, ctx, 8, Some(&s.ef("glossary_pointer")?));
-    o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!("<div {}>", ctx.frame.dc(Component::GlossaryLinks)));
-    for t in v.f("terms")?.seq()? {
-        let href = format!("constitution.html#g-{}", t.f("id")?.id()?);
-        let en = t.f("en")?;
-        let en = if matches!(en.v, Value::Null) {
-            String::new()
-        } else {
-            format!(" <span class=\"en\">{}</span>", en.e()?)
-        };
-        o.push(format!(
-            "<span class=\"hint\"><a href=\"{href}\">{}{en}</a><label><input type=\"checkbox\" class=\"vh\" aria-label=\"説明を開く\"><span class=\"hint-btn q\">?</span></label><span class=\"hint-body\">{}<br><a href=\"{href}\">憲法 §7 の定義へ</a></span></span>",
-            t.ef("term")?,
-            t.ef("short")?
-        ));
-    }
-    o.push("</div>".to_string());
-    o.push("</div>".to_string());
-    Ok(())
+/// 自前の図の数 = 2 + 〔verdicts の節が在れば 1〕（図 1〜3）。章 09 の図の番号はこの続き（便 35）・帯の h2 / toc /
+/// foot の数は章 09 の図の数のまま。
+fn own_figures(ctx: &Ctx<'_>) -> usize {
+    2 + usize::from(ctx.verdicts.is_some())
 }
 
 /// 章 09（図・便 34）。用語集の後・承認欄の前。図ごとに共有の図の枠（`face::figure_panel`）を置き、根拠（refs）の
@@ -1273,7 +1164,7 @@ fn figures_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
         None,
     );
     o.push("<div class=\"chapbody\">".to_string());
-    for (i, fig) in ctx.figures.iter().enumerate() {
+    for (n, fig) in (own_figures(ctx) + 1..).zip(&ctx.figures) {
         let drawn = face::figure_body(dir, fig)?;
         let caption = fig.ef("caption")?;
         let refs = match fig.g("refs")? {
@@ -1284,7 +1175,7 @@ fn figures_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
                 .collect::<R<Vec<_>>>()?,
             None => Vec::new(),
         };
-        face::figure_panel(o, &ctx.frame, i + 1, &drawn, &caption, &refs);
+        face::figure_panel(o, &ctx.frame, n, &drawn, &caption, &refs);
     }
     o.push("</div>".to_string());
     Ok(())
@@ -1452,7 +1343,7 @@ mod face_srs_tests {
             limit("context-band", "max_per_band"),
             MAX_PER_BAND.to_string()
         );
-        let v = Value::Null;
+        let v = crate::yaml::Value::Null;
         let x = X::root(&v, "srs.yaml.actors");
         assert!(band_limit(&x, "入れる側", MAX_PER_BAND).is_ok());
         assert!(band_limit(&x, "入れる側", MAX_PER_BAND + 1).is_err());
@@ -1467,12 +1358,12 @@ mod face_srs_tests {
         for (k, class) in TONE {
             assert_eq!(*class, format!("tone-{k}"));
         }
-        let both = Value::Str("test+inspection".into());
+        let both = crate::yaml::Value::Str("test+inspection".into());
         assert_eq!(
             method_label(&X::root(&both, "m")).unwrap(),
             "実際に動かして確かめる（Test） + 目で見て確かめる（Inspection）"
         );
-        let bad = Value::Str("review".into());
+        let bad = crate::yaml::Value::Str("review".into());
         assert!(method_label(&X::root(&bad, "m")).is_err());
     }
 }
