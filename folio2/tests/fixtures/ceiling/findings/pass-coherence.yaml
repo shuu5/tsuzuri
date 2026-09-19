@@ -1,0 +1,8 @@
+verdict: 合格
+record:
+  model: opus
+  effort: high
+  at: 2026-09-19T05:00:00Z
+  read: [constitution, rules, srs, adr, design-note]
+  bundle: sha256-files-1 91ca924dceef12d5b2df3946e6b56de69b1feeef13ea66f78d950af54c28476c
+findings: []

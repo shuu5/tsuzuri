@@ -14,6 +14,7 @@ mod face_note;
 mod face_srs;
 mod face_srs_rtm;
 mod figure;
+mod findings;
 mod freeze;
 mod gitcheck;
 mod hello;
@@ -201,13 +202,13 @@ enum Command {
         #[arg(long)]
         state: Option<PathBuf>,
     },
-    /// 天井の材料の束を観点ごとに置き場へ組む（--write）。AI は起動しない
-    #[command(group(ArgGroup::new("mode").required(true).args(["write"])))]
+    /// 天井の材料の束を観点ごとに置き場へ組む（--write）・席か器が書いた所見 file を数えて観点ごとの 3 値を返す（--check）。AI は起動しない
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Ceiling {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
-        /// 配信先（folio build の --out・相対なら --dir からの相対・絶対ならそのまま）
+        /// 配信先（folio build の --out・相対なら --dir からの相対・絶対ならそのまま・--check でも束が古くないかを測るのに要る）
         #[arg(long)]
         faces: PathBuf,
         /// 束の置き場（既定なし・相対なら --dir からの相対・絶対ならそのまま）
@@ -216,6 +217,9 @@ enum Command {
         /// 観点ごとの束（sources/・faces/・question.yaml・finding.yaml・reads.yaml・digest.txt）を置き場へ書く（全部か無しか）
         #[arg(long)]
         write: bool,
+        /// 観点ごとの所見 file（findings.yaml）を天井の正本の欄の決まりで数える（4 観点が全部合格 0・不合格 1・まだ分からない 2）
+        #[arg(long)]
+        check: bool,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -449,13 +453,24 @@ fn main() -> ExitCode {
             dir,
             faces,
             out,
-            write: _,
+            write,
+            check: _,
         } => {
-            let outcome = bundle::run(&dir, &faces, &out);
-            if let Some(line) = &outcome.stdout {
+            if write {
+                let outcome = bundle::run(&dir, &faces, &out);
+                if let Some(line) = &outcome.stdout {
+                    println!("{line}");
+                }
+                if let Some(line) = &outcome.stderr {
+                    eprintln!("{line}");
+                }
+                return ExitCode::from(outcome.verdict.exit_code() as u8);
+            }
+            let outcome = findings::run(&dir, &faces, &out);
+            for line in &outcome.stdout {
                 println!("{line}");
             }
-            if let Some(line) = &outcome.stderr {
+            for line in &outcome.stderr {
                 eprintln!("{line}");
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)

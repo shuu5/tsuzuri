@@ -8,6 +8,8 @@
 //! 全部か無しか: 4 観点の全 file を memory の上で先に用意し、1 本でも用意できなければ何も書かず 2（P-4.1）。
 //! 書くときは各観点の sources/ と faces/ を消してから作り直す（古い写しが要約値に混ざらないため）。
 //! 席や器が書く所見 file・起動の記録は触らない。判定を持たないので 1（不合格）は返さない（FR5 の 3 値のうち 2 つ）。
+//! 便 39（`findings.rs`・`--check`）は正本の読み `load`・観点 1 つの組み立て `build_one`・要約値 `digest_text` を
+//! crate の中から呼ぶ（--write の振る舞いと文言は不変）。
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -73,7 +75,7 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn unknown(reason: impl Into<String>) -> Self {
+    pub fn unknown(reason: impl Into<String>) -> Self {
         Outcome {
             verdict: Verdict::Unknown,
             stdout: None,
@@ -83,24 +85,38 @@ impl Outcome {
 }
 
 /// 観点 1 つの束（観点の dir からの相対 path → 中身・path の byte 順）。
-type Files = BTreeMap<String, Vec<u8>>;
+pub type Files = BTreeMap<String, Vec<u8>>;
 
-/// 天井の正本から読む欄（本便が組むのに要る分だけ・形の検査は床 `ceiling.rs` の領分）。
-struct Ceiling {
+/// 天井の正本から読む欄（束を組むのに要る分と、所見 file を数える値域・欄の名・形の検査は床 `ceiling.rs` の領分）。
+pub struct Ceiling {
     /// documents の各行（id・file）
     documents: Vec<(String, String)>,
-    viewpoints: Vec<Viewpoint>,
+    pub viewpoints: Vec<Viewpoint>,
+    /// 所見の欄の決まり（finding・weights・verdicts・record の値）
+    pub rules: Rules,
     /// finding.yaml の本文（4 観点とも同じ）
     finding: String,
 }
 
-struct Viewpoint {
-    id: String,
+pub struct Viewpoint {
+    pub id: String,
     name: String,
     reader: String,
     question: String,
     /// reads の各行（doc・fields）
-    reads: Vec<(String, Vec<String>)>,
+    pub reads: Vec<(String, Vec<String>)>,
+}
+
+/// 所見の欄の決まり（天井の正本 finding・weights・verdicts・record の写し・finding.yaml の材料と `--check` の値域）。
+pub struct Rules {
+    pub finding_required: Vec<String>,
+    pub finding_optional: Vec<String>,
+    pub place_required: Vec<String>,
+    pub refute_values: Vec<String>,
+    pub weight_values: Vec<String>,
+    pub weight_refute: Vec<String>,
+    pub verdict_values: Vec<String>,
+    pub record_required: Vec<String>,
 }
 
 // ── 命令の口 ──
@@ -123,7 +139,7 @@ pub fn run(dir: &Path, faces: &Path, out: &Path) -> Outcome {
 // ── 天井の正本を読む ──
 
 /// `<dir>/ceiling.yaml` を `check.rs` の正本の読み手と同じ文言で読む。
-fn load(dir: &Path) -> R<Ceiling> {
+pub fn load(dir: &Path) -> R<Ceiling> {
     let path = dir.join(FILE);
     if path.is_symlink() {
         return Err(format!("{FILE}: symlink は認めない"));
@@ -178,7 +194,8 @@ fn load(dir: &Path) -> R<Ceiling> {
             id,
         });
     }
-    let finding = finding_text(&root)?;
+    let rules = load_rules(&root)?;
+    let finding = finding_text(&rules);
     let bundle = table_of(&root, "bundle", "")?;
     if list_of(bundle, "contents", "bundle")? != CONTENTS
         || text_of(bundle, "digest", "bundle")? != DIGEST
@@ -188,6 +205,7 @@ fn load(dir: &Path) -> R<Ceiling> {
     Ok(Ceiling {
         documents,
         viewpoints,
+        rules,
         finding,
     })
 }
@@ -239,30 +257,44 @@ fn prefix(at: &str) -> String {
     }
 }
 
-/// finding.yaml の本文（所見の欄の決まり・天井の正本の finding・weights・verdicts・record を固定の型に流し込む）。
-fn finding_text(root: &Node) -> R<String> {
+/// 所見の欄の決まり（天井の正本の finding・weights・verdicts・record）。
+fn load_rules(root: &Node) -> R<Rules> {
     let finding = table_of(root, "finding", "")?;
     let place = table_of(finding, "place", "finding")?;
     let refute = table_of(finding, "refute", "finding")?;
     let weights = table_of(root, "weights", "")?;
     let verdicts = table_of(root, "verdicts", "")?;
     let record = table_of(root, "record", "")?;
-    let join = |items: Vec<String>| items.join(", ");
-    Ok(format!(
+    Ok(Rules {
+        finding_required: list_of(finding, "required", "finding")?,
+        finding_optional: list_of(finding, "optional", "finding")?,
+        place_required: list_of(place, "required", "finding.place")?,
+        refute_values: list_of(refute, "values", "finding.refute")?,
+        weight_values: list_of(weights, "values", "weights")?,
+        weight_refute: list_of(weights, "refute", "weights")?,
+        verdict_values: list_of(verdicts, "values", "verdicts")?,
+        record_required: list_of(record, "required", "record")?,
+    })
+}
+
+/// finding.yaml の本文（所見の欄の決まりを固定の型に流し込む）。
+fn finding_text(rules: &Rules) -> String {
+    let join = |items: &[String]| items.join(", ");
+    format!(
         "# 所見の欄の決まり（天井の正本 ceiling.yaml の finding・weights・verdicts・record の写し・folio ceiling が組んだ）\n\
          finding:\n  required: [{}]\n  optional: [{}]\n  place: {{required: [{}]}}\n  refute: {{values: [{}]}}\n\
          weights:\n  values: [{}]\n  refute: [{}]\n\
          verdicts:\n  values: [{}]\n\
          record:\n  required: [{}]\n",
-        join(list_of(finding, "required", "finding")?),
-        join(list_of(finding, "optional", "finding")?),
-        join(list_of(place, "required", "finding.place")?),
-        join(list_of(refute, "values", "finding.refute")?),
-        join(list_of(weights, "values", "weights")?),
-        join(list_of(weights, "refute", "weights")?),
-        join(list_of(verdicts, "values", "verdicts")?),
-        join(list_of(record, "required", "record")?),
-    ))
+        join(&rules.finding_required),
+        join(&rules.finding_optional),
+        join(&rules.place_required),
+        join(&rules.refute_values),
+        join(&rules.weight_values),
+        join(&rules.weight_refute),
+        join(&rules.verdict_values),
+        join(&rules.record_required),
+    )
 }
 
 // ── 束を memory の上で組む ──
@@ -275,33 +307,45 @@ fn build_all(dir: &Path, faces_dir: &Path, ceiling: &Ceiling) -> R<Vec<(String, 
     let face_files = read_dir_names(faces_dir)?;
     let mut bundles = Vec::with_capacity(ceiling.viewpoints.len());
     for vp in &ceiling.viewpoints {
-        let mut files = Files::new();
-        let mut seen: Vec<&str> = Vec::new();
-        for (doc, _) in &vp.reads {
-            if seen.contains(&doc.as_str()) {
-                continue;
-            }
-            seen.push(doc);
-            let file = &ceiling
-                .documents
-                .iter()
-                .find(|(id, _)| id == doc)
-                .expect("reads の doc は load で documents に解いてある")
-                .1;
-            copy_sources(dir, file, &mut files)?;
-            copy_faces(faces_dir, &face_files, doc, &mut files)?;
-        }
-        files.insert("question.yaml".to_string(), question_text(vp).into_bytes());
-        files.insert(
-            "finding.yaml".to_string(),
-            ceiling.finding.clone().into_bytes(),
-        );
-        files.insert("reads.yaml".to_string(), reads_text(vp).into_bytes());
-        let digest = digest_text(&files);
-        files.insert(DIGEST_FILE.to_string(), digest.into_bytes());
+        let files = build_one(dir, faces_dir, &face_files, ceiling, vp)?;
         bundles.push((vp.id.clone(), files));
     }
     Ok(bundles)
+}
+
+/// 観点 1 つの束を memory の上で用意する（digest.txt を含む）。`face_files` = `--faces` の直下の名（`read_dir_names`）。
+pub fn build_one(
+    dir: &Path,
+    faces_dir: &Path,
+    face_files: &[(String, bool)],
+    ceiling: &Ceiling,
+    vp: &Viewpoint,
+) -> R<Files> {
+    let mut files = Files::new();
+    let mut seen: Vec<&str> = Vec::new();
+    for (doc, _) in &vp.reads {
+        if seen.contains(&doc.as_str()) {
+            continue;
+        }
+        seen.push(doc);
+        let file = &ceiling
+            .documents
+            .iter()
+            .find(|(id, _)| id == doc)
+            .expect("reads の doc は load で documents に解いてある")
+            .1;
+        copy_sources(dir, file, &mut files)?;
+        copy_faces(faces_dir, face_files, doc, &mut files)?;
+    }
+    files.insert("question.yaml".to_string(), question_text(vp).into_bytes());
+    files.insert(
+        "finding.yaml".to_string(),
+        ceiling.finding.clone().into_bytes(),
+    );
+    files.insert("reads.yaml".to_string(), reads_text(vp).into_bytes());
+    let digest = digest_text(&files);
+    files.insert(DIGEST_FILE.to_string(), digest.into_bytes());
+    Ok(files)
 }
 
 /// 正本の写し。file 形（末尾が / でない）は `<dir>/<file>` を `sources/<file>` へ、dir 形（末尾が /）は
@@ -375,7 +419,7 @@ fn copy_faces(
 }
 
 /// dir の直下の名（UTF-8 に読めるものだけ・byte 順）と file かどうか。
-fn read_dir_names(dir: &Path) -> R<Vec<(String, bool)>> {
+pub fn read_dir_names(dir: &Path) -> R<Vec<(String, bool)>> {
     let mut names = Vec::new();
     for entry in fs::read_dir(dir).map_err(|e| format!("{}: 読めない: {e}", dir.display()))? {
         let entry = entry.map_err(|e| format!("{}: 読めない: {e}", dir.display()))?;
@@ -415,7 +459,7 @@ fn reads_text(vp: &Viewpoint) -> String {
 }
 
 /// digest.txt の 1 行。束の file（digest.txt を除く）を相対 path の byte 順に並べ、中身を連結した sha256。
-fn digest_text(files: &Files) -> String {
+pub fn digest_text(files: &Files) -> String {
     let mut bytes = Vec::new();
     for (path, body) in files {
         if path != DIGEST_FILE {
