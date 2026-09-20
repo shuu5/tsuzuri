@@ -6,16 +6,20 @@
 //! 上書きしない（P-4.1・AC12）。往復（座標を直して撃ち直す）は folio の外＝planner が台帳に記帳する
 //! （ADR-4 決定 (7)）。道具の他の命令（preview・brands capture・--open）は呼ばない。
 //! 図の行 1 つから本体を描く口（`render`）は設計ノートの面（便 31）と共有する。
+//!
+//! 凍結 anchor（型付き記述 1 本と図の本体の写し・P-10.1）は compile 時に取り込み、命令と面の経路の導出の前に
+//! 照合する。落ちたら判定を「まだ分からない」に落とし、出力も前の生成物も書かない（便 60・ADR-4 決定 (6)・P-10.3）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::face::{self, R, X};
 use crate::face_note;
 use crate::verdict::Verdict;
-use crate::yaml::Value;
+use crate::yaml::{self, Value};
 
 /// 図の型の写像（β・正本の値 → 図の道具の型）。表に無い型は導出できない。
 const FIGURE_TYPES: &[(&str, &str)] = &[
@@ -34,6 +38,18 @@ const QUALITY: &str = "showcase";
 
 /// 道具の診断の欄が無いときに出す stdout の頭の字数。
 const HEAD_CHARS: usize = 200;
+
+/// 凍結 anchor の型付き記述（tests/fixtures/figure/anchor/spec.json の写し・compile 時に取り込む）。
+const ANCHOR_SPEC: &str = include_str!("../../../tests/fixtures/figure/anchor/spec.json");
+
+/// 凍結 anchor の図の本体（tests/fixtures/figure/anchor/body.svg の写し・compile 時に取り込む）。
+const ANCHOR_BODY: &str = include_str!("../../../tests/fixtures/figure/anchor/body.svg");
+
+/// 凍結 anchor の図の型（型付き記述の diagram_type と同じ）。
+const ANCHOR_KIND: &str = "architecture";
+
+/// 照合の結果（process の中で 1 回だけ計算する・道具の呼び出しを図ごとに増やさない）。
+static ANCHOR: OnceLock<R<()>> = OnceLock::new();
 
 pub enum Mode {
     Write,
@@ -64,6 +80,10 @@ pub fn run(doc: &str, id: &str, dir: &Path, out: &Path, mode: Mode) -> Outcome {
     let out_path = dir.join(out);
     if !out_path.parent().is_some_and(Path::is_dir) {
         return Outcome::unknown(format!("{}: 出力先の親 dir が無い", out_path.display()));
+    }
+    // 凍結 anchor が落ちていれば --write / --check とも導出せず「まだ分からない」（P-10.3）
+    if let Err(e) = anchor_holds(dir) {
+        return Outcome::unknown(e);
     }
     let body = match derive(dir, doc, id) {
         Ok(b) => b,
@@ -168,7 +188,32 @@ pub fn render(dir: &Path, id: &str, kind: &str, spec: &X<'_>) -> R<String> {
     }
     let json = to_json(spec.v)?;
     let tool = tool_path(dir)?;
+    anchor_holds(dir)?;
     deliver(&tool, kind, &json, id)
+}
+
+// ── 凍結 anchor の照合（P-10.1・P-10.3）──
+
+/// 凍結 anchor が保たれているか。型付き記述の写しを既存の導出の経路（to_json → 道具へ deliver）に掛け、
+/// 図の本体の写しと byte で比べる。違えば Err（道具の版か写しが変わった）。道具が起動できない・検査を
+/// 通らないは既存の Err がそのまま上がる。結果は process の中で 1 回だけ計算し、以後は再利用する。
+pub fn anchor_holds(dir: &Path) -> R<()> {
+    ANCHOR.get_or_init(|| check_anchor(dir)).clone()
+}
+
+fn check_anchor(dir: &Path) -> R<()> {
+    let spec = yaml::parse_typed(ANCHOR_SPEC)
+        .map_err(|e| format!("凍結 anchor の型付き記述を読めない: {e}"))?;
+    let json = to_json(&spec)?;
+    let tool = tool_path(dir)?;
+    let body = deliver(&tool, ANCHOR_KIND, &json, "anchor")?;
+    if body.as_bytes() != ANCHOR_BODY.as_bytes() {
+        return Err(
+            "凍結 anchor が落ちた（図の道具の出力が固定の写しと違う・道具の版か写しが変わった。P-10.3）"
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 /// 図の型（閉じた表 β）→ 図の道具の型。既存 3 型（pipeline-rail・context-band・state-strip）も道具の型でない。
@@ -384,7 +429,6 @@ fn unescape_lines(raw: &str) -> Vec<String> {
 #[cfg(test)]
 mod figure_tests {
     use super::*;
-    use crate::yaml;
 
     #[test]
     fn figure_to_json_writes_every_type_in_the_written_order() {
@@ -462,6 +506,21 @@ mod figure_tests {
             error_head("{\"severity\": \"error\"}"),
             "{\"severity\": \"error\"}"
         );
+    }
+
+    #[test]
+    fn figure_anchor_constants_are_the_frozen_pair() {
+        // 型付き記述は既存の読み手で表として読め、型は道具の型 architecture
+        let spec = yaml::parse_typed(ANCHOR_SPEC).unwrap();
+        let x = X::root(&spec, "anchor");
+        assert_eq!(x.f("diagram_type").unwrap().v.as_str(), Some(ANCHOR_KIND));
+        assert!(
+            to_json(&spec)
+                .unwrap()
+                .starts_with("{\"schema_version\":1,")
+        );
+        // 図の本体の写しは svg 1 つ
+        assert_eq!(body(ANCHOR_BODY).unwrap(), ANCHOR_BODY);
     }
 
     #[test]

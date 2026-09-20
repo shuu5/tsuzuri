@@ -5,8 +5,10 @@
 //! - --check の 3 値・型と id と鍵と spec の「まだ分からない」・道具と node の不在
 //! - 実の正本（example）の fig-1 の体裁（行内の様式 0・色の直書き 0・意味 class は部品目録の一覧の中）
 //! - 版の固定（写しの version と要約値が R-15 の value に在る）
+//! - 凍結 anchor の実行時の照合（便 60・P-10.3）: 道具の写しを改変すると --write / --check / 設計ノートの面が
+//!   「まだ分からない」（2）に落ち、出力も前の生成物も書かない・改変しない写しでは保たれる
 //!
-//! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
+//! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中・道具の改変は写しにだけ当てる）。
 
 use std::fs;
 use std::io::Write;
@@ -408,7 +410,126 @@ fn figure_on_the_real_source_has_only_semantic_classes() {
     }
 }
 
-// ── 8. 版の固定（R-15）──
+// ── 8. 凍結 anchor の実行時の照合（便 60・P-10.3）──
+
+/// 写した道具を改変する（図の本体に出る class の字 m-default → m-defaultx・凍結 anchor の body.svg に実在する
+/// 字で、道具の出力が変わる最小の改変）。repo の vendor は触らない。
+fn drift_tool(td: &Path) {
+    edit(&td.join("vendor/archify/renderers/shared/utils.mjs"), |t| {
+        t.replacen("class=\"m-default\"", "class=\"m-defaultx\"", 1)
+    });
+}
+
+const ANCHOR_DRIFT: &str = "凍結 anchor が落ちた";
+
+#[test]
+fn anchor_drift_makes_figure_write_unknown() {
+    let (td, work) = fixture_copy("anchor-drift-write");
+    drift_tool(&td);
+    let out = td.join("fig.svg");
+    let run = folio_figure("full", "fig-anchor", &work, &out, "--write");
+    let wrote = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    unknown("改変した道具で --write", &run, wrote, ANCHOR_DRIFT);
+}
+
+#[test]
+fn anchor_drift_keeps_the_previous_output() {
+    let (td, work) = fixture_copy("anchor-drift-keep");
+    drift_tool(&td);
+    let out = td.join("fig.svg");
+    let before = "<svg>前の生成物</svg>".as_bytes().to_vec();
+    fs::write(&out, &before).unwrap();
+    let run = folio_figure("full", "fig-anchor", &work, &out, "--write");
+    let after = fs::read(&out).unwrap();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio figure --write"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains(ANCHOR_DRIFT), "{}", stderr(&run));
+    assert_eq!(
+        after, before,
+        "凍結 anchor が落ちたのに前の生成物を上書きした"
+    );
+}
+
+#[test]
+fn anchor_drift_makes_figure_check_unknown() {
+    let (td, work) = fixture_copy("anchor-drift-check");
+    let out = td.join("fig.svg");
+    // 改変の前に書いた生成物を置き、--check が不合格（1）でなく「まだ分からない」（2）に落ちることを測る
+    let write = folio_figure("full", "fig-anchor", &work, &out, "--write");
+    drift_tool(&td);
+    let check = folio_figure("full", "fig-anchor", &work, &out, "--check");
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&write, "write"), 0, "{}", stderr(&write));
+    assert_eq!(
+        code(&check, "check（改変した道具）"),
+        2,
+        "{}",
+        stderr(&check)
+    );
+    assert!(
+        stderr(&check).contains("まだ分からない"),
+        "{}",
+        stderr(&check)
+    );
+    assert!(stderr(&check).contains(ANCHOR_DRIFT), "{}", stderr(&check));
+}
+
+#[test]
+fn anchor_drift_makes_the_note_face_unknown() {
+    // 設計ノートの面の歯（tests/face_note.rs）と同じ写し: 天井の正本と器の導出 file を足す
+    let (td, work) = fixture_copy("anchor-drift-note");
+    fs::copy(
+        face_fixture().join("ceiling.yaml"),
+        work.join("ceiling.yaml"),
+    )
+    .unwrap();
+    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::copy(
+        repo_root().join("contracts/schema.toml"),
+        td.join("contracts/schema.toml"),
+    )
+    .unwrap();
+    drift_tool(&td);
+    let out = td.join("note-full.html");
+    let run = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("face")
+        .arg("--face")
+        .arg("note")
+        .arg("--id")
+        .arg("full")
+        .arg("--dir")
+        .arg(&work)
+        .arg("--out")
+        .arg(&out)
+        .arg("--write")
+        .output()
+        .expect("folio を起動できない");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{}", stderr(&run));
+    assert!(stderr(&run).contains(ANCHOR_DRIFT), "{}", stderr(&run));
+    assert!(!exists, "凍結 anchor が落ちたのに面を書いた");
+}
+
+#[test]
+fn anchor_holds_on_the_untouched_copy() {
+    let (td, work) = fixture_copy("anchor-holds");
+    let out = td.join("fig.svg");
+    let run = folio_figure("full", "fig-anchor", &work, &out, "--write");
+    let written = fs::read(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio figure --write"), 0, "{}", stderr(&run));
+    assert!(stderr(&run).is_empty(), "{}", stderr(&run));
+    assert_eq!(
+        written,
+        frozen_body(),
+        "改変しない写しの出力が anchor/body.svg と違う"
+    );
+}
+
+// ── 9. 版の固定（R-15）──
 
 /// 版管理の下の写しの全 file を path の byte 順に連結した byte 列。
 fn vendor_bytes() -> (Vec<u8>, usize) {
