@@ -8,12 +8,13 @@ use std::path::Path;
 
 use crate::constitution_enums as ce;
 use crate::face::{
-    self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, RULE_KIND, RULE_STATUS, Tier, X, anchor,
-    binds_label, card, esc, hint, hint_q, mechanism_kind_label, mechanism_live_label,
-    pattern_label, polarity_label, rationale, retreat_kind_label, section_anchor, split_dash,
+    self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, Tier, X, anchor, binds_label, card, esc, hint,
+    hint_q, mechanism_kind_label, mechanism_live_label, pattern_label, polarity_label, rationale,
+    retreat_kind_label, rule_kind_label, rule_status_class, section_anchor, split_dash,
     stage_label, strength_label, tier_label, tier_of, val,
 };
 use crate::parts::catalog::Component;
+use crate::rules;
 
 /// 憲法の面が使う部品（15 種・便 40 で ceiling-stamp を足した）。
 pub const PARTS: [Component; 15] = [
@@ -737,7 +738,7 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
             x.f("id")?.id()?,
             what_with_xref(x)?,
             val(&x.f("value")?, 0)?,
-            x.f("kind")?.lookup(RULE_KIND, "rules 行の種別")?,
+            rule_kind_label(x.f("kind")?.parse(rules::RuleKind::from_name, "rules 行の種別")?),
             stage_label(x.f("stage")?.parse(ce::Stage::from_name, "rules 行の stage")?),
             ruling(x)?,
             state_chip(x)?
@@ -762,7 +763,7 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
             anchor(x.f("id")?.id()?),
             x.f("id")?.id()?,
             what_with_xref(x)?,
-            x.f("kind")?.lookup(RULE_KIND, "rules 行の種別")?,
+            rule_kind_label(x.f("kind")?.parse(rules::RuleKind::from_name, "rules 行の種別")?),
             ruling(x)?,
             state_chip(x)?
         ));
@@ -791,7 +792,7 @@ fn state_chip(x: &X<'_>) -> R<String> {
     let status = x.f("status")?;
     Ok(format!(
         "<span class=\"{}\">{}</span>",
-        status.lookup(RULE_STATUS, "rules 行の状態")?,
+        rule_status_class(status.parse(rules::RuleStatus::from_name, "rules 行の状態")?),
         status.e()?
     ))
 }

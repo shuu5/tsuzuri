@@ -20,6 +20,7 @@ use crate::constitution_enums as ce;
 use crate::figure;
 use crate::findings;
 use crate::parts::catalog::{self, Component};
+use crate::rules;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
 use crate::{face_adr, face_constitution, face_index, face_note, face_srs};
@@ -625,23 +626,30 @@ pub fn retreat_kind_label(k: ce::RetreatKind) -> &'static str {
     }
 }
 
+/// rules 行の種別 → 名札（便 54・値域は `rules::RuleKind`・網羅の場合分けで値が足されても消えても組み立てが通らない）。
+pub fn rule_kind_label(k: rules::RuleKind) -> &'static str {
+    match k {
+        rules::RuleKind::Deny => "測って落とす",
+        rules::RuleKind::BuildCheck => "生成時の検査",
+        rules::RuleKind::Detect => "記録のみ",
+        rules::RuleKind::HumanReview => "人が守る作法",
+    }
+}
+
+/// rules 行の状態 → state の chip の class（便 54・値域は `rules::RuleStatus`）。
+pub fn rule_status_class(s: rules::RuleStatus) -> &'static str {
+    match s {
+        rules::RuleStatus::Provisional => "state warn",
+        rules::RuleStatus::Frozen => "state ok",
+        rules::RuleStatus::Undecided => "state",
+    }
+}
+
 // ── 名札の表（β・値域に依らない表・表に無い値は導出できない）──
 
 pub const DOC_STATUS: &[(&str, &str)] = &[
     ("effective", "発効・拘束力あり"),
     ("draft", "未承認・拘束力なし"),
-];
-/// rules 行の状態 → state の chip の class。
-pub const RULE_STATUS: &[(&str, &str)] = &[
-    ("凍結", "state ok"),
-    ("仮", "state warn"),
-    ("未定", "state"),
-];
-pub const RULE_KIND: &[(&str, &str)] = &[
-    ("deny", "測って落とす"),
-    ("build-check", "生成時の検査"),
-    ("detect", "記録のみ"),
-    ("human-review", "人が守る作法"),
 ];
 /// 確かめ方の 1 語の名札（test+inspection は 2 つを「 + 」で繋ぐ・関数 method_label）。
 pub const METHOD: &[(&str, &str)] = &[
@@ -1168,6 +1176,37 @@ mod face_tests {
                 ("spike", "試して測る"),
                 ("measure", "測る"),
                 ("ruling", "持ち主に問う")
+            ]
+        );
+    }
+
+    /// 凍結の針（P-10.1・便 54 §1 (c) 1）: 規則の表の種別の名札 4 対と状態の class 3 対を、便 54 の前の表の字面と
+    /// 正本（生成区間）の順で固定する。
+    #[test]
+    fn face_rule_labels_are_frozen_needles_for_kind_and_status() {
+        assert_eq!(
+            pairs(
+                &rules::RuleKind::ALL,
+                rules::RuleKind::name,
+                rule_kind_label
+            ),
+            [
+                ("deny", "測って落とす"),
+                ("build-check", "生成時の検査"),
+                ("detect", "記録のみ"),
+                ("human-review", "人が守る作法")
+            ]
+        );
+        assert_eq!(
+            pairs(
+                &rules::RuleStatus::ALL,
+                rules::RuleStatus::name,
+                rule_status_class
+            ),
+            [
+                ("仮", "state warn"),
+                ("凍結", "state ok"),
+                ("未定", "state")
             ]
         );
     }

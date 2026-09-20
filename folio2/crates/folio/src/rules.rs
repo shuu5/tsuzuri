@@ -2,7 +2,8 @@
 //! 規則の表の正本 `design-intent/rules.yaml` の先頭の節 `schema` の正本で、葉は下の定数と同じ配列を指す（同じ一覧を 2 回書かない）。
 //! `_note` で終わる欄は人が読む説明の注で、凍結 anchor tests/fixtures/schema/rules-region.txt の順と字面のまま持つ（`schema.rs` の
 //! `derive` が書く）。値域 stage と種別と憲法の機構の対応の右辺は憲法から導出した型（`constitution_enums.rs`）の名を使う＝憲法の値と
-//! 規則の表の値が 1 か所から出る。値域 kind と status は規則の表だけの値域なので、この file の定数が正本。
+//! 規則の表の値が 1 か所から出る。値域 kind と status は規則の表だけの値域なので、この file の型 `RuleKind` と `RuleStatus` が正本
+//! （便 54・面の名札も床の木の表の鍵もこの型の name から出る）。
 //! 床（`check.rs` の `check_rules`）は最上位の節の閉じた一覧を file の schema.top_level ではなく `RULES_TOP_LEVEL` から読む
 //! （file の側で節を足して通す口を塞ぐ・N-3.1）。実の file の生成区間と命令 `folio schema` の対象に足すのは後続の段
 //! （便 53）＝それまで `FLOOR` と行の欄の定数の読み手は歯だけなので、未使用の警告はこの file だけ黙らせる。
@@ -32,11 +33,86 @@ pub const DISCIPLINE_REQUIRED: [&str; 7] = [
 /// 作法の行が持ってよい欄。
 pub const DISCIPLINE_OPTIONAL: [&str; 1] = ["note"];
 
-/// 種別の値域（規則の表だけの値域・順も固定）。
-pub const RULE_KIND: [&str; 4] = ["deny", "build-check", "detect", "human-review"];
+/// 規則の表の行の種別（規則の表だけの値域・便 54・憲法から導出した型と同じ形）。値の字面を書く唯一の所。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleKind {
+    /// deny
+    Deny,
+    /// build-check
+    BuildCheck,
+    /// detect
+    Detect,
+    /// human-review
+    HumanReview,
+}
+impl RuleKind {
+    /// 全部（生成区間の順）
+    pub const ALL: [RuleKind; 4] = [
+        RuleKind::Deny,
+        RuleKind::BuildCheck,
+        RuleKind::Detect,
+        RuleKind::HumanReview,
+    ];
+    /// 名の字面（生成区間の順・長さは値の数）
+    pub const NAMES: [&str; 4] = ["deny", "build-check", "detect", "human-review"];
+    /// 規則の表の名
+    pub const fn name(self) -> &'static str {
+        match self {
+            RuleKind::Deny => "deny",
+            RuleKind::BuildCheck => "build-check",
+            RuleKind::Detect => "detect",
+            RuleKind::HumanReview => "human-review",
+        }
+    }
+    /// 規則の表の名から引く（無ければ None）
+    pub fn from_name(name: &str) -> Option<RuleKind> {
+        match name {
+            "deny" => Some(RuleKind::Deny),
+            "build-check" => Some(RuleKind::BuildCheck),
+            "detect" => Some(RuleKind::Detect),
+            "human-review" => Some(RuleKind::HumanReview),
+            _ => None,
+        }
+    }
+}
 
-/// 状態の値域（規則の表だけの値域・順は file の順）。
-pub const RULE_STATUS: [&str; 3] = ["仮", "凍結", "未定"];
+/// 規則の表の行の状態（規則の表だけの値域・便 54・憲法から導出した型と同じ形）。値の字面を書く唯一の所。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleStatus {
+    /// 仮
+    Provisional,
+    /// 凍結
+    Frozen,
+    /// 未定
+    Undecided,
+}
+impl RuleStatus {
+    /// 全部（生成区間の順）
+    pub const ALL: [RuleStatus; 3] = [
+        RuleStatus::Provisional,
+        RuleStatus::Frozen,
+        RuleStatus::Undecided,
+    ];
+    /// 名の字面（生成区間の順・長さは値の数）
+    pub const NAMES: [&str; 3] = ["仮", "凍結", "未定"];
+    /// 規則の表の名
+    pub const fn name(self) -> &'static str {
+        match self {
+            RuleStatus::Provisional => "仮",
+            RuleStatus::Frozen => "凍結",
+            RuleStatus::Undecided => "未定",
+        }
+    }
+    /// 規則の表の名から引く（無ければ None）
+    pub fn from_name(name: &str) -> Option<RuleStatus> {
+        match name {
+            "仮" => Some(RuleStatus::Provisional),
+            "凍結" => Some(RuleStatus::Frozen),
+            "未定" => Some(RuleStatus::Undecided),
+            _ => None,
+        }
+    }
+}
 
 /// 種別 deny に対応する憲法の機構（`kind_map_to_constitution.deny`・名は憲法から導出した型の name）。
 const KIND_DENY_MAPS_TO: [&str; 2] = [
@@ -81,8 +157,8 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "enums",
         Floor::Map(&[
-            ("kind", Floor::Strs(&RULE_KIND)),
-            ("status", Floor::Strs(&RULE_STATUS)),
+            ("kind", Floor::Strs(&RuleKind::NAMES)),
+            ("status", Floor::Strs(&RuleStatus::NAMES)),
             ("stage", Floor::Strs(&Stage::NAMES)),
         ]),
     ),
@@ -94,19 +170,19 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         "kind_meaning",
         Floor::Map(&[
             (
-                "deny",
+                RuleKind::Deny.name(),
                 Floor::Val("機械が測って、超過なら落とす（憲法の reject / build-check に対応）"),
             ),
             (
-                "build-check",
+                RuleKind::BuildCheck.name(),
                 Floor::Val("生成時の検査で数え、違反なら落とす（憲法の build-check に対応）"),
             ),
             (
-                "detect",
+                RuleKind::Detect.name(),
                 Floor::Val("記録・起票のみ・止めない（憲法の none に対応）"),
             ),
             (
-                "human-review",
+                RuleKind::HumanReview.name(),
                 Floor::Val("人が守る作法（憲法の human-review に対応・D 行）"),
             ),
         ]),
@@ -114,9 +190,12 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "kind_map_to_constitution",
         Floor::Map(&[
-            ("deny", Floor::Strs(&KIND_DENY_MAPS_TO)),
-            ("build-check", Floor::Strs(&KIND_BUILD_CHECK_MAPS_TO)),
-            ("detect", Floor::Strs(&KIND_DETECT_MAPS_TO)),
+            (RuleKind::Deny.name(), Floor::Strs(&KIND_DENY_MAPS_TO)),
+            (
+                RuleKind::BuildCheck.name(),
+                Floor::Strs(&KIND_BUILD_CHECK_MAPS_TO),
+            ),
+            (RuleKind::Detect.name(), Floor::Strs(&KIND_DETECT_MAPS_TO)),
         ]),
     ),
     (
