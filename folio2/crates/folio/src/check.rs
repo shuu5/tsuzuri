@@ -2,7 +2,8 @@
 //! 数えるのは 重複キー・未知の節・欄の非空（便 0）と、参照 id の解決・rules 行の逆参照・憲法の件数（便 1・refs）と、語彙の検査 R-9（便 4・vocab）と、
 //! 判断の記録（adr/）の欄の決まり（便 5・adr）と、判断の記録と正本 4 file・凍結 anchor の列の突き合わせ（便 6・link）と、
 //! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）と、入口の正本の形（便 12・entrance）と、
-//! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）と、天井の正本の形（便 37・ceiling）。
+//! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）と、天井の正本の形（便 37・ceiling）と、
+//! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ・組み立て時に憲法から導出した型で引く）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
@@ -13,6 +14,7 @@ use std::path::Path;
 use crate::adr;
 use crate::anchor;
 use crate::ceiling;
+use crate::constitution_enums as ce;
 use crate::entrance;
 use crate::freeze::{self, After, Flag};
 use crate::intake;
@@ -360,9 +362,88 @@ fn check_constitution(root: &Node, report: &mut Report) {
                 report,
             );
         }
+        check_article_enums(&id, article, &statements, report);
         duplicate_statement_ids(statements, report);
     }
     duplicate_ids(FILE, articles, report);
+}
+
+/// 条 1 つの値域を持つ欄 10 か所（便 55・ADR-11 決定 (3)(ア)）= 条の tier / binds・規範文の pattern / strength・
+/// rationale の各行の kind・mechanism の kind / live / stage / polarity・retreat の kind。在る欄だけ、値を憲法の正本から
+/// 組み立て時に導出した型（`constitution_enums`）の from_name で引き、引けなければ（文字列でない値も同じ）種別 schema の違反 1 件。
+/// 欄が無い・null のときと、rationale / mechanism / retreat が一覧や表でないときは黙る（必須の欄の有無は別の話）。
+fn check_article_enums(id: &str, article: &Node, statements: &[&Node], report: &mut Report) {
+    const FILE: &str = "constitution.yaml";
+    let mut field = |holder: &Node, name: &str, path: &str, key: &str, known: fn(&str) -> bool| {
+        let Some(value) = holder.get(name) else {
+            return;
+        };
+        if matches!(value, Node::Null) {
+            return;
+        }
+        if !value.as_str().is_some_and(known) {
+            report.violation(
+                "schema",
+                format!(
+                    "{FILE}: 条 {id} の {path} の値「{}」が憲法の値域 schema.enums.{key} に無い",
+                    value.as_str().unwrap_or("?")
+                ),
+            );
+        }
+    };
+    field(article, "tier", "tier", "tier", |v| {
+        ce::Tier::from_name(v).is_some()
+    });
+    field(article, "binds", "binds", "binds", |v| {
+        ce::Binds::from_name(v).is_some()
+    });
+    for st in statements {
+        let sid = row_id(st);
+        field(
+            st,
+            "pattern",
+            &format!("statements の {sid} の pattern"),
+            "pattern",
+            |v| ce::Pattern::from_name(v).is_some(),
+        );
+        field(
+            st,
+            "strength",
+            &format!("statements の {sid} の strength"),
+            "strength",
+            |v| ce::Strength::from_name(v).is_some(),
+        );
+    }
+    if let Some(Node::Seq(items)) = article.get("rationale") {
+        for (i, item) in items.iter().enumerate() {
+            field(
+                item,
+                "kind",
+                &format!("rationale の {} 行目の kind", i + 1),
+                "rationale_kind",
+                |v| ce::RationaleKind::from_name(v).is_some(),
+            );
+        }
+    }
+    if let Some(m) = article.get("mechanism") {
+        field(m, "kind", "mechanism.kind", "mechanism_kind", |v| {
+            ce::MechanismKind::from_name(v).is_some()
+        });
+        field(m, "live", "mechanism.live", "mechanism_live", |v| {
+            ce::MechanismLive::from_name(v).is_some()
+        });
+        field(m, "stage", "mechanism.stage", "stage", |v| {
+            ce::Stage::from_name(v).is_some()
+        });
+        field(m, "polarity", "mechanism.polarity", "polarity", |v| {
+            ce::Polarity::from_name(v).is_some()
+        });
+    }
+    if let Some(r) = article.get("retreat") {
+        field(r, "kind", "retreat.kind", "retreat_kind", |v| {
+            ce::RetreatKind::from_name(v).is_some()
+        });
+    }
 }
 
 /// 規則の表。最上位の節の閉じた一覧は file の schema.top_level ではなく床の定数（`rules::RULES_TOP_LEVEL`）から読む

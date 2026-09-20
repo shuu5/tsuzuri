@@ -3,6 +3,8 @@
 //! 各組は変異 1 つだけを持つ＝違反はちょうど 1 件で、その種類まで見る（別の理由で落ちた組を緑にしない）。
 //! 要件書の図の節（便 34・FR15）は design-intent の写し（copy_tree + git init・tests/adr.rs の Work と同じ形）の
 //! srs.yaml に図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複・未知の欄）で 不合格 1 を見る。
+//! 憲法の条の値域を持つ欄（便 55・床の穴 f2-648.82）は同じ写しの constitution.yaml の条 P-1 に変異 1 つずつを当てて見る
+//! （改訂の差分の範囲の外の欄 3 つは違反ちょうど 1 件・範囲の内の欄 2 つは値域の違反を含む・欄が無ければ黙る）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -130,6 +132,16 @@ impl Work {
     /// 写しの rules.yaml の字面の変異（1 か所だけ）。
     fn mutate_rules(&self, from: &str, to: &str) {
         mutate_file(&self.rules(), from, to);
+    }
+
+    /// 実の constitution.yaml の写し。
+    fn constitution(&self) -> PathBuf {
+        self.dir().join("constitution.yaml")
+    }
+
+    /// 写しの constitution.yaml の字面の変異（1 か所だけ）。
+    fn mutate_constitution(&self, from: &str, to: &str) {
+        mutate_file(&self.constitution(), from, to);
     }
 
     fn check(&self) -> Output {
@@ -373,6 +385,134 @@ fn check_rules_without_the_file_top_level_line_is_not_unknown() {
         "{}",
         stdout(&out)
     );
+}
+
+// ── 憲法の条の値域を持つ欄（便 55） ──
+
+/// 実の constitution.yaml の写しの条 P-1 の機構の行（変異の当て先・note の字面で 1 か所に絞る）。
+const P1_MECHANISM: &str =
+    "{kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 公開する命令";
+
+/// 写しの constitution.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（種別 schema・constitution.yaml の場所）で、
+/// 値域の外の値 `value` と鍵の名 `schema.enums.<key>` を含む（改訂の差分の範囲の外の欄）。
+fn assert_constitution_enum_violation(w: &Work, key: &str, value: &str) {
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "違反は変異の 1 件だけのはず: {v:?}");
+    assert!(v[0].starts_with("[schema] constitution.yaml"), "{v:?}");
+    assert!(v[0].contains("条 P-1"), "{v:?}");
+    assert!(v[0].contains(&format!("「{value}」")), "{v:?}");
+    assert!(
+        v[0].contains(&format!("schema.enums.{key} に無い")),
+        "{v:?}"
+    );
+    assert!(
+        stdout(&out).contains("folio check: 不合格（違反 1・"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+/// 改訂の差分の範囲の内の欄（条文 5 欄）の変異 = 改訂の差分の違反も出るので件数は固定せず、値域の違反 1 件が
+/// 在ることだけを見る（種別 schema・条 P-1・値・鍵の名）。
+fn assert_constitution_enum_violation_among(w: &Work, key: &str, value: &str) {
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = violations(&out);
+    let hits: Vec<&String> = v
+        .iter()
+        .filter(|l| {
+            l.starts_with("[schema] constitution.yaml")
+                && l.contains("条 P-1")
+                && l.contains(&format!("「{value}」"))
+                && l.contains(&format!("schema.enums.{key} に無い"))
+        })
+        .collect();
+    assert_eq!(hits.len(), 1, "値域の違反がちょうど 1 件のはず: {v:?}");
+    assert!(stdout(&out).contains("不合格"), "{}", stdout(&out));
+}
+
+#[test]
+fn check_constitution_enum_mechanism_kind_outside_the_range_fails() {
+    let w = Work::new("enum-mechanism-kind");
+    w.mutate_constitution(
+        P1_MECHANISM,
+        "{kind: mystery, live: M0, stage: post, polarity: fail-closed, note: 公開する命令",
+    );
+    assert_constitution_enum_violation(&w, "mechanism_kind", "mystery");
+}
+
+#[test]
+fn check_constitution_enum_mechanism_live_outside_the_range_fails() {
+    let w = Work::new("enum-mechanism-live");
+    w.mutate_constitution(
+        P1_MECHANISM,
+        "{kind: build-check, live: someday, stage: post, polarity: fail-closed, note: 公開する命令",
+    );
+    assert_constitution_enum_violation(&w, "mechanism_live", "someday");
+}
+
+#[test]
+fn check_constitution_enum_rationale_kind_outside_the_range_fails() {
+    let w = Work::new("enum-rationale-kind");
+    w.mutate_constitution(
+        "{kind: folio2-ruling, ref: \"裁定 #1（推奨で進み、支度表で覆す）\"}",
+        "{kind: hearsay, ref: \"裁定 #1（推奨で進み、支度表で覆す）\"}",
+    );
+    assert_constitution_enum_violation(&w, "rationale_kind", "hearsay");
+}
+
+#[test]
+fn check_constitution_enum_tier_outside_the_range_is_among_the_violations() {
+    let w = Work::new("enum-tier");
+    w.mutate_constitution(
+        "\n  - id: P-1\n    title: 判断する道具を作らない\n    tier: always\n",
+        "\n  - id: P-1\n    title: 判断する道具を作らない\n    tier: sometimes\n",
+    );
+    assert_constitution_enum_violation_among(&w, "tier", "sometimes");
+}
+
+#[test]
+fn check_constitution_enum_strength_outside_the_range_is_among_the_violations() {
+    let w = Work::new("enum-strength");
+    w.mutate_constitution(
+        "{id: P-1.2, pattern: ubiquitous, strength: must-not, text:",
+        "{id: P-1.2, pattern: ubiquitous, strength: may, text:",
+    );
+    assert_constitution_enum_violation_among(&w, "strength", "may");
+}
+
+/// 欄が無ければ黙る = 条 P-1 の mechanism から stage の欄を消しても、本便の違反（schema.enums.stage を含む行）は出ない。
+#[test]
+fn check_constitution_enum_missing_stage_field_is_silent() {
+    let w = Work::new("enum-no-stage");
+    w.mutate_constitution(
+        P1_MECHANISM,
+        "{kind: build-check, live: M0, polarity: fail-closed, note: 公開する命令",
+    );
+    let out = w.check();
+    let s = stdout(&out);
+    assert!(!s.lines().any(|l| l.contains("schema.enums.stage")), "{s}");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{s}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
 }
 
 #[test]
