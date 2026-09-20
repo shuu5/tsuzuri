@@ -137,7 +137,7 @@ articles:
       - {id: P-2.2, pattern: ubiquitous, strength: must-not, text: 手書きのページを配信先と入口の導線に置かない。}
       - {id: P-2.3, pattern: ubiquitous, strength: must, text: 色・字の大きさ・余白の元の値（design token）は 1 か所で定義する。}
       - {id: P-2.4, pattern: ubiquitous, strength: must, text: 部品・図の型・密度 profile は閉じた一覧（部品目録）で持ち、追加には判断の記録を要する。}
-    plain: 見た目を作る係は 1 つだけ。誰かが手でページを書き足すと、そこから見た目が割れていくので、入口からも締め出します。色や字の元の値も 1 か所。使える部品は決まった一覧にあるものだけで、一覧に足すときは理由の記録が要ります。
+    plain: 見た目を作る係は 1 つだけ。誰かが手でページを書き足すと、そこから見た目が割れていくので、入口からも締め出します。色や字の大きさ・余白の元の値も 1 か所。使える部品・図の型・文書の密度の設定（密度 profile）は決まった一覧にあるものだけで、一覧に足すときは判断の記録が要ります。
     rationale:
       - {kind: v1-incident, ref: "提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）"}
       - {kind: folio2-ruling, ref: "裁定 #4（v1 P-2 を置換）"}
@@ -188,7 +188,7 @@ articles:
       - {id: P-5.4, pattern: ubiquitous, strength: must-not, text: 台帳（bd）はタスクと裁定の記帳先であり、規則を置かない。}
       - {id: P-5.5, pattern: ubiquitous, strength: must, text: 原則と裁定の正本は設計文書、機械が執行する規則の正本は型付きデータとし、置き場をこの 2 面に限る。}
       - {id: P-5.6, pattern: state, strength: must, text: 実装の型付きの定数を規則の正本とするあいだ、その写しを人が読める型付きデータとして設計文書の置き場へ決定的に導出する。}
-    plain: 「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。道具の中に型を付けて書いた決まりも表の 1 つに数えますが、それを元にしているあいだは、人が読める写しを機械が自動で作って設計文書の置き場に置き続けます。
+    plain: 「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。道具の中に型を付けて書いた決まりも表の 1 つに数えますが、それを元にしているあいだは、人が読める写しを、機械が何度やっても同じ結果になる形で作って、設計文書の置き場に置き続けます。
     rationale:
       - {kind: scribe2-article, ref: "C1（規則はデータ）・C14（規律は文書とデータの 2 面）・C15 / C15.2（台帳はタスク専用・id 参照）。C1 の「値は 1 file」は G14=A により folio2 では憲法 / rules / 語彙 / 要件書の 4 file に分ける（意図的な逸脱）"}
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18「本 hook は tier-2 shaping であって guarantee ではない」＝規則が散文にしか無い・rules.html 248KB の散文"}
@@ -233,7 +233,7 @@ articles:
     binds: practice
     statements:
       - {id: P-8.1, pattern: ubiquitous, strength: must, text: 取り消しにくい判断（ADR）には、それを捨てる条件を同時に書く。}
-    plain: 理由の記録（ADR）を書くときは、「うまくいかなかったら、こうなった時点でやめる」も一緒に書きます。
+    plain: 判断の記録（ADR）を書くときは、「うまくいかなかったら、こうなった時点でやめる」も一緒に書きます。
     rationale:
       - {kind: v1-incident, ref: "ADR-0047 §2.4（confirmed 偽陽性 1 件で warn へ戻す・判断者は user）"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 判断の記録（ADR）の正本 schema で retreat 欄を必須にする（空なら生成が落ちる）。ADR の正本 schema が置かれるまでは動かない。}
@@ -289,7 +289,7 @@ articles:
       - {id: P-13.2, pattern: ubiquitous, strength: must-not, text: 前の版（folio v1）を、受入の物差し役にも停止権の持ち主にもしない。}
       - {id: P-13.3, pattern: ubiquitous, strength: must, text: 設計文書の変更は、判断の記録か版付きの文書として残す。}
       - {id: P-13.4, pattern: state, strength: must, text: 自分のコードの変更を自分の便で運ぶ運用（self-host）は、外部の利用者で受入が通った後に始める。}
-    plain: 何が正しいかを決めるのは設計文書で、前の道具ではありません。前の道具（folio v1）は使ってよいが、正しさの物差しにも止める権限にもしません。設計文書を変えたら、その記録（理由の記録か新しい版）を残します。自分の便で自分のコードを運ぶのは、よそで使ってもらって合格した後＝いちばん最後です。
+    plain: 何が正しいかを決めるのは設計文書で、前の道具ではありません。前の道具（folio v1）は使ってよいが、正しさの物差しにも止める権限にもしません。設計文書を変えたら、その記録（判断の記録か新しい版）を残します。自分の便で自分のコードを運ぶのは、よそで使ってもらって合格した後＝いちばん最後です。
     rationale:
       - {kind: scribe2-article, ref: "C8 / C8.3（前の版を物差しにしない・design-intent の変更は ADR か版付き文書）。C8.2 は P-18 へ"}
       - {kind: v1-incident, ref: "self-host の層解釈と oracle 死角に ADR 6 本（0044 / 0045 / 0050 / 0051 / 0053 / 0056）"}
@@ -308,7 +308,7 @@ articles:
       - {id: P-14.1, pattern: event, strength: must, text: folio inject --write を実行したとき、憲法の前文と規範文を持つ条を CLAUDE.md の生成区間へ決定的に導出して書く。}
       - {id: P-14.2, pattern: event, strength: must, text: folio inject --check は生成区間と正本の差分を検出し、差があれば失敗（非 0）で終える。}
       - {id: P-14.3, pattern: ubiquitous, strength: must, text: CLAUDE.md の生成区間の総バイト数は rules 行 R-2 以下に収める。}
-    plain: 憲法の前文と「守らせる条」を、AI が毎回読む場所（CLAUDE.md）に写します。ずれていたら検査が失敗して止まります。写す量には上限（R-2 行）があります。
+    plain: 憲法の前文と「守らせる条」を、AI が毎回読む場所（CLAUDE.md）に、何度やっても同じ結果になる形で写します。ずれていたら検査が失敗して止まります。写す量には上限（R-2 行）があります。
     rationale:
       - {kind: folio2-ruling, ref: "受入 (b)・注入の所有（規格は folio・呼ぶのは consumer・pointer 化は却下）・G9=A（上限は rules 行）・G13=A（母集団は規範文を持つ条）"}
       - {kind: scribe2-article, ref: "C1.2（人が読む規則の文書は型から生成し、手書きの規範文は 0 行）"}
@@ -400,7 +400,7 @@ articles:
       - {id: A-2.1, pattern: event, strength: must, text: 条文を改訂するとき、判断の記録と撤退条件を先に書き、持ち主の承認（逐語・日付・裁定 id）を得てから版を上げる。}
       - {id: A-2.2, pattern: ubiquitous, strength: must-not, text: 条文（id・見出し・規範文・段・縛る相手）と schema 節・前文が 1 文字も変わらない変更を改訂として扱わない。}
       - {id: A-2.3, pattern: event, strength: must, text: 改訂の前に、その改訂が主張する利益を敵対的に検証し（grill）、記録を判断の記録に添える。}
-    plain: この文書は勝手に書き換えません。理由と撤退条件を書き、その改訂が本当に良いかを反対側から確かめてその記録を理由の記録に添え、あなたの OK（言葉どおり・日付・裁定の番号）を残してから版を上げます。条の番号・見出し・守らせる文・段・縛る相手と、決まりの型（schema）・前文のどれ 1 つも変わらない直しは「改訂」ではありません。
+    plain: この文書は勝手に書き換えません。理由と撤退条件を書き、その改訂が本当に良いかを反対側から確かめてその記録を判断の記録に添え、あなたの OK（言葉どおり・日付・裁定の番号）を残してから版を上げます。条の番号・見出し・守らせる文・段・縛る相手と、決まりの型（schema）・前文のどれ 1 つも変わらない直しは「改訂」ではありません。
     rationale:
       - {kind: scribe2-article, ref: "A2（主張された利益の grill 検証を前置 → user 裁定）"}
       - {kind: v1-incident, ref: "ADR-0056 §2.1（宣言内容を 1 文字も変えない生成経路の flip だけが「変更」に該当しない。宣言文・段・id・見出しの変更は対象）"}
@@ -485,7 +485,7 @@ articles:
     binds: practice
     statements:
       - {id: N-4.1, pattern: unwanted, strength: must, text: 条文の改訂が、判断の記録・裁定 id・承認の逐語のいずれかを欠くなら、それを拒む。}
-    plain: 理由の記録・決定の番号（裁定 id）・あなたの OK の言葉、この 3 つが揃っていない書き換えは、機械が止めます。
+    plain: 判断の記録・決定の番号（裁定 id）・あなたの OK の言葉、この 3 つが揃っていない書き換えは、機械が止めます。
     rationale:
       - {kind: scribe2-article, ref: "N4 / N4.2（新 ADR + delta marker + 裁定 id）"}
       - {kind: folio2-ruling, ref: "G5=A（N-4 新設）"}
@@ -498,7 +498,7 @@ articles:
     binds: tool
     statements:
       - {id: N-5.1, pattern: unwanted, strength: must, text: 変更が文書の型ごとの AI 係（agent）や検査の観点（lens）を増設するなら、それを拒む。}
-    plain: 文書の種類が増えるたびに専用の係を増やすことは、機械が拒みます。違いは設定の表（P-5.3）で表します。係が増えると AI が毎回読む説明文が膨らんで、遅く・高くなるからです（v1 では 36 係になりました）。
+    plain: 文書の種類が増えるたびに専用の AI 係や検査の観点を増やすことは、機械が拒みます。違いは設定の表（P-5.3）で表します。係が増えると AI が毎回読む説明文が膨らんで、遅く・高くなるからです（v1 では 36 係になりました）。
     rationale:
       - {kind: v1-incident, ref: "agent 36 本・description 合計 29,027 字・ADR-0007 → 0055（Tier 1 → Tier 0 pointer digest へ降格）"}
     mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0。常時注入の総量は R-1 の上限で落とす（母集団は folio2 が所有する係と skill）。}
