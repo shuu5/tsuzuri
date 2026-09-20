@@ -1,4 +1,4 @@
-# folio2 要件書 — 正本（v1.4・M0 = v1.0 発効 2026-09-12・M1 の要件 = v1.1 2026-09-16・CON1 の改訂 = v1.2 2026-09-17・図 3 の正本 verdicts = v1.3 2026-09-17・判断の記録の面 FR16 / AC14 = v1.4 2026-09-18・用語集の形 = v1.5 2026-09-19・天井の要件 FR17 / FR18 = v1.6 2026-09-19・導出物の要件 FR19 / AC17 = v1.7 2026-09-19・AC10 の平易文の直し = v1.8 2026-09-19・planner 席）
+# folio2 要件書 — 正本（版は meta.version・版ごとの出所は meta.status_note・作成と承認の席は meta.approval の行）
 # 位置: f2-648.1 の中身 3（要件書 M0 の正本）。見本 v4 の srs.html（walk 承認済みの提示層）を起点に G15=A を反映:
 #   分離緩め（憲法の根拠文と数値は生成器が正本から差し込む＝ここには id だけ書く・値を再掲しない）/ 参照の母集合は内部 3 空間
 #   （要件 id・条 id・rules 行 id）で外部 pointer は sources 欄 / P-3 は置き場条へ弱めた（憲法側）/ AC 4→6 / RED test は文 + fixture path /
@@ -8,11 +8,11 @@
 
 meta:
   id: folio2-srs-m0
-  title: 要件書（M0・最初に動く形 ＋ M1・設計ノートと契約表と図の生成）
-  version: v1.15
+  title: 要件書（M0・最初に動く形 ＋ M1・設計ノートと契約表と図の生成 ＋ M2・天井と導出物）
+  version: v1.16
   status: effective
-  effective_version: v1.15
-  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）・v1.5 = 2026-09-19 発効（glossary_pointer の文言だけ = 要件書 §8 を憲法 §7 と同じ形に・逐語「各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う」・裁定 id f2-648 notes 2026-09-19）・v1.6 = 2026-09-19 発効（天井の要件 FR17 / FR18 と受入基準 AC15 / AC16 の追加・逐語「承認する」・裁定 id f2-648.52 notes 2026-09-19・判断の記録 ADR-8）・v1.7 = 2026-09-19 発効（導出物の要件 FR19 と受入基準 AC17 の追加・逐語「承認する」・裁定 id f2-648 notes 2026-09-19 20:50 JST・判断の記録 ADR-9）・v1.8 = 2026-09-19 発効（受入基準 AC10 の平易文を規範の字面「数と単位」に合わせる直しだけ・天井の 2 周目の止める所見 忠実さ F-2〔反証 支持〕・逐語「１．推奨で」・裁定 id f2-648 notes 2026-09-19）・v1.9 = 2026-09-20 発効（FR19 と AC17 の対象に天井の正本を足す・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 08:14 JST・判断の記録 ADR-11 決定 (4)①）・v1.10 = 2026-09-20 発効（FR19 と AC17 の対象に規則の表を足す・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 11:05 JST・判断の記録 ADR-11 決定 (4)②）・v1.11 = 2026-09-20 発効（FR5 の文の「生成のたびに」を「配信先を組み立てるたびに（folio build）」に・天井の 3 周目の止める所見 実態 F-1〔反証 支持〕・逐語「どちらも推奨で」・裁定 id f2-648 notes 2026-09-20 13:30 JST）・v1.12 = 2026-09-20 発効（平易文の直し FR3・FR6・FR12・FR16・FR17・FR19・AC16 / FR11・FR13・FR14 の未実装の注 / 受入基準 AC3・AC4・AC6・AC15・AC16 の固定の材料の名 = 規範文と受入の判定は不変・天井の 3〜5 周目の「直す」の一括・逐語「１．推奨で」・裁定 id f2-648 notes 2026-09-20 15:01 JST）・v1.13 = 2026-09-20 発効（制約 CON5 の席の名を planner 席 から orchestrator 席 に = 設計判断を下す席の名が器の側で替わった・要件と受入基準は不変・逐語「orchestrator席に直してよい」・裁定 id f2-648 notes 2026-09-20 15:20 JST）・v1.14 = 2026-09-20 発効（非機能要件 NFR2 に未達の注と平易文の 1 文 / 受入基準 AC5 の題と固定の材料を生成した 3 面の walk に / FR5・FR19 の平易文 = 規範文と受入の判定は不変・天井の 7 周目の止める 1 件と直すの一括・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 16:36 JST）・v1.15 = 2026-09-20 発効（平易文の直し FR2・FR6・FR8・FR15・NFR3・AC15 / 受入基準 AC2 の題と材料を生成器が出すすべての面に / FR16 の確かめ方の面の数え / 制約 CON6 は規則の写しをやめ行 D-7 の参照に（行 D-7 の改訂は同じ承認）= 要件の規範文と受入の判定の式は不変・天井の 8 周目と平易文の総点検・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 17:21 JST）
+  effective_version: v1.16
+  status_note: v1.0 = 2026-09-12 発効・v1.1 = 2026-09-16 発効（逐語「いずれも推奨で進めて」）・v1.2 = 2026-09-17 発効（CON1 の改訂 = 実装の着手・承認欄の v1.2 の行・逐語「それらの制限はすべて取っ払うので今のscribe2を使ってfolio2の実装を進めろ。」・裁定 id f2-648 notes 2026-09-17 07:4x JST）・v1.3 = 2026-09-17 発効（図 3 の正本 verdicts の節の追加・逐語「Aですすめてよい」・裁定 id f2-648 notes 2026-09-17）・v1.4 = 2026-09-18 発効（判断の記録の面 FR16 / AC14 の追加と scope の行の改訂・逐語「承認する」・裁定 id f2-648.39 notes 2026-09-18・判断の記録 ADR-7）・v1.5 = 2026-09-19 発効（glossary_pointer の文言だけ = 要件書 §8 を憲法 §7 と同じ形に・逐語「各ページの語彙の項目だがconstitutionとSRSでスタイルが異なる。これに関してはconstitution側に統一したほうが良いのではと思う」・裁定 id f2-648 notes 2026-09-19）・v1.6 = 2026-09-19 発効（天井の要件 FR17 / FR18 と受入基準 AC15 / AC16 の追加・逐語「承認する」・裁定 id f2-648.52 notes 2026-09-19・判断の記録 ADR-8）・v1.7 = 2026-09-19 発効（導出物の要件 FR19 と受入基準 AC17 の追加・逐語「承認する」・裁定 id f2-648 notes 2026-09-19 20:50 JST・判断の記録 ADR-9）・v1.8 = 2026-09-19 発効（受入基準 AC10 の平易文を規範の字面「数と単位」に合わせる直しだけ・天井の 2 周目の止める所見 忠実さ F-2〔反証 支持〕・逐語「１．推奨で」・裁定 id f2-648 notes 2026-09-19）・v1.9 = 2026-09-20 発効（FR19 と AC17 の対象に天井の正本を足す・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 08:14 JST・判断の記録 ADR-11 決定 (4)①）・v1.10 = 2026-09-20 発効（FR19 と AC17 の対象に規則の表を足す・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 11:05 JST・判断の記録 ADR-11 決定 (4)②）・v1.11 = 2026-09-20 発効（FR5 の文の「生成のたびに」を「配信先を組み立てるたびに（folio build）」に・天井の 3 周目の止める所見 実態 F-1〔反証 支持〕・逐語「どちらも推奨で」・裁定 id f2-648 notes 2026-09-20 13:30 JST）・v1.12 = 2026-09-20 発効（平易文の直し FR3・FR6・FR12・FR16・FR17・FR19・AC16 / FR11・FR13・FR14 の未実装の注 / 受入基準 AC3・AC4・AC6・AC15・AC16 の固定の材料の名 = 規範文と受入の判定は不変・天井の 3〜5 周目の「直す」の一括・逐語「１．推奨で」・裁定 id f2-648 notes 2026-09-20 15:01 JST）・v1.13 = 2026-09-20 発効（制約 CON5 の席の名を planner 席 から orchestrator 席 に = 設計判断を下す席の名が器の側で替わった・要件と受入基準は不変・逐語「orchestrator席に直してよい」・裁定 id f2-648 notes 2026-09-20 15:20 JST）・v1.14 = 2026-09-20 発効（非機能要件 NFR2 に未達の注と平易文の 1 文 / 受入基準 AC5 の題と固定の材料を生成した 3 面の walk に / FR5・FR19 の平易文 = 規範文と受入の判定は不変・天井の 7 周目の止める 1 件と直すの一括・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 16:36 JST）・v1.15 = 2026-09-20 発効（平易文の直し FR2・FR6・FR8・FR15・NFR3・AC15 / 受入基準 AC2 の題と材料を生成器が出すすべての面に / FR16 の確かめ方の面の数え / 制約 CON6 は規則の写しをやめ行 D-7 の参照に（行 D-7 の改訂は同じ承認）= 要件の規範文と受入の判定の式は不変・天井の 8 周目と平易文の総点検・逐語「承認する」・裁定 id f2-648 notes 2026-09-20 17:21 JST）・v1.16 = 2026-09-21 発効（約束と実態の総点検と天井の 9 周目の一括 = NFR1 の未達の注・AC2 の平易文と固定の材料の名・AC9 / AC11 / AC15 / FR17 の注・FR12 と CON6 と scope と表紙の題と出所の実態合わせ・要件の規範文は不変・逐語「すべて推奨で進めて」・裁定 id f2-648 notes 2026-09-21 00:00 JST）
   generated: 2026-09-12
   promise: 持ち主が易しい質問 5 つに答える（答えなくても推奨で進む）と、入口・憲法・要件書の 3 枚が同じ見た目で生成され、機械検査の結果が必ず表示される。
   counts: {fr: 19, nfr: 3, ac: 17, con: 9}
@@ -50,6 +50,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-20, stamp: "発効（f2-648 notes 2026-09-20 16:36 JST・対話面 R-8・天井の 7 周目の報告の問 1〔止める 1 件の直しと文で済む直すの一括 15 行・案 A〕への回答）", verbatim: 承認する, version: v1.14}
     - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-20, stamp: "v1.15 起草（f2-648.66・天井の 8 周目の直すと平易文の総点検 = 平易文 6 本・AC2 の題と材料・FR16 の確かめ方・制約 CON6。要件の規範文は不変）"}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-20, stamp: "発効（f2-648 notes 2026-09-20 17:21 JST・対話面 R-8・天井の 8 周目と総点検の報告の問 1〔やさしい説明文の直しの一括 32 行・規則の表 D-7 を含む〕への回答）", verbatim: 承認する, version: v1.15}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-20, stamp: "v1.16 起草（f2-648.66・約束と実態の総点検と天井の 9 周目の止める 3 件 = 文書を実態に合わせて正直にする直しだけ。要件の規範文は不変）"}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-21, stamp: "発効（f2-648 notes 2026-09-21 00:00 JST・対話面 R-8・9 周目と総点検の報告の問 1〔一括 76 行・規則の表 11 行を含む〕への回答）", verbatim: すべて推奨で進めて, version: v1.16}
   effective: 承認欄の「承認」に持ち主の逐語と日付が入った時点で発効する（憲法 §6 発効段と同じ形）。版ごとに承認の行を足し、前の版の行は書き換えない。
   changes_from_v1_0:
     - M1 の要件を新しい番号で足した（FR9〜FR15・AC7〜AC13・CON8〜CON9）。M0 の要件（FR1〜FR8・NFR1〜NFR3・AC1〜AC6・CON1〜CON7）は据え置き（P-7.2）。NFR3 と AC6 の母集団（内部 3 空間）は広げない（ADR-3 決定 (6)）
@@ -82,7 +84,7 @@ scope:
     - 設計ノートの生成（M1 で建てる = scope_m1・判断の記録の面は v1.4 で FR16 として足した）
     - 「番号が実在するか」を機械で追う仕組みの完成形（M0 は参照 id の未解決 0 を数えるだけ）
     - 何が変わったかの検出器
-    - "読みやすさの AI 検査（天井）と見た目の AI 検査（P-3.2: 「まだ分からない」として表に出す）"
+    - "読みやすさの AI 検査（天井）と見た目の AI 検査（P-3.2: 「まだ分からない」として表に出す）— 天井は M2 で建てた（第 1.6 版の FR17 / FR18・判断の記録 ADR-8）。見た目の AI 検査は今も建てない"
 
 scope_m1:
   build:
@@ -161,6 +163,7 @@ requirements:
     verify: {method: test, how: 未整備 / 整備済 / 止める設定 の 3 状態で出力行数を数える, ac: []}
     goals: [GOAL3]
     figures: [図2-1, 図1]
+    note: folio が持つのは命令 folio hello（3 状態の判定・止める設定・1 回きりの印）まで。セッション開始へ結ぶ仕掛け（hook）は各プロジェクトの設定が持ち、folio の外に在る（設計ノートの便 21 の記録）。
   - id: FR4
     title: 3 枚を 1 つの生成器で出す
     pattern: ubiquitous
@@ -271,7 +274,7 @@ requirements:
     goals: [GOAL4]
     figures: []
     milestone: M1
-    note: 判断の記録 ADR-3 決定 (7)。M1 まで器（scribe2）が同じ式を暫定で持ち、M1 が引き取ったら撤去する。意味だけで規範になる文は床の外（天井）。数と単位を散文から一律に排する床は採らない（偽陽性）。
+    note: 判断の記録 ADR-3 決定 (7)。M1 まで器（scribe2）が同じ式を暫定で持ち、M1 が引き取ったら撤去する。folio2 の引き取りは便 24 で済んだ（2026-09-18）が、器の側の暫定の式は 2026-09-20 時点でも残っている。撤去は M1 の残り（FR11 / FR13 / FR14）が揃った後に器へ要求する（台帳 f2-648 の子に起票）。意味だけで規範になる文は床の外（天井）。数と単位を散文から一律に排する床は採らない（偽陽性）。
   - id: FR13
     title: 着地は印だけから読み、無ければ「まだ分からない」
     pattern: event
@@ -340,7 +343,7 @@ requirements:
     goals: [GOAL4]
     figures: [図1]
     milestone: M2
-    note: 判断の記録 ADR-8 決定 (1)(2)。観点は型に依らない 4 つ（忠実さ・読みやすさ・文書どうしの整合・実態との整合）で天井の正本に閉じる。
+    note: 判断の記録 ADR-8 決定 (1)(2)。観点は型に依らない 4 つ（忠実さ・読みやすさ・文書どうしの整合・実態との整合）で天井の正本に閉じる。実装は「止める」の所見ごとの反証の材料の束も同じ命令で組む（folio ceiling --refute・便 42・判断の記録 ADR-8 決定 (3)）= この要件の文はまだそれを言っていない（次の版で足す）。
   - id: FR18
     title: 所見の形と天井の 3 値を床で数える
     pattern: event
@@ -374,13 +377,13 @@ nonfunctional:
     strength: must
     when: つねに
     shall: folio が常時注入する説明文（agent と skill の名前 + 説明）の合計は rules 行 R-1 の値以下にする。
-    plain: AI が毎回読まされる「道具の説明文」の量に上限を置きます。v1 ではこれが膨らんで遅く高くなりました。
+    plain: AI が毎回読まされる「道具の説明文」の量に上限を置きます。v1 ではこれが膨らんで遅く高くなりました。ただし今は、前の版の道具の説明文が読み込まれたままで、上限を大きく超えています。外して測り直すまで未達です。
     basis: [N-5, P-14]
     rules: [R-1]
     verify: {method: test, how: 計測 script が数え、R-1 と比べる（値はここに再掲しない）, ac: []}
     goals: [GOAL3, GOAL4]
     figures: [図2-6]
-    note: 図の道具（archify）は AI 向けの説明（skill）として載せない＝R-1 の母集団に入れない（判断の記録 ADR-4 決定 (5)・v1.1 で注を足した）。
+    note: 図の道具（archify）は AI 向けの説明（skill）として載せない＝R-1 の母集団に入れない（判断の記録 ADR-4 決定 (5)・v1.1 で注を足した）。未達である（2026-09-20 時点・天井の 9 周目の止める所見 実態との整合 F-1・反証 支持）。folio2 の設定（版管理の外の .claude/settings.local.json）が前の版（folio v1）の plugin を有効にしたままで、2026-09-20 の実測は係 36 本と skill 3 本の名前と説明で 31,322 字＝規則 R-1 の上限を大きく超える。この要件の口（常時注入される係と skill の名前と説明を数える）は未実装である。plugin を設定から外すのは持ち主の設定の操作で、folio の便では運べない。外して測り直すまで、この要件の充足は「まだ分からない」として扱う（P-4.2）。
   - id: NFR2
     title: 見た目の材料は 1 か所から
     pattern: ubiquitous
@@ -409,7 +412,7 @@ nonfunctional:
 
 acceptance:
   - {id: AC1, title: 決まった 5 つの回答で支度表ができ、未回答の項目は別枠に出る, plain: 決まった答えを 5 つ入れると「何を作るか」の表が出て、答えなかった項目は別の枠に分けて出る。それを見せてもらえたら OK。, verifies: [FR1, FR2], red_test: {sentence: 固定回答 5 つの fixture を入れ、期待の支度表と一致し、無回答では全項目が別枠に出る, fixture: tests/fixtures/intake/answers-5.yaml}}
-  - {id: AC2, title: 生成器が出すすべての面の class が部品目録に存在し、目録に無い class は 0, plain: folio が作るどのページにも、部品表に載っていない飾りや、決まった材料以外の色が 1 つも無いことを、機械が数えて見せる。, verifies: [FR4, NFR2], red_test: {sentence: 目録外 class を 1 つ足した fixture で不合格になり、実の正本から生成した面では合格になる, fixture: tests/fixtures/floor/parts-catalog.json}}
+  - {id: AC2, title: 生成器が出すすべての面の class が部品目録に存在し、目録に無い class は 0, plain: 部品の検査（folio parts --check）が数える面（今は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）のどれにも、部品表に載っていない飾りや、決まった材料以外の色が 1 つも無いことを、機械が数えて見せる。器のためだけに残している読み物のページは、まだこの数えの外です（NFR2 の注）。, verifies: [FR4, NFR2], red_test: {sentence: 目録外 class を 1 つ足した fixture で不合格になり、実の正本から生成した面では合格になる, fixture: tests/fixtures/floor/（mini-ok.html = 通る面・mini-extra.html = 目録外 class を 1 つ足した面・mini.css = 様式の定義・parts-catalog.json = 部品目録の凍結の写し）}}
   - {id: AC3, title: 床を壊した状態で「まだ分からない」が表示され、合格にならない, plain: わざと検査を壊した状態で道具を走らせ、「まだ分からない」と表示されて「合格」にならないことを見せる。, verifies: [FR5], red_test: {sentence: 正本が 1 つ欠けた fixture で床の結果が「まだ分からない」になり「合格」にならない, fixture: tests/fixtures/check/missing-file/}}
   - {id: AC4, title: CLAUDE.md の生成区間を 1 字変えると --check が非 0 で終わる, plain: AI の手元にある憲法の写しを 1 文字だけ書き換えて道具を走らせ、道具が「ずれている」と言って止まることを見せる。, verifies: [FR6], red_test: {sentence: 生成区間を 1 byte 変えた CLAUDE.md で --check の終了コードが非 0 になる, fixture: tests/fixtures/inject/drift/}}
   - {id: AC5, title: 生成した 3 面（入口・憲法・要件書）を持ち主が実際に開いて読み（walk）承認済み, plain: 3 枚のページを実際に開いて見て、持ち主が「これでよい」と言った記録（言葉どおり・日付つき）がある。, verifies: [FR4], red_test: {sentence: 承認の逐語と日付が台帳（f2-648 notes）と承認欄にある, fixture: 入口の正本 index.yaml の承認欄（持ち主の逐語 2026-09-18「確認した　大体これで良い」・生成した 3 面の walk）と bd f2-648 notes。手書きの見本 3 面の段の承認は 2026-09-12「承認するけど…」で、見本は design-intent/preview/retired/ へ退役済み}, note: 付帯条件（user 直命）を受入に含める（G16=A・受入 (d)）。}
@@ -417,14 +420,14 @@ acceptance:
 
   - {id: AC7, title: 設計ノートが閉じた一覧の節の型だけで生成され、一覧に無い節の型は落ちる, plain: 設計の文書を機械が作れて、知らない種類の節があると作らずに止まることを見せる。, verifies: [FR9], red_test: {sentence: 一覧に無い節の型を 1 つ持つ fixture で生成が落ち、一覧内だけの fixture で通る, fixture: tests/fixtures/design-note/section-types/（落ちる側と通る側の 2 本）}, milestone: M1}
   - {id: AC8, title: 器の導出 file が無いと「まだ分からない」になり、合格にならない, plain: 契約表の「欄の決まり」の写しが無い状態で走らせ、「まだ分からない」と出て「合格」にならないことを見せる。, verifies: [FR10], red_test: {sentence: 導出 file を欠いた fixture で判定が「まだ分からない」になり合格にならない, fixture: tests/fixtures/design-note/schema-missing/}, milestone: M1}
-  - {id: AC9, title: 導出物を 1 字変えると --check が非 0 で終わる, plain: scribe2 が読む形の file を 1 文字だけ書き換えて走らせ、「ずれている」と言って止まることを見せる。, verifies: [FR11], red_test: {sentence: 導出物を 1 byte 変えた fixture で --check の終了コードが非 0 になる, fixture: tests/fixtures/contracts/（凍結 anchor = 契約表と期待導出物の対 + 1 字ずらした導出物）}, milestone: M1}
+  - {id: AC9, title: 導出物を 1 字変えると --check が非 0 で終わる, plain: scribe2 が読む形の file を 1 文字だけ書き換えて走らせ、「ずれている」と言って止まることを見せる。, verifies: [FR11], red_test: {sentence: 導出物を 1 byte 変えた fixture で --check の終了コードが非 0 になる, fixture: tests/fixtures/contracts/（凍結 anchor = 契約表と期待導出物の対 + 1 字ずらした導出物）。固定の材料はまだ置いていない＝要件 FR11 の口が未実装のため（2026-09-20 時点）・path は便で置くときの予定の名}, milestone: M1}
   - {id: AC10, title: 規範の印を持つ文の違反が数えられ、記述の文は数えられない, plain: 「〜しなければならない」と書いたのに番号が無い文・数と単位を書いた文が違反として出て、普通の説明文は出ないことを見せる。, verifies: [FR12], red_test: {sentence: 参照 id の無い印付きの文 1 つと数と単位を持つ印付きの文 1 つの fixture で違反 2 が報告され、記述の文だけの fixture で 0 になる, fixture: tests/fixtures/prose-gate/}, milestone: M1}
-  - {id: AC11, title: 印の無い commit の契約は「まだ分からない」と出て「未着地」と出ない, plain: 便が入ったかを示す印が無いとき、「まだ分からない」と表示され「入っていない」とは表示されないことを見せる。, verifies: [FR13], red_test: {sentence: 印の無い commit の fixture で「まだ分からない」が出て「未着地」が出ず、印の在る fixture で要約値（sha）が出る, fixture: tests/fixtures/rtm/（印の無い commit と印の在る commit の 2 本）}, milestone: M1}
+  - {id: AC11, title: 印の無い commit の契約は「まだ分からない」と出て「未着地」と出ない, plain: 便が入ったかを示す印が無いとき、「まだ分からない」と表示され「入っていない」とは表示されないことを見せる。, verifies: [FR13], red_test: {sentence: 印の無い commit の fixture で「まだ分からない」が出て「未着地」が出ず、印の在る fixture で要約値（sha）が出る, fixture: tests/fixtures/rtm/（印の無い commit と印の在る commit の 2 本）。固定の材料はまだ置いていない＝要件 FR13 の口が未実装のため（2026-09-20 時点）・path は便で置くときの予定の名}, milestone: M1}
   - {id: AC13, title: 器の導出 file を 1 欄変えると契約表の節の欄が追従する, plain: scribe2 側の「欄の決まり」の写しに欄を 1 つ足すと、folio の契約表にもその欄が現れ、folio 側の記録を直さなくてよいことを見せる。, verifies: [FR10], red_test: {sentence: 導出 file に欄を 1 つ足した fixture で契約表の節にその欄が登録され、folio 側の型に欄の一覧が無い, fixture: tests/fixtures/design-note/schema-plus-one/}, milestone: M1}
   - {id: AC14, title: 判断の記録の面のすべての class が部品目録に存在し、目録に無い class は 0, plain: 判断の記録のページに、部品表に載っていない飾りが 1 つも無いことを、機械が数えて見せる。, verifies: [FR16], red_test: {sentence: 目録外 class を 1 つ足した判断の記録の fixture で不合格になり、実の正本の判断の記録では合格になる, fixture: tests/fixtures/face/adr/（最小の判断の記録 1 本 + 目録外 class を足した 1 本）}, milestone: M1}
   - {id: AC12, title: 検査を通らない図は生成されず、前の生成物が残る, plain: わざと崩れた図の記述を入れて走らせ、図が作られず前の図がそのまま残ることを見せる。, verifies: [FR15], red_test: {sentence: 前の生成物を置いた上で、仕上がりの段の検査を通らない型付き記述の fixture を入れると図が生成されず前の生成物の要約値が変わらない, fixture: tests/fixtures/figure/（前の生成物 + 通らない記述 + 通る記述の 3 本）}, milestone: M1}
 
-  - {id: AC15, title: 4 観点の材料の束が凍結 fixture から決定的に組め、束の要約値が期待と一致する, plain: 欠陥を 1 つ仕込んだ小さな文書から、4 つの観点の材料の束を機械が組み、凍結してある期待の要約値と一致することを見せる。, verifies: [FR17], red_test: {sentence: 凍結 fixture の正本から組んだ束の要約値が期待の値と違えば不合格になり、期待と同じなら合格になる, fixture: tests/fixtures/ceiling/bundle/（欠陥を 1 つ仕込んだ最小の正本の写し + 期待の要約値）}, milestone: M2}
+  - {id: AC15, title: 4 観点の材料の束が凍結 fixture から決定的に組め、束の要約値が期待と一致する, plain: 欠陥を 1 つ仕込んだ小さな文書から、4 つの観点の材料の束を機械が組み、凍結してある期待の要約値と一致することを見せる。, verifies: [FR17], red_test: {sentence: 凍結 fixture の正本から組んだ束の要約値が期待の値と違えば不合格になり、期待と同じなら合格になる, fixture: tests/fixtures/ceiling/bundle/（欠陥を 1 つ仕込んだ最小の正本の写し source/ と面の写し faces/）。期待の要約値はこの置き場ではなく歯の側の定数が持ち、同じ歯が外の命令で測り直して突き合わせる（P-10.2）}, milestone: M2}
   - {id: AC16, title: 所見 file の必須欄が欠けるか束の要約値が合わないと「まだ分からない」になり、その観点があると天井は合格にならない, plain: AI の返事が形を守っていない・材料を読まずに書いた、と機械が見抜いて「まだ分からない」と出し、「合格」にしないことを見せる。, verifies: [FR18], red_test: {sentence: 必須欄を 1 つ欠いた所見 file と束の要約値の合わない所見 file で 2 になり、4 観点が形どおりの所見 file でだけ 0 になる, fixture: tests/fixtures/ceiling/findings/（所見 file 11 本 = 合格 4・欄の欠け・要約値違い・根拠が正本に無い・反証が未・反証で支持・反証で全部退けた・所見なしの不合格）}, milestone: M2}
   - {id: AC17, title: 欄の決まりの file と天井の正本と規則の表の生成区間を 1 字変えると --check が非 0 で終わり、印が無いと「まだ分からない」になる, plain: 「文書の書き方の決まり」のファイルや天井の正本や規則の表の、自動で書かれた部分を 1 文字だけ書き換えて道具を走らせ、道具が「ずれている」と言って止まることを見せる。目印を消したときは「まだ分からない」と言うことも見せる。, verifies: [FR19], red_test: {sentence: 生成区間を 1 byte 変えた欄の決まりの file か天井の正本か規則の表で --check の終了コードが非 0 になり、印の無い file では「まだ分からない」の終了コードになる, fixture: tests/fixtures/schema/}, milestone: M2}
 not_frozen: 「60 分以内にできる」「300k token 以下」は、ここには書かない。測定の仕組みが違うので、M1 の実地試験（非エンジニア 1 回）で初めて数値を決める。
@@ -435,15 +438,15 @@ constraints:
   - {id: CON3, title: 公開, text: 見せる先は tailnet だけ。認証なしで公開ネットに晒さない。, basis: [N-6], source: 憲法 N-6・tailnet-serve の下限}
   - {id: CON4, title: 移行元, text: folio v1 の HTML 72 面は凍結。参照するが書かない。v1 は道具として使い、正しさの物差しにも停止権にもしない。, basis: [P-13], source: 報告 軸 5・憲法 P-13}
   - {id: CON5, title: 席のモデル, text: folio の設計判断を下す席（orchestrator 席）は、現行では fable 5.1・effort は high または xhigh で動かす。high と xhigh の切替は持ち主が /effort で手動で行い、folio2 は既定の仕組みを持たない。並列実行・便・作業者の内側は opus まで。, basis: [P-16], source: "持ち主の裁定 2026-09-12 17:1x（P1 / P4）・席の名は持ち主の裁定 2026-09-20 15:20 JST（f2-648 notes・第 1.13 版）", rules: [D-1, D-2]}
-  - {id: CON6, title: scribe2 の限定利用, text: scribe2 の限定利用の作法は規則の表の行 D-7 のとおり（規則はその行が持ち、ここには写さない）。v1 の並列実行の骨格は使わず、並列は素の Agent の同時起動か、その場で書く Workflow（予算を明示）。, basis: [P-13, P-16], source: 持ち主の裁定 2026-09-12（P3 / P5・s2 経由 18:1x）・第 1.15 版で規則の写しをやめ行 D-7 の参照にした（行 D-7 の改訂は同じ承認）, rules: [D-3, D-4, D-7]}
+  - {id: CON6, title: scribe2 の限定利用, text: scribe2 の限定利用の作法は規則の表の行 D-7 のとおり。並列の組み方と予算の明示は行 D-3・D-4 のとおり（規則は行が持ち、ここには写さない）。, basis: [P-13, P-16], source: 持ち主の裁定 2026-09-12（P3 / P5・s2 経由 18:1x）・第 1.15 版で規則の写しをやめ行 D-7 の参照にした（行 D-7 の改訂は同じ承認）, rules: [D-3, D-4, D-7]}
   - {id: CON7, title: 実装の手段, text: folio v2 は Rust の単一 crate として実装する（bash の寄せ集めをやめる）。, basis: [], source: 裁定 s2-07l.42（folio v2 Rust 化・3 択決定）。GOAL4 から移した（G15 D10）。}
 
   - {id: CON8, title: M1 の順序と移す範囲, text: 契約表は今の形（scribe2 の設計文書の中の機械が読む区間）で着地させ、folio2 の M1 で設計ノートの YAML 正本と導出物へ移す。scribe2 の設計文書のどこまでを YAML へ移すかは、本版（v1.1）の承認時に持ち主へ出す別の論点とし、その裁定 = 最初の範囲は契約表を持つ設計文書だけ（他の設計文書の移行は M1 の後に改めて問う）。, basis: [P-13, P-6], source: 判断の記録 ADR-3 決定 (8)・scribe2 planner の裁定（s2-07l.197 notes 2026-09-13）・持ち主の裁定 2026-09-16「いずれも推奨で進めて」（f2-648 notes 23:5x JST・推奨 = 契約表を持つ文書だけ）}
   - {id: CON9, title: 席へ届く経路, text: 設計ノートや要件書の中身が席の文脈へ届く経路は器（scribe2）の役割の注入が持つ。憲法の注入（FR6）は憲法専用のまま広げない。folio が出すのは機械が読む id の索引（FR14）まで。, basis: [P-14, P-13], source: 判断の記録 ADR-3 決定 (9)}
 
 sources:
-  - {id: report-v2-shape, name: 報告「folio2 — v2 の形」, where: .claude-session/reports/2026-09-12-v2-shape/index.html（gitignored・参照の母集合に入れない）}
-  - {id: mockup-v4, name: 見本 v4（承認済み提示層）, where: .claude-session/reports/2026-09-12-mockup-3faces-v4/}
+  - {id: report-v2-shape, name: 報告「folio2 — v2 の形」, where: 失われた（2026-09-12 は repo の中の .claude-session/reports/2026-09-12-v2-shape/index.html に在ったが 2026-09-20 時点でその置き場は無く・repo の外へ移した報告の置き場にも残っていない・外部 pointer なので参照の母集合に入れない）}
+  - {id: mockup-v4, name: 見本 v4（承認済み提示層）, where: design-intent/preview/retired/（day-1 の取り込みで repo へ入れた暫定の写し 3 面・f2-648.29 で退役）。元の .claude-session/reports/2026-09-12-mockup-3faces-v4/ は失われた}
 
 glossary_pointer: vocabulary.yaml（読者が引く語の正本。要件書 §8 は憲法 §7 と同じ形で語と定義を出す・ここには写さない）
 

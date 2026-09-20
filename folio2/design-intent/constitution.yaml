@@ -1,4 +1,4 @@
-# folio2 憲法 — 正本（v1.1・初回の発効 2026-09-12・第 1.1 版 2026-09-20 = 判断の記録 ADR-11・planner 席 fable 5.1）
+# folio2 憲法 — 正本（v1.1・初回の発効 2026-09-12・第 1.1 版 2026-09-20 = 判断の記録 ADR-11・orchestrator 席 fable 5.1）
 #
 # 位置: f2-648.1「day-1 文書」。v0.1（初稿）を敵対レビュー wf_5e659fc9-0ed（7 観点・反証 24 + 追加反証 34・review/summary.md）で
 # 直したもの。裁定 G1〜G16・P1〜P5 に従う。裁定に触れる変更は入れず、承認要求の「論点」として別枠で出す。
@@ -141,7 +141,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）"}
       - {kind: folio2-ruling, ref: "裁定 #4（v1 P-2 を置換）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、token 由来 100%、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。day-1 は見本の検品道具（check-v4 / probe-v4）で動く。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。床は folio parts --check（数える面は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）。色や字の大きさが design token 由来である割合（R-3 の後半）を数える口は無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。床が掛からないページは 2026-09-20 時点で 1 枚在り、未達である（要件書 NFR2 の注）。}
     retreat: {kind: spike, condition: 単一生成器で v1 要件書相当の密度が出せない（spike 5）なら再検討する。}
     supersedes_v1: {doc: folio v1 憲章, article: "P-2: format は HTML + common.css のみ", ruling: "裁定 #4", rationale: 見た目が割れた原因は形式（HTML か Markdown か）ではなく、所有者が 2 つあったこと。}
     relations: {reqs: [FR4, NFR2, AC2], rules: [R-3, R-5]}
@@ -210,7 +210,7 @@ articles:
       - {kind: folio2-ruling, ref: "裁定 #4（正本 YAML・HTML は生成物）"}
       - {kind: v1-incident, ref: "v1 憲法の正本が手書き HTML（origin 22,748 byte）で、消費側（scribe2）が 834 行の HTML parser を自作した（ADR-0051 層分離・ADR-0045 逐語 extract）。生成物は 90,122 byte"}
       - {kind: v1-incident, ref: "ADR-0033 §2.3 で Option B（両面手書き + gate）を選び、45 日後（2026-05-29 → 07-13）の ADR-0050 で Option A'（正本から derive）へ全面転換。ADR-0052（手動同鏡は人の規律に依存し実際に drift）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（render の --check と inject_check の --check・対象は読み物と CLAUDE.md 生成区間）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（folio inject --check〔CLAUDE.md の生成区間〕・folio render --check〔読み物〕・folio build --check〔配信先の全面〕・folio face と folio figure と folio schema の --check）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
     retreat: {kind: spike, condition: 憲法の改訂表現（del/ins・amended_by）が YAML で表せないと spike 1 で分かったら、憲法だけ二正本 + byte 束縛へ退避する。}
     relations: {reqs: [FR4, FR6], articles: [P-14]}
 
@@ -236,7 +236,7 @@ articles:
     plain: 判断の記録（ADR）を書くときは、「うまくいかなかったら、こうなった時点でやめる」も一緒に書きます。
     rationale:
       - {kind: v1-incident, ref: "ADR-0047 §2.4（confirmed 偽陽性 1 件で warn へ戻す・判断者は user）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 判断の記録（ADR）の正本 schema で retreat 欄を必須にする（空なら生成が落ちる）。ADR の正本 schema が置かれるまでは動かない。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 判断の記録（ADR）の正本 schema で retreat 欄を必須にする（空なら生成が落ちる）。その schema は判断の記録の置き場の欄の決まり（adr/schema.yaml）が持ち、床は folio check が数える。}
     relations: {sections: [§6]}
 
   - id: P-10
@@ -262,7 +262,7 @@ articles:
     plain: 同じ穴に何度もはまるなら、機械が粘るのをやめて人に相談します。「何度まで」は表（R-7 行）で決めます。
     rationale:
       - {kind: v1-incident, ref: "engine-design §12（parser-differential の whack-a-mole を round 1 / round 2 の 2 連続で実証 → user 判断で fail-closed へ転換）"}
-    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。folio が数える面を持つのは便 0 以降。}
+    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。回数を数えて止めるのは席と器（scribe2）で、folio は数える面を持たない（2026-09-20 時点・便 0 は 2026-09-17 に着地したが folio に数える口は入らなかった）。}
     relations: {rules: [R-7, D-4], articles: [P-1]}
 
   - id: P-12
@@ -294,7 +294,7 @@ articles:
       - {kind: scribe2-article, ref: "C8 / C8.3（前の版を物差しにしない・design-intent の変更は ADR か版付き文書）。C8.2 は P-18 へ"}
       - {kind: v1-incident, ref: "self-host の層解釈と oracle 死角に ADR 6 本（0044 / 0045 / 0050 / 0051 / 0053 / 0056）"}
       - {kind: folio2-ruling, ref: "G7=A（C8 を移行条項つきで写す）・G6=A（順序は別条）・要件書 CON4（v1 は読むだけ）"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: folio2 の生成器・検査器が v1 の path に書き込み口を持たない（CON4）ことを test で固定する。v1 側の guard 設定の目視は開発規律 D-9。}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: folio2 の生成器・検査器が v1 の path に書き込み口を持たない（CON4）。書き込み先は呼び手が渡す出力先の指定だけだが、そのことを歯で固定してはいない（2026-09-20 時点）＝回帰を検出する口が無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。v1 側の guard 設定の目視は開発規律 D-9。}
     note: scribe2 は ADR-0003 で「成熟宣言 + user go」の解禁 gate を廃止した。folio2 が P-13.4 の順序を残すのは G6=A（順序は別条）の裁定による。それまでは v1 の生成器と手作業を道具として使う（CON4）。
     relations: {reqs: [CON1, CON4], rules: [D-7, D-9], articles: [A-4, P-18]}
 
@@ -358,7 +358,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）"}
       - {kind: folio2-ruling, ref: "G5=A（A-2 を条文改訂と rules 数値に分割）"}
-    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: rules 行の diff に裁定 id と時刻が無ければ落とす（CI は便 0 以降・それまでは PR の diff を人が見る）。}
+    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: rules 行の差分に裁定 id と時刻が無ければ落とす。この差分を数える口は未実装である（2026-09-20 時点・便 0 は 2026-09-17 に着地したが、その検査は置かれなかった）。それまでは取り込みの要求の差分を人が見るにとどまり、P-17.1 / P-17.2 / P-17.4 の充足は「まだ分からない」として扱う（P-4.2）。}
     relations: {rules: [R-1, R-2, R-3, R-4, R-5, R-6, R-7, R-8, R-9, R-10, R-11, R-12, R-13, R-14, R-15, R-16, D-3, D-5, D-8], articles: [A-2]}
 
   - id: P-18
@@ -374,7 +374,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "C8.2（design-intent と食い違う編集は編集時に止める）・C16 / C16.2（事後検証を代替にしない・編集時 guard 0 の構成を CI が拒む）・C11.2（極性の型と build 時の極性一覧）"}
       - {kind: folio2-ruling, ref: "裁定 #3（scribe2 の機構条のうち「極性一覧」を写す）・G3=A（撤去コストは共通 1 行）"}
-    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: 各条の mechanism の stage / polarity 欄と rules 行の stage 列から極性一覧を生成し、編集時（in-loop）の本数が rules 行 R-13 の下限を割れば不合格（day-1 は check_draft.py が一覧を出す）。便 0 で最初の編集時 guard（契約の書き込み範囲の外への編集を止める・scribe2 提供）が入るまでは「まだ分からない」。}
+    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: 各条の mechanism の stage / polarity 欄と rules 行の stage 列から極性一覧を生成し、編集時（in-loop）の本数が rules 行 R-13 の下限を割れば不合格。極性一覧を出す口と R-13 を数える口は未実装である（2026-09-20 時点・day-1 の口は 2026-09-18 に退役し Rust の床へ写していない）。folio2 側の編集時 guard も 1 本も無い（設計ノートの欄の決まりの guards 欄が逐語でそう書く）。それまで P-18.3 / P-18.4 の充足は「まだ分からない」として扱う（P-4.2）。}
     note: v0.1 では P-15.2 の条件節（「持つときは」）に潰れ、scribe2 C16 が課す義務が落ちていた（敵対レビュー scribe2-consistency-02・-04）。
     relations: {rules: [R-13], articles: [P-15, P-13, P-4]}
 
@@ -448,7 +448,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "N1 / N1.2"}
       - {kind: folio2-ruling, ref: "G8=A（不可逆な削除は Never）"}
-    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: 削除の経路を実装せず、退役は可逆な移動（retire）だけを公開する。削除の呼び出しが無いことを test で固定する。}
+    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: 管理下の対象（正本・生成した面・支度表・台帳の記録）を消す経路を実装しない。決定的に作り直せる写しの作り直しに限り消す（folio ceiling --write が束の材料の置き場を作り直すとき・図の道具を撃つために folio 自身が作った一時の置き場）。退役は可逆な移動で行い、folio は退役の口を持たない。消す呼び出しをこの 2 つに限ることは歯で固定していない（2026-09-20 時点）。}
     relations: {articles: [A-1, P-7]}
 
   - id: N-2
@@ -462,7 +462,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "N2 / C1.2（規則を散文・memory・chat にだけ置かない・生成された文書の中の手書き規範文は 0 行）"}
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18 の散文 hook 規則・rules.html 248KB"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: ① folio が生成する文書（読み物・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = render / inject_check の --check）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（inject_check の --check が数える）。検査対象は folio2 が所有する文書に限る。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: ① folio が生成する文書（読み物・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = folio render --check と folio inject --check）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（folio inject --check が数える）。検査対象は folio2 が所有する文書に限る。}
     note: 見本 v4 の P-5（Always）に含まれていた禁止側を Never へ置いた（G12 の改番）。
     relations: {rules: [R-16], articles: [P-5, P-14, P-17]}
 
@@ -475,7 +475,7 @@ articles:
     plain: 「今回だけ特別」のスイッチを足す変更は、機械が止めます。変えたいときは正式に改訂します。
     rationale:
       - {kind: v1-incident, ref: "ADR-0047 §2.2（例外機構を導入しない＝逃げ道と規律を一致させる）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本と rules の全節（top_level・meta・前文・条・規範文・mechanism・rules 行）で未知の欄を schema 検査が落とす（day-1 は check_draft.py）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本と rules の全節（top_level・meta・前文・条・規範文・mechanism・rules 行）で未知の欄を schema 検査が落とす（床は folio check）。}
     note: scribe2 N3（host 固有の分岐を code に焼かない）とは別の条。番号の一致は意図していない。
     relations: {articles: [A-2], sections: [§6]}
 
@@ -501,7 +501,7 @@ articles:
     plain: 文書の種類が増えるたびに専用の AI 係や検査の観点を増やすことは、機械が拒みます。違いは設定の表（P-5.3）で表します。係が増えると AI が毎回読む説明文が膨らんで、遅く・高くなるからです（v1 では 36 係になりました）。
     rationale:
       - {kind: v1-incident, ref: "agent 36 本・description 合計 29,027 字・ADR-0007 → 0055（Tier 1 → Tier 0 pointer digest へ降格）"}
-    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0。常時注入の総量は R-1 の上限で落とす（母集団は folio2 が所有する係と skill）。}
+    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0（検査の観点は天井の正本の 4 つで閉じ、folio2 が所有する AI 係は 0 本）。常時注入の総量は R-1 の上限で落とす（母集団は folio2 が所有する係と skill）が、この上限を数える口は未実装である（2026-09-20 時点）＝その部分の充足は「まだ分からない」として扱う（P-4.2・要件書 NFR1 の注）。}
     relations: {reqs: [NFR1], rules: [R-1, D-3], articles: [P-5]}
 
   - id: N-6
