@@ -18,6 +18,12 @@
 //! 13. 天井の正本の側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 14. 天井の正本の側の印: begin を消す → 2。
 //! 15. 天井の正本の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致（人が書く節も不変）。
+//!
+//! 便 53（docs/design/delivery-53.md §1 (c)）: 命令は 4 本目の file rules.yaml（規則の表・生成区間は先頭の注釈の次）も順に見る（合格の標準出力は 4 行）。
+//! 16. 規則の表の側の実の正本: --check → 0・4 行目に「rules.yaml」「1764 byte」・生成区間の要約値が (b) の値・行数 27。
+//! 17. 規則の表の側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
+//! 18. 規則の表の側の印: begin を消す → 2。
+//! 19. 規則の表の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致（人が書く行 thresholds・discipline と先頭の注釈も不変）。
 
 use std::fs;
 use std::io::Write;
@@ -40,8 +46,14 @@ const CEILING_REGION_BYTES: usize = 2915;
 const CEILING_REGION_SHA256: &str =
     "5ad2f19b7d8c4a197865c5280f4c82653f97ef6dc0b9b45186a2678539429fa2";
 
-/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本）。
-const TARGETS: usize = 3;
+/// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
+const RULES_REGION_LINES: usize = 27;
+const RULES_REGION_BYTES: usize = 1764;
+const RULES_REGION_SHA256: &str =
+    "dcf207ced150b5ebd3d6ae03bcdb5bc42ef9a06d6f74ff3f830ff96729dafad2";
+
+/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表）。
+const TARGETS: usize = 4;
 
 const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
 const END: &str = "# folio:schema:end";
@@ -176,6 +188,14 @@ impl Work {
         fs::read_to_string(self.ceiling_yaml()).unwrap()
     }
 
+    fn rules_yaml(&self) -> PathBuf {
+        self.dir().join("rules.yaml")
+    }
+
+    fn read_rules(&self) -> String {
+        fs::read_to_string(self.rules_yaml()).unwrap()
+    }
+
     /// 写しの adr/schema.yaml の字面の変異（1 か所だけ）。
     fn mutate(&self, from: &str, to: &str) {
         mutate_file(&self.schema_yaml(), from, to);
@@ -189,6 +209,11 @@ impl Work {
     /// 写しの ceiling.yaml の字面の変異（1 か所だけ）。
     fn mutate_ceiling(&self, from: &str, to: &str) {
         mutate_file(&self.ceiling_yaml(), from, to);
+    }
+
+    /// 写しの rules.yaml の字面の変異（1 か所だけ）。
+    fn mutate_rules(&self, from: &str, to: &str) {
+        mutate_file(&self.rules_yaml(), from, to);
     }
 
     fn schema(&self, flags: &[&str]) -> Output {
@@ -675,5 +700,130 @@ fn schema_write_restores_the_ceiling_region_and_is_idempotent() {
         &["変わらない", &format!("{CEILING_REGION_BYTES} byte")],
     );
     assert_eq!(w.read_ceiling(), original);
+    assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
+}
+
+// ── 便 53: 規則の表の側 ──
+
+/// 規則の表の側の生成区間の変異（1 byte・値域 stage の 2 つ目の値）。
+const RULES_DRIFT_FROM: &str = "\n    stage: [in-loop, post]\n";
+const RULES_DRIFT_TO: &str = "\n    stage: [in-loop, past]\n";
+
+// ── 16. 規則の表の側の実の正本 ──
+
+#[test]
+fn schema_check_matches_the_real_rules_file_and_its_frozen_digest() {
+    let w = Work::new("rules-real");
+    let out = w.schema(&["--check"]);
+    assert_outcome(
+        &out,
+        0,
+        &["一致", "rules.yaml", &format!("{RULES_REGION_BYTES} byte")],
+    );
+    let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), TARGETS, "{lines:?}");
+    assert!(lines[0].contains("adr/schema.yaml"), "{lines:?}");
+    assert!(lines[1].contains("design-note/schema.yaml"), "{lines:?}");
+    assert!(lines[2].contains("ceiling.yaml"), "{lines:?}");
+    assert!(lines[3].contains("rules.yaml"), "{lines:?}");
+    assert!(
+        lines[3].contains(&format!("{RULES_REGION_BYTES} byte")),
+        "{lines:?}"
+    );
+    let text = w.read_rules();
+    let cur = region(&text);
+    assert_eq!(cur.len(), RULES_REGION_BYTES, "生成区間の byte 数");
+    assert_eq!(cur.lines().count(), RULES_REGION_LINES, "生成区間の行数");
+    assert!(cur.starts_with("schema:\n"));
+    match sha256_hex(cur.as_bytes()) {
+        Ok(hex) => assert_eq!(hex, RULES_REGION_SHA256, "sha256sum で測り直した要約値"),
+        Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
+    }
+    // 生成区間は file の先頭の注釈の次（begin の前は注釈と空行だけ・人が書く行は end の後）
+    let (head, _) = text.split_once(BEGIN).unwrap();
+    assert!(
+        head.lines().all(|l| l.is_empty() || l.starts_with('#')),
+        "{head}"
+    );
+    let (_, tail) = text.split_once(&format!("\n{END}\n")).unwrap();
+    assert!(tail.contains("\nthresholds:\n"), "{tail}");
+    assert!(tail.contains("\ndiscipline:\n"), "{tail}");
+    // 検査は file を書かない
+    assert_eq!(w.read_rules(), text);
+}
+
+// ── 17. 規則の表の側のずれ ──
+
+#[test]
+fn schema_check_fails_on_one_byte_drift_inside_the_rules_region() {
+    let w = Work::new("rules-drift");
+    let adr = w.read();
+    let note = w.read_note();
+    let ceiling = w.read_ceiling();
+    w.mutate_rules(RULES_DRIFT_FROM, RULES_DRIFT_TO);
+    assert_outcome(
+        &w.schema(&["--check"]),
+        1,
+        &[
+            "rules.yaml",
+            "生成区間",
+            "≠ 導出",
+            &format!("{RULES_REGION_BYTES} byte"),
+        ],
+    );
+    // 先の 3 本（合格）の行は、4 本目で落ちたときは出さない・file も触らない
+    assert_eq!(w.read(), adr);
+    assert_eq!(w.read_note(), note);
+    assert_eq!(w.read_ceiling(), ceiling);
+}
+
+// ── 18. 規則の表の側の印 ──
+
+#[test]
+fn schema_check_is_unknown_without_the_rules_begin_marker() {
+    let w = Work::new("rules-no-begin");
+    w.mutate_rules(&format!("{BEGIN}\n"), "");
+    assert_outcome(&w.schema(&["--check"]), 2, &["rules.yaml: 印が 1 対でない"]);
+    assert_outcome(&w.schema(&["--write"]), 2, &["rules.yaml: 印が 1 対でない"]);
+}
+
+// ── 19. 規則の表の側の書き直し ──
+
+#[test]
+fn schema_write_restores_the_rules_region_and_is_idempotent() {
+    let w = Work::new("rules-write");
+    let original = w.read_rules();
+    let adr = w.read();
+    let note = w.read_note();
+    let ceiling = w.read_ceiling();
+    w.mutate_rules(RULES_DRIFT_FROM, RULES_DRIFT_TO);
+    assert_ne!(w.read_rules(), original);
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &[
+            "変わらない",
+            "adr/schema.yaml",
+            "design-note/schema.yaml",
+            "ceiling.yaml",
+            "書いた",
+            "rules.yaml",
+            &format!("{RULES_REGION_BYTES} byte"),
+        ],
+    );
+    assert_eq!(
+        w.read_rules(),
+        original,
+        "file 全体が元と byte 一致（人が書く行 thresholds・discipline と先頭の注釈も不変）"
+    );
+    assert_eq!(w.read(), adr, "判断の記録の側は触らない");
+    assert_eq!(w.read_note(), note, "設計ノートの側は触らない");
+    assert_eq!(w.read_ceiling(), ceiling, "天井の正本の側は触らない");
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &["変わらない", &format!("{RULES_REGION_BYTES} byte")],
+    );
+    assert_eq!(w.read_rules(), original);
     assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
 }
