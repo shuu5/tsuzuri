@@ -12,6 +12,7 @@
 
 use std::path::Path;
 
+use crate::constitution_enums as ce;
 use crate::face::{self, Frame, R, X, anchor, card};
 use crate::parts::catalog::Component;
 
@@ -93,12 +94,22 @@ const STATUS: &[(&str, &str)] = &[
 /// 案の判定（verdict）→ 名札。
 const VERDICT: &[(&str, &str)] = &[("adopted", "採用"), ("rejected", "退けた")];
 
-/// 撤退条件の種類（retreat.kind）→ 名札。
-const RETREAT_KIND: &[(&str, &str)] = &[
-    ("spike", "小さな試し"),
-    ("measure", "数えた値"),
-    ("ruling", "持ち主の裁定"),
-];
+/// 撤退条件の種類（retreat.kind）→ 判断の記録の面の名札（憲法の面の名札 `face::retreat_kind_label` と字面が違う）。
+/// 憲法の値域から導出した型への網羅の場合分け（便 50・その他の枝なし = 値が足されても消えても組み立てが通らない）。
+fn retreat_kind_label(k: ce::RetreatKind) -> &'static str {
+    match k {
+        ce::RetreatKind::Spike => "小さな試し",
+        ce::RetreatKind::Measure => "数えた値",
+        ce::RetreatKind::Ruling => "持ち主の裁定",
+    }
+}
+
+/// 撤退条件の種類の欄 → 名札（値域に無い値は Err・文言は表引きと同じ）。
+fn retreat_kind(x: &X<'_>) -> R<&'static str> {
+    Ok(retreat_kind_label(
+        x.parse(ce::RetreatKind::from_name, "撤退条件の種類")?,
+    ))
+}
 
 /// 状態の名札（短い）と状態の行（組み立て済みの HTML）。
 struct Status {
@@ -452,9 +463,7 @@ fn cover(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, n: &C
     o.push(meta_span("改訂", &format!("{} 件", n.amends)));
     o.push(meta_span(
         "撤退条件",
-        a.f("retreat")?
-            .f("kind")?
-            .lookup(RETREAT_KIND, "撤退条件の種類")?,
+        retreat_kind(&a.f("retreat")?.f("kind")?)?,
     ));
     // 図は 1 枚以上のときだけ（図なしの面は便 32 までと byte 不変）
     if n.figures > 0 {
@@ -610,10 +619,7 @@ fn basis_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ct
     o.push(card(
         "card retreat",
         None,
-        &format!(
-            "撤退条件（{}）",
-            rt.f("kind")?.lookup(RETREAT_KIND, "撤退条件の種類")?
-        ),
+        &format!("撤退条件（{}）", retreat_kind(&rt.f("kind")?)?),
         &format!("<p>{}</p>", rt.ef("condition")?),
     ));
     o.push("</div>".to_string());
@@ -754,4 +760,32 @@ fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts) -> R<()
     }
     f.foot(o, id, &date, &dl);
     Ok(())
+}
+
+#[cfg(test)]
+mod face_adr_tests {
+    use super::*;
+    use crate::yaml::Value;
+
+    /// 凍結の針（P-10.1・便 50 §1 (e) 1）: 判断の記録の面の撤退条件の種類の名札を便 50 の前の表の字面と順で固定する。
+    #[test]
+    fn face_labels_retreat_kind_of_the_adr_face_is_a_frozen_needle() {
+        let rows: Vec<(&str, &str)> = ce::RetreatKind::ALL
+            .iter()
+            .map(|k| (k.name(), retreat_kind_label(*k)))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("spike", "小さな試し"),
+                ("measure", "数えた値"),
+                ("ruling", "持ち主の裁定")
+            ]
+        );
+        let v = Value::Str("guess".into());
+        assert_eq!(
+            retreat_kind(&X::root(&v, "adr/ADR-1.yaml.retreat.kind")).unwrap_err(),
+            "adr/ADR-1.yaml.retreat.kind: 撤退条件の種類 の表に無い値「guess」"
+        );
+    }
 }

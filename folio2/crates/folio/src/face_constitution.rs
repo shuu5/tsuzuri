@@ -6,10 +6,12 @@
 
 use std::path::Path;
 
+use crate::constitution_enums as ce;
 use crate::face::{
-    self, BINDS, DOC_STATUS, Frame, LIVE, MAX_RAIL_NODES, MECH_KIND, PATTERN, POLARITY, R,
-    RETREAT_KIND, RULE_KIND, RULE_STATUS, STAGE, STRENGTH, TIERS, Tier, X, anchor, card, esc, hint,
-    hint_q, rationale, section_anchor, split_dash, tier_of, val,
+    self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, RULE_KIND, RULE_STATUS, Tier, X, anchor,
+    binds_label, card, esc, hint, hint_q, mechanism_kind_label, mechanism_live_label,
+    pattern_label, polarity_label, rationale, retreat_kind_label, section_anchor, split_dash,
+    stage_label, strength_label, tier_label, tier_of, val,
 };
 use crate::parts::catalog::Component;
 
@@ -150,8 +152,9 @@ pub fn derive(dir: &Path, ceiling: Option<&Path>) -> R<String> {
 // ── 読みと検査 ──
 
 fn context<'a>(c: &X<'a>, r: &X<'a>, s: &X<'a>) -> R<Ctx<'a>> {
+    let enums = c.f("schema")?.f("enums")?;
     let mut tiers: Vec<(String, Tier)> = Vec::new();
-    for t in c.f("schema")?.f("enums")?.f("tier")?.seq()? {
+    for t in enums.f("tier")?.seq()? {
         let key = t.text()?;
         let tier = tier_of(&key).map_err(|e| format!("{}: {e}", t.at))?;
         if tiers.iter().any(|(k, _)| *k == key) {
@@ -159,8 +162,14 @@ fn context<'a>(c: &X<'a>, r: &X<'a>, s: &X<'a>) -> R<Ctx<'a>> {
         }
         tiers.push((key, tier));
     }
-    if tiers.len() != TIERS.len() {
+    if tiers.len() != ce::Tier::ALL.len() {
         return Err("constitution.yaml.schema.enums.tier: 段の表の 3 つ全部でない".to_string());
+    }
+    // 組み立てた版と読んでいる版のずれの検査を、置き場の schema.enums に在る鍵の全部へ（便 50 (d)・段は上で見た）
+    for (key, x) in enums.pairs()? {
+        if key != "tier" {
+            enum_skew(key, &x)?;
+        }
     }
 
     let mut arts = Vec::new();
@@ -168,7 +177,7 @@ fn context<'a>(c: &X<'a>, r: &X<'a>, s: &X<'a>) -> R<Ctx<'a>> {
         let id = a.f("id")?.id()?;
         let title = a.ef("title")?;
         let tier_x = a.f("tier")?;
-        let tier = tier_x.lookup(TIERS, "段")?;
+        let tier = tier_label(tier_x.parse(ce::Tier::from_name, "段")?);
         let tier_key = tier_x.text()?;
         arts.push(Art {
             x: a,
@@ -204,6 +213,37 @@ fn context<'a>(c: &X<'a>, r: &X<'a>, s: &X<'a>) -> R<Ctx<'a>> {
         reqs,
         rule_ids,
     })
+}
+
+/// 読んでいる置き場の憲法の値域 1 つ（schema.enums の鍵 `key`）が、この folio を組み立てた版の憲法の値域
+/// （`constitution_enums::ENUMS`）と集合で一致する = 各値が導出した型に在る・2 度無い・数が同じ（順は問わない・段と同じ強さ）。
+/// 組み立てた版に無い鍵が置き場に在るときも Err。置き場に無い鍵は見ない（便 50 §1 (d)）。
+fn enum_skew(key: &str, x: &X<'_>) -> R<()> {
+    let skew = |why: String| {
+        format!(
+            "constitution.yaml.schema.enums.{key}: {why}・組み立て時の憲法の値域と違う（組み立て直す）"
+        )
+    };
+    let names = ce::ENUMS
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, names)| *names)
+        .ok_or_else(|| skew("組み立てた版に無い鍵".to_string()))?;
+    let mut seen: Vec<String> = Vec::new();
+    for v in x.seq()? {
+        let s = v.text()?;
+        if !names.contains(&s.as_str()) {
+            return Err(skew(format!("値「{s}」が組み立てた版に無い")));
+        }
+        if seen.contains(&s) {
+            return Err(skew(format!("値「{s}」が 2 度ある")));
+        }
+        seen.push(s);
+    }
+    if seen.len() != names.len() {
+        return Err(skew(format!("組み立てた版の {} 値全部でない", names.len())));
+    }
+    Ok(())
 }
 
 /// meta の counts のキーの集合 = 段の一覧・値 = 数えた数。
@@ -453,7 +493,7 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
     let a = &art.x;
     let t = art.tier;
     let binds = a.f("binds")?;
-    binds.lookup(BINDS, "縛る相手")?;
+    binds_label(binds.parse(ce::Binds::from_name, "縛る相手")?);
     o.push(format!(
         "<article {} class=\"{}\" id=\"{}\">",
         dc(Component::ItemRow),
@@ -477,9 +517,9 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
     for st in a.f("statements")?.seq()? {
         let sid = st.ef("id")?;
         let pattern = st.f("pattern")?;
-        pattern.lookup(PATTERN, "型")?;
+        pattern_label(pattern.parse(ce::Pattern::from_name, "型")?);
         let strength = st.f("strength")?;
-        let kw = strength.lookup(STRENGTH, "強度")?;
+        let kw = strength_label(strength.parse(ce::Strength::from_name, "強度")?);
         o.push(format!(
             "<p class=\"norm\"><span class=\"ew\">{sid}</span> {} <span class=\"kw\">{kw}</span></p>",
             st.ef("text")?
@@ -504,7 +544,10 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
             "撤退条件",
             &format!(
                 "{}: {}",
-                rt.f("kind")?.lookup(RETREAT_KIND, "撤退条件の種別")?,
+                retreat_kind_label(
+                    rt.f("kind")?
+                        .parse(ce::RetreatKind::from_name, "撤退条件の種別")?
+                ),
                 rt.ef("condition")?
             ),
         ));
@@ -514,18 +557,21 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
     let live = mech.f("live")?;
     let mut human = format!(
         "{}・{}",
-        kind.lookup(MECH_KIND, "機構")?,
-        live.lookup(LIVE, "機構の live")?
+        mechanism_kind_label(kind.parse(ce::MechanismKind::from_name, "機構")?),
+        mechanism_live_label(live.parse(ce::MechanismLive::from_name, "機構の live")?)
     );
     let mut machine = format!("{} · live: {}", kind.e()?, live.e()?);
     if let Some(stage) = mech.g("stage")? {
-        human.push_str(&format!("・{}", stage.lookup(STAGE, "機構の stage")?));
+        human.push_str(&format!(
+            "・{}",
+            stage_label(stage.parse(ce::Stage::from_name, "機構の stage")?)
+        ));
         machine.push_str(&format!(" · stage: {}", stage.e()?));
     }
     if let Some(polarity) = mech.g("polarity")? {
         human.push_str(&format!(
             "・{}",
-            polarity.lookup(POLARITY, "機構の polarity")?
+            polarity_label(polarity.parse(ce::Polarity::from_name, "機構の polarity")?)
         ));
         machine.push_str(&format!(" · polarity: {}", polarity.e()?));
     }
@@ -692,7 +738,7 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
             what_with_xref(x)?,
             val(&x.f("value")?, 0)?,
             x.f("kind")?.lookup(RULE_KIND, "rules 行の種別")?,
-            x.f("stage")?.lookup(STAGE, "rules 行の stage")?,
+            stage_label(x.f("stage")?.parse(ce::Stage::from_name, "rules 行の stage")?),
             ruling(x)?,
             state_chip(x)?
         ));

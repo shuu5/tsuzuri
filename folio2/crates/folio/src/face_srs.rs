@@ -9,9 +9,11 @@
 
 use std::path::Path;
 
+use crate::constitution_enums as ce;
 use crate::face::{
-    self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, METHOD, PATTERN, PRIO,
-    R, STRENGTH, STRENGTH_MEANING, TONE, X, anchor, card, hint, hint_q, method_label,
+    self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, METHOD, R, TONE, X,
+    anchor, card, hint, hint_q, method_label, pattern_label, strength_label, strength_meaning,
+    strength_prio,
 };
 use crate::parts::catalog::Component;
 
@@ -792,13 +794,16 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
     Ok(())
 }
 
-/// 凡例の 1 行（言葉 = 強度と型の名札・確かめ方 = 確かめ方の名札）。
+/// 凡例の 1 行（言葉 = 強度と型の名札・確かめ方 = 確かめ方の名札）。強度と型は導出した型の ALL の順（= 憲法の値域の file の順）。
 fn legend_line() -> String {
-    let words = STRENGTH
+    let words = ce::Strength::ALL
         .iter()
-        .zip(STRENGTH_MEANING)
-        .map(|((_, kw), (_, meaning))| format!("{kw} = {meaning}"))
-        .chain(PATTERN.iter().map(|(_, label)| label.to_string()))
+        .map(|s| format!("{} = {}", strength_label(*s), strength_meaning(*s)))
+        .chain(
+            ce::Pattern::ALL
+                .iter()
+                .map(|p| pattern_label(*p).to_string()),
+        )
         .collect::<Vec<_>>()
         .join("／");
     let methods = METHOD
@@ -949,10 +954,10 @@ fn nfr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
 fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, it: &Item<'_>, nfr: bool) -> R<()> {
     let x = &it.x;
     let pattern = x.f("pattern")?;
-    let ears = pattern.lookup(PATTERN, "型")?;
+    let ears = pattern_label(pattern.parse(ce::Pattern::from_name, "型")?);
     let strength = x.f("strength")?;
-    let kw = strength.lookup(STRENGTH, "強度")?;
-    let prio = strength.lookup(PRIO, "強度")?;
+    let s = strength.parse(ce::Strength::from_name, "強度")?;
+    let (kw, prio) = (strength_label(s), strength_prio(s));
     let milestone = x.g("milestone")?;
     o.push(format!(
         "<article {}{} id=\"{}\">",
@@ -1352,11 +1357,10 @@ mod face_srs_tests {
         assert!(band_limit(&x, "入れる側", MAX_PER_BAND + 1).is_err());
     }
 
+    /// 強度の 3 つの名札（規範の語・意味・色）の揃いは、便 50 から同じ型への網羅の場合分けになり組み立てが保つ。
     #[test]
     fn face_srs_label_tables_are_aligned() {
         let keys = |t: &[(&str, &str)]| t.iter().map(|(k, _)| k.to_string()).collect::<Vec<_>>();
-        assert_eq!(keys(STRENGTH), keys(STRENGTH_MEANING));
-        assert_eq!(keys(STRENGTH), keys(PRIO));
         assert_eq!(keys(TONE), ["ok", "bad", "neutral", "warn"]);
         for (k, class) in TONE {
             assert_eq!(*class, format!("tone-{k}"));

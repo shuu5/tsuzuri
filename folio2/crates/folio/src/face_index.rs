@@ -18,9 +18,10 @@
 use std::fs;
 use std::path::Path;
 
+use crate::constitution_enums as ce;
 use crate::face::{
-    self, ANNEXES, Frame, INDEX_STATUS, R, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf, TIERS,
-    X, anchor, esc, hint, hint_q, stop_anchor, tier_of,
+    self, ANNEXES, Frame, INDEX_STATUS, R, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf, X,
+    anchor, esc, hint, hint_q, stop_anchor, tier_of,
 };
 use crate::face_note;
 use crate::parts::catalog::Component;
@@ -427,7 +428,7 @@ fn constitution_card(c: &X<'_>) -> R<Readable> {
     let mut tiers = Vec::new();
     for a in c.f("articles")?.seq()? {
         let t = a.f("tier")?;
-        t.lookup(TIERS, "段")?;
+        t.parse(ce::Tier::from_name, "段")?;
         tiers.push(t.text()?);
     }
     let counts = m.f("counts")?;

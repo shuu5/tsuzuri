@@ -182,19 +182,20 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             "「発効した判断」= この status かつ承認欄あり。amends が効くのは発効した判断だけ",
         ),
     ),
+    // 注の鍵は憲法の値域から導出した型の名（便 50 (a2)・値の字面を手書きしない）。注の文と順は adr/schema.yaml の生成区間のまま
     (
         "retreat_kind_note",
         Floor::Map(&[
             (
-                "spike",
+                RetreatKind::Spike.name(),
                 Floor::Val("小さな試し（spike）の結果が条件に当たったら捨てる"),
             ),
             (
-                "measure",
+                RetreatKind::Measure.name(),
                 Floor::Val("数えた値（回数・件数・byte）が条件に達したら捨てる"),
             ),
             (
-                "ruling",
+                RetreatKind::Ruling.name(),
                 Floor::Val("持ち主の裁定で捨てる（条件は「何を持ち主に問うか」を書く）"),
             ),
         ]),

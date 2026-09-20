@@ -72,6 +72,8 @@ pub fn constitution_enums(text: &str) -> Result<String, String> {
     let mut out = String::new();
     out.push_str("// 組み立て時に build.rs が憲法の正本（design-intent/constitution.yaml）の schema.enums から導出した。人は書かない。\n");
     let mut types = HashSet::new();
+    // 鍵の名と型の名の対（定数 ENUMS の素・file の順）
+    let mut keys: Vec<(&str, String)> = Vec::with_capacity(enums.len());
     for (key, body) in enums.iter() {
         let key = key
             .as_str()
@@ -106,7 +108,17 @@ pub fn constitution_enums(text: &str) -> Result<String, String> {
             &names,
         )
         .map_err(|e| format!("schema.enums.{key}: {e}"))?;
+        keys.push((key, ty));
     }
+    // 鍵の名と NAMES の対の列（便 50 (d)・面の生成器が読んでいる置き場の値域と組み立てた版のずれを鍵ごとに見る）
+    out.push_str(&format!(
+        "/// 憲法の値域の鍵の名と NAMES の対（憲法の正本の schema.enums の鍵・file の順）。\npub const ENUMS: [(&str, &[&str]); {}] = [\n",
+        keys.len()
+    ));
+    for (key, ty) in &keys {
+        out.push_str(&format!("    ({key:?}, &{ty}::NAMES),\n"));
+    }
+    out.push_str("];\n");
     Ok(out)
 }
 

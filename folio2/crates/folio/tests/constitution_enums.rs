@@ -1,6 +1,7 @@
 //! 憲法の値域の導出の歯（便 49・docs/design/delivery-49.md §1 (d) 1）。build.rs を path で取り込み、
 //! 純粋な関数 `constitution_enums`（憲法の正本の文字列 → 導出した Rust の source か理由の文）を直に呼ぶ。
 //! 実の正本で Ok・鍵の数だけ型が出る（数は file から数える）・変異 5 つがそれぞれ Err で文に鍵の名が入る。
+//! 便 50（delivery-50.md §1 (d)(e) 4）: 定数 ENUMS（鍵の名と NAMES の対の列）が鍵の数だけ対を持つ。
 
 #[allow(dead_code)]
 #[path = "../build.rs"]
@@ -31,7 +32,11 @@ fn enum_key_count(text: &str) -> usize {
 
 /// 正本の 1 か所を書き換えた変異（置き換えが当たらなければ歯の側の誤り）。
 fn mutate(text: &str, from: &str, to: &str) -> String {
-    assert_eq!(text.matches(from).count(), 1, "変異の的「{from}」が正本に 1 つでない");
+    assert_eq!(
+        text.matches(from).count(),
+        1,
+        "変異の的「{from}」が正本に 1 つでない"
+    );
     text.replace(from, to)
 }
 
@@ -40,11 +45,20 @@ const RETREAT_LINE: &str = "retreat_kind: [spike, measure, ruling]";
 #[test]
 fn constitution_enums_derives_types_from_the_real_constitution() {
     let source = build::constitution_enums(&constitution()).expect("実の憲法から導出できない");
-    assert!(source.contains("pub enum RetreatKind {"), "RetreatKind の型が無い");
-    assert!(source.contains("pub enum MechanismLive {"), "MechanismLive の型が無い");
+    assert!(
+        source.contains("pub enum RetreatKind {"),
+        "RetreatKind の型が無い"
+    );
+    assert!(
+        source.contains("pub enum MechanismLive {"),
+        "MechanismLive の型が無い"
+    );
     assert!(source.contains("    M0,\n"), "M0 の名が無い");
     assert!(source.contains("    MustNot,\n"), "MustNot の名が無い");
-    assert!(source.contains("    V1Incident,\n"), "V1Incident の名が無い");
+    assert!(
+        source.contains("    V1Incident,\n"),
+        "V1Incident の名が無い"
+    );
 }
 
 #[test]
@@ -57,6 +71,26 @@ fn constitution_enums_emits_one_type_per_key_of_the_file() {
     assert_eq!(source.matches("pub const NAMES: [&str; ").count(), keys);
     assert_eq!(source.matches("pub const ALL: [").count(), keys);
     assert_eq!(source.matches("pub fn from_name(").count(), keys);
+}
+
+/// 便 50 §1 (d)(e) 4: 導出した source に定数 ENUMS（鍵の名と NAMES の対の列）が在り、実の憲法の鍵の数だけ対を持つ。
+#[test]
+fn constitution_enums_emits_the_key_table_with_one_pair_per_key() {
+    let text = constitution();
+    let keys = enum_key_count(&text);
+    let source = build::constitution_enums(&text).unwrap();
+    let head = format!("pub const ENUMS: [(&str, &[&str]); {keys}] = [\n");
+    let at = source.find(&head).expect("定数 ENUMS が無い");
+    let body = &source[at + head.len()..];
+    let end = body.find("];\n").expect("ENUMS が閉じていない");
+    let rows: Vec<&str> = body[..end].lines().collect();
+    assert_eq!(rows.len(), keys, "ENUMS の対の数が鍵の数と違う");
+    assert!(
+        rows.contains(&"    (\"retreat_kind\", &RetreatKind::NAMES),"),
+        "{rows:?}"
+    );
+    assert!(rows.contains(&"    (\"tier\", &Tier::NAMES),"), "{rows:?}");
+    assert_eq!(source.matches("pub const ENUMS: ").count(), 1);
 }
 
 #[test]
@@ -81,7 +115,10 @@ fn constitution_enums_rejects_a_value_written_twice() {
         "retreat_kind: [spike, measure, ruling, spike]",
     );
     let err = build::constitution_enums(&text).expect_err("同じ値が 2 度在るのに Ok");
-    assert!(err.contains("retreat_kind") && err.contains("spike"), "{err}");
+    assert!(
+        err.contains("retreat_kind") && err.contains("spike"),
+        "{err}"
+    );
 }
 
 #[test]

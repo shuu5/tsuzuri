@@ -3,6 +3,8 @@
 //! - 実の正本で生成した面が `folio parts --check` に合格する（AC2 の機構・生成側から独立した物差し 1）
 //! - 逐語と件数の census（yaml-rust2 で正本を直に読む・生成側から独立した物差し 2）
 //! - check の 3 値・表に無い面の名・導出できない入力 8 つ・escape
+//! - 組み立てた版と読んでいる版のずれ（便 50・docs/design/delivery-50.md §1 (d)(e) 3）: 実の置き場の写しで憲法の
+//!   値域に値を足す・知らない鍵を足す → 2 ∧ 標準エラーに鍵の名と「組み立て時の憲法の値域と違う」
 //!
 //! 入口の面（便 16・20〜22）の歯は `face_index.rs` へ移した（便 26・docs/design/delivery-26.md §1 (c)）。
 //! 図の章（便 34・FR15）: 写し（srs.yaml・図 1 枚）の toc の 09 と figure-panel と型の名札と根拠のリンク・図なしの面は
@@ -412,6 +414,64 @@ fn face_unknown_when_a_tier_is_outside_the_table() {
             })
         },
         plain_out,
+    );
+}
+
+/// 実の設計文書の置き場の写し（面が読む 5 file）に変異を 1 つ当て、`--write` = 2 ∧「まだ分からない」∧ 標準エラーが
+/// 各 `wants` を含む ∧ 出力先が出来ていない（便 50 §1 (e) 3）。
+fn real_unknown(case: &str, from: &str, to: &str, wants: &[&str]) {
+    let td = temp_dir(&format!("real-unknown-{case}"));
+    let work = td.join("src");
+    fs::create_dir_all(&work).unwrap();
+    for name in [
+        "constitution.yaml",
+        "rules.yaml",
+        "vocabulary.yaml",
+        "srs.yaml",
+        "ceiling.yaml",
+    ] {
+        fs::copy(design_intent().join(name), work.join(name)).unwrap();
+    }
+    edit(&work.join("constitution.yaml"), |t| t.replacen(from, to, 1));
+    let out = td.join("never.html");
+    let run = folio_face("constitution", &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face"), 2, "{case}: {}", stderr(&run));
+    assert!(
+        stderr(&run).contains("まだ分からない"),
+        "{case}: {}",
+        stderr(&run)
+    );
+    for want in wants {
+        assert!(
+            stderr(&run).contains(want),
+            "{case}: 「{want}」が無い: {}",
+            stderr(&run)
+        );
+    }
+    assert!(!exists, "{case}: 導出できないのに出力先に書いた");
+}
+
+/// 読んでいる置き場の憲法の値域に値が足された = 組み立てた版とずれる（便 50 §1 (d)）。
+#[test]
+fn face_unknown_when_an_enum_value_is_added_to_the_sources() {
+    real_unknown(
+        "enum-value-added",
+        "    pattern: [ubiquitous, event, state, unwanted, optional]\n",
+        "    pattern: [ubiquitous, event, state, unwanted, optional, sometimes]\n",
+        &["schema.enums.pattern", "組み立て時の憲法の値域と違う"],
+    );
+}
+
+/// 読んでいる置き場の schema.enums に組み立てた版に無い鍵が在る（便 50 §1 (d)）。
+#[test]
+fn face_unknown_when_an_enum_key_is_not_in_the_built_constitution() {
+    real_unknown(
+        "enum-key-unknown",
+        "    retreat_kind: [spike, measure, ruling]\n",
+        "    retreat_kind: [spike, measure, ruling]\n    mood: [calm, tense]\n",
+        &["schema.enums.mood", "組み立て時の憲法の値域と違う"],
     );
 }
 

@@ -2,7 +2,9 @@
 //! 導出して書く（--write）・検査する（--check）。生成器は憲法の面（`face_constitution.rs`）・要件書の面
 //! （`face_srs.rs`）・入口の面（`face_index.rs`・便 16・delivery-16.md §1 (b)）の 3 つ。
 //! この file は命令の口（面の名の解決・正本の読み・3 値と文言）と、生成器が共有する口（木を辿る型 X・escape・
-//! 名札の表・値の読める形・小窓・面の骨格・図の枠）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
+//! 名札・値の読める形・小窓・面の骨格・図の枠）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
+//! 憲法の値域の名札（便 50・ADR-11 決定 (4)②）は、組み立て時に憲法の正本から導出した型（`constitution_enums`）への
+//! 網羅の場合分けで持つ = 値域の値の字面を鍵にした表を持たない（値が足されても消えても組み立てが通らない）。
 //! 図の枠（便 34・P-2.1）: 図の節（figures）の 1 枚の枠（figure-panel・fig-title・図の本体・figcaption）は
 //! 設計ノート・判断の記録・要件書の 3 面が同じ字面で出すので、`figure_body` と `figure_panel` をここに 1 つ持つ。
 //! 天井の名札（便 40・delivery-40.md §1 (c)(d)・ADR-8 決定 (4)・P-3.3）: 5 面の site-bar に床の名札（freshness-stamp）の
@@ -12,6 +14,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::constitution_enums as ce;
 use crate::figure;
 use crate::findings;
 use crate::parts::catalog::Component;
@@ -272,6 +275,21 @@ impl<'a> X<'a> {
         ))
     }
 
+    /// 憲法の値域の表引き（正本の値 → 導出した型・便 50 (b)）。`from_name` は型の関数 from_name。値域に無い値は Err
+    /// （文言は `lookup` と同じ）。
+    pub fn parse<T>(&self, from_name: fn(&str) -> Option<T>, what: &str) -> R<T> {
+        if let Value::Str(s) = self.v
+            && let Some(t) = from_name(s)
+        {
+            return Ok(t);
+        }
+        Err(format!(
+            "{}: {what} の表に無い値「{}」",
+            self.at,
+            self.v.py_str()
+        ))
+    }
+
     /// 機械のための面の字面（正本の値のまま・scalar だけ）。
     pub fn raw(&self) -> R<String> {
         match self.v {
@@ -434,7 +452,10 @@ pub fn rationale(x: &X<'_>) -> R<String> {
         .map(|r| {
             Ok(format!(
                 "{}: {}",
-                r.f("kind")?.lookup(RATIONALE_KIND, "根拠の種別")?,
+                rationale_kind_label(
+                    r.f("kind")?
+                        .parse(ce::RationaleKind::from_name, "根拠の種別")?
+                ),
                 r.ef("ref")?
             ))
         })
@@ -442,7 +463,10 @@ pub fn rationale(x: &X<'_>) -> R<String> {
         .join("／"))
 }
 
-// ── 名札の表（β・表に無い値は導出できない）──
+// ── 名札（β・憲法の値域の名札は導出した型への網羅の場合分け・便 50）──
+// 憲法の値域（`constitution_enums`・組み立て時に憲法の正本から導出）の名札は、型の値の全部を並べた場合分けで持ち、
+// その他を受ける枝を置かない = 憲法の側で値が足されても消えても組み立てが通らない（ADR-11 決定 (4)②）。
+// 値域の値の字面（must-not・ask-first など）を鍵にした表は持たない。
 
 /// 段の名札。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -458,10 +482,10 @@ pub struct Tier {
     pub remove_html: &'static str,
 }
 
-pub const TIERS: &[(&str, Tier)] = &[
-    (
-        "always",
-        Tier {
+/// 段 → 名札。
+pub fn tier_label(t: ce::Tier) -> Tier {
+    match t {
+        ce::Tier::Always => Tier {
             name: "いつも守る",
             en: "Always",
             class: "tier-always",
@@ -470,10 +494,7 @@ pub const TIERS: &[(&str, Tier)] = &[
             remove: "憲法の改訂（§6: 判断の記録 + 持ち主の承認）",
             remove_html: "憲法の改訂（<a class=\"xref\" href=\"#s6\">§6</a>: 判断の記録 + 持ち主の承認）",
         },
-    ),
-    (
-        "ask-first",
-        Tier {
+        ce::Tier::AskFirst => Tier {
             name: "確認してから変える",
             en: "Ask-first",
             class: "tier-askfirst",
@@ -482,10 +503,7 @@ pub const TIERS: &[(&str, Tier)] = &[
             remove: "その場の持ち主の確認",
             remove_html: "その場の持ち主の確認",
         },
-    ),
-    (
-        "never",
-        Tier {
+        ce::Tier::Never => Tier {
             name: "絶対にやらない",
             en: "Never",
             class: "tier-never",
@@ -494,56 +512,119 @@ pub const TIERS: &[(&str, Tier)] = &[
             remove: "憲法の改訂（確認では解けない）",
             remove_html: "<a class=\"xref\" href=\"#s6\">憲法の改訂</a>（確認では解けない）",
         },
-    ),
-];
+    }
+}
 
-/// 段の表引き（表に無い値は Err）。
+/// 段の表引き（値域に無い値は Err）。
 pub fn tier_of(key: &str) -> R<Tier> {
-    TIERS
-        .iter()
-        .find(|(k, _)| *k == key)
-        .map(|(_, t)| *t)
+    ce::Tier::from_name(key)
+        .map(tier_label)
         .ok_or_else(|| format!("段 の表に無い値「{key}」"))
 }
 
-pub const STRENGTH: &[(&str, &str)] = &[
-    ("must", "MUST"),
-    ("must-not", "MUST NOT"),
-    ("should", "SHOULD"),
-];
-pub const PATTERN: &[(&str, &str)] = &[
-    ("ubiquitous", "つねに"),
-    ("event", "〜のとき"),
-    ("state", "〜のあいだ"),
-    ("unwanted", "〜になったら"),
-    ("optional", "〜ならば"),
-];
-pub const BINDS: &[(&str, &str)] = &[("tool", "道具"), ("practice", "作法"), ("both", "両方")];
-pub const MECH_KIND: &[(&str, &str)] = &[
-    ("reject", "機械が拒む"),
-    ("build-check", "生成時の検査"),
-    ("human-review", "人が目で確かめる"),
-    ("none", "なし"),
-];
-pub const LIVE: &[(&str, &str)] = &[
-    ("now", "いま動く"),
-    ("M0", "M0 で動く"),
-    ("delivery-0", "便 0 で動く"),
-    ("M1", "M1 で動く"),
-    ("adr", "判断の記録の欄の決まりの後"),
-];
-pub const STAGE: &[(&str, &str)] = &[("in-loop", "編集時"), ("post", "事後")];
-pub const POLARITY: &[(&str, &str)] = &[("fail-open", "開く"), ("fail-closed", "閉じる")];
-pub const RATIONALE_KIND: &[(&str, &str)] = &[
-    ("v1-incident", "v1 の実害"),
-    ("scribe2-article", "scribe2 の条"),
-    ("folio2-ruling", "持ち主の裁定"),
-];
-pub const RETREAT_KIND: &[(&str, &str)] = &[
-    ("spike", "試して測る"),
-    ("measure", "測る"),
-    ("ruling", "持ち主に問う"),
-];
+/// 強度 → 規範の語。
+pub fn strength_label(s: ce::Strength) -> &'static str {
+    match s {
+        ce::Strength::Must => "MUST",
+        ce::Strength::MustNot => "MUST NOT",
+        ce::Strength::Should => "SHOULD",
+    }
+}
+
+/// 強度 → 意味（要件書の凡例）。
+pub fn strength_meaning(s: ce::Strength) -> &'static str {
+    match s {
+        ce::Strength::Must => "必ず守る",
+        ce::Strength::MustNot => "決してしない",
+        ce::Strength::Should => "強い推奨（外すなら理由が要る）",
+    }
+}
+
+/// 強度 → 色の class（prio）。
+pub fn strength_prio(s: ce::Strength) -> &'static str {
+    match s {
+        ce::Strength::Must | ce::Strength::MustNot => "must",
+        ce::Strength::Should => "should",
+    }
+}
+
+/// 型（EARS の pattern）→ 名札。
+pub fn pattern_label(p: ce::Pattern) -> &'static str {
+    match p {
+        ce::Pattern::Ubiquitous => "つねに",
+        ce::Pattern::Event => "〜のとき",
+        ce::Pattern::State => "〜のあいだ",
+        ce::Pattern::Unwanted => "〜になったら",
+        ce::Pattern::Optional => "〜ならば",
+    }
+}
+
+/// 縛る相手 → 名札。
+pub fn binds_label(b: ce::Binds) -> &'static str {
+    match b {
+        ce::Binds::Tool => "道具",
+        ce::Binds::Practice => "作法",
+        ce::Binds::Both => "両方",
+    }
+}
+
+/// 機構の種別 → 名札。
+pub fn mechanism_kind_label(k: ce::MechanismKind) -> &'static str {
+    match k {
+        ce::MechanismKind::Reject => "機械が拒む",
+        ce::MechanismKind::BuildCheck => "生成時の検査",
+        ce::MechanismKind::HumanReview => "人が目で確かめる",
+        ce::MechanismKind::None => "なし",
+    }
+}
+
+/// 機構の live → 名札。
+pub fn mechanism_live_label(l: ce::MechanismLive) -> &'static str {
+    match l {
+        ce::MechanismLive::Now => "いま動く",
+        ce::MechanismLive::M0 => "M0 で動く",
+        ce::MechanismLive::Delivery0 => "便 0 で動く",
+        ce::MechanismLive::M1 => "M1 で動く",
+        ce::MechanismLive::Adr => "判断の記録の欄の決まりの後",
+    }
+}
+
+/// stage → 名札。
+pub fn stage_label(s: ce::Stage) -> &'static str {
+    match s {
+        ce::Stage::InLoop => "編集時",
+        ce::Stage::Post => "事後",
+    }
+}
+
+/// polarity → 名札。
+pub fn polarity_label(p: ce::Polarity) -> &'static str {
+    match p {
+        ce::Polarity::FailOpen => "開く",
+        ce::Polarity::FailClosed => "閉じる",
+    }
+}
+
+/// 根拠の種別 → 名札。
+pub fn rationale_kind_label(k: ce::RationaleKind) -> &'static str {
+    match k {
+        ce::RationaleKind::V1Incident => "v1 の実害",
+        ce::RationaleKind::Scribe2Article => "scribe2 の条",
+        ce::RationaleKind::Folio2Ruling => "持ち主の裁定",
+    }
+}
+
+/// 撤退条件の種別 → 名札（憲法の面・判断の記録の面の名札は `face_adr.rs`）。
+pub fn retreat_kind_label(k: ce::RetreatKind) -> &'static str {
+    match k {
+        ce::RetreatKind::Spike => "試して測る",
+        ce::RetreatKind::Measure => "測る",
+        ce::RetreatKind::Ruling => "持ち主に問う",
+    }
+}
+
+// ── 名札の表（β・値域に依らない表・表に無い値は導出できない）──
+
 pub const DOC_STATUS: &[(&str, &str)] = &[
     ("effective", "発効・拘束力あり"),
     ("draft", "未承認・拘束力なし"),
@@ -560,14 +641,6 @@ pub const RULE_KIND: &[(&str, &str)] = &[
     ("detect", "記録のみ"),
     ("human-review", "人が守る作法"),
 ];
-/// 強度の意味（要件書の凡例）。
-pub const STRENGTH_MEANING: &[(&str, &str)] = &[
-    ("must", "必ず守る"),
-    ("must-not", "決してしない"),
-    ("should", "強い推奨（外すなら理由が要る）"),
-];
-/// 強度 → 色の class（prio）。
-pub const PRIO: &[(&str, &str)] = &[("must", "must"), ("must-not", "must"), ("should", "should")];
 /// 確かめ方の 1 語の名札（test+inspection は 2 つを「 + 」で繋ぐ・関数 method_label）。
 pub const METHOD: &[(&str, &str)] = &[
     ("test", "実際に動かして確かめる（Test）"),
@@ -993,7 +1066,197 @@ mod face_tests {
         assert!(tier_of("sometimes").is_err());
         assert!(tier_of("Always").is_err());
         let v = Value::Str("sometimes".into());
-        assert!(X::root(&v, "t").lookup(TIERS, "段").is_err());
+        assert!(X::root(&v, "t").parse(ce::Tier::from_name, "段").is_err());
+    }
+
+    /// 導出した型の全部を回し、name で引いた（値の字面・名札）の対の列。
+    fn pairs<T: Copy>(
+        all: &[T],
+        name: fn(T) -> &'static str,
+        label: fn(T) -> &'static str,
+    ) -> Vec<(&'static str, &'static str)> {
+        all.iter().map(|v| (name(*v), label(*v))).collect()
+    }
+
+    /// 凍結の針（P-10.1・便 50 §1 (e) 1）: 11 枚の文字列の名札を、便 50 の前の表の字面と順で固定する。
+    #[test]
+    fn face_labels_are_frozen_needles_for_the_string_tables() {
+        assert_eq!(
+            pairs(&ce::Strength::ALL, ce::Strength::name, strength_label),
+            [
+                ("must", "MUST"),
+                ("must-not", "MUST NOT"),
+                ("should", "SHOULD")
+            ]
+        );
+        assert_eq!(
+            pairs(&ce::Strength::ALL, ce::Strength::name, strength_meaning),
+            [
+                ("must", "必ず守る"),
+                ("must-not", "決してしない"),
+                ("should", "強い推奨（外すなら理由が要る）")
+            ]
+        );
+        assert_eq!(
+            pairs(&ce::Strength::ALL, ce::Strength::name, strength_prio),
+            [("must", "must"), ("must-not", "must"), ("should", "should")]
+        );
+        assert_eq!(
+            pairs(&ce::Pattern::ALL, ce::Pattern::name, pattern_label),
+            [
+                ("ubiquitous", "つねに"),
+                ("event", "〜のとき"),
+                ("state", "〜のあいだ"),
+                ("unwanted", "〜になったら"),
+                ("optional", "〜ならば")
+            ]
+        );
+        assert_eq!(
+            pairs(&ce::Binds::ALL, ce::Binds::name, binds_label),
+            [("tool", "道具"), ("practice", "作法"), ("both", "両方")]
+        );
+        assert_eq!(
+            pairs(
+                &ce::MechanismKind::ALL,
+                ce::MechanismKind::name,
+                mechanism_kind_label
+            ),
+            [
+                ("reject", "機械が拒む"),
+                ("build-check", "生成時の検査"),
+                ("human-review", "人が目で確かめる"),
+                ("none", "なし")
+            ]
+        );
+        assert_eq!(
+            pairs(
+                &ce::MechanismLive::ALL,
+                ce::MechanismLive::name,
+                mechanism_live_label
+            ),
+            [
+                ("now", "いま動く"),
+                ("M0", "M0 で動く"),
+                ("delivery-0", "便 0 で動く"),
+                ("M1", "M1 で動く"),
+                ("adr", "判断の記録の欄の決まりの後")
+            ]
+        );
+        assert_eq!(
+            pairs(&ce::Stage::ALL, ce::Stage::name, stage_label),
+            [("in-loop", "編集時"), ("post", "事後")]
+        );
+        assert_eq!(
+            pairs(&ce::Polarity::ALL, ce::Polarity::name, polarity_label),
+            [("fail-open", "開く"), ("fail-closed", "閉じる")]
+        );
+        assert_eq!(
+            pairs(
+                &ce::RationaleKind::ALL,
+                ce::RationaleKind::name,
+                rationale_kind_label
+            ),
+            [
+                ("v1-incident", "v1 の実害"),
+                ("scribe2-article", "scribe2 の条"),
+                ("folio2-ruling", "持ち主の裁定")
+            ]
+        );
+        assert_eq!(
+            pairs(
+                &ce::RetreatKind::ALL,
+                ce::RetreatKind::name,
+                retreat_kind_label
+            ),
+            [
+                ("spike", "試して測る"),
+                ("measure", "測る"),
+                ("ruling", "持ち主に問う")
+            ]
+        );
+    }
+
+    /// 凍結の針（P-10.1・便 50 §1 (e) 1）: 段の名札（構造体 Tier）を便 50 の前の表の字面と順で固定する。
+    #[test]
+    fn face_labels_tier_is_a_frozen_needle() {
+        // 行 = （値の字面・[name, en, class, color, meaning, remove, remove_html]）
+        let rows: Vec<(&str, [&str; 7])> = ce::Tier::ALL
+            .iter()
+            .map(|k| {
+                let t = tier_label(*k);
+                (
+                    k.name(),
+                    [t.name, t.en, t.class, t.color, t.meaning, t.remove, t.remove_html],
+                )
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                (
+                    "always",
+                    [
+                        "いつも守る",
+                        "Always",
+                        "tier-always",
+                        "ok",
+                        "道具も AI も、毎回これに従う",
+                        "憲法の改訂（§6: 判断の記録 + 持ち主の承認）",
+                        "憲法の改訂（<a class=\"xref\" href=\"#s6\">§6</a>: 判断の記録 + 持ち主の承認）",
+                    ],
+                ),
+                (
+                    "ask-first",
+                    [
+                        "確認してから変える",
+                        "Ask-first",
+                        "tier-askfirst",
+                        "warn",
+                        "やってよいが、実行前に持ち主へ確認する",
+                        "その場の持ち主の確認",
+                        "その場の持ち主の確認",
+                    ],
+                ),
+                (
+                    "never",
+                    [
+                        "絶対にやらない",
+                        "Never",
+                        "tier-never",
+                        "bad",
+                        "確認があってもやらない",
+                        "憲法の改訂（確認では解けない）",
+                        "<a class=\"xref\" href=\"#s6\">憲法の改訂</a>（確認では解けない）",
+                    ],
+                ),
+            ]
+        );
+    }
+
+    /// 表引きの口（便 50 (b)）: 値域の値は導出した型へ・外は Err で文言は lookup と同じ形。
+    #[test]
+    fn face_labels_parse_reads_the_derived_type_and_rejects_the_outside() {
+        let v = Value::Str("must-not".into());
+        assert_eq!(
+            X::root(&v, "s")
+                .parse(ce::Strength::from_name, "強度")
+                .unwrap(),
+            ce::Strength::MustNot
+        );
+        let v = Value::Str("may".into());
+        assert_eq!(
+            X::root(&v, "srs.yaml.requirements[0].strength")
+                .parse(ce::Strength::from_name, "強度")
+                .unwrap_err(),
+            "srs.yaml.requirements[0].strength: 強度 の表に無い値「may」"
+        );
+        let v = Value::Int("1".into());
+        assert_eq!(
+            X::root(&v, "s")
+                .parse(ce::Strength::from_name, "強度")
+                .unwrap_err(),
+            X::root(&v, "s").lookup(DOC_STATUS, "強度").unwrap_err()
+        );
     }
 
     #[test]
