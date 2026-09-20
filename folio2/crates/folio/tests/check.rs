@@ -315,9 +315,9 @@ fn check_srs_figure_id_shared_with_a_requirement_fails() {
 
 // ── 規則の表の最上位の節は床の定数から（便 51） ──
 
-/// 実の rules.yaml の写しの schema.top_level の行（変異の当て先）。
-const RULES_TOP_LEVEL_LINE: &str =
-    "\n  top_level: [schema, thresholds, discipline]   # 未知の節は検査で落とす（N-3）";
+/// 実の rules.yaml の写しの schema.top_level の行（変異の当て先）。行末の注釈の有無に依らない形
+/// （実の正本の schema の節は生成区間になり、注釈は欄 top_level_note へ移った）。
+const RULES_TOP_LEVEL_LINE: &str = "\n  top_level: [schema, thresholds, discipline]";
 
 /// file の側で schema.top_level に extras を足し、最上位に節 extras を足しても、床は定数の一覧で数える＝
 /// 不合格 1・違反は「未知の節」の 1 件だけで extras を含む（本便の前の main では合格してしまう歯）。
@@ -326,7 +326,7 @@ fn check_rules_section_added_via_the_file_top_level_is_still_unknown() {
     let w = Work::new("rules-extras");
     w.mutate_rules(
         RULES_TOP_LEVEL_LINE,
-        "\n  top_level: [schema, thresholds, discipline, extras]   # 未知の節は検査で落とす（N-3）",
+        "\n  top_level: [schema, thresholds, discipline, extras]",
     );
     let before = fs::read_to_string(w.rules()).unwrap();
     let sep = if before.ends_with('\n') { "" } else { "\n" };

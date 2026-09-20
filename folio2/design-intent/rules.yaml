@@ -2,28 +2,37 @@
 # G14=A: design-intent/rules.yaml。2 節: thresholds = 閾値行 R-n（機械が測って止める値）/ discipline = 開発規律行 D-n（人が守る作法・G2=C）。
 # 変更手続き: 行の追加・変更は P-17（裁定 id と時刻を行に付ける）。初版の行は憲法の発効の承認を裁定とみなす（P-17.3）＝ ruling / ruled_at が null の行は発効時に埋める。
 # 読み方は schema 節が持つ（コメントは規則ではない）。
+# schema 節は生成区間（判断の記録 ADR-11 決定 (3)(イ)・(4)②）= 正本は実装の型付きの定数（規則の表の床の木）で、ここはその写し。手で直さず folio schema --write が書く。行（R-n・D-n）は人が書く。持ち主の承認 2026-09-20（逐語「承認する」・裁定 id f2-648 notes 2026-09-20 11:05 JST）。
 
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
 schema:
   version: 1
-  top_level: [schema, thresholds, discipline]   # 未知の節は検査で落とす（N-3）
+  top_level: [schema, thresholds, discipline]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。thresholds と discipline は人が書き、schema は生成区間
   threshold_row:
     required: [id, article, what, value, kind, status, ruling, ruled_at, stage]
     optional: [basis, projection, same_failure, population, note]
-  discipline_row:
-    required: [id, article, what, kind, status, ruling, ruled_at]
-    optional: [note]
+  discipline_row: {required: [id, article, what, kind, status, ruling, ruled_at], optional: [note]}
   enums:
     kind: [deny, build-check, detect, human-review]
     status: [仮, 凍結, 未定]
     stage: [in-loop, post]
+  enums_note: stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）
   kind_meaning:
     deny: 機械が測って、超過なら落とす（憲法の reject / build-check に対応）
     build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）
     detect: 記録・起票のみ・止めない（憲法の none に対応）
     human-review: 人が守る作法（憲法の human-review に対応・D 行）
-  kind_map_to_constitution: {deny: [reject, build-check], build-check: [build-check], detect: [none]}   # R 行にだけ適用する（D 行は作法＝条の機構とは別）
-  excluded: {what: [時間（「60 分以内」）, 費用（「300k token 以下」）], why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。}
+  kind_map_to_constitution:
+    deny: [reject, build-check]
+    build-check: [build-check]
+    detect: [none]
+  kind_map_to_constitution_note: R 行にだけ適用する（D 行は作法＝条の機構とは別）。右辺は憲法の値域 mechanism_kind の値
+  excluded:
+    what: [時間（「60 分以内」）, 費用（「300k token 以下」）]
+    why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。
   reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。
+# folio:schema:end
 
 thresholds:
   - {id: R-1, article: N-5, what: AI へ常時渡す説明文の合計（folio2 が所有する AI 係と skill の名前 + 説明）, value: "2,000 字 以下", kind: deny, status: 仮, ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）, ruled_at: 2026-09-12, stage: post, population: folio2 が所有する係と skill だけ。口座共通（home 配下）の分は数えて記録する（detect）が落とさない, note: "測り方を凍結してから再計測（spike 2）。day-0 は folio2 の settings が v1 plugin（agent 36 本）を載せているため大きく超過＝M0 で v1 plugin を外してから測る"}
