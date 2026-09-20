@@ -1,6 +1,13 @@
 //! `folio parts` の歯（便 13・docs/design/delivery-13.md §1 (c)）。
 //! 生成した 3 面（folio build を一時 dir へ・手書きの見本は退役済み 2026-09-18）で合格・目録外の class / 部品 / 面に置けない部品 / 許されない行内の様式で不合格（変異は写しに 1 つずつ）・
 //! 読めない入力 6 つで終了 2・独立した凍結 fixture（tests/fixtures/floor/）の合格と不合格と --print の byte 一致。
+//! 便 52（delivery-52.md §1 (d) 3・4）: build.rs を path で取り込み、純粋な関数 `parts_catalog`（部品目録の文字列 →
+//! 導出した Rust の source か理由の文）を直に呼ぶ = 実の部品目録で Ok・変異 3 つがそれぞれ Err。実行時の一致 = 部品目録の
+//! 上限か図の型の名札を変えた写しで --check が「まだ分からない」。
+
+#[allow(dead_code)]
+#[path = "../build.rs"]
+mod build;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -300,6 +307,114 @@ fn parts_check_is_unknown_when_the_catalog_differs_from_build_time() {
         "2〜4 を数えている: {}",
         stdout(&out)
     );
+}
+
+// ── 部品目録の上限と図の型の名札（便 52）──
+
+fn catalog_text() -> String {
+    fs::read_to_string(design_intent().join("preview/parts.json")).expect("部品目録が読めない")
+}
+
+/// 部品目録の 1 か所を書き換えた変異（置き換えが当たらなければ歯の側の誤り）。
+fn mutate(text: &str, from: &str, to: &str) -> String {
+    assert_eq!(
+        text.matches(from).count(),
+        1,
+        "変異の的「{from}」が部品目録に 1 つでない"
+    );
+    text.replace(from, to)
+}
+
+/// 変異した部品目録の写しを一時 dir の preview/ に置き、`--check --dir <一時 dir>` で撃つ。
+fn check_with_mutated_catalog(case: &str, from: &str, to: &str) -> Output {
+    let td = temp_dir(case);
+    fs::create_dir_all(td.join("preview")).unwrap();
+    fs::write(
+        td.join("preview/parts.json"),
+        mutate(&catalog_text(), from, to),
+    )
+    .unwrap();
+    let out = parts_check(&td, &[]);
+    let _ = fs::remove_dir_all(&td);
+    out
+}
+
+const TYPE_IDS_TABLE: &str = "    \"type_ids\": {\n      \"archify-architecture\": \"構成図（architecture）\",\n      \"archify-workflow\": \"手順図（workflow）\",\n      \"archify-sequence\": \"順序図（sequence）\",\n      \"archify-dataflow\": \"流れ図（dataflow）\",\n      \"archify-lifecycle\": \"状態図（lifecycle）\"\n    },\n";
+
+#[test]
+fn parts_catalog_derives_limits_and_figure_type_labels_from_the_real_catalog() {
+    let source = build::parts_catalog(&catalog_text()).expect("実の部品目録から導出できない");
+    assert!(
+        source.contains("pub const PIPELINE_RAIL_MAX_NODES: usize = "),
+        "PIPELINE_RAIL_MAX_NODES が無い"
+    );
+    assert!(
+        source.contains("pub const STATE_STRIP_MAX_NODES: usize = "),
+        "STATE_STRIP_MAX_NODES が無い"
+    );
+    assert!(
+        source.contains("pub const CONTEXT_BAND_MAX_PER_BAND: usize = "),
+        "CONTEXT_BAND_MAX_PER_BAND が無い"
+    );
+    assert!(
+        source.contains("pub const LIMITS: [(&str, &str, usize); "),
+        "LIMITS が無い"
+    );
+    assert!(
+        source.contains("pub const FIGURE_TYPE_LABELS: [(&str, &str); "),
+        "FIGURE_TYPE_LABELS が無い"
+    );
+    assert!(
+        source.contains("pub enum Component {"),
+        "型 4 つの出力が無い"
+    );
+}
+
+#[test]
+fn parts_catalog_rejects_a_limit_that_is_a_string() {
+    let text = mutate(&catalog_text(), "\"max_nodes\": 7", "\"max_nodes\": \"7\"");
+    let err = build::parts_catalog(&text).expect_err("文字列の上限なのに Ok");
+    assert!(
+        err.contains("pipeline-rail") && err.contains("max_nodes"),
+        "{err}"
+    );
+}
+
+#[test]
+fn parts_catalog_rejects_a_type_id_outside_the_figure_type_enum() {
+    let text = mutate(
+        &catalog_text(),
+        "\"archify-architecture\": \"構成図",
+        "\"archify-tower\": \"構成図",
+    );
+    let err = build::parts_catalog(&text).expect_err("figure_type_enum に無い鍵なのに Ok");
+    assert!(
+        err.contains("archify-tower") && err.contains("figure_type_enum"),
+        "{err}"
+    );
+}
+
+#[test]
+fn parts_catalog_rejects_type_ids_written_as_a_list() {
+    let text = mutate(
+        &catalog_text(),
+        TYPE_IDS_TABLE,
+        "    \"type_ids\": [\n      \"archify-architecture\"\n    ],\n",
+    );
+    let err = build::parts_catalog(&text).expect_err("type_ids が一覧なのに Ok");
+    assert!(err.contains("type_ids"), "{err}");
+}
+
+#[test]
+fn parts_check_is_unknown_when_a_catalog_limit_differs_from_build_time() {
+    let out = check_with_mutated_catalog("limit-drift", "\"max_nodes\": 7", "\"max_nodes\": 8");
+    assert_unknown(&out, "limit-drift", "組み立て時の部品目録と違う");
+}
+
+#[test]
+fn parts_check_is_unknown_when_a_figure_type_label_differs_from_build_time() {
+    let out = check_with_mutated_catalog("label-drift", "手順図（workflow）", "手續図（workflow）");
+    assert_unknown(&out, "label-drift", "組み立て時の部品目録と違う");
 }
 
 // ── 独立した凍結 fixture ──

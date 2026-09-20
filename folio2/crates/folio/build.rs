@@ -2,6 +2,8 @@
 //! 部品・図の型・棚の型・行内の様式に許す性質 の閉じた一覧（enum）を Rust の source 1 本として `OUT_DIR` に書く。
 //! 便 49（ADR-11 決定 (4)②）から憲法の正本 `design-intent/constitution.yaml` の schema.enums も同じ型で導出し、
 //! 値域の閉じた一覧をもう 1 本 `OUT_DIR` に書く（鍵の一覧は file から・人は鍵も値も書かない）。
+//! 便 52（ADR-11 決定 (4)③）から部品目録の上限（部品ごとの鍵が max_ で始まる欄・どの欄かは書き並べない）と
+//! 図の型の名札（figure_body_classes.type_ids）も同じ source に定数として導出する（面の生成器は手書きの写しを持たない）。
 //! 人は型の一覧を書かない。導出できない部品目録・憲法は組み立てを失敗させる（黙って空の一覧にしない）。
 
 use std::collections::HashSet;
@@ -151,7 +153,16 @@ fn type_name(key: &str) -> Result<String, String> {
 /// 部品目録を読んで Rust の source を組む。
 fn derive(path: &Path) -> Result<String, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("読めない（{e}）"))?;
-    let docs = YamlLoader::load_from_str(&text).map_err(|e| format!("読めない（{e}）"))?;
+    parts_catalog(&text)
+}
+
+/// 部品目録の文字列を受け、閉じた一覧 4 つ（Component・FigureType・ShelfType・StyleProp）と、便 52 (a) の上限の定数
+/// （部品ごとの鍵が max_ で始まる欄・file の順・名は部品の名と欄の名を大文字にして「_」で繋ぐ = pipeline-rail の
+/// max_nodes は PIPELINE_RAIL_MAX_NODES・型は usize）・その（部品の名・欄の名・値）の対の列 LIMITS・図の型の名札の対の列
+/// FIGURE_TYPE_LABELS（figure_body_classes.type_ids・file の順）を Rust の source に組む純粋な関数。
+/// 上限の値が 0 以上の整数でない・type_ids が表でない・値が文字列でない・鍵が figure_type_enum に無い、は Err。
+pub fn parts_catalog(text: &str) -> Result<String, String> {
+    let docs = YamlLoader::load_from_str(text).map_err(|e| format!("読めない（{e}）"))?;
     let root = match docs.as_slice() {
         [doc] => doc,
         _ => return Err("文書が 1 つでない".to_string()),
@@ -163,12 +174,15 @@ fn derive(path: &Path) -> Result<String, String> {
         .and_then(Yaml::as_hash)
         .ok_or_else(|| "components が表でない".to_string())?;
     let mut parts: Vec<(String, Vec<String>)> = Vec::with_capacity(components.len());
+    // 上限（部品の名・欄の名・値・定数の名）の列（file の順・どの欄かは書き並べない）
+    let mut limits: Vec<(&str, &str, i64, String)> = Vec::new();
+    let mut limit_names = HashSet::new();
     for (name, body) in components.iter() {
         let name = name
             .as_str()
             .ok_or_else(|| "components のキーが文字列でない".to_string())?;
-        let faces = body
-            .as_hash()
+        let fields = body.as_hash();
+        let faces = fields
             .and_then(|m| m.get(&Yaml::String("faces".to_string())))
             .and_then(Yaml::as_vec)
             .ok_or_else(|| format!("部品「{name}」が faces の一覧を持たない"))?;
@@ -181,11 +195,51 @@ fn derive(path: &Path) -> Result<String, String> {
             })
             .collect::<Result<Vec<_>, _>>()?;
         parts.push((name.to_string(), faces));
+        for (key, value) in fields.into_iter().flatten() {
+            let Some(key) = key.as_str().filter(|k| k.starts_with("max_")) else {
+                continue;
+            };
+            let n = match value {
+                Yaml::Integer(n) if *n >= 0 => *n,
+                _ => return Err(format!("部品「{name}」の {key} が 0 以上の整数でない")),
+            };
+            let konst = limit_name(name, key)?;
+            if !limit_names.insert(konst.clone()) {
+                return Err(format!(
+                    "部品「{name}」の {key}: 2 つの欄が同じ定数の名「{konst}」に潰れる"
+                ));
+            }
+            limits.push((name, key, n, konst));
+        }
     }
 
     let figure_types = string_list(root, "figure_type_enum")?;
     let shelf_types = string_list(root, "shelf_type_enum")?;
     let style_props = string_list(root, "style_props_allowed")?;
+
+    // 図の型の名札（figure_body_classes.type_ids・file の順・鍵は figure_type_enum に在る）
+    let type_ids = root
+        .as_hash()
+        .and_then(|m| m.get(&Yaml::String("figure_body_classes".to_string())))
+        .and_then(Yaml::as_hash)
+        .and_then(|m| m.get(&Yaml::String("type_ids".to_string())))
+        .and_then(Yaml::as_hash)
+        .ok_or_else(|| "figure_body_classes.type_ids が表でない".to_string())?;
+    let mut labels: Vec<(&str, &str)> = Vec::with_capacity(type_ids.len());
+    for (kind, label) in type_ids.iter() {
+        let kind = kind
+            .as_str()
+            .ok_or_else(|| "figure_body_classes.type_ids の鍵が文字列でない".to_string())?;
+        if !figure_types.iter().any(|t| t == kind) {
+            return Err(format!(
+                "figure_body_classes.type_ids の鍵「{kind}」が figure_type_enum に無い"
+            ));
+        }
+        let label = label
+            .as_str()
+            .ok_or_else(|| format!("figure_body_classes.type_ids.{kind} が文字列でない"))?;
+        labels.push((kind, label));
+    }
 
     let mut out = String::new();
     out.push_str("// 組み立て時に build.rs が部品目録（design-intent/preview/parts.json）から導出した。人は書かない。\n");
@@ -228,11 +282,47 @@ fn derive(path: &Path) -> Result<String, String> {
         "StyleProp",
         &refs(&style_props),
     )?;
+    // 上限（便 52 (a) 1）: 部品ごとに定数 1 つずつ + （部品の名・欄の名・値）の対の列 LIMITS
+    for (name, key, n, konst) in &limits {
+        out.push_str(&format!(
+            "/// 部品目録の上限（components.{name}.{key}）。\npub const {konst}: usize = {n};\n"
+        ));
+    }
+    out.push_str(&format!(
+        "/// 部品目録の上限の（部品の名・欄の名・値）の対（鍵が max_ で始まる欄・目録の順・実行時の一致に使う）。\npub const LIMITS: [(&str, &str, usize); {}] = [\n",
+        limits.len()
+    ));
+    for (name, key, _, konst) in &limits {
+        out.push_str(&format!("    ({name:?}, {key:?}, {konst}),\n"));
+    }
+    out.push_str("];\n");
+    // 図の型の名札（便 52 (a) 2）
+    out.push_str(&format!(
+        "/// 図の型の名札（部品目録の figure_body_classes.type_ids・目録の順・型の字面と名札の対）。\npub const FIGURE_TYPE_LABELS: [(&str, &str); {}] = [\n",
+        labels.len()
+    ));
+    for (kind, label) in &labels {
+        out.push_str(&format!("    ({kind:?}, {label:?}),\n"));
+    }
+    out.push_str("];\n");
     Ok(out)
 }
 
 fn refs(v: &[String]) -> Vec<&str> {
     v.iter().map(String::as_str).collect()
+}
+
+/// 上限の定数の名（部品の名の「-」を「_」にし、欄の名と「_」で繋いで大文字にする・pipeline-rail の max_nodes は
+/// PIPELINE_RAIL_MAX_NODES）。部品の名は `variant` と同じ字の縛り・欄の名は ASCII の英字と数字と「_」だけ。
+fn limit_name(name: &str, key: &str) -> Result<String, String> {
+    variant(name)?;
+    if let Some(c) = key
+        .chars()
+        .find(|c| !(c.is_ascii_alphanumeric() || *c == '_'))
+    {
+        return Err(format!("欄「{key}」に使えない字「{c}」"));
+    }
+    Ok(format!("{}_{key}", name.replace('-', "_")).to_ascii_uppercase())
 }
 
 /// 根の表の `key` を文字列の一覧として読む。

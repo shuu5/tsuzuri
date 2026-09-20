@@ -985,28 +985,3 @@ fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts) -> R
     f.foot(o, &format!("{id} {version}"), &generated, &dl);
     Ok(())
 }
-
-#[cfg(test)]
-mod face_note_tests {
-    use super::*;
-    use yaml_rust2::YamlLoader;
-
-    /// 型の名札の表（β・便 34 からは `face.rs` の共有の表）は部品目録 parts.json の figure_body_classes.type_ids と
-    /// 字面が同じ（順も同じ）。
-    #[test]
-    fn face_note_figure_labels_match_the_parts_catalog_type_ids() {
-        use crate::face::FIGURE_LABELS;
-        let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent/preview/parts.json");
-        let text = fs::read_to_string(&path).unwrap();
-        let doc = YamlLoader::load_from_str(&text).unwrap().remove(0);
-        let table = doc["figure_body_classes"]["type_ids"]
-            .as_hash()
-            .expect("figure_body_classes.type_ids が表でない");
-        let catalog: Vec<(&str, &str)> = table
-            .iter()
-            .map(|(k, v)| (k.as_str().unwrap(), v.as_str().unwrap()))
-            .collect();
-        assert_eq!(catalog, FIGURE_LABELS.to_vec());
-    }
-}

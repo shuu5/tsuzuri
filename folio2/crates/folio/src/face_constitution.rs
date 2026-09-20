@@ -1138,22 +1138,4 @@ mod face_constitution_tests {
         names.dedup();
         assert_eq!(names.len(), 15);
     }
-
-    #[test]
-    fn face_rail_node_limit_matches_the_parts_catalog() {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../design-intent/preview/parts.json"
-        );
-        let text = std::fs::read_to_string(path).unwrap();
-        let doc = crate::yaml::parse(&text).unwrap();
-        let max = doc
-            .root
-            .get("components")
-            .and_then(|c| c.get("pipeline-rail"))
-            .and_then(|r| r.get("max_nodes"))
-            .and_then(crate::yaml::Node::as_str)
-            .expect("pipeline-rail の max_nodes が無い");
-        assert_eq!(max, MAX_RAIL_NODES.to_string());
-    }
 }

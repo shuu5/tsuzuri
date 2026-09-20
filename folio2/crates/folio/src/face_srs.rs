@@ -1322,35 +1322,9 @@ mod face_srs_tests {
         assert_eq!(names.len(), 18);
     }
 
+    /// 帯の上限の関数（上限は便 52 から部品目録の導出・値の一致は parts.rs の歯が見る）。
     #[test]
-    fn face_srs_limits_match_the_parts_catalog() {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../design-intent/preview/parts.json"
-        );
-        let text = std::fs::read_to_string(path).unwrap();
-        let doc = crate::yaml::parse(&text).unwrap();
-        let limit = |part: &str, key: &str| {
-            doc.root
-                .get("components")
-                .and_then(|c| c.get(part))
-                .and_then(|r| r.get(key))
-                .and_then(crate::yaml::Node::as_str)
-                .unwrap_or_else(|| panic!("{part} の {key} が無い"))
-                .to_string()
-        };
-        assert_eq!(
-            limit("pipeline-rail", "max_nodes"),
-            MAX_RAIL_NODES.to_string()
-        );
-        assert_eq!(
-            limit("state-strip", "max_nodes"),
-            MAX_STATE_NODES.to_string()
-        );
-        assert_eq!(
-            limit("context-band", "max_per_band"),
-            MAX_PER_BAND.to_string()
-        );
+    fn face_srs_band_limit_rejects_one_more_than_the_limit() {
         let v = crate::yaml::Value::Null;
         let x = X::root(&v, "srs.yaml.actors");
         assert!(band_limit(&x, "入れる側", MAX_PER_BAND).is_ok());

@@ -5,6 +5,8 @@
 //! 名札・値の読める形・小窓・面の骨格・図の枠）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
 //! 憲法の値域の名札（便 50・ADR-11 決定 (4)②）は、組み立て時に憲法の正本から導出した型（`constitution_enums`）への
 //! 網羅の場合分けで持つ = 値域の値の字面を鍵にした表を持たない（値が足されても消えても組み立てが通らない）。
+//! 部品目録の上限 3 本と図の型の名札（便 52・ADR-11 決定 (4)③）は、組み立て時に部品目録から導出した定数
+//! （`parts::catalog`）を指す = 手書きの写しを持たない。
 //! 図の枠（便 34・P-2.1）: 図の節（figures）の 1 枚の枠（figure-panel・fig-title・図の本体・figcaption）は
 //! 設計ノート・判断の記録・要件書の 3 面が同じ字面で出すので、`figure_body` と `figure_panel` をここに 1 つ持つ。
 //! 天井の名札（便 40・delivery-40.md §1 (c)(d)・ADR-8 決定 (4)・P-3.3）: 5 面の site-bar に床の名札（freshness-stamp）の
@@ -17,7 +19,7 @@ use std::path::Path;
 use crate::constitution_enums as ce;
 use crate::figure;
 use crate::findings;
-use crate::parts::catalog::Component;
+use crate::parts::catalog::{self, Component};
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
 use crate::{face_adr, face_constitution, face_index, face_note, face_srs};
@@ -756,14 +758,14 @@ pub fn method_label(x: &X<'_>) -> R<String> {
     Ok(x.lookup(METHOD, "確かめ方")?.to_string())
 }
 
-// ── 部品目録の上限（歯が parts.json と同値を確かめる）──
+// ── 部品目録の上限（組み立て時に部品目録から導出する・便 52・ADR-11 決定 (4)③）──
 
 /// pipeline-rail の max_nodes。
-pub const MAX_RAIL_NODES: usize = 7;
+pub const MAX_RAIL_NODES: usize = catalog::PIPELINE_RAIL_MAX_NODES;
 /// state-strip の max_nodes。
-pub const MAX_STATE_NODES: usize = 4;
+pub const MAX_STATE_NODES: usize = catalog::STATE_STRIP_MAX_NODES;
 /// context-band の max_per_band。
-pub const MAX_PER_BAND: usize = 4;
+pub const MAX_PER_BAND: usize = catalog::CONTEXT_BAND_MAX_PER_BAND;
 
 // ── 面の骨格（面に依らない口・P-6.3）──
 
@@ -989,15 +991,9 @@ pub(crate) fn glossary_rows(o: &mut Vec<String>, v: &X<'_>) -> R<()> {
 
 // ── 図の枠（3 面が共有する口・便 34）──
 
-/// 図の型（閉じた表 β・図の道具の 5 型）→ figcaption の名札。字面は部品目録 parts.json の
-/// figure_body_classes.type_ids と同じ（`face_note.rs` の歯で突き合わせる）。表に無い型は `figure::render` が先に断る。
-pub(crate) const FIGURE_LABELS: [(&str, &str); 5] = [
-    ("archify-architecture", "構成図（architecture）"),
-    ("archify-workflow", "手順図（workflow）"),
-    ("archify-sequence", "順序図（sequence）"),
-    ("archify-dataflow", "流れ図（dataflow）"),
-    ("archify-lifecycle", "状態図（lifecycle）"),
-];
+/// 図の型（図の道具の型）→ figcaption の名札。組み立て時に部品目録 parts.json の figure_body_classes.type_ids から
+/// 導出した対の列（便 52・手書きの写しを持たない）。表に無い型は `figure::render` が先に断る。
+pub(crate) use catalog::FIGURE_TYPE_LABELS as FIGURE_LABELS;
 
 /// 図の道具で描いた図 1 枚（図の id・図の本体・型の名札）。
 pub struct Figure<'a> {

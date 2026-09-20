@@ -1,7 +1,8 @@
 //! `folio parts`（便 13・docs/design/delivery-13.md §1）。3 面の生成器が使ってよい部品の一覧を型で閉じ（組み立て時に
 //! 部品目録 `preview/parts.json` から build.rs が導出する・P-6.4）、できた面を部品目録と突き合わせる（要件書 AC2 の機構）。
-//! --print は導出した一覧を JSON の 1 行で出す。--check は 部品目録と組み立て時の写しの一致 → 面の class（様式の定義の
-//! class の集合に在る）・部品の名札（部品の一覧に在り、その面に置ける）・行内の様式（許す性質だけ）を数える。
+//! --print は導出した一覧を JSON の 1 行で出す。--check は 部品目録と組み立て時の写しの一致（型 4 つ・便 52 からは上限と
+//! 図の型の名札も）→ 面の class（様式の定義の class の集合に在る）・部品の名札（部品の一覧に在り、その面に置ける）・
+//! 行内の様式（許す性質だけ）を数える。
 //! 面と様式の定義は外部 crate も正規表現も使わない手書きの走査で読む。
 
 use std::collections::HashSet;
@@ -17,7 +18,7 @@ pub mod catalog {
     include!(concat!(env!("OUT_DIR"), "/parts_catalog.rs"));
 }
 
-use catalog::{Component, FigureType, ShelfType, StyleProp};
+use catalog::{Component, FIGURE_TYPE_LABELS, FigureType, LIMITS, ShelfType, StyleProp};
 
 /// 面の名（--page の左辺・部品目録の faces の値）。
 pub const FACES: [&str; 5] = ["index", "constitution", "srs", "adr", "note"];
@@ -115,7 +116,8 @@ pub fn check(dir: &Path, css: Option<&Path>, pages: &[String]) -> Report {
     report
 }
 
-/// 実行時の部品目録を読み、組み立て時に導出した一覧と過不足なく同じ順で一致するか。違えば Err（まだ分からない）。
+/// 実行時の部品目録を読み、組み立て時に導出した一覧（型 4 つ）・上限（部品ごとの max_ で始まる欄の名と値）・図の型の
+/// 名札（type_ids の対と順）と過不足なく同じ順で一致するか。違えば Err（まだ分からない）。
 fn catalog_matches(path: &Path) -> Result<(), String> {
     let text = fs::read_to_string(path).map_err(|e| format!("parts.json: 読めない（{e}）"))?;
     let doc = yaml::parse(&text).map_err(|e| format!("parts.json: 読めない（{e}）"))?;
@@ -145,7 +147,9 @@ fn catalog_matches(path: &Path) -> Result<(), String> {
         && same_list(
             root.get("style_props_allowed"),
             StyleProp::ALL.iter().map(|p| p.name()),
-        );
+        )
+        && same_limits(components)
+        && same_labels(root);
     if same {
         Ok(())
     } else {
@@ -159,6 +163,47 @@ fn same_list<'a>(node: Option<&Node>, want: impl ExactSizeIterator<Item = &'a st
         return false;
     };
     seq.len() == want.len() && seq.iter().zip(want).all(|(n, w)| n.as_str() == Some(w))
+}
+
+/// 部品ごとの鍵が max_ で始まる欄（部品の名・欄の名・値の字面）が、組み立て時の LIMITS と過不足なく同じ順で同じか
+/// （便 52 (c)・表でない部品は欄を持たない扱い）。
+fn same_limits(components: Option<&[(String, Node)]>) -> bool {
+    let Some(m) = components else {
+        return false;
+    };
+    let found: Vec<(&str, &str, &Node)> = m
+        .iter()
+        .flat_map(|(name, body)| {
+            body.as_map()
+                .unwrap_or_default()
+                .iter()
+                .filter(|(k, _)| k.starts_with("max_"))
+                .map(move |(k, v)| (name.as_str(), k.as_str(), v))
+        })
+        .collect();
+    found.len() == LIMITS.len()
+        && found
+            .iter()
+            .zip(LIMITS)
+            .all(|((name, key, v), (wn, wk, wv))| {
+                *name == wn && *key == wk && v.as_str().is_some_and(|s| s == wv.to_string())
+            })
+}
+
+/// figure_body_classes.type_ids の対（型の字面・名札）が、組み立て時の FIGURE_TYPE_LABELS と過不足なく同じ順で同じか
+/// （便 52 (c)・表でない・値が文字列でない、は違う）。
+fn same_labels(root: &Node) -> bool {
+    let Some(m) = root
+        .get("figure_body_classes")
+        .and_then(|n| n.get("type_ids"))
+        .and_then(Node::as_map)
+    else {
+        return false;
+    };
+    m.len() == FIGURE_TYPE_LABELS.len()
+        && m.iter()
+            .zip(FIGURE_TYPE_LABELS)
+            .all(|((k, v), (wk, wv))| k == wk && v.as_str() == Some(wv))
 }
 
 /// 面 1 つ: 読めなければ「まだ分からない」1 件で終わり、読めれば class・部品の名札・行内の様式を数える。
@@ -541,5 +586,81 @@ mod tests {
         assert_eq!(ShelfType::from_name("doc-shelf"), Some(ShelfType::DocShelf));
         assert_eq!(StyleProp::from_name("--rail-n"), Some(StyleProp::RailN));
         assert!(StyleProp::from_name("color").is_none());
+    }
+
+    /// 凍結の針（P-10.1・便 52 §1 (d) 2・(b) の置き換えの番）: face.rs の名を通して読む上限 3 つが 7・4・4 で、face.rs の
+    /// FIGURE_LABELS が便 52 の前の手書きの 5 対と順まで同じ。導出した定数の側（上限 3 つ・LIMITS・FIGURE_TYPE_LABELS）も同じ値。
+    #[test]
+    fn parts_derived_limits_and_figure_labels_are_frozen_needles() {
+        use crate::face::{FIGURE_LABELS, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES};
+        const LABELS: [(&str, &str); 5] = [
+            ("archify-architecture", "構成図（architecture）"),
+            ("archify-workflow", "手順図（workflow）"),
+            ("archify-sequence", "順序図（sequence）"),
+            ("archify-dataflow", "流れ図（dataflow）"),
+            ("archify-lifecycle", "状態図（lifecycle）"),
+        ];
+        // face.rs の名を通して
+        assert_eq!((MAX_RAIL_NODES, MAX_STATE_NODES, MAX_PER_BAND), (7, 4, 4));
+        assert_eq!(FIGURE_LABELS, LABELS);
+        // 導出した定数の側
+        assert_eq!(
+            (
+                catalog::PIPELINE_RAIL_MAX_NODES,
+                catalog::STATE_STRIP_MAX_NODES,
+                catalog::CONTEXT_BAND_MAX_PER_BAND
+            ),
+            (7, 4, 4)
+        );
+        assert_eq!(
+            LIMITS,
+            [
+                ("pipeline-rail", "max_nodes", 7),
+                ("context-band", "max_per_band", 4),
+                ("state-strip", "max_nodes", 4),
+            ]
+        );
+        assert_eq!(FIGURE_TYPE_LABELS, LABELS);
+    }
+
+    /// 実行時の一致（便 52 (c)）: 実の部品目録は Ok・上限の値か名札の 1 字を変えた写しは同じ文言の Err。
+    #[test]
+    fn parts_derived_catalog_matches_sees_limits_and_labels() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../design-intent/preview/parts.json"
+        );
+        let text = fs::read_to_string(path).unwrap();
+        let td = std::env::temp_dir().join(format!("folio-parts-derived-{}", std::process::id()));
+        fs::create_dir_all(&td).unwrap();
+        let copy = td.join("parts.json");
+        fs::write(&copy, &text).unwrap();
+        assert_eq!(catalog_matches(&copy), Ok(()));
+        for (from, to) in [
+            ("\"max_nodes\": 7", "\"max_nodes\": 8"),
+            (
+                "\"max_per_band\": 4",
+                "\"max_per_band\": 4,\n      \"max_extra\": 1",
+            ),
+            ("\"max_nodes\": 4", "\"max_n\": 4"),
+            ("手順図（workflow）", "手続図（workflow）"),
+            (
+                "\"archify-sequence\": \"順序図",
+                "\"archify-sequence2\": \"順序図",
+            ),
+        ] {
+            assert_eq!(
+                text.matches(from).count(),
+                1,
+                "変異の的「{from}」が 1 つでない"
+            );
+            fs::write(&copy, text.replacen(from, to, 1)).unwrap();
+            let err = catalog_matches(&copy).unwrap_err();
+            assert_eq!(
+                err, "parts.json: 組み立て時の部品目録と違う（組み立て直す）",
+                "{from}"
+            );
+        }
+        let _ = fs::remove_dir_all(&td);
     }
 }
