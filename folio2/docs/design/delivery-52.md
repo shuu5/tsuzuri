@@ -21,7 +21,7 @@
 
 (c) 実行時の一致を広げる。parts.rs の catalog_matches は、型 4 つに加えて、上限（部品ごとの max_ で始まる欄の名と値）と図の型の名札（type_ids の対と順）も、読んでいる置き場の部品目録と組み立て時の写しで比べる。違えば今と同じ「まだ分からない」と同じ文言。比べるために要る「部品の名・欄の名・値」の対の列は (a) の導出に定数として足してよい（名は LIMITS）。
 
-(d) 歯。新しい歯の関数名は parts で始める。
+(d) 歯。新しい歯の関数名は、tests/parts.rs の側は parts で、src/parts.rs の unit test の側は parts_derived で始める（parts を名に含む歯は面の歯の file にも在るので、検証の絞り込みは file と語の両方で行う）。
 1. 消す歯 3 本（根拠つき）: 上に挙げた 3 本は、導出の後は「部品目録から導出した値」を「部品目録の値」と比べるだけになり、何も落とせなくなるので消す（face_srs.rs の歯のうち band_limit の 2 行は上限の関数の歯なので、別の歯として残す）。
 2. src/parts.rs の unit test（凍結の針・P-10.1）: 導出した上限 3 つが 7・4・4 で、図の型の名札が今の 5 対（構成図（architecture）・手順図（workflow）・順序図（sequence）・流れ図（dataflow）・状態図（lifecycle））と順まで同じ（字面を歯に直に書く）。
 3. crates/folio/tests/parts.rs（build.rs を path の属性で取り込み、(a) の純粋な関数を直に呼ぶ）: 実の部品目録 → Ok ∧ 出力に PIPELINE_RAIL_MAX_NODES と FIGURE_TYPE_LABELS が在る。変異 3 つがそれぞれ Err = max_nodes を文字列にする・type_ids の鍵を figure_type_enum に無い名にする・type_ids を一覧にする。
@@ -61,7 +61,7 @@ title = "部品目録の上限 3 本と図の型の名札を build.rs の組み�
 req = ["FR4", "NFR2"]
 section = "1"
 write-set = ["crates/folio/build.rs", "crates/folio/src/parts.rs", "crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_srs.rs", "crates/folio/src/face_note.rs", "crates/folio/tests/parts.rs"]
-verify = ["cargo nextest run -p folio parts", "cargo clippy --workspace --all-targets -- -D warnings"]
+verify = ["cargo nextest run -p folio --test parts parts", "cargo nextest run -p folio parts_derived", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "parts の歯（導出の Ok と変異 3 つの Err・凍結の針 = 上限 7・4・4 と名札 5 対・部品目録の上限か名札を変えた写しで parts --check が「まだ分からない」・既存は期待不変）が緑、face.rs に上限の数と図の型の名札の手書きが残らず、共通の検証（面の凍結の fixture と byte 一致・figure・floor_cases 134 件）が緑、clippy が 0 警告で CI が通る"
+done = "parts と parts_derived の歯（導出の Ok と変異 3 つの Err・凍結の針 = 上限 7・4・4 と名札 5 対・部品目録の上限か名札を変えた写しで parts --check が「まだ分からない」・既存は期待不変）が緑、face.rs に上限の数と図の型の名札の手書きが残らず、共通の検証（面の凍結の fixture と byte 一致・figure・floor_cases 134 件）が緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->

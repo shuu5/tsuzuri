@@ -29,7 +29,7 @@
 4. crates/folio/tests/constitution_enums.rs に 1 本足す: 導出した source に定数 ENUMS が在り、実の憲法の鍵の数だけ対を持つ（関数名は constitution_enums で始める）。
 5. 回帰（期待不変・共通の検証が回す）: 面の凍結の fixture と byte 一致の歯の全部（tests/face.rs・tests/face_index.rs・tests/face_adr.rs・tests/face_note.rs・tests/site.rs）・束の要約値の歯（tests/bundle.rs = 束に面が入る）・tests/parts.rs・tests/floor_cases.rs（凍結の場合 134 件）。
 
-(f) 大きさと接続。新規 file は無い。既存 = face.rs（表 12 枚が関数に替わる・増分は 100〜200 行の見積）・face_constitution.rs（(d) で約 +40 行）・face_index.rs と face_srs.rs と face_adr.rs（表引きの書き換え = 増減ほぼ 0・face_srs.rs は余地 114 なので増やさない）・build.rs（正規化 332・ENUMS で約 +15 行）・adr.rs（(a2) で数行）・tests/face.rs（約 +60 行）・tests/constitution_enums.rs（約 +15 行）。size M = 既存 file 1 本あたりの増分は 300 行に収まる見積。設計文書・fixture・src/render.rs（退役待ち）・src/link.rs・src/inject.rs・tests/floor_cases.yaml・CI の yml は触らない。外部 crate は増やさない。
+(f) 大きさと接続。新規 file は無い。既存 = face.rs（表 12 枚が関数に替わる = 単純な表 11 枚は 1 枚あたり +2 行前後・段の表は同じ大きさ・表引きの口 約 +12 行・凍結の針の歯 約 +50 行 = 増分は約 +85 行の見積）・face_constitution.rs（(d) で約 +40 行）・face_index.rs と face_srs.rs と face_adr.rs（表引きの書き換え = 増減ほぼ 0・face_srs.rs は余地 114 なので増やさない）・build.rs（正規化 332・ENUMS で約 +15 行）・adr.rs（(a2) で数行）・tests/face.rs（約 +60 行）・tests/constitution_enums.rs（約 +15 行）。size S = 既存 file 1 本あたりの増分は 100 行に収まる見積（余地のいちばん小さい face_srs.rs 114 と face_index.rs 173 は増やさない）。設計文書・fixture・src/render.rs（退役待ち）・src/link.rs・src/inject.rs・tests/floor_cases.yaml・CI の yml は触らない。外部 crate は増やさない。
 
 ## 2. 範囲
 
@@ -62,7 +62,7 @@ title = "面の生成器の表 13 枚から憲法の値域の鍵の列を消し�
 req = ["FR4", "NFR2"]
 section = "1"
 write-set = ["crates/folio/build.rs", "crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_index.rs", "crates/folio/src/face_srs.rs", "crates/folio/src/face_adr.rs", "crates/folio/src/adr.rs", "crates/folio/tests/face.rs", "crates/folio/tests/constitution_enums.rs"]
-verify = ["cargo nextest run -p folio face_labels", "cargo nextest run -p folio --test face face", "cargo nextest run -p folio constitution_enums", "cargo clippy --workspace --all-targets -- -D warnings"]
-size = "M"
+verify = ["cargo nextest run -p folio face_labels", "cargo nextest run -p folio --test face face", "cargo nextest run -p folio --test constitution_enums constitution_enums", "cargo clippy --workspace --all-targets -- -D warnings"]
+size = "S"
 done = "face_labels の歯（名札の凍結の針 13 枚ぶん）が緑、face の歯（値域に値を足す・知らない鍵を足すと「まだ分からない」・既存は期待不変で面の凍結の fixture と byte 一致）が緑、constitution_enums の歯（ENUMS が鍵の数だけ）が緑、face.rs と face_adr.rs と adr.rs に値域の値の字面を鍵にした表が残らず、folio schema --check の 3 行が不変、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
