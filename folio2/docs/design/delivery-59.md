@@ -17,11 +17,11 @@
 (d) 命令の説明を実装に合わせる（crates/folio/src/main.rs・正規化 551 行）: folio schema の --dir の説明「設計文書の置き場（adr/schema.yaml を読む）」を「設計文書の置き場（欄の決まりの file 4 本 = adr/schema.yaml・design-note/schema.yaml・ceiling.yaml・rules.yaml を読む）」に、folio parts の --page の説明の「1 つも無ければ --dir の下の preview/ の index / constitution / srs」を「1 つも無ければ --dir の下の preview/ の index / constitution / srs / adr / note」に。説明の字だけで、旗の型・既定の値・処理は変えない。
 
 (e) 歯。
-1. crates/folio/tests/check.rs（正規化 527 行）に 2 本足す（関数名は r11_ で始める・今この語で始まる歯は無い）: ① 実の正本の写しで strength を must-not に変えた規範文 1 本が種別 R-11 で落ち、文言に「strength must-not と文末が合わない」を含む ② must-not の規範文の文末を「〜する。」に変えても落ちる（逆向き）。写しの作り方は同じ file の既存の歯と同じ（実の design-intent を一時の置き場へ写して 1 手だけ書き換える）。
+1. crates/folio/tests/check.rs（正規化 527 行）に 3 本足す（関数名は r11_ で始める・今この語で始まる歯は無い）。式の分岐は 2 つ（must-not なのに「ない。」で終わらない／must か should なのに「ない。」で終わる）で、歯はその両方を別々に測る: ① 分岐 1 = 実の正本の写しで、文末が「する。」の規範文 1 本（P-1.1・strength must）の strength を must-not に変えると、種別 R-11 で落ち、文言に「P-1.1: strength must-not と文末が合わない」を含む ② 分岐 2 = 実の正本の写しで、strength must の規範文 1 本（P-1.1）の text の末尾の「担う。」を「担わない。」に変える（strength は must のまま）と、種別 R-11 で落ち、文言に「P-1.1: strength must と文末が合わない」を含む ③ 写しを変えずに folio check が合格（違反 0・まだ分からない 0）= 実の正本（27 条・規範文 67 本）に不一致が無いことを、式を足した後の床で確かめる。写しの作り方は同じ file の既存の歯と同じ（実の design-intent を一時の置き場へ写して 1 手だけ書き換える）。
 2. tests/floor_cases.rs の歯 floor_cases_all_pass_with_folio（本文は不変）が 135 / 135 で緑 = (b) の場合と、既存 134 件の不変を確かめる。
 3. 回帰（期待不変・共通の検証が回す）: tests/check.rs の既存・tests/schema.rs・tests/parts.rs（命令の説明の字を固定する歯は無い = 席が grep で確かめた）。
 
-(f) 大きさと接続。新規 file は無い。既存 = check.rs（式 約 +15 行）・main.rs（説明 2 行）・rules.yaml（R-11 の注 1 行）・floor_cases.yaml（1 件）・tests/check.rs（約 +40 行）。size S。tests/floor_cases.rs は本文不変（検証の範囲に入るので write-set に置く）。ほかの設計文書・fixture・CI の yml は触らない。外部 crate は増やさない。
+(f) 大きさと接続。新規 file は無い。既存 = check.rs（式 約 +15 行）・main.rs（説明 2 行）・rules.yaml（R-11 の注 1 行）・floor_cases.yaml（1 件）・tests/check.rs（約 +55 行）。size S。tests/floor_cases.rs は本文不変（検証の範囲に入るので write-set に置く）。ほかの設計文書・fixture・CI の yml は触らない。外部 crate は増やさない。
 
 ## 2. 範囲
 
@@ -36,7 +36,7 @@
 | case | 凍結の場合 | floor_cases.yaml に strength-polarity を 1 件 |
 | note | 注 | rules.yaml の R-11 の注を実態に |
 | help | 説明 | main.rs の schema --dir と parts --page の説明 |
-| teeth | 歯 | tests/check.rs に r11_ の 2 本 |
+| teeth | 歯 | tests/check.rs に r11_ の 3 本（分岐 1・分岐 2・変えない写しの合格） |
 
 ## 4. 検査（歯）
 
@@ -57,5 +57,5 @@ section = "1"
 write-set = ["crates/folio/src/check.rs", "crates/folio/src/main.rs", "crates/folio/tests/check.rs", "crates/folio/tests/floor_cases.rs", "tests/floor_cases.yaml", "design-intent/rules.yaml"]
 verify = ["cargo nextest run -p folio --test check r11_", "cargo nextest run -p folio --test floor_cases floor_cases", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "r11_ の歯 2 本（must-not で文末が〜する。の規範文が種別 R-11 で落ちる・逆向きも落ちる）が緑、floor_cases の歯が 135 / 135 で緑（既存 134 件の期待は不変）、実の正本で folio check が合格のまま、clippy が 0 警告で CI が通る"
+done = "r11_ の歯 3 本（分岐 1 = must-not なのに文末が〜する。の規範文が種別 R-11 で落ちる・分岐 2 = must なのに文末が〜ない。の規範文が種別 R-11 で落ちる・変えない写しは合格）が緑、floor_cases の歯が 135 / 135 で緑（既存 134 件の期待は不変）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
