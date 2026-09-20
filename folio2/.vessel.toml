@@ -1,6 +1,6 @@
 # folio2 の vessel 宣言（器 scribe2 が便を起こすときに読む・scribe2 pipe/declaration.rs）。値は器の上限（rules 行 runner.allowed_commands）の内側。
-# 置いた便 = f2-648.10（便 0 の受け皿・持ち主の裁定 2026-09-17）。要件面 = 正本 YAML から導出した読み物 HTML（design-intent/preview/readable.html・render --check で正本との一致を床が強制・P-6.3）。暫定: scribe2 の審査の材料を作る読み手が HTML 形しか読まない（受付の id 実在は yaml も読む・読み手 2 本の食い違い＝s2 へ起票依頼 2026-09-17）ため。s2 側が直ったら design-intent/srs.yaml へ戻す。契約の req は FR / NFR に限る。
+# 置いた便 = f2-648.10（便 0 の受け皿・持ち主の裁定 2026-09-17）。要件面 = 要件書の正本 design-intent/srs.yaml（器の口 s2-07l.467 が shall: / when: を直に読む・2026-09-21 から。それまでの読み物 readable.html は design-intent/preview/retired/ へ退役・持ち主の裁定 2026-09-21 08:47 JST「退役して」）。
 schema = 1
 allowed-commands = ["cargo", "git"]
 common-verify = ["cargo nextest run --workspace --no-tests=fail --no-fail-fast", "cargo clippy --workspace --all-targets -- -D warnings"]
-requirements = "design-intent/preview/readable.html"
+requirements = "design-intent/srs.yaml"
