@@ -5,14 +5,12 @@
 use std::fs;
 use std::path::Path;
 
+use crate::constitution_enums::Strength;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
 
 pub const BEGIN: &str = "<!-- constitution:begin -->";
 pub const END: &str = "<!-- constitution:end -->";
-
-/// 規範文の判定は正本の strength 欄で行う（文末の語で判定しない）。
-const STRENGTHS: [&str; 3] = ["must", "must-not", "should"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -61,8 +59,9 @@ pub fn derive(constitution: &Node) -> Result<(String, usize), String> {
                 .get("id")
                 .and_then(Node::as_str)
                 .ok_or("規範文に id が無い")?;
+            // 規範文の判定は正本の strength 欄で行う（文末の語で判定しない）。値域は憲法から組み立て時に導出した Strength（便 49）。
             let strength = s.get("strength").and_then(Node::as_str);
-            if !strength.is_some_and(|v| STRENGTHS.contains(&v)) {
+            if !strength.is_some_and(|v| Strength::from_name(v).is_some()) {
                 return Err(format!("{id}: strength が規範の値でない: {strength:?}"));
             }
             let text = s

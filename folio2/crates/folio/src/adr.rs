@@ -13,6 +13,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::constitution_enums::RetreatKind;
 use crate::parts::catalog::FigureType;
 use crate::schema::{Floor, floor_diff, keys_floor, strip_notes};
 use crate::verdict::Report;
@@ -47,7 +48,8 @@ const RECORD: Keys = Keys {
 const NON_EMPTY: &[&str] = &["title", "context", "decision", "plain"];
 const STATUS: &[&str] = &["proposed", "accepted", "retired"];
 const VERDICT: &[&str] = &["adopted", "rejected"];
-const RETREAT_KIND: &[&str] = &["spike", "measure", "ruling"];
+/// 撤退条件の種類 = 憲法の値域 schema.enums.retreat_kind から組み立て時に導出した名の列（便 49・手書きの写しは持たない）。
+const RETREAT_KIND: &[&str] = &RetreatKind::NAMES;
 const APPROVER: &[&str] = &["持ち主", "planner 席"];
 const SURFACE: &[&str] = &["R-8"];
 const EFFECTIVE_STATUS: &[&str] = &["accepted", "retired"];

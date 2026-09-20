@@ -5,6 +5,7 @@ mod anchor;
 mod bundle;
 mod ceiling;
 mod check;
+mod constitution_enums;
 mod entrance;
 mod face;
 mod face_adr;
