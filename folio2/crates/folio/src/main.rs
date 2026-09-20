@@ -110,7 +110,7 @@ enum Command {
         /// 様式の定義（既定は --dir の下の preview/folio.css）
         #[arg(long)]
         css: Option<PathBuf>,
-        /// 面の名と path（<面の名>=<path>・何度でも・1 つも無ければ --dir の下の preview/ の index / constitution / srs）
+        /// 面の名と path（<面の名>=<path>・何度でも・1 つも無ければ --dir の下の preview/ の index / constitution / srs / adr / note）
         #[arg(long = "page", value_name = "FACE=PATH")]
         pages: Vec<String>,
         /// 部品目録との一致・class・部品の名札・行内の様式を検査する（合格 0・不合格 1・まだ分からない 2）
@@ -237,7 +237,7 @@ enum Command {
     /// 欄の決まりの file の schema 節（生成区間）を床の定数から導出して書く（--write）・検査する（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Schema {
-        /// 設計文書の置き場（adr/schema.yaml を読む）
+        /// 設計文書の置き場（欄の決まりの file 4 本 = adr/schema.yaml・design-note/schema.yaml・ceiling.yaml・rules.yaml を読む）
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
         /// 生成区間を導出で置き換えて書く（既に同じなら書かない・区間の外の byte は変えない）

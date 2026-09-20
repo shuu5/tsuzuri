@@ -363,6 +363,7 @@ fn check_constitution(root: &Node, report: &mut Report) {
             );
         }
         check_article_enums(&id, article, &statements, report);
+        check_statement_polarity(&id, &statements, report);
         duplicate_statement_ids(statements, report);
     }
     duplicate_ids(FILE, articles, report);
@@ -443,6 +444,36 @@ fn check_article_enums(id: &str, article: &Node, statements: &[&Node], report: &
         field(r, "kind", "retreat.kind", "retreat_kind", |v| {
             ce::RetreatKind::from_name(v).is_some()
         });
+    }
+}
+
+/// 規則の表 R-11（便 59・day-1 の Python の床から戻した式）: 規範文の strength と文末の一致 = must-not ⇔ 文末が「ない。」／
+/// must・should ⇔ それ以外。式は床の定数（憲法の schema.one_polarity は宣言で、床はその値を読まない・規則の表 R-11 の what が正本・
+/// ADR-11 決定 (3)(エ)）。合わない 1 本につき種別 R-11 の違反 1 件。strength が値域の外（`check_article_enums` が種別 schema で
+/// 数える）・text が字でない（非空の検査が数える）ときは黙る＝二重に出さない。
+fn check_statement_polarity(id: &str, statements: &[&Node], report: &mut Report) {
+    for st in statements {
+        let Some(strength) = st
+            .get("strength")
+            .and_then(Node::as_str)
+            .and_then(ce::Strength::from_name)
+        else {
+            continue;
+        };
+        let Some(text) = st.get("text").and_then(Node::as_str) else {
+            continue;
+        };
+        let negative = text.trim_end().ends_with("ない。");
+        if (strength == ce::Strength::MustNot) != negative {
+            report.violation(
+                "R-11",
+                format!(
+                    "{id}: {}: strength {} と文末が合わない（must-not ⇔ 〜ない。）",
+                    row_id(st),
+                    strength.name()
+                ),
+            );
+        }
     }
 }
 

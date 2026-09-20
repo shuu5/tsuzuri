@@ -515,6 +515,123 @@ fn check_constitution_enum_missing_stage_field_is_silent() {
     assert!(violations(&out).is_empty(), "{:?}", violations(&out));
 }
 
+// ── 規則 R-11（強度と規範文の文末の一致・便 59） ──
+
+/// 実の constitution.yaml の写しの条 P-1 の規範文 P-1.1（strength must・文末は「担う。」）の行の頭（変異の当て先）。
+const P1_1_HEAD: &str = "{id: P-1.1, pattern: ubiquitous, strength: must, text:";
+
+/// 写しの constitution.yaml に変異を当てた結果が 不合格 1 で、種別 R-11 の違反がちょうど 1 件在り、その文言が
+/// 「P-1: P-1.1: strength <strength> と文末が合わない」を含む（改訂の差分の違反も出るので件数は固定しない）。
+fn assert_r11_violation(w: &Work, strength: &str) {
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = violations(&out);
+    let hits: Vec<&String> = v.iter().filter(|l| l.starts_with("[R-11] ")).collect();
+    assert_eq!(hits.len(), 1, "R-11 の違反がちょうど 1 件のはず: {v:?}");
+    assert!(
+        hits[0].contains(&format!("P-1: P-1.1: strength {strength} と文末が合わない")),
+        "{v:?}"
+    );
+    assert!(hits[0].contains("must-not ⇔ 〜ない。"), "{v:?}");
+    assert!(stdout(&out).contains("不合格"), "{}", stdout(&out));
+}
+
+/// 分岐 1 = must-not なのに文末が「〜する。」（P-1.1 の strength だけを must-not に）。
+#[test]
+fn r11_must_not_with_affirmative_ending_fails() {
+    let w = Work::new("r11-must-not");
+    w.mutate_constitution(
+        P1_1_HEAD,
+        "{id: P-1.1, pattern: ubiquitous, strength: must-not, text:",
+    );
+    assert_r11_violation(&w, "must-not");
+}
+
+/// 分岐 2 = must なのに文末が「〜ない。」（P-1.1 の text の末尾だけを「担わない。」に・strength は must のまま）。
+#[test]
+fn r11_must_with_negative_ending_fails() {
+    let w = Work::new("r11-must");
+    w.mutate_constitution(
+        "結果を知らせるところまでを担う。}",
+        "結果を知らせるところまでを担わない。}",
+    );
+    assert_r11_violation(&w, "must");
+}
+
+/// 変えない写しは合格 = 実の正本の規範文に strength と文末の不一致が無い（式を足した後の床で確かめる）。
+#[test]
+fn r11_unchanged_copy_passes() {
+    let w = Work::new("r11-unchanged");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    assert!(
+        stdout(&out).contains("folio check: 合格（違反 0・まだ分からない 0）"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+/// 規則の表 R-11 の行の注が実態（便 59 で Rust の床に戻した）を言う。
+#[test]
+fn r11_rules_note_says_the_floor_counts_it_again() {
+    let text = fs::read_to_string(repo_root().join("design-intent/rules.yaml")).unwrap();
+    let lines: Vec<&str> = text.lines().filter(|l| l.contains("{id: R-11,")).collect();
+    assert_eq!(lines.len(), 1, "R-11 の行が 1 本でない: {lines:?}");
+    let line = lines[0];
+    assert!(
+        line.contains("便 59 で Rust の床に戻した（folio check の種別 R-11）"),
+        "{line}"
+    );
+    assert!(!line.contains("Rust の床へ写していない"), "{line}");
+}
+
+fn folio_help(subcommand: &str) -> String {
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg(subcommand)
+        .arg("--help")
+        .output()
+        .expect("folio を起動できない");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    stdout(&out)
+}
+
+/// folio schema --help の --dir の説明が欄の決まりの file 4 本の名を出す。
+#[test]
+fn r11_schema_help_names_the_four_schema_files() {
+    let help = folio_help("schema");
+    assert!(
+        help.contains("adr/schema.yaml・design-note/schema.yaml・ceiling.yaml・rules.yaml"),
+        "{help}"
+    );
+}
+
+/// folio parts --help の --page の説明が既定の面 5 つの名を出す。
+#[test]
+fn r11_parts_help_names_the_five_default_faces() {
+    let help = folio_help("parts");
+    assert!(
+        help.contains("index / constitution / srs / adr / note"),
+        "{help}"
+    );
+}
+
 #[test]
 fn check_srs_figure_with_an_unknown_field_fails() {
     let w = Work::new("figure-extra");

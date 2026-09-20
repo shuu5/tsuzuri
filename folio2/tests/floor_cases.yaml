@@ -3,7 +3,7 @@
 # 敵対レビュー 1 周目（B1〜B3 / M1〜M7 / m1）・2 周目（fc-1〜fc-9 / fp-1〜fp-7 / loophole-1〜13 / content-1・2・5・11 / fixrun-1〜6）・
 # 3 周目（loophole-v3-1〜6・9〜11・15 / fp3-2・4〜7・9・10 / content-limits-1・2・6・13）・4 周目（loophole-v4-1〜5・7 / F-1〜F-3）・5 周目（doc-v5-1〜2 / loophole-v5-1〜9）の再現と、正の経路（欄の決まりの写し・範囲の増減・空の値・貼れる差分・改行入りの値・浅い写し）を含む。
 # 写しは既定で git の 1 commit（床は版管理の無い写しを「まだ分からない」に落とす）。no_git: true の case だけ版管理なし。
-expected_cases: 134
+expected_cases: 135
 
 shared:
   p8_title_old: &p8_title_old 撤退条件を決定と同時に書く
@@ -777,3 +777,4 @@ cases_v6:
   - {id: anchor-tampered-algo-flipped, why: 憲法を改竄した上で anchor の digest の方式を書き換えても、写しの内容の照合は行うので違反が消えない（loophole-v5-7）, mutate: [{file: constitution.yaml, path: "articles[id=P-8].statements[0].text", value: *p8_new}, {file: anchors/constitution-v1.0.yaml, path: digest_algo, value: sha256-json-9}], expect_rc: 1, expect_msg: 判断の記録と承認を伴わない改憲}
   - {id: date-block-scalar, why: 日付の末尾に改行が付く値（block scalar）は年-月-日でない（loophole-v5-8）, mutate: [{file: adr/ADR-1.yaml, path: date, value: "2026-09-12\n"}], expect_rc: 1, expect_msg: 年-月-日でない}
   - {id: version-spelling, why: 版の綴りは v<数>.<数>（v1.0.0 のような同じ版の別綴りを列に並べない・loophole-v5-9）, mutate: [{file: constitution.yaml, path: meta.version, value: v1.0.0}], expect_rc: 1, expect_msg: 綴り}
+  - {id: strength-polarity, why: 規範文の strength と文末の不一致（must-not なのに文末が「〜する。」）は規則 R-11 で落ちる（便 59・day-1 の床から戻した式）, mutate: [{file: constitution.yaml, path: "articles[id=P-1].statements[0].strength", value: must-not}], expect_rc: 1, expect_msg: "P-1.1: strength must-not と文末が合わない"}
