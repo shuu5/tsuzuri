@@ -40,6 +40,7 @@ figures:
       title: ページができるまで
       subtitle: 見た目は見本から、文章と数は正本から。名札が目録に無ければ書かない。
       quality_profile: showcase
+      legend: {mode: auto, entries: {frontend: {label: 面（人が触る側）}, backend: {label: 道具の処理}, security: {label: 決まり}, external: {label: 外の相手}}}
     lanes:
     - id: writer
       label: 書く人
@@ -152,6 +153,7 @@ figures:
       title: folio face --face srs が 1 面を組む順序
       subtitle: 正本の読みから byte 一致の検査まで（面 index・constitution も同じ形）
       quality_profile: showcase
+      legend: {mode: auto, entries: {emphasis: {label: 頼む}, return: {label: 返す}, dashed: {label: 後で届く}, default: {label: 送る}}}
     participants:
     - id: cli
       type: external

@@ -32,6 +32,7 @@ figures:
         title: 図がページに載るまで
         subtitle: 図の元を書いてから、確かめて、絵にして、ページに載せるまで。だめなら前の絵のまま。
         quality_profile: showcase
+        legend: {mode: auto, entries: {frontend: {label: 面（人が触る側）}, backend: {label: 道具の処理}, security: {label: 決まり}, external: {label: 外の相手}}}
       lanes:
       - id: writer
         label: 書く人
@@ -139,6 +140,7 @@ figures:
         title: folio face --face note が図の道具を呼ぶ順序
         subtitle: 子の処理の起動から終了コードの扱いまで
         quality_profile: showcase
+        legend: {mode: auto, entries: {emphasis: {label: 頼む}, return: {label: 返す}, dashed: {label: 後で届く}, default: {label: 送る}}}
       participants:
       - id: cli
         type: external

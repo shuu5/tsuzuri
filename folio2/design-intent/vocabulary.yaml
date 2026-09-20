@@ -28,7 +28,7 @@ terms:
   - {id: generated-block, term: 生成区間, en: generated block, short: file の中で機械が書き換える印のついた範囲, def: file の中で、機械が書き換える印のついた範囲（CLAUDE.md の憲法の写し・欄の決まりの file と天井の正本と規則の表の決まりの部分）。手で直さない（P-6.2・P-14）。正本は別に在り、機械がそこから導出して書く。}
   - {id: inject, term: 注入, en: inject, short: 憲法の守らせる条を AI の手元へ写すこと, def: 憲法の規範文を持つ条を CLAUDE.md の生成区間へ写すこと。書き込み（--write）と検査（--check）がある（P-14）。}
   - {id: intake, term: 相談窓口（intake）と支度表, en: intake / preparation sheet, short: 何の文書が要るかを決める入口と、その結果の 1 枚, def: 相談窓口 = どの文書を持つかを易しい質問で決める入口。支度表 = その結果（持つ文書・推奨で進めた項目）を 1 枚にしたもの（要件書 FR1）。}
-  - {id: delivery, term: 便, en: delivery, short: 変更を 1 まとまりで運ぶ単位, def: 変更を 1 まとまりで運ぶ単位（契約〔何を作るかの約束・台帳に書く〕→ 実装 → 検査 → 取り込み）。運ぶ器は scribe2（CON6）。}
+  - {id: delivery, term: 便, en: delivery, short: 変更を 1 まとまりで運ぶ単位, def: 変更を 1 まとまりで運ぶ単位（契約〔何を作るかの約束・設計ノートの契約表の行〕→ 実装 → 検査 → 取り込み）。運ぶ器は scribe2（CON6）。}
   - {id: spike, term: spike, en: spike, short: 決める前に小さく試して測ること, def: 決める前に小さく試して測ること。}
   - {id: tailnet, term: tailnet, en: tailnet, short: 自分の端末どうしだけがつながる私設ネット, def: 自分の端末どうしだけがつながる私設ネット。見せる先はここだけ（N-6）。}
   - {id: self-host, term: 自分で自分を作る（self-host）, en: self-host, short: folio が folio 自身の文書やコードを作る運用, def: folio が folio 自身の文書やコードを自分の道具で作る運用。文書は最初から自分で作るが、コードの変更を自分の便で運ぶのは最後（P-13・A-4）。}

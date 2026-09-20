@@ -141,7 +141,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）"}
       - {kind: folio2-ruling, ref: "裁定 #4（v1 P-2 を置換）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。床は folio parts --check（数える面は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）。色や字の大きさが design token 由来である割合（R-3 の後半）を数える口は無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。床が掛からないページは 2026-09-20 時点で 1 枚在り、未達である（要件書 NFR2 の注）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。床は folio parts --check（数える面は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）。色や字の大きさが design token 由来である割合（R-3 の後半）を数える口は無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。床が掛からないページは 2026-09-20 時点で 1 枚在り、未達である（要件書 NFR2 の注）。密度 profile の閉じた一覧は 2026-09-21 時点で設計ノートの欄の決まりの生成区間（design-note/schema.yaml の profile の値域・正本は実装の定数）に在り、部品目録には載っていない。部品目録へ写すか別の行き先にするかは、判断の記録 ADR-11 の後続の便で決める。}
     retreat: {kind: spike, condition: 単一生成器で v1 要件書相当の密度が出せない（spike 5）なら再検討する。}
     supersedes_v1: {doc: folio v1 憲章, article: "P-2: format は HTML + common.css のみ", ruling: "裁定 #4", rationale: 見た目が割れた原因は形式（HTML か Markdown か）ではなく、所有者が 2 つあったこと。}
     relations: {reqs: [FR4, NFR2, AC2], rules: [R-3, R-5]}
@@ -501,7 +501,7 @@ articles:
     plain: 文書の種類が増えるたびに専用の AI 係や検査の観点を増やすことは、機械が拒みます。違いは設定の表（P-5.3）で表します。係が増えると AI が毎回読む説明文が膨らんで、遅く・高くなるからです（v1 では 36 係になりました）。
     rationale:
       - {kind: v1-incident, ref: "agent 36 本・description 合計 29,027 字・ADR-0007 → 0055（Tier 1 → Tier 0 pointer digest へ降格）"}
-    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0（検査の観点は天井の正本の 4 つで閉じ、folio2 が所有する AI 係は 0 本）。常時注入の総量は R-1 の上限で落とす（母集団は folio2 が所有する係と skill）が、この上限を数える口は未実装である（2026-09-20 時点）＝その部分の充足は「まだ分からない」として扱う（P-4.2・要件書 NFR1 の注）。}
+    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0（検査の観点は天井の正本の 4 つで閉じ、folio2 が自前で定義した AI 係は 0 本）。常時注入の総量は R-1 の上限で落とす。その母集団「folio2 が所有する係と skill」は、folio2 の設定が載せている係と skill の全部＝自前で定義したものと、設定が有効にした前の版（folio v1）の plugin のものの両方を指す（直前の「0 本」は自前で定義した係の数であって、母集団の数ではない・規則の表 R-1 の注と同じ範囲）。この上限を数える口は未実装である（2026-09-20 時点）＝その部分の充足は「まだ分からない」として扱う（P-4.2・要件書 NFR1 の注）。}
     relations: {reqs: [NFR1], rules: [R-1, D-3], articles: [P-5]}
 
   - id: N-6
@@ -520,7 +520,7 @@ articles:
     relations: {reqs: [CON3, FR7], rules: [D-8], articles: [A-1]}
 
 # ───────────────────────── §5 rules（数値は条文に書かない）─────────────────────────
-rules_pointer: rules.yaml（G14=A で別 file。閾値行 R-n と開発規律行 D-n。条からは行 id で参照し、行からは article 欄で条を指す）
+rules_pointer: 数値の決まりは 1 か所にまとめていて、この章がその表です。行は 2 種類あり、閾値行（R-n・超えてはいけない数）と開発規律行（D-n・進め方の決まり）です。条文は数値を書かずに行の番号で呼び、行はその数値が縛る条を指し返します。表の元の file は rules.yaml です。
 
 # ───────────────────────── §6 改訂（本章は新しい規則を持たない）─────────────────────────
 amendment:
@@ -528,13 +528,13 @@ amendment:
   steps:
     - {n: 1, who: AI, what: 理由を書く — 判断の記録（ADR）を 1 本起こし、撤退条件も同時に書く, article: [P-8, A-2]}
     - {n: 2, who: AI, what: 反対側から確かめる — 主張する利益を敵対的に検証し記録を添える, article: [A-2]}
-    - {n: 3, who: AI, what: 差分で表す — 現行文を残し amended_by に previous_text を対で記録する。番号は変えない, article: [P-7]}
+    - {n: 3, who: AI, what: 差分で表す — 現行文を残し、改訂の来歴の欄（amended_by）に前の文（previous_text）を対で記録する。番号は変えない, article: [P-7]}
     - {n: 4, who: 持ち主, what: 承認する — 逐語と日付と裁定 id を残す。ここを通らなければ変わらない, article: [A-2, N-4, P-12]}
     - {n: 5, who: 機械, what: 版を上げ、再注入する — CLAUDE.md の生成区間を作り直し、差分が無いことを確かめる, article: [P-14]}
   effective_step: {n: 0, who: 持ち主, what: 初回の発効 — meta.approval に who / date / ruling / verbatim を置き、meta.binding を true・meta.baseline を発効 commit にする（G15）, article: [P-12, P-17]}
 
 # ───────────────────────── §7 用語集（G11=A・vocabulary.yaml が正本）─────────────────────────
-glossary_pointer: vocabulary.yaml（読者が引く語の正本。未定義の専門語 0 は R-9 行が床。ここには写さない）
+glossary_pointer: この章は、この文書に出てくる言葉の意味をまとめた一覧です。語と定義の元は語彙の file（vocabulary.yaml）1 つに置いていて、説明の無い専門語を 0 にする数えは規則の表の行 R-9 が持ちます。
 
 # ───────────────────────── §8 出所 ─────────────────────────
 sources:
