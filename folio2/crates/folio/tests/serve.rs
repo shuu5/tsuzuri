@@ -108,7 +108,10 @@ fn built_site(case: &str) -> (PathBuf, PathBuf) {
         .arg("--write")
         .output()
         .unwrap();
-    assert_eq!(code(&build, "folio build --write"), 0, "{}", stderr(&build));
+    // folio build の --write は最初に構造の床を回す（便 56・FR5）。凍結 fixture の写しは正本が揃っていないので
+    // 床は「まだ分からない」= 面は書いて 2（配信先は揃う）
+    assert_eq!(code(&build, "folio build --write"), 2, "{}", stderr(&build));
+    assert!(site.join("index.html").is_file(), "面が書かれていない");
     (td, site)
 }
 

@@ -513,6 +513,34 @@ fn bundle_unknown_when_a_read_doc_is_not_a_document() {
 
 // ── 5. 実の正本 ──
 
+/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
+fn git(cwd: &Path, args: &[&str]) {
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(key);
+        }
+    }
+    let out = cmd
+        .current_dir(cwd)
+        .args([
+            "-c",
+            "user.email=fx@example",
+            "-c",
+            "user.name=fx",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git を起動できない");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 /// dir の直下の file の名（byte 順）。
 fn names(dir: &Path) -> Vec<String> {
     let mut out: Vec<String> = fs::read_dir(dir)
@@ -543,6 +571,10 @@ fn bundle_on_the_real_source_builds_four_bundles() {
         &repo_root().join("vendor/archify"),
         &td.join("vendor/archify"),
     );
+    // folio build の --write は最初に構造の床を回す（便 56・FR5）。写しを git の 1 commit にして床を合格させる
+    git(&td, &["init", "-q"]);
+    git(&td, &["add", "-A"]);
+    git(&td, &["commit", "-q", "-m", "fixture"]);
     let site = td.join("site");
     let build = Command::new(env!("CARGO_BIN_EXE_folio"))
         .arg("build")

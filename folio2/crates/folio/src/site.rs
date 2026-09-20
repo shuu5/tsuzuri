@@ -9,11 +9,16 @@
 //! 書かない（配信先の dir も作らない・P-4.1）。配信先に在る他の file は消さない（N-1.1）。
 //! 天井の名札（便 40・delivery-40.md §1 (a)(d)）: 任意の旗 `--ceiling`（束の置き場・相対なら `--dir` からの相対）を
 //! 5 つの面の生成器へそのまま通す。`--write` でも `--check` でも同じ値を渡す（名札の中身も byte 一致の対象）。
+//! 構造の床（便 56・delivery-56.md §1 (a)・要件書 v1.11 の FR5）: `--write` は最初に床（`check::check_dir`・旗なし＝
+//! 下書きも凍結もしない）を回し、標準出力の 1 行目に床の 3 値を出す。不合格なら配信先へ 1 file も書かず 1・
+//! まだ分からないなら今までどおり書いて 2・合格なら書いて 0。`--check` は床を回さない（出力も終了コードも今のまま）。
 
 use std::fs;
 use std::path::Path;
 
+use crate::check;
 use crate::face::R;
+use crate::freeze::Flag;
 use crate::verdict::Verdict;
 use crate::{face_adr, face_constitution, face_index, face_note, face_srs};
 
@@ -42,7 +47,8 @@ pub enum Mode {
     Check,
 }
 
-/// 1 回の実行の結果。`stdout` / `stderr` は 1 行ずつ。
+/// 1 回の実行の結果。`stderr` は 1 行。`stdout` は `--check` で 1 行・`--write` では 1 行目が床の 3 値で、
+/// 書いたときはその後に「書いた」の行が続く（改行で繋いだ 1 つの字列）。
 pub struct Outcome {
     pub verdict: Verdict,
     pub stdout: Option<String>,
@@ -57,6 +63,15 @@ impl Outcome {
             stderr: Some(format!("folio build: まだ分からない: {}", reason.into())),
         }
     }
+
+    /// 標準出力の先頭に床の行を置く（既に行が在れば改行で繋ぐ）。
+    fn with_floor_line(mut self, floor_line: &str) -> Self {
+        self.stdout = Some(match self.stdout.take() {
+            Some(rest) => format!("{floor_line}\n{rest}"),
+            None => floor_line.to_string(),
+        });
+        self
+    }
 }
 
 // ── 命令の口 ──
@@ -65,15 +80,51 @@ pub fn run(dir: &Path, out: &Path, ceiling: Option<&Path>, mode: Mode) -> Outcom
     // --out と --ceiling が相対なら --dir からの相対・絶対ならそのまま
     let out_dir = dir.join(out);
     let ceiling_dir = ceiling.map(|c| dir.join(c));
-    let built = match build_all(dir, ceiling_dir.as_deref()) {
+    match mode {
+        Mode::Write => write_after_floor(dir, &out_dir, ceiling_dir.as_deref()),
+        Mode::Check => {
+            let built = match build_all(dir, ceiling_dir.as_deref()) {
+                Ok(b) => b,
+                Err(e) => return Outcome::unknown(e),
+            };
+            let total: usize = built.iter().map(|(_, bytes)| bytes.len()).sum();
+            check_all(&out_dir, &built, total)
+        }
+    }
+}
+
+/// `--write`（便 56 §1 (a)）: 最初に構造の床を旗なしで回し、3 値を標準出力の 1 行目に結ぶ。
+/// 不合格 = 何も書かず 1（配信先の dir も作らない・既に在る配信先は 1 byte も変えない）。
+/// まだ分からない = 今までどおり書いて 2。合格 = 今までどおり書いて 0。
+/// 面の用意が出来ない（Err の道）ときは今までどおり「まだ分からない」で 2・何も書かない。
+fn write_after_floor(dir: &Path, out_dir: &Path, ceiling: Option<&Path>) -> Outcome {
+    let (report, _after) = check::check_dir(dir, Flag::None);
+    let floor = report.verdict();
+    let floor_line = format!(
+        "folio build: 床 = {floor}（違反 {}・まだ分からない {}）",
+        report.violations.len(),
+        report.unknowns.len() + report.pendings.len()
+    );
+    if floor == Verdict::Fail {
+        return Outcome {
+            verdict: Verdict::Fail,
+            stdout: Some(format!(
+                "{floor_line}・書かない（folio check で中身を見る）"
+            )),
+            stderr: None,
+        };
+    }
+    let built = match build_all(dir, ceiling) {
         Ok(b) => b,
-        Err(e) => return Outcome::unknown(e),
+        Err(e) => return Outcome::unknown(e).with_floor_line(&floor_line),
     };
     let total: usize = built.iter().map(|(_, bytes)| bytes.len()).sum();
-    match mode {
-        Mode::Write => write_all(&out_dir, &built, total),
-        Mode::Check => check_all(&out_dir, &built, total),
+    let mut outcome = write_all(out_dir, &built, total).with_floor_line(&floor_line);
+    // 書けても床が「まだ分からない」なら合格にしない（FR5）
+    if outcome.verdict == Verdict::Pass && floor == Verdict::Unknown {
+        outcome.verdict = Verdict::Unknown;
     }
+    outcome
 }
 
 /// 出す file を全部 memory の上で用意する（1 本でも用意できなければ Err）。`ceiling` = 天井の束の置き場（解決済み）。

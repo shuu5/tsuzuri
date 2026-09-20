@@ -58,6 +58,56 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
+/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
+fn git(cwd: &Path, args: &[&str]) {
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(key);
+        }
+    }
+    let out = cmd
+        .current_dir(cwd)
+        .args([
+            "-c",
+            "user.email=fx@example",
+            "-c",
+            "user.name=fx",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git を起動できない");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// 実の正本の写し（design-intent/ と器の導出 file と図の道具）を一時 dir へ写し、git の 1 commit にする
+/// （folio build の --write は最初に構造の床を回す＝便 56・FR5・版管理の無い写しは「まだ分からない」の 2 になる）。
+/// 戻り値 = 正本の写し。
+fn real_copy(td: &Path) -> PathBuf {
+    let dir = td.join("design-intent");
+    copy_tree(&design_intent(), &dir);
+    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::copy(
+        repo_root().join("contracts/schema.toml"),
+        td.join("contracts/schema.toml"),
+    )
+    .unwrap();
+    copy_tree(
+        &repo_root().join("vendor/archify"),
+        &td.join("vendor/archify"),
+    );
+    git(td, &["init", "-q"]);
+    git(td, &["add", "-A"]);
+    git(td, &["commit", "-q", "-m", "fixture"]);
+    dir
+}
+
 /// `folio ceiling --dir <dir> --faces <faces> --out <out> <flags…>`。
 fn folio_ceiling(dir: &Path, faces: &Path, out: &Path, flags: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_folio"))
@@ -731,18 +781,7 @@ fn findings_flags_require_exactly_one_of_write_and_check() {
 #[test]
 fn findings_check_passes_on_the_real_source_with_empty_findings() {
     let td = temp_dir("real");
-    let dir = td.join("design-intent");
-    copy_tree(&design_intent(), &dir);
-    fs::create_dir_all(td.join("contracts")).unwrap();
-    fs::copy(
-        repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
-    )
-    .unwrap();
-    copy_tree(
-        &repo_root().join("vendor/archify"),
-        &td.join("vendor/archify"),
-    );
+    let dir = real_copy(&td);
     let site = td.join("site");
     let build = Command::new(env!("CARGO_BIN_EXE_folio"))
         .arg("build")
@@ -1111,18 +1150,7 @@ fn findings_refute_flags_are_exclusive_and_faces_is_optional_only_for_refute() {
 #[test]
 fn findings_refute_on_the_real_source_builds_a_bundle_the_check_reads() {
     let td = temp_dir("refute-real");
-    let dir = td.join("design-intent");
-    copy_tree(&design_intent(), &dir);
-    fs::create_dir_all(td.join("contracts")).unwrap();
-    fs::copy(
-        repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
-    )
-    .unwrap();
-    copy_tree(
-        &repo_root().join("vendor/archify"),
-        &td.join("vendor/archify"),
-    );
+    let dir = real_copy(&td);
     let site = td.join("site");
     let build = Command::new(env!("CARGO_BIN_EXE_folio"))
         .arg("build")

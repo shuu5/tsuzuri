@@ -171,7 +171,36 @@ fn face_copy(td: &Path) -> PathBuf {
     work
 }
 
-/// 実の正本の写し（design-intent/ と器の導出 file と図の道具）。戻り値 = 正本の写し。
+/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
+fn git(cwd: &Path, args: &[&str]) {
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(key);
+        }
+    }
+    let out = cmd
+        .current_dir(cwd)
+        .args([
+            "-c",
+            "user.email=fx@example",
+            "-c",
+            "user.name=fx",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git を起動できない");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// 実の正本の写し（design-intent/ と器の導出 file と図の道具）を git の 1 commit にする（folio build の --write は
+/// 最初に構造の床を回す＝便 56・FR5・版管理の無い写しは「まだ分からない」の 2 になる）。戻り値 = 正本の写し。
 fn real_copy(td: &Path) -> PathBuf {
     let dir = td.join("design-intent");
     copy_tree(&design_intent(), &dir);
@@ -185,6 +214,9 @@ fn real_copy(td: &Path) -> PathBuf {
         &repo_root().join("vendor/archify"),
         &td.join("vendor/archify"),
     );
+    git(td, &["init", "-q"]);
+    git(td, &["add", "-A"]);
+    git(td, &["commit", "-q", "-m", "fixture"]);
     dir
 }
 

@@ -3,8 +3,11 @@
 //! - check の 3 値（一致 0・DRIFT 1・無い 2・空の配信先 2）
 //! - 実の正本で `folio parts --check` と 各面（設計ノートの面を含む）の `folio face --check` に合格する（AC2 の機構）
 //! - 全部か無しか（導出できなければ配信先の dir も作らない）・親 dir が無い・配信先の他の file を消さない
+//! - 構造の床（便 56・delivery-56.md §1 (b)・FR5）: `--write` は最初に床を回す。合格の写し（git の 1 commit）は 0・
+//!   不合格の写しは書かず 1・既に在る配信先は不変・版管理の無い写しは書いて 2・`--check` は床と無関係
 //!
-//! 版管理の `design-intent/preview/` は書き換えない（`--out` は必ず一時 dir の中）。
+//! 凍結 fixture（tests/fixtures/face/）の写しは正本が揃っていない（adr/schema.yaml 等が無い）ので床は「まだ分からない」
+//! ＝ `--write` は書いて 2。版管理の `design-intent/preview/` は書き換えない（`--out` は必ず一時 dir の中）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -159,11 +162,19 @@ fn site_write_matches_the_frozen_fixture() {
     .collect();
     let _ = fs::remove_dir_all(&td);
 
-    assert_eq!(code(&run, "folio build --write"), 0, "{}", stderr(&run));
+    // 凍結 fixture の写しは床が「まだ分からない」（便 56）= 書いて 2・1 行目は床の行
+    assert_eq!(code(&run, "folio build --write"), 2, "{}", stderr(&run));
     let total: usize = got.iter().map(Vec::len).sum();
+    let out = stdout(&run);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 2, "{out}");
+    assert!(
+        lines[0].starts_with("folio build: 床 = まだ分からない（"),
+        "{out}"
+    );
     assert_eq!(
-        stdout(&run),
-        format!("folio build: 書いた（7 file・{total} byte）\n")
+        lines[1],
+        format!("folio build: 書いた（7 file・{total} byte）")
     );
     for (i, name) in SITE_FILES.iter().enumerate() {
         assert!(!got[i].is_empty(), "{name} が配信先に無い");
@@ -199,7 +210,8 @@ fn site_check_has_three_values() {
     let nothing = folio_build(&work, &empty, "--check");
     let _ = fs::remove_dir_all(&td);
 
-    assert_eq!(code(&write, "write"), 0, "{}", stderr(&write));
+    // 凍結 fixture の写しは床が「まだ分からない」（便 56）= 書いて 2
+    assert_eq!(code(&write, "write"), 2, "{}", stderr(&write));
     assert_eq!(code(&ok, "check（一致）"), 0, "{}", stderr(&ok));
     assert!(
         stdout(&ok).starts_with("folio build: OK — 配信先は正本と一致（7 file・"),
@@ -215,7 +227,7 @@ fn site_check_has_three_values() {
         "{}",
         stderr(&drift)
     );
-    assert_eq!(code(&rewrite, "write（再）"), 0, "{}", stderr(&rewrite));
+    assert_eq!(code(&rewrite, "write（再）"), 2, "{}", stderr(&rewrite));
     assert_eq!(code(&missing, "check（無い）"), 2, "{}", stderr(&missing));
     assert!(
         stderr(&missing).contains("配信先に無い"),
@@ -362,10 +374,17 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
         "{}",
         stderr(&build)
     );
+    // 実の正本は版管理の中に在り床が合格する（便 56）= 1 行目が床の合格・2 行目が「書いた」
+    let out = stdout(&build);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 2, "{out}");
+    assert_eq!(
+        lines[0],
+        "folio build: 床 = 合格（違反 0・まだ分からない 0）"
+    );
     assert!(
-        stdout(&build).starts_with(&format!("folio build: 書いた（{total} file・")),
-        "{}",
-        stdout(&build)
+        lines[1].starts_with(&format!("folio build: 書いた（{total} file・")),
+        "{out}"
     );
     assert!(all_adr, "判断の記録の面が {records} 枚そろっていない");
     assert!(
@@ -471,7 +490,238 @@ fn site_write_keeps_the_other_files_in_the_out_dir() {
     let all = SITE_FILES.iter().all(|name| site.join(name).is_file());
     let _ = fs::remove_dir_all(&td);
 
-    assert_eq!(code(&run, "folio build --write"), 0, "{}", stderr(&run));
+    // 凍結 fixture の写しは床が「まだ分からない」（便 56）= 書いて 2
+    assert_eq!(code(&run, "folio build --write"), 2, "{}", stderr(&run));
     assert_eq!(extra, "手で置いた file\n", "配信先の他の file を消した");
     assert!(all, "7 本が揃っていない");
+}
+
+// ── 構造の床（便 56・FR5）──
+
+/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
+fn git(cwd: &Path, args: &[&str]) {
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(key);
+        }
+    }
+    let out = cmd
+        .current_dir(cwd)
+        .args([
+            "-c",
+            "user.email=fx@example",
+            "-c",
+            "user.name=fx",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git を起動できない");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// 実の設計文書の置き場 design-intent と器の導出 file と図の道具を一時 dir へ写す。`commit` なら git の 1 commit にする
+/// （床が合格する写し・tests/schema.rs の Work と同じ形）。戻り値 = (一時 dir, 正本の写し)。
+fn real_copy(case: &str, commit: bool) -> (PathBuf, PathBuf) {
+    let td = temp_dir(case);
+    let dir = td.join("design-intent");
+    copy_dir(&design_intent(), &dir);
+    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::copy(
+        repo_root().join("contracts/schema.toml"),
+        td.join("contracts/schema.toml"),
+    )
+    .unwrap();
+    copy_dir(&vendor(), &td.join("vendor/archify"));
+    if commit {
+        git(&td, &["init", "-q"]);
+        git(&td, &["add", "-A"]);
+        git(&td, &["commit", "-q", "-m", "fixture"]);
+    }
+    (td, dir)
+}
+
+/// 写しの設計ノートの散文に、規範の印（R-16 の marks）を持ち参照 id の無い文を 1 つ足して commit する。
+fn add_prose_violation(td: &Path, dir: &Path) {
+    let path = dir.join("design-note/example.yaml");
+    let before = fs::read_to_string(&path).unwrap();
+    let needle =
+        "      検査を通らなかった図は生成せず、前の生成物も上書きしない（FR15・P-4.1）。\n";
+    assert_eq!(
+        before.matches(needle).count(),
+        1,
+        "変異の当て先が 1 か所でない"
+    );
+    let after = before.replacen(
+        needle,
+        &format!("{needle}      検査を通らなかった図の生成物は消去しなければならない。\n"),
+        1,
+    );
+    fs::write(&path, after).unwrap();
+    git(td, &["add", "-A"]);
+    git(td, &["commit", "-q", "-m", "violation"]);
+}
+
+fn folio_check(dir: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("check")
+        .arg("--dir")
+        .arg(dir)
+        .output()
+        .expect("folio を起動できない")
+}
+
+/// dir の直下の全 file の名と中身（名の順）。dir が無ければ空。
+fn site_tree(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<(String, Vec<u8>)> = entries
+        .map(|e| {
+            let e = e.unwrap();
+            (
+                e.file_name().to_string_lossy().into_owned(),
+                fs::read(e.path()).unwrap(),
+            )
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+#[test]
+fn site_floor_pass_writes_and_exits_zero() {
+    let (td, dir) = real_copy("floor-pass", true);
+    let site = td.join("site");
+    let run = folio_build(&dir, &site, "--write");
+    let index = site.join("index.html").is_file();
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&run, "folio build --write"), 0, "{}", stderr(&run));
+    let out = stdout(&run);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 2, "{out}");
+    assert!(lines[0].starts_with("folio build: 床 = 合格"), "{out}");
+    assert!(lines[1].starts_with("folio build: 書いた"), "{out}");
+    assert!(index, "面が書かれていない");
+}
+
+#[test]
+fn site_floor_fail_writes_nothing_and_exits_one() {
+    let (td, dir) = real_copy("floor-fail", true);
+    add_prose_violation(&td, &dir);
+    let check = folio_check(&dir);
+    let site = td.join("site");
+    let run = folio_build(&dir, &site, "--write");
+    let exists = site.exists();
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&check, "folio check"), 1, "{}", stdout(&check));
+    assert_eq!(code(&run, "folio build --write"), 1, "{}", stderr(&run));
+    let out = stdout(&run);
+    assert_eq!(out.lines().count(), 1, "{out}");
+    assert!(out.contains("床 = 不合格"), "{out}");
+    assert!(out.contains("書かない"), "{out}");
+    assert!(!exists, "床が不合格なのに配信先の dir を作った");
+}
+
+#[test]
+fn site_floor_fail_leaves_an_existing_site_untouched() {
+    let (td, dir) = real_copy("floor-keep", true);
+    let site = td.join("site");
+    let first = folio_build(&dir, &site, "--write");
+    let before = site_tree(&site);
+    add_prose_violation(&td, &dir);
+    let second = folio_build(&dir, &site, "--write");
+    let after = site_tree(&site);
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(
+        code(&first, "folio build --write（合格）"),
+        0,
+        "{}",
+        stderr(&first)
+    );
+    assert!(!before.is_empty(), "合格の配信先が空");
+    assert_eq!(
+        code(&second, "folio build --write（不合格）"),
+        1,
+        "{}",
+        stderr(&second)
+    );
+    assert!(
+        stdout(&second).contains("床 = 不合格"),
+        "{}",
+        stdout(&second)
+    );
+    assert!(
+        before == after,
+        "床が不合格なのに既に在る配信先の file を変えた"
+    );
+}
+
+#[test]
+fn site_floor_unknown_without_version_control_writes_and_exits_two() {
+    let (td, dir) = real_copy("floor-nogit", false);
+    let site = td.join("site");
+    let run = folio_build(&dir, &site, "--write");
+    let index = site.join("index.html").is_file();
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&run, "folio build --write"), 2, "{}", stderr(&run));
+    let out = stdout(&run);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 2, "{out}");
+    assert!(
+        lines[0].starts_with("folio build: 床 = まだ分からない"),
+        "{out}"
+    );
+    assert!(lines[1].starts_with("folio build: 書いた"), "{out}");
+    assert!(index, "面が書かれていない");
+}
+
+#[test]
+fn site_floor_check_does_not_run_the_floor() {
+    let (td, dir) = real_copy("floor-check", true);
+    let site = td.join("site");
+    let write = folio_build(&dir, &site, "--write");
+    let ok = folio_build(&dir, &site, "--check");
+    add_prose_violation(&td, &dir);
+    let drift = folio_build(&dir, &site, "--check");
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&write, "folio build --write"), 0, "{}", stderr(&write));
+    assert_eq!(
+        code(&ok, "folio build --check（一致）"),
+        0,
+        "{}",
+        stderr(&ok)
+    );
+    assert!(
+        stdout(&ok).starts_with("folio build: OK"),
+        "{}",
+        stdout(&ok)
+    );
+    assert!(!stdout(&ok).contains("床"), "{}", stdout(&ok));
+    // 正本が変わったので不一致の 1（床の 3 値とは無関係・出力にも床の行は無い）
+    assert_eq!(
+        code(&drift, "folio build --check（不一致）"),
+        1,
+        "{}",
+        stderr(&drift)
+    );
+    assert!(stderr(&drift).contains("DRIFT"), "{}", stderr(&drift));
+    assert!(
+        stderr(&drift).contains("note-example.html"),
+        "{}",
+        stderr(&drift)
+    );
+    assert!(stdout(&drift).is_empty(), "{}", stdout(&drift));
+    assert!(!stderr(&drift).contains("床"), "{}", stderr(&drift));
 }
