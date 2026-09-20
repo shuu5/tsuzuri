@@ -28,8 +28,9 @@ use crate::yaml::{self, Node};
 const DIR: &str = "design-note";
 const SCHEMA_FILE: &str = "design-note/schema.yaml";
 
-/// 違反の種別（設計ノートの形・散文の門）。
+/// 違反の種別（設計ノートの形・未知の欄・散文の門）。
 const KIND: &str = "note";
+const UNKNOWN_FIELD: &str = "未知の欄";
 const PROSE_GATE: &str = "prose-gate";
 
 // ── 床の定数（design-note/schema.yaml の schema 節の正本） ──
@@ -866,6 +867,7 @@ fn check_meta(file: &str, note: &NoteDoc, note_ids: &HashSet<&str>, report: &mut
     let blank = Node::Null;
     let meta = note.root.get("meta").unwrap_or(&blank);
     non_empty(file, "meta", meta, DOC_META.required, report);
+    unknown_fields(file, "meta", meta, &DOC_META, report);
 
     if let Some(id) = field(meta, "id") {
         if id != note.id {
@@ -983,6 +985,8 @@ fn check_section(
     let shown = section.get("n").and_then(Node::as_str).unwrap_or("?");
     let at = format!("§{shown}");
     non_empty(file, &at, section, SECTION.required, report);
+    // 節の欄は SECTION の和集合で見る（型ごとの required / forbid は下の by_type が別に数える）
+    unknown_fields(file, &at, section, &SECTION, report);
 
     match shown.parse::<u64>() {
         Ok(n) if n >= 1 => {
@@ -1184,6 +1188,7 @@ fn check_figures(file: &str, root: &Node, known: &HashSet<String>, report: &mut 
     for entry in row_list(file, "figures", root, "figures", report) {
         let at = format!("figures の {}", row_id(entry));
         non_empty(file, &at, entry, FIGURE_ENTRY.required, report);
+        unknown_fields(file, &at, entry, &FIGURE_ENTRY, report);
         if let Some(v) = field(entry, "type")
             && FigureType::from_name(v).is_none()
         {
@@ -1219,6 +1224,16 @@ fn row_list<'a>(
         Some(_) => {
             report.unknown(format!("{file}: {place} が表の一覧でない"));
             Vec::new()
+        }
+    }
+}
+
+/// 欄の表の未知の欄（欄の決まりの required と optional の和集合に無い鍵）を 1 件ずつ数える
+/// （要件書 FR9 の正本の形・要件書の図の行の検査と同じ字面）。表でなければ 0 件（形の側が数えてある）。
+fn unknown_fields(file: &str, at: &str, node: &Node, keys: &Keys, report: &mut Report) {
+    for (key, _) in node.as_map().unwrap_or_default() {
+        if !keys.has(key) {
+            report.violation(UNKNOWN_FIELD, format!("{file}: {at} の未知の欄「{key}」"));
         }
     }
 }

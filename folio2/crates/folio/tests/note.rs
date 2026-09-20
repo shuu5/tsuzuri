@@ -459,3 +459,58 @@ fn note_schema_copy_drift_fails() {
         &["design-note/schema.yaml", "床の定数と違う", "type_enum"],
     );
 }
+
+// ── 未知の欄（meta・節・図の行・便 61） ──
+//
+// 欄の決まりは 3 階層とも閉じた欄の集合（required と optional）なので、和集合に無い鍵は違反 1 件（種別「未知の欄」・
+// 要件書の図の行の検査と同じ字面）。道（{at}）は同じ節の他の違反と同じ字面（meta / §N / figures の <id>）を使う。
+
+#[test]
+fn note_unknown_field_in_meta_fails() {
+    let w = Work::new("unknown-meta");
+    w.mutate(
+        "\n  profile: design-note\n",
+        "\n  profile: design-note\n  mystery: x\n",
+    );
+    assert_single_violation(
+        &w.check(),
+        "未知の欄",
+        &["design-note/example.yaml", "meta の未知の欄「mystery」"],
+    );
+}
+
+#[test]
+fn note_unknown_field_in_section_fails() {
+    let w = Work::new("unknown-section");
+    w.mutate("  - n: 2\n", "  - n: 2\n    mystery: x\n");
+    assert_single_violation(
+        &w.check(),
+        "未知の欄",
+        &["design-note/example.yaml", "§2 の未知の欄「mystery」"],
+    );
+}
+
+#[test]
+fn note_unknown_field_in_figure_fails() {
+    let w = Work::new("unknown-figure");
+    w.mutate_file(
+        &w.note("figures.yaml"),
+        "  - id: fig-plain\n",
+        "  - id: fig-plain\n    mystery: x\n",
+    );
+    assert_single_violation(
+        &w.check(),
+        "未知の欄",
+        &[
+            "design-note/figures.yaml",
+            "figures の fig-plain の未知の欄「mystery」",
+        ],
+    );
+}
+
+/// 変えない写し＝実の設計ノート 3 本に未知の欄は 1 つも無い（式を足した後の床で数え直す）。
+#[test]
+fn note_unknown_field_none_on_the_canonical_copy() {
+    let w = Work::new("unknown-none");
+    assert_passes(&w.check());
+}
