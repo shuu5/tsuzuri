@@ -25,7 +25,7 @@ schema:
     status: [proposed, accepted, retired]
     verdict: [adopted, rejected]
     retreat_kind: [spike, measure, ruling]
-    approver: [持ち主, planner 席]
+    approver: [持ち主, planner 席, orchestrator 席]
     surface: [R-8]
   enums_note: retreat_kind は憲法 schema.enums.retreat_kind と同じ（食い違えば落ちる）。surface は対話面を rules 行の id で指す（P-5.2・P-12.1 が名指す R-8 = 持ち主と planner 席の対話面）
   status_note:

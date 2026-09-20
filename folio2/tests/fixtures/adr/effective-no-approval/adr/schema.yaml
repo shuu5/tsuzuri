@@ -12,7 +12,7 @@ schema:
     status: [proposed, accepted, retired]
     verdict: [adopted, rejected]
     retreat_kind: [spike, measure, ruling]
-    approver: [持ち主, planner 席]
+    approver: [持ち主, planner 席, orchestrator 席]
     surface: [R-8]
   effective_status: [accepted, retired]
   option: {required: [id, name, text, verdict, reason], optional: []}

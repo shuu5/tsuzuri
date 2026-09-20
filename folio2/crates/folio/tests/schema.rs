@@ -1,5 +1,5 @@
 //! `folio schema`（便 45・docs/design/delivery-45.md §1 (f)）の歯。folio は実行 file の crate なので命令を撃つ。
-//! 1. 実の正本: design-intent の写しに --check → 0・「一致」・「22182 byte」。生成区間を sha256sum で測り直して (d) の値。
+//! 1. 実の正本: design-intent の写しに --check → 0・「一致」・「22254 byte」。生成区間を sha256sum で測り直して (d) の値。
 //! 2. ずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 3. 印: begin を消す・end を 2 本に・begin と end を入れ替える → 2。
 //! 4. 書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致。もう 1 度 → 0・「変わらない」。
@@ -27,16 +27,20 @@
 //!
 //! 便 57（docs/design/delivery-57.md §1 (c)）: 設計ノートの側の注 4 つに「未実装である」を足した（8 の定数を 15305 byte と新しい要約値に）。
 //! 20. 設計ノートの側の実の生成区間が凍結 anchor tests/fixtures/schema/note-region.txt と byte 一致 ∧ 注 folio_check_note の行に「未実装である」を含む。
+//!
+//! 便 58（docs/design/delivery-58.md §1 (e)）: 承認者の値域に orchestrator 席 を足した（1 の定数を 22254 byte と新しい要約値に）。
+//! 21. 判断の記録の側の実の生成区間が凍結 anchor tests/fixtures/schema/adr-region.txt と byte 一致 ∧ approver の行に orchestrator 席 を含む。
 
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-/// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測。
+/// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測（便 58 (b) で承認者の値域に
+/// orchestrator 席 を足した後の値・tests/fixtures/schema/adr-region.txt と同じ byte・行数は不変）。
 const REGION_LINES: usize = 117;
-const REGION_BYTES: usize = 22182;
-const REGION_SHA256: &str = "8c53aa96fad9bddf83fb04d33113124b79bac036aea3fa2a12249e37f65ce998";
+const REGION_BYTES: usize = 22254;
+const REGION_SHA256: &str = "29e1188380852b143ca3db715348cc7a74220db206d284d988d66cde8f95d24b";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・注 4 つに「未実装である」を足した後の値）。
@@ -858,4 +862,23 @@ fn schema_design_note_region_matches_the_frozen_anchor_and_says_unimplemented() 
             .unwrap_or_else(|| panic!("注 {key} の行が無い"));
         assert!(line.contains("未実装である"), "{key}: {line}");
     }
+}
+
+// ── 便 58: 承認者の値域に orchestrator 席 ──
+
+// ── 21. 実の生成区間は凍結 anchor と byte 一致・値域 approver に orchestrator 席 ──
+
+#[test]
+fn schema_adr_region_matches_the_frozen_anchor_and_lists_the_orchestrator_seat() {
+    let text = fs::read_to_string(repo_root().join("design-intent/adr/schema.yaml")).unwrap();
+    let cur = region(&text);
+    let anchor =
+        fs::read_to_string(repo_root().join("tests/fixtures/schema/adr-region.txt")).unwrap();
+    assert_eq!(cur, anchor, "実の生成区間が凍結 anchor と byte 一致");
+    assert_eq!(cur.len(), REGION_BYTES);
+    let line = cur
+        .lines()
+        .find(|l| l.trim_start().starts_with("approver: "))
+        .expect("値域 approver の行が無い");
+    assert!(line.contains("orchestrator 席"), "{line}");
 }

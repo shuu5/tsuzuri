@@ -50,7 +50,7 @@ const STATUS: &[&str] = &["proposed", "accepted", "retired"];
 const VERDICT: &[&str] = &["adopted", "rejected"];
 /// 撤退条件の種類 = 憲法の値域 schema.enums.retreat_kind から組み立て時に導出した名の列（便 49・手書きの写しは持たない）。
 const RETREAT_KIND: &[&str] = &RetreatKind::NAMES;
-const APPROVER: &[&str] = &["持ち主", "planner 席"];
+const APPROVER: &[&str] = &["持ち主", "planner 席", "orchestrator 席"];
 const SURFACE: &[&str] = &["R-8"];
 const EFFECTIVE_STATUS: &[&str] = &["accepted", "retired"];
 const OPTION: Keys = Keys {
@@ -126,7 +126,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "owner_note",
         Floor::Val(
-            "条文を改訂する発効した判断の承認者はこの値（N-4）。planner 席は条文を改訂しない判断だけを承認できる",
+            "条文を改訂する発効した判断の承認者はこの値（N-4）。orchestrator 席（2026-09-19 までの名は planner 席）は条文を改訂しない判断だけを承認できる",
         ),
     ),
     ("required", Floor::Strs(RECORD.required)),
@@ -151,7 +151,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "enums_note",
         Floor::Val(
-            "retreat_kind は憲法 schema.enums.retreat_kind と同じ（食い違えば落ちる）。surface は対話面を rules 行の id で指す（P-5.2・P-12.1 が名指す R-8 = 持ち主と planner 席の対話面）",
+            "retreat_kind は憲法 schema.enums.retreat_kind と同じ（食い違えば落ちる）。surface は対話面を rules 行の id で指す（P-5.2・P-12.1 が名指す R-8 = 持ち主と orchestrator 席の対話面）",
         ),
     ),
     (
@@ -1166,5 +1166,24 @@ mod tests {
         assert_eq!(out.len(), fields.len() - notes, "{out:?}");
         assert!(out.iter().all(|p| p.ends_with("（欠落）")), "{out:?}");
         assert!(out.iter().all(|p| !p.contains("_note")), "{out:?}");
+    }
+
+    /// 床の木の導出は凍結 anchor（設計判断の席が独立の実装で組んだ・P-10.1）と byte 一致（便 58 §1 (e)3・
+    /// `ceiling.rs` / `rules.rs` / `note.rs` の同名の歯と同じ形で `schema.rs` の pub の `derive` を呼ぶ）。
+    #[test]
+    fn adr_floor_derives_the_frozen_anchor_byte_for_byte() {
+        let anchor = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/schema/adr-region.txt"
+        ))
+        .unwrap();
+        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+    }
+
+    /// 承認者の値域は 持ち主・planner 席・orchestrator 席 の 3 つ（席の呼び名の裁定 2026-09-20・便 58 §1 (a)1・
+    /// planner 席 は凍結の場合と過去の記録のために残す）。
+    #[test]
+    fn adr_floor_approver_enum_has_three_values() {
+        assert_eq!(APPROVER, ["持ち主", "planner 席", "orchestrator 席"]);
     }
 }

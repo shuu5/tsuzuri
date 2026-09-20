@@ -16,7 +16,7 @@ schema:
   ruling_pattern: '[a-z]\d-[0-9a-z]+(\.\d+)?'
   ruling_pattern_note: 裁定 id は台帳の id（f2-648.2 / s2-07l.149 の形）を 1 つ以上含む。実在と本物かは人が台帳と突き合わせる（P-12.2）
   owner: 持ち主
-  owner_note: 条文を改訂する発効した判断の承認者はこの値（N-4）。planner 席は条文を改訂しない判断だけを承認できる
+  owner_note: 条文を改訂する発効した判断の承認者はこの値（N-4）。orchestrator 席（2026-09-19 までの名は planner 席）は条文を改訂しない判断だけを承認できる
   required: [id, title, status, date, context, decision, options, basis, retreat, plain]
   optional: [amends, grill, approval, consequences, supersedes, superseded_by, note, figures]
   non_empty: [title, context, decision, plain]
@@ -25,9 +25,9 @@ schema:
     status: [proposed, accepted, retired]
     verdict: [adopted, rejected]
     retreat_kind: [spike, measure, ruling]
-    approver: [持ち主, planner 席]
+    approver: [持ち主, planner 席, orchestrator 席]
     surface: [R-8]
-  enums_note: retreat_kind は憲法 schema.enums.retreat_kind と同じ（食い違えば落ちる）。surface は対話面を rules 行の id で指す（P-5.2・P-12.1 が名指す R-8 = 持ち主と planner 席の対話面）
+  enums_note: retreat_kind は憲法 schema.enums.retreat_kind と同じ（食い違えば落ちる）。surface は対話面を rules 行の id で指す（P-5.2・P-12.1 が名指す R-8 = 持ち主と orchestrator 席の対話面）
   status_note:
     proposed: 提案中・拘束力なし（承認欄は空でよい）
     accepted: 発効（承認欄が必須。条文を改訂する判断なら承認者は 持ち主・grill 必須）

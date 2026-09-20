@@ -420,7 +420,7 @@ cases_single:
 
 cases_floor_constants:
   - {id: owner-knob, why: 承認者の定義（owner）を data 側で動かせない（content-limits-1・loophole-v3-3）, mutate: [{file: adr/schema.yaml, path: schema.owner, value: planner 席}], expect_rc: 1, expect_msg: schema.owner が床の定数と違う}
-  - {id: approver-knob, why: 承認者の値域を data 側で広げられない（loophole-v3-3）, mutate: [{file: adr/schema.yaml, path: schema.enums.approver, value: [持ち主, planner 席, 誰でも]}], expect_rc: 1, expect_msg: schema.enums.approver が床の定数と違う}
+  - {id: approver-knob, why: 承認者の値域を data 側で広げられない（loophole-v3-3）, mutate: [{file: adr/schema.yaml, path: schema.enums.approver, value: [持ち主, planner 席, orchestrator 席, 誰でも]}], expect_rc: 1, expect_msg: schema.enums.approver が床の定数と違う}
   - {id: surface-knob, why: 対話面の値域を data 側で広げられない（content-limits-2・P-12.1）, mutate: [{file: adr/schema.yaml, path: schema.enums.surface, value: [R-8, R-9]}], expect_rc: 1, expect_msg: schema.enums.surface が床の定数と違う}
   - {id: ruling-pattern-knob, why: 裁定 id の形を data 側で緩められない（content-limits-2）, mutate: [{file: adr/schema.yaml, path: schema.ruling_pattern, value: "."}], expect_rc: 1, expect_msg: schema.ruling_pattern が床の定数と違う}
   - {id: effective-status-knob, why: 発効の定義を data 側で消せない（content-limits-2）, mutate: [{file: adr/schema.yaml, path: schema.effective_status, value: []}], expect_rc: 1, expect_msg: schema.effective_status が床の定数と違う}
