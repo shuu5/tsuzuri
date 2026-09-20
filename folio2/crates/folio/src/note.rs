@@ -3,7 +3,7 @@
 //! 数えるのは 欄の決まり（同じ dir の `schema.yaml`）の schema 節が定める形（文書と meta の欄・節の番号と型・
 //! 型ごとの行の欄と値域・承認欄の要否）と、契約表の節の欄（器 scribe2 の導出 file `contracts/schema.toml` から読む・
 //! 欄の一覧も値域も自分の型にも散文にも持たない・FR10）と、参照 id の解決（folio2 が所有する id 空間）である。
-//! 散文の門（FR12・rules 行 R-16）と導出物（FR11）は本便に入れない。
+//! 散文の門（FR12・rules 行 R-16）は便 24 で入った。導出物（FR11）と索引（FR14）は未実装（欄の決まりの注が明記する・便 57）。
 //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、`design-note/schema.yaml` の schema 節はその写し
 //! （判断の記録の欄の決まり `adr.rs` と同じ作り・N-3.1）。パターンの文字列は定数として字面で持つだけで、
 //! 形の判定は字の走査で行う（正規表現は使わない）。器の導出 file（TOML）も行走査で読む（外部 crate を足さない）。
@@ -298,7 +298,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                 "folio_check",
                 Floor::Strs(&["yaml-form", "derived-diff-zero", "own-id-space"]),
             ),
-            ("folio_check_note", Floor::Val("契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）")),
+            ("folio_check_note", Floor::Val("契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）。このうち導出物の差分 0（derived-diff-zero）は未実装である = 要件書 FR11 の便が入るまで folio はこの検査を回さず、folio build --check もこれを数えない（その間この検査の結果は「まだ分からない」として扱う・P-4.2）")),
         ]),
     ),
     (
@@ -340,7 +340,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                     ("stage", Floor::Val("post")),
                 ]),
             ),
-            ("derived_note", Floor::Val("判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため")),
+            ("derived_note", Floor::Val("判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。導出物を組む口と差分を数える口は未実装である（要件書 FR11 の便で入る・それまで derived の節は決めた形の記録）")),
         ]),
     ),
     (
@@ -406,7 +406,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         Floor::Map(&[
             ("entries", Floor::Strs(&["doc", "requirement", "contract"])),
             ("entry_fields", Floor::Strs(&["id", "title"])),
-            ("index_note", Floor::Val("要件書 FR14。機械が読む id の索引（文書・要件・契約の id と 1 行の題）。中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）")),
+            ("index_note", Floor::Val("要件書 FR14。機械が読む id の索引（文書・要件・契約の id と 1 行の題）。中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）。索引を出す口は未実装である（要件書 FR14 の便で入る）")),
         ]),
     ),
     (
@@ -454,7 +454,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ),
             ("polarity_list_feed", Floor::Val("true")),
             ("p18_4_judged_by", Floor::Val("R-13")),
-            ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）")),
+            ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は未実装である（要件書 FR11 の便が入るまで、極性一覧へは「まだ無い検査」として寄せる）")),
         ]),
     ),
 ]);
@@ -1286,4 +1286,21 @@ fn is_version(s: &str) -> bool {
     s.strip_prefix('v')
         .and_then(|rest| rest.split_once('.'))
         .is_some_and(|(major, minor)| digits(major) && digits(minor))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 床の木の導出は凍結 anchor（設計判断の席が独立の実装で組んだ・P-10.1）と byte 一致（便 57 §1 (c)3・
+    /// `ceiling.rs` / `rules.rs` の同名の歯と同じ形で `schema.rs` の pub の `derive` を呼ぶ）。
+    #[test]
+    fn note_floor_derives_the_frozen_anchor_byte_for_byte() {
+        let anchor = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/schema/note-region.txt"
+        ))
+        .unwrap();
+        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+    }
 }

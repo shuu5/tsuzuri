@@ -8,7 +8,7 @@
 //! 7. 床は印を見ない: 印 2 本を消した写しに folio check → 合格（git init 済みの写し・tests/ceiling.rs の Work と同じ作り方）。
 //!
 //! 便 46（docs/design/delivery-46.md §1 (d)）: 命令は 2 本目の file design-note/schema.yaml も順に見る（合格の標準出力は 2 行）。
-//! 8. 設計ノートの側の実の正本: --check → 0・2 行目に「design-note/schema.yaml」「14618 byte」・生成区間の要約値が (c) の値。
+//! 8. 設計ノートの側の実の正本: --check → 0・2 行目に「design-note/schema.yaml」「15305 byte」・生成区間の要約値が (c) の値。
 //! 9. 設計ノートの側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 10. 設計ノートの側の印: begin を消す → 2。
 //! 11. 設計ノートの側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致。
@@ -24,6 +24,9 @@
 //! 17. 規則の表の側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 18. 規則の表の側の印: begin を消す → 2。
 //! 19. 規則の表の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致（人が書く行 thresholds・discipline と先頭の注釈も不変）。
+//!
+//! 便 57（docs/design/delivery-57.md §1 (c)）: 設計ノートの側の注 4 つに「未実装である」を足した（8 の定数を 15305 byte と新しい要約値に）。
+//! 20. 設計ノートの側の実の生成区間が凍結 anchor tests/fixtures/schema/note-region.txt と byte 一致 ∧ 注 folio_check_note の行に「未実装である」を含む。
 
 use std::fs;
 use std::io::Write;
@@ -35,10 +38,11 @@ const REGION_LINES: usize = 117;
 const REGION_BYTES: usize = 22182;
 const REGION_SHA256: &str = "8c53aa96fad9bddf83fb04d33113124b79bac036aea3fa2a12249e37f65ce998";
 
-/// 便 46 (c) 凍結 anchor: design-note/schema.yaml の生成区間（planner の独立の Python と admin の別の実装で byte 一致）。
+/// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
+/// tests/fixtures/schema/note-region.txt と同じ byte・注 4 つに「未実装である」を足した後の値）。
 const NOTE_REGION_LINES: usize = 135;
-const NOTE_REGION_BYTES: usize = 14618;
-const NOTE_REGION_SHA256: &str = "cae43ed2765884f8593aff4925ffae3cc0e69a0e18d376160d615853f437ce8e";
+const NOTE_REGION_BYTES: usize = 15305;
+const NOTE_REGION_SHA256: &str = "836e07fadc3e32b897e975cab8454aacb4ca02507e992d2979b332c4d96a019f";
 
 /// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
 const CEILING_REGION_LINES: usize = 24;
@@ -826,4 +830,32 @@ fn schema_write_restores_the_rules_region_and_is_idempotent() {
     );
     assert_eq!(w.read_rules(), original);
     assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
+}
+
+// ── 便 57: 設計ノートの側の注に「未実装である」 ──
+
+// ── 20. 実の生成区間は凍結 anchor と byte 一致・注 folio_check_note に「未実装である」を含む ──
+
+#[test]
+fn schema_design_note_region_matches_the_frozen_anchor_and_says_unimplemented() {
+    let text =
+        fs::read_to_string(repo_root().join("design-intent/design-note/schema.yaml")).unwrap();
+    let cur = region(&text);
+    let anchor =
+        fs::read_to_string(repo_root().join("tests/fixtures/schema/note-region.txt")).unwrap();
+    assert_eq!(cur, anchor, "実の生成区間が凍結 anchor と byte 一致");
+    assert_eq!(cur.len(), NOTE_REGION_BYTES);
+    // 注 4 つ（folio_check_note・derived_note・index_note・guards_note）は「未実装である」を含む
+    for key in [
+        "folio_check_note",
+        "derived_note",
+        "index_note",
+        "guards_note",
+    ] {
+        let line = cur
+            .lines()
+            .find(|l| l.trim_start().starts_with(&format!("{key}: ")))
+            .unwrap_or_else(|| panic!("注 {key} の行が無い"));
+        assert!(line.contains("未実装である"), "{key}: {line}");
+    }
 }
