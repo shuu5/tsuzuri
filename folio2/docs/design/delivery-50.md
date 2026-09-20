@@ -27,9 +27,10 @@
 2. 消す歯 1 つ（根拠つき）: face_srs.rs の unit test face_srs_label_tables_are_aligned のうち、STRENGTH と STRENGTH_MEANING と PRIO の鍵の列が揃っていることを見る 2 行は、鍵の列が無くなるので消す（3 つの名札が同じ型への網羅の場合分けになり、揃いは組み立てが保つ）。同じ歯の TONE の部分は残す。face.rs の unit test のうち表 TIERS を lookup に渡している 1 行は、(b) の口で同じ期待（表に無い値は Err）に書き換える。
 3. tests/face.rs: 実の設計文書の置き場の写しで、憲法の schema.enums.pattern の一覧に値を 1 つ足す → 憲法の面の生成が「まだ分からない」（終了 2）∧ 標準エラーに schema.enums.pattern と「組み立て時の憲法の値域と違う」。同じ形で schema.enums に知らない鍵を 1 つ足す → 終了 2 ∧ 鍵の名。既存の face_unknown_when_a_tier_is_outside_the_table は期待不変。
 4. crates/folio/tests/constitution_enums.rs に 1 本足す: 導出した source に定数 ENUMS が在り、実の憲法の鍵の数だけ対を持つ（関数名は constitution_enums で始める）。
-5. 回帰（期待不変・共通の検証が回す）: 面の凍結の fixture と byte 一致の歯の全部（tests/face.rs・tests/face_index.rs・tests/face_adr.rs・tests/face_note.rs・tests/site.rs）・束の要約値の歯（tests/bundle.rs = 束に面が入る）・tests/parts.rs・tests/floor_cases.rs（凍結の場合 134 件）。
+5. (a2) の番をする歯（既存・本文は変えない・verify に名指す）: crates/folio/tests/schema.rs の歯は、実の設計文書の置き場の写しに folio schema --check を当て、終了 0 ∧ 標準出力 3 行 ∧ 判断の記録の側が 22182 byte であることを見ている。adr.rs の床の木の注 retreat_kind_note の鍵・順・字面が 1 字でもずれれば、導出が実の adr/schema.yaml の生成区間と合わず、この歯が落ちる。
+6. 回帰（期待不変・共通の検証が回す）: 面の凍結の fixture と byte 一致の歯の全部（tests/face.rs・tests/face_index.rs・tests/face_adr.rs・tests/face_note.rs・tests/site.rs）・束の要約値の歯（tests/bundle.rs = 束に面が入る）・tests/parts.rs・tests/floor_cases.rs（凍結の場合 134 件）。
 
-(f) 大きさと接続。新規 file は無い。既存 = face.rs（表 12 枚が関数に替わる = 単純な表 11 枚は 1 枚あたり +2 行前後・段の表は同じ大きさ・表引きの口 約 +12 行・凍結の針の歯 約 +50 行 = 増分は約 +85 行の見積）・face_constitution.rs（(d) で約 +40 行）・face_index.rs と face_srs.rs と face_adr.rs（表引きの書き換え = 増減ほぼ 0・face_srs.rs は余地 114 なので増やさない）・build.rs（正規化 332・ENUMS で約 +15 行）・adr.rs（(a2) で数行）・tests/face.rs（約 +60 行）・tests/constitution_enums.rs（約 +15 行）。size S = 既存 file 1 本あたりの増分は 100 行に収まる見積（余地のいちばん小さい face_srs.rs 114 と face_index.rs 173 は増やさない）。設計文書・fixture・src/render.rs（退役待ち）・src/link.rs・src/inject.rs・tests/floor_cases.yaml・CI の yml は触らない。外部 crate は増やさない。
+(f) 大きさと接続。新規 file は無い。既存 = face.rs（表 12 枚が関数に替わる = 単純な表 11 枚は 1 枚あたり +2 行前後・段の表は同じ大きさ・表引きの口 約 +12 行・凍結の針の歯 約 +50 行 = 増分は約 +85 行の見積）・face_constitution.rs（(d) で約 +40 行）・face_index.rs と face_srs.rs と face_adr.rs（表引きの書き換え = 増減ほぼ 0・face_srs.rs は余地 114 なので増やさない）・build.rs（正規化 332・ENUMS で約 +15 行）・adr.rs（(a2) で数行）・tests/face.rs（約 +60 行）・tests/constitution_enums.rs（約 +15 行）・tests/schema.rs（本文は変えない・verify の scope なので write-set に置く）。size S = 既存 file 1 本あたりの増分は 100 行に収まる見積（余地のいちばん小さい face_srs.rs 114 と face_index.rs 173 は増やさない）。設計文書・fixture・src/render.rs（退役待ち）・src/link.rs・src/inject.rs・tests/floor_cases.yaml・CI の yml は触らない。外部 crate は増やさない。
 
 ## 2. 範囲
 
@@ -61,8 +62,8 @@ id = "ay"
 title = "面の生成器の表 13 枚から憲法の値域の鍵の列を消し、名札を導出した型への網羅の場合分けで持つ（値が足されても消えても組み立てが通らない）・組み立てた版と読んでいる版のずれの検査を置き場の値域の在る鍵の全部へ（面の出力の byte と Err の文言は不変・ADR-11 決定 (4)② の 2 本目）"
 req = ["FR4", "NFR2"]
 section = "1"
-write-set = ["crates/folio/build.rs", "crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_index.rs", "crates/folio/src/face_srs.rs", "crates/folio/src/face_adr.rs", "crates/folio/src/adr.rs", "crates/folio/tests/face.rs", "crates/folio/tests/constitution_enums.rs"]
-verify = ["cargo nextest run -p folio face_labels", "cargo nextest run -p folio --test face face", "cargo nextest run -p folio --test constitution_enums constitution_enums", "cargo clippy --workspace --all-targets -- -D warnings"]
+write-set = ["crates/folio/build.rs", "crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_index.rs", "crates/folio/src/face_srs.rs", "crates/folio/src/face_adr.rs", "crates/folio/src/adr.rs", "crates/folio/tests/face.rs", "crates/folio/tests/constitution_enums.rs", "crates/folio/tests/schema.rs"]
+verify = ["cargo nextest run -p folio face_labels", "cargo nextest run -p folio --test face face", "cargo nextest run -p folio --test constitution_enums constitution_enums", "cargo nextest run -p folio --test schema schema", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "face_labels の歯（名札の凍結の針 13 枚ぶん）が緑、face の歯（値域に値を足す・知らない鍵を足すと「まだ分からない」・既存は期待不変で面の凍結の fixture と byte 一致）が緑、constitution_enums の歯（ENUMS が鍵の数だけ）が緑、face.rs と face_adr.rs と adr.rs に値域の値の字面を鍵にした表が残らず、folio schema --check の 3 行が不変、clippy が 0 警告で CI が通る"
+done = "face_labels の歯（名札の凍結の針 13 枚ぶん）が緑、face の歯（値域に値を足す・知らない鍵を足すと「まだ分からない」・既存は期待不変で面の凍結の fixture と byte 一致）が緑、constitution_enums の歯（ENUMS が鍵の数だけ）が緑、face.rs と face_adr.rs と adr.rs に値域の値の字面を鍵にした表が残らず、schema の歯（実の置き場の写しで folio schema --check が 3 行一致・判断の記録の側 22182 byte = adr.rs の注の表の番）が期待不変で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->

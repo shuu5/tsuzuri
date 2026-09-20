@@ -23,7 +23,7 @@
 
 (d) 歯。新しい歯の関数名は、tests/parts.rs の側は parts で、src/parts.rs の unit test の側は parts_derived で始める（parts を名に含む歯は面の歯の file にも在るので、検証の絞り込みは file と語の両方で行う）。
 1. 消す歯 3 本（根拠つき）: 上に挙げた 3 本は、導出の後は「部品目録から導出した値」を「部品目録の値」と比べるだけになり、何も落とせなくなるので消す（face_srs.rs の歯のうち band_limit の 2 行は上限の関数の歯なので、別の歯として残す）。
-2. src/parts.rs の unit test（凍結の針・P-10.1）: 導出した上限 3 つが 7・4・4 で、図の型の名札が今の 5 対（構成図（architecture）・手順図（workflow）・順序図（sequence）・流れ図（dataflow）・状態図（lifecycle））と順まで同じ（字面を歯に直に書く）。
+2. src/parts.rs の unit test（凍結の針・P-10.1・(b) の置き換えの番）: face.rs の名を通して読む = face.rs の MAX_RAIL_NODES・MAX_STATE_NODES・MAX_PER_BAND が 7・4・4 で、face.rs の FIGURE_LABELS が今の 5 対と順まで同じ（名の付け替えの取り違えもここで落ちる）。導出した定数の側も同じ値 = 導出した上限 3 つが 7・4・4 で、図の型の名札が今の 5 対（構成図（architecture）・手順図（workflow）・順序図（sequence）・流れ図（dataflow）・状態図（lifecycle））と順まで同じ（字面を歯に直に書く）。
 3. crates/folio/tests/parts.rs（build.rs を path の属性で取り込み、(a) の純粋な関数を直に呼ぶ）: 実の部品目録 → Ok ∧ 出力に PIPELINE_RAIL_MAX_NODES と FIGURE_TYPE_LABELS が在る。変異 3 つがそれぞれ Err = max_nodes を文字列にする・type_ids の鍵を figure_type_enum に無い名にする・type_ids を一覧にする。
 4. 同じ file: 実の設計文書の置き場の写しで、部品目録の pipeline-rail の max_nodes を 8 にして folio parts --check → 「まだ分からない」（終了 2）∧「組み立て時の部品目録と違う」。type_ids の名札の 1 字を変えても同じ。
 5. 回帰（期待不変・共通の検証が回す）: tests/parts.rs の既存の歯・面の凍結の fixture と byte 一致の歯の全部・tests/figure.rs・tests/floor_cases.rs（凍結の場合 134 件）・tests/constitution_enums.rs。

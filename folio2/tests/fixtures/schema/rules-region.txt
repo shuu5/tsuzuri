@@ -1,0 +1,27 @@
+schema:
+  version: 1
+  top_level: [schema, thresholds, discipline]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。thresholds と discipline は人が書き、schema は生成区間
+  threshold_row:
+    required: [id, article, what, value, kind, status, ruling, ruled_at, stage]
+    optional: [basis, projection, same_failure, population, note]
+  discipline_row: {required: [id, article, what, kind, status, ruling, ruled_at], optional: [note]}
+  enums:
+    kind: [deny, build-check, detect, human-review]
+    status: [仮, 凍結, 未定]
+    stage: [in-loop, post]
+  enums_note: stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）
+  kind_meaning:
+    deny: 機械が測って、超過なら落とす（憲法の reject / build-check に対応）
+    build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）
+    detect: 記録・起票のみ・止めない（憲法の none に対応）
+    human-review: 人が守る作法（憲法の human-review に対応・D 行）
+  kind_map_to_constitution:
+    deny: [reject, build-check]
+    build-check: [build-check]
+    detect: [none]
+  kind_map_to_constitution_note: R 行にだけ適用する（D 行は作法＝条の機構とは別）。右辺は憲法の値域 mechanism_kind の値
+  excluded:
+    what: [時間（「60 分以内」）, 費用（「300k token 以下」）]
+    why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。
+  reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。
