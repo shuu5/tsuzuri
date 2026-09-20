@@ -117,20 +117,35 @@ impl Work {
         fs::write(self.srs(), format!("{before}{sep}{FIGURE}")).unwrap();
     }
 
+    /// 実の rules.yaml の写し。
+    fn rules(&self) -> PathBuf {
+        self.dir().join("rules.yaml")
+    }
+
     /// 写しの srs.yaml の字面の変異（1 か所だけ）。
     fn mutate(&self, from: &str, to: &str) {
-        let before = fs::read_to_string(self.srs()).unwrap();
-        assert_eq!(
-            before.matches(from).count(),
-            1,
-            "変異の当て先が 1 か所でない: {from:?}"
-        );
-        fs::write(self.srs(), before.replacen(from, to, 1)).unwrap();
+        mutate_file(&self.srs(), from, to);
+    }
+
+    /// 写しの rules.yaml の字面の変異（1 か所だけ）。
+    fn mutate_rules(&self, from: &str, to: &str) {
+        mutate_file(&self.rules(), from, to);
     }
 
     fn check(&self) -> Output {
         folio_check(&self.dir())
     }
+}
+
+/// file の字面の変異（当て先はちょうど 1 か所）。
+fn mutate_file(path: &Path, from: &str, to: &str) {
+    let before = fs::read_to_string(path).unwrap();
+    assert_eq!(
+        before.matches(from).count(),
+        1,
+        "変異の当て先が 1 か所でない: {from:?}"
+    );
+    fs::write(path, before.replacen(from, to, 1)).unwrap();
 }
 
 impl Drop for Work {
@@ -296,6 +311,68 @@ fn check_srs_figure_id_shared_with_a_requirement_fails() {
     w.with_figure();
     w.mutate("\n  - id: fig-1\n", "\n  - id: FR1\n");
     assert_srs_figure_violation(&w, &["行 id「FR1」が重複"]);
+}
+
+// ── 規則の表の最上位の節は床の定数から（便 51） ──
+
+/// 実の rules.yaml の写しの schema.top_level の行（変異の当て先）。
+const RULES_TOP_LEVEL_LINE: &str =
+    "\n  top_level: [schema, thresholds, discipline]   # 未知の節は検査で落とす（N-3）";
+
+/// file の側で schema.top_level に extras を足し、最上位に節 extras を足しても、床は定数の一覧で数える＝
+/// 不合格 1・違反は「未知の節」の 1 件だけで extras を含む（本便の前の main では合格してしまう歯）。
+#[test]
+fn check_rules_section_added_via_the_file_top_level_is_still_unknown() {
+    let w = Work::new("rules-extras");
+    w.mutate_rules(
+        RULES_TOP_LEVEL_LINE,
+        "\n  top_level: [schema, thresholds, discipline, extras]   # 未知の節は検査で落とす（N-3）",
+    );
+    let before = fs::read_to_string(w.rules()).unwrap();
+    let sep = if before.ends_with('\n') { "" } else { "\n" };
+    fs::write(w.rules(), format!("{before}{sep}extras: 余分\n")).unwrap();
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "違反は変異の 1 件だけのはず: {v:?}");
+    assert!(v[0].starts_with("[未知の節] rules.yaml"), "{v:?}");
+    assert!(v[0].contains("extras"), "{v:?}");
+    assert!(stdout(&out).contains("不合格"), "{}", stdout(&out));
+}
+
+/// 写しの rules.yaml から schema.top_level の行を消しても、規則の表についての「まだ分からない」は出ない＝
+/// 床の結果は消す前（実の正本 = 合格）と同じ。
+#[test]
+fn check_rules_without_the_file_top_level_line_is_not_unknown() {
+    let w = Work::new("rules-no-top-level");
+    let before = w.check();
+    assert_eq!(before.status.code(), Some(0), "{}", stdout(&before));
+    w.mutate_rules(RULES_TOP_LEVEL_LINE, "");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(stdout(&out), stdout(&before));
+    assert!(
+        !String::from_utf8_lossy(&out.stderr).contains("rules.yaml"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout(&out).contains("folio check: 合格（違反 0・まだ分からない 0）"),
+        "{}",
+        stdout(&out)
+    );
 }
 
 #[test]

@@ -20,6 +20,7 @@ use crate::link;
 use crate::note;
 use crate::parts::catalog::FigureType;
 use crate::refs;
+use crate::rules;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::{self, Node};
@@ -216,7 +217,8 @@ pub(crate) fn unknown_sections(file: &str, root: &Node, allowed: &[&str], report
     }
 }
 
-/// 節の決まり（`schema.top_level`）を正本から読む。読めなければ「まだ分からない」。
+/// 節の決まり（`schema.top_level`）を正本から読む。読めなければ「まだ分からない」。憲法だけが使う（ADR-11 決定 (3)＝file が正本・
+/// 規則の表は便 51 から床の定数）。
 fn schema_top_level<'a>(file: &str, root: &'a Node, report: &mut Report) -> Option<Vec<&'a str>> {
     let list = root
         .get("schema")
@@ -363,11 +365,11 @@ fn check_constitution(root: &Node, report: &mut Report) {
     duplicate_ids(FILE, articles, report);
 }
 
+/// 規則の表。最上位の節の閉じた一覧は file の schema.top_level ではなく床の定数（`rules::RULES_TOP_LEVEL`）から読む
+/// （便 51・file の側で節を足して通す口を塞ぐ・N-3.1）。file の schema.top_level の有無は見ない（写しの一致は `folio schema` の側）。
 fn check_rules(root: &Node, report: &mut Report) {
     const FILE: &str = "rules.yaml";
-    if let Some(top) = schema_top_level(FILE, root, report) {
-        unknown_sections(FILE, root, &top, report);
-    }
+    unknown_sections(FILE, root, &rules::RULES_TOP_LEVEL, report);
     let mut all = Vec::new();
     for section in ["thresholds", "discipline"] {
         for row in rows(FILE, root, section, report) {

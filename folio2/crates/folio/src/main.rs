@@ -28,6 +28,7 @@ mod parts;
 mod prose;
 mod refs;
 mod render;
+mod rules;
 mod schema;
 mod serve;
 mod sha256;
