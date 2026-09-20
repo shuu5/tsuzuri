@@ -121,7 +121,7 @@ articles:
     statements:
       - {id: P-1.1, pattern: ubiquitous, strength: must, text: folio は文書を生成し、機械で検査し、結果を知らせるところまでを担う。}
       - {id: P-1.2, pattern: ubiquitous, strength: must-not, text: folio は要否・採否の最終判断を代行する機能を持たない。}
-    plain: 道具は、書類を作って、間違いを見つけて、知らせるところまで。「これでいいか」を決める機能は、道具の側に作りません。決めるのはあなたです。
+    plain: 道具は、書類を作って、間違いを見つけて、知らせるところまで。「これでいいか」を最後に決める機能は、道具の側に作りません。決めるのはあなたです。
     rationale:
       - {kind: v1-incident, ref: "research/document-discipline-engine-design §11（判断は人間・「判断する engine」を作らない）"}
       - {kind: folio2-ruling, ref: "裁定 #1（推奨で進み、支度表で覆す）"}
@@ -137,7 +137,7 @@ articles:
       - {id: P-2.2, pattern: ubiquitous, strength: must-not, text: 手書きのページを配信先と入口の導線に置かない。}
       - {id: P-2.3, pattern: ubiquitous, strength: must, text: 色・字の大きさ・余白の元の値（design token）は 1 か所で定義する。}
       - {id: P-2.4, pattern: ubiquitous, strength: must, text: 部品・図の型・密度 profile は閉じた一覧（部品目録）で持ち、追加には判断の記録を要する。}
-    plain: 見た目を作る係は 1 つだけ。誰かが手でページを書き足すと、そこから見た目が割れていくので、入口からも締め出します。色や字の大きさ・余白の元の値も 1 か所。使える部品・図の型・文書の密度の設定（密度 profile）は決まった一覧にあるものだけで、一覧に足すときは判断の記録が要ります。
+    plain: 見た目を作る係は 1 つだけ。誰かが手でページを書き足すと、そこから見た目が割れていくので、見せる置き場（配信先）にも入口の案内にも、手書きのページは置きません。色や字の大きさ・余白の元の値も 1 か所。使える部品・図の型・文書の密度の設定（密度 profile）は決まった一覧にあるものだけで、一覧に足すときは判断の記録が要ります。
     rationale:
       - {kind: v1-incident, ref: "提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）"}
       - {kind: folio2-ruling, ref: "裁定 #4（v1 P-2 を置換）"}
@@ -168,7 +168,7 @@ articles:
     statements:
       - {id: P-4.1, pattern: ubiquitous, strength: must-not, text: 検査・生成が実行できなかった結果を「異常なし」として扱わない。}
       - {id: P-4.2, pattern: ubiquitous, strength: must, text: 判定できないものは「まだ分からない」として表に出す。}
-    plain: できなかったことを「問題なし」に化けさせません。分からないときは「分からない」と表示します。
+    plain: できなかったことを「問題なし」に化けさせません。分からないときは「まだ分からない」と表示します。
     rationale:
       - {kind: v1-incident, ref: "engine-design §12 ②（parser-differential に 2 連続で敗北 → 受理域を絞る fail-closed へ転換）・ADR-0045 no silent skip"}
     mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 床を故意に壊した状態で「まだ分からない」になり、合格にならない（AC3）。判定の値域は 合格 / 不合格 / まだ分からない の 3 値。}
@@ -188,7 +188,7 @@ articles:
       - {id: P-5.4, pattern: ubiquitous, strength: must-not, text: 台帳（bd）はタスクと裁定の記帳先であり、規則を置かない。}
       - {id: P-5.5, pattern: ubiquitous, strength: must, text: 原則と裁定の正本は設計文書、機械が執行する規則の正本は型付きデータとし、置き場をこの 2 面に限る。}
       - {id: P-5.6, pattern: state, strength: must, text: 実装の型付きの定数を規則の正本とするあいだ、その写しを人が読める型付きデータとして設計文書の置き場へ決定的に導出する。}
-    plain: 「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。道具の中に型を付けて書いた決まりも表の 1 つに数えますが、それを元にしているあいだは、人が読める写しを、機械が何度やっても同じ結果になる形で作って、設計文書の置き場に置き続けます。
+    plain: 「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。道具の中に型を付けて書いた決まりも表の 1 つに数えますが、それを元にしているあいだは、人が読める表（型付きデータ）の形の写しを、機械が何度やっても同じ結果になる形で作って、設計文書の置き場に置き続けます。
     rationale:
       - {kind: scribe2-article, ref: "C1（規則はデータ）・C14（規律は文書とデータの 2 面）・C15 / C15.2（台帳はタスク専用・id 参照）。C1 の「値は 1 file」は G14=A により folio2 では憲法 / rules / 語彙 / 要件書の 4 file に分ける（意図的な逸脱）"}
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18「本 hook は tier-2 shaping であって guarantee ではない」＝規則が散文にしか無い・rules.html 248KB の散文"}
@@ -322,7 +322,7 @@ articles:
     statements:
       - {id: P-15.1, pattern: ubiquitous, strength: must-not, text: 自動で走る仕掛け（hook）を「守られる保証」として設計しない。}
       - {id: P-15.2, pattern: ubiquitous, strength: must, text: 編集の時点で止める仕掛けを持つときは、その判定の式を事後の検査が同じ関数で確かめる。}
-    plain: 「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。止める仕掛けを置くなら、後から確かめる検査も同じ物差し（同じ判定の式）で見ます。
+    plain: 「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。止める仕掛けを置くなら、後から確かめる検査も、その判定を同じ 1 つの関数で見ます（同じ中身を別々に 2 か所へ書いたのでは足りません）。
     rationale:
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18 逐語「本 hook は tier-2 shaping であって guarantee ではない」・ADR-0043 §2.3"}
       - {kind: v1-incident, ref: "plugin-lib.sh:238 / check-content-boundary.sh:55（hook と事後検査が 2 実装の人間同期＝drift の実体）"}
@@ -354,7 +354,7 @@ articles:
       - {id: P-17.2, pattern: unwanted, strength: must, text: 裁定 id の無い rules 行の変更があったら、検査がそれを落とす。}
       - {id: P-17.3, pattern: ubiquitous, strength: must, text: 初版の行は、この憲法の発効の承認を裁定とみなし、発効時にその id と時刻を全行に付ける。}
       - {id: P-17.4, pattern: event, strength: must, text: folio の振る舞いを縛る閾値行（deny 種別）の値を緩めるとき、A-2.3 の検証を前置する。}
-    plain: 数値や作法の表を変えるときは、どの決定（裁定の番号）でいつ変えたかを行に書きます。書いていない変更は機械が止めます。最初の表は、この憲法の承認をその決定として扱い、承認のときに番号と日付を全部の行に入れます。機械が止めるための上限をゆるめるときは、改訂と同じように反対側から確かめてからにします。
+    plain: 数値や作法の表を変えるときは、どの決定（裁定の番号）でいつ変えたかを行に書きます。書いていない変更は機械が止めます。最初の表は、この憲法の承認をその決定として扱い、承認のときに番号と日付を全部の行に入れます。機械が止めるために決めた線（上限も下限も）をゆるめるときは、改訂と同じように反対側から確かめてからにします。
     rationale:
       - {kind: scribe2-article, ref: "C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）"}
       - {kind: folio2-ruling, ref: "G5=A（A-2 を条文改訂と rules 数値に分割）"}
@@ -370,7 +370,7 @@ articles:
       - {id: P-18.2, pattern: ubiquitous, strength: must-not, text: 事後の検査を、編集の時点で止めることの代わりにしない。}
       - {id: P-18.3, pattern: ubiquitous, strength: must, text: 止める仕掛け（guard）は「開く／閉じる」の極性と「編集時／事後」の別を型で持ち、その一覧（極性一覧）を生成時に出す。}
       - {id: P-18.4, pattern: unwanted, strength: must, text: 編集の時点で止める guard が 1 本も無い構成なら、検査がそれを落とす。}
-    plain: 決まりに反する書き換えは、書き換えたその場で止めます。「後で検査するから」は、その場で止めることの代わりになりません。止める仕掛けと検査には「壊れたら通す／止める」「その場／後で」の札を付けて一覧にし、その場で止める仕掛けが 1 つも無い状態は検査で落とします。
+    plain: 決まりに反する書き換えは、書き換えたその場で止めます。「後で検査するから」は、その場で止めることの代わりになりません。止める仕掛けと検査には「壊れたら通す／止める」「その場／後で」の札を型として付け、その一覧は作るたびに機械が出します。その場で止める仕掛けが 1 つも無い状態は検査で落とします。
     rationale:
       - {kind: scribe2-article, ref: "C8.2（design-intent と食い違う編集は編集時に止める）・C16 / C16.2（事後検証を代替にしない・編集時 guard 0 の構成を CI が拒む）・C11.2（極性の型と build 時の極性一覧）"}
       - {kind: folio2-ruling, ref: "裁定 #3（scribe2 の機構条のうち「極性一覧」を写す）・G3=A（撤去コストは共通 1 行）"}
