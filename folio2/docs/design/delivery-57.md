@@ -24,7 +24,7 @@ note.rs の頭の説明に残る「散文の門（FR12・rules 行 R-16）と導
 (c) 歯。
 1. crates/folio/tests/schema.rs の設計ノートの側の定数を新しい値に上げる = 14618 を 15305 に・sha256 を (b) の値に。標準出力の 2 行目の期待「14618 byte」も 15305 に。ほかの 3 本（22182・2915・1764）は不変。
 2. 同じ file に 1 本足す（関数名は schema で始める）: 実の設計ノートの欄の決まりの生成区間が tests/fixtures/schema/note-region.txt と byte 一致 ∧ 注 folio_check_note の行に「未実装である」を含む。
-3. src/note.rs の unit test に 1 本足す（関数名は note_floor で始める）: schema.rs の derive に FLOOR を渡した結果が note-region.txt と byte 一致。
+3. src/note.rs の unit test に 1 本足す（関数名は note_floor で始める）: schema.rs の derive に FLOOR を渡した結果が note-region.txt と byte 一致。関数 derive は crates/folio/src/schema.rs に既に pub の関数として在り（床の木を受けて生成区間の字面を返す）、同じ形の unit test が既に 2 本それを呼んでいる（crates/folio/src/ceiling.rs の ceiling_floor_derives_the_frozen_anchor_byte_for_byte と crates/folio/src/rules.rs の rules_floor_derives_the_frozen_anchor_byte_for_byte）= schema.rs は変えない。
 4. 回帰（期待不変・共通の検証が回す）: tests/note.rs・tests/face_note.rs（設計ノートの面は欄の決まりの注を出さない = 面の凍結の fixture は不変）・tests/check.rs・tests/floor_cases.rs（凍結の場合 134 件）。
 
 (d) 大きさと接続。新規 file は無い。既存 = note.rs（注 4 行の書き足しと頭の説明 = 約 +10 行・歯 約 +15 行）・design-intent/design-note/schema.yaml（生成区間の 4 行）・tests/schema.rs（約 +25 行）。size S。値の欄・床の検査・ほかの設計文書・fixture（anchor は本便の前に設計判断の席が置く）・CI の yml は触らない。外部 crate は増やさない。
@@ -61,5 +61,5 @@ section = "1"
 write-set = ["crates/folio/src/note.rs", "design-intent/design-note/schema.yaml", "crates/folio/tests/schema.rs"]
 verify = ["cargo nextest run -p folio --test schema schema", "cargo nextest run -p folio note_floor", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "schema の歯（設計ノートの側 15305 byte と新しい sha256・実の生成区間が anchor と byte 一致で「未実装である」を含む・ほかの 3 本は不変）が緑、note_floor の歯（床の木の導出が anchor と byte 一致）が緑、clippy が 0 警告で CI が通る"
+done = "schema の歯（設計ノートの側 15305 byte と新しい sha256・実の生成区間が anchor と byte 一致で「未実装である」を含む・ほかの 3 本は不変）が緑、note_floor の歯（床の木の導出が anchor と byte 一致・schema.rs の既に pub の関数 derive を呼ぶので schema.rs は変えない）が緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
