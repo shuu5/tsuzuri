@@ -27,7 +27,6 @@ mod note;
 mod parts;
 mod prose;
 mod refs;
-mod render;
 mod rules;
 mod schema;
 mod serve;
@@ -84,22 +83,6 @@ enum Command {
         /// 導出した本文を標準出力へ書く
         #[arg(long)]
         print: bool,
-    },
-    /// 正本 4 file と判断の記録から day-1 の読み物（HTML 1 面）を導出して書く（--write）・検査する（--check）
-    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
-    Render {
-        /// 正本の置き場
-        #[arg(long, default_value = "design-intent")]
-        dir: PathBuf,
-        /// 出力先（相対なら --dir からの相対・絶対ならそのまま）
-        #[arg(long, default_value = "preview/readable.html")]
-        out: PathBuf,
-        /// 導出した読み物を出力先へ書く
-        #[arg(long)]
-        write: bool,
-        /// 出力先と導出の byte 一致を検査する（無い 2・不一致 1・一致 0）
-        #[arg(long)]
-        check: bool,
     },
     /// 部品目録から組み立て時に導出した一覧を出す（--print）・面の class と部品の名札と行内の様式を部品目録と突き合わせる（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["check", "print"])))]
@@ -332,26 +315,6 @@ fn main() -> ExitCode {
             }
             for msg in &outcome.messages {
                 eprintln!("folio inject: {msg}");
-            }
-            ExitCode::from(outcome.verdict.exit_code() as u8)
-        }
-        Command::Render {
-            dir,
-            out,
-            write,
-            check: _,
-        } => {
-            let mode = if write {
-                render::Mode::Write
-            } else {
-                render::Mode::Check
-            };
-            let outcome = render::run(&dir, &out, mode);
-            if let Some(line) = &outcome.stdout {
-                println!("{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                eprintln!("{line}");
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)
         }

@@ -642,3 +642,32 @@ fn check_srs_figure_with_an_unknown_field_fails() {
     );
     assert_srs_figure_violation(&w, &["未知の欄", "extra"]);
 }
+
+/// 退役した命令 folio render は使い方の誤り（終了 2）で止まり、標準エラーに render の字を出す。
+#[test]
+fn retired_render_subcommand_is_unrecognized() {
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .args(["render", "--check"])
+        .output()
+        .expect("folio を起動できない");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{err}");
+    assert!(err.contains("render"), "{err}");
+}
+
+/// folio --help の命令の一覧に render が無く、build は在る。
+#[test]
+fn retired_render_help_does_not_list_render() {
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("--help")
+        .output()
+        .expect("folio を起動できない");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let help = stdout(&out);
+    assert!(!help.lines().any(|l| l.starts_with("  render")), "{help}");
+    assert!(help.lines().any(|l| l.starts_with("  build")), "{help}");
+}
