@@ -17,7 +17,7 @@
 (d) 歯（crates/folio/tests/schema.rs・関数名は r9_population_ で始める・今この語で始まる歯は無い）。
 1. r9_population_names_the_vocabulary: design-intent の写しに folio schema --check を当てると 0 で終わり、design-intent/adr/schema.yaml の生成区間の prose_note の行に「憲法・rules・要件書・語彙〕」が在り「憲法・rules・要件書〕」が無い。
 2. r9_population_anchor_holds: tests/fixtures/schema/adr-region.txt の byte 数が 22263・sha256 が (b) の値・行数 117（anchor 自身の自己検査）。
-3. 回帰（期待不変・verify の 2 行目）: tests/schema.rs の既存の歯すべて（判断の記録の側の byte 数と要約値の歯は (b) の定数で緑になる）・tests/adr.rs・tests/floor_cases.rs（写しの注は突き合わせの外）。
+3. 回帰（期待不変・verify の 2 行目 = --test adr --test floor_cases --test schema）: tests/adr.rs・tests/floor_cases.rs（写しの注は突き合わせの外・どちらも本文不変のまま write-set に置く）・tests/schema.rs の既存の歯すべて（判断の記録の側の byte 数と要約値の歯は (b) の定数で緑になる）。
 
 (e) 大きさと接続。新規 file は無い。crates/folio/tests/adr.rs・crates/folio/tests/floor_cases.rs は本文不変のまま write-set に置く（verify の --test の scope・回帰の歯の置き場）。adr.rs（1 行）・adr/schema.yaml（1 行・--write）・adr-region.txt（1 行）・tests/schema.rs（定数 2 つ + 注釈 + 歯 2 本 約 25 行）・写し 17 本（各 1 行）。size S。外部 crate は増やさない。
 
@@ -52,7 +52,7 @@ title = "判断の記録の欄の決まりの床の木 FLOOR の prose_note の�
 req = ["FR19", "FR5"]
 section = "1"
 write-set = ["crates/folio/src/adr.rs", "design-intent/adr/schema.yaml", "tests/fixtures/schema/adr-region.txt", "crates/folio/tests/schema.rs", "crates/folio/tests/adr.rs", "crates/folio/tests/floor_cases.rs", "tests/fixtures/floor_base/design-intent/adr/schema.yaml", "tests/fixtures/anchor/root-digest-drift/adr/schema.yaml", "tests/fixtures/anchor/no-anchor/adr/schema.yaml", "tests/fixtures/adr/two-adopted/adr/schema.yaml", "tests/fixtures/adr/schema-drift/adr/schema.yaml", "tests/fixtures/adr/effective-no-approval/adr/schema.yaml", "tests/fixtures/link/retreat-kind-drift/adr/schema.yaml", "tests/fixtures/link/adr-id-missing/adr/schema.yaml", "tests/fixtures/link/amended-by-orphan/adr/schema.yaml", "tests/fixtures/refs/dangling-id/adr/schema.yaml", "tests/fixtures/refs/orphan-rule/adr/schema.yaml", "tests/fixtures/refs/bad-counts/adr/schema.yaml", "tests/fixtures/vocab/exemptions/adr/schema.yaml", "tests/fixtures/check/dup-key/adr/schema.yaml", "tests/fixtures/vocab/unknown-word/adr/schema.yaml", "tests/fixtures/check/empty-field/adr/schema.yaml", "tests/fixtures/check/unknown-section/adr/schema.yaml"]
-verify = ["cargo nextest run -p folio --test schema r9_population_", "cargo nextest run -p folio --test schema --test adr --test floor_cases", "cargo clippy --workspace --all-targets -- -D warnings"]
+verify = ["cargo nextest run -p folio --test schema r9_population_", "cargo nextest run -p folio --test adr --test floor_cases --test schema", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "r9_population_ の歯 2 本（生成区間の注が語彙を含む・anchor の自己検査）が緑、tests/schema.rs（判断の記録の側の byte 数 22263 と要約値の歯を含む）・tests/adr.rs・tests/floor_cases.rs の既存の歯が全部緑、folio schema --check が 4 行とも一致、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->

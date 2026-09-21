@@ -12,7 +12,7 @@
 
 (b) 導出。crates/folio/build.rs（正規化 約 415 行）の parts_catalog は profile_enum を string_list で読み、catalog に `pub const PROFILES: &[&str]`（目録の順・注釈「密度 profile の閉じた一覧（部品目録の profile_enum・目録の順）」）を出す。鍵が無い・文字列の一覧でないは Err（ほかの一覧と同じ・fail-closed）。
 
-(c) 読む側。crates/folio/src/note.rs（正規化 約 1,295 行・余地 約 205）の定数 PROFILE_ENUM を消し、床の木の profile_enum と meta.profile の値域の判定の 2 か所は crate::parts::catalog::PROFILES を読む。値は同じなので design-intent/design-note/schema.yaml の生成区間は 1 byte も変わらない（folio schema --check は合格のまま・凍結 anchor tests/fixtures/schema/note-region.txt は触らない）。crates/folio/src/parts.rs（正規化 約 630 行）の print_catalog は末尾に "profiles":[...] を足し（style_props の後）、catalog_matches（parts --check）は parts.json の profile_enum と PROFILES の一致も見る（ほかの 3 つの一覧と同じ形）。
+(c) 読む側。crates/folio/src/note.rs（正規化 約 1,295 行・余地 約 205）の定数 PROFILE_ENUM を消し、床の木の profile_enum と meta.profile の値域の判定の 2 か所は crate::parts::catalog::PROFILES を読む。値は同じなので design-intent/design-note/schema.yaml の生成区間は 1 byte も変わらない（folio schema --check は合格のまま・凍結 anchor tests/fixtures/schema/note-region.txt は触らない・その不変を測る歯の置き場 crates/folio/tests/schema.rs は本文不変のまま write-set に置く）。crates/folio/src/parts.rs（正規化 約 630 行）の print_catalog は末尾に "profiles":[...] を足し（style_props の後）、catalog_matches（parts --check）は parts.json の profile_enum と PROFILES の一致も見る（ほかの 3 つの一覧と同じ形）。
 
 (d) 歯（関数名は profiles_ で始める・今この語で始まる歯は無い）。
 1. profiles_are_in_the_catalog_print（crates/folio/tests/parts.rs・正規化 約 430 行）: folio parts --print の出力に "profiles":["design-note"] が在る。
@@ -53,7 +53,7 @@ title = "密度 profile の閉じた一覧 profile_enum を部品目録 parts.js
 req = ["FR9"]
 section = "1"
 write-set = ["design-intent/preview/parts.json", "crates/folio/build.rs", "crates/folio/src/parts.rs", "crates/folio/src/note.rs", "crates/folio/tests/parts.rs", "crates/folio/tests/note.rs", "crates/folio/tests/schema.rs"]
-verify = ["cargo nextest run -p folio --test parts --test note profiles_", "cargo nextest run -p folio --test parts --test note --test schema", "cargo clippy --workspace --all-targets -- -D warnings"]
+verify = ["cargo nextest run -p folio --test parts --test note profiles_", "cargo nextest run -p folio --test schema --test parts --test note", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "profiles_ の歯 3 本（print に在る・parts.json と同じ・meta.profile の門が同じに落ちる）が緑、tests/parts.rs・tests/note.rs・tests/schema.rs の既存の歯が全部緑（design-note/schema.yaml は不変）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
