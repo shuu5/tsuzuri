@@ -1365,3 +1365,157 @@ fn face_srs_unknown_when_the_figure_tool_is_absent() {
     assert!(stderr(&run).contains("図の道具が無い"), "{}", stderr(&run));
     assert!(!exists, "導出できないのに面を書いた");
 }
+
+// ── 憲法の面の数えの字と札の凡例（便 63・docs/design/delivery-63.md §1 (a)(b)(d)）──
+
+/// 写しの憲法へ足す「いつも守る」の条 2〜`n`（fixture の A-1 と同じ最小の形・id と字面だけ変える）。
+fn always_articles(n: usize) -> String {
+    (2..=n)
+        .map(|i| {
+            format!(
+                "  - id: P-{i}\n    title: 足した条 {i}\n    tier: always\n    binds: practice\n    \
+                 statements:\n      - {{id: P-{i}.1, pattern: ubiquitous, strength: must, text: 足した条 {i} の規範文。}}\n    \
+                 plain: 足した条 {i} のやさしい言い方。\n    rationale:\n      - {{kind: folio2-ruling, ref: 裁定 F-1}}\n    \
+                 mechanism: {{kind: human-review, live: now}}\n\n"
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn count_word_uses_tsu_only_up_to_nine() {
+    // 9 以下の段（fixture のまま・3 段とも 1 条）は「つ」が付く
+    let td = temp_dir("count-word-nine");
+    let out = td.join("constitution.html");
+    let run = folio_face("constitution", &fixture(), &out, "--write");
+    let nine = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    // 目次と章の帯の 2 か所 × 3 段
+    assert_eq!(
+        nine.matches("1 つの原則").count(),
+        6,
+        "9 以下の段の見出しが 3 段 × 2 か所で「つ」付きでない"
+    );
+    assert!(!nine.contains("1 の原則"), "9 以下の段から「つ」が落ちた");
+
+    // いつも守るを 10 条にした写し = その段だけ「つ」が落ちる
+    let (td, work) = fixture_copy("count-word-ten");
+    edit(&work.join("constitution.yaml"), |t| {
+        t.replacen("{always: 1,", "{always: 10,", 1).replacen(
+            "\nrules_pointer:",
+            &format!("\n{}rules_pointer:", always_articles(10)),
+            1,
+        )
+    });
+    let out = td.join("constitution.html");
+    let run = folio_face("constitution", &work, &out, "--write");
+    let ten = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert_eq!(
+        ten.matches("10 の原則").count(),
+        2,
+        "「10 の原則」が目次と章の帯の 2 か所に出ていない"
+    );
+    assert!(!ten.contains("10 つの原則"), "10 以上なのに「つ」が付いた");
+    // 1 条のままの 2 段（確認してから・絶対にやらない）は「つ」が付いたまま
+    assert_eq!(
+        ten.matches("1 つの原則").count(),
+        4,
+        "9 以下の段の見出しが 2 段 × 2 か所で「つ」付きでない"
+    );
+}
+
+/// 札の凡例の 1 つ目の対（要件書の面 §3 の凡例と同じ字）。
+const TIER_LEGEND_HEAD: &str = "MUST = 必ず守る";
+
+/// 章 s3（確認してから）と s4（絶対にやらない）の区間。
+const LATER_TIER_CHAPTERS: [(&str, &str); 2] = [
+    ("<section id=\"s3\"", "<section id=\"s4\""),
+    ("<section id=\"s4\"", "<section id=\"s5\""),
+];
+
+#[test]
+fn tier_legend_appears_once_in_the_constitution_face() {
+    let (td, _, html) = real_face("tier-legend");
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        html.matches(TIER_LEGEND_HEAD).count(),
+        1,
+        "凡例の字が面に 1 回でない"
+    );
+    let first = legend_lines(&html, "<section id=\"s2\"", "<section id=\"s3\"");
+    assert_eq!(
+        first.len(),
+        1,
+        "いつも守るの章の凡例の行が 1 行でない: {first:?}"
+    );
+    assert!(
+        first[0].contains(TIER_LEGEND_HEAD),
+        "凡例が札の字と意味を並べていない: {}",
+        first[0]
+    );
+    for (a, b) in LATER_TIER_CHAPTERS {
+        let later = legend_lines(&html, a, b);
+        assert!(later.is_empty(), "後の段の章にも凡例が出ている: {later:?}");
+    }
+    // 帯の直後・条の一覧の前
+    let chapter = between(&html, "<section id=\"s2\"", "<section id=\"s3\"");
+    let at = chapter.find(first[0]).unwrap();
+    let first_row = chapter
+        .find("data-component=\"item-row\"")
+        .expect("いつも守るの章に条が無い");
+    assert!(at < first_row, "凡例が条の一覧より後に在る");
+    // 要件書の面 §3 の凡例と同じ class・同じ部品の名札
+    let (td, _, srs) = real_srs("tier-legend-srs");
+    let _ = fs::remove_dir_all(&td);
+    let fr = legend_lines(&srs, "<section id=\"s3\"", "<section id=\"s4\"");
+    assert_eq!(fr.len(), 1, "要件書の面 §3 の凡例の行が 1 行でない: {fr:?}");
+    let head = "<div class=\"legend-line\"><span>凡例:</span>";
+    assert!(
+        fr[0].starts_with(head),
+        "要件書の面 §3 の凡例の形が変わった: {}",
+        fr[0]
+    );
+    assert!(
+        first[0].starts_with(head) && first[0].ends_with("</div>"),
+        "憲法の面の凡例が §3 と同じ class で包まれていない: {}",
+        first[0]
+    );
+    assert_eq!(
+        components(first[0]),
+        components(fr[0]),
+        "凡例の部品の名札が §3 の凡例と違う"
+    );
+}
+
+#[test]
+fn tier_legend_words_come_from_the_shared_table() {
+    let (td, _, html) = real_face("tier-legend-words");
+    let _ = fs::remove_dir_all(&td);
+    let (td2, _, srs) = real_srs("tier-legend-words-srs");
+    let _ = fs::remove_dir_all(&td2);
+    let c = legend_lines(&html, "<section id=\"s2\"", "<section id=\"s3\"");
+    let fr = legend_lines(&srs, "<section id=\"s3\"", "<section id=\"s4\"");
+    assert_eq!(c.len(), 1, "憲法の面の凡例の行が 1 行でない: {c:?}");
+    assert_eq!(fr.len(), 1, "要件書の面 §3 の凡例の行が 1 行でない: {fr:?}");
+    // 3 つの語は歯の側で持つ（生成側の表を呼ばない・2 面が同じ字を出す）
+    for (kw, meaning) in [
+        ("MUST", "必ず守る"),
+        ("MUST NOT", "決してしない"),
+        ("SHOULD", "強い推奨（外すなら理由が要る）"),
+    ] {
+        let pair = format!("{kw} = {meaning}");
+        assert!(
+            c[0].contains(&pair),
+            "憲法の面の凡例に「{pair}」が無い: {}",
+            c[0]
+        );
+        assert!(
+            fr[0].contains(&pair),
+            "要件書の面 §3 の凡例に「{pair}」が無い: {}",
+            fr[0]
+        );
+    }
+}

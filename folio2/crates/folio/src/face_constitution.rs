@@ -11,7 +11,7 @@ use crate::face::{
     self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, Tier, X, anchor, binds_label, card, esc, hint,
     hint_q, mechanism_kind_label, mechanism_live_label, pattern_label, polarity_label, rationale,
     retreat_kind_label, rule_kind_label, rule_status_class, section_anchor, split_dash,
-    stage_label, strength_label, tier_label, tier_of, val,
+    stage_label, strength_label, strength_meaning, tier_label, tier_of, val,
 };
 use crate::parts::catalog::Component;
 use crate::rules;
@@ -280,6 +280,28 @@ fn tier_count(ctx: &Ctx<'_>, key: &str) -> usize {
     ctx.arts.iter().filter(|a| a.tier_key == key).count()
 }
 
+/// 段の章の見出しの数えの字（便 63・天井の 11 周目の読みやすさ F-2）。日本語の助数詞「つ」は 9 までにしか付かないので、
+/// 10 以上は「{n} の原則」にする。目次と章の帯の 2 か所が同じ字面になるよう、ここ 1 か所から出す。
+fn count_word(n: usize) -> String {
+    if n <= 9 {
+        format!("{n} つの原則")
+    } else {
+        format!("{n} の原則")
+    }
+}
+
+/// 規範文の末尾に出る札（MUST / MUST NOT / SHOULD）の意味を言う凡例 1 行（便 63・読みやすさ F-1）。
+/// 札の字も意味の字も `face.rs` の名札の表から組み、この file に写しを持たない（1 か所の正本・P-6.3）。
+/// 並びは導出した型の ALL の順（= 憲法の値域の file の順・要件書の面 §3 の凡例と同じ）。
+fn tier_legend() -> String {
+    let words = ce::Strength::ALL
+        .iter()
+        .map(|s| format!("{} = {}", strength_label(*s), strength_meaning(*s)))
+        .collect::<Vec<_>>()
+        .join("／");
+    format!("<div class=\"legend-line\"><span>凡例:</span><span>{words}</span></div>")
+}
+
 /// 章の名（00〜08）。
 fn chapter_name(ctx: &Ctx<'_>, i: usize) -> &'static str {
     match i {
@@ -374,7 +396,7 @@ fn chapter_h2(ctx: &Ctx<'_>, i: usize, c: &X<'_>, r: &X<'_>) -> R<String> {
     Ok(match i {
         0 => "何のために・誰のために・何をあきらめるか".to_string(),
         1 => format!("{} 段の意味 — {}", ctx.tiers.len(), tier_names(ctx)),
-        2..=4 => format!("{} つの原則", tier_count(ctx, &ctx.tiers[i - 2].0)),
+        2..=4 => count_word(tier_count(ctx, &ctx.tiers[i - 2].0)),
         5 => format!(
             "数値と作法の表 — 閾値行 {}・開発規律行 {}",
             r.f("thresholds")?.seq()?.len(),
@@ -478,9 +500,13 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
 }
 
 fn tier_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, i: usize, key: &str, tier: &Tier) -> R<()> {
-    let h2 = format!("{} つの原則", tier_count(ctx, key));
+    let h2 = count_word(tier_count(ctx, key));
     FRAME.band(o, i + 2, tier.name, &h2, Some(tier.meaning));
     o.push("<div class=\"chapbody\">".to_string());
+    // 札の凡例は 3 つの段の章の最初の 1 か所だけ（同じ札が続く章で繰り返さない・便 63）
+    if i == 0 {
+        o.push(tier_legend());
+    }
     o.push("<div class=\"stack\">".to_string());
     for art in ctx.arts.iter().filter(|a| a.tier_key == key) {
         item_row(o, ctx, art)?;
