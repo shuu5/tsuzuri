@@ -39,7 +39,7 @@ figures:
       title: 判断の記録がページになり、入口の棚に並ぶまで
       subtitle: 記録 1 本につきページ 1 枚。採用した案も退けた案も同じ形で見せる。
       quality_profile: showcase
-      legend: {mode: auto, entries: {frontend: {label: 面（人が触る側）}, backend: {label: 道具の処理}, security: {label: 決まり}, external: {label: 外の相手}}}
+      legend: {mode: auto, entries: {frontend: {label: 見せる側（私設ネットの中の面）}, backend: {label: 道具の処理}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人・持ち主）}}}
     lanes:
     - id: writer
       label: 書く人

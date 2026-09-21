@@ -32,7 +32,7 @@ figures:
         title: 図がページに載るまで
         subtitle: 図の元を書いてから、確かめて、絵にして、ページに載せるまで。だめなら前の絵のまま。
         quality_profile: showcase
-        legend: {mode: auto, entries: {frontend: {label: 面（人が触る側）}, backend: {label: 道具の処理}, security: {label: 決まり}, external: {label: 外の相手}}}
+        legend: {mode: auto, entries: {frontend: {label: 見せる側（私設ネットの中の面）}, backend: {label: 道具の処理}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人・持ち主）}}}
       lanes:
       - id: writer
         label: 書く人

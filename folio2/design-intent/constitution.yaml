@@ -141,7 +141,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）"}
       - {kind: folio2-ruling, ref: "裁定 #4（v1 P-2 を置換）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。床は folio parts --check（数える面は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）。色や字の大きさが design token 由来である割合（R-3 の後半）を数える口は無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。床が掛からないページは、読み物が 2026-09-21 に退役して 0 枚になった（要件書 NFR2 の注）。密度 profile の閉じた一覧の行き先は部品目録（preview/parts.json と、そこから組み立て時に導出する実装の定数）で、条 P-2.4 が名指す置き場のままだから条の改訂は要らない。2026-09-21 時点では設計ノートの欄の決まりの生成区間（design-note/schema.yaml の profile の値域・正本は実装の定数）に在り、便 68 で部品目録の側へ移す。移るまでは条 P-2.4 が名指す置き場の外に在るので、その部分の充足は「まだ分からない」として扱う（P-4.2）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。床は folio parts --check（数える面は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）。色や字の大きさが design token 由来である割合（R-3 の後半）を数える口は無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。床が掛からないページは、読み物が 2026-09-21 に退役して 0 枚になった（要件書 NFR2 の注）。密度 profile の閉じた一覧は部品目録（preview/parts.json の profile_enum・組み立て時に導出する実装の定数）に在る（便 68・2026-09-21 着地）＝条 P-2.4 が名指す置き場の中。}
     retreat: {kind: spike, condition: 単一生成器で v1 要件書相当の密度が出せない（spike 5）なら再検討する。}
     supersedes_v1: {doc: folio v1 憲章, article: "P-2: format は HTML + common.css のみ", ruling: "裁定 #4", rationale: 見た目が割れた原因は形式（HTML か Markdown か）ではなく、所有者が 2 つあったこと。}
     relations: {reqs: [FR4, NFR2, AC2], rules: [R-3, R-5]}
@@ -154,7 +154,7 @@ articles:
       - {id: P-3.1, pattern: ubiquitous, strength: must, text: 機械で決定的に検査できる項目は床に置く。}
       - {id: P-3.2, pattern: ubiquitous, strength: must, text: 意味の検査（読みやすさ・忠実さ）は AI の天井に置く。}
       - {id: P-3.3, pattern: ubiquitous, strength: must-not, text: 床の合格を、完成や天井の合格として扱わない。}
-    plain: 機械が数えられること（部品が揃っているか等）は機械の側に、意味（分かりやすいか等）は AI の側に置きます。機械の合格は「壊れていない」であって「良い」ではありません。
+    plain: 機械が数えられること（部品が揃っているか等）は機械の側に、意味（分かりやすいか等）は AI の側に置きます。機械の合格は「壊れていない」であって「良い」ではありません。床の合格を「できあがり」としても扱いません。
     rationale:
       - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
       - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
@@ -354,7 +354,7 @@ articles:
       - {id: P-17.2, pattern: unwanted, strength: must, text: 裁定 id の無い rules 行の変更があったら、検査がそれを落とす。}
       - {id: P-17.3, pattern: ubiquitous, strength: must, text: 初版の行は、この憲法の発効の承認を裁定とみなし、発効時にその id と時刻を全行に付ける。}
       - {id: P-17.4, pattern: event, strength: must, text: folio の振る舞いを縛る閾値行（deny 種別）の値を緩めるとき、A-2.3 の検証を前置する。}
-    plain: 数値や作法の表を変えるときは、どの決定（裁定の番号）でいつ変えたかを行に書きます。書いていない変更は機械が止めます。最初の表は、この憲法の承認をその決定として扱い、承認のときに番号と日付を全部の行に入れます。機械が止めるために決めた線（上限も下限も）をゆるめるときは、改訂と同じように反対側から確かめてからにします。
+    plain: 数値や作法の表を変えるときは、どの決定（裁定の番号）でいつ変えたかを行に書きます。書いていない変更は機械が止めます。最初の表は、この憲法の承認をその決定として扱い、承認のときに番号と日付を全部の行に入れます。機械が測って落とす閾値の行（deny 種別）の線をゆるめるときは、改訂と同じように反対側から確かめてからにします。
     rationale:
       - {kind: scribe2-article, ref: "C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）"}
       - {kind: folio2-ruling, ref: "G5=A（A-2 を条文改訂と rules 数値に分割）"}
@@ -539,7 +539,7 @@ glossary_pointer: この章は、この文書に出てくる言葉の意味を�
 # ───────────────────────── §8 出所 ─────────────────────────
 sources:
   - {n: 1, name: v1 が自分で到達していた教訓, ref: 報告 §2「v2 の憲法候補」・facet v1-lessons（実害と 1 対 1・数値は一次資料で再確認済み）}
-  - {n: 2, name: "scribe2 憲法の機構条（裁定 #3）", ref: "裁定 #3 の逐語「機構条だけ写す（極性一覧・散文規則禁止・id 参照・C8。依存予算は folio2 専用値）」= C11.2 / C16.2（P-18）・N2 / C1.2（N-2）・C15.2（P-5）・C8 / C8.2 / C8.3（P-13・P-18）・C13 の値（A-3・R-6）"}
-  - {n: 3, name: "scribe2 憲法から足した条（裁定 #3 の外・各裁定で追加）", ref: "G8=A: C7（P-12）・N1（N-1）・A2 / N4（A-2・N-4）・公開 Never（N-6）・注入条（P-14）／ G5=A: C5（P-17）／ G6=A: A4 / A4.3（A-4）／ G7=A: C13（A-3）／ C14（P-5.5・G2=C の二層の写し）"}
+  - {n: 2, name: "scribe2 憲法の機構条（裁定 #3）", ref: "裁定 #3 の逐語「機構条だけ写す（極性一覧・散文規則禁止・id 参照・C8。依存予算は folio2 専用値）」= C11.2 / C16.2（P-18）・N2 / C1.2（N-2）・C15.2（P-5）・C8 / C8.2 / C8.3（P-13・P-18）・C13 の値（A-3・R-6）。記号の読み方: C-n / N-n = 前の版（scribe2）の憲法の条の番号・G-n / P-n = 2026-09-12 の裁定の番号（判断の記録 ADR-1 の出所）"}
+  - {n: 3, name: "scribe2 憲法から足した条（裁定 #3 の外・各裁定で追加）", ref: "G8=A: C7（P-12）・N1（N-1）・A2 / N4（A-2・N-4）・公開 Never（N-6）・注入条（P-14）／ G5=A: C5（P-17）／ G6=A: A4 / A4.3（A-4）／ G7=A: C13（A-3）／ C14（P-5.5・G2=C の二層の写し）。記号の読み方: C-n / N-n = 前の版（scribe2）の憲法の条の番号・G-n / P-n = 2026-09-12 の裁定の番号（判断の記録 ADR-1 の出所）"}
   - {n: 4, name: 持ち主の裁定, ref: 裁定 9 点（2026-09-11〜12）・G1〜G16・P1〜P5（2026-09-12・逐語は bd f2-648 / f2-648.1 notes）}
   - {n: 5, name: 敵対レビュー, ref: review/summary.md（wf_5e659fc9-0ed・生存 17 + 未反証 34 の追加反証・2026-09-12）}

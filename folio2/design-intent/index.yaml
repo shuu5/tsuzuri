@@ -26,7 +26,7 @@ audience:
 
 shelf:
   title: このプロジェクトの文書
-  explain: 棚 = このプロジェクトが持つ文書の一覧と、文書どうしの関係。文書の枚数を言うのはこの見出しだけ（各文書の中身の数はカードに書く）。
+  explain: 棚 = 相談窓口が決める文書の型の一覧（道具自身の正本 = 相談窓口の正本と天井の正本はここに載せない）と、文書どうしの関係。文書の枚数を言うのはこの見出しだけ（各文書の中身の数はカードに書く）。
   legend:
     - {id: readable, text: 読める}
     - {id: absent, text: まだ無い}
@@ -62,12 +62,14 @@ lanes:
     - id: owner
       mark: 決
       who: 決める人（持ち主）
-      why: 「何ができたら完成か」と「何を確認してから変えるか」
+      why: 「何ができたら完成か」と「何を確認してから変えるか」と「なぜそう決めたか」
       minutes: 15
       stops:
         - {doc: srs, at: s5, label: 受入基準}
         - {doc: constitution, at: s3, label: 確認してから変える}
         - {doc: constitution, at: s5, label: 数値の表}
+        - {doc: adr, at: ADR-8, label: なぜそう決めたか（例 = 完成の線に AI の検査〔天井〕を足した判断）}
+        - {doc: adr, at: ADR-11, label: なぜそう決めたか（例 = 数値と決まりの正本の置き場を決めた判断）}
     - id: builder
       mark: 作
       who: 作る人（AI・エンジニア）
