@@ -19,7 +19,7 @@ schema:
     stage: [in-loop, post]
   enums_note: stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）
   kind_meaning:
-    deny: 機械が測って、超過なら落とす（憲法の reject / build-check に対応）
+    deny: 機械が測って、値域の外なら落とす（上限の超過・下限の不足・固定の値との違い。憲法の reject / build-check に対応）
     build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）
     detect: 記録・起票のみ・止めない（憲法の none に対応）
     human-review: 人が守る作法（憲法の human-review に対応・D 行）

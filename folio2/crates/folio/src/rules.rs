@@ -171,7 +171,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         Floor::Map(&[
             (
                 RuleKind::Deny.name(),
-                Floor::Val("機械が測って、超過なら落とす（憲法の reject / build-check に対応）"),
+                Floor::Val("機械が測って、値域の外なら落とす（上限の超過・下限の不足・固定の値との違い。憲法の reject / build-check に対応）"),
             ),
             (
                 RuleKind::BuildCheck.name(),

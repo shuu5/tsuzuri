@@ -20,7 +20,7 @@
 //! 15. 天井の正本の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致（人が書く節も不変）。
 //!
 //! 便 53（docs/design/delivery-53.md §1 (c)）: 命令は 4 本目の file rules.yaml（規則の表・生成区間は先頭の注釈の次）も順に見る（合格の標準出力は 4 行）。
-//! 16. 規則の表の側の実の正本: --check → 0・4 行目に「rules.yaml」「1764 byte」・生成区間の要約値が (b) の値・行数 27。
+//! 16. 規則の表の側の実の正本: --check → 0・4 行目に「rules.yaml」「1833 byte」・生成区間の要約値が (b) の値・行数 27。
 //! 17. 規則の表の側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 18. 規則の表の側の印: begin を消す → 2。
 //! 19. 規則の表の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致（人が書く行 thresholds・discipline と先頭の注釈も不変）。
@@ -52,6 +52,11 @@
 //! 便 78（docs/design/delivery-78.md §1 (d)）: 要件書の注 top_level_note から scope_m1 の誤った一文を落とした
 //! （F77_REGIONS の srs.yaml を 708 byte と新しい要約値に）。
 //! f78_ 1. --check → 0 ∧ 要件書の生成区間に「今の正本には無い」が無い ∧ 最上位に scope_m1 の節が在る。
+//!
+//! 便 85（docs/design/delivery-85.md §1 (d)）: 種別 deny の意味を下限の不足と固定の値との違いにも当たる字に直した
+//! （RULES_REGION_* を 1833 byte と新しい要約値に）。
+//! f85_ 1. --check → 0・8 行・rules.yaml の行が 1833 byte ∧ 生成区間が凍結 anchor と byte 一致 ∧ anchor の自己検査。
+//! f85_ 2. deny の意味が 値域の外・上限の超過・下限の不足・固定の値との違い を持ち 超過なら落とす が無い ∧ R-13 / R-14 の値と種別は不変。
 
 use std::fs;
 use std::io::Write;
@@ -79,9 +84,9 @@ const CEILING_REGION_SHA256: &str =
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
 const RULES_REGION_LINES: usize = 27;
-const RULES_REGION_BYTES: usize = 1764;
+const RULES_REGION_BYTES: usize = 1833;
 const RULES_REGION_SHA256: &str =
-    "dcf207ced150b5ebd3d6ae03bcdb5bc42ef9a06d6f74ff3f830ff96729dafad2";
+    "54580596905e2d70d834c34553d3ad9000dd356473a0df0f60e8afe8fafe652c";
 
 /// 便 76 (b) 凍結 anchor: index.yaml の生成区間（設計判断の席が独立に組んだ・tests/fixtures/schema/index-region.txt と同じ byte）。
 const INDEX_REGION_LINES: usize = 9;
@@ -1238,5 +1243,60 @@ fn f78_srs_note_does_not_claim_scope_m1_is_absent() {
     assert!(
         text.lines().any(|l| l.starts_with("scope_m1:")),
         "要件書の最上位に scope_m1 の節が無い"
+    );
+}
+
+// ── 便 85: 種別 deny の意味は上限・下限・固定の値のどれにも当たる ──
+
+/// 便 85 (b) 凍結 anchor の置き場。
+const F85_RULES_ANCHOR: &str = "tests/fixtures/schema/rules-region.txt";
+
+// ── f85_ 1. 生成区間が新しい凍結 anchor と byte 一致・anchor の自己検査 ──
+
+#[test]
+fn f85_rules_region_matches_the_new_anchor() {
+    let w = Work::new("f85-anchor");
+    let out = w.schema(&["--check"]);
+    assert_outcome(&out, 0, &["一致", "rules.yaml・1833 byte"]);
+    let anchor_text = fs::read_to_string(repo_root().join(F85_RULES_ANCHOR)).unwrap();
+    let text = w.read_rules();
+    assert_eq!(region(&text), anchor_text, "rules.yaml の生成区間が anchor と byte 一致");
+    assert_eq!(anchor_text.lines().count(), 27, "anchor の行数");
+    assert_eq!(anchor_text.len(), 1833, "anchor の byte 数");
+    let hex = sha256_hex(anchor_text.as_bytes())
+        .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
+    assert_eq!(
+        hex, "54580596905e2d70d834c34553d3ad9000dd356473a0df0f60e8afe8fafe652c",
+        "sha256sum で測った anchor の要約値"
+    );
+}
+
+// ── f85_ 2. deny の意味の字・R-13 / R-14 の値と種別は不変 ──
+
+#[test]
+fn f85_deny_meaning_names_the_lower_bound_and_the_fixed_value() {
+    let w = Work::new("f85-deny");
+    let text = w.read_rules();
+    let cur = region(&text);
+    let deny = cur
+        .lines()
+        .find(|l| l.starts_with("    deny: "))
+        .expect("kind_meaning の deny の行が無い");
+    for word in ["値域の外", "上限の超過", "下限の不足", "固定の値との違い"] {
+        assert!(deny.contains(word), "「{word}」が無い: {deny}");
+    }
+    assert_eq!(cur.matches("超過なら落とす").count(), 0, "{cur}");
+    let row = |id: &str| {
+        text.lines()
+            .find(|l| l.starts_with(&format!("  - {{id: {id}, ")))
+            .unwrap_or_else(|| panic!("行 {id} が無い"))
+            .to_string()
+    };
+    let r13 = row("R-13");
+    assert!(r13.contains(", value: \"1 本以上\", kind: deny, "), "{r13}");
+    let r14 = row("R-14");
+    assert!(
+        r14.contains(", value: 最上段（showcase）固定, kind: deny, "),
+        "{r14}"
     );
 }

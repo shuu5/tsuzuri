@@ -1759,3 +1759,14 @@ fn f74_srs_cover_figure_href_comes_from_the_source() {
     assert_eq!(links[3], ("fig-x".to_string(), "図 4".to_string()));
     assert_eq!(figure_panel_ids(&html)[3], "fig-x");
 }
+
+// ── 便 85（docs/design/delivery-85.md §1 (d) 3）: 章 05 の種別の凡例に deny の新しい意味が届く ──
+
+#[test]
+fn f85_constitution_legend_shows_the_new_meaning() {
+    let (td, _, html) = real_face("f85-legend");
+    let _ = fs::remove_dir_all(&td);
+    let five = between(&html, "<section id=\"s5\"", "<section id=\"s6\"");
+    assert!(five.contains("値域の外なら落とす"), "章 05 の凡例に新しい deny の意味が無い");
+    assert_eq!(five.matches("超過なら落とす").count(), 0, "章 05 に古い字が残っている");
+}
