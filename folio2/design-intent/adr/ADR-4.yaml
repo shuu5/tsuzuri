@@ -42,7 +42,7 @@ figures:
       title: 図がページに載るまで
       subtitle: folio が持つことと、借りた道具に任せること。だめなら前の絵のまま。
       quality_profile: showcase
-      legend: {mode: auto, entries: {frontend: {label: 見せる側（私設ネットの中の面）}, backend: {label: 道具の処理}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人・持ち主）}}}
+      legend: {mode: auto, entries: {frontend: {label: ページに載せる側}, backend: {label: 組み立てる側（folio と借りた道具）}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人）}}}
     lanes:
     - id: writer
       label: 書く人

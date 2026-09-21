@@ -28,7 +28,7 @@ sections:
       - {id: anchor, name: 凍結 anchor, role: 型付き記述 1 本と期待される図の本体の写し, ref: [P-10, R-15]}
   - n: 3
     type: ports-table
-    title: 口
+    title: 口（外から呼ばれる受け口）
     rows:
       - {id: validate, name: 検査, input: 型付き記述 1 本, output: 診断（規則の id・対象・証拠・修正候補）, refuses: 仕上がりの段（R-14）を通らない記述, ref: [FR15, R-14]}
       - {id: index, name: 索引, input: 正本の集合, output: 文書・要件・契約の id と 1 行の題, refuses: なし, ref: [FR14], note: 未実装（2026-09-20 時点・要件書 FR14 の便で入る）}
@@ -44,7 +44,7 @@ sections:
       - {id: refs, name: 参照 id, need: optional, shape: list}
   - n: 5
     type: teeth-table
-    title: 検査
+    title: 検査（壊すと落ちる自動の検査の一覧）
     rows:
       - {id: showcase-fail, name: 通らない図は生成されない, red_when: 仕上がりの段の検査を通らない記述で図が生成されるか前の生成物が変わる, fixture: tests/fixtures/figure/, ref: [AC12]}
       - {id: anchor-drift, name: 道具の版上げを検出する, red_when: 凍結 anchor の図の本体と出力が違うのに判定が「まだ分からない」にならない, fixture: tests/fixtures/figure/anchor/, ref: [FR15, P-10]}

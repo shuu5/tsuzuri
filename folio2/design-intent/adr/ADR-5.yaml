@@ -40,7 +40,7 @@ figures:
       title: ページができるまで
       subtitle: 見た目は見本から、文章と数は正本から。名札が目録に無ければ書かない。
       quality_profile: showcase
-      legend: {mode: auto, entries: {frontend: {label: 見せる側（私設ネットの中の面）}, backend: {label: 道具の処理}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人・持ち主）}}}
+      legend: {mode: auto, entries: {frontend: {label: ページを書く側}, backend: {label: folio の処理}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人・持ち主）}}}
     lanes:
     - id: writer
       label: 書く人
