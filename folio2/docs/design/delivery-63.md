@@ -10,9 +10,9 @@
 
 (a) 数えの字。crates/folio/src/face_constitution.rs（正規化 1107 行・余地 393）の章見出しと目次の「{n} つの原則」（2 か所・tier_count の値を入れる format）を、n が 1〜9 のときは「{n} つの原則」、10 以上のときは「{n} の原則」にする関数 1 つ（count_word の名・face_constitution.rs の中に置く）に寄せる。今の実の憲法は 17・4・6 なので、面は「17 の原則」「4 つの原則」「6 つの原則」になる。
 
-(b) 強度の凡例。同じ file の、規範文の札（MUST / MUST NOT / SHOULD）を出す 3 つの段の章（いつも守る・確認してから・絶対にやらない）の最初の章の帯の直後に、凡例を 1 行出す: 「MUST = 必ず守る／MUST NOT = 決してしない／SHOULD = 強い推奨（外すなら理由が要る）」。字は面の生成器 face.rs の強度の名札の表（strength_label の 3 値の日本語）から組み、手書きの写しを face_constitution.rs に置かない。部品目録の class は既存の要件書の面の凡例（face_srs.rs が §3 の頭に出す同じ凡例）と同じ部品と class を使う（部品目録 parts.json に新しい部品も class も足さない = folio parts --check は変わらない）。凡例は 3 つの段の章の最初の 1 か所だけ（3 か所に繰り返さない）。
+(b) 強度の凡例。同じ file の、規範文の札（MUST / MUST NOT / SHOULD）を出す 3 つの段の章（いつも守る・確認してから・絶対にやらない）の最初の章の帯の直後に、凡例を 1 行出す: 「MUST = 必ず守る／MUST NOT = 決してしない／SHOULD = 強い推奨（外すなら理由が要る）」。字は面の生成器 face.rs の公開関数 strength_label（3 値の日本語を返す・face_constitution.rs が既に use で取り込んでいる）から組み、手書きの写しを face_constitution.rs に置かない（face.rs は触らない）。部品目録の class は既存の要件書の面の凡例（face_srs.rs が §3 の頭に出す同じ凡例）と同じ部品と class を使う（部品目録 parts.json に新しい部品も class も足さない = folio parts --check は変わらない）。凡例は 3 つの段の章の最初の 1 か所だけ（3 か所に繰り返さない）。
 
-(c) 凍結の面の写し。tests/fixtures/face/expected.html（憲法の面の凍結 anchor・fixture の正本から生成）は (a)(b) で変わるので、同じ着地で fixture の正本から生成し直して置き換える（手で直さない・歯 face_ の凍結の一致がその写しと合う）。fixture の憲法（tests/fixtures/face/constitution.yaml）の条の数は実の憲法と違ってよい（数えの字は n で決まる）。
+(c) 凍結の面の写し。repo の根の tests/fixtures/face/expected.html（crates/folio/ の下ではない・歯は repo_root() から読む・憲法の面の凍結 anchor・fixture の正本から生成）は (a)(b) で変わるので、同じ着地で fixture の正本から生成し直して置き換える（手で直さない・歯 face_ の凍結の一致がその写しと合う）。fixture の憲法（tests/fixtures/face/constitution.yaml）の条の数は実の憲法と違ってよい（数えの字は n で決まる）。
 
 (d) 歯（crates/folio/tests/face.rs・正規化 1205 行・関数名は tier_legend_ と count_word_ で始める・今この語で始まる歯は無い）。
 1. count_word_uses_tsu_only_up_to_nine: fixture の憲法の写しで、いつも守るの条の数を 10 以上にした写し（条を複製して id を変える・既存の歯 edit / mutated と同じ形）の面に「{n} の原則」が出て「{n} つの原則」が出ない。もう 1 つ、条が 9 以下の段の見出しは「{n} つの原則」のまま。
@@ -20,7 +20,7 @@
 3. tier_legend_words_come_from_the_shared_table: 凡例の 3 つの語（必ず守る・決してしない・強い推奨（外すなら理由が要る））が要件書の面の凡例の語と 1 字も違わない（2 面を生成して同じ 3 語を含む）。
 4. 回帰（期待不変・verify の 2 行目）: tests/face.rs の既存の歯すべて（凍結の写しは (c) で更新）。
 
-(e) 大きさと接続。新規 file は無い。face_constitution.rs（+約 25 行）・tests/face.rs（+約 60 行）・tests/fixtures/face/expected.html（再生成）。size S。face.rs（余地 252）・face_srs.rs・parts.json・design-intent は触らない。外部 crate は増やさない。
+(e) 大きさと接続。新規 file は無い。crates/folio/src/face_constitution.rs（+約 25 行）・crates/folio/tests/face.rs（+約 60 行）・repo の根の tests/fixtures/face/expected.html（再生成・write-set の 3 行目）。size S。face.rs（余地 252）・face_srs.rs・parts.json・design-intent は触らない。外部 crate は増やさない。
 
 ## 2. 範囲
 
