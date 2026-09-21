@@ -9,16 +9,18 @@ use std::path::{Path, PathBuf};
 
 use crate::adr::{self, Adr};
 use crate::anchor;
+use crate::ids;
 use crate::lineage;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Value};
 
-/// `folio check` の旗（両方同時は引数の断り）。
+/// `folio check` の旗（2 つ以上同時は引数の断り）。`FreezeIds` は便 88（`ids.rs`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flag {
     None,
     EmitAmends,
     FreezeAnchor,
+    FreezeIds,
 }
 
 /// 便 8 までの検査が残した列の結果（`anchor::check_anchor` が返す）。
@@ -82,12 +84,13 @@ fn ver_key(v: &str) -> Vec<(usize, String)> {
         .collect()
 }
 
-/// 旗の後始末。便 8 までの全検査の後に呼ぶ（`state` は列の結果・読めずに止まったなら None）。
+/// 旗の後始末。便 8 までの全検査の後に呼ぶ（`state` は列の結果・読めずに止まったなら None・`ids` は便 88 の id の一覧）。
 pub fn after(
     dir: &Path,
     flag: Flag,
     state: Option<&State>,
     adr: Option<&Adr>,
+    ids: Option<&ids::Current>,
     report: &mut Report,
 ) -> After {
     match (flag, state, adr) {
@@ -96,6 +99,10 @@ pub fn after(
         (Flag::EmitAmends, None, _) => After::Emit(Vec::new()),
         (Flag::FreezeAnchor, Some(st), Some(adr)) => freeze(dir, st, adr, report),
         (Flag::FreezeAnchor, ..) => After::Freeze(not_frozen(report)),
+        (Flag::FreezeIds, ..) => match ids {
+            Some(cur) => ids::freeze(cur, report),
+            None => After::Freeze(not_frozen_by(report, "--freeze-ids")),
+        },
     }
 }
 
@@ -139,8 +146,13 @@ fn emit_lines(st: &State, report: &mut Report) -> Vec<String> {
 }
 
 fn not_frozen(report: &Report) -> String {
+    not_frozen_by(report, "--freeze-anchor")
+}
+
+/// 凍結しないときの 1 行（`flag` は旗の綴り）。
+pub(crate) fn not_frozen_by(report: &Report, flag: &str) -> String {
     format!(
-        "凍結しない — 違反 {} 件・まだ分からない {} 件を直してから --freeze-anchor",
+        "凍結しない — 違反 {} 件・まだ分からない {} 件を直してから {flag}",
         report.violations.len(),
         report.unknowns.len() + report.pendings.len()
     )

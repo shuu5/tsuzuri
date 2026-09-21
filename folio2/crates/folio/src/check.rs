@@ -17,6 +17,7 @@ use crate::ceiling;
 use crate::constitution_enums as ce;
 use crate::entrance;
 use crate::freeze::{self, After, Flag};
+use crate::ids;
 use crate::intake;
 use crate::link;
 use crate::note;
@@ -156,6 +157,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
     let mut report = Report::default();
     let mut state = None;
     let mut adr_records = None;
+    let mut ids_cur = None;
     match load_all(dir, &mut report) {
         Some(src) => {
             let history = anchor::history_ids(dir);
@@ -192,6 +194,14 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
                     &mut report,
                 );
                 state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
+                // 要件・判断・受入基準の id の消失と改番（便 88）
+                ids_cur = Some(ids::check_ids(
+                    dir,
+                    &src.srs,
+                    &records.records,
+                    flag,
+                    &mut report,
+                ));
                 adr_records = Some(records);
             }
             note::check_note(
@@ -205,7 +215,14 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
         }
         None => debug_assert!(!report.unknowns.is_empty()),
     }
-    let after = freeze::after(dir, flag, state.as_ref(), adr_records.as_ref(), &mut report);
+    let after = freeze::after(
+        dir,
+        flag,
+        state.as_ref(),
+        adr_records.as_ref(),
+        ids_cur.as_ref(),
+        &mut report,
+    );
     (report, after)
 }
 
