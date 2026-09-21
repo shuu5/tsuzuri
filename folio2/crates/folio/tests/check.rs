@@ -671,3 +671,30 @@ fn retired_render_help_does_not_list_render() {
     assert!(!help.lines().any(|l| l.starts_with("  render")), "{help}");
     assert!(help.lines().any(|l| l.starts_with("  build")), "{help}");
 }
+
+/// 憲法 P-1 の機構: 公開する命令（subcommand）の一覧は閉じた一覧と全数で一致し、採否を決める口はその一覧に無い。
+/// 一覧を足すときはこの歯と憲法 P-1 の機構の注を同じ便で直す（P-1.2・天井の 12 周目の実態 F-1）。
+#[test]
+fn p1_commands_closed_list() {
+    const CLOSED: [&str; 11] = [
+        "check", "inject", "parts", "face", "figure", "build", "intake", "hello", "ceiling", "schema",
+        "serve",
+    ];
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("--help")
+        .output()
+        .expect("folio を起動できない");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let help = stdout(&out);
+    let body = help.split("Commands:").nth(1).expect("Commands: の節が無い");
+    let body = body.split("\n\n").next().unwrap_or(body);
+    let listed: Vec<&str> = body
+        .lines()
+        .filter_map(|l| l.strip_prefix("  ").and_then(|l| l.split_whitespace().next()))
+        .filter(|name| *name != "help")
+        .collect();
+    assert_eq!(listed, CLOSED, "{help}");
+    for forbidden in ["approve", "decide", "accept", "reject", "judge"] {
+        assert!(!CLOSED.contains(&forbidden), "採否を決める口「{forbidden}」が一覧に在る");
+    }
+}
