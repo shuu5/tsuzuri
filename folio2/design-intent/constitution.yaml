@@ -224,7 +224,7 @@ articles:
     plain: 一度つけた番号は、消したり付け替えたりしません。「3 番は廃止」と書いて、3 番の番号は空けたままにします。
     rationale:
       - {kind: v1-incident, ref: "ADR-0034 §2.2。v1 では append-only は守られた側で、実害は逆＝48 ADR が全部 accepted で「取り消した決定」を機械で引けない（→ P-7.2）"}
-    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: meta.binding が true の直近版を baseline に取り、id の消失・意味の差し替えを落とす。発効前（binding false）は baseline が無いので検査対象外＝散文の適用除外ではなく機構の定義。}
+    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: meta.binding が true の直近版を baseline に取り、id の消失・意味の差し替えを落とす。発効前（binding false）は baseline が無いので検査対象外＝散文の適用除外ではなく機構の定義。この baseline の口は憲法だけ（design-intent/anchors/ の constitution-v*.yaml・実装 anchor.rs）。要件・判断・受入基準の id の消失と改番は今は数える口が無い＝まだ分からない（台帳へ起票して塞ぐ）。}
     relations: {reqs: [NFR3]}
 
   - id: P-8
