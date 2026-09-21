@@ -8,7 +8,7 @@
 
 ## 1. 目的と中身
 
-(a) 設計ノートの面（要件 FR9 = 設計ノートを 1 つの型で生成する・その面の見せ方）。crates/folio/src/face_note.rs（正規化 約 925 行・余地 約 575・便 65 の後の行数は席が受付時に測り直す）で: (1) 歯の表の行の red_when の文に名札「赤くなる条件」を付ける（「固定の材料」と同じ形 = 名札 + 本文）。(2) 契約表の章（§6 相当・rows が契約表の行のとき）の先頭に凡例 1 行「大きさ: S = 小さい便（src の余地 100 行の見積）／M = 中くらいの便（300 行の見積）」を置く（字面は憲法の面の凡例と同じ部品 legend-line・値は契約表の size の値域 S / M の順・部品目録に無い class は使わない）。(3) 脚注の正本の file 名を Frame の source に実際の id（meta.id）から `design-note/{id}.yaml` で入れる（「<文書 id>」の字を出さない）。
+(a) 設計ノートの面（要件 FR9 = 設計ノートを 1 つの型で生成する・その面の見せ方）。crates/folio/src/face_note.rs（正規化 約 925 行・余地 約 575・便 65 の後の行数は席が受付時に測り直す）で: (1) 歯の表の行の red_when の文に名札「赤くなる条件」を付ける（「固定の材料」と同じ形 = 名札 + 本文）。(2) 契約表の章（§6 相当・rows が契約表の行のとき）の先頭に凡例 1 行「大きさ: S = 小さい便（src の余地 100 行の見積）／M = 中くらいの便（300 行の見積）」を置く（部品は legend-line = 部品目録 design-intent/preview/parts.json の components に既に在る「凡例の 1 行（hint 内に本体）」・憲法の面 §5 と便 63 の札の凡例が同じ部品を使い parts --check は合格している・この便で目録に足す部品は無い・値は契約表の size の値域 S / M の順）。(3) 脚注の正本の file 名を Frame の source に実際の id（meta.id）から `design-note/{id}.yaml` で入れる（「<文書 id>」の字を出さない）。
 
 (b) 判断の記録の面。crates/folio/src/face_adr.rs（正規化 約 748 行・余地 約 750・便 65 の後は席が測り直す）の表紙の meta_span「撤退条件」の値を、種別の名だけから 1 文にする: 小さな試し → 「小さな試しで確かめて、外れたら捨てる」／数えた値 → 「数えた値が条件を超えたら捨てる」／持ち主の裁定 → 「持ち主の裁定で捨てる」（retreat_kind_label と同じ網羅の場合分け・値が増えれば組み立てが通らない）。章 04 の「撤退条件（種別）」の見出しは触らない。
 
@@ -21,7 +21,7 @@
 4. label_fix_retreat_sentence_on_the_cover（crates/folio/tests/face_adr.rs・正規化 約 840 行）: 凍結の正本（retreat.kind = measure）から出した判断の記録の面の表紙に「数えた値が条件を超えたら捨てる」が在り、表紙の meta_span の中に「数えた値」だけの値が無い。
 5. 回帰（期待不変・verify の 2 行目）: tests/face_note.rs・tests/face_adr.rs・tests/site.rs の既存の歯すべて（凍結の写し 3 本との byte 一致の歯は (c) で更新した写しで緑）。
 
-(e) 大きさと接続。新規 file は無い。face_note.rs（+約 20 行）・face_adr.rs（+約 12 行）・tests/face_note.rs（+約 40 行）・tests/face_adr.rs（+約 15 行）・写し 3 本（再生成）。size S。外部 crate は増やさない。便 65（f2-648.97）と write-set が重なるので、器の受付はその着地の後（dispatcher の overlap）。
+(e) 大きさと接続。新規 file は無い。face_note.rs（+約 20 行）・face_adr.rs（+約 12 行）・tests/face_note.rs（+約 40 行）・tests/face_adr.rs（+約 15 行）・写し 3 本（再生成）。size S。外部 crate は増やさない。先行の便は無い（便 65 = f2-648.97 は 2026-09-21 に main a67a3be で着地済み・便 70 = f2-648.103 は main 7912f48 で着地済みで、本便はどちらの成果にも依らず部品目録も触らない）。
 
 ## 2. 範囲
 
