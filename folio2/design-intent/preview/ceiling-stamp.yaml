@@ -1,13 +1,13 @@
 # folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
-round: 2026-09-21-round15
-at: 2026-09-21T07:27:50Z
+round: 2026-09-21-round18
+at: 2026-09-21T11:52:29Z
 verdict: 合格
-sources: sha256 9ddda5cb4b68ea594f67141975dd8bbe7c86f58153d47fd6c53b5bda3dad4352
-faces: sha256 f743cbd3fa0508c7554d35f3d5502117157966631aed050d400ad58887ab27e9
+sources: sha256 8c8d945f0ae41ca91690003faf5aaf9598d09f3107050b59001be0c279d22b88
+faces: sha256 949338793e4d5761be954916b27bf390b992a0868f57cabf9fbd2aaaff8f88a5
 viewpoints:
-  - {id: fidelity, verdict: 合格, findings: 2, stops: 0, bundle: c30fc90b, model: opus, effort: default, at: 2026-09-21T07:25:42Z}
-  - {id: readability, verdict: 合格, findings: 7, stops: 0, bundle: c88e80f0, model: opus, effort: default, at: 2026-09-21T07:23:58Z}
-  - {id: coherence, verdict: 合格, findings: 6, stops: 0, bundle: 5d3b78ee, model: opus, effort: default, at: 2026-09-21T07:27:50Z}
-  - {id: reality, verdict: 合格, findings: 4, stops: 0, bundle: 516bd976, model: opus, effort: default, at: 2026-09-21T07:27:17Z}
+  - {id: fidelity, verdict: 合格, findings: 5, stops: 0, bundle: 93cf3894, model: opus, effort: default, at: 2026-09-21T11:50:15Z}
+  - {id: readability, verdict: 合格, findings: 6, stops: 0, bundle: 41614748, model: opus, effort: default, at: 2026-09-21T11:45:50Z}
+  - {id: coherence, verdict: 合格, findings: 5, stops: 0, bundle: 68931377, model: opus, effort: default, at: 2026-09-21T11:51:04Z}
+  - {id: reality, verdict: 合格, findings: 2, stops: 0, bundle: 8e29568a, model: opus, effort: default, at: 2026-09-21T11:52:29Z}
 refutes: []
 reads: [adr, ceiling, constitution, design-note, index, intake, rules, srs, vocabulary]
