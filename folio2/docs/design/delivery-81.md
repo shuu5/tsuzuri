@@ -32,7 +32,7 @@ resolve（438〜441 行）の段の参照の 2 つの字を次に変える。ほ
 
 ### (b) 受入基準の英字の欄名
 
-ac_chapter の 1106〜1108 行の hint の本体の字 「／fixture: 」 を 「／固定の材料: 」 に置き換える。名札（RED の歯）と値（正本の fixture の逐語）は変えない。これで受入基準の章に英字の欄名が 1 つも残らない。
+ac_chapter の 1106〜1108 行の hint の本体の字 「／fixture: 」 を 「／固定の材料: 」 に置き換える。名札（RED の歯）と値（正本の fixture の逐語）は変えない。これで受入基準の章に英字の欄名の字面 「／fixture: 」 が 1 つも残らない（値の path に含まれる英字は正本の逐語なのでそのまま）。
 
 ### (c) 承認欄の来歴の折りたたみ
 
@@ -51,7 +51,7 @@ approval（1212〜1220 行）を次の形にする。
 1. f81_figure_label_reads_as_a_step: 実の置き場の写しで要件書の面を書く → 0 ∧ 面に 「図 2 の 」 が 1 回以上在る ∧ 面に 「図 2 1」「図 2 2」「図 2 3」「図 2 4」「図 2 5」「図 2 6」「図 2 7」 のどれも 0 回。本便の前の main では旧字面が在るので赤い歯。
 2. f81_every_referenced_step_has_a_label: 歯の側で正本 design-intent/srs.yaml の rail の段（実測 7 段）と、要件と非機能要件の figures 欄の参照を直に読み（yaml-rust2）、参照された段 n のそれぞれについて 「図 2 の {n} 段目」 が面に在る。生成器の字を写さない物差し。
 3. f81_rtm_cell_uses_the_short_label: 同じ面の対応表（部品 rtm-grid）の枡に 「図 2 の 」 が在り、対応表の枡に 「図 2 1」 の形が 0 回。
-4. f81_acceptance_has_no_english_field_name: 受入基準の章（章の帯から次の章の帯まで）に ASCII の fixture が 0 回 ∧ 「／固定の材料: 」 が在り、その回数が正本の acceptance の行の数と一致する（数は歯の側で正本から数える）。本便の前の main では fixture が在るので赤い歯。
+4. f81_acceptance_has_no_english_field_name: 受入基準の章（章の帯から次の章の帯まで）に欄名の字面 「／fixture: 」 が 0 回 ∧ 「／固定の材料: 」 が在り、その回数が正本の acceptance の行の数と一致する（数は歯の側で正本から数える）。物差しは欄名の字面だけで、値の側の逐語（tests/fixtures/intake/answers.yaml のように fixture を含む path）は数えない。本便の前の main では 「／fixture: 」 が在るので赤い歯。
 5. f81_approval_lead_is_only_the_summary: 承認欄の帯の lead の字が 「{status} — 」 の後ろに status_note の最初の 「。」 までだけを持ち、lead に 「v1.0 = 」 が 0 回（要旨と来歴の切り方は歯の側で正本から独立に組む）。本便の前の main では lead に来歴が在るので赤い歯。
 6. f81_approval_history_is_folded: 承認欄の chapbody に summary の字が 「版ごとの来歴」 の details が 1 つ在り、その中の p の字が status_note の最初の 「。」 の後ろの逐語（escape だけを掛けたもの）と一致する。
 7. 回帰（期待不変・verify の 2 行目）: crates/folio/tests/face.rs・tests/site.rs・tests/badge.rs の既存の歯すべて。
@@ -102,5 +102,5 @@ section = "1"
 write-set = ["crates/folio/src/face_srs.rs", "+crates/folio/tests/face_srs.rs", "crates/folio/tests/face.rs", "crates/folio/tests/site.rs", "crates/folio/tests/badge.rs", "tests/fixtures/face/expected-srs.html"]
 verify = ["cargo nextest run -p folio --test face_srs f81_", "cargo nextest run -p folio --test face_srs --test face --test site --test badge", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "f81_ の歯 6 本（段の名札が読める字で旧字面が 0 回・正本から数えた参照の段が全部面に在る・対応表の短い字・受入の章に英字の欄名が 0 回で日本語の名札が行の数だけ・承認欄の lead が要旨だけ・来歴が折りたたみの中で逐語一致）が緑、tests/face.rs と tests/site.rs と tests/badge.rs の既存の歯が全部緑（生成し直した凍結の写し expected-srs.html との byte 一致の歯を含む）、clippy が 0 警告で CI が通る"
+done = "f81_ の歯 6 本（段の名札が読める字で旧字面が 0 回・正本から数えた参照の段が全部面に在る・対応表の短い字・受入の章に欄名の字面 ／fixture: が 0 回で日本語の名札が行の数だけ・承認欄の lead が要旨だけ・来歴が折りたたみの中で逐語一致）が緑、tests/face.rs と tests/site.rs と tests/badge.rs の既存の歯が全部緑（生成し直した凍結の写し expected-srs.html との byte 一致の歯を含む）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
