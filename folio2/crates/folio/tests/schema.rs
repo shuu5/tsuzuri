@@ -1,5 +1,5 @@
 //! `folio schema`（便 45・docs/design/delivery-45.md §1 (f)）の歯。folio は実行 file の crate なので命令を撃つ。
-//! 1. 実の正本: design-intent の写しに --check → 0・「一致」・「22254 byte」。生成区間を sha256sum で測り直して (d) の値。
+//! 1. 実の正本: design-intent の写しに --check → 0・「一致」・「22263 byte」。生成区間を sha256sum で測り直して (d) の値。
 //! 2. ずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 3. 印: begin を消す・end を 2 本に・begin と end を入れ替える → 2。
 //! 4. 書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致。もう 1 度 → 0・「変わらない」。
@@ -30,6 +30,10 @@
 //!
 //! 便 58（docs/design/delivery-58.md §1 (e)）: 承認者の値域に orchestrator 席 を足した（1 の定数を 22254 byte と新しい要約値に）。
 //! 21. 判断の記録の側の実の生成区間が凍結 anchor tests/fixtures/schema/adr-region.txt と byte 一致 ∧ approver の行に orchestrator 席 を含む。
+//!
+//! 便 69（docs/design/delivery-69.md §1 (d)）: 注 prose_note の R-9 の母集団に 語彙 を足した（1 の定数を 22263 byte と新しい要約値に）。
+//! 22. design-intent の写しに --check → 0 ∧ 実の生成区間の prose_note の行が「憲法・rules・要件書・語彙〕」を含み「憲法・rules・要件書〕」を含まない。
+//! 23. 凍結 anchor の自己検査: adr-region.txt が 117 行・22263 byte・(d) の要約値（測れなければ落とす）。
 
 use std::fs;
 use std::io::Write;
@@ -37,10 +41,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 /// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測（便 58 (b) で承認者の値域に
-/// orchestrator 席 を足した後の値・tests/fixtures/schema/adr-region.txt と同じ byte・行数は不変）。
+/// orchestrator 席 を足し、便 69 (b) で注 prose_note の母集団に 語彙 を足した後の値・
+/// tests/fixtures/schema/adr-region.txt と同じ byte・行数は不変）。
 const REGION_LINES: usize = 117;
-const REGION_BYTES: usize = 22254;
-const REGION_SHA256: &str = "29e1188380852b143ca3db715348cc7a74220db206d284d988d66cde8f95d24b";
+const REGION_BYTES: usize = 22263;
+const REGION_SHA256: &str = "a5e1efca970d561966f78b598351afda2eda428fd4255b4a18a46f652ec6d389";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・注 4 つに「未実装である」を足した後の値）。
@@ -881,4 +886,34 @@ fn schema_adr_region_matches_the_frozen_anchor_and_lists_the_orchestrator_seat()
         .find(|l| l.trim_start().starts_with("approver: "))
         .expect("値域 approver の行が無い");
     assert!(line.contains("orchestrator 席"), "{line}");
+}
+
+// ── 便 69: 注 prose_note の R-9 の母集団に 語彙 ──
+
+// ── 22. 実の生成区間の注 prose_note は母集団に 語彙 を含む ──
+
+#[test]
+fn r9_population_names_the_vocabulary() {
+    let w = Work::new("r9-population");
+    assert_outcome(&w.schema(&["--check"]), 0, &["一致", "adr/schema.yaml"]);
+    let text = w.read();
+    let line = region(&text)
+        .lines()
+        .find(|l| l.trim_start().starts_with("prose_note: "))
+        .expect("注 prose_note の行が無い");
+    assert!(line.contains("憲法・rules・要件書・語彙〕"), "{line}");
+    assert!(!line.contains("憲法・rules・要件書〕"), "{line}");
+}
+
+// ── 23. 凍結 anchor の自己検査（要約値を測れなければ落とす）──
+
+#[test]
+fn r9_population_anchor_holds() {
+    let anchor =
+        fs::read_to_string(repo_root().join("tests/fixtures/schema/adr-region.txt")).unwrap();
+    assert_eq!(anchor.lines().count(), REGION_LINES, "anchor の行数");
+    assert_eq!(anchor.len(), REGION_BYTES, "anchor の byte 数");
+    let hex = sha256_hex(anchor.as_bytes())
+        .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
+    assert_eq!(hex, REGION_SHA256, "sha256sum で測った anchor の要約値");
 }
