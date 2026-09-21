@@ -10,3 +10,9 @@ requirements:
     shall: folio は文書を生成する。
     plain: 書類を作ります。
     basis: [P-1]
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    verify: {method: test, how: 歯で見る, ac: []}
+    goals: []
+    figures: []

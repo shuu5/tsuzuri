@@ -698,3 +698,66 @@ fn p1_commands_closed_list() {
         assert!(!CLOSED.contains(&forbidden), "採否を決める口「{forbidden}」が一覧に在る");
     }
 }
+
+// ── 要件の行の必須欄（便 75・面の生成器 face_srs.rs が読む欄から導いた床の定数） ──
+
+const FR1_FIGURES: &str = "\n    figures: [図2-1, 図2-2, 図1]\n";
+const FR1_VERIFY: &str = "    verify: {method: test, how: 決まった回答 5 つを入れ、支度表が期待どおりか比較する, ac: [AC1]}\n";
+
+/// 写しの srs.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（srs.yaml の場所）で `words` を全部含む。
+fn assert_srs_item_violation(w: &Work, words: &[&str]) {
+    assert_srs_figure_violation(w, words);
+}
+
+#[test]
+fn f75_srs_requirement_without_figures_fails() {
+    let w = Work::new("f75-no-figures");
+    w.mutate(FR1_FIGURES, "\n");
+    assert_srs_item_violation(&w, &["requirements の FR1", "figures", "が無い"]);
+}
+
+#[test]
+fn f75_srs_requirement_with_an_empty_figures_list_passes() {
+    let w = Work::new("f75-empty-figures");
+    w.mutate(FR1_FIGURES, "\n    figures: []\n");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+}
+
+#[test]
+fn f75_srs_requirement_without_verify_fails() {
+    let w = Work::new("f75-no-verify");
+    w.mutate(FR1_VERIFY, "");
+    assert_srs_item_violation(&w, &["requirements の FR1", "verify", "が無い"]);
+}
+
+#[test]
+fn f75_srs_requirement_with_an_empty_verify_how_fails() {
+    let w = Work::new("f75-empty-how");
+    w.mutate(
+        FR1_VERIFY,
+        "    verify: {method: test, how: \"\", ac: [AC1]}\n",
+    );
+    assert_srs_item_violation(&w, &["FR1 の verify", "how", "が空"]);
+}
+
+#[test]
+fn f75_srs_requirement_with_an_unknown_field_fails() {
+    let w = Work::new("f75-extra");
+    w.mutate(FR1_FIGURES, "\n    figures: []\n    extra: 1\n");
+    assert_srs_item_violation(&w, &["未知の欄", "extra"]);
+}
+
+#[test]
+fn f75_srs_nonfunctional_without_figures_fails() {
+    let w = Work::new("f75-nfr-no-figures");
+    w.mutate("\n    figures: [全段]\n", "\n");
+    assert_srs_item_violation(&w, &["nonfunctional の NFR3", "figures"]);
+}

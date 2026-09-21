@@ -62,6 +62,15 @@ pub const SRS_TOP_LEVEL: [&str; 16] = [
 const SRS_FIGURE_REQUIRED: [&str; 4] = ["id", "type", "caption", "spec"];
 const SRS_FIGURE_OPTIONAL: [&str; 2] = ["refs", "note"];
 
+/// 要件の行（requirements / nonfunctional）の欄（便 75・面の生成器 face_srs.rs の item_row が読む欄から導く）。
+/// 字の欄は非空・一覧の欄は在ること（空の一覧は通る）・verify は表で中の字の欄は非空・ac は一覧。
+const SRS_ITEM_TEXT: [&str; 7] = [
+    "id", "title", "pattern", "strength", "when", "shall", "plain",
+];
+const SRS_ITEM_LIST: [&str; 3] = ["goals", "basis", "figures"];
+const SRS_ITEM_VERIFY_TEXT: [&str; 2] = ["method", "how"];
+const SRS_ITEM_OPTIONAL: [&str; 3] = ["milestone", "rules", "note"];
+
 /// 語彙の節の閉じた一覧（同上）。
 pub const VOCABULARY_TOP_LEVEL: [&str; 3] = ["terms", "field_terms", "identifiers"];
 
@@ -543,9 +552,13 @@ fn check_srs(root: &Node, report: &mut Report) {
     ] {
         for row in rows(FILE, root, section, report) {
             let fields: &[&str] = match section {
+                "requirements" | "nonfunctional" => {
+                    check_srs_item(section, row, report);
+                    all.push(row);
+                    continue;
+                }
                 // 図 3 の答えの行（tone の値域は面の生成器が数える）
                 "verdicts" => &["id", "name", "tone", "cond"],
-                "requirements" | "nonfunctional" => &["id", "title", "shall", "plain"],
                 _ => &["id", "title"],
             };
             non_empty(
@@ -564,6 +577,45 @@ fn check_srs(root: &Node, report: &mut Report) {
         all.push(fig);
     }
     duplicate_ids(FILE, all, report);
+}
+
+/// 要件の行 1 つ（便 75）。欄の集合は閉じた一覧・字の欄は非空・一覧の欄は在ること・verify は表で中を数える。
+/// verify が無い・表でないときは違反 1 件で中は見ない（1 つの欠けを 2 件に膨らませない）。
+fn check_srs_item(section: &str, row: &Node, report: &mut Report) {
+    const FILE: &str = "srs.yaml";
+    let at = format!("{section} の {}", row_id(row));
+    for (key, _) in row.as_map().unwrap_or_default() {
+        let k = key.as_str();
+        if !SRS_ITEM_TEXT.contains(&k)
+            && !SRS_ITEM_LIST.contains(&k)
+            && !SRS_ITEM_OPTIONAL.contains(&k)
+            && k != "verify"
+        {
+            report.violation("未知の欄", format!("{FILE}: {at} の未知の欄「{key}」"));
+        }
+    }
+    non_empty(FILE, &at, row, &SRS_ITEM_TEXT, report);
+    for key in SRS_ITEM_LIST {
+        seq_field(FILE, &at, row, key, report);
+    }
+    match row.get("verify") {
+        Some(verify) if verify.as_map().is_some() => {
+            let inner = format!("{at} の verify");
+            non_empty(FILE, &inner, verify, &SRS_ITEM_VERIFY_TEXT, report);
+            seq_field(FILE, &inner, verify, "ac", report);
+        }
+        _ => report.violation("schema", format!("{FILE}: {at} の verify が無い（表）")),
+    }
+}
+
+/// 欄が一覧であること（空の一覧は通る）。無い・null・一覧でないは同じ字面の違反 1 件。
+fn seq_field(file: &str, at: &str, row: &Node, key: &str, report: &mut Report) {
+    if !matches!(row.get(key), Some(Node::Seq(_))) {
+        report.violation(
+            "schema",
+            format!("{file}: {at} の {key} が無い（一覧・空でよい）"),
+        );
+    }
 }
 
 /// 要件書の図の行 1 つ（便 34）。欄の集合・id と caption の非空（欠落も同じ形）・型は部品目録の図の型・spec は表・

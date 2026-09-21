@@ -9,4 +9,11 @@ requirements:
     title: 検査結果を必ず返す
     shall: folio は結果を 3 値で返す。
     plain: 3 つのどれかを必ず表示します。
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    verify: {method: test, how: 歯で見る, ac: []}
+    goals: []
+    basis: []
+    figures: []
 extra_section: 要件書の閉じた一覧に無い節
