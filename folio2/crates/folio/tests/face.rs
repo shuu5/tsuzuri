@@ -1284,6 +1284,74 @@ fn face_srs_unknown_when_a_figure_type_is_not_a_tool_type() {
     assert!(html.is_empty(), "導出できないのに面を書いた");
 }
 
+// ── 受入基準の章の凡例（便 64・docs/design/delivery-64.md §1 (c)）──
+
+/// 受入基準の札「まだ分からない」の凡例が言う字。
+const AC_LEGEND: &str = "合否を folio はまだ数えていません";
+
+/// 章の区間（帯 `a` から帯 `b` の直前まで）に出る凡例の行を出た順に。
+fn legend_lines<'a>(html: &'a str, a: &str, b: &str) -> Vec<&'a str> {
+    between(html, a, b)
+        .lines()
+        .filter(|l| l.starts_with("<div class=\"legend-line\">"))
+        .collect()
+}
+
+#[test]
+fn ac_legend_appears_once_in_the_acceptance_chapter() {
+    let (td, _, html) = real_srs("srs-ac-legend");
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        html.matches(AC_LEGEND).count(),
+        1,
+        "凡例の字が面に 1 回でない"
+    );
+    let chapter = between(&html, "<section id=\"s5\"", "<section id=\"s6\"");
+    let lines = legend_lines(&html, "<section id=\"s5\"", "<section id=\"s6\"");
+    assert_eq!(
+        lines.len(),
+        1,
+        "受入基準の章の凡例の行が 1 行でない: {lines:?}"
+    );
+    assert!(
+        lines[0].contains(&format!("まだ分からない = この基準の{AC_LEGEND}")),
+        "凡例が札の字と意味を並べていない: {}",
+        lines[0]
+    );
+    // 帯の直後・基準の一覧の前（最初の札より先）
+    let at = chapter.find(lines[0]).unwrap();
+    let first_chip = chapter
+        .find("data-component=\"ac-state-chip\"")
+        .expect("受入基準の章に札が無い");
+    assert!(at < first_chip, "凡例が基準の一覧より後に在る");
+}
+
+#[test]
+fn ac_legend_uses_the_same_parts_as_chapter_three() {
+    let (td, _, html) = real_srs("srs-ac-legend-parts");
+    let _ = fs::remove_dir_all(&td);
+    let fr = legend_lines(&html, "<section id=\"s3\"", "<section id=\"s4\"");
+    let ac = legend_lines(&html, "<section id=\"s5\"", "<section id=\"s6\"");
+    assert_eq!(fr.len(), 1, "§3 の凡例の行が 1 行でない: {fr:?}");
+    assert_eq!(ac.len(), 1, "受入基準の章の凡例の行が 1 行でない: {ac:?}");
+    assert_eq!(
+        components(ac[0]),
+        components(fr[0]),
+        "凡例の部品の名札が §3 の凡例と違う"
+    );
+    let head = "<div class=\"legend-line\"><span>凡例:</span>";
+    assert!(
+        fr[0].starts_with(head),
+        "§3 の凡例の形が変わった: {}",
+        fr[0]
+    );
+    assert!(
+        ac[0].starts_with(head) && ac[0].ends_with("</div>"),
+        "受入基準の章の凡例が §3 と同じ class で包まれていない: {}",
+        ac[0]
+    );
+}
+
 #[test]
 fn face_srs_unknown_when_the_figure_tool_is_absent() {
     let (td, work) = fixture_copy("srs-no-tool");

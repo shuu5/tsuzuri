@@ -1054,9 +1054,16 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, it: &Item<'_>, nfr: bool) -> R<(
     Ok(())
 }
 
+/// 受入基準の章の凡例の 1 行（札「まだ分からない」が何を言うか・便 64）。部品と class は §3 の凡例（`legend_line`）と同じ。
+/// folio はまだ受入の結果を測らない（P-4.2）——測るのは便の検証の歯で、その結果はこの面に写していない。
+fn ac_legend_line() -> &'static str {
+    "<div class=\"legend-line\"><span>凡例:</span><span>まだ分からない = この基準の合否を folio はまだ数えていません（合否を測るのは便の検証の歯で、その結果はこのページに写していません）</span></div>"
+}
+
 fn ac_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>) -> R<()> {
     band(o, ctx, 5, None);
     o.push("<div class=\"chapbody\">".to_string());
+    o.push(ac_legend_line().to_string());
     o.push(format!(
         "<div {} style=\"--band-n:2\">",
         ctx.frame.dc(Component::SectionLeadCallout)
