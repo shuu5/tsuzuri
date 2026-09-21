@@ -1,0 +1,10 @@
+# folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
+round: stamp-case
+verdict: 合格
+viewpoints:
+  - {id: fidelity, verdict: 合格, findings: 0, stops: 0, model: opus, effort: high}
+  - {id: readability, verdict: 合格, findings: 0, stops: 0, model: opus, effort: high}
+  - {id: coherence, verdict: 合格, findings: 0, stops: 0, model: opus, effort: high}
+  - {id: reality, verdict: 合格, findings: 0, stops: 0, model: opus, effort: high}
+refutes: []
+reads: [adr, constitution, design-note, rules, srs]
