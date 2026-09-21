@@ -1,0 +1,13 @@
+# folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
+round: gate-case
+at: 2026-09-19T05:00:00Z
+verdict: まだ分からない
+sources: sha256 0000000000000000000000000000000000000000000000000000000000000000
+faces: sha256 0000000000000000000000000000000000000000000000000000000000000000
+viewpoints:
+  - {id: fidelity, verdict: 合格, findings: 0, stops: 0, bundle: sha256 0000000000000000000000000000000000000000000000000000000000000000, model: opus, effort: high, at: 2026-09-19T05:00:00Z}
+  - {id: readability, verdict: 合格, findings: 0, stops: 0, bundle: sha256 0000000000000000000000000000000000000000000000000000000000000000, model: opus, effort: high, at: 2026-09-19T05:00:00Z}
+  - {id: coherence, verdict: 合格, findings: 0, stops: 0, bundle: sha256 0000000000000000000000000000000000000000000000000000000000000000, model: opus, effort: high, at: 2026-09-19T05:00:00Z}
+  - {id: reality, verdict: まだ分からない, findings: 0, stops: 0, bundle: sha256 0000000000000000000000000000000000000000000000000000000000000000, model: opus, effort: high, at: 2026-09-19T05:00:00Z}
+refutes: []
+reads: [adr, constitution, design-note, rules, srs]

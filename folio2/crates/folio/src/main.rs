@@ -17,6 +17,7 @@ mod face_srs_rtm;
 mod figure;
 mod findings;
 mod freeze;
+mod gate;
 mod gitcheck;
 mod hello;
 mod inject;
@@ -196,8 +197,9 @@ enum Command {
         state: Option<PathBuf>,
     },
     /// 天井の材料の束を観点ごとに置き場へ組む（--write）・席か器が書いた所見 file を数えて観点ごとの 3 値を返す（--check）・
-    /// 止める の所見ごとに反証の材料の束を組む（--refute）・周の結果から天井の印を書く（--stamp）。AI は起動しない
-    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "refute", "stamp"])))]
+    /// 止める の所見ごとに反証の材料の束を組む（--refute）・周の結果から天井の印を書く（--stamp）・
+    /// 印と便の書き換える file の一覧から門の 3 値を返す（--gate）。AI は起動しない
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "refute", "stamp", "gate"])))]
     Ceiling {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
@@ -205,9 +207,9 @@ enum Command {
         /// 配信先（folio build の --out・相対なら --dir からの相対・絶対ならそのまま・--write と --check に要る〔--check でも束が古くないかを測る〕・--refute は読まない）
         #[arg(long)]
         faces: Option<PathBuf>,
-        /// 束の置き場（既定なし・相対なら --dir からの相対・絶対ならそのまま）
-        #[arg(long)]
-        out: PathBuf,
+        /// 束の置き場（既定なし・相対なら --dir からの相対・絶対ならそのまま・--gate は読まない）
+        #[arg(long, required_unless_present = "gate")]
+        out: Option<PathBuf>,
         /// 観点ごとの束（sources/・faces/・question.yaml・finding.yaml・reads.yaml・digest.txt）を置き場へ書く（全部か無しか）
         #[arg(long)]
         write: bool,
@@ -220,6 +222,12 @@ enum Command {
         /// 周の結果（観点ごとの所見 file と止めるの反証の結果）から天井の印を導出し <dir>/preview/ceiling-stamp.yaml へ書く（同じなら書かない・組めなければ まだ分からない で何も書かない）
         #[arg(long)]
         stamp: bool,
+        /// 印 <dir>/preview/ceiling-stamp.yaml と --write-set から門の 3 値を返す（通す 0・止める 1・まだ分からない 2・何も書かない）
+        #[arg(long, requires = "write_set")]
+        gate: bool,
+        /// 便の書き換える file（repo の根からの相対・接頭辞 + / - / ~ は剥がす・1 つ以上・--gate に要る）
+        #[arg(long = "write-set", value_name = "PATH", num_args = 1.., requires = "gate")]
+        write_set: Vec<String>,
     },
     /// 欄の決まりの file の schema 節（生成区間）を床の定数から導出して書く（--write）・検査する（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
@@ -452,7 +460,15 @@ fn main() -> ExitCode {
             check: _,
             refute,
             stamp,
+            gate,
+            write_set,
         } => {
+            if gate {
+                let outcome = gate::run(&dir, &write_set);
+                println!("{}", outcome.stdout);
+                return ExitCode::from(outcome.verdict.exit_code() as u8);
+            }
+            let out = out.expect("--gate の外では clap が --out を要る");
             if stamp {
                 let outcome = stamp::run(&dir, &out);
                 println!("{}", outcome.stdout);
