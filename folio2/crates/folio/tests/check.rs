@@ -822,3 +822,40 @@ fn f75_srs_nonfunctional_without_figures_fails() {
     w.mutate("\n    figures: [全段]\n", "\n");
     assert_srs_item_violation(&w, &["nonfunctional の NFR3", "figures"]);
 }
+
+// ── 要件の行の欄の閉じた一覧は実装の定数が持つ（便 86・生成区間は写しで file の側から緩められない） ──
+
+/// 便 86 (c) の生成区間の optional の行（写しの側の変異の当て先）。
+const F86_REGION_OPTIONAL: &str = "\n    optional: [milestone, rules, note]\n";
+
+#[test]
+fn f86_unknown_field_cannot_be_loosened_from_the_file() {
+    let w = Work::new("f86-loosen");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    w.mutate(FR1_FIGURES, "\n    figures: [図2-1, 図2-2, 図1]\n    extras: 1\n");
+    assert_srs_item_violation(&w, &["未知の欄", "extras"]);
+    // 生成区間の optional に extras を足しても閉じた一覧は緩まない（N-3.1）
+    w.mutate(
+        F86_REGION_OPTIONAL,
+        "\n    optional: [milestone, rules, note, extras]\n",
+    );
+    assert_srs_item_violation(&w, &["未知の欄", "extras"]);
+}
+
+#[test]
+fn f86_verify_inner_list_is_still_checked() {
+    let w = Work::new("f86-no-ac");
+    w.mutate(
+        FR1_VERIFY,
+        "    verify: {method: test, how: 決まった回答 5 つを入れ、支度表が期待どおりか比較する}\n",
+    );
+    assert_srs_item_violation(&w, &["FR1 の verify の ac が無い（一覧・空でよい）"]);
+}

@@ -21,3 +21,9 @@ schema:
   figures:
     entry: {required: [id, type, caption, spec], optional: [refs, note]}
   figures_note: 要件書の図の節の行の欄（判断の記録と設計ノートの欄の決まりの figures.entry と同じ形）。型（type）の値域は部品目録が持つ
+  requirement_row:
+    required_text: [id, title, pattern, strength, when, shall, plain]
+    required_list: [goals, basis, figures]
+    optional: [milestone, rules, note]
+    verify: {required_text: [method, how], required_list: [ac]}
+  requirement_row_note: 要件の行（requirements と nonfunctional）の欄の閉じた一覧。required_text は非空の字・required_list は在ること（空の一覧でよい）・optional は任意・verify は表

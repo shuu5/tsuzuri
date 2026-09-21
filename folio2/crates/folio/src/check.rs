@@ -91,6 +91,28 @@ pub(crate) const SRS_FLOOR: Floor = Floor::Map(&[
             "要件書の図の節の行の欄（判断の記録と設計ノートの欄の決まりの figures.entry と同じ形）。型（type）の値域は部品目録が持つ",
         ),
     ),
+    // 要件の行の欄の閉じた一覧の写し（便 86 §1 (b)）。葉は check_srs_item が読む定数そのもの
+    (
+        "requirement_row",
+        Floor::Map(&[
+            ("required_text", Floor::Strs(&SRS_ITEM_TEXT)),
+            ("required_list", Floor::Strs(&SRS_ITEM_LIST)),
+            ("optional", Floor::Strs(&SRS_ITEM_OPTIONAL)),
+            (
+                SRS_ITEM_VERIFY,
+                Floor::Map(&[
+                    ("required_text", Floor::Strs(&SRS_ITEM_VERIFY_TEXT)),
+                    ("required_list", Floor::Strs(&SRS_ITEM_VERIFY_LIST)),
+                ]),
+            ),
+        ]),
+    ),
+    (
+        "requirement_row_note",
+        Floor::Val(
+            "要件の行（requirements と nonfunctional）の欄の閉じた一覧。required_text は非空の字・required_list は在ること（空の一覧でよい）・optional は任意・verify は表",
+        ),
+    ),
 ]);
 
 /// 要件の行（requirements / nonfunctional）の欄（便 75・面の生成器 face_srs.rs の item_row が読む欄から導く）。
@@ -101,6 +123,9 @@ const SRS_ITEM_TEXT: [&str; 7] = [
 const SRS_ITEM_LIST: [&str; 3] = ["goals", "basis", "figures"];
 const SRS_ITEM_VERIFY_TEXT: [&str; 2] = ["method", "how"];
 const SRS_ITEM_OPTIONAL: [&str; 3] = ["milestone", "rules", "note"];
+/// verify の欄の字と、その中の一覧の欄（便 86 §1 (a)・字面の写しを閉じて生成区間が集合の全部を覆う）。
+const SRS_ITEM_VERIFY: &str = "verify";
+const SRS_ITEM_VERIFY_LIST: [&str; 1] = ["ac"];
 
 /// 語彙の節の閉じた一覧（同上）。末尾の schema は生成区間（便 77）。
 pub const VOCABULARY_TOP_LEVEL: [&str; 4] = ["terms", "field_terms", "identifiers", "schema"];
@@ -631,7 +656,7 @@ fn check_srs_item(section: &str, row: &Node, report: &mut Report) {
         if !SRS_ITEM_TEXT.contains(&k)
             && !SRS_ITEM_LIST.contains(&k)
             && !SRS_ITEM_OPTIONAL.contains(&k)
-            && k != "verify"
+            && k != SRS_ITEM_VERIFY
         {
             report.violation("未知の欄", format!("{FILE}: {at} の未知の欄「{key}」"));
         }
@@ -640,11 +665,13 @@ fn check_srs_item(section: &str, row: &Node, report: &mut Report) {
     for key in SRS_ITEM_LIST {
         seq_field(FILE, &at, row, key, report);
     }
-    match row.get("verify") {
+    match row.get(SRS_ITEM_VERIFY) {
         Some(verify) if verify.as_map().is_some() => {
-            let inner = format!("{at} の verify");
+            let inner = format!("{at} の {SRS_ITEM_VERIFY}");
             non_empty(FILE, &inner, verify, &SRS_ITEM_VERIFY_TEXT, report);
-            seq_field(FILE, &inner, verify, "ac", report);
+            for key in SRS_ITEM_VERIFY_LIST {
+                seq_field(FILE, &inner, verify, key, report);
+            }
         }
         _ => report.violation("schema", format!("{FILE}: {at} の verify が無い（表）")),
     }

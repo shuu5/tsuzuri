@@ -50,18 +50,25 @@
 //! f77_ 5. 3 file をずらした写しに --write → 0・3 file 全体が元と byte 一致・もう 1 度で 8 行とも変わらない。
 //!
 //! 便 78（docs/design/delivery-78.md §1 (d)）: 要件書の注 top_level_note から scope_m1 の誤った一文を落とした
-//! （F77_REGIONS の srs.yaml を 708 byte と新しい要約値に）。
+//! （F77_REGIONS の srs.yaml を 1168 byte と新しい要約値に・便 86 で要件の行の枝を足した後の値）。
 //! f78_ 1. --check → 0 ∧ 要件書の生成区間に「今の正本には無い」が無い ∧ 最上位に scope_m1 の節が在る。
 //!
 //! 便 85（docs/design/delivery-85.md §1 (d)）: 種別 deny の意味を下限の不足と固定の値との違いにも当たる字に直した
 //! （RULES_REGION_* を 1833 byte と新しい要約値に）。
 //! f85_ 1. --check → 0・8 行・rules.yaml の行が 1833 byte ∧ 生成区間が凍結 anchor と byte 一致 ∧ anchor の自己検査。
 //! f85_ 2. deny の意味が 値域の外・上限の超過・下限の不足・固定の値との違い を持ち 超過なら落とす が無い ∧ R-13 / R-14 の値と種別は不変。
+//!
+//! 便 86（docs/design/delivery-86.md §1 (f)）: 要件書の生成区間の末尾に要件の行の欄の閉じた一覧を足した
+//! （F77_REGIONS の srs.yaml を 29 行・1168 byte と新しい要約値に）。
+//! f86_ 1. --check → 0・8 行・srs.yaml の行が 1168 byte ∧ 生成区間が凍結 anchor と byte 一致 ∧ anchor の自己検査。
+//! f86_ 2. 正本の要件の行に現れる欄の集合が生成区間の requirement_row の 4 群 + verify の中に過不足なく収まる。
 
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+
+use yaml_rust2::{Yaml, YamlLoader};
 
 /// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測（便 58 (b) で承認者の値域に
 /// orchestrator 席 を足し、便 69 (b) で注 prose_note の母集団に 語彙 を足した後の値・
@@ -99,9 +106,9 @@ const F77_REGIONS: [(&str, &str, usize, usize, &str); 3] = [
     (
         "srs.yaml",
         "tests/fixtures/schema/srs-region.txt",
-        23,
-        708,
-        "290e27043b7b0e01b7d78a1c2829f1e484da4af57c874bd7d0c54792b467c3aa",
+        29,
+        1168,
+        "3937340f77713b087b33ca43b8fe866ca310b97cd04e5e1f4ce9967e19b724e1",
     ),
     (
         "vocabulary.yaml",
@@ -1299,4 +1306,98 @@ fn f85_deny_meaning_names_the_lower_bound_and_the_fixed_value() {
         r14.contains(", value: 最上段（showcase）固定, kind: deny, "),
         "{r14}"
     );
+}
+
+// ── 便 86: 要件の行の欄の閉じた一覧を要件書の生成区間へ導出する ──
+
+/// 便 86 (c) 凍結 anchor の置き場と自己検査の値（設計判断の席が独立に組んだ）。
+const F86_SRS_ANCHOR: &str = "tests/fixtures/schema/srs-region.txt";
+const F86_SRS_LINES: usize = 29;
+const F86_SRS_BYTES: usize = 1168;
+const F86_SRS_SHA256: &str = "3937340f77713b087b33ca43b8fe866ca310b97cd04e5e1f4ce9967e19b724e1";
+
+// ── f86_ 1. 生成区間が新しい凍結 anchor と byte 一致・anchor の自己検査 ──
+
+#[test]
+fn f86_srs_region_matches_the_new_anchor() {
+    let w = Work::new("f86-anchor");
+    let out = w.schema(&["--check"]);
+    assert_outcome(&out, 0, &["一致", &format!("srs.yaml・{F86_SRS_BYTES} byte")]);
+    let anchor_text = fs::read_to_string(repo_root().join(F86_SRS_ANCHOR)).unwrap();
+    let text = w.read_file("srs.yaml");
+    assert_eq!(region(&text), anchor_text, "srs.yaml の生成区間が anchor と byte 一致");
+    assert_eq!(anchor_text.lines().count(), F86_SRS_LINES, "anchor の行数");
+    assert_eq!(anchor_text.len(), F86_SRS_BYTES, "anchor の byte 数");
+    let hex = sha256_hex(anchor_text.as_bytes())
+        .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
+    assert_eq!(hex, F86_SRS_SHA256, "sha256sum で測った anchor の要約値");
+}
+
+// ── f86_ 2. 正本の要件の行の欄の集合が生成区間の群に過不足なく収まる ──
+
+/// 表の鍵の字（字でない鍵は落とす）。
+fn keys(node: &Yaml) -> Vec<String> {
+    node.as_hash()
+        .map(|h| h.keys().filter_map(|k| k.as_str().map(str::to_string)).collect())
+        .unwrap_or_default()
+}
+
+/// 字の一覧（一覧でない・字でない項は歯を落とす）。
+fn strs(node: &Yaml, at: &str) -> Vec<String> {
+    node.as_vec()
+        .unwrap_or_else(|| panic!("{at} が一覧でない"))
+        .iter()
+        .map(|v| v.as_str().unwrap_or_else(|| panic!("{at} の項が字でない")).to_string())
+        .collect()
+}
+
+#[test]
+fn f86_region_lists_every_group_of_the_row() {
+    let w = Work::new("f86-groups");
+    let text = w.read_file("srs.yaml");
+    let reg = YamlLoader::load_from_str(region(&text)).unwrap().remove(0);
+    let row = &reg["schema"]["requirement_row"];
+    let text_keys = strs(&row["required_text"], "required_text");
+    let list_keys = strs(&row["required_list"], "required_list");
+    let optional = strs(&row["optional"], "optional");
+    let verify_text = strs(&row["verify"]["required_text"], "verify.required_text");
+    let verify_list = strs(&row["verify"]["required_list"], "verify.required_list");
+    assert_eq!(
+        [text_keys.len(), list_keys.len(), optional.len(), verify_text.len(), verify_list.len()],
+        [7, 3, 3, 2, 1],
+        "{row:?}"
+    );
+    assert_eq!(keys(row), ["required_text", "required_list", "optional", "verify"]);
+    assert_eq!(keys(&row["verify"]), ["required_text", "required_list"]);
+
+    // 生成区間が言う行の欄（群どうしは重ならない）
+    let mut declared: Vec<String> = [&text_keys, &list_keys, &optional].into_iter().flatten().cloned().collect();
+    declared.push("verify".to_string());
+    let mut inner: Vec<String> = verify_text.iter().chain(&verify_list).cloned().collect();
+    let (n, m) = (declared.len(), inner.len());
+    declared.sort();
+    declared.dedup();
+    inner.sort();
+    inner.dedup();
+    assert_eq!((declared.len(), inner.len()), (n, m), "群が重なる");
+
+    // 正本の要件の行（requirements と nonfunctional の全行）に実際に現れる欄の和集合
+    let doc = YamlLoader::load_from_str(&text).unwrap().remove(0);
+    let mut seen: Vec<String> = Vec::new();
+    let mut seen_inner: Vec<String> = Vec::new();
+    let mut count = 0;
+    for section in ["requirements", "nonfunctional"] {
+        for item in doc[section].as_vec().unwrap_or_else(|| panic!("{section} が一覧でない")) {
+            count += 1;
+            seen.extend(keys(item));
+            seen_inner.extend(keys(&item["verify"]));
+        }
+    }
+    assert!(count > 0, "要件の行が無い");
+    seen.sort();
+    seen.dedup();
+    seen_inner.sort();
+    seen_inner.dedup();
+    assert_eq!(seen, declared, "正本の要件の行の欄の集合 = 生成区間の 4 群");
+    assert_eq!(seen_inner, inner, "正本の verify の中の欄の集合 = 生成区間の verify の 2 群");
 }
