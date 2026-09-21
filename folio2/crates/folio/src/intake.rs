@@ -8,14 +8,27 @@
 use std::collections::HashSet;
 
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
+use crate::schema::Floor;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
 
 const FILE: &str = "intake.yaml";
 
-/// 相談窓口の正本の節の閉じた一覧（床の定数・入口と同じ持ち方）。
-pub const INTAKE_TOP_LEVEL: [&str; 5] = ["meta", "answers", "targets", "questions", "sheet"];
+/// 相談窓口の正本の節の閉じた一覧（床の定数・入口と同じ持ち方）。末尾の schema は生成区間（便 77・ADR-11 決定 (4)⑤）。
+pub const INTAKE_TOP_LEVEL: [&str; 6] = ["meta", "answers", "targets", "questions", "sheet", "schema"];
+
+/// 相談窓口の正本の schema 節（生成区間）の床の木（便 77 §1 (a)）。欄の順と字面は凍結 anchor
+/// tests/fixtures/schema/intake-region.txt のとおり。床（`check_intake`）は生成区間の中身をこの木と突き合わせない。
+pub(crate) const INTAKE_FLOOR: Floor = Floor::Map(&[
+    ("top_level", Floor::Strs(&INTAKE_TOP_LEVEL)),
+    (
+        "top_level_note",
+        Floor::Val(
+            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。meta と answers と targets と questions と sheet は人が書き、schema は生成区間",
+        ),
+    ),
+]);
 
 /// 棚に無い行き先（憲法を AI の手元へ写す＝注入）。
 pub const INJECT_TARGET: &str = "inject";

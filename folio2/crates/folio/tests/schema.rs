@@ -40,6 +40,14 @@
 //! f76_ 4. 入口の正本の側のずれ: 生成区間の 1 byte を書き換えて --check → 1・先の 4 本は触らない。
 //! f76_ 5. 入口の正本の側の印: begin を消す → --check も --write も 2。
 //! f76_ 6. 入口の正本の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致・もう 1 度で変わらない。
+//!
+//! 便 77（docs/design/delivery-77.md §1 (e)）: 命令は 6〜8 本目の file srs.yaml・vocabulary.yaml・intake.yaml（生成区間は末尾）も
+//! 順に見る（合格の標準出力は 8 行）。
+//! f77_ 1. --check → 0・8 行・6〜8 行目が 3 file で byte 数が anchor の byte 長と同じ。
+//! f77_ 2. 3 file の生成区間が凍結 anchor と byte 一致・anchor の自己検査（要約値を測れなければ落とす）。
+//! f77_ 3. 3 file それぞれの生成区間の 1 byte を書き換えて --check → 1。
+//! f77_ 4. 3 file それぞれの begin を消す → 2。
+//! f77_ 5. 3 file をずらした写しに --write → 0・3 file 全体が元と byte 一致・もう 1 度で 8 行とも変わらない。
 
 use std::fs;
 use std::io::Write;
@@ -77,8 +85,47 @@ const INDEX_REGION_BYTES: usize = 860;
 const INDEX_REGION_SHA256: &str =
     "01604d6003dde61fe970af89194215b5e0517d32610fd9cc0cc4554801f7f9ee";
 
-/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本）。
-const TARGETS: usize = 5;
+/// 便 77 (b) 凍結 anchor 3 本（file 名・anchor・行数・byte 数・要約値）。設計判断の席が独立に組んだ。
+const F77_REGIONS: [(&str, &str, usize, usize, &str); 3] = [
+    (
+        "srs.yaml",
+        "tests/fixtures/schema/srs-region.txt",
+        23,
+        777,
+        "879ab87dc75a6c2545868a33cb96540cf679b0e6499222daa653f720da6563ef",
+    ),
+    (
+        "vocabulary.yaml",
+        "tests/fixtures/schema/vocabulary-region.txt",
+        3,
+        238,
+        "2746b140abdf5bfafa2b3b907b2bce91c9ee21e3af5488ba09420006f0170161",
+    ),
+    (
+        "intake.yaml",
+        "tests/fixtures/schema/intake-region.txt",
+        3,
+        262,
+        "38fd3ff44e9aa6a398344d3385cb4281c77daf62d3839410e5da3814183aee8b",
+    ),
+];
+
+/// 便 77 の 3 file の生成区間の変異（1 byte ずつ・F77_REGIONS と同じ順）。
+const F77_DRIFTS: [(&str, &str); 3] = [
+    ("\n    - glossary_pointer\n", "\n    - glossary_pointeR\n"),
+    (
+        "\n  top_level: [terms, field_terms, identifiers, schema]\n",
+        "\n  top_level: [terms, field_terms, identifierS, schema]\n",
+    ),
+    (
+        "\n  top_level: [meta, answers, targets, questions, sheet, schema]\n",
+        "\n  top_level: [meta, answers, targets, questions, sheeT, schema]\n",
+    ),
+];
+
+/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
+/// → 要件書 → 語彙 → 相談窓口）。
+const TARGETS: usize = 8;
 
 const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
 const END: &str = "# folio:schema:end";
@@ -1061,4 +1108,115 @@ fn f76_schema_write_restores_the_index_region_and_is_idempotent() {
     );
     assert_eq!(w.read_index(), original);
     assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
+}
+
+// ── 便 77: 要件書・語彙・相談窓口の側 ──
+
+impl Work {
+    fn read_file(&self, file: &str) -> String {
+        fs::read_to_string(self.dir().join(file)).unwrap()
+    }
+}
+
+// ── f77_ 1. 8 行の一致と byte 数 ──
+
+#[test]
+fn f77_check_covers_the_three_files() {
+    let w = Work::new("f77-check");
+    let out = w.schema(&["--check"]);
+    assert_outcome(&out, 0, &["一致"]);
+    let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), 8, "{lines:?}");
+    assert!(lines[4].contains("index.yaml"), "{lines:?}");
+    for (i, (file, anchor, _, bytes, _)) in F77_REGIONS.iter().enumerate() {
+        let line = &lines[5 + i];
+        assert!(line.contains(&format!("（{file}・")), "{line}");
+        assert!(line.contains(&format!("{bytes} byte")), "{line}");
+        let len = fs::read(repo_root().join(anchor)).unwrap().len();
+        assert!(line.contains(&format!("・{len} byte）")), "anchor の byte 長 {len}: {line}");
+    }
+}
+
+// ── f77_ 2. 凍結 anchor との byte 一致と anchor の自己検査 ──
+
+#[test]
+fn f77_regions_match_the_frozen_anchors() {
+    let w = Work::new("f77-anchors");
+    for (file, anchor, lines, bytes, sha) in F77_REGIONS {
+        let text = w.read_file(file);
+        let anchor_text = fs::read_to_string(repo_root().join(anchor)).unwrap();
+        assert_eq!(region(&text), anchor_text, "{file} の生成区間が {anchor} と byte 一致");
+        assert_eq!(anchor_text.lines().count(), lines, "{anchor} の行数");
+        assert_eq!(anchor_text.len(), bytes, "{anchor} の byte 数");
+        let hex = sha256_hex(anchor_text.as_bytes())
+            .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
+        assert_eq!(hex, sha, "sha256sum で測った {anchor} の要約値");
+        // 印の後は file の終わり（生成区間は末尾）
+        assert!(text.ends_with(&format!("\n{END}\n")), "{file}");
+    }
+}
+
+// ── f77_ 3. 3 file のずれ ──
+
+#[test]
+fn f77_drift_in_each_region_fails() {
+    for ((file, _, _, bytes, _), (from, to)) in F77_REGIONS.iter().zip(F77_DRIFTS) {
+        let w = Work::new(&format!("f77-drift-{file}"));
+        mutate_file(&w.dir().join(file), from, to);
+        assert_outcome(
+            &w.schema(&["--check"]),
+            1,
+            &[&format!("{file}: 生成区間"), "≠ 導出", &format!("{bytes} byte")],
+        );
+    }
+}
+
+// ── f77_ 4. 3 file の印 ──
+
+#[test]
+fn f77_missing_marker_in_each_file_is_unknown() {
+    for (file, ..) in F77_REGIONS {
+        let w = Work::new(&format!("f77-no-begin-{file}"));
+        mutate_file(&w.dir().join(file), &format!("{BEGIN}\n"), "");
+        assert_outcome(
+            &w.schema(&["--check"]),
+            2,
+            &[&format!("{file}: 印が 1 対でない")],
+        );
+    }
+}
+
+// ── f77_ 5. 書き直しと冪等 ──
+
+#[test]
+fn f77_write_restores_the_three_regions() {
+    let w = Work::new("f77-write");
+    let originals: Vec<String> = F77_REGIONS.iter().map(|r| w.read_file(r.0)).collect();
+    for ((file, ..), (from, to)) in F77_REGIONS.iter().zip(F77_DRIFTS) {
+        mutate_file(&w.dir().join(file), from, to);
+    }
+    let out = w.schema(&["--write"]);
+    assert_outcome(&out, 0, &["書いた"]);
+    for ((file, ..), original) in F77_REGIONS.iter().zip(&originals) {
+        assert!(
+            stdout(&out).contains(&format!("書いた（{file}・")),
+            "{}",
+            stdout(&out)
+        );
+        assert_eq!(
+            &w.read_file(file),
+            original,
+            "{file} 全体が元と byte 一致（人が書く節・meta・承認欄・注釈も不変）"
+        );
+    }
+    let again = w.schema(&["--write"]);
+    assert_outcome(&again, 0, &[]);
+    assert!(
+        stdout(&again).lines().all(|l| l.contains("変わらない")),
+        "{}",
+        stdout(&again)
+    );
+    for ((file, ..), original) in F77_REGIONS.iter().zip(&originals) {
+        assert_eq!(&w.read_file(file), original, "{file}");
+    }
 }

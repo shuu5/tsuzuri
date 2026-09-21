@@ -325,6 +325,65 @@ fn check_srs_figure_id_shared_with_a_requirement_fails() {
     assert_srs_figure_violation(&w, &["行 id「FR1」が重複"]);
 }
 
+// ── 要件書・語彙・相談窓口の最上位の節は床の定数から（便 77 §1 (e) 6） ──
+
+/// 実の置き場（生成区間を置いた 3 file）に folio check → 合格・未知の節 0 件。続けて写しの 3 file それぞれで、
+/// file の側の schema.top_level に extras を足し、最上位に節 extras を足しても、床は定数の一覧で数える＝
+/// 不合格 1・未知の節はちょうど 1 件でその file 名と extras を含む。
+#[test]
+fn f77_top_level_is_closed_on_the_three_files() {
+    let out = folio_check(&repo_root().join("design-intent"));
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let unknown: Vec<String> = violations(&out)
+        .into_iter()
+        .filter(|v| v.starts_with("[未知の節]"))
+        .collect();
+    assert!(unknown.is_empty(), "{unknown:?}");
+
+    for (file, from, to) in [
+        ("srs.yaml", "\n    - figures\n    - schema\n", "\n    - figures\n    - schema\n    - extras\n"),
+        (
+            "vocabulary.yaml",
+            "\n  top_level: [terms, field_terms, identifiers, schema]\n",
+            "\n  top_level: [terms, field_terms, identifiers, schema, extras]\n",
+        ),
+        (
+            "intake.yaml",
+            "\n  top_level: [meta, answers, targets, questions, sheet, schema]\n",
+            "\n  top_level: [meta, answers, targets, questions, sheet, schema, extras]\n",
+        ),
+    ] {
+        let w = Work::new(&format!("f77-extras-{file}"));
+        let path = w.dir().join(file);
+        mutate_file(&path, from, to);
+        let before = fs::read_to_string(&path).unwrap();
+        let sep = if before.ends_with('\n') { "" } else { "\n" };
+        fs::write(&path, format!("{before}{sep}extras: 余分\n")).unwrap();
+        let out = w.check();
+        assert_eq!(
+            out.status.code(),
+            Some(1),
+            "{file}: {}{}",
+            stdout(&out),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let unknown: Vec<String> = violations(&out)
+            .into_iter()
+            .filter(|v| v.starts_with("[未知の節]"))
+            .collect();
+        assert_eq!(unknown.len(), 1, "{file}: 未知の節はちょうど 1 件: {unknown:?}");
+        assert!(unknown[0].starts_with(&format!("[未知の節] {file}")), "{unknown:?}");
+        assert!(unknown[0].contains("extras"), "{unknown:?}");
+        assert!(stdout(&out).contains("不合格"), "{}", stdout(&out));
+    }
+}
+
 // ── 規則の表の最上位の節は床の定数から（便 51） ──
 
 /// 実の rules.yaml の写しの schema.top_level の行（変異の当て先）。行末の注釈の有無に依らない形
@@ -612,12 +671,14 @@ fn folio_help(subcommand: &str) -> String {
     stdout(&out)
 }
 
-/// folio schema --help の --dir の説明が欄の決まりの file 4 本の名を出す。
+/// folio schema --help の --dir の説明が生成区間を持つ file 8 本の名を出す（便 77 §1 (d)）。
 #[test]
-fn r11_schema_help_names_the_four_schema_files() {
+fn r11_schema_help_names_the_schema_files() {
     let help = folio_help("schema");
     assert!(
-        help.contains("adr/schema.yaml・design-note/schema.yaml・ceiling.yaml・rules.yaml"),
+        help.contains(
+            "adr/schema.yaml・design-note/schema.yaml・ceiling.yaml・rules.yaml・index.yaml・srs.yaml・vocabulary.yaml・intake.yaml"
+        ),
         "{help}"
     );
 }

@@ -29,12 +29,16 @@ const WIDTH: usize = 100;
 /// 3 本目は天井の正本（便 48・ADR-11 決定 (4)①・生成区間は file の末尾に 1 対）。
 /// 4 本目は規則の表（便 53・ADR-11 決定 (4)②・生成区間は file の先頭の注釈の次に 1 対）。
 /// 5 本目は入口の正本（便 76・ADR-11 決定 (4)④・生成区間は file の末尾に 1 対）。
+/// 6〜8 本目は要件書・語彙・相談窓口（便 77・ADR-11 決定 (4)⑤・生成区間は file の末尾に 1 対）。
 const TARGETS: &[(&str, &Floor)] = &[
     ("adr/schema.yaml", &crate::adr::FLOOR),
     ("design-note/schema.yaml", &crate::note::FLOOR),
     ("ceiling.yaml", &crate::ceiling::FLOOR),
     ("rules.yaml", &crate::rules::FLOOR),
     ("index.yaml", &crate::entrance::FLOOR),
+    ("srs.yaml", &crate::check::SRS_FLOOR),
+    ("vocabulary.yaml", &crate::check::VOCABULARY_FLOOR),
+    ("intake.yaml", &crate::intake::INTAKE_FLOOR),
 ];
 
 // ── 床の機械 ──

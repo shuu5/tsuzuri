@@ -45,3 +45,10 @@ sheet:
     - {id: recommended, text: 推奨で進めた項目（質問の id・文・推奨回答）＝答えの無かった質問だけ。別枠（FR2）}
     - {id: answers, text: 受け取った回答（質問の id・値）}
     - {id: approval, text: 持ち主の承認（逐語・日付）。承認するのはここ 1 回だけ}
+
+# 決まりの部分（生成区間）。最上位の節の閉じた一覧。正本は実装の型付きの定数（crates/folio/src/intake.rs）で、ここはその人が読む写し。手で直さず folio schema --write が書く（判断の記録 ADR-11 決定 (3)(イ)・(4)⑤・憲法 P-5.6）。ほかの節は人が書く
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  top_level: [meta, answers, targets, questions, sheet, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。meta と answers と targets と questions と sheet は人が書き、schema は生成区間
+# folio:schema:end

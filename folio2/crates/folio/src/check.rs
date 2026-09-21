@@ -23,6 +23,7 @@ use crate::note;
 use crate::parts::catalog::FigureType;
 use crate::refs;
 use crate::rules;
+use crate::schema::Floor;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::{self, Node};
@@ -38,8 +39,9 @@ pub const FILES: [&str; 7] = [
     "ceiling",
 ];
 
-/// 要件書の節の閉じた一覧（要件書は schema 節を持たないので床の定数で持つ）。figures は任意の図の節（便 34・FR15）。
-pub const SRS_TOP_LEVEL: [&str; 16] = [
+/// 要件書の節の閉じた一覧（正本は床の定数・file の schema 節はその写し）。figures は任意の図の節（便 34・FR15）。
+/// 末尾の schema は生成区間（便 77・ADR-11 決定 (4)⑤）。
+pub const SRS_TOP_LEVEL: [&str; 17] = [
     "meta",
     "goals",
     "scope",
@@ -56,11 +58,40 @@ pub const SRS_TOP_LEVEL: [&str; 16] = [
     "sources",
     "glossary_pointer",
     "figures",
+    "schema",
 ];
 
 /// 要件書の図の節の行の欄（判断の記録の figures.entry と同じ形・便 34）。
 const SRS_FIGURE_REQUIRED: [&str; 4] = ["id", "type", "caption", "spec"];
 const SRS_FIGURE_OPTIONAL: [&str; 2] = ["refs", "note"];
+
+/// 要件書の schema 節（生成区間）の床の木（便 77 §1 (a)）。欄の順と字面は凍結 anchor
+/// tests/fixtures/schema/srs-region.txt のとおり。床（`check_srs`）は生成区間の中身をこの木と突き合わせない。
+pub(crate) const SRS_FLOOR: Floor = Floor::Map(&[
+    ("top_level", Floor::Strs(&SRS_TOP_LEVEL)),
+    (
+        "top_level_note",
+        Floor::Val(
+            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。schema のほかの節は人が書き、schema は生成区間。scope_m1 は名を空けてある節で、今の正本には無い",
+        ),
+    ),
+    (
+        "figures",
+        Floor::Map(&[(
+            "entry",
+            Floor::Map(&[
+                ("required", Floor::Strs(&SRS_FIGURE_REQUIRED)),
+                ("optional", Floor::Strs(&SRS_FIGURE_OPTIONAL)),
+            ]),
+        )]),
+    ),
+    (
+        "figures_note",
+        Floor::Val(
+            "要件書の図の節の行の欄（判断の記録と設計ノートの欄の決まりの figures.entry と同じ形）。型（type）の値域は部品目録が持つ",
+        ),
+    ),
+]);
 
 /// 要件の行（requirements / nonfunctional）の欄（便 75・面の生成器 face_srs.rs の item_row が読む欄から導く）。
 /// 字の欄は非空・一覧の欄は在ること（空の一覧は通る）・verify は表で中の字の欄は非空・ac は一覧。
@@ -71,8 +102,19 @@ const SRS_ITEM_LIST: [&str; 3] = ["goals", "basis", "figures"];
 const SRS_ITEM_VERIFY_TEXT: [&str; 2] = ["method", "how"];
 const SRS_ITEM_OPTIONAL: [&str; 3] = ["milestone", "rules", "note"];
 
-/// 語彙の節の閉じた一覧（同上）。
-pub const VOCABULARY_TOP_LEVEL: [&str; 3] = ["terms", "field_terms", "identifiers"];
+/// 語彙の節の閉じた一覧（同上）。末尾の schema は生成区間（便 77）。
+pub const VOCABULARY_TOP_LEVEL: [&str; 4] = ["terms", "field_terms", "identifiers", "schema"];
+
+/// 語彙の schema 節（生成区間）の床の木（便 77 §1 (a)）。欄の順と字面は凍結 anchor tests/fixtures/schema/vocabulary-region.txt のとおり。
+pub(crate) const VOCABULARY_FLOOR: Floor = Floor::Map(&[
+    ("top_level", Floor::Strs(&VOCABULARY_TOP_LEVEL)),
+    (
+        "top_level_note",
+        Floor::Val(
+            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。terms と field_terms と identifiers は人が書き、schema は生成区間",
+        ),
+    ),
+]);
 
 struct Sources {
     constitution: Node,
