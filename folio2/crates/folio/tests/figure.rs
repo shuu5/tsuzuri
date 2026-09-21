@@ -154,6 +154,30 @@ fn frozen_body() -> Vec<u8> {
     fs::read(figure_fixture().join("anchor/body.svg")).unwrap()
 }
 
+/// 凍結の写し（道具の生の出力）に便 67 の置き換えを当てた byte 列 = folio が書く図の本体。
+/// 置き換えは 2 か所（凡例の見出しの要素の中身と 1 つ目の開始タグの言語の宣言）だけで、他の byte は動かない
+/// （docs/design/delivery-67.md §1 (c) 4・置き換えの字面は歯の側で持ち、生成側の関数を呼ばない）。
+fn frozen_body_ja() -> Vec<u8> {
+    let raw = String::from_utf8(frozen_body()).expect("凍結の写しが UTF-8 でない");
+    let head = raw.find('>').expect("凍結の写しに開始タグの閉じが無い") + 1;
+    assert_eq!(
+        raw[..head].matches("lang=\"en\"").count(),
+        1,
+        "凍結の写しの 1 つ目の開始タグに lang=en が 1 つでない"
+    );
+    assert_eq!(
+        raw.matches(">Legend<").count(),
+        1,
+        "凍結の写しに凡例の見出しが 1 つでない"
+    );
+    let swapped = raw
+        .replacen("lang=\"en\"", "lang=\"ja\"", 1)
+        .replacen(">Legend<", ">凡例<", 1);
+    // 置き換えは字数を変えない（見出しは 6 字 → 2 字で byte は同じ 6・言語の宣言は 2 字）
+    assert_eq!(swapped.len(), raw.len(), "置き換えで byte 数が動いた");
+    swapped.into_bytes()
+}
+
 /// 写しに変異を当てる（当たっていなければ落とす）。
 fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
     let before = fs::read_to_string(path).unwrap();
@@ -199,7 +223,8 @@ fn figure_write_matches_the_frozen_anchor() {
     let written = fs::read(&out).unwrap_or_default();
     let _ = fs::remove_dir_all(&td);
     assert_eq!(code(&run, "folio figure --write"), 0, "{}", stderr(&run));
-    let frozen = frozen_body();
+    // 比べる相手は凍結の写しに便 67 の置き換えを当てた byte 列（写しとの差は 2 か所だけ）
+    let frozen = frozen_body_ja();
     if written != frozen {
         let at = written
             .iter()
@@ -211,7 +236,7 @@ fn figure_write_matches_the_frozen_anchor() {
                 .into_owned()
         };
         panic!(
-            "anchor/body.svg と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 凍結\n{}",
+            "anchor/body.svg（置き換えの後）と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 凍結\n{}",
             written.len(),
             frozen.len(),
             show(&written),
@@ -524,8 +549,8 @@ fn anchor_holds_on_the_untouched_copy() {
     assert!(stderr(&run).is_empty(), "{}", stderr(&run));
     assert_eq!(
         written,
-        frozen_body(),
-        "改変しない写しの出力が anchor/body.svg と違う"
+        frozen_body_ja(),
+        "改変しない写しの出力が anchor/body.svg（置き換えの後）と違う"
     );
 }
 
@@ -632,4 +657,73 @@ fn figure_tool_version_and_digest_are_frozen_in_the_rules() {
         // 測る道具が無いときは合格にしない代わりに理由を出す（panic で落とさない・FR5 の形）
         Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
     }
+}
+
+// ── 10. 図の本体の日本語（便 67・docs/design/delivery-67.md §1 (c)・天井の 11 周目の読みやすさ F-3）──
+
+/// 凍結 anchor の図（凡例を持つ）を --write し、結果と書いた図の本体を返す。
+fn anchor_write(case: &str) -> (Output, String) {
+    let (td, work) = fixture_copy(case);
+    let out = td.join("fig.svg");
+    let run = folio_figure("full", "fig-anchor", &work, &out, "--write");
+    let body = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    (run, body)
+}
+
+#[test]
+fn legend_ja_replaces_the_heading_word() {
+    let (run, body) = anchor_write("legend-ja-word");
+    assert_eq!(code(&run, "folio figure --write"), 0, "{}", stderr(&run));
+    assert_eq!(
+        body.matches(">凡例<").count(),
+        1,
+        "凡例の見出しの要素の中身が日本語でない"
+    );
+    assert_eq!(
+        body.matches(">Legend<").count(),
+        0,
+        "英語の見出しが残っている"
+    );
+    // 要素の中身でない Legend（注釈）は触らない
+    assert_eq!(
+        body.matches("<!-- Legend -->").count(),
+        1,
+        "要素の中身でない Legend まで置き換えた"
+    );
+}
+
+#[test]
+fn legend_ja_sets_the_language_to_ja() {
+    let (run, body) = anchor_write("legend-ja-lang");
+    assert_eq!(code(&run, "folio figure --write"), 0, "{}", stderr(&run));
+    let head = &body[..body.find('>').expect("開始タグの閉じが無い") + 1];
+    assert!(
+        head.starts_with("<svg "),
+        "1 つ目の要素が svg でない: {head}"
+    );
+    assert!(
+        head.contains("lang=\"ja\""),
+        "1 つ目の svg の開始タグの言語の宣言が ja でない: {head}"
+    );
+    assert_eq!(
+        body.matches("lang=\"en\"").count(),
+        0,
+        "lang=en が残っている"
+    );
+}
+
+#[test]
+fn legend_ja_keeps_the_anchor_check_green() {
+    // 照合は置き換えの前の値（道具の生の出力）で写しと比べるので、置き換えを掛けても anchor は落ちない
+    // （便 60 の歯 anchor_holds_on_the_untouched_copy と同じ判定）
+    let (run, body) = anchor_write("legend-ja-anchor");
+    assert_eq!(code(&run, "folio figure --write"), 0, "{}", stderr(&run));
+    assert!(
+        !stderr(&run).contains(ANCHOR_DRIFT),
+        "置き換えの後の値で照合している: {}",
+        stderr(&run)
+    );
+    assert!(stderr(&run).is_empty(), "{}", stderr(&run));
+    assert!(!body.is_empty(), "改変しない写しなのに図を書いていない");
 }

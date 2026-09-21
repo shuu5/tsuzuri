@@ -189,7 +189,26 @@ pub fn render(dir: &Path, id: &str, kind: &str, spec: &X<'_>) -> R<String> {
     let json = to_json(spec.v)?;
     let tool = tool_path(dir)?;
     anchor_holds(dir)?;
-    deliver(&tool, kind, &json, id)
+    Ok(ja(&deliver(&tool, kind, &json, id)?))
+}
+
+/// 図の本体の英語の字を日本語に決定的に置き換える（便 67・docs/design/delivery-67.md §1 (a)）。
+/// ① 凡例の見出しの要素の中身 `>Legend<` → `>凡例<`（道具の翻訳表は英語と中国語しか持たず、型付き記述からは
+///    替えられない。属性や注釈（`<!-- Legend -->`）の中の Legend は触らない）
+/// ② 根の要素（1 つ目の `<svg` の開始タグ）の言語の宣言 `lang="en"` → `lang="ja"`
+///
+/// 置き換えは図の本体の意味の属性（箱の id・種別・名札・線）を変えない字の置き換えで、ADR-4 決定 (3) の
+/// 範囲の内。凍結 anchor の照合（`check_anchor`）は `deliver` を直に呼ぶので、置き換えの前の値で写しと比べる
+/// （`tests/fixtures/figure/anchor/body.svg` は道具の生の出力のまま・§1 (a) の順序）。
+fn ja(body: &str) -> String {
+    const EN: &str = "lang=\"en\"";
+    let mut out = body.to_string();
+    // 言語の宣言は 1 つ目の開始タグの中（閉じの `>` まで）だけを見る
+    let head = out.find('>').map_or(0, |i| i + 1);
+    if let Some(at) = out[..head].find(EN) {
+        out.replace_range(at..at + EN.len(), "lang=\"ja\"");
+    }
+    out.replace(">Legend<", ">凡例<")
 }
 
 // ── 凍結 anchor の照合（P-10.1・P-10.3）──
@@ -505,6 +524,24 @@ mod figure_tests {
         assert_eq!(
             error_head("{\"severity\": \"error\"}"),
             "{\"severity\": \"error\"}"
+        );
+    }
+
+    #[test]
+    fn figure_ja_swaps_only_the_heading_and_the_root_language() {
+        assert_eq!(
+            ja("<svg lang=\"en\" x=\"1\"><!-- Legend --><text>Legend</text></svg>"),
+            "<svg lang=\"ja\" x=\"1\"><!-- Legend --><text>凡例</text></svg>"
+        );
+        // 属性の中の Legend と 2 つ目より後の lang=en は触らない
+        assert_eq!(
+            ja("<svg lang=\"en\"><g id=\"Legend\" lang=\"en\"></g></svg>"),
+            "<svg lang=\"ja\"><g id=\"Legend\" lang=\"en\"></g></svg>"
+        );
+        // 置き換える字が無ければそのまま
+        assert_eq!(
+            ja("<svg><text>凡例</text></svg>"),
+            "<svg><text>凡例</text></svg>"
         );
     }
 
