@@ -72,7 +72,7 @@ pub(crate) const SRS_FLOOR: Floor = Floor::Map(&[
     (
         "top_level_note",
         Floor::Val(
-            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。schema のほかの節は人が書き、schema は生成区間。scope_m1 は名を空けてある節で、今の正本には無い",
+            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。schema のほかの節は人が書き、schema は生成区間",
         ),
     ),
     (

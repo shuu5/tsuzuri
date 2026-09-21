@@ -48,6 +48,10 @@
 //! f77_ 3. 3 file それぞれの生成区間の 1 byte を書き換えて --check → 1。
 //! f77_ 4. 3 file それぞれの begin を消す → 2。
 //! f77_ 5. 3 file をずらした写しに --write → 0・3 file 全体が元と byte 一致・もう 1 度で 8 行とも変わらない。
+//!
+//! 便 78（docs/design/delivery-78.md §1 (d)）: 要件書の注 top_level_note から scope_m1 の誤った一文を落とした
+//! （F77_REGIONS の srs.yaml を 708 byte と新しい要約値に）。
+//! f78_ 1. --check → 0 ∧ 要件書の生成区間に「今の正本には無い」が無い ∧ 最上位に scope_m1 の節が在る。
 
 use std::fs;
 use std::io::Write;
@@ -91,8 +95,8 @@ const F77_REGIONS: [(&str, &str, usize, usize, &str); 3] = [
         "srs.yaml",
         "tests/fixtures/schema/srs-region.txt",
         23,
-        777,
-        "879ab87dc75a6c2545868a33cb96540cf679b0e6499222daa653f720da6563ef",
+        708,
+        "290e27043b7b0e01b7d78a1c2829f1e484da4af57c874bd7d0c54792b467c3aa",
     ),
     (
         "vocabulary.yaml",
@@ -1219,4 +1223,20 @@ fn f77_write_restores_the_three_regions() {
     for ((file, ..), original) in F77_REGIONS.iter().zip(&originals) {
         assert_eq!(&w.read_file(file), original, "{file}");
     }
+}
+
+// ── 便 78: 要件書の生成区間の注は scope_m1 を「無い」と言わない ──
+
+// ── f78_ 1. --check → 0 ∧ 注に「今の正本には無い」が無い ∧ 最上位に scope_m1 の節が在る ──
+
+#[test]
+fn f78_srs_note_does_not_claim_scope_m1_is_absent() {
+    let w = Work::new("f78-srs-note");
+    assert_outcome(&w.schema(&["--check"]), 0, &["一致", "srs.yaml"]);
+    let text = w.read_file("srs.yaml");
+    assert!(!region(&text).contains("今の正本には無い"), "{}", region(&text));
+    assert!(
+        text.lines().any(|l| l.starts_with("scope_m1:")),
+        "要件書の最上位に scope_m1 の節が無い"
+    );
 }

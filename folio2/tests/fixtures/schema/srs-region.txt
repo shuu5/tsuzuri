@@ -17,7 +17,7 @@ schema:
     - glossary_pointer
     - figures
     - schema
-  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。schema のほかの節は人が書き、schema は生成区間。scope_m1 は名を空けてある節で、今の正本には無い
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。schema のほかの節は人が書き、schema は生成区間
   figures:
     entry: {required: [id, type, caption, spec], optional: [refs, note]}
   figures_note: 要件書の図の節の行の欄（判断の記録と設計ノートの欄の決まりの figures.entry と同じ形）。型（type）の値域は部品目録が持つ
