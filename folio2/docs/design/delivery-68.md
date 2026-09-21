@@ -20,7 +20,7 @@
 3. profiles_gate_the_note_meta（crates/folio/tests/note.rs・正規化 約 461 行）: 設計ノートの写しの meta.profile を一覧に無い値（design-notex）に変えて folio check を当てると 1 で終わり、標準出力に「meta.profile」と「一覧に無い」が在る（一覧を部品目録へ移しても床が同じに落ちる証）。
 4. 回帰（期待不変・verify の 2 行目）: tests/parts.rs・tests/note.rs・tests/schema.rs の既存の歯すべて。
 
-(e) 大きさと接続。新規 file は無い。parts.json（+2 行）・build.rs（+約 10 行）・parts.rs（+約 12 行）・note.rs（−3 行 +2 行）・tests/parts.rs（+約 30 行）・tests/note.rs（+約 15 行）。size S。外部 crate は増やさない。憲法 P-2 の機構の注と語彙の部品目録の項（「部品目録には載っていない」の文）は設計文書の側で席が一括 6 で直す（この便では触らない）。
+(e) 大きさと接続。新規 file は無い。crates/folio/tests/schema.rs は本文不変のまま write-set に置く（verify の --test schema の scope・生成区間の不変を測る歯の置き場）。parts.json（+2 行）・build.rs（+約 10 行）・parts.rs（+約 12 行）・note.rs（−3 行 +2 行）・tests/parts.rs（+約 30 行）・tests/note.rs（+約 15 行）。size S。外部 crate は増やさない。憲法 P-2 の機構の注と語彙の部品目録の項（「部品目録には載っていない」の文）は設計文書の側で席が一括 6 で直す（この便では触らない）。
 
 ## 2. 範囲
 
@@ -52,7 +52,7 @@ id = "bq"
 title = "密度 profile の閉じた一覧 profile_enum を部品目録 parts.json に載せ、build.rs が catalog::PROFILES に導出し、設計ノートの床の値域と生成区間・parts --print / --check はそこから読む（値は design-note の 1 つのまま・天井の 12 周目の整合 F-2）"
 req = ["FR9"]
 section = "1"
-write-set = ["design-intent/preview/parts.json", "crates/folio/build.rs", "crates/folio/src/parts.rs", "crates/folio/src/note.rs", "crates/folio/tests/parts.rs", "crates/folio/tests/note.rs"]
+write-set = ["design-intent/preview/parts.json", "crates/folio/build.rs", "crates/folio/src/parts.rs", "crates/folio/src/note.rs", "crates/folio/tests/parts.rs", "crates/folio/tests/note.rs", "crates/folio/tests/schema.rs"]
 verify = ["cargo nextest run -p folio --test parts --test note profiles_", "cargo nextest run -p folio --test parts --test note --test schema", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "profiles_ の歯 3 本（print に在る・parts.json と同じ・meta.profile の門が同じに落ちる）が緑、tests/parts.rs・tests/note.rs・tests/schema.rs の既存の歯が全部緑（design-note/schema.yaml は不変）、clippy が 0 警告で CI が通る"
