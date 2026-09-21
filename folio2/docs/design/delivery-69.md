@@ -12,14 +12,14 @@
 
 (b) 実の生成区間。folio schema --write を design-intent に当て、design-intent/adr/schema.yaml の生成区間の prose_note の行だけが変わる（ほかの 3 本の欄の決まりの file は 1 byte も変わらない）。orchestrator 席が独立に組んだ凍結 anchor の値 = 生成区間は 117 行・22,263 byte・sha256 = a5e1efca970d561966f78b598351afda2eda428fd4255b4a18a46f652ec6d389（席が 2026-09-21 に今の anchor の写しの同じ 1 か所を置き換えて測った）。tests/fixtures/schema/adr-region.txt の同じ 1 か所を同じ字にし（その結果が上の byte 数と要約値に一致することを歯が確かめる）、crates/folio/tests/schema.rs（正規化 約 800 行）の定数 REGION_BYTES を 22263・REGION_SHA256 を上の値にし、その定数の注釈と file 先頭の注釈の 22254 を 22263 に直す。生成物が anchor に合わないときは実装の側を直す（anchor を生成物に合わせない）。
 
-(c) 写し 17 本。tests/fixtures の下の判断の記録の欄の決まりの写し（floor_base の 1 本と場合ごとの置き場の 16 本・write-set に全数）の prose_note の同じ 1 か所を同じ字にする（各 file その 1 行だけ・注は床の突き合わせの外なので歯は落ちないが、写しを実の file と同じ byte に保つ）。
+(c) 写し 17 本。tests/fixtures の下の判断の記録の欄の決まりの写しは 17 本在る（floor_base の 1 本と場合ごとの置き場の 16 本・write-set に全数）が、prose_note の行を持つのは実の file の全写しである tests/fixtures/floor_base/design-intent/adr/schema.yaml の 1 本だけで、ほかの 16 本は最小の手書きの写し（欄の決まりの節の値だけ・注の欄を持たない）である（2026-09-21 に席が grep で実測 = 「憲法・rules・要件書〕」を含む写しは floor_base の 1 本）。したがって字を変えるのは floor_base の 1 本の同じ 1 行だけで、残る 16 本は 1 byte も変えない（変える行が無い・write-set に置くのは器の交差の照合のため）。
 
 (d) 歯（crates/folio/tests/schema.rs・関数名は r9_population_ で始める・今この語で始まる歯は無い）。
 1. r9_population_names_the_vocabulary: design-intent の写しに folio schema --check を当てると 0 で終わり、design-intent/adr/schema.yaml の生成区間の prose_note の行に「憲法・rules・要件書・語彙〕」が在り「憲法・rules・要件書〕」が無い。
-2. r9_population_anchor_holds: tests/fixtures/schema/adr-region.txt の byte 数が 22263・sha256 が (b) の値・行数 117（anchor 自身の自己検査）。
+2. r9_population_anchor_holds: tests/fixtures/schema/adr-region.txt の byte 数が 22263・sha256 が (b) の値・行数 117（anchor 自身の自己検査）。要約値は sha256sum の子の処理で測り、測れないときは歯を落とす（panic・「まだ分からない」に落として通さない = 素通りの穴を作らない）。
 3. 回帰（期待不変・verify の 2 行目 = --test adr --test floor_cases --test schema）: tests/adr.rs・tests/floor_cases.rs（写しの注は突き合わせの外・どちらも本文不変のまま write-set に置く）・tests/schema.rs の既存の歯すべて（判断の記録の側の byte 数と要約値の歯は (b) の定数で緑になる）。
 
-(e) 大きさと接続。新規 file は無い。crates/folio/tests/adr.rs・crates/folio/tests/floor_cases.rs は本文不変のまま write-set に置く（verify の --test の scope・回帰の歯の置き場）。adr.rs（1 行）・adr/schema.yaml（1 行・--write）・adr-region.txt（1 行）・tests/schema.rs（定数 2 つ + 注釈 + 歯 2 本 約 25 行）・写し 17 本（各 1 行）。size S。外部 crate は増やさない。
+(e) 大きさと接続。新規 file は無い。変わる file は adr.rs・adr/schema.yaml・adr-region.txt・tests/schema.rs・floor_base の写しの 5 本で、残る 16 本の写しは不変。crates/folio/tests/adr.rs・crates/folio/tests/floor_cases.rs は本文不変のまま write-set に置く（verify の --test の scope・回帰の歯の置き場）。adr.rs（1 行）・adr/schema.yaml（1 行・--write）・adr-region.txt（1 行）・tests/schema.rs（定数 2 つ + 注釈 + 歯 2 本 約 25 行）・写し 17 本（各 1 行）。size S。外部 crate は増やさない。
 
 ## 2. 範囲
 
