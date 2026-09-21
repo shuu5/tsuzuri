@@ -23,7 +23,7 @@
 4. gate_is_unknown_when_the_stamp_is_stale: stamp-pass を仮の要約値のまま置く → 終了 2・「印が古い」。
 5. gate_is_unknown_on_an_unknown_viewpoint: stamp-unknown（要約値は合わせる）→ 終了 2・reality。
 6. gate_is_unknown_without_a_stamp: 印を置かない → 終了 2・「印が無い」。
-7. gate_ignores_preview_and_retired_paths: write-set が design-intent/preview/ceiling-stamp.yaml と design-intent/preview/retired/readable.html だけ → 終了 0（設計文書の正本を書き換えない便）。
+7. gate_ignores_preview_and_retired_paths: 印を置かずに、write-set が design-intent/preview/ceiling-stamp.yaml・design-intent/preview/retired/readable.html・design-intent/adr/retired/ADR-0.yaml（preview の下でない・要素に retired を持つ path）だけ → 終了 0・「通す」（設計文書の正本を書き換えない便）。retired の規則を実装しない gate.rs では ADR-0.yaml が正本と見なされ、印が無いので終了 2 になる = この歯が赤になる（preview の規則だけでは緑にならない）。
 8. 回帰（期待不変・verify の 2 行目）: tests/stamp.rs・tests/findings.rs・tests/check.rs（命令の一覧は不変）の既存の歯すべて。
 
 (f) 大きさと接続。新規 file = gate.rs（約 150 行）・tests/gate.rs（約 220 行）・fixture 3 本。main.rs（+約 15 行）。size S。外部 crate は増やさない。便 72 と main.rs で重なるので受付は便 72 の着地の後。
@@ -62,5 +62,5 @@ section = "1"
 write-set = ["crates/folio/src/main.rs", "+crates/folio/src/gate.rs", "+crates/folio/tests/gate.rs", "crates/folio/tests/stamp.rs", "crates/folio/tests/findings.rs", "crates/folio/tests/check.rs", "+tests/fixtures/ceiling/findings/stamp-pass.yaml", "+tests/fixtures/ceiling/findings/stamp-fail.yaml", "+tests/fixtures/ceiling/findings/stamp-unknown.yaml"]
 verify = ["cargo nextest run -p folio --test gate gate_", "cargo nextest run -p folio --test stamp --test findings --test check", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "gate_ の歯 7 本（6 場合 + preview / retired の除外）が緑、tests/stamp.rs・tests/findings.rs・tests/check.rs の既存の歯が全部緑、clippy が 0 警告で CI が通る"
+done = "gate_ の歯 7 本（6 場合 + preview の生成物と preview の外の retired の除外〔印なしで通す〕）が緑、tests/stamp.rs・tests/findings.rs・tests/check.rs の既存の歯が全部緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
