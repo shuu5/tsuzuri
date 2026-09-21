@@ -252,3 +252,165 @@ fn f79_rules_ruling_without_previous_is_unchanged() {
         format!("{}（{}）", esc(&ruling), esc(&at))
     );
 }
+
+// ── 便 80: 条の欠番の行と改訂来歴の小窓（docs/design/delivery-80.md §1 (c)） ──
+
+/// 正本 design-intent/constitution.yaml を直に読む。
+fn source_constitution() -> Yaml {
+    let text = fs::read_to_string(design_intent().join("constitution.yaml")).unwrap();
+    YamlLoader::load_from_str(&text).unwrap().remove(0)
+}
+
+/// 歯の側の数え: 条の id を接頭辞ごとに集め、1 から最大までの欠けを「接頭辞-数」で返す（接頭辞は初出の順）。
+fn source_gaps() -> Vec<String> {
+    let doc = source_constitution();
+    let mut prefixes: Vec<String> = Vec::new();
+    let mut numbers: Vec<Vec<u32>> = Vec::new();
+    for a in doc["articles"].as_vec().unwrap() {
+        let id = a["id"].as_str().unwrap();
+        let cut = id.rfind('-').unwrap();
+        let (p, n) = (&id[..cut], id[cut + 1..].parse::<u32>().unwrap());
+        match prefixes.iter().position(|q| q == p) {
+            Some(i) => numbers[i].push(n),
+            None => {
+                prefixes.push(p.to_string());
+                numbers.push(vec![n]);
+            }
+        }
+    }
+    let mut gaps = Vec::new();
+    for (p, ns) in prefixes.iter().zip(&numbers) {
+        let max = *ns.iter().max().unwrap();
+        gaps.extend((1..=max).filter(|k| !ns.contains(k)).map(|k| format!("{p}-{k}")));
+    }
+    gaps
+}
+
+/// 正本の amended_by の項の全部の（previous_text, rationale）。
+fn source_amendments() -> Vec<(String, String)> {
+    let doc = source_constitution();
+    let mut out = Vec::new();
+    for a in doc["articles"].as_vec().unwrap() {
+        if let Some(items) = a["amended_by"].as_vec() {
+            for am in items {
+                out.push((
+                    am["previous_text"].as_str().unwrap().to_string(),
+                    am["rationale"].as_str().unwrap().to_string(),
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// 章 01（読み方）の本文（帯 s1 から帯 s2 の前まで）。
+fn chapter_01(html: &str) -> &str {
+    let start = html.find("id=\"s1\"").expect("章 01 が無い");
+    let rest = &html[start..];
+    &rest[..rest.find("id=\"s2\"").expect("章 02 が無い")]
+}
+
+/// 面の欠番の行の列。
+fn face_gaps(html: &str) -> Vec<String> {
+    let line = html.split("欠番: ").nth(1).expect("欠番の行が無い");
+    line[..line.find('（').unwrap()]
+        .split('・')
+        .map(str::to_string)
+        .collect()
+}
+
+/// 部品 principle-amendment-history の中の am-row の行の全部。
+fn amendment_rows(html: &str) -> Vec<String> {
+    let mut rows = Vec::new();
+    for block in html
+        .split("<div data-component=\"principle-amendment-history\">")
+        .skip(1)
+    {
+        let block = &block[..block.find("</div>").unwrap()];
+        rows.extend(
+            block
+                .split("<span class=\"am-row\">")
+                .skip(1)
+                .map(str::to_string),
+        );
+    }
+    rows
+}
+
+/// 行の中の小窓 `label` の本体の全部。
+fn hint_bodies(row: &str, label: &str) -> Vec<String> {
+    let open = format!("<span class=\"hint-btn\">{label}</span></label><span class=\"hint-body\">");
+    row.split(&open)
+        .skip(1)
+        .map(|b| b[..b.find("</span>").unwrap()].to_string())
+        .collect()
+}
+
+#[test]
+fn f80_constitution_shows_the_missing_number() {
+    let html = real_html("gap-line");
+    assert!(
+        chapter_01(&html).contains("欠番: P-9"),
+        "章 01 に欠番の行が無い"
+    );
+    assert_eq!(html.matches("欠番:").count(), 1, "欠番の行が 1 回でない");
+    assert!(
+        chapter_01(&html).contains("<a class=\"xref\" href=\"#p-7\">P-7</a>"),
+        "欠番の行に P-7 へのリンクが無い"
+    );
+}
+
+#[test]
+fn f80_missing_numbers_match_an_independent_count() {
+    let html = real_html("gap-count");
+    let gaps = source_gaps();
+    assert_eq!(gaps, vec!["P-9".to_string()], "正本の欠番の実測が変わった");
+    assert_eq!(face_gaps(&html), gaps);
+}
+
+#[test]
+fn f80_no_missing_line_when_the_numbers_are_dense() {
+    let html = real_html("gap-prefix");
+    let gaps = face_gaps(&html);
+    assert!(!gaps.is_empty());
+    for g in &gaps {
+        assert!(
+            !g.starts_with("A-") && !g.starts_with("N-"),
+            "欠けの無い接頭辞に欠番が出た: {g}"
+        );
+    }
+}
+
+#[test]
+fn f80_amendment_rows_carry_the_previous_text() {
+    let html = real_html("am-count");
+    let total = source_amendments().len();
+    assert_eq!(total, 4, "正本の amended_by の項の実測が変わった");
+    let rows = amendment_rows(&html);
+    let amended: Vec<&String> = rows.iter().filter(|r| !r.contains("を置換（")).collect();
+    assert_eq!(amended.len(), total, "amended_by の行の数が正本と違う");
+    for r in &amended {
+        assert_eq!(hint_bodies(r, "前の文").len(), 1, "{r}");
+        assert_eq!(hint_bodies(r, "理由").len(), 1, "{r}");
+    }
+    let prev: usize = rows.iter().map(|r| hint_bodies(r, "前の文").len()).sum();
+    let why: usize = rows.iter().map(|r| hint_bodies(r, "理由").len()).sum();
+    assert_eq!((prev, why), (total, total));
+}
+
+#[test]
+fn f80_amendment_previous_text_is_verbatim() {
+    let html = real_html("am-verbatim");
+    let rows = amendment_rows(&html);
+    let mut face_prev: Vec<String> = rows.iter().flat_map(|r| hint_bodies(r, "前の文")).collect();
+    let mut face_why: Vec<String> = rows.iter().flat_map(|r| hint_bodies(r, "理由")).collect();
+    let (mut src_prev, mut src_why): (Vec<String>, Vec<String>) = source_amendments()
+        .into_iter()
+        .map(|(p, w)| (esc(&p), esc(&w)))
+        .unzip();
+    for v in [&mut face_prev, &mut face_why, &mut src_prev, &mut src_why] {
+        v.sort();
+    }
+    assert_eq!(face_prev, src_prev);
+    assert_eq!(face_why, src_why);
+}

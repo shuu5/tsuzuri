@@ -486,8 +486,44 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
         ));
     }
     o.push("</div>".to_string());
+    // 条の欠番の行（P-7.2・欠番が無ければ置かない・便 80 §1 (a)）
+    let gaps = missing_numbers(ctx)?;
+    if !gaps.is_empty() {
+        o.push(format!(
+            "<div class=\"legend-line\"><span>欠番: {}（条の廃止は状態で表し、番号は空けたままにする — <a class=\"xref\" href=\"#{}\">P-7</a>）</span></div>",
+            gaps.join("・"),
+            anchor("P-7")
+        ));
+    }
     o.push("</div>".to_string());
     Ok(())
+}
+
+/// 条の id の列の欠番（接頭辞ごとに 1 から最大の数まで・接頭辞は正本の初出の順・中は数の小さい順・便 80 §1 (a)）。
+/// 番号が符号なしの整数に読めない id は Err（P-4.1）。
+fn missing_numbers(ctx: &Ctx<'_>) -> R<Vec<String>> {
+    let mut groups: Vec<(&str, Vec<u32>)> = Vec::new();
+    for art in &ctx.arts {
+        let (prefix, n) = art
+            .id
+            .rsplit_once('-')
+            .and_then(|(p, n)| Some((p, n.parse::<u32>().ok()?)))
+            .ok_or_else(|| format!("条の id「{}」の番号が読めない", art.id))?;
+        match groups.iter_mut().find(|(p, _)| *p == prefix) {
+            Some((_, ns)) => ns.push(n),
+            None => groups.push((prefix, vec![n])),
+        }
+    }
+    let mut gaps = Vec::new();
+    for (prefix, ns) in &groups {
+        let max = ns.iter().copied().max().unwrap_or(0);
+        for k in 1..=max {
+            if !ns.contains(&k) {
+                gaps.push(format!("{prefix}-{k}"));
+            }
+        }
+    }
+    Ok(gaps)
 }
 
 fn tier_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, i: usize, key: &str, tier: &Tier) -> R<()> {
@@ -617,14 +653,16 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
             ));
         }
         for am in &amended {
-            am.ef("previous_text")?;
-            am.ef("rationale")?;
+            let previous = am.ef("previous_text")?;
+            let why = am.ef("rationale")?;
             h.push_str(&format!(
-                "<span class=\"am-row\">{} <span class=\"am-meta\">{} · {} · 承認 {}</span></span>",
+                "<span class=\"am-row\">{} <span class=\"am-meta\">{} · {} · 承認 {}</span>{}{}</span>",
                 am.ef("adr")?,
                 am.ef("date")?,
                 am.ef("ruling")?,
-                am.ef("approved_by")?
+                am.ef("approved_by")?,
+                hint("前の文", &previous),
+                hint("理由", &why)
             ));
         }
         o.push(format!(
