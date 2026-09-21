@@ -767,8 +767,8 @@ fn types<'d>(docs: impl Iterator<Item = &'d Doc>) -> String {
 fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
     let sh = i.f("shelf")?;
     let mut legend = String::from("<div class=\"fig-legend\">");
-    for row in sh.f("legend")?.seq()? {
-        let sw = row.f("id")?.lookup(SHELF_LEGEND, "凡例")?;
+    // 凡例も表の id と過不足なく（便 76・並びは表が決める）
+    for (_, sw, row) in exact(&sh.f("legend")?, SHELF_LEGEND, "凡例")? {
         legend.push_str(&format!(
             "<span class=\"lg\"><span class=\"{sw}\"></span>{}</span>",
             row.ef("text")?

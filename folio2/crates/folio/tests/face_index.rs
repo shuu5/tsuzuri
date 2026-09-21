@@ -1009,6 +1009,38 @@ fn face_index_unknown_when_a_legend_id_is_outside_the_table() {
     );
 }
 
+/// 便 76 §1 (f)(h)8: 凡例も表の id と過不足なく（行を 1 つ消すと面が出ない）。
+#[test]
+fn f76_face_index_unknown_when_a_legend_row_is_missing() {
+    index_unknown(
+        "legend-missing",
+        index_edit("    - {id: absent, text: まだ無い}\n", ""),
+    );
+}
+
+/// 便 76 §1 (f)(h)9: 凡例の並びは表が決める（正本の行の並びを入れ替えても面は同じ byte）。
+#[test]
+fn f76_face_index_legend_order_comes_from_the_table() {
+    let (td, work) = index_fixture_copy("legend-order-before");
+    let (_, before) = index_from("入れ替える前", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+
+    let (td, work) = index_fixture_copy("legend-order-after");
+    edit(&work.join("index.yaml"), |t| {
+        let rows = "    - {id: readable, text: 読める}\n    - {id: absent, text: まだ無い}\n    - {id: binds, text: 矢印}\n    - {id: inside, text: 点線}\n";
+        let swapped = "    - {id: inside, text: 点線}\n    - {id: binds, text: 矢印}\n    - {id: absent, text: まだ無い}\n    - {id: readable, text: 読める}\n";
+        assert_eq!(t.matches(rows).count(), 1, "凡例の 4 行が表の並びで無い");
+        t.replacen(rows, swapped, 1)
+    });
+    let (_, after) = index_from("入れ替えた後", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    assert_same_bytes(
+        after.as_bytes(),
+        before.as_bytes(),
+        "凡例の並びを入れ替えた面",
+    );
+}
+
 #[test]
 fn face_index_unknown_when_constitution_counts_differ() {
     index_unknown("counts", |w| {

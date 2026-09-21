@@ -8,14 +8,66 @@
 use std::collections::HashSet;
 
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
+use crate::face;
+use crate::schema::Floor;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
 
 const FILE: &str = "index.yaml";
 
-/// 入口の正本の節の閉じた一覧（床の定数・要件書と同じ持ち方）。
-pub const INDEX_TOP_LEVEL: [&str; 5] = ["meta", "audience", "shelf", "lanes", "intake"];
+/// 入口の正本の節の閉じた一覧（床の定数・要件書と同じ持ち方）。末尾の schema は生成区間（便 76・ADR-11 決定 (4)④）。
+pub const INDEX_TOP_LEVEL: [&str; 6] = ["meta", "audience", "shelf", "lanes", "intake", "schema"];
+
+/// 表の鍵の列（id だけ）を組み立て時に取り出す。長さは表の長さと同じでなければ組み立てが通らない。
+const fn ids<T: Copy, const N: usize>(table: &'static [(&'static str, T)]) -> [&'static str; N] {
+    assert!(table.len() == N);
+    let mut out = [table[0].0; N];
+    let mut i = 1;
+    while i < N {
+        out[i] = table[i].0;
+        i += 1;
+    }
+    out
+}
+
+/// 棚の文書の閉じた id の列（並びは表の順）。
+pub const SHELF_DOC_IDS: [&str; face::SHELF_DOCS.len()] = ids(face::SHELF_DOCS);
+/// 棚の文書どうしの関係の閉じた id の列（並びは表の順）。
+pub const SHELF_RELATION_IDS: [&str; face::SHELF_RELATIONS.len()] = ids(face::SHELF_RELATIONS);
+/// 棚の付録の閉じた id の列（並びは表の順）。
+pub const ANNEX_IDS: [&str; face::ANNEXES.len()] = ids(face::ANNEXES);
+/// 棚の凡例の閉じた id の列（並びは表の順）。
+pub const SHELF_LEGEND_IDS: [&str; face::SHELF_LEGEND.len()] = ids(face::SHELF_LEGEND);
+
+/// 入口の正本の schema 節（生成区間）の床の木（便 76 §1 (b)）。欄の順と字面は凍結 anchor
+/// tests/fixtures/schema/index-region.txt のとおり（`derive` の結果が byte 一致・単体の歯が数える）。葉は上の定数と同じ配列。
+/// 見た目の値（置き場の class・面の file 名・原語の札・区切り・章の番号と単位・sw の class）は出さない（P-2.3）。
+/// 床（`check_entrance`）は生成区間の中身をこの木と突き合わせない（写しの fixture は生成区間を持たない・便 53 と同じ線引き）。
+pub(crate) const FLOOR: Floor = Floor::Map(&[
+    ("top_level", Floor::Strs(&INDEX_TOP_LEVEL)),
+    (
+        "top_level_note",
+        Floor::Val(
+            "最上位の節の閉じた一覧（ほかの節は床が落とす）。meta・audience・shelf・lanes・intake は人が書き、schema は生成区間",
+        ),
+    ),
+    (
+        "shelf",
+        Floor::Map(&[
+            ("documents", Floor::Strs(&SHELF_DOC_IDS)),
+            ("annexes", Floor::Strs(&ANNEX_IDS)),
+            ("relations", Floor::Strs(&SHELF_RELATION_IDS)),
+            ("legend", Floor::Strs(&SHELF_LEGEND_IDS)),
+        ]),
+    ),
+    (
+        "shelf_note",
+        Floor::Val(
+            "棚の閉じた id の集合（documents = 文書・annexes = 付録・relations = 文書どうしの関係・legend = 凡例）。棚の行はこの id に 1 つずつ要る。行の中身は人が書き、置き場の class や面の file 名のような見た目の値は面の生成器が持つ（P-2.3）。何にするかの裁定の正本は判断の記録 ADR-5 決定 (2) と入口の正本の承認欄",
+        ),
+    ),
+]);
 
 /// 入口の正本 `index` の形を数える。`vocabulary` は既知の語の集合にだけ使う。
 pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
@@ -258,5 +310,68 @@ mod tests {
         let mut got: Vec<&str> = set.iter().map(String::as_str).collect();
         got.sort_unstable();
         assert_eq!(got, ["constitution", "srs", "vocabulary"]);
+    }
+
+    /// 床の木の導出は凍結 anchor（設計判断の席が独立に組んだ・P-10.1）と byte 一致（便 76 §1 (h)1）。
+    /// anchor を書き換えて合わせてはいけない（変えるなら設計判断の席へ問う）。
+    #[test]
+    fn f76_index_floor_derives_the_frozen_anchor_byte_for_byte() {
+        let anchor = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/schema/index-region.txt"
+        ))
+        .unwrap();
+        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+    }
+
+    /// 凍結の針（便 76 §1 (h)2）: 最上位の節は 6 語・棚の 4 つの列は字面と順のとおり（字面を直に書く）、
+    /// かつ face.rs の表から取り出した 4 本の定数と同じ中身。
+    #[test]
+    fn f76_index_floor_is_the_frozen_closed_id_sets() {
+        let Floor::Map(fields) = &FLOOR else {
+            panic!("FLOOR は表");
+        };
+        let Some((_, Floor::Strs(top))) = fields.iter().find(|(k, _)| *k == "top_level") else {
+            panic!("top_level が一覧でない");
+        };
+        assert_eq!(
+            *top,
+            ["meta", "audience", "shelf", "lanes", "intake", "schema"]
+        );
+        let Some((_, Floor::Map(shelf))) = fields.iter().find(|(k, _)| *k == "shelf") else {
+            panic!("shelf が表でない");
+        };
+        let list = |key: &str| -> &'static [&'static str] {
+            match shelf.iter().find(|(k, _)| *k == key) {
+                Some((_, Floor::Strs(items))) => items,
+                _ => panic!("shelf.{key} が一覧でない"),
+            }
+        };
+        assert_eq!(
+            shelf.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
+            ["documents", "annexes", "relations", "legend"]
+        );
+        assert_eq!(
+            list("documents"),
+            ["constitution", "srs", "design-note", "adr"]
+        );
+        assert_eq!(list("annexes"), ["vocabulary", "rules"]);
+        assert_eq!(
+            list("relations"),
+            ["binds", "before-build", "inside", "amends"]
+        );
+        assert_eq!(list("legend"), ["readable", "absent", "binds", "inside"]);
+        // 表から取り出した列であることの針
+        assert_eq!(list("documents"), &SHELF_DOC_IDS[..]);
+        assert_eq!(list("annexes"), &ANNEX_IDS[..]);
+        assert_eq!(list("relations"), &SHELF_RELATION_IDS[..]);
+        assert_eq!(list("legend"), &SHELF_LEGEND_IDS[..]);
+        fn keys<T>(table: &[(&'static str, T)]) -> Vec<&'static str> {
+            table.iter().map(|(k, _)| *k).collect()
+        }
+        assert_eq!(SHELF_DOC_IDS.to_vec(), keys(face::SHELF_DOCS));
+        assert_eq!(ANNEX_IDS.to_vec(), keys(face::ANNEXES));
+        assert_eq!(SHELF_RELATION_IDS.to_vec(), keys(face::SHELF_RELATIONS));
+        assert_eq!(SHELF_LEGEND_IDS.to_vec(), keys(face::SHELF_LEGEND));
     }
 }

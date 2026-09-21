@@ -34,6 +34,12 @@
 //! 便 69（docs/design/delivery-69.md §1 (d)）: 注 prose_note の R-9 の母集団に 語彙 を足した（1 の定数を 22263 byte と新しい要約値に）。
 //! 22. design-intent の写しに --check → 0 ∧ 実の生成区間の prose_note の行が「憲法・rules・要件書・語彙〕」を含み「憲法・rules・要件書〕」を含まない。
 //! 23. 凍結 anchor の自己検査: adr-region.txt が 117 行・22263 byte・(d) の要約値（測れなければ落とす）。
+//!
+//! 便 76（docs/design/delivery-76.md §1 (c)(h)）: 命令は 5 本目の file index.yaml（入口の正本・生成区間は末尾）も順に見る（合格の標準出力は 5 行）。
+//! f76_ 3. 入口の正本の側の実の正本: --check → 0・5 行目に「index.yaml」「860 byte」・要約値が (b) の値・行数 9・印の前は相談窓口の節・印の後は file の終わり。
+//! f76_ 4. 入口の正本の側のずれ: 生成区間の 1 byte を書き換えて --check → 1・先の 4 本は触らない。
+//! f76_ 5. 入口の正本の側の印: begin を消す → --check も --write も 2。
+//! f76_ 6. 入口の正本の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致・もう 1 度で変わらない。
 
 use std::fs;
 use std::io::Write;
@@ -65,8 +71,14 @@ const RULES_REGION_BYTES: usize = 1764;
 const RULES_REGION_SHA256: &str =
     "dcf207ced150b5ebd3d6ae03bcdb5bc42ef9a06d6f74ff3f830ff96729dafad2";
 
-/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表）。
-const TARGETS: usize = 4;
+/// 便 76 (b) 凍結 anchor: index.yaml の生成区間（設計判断の席が独立に組んだ・tests/fixtures/schema/index-region.txt と同じ byte）。
+const INDEX_REGION_LINES: usize = 9;
+const INDEX_REGION_BYTES: usize = 860;
+const INDEX_REGION_SHA256: &str =
+    "01604d6003dde61fe970af89194215b5e0517d32610fd9cc0cc4554801f7f9ee";
+
+/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本）。
+const TARGETS: usize = 5;
 
 const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
 const END: &str = "# folio:schema:end";
@@ -207,6 +219,19 @@ impl Work {
 
     fn read_rules(&self) -> String {
         fs::read_to_string(self.rules_yaml()).unwrap()
+    }
+
+    fn index_yaml(&self) -> PathBuf {
+        self.dir().join("index.yaml")
+    }
+
+    fn read_index(&self) -> String {
+        fs::read_to_string(self.index_yaml()).unwrap()
+    }
+
+    /// 写しの index.yaml の字面の変異（1 か所だけ）。
+    fn mutate_index(&self, from: &str, to: &str) {
+        mutate_file(&self.index_yaml(), from, to);
     }
 
     /// 写しの adr/schema.yaml の字面の変異（1 か所だけ）。
@@ -916,4 +941,124 @@ fn r9_population_anchor_holds() {
     let hex = sha256_hex(anchor.as_bytes())
         .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
     assert_eq!(hex, REGION_SHA256, "sha256sum で測った anchor の要約値");
+}
+
+// ── 便 76: 入口の正本の側 ──
+
+/// 入口の正本の側の生成区間の変異（1 byte・凡例の 1 つ目の id）。
+const INDEX_DRIFT_FROM: &str = "\n    legend: [readable, absent, binds, inside]\n";
+const INDEX_DRIFT_TO: &str = "\n    legend: [readablE, absent, binds, inside]\n";
+
+// ── f76_ 3. 入口の正本の側の実の正本 ──
+
+#[test]
+fn f76_schema_check_matches_the_real_index_file_and_its_frozen_digest() {
+    let w = Work::new("index-real");
+    let out = w.schema(&["--check"]);
+    assert_outcome(
+        &out,
+        0,
+        &["一致", "index.yaml", &format!("{INDEX_REGION_BYTES} byte")],
+    );
+    let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), TARGETS, "{lines:?}");
+    assert!(lines[3].contains("rules.yaml"), "{lines:?}");
+    assert!(lines[4].contains("index.yaml"), "{lines:?}");
+    assert!(
+        lines[4].contains(&format!("{INDEX_REGION_BYTES} byte")),
+        "{lines:?}"
+    );
+    let text = w.read_index();
+    let cur = region(&text);
+    assert_eq!(cur.len(), INDEX_REGION_BYTES, "生成区間の byte 数");
+    assert_eq!(cur.lines().count(), INDEX_REGION_LINES, "生成区間の行数");
+    assert!(cur.starts_with("schema:\n"));
+    match sha256_hex(cur.as_bytes()) {
+        Ok(hex) => assert_eq!(hex, INDEX_REGION_SHA256, "sha256sum で測り直した要約値"),
+        Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
+    }
+    // 印の前に相談窓口の節が在り、印の後は file の終わり
+    let (head, _) = text.split_once(BEGIN).unwrap();
+    assert!(head.contains("\nintake:\n"), "{head}");
+    assert!(text.ends_with(&format!("\n{END}\n")), "{text}");
+    // 検査は file を書かない
+    assert_eq!(w.read_index(), text);
+}
+
+// ── f76_ 4. 入口の正本の側のずれ ──
+
+#[test]
+fn f76_schema_check_fails_on_one_byte_drift_inside_the_index_region() {
+    let w = Work::new("index-drift");
+    let adr = w.read();
+    let note = w.read_note();
+    let ceiling = w.read_ceiling();
+    let rules = w.read_rules();
+    w.mutate_index(INDEX_DRIFT_FROM, INDEX_DRIFT_TO);
+    assert_outcome(
+        &w.schema(&["--check"]),
+        1,
+        &[
+            "index.yaml",
+            "生成区間",
+            "≠ 導出",
+            &format!("{INDEX_REGION_BYTES} byte"),
+        ],
+    );
+    // 先の 4 本（合格）の行は、5 本目で落ちたときは出さない・file も触らない
+    assert_eq!(w.read(), adr);
+    assert_eq!(w.read_note(), note);
+    assert_eq!(w.read_ceiling(), ceiling);
+    assert_eq!(w.read_rules(), rules);
+}
+
+// ── f76_ 5. 入口の正本の側の印 ──
+
+#[test]
+fn f76_schema_check_is_unknown_without_the_index_begin_marker() {
+    let w = Work::new("index-no-begin");
+    w.mutate_index(&format!("{BEGIN}\n"), "");
+    assert_outcome(&w.schema(&["--check"]), 2, &["index.yaml: 印が 1 対でない"]);
+    assert_outcome(&w.schema(&["--write"]), 2, &["index.yaml: 印が 1 対でない"]);
+}
+
+// ── f76_ 6. 入口の正本の側の書き直し ──
+
+#[test]
+fn f76_schema_write_restores_the_index_region_and_is_idempotent() {
+    let w = Work::new("index-write");
+    let original = w.read_index();
+    let adr = w.read();
+    let note = w.read_note();
+    let ceiling = w.read_ceiling();
+    let rules = w.read_rules();
+    w.mutate_index(INDEX_DRIFT_FROM, INDEX_DRIFT_TO);
+    assert_ne!(w.read_index(), original);
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &[
+            "変わらない",
+            "rules.yaml",
+            "書いた",
+            "index.yaml",
+            &format!("{INDEX_REGION_BYTES} byte"),
+        ],
+    );
+    assert_eq!(
+        w.read_index(),
+        original,
+        "file 全体が元と byte 一致（人が書く節 meta・audience・shelf・lanes・intake と承認欄と注釈も不変）"
+    );
+    assert_eq!(w.read(), adr, "判断の記録の側は触らない");
+    assert_eq!(w.read_note(), note, "設計ノートの側は触らない");
+    assert_eq!(w.read_ceiling(), ceiling, "天井の正本の側は触らない");
+    assert_eq!(w.read_rules(), rules, "規則の表の側は触らない");
+    assert_outcome(
+        &w.schema(&["--write"]),
+        0,
+        &["変わらない", &format!("{INDEX_REGION_BYTES} byte")],
+    );
+    assert_eq!(w.read_index(), original);
+    assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
 }

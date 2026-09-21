@@ -298,3 +298,26 @@ fn entrance_duplicate_key_fails() {
         &["同じ表にキー「title」を 2 度書いている"],
     );
 }
+
+/// 便 76 §1 (d)(h)7: 生成区間の節 schema は未知の節にならない。床は生成区間の中身を床の木と突き合わせないので、
+/// 写しから生成区間の節だけを消しても床の結果は同じ。
+#[test]
+fn f76_entrance_accepts_the_generated_region() {
+    let w = Work::new("generated-region");
+    let text = fs::read_to_string(w.index()).unwrap();
+    assert!(
+        text.contains("\nschema:\n"),
+        "実の入口の正本に生成区間の節が無い"
+    );
+    let with_region = w.check();
+    assert_passes(&with_region);
+
+    let begin = text.find("\nschema:\n").unwrap() + 1;
+    let end = text.find("\n# folio:schema:end\n").unwrap() + 1;
+    fs::write(w.index(), format!("{}{}", &text[..begin], &text[end..])).unwrap();
+    assert!(!fs::read_to_string(w.index()).unwrap().contains("\nschema:"));
+    let without_region = w.check();
+    assert_passes(&without_region);
+    assert_eq!(without_region.status.code(), with_region.status.code());
+    assert_eq!(stdout(&without_region), stdout(&with_region));
+}
