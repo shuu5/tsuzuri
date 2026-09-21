@@ -48,11 +48,11 @@ schema = 1
 
 [[contract]]
 id = "br"
-title = "判断の記録の欄の決まりの床の木 FLOOR の prose_note の母集団を〔憲法・rules・要件書・語彙〕にし、実の生成区間を folio schema --write で書き直して凍結 anchor（117 行・22,263 byte・sha256 a5e1efca…）に合わせ、写し 17 本の同じ 1 行を同じ字にする（天井の 12 周目の整合 F-4）"
+title = "判断の記録の欄の決まりの床の木 FLOOR の prose_note の母集団を〔憲法・rules・要件書・語彙〕にし、実の生成区間を folio schema --write で書き直して凍結 anchor（117 行・22,263 byte・sha256 a5e1efca…）に合わせ、注の行を持つ写し（floor_base の 1 本）の同じ 1 行を同じ字にする（残る 16 本の写しは注の行を持たず不変・天井の 12 周目の整合 F-4）"
 req = ["FR19", "FR5"]
 section = "1"
 write-set = ["crates/folio/src/adr.rs", "design-intent/adr/schema.yaml", "tests/fixtures/schema/adr-region.txt", "crates/folio/tests/schema.rs", "crates/folio/tests/adr.rs", "crates/folio/tests/floor_cases.rs", "tests/fixtures/floor_base/design-intent/adr/schema.yaml", "tests/fixtures/anchor/root-digest-drift/adr/schema.yaml", "tests/fixtures/anchor/no-anchor/adr/schema.yaml", "tests/fixtures/adr/two-adopted/adr/schema.yaml", "tests/fixtures/adr/schema-drift/adr/schema.yaml", "tests/fixtures/adr/effective-no-approval/adr/schema.yaml", "tests/fixtures/link/retreat-kind-drift/adr/schema.yaml", "tests/fixtures/link/adr-id-missing/adr/schema.yaml", "tests/fixtures/link/amended-by-orphan/adr/schema.yaml", "tests/fixtures/refs/dangling-id/adr/schema.yaml", "tests/fixtures/refs/orphan-rule/adr/schema.yaml", "tests/fixtures/refs/bad-counts/adr/schema.yaml", "tests/fixtures/vocab/exemptions/adr/schema.yaml", "tests/fixtures/check/dup-key/adr/schema.yaml", "tests/fixtures/vocab/unknown-word/adr/schema.yaml", "tests/fixtures/check/empty-field/adr/schema.yaml", "tests/fixtures/check/unknown-section/adr/schema.yaml"]
 verify = ["cargo nextest run -p folio --test schema r9_population_", "cargo nextest run -p folio --test adr --test floor_cases --test schema", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "r9_population_ の歯 2 本（生成区間の注が語彙を含む・anchor の自己検査）が緑、tests/schema.rs（判断の記録の側の byte 数 22263 と要約値の歯を含む）・tests/adr.rs・tests/floor_cases.rs の既存の歯が全部緑、folio schema --check が 4 行とも一致、clippy が 0 警告で CI が通る"
+done = "r9_population_ の歯 2 本（生成区間の注が語彙を含む・anchor の自己検査 = 要約値を測れなければ落ちる）が緑、写しのうち注の行を持つ floor_base の 1 本だけが変わり残る 16 本は不変、tests/schema.rs（判断の記録の側の byte 数 22263 と要約値の歯を含む）・tests/adr.rs・tests/floor_cases.rs の既存の歯が全部緑、folio schema --check が 4 行とも一致、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
