@@ -414,3 +414,136 @@ fn f80_amendment_previous_text_is_verbatim() {
     assert_eq!(face_prev, src_prev);
     assert_eq!(face_why, src_why);
 }
+
+// ── 便 84: 機構の小窓のいつから動くかの意味と用語集の欄の名前の節（docs/design/delivery-84.md §1 (c)） ──
+
+/// いつから動くかの名札 5 つ（歯の側で持つ）。
+const LIVE_LABELS: [&str; 5] = [
+    "いま動く",
+    "M0 で動く",
+    "便 0 で動く",
+    "M1 で動く",
+    "判断の記録の欄の決まりの後",
+];
+
+/// 正本 design-intent/vocabulary.yaml の field_terms の（id, term）。
+fn source_field_terms() -> Vec<(String, String)> {
+    let text = fs::read_to_string(design_intent().join("vocabulary.yaml")).unwrap();
+    let doc: Yaml = YamlLoader::load_from_str(&text).unwrap().remove(0);
+    doc["field_terms"]
+        .as_vec()
+        .expect("field_terms が一覧でない")
+        .iter()
+        .map(|t| {
+            (
+                t["id"].as_str().unwrap().to_string(),
+                t["term"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+/// 数えの字（歯の側で独立に組む: 9 までは「n つの語」・10 以上は「n の語」）。
+fn count_words(n: usize) -> String {
+    if n <= 9 {
+        format!("{n} つの語")
+    } else {
+        format!("{n} の語")
+    }
+}
+
+/// 章 07（用語集）の本文（帯 s7 から帯 s8 の前まで）。
+fn chapter_07(html: &str) -> &str {
+    let start = html.find("<section id=\"s7\"").expect("章 07 が無い");
+    let rest = &html[start..];
+    &rest[..rest.find("<section id=\"s8\"").expect("章 08 が無い")]
+}
+
+/// 章の中の部品 glossary-term-table の div の中身（開きの直後から次の「\n</div>」の手前まで）の全部。
+fn glossary_tables(chapter: &str) -> Vec<&str> {
+    let open = "<div data-component=\"glossary-term-table\">";
+    chapter
+        .split(open)
+        .skip(1)
+        .map(|b| &b[..b.find("\n</div>").expect("表の終わりが無い")])
+        .collect()
+}
+
+#[test]
+fn f84_mechanism_chip_explains_the_stage() {
+    let html = real_html("f84-chip");
+    let bodies = hint_bodies(&html, "機構");
+    assert!(!bodies.is_empty(), "機構の小窓が無い");
+    assert!(
+        bodies
+            .iter()
+            .any(|b| b.contains("M0 で動く（M0 = 要件書の scope の 作る の側に在る段）")),
+        "M0 の意味が機構の小窓に無い"
+    );
+    let mut seen = 0;
+    for b in &bodies {
+        for label in LIVE_LABELS {
+            for (at, _) in b.match_indices(label) {
+                seen += 1;
+                assert!(
+                    b[at + label.len()..].starts_with('（'),
+                    "名札「{label}」の直後が括弧でない: {b}"
+                );
+            }
+        }
+    }
+    assert!(seen >= bodies.len(), "機構の小窓に名札が無いものがある");
+}
+
+#[test]
+fn f84_glossary_has_the_field_terms_section() {
+    let html = real_html("f84-fields");
+    let ch = chapter_07(&html);
+    let tables = glossary_tables(ch);
+    assert_eq!(
+        tables.len(),
+        2,
+        "章 07 の glossary-term-table が 2 つでない"
+    );
+    let second_at = ch
+        .rfind("<div data-component=\"glossary-term-table\">")
+        .unwrap();
+    let h3_at = ch.find("<h3>欄の名前").expect("h3 の「欄の名前」が無い");
+    assert!(
+        h3_at < second_at,
+        "h3 の「欄の名前」が 2 つ目の表の前に無い"
+    );
+    let fields = source_field_terms();
+    assert_eq!(fields.len(), 7, "正本の field_terms の実測が変わった");
+    for (_, term) in &fields {
+        assert!(
+            tables[1].contains(&format!("<div class=\"gword\">{}", esc(term))),
+            "欄の名前の表に「{term}」が無い"
+        );
+    }
+    assert_eq!(
+        tables[1].matches("<div class=\"grow\"").count(),
+        fields.len()
+    );
+    let id = &fields
+        .iter()
+        .find(|(_, t)| t == "規範文")
+        .expect("正本に規範文が無い")
+        .0;
+    assert!(
+        html.contains(&format!("id=\"g-{id}\"")),
+        "規範文の行の id が無い"
+    );
+}
+
+#[test]
+fn f84_glossary_heading_counts_from_the_source() {
+    let html = real_html("f84-count");
+    let n = source_field_terms().len();
+    let want = format!("<h3>欄の名前 — {}</h3>", count_words(n));
+    assert_eq!(
+        chapter_07(&html).matches(&want).count(),
+        1,
+        "{want} が章 07 に 1 回でない"
+    );
+}

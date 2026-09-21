@@ -734,8 +734,9 @@ pub fn card(class: &str, id: Option<&str>, cid: &str, body: &str) -> String {
 /// 語彙の正本（`v` = vocabulary.yaml の根）の terms を正本の順に 1 語 1 行で出す（部品 glossary-term-table の中身）。
 /// 1 行 = div.grow〔id g-語の id〕・div.gword〔term + en が在れば span.en〕・div〔p.gdef の def + note が在れば
 /// p.gdef + a.back「目次へ」〕。目次へのリンクは同じ面の #toc。憲法の面の章 07 と要件書の面の章 08 が同じ字面で出す。
-pub(crate) fn glossary_rows(o: &mut Vec<String>, v: &X<'_>) -> R<()> {
-    for t in v.f("terms")?.seq()? {
+/// `section` = 読む節の名（terms か field_terms・便 84）。
+pub(crate) fn glossary_rows(o: &mut Vec<String>, v: &X<'_>, section: &str) -> R<()> {
+    for t in v.f(section)?.seq()? {
         let en = t.f("en")?;
         let en = if matches!(en.v, Value::Null) {
             String::new()
@@ -753,6 +754,23 @@ pub(crate) fn glossary_rows(o: &mut Vec<String>, v: &X<'_>) -> R<()> {
             t.ef("def")?
         ));
     }
+    Ok(())
+}
+
+/// 用語集の欄の名前の節（便 84）: 語彙の根が field_terms を持ち空でないときだけ h3 1 行と部品 glossary-term-table の
+/// div 1 つ（`dc` = その面の属性 data-component）を足す。無い・空なら 1 行も足さない。2 面が同じ字面で出す。
+pub(crate) fn glossary_field_terms(o: &mut Vec<String>, v: &X<'_>, dc: &str) -> R<()> {
+    let Some(ft) = v.g("field_terms")? else {
+        return Ok(());
+    };
+    let n = ft.seq()?.len();
+    if n == 0 {
+        return Ok(());
+    }
+    o.push(format!("<h3>欄の名前 — {}</h3>", count_word(n, "語")));
+    o.push(format!("<div {dc}>"));
+    glossary_rows(o, v, "field_terms")?;
+    o.push("</div>".to_string());
     Ok(())
 }
 
@@ -904,6 +922,20 @@ mod face_tests {
                 ("delivery-0", "便 0 で動く"),
                 ("M1", "M1 で動く"),
                 ("adr", "判断の記録の欄の決まりの後")
+            ]
+        );
+        assert_eq!(
+            pairs(
+                &ce::MechanismLive::ALL,
+                ce::MechanismLive::name,
+                mechanism_live_meaning
+            ),
+            [
+                ("now", "今の folio に在る"),
+                ("M0", "M0 = 要件書の scope の 作る の側に在る段"),
+                ("delivery-0", "便 0 = 最初の便の段"),
+                ("M1", "M1 = 要件書の scope_m1 の 作る の側に在る段"),
+                ("adr", "判断の記録の欄の決まりが定まった後")
             ]
         );
         assert_eq!(

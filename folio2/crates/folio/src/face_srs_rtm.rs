@@ -2,7 +2,7 @@
 //! 章 08 は用語集（glossary-term-table・便 36 で憲法の面の章 07 と同じ形にした・語の行は `face.rs` の共有の口）。
 //! 文脈（`Ctx`）と共有の口（band・xref・hint 等）は `face_srs.rs` のもの。
 
-use crate::face::{R, X, anchor, glossary_rows, hint};
+use crate::face::{R, X, anchor, glossary_field_terms, glossary_rows, hint};
 use crate::face_srs::{Ctx, band};
 use crate::parts::catalog::Component;
 
@@ -105,8 +105,10 @@ pub(crate) fn glossary_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, v:
         ctx.frame.dc(Component::GlossaryTermTable)
     ));
     // 語の行は憲法の面の章 07 と同じ字面（便 36・`face.rs` の共有の口）
-    glossary_rows(o, v)?;
+    glossary_rows(o, v, "terms")?;
     o.push("</div>".to_string());
+    // 欄の名前の節も憲法の面の章 07 と同じ字面（便 84）
+    glossary_field_terms(o, v, &ctx.frame.dc(Component::GlossaryTermTable))?;
     o.push("</div>".to_string());
     Ok(())
 }

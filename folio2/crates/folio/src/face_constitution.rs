@@ -10,9 +10,10 @@ use std::sync::LazyLock;
 use crate::constitution_enums as ce;
 use crate::face::{
     self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, Tier, X, anchor, binds_label, card, count_word,
-    esc, hint, hint_q, mechanism_kind_label, mechanism_live_label, pattern_label, polarity_label,
-    rationale, retreat_kind_label, rule_kind_label, rule_status_class, section_anchor, split_dash,
-    stage_label, strength_label, strength_meaning, tier_label, tier_of, val,
+    esc, hint, hint_q, mechanism_kind_label, mechanism_live_label, mechanism_live_meaning,
+    pattern_label, polarity_label, rationale, retreat_kind_label, rule_kind_label,
+    rule_status_class, section_anchor, split_dash, stage_label, strength_label, strength_meaning,
+    tier_label, tier_of, val,
 };
 use crate::parts::catalog::Component;
 use crate::rules;
@@ -609,10 +610,12 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
     let mech = a.f("mechanism")?;
     let kind = mech.f("kind")?;
     let live = mech.f("live")?;
+    let live_v = live.parse(ce::MechanismLive::from_name, "機構の live")?;
     let mut human = format!(
-        "{}・{}",
+        "{}・{}（{}）",
         mechanism_kind_label(kind.parse(ce::MechanismKind::from_name, "機構")?),
-        mechanism_live_label(live.parse(ce::MechanismLive::from_name, "機構の live")?)
+        mechanism_live_label(live_v),
+        mechanism_live_meaning(live_v)
     );
     let mut machine = format!("{} · live: {}", kind.e()?, live.e()?);
     if let Some(stage) = mech.g("stage")? {
@@ -1158,8 +1161,10 @@ fn glossary_chapter(o: &mut Vec<String>, c: &X<'_>, v: &X<'_>) -> R<()> {
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!("<div {}>", dc(Component::GlossaryTermTable)));
     // 語の行は要件書の面の章 08 と共有（便 36・`face.rs`）
-    face::glossary_rows(o, v)?;
+    face::glossary_rows(o, v, "terms")?;
     o.push("</div>".to_string());
+    // 欄の名前の節も要件書の面の章 08 と同じ字面（便 84）
+    face::glossary_field_terms(o, v, &dc(Component::GlossaryTermTable))?;
     o.push("</div>".to_string());
     Ok(())
 }

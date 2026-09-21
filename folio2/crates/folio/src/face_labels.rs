@@ -132,6 +132,17 @@ pub fn mechanism_live_label(l: ce::MechanismLive) -> &'static str {
     }
 }
 
+/// 機構の live → 意味（段の中身は要件書の正本が持つので、段の名と定義の在る節を指すだけ・便 84）。
+pub fn mechanism_live_meaning(l: ce::MechanismLive) -> &'static str {
+    match l {
+        ce::MechanismLive::Now => "今の folio に在る",
+        ce::MechanismLive::M0 => "M0 = 要件書の scope の 作る の側に在る段",
+        ce::MechanismLive::Delivery0 => "便 0 = 最初の便の段",
+        ce::MechanismLive::M1 => "M1 = 要件書の scope_m1 の 作る の側に在る段",
+        ce::MechanismLive::Adr => "判断の記録の欄の決まりが定まった後",
+    }
+}
+
 /// stage → 名札。
 pub fn stage_label(s: ce::Stage) -> &'static str {
     match s {

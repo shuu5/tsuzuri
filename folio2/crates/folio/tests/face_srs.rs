@@ -229,3 +229,124 @@ fn f81_approval_history_is_folded() {
         .unwrap();
     assert_eq!(inner, esc(&history), "折りたたみの中が来歴の逐語でない");
 }
+
+// ── 便 84: 用語集の欄の名前の節（docs/design/delivery-84.md §1 (c)） ──
+
+/// `folio face --face <face> --dir <dir> --out <out> --write` の結果と面の本文。
+fn write_face(face: &str, dir: &Path, out: &Path) -> (Output, String) {
+    let run = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("face")
+        .arg("--face")
+        .arg(face)
+        .arg("--dir")
+        .arg(dir)
+        .arg("--out")
+        .arg(out)
+        .arg("--write")
+        .output()
+        .expect("folio を起動できない");
+    (run, fs::read_to_string(out).unwrap_or_default())
+}
+
+/// 実の置き場の写しで憲法の面を書き、本文を返す。
+fn real_constitution(case: &str) -> String {
+    let td = temp_dir(case);
+    let work = td.join("src");
+    copy_dir(&design_intent(), &work);
+    copy_dir(&vendor(), &td.join("vendor/archify"));
+    let (run, html) = write_face("constitution", &work, &td.join("constitution.html"));
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&run, "folio face --face constitution --write"),
+        0,
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    html
+}
+
+/// 章 `n`（帯 s<n> から次の section の前まで）。
+fn chapter(html: &str, n: usize) -> &str {
+    let start = html
+        .find(&format!("<section id=\"s{n}\""))
+        .unwrap_or_else(|| panic!("章 {n} が無い"));
+    let rest = &html[start..];
+    let end = rest[1..].find("<section ").map_or(rest.len(), |e| e + 1);
+    &rest[..end]
+}
+
+/// 章の中の部品 glossary-term-table の div の中身の全部。
+fn glossary_tables(chapter: &str) -> Vec<&str> {
+    let open = "<div data-component=\"glossary-term-table\">";
+    chapter
+        .split(open)
+        .skip(1)
+        .map(|b| &b[..b.find("\n</div>").expect("表の終わりが無い")])
+        .collect()
+}
+
+#[test]
+fn f84_srs_glossary_has_the_same_field_terms_section() {
+    let srs = real_srs("f84-srs");
+    let constitution = real_constitution("f84-srs-c");
+    let s = glossary_tables(chapter(&srs, 8));
+    let c = glossary_tables(chapter(&constitution, 7));
+    assert_eq!(s.len(), 2, "章 08 の glossary-term-table が 2 つでない");
+    assert_eq!(
+        c.len(),
+        2,
+        "憲法の面の章 07 の glossary-term-table が 2 つでない"
+    );
+    assert!(
+        s[1].contains("<div class=\"grow\""),
+        "欄の名前の表に行が無い"
+    );
+    assert_eq!(s[1], c[1], "欄の名前の表が 2 面で byte 一致しない");
+    let h3 = |ch: &str| span(ch, "<h3>欄の名前", "</h3>").to_string();
+    assert_eq!(h3(chapter(&srs, 8)), h3(chapter(&constitution, 7)));
+}
+
+#[test]
+fn f84_missing_field_terms_leaves_the_face_unchanged() {
+    let fixture = repo_root().join("tests/fixtures/face");
+    let td = temp_dir("f84-missing");
+    let work = td.join("src");
+    fs::create_dir_all(&work).unwrap();
+    for name in [
+        "constitution.yaml",
+        "rules.yaml",
+        "srs.yaml",
+        "ceiling.yaml",
+    ] {
+        fs::copy(fixture.join(name), work.join(name)).unwrap();
+    }
+    let vocab = fs::read_to_string(fixture.join("vocabulary.yaml")).unwrap();
+    let cut = vocab
+        .find("\nfield_terms:\n")
+        .expect("写しに field_terms の節が無い");
+    fs::write(work.join("vocabulary.yaml"), &vocab[..cut + 1]).unwrap();
+    copy_dir(&vendor(), &td.join("vendor/archify"));
+    let (run_c, c) = write_face("constitution", &work, &td.join("constitution.html"));
+    let (run_s, s) = write_face("srs", &work, &td.join("srs.html"));
+    let _ = fs::remove_dir_all(&td);
+    for (face, run, html) in [("constitution", &run_c, &c), ("srs", &run_s, &s)] {
+        assert_eq!(
+            code(run, face),
+            0,
+            "{face}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        assert!(
+            !html.contains("<h3>欄の名前"),
+            "{face} に欄の名前の節が在る"
+        );
+        assert_eq!(
+            html.matches("data-component=\"glossary-term-table\"")
+                .count(),
+            1,
+            "{face} の glossary-term-table が 1 つでない"
+        );
+    }
+    let s1 = span(&c, "<section id=\"s1\"", "</section>");
+    assert!(!s1.contains("<p class=\"lead\">"), "章 01 の帯に副題が在る");
+}
