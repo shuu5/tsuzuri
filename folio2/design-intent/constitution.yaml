@@ -188,13 +188,13 @@ articles:
       - {id: P-5.4, pattern: ubiquitous, strength: must-not, text: 台帳（bd）はタスクと裁定の記帳先であり、規則を置かない。}
       - {id: P-5.5, pattern: ubiquitous, strength: must, text: 原則と裁定の正本は設計文書、機械が執行する規則の正本は型付きデータとし、置き場をこの 2 面に限る。}
       - {id: P-5.6, pattern: state, strength: must, text: 実装の型付きの定数を規則の正本とするあいだ、その写しを人が読める型付きデータとして設計文書の置き場へ決定的に導出する。}
-    plain: 「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。道具の中に型を付けて書いた決まりも表の 1 つに数えますが、それを元にしているあいだは、人が読める表（型付きデータ）の形の写しを、機械が何度やっても同じ結果になる形で作って、設計文書の置き場に置き続けます。
+    plain: 「こうしてね」と文章に書いただけでは、AI は守り続けられません。守らせたい規則は表に載せ、番号で呼びます。文書の種類ごとの違いも、係を増やさず設定の表で表します。台帳（タスクと持ち主の決めごとの帳簿）には規則を書きません。原則と決定は設計文書に、機械が守らせる規則は表に、置き場はこの 2 つだけです。道具の中に型を付けて書いた決まりも表の 1 つに数えますが、それを元にしているあいだは、人が読める表（型付きデータ）の形の写しを、機械が何度やっても同じ結果になる形で作って、設計文書の置き場に置き続けます。
     rationale:
       - {kind: scribe2-article, ref: "C1（規則はデータ）・C14（規律は文書とデータの 2 面）・C15 / C15.2（台帳はタスク専用・id 参照）。C1 の「値は 1 file」は G14=A により folio2 では憲法 / rules / 語彙 / 要件書の 4 file に分ける（意図的な逸脱）"}
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18「本 hook は tier-2 shaping であって guarantee ではない」＝規則が散文にしか無い・rules.html 248KB の散文"}
       - {kind: folio2-ruling, ref: "G2=C（二層: 憲法は道具の折れない線・開発規律は型付きデータ）・G14=A"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 参照 id の未解決 0（R-4・双方向・NFR3）。rules 表の各行に裁定 id 列（P-17）。散文だけの規則は N-2 が落とす。P-5.6 は、写しが在る定数については folio schema --check が導出との byte 一致を数える（FR19）。写しがまだ無い定数を数える口は無く、その間 P-5.6 の充足は「まだ分からない」として扱う（P-4.2・判断の記録 ADR-11 の便で対象を足す・範囲は rules 行 D-11）。床は folio check（day-1 の検査 script は退役済み）。}
-    relations: {reqs: [NFR3, AC6, FR19], rules: [R-4, R-9, R-10, R-11, D-11], articles: [N-2, P-17, P-6, P-4]}
+    relations: {reqs: [NFR3, AC6, FR19], rules: [R-4, R-9, R-10, R-11, R-12, D-11], articles: [N-2, P-17, P-6, P-4]}
 
   - id: P-6
     title: 正本は 1 つ、ほかはそこから導出する
@@ -247,7 +247,7 @@ articles:
       - {id: P-10.1, pattern: ubiquitous, strength: must, text: 検査は、生成側からも検査側からも独立した凍結 anchor（固定の fixture）を 1 本以上持つ。}
       - {id: P-10.2, pattern: ubiquitous, strength: must-not, text: 生成物どうしの突き合わせを唯一の合格判定にしない。}
       - {id: P-10.3, pattern: unwanted, strength: must, text: anchor が維持できなくなった検査の結果は「まだ分からない」に落とす。}
-    plain: 「自分で作ったものと自分で作ったものを見比べて OK」は、何でも OK になってしまうので、それだけでは合格にしません。作る側からも検査する側からも独立した、動かない基準を 1 つ別に置きます。その基準が保てなくなった検査は「まだ分からない」に戻します。
+    plain: 「自分で作ったものと自分で作ったものを見比べて OK」は、何でも OK になってしまうので、それだけでは合格にしません。作る側からも検査する側からも独立した、動かない基準を 1 つ以上、別に置きます。その基準が保てなくなった検査は「まだ分からない」に戻します。
     rationale:
       - {kind: v1-incident, ref: "ADR-0053（flip 後 ORIG==生成物 で自己比較恒真化・任意値 PASS → 凍結 literal census + round-trip + 敵対 test の三本柱へ。再発ハザードへの予防的退役・user 裁定 2026-07-18）"}
     mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 凍結 fixture を検査の入力に持ち、fixture 不在は「まだ分からない」、fixture との不一致は「不合格」に落とす。}
@@ -313,7 +313,7 @@ articles:
       - {kind: folio2-ruling, ref: "受入 (b)・注入の所有（規格は folio・呼ぶのは consumer・pointer 化は却下）・G9=A（上限は rules 行）・G13=A（母集団は規範文を持つ条）"}
       - {kind: scribe2-article, ref: "C1.2（人が読む規則の文書は型から生成し、手書きの規範文は 0 行）"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: --check の byte 一致（AC4）。R-2 超過は落とす。生成と検査は同じ導出関数（day-1 は inject_check.py・M0 で folio inject）。注入する欄は R-2 行の projection 欄が定める。同型の実装は scribe2 の xtask gen-claude-md / check claude-md-constitution（条ではなく実装）。}
-    relations: {reqs: [FR6, AC4, NFR1], rules: [R-2, R-12], articles: [P-6]}
+    relations: {reqs: [FR6, AC4, NFR1], rules: [R-2], articles: [P-6]}
 
   - id: P-15
     title: 自動の仕掛けに寄りかからない
@@ -322,7 +322,7 @@ articles:
     statements:
       - {id: P-15.1, pattern: ubiquitous, strength: must-not, text: 自動で走る仕掛け（hook）を「守られる保証」として設計しない。}
       - {id: P-15.2, pattern: ubiquitous, strength: must, text: 編集の時点で止める仕掛けを持つときは、その判定の式を事後の検査が同じ関数で確かめる。}
-    plain: 「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。止める仕掛けを置くなら、後から確かめる検査も、その判定を同じ 1 つの関数で見ます（同じ中身を別々に 2 か所へ書いたのでは足りません）。
+    plain: 「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。編集の時点で止める仕掛けを置くなら、後から確かめる検査も、その判定を同じ 1 つの関数で見ます（同じ中身を別々に 2 か所へ書いたのでは足りません）。
     rationale:
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18 逐語「本 hook は tier-2 shaping であって guarantee ではない」・ADR-0043 §2.3"}
       - {kind: v1-incident, ref: "plugin-lib.sh:238 / check-content-boundary.sh:55（hook と事後検査が 2 実装の人間同期＝drift の実体）"}

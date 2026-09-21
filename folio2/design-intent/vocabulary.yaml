@@ -14,7 +14,7 @@ terms:
   - {id: fail-closed, term: 黙って飛ばさない（fail-closed）, en: fail-closed, short: 確かめられなかったら「合格」にしない, def: 確かめられなかったら「合格」にしない、という安全側の倒し方。分からないときは「まだ分からない」と表示する（P-4）。}
   - {id: frozen-anchor, term: 凍結 anchor（固定の fixture）, en: frozen anchor / fixture, short: 検査のための動かない基準, def: 作る側からも検査する側からも独立した、動かない基準（固定の見本データ）。生成物どうしの見比べだけを合格にしないために置く（P-10）。}
   - {id: design-token, term: design token, en: design token, short: 色・字の大きさ・余白の元の値, def: 色・字の大きさ・余白などの元の値。1 か所で決めて全ページが使う（P-2）。}
-  - {id: parts-catalog, term: 部品目録, en: parts catalog, short: ページを組み立てる部品の一覧, def: ページを組み立てる部品（表紙・章帯・カード・図）の閉じた一覧。ここに無い部品は使えない。図の型と密度 profile もここに載る（P-2）。}
+  - {id: parts-catalog, term: 部品目録, en: parts catalog, short: ページを組み立てる部品の一覧, def: ページを組み立てる部品（表紙・章帯・カード・図）の閉じた一覧。ここに無い部品は使えない。図の型もここに載る。密度 profile の閉じた一覧は 2026-09-21 時点で設計ノートの欄の決まりの生成区間に在り、部品目録には載っていない。部品目録へ写すか別の行き先にするかは判断の記録 ADR-11 の後続の便で決める（P-2）。}
   - {id: profile, term: 密度 profile, en: density profile, short: 文書の種類ごとの見せ方の設定, def: 文書の種類ごとの見せ方の設定（どれくらい詰めて見せるか・使う図の型）。係を増やさず、設定で違いを表す（P-5.3・N-5）。}
   - {id: adr, term: 判断の記録（ADR）, en: ADR, short: 戻せない判断を理由つきで残す 1 枚, def: 戻せない判断を、理由・退けた案・撤退条件つきで残す 1 枚。憲法の改訂にも必ず要る（P-8・A-2）。}
   - {id: retreat, term: 撤退条件, en: retreat condition, short: その判断を捨てる条件, def: その判断を捨てる条件。決めるときに一緒に書く（P-8）。}
@@ -56,7 +56,7 @@ terms:
   - {id: port, term: 口, en: interface, short: 道具が外から呼ばれる受け口, def: 道具が外から呼ばれる受け口（命令・命令の旗・関数）。「口の表」は設計ノートで受け口を並べた表。まだ作っていない受け口は「口が無い」と言う。}
 # 欄の名前（機械層・読者は引かない・R-9 の母集団外）
 field_terms:
-  - {id: tier, term: 段, en: tier, def: 条の実行時の扱い。いつも守る（道具も AI も守る）／確認してから変える（実行前に持ち主へ聞く）／絶対にやらない（やろうとしたら機械が拒む）。}
+  - {id: tier, term: 段, en: tier, def: 条の実行時の扱い。いつも守る（道具も AI も守る）／確認してから変える（消す・外へ出す・外の道具や鍵を使う操作は実行前に持ち主へ聞く）／絶対にやらない（やろうとしたら機械が拒む）。}
   - {id: normative-statement, term: 規範文, en: normative statement, def: 条の中の、守るべきことを書いた文。型（いつ守るか）と強度を欄に持ち、1 文 1 極性。}
   - {id: plain-text, term: やさしく言うと, en: plain reading, def: 規範文を非エンジニア向けに言い換えた文。規範文に無い義務を足さず、落とさない（受入 (f)・R-10）。}
   - {id: strength, term: 強度, en: strength, def: must（必ず守る）／ must-not（決してしない）／ should（既定・外すなら理由を残す）。文末と一致する（R-11）。}
