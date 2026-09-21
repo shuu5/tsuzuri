@@ -18,7 +18,7 @@ orchestrator 席の実測（2026-09-22・main bb80fef・便 79 / 80 / 81 の着�
 - いつから動くかの名札は mechanism_live_label で、組み立て時に憲法の正本から導いた型 ce::MechanismLive への網羅の場合分け（その他を受ける枝なし・ADR-11 決定 (4)②）。値は 5 つ。**便 87 の着地で、この関数は crates/folio/src/face.rs から crates/folio/src/face_labels.rs へ字を変えずに移る**（便 87 の前は face.rs の 596〜605 行）。同じ形の名札が同じ module に 9 本並ぶ（段・強度・型・縛る相手・機構の種別・stage・polarity・根拠の種別・撤退の種別）。うち強度だけは名札（strength_label）と意味（strength_meaning）の 2 本を持つ形になっており、本便はその形に倣う。行の番号でなく関数の名で当たること。
 - 機構の小窓を組むのは crates/folio/src/face_constitution.rs の item_row（546〜688 行）の 611〜635 行。種別の名札と いつから動くか の名札を中黒で繋ぎ、stage と polarity が在れば足し、note が在れば区切って足し、face.rs の hint（359〜364 行）に名札 機構 で渡す。
 - 用語集の語の行を組むのは face.rs の glossary_rows（便 87 の前は 1040〜1069 行。便 87 が 480 行から 787 行を移すので約 305 行くり上がるが、face.rs に残る）で、引数の語彙の根から terms だけを読む。呼ぶのは 2 か所 = face_constitution.rs の glossary_chapter（1150〜1165 行・憲法の面の章 07）と crates/folio/src/face_srs_rtm.rs の glossary_chapter（100〜112 行・要件書の面の章 08）。どちらも部品 glossary-term-table の div 1 つの中に行を並べる。部品目録 design-intent/preview/parts.json は glossary-term-table の面を constitution と srs の 2 つに定めており、同じ面に 2 つ置くことを妨げる欄は持たない。
-- field_terms を既に読んでいる所が 1 つある。face_constitution.rs の reading（459〜500 行）が id が tier の行の def だけを章 01 の lead に使う。行の欄は id・term・en・def の 4 つで、terms と違い short と note を持たない（glossary_rows は note を任意で読むので、そのまま通る）。
+- field_terms を既に読んでいる所が 1 つある。face_constitution.rs の reading（459〜500 行）が id が tier の行の def だけを章 01 の lead に使う。field_terms を持たない語彙では、reading は lead を None のまま帯を書き（木の口 g は無い鍵に Err でなく None を返す・face.rs 186 行・reading の 461 行は if let Some で受ける）、憲法の面は 0 で終わり章 01 の帯は副題を持たない。床（check.rs の rows・321〜322 行）も無い節を空の一覧として通す。つまり field_terms が無い正本は本便の前から 2 面とも 0 で書けており、本便はその振る舞いを変えない。行の欄は id・term・en・def の 4 つで、terms と違い short と note を持たない（glossary_rows は note を任意で読むので、そのまま通る）。
 - 語の id の重なりは 0（terms の 54 個と field_terms の 7 個に同じ id は無い。実測）。面の行の id は g- を頭に付けるので、節を 2 つ並べても重複する id は出ない。
 - 凍結の写し tests/fixtures/face/vocabulary.yaml は terms を 2 語、field_terms を 1 語（id が tier）持つので、②の直しは写しの面の字を変える。
 - 章の見出しの数えの字は face.rs の count_word（472〜478 行・9 までは 「{n} つの{noun}」・10 以上は 「{n} の{noun}」）。見出しに数を出すときはここから出す（便 70）。
@@ -58,7 +58,7 @@ crates/folio/tests/face_constitution.rs（便 79 が置く）に 3 本。
 crates/folio/tests/face_srs.rs（便 81 が置く）に 2 本。
 
 4. f84_srs_glossary_has_the_same_field_terms_section: 実の置き場の写しで要件書の面を書く → 0 ∧ 章 08 に部品 glossary-term-table の div が 2 つ在り、2 つ目の中身が憲法の面の 2 つ目の中身と byte 一致する（便 36 からの「2 面で同じ字面」）。
-5. f84_missing_field_terms_leaves_the_face_unchanged: field_terms を持たない写しの語彙で 2 面を書く → 0 ∧ どちらの面にも h3 の 「欄の名前」 が無く、部品 glossary-term-table の div が 1 つずつ。
+5. f84_missing_field_terms_leaves_the_face_unchanged: field_terms を持たない写しの語彙（tests/fixtures/face/vocabulary.yaml から field_terms の節を歯の側で外したもの）で 2 面を書く → 0（上の前提のとおり、無い節は面でも床でも Err にならない）∧ どちらの面にも h3 の 「欄の名前」 が無く、部品 glossary-term-table の div が 1 つずつ ∧ 憲法の面の章 01 の帯は副題を持たない（本便の前と同じ）。「字が不変」は本便が足す節（章 07 / 08）が現れないことを指し、面全体の byte 一致は求めない（写しを外した語彙は凍結の写しの面と一致しない）。
 6. 回帰（期待不変・verify の 2 行目）: crates/folio/tests/face_constitution.rs の f79_ と f80_・tests/face_srs.rs の f81_・tests/face.rs・tests/site.rs・tests/badge.rs の既存の歯すべて。tests/face.rs の census の歯が部品の数を数えているときは、用語集の表が 2 つになる分を歯の側で正本から数え直す（歯の期待を生成器の字から写さない）。
 
 ### (d) 凍結の写し
@@ -115,5 +115,5 @@ section = "1"
 write-set = ["crates/folio/src/face_labels.rs", "crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_srs_rtm.rs", "crates/folio/tests/face_constitution.rs", "crates/folio/tests/face_srs.rs", "crates/folio/tests/face.rs", "crates/folio/tests/site.rs", "crates/folio/tests/badge.rs", "tests/fixtures/face/expected.html", "tests/fixtures/face/expected-srs.html"]
 verify = ["cargo nextest run -p folio --test face_constitution --test face_srs f84_", "cargo nextest run -p folio --test face_constitution --test face_srs --test face --test site --test badge", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "f84_ の歯 5 本（機構の小窓に段の意味が括弧で付く・憲法の面の章 07 に欄の名前の節と 7 語・見出しの数えが正本と一致・要件書の面の章 08 の同じ節が憲法の面と byte 一致・節を持たない正本では面の字が不変）が緑、tests/face_constitution.rs の f79_ と f80_ と tests/face_srs.rs の f81_ と tests/face.rs と tests/site.rs と tests/badge.rs の既存の歯が全部緑（生成し直した凍結の写し 2 本との byte 一致の歯を含む）、clippy が 0 警告で CI が通る"
+done = "f84_ の歯 5 本（機構の小窓に段の意味が括弧で付く・憲法の面の章 07 に欄の名前の節と 7 語・見出しの数えが正本と一致・要件書の面の章 08 の同じ節が憲法の面と byte 一致・field_terms を持たない正本では 2 面が 0 で書け欄の名前の節が現れない）が緑、tests/face_constitution.rs の f79_ と f80_ と tests/face_srs.rs の f81_ と tests/face.rs と tests/site.rs と tests/badge.rs の既存の歯が全部緑（生成し直した凍結の写し 2 本との byte 一致の歯を含む）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
