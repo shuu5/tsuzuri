@@ -1,4 +1,4 @@
-# folio2 判断の記録 ADR-6 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。読み物は preview/readable.html（生成物・手で直さない）。
+# folio2 判断の記録 ADR-6 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。人が読む面は folio face --face adr（生成物・手で直さない）。
 # 状態: accepted（発効 2026-09-18・持ち主の承認は approval 欄・裁定 id = f2-648.31 notes 2026-09-18）。条文の改訂ではない（amends は空）。
 # 位置: f2-648.31。元になった持ち主の裁定 = 2026-09-18 の 3 つの問い（置き場・質問 5 つ・支度表の形）への回答（台帳 f2-648 notes に逐語「承認するし質問も全て推奨で承認する」）。
 id: ADR-6

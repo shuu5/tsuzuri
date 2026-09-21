@@ -1,4 +1,4 @@
-# folio2 判断の記録 ADR-1 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。読み物は preview/readable.html（生成物・手で直さない）。
+# folio2 判断の記録 ADR-1 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。人が読む面は folio face --face adr（生成物・手で直さない）。
 id: ADR-1
 title: 判断の記録の正本は「1 判断 = 型付きの YAML 1 file」とし、design-intent/adr/ にゼロ詰めしない番号（ADR-n）で置く
 status: accepted

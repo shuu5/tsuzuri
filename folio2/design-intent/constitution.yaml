@@ -125,7 +125,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "research/document-discipline-engine-design §11（判断は人間・「判断する engine」を作らない）"}
       - {kind: folio2-ruling, ref: "裁定 #1（推奨で進み、支度表で覆す）"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 公開する命令（subcommand）の一覧を閉じた一覧で持ち、採否を決める口が無いことを検査する。支度表は「推奨で進めた項目」を別枠に出す（FR2・AC1）。}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 公開する命令（subcommand）の値域は実装の型付きの定数で閉じ、その全数一致を歯 p1_commands_closed_list（凍結の一覧との突き合わせ・P-10.1）が数える。採否を決める口の不在は、その一覧に採否を決める命令が無いことで表す。支度表は「推奨で進めた項目」を別枠に出す（FR2・AC1）。}
     relations: {reqs: [FR1, FR2, AC1]}
 
   - id: P-2
@@ -141,7 +141,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "提示層 3 系統 + token 2 系統で積集合 0・原因は所有者が 2 つ（報告 軸 5・ADR-0039 → 0054）"}
       - {kind: folio2-ruling, ref: "裁定 #4（v1 P-2 を置換）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。床は folio parts --check（数える面は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）。色や字の大きさが design token 由来である割合（R-3 の後半）を数える口は無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。床が掛からないページは 2026-09-20 時点で 1 枚在り、未達である（要件書 NFR2 の注）。密度 profile の閉じた一覧は 2026-09-21 時点で設計ノートの欄の決まりの生成区間（design-note/schema.yaml の profile の値域・正本は実装の定数）に在り、部品目録には載っていない。部品目録へ写すか別の行き先にするかは、判断の記録 ADR-11 の後続の便で決める。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。床は folio parts --check（数える面は入口・憲法・要件書・判断の記録・設計ノートの 5 つ）。色や字の大きさが design token 由来である割合（R-3 の後半）を数える口は無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。床が掛からないページは、読み物が 2026-09-21 に退役して 0 枚になった（要件書 NFR2 の注）。密度 profile の閉じた一覧の行き先は部品目録（preview/parts.json と、そこから組み立て時に導出する実装の定数）で、条 P-2.4 が名指す置き場のままだから条の改訂は要らない。2026-09-21 時点では設計ノートの欄の決まりの生成区間（design-note/schema.yaml の profile の値域・正本は実装の定数）に在り、便 68 で部品目録の側へ移す。移るまでは条 P-2.4 が名指す置き場の外に在るので、その部分の充足は「まだ分からない」として扱う（P-4.2）。}
     retreat: {kind: spike, condition: 単一生成器で v1 要件書相当の密度が出せない（spike 5）なら再検討する。}
     supersedes_v1: {doc: folio v1 憲章, article: "P-2: format は HTML + common.css のみ", ruling: "裁定 #4", rationale: 見た目が割れた原因は形式（HTML か Markdown か）ではなく、所有者が 2 つあったこと。}
     relations: {reqs: [FR4, NFR2, AC2], rules: [R-3, R-5]}
@@ -158,7 +158,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
       - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 検査の一覧が床・天井のどちらかの層を持つことを検査する。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
+    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check だけ・ほかの命令の --check と folio check はすべて床）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
     relations: {reqs: [FR5, AC3], articles: [P-4]}
 
   - id: P-4

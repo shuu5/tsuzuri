@@ -1,4 +1,4 @@
-# folio2 判断の記録 ADR-4 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。読み物は preview/readable.html（生成物・手で直さない）。
+# folio2 判断の記録 ADR-4 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。人が読む面は folio face --face adr（生成物・手で直さない）。
 # 状態: accepted（発効 2026-09-16・持ち主の承認は approval 欄・裁定 id = f2-648 notes 2026-09-16）。条文の改訂ではない（amends は空）。発効と同時に行った変更 = rules 行 R-5 の改訂・R-14 / R-15 の新設・部品目録・語彙（f2-648.6）。
 # 位置: f2-648.5。持ち主の方針の裁定「受け入れで良い」（2026-09-15・f2-648 notes）は「実行環境（Node.js）を組み立て時の外部依存に持つ」方針への回答であり、本判断の発効の承認と、依存を実際に足す便での A-3.1 の確認は別に取る。
 id: ADR-4

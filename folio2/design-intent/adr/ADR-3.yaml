@@ -1,4 +1,4 @@
-# folio2 判断の記録 ADR-3 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。読み物は preview/readable.html（生成物・手で直さない）。
+# folio2 判断の記録 ADR-3 — 正本（1 判断 = YAML 1 file）。欄の決まりは adr/schema.yaml。人が読む面は folio face --face adr（生成物・手で直さない）。
 # 状態: accepted（発効 2026-09-16・持ち主の承認は approval 欄・裁定 id = f2-648 notes 2026-09-16）。条文の改訂ではない（amends は空）。発効と同時に行った変更 = 要件書 v1.1（M1 の要件 FR9〜FR15・AC7〜AC13・CON8〜CON9・2026-09-16 発効「いずれも推奨で進めて」）・rules 行 R-16・語彙（f2-648.4）。
 id: ADR-3
 title: 契約表（便の割りの表）の所有と境界 — 欄集合の正本は器（scribe2）の型から導出した型付き file、意味の検査は器の編集時の止める仕掛け、folio2 は器・導出・導出物の差分 0 だけを持つ
