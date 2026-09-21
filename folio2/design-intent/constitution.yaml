@@ -1,4 +1,4 @@
-# folio2 憲法 — 正本（v1.1・初回の発効 2026-09-12・第 1.1 版 2026-09-20 = 判断の記録 ADR-11・orchestrator 席 fable 5.1）
+# folio2 憲法 — 正本（v1.2・初回の発効 2026-09-12・第 1.1 版 2026-09-20 = 判断の記録 ADR-11・第 1.2 版 2026-09-21 = 判断の記録 ADR-12・orchestrator 席 fable 5.1）
 #
 # 位置: f2-648.1「day-1 文書」。v0.1（初稿）を敵対レビュー wf_5e659fc9-0ed（7 観点・反証 24 + 追加反証 34・review/summary.md）で
 # 直したもの。裁定 G1〜G16・P1〜P5 に従う。裁定に触れる変更は入れず、承認要求の「論点」として別枠で出す。
@@ -7,7 +7,7 @@
 #   - 段（tier）は「実行時の扱い」（G3）。どの段の条も、外すには §6 の改訂（判断の記録 + 裁定 id + 持ち主の承認）が要る。
 #   - 各条は rationale / binds / mechanism を必ず持つ（G1=B / G2=C / G4=A）。数値は条文に書かず rules 行の id で呼ぶ（P-5）。
 #   - 発効前（v0.x）の変更は meta.changes_from_* に列挙してある（当時は binding: false ゆえ改番は P-7 に触れなかった）。以後の改訂は amended_by。
-# 状態: 発効（持ち主の承認 2026-09-12「承認する」・逐語は f2-648.1 notes と meta.approval）。改訂は §6（A-2 / N-4）。改訂の来歴は各条の amended_by と凍結 anchor の列（anchors/）が持つ＝第 1.1 版は条 P-5 と P-14（判断の記録 ADR-11・承認 2026-09-20）。
+# 状態: 発効（持ち主の承認 2026-09-12「承認する」・逐語は f2-648.1 notes と meta.approval）。改訂は §6（A-2 / N-4）。改訂の来歴は各条の amended_by と凍結 anchor の列（anchors/）が持つ＝第 1.1 版は条 P-5 と P-14（判断の記録 ADR-11・承認 2026-09-20）、第 1.2 版は前文の平易文と条 N-6（判断の記録 ADR-12・承認 2026-09-21）。
 
 schema:
   version: 1
@@ -66,7 +66,7 @@ schema:
 
 meta:
   id: folio2-constitution
-  version: v1.1
+  version: v1.2
   status: effective
   binding: true                   # 発効済み。この版が P-7 / A-2 / N-4 の baseline
   baseline: "初回発効の commit（hash は台帳 f2-648.1 notes に記帳。file は自分の commit hash を持てない）"
@@ -104,7 +104,7 @@ north_star:
 # 前文（条ではない・全条に先立つ・F9 は承認要求の論点）
 precedence:
   text: 条どうしが衝突したら「網羅より揃い ／ 速さより黙らないこと ／ 賢さより戻せること」の順で解き、段どうしが衝突したら「絶対にやらない ＞ 確認してから ＞ いつも守る」の順で解く。
-  plain: 迷ったら「全部そろえる」より「そろっている」、「早い」より「黙って飛ばさない」、「賢い」より「元に戻せる」を選びます。段が食い違ったら、強い段（絶対にやらない）が勝ちます。
+  plain: 迷ったら「全部そろえる」より「そろっている」、「早い」より「黙って飛ばさない」、「賢い」より「元に戻せる」を選びます。段が食い違ったら、「絶対にやらない」＞「確認してから」＞「いつも守る」の順で強い方が勝ちます。
   binds: both
   mechanism: {kind: none, live: now, note: 判断の規則であって機械では検査できない。生成区間（P-14）の先頭に写す。}
   rationale:
@@ -505,17 +505,19 @@ articles:
     relations: {reqs: [NFR1], rules: [R-1, D-3], articles: [P-5]}
 
   - id: N-6
-    title: 見せる先を tailnet の外へ広げない
+    title: 見せる先を同じ端末の中と tailnet の外へ広げない
+    amended_by:
+      - {adr: ADR-12, date: 2026-09-21, approved_by: 持ち主, ruling: f2-648 notes 2026-09-21 20:33 JST（発効の承認・判断の記録 ADR-12 と憲法 第 1.2 版と要件書 v1.23 を 1 つの承認で発効する承認要求への回答）, previous_text: 配信（serve）の接続先（bind 先）が tailnet の外なら、起動を拒む。, rationale: 実装（便 17）は同じ端末の中（loopback）への配信を通し、外へ晒さない狙い（N-6.2）は損なわれない。同じ端末の中の住所は端末の外の機器から直には届かず、中継は「出す」操作として A-1.1 と N-6.2 が受ける＝外へ出る経路は改訂の前後で 1 本も増えない。見出しも同じ向きに改め（前の見出し = 見せる先を tailnet の外へ広げない）、前文の平易文の 3 段の順位の直しを同じ版に同梱した（天井の 17 周目の実態 F-1・13 周目の忠実さ F-1）。}
     tier: never
     binds: tool
     statements:
-      - {id: N-6.1, pattern: unwanted, strength: must, text: 配信（serve）の接続先（bind 先）が tailnet の外なら、起動を拒む。}
+      - {id: N-6.1, pattern: unwanted, strength: must, text: 配信（serve）の接続先（bind 先）が、同じ端末の中（loopback）でも tailnet の中でもないなら、起動を拒む。}
       - {id: N-6.2, pattern: ubiquitous, strength: must-not, text: 配信の出力と、支度表・台帳の中身を、認証なしの公開ネットに晒さない。}
-    plain: 見せる先は自分の端末どうしの私設ネット（tailnet）だけで、外へ向けた配信は機械が起動を止めます。配信で見せるページや、支度表・台帳の中身を、認証なしの公開の場所に出しません。承認済みの文書を版管理（公開 repo）へ置くのは別の話で、A-1 の「出す」として確認します。
+    plain: 見せる先は自分の端末どうしの私設ネット（tailnet）か、同じ端末の中（loopback）だけで、そのどちらでもない先へ向けた配信は機械が起動を止めます。配信で見せるページや、支度表・台帳の中身を、認証なしの公開の場所に出しません。承認済みの文書を版管理（公開 repo）へ置くのは別の話で、A-1 の「出す」として確認します。
     rationale:
       - {kind: folio2-ruling, ref: "要件書 CON3（tailnet のみ）・FR7・G8=A（出す（公開）の Never）・G14=A（承認済み HTML は design-intent/preview/ へ・生 IP は除去）"}
       - {kind: v1-incident, ref: "tailnet-serve の下限（tailnet の住所が無いと起動を拒む）"}
-    mechanism: {kind: reject, live: now, stage: post, polarity: fail-closed, note: tailnet の住所が無いとき serve が起動を拒む（FR7 の確かめ方・day-1 は tailnet-serve script）。}
+    mechanism: {kind: reject, live: now, stage: post, polarity: fail-closed, note: 接続先が同じ端末の中（loopback）でも tailnet の範囲でもないとき serve が起動を拒み、住所を明示しない起動は tailnet の住所を解けなければ拒む（FR7 の確かめ方・day-1 は tailnet-serve script）。}
     note: CON3 の強さは Never 相当なのに見本では A-1（Ask-first）に対応していたねじれを解いた。v0.1 の「生成物」は G14=A（PUBLIC repo への commit）と矛盾したため配信面に絞った。
     relations: {reqs: [CON3, FR7], rules: [D-8], articles: [A-1]}
 
