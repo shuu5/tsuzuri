@@ -528,13 +528,19 @@ fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
             &format!("<a href=\"#{href}\">{}</a>", range(rows)),
         ));
     }
-    let mut figs = vec![
-        "<a href=\"#fig-context\">図 1</a>",
-        "<a href=\"#fig-rail\">図 2</a>",
-    ];
+    let mut ids = vec!["fig-context", "fig-rail"];
     if ctx.verdicts.is_some() {
-        figs.push("<a href=\"#fig-verdicts\">図 3</a>");
+        ids.push("fig-verdicts");
     }
+    // 章 09 の図は自前の図の続きの番号（figures_chapter と同じ数え方・便 74）
+    for fig in &ctx.figures {
+        ids.push(fig.f("id")?.id()?);
+    }
+    let figs: Vec<String> = ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| format!("<a href=\"#{}\">図 {}</a>", face::esc(id), i + 1))
+        .collect();
     o.push(meta_span("図", &figs.join(" · ")));
     o.push(meta_span(
         "版",

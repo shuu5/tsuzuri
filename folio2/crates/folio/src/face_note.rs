@@ -300,7 +300,8 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
         figures_chapter(&mut o, &frame, secs.len() + 1, &figs, &env)?;
     }
     approval_chapter(&mut o, &frame, &meta, &st)?;
-    foot(&mut o, &frame, &meta, id, &counts)?;
+    let chip = face::glossary_chip(dir)?;
+    foot(&mut o, &frame, &meta, id, &counts, &chip)?;
     Ok(format!("{}\n", o.join("\n")))
 }
 
@@ -636,6 +637,11 @@ fn cover(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, st: &Status, n:
     // h1 は短い名（title は文の長さなので副題へ・便 27 の判断の記録の面と同じ）
     o.push(format!("<h1>設計ノート {id}</h1>"));
     o.push(format!("<p class=\"sub-title\">{}</p>", meta.ef("title")?));
+    // 読み手の名札は生成器の固定の 1 行（正本に欄を足さない・便 74）
+    o.push(
+        "<div class=\"summary-card\"><span class=\"ic\">読</span><div><p class=\"lab\">読み手</p><p class=\"txt\">作る人（実装する人）。中の組み立て方（口・検査・契約表）を書く面です。何を作るかは要件書へ、なぜそう決めたかは判断の記録へ。</p></div></div>"
+            .to_string(),
+    );
     if let Some(note) = meta.g("note")? {
         o.push(format!(
             "<div class=\"summary-card\"><span class=\"ic\">注</span><div><p class=\"lab\">注</p><p class=\"txt\">{}</p></div></div>",
@@ -994,7 +1000,8 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, st: &Status) -
     Ok(())
 }
 
-fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts) -> R<()> {
+/// 脚（`chip` = 用語集への札・doc-locator の行の末尾・便 74）。
+fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts, chip: &str) -> R<()> {
     let generated = meta.ef("generated")?;
     let version = meta.ef("version")?;
     let dl = format!(
@@ -1004,6 +1011,6 @@ fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts) -> R
         n.sections,
         n.figures
     );
-    f.foot(o, &format!("{id} {version}"), &generated, &dl);
+    f.foot_aside(o, &format!("{id} {version}"), &generated, &dl, chip);
     Ok(())
 }

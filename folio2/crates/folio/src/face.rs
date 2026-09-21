@@ -971,6 +971,18 @@ impl Frame {
 
     /// prevnext・foot（ft-plain と機械のための面）・doc-locator・body と html の閉じ。`dl` は組み立て済みの HTML。
     pub fn foot(&self, o: &mut Vec<String>, version: &str, generated: &str, dl: &str) {
+        self.foot_aside(o, version, generated, dl, "");
+    }
+
+    /// `foot` と同じ・doc-locator の行の末尾（入口へ戻る の後）に組み立て済みの `aside` を差し込む（便 74）。
+    pub fn foot_aside(
+        &self,
+        o: &mut Vec<String>,
+        version: &str,
+        generated: &str,
+        dl: &str,
+        aside: &str,
+    ) {
         o.push(format!(
             "<nav class=\"prevnext\"><a href=\"{}\"><span class=\"k\">前</span>{}</a><a href=\"{}\"><span class=\"k\">次</span>{}</a></nav>",
             self.prev.0, self.prev.1, self.next.0, self.next.1
@@ -986,12 +998,26 @@ impl Frame {
         o.push("</footer>".to_string());
         o.push("</main>".to_string());
         o.push(format!(
-            "<p class=\"doc-locator\">この文書の所属: 設計文書（design-intent）/ {} — <a href=\"index.html\">入口へ戻る</a></p>",
+            "<p class=\"doc-locator\">この文書の所属: 設計文書（design-intent）/ {} — <a href=\"index.html\">入口へ戻る</a>{aside}</p>",
             self.name
         ));
         o.push("</body>".to_string());
         o.push("</html>".to_string());
     }
+}
+
+/// 用語集への札 1 枚（入口の面の棚の札と同じ字面・語の数は語彙の正本の terms から・章と単位は ANNEXES から・便 74）。
+pub fn glossary_chip(dir: &Path) -> R<String> {
+    let v_doc = load(dir, "vocabulary.yaml")?;
+    let terms = X::root(&v_doc, "vocabulary.yaml").f("terms")?.seq()?.len();
+    let (c, unit) = ANNEXES
+        .iter()
+        .find(|(id, _)| *id == "vocabulary")
+        .map(|(_, a)| *a)
+        .ok_or("付録の表に vocabulary が無い")?;
+    Ok(format!(
+        "<span class=\"annex-chips\"><a href=\"constitution.html#s{c}\">付録 語彙 <span class=\"cnt\">{terms} {unit} → 憲法 §{c}</span></a></span>"
+    ))
 }
 
 fn toc_li(href: &str, n: &str, k: &str, t: &str) -> String {

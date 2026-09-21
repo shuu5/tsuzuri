@@ -1001,3 +1001,64 @@ fn label_fix_retreat_sentence_on_the_cover() {
         "持ち主の裁定で捨てる"
     );
 }
+
+// ── 用語集への札（便 74・delivery-74.md §1 (b)(f)）──
+
+/// 面の doc-locator の行の中の用語集の札の a 要素（札の span が 1 つだけ在ること・行き先を測る）。
+fn glossary_chip_a(html: &str) -> String {
+    let line = html
+        .lines()
+        .find(|l| l.starts_with("<p class=\"doc-locator\">"))
+        .expect("doc-locator の行が無い");
+    assert_eq!(
+        line.matches("<span class=\"annex-chips\">").count(),
+        1,
+        "doc-locator の行に札の span が 1 つでない: {line}"
+    );
+    let chips = &line[line.find("<span class=\"annex-chips\">").unwrap()..];
+    let start = chips.find("<a ").expect("札に a が無い");
+    let end = chips[start..].find("</a>").expect("札の a が閉じていない") + start + "</a>".len();
+    let a = chips[start..end].to_string();
+    assert!(
+        a.starts_with("<a href=\"constitution.html#s7\">"),
+        "札の行き先が constitution.html#s7 でない: {a}"
+    );
+    a
+}
+
+#[test]
+fn f74_adr_foot_links_to_the_glossary() {
+    let a = glossary_chip_a(&fixture_html("f74-chip"));
+    assert_eq!(
+        a,
+        "<a href=\"constitution.html#s7\">付録 語彙 <span class=\"cnt\">2 語 → 憲法 §7</span></a>"
+    );
+    // 語彙の正本に 1 語足すと数が 3 になる（数は正本から来る）
+    let (td, work) = fixture_copy("f74-chip-3");
+    edit(&work.join("vocabulary.yaml"), |t| {
+        t.replacen(
+            "\nfield_terms:",
+            "  - id: third\n    term: 三つ目\n    en: null\n    short: 足した語\n    def: 足した語。\n\nfield_terms:",
+            1,
+        )
+    });
+    let out = td.join("adr-2.html");
+    let run = folio_face("adr", Some("ADR-2"), &work, &out, "--write");
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert!(
+        glossary_chip_a(&html).contains("<span class=\"cnt\">3 語 → 憲法 §7</span>"),
+        "語を足しても札の数が 3 にならない"
+    );
+}
+
+#[test]
+fn f74_glossary_chip_is_verbatim_the_index_chip() {
+    let a = glossary_chip_a(&fixture_html("f74-verbatim"));
+    let index = fs::read_to_string(fixture().join("expected-index.html")).unwrap();
+    assert!(
+        index.contains(&a),
+        "札の a が入口の面の札と逐語で一致しない: {a}"
+    );
+}

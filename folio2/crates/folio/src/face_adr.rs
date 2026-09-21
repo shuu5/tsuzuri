@@ -222,7 +222,7 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
         figures_chapter(&mut o, &f, CHAPTERS.len() + 1, &figs, dir, &ctx)?;
     }
     approval_chapter(&mut o, &f, &a, &st)?;
-    foot(&mut o, &f, &a, id, &counts)?;
+    foot(&mut o, &f, &a, id, &counts, &face::glossary_chip(dir)?)?;
     Ok(format!("{}\n", o.join("\n")))
 }
 
@@ -794,7 +794,8 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, st: &Status) -> R
     Ok(())
 }
 
-fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts) -> R<()> {
+/// 脚（`chip` = 用語集への札・doc-locator の行の末尾・便 74）。
+fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts, chip: &str) -> R<()> {
     let date = a.ef("date")?;
     let basis = a
         .f("basis")?
@@ -812,7 +813,7 @@ fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts) -> R<()
     if n.figures > 0 {
         dl.push_str(&format!("<dt>figures</dt><dd>{}</dd>", n.figures));
     }
-    f.foot(o, id, &date, &dl);
+    f.foot_aside(o, id, &date, &dl, chip);
     Ok(())
 }
 

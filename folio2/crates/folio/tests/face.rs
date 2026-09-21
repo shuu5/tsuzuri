@@ -920,6 +920,11 @@ fn face_srs_figure_3_appears_only_with_verdicts() {
         )
         .replace("<a class=\"fig\" href=\"#fig-verdicts\">図 3</a>", "図 3")
         .replacen(
+            "<a href=\"#fig-1\">図 4</a>",
+            "<a href=\"#fig-1\">図 3</a>",
+            1,
+        )
+        .replacen(
             "<span class=\"fn\">図 4</span>",
             "<span class=\"fn\">図 3</span>",
             1,
@@ -1167,6 +1172,8 @@ fn face_srs_figure_chapter_is_the_only_difference_from_the_figureless_face() {
     let a = cut(&frozen, "<section id=\"s9\"", "<section id=\"approval\"");
     let a = cut_line(&a, "<li><a href=\"#s9\">");
     let a = a.replace("<dt>figures</dt><dd>1</dd>", "");
+    // 表紙の図の列の章 09 の図（便 74）
+    let a = a.replacen(" · <a href=\"#fig-1\">図 4</a>", "", 1);
     // 章の数から数える字（全 N 章・k/N）だけは正本から数えた数（γ）なので揃える
     let a = a
         .replace("全 10 章", "全 9 章")
@@ -1674,4 +1681,81 @@ fn noun_count_projection_label_is_plain() {
         "§5 に「写す範囲」の名札が無い: {five}"
     );
     assert!(!html.contains("射影"), "面に数学の語「射影」が残っている");
+}
+
+// ── 要件書の面の表紙の図の列（便 74・delivery-74.md §1 (d)(f)）──
+
+/// 表紙の「図」の欄の a の列（行き先・番号の字）。
+fn cover_figure_links(html: &str) -> Vec<(String, String)> {
+    let cell = between(
+        html,
+        "<span class=\"m\"><span class=\"k\">図</span><span class=\"v\">",
+        "</span></span>",
+    );
+    cell.split(" · ")
+        .map(|a| {
+            let href = between(a, "<a href=\"#", "\">").to_string();
+            let n = between(a, "\">", "</a>").to_string();
+            (href, n)
+        })
+        .collect()
+}
+
+/// 面の中の figure-panel の id の列（出る順）。
+fn figure_panel_ids(html: &str) -> Vec<String> {
+    let open = "<figure data-component=\"figure-panel\" data-role=\"diagram\" id=\"";
+    html.split(open)
+        .skip(1)
+        .map(|rest| rest[..rest.find('"').unwrap()].to_string())
+        .collect()
+}
+
+fn f74_srs_html(case: &str, mutate: Option<fn(&str) -> String>) -> String {
+    let (td, work) = fixture_copy(case);
+    if let Some(m) = mutate {
+        edit(&work.join("srs.yaml"), m);
+    }
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &work, &out, "--write");
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    html
+}
+
+#[test]
+fn f74_srs_cover_lists_every_figure_panel() {
+    let html = f74_srs_html("f74-cover", None);
+    let links = cover_figure_links(&html);
+    let panels = figure_panel_ids(&html);
+    let hrefs: Vec<&str> = links.iter().map(|(h, _)| h.as_str()).collect();
+    assert_eq!(
+        hrefs,
+        panels.iter().map(String::as_str).collect::<Vec<_>>(),
+        "表紙の図の列と面の figure-panel の列が違う"
+    );
+    for (i, (_, n)) in links.iter().enumerate() {
+        assert_eq!(
+            n,
+            &format!("図 {}", i + 1),
+            "表紙の図の番号が 1 からの連番でない"
+        );
+    }
+    assert_eq!(
+        hrefs,
+        ["fig-context", "fig-rail", "fig-verdicts", "fig-1"],
+        "凍結 fixture の表紙の図の列が 4 つでない"
+    );
+}
+
+#[test]
+fn f74_srs_cover_figure_href_comes_from_the_source() {
+    let html = f74_srs_html(
+        "f74-href",
+        Some(|t| t.replacen("  - id: fig-1\n", "  - id: fig-x\n", 1)),
+    );
+    let links = cover_figure_links(&html);
+    assert_eq!(links.len(), 4, "{links:?}");
+    assert_eq!(links[3], ("fig-x".to_string(), "図 4".to_string()));
+    assert_eq!(figure_panel_ids(&html)[3], "fig-x");
 }

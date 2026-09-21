@@ -1006,3 +1006,53 @@ fn real_yaml(path: &Path) -> Yaml {
     let text = fs::read_to_string(path).unwrap();
     YamlLoader::load_from_str(&text).unwrap().remove(0)
 }
+
+// ── 用語集への札と読み手の名札（便 74・delivery-74.md §1 (c)(f)）──
+
+#[test]
+fn f74_note_foot_links_to_the_glossary() {
+    let html = fixture_html("f74-chip");
+    let line = html
+        .lines()
+        .find(|l| l.starts_with("<p class=\"doc-locator\">"))
+        .expect("doc-locator の行が無い");
+    assert_eq!(
+        line.matches("<span class=\"annex-chips\">").count(),
+        1,
+        "doc-locator の行に札の span が 1 つでない: {line}"
+    );
+    assert!(
+        line.ends_with(
+            "<a href=\"index.html\">入口へ戻る</a><span class=\"annex-chips\"><a href=\"constitution.html#s7\">付録 語彙 <span class=\"cnt\">2 語 → 憲法 §7</span></a></span></p>"
+        ),
+        "doc-locator の行の札の字・行き先が違う: {line}"
+    );
+}
+
+#[test]
+fn f74_note_cover_names_the_reader() {
+    let html = fixture_html("f74-reader");
+    let start = html
+        .find("<header data-component=\"doc-cover-band\">")
+        .expect("表紙が無い");
+    let cover = &html[start..start + html[start..].find("</header>").unwrap()];
+    let reader =
+        "<div class=\"summary-card\"><span class=\"ic\">読</span><div><p class=\"lab\">読み手</p>";
+    assert_eq!(
+        cover.matches(reader).count(),
+        1,
+        "表紙に読み手の名札が 1 枚でない: {cover}"
+    );
+    let note = cover
+        .find("<p class=\"lab\">注</p>")
+        .expect("写しの表紙に注の枠が無い");
+    assert!(
+        cover.find(reader).unwrap() < note,
+        "読み手の名札が注の枠より後に在る"
+    );
+    let source = fs::read_to_string(fixture().join("design-note/full.yaml")).unwrap();
+    assert!(
+        !source.contains("読み手"),
+        "正本に「読み手」の字が在る（欄を足していないはず）"
+    );
+}
