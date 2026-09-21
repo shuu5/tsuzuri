@@ -95,7 +95,8 @@ crates/folio/tests/check.rs に 2 本。
 
 3. f86_unknown_field_cannot_be_loosened_from_the_file: (d) を当てた実の置き場の写しに folio check → 0 ∧ 違反 0。続けて、写しの要件の行 1 つに欄 extras を足す → 不合格 ∧ 未知の欄 がちょうど 1 件で extras を含む。さらに写しの schema.requirement_row の optional に extras を足しても不合格のまま（閉じた一覧は実装の定数が持ち、file の側から緩められない・N-3.1）。
 4. f86_verify_inner_list_is_still_checked: 写しの要件の行の verify から ac を落とす → 不合格 ∧ 断りの字が 「verify の ac が無い（一覧・空でよい）」 のまま（定数化で断りの字面が変わっていない）。
-5. 回帰（期待不変・verify の 2 行目）: crates/folio/tests/schema.rs の f76_ から f78_ を含む既存の歯すべて・tests/check.rs の f75_ 5 本と f77_ と r11_ と床の歯すべて。共通の検証（.vessel.toml の common-verify）が workspace 全部を回すので、面と束と凍結の場合 134 件もそこで見る。
+5. 既存の歯の定数の更新: crates/folio/tests/schema.rs の 98 行からの定数 F77_REGIONS の 1 行目（srs.yaml の行・100〜105 行）を (c) の anchor に合わせて直す（行数 23 → 29・byte 数 708 → 1168・要約値 290e2704… → 3937340f77713b087b33ca43b8fe866ca310b97cd04e5e1f4ce9967e19b724e1）。同 file の 53 行の注釈の 708 byte の字も 1168 に直す。この定数を読む既存の歯（f77_check_covers_the_three_files・f77_regions_match_the_frozen_anchors）は字を変えない（定数の更新で緑に戻る）。--check の標準出力の各行が「（file・N byte）」の形で生成区間の byte 数を載せることは、着地済みの歯 f77_check_covers_the_three_files が既に前提にしている（本便は形を変えない）。歯 f78_srs_note_does_not_claim_scope_m1_is_absent（1238 行）は注の字と scope_m1 の節だけを見るので影響しない。
+6. 回帰（5 の定数の更新の後は期待不変・verify の 2 行目）: crates/folio/tests/schema.rs の f76_ から f78_ を含む既存の歯すべて・tests/check.rs の f75_ 5 本と f77_ と r11_ と床の歯すべて。共通の検証（.vessel.toml の common-verify）が workspace 全部を回すので、面と束と凍結の場合 134 件もそこで見る。
 
 ### (g) 大きさ
 
@@ -139,5 +140,5 @@ section = "1"
 write-set = ["crates/folio/src/check.rs", "tests/fixtures/schema/srs-region.txt", "design-intent/srs.yaml", "crates/folio/tests/schema.rs", "crates/folio/tests/check.rs"]
 verify = ["cargo nextest run -p folio --test schema --test check f86_", "cargo nextest run -p folio --test schema --test check", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "f86_ の歯 4 本（要件書の生成区間が新しい凍結 anchor と byte 一致し anchor の自己検査が通る・正本の要件の行に現れる欄の集合が生成区間の群に過不足なく収まる・知らない欄が 1 件で file の側から緩められない・verify の ac の断りの字面が不変）が緑、tests/schema.rs と tests/check.rs の既存の歯が全部緑（f75_ 5 本と f77_ と f78_ を含む）、folio schema --check が 8 file とも一致、folio check が合格（違反 0・まだ分からない 0）、clippy が 0 警告で CI が通る"
+done = "f86_ の歯 4 本（要件書の生成区間が新しい凍結 anchor と byte 一致し anchor の自己検査が通る・正本の要件の行に現れる欄の集合が生成区間の群に過不足なく収まる・知らない欄が 1 件で file の側から緩められない・verify の ac の断りの字面が不変）が緑、tests/schema.rs の凍結 anchor の定数（F77_REGIONS の srs.yaml の行・行数・byte 数・要約値）を新しい anchor に合わせた上で tests/schema.rs と tests/check.rs の既存の歯が全部緑（f75_ 5 本と f77_ と f78_ を含む）、folio schema --check が 8 file とも一致、folio check が合格（違反 0・まだ分からない 0）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
