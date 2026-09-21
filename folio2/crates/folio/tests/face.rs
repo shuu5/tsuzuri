@@ -1519,3 +1519,159 @@ fn tier_legend_words_come_from_the_shared_table() {
         );
     }
 }
+
+// ── 章の見出しの助数詞と §5 の名札（便 70・docs/design/delivery-70.md §1 (e)）──
+
+/// 便 63 の数えの規則で組んだ字（生成側の count_word を呼ばず歯の側で組む・9 までは「つ」・10 以上は「N の」）。
+fn counted(n: usize, noun: &str) -> String {
+    if n <= 9 {
+        format!("{n} つの{noun}")
+    } else {
+        format!("{n} の{noun}")
+    }
+}
+
+/// 規則を外した字（9 以下で「つ」が落ちた形・10 以上で「つ」が付いた形）。
+fn miscounted(n: usize, noun: &str) -> String {
+    if n <= 9 {
+        format!("{n} の{noun}")
+    } else {
+        format!("{n} つの{noun}")
+    }
+}
+
+/// 数えの字が目次と章の帯の 2 か所に出ていて、規則を外した形が無い（同じ数の節が重なっても数が合う）。
+fn assert_counted(html: &str, counts: &[(usize, &str)], what: &str) {
+    let wants: Vec<String> = counts.iter().map(|(n, noun)| counted(*n, noun)).collect();
+    for ((n, noun), want) in counts.iter().zip(&wants) {
+        assert!(html.contains(want), "{what}: 「{want}」が面に無い");
+        let bad = miscounted(*n, noun);
+        assert!(
+            !html.contains(&bad),
+            "{what}: 助数詞の規則を外れた「{bad}」が在る"
+        );
+    }
+    let mut distinct: Vec<&String> = wants.iter().collect();
+    distinct.sort();
+    distinct.dedup();
+    let hits: usize = distinct
+        .iter()
+        .map(|w| html.matches(w.as_str()).count())
+        .sum();
+    assert_eq!(
+        hits,
+        2 * wants.len(),
+        "{what}: 数えの字が目次と章の帯の 2 か所 × {} 章で出ていない",
+        wants.len()
+    );
+}
+
+/// 要件書の正本の 3 節の数（歯が自分で数える・面の側の数え方に依らない）。
+fn srs_counts(dir: &Path) -> Vec<(usize, &'static str)> {
+    let s = load_yaml_at(dir, "srs.yaml");
+    [
+        ("requirements", "機能要件"),
+        ("nonfunctional", "非機能要件"),
+        ("acceptance", "受入基準"),
+    ]
+    .iter()
+    .map(|(sec, noun)| (seq(&s[*sec], sec).len(), *noun))
+    .collect()
+}
+
+#[test]
+fn noun_count_srs_uses_the_counter_word() {
+    // 凍結の正本（3 節とも 9 以下 = 「つ」が付く）
+    let (td, work) = fixture_copy("noun-count-srs");
+    let out = td.join("srs.html");
+    let run = folio_face("srs", &work, &out, "--write");
+    let frozen = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&run, "folio face --face srs --write"),
+        0,
+        "{}",
+        stderr(&run)
+    );
+    assert_counted(&frozen, &srs_counts(&fixture()), "凍結の正本の要件書の面");
+
+    // 実の正本（機能要件と受入基準は 10 以上・非機能要件は 3 = 「3 の非機能要件」にならない）
+    let (td, _, real) = real_srs("noun-count-srs-real");
+    let _ = fs::remove_dir_all(&td);
+    let counts = srs_counts(&design_intent());
+    assert_counted(&real, &counts, "実の正本の要件書の面");
+    assert!(
+        counts.iter().any(|(n, _)| *n >= 10) && counts.iter().any(|(n, _)| *n <= 9),
+        "実の正本が 10 以上と 9 以下の両方の節を持たない（歯の前提）: {counts:?}"
+    );
+}
+
+#[test]
+fn noun_count_constitution_is_unchanged_by_the_move() {
+    for (dir, case, what) in [
+        (fixture(), "noun-count-const", "凍結の正本の憲法の面"),
+        (
+            design_intent(),
+            "noun-count-const-real",
+            "実の正本の憲法の面",
+        ),
+    ] {
+        let td = temp_dir(case);
+        let out = td.join("constitution.html");
+        let run = folio_face("constitution", &dir, &out, "--write");
+        let html = fs::read_to_string(&out).unwrap_or_default();
+        let _ = fs::remove_dir_all(&td);
+        assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+        // 段ごとの数は正本の meta.counts から歯が自分で読む（再生成する写しに依らない oracle）
+        let c = load_yaml_at(&dir, "constitution.yaml");
+        let counts: Vec<(usize, &str)> = ["always", "ask-first", "never"]
+            .iter()
+            .map(|key| {
+                let n = c["meta"]["counts"][*key]
+                    .as_i64()
+                    .unwrap_or_else(|| panic!("meta.counts.{key} が数でない"));
+                (usize::try_from(n).expect("meta.counts が負"), "原則")
+            })
+            .collect();
+        assert_counted(&html, &counts, what);
+    }
+}
+
+/// 種別の鍵 → 表の種別の欄と同じ名札（歯の側で持つ・生成側の表を呼ばない）。
+const RULE_KIND_LABELS: [(&str, &str); 4] = [
+    ("deny", "測って落とす"),
+    ("build-check", "生成時の検査"),
+    ("detect", "記録のみ"),
+    ("human-review", "人が守る作法"),
+];
+
+#[test]
+fn noun_count_rule_kind_legend_uses_the_labels() {
+    let (td, _, html) = real_face("noun-count-legend");
+    let _ = fs::remove_dir_all(&td);
+    let r = load_yaml("rules.yaml");
+    let meaning = &r["schema"]["kind_meaning"];
+    for (key, label) in RULE_KIND_LABELS {
+        let m = meaning[key]
+            .as_str()
+            .unwrap_or_else(|| panic!("rules.yaml の schema.kind_meaning.{key} が無い"));
+        let want = format!("{label}（{key}）: {}", esc(m));
+        assert!(html.contains(&want), "§5 の凡例に「{want}」が無い");
+        assert!(
+            !html.contains(&format!("{key}: ")),
+            "§5 の凡例に英語の鍵だけの形「{key}: 」が残っている"
+        );
+    }
+}
+
+#[test]
+fn noun_count_projection_label_is_plain() {
+    let (td, _, html) = real_face("noun-count-projection");
+    let _ = fs::remove_dir_all(&td);
+    let five = between(&html, "<section id=\"s5\"", "<section id=\"s6\"");
+    assert!(
+        five.contains("写す範囲"),
+        "§5 に「写す範囲」の名札が無い: {five}"
+    );
+    assert!(!html.contains("射影"), "面に数学の語「射影」が残っている");
+}

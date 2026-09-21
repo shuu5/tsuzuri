@@ -8,9 +8,9 @@ use std::path::Path;
 
 use crate::constitution_enums as ce;
 use crate::face::{
-    self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, Tier, X, anchor, binds_label, card, esc, hint,
-    hint_q, mechanism_kind_label, mechanism_live_label, pattern_label, polarity_label, rationale,
-    retreat_kind_label, rule_kind_label, rule_status_class, section_anchor, split_dash,
+    self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, Tier, X, anchor, binds_label, card, count_word,
+    esc, hint, hint_q, mechanism_kind_label, mechanism_live_label, pattern_label, polarity_label,
+    rationale, retreat_kind_label, rule_kind_label, rule_status_class, section_anchor, split_dash,
     stage_label, strength_label, strength_meaning, tier_label, tier_of, val,
 };
 use crate::parts::catalog::Component;
@@ -280,16 +280,6 @@ fn tier_count(ctx: &Ctx<'_>, key: &str) -> usize {
     ctx.arts.iter().filter(|a| a.tier_key == key).count()
 }
 
-/// 段の章の見出しの数えの字（便 63・天井の 11 周目の読みやすさ F-2）。日本語の助数詞「つ」は 9 までにしか付かないので、
-/// 10 以上は「{n} の原則」にする。目次と章の帯の 2 か所が同じ字面になるよう、ここ 1 か所から出す。
-fn count_word(n: usize) -> String {
-    if n <= 9 {
-        format!("{n} つの原則")
-    } else {
-        format!("{n} の原則")
-    }
-}
-
 /// 規範文の末尾に出る札（MUST / MUST NOT / SHOULD）の意味を言う凡例 1 行（便 63・読みやすさ F-1）。
 /// 札の字も意味の字も `face.rs` の名札の表から組み、この file に写しを持たない（1 か所の正本・P-6.3）。
 /// 並びは導出した型の ALL の順（= 憲法の値域の file の順・要件書の面 §3 の凡例と同じ）。
@@ -396,7 +386,7 @@ fn chapter_h2(ctx: &Ctx<'_>, i: usize, c: &X<'_>, r: &X<'_>) -> R<String> {
     Ok(match i {
         0 => "何のために・誰のために・何をあきらめるか".to_string(),
         1 => format!("{} 段の意味 — {}", ctx.tiers.len(), tier_names(ctx)),
-        2..=4 => count_word(tier_count(ctx, &ctx.tiers[i - 2].0)),
+        2..=4 => count_word(tier_count(ctx, &ctx.tiers[i - 2].0), "原則"),
         5 => format!(
             "数値と作法の表 — 閾値行 {}・開発規律行 {}",
             r.f("thresholds")?.seq()?.len(),
@@ -500,7 +490,7 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
 }
 
 fn tier_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, i: usize, key: &str, tier: &Tier) -> R<()> {
-    let h2 = count_word(tier_count(ctx, key));
+    let h2 = count_word(tier_count(ctx, key), "原則");
     FRAME.band(o, i + 2, tier.name, &h2, Some(tier.meaning));
     o.push("<div class=\"chapbody\">".to_string());
     // 札の凡例は 3 つの段の章の最初の 1 か所だけ（同じ札が続く章で繰り返さない・便 63）
@@ -729,12 +719,19 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
     );
     o.push("<div class=\"chapbody\">".to_string());
     o.push("<div class=\"legend-line\"><span>状態: </span><span><span class=\"state ok\">凍結</span> = 値は動かさない（変えるなら裁定が要る）／<span class=\"state warn\">仮</span> = 値は入っているが確定前／<span class=\"state\">未定</span> = まだ値が無い</span></div>".to_string());
+    // 凡例の種別の字は表の種別の欄と同じ名札（`face.rs` の rule_kind_label）から出し、正本の鍵は括弧に添える
+    // （便 70・天井の 12 周目の読みやすさ F-5）。鍵が種別の値域に無ければ Err（fail-closed）。
     let kinds = r
         .f("schema")?
         .f("kind_meaning")?
         .pairs()?
         .iter()
-        .map(|(k, x)| Ok(format!("{}: {}", esc(k), x.e()?)))
+        .map(|(k, x)| {
+            let label = rules::RuleKind::from_name(k)
+                .map(rule_kind_label)
+                .ok_or_else(|| format!("{}: rules 行の種別の表に無い値「{k}」", x.at))?;
+            Ok(format!("{label}（{}）: {}", esc(k), x.e()?))
+        })
         .collect::<R<Vec<_>>>()?
         .join("／");
     o.push(format!(
@@ -749,7 +746,7 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
         for (key, label) in [
             ("note", "注"),
             ("population", "母集団"),
-            ("projection", "射影"),
+            ("projection", "写す範囲"),
             ("basis", "根拠"),
             ("same_failure", "同じ種類"),
         ] {

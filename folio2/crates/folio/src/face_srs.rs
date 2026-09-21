@@ -12,8 +12,8 @@ use std::path::Path;
 use crate::constitution_enums as ce;
 use crate::face::{
     self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, METHOD, R, TONE, X,
-    anchor, card, hint, hint_q, method_label, pattern_label, strength_label, strength_meaning,
-    strength_prio,
+    anchor, card, count_word, hint, hint_q, method_label, pattern_label, strength_label,
+    strength_meaning, strength_prio,
 };
 use crate::parts::catalog::Component;
 
@@ -567,11 +567,18 @@ fn chapter_h2(ctx: &Ctx<'_>, n: usize) -> String {
     match n {
         1 => "「これができたら成功」を先に決める".to_string(),
         2 => "誰が登場し、何を作り、何を作らないか".to_string(),
-        3 => format!("{} の機能要件 — いつ・何をするか", ctx.fr.len()),
-        4 => format!("{} の非機能要件 — 数で測れる約束", ctx.nfr.len()),
+        // 数えの助数詞は 3 面の共有の口から（便 70・天井の 12 周目の読みやすさ F-2）
+        3 => format!(
+            "{} — いつ・何をするか",
+            count_word(ctx.fr.len(), "機能要件")
+        ),
+        4 => format!(
+            "{} — 数で測れる約束",
+            count_word(ctx.nfr.len(), "非機能要件")
+        ),
         5 => format!(
-            "{} の受入基準 — 何を見せられたら「できた」か",
-            ctx.acs.len()
+            "{} — 何を見せられたら「できた」か",
+            count_word(ctx.acs.len(), "受入基準")
         ),
         6 => "設計の前に決まっていること".to_string(),
         7 => {
