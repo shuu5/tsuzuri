@@ -210,7 +210,7 @@ articles:
       - {kind: folio2-ruling, ref: "裁定 #4（正本 YAML・HTML は生成物）"}
       - {kind: v1-incident, ref: "v1 憲法の正本が手書き HTML（origin 22,748 byte）で、消費側（scribe2）が 834 行の HTML parser を自作した（ADR-0051 層分離・ADR-0045 逐語 extract）。生成物は 90,122 byte"}
       - {kind: v1-incident, ref: "ADR-0033 §2.3 で Option B（両面手書き + gate）を選び、45 日後（2026-05-29 → 07-13）の ADR-0050 で Option A'（正本から derive）へ全面転換。ADR-0052（手動同鏡は人の規律に依存し実際に drift）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（folio inject --check〔CLAUDE.md の生成区間〕・folio render --check〔読み物〕・folio build --check〔配信先の全面〕・folio face と folio figure と folio schema の --check）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（folio inject --check〔CLAUDE.md の生成区間〕・folio build --check〔配信先の全面〕・folio face と folio figure と folio schema の --check。読み物の folio render --check は 2026-09-21 に退役）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
     retreat: {kind: spike, condition: 憲法の改訂表現（del/ins・amended_by）が YAML で表せないと spike 1 で分かったら、憲法だけ二正本 + byte 束縛へ退避する。}
     relations: {reqs: [FR4, FR6], articles: [P-14]}
 
@@ -462,7 +462,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "N2 / C1.2（規則を散文・memory・chat にだけ置かない・生成された文書の中の手書き規範文は 0 行）"}
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18 の散文 hook 規則・rules.html 248KB"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: ① folio が生成する文書（読み物・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = folio render --check と folio inject --check）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（folio inject --check が数える）。検査対象は folio2 が所有する文書に限る。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: ① folio が生成する文書（配信先の面・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = folio build --check と folio inject --check。読み物の folio render --check は 2026-09-21 に退役）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（folio inject --check が数える）。検査対象は folio2 が所有する文書に限る。}
     note: 見本 v4 の P-5（Always）に含まれていた禁止側を Never へ置いた（G12 の改番）。
     relations: {rules: [R-16], articles: [P-5, P-14, P-17]}
 
