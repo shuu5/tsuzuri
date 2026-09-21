@@ -373,7 +373,7 @@ requirements:
     goals: [GOAL4]
     figures: [図1, 図3]
     milestone: M2
-    note: 判断の記録 ADR-8 決定 (3)(4)(5)。止める所見の反証の 2 段目も同じ欄の決まりで受ける。v1.24 で規範文と平易文に、観点ごとの 3 値と日付を面の天井の名札として出す口の 1 文を足した（天井の 20 周目 実態との整合 F-1）。この口は便 40 で着地しており（部品 ceiling-stamp・実装 crates/folio/src/face.rs の ceiling_stamp・旗は folio face --ceiling と folio build --ceiling・歯 crates/folio/tests/badge.rs・部品目録 design-intent/preview/parts.json）、根拠は判断の記録 ADR-8 決定 (4) と部品目録だけが持っていた。要件 FR17 が第 1.18 版で行った補い（実装に在る口を要件の文が言っていなかった）と同じ形で、実装は変えない。
+    note: 判断の記録 ADR-8 決定 (3)(4)(5)。止める所見の反証の 2 段目も同じ欄の決まりで受ける。v1.24 で規範文と平易文に、観点ごとの 3 値と日付を面の天井の名札として出す口の 1 文を足した（天井の 20 周目 実態との整合 F-1）。この口は便 40 で着地しており（部品 ceiling-stamp・実装 crates/folio/src/face.rs の ceiling_stamp・面は印 design-intent/preview/ceiling-stamp.yaml を読む〔便 83・台帳 f2-648.121・2026-09-22 に旗 --ceiling を外した〕・歯 crates/folio/tests/badge.rs・部品目録 design-intent/preview/parts.json）、根拠は判断の記録 ADR-8 決定 (4) と部品目録だけが持っていた。要件 FR17 が第 1.18 版で行った補い（実装に在る口を要件の文が言っていなかった）と同じ形で、実装は変えない。
   - id: FR19
     title: 欄の決まりの file と天井の正本と規則の表の決まりの部分を床の定数から導出する（schema）
     pattern: event
