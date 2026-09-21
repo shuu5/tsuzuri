@@ -53,7 +53,7 @@ crates/folio/src/main.rs の mod の列（3 行から 40 行）に face_labels �
    - crates/folio/src/face.rs にその 8 本の定義の頭が 1 つも無い。
    - crates/folio/src/face.rs に face_labels を丸ごと再輸出する行が 1 本だけ在る。
    file の読みは歯の file の位置（CARGO_MANIFEST_DIR）から repo の根を辿る既存の作り方（tests/face.rs の repo_root と同じ形）で行う。
-2. 回帰（期待不変）は 2 段で見る。verify の 2 行目 = write-set に在る歯の file 5 本（tests/face.rs・tests/face_constitution.rs・tests/face_srs.rs・tests/site.rs・tests/badge.rs）の既存の歯すべてと、face.rs の単体の歯 mod face_tests の 9 本（名札の凍結の針を含む・--bin folio で走らせる）。凍結の写し 7 本との byte 一致はこの段で見られる。残りの歯の file 4 本（tests/face_index.rs・tests/face_adr.rs・tests/face_note.rs・tests/parts.rs）は本便が触らず verify にも write-set にも名指さない。それらは共通の検証（.vessel.toml の common-verify = workspace 全体の nextest）で回る。
+2. 回帰（期待不変）は 2 段で見る。verify の 2 行目 = write-set に在る歯の file 5 本（tests/face.rs・tests/face_constitution.rs・tests/face_srs.rs・tests/site.rs・tests/badge.rs）の既存の歯すべて。凍結の写し 7 本との byte 一致はこの段で見られる。face.rs の単体の歯 mod face_tests の 9 本（名札の凍結の針を含む）と、本便が触らない歯の file 4 本（tests/face_index.rs・tests/face_adr.rs・tests/face_note.rs・tests/parts.rs）は verify にも write-set にも名指さず、共通の検証（.vessel.toml の common-verify = workspace 全体の nextest）で回る。器の受付は verify の旗 --bin の次の語を filter 語と読むので、単体の歯を verify の行で名指さない（席の実測 2026-09-22）。
 
 ### (f) 大きさ
 
@@ -97,7 +97,7 @@ title = "face.rs の名札と名札の表の 2 区間（308 行・公開の名 2
 req = ["FR4"]
 section = "1"
 write-set = ["-crates/folio/src/face.rs", "+crates/folio/src/face_labels.rs", "crates/folio/src/main.rs", "+crates/folio/tests/face_labels.rs", "crates/folio/tests/face.rs", "crates/folio/tests/face_constitution.rs", "crates/folio/tests/face_srs.rs", "crates/folio/tests/site.rs", "crates/folio/tests/badge.rs"]
-verify = ["cargo nextest run -p folio --test face_labels f87_", "cargo nextest run -p folio --bin folio --test face --test face_constitution --test face_srs --test site --test badge", "cargo clippy --workspace --all-targets -- -D warnings"]
+verify = ["cargo nextest run -p folio --test face_labels f87_", "cargo nextest run -p folio --test face --test face_constitution --test face_srs --test site --test badge", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "f87_ の歯 1 本（器の式で face.rs が 1250 行以下・移した 8 本の定義が新しい module に在り face.rs に無い・再輸出の行が 1 本）が緑、tests/face.rs と tests/face_constitution.rs と tests/face_srs.rs と tests/site.rs と tests/badge.rs の既存の歯と face.rs の単体の歯 mod face_tests の 9 本（--bin folio）が全部緑（凍結の写し 7 本との byte 一致と名札の凍結の針を含む）、clippy が 0 警告で CI が通る"
+done = "f87_ の歯 1 本（器の式で face.rs が 1250 行以下・移した 8 本の定義が新しい module に在り face.rs に無い・再輸出の行が 1 本）が緑、tests/face.rs と tests/face_constitution.rs と tests/face_srs.rs と tests/site.rs と tests/badge.rs の既存の歯が全部緑（凍結の写し 7 本との byte 一致を含む）、共通の検証（workspace 全体の nextest）で face.rs の単体の歯 mod face_tests の 9 本（名札の凍結の針）と残りの歯の file 4 本も緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
