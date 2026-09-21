@@ -496,9 +496,9 @@ figures:
     diagram_type: workflow
     meta:
       title: 文書が読める形になって届くまで
-      subtitle: 書く → 機械が確かめる → ページにする → 私設ネットの中だけで見せる。確かめられなければ止めて知らせる。
+      subtitle: 書く → 機械が確かめる → ページにする → 同じ端末の中か私設ネット（tailnet）の中だけで見せる。確かめられなければ止めて知らせる。
       quality_profile: showcase
-      legend: {mode: auto, entries: {frontend: {label: 見せる側（私設ネットの中の面）}, backend: {label: 道具の処理}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人・持ち主）}}}
+      legend: {mode: auto, entries: {frontend: {label: 見せる側（同じ端末か私設ネットの中の面）}, backend: {label: 道具の処理}, security: {label: 確かめて止める側}, external: {label: 人の側（書く人・持ち主）}}}
     lanes:
     - id: writer
       label: 書く人
@@ -535,9 +535,9 @@ figures:
       lane: folio
       col: 3
       type: frontend
-      label: 私設ネットの中で見せる
-      sublabel: 公開ネットには出さない
-      width: 160
+      label: 端末内か私設ネットで見せる
+      sublabel: 公開ネットには出さない（N-6.1）
+      width: 190
     - id: walk
       lane: owner
       col: 4
