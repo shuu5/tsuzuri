@@ -18,7 +18,7 @@
 
 範囲の判断 2 つ: (1) 入口の正本の最上位の節の閉じた一覧（crates/folio/src/entrance.rs の 18 行の定数 INDEX_TOP_LEVEL）も同じ生成区間に載せる。生成区間を足す以上この定数に 1 語足す必要があり、天井の正本・規則の表の生成区間も最上位の節の一覧を先頭に持つ形で揃っているためである。ADR-11 決定 (4)⑤ は要件書・語彙・入口・相談窓口の同じ一覧を別便に置くが、入口の分だけ本便が先に片付く（残りの 3 file は (4)⑤ のまま）。(2) 読む順番（lanes）は対象外とする。実測 = 面の生成器（face_index.rs の 1109 行）も床（entrance.rs の 100 行）も行の id の閉じた一覧を持たず、行は自由な id で足せる＝そもそも二重の記述が無い。
 
-(a) 表の鍵の列を組み立て時に取り出す。crates/folio/src/face.rs（生の行 1397・正規化 1306・余地 194）の 4 つの表の直後に、鍵の列だけを取り出す小さな const fn と、それを当てた 4 本の定数 SHELF_DOC_IDS・SHELF_RELATION_IDS・ANNEX_IDS・SHELF_LEGEND_IDS を置く。形は次のとおりで、長さは表の長さから取る（手書きの 2 枚目の一覧は置かない・P-6.4）。
+(a) 表の鍵の列を組み立て時に取り出す。crates/folio/src/entrance.rs（床の木と同じ file・face.rs の 4 つの表は既に pub const なので face.rs は 1 行も触らない＝受付の余地が 93 行で size S の見積に足りないため〔改訂 b〕）に、鍵の列だけを取り出す小さな const fn と、それを当てた 4 本の定数 SHELF_DOC_IDS・SHELF_RELATION_IDS・ANNEX_IDS・SHELF_LEGEND_IDS を置く（表は face:: の path で参照する）。形は次のとおりで、長さは表の長さから取る（手書きの 2 枚目の一覧は置かない・P-6.4）。
 
 ```rust
 /// 表の鍵の列（id だけ）を組み立て時に取り出す。長さは表の長さと同じでなければ組み立てが通らない。
@@ -74,7 +74,7 @@ schema:
 (h) 歯（関数名は f76_ で始める・`grep -rn 'fn f76_' crates/folio/tests` は今 0 本・src の側も同じ語で始める）。
 
 1. f76_index_floor_derives_the_frozen_anchor_byte_for_byte（crates/folio/src/entrance.rs の単体の歯）: schema.rs の derive に FLOOR を渡した結果が凍結 anchor tests/fixtures/schema/index-region.txt と byte 一致。
-2. f76_index_floor_is_the_frozen_closed_id_sets（同）: FLOOR の top_level が 6 語、shelf の下の 4 つの列が (b) の字面と順のとおり（字面を歯に直に書く凍結の針）。かつ 4 つの列が face.rs の 4 本の定数と同一の中身であること（表から取り出した列であることの針）。
+2. f76_index_floor_is_the_frozen_closed_id_sets（同）: FLOOR の top_level が 6 語、shelf の下の 4 つの列が (b) の字面と順のとおり（字面を歯に直に書く凍結の針）。かつ 4 つの列が entrance.rs の 4 本の定数と同一の中身であること（face.rs の表から取り出した列であることの針）。
 3. f76_schema_check_matches_the_real_index_file_and_its_frozen_digest（crates/folio/tests/schema.rs）: 実の設計文書の置き場の写しに --check → 0 ∧ 標準出力が 5 行 ∧ 5 行目に index.yaml と 860 byte ∧ 生成区間を sha256 で測り直して (b) の値と同じ ∧ 行数 9 ∧ 生成区間が schema の行で始まる ∧ 印の前に相談窓口の節が在り印の後は file の終わり。既存の定数 TARGETS は 4 から 5 に上げる（ほかの歯の期待は不変）。
 4. f76_schema_check_fails_on_one_byte_drift_inside_the_index_region（同）: 写しの入口の正本の生成区間の 1 byte を書き換えて --check → 1 ∧ index.yaml ∧ 導出と違う旨 ∧ 先の 4 本の file は触らない。
 5. f76_schema_check_is_unknown_without_the_index_begin_marker（同）: 入口の正本の begin の印を消す → --check も --write も 2 ∧ index.yaml の印が 1 対でない旨。
@@ -84,18 +84,18 @@ schema:
 9. f76_face_index_legend_order_comes_from_the_table（同）: 凡例の 4 行の並びを入れ替えた写しから出した面が、入れ替える前の面と byte 一致（並びは表が決める）。
 10. 回帰（期待不変・verify の 2 行目）: tests/schema.rs・tests/entrance.rs・tests/face_index.rs の既存の歯すべて。tests/check.rs（命令の閉じた一覧 11 本を含む）・tests/floor_cases.rs（凍結の場合 134 件）・面と束の歯は共通の検証が回す。実測 = 凍結の場合 134 件に入口の正本を書き換える場合は 1 つも無く、床の写しの入口の正本 20 本は生成区間を持たないまま通る。
 
-(i) 大きさと接続。新規 file は 1 本（tests/fixtures/schema/index-region.txt・9 行）。既存 = face.rs（+約 18 行・余地 194 → 約 176）・entrance.rs（+約 55 行・余地 1261 → 約 1206）・face_index.rs（+約 6 行・余地 209 → 約 203）・schema.rs（+約 3 行・余地 1062 → 約 1059）・tests/schema.rs（正規化 826・+約 110 行）・tests/entrance.rs（正規化 271・+約 30 行）・tests/face_index.rs（正規化 1379・+約 30 行）・design-intent/index.yaml（+13 行）。size S（src の各 file の余地はどれも 100 以上）。行数は生の行と正規化（空行を除き幅 120 で折る）の両方を書いたが、受付のときは席が測り直す。crates/folio/src/main.rs・check.rs・ceiling.rs・rules.rs・adr.rs・note.rs・build.rs・部品目録 design-intent/preview/parts.json・様式 folio.css・凍結の写しの面・tests/floor_cases.yaml・CI の yml は触らない。外部 crate は増やさない。先行の便は無い（便 74 行 bw は main 26fe980 に着地済みで、本便が触る face.rs の表の並びとは重ならない）。
+(i) 大きさと接続。新規 file は 1 本（tests/fixtures/schema/index-region.txt・9 行）。既存 = entrance.rs（+約 73 行・余地 1261 → 約 1188・face.rs は触らない）・face_index.rs（+約 6 行・余地 209 → 約 203）・schema.rs（+約 3 行・余地 1062 → 約 1059）・tests/schema.rs（正規化 826・+約 110 行）・tests/entrance.rs（正規化 271・+約 30 行）・tests/face_index.rs（正規化 1379・+約 30 行）・design-intent/index.yaml（+13 行）。size S（src の各 file の余地はどれも 100 以上）。行数は生の行と正規化（空行を除き幅 120 で折る）の両方を書いたが、受付のときは席が測り直す。crates/folio/src/main.rs・check.rs・ceiling.rs・rules.rs・adr.rs・note.rs・build.rs・部品目録 design-intent/preview/parts.json・様式 folio.css・凍結の写しの面・tests/floor_cases.yaml・CI の yml は触らない。外部 crate は増やさない。先行の便は無い（便 74 行 bw は main 26fe980 に着地済みで、本便が触る face.rs の表の並びとは重ならない）。
 
 ## 2. 範囲
 
-- 入れる: 表の鍵の列を取り出す口と 4 本の定数（face.rs）・床の木 FLOOR と最上位の節の 1 語（entrance.rs）・命令の 5 本目の対象（schema.rs）・入口の正本の生成区間（design-intent/index.yaml）・凡例を過不足なしに（face_index.rs）・凍結 anchor 1 本・歯 9 本。
+- 入れる: 表の鍵の列を取り出す口と 4 本の定数（entrance.rs）・床の木 FLOOR と最上位の節の 1 語（entrance.rs）・命令の 5 本目の対象（schema.rs）・入口の正本の生成区間（design-intent/index.yaml）・凡例を過不足なしに（face_index.rs）・凍結 anchor 1 本・歯 9 本。
 - 入れない: 要件書 第 1.22 版（席の PR・持ち主の承認・先行）・床が入口の正本の生成区間を床の木と突き合わせること（写しの fixture 20 本を直さないため・便 53 と同じ線引き）・見た目の値（置き場の class・面の file 名・原語の札・区切り・章の番号と単位・sw の class）を生成区間へ出すこと・読む順番（lanes）の行（閉じた id の集合が無い）・要件書と語彙と相談窓口の最上位の節の一覧（ADR-11 決定 (4)⑤）・天井の印の付け直し（周の手順）・入口の面の見た目と正本の行の中身。
 
 ## 3. 部品
 
 | id | 名 | 役 |
 |---|---|---|
-| ids | 鍵の列 | face.rs の const fn と 4 本の id の定数（表から取り出す） |
+| ids | 鍵の列 | entrance.rs の const fn と 4 本の id の定数（face.rs の pub const の表から取り出す） |
 | floor | 床の木 | entrance.rs の FLOOR（凍結 anchor と byte 一致・最上位の節は 6 語） |
 | target | 対象 | schema.rs の TARGETS の 5 本目（index.yaml と entrance.rs の FLOOR） |
 | region | 生成区間 | design-intent/index.yaml の末尾（注釈 1 行 + 印 2 本 + 9 行） |
@@ -119,7 +119,7 @@ id = "by"
 title = "入口の棚の閉じた id の集合 4 つ（文書・付録・関係・凡例）と最上位の節の一覧を、実装の表から取り出した定数を正本として入口の正本 index.yaml の生成区間へ導出し、命令 folio schema の 5 本目の対象に足す。凡例の検査を片方向から過不足なしに揃える（見た目の値は生成区間へ出さない・床は突き合わせない・ADR-11 決定 (3)(ウ)(オ) と (4)④）"
 req = ["FR4", "FR5", "FR19"]
 section = "1"
-write-set = ["crates/folio/src/face.rs", "crates/folio/src/entrance.rs", "crates/folio/src/face_index.rs", "crates/folio/src/schema.rs", "crates/folio/tests/schema.rs", "crates/folio/tests/entrance.rs", "crates/folio/tests/face_index.rs", "+tests/fixtures/schema/index-region.txt", "design-intent/index.yaml"]
+write-set = ["crates/folio/src/entrance.rs", "crates/folio/src/face_index.rs", "crates/folio/src/schema.rs", "crates/folio/tests/schema.rs", "crates/folio/tests/entrance.rs", "crates/folio/tests/face_index.rs", "+tests/fixtures/schema/index-region.txt", "design-intent/index.yaml"]
 verify = ["cargo nextest run -p folio f76_", "cargo nextest run -p folio --test schema --test entrance --test face_index", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "f76_ の歯 9 本（床の木の導出が凍結 anchor と byte 一致・閉じた id の集合の凍結の針・実の入口の正本の一致と要約値と行数・ずれ・印・書き直し・生成区間の節が未知の節にならない・凡例の行を 1 つ消すと面が出ない・凡例の並びは表が決める）が緑、tests/schema.rs と tests/entrance.rs と tests/face_index.rs の既存の歯が全部緑（命令の標準出力の行数は 4 から 5 へ）、clippy が 0 警告で CI が通る"
