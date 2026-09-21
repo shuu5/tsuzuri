@@ -33,6 +33,7 @@ mod serve;
 mod sha256;
 mod sheet;
 mod site;
+mod stamp;
 mod verdict;
 mod vocab;
 mod yaml;
@@ -195,8 +196,8 @@ enum Command {
         state: Option<PathBuf>,
     },
     /// 天井の材料の束を観点ごとに置き場へ組む（--write）・席か器が書いた所見 file を数えて観点ごとの 3 値を返す（--check）・
-    /// 止める の所見ごとに反証の材料の束を組む（--refute）。AI は起動しない
-    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "refute"])))]
+    /// 止める の所見ごとに反証の材料の束を組む（--refute）・周の結果から天井の印を書く（--stamp）。AI は起動しない
+    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "refute", "stamp"])))]
     Ceiling {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
@@ -216,6 +217,9 @@ enum Command {
         /// 反証が未の 止める の所見ごとに反証の材料の束（finding・question・reads・schema・sources.txt・digest.txt）を <out>/<観点>/refute/<所見の id>/ へ組む（全部か無しか）
         #[arg(long)]
         refute: bool,
+        /// 周の結果（観点ごとの所見 file と止めるの反証の結果）から天井の印を導出し <dir>/preview/ceiling-stamp.yaml へ書く（同じなら書かない・組めなければ まだ分からない で何も書かない）
+        #[arg(long)]
+        stamp: bool,
     },
     /// 欄の決まりの file の schema 節（生成区間）を床の定数から導出して書く（--write）・検査する（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
@@ -447,7 +451,13 @@ fn main() -> ExitCode {
             write,
             check: _,
             refute,
+            stamp,
         } => {
+            if stamp {
+                let outcome = stamp::run(&dir, &out);
+                println!("{}", outcome.stdout);
+                return ExitCode::from(outcome.verdict.exit_code() as u8);
+            }
             if refute {
                 let outcome = findings::refute(&dir, &out);
                 for line in &outcome.stdout {

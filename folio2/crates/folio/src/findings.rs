@@ -11,6 +11,7 @@
 //! 反証の材料の束（finding.yaml・question.yaml・reads.yaml・schema.yaml・sources.txt + digest.txt）を
 //! `<out>/<観点>/refute/<所見の id>/` へ組む（所見 file は触らない・正本は写さず親の要約値 sources.txt で縛る・全部か無しか）。
 //! `--check` は同じ dir の result.yaml（反証役が書く）を欄の決まりで読み、その refute の値を所見の反証の結果として規則 7〜10 に渡す。
+//! 天井の印（便 72・`stamp.rs`）は観点の数え `count_viewpoint`・所見 file の読み `read_findings`・束の歩き `walk` を crate の中から呼ぶ。
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -41,18 +42,20 @@ pub struct Outcome {
     pub stderr: Vec<String>,
 }
 
-/// 観点 1 つの数えの結果。
-struct Counted {
-    verdict: Verdict,
-    reasons: Vec<String>,
+/// 観点 1 つの数えの結果（便 72 の印 `stamp.rs` も同じ口で数える）。
+pub(crate) struct Counted {
+    pub(crate) verdict: Verdict,
+    pub(crate) reasons: Vec<String>,
     /// 所見の数
-    findings: usize,
+    pub(crate) findings: usize,
     /// 残る 止める の数（反証で退けたものは数えない）
-    stops: usize,
+    pub(crate) stops: usize,
     /// 起動の記録の at（読めたときだけ・名札の日付）
     at: Option<String>,
     /// digest.txt の 16 進の先頭 8 字（読めたときだけ・名札の要約値）
-    digest: Option<String>,
+    pub(crate) digest: Option<String>,
+    /// 止める の所見ごとの反証の結果（所見の id・refute の値・読めたものだけ・所見の順）
+    pub(crate) refutes: Vec<(String, String)>,
 }
 
 impl Counted {
@@ -65,6 +68,7 @@ impl Counted {
             stops: 0,
             at: None,
             digest: None,
+            refutes: Vec::new(),
         }
     }
 }
@@ -197,8 +201,8 @@ fn before_viewpoints(reason: String) -> Outcome {
 
 // ── 観点ごとの 3 値（§1 (c)）──
 
-/// `faces` = `--check` の配信先（直下の名つき）。None なら 3（束が古い）を当てない（名札・便 40）。
-fn count_viewpoint(
+/// `faces` = `--check` の配信先（直下の名つき）。None なら 3（束が古い）を当てない（名札・便 40・印・便 72）。
+pub(crate) fn count_viewpoint(
     dir: &Path,
     faces: Option<(&Path, &[(String, bool)])>,
     out_dir: &Path,
@@ -260,6 +264,7 @@ fn count_viewpoint(
             (None, 0, 0, None)
         }
     };
+    let refutes = sheet.as_ref().map_or_else(Vec::new, |s| s.refutes.clone());
     if !reasons.is_empty() {
         return Counted {
             verdict: Verdict::Unknown,
@@ -268,6 +273,7 @@ fn count_viewpoint(
             stops,
             at,
             digest: digest8,
+            refutes,
         };
     }
     let sheet = sheet.expect("理由が無ければ所見 file は読めている");
@@ -284,6 +290,7 @@ fn count_viewpoint(
             stops,
             at,
             digest: digest8,
+            refutes,
         };
     }
     // 8.〜10. file の verdict と残る所見
@@ -321,6 +328,7 @@ fn count_viewpoint(
         stops,
         at,
         digest: digest8,
+        refutes,
     }
 }
 
@@ -371,7 +379,7 @@ fn measure(vp_dir: &Path) -> R<Files> {
     Ok(files)
 }
 
-fn walk(dir: &Path, rel: &str, files: &mut Files) -> R<()> {
+pub(crate) fn walk(dir: &Path, rel: &str, files: &mut Files) -> R<()> {
     for (name, is_file) in bundle::read_dir_names(dir)? {
         let here = format!("{rel}/{name}");
         let path = dir.join(&name);
@@ -388,7 +396,7 @@ fn walk(dir: &Path, rel: &str, files: &mut Files) -> R<()> {
 // ── 所見 file を読む（§1 (b)）──
 
 /// `<vp_dir>/findings.yaml`。無い = Ok(None)・読めない / parse できない / 重複キー / 最上位が表でない = Err（file 名: 理由）。
-fn read_findings(vp_dir: &Path) -> R<Option<Node>> {
+pub(crate) fn read_findings(vp_dir: &Path) -> R<Option<Node>> {
     read_table(&vp_dir.join(FINDINGS_FILE), FINDINGS_FILE)
 }
 
@@ -430,6 +438,8 @@ struct Sheet {
     remaining_stops: Vec<String>,
     /// 反証で退けた 止める の所見の id（規則 9 の再判定待ち・便 41）
     refuted_stops: Vec<String>,
+    /// 止める の所見の（id・反証の結果の値）（値が読めたものだけ・印・便 72）
+    refutes: Vec<(String, String)>,
 }
 
 /// `results` = 止める の所見ごとに反証役の result.yaml も読む（`--check`・便 42 §1 (d)）。`--refute` は所見 file の欄の
@@ -448,6 +458,7 @@ fn count_sheet(
         unrefuted: Vec::new(),
         remaining_stops: Vec::new(),
         refuted_stops: Vec::new(),
+        refutes: Vec::new(),
     };
     let entries = root.as_map().expect("最上位は表と読んである");
     for (key, _) in entries {
@@ -693,6 +704,9 @@ fn count_findings(
                 Some(r) => Some(Some(r)),
                 None => refute,
             };
+            if let Some(Some(v)) = &refute {
+                sheet.refutes.push((id.clone(), v.clone()));
+            }
             match refute {
                 None => sheet.unrefuted.push(id.clone()),
                 Some(Some(v)) if v == "退けた" => sheet.refuted_stops.push(id.clone()),
