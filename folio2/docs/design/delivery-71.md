@@ -1,6 +1,6 @@
 # 設計: 便 71 — 設計ノートの面の名札 3 か所（赤くなる条件・契約表の大きさの凡例・脚注の正本の file 名）と判断の記録の面の表紙の撤退条件の 1 文（天井の 12 周目の読みやすさ F-6 / F-7 / F-8 / F-11 の是正・FR16）
 
-- 要件: FR16（判断の記録の面）/ FR4 / GOAL2（非エンジニアが読める）
+- 要件: FR9（設計ノートを 1 つの型で生成する = 設計ノートの面）/ FR16（判断の記録の面）/ GOAL2（非エンジニアが読める）
 - 条: P-2.1 / P-6.1
 - 出所: 天井の 12 周目（2026-09-21・main bbd2a05）の読みやすさ F-6（直す）= 設計ノートの面の歯の表の行が red_when（この検査が赤くなる条件）の文を名札なしで出すので、題の直下で正反対のことを述べた文に見える（同じ行の「固定の材料」には名札が在る）。F-7（直す）= 契約表の行が「M」の札だけを出し、設計ノートの面には凡例が 1 つも無い。F-8（直す）= 設計ノートの面の脚注が「正本 design-note/<文書 id>.yaml」と差し込みの合図をそのまま出す（入口・憲法・要件書の脚注は実際の file 名）。F-11（参考）= 判断の記録の面の表紙が「撤退条件 数えた値」と種別の名だけを出し、何をもって捨てるのかが表紙から分からない。
 - 根拠の判断: 見た目の直しであり判断は無い。文言は正本の欄の決まり（design-note/schema.yaml の row_note = red_when は「何を壊せば落ちるか（1 文）」・契約表の size の値域 S / M）から取る。
@@ -51,7 +51,7 @@ schema = 1
 [[contract]]
 id = "bt"
 title = "設計ノートの面に名札「赤くなる条件」と契約表の大きさの凡例を置き、脚注の正本の file 名を実際の id にし、判断の記録の面の表紙の撤退条件を 1 文にする（凍結の写し 3 本を再生成・天井の 12 周目の読みやすさ F-6 / F-7 / F-8 / F-11）"
-req = ["FR16", "FR4"]
+req = ["FR9", "FR16"]
 section = "1"
 write-set = ["crates/folio/src/face_note.rs", "crates/folio/src/face_adr.rs", "crates/folio/tests/face_note.rs", "crates/folio/tests/face_adr.rs", "crates/folio/tests/site.rs", "tests/fixtures/face/expected-note.html", "tests/fixtures/face/expected-adr.html", "tests/fixtures/face/expected-site-adr-2.html"]
 verify = ["cargo nextest run -p folio --test face_note --test face_adr label_fix_", "cargo nextest run -p folio --test face_note --test face_adr --test site", "cargo clippy --workspace --all-targets -- -D warnings"]

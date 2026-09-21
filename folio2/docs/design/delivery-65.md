@@ -14,7 +14,7 @@
 
 (c) 設計ノートの面。crates/folio/src/face_note.rs（正規化 925 行・余地 575）で、前と次を設計ノートの id の列（入口の棚と同じ順 = 正本の置き場の design-note/ の id の字の順・schema の見本は含めない）から同じ規則で決める（先頭の前と末尾の次は入口）。
 
-(d) 凍結の面の写し。tests/fixtures/face/expected-adr.html・expected-note.html・expected-site-adr-2.html の prevnext の字が変わるので、同じ着地で fixture の正本から生成し直して置き換える（手で直さない）。再生成した写しとの byte 一致は既存の歯（tests/face_adr.rs・tests/face_note.rs の凍結 fixture の歯・tests/site.rs の site_write_matches_the_frozen_fixture）が測る = verify の 3 行目（絞り無し）で回す。fixture の判断の記録が 1 本だけなら前も次も入口になる（それでよい）。
+(d) 凍結の面の写し（2026-09-21 10:5x: 器の門が main の無関係の歯 ceiling_read_doc_not_a_document_fails の赤で落ちたので、その歯を席が直した後に受け付け直す・本便の中身は不変）。tests/fixtures/face/expected-adr.html・expected-note.html・expected-site-adr-2.html の prevnext の字が変わるので、同じ着地で fixture の正本から生成し直して置き換える（手で直さない）。再生成した写しとの byte 一致は既存の歯（tests/face_adr.rs・tests/face_note.rs の凍結 fixture の歯・tests/site.rs の site_write_matches_the_frozen_fixture）が測る = verify の 3 行目（絞り無し）で回す。fixture の判断の記録が 1 本だけなら前も次も入口になる（それでよい）。
 
 (e) 歯（関数名は neighbor_ で始める・今この語で始まる歯は無い）。
 1. crates/folio/tests/face_adr.rs: neighbor_adr_links_go_to_the_adjacent_record = 実の design-intent の写しから ADR-5 の面を生成すると、prevnext の前が adr-4.html・次が adr-6.html を指し、名に「ADR-4」「ADR-6」を含む。neighbor_adr_first_and_last_fall_back_to_the_entrance = ADR-1 の前と、最大の n の記録の次が index.html。

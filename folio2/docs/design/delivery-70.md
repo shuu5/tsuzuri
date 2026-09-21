@@ -18,7 +18,7 @@
 
 (e) 歯（crates/folio/tests/face.rs・正規化 約 1,250 行・関数名は noun_count_ で始める・今この語で始まる歯は無い）。
 1. noun_count_srs_uses_the_counter_word: 凍結の正本（tests/fixtures/face/srs.yaml）から --write で出した要件書の面の目次に「の機能要件」「の受入基準」（10 以上）と「つの非機能要件」（3）が在り、「3 の非機能要件」が無い。
-2. noun_count_constitution_is_unchanged_by_the_move: 憲法の面の出力の章の帯の数えの字（「N つの原則」「N の原則」）が便 63 の後と同じ = 凍結の写し expected.html の該当の字（「の原則」を含む見出し）を含む。
+2. noun_count_constitution_is_unchanged_by_the_move: 凍結の正本 tests/fixtures/face/constitution.yaml の meta.counts（always / ask_first / never の 3 つの数）を歯が自分で読み、憲法の面の出力の目次に、その数ごとに便 63 の規則で組んだ字（9 以下は「{n} つの原則」・10 以上は「{n} の原則」・歯の中で独立に組む）がすべて在り、「{n} つの原則」（n ≥ 10）の形が無いことを見る（oracle は正本の数と規則の字で、再生成する写しには依らない）。
 3. noun_count_rule_kind_legend_uses_the_labels: 憲法の面 §5 の種別の凡例に「測って落とす（deny）」「生成時の検査（build-check）」「記録のみ（detect）」「人が守る作法（human-review）」が在り「deny: 」の形が無い。
 4. noun_count_projection_label_is_plain: 憲法の面 §5 に「写す範囲」が在り「射影」が無い。
 5. 回帰（期待不変・verify の 2 行目と 3 行目）: tests/face.rs の既存の歯すべて（憲法の面と要件書の面の凍結の写しとの byte 一致の歯は (d) で更新した写しで緑）・tests/site.rs（配信先の写しは憲法・要件書の面を含まない = 不変）。
@@ -58,5 +58,5 @@ section = "1"
 write-set = ["crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_srs.rs", "crates/folio/tests/face.rs", "crates/folio/tests/site.rs", "tests/fixtures/face/expected.html", "tests/fixtures/face/expected-srs.html"]
 verify = ["cargo nextest run -p folio --test face noun_count_", "cargo nextest run -p folio --test face", "cargo nextest run -p folio --test site", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "noun_count_ の歯 4 本（要件書の面の助数詞・憲法の面の数えは不変・§5 の凡例の名札・写す範囲）が緑、tests/face.rs の既存の歯が全部緑（再生成した凍結の写し expected.html / expected-srs.html との byte 一致の歯を含む）、tests/site.rs が全部緑、clippy が 0 警告で CI が通る"
+done = "noun_count_ の歯 4 本（要件書の面の助数詞・憲法の面の数えは正本の数と便 63 の規則から独立に組んだ字と一致・§5 の凡例の名札・写す範囲）が緑、tests/face.rs の既存の歯が全部緑（再生成した凍結の写し expected.html / expected-srs.html との byte 一致の歯を含む）、tests/site.rs が全部緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->

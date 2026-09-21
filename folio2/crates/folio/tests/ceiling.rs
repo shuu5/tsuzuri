@@ -415,10 +415,10 @@ fn ceiling_missing_document_fails() {
 #[test]
 fn ceiling_read_doc_not_a_document_fails() {
     let w = Work::new("read-doc");
-    // 針は行の先頭だけ（読む欄の一覧は含めない）。入口を読む観点は読みやすさだけなので当て先は 1 か所。
+    // 針は読みやすさの行（読む欄の先頭 audience まで）。天井の正本 v0.8 から整合の観点も入口を読むので、行の先頭だけでは 2 か所に当たる。
     w.mutate(
-        "      - {doc: index, fields: [",
-        "      - {doc: nowhere, fields: [",
+        "      - {doc: index, fields: [audience,",
+        "      - {doc: nowhere, fields: [audience,",
     );
     assert_single_violation(
         &w.check(),
