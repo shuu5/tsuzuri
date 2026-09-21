@@ -14,6 +14,8 @@
 
 (c) 読む側。crates/folio/src/note.rs（正規化 約 1,295 行・余地 約 205）の定数 PROFILE_ENUM を消し、床の木の profile_enum と meta.profile の値域の判定の 2 か所は crate::parts::catalog::PROFILES を読む。値は同じなので design-intent/design-note/schema.yaml の生成区間は 1 byte も変わらない（folio schema --check は合格のまま・凍結 anchor tests/fixtures/schema/note-region.txt は触らない・その不変を測る歯の置き場 crates/folio/tests/schema.rs は本文不変のまま write-set に置く）。crates/folio/src/parts.rs（正規化 約 630 行）の print_catalog は末尾に "profiles":[...] を足し（style_props の後）、catalog_matches（parts --check）は parts.json の profile_enum と PROFILES の一致も見る（ほかの 3 つの一覧と同じ形）。
 
+(d′) 凍結の目録の写し。tests/fixtures/floor/parts-catalog.json は folio parts --print の出力の凍結の写し（crates/folio/tests/badge.rs の歯 badge_parts_catalog_lists_the_stamp_and_the_five_faces_pass_parts_check が byte で突き合わせる・正規化 約 430 行）で、(c) で出力に "profiles" が加わるので、同じ着地で folio parts --print の出力で置き換える（手で直さない・器の runner の質問 2026-09-21 02:33Z への答え）。tests/badge.rs は本文不変のまま write-set に置く（verify の --test badge の scope）。
+
 (d) 歯（関数名は profiles_ で始める・今この語で始まる歯は無い）。
 1. profiles_are_in_the_catalog_print（crates/folio/tests/parts.rs・正規化 約 430 行）: folio parts --print の出力に "profiles":["design-note"] が在る。
 2. profiles_print_matches_the_parts_json（同）: 出力の profiles の一覧と design-intent/preview/parts.json の profile_enum（歯が file を読んで取る）が同じ順で同じ。
@@ -52,8 +54,8 @@ id = "bq"
 title = "密度 profile の閉じた一覧 profile_enum を部品目録 parts.json に載せ、build.rs が catalog::PROFILES に導出し、設計ノートの床の値域と生成区間・parts --print / --check はそこから読む（値は design-note の 1 つのまま・天井の 12 周目の整合 F-2）"
 req = ["FR9"]
 section = "1"
-write-set = ["design-intent/preview/parts.json", "crates/folio/build.rs", "crates/folio/src/parts.rs", "crates/folio/src/note.rs", "crates/folio/tests/parts.rs", "crates/folio/tests/note.rs", "crates/folio/tests/schema.rs"]
-verify = ["cargo nextest run -p folio --test parts --test note profiles_", "cargo nextest run -p folio --test schema --test parts --test note", "cargo clippy --workspace --all-targets -- -D warnings"]
+write-set = ["design-intent/preview/parts.json", "crates/folio/build.rs", "crates/folio/src/parts.rs", "crates/folio/src/note.rs", "crates/folio/tests/parts.rs", "crates/folio/tests/note.rs", "crates/folio/tests/schema.rs", "crates/folio/tests/badge.rs", "tests/fixtures/floor/parts-catalog.json"]
+verify = ["cargo nextest run -p folio --test parts --test note profiles_", "cargo nextest run -p folio --test schema --test parts --test note --test badge", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "profiles_ の歯 3 本（print に在る・parts.json と同じ・meta.profile の門が同じに落ちる）が緑、tests/parts.rs・tests/note.rs・tests/schema.rs の既存の歯が全部緑（design-note/schema.yaml は不変）、clippy が 0 警告で CI が通る"
+done = "profiles_ の歯 3 本（print に在る・parts.json と同じ・meta.profile の門が同じに落ちる）が緑、tests/parts.rs・tests/note.rs・tests/schema.rs・tests/badge.rs の既存の歯が全部緑（design-note/schema.yaml は不変・凍結の目録の写しは再生成）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
