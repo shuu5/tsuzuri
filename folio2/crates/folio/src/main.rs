@@ -11,6 +11,7 @@ mod face;
 mod face_adr;
 mod face_constitution;
 mod face_index;
+mod face_labels;
 mod face_note;
 mod face_srs;
 mod face_srs_rtm;
