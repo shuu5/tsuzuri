@@ -218,8 +218,8 @@ struct Row {
 
 // ── 入口 ──
 
-/// 正本 1 本 → 設計ノートの面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
-pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
+/// 正本 1 本 → 設計ノートの面の HTML（決定的）。天井の名札は印から読む（便 40・便 83）。
+pub fn derive(dir: &Path, id: &str) -> R<String> {
     check_id_shape(id)?;
     let name = format!("design-note/{id}.yaml");
     let n_doc = face::load(dir, &name)?;
@@ -265,7 +265,7 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
     };
     let st = status(&meta)?;
     let counts = counts(&secs, figs.len())?;
-    let stamp = face::ceiling_stamp(dir, ceiling)?;
+    let stamp = face::ceiling_stamp(dir)?;
     // prevnext は入口の棚と同じ順（id の字の順）で隣の設計ノート・両端は入口（便 65）
     let notes = face_index::notes(dir)?;
     let links: Vec<(String, String)> = notes.iter().map(face_index::Note::link).collect();

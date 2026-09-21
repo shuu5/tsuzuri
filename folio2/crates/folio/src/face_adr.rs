@@ -181,8 +181,8 @@ struct Target {
     title: String,
 }
 
-/// 正本 1 本 → 判断の記録の面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
-pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
+/// 正本 1 本 → 判断の記録の面の HTML（決定的）。天井の名札は印から読む（便 40・便 83）。
+pub fn derive(dir: &Path, id: &str) -> R<String> {
     check_id_shape(id)?;
     let name = format!("adr/{id}.yaml");
     let a_doc = face::load(dir, &name)?;
@@ -207,7 +207,7 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
     };
     let counts = counts(&a, figs.len())?;
     let f = frame(CHAPTERS.len() + usize::from(!figs.is_empty()), dir, id)?;
-    let stamp = face::ceiling_stamp(dir, ceiling)?;
+    let stamp = face::ceiling_stamp(dir)?;
 
     let mut o: Vec<String> = Vec::new();
     head(&mut o, &f, &a, id, &st, &stamp)?;

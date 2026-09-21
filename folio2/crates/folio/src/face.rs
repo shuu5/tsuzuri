@@ -11,7 +11,7 @@
 //! 設計ノート・判断の記録・要件書の 3 面が同じ字面で出すので、`figure_body` と `figure_panel` をここに 1 つ持つ。
 //! 天井の名札（便 40・delivery-40.md §1 (c)(d)・ADR-8 決定 (4)・P-3.3）: 5 面の site-bar に床の名札（freshness-stamp）の
 //! 直後に部品 ceiling-stamp を置く。字は `ceiling_stamp` の 1 つで組む（面ごとに組み直さない）ので 5 面で同じになる。
-//! 束の置き場は任意の旗 `--ceiling` で受け、無ければ 4 観点とも「まだ分からない」（未実施）を出す（P-4.2）。
+//! 出所は天井の印 preview/ceiling-stamp.yaml の 1 つ（便 83・P-6.3）で、印が無ければ 4 観点とも「まだ分からない」（未実施）を出す（P-4.2）。
 
 use std::fs;
 use std::path::Path;
@@ -20,6 +20,7 @@ use crate::constitution_enums as ce;
 use crate::figure;
 use crate::findings;
 use crate::parts::catalog::{self, Component};
+use crate::stamp;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
 use crate::{face_adr, face_constitution, face_index, face_note, face_srs};
@@ -50,15 +51,8 @@ impl Outcome {
 
 // ── 命令の口 ──
 
-/// `--out` と `--ceiling` は相対なら `--dir` からの相対・絶対ならそのまま。
-pub fn run(
-    face: &str,
-    id: Option<&str>,
-    dir: &Path,
-    out: &Path,
-    ceiling: Option<&Path>,
-    mode: Mode,
-) -> Outcome {
+/// `--out` は相対なら `--dir` からの相対・絶対ならそのまま。
+pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> Outcome {
     if !matches!(face, "index" | "constitution" | "srs" | "adr" | "note") {
         return Outcome::unknown(format!(
             "面の名「{face}」は index・constitution・srs・adr・note のどれでもない"
@@ -83,14 +77,12 @@ pub fn run(
     if !out_path.parent().is_some_and(Path::is_dir) {
         return Outcome::unknown(format!("{}: 出力先の親 dir が無い", out_path.display()));
     }
-    let ceiling_dir = ceiling.map(|c| dir.join(c));
-    let ceiling = ceiling_dir.as_deref();
     let derived = match face {
-        "index" => face_index::derive(dir, ceiling),
-        "constitution" => face_constitution::derive(dir, ceiling),
-        "srs" => face_srs::derive(dir, ceiling),
-        "note" => face_note::derive(dir, doc_id, ceiling),
-        _ => face_adr::derive(dir, doc_id, ceiling),
+        "index" => face_index::derive(dir),
+        "constitution" => face_constitution::derive(dir),
+        "srs" => face_srs::derive(dir),
+        "note" => face_note::derive(dir, doc_id),
+        _ => face_adr::derive(dir, doc_id),
     };
     let html = match derived {
         Ok(h) => h,
@@ -361,47 +353,58 @@ pub fn hint(label: &str, body: &str) -> String {
     )
 }
 
-/// 天井の名札の字（部品 ceiling-stamp の中身・便 40・§1 (c)）。`ceiling` = 束の置き場（解決済み・None = `--ceiling` なし）。
-/// 観点の名は天井の正本 `<dir>/ceiling.yaml` の viewpoints の name の逐語・順も正本のとおり（`findings::stamps`）。
-/// 置き場が在るとき「天井 <b>名 3 値</b> · …（<日付>・束 <8 字>/<8 字>/<8 字>/<8 字>）」——日付 = 4 観点の at のうち読めた
-/// ものの byte 順で最大の 1 つ（1 つも読めなければ「日付なし」）・読めない観点の要約値は「--------」。
-/// 置き場が無いとき「天井 <b>名 まだ分からない</b> · …（未実施）」。天井の正本が読めなければ Err（面は導出できない・P-4.1）。
-pub fn ceiling_stamp(dir: &Path, ceiling: Option<&Path>) -> R<String> {
-    let place = ceiling.filter(|p| p.is_dir());
-    let stamps = findings::stamps(dir, place)?;
+/// 天井の名札の字（部品 ceiling-stamp の中身・便 40 §1 (c)・便 83 §1 (b)(d)）。出所は天井の印
+/// `<dir>/preview/ceiling-stamp.yaml`（`stamp::marks`）と天井の正本の viewpoints の名（`findings::viewpoint_names`）の 2 つだけ。
+/// 印が在るとき「天井 <b>名 3 値</b> · …（<印の at>・束 <8 字>/…）」——日付と要約値は印の値のまま（面の側で数え直さない）。
+/// 印が無いとき「天井 <b>名 まだ分からない</b> · …（未実施）」。印の観点の id の列が正本と順まで同じでなければ Err
+/// （印・正本が読めないときも Err＝面は導出できない・P-4.1）。字の後ろに説明の小窓を 1 つ置く（5 面で同じ字）。
+pub fn ceiling_stamp(dir: &Path) -> R<String> {
     let names = findings::viewpoint_names(dir)?;
-    let cells = stamps
-        .iter()
-        .map(|s| {
-            let name = names
+    let (cells, tail) = match stamp::marks(dir)? {
+        None => (
+            names
                 .iter()
-                .find(|(id, _)| *id == s.id)
-                .map(|(_, name)| name.as_str())
-                .ok_or_else(|| format!("ceiling.yaml: viewpoints[{}].name: 読めない", s.id))?;
-            Ok(format!("<b>{} {}</b>", esc(name), s.verdict))
-        })
-        .collect::<R<Vec<_>>>()?
-        .join(" · ");
-    let tail = if place.is_some() {
-        let date = stamps
-            .iter()
-            .filter_map(|s| s.at.as_deref())
-            .max()
-            .map_or_else(|| "日付なし".to_string(), esc);
-        let digests = stamps
-            .iter()
-            .map(|s| {
-                s.digest
-                    .as_deref()
-                    .map_or_else(|| "--------".to_string(), esc)
-            })
-            .collect::<Vec<_>>()
-            .join("/");
-        format!("{date}・束 {digests}")
-    } else {
-        "未実施".to_string()
+                .map(|(_, name)| format!("<b>{} {}</b>", esc(name), Verdict::Unknown))
+                .collect::<Vec<_>>(),
+            "未実施".to_string(),
+        ),
+        Some((at, marks)) => {
+            let ids: Vec<&str> = marks.iter().map(|m| m.id.as_str()).collect();
+            let want: Vec<&str> = names.iter().map(|(id, _)| id.as_str()).collect();
+            if ids != want {
+                return Err(format!(
+                    "{}: 印の観点が天井の正本と違う（印 {}・正本 {}）",
+                    stamp::STAMP_FILE,
+                    ids.join(", "),
+                    want.join(", ")
+                ));
+            }
+            let cells = marks
+                .iter()
+                .zip(&names)
+                .map(|(m, (_, name))| format!("<b>{} {}</b>", esc(name), esc(&m.verdict)))
+                .collect();
+            let digests: Vec<String> = marks.iter().map(|m| esc(&m.bundle)).collect();
+            (cells, format!("{}・束 {}", esc(&at), digests.join("/")))
+        }
     };
-    Ok(format!("天井 {cells}（{tail}）"))
+    Ok(format!(
+        "天井 {}（{tail}）{}",
+        cells.join(" · "),
+        hint_q(&ceiling_hint()?)
+    ))
+}
+
+/// 天井の名札の小窓の本体（便 83 §1 (d)・面によらず同じ字）。用語集への導線は `glossary_chip` と同じ規則で章を引く。
+fn ceiling_hint() -> R<String> {
+    let c = ANNEXES
+        .iter()
+        .find(|(id, _)| *id == "vocabulary")
+        .map(|(_, (c, _))| *c)
+        .ok_or("付録の表に vocabulary が無い")?;
+    Ok(format!(
+        "<p>天井は AI が意味を読む検査です。観点ごとに 合格・不合格・まだ分からない の 3 値を出します。1 つでも まだ分からない が在れば合格にしません。</p><p>括弧の中は、最後に数えた日付と、観点ごとの材料の束の要約値の先頭 8 字です。</p><p><a href=\"constitution.html#s{c}\">用語集（天井の判定の印）</a></p>"
+    ))
 }
 
 /// 「?」の小窓。

@@ -16,7 +16,7 @@ use crate::face::R;
 use crate::findings::{self, Counted};
 use crate::sha256;
 use crate::verdict::Verdict;
-use crate::yaml::Node;
+use crate::yaml::{self, Node};
 
 /// 印の置き場（`--dir` からの相対・床の定数）。
 pub const STAMP_FILE: &str = "preview/ceiling-stamp.yaml";
@@ -241,6 +241,60 @@ fn union_digest(out_dir: &Path, ceiling: &Ceiling, sub: &str) -> R<String> {
     }
     let bytes: Vec<u8> = union.into_values().flatten().collect();
     Ok(format!("sha256 {}", sha256::hex(&bytes)))
+}
+
+// ── 印の読み手（便 83・delivery-83.md §1 (a)）──
+
+/// 名札のために印から読む観点 1 つの行（8 欄のうち 4 つ・どれも印の字のまま）。
+pub struct Mark {
+    pub id: String,
+    pub verdict: String,
+    /// 観点の at（名札の日付は top-level の at を使うので読むだけ・読めなければ Err）
+    #[allow(dead_code)]
+    pub at: String,
+    pub bundle: String,
+}
+
+/// 面の天井の名札のために印を読む。返りは（top-level の at・観点の行を印の順に）。印の file が無ければ None。
+/// symlink・読めない・parse できない・欄 at が読めない・viewpoints が一覧でない・行の欄が読めないは Err（P-4.1）。
+pub fn marks(dir: &Path) -> R<Option<(String, Vec<Mark>)>> {
+    let path = dir.join(STAMP_FILE);
+    if path.is_symlink() {
+        return Err(format!("{STAMP_FILE}: symlink は認めない"));
+    }
+    if !path.exists() {
+        return Ok(None);
+    }
+    let text = fs::read_to_string(&path).map_err(|e| format!("{STAMP_FILE}: 読めない: {e}"))?;
+    let root = yaml::parse(&text)
+        .map_err(|e| format!("{STAMP_FILE}: parse できない: {e}"))?
+        .root;
+    let field = |node: &Node, key: &str, at: &str| {
+        node.get(key)
+            .and_then(Node::as_str)
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string)
+            .ok_or_else(|| format!("{STAMP_FILE}: {at}{key} が読めない"))
+    };
+    let at = field(&root, "at", "")?;
+    let rows = root
+        .get("viewpoints")
+        .and_then(Node::as_seq)
+        .ok_or_else(|| format!("{STAMP_FILE}: viewpoints が一覧でない"))?;
+    let marks = rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let at = format!("viewpoints[{i}].");
+            Ok(Mark {
+                id: field(row, "id", &at)?,
+                verdict: field(row, "verdict", &at)?,
+                at: field(row, "at", &at)?,
+                bundle: field(row, "bundle", &at)?,
+            })
+        })
+        .collect::<R<Vec<_>>>()?;
+    Ok(Some((at, marks)))
 }
 
 /// 流れの形（`{…}`・`[…]`）の中に素のまま置ける値はそのまま、置けない値は `"` で囲む。

@@ -7,8 +7,8 @@
 //! id の数の昇順・設計ノートの並びも入口の面と同じ読み（`face_index::notes`）で id の字の昇順。
 //! 全部か無しか: 出す file を先に全部 memory の上で用意し、1 つでも導出できなければ 2 で終わり、配信先に 1 byte も
 //! 書かない（配信先の dir も作らない・P-4.1）。配信先に在る他の file は消さない（N-1.1）。
-//! 天井の名札（便 40・delivery-40.md §1 (a)(d)）: 任意の旗 `--ceiling`（束の置き場・相対なら `--dir` からの相対）を
-//! 5 つの面の生成器へそのまま通す。`--write` でも `--check` でも同じ値を渡す（名札の中身も byte 一致の対象）。
+//! 天井の名札（便 40・便 83・delivery-83.md §1 (b)(c)）: 5 つの面の生成器が天井の印 `<dir>/preview/ceiling-stamp.yaml` を
+//! 読んで組む（旗は無い）。`--write` でも `--check` でも同じ印を読む（名札の中身も byte 一致の対象）。
 //! 構造の床（便 56・delivery-56.md §1 (a)・要件書 v1.11 の FR5）: `--write` は最初に床（`check::check_dir`・旗なし＝
 //! 下書きも凍結もしない）を回し、標準出力の 1 行目に床の 3 値を出す。不合格なら配信先へ 1 file も書かず 1・
 //! まだ分からないなら今までどおり書いて 2・合格なら書いて 0。`--check` は床を回さない（出力も終了コードも今のまま）。
@@ -76,14 +76,13 @@ impl Outcome {
 
 // ── 命令の口 ──
 
-pub fn run(dir: &Path, out: &Path, ceiling: Option<&Path>, mode: Mode) -> Outcome {
-    // --out と --ceiling が相対なら --dir からの相対・絶対ならそのまま
+pub fn run(dir: &Path, out: &Path, mode: Mode) -> Outcome {
+    // --out が相対なら --dir からの相対・絶対ならそのまま
     let out_dir = dir.join(out);
-    let ceiling_dir = ceiling.map(|c| dir.join(c));
     match mode {
-        Mode::Write => write_after_floor(dir, &out_dir, ceiling_dir.as_deref()),
+        Mode::Write => write_after_floor(dir, &out_dir),
         Mode::Check => {
-            let built = match build_all(dir, ceiling_dir.as_deref()) {
+            let built = match build_all(dir) {
                 Ok(b) => b,
                 Err(e) => return Outcome::unknown(e),
             };
@@ -97,7 +96,7 @@ pub fn run(dir: &Path, out: &Path, ceiling: Option<&Path>, mode: Mode) -> Outcom
 /// 不合格 = 何も書かず 1（配信先の dir も作らない・既に在る配信先は 1 byte も変えない）。
 /// まだ分からない = 今までどおり書いて 2。合格 = 今までどおり書いて 0。
 /// 面の用意が出来ない（Err の道）ときは今までどおり「まだ分からない」で 2・何も書かない。
-fn write_after_floor(dir: &Path, out_dir: &Path, ceiling: Option<&Path>) -> Outcome {
+fn write_after_floor(dir: &Path, out_dir: &Path) -> Outcome {
     let (report, _after) = check::check_dir(dir, Flag::None);
     let floor = report.verdict();
     let floor_line = format!(
@@ -114,7 +113,7 @@ fn write_after_floor(dir: &Path, out_dir: &Path, ceiling: Option<&Path>) -> Outc
             stderr: None,
         };
     }
-    let built = match build_all(dir, ceiling) {
+    let built = match build_all(dir) {
         Ok(b) => b,
         Err(e) => return Outcome::unknown(e).with_floor_line(&floor_line),
     };
@@ -127,12 +126,12 @@ fn write_after_floor(dir: &Path, out_dir: &Path, ceiling: Option<&Path>) -> Outc
     outcome
 }
 
-/// 出す file を全部 memory の上で用意する（1 本でも用意できなければ Err）。`ceiling` = 天井の束の置き場（解決済み）。
-fn build_all(dir: &Path, ceiling: Option<&Path>) -> R<Vec<(String, Vec<u8>)>> {
+/// 出す file を全部 memory の上で用意する（1 本でも用意できなければ Err）。
+fn build_all(dir: &Path) -> R<Vec<(String, Vec<u8>)>> {
     let mut built = Vec::with_capacity(OUTPUTS.len());
     for (name, source) in OUTPUTS {
         let bytes = match source {
-            Source::Face(face) => derive(face, dir, ceiling)?.into_bytes(),
+            Source::Face(face) => derive(face, dir)?.into_bytes(),
             Source::Style => {
                 let path = dir.join("preview").join(name);
                 fs::read(&path).map_err(|e| format!("{}: 読めない: {e}", path.display()))?
@@ -141,22 +140,22 @@ fn build_all(dir: &Path, ceiling: Option<&Path>) -> R<Vec<(String, Vec<u8>)>> {
         built.push((name.to_string(), bytes));
     }
     for record in face_index::records(dir)? {
-        let html = face_adr::derive(dir, record.id(), ceiling)?;
+        let html = face_adr::derive(dir, record.id())?;
         built.push((record.file(), html.into_bytes()));
     }
     for note in face_index::notes(dir)? {
-        let html = face_note::derive(dir, note.id(), ceiling)?;
+        let html = face_note::derive(dir, note.id())?;
         built.push((note.file(), html.into_bytes()));
     }
     Ok(built)
 }
 
 /// 面の名 → 便 14〜16 の生成器（`face.rs` の run と同じ選び方）。
-fn derive(face: &str, dir: &Path, ceiling: Option<&Path>) -> R<String> {
+fn derive(face: &str, dir: &Path) -> R<String> {
     match face {
-        "index" => face_index::derive(dir, ceiling),
-        "constitution" => face_constitution::derive(dir, ceiling),
-        "srs" => face_srs::derive(dir, ceiling),
+        "index" => face_index::derive(dir),
+        "constitution" => face_constitution::derive(dir),
+        "srs" => face_srs::derive(dir),
         f => Err(format!(
             "面の名「{f}」は index・constitution・srs のどれでもない"
         )),
@@ -257,6 +256,6 @@ mod site_tests {
 
     #[test]
     fn site_derive_takes_only_the_three_face_names() {
-        assert!(derive("figure", Path::new("design-intent"), None).is_err());
+        assert!(derive("figure", Path::new("design-intent")).is_err());
     }
 }

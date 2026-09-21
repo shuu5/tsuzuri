@@ -50,9 +50,7 @@ pub(crate) struct Counted {
     pub(crate) findings: usize,
     /// 残る 止める の数（反証で退けたものは数えない）
     pub(crate) stops: usize,
-    /// 起動の記録の at（読めたときだけ・名札の日付）
-    at: Option<String>,
-    /// digest.txt の 16 進の先頭 8 字（読めたときだけ・名札の要約値）
+    /// digest.txt の 16 進の先頭 8 字（読めたときだけ・印の要約値）
     pub(crate) digest: Option<String>,
     /// 止める の所見ごとの反証の結果（所見の id・refute の値・読めたものだけ・所見の順）
     pub(crate) refutes: Vec<(String, String)>,
@@ -66,44 +64,10 @@ impl Counted {
             reasons: vec!["束が無い".to_string()],
             findings: 0,
             stops: 0,
-            at: None,
             digest: None,
             refutes: Vec::new(),
         }
     }
-}
-
-/// 名札（便 40）のための観点 1 つの結果。理由は持たない（面は数えた結果だけ・理由は `--check` の標準エラー）。
-pub struct Stamp {
-    pub id: String,
-    pub verdict: Verdict,
-    /// 起動の記録の at（読めたときだけ）
-    pub at: Option<String>,
-    /// digest.txt の 16 進の先頭 8 字（読めたときだけ）
-    pub digest: Option<String>,
-}
-
-/// 観点ごとの 3 値を名札のために返す（便 40・§1 (b)）。`out` = 束の置き場（解決済み・None = 置き場なし）。
-/// 便 39 の規則 1・2・4〜10 をそのまま当て、3（束が古い）だけを当てない。置き場が無い・観点の dir が無い観点は
-/// まだ分からない（at と要約値は無し）。天井の正本の viewpoints の順に返す。天井の正本が読めなければ Err（面は導出できない）。
-pub fn stamps(dir: &Path, out: Option<&Path>) -> R<Vec<Stamp>> {
-    let ceiling = bundle::load(dir)?;
-    Ok(ceiling
-        .viewpoints
-        .iter()
-        .map(|vp| {
-            let counted = match out {
-                Some(out_dir) => count_viewpoint(dir, None, out_dir, &ceiling, vp),
-                None => Counted::absent(),
-            };
-            Stamp {
-                id: vp.id.clone(),
-                verdict: counted.verdict,
-                at: counted.at,
-                digest: counted.digest,
-            }
-        })
-        .collect())
 }
 
 /// 天井の正本 `<dir>/ceiling.yaml` の viewpoints の（id・name）を正本の順に（名札の観点の名は正本の逐語・P-6.3・
@@ -240,7 +204,7 @@ pub(crate) fn count_viewpoint(
     }
 
     // 4.〜6. 所見 file（止める の所見は反証役の result.yaml も読む・便 42）
-    let (sheet, findings, stops, at) = match read_findings(&vp_dir) {
+    let (sheet, findings, stops) = match read_findings(&vp_dir) {
         Ok(Some(root)) => {
             let mut sheet = count_sheet(
                 &vp_dir,
@@ -253,15 +217,15 @@ pub(crate) fn count_viewpoint(
             reasons.append(&mut sheet.reasons);
             // 残る 止める の数 = 反証が未 + 反証が 退けた でないもの
             let stops = sheet.unrefuted.len() + sheet.remaining_stops.len();
-            (Some(sheet), sheet_findings(&root), stops, record_at(&root))
+            (Some(sheet), sheet_findings(&root), stops)
         }
         Ok(None) => {
             reasons.push("所見 file が無い".to_string());
-            (None, 0, 0, None)
+            (None, 0, 0)
         }
         Err(e) => {
             reasons.push(format!("所見 file: {e}"));
-            (None, 0, 0, None)
+            (None, 0, 0)
         }
     };
     let refutes = sheet.as_ref().map_or_else(Vec::new, |s| s.refutes.clone());
@@ -271,7 +235,6 @@ pub(crate) fn count_viewpoint(
             reasons,
             findings,
             stops,
-            at,
             digest: digest8,
             refutes,
         };
@@ -288,7 +251,6 @@ pub(crate) fn count_viewpoint(
             reasons,
             findings,
             stops,
-            at,
             digest: digest8,
             refutes,
         };
@@ -326,7 +288,6 @@ pub(crate) fn count_viewpoint(
         reasons,
         findings,
         stops,
-        at,
         digest: digest8,
         refutes,
     }
@@ -342,15 +303,6 @@ fn digest_head(digest: &str) -> Option<String> {
     head.bytes()
         .all(|b| b.is_ascii_hexdigit())
         .then(|| head.to_string())
-}
-
-/// 所見 file の起動の記録の at（空でない文のときだけ）。
-fn record_at(root: &Node) -> Option<String> {
-    root.get("record")
-        .and_then(|r| r.get("at"))
-        .and_then(Node::as_str)
-        .filter(|s| !s.trim().is_empty())
-        .map(str::to_string)
 }
 
 /// 観点の dir と 5 つの中身と digest.txt が全部在るか。

@@ -243,8 +243,8 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// 正本 → 要件書の面の HTML（決定的）。`ceiling` = 天井の束の置き場（解決済み・None = `--ceiling` なし・便 40）。
-pub fn derive(dir: &Path, ceiling: Option<&Path>) -> R<String> {
+/// 正本 → 要件書の面の HTML（決定的）。天井の名札は印から読む（便 40・便 83）。
+pub fn derive(dir: &Path) -> R<String> {
     let s_doc = face::load(dir, "srs.yaml")?;
     let c_doc = face::load(dir, "constitution.yaml")?;
     let r_doc = face::load(dir, "rules.yaml")?;
@@ -257,7 +257,7 @@ pub fn derive(dir: &Path, ceiling: Option<&Path>) -> R<String> {
     let ctx = context(&s, &c, &r)?;
     let m = s.f("meta")?;
     check_counts(&ctx, &m.f("counts")?)?;
-    let stamp = face::ceiling_stamp(dir, ceiling)?;
+    let stamp = face::ceiling_stamp(dir)?;
 
     let mut o: Vec<String> = Vec::new();
     head(&mut o, &ctx, &m, &stamp)?;
