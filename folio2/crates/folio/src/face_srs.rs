@@ -435,8 +435,8 @@ fn resolve(s: &str, rail: &[(u64, String)], verdicts: bool) -> R<Where> {
                 .ok_or_else(|| format!("図の参照「{s}」の段 {n} が rail に無い"))?;
             Where {
                 href: Some(format!("#rail-{n}")),
-                long: format!("図 2 {n} {what}"),
-                short: format!("図 2 {n}"),
+                long: format!("図 2 の {n} 段目（{what}）"),
+                short: format!("図 2 の {n} 段目"),
             }
         }
         Fig::Context => Where {
@@ -1107,7 +1107,7 @@ fn ac_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>) -> R<()> {
             verifies.join("・"),
             hint(
                 "RED の歯",
-                &format!("{}／fixture: {}", red.ef("sentence")?, red.ef("fixture")?)
+                &format!("{}／固定の材料: {}", red.ef("sentence")?, red.ef("fixture")?)
             )
         );
         if let Some(note) = x.g("note")? {
@@ -1211,12 +1211,25 @@ fn figures_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
 
 fn approval(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
-    let lead = match m.g("status_note")? {
-        Some(n) => format!("{status} — {}", n.e()?),
-        None => status.to_string(),
+    // status_note は最初の「。」までが要旨・後ろが版ごとの来歴（便 81 (c)）。来歴は折りたたみの中だけに出す。
+    let (lead, history) = match m.g("status_note")? {
+        Some(n) => {
+            let note = n.text()?;
+            let (gist, rest) = match note.find('。') {
+                Some(i) => note.split_at(i + '。'.len_utf8()),
+                None => (note.as_str(), ""),
+            };
+            (format!("{status} — {}", face::esc(gist)), face::esc(rest))
+        }
+        None => (status.to_string(), String::new()),
     };
     ctx.frame.approval_band(o, "作成 / レビュー / 承認", &lead);
     o.push("<div class=\"chapbody\">".to_string());
+    if !history.is_empty() {
+        o.push(format!(
+            "<details class=\"note\"><summary>版ごとの来歴</summary><div><p>{history}</p></div></details>"
+        ));
+    }
     o.push(format!("<div {}>", ctx.frame.dc(Component::ApprovalBlock)));
     for row in m.f("approval")?.seq()? {
         let role = row.f("role")?;
@@ -1294,8 +1307,8 @@ mod face_srs_tests {
             resolve("図2-1", &rail(), false).unwrap(),
             Where {
                 href: Some("#rail-1".to_string()),
-                long: "図 2 1 相談を受ける".to_string(),
-                short: "図 2 1".to_string(),
+                long: "図 2 の 1 段目（相談を受ける）".to_string(),
+                short: "図 2 の 1 段目".to_string(),
             }
         );
         let context = resolve("図1", &rail(), false).unwrap();
