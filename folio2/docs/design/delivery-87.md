@@ -63,6 +63,8 @@ src は 3 本。crates/folio/src/face.rs（器の式で 1407・余地 93・308 �
 
 字の書き換え・関数の統合や分割・公開の範囲の変更（pub のままにする）・引数や戻り値の変更・呼び出し側の use の付け替え（再輸出で吸収する）。face.rs の単体の歯 mod face_tests の移動（名札の歯は face.rs に残る。再輸出で名が解けるので字は変わらない。歯まで移すかは、face.rs にさらに余地が要るようになったときの別の便で判断する）。face.rs のほかの区間（命令の口・木を辿る口・字面の口・部品目録の上限・面の骨格・用語集の語の行・図の枠）。face_srs.rs（余地 102）と face_index.rs（余地 122）の切り出し（本便では触らない。行を足す便が来たときに同じ形で別に起こす）。
 
+受付の cap への断り: face.rs は本便で行が減る file なので、write-set では縮む file の印（-）を付けて宣言する（器の受付は縮む file に上限の余地を求めない）。ほかの file の余地は size S の見積を満たす。
+
 ## 2. 範囲
 
 - 入れる: 新しい module 1 本・308 行のそのままの移動・mod の宣言 1 行・再輸出 1 行・取り込みの置き場の直し 1 行・歯 1 本と新しい歯の file。
@@ -94,7 +96,7 @@ id = "cj"
 title = "face.rs の名札と名札の表の 2 区間（308 行・公開の名 27 個）を新しい module face_labels.rs へ 1 字も変えずに移し、face.rs は丸ごと再輸出する 1 行だけを持つ（呼び出し側は 1 file も触らない・5 面の出力と凍結の写しは 1 byte も変わらない・器の式で face.rs の余地を 93 行から約 398 行へ空ける）"
 req = ["FR4"]
 section = "1"
-write-set = ["crates/folio/src/face.rs", "+crates/folio/src/face_labels.rs", "crates/folio/src/main.rs", "+crates/folio/tests/face_labels.rs", "crates/folio/tests/face.rs", "crates/folio/tests/face_constitution.rs", "crates/folio/tests/face_srs.rs", "crates/folio/tests/site.rs", "crates/folio/tests/badge.rs"]
+write-set = ["-crates/folio/src/face.rs", "+crates/folio/src/face_labels.rs", "crates/folio/src/main.rs", "+crates/folio/tests/face_labels.rs", "crates/folio/tests/face.rs", "crates/folio/tests/face_constitution.rs", "crates/folio/tests/face_srs.rs", "crates/folio/tests/site.rs", "crates/folio/tests/badge.rs"]
 verify = ["cargo nextest run -p folio --test face_labels f87_", "cargo nextest run -p folio --test face --test face_constitution --test face_srs --test site --test badge", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "f87_ の歯 1 本（器の式で face.rs が 1250 行以下・移した 8 本の定義が新しい module に在り face.rs に無い・再輸出の行が 1 本）が緑、tests/face.rs と tests/face_constitution.rs と tests/face_srs.rs と tests/site.rs と tests/badge.rs の既存の歯が全部緑（凍結の写し 7 本との byte 一致と face.rs の単体の名札の凍結の針を含む）、clippy が 0 警告で CI が通る"
