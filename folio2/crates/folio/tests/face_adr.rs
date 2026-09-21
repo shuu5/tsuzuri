@@ -1062,3 +1062,38 @@ fn f74_glossary_chip_is_verbatim_the_index_chip() {
         "札の a が入口の面の札と逐語で一致しない: {a}"
     );
 }
+
+// ── 章 05 の注の折りたたみ（便 82・docs/design/delivery-82.md §1 (c)・天井の 17 周目の読みやすさ F-3）──
+
+const NOTE_FOLD: &str = "<details class=\"note\"><summary>注</summary><div><p>";
+
+#[test]
+fn f82_adr_note_is_folded() {
+    let td = temp_dir("f82-fold");
+    let (_, html) = real_face(&td, "ADR-8");
+    let _ = fs::remove_dir_all(&td);
+    let note = load_yaml_at(&design_intent(), "adr/ADR-8.yaml")["note"]
+        .as_str()
+        .expect("ADR-8 の note が文字列でない")
+        .to_string();
+    assert_eq!(
+        html.matches(NOTE_FOLD).count(),
+        1,
+        "注の折りたたみが 1 つでない"
+    );
+    assert_eq!(html.matches("<h3>注</h3>").count(), 0, "h3 の注が残っている");
+    let want = format!("{NOTE_FOLD}{}</p></div></details>", esc(&note));
+    assert!(html.contains(&want), "折りたたみの中の字が note の逐語でない");
+    // 章 05 の中に在る
+    let ch5 = html.find("<div class=\"chapbody\">").is_some()
+        && html[..html.find(NOTE_FOLD).unwrap()].contains("この判断で変わること");
+    assert!(ch5, "注の折りたたみが章 05 の中に無い");
+}
+
+#[test]
+fn f82_adr_without_a_note_has_no_fold() {
+    let html = fixture_html("f82-nofold");
+    assert_eq!(html.matches(NOTE_FOLD).count(), 0, "注の無い正本に折りたたみが在る");
+    assert_eq!(html.matches("<summary>注</summary>").count(), 0);
+    assert_eq!(html.matches("<h3>注</h3>").count(), 0, "注の無い正本に h3 の注が在る");
+}

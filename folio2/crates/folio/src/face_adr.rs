@@ -731,8 +731,10 @@ fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &C
         }
     }
     if let Some(note) = a.g("note")? {
-        o.push("<h3>注</h3>".to_string());
-        o.push(format!("<p>{}</p>", note.e()?));
+        o.push(format!(
+            "<details class=\"note\"><summary>注</summary><div><p>{}</p></div></details>",
+            note.e()?
+        ));
     }
     o.push("</div>".to_string());
     Ok(())
