@@ -744,12 +744,14 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
         wants.push(text(row, "why").to_string());
         for st in seq(&row["stops"], "stops") {
             wants.push(text(st, "label").to_string());
-            let file = match text(st, "doc") {
-                "constitution" => "constitution.html",
-                "srs" => "srs.html",
+            let at = text(st, "at");
+            // 判断の記録は面が 1 本 1 枚なので節の anchor を持たない（便 66）
+            let href = match text(st, "doc") {
+                "constitution" => format!("<li><a href=\"constitution.html#{at}\">"),
+                "srs" => format!("<li><a href=\"srs.html#{at}\">"),
+                "adr" => format!("<li><a href=\"{}.html\">", at.to_lowercase()),
                 other => panic!("面の無い行き先「{other}」"),
             };
-            let href = format!("<li><a href=\"{file}#{}\">", text(st, "at"));
             assert!(html.contains(&href), "行き先の href が無い: {href}");
             stops += 1;
         }
@@ -1025,6 +1027,70 @@ fn face_index_unknown_when_the_adr_dir_is_missing() {
     index_unknown("adr-dir", |w| fs::remove_dir_all(w.join("adr")).unwrap());
 }
 
+// ── 読む順番の行き先の判断の記録（便 66・docs/design/delivery-66.md §1 (a)(b)）──
+
+/// fixture の入口の正本の読む順番に行き先を 1 つ足す（判断の記録の行）。
+fn add_stop(at: &'static str, label: &'static str) -> impl FnOnce(&Path) {
+    move |w: &Path| {
+        edit(&w.join("index.yaml"), |t| {
+            t.replacen(
+                "        - {doc: srs, at: fig-rail, label: 段の図}\n",
+                &format!(
+                    "        - {{doc: srs, at: fig-rail, label: 段の図}}\n        - {{doc: adr, at: {at}, label: {label}}}\n"
+                ),
+                1,
+            )
+        })
+    }
+}
+
+/// fixture の入口の棚が判断の記録に与える型（「判断の記録」）。
+fn adr_type() -> String {
+    let i = load_yaml_at(&fixture(), "index.yaml");
+    seq(&i["shelf"]["documents"], "documents")
+        .iter()
+        .find(|d| text(d, "id") == "adr")
+        .map(|d| esc(text(d, "type")))
+        .expect("index.yaml の棚に adr の行が無い")
+}
+
+#[test]
+fn lane_adr_stop_links_to_the_record_face() {
+    let (td, work) = index_fixture_copy("index-lane-adr");
+    // fixture の写しが持つ判断の記録は ADR-2 の 1 本
+    add_stop("ADR-2", "なぜそう決めたか")(&work);
+    let (_, html) = index_from("判断の記録への行き先", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    let want = format!(
+        "<li><a href=\"adr-2.html\">{} なぜそう決めたか</a></li>",
+        adr_type()
+    );
+    assert!(
+        html.contains(&want),
+        "行き先が無い: {want}\n{}",
+        between(&html, "<div class=\"lane-grid\"", "\n</div>\n</div>")
+    );
+}
+
+#[test]
+fn lane_adr_stop_with_unknown_record_is_refused() {
+    index_unknown("lane-adr-unknown", add_stop("ADR-99", "無い記録"));
+}
+
+#[test]
+fn lane_adr_stop_anchor_rejects_other_shapes() {
+    let (td, work) = index_fixture_copy("index-lane-adr-shape");
+    add_stop("s1", "節の id")(&work);
+    let out = td.join("never.html");
+    let run = folio_face("index", &work, &out, "--write");
+    let exists = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --face index"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{}", stderr(&run));
+    assert!(stderr(&run).contains("行き先"), "{}", stderr(&run));
+    assert!(!exists, "導出できないのに出力先に書いた");
+}
+
 // ── 入口の面の節「支度表」（便 20・docs/design/delivery-20.md §1 (d)）──
 
 /// 節「支度表」の字面（帯の始まりから chapbody の終わりまで）。
@@ -1188,24 +1254,61 @@ fn face_index_sheet_document_without_an_annex_has_no_parentheses() {
     );
 }
 
-#[test]
-fn face_index_sheet_approval_is_the_first_row_when_it_is_stamped() {
-    let (td, work) = index_sheet_copy("index-sheet-approval");
+/// 支度表の写しの承認欄に 1 行押す（便 66 の逐語は行に出ない字）。
+fn stamp_approval(work: &Path, verbatim: &str) {
     edit(&work.join("intake-sheet.yaml"), |t| {
         t.replacen(
             "approval: []\n",
-            "approval:\n  - {when: 2026-09-03, verbatim: 承認する}\n",
+            &format!("approval:\n  - {{when: 2026-09-03, verbatim: {verbatim}}}\n"),
             1,
         )
     });
+}
+
+#[test]
+fn face_index_sheet_approval_is_the_first_row_when_it_is_stamped() {
+    let (td, work) = index_sheet_copy("index-sheet-approval");
+    stamp_approval(&work, "承認する");
     let (_, html) = index_from("承認あり", &work, &td);
     let _ = fs::remove_dir_all(&td);
     assert!(
-        sheet_section(&html)
-            .contains("<span class=\"k\">承認</span><span class=\"v\">2026-09-03 承認する</span>"),
+        sheet_section(&html).contains(
+            "<span class=\"k\">承認</span><span class=\"v\">承認済み（2026-09-03）</span>"
+        ),
         "{}",
         sheet_section(&html)
     );
+}
+
+/// 便 66（天井の 11 周目 F-7）: 承認の行は「承認済み（日付）」だけで、持ち主の逐語は折りたたみの中にある。
+#[test]
+fn sheet_approval_shows_approved_with_date_and_hides_the_verbatim_in_details() {
+    let (td, work) = index_sheet_copy("index-sheet-approval-details");
+    stamp_approval(&work, "aで");
+    let (_, html) = index_from("承認あり", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    let section = sheet_section(&html).to_string();
+
+    // 行は「承認済み（日付）」
+    let row = section
+        .lines()
+        .find(|l| l.contains("<span class=\"k\">承認</span>"))
+        .unwrap_or_else(|| panic!("承認の行が無い: {section}"));
+    assert!(
+        row.contains("<span class=\"v\">承認済み（2026-09-03）</span>"),
+        "{row}"
+    );
+    // 逐語は details の中だけ（行の本文には出ない）
+    assert!(!row.contains("aで"), "行に逐語が出ている: {row}");
+    assert_eq!(section.matches("aで").count(), 1, "逐語の数: {section}");
+    let details = between(&section, "<details class=\"note\">", "</details>");
+    assert!(
+        details.contains("<summary>言葉どおりの記録</summary>"),
+        "{details}"
+    );
+    assert!(details.contains("aで"), "折りたたみに逐語が無い: {details}");
+    // 行の数は変わらない（持つ文書・推奨で進めた項目・承認・正本）
+    assert_eq!(section.matches("<p class=\"st").count(), 4, "行の数");
 }
 
 // ── 支度表の付録は index.yaml の annexes に解く（便 22・docs/design/delivery-22.md §1 (c)）──

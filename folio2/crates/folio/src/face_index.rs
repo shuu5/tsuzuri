@@ -99,6 +99,9 @@ const SHEET_ABSENT: &str = "まだ無い";
 const SHEET_NO_DOCUMENTS: &str = "なし";
 const SHEET_NO_RECOMMENDED: &str = "なし（全部に答えた）";
 const SHEET_NO_APPROVAL: &str = "まだ（対話面で承認したら台帳と承認欄に記帳する）";
+/// 承認が在るときの行の字（便 66・天井の 11 周目 F-7）。逐語は行に出さず折りたたみの中だけに置く。
+const SHEET_APPROVED: &str = "承認済み";
+const SHEET_VERBATIM: &str = "言葉どおりの記録";
 const SHEET_MADE_BY: &str = "（folio intake の生成物・手で直さない）";
 
 fn dc(c: Component) -> String {
@@ -588,7 +591,8 @@ struct SheetHead {
 struct SheetBody {
     documents: Vec<String>,
     recommended: Vec<String>,
-    approval: Option<String>,
+    /// 承認の最初の 1 行（日付・逐語）。無ければ None＝「まだ」。
+    approval: Option<(String, String)>,
 }
 
 /// 必須の欄の字面（無い・空は Err）。
@@ -684,7 +688,7 @@ fn sheet_body(
     }
 
     let approval = match sheet.f("approval")?.seq()?.first() {
-        Some(row) => Some(format!("{} {}", row.ef("when")?, row.ef("verbatim")?)),
+        Some(row) => Some((row.ef("when")?, row.ef("verbatim")?)),
         None => None,
     };
 
@@ -1076,6 +1080,23 @@ fn slim_band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, x: &X<'_>
     Ok(())
 }
 
+/// 読む順番の行き先の href（便 66）。判断の記録は面が 1 本 1 枚なのでその面の file へ、ほかの文書は
+/// 面の節の anchor へ。`at` は `stop_anchor` を通った後の字（判断の記録なら `ADR-<数>`）。
+fn stop_href(ctx: &Ctx, doc: &Doc, doc_x: &X<'_>, at_x: &X<'_>, at: &str) -> R<String> {
+    if doc.id == "adr" {
+        let record = ctx
+            .adr
+            .iter()
+            .find(|r| r.id == at)
+            .ok_or_else(|| format!("{}: 判断の記録「{at}」が adr/ に無い", at_x.at))?;
+        return Ok(record.file());
+    }
+    let Some(file) = doc.shelf.face else {
+        return Err(format!("{}: 文書「{}」は面が無い", doc_x.at, doc.id));
+    };
+    Ok(format!("{file}#{at}"))
+}
+
 fn lanes(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>) -> R<()> {
     let la = i.f("lanes")?;
     slim_band(o, 1, "band-5", "読む順番", &la)?;
@@ -1091,14 +1112,12 @@ fn lanes(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>) -> R<()> {
         for st in row.f("stops")?.seq()? {
             let doc_x = st.f("doc")?;
             let doc = ctx.doc(&doc_x)?;
-            let Some(file) = doc.shelf.face else {
-                return Err(format!("{}: 文書「{}」は面が無い", doc_x.at, doc.id));
-            };
             let at_x = st.f("at")?;
             let at = at_x.text()?;
             stop_anchor(doc.id, &at).map_err(|e| format!("{}: {e}", at_x.at))?;
+            let href = stop_href(ctx, doc, &doc_x, &at_x, &at)?;
             stops.push_str(&format!(
-                "<li><a href=\"{file}#{at}\">{} {}</a></li>",
+                "<li><a href=\"{href}\">{} {}</a></li>",
                 doc.ty,
                 st.ef("label")?
             ));
@@ -1183,13 +1202,23 @@ fn sheet_section(
             };
             st(o, " ok", "●", SHEET_DOCUMENTS, &documents);
             st(o, "", "○", SHEET_RECOMMENDED, &recommended);
-            st(
-                o,
-                "",
-                "○",
-                SHEET_APPROVAL,
-                b.approval.as_deref().unwrap_or(SHEET_NO_APPROVAL),
-            );
+            match &b.approval {
+                Some((when, verbatim)) => {
+                    st(
+                        o,
+                        "",
+                        "○",
+                        SHEET_APPROVAL,
+                        &format!("{SHEET_APPROVED}（{when}）"),
+                    );
+                    // 逐語は折りたたみの中だけに出す（P-12.2・記録は正本の側）。details は段落を閉じる
+                    // 要素なので行（p.st）の中には入れず、その行の隣に置く。
+                    o.push(format!(
+                        "<details class=\"note\"><summary>{SHEET_VERBATIM}</summary><div><p>{verbatim}</p></div></details>"
+                    ));
+                }
+                None => st(o, "", "○", SHEET_APPROVAL, SHEET_NO_APPROVAL),
+            }
             st(
                 o,
                 "",
@@ -1277,6 +1306,10 @@ mod face_index_tests {
         for at in ["s1", "s8", "fig-context", "fig-rail", "fig-verdicts"] {
             assert!(stop_anchor("srs", at).is_ok(), "{at}");
         }
+        // 判断の記録の行き先は記録の id（便 66）
+        for at in ["ADR-1", "ADR-2", "ADR-11"] {
+            assert!(stop_anchor("adr", at).is_ok(), "{at}");
+        }
         for (doc, at) in [
             ("constitution", "s9"),
             ("constitution", "fig-rail"),
@@ -1286,6 +1319,13 @@ mod face_index_tests {
             ("srs", "s10"),
             ("design-note", "s1"),
             ("constitution", ""),
+            ("adr", "s1"),
+            ("adr", ""),
+            ("adr", "ADR-"),
+            ("adr", "ADR-0"),
+            ("adr", "ADR-1a"),
+            ("adr", "adr-1"),
+            ("constitution", "ADR-1"),
         ] {
             assert!(stop_anchor(doc, at).is_err(), "{doc}#{at}");
         }

@@ -739,18 +739,26 @@ pub const SHELF_LEGEND: &[(&str, &str)] = &[
 /// 入口の状態の名札。
 pub const INDEX_STATUS: &[(&str, &str)] = &[("draft", "下書き・拘束力なし"), ("effective", "発効")];
 
-/// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図。
+/// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図・
+/// 判断の記録は `ADR-<1 以上の数>`（記録の面は 1 本 1 枚なので行き先は記録の id そのもの・便 66）。
 pub fn stop_anchor(doc: &str, at: &str) -> R<()> {
     let chapter = |from: u8| matches!(at.as_bytes(), [b's', d] if (b'0' + from..=b'8').contains(d));
+    let record = || match at.strip_prefix("ADR-") {
+        Some(n) => n.bytes().all(|b| b.is_ascii_digit()) && n.parse::<u64>().is_ok_and(|n| n >= 1),
+        None => false,
+    };
     let ok = match doc {
         "constitution" => chapter(0),
         "srs" => chapter(1) || matches!(at, "fig-context" | "fig-rail" | "fig-verdicts"),
+        "adr" => record(),
         _ => false,
     };
     if ok {
         Ok(())
     } else {
-        Err(format!("行き先「{doc}#{at}」はその面の節の id に無い"))
+        Err(format!(
+            "行き先「{doc}#{at}」はその面の節の id（判断の記録は記録の id）に無い"
+        ))
     }
 }
 
