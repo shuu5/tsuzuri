@@ -927,3 +927,82 @@ fn face_note_mode_is_exactly_one() {
         assert_eq!(out.status.code(), Some(2), "{args:?}: {}", stderr(&out));
     }
 }
+
+// ── 名札（便 71・天井の 12 周目の読みやすさ F-6 / F-7 / F-8）──
+
+/// 正本の `id: <rid>` の行の `<key>: ` の値（流れの表の 1 行・次の `, ` か `}` まで）。
+fn row_value(yaml: &str, rid: &str, key: &str) -> String {
+    let line = yaml
+        .lines()
+        .find(|l| l.contains(&format!("{{id: {rid},")))
+        .unwrap_or_else(|| panic!("行 {rid} が無い"));
+    let at = line.find(&format!(" {key}: ")).expect("欄が無い") + key.len() + 3;
+    let tail = &line[at..];
+    let end = tail.find([',', '}']).unwrap_or(tail.len());
+    tail[..end].to_string()
+}
+
+#[test]
+fn label_fix_red_when_has_a_label() {
+    let html = fixture_html("label-red-when");
+    let yaml = fs::read_to_string(fixture().join("design-note/full.yaml")).unwrap();
+    let red_when = esc(&row_value(&yaml, "anchor", "red_when"));
+    // 名札は red_when の文の直前・同じ要素（p.norm）の中
+    let want = format!("<p class=\"norm\"><span class=\"pk\">赤くなる条件</span>{red_when}</p>");
+    assert!(html.contains(&want), "red_when に名札が無い: {html}");
+    assert_eq!(html.matches("赤くなる条件").count(), 1, "名札の数");
+}
+
+#[test]
+fn label_fix_size_legend_is_present() {
+    let html = fixture_html("label-size-legend");
+    let legends: Vec<&str> = html
+        .lines()
+        .filter(|l| l.starts_with("<div class=\"legend-line\">"))
+        .collect();
+    assert_eq!(legends.len(), 1, "legend-line の数: {legends:?}");
+    let legend = legends[0];
+    assert!(legend.contains("大きさ: S = "), "S の凡例が無い: {legend}");
+    assert!(legend.contains("M = "), "M の凡例が無い: {legend}");
+    assert!(
+        legend.find("S = ") < legend.find("M = "),
+        "値域の順（S / M）でない: {legend}"
+    );
+    // 置き場は契約表の章（帯 s6 の後・次の帯の前）
+    let at = html.find(legend).unwrap();
+    let chapter = html.find("<section id=\"s6\"").expect("契約表の章が無い");
+    assert!(chapter < at, "凡例が契約表の章より前に在る");
+    let between = &html[chapter + 1..at];
+    assert!(
+        between.contains("<h2>§6 契約表</h2>"),
+        "s6 が契約表の章でない"
+    );
+    assert!(
+        !between.contains("<section id="),
+        "凡例が契約表の章の後の章に在る"
+    );
+}
+
+#[test]
+fn label_fix_footer_names_the_real_file() {
+    let html = fixture_html("label-footer");
+    let yaml = real_yaml(&fixture().join("design-note/full.yaml"));
+    let id = yaml["meta"]["id"].as_str().unwrap();
+    let foot = html
+        .lines()
+        .find(|l| l.starts_with("<p class=\"ft-plain\">"))
+        .expect("脚注が無い");
+    assert!(
+        !foot.contains("design-note/&lt;文書 id&gt;.yaml") && !foot.contains("<文書 id>"),
+        "脚注に差し込みの合図が残る: {foot}"
+    );
+    assert!(
+        foot.contains(&format!("正本 design-note/{id}.yaml から")),
+        "脚注に実際の file 名が無い: {foot}"
+    );
+}
+
+fn real_yaml(path: &Path) -> Yaml {
+    let text = fs::read_to_string(path).unwrap();
+    YamlLoader::load_from_str(&text).unwrap().remove(0)
+}

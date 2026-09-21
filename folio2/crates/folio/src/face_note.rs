@@ -109,6 +109,12 @@ const SHAPE: &[(&str, &str)] = &[
     ("table", "表"),
 ];
 
+/// 検査の行の red_when の名札（欄の決まり row_note = 何を壊せば落ちるか・便 71）。
+const RED_WHEN: &str = "赤くなる条件";
+
+/// 契約表の章の先頭の凡例（部品 legend-line・値は契約表の size の値域 S / M の順・便 71）。
+const SIZE_LEGEND: &str = "<div class=\"legend-line\"><span>大きさ: S = 小さい便（src の余地 100 行の見積）／M = 中くらいの便（300 行の見積）</span></div>";
+
 /// 断らない口の印（欄の決まり refuses_none_marker）。
 const REFUSES_NONE: &str = "なし";
 
@@ -271,7 +277,8 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
 
     let frame = Frame {
         name: "設計ノート",
-        source: "design-note/<文書 id>.yaml",
+        // 脚注の正本の file 名は実際の id（Frame の source は 'static なので 1 面に 1 本だけ leak する・便 71）
+        source: Box::leak(name.clone().into_boxed_str()),
         favicon: FAVICON,
         // 読める面の nav にこの面は無い（どの nav にも aria-current を付けない）
         current: 3,
@@ -675,6 +682,9 @@ fn section_chapter(
 ) -> R<()> {
     f.band(o, s.idx, s.label, &format!("§{} {}", s.n, s.title), None);
     o.push("<div class=\"chapbody\">".to_string());
+    if s.key == CONTRACT_TABLE {
+        o.push(SIZE_LEGEND.to_string());
+    }
     if let Some(note) = s.x.g("note")? {
         o.push(format!("<p class=\"intro\">{}</p>", note.e()?));
     }
@@ -835,7 +845,10 @@ fn table_chapter(
             }
             "teeth-table" => {
                 r.rt = row.ef("name")?;
-                r.norm = Some(row.ef("red_when")?);
+                r.norm = Some(format!(
+                    "<span class=\"pk\">{RED_WHEN}</span>{}",
+                    row.ef("red_when")?
+                ));
                 r.plain = Some(("固定の材料", format!("<code>{}</code>", row.ef("fixture")?)));
                 push_ref_chip(&mut r.chips, &row, env)?;
                 push_note_chip(&mut r.chips, &row)?;

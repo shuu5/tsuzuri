@@ -133,6 +133,15 @@ fn retreat_kind(x: &X<'_>) -> R<&'static str> {
     ))
 }
 
+/// 撤退条件の種類 → 表紙の 1 文（何をもって捨てるか・便 71 §1 (b)・`retreat_kind_label` と同じ網羅の場合分け）。
+fn retreat_sentence(k: ce::RetreatKind) -> &'static str {
+    match k {
+        ce::RetreatKind::Spike => "小さな試しで確かめて、外れたら捨てる",
+        ce::RetreatKind::Measure => "数えた値が条件を超えたら捨てる",
+        ce::RetreatKind::Ruling => "持ち主の裁定で捨てる",
+    }
+}
+
 /// 状態の名札（短い）と状態の行（組み立て済みの HTML）。
 struct Status {
     label: &'static str,
@@ -504,7 +513,11 @@ fn cover(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, n: &C
     o.push(meta_span("改訂", &format!("{} 件", n.amends)));
     o.push(meta_span(
         "撤退条件",
-        retreat_kind(&a.f("retreat")?.f("kind")?)?,
+        retreat_sentence(
+            a.f("retreat")?
+                .f("kind")?
+                .parse(ce::RetreatKind::from_name, "撤退条件の種類")?,
+        ),
     ));
     // 図は 1 枚以上のときだけ（図なしの面は便 32 までと byte 不変）
     if n.figures > 0 {

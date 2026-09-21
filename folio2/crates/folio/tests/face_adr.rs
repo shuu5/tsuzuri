@@ -972,3 +972,32 @@ fn face_adr_mode_is_exactly_one() {
         assert_eq!(out.status.code(), Some(2), "{args:?}: {}", stderr(&out));
     }
 }
+
+// ── 表紙の撤退条件の 1 文（便 71・天井の 12 周目の読みやすさ F-11）──
+
+/// 表紙の meta_span「撤退条件」の値。
+fn cover_retreat(html: &str) -> String {
+    let key = "<span class=\"m\"><span class=\"k\">撤退条件</span><span class=\"v\">";
+    let at = html.find(key).expect("表紙に撤退条件が無い") + key.len();
+    let end = html[at..].find("</span>").unwrap();
+    html[at..at + end].to_string()
+}
+
+#[test]
+fn label_fix_retreat_sentence_on_the_cover() {
+    // 写しの ADR-2 の retreat.kind を measure にした面
+    let (run, html) = mutated("label-retreat", |t| {
+        t.replacen("retreat: {kind: ruling,", "retreat: {kind: measure,", 1)
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert_eq!(cover_retreat(&html), "数えた値が条件を超えたら捨てる");
+    assert!(
+        !html.contains("<span class=\"k\">撤退条件</span><span class=\"v\">数えた値</span>"),
+        "表紙に種別の名だけの値が残る"
+    );
+    // 変異なしの写し（ruling）も 1 文
+    assert_eq!(
+        cover_retreat(&fixture_html("label-retreat-ruling")),
+        "持ち主の裁定で捨てる"
+    );
+}
