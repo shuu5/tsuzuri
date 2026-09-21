@@ -299,6 +299,76 @@ fn real_face(td: &Path, id: &str) -> (PathBuf, String) {
     (out, html)
 }
 
+/// 面の下端の prevnext の（前の href・前の名・次の href・次の名）。
+fn prevnext(html: &str) -> (String, String, String, String) {
+    let line = html
+        .lines()
+        .find(|l| l.starts_with("<nav class=\"prevnext\">"))
+        .expect("prevnext が無い");
+    let parts: Vec<&str> = line.split("<a href=\"").skip(1).collect();
+    assert_eq!(parts.len(), 2, "prevnext の a が 2 つでない: {line}");
+    let split = |p: &str| {
+        let (href, rest) = p.split_once('"').unwrap();
+        let name = rest
+            .split("</span>")
+            .nth(1)
+            .unwrap()
+            .split("</a>")
+            .next()
+            .unwrap();
+        (href.to_string(), name.to_string())
+    };
+    let ((ph, pn), (nh, nn)) = (split(parts[0]), split(parts[1]));
+    (ph, pn, nh, nn)
+}
+
+// ── 前 / 次（便 65・delivery-65.md §1 (e)1）──
+
+#[test]
+fn neighbor_adr_links_go_to_the_adjacent_record() {
+    let td = temp_dir("neighbor-adjacent");
+    let (_, html) = real_face(&td, "ADR-5");
+    let _ = fs::remove_dir_all(&td);
+    let (ph, pn, nh, nn) = prevnext(&html);
+    assert_eq!(ph, "adr-4.html", "前の href");
+    assert!(pn.contains("ADR-4"), "前の名に ADR-4 が無い: {pn}");
+    assert_eq!(nh, "adr-6.html", "次の href");
+    assert!(nn.contains("ADR-6"), "次の名に ADR-6 が無い: {nn}");
+    // 名は id + 半角空白 + 題（題は正本の逐語を escape したもの）
+    let a4 = load_yaml_at(&design_intent().join("adr"), "ADR-4.yaml");
+    assert_eq!(pn, format!("ADR-4 {}", esc(a4["title"].as_str().unwrap())));
+}
+
+#[test]
+fn neighbor_adr_first_and_last_fall_back_to_the_entrance() {
+    let ids = real_ids();
+    let td = temp_dir("neighbor-ends");
+    let (_, first) = real_face(&td, &ids[0]);
+    let last_id = ids.last().unwrap();
+    let (_, last) = real_face(&td, last_id);
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(ids[0], "ADR-1");
+    let (ph, pn, nh, _) = prevnext(&first);
+    assert_eq!(
+        (ph.as_str(), pn.as_str()),
+        ("index.html", "入口"),
+        "ADR-1 の前"
+    );
+    assert_eq!(nh, "adr-2.html", "ADR-1 の次");
+    let (ph, _, nh, nn) = prevnext(&last);
+    assert_eq!(
+        (nh.as_str(), nn.as_str()),
+        ("index.html", "入口"),
+        "{last_id} の次"
+    );
+    let before = &ids[ids.len() - 2];
+    assert_eq!(
+        ph,
+        format!("{}.html", before.to_ascii_lowercase()),
+        "{last_id} の前"
+    );
+}
+
 #[test]
 fn face_adr_on_the_real_sources_passes_parts_check() {
     let td = temp_dir("parts");

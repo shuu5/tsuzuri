@@ -95,8 +95,8 @@ fn frame(figures: bool) -> Frame {
         current: 2,
         first: 1,
         bands: &BANDS[..CHAPTERS.len() + usize::from(figures)],
-        prev: ("constitution.html", "憲法"),
-        next: ("index.html", "入口"),
+        prev: face::link("constitution.html", "憲法"),
+        next: face::link("index.html", "入口"),
         parts: &PARTS,
     }
 }

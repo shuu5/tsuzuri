@@ -17,6 +17,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::constitution_enums as ce;
 use crate::face::{
@@ -45,17 +46,17 @@ pub const PARTS: [Component; 13] = [
 ];
 
 /// 入口の面の骨格（head と部品の名札だけに使う）。
-const FRAME: Frame = Frame {
+static FRAME: LazyLock<Frame> = LazyLock::new(|| Frame {
     name: "入口",
     source: "index.yaml",
     favicon: "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d3a54'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E入%3C/text%3E%3C/svg%3E\">",
     current: 0,
     first: 1,
     bands: &[],
-    prev: ("index.html", "入口"),
-    next: ("constitution.html", "憲法"),
+    prev: face::link("index.html", "入口"),
+    next: face::link("constitution.html", "憲法"),
     parts: &PARTS,
-};
+});
 
 /// 読んだ正本（foot の sources）。支度表は生成物なので載せない（節の中で file 名を出す）。
 const SOURCES: [&str; 8] = [
@@ -145,12 +146,19 @@ pub struct Note {
     status: &'static str,
     /// 生成日（escape 済み）
     generated: String,
+    /// 題（escape 済み）
+    title: String,
 }
 
 impl Note {
     /// この設計ノートの面の file（`note-<文書 id>.html`・便 28 の生成器の出す 1 枚）。
     pub fn file(&self) -> String {
         format!("note-{}.html", self.id)
+    }
+
+    /// 隣の面の prevnext が指す（file・名 = 題・便 65）。
+    pub fn link(&self) -> (String, String) {
+        (self.file(), self.title.clone())
     }
 
     /// 正本の id（`folio face --face note --id` に渡す字と同じ）。
@@ -291,7 +299,7 @@ pub fn derive(dir: &Path, ceiling: Option<&Path>) -> R<String> {
 // ── 読みと数え ──
 
 /// 判断の記録の id（`ADR-<数>`）の数（「-」で割った 2 番目・ASCII の数字列だけ・便 11 の render.rs と同じ）。
-fn adr_number(id: &str) -> Option<u64> {
+pub(crate) fn adr_number(id: &str) -> Option<u64> {
     let second = id.split('-').nth(1)?;
     if second.is_empty() || !second.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -383,13 +391,14 @@ pub fn notes(dir: &Path) -> R<Vec<Note>> {
                 "{at}: 欄 meta.id「{id}」は id の形でない（英小文字で始まり 英小文字・数字・ハイフン）"
             ));
         }
-        required(&m, "title")?;
+        let title = esc(&required(&m, "title")?);
         out.push(Note {
             status: m
                 .f("status")?
                 .lookup(face_note::STATUS, "設計ノートの状態")?,
             generated: esc(&required(&m, "generated")?),
             id,
+            title,
         });
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));

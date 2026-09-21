@@ -5,6 +5,7 @@
 //! 面に依らない口（head と site-bar・章の帯・card・toc・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ（便 15）。
 
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::constitution_enums as ce;
 use crate::face::{
@@ -70,17 +71,17 @@ const BANDS: [(&str, &str); 9] = [
 ];
 
 /// 憲法の面の骨格。
-const FRAME: Frame = Frame {
+static FRAME: LazyLock<Frame> = LazyLock::new(|| Frame {
     name: "憲法",
     source: "constitution.yaml",
     favicon: "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e7b65'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E憲%3C/text%3E%3C/svg%3E\">",
     current: 1,
     first: 0,
     bands: &BANDS,
-    prev: ("index.html", "入口"),
-    next: ("srs.html", "要件書"),
+    prev: face::link("index.html", "入口"),
+    next: face::link("srs.html", "要件書"),
     parts: &PARTS,
-};
+});
 
 /// 属性 data-component（名札は憲法の面の部品の一覧からだけ出す）。
 fn dc(c: Component) -> String {

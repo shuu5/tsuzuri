@@ -10,10 +10,12 @@
 //! `figure.rs` の `render` が図の道具で描いたものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない
 //! （全部か無しか）。図が無い面は便 32 までと byte 不変。
 
+use std::fs;
 use std::path::Path;
 
 use crate::constitution_enums as ce;
 use crate::face::{self, Frame, R, X, anchor, card};
+use crate::face_index;
 use crate::parts::catalog::Component;
 
 /// 判断の記録の面が使う部品（9 種・便 33 で figure-panel を・便 40 で ceiling-stamp を足した）。
@@ -68,18 +70,38 @@ static BANDS: [(&str, &str); 6] = [
 const FAVICON: &str = "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235f45a6'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E要%3C/text%3E%3C/svg%3E\">";
 
 /// 判断の記録の面の骨格（章の数 = 5 + 図の章の有無）。nav の aria-current は付かない（読める面の nav に判断の記録は無い）。
-fn frame(chapters: usize) -> Frame {
-    Frame {
+/// prevnext は ADR-n の数の順で隣の記録（廃止も飛ばさない）・両端は入口（便 65）。
+fn frame(chapters: usize, dir: &Path, id: &str) -> R<Frame> {
+    let ids = record_ids(dir)?;
+    let at = ids
+        .iter()
+        .position(|x| x == id)
+        .ok_or_else(|| format!("adr/: 判断の記録の列に {id} が無い"))?;
+    // 名 = id + 半角空白 + 題（題が無ければ id だけ）
+    let links: Vec<(String, String)> = ids
+        .iter()
+        .map(|x| {
+            let title = record_title(dir, x);
+            let name = if title.is_empty() {
+                x.clone()
+            } else {
+                format!("{x} {title}")
+            };
+            (format!("{}.html", anchor(x)), name)
+        })
+        .collect();
+    let (prev, next) = face::neighbors(&links, at);
+    Ok(Frame {
         name: "判断の記録",
         source: "adr/ADR-n.yaml",
         favicon: FAVICON,
         current: 3,
         first: 1,
         bands: &BANDS[..chapters],
-        prev: ("srs.html", "要件書"),
-        next: ("index.html", "入口"),
+        prev,
+        next,
         parts: &PARTS,
-    }
+    })
 }
 
 // ── 名札の表（β・表に無い値は導出できない）──
@@ -175,7 +197,7 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
         None => Vec::new(),
     };
     let counts = counts(&a, figs.len())?;
-    let f = frame(CHAPTERS.len() + usize::from(!figs.is_empty()));
+    let f = frame(CHAPTERS.len() + usize::from(!figs.is_empty()), dir, id)?;
     let stamp = face::ceiling_stamp(dir, ceiling)?;
 
     let mut o: Vec<String> = Vec::new();
@@ -255,6 +277,25 @@ fn context(c: &X<'_>, r: &X<'_>, s: &X<'_>) -> R<Ctx> {
         rules,
         reqs,
     })
+}
+
+/// `adr/` の下の判断の記録の id（file 名 `ADR-<数>.yaml` の stem）を数の昇順に並べる（字の順でない・廃止も入れる・便 65）。
+fn record_ids(dir: &Path) -> R<Vec<String>> {
+    let entries = fs::read_dir(dir.join("adr")).map_err(|e| format!("adr/: 読めない: {e}"))?;
+    let mut ids: Vec<(u64, String)> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("adr/: 読めない: {e}"))?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let Some(stem) = name.strip_suffix(".yaml").filter(|s| s.starts_with("ADR-")) else {
+            continue;
+        };
+        if let Some(n) = face_index::adr_number(stem) {
+            ids.push((n, stem.to_string()));
+        }
+    }
+    ids.sort();
+    Ok(ids.into_iter().map(|(_, id)| id).collect())
 }
 
 /// 判断の記録の題（file が無い・読めない・title の欄が無い・空なら空。面は 2 にしない）。

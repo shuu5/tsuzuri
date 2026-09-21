@@ -236,6 +236,62 @@ fn real_face(td: &Path) -> (PathBuf, String) {
     (out, html)
 }
 
+/// 面の下端の prevnext の（前の href・次の href）。
+fn prevnext_hrefs(html: &str) -> (String, String) {
+    let line = html
+        .lines()
+        .find(|l| l.starts_with("<nav class=\"prevnext\">"))
+        .expect("prevnext が無い");
+    let hrefs: Vec<&str> = line
+        .split("<a href=\"")
+        .skip(1)
+        .map(|p| p.split('"').next().unwrap())
+        .collect();
+    assert_eq!(hrefs.len(), 2, "prevnext の a が 2 つでない: {line}");
+    (hrefs[0].to_string(), hrefs[1].to_string())
+}
+
+// ── 前 / 次（便 65・delivery-65.md §1 (e)2）──
+
+#[test]
+fn neighbor_note_links_follow_the_shelf_order() {
+    // 実の設計ノート（欄の決まり schema.yaml は除く）を id の字の順に = 入口の棚の順
+    let mut ids: Vec<String> = fs::read_dir(design_intent().join("design-note"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n != "schema.yaml")
+        .filter_map(|n| n.strip_suffix(".yaml").map(str::to_string))
+        .collect();
+    ids.sort();
+    assert_eq!(ids, ["example", "figures"], "実の設計ノートの列");
+    let td = temp_dir("neighbor");
+    let faces: Vec<(String, String)> = ids
+        .iter()
+        .map(|id| {
+            let out = td.join(format!("note-{id}.html"));
+            let run = folio_face("note", Some(id), &design_intent(), &out, "--write");
+            assert_eq!(
+                code(&run, "folio face --write"),
+                0,
+                "{id}: {}",
+                stderr(&run)
+            );
+            prevnext_hrefs(&fs::read_to_string(&out).unwrap())
+        })
+        .collect();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        faces[0],
+        ("index.html".to_string(), "note-figures.html".to_string()),
+        "1 本目の前は入口・次は 2 本目"
+    );
+    assert_eq!(
+        faces[1],
+        ("note-example.html".to_string(), "index.html".to_string()),
+        "2 本目の前は 1 本目・次は入口"
+    );
+}
+
 #[test]
 fn face_note_on_the_real_source_passes_parts_check() {
     let td = temp_dir("parts");

@@ -13,6 +13,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::face::{self, Frame, R, X, anchor, esc, hint};
+use crate::face_index;
 use crate::parts::catalog::Component;
 
 /// 設計ノートの面が使う部品（8 種・判断の記録の面の section-lead-callout の代わりに figure-panel・便 40 で ceiling-stamp を足した）。
@@ -259,6 +260,14 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
     let st = status(&meta)?;
     let counts = counts(&secs, figs.len())?;
     let stamp = face::ceiling_stamp(dir, ceiling)?;
+    // prevnext は入口の棚と同じ順（id の字の順）で隣の設計ノート・両端は入口（便 65）
+    let notes = face_index::notes(dir)?;
+    let links: Vec<(String, String)> = notes.iter().map(face_index::Note::link).collect();
+    let at = notes
+        .iter()
+        .position(|q| q.id() == id)
+        .ok_or_else(|| format!("design-note/: 設計ノートの列に {id} が無い"))?;
+    let (prev, next) = face::neighbors(&links, at);
 
     let frame = Frame {
         name: "設計ノート",
@@ -268,8 +277,8 @@ pub fn derive(dir: &Path, id: &str, ceiling: Option<&Path>) -> R<String> {
         current: 3,
         first: 1,
         bands: &BANDS[..chapters],
-        prev: ("srs.html", "要件書"),
-        next: ("index.html", "入口"),
+        prev,
+        next,
         parts: &PARTS,
     };
 

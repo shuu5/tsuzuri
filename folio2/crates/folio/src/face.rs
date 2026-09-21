@@ -803,6 +803,23 @@ const NAV: [(&str, &str); 3] = [
     ("srs.html", "要件書"),
 ];
 
+/// prevnext の 1 つ（href・名）。
+pub fn link(href: &str, name: &str) -> (String, String) {
+    (href.to_string(), name.to_string())
+}
+
+/// 並んだ面の列（`links`）の `at` 番目の前と次（便 65）。先頭の前と末尾の次は入口。
+pub fn neighbors(links: &[(String, String)], at: usize) -> ((String, String), (String, String)) {
+    let entrance = || link("index.html", "入口");
+    let prev = at
+        .checked_sub(1)
+        .and_then(|i| links.get(i))
+        .cloned()
+        .unwrap_or_else(entrance);
+    let next = links.get(at + 1).cloned().unwrap_or_else(entrance);
+    (prev, next)
+}
+
 /// 面ごとの固定値。
 pub struct Frame {
     /// 面の名（crumb・here・foot）
@@ -817,9 +834,9 @@ pub struct Frame {
     pub first: usize,
     /// 章ごとの帯の class と kicker の絵記号（first から順に）
     pub bands: &'static [(&'static str, &'static str)],
-    /// prevnext の前と次（href・名）
-    pub prev: (&'static str, &'static str),
-    pub next: (&'static str, &'static str),
+    /// prevnext の前と次（href・名は escape 済み・判断の記録と設計ノートは隣の 1 本を指す・便 65）
+    pub prev: (String, String),
+    pub next: (String, String),
     /// 面が使う部品
     pub parts: &'static [Component],
 }
