@@ -71,7 +71,6 @@ const STATUS_ENUM: &[&str] = &["draft", "effective", "retired", "example"];
 const EFFECTIVE_STATUS: &[&str] = &["effective", "retired"];
 const STATUS_EXAMPLE: &str = "example";
 const STATUS_RETIRED: &str = "retired";
-const PROFILE_ENUM: &[&str] = &["design-note"];
 const APPROVAL_REQUIRED: &[&str] = &["who", "date", "ruling", "verbatim", "surface"];
 const SURFACE_ENUM: &[&str] = &["R-8"];
 const SECTION: Keys = Keys {
@@ -167,7 +166,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                     ("example", Floor::Val("見本（拘束力なし・承認欄を持たない・凍結 anchor の材料）")),
                 ]),
             ),
-            ("profile_enum", Floor::Strs(PROFILE_ENUM)),
+            ("profile_enum", Floor::Strs(crate::parts::catalog::PROFILES)),
             ("profile_note", Floor::Val("密度 profile は 1 行（見せ方だけを持つ・拘束の旗を置かない・ADR-3 決定 (1)・N-3）。文書の種類による違いは節の型で表す（P-5.3）")),
             (
                 "approval",
@@ -903,7 +902,7 @@ fn check_meta(file: &str, note: &NoteDoc, note_ids: &HashSet<&str>, report: &mut
         );
     }
     if let Some(v) = field(meta, "profile")
-        && !PROFILE_ENUM.contains(&v)
+        && !crate::parts::catalog::PROFILES.contains(&v)
     {
         report.violation(KIND, format!("{file}: meta.profile「{v}」が一覧に無い"));
     }

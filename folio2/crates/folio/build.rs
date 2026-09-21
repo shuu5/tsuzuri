@@ -216,6 +216,7 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
     let figure_types = string_list(root, "figure_type_enum")?;
     let shelf_types = string_list(root, "shelf_type_enum")?;
     let style_props = string_list(root, "style_props_allowed")?;
+    let profiles = string_list(root, "profile_enum")?;
 
     // 図の型の名札（figure_body_classes.type_ids・file の順・鍵は figure_type_enum に在る）
     let type_ids = root
@@ -282,6 +283,12 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
         "StyleProp",
         &refs(&style_props),
     )?;
+    // 密度 profile（便 68 (b)）
+    let lits: Vec<String> = profiles.iter().map(|p| format!("{p:?}")).collect();
+    out.push_str(&format!(
+        "/// 密度 profile の閉じた一覧（部品目録の profile_enum・目録の順）。\npub const PROFILES: &[&str] = &[{}];\n",
+        lits.join(", ")
+    ));
     // 上限（便 52 (a) 1）: 部品ごとに定数 1 つずつ + （部品の名・欄の名・値）の対の列 LIMITS
     for (name, key, n, konst) in &limits {
         out.push_str(&format!(

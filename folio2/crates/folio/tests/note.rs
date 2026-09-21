@@ -272,6 +272,24 @@ fn note_status_not_in_enum_fails() {
     assert_single_violation(&w.check(), "note", &["meta.status「nope」が一覧に無い"]);
 }
 
+/// 便 68（delivery-68.md §1 (d) 3）: 密度 profile の一覧を部品目録へ移しても、一覧に無い値で床が同じに落ちる。
+#[test]
+fn profiles_gate_the_note_meta() {
+    let w = Work::new("profile");
+    w.mutate("\n  profile: design-note\n", "\n  profile: design-notex\n");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    let text = stdout(&out);
+    assert!(text.contains("meta.profile"), "{text}");
+    assert!(text.contains("一覧に無い"), "{text}");
+}
+
 #[test]
 fn note_id_not_matching_the_file_stem_fails() {
     let w = Work::new("id-stem");

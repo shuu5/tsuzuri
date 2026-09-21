@@ -460,6 +460,46 @@ fn parts_print_matches_the_floor_catalog_byte_for_byte() {
     assert_eq!(out.stdout, fs::read(floor("parts-catalog.json")).unwrap());
 }
 
+// ── 密度 profile の閉じた一覧（便 68・delivery-68.md §1 (d) 1・2）──
+
+fn parts_print() -> String {
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("parts")
+        .arg("--print")
+        .output()
+        .unwrap();
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    stdout(&out)
+}
+
+/// `open` の直後から次の `]` までの文字列の一覧（区切りは「,」・前後の空白と引用符を外す）。
+fn string_list_after(text: &str, open: &str) -> Vec<String> {
+    let start = text
+        .find(open)
+        .unwrap_or_else(|| panic!("「{open}」が無い"))
+        + open.len();
+    let end = start + text[start..].find(']').expect("一覧が閉じていない");
+    text[start..end]
+        .split(',')
+        .map(|s| s.trim().trim_matches('"').to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+#[test]
+fn profiles_are_in_the_catalog_print() {
+    let text = parts_print();
+    assert!(text.contains("\"profiles\":[\"design-note\"]"), "{text}");
+}
+
+#[test]
+fn profiles_print_matches_the_parts_json() {
+    let printed = string_list_after(&parts_print(), "\"profiles\":[");
+    let catalog = string_list_after(&catalog_text(), "\"profile_enum\": [");
+    assert!(!catalog.is_empty(), "parts.json の profile_enum が空");
+    assert_eq!(printed, catalog);
+}
+
 #[test]
 fn parts_mode_is_exactly_one() {
     for args in [&["--check", "--print"][..], &[][..]] {

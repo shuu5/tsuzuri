@@ -18,7 +18,7 @@ pub mod catalog {
     include!(concat!(env!("OUT_DIR"), "/parts_catalog.rs"));
 }
 
-use catalog::{Component, FIGURE_TYPE_LABELS, FigureType, LIMITS, ShelfType, StyleProp};
+use catalog::{Component, FIGURE_TYPE_LABELS, FigureType, LIMITS, PROFILES, ShelfType, StyleProp};
 
 /// 面の名（--page の左辺・部品目録の faces の値）。
 pub const FACES: [&str; 5] = ["index", "constitution", "srs", "adr", "note"];
@@ -28,7 +28,7 @@ const ATTRS: [&str; 3] = ["class", "style", "data-component"];
 
 // ── --print ──
 
-/// 導出した一覧の JSON 1 行（末尾に改行 1 つ）。キーは components・figure_types・shelf_types・style_props の順。
+/// 導出した一覧の JSON 1 行（末尾に改行 1 つ）。キーは components・figure_types・shelf_types・style_props・profiles の順。
 pub fn print_catalog() -> String {
     let mut out = String::from("{\"components\":{");
     for (i, c) in Component::ALL.iter().enumerate() {
@@ -45,6 +45,8 @@ pub fn print_catalog() -> String {
     json_list(ShelfType::ALL.iter().map(|t| t.name()), &mut out);
     out.push_str(",\"style_props\":");
     json_list(StyleProp::ALL.iter().map(|p| p.name()), &mut out);
+    out.push_str(",\"profiles\":");
+    json_list(PROFILES.iter().copied(), &mut out);
     out.push_str("}\n");
     out
 }
@@ -116,7 +118,7 @@ pub fn check(dir: &Path, css: Option<&Path>, pages: &[String]) -> Report {
     report
 }
 
-/// 実行時の部品目録を読み、組み立て時に導出した一覧（型 4 つ）・上限（部品ごとの max_ で始まる欄の名と値）・図の型の
+/// 実行時の部品目録を読み、組み立て時に導出した一覧（型 4 つと密度 profile）・上限（部品ごとの max_ で始まる欄の名と値）・図の型の
 /// 名札（type_ids の対と順）と過不足なく同じ順で一致するか。違えば Err（まだ分からない）。
 fn catalog_matches(path: &Path) -> Result<(), String> {
     let text = fs::read_to_string(path).map_err(|e| format!("parts.json: 読めない（{e}）"))?;
@@ -148,6 +150,7 @@ fn catalog_matches(path: &Path) -> Result<(), String> {
             root.get("style_props_allowed"),
             StyleProp::ALL.iter().map(|p| p.name()),
         )
+        && same_list(root.get("profile_enum"), PROFILES.iter().copied())
         && same_limits(components)
         && same_labels(root);
     if same {
