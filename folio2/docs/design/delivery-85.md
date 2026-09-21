@@ -73,7 +73,8 @@ crates/folio/tests/schema.rs に 2 本。
 crates/folio/tests/face.rs に 1 本。
 
 3. f85_constitution_legend_shows_the_new_meaning: 実の置き場の写しで憲法の面を書く → 0 ∧ 章 05 の種別の凡例に 値域の外なら落とす が在り、超過なら落とす が 0 回（凡例は読んでいる file の kind_meaning から出るので、直しが読み手まで届いていることを見る）。
-4. 回帰（期待不変・verify の 2 行目）: crates/folio/tests/schema.rs の f76_ から f78_ を含む既存の歯すべて・tests/check.rs の f77_ と r11_ と床の歯すべて・tests/face.rs の既存の歯すべて（実の置き場の逐語と件数の census を含む。census が種別の凡例の字を凍結しているときは、歯の側の期待を正本から数え直す）。
+4. 既存の歯の定数の更新: crates/folio/tests/schema.rs の 81〜84 行の定数 RULES_REGION_LINES（27 のまま）・RULES_REGION_BYTES（1764 → 1833）・RULES_REGION_SHA256（dcf207ce… → 54580596905e2d70d834c34553d3ad9000dd356473a0df0f60e8afe8fafe652c）を (b) の anchor に合わせて直す。同 file の 23 行の注釈の 1764 byte の字も 1833 に直す。この 3 定数を読む既存の歯 7 か所（810・819・824・828・860・900・914 行）は字を変えない（定数の更新で緑に戻る）。
+5. 回帰（4 の定数の更新の後は期待不変・verify の 2 行目）: crates/folio/tests/schema.rs の f76_ から f78_ を含む既存の歯すべて・tests/check.rs の f77_ と r11_ と床の歯すべて・tests/face.rs の既存の歯すべて（実の置き場の逐語と件数の census を含む。census が種別の凡例の字を凍結しているときは、歯の側の期待を正本から数え直す）。
 
 ### (e) 門と裁定
 
@@ -120,5 +121,5 @@ section = "1"
 write-set = ["crates/folio/src/rules.rs", "tests/fixtures/schema/rules-region.txt", "design-intent/rules.yaml", "crates/folio/tests/schema.rs", "crates/folio/tests/face.rs", "crates/folio/tests/check.rs"]
 verify = ["cargo nextest run -p folio --test schema --test face f85_", "cargo nextest run -p folio --test schema --test face --test check", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "f85_ の歯 3 本（規則の表の生成区間が新しい凍結 anchor と byte 一致し anchor の自己検査が通る・deny の意味が下限と固定の値を名指し超過の字が消えている・R-13 と R-14 の値と種別が不変・憲法の面の種別の凡例に新しい字が出る）が緑、tests/schema.rs と tests/check.rs と tests/face.rs の既存の歯が全部緑、folio schema --check が 8 file とも一致、folio check が合格（違反 0・まだ分からない 0）、clippy が 0 警告で CI が通る"
+done = "f85_ の歯 3 本（規則の表の生成区間が新しい凍結 anchor と byte 一致し anchor の自己検査が通る・deny の意味が下限と固定の値を名指し超過の字が消えている・R-13 と R-14 の値と種別が不変・憲法の面の種別の凡例に新しい字が出る）が緑、tests/schema.rs の凍結 anchor の定数 3 つ（行数・byte 数・要約値）を新しい anchor に合わせた上で tests/schema.rs と tests/check.rs と tests/face.rs の既存の歯が全部緑、folio schema --check が 8 file とも一致、folio check が合格（違反 0・まだ分からない 0）、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
