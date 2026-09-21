@@ -761,7 +761,7 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
             anchor(x.f("id")?.id()?),
             x.f("id")?.id()?,
             what_with_xref(x)?,
-            val(&x.f("value")?, 0)?,
+            value_cell(&x.f("value")?, 0)?,
             rule_kind_label(x.f("kind")?.parse(rules::RuleKind::from_name, "rules 行の種別")?),
             stage_label(x.f("stage")?.parse(ce::Stage::from_name, "rules 行の stage")?),
             ruling(x)?,
@@ -808,8 +808,69 @@ fn what_with_xref(x: &X<'_>) -> R<String> {
     ))
 }
 
+/// 閾値行の値の表に現れてよい鍵と、その日本語の小見出し（閉じた表・便 79・§1 (a)）。順は表引きにだけ使う。
+const VALUE_KEY_LABELS: &[(&str, &str)] = &[
+    ("marks", "規範の印"),
+    ("prohibition", "「禁止」の扱い"),
+    ("word", "語"),
+    ("clause_ends", "直後の字"),
+    ("units", "単位"),
+];
+
+/// 閾値行の値の枡（便 79・§1 (a)）。表は鍵ごとに「<小見出し>（<鍵>）」を組み、表でない値は `face::val` の字面のまま。
+/// 鍵が VALUE_KEY_LABELS に無ければ Err（面は導出できない・P-4.1）。
+fn value_cell(x: &X<'_>, d: usize) -> R<String> {
+    if x.v.as_map().is_none() {
+        return val(x, d);
+    }
+    let mut parts = Vec::new();
+    for (k, vx) in x.pairs()? {
+        let label = VALUE_KEY_LABELS
+            .iter()
+            .find(|(key, _)| *key == k)
+            .map(|(_, label)| *label)
+            .ok_or_else(|| format!("{}: rules 行の値の表に無い鍵「{k}」", vx.at))?;
+        let body = if vx.v.as_map().is_some() {
+            format!("<br>{}", value_cell(&vx, d + 1)?)
+        } else {
+            val(&vx, d + 1)?
+        };
+        parts.push(format!(
+            "{}<b>{}（{}）</b>: {body}",
+            "　".repeat(d),
+            esc(label),
+            esc(k)
+        ));
+    }
+    Ok(parts.join("<br>"))
+}
+
+/// 裁定の欄で過去の裁定を連ねる区切りの字面（正本 rules.yaml で 1 つに揃っている・便 79・§1 (b)）。
+const PREVIOUS_RULING: &str = "）・前の裁定 = ";
+
+/// 裁定の枡（便 79・§1 (b)）。最新の 1 件だけを出し、過去の裁定は小窓「前の裁定 <N> 件」へ畳む。
 fn ruling(x: &X<'_>) -> R<String> {
-    Ok(format!("{}（{}）", x.ef("ruling")?, x.ef("ruled_at")?))
+    let text = x.ef("ruling")?;
+    let at = x.ef("ruled_at")?;
+    let mut pieces = text.split(PREVIOUS_RULING);
+    let latest = pieces.next().unwrap_or_default();
+    let previous: Vec<&str> = pieces.collect();
+    if previous.is_empty() {
+        return Ok(format!("{text}（{at}）"));
+    }
+    let last = previous.len() - 1;
+    let body = previous
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let close = if i < last { "）" } else { "" };
+            format!("<p>前の裁定 = {p}{close}</p>")
+        })
+        .collect::<String>();
+    Ok(format!(
+        "{latest}）（{at}） {}",
+        hint(&format!("前の裁定 {} 件", previous.len()), &body)
+    ))
 }
 
 fn state_chip(x: &X<'_>) -> R<String> {
