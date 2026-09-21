@@ -3,37 +3,39 @@
 - 要件: FR4（人が読むページを 1 つの生成器から出す）
 - 条: P-2.1（人が読むページはすべて 1 つの生成器から出力する）/ P-6.3（同じ内容を 2 つの面が持つとき一方を正本とし他方は導出する）/ P-5.1（規則・閾値・型の一覧は型付きデータに置く）/ P-4.1（読めない入力を異常なしにしない）
 - 出所: 一括 10 の仕分け C。天井の 18 周目 読みやすさ F-3「条のカードの機構の札に、いつから動くか（M0 など）の意味を面へ出す。憲法の schema の節そのものは改訂の範囲なので触らない」と 20 周目 読みやすさ F-2「用語集の面に欄の名前（field_terms）の節を出し、『規範文』を面から引けるようにする」。
-- 位置: 便 79（歯の file crates/folio/tests/face_constitution.rs を置く）と 便 81（歯の file crates/folio/tests/face_srs.rs を置く）の後。両方の着地の後に受け付ける。
+- 位置: 便 79（歯の file crates/folio/tests/face_constitution.rs を置く）・便 81（歯の file crates/folio/tests/face_srs.rs を置く）・**便 87（face.rs の名札を crates/folio/src/face_labels.rs へ切り出す）**の後。3 本とも着地の後に受け付ける。初版は受付の cap で断られた（器は face.rs の余地を 93 行と測り、size S の見積 100 行に届かない）。便 87 が face.rs の 480 行から 787 行をそのまま移し、余地を約 398 行に空ける。
 - 置き場: この文書は folio2 の設計ノート。契約表は末尾の区間。審査の材料は行 cg が指す §1 だけなので、判定に要る材料は §1 に全部置く。write-set は手書き。
+- 改訂 b（2026-09-22）: 便 87 を前提にし、いつから動くかの意味の置き場を face.rs から face_labels.rs へ移し（便 87 が名札をその module へ移すため）、実測を器の行数の式（空行を含む全行 + 120 字を超える行の折り返し）で測り直した。運ぶ中身は初版と同じ。
+- 契約表の検査の断り: 便 87 の着地より前に contracts check を撃つと、write-set の crates/folio/src/face_labels.rs が base に無いので write-set-item-unresolved が 1 件出る。この file は便 87 が作るので、新規の印（+）は付けない。便 87 が main に着地すれば所見は消える。受付は便 87 の後に行うこと。
 - 門: 本便は design-intent の下の正本を 1 file も書き換えない（触るのは crates/folio/ と tests/fixtures/face/ だけ）ので、天井の門（folio ceiling --gate）は 通す を返す。
 
 ## 1. 目的と中身
 
 ① 憲法の面の条のカードは、機構の小窓に「機械が拒む・M0 で動く・編集時・止める」のような札を並べる。いつから動くかの値（いま動く・M0 で動く・便 0 で動く・M1 で動く・判断の記録の欄の決まりの後）は面に出ているが、M0 や 便 0 が何を指すのかは面のどこにも無いので、読み手は札を読めても意味が取れない。② 語彙の正本は語（terms・実測 54 語）と欄の名前（field_terms・実測 7 語 = 段・規範文・やさしく言うと・強度・型（いつ守るか）・機構・縛る相手）の 2 つの節を持つが、面に出るのは語だけである。憲法の面も要件書の面も、本文でいちばん多く使う「規範文」「やさしく言うと」「強度」を用語集から引けない。本便はこの 2 つを面の側だけで直す。正本 design-intent/constitution.yaml と design-intent/vocabulary.yaml は 1 byte も触らない。
 
-orchestrator 席の実測（2026-09-22・main 81bc02c）:
+orchestrator 席の実測（2026-09-22・main bb80fef・便 79 / 80 / 81 の着地後。便 87 の切り出しより前の行の番号）:
 
-- いつから動くかの名札は crates/folio/src/face.rs の mechanism_live_label（595〜604 行）で、組み立て時に憲法の正本から導いた型 ce::MechanismLive への網羅の場合分け（その他を受ける枝なし・ADR-11 決定 (4)②）。値は 5 つ。同じ形の名札が近くに 9 本並ぶ（段・強度・型・縛る相手・機構の種別・stage・polarity・根拠の種別・撤退の種別）。うち強度だけは名札（strength_label・539 行）と意味（strength_meaning・548 行）の 2 本を持つ形になっており、本便はその形に倣う。
-- 機構の小窓を組むのは crates/folio/src/face_constitution.rs の item_row（510〜652 行）の 573〜600 行。種別の名札と いつから動くか の名札を中黒で繋ぎ、stage と polarity が在れば足し、note が在れば区切って足し、face.rs の hint（358〜363 行）に名札 機構 で渡す。
-- 用語集の語の行を組むのは face.rs の glossary_rows（1039〜1068 行）で、引数の語彙の根から terms だけを読む。呼ぶのは 2 か所 = face_constitution.rs の glossary_chapter（1051〜1066 行・憲法の面の章 07）と crates/folio/src/face_srs_rtm.rs の glossary_chapter（100〜112 行・要件書の面の章 08）。どちらも部品 glossary-term-table の div 1 つの中に行を並べる。部品目録 design-intent/preview/parts.json は glossary-term-table の面を constitution と srs の 2 つに定めており、同じ面に 2 つ置くことを妨げる欄は持たない。
-- field_terms を既に読んでいる所が 1 つある。face_constitution.rs の reading（459〜489 行）が id が tier の行の def だけを章 01 の lead に使う。行の欄は id・term・en・def の 4 つで、terms と違い short と note を持たない（glossary_rows は note を任意で読むので、そのまま通る）。
+- いつから動くかの名札は mechanism_live_label で、組み立て時に憲法の正本から導いた型 ce::MechanismLive への網羅の場合分け（その他を受ける枝なし・ADR-11 決定 (4)②）。値は 5 つ。**便 87 の着地で、この関数は crates/folio/src/face.rs から crates/folio/src/face_labels.rs へ字を変えずに移る**（便 87 の前は face.rs の 596〜605 行）。同じ形の名札が同じ module に 9 本並ぶ（段・強度・型・縛る相手・機構の種別・stage・polarity・根拠の種別・撤退の種別）。うち強度だけは名札（strength_label）と意味（strength_meaning）の 2 本を持つ形になっており、本便はその形に倣う。行の番号でなく関数の名で当たること。
+- 機構の小窓を組むのは crates/folio/src/face_constitution.rs の item_row（546〜688 行）の 611〜635 行。種別の名札と いつから動くか の名札を中黒で繋ぎ、stage と polarity が在れば足し、note が在れば区切って足し、face.rs の hint（359〜364 行）に名札 機構 で渡す。
+- 用語集の語の行を組むのは face.rs の glossary_rows（便 87 の前は 1040〜1069 行。便 87 が 480 行から 787 行を移すので約 305 行くり上がるが、face.rs に残る）で、引数の語彙の根から terms だけを読む。呼ぶのは 2 か所 = face_constitution.rs の glossary_chapter（1150〜1165 行・憲法の面の章 07）と crates/folio/src/face_srs_rtm.rs の glossary_chapter（100〜112 行・要件書の面の章 08）。どちらも部品 glossary-term-table の div 1 つの中に行を並べる。部品目録 design-intent/preview/parts.json は glossary-term-table の面を constitution と srs の 2 つに定めており、同じ面に 2 つ置くことを妨げる欄は持たない。
+- field_terms を既に読んでいる所が 1 つある。face_constitution.rs の reading（459〜500 行）が id が tier の行の def だけを章 01 の lead に使う。行の欄は id・term・en・def の 4 つで、terms と違い short と note を持たない（glossary_rows は note を任意で読むので、そのまま通る）。
 - 語の id の重なりは 0（terms の 54 個と field_terms の 7 個に同じ id は無い。実測）。面の行の id は g- を頭に付けるので、節を 2 つ並べても重複する id は出ない。
 - 凍結の写し tests/fixtures/face/vocabulary.yaml は terms を 2 語、field_terms を 1 語（id が tier）持つので、②の直しは写しの面の字を変える。
-- 章の見出しの数えの字は face.rs の count_word（471〜477 行・9 までは 「{n} つの{noun}」・10 以上は 「{n} の{noun}」）。見出しに数を出すときはここから出す（便 70）。
+- 章の見出しの数えの字は face.rs の count_word（472〜478 行・9 までは 「{n} つの{noun}」・10 以上は 「{n} の{noun}」）。見出しに数を出すときはここから出す（便 70）。
 - 様式 design-intent/preview/folio.css は h3 と小窓の規則を既に持ち、部品 --check（crates/folio/src/parts.rs 233〜242 行）は面の class が folio.css に在ることだけを見る。本便は新しい class を 1 つも作らないので様式は 1 byte も触らない。
 
 ### (a) いつから動くかの意味
 
-face.rs に名札の隣の意味を 1 本足し、憲法の面の小窓で使う。
+crates/folio/src/face_labels.rs（便 87 が名札を移した先）に名札の隣の意味を 1 本足し、憲法の面の小窓で使う。face.rs は新しい module を丸ごと再輸出するので、呼ぶ側は今までどおり face.rs から名指せる（本便は face.rs の再輸出の行を触らない）。
 
-1. 関数 mechanism_live_meaning(l: ce::MechanismLive) -> &'static str。mechanism_live_label と同じ位置（595 行の隣）に置き、同じ形の網羅の場合分けで持つ（その他を受ける枝を置かない＝憲法の側で値が足されても消えても組み立てが通らない）。字は次の 5 つ。
+1. 関数 mechanism_live_meaning(l: ce::MechanismLive) -> &'static str。face_labels.rs の mechanism_live_label のすぐ隣（strength_label と strength_meaning が並ぶのと同じ形）に置き、同じ形の網羅の場合分けで持つ（その他を受ける枝を置かない＝憲法の側で値が足されても消えても組み立てが通らない）。公開の範囲は mechanism_live_label と同じにする。字は次の 5 つ。
    - いま動く → 今の folio に在る
    - M0 で動く → M0 = 要件書の scope の 作る の側に在る段
    - 便 0 で動く → 便 0 = 最初の便の段
    - M1 で動く → M1 = 要件書の scope_m1 の 作る の側に在る段
    - 判断の記録の欄の決まりの後 → 判断の記録の欄の決まりが定まった後
    段の中身そのものは要件書の正本が持つので、面は段の名と、その定義が要件書のどの節に在るかを指すだけにする（正本の一覧を面へ写さない・P-6.3）。
-2. face_constitution.rs の item_row の 573〜578 行で、いつから動くか の名札に続けて括弧で意味を添える形にする（「{名札}（{意味}）」）。種別・stage・polarity・note の並びと区切りは変えない。機械のための面の行（machine・579 行〜）は正本の値のままなので触らない。
+2. face_constitution.rs の item_row の 611〜616 行で、いつから動くか の名札に続けて括弧で意味を添える形にする（「{名札}（{意味}）」）。種別・stage・polarity・note の並びと区切りは変えない。機械のための面の行（machine・617 行〜）は正本の値のままなので触らない。
 
 ### (b) 用語集の欄の名前の節
 
@@ -70,7 +72,9 @@ crates/folio/tests/face_srs.rs（便 81 が置く）に 2 本。
 
 ### (e) 大きさ
 
-src は 3 本。crates/folio/src/face.rs（幅 120 で正規化して 1306 行・余地 194・見積は + 約 15 行。便 83 が先に着地しても余地は約 170）／face_constitution.rs（1130 行・余地 370・便 79 と 80 が先に着地すると余地は約 270・見積は + 約 15 行）／face_srs_rtm.rs（109 行・余地 1391・見積は + 約 10 行）。歯は tests/face_constitution.rs（+ 約 70 行）と tests/face_srs.rs（+ 約 40 行）。size **S**（src の各 file の余地は 100 以上）。外部 crate は増やさない。face_srs.rs・face_adr.rs・face_note.rs・face_index.rs・図の道具・部品目録・様式・design-intent の下の正本・tests/floor_cases.yaml・CI の yml は触らない。
+行数は器の式（空行を含む全行を数え、字数が 120 を超える行は 切り上げ(字数 ÷ 120) − 1 だけ足す）で測る。実測は main bb80fef（便 79 / 80 / 81 の着地後）。
+
+src は 4 本。crates/folio/src/face_labels.rs（便 87 の新しい module・移した 308 行 + 頭の約 10 行 = 約 318・余地 約 1182・見積は + 約 15 行）／face.rs（今 1407・余地 93 だが、便 87 の着地で約 1102・余地 約 398。便 83 が先に着地すると約 378・本便の見積は + 約 10 行）／face_constitution.rs（1289・余地 211・見積は + 約 15 行）／face_srs_rtm.rs（112・余地 1388・見積は + 約 10 行）。歯は tests/face_constitution.rs（+ 約 70 行）と tests/face_srs.rs（+ 約 40 行）。size **S**（触る src の各 file の余地は 100 以上）。外部 crate は増やさない。face_srs.rs（余地 102）・face_adr.rs・face_note.rs・face_index.rs（余地 122）・図の道具・部品目録・様式・design-intent の下の正本・tests/floor_cases.yaml・CI の yml は触らない。
 
 ### (f) 本便が運ばないもの
 
@@ -85,7 +89,7 @@ src は 3 本。crates/folio/src/face.rs（幅 120 で正規化して 1306 行�
 
 | id | 名 | 役 |
 |---|---|---|
-| meaning | 意味の名札 | face.rs の mechanism_live_meaning（網羅の場合分け・5 つ） |
+| meaning | 意味の名札 | face_labels.rs の mechanism_live_meaning（網羅の場合分け・5 つ） |
 | chip | 機構の小窓 | face_constitution.rs の item_row の 名札（意味） |
 | rows | 語の行 | face.rs の glossary_rows に読む節の名を渡す |
 | fields | 欄の名前の節 | 2 面の用語集の章の h3 1 行と glossary-term-table 1 つ |
@@ -108,7 +112,7 @@ id = "cg"
 title = "憲法の面の機構の小窓で、いつから動くかの名札に意味を括弧で添え（値域の型への網羅の場合分けで持ち、段の中身は要件書の節を指すだけにする）、憲法の面の章 07 と要件書の面の章 08 の用語集に、語彙の正本の欄の名前（field_terms）の節を 2 面で同じ字面で足す（正本は 1 byte も触らない・節が無い正本では字が不変・凍結の写し 2 本を生成し直す・天井 18 周目 読みやすさ F-3 と 20 周目 読みやすさ F-2）"
 req = ["FR4"]
 section = "1"
-write-set = ["crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_srs_rtm.rs", "crates/folio/tests/face_constitution.rs", "crates/folio/tests/face_srs.rs", "crates/folio/tests/face.rs", "crates/folio/tests/site.rs", "crates/folio/tests/badge.rs", "tests/fixtures/face/expected.html", "tests/fixtures/face/expected-srs.html"]
+write-set = ["crates/folio/src/face_labels.rs", "crates/folio/src/face.rs", "crates/folio/src/face_constitution.rs", "crates/folio/src/face_srs_rtm.rs", "crates/folio/tests/face_constitution.rs", "crates/folio/tests/face_srs.rs", "crates/folio/tests/face.rs", "crates/folio/tests/site.rs", "crates/folio/tests/badge.rs", "tests/fixtures/face/expected.html", "tests/fixtures/face/expected-srs.html"]
 verify = ["cargo nextest run -p folio --test face_constitution --test face_srs f84_", "cargo nextest run -p folio --test face_constitution --test face_srs --test face --test site --test badge", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "f84_ の歯 5 本（機構の小窓に段の意味が括弧で付く・憲法の面の章 07 に欄の名前の節と 7 語・見出しの数えが正本と一致・要件書の面の章 08 の同じ節が憲法の面と byte 一致・節を持たない正本では面の字が不変）が緑、tests/face_constitution.rs の f79_ と f80_ と tests/face_srs.rs の f81_ と tests/face.rs と tests/site.rs と tests/badge.rs の既存の歯が全部緑（生成し直した凍結の写し 2 本との byte 一致の歯を含む）、clippy が 0 警告で CI が通る"

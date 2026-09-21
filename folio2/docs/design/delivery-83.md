@@ -3,22 +3,24 @@
 - 要件: FR18（所見の形と天井の 3 値を床で数え、観点ごとの 3 値と日付を面に天井の名札として出す）/ FR4（人が読むページを 1 つの生成器から出す）
 - 条: P-6.3（同じ内容を 2 つの面が持つとき一方を正本とし他方は導出する）/ P-4.1（検査・生成が実行できなかった結果を異常なしとして扱わない）/ P-4.2（判定できないものは まだ分からない として表に出す）/ P-2.1（人が読むページはすべて 1 つの生成器から出力する）
 - 出所: 台帳 f2-648.113（天井の 16 周目 実態 F-5 で起票）「面の天井の名札（folio build --ceiling が束の置き場を読む形）を、生成物の印 design-intent/preview/ceiling-stamp.yaml を読む形に変える」。あわせて一括 10 の仕分け C の 17 周目 読みやすさ F-5「面の頭の天井の名札に説明の吹き出しか用語集への導線を付ける」。
+- 位置: **便 87（face.rs の名札の切り出し）の後**。初版は受付の cap で断られた（器は crates/folio/src/face.rs の余地を 93 行と測り、size S の見積 100 行に届かない）。便 87 が face.rs の 480 行から 787 行（名札と名札の表・308 行）を crates/folio/src/face_labels.rs へそのまま移し、余地を約 398 行に空ける。本便は便 87 の着地の後に受け付ける。
 - 置き場: この文書は folio2 の設計ノート。契約表は末尾の区間。審査の材料は行 cf が指す §1 だけなので、判定に要る材料は §1 に全部置く。write-set は手書き。
+- 改訂 b（2026-09-22）: 便 87 を前提にし、実測を器の行数の式（空行を含む全行 + 120 字を超える行の折り返し）で測り直した。運ぶ中身は初版と同じ。
 - 門: 本便は design-intent の下の正本を 1 file も書き換えない（触るのは crates/folio/ と tests/fixtures/face/ だけ・印 design-intent/preview/ceiling-stamp.yaml も触らない）ので、天井の門（folio ceiling --gate）は 通す を返す。
 
 ## 1. 目的と中身
 
 天井の結果は今、2 つの経路で面と門に届く。門（folio ceiling --gate）は印 design-intent/preview/ceiling-stamp.yaml を読む。面の天井の名札は印を読まず、旗 --ceiling が指す束の置き場を歩いて観点ごとに数え直す。同じ事実を 2 つの口が別々に作っており、P-6.3 の「一方を正本とし他方は導出する」に反する。旗を渡し忘れれば名札は 未実施 になり、旗が古い周の置き場を指せば名札だけが古い周を映す。本便は名札の出所を印 1 つに寄せ、旗を外す。あわせて、名札が何を言っているのか面から分からない（3 値の意味も、観点の 4 つが何かも面に無い）ので、名札に説明の小窓を 1 つ付けて用語集へ導く。
 
-orchestrator 席の実測（2026-09-22・main 81bc02c）:
+orchestrator 席の実測（2026-09-22・main bb80fef・便 79 / 80 / 81 の着地後。便 87 の切り出しより前の行の番号）:
 
 - 名札の字を組むのは crates/folio/src/face.rs の ceiling_stamp（369〜406 行）。引数は正本の置き場と、束の置き場（解決済み・無しも可）。crates/folio/src/findings.rs の stamps（89〜107 行）が束を歩いて観点ごとに 3 値・起動の記録の at・要約値の先頭 8 字を数え、viewpoint_names（111〜133 行）が天井の正本 ceiling.yaml の viewpoints の id と名を正本の順で返す。日付は観点の at のうち読めたものの byte 順の最大で、読めなければ 日付なし。置き場が無ければ 4 観点とも まだ分からない で 未実施。
-- 名札を site-bar に置くのは同じ file の Frame の head（914〜917 行）で、部品 ceiling-stamp の span に ceiling_stamp の返り値をそのまま入れる。床の名札（freshness-stamp・910〜913 行）の直後。
+- 名札を site-bar に置くのは同じ file の Frame の head（本便の受付の前の main では 914〜917 行。便 87 が 480 行から 787 行を移すので、この行は約 305 行くり上がる。行の番号でなく関数の名で当たること）で、部品 ceiling-stamp の span に ceiling_stamp の返り値をそのまま入れる。床の名札（freshness-stamp）の直後。
 - ceiling_stamp を呼ぶのは 5 面の derive だけ（face_constitution.rs 134 行・face_srs.rs 260 行・face_adr.rs 210 行・face_note.rs 268 行・face_index.rs 284 行）。
 - 印を書くのは crates/folio/src/stamp.rs。置き場は同 file 22 行の STAMP_FILE（preview/ceiling-stamp.yaml）。欄は round・at・verdict・sources・faces・viewpoints・refutes・reads の 8 つ（同 file 6 行）。viewpoints の行は id・verdict・findings・stops・bundle・model・effort・at を持ち、bundle は要約値の先頭 8 字である。top-level の at は観点の at の byte 順の最大（同 file 122〜127 行）で、名札が今使っている日付の規則と同じ。
 - 印を読む既存の口は crates/folio/src/gate.rs の read_stamp（128〜162 行）1 つだけで、非公開かつ sources と viewpoints の（id・verdict）しか持たない。日付も要約値も読まない。名札に要る欄を読む口は今どこにも無い。
 - 旗 --ceiling は crates/folio/src/main.rs の Face（123〜125 行）と Build（164〜166 行）の 2 か所で宣言され、face::run（main.rs 373 行）と site::run（main.rs 416 行）へ渡る。旗を実際に渡す歯は crates/folio/tests/badge.rs の 9 か所だけ（ほかの一致はどれも説明の文の中の言及）。
-- 小窓は face.rs の hint（358〜363 行・名札付き）と hint_q（409〜414 行・「?」の形）。用語集への導線の既存の形は同 file の glossary_chip（1010〜1021 行）で、付録の表 ANNEXES（740 行）から章の番号を引き、constitution.html のその章へリンクする。
+- 小窓は face.rs の hint（358〜363 行・名札付き）と hint_q（409〜414 行・「?」の形）。この 2 本は便 87 が移す区間より前に在るので行の番号は変わらない。用語集への導線の既存の形は同 file の glossary_chip（便 87 の前は 1010〜1021 行・便 87 で約 305 行くり上がる）で、付録の表 ANNEXES から章の番号を引き、constitution.html のその章へリンクする。ANNEXES は便 87 で crates/folio/src/face_labels.rs へ移るが、face.rs が新しい module を丸ごと再輸出するので、本便は今までどおり face.rs の中から ANNEXES の名で読める（face_labels.rs は 1 byte も触らない）。
 - 様式 design-intent/preview/folio.css は 95 行で部品 ceiling-stamp を inline-flex・折り返しなしで定義し、588〜599 行で小窓を position:relative の inline-block、小窓の本体を position:absolute で折り返しありに定義する。小窓を名札の中に置いても様式は 1 byte も要らない。部品 --check は面の class が folio.css に在ることを見る（crates/folio/src/parts.rs 233〜242 行）ので、使う class は既存の hint・hint-btn・hint-body・vh だけにする。
 - 天井の 21 周目の印（design-intent/preview/ceiling-stamp.yaml）の実測: 4 観点とも 合格、top-level の at は 2026-09-21T14:08:10Z、観点の bundle は 8dead31e / 22aa40dc / af59959e / 53588227。
 
@@ -78,7 +80,9 @@ crates/folio/tests/badge.rs に置く（天井の名札の歯の置き場）。�
 
 ### (g) 大きさ
 
-src は 10 本。crates/folio/src/stamp.rs（幅 120 で正規化して 259 行・余地 1241・見積は + 約 55 行）／face.rs（1306 行・余地 194・見積は + 約 20 行）／findings.rs（1083 行・余地 417・約 20 行減る）／main.rs（535 行・余地 965・約 10 行減る）／site.rs（391 行・余地 1109・約 3 行減る）／face_constitution.rs（1130 行・余地 370）・face_srs.rs（1305 行・余地 195）・face_adr.rs（801 行・余地 699）・face_note.rs（954 行・余地 546）・face_index.rs（1291 行・余地 209）はどれも 2 行ずつの差し替え。便 79 から 82 が先に着地しても、どの file の余地も 100 を下回らない（最小は face_srs.rs の約 165）。size **S**（src の足し合わせは 100 行に届かない）。外部 crate は増やさない。部品目録・様式・design-intent の下の正本と印・tests/floor_cases.yaml・vendor/archify/・CI の yml は触らない。
+行数は器の式（空行を含む全行を数え、字数が 120 を超える行は 切り上げ(字数 ÷ 120) − 1 だけ足す）で測る。実測は main bb80fef（便 79 / 80 / 81 の着地後）。
+
+src は 10 本。crates/folio/src/stamp.rs（277・余地 1223・見積は + 約 55 行）／face.rs（今 1407・余地 93 だが、**便 87 の着地で約 1102・余地 約 398** になる・本便の見積は + 約 20 行）／findings.rs（1144・余地 356・約 20 行減る）／main.rs（542・余地 958・約 10 行減る。便 87 で + 1 行）／site.rs（262・余地 1238・約 3 行減る）／face_constitution.rs（1289・余地 211）・face_srs.rs（1398・余地 102）・face_adr.rs（853・余地 647）・face_note.rs（1023・余地 477）・face_index.rs（1378・余地 122）はどれも引数を 1 つ外す差し替えで、**行は 1 行も増えない**（長い行が短くなるだけ）。だから余地 102 の face_srs.rs と余地 122 の face_index.rs も受付を通る。size **S**（src の足し合わせは 100 行に届かない）。外部 crate は増やさない。face_labels.rs（便 87 の新しい module）・部品目録・様式・design-intent の下の正本と印・tests/floor_cases.yaml・vendor/archify/・CI の yml は触らない。
 
 ### (h) 本便が運ばないもの
 
