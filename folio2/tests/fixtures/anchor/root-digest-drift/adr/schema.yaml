@@ -6,7 +6,7 @@ schema:
   ruling_pattern: '[a-z]\d-[0-9a-z]+(\.\d+)?'
   owner: 持ち主
   required: [id, title, status, date, context, decision, options, basis, retreat, plain]
-  optional: [amends, grill, approval, consequences, supersedes, superseded_by, note, figures]
+  optional: [amends, grill, approval, consequences, produced, supersedes, superseded_by, note, figures]
   non_empty: [title, context, decision, plain]
   enums:
     status: [proposed, accepted, retired]

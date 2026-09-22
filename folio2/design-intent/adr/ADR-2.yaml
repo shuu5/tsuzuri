@@ -11,6 +11,7 @@ options:
   - {id: c, name: 版の印（git tag）を比較元にする, text: 発効 commit に印を付け、床は印の指す憲法と比べる。, verdict: rejected, reason: 印は push が別で写し（clone）の間でずれる。印が無い環境で検査が黙るか落ちるかを機械で弁別しにくい。印は動かせるので改竄への耐性も案 a を上回らない。}
   - {id: d, name: 統合先（origin/main）との差分, text: 床は統合先の憲法と現行を比べる。, verdict: rejected, reason: 比較対象が動く（取り込みの要求（PR）の外で統合先が進む）。生成物どうしの突き合わせに当たる（P-10.2）。}
 basis: [A-2, N-4, P-4, P-6, P-7, P-10, P-12, R-7, P-17]
+produced: [ADR-11]
 retreat: {kind: measure, condition: 数えるのは orchestrator 席（2026-09-19 までの名は planner 席・床を回す席）で、台帳に記帳する。凍結忘れ（版を上げたのに凍結の命令（--freeze-anchor）を回さず床が「版が違う」で落ちる）が rules 行 R-7 の上限を超えて繰り返されたとき、または列切れ（anchor か索引を消して不合格か「まだ分からない」に落ちる）が R-7 の上限を超えて繰り返されたとき（2 つは R-7 の same_failure では別種なので、別々に数える）、本判断を捨て、比較元を anchor の列から、便 0 の検査（CI）が版管理の履歴から作る比較元へ替える。}
 amends: []
 approval: {who: 持ち主, date: 2026-09-13, ruling: f2-648.2 notes 2026-09-13 09:35, verbatim: すべて承認する, surface: R-8}

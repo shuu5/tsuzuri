@@ -18,7 +18,7 @@ schema:
   owner: 持ち主
   owner_note: 条文を改訂する発効した判断の承認者はこの値（N-4）。planner 席は条文を改訂しない判断だけを承認できる
   required: [id, title, status, date, context, decision, options, basis, retreat, plain]
-  optional: [amends, grill, approval, consequences, supersedes, superseded_by, note, figures]
+  optional: [amends, grill, approval, consequences, produced, supersedes, superseded_by, note, figures]
   non_empty: [title, context, decision, plain]
   non_empty_note: ほかに床が非空を課す欄 = basis（空の一覧を落とす）・options の name / text / reason・retreat.condition・grill の who / where / summary・approval の ruling / verbatim・amends の field / version / previous_text / new_text・憲法の各条の amended_by の approved_by / ruling / previous_text / rationale・anchor の承認一覧の who / ruling / verbatim
   enums:

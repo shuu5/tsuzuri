@@ -29,6 +29,8 @@ const ID_PATTERN: &str = "^ADR-[1-9][0-9]*$";
 const DATE_FORMAT: &str = r"^\d{4}-\d{2}-\d{2}$";
 const RULING_PATTERN: &str = r"[a-z]\d-[0-9a-z]+(\.\d+)?";
 const OWNER: &str = "持ち主";
+/// 帰結の欄（便 92・ADR-13 決定 (3-b)（ウ））。その判断が発効で生んだものの id の一覧で、根拠の欄 basis とは別に持つ。
+const PRODUCED: &str = "produced";
 const RECORD: Keys = Keys {
     required: &[
         "id", "title", "status", "date", "context", "decision", "options", "basis", "retreat",
@@ -39,6 +41,7 @@ const RECORD: Keys = Keys {
         "grill",
         "approval",
         "consequences",
+        PRODUCED,
         "supersedes",
         "superseded_by",
         "note",
@@ -221,6 +224,12 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         "basis_note",
         Floor::Val(
             "条・要件・rules 行・判断の記録の id。各項は id の形（P-5.2）。条・要件・rules 行の未解決も判断の記録の未解決も欄の決まりの規則として床が落とす（rules 行 R-4 の行と母集団〔正本 4 file・内部 3 空間〕は変えない）",
+        ),
+    ),
+    (
+        "produced_note",
+        Floor::Val(
+            "その判断が発効で生んだもの（要件・受入基準・rules 行・後続の判断）の id の一覧。根拠（basis）には書かない＝面の章 04 は根拠だけを描く。各項は id の形（P-5.2）で、条と規範文は書かない（条の改訂は amends と amended_by が持つ）。自分の id と basis に在る id は書かない",
         ),
     ),
     (
@@ -697,6 +706,35 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
         _ => report.violation("adr", format!("{id}: basis（根拠の id）が空")),
     }
 
+    // 帰結の欄（便 92）: 条でない id の形・自分と basis に無い id。実在は link.rs の網が数える
+    match present(d, PRODUCED) {
+        None => {}
+        Some(Node::Seq(items)) => {
+            let basis = d.get("basis").and_then(Node::as_seq).unwrap_or(&[]);
+            for p in items {
+                let v = p.as_str();
+                if !v.is_some_and(|s| is_basis_id(s) && !is_article_id(s)) {
+                    report.violation(
+                        "adr",
+                        format!(
+                            "{id}: {PRODUCED}「{}」が id の形でない（要件・rules 行・判断の記録だけ・P-5.2）",
+                            show(Some(p))
+                        ),
+                    );
+                } else if v == Some(id) || basis.iter().any(|b| b.as_str() == v) {
+                    report.violation(
+                        "adr",
+                        format!(
+                            "{id}: {PRODUCED}「{}」が自分の id か根拠（basis）に在る",
+                            show(Some(p))
+                        ),
+                    );
+                }
+            }
+        }
+        Some(_) => report.violation("adr", format!("{id}: {PRODUCED} が一覧でない")),
+    }
+
     let amends: &[Node] = match present(d, "amends") {
         None => &[],
         Some(Node::Seq(items)) => items,
@@ -1091,13 +1129,7 @@ fn is_adr_id(s: &str) -> bool {
 
 /// basis の各項の id の形（条・要件・rules 行・判断の記録の全体一致）。要件書の図の refs（`check.rs`・便 34）も同じ判定を呼ぶ。
 pub(crate) fn is_basis_id(s: &str) -> bool {
-    let article = ["P-", "A-", "N-"].iter().any(|p| {
-        s.strip_prefix(p)
-            .is_some_and(|rest| match rest.split_once('.') {
-                Some((n, sub)) => digits(n) && digits(sub),
-                None => digits(rest),
-            })
-    });
+    let article = is_article_id(s);
     let req = ["FR", "NFR", "AC", "CON", "GOAL"]
         .iter()
         .any(|p| s.strip_prefix(p).is_some_and(digits));
@@ -1105,6 +1137,17 @@ pub(crate) fn is_basis_id(s: &str) -> bool {
         .iter()
         .any(|p| s.strip_prefix(p).is_some_and(digits));
     article || req || row || is_adr_id(s)
+}
+
+/// 条と規範文の id（P-n / A-n / N-n と P-n.m の形）。帰結の欄 produced は受けない（便 92）。
+fn is_article_id(s: &str) -> bool {
+    ["P-", "A-", "N-"].iter().any(|p| {
+        s.strip_prefix(p)
+            .is_some_and(|rest| match rest.split_once('.') {
+                Some((n, sub)) => digits(n) && digits(sub),
+                None => digits(rest),
+            })
+    })
 }
 
 /// 小文字の英字 1 字 + 数字 1 字 + 「-」+ 小文字の英字か数字 1 字 の並びを含む（ruling_pattern の search）。
@@ -1159,7 +1202,7 @@ mod tests {
             unreachable!()
         };
         let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
-        assert_eq!(notes, 22);
+        assert_eq!(notes, 23);
         let mut out = Vec::new();
         floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
         // 空の写し = 値の欄が全部（欠落）・注は 1 本も立たない

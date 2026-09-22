@@ -18,7 +18,16 @@ schema:
   owner: 持ち主
   owner_note: 条文を改訂する発効した判断の承認者はこの値（N-4）。orchestrator 席（2026-09-19 までの名は planner 席）は条文を改訂しない判断だけを承認できる
   required: [id, title, status, date, context, decision, options, basis, retreat, plain]
-  optional: [amends, grill, approval, consequences, supersedes, superseded_by, note, figures]
+  optional:
+    - amends
+    - grill
+    - approval
+    - consequences
+    - produced
+    - supersedes
+    - superseded_by
+    - note
+    - figures
   non_empty: [title, context, decision, plain]
   non_empty_note: ほかに床が非空を課す欄 = basis（空の一覧を落とす）・options の name / text / reason・retreat.condition・grill の who / where / summary・approval の ruling / verbatim・amends の field / version / previous_text / new_text・憲法の各条の amended_by の approved_by / ruling / previous_text / rationale・anchor の承認一覧の who / ruling / verbatim
   enums:
@@ -44,6 +53,7 @@ schema:
   retreat: {required: [kind, condition], optional: []}
   retreat_note: P-8.1。床は非空と kind の値域を見る＝「誰が数えるか」は本文に書く（人が見る）
   basis_note: 条・要件・rules 行・判断の記録の id。各項は id の形（P-5.2）。条・要件・rules 行の未解決も判断の記録の未解決も欄の決まりの規則として床が落とす（rules 行 R-4 の行と母集団〔正本 4 file・内部 3 空間〕は変えない）
+  produced_note: その判断が発効で生んだもの（要件・受入基準・rules 行・後続の判断）の id の一覧。根拠（basis）には書かない＝面の章 04 は根拠だけを描く。各項は id の形（P-5.2）で、条と規範文は書かない（条の改訂は amends と amended_by が持つ）。自分の id と basis に在る id は書かない
   prose_note: 本文（見出し・問題・決定・案・撤退条件・平易文・帰結）と本 file の平易文の英字語は「日本語（原語）」の形で書く。語彙に無い裸の英字語は欄の決まりの規則として床が落とす（rules 行 R-9 の行と母集団〔憲法・rules・要件書・語彙〕は変えない）
   amends_entry:
     required: [target, field, version, previous_text, new_text]

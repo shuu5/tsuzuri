@@ -272,3 +272,81 @@ fn adr_figure_ids_must_be_unique_fails() {
     fs::write(w.adr1(), format!("{before}{second}")).unwrap();
     assert_figure_violation(&w, &["図の id「fig-1」が重複"]);
 }
+
+// ── 帰結の欄 produced（便 92・docs/design/delivery-92.md §1 (g)） ──
+
+/// 変異の当て先 = 実の ADR-1 の produced の 1 行。
+const PRODUCED_ADR1: &str = "\nproduced: [ADR-2]\n";
+
+#[test]
+fn f92_the_real_records_carry_the_produced_field() {
+    let w = Work::new("f92-real");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    let mut files = Vec::new();
+    let mut ids = Vec::new();
+    for entry in fs::read_dir(w.dir().join("adr")).unwrap() {
+        let path = entry.unwrap().path();
+        let text = fs::read_to_string(&path).unwrap();
+        for line in text.lines() {
+            if let Some(rest) = line.strip_prefix("produced: [") {
+                files.push(path.file_name().unwrap().to_string_lossy().into_owned());
+                let list = rest.strip_suffix(']').expect("1 行の flow の一覧");
+                ids.extend(list.split(", ").map(str::to_string));
+            }
+        }
+    }
+    files.sort();
+    assert_eq!(
+        files,
+        [
+            "ADR-1.yaml",
+            "ADR-2.yaml",
+            "ADR-3.yaml",
+            "ADR-4.yaml",
+            "ADR-8.yaml"
+        ]
+    );
+    assert_eq!(ids.len(), 15, "{ids:?}");
+    assert!(
+        ids.iter()
+            .all(|id| !["P-", "A-", "N-"].iter().any(|p| id.starts_with(p))),
+        "{ids:?}"
+    );
+}
+
+#[test]
+fn f92_an_article_id_is_a_violation() {
+    let w = Work::new("f92-article");
+    w.mutate(PRODUCED_ADR1, "\nproduced: [P-6]\n");
+    assert_figure_violation(&w, &["produced", "P-6", "id の形でない"]);
+}
+
+#[test]
+fn f92_an_id_in_the_basis_is_a_violation() {
+    let w = Work::new("f92-basis");
+    w.mutate(PRODUCED_ADR1, "\nproduced: [FR16]\n");
+    assert_figure_violation(&w, &["produced", "FR16", "自分の id か根拠"]);
+}
+
+#[test]
+fn f92_produced_that_is_not_a_list_is_a_violation() {
+    let w = Work::new("f92-not-list");
+    w.mutate(PRODUCED_ADR1, "\nproduced: ADR-2\n");
+    assert_figure_violation(&w, &["produced が一覧でない"]);
+}
+
+/// 実在は link.rs の網が数える（床の枝は重ねない）。
+#[test]
+fn f92_an_adr_that_does_not_exist_is_a_violation() {
+    let w = Work::new("f92-missing");
+    w.mutate(PRODUCED_ADR1, "\nproduced: [ADR-99]\n");
+    assert_figure_violation(&w, &["ADR-1.produced[0]", "ADR-99", "実在しない"]);
+}

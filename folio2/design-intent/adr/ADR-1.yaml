@@ -12,6 +12,7 @@ options:
   - {id: c, name: 散文（Markdown）の判断の記録, text: 前の版（folio v1）と同じ、文書の置き場に散文で置く形（docs/adr/ADR-0001.md）。, verdict: rejected, reason: 散文の欄は欠落を機械で検査できない（N-2 の極性と逆）。v1 は 48 本が全部「発効（accepted）」で「取り消した決定」を機械で引けなかった（P-7 の出所）。}
   - {id: d, name: 台帳（bd）の notes だけに残す, text: 判断は台帳の notes の逐語で足りるとする。, verdict: rejected, reason: 台帳はタスクと裁定の記帳先であって規則も文書も置かない（P-5.4）。承認は文書の承認欄にも記帳する（P-12.2）。}
 basis: [P-8, A-2, N-4, N-3, P-5, P-6, P-7, P-12, P-13, R-7, R-8, CON1, FR16, N-2, R-4, R-9]
+produced: [ADR-2]
 retreat: {kind: measure, condition: 数えるのは orchestrator 席（2026-09-19 までの名は planner 席・床を回す席）で、数えた結果は台帳に記帳する。案 a の利点（判断ごとの file で 2 席の衝突を避ける・どの判断が変わったかが file 名で見える）が出ていない事例＝2 席が同じ判断の記録の file を同時に直して取り込みが競合した回数、または取り込みの審査で判断の単位を file 名で追えなかった回数のどちらかが、同じ種類の失敗として rules 行 R-7 の上限を超えたら、本判断を捨てて案 e（全部を 1 file の配列に持つ）へ戻す。戻す前に持ち主へ知らせる。}
 amends: []
 approval: {who: 持ち主, date: 2026-09-13, ruling: f2-648.2 notes 2026-09-13 09:35, verbatim: すべて承認する, surface: R-8}
