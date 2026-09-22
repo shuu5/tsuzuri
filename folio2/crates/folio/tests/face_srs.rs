@@ -350,3 +350,48 @@ fn f84_missing_field_terms_leaves_the_face_unchanged() {
     let s1 = span(&c, "<section id=\"s1\"", "</section>");
     assert!(!s1.contains("<p class=\"lead\">"), "章 01 の帯に副題が在る");
 }
+
+// ── 便 100: 章 03〜06 を face_srs_items.rs へ切り出す（docs/design/delivery-100.md §1 (f)）──
+
+/// 器の行数の式: 空行を含む全行を数え、字数（Unicode の字の数）が 120 を超える行は 切り上げ(字数 ÷ 120) − 1 だけ足す。
+fn cap_lines(text: &str) -> usize {
+    text.lines()
+        .map(|l| {
+            let n = l.chars().count();
+            if n > 120 { n.div_ceil(120) } else { 1 }
+        })
+        .sum()
+}
+
+#[test]
+fn f100_face_srs_is_split_and_under_the_cap() {
+    let src = repo_root().join("crates/folio/src");
+    let read = |name: &str| {
+        fs::read_to_string(src.join(name)).unwrap_or_else(|e| panic!("{name} が読めない: {e}"))
+    };
+    let srs = read("face_srs.rs");
+    let items = read("face_srs_items.rs");
+    let (n_srs, n_items) = (cap_lines(&srs), cap_lines(&items));
+    assert!(n_srs <= 1100, "face_srs.rs が器の式で {n_srs} 行（上限 1100）");
+    assert!(n_items <= 600, "face_srs_items.rs が器の式で {n_items} 行（上限 600）");
+    for head in [
+        "fn legend_line(",
+        "fn fr_chapter(",
+        "fn nfr_chapter(",
+        "fn item_row(",
+        "fn ac_legend_line(",
+        "fn ac_chapter(",
+        "fn con_chapter(",
+    ] {
+        assert_eq!(
+            items.matches(head).count(),
+            1,
+            "face_srs_items.rs の「{head}」が 1 つでない"
+        );
+        assert_eq!(
+            srs.matches(head).count(),
+            0,
+            "face_srs.rs に「{head}」が残っている"
+        );
+    }
+}

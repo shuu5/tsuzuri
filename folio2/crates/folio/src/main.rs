@@ -14,6 +14,7 @@ mod face_index;
 mod face_labels;
 mod face_note;
 mod face_srs;
+mod face_srs_items;
 mod face_srs_rtm;
 mod figure;
 mod findings;

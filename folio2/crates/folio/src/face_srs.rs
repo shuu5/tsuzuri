@@ -6,14 +6,14 @@
 //! 図の章（便 34・FR15）: 正本に任意の図の節（figures・最上位）が 1 枚以上あれば章 09「図」を用語集の後・承認欄の
 //! 前に置く。図の枠は `face.rs` の共有の口（`figure_body` / `figure_panel`）で、判断の記録・設計ノートの面と同じ字面。
 //! 図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか）。図が無い面は便 33 までと byte 不変。
+//! 章 03〜06（機能要件・非機能要件・受入基準・制約）の生成は便 100 で `face_srs_items.rs` へ移した（字は 1 字も
+//! 変えていない）。
 
 use std::path::Path;
 
-use crate::constitution_enums as ce;
 use crate::face::{
-    self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, METHOD, R, TONE, X,
-    anchor, card, count_word, hint, hint_q, method_label, pattern_label, strength_label,
-    strength_meaning, strength_prio,
+    self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, R, X, anchor, card,
+    count_word, hint,
 };
 use crate::parts::catalog::Component;
 
@@ -115,12 +115,12 @@ pub(crate) struct Item<'a> {
 }
 
 /// rail の段 1 つ。
-struct Step<'a> {
-    x: X<'a>,
-    n: u64,
-    who: String,
-    owner: bool,
-    what: String,
+pub(crate) struct Step<'a> {
+    pub(crate) x: X<'a>,
+    pub(crate) n: u64,
+    pub(crate) who: String,
+    pub(crate) owner: bool,
+    pub(crate) what: String,
 }
 
 /// 導出の文脈（行・参照の先・骨格）。章 07・08 の生成（`face_srs_rtm.rs`）も読む。
@@ -128,15 +128,15 @@ pub(crate) struct Ctx<'a> {
     pub(crate) goals: Vec<Item<'a>>,
     pub(crate) fr: Vec<Item<'a>>,
     pub(crate) nfr: Vec<Item<'a>>,
-    acs: Vec<Item<'a>>,
-    cons: Vec<Item<'a>>,
+    pub(crate) acs: Vec<Item<'a>>,
+    pub(crate) cons: Vec<Item<'a>>,
     /// 条 id → escape した title
     arts: Vec<(&'a str, String)>,
     rule_ids: Vec<&'a str>,
-    rail: Vec<Step<'a>>,
+    pub(crate) rail: Vec<Step<'a>>,
     /// 段の n → escape した what
     rail_what: Vec<(u64, String)>,
-    verdicts: Option<Vec<X<'a>>>,
+    pub(crate) verdicts: Option<Vec<X<'a>>>,
     /// 任意の図の節の行（無ければ空）
     figures: Vec<X<'a>>,
     /// 面の骨格（章の数は図の章の有無で変わる）
@@ -195,7 +195,7 @@ impl<'a> Ctx<'a> {
         Ok(href.unwrap_or_else(|| format!("{id}（まだ分からない）")))
     }
 
-    fn req(&self, x: &X<'_>) -> R<&Item<'a>> {
+    pub(crate) fn req(&self, x: &X<'_>) -> R<&Item<'a>> {
         let id = x.id()?;
         self.fr
             .iter()
@@ -220,7 +220,7 @@ impl<'a> Ctx<'a> {
             .ok_or_else(|| format!("{}: 受入基準 id「{id}」が無い", x.at))
     }
 
-    fn article(&self, x: &X<'_>) -> R<&(&'a str, String)> {
+    pub(crate) fn article(&self, x: &X<'_>) -> R<&(&'a str, String)> {
         let id = x.id()?;
         self.arts
             .iter()
@@ -228,7 +228,7 @@ impl<'a> Ctx<'a> {
             .ok_or_else(|| format!("{}: 条 id「{id}」が無い", x.at))
     }
 
-    fn rule(&self, x: &X<'_>) -> R<&'a str> {
+    pub(crate) fn rule(&self, x: &X<'_>) -> R<&'a str> {
         let id = x.id()?;
         self.rule_ids
             .iter()
@@ -265,10 +265,10 @@ pub fn derive(dir: &Path) -> R<String> {
     toc(&mut o, &ctx);
     goals_chapter(&mut o, &ctx)?;
     scope_chapter(&mut o, &ctx, &s, &m)?;
-    fr_chapter(&mut o, &ctx, &m)?;
-    nfr_chapter(&mut o, &ctx)?;
-    ac_chapter(&mut o, &ctx, &s)?;
-    con_chapter(&mut o, &ctx)?;
+    crate::face_srs_items::fr_chapter(&mut o, &ctx, &m)?;
+    crate::face_srs_items::nfr_chapter(&mut o, &ctx)?;
+    crate::face_srs_items::ac_chapter(&mut o, &ctx, &s)?;
+    crate::face_srs_items::con_chapter(&mut o, &ctx)?;
     crate::face_srs_rtm::rtm_chapter(&mut o, &ctx)?;
     crate::face_srs_rtm::glossary_chapter(&mut o, &ctx, &s, &v)?;
     if !ctx.figures.is_empty() {
@@ -420,7 +420,7 @@ fn parse_fig(s: &str) -> R<Fig> {
 #[derive(Debug, PartialEq)]
 pub(crate) struct Where {
     pub(crate) href: Option<String>,
-    long: String,
+    pub(crate) long: String,
     pub(crate) short: String,
 }
 
@@ -458,7 +458,7 @@ fn resolve(s: &str, rail: &[(u64, String)], verdicts: bool) -> R<Where> {
 }
 
 /// 段の 2 つの枠（上 = 持ち主の側・下 = 道具の側）。`node` は組み立て済みの rail-node。
-fn slots(owner: bool, node: &str) -> (String, String) {
+pub(crate) fn slots(owner: bool, node: &str) -> (String, String) {
     if owner {
         (
             format!("<div class=\"rail-slot filled\">{node}</div>"),
@@ -611,7 +611,7 @@ pub(crate) fn band(o: &mut Vec<String>, ctx: &Ctx<'_>, n: usize, lead: Option<&s
         .band(o, n, CHAPTERS[n - 1], &chapter_h2(ctx, n), lead);
 }
 
-fn figure_open(
+pub(crate) fn figure_open(
     o: &mut Vec<String>,
     ctx: &Ctx<'_>,
     id: &str,
@@ -629,7 +629,7 @@ fn figure_open(
     ));
 }
 
-fn figure_close(o: &mut Vec<String>, fn_: &str, m: &X<'_>) -> R<()> {
+pub(crate) fn figure_close(o: &mut Vec<String>, fn_: &str, m: &X<'_>) -> R<()> {
     o.push(format!(
         "<figcaption><span class=\"ver\">{fn_} · {} {} · srs.yaml</span></figcaption>",
         m.ef("version")?,
@@ -640,7 +640,7 @@ fn figure_close(o: &mut Vec<String>, fn_: &str, m: &X<'_>) -> R<()> {
 }
 
 /// 図の中の要件へのリンク。
-fn fig_req(item: &Item<'_>) -> String {
+pub(crate) fn fig_req(item: &Item<'_>) -> String {
     format!(
         "<a class=\"fig-req\" href=\"#{}\"><span class=\"no\">{}</span>{}</a>",
         anchor(item.id),
@@ -650,14 +650,14 @@ fn fig_req(item: &Item<'_>) -> String {
 }
 
 /// 憲法の条への xref（字面は「<前置き><id><後置き>」）。
-fn article_link(id: &str, text: &str) -> String {
+pub(crate) fn article_link(id: &str, text: &str) -> String {
     format!(
         "<a class=\"xref\" href=\"constitution.html#{}\">{text}</a>",
         anchor(id)
     )
 }
 
-fn xref(id: &str, text: &str) -> String {
+pub(crate) fn xref(id: &str, text: &str) -> String {
     format!("<a class=\"xref\" href=\"#{}\">{text}</a>", anchor(id))
 }
 
@@ -807,374 +807,6 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
     Ok(())
 }
 
-/// 凡例の 1 行（言葉 = 強度と型の名札・確かめ方 = 確かめ方の名札）。強度と型は導出した型の ALL の順（= 憲法の値域の file の順）。
-fn legend_line() -> String {
-    let words = ce::Strength::ALL
-        .iter()
-        .map(|s| format!("{} = {}", strength_label(*s), strength_meaning(*s)))
-        .chain(
-            ce::Pattern::ALL
-                .iter()
-                .map(|p| pattern_label(*p).to_string()),
-        )
-        .collect::<Vec<_>>()
-        .join("／");
-    let methods = METHOD
-        .iter()
-        .map(|(_, label)| *label)
-        .collect::<Vec<_>>()
-        .join("／");
-    format!(
-        "<div class=\"legend-line\"><span>凡例:</span>{}{}</div>",
-        hint("言葉", &words),
-        hint("確かめ方", &methods)
-    )
-}
-
-fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
-    band(o, ctx, 3, None);
-    o.push("<div class=\"chapbody\">".to_string());
-    o.push(legend_line());
-
-    // 図 2
-    let count = ctx.rail.len();
-    let legend = "<div class=\"fig-legend\"><span class=\"lg\"><span class=\"sw ok\"></span>あなたの手番</span><span class=\"lg\"><span class=\"sw neutral\"></span>folio がやる</span><span class=\"lg\"><span class=\"sw line\"></span>番号の順に進む</span><span class=\"lg\">枠線が点線 = 定める要件が無い段</span></div>";
-    figure_open(
-        o,
-        ctx,
-        "fig-rail",
-        "図 2",
-        &format!("folio が 1 回で通す {count} 段 — 各段を決めている要件"),
-        Some(legend),
-    );
-    o.push(format!(
-        "<ol {} style=\"--rail-n:{count}\">",
-        ctx.frame.dc(Component::PipelineRail)
-    ));
-    for st in &ctx.rail {
-        let x = &st.x;
-        let nt = match x.g("note")? {
-            Some(n) => format!("{} {}", st.what, hint_q(&n.e()?)),
-            None => st.what.clone(),
-        };
-        let basis = match x.g("basis")? {
-            Some(b) => b
-                .seq()?
-                .iter()
-                .map(|q| {
-                    let (id, _) = ctx.article(q)?;
-                    Ok(article_link(id, &format!("憲法 {id}")))
-                })
-                .collect::<R<Vec<_>>>()?,
-            None => Vec::new(),
-        };
-        let reqs = x
-            .f("reqs")?
-            .seq()?
-            .iter()
-            .map(|q| Ok(fig_req(ctx.req(q)?)))
-            .collect::<R<Vec<_>>>()?;
-        let fig_reqs = if reqs.is_empty() {
-            let refs = if basis.is_empty() {
-                String::new()
-            } else {
-                format!("（{}）", basis.join("・"))
-            };
-            format!("<span class=\"fig-req none\">この段を定める要件は無い{refs}</span>")
-        } else {
-            reqs.concat()
-        };
-        let node = format!(
-            "<article {}{} id=\"rail-{}\"><span class=\"actor\">担当: {}</span><p class=\"nt\">{nt}</p><p class=\"fig-reqs\">{fig_reqs}</p></article>",
-            ctx.frame.dc(Component::RailNode),
-            if st.owner { " class=\"tone-ok\"" } else { "" },
-            st.n,
-            st.who
-        );
-        o.push(format!(
-            "<li class=\"rail-col\"><span class=\"rail-step\"><span class=\"no\">{}</span></span>",
-            st.n
-        ));
-        let (upper, lower) = slots(st.owner, &node);
-        o.push(upper);
-        o.push(format!("{lower}</li>"));
-    }
-    o.push("</ol>".to_string());
-    figure_close(o, "図 2", m)?;
-
-    o.push("<div class=\"stack\">".to_string());
-    for it in &ctx.fr {
-        item_row(o, ctx, it, false)?;
-    }
-    o.push("</div>".to_string());
-
-    // 図 3（verdicts の節が在るときだけ）
-    if let Some(verdicts) = &ctx.verdicts {
-        let mut legend = String::new();
-        let mut nodes = Vec::new();
-        for v in verdicts {
-            let tone_x = v.f("tone")?;
-            let class = tone_x.lookup(TONE, "図の色")?;
-            let tone = tone_x.e()?;
-            let name = v.ef("name")?;
-            legend.push_str(&format!(
-                "<span class=\"lg\"><span class=\"sw {tone}\"></span>{name}</span>"
-            ));
-            nodes.push(format!(
-                "<li {} class=\"{class}\" id=\"v-{}\"><p class=\"nt\">{name}</p><span class=\"cond\">ここへ来る条件</span><p class=\"np\">{}</p></li>",
-                ctx.frame.dc(Component::StateNode),
-                v.f("id")?.id()?,
-                v.ef("cond")?
-            ));
-        }
-        figure_open(
-            o,
-            ctx,
-            "fig-verdicts",
-            "図 3",
-            &format!(
-                "検査の答えは {} つ — どういうときにその答えになるか",
-                verdicts.len()
-            ),
-            Some(&format!("<div class=\"fig-legend\">{legend}</div>")),
-        );
-        o.push(format!(
-            "<ul {} style=\"--state-n:{}\">",
-            ctx.frame.dc(Component::StateStrip),
-            verdicts.len()
-        ));
-        o.extend(nodes);
-        o.push("</ul>".to_string());
-        figure_close(o, "図 3", m)?;
-    }
-    o.push("</div>".to_string());
-    Ok(())
-}
-
-fn nfr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
-    band(o, ctx, 4, None);
-    o.push("<div class=\"chapbody\">".to_string());
-    o.push(legend_line());
-    o.push("<div class=\"stack\">".to_string());
-    for it in &ctx.nfr {
-        item_row(o, ctx, it, true)?;
-    }
-    o.push("</div>".to_string());
-    o.push("</div>".to_string());
-    Ok(())
-}
-
-fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, it: &Item<'_>, nfr: bool) -> R<()> {
-    let x = &it.x;
-    let pattern = x.f("pattern")?;
-    let ears = pattern_label(pattern.parse(ce::Pattern::from_name, "型")?);
-    let strength = x.f("strength")?;
-    let s = strength.parse(ce::Strength::from_name, "強度")?;
-    let (kw, prio) = (strength_label(s), strength_prio(s));
-    let milestone = x.g("milestone")?;
-    o.push(format!(
-        "<article {}{} id=\"{}\">",
-        ctx.frame.dc(Component::ItemRow),
-        if nfr { " class=\"kind-nfr\"" } else { "" },
-        anchor(it.id)
-    ));
-    let pill = match &milestone {
-        Some(ms) => format!("<span class=\"pill\">{}</span>", ms.e()?),
-        None => String::new(),
-    };
-    o.push(format!(
-        "<div class=\"ir-head\"><span class=\"rid\">{}</span><h3 class=\"rt\">{}</h3><span class=\"badges\"><span class=\"prio {prio}\">{kw}</span><span class=\"ears\">{ears}</span>{pill}</span></div>",
-        it.id, it.title
-    ));
-    let when = x.ef("when")?;
-    let shall = x.ef("shall")?;
-    let norm = if pattern.v.as_str() == Some("ubiquitous") {
-        shall
-    } else {
-        format!("<span class=\"ew\">{when}</span> {shall}")
-    };
-    o.push(format!("<p class=\"norm\">{norm}</p>"));
-    o.push(format!(
-        "<div class=\"plain\"><span class=\"pk\">やさしく言うと</span>{}</div>",
-        x.ef("plain")?
-    ));
-
-    // 小窓（確かめ方・根拠・注）と図の参照
-    let verify = x.f("verify")?;
-    let method = verify.f("method")?;
-    let mut how = format!(
-        "<span class=\"vbadge\">{}</span> {}",
-        method_label(&method)?,
-        verify.ef("how")?
-    );
-    let acs = verify
-        .f("ac")?
-        .seq()?
-        .iter()
-        .map(|q| {
-            let a = ctx.ac(q)?;
-            Ok(xref(a.id, a.id))
-        })
-        .collect::<R<Vec<_>>>()?;
-    if !acs.is_empty() {
-        how.push_str(&format!("（{}）", acs.join("・")));
-    }
-    let mut chips = vec![hint("確かめ方", &how)];
-    let mut basis = Vec::new();
-    for q in x.f("goals")?.seq()? {
-        let g = ctx.goal(&q)?;
-        basis.push(xref(g.id, &format!("{}（{}）", g.id, g.title)));
-    }
-    for q in x.f("basis")?.seq()? {
-        let (id, title) = ctx.article(&q)?;
-        basis.push(article_link(id, &format!("憲法 {id}（{title}）")));
-    }
-    if let Some(rules) = x.g("rules")? {
-        for q in rules.seq()? {
-            let id = ctx.rule(&q)?;
-            basis.push(article_link(id, &format!("rules {id}")));
-        }
-    }
-    if !basis.is_empty() {
-        chips.push(hint("根拠", &basis.join("・")));
-    }
-    if let Some(note) = x.g("note")? {
-        chips.push(hint("注", &note.e()?));
-    }
-    for f in x.f("figures")?.seq()? {
-        let w = ctx.fig(&f)?;
-        chips.push(match w.href {
-            Some(h) => format!("<a class=\"rq-where\" href=\"{h}\">{}</a>", w.long),
-            None => w.long,
-        });
-    }
-    o.push(format!("<p class=\"meta-chips\">{}</p>", chips.concat()));
-
-    // 機械のための面（正本の値のまま）
-    let mut dl = format!(
-        "<dt>pattern</dt><dd>{}</dd><dt>strength</dt><dd>{}</dd><dt>when</dt><dd>{when}</dd><dt>verify</dt><dd>{}</dd>",
-        pattern.e()?,
-        strength.e()?,
-        method.e()?
-    );
-    if let Some(ms) = &milestone {
-        dl.push_str(&format!("<dt>milestone</dt><dd>{}</dd>", ms.e()?));
-    }
-    o.push(format!(
-        "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl>{dl}</dl></details>"
-    ));
-    o.push("</article>".to_string());
-    Ok(())
-}
-
-/// 受入基準の章の凡例の 1 行（札「まだ分からない」が何を言うか・便 64）。部品と class は §3 の凡例（`legend_line`）と同じ。
-/// folio はまだ受入の結果を測らない（P-4.2）——測るのは便の検証の歯で、その結果はこの面に写していない。
-fn ac_legend_line() -> &'static str {
-    "<div class=\"legend-line\"><span>凡例:</span><span>まだ分からない = この基準の合否を folio はまだ数えていません（合否を測るのは便の検証の歯で、その結果はこのページに写していません）</span></div>"
-}
-
-fn ac_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>) -> R<()> {
-    band(o, ctx, 5, None);
-    o.push("<div class=\"chapbody\">".to_string());
-    o.push(ac_legend_line().to_string());
-    o.push(format!(
-        "<div {} style=\"--band-n:2\">",
-        ctx.frame.dc(Component::SectionLeadCallout)
-    ));
-    for a in &ctx.acs {
-        let x = &a.x;
-        // folio はまだ受入の結果を測らない（P-4.2）
-        let mut cid = format!(
-            "{} <span {}>まだ分からない</span>",
-            a.id,
-            ctx.frame.dc(Component::AcStateChip)
-        );
-        if let Some(ms) = x.g("milestone")? {
-            cid.push_str(&format!(" <span class=\"pill\">{}</span>", ms.e()?));
-        }
-        let verifies = x
-            .f("verifies")?
-            .seq()?
-            .iter()
-            .map(|q| {
-                let r = ctx.req(q)?;
-                Ok(xref(r.id, r.id))
-            })
-            .collect::<R<Vec<_>>>()?;
-        let red = x.f("red_test")?;
-        let mut cd = format!(
-            "{} を確かめる。{}",
-            verifies.join("・"),
-            hint(
-                "RED の歯",
-                &format!("{}／固定の材料: {}", red.ef("sentence")?, red.ef("fixture")?)
-            )
-        );
-        if let Some(note) = x.g("note")? {
-            cd.push_str(&hint("注", &note.e()?));
-        }
-        o.push(card(
-            "card accent",
-            Some(&anchor(a.id)),
-            &cid,
-            &format!(
-                "<p class=\"ct\">{}</p><div class=\"plain\"><span class=\"pk\">やさしく言うと</span>{}</div><p class=\"cd\">{cd}</p>",
-                a.title,
-                x.ef("plain")?
-            ),
-        ));
-    }
-    o.push("</div>".to_string());
-    o.push(format!(
-        "<div class=\"callout warn\"><span class=\"ck\">凍結しないもの</span><p>{}</p></div>",
-        s.ef("not_frozen")?
-    ));
-    o.push("</div>".to_string());
-    Ok(())
-}
-
-fn con_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
-    band(o, ctx, 6, None);
-    o.push("<div class=\"chapbody\">".to_string());
-    o.push("<div class=\"tbl-wrap\"><table class=\"tbl\">".to_string());
-    o.push(
-        "<thead><tr><th>id</th><th>制約</th><th>中身</th><th>根拠</th><th>出所</th></tr></thead>"
-            .to_string(),
-    );
-    o.push("<tbody>".to_string());
-    for con in &ctx.cons {
-        let x = &con.x;
-        let mut refs = Vec::new();
-        for q in x.f("basis")?.seq()? {
-            let (id, _) = ctx.article(&q)?;
-            refs.push(article_link(id, id));
-        }
-        if let Some(rules) = x.g("rules")? {
-            for q in rules.seq()? {
-                let id = ctx.rule(&q)?;
-                refs.push(article_link(id, id));
-            }
-        }
-        let refs = if refs.is_empty() {
-            "—".to_string()
-        } else {
-            refs.join("・")
-        };
-        o.push(format!(
-            "<tr id=\"{}\"><td class=\"id\" data-k=\"id\">{}</td><td data-k=\"制約\">{}</td><td data-k=\"中身\">{}</td><td data-k=\"根拠\">{refs}</td><td data-k=\"出所\">{}</td></tr>",
-            anchor(con.id),
-            con.id,
-            con.title,
-            x.ef("text")?,
-            x.ef("source")?
-        ));
-    }
-    o.push("</tbody>".to_string());
-    o.push("</table></div>".to_string());
-    o.push("</div>".to_string());
-    Ok(())
-}
-
 /// 自前の図の数 = 2 + 〔verdicts の節が在れば 1〕（図 1〜3）。章 09 の図の番号はこの続き（便 35）・帯の h2 / toc /
 /// foot の数は章 09 の図の数のまま。
 fn own_figures(ctx: &Ctx<'_>) -> usize {
@@ -1296,6 +928,7 @@ fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
 #[cfg(test)]
 mod face_srs_tests {
     use super::*;
+    use crate::face::{TONE, method_label};
 
     fn rail() -> Vec<(u64, String)> {
         vec![(1, "相談を受ける".to_string()), (2, "決める".to_string())]
