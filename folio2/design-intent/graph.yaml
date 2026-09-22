@@ -1,0 +1,42 @@
+# folio2 索引の欄の決まり — 正本（v0.1 起草・orchestrator 席）
+# 位置: 判断の記録 ADR-13 決定 (1)(2)。設計文書の索引（節点と辺）の 種類と型の閉じた一覧 を人が読める形で持つ。
+# 索引の中身そのものはここに置かない＝毎回 folio graph --print が正本から組み直す導出物である（ADR-13 決定 (4)・P-6.3 / P-6.4）。
+# 状態: v0.1 は起草（便 95・行 cr）。閉じた一覧の正本は実装の型付きの定数 crates/folio/src/graph.rs で、下の生成区間はその写しである（P-5.1・P-5.6）。
+
+meta:
+  id: folio2-graph
+  title: 設計文書の索引の欄の決まり
+  version: v0.1
+  status: draft
+  approval:
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-22, stamp: 起草（便 95・行 cr・判断の記録 ADR-13 決定 (1)(2)）, version: v0.1}
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  top_level: [meta, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。meta は人が書き、schema は生成区間。索引の中身そのものはこの file に置かない＝毎回 folio graph --print が正本から組み直す導出物である（判断の記録 ADR-13 決定 (4)・P-6.3 / P-6.4）
+  node: {required: [id, kind, file, title]}
+  node_note: 索引の節点 1 つの欄。id は設計文書の全体で 1 つに定まる id、kind は node_kinds の値、file は正本の置き場からの相対の path、title は空白を 1 つに畳んで Unicode の字で 36 に切った 1 行の題。欄の要約値は天井の印と同じ便で足す（ADR-13 決定 (1)(8)）
+  node_kinds: [条, 規範文, 規則行, 目的, 要件, 非機能要件, 受入基準, 制約, 登場人物, 出力, 判断の記録]
+  node_kinds_note: 節点の種類の閉じた一覧（順も固定・増減は判断の記録が要る＝P-2.4 と同じ扱い）。正本は実装の型付きの定数 crates/folio/src/graph.rs の NODE_KINDS で、この節はその写しである（P-5.1・P-5.6）
+  edge: {required: [from, to, type]}
+  edge_note: 索引の辺 1 つの欄。from と to は節点の id、type は edge_types の値。両端が節点のときだけ表に出し、端が節点でない参照（図の名・改訂の範囲の節名）は数だけ要約の 1 行に出す（P-4.2）
+  edge_types:
+    - in-article
+    - relations.articles
+    - relations.reqs
+    - relations.rules
+    - relations.sections
+    - amended_by
+    - article
+    - refs
+    - basis
+    - goals
+    - rules
+    - adrs
+    - verify.ac
+    - verifies
+    - figures
+    - produced
+    - amends
+  edge_types_note: 辺の型の閉じた一覧（順も固定・ADR-13 決定 (2)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_TYPES で、この節はその写しである。figures は伝播に使わない（決定 (2)）。観点が読む文書の欄（reads）と入口の棚の関係は、文書を節点にする便で足す
+# folio:schema:end

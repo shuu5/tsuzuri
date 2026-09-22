@@ -233,7 +233,7 @@ enum Command {
     /// 欄の決まりの file の schema 節（生成区間）を床の定数から導出して書く（--write）・検査する（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Schema {
-        /// 設計文書の置き場（生成区間を持つ file 8 本 = adr/schema.yaml・design-note/schema.yaml・ceiling.yaml・rules.yaml・index.yaml・srs.yaml・vocabulary.yaml・intake.yaml を読む）
+        /// 設計文書の置き場（生成区間を持つ file 9 本 = adr/schema.yaml・design-note/schema.yaml・ceiling.yaml・rules.yaml・index.yaml・srs.yaml・vocabulary.yaml・intake.yaml・graph.yaml を読む）
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
         /// 生成区間を導出で置き換えて書く（既に同じなら書かない・区間の外の byte は変えない）

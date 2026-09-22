@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
+use crate::schema::Floor;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
 
@@ -45,6 +46,55 @@ pub const EDGE_TYPES: [&str; 17] = [
     "produced",
     "amends",
 ];
+
+/// 索引の欄の決まりの正本 `graph.yaml` の最上位の節の閉じた一覧（便 95）。
+const GRAPH_TOP_LEVEL: [&str; 2] = ["meta", "schema"];
+
+/// `graph.yaml` の schema 節（生成区間）の床の木（便 95・docs/design/delivery-95.md §1 (c)(d)）。欄の順と字面は凍結
+/// anchor tests/fixtures/schema/graph-region.txt のとおり。閉じた一覧 2 本の葉は上の定数そのもの（同じ一覧を 2 回書かない）。
+pub(crate) const FLOOR: Floor = Floor::Map(&[
+    ("top_level", Floor::Strs(&GRAPH_TOP_LEVEL)),
+    (
+        "top_level_note",
+        Floor::Val(
+            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。meta は人が書き、schema は生成区間。索引の中身そのものはこの file に置かない＝毎回 folio graph --print が正本から組み直す導出物である（判断の記録 ADR-13 決定 (4)・P-6.3 / P-6.4）",
+        ),
+    ),
+    (
+        "node",
+        Floor::Map(&[("required", Floor::Strs(&["id", "kind", "file", "title"]))]),
+    ),
+    (
+        "node_note",
+        Floor::Val(
+            "索引の節点 1 つの欄。id は設計文書の全体で 1 つに定まる id、kind は node_kinds の値、file は正本の置き場からの相対の path、title は空白を 1 つに畳んで Unicode の字で 36 に切った 1 行の題。欄の要約値は天井の印と同じ便で足す（ADR-13 決定 (1)(8)）",
+        ),
+    ),
+    ("node_kinds", Floor::Strs(&NODE_KINDS)),
+    (
+        "node_kinds_note",
+        Floor::Val(
+            "節点の種類の閉じた一覧（順も固定・増減は判断の記録が要る＝P-2.4 と同じ扱い）。正本は実装の型付きの定数 crates/folio/src/graph.rs の NODE_KINDS で、この節はその写しである（P-5.1・P-5.6）",
+        ),
+    ),
+    (
+        "edge",
+        Floor::Map(&[("required", Floor::Strs(&["from", "to", "type"]))]),
+    ),
+    (
+        "edge_note",
+        Floor::Val(
+            "索引の辺 1 つの欄。from と to は節点の id、type は edge_types の値。両端が節点のときだけ表に出し、端が節点でない参照（図の名・改訂の範囲の節名）は数だけ要約の 1 行に出す（P-4.2）",
+        ),
+    ),
+    ("edge_types", Floor::Strs(&EDGE_TYPES)),
+    (
+        "edge_types_note",
+        Floor::Val(
+            "辺の型の閉じた一覧（順も固定・ADR-13 決定 (2)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_TYPES で、この節はその写しである。figures は伝播に使わない（決定 (2)）。観点が読む文書の欄（reads）と入口の棚の関係は、文書を節点にする便で足す",
+        ),
+    ),
+]);
 
 /// 題の字数の上限（Unicode の字）。
 const TITLE_CHARS: usize = 36;

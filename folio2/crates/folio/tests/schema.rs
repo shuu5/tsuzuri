@@ -44,8 +44,8 @@ const NOTE_REGION_BYTES: usize = 15305;
 const NOTE_REGION_SHA256: &str = "836e07fadc3e32b897e975cab8454aacb4ca02507e992d2979b332c4d96a019f";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
-/// → 要件書 → 語彙 → 相談窓口）。
-const TARGETS: usize = 8;
+/// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
+const TARGETS: usize = 9;
 
 const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
 const END: &str = "# folio:schema:end";

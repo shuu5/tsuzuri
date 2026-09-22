@@ -1,4 +1,4 @@
-//! 命令 folio schema が見る 8 本のうち、欄の決まりの 2 本を除いた 6 本の正本（ceiling.yaml・rules.yaml・index.yaml・srs.yaml・vocabulary.yaml・intake.yaml）の側の歯。
+//! 命令 folio schema が見る 9 本のうち、欄の決まりの 2 本を除いた 7 本の正本（ceiling.yaml・rules.yaml・index.yaml・srs.yaml・vocabulary.yaml・intake.yaml・graph.yaml）の側の歯。
 //! 便 89（docs/design/delivery-89.md §1 (b)）で tests/schema.rs から 1 字も変えずに移した（歯の関数名も凍結の定数の値も不変）。
 //! helper（repo_root から region まで）は tests/schema.rs の写し（歯の file どうしは互いに use できない）。
 //! 以下は移す前の頭の注釈（便ごとの歯の一覧）。
@@ -42,6 +42,13 @@
 //! （F77_REGIONS の srs.yaml を 29 行・1168 byte と新しい要約値に）。
 //! f86_ 1. --check → 0・8 行・srs.yaml の行が 1168 byte ∧ 生成区間が凍結 anchor と byte 一致 ∧ anchor の自己検査。
 //! f86_ 2. 正本の要件の行に現れる欄の集合が生成区間の requirement_row の 4 群 + verify の中に過不足なく収まる。
+//!
+//! 便 95（docs/design/delivery-95.md §1 (f)）: 命令は 9 本目の file graph.yaml（索引の欄の決まり・生成区間は末尾）も
+//! 順に見る（合格の標準出力は 9 行）。
+//! f95_ 1. graph.yaml の生成区間が 28 行・2106 byte で凍結 anchor と byte 一致・anchor の要約値。
+//! f95_ 2. --check → 0・9 行・9 行目が graph.yaml。
+//! f95_ 3. 生成区間の 1 byte を書き換えて --check → 1・理由に graph.yaml・--write で元の byte に戻る。
+//! f95_ 4. 生成区間の node_kinds と edge_types が folio graph --print の出す種類と型を漏れなく覆う。
 
 use std::fs;
 use std::io::Write;
@@ -107,8 +114,8 @@ const F77_DRIFTS: [(&str, &str); 3] = [
 ];
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
-/// → 要件書 → 語彙 → 相談窓口）。
-const TARGETS: usize = 8;
+/// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
+const TARGETS: usize = 9;
 
 const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
 const END: &str = "# folio:schema:end";
@@ -724,7 +731,7 @@ fn f77_check_covers_the_three_files() {
     let out = w.schema(&["--check"]);
     assert_outcome(&out, 0, &["一致"]);
     let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
-    assert_eq!(lines.len(), 8, "{lines:?}");
+    assert_eq!(lines.len(), TARGETS, "{lines:?}");
     assert!(lines[4].contains("index.yaml"), "{lines:?}");
     for (i, (file, anchor, _, bytes, _)) in F77_REGIONS.iter().enumerate() {
         let line = &lines[5 + i];
@@ -1024,5 +1031,105 @@ fn f89_schema_teeth_are_split_and_under_the_cap() {
             !old.lines().any(|line| line.starts_with(head)),
             "tests/schema.rs に「{head}」が残っている"
         );
+    }
+}
+
+// ── 便 95: 索引の欄の決まりの正本 graph.yaml ──
+
+/// 便 95 (c) 凍結 anchor の置き場と自己検査の値（設計判断の席が独立の実装で組んだ）。
+const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
+const F95_GRAPH_LINES: usize = 28;
+const F95_GRAPH_BYTES: usize = 2106;
+const F95_GRAPH_SHA256: &str = "c4385eb354b96cd2979400572d406bd190a54318e35673fa13895bb06adeeccc";
+
+/// 生成区間の変異（node_kinds の行の 判断の記録 の末尾の 1 字）。
+const F95_DRIFT_FROM: &str = ", 判断の記録]\n";
+const F95_DRIFT_TO: &str = ", 判断の記禄]\n";
+
+// ── f95_ 1. 生成区間が凍結 anchor と byte 一致・anchor の自己検査 ──
+
+#[test]
+fn f95_the_graph_schema_region_matches_the_anchor() {
+    let w = Work::new("f95-anchor");
+    let text = w.read_file("graph.yaml");
+    let anchor_text = fs::read_to_string(repo_root().join(F95_GRAPH_ANCHOR)).unwrap();
+    assert_eq!(region(&text), anchor_text, "graph.yaml の生成区間が anchor と byte 一致");
+    assert_eq!(anchor_text.lines().count(), F95_GRAPH_LINES, "anchor の行数");
+    assert_eq!(anchor_text.len(), F95_GRAPH_BYTES, "anchor の byte 数");
+    let hex = sha256_hex(anchor_text.as_bytes())
+        .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
+    assert_eq!(hex, F95_GRAPH_SHA256, "sha256sum で測った anchor の要約値");
+    // 印の後は file の終わり（生成区間は末尾）
+    assert!(text.ends_with(&format!("\n{END}\n")), "graph.yaml");
+}
+
+// ── f95_ 2. --check → 0・9 行・9 行目が graph.yaml ──
+
+#[test]
+fn f95_the_command_now_sees_nine_files() {
+    let w = Work::new("f95-check");
+    let out = w.schema(&["--check"]);
+    assert_outcome(&out, 0, &["一致"]);
+    let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), 9, "{lines:?}");
+    assert_eq!(
+        lines[8],
+        format!("folio schema: 一致（graph.yaml・{F95_GRAPH_BYTES} byte）"),
+        "{lines:?}"
+    );
+}
+
+// ── f95_ 3. ずれ → 1・--write で元の byte に戻る ──
+
+#[test]
+fn f95_a_drift_in_the_graph_region_fails() {
+    let w = Work::new("f95-drift");
+    let original = w.read_file("graph.yaml");
+    mutate_file(&w.dir().join("graph.yaml"), F95_DRIFT_FROM, F95_DRIFT_TO);
+    assert_outcome(
+        &w.schema(&["--check"]),
+        1,
+        &["graph.yaml: 生成区間", "≠ 導出", &format!("{F95_GRAPH_BYTES} byte")],
+    );
+    let out = w.schema(&["--write"]);
+    assert_outcome(&out, 0, &["書いた（graph.yaml・"]);
+    assert_eq!(w.read_file("graph.yaml"), original, "graph.yaml 全体が元と byte 一致");
+    assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
+}
+
+// ── f95_ 4. 閉じた一覧 2 本が索引の出す種類と型を覆う ──
+
+#[test]
+fn f95_the_closed_lists_are_the_same_as_the_index() {
+    let w = Work::new("f95-cover");
+    let text = w.read_file("graph.yaml");
+    let reg = YamlLoader::load_from_str(region(&text)).unwrap().remove(0);
+    let kinds = strs(&reg["schema"]["node_kinds"], "node_kinds");
+    let types = strs(&reg["schema"]["edge_types"], "edge_types");
+    assert_eq!((kinds.len(), types.len()), (11, 17), "{reg:?}");
+
+    let out = folio(&["graph", "--print", "--dir"], &w.dir(), &[]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let printed = stdout(&out);
+    let mut part = 0;
+    let (mut seen_kinds, mut seen_types) = (Vec::new(), Vec::new());
+    for line in printed.lines() {
+        if line.starts_with('#') {
+            part += 1;
+            continue;
+        }
+        let cols: Vec<&str> = line.split('\t').collect();
+        match part {
+            1 => seen_kinds.push(cols[1].to_string()),
+            2 => seen_types.push(cols[2].to_string()),
+            _ => panic!("表の外の行: {line}"),
+        }
+    }
+    assert!(!seen_kinds.is_empty() && !seen_types.is_empty(), "{printed}");
+    for kind in &seen_kinds {
+        assert!(kinds.contains(kind), "種類 {kind} が node_kinds の外");
+    }
+    for ty in &seen_types {
+        assert!(types.contains(ty), "型 {ty} が edge_types の外");
     }
 }
