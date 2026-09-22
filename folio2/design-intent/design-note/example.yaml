@@ -31,7 +31,7 @@ sections:
     title: 口（外から呼ばれる受け口）
     rows:
       - {id: validate, name: 検査, input: 型付き記述 1 本, output: 診断（規則の id・対象・証拠・修正候補）, refuses: 仕上がりの段（R-14）を通らない記述, ref: [FR15, R-14]}
-      - {id: index, name: 索引, input: 正本の集合, output: 文書・要件・契約の id と 1 行の題, refuses: なし, ref: [FR14], note: 未実装（2026-09-20 時点・要件書 FR14 の便で入る）}
+      - {id: index, name: 索引, input: 正本の集合, output: 索引の節点（id・種類・所属 file・欄の要約値・1 行の題）と辺（両端の節点の id と型）, refuses: なし, ref: [FR14], note: 着地済み（2026-09-22・要件書 FR14 の口）}
       - {id: render, name: 描画, input: 検査に通った型付き記述, output: 図の本体（SVG）, refuses: 検査を通っていない記述, ref: [FR15]}
       - {id: embed, name: 埋め込み, input: 図の本体, output: 部品目録の class だけで塗られた図の部品, refuses: 部品目録に無い class を持つ本体（R-3）, ref: [FR15, R-3]}
   - n: 4
