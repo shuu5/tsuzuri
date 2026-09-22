@@ -34,7 +34,7 @@ options:
     text: 先頭の注・先頭の欄（meta）・対応表（mapping）・平易文（plain）まで含めて file 全体を実装の定数から生成し、byte 一致を file 全体に当てる。
     verdict: rejected
     reason: 床の定数は schema 節の値しか覆っておらず、file 全体を生成物にすると裁定の記録（meta.type_enum_ruling の裁定 id と逐語）と対応表（mapping）の正本まで実装へ移り、P-5.5（原則と裁定の正本は設計文書）に反する。凍結 fixture の写し 16 本（最小の写し・各 2,199 byte）を完全な写しに差し替えることになり、便の上限に収まらない。
-basis: [P-5, P-6, P-10, P-14, N-3, ADR-1, ADR-2, ADR-8, FR6]
+basis: [P-5, P-6, P-10, P-14, N-3, ADR-1, ADR-2, ADR-8, FR6, P-13, R-7]
 retreat:
   kind: measure
   condition: 数えるのは orchestrator 席（2026-09-19 までの名は planner 席）で、台帳に記帳する。発効後、(a) 生成区間を人が直して folio schema --check か folio check が落ちた回数、(b) 導出の口の不一致（生成区間の印や体裁の差）で便の受付か取り込みの審査が止まった回数（器の断りの記録 1 回を 1 件と数える）を、rules 行 R-7 の同じ種類の失敗の定義（same_failure）では別種として別々に数え、どちらかが R-7 の上限を超えたら、本判断を捨てて案 b（欄の決まりの file を正本から外す）へ移る判断の記録を起こす。

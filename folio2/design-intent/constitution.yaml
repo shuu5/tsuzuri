@@ -464,7 +464,7 @@ articles:
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18 の散文 hook 規則・rules.html 248KB"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: ① folio が生成する文書（配信先の面・CLAUDE.md 生成区間）の中に、正本に無い手書きの規範文が 0 行（再生成との差分 0 = folio build --check と folio inject --check。読み物の folio render --check は 2026-09-21 に退役）。② CLAUDE.md の生成区間の外に規範語（〜する。／〜ない。で終わる行）を置かない（folio inject --check が数える）。検査対象は folio2 が所有する文書に限る。}
     note: 見本 v4 の P-5（Always）に含まれていた禁止側を Never へ置いた（G12 の改番）。
-    relations: {rules: [R-16], articles: [P-5, P-14, P-17]}
+    relations: {rules: [R-16, R-17], articles: [P-5, P-14, P-17]}
 
   - id: N-3
     title: 例外の仕組みを作らない
