@@ -5,10 +5,11 @@
 - 出所: 一括 12 の仕分け `docs/design/batch12-triage.md` の問 4 の 2 と 3。持ち主の承認は 2026-09-22 20:52 JST・対話面 R-8・逐語「全部承認する」（台帳 f2-648 notes・一括 12 の承認要求の問い 5 つへの回答）。同じ仕分けの「本一括で動かさなかったもの」は、文書の一覧を足すと実装の固定長の定数 2 本と生成区間と凍結 anchor が同時に動くので一括では運べず、**承認だけを問い、便 1 本で運ぶ**と書く。連れて動くものの列挙は `docs/design/delivery-95.md` §1、骨格の 6 語は `docs/design/delivery-97.md` §1 (d)、固定長 2 本の実在は検証役の報告 `~/.local/share/folio2/handoff-2026-09-22/d94-verify.md` §6 (7)。
 - 置き場: この文書は folio2 の設計ノート。契約表は末尾の区間。審査の材料は行 cz が指す §1 だけなので、判定に要る材料は §1 に全部置く。write-set は手書き（**新しい file は 1 本も無い**・縮む file も無い・新しい dir は作らない）。
 - 門: 本便は design-intent の下の正本 `design-intent/ceiling.yaml` を書き換えるので、天井の門の対象である。起草役が本便の write-set 28 本をそのまま `folio ceiling --gate --dir design-intent --write-set …` に渡して実測すると **2（まだ分からない・断りの字は 印が古い）**（2026-09-22・main 278ba59）。判定は本便の中身によらない（印は 23 周目のまま）。持ち主の指示（2026-09-22 00:0x JST・対話面 R-8・台帳 f2-648 notes・逐語「一通り完成を目指して速度を上げたいので、あまりにも無駄に似たような審査を繰り返しまくっているならやめてどんどん進めて」の (2)）により、**設計文書を触る便は印が古くても門を経ずに出す**（便 95・99・101 と同じ扱い）。
-- 前の便: 便 99（行 cu）・便 100（行 cw）・便 101（行 cx）と一括 12 は着地済みで、本便の base は **main 278ba59**。天井の正本は第 0.11 版が発効済み（読む欄を 8 対広げた分は本便に含まれない）。
-- 並行の便との重なり: **便 98（PR #255・行 cy・束を章まで絞る）と `crates/folio/src/bundle.rs` が重なる。器が順に運ぶ。** 重なりの中身と、後に着地する側が何を合わせるかは §1 (f) に書く。**束の凍結 anchor `tests/fixtures/ceiling/bundle-anchor.txt` と所見 fixture 10 本の要約値は、本便では 1 字も動かない**（§1 (e) の実測）。便 98 の設計ノート §0 は「どちらが先でも後の便が束の anchor を組み直す」と書くが、本便の側は組み直す必要が無い。
-- 並行の便との重なり（2 本目）: **便 103（PR #257・行 da・設計ノートの欄の決まりの側）と `tests/fixtures/schema/node-digest-anchor.txt` と `crates/folio/tests/graph.rs` の 2 本が重なる。器が順に運び、後に着地する側が §1 (e) の手順（独立の script `tests/fixtures/schema/node-digest.py` で組み直し、その file の要約値を `F99_ANCHOR_SHA256` へ写す）で anchor を作り直す。** したがって **§1 (e) の表の 2 つの 16 進の値（残差の要約値と anchor file の要約値）は、本便が先に着地したときの値である**。便 103 が先なら、本便の作業者は手順だけを踏み、値は script の出力に従う（§1 (e) の表の 2 値は使わない・行数 192 と byte 数 3,007 は便 103 の側でも変わらない見込みだが、これも script の出力に従う）。
+- 前の便: 便 99（行 cu）・便 100（行 cw）・便 101（行 cx）と一括 12 は着地済み。契約を起草したときの base は main 278ba59 だったが、受付までに便 98（行 cy）と便 103（行 da）が先に着地したので、**本便が実際に運んだ base は main f547ce7**（便 98 の着地の commit）である。天井の正本は第 0.11 版が発効済み（読む欄を 8 対広げた分は本便に含まれない）。
+- 並行の便との重なり: **便 98（PR #255・行 cy・束を章まで絞る）と `crates/folio/src/bundle.rs` が重なっていた。便 98 が先に着地した（main f547ce7）**ので、本便は §1 (f) の「便 98 が先なら」の枝を踏んだ。実際に踏んだ形は §1 (f) に書く。**束の凍結 anchor `tests/fixtures/ceiling/bundle-anchor.txt` と所見 fixture 10 本の要約値は、便 98 の着地の後も本便では 1 字も動かなかった**（§1 (e) の実測）。便 98 の設計ノート §0 は「どちらが先でも後の便が束の anchor を組み直す」と書くが、本便の側は組み直す必要が無かった。
+- 並行の便との重なり（2 本目）: **便 103（PR #257・行 da・設計ノートの欄の決まりの側）と `tests/fixtures/schema/node-digest-anchor.txt` と `crates/folio/tests/graph.rs` の 2 本が重なっていた。便 103 も先に着地した（main 4165603）**ので、この 2 本の「今」の値は便 103 が置いた値になった。本便の作業者は §1 (e) の手順（独立の script `tests/fixtures/schema/node-digest.py` で組み直し、その file の要約値を `F99_ANCHOR_SHA256` へ写す）だけを踏み、値は script の出力に従った。**§1 (e) の表の値は、その出力を着地後に測り直したものである**（行数 192 と byte 数 3,007 と節点の 189 行は、便 103 の後も本便の後も動かなかった）。
 - 改訂 b（2026-09-22 22:0x JST・検証役の report `~/.local/share/folio2/handoff-2026-09-22/d102-verify.md` への応答）: §1 (b) に ③（天井の正本の版と承認欄の逐語）を足し、§0 に便 103 との重なりを足し、§1 (h) の `tests/graph.rs` の行と §1 (i) の門の 1 文の字を直した。**行 cz・write-set・歯 4 本・done・生成区間と 2 つの凍結 anchor の値は 1 つも変えていない**（meta と承認欄の行は生成区間の外なので anchor は動かない。起草役が写しの repo で逐語のとおりに書き替え、生成区間が 3,176 byte のまま・2 つの anchor の要約値が同じまま・`folio check` が違反 0・workspace 全体の歯 764 本が緑であることを測り直した）。
+- 改訂 c（2026-09-22・着地後の注記）: 本便は **main 37ee092** に着地した。base は改訂 b が書いた 278ba59 でなく **f547ce7**（便 98 / 便 103 の着地後）で、§1 (a) の余地の表・§1 (e) の表・§1 (g)(h) の数と §1 (f) の「便 98 が先」の枝は、着地した commit の実測に置き替えた。**行 cz（title・done・verify・write-set）と §1 (b) の承認欄の逐語・§1 (c)(d) の生成区間の逐語と凍結の値・🔴 3 点は 1 字も変えていない。** 門の実測の 1 行と §5 は、受付の時点の記録としてそのまま残す。
 
 ## 1. 目的と中身
 
@@ -19,21 +20,21 @@
 
 design-intent の下で人が書く節を書き換えるのは `design-intent/ceiling.yaml` の 1 file だけで、**観点（4 つ）・重さの値域・観点ごとの読む欄（reads）・問いの文は 1 字も触らない**（条 N-5 の観点の増設に当たらない）。
 
-### (a) 実測（2026-09-22・base main 278ba59）
+### (a) 実測（2026-09-22・着地後に base f547ce7 と着地 37ee092 で測り直し）
 
-**src と歯の余地**（幅 120 で正規化 = 全行 + 各行の ceil(len/120) − 1・上限は規則 R-C4-2 の 1,500）。増分は起草役が写しの repo で実際に書いて測った値である。
+**src と歯の余地**（幅 120 で正規化 = 全行 + 各行の ceil(len/120) − 1・上限は規則 R-C4-2 の 1,500）。今 = base f547ce7、増分 = 着地した commit 37ee092 を f547ce7 と突き合わせて測った値である。
 
 | file | 正規化の行 | 余地 | 本便の増分 |
 | --- | --- | --- | --- |
-| crates/folio/src/ceiling.rs | 532 | 968 | +35 |
-| crates/folio/src/bundle.rs | 539 | 961 | +17 |
-| crates/folio/tests/ceiling.rs | 529 | 971 | +136 |
-| crates/folio/tests/schema_docs.rs | 1,137 | **363** | +3 |
+| crates/folio/src/ceiling.rs | 532 | 968 | +44 |
+| crates/folio/src/bundle.rs | 719 | 781 | +11（便 98 の着地で 539 → 719・§1 (f)） |
+| crates/folio/tests/ceiling.rs | 529 | 971 | +110 |
+| crates/folio/tests/schema_docs.rs | 1,137 | **363** | +0（凍結の値 3 つと注釈の書き替えだけ） |
 | crates/folio/tests/graph.rs | 608 | 892 | +0（凍結の値 1 つを書き替えるだけ） |
 
 **歯を `crates/folio/tests/schema_docs.rs` に置いてはいけない。** その file には便 89 が置いた別の上限があり、歯 `f89_schema_teeth_are_split_and_under_the_cap` が**器の式で 1,200 行以下**を数える。今が 1,137 行なので余地は **63 行しか無い**。起草役が最初に本便の歯 2 本をそこへ置いたら 1,248 行になり、この歯が落ちた（実測）。だから歯は `crates/folio/tests/ceiling.rs`（天井の正本の歯の file・余地 971）へ置き、`schema_docs.rs` は凍結の値 3 つと頭の注釈だけを直す。
 
-**器の受付の余地の判定**（規則 pipe.size_m_lines = 300）は write-set の各 .rs に当たる。5 本の余地は 968 / 961 / 971 / 363 / 892 で、**いちばん小さい 363 でも M の見積 300 を上回る**。1 file あたりの増分のいちばん大きいのは tests/ceiling.rs の 136 で、S の見積 100 を超えるので **size は M**。
+**器の受付の余地の判定**（規則 pipe.size_m_lines = 300）は write-set の各 .rs に当たる。5 本の余地は 968 / 781 / 971 / 363 / 892 で、**いちばん小さい 363 でも M の見積 300 を上回る**。1 file あたりの増分のいちばん大きいのは tests/ceiling.rs の 110 で、S の見積 100 を超えるので **size は M**。
 
 ### (b) 何をどこへ足すか
 
@@ -147,7 +148,7 @@ design-intent の下で人が書く節を書き換えるのは `design-intent/ce
 
 ### (e) 巻き添え（全数を固定した歯を全部当たった）
 
-起草役が写しの repo で本便の変更を全部当て、workspace 全体の歯（760 本）を回して落ちる歯を数えた。**落ちたのは 4 本だけで、どれも凍結の値の写しである。**
+起草役が写しの repo で本便の変更を全部当て、workspace 全体の歯（base f547ce7 で 770 本）を回して落ちる歯を数えた。**落ちたのは 4 本だけで、どれも凍結の値の写しである。**（着地後に base f547ce7 で追試しても同じ 4 本だった。）
 
 | 落ちた歯 | 直す先 |
 | --- | --- |
@@ -156,13 +157,15 @@ design-intent の下で人が書く節を書き換えるのは `design-intent/ce
 
 **節点の要約値の凍結 anchor `tests/fixtures/schema/node-digest-anchor.txt` は、残差の 2 行だけが動く。** この anchor は凍結の土台 `tests/fixtures/floor_base/design-intent` に対して独立の script `tests/fixtures/schema/node-digest.py` が組む。土台の ceiling.yaml が 327 byte 増える（生成区間が 261 + 足す行が 66）ので、節点にも辺の欄にも属さない残りの byte が同じだけ増える。**節点の 189 行は 1 字も動かない。**
 
-| 何 | 今 | 本便 |
+| 何 | 今（base f547ce7） | 本便（着地 37ee092） |
 | --- | --- | --- |
-| 残差 sha256 | 5e7ac0d2…f655 | **377094880637f575e1c42f44bd18d902f72c239256441f0f30f243911ee62531** |
-| 残差の byte | 141,004 | **141,331** |
-| 合計の byte | 389,176 | **389,503** |
+| 残差 sha256 | bba70df9…a1881 | **e4cfaeef3f85e52adebb014ea6a51d49a6c4d7bc1174e24ceec8567e80c753d1** |
+| 残差の byte | 141,162 | **141,489** |
+| 合計の byte | 389,334 | **389,661** |
 | anchor の行数・byte 数 | 192 行・3,007 byte | **不変**（数字の桁が同じ） |
-| anchor file の sha256（`crates/folio/tests/graph.rs` の F99_ANCHOR_SHA256） | c0208821…7b7a | **b9ef20079bab64551044a24c3bf39a943f5a5b6c13d91e5014dbfecd8cfd4178** |
+| anchor file の sha256（`crates/folio/tests/graph.rs` の F99_ANCHOR_SHA256） | ed795897…980b45 | **49286329ce63895f7e52e5e9046d321ec6036b9feaf507022f566fb14426b11b** |
+
+**この表の 4 つの数は、起草役と席が独立に組み直して一致させたものである**（便 103 の着地で「今」の側が動いたので、着地の後にもう一度測り直した）。増分 141,489 − 141,162 = 327 byte は、上に書いた土台の ceiling.yaml の増分と一致する。
 
 作業者は anchor を手で書かず、`python3 tests/fixtures/schema/node-digest.py tests/fixtures/floor_base/design-intent` の出力をそのまま file にして、その file の sha256 を `F99_ANCHOR_SHA256` へ写す（便 101 と同じ手順）。
 
@@ -179,12 +182,20 @@ design-intent の下で人が書く節を書き換えるのは `design-intent/ce
 
 理由は 3 つ。① `ceiling.rs` の頭の注釈が「天井の床の定数は全部この 1 枚に置く」と書く（便 47・ADR-11 決定 (4)①）。② 束の中身の一覧 `BUNDLE_CONTENTS` も同じ file に在り、`bundle.rs` は `crate::ceiling::` から取っている＝骨格だけ別の file に置くと持ち方が 2 通りになる。③ 生成区間の正本は床の木 `FLOOR` で、`FLOOR` は `ceiling.rs` に在って葉に同じ配列を指す（同じ一覧を 2 回書かない・P-6.3 / P-6.4）。
 
-**どちらが先に着地しても、後の便が合わせる。**
+**どちらが先に着地しても、後の便が合わせる**と書いた。実際は **便 98 が先に着地した**ので、本便は 2 つ目の枝（`bundle.rs` の一覧を `ceiling.rs` へ移して `FLOOR` の葉にする・**値は 1 字も変えない**・移すだけ）を踏んだ。**以下は着地後の記録である。**
 
-- 本便が先なら、便 98 は `ceiling.rs` の側の `BUNDLE_SKELETON` を use するだけで、`bundle.rs` に一覧を書かない。
-- 便 98 が先なら、本便が `bundle.rs` の一覧を `ceiling.rs` へ移して `FLOOR` の葉にする（**値は 1 字も変えない**・移すだけ）。このとき本便の増分は tests 側が変わらず src 側が数行増える。
+便 98 は `crates/folio/src/bundle.rs` に `pub const SKELETON: [&str; 6]` を置いた。本便が踏んだのは次の 4 手である。
 
-**重なるのは `crates/folio/src/bundle.rs` の 1 file だけで、本便がそこへ書くのは `FACE_NAMES` の 1 行と単体の歯 1 本である。** 便 98 は `FACE_NAMES` にも `DOCUMENT_IDS` にも触らないと自分の設計ノートに書いている。
+1. `ceiling.rs` の `BUNDLE_SKELETON`（`BUNDLE_CONTENTS` の次・`FLOOR` の `bundle.skeleton` の葉）は、この設計ノートのとおりに置く。
+2. `bundle.rs` の `use crate::ceiling::{…}` の一覧に `BUNDLE_SKELETON` を足す。
+3. `bundle.rs` の `pub const SKELETON` の宣言を消し、同じ場所に移し先を名指す注の 1 行を残す。
+4. `bundle.rs` の 2 か所の参照（reads.yaml の 常に残す節 の行を組むところと、`cut_sections` の残す判定）を `BUNDLE_SKELETON` に替える。
+
+**再輸出（`pub use`）は要らなかった。** `bundle::SKELETON` を crate の外から参照するものが無いからである。便 98 の歯 `crates/folio/tests/bundle.rs` は自前の `const SKELETON`（独立の写し）を持っていて実装の側を見ていないので、**write-set の外の file を 1 字も触らずに済んだ**。
+
+この結果、本便の増分は **tests 側が変わらず、`bundle.rs` は消した宣言のぶんだけ減った**（起草時の見積 17 に対して着地は 11）。「src 側が数行増える」と書いた起草時の見積は外れている。`bundle.rs` の余地の側は、便 98 の着地で 961 から 781 へ狭まった（§1 (a)）。
+
+**重なったのは `crates/folio/src/bundle.rs` の 1 file だけで、本便がそこへ書いたのは `FACE_NAMES` の 1 行と use の 1 語と単体の歯 1 本、消したのは `SKELETON` の宣言である。** 便 98 は `FACE_NAMES` にも `DOCUMENT_IDS` にも触らないと自分の設計ノートに書き、着地した便 98 も触っていない。
 
 ### (g) 歯（4 本・置き場は 3 か所）
 
@@ -196,7 +207,7 @@ design-intent の下で人が書く節を書き換えるのは `design-intent/ce
 
 **4. f102_every_skeleton_word_is_a_top_level_section_of_a_real_source**（`crates/folio/src/ceiling.rs` の単体の歯）— 骨格の 6 語が、**実の正本の最上位の節（列 0 の `<名>:` の行）として 1 語につき 1 本以上の file に実在する**こと。**赤い歯**（本便の前に `BUNDLE_SKELETON` が無い）。置く理由は、常に残す節の一覧が正本の形から外れていないことを、束を絞る口が入る前から数えるためである（起草役の実測: meta と schema は 10 file・id と title と status と date は 14 file に在る）。**数は固定しない**（1 本以上）。
 
-4 本とも期待値を起草役が独立に出した（1 と 4 は実測、2 と 3 は不変条件）。回帰は verify の 2 行目（`crates/folio/tests/ceiling.rs` と `crates/folio/tests/schema_docs.rs` の全部）・3 行目（節点の要約値の anchor）と `.vessel.toml` の common-verify（workspace 全体の nextest と clippy）が見る。**起草役は写しの repo で本便の変更と歯 4 本を全部書き、`cargo nextest run --workspace` が 764 本すべて緑・`cargo clippy --workspace --all-targets -- -D warnings` が 0 警告になるまで確かめた。**
+4 本とも期待値を起草役が独立に出した（1 と 4 は実測、2 と 3 は不変条件）。回帰は verify の 2 行目（`crates/folio/tests/ceiling.rs` と `crates/folio/tests/schema_docs.rs` の全部）・3 行目（節点の要約値の anchor）と `.vessel.toml` の common-verify（workspace 全体の nextest と clippy）が見る。**起草役は写しの repo で本便の変更と歯 4 本を全部書き、`cargo nextest run --workspace` と `cargo clippy --workspace --all-targets -- -D warnings` が緑になるまで確かめた。着地した commit 37ee092 では workspace の歯は 774 本（base f547ce7 の 770 本 + 本便の 4 本）で、全部緑である。**
 
 ### (h) 大きさ
 
@@ -204,17 +215,17 @@ design-intent の下で人が書く節を書き換えるのは `design-intent/ce
 
 | 何 | 行 |
 | --- | --- |
-| crates/folio/tests/ceiling.rs（歯 2 本と読み口 3 つ・印の字の定数 2 つ・余地 971） | 136 |
-| crates/folio/src/ceiling.rs（DOCUMENT_IDS・BUNDLE_SKELETON・FLOOR の葉と注・単体の歯 1 本・余地 968） | 35（生 39） |
-| crates/folio/src/bundle.rs（FACE_NAMES の 1 行・単体の歯 1 本・余地 961） | 17（生 19） |
-| crates/folio/tests/schema_docs.rs（凍結の値 3 つ・変異の当て先・頭の注釈・余地 363） | 3（生 8） |
-| crates/folio/tests/graph.rs（凍結の要約値 1 つ・余地 892） | 0（生 1） |
+| crates/folio/tests/ceiling.rs（歯 2 本と読み口 3 つ・印の字の定数 2 つ・余地 971） | 110 |
+| crates/folio/src/ceiling.rs（DOCUMENT_IDS・BUNDLE_SKELETON・FLOOR の葉と注・単体の歯 1 本・余地 968） | 44（生 48 足す・5 消える） |
+| crates/folio/src/bundle.rs（FACE_NAMES の 1 行・use の 1 語・単体の歯 1 本・SKELETON の宣言を消す・余地 781） | 11（生 18 足す・7 消える） |
+| crates/folio/tests/schema_docs.rs（凍結の値 3 つ・変異の当て先・頭の注釈・余地 363） | 0（生 6 足す・6 消える） |
+| crates/folio/tests/graph.rs（凍結の要約値 1 つ・余地 892） | 0（生 1 足す・1 消える） |
 | design-intent/ceiling.yaml（読む文書の行 1 本・生成区間・meta の版と承認欄 2 行・頭の注釈） | 12 |
 | tests/fixtures/ の ceiling.yaml 20 本（1 本あたり 7 行） | 140 |
 | tests/fixtures/schema/ の anchor 2 本 | 8 |
-| 合計 | **351**（版管理が数える生の行では足す 363・消える 84） |
+| 合計 | **325**（版管理が数える生の行では足す 343・消える 90） |
 
-**1 file あたりの増分のいちばん大きいのは 136 行**で、M の見積 300 の内側である。写しの 20 本は 1 本 7 行の同じ機械的な変更で、これを割ると床が写しの取りこぼしで落ちる（生成区間を持つ写しは同時にしか動かせない）。新しい file は 1 本も無い。新しい dir は作らない。縮む file は無い。外部 crate は増やさない。
+**1 file あたりの増分のいちばん大きいのは 110 行**で、M の見積 300 の内側である。写しの 20 本は 1 本 7 行の同じ機械的な変更で、これを割ると床が写しの取りこぼしで落ちる（生成区間を持つ写しは同時にしか動かせない）。新しい file は 1 本も無い。新しい dir は作らない。縮む file は無い。外部 crate は増やさない。
 
 ### (i) 運ばないもの・撤退条件・🔴
 
