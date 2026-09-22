@@ -8,6 +8,7 @@
 - 並行する便: 便 99（`crates/folio/src/graph.rs`・`stamp.rs`・`gate.rs`・`design-intent/graph.yaml`・`tests/fixtures/schema/` の 4 本・`crates/folio/tests/graph.rs`・`tests/stamp.rs`・`tests/schema_docs.rs`）と、本便の write-set は **1 本も重ならない**。便 101（行 cx）とも重ならない。
 
 - 改訂 b（2026-09-22 17:5x JST・検証役の report handoff-2026-09-22/d100-verify.md への応答）: verify の 2 行目の --test face の scope crates/folio/tests/face.rs を write-set に足す（本文は変えない・器の受付は verify の --test X の X の file を write-set に求める）。ほかは変えない。
+- 改訂 c（2026-09-22 18:0x JST・run f2-648.137-20260922T085029Z の審査 FAIL〔literal-mismatch〕への応答）: done が tests/face_srs.rs と tests/face.rs の 2 file に workspace の本数 743 を帰属させていた。verify の 2 行目で測れるのは 2 file の 60 本（face_srs 8・face 52・席が main で実測）なので、done を 2 file の 60 本と、共通の検証の workspace 743 + 1 = 744 本とに書き分ける。ほかは変えない。
 ## 1. 目的と中身
 
 `crates/folio/src/face_srs.rs` は要件書の面の生成器で、器が便を受けるときに測る行数の上限（1500）に対する余地が **102 行**しか残っていない。この file に行を足す便は size S の見積（100 行）をかろうじて満たすだけで、size M の見積（300 行）では受け付けられない。設計ノート §8 の行 G8 はこの file の側に要件ごとの実装の状態を出す M の便なので、先に file を割る 1 本が要る。本便は章 03〜06（機能要件・非機能要件・受入基準・制約）の生成を新しい file へ **そのまま移す**。移す行は 1 字も変えず、関数名も部品の名札も出力の字面も 1 つも変えない。面の生成物は byte まで同じである。
@@ -121,5 +122,5 @@ section = "1"
 write-set = ["-crates/folio/src/face_srs.rs", "+crates/folio/src/face_srs_items.rs", "crates/folio/src/main.rs", "crates/folio/tests/face_srs.rs", "crates/folio/tests/face.rs"]
 verify = ["cargo nextest run -p folio --test face_srs f100_", "cargo nextest run -p folio --test face_srs --test face", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "f100_ の歯 1 本（器の式で face_srs.rs が 1100 行以下・face_srs_items.rs が 600 行以下・移した 7 つの定義の頭が新しい file に 1 つずつ在り face_srs.rs に 1 つも無い）が緑、crates/folio/tests/face_srs.rs と crates/folio/tests/face.rs の既存の歯が全部緑（本便の前の 743 本と名前も本数も違わない 743 本 + f100_ の 1 本 = 744 本）、clippy が 0 警告で CI が通る"
+done = "f100_ の歯 1 本（器の式で face_srs.rs が 1100 行以下・face_srs_items.rs が 600 行以下・移した 7 つの定義の頭が新しい file に 1 つずつ在り face_srs.rs に 1 つも無い）が緑、crates/folio/tests/face_srs.rs の既存の 8 本と crates/folio/tests/face.rs の 52 本（合わせて 60 本・本便の前の main と名前も本数も違わない）が全部緑、共通の検証の workspace 全体の nextest が本便の前の 743 本 + f100_ の 1 本 = 744 本で全部緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
