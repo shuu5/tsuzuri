@@ -273,7 +273,7 @@ fn walk(node: &Node, at: &str, f: &mut dyn FnMut(&str, &str)) {
 
 /// 本文の中の判断の記録の id を拾う。床の式 `(?<![A-Za-z0-9-])(ADR-[1-9][0-9]*)(?![A-Za-z0-9])` を文字の走査で写す
 /// （4 桁の ADR-0047 は 1〜9 で始まらないので形に当たらない）。
-fn scan_adr_ids(text: &str) -> Vec<String> {
+pub(crate) fn scan_adr_ids(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
     let head: Vec<char> = "ADR-".chars().collect();
     let mut out = Vec::new();

@@ -20,6 +20,7 @@ use crate::freeze::{self, After, Flag};
 use crate::ids;
 use crate::intake;
 use crate::link;
+use crate::mentions;
 use crate::note;
 use crate::parts::catalog::FigureType;
 use crate::refs;
@@ -215,6 +216,23 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
                 adr_records.as_ref(),
                 &mut report,
             );
+            // 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ数える
+            if let Some(records) = adr_records.as_ref() {
+                mentions::check_mentions(
+                    dir,
+                    &[
+                        ("constitution.yaml", &src.constitution),
+                        ("rules.yaml", &src.rules),
+                        ("vocabulary.yaml", &src.vocabulary),
+                        ("srs.yaml", &src.srs),
+                        ("index.yaml", &src.index),
+                        ("intake.yaml", &src.intake),
+                        ("ceiling.yaml", &src.ceiling),
+                    ],
+                    records,
+                    &mut report,
+                );
+            }
         }
         None => debug_assert!(!report.unknowns.is_empty()),
     }

@@ -3,7 +3,7 @@
 # 敵対レビュー 1 周目（B1〜B3 / M1〜M7 / m1）・2 周目（fc-1〜fc-9 / fp-1〜fp-7 / loophole-1〜13 / content-1・2・5・11 / fixrun-1〜6）・
 # 3 周目（loophole-v3-1〜6・9〜11・15 / fp3-2・4〜7・9・10 / content-limits-1・2・6・13）・4 周目（loophole-v4-1〜5・7 / F-1〜F-3）・5 周目（doc-v5-1〜2 / loophole-v5-1〜9）の再現と、正の経路（欄の決まりの写し・範囲の増減・空の値・貼れる差分・改行入りの値・浅い写し）を含む。
 # 写しは既定で git の 1 commit（床は版管理の無い写しを「まだ分からない」に落とす）。no_git: true の case だけ版管理なし。
-expected_cases: 141
+expected_cases: 142
 
 shared:
   p8_title_old: &p8_title_old 撤退条件を決定と同時に書く
@@ -787,3 +787,8 @@ cases_srs_item:
   - {id: srs-item-no-verify, why: verify を欠いた要件の行は 1 件で落ちる（中の欄は数えない）, mutate: [{file: srs.yaml, path: "requirements[19]", value: {id: FR90, title: 検査の行を足す, pattern: ubiquitous, strength: must, when: つねに, shall: 床は行を数える。, plain: 行を数えます。, basis: [P-1], goals: [GOAL1], figures: [図1]}, add: true}], expect_rc: 1, expect_n: 1, expect_msg: の verify が無い}
   - {id: srs-item-unknown-field, why: 閉じた一覧に無い欄は落ちる（N-3）, mutate: [{file: srs.yaml, path: "requirements[19]", value: {id: FR90, title: 検査の行を足す, pattern: ubiquitous, strength: must, when: つねに, shall: 床は行を数える。, plain: 行を数えます。, basis: [P-1], verify: {method: test, how: 歯で見る, ac: [AC1]}, goals: [GOAL1], figures: [図1], extra: 1}, add: true}], expect_rc: 1, expect_n: 1, expect_msg: 未知の欄}
   - {id: srs-item-nfr-no-figures, why: nonfunctional の行も同じ決まりを通る, mutate: [{file: srs.yaml, path: "nonfunctional[3]", value: {id: NFR90, title: 検査の行を足す, pattern: ubiquitous, strength: must, when: つねに, shall: 床は行を数える。, plain: 行を数えます。, basis: [P-1], verify: {method: test, how: 歯で見る, ac: [AC1]}, goals: [GOAL1]}, add: true}], expect_rc: 1, expect_n: 1, expect_msg: の figures が無い}
+
+# 散文の言及の歯 R-17（便 93・P-10.1）。土台には行 R-17 が無い（歯は黙る）ので、段の中で行と条 N-2 の逆参照を足して数える。
+# 土台の行 R-3 の注は受入基準 AC2 を書きながら、行 R-3 は AC2 を受ける型付きの欄を持たない。件数は固定しない（同じ形の言及が多い）。
+cases_mentions:
+  - {id: mentions-rule-row-counts-the-frozen-base, why: 凍結した土台に行 R-17 を足すと散文の言及が型付きの欄に無いものを数える（便 93 (g)）, mutate: [{file: rules.yaml, path: "thresholds[16]", value: {id: R-17, article: N-2, what: 設計文書の中で番号を持つ行の散文の欄に現れた、その行以外の番号のうち、その行の型付きの欄に無いものの数, value: 0 件, kind: build-check, status: 仮, ruling: *ruling, ruled_at: 2026-09-12, stage: post, population: 正本の中で番号を持つ行の、型付きの欄の外に在る散文の欄}, add: true}, {file: constitution.yaml, path: "articles[id=N-2].relations.rules", value: [R-16, R-17]}], expect_rc: 1, expect_msg: R-3 の散文が AC2 を指すのに}

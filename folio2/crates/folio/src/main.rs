@@ -26,6 +26,7 @@ mod inject;
 mod intake;
 mod lineage;
 mod link;
+mod mentions;
 mod note;
 mod parts;
 mod prose;

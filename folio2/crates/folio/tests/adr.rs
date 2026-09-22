@@ -325,14 +325,15 @@ fn f92_the_real_records_carry_the_produced_field() {
 #[test]
 fn f92_an_article_id_is_a_violation() {
     let w = Work::new("f92-article");
-    w.mutate(PRODUCED_ADR1, "\nproduced: [P-6]\n");
+    // ADR-2 を残す＝ADR-1 の帰結の散文が指す ADR-2 を外して行 R-17 の違反を足さない（便 93 改訂 b）
+    w.mutate(PRODUCED_ADR1, "\nproduced: [ADR-2, P-6]\n");
     assert_figure_violation(&w, &["produced", "P-6", "id の形でない"]);
 }
 
 #[test]
 fn f92_an_id_in_the_basis_is_a_violation() {
     let w = Work::new("f92-basis");
-    w.mutate(PRODUCED_ADR1, "\nproduced: [FR16]\n");
+    w.mutate(PRODUCED_ADR1, "\nproduced: [ADR-2, FR16]\n");
     assert_figure_violation(&w, &["produced", "FR16", "自分の id か根拠"]);
 }
 
@@ -347,6 +348,6 @@ fn f92_produced_that_is_not_a_list_is_a_violation() {
 #[test]
 fn f92_an_adr_that_does_not_exist_is_a_violation() {
     let w = Work::new("f92-missing");
-    w.mutate(PRODUCED_ADR1, "\nproduced: [ADR-99]\n");
-    assert_figure_violation(&w, &["ADR-1.produced[0]", "ADR-99", "実在しない"]);
+    w.mutate(PRODUCED_ADR1, "\nproduced: [ADR-2, ADR-99]\n");
+    assert_figure_violation(&w, &["ADR-1.produced[1]", "ADR-99", "実在しない"]);
 }
