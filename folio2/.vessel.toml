@@ -4,3 +4,5 @@ schema = 1
 allowed-commands = ["cargo", "git"]
 common-verify = ["cargo nextest run --workspace --no-tests=fail --no-fail-fast", "cargo clippy --workspace --all-targets -- -D warnings"]
 requirements = "design-intent/srs.yaml"
+# 入口の flip（TDD の RED の検査）は測らないと名乗る（scribe2 s2-07l.554・ADR-0054・pipeline.md §54）。folio2 は xtask を持たず、器の新 binary は cargo の行を持つ宣言にこの key か flip の行のどちらかを求める（2026-09-23・持ち主の指示で最新 binary へ移行）。
+entrance-flip = "unmeasured"
