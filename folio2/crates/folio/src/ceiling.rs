@@ -32,8 +32,8 @@ pub const VERDICT_VALUES: [&str; 3] = ["合格", "不合格", "まだ分から�
 /// 観点の id の列（ADR-8 決定 (1)・順も固定・増減はどちらも違反）。
 pub const VIEWPOINT_IDS: [&str; 4] = ["fidelity", "readability", "coherence", "reality"];
 
-/// 読む文書の id の集合 = 正本 7 file + 判断の記録 + 設計ノート（増減はどちらも違反）。
-pub const DOCUMENT_IDS: [&str; 9] = [
+/// 読む文書の id の集合 = 正本 7 file + 判断の記録 + 設計ノート + 索引の欄の決まり（増減はどちらも違反・便 102 で graph）。
+pub const DOCUMENT_IDS: [&str; 10] = [
     "constitution",
     "rules",
     "vocabulary",
@@ -43,6 +43,7 @@ pub const DOCUMENT_IDS: [&str; 9] = [
     "ceiling",
     "adr",
     "design-note",
+    "graph",
 ];
 
 /// 所見 1 件が必ず持つ欄。
@@ -62,6 +63,9 @@ pub const RECORD_REQUIRED: [&str; 5] = ["model", "effort", "at", "read", "bundle
 
 /// 材料の束の中身（順も同じ・`bundle.rs` が組む）。
 pub const BUNDLE_CONTENTS: [&str; 5] = ["sources", "faces", "question", "finding", "reads"];
+
+/// 束の sources の写しで常に残す最上位の節（順も同じ・`bundle.rs` が組む・便 102）。
+pub const BUNDLE_SKELETON: [&str; 6] = ["meta", "id", "title", "status", "date", "schema"];
 
 /// 束の要約値の規則の名（digest.txt の頭）。
 pub const BUNDLE_DIGEST: &str = "sha256-files-1";
@@ -151,12 +155,13 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         Floor::Map(&[
             ("contents", Floor::Strs(&BUNDLE_CONTENTS)),
             ("digest", Floor::Val(BUNDLE_DIGEST)),
+            ("skeleton", Floor::Strs(&BUNDLE_SKELETON)),
         ]),
     ),
     (
         "bundle_note",
         Floor::Val(
-            "材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）",
+            "材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）。skeleton は sources の写しで常に残す最上位の節の閉じた一覧（観点が読むと宣言した欄に関わらず残す＝どの版の何を読んでいるかを決める欄）",
         ),
     ),
     (
@@ -496,10 +501,48 @@ mod tests {
     }
 
     #[test]
-    fn ceiling_document_ids_are_the_seven_files_plus_adr_and_design_note() {
+    fn ceiling_document_ids_are_the_seven_files_plus_adr_design_note_and_graph() {
         let mut expected: Vec<&str> = FILES.to_vec();
-        expected.extend(["adr", "design-note"]);
+        expected.extend(["adr", "design-note", "graph"]);
         assert_eq!(DOCUMENT_IDS.to_vec(), expected);
+    }
+
+    /// 骨格の 6 語は、実の正本（天井の正本の documents の行が指す file・dir 形は直下の .yaml）の最上位の節
+    /// （列 0 の `<名>:` の行）として 1 語につき 1 本以上の file に実在する（便 102 §1 (g)4・数は固定しない）。
+    #[test]
+    fn f102_every_skeleton_word_is_a_top_level_section_of_a_real_source() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent");
+        let text = std::fs::read_to_string(dir.join(FILE)).unwrap();
+        let ceiling = crate::yaml::parse(&text).unwrap().root;
+        let mut paths = Vec::new();
+        for row in rows(FILE, &ceiling, "documents", &mut Report::default()) {
+            let file = row.get("file").and_then(Node::as_str).unwrap();
+            let path = dir.join(file);
+            if file.ends_with('/') {
+                for entry in std::fs::read_dir(&path).unwrap() {
+                    let p = entry.unwrap().path();
+                    if p.extension().is_some_and(|e| e == "yaml") {
+                        paths.push(p);
+                    }
+                }
+            } else {
+                paths.push(path);
+            }
+        }
+        assert!(paths.len() >= DOCUMENT_IDS.len(), "{paths:?}");
+        for word in BUNDLE_SKELETON {
+            let head = format!("{word}:");
+            let hits = paths
+                .iter()
+                .filter(|p| {
+                    std::fs::read_to_string(p).unwrap().lines().any(|l| {
+                        l.strip_prefix(&head)
+                            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '\t']))
+                    })
+                })
+                .count();
+            assert!(hits >= 1, "骨格の語「{word}」を最上位の節に持つ正本が無い");
+        }
     }
 
     #[test]

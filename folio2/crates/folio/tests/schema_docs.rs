@@ -4,7 +4,7 @@
 //! 以下は移す前の頭の注釈（便ごとの歯の一覧）。
 //!
 //! 便 48（docs/design/delivery-48.md §1 (c)(d)）: 命令は 3 本目の file ceiling.yaml（天井の正本・生成区間は末尾）も順に見る（合格の標準出力は 3 行）。
-//! 12. 天井の正本の側の実の正本: --check → 0・3 行目に「ceiling.yaml」「2915 byte」・生成区間の要約値が (c) の値・行数 24。
+//! 12. 天井の正本の側の実の正本: --check → 0・3 行目に「ceiling.yaml」「3176 byte」・生成区間の要約値が (c) の値・行数 27（便 102 で 24 行・2915 byte から）。
 //! 13. 天井の正本の側のずれ: 生成区間の 1 byte を書き換えて --check → 1。
 //! 14. 天井の正本の側の印: begin を消す → 2。
 //! 15. 天井の正本の側の書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致（人が書く節も不変）。
@@ -58,10 +58,10 @@ use std::process::{Command, Output, Stdio};
 use yaml_rust2::{Yaml, YamlLoader};
 
 /// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
-const CEILING_REGION_LINES: usize = 24;
-const CEILING_REGION_BYTES: usize = 2915;
+const CEILING_REGION_LINES: usize = 27;
+const CEILING_REGION_BYTES: usize = 3176;
 const CEILING_REGION_SHA256: &str =
-    "5ad2f19b7d8c4a197865c5280f4c82653f97ef6dc0b9b45186a2678539429fa2";
+    "1cc1401cc474f16b272e02cfa434e4fb5b00aead4b803b1d0adcb2fe9e4f5386";
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
 const RULES_REGION_LINES: usize = 30;
@@ -349,8 +349,8 @@ fn region(text: &str) -> &str {
 // ── 便 48: 天井の正本の側 ──
 
 /// 天井の正本の側の生成区間の変異（1 byte・束の要約値の規則の名）。
-const CEILING_DRIFT_FROM: &str = ", digest: sha256-files-1}\n";
-const CEILING_DRIFT_TO: &str = ", digest: sha256-files-2}\n";
+const CEILING_DRIFT_FROM: &str = "\n    digest: sha256-files-1\n";
+const CEILING_DRIFT_TO: &str = "\n    digest: sha256-files-2\n";
 
 // ── 12. 天井の正本の側の実の正本 ──
 

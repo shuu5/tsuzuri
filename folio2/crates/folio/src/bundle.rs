@@ -21,7 +21,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::ceiling::{
-    BUNDLE_DIGEST, FINDING_OPTIONAL, FINDING_REQUIRED, PLACE_REQUIRED, RECORD_REQUIRED,
+    BUNDLE_DIGEST, BUNDLE_SKELETON,FINDING_OPTIONAL, FINDING_REQUIRED, PLACE_REQUIRED, RECORD_REQUIRED,
     REFUTE_VALUES, VERDICT_VALUES,
 };
 use crate::face::R;
@@ -36,7 +36,7 @@ const FILE: &str = "ceiling.yaml";
 pub const DIGEST_FILE: &str = "digest.txt";
 
 /// 文書の id → 面の file の名の形（`site.rs` の配信先の名の写し・床の定数）。`None` = 面は無い。
-pub const FACE_NAMES: [(&str, Option<FaceName>); 9] = [
+pub const FACE_NAMES: [(&str, Option<FaceName>); 10] = [
     ("index", Some(FaceName::Exact("index.html"))),
     ("constitution", Some(FaceName::Exact("constitution.html"))),
     ("srs", Some(FaceName::Exact("srs.html"))),
@@ -46,6 +46,7 @@ pub const FACE_NAMES: [(&str, Option<FaceName>); 9] = [
     ("vocabulary", None),
     ("intake", None),
     ("ceiling", None),
+    ("graph", None),
 ];
 
 /// 面の file の名の形。
@@ -392,7 +393,7 @@ fn build_counted(
         reads.push_str(&format!("# 落とした節 {rel}: {}\n", names.join(", ")));
     }
     reads.push_str(&notes_absent);
-    reads.push_str(&format!("# 常に残す節: {}\n", SKELETON.join(", ")));
+    reads.push_str(&format!("# 常に残す節: {}\n", BUNDLE_SKELETON.join(", ")));
     files.insert("question.yaml".to_string(), question_text(vp).into_bytes());
     files.insert(
         "finding.yaml".to_string(),
@@ -410,8 +411,7 @@ fn build_counted(
 
 // ── 最上位の節で切る（便 98・docs/design/delivery-98.md §1 (b)） ──
 
-/// 骨格の閉じた一覧（どの観点の写しにも常に残す最上位の節・P-5.1）。
-pub const SKELETON: [&str; 6] = ["meta", "id", "title", "status", "date", "schema"];
+// 骨格の閉じた一覧（どの観点の写しにも常に残す最上位の節）は床の定数 `ceiling::BUNDLE_SKELETON`（便 102 で移した・値は不変）。
 
 /// 生成区間の開きと閉じの印（行の頭）。
 const REGION_BEGIN: &str = "# folio:schema:begin";
@@ -480,7 +480,7 @@ fn cut_sections(text: &str, tops: &[&str]) -> Cut {
     }
     let keep: Vec<bool> = sections
         .iter()
-        .map(|s| tops.contains(&s.as_str()) || SKELETON.contains(&s.as_str()))
+        .map(|s| tops.contains(&s.as_str()) || BUNDLE_SKELETON.contains(&s.as_str()))
         .collect();
     // 生成区間は中の節と一緒に 1 つの塊（規則 4）
     let begin = lines.iter().position(|l| l.starts_with(REGION_BEGIN));
@@ -702,9 +702,20 @@ mod bundle_tests {
         assert!(!form("adr").unwrap().matches("adr-.html"));
         assert!(form("design-note").unwrap().matches("note-full.html"));
         assert!(!form("design-note").unwrap().matches("folio.css"));
-        for doc in ["rules", "vocabulary", "intake", "ceiling"] {
+        for doc in ["rules", "vocabulary", "intake", "ceiling", "graph"] {
             assert!(form(doc).is_none(), "{doc}");
         }
+    }
+
+    /// 読む文書の id（`ceiling::DOCUMENT_IDS`）と面の名の形の表の id は同じ集合で、どちらにも重複が無い（便 102 §1 (g)3）。
+    #[test]
+    fn f102_the_face_name_table_covers_every_document_id() {
+        use std::collections::BTreeSet;
+        let docs: BTreeSet<&str> = crate::ceiling::DOCUMENT_IDS.into_iter().collect();
+        let faces: BTreeSet<&str> = FACE_NAMES.iter().map(|(id, _)| *id).collect();
+        assert_eq!(docs.len(), crate::ceiling::DOCUMENT_IDS.len(), "DOCUMENT_IDS に重複");
+        assert_eq!(faces.len(), FACE_NAMES.len(), "FACE_NAMES に重複");
+        assert_eq!(docs, faces);
     }
 
     #[test]

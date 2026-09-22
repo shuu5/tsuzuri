@@ -33,6 +33,7 @@ documents:
   - {id: adr, file: adr/, note: 判断の記録。1 本ずつ。置き場の欄の決まりの file（schema）の決まりの部分は生成区間で、正本は実装の定数である。そこへの所見の直す先は実装の側（便）で、file を手で直さない}
   - {id: design-note, file: design-note/, note: 設計ノート。1 本ずつ。置き場の欄の決まりの file（schema）の決まりの部分は生成区間で、正本は実装の定数である。そこへの所見の直す先は実装の側（便）で、file を手で直さない}
   - {id: ceiling, file: ceiling.yaml, note: この正本。末尾の schema の節は生成区間で、正本は実装の定数である}
+  - {id: graph, file: graph.yaml, note: 索引の欄の決まり}
 
 # 観点 4 つ（文書の型に依らない・順も固定・ADR-8 決定 (1)）。reads = その観点で読む文書と欄（欄の名は正本の欄の名・機械の層）。問いの文は重さの基準と床の領分を含む（v0.2・ADR-10）
 viewpoints:
@@ -92,7 +93,7 @@ schema:
   verdicts_note: 観点ごとの 3 値（順も固定）。1 つでも「まだ分からない」なら天井は合格にならない。何にするかの裁定の正本は要件書 FR5 と判断の記録 ADR-8 決定 (4)
   viewpoints: [fidelity, readability, coherence, reality]
   viewpoints_note: 観点の閉じた id の列（順も固定）。viewpoints の行はこの id に 1 つずつ要る。何にするかの裁定の正本は判断の記録 ADR-8 決定 (1)。観点を増やさないことは憲法 N-5
-  documents: [constitution, rules, vocabulary, srs, index, intake, ceiling, adr, design-note]
+  documents: [constitution, rules, vocabulary, srs, index, intake, ceiling, adr, design-note, graph]
   documents_note: 読む文書の閉じた id の集合（順は問わない）。documents の行はこの id に 1 つずつ要る。所見の場所の doc と観点の reads の doc はこの行に解く
   finding:
     required: [id, viewpoint, place, weight, evidence]
@@ -102,8 +103,11 @@ schema:
   finding_note: 所見 1 件の欄の決まり。place は documents の id と、欄か節か行の id。evidence は正本の逐語の引用（床が実在を照合する）。weight の値域と反証に回す重さは人が書く weights の節が持つ
   record: {required: [model, effort, at, read, bundle]}
   record_note: 起動の記録の欄（観点ごとに 1 つ・合格の観点にも必須）。1 つでも欠けるか bundle の要約値が束と合わなければ、床がその観点を「まだ分からない」に落とす（判断の記録 ADR-8 決定 (3)）
-  bundle: {contents: [sources, faces, question, finding, reads], digest: sha256-files-1}
-  bundle_note: 材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）
+  bundle:
+    contents: [sources, faces, question, finding, reads]
+    digest: sha256-files-1
+    skeleton: [meta, id, title, status, date, schema]
+  bundle_note: 材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）。skeleton は sources の写しで常に残す最上位の節の閉じた一覧（観点が読むと宣言した欄に関わらず残す＝どの版の何を読んでいるかを決める欄）
   refute:
     contents: [finding.yaml, question.yaml, reads.yaml, schema.yaml, sources.txt]
     result_required: [id, refute, model, effort, at, bundle]

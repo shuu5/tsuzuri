@@ -5,6 +5,7 @@
 //! 第 3 版の形（便 47・docs/design/delivery-47.md §1 (e)2〜4）: 旧 4 節を外し生成区間 schema（凍結 anchor
 //! tests/fixtures/schema/ceiling-region.txt の中身）を足した写しが通る・生成区間のずれは違反 1 件。
 //! 締め（便 48・docs/design/delivery-48.md §1 (d)5）: schema の節が無ければ種別 ceiling の違反ちょうど 1 件・旧 4 節の名の節は未知の節で落ちる。
+//! 便 102（docs/design/delivery-102.md §1 (g)1・2）: 生成区間を持つ file が読む文書の行に全部覆われる・ceiling.yaml の写しが全部そろう。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -526,4 +527,113 @@ fn ceiling_duplicate_key_fails() {
         "重複キー",
         &["同じ表にキー「id」を 2 度書いている"],
     );
+}
+
+// ── 便 102: 読む文書の一覧に索引の欄の決まり（docs/design/delivery-102.md §1 (g)1・2） ──
+
+/// 生成区間の印（begin の行・end の行）。
+const F102_BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）\n";
+const F102_END: &str = "\n# folio:schema:end\n";
+
+/// 人が書く documents の節の行の (id, file)。列 0 の `documents:` の次から、字下げの無い行の手前まで。
+fn f102_document_rows(text: &str) -> Vec<(String, String)> {
+    let field = |line: &str, key: &str| -> String {
+        let at = line.find(key).unwrap_or_else(|| panic!("「{key}」が無い行: {line}")) + key.len();
+        let rest = &line[at..];
+        rest[..rest.find([',', '}']).unwrap_or(rest.len())].trim().to_string()
+    };
+    text.lines()
+        .skip_while(|l| *l != "documents:")
+        .skip(1)
+        .take_while(|l| l.is_empty() || l.starts_with(' '))
+        .filter(|l| l.starts_with("  - {"))
+        .map(|l| (field(l, "id: "), field(l, "file: ")))
+        .collect()
+}
+
+/// 生成区間の閉じた一覧 documents の id（凍結 anchor の `  documents: [...]` の行）。
+fn f102_region_documents(region: &str) -> Vec<String> {
+    let line = region
+        .lines()
+        .find_map(|l| l.strip_prefix("  documents: ["))
+        .expect("生成区間に documents の行が無い");
+    line.trim_end_matches(']')
+        .split(", ")
+        .map(str::to_string)
+        .collect()
+}
+
+/// `dir` の下の名 ceiling.yaml の file を全部（下の dir も歩く）。
+fn f102_find_ceilings(dir: &Path, out: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            f102_find_ceilings(&path, out);
+        } else if path.file_name().is_some_and(|n| n == "ceiling.yaml") {
+            out.push(path);
+        }
+    }
+}
+
+/// folio schema --check が名指す file（生成区間を持つ file の全部）が、天井の正本の読む文書の行に 1 本残らず覆われる
+/// （覆う = 行の file がその名と同じか、末尾が / の dir 形でその名を含む）。数は固定しない。
+#[test]
+fn f102_the_ceiling_reads_every_file_with_a_generated_region() {
+    let dir = repo_root().join("design-intent");
+    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .args(["schema", "--check", "--dir"])
+        .arg(&dir)
+        .output()
+        .expect("folio を起動できない");
+    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(&out), stderr(&out));
+    let rows = f102_document_rows(&fs::read_to_string(dir.join("ceiling.yaml")).unwrap());
+    let text = stdout(&out);
+    let names: Vec<&str> = text
+        .lines()
+        .map(|l| {
+            let head = l.find('（').unwrap_or_else(|| panic!("名が読めない行: {l}")) + '（'.len_utf8();
+            let rest = &l[head..];
+            &rest[..rest.find('・').unwrap_or_else(|| panic!("名が読めない行: {l}"))]
+        })
+        .collect();
+    assert!(!names.is_empty(), "{text}");
+    let uncovered: Vec<&str> = names
+        .iter()
+        .copied()
+        .filter(|name| {
+            !rows
+                .iter()
+                .any(|(_, file)| file == name || (file.ends_with('/') && name.starts_with(file.as_str())))
+        })
+        .collect();
+    assert!(
+        uncovered.is_empty(),
+        "天井の正本の読む文書の行に覆われない生成区間の file: {uncovered:?}"
+    );
+}
+
+/// design-intent と tests/fixtures の下の ceiling.yaml は全部、生成区間が凍結 anchor と byte 一致し、人が書く documents の
+/// 節の id の集合が生成区間の閉じた一覧と同じ。写しの本数は固定しない（実の正本が見つかることだけを確かめる）。
+#[test]
+fn f102_every_ceiling_copy_carries_the_frozen_region_and_the_same_documents() {
+    let root = repo_root();
+    let mut files = Vec::new();
+    f102_find_ceilings(&root.join("design-intent"), &mut files);
+    f102_find_ceilings(&root.join("tests/fixtures"), &mut files);
+    let real = root.join("design-intent/ceiling.yaml");
+    assert!(files.contains(&real), "実の正本が見つからない: {files:?}");
+    let anchor = anchor();
+    let mut closed = f102_region_documents(&anchor);
+    closed.sort();
+    for path in &files {
+        let text = fs::read_to_string(path).unwrap();
+        let shown = path.strip_prefix(&root).unwrap_or(path).display();
+        let begin = text.find(F102_BEGIN).unwrap_or_else(|| panic!("{shown}: begin の印が無い"));
+        let body = &text[begin + F102_BEGIN.len()..];
+        let end = body.find(F102_END).unwrap_or_else(|| panic!("{shown}: end の印が無い")) + 1;
+        assert!(body[..end] == anchor, "{shown}: 生成区間が凍結 anchor と違う");
+        let mut ids: Vec<String> = f102_document_rows(&text).into_iter().map(|(id, _)| id).collect();
+        ids.sort();
+        assert_eq!(ids, closed, "{shown}: documents の節の id の集合が生成区間の閉じた一覧と違う");
+    }
 }
