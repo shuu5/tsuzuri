@@ -1,13 +1,215 @@
 # folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
-round: 2026-09-21-round23
-at: 2026-09-21T15:03:23Z
+round: 2026-09-22-round26
+at: 2026-09-22T14:46:56Z
 verdict: 合格
-sources: sha256 b18dab701f809a327076bcaa398105aa32afd6d84d3af8fdfc3fdd5a3fb4471d
-faces: sha256 3cb05622279ec64585d8d8ad8f794ede79ca70bc80024ac2b21ddd1642df2e4c
+sources: sha256 daf9c226b13478b0e0edc0838476f7b5a9755c6de9f190e13d8cf8d978506d18
+faces: sha256 b6c821aa2265e59589e25ec5dbe3074663b286c557eb461a702159c91b36aac8
 viewpoints:
-  - {id: fidelity, verdict: 合格, findings: 4, stops: 0, bundle: a9b8a6aa, model: opus, effort: default, at: 2026-09-21T14:59:00Z}
-  - {id: readability, verdict: 合格, findings: 7, stops: 0, bundle: 3f1b791b, model: opus, effort: default, at: 2026-09-21T15:00:00Z}
-  - {id: coherence, verdict: 合格, findings: 5, stops: 0, bundle: 19bdbe88, model: opus, effort: default, at: 2026-09-21T15:01:49Z}
-  - {id: reality, verdict: 合格, findings: 3, stops: 0, bundle: c132ab18, model: opus, effort: default, at: 2026-09-21T15:03:23Z}
+  - {id: fidelity, verdict: 合格, findings: 0, stops: 0, bundle: e6010626, model: opus, effort: default, at: 2026-09-22T14:46:56Z}
+  - {id: readability, verdict: 合格, findings: 4, stops: 0, bundle: 455f09c8, model: opus, effort: default, at: 2026-09-22T14:22:18Z}
+  - {id: coherence, verdict: 合格, findings: 7, stops: 0, bundle: a3f38a40, model: opus, effort: default, at: 2026-09-22T14:22:08Z}
+  - {id: reality, verdict: 合格, findings: 3, stops: 0, bundle: 284796e9, model: opus, effort: default, at: 2026-09-22T14:26:28Z}
 refutes: []
 reads: [adr, ceiling, constitution, design-note, index, intake, rules, srs, vocabulary]
+rest: sha256 49aa6858de746b6a964073ba3f3f0157e76d1815cd850655bf5b68555d3d3c80
+nodes:
+  - {id: A-1, digest: 6d545583}
+  - {id: A-1.1, digest: df732d5b}
+  - {id: A-2, digest: d244c8dc}
+  - {id: A-2.1, digest: b49d1863}
+  - {id: A-2.2, digest: 8234997e}
+  - {id: A-2.3, digest: 0d5abecd}
+  - {id: A-3, digest: dccabf83}
+  - {id: A-3.1, digest: d7b350b3}
+  - {id: A-4, digest: bef283dd}
+  - {id: A-4.1, digest: 1a57bd81}
+  - {id: A-4.2, digest: c46fbc55}
+  - {id: A-4.3, digest: 5e6460c2}
+  - {id: AC1, digest: a86d26ba}
+  - {id: AC10, digest: d9b4d37b}
+  - {id: AC11, digest: 68252114}
+  - {id: AC12, digest: 3705a194}
+  - {id: AC13, digest: 7fe3c746}
+  - {id: AC14, digest: 96958328}
+  - {id: AC15, digest: 30443849}
+  - {id: AC16, digest: be171490}
+  - {id: AC17, digest: 44743fef}
+  - {id: AC18, digest: cd1553f9}
+  - {id: AC2, digest: 225374e5}
+  - {id: AC3, digest: 193660bb}
+  - {id: AC4, digest: 103f7e05}
+  - {id: AC5, digest: a33cf16a}
+  - {id: AC6, digest: 1e2af684}
+  - {id: AC7, digest: 1c3680a3}
+  - {id: AC8, digest: 967acdeb}
+  - {id: AC9, digest: e931db33}
+  - {id: ADR-1, digest: c4c4281d}
+  - {id: ADR-10, digest: 3e93ce22}
+  - {id: ADR-11, digest: 64980ee8}
+  - {id: ADR-12, digest: b507f2d6}
+  - {id: ADR-13, digest: 25b4ccb0}
+  - {id: ADR-14, digest: 0cdc7631}
+  - {id: ADR-2, digest: f0477099}
+  - {id: ADR-3, digest: f8a918d1}
+  - {id: ADR-4, digest: bfc2b9af}
+  - {id: ADR-5, digest: ea177b73}
+  - {id: ADR-6, digest: 0dc1dfbd}
+  - {id: ADR-7, digest: 9d801ae7}
+  - {id: ADR-8, digest: 237cb0de}
+  - {id: ADR-9, digest: 38dd36c7}
+  - {id: CON1, digest: 144a68c4}
+  - {id: CON2, digest: 359337b5}
+  - {id: CON3, digest: 4f88c0b0}
+  - {id: CON4, digest: d43b71f8}
+  - {id: CON5, digest: 173a5ec9}
+  - {id: CON6, digest: 442bbf92}
+  - {id: CON7, digest: bd5d479d}
+  - {id: CON8, digest: 26b277ba}
+  - {id: CON9, digest: fb991f7f}
+  - {id: D-1, digest: d98f2bab}
+  - {id: D-10, digest: 13e44933}
+  - {id: D-11, digest: 257e57e0}
+  - {id: D-12, digest: 0b2c1c2c}
+  - {id: D-2, digest: 1e4c2762}
+  - {id: D-3, digest: ca2c7318}
+  - {id: D-4, digest: e738eec2}
+  - {id: D-5, digest: 357c75b1}
+  - {id: D-6, digest: b74ca8cf}
+  - {id: D-7, digest: 8c772465}
+  - {id: D-8, digest: 6abbaeae}
+  - {id: D-9, digest: e95ee916}
+  - {id: FR1, digest: ab26d6f7}
+  - {id: FR10, digest: f1d9d507}
+  - {id: FR11, digest: e959e889}
+  - {id: FR12, digest: 00437df8}
+  - {id: FR13, digest: 8c4ef700}
+  - {id: FR14, digest: eb4600e0}
+  - {id: FR15, digest: fc6b30c2}
+  - {id: FR16, digest: 6d58a656}
+  - {id: FR17, digest: cc1e8192}
+  - {id: FR18, digest: 1ba8952a}
+  - {id: FR19, digest: cd086c50}
+  - {id: FR2, digest: fe4e622d}
+  - {id: FR20, digest: 0631909d}
+  - {id: FR21, digest: 76891f7d}
+  - {id: FR3, digest: 109472d4}
+  - {id: FR4, digest: 789283d7}
+  - {id: FR5, digest: 8734fec7}
+  - {id: FR6, digest: 189725c9}
+  - {id: FR7, digest: 59cd1c3c}
+  - {id: FR8, digest: b1e50bbd}
+  - {id: FR9, digest: 9b1280c9}
+  - {id: GOAL1, digest: 57877b1d}
+  - {id: GOAL2, digest: cc0b6727}
+  - {id: GOAL3, digest: a31c2ca2}
+  - {id: GOAL4, digest: d58567f1}
+  - {id: N-1, digest: 54c4dfc4}
+  - {id: N-1.1, digest: b36a8b57}
+  - {id: N-1.2, digest: 8a6bb65b}
+  - {id: N-2, digest: e860ed3c}
+  - {id: N-2.1, digest: 1d65df0a}
+  - {id: N-2.2, digest: eb936f44}
+  - {id: N-3, digest: dab2bba7}
+  - {id: N-3.1, digest: 3d3e88ec}
+  - {id: N-4, digest: 7dcb3b6a}
+  - {id: N-4.1, digest: 8a92790c}
+  - {id: N-5, digest: 28d99765}
+  - {id: N-5.1, digest: 57f67582}
+  - {id: N-6, digest: d9d7b4f8}
+  - {id: N-6.1, digest: ab2be4da}
+  - {id: N-6.2, digest: 5466a8a9}
+  - {id: NFR1, digest: 8ad380e8}
+  - {id: NFR2, digest: 25aaf47f}
+  - {id: NFR3, digest: d0b66c83}
+  - {id: P-1, digest: 8b0e9bb3}
+  - {id: P-1.1, digest: 03796068}
+  - {id: P-1.2, digest: b25c3bf3}
+  - {id: P-10, digest: 90a10f65}
+  - {id: P-10.1, digest: fdb0e690}
+  - {id: P-10.2, digest: 7a182b26}
+  - {id: P-10.3, digest: 6e5414a9}
+  - {id: P-11, digest: 7417c817}
+  - {id: P-11.1, digest: 082304e2}
+  - {id: P-12, digest: 4617605f}
+  - {id: P-12.1, digest: 5547f54b}
+  - {id: P-12.2, digest: e68bf719}
+  - {id: P-12.3, digest: 2050051b}
+  - {id: P-13, digest: d2fa2aad}
+  - {id: P-13.1, digest: 144c8809}
+  - {id: P-13.2, digest: ec3d8f32}
+  - {id: P-13.3, digest: 71c1b47c}
+  - {id: P-13.4, digest: 317330e7}
+  - {id: P-14, digest: 79a056d2}
+  - {id: P-14.1, digest: 785dad10}
+  - {id: P-14.2, digest: ffbd25b9}
+  - {id: P-14.3, digest: 44737ede}
+  - {id: P-15, digest: a260a75c}
+  - {id: P-15.1, digest: 770f92fe}
+  - {id: P-15.2, digest: 5dbf46d1}
+  - {id: P-16, digest: 76a06e36}
+  - {id: P-16.1, digest: 60059757}
+  - {id: P-16.2, digest: 47d36850}
+  - {id: P-17, digest: 1d6e99fe}
+  - {id: P-17.1, digest: e0e7dd92}
+  - {id: P-17.2, digest: cb9498d7}
+  - {id: P-17.3, digest: b42bbe24}
+  - {id: P-17.4, digest: a86bda79}
+  - {id: P-18, digest: 2199e562}
+  - {id: P-18.1, digest: 4544cd70}
+  - {id: P-18.2, digest: cb6effa7}
+  - {id: P-18.3, digest: 3f51098b}
+  - {id: P-18.4, digest: a22a5262}
+  - {id: P-2, digest: dc6dae67}
+  - {id: P-2.1, digest: a790ff1a}
+  - {id: P-2.2, digest: 748a6b59}
+  - {id: P-2.3, digest: f3f4eab2}
+  - {id: P-2.4, digest: b8635a08}
+  - {id: P-3, digest: c682a1cd}
+  - {id: P-3.1, digest: 28a2f7be}
+  - {id: P-3.2, digest: efe33963}
+  - {id: P-3.3, digest: 9d8c0a47}
+  - {id: P-4, digest: 71bcc171}
+  - {id: P-4.1, digest: e9db2f8b}
+  - {id: P-4.2, digest: 028bae13}
+  - {id: P-5, digest: e0518e63}
+  - {id: P-5.1, digest: de076dab}
+  - {id: P-5.2, digest: b033d666}
+  - {id: P-5.3, digest: 777bebd4}
+  - {id: P-5.4, digest: 9ae32b89}
+  - {id: P-5.5, digest: 2b1dddc7}
+  - {id: P-5.6, digest: f1d3e407}
+  - {id: P-6, digest: fb6f5af7}
+  - {id: P-6.1, digest: 605b82be}
+  - {id: P-6.2, digest: d5049c2f}
+  - {id: P-6.3, digest: 3b902555}
+  - {id: P-6.4, digest: 3c4279fb}
+  - {id: P-7, digest: 90ed2a92}
+  - {id: P-7.1, digest: da0ab253}
+  - {id: P-7.2, digest: 2a59e86f}
+  - {id: P-8, digest: d6c71a9e}
+  - {id: P-8.1, digest: 07a81135}
+  - {id: R-1, digest: 72bebf40}
+  - {id: R-10, digest: 377927ce}
+  - {id: R-11, digest: fb12d643}
+  - {id: R-12, digest: 75c7b4ac}
+  - {id: R-13, digest: f78cef89}
+  - {id: R-14, digest: d6c26874}
+  - {id: R-15, digest: 217bf6bf}
+  - {id: R-16, digest: a325bf80}
+  - {id: R-17, digest: b6d603ca}
+  - {id: R-2, digest: af486c93}
+  - {id: R-3, digest: cc9337b9}
+  - {id: R-4, digest: 0f50d006}
+  - {id: R-5, digest: bef68658}
+  - {id: R-6, digest: 9498aa47}
+  - {id: R-7, digest: 5157a878}
+  - {id: R-8, digest: 26fd4c7f}
+  - {id: R-9, digest: 1416a9ee}
+  - {id: ai-session, digest: a06d2523}
+  - {id: folio-v1, digest: 5ccc2ed6}
+  - {id: folio-v2, digest: 18fcd723}
+  - {id: owner, digest: b852a79f}
+  - {id: prep-sheet, digest: de2c6e1c}
+  - {id: scribe2, digest: 98133617}
+  - {id: three-faces, digest: 111536ed}
+  - {id: verdict, digest: f2d63709}
