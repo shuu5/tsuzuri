@@ -38,10 +38,10 @@ const REGION_BYTES: usize = 24202;
 const REGION_SHA256: &str = "0c95ab5011ff3a09ec3b6cdb4dd0bc3a6150ca5ca11ee92c7e233e96520f9ef3";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
-/// tests/fixtures/schema/note-region.txt と同じ byte・注 4 つに「未実装である」を足した後の値）。
-const NOTE_REGION_LINES: usize = 135;
-const NOTE_REGION_BYTES: usize = 15305;
-const NOTE_REGION_SHA256: &str = "836e07fadc3e32b897e975cab8454aacb4ca02507e992d2979b332c4d96a019f";
+/// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改めた後の値）。
+const NOTE_REGION_LINES: usize = 137;
+const NOTE_REGION_BYTES: usize = 16424;
+const NOTE_REGION_SHA256: &str = "bcc821c9ccf458e06cc2591896901a5e3c11358762117e9e5eb59df631e99a8f";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
 /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
@@ -558,13 +558,8 @@ fn schema_design_note_region_matches_the_frozen_anchor_and_says_unimplemented() 
         fs::read_to_string(repo_root().join("tests/fixtures/schema/note-region.txt")).unwrap();
     assert_eq!(cur, anchor, "実の生成区間が凍結 anchor と byte 一致");
     assert_eq!(cur.len(), NOTE_REGION_BYTES);
-    // 注 4 つ（folio_check_note・derived_note・index_note・guards_note）は「未実装である」を含む
-    for key in [
-        "folio_check_note",
-        "derived_note",
-        "index_note",
-        "guards_note",
-    ] {
+    // 注 3 つ（folio_check_note・derived_note・guards_note）は「未実装である」を含む（index_note は便 103 で落ちた）
+    for key in ["folio_check_note", "derived_note", "guards_note"] {
         let line = cur
             .lines()
             .find(|l| l.trim_start().starts_with(&format!("{key}: ")))

@@ -3,7 +3,7 @@
 //! 数えるのは 欄の決まり（同じ dir の `schema.yaml`）の schema 節が定める形（文書と meta の欄・節の番号と型・
 //! 型ごとの行の欄と値域・承認欄の要否）と、契約表の節の欄（器 scribe2 の導出 file `contracts/schema.toml` から読む・
 //! 欄の一覧も値域も自分の型にも散文にも持たない・FR10）と、参照 id の解決（folio2 が所有する id 空間）である。
-//! 散文の門（FR12・rules 行 R-16）は便 24 で入った。導出物（FR11）と索引（FR14）は未実装（欄の決まりの注が明記する・便 57）。
+//! 散文の門（FR12・rules 行 R-16）は便 24 で入り、索引（FR14）は 2026-09-22 に着地した（folio graph --print・graph.rs）。導出物（FR11）は未実装（欄の決まりの注が明記する）。
 //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、`design-note/schema.yaml` の schema 節はその写し
 //! （判断の記録の欄の決まり `adr.rs` と同じ作り・N-3.1）。パターンの文字列は定数として字面で持つだけで、
 //! 形の判定は字の走査で行う（正規表現は使わない）。器の導出 file（TOML）も行走査で読む（外部 crate を足さない）。
@@ -404,9 +404,11 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "index",
         Floor::Map(&[
-            ("entries", Floor::Strs(&["doc", "requirement", "contract"])),
-            ("entry_fields", Floor::Strs(&["id", "title"])),
-            ("index_note", Floor::Val("要件書 FR14。機械が読む id の索引（文書・要件・契約の id と 1 行の題）。中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）。索引を出す口は未実装である（要件書 FR14 の便で入る）")),
+            ("node_fields_ref", Floor::Val("design-intent/graph.yaml node")),
+            ("node_kinds_ref", Floor::Val("design-intent/graph.yaml node_kinds")),
+            ("edge_fields_ref", Floor::Val("design-intent/graph.yaml edge")),
+            ("edge_types_ref", Floor::Val("design-intent/graph.yaml edge_types")),
+            ("index_note", Floor::Val("要件書 FR14。機械が読む id の索引は、設計文書の正本から毎回組み直す導出物として口 folio graph --print が出す（2026-09-22 着地・実装 crates/folio/src/graph.rs・台帳 f2-648.132）。索引は節点（設計文書の中で id を持つ行）と辺（両端の節点の id と型）を持ち、節点と辺の欄も、節点の種類と辺の型の閉じた一覧も、索引の欄の決まり design-intent/graph.yaml が正本として持つ＝この節はその置き場を指すだけで写しを持たない（P-6.3）。判断の記録 ADR-14 決定 (1) のとおり節点は id を持つ行に閉じるので、設計ノートの節と契約表の行は節点にならない。索引の中身そのものは版管理に置かず、中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）")),
         ]),
     ),
     (
@@ -450,11 +452,12 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                     "derived-diff-zero",
                     "own-id-space",
                     "prose-gate",
+                    "prose-mentions",
                 ]),
             ),
             ("polarity_list_feed", Floor::Val("true")),
             ("p18_4_judged_by", Floor::Val("R-13")),
-            ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は未実装である（要件書 FR11 の便が入るまで、極性一覧へは「まだ無い検査」として寄せる）")),
+            ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は未実装である（要件書 FR11 の便が入るまで、極性一覧へは「まだ無い検査」として寄せる）。prose-mentions は規則の表の行 R-17 の床の歯（2026-09-22 着地・実装 crates/folio/src/mentions.rs・台帳 f2-648.131）で、対象の file の閉じた一覧に design-note/ が在る＝設計ノートの散文の欄に現れた id が、その行の型付きの欄にも相手の行の型付きの欄にも無ければ事後に数える")),
         ]),
     ),
 ]);

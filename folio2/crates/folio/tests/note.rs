@@ -532,3 +532,112 @@ fn note_unknown_field_none_on_the_canonical_copy() {
     let w = Work::new("unknown-none");
     assert_passes(&w.check());
 }
+
+// ── 便 103: 索引の節は索引の欄の決まりを指す・事後の検査に prose-mentions（docs/design/delivery-103.md §1 (g)） ──
+
+const INDEX_SCHEMA: &str = "design-intent/graph.yaml";
+
+/// 実の file の生成区間（begin の次の行から end の行の前まで）。
+fn schema_region(rel: &str) -> String {
+    let text = fs::read_to_string(repo_root().join(rel)).unwrap();
+    let b = text.find("# folio:schema:begin").expect("begin が無い");
+    let b = b + text[b..].find('\n').unwrap() + 1;
+    let e = text.find("\n# folio:schema:end\n").expect("end が無い") + 1;
+    text[b..e].to_string()
+}
+
+/// 設計ノートの欄の決まりの生成区間から、欄 key の 1 行を字下げを落として引く。
+fn note_schema_line(key: &str) -> String {
+    let region = schema_region("design-intent/design-note/schema.yaml");
+    region
+        .lines()
+        .map(str::trim_start)
+        .find(|l| l.starts_with(&format!("{key}: ")))
+        .unwrap_or_else(|| panic!("欄 {key} の行が無い"))
+        .to_string()
+}
+
+#[test]
+fn f103_the_index_section_points_at_the_index_schema() {
+    for line in [
+        "node_fields_ref: design-intent/graph.yaml node",
+        "node_kinds_ref: design-intent/graph.yaml node_kinds",
+        "edge_fields_ref: design-intent/graph.yaml edge",
+        "edge_types_ref: design-intent/graph.yaml edge_types",
+    ] {
+        let key = line.split(": ").next().unwrap();
+        assert_eq!(note_schema_line(key), line, "指す欄の逐語");
+    }
+    let region = schema_region("design-intent/design-note/schema.yaml");
+    for key in ["entries", "entry_fields"] {
+        assert!(
+            !region
+                .lines()
+                .any(|l| l.trim_start().starts_with(&format!("{key}:"))),
+            "写しの一覧の行 {key} が残っている"
+        );
+    }
+}
+
+#[test]
+fn f103_the_index_refs_resolve_in_the_index_schema() {
+    let region = schema_region("design-intent/design-note/schema.yaml");
+    let target = schema_region(INDEX_SCHEMA);
+    let mut found = 0;
+    for line in region.lines().map(str::trim_start) {
+        let Some((name, value)) = line.split_once(": ") else {
+            continue;
+        };
+        let Some(field) = value.strip_prefix(&format!("{INDEX_SCHEMA} ")) else {
+            continue;
+        };
+        assert!(
+            name.ends_with("_ref"),
+            "指す欄の名が _ref で終わらない: {line}"
+        );
+        assert!(
+            target.lines().any(|l| l
+                .strip_prefix("  ")
+                .is_some_and(|l| !l.starts_with(' ') && l.starts_with(&format!("{field}:")))),
+            "指す先 {field} が {INDEX_SCHEMA} の生成区間に無い"
+        );
+        found += 1;
+    }
+    assert_eq!(found, 4, "索引の欄の決まりを指す欄の数");
+}
+
+#[test]
+fn f103_the_index_note_names_the_landed_port() {
+    let line = note_schema_line("index_note");
+    for word in ["folio graph --print", "ADR-14", INDEX_SCHEMA, "CON9"] {
+        assert!(
+            line.contains(word),
+            "index_note が {word} を名指さない: {line}"
+        );
+    }
+    assert!(
+        !line.contains("未実装"),
+        "index_note に 未実装 の字が残っている: {line}"
+    );
+}
+
+#[test]
+fn f103_the_post_guards_carry_the_mentions_tooth() {
+    assert_eq!(
+        note_schema_line("post"),
+        "post: [yaml-form, derived-diff-zero, own-id-space, prose-gate, prose-mentions]",
+        "事後の検査の一覧"
+    );
+    let line = note_schema_line("guards_note");
+    for word in [
+        "prose-mentions",
+        "R-17",
+        "crates/folio/src/mentions.rs",
+        "design-note/",
+    ] {
+        assert!(
+            line.contains(word),
+            "guards_note が {word} を名指さない: {line}"
+        );
+    }
+}

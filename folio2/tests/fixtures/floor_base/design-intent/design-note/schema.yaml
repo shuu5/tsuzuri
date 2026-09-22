@@ -129,8 +129,10 @@ schema:
     forbidden_wording: 未着地
     landing_note: 要件書 FR13・ADR-3 決定 (5)(6)。着地の判定の語は要件書 FR13 のとおり「着地」と「まだ分からない」の 2 つで、床の検査結果の語（合格・不合格）は使わない（P-3.3・床の合格と紛れさせない）。「未着地」は出さない（印の不在は未着地と弁別できないため・P-4.2）。印の名は器の名前の定数から導出され、folio2 は名を手で持たない（trailer_name_source）。他の repo の要件 id・契約 id・便の id は参照 id の床（R-4）の母集団に入れず、出所付きの測定値として扱う
   index:
-    entries: [doc, requirement, contract]
-    entry_fields: [id, title]
+    node_fields_ref: design-intent/graph.yaml node
+    node_kinds_ref: design-intent/graph.yaml node_kinds
+    edge_fields_ref: design-intent/graph.yaml edge
+    edge_types_ref: design-intent/graph.yaml edge_types
     index_note: 要件書 FR14。機械が読む id の索引（文書・要件・契約の id と 1 行の題）。中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）
   figures:
     spec: 図の道具（archify）の型付き記述（JSON の 5 型の欄の決まりそのまま・ADR-4 決定 (1)）
@@ -149,7 +151,7 @@ schema:
     figures_note: 図の正本は設計ノートの figures 節に型付き記述で置き、別 file にも散文にも持たない（ADR-4 決定 (1)）。生成は要件書 FR15（検査を通らない図は生成しない・前の生成物を上書きしない・凍結 anchor が落ちたら「まだ分からない」・決定 (2)(6)）。図の本体の意味の属性は捨てず（semantic_attrs = keep・決定 (3)）、閲覧の仕掛けは捨て（viewer_chrome = discard・決定 (3)）、意味を表す class は部品目録に載り色・字の大きさ・線の太さは design token で塗る（body_classes・R-3・決定 (3)）。道具の通信する命令は使わず（network_commands = forbid）、AI 向けの説明（skill）として載せない（skill_listing = forbid・R-1 の母集団外・決定 (5)）。修正の往復は R-7 が上限で、往復の記録は台帳に残し撤退条件の測定に使う（retry_record = ledger・決定 (7)）。図の対（持ち主の裁定 2026-09-19・f2-648 notes）＝設計ノートの図は、非エンジニア向けの手順図（専門の言葉を使わず「誰が・どの順で・何をして・だめならどうなるか」）と、エンジニア向けの順序図（命令の名・旗・終了コード・file 名をそのまま）を対で置く。見本は design-note/figures.yaml。これは書き方の指針であり床は数えない
   guards:
     in_loop: []
-    post: [yaml-form, derived-diff-zero, own-id-space, prose-gate]
+    post: [yaml-form, derived-diff-zero, own-id-space, prose-gate, prose-mentions]
     polarity_list_feed: true
     p18_4_judged_by: R-13
     guards_note: 設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）
