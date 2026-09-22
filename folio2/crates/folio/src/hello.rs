@@ -1,16 +1,21 @@
 //! `folio hello`（便 21・docs/design/delivery-21.md §1）。AI のセッションが始まったときに 1 行だけ
 //! 「設計文書がまだ無い・相談は folio intake から」と知らせる（FR3 の型 state）。出すのは design-intent が
-//! 未整備のあいだだけで、止める設定 1 つで切れ、同じプロジェクトには 1 回しか出さない。
+//! 未整備のあいだだけで、止める設定 1 つで切れ、同じプロジェクトには 1 回しか出さない。整備済みなら設計文書の索引の
+//! 数と全体像の口 `folio graph --digest` を 1 行で毎回出す（便 96・docs/design/delivery-96.md §1 (d)）。
 //! repo には何も書かない——印は `--state` の下だけ（N-1）。正規表現も外部 crate も使わない。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::graph;
 use crate::sha256;
 use crate::verdict::Verdict;
 
 /// 未整備のときに出す 1 行（これだけを標準出力へ書く）。
 const GREETING: &str = "folio: この project には設計文書（design-intent）がまだ無い。AI に「folio intake」と頼むと相談が始まる（止めるには .folio-quiet を置く）";
+
+/// 整備済みだが索引を組めないときに出す 1 行（便 96）。
+const NO_INDEX: &str = "folio: 設計文書はあるが索引を組めない（まだ分からない）";
 
 /// 唯一の止める設定（プロジェクトの根の直下・中身は読まない）。
 const QUIET: &str = ".folio-quiet";
@@ -72,9 +77,23 @@ pub fn run(dir: &Path, state: Option<&Path>) -> Outcome {
     if root.join(QUIET).is_file() {
         return silent();
     }
-    // 2. 整備済み
+    // 2. 整備済み。索引の数を持つ 1 行を毎回出す（印は付けない・何も書かない・便 96）。組めなければ 1 行を出したまま
+    //    「まだ分からない」で終わる（黙って 0 を返して設計文書が無いと読ませない・P-4.1）。
     if dir.is_dir() && dir.join(CONSTITUTION).is_file() {
-        return silent();
+        return match graph::counts(dir) {
+            Ok((nodes, edges)) => Outcome {
+                stdout: Some(format!(
+                    "folio: 設計文書 {nodes} 節点・{edges} 辺。全体像は folio graph --digest"
+                )),
+                stderr: None,
+                verdict: Verdict::Pass,
+            },
+            Err(why) => Outcome {
+                stdout: Some(NO_INDEX.to_string()),
+                stderr: Some(format!("folio hello: まだ分からない: 索引を組めない: {why}")),
+                verdict: Verdict::Unknown,
+            },
+        };
     }
     // 3. 出した印（プロジェクト 1 つにつき 1 回）
     let state = state.map(Path::to_path_buf).or_else(default_state);

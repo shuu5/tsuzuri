@@ -188,7 +188,8 @@ enum Command {
         #[arg(long)]
         write: bool,
     },
-    /// 設計文書がまだ無いことを 1 行だけ知らせる（整備済み・止める設定・出した印のどれかが在れば何も出さない）
+    /// 設計文書がまだ無いことを 1 行だけ知らせる（止める設定・出した印のどれかが在れば何も出さない）。整備済みなら索引の数と
+    /// 全体像の口を 1 行で毎回知らせる
     Hello {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
@@ -243,8 +244,9 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
-    /// 設計文書の正本から節点と辺の索引を組み、2 つの表と要約の 1 行を標準出力へ出す（--print・repo へは書かない・組めなければ まだ分からない）
-    #[command(group(ArgGroup::new("mode").required(true).args(["print"])))]
+    /// 設計文書の正本から節点と辺の索引を組み、2 つの表と要約の 1 行（--print）か、3 つの表と要約の 2 行の短い出力（--digest）を
+    /// 標準出力へ出す（repo へは書かない・組めなければ まだ分からない）
+    #[command(group(ArgGroup::new("mode").required(true).args(["print", "digest"])))]
     Graph {
         /// 正本の置き場（constitution.yaml・rules.yaml・srs.yaml・adr/ADR-*.yaml を読む）
         #[arg(long, default_value = "design-intent")]
@@ -252,6 +254,9 @@ enum Command {
         /// 索引を標準出力へ書く
         #[arg(long)]
         print: bool,
+        /// 全体像の短い出力（種類ごとの節点・型ごとの辺・file ごとの節点の数）を標準出力へ書く
+        #[arg(long)]
+        digest: bool,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -542,8 +547,12 @@ fn main() -> ExitCode {
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)
         }
-        Command::Graph { dir, print: _ } => {
-            let outcome = graph::run(&dir);
+        Command::Graph {
+            dir,
+            print: _,
+            digest,
+        } => {
+            let outcome = graph::run(&dir, digest);
             if let Some(body) = &outcome.stdout {
                 print!("{body}");
             }

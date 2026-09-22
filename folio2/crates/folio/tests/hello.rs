@@ -118,16 +118,73 @@ fn hello_unprepared_greets_and_marks() {
     assert_eq!(w.marks().len(), 1, "{:?}", w.marks());
 }
 
+/// 凍結した土台の写しの正本の置き場（便 96）。
+fn floor_base() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/floor_base/design-intent")
+}
+
+fn copy_tree(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let to = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &to);
+        } else {
+            fs::copy(entry.path(), &to).unwrap();
+        }
+    }
+}
+
+/// 凍結した土台の索引の数（便 94 の凍結 anchor の数え）を持つ 1 行。
+const BASE_LINE: &str = "folio: 設計文書 189 節点・576 辺。全体像は folio graph --digest";
+
 #[test]
-fn hello_prepared_says_nothing() {
-    let w = Work::new("prepared");
+fn f96_hello_with_sources_names_the_counts() {
+    let w = Work::new("f96-counts");
+    let out = folio_hello(&floor_base(), &w.state());
+    assert_eq!(assert_greets(&out), BASE_LINE);
+    assert!(w.marks().is_empty(), "整備済みで印が出来た: {:?}", w.marks());
+    assert!(!w.state().exists(), "印の置き場が出来た");
+}
+
+#[test]
+fn f96_hello_says_the_line_every_time() {
+    let w = Work::new("f96-every");
+    let first = folio_hello(&floor_base(), &w.state());
+    let second = folio_hello(&floor_base(), &w.state());
+    assert_eq!(assert_greets(&first), BASE_LINE);
+    assert_eq!(assert_greets(&second), BASE_LINE);
+    assert!(w.marks().is_empty(), "整備済みで印が出来た: {:?}", w.marks());
+}
+
+/// 整備済み（constitution.yaml だけ）で索引が組めなければ、1 行を出したまま「まだ分からない」2。
+/// 便 21 の歯 hello_prepared_says_nothing の置き換え（便 96 が整備済みの枝の振る舞いを変えた）。
+#[test]
+fn f96_hello_without_an_index_is_inconclusive() {
+    let w = Work::new("f96-no-index");
     w.prepare();
-    assert_silent(&w.hello());
+    let out = w.hello();
+    assert_eq!(lines(&out), 1, "{}", stdout(&out));
+    assert!(stdout(&out).contains("索引を組めない"), "{}", stdout(&out));
+    assert_eq!(out.status.code(), Some(2), "{}{}", stdout(&out), stderr(&out));
+    let err = stderr(&out);
+    assert_eq!(err.lines().count(), 1, "{err}");
     assert!(
-        w.marks().is_empty(),
-        "整備済みで印が出来た: {:?}",
-        w.marks()
+        err.starts_with("folio hello: まだ分からない: 索引を組めない: "),
+        "{err}"
     );
+    assert!(w.marks().is_empty(), "整備済みで印が出来た: {:?}", w.marks());
+}
+
+/// 止める設定は整備済みの 1 行にも先に効く（判定の順の回帰）。
+#[test]
+fn f96_the_quiet_file_silences_the_line_with_sources() {
+    let w = Work::new("f96-quiet");
+    copy_tree(&floor_base(), &w.dir());
+    w.quiet();
+    assert_silent(&w.hello());
+    assert!(w.marks().is_empty(), "止める設定で印が出来た: {:?}", w.marks());
 }
 
 /// 止める設定は未整備でも効く（判定の順で最初）。

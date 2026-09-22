@@ -1,0 +1,46 @@
+# 種類ごとの節点（1 行 = 種類 / 数・タブ区切り・閉じた一覧の順）
+条	27
+規範文	66
+規則行	26
+目的	4
+要件	19
+非機能要件	3
+受入基準	17
+制約	9
+登場人物	5
+出力	3
+判断の記録	10
+# 型ごとの辺（1 行 = 型 / 表に出た数 / 端が節点でない数・タブ区切り・閉じた一覧の順）
+in-article	132	0
+relations.articles	33	0
+relations.reqs	25	0
+relations.rules	47	0
+relations.sections	0	5
+amended_by	0	0
+article	26	0
+refs	0	0
+basis	232	0
+goals	27	0
+rules	16	0
+adrs	0	0
+verify.ac	19	0
+verifies	19	0
+figures	0	21
+produced	0	0
+amends	0	0
+# file ごとの節点（1 行 = file / 数・タブ区切り・file の名の byte 順）
+adr/ADR-1.yaml	1
+adr/ADR-10.yaml	1
+adr/ADR-2.yaml	1
+adr/ADR-3.yaml	1
+adr/ADR-4.yaml	1
+adr/ADR-5.yaml	1
+adr/ADR-6.yaml	1
+adr/ADR-7.yaml	1
+adr/ADR-8.yaml	1
+adr/ADR-9.yaml	1
+constitution.yaml	93
+rules.yaml	26
+srs.yaml	60
+# 節点 189・辺 576・型 10・端が節点でない参照 26
+# 索引そのもの（節点と辺の全行）は folio graph --print

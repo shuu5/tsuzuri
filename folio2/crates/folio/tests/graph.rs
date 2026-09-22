@@ -137,17 +137,29 @@ impl Drop for Work {
     }
 }
 
-fn print(dir: &Path) -> Output {
+fn graph(dir: &Path, flag: &str) -> Output {
     Command::new(env!("CARGO_BIN_EXE_folio"))
-        .args(["graph", "--print", "--dir"])
+        .args(["graph", flag, "--dir"])
         .arg(dir)
         .output()
         .expect("folio を起動できない")
 }
 
+fn print(dir: &Path) -> Output {
+    graph(dir, "--print")
+}
+
 /// 合格で終わった出力の字。
 fn printed(dir: &Path) -> String {
-    let out = print(dir);
+    passed(print(dir))
+}
+
+/// 合格で終わった短い出力の字（便 96）。
+fn digested(dir: &Path) -> String {
+    passed(graph(dir, "--digest"))
+}
+
+fn passed(out: Output) -> String {
     assert_eq!(
         out.status.code(),
         Some(0),
@@ -320,4 +332,123 @@ fn f94_the_title_is_folded_into_one_line() {
     assert_eq!(title, title.trim(), "前後の空白が残った: {title:?}");
     assert!(title.chars().count() <= 36, "題が 36 字を超えた: {title:?}");
     assert!(title.starts_with("folio は 文書を 生成し、 機械で 検査し、"), "題: {title:?}");
+}
+
+/// 短い出力（便 96）の 3 表の見出しと最後の 1 行。
+const KINDS_HEAD: &str = "# 種類ごとの節点（1 行 = 種類 / 数・タブ区切り・閉じた一覧の順）";
+const TYPES_HEAD: &str =
+    "# 型ごとの辺（1 行 = 型 / 表に出た数 / 端が節点でない数・タブ区切り・閉じた一覧の順）";
+const FILES_HEAD: &str = "# file ごとの節点（1 行 = file / 数・タブ区切り・file の名の byte 順）";
+const NEXT_LINE: &str = "# 索引そのもの（節点と辺の全行）は folio graph --print";
+
+/// 短い出力を割ったもの: 3 表の行と要約の 1 行。
+struct Digest<'a> {
+    kinds: Vec<Vec<&'a str>>,
+    types: Vec<Vec<&'a str>>,
+    files: Vec<Vec<&'a str>>,
+    summary: &'a str,
+}
+
+fn split_digest<'a>(text: &'a str) -> Digest<'a> {
+    assert!(text.ends_with('\n'), "最後の行が改行で終わらない");
+    let lines: Vec<&str> = text.lines().collect();
+    let at = |head: &str| {
+        lines
+            .iter()
+            .position(|l| *l == head)
+            .unwrap_or_else(|| panic!("見出しが無い: {head}"))
+    };
+    let (k, t, f) = (at(KINDS_HEAD), at(TYPES_HEAD), at(FILES_HEAD));
+    assert_eq!(k, 0, "1 表の見出しが先頭に無い");
+    assert!(t < f, "表の順");
+    let n = lines.len();
+    assert!(n >= f + 3, "要約の 2 行が無い");
+    assert_eq!(lines[n - 1], NEXT_LINE, "最後の行");
+    let cols = |range: &[&'a str]| -> Vec<Vec<&'a str>> {
+        range.iter().map(|l| l.split('\t').collect()).collect()
+    };
+    Digest {
+        kinds: cols(&lines[k + 1..t]),
+        types: cols(&lines[t + 1..f]),
+        files: cols(&lines[f + 1..n - 2]),
+        summary: lines[n - 2],
+    }
+}
+
+fn num(s: &str) -> usize {
+    s.parse().unwrap_or_else(|_| panic!("数でない: {s:?}"))
+}
+
+/// 要約の 1 行の 4 つの数（節点・辺・型・端が節点でない参照）。
+fn summary_counts(summary: &str) -> Vec<usize> {
+    summary
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|s| !s.is_empty())
+        .map(num)
+        .collect()
+}
+
+#[test]
+fn f96_the_digest_of_the_frozen_base_matches_the_anchor() {
+    let anchor = fs::read(repo_root().join("tests/fixtures/schema/graph-digest-anchor.txt"))
+        .expect("凍結 anchor を読めない");
+    assert_eq!(anchor.len(), 1_048, "anchor の byte 数");
+    assert_eq!(anchor.iter().filter(|b| **b == b'\n').count(), 46, "anchor の行数");
+    let text = digested(&repo_root().join("tests/fixtures/floor_base/design-intent"));
+    assert!(text.as_bytes() == anchor.as_slice(), "短い出力が anchor と byte 一致しない:\n{text}");
+}
+
+#[test]
+fn f96_the_digest_agrees_with_the_print() {
+    let dir = repo_root().join("design-intent");
+    let index = printed(&dir);
+    let text = digested(&dir);
+    let d = split_digest(&text);
+    assert_eq!(d.summary, split(&index).summary, "要約の 1 行が索引の最後の行と違う");
+    let c = summary_counts(d.summary);
+    assert_eq!(c.len(), 4, "要約の 1 行の数: {}", d.summary);
+    let sum = |rows: &[Vec<&str>], col: usize| rows.iter().map(|r| num(r[col])).sum::<usize>();
+    assert_eq!(sum(&d.kinds, 1), c[0], "種類ごとの合計");
+    assert_eq!(sum(&d.types, 1), c[1], "型ごとの表に出た数の合計");
+    assert_eq!(sum(&d.types, 2), c[3], "型ごとの端が節点でない数の合計");
+    let used = d.types.iter().filter(|r| num(r[1]) > 0).count();
+    assert_eq!(used, c[2], "表に出た型の数");
+    assert_eq!(sum(&d.files, 1), c[0], "file ごとの合計");
+}
+
+#[test]
+fn f96_the_digest_rows_are_the_closed_lists() {
+    let text = digested(&repo_root().join("design-intent"));
+    let d = split_digest(&text);
+    let kinds: Vec<&str> = d.kinds.iter().map(|r| r[0]).collect();
+    assert_eq!(kinds, NODE_KINDS, "1 表の語と順");
+    assert!(d.kinds.iter().all(|r| r.len() == 2), "1 表の欄の数");
+    let types: Vec<&str> = d.types.iter().map(|r| r[0]).collect();
+    assert_eq!(types, EDGE_TYPES, "2 表の語と順");
+    assert!(d.types.iter().all(|r| r.len() == 3), "2 表の欄の数");
+    assert!(!d.files.is_empty(), "3 表が空");
+    assert!(d.files.iter().all(|r| r.len() == 2), "3 表の欄の数");
+    let names: Vec<&[u8]> = d.files.iter().map(|r| r[0].as_bytes()).collect();
+    let mut sorted = names.clone();
+    sorted.sort();
+    sorted.dedup();
+    assert_eq!(names, sorted, "3 表が file の名の byte 順でない");
+}
+
+#[test]
+fn f96_a_broken_source_makes_the_digest_inconclusive() {
+    let work = Work::new("digest-broken");
+    fs::remove_file(work.dir().join("constitution.yaml")).unwrap();
+    let mut before = BTreeMap::new();
+    snapshot(&work.root, &work.root, &mut before);
+    let first = graph(&work.dir(), "--digest");
+    assert_eq!(first.status.code(), Some(2), "終了コード");
+    assert!(first.stdout.is_empty(), "表が出た: {}", String::from_utf8_lossy(&first.stdout));
+    let second = graph(&work.dir(), "--digest");
+    assert_eq!(second.status.code(), Some(2), "2 度目の終了コード");
+    assert_eq!(first.stdout, second.stdout, "2 度当てた標準出力が byte 一致しない");
+    assert_eq!(first.stderr, second.stderr, "2 度当てた標準エラーが byte 一致しない");
+    let mut after = BTreeMap::new();
+    snapshot(&work.root, &work.root, &mut after);
+    assert!(before == after, "写しの file が変わった");
 }

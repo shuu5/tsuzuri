@@ -103,6 +103,13 @@ const TITLE_CHARS: usize = 36;
 const NODES_HEAD: &str = "# 節点（1 行 = id / 種類 / file / 題 36 字・タブ区切り）";
 const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
 
+/// 短い出力の 3 つの表の見出しと、最後に置く次の口の 1 行（便 96）。
+const KINDS_HEAD: &str = "# 種類ごとの節点（1 行 = 種類 / 数・タブ区切り・閉じた一覧の順）";
+const TYPES_HEAD: &str =
+    "# 型ごとの辺（1 行 = 型 / 表に出た数 / 端が節点でない数・タブ区切り・閉じた一覧の順）";
+const FILES_HEAD: &str = "# file ごとの節点（1 行 = file / 数・タブ区切り・file の名の byte 順）";
+const NEXT_LINE: &str = "# 索引そのもの（節点と辺の全行）は folio graph --print";
+
 /// 規則の表の 2 節。
 const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
 
@@ -130,11 +137,14 @@ const SRS_FIELDS: [(&str, usize); 6] = [
 /// 憲法の relations の 4 名前空間と辺の型。
 const RELATIONS: [(&str, usize); 4] = [("articles", 1), ("reqs", 2), ("rules", 3), ("sections", 4)];
 
-/// 索引: 節点（id → 種類・file・題）と、欄が指した参照の 3 つ組（端・端・型）。
+/// 欄が指した参照の 3 つ組（端・端・型）。
+type Ref = (String, String, &'static str);
+
+/// 索引: 節点（id → 種類・file・題）と、欄が指した参照。
 #[derive(Default)]
 struct Index {
     nodes: BTreeMap<String, (&'static str, String, String)>,
-    refs: BTreeSet<(String, String, &'static str)>,
+    refs: BTreeSet<Ref>,
 }
 
 impl Index {
@@ -156,6 +166,26 @@ impl Index {
         }
     }
 
+    /// 参照を 表に出る辺（両端が節点）と 端が節点でない参照 に分ける。
+    fn split(&self) -> (Vec<&Ref>, Vec<&Ref>) {
+        self.refs
+            .iter()
+            .partition(|(_, to, _)| self.nodes.contains_key(to))
+    }
+
+    /// 要約の 1 行（--print の最後の行・--digest の要約の 1 行目）。
+    fn summary(&self) -> String {
+        let (edges, dangling) = self.split();
+        let types: BTreeSet<&str> = edges.iter().map(|(_, _, ty)| *ty).collect();
+        format!(
+            "# 節点 {}・辺 {}・型 {}・端が節点でない参照 {}\n",
+            self.nodes.len(),
+            edges.len(),
+            types.len(),
+            dangling.len()
+        )
+    }
+
     /// 2 つの表と要約の 1 行。辺は両端が節点のときだけ表に出し、端が節点でない参照は数だけ出す。
     fn render(&self) -> String {
         let mut out = format!("{NODES_HEAD}\n");
@@ -163,21 +193,38 @@ impl Index {
             out.push_str(&format!("{id}\t{kind}\t{file}\t{title}\n"));
         }
         out.push_str(&format!("{EDGES_HEAD}\n"));
-        let (edges, dangling): (Vec<_>, Vec<_>) = self
-            .refs
-            .iter()
-            .partition(|(_, to, _)| self.nodes.contains_key(to));
-        for (from, to, ty) in &edges {
+        for (from, to, ty) in self.split().0 {
             out.push_str(&format!("{from}\t{to}\t{ty}\n"));
         }
-        let types: BTreeSet<&str> = edges.iter().map(|(_, _, ty)| *ty).collect();
-        out.push_str(&format!(
-            "# 節点 {}・辺 {}・型 {}・端が節点でない参照 {}\n",
-            self.nodes.len(),
-            edges.len(),
-            types.len(),
-            dangling.len()
-        ));
+        out.push_str(&self.summary());
+        out
+    }
+
+    /// 短い出力（便 96）: 種類ごとの節点・型ごとの辺（表に出た数 / 端が節点でない数）・file ごとの節点の 3 表と
+    /// 要約の 2 行。1 表と 2 表は閉じた一覧の全数をその順で出す（数が 0 の行も出す）。
+    fn digest(&self) -> String {
+        let mut out = format!("{KINDS_HEAD}\n");
+        for kind in NODE_KINDS {
+            let n = self.nodes.values().filter(|(k, _, _)| *k == kind).count();
+            out.push_str(&format!("{kind}\t{n}\n"));
+        }
+        out.push_str(&format!("{TYPES_HEAD}\n"));
+        let (edges, dangling) = self.split();
+        for ty in EDGE_TYPES {
+            let shown = edges.iter().filter(|(_, _, t)| *t == ty).count();
+            let loose = dangling.iter().filter(|(_, _, t)| *t == ty).count();
+            out.push_str(&format!("{ty}\t{shown}\t{loose}\n"));
+        }
+        out.push_str(&format!("{FILES_HEAD}\n"));
+        let mut files: BTreeMap<&str, usize> = BTreeMap::new();
+        for (_, file, _) in self.nodes.values() {
+            *files.entry(file.as_str()).or_default() += 1;
+        }
+        for (file, n) in files {
+            out.push_str(&format!("{file}\t{n}\n"));
+        }
+        out.push_str(&self.summary());
+        out.push_str(&format!("{NEXT_LINE}\n"));
         out
     }
 }
@@ -322,18 +369,29 @@ fn build(dir: &Path) -> Result<Index, String> {
     Ok(index)
 }
 
-/// `folio graph --print` の結果。
+/// 節点の数と表に出た辺の数だけを返す口（`folio hello` の 1 行が使う・組み方を 2 面に増やさない・便 96）。
+pub fn counts(dir: &Path) -> Result<(usize, usize), String> {
+    let index = build(dir)?;
+    let edges = index.split().0.len();
+    Ok((index.nodes.len(), edges))
+}
+
+/// `folio graph --print` / `--digest` の結果。
 pub struct Outcome {
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub verdict: Verdict,
 }
 
-/// 組めたら標準出力の字と 合格、組めなければ表を出さずに「まだ分からない」。
-pub fn run(dir: &Path) -> Outcome {
+/// 組めたら標準出力の字（`digest` なら短い出力・でなければ索引）と 合格、組めなければ表を出さずに「まだ分からない」。
+pub fn run(dir: &Path, digest: bool) -> Outcome {
     match build(dir) {
         Ok(index) => Outcome {
-            stdout: Some(index.render()),
+            stdout: Some(if digest {
+                index.digest()
+            } else {
+                index.render()
+            }),
             stderr: None,
             verdict: Verdict::Pass,
         },
