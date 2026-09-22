@@ -713,6 +713,31 @@ fn findings_unknown_when_the_faces_dir_is_missing() {
     assert!(stdout(&run).is_empty(), "{}", stdout(&run));
 }
 
+// ── 4'. 絞った束（便 98・delivery-98.md §1 (e) 歯 8）──
+
+/// 絞った束に凍結の所見 fixture を当てて 3 値が今と同じ（根拠は絞った写しの中に残る・作り話の根拠は外のまま）。
+#[test]
+fn f98_the_frozen_findings_still_pass_the_check() {
+    let site = Site::passing("f98-frozen");
+    let run = site.check();
+    assert_outcome(&run, "pass 4 本", 0, &[]);
+    let srs = fs::read_to_string(site.out.join("fidelity/sources/srs.yaml")).unwrap();
+    assert!(!srs.contains("\nrail:\n"), "srs.yaml が絞られていない");
+    for (name, want, word) in [
+        ("stop-upheld", 1, "止める所見が残っている"),
+        ("stop-refuted", 2, "再判定待ち"),
+        ("stop-unrefuted", 2, "反証が未"),
+        ("fail-no-findings", 2, "不合格なのに所見が無い"),
+        ("missing-field", 2, "record"),
+        ("digest-mismatch", 2, "要約値が束と合わない"),
+        ("fabricated-evidence", 2, "根拠が正本に無い"),
+    ] {
+        site.put("fidelity", &findings_fixture(&format!("{name}.yaml")));
+        assert_outcome(&site.check(), name, want, &[word]);
+    }
+    site.done();
+}
+
 // ── 5. 混ざり ──
 
 const REALITY_FAIL: &str = "verdict: 不合格
@@ -721,7 +746,7 @@ record:
   effort: high
   at: 2026-09-19T05:00:00Z
   read: [srs, adr, design-note]
-  bundle: sha256-files-1 24ce1b872fa08dd128b39ac42e4ba72096bfe263df3bb463c9616899c96786d7
+  bundle: sha256-files-1 d8734c77995da9034593d27e757890ec9133c86444a466b05c85a1a9e1250d89
 findings:
   - id: R-1
     viewpoint: reality
@@ -808,6 +833,7 @@ fn findings_check_passes_on_the_real_source_with_empty_findings() {
         let reads = fs::read_to_string(vp_dir.join("reads.yaml")).unwrap();
         let docs: Vec<&str> = reads
             .lines()
+            .filter(|l| !l.starts_with('#')) // 落とした節の注釈（便 98）
             .map(|l| {
                 l.strip_prefix("- {doc: ")
                     .and_then(|r| r.split(',').next())
@@ -840,18 +866,19 @@ const REFUTE_FILES: [&str; 5] = [
     "schema.yaml",
     "sources.txt",
 ];
-const REFUTE_CONCAT_LEN: usize = 1_888;
-const REFUTE_DIGEST: &str = "843ad558c1ee8cf7ea0f8b787f710bec0e4f7c58b7b1d2fab997e044b7b5f72d";
+const REFUTE_CONCAT_LEN: usize = 2_338;
+const REFUTE_DIGEST: &str = "ec8643e3a9942c05096c506eaf6c11a35d26a323c53a4852148f248cbdea0d46";
 
 const REFUTE_FINDING: &str = "id: F-1\nviewpoint: fidelity\nplace: {doc: srs, at: requirements.FR2.plain}\nweight: 止める\nevidence: |\n  合格か不合格のどちらかを出します。\nnote: |\n  規範文の 3 値のうち「まだ分からない」を平易文が落としている。\n";
 
 /// 便 38 の (e) の fidelity の question.yaml の 6 行 + 反証の 4 行。
 const REFUTE_QUESTION: &str = "id: fidelity\nname: 忠実さ\nreader: |\n  元の文と平易文の両方を読み、意味の差だけを拾う編集者\nquestion: |\n  人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文・決定の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは元の語と同じものを指しているか。図の根拠が指す先は、図の中身と合っているか。判定できない箇所は「まだ分からない」と書く。\nrefute:\n  values: [支持, 退けた, まだ分からない]\n  rule: |\n    所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。\n";
 
-const REFUTE_READS: &str = "- {doc: constitution, fields: [articles.plain, articles.statements.text]}\n- {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title]}\n- {doc: adr, fields: [plain, decision, options.text, figures.refs]}\n- {doc: design-note, fields: [sections, figures.refs]}\n";
+/// 親の観点の reads.yaml の写し（便 98 の落とした節の注釈を含む・delivery-98.md §1 (c) の 1 つ目の逐語）。
+const REFUTE_READS: &str = "- {doc: constitution, fields: [articles.plain, articles.statements.text]}\n- {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title]}\n- {doc: adr, fields: [plain, decision, options.text, figures.refs]}\n- {doc: design-note, fields: [sections, figures.refs]}\n# 落とした節 adr/ADR-2.yaml: context, basis, retreat, amends, consequences\n# 落とした節 constitution.yaml: north_star, precedence, rules_pointer, amendment, glossary_pointer, sources\n# 落とした節 design-note/full.yaml: sources\n# 落とした節 srs.yaml: goals, scope, scope_m1, actors, outputs, rail, verdicts, nonfunctional, not_frozen, constraints, glossary_pointer, figures\n# 常に残す節: meta, id, title, status, date, schema\n";
 
 const REFUTE_SOURCES: &str =
-    "sha256-files-1 2bd676377b9d6e75d752e645b11cd50088de5288b1de897bf12aa6f5e7cb5a32\n";
+    "sha256-files-1 d2e153b29a2b46b88295d10f782163636a5613649ceb9efa80dcebfb48473782\n";
 
 const REFUTE_SCHEMA: &str = "# 反証の結果の欄の決まり（folio ceiling --refute が組んだ・結果は同じ dir の result.yaml に書く）\nresult:\n  required: [id, refute, model, effort, at, bundle]\n  values: [支持, 退けた, まだ分からない]\n";
 
@@ -1178,6 +1205,7 @@ fn findings_refute_on_the_real_source_builds_a_bundle_the_check_reads() {
         let reads = fs::read_to_string(vp_dir.join("reads.yaml")).unwrap();
         let docs: Vec<&str> = reads
             .lines()
+            .filter(|l| !l.starts_with('#')) // 落とした節の注釈（便 98）
             .map(|l| {
                 l.strip_prefix("- {doc: ")
                     .and_then(|r| r.split(',').next())

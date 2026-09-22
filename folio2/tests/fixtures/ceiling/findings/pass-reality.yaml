@@ -4,5 +4,5 @@ record:
   effort: high
   at: 2026-09-19T05:00:00Z
   read: [srs, adr, design-note]
-  bundle: sha256-files-1 24ce1b872fa08dd128b39ac42e4ba72096bfe263df3bb463c9616899c96786d7
+  bundle: sha256-files-1 d8734c77995da9034593d27e757890ec9133c86444a466b05c85a1a9e1250d89
 findings: []

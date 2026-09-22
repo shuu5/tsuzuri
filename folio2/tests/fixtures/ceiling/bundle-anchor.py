@@ -9,6 +9,9 @@ folio の code を 1 行も呼ばない（python3 の標準 library だけ・PyY
 - sources/: documents の file 形は byte のまま 1 本、dir 形（末尾が /）は直下の .yaml を名の byte 順に全部
 - faces/: doc の id ごとの面の名の形（下の FACES）に当たる faces/ の直下の file
 - 要約値: 束の file を観点の dir からの相対 path の byte 順に並べ、中身を区切りなしに連結した sha256
+- 絞り（便 98・docs/design/delivery-98.md §1 (b)(c)(d)）: sources/ の写しは観点の reads が挙げた最上位の節と骨格 6 語と
+  file の頭の行だけを byte のまま残す。落とした節と 宣言に在るが正本に無い節 は reads.yaml の末尾に注釈の行で出し、
+  その名の総数を 落とした節の数・正本に無い節の数 として書く
 """
 
 import hashlib
@@ -140,21 +143,114 @@ def face_hits(form, names):
     return [n for n in names if len(n) > len(head) + len(tail) and n.startswith(head) and n.endswith(tail)]
 
 
+def is_trivia(line):
+    stripped = line.strip()
+    return stripped == "" or stripped.startswith("#")
+
+
+def head_name(line):
+    """列 0 の `名:`（: の後が空か空白）なら名、ほかは None。列 0 の `- ` は節の続き。"""
+    if line == "" or line[0] in " \t#-":
+        return None
+    body = line.rstrip("\r\n")
+    i = body.find(":")
+    while i != -1:
+        if i > 0 and (i + 1 == len(body) or body[i + 1] in " \t"):
+            return body[:i]
+        i = body.find(":", i + 1)
+    return None
+
+
+def cut(raw, keep):
+    """最上位の節で切る（便 98 §1 (b) 規則 1〜4）。戻り値 = (残した byte, 節の名の列, 落とした節の名の列)。"""
+    lines = raw.decode("utf-8").splitlines(keepends=True)
+    names = [head_name(line) for line in lines]
+    owner = [None] * len(lines)  # None = file の頭、ほかは節の番号
+    sections = []
+    cur = None
+    i = 0
+    while i < len(lines):
+        if names[i] is not None:
+            sections.append(names[i])
+            cur = len(sections) - 1
+            owner[i] = cur
+            i += 1
+            continue
+        if cur is not None and is_trivia(lines[i]):
+            j = i
+            while j < len(lines) and is_trivia(lines[j]):
+                j += 1
+            if j < len(lines) and names[j] is not None:
+                target = len(sections)  # 直後の節へ寄せる
+            else:
+                target = cur  # 直後が節の続きか file の末尾なら直前の節へ
+            for k in range(i, j):
+                owner[k] = target
+            i = j
+            continue
+        owner[i] = cur
+        i += 1
+    # 生成区間は 1 つの塊（規則 4）
+    begin = [k for k, line in enumerate(lines) if line.startswith("# folio:schema:begin")]
+    end = [k for k, line in enumerate(lines) if line.startswith("# folio:schema:end")]
+    groups = {}
+    if begin and end and begin[0] < end[0]:
+        inside = sorted({owner[k] for k in range(begin[0], end[0] + 1) if names[k] is not None})
+        for k in range(begin[0], end[0] + 1):
+            groups[k] = inside
+    kept_section = [name in keep for name in sections]
+    out = []
+    for k, line in enumerate(lines):
+        if k in groups:
+            live = any(kept_section[s] for s in groups[k])
+        elif owner[k] is None:
+            live = True
+        else:
+            live = owner[k] < len(sections) and kept_section[owner[k]]
+        if live:
+            out.append(line)
+    dropped = [name for name, kept in zip(sections, kept_section) if not kept]
+    return "".join(out).encode("utf-8"), sections, dropped
+
+
+SKELETON = ["meta", "id", "title", "status", "date", "schema"]
+
+
 def build(vp, documents, finding_text):
     files = {}
     face_names = sorted(
         (n for n in os.listdir(FACES_DIR) if os.path.isfile(os.path.join(FACES_DIR, n))),
         key=lambda n: n.encode("utf-8"),
     )
+    declared = {}
+    for doc, fields in vp["reads"]:
+        for field in fields:
+            top = field.split(".")[0]
+            declared.setdefault(doc, [])
+            if top not in declared[doc]:
+                declared[doc].append(top)
+    dropped, present, done = {}, {}, []
     for doc, _ in vp["reads"]:
+        if doc in done:
+            continue
+        done.append(doc)
         file = documents[doc]
         path = os.path.join(SOURCE, file)
+        keep = set(declared[doc]) | set(SKELETON)
+        present[doc] = set()
+        paths = []
         if file.endswith("/"):
             for name in sorted(os.listdir(path), key=lambda n: n.encode("utf-8")):
                 if name.endswith(".yaml") and os.path.isfile(os.path.join(path, name)):
-                    files["sources/" + file + name] = read(os.path.join(path, name))
+                    paths.append((file + name, os.path.join(path, name)))
         else:
-            files["sources/" + file] = read(path)
+            paths.append((file, path))
+        for rel, full in paths:
+            body, sections, gone = cut(read(full), keep)
+            files["sources/" + rel] = body
+            present[doc].update(sections)
+            if gone:
+                dropped[rel] = gone
         if doc in FACES:
             for name in face_hits(FACES[doc], face_names):
                 files["faces/" + name] = read(os.path.join(FACES_DIR, name))
@@ -164,20 +260,31 @@ def build(vp, documents, finding_text):
     files["question.yaml"] = question.encode("utf-8")
     files["finding.yaml"] = finding_text.encode("utf-8")
     reads = "".join("- {doc: " + d + ", fields: [" + ", ".join(fs) + "]}\n" for d, fs in vp["reads"])
+    for rel in sorted(dropped, key=lambda r: r.encode("utf-8")):
+        reads += "# 落とした節 " + rel + ": " + ", ".join(dropped[rel]) + "\n"
+    absent = 0
+    for doc in done:
+        missing = [name for name in declared[doc] if name not in present[doc]]
+        if missing:
+            reads += "# 宣言に在るが正本に無い節 " + documents[doc] + ": " + ", ".join(missing) + "\n"
+            absent += len(missing)
+    reads += "# 常に残す節: " + ", ".join(SKELETON) + "\n"
     files["reads.yaml"] = reads.encode("utf-8")
-    return files
+    return files, sum(len(g) for g in dropped.values()), absent
 
 
 def main():
     documents, viewpoints, finding_text = load()
     out = ["# 凍結 anchor: 天井の材料の束（tests/fixtures/ceiling/bundle-anchor.py が組んだ・folio の code を 1 行も呼ばない）"]
     for vp in viewpoints:
-        files = build(vp, documents, finding_text)
+        files, dropped, absent = build(vp, documents, finding_text)
         joined = b"".join(files[k] for k in sorted(files, key=lambda k: k.encode("utf-8")))
         out.append("観点\t" + vp["id"])
         out.append("file数\t" + str(len(files)))
         out.append("byte\t" + str(len(joined)))
         out.append("要約値\t" + hashlib.sha256(joined).hexdigest())
+        out.append("落とした節の数\t" + str(dropped))
+        out.append("正本に無い節の数\t" + str(absent))
     sys.stdout.buffer.write(("\n".join(out) + "\n").encode("utf-8"))
 
 

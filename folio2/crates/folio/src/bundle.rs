@@ -12,6 +12,9 @@
 //! 席や器が書く所見 file・起動の記録は触らない。判定を持たないので 1（不合格）は返さない（FR5 の 3 値のうち 2 つ）。
 //! 便 39（`findings.rs`・`--check`）は正本の読み `load`・観点 1 つの組み立て `build_one`・要約値 `digest_text` を
 //! crate の中から呼ぶ（--write の振る舞いと文言は不変）。便 42（`--refute`）は `question_text` も呼ぶ。
+//! 便 98（docs/design/delivery-98.md §1 (b)(c)・FR17）: sources/ の写しは観点の reads が挙げた最上位の節・骨格 6 語・file の頭
+//! の行だけを byte のまま正本の順に残す（行の中の欄には降りない）。落とした節と 宣言に在るが正本に無い節 は reads.yaml の
+//! 末尾の注釈の行で名指し、標準出力の 1 行にその数を足す（束の中身の閉じた一覧は動かさない・sources/ へは書かない）。
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -290,16 +293,23 @@ fn finding_text(rules: &Rules) -> String {
 
 // ── 束を memory の上で組む ──
 
-/// 4 観点の束を全部 memory の上で用意する（1 本でも用意できなければ Err）。戻り値 = (観点の id, file) の列（viewpoints の順）。
-fn build_all(dir: &Path, faces_dir: &Path, ceiling: &Ceiling) -> R<Vec<(String, Files)>> {
+/// 観点 1 つの束と、落とした節の名の総数・宣言に在るが正本に無い節の名の総数。
+struct Built {
+    files: Files,
+    dropped: usize,
+    absent: usize,
+}
+
+/// 4 観点の束を全部 memory の上で用意する（1 本でも用意できなければ Err）。戻り値 = (観点の id, 束) の列（viewpoints の順）。
+fn build_all(dir: &Path, faces_dir: &Path, ceiling: &Ceiling) -> R<Vec<(String, Built)>> {
     if !faces_dir.is_dir() {
         return Err(format!("{}: 配信先が無い", faces_dir.display()));
     }
     let face_files = read_dir_names(faces_dir)?;
     let mut bundles = Vec::with_capacity(ceiling.viewpoints.len());
     for vp in &ceiling.viewpoints {
-        let files = build_one(dir, faces_dir, &face_files, ceiling, vp)?;
-        bundles.push((vp.id.clone(), files));
+        let built = build_counted(dir, faces_dir, &face_files, ceiling, vp)?;
+        bundles.push((vp.id.clone(), built));
     }
     Ok(bundles)
 }
@@ -312,31 +322,197 @@ pub fn build_one(
     ceiling: &Ceiling,
     vp: &Viewpoint,
 ) -> R<Files> {
+    build_counted(dir, faces_dir, face_files, ceiling, vp).map(|b| b.files)
+}
+
+fn build_counted(
+    dir: &Path,
+    faces_dir: &Path,
+    face_files: &[(String, bool)],
+    ceiling: &Ceiling,
+    vp: &Viewpoint,
+) -> R<Built> {
     let mut files = Files::new();
-    let mut seen: Vec<&str> = Vec::new();
-    for (doc, _) in &vp.reads {
-        if seen.contains(&doc.as_str()) {
-            continue;
+    // doc ごとの読む最上位の節（宣言の順・重複なし）
+    let mut declared: Vec<(&str, Vec<&str>)> = Vec::new();
+    for (doc, fields) in &vp.reads {
+        let at = match declared.iter().position(|(d, _)| d == doc) {
+            Some(at) => at,
+            None => {
+                declared.push((doc, Vec::new()));
+                declared.len() - 1
+            }
+        };
+        for field in fields {
+            let top = field.split('.').next().unwrap_or(field);
+            if !declared[at].1.contains(&top) {
+                declared[at].1.push(top);
+            }
         }
-        seen.push(doc);
+    }
+    let mut dropped: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut notes_absent = String::new();
+    let mut absent = 0;
+    for (doc, tops) in &declared {
         let file = &ceiling
             .documents
             .iter()
             .find(|(id, _)| id == doc)
             .expect("reads の doc は load で documents に解いてある")
             .1;
-        copy_sources(dir, file, &mut files)?;
+        let mut copied = Files::new();
+        copy_sources(dir, file, &mut copied)?;
+        let mut present: Vec<String> = Vec::new();
+        for (rel, bytes) in copied {
+            let text = String::from_utf8(bytes)
+                .map_err(|_| format!("{}: UTF-8 として読めない", &rel["sources/".len()..]))?;
+            let cut = cut_sections(&text, tops);
+            present.extend(cut.sections);
+            if !cut.dropped.is_empty() {
+                dropped.insert(rel["sources/".len()..].to_string(), cut.dropped);
+            }
+            files.insert(rel, cut.kept.into_bytes());
+        }
+        let missing: Vec<&str> = tops
+            .iter()
+            .copied()
+            .filter(|t| !present.iter().any(|p| p == t))
+            .collect();
+        if !missing.is_empty() {
+            absent += missing.len();
+            notes_absent.push_str(&format!(
+                "# 宣言に在るが正本に無い節 {file}: {}\n",
+                missing.join(", ")
+            ));
+        }
         copy_faces(faces_dir, face_files, doc, &mut files)?;
     }
+    let mut reads = reads_text(vp);
+    for (rel, names) in &dropped {
+        reads.push_str(&format!("# 落とした節 {rel}: {}\n", names.join(", ")));
+    }
+    reads.push_str(&notes_absent);
+    reads.push_str(&format!("# 常に残す節: {}\n", SKELETON.join(", ")));
     files.insert("question.yaml".to_string(), question_text(vp).into_bytes());
     files.insert(
         "finding.yaml".to_string(),
         ceiling.finding.clone().into_bytes(),
     );
-    files.insert("reads.yaml".to_string(), reads_text(vp).into_bytes());
+    files.insert("reads.yaml".to_string(), reads.into_bytes());
     let digest = digest_text(&files);
     files.insert(DIGEST_FILE.to_string(), digest.into_bytes());
-    Ok(files)
+    Ok(Built {
+        files,
+        dropped: dropped.values().map(Vec::len).sum(),
+        absent,
+    })
+}
+
+// ── 最上位の節で切る（便 98・docs/design/delivery-98.md §1 (b)） ──
+
+/// 骨格の閉じた一覧（どの観点の写しにも常に残す最上位の節・P-5.1）。
+pub const SKELETON: [&str; 6] = ["meta", "id", "title", "status", "date", "schema"];
+
+/// 生成区間の開きと閉じの印（行の頭）。
+const REGION_BEGIN: &str = "# folio:schema:begin";
+const REGION_END: &str = "# folio:schema:end";
+
+/// 1 file を切った結果。
+struct Cut {
+    /// 残した行（正本の byte のまま・正本の順のまま）
+    kept: String,
+    /// 最上位の節の名（正本に出る順）
+    sections: Vec<String>,
+    /// 落とした節の名（正本に出る順）
+    dropped: Vec<String>,
+}
+
+/// 列 0 の `名:`（`:` の後が行末か空白）なら名。列 0 の `- ` は節の続き・注釈と空行は節でない（規則 2）。
+fn section_name(line: &str) -> Option<&str> {
+    let body = line.trim_end_matches(['\n', '\r']);
+    if body.is_empty() || body.starts_with([' ', '\t', '#', '-']) {
+        return None;
+    }
+    body.match_indices(':')
+        .map(|(i, _)| i)
+        .find(|&i| i > 0 && matches!(body[i + 1..].chars().next(), None | Some(' ' | '\t')))
+        .map(|i| &body[..i])
+}
+
+fn is_trivia(line: &str) -> bool {
+    let t = line.trim();
+    t.is_empty() || t.starts_with('#')
+}
+
+/// 最上位の節の単位で切る（規則 1〜4）。残すのは `tops` の節・骨格・file の頭（最初の節より前の行）。
+fn cut_sections(text: &str, tops: &[&str]) -> Cut {
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let names: Vec<Option<&str>> = lines.iter().map(|l| section_name(l)).collect();
+    // 行の持ち主の節の番号（None = file の頭）
+    let mut owner: Vec<Option<usize>> = vec![None; lines.len()];
+    let mut sections: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        if let Some(name) = names[i] {
+            sections.push(name.to_string());
+            owner[i] = Some(sections.len() - 1);
+            i += 1;
+            continue;
+        }
+        let cur = sections.len().checked_sub(1);
+        if cur.is_some() && is_trivia(lines[i]) {
+            // 注釈と空行の連なりは直後の節へ寄せ、直後が節でなければ直前の節へ（規則 3）
+            let mut j = i;
+            while j < lines.len() && is_trivia(lines[j]) {
+                j += 1;
+            }
+            let to = if j < lines.len() && names[j].is_some() {
+                Some(sections.len())
+            } else {
+                cur
+            };
+            owner[i..j].fill(to);
+            i = j;
+            continue;
+        }
+        owner[i] = cur;
+        i += 1;
+    }
+    let keep: Vec<bool> = sections
+        .iter()
+        .map(|s| tops.contains(&s.as_str()) || SKELETON.contains(&s.as_str()))
+        .collect();
+    // 生成区間は中の節と一緒に 1 つの塊（規則 4）
+    let begin = lines.iter().position(|l| l.starts_with(REGION_BEGIN));
+    let end = lines.iter().position(|l| l.starts_with(REGION_END));
+    let region = match (begin, end) {
+        (Some(b), Some(e)) if b < e => {
+            let live = (b..=e).any(|k| names[k].is_some() && owner[k].is_some_and(|s| keep[s]));
+            Some((b, e, live))
+        }
+        _ => None,
+    };
+    let mut kept = String::new();
+    for (k, line) in lines.iter().enumerate() {
+        let live = match region {
+            Some((b, e, live)) if (b..=e).contains(&k) => live,
+            _ => owner[k].is_none_or(|s| keep.get(s).copied().unwrap_or(false)),
+        };
+        if live {
+            kept.push_str(line);
+        }
+    }
+    let dropped = sections
+        .iter()
+        .zip(&keep)
+        .filter(|(_, k)| !**k)
+        .map(|(s, _)| s.clone())
+        .collect();
+    Cut {
+        kept,
+        sections,
+        dropped,
+    }
 }
 
 /// 正本の写し。file 形（末尾が / でない）は `<dir>/<file>` を `sources/<file>` へ、dir 形（末尾が /）は
@@ -463,7 +639,7 @@ pub fn digest_text(files: &Files) -> String {
 
 // ── 置き場へ書く ──
 
-fn write_all(out_dir: &Path, bundles: &[(String, Files)]) -> Outcome {
+fn write_all(out_dir: &Path, bundles: &[(String, Built)]) -> Outcome {
     if !out_dir.is_dir() {
         if !out_dir.parent().is_some_and(Path::is_dir) {
             return Outcome::unknown(format!("{}: 置き場の親 dir が無い", out_dir.display()));
@@ -474,7 +650,11 @@ fn write_all(out_dir: &Path, bundles: &[(String, Files)]) -> Outcome {
     }
     let mut count = 0;
     let mut total = 0;
-    for (id, files) in bundles {
+    let (mut dropped, mut absent) = (0, 0);
+    for (id, built) in bundles {
+        let files = &built.files;
+        dropped += built.dropped;
+        absent += built.absent;
         let vp_dir = out_dir.join(id);
         // 古い写しが要約値に混ざらないよう sources/ と faces/ は消してから作り直す。他の file は触らない
         for sub in ["sources", "faces"] {
@@ -502,7 +682,7 @@ fn write_all(out_dir: &Path, bundles: &[(String, Files)]) -> Outcome {
     Outcome {
         verdict: Verdict::Pass,
         stdout: Some(format!(
-            "folio ceiling: 束を組んだ（観点 {}・file {count}・{total} byte）",
+            "folio ceiling: 束を組んだ（観点 {}・file {count}・{total} byte・落とした節 {dropped}・正本に無い節 {absent}）",
             bundles.len()
         )),
         stderr: None,

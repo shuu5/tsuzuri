@@ -7,6 +7,8 @@
 //! - 読み手は一覧を床の定数から取る（便 47・delivery-47.md §1 (e)5）: fixture の天井の正本から旧 4 節を外し凍結 anchor
 //!   tests/fixtures/schema/ceiling-region.txt の中身を足しても、凍結 anchor と同じ束が組める
 //! - 実の正本（design-intent の写し・前段は folio build）
+//! - 絞り（便 98・docs/design/delivery-98.md §1 (e)）: 凍結 anchor の 6 種別・reads.yaml の注釈の逐語・骨格と頭・行の byte と順・
+//!   列 0 の `- `・生成区間
 //!
 //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
 
@@ -211,7 +213,7 @@ const REALITY_FILES: [&str; 11] = [
     "sources/srs.yaml",
 ];
 
-/// 観点の id・file の一覧（digest.txt を除く）・連結の byte 数・要約値。
+/// 観点の id・file の一覧（digest.txt を除く）・連結の byte 数・要約値（便 98 の絞った束・delivery-98.md §1 (d)）。
 fn expected() -> Vec<(&'static str, Vec<&'static str>, usize, &'static str)> {
     let fidelity = FIDELITY_FILES.to_vec();
     let mut readability = fidelity.clone();
@@ -222,33 +224,42 @@ fn expected() -> Vec<(&'static str, Vec<&'static str>, usize, &'static str)> {
         (
             "fidelity",
             fidelity,
-            15_055,
-            "2bd676377b9d6e75d752e645b11cd50088de5288b1de897bf12aa6f5e7cb5a32",
+            11_738,
+            "d2e153b29a2b46b88295d10f782163636a5613649ceb9efa80dcebfb48473782",
         ),
         (
             "readability",
             readability,
-            17_317,
-            "ded1548e1b6c5185b5b2ea0083d6ee68ed66dd5ca998bdd7d5d9a52ed2065576",
+            11_867,
+            "877fcb5b03de9be5f6d8c4c1f61602e0f578a15e054cff9109eeb37834d08c68",
         ),
         (
             "coherence",
             coherence,
-            15_770,
-            "91ca924dceef12d5b2df3946e6b56de69b1feeef13ea66f78d950af54c28476c",
+            11_489,
+            "b0030a3fa1e1dc4d4e4710bbba07ec65f80bf1fa14bd2b4c75eea186b26f281d",
         ),
         (
             "reality",
             REALITY_FILES.to_vec(),
-            11_385,
-            "24ce1b872fa08dd128b39ac42e4ba72096bfe263df3bb463c9616899c96786d7",
+            7_560,
+            "d8734c77995da9034593d27e757890ec9133c86444a466b05c85a1a9e1250d89",
         ),
     ]
 }
 
+/// 観点ごとの 落とした節の数・正本に無い節の数（節の名の総数・delivery-98.md §1 (d)）。
+const EXPECTED_NOTED: [(usize, usize); 4] = [(24, 0), (30, 1), (24, 1), (20, 0)];
+
 const FIDELITY_QUESTION: &str = "id: fidelity\nname: 忠実さ\nreader: |\n  元の文と平易文の両方を読み、意味の差だけを拾う編集者\nquestion: |\n  人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文・決定の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは元の語と同じものを指しているか。図の根拠が指す先は、図の中身と合っているか。判定できない箇所は「まだ分からない」と書く。\n";
 
-const FIDELITY_READS: &str = "- {doc: constitution, fields: [articles.plain, articles.statements.text]}\n- {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title]}\n- {doc: adr, fields: [plain, decision, options.text, figures.refs]}\n- {doc: design-note, fields: [sections, figures.refs]}\n";
+/// delivery-98.md §1 (c) の 1 つ目の逐語（746 byte）。
+const FIDELITY_READS: &str = "- {doc: constitution, fields: [articles.plain, articles.statements.text]}\n- {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title]}\n- {doc: adr, fields: [plain, decision, options.text, figures.refs]}\n- {doc: design-note, fields: [sections, figures.refs]}\n# 落とした節 adr/ADR-2.yaml: context, basis, retreat, amends, consequences\n# 落とした節 constitution.yaml: north_star, precedence, rules_pointer, amendment, glossary_pointer, sources\n# 落とした節 design-note/full.yaml: sources\n# 落とした節 srs.yaml: goals, scope, scope_m1, actors, outputs, rail, verdicts, nonfunctional, not_frozen, constraints, glossary_pointer, figures\n# 常に残す節: meta, id, title, status, date, schema\n";
+
+/// delivery-98.md §1 (c) の 2 つ目の逐語（860 byte）。
+const READABILITY_READS: &str = "- {doc: index, fields: [shelf, sections]}\n- {doc: constitution, fields: [articles.title, articles.plain]}\n- {doc: srs, fields: [goals, scope, requirements.title, requirements.plain]}\n- {doc: adr, fields: [title, plain]}\n- {doc: design-note, fields: [sections]}\n# 落とした節 adr/ADR-2.yaml: context, decision, options, basis, retreat, amends, consequences, figures\n# 落とした節 constitution.yaml: north_star, precedence, rules_pointer, amendment, glossary_pointer, sources\n# 落とした節 design-note/full.yaml: figures, sources\n# 落とした節 index.yaml: audience, lanes, intake\n# 落とした節 srs.yaml: scope_m1, actors, outputs, rail, verdicts, nonfunctional, acceptance, not_frozen, constraints, glossary_pointer, figures\n# 宣言に在るが正本に無い節 index.yaml: sections\n# 常に残す節: meta, id, title, status, date, schema\n";
+
+const SKELETON: [&str; 6] = ["meta", "id", "title", "status", "date", "schema"];
 
 const FINDING: &str = "# 所見の欄の決まり（天井の正本 ceiling.yaml の finding・weights・verdicts・record の写し・folio ceiling が組んだ）\nfinding:\n  required: [id, viewpoint, place, weight, evidence]\n  optional: [refute, note]\n  place: {required: [doc, at]}\n  refute: {values: [支持, 退けた, まだ分からない]}\nweights:\n  values: [止める, 直す, 参考]\n  refute: [止める]\nverdicts:\n  values: [合格, 不合格, まだ分からない]\nrecord:\n  required: [model, effort, at, read, bundle]\n";
 
@@ -283,68 +294,160 @@ fn anchor_file() -> PathBuf {
     repo_root().join("tests/fixtures/ceiling/bundle-anchor.txt")
 }
 
-/// anchor file を読む。戻り値 = (観点の id, file数, byte, 要約値) の列（file の順）。
-fn anchor_rows() -> Vec<(String, usize, usize, String)> {
+/// anchor file の観点 1 つ分（便 98 で 6 種別）。
+#[derive(Debug, PartialEq)]
+struct AnchorRow {
+    id: String,
+    files: usize,
+    bytes: usize,
+    hex: String,
+    dropped: usize,
+    absent: usize,
+}
+
+/// anchor file を読む（file の順）。
+fn anchor_rows() -> Vec<AnchorRow> {
     let text = fs::read_to_string(anchor_file()).unwrap();
-    let mut rows: Vec<(String, usize, usize, String)> = Vec::new();
+    let mut rows: Vec<AnchorRow> = Vec::new();
     for line in text.lines().filter(|l| !l.starts_with('#')) {
         let (kind, val) = line
             .split_once('\t')
             .unwrap_or_else(|| panic!("anchor の行にタブが無い: {line:?}"));
+        if kind == "観点" {
+            rows.push(AnchorRow {
+                id: val.to_string(),
+                files: 0,
+                bytes: 0,
+                hex: String::new(),
+                dropped: 0,
+                absent: 0,
+            });
+            continue;
+        }
+        let row = rows.last_mut().unwrap();
         match kind {
-            "観点" => rows.push((val.to_string(), 0, 0, String::new())),
-            "file数" => rows.last_mut().unwrap().1 = val.parse().unwrap(),
-            "byte" => rows.last_mut().unwrap().2 = val.parse().unwrap(),
-            "要約値" => rows.last_mut().unwrap().3 = val.to_string(),
+            "file数" => row.files = val.parse().unwrap(),
+            "byte" => row.bytes = val.parse().unwrap(),
+            "要約値" => row.hex = val.to_string(),
+            "落とした節の数" => row.dropped = val.parse().unwrap(),
+            "正本に無い節の数" => row.absent = val.parse().unwrap(),
             _ => panic!("anchor の種別が違う: {line:?}"),
         }
     }
     rows
 }
 
-#[test]
-fn f97_the_script_rebuilds_the_frozen_anchor() {
-    let run = match Command::new("python3").arg(anchor_script()).output() {
-        Ok(run) => run,
-        // 道具が無いときは合格にしない代わりに理由を出す（assert_digest と同じ形・P-10.3）
-        Err(e) => {
-            eprintln!("# まだ分からない: bundle-anchor.py: python3 を起動できない: {e}");
-            return;
-        }
-    };
-    assert_eq!(code(&run, "bundle-anchor.py"), 0, "{}", stderr(&run));
-    assert_eq!(
-        stdout(&run),
-        fs::read_to_string(anchor_file()).unwrap(),
-        "script の出力が凍結 anchor と違う"
-    );
+/// reads.yaml の注釈の行 `<head><file>: <名>, <名>…` の名の総数（行の数ではない）。
+fn noted(reads: &str, head: &str) -> usize {
+    reads
+        .lines()
+        .filter_map(|l| l.strip_prefix(head))
+        .map(|rest| rest.split_once(": ").unwrap().1.split(", ").count())
+        .sum()
 }
+
+const DROPPED_HEAD: &str = "# 落とした節 ";
+const ABSENT_HEAD: &str = "# 宣言に在るが正本に無い節 ";
 
 #[test]
 fn f97_the_anchor_file_agrees_with_the_teeth() {
     let got = anchor_rows();
-    let want: Vec<(String, usize, usize, String)> = expected()
+    let want: Vec<AnchorRow> = expected()
         .into_iter()
-        .map(|(id, files, len, hex)| (id.to_string(), files.len(), len, hex.to_string()))
+        .zip(EXPECTED_NOTED)
+        .map(|((id, files, len, hex), (dropped, absent))| AnchorRow {
+            id: id.to_string(),
+            files: files.len(),
+            bytes: len,
+            hex: hex.to_string(),
+            dropped,
+            absent,
+        })
         .collect();
     assert_eq!(got, want, "anchor file と凍結の 4 対");
 }
 
+/// 独立の script の出力が凍結 anchor と byte 一致し、凍結の土台から組んだ束が 6 種別とも anchor と一致する（便 98 §1 (d)）。
 #[test]
-fn f97_the_bundle_matches_the_anchor_file() {
-    let (td, src, faces) = fixture_copy("f97-anchor");
+fn f98_the_cut_bundle_matches_the_rebuilt_anchor() {
+    match Command::new("python3").arg(anchor_script()).output() {
+        Ok(run) => {
+            assert_eq!(code(&run, "bundle-anchor.py"), 0, "{}", stderr(&run));
+            assert_eq!(
+                stdout(&run),
+                fs::read_to_string(anchor_file()).unwrap(),
+                "script の出力が凍結 anchor と違う"
+            );
+        }
+        // 道具が無いときは合格にしない代わりに理由を出す（assert_digest と同じ形・P-10.3）
+        Err(e) => eprintln!("# まだ分からない: bundle-anchor.py: python3 を起動できない: {e}"),
+    }
+    let (td, src, faces) = fixture_copy("f98-anchor");
     let out = td.join("bundle");
     let run = folio_ceiling(&src, &faces, &out);
     assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
     let rows = anchor_rows();
     assert_eq!(rows.len(), 4, "anchor の観点の数");
-    for (id, count, concat_len, hex) in rows {
-        let vp_dir = out.join(&id);
+    let (mut dropped, mut absent) = (0, 0);
+    for row in rows {
+        let vp_dir = out.join(&row.id);
         let files = tree(&vp_dir).into_keys().filter(|k| k != "digest.txt").count();
-        assert_eq!(files, count, "{id}: file の数");
-        assert_digest(&vp_dir, &hex, concat_len);
+        assert_eq!(files, row.files, "{}: file の数", row.id);
+        assert_digest(&vp_dir, &row.hex, row.bytes);
+        let reads = fs::read_to_string(vp_dir.join("reads.yaml")).unwrap();
+        assert_eq!(noted(&reads, DROPPED_HEAD), row.dropped, "{}: 落とした節の数", row.id);
+        assert_eq!(noted(&reads, ABSENT_HEAD), row.absent, "{}: 正本に無い節の数", row.id);
+        dropped += row.dropped;
+        absent += row.absent;
     }
+    assert!(
+        stdout(&run).contains(&format!("落とした節 {dropped}・正本に無い節 {absent}")),
+        "{}",
+        stdout(&run)
+    );
     let _ = fs::remove_dir_all(&td);
+}
+
+/// 凍結の土台の 忠実さ の reads.yaml が §1 (c) の 1 つ目の逐語と byte 一致する。
+#[test]
+fn f98_the_dropped_sections_are_named_in_reads() {
+    let (td, src, faces) = fixture_copy("f98-dropped");
+    let out = td.join("bundle");
+    let run = folio_ceiling(&src, &faces, &out);
+    assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
+    let reads = fs::read_to_string(out.join("fidelity/reads.yaml")).unwrap();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(reads.len(), 746);
+    assert_eq!(reads, FIDELITY_READS);
+}
+
+/// 読みやすさ の reads.yaml が §1 (c) の 2 つ目の逐語と byte 一致し、整合 には rules.yaml の rows が同じ形で出る。
+#[test]
+fn f98_a_section_absent_from_every_source_is_named() {
+    let (td, src, faces) = fixture_copy("f98-absent");
+    let out = td.join("bundle");
+    let run = folio_ceiling(&src, &faces, &out);
+    assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
+    let readability = fs::read_to_string(out.join("readability/reads.yaml")).unwrap();
+    let coherence = fs::read_to_string(out.join("coherence/reads.yaml")).unwrap();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(readability.len(), 860);
+    assert_eq!(readability, READABILITY_READS);
+    let lines: Vec<&str> = coherence.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| *l == "# 宣言に在るが正本に無い節 rules.yaml: rows")
+        .unwrap_or_else(|| panic!("整合 に rules.yaml の rows が無い: {coherence}"));
+    assert_eq!(at + 2, lines.len(), "{coherence}");
+    assert!(lines[at + 1].starts_with("# 常に残す節: "), "{coherence}");
+    assert!(
+        lines[..at].iter().all(|l| !l.starts_with("# 常に残す節")),
+        "{coherence}"
+    );
+    assert!(
+        lines[at + 1..].iter().all(|l| !l.starts_with(DROPPED_HEAD)),
+        "{coherence}"
+    );
 }
 
 // ── 2. 写しの byte ──
@@ -356,8 +459,8 @@ fn bundle_copies_sources_and_faces_byte_for_byte() {
     let run = folio_ceiling(&src, &faces, &out);
     assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
     let fidelity = out.join("fidelity");
+    // 正本の写しは読む節まで絞る（便 98）＝ byte のままの行と順は歯 f98_every_kept_line_is_verbatim_and_in_order が見る
     let srs = fs::read(fidelity.join("sources/srs.yaml")).unwrap();
-    assert_eq!(srs, fs::read(fixture().join("source/srs.yaml")).unwrap());
     assert!(
         String::from_utf8_lossy(&srs).contains("    plain: 合格か不合格のどちらかを出します。\n"),
         "欠陥の行が写しに無い"
@@ -630,9 +733,9 @@ fn names(dir: &Path) -> Vec<String> {
     out
 }
 
-#[test]
-fn bundle_on_the_real_source_builds_four_bundles() {
-    let td = temp_dir("real");
+/// 実の正本（design-intent の写し）から folio build で面を組み、束を組む。戻り値 = (一時 dir, 正本の写し, 面, 束)。
+fn real_bundle(case: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
+    let td = temp_dir(case);
     let dir = td.join("design-intent");
     copy_tree(&design_intent(), &dir);
     fs::create_dir_all(td.join("contracts")).unwrap();
@@ -664,7 +767,15 @@ fn bundle_on_the_real_source_builds_four_bundles() {
     let out = td.join("bundle");
     let run = folio_ceiling(&dir, &site, &out);
     assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
-    let dirs = ["fidelity", "readability", "coherence", "reality"];
+    (td, dir, site, out)
+}
+
+const VIEWPOINTS: [&str; 4] = ["fidelity", "readability", "coherence", "reality"];
+
+#[test]
+fn bundle_on_the_real_source_builds_four_bundles() {
+    let (td, dir, _site, out) = real_bundle("real");
+    let dirs = VIEWPOINTS;
     for id in dirs {
         let vp_dir = out.join(id);
         assert!(vp_dir.is_dir(), "{id}: 観点の dir が無い");
@@ -708,4 +819,161 @@ fn bundle_on_the_real_source_builds_four_bundles() {
     assert_eq!(note_faces, ["note-example.html", "note-figures.html"]);
     assert!(!faces.contains(&"folio.css".to_string()), "{faces:?}");
     let _ = fs::remove_dir_all(&td);
+}
+
+// ── 6. 絞り（便 98・docs/design/delivery-98.md §1 (b)(e)）──
+
+/// 列 0 の `名:` の行なら名（歯の側の読み・列 0 の `- ` と注釈は節でない）。
+fn top_key(line: &str) -> Option<&str> {
+    let line = line.trim_end_matches('\n');
+    if line.starts_with([' ', '\t', '#', '-']) {
+        return None;
+    }
+    let (name, rest) = line.split_once(':')?;
+    (!name.is_empty() && (rest.is_empty() || rest.starts_with(' '))).then_some(name)
+}
+
+/// 束の 4 観点の sources/ の下の全 file について `f(観点, sources からの相対 path, 正本, 写し)`。
+fn each_copy(dir: &Path, out: &Path, mut f: impl FnMut(&str, &str, &str, &str)) {
+    for id in VIEWPOINTS {
+        for (rel, body) in tree(&out.join(id)) {
+            let Some(rel) = rel.strip_prefix("sources/") else {
+                continue;
+            };
+            let source = fs::read_to_string(dir.join(rel)).unwrap();
+            f(id, rel, &source, &String::from_utf8(body).unwrap());
+        }
+    }
+}
+
+/// 骨格 6 節の見出しの行と file の頭の行が 1 行も落ちない。
+fn assert_skeleton_and_head(dir: &Path, out: &Path) {
+    let mut seen = 0;
+    each_copy(dir, out, |id, rel, source, copy| {
+        let lines: Vec<&str> = source.split_inclusive('\n').collect();
+        let first = lines.iter().position(|l| top_key(l).is_some()).unwrap_or(lines.len());
+        let head: String = lines[..first].concat();
+        assert!(copy.starts_with(&head), "{id}: {rel}: file の頭が落ちた");
+        for line in &lines[first..] {
+            if top_key(line).is_some_and(|k| SKELETON.contains(&k)) {
+                assert!(
+                    copy.split_inclusive('\n').any(|l| l == *line),
+                    "{id}: {rel}: 骨格の行が落ちた: {line:?}"
+                );
+                seen += 1;
+            }
+        }
+    });
+    assert!(seen > 0, "骨格の行が 1 つも無い");
+}
+
+/// 写しの各行が正本の同じ file の行として byte のまま在り、順序も同じ（写しの行の列は正本の行の列の部分列）。
+fn assert_verbatim_in_order(dir: &Path, out: &Path) {
+    each_copy(dir, out, |id, rel, source, copy| {
+        let mut rest = source.split_inclusive('\n');
+        for line in copy.split_inclusive('\n') {
+            assert!(
+                rest.any(|l| l == line),
+                "{id}: {rel}: 正本に無いか順が違う行: {line:?}"
+            );
+        }
+    });
+}
+
+#[test]
+fn f98_the_skeleton_and_the_head_survive_every_cut() {
+    let (td, src, faces) = fixture_copy("f98-skeleton");
+    let out = td.join("bundle");
+    let run = folio_ceiling(&src, &faces, &out);
+    assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
+    assert_skeleton_and_head(&src, &out);
+    let _ = fs::remove_dir_all(&td);
+    let (td, dir, _site, out) = real_bundle("f98-skeleton-real");
+    assert_skeleton_and_head(&dir, &out);
+    let _ = fs::remove_dir_all(&td);
+}
+
+#[test]
+fn f98_every_kept_line_is_verbatim_and_in_order() {
+    let (td, src, faces) = fixture_copy("f98-verbatim");
+    let out = td.join("bundle");
+    let run = folio_ceiling(&src, &faces, &out);
+    assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
+    assert_verbatim_in_order(&src, &out);
+    let _ = fs::remove_dir_all(&td);
+    let (td, dir, _site, out) = real_bundle("f98-verbatim-real");
+    assert_verbatim_in_order(&dir, &out);
+    let _ = fs::remove_dir_all(&td);
+}
+
+/// 列 0 の `- ` の連なりは直前の節（figures）の続き（規則 2）。figures を宣言しない観点の写しに figures の行が残らない。
+#[test]
+fn f98_a_column_zero_sequence_is_not_a_new_section() {
+    let (td, dir, _site, out) = real_bundle("f98-column-zero");
+    let (mut kept, mut cut) = (0, 0);
+    for id in VIEWPOINTS {
+        let reads = fs::read_to_string(out.join(id).join("reads.yaml")).unwrap();
+        let declares = |doc: &str| {
+            reads.lines().any(|l| {
+                l.strip_prefix(&format!("- {{doc: {doc}, fields: ["))
+                    .is_some_and(|r| r.split([',', ' ', ']', '.']).any(|f| f == "figures"))
+            })
+        };
+        for (doc, rel) in [
+            ("srs", "srs.yaml"),
+            ("adr", "adr/ADR-4.yaml"),
+            ("adr", "adr/ADR-5.yaml"),
+            ("adr", "adr/ADR-7.yaml"),
+        ] {
+            let path = out.join(id).join("sources").join(rel);
+            if !path.exists() {
+                continue;
+            }
+            let copy = fs::read_to_string(path).unwrap();
+            let source = fs::read_to_string(dir.join(rel)).unwrap();
+            let lines: Vec<&str> = source.split_inclusive('\n').collect();
+            let start = lines.iter().position(|l| *l == "figures:\n").unwrap();
+            let len = lines[start + 1..]
+                .iter()
+                .position(|l| top_key(l).is_some())
+                .unwrap_or(lines.len() - start - 1);
+            let mut block = &lines[start..=start + len];
+            while block.last().is_some_and(|l| l.trim().is_empty() || l.trim_start().starts_with('#')) {
+                block = &block[..block.len() - 1];
+            }
+            let dashes: Vec<&&str> = block.iter().filter(|l| l.starts_with("- ")).collect();
+            assert!(!dashes.is_empty(), "{rel}: 列 0 の - の連なりが無い");
+            if declares(doc) {
+                assert!(copy.contains(&block.concat()), "{id}: {rel}: figures の節が残らない");
+                kept += 1;
+            } else {
+                let copied: Vec<&str> = copy.split_inclusive('\n').collect();
+                assert!(!copied.contains(&"figures:\n"), "{id}: {rel}: figures の見出しが残った");
+                for d in dashes {
+                    assert!(!copied.contains(d), "{id}: {rel}: figures の行が残った: {d:?}");
+                }
+                cut += 1;
+            }
+        }
+    }
+    let _ = fs::remove_dir_all(&td);
+    assert!(kept > 0 && cut > 0, "残す側 {kept}・落とす側 {cut}");
+}
+
+/// 生成区間を持つ写しで開きの印と閉じの印がどちらも 1 つずつ残る（規則 3・規則 4）。
+#[test]
+fn f98_the_generated_region_stays_whole() {
+    let (td, dir, _site, out) = real_bundle("f98-region");
+    let mut pairs = 0;
+    each_copy(&dir, &out, |id, rel, source, copy| {
+        if !source.lines().any(|l| l.starts_with("# folio:schema:begin")) {
+            return;
+        }
+        let count = |mark: &str| copy.lines().filter(|l| l.starts_with(mark)).count();
+        assert_eq!(count("# folio:schema:begin"), 1, "{id}: {rel}: 開きの印");
+        assert_eq!(count("# folio:schema:end"), 1, "{id}: {rel}: 閉じの印");
+        pairs += 1;
+    });
+    let _ = fs::remove_dir_all(&td);
+    assert!(pairs > 0, "生成区間を持つ写しが無い");
 }
