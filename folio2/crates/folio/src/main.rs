@@ -20,6 +20,7 @@ mod findings;
 mod freeze;
 mod gate;
 mod gitcheck;
+mod graph;
 mod hello;
 mod ids;
 mod inject;
@@ -241,6 +242,16 @@ enum Command {
         /// 生成区間と導出の byte 一致を検査する（読めない・印が 1 対でない 2・不一致 1・一致 0）
         #[arg(long)]
         check: bool,
+    },
+    /// 設計文書の正本から節点と辺の索引を組み、2 つの表と要約の 1 行を標準出力へ出す（--print・repo へは書かない・組めなければ まだ分からない）
+    #[command(group(ArgGroup::new("mode").required(true).args(["print"])))]
+    Graph {
+        /// 正本の置き場（constitution.yaml・rules.yaml・srs.yaml・adr/ADR-*.yaml を読む）
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 索引を標準出力へ書く
+        #[arg(long)]
+        print: bool,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -528,6 +539,16 @@ fn main() -> ExitCode {
             }
             if let Some(line) = &outcome.stderr {
                 eprintln!("folio schema: {line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Graph { dir, print: _ } => {
+            let outcome = graph::run(&dir);
+            if let Some(body) = &outcome.stdout {
+                print!("{body}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("folio graph: {line}");
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)
         }
