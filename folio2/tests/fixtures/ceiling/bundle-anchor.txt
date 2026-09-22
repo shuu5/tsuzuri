@@ -1,0 +1,17 @@
+# 凍結 anchor: 天井の材料の束（tests/fixtures/ceiling/bundle-anchor.py が組んだ・folio の code を 1 行も呼ばない）
+観点	fidelity
+file数	13
+byte	15055
+要約値	2bd676377b9d6e75d752e645b11cd50088de5288b1de897bf12aa6f5e7cb5a32
+観点	readability
+file数	15
+byte	17317
+要約値	ded1548e1b6c5185b5b2ea0083d6ee68ed66dd5ca998bdd7d5d9a52ed2065576
+観点	coherence
+file数	14
+byte	15770
+要約値	91ca924dceef12d5b2df3946e6b56de69b1feeef13ea66f78d950af54c28476c
+観点	reality
+file数	11
+byte	11385
+要約値	24ce1b872fa08dd128b39ac42e4ba72096bfe263df3bb463c9616899c96786d7

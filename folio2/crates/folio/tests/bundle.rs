@@ -273,6 +273,80 @@ fn bundle_write_matches_the_frozen_anchor() {
     let _ = fs::remove_dir_all(&td);
 }
 
+// ── 1b. 独立の script と凍結 anchor file（便 97・docs/design/delivery-97.md §1 (c)(g)・P-10.1 / P-10.2 / P-10.3） ──
+
+fn anchor_script() -> PathBuf {
+    repo_root().join("tests/fixtures/ceiling/bundle-anchor.py")
+}
+
+fn anchor_file() -> PathBuf {
+    repo_root().join("tests/fixtures/ceiling/bundle-anchor.txt")
+}
+
+/// anchor file を読む。戻り値 = (観点の id, file数, byte, 要約値) の列（file の順）。
+fn anchor_rows() -> Vec<(String, usize, usize, String)> {
+    let text = fs::read_to_string(anchor_file()).unwrap();
+    let mut rows: Vec<(String, usize, usize, String)> = Vec::new();
+    for line in text.lines().filter(|l| !l.starts_with('#')) {
+        let (kind, val) = line
+            .split_once('\t')
+            .unwrap_or_else(|| panic!("anchor の行にタブが無い: {line:?}"));
+        match kind {
+            "観点" => rows.push((val.to_string(), 0, 0, String::new())),
+            "file数" => rows.last_mut().unwrap().1 = val.parse().unwrap(),
+            "byte" => rows.last_mut().unwrap().2 = val.parse().unwrap(),
+            "要約値" => rows.last_mut().unwrap().3 = val.to_string(),
+            _ => panic!("anchor の種別が違う: {line:?}"),
+        }
+    }
+    rows
+}
+
+#[test]
+fn f97_the_script_rebuilds_the_frozen_anchor() {
+    let run = match Command::new("python3").arg(anchor_script()).output() {
+        Ok(run) => run,
+        // 道具が無いときは合格にしない代わりに理由を出す（assert_digest と同じ形・P-10.3）
+        Err(e) => {
+            eprintln!("# まだ分からない: bundle-anchor.py: python3 を起動できない: {e}");
+            return;
+        }
+    };
+    assert_eq!(code(&run, "bundle-anchor.py"), 0, "{}", stderr(&run));
+    assert_eq!(
+        stdout(&run),
+        fs::read_to_string(anchor_file()).unwrap(),
+        "script の出力が凍結 anchor と違う"
+    );
+}
+
+#[test]
+fn f97_the_anchor_file_agrees_with_the_teeth() {
+    let got = anchor_rows();
+    let want: Vec<(String, usize, usize, String)> = expected()
+        .into_iter()
+        .map(|(id, files, len, hex)| (id.to_string(), files.len(), len, hex.to_string()))
+        .collect();
+    assert_eq!(got, want, "anchor file と凍結の 4 対");
+}
+
+#[test]
+fn f97_the_bundle_matches_the_anchor_file() {
+    let (td, src, faces) = fixture_copy("f97-anchor");
+    let out = td.join("bundle");
+    let run = folio_ceiling(&src, &faces, &out);
+    assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
+    let rows = anchor_rows();
+    assert_eq!(rows.len(), 4, "anchor の観点の数");
+    for (id, count, concat_len, hex) in rows {
+        let vp_dir = out.join(&id);
+        let files = tree(&vp_dir).into_keys().filter(|k| k != "digest.txt").count();
+        assert_eq!(files, count, "{id}: file の数");
+        assert_digest(&vp_dir, &hex, concat_len);
+    }
+    let _ = fs::remove_dir_all(&td);
+}
+
 // ── 2. 写しの byte ──
 
 #[test]
