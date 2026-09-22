@@ -6,6 +6,7 @@
 - 置き場: この文書は folio2 の設計ノート。契約表は末尾の区間。審査の材料は行 cp が指す §1 だけなので、判定に要る材料は §1 に全部置く。write-set は手書き（新しい file は crates/folio/src/mentions.rs の 1 本で先頭に + を付ける・縮む file は無い）。
 - 門: 本便は design-intent の下の正本（rules.yaml・adr/ADR-13.yaml）を書き換えるので天井の門の対象である。席が実測した folio ceiling --gate は 2（まだ分からない・印が古い）を返す。持ち主の裁定 D-12（2026-09-21 23:45 JST・逐語「推奨で進めて」）により門の外で受ける。
 - 前の便: 便 90（要件の欄 adrs）・便 91（規則の表の行の欄 refs）・便 92（判断の記録の帰結の欄 produced）。3 本とも着地済み（main 7942194）。受け皿が揃うまで歯を入れないという順は設計ノート §8 が固定しており、本便はその最後の 1 本である。
+- 改訂 b（2026-09-22 14:1x JST・run f2-648.131-20260922T050042Z の質問 about:write-set への回答）: 実装側が crates/folio/tests/adr.rs の f92_ の歯 3 本（ADR-1 の写しの produced: [ADR-2] を produced: [P-6] ／ [FR16] ／ ADR-2 に変異させる）が、ADR-1 の帰結の散文が ADR-2 を指したままになるため、狙いの違反に加えて種別 R-17 の違反を 1 件出して落ちると報告した。歯の意図は produced の欄の形の検査であり、ADR-2 を外す必要は無い。そこで write-set に crates/folio/tests/adr.rs を足し、3 本の変異を ADR-2 を残す形（produced: [ADR-2, P-6] ／ [ADR-2, FR16] ／ 一覧でない値）に直す。歯の数と期待の字面は変えない。これ以外の変更は無い（(i) の運ばないものから adr.rs を外した）。
 
 ## 1. 目的と中身
 
@@ -123,12 +124,14 @@ tests/check.rs の Work は実の design-intent を一時 dir へ写し、器の
 
 回帰は verify の 2 行目で見る。tests/check.rs（本便の前の 46 本 ＋ f93_ の 5 本 = 51 本）と tests/floor_cases.rs（1 本・回す事例が 141 から 142 になる）。器の受付は verify の旗 --bin の次の語を filter 語と読むので、verify の行に --bin は書かない。
 
+改訂 b で足した分: crates/folio/tests/adr.rs の f92_an_article_id_is_a_violation ／ f92_an_id_in_the_basis_is_a_violation ／ f92_produced_that_is_not_a_list_is_a_violation の 3 本は、ADR-1 の写しの produced: [ADR-2] を当て先に変異させる。ADR-1 の帰結の散文は ADR-2 を指すので、ADR-2 を落とす変異は本便の歯が種別 R-17 の違反を 1 件足し、3 本が assert_figure_violation の ちょうど 1 件 で落ちる。直しは変異の値に ADR-2 を残すこと（produced: [ADR-2, P-6] ／ produced: [ADR-2, FR16] ／ 一覧でない値は produced: ADR-2 のままで良いが、一覧でない値の検査が先に落ちて R-17 まで届かないかは実装が確かめる）。期待の字面（id の形でない・自分の id か根拠・produced が一覧でない）と歯の本数は変えない。回帰は共通の検証（workspace 全体の nextest）で見る。
+
 ### (i) 本便が運ばないもの・宣言する食い違い・撤退条件
 
 **運ばないもの。**
 
 - **機械の読みの写しを設計文書へ導出すること（P-5.6 / 行 D-11）。** (b) の 5 つの閉じた一覧と (e) の語形の一覧は、床が違反と まだ分からない を出す判定に使う閉じた一覧なので、写しを人が読める型付きデータへ決定的に導出する義務が掛かる。置き場は rules.yaml の生成区間（rules.rs の床の木に群を足せば `folio schema` の対象は増えない＝要件 FR19 の文も schema.rs も触らない）だが、**導出の結果（生成区間の行数・byte 数・要約値・凍結 anchor tests/fixtures/schema/rules-region.txt）は席の権能では実測できない**（席は crates/ を編集できない）ので、測れる側が運ぶ次の便に回す。本便はその義務を (i) に明記し、台帳へ後続として起票する。
-- 要件書（srs.yaml）・憲法の条文・語彙・ほかの判断の記録の本文・ほかの 7 file の生成区間・面の生成器・adr.rs・refs.rs・rules.rs・schema.rs・土台 tests/fixtures/floor_base/・id の一覧の凍結 anchor・CI の yml。
+- 要件書（srs.yaml）・憲法の条文・語彙・ほかの判断の記録の本文・ほかの 7 file の生成区間・面の生成器・refs.rs・rules.rs・schema.rs・土台 tests/fixtures/floor_base/・id の一覧の凍結 anchor・CI の yml。
 - 要件書の項がほかの要件・制約を指す欄（(d) の 21 件のうち 16 件）。判断の記録 ADR-13 決定 (3-b) が保留としている。
 
 **宣言する食い違い（次の一括の🔴 に出す・行の改訂は裁定 id を要するので本便では触らない）。**
@@ -172,8 +175,8 @@ id = "cp"
 title = "規則の表の行 R-17（設計文書の中で id を持つ行の散文の欄に現れた、その行以外の id のうち、その行の型付きの欄に無いものの数・値 0 件）を folio check が機械で数える床の歯を新しい file crates/folio/src/mentions.rs に足す。数え方（対象の 9 file・id を持つ行・散文の欄 = 型付きの欄 21 語と来歴 6 語と最上位 2 節の補集合・受け皿の表・数えない言及の語形 10 語）は実装の型付きの定数で閉じ、対は無向で見て規範文の id は親の条へ丸める。歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ黙り（凍結した土台には行が無いので既存の床の事例 141 件は動かない）、値が 0 件 でなければ まだ分からない を出す。main の現物で残る 9 件は判断の記録 ADR-13 の根拠に条 5 個・規則の表の行 R-16 の refs に行 2 個を書き写して 0 にしてから着地させる（行の what と値と母集団は 1 字も変えない）"
 req = ["NFR3", "FR5"]
 section = "1"
-write-set = ["+crates/folio/src/mentions.rs", "crates/folio/src/main.rs", "crates/folio/src/check.rs", "crates/folio/src/link.rs", "design-intent/adr/ADR-13.yaml", "design-intent/rules.yaml", "tests/floor_cases.yaml", "crates/folio/tests/check.rs", "crates/folio/tests/floor_cases.rs"]
+write-set = ["+crates/folio/src/mentions.rs", "crates/folio/src/main.rs", "crates/folio/src/check.rs", "crates/folio/src/link.rs", "design-intent/adr/ADR-13.yaml", "design-intent/rules.yaml", "tests/floor_cases.yaml", "crates/folio/tests/check.rs", "crates/folio/tests/floor_cases.rs", "crates/folio/tests/adr.rs"]
 verify = ["cargo nextest run -p folio --test check f93_", "cargo nextest run -p folio --test check --test floor_cases", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "M"
-done = "f93_ の歯 5 本（実の正本の写しで素の床が終了コード 0・違反 0・まだ分からない 0 で ADR-13 の根拠に条 5 個と R-16 の refs に行 2 個が在る／R-16 の refs から R-9 を外すと種別 R-17 の違反ちょうど 1 件／同じ文に 対象外 を足すと違反 0／要件が要件を指す言及は受け皿が無いので違反 0／行 R-17 を消すと R-17 の違反は 0 で参照 id の違反ちょうど 1 件）が全部緑、tests/check.rs の既存の歯 46 本と tests/floor_cases.rs の 142 件が全部緑、clippy が 0 警告で CI が通る"
+done = "f93_ の歯 5 本（実の正本の写しで素の床が終了コード 0・違反 0・まだ分からない 0 で ADR-13 の根拠に条 5 個と R-16 の refs に行 2 個が在る／R-16 の refs から R-9 を外すと種別 R-17 の違反ちょうど 1 件／同じ文に 対象外 を足すと違反 0／要件が要件を指す言及は受け皿が無いので違反 0／行 R-17 を消すと R-17 の違反は 0 で参照 id の違反ちょうど 1 件）が全部緑、tests/check.rs の既存の歯 46 本と tests/floor_cases.rs の 142 件が全部緑、tests/adr.rs の f92_ の歯 3 本が ADR-2 を残した変異で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
