@@ -32,10 +32,10 @@ use std::process::{Command, Output, Stdio};
 
 /// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測（便 58 (b) で承認者の値域に
 /// orchestrator 席 を足し、便 69 (b) で注 prose_note の母集団に 語彙 を足し、便 92 (d) で帰結の欄 produced と
-/// その注を足した後の値・tests/fixtures/schema/adr-region.txt と同じ byte）。
-const REGION_LINES: usize = 127;
-const REGION_BYTES: usize = 22701;
-const REGION_SHA256: &str = "40396925dd036902ccc3b70e540718e9f3e3ab10b5eb341b9251f252d98558a8";
+/// その注を、便 101 (d) で改訂の欄 revises を足した後の値・tests/fixtures/schema/adr-region.txt と同じ byte）。
+const REGION_LINES: usize = 136;
+const REGION_BYTES: usize = 24202;
+const REGION_SHA256: &str = "0c95ab5011ff3a09ec3b6cdb4dd0bc3a6150ca5ca11ee92c7e233e96520f9ef3";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・注 4 つに「未実装である」を足した後の値）。

@@ -31,6 +31,8 @@ const RULING_PATTERN: &str = r"[a-z]\d-[0-9a-z]+(\.\d+)?";
 const OWNER: &str = "持ち主";
 /// 帰結の欄（便 92・ADR-13 決定 (3-b)（ウ））。その判断が発効で生んだものの id の一覧で、根拠の欄 basis とは別に持つ。
 const PRODUCED: &str = "produced";
+/// 改訂の欄（便 101・ADR-13 決定 (14)）。発効した判断が生きたまま、その決定の範囲を別の判断が変えた対の一覧で、改訂する側だけが持つ。
+const REVISES: &str = "revises";
 const RECORD: Keys = Keys {
     required: &[
         "id", "title", "status", "date", "context", "decision", "options", "basis", "retreat",
@@ -38,6 +40,7 @@ const RECORD: Keys = Keys {
     ],
     optional: &[
         "amends",
+        REVISES,
         "grill",
         "approval",
         "consequences",
@@ -51,6 +54,7 @@ const RECORD: Keys = Keys {
 const NON_EMPTY: &[&str] = &["title", "context", "decision", "plain"];
 const STATUS: &[&str] = &["proposed", "accepted", "retired"];
 const VERDICT: &[&str] = &["adopted", "rejected"];
+const REVISE_KIND: &[&str] = &["narrow", "widen"];
 /// 撤退条件の種類 = 憲法の値域 schema.enums.retreat_kind から組み立て時に導出した名の列（便 49・手書きの写しは持たない）。
 const RETREAT_KIND: &[&str] = &RetreatKind::NAMES;
 const APPROVER: &[&str] = &["持ち主", "planner 席", "orchestrator 席"];
@@ -68,6 +72,10 @@ const RETREAT: Keys = Keys {
 };
 const AMENDS_ENTRY: Keys = Keys {
     required: &["target", "field", "version", "previous_text", "new_text"],
+    optional: &[],
+};
+const REVISES_ENTRY: Keys = Keys {
+    required: &["target", "decision", "kind", "summary"],
     optional: &[],
 };
 const GRILL: Keys = Keys {
@@ -149,6 +157,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ("retreat_kind", Floor::Strs(RETREAT_KIND)),
             ("approver", Floor::Strs(APPROVER)),
             ("surface", Floor::Strs(SURFACE)),
+            ("revise_kind", Floor::Strs(REVISE_KIND)),
         ]),
     ),
     (
@@ -285,6 +294,42 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                 "renumber",
                 Floor::Val(
                     "規範文の改番（同じ本文を消して別の id で足す）と、過去の版の anchor に在って最新 anchor に無い番号の再利用は落ちる（P-7.1）。本文も変えて付け替えた改番は「削除 + 新設」と弁別できない（限界）",
+                ),
+            ),
+        ]),
+    ),
+    ("revises_entry", keys_floor!(REVISES_ENTRY)),
+    (
+        "revises_note",
+        Floor::Map(&[
+            (
+                "target",
+                Floor::Val(
+                    "改訂する先の判断の記録の id（ADR-n）。自分の id は書かない。実在は判断の記録の全欄の走査が数える。条の改訂は amends と amended_by が持ち、判断を丸ごと置き換える形は supersedes / superseded_by が持つ＝この欄は「発効した判断が生きたまま、その決定の範囲が別の判断で変わる」ときだけに使う",
+                ),
+            ),
+            (
+                "decision",
+                Floor::Val(
+                    "改訂する決定の番号（その判断の decision の中の番号の字・例 (4)）。1 本の記録の中で target と decision の対は一意＝同じ決定を 2 行で書かない",
+                ),
+            ),
+            (
+                "kind",
+                Floor::Val(
+                    "改訂の向き。narrow = 決定の範囲を狭める／widen = 広げる。床は値域だけを見て、向きが本当かは人が読む（P-12.2）",
+                ),
+            ),
+            (
+                "summary",
+                Floor::Val(
+                    "その決定の何をどう変えたかの 1 文。逐語の突き合わせ（amends の previous_text / new_text）は持たない＝判断の記録は版ごとの凍結 anchor を持たないので、床が字面を突き合わせる相手が無い（P-10.2）",
+                ),
+            ),
+            (
+                "reverse",
+                Floor::Val(
+                    "改訂される側に来歴の欄は置かない（片側だけ）。改訂の有無は改訂する側のこの欄から数える＝条の改訂の来歴（amended_by）と違い、凍結 anchor との消し込みが無いので双方向にしても床が確かめられるものが増えない",
                 ),
             ),
         ]),
@@ -755,6 +800,8 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
         }
     }
 
+    check_revises(id, d, report);
+
     let approval = present(d, "approval");
     if in_enum(d.get("status"), EFFECTIVE_STATUS) && approval.is_none_or(Node::is_blank) {
         report.violation(
@@ -782,6 +829,59 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
     }
 
     check_figures(id, d, report);
+}
+
+/// (d) 任意の改訂の欄（便 101）。欄の集合・4 欄の非空・target は自分でない判断の記録の id・kind の値域・
+/// target と decision の対は 1 本の記録の中で一意。実在は link.rs の網が数える。
+fn check_revises(id: &str, d: &Node, report: &mut Report) {
+    let items: &[Node] = match present(d, REVISES) {
+        None => return,
+        Some(Node::Seq(items)) => items,
+        Some(_) => {
+            report.violation("adr", format!("{id}: {REVISES} が一覧でない"));
+            return;
+        }
+    };
+    let mut seen: Vec<(&str, &str)> = Vec::new();
+    for (i, e) in items.iter().enumerate() {
+        let at = format!("{id}.{REVISES}[{i}]");
+        if !check_keys("adr", &at, e, &REVISES_ENTRY, report) {
+            continue;
+        }
+        for k in REVISES_ENTRY.required {
+            if !non_empty(e.get(k)) {
+                report.violation("adr", format!("{at}.{k} が空"));
+            }
+        }
+        let target = scalar(e.get("target"));
+        if target.is_some_and(|t| !t.trim().is_empty())
+            && !target.is_some_and(|t| is_adr_id(t) && t != id)
+        {
+            report.violation(
+                "adr",
+                format!(
+                    "{at}.target が判断の記録の id でない（自分の id も書かない）: {}",
+                    show(e.get("target"))
+                ),
+            );
+        }
+        if non_empty(e.get("kind")) && !in_enum(e.get("kind"), REVISE_KIND) {
+            report.violation(
+                "adr",
+                format!("{at}: kind「{}」が値域でない", show(e.get("kind"))),
+            );
+        }
+        if let (Some(t), Some(dec)) = (target, scalar(e.get("decision"))) {
+            if seen.contains(&(t, dec)) {
+                report.violation(
+                    "adr",
+                    format!("{at}: {t} の decision「{dec}」が 2 行に在る（対は一意）"),
+                );
+            } else {
+                seen.push((t, dec));
+            }
+        }
+    }
 }
 
 /// (d) 任意の図の節（便 33）。欄の集合・id と caption の非空・型は部品目録の一覧・spec は表・refs は basis と同じ
@@ -1202,7 +1302,7 @@ mod tests {
             unreachable!()
         };
         let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
-        assert_eq!(notes, 23);
+        assert_eq!(notes, 24);
         let mut out = Vec::new();
         floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
         // 空の写し = 値の欄が全部（欠落）・注は 1 本も立たない

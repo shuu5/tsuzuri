@@ -474,7 +474,7 @@ fn f96_a_broken_source_makes_the_digest_inconclusive() {
 
 const F99_SCRIPT: &str = "tests/fixtures/schema/node-digest.py";
 const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
-const F99_ANCHOR_SHA256: &str = "e71740609965710c1994257d9454ad8485b65b55c75cb5c30a74cfd6d411e21f";
+const F99_ANCHOR_SHA256: &str = "c0208821b2c65ebd07ed3c65f53e9d162f7eb2e397cacc59c2b7bf8d80b77b7a";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。

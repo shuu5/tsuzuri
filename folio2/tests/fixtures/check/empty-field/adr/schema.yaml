@@ -6,7 +6,7 @@ schema:
   ruling_pattern: '[a-z]\d-[0-9a-z]+(\.\d+)?'
   owner: 持ち主
   required: [id, title, status, date, context, decision, options, basis, retreat, plain]
-  optional: [amends, grill, approval, consequences, produced, supersedes, superseded_by, note, figures]
+  optional: [amends, revises, grill, approval, consequences, produced, supersedes, superseded_by, note, figures]
   non_empty: [title, context, decision, plain]
   enums:
     status: [proposed, accepted, retired]
@@ -14,6 +14,7 @@ schema:
     retreat_kind: [spike, measure, ruling]
     approver: [持ち主, planner 席, orchestrator 席]
     surface: [R-8]
+    revise_kind: [narrow, widen]
   effective_status: [accepted, retired]
   option: {required: [id, name, text, verdict, reason], optional: []}
   options_rule: {min: 2, adopted: 1}
@@ -24,6 +25,7 @@ schema:
     new_article_marker: （新設）
     deleted_marker: （削除）
     empty_marker: （空）
+  revises_entry: {required: [target, decision, kind, summary], optional: []}
   grill: {required: [when, who, where, summary], optional: []}
   approval: {required: [who, date, ruling, verbatim, surface], optional: []}
   amended_by_entry: {required: [adr, date, approved_by, ruling, previous_text, rationale], optional: []}
