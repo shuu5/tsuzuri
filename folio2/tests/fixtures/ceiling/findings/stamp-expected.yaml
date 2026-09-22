@@ -8,3 +8,27 @@ viewpoints:
   - {id: reality, verdict: 合格, findings: 0, stops: 0, model: opus, effort: high}
 refutes: []
 reads: [adr, constitution, design-note, rules, srs]
+nodes:
+  - {id: A-1, digest: a82cf170}
+  - {id: A-1.1, digest: ea5b6120}
+  - {id: AC1, digest: 9bd1e10b}
+  - {id: ADR-1, digest: 11a999d6}
+  - {id: ADR-2, digest: fd8ac49d}
+  - {id: CON1, digest: 56aa54e5}
+  - {id: D-1, digest: 86b0b390}
+  - {id: FR1, digest: a81a54e7}
+  - {id: FR2, digest: 4aac2ab1}
+  - {id: GOAL1, digest: fc191415}
+  - {id: GOAL2, digest: 40d0b256}
+  - {id: N-1, digest: 565c9a03}
+  - {id: N-1.1, digest: 5543ff04}
+  - {id: NFR1, digest: 6af464d5}
+  - {id: P-1, digest: a4fc0435}
+  - {id: P-1.1, digest: 0019a1f7}
+  - {id: P-1.2, digest: 8e2b9724}
+  - {id: R-1, digest: 81e06388}
+  - {id: ai-session, digest: a65dd1fe}
+  - {id: folio, digest: 68d4f1d6}
+  - {id: owner, digest: 1eaacd04}
+  - {id: prep-sheet, digest: de2c6e1c}
+  - {id: verdict, digest: e68a2fbb}

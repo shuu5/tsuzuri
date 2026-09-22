@@ -2,7 +2,8 @@
 //! 周の結果（`--write` が組んだ観点ごとの束・席か器が書いた所見 file・止める の反証の結果 result.yaml）から天井の印を
 //! 決定的に導出し `<dir>/preview/ceiling-stamp.yaml` へ書く。観点ごとの 3 値は `--check` と同じ口
 //! （`findings::count_viewpoint`・配信先を取らないので規則 3〔束が古い〕は当てない＝名札と同じ）で数え、二重に実装しない。
-//! 印の欄は閉じた一覧でこの順: round・at・verdict・sources・faces・viewpoints・refutes・reads。
+//! 印の欄は閉じた一覧でこの順: round・at・verdict・sources・faces・viewpoints・refutes・reads・rest・nodes
+//! （rest と nodes は便 99: 残差の要約値と節点ごとの要約値の表・組み方は `graph::stamp_table`）。
 //! 決定性: 時刻・絶対 path・環境の値を書かない（round は置き場の dir の名・at は所見 file の起動の記録から取る）。
 //! 全部か無しか: 観点のどれかの束・所見 file・起動の記録が読めない、または正本と面の写しが観点で食い違うときは
 //! まだ分からない（終了 2）で file を触らない。既に同じ byte なら書かない。判定の 3 値は印の中身で、命令は書けたら 0。
@@ -14,6 +15,7 @@ use std::path::Path;
 use crate::bundle::{self, Ceiling, Files};
 use crate::face::R;
 use crate::findings::{self, Counted};
+use crate::graph;
 use crate::sha256;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
@@ -169,6 +171,11 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
     }
     let reads: Vec<String> = reads.into_iter().map(plain).collect();
     text.push_str(&format!("reads: [{}]\n", reads.join(", ")));
+    let (rest, nodes) = graph::stamp_table(dir, &ceiling)?;
+    text.push_str(&format!("rest: {rest}\nnodes:\n"));
+    for (id, digest) in nodes {
+        text.push_str(&format!("  - {{id: {}, digest: {digest}}}\n", plain(&id)));
+    }
     Ok(text)
 }
 

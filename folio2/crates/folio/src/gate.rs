@@ -186,7 +186,7 @@ fn sources_digest(dir: &Path, ceiling: &bundle::Ceiling) -> R<String> {
 }
 
 /// 天井の正本の documents（id・file）。
-fn documents(dir: &Path) -> R<Vec<(String, String)>> {
+pub(crate) fn documents(dir: &Path) -> R<Vec<(String, String)>> {
     let text = fs::read_to_string(dir.join("ceiling.yaml"))
         .map_err(|e| format!("ceiling.yaml: 読めない: {e}"))?;
     let root = yaml::parse(&text)
@@ -207,7 +207,7 @@ fn documents(dir: &Path) -> R<Vec<(String, String)>> {
 }
 
 /// 文書 1 つの file。file 形はその file、dir 形（末尾が /）は直下の .yaml（`<dir>` からの相対 path で持つ）。
-fn collect(dir: &Path, file: &str, files: &mut BTreeMap<String, Vec<u8>>) -> R<()> {
+pub(crate) fn collect(dir: &Path, file: &str, files: &mut BTreeMap<String, Vec<u8>>) -> R<()> {
     let path = dir.join(file);
     if path.is_symlink() {
         return Err(format!("{file}: symlink は認めない"));

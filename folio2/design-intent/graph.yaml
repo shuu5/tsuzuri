@@ -14,8 +14,8 @@ meta:
 schema:
   top_level: [meta, schema]
   top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。meta は人が書き、schema は生成区間。索引の中身そのものはこの file に置かない＝毎回 folio graph --print が正本から組み直す導出物である（判断の記録 ADR-13 決定 (4)・P-6.3 / P-6.4）
-  node: {required: [id, kind, file, title]}
-  node_note: 索引の節点 1 つの欄。id は設計文書の全体で 1 つに定まる id、kind は node_kinds の値、file は正本の置き場からの相対の path、title は空白を 1 つに畳んで Unicode の字で 36 に切った 1 行の題。欄の要約値は天井の印と同じ便で足す（ADR-13 決定 (1)(8)）
+  node: {required: [id, kind, file, digest, title]}
+  node_note: 索引の節点 1 つの欄。id は設計文書の全体で 1 つに定まる id、kind は node_kinds の値、file は正本の置き場からの相対の path、digest は節点の本文の要約値（式は digest_note）、title は空白を 1 つに畳んで Unicode の字で 36 に切った 1 行の題
   node_kinds: [条, 規範文, 規則行, 目的, 要件, 非機能要件, 受入基準, 制約, 登場人物, 出力, 判断の記録]
   node_kinds_note: 節点の種類の閉じた一覧（順も固定・増減は判断の記録が要る＝P-2.4 と同じ扱い）。正本は実装の型付きの定数 crates/folio/src/graph.rs の NODE_KINDS で、この節はその写しである（P-5.1・P-5.6）
   edge: {required: [from, to, type]}
@@ -39,4 +39,11 @@ schema:
     - produced
     - amends
   edge_types_note: 辺の型の閉じた一覧（順も固定・ADR-13 決定 (2)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_TYPES で、この節はその写しである。figures は伝播に使わない（決定 (2)）。観点が読む文書の欄（reads）と入口の棚の関係は、文書を節点にする便で足す
+  edge_fields:
+    constitution.yaml: [relations]
+    rules.yaml: [article, refs]
+    srs.yaml: [basis, goals, rules, adrs, verifies, verify.ac]
+    adr: [basis, produced]
+  edge_fields_note: 辺の欄の閉じた一覧（正本の file ごと・欄の名）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は周の引き金にならない（判断の記録 ADR-13 決定 (8)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す
+  digest_note: 節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値。天井の印はこの要約値の表と、節点にも辺の欄にも属さない残りの byte の要約値（残差）を持つ（ADR-13 決定 (8)）
 # folio:schema:end

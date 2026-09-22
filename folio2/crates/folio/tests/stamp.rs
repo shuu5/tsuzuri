@@ -180,7 +180,8 @@ impl Round {
     }
 }
 
-/// 印から要約値 3 種（sources / faces / 各行の bundle）と at を落とす（anchor の形・§1 (c)）。
+/// 印から要約値 4 種（sources / faces / rest / 各行の bundle）と at を落とす（anchor の形・§1 (c)）。rest は写しの
+/// reads を書き替えると母集団が動くので凍結しない（便 99・delivery-99.md §1 (e)）。nodes の表は落とさない。
 fn without_digests(stamp: &str) -> String {
     stamp
         .split_inclusive('\n')
@@ -188,6 +189,7 @@ fn without_digests(stamp: &str) -> String {
             !line.starts_with("at: ")
                 && !line.starts_with("sources: ")
                 && !line.starts_with("faces: ")
+                && !line.starts_with("rest: ")
         })
         .map(|line| {
             let mut line = line.to_string();
@@ -409,4 +411,105 @@ fn stamp_carries_the_refute_results() {
         stamp.contains("  - {id: fidelity, verdict: 不合格, findings: 1, stops: 1, "),
         "{stamp}"
     );
+}
+
+// ── 便 99: 印の rest と nodes（docs/design/delivery-99.md §1 (h) の 7〜9） ──
+
+/// 印の最上位の欄の名（字下げの無い `key:` の行・注釈を除く）の並び。
+fn top_keys(stamp: &str) -> Vec<&str> {
+    stamp
+        .lines()
+        .filter(|l| !l.starts_with([' ', '#']))
+        .filter_map(|l| l.split_once(':').map(|(k, _)| k))
+        .collect()
+}
+
+/// 印の nodes の行（id・要約値）。
+fn node_rows(stamp: &str) -> Vec<(String, String)> {
+    let at = stamp.find("\nnodes:\n").expect("印に nodes が無い") + "\nnodes:\n".len();
+    stamp[at..]
+        .lines()
+        .map(|l| {
+            let inner = l
+                .strip_prefix("  - {id: ")
+                .and_then(|r| r.strip_suffix('}'))
+                .unwrap_or_else(|| panic!("nodes の行の形でない: {l}"));
+            let (id, digest) = inner.split_once(", digest: ").expect("digest の対が無い");
+            (id.to_string(), digest.to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn f99_the_stamp_carries_the_node_table() {
+    let round = Round::passing("f99-table");
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let stamp = stamp.expect("印が無い");
+    assert_eq!(
+        top_keys(&stamp),
+        ["round", "at", "verdict", "sources", "faces", "viewpoints", "refutes", "reads", "rest", "nodes"],
+        "印の欄の並び"
+    );
+    let anchor = findings_fixture("stamp-expected.yaml");
+    assert_eq!((anchor.lines().count(), anchor.len()), (34, 1_342), "凍結 anchor の行数と byte 数");
+    assert_eq!(without_digests(&stamp), anchor, "印:\n{stamp}");
+}
+
+#[test]
+fn f99_the_stamp_rest_is_recomputable() {
+    let round = Round::passing("f99-rest");
+    let run = round.stamp();
+    assert_eq!(code(&run, "--stamp"), 0, "{}", stdout(&run));
+    let stamp = fs::read_to_string(round.stamp_path()).unwrap();
+    let script = repo_root().join("tests/fixtures/schema/node-digest.py");
+    let independent = Command::new("python3").arg(script).arg(&round.src).output();
+    round.done();
+    let rest = value(&stamp, "rest").strip_prefix("sha256 ").expect("rest が sha256 の形でない");
+    assert!(
+        rest.len() == 64 && rest.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "rest: {rest}"
+    );
+    match independent {
+        Ok(out) => {
+            assert_eq!(code(&out, "node-digest.py"), 0, "{}", stderr(&out));
+            let text = stdout(&out);
+            let want = text
+                .lines()
+                .find_map(|l| l.strip_prefix("# 残差 sha256 "))
+                .expect("独立の実装の出力に残差の行が無い");
+            assert_eq!(rest, want, "印の rest が独立の実装の残差の要約値と違う");
+        }
+        Err(e) => eprintln!("# まだ分からない: node-digest.py: python3 を起動できない: {e}"),
+    }
+}
+
+#[test]
+fn f99_the_stamp_node_rows_are_the_index() {
+    let round = Round::passing("f99-index");
+    let run = round.stamp();
+    assert_eq!(code(&run, "--stamp"), 0, "{}", stdout(&run));
+    let stamp = fs::read_to_string(round.stamp_path()).unwrap();
+    let print = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .args(["graph", "--print", "--dir"])
+        .arg(&round.src)
+        .output()
+        .expect("folio を起動できない");
+    round.done();
+    assert_eq!(code(&print, "folio graph --print"), 0, "{}", stderr(&print));
+    let index: Vec<(String, String)> = stdout(&print)
+        .lines()
+        .take_while(|l| !l.starts_with("# 辺"))
+        .filter(|l| !l.starts_with('#'))
+        .map(|l| {
+            let cols: Vec<&str> = l.split('\t').collect();
+            assert_eq!(cols.len(), 5, "節点の行の欄の数: {l}");
+            (cols[0].to_string(), cols[3].to_string())
+        })
+        .collect();
+    let rows = node_rows(&stamp);
+    assert_eq!(rows.len(), 23, "nodes の行の数");
+    assert_eq!(rows, index, "印の nodes が索引の節点の行と同じ数・同じ順で一致しない");
 }

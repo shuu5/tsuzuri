@@ -46,7 +46,7 @@ const EDGE_TYPES: [&str; 17] = [
     "amends",
 ];
 
-const NODES_HEAD: &str = "# 節点（1 行 = id / 種類 / file / 題 36 字・タブ区切り）";
+const NODES_HEAD: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）";
 const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
 
 fn repo_root() -> PathBuf {
@@ -120,10 +120,27 @@ struct Work {
 
 impl Work {
     fn new(case: &str) -> Work {
+        Work::from(case, "design-intent")
+    }
+
+    /// 凍結した土台 tests/fixtures/floor_base/design-intent の写し（便 99）。
+    fn base(case: &str) -> Work {
+        Work::from(case, "tests/fixtures/floor_base/design-intent")
+    }
+
+    fn from(case: &str, src: &str) -> Work {
         let root = std::env::temp_dir().join(format!("folio-graph-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        copy_tree(&repo_root().join("design-intent"), &root.join("design-intent"));
+        copy_tree(&repo_root().join(src), &root.join("design-intent"));
         Work { root }
+    }
+
+    /// 写しの file の中の `from`（ちょうど 1 か所）を `to` に替える。
+    fn replace(&self, file: &str, from: &str, to: &str) {
+        let path = self.dir().join(file);
+        let text = fs::read_to_string(&path).unwrap();
+        assert_eq!(text.matches(from).count(), 1, "{file}: 「{from}」が 1 か所でない");
+        fs::write(&path, text.replacen(from, to, 1)).unwrap();
     }
 
     fn dir(&self) -> PathBuf {
@@ -218,7 +235,7 @@ fn f94_the_frozen_base_index_matches_the_anchor() {
     assert_eq!(counts, "# 節点 189・辺 576・型 10・端が節点でない参照 26");
     assert_eq!(parts.summary, counts, "要約の 1 行");
     assert_eq!(text.lines().count(), 768, "出力の行数");
-    assert_eq!(text.len(), 29_558, "出力の byte 数");
+    assert_eq!(text.len(), 31_277, "出力の byte 数（便 99 で要約値の欄を足した）");
     for (name, bytes) in [
         ("節点の表", joined(&parts.nodes)),
         ("辺の表", joined(&parts.edges)),
@@ -239,7 +256,7 @@ fn f94_the_real_sources_build_the_closed_lists() {
     assert!(!parts.edges.is_empty(), "辺が 1 本も無い");
     for line in &parts.nodes {
         let cols: Vec<&str> = line.split('\t').collect();
-        assert_eq!(cols.len(), 4, "節点の行の欄の数: {line}");
+        assert_eq!(cols.len(), 5, "節点の行の欄の数: {line}");
         assert!(NODE_KINDS.contains(&cols[1]), "閉じた一覧に無い種類: {line}");
     }
     for line in &parts.edges {
@@ -326,7 +343,7 @@ fn f94_the_title_is_folded_into_one_line() {
         .into_iter()
         .find(|l| l.starts_with("P-1.1\t"))
         .expect("P-1.1 の節点の行が無い");
-    let title = line.split('\t').nth(3).expect("題の欄が無い");
+    let title = line.split('\t').nth(4).expect("題の欄が無い");
     assert!(!title.contains('\n') && !title.contains('\t'), "題: {title:?}");
     assert!(!title.contains("  "), "連なった空白が残った: {title:?}");
     assert_eq!(title, title.trim(), "前後の空白が残った: {title:?}");
@@ -450,5 +467,140 @@ fn f96_a_broken_source_makes_the_digest_inconclusive() {
     assert_eq!(first.stderr, second.stderr, "2 度当てた標準エラーが byte 一致しない");
     let mut after = BTreeMap::new();
     snapshot(&work.root, &work.root, &mut after);
+    assert!(before == after, "写しの file が変わった");
+}
+
+// ── 便 99: 節点の要約値（docs/design/delivery-99.md §1 (h) の 1〜6） ──
+
+const F99_SCRIPT: &str = "tests/fixtures/schema/node-digest.py";
+const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
+const F99_ANCHOR_SHA256: &str = "e71740609965710c1994257d9454ad8485b65b55c75cb5c30a74cfd6d411e21f";
+const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+
+/// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。
+fn independent(dir: &Path) -> Option<String> {
+    match Command::new("python3")
+        .arg(repo_root().join(F99_SCRIPT))
+        .arg(dir)
+        .output()
+    {
+        Ok(out) => Some(passed(out)),
+        Err(e) => {
+            eprintln!("# まだ分からない: node-digest.py: python3 を起動できない: {e}");
+            None
+        }
+    }
+}
+
+/// 節点の行の id → 4 列目（要約値）。
+fn digest_column(text: &str) -> BTreeMap<String, String> {
+    split(text)
+        .nodes
+        .iter()
+        .map(|line| {
+            let cols: Vec<&str> = line.split('\t').collect();
+            assert_eq!(cols.len(), 5, "節点の行の欄の数: {line}");
+            (cols[0].to_string(), cols[3].to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn f99_the_independent_script_matches_the_anchor() {
+    let anchor = fs::read(repo_root().join(F99_ANCHOR)).expect("凍結 anchor を読めない");
+    assert_eq!(anchor.iter().filter(|b| **b == b'\n').count(), 192, "anchor の行数");
+    assert_eq!(anchor.len(), 3_007, "anchor の byte 数");
+    let hex = sha256_hex(&anchor).unwrap_or_else(|e| panic!("anchor の要約値を測れない: {e}"));
+    assert_eq!(hex, F99_ANCHOR_SHA256, "sha256sum で測った anchor の要約値");
+    if let Some(out) = independent(&repo_root().join(FLOOR_BASE)) {
+        assert!(out.as_bytes() == anchor.as_slice(), "独立の実装の出力が anchor と違う:\n{out}");
+    }
+}
+
+#[test]
+fn f99_the_index_carries_the_digest_column() {
+    let anchor = fs::read_to_string(repo_root().join("tests/fixtures/schema/graph-anchor.txt")).unwrap();
+    let text = printed(&repo_root().join(FLOOR_BASE));
+    let parts = split(&text);
+    assert_eq!(Some(parts.summary), anchor.lines().nth(1), "要約の 1 行");
+    assert_eq!((text.lines().count(), text.len()), (768, 31_277), "出力の行数と byte 数");
+    for line in &parts.nodes {
+        let digest = line.split('\t').nth(3).unwrap_or_default();
+        assert!(
+            digest.len() == 8 && digest.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+            "4 列目が 16 進の小文字 8 字でない: {line}"
+        );
+    }
+    assert_eq!(digest_column(&text).len(), 189, "節点の数");
+    let edges = sha256_hex(&joined(&parts.edges)).unwrap();
+    assert_eq!(edges, anchor_hex(&anchor, "辺の表"), "辺の表の要約値");
+    assert!(edges.starts_with("a09c3f55"), "辺の表の要約値が便 94 の値から動いた: {edges}");
+    let nodes = sha256_hex(&joined(&parts.nodes)).unwrap();
+    assert_eq!(nodes, anchor_hex(&anchor, "節点の表"), "節点の表の要約値");
+    let whole = sha256_hex(text.as_bytes()).unwrap();
+    assert_eq!(whole, anchor_hex(&anchor, "出力全体"), "出力全体の要約値");
+}
+
+#[test]
+fn f99_the_digest_column_is_the_independent_value() {
+    let anchor = fs::read_to_string(repo_root().join(F99_ANCHOR)).unwrap();
+    let want: BTreeMap<String, String> = anchor
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(|l| {
+            let (id, hex) = l.split_once('\t').expect("anchor の行にタブが無い");
+            (id.to_string(), hex.to_string())
+        })
+        .collect();
+    assert_eq!(want.len(), 189, "anchor の節点の数");
+    let got = digest_column(&printed(&repo_root().join(FLOOR_BASE)));
+    assert_eq!(got, want, "索引の 4 列目が独立の実装の値と違う");
+}
+
+#[test]
+fn f99_an_edge_only_change_moves_no_digest() {
+    let work = Work::base("f99-edges");
+    let before = digest_column(&printed(&work.dir()));
+    work.replace(
+        "constitution.yaml",
+        "    relations: {reqs: [FR1, FR2, AC1]}\n",
+        "    relations: {reqs: [FR1, FR2, FR3, AC1]}\n",
+    );
+    work.replace("rules.yaml", "  - {id: R-1, article: N-5, ", "  - {id: R-1, article: N-5, refs: [P-4], ");
+    work.replace(
+        "srs.yaml",
+        "    basis: [P-1]\n    verify: {method: test, how: 決まった回答 5 つを入れ、支度表が期待どおりか比較する, ac: [AC1]}\n",
+        "    basis: [P-1, P-4]\n    verify: {method: test, how: 決まった回答 5 つを入れ、支度表が期待どおりか比較する, ac: [AC1, AC2]}\n",
+    );
+    work.replace("adr/ADR-1.yaml", "basis: [P-8, ", "basis: [P-1, P-8, ");
+    let after = digest_column(&printed(&work.dir()));
+    assert_eq!(after.len(), 189, "節点の数");
+    assert_eq!(before, after, "辺の欄だけの変更で要約値が動いた");
+}
+
+#[test]
+fn f99_a_body_change_moves_exactly_one_digest() {
+    let work = Work::base("f99-body");
+    let before = digest_column(&printed(&work.dir()));
+    work.replace("srs.yaml", "    shall: folio は 5 問以下", "    shall: folio は 6 問以下");
+    let after = digest_column(&printed(&work.dir()));
+    let moved: Vec<&String> = before.keys().filter(|id| before[*id] != after[*id]).collect();
+    assert_eq!(moved, ["FR1"], "動いた要約値");
+}
+
+#[test]
+fn f99_a_scan_that_disagrees_is_inconclusive() {
+    let work = Work::base("f99-disagree");
+    // 規範文の頭の行の id の欄を残したまま、行の逐語が節点の頭と読めない形に崩す（索引は YAML として読める）
+    work.replace("constitution.yaml", "      - {id: P-1.1, ", "      -  {id: P-1.1, ");
+    let mut before = BTreeMap::new();
+    snapshot(&work.root, &work.root, &mut before);
+    let out = print(&work.dir());
+    let mut after = BTreeMap::new();
+    snapshot(&work.root, &work.root, &mut after);
+    assert_eq!(out.status.code(), Some(2), "終了コード");
+    assert!(out.stdout.is_empty(), "表が出た: {}", String::from_utf8_lossy(&out.stdout));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("まだ分からない") && err.contains("食い違う") && err.contains("P-1.1"), "{err}");
     assert!(before == after, "写しの file が変わった");
 }

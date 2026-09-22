@@ -45,7 +45,7 @@
 //!
 //! 便 95（docs/design/delivery-95.md §1 (f)）: 命令は 9 本目の file graph.yaml（索引の欄の決まり・生成区間は末尾）も
 //! 順に見る（合格の標準出力は 9 行）。
-//! f95_ 1. graph.yaml の生成区間が 28 行・2106 byte で凍結 anchor と byte 一致・anchor の要約値。
+//! f95_ 1. graph.yaml の生成区間が 35 行・3607 byte（便 99 で 28 行・2106 byte から）で凍結 anchor と byte 一致・anchor の要約値。
 //! f95_ 2. --check → 0・9 行・9 行目が graph.yaml。
 //! f95_ 3. 生成区間の 1 byte を書き換えて --check → 1・理由に graph.yaml・--write で元の byte に戻る。
 //! f95_ 4. 生成区間の node_kinds と edge_types が folio graph --print の出す種類と型を漏れなく覆う。
@@ -1038,9 +1038,10 @@ fn f89_schema_teeth_are_split_and_under_the_cap() {
 
 /// 便 95 (c) 凍結 anchor の置き場と自己検査の値（設計判断の席が独立の実装で組んだ）。
 const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
-const F95_GRAPH_LINES: usize = 28;
-const F95_GRAPH_BYTES: usize = 2106;
-const F95_GRAPH_SHA256: &str = "c4385eb354b96cd2979400572d406bd190a54318e35673fa13895bb06adeeccc";
+/// 便 99 で node の digest と edge_fields・edge_fields_note・digest_note を足した値（docs/design/delivery-99.md §1 (f)）。
+const F95_GRAPH_LINES: usize = 35;
+const F95_GRAPH_BYTES: usize = 3607;
+const F95_GRAPH_SHA256: &str = "7e2515a7727d84e4df0449d54577f842778f4e244701622986f3098c51eb947b";
 
 /// 生成区間の変異（node_kinds の行の 判断の記録 の末尾の 1 字）。
 const F95_DRIFT_FROM: &str = ", 判断の記録]\n";
