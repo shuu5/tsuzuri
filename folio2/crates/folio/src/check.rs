@@ -588,10 +588,49 @@ fn check_rules(root: &Node, report: &mut Report) {
                 &["id", "article", "what"],
                 report,
             );
+            check_rule_refs(row, report);
             all.push(row);
         }
     }
     duplicate_ids(FILE, all, report);
+}
+
+/// 規則の表の行の refs（便 91 §1 (c)）。各項は id の形で、その行自身の id でも article の値でもない（article の条以外）。
+/// 実在は refs.rs（行 R-4 の 1 つ目の数え）と link.rs（A-2）の網が数えるので重ねない。
+fn check_rule_refs(row: &Node, report: &mut Report) {
+    const FILE: &str = "rules.yaml";
+    let key = rules::ROW_REFS;
+    let at = format!("行 {}", row_id(row));
+    match row.get(key) {
+        None | Some(Node::Null) => {}
+        Some(Node::Seq(items)) => {
+            let own = [
+                row.get("id").and_then(Node::as_str),
+                row.get("article").and_then(Node::as_str),
+            ];
+            for r in items {
+                let value = r.as_str();
+                if !value.is_some_and(adr::is_basis_id) {
+                    report.violation(
+                        "schema",
+                        format!(
+                            "{FILE}: {at} の {key}「{}」が id の形でない（条・要件・rules 行・判断の記録）",
+                            value.unwrap_or("?")
+                        ),
+                    );
+                } else if own.contains(&value) {
+                    report.violation(
+                        "schema",
+                        format!(
+                            "{FILE}: {at} の {key}「{}」が自分の id か article の条である（article の条以外を書く）",
+                            value.unwrap_or("?")
+                        ),
+                    );
+                }
+            }
+        }
+        Some(_) => report.violation("schema", format!("{FILE}: {at} の {key} が一覧でない")),
+    }
 }
 
 fn check_vocabulary(root: &Node, report: &mut Report) {

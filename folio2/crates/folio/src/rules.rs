@@ -21,9 +21,20 @@ pub const THRESHOLD_REQUIRED: [&str; 9] = [
     "id", "article", "what", "value", "kind", "status", "ruling", "ruled_at", "stage",
 ];
 
+/// 行の欄 refs の字（便 91・ADR-13 決定 (3-b)（イ））。その行の散文が依っている、article の条以外の id の一覧。
+/// 床（`check.rs` の `check_rule_refs`）は id の形と、その行自身の id でも article の値でもないことと、一覧であることを数える。
+/// 実在は refs.rs と link.rs の網が数える（重ねない）。
+pub const ROW_REFS: &str = "refs";
+
 /// 閾値の行が持ってよい欄。
-pub const THRESHOLD_OPTIONAL: [&str; 5] =
-    ["basis", "projection", "same_failure", "population", "note"];
+pub const THRESHOLD_OPTIONAL: [&str; 6] = [
+    "basis",
+    "projection",
+    "same_failure",
+    "population",
+    "note",
+    ROW_REFS,
+];
 
 /// 作法の行（D-n）が必ず持つ欄。
 pub const DISCIPLINE_REQUIRED: [&str; 7] = [
@@ -31,7 +42,7 @@ pub const DISCIPLINE_REQUIRED: [&str; 7] = [
 ];
 
 /// 作法の行が持ってよい欄。
-pub const DISCIPLINE_OPTIONAL: [&str; 1] = ["note"];
+pub const DISCIPLINE_OPTIONAL: [&str; 2] = ["note", ROW_REFS];
 
 /// 規則の表の行の種別（規則の表だけの値域・便 54・憲法から導出した型と同じ形）。値の字面を書く唯一の所。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,6 +164,12 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ("required", Floor::Strs(&DISCIPLINE_REQUIRED)),
             ("optional", Floor::Strs(&DISCIPLINE_OPTIONAL)),
         ]),
+    ),
+    (
+        "refs_note",
+        Floor::Val(
+            "その行の散文が依っている、article の条以外の id の一覧（ほかの行・要件書の id・判断の記録・別の条と規範文）。各項は id の形（P-5.2）で、その行自身の id と article の値は書かない。未解決は行 R-4 の 1 つ目の数えが拾い、判断の記録の未実在は A-2 の網が拾う（R-4 の what と値と母集団は変えない）",
+        ),
     ),
     (
         "enums",

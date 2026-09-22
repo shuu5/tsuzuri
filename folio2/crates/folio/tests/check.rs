@@ -917,3 +917,107 @@ fn f90_adrs_that_is_not_a_list_is_a_violation() {
     w.mutate(F90_FR19_ADRS, "\n    adrs: 判断の記録\n");
     assert_srs_item_violation(&w, &["FR19", "adrs が一覧でない"]);
 }
+
+// ── 規則の表の行の条以外を指す欄 refs（便 91・ADR-13 決定 (3-b)（イ）） ──
+
+/// 便 91 (g) の変異の当て先 = 写しの行 R-4 の refs（実の rules.yaml でちょうど 1 か所）。
+const F91_R4_REFS: &str = ", refs: [AC6]}";
+
+/// 便 91 (b) の書き写した 27 対（行 → refs）。
+const F91_ROWS: [(&str, &[&str]); 14] = [
+    ("R-1", &["P-4.2", "P-6.3", "D-3"]),
+    ("R-3", &["P-4.2", "AC2"]),
+    ("R-4", &["AC6"]),
+    ("R-5", &["P-2.4"]),
+    ("R-12", &["P-4.2", "R-2"]),
+    ("R-13", &["P-4.2"]),
+    ("R-14", &["P-4.1", "P-11.1", "N-3.1", "R-7"]),
+    ("R-15", &["P-10.3", "A-3.1", "CON2", "ADR-4"]),
+    ("R-16", &["P-6.3", "P-10.1", "ADR-3"]),
+    ("R-17", &["P-4.2"]),
+    ("D-3", &["R-1"]),
+    ("D-10", &["P-5.2", "R-8"]),
+    ("D-11", &["P-5.6"]),
+    ("D-12", &["ADR-8"]),
+];
+
+/// 写しの rules.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（rules.yaml の場所）で `words` を全部含む。
+fn assert_rules_violation(w: &Work, words: &[&str]) {
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "違反は変異の 1 件だけのはず: {v:?}");
+    assert!(v[0].contains("rules.yaml"), "{v:?}");
+    for word in words {
+        assert!(v[0].contains(word), "「{word}」が無い: {v:?}");
+    }
+}
+
+#[test]
+fn f91_the_real_rules_carry_the_refs_field() {
+    let w = Work::new("f91-real");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    let text = fs::read_to_string(w.rules()).unwrap();
+    assert_eq!(text.matches("refs: [").count(), 14, "refs の行の数");
+    let mut total = 0;
+    for line in text.lines().filter(|l| l.contains("refs: [")) {
+        let id = line
+            .strip_prefix("  - {id: ")
+            .and_then(|l| l.split(',').next())
+            .unwrap_or_else(|| panic!("行の形でない: {line}"));
+        let (_, want) = F91_ROWS
+            .iter()
+            .find(|(row, _)| *row == id)
+            .unwrap_or_else(|| panic!("表に無い行: {id}"));
+        let body = line
+            .rsplit_once(", refs: [")
+            .and_then(|(_, b)| b.strip_suffix("]}"))
+            .unwrap_or_else(|| panic!("行の末尾の一覧でない: {id}"));
+        let got: Vec<&str> = body.split(", ").collect();
+        assert_eq!(got, *want, "{id} の refs");
+        total += got.len();
+    }
+    assert_eq!(total, 27, "refs の id の合計");
+}
+
+#[test]
+fn f91_a_value_that_is_not_an_id_is_a_violation() {
+    let w = Work::new("f91-not-id");
+    w.mutate_rules(F91_R4_REFS, ", refs: [xyz]}");
+    assert_rules_violation(&w, &["R-4", "refs", "xyz", "id の形でない"]);
+}
+
+#[test]
+fn f91_the_article_of_the_row_is_a_violation() {
+    let w = Work::new("f91-article");
+    w.mutate_rules(F91_R4_REFS, ", refs: [P-5]}");
+    assert_rules_violation(&w, &["R-4", "refs", "P-5", "自分の id か article の条である"]);
+}
+
+#[test]
+fn f91_refs_that_is_not_a_list_is_a_violation() {
+    let w = Work::new("f91-not-list");
+    w.mutate_rules(F91_R4_REFS, ", refs: AC6}");
+    assert_rules_violation(&w, &["R-4", "refs が一覧でない"]);
+}
+
+#[test]
+fn f91_an_id_that_does_not_exist_is_a_violation() {
+    let w = Work::new("f91-missing");
+    w.mutate_rules(F91_R4_REFS, ", refs: [AC99]}");
+    assert_rules_violation(&w, &["thresholds[3].refs[0]", "AC99", "実在しない"]);
+}

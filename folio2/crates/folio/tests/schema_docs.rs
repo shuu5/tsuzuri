@@ -57,10 +57,10 @@ const CEILING_REGION_SHA256: &str =
     "5ad2f19b7d8c4a197865c5280f4c82653f97ef6dc0b9b45186a2678539429fa2";
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
-const RULES_REGION_LINES: usize = 27;
-const RULES_REGION_BYTES: usize = 1833;
+const RULES_REGION_LINES: usize = 30;
+const RULES_REGION_BYTES: usize = 2269;
 const RULES_REGION_SHA256: &str =
-    "54580596905e2d70d834c34553d3ad9000dd356473a0df0f60e8afe8fafe652c";
+    "d3f7f85d910a08c767cfe908219b1a89ceb906982a49dc2fb45313cbe9f6cf7f";
 
 /// 便 76 (b) 凍結 anchor: index.yaml の生成区間（設計判断の席が独立に組んだ・tests/fixtures/schema/index-region.txt と同じ byte）。
 const INDEX_REGION_LINES: usize = 9;
@@ -846,16 +846,16 @@ const F85_RULES_ANCHOR: &str = "tests/fixtures/schema/rules-region.txt";
 fn f85_rules_region_matches_the_new_anchor() {
     let w = Work::new("f85-anchor");
     let out = w.schema(&["--check"]);
-    assert_outcome(&out, 0, &["一致", "rules.yaml・1833 byte"]);
+    assert_outcome(&out, 0, &["一致", "rules.yaml・2269 byte"]);
     let anchor_text = fs::read_to_string(repo_root().join(F85_RULES_ANCHOR)).unwrap();
     let text = w.read_rules();
     assert_eq!(region(&text), anchor_text, "rules.yaml の生成区間が anchor と byte 一致");
-    assert_eq!(anchor_text.lines().count(), 27, "anchor の行数");
-    assert_eq!(anchor_text.len(), 1833, "anchor の byte 数");
+    assert_eq!(anchor_text.lines().count(), 30, "anchor の行数");
+    assert_eq!(anchor_text.len(), 2269, "anchor の byte 数");
     let hex = sha256_hex(anchor_text.as_bytes())
         .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
     assert_eq!(
-        hex, "54580596905e2d70d834c34553d3ad9000dd356473a0df0f60e8afe8fafe652c",
+        hex, "d3f7f85d910a08c767cfe908219b1a89ceb906982a49dc2fb45313cbe9f6cf7f",
         "sha256sum で測った anchor の要約値"
     );
 }

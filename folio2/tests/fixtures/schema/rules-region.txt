@@ -4,8 +4,11 @@ schema:
   top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。thresholds と discipline は人が書き、schema は生成区間
   threshold_row:
     required: [id, article, what, value, kind, status, ruling, ruled_at, stage]
-    optional: [basis, projection, same_failure, population, note]
-  discipline_row: {required: [id, article, what, kind, status, ruling, ruled_at], optional: [note]}
+    optional: [basis, projection, same_failure, population, note, refs]
+  discipline_row:
+    required: [id, article, what, kind, status, ruling, ruled_at]
+    optional: [note, refs]
+  refs_note: その行の散文が依っている、article の条以外の id の一覧（ほかの行・要件書の id・判断の記録・別の条と規範文）。各項は id の形（P-5.2）で、その行自身の id と article の値は書かない。未解決は行 R-4 の 1 つ目の数えが拾い、判断の記録の未実在は A-2 の網が拾う（R-4 の what と値と母集団は変えない）
   enums:
     kind: [deny, build-check, detect, human-review]
     status: [仮, 凍結, 未定]
