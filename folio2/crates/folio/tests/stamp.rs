@@ -91,22 +91,46 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
-/// 天井の正本の viewpoints の各 reads を SAME_READS に揃える（一時 dir の写しの上だけ）。
-fn same_reads(ceiling: &str) -> String {
+/// 天井の正本の viewpoints の各 reads を、観点の id から引いた行の塊に差し替える（一時 dir の写しの上だけ）。
+fn put_reads(ceiling: &str, reads: &dyn Fn(&str) -> String) -> String {
     let mut out = String::new();
+    let mut id = String::new();
     let mut in_reads = false;
     for line in ceiling.split_inclusive('\n') {
         if in_reads && line.starts_with("      - {doc: ") {
             continue;
         }
         in_reads = false;
+        if let Some(rest) = line.strip_prefix("  - id: ") {
+            id = rest.trim_end().to_string();
+        }
         out.push_str(line);
         if line == "    reads:\n" {
-            out.push_str(SAME_READS);
+            out.push_str(&reads(&id));
             in_reads = true;
         }
     }
     out
+}
+
+/// 便 104 の土台 split-reads.yaml の観点ごとの行の塊（観点の id → 字下げ 6 の reads の行）。
+fn split_reads() -> BTreeMap<String, String> {
+    let text = fs::read_to_string(repo_root().join("tests/fixtures/ceiling/split-reads.yaml")).unwrap();
+    let mut blocks: BTreeMap<String, String> = BTreeMap::new();
+    let mut id = String::new();
+    for line in text.split_inclusive('\n') {
+        if line.starts_with('#') {
+            continue;
+        }
+        if let Some(key) = line.strip_suffix(":\n") {
+            id = key.to_string();
+            blocks.insert(id.clone(), String::new());
+        } else {
+            assert!(line.starts_with("      - {doc: "), "split-reads.yaml の行の形でない: {line}");
+            blocks.get_mut(&id).expect("観点の id の前に行が在る").push_str(line);
+        }
+    }
+    blocks
 }
 
 /// 所見 file の record の read と bundle を、この周の 5 文書と観点の digest.txt に合わせる。
@@ -134,19 +158,36 @@ struct Round {
 impl Round {
     /// 凍結 fixture の束を写し、reads を揃えて `--write` で組み、pass-coherence.yaml を 4 観点に写す。
     fn passing(case: &str) -> Round {
+        Round::build(case, &|_| SAME_READS.to_string())
+    }
+
+    /// 便 104: 4 観点が同じ 5 文書の違う欄を読む周（split-reads.yaml）。
+    fn split(case: &str) -> Round {
+        let blocks = split_reads();
+        Round::build(case, &|id| blocks.get(id).cloned().unwrap_or_default())
+    }
+
+    /// 凍結 fixture の束を写し、観点ごとの reads を差し替えて `--write` で組み、pass-coherence.yaml を 4 観点に写す。
+    fn build(case: &str, reads: &dyn Fn(&str) -> String) -> Round {
         let td = temp_dir(case);
         let src = td.join("src");
         let faces = td.join("faces");
         copy_tree(&bundle_fixture().join("source"), &src);
         copy_tree(&bundle_fixture().join("faces"), &faces);
         let ceiling = src.join("ceiling.yaml");
-        let aligned = same_reads(&fs::read_to_string(&ceiling).unwrap());
+        let replaced = put_reads(&fs::read_to_string(&ceiling).unwrap(), reads);
+        let mut lines = 0;
+        for id in VIEWPOINTS {
+            let block = reads(id);
+            assert!(!block.is_empty() && replaced.contains(&block), "{id}: reads を差し込めない");
+            lines += block.lines().count();
+        }
         assert_eq!(
-            aligned.matches(SAME_READS).count(),
-            4,
-            "reads を 4 観点に揃えられない"
+            replaced.matches("      - {doc: ").count(),
+            lines,
+            "reads を 4 観点に差し込めない"
         );
-        fs::write(&ceiling, aligned).unwrap();
+        fs::write(&ceiling, replaced).unwrap();
         let out = td.join("stamp-case");
         let run = folio_ceiling(&src, Some(&faces), &out, &["--write"]);
         assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
@@ -291,6 +332,84 @@ fn union_hex(out: &Path, sub: &str) -> Result<String, String> {
     sha256_hex(&bytes)
 }
 
+/// 流れの形の行 `{key: 値, …}` から欄 `key` の値を取る。
+fn flow_field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let head = format!("{key}: ");
+    let at = line
+        .find(&format!("{{{head}"))
+        .map(|i| i + 1)
+        .or_else(|| line.find(&format!(", {head}")).map(|i| i + 2))?;
+    let rest = &line[at + head.len()..];
+    Some(rest[..rest.find([',', '}'])?].trim())
+}
+
+/// folio を呼ばずに測った正本の要約値（便 104・§1 (e) の 2）: 天井の正本の documents と viewpoints の reads から文書の
+/// file（dir 形は直下の .yaml）を集め、`<dir>` からの相対 path の byte 順に連結して外の命令 sha256sum で測る。
+/// 集められないときは歯を落とす（P-4.1）。Err は sha256sum の側の失敗だけ。
+fn canonical_hex(dir: &Path) -> Result<String, String> {
+    let ceiling = fs::read_to_string(dir.join("ceiling.yaml")).expect("天井の正本が読めない");
+    let mut documents: BTreeMap<String, String> = BTreeMap::new();
+    let mut reads: Vec<String> = Vec::new();
+    let mut in_documents = false;
+    for line in ceiling.lines() {
+        if !line.starts_with(' ') {
+            in_documents = line == "documents:";
+            continue;
+        }
+        if in_documents && let (Some(id), Some(file)) = (flow_field(line, "id"), flow_field(line, "file")) {
+            documents.insert(id.to_string(), file.to_string());
+        }
+        if line.starts_with("      - {doc: ") {
+            let doc = flow_field(line, "doc").expect("reads の行に doc が無い").to_string();
+            if !reads.contains(&doc) {
+                reads.push(doc);
+            }
+        }
+    }
+    assert!(!documents.is_empty(), "天井の正本の documents が読めない");
+    assert!(!reads.is_empty(), "天井の正本の reads が読めない");
+    let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    for doc in &reads {
+        let file = documents.get(doc).unwrap_or_else(|| panic!("{doc}: 文書の一覧に無い"));
+        if let Some(sub) = file.strip_suffix('/') {
+            for entry in fs::read_dir(dir.join(sub)).unwrap() {
+                let entry = entry.unwrap();
+                let name = entry.file_name().into_string().unwrap();
+                if entry.file_type().unwrap().is_file() && name.ends_with(".yaml") {
+                    files.insert(format!("{file}{name}"), fs::read(entry.path()).unwrap());
+                }
+            }
+        } else {
+            files.insert(file.clone(), fs::read(dir.join(file)).unwrap());
+        }
+    }
+    assert!(files.len() >= reads.len(), "文書の file が集められない: {files:?}", files = files.keys());
+    let bytes: Vec<u8> = files.into_values().flatten().collect();
+    assert!(!bytes.is_empty(), "正本の byte 列が空");
+    sha256_hex(&bytes)
+}
+
+/// sha256sum を起動できないときだけ まだ分からない の 1 行で済ませる。それ以外の Err は歯を落とす。
+fn canonical_or_unknown(dir: &Path) -> Option<String> {
+    match canonical_hex(dir) {
+        Ok(hex) => Some(hex),
+        Err(why) if why.starts_with("sha256sum を起動できない") => {
+            eprintln!("# まだ分からない: 正本の要約値を測れない: {why}");
+            None
+        }
+        Err(why) => panic!("正本の要約値を測れない: {why}"),
+    }
+}
+
+/// `folio ceiling --dir src --gate --write-set src/srs.yaml`（今の dir = 周の一時 dir）。
+fn folio_gate(round: &Round) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_folio"))
+        .current_dir(&round.td)
+        .args(["ceiling", "--dir", "src", "--gate", "--write-set", "src/srs.yaml"])
+        .output()
+        .expect("folio を起動できない")
+}
+
 // ── 1. 凍結の形 ──
 
 #[test]
@@ -315,18 +434,18 @@ fn stamp_sources_digest_is_recomputable() {
     let run = round.stamp();
     assert_eq!(code(&run, "--stamp"), 0, "{}", stdout(&run));
     let stamp = fs::read_to_string(round.stamp_path()).unwrap();
-    let measured = [
-        ("sources", union_hex(&round.out, "sources")),
-        ("faces", union_hex(&round.out, "faces")),
-    ];
+    // sources は正本から測り直す（便 104）・faces は束の faces/ の和集合を測り直す
+    let sources = canonical_or_unknown(&round.src);
+    let faces = union_hex(&round.out, "faces")
+        .map_err(|why| eprintln!("# まだ分からない: 要約値を測れない: {why}"))
+        .ok();
     round.done();
-    for (key, hex) in measured {
+    for (key, hex) in [("sources", sources), ("faces", faces)] {
         let got = value(&stamp, key);
         let got = got.strip_prefix("sha256 ").expect("sha256 の形でない");
         assert_eq!(got.len(), 64, "{key}: {got}");
-        match hex {
-            Ok(h) => assert_eq!(got, h, "{key}"),
-            Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
+        if let Some(h) = hex {
+            assert_eq!(got, h, "{key}");
         }
     }
 }
@@ -512,4 +631,66 @@ fn f99_the_stamp_node_rows_are_the_index() {
     let rows = node_rows(&stamp);
     assert_eq!(rows.len(), 23, "nodes の行の数");
     assert_eq!(rows, index, "印の nodes が索引の節点の行と同じ数・同じ順で一致しない");
+}
+
+// ── 便 104: 観点ごとに読む欄が違う周（docs/design/delivery-104.md §1 (e)） ──
+
+#[test]
+fn f104_the_stamp_survives_viewpoints_reading_different_fields() {
+    let blocks = split_reads();
+    assert_eq!(
+        blocks.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["coherence", "fidelity", "readability", "reality"],
+        "土台の観点の id"
+    );
+    let distinct: std::collections::BTreeSet<&String> = blocks.values().collect();
+    assert_eq!(distinct.len(), 4, "土台の 4 つの塊が互いに違わない");
+    let round = Round::split("f104-split");
+    let fidelity = fs::read(round.out.join("fidelity/sources/srs.yaml")).unwrap();
+    let readability = fs::read(round.out.join("readability/sources/srs.yaml")).unwrap();
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    round.done();
+    assert_ne!(fidelity, readability, "srs.yaml の写しが観点で同じ byte（読む欄の違いが周に無い）");
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    assert!(stdout(&run).contains("印を書いた"), "{}", stdout(&run));
+    let stamp = stamp.expect("印が無い");
+    let anchor = findings_fixture("stamp-expected.yaml");
+    assert_eq!(without_digests(&stamp), anchor, "印:\n{stamp}");
+}
+
+#[test]
+fn f104_the_stamp_sources_is_the_canonical_digest() {
+    let split = Round::split("f104-canon-split");
+    let run = split.stamp();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let stamp = fs::read_to_string(split.stamp_path()).unwrap();
+    let canonical = canonical_or_unknown(&split.src);
+    split.done();
+    let same = Round::passing("f104-canon-same");
+    let run = same.stamp();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let aligned = fs::read_to_string(same.stamp_path()).unwrap();
+    same.done();
+    let got = value(&stamp, "sources");
+    let hex = got.strip_prefix("sha256 ").expect("sources が sha256 の形でない");
+    assert!(
+        hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "sources: {got}"
+    );
+    if let Some(want) = canonical {
+        assert_eq!(hex, want, "印の sources が正本の要約値と違う");
+    }
+    assert_eq!(got, value(&aligned, "sources"), "読む欄を揃えた周と sources が違う");
+}
+
+#[test]
+fn f104_the_gate_passes_the_stamp_it_just_wrote() {
+    let round = Round::split("f104-gate");
+    let run = round.stamp();
+    let gate = folio_gate(&round);
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    assert_eq!(code(&gate, "--gate"), 0, "{}{}", stdout(&gate), stderr(&gate));
+    assert!(stdout(&gate).contains("正本の要約値が同じ"), "{}", stdout(&gate));
 }

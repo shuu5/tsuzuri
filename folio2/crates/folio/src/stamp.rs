@@ -5,7 +5,10 @@
 //! 印の欄は閉じた一覧でこの順: round・at・verdict・sources・faces・viewpoints・refutes・reads・rest・nodes
 //! （rest と nodes は便 99: 残差の要約値と節点ごとの要約値の表・組み方は `graph::stamp_table`）。
 //! 決定性: 時刻・絶対 path・環境の値を書かない（round は置き場の dir の名・at は所見 file の起動の記録から取る）。
-//! 全部か無しか: 観点のどれかの束・所見 file・起動の記録が読めない、または正本と面の写しが観点で食い違うときは
+//! 欄 sources は束の写しでなく `--dir` の正本から、門と同じ関数（`gate.rs` の `sources_digest`）で測る（便 104・
+//! docs/design/delivery-104.md §1 (b)・FR20 の 正本の要約値）。束の sources/ の写しは便 98 で観点ごとに絞られ、同じ文書でも
+//! 観点で byte が違う。欄 faces は束の faces/ の和集合のまま（面は絞られていない・門は faces を突き合わせない）。
+//! 全部か無しか: 観点のどれかの束・所見 file・起動の記録が読めない、または面の写しが観点で食い違うときは
 //! まだ分からない（終了 2）で file を触らない。既に同じ byte なら書かない。判定の 3 値は印の中身で、命令は書けたら 0。
 
 use std::collections::BTreeSet;
@@ -15,6 +18,7 @@ use std::path::Path;
 use crate::bundle::{self, Ceiling, Files};
 use crate::face::R;
 use crate::findings::{self, Counted};
+use crate::gate;
 use crate::graph;
 use crate::sha256;
 use crate::verdict::Verdict;
@@ -110,8 +114,8 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
             row(&out_dir.join(&vp.id), &vp.id, counted).map_err(|e| format!("{}: {e}", vp.id))?,
         );
     }
-    let sources = union_digest(out_dir, &ceiling, "sources")?;
-    let faces = union_digest(out_dir, &ceiling, "faces")?;
+    let sources = gate::sources_digest(dir, &ceiling)?;
+    let faces = faces_digest(out_dir, &ceiling)?;
 
     let verdicts: Vec<Verdict> = rows.iter().map(|r| r.counted.verdict).collect();
     let verdict = if verdicts.contains(&Verdict::Unknown) {
@@ -225,9 +229,10 @@ fn row(vp_dir: &Path, id: &str, counted: Counted) -> R<Row> {
     })
 }
 
-/// 要約値 = `<out>/<観点>/<sub>/` の下の file を `<sub>/` からの相対 path で和集合にし（同じ相対 path が観点で違う byte
-/// なら Err）、相対 path の byte 順に中身を区切りなしに連結した byte 列の sha256（「sha256 <16 進>」）。
-fn union_digest(out_dir: &Path, ceiling: &Ceiling, sub: &str) -> R<String> {
+/// 面の要約値 = `<out>/<観点>/faces/` の下の file を `faces/` からの相対 path で和集合にし（同じ相対 path が観点で違う
+/// byte なら Err）、相対 path の byte 順に中身を区切りなしに連結した byte 列の sha256（「sha256 <16 進>」）。
+fn faces_digest(out_dir: &Path, ceiling: &Ceiling) -> R<String> {
+    let sub = "faces";
     let mut union = Files::new();
     for vp in &ceiling.viewpoints {
         let mut files = Files::new();

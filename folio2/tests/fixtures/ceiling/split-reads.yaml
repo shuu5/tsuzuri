@@ -1,0 +1,28 @@
+# 便 104 の歯の土台（手書き・docs/design/delivery-104.md §1 (d)）。観点ごとの reads の行の塊。
+# 4 観点とも同じ 5 文書（constitution・rules・srs・adr・design-note）を読み、欄（fields）だけが観点で違う。
+# 行の形は天井の正本 ceiling.yaml の viewpoints[].reads と同じ（字下げ 6 のまま写しの reads: の下へ差し込む）。
+# 束の sources/ の写しは読む最上位の節まで絞られるので、同じ文書の写しが観点で違う byte になる。
+fidelity:
+      - {doc: constitution, fields: [articles.plain, articles.statements.text]}
+      - {doc: rules, fields: [thresholds]}
+      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain]}
+      - {doc: adr, fields: [plain, decision, options.text, figures.refs]}
+      - {doc: design-note, fields: [sections, figures.refs]}
+readability:
+      - {doc: constitution, fields: [north_star, articles.title]}
+      - {doc: rules, fields: [discipline]}
+      - {doc: srs, fields: [goals, scope, requirements.title]}
+      - {doc: adr, fields: [title, plain]}
+      - {doc: design-note, fields: [sections]}
+coherence:
+      - {doc: constitution, fields: [articles, precedence]}
+      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
+      - {doc: adr, fields: [decision, basis, consequences, retreat]}
+      - {doc: design-note, fields: [sections]}
+reality:
+      - {doc: constitution, fields: [precedence, amendment]}
+      - {doc: rules, fields: [thresholds]}
+      - {doc: srs, fields: [requirements, acceptance, constraints]}
+      - {doc: adr, fields: [decision, consequences]}
+      - {doc: design-note, fields: [sections, figures]}

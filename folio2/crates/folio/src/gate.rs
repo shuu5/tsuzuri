@@ -3,8 +3,8 @@
 //! 3 値を返す: 設計文書の正本を書き換えない便は 通す（0）・印が 4 観点とも合格で正本の要約値が同じなら 通す（0）・
 //! 不合格 が在れば 止める（1）・印が無い / 古い / まだ分からない が在れば まだ分からない（2）。
 //! 設計文書の正本 = `<dir>` の下に在り、`<dir>/preview/` の下でなく、path のどの要素も retired でないもの。
-//! 要約値の測り直しは束の規則（`bundle.rs` の sources/ の写し）と同じ集合: 観点の reads が指す文書の file
-//! （file 形はその file・dir 形は直下の .yaml）を `<dir>` からの相対 path の byte 順に連結した sha256。
+//! 正本の要約値は観点の reads が指す文書の file（file 形はその file・dir 形は直下の .yaml）の全文を `<dir>` からの
+//! 相対 path の byte 順に連結した sha256。印（`stamp.rs`）も欄 sources をこの関数で測る（便 104・2 面に実装しない）。
 //! 何も書かない。標準出力は 1 行「folio ceiling: <3 値>（<理由>）」。
 
 use std::collections::BTreeMap;
@@ -162,8 +162,8 @@ fn read_stamp(dir: &Path) -> R<Option<Stamp>> {
     }))
 }
 
-/// 今の正本の要約値（「sha256 <16 進>」）。観点の reads が指す文書だけを、束の sources/ と同じ規則で集める。
-fn sources_digest(dir: &Path, ceiling: &bundle::Ceiling) -> R<String> {
+/// 今の正本の要約値（「sha256 <16 進>」）。観点の reads が指す文書だけを全文で集める（印の sources も同じ関数・便 104）。
+pub(crate) fn sources_digest(dir: &Path, ceiling: &bundle::Ceiling) -> R<String> {
     let documents = documents(dir)?;
     let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut seen: Vec<&str> = Vec::new();
