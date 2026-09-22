@@ -401,10 +401,15 @@ fn f101_the_real_record_carries_the_revises_row() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    // read_dir の順は file system に依るので、file 名で並べてから見る（CI で順が入れ替わり落ちた）
+    let mut paths: Vec<_> = fs::read_dir(w.dir().join("adr"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    paths.sort();
     let mut files = Vec::new();
     let mut rows = Vec::new();
-    for entry in fs::read_dir(w.dir().join("adr")).unwrap() {
-        let path = entry.unwrap().path();
+    for path in paths {
         let text = fs::read_to_string(&path).unwrap();
         if !text.lines().any(|l| l == "revises:") {
             continue;
