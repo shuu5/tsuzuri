@@ -212,7 +212,7 @@ articles:
       - {kind: v1-incident, ref: "ADR-0033 §2.3 で Option B（両面手書き + gate）を選び、45 日後（2026-05-29 → 07-13）の ADR-0050 で Option A'（正本から derive）へ全面転換。ADR-0052（手動同鏡は人の規律に依存し実際に drift）"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（folio inject --check〔CLAUDE.md の生成区間〕・folio build --check〔配信先の全面〕・folio face と folio figure と folio schema の --check。読み物の folio render --check は 2026-09-21 に退役）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
     retreat: {kind: spike, condition: 憲法の改訂表現（del/ins・amended_by）が YAML で表せないと spike 1 で分かったら、憲法だけ二正本 + byte 束縛へ退避する。}
-    relations: {reqs: [FR4, FR6], articles: [P-14]}
+    relations: {reqs: [FR4, FR6], rules: [D-13], articles: [P-14]}
 
   - id: P-7
     title: 番号は増やすだけ（append only）
