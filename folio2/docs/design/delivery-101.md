@@ -8,6 +8,7 @@
 - 並行する便: 便 99（`crates/folio/src/graph.rs`・`stamp.rs`・`gate.rs`・`design-intent/graph.yaml`・`tests/fixtures/schema/` の 4 本・`crates/folio/tests/graph.rs`・`tests/stamp.rs`・`tests/schema_docs.rs`）と、本便の write-set は **1 本も重ならない**。便 100（行 cw）とも重ならない。
 
 - 改訂 b（2026-09-22 18:1x JST・run f2-648.138-20260922T085029Z の質問 about:write-set への回答）: 本便が凍結の土台 tests/fixtures/floor_base/design-intent/adr/schema.yaml の写しを直すと、便 99（main c7e05bb・本便の契約の base 420d910 の後に着地）の凍結 anchor tests/fixtures/schema/node-digest-anchor.txt の残差の 2 行（191〜192 行 = 残差の sha256 と byte の内訳）と、crates/folio/tests/graph.rs の F99_ANCHOR_SHA256（anchor file の sha256）が変わり、歯 f99_the_independent_script_matches_the_anchor が赤になる。schema.yaml は節点でないので節点の要約値（1〜189 行）と graph-anchor.txt は動かない。この 2 file を write-set に足す。直し方は、写しを直した後に独立の script tests/fixtures/schema/node-digest.py を土台に当てて anchor を組み直し（folio の出力から写さない）、その file の sha256sum を F99_ANCHOR_SHA256 に写す。残差以外の行が 1 byte でも変わったら本便の直しが間違っている。
+- 改訂 c（2026-09-22 18:2x JST・run f2-648.138-20260922T090308Z の審査 FAIL〔section-material-missing〕への応答）: 改訂 b で write-set に足した 2 file を §1 が名指していなかった。(h) に直し方の段落、(i) に運ばないものではない旨、verify に f99_ の歯の行、done にその 1 項を足す。
 ## 1. 目的と中身
 
 判断の記録は、**発効した判断が生きたまま、その決定の範囲が別の判断で変わる**ことを記す型付きの欄を持たない。憲法の条の改訂は amends と条の側の amended_by が持ち、判断を丸ごと置き換える形は supersedes と superseded_by が持ち、その判断が生んだものは便 92 が足した produced が持つが、**判断どうしの改訂**はどれでも受けられない。ADR-13 は自分が ADR-8 の決定 (4) を狭めたことを帰結の散文にしか書けず、決定 (14) が「その欄を欄の決まりへ足す便を列に入れる」と自認している。本便はその 1 本で、判断の記録に改訂の欄 revises を足し、ADR-13 の 1 対を書き写す。欄の決まりの正本は実装の型付きの定数（P-5.6）で、設計文書の側の生成区間へは `folio schema --write` が導出する。
@@ -153,13 +154,15 @@ revises:
 
 src は `crates/folio/src/adr.rs` の 1 本だけ（1287・余地 **213**・**+88 の実測**・着地後は 1375・余地 125）。歯は `crates/folio/tests/adr.rs`（353・余地 1147・+110 行の見込み）と `crates/folio/tests/schema.rs`（624・余地 876・**行数は不変**で凍結の 3 つの値だけが変わる）。正本は `design-intent/adr/schema.yaml` の生成区間が 127 行から 136 行になり、`design-intent/adr/ADR-13.yaml` が 3 行（空行 1・欄の見出し 1・項 1）増える（418 → 422・余地 1078）。凍結 anchor `tests/fixtures/schema/adr-region.txt` は 127 行から 136 行になり、欄の決まりの写し 17 本はそれぞれ 3 か所が変わる。size **S**（触る src は `adr.rs` 1 本で、余地 213 は S の見積 100 を上回る。**M の見積 300 には足りないので本便は S に収める**）。新しい file も新しい dir も無く、縮む file も無い。外部 crate は増やさない。
 
+**便 99 の凍結 anchor の巻き添え（改訂 b・c）。** 本便が凍結の土台 tests/fixtures/floor_base/design-intent/adr/schema.yaml の写しを直すと、便 99（main c7e05bb）の凍結 anchor `tests/fixtures/schema/node-digest-anchor.txt` の残差の 2 行（191〜192 行 = 残差の sha256 と byte の内訳）が変わる。schema.yaml は節点でないので、節点の要約値（1〜189 行）と `graph-anchor.txt` は 1 byte も動かない。直し方: 写しを直した後に独立の script `tests/fixtures/schema/node-digest.py` を土台に当てて anchor を組み直し（folio の出力から写さない）、`sha256sum` で測ったその file の要約値を `crates/folio/tests/graph.rs` の定数 `F99_ANCHOR_SHA256` に写す。2 file とも行数は変わらない（anchor は 2 行の値・歯は 1 定数の値だけ）。残差以外の行が 1 byte でも変わったら本便の写しの直しが間違っている。回帰は verify の 3 行目（歯 `f99_the_independent_script_matches_the_anchor`）で見る。
+
 ### (i) 本便が運ばないもの・撤退条件
 
 - 判断の記録の面への表示（(f)）。面の章の見た目の裁定を伴うので、面の便に回す。
 - 索引の辺の欄の閉じた一覧に revises を足すこと（(f)）。`crates/folio/src/graph.rs` は並行する便 99 の write-set に在るので、便 99 の着地後の別の便で運ぶ。
 - 改訂される側の来歴の欄（(b) の 片側だけ の判断）。双方向にしても床が確かめられるものが増えないという理由が偽になったとき（= 改訂の対が 1 対でなくなり、改訂された判断を読む人がそれを知る道が要ると分かったとき）に、別の便で問う。
 - 要件の項がほかの要件・制約を指す欄（12 対）。ADR-13 決定 (3-b) が便 90 の後の数えを見てから決めると保留している。
-- 憲法の条文・規則の表・語彙・要件書・判断の記録の本文（決定・案・撤退条件・平易文・帰結）・ほかの 8 file の生成区間・`face_adr.rs`・`link.rs`・`refs.rs`・`check.rs`・`rules.rs`・`schema.rs`・`main.rs`・`graph.rs`・`mentions.rs`・`tests/floor_cases.yaml`・id の一覧の凍結 anchor・`tests/schema_docs.rs`・CI の yml。
+- 憲法の条文・規則の表・語彙・要件書・判断の記録の本文（決定・案・撤退条件・平易文・帰結）・ほかの 8 file の生成区間・`face_adr.rs`・`link.rs`・`refs.rs`・`check.rs`・`rules.rs`・`schema.rs`・`main.rs`・`graph.rs`・`mentions.rs`・`tests/floor_cases.yaml`・id の一覧の凍結 anchor・`tests/schema_docs.rs`・CI の yml。便 99 の anchor の残差の 2 行と `tests/graph.rs` の定数 1 つは (h) のとおり直す（運ばないものではない）。
 - 撤退条件: revises の欄が機械で数えられる形に閉じていられなくなったとき（向きが narrow でも widen でもない対が出て、supersedes との使い分けが人の判断に戻るとき）は、(c) 5 の枝を `adr.rs` から外し、欄を RECORD.optional から落として ADR-13 の 2 行を消す。便 1 本で戻せる。欄を残したまま向きの値域を 3 つ目へ広げる形は取らない（広げた瞬間に supersedes と revises のどちらに書くのかが人の判断に戻るため）。
 
 ## 2. 範囲
@@ -197,7 +200,7 @@ title = "判断の記録に、発効した判断が生きたままその決定�
 req = ["FR19", "NFR3"]
 section = "1"
 write-set = ["crates/folio/src/adr.rs", "design-intent/adr/schema.yaml", "design-intent/adr/ADR-13.yaml", "tests/fixtures/schema/adr-region.txt", "tests/fixtures/adr/effective-no-approval/adr/schema.yaml", "tests/fixtures/adr/schema-drift/adr/schema.yaml", "tests/fixtures/adr/two-adopted/adr/schema.yaml", "tests/fixtures/anchor/no-anchor/adr/schema.yaml", "tests/fixtures/anchor/root-digest-drift/adr/schema.yaml", "tests/fixtures/check/dup-key/adr/schema.yaml", "tests/fixtures/check/empty-field/adr/schema.yaml", "tests/fixtures/check/unknown-section/adr/schema.yaml", "tests/fixtures/floor_base/design-intent/adr/schema.yaml", "tests/fixtures/link/adr-id-missing/adr/schema.yaml", "tests/fixtures/link/amended-by-orphan/adr/schema.yaml", "tests/fixtures/link/retreat-kind-drift/adr/schema.yaml", "tests/fixtures/refs/bad-counts/adr/schema.yaml", "tests/fixtures/refs/dangling-id/adr/schema.yaml", "tests/fixtures/refs/orphan-rule/adr/schema.yaml", "tests/fixtures/vocab/exemptions/adr/schema.yaml", "tests/fixtures/vocab/unknown-word/adr/schema.yaml", "crates/folio/tests/adr.rs", "crates/folio/tests/schema.rs", "tests/fixtures/schema/node-digest-anchor.txt", "crates/folio/tests/graph.rs"]
-verify = ["cargo nextest run -p folio --test adr f101_", "cargo nextest run -p folio --test adr --test schema", "cargo clippy --workspace --all-targets -- -D warnings"]
+verify = ["cargo nextest run -p folio --test adr f101_", "cargo nextest run -p folio --test adr --test schema", "cargo nextest run -p folio --test graph f99_the_independent_script_matches_the_anchor", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
-done = "f101_ の歯 7 本（実の判断の記録の写しで床が終了コード 0 で違反 0 かつ revises を持つ file が ADR-13 の 1 本だけで項は target ADR-8・decision (4)・kind narrow の 1 つ／条の id を target にすると違反 1 件／自分の id を target にすると違反 1 件／実在しない判断の記録を target にすると違反 1 件／値域外の向きで違反 1 件／一覧でない値で違反 1 件／同じ target と decision の対を 2 行に書くと違反 1 件）が全部緑、tests/adr.rs と tests/schema.rs の既存の歯が全部緑（生成区間 136 行 24202 byte と凍結 anchor が byte 一致し、凍結の要約値が sha256sum の測り直しと一致する）、folio schema --check が 9 file とも一致、clippy が 0 警告で CI が通る"
+done = "f101_ の歯 7 本（実の判断の記録の写しで床が終了コード 0 で違反 0 かつ revises を持つ file が ADR-13 の 1 本だけで項は target ADR-8・decision (4)・kind narrow の 1 つ／条の id を target にすると違反 1 件／自分の id を target にすると違反 1 件／実在しない判断の記録を target にすると違反 1 件／値域外の向きで違反 1 件／一覧でない値で違反 1 件／同じ target と decision の対を 2 行に書くと違反 1 件）が全部緑、tests/adr.rs と tests/schema.rs の既存の歯が全部緑（生成区間 136 行 24202 byte と凍結 anchor が byte 一致し、凍結の要約値が sha256sum の測り直しと一致する）、folio schema --check が 9 file とも一致、tests/graph.rs の f99_the_independent_script_matches_the_anchor が独立の script で組み直した anchor（残差の 2 行だけが変わる）で緑、clippy が 0 警告で CI が通る"
 <!-- contracts:end -->
