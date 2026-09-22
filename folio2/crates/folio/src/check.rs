@@ -123,7 +123,10 @@ const SRS_ITEM_TEXT: [&str; 7] = [
 ];
 const SRS_ITEM_LIST: [&str; 3] = ["goals", "basis", "figures"];
 const SRS_ITEM_VERIFY_TEXT: [&str; 2] = ["method", "how"];
-const SRS_ITEM_OPTIONAL: [&str; 3] = ["milestone", "rules", "note"];
+/// adrs は判断の記録の id だけを受ける一覧（便 90・ADR-13 決定 (3-b)（ア））。
+const SRS_ITEM_OPTIONAL: [&str; 4] = ["milestone", "rules", "adrs", "note"];
+/// adrs の欄の字（中身を見る唯一の任意の欄）。
+const SRS_ITEM_ADRS: &str = "adrs";
 /// verify の欄の字と、その中の一覧の欄（便 86 §1 (a)・字面の写しを閉じて生成区間が集合の全部を覆う）。
 const SRS_ITEM_VERIFY: &str = "verify";
 const SRS_ITEM_VERIFY_LIST: [&str; 1] = ["ac"];
@@ -691,6 +694,30 @@ fn check_srs_item(section: &str, row: &Node, report: &mut Report) {
             }
         }
         _ => report.violation("schema", format!("{FILE}: {at} の verify が無い（表）")),
+    }
+    // adrs は判断の記録の id の形だけを数える（便 90 §1 (c)）。実在は link.rs の網（A-2）が数えるので重ねない
+    match row.get(SRS_ITEM_ADRS) {
+        None | Some(Node::Null) => {}
+        Some(Node::Seq(items)) => {
+            for r in items {
+                if !r
+                    .as_str()
+                    .is_some_and(|v| v.starts_with("ADR-") && adr::is_basis_id(v))
+                {
+                    report.violation(
+                        "schema",
+                        format!(
+                            "{FILE}: {at} の {SRS_ITEM_ADRS}「{}」が判断の記録の id の形でない",
+                            r.as_str().unwrap_or("?")
+                        ),
+                    );
+                }
+            }
+        }
+        Some(_) => report.violation(
+            "schema",
+            format!("{FILE}: {at} の {SRS_ITEM_ADRS} が一覧でない"),
+        ),
     }
 }
 

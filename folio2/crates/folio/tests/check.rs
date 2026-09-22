@@ -826,7 +826,7 @@ fn f75_srs_nonfunctional_without_figures_fails() {
 // ── 要件の行の欄の閉じた一覧は実装の定数が持つ（便 86・生成区間は写しで file の側から緩められない） ──
 
 /// 便 86 (c) の生成区間の optional の行（写しの側の変異の当て先）。
-const F86_REGION_OPTIONAL: &str = "\n    optional: [milestone, rules, note]\n";
+const F86_REGION_OPTIONAL: &str = "\n    optional: [milestone, rules, adrs, note]\n";
 
 #[test]
 fn f86_unknown_field_cannot_be_loosened_from_the_file() {
@@ -845,7 +845,7 @@ fn f86_unknown_field_cannot_be_loosened_from_the_file() {
     // 生成区間の optional に extras を足しても閉じた一覧は緩まない（N-3.1）
     w.mutate(
         F86_REGION_OPTIONAL,
-        "\n    optional: [milestone, rules, note, extras]\n",
+        "\n    optional: [milestone, rules, adrs, note, extras]\n",
     );
     assert_srs_item_violation(&w, &["未知の欄", "extras"]);
 }
@@ -858,4 +858,62 @@ fn f86_verify_inner_list_is_still_checked() {
         "    verify: {method: test, how: 決まった回答 5 つを入れ、支度表が期待どおりか比較する}\n",
     );
     assert_srs_item_violation(&w, &["FR1 の verify の ac が無い（一覧・空でよい）"]);
+}
+
+// ── 要件の行の判断の記録の欄 adrs（便 90・ADR-13 決定 (3-b)（ア）） ──
+
+/// 便 90 (g) の変異の当て先 = 写しの FR19 の行の adrs（実の要件書で ADR-9 を持つ行は 1 本だけ）。
+const F90_FR19_ADRS: &str = "\n    adrs: [ADR-9]\n";
+
+#[test]
+fn f90_the_real_srs_carries_the_adrs_field() {
+    let w = Work::new("f90-real");
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    let text = fs::read_to_string(w.srs()).unwrap();
+    let rows: Vec<&str> = text
+        .lines()
+        .filter_map(|l| l.strip_prefix("    adrs: ["))
+        .collect();
+    assert_eq!(rows.len(), 13, "adrs の行の数: {rows:?}");
+    for row in rows {
+        let body = row.strip_suffix(']').unwrap_or_else(|| panic!("一覧の形でない: {row}"));
+        for id in body.split(", ") {
+            let num = id.strip_prefix("ADR-").unwrap_or_else(|| panic!("ADR- で始まらない: {id}"));
+            assert!(
+                num.starts_with(|c: char| matches!(c, '1'..='9'))
+                    && num.chars().all(|c| c.is_ascii_digit()),
+                "判断の記録の id の形でない: {id}"
+            );
+            assert!(w.dir().join(format!("adr/{id}.yaml")).is_file(), "{id} の正本が無い");
+        }
+    }
+}
+
+#[test]
+fn f90_an_id_that_is_not_an_adr_is_a_violation() {
+    let w = Work::new("f90-not-adr");
+    w.mutate(F90_FR19_ADRS, "\n    adrs: [FR5]\n");
+    assert_srs_item_violation(&w, &["FR19", "adrs", "FR5", "判断の記録の id の形でない"]);
+}
+
+#[test]
+fn f90_an_adr_that_does_not_exist_is_a_violation() {
+    let w = Work::new("f90-missing-adr");
+    w.mutate(F90_FR19_ADRS, "\n    adrs: [ADR-99]\n");
+    assert_srs_item_violation(&w, &["adrs", "ADR-99", "が実在しない"]);
+}
+
+#[test]
+fn f90_adrs_that_is_not_a_list_is_a_violation() {
+    let w = Work::new("f90-not-list");
+    w.mutate(F90_FR19_ADRS, "\n    adrs: 判断の記録\n");
+    assert_srs_item_violation(&w, &["FR19", "adrs が一覧でない"]);
 }

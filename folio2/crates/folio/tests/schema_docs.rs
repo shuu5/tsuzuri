@@ -74,8 +74,8 @@ const F77_REGIONS: [(&str, &str, usize, usize, &str); 3] = [
         "srs.yaml",
         "tests/fixtures/schema/srs-region.txt",
         29,
-        1168,
-        "3937340f77713b087b33ca43b8fe866ca310b97cd04e5e1f4ce9967e19b724e1",
+        1174,
+        "7fc1ed83deb5193ffffa57061707b7d912919b51e2ff542d17a97fb2f026ef59",
     ),
     (
         "vocabulary.yaml",
@@ -895,8 +895,8 @@ fn f85_deny_meaning_names_the_lower_bound_and_the_fixed_value() {
 /// 便 86 (c) 凍結 anchor の置き場と自己検査の値（設計判断の席が独立に組んだ）。
 const F86_SRS_ANCHOR: &str = "tests/fixtures/schema/srs-region.txt";
 const F86_SRS_LINES: usize = 29;
-const F86_SRS_BYTES: usize = 1168;
-const F86_SRS_SHA256: &str = "3937340f77713b087b33ca43b8fe866ca310b97cd04e5e1f4ce9967e19b724e1";
+const F86_SRS_BYTES: usize = 1174;
+const F86_SRS_SHA256: &str = "7fc1ed83deb5193ffffa57061707b7d912919b51e2ff542d17a97fb2f026ef59";
 
 // ── f86_ 1. 生成区間が新しい凍結 anchor と byte 一致・anchor の自己検査 ──
 
@@ -946,7 +946,7 @@ fn f86_region_lists_every_group_of_the_row() {
     let verify_list = strs(&row["verify"]["required_list"], "verify.required_list");
     assert_eq!(
         [text_keys.len(), list_keys.len(), optional.len(), verify_text.len(), verify_list.len()],
-        [7, 3, 3, 2, 1],
+        [7, 3, 4, 2, 1],
         "{row:?}"
     );
     assert_eq!(keys(row), ["required_text", "required_list", "optional", "verify"]);
