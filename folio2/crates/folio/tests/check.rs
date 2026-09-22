@@ -450,7 +450,7 @@ fn check_rules_without_the_file_top_level_line_is_not_unknown() {
 
 /// 実の constitution.yaml の写しの条 P-1 の機構の行（変異の当て先・note の字面で 1 か所に絞る）。
 const P1_MECHANISM: &str =
-    "{kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 公開する命令";
+    "{kind: build-check, live: now, stage: post, polarity: fail-closed, note: 公開する命令";
 
 /// 写しの constitution.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（種別 schema・constitution.yaml の場所）で、
 /// 値域の外の値 `value` と鍵の名 `schema.enums.<key>` を含む（改訂の差分の範囲の外の欄）。
@@ -509,7 +509,7 @@ fn check_constitution_enum_mechanism_kind_outside_the_range_fails() {
     let w = Work::new("enum-mechanism-kind");
     w.mutate_constitution(
         P1_MECHANISM,
-        "{kind: mystery, live: M0, stage: post, polarity: fail-closed, note: 公開する命令",
+        "{kind: mystery, live: now, stage: post, polarity: fail-closed, note: 公開する命令",
     );
     assert_constitution_enum_violation(&w, "mechanism_kind", "mystery");
 }
@@ -560,7 +560,7 @@ fn check_constitution_enum_missing_stage_field_is_silent() {
     let w = Work::new("enum-no-stage");
     w.mutate_constitution(
         P1_MECHANISM,
-        "{kind: build-check, live: M0, polarity: fail-closed, note: 公開する命令",
+        "{kind: build-check, live: now, polarity: fail-closed, note: 公開する命令",
     );
     let out = w.check();
     let s = stdout(&out);

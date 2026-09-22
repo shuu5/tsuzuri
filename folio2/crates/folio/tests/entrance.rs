@@ -248,7 +248,7 @@ fn entrance_duplicate_document_id_fails() {
 #[test]
 fn entrance_unknown_word_fails() {
     let w = Work::new("unknown-word");
-    w.mutate("  explain: 棚 = ", "  explain: 棚 zzqx = ");
+    w.mutate("  explain: この棚には、", "  explain: この棚には zzqx、");
     assert_single_violation(
         &w.check(),
         "index",
@@ -259,7 +259,7 @@ fn entrance_unknown_word_fails() {
 #[test]
 fn entrance_known_word_passes() {
     let w = Work::new("known-word");
-    w.mutate("  explain: 棚 = ", "  explain: 棚 folio = ");
+    w.mutate("  explain: この棚には、", "  explain: この棚には folio、");
     assert_passes(&w.check());
 }
 

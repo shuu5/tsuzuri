@@ -15,7 +15,7 @@ meta:
   floor: {live: M1, landed: 便 23}
   floor_note: 床は M1 の便 23 で着地した（folio check が設計ノートを数える）。見本 example.yaml は生成器から独立した固定の材料で、M1 の凍結 anchor（P-10.1）の元になる候補（要件書の受入基準の fixture そのものではない）。
   type_enum_ruling: {basis: [ADR-3, FR9, FR12], ruling: f2-648 notes 2026-09-17 06:53 JST（逐語「承認する」・対話面 R-8・f2-648.7 の取り込みの承認）, ruled_at: 2026-09-17}
-  type_enum_ruling_note: 節の型の閉じた一覧（schema.section.type_enum）と文書の状態の値域（schema.doc_meta.status_enum の example）は、判断の記録 ADR-3 決定 (1) と要件書 FR9 が「など」で開いていた一覧を本 file が初めて閉じたもの（P-2.4）。ruling / ruled_at は本便の取り込みの承認（持ち主の逐語・2026-09-17）で埋めた（rules 行の初版と同じ手順・裁定前は null で置いていた・P-12.3）。P-2.4 の「判断の記録」は ADR-3 決定 (1) を出所とし、閉じた一覧そのものは ADR-3 の帰結として持ち主の承認で追認する（ADR は新しく起こさない）。以後の追加は判断の記録を要する。
+  type_enum_ruling_note: 節の型の閉じた一覧（schema.section.type_enum）と文書の状態の値域（schema.doc_meta.status_enum の example）は、判断の記録 ADR-3 決定 (1) と要件書 FR9 が「など」で開いていた一覧を本 file が初めて閉じたもの（P-2.4）。ruling / ruled_at は本便の取り込みの承認（持ち主の逐語・2026-09-17）で埋めた（rules 行の初版と同じ手順・裁定前は null で置いていた・P-12.3）。P-2.4 の「判断の記録」は ADR-3 決定 (1) を出所とし、閉じた一覧そのものは ADR-3 の帰結として持ち主の承認で追認する（ADR は新しく起こさない）。以後の追加は判断の記録を要する。条 P-2.4 が名指す置き場（部品目録）は部品・図の型・密度 profile のためのもので、設計ノートの節の型はそこに入らない＝この一覧の置き場はこの file であり、閉じることの理由の本体は判断の記録 ADR-3 決定 (1) と条 P-5.3 である（判断の記録 ADR-3 の注と同じ射程・天井の 21 周目の文書どうしの整合 F-4・一括 11）。
 
 # folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
 schema:

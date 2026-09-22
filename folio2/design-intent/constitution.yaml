@@ -125,7 +125,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "research/document-discipline-engine-design §11（判断は人間・「判断する engine」を作らない）"}
       - {kind: folio2-ruling, ref: "裁定 #1（推奨で進み、支度表で覆す）"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 公開する命令（subcommand）の値域は実装の型付きの定数で閉じ、その全数一致を歯 p1_commands_closed_list（凍結の一覧との突き合わせ・P-10.1）が数える。採否を決める口の不在は、その一覧に採否を決める命令が無いことで表す。支度表は「推奨で進めた項目」を別枠に出す（FR2・AC1）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 公開する命令（subcommand）の値域は実装の型付きの定数で閉じ、その全数一致を歯 p1_commands_closed_list（凍結の一覧との突き合わせ・P-10.1）が数える。採否を決める口の不在は、その一覧に採否を決める命令が無いことで表す。支度表は「推奨で進めた項目」を別枠に出す（FR2・AC1）。}
     relations: {reqs: [FR1, FR2, AC1]}
 
   - id: P-2
@@ -154,11 +154,11 @@ articles:
       - {id: P-3.1, pattern: ubiquitous, strength: must, text: 機械で決定的に検査できる項目は床に置く。}
       - {id: P-3.2, pattern: ubiquitous, strength: must, text: 意味の検査（読みやすさ・忠実さ）は AI の天井に置く。}
       - {id: P-3.3, pattern: ubiquitous, strength: must-not, text: 床の合格を、完成や天井の合格として扱わない。}
-    plain: 機械が数えられること（部品が揃っているか等）は機械の側に、意味（分かりやすいか等）は AI の側に置きます。機械の合格は「壊れていない」であって「良い」ではありません。床の合格を「できあがり」としても扱いません。
+    plain: 機械が何度やっても同じ結果になる形で数えられること（部品が揃っているか等）は機械の側に、意味（読みやすいか・元の文に忠実か）は AI の側に置きます。機械の合格は「壊れていない」であって「良い」ではありません。床の合格を「できあがり」としても扱いません。
     rationale:
       - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
       - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と正本の要約値から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と正本の要約値から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
     relations: {reqs: [FR5, AC3], rules: [D-12], articles: [P-4]}
 
   - id: P-4
@@ -171,7 +171,7 @@ articles:
     plain: できなかったことを「問題なし」に化けさせません。分からないときは「まだ分からない」と表示します。
     rationale:
       - {kind: v1-incident, ref: "engine-design §12 ②（parser-differential に 2 連続で敗北 → 受理域を絞る fail-closed へ転換）・ADR-0045 no silent skip"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 床を故意に壊した状態で「まだ分からない」になり、合格にならない（AC3）。判定の値域は 合格 / 不合格 / まだ分からない の 3 値。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 床を故意に壊した状態で「まだ分からない」になり、合格にならない（AC3）。判定の値域は 合格 / 不合格 / まだ分からない の 3 値。}
     relations: {reqs: [FR5, AC3], rules: [D-5, R-14]}
 
   - id: P-5
@@ -224,7 +224,7 @@ articles:
     plain: 一度つけた番号は、消したり付け替えたりしません。「3 番は廃止」と書いて、3 番の番号は空けたままにします。
     rationale:
       - {kind: v1-incident, ref: "ADR-0034 §2.2。v1 では append-only は守られた側で、実害は逆＝48 ADR が全部 accepted で「取り消した決定」を機械で引けない（→ P-7.2）"}
-    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: meta.binding が true の直近版を baseline に取り、id の消失・意味の差し替えを落とす。発効前（binding false）は baseline が無いので検査対象外＝散文の適用除外ではなく機構の定義。baseline は 2 つ＝憲法（design-intent/anchors/ の constitution-v*.yaml・実装 anchor.rs）と、要件・判断・受入基準の id の一覧（同じ置き場の ids-v*.yaml・id と規範文の要約値だけ・実装 ids.rs・凍結は folio check --freeze-ids）。id の一覧の側は、baseline の id が現行に無ければ P-7（番号を消した）、その要約値が現行の別の id に在れば P-7.1（同じ本文を別の番号に付け替えた）で落とし、ids- の anchor が 1 本も無ければ まだ分からない に落とす。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: meta.binding が true の直近版を baseline に取り、id の消失・意味の差し替えを落とす。発効前（binding false）は baseline が無いので検査対象外＝散文の適用除外ではなく機構の定義。baseline は 2 つ＝憲法（design-intent/anchors/ の constitution-v*.yaml・実装 anchor.rs）と、要件・判断・受入基準の id の一覧（同じ置き場の ids-v*.yaml・id と規範文の要約値だけ・実装 ids.rs・凍結は folio check --freeze-ids）。id の一覧の側は、baseline の id が現行に無ければ P-7（番号を消した）、その要約値が現行の別の id に在れば P-7.1（同じ本文を別の番号に付け替えた）で落とし、ids- の anchor が 1 本も無ければ まだ分からない に落とす。}
     relations: {reqs: [NFR3]}
 
   - id: P-8
@@ -250,7 +250,7 @@ articles:
     plain: 「自分で作ったものと自分で作ったものを見比べて OK」は、何でも OK になってしまうので、それだけでは合格にしません。作る側からも検査する側からも独立した、動かない基準を 1 つ以上、別に置きます。その基準が保てなくなった検査は「まだ分からない」に戻します。
     rationale:
       - {kind: v1-incident, ref: "ADR-0053（flip 後 ORIG==生成物 で自己比較恒真化・任意値 PASS → 凍結 literal census + round-trip + 敵対 test の三本柱へ。再発ハザードへの予防的退役・user 裁定 2026-07-18）"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 凍結 fixture を検査の入力に持ち、fixture 不在は「まだ分からない」、fixture との不一致は「不合格」に落とす。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 凍結 fixture を検査の入力に持ち、fixture 不在は「まだ分からない」、fixture との不一致は「不合格」に落とす。}
     relations: {articles: [P-3, P-4]}
 
   - id: P-11
@@ -262,7 +262,7 @@ articles:
     plain: 同じ穴に何度もはまるなら、機械が粘るのをやめて人に相談します。「何度まで」は表（R-7 行）で決めます。
     rationale:
       - {kind: v1-incident, ref: "engine-design §12（parser-differential の whack-a-mole を round 1 / round 2 の 2 連続で実証 → user 判断で fail-closed へ転換）"}
-    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。回数を数えて止めるのは席と器（scribe2）で、folio は数える面を持たない＝この実態と実測の正本は rules 行 R-7 の注であり、ここには写さない。}
+    mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。回数を数えて止めるのは席と器（scribe2）で、folio は数える面を持たない＝この実態と実測の正本は rules 行 R-7 の注であり、ここには写さない。}
     relations: {rules: [R-7, D-4], articles: [P-1]}
 
   - id: P-12
@@ -277,7 +277,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "C7 / C7.2（対話面は 1 つ・逐語で記帳）"}
       - {kind: folio2-ruling, ref: "G8=A（C7 を足す）・運用実績（G1〜G16・P1〜P5 の裁定はすべて bd notes の逐語）・受入 (c)"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
     relations: {rules: [R-8, D-10], sections: [§6]}
 
   - id: P-13
@@ -294,7 +294,7 @@ articles:
       - {kind: scribe2-article, ref: "C8 / C8.3（前の版を物差しにしない・design-intent の変更は ADR か版付き文書）。C8.2 は P-18 へ"}
       - {kind: v1-incident, ref: "self-host の層解釈と oracle 死角に ADR 6 本（0044 / 0045 / 0050 / 0051 / 0053 / 0056）"}
       - {kind: folio2-ruling, ref: "G7=A（C8 を移行条項つきで写す）・G6=A（順序は別条）・要件書 CON4（v1 は読むだけ）"}
-    mechanism: {kind: build-check, live: M0, stage: post, polarity: fail-closed, note: folio2 の生成器・検査器が v1 の path に書き込み口を持たない（CON4）。書き込み先は呼び手が渡す出力先の指定だけだが、そのことを歯で固定してはいない（2026-09-20 時点）＝回帰を検出する口が無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。v1 側の guard 設定の目視は開発規律 D-9。}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: folio2 の生成器・検査器が v1 の path に書き込み口を持たない（CON4）。書き込み先は呼び手が渡す出力先の指定だけだが、そのことを歯で固定してはいない（2026-09-20 時点）＝回帰を検出する口が無く、その部分の充足は「まだ分からない」として扱う（P-4.2）。v1 側の guard 設定の目視は開発規律 D-9。}
     note: scribe2 は ADR-0003 で「成熟宣言 + user go」の解禁 gate を廃止した。folio2 が P-13.4 の順序を残すのは G6=A（順序は別条）の裁定による。それまでは v1 の生成器と手作業を道具として使う（CON4）。
     relations: {reqs: [CON1, CON4], rules: [D-7, D-9], articles: [A-4, P-18]}
 
@@ -313,7 +313,7 @@ articles:
       - {kind: folio2-ruling, ref: "受入 (b)・注入の所有（規格は folio・呼ぶのは consumer・pointer 化は却下）・G9=A（上限は rules 行）・G13=A（母集団は規範文を持つ条）"}
       - {kind: scribe2-article, ref: "C1.2（人が読む規則の文書は型から生成し、手書きの規範文は 0 行）"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: --check の byte 一致（AC4）。R-2 超過は落とす。生成と検査は同じ導出関数（day-1 は inject_check.py・M0 で folio inject）。注入する欄は R-2 行の projection 欄が定める。同型の実装は scribe2 の xtask gen-claude-md / check claude-md-constitution（条ではなく実装）。}
-    relations: {reqs: [FR6, AC4, NFR1], rules: [R-2], articles: [P-6]}
+    relations: {reqs: [FR6, AC4], rules: [R-2], articles: [P-6]}
 
   - id: P-15
     title: 自動の仕掛けに寄りかからない
@@ -322,7 +322,7 @@ articles:
     statements:
       - {id: P-15.1, pattern: ubiquitous, strength: must-not, text: 自動で走る仕掛け（hook）を「守られる保証」として設計しない。}
       - {id: P-15.2, pattern: ubiquitous, strength: must, text: 編集の時点で止める仕掛けを持つときは、その判定の式を事後の検査が同じ関数で確かめる。}
-    plain: 「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。編集の時点で止める仕掛けを置くなら、後から確かめる検査も、その判定を同じ 1 つの関数で見ます（同じ中身を別々に 2 か所へ書いたのでは足りません）。
+    plain: 「自動で止まるはず」を頼りにしません。止まらなかったときにも壊れない作りにします。編集の時点で止める仕掛けを置くなら、後から確かめる検査も、その判定をプログラムの同じ 1 か所で見ます（同じ中身を別々に 2 か所へ書いたのでは足りません）。
     rationale:
       - {kind: v1-incident, ref: "folio/CLAUDE.md:18 逐語「本 hook は tier-2 shaping であって guarantee ではない」・ADR-0043 §2.3"}
       - {kind: v1-incident, ref: "plugin-lib.sh:238 / check-content-boundary.sh:55（hook と事後検査が 2 実装の人間同期＝drift の実体）"}
@@ -358,7 +358,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）"}
       - {kind: folio2-ruling, ref: "G5=A（A-2 を条文改訂と rules 数値に分割）"}
-    mechanism: {kind: reject, live: delivery-0, stage: post, polarity: fail-closed, note: rules 行の差分に裁定 id と時刻が無ければ落とす。この差分を数える口は未実装である（2026-09-20 時点・便 0 は 2026-09-17 に着地したが、その検査は置かれなかった）。それまでは取り込みの要求の差分を人が見るにとどまり、P-17.1 / P-17.2 / P-17.4 の充足は「まだ分からない」として扱う（P-4.2）。}
+    mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: rules 行の差分に裁定 id と時刻が無ければ落とす。この差分を数える口は未実装である（2026-09-20 時点・便 0 は 2026-09-17 に着地したが、その検査は置かれなかった）。それまでは取り込みの要求の差分を人が見るにとどまり、P-17.1 / P-17.2 / P-17.4 の充足は「まだ分からない」として扱う（P-4.2）。}
     relations: {rules: [R-1, R-2, R-3, R-4, R-5, R-6, R-7, R-8, R-9, R-10, R-11, R-12, R-13, R-14, R-15, R-16, D-3, D-5, D-8], articles: [A-2]}
 
   - id: P-18
@@ -374,7 +374,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "C8.2（design-intent と食い違う編集は編集時に止める）・C16 / C16.2（事後検証を代替にしない・編集時 guard 0 の構成を CI が拒む）・C11.2（極性の型と build 時の極性一覧）"}
       - {kind: folio2-ruling, ref: "裁定 #3（scribe2 の機構条のうち「極性一覧」を写す）・G3=A（撤去コストは共通 1 行）"}
-    mechanism: {kind: build-check, live: delivery-0, stage: post, polarity: fail-closed, note: 各条の mechanism の stage / polarity 欄と rules 行の stage 列から極性一覧を生成し、編集時（in-loop）の本数が rules 行 R-13 の下限を割れば不合格。極性一覧を出す口と R-13 を数える口は未実装である（2026-09-20 時点・day-1 の口は 2026-09-18 に退役し Rust の床へ写していない）。folio2 側の編集時 guard も 1 本も無い（設計ノートの欄の決まりの guards 欄が逐語でそう書く）。それまで P-18.3 / P-18.4 の充足は「まだ分からない」として扱う（P-4.2）。}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 各条の mechanism の stage / polarity 欄と rules 行の stage 列から極性一覧を生成し、編集時（in-loop）の本数が rules 行 R-13 の下限を割れば不合格。極性一覧を出す口と R-13 を数える口は未実装である（2026-09-20 時点・day-1 の口は 2026-09-18 に退役し Rust の床へ写していない）。folio2 側の編集時 guard も 1 本も無い（設計ノートの欄の決まりの guards 欄が逐語でそう書く）。それまで P-18.3 / P-18.4 の充足は「まだ分からない」として扱う（P-4.2）。}
     note: v0.1 では P-15.2 の条件節（「持つときは」）に潰れ、scribe2 C16 が課す義務が落ちていた（敵対レビュー scribe2-consistency-02・-04）。
     relations: {rules: [R-13], articles: [P-15, P-13, P-4]}
 
@@ -405,7 +405,7 @@ articles:
       - {kind: scribe2-article, ref: "A2（主張された利益の grill 検証を前置 → user 裁定）"}
       - {kind: v1-incident, ref: "ADR-0056 §2.1（宣言内容を 1 文字も変えない生成経路の flip だけが「変更」に該当しない。宣言文・段・id・見出しの変更は対象）"}
       - {kind: folio2-ruling, ref: "G5=A（rules 数値の変更は P-17 へ分離）・G8=A（M4 は但し書き）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本の baseline diff — 母集合は schema 節・前文・各条の id / title / statements / tier / binds（amendment_scope）。差分には対応する amended_by（adr・date・approved_by・ruling・previous_text・rationale）が要り、amended_by.adr が指す判断の記録の実在も同じ検査が確かめる（R-4 の母集合＝内部 3 空間は変えない・G15）。差分 0 なら A-2.2 の非改訂（自己申告では適用しない）。無ければ N-4 が落とす。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本の baseline diff — 母集団は schema 節・前文・各条の id / title / statements / tier / binds（amendment_scope）。差分には対応する amended_by（adr・date・approved_by・ruling・previous_text・rationale）が要り、amended_by.adr が指す判断の記録の実在も同じ検査が確かめる（R-4 の母集団＝内部 3 空間は変えない・G15）。差分 0 なら A-2.2 の非改訂（自己申告では適用しない）。無ければ N-4 が落とす。}
     relations: {rules: [R-4], articles: [N-4, P-8, P-17], sections: [§6]}
 
   - id: A-3
@@ -448,7 +448,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "N1 / N1.2"}
       - {kind: folio2-ruling, ref: "G8=A（不可逆な削除は Never）"}
-    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: 管理下の対象（正本・生成した面・支度表・台帳の記録）を消す経路を実装しない。決定的に作り直せる写しの作り直しに限り消す（folio ceiling --write が束の材料の置き場を作り直すとき・図の道具を撃つために folio 自身が作った一時の置き場）。退役は可逆な移動で行い、folio は退役の口を持たない。消す呼び出しをこの 2 つに限ることは歯で固定していない（2026-09-20 時点）。}
+    mechanism: {kind: reject, live: now, stage: post, polarity: fail-closed, note: 管理下の対象（正本・生成した面・支度表・台帳の記録）を消す経路を実装しない。決定的に作り直せる写しの作り直しに限り消す（folio ceiling --write が束の材料の置き場を作り直すとき・図の道具を撃つために folio 自身が作った一時の置き場）。退役は可逆な移動で行い、folio は退役の口を持たない。消す呼び出しをこの 2 つに限ることは歯で固定していない（2026-09-20 時点）。}
     relations: {articles: [A-1, P-7]}
 
   - id: N-2
@@ -489,7 +489,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "N4 / N4.2（新 ADR + delta marker + 裁定 id）"}
       - {kind: folio2-ruling, ref: "G5=A（N-4 新設）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: A-2 と同じ検査関数・同じ母集合（schema 節・前文・各条の id / title / statements / tier / binds）。対応する amended_by が無ければ落とす（A-2 は手続き・N-4 はその拒否）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: A-2 と同じ検査関数・同じ母集団（schema 節・前文・各条の id / title / statements / tier / binds）。対応する amended_by が無ければ落とす（A-2 は手続き・N-4 はその拒否）。}
     relations: {articles: [A-2], sections: [§6]}
 
   - id: N-5
@@ -501,7 +501,7 @@ articles:
     plain: 文書の種類が増えるたびに専用の AI 係や検査の観点を増やすことは、機械が拒みます。違いは設定の表（P-5.3）で表します。係が増えると AI が毎回読む説明文が膨らんで、遅く・高くなるからです（v1 では 36 係になりました）。
     rationale:
       - {kind: v1-incident, ref: "agent 36 本・description 合計 29,027 字・ADR-0007 → 0055（Tier 1 → Tier 0 pointer digest へ降格）"}
-    mechanism: {kind: reject, live: M0, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0（検査の観点は天井の正本の 4 つで閉じ、folio2 が自前で定義した AI 係は 0 本）。常時注入の総量は R-1 の上限で落とす。その母集団の定義と実測は規則の表の行 R-1 の注が持つ（ここには写さない・直前の「0 本」は自前で定義した係の数であって母集団の数ではない）。この上限を数える口は未実装である（2026-09-20 時点）＝その部分の充足は「まだ分からない」として扱う（P-4.2・要件書 NFR1 の注）。}
+    mechanism: {kind: reject, live: now, stage: post, polarity: fail-closed, note: AI 係と検査の観点は閉じた一覧（部品目録と同型）で持ち、一覧外・文書型専用のものは 0（検査の観点は天井の正本の 4 つで閉じ、folio2 が自前で定義した AI 係は 0 本）。常時注入の総量は R-1 の上限で落とす。その母集団の定義と実測は規則の表の行 R-1 の注が持つ（ここには写さない・直前の「0 本」は自前で定義した係の数であって母集団の数ではない）。この上限を数える口は未実装である（2026-09-20 時点）＝その部分の充足は「まだ分からない」として扱う（P-4.2・要件書 NFR1 の注）。}
     relations: {reqs: [NFR1], rules: [R-1, D-3], articles: [P-5]}
 
   - id: N-6
@@ -541,7 +541,7 @@ glossary_pointer: この章は、この文書に出てくる言葉の意味を�
 # ───────────────────────── §8 出所 ─────────────────────────
 sources:
   - {n: 1, name: v1 が自分で到達していた教訓, ref: 報告 §2「v2 の憲法候補」・報告の区分（facet）v1-lessons（実害と 1 対 1・数値は一次資料で再確認済み）}
-  - {n: 2, name: "scribe2 憲法の機構条（裁定 #3）", ref: "裁定 #3 の逐語「機構条だけ写す（極性一覧・散文規則禁止・id 参照・C8。依存予算は folio2 専用値）」= C11.2 / C16.2（P-18）・N2 / C1.2（N-2）・C15.2（P-5）・C8 / C8.2 / C8.3（P-13・P-18）・C13 の値（A-3・R-6）。記号の読み方: C-n / N-n = 前の版（scribe2）の憲法の条の番号・G-n / P-n = 2026-09-12 の裁定の番号（判断の記録 ADR-1 の出所）"}
-  - {n: 3, name: "scribe2 憲法から足した条（裁定 #3 の外・各裁定で追加）", ref: "G8=A: C7（P-12）・N1（N-1）・A2 / N4（A-2・N-4）・公開 Never（N-6）・注入条（P-14）／ G5=A: C5（P-17）／ G6=A: A4 / A4.3（A-4）／ G7=A: C13（A-3）／ C14（P-5.5・G2=C の二層の写し）。記号の読み方: C-n / N-n = 前の版（scribe2）の憲法の条の番号・G-n / P-n = 2026-09-12 の裁定の番号（判断の記録 ADR-1 の出所）"}
-  - {n: 4, name: 持ち主の裁定, ref: 裁定 9 点（2026-09-11〜12）・G1〜G16・P1〜P5（2026-09-12・逐語は bd f2-648 / f2-648.1 notes）}
+  - {n: 2, name: "scribe2 憲法の機構条（裁定 #3）", ref: "裁定 #3 の逐語「機構条だけ写す（極性一覧・散文規則禁止・id 参照・C8。依存予算は folio2 専用値）」= C11.2 / C16.2（P-18）・N2 / C1.2（N-2）・C15.2（P-5）・C8 / C8.2 / C8.3（P-13・P-18）・C13 の値（A-3・R-6）。記号の読み方: C-n / N-n = 前の版（scribe2）の憲法の条の番号・G-n / P-n = 2026-09-12 の裁定の番号（判断の記録 ADR-1 の出所）・「G-n=X」の「=X」はその裁定で選ばれた案の記号"}
+  - {n: 3, name: "scribe2 憲法から足した条（裁定 #3 の外・各裁定で追加）", ref: "G8=A: C7（P-12）・N1（N-1）・A2 / N4（A-2・N-4）・公開 Never（N-6）・注入条（P-14）／ G5=A: C5（P-17）／ G6=A: A4 / A4.3（A-4）／ G7=A: C13（A-3）／ C14（P-5.5・G2=C の二層の写し）。記号の読み方: C-n / N-n = 前の版（scribe2）の憲法の条の番号・G-n / P-n = 2026-09-12 の裁定の番号（判断の記録 ADR-1 の出所）・「G-n=X」の「=X」はその裁定で選ばれた案の記号"}
+  - {n: 4, name: 持ち主の裁定, ref: 裁定 9 点（2026-09-11〜12）・G1〜G16・P1〜P5（2026-09-12・逐語は bd f2-648 / f2-648.1 notes）。規則の表の裁定の欄に残る「申告 X」は、この憲法の発効より前（v0.x）の草案がその行の裁定を自己申告していた印で、発効の時点で P-17.3 によりこの憲法の発効の承認がその行の裁定になった（値は動いていない・X が指す元の裁定の逐語は f2-648.1 notes）}
   - {n: 5, name: 敵対レビュー, ref: review/summary.md（wf_5e659fc9-0ed・敵対レビューで残った指摘 17 件〔生存〕と、反証しきれなかった 34 件〔未反証〕への追加の反証・2026-09-12）}

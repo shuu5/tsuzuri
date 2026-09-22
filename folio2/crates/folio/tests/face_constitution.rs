@@ -237,7 +237,7 @@ fn f79_rules_ruling_folds_the_previous_ones() {
         assert_eq!(label, format!("前の裁定 {n} 件"), "{id}");
         assert_eq!(body.matches("前の裁定 = ").count(), n, "{id}");
     }
-    assert_eq!(source_previous("R-1"), 3);
+    assert_eq!(source_previous("R-1"), 4);
     assert_eq!(source_previous("D-3"), 3);
     assert_eq!(source_previous("R-2"), 2);
 }
@@ -417,14 +417,26 @@ fn f80_amendment_previous_text_is_verbatim() {
 
 // ── 便 84: 機構の小窓のいつから動くかの意味と用語集の欄の名前の節（docs/design/delivery-84.md §1 (c)） ──
 
-/// いつから動くかの名札 5 つ（歯の側で持つ）。
-const LIVE_LABELS: [&str; 5] = [
-    "いま動く",
-    "M0 で動く",
-    "便 0 で動く",
-    "M1 で動く",
-    "判断の記録の欄の決まりの後",
+/// いつから動くかの（正本の値, 名札）5 つ（歯の側で持つ）。
+const LIVE_LABELS: [(&str, &str); 5] = [
+    ("now", "いま動く"),
+    ("M0", "M0 で動く"),
+    ("delivery-0", "便 0 で動く"),
+    ("M1", "M1 で動く"),
+    ("adr", "判断の記録の欄の決まりの後"),
 ];
+
+/// 正本 design-intent/constitution.yaml の各条の機構の「いつから動くか」の値（重複を畳まない）。
+fn source_live_values() -> Vec<String> {
+    let text = fs::read_to_string(design_intent().join("constitution.yaml")).unwrap();
+    let doc: Yaml = YamlLoader::load_from_str(&text).unwrap().remove(0);
+    doc["articles"]
+        .as_vec()
+        .unwrap()
+        .iter()
+        .filter_map(|a| a["mechanism"]["live"].as_str().map(str::to_string))
+        .collect()
+}
 
 /// 正本 design-intent/vocabulary.yaml の field_terms の（id, term）。
 fn source_field_terms() -> Vec<(String, String)> {
@@ -474,15 +486,21 @@ fn f84_mechanism_chip_explains_the_stage() {
     let html = real_html("f84-chip");
     let bodies = hint_bodies(&html, "機構");
     assert!(!bodies.is_empty(), "機構の小窓が無い");
-    assert!(
-        bodies
-            .iter()
-            .any(|b| b.contains("M0 で動く（M0 = 要件書の scope の 作る の側に在る段）")),
-        "M0 の意味が機構の小窓に無い"
-    );
+    // 正本に在る値の名札だけを数える（値が消えても歯が釘付けにならない・便 43 / 44 と同じ向き）
+    let live = source_live_values();
+    assert!(!live.is_empty(), "正本の条に機構の live が無い");
+    for (value, label) in LIVE_LABELS {
+        if !live.iter().any(|v| v == value) {
+            continue;
+        }
+        assert!(
+            bodies.iter().any(|b| b.contains(&format!("{label}（"))),
+            "正本に在る「{value}」の意味が機構の小窓に無い"
+        );
+    }
     let mut seen = 0;
     for b in &bodies {
-        for label in LIVE_LABELS {
+        for (_, label) in LIVE_LABELS {
             for (at, _) in b.match_indices(label) {
                 seen += 1;
                 assert!(

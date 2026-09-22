@@ -38,7 +38,7 @@ sections:
     type: fields-table
     title: 図の節の欄
     rows:
-      - {id: type, name: 図の型, need: required, shape: text, enum: [archify-architecture, archify-workflow, archify-sequence, archify-dataflow, archify-lifecycle]}
+      - {id: type, name: 図の型, need: required, shape: text, note: 値域の正本は部品目録（要素数は規則の表の行 R-5 の値）で、ここには写さない（P-6.3）}
       - {id: spec, name: 型付き記述, need: required, shape: table}
       - {id: caption, name: 見出し, need: required, shape: text}
       - {id: refs, name: 参照 id, need: optional, shape: list}

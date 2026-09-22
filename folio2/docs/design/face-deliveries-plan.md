@@ -125,3 +125,11 @@
 ## 8. 部品目録と様式
 
 9 本とも design-intent/preview/parts.json と design-intent/preview/folio.css を 1 byte も触らない。新しい部品も新しい class も作らず、既存の部品（item-row・principle-amendment-history・glossary-term-table・approval-block・ceiling-stamp・figure-panel）と既存の class（hint・hint-btn・hint-body・vh・legend-line・note・am-row・am-meta・am-kick・rq-where）だけで組む。`folio parts --check` は面の class が folio.css に在ることを見る（crates/folio/src/parts.rs 233〜242 行）ので、この線を守るかぎり様式の追加は要らない。
+
+## 9. 一括 11 からの便候補
+
+天井の 21〜23 周目の所見のうち、直す先が正本の file ではなく実装の型付きの定数（生成区間の正本）だったもの。仕分けで C に置いた所見は 2 件（21 周目 整合 F-7・22 周目 実態 F-3）で、下の 3 本目は 21 周目 整合 F-4 の生成区間の側＝人が書く欄の側は A で直したので、仕分けの表ではその行の一言に書いてある。仕分けは docs/design/batch11-triage.md。
+
+- 判断の記録の欄の決まりの限界の注（adr/schema.yaml の limits_note・正本は crates/folio/src/adr.rs）— 床の凍結の場合の file を「M0 で床の入力に取り込む」と書いたまま残る。判断の記録 ADR-2 は同じ文を帰結に持ち、その注（天井の 11 周目・一括 5）で「起きていない・後続に残すか取り下げるかは別の判断で決める」と断ったので、断りの無い側だけが古い（天井の 21 周目 整合 F-7）。
+- 同じ欄のもう 1 つの字（adr/schema.yaml の limits_note と anchor_note）— 「P-7.2〔廃止は状態で〕を条に適用する形は M0 で決める」のまま。M0 は 2026-09-18 に着地し、判断の記録 ADR-2 の帰結は同じ事実を今の状態（台帳 f2-648.100 に起票・open）へ直している（天井の 22 周目 実態 F-3）。
+- 設計ノートの欄の決まりの生成区間の中の節の型の注（design-note/schema.yaml の section.type_note・正本は crates/folio/src/note.rs）— 条 P-2.4 を根拠に引くが、P-2.4 が縛るのは部品・図の型・密度 profile とその置き場（部品目録）で、設計ノートの節の型は入らない。人が書く側の注（meta.type_enum_ruling_note）には一括 11 で射程の断りを足したので、生成区間の側も同じ射程に揃える（天井の 21 周目 整合 F-4）。
