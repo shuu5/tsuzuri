@@ -9,6 +9,7 @@
 - 前の便: 便 72（印・`crates/folio/src/stamp.rs`）・便 73（門・`crates/folio/src/gate.rs`）・便 98（束を絞る・main f547ce7）・便 99（印の `rest` と `nodes`）。どれも着地済み。base は **main 44f22ab**。
 
 - 改訂 b（2026-09-23 00:2x JST・検証役の report `~/.local/share/folio2/handoff-2026-09-22/d104-verify.md` §7 への応答）: §1 (e) 2 の「まだ分からない」に逃げてよい条件を外の命令の起動失敗だけに狭め、それ以外の測れない理由では歯を落とすと明記。既に在る歯の測り直しを残すことを明記。数値・write-set・歯の本数・done・verify は変えない。
+- 改訂 c（2026-09-23 00:5x JST・受付の断り name-unresolved への応答）: §1 (h) の表・§2 の入れる物・§3 の部品の表で、base に無い関連 fn を `Round::split` / `Round::build` の字面で名指していた 3 か所を「`Round` に足す関連 fn の `split` と `build`」に直した。中身・数値・write-set・歯・done・verify は変えない。
 ## 1. 設計
 
 ### (a) いま起きていること（実測）
@@ -91,7 +92,7 @@ anchor を組み直す必要が出る場合は 1 つだけある: 印の**欄の
 | --- | --- |
 | `crates/folio/src/stamp.rs`（呼ぶ先の 1 行・`use` 1 行・注 5 行・関数の名と旗・**base 338 → 344**・**余地 1,156**） | +6 |
 | `crates/folio/src/gate.rs`（`pub(crate)` の 1 語・注 3 行・**base 252 → 253**・**余地 1,247**） | +1 |
-| `crates/folio/tests/stamp.rs`（`put_reads` と `split_reads` と `Round::split` と `Round::build` と `folio_gate` と `canonical_hex`・`f104_` の歯 3 本・既に在る歯 1 本の測り直す先・**base 515 → 674**） | +159 |
+| `crates/folio/tests/stamp.rs`（`put_reads` と `split_reads` と `Round` に足す関連 fn の `split` と `build` と `folio_gate` と `canonical_hex`・`f104_` の歯 3 本・既に在る歯 1 本の測り直す先・**base 515 → 674**） | +159 |
 | `tests/fixtures/ceiling/split-reads.yaml`（**新しい file**・手書き・28 行 1,376 byte） | +28 |
 | 合計 | **+194** |
 
@@ -111,7 +112,7 @@ size **S**（触る src は `stamp.rs` と `gate.rs` の 2 本で、余地はそ
 
 ## 2. 範囲
 
-- 入れる: `gate::sources_digest` の見え方 1 語と注 3 行・`stamp.rs` の呼ぶ先 1 行と `use` 1 行と注 5 行・`union_digest` を `faces_digest` に替えること・手書きの土台 `tests/fixtures/ceiling/split-reads.yaml` 1 本・`crates/folio/tests/stamp.rs` の周の組み立ての一般化（`put_reads`・`split_reads`・`Round::split`・`Round::build`）と `folio_gate` と `canonical_hex` と `f104_` の歯 3 本と既に在る歯 1 本の測り直す先。
+- 入れる: `gate::sources_digest` の見え方 1 語と注 3 行・`stamp.rs` の呼ぶ先 1 行と `use` 1 行と注 5 行・`union_digest` を `faces_digest` に替えること・手書きの土台 `tests/fixtures/ceiling/split-reads.yaml` 1 本・`crates/folio/tests/stamp.rs` の周の組み立ての一般化（`put_reads`・`split_reads`・`Round` に足す関連 fn の `split` と `build`）と `folio_gate` と `canonical_hex` と `f104_` の歯 3 本と既に在る歯 1 本の測り直す先。
 - 入れない: 束の絞りの規則・束の要約値・凍結 anchor の中身（`stamp-expected.yaml`・`bundle-anchor.txt`・所見 fixture）・印の欄の並びと字面・門の 3 値の規則・`rest` と `nodes` の組み方・置き場の引っ越し・`design-intent/` の下の file・新しい dir・外部 crate・台帳への記帳。
 
 ## 3. 部品
@@ -122,7 +123,7 @@ size **S**（触る src は `stamp.rs` と `gate.rs` の 2 本で、余地はそ
 | call | 呼ぶ先 | `crates/folio/src/stamp.rs` の `derive` が欄 `sources` にその関数を使う |
 | faces | 面の要約値 | `crates/folio/src/stamp.rs` の `faces_digest`（束の `faces/` の和集合・観点で違えば Err の枝は残す） |
 | split | 土台 | `tests/fixtures/ceiling/split-reads.yaml`（手書き・4 観点が同じ 5 文書の違う欄を読む `reads` の行） |
-| round | 周の組み立て | `crates/folio/tests/stamp.rs` の `put_reads`・`split_reads`・`Round::split`・`Round::build` |
+| round | 周の組み立て | `crates/folio/tests/stamp.rs` の `put_reads`・`split_reads`・`Round` に足す関連 fn の `split` と `build` |
 | meas | 独立の測り | `crates/folio/tests/stamp.rs` の `canonical_hex`（正本から集めて外の命令 `sha256sum` で測る） |
 | teeth | 歯 | `crates/folio/tests/stamp.rs` の `f104_` 3 本と、測り直す先を替える既に在る歯 1 本 |
 
