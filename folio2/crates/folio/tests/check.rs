@@ -864,7 +864,8 @@ fn f86_verify_inner_list_is_still_checked() {
 
 /// 便 90 (g) の変異の当て先 = 写しの FR19 の行の adrs（実の要件書で ADR-9 を持つ行は 1 本だけ）。
 /// 変異は ADR-9 を残す＝FR19 の散文が指す ADR-9 を外して行 R-17 の違反を足さない（便 93）。
-const F90_FR19_ADRS: &str = "\n    adrs: [ADR-9]\n";
+// 変異の当て先は要件書で 1 か所しかない adrs の行（一括 12 で FR19 の行に ADR-13 が足されたため FR17 側へ移した）
+const F90_FR19_ADRS: &str = "\n    adrs: [ADR-5]\n";
 
 #[test]
 fn f90_the_real_srs_carries_the_adrs_field() {
@@ -883,7 +884,7 @@ fn f90_the_real_srs_carries_the_adrs_field() {
         .lines()
         .filter_map(|l| l.strip_prefix("    adrs: ["))
         .collect();
-    assert_eq!(rows.len(), 13, "adrs の行の数: {rows:?}");
+    assert_eq!(rows.len(), 14, "adrs の行の数: {rows:?}");
     for row in rows {
         let body = row.strip_suffix(']').unwrap_or_else(|| panic!("一覧の形でない: {row}"));
         for id in body.split(", ") {
@@ -901,22 +902,22 @@ fn f90_the_real_srs_carries_the_adrs_field() {
 #[test]
 fn f90_an_id_that_is_not_an_adr_is_a_violation() {
     let w = Work::new("f90-not-adr");
-    w.mutate(F90_FR19_ADRS, "\n    adrs: [ADR-9, FR5]\n");
-    assert_srs_item_violation(&w, &["FR19", "adrs", "FR5", "判断の記録の id の形でない"]);
+    w.mutate(F90_FR19_ADRS, "\n    adrs: [ADR-5, FR5]\n");
+    assert_srs_item_violation(&w, &["FR16", "adrs", "FR5", "判断の記録の id の形でない"]);
 }
 
 #[test]
 fn f90_an_adr_that_does_not_exist_is_a_violation() {
     let w = Work::new("f90-missing-adr");
-    w.mutate(F90_FR19_ADRS, "\n    adrs: [ADR-9, ADR-99]\n");
+    w.mutate(F90_FR19_ADRS, "\n    adrs: [ADR-5, ADR-99]\n");
     assert_srs_item_violation(&w, &["adrs", "ADR-99", "が実在しない"]);
 }
 
 #[test]
 fn f90_adrs_that_is_not_a_list_is_a_violation() {
     let w = Work::new("f90-not-list");
-    w.mutate(F90_FR19_ADRS, "\n    adrs: ADR-9\n");
-    assert_srs_item_violation(&w, &["FR19", "adrs が一覧でない"]);
+    w.mutate(F90_FR19_ADRS, "\n    adrs: ADR-5\n");
+    assert_srs_item_violation(&w, &["FR16", "adrs が一覧でない"]);
 }
 
 // ── 規則の表の行の条以外を指す欄 refs（便 91・ADR-13 決定 (3-b)（イ）） ──
@@ -937,11 +938,11 @@ const F91_ROWS: [(&str, &[&str]); 14] = [
     ("R-15", &["P-10.3", "A-3.1", "CON2", "ADR-4"]),
     // R-9 / R-12 は便 93 (d) の書き写し（母集団の文が名指す境界）
     ("R-16", &["P-6.3", "P-10.1", "R-9", "R-12", "ADR-3"]),
-    ("R-17", &["P-4.2"]),
+    ("R-17", &["P-4.2", "P-5.6", "ADR-13"]),
     ("D-3", &["R-1"]),
     ("D-10", &["P-5.2", "R-8"]),
     ("D-11", &["P-5.6"]),
-    ("D-12", &["ADR-8"]),
+    ("D-12", &["ADR-8", "ADR-13"]),
 ];
 
 /// 写しの rules.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（rules.yaml の場所）で `words` を全部含む。
@@ -994,7 +995,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
         assert_eq!(got, *want, "{id} の refs");
         total += got.len();
     }
-    assert_eq!(total, 29, "refs の id の合計");
+    assert_eq!(total, 32, "refs の id の合計");
 }
 
 #[test]
@@ -1110,22 +1111,24 @@ fn f93_a_kind_without_a_receptacle_is_not_counted() {
     assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
     assert!(violations(&out).is_empty(), "{:?}", violations(&out));
     let text = fs::read_to_string(w.srs()).unwrap();
-    let (_, rest) = text
-        .split_once("\n  - id: FR12\n")
-        .expect("FR12 の行が無い");
-    let row = rest.split("\n  - id: ").next().unwrap();
-    let note = row
-        .lines()
-        .find(|l| l.starts_with("    note: "))
-        .expect("FR12 の note が無い");
-    for id in ["FR11", "FR13", "FR14"] {
-        assert!(note.contains(id), "FR12 の note に {id} が無い");
-        for key in ["basis", "rules", "adrs", "verify", "goals", "figures"] {
+    // 要件 → 要件 は受け皿の表に無い組なので、散文が指していても数えない。
+    // 当て先は実の正本で互いの注が相手を指す 2 組（一括 12 で FR12 の注の二重の記述を外したので移した）。
+    for (owner, id) in [("FR3", "FR21"), ("FR21", "FR3")] {
+        let (_, rest) = text
+            .split_once(&format!("\n  - id: {owner}\n"))
+            .unwrap_or_else(|| panic!("{owner} の行が無い"));
+        let row = rest.split("\n  - id: ").next().unwrap();
+        let note = row
+            .lines()
+            .find(|l| l.starts_with("    note: "))
+            .unwrap_or_else(|| panic!("{owner} の note が無い"));
+        assert!(note.contains(id), "{owner} の note に {id} が無い");
+        for key in ["basis", "verify", "goals", "figures"] {
             let typed = row
                 .lines()
                 .find(|l| l.starts_with(&format!("    {key}: ")))
-                .unwrap_or_else(|| panic!("FR12 の {key} が無い"));
-            assert!(!typed.contains(id), "FR12 の {key} に {id} が在る: {typed}");
+                .unwrap_or_else(|| panic!("{owner} の {key} が無い"));
+            assert!(!typed.contains(id), "{owner} の {key} に {id} が在る: {typed}");
         }
     }
 }
@@ -1143,18 +1146,21 @@ fn f93_deleting_the_rule_row_is_not_a_silent_escape() {
     fs::write(w.rules(), format!("{}\n", kept.join("\n"))).unwrap();
     let out = w.check();
     assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
-    // 違反は全部 種別 参照 id の R-17 の未解決で、ちょうど 2 件＝条 N-2 の関係の欄が指す先が消えた 1 件と、
-    // 要件書の承認の来歴（meta）の印が規則の行 R-17 を名指す 1 件（便 93 改訂 c）。歯そのものは黙る
+    // 違反は全部 種別 参照 id の R-17 の未解決で、ちょうど 3 件＝条 N-2 の関係の欄が指す先が消えた 1 件と、
+    // 要件書の承認の来歴（meta）の印が規則の行 R-17 を名指す 1 件（便 93 改訂 c）と、
+    // 語彙の「辺」の定義が規則の行 R-17 を名指す 1 件（一括 12）。歯そのものは黙る
     let v = violations(&out);
     assert!(
         v.iter()
             .all(|l| l.starts_with("[参照 id] ") && l.contains("id R-17 が実在しない")),
         "違反は R-17 の参照 id だけのはず: {v:?}"
     );
-    assert_eq!(v.len(), 2, "参照 id の違反はちょうど 2 件のはず: {v:?}");
+    assert_eq!(v.len(), 3, "参照 id の違反はちょうど 3 件のはず: {v:?}");
     let relation = |l: &&String| l.starts_with("[参照 id] constitution.yaml: ") && l.contains(".relations.rules");
     assert_eq!(v.iter().filter(relation).count(), 1, "条 N-2 の関係の欄の違反: {v:?}");
     let meta = |l: &&String| l.starts_with("[参照 id] srs.yaml: meta.");
     assert_eq!(v.iter().filter(meta).count(), 1, "要件書の承認の来歴の違反: {v:?}");
+    let term = |l: &&String| l.starts_with("[参照 id] vocabulary.yaml: terms");
+    assert_eq!(v.iter().filter(term).count(), 1, "語彙の定義の違反: {v:?}");
     assert!(!v.iter().any(|l| l.starts_with("[R-17]")), "{v:?}");
 }

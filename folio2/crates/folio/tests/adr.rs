@@ -320,13 +320,14 @@ fn f92_the_real_records_carry_the_produced_field() {
         files,
         [
             "ADR-1.yaml",
+            "ADR-13.yaml",
             "ADR-2.yaml",
             "ADR-3.yaml",
             "ADR-4.yaml",
             "ADR-8.yaml"
         ]
     );
-    assert_eq!(ids.len(), 15, "{ids:?}");
+    assert_eq!(ids.len(), 16, "{ids:?}");
     assert!(
         ids.iter()
             .all(|id| !["P-", "A-", "N-"].iter().any(|p| id.starts_with(p))),
@@ -417,10 +418,14 @@ fn f101_the_real_record_carries_the_revises_row() {
                 .map(str::to_string),
         );
     }
-    assert_eq!(files, ["ADR-13.yaml"]);
-    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(files, ["ADR-13.yaml", "ADR-14.yaml"]);
+    assert_eq!(rows.len(), 2, "{rows:?}");
     assert!(
         rows[0].starts_with("  - {target: ADR-8, decision: (4), kind: narrow, summary: "),
+        "{rows:?}"
+    );
+    assert!(
+        rows[1].starts_with("  - {target: ADR-13, decision: (1), kind: narrow, summary: "),
         "{rows:?}"
     );
 }

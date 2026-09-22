@@ -1,12 +1,12 @@
-# folio2 天井の正本（v0.10・orchestrator 席）
+# folio2 天井の正本（v0.11・orchestrator 席）
 # 位置: 判断の記録 ADR-8 決定 (1)(3)(4)・ADR-10（v0.2 = 1 周目の結果を受けた問いの文と読む欄の改訂）。観点 4 つ（文書の型に依らない）・観点ごとの問いの文と読む欄・文書の一覧・所見の欄の決まり・起動の記録の欄・重さと 3 値の値域・材料の束の要約値の規則を持つ。v0.3（判断の記録 ADR-11 決定 (4)①）= 観点ごとの 3 値・所見と記録の欄の決まり・束の中身と要約値の規則・反証の規則は、人が書く節をやめて末尾の生成区間（schema の節・正本は実装の定数・folio が導出する）に移した。人が書くのは meta・重さ（weights）・読む文書の行（documents）・観点の行（viewpoints）。
-# 状態: v0.10 は発効（2026-09-22 11:42 JST 持ち主「全部承認する」・一括 11 = 天井の 22 周目の整合 F-1 と 23 周目の整合 F-1 = 文書の一覧の 語彙・要件書・相談窓口 の 3 行に、生成区間への所見の直す先は実装の側だという断りを足した〔ほかの 5 行と同じ 1 文・便 77 で 8 file すべてが生成区間の印を持つ〕。23 周目の整合 F-4 = 文書どうしの整合の読む文書の入口の行に相談窓口の節（intake）を足した〔入口の正本の相談窓口の節が要件 FR1 / FR2 と相談窓口の正本を人の文で言い直しており、どの観点の読む欄にも入っていなかった〕。観点・重さ・生成区間は不変・持ち主の承認済み）。v0.9 は発効（2026-09-21・一括 10 = 天井の 18 周目の整合 F-1 と 20 周目の整合 F-3 = 文書の一覧の 入口 と この正本 の行に、生成区間への所見の直す先は実装の側だという断りを足した〔規則の表・判断の記録・設計ノートの 3 行と同じ 1 文〕。観点・重さ・読む欄・生成区間は不変・持ち主の承認済み）。v0.8 は発効（2026-09-21・天井の 12 周目の整合 F-7 = 整合の観点の読む文書に入口（棚と読む順番）を足し、読み手の想定を 9 種に・問いの文の文書の列に入口を足した。観点・重さ・生成区間・ほかの 3 観点は不変。承認 = f2-648 notes 2026-09-21 10:17 JST 逐語「承認する」・要件書 v1.19 と同じ承認）。v0.7 = 2026-09-21 発効（11 周目の整合 F-5 = 実態との整合の読む文書に憲法と規則の表）。
+# 状態: v0.10 は発効（2026-09-22 11:42 JST 持ち主「全部承認する」・一括 11 = 天井の 22 周目の整合 F-1 と 23 周目の整合 F-1 = 文書の一覧の 語彙・要件書・相談窓口 の 3 行に、生成区間への所見の直す先は実装の側だという断りを足した〔ほかの 5 行と同じ 1 文・便 77 で 8 file すべてが生成区間の印を持つ〕。23 周目の整合 F-4 = 文書どうしの整合の読む文書の入口の行に相談窓口の節（intake）を足した〔入口の正本の相談窓口の節が要件 FR1 / FR2 と相談窓口の正本を人の文で言い直しており、どの観点の読む欄にも入っていなかった〕。観点・重さ・生成区間は不変・持ち主の承認済み）。v0.9 は発効（2026-09-21・一括 10 = 天井の 18 周目の整合 F-1 と 20 周目の整合 F-3 = 文書の一覧の 入口 と この正本 の行に、生成区間への所見の直す先は実装の側だという断りを足した〔規則の表・判断の記録・設計ノートの 3 行と同じ 1 文〕。観点・重さ・読む欄・生成区間は不変・持ち主の承認済み）。v0.8 は発効（2026-09-21・天井の 12 周目の整合 F-7 = 整合の観点の読む文書に入口（棚と読む順番）を足し、読み手の想定を 9 種に・問いの文の文書の列に入口を足した。観点・重さ・生成区間・ほかの 3 観点は不変。承認 = f2-648 notes 2026-09-21 10:17 JST 逐語「承認する」・要件書 v1.19 と同じ承認）。v0.7 = 2026-09-21 発効（11 周目の整合 F-5 = 実態との整合の読む文書に憲法と規則の表）。 ／ v0.11 は発効（2026-09-22 20:52 JST 持ち主「全部承認する」・一括 12 の問 4 = 観点の読む文書の欄に 8 対を足して実測に合わせた〔便 98 が束を節まで絞る前の宣言の是正〕。観点の数と重さと文書の一覧と生成区間は不変）
 # 読み方: folio は AI を起動しない。観点ごとに材料の束（bundle）を組み、席か器が AI を回して所見（finding）と起動の記録（record）を同じ置き場へ書く。床は所見の形と記録の有無と束の要約値の一致だけを数え、所見の意味の当否は判定しない（P-1）。
 
 meta:
   id: folio2-ceiling
   title: 天井の正本（観点・所見の欄の決まり・起動の記録）
-  version: v0.10
+  version: v0.11
   status: effective
   generated: 2026-09-19
   approval:
@@ -30,6 +30,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-21, stamp: "発効（f2-648 notes 2026-09-21 22:50 JST・対話面 R-8・天井 19・20 周目と一括 10 の承認要求への回答・要件書 v1.24 と同じ承認）", verbatim: 承認する。, version: v0.9}
     - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-22, stamp: "v0.10 の起草（一括 11・天井 22 周目 整合 F-1 と 23 周目 整合 F-1 = 文書の一覧の 語彙・要件書・相談窓口 の 3 行に生成区間の直す先の断り／23 周目 整合 F-4 = 整合の読む文書の入口の行に相談窓口の節。観点と重さと生成区間は不変）", version: v0.10}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-22, stamp: "発効（f2-648 notes 2026-09-22 11:42 JST・対話面 R-8・一括 11 の承認要求〔🔴 8〕への回答）", verbatim: 全部承認する, version: v0.10}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-22, stamp: "v0.11 の起草（一括 12・便 97 の 🔴 1 = 観点の読む文書の欄に 8 対を足して実測に合わせる。直近 10 周の所見の根拠 183 件のうち 17 件が、面には出ているのに読む欄の宣言に無い節に在った。観点の数と重さと文書の一覧と生成区間は不変）", version: v0.11}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-22, stamp: "発効（f2-648 notes 2026-09-22 20:52 JST・対話面 R-8・一括 12 の承認要求〔問い 5 つ〕への回答・問 4）", verbatim: 全部承認する, version: v0.11}
 
 # 所見の重さ。refute に挙げた重さの所見だけ、別の文脈の AI が中立に反証する（ADR-8 決定 (3)）。反証が「まだ分からない」なら所見は残す。重さの基準は各観点の問いの文が持つ（v0.2）
 weights:
@@ -58,22 +60,22 @@ viewpoints:
       - {doc: constitution, fields: [articles.plain, articles.statements.text]}
       - {doc: rules, fields: [thresholds, discipline]}
       - {doc: vocabulary, fields: [terms, field_terms]}
-      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs]}
+      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs, nonfunctional, scope_m1]}
       - {doc: intake, fields: [questions]}
-      - {doc: adr, fields: [plain, decision, options.text, figures.refs]}
+      - {doc: adr, fields: [plain, decision, options.text, figures.refs, note]}
       - {doc: design-note, fields: [sections, figures.refs]}
   - id: readability
     name: 読みやすさ
     reader: この道具を初めて見る非エンジニア
     question: 入口から歩いて「何が決まりで・何ができたら完成で・なぜそう決めたか」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。
     reads:
-      - {doc: index, fields: [audience, shelf, lanes]}
+      - {doc: index, fields: [audience, shelf, lanes, intake]}
       - {doc: constitution, fields: [articles.title, articles.plain, precedence, sources]}
       - {doc: rules, fields: [thresholds, discipline]}
       - {doc: vocabulary, fields: [terms]}
-      - {doc: srs, fields: [goals, scope, requirements.title, requirements.plain, nonfunctional, constraints]}
+      - {doc: srs, fields: [goals, scope, requirements.title, requirements.plain, nonfunctional, constraints, acceptance, figures]}
       - {doc: intake, fields: [questions]}
-      - {doc: adr, fields: [title, plain, decision]}
+      - {doc: adr, fields: [title, plain, decision, context, note]}
       - {doc: design-note, fields: [sections]}
   - id: coherence
     name: 文書どうしの整合
@@ -82,8 +84,8 @@ viewpoints:
     reads:
       - {doc: constitution, fields: [articles, precedence]}
       - {doc: rules, fields: [thresholds, discipline]}
-      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
-      - {doc: adr, fields: [context, decision, options, basis, consequences, retreat]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1]}
+      - {doc: adr, fields: [context, decision, options, basis, consequences, retreat, note]}
       - {doc: design-note, fields: [sections]}
       - {doc: intake, fields: [targets, questions]}
       - {doc: ceiling, fields: [documents, viewpoints]}
@@ -97,7 +99,7 @@ viewpoints:
       - {doc: constitution, fields: [articles.mechanism, articles.statements.text]}
       - {doc: rules, fields: [thresholds, discipline]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
-      - {doc: adr, fields: [decision, consequences]}
+      - {doc: adr, fields: [decision, consequences, note]}
       - {doc: design-note, fields: [sections]}
 
 # 決まりの部分（生成区間）。観点ごとの 3 値・観点と読む文書の閉じた id・所見と起動の記録の欄・束の中身と要約値の規則・反証の束と結果の欄と規則の文。何にするかの裁定の正本は設計文書（要件書 FR5・判断の記録 ADR-8）で、機械が執行する規則の正本は実装の定数（判断の記録 ADR-11 決定 (3)(イ)(ウ)(オ)）。直すときは実装の側を便で直す。憲法の schema の節（file が正本）とは向きが逆である（規則の表の schema の節は同じ向き = 生成区間・判断の記録 ADR-11 決定 (4)②）
