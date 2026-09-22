@@ -10,6 +10,7 @@
 
 - 改訂 b（2026-09-23 00:2x JST・検証役の report `~/.local/share/folio2/handoff-2026-09-22/d104-verify.md` §7 への応答）: §1 (e) 2 の「まだ分からない」に逃げてよい条件を外の命令の起動失敗だけに狭め、それ以外の測れない理由では歯を落とすと明記。既に在る歯の測り直しを残すことを明記。数値・write-set・歯の本数・done・verify は変えない。
 - 改訂 c（2026-09-23 00:5x JST・受付の断り name-unresolved への応答）: §1 (h) の表・§2 の入れる物・§3 の部品の表で、base に無い関連 fn を `Round::split` / `Round::build` の字面で名指していた 3 か所を「`Round` に足す関連 fn の `split` と `build`」に直した。中身・数値・write-set・歯・done・verify は変えない。
+- 改訂 d（2026-09-23 00:4x JST・受付の断り name-unresolved への応答 2 回目）: `gate::sources_digest` の字面（base では非公開の fn で、器の名指しの解決が path 形を base に見つけられない）5 か所を「`gate.rs` の `sources_digest`」に直した（契約表の title の 1 か所を含む）。中身・数値・write-set・歯・done・verify は変えない。
 ## 1. 設計
 
 ### (a) いま起きていること（実測）
@@ -35,19 +36,19 @@
 
 | 形 | 触る src | 行の動き（幅 120 正規化） |
 | --- | --- | --- |
-| （あ）`gate::sources_digest` を `pub(crate)` にして `stamp.rs` から呼ぶ | 2 本（`stamp.rs`・`gate.rs`） | stamp.rs 338 → 344（+6）・gate.rs 252 → 253（+1）・計 **+7** |
+| （あ）`gate.rs` の `sources_digest` を `pub(crate)` にして `stamp.rs` から呼ぶ | 2 本（`stamp.rs`・`gate.rs`） | stamp.rs 338 → 344（+6）・gate.rs 252 → 253（+1）・計 **+7** |
 | （い）`sources_digest` と `documents` と `collect` を `bundle.rs` へ移し、`gate.rs` と `stamp.rs` と `graph.rs` が呼ぶ | 4 本（`bundle.rs`・`gate.rs`・`stamp.rs`・`graph.rs`） | bundle.rs 730 → 800（+70）・gate.rs 252 → 181（−71）・stamp.rs 338 → 343（+5）・graph.rs 738（呼ぶ先 2 か所と use 1 行の入れ替え） |
 
 **（あ）を採る。** 理由は 3 つ。
 
 1. **置き場は既に決まっている。** `gate.rs` の `documents` と `collect` は既に `pub(crate)` で、`crates/folio/src/graph.rs` の `stamp_table`（666〜670 行）が印の `rest` と `nodes` を組むのに呼んでいる。つまり「`--dir` の正本から観点の読む文書の file を集める」口の置き場は `gate.rs` だと既に決まっており、印の 3 欄のうち `rest` と `nodes` は**もう** `gate.rs` の口を通って正本から測っている。`sources` だけが束の写しから測っていた。（あ）はその 1 欄を残り 2 欄と同じ経路に揃える。
 2. **直す便の大きさが小さい。** （い）は 70 行の引っ越しで、本便が直す欠陥とは関わらない `graph.rs` を write-set に入れる。欠陥を直す便に引っ越しを載せない。
-3. **（い）の利点（module の依存の向きを一方向にする）は本便で払う必要が無い。** `gate.rs` は既に `stamp::STAMP_FILE` を読み、`stamp.rs` が `gate::sources_digest` を呼ぶと 2 方向の辺になるが、Rust の 1 つの crate の中の module は相互に参照でき、build も clippy も通る（起草役が実測）。置き場を動かしたくなったら（い）は本便の後でも 1 便で運べる（本便が足すのは `pub(crate)` の 1 語と呼ぶ 1 行だけ）。
+3. **（い）の利点（module の依存の向きを一方向にする）は本便で払う必要が無い。** `gate.rs` は既に `stamp::STAMP_FILE` を読み、`stamp.rs` が `gate.rs` の `sources_digest` を呼ぶと 2 方向の辺になるが、Rust の 1 つの crate の中の module は相互に参照でき、build も clippy も通る（起草役が実測）。置き場を動かしたくなったら（い）は本便の後でも 1 便で運べる（本便が足すのは `pub(crate)` の 1 語と呼ぶ 1 行だけ）。
 
 **書き換えは 3 か所（起草役の実測の patch は `~/.local/share/folio2/handoff-2026-09-22/d104-measured.patch`）。**
 
 - `gate.rs`: `fn sources_digest` → `pub(crate) fn sources_digest`（1 語）。file の頭の注 2 行と関数の注 1 行を、印もこの関数を呼ぶ形に書き替える。
-- `stamp.rs`: `use crate::gate;` を足し、`derive` の中で欄 sources を組む 1 行を、`union_digest` に旗 sources を渡す形から `gate::sources_digest(dir, &ceiling)?` に替える。
+- `stamp.rs`: `use crate::gate;` を足し、`derive` の中で欄 sources を組む 1 行を、`union_digest` に旗 sources を渡す形から `gate.rs の sources_digest(dir, &ceiling)?` に替える。
 - `stamp.rs`: file の頭の注に便 104 の 3 行を足し、全部か無しか の 1 行から「正本と」を落とす（正本の写しが観点で食い違うことは、もう まだ分からない の理由ではない）。
 
 ### (c) 面の側（欄 `faces`）は和集合のまま
@@ -112,7 +113,7 @@ size **S**（触る src は `stamp.rs` と `gate.rs` の 2 本で、余地はそ
 
 ## 2. 範囲
 
-- 入れる: `gate::sources_digest` の見え方 1 語と注 3 行・`stamp.rs` の呼ぶ先 1 行と `use` 1 行と注 5 行・`union_digest` を `faces_digest` に替えること・手書きの土台 `tests/fixtures/ceiling/split-reads.yaml` 1 本・`crates/folio/tests/stamp.rs` の周の組み立ての一般化（`put_reads`・`split_reads`・`Round` に足す関連 fn の `split` と `build`）と `folio_gate` と `canonical_hex` と `f104_` の歯 3 本と既に在る歯 1 本の測り直す先。
+- 入れる: `gate.rs` の `sources_digest` の見え方 1 語と注 3 行・`stamp.rs` の呼ぶ先 1 行と `use` 1 行と注 5 行・`union_digest` を `faces_digest` に替えること・手書きの土台 `tests/fixtures/ceiling/split-reads.yaml` 1 本・`crates/folio/tests/stamp.rs` の周の組み立ての一般化（`put_reads`・`split_reads`・`Round` に足す関連 fn の `split` と `build`）と `folio_gate` と `canonical_hex` と `f104_` の歯 3 本と既に在る歯 1 本の測り直す先。
 - 入れない: 束の絞りの規則・束の要約値・凍結 anchor の中身（`stamp-expected.yaml`・`bundle-anchor.txt`・所見 fixture）・印の欄の並びと字面・門の 3 値の規則・`rest` と `nodes` の組み方・置き場の引っ越し・`design-intent/` の下の file・新しい dir・外部 crate・台帳への記帳。
 
 ## 3. 部品
@@ -142,7 +143,7 @@ schema = 1
 
 [[contract]]
 id = "db"
-title = "天井の印（folio ceiling --stamp）の欄 sources を、材料の束の観点ごとの写しの和集合からでなく、--dir の設計文書の正本から測る形へ改める。門（--gate）が印の sources を突き合わせるのに使う関数 gate::sources_digest（観点の reads が指す文書の file・file 形はその file・dir 形は直下の .yaml を --dir からの相対 path の byte 順に連結した sha256）を pub(crate) にし、stamp.rs の derive がその同じ関数を呼ぶ（2 面に実装しない・P-6.3・P-15.2・要件書 FR20 の規範文が印の欄を 正本の要約値 と言う）。便 98 が束の sources/ の写しを観点の reads が宣言した最上位の節まで絞ってから、同じ文書の写しが観点ごとに違う byte になり、和集合を取る口が Err を返して印が書けなくなっていた。面の側の欄 faces は束の faces/ の和集合のまま残し（面は絞られていない・門は faces を突き合わせない）、呼ぶ先が 1 つになった口を faces_digest に名を替えて旗 sub を落とす。観点で中身が違えば Err とする枝は faces に残す。歯の土台として、4 観点が同じ 5 文書の違う欄を読む reads の行を手で書いた file tests/fixtures/ceiling/split-reads.yaml を既に在る dir の下に 1 本足し、印の歯の周の組み立てを観点ごとに reads を差し替えられる形へ一般化する（既に在る周の振る舞いは変えない）。凍結 anchor tests/fixtures/ceiling/findings/stamp-expected.yaml は 34 行 1,342 byte のまま 1 byte も動かさない（要約値の行を落とした形と突き合わせる anchor なので、動くのは sources の値だけ）。印の欄の並びと字面・門の 3 値の規則・束の絞りの規則・束の要約値・rest と nodes の組み方は 1 つも変えず、design-intent の下は 1 file も書き換えない"
+title = "天井の印（folio ceiling --stamp）の欄 sources を、材料の束の観点ごとの写しの和集合からでなく、--dir の設計文書の正本から測る形へ改める。門（--gate）が印の sources を突き合わせるのに使う関数 gate.rs の sources_digest（観点の reads が指す文書の file・file 形はその file・dir 形は直下の .yaml を --dir からの相対 path の byte 順に連結した sha256）を pub(crate) にし、stamp.rs の derive がその同じ関数を呼ぶ（2 面に実装しない・P-6.3・P-15.2・要件書 FR20 の規範文が印の欄を 正本の要約値 と言う）。便 98 が束の sources/ の写しを観点の reads が宣言した最上位の節まで絞ってから、同じ文書の写しが観点ごとに違う byte になり、和集合を取る口が Err を返して印が書けなくなっていた。面の側の欄 faces は束の faces/ の和集合のまま残し（面は絞られていない・門は faces を突き合わせない）、呼ぶ先が 1 つになった口を faces_digest に名を替えて旗 sub を落とす。観点で中身が違えば Err とする枝は faces に残す。歯の土台として、4 観点が同じ 5 文書の違う欄を読む reads の行を手で書いた file tests/fixtures/ceiling/split-reads.yaml を既に在る dir の下に 1 本足し、印の歯の周の組み立てを観点ごとに reads を差し替えられる形へ一般化する（既に在る周の振る舞いは変えない）。凍結 anchor tests/fixtures/ceiling/findings/stamp-expected.yaml は 34 行 1,342 byte のまま 1 byte も動かさない（要約値の行を落とした形と突き合わせる anchor なので、動くのは sources の値だけ）。印の欄の並びと字面・門の 3 値の規則・束の絞りの規則・束の要約値・rest と nodes の組み方は 1 つも変えず、design-intent の下は 1 file も書き換えない"
 req = ["FR20", "FR17"]
 section = "1"
 write-set = ["crates/folio/src/stamp.rs", "crates/folio/src/gate.rs", "crates/folio/tests/stamp.rs", "crates/folio/tests/gate.rs", "+tests/fixtures/ceiling/split-reads.yaml"]
