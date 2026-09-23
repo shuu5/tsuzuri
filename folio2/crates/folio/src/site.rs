@@ -20,7 +20,7 @@ use crate::check;
 use crate::cursor::R;
 use crate::phase::Flag;
 use crate::verdict::Verdict;
-use crate::{face_adr, face_constitution, face_index, face_note, face_srs};
+use crate::{face_adr, face_constitution, face_index, face_index_read, face_note, face_srs};
 
 /// 配信先へ出す 1 本の出どころ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -139,11 +139,11 @@ fn build_all(dir: &Path) -> R<Vec<(String, Vec<u8>)>> {
         };
         built.push((name.to_string(), bytes));
     }
-    for record in face_index::records(dir)? {
+    for record in face_index_read::records(dir)? {
         let html = face_adr::derive(dir, record.id())?;
         built.push((record.file(), html.into_bytes()));
     }
-    for note in face_index::notes(dir)? {
+    for note in face_index_read::notes(dir)? {
         let html = face_note::derive(dir, note.id())?;
         built.push((note.file(), html.into_bytes()));
     }

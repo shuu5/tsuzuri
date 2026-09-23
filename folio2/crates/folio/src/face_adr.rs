@@ -17,7 +17,7 @@ use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X};
 use crate::face::{self, Frame, anchor, card};
-use crate::face_index;
+use crate::face_index_read;
 
 /// 判断の記録の面が使う部品（9 種・便 33 で figure-panel を・便 40 で ceiling-stamp を足した）。
 pub const PARTS: [Component; 9] = [
@@ -300,7 +300,7 @@ fn record_ids(dir: &Path) -> R<Vec<String>> {
         let Some(stem) = name.strip_suffix(".yaml").filter(|s| s.starts_with("ADR-")) else {
             continue;
         };
-        if let Some(n) = face_index::adr_number(stem) {
+        if let Some(n) = face_index_read::adr_number(stem) {
             ids.push((n, stem.to_string()));
         }
     }
