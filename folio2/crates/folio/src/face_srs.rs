@@ -777,9 +777,16 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
     figure_close(o, "図 1", m)?;
 
     o.push("<h3>作るもの / 作らないもの</h3>".to_string());
-    for (key, label) in [("scope", "M0"), ("scope_m1", "M1")] {
-        let sc = s.f(key)?;
-        let note = if key == "scope_m1"
+    // 段の範囲の節（鍵・名札・必須か）。scope_m3 は任意の節で、無ければ描かない（便 118・便 117 の §1 (h) の 2・ADR-16 決定 (1)）。
+    for (key, label, required) in [
+        ("scope", "M0", true),
+        ("scope_m1", "M1", true),
+        ("scope_m3", "M3", false),
+    ] {
+        let Some(sc) = (if required { Some(s.f(key)?) } else { s.g(key)? }) else {
+            continue;
+        };
+        let note = if key != "scope"
             && let Some(n) = sc.g("note")?
         {
             format!(" {}", hint("注", &n.e()?))

@@ -4,6 +4,8 @@
 //! - 正本から数えた参照の段が全部面に在る（yaml-rust2 で正本を直に読む・生成器の字を写さない）
 //! - 受入基準の章に英字の欄名の字面が 0 回で、日本語の名札が行の数だけ
 //! - 承認欄の lead が status_note の要旨（最初の「。」まで）だけで、来歴は折りたたみの中に逐語で在る
+//! - 便 118: M3 の範囲の節 scope_m3 は、在れば章 02 の段の範囲の塊を M1 の直後に 1 つ足し（名札 M3・注の小窓も同じ形）、
+//!   無い・null なら面は凍結 fixture と byte 一致する（scope と scope_m1 は必須のまま・docs/design/delivery-118.md §1 (d)）
 //!
 //! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
 
@@ -394,4 +396,171 @@ fn f100_face_srs_is_split_and_under_the_cap() {
             "face_srs.rs に「{head}」が残っている"
         );
     }
+}
+
+// ── 便 118: M3 の範囲の節 scope_m3 を段の範囲の塊に描く（docs/design/delivery-118.md §1 (d)）──
+
+/// 見本の scope_m3 の字（build・not_build・note）。escape を見るため「&」「<」「>」を含む。
+const M3_BUILD: &str = "束 & 門の生成";
+const M3_NOT_BUILD: &str = "他の repo の設計文書の移送";
+const M3_NOTE: &str = "版 B で <中身> を決める。";
+/// 段の範囲の塊（部品 section-lead-callout）の開き。
+const CALLOUT: &str = "<div data-component=\"section-lead-callout\" style=\"--band-n:2\">";
+
+/// 手書きの scope_m3 の節（値は全部二重引用符付き）。
+fn m3_section() -> String {
+    format!(
+        "scope_m3:\n  build:\n    - \"{M3_BUILD}\"\n  not_build:\n    - \"{M3_NOT_BUILD}\"\n  note: \"{M3_NOTE}\"\n\n"
+    )
+}
+
+/// 面の fixture の 5 file を一時 dir の下の src/ へ写し（要件書だけ `edit` で書き換える）、要件書の面を書く。
+/// 結果・面の本文・面の file が書かれたかを返す（一時 dir は消す）。
+fn fixture_srs(case: &str, edit: impl FnOnce(String) -> String) -> (Output, String, bool) {
+    let fixture = repo_root().join("tests/fixtures/face");
+    let td = temp_dir(case);
+    let work = td.join("src");
+    fs::create_dir_all(&work).unwrap();
+    for name in [
+        "constitution.yaml",
+        "rules.yaml",
+        "vocabulary.yaml",
+        "ceiling.yaml",
+    ] {
+        fs::copy(fixture.join(name), work.join(name)).unwrap();
+    }
+    let srs = fs::read_to_string(fixture.join("srs.yaml")).unwrap();
+    fs::write(work.join("srs.yaml"), edit(srs)).unwrap();
+    copy_dir(&vendor(), &td.join("vendor/archify"));
+    let out = td.join("srs.html");
+    let (run, html) = write_face("srs", &work, &out);
+    let written = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    (run, html, written)
+}
+
+/// 最上位の節 actors の直前に `section` を足す。
+fn add_before_actors(srs: &str, section: &str) -> String {
+    let at = srs.find("\nactors:\n").expect("写しに actors の節が無い") + 1;
+    format!("{}{section}{}", &srs[..at], &srs[at..])
+}
+
+/// 最上位の節 `key` を（次の最上位の鍵の手前まで）落とす。
+fn drop_section(srs: &str, key: &str) -> String {
+    let start = srs
+        .find(&format!("\n{key}:\n"))
+        .unwrap_or_else(|| panic!("写しに {key} の節が無い"))
+        + 1;
+    let rest = &srs[start..];
+    let mut end = rest.find('\n').unwrap() + 1;
+    for line in rest[end..].split_inclusive('\n') {
+        if !line.trim().is_empty() && !line.starts_with(' ') {
+            break;
+        }
+        end += line.len();
+    }
+    format!("{}{}", &srs[..start], &rest[end..])
+}
+
+/// 章 02 の段の範囲の塊（開きから次の行頭の閉じの div まで・閉じを含む）の全部。
+fn callouts(html: &str) -> Vec<&str> {
+    let ch = chapter(html, 2);
+    ch.match_indices(CALLOUT)
+        .map(|(i, _)| {
+            let end = ch[i..].find("\n</div>\n").expect("塊の閉じが無い") + "\n</div>\n".len();
+            &ch[i..i + end]
+        })
+        .collect()
+}
+
+fn ok(run: &Output) {
+    assert_eq!(
+        code(run, "folio face --face srs --write"),
+        0,
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+fn frozen_srs() -> String {
+    fs::read_to_string(repo_root().join("tests/fixtures/face/expected-srs.html")).unwrap()
+}
+
+#[test]
+fn f118_scope_m3_copied_from_scope_m1_has_the_same_block() {
+    let (run, html, _) = fixture_srs("f118-copy", |srs| {
+        let start = srs.find("\nscope_m1:\n").expect("写しに scope_m1 が無い") + 1;
+        let end = srs.find("\nactors:\n").expect("写しに actors が無い") + 1;
+        let m3 = srs[start..end].replacen("scope_m1:", "scope_m3:", 1);
+        add_before_actors(&srs, &m3)
+    });
+    ok(&run);
+    let b = callouts(&html);
+    assert_eq!(b.len(), 3, "章 02 の段の範囲の塊が 3 つでない");
+    for (block, label) in b.iter().zip(["M0", "M1", "M3"]) {
+        assert!(
+            block.contains(&format!("<div class=\"cid\">{label} で作る</div>")),
+            "塊の名札が {label} でない: {block}"
+        );
+    }
+    let want = b[1].replace("<div class=\"cid\">M1 ", "<div class=\"cid\">M3 ");
+    assert_eq!(b[2], want, "3 つ目の塊が 2 つ目の名札を M3 に替えた字でない");
+    assert!(b[2].contains("<span class=\"hint-body\">"), "3 つ目の塊に注の小窓が無い");
+}
+
+#[test]
+fn f118_handwritten_scope_m3_adds_one_escaped_block() {
+    let (run, html, _) = fixture_srs("f118-hand", |srs| add_before_actors(&srs, &m3_section()));
+    ok(&run);
+    let b = callouts(&html);
+    assert_eq!(b.len(), 3, "章 02 の段の範囲の塊が 3 つでない");
+    let m3 = b[2];
+    assert!(
+        m3.contains(&format!(
+            "<div class=\"cid\">M3 で作る</div><p class=\"cd\">{}</p>",
+            esc(M3_BUILD)
+        )),
+        "M3 で作るの card に build の値が無い: {m3}"
+    );
+    assert!(
+        m3.contains(&format!(
+            "<div class=\"cid\">M3 では作らない <span class=\"pill\">対象外</span></div><p class=\"cd\">{} ",
+            esc(M3_NOT_BUILD)
+        )),
+        "M3 では作らないの card に not_build の値が無い: {m3}"
+    );
+    assert!(
+        m3.contains(&format!("<span class=\"hint-body\">{}</span>", esc(M3_NOTE))),
+        "注の小窓に note の値が無い: {m3}"
+    );
+    assert!(!html.contains("<中身>"), "note の生の「<」「>」が面に在る");
+    let rest = html.replacen(m3, "", 1);
+    assert!(rest == frozen_srs(), "M3 の塊を除いた面が凍結 fixture と一致しない");
+}
+
+#[test]
+fn f118_null_scope_m3_is_unchanged_and_scope_m1_stays_required() {
+    let (run, html, _) = fixture_srs("f118-null", |srs| add_before_actors(&srs, "scope_m3:\n\n"));
+    ok(&run);
+    assert!(html == frozen_srs(), "scope_m3 が null の面が凍結 fixture と一致しない");
+    for key in ["scope", "scope_m1"] {
+        let (run, _, written) =
+            fixture_srs(&format!("f118-drop-{key}"), |srs| drop_section(&srs, key));
+        let err = String::from_utf8_lossy(&run.stderr);
+        assert_eq!(code(&run, key), 2, "{key} を落とした写しが 2 で終わらない: {err}");
+        assert!(err.contains(&format!("欄 {key} が無い")), "{key}: {err}");
+        assert!(!written, "{key} を落とした写しで面を書いた");
+    }
+}
+
+#[test]
+fn f118_real_srs_has_an_m3_block_only_with_scope_m3() {
+    let text = fs::read_to_string(design_intent().join("srs.yaml")).unwrap();
+    let has = text.lines().any(|l| l.starts_with("scope_m3:"));
+    let html = real_srs("f118-real");
+    assert_eq!(
+        html.matches("<div class=\"cid\">M3 で作る</div>").count(),
+        usize::from(has),
+        "実の要件書の面の M3 の塊の数が scope_m3 の有無と違う"
+    );
 }
