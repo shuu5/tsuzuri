@@ -1,15 +1,16 @@
-# folio2 索引の欄の決まり — 正本（v0.1 起草・orchestrator 席）
+# folio2 索引の欄の決まり — 正本（v0.1・orchestrator 席）
 # 位置: 判断の記録 ADR-13 決定 (1)(2)。設計文書の索引（節点と辺）の 種類と型の閉じた一覧 を人が読める形で持つ。
 # 索引の中身そのものはここに置かない＝毎回 folio graph --print が正本から組み直す導出物である（ADR-13 決定 (4)・P-6.3 / P-6.4）。
-# 状態: v0.1 は起草（便 95・行 cr）。閉じた一覧の正本は実装の型付きの定数 crates/folio/src/graph.rs で、下の生成区間はその写しである（P-5.1・P-5.6）。
+# 状態: v0.1 は発効（2026-09-23 23:49 JST 持ち主「全部推奨で良い」・一括 14 の問 6 = 承認欄に持ち主の承認の行を足しただけで中身は不変・起草は便 95・行 cr・仕分けは docs/design/batch14-triage.md）。閉じた一覧の正本は実装の型付きの定数 crates/folio/src/graph.rs で、下の生成区間はその写しである（P-5.1・P-5.6）。
 
 meta:
   id: folio2-graph
   title: 設計文書の索引の欄の決まり
   version: v0.1
-  status: draft
+  status: effective
   approval:
     - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-22, stamp: 起草（便 95・行 cr・判断の記録 ADR-13 決定 (1)(2)）, version: v0.1}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-23, stamp: "発効（f2-648 notes 2026-09-23 23:49 JST・対話面 R-8・一括 14 の問 6〔第 0.1 版の発効・中身は不変〕への回答・推奨どおり）", verbatim: 全部推奨で良い, version: v0.1}
 # folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
 schema:
   top_level: [meta, schema]
