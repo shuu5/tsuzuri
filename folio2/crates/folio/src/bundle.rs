@@ -24,7 +24,7 @@ use crate::ceiling::{
     BUNDLE_DIGEST, BUNDLE_SKELETON,FINDING_OPTIONAL, FINDING_REQUIRED, PLACE_REQUIRED, RECORD_REQUIRED,
     REFUTE_VALUES, VERDICT_VALUES,
 };
-use crate::face::R;
+use crate::cursor::R;
 use crate::sha256;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};

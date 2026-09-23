@@ -3,7 +3,7 @@
 //! 公開の名は `face.rs` から丸ごと再輸出されるので、呼び出し側は `crate::face::…` のまま名指せる。
 
 use crate::constitution_enums as ce;
-use crate::face::{R, X};
+use crate::cursor::{R, X};
 use crate::rules;
 
 // ── 名札（β・憲法の値域の名札は導出した型への網羅の場合分け・便 50）──

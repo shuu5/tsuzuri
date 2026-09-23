@@ -8,9 +8,10 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 use crate::constitution_enums as ce;
+use crate::cursor::{self, R, X, esc};
 use crate::face::{
-    self, DOC_STATUS, Frame, MAX_RAIL_NODES, R, Tier, X, anchor, binds_label, card, count_word,
-    esc, hint, hint_q, mechanism_kind_label, mechanism_live_label, mechanism_live_meaning,
+    self, DOC_STATUS, Frame, MAX_RAIL_NODES, Tier, anchor, binds_label, card, count_word,
+    hint, hint_q, mechanism_kind_label, mechanism_live_label, mechanism_live_meaning,
     pattern_label, polarity_label, rationale, retreat_kind_label, rule_kind_label,
     rule_status_class, section_anchor, split_dash, stage_label, strength_label, strength_meaning,
     tier_label, tier_of, val,
@@ -120,10 +121,10 @@ impl<'a> Ctx<'a> {
 
 /// 正本 → 憲法の面の HTML（決定的）。天井の名札は印から読む（便 40・便 83）。
 pub fn derive(dir: &Path) -> R<String> {
-    let c_doc = face::load(dir, "constitution.yaml")?;
-    let r_doc = face::load(dir, "rules.yaml")?;
-    let v_doc = face::load(dir, "vocabulary.yaml")?;
-    let s_doc = face::load(dir, "srs.yaml")?;
+    let c_doc = cursor::load(dir, "constitution.yaml")?;
+    let r_doc = cursor::load(dir, "rules.yaml")?;
+    let v_doc = cursor::load(dir, "vocabulary.yaml")?;
+    let s_doc = cursor::load(dir, "srs.yaml")?;
     let c = X::root(&c_doc, "constitution.yaml");
     let r = X::root(&r_doc, "rules.yaml");
     let v = X::root(&v_doc, "vocabulary.yaml");

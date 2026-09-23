@@ -3,8 +3,9 @@
 //! `fig_req`・`article_link`・`xref`・`slots`）は `face_srs.rs` のもの。
 
 use crate::constitution_enums as ce;
+use crate::cursor::{R, X};
 use crate::face::{
-    METHOD, R, TONE, X, anchor, card, hint, hint_q, method_label, pattern_label, strength_label,
+    METHOD, TONE, anchor, card, hint, hint_q, method_label, pattern_label, strength_label,
     strength_meaning, strength_prio,
 };
 use crate::face_srs::{

@@ -16,7 +16,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::bundle::{self, Ceiling, Files};
-use crate::face::R;
+use crate::cursor::R;
 use crate::findings::{self, Counted};
 use crate::gate;
 use crate::graph;

@@ -17,7 +17,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::check;
-use crate::face::R;
+use crate::cursor::R;
 use crate::freeze::Flag;
 use crate::verdict::Verdict;
 use crate::{face_adr, face_constitution, face_index, face_note, face_srs};

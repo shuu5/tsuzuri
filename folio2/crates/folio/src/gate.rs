@@ -12,7 +12,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use crate::bundle;
-use crate::face::R;
+use crate::cursor::R;
 use crate::sha256;
 use crate::stamp::STAMP_FILE;
 use crate::verdict::Verdict;

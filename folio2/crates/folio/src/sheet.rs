@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use crate::face::{self, R, X};
+use crate::cursor::{self, R, X};
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
 
@@ -162,7 +162,7 @@ struct Intake {
 /// 相談窓口の正本を型付きで読む。欄が無い・型が違う・質問の id の重複・recommend が values に無い・
 /// 行き先が targets に無い は Err（まだ分からない）。
 fn load_intake(dir: &Path) -> R<Intake> {
-    let value = face::load(dir, INTAKE)?;
+    let value = cursor::load(dir, INTAKE)?;
     let root = X::root(&value, INTAKE);
 
     let version = root.f("meta")?.f("version")?.text()?;
@@ -250,7 +250,7 @@ fn branch<'a>(row: &X<'a>, yes: bool) -> R<X<'a>> {
 /// 回答の file（最上位の欄 answers の表・質問の id → 値）。
 fn read_answers(dir: &Path, path: &Path, intake: &Intake) -> R<Vec<(String, String)>> {
     let name = path.to_string_lossy().into_owned();
-    let value = face::load(dir, &name)?;
+    let value = cursor::load(dir, &name)?;
     let root = X::root(&value, &name);
     let mut out = Vec::new();
     for (q, v) in root.f("answers")?.pairs()? {
@@ -277,7 +277,7 @@ struct SheetAnswer {
 }
 
 fn read_sheet(dir: &Path, intake: &Intake) -> R<Vec<SheetAnswer>> {
-    let value = face::load(dir, &intake.sheet_file)?;
+    let value = cursor::load(dir, &intake.sheet_file)?;
     let root = X::root(&value, &intake.sheet_file);
     let mut out = Vec::new();
     for row in root.f("answers")?.seq()? {

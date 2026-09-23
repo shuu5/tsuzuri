@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 use crate::bundle::{self, Ceiling, DIGEST_FILE, Files, Rules, Viewpoint};
 use crate::ceiling::{BUNDLE_CONTENTS, REFUTE_CONTENTS, REFUTE_RULE, RESULT_REQUIRED};
-use crate::face::R;
+use crate::cursor::R;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
 

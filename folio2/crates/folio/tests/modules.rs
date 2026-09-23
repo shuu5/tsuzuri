@@ -17,6 +17,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("sha256", 0),
     ("verdict", 0),
     ("constitution_enums", 1),
+    ("cursor", 1),
     ("floor", 1),
     ("yaml", 1),
     ("adr", 2),
@@ -65,18 +66,13 @@ const LAYERS: &[(&str, u8)] = &[
 /// 行を足す書き換えは認めない（足すなら ADR-15 を改訂する）。ADR-15 の列（便 107〜112）が 1 本ずつ消す。
 const REMAINING_UPWARD: &[(&str, &str)] = &[
     ("anchor", "freeze"),
-    ("bundle", "face"),
     ("check", "freeze"),
     ("entrance", "face"),
     ("findings", "bundle"),
-    ("findings", "face"),
     ("gate", "bundle"),
-    ("gate", "face"),
     ("gate", "stamp"),
     ("ids", "freeze"),
     ("parts", "face"),
-    ("sheet", "face"),
-    ("stamp", "face"),
 ];
 
 fn src_dir() -> PathBuf {

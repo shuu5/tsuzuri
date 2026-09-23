@@ -1,8 +1,9 @@
 //! `folio face`（便 14・docs/design/delivery-14.md §1 (a)(c)／便 15・delivery-15.md §1 (b)）。見本 3 面の 1 面を正本から
 //! 導出して書く（--write）・検査する（--check）。生成器は憲法の面（`face_constitution.rs`）・要件書の面
 //! （`face_srs.rs`）・入口の面（`face_index.rs`・便 16・delivery-16.md §1 (b)）の 3 つ。
-//! この file は命令の口（面の名の解決・正本の読み・3 値と文言）と、生成器が共有する口（木を辿る型 X・escape・
-//! 名札・値の読める形・小窓・面の骨格・図の枠）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
+//! この file は命令の口（面の名の解決・正本の読み・3 値と文言）と、生成器が共有する口（名札・値の読める形・
+//! 小窓・面の骨格・図の枠）を持つ。導出できない入力は 2「まだ分からない」に倒し、出力先に 1 byte も書かない（P-4.1）。
+//! 正本の cursor（結果の型 R・load・木を辿る型 X・escape・safe_id）は `cursor.rs` へ降ろした（便 107・ADR-15）。
 //! 憲法の値域の名札（便 50・ADR-11 決定 (4)②）は、組み立て時に憲法の正本から導出した型（`constitution_enums`）への
 //! 網羅の場合分けで持つ = 値域の値の字面を鍵にした表を持たない（値が足されても消えても組み立てが通らない）。
 //! 部品目録の上限 3 本と図の型の名札（便 52・ADR-11 決定 (4)③）は、組み立て時に部品目録から導出した定数
@@ -17,15 +18,14 @@ use std::fs;
 use std::path::Path;
 
 use crate::constitution_enums as ce;
+use crate::cursor::{R, X, esc, load};
 use crate::figure;
 use crate::findings;
 use crate::parts::catalog::{self, Component};
 use crate::stamp;
 use crate::verdict::Verdict;
-use crate::yaml::{self, Value};
+use crate::yaml::Value;
 use crate::{face_adr, face_constitution, face_index, face_note, face_srs};
-
-pub type R<T> = Result<T, String>;
 
 pub enum Mode {
     Write,
@@ -133,197 +133,7 @@ pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> 
     }
 }
 
-/// 正本 1 file を型付きで読む。無い・読めない・UTF-8 でない・重複キー・空の文書は Err（まだ分からない）。
-pub fn load(dir: &Path, name: &str) -> R<Value> {
-    let bytes = fs::read(dir.join(name)).map_err(|e| format!("{name}: 読めない: {e}"))?;
-    let text = String::from_utf8(bytes).map_err(|_| format!("{name}: UTF-8 でない"))?;
-    let doc = yaml::parse(&text).map_err(|e| format!("{name}: 読めない: {e}"))?;
-    if let Some(d) = doc.duplicates.first() {
-        return Err(format!("{name}: 重複キー「{}」（{} 行）", d.key, d.line));
-    }
-    yaml::parse_typed(&text).map_err(|e| format!("{name}: {e}"))
-}
-
-// ── 木を辿る口（便 11 の render.rs の X と同じ形）──
-
-/// 型付きの木の 1 点（欄の道つき）。無い欄と型違いは文言つきの Err。
-pub struct X<'a> {
-    pub v: &'a Value,
-    pub at: String,
-}
-
-impl<'a> X<'a> {
-    pub fn root(v: &'a Value, at: &str) -> Self {
-        X {
-            v,
-            at: at.to_string(),
-        }
-    }
-
-    fn child(&self, v: &'a Value, seg: &str) -> Self {
-        X {
-            v,
-            at: format!("{}{seg}", self.at),
-        }
-    }
-
-    fn entries(&self) -> R<&'a [(Value, Value)]> {
-        self.v
-            .as_map()
-            .ok_or_else(|| format!("{}: 表でない", self.at))
-    }
-
-    /// 必須の欄（無ければ Err）。
-    pub fn f(&self, key: &str) -> R<X<'a>> {
-        self.entries()?;
-        self.v
-            .get(key)
-            .map(|v| self.child(v, &format!(".{key}")))
-            .ok_or_else(|| format!("{}: 欄 {key} が無い", self.at))
-    }
-
-    /// 任意の欄（無い・null は None）。
-    pub fn g(&self, key: &str) -> R<Option<X<'a>>> {
-        self.entries()?;
-        Ok(self
-            .v
-            .get(key)
-            .filter(|v| !matches!(v, Value::Null))
-            .map(|v| self.child(v, &format!(".{key}"))))
-    }
-
-    /// 一覧の要素。
-    pub fn seq(&self) -> R<Vec<X<'a>>> {
-        let items = self
-            .v
-            .as_seq()
-            .ok_or_else(|| format!("{}: 一覧でない", self.at))?;
-        Ok(items
-            .iter()
-            .enumerate()
-            .map(|(i, v)| self.child(v, &format!("[{i}]")))
-            .collect())
-    }
-
-    /// 表の（キー, 値）を書かれた順に（キーは文字列だけ）。
-    pub fn pairs(&self) -> R<Vec<(&'a str, X<'a>)>> {
-        self.entries()?
-            .iter()
-            .map(|(k, v)| {
-                let k = k
-                    .as_str()
-                    .ok_or_else(|| format!("{}: 表のキーが文字列でない", self.at))?;
-                Ok((k, self.child(v, &format!(".{k}"))))
-            })
-            .collect()
-    }
-
-    /// scalar の字面（文字列・整数・小数・日付）。null・真偽・一覧・表は Err。
-    pub fn text(&self) -> R<String> {
-        match self.v {
-            Value::Str(_) | Value::Int(_) | Value::Float(_) | Value::Date(_) => Ok(self.v.py_str()),
-            _ => Err(format!("{}: 文字列でない", self.at)),
-        }
-    }
-
-    /// escape した scalar の字面。
-    pub fn e(&self) -> R<String> {
-        Ok(esc(&self.text()?))
-    }
-
-    /// 必須の欄の escape した字面。
-    pub fn ef(&self, key: &str) -> R<String> {
-        self.f(key)?.e()
-    }
-
-    /// id と href に使う id（文字列で、英数字と「-」「.」だけ）。
-    pub fn id(&self) -> R<&'a str> {
-        let s = self
-            .v
-            .as_str()
-            .ok_or_else(|| format!("{}: 文字列でない", self.at))?;
-        safe_id(s).map_err(|e| format!("{}: {e}", self.at))
-    }
-
-    /// 整数（0 以上）。
-    pub fn count(&self) -> R<u64> {
-        match self.v {
-            Value::Int(n) => n
-                .parse()
-                .map_err(|_| format!("{}: 0 以上の整数でない", self.at)),
-            _ => Err(format!("{}: 整数でない", self.at)),
-        }
-    }
-
-    /// 名札の表引き（表に無い値は Err）。
-    pub fn lookup<T: Copy>(&self, table: &[(&str, T)], what: &str) -> R<T> {
-        if let Value::Str(s) = self.v
-            && let Some((_, t)) = table.iter().find(|(k, _)| k == s)
-        {
-            return Ok(*t);
-        }
-        Err(format!(
-            "{}: {what} の表に無い値「{}」",
-            self.at,
-            self.v.py_str()
-        ))
-    }
-
-    /// 憲法の値域の表引き（正本の値 → 導出した型・便 50 (b)）。`from_name` は型の関数 from_name。値域に無い値は Err
-    /// （文言は `lookup` と同じ）。
-    pub fn parse<T>(&self, from_name: fn(&str) -> Option<T>, what: &str) -> R<T> {
-        if let Value::Str(s) = self.v
-            && let Some(t) = from_name(s)
-        {
-            return Ok(t);
-        }
-        Err(format!(
-            "{}: {what} の表に無い値「{}」",
-            self.at,
-            self.v.py_str()
-        ))
-    }
-
-    /// 機械のための面の字面（正本の値のまま・scalar だけ）。
-    pub fn raw(&self) -> R<String> {
-        match self.v {
-            Value::Null => Ok("null".to_string()),
-            Value::Bool(b) => Ok(b.to_string()),
-            Value::Seq(_) | Value::Map(_) => Err(format!("{}: scalar でない", self.at)),
-            other => Ok(esc(&other.py_str())),
-        }
-    }
-}
-
 // ── 字面の口 ──
-
-/// 便 11 と同じ 5 字の escape。
-pub fn esc(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#x27;"),
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-/// id と href に使う id は英数字と「-」「.」だけ（空は受けない）。
-pub fn safe_id(s: &str) -> R<&str> {
-    if !s.is_empty()
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.'))
-    {
-        Ok(s)
-    } else {
-        Err(format!("id「{s}」が英数字と「-」「.」以外を含む"))
-    }
-}
 
 /// 同じ面の anchor（id を ASCII 小文字に）。
 pub fn anchor(id: &str) -> String {
@@ -838,7 +648,9 @@ pub fn figure_panel(
 #[cfg(test)]
 mod face_tests {
     use super::*;
+    use crate::cursor::safe_id;
     use crate::rules;
+    use crate::yaml;
 
     #[test]
     fn face_tier_lookup_has_three_values_and_rejects_others() {

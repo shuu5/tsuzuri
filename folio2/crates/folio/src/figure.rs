@@ -16,7 +16,8 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::face::{self, R, X};
+use crate::cursor::{self, R, X};
+use crate::face;
 use crate::face_note;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
@@ -144,7 +145,7 @@ pub fn derive(dir: &Path, doc: &str, id: &str) -> R<String> {
         ));
     }
     let name = format!("design-note/{doc}.yaml");
-    let value = face::load(dir, &name)?;
+    let value = cursor::load(dir, &name)?;
     let d = X::root(&value, &name);
     let file_id = d.f("meta")?.f("id")?.id()?;
     if file_id != doc {

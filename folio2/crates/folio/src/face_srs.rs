@@ -11,8 +11,9 @@
 
 use std::path::Path;
 
+use crate::cursor::{self, R, X};
 use crate::face::{
-    self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, R, X, anchor, card,
+    self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, anchor, card,
     count_word, hint,
 };
 use crate::parts::catalog::Component;
@@ -245,10 +246,10 @@ impl<'a> Ctx<'a> {
 
 /// 正本 → 要件書の面の HTML（決定的）。天井の名札は印から読む（便 40・便 83）。
 pub fn derive(dir: &Path) -> R<String> {
-    let s_doc = face::load(dir, "srs.yaml")?;
-    let c_doc = face::load(dir, "constitution.yaml")?;
-    let r_doc = face::load(dir, "rules.yaml")?;
-    let v_doc = face::load(dir, "vocabulary.yaml")?;
+    let s_doc = cursor::load(dir, "srs.yaml")?;
+    let c_doc = cursor::load(dir, "constitution.yaml")?;
+    let r_doc = cursor::load(dir, "rules.yaml")?;
+    let v_doc = cursor::load(dir, "vocabulary.yaml")?;
     let s = X::root(&s_doc, "srs.yaml");
     let c = X::root(&c_doc, "constitution.yaml");
     let r = X::root(&r_doc, "rules.yaml");
@@ -539,7 +540,7 @@ fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let figs: Vec<String> = ids
         .iter()
         .enumerate()
-        .map(|(i, id)| format!("<a href=\"#{}\">図 {}</a>", face::esc(id), i + 1))
+        .map(|(i, id)| format!("<a href=\"#{}\">図 {}</a>", cursor::esc(id), i + 1))
         .collect();
     o.push(meta_span("図", &figs.join(" · ")));
     o.push(meta_span(
@@ -851,7 +852,7 @@ fn approval(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
                 Some(i) => note.split_at(i + '。'.len_utf8()),
                 None => (note.as_str(), ""),
             };
-            (format!("{status} — {}", face::esc(gist)), face::esc(rest))
+            (format!("{status} — {}", cursor::esc(gist)), cursor::esc(rest))
         }
         None => (status.to_string(), String::new()),
     };

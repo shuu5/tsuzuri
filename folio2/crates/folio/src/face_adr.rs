@@ -14,7 +14,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::constitution_enums as ce;
-use crate::face::{self, Frame, R, X, anchor, card};
+use crate::cursor::{self, R, X};
+use crate::face::{self, Frame, anchor, card};
 use crate::face_index;
 use crate::parts::catalog::Component;
 
@@ -185,10 +186,10 @@ struct Target {
 pub fn derive(dir: &Path, id: &str) -> R<String> {
     check_id_shape(id)?;
     let name = format!("adr/{id}.yaml");
-    let a_doc = face::load(dir, &name)?;
-    let c_doc = face::load(dir, "constitution.yaml")?;
-    let r_doc = face::load(dir, "rules.yaml")?;
-    let s_doc = face::load(dir, "srs.yaml")?;
+    let a_doc = cursor::load(dir, &name)?;
+    let c_doc = cursor::load(dir, "constitution.yaml")?;
+    let r_doc = cursor::load(dir, "rules.yaml")?;
+    let s_doc = cursor::load(dir, "srs.yaml")?;
     let a = X::root(&a_doc, &name);
     let ctx = context(
         &X::root(&c_doc, "constitution.yaml"),
@@ -309,7 +310,7 @@ fn record_ids(dir: &Path) -> R<Vec<String>> {
 
 /// 判断の記録の題（file が無い・読めない・title の欄が無い・空なら空。面は 2 にしない）。
 fn record_title(dir: &Path, id: &str) -> String {
-    match face::load(dir, &format!("adr/{id}.yaml")) {
+    match cursor::load(dir, &format!("adr/{id}.yaml")) {
         Ok(doc) => field_title(&X::root(&doc, id), "title"),
         Err(_) => String::new(),
     }

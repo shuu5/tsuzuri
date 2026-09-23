@@ -20,9 +20,10 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 use crate::constitution_enums as ce;
+use crate::cursor::{self, R, X, esc};
 use crate::face::{
-    self, ANNEXES, Frame, INDEX_STATUS, R, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf, X,
-    anchor, esc, hint, hint_q, stop_anchor, tier_of,
+    self, ANNEXES, Frame, INDEX_STATUS, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf,
+    anchor, hint, hint_q, stop_anchor, tier_of,
 };
 use crate::face_note;
 use crate::parts::catalog::Component;
@@ -262,12 +263,12 @@ impl Ctx {
 
 /// 正本 → 入口の面の HTML（決定的）。天井の名札は印から読む（便 40・便 83）。
 pub fn derive(dir: &Path) -> R<String> {
-    let i_doc = face::load(dir, "index.yaml")?;
-    let c_doc = face::load(dir, "constitution.yaml")?;
-    let s_doc = face::load(dir, "srs.yaml")?;
-    let v_doc = face::load(dir, "vocabulary.yaml")?;
-    let r_doc = face::load(dir, "rules.yaml")?;
-    let n_doc = face::load(dir, INTAKE)?;
+    let i_doc = cursor::load(dir, "index.yaml")?;
+    let c_doc = cursor::load(dir, "constitution.yaml")?;
+    let s_doc = cursor::load(dir, "srs.yaml")?;
+    let v_doc = cursor::load(dir, "vocabulary.yaml")?;
+    let r_doc = cursor::load(dir, "rules.yaml")?;
+    let n_doc = cursor::load(dir, INTAKE)?;
     let adr = records(dir)?;
     let notes = notes(dir)?;
     let i = X::root(&i_doc, "index.yaml");
@@ -325,7 +326,7 @@ pub fn records(dir: &Path) -> R<Vec<Record>> {
 
     let mut docs = Vec::with_capacity(names.len());
     for name in names {
-        let doc = face::load(dir, &name)?;
+        let doc = cursor::load(dir, &name)?;
         docs.push((name, doc));
     }
     let mut out = Vec::with_capacity(docs.len());
@@ -373,7 +374,7 @@ pub fn notes(dir: &Path) -> R<Vec<Note>> {
     let mut docs = Vec::with_capacity(names.len());
     for name in names {
         let at = format!("{NOTE_DIR}/{name}");
-        let doc = face::load(dir, &at)?;
+        let doc = cursor::load(dir, &at)?;
         docs.push((name, at, doc));
     }
     let mut out = Vec::with_capacity(docs.len());
@@ -665,7 +666,7 @@ fn sheet_body(
     if !dir.join(&head.file).exists() {
         return Ok(None);
     }
-    let doc = face::load(dir, &head.file)?;
+    let doc = cursor::load(dir, &head.file)?;
     let sheet = X::root(&doc, &head.file);
     let targets = targets(n)?;
 

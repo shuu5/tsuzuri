@@ -12,7 +12,8 @@
 use std::fs;
 use std::path::Path;
 
-use crate::face::{self, Frame, R, X, anchor, esc, hint};
+use crate::cursor::{self, R, X, esc};
+use crate::face::{self, Frame, anchor, hint};
 use crate::face_index;
 use crate::parts::catalog::Component;
 
@@ -222,10 +223,10 @@ struct Row {
 pub fn derive(dir: &Path, id: &str) -> R<String> {
     check_id_shape(id)?;
     let name = format!("design-note/{id}.yaml");
-    let n_doc = face::load(dir, &name)?;
-    let c_doc = face::load(dir, "constitution.yaml")?;
-    let r_doc = face::load(dir, "rules.yaml")?;
-    let s_doc = face::load(dir, "srs.yaml")?;
+    let n_doc = cursor::load(dir, &name)?;
+    let c_doc = cursor::load(dir, "constitution.yaml")?;
+    let r_doc = cursor::load(dir, "rules.yaml")?;
+    let s_doc = cursor::load(dir, "srs.yaml")?;
     let d = X::root(&n_doc, &name);
     let ctx = context(
         &X::root(&c_doc, "constitution.yaml"),
