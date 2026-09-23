@@ -1146,16 +1146,26 @@ fn f93_deleting_the_rule_row_is_not_a_silent_escape() {
     fs::write(w.rules(), format!("{}\n", kept.join("\n"))).unwrap();
     let out = w.check();
     assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
-    // 違反は全部 種別 参照 id の R-17 の未解決で、ちょうど 3 件＝条 N-2 の関係の欄が指す先が消えた 1 件と、
-    // 要件書の承認の来歴（meta）の印が規則の行 R-17 を名指す 1 件（便 93 改訂 c）と、
-    // 語彙の「辺」の定義が規則の行 R-17 を名指す 1 件（一括 12）。歯そのものは黙る
+    // 違反は全部 R-17 の未解決＝種別 参照 id の 3 件（条 N-2 の関係の欄が指す先が消えた 1 件・
+    // 要件書の承認の来歴（meta）の印が規則の行 R-17 を名指す 1 件〔便 93 改訂 c〕・
+    // 語彙の「辺」の定義が規則の行 R-17 を名指す 1 件〔一括 12〕）と、種別 adr の、判断の記録の型付きの欄
+    // （basis・decision の参照）が R-17 を名指す件（ADR-16 から・記録が増えれば増えるので数は固定しない）。
+    // 歯そのものは黙る
     let v = violations(&out);
     assert!(
-        v.iter()
-            .all(|l| l.starts_with("[参照 id] ") && l.contains("id R-17 が実在しない")),
-        "違反は R-17 の参照 id だけのはず: {v:?}"
+        v.iter().all(|l| l.contains("id R-17 が実在しない")),
+        "違反は R-17 の未解決だけのはず: {v:?}"
     );
-    assert_eq!(v.len(), 3, "参照 id の違反はちょうど 3 件のはず: {v:?}");
+    assert!(
+        v.iter()
+            .all(|l| l.starts_with("[参照 id] ") || l.starts_with("[adr] ADR-")),
+        "違反の種別は 参照 id か adr のはず: {v:?}"
+    );
+    assert_eq!(
+        v.iter().filter(|l| l.starts_with("[参照 id] ")).count(),
+        3,
+        "参照 id の違反はちょうど 3 件のはず: {v:?}"
+    );
     let relation = |l: &&String| l.starts_with("[参照 id] constitution.yaml: ") && l.contains(".relations.rules");
     assert_eq!(v.iter().filter(relation).count(), 1, "条 N-2 の関係の欄の違反: {v:?}");
     let meta = |l: &&String| l.starts_with("[参照 id] srs.yaml: meta.");

@@ -407,30 +407,43 @@ fn f101_the_real_record_carries_the_revises_row() {
         .map(|e| e.unwrap().path())
         .collect();
     paths.sort();
-    let mut files = Vec::new();
-    let mut rows = Vec::new();
+    // 実の記録のうち revises の欄を持つ file と、その行（file 名 → 行）。欄を持つ file の全数は固定しない
+    // （判断の記録が増えて欄を持てば増える＝ADR-16 で増えた）。欄を最初に持った 2 本（ADR-13 と ADR-14）
+    // の行の形だけを見る
+    let mut rows: Vec<(String, Vec<String>)> = Vec::new();
     for path in paths {
         let text = fs::read_to_string(&path).unwrap();
         if !text.lines().any(|l| l == "revises:") {
             continue;
         }
-        files.push(path.file_name().unwrap().to_string_lossy().into_owned());
         let after = text.split_once("\nrevises:\n").unwrap().1;
-        rows.extend(
+        rows.push((
+            path.file_name().unwrap().to_string_lossy().into_owned(),
             after
                 .lines()
                 .take_while(|l| l.starts_with("  - "))
-                .map(str::to_string),
-        );
+                .map(str::to_string)
+                .collect(),
+        ));
     }
-    assert_eq!(files, ["ADR-13.yaml", "ADR-14.yaml"]);
-    assert_eq!(rows.len(), 2, "{rows:?}");
+    let files: Vec<&str> = rows.iter().map(|(f, _)| f.as_str()).collect();
+    assert!(files.contains(&"ADR-13.yaml"), "{files:?}");
+    assert!(files.contains(&"ADR-14.yaml"), "{files:?}");
+    for (_, lines) in &rows {
+        assert!(!lines.is_empty(), "{rows:?}");
+        for line in lines {
+            assert!(line.starts_with("  - {target: ADR-"), "{line}");
+        }
+    }
+    let first = |file: &str| rows.iter().find(|(f, _)| f == file).unwrap().1[0].clone();
     assert!(
-        rows[0].starts_with("  - {target: ADR-8, decision: (4), kind: narrow, summary: "),
+        first("ADR-13.yaml")
+            .starts_with("  - {target: ADR-8, decision: (4), kind: narrow, summary: "),
         "{rows:?}"
     );
     assert!(
-        rows[1].starts_with("  - {target: ADR-13, decision: (1), kind: narrow, summary: "),
+        first("ADR-14.yaml")
+            .starts_with("  - {target: ADR-13, decision: (1), kind: narrow, summary: "),
         "{rows:?}"
     );
 }
