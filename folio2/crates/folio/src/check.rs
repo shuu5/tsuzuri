@@ -18,13 +18,12 @@ use crate::ceiling;
 use crate::constitution_enums as ce;
 use crate::entrance;
 use crate::floor::Floor;
-use crate::freeze;
 use crate::ids;
 use crate::intake;
 use crate::link;
 use crate::mentions;
 use crate::note;
-use crate::phase::{After, Flag};
+use crate::phase::{Flag, State};
 use crate::refs;
 use crate::rules;
 use crate::verdict::Report;
@@ -157,8 +156,19 @@ struct Sources {
     ceiling: Node,
 }
 
-/// `dir` の正本 7 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を `freeze.rs` へ渡す）。
-pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
+/// 凍結の後始末の材料（口の検査が残したもの・入口が口を出た直後に後始末へ渡す）。
+/// 判断の記録が読めなかったときは 3 つとも無い。
+pub struct Materials {
+    /// 凍結 anchor の列の検査が残した列の結果。
+    pub state: Option<State>,
+    /// 読めた判断の記録。
+    pub adr: Option<adr::Adr>,
+    /// id の消失と改番の検査が読んだ現行の id。
+    pub ids: Option<ids::Current>,
+}
+
+/// `dir` の正本 7 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を材料に載せて返す）。
+pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
     let mut report = Report::default();
     let mut state = None;
     let mut adr_records = None;
@@ -237,15 +247,12 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, After) {
         }
         None => debug_assert!(!report.unknowns.is_empty()),
     }
-    let after = freeze::after(
-        dir,
-        flag,
-        state.as_ref(),
-        adr_records.as_ref(),
-        ids_cur.as_ref(),
-        &mut report,
-    );
-    (report, after)
+    let materials = Materials {
+        state,
+        adr: adr_records,
+        ids: ids_cur,
+    };
+    (report, materials)
 }
 
 fn load_all(dir: &Path, report: &mut Report) -> Option<Sources> {

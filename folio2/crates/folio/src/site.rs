@@ -97,7 +97,7 @@ pub fn run(dir: &Path, out: &Path, mode: Mode) -> Outcome {
 /// まだ分からない = 今までどおり書いて 2。合格 = 今までどおり書いて 0。
 /// 面の用意が出来ない（Err の道）ときは今までどおり「まだ分からない」で 2・何も書かない。
 fn write_after_floor(dir: &Path, out_dir: &Path) -> Outcome {
-    let (report, _after) = check::check_dir(dir, Flag::None);
+    let (report, _) = check::check_dir(dir, Flag::None);
     let floor = report.verdict();
     let floor_line = format!(
         "folio build: 床 = {floor}（違反 {}・まだ分からない {}）",

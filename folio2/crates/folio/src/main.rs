@@ -297,7 +297,16 @@ fn main() -> ExitCode {
             } else {
                 Flag::None
             };
-            let (report, after) = check::check_dir(&dir, flag);
+            let (mut report, materials) = check::check_dir(&dir, flag);
+            // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
+            let after = freeze::after(
+                &dir,
+                flag,
+                materials.state.as_ref(),
+                materials.adr.as_ref(),
+                materials.ids.as_ref(),
+                &mut report,
+            );
             if let After::Refused(msg) = &after {
                 eprintln!("folio check: {msg}");
                 return ExitCode::from(1);
