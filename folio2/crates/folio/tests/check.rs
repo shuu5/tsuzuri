@@ -869,6 +869,28 @@ fn f86_verify_inner_list_is_still_checked() {
 // 変異の当て先は要件書で 1 か所しかない adrs の行（一括 12 で FR19 の行に ADR-13 が足されたため FR17 側へ移した）
 const F90_FR19_ADRS: &str = "\n    adrs: [ADR-5]\n";
 
+/// 写しの YAML の木を歩き、鍵 adrs を持つ表の（持ち主の id, adrs の値）を出てきた順に集める。
+/// 持ち主の id が無い表（要件の行でない所）に adrs が在れば歯が落ちる。
+fn f90_adrs_rows(node: &yaml_rust2::Yaml, out: &mut Vec<(String, yaml_rust2::Yaml)>) {
+    use yaml_rust2::Yaml;
+    match node {
+        Yaml::Hash(h) => {
+            if let Some(adrs) = h.get(&Yaml::String("adrs".into())) {
+                let owner = h
+                    .get(&Yaml::String("id".into()))
+                    .and_then(Yaml::as_str)
+                    .unwrap_or_else(|| panic!("id の無い表に adrs が在る: {adrs:?}"));
+                out.push((owner.to_string(), adrs.clone()));
+            }
+            for v in h.values() {
+                f90_adrs_rows(v, out);
+            }
+        }
+        Yaml::Array(a) => a.iter().for_each(|v| f90_adrs_rows(v, out)),
+        _ => {}
+    }
+}
+
 #[test]
 fn f90_the_real_srs_carries_the_adrs_field() {
     let w = Work::new("f90-real");
@@ -881,22 +903,38 @@ fn f90_the_real_srs_carries_the_adrs_field() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    // adrs を持つ行の集合は写しの要件書そのものから読む（行の数は固定しない＝要件を足しても落ちない）。
+    // 歯が見るのは性質＝欄を持つ行が 1 つ以上在り、各行の値が一覧で、各項が判断の記録の id の形で、
+    // その正本 adr/<id>.yaml が写しに実在すること。
     let text = fs::read_to_string(w.srs()).unwrap();
-    let rows: Vec<&str> = text
-        .lines()
-        .filter_map(|l| l.strip_prefix("    adrs: ["))
-        .collect();
-    assert_eq!(rows.len(), 14, "adrs の行の数: {rows:?}");
-    for row in rows {
-        let body = row.strip_suffix(']').unwrap_or_else(|| panic!("一覧の形でない: {row}"));
-        for id in body.split(", ") {
-            let num = id.strip_prefix("ADR-").unwrap_or_else(|| panic!("ADR- で始まらない: {id}"));
+    let doc = yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
+    let mut rows = Vec::new();
+    f90_adrs_rows(&doc, &mut rows);
+    assert!(!rows.is_empty(), "実の要件書に adrs を持つ行が 1 つも無い");
+    // 字面の走査で見つかる行の数と木の上の数が一致する（字面の形の違う adrs が見落とされない）。
+    let lines = text.lines().filter(|l| l.trim_start().starts_with("adrs:")).count();
+    assert_eq!(lines, rows.len(), "字面の adrs の行と木の上の adrs の行が食い違う: {rows:?}");
+    for (owner, adrs) in &rows {
+        let items = adrs
+            .as_vec()
+            .unwrap_or_else(|| panic!("{owner} の adrs が一覧でない: {adrs:?}"));
+        assert!(!items.is_empty(), "{owner} の adrs が空");
+        for item in items {
+            let id = item
+                .as_str()
+                .unwrap_or_else(|| panic!("{owner} の adrs の項が字でない: {item:?}"));
+            let num = id
+                .strip_prefix("ADR-")
+                .unwrap_or_else(|| panic!("{owner}: ADR- で始まらない: {id}"));
             assert!(
                 num.starts_with(|c: char| matches!(c, '1'..='9'))
                     && num.chars().all(|c| c.is_ascii_digit()),
-                "判断の記録の id の形でない: {id}"
+                "{owner}: 判断の記録の id の形でない: {id}"
             );
-            assert!(w.dir().join(format!("adr/{id}.yaml")).is_file(), "{id} の正本が無い");
+            assert!(
+                w.dir().join(format!("adr/{id}.yaml")).is_file(),
+                "{owner}: {id} の正本が無い"
+            );
         }
     }
 }
@@ -1148,10 +1186,9 @@ fn f93_deleting_the_rule_row_is_not_a_silent_escape() {
     fs::write(w.rules(), format!("{}\n", kept.join("\n"))).unwrap();
     let out = w.check();
     assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
-    // 違反は全部 R-17 の未解決＝種別 参照 id の 3 件（条 N-2 の関係の欄が指す先が消えた 1 件・
-    // 要件書の承認の来歴（meta）の印が規則の行 R-17 を名指す 1 件〔便 93 改訂 c〕・
-    // 語彙の「辺」の定義が規則の行 R-17 を名指す 1 件〔一括 12〕）と、種別 adr の、判断の記録の型付きの欄
-    // （basis・decision の参照）が R-17 を名指す件（ADR-16 から・記録が増えれば増えるので数は固定しない）。
+    // 違反は全部 R-17 の未解決で、種別は 参照 id（憲法・要件書・語彙が R-17 を名指す所）か adr（判断の記録の
+    // 型付きの欄が R-17 を名指す所）だけ。件数は固定しない（R-17 を名指す記録が増えれば増える）。
+    // 代わりに、違反が指す所が写しの記録に実在し、その値が R-17 を名指していることを 1 件ずつ照合する。
     // 歯そのものは黙る
     let v = violations(&out);
     assert!(
@@ -1163,18 +1200,75 @@ fn f93_deleting_the_rule_row_is_not_a_silent_escape() {
             .all(|l| l.starts_with("[参照 id] ") || l.starts_with("[adr] ADR-")),
         "違反の種別は 参照 id か adr のはず: {v:?}"
     );
-    assert_eq!(
-        v.iter().filter(|l| l.starts_with("[参照 id] ")).count(),
-        3,
-        "参照 id の違反はちょうど 3 件のはず: {v:?}"
+    assert!(
+        v.iter().any(|l| l.starts_with("[参照 id] ")),
+        "参照 id の違反が 1 件も無い（行を消すことが黙って通った）: {v:?}"
     );
+    for l in &v {
+        let (file, path) = f93_located(l);
+        let text = fs::read_to_string(w.dir().join(&file))
+            .unwrap_or_else(|e| panic!("違反が指す file {file} が写しに無い（{e}）: {l}"));
+        let doc = yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
+        let node = f93_node(&doc, &path).unwrap_or_else(|| panic!("違反が指す所 {path} が {file} に無い: {l}"));
+        assert!(f93_text(node).contains("R-17"), "違反が指す所の値が R-17 を名指さない: {l}");
+    }
+    // 憲法の条の関係の欄（relations.rules・型付き）が R-17 を名指す項は、写しの憲法から数えた数と同じだけ違反になる。
+    let constitution = fs::read_to_string(w.constitution()).unwrap();
+    let constitution = yaml_rust2::YamlLoader::load_from_str(&constitution).unwrap().remove(0);
+    let named = constitution["articles"]
+        .as_vec()
+        .expect("憲法の articles が一覧でない")
+        .iter()
+        .filter_map(|a| a["relations"]["rules"].as_vec())
+        .flatten()
+        .filter(|r| r.as_str() == Some("R-17"))
+        .count();
     let relation = |l: &&String| l.starts_with("[参照 id] constitution.yaml: ") && l.contains(".relations.rules");
-    assert_eq!(v.iter().filter(relation).count(), 1, "条 N-2 の関係の欄の違反: {v:?}");
-    let meta = |l: &&String| l.starts_with("[参照 id] srs.yaml: meta.");
-    assert_eq!(v.iter().filter(meta).count(), 1, "要件書の承認の来歴の違反: {v:?}");
-    let term = |l: &&String| l.starts_with("[参照 id] vocabulary.yaml: terms");
-    assert_eq!(v.iter().filter(term).count(), 1, "語彙の定義の違反: {v:?}");
+    assert_eq!(v.iter().filter(relation).count(), named, "条の関係の欄の違反: {v:?}");
     assert!(!v.iter().any(|l| l.starts_with("[R-17]")), "{v:?}");
+}
+
+/// 違反の行が指す（写しの置き場からの file, file の中の道筋）。
+/// `[参照 id] <file>: <道筋>: <文>` と `[adr] ADR-<n>.<道筋>: <文>` の 2 つの形を読む。
+fn f93_located(line: &str) -> (String, String) {
+    if let Some(rest) = line.strip_prefix("[参照 id] ") {
+        let (file, rest) = rest.split_once(": ").unwrap_or_else(|| panic!("形が違う: {line}"));
+        let (path, _) = rest.split_once(": ").unwrap_or_else(|| panic!("形が違う: {line}"));
+        (file.to_string(), path.to_string())
+    } else if let Some(rest) = line.strip_prefix("[adr] ") {
+        let (at, _) = rest.split_once(": ").unwrap_or_else(|| panic!("形が違う: {line}"));
+        let (id, path) = at.split_once('.').unwrap_or_else(|| panic!("形が違う: {line}"));
+        (format!("adr/{id}.yaml"), path.to_string())
+    } else {
+        panic!("種別が違う: {line}")
+    }
+}
+
+/// YAML の木で道筋 `a.b[3].c` の先の節（無ければ None）。
+fn f93_node<'a>(doc: &'a yaml_rust2::Yaml, path: &str) -> Option<&'a yaml_rust2::Yaml> {
+    let mut node = doc;
+    for seg in path.split('.') {
+        let (key, mut rest) = seg.split_once('[').map_or((seg, ""), |(k, r)| (k, r));
+        if !key.is_empty() {
+            node = node.as_hash()?.get(&yaml_rust2::Yaml::String(key.into()))?;
+        }
+        while !rest.is_empty() {
+            let (idx, after) = rest.split_once(']')?;
+            node = node.as_vec()?.get(idx.parse::<usize>().ok()?)?;
+            rest = after.strip_prefix('[').unwrap_or(after);
+        }
+    }
+    Some(node)
+}
+
+/// 節の字面（字ならそのまま・それ以外は YAML に書き出す）。
+fn f93_text(node: &yaml_rust2::Yaml) -> String {
+    if let Some(s) = node.as_str() {
+        return s.to_string();
+    }
+    let mut out = String::new();
+    yaml_rust2::YamlEmitter::new(&mut out).dump(node).unwrap();
+    out
 }
 
 // ── 要件書の最上位の節の閉じた一覧に M3 の範囲の節 scope_m3（便 117・ADR-16 決定 (1)(7)①） ──

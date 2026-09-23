@@ -213,44 +213,82 @@ fn f79_rules_value_cell_leaves_scalars_alone() {
 
 // ── (b) 裁定の枡の折りたたみ ──
 
+/// 正本 rules.yaml の全部の行（閾値の表と規律の表・正本の順）の id。
+fn source_row_ids() -> Vec<String> {
+    let text = fs::read_to_string(design_intent().join("rules.yaml")).unwrap();
+    let doc: Yaml = YamlLoader::load_from_str(&text).unwrap().remove(0);
+    ["thresholds", "discipline"]
+        .iter()
+        .flat_map(|t| doc[*t].as_vec().unwrap().clone())
+        .map(|row| row["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// 正本の裁定の欄を（最新の 1 件, 過去の裁定の字の並び）に分ける（歯の側の数え・区切りは「）・前の裁定 = 」）。
+fn source_split(id: &str) -> (String, Vec<String>) {
+    let (ruling, _) = source_ruling(id);
+    let mut pieces = ruling.split("）・前の裁定 = ").map(str::to_string);
+    let latest = pieces.next().unwrap();
+    (latest, pieces.collect())
+}
+
+/// 前の裁定を畳んだ行（裁定の欄に「前の裁定 = 」を持つ行）と持たない行に、正本の全行を分ける。
+/// どちらの側も 1 行以上在ることを確かめる（片側が空なら、その側の性質を当てる歯が黙って空回りする）。
+fn source_rows_by_previous() -> (Vec<String>, Vec<String>) {
+    let (folded, plain): (Vec<String>, Vec<String>) =
+        source_row_ids().into_iter().partition(|id| source_previous(id) > 0);
+    assert!(!folded.is_empty(), "正本に前の裁定を持つ行が 1 つも無い");
+    assert!(!plain.is_empty(), "正本に前の裁定を持たない行が 1 つも無い");
+    (folded, plain)
+}
+
 #[test]
 fn f79_rules_ruling_shows_only_the_latest() {
+    // 前の裁定を持つ行の全部で、小窓より前に見える字は最新の裁定と ruled_at だけ（行の id と数は正本から読む）。
     let html = real_html("latest");
-    let c = cell(&html, "R-14", "裁定");
-    let seen = visible(&c);
-    assert!(!seen.contains("前の裁定 = "), "過去の裁定が見えている: {seen}");
-    assert!(seen.contains("2026-09-21 22:50 JST"), "{seen}");
-    assert!(seen.contains("（2026-09-21）"), "{seen}");
+    let (folded, _) = source_rows_by_previous();
+    for id in &folded {
+        let c = cell(&html, id, "裁定");
+        let seen = visible(&c);
+        assert!(!seen.contains("前の裁定 = "), "{id}: 過去の裁定が見えている: {seen}");
+        let (latest, _) = source_split(id);
+        let (_, at) = source_ruling(id);
+        assert!(seen.starts_with(&esc(&latest)), "{id}: 最新の裁定で始まらない: {seen}");
+        assert!(seen.contains(&format!("（{}）", esc(&at))), "{id}: ruled_at が無い: {seen}");
+    }
 }
 
 #[test]
 fn f79_rules_ruling_folds_the_previous_ones() {
+    // 前の裁定を持つ行の全部で、小窓の名札の件数と本体の「前の裁定 = 」の数が、歯の側で正本を直に数えた数と一致し、
+    // 過去の裁定の字が 1 件ずつ本体に在る（生成器の数えを写さない）。
     let html = real_html("folds");
-    let (label, body) = fold(&cell(&html, "R-14", "裁定")).expect("R-14 に小窓が無い");
-    assert_eq!(label, "前の裁定 2 件");
-    assert_eq!(body.matches("前の裁定 = ").count(), 2, "{body}");
-    for id in ["R-14", "R-1", "D-3", "R-2"] {
+    let (folded, _) = source_rows_by_previous();
+    for id in &folded {
         let n = source_previous(id);
-        assert!(n > 0, "正本の {id} に過去の裁定が無い");
         let (label, body) = fold(&cell(&html, id, "裁定"))
             .unwrap_or_else(|| panic!("{id} に小窓が無い"));
         assert_eq!(label, format!("前の裁定 {n} 件"), "{id}");
-        assert_eq!(body.matches("前の裁定 = ").count(), n, "{id}");
+        assert_eq!(body.matches("前の裁定 = ").count(), n, "{id}: {body}");
+        let (_, previous) = source_split(id);
+        assert_eq!(previous.len(), n, "{id}");
+        for p in &previous {
+            assert!(body.contains(&esc(p)), "{id}: 小窓に過去の裁定「{p}」が無い: {body}");
+        }
     }
-    assert_eq!(source_previous("R-1"), 4);
-    assert_eq!(source_previous("D-3"), 3);
-    assert_eq!(source_previous("R-2"), 2);
 }
 
 #[test]
 fn f79_rules_ruling_without_previous_is_unchanged() {
+    // 前の裁定を持たない行の全部で、裁定の枡に小窓が無く、字面が「{ruling}（{ruled_at}）」のまま（歯の側で正本から組む）。
     let html = real_html("unchanged");
-    let (ruling, at) = source_ruling("D-1");
-    assert_eq!(source_previous("D-1"), 0);
-    assert_eq!(
-        cell(&html, "D-1", "裁定"),
-        format!("{}（{}）", esc(&ruling), esc(&at))
-    );
+    let (_, plain) = source_rows_by_previous();
+    for id in &plain {
+        let (ruling, at) = source_ruling(id);
+        let c = cell(&html, id, "裁定");
+        assert!(fold(&c).is_none(), "{id}: 前の裁定の無い行に小窓が在る: {c}");
+        assert_eq!(c, format!("{}（{}）", esc(&ruling), esc(&at)), "{id}");
+    }
 }
 
 // ── 便 80: 条の欠番の行と改訂来歴の小窓（docs/design/delivery-80.md §1 (c)） ──
