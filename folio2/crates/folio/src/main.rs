@@ -5,6 +5,7 @@ mod anchor;
 mod bundle;
 mod catalog;
 mod ceiling;
+mod ceiling_src;
 mod check;
 mod constitution_enums;
 mod cursor;
@@ -508,7 +509,7 @@ fn main() -> ExitCode {
             }
             // --write と --check は配信先が要る（束が古くないかを測る）
             let Some(faces) = faces else {
-                let outcome = bundle::Outcome::unknown("--faces が要る");
+                let outcome = ceiling_src::Outcome::unknown("--faces が要る");
                 if let Some(line) = &outcome.stderr {
                     eprintln!("{line}");
                 }

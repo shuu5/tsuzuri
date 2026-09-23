@@ -2,7 +2,7 @@
 //! 席か器が観点の束の dir へ書いた所見 file（`findings.yaml`）を天井の正本の欄の決まりで数え、観点ごとに 3 値を返す。
 //! 数えるのは形・実在・一致だけ（所見の外形と欄の決まり・根拠の逐語の実在・束の要約値の一致 3 方向・止める の反証の有無）で、
 //! 所見の中身が正しいかは判定しない（P-1）。所見 file の名と外形（最上位の欄 3 つ）は床の定数で持ち、欄ごとの値域は
-//! `bundle::load` の型 `Rules`（weights は天井の正本・残りは床の定数 `ceiling.rs`・便 47）から取る（P-5.1）。folio は所見 file を書かない。
+//! `ceiling_src::load` の型 `Rules`（weights は天井の正本・残りは床の定数 `ceiling.rs`・便 47）から取る（P-5.1）。folio は所見 file を書かない。
 //! 終了 = 4 観点が全部 合格 のときだけ 0、まだ分からない が 1 つでも在れば 2、無くて 不合格 が在れば 1（P-4）。
 //! 名札（便 40・delivery-40.md §1 (b)・ADR-8 決定 (4)）: 面の生成器は `stamps` で観点ごとの 3 値を取る。同じ規則のうち
 //! 3（束が古い）だけを当てない——名札を載せた面そのものが次の束の入力（faces/）になるので、面の生成の中で「現在の面から
@@ -17,8 +17,8 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::bundle::{self, Ceiling, DIGEST_FILE, Files, Rules, Viewpoint};
 use crate::ceiling::{BUNDLE_CONTENTS, REFUTE_CONTENTS, REFUTE_RULE, RESULT_REQUIRED};
+use crate::ceiling_src::{self, Ceiling, DIGEST_FILE, Files, Rules, Viewpoint};
 use crate::cursor::R;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
@@ -71,7 +71,7 @@ impl Counted {
 }
 
 /// 天井の正本 `<dir>/ceiling.yaml` の viewpoints の（id・name）を正本の順に（名札の観点の名は正本の逐語・P-6.3・
-/// `bundle::load` は name を外に出さない）。
+/// `ceiling_src::load` は name を外に出さない）。
 pub fn viewpoint_names(dir: &Path) -> R<Vec<(String, String)>> {
     let text = fs::read_to_string(dir.join("ceiling.yaml"))
         .map_err(|e| format!("ceiling.yaml: 読めない: {e}"))?;
@@ -102,7 +102,7 @@ pub fn viewpoint_names(dir: &Path) -> R<Vec<(String, String)>> {
 pub fn run(dir: &Path, faces: &Path, out: &Path) -> Outcome {
     let faces_dir = dir.join(faces);
     let out_dir = dir.join(out);
-    let ceiling = match bundle::load(dir) {
+    let ceiling = match ceiling_src::load(dir) {
         Ok(c) => c,
         Err(e) => return before_viewpoints(e),
     };
@@ -110,7 +110,7 @@ pub fn run(dir: &Path, faces: &Path, out: &Path) -> Outcome {
     if !faces_dir.is_dir() {
         return before_viewpoints(format!("{}: 配信先が無い", faces_dir.display()));
     }
-    let face_files = match bundle::read_dir_names(&faces_dir) {
+    let face_files = match ceiling_src::read_dir_names(&faces_dir) {
         Ok(f) => f,
         Err(e) => return before_viewpoints(e),
     };
@@ -155,7 +155,7 @@ pub fn run(dir: &Path, faces: &Path, out: &Path) -> Outcome {
 }
 
 fn before_viewpoints(reason: String) -> Outcome {
-    let write = bundle::Outcome::unknown(reason);
+    let write = ceiling_src::Outcome::unknown(reason);
     Outcome {
         verdict: write.verdict,
         stdout: Vec::new(),
@@ -186,14 +186,14 @@ pub(crate) fn count_viewpoint(
 
     // 2. 束が壊れている（置き場の file から測り直す）
     match measure(&vp_dir) {
-        Ok(files) if bundle::digest_text(&files) == digest => {}
+        Ok(files) if ceiling_src::digest_text(&files) == digest => {}
         Ok(_) => reasons.push("束が壊れている（要約値が digest.txt と違う）".to_string()),
         Err(e) => reasons.push(e),
     }
 
     // 3. 束が古い（現在の正本から memory の上に組み直す）
     if let Some((faces_dir, face_files)) = faces {
-        match bundle::build_one(dir, faces_dir, face_files, ceiling, vp) {
+        match ceiling_src::build_one(dir, faces_dir, face_files, ceiling, vp) {
             Ok(files)
                 if files
                     .get(DIGEST_FILE)
@@ -332,7 +332,7 @@ fn measure(vp_dir: &Path) -> R<Files> {
 }
 
 pub(crate) fn walk(dir: &Path, rel: &str, files: &mut Files) -> R<()> {
-    for (name, is_file) in bundle::read_dir_names(dir)? {
+    for (name, is_file) in ceiling_src::read_dir_names(dir)? {
         let here = format!("{rel}/{name}");
         let path = dir.join(&name);
         if is_file {
@@ -754,7 +754,7 @@ fn count_result(dir: &Path, id: &str, rules: &Rules, why: &mut Vec<String>) -> O
     // 反証の束そのものが digest.txt のとおりか（5 つの file から測り直す）
     if let Some(d) = &digest {
         match measure_refute(dir) {
-            Ok(files) if bundle::digest_text(&files) == *d => {}
+            Ok(files) if ceiling_src::digest_text(&files) == *d => {}
             Ok(_) => why.push("反証の束が壊れている（要約値が digest.txt と違う）".to_string()),
             Err(e) => why.push(format!("反証の束が壊れている（{e}）")),
         }
@@ -861,7 +861,7 @@ fn sheet_findings(root: &Node) -> usize {
 /// 1 件でも用意できなければ何も書かず 2（全部か無しか）。対象が 0 件でも 0。判定を持たないので 1 は返さない。
 pub fn refute(dir: &Path, out: &Path) -> Outcome {
     let out_dir = dir.join(out);
-    let ceiling = match bundle::load(dir) {
+    let ceiling = match ceiling_src::load(dir) {
         Ok(c) => c,
         Err(e) => return before_viewpoints(e),
     };
@@ -975,7 +975,7 @@ fn plan_refutes(
     }
     let reads = fs::read(vp_dir.join("reads.yaml"))
         .map_err(|e| vec![format!("reads.yaml: 読めない: {e}")])?;
-    let question = bundle::question_text(vp);
+    let question = ceiling_src::question_text(vp);
     let mut planned = Vec::new();
     for item in root.get("findings").and_then(Node::as_seq).unwrap_or(&[]) {
         let Some(target) = Target::from(item, &ceiling.rules) else {
@@ -1049,7 +1049,7 @@ fn refute_files(
         .into_bytes(),
     );
     files.insert("sources.txt".to_string(), parent_digest.as_bytes().to_vec());
-    let digest = bundle::digest_text(&files);
+    let digest = ceiling_src::digest_text(&files);
     files.insert(DIGEST_FILE.to_string(), digest.into_bytes());
     files
 }

@@ -10,12 +10,13 @@
 //! 観点で byte が違う。欄 faces は束の faces/ の和集合のまま（面は絞られていない・門は faces を突き合わせない）。
 //! 全部か無しか: 観点のどれかの束・所見 file・起動の記録が読めない、または面の写しが観点で食い違うときは
 //! まだ分からない（終了 2）で file を触らない。既に同じ byte なら書かない。判定の 3 値は印の中身で、命令は書けたら 0。
+//! 印の file 名 `STAMP_FILE` は便 110 で `ceiling_src.rs` へ降ろした（ADR-15・層 1 読む・門も同じ名を読む）。
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
-use crate::bundle::{self, Ceiling, Files};
+use crate::ceiling_src::{self, Ceiling, Files, STAMP_FILE};
 use crate::cursor::R;
 use crate::findings::{self, Counted};
 use crate::gate;
@@ -23,9 +24,6 @@ use crate::graph;
 use crate::sha256;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
-
-/// 印の置き場（`--dir` からの相対・床の定数）。
-pub const STAMP_FILE: &str = "preview/ceiling-stamp.yaml";
 
 /// 印の先頭の注釈（1 行）。
 const HEADER: &str =
@@ -98,7 +96,7 @@ pub fn run(dir: &Path, out: &Path) -> Outcome {
 
 /// 印の全文。組めなければ Err（理由 1 つ）。
 fn derive(dir: &Path, out_dir: &Path) -> R<String> {
-    let ceiling = bundle::load(dir)?;
+    let ceiling = ceiling_src::load(dir)?;
     if !out_dir.is_dir() {
         return Err(format!("{}: 置き場が無い", out_dir.display()));
     }

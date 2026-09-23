@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use crate::bundle::Ceiling;
+use crate::ceiling_src::Ceiling;
 use crate::floor::Floor;
 use crate::gate;
 use crate::sha256;

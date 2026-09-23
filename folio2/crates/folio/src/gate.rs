@@ -11,10 +11,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use crate::bundle;
+use crate::ceiling_src::{self, STAMP_FILE};
 use crate::cursor::R;
 use crate::sha256;
-use crate::stamp::STAMP_FILE;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
 
@@ -51,7 +50,7 @@ pub fn run(dir: &Path, write_set: &[String]) -> Outcome {
         Ok(None) => return Outcome::new(Verdict::Unknown, "印が無い"),
         Err(e) => return Outcome::new(Verdict::Unknown, format!("印が読めない: {e}")),
     };
-    let ceiling = match bundle::load(dir) {
+    let ceiling = match ceiling_src::load(dir) {
         Ok(c) => c,
         Err(e) => return Outcome::new(Verdict::Unknown, e),
     };
@@ -163,7 +162,7 @@ fn read_stamp(dir: &Path) -> R<Option<Stamp>> {
 }
 
 /// 今の正本の要約値（「sha256 <16 進>」）。観点の reads が指す文書だけを全文で集める（印の sources も同じ関数・便 104）。
-pub(crate) fn sources_digest(dir: &Path, ceiling: &bundle::Ceiling) -> R<String> {
+pub(crate) fn sources_digest(dir: &Path, ceiling: &ceiling_src::Ceiling) -> R<String> {
     let documents = documents(dir)?;
     let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut seen: Vec<&str> = Vec::new();
@@ -217,7 +216,7 @@ pub(crate) fn collect(dir: &Path, file: &str, files: &mut BTreeMap<String, Vec<u
         files.insert(file.to_string(), bytes);
         return Ok(());
     }
-    for (name, is_file) in bundle::read_dir_names(&path)? {
+    for (name, is_file) in ceiling_src::read_dir_names(&path)? {
         if !is_file || !name.ends_with(".yaml") {
             continue;
         }

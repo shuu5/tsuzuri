@@ -12,9 +12,14 @@
 //! 書き、`floor_diff` は読まない）。束を組む命令（`bundle.rs`）と所見の検査（`findings.rs`）の読み手も一覧をここから取る。
 //! 節 `schema` は必須で `FLOOR` と突き合わせる（便 48・docs/design/delivery-48.md §1 (b)）。第 2 版までの人が書いた 4 節
 //! （verdicts・finding・record・bundle）の受け口は無く、その名の節は未知の節で落ちる。
+//! 束の読み手も読む所見と束の閉じた一覧 8 本は便 110 で `ceiling_src.rs` へ降ろした（ADR-15・層 1 読む・床の木の葉は同じ配列）。
 
 use std::collections::HashSet;
 
+use crate::ceiling_src::{
+    BUNDLE_DIGEST, BUNDLE_SKELETON, FINDING_OPTIONAL, FINDING_REQUIRED, PLACE_REQUIRED,
+    RECORD_REQUIRED, REFUTE_VALUES, VERDICT_VALUES,
+};
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
 use crate::floor::{Floor, floor_diff, strip_notes};
 use crate::verdict::Report;
@@ -25,9 +30,6 @@ const FILE: &str = "ceiling.yaml";
 
 /// 天井の正本の最上位の節の閉じた一覧（`FLOOR` の top_level・人が書く 4 節 + 生成区間 schema・ほかの名は未知の節）。
 pub const CEILING_TOP_LEVEL: [&str; 5] = ["meta", "weights", "documents", "viewpoints", "schema"];
-
-/// 観点ごとの 3 値（要件書 FR5 の 3 値・順も固定）。
-pub const VERDICT_VALUES: [&str; 3] = ["合格", "不合格", "まだ分からない"];
 
 /// 観点の id の列（ADR-8 決定 (1)・順も固定・増減はどちらも違反）。
 pub const VIEWPOINT_IDS: [&str; 4] = ["fidelity", "readability", "coherence", "reality"];
@@ -46,29 +48,8 @@ pub const DOCUMENT_IDS: [&str; 10] = [
     "graph",
 ];
 
-/// 所見 1 件が必ず持つ欄。
-pub const FINDING_REQUIRED: [&str; 5] = ["id", "viewpoint", "place", "weight", "evidence"];
-
-/// 所見 1 件が持ってよい欄。
-pub const FINDING_OPTIONAL: [&str; 2] = ["refute", "note"];
-
-/// 所見の場所が必ず持つ欄。
-pub const PLACE_REQUIRED: [&str; 2] = ["doc", "at"];
-
-/// 反証の結果の値域。
-pub const REFUTE_VALUES: [&str; 3] = ["支持", "退けた", "まだ分からない"];
-
-/// 起動の記録が必ず持つ欄。
-pub const RECORD_REQUIRED: [&str; 5] = ["model", "effort", "at", "read", "bundle"];
-
 /// 材料の束の中身（順も同じ・`bundle.rs` が組む）。
 pub const BUNDLE_CONTENTS: [&str; 5] = ["sources", "faces", "question", "finding", "reads"];
-
-/// 束の sources の写しで常に残す最上位の節（順も同じ・`bundle.rs` が組む・便 102）。
-pub const BUNDLE_SKELETON: [&str; 6] = ["meta", "id", "title", "status", "date", "schema"];
-
-/// 束の要約値の規則の名（digest.txt の頭）。
-pub const BUNDLE_DIGEST: &str = "sha256-files-1";
 
 /// 反証の束の中身（名の byte 順・digest.txt と result.yaml は数えない・`findings.rs` が組む）。
 pub const REFUTE_CONTENTS: [&str; 5] = [

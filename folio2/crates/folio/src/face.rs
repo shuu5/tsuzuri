@@ -18,6 +18,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::catalog::{self, Component};
+use crate::ceiling_src;
 use crate::constitution_enums as ce;
 use crate::cursor::{R, X, esc, load};
 use crate::figure;
@@ -185,7 +186,7 @@ pub fn ceiling_stamp(dir: &Path) -> R<String> {
             if ids != want {
                 return Err(format!(
                     "{}: 印の観点が天井の正本と違う（印 {}・正本 {}）",
-                    stamp::STAMP_FILE,
+                    ceiling_src::STAMP_FILE,
                     ids.join(", "),
                     want.join(", ")
                 ));

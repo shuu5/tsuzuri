@@ -17,6 +17,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("sha256", 0),
     ("verdict", 0),
     ("catalog", 1),
+    ("ceiling_src", 1),
     ("constitution_enums", 1),
     ("cursor", 1),
     ("floor", 1),
@@ -69,9 +70,6 @@ const LAYERS: &[(&str, u8)] = &[
 const REMAINING_UPWARD: &[(&str, &str)] = &[
     ("anchor", "freeze"),
     ("check", "freeze"),
-    ("findings", "bundle"),
-    ("gate", "bundle"),
-    ("gate", "stamp"),
     ("ids", "freeze"),
 ];
 
