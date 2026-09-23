@@ -1,6 +1,7 @@
 //! 面の共有の名札（便 87・docs/design/delivery-87.md §1 (a)）。憲法の値域の型（`constitution_enums`）への網羅の
 //! 場合分けで持つ名札と、値域に依らない名札の表を持つ。便 87 で `face.rs` から移したもので、字は 1 字も変えていない。
 //! 公開の名は `face.rs` から丸ごと再輸出されるので、呼び出し側は `crate::face::…` のまま名指せる。
+//! 入口の棚の閉じた一覧（`Shelf` と表 4 つ）は便 109 で `shelf.rs` へ降ろした（ADR-15・層 1 読む）。
 
 use crate::constitution_enums as ce;
 use crate::cursor::{R, X};
@@ -213,78 +214,6 @@ pub const TONE: &[(&str, &str)] = &[
     ("bad", "tone-bad"),
     ("neutral", "tone-neutral"),
     ("warn", "tone-warn"),
-];
-
-/// 入口の棚の文書（便 16）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Shelf {
-    /// 棚の置き場（見本の css の shelf-grid の class）
-    pub place: &'static str,
-    /// 読める面の file（面が無ければ None）
-    pub face: Option<&'static str>,
-    /// 原語の札
-    pub en: &'static str,
-    /// minimap でこの文書の前に置く区切り
-    pub sep: &'static str,
-}
-
-/// 文書の id → 棚（並びは棚の置き場の順）。
-pub const SHELF_DOCS: &[(&str, Shelf)] = &[
-    (
-        "constitution",
-        Shelf {
-            place: "shelf-c",
-            face: Some("constitution.html"),
-            en: "CONSTITUTION",
-            sep: "→",
-        },
-    ),
-    (
-        "srs",
-        Shelf {
-            place: "shelf-s",
-            face: Some("srs.html"),
-            en: "SRS",
-            sep: "→",
-        },
-    ),
-    (
-        "design-note",
-        Shelf {
-            place: "shelf-d",
-            face: None,
-            en: "DESIGN",
-            sep: "→",
-        },
-    ),
-    (
-        "adr",
-        Shelf {
-            place: "shelf-adr",
-            face: None,
-            en: "ADR",
-            sep: "｜",
-        },
-    ),
-];
-
-/// 関係の id → 棚の置き場（shelf-link の class）。
-pub const SHELF_RELATIONS: &[(&str, &str)] = &[
-    ("binds", "shelf-l1"),
-    ("before-build", "shelf-l2"),
-    ("inside", "shelf-branch branch"),
-    ("amends", "up"),
-];
-
-/// 付録の id → （憲法の章の番号・数の単位）。
-pub const ANNEXES: &[(&str, (u8, &str))] = &[("vocabulary", (7, "語")), ("rules", (5, "行"))];
-
-/// 棚の凡例の id → sw の class。
-pub const SHELF_LEGEND: &[(&str, &str)] = &[
-    ("readable", "sw ok"),
-    ("absent", "sw neutral"),
-    ("binds", "sw line"),
-    ("inside", "sw dash"),
 ];
 
 /// 入口の状態の名札。

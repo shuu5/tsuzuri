@@ -41,6 +41,7 @@ mod schema;
 mod serve;
 mod sha256;
 mod sheet;
+mod shelf;
 mod site;
 mod stamp;
 mod verdict;

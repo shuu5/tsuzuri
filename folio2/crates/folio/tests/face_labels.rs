@@ -1,6 +1,7 @@
 //! 便 87（docs/design/delivery-87.md §1 (e)）: face.rs の名札と名札の表を face_labels.rs へ切り出した歯。
 //! 器の行数の式で face.rs が上限の内に収まり、移した定義が新しい module に在って face.rs に無く、
 //! face.rs が新しい module を丸ごと再輸出する行を 1 本だけ持つことを見る。振る舞いの不変は既存の歯が見る。
+//! 便 109（docs/design/delivery-109.md §1 (e) の 2・ADR-15 決定 (5)）で、棚の一覧の 3 本の置き場の見張りだけを shelf.rs へ直した。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,15 +25,19 @@ fn vessel_lines(text: &str) -> usize {
         .sum()
 }
 
-/// 移した 8 本の定義の頭。
+/// 移した 8 本の定義の頭のうち、face_labels.rs に残る 5 本。
 const MOVED_HEADS: &[&str] = &[
     "pub fn tier_label(",
     "pub fn rule_kind_label(",
     "pub fn method_label(",
     "pub fn stop_anchor(",
+    "pub struct Tier {",
+];
+
+/// 移した 8 本の定義の頭のうち、便 109 で shelf.rs へ降ろした 3 本（入口の棚の閉じた一覧）。
+const SHELF_HEADS: &[&str] = &[
     "pub const SHELF_DOCS:",
     "pub const ANNEXES:",
-    "pub struct Tier {",
     "pub struct Shelf {",
 ];
 
@@ -50,6 +55,22 @@ fn f87_face_is_split_and_under_the_cap() {
         assert!(
             labels.lines().any(|l| l.starts_with(head)),
             "face_labels.rs に「{head}」の定義が無い"
+        );
+        assert!(
+            !face.lines().any(|l| l.trim_start().starts_with(head)),
+            "face.rs に「{head}」の定義が残っている"
+        );
+    }
+
+    let shelf = read("crates/folio/src/shelf.rs");
+    for head in SHELF_HEADS {
+        assert!(
+            shelf.lines().any(|l| l.starts_with(head)),
+            "shelf.rs に「{head}」の定義が無い"
+        );
+        assert!(
+            !labels.lines().any(|l| l.trim_start().starts_with(head)),
+            "face_labels.rs に「{head}」の定義が残っている"
         );
         assert!(
             !face.lines().any(|l| l.trim_start().starts_with(head)),

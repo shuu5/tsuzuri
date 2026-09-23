@@ -22,11 +22,8 @@ use std::sync::LazyLock;
 use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X, esc};
-use crate::face::{
-    self, ANNEXES, Frame, INDEX_STATUS, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf,
-    anchor, hint, hint_q, stop_anchor, tier_of,
-};
-use crate::face_note;
+use crate::face::{self, Frame, INDEX_STATUS, anchor, hint, hint_q, stop_anchor, tier_of};
+use crate::shelf::{self, ANNEXES, SHELF_DOCS, SHELF_LEGEND, SHELF_RELATIONS, Shelf};
 use crate::yaml::Value;
 
 /// 入口の面が使う部品（13 種・便 40 で ceiling-stamp を足した）。
@@ -143,7 +140,7 @@ impl Record {
 pub struct Note {
     /// 正本の id（英小文字・数字・ハイフンだけなので escape は要らない）
     id: String,
-    /// 状態の名札（β・`face_note::STATUS`）
+    /// 状態の名札（β・`shelf::STATUS`）
     status: &'static str,
     /// 生成日（escape 済み）
     generated: String,
@@ -355,7 +352,7 @@ pub fn records(dir: &Path) -> R<Vec<Record>> {
 
 /// `design-note/` の直下で名が `.yaml` で終わる正本（欄の決まり `schema.yaml` は除く）を読み、id の字の昇順に
 /// 並べる（file 名が一意なので同じ id は無い）。欄 meta の id・title・status・generated は必須で、id は file 名の
-/// stem と一致し、id の形（`face_note::is_doc_id`）で、status は設計ノートの面の表（`face_note::STATUS`）の中。
+/// stem と一致し、id の形（`shelf::is_doc_id`）で、status は設計ノートの面の表（`shelf::STATUS`）の中。
 pub fn notes(dir: &Path) -> R<Vec<Note>> {
     let entries =
         fs::read_dir(dir.join(NOTE_DIR)).map_err(|e| format!("{NOTE_DIR}/: 読めない: {e}"))?;
@@ -387,7 +384,7 @@ pub fn notes(dir: &Path) -> R<Vec<Note>> {
                 "{at}: 欄 meta.id「{id}」が file 名「{stem}」と違う"
             ));
         }
-        if !face_note::is_doc_id(&id) {
+        if !shelf::is_doc_id(&id) {
             return Err(format!(
                 "{at}: 欄 meta.id「{id}」は id の形でない（英小文字で始まり 英小文字・数字・ハイフン）"
             ));
@@ -396,7 +393,7 @@ pub fn notes(dir: &Path) -> R<Vec<Note>> {
         out.push(Note {
             status: m
                 .f("status")?
-                .lookup(face_note::STATUS, "設計ノートの状態")?,
+                .lookup(shelf::STATUS, "設計ノートの状態")?,
             generated: esc(&required(&m, "generated")?),
             id,
             title,
@@ -903,7 +900,7 @@ fn adr_rows(o: &mut Vec<String>, adr: &[Record]) {
 /// 設計ノートの card の 2 行（設計ノートが 1 本以上のとき）。1 行目は本数と状態ごとの数・2 行目は更新と
 /// 各設計ノートの面へのリンク（id は番号でないので範囲は出さない）。
 fn note_rows(o: &mut Vec<String>, notes: &[Note]) {
-    let kinds = face_note::STATUS
+    let kinds = shelf::STATUS
         .iter()
         .filter_map(|(_, label)| {
             let n = notes.iter().filter(|q| q.status == *label).count();

@@ -22,6 +22,7 @@ use crate::constitution_enums as ce;
 use crate::cursor::{R, X, esc, load};
 use crate::figure;
 use crate::findings;
+use crate::shelf::ANNEXES;
 use crate::stamp;
 use crate::verdict::Verdict;
 use crate::yaml::Value;

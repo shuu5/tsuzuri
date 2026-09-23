@@ -8,8 +8,8 @@
 use std::collections::HashSet;
 
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
-use crate::face;
 use crate::floor::Floor;
+use crate::shelf;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
@@ -32,13 +32,13 @@ const fn ids<T: Copy, const N: usize>(table: &'static [(&'static str, T)]) -> [&
 }
 
 /// 棚の文書の閉じた id の列（並びは表の順）。
-pub const SHELF_DOC_IDS: [&str; face::SHELF_DOCS.len()] = ids(face::SHELF_DOCS);
+pub const SHELF_DOC_IDS: [&str; shelf::SHELF_DOCS.len()] = ids(shelf::SHELF_DOCS);
 /// 棚の文書どうしの関係の閉じた id の列（並びは表の順）。
-pub const SHELF_RELATION_IDS: [&str; face::SHELF_RELATIONS.len()] = ids(face::SHELF_RELATIONS);
+pub const SHELF_RELATION_IDS: [&str; shelf::SHELF_RELATIONS.len()] = ids(shelf::SHELF_RELATIONS);
 /// 棚の付録の閉じた id の列（並びは表の順）。
-pub const ANNEX_IDS: [&str; face::ANNEXES.len()] = ids(face::ANNEXES);
+pub const ANNEX_IDS: [&str; shelf::ANNEXES.len()] = ids(shelf::ANNEXES);
 /// 棚の凡例の閉じた id の列（並びは表の順）。
-pub const SHELF_LEGEND_IDS: [&str; face::SHELF_LEGEND.len()] = ids(face::SHELF_LEGEND);
+pub const SHELF_LEGEND_IDS: [&str; shelf::SHELF_LEGEND.len()] = ids(shelf::SHELF_LEGEND);
 
 /// 入口の正本の schema 節（生成区間）の床の木（便 76 §1 (b)）。欄の順と字面は凍結 anchor
 /// tests/fixtures/schema/index-region.txt のとおり（`derive` の結果が byte 一致・単体の歯が数える）。葉は上の定数と同じ配列。
@@ -369,9 +369,9 @@ mod tests {
         fn keys<T>(table: &[(&'static str, T)]) -> Vec<&'static str> {
             table.iter().map(|(k, _)| *k).collect()
         }
-        assert_eq!(SHELF_DOC_IDS.to_vec(), keys(face::SHELF_DOCS));
-        assert_eq!(ANNEX_IDS.to_vec(), keys(face::ANNEXES));
-        assert_eq!(SHELF_RELATION_IDS.to_vec(), keys(face::SHELF_RELATIONS));
-        assert_eq!(SHELF_LEGEND_IDS.to_vec(), keys(face::SHELF_LEGEND));
+        assert_eq!(SHELF_DOC_IDS.to_vec(), keys(shelf::SHELF_DOCS));
+        assert_eq!(ANNEX_IDS.to_vec(), keys(shelf::ANNEXES));
+        assert_eq!(SHELF_RELATION_IDS.to_vec(), keys(shelf::SHELF_RELATIONS));
+        assert_eq!(SHELF_LEGEND_IDS.to_vec(), keys(shelf::SHELF_LEGEND));
     }
 }

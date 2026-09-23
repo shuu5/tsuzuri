@@ -8,6 +8,7 @@
 //! 図の章（便 31）は図ごとに図の枠（figure-panel・便 34 からは `face.rs` の共有の口）を置き、図の本体（SVG）は
 //! `figure.rs` の `render` が図の道具で描いたものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない
 //! （全部か無しか・FR15）。
+//! 状態の閉じた一覧 `STATUS` と文書 id の形 `is_doc_id` は便 109 で `shelf.rs` へ降ろした（ADR-15・層 1 読む）。
 
 use std::fs;
 use std::path::Path;
@@ -16,6 +17,7 @@ use crate::catalog::Component;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{self, Frame, anchor, hint};
 use crate::face_index;
+use crate::shelf::{STATUS, is_doc_id};
 
 /// 設計ノートの面が使う部品（8 種・判断の記録の面の section-lead-callout の代わりに figure-panel・便 40 で ceiling-stamp を足した）。
 pub const PARTS: [Component; 8] = [
@@ -89,14 +91,6 @@ const TYPES: [(&str, &str); 6] = [
 ];
 
 const CONTRACT_TABLE: &str = "contract-table";
-
-/// 文書の状態 → 名札（状態の行は関数 status）。
-pub(crate) const STATUS: &[(&str, &str)] = &[
-    ("draft", "下書き"),
-    ("effective", "発効"),
-    ("retired", "廃止"),
-    ("example", "見本"),
-];
 
 /// 欄の要否 → pill の字。
 const NEED: &[(&str, &str)] = &[("required", "必須"), ("optional", "任意")];
@@ -307,13 +301,6 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
 }
 
 // ── 読みと解き ──
-
-/// 文書 id の形（欄の決まり id_pattern = 英小文字で始まり 英小文字・数字・ハイフン）。
-pub(crate) fn is_doc_id(s: &str) -> bool {
-    let mut cs = s.chars();
-    cs.next().is_some_and(|c| c.is_ascii_lowercase())
-        && cs.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-}
 
 fn check_id_shape(id: &str) -> R<()> {
     if is_doc_id(id) {

@@ -18,7 +18,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::cursor::{self, R, X};
 use crate::face;
-use crate::face_note;
+use crate::shelf;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
 
@@ -139,7 +139,7 @@ pub fn run(doc: &str, id: &str, dir: &Path, out: &Path, mode: Mode) -> Outcome {
 
 /// 設計ノートの図 1 枚の本体（SVG）を導出する。読めない・型が表に無い・道具が通らないは Err（まだ分からない）。
 pub fn derive(dir: &Path, doc: &str, id: &str) -> R<String> {
-    if !face_note::is_doc_id(doc) {
+    if !shelf::is_doc_id(doc) {
         return Err(format!(
             "--doc「{doc}」は id の形でない（英小文字で始まり 英小文字・数字・ハイフン）"
         ));

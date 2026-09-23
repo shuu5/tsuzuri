@@ -20,6 +20,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("constitution_enums", 1),
     ("cursor", 1),
     ("floor", 1),
+    ("shelf", 1),
     ("yaml", 1),
     ("adr", 2),
     ("anchor", 2),
@@ -68,7 +69,6 @@ const LAYERS: &[(&str, u8)] = &[
 const REMAINING_UPWARD: &[(&str, &str)] = &[
     ("anchor", "freeze"),
     ("check", "freeze"),
-    ("entrance", "face"),
     ("findings", "bundle"),
     ("gate", "bundle"),
     ("gate", "stamp"),
