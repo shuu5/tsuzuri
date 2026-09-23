@@ -49,6 +49,9 @@
 //! f95_ 2. --check → 0・9 行・9 行目が graph.yaml。
 //! f95_ 3. 生成区間の 1 byte を書き換えて --check → 1・理由に graph.yaml・--write で元の byte に戻る。
 //! f95_ 4. 生成区間の node_kinds と edge_types が folio graph --print の出す種類と型を漏れなく覆う。
+//!
+//! 便 117（docs/design/delivery-117.md §1 (b)(d)）: 要件書の最上位の節の閉じた一覧に scope_m3 を足した（生成区間は導出・anchor は手で 1 行）。
+//! F77_REGIONS の srs.yaml を wc と sha256sum で測り直した 30 行・1189 byte と要約値に・F86_SRS_* はその行を指す形に寄せた。
 
 use std::fs;
 use std::io::Write;
@@ -80,9 +83,9 @@ const F77_REGIONS: [(&str, &str, usize, usize, &str); 3] = [
     (
         "srs.yaml",
         "tests/fixtures/schema/srs-region.txt",
-        29,
-        1174,
-        "7fc1ed83deb5193ffffa57061707b7d912919b51e2ff542d17a97fb2f026ef59",
+        30,
+        1189,
+        "0a06c5630693cc4157376d034838d92c48635433d8948248b94b71023a45afc8",
     ),
     (
         "vocabulary.yaml",
@@ -900,10 +903,12 @@ fn f85_deny_meaning_names_the_lower_bound_and_the_fixed_value() {
 // ── 便 86: 要件の行の欄の閉じた一覧を要件書の生成区間へ導出する ──
 
 /// 便 86 (c) 凍結 anchor の置き場と自己検査の値（設計判断の席が独立に組んだ）。
+/// 便 117（docs/design/delivery-117.md §1 (b)(d)）: 値は数を書き直さず F77_REGIONS の srs.yaml の行（先頭の組）を指す
+/// （anchor の値を pin する場所を 1 か所に寄せた）。
 const F86_SRS_ANCHOR: &str = "tests/fixtures/schema/srs-region.txt";
-const F86_SRS_LINES: usize = 29;
-const F86_SRS_BYTES: usize = 1174;
-const F86_SRS_SHA256: &str = "7fc1ed83deb5193ffffa57061707b7d912919b51e2ff542d17a97fb2f026ef59";
+const F86_SRS_LINES: usize = F77_REGIONS[0].2;
+const F86_SRS_BYTES: usize = F77_REGIONS[0].3;
+const F86_SRS_SHA256: &str = F77_REGIONS[0].4;
 
 // ── f86_ 1. 生成区間が新しい凍結 anchor と byte 一致・anchor の自己検査 ──
 

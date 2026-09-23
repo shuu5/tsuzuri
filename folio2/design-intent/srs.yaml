@@ -723,6 +723,7 @@ schema:
     - goals
     - scope
     - scope_m1
+    - scope_m3
     - actors
     - outputs
     - rail

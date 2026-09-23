@@ -5,6 +5,8 @@
 //! srs.yaml に図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複・未知の欄）で 不合格 1 を見る。
 //! 憲法の条の値域を持つ欄（便 55・床の穴 f2-648.82）は同じ写しの constitution.yaml の条 P-1 に変異 1 つずつを当てて見る
 //! （改訂の差分の範囲の外の欄 3 つは違反ちょうど 1 件・範囲の内の欄 2 つは値域の違反を含む・欄が無ければ黙る）。
+//! 便 117（docs/design/delivery-117.md §1 (d)）: 要件書の最上位の節の閉じた一覧に M3 の範囲の節 scope_m3 を足した。f117_ の 3 本は
+//! 写しに足した scope_m3 の節の合格・ほかの段の名の節の未知の節・実の生成区間の一覧の並びを見る（どれも数を pin しない）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1173,4 +1175,108 @@ fn f93_deleting_the_rule_row_is_not_a_silent_escape() {
     let term = |l: &&String| l.starts_with("[参照 id] vocabulary.yaml: terms");
     assert_eq!(v.iter().filter(term).count(), 1, "語彙の定義の違反: {v:?}");
     assert!(!v.iter().any(|l| l.starts_with("[R-17]")), "{v:?}");
+}
+
+// ── 要件書の最上位の節の閉じた一覧に M3 の範囲の節 scope_m3（便 117・ADR-16 決定 (1)(7)①） ──
+
+/// 見本の節の中身（scope_m1 と同じ形＝build と not_build の一覧に 1 行ずつ）。名は歯が前に付ける。
+const F117_SECTION_BODY: &str = ":\n  build:\n    - 見本の範囲\n  not_build:\n    - 見本の範囲の外\n";
+
+/// 写しの srs.yaml の最上位の節 actors の直前に、名 name の見本の節を足す。
+fn f117_with_section(w: &Work, name: &str) {
+    w.mutate("\nactors:\n", &format!("\n{name}{F117_SECTION_BODY}actors:\n"));
+}
+
+/// 要件書の生成区間（印 2 本の間）の schema.top_level の一覧の項。
+fn f117_region_top_level(text: &str) -> Vec<String> {
+    let begin = text.find("# folio:schema:begin").expect("生成区間の begin が無い");
+    let end = text.find("# folio:schema:end").expect("生成区間の end が無い");
+    let region = &text[begin..end];
+    let doc = yaml_rust2::YamlLoader::load_from_str(region).unwrap().remove(0);
+    doc["schema"]["top_level"]
+        .as_vec()
+        .expect("生成区間の top_level が一覧でない")
+        .iter()
+        .map(|v| v.as_str().expect("top_level の項が字でない").to_string())
+        .collect()
+}
+
+/// scope_m3 の節を持つ要件書の写しは床を通る（実の要件書が既に節を持つときは足さずに撃つ）。
+#[test]
+fn f117_srs_with_the_scope_m3_section_passes() {
+    let w = Work::new("f117-scope-m3");
+    let before = fs::read_to_string(w.srs()).unwrap();
+    if !before.lines().any(|l| l.starts_with("scope_m3:")) {
+        f117_with_section(&w, "scope_m3");
+    }
+    let after = fs::read_to_string(w.srs()).unwrap();
+    assert_eq!(
+        after.lines().filter(|l| l.starts_with("scope_m3:")).count(),
+        1,
+        "最上位の scope_m3 の鍵はちょうど 1 つ"
+    );
+    let out = w.check();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    assert!(
+        stdout(&out).contains("folio check: 合格（違反 0・まだ分からない 0）"),
+        "{}",
+        stdout(&out)
+    );
+}
+
+/// ほかの段の名の節（scope_m2・scope_m4・scope_m）は 1 つずつ未知の節のまま落ちる。
+#[test]
+fn f117_other_stage_sections_are_still_unknown() {
+    for name in ["scope_m2", "scope_m4", "scope_m"] {
+        let w = Work::new(&format!("f117-{name}"));
+        f117_with_section(&w, name);
+        let out = w.check();
+        assert_eq!(
+            out.status.code(),
+            Some(1),
+            "{name}: {}{}",
+            stdout(&out),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let unknown: Vec<String> = violations(&out)
+            .into_iter()
+            .filter(|v| v.starts_with("[未知の節]"))
+            .collect();
+        assert_eq!(unknown.len(), 1, "{name}: 未知の節はちょうど 1 件: {unknown:?}");
+        assert!(unknown[0].starts_with("[未知の節] srs.yaml"), "{unknown:?}");
+        assert!(unknown[0].contains(&format!("「{name}」")), "{unknown:?}");
+        assert!(stdout(&out).contains("不合格"), "{}", stdout(&out));
+    }
+}
+
+/// 実の要件書の生成区間の一覧は scope_m3 をちょうど 1 回 scope_m1 の直後に持ち、実の最上位の節はどれも一覧に在る。
+#[test]
+fn f117_the_real_region_lists_scope_m3_after_scope_m1() {
+    let text = fs::read_to_string(repo_root().join("design-intent/srs.yaml")).unwrap();
+    let listed = f117_region_top_level(&text);
+    assert_eq!(
+        listed.iter().filter(|k| *k == "scope_m3").count(),
+        1,
+        "scope_m3 はちょうど 1 回: {listed:?}"
+    );
+    let at = listed.iter().position(|k| k == "scope_m1").expect("一覧に scope_m1 が無い");
+    assert_eq!(listed.get(at + 1).map(String::as_str), Some("scope_m3"), "{listed:?}");
+    let doc = yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
+    let real: Vec<String> = doc
+        .as_hash()
+        .expect("要件書の最上位が表でない")
+        .keys()
+        .map(|k| k.as_str().expect("最上位の鍵が字でない").to_string())
+        .collect();
+    assert!(!real.is_empty(), "要件書の最上位の節が無い");
+    for key in &real {
+        assert!(listed.contains(key), "最上位の節「{key}」が一覧に無い: {listed:?}");
+    }
 }

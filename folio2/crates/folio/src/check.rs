@@ -42,12 +42,14 @@ pub const FILES: [&str; 7] = [
 ];
 
 /// 要件書の節の閉じた一覧（正本は床の定数・file の schema 節はその写し）。figures は任意の図の節（便 34・FR15）。
-/// 末尾の schema は生成区間（便 77・ADR-11 決定 (4)⑤）。
-pub const SRS_TOP_LEVEL: [&str; 17] = [
+/// 末尾の schema は生成区間（便 77・ADR-11 決定 (4)⑤）。scope_m3 は M3 の範囲の節（便 117・判断の記録 ADR-16 決定 (1)(7)①・
+/// 節の中身は要件書の版上げが書く）。
+pub const SRS_TOP_LEVEL: [&str; 18] = [
     "meta",
     "goals",
     "scope",
     "scope_m1",
+    "scope_m3",
     "actors",
     "outputs",
     "rail",
