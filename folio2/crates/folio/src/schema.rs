@@ -23,7 +23,7 @@ pub const END: &str = "# folio:schema:end";
 /// 6〜8 本目は要件書・語彙・相談窓口（便 77・ADR-11 決定 (4)⑤・生成区間は file の末尾に 1 対）。
 /// 9 本目は索引の欄の決まり（便 95・ADR-13 決定 (1)・生成区間は file の末尾に 1 対）。
 const TARGETS: &[(&str, &Floor)] = &[
-    ("adr/schema.yaml", &crate::adr::FLOOR),
+    ("adr/schema.yaml", &crate::floor_adr::FLOOR),
     ("design-note/schema.yaml", &crate::note::FLOOR),
     ("ceiling.yaml", &crate::ceiling::FLOOR),
     ("rules.yaml", &crate::rules::FLOOR),

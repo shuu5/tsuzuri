@@ -21,6 +21,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("constitution_enums", 1),
     ("cursor", 1),
     ("floor", 1),
+    ("floor_adr", 1),
     ("phase", 1),
     ("shelf", 1),
     ("yaml", 1),

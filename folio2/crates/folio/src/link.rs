@@ -10,6 +10,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::adr::{self, Adr};
+use crate::floor_adr;
 use crate::refs;
 use crate::verdict::Report;
 use crate::vocab;
@@ -518,7 +519,7 @@ fn amended_by(constitution: &Node, records: &[(String, Node)], report: &mut Repo
                 "A-2",
                 &format!("{id}.amended_by"),
                 am,
-                &adr::AMENDED_BY_ENTRY,
+                &floor_adr::AMENDED_BY_ENTRY,
                 report,
             ) {
                 continue;

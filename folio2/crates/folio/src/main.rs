@@ -22,6 +22,7 @@ mod face_srs_rtm;
 mod figure;
 mod findings;
 mod floor;
+mod floor_adr;
 mod freeze;
 mod gate;
 mod gitcheck;
