@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
-use crate::schema::Floor;
+use crate::floor::Floor;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;

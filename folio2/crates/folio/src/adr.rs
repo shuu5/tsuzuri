@@ -14,8 +14,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::constitution_enums::RetreatKind;
+use crate::floor::{Floor, floor_diff, keys_floor, strip_notes};
 use crate::parts::catalog::FigureType;
-use crate::schema::{Floor, floor_diff, keys_floor, strip_notes};
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
 
@@ -1320,7 +1320,7 @@ mod tests {
             "/../../tests/fixtures/schema/adr-region.txt"
         ))
         .unwrap();
-        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+        assert_eq!(crate::floor::derive(&FLOOR), anchor);
     }
 
     /// 承認者の値域は 持ち主・planner 席・orchestrator 席 の 3 つ（席の呼び名の裁定 2026-09-20・便 58 §1 (a)1・

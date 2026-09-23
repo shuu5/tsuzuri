@@ -16,7 +16,7 @@
 use std::collections::HashSet;
 
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
-use crate::schema::{Floor, floor_diff, strip_notes};
+use crate::floor::{Floor, floor_diff, strip_notes};
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
@@ -483,7 +483,7 @@ mod tests {
             "/../../tests/fixtures/schema/ceiling-region.txt"
         ))
         .unwrap();
-        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+        assert_eq!(crate::floor::derive(&FLOOR), anchor);
     }
 
     /// 床の突き合わせは FLOOR の注（`_note`）を読まない＝注を持つ FLOOR と注の無い写しの差は 0。

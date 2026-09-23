@@ -16,11 +16,11 @@ use std::path::Path;
 
 use crate::adr::Adr;
 use crate::check::{duplicate_ids, non_empty, row_id, unknown_sections};
+use crate::floor::{Floor, floor_diff, keys_floor, strip_notes};
 use crate::link;
 use crate::parts::catalog::FigureType;
 use crate::prose;
 use crate::refs;
-use crate::schema::{Floor, floor_diff, keys_floor, strip_notes};
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
 
@@ -1318,6 +1318,6 @@ mod tests {
             "/../../tests/fixtures/schema/note-region.txt"
         ))
         .unwrap();
-        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+        assert_eq!(crate::floor::derive(&FLOOR), anchor);
     }
 }

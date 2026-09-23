@@ -11,7 +11,7 @@
 #![allow(dead_code)]
 
 use crate::constitution_enums::{MechanismKind, Stage};
-use crate::schema::Floor;
+use crate::floor::Floor;
 
 /// 規則の表の最上位の節の閉じた一覧（`FLOOR` の top_level・thresholds と discipline は人が書き、schema は生成区間・ほかの名は未知の節）。
 pub const RULES_TOP_LEVEL: [&str; 3] = ["schema", "thresholds", "discipline"];
@@ -254,7 +254,7 @@ mod tests {
             "/../../tests/fixtures/schema/rules-region.txt"
         ))
         .unwrap();
-        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+        assert_eq!(crate::floor::derive(&FLOOR), anchor);
     }
 
     /// 凍結の針（便 51 §1 (c)2）: 値域 stage は憲法から導出した名の列と同じ・最上位の節は 3 値（字面を直に書く）。

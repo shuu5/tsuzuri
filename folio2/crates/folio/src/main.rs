@@ -18,6 +18,7 @@ mod face_srs_items;
 mod face_srs_rtm;
 mod figure;
 mod findings;
+mod floor;
 mod freeze;
 mod gate;
 mod gitcheck;

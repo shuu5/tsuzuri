@@ -9,7 +9,7 @@ use std::collections::HashSet;
 
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
 use crate::face;
-use crate::schema::Floor;
+use crate::floor::Floor;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
@@ -321,7 +321,7 @@ mod tests {
             "/../../tests/fixtures/schema/index-region.txt"
         ))
         .unwrap();
-        assert_eq!(crate::schema::derive(&FLOOR), anchor);
+        assert_eq!(crate::floor::derive(&FLOOR), anchor);
     }
 
     /// 凍結の針（便 76 §1 (h)2）: 最上位の節は 6 語・棚の 4 つの列は字面と順のとおり（字面を直に書く）、

@@ -8,8 +8,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::bundle::Ceiling;
+use crate::floor::Floor;
 use crate::gate;
-use crate::schema::Floor;
 use crate::sha256;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
