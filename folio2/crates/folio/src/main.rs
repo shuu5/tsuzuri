@@ -23,6 +23,7 @@ mod figure;
 mod findings;
 mod floor;
 mod floor_adr;
+mod floor_note;
 mod freeze;
 mod gate;
 mod gitcheck;
