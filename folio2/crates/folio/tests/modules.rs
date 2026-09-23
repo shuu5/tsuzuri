@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 const LAYERS: &[(&str, u8)] = &[
     ("sha256", 0),
     ("verdict", 0),
+    ("catalog", 1),
     ("constitution_enums", 1),
     ("cursor", 1),
     ("floor", 1),
@@ -72,7 +73,6 @@ const REMAINING_UPWARD: &[(&str, &str)] = &[
     ("gate", "bundle"),
     ("gate", "stamp"),
     ("ids", "freeze"),
-    ("parts", "face"),
 ];
 
 fn src_dir() -> PathBuf {

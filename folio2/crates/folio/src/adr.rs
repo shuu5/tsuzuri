@@ -13,9 +13,9 @@
 use std::fs;
 use std::path::Path;
 
+use crate::catalog::FigureType;
 use crate::constitution_enums::RetreatKind;
 use crate::floor::{Floor, floor_diff, keys_floor, strip_notes};
-use crate::parts::catalog::FigureType;
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
 

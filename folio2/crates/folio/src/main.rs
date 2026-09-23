@@ -3,6 +3,7 @@
 mod adr;
 mod anchor;
 mod bundle;
+mod catalog;
 mod ceiling;
 mod check;
 mod constitution_enums;

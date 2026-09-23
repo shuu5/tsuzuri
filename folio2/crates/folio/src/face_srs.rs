@@ -11,12 +11,12 @@
 
 use std::path::Path;
 
+use crate::catalog::Component;
 use crate::cursor::{self, R, X};
 use crate::face::{
     self, DOC_STATUS, Frame, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES, anchor, card,
     count_word, hint,
 };
-use crate::parts::catalog::Component;
 
 /// 要件書の面が使う部品（18 種・便 40 で ceiling-stamp を足した）。
 pub const PARTS: [Component; 18] = [

@@ -12,10 +12,10 @@
 use std::fs;
 use std::path::Path;
 
+use crate::catalog::Component;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{self, Frame, anchor, hint};
 use crate::face_index;
-use crate::parts::catalog::Component;
 
 /// 設計ノートの面が使う部品（8 種・判断の記録の面の section-lead-callout の代わりに figure-panel・便 40 で ceiling-stamp を足した）。
 pub const PARTS: [Component; 8] = [

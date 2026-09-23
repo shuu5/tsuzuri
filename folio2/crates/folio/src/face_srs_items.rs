@@ -2,6 +2,7 @@
 //! 便 100 で `face_srs.rs` から 1 字も変えずに移した。文脈（`Ctx`）と共有の口（`band`・`figure_open`・`figure_close`・
 //! `fig_req`・`article_link`・`xref`・`slots`）は `face_srs.rs` のもの。
 
+use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{R, X};
 use crate::face::{
@@ -11,7 +12,6 @@ use crate::face::{
 use crate::face_srs::{
     Ctx, Item, article_link, band, fig_req, figure_close, figure_open, slots, xref,
 };
-use crate::parts::catalog::Component;
 
 /// 凡例の 1 行（言葉 = 強度と型の名札・確かめ方 = 確かめ方の名札）。強度と型は導出した型の ALL の順（= 憲法の値域の file の順）。
 fn legend_line() -> String {

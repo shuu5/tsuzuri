@@ -2,10 +2,10 @@
 //! 章 08 は用語集（glossary-term-table・便 36 で憲法の面の章 07 と同じ形にした・語の行は `face.rs` の共有の口）。
 //! 文脈（`Ctx`）と共有の口（band・xref・hint 等）は `face_srs.rs` のもの。
 
+use crate::catalog::Component;
 use crate::cursor::{R, X};
 use crate::face::{anchor, glossary_field_terms, glossary_rows, hint};
 use crate::face_srs::{Ctx, band};
-use crate::parts::catalog::Component;
 
 pub(crate) fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
     band(o, ctx, 7, None);

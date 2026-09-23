@@ -7,7 +7,7 @@
 //! 憲法の値域の名札（便 50・ADR-11 決定 (4)②）は、組み立て時に憲法の正本から導出した型（`constitution_enums`）への
 //! 網羅の場合分けで持つ = 値域の値の字面を鍵にした表を持たない（値が足されても消えても組み立てが通らない）。
 //! 部品目録の上限 3 本と図の型の名札（便 52・ADR-11 決定 (4)③）は、組み立て時に部品目録から導出した定数
-//! （`parts::catalog`）を指す = 手書きの写しを持たない。
+//! （`catalog`）を指す = 手書きの写しを持たない。
 //! 図の枠（便 34・P-2.1）: 図の節（figures）の 1 枚の枠（figure-panel・fig-title・図の本体・figcaption）は
 //! 設計ノート・判断の記録・要件書の 3 面が同じ字面で出すので、`figure_body` と `figure_panel` をここに 1 つ持つ。
 //! 天井の名札（便 40・delivery-40.md §1 (c)(d)・ADR-8 決定 (4)・P-3.3）: 5 面の site-bar に床の名札（freshness-stamp）の
@@ -17,11 +17,11 @@
 use std::fs;
 use std::path::Path;
 
+use crate::catalog::{self, Component};
 use crate::constitution_enums as ce;
 use crate::cursor::{R, X, esc, load};
 use crate::figure;
 use crate::findings;
-use crate::parts::catalog::{self, Component};
 use crate::stamp;
 use crate::verdict::Verdict;
 use crate::yaml::Value;
@@ -648,6 +648,7 @@ pub fn figure_panel(
 #[cfg(test)]
 mod face_tests {
     use super::*;
+    use crate::catalog::{FIGURE_TYPE_LABELS, LIMITS};
     use crate::cursor::safe_id;
     use crate::rules;
     use crate::yaml;
@@ -935,5 +936,40 @@ mod face_tests {
             val(&X::root(&v, "v"), 0).unwrap(),
             "<b>a</b>: 「x」・<code>null</code><br><b>b</b>: <br>　<b>c</b>: 1<br><b>d</b>: &lt;&amp;&gt;"
         );
+    }
+
+    /// 凍結の針（P-10.1・便 52 §1 (d) 2・(b) の置き換えの番）: face.rs の名を通して読む上限 3 つが 7・4・4 で、face.rs の
+    /// FIGURE_LABELS が便 52 の前の手書きの 5 対と順まで同じ。導出した定数の側（上限 3 つ・LIMITS・FIGURE_TYPE_LABELS）も同じ値。
+    #[test]
+    fn parts_derived_limits_and_figure_labels_are_frozen_needles() {
+        use crate::face::{FIGURE_LABELS, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES};
+        const LABELS: [(&str, &str); 5] = [
+            ("archify-architecture", "構成図（architecture）"),
+            ("archify-workflow", "手順図（workflow）"),
+            ("archify-sequence", "順序図（sequence）"),
+            ("archify-dataflow", "流れ図（dataflow）"),
+            ("archify-lifecycle", "状態図（lifecycle）"),
+        ];
+        // face.rs の名を通して
+        assert_eq!((MAX_RAIL_NODES, MAX_STATE_NODES, MAX_PER_BAND), (7, 4, 4));
+        assert_eq!(FIGURE_LABELS, LABELS);
+        // 導出した定数の側
+        assert_eq!(
+            (
+                catalog::PIPELINE_RAIL_MAX_NODES,
+                catalog::STATE_STRIP_MAX_NODES,
+                catalog::CONTEXT_BAND_MAX_PER_BAND
+            ),
+            (7, 4, 4)
+        );
+        assert_eq!(
+            LIMITS,
+            [
+                ("pipeline-rail", "max_nodes", 7),
+                ("context-band", "max_per_band", 4),
+                ("state-strip", "max_nodes", 4),
+            ]
+        );
+        assert_eq!(FIGURE_TYPE_LABELS, LABELS);
     }
 }

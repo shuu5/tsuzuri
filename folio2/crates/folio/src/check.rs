@@ -13,6 +13,7 @@ use std::path::Path;
 
 use crate::adr;
 use crate::anchor;
+use crate::catalog::FigureType;
 use crate::ceiling;
 use crate::constitution_enums as ce;
 use crate::entrance;
@@ -23,7 +24,6 @@ use crate::intake;
 use crate::link;
 use crate::mentions;
 use crate::note;
-use crate::parts::catalog::FigureType;
 use crate::refs;
 use crate::rules;
 use crate::verdict::Report;

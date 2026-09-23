@@ -19,6 +19,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::LazyLock;
 
+use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{
@@ -26,7 +27,6 @@ use crate::face::{
     anchor, hint, hint_q, stop_anchor, tier_of,
 };
 use crate::face_note;
-use crate::parts::catalog::Component;
 use crate::yaml::Value;
 
 /// 入口の面が使う部品（13 種・便 40 で ceiling-stamp を足した）。

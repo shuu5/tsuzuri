@@ -13,11 +13,11 @@
 use std::fs;
 use std::path::Path;
 
+use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X};
 use crate::face::{self, Frame, anchor, card};
 use crate::face_index;
-use crate::parts::catalog::Component;
 
 /// 判断の記録の面が使う部品（9 種・便 33 で figure-panel を・便 40 で ceiling-stamp を足した）。
 pub const PARTS: [Component; 9] = [

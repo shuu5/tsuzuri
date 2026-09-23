@@ -4,21 +4,17 @@
 //! 図の型の名札も）→ 面の class（様式の定義の class の集合に在る）・部品の名札（部品の一覧に在り、その面に置ける）・
 //! 行内の様式（許す性質だけ）を数える。
 //! 面と様式の定義は外部 crate も正規表現も使わない手書きの走査で読む。
+//! 閉じた一覧そのものの取り込みは `catalog.rs`（便 108・ADR-15・層 1 読む）へ降ろした。
 
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::catalog::{
+    Component, FIGURE_TYPE_LABELS, FigureType, LIMITS, PROFILES, ShelfType, StyleProp,
+};
 use crate::verdict::Report;
 use crate::yaml::{self, Node, json_str};
-
-/// 組み立て時に部品目録から導出した閉じた一覧（build.rs が OUT_DIR に書く）。
-#[allow(dead_code)]
-pub mod catalog {
-    include!(concat!(env!("OUT_DIR"), "/parts_catalog.rs"));
-}
-
-use catalog::{Component, FIGURE_TYPE_LABELS, FigureType, LIMITS, PROFILES, ShelfType, StyleProp};
 
 /// 面の名（--page の左辺・部品目録の faces の値）。
 pub const FACES: [&str; 5] = ["index", "constitution", "srs", "adr", "note"];
@@ -589,41 +585,6 @@ mod tests {
         assert_eq!(ShelfType::from_name("doc-shelf"), Some(ShelfType::DocShelf));
         assert_eq!(StyleProp::from_name("--rail-n"), Some(StyleProp::RailN));
         assert!(StyleProp::from_name("color").is_none());
-    }
-
-    /// 凍結の針（P-10.1・便 52 §1 (d) 2・(b) の置き換えの番）: face.rs の名を通して読む上限 3 つが 7・4・4 で、face.rs の
-    /// FIGURE_LABELS が便 52 の前の手書きの 5 対と順まで同じ。導出した定数の側（上限 3 つ・LIMITS・FIGURE_TYPE_LABELS）も同じ値。
-    #[test]
-    fn parts_derived_limits_and_figure_labels_are_frozen_needles() {
-        use crate::face::{FIGURE_LABELS, MAX_PER_BAND, MAX_RAIL_NODES, MAX_STATE_NODES};
-        const LABELS: [(&str, &str); 5] = [
-            ("archify-architecture", "構成図（architecture）"),
-            ("archify-workflow", "手順図（workflow）"),
-            ("archify-sequence", "順序図（sequence）"),
-            ("archify-dataflow", "流れ図（dataflow）"),
-            ("archify-lifecycle", "状態図（lifecycle）"),
-        ];
-        // face.rs の名を通して
-        assert_eq!((MAX_RAIL_NODES, MAX_STATE_NODES, MAX_PER_BAND), (7, 4, 4));
-        assert_eq!(FIGURE_LABELS, LABELS);
-        // 導出した定数の側
-        assert_eq!(
-            (
-                catalog::PIPELINE_RAIL_MAX_NODES,
-                catalog::STATE_STRIP_MAX_NODES,
-                catalog::CONTEXT_BAND_MAX_PER_BAND
-            ),
-            (7, 4, 4)
-        );
-        assert_eq!(
-            LIMITS,
-            [
-                ("pipeline-rail", "max_nodes", 7),
-                ("context-band", "max_per_band", 4),
-                ("state-strip", "max_nodes", 4),
-            ]
-        );
-        assert_eq!(FIGURE_TYPE_LABELS, LABELS);
     }
 
     /// 実行時の一致（便 52 (c)）: 実の部品目録は Ok・上限の値か名札の 1 字を変えた写しは同じ文言の Err。

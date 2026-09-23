@@ -7,6 +7,7 @@
 use std::path::Path;
 use std::sync::LazyLock;
 
+use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{
@@ -16,7 +17,6 @@ use crate::face::{
     rule_status_class, section_anchor, split_dash, stage_label, strength_label, strength_meaning,
     tier_label, tier_of, val,
 };
-use crate::parts::catalog::Component;
 use crate::rules;
 
 /// 憲法の面が使う部品（15 種・便 40 で ceiling-stamp を足した）。

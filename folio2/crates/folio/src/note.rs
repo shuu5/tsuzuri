@@ -15,10 +15,10 @@ use std::fs;
 use std::path::Path;
 
 use crate::adr::Adr;
+use crate::catalog::FigureType;
 use crate::check::{duplicate_ids, non_empty, row_id, unknown_sections};
 use crate::floor::{Floor, floor_diff, keys_floor, strip_notes};
 use crate::link;
-use crate::parts::catalog::FigureType;
 use crate::prose;
 use crate::refs;
 use crate::verdict::Report;
@@ -166,7 +166,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                     ("example", Floor::Val("見本（拘束力なし・承認欄を持たない・凍結 anchor の材料）")),
                 ]),
             ),
-            ("profile_enum", Floor::Strs(crate::parts::catalog::PROFILES)),
+            ("profile_enum", Floor::Strs(crate::catalog::PROFILES)),
             ("profile_note", Floor::Val("密度 profile は 1 行（見せ方だけを持つ・拘束の旗を置かない・ADR-3 決定 (1)・N-3）。文書の種類による違いは節の型で表す（P-5.3）")),
             (
                 "approval",
@@ -905,7 +905,7 @@ fn check_meta(file: &str, note: &NoteDoc, note_ids: &HashSet<&str>, report: &mut
         );
     }
     if let Some(v) = field(meta, "profile")
-        && !crate::parts::catalog::PROFILES.contains(&v)
+        && !crate::catalog::PROFILES.contains(&v)
     {
         report.violation(KIND, format!("{file}: meta.profile「{v}」が一覧に無い"));
     }
