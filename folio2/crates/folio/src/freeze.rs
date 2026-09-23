@@ -3,63 +3,18 @@
 //! amends にそのまま貼れる形で印字する（読み取り専用）／全検査が 0 違反で測れないも無いときだけ現行の写しを
 //! 新しい版の anchor として書き、索引に追記する。検査の式は便 7・便 8（`anchor.rs`・`lineage.rs`）のまま。
 //! 書き手は `yaml::write`（外部 crate を足さない）。正規表現は使わない。
+//! 旗・列の結果・旗の後始末の型 3 つと凍結しないときの 1 行は便 111 で `phase.rs` へ降ろした（ADR-15・層 1 読む）。
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::adr::{self, Adr};
 use crate::anchor;
 use crate::ids;
 use crate::lineage;
+use crate::phase::{After, Flag, State, not_frozen_by};
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Value};
-
-/// `folio check` の旗（2 つ以上同時は引数の断り）。`FreezeIds` は便 88（`ids.rs`）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Flag {
-    None,
-    EmitAmends,
-    FreezeAnchor,
-    FreezeIds,
-}
-
-/// 便 8 までの検査が残した列の結果（`anchor::check_anchor` が返す）。
-pub struct State {
-    /// 現行の憲法（型付き）
-    pub c: Value,
-    /// 憲法 schema.amendment_scope
-    pub scope: Vec<String>,
-    /// 便 7 (e) の現行の写し
-    pub cur_proj: Value,
-    /// 現行 meta.version の `str(x)`
-    pub cur_ver: String,
-    /// 憲法 meta.approval（無ければ null）
-    pub meta_approval: Value,
-    /// 読めた索引
-    pub index: Option<Value>,
-    /// 索引の末尾の版
-    pub newest: Option<String>,
-    /// 最新の版の anchor（読めて列に載ったもの）
-    pub newest_doc: Option<Value>,
-    /// 版管理の HEAD か履歴に anchor が在った
-    pub seen_in_git: bool,
-    /// 改訂の記録（amended_by か発効した判断の amends）が在る
-    pub records_exist: bool,
-    /// `<dir>/anchors`
-    pub anchors_dir: PathBuf,
-}
-
-/// 旗の後始末（標準出力・標準エラーへ書くもの）。
-pub enum After {
-    /// 旗なし
-    Nothing,
-    /// `--emit-amends` の標準出力の行
-    Emit(Vec<String>),
-    /// `--freeze-anchor` の (1)。他の出力をせず終了コード 1
-    Refused(String),
-    /// `--freeze-anchor` の結果の 1 行（標準エラー）
-    Freeze(String),
-}
 
 fn floor(path: &[&str]) -> &'static str {
     adr::floor_val(path).unwrap_or_default()
@@ -147,15 +102,6 @@ fn emit_lines(st: &State, report: &mut Report) -> Vec<String> {
 
 fn not_frozen(report: &Report) -> String {
     not_frozen_by(report, "--freeze-anchor")
-}
-
-/// 凍結しないときの 1 行（`flag` は旗の綴り）。
-pub(crate) fn not_frozen_by(report: &Report, flag: &str) -> String {
-    format!(
-        "凍結しない — 違反 {} 件・まだ分からない {} 件を直してから {flag}",
-        report.violations.len(),
-        report.unknowns.len() + report.pendings.len()
-    )
 }
 
 /// (c) 凍結。

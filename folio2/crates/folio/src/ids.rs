@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use crate::adr;
 use crate::anchor;
-use crate::freeze::{self, After, Flag};
+use crate::phase::{self, After, Flag};
 use crate::sha256;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Node, Value};
@@ -223,7 +223,7 @@ pub(crate) fn check_ids(
 pub(crate) fn freeze(cur: &Current, report: &mut Report) -> After {
     let Some(version) = &cur.version else {
         report.unknown("srs.yaml: meta.version が読めない（id の一覧の anchor の file 名を決められない）");
-        return After::Freeze(freeze::not_frozen_by(report, "--freeze-ids"));
+        return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
     };
     let name = format!("{IDS_PREFIX}{version}{IDS_SUFFIX}");
     let path = cur.anchors_dir.join(&name);
@@ -233,7 +233,7 @@ pub(crate) fn freeze(cur: &Current, report: &mut Report) -> After {
         ));
     }
     if report.verdict() != Verdict::Pass {
-        return After::Freeze(freeze::not_frozen_by(report, "--freeze-ids"));
+        return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
     }
     let s = |x: &str| Value::Str(x.to_string());
     let fields = SECTIONS
@@ -281,12 +281,12 @@ pub(crate) fn freeze(cur: &Current, report: &mut Report) -> After {
         Ok(t) => t,
         Err(e) => {
             report.pending(format!("id の一覧の木を書けない（{e}）"));
-            return After::Freeze(freeze::not_frozen_by(report, "--freeze-ids"));
+            return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
         }
     };
     if let Err(e) = fs::create_dir_all(&cur.anchors_dir).and_then(|()| fs::write(&path, text)) {
         report.unknown(format!("anchors/ に書けない: {e}"));
-        return After::Freeze(freeze::not_frozen_by(report, "--freeze-ids"));
+        return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
     }
     After::Freeze(format!(
         "凍結した: {}（id {} 本）・版管理に commit する（commit するまで素の床は未追跡の anchor で 1）",

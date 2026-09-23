@@ -21,6 +21,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("constitution_enums", 1),
     ("cursor", 1),
     ("floor", 1),
+    ("phase", 1),
     ("shelf", 1),
     ("yaml", 1),
     ("adr", 2),
@@ -67,11 +68,7 @@ const LAYERS: &[(&str, u8)] = &[
 
 /// まだ降ろしていない層が上がる辺（名指す側, 名指される側）。凍結した実測であって許可ではない。
 /// 行を足す書き換えは認めない（足すなら ADR-15 を改訂する）。ADR-15 の列（便 107〜112）が 1 本ずつ消す。
-const REMAINING_UPWARD: &[(&str, &str)] = &[
-    ("anchor", "freeze"),
-    ("check", "freeze"),
-    ("ids", "freeze"),
-];
+const REMAINING_UPWARD: &[(&str, &str)] = &[("check", "freeze")];
 
 fn src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")

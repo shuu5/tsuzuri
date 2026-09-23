@@ -35,6 +35,7 @@ mod link;
 mod mentions;
 mod note;
 mod parts;
+mod phase;
 mod prose;
 mod refs;
 mod rules;
@@ -54,7 +55,7 @@ use std::process::ExitCode;
 
 use clap::{ArgGroup, Parser, Subcommand};
 
-use crate::freeze::{After, Flag};
+use crate::phase::{After, Flag};
 
 #[derive(Parser)]
 #[command(name = "folio", version, about = "folio v2 — 設計文書の生成と検査")]

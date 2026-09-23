@@ -10,9 +10,9 @@ use std::fs;
 use std::path::Path;
 
 use crate::adr::{self, Adr};
-use crate::freeze::{Flag, State};
 use crate::gitcheck;
 use crate::lineage;
+use crate::phase::{Flag, State};
 use crate::sha256;
 use crate::verdict::Report;
 use crate::yaml::{self, Node, Value};
