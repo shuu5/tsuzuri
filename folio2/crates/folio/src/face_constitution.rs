@@ -3,6 +3,8 @@
 //! 生成物の文字列は 正本の値（α）・名札の表（β・`face.rs`）・正本から数えた数（γ）のどれかで、部品の名札は
 //! 部品目録から組み立て時に導出した `Component` の関数 name からだけ出す（ADR-5 決定 (3)）。
 //! 面に依らない口（head と site-bar・章の帯・card・toc・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ（便 15）。
+//! 読み手（正本を読んで面の文脈と節の中身を組む側・条と文脈と改訂の段の型・読みと検査・欠番・関係の欄・改訂の段の読み）は
+//! 便 116 で `face_constitution_read.rs`（層 4）へ降ろした。面の口と HTML を書く側と名札と数の口はここに残す。
 
 use std::path::Path;
 use std::sync::LazyLock;
@@ -14,8 +16,10 @@ use crate::face::{
     self, DOC_STATUS, Frame, MAX_RAIL_NODES, Tier, anchor, binds_label, card, count_word,
     hint, hint_q, mechanism_kind_label, mechanism_live_label, mechanism_live_meaning,
     pattern_label, polarity_label, rationale, retreat_kind_label, rule_kind_label,
-    rule_status_class, section_anchor, split_dash, stage_label, strength_label, strength_meaning,
-    tier_label, tier_of, val,
+    rule_status_class, stage_label, strength_label, strength_meaning, val,
+};
+use crate::face_constitution_read::{
+    Art, Ctx, Step, check_counts, context, missing_numbers, relations, step,
 };
 use crate::rules;
 
@@ -90,35 +94,6 @@ fn dc(c: Component) -> String {
     FRAME.dc(c)
 }
 
-/// 条 1 つ（id・escape した title・段）。
-struct Art<'a> {
-    x: X<'a>,
-    id: &'a str,
-    title: String,
-    tier_key: String,
-    tier: Tier,
-}
-
-/// 導出の文脈（段の順・条・参照の先）。
-struct Ctx<'a> {
-    tiers: Vec<(String, Tier)>,
-    arts: Vec<Art<'a>>,
-    /// 要件書の 5 節の id → escape した title
-    reqs: Vec<(String, String)>,
-    rule_ids: Vec<String>,
-}
-
-impl<'a> Ctx<'a> {
-    /// 条 id を指す値 → その条（無ければ Err）。
-    fn article(&self, x: &X<'_>) -> R<&Art<'a>> {
-        let id = x.id()?;
-        self.arts
-            .iter()
-            .find(|a| a.id == id)
-            .ok_or_else(|| format!("{}: 条 id「{id}」が無い", x.at))
-    }
-}
-
 /// 正本 → 憲法の面の HTML（決定的）。天井の名札は印から読む（便 40・便 83）。
 pub fn derive(dir: &Path) -> R<String> {
     let c_doc = cursor::load(dir, "constitution.yaml")?;
@@ -151,123 +126,6 @@ pub fn derive(dir: &Path) -> R<String> {
     approval(&mut o, &m)?;
     foot(&mut o, &ctx, &m)?;
     Ok(format!("{}\n", o.join("\n")))
-}
-
-// ── 読みと検査 ──
-
-fn context<'a>(c: &X<'a>, r: &X<'a>, s: &X<'a>) -> R<Ctx<'a>> {
-    let enums = c.f("schema")?.f("enums")?;
-    let mut tiers: Vec<(String, Tier)> = Vec::new();
-    for t in enums.f("tier")?.seq()? {
-        let key = t.text()?;
-        let tier = tier_of(&key).map_err(|e| format!("{}: {e}", t.at))?;
-        if tiers.iter().any(|(k, _)| *k == key) {
-            return Err(format!("{}: 段「{key}」が 2 度ある", t.at));
-        }
-        tiers.push((key, tier));
-    }
-    if tiers.len() != ce::Tier::ALL.len() {
-        return Err("constitution.yaml.schema.enums.tier: 段の表の 3 つ全部でない".to_string());
-    }
-    // 組み立てた版と読んでいる版のずれの検査を、置き場の schema.enums に在る鍵の全部へ（便 50 (d)・段は上で見た）
-    for (key, x) in enums.pairs()? {
-        if key != "tier" {
-            enum_skew(key, &x)?;
-        }
-    }
-
-    let mut arts = Vec::new();
-    for a in c.f("articles")?.seq()? {
-        let id = a.f("id")?.id()?;
-        let title = a.ef("title")?;
-        let tier_x = a.f("tier")?;
-        let tier = tier_label(tier_x.parse(ce::Tier::from_name, "段")?);
-        let tier_key = tier_x.text()?;
-        arts.push(Art {
-            x: a,
-            id,
-            title,
-            tier_key,
-            tier,
-        });
-    }
-
-    let mut reqs = Vec::new();
-    for sec in [
-        "goals",
-        "requirements",
-        "nonfunctional",
-        "acceptance",
-        "constraints",
-    ] {
-        for x in s.f(sec)?.seq()? {
-            reqs.push((x.f("id")?.text()?, x.ef("title")?));
-        }
-    }
-
-    let mut rule_ids = Vec::new();
-    for sec in ["thresholds", "discipline"] {
-        for x in r.f(sec)?.seq()? {
-            rule_ids.push(x.f("id")?.id()?.to_string());
-        }
-    }
-    Ok(Ctx {
-        tiers,
-        arts,
-        reqs,
-        rule_ids,
-    })
-}
-
-/// 読んでいる置き場の憲法の値域 1 つ（schema.enums の鍵 `key`）が、この folio を組み立てた版の憲法の値域
-/// （`constitution_enums::ENUMS`）と集合で一致する = 各値が導出した型に在る・2 度無い・数が同じ（順は問わない・段と同じ強さ）。
-/// 組み立てた版に無い鍵が置き場に在るときも Err。置き場に無い鍵は見ない（便 50 §1 (d)）。
-fn enum_skew(key: &str, x: &X<'_>) -> R<()> {
-    let skew = |why: String| {
-        format!(
-            "constitution.yaml.schema.enums.{key}: {why}・組み立て時の憲法の値域と違う（組み立て直す）"
-        )
-    };
-    let names = ce::ENUMS
-        .iter()
-        .find(|(k, _)| *k == key)
-        .map(|(_, names)| *names)
-        .ok_or_else(|| skew("組み立てた版に無い鍵".to_string()))?;
-    let mut seen: Vec<String> = Vec::new();
-    for v in x.seq()? {
-        let s = v.text()?;
-        if !names.contains(&s.as_str()) {
-            return Err(skew(format!("値「{s}」が組み立てた版に無い")));
-        }
-        if seen.contains(&s) {
-            return Err(skew(format!("値「{s}」が 2 度ある")));
-        }
-        seen.push(s);
-    }
-    if seen.len() != names.len() {
-        return Err(skew(format!("組み立てた版の {} 値全部でない", names.len())));
-    }
-    Ok(())
-}
-
-/// meta の counts のキーの集合 = 段の一覧・値 = 数えた数。
-fn check_counts(ctx: &Ctx<'_>, counts: &X<'_>) -> R<()> {
-    let pairs = counts.pairs()?;
-    let same_keys = pairs.len() == ctx.tiers.len()
-        && pairs
-            .iter()
-            .all(|(k, _)| ctx.tiers.iter().any(|(t, _)| t == k));
-    if !same_keys {
-        return Err(format!("{}: キーの集合が段の一覧と違う", counts.at));
-    }
-    for (key, x) in pairs {
-        let counted = ctx.arts.iter().filter(|a| a.tier_key == key).count() as u64;
-        let written = x.count()?;
-        if written != counted {
-            return Err(format!("{}: {written} だが数えた条は {counted}", x.at));
-        }
-    }
-    Ok(())
 }
 
 /// 段の名を「・」で繋いだもの。
@@ -501,33 +359,6 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
     Ok(())
 }
 
-/// 条の id の列の欠番（接頭辞ごとに 1 から最大の数まで・接頭辞は正本の初出の順・中は数の小さい順・便 80 §1 (a)）。
-/// 番号が符号なしの整数に読めない id は Err（P-4.1）。
-fn missing_numbers(ctx: &Ctx<'_>) -> R<Vec<String>> {
-    let mut groups: Vec<(&str, Vec<u32>)> = Vec::new();
-    for art in &ctx.arts {
-        let (prefix, n) = art
-            .id
-            .rsplit_once('-')
-            .and_then(|(p, n)| Some((p, n.parse::<u32>().ok()?)))
-            .ok_or_else(|| format!("条の id「{}」の番号が読めない", art.id))?;
-        match groups.iter_mut().find(|(p, _)| *p == prefix) {
-            Some((_, ns)) => ns.push(n),
-            None => groups.push((prefix, vec![n])),
-        }
-    }
-    let mut gaps = Vec::new();
-    for (prefix, ns) in &groups {
-        let max = ns.iter().copied().max().unwrap_or(0);
-        for k in 1..=max {
-            if !ns.contains(&k) {
-                gaps.push(format!("{prefix}-{k}"));
-            }
-        }
-    }
-    Ok(gaps)
-}
-
 fn tier_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, i: usize, key: &str, tier: &Tier) -> R<()> {
     let h2 = count_word(tier_count(ctx, key), "原則");
     FRAME.band(o, i + 2, tier.name, &h2, Some(tier.meaning));
@@ -689,60 +520,6 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
     ));
     o.push("</article>".to_string());
     Ok(())
-}
-
-/// 関係の欄 → リンクの列（reqs・rules・articles・sections の順・群の中は正本の順）。
-fn relations(ctx: &Ctx<'_>, rel: &X<'_>) -> R<Vec<String>> {
-    let mut links = Vec::new();
-    if let Some(reqs) = rel.g("reqs")? {
-        for q in reqs.seq()? {
-            let id = q.id()?;
-            let title = ctx
-                .reqs
-                .iter()
-                .find(|(k, _)| k == id)
-                .map(|(_, t)| t)
-                .ok_or_else(|| format!("{}: 要件書に id「{id}」が無い", q.at))?;
-            links.push(format!(
-                "<a class=\"xref\" href=\"srs.html#{}\">要件書 {id}（{title}）</a>",
-                anchor(id)
-            ));
-        }
-    }
-    if let Some(rules) = rel.g("rules")? {
-        for q in rules.seq()? {
-            let id = q.id()?;
-            if !ctx.rule_ids.iter().any(|k| k == id) {
-                return Err(format!("{}: rules 行 id「{id}」が無い", q.at));
-            }
-            links.push(format!(
-                "<a class=\"xref\" href=\"#{}\">rules {id}</a>",
-                anchor(id)
-            ));
-        }
-    }
-    if let Some(articles) = rel.g("articles")? {
-        for q in articles.seq()? {
-            let art = ctx.article(&q)?;
-            links.push(format!(
-                "<a class=\"xref\" href=\"#{}\">{} {}</a>",
-                anchor(art.id),
-                art.id,
-                art.title
-            ));
-        }
-    }
-    if let Some(sections) = rel.g("sections")? {
-        for q in sections.seq()? {
-            let text = q.text()?;
-            let to = section_anchor(&text).map_err(|e| format!("{}: {e}", q.at))?;
-            links.push(format!(
-                "<a class=\"xref\" href=\"#{to}\">{}</a>",
-                esc(&text)
-            ));
-        }
-    }
-    Ok(links)
 }
 
 fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
@@ -922,39 +699,6 @@ fn state_chip(x: &X<'_>) -> R<String> {
         rule_status_class(status.parse(rules::RuleStatus::from_name, "rules 行の状態")?),
         status.e()?
     ))
-}
-
-/// 改訂の段 1 つの読み（n・担当・持ち主か・what の前後・条へのリンクの素）。
-struct Step<'a> {
-    n: u64,
-    who: String,
-    owner: bool,
-    head: String,
-    tail: Option<String>,
-    arts: Vec<&'a Art<'a>>,
-}
-
-fn step<'a>(ctx: &'a Ctx<'a>, st: &X<'_>) -> R<Step<'a>> {
-    let n = st.f("n")?.count()?;
-    let who_x = st.f("who")?;
-    let who = who_x.e()?;
-    let owner = who_x.v.as_str() == Some("持ち主");
-    let what = st.f("what")?.text()?;
-    let (head, tail) = split_dash(&what);
-    let arts = st
-        .f("article")?
-        .seq()?
-        .iter()
-        .map(|q| ctx.article(q))
-        .collect::<R<Vec<_>>>()?;
-    Ok(Step {
-        n,
-        who,
-        owner,
-        head: esc(head),
-        tail: tail.map(esc),
-        arts,
-    })
 }
 
 fn stepper_li(no: &str, s: &Step<'_>) -> String {

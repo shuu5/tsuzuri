@@ -13,6 +13,7 @@ mod entrance;
 mod face;
 mod face_adr;
 mod face_constitution;
+mod face_constitution_read;
 mod face_index;
 mod face_index_read;
 mod face_labels;

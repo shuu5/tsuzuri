@@ -55,6 +55,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("face", 4),
     ("face_adr", 4),
     ("face_constitution", 4),
+    ("face_constitution_read", 4),
     ("face_index", 4),
     ("face_index_read", 4),
     ("face_labels", 4),
