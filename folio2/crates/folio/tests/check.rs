@@ -982,7 +982,7 @@ const F91_ROWS: [(&str, &[&str]); 14] = [
     ("D-3", &["R-1"]),
     ("D-10", &["P-5.2", "R-8"]),
     ("D-11", &["P-5.6"]),
-    ("D-12", &["ADR-8", "ADR-13"]),
+    ("D-12", &["ADR-8", "ADR-13", "ADR-18"]),
 ];
 
 /// 写しの rules.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（rules.yaml の場所）で `words` を全部含む。
@@ -1035,7 +1035,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
         assert_eq!(got, *want, "{id} の refs");
         total += got.len();
     }
-    assert_eq!(total, 32, "refs の id の合計");
+    assert_eq!(total, 33, "refs の id の合計");
 }
 
 #[test]
