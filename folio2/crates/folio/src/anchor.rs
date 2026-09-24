@@ -380,7 +380,8 @@ pub(crate) fn amends_list(d: &Node) -> impl Iterator<Item = &Node> {
 }
 
 /// (e)〜(i) を掛ける。`history` は (j) の列に在った id（`history_ids`）。
-/// `flag` が `--freeze-anchor` のときは (i) を掛けず（凍結の前提の検査が替わる・便 9）、列の結果を `freeze.rs` へ返す。
+/// `flag` が `--freeze-anchor` か `--freeze-start`（便 121）のときは (i) を掛けず（凍結の前提の検査が替わる・便 9）、
+/// 列の結果を `freeze.rs` へ返す。列の根は憲法の名で列の根の表を引いて照らす（便 121・`check_root`）。
 pub fn check_anchor(
     dir: &Path,
     adr: &Adr,
@@ -417,13 +418,18 @@ pub fn check_anchor(
         .cloned()
         .unwrap_or(Value::Null);
 
+    // 列の根は憲法の名で表を引く（便 121・ADR-16 決定 (2)(ア)）
+    let name = meta
+        .and_then(|m| m.get("id"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let first_ver = floor(&["anchor", "first_version"]);
-    let root_digest = floor(&["anchor", "root_digest"]);
     let anch = dir.join(floor(&["anchor", "dir"]));
     let index_file = floor(&["anchor", "index_file"]);
     let root = fs::canonicalize(dir).ok();
     let mut index: Option<Value> = None;
     let mut anchors: Vec<Anchor> = Vec::new();
+    let mut chain_exists = false;
     if anch.exists() || anch.is_symlink() {
         if anch.is_symlink() || !anch.is_dir() {
             report.unknown(format!(
@@ -452,15 +458,16 @@ pub fn check_anchor(
                 return None;
             }
         };
-        for name in names {
-            let path = anch.join(&name);
-            if !real_under(root.as_deref(), &path, &name, report) {
+        chain_exists = index_path.exists() || index_path.is_symlink() || !names.is_empty();
+        for file in names {
+            let path = anch.join(&file);
+            if !real_under(root.as_deref(), &path, &file, report) {
                 continue;
             }
-            let Some(d) = read_typed(&path, &format!("anchors/{name}"), report) else {
+            let Some(d) = read_typed(&path, &format!("anchors/{file}"), report) else {
                 continue;
             };
-            if let Some(a) = check_file(dir, &name, d, &meta_approval, adr, &anchors, report) {
+            if let Some(a) = check_file(dir, &file, d, &meta_approval, adr, &anchors, report) {
                 anchors.push(a);
             }
         }
@@ -510,13 +517,8 @@ pub fn check_anchor(
                     format!("{index_file}: 列の根 {vs} が最初の版 {first_ver}（床の定数）でない"),
                 );
             }
-            if n == 0 && py_str(e.get("digest")) != root_digest {
-                report.violation(
-                    "anchor",
-                    format!(
-                        "{index_file}: 列の根 {vs} の digest が床の定数と違う（根は 1 度きり・別の中身で凍結し直せない。変えるのは移行＝床の外の手順）"
-                    ),
-                );
+            if n == 0 {
+                check_root(index_file, &vs, name.as_deref(), &py_str(e.get("digest")), report);
             }
             let prev = (!is_none(e.get("previous"))).then(|| py_str(e.get("previous")));
             if prev != expect_prev {
@@ -658,9 +660,9 @@ pub fn check_anchor(
         }
     }
 
-    // (i) 現行との一致（`--freeze-anchor` では凍結の前提の検査に替わる）
-    if flag == Flag::FreezeAnchor {
-        // freeze.rs の (c) が受け持つ
+    // (i) 現行との一致（`--freeze-anchor` と `--freeze-start` では凍結の前提の検査に替わる）
+    if matches!(flag, Flag::FreezeAnchor | Flag::FreezeStart) {
+        // freeze.rs の (c) と始まりの凍結（便 121）が受け持つ
     } else if index.is_none() && anchors.is_empty() && !records_exist {
         report.pending(format!(
             "凍結 anchor が 0 本（{}）＝A-2 / N-4 の差分検査は「まだ分からない」（P-10.3）。発効版で --freeze-anchor を実行する",
@@ -705,7 +707,33 @@ pub fn check_anchor(
         newest_doc,
         records_exist,
         anchors_dir: anch,
+        name,
+        chain_exists,
     })
+}
+
+/// 列の根の照らし（便 121・ADR-16 決定 (2)(ア)）: 索引の最初の項の digest を、憲法の名で引いた列の根の表の行と比べる。
+/// 表に行が無い名は digest の全桁を出す違反・値の違いは違反・一致は何もしない。
+fn check_root(index_file: &str, vs: &str, name: Option<&str>, digest: &str, report: &mut Report) {
+    let shown = name.map_or_else(
+        || "（meta.id が無い）".to_string(),
+        |n| n.to_string(),
+    );
+    match adr::root_digest(name) {
+        None => report.violation(
+            "anchor",
+            format!(
+                "{index_file}: 列の根 {vs} の憲法の名 {shown} が列の根の表に無い（床の定数 root_digests に行が無い＝その名の列の根は照らせない。索引の digest {digest}。行を足すのは folio2 の便・根は 1 度きり）"
+            ),
+        ),
+        Some(want) if want != digest => report.violation(
+            "anchor",
+            format!(
+                "{index_file}: 列の根 {vs} の digest が床の定数（列の根の表の {shown} の行）と違う（根は 1 度きり・別の中身で凍結し直せない。変えるのは移行＝床の外の手順）"
+            ),
+        ),
+        Some(_) => {}
+    }
 }
 
 /// (i) 版を上げて未凍結の間も測る: 条の消失と規範文の改番（P-7）。

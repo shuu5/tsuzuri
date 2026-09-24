@@ -9,7 +9,8 @@
 use std::fs;
 use std::path::Path;
 
-use crate::floor::{Floor, derive};
+use crate::adr;
+use crate::floor::{Floor, derive_for};
 use crate::verdict::Verdict;
 
 /// 生成区間の印（行の全部がこの字面・前後に空白なし）。
@@ -82,8 +83,18 @@ impl Outcome {
     }
 }
 
-/// 対象の file 1 本を --write / --check に掛ける。合格なら標準出力の 1 行を返す。
-fn run_one(dir: &Path, file: &str, floor: &Floor, mode: Mode) -> Result<String, Outcome> {
+/// 置き場の憲法の名（constitution.yaml の meta.id）で導く file（便 121・ADR-16 決定 (2)(ア)）。判断の記録の欄の決まりの
+/// 列の根の表は置き場の名の行だけを写す＝ほかの 8 本は名を使わない。
+const NAMED: &str = "adr/schema.yaml";
+
+/// 対象の file 1 本を --write / --check に掛ける。合格なら標準出力の 1 行を返す。`name` は置き場の憲法の名（`NAMED` だけ）。
+fn run_one(
+    dir: &Path,
+    file: &str,
+    floor: &Floor,
+    name: Option<&str>,
+    mode: Mode,
+) -> Result<String, Outcome> {
     let path = dir.join(file);
     if path.is_symlink() || !path.is_file() {
         return Err(Outcome::refused(
@@ -99,7 +110,7 @@ fn run_one(dir: &Path, file: &str, floor: &Floor, mode: Mode) -> Result<String, 
             format!("{file}: 印が 1 対でない"),
         ));
     };
-    let want = derive(floor);
+    let want = derive_for(floor, name);
     let cur = &text[start..end];
     let size = want.len();
     if cur == want {
@@ -123,7 +134,22 @@ fn run_one(dir: &Path, file: &str, floor: &Floor, mode: Mode) -> Result<String, 
 pub fn run(dir: &Path, mode: Mode) -> Outcome {
     let mut stdout = Vec::new();
     for (file, floor) in TARGETS {
-        match run_one(dir, file, floor, mode) {
+        let name = match *file {
+            NAMED => match adr::place_name(dir) {
+                Ok(n) => Some(n),
+                // 黙って空の表を書かない（P-4.1）＝その file の手前で「まだ分からない」
+                Err(e) => {
+                    return Outcome::refused(
+                        Verdict::Unknown,
+                        format!(
+                            "{file}: 置き場の憲法の名（meta.id）を読めない＝列の根の表の行を選べない（{e}）"
+                        ),
+                    );
+                }
+            },
+            _ => None,
+        };
+        match run_one(dir, file, floor, name.as_deref(), mode) {
             Ok(line) => stdout.push(line),
             Err(outcome) => return outcome,
         }

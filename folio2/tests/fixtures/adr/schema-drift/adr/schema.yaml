@@ -37,7 +37,7 @@ schema:
     file_name: 'constitution-<version>.yaml'
     index_file: index.yaml
     first_version: v1.0
-    root_digest: acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed
+    root_digests: {}
     version_pattern: '^v[0-9]+\.[0-9]+$'
     digest_algo: sha256-json-1
     file_keys: [kind, digest_algo, version, previous, projection, meta_approval, approvals, content, digest]

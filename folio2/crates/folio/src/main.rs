@@ -85,6 +85,9 @@ enum Command {
         /// 全検査が 0 違反で測れないも無いときだけ、要件・判断・受入基準の id の一覧を anchors/ids-<要件書の版>.yaml として書く（書いたら commit する）
         #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor"])]
         freeze_ids: bool,
+        /// 憲法の列と id の一覧がどちらも無い置き場でだけ、全検査が 0 違反で測れないも無いときに最初の版の anchor と索引と id の一覧を同時に書く（書いたら commit する）
+        #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids"])]
+        freeze_start: bool,
     },
     /// 憲法の前文と規範文を CLAUDE.md の生成区間へ書く（--write）・検査する（--check）・出す（--print）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "print"])))]
@@ -309,6 +312,7 @@ fn main() -> ExitCode {
             emit_amends,
             freeze_anchor,
             freeze_ids,
+            freeze_start,
         } => {
             let flag = if emit_amends {
                 Flag::EmitAmends
@@ -316,6 +320,8 @@ fn main() -> ExitCode {
                 Flag::FreezeAnchor
             } else if freeze_ids {
                 Flag::FreezeIds
+            } else if freeze_start {
+                Flag::FreezeStart
             } else {
                 Flag::None
             };

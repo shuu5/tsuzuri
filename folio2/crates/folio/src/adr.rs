@@ -15,12 +15,12 @@ use std::fs;
 use std::path::Path;
 
 use crate::catalog::FigureType;
-use crate::floor::{Floor, floor_diff, strip_notes};
+use crate::floor::{Floor, floor_diff_for, strip_notes};
 use crate::floor_adr::{
     AMENDS_ENTRY, APPROVAL, APPROVER, EFFECTIVE_STATUS, FIGURE_ENTRY, FIGURE_TYPE_ENUM_REF, FLOOR,
     GRILL, ID_PATTERN, Keys, NON_EMPTY, OPTION, OPTIONS_ADOPTED, OPTIONS_MIN, OWNER, PRODUCED,
-    RECORD, RETREAT, RETREAT_KIND, REVISE_KIND, REVISES, REVISES_ENTRY, RULING_PATTERN, STATUS,
-    SURFACE, VERDICT,
+    RECORD, RETREAT, RETREAT_KIND, REVISE_KIND, REVISES, REVISES_ENTRY, ROOT_DIGESTS,
+    RULING_PATTERN, STATUS, SURFACE, VERDICT,
 };
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
@@ -62,6 +62,32 @@ fn floor_at(path: &[&str]) -> Option<&'static Floor> {
     Some(cur)
 }
 
+/// 列の根の表（`ROOT_DIGESTS`・便 121・ADR-16 決定 (2)(ア)）を憲法の名で引く。名が無いか表に無ければ None。
+/// 床の列の照らし（`anchor.rs`）と凍結の命令（`freeze.rs`）が共有する。
+pub(crate) fn root_digest(name: Option<&str>) -> Option<&'static str> {
+    ROOT_DIGESTS
+        .iter()
+        .find(|(k, _)| Some(*k) == name)
+        .map(|(_, v)| *v)
+}
+
+/// 置き場の憲法の名（`<dir>/constitution.yaml` の meta.id）。読めなければ理由の字（便 121）。
+/// 欄の決まりの写しの突き合わせ（`check_adr`）と `folio schema` が共有する。
+pub(crate) fn place_name(dir: &Path) -> Result<String, String> {
+    const FILE: &str = "constitution.yaml";
+    let path = dir.join(FILE);
+    if path.is_symlink() || !path.is_file() {
+        return Err(format!("{FILE}: 読めない（symlink・file でない・不在）＝meta.id を読めない"));
+    }
+    let doc = read(&path).map_err(|e| format!("{FILE}: 読めない: {e}＝meta.id を読めない"))?;
+    doc.root
+        .get("meta")
+        .and_then(|m| m.get("id"))
+        .and_then(Node::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| format!("{FILE}: meta.id が無い（字でない）"))
+}
+
 const SCHEMA_FILE: &str = "adr/schema.yaml";
 
 /// 読めた欄の決まり（adr/schema.yaml の木）と判断の記録（id と木の組・名前順）。
@@ -81,10 +107,13 @@ pub fn check_adr(dir: &Path, report: &mut Report) -> Option<Adr> {
         return None;
     }
     let schema = load_schema(&adr_dir, report)?;
+    // 列の根の表は置き場の名の行だけと突き合わせる（便 121・名が読めなければ空の表）
+    let name = place_name(dir).ok();
     let mut drift = Vec::new();
-    floor_diff(
+    floor_diff_for(
         &strip_notes(schema.get("schema").unwrap_or(&Node::Null)),
         &FLOOR,
+        name.as_deref(),
         "",
         &mut drift,
     );
@@ -853,10 +882,14 @@ mod tests {
 
     #[test]
     fn floor_values_and_numbers_are_read_through_the_floor() {
+        // 列の根は憲法の名で引く表（便 121）＝値の読み口では読めない
         assert_eq!(
-            floor_val(&["anchor", "root_digest"]),
+            root_digest(Some("folio2-constitution")),
             Some("acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed")
         );
+        assert_eq!(root_digest(Some("fixture-constitution")), None);
+        assert_eq!(root_digest(None), None);
+        assert_eq!(floor_val(&["anchor", "root_digests"]), None);
         assert_eq!(floor_val(&["anchor", "first_version"]), Some("v1.0"));
         assert_eq!(floor_val(&["amends_entry", "empty_marker"]), Some("（空）"));
         assert_eq!(floor_val(&["anchor", "file_keys"]), None);
@@ -874,7 +907,7 @@ mod tests {
         let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
         assert_eq!(notes, 24);
         let mut out = Vec::new();
-        floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
+        crate::floor::floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
         // 空の写し = 値の欄が全部（欠落）・注は 1 本も立たない
         assert_eq!(out.len(), fields.len() - notes, "{out:?}");
         assert!(out.iter().all(|p| p.ends_with("（欠落）")), "{out:?}");
@@ -883,6 +916,7 @@ mod tests {
 
     /// 床の木の導出は凍結 anchor（設計判断の席が独立の実装で組んだ・P-10.1）と byte 一致（便 58 §1 (e)3・
     /// `ceiling.rs` / `rules.rs` / `note.rs` の同名の歯と同じ形で `schema.rs` の pub の `derive` を呼ぶ）。
+    /// 便 121 から名つきの導出（folio2 の憲法の名＝列の根の表の folio2 の行だけを写す）。
     #[test]
     fn adr_floor_derives_the_frozen_anchor_byte_for_byte() {
         let anchor = std::fs::read_to_string(concat!(
@@ -890,7 +924,10 @@ mod tests {
             "/../../tests/fixtures/schema/adr-region.txt"
         ))
         .unwrap();
-        assert_eq!(crate::floor::derive(&FLOOR), anchor);
+        assert_eq!(
+            crate::floor::derive_for(&FLOOR, Some("folio2-constitution")),
+            anchor
+        );
     }
 
     /// 承認者の値域は 持ち主・planner 席・orchestrator 席 の 3 つ（席の呼び名の裁定 2026-09-20・便 58 §1 (a)1・

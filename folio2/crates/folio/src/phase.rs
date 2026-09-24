@@ -9,12 +9,14 @@ use crate::verdict::Report;
 use crate::yaml::Value;
 
 /// `folio check` の旗（2 つ以上同時は引数の断り）。`FreezeIds` は便 88（`ids.rs`）。
+/// `FreezeStart` は便 121（憲法の列と id の一覧がどちらも無い置き場で 2 つを同時に書く・ADR-16 決定 (2)(イ)）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flag {
     None,
     EmitAmends,
     FreezeAnchor,
     FreezeIds,
+    FreezeStart,
 }
 
 /// 便 8 までの検査が残した列の結果（`anchor::check_anchor` が返す）。
@@ -41,6 +43,10 @@ pub struct State {
     pub records_exist: bool,
     /// `<dir>/anchors`
     pub anchors_dir: PathBuf,
+    /// 憲法 meta.id（字でなければ None）。列の根の表を引く名（便 121）
+    pub name: Option<String>,
+    /// 憲法の列の file（索引か `constitution-*.yaml`）が anchors/ に 1 本でも在る（便 121 の始まりの凍結の断り）
+    pub chain_exists: bool,
 }
 
 /// 旗の後始末（標準出力・標準エラーへ書くもの）。

@@ -43,6 +43,8 @@ pub(crate) struct Current {
     /// 要件書 meta.version（読めなければ None）
     version: Option<String>,
     anchors_dir: PathBuf,
+    /// id の一覧の file（`ids-*.yaml`）が anchors/ に 1 本でも在る（便 121 の始まりの凍結の断り）
+    pub(crate) exists: bool,
 }
 
 /// 字面の UTF-8 の byte 列の sha256 の 16 進（前後の空白は落とさない）。
@@ -186,8 +188,8 @@ pub(crate) fn check_ids(
             }
         }
     }
-    // 読めないのではなく測れない（違反が在れば不合格が先に立つ）
-    if names.is_empty() && flag != Flag::FreezeIds {
+    // 読めないのではなく測れない（違反が在れば不合格が先に立つ）。始まりの凍結（便 121）も不在を前提にする
+    if names.is_empty() && !matches!(flag, Flag::FreezeIds | Flag::FreezeStart) {
         report.pending(
             "要件・判断・受入基準の id の消失と改番は baseline（anchors/ids-*.yaml）が無いので測れない（folio check --freeze-ids で凍結できる）",
         );
@@ -216,17 +218,16 @@ pub(crate) fn check_ids(
         rows,
         version,
         anchors_dir,
+        exists: !names.is_empty(),
     }
 }
 
 /// `--freeze-ids`（§1 (d)）。全検査が 0 違反で「まだ分からない」も無いときだけ書く。
+/// 組む（`target`・`build`）と書く（`write`）は始まりの凍結（便 121・`freeze.rs`）と共有する＝字と byte は便 88 のまま。
 pub(crate) fn freeze(cur: &Current, report: &mut Report) -> After {
-    let Some(version) = &cur.version else {
-        report.unknown("srs.yaml: meta.version が読めない（id の一覧の anchor の file 名を決められない）");
+    let Some((name, path)) = target(cur, report) else {
         return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
     };
-    let name = format!("{IDS_PREFIX}{version}{IDS_SUFFIX}");
-    let path = cur.anchors_dir.join(&name);
     if path.exists() || path.is_symlink() {
         return After::Refused(format!(
             "anchors/{name} が既に在る（同じ版は上書きしない・N-1.1）"
@@ -235,6 +236,48 @@ pub(crate) fn freeze(cur: &Current, report: &mut Report) -> After {
     if report.verdict() != Verdict::Pass {
         return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
     }
+    let text = match build(cur) {
+        Ok(t) => t,
+        Err(e) => {
+            report.pending(format!("id の一覧の木を書けない（{e}）"));
+            return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
+        }
+    };
+    if let Err(e) = write(cur, &path, text) {
+        report.unknown(format!("anchors/ に書けない: {e}"));
+        return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
+    }
+    After::Freeze(format!(
+        "凍結した: {}（id {} 本）・版管理に commit する（commit するまで素の床は未追跡の anchor で 1）",
+        path.display(),
+        cur.rows.len()
+    ))
+}
+
+/// id の一覧の anchor の file 名と path（`ids-<要件書の版>.yaml`）。版が読めなければ「まだ分からない」を積んで None。
+pub(crate) fn target(cur: &Current, report: &mut Report) -> Option<(String, PathBuf)> {
+    let Some(version) = &cur.version else {
+        report.unknown("srs.yaml: meta.version が読めない（id の一覧の anchor の file 名を決められない）");
+        return None;
+    };
+    let name = format!("{IDS_PREFIX}{version}{IDS_SUFFIX}");
+    let path = cur.anchors_dir.join(&name);
+    Some((name, path))
+}
+
+/// id の数（凍結の 1 行に出す）。
+pub(crate) fn count(cur: &Current) -> usize {
+    cur.rows.len()
+}
+
+/// id の一覧の anchor を書く（anchors/ が無ければ作る）。
+pub(crate) fn write(cur: &Current, path: &Path, text: String) -> std::io::Result<()> {
+    fs::create_dir_all(&cur.anchors_dir).and_then(|()| fs::write(path, text))
+}
+
+/// id の一覧の anchor の本文を組む（digest を足した木を書き手で字にする）。
+pub(crate) fn build(cur: &Current) -> Result<String, String> {
+    let version = cur.version.as_deref().unwrap_or_default();
     let s = |x: &str| Value::Str(x.to_string());
     let fields = SECTIONS
         .iter()
@@ -270,29 +313,13 @@ pub(crate) fn freeze(cur: &Current, report: &mut Report) -> After {
         ),
         (s("ids"), Value::Seq(ids)),
     ];
-    let written = anchor::digest_of(&Value::Map(tree.clone())).and_then(|d| {
+    anchor::digest_of(&Value::Map(tree.clone())).and_then(|d| {
         tree.push((s("digest"), s(&d)));
         let header = format!(
             "# folio2 要件・判断・受入基準の id の一覧の凍結 anchor（要件書 {version} の時点・P-7.1）。行 = id・節・要約値（欄の字面の UTF-8 の sha256・欄は projection.fields の先に在る方）。手で直さない・消さない・同じ版は上書きしない（folio check --freeze-ids が全検査 0 違反のときだけ作る）。"
         );
         yaml::write(&Value::Map(tree), &header)
-    });
-    let text = match written {
-        Ok(t) => t,
-        Err(e) => {
-            report.pending(format!("id の一覧の木を書けない（{e}）"));
-            return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
-        }
-    };
-    if let Err(e) = fs::create_dir_all(&cur.anchors_dir).and_then(|()| fs::write(&path, text)) {
-        report.unknown(format!("anchors/ に書けない: {e}"));
-        return After::Freeze(phase::not_frozen_by(report, "--freeze-ids"));
-    }
-    After::Freeze(format!(
-        "凍結した: {}（id {} 本）・版管理に commit する（commit するまで素の床は未追跡の anchor で 1）",
-        path.display(),
-        cur.rows.len()
-    ))
+    })
 }
 
 #[cfg(test)]

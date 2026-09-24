@@ -91,6 +91,14 @@ pub(crate) const FIGURE_ENTRY: Keys = Keys {
 };
 /// 図の型の一覧の置き場（部品目録の図の型・写しの字面）。
 pub(crate) const FIGURE_TYPE_ENUM_REF: &str = "design-intent/preview/parts.json figure_type_enum";
+/// 列の根の表（便 121・ADR-16 決定 (2)(ア)・裁定 id = 台帳 f2-648 notes 2026-09-23 17:39 JST）。鍵 = 検査される置き場の
+/// 憲法の正本の meta.id・値 = その列の根の anchor の digest（16 進 64 字）。閉じた一覧で、行を足すのは folio2 の便
+/// （持ち主の承認の裁定 id を名指す・行 D-11）。最初の版は表に持たせない（anchor の節の first_version が全行で共通）。
+/// 初版の行は folio2 の憲法 第 1.0 版の凍結の digest（便 121 の前の root_digest の値のまま）。
+pub(crate) const ROOT_DIGESTS: &[(&str, &str)] = &[(
+    "folio2-constitution",
+    "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed",
+)];
 
 /// 床の定数（値は day-1 の床の FLOOR と同じ）。`_note` で終わる欄は人が読む説明の注（便 45・ADR-9）で、
 /// adr/schema.yaml の生成区間に在る順と字面のまま持つ＝床の突き合わせ（`floor_diff`）は読まず、`folio schema` の導出だけが使う。
@@ -366,10 +374,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ("file_name", Floor::Val("constitution-<version>.yaml")),
             ("index_file", Floor::Val("index.yaml")),
             ("first_version", Floor::Val("v1.0")),
-            (
-                "root_digest",
-                Floor::Val("acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed"),
-            ),
+            ("root_digests", Floor::Pick(ROOT_DIGESTS)),
             ("version_pattern", Floor::Val(r"^v[0-9]+\.[0-9]+$")),
             ("digest_algo", Floor::Val("sha256-json-1")),
             (
@@ -409,13 +414,14 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             "版の綴りは v<数>.<数>（version_pattern）。v1.0.0 のような同じ版の別綴りは列に並べない",
             "現行の写し（憲法 schema.amendment_scope の各節・条は 5 欄）は最新 anchor と一致する（不一致 = 判断の記録と承認を伴わない改憲 → N-4）",
             "最新 anchor の版は憲法 meta.version と同じ（違えば「版を上げたのに凍結していない」→ A-2。凍結するまで記録の消し込みは測らない＝執筆中に前の版の改訂を告発しない。ただし条の消失・規範文の改番・廃止した番号の再利用は執筆中も測る）",
-            "anchor は索引の entries の順に previous で列をなし、根は first_version で、根の anchor の digest は床の定数（root_digest）と一致する（根は 1 度きり＝別の写し〔別の版管理・根の無い枝・浅い写し・記録の無い版管理〕で同じ版を凍結し直して持ち帰っても落ちる。根を作り直すのは移行＝床の外の手順）。索引にある anchor file が無い（消された）・索引が在って entries が空、なら差分検査は「まだ分からない」（P-10.3・終了コード 2）——ただし版管理の履歴にその anchor が在れば「履歴に在ったが無い」の違反が先に立って終了コード 1 になる（2 になるのは履歴にも anchor が無い写しだけ）。索引に無い anchor・索引と違う digest・列の付け替え・索引だけの削除・索引を空にして anchor file が残る（列の外の anchor）は落とす（終了コード 1）",
+            "anchor は索引の entries の順に previous で列をなし、根は first_version で、根の anchor の digest は列の根の表（root_digests・床の定数）の置き場の名（憲法 meta.id）の行と一致する（表に無い名の列は落とす・行を足すのは folio2 の便・根は 1 度きり＝別の写し〔別の版管理・根の無い枝・浅い写し・記録の無い版管理〕で同じ版を凍結し直して持ち帰っても落ちる。根を作り直すのは移行＝床の外の手順）。索引にある anchor file が無い（消された）・索引が在って entries が空、なら差分検査は「まだ分からない」（P-10.3・終了コード 2）——ただし版管理の履歴にその anchor が在れば「履歴に在ったが無い」の違反が先に立って終了コード 1 になる（2 になるのは履歴にも anchor が無い写しだけ）。索引に無い anchor・索引と違う digest・列の付け替え・索引だけの削除・索引を空にして anchor file が残る（列の外の anchor）は落とす（終了コード 1）",
             "発効の承認の写し（meta_approval）は憲法 meta.approval と一致する。承認一覧（approvals）の各項はその判断の記録が実在し、承認欄（承認者・日付・裁定 id・逐語・対話面）と 1 字も違わない",
             "直前 anchor との差分は欄単位で全件を、その版を名指す発効した判断の amends と 1 対 1 に消し込む（amends_note.matching）。変わった条には amended_by が要る。範囲（amendment_scope）の増減も欄単位の（新設）（削除）で記録する（狭めるときは列に在った節名を対象に名指す）。同じ消し込みを列の全区間（隣り合う anchor どうし）でも行う＝凍結後に過去の版の記録を書き換えても落ちる。発効した判断の amends が名指せる版は、列の根より後の版（隣り合う anchor の差分で消し込める）か執筆中の版（根でない）だけ＝列に無い版（最新版の anchor と索引の項を消して前の版へ戻した細工）も、列の根の版（改訂前が無いので突き合わせる差分が存在しない架空の記録）も落とす",
             "anchor に在って現行に無い条は落とす（番号は消さない・P-7。条の廃止（status）の機構は day-1 の憲法 schema に無い＝M0 で決める）。規範文 id の重複・改番・廃止した番号の再利用・印を値に持つ欄も落とす",
             "anchor が 0 本で改訂の記録も無ければ「まだ分からない」（P-10.3・終了コード 2。版管理の履歴に anchor が在れば「履歴に在ったが無い」で終了コード 1）。記録があるのに anchor が無ければ落とす",
             "版管理（git）との照合＝環境変数（GIT_DIR / GIT_WORK_TREE 等）は継承せず、全ての参照（--all）の履歴を見る。落とすもの = 先頭（HEAD）に anchor があって作業ツリーに無い・履歴に一度でも在った anchor が無い（削除を commit しても）・履歴に在った同じ形式の anchor と中身が違う（差し替え・書き換え。固定の欄・digest の方式・写しの取り方が今と違う古い anchor は移行の痕跡として見ない）・anchors/ か anchor file が版管理から除外（ignore）されている（追跡済みでも、file の pattern でも）・最新版以外の anchor が追跡されていない（凍結した anchor は commit する）・design-intent 自体が版管理の根・版管理の根が design-intent の上に無い。「まだ分からない」（終了コード 2）にするもの = 版管理が無い・commit が 1 つも無い（HEAD 無し）・読めない写し、と anchor が 1 本も無い浅い写し（shallow・anchor が揃った浅い写しは残りの検査で進む）＝写しで回すときも git init + commit の中で回す。版管理は比較元ではなく「消された・差し替えられた anchor」を早く止める補助で、列の真偽は索引と digest と根の定数が受け持つ",
-            "同じ版の anchor は上書きしない・anchor と索引は消さない・空にしない。生成は folio check --freeze-anchor で、全検査が 0 違反かつ「まだ分からない」が無く、版が最新より新しく、差分とその版の発効した判断があるときだけ書く。列の始め直し（最初の版が first_version でない・版管理の先頭か履歴に anchor が在った・記録が在るのに anchor が無い・根の digest が床の定数と違う）は認めない",
+            "同じ版の anchor は上書きしない・anchor と索引は消さない・空にしない。生成は folio check --freeze-anchor で、全検査が 0 違反かつ「まだ分からない」が無く、版が最新より新しく、差分とその版の発効した判断があるときだけ書く。列の始め直し（最初の版が first_version でない・版管理の先頭か履歴に anchor が在った・記録が在るのに anchor が無い・根の digest が列の根の表の置き場の名の行と違う）は認めない。表に無い名の列の根は、凍結の命令が組んだ digest の全桁（表に足す値）を出して凍結しない",
+            "始まりの凍結は folio check --freeze-start で、憲法の列（索引か constitution- で始まる anchor）と id の一覧（ids- で始まる anchor）がどちらも 0 本の置き場でだけ、最初の版の anchor と索引と id の一覧を同時に書く（どちらか 1 本でも在れば何も書かずに断る）。数えから外すのは 2 つの基準の不在の「まだ分からない」だけで、列の根の表の照らしを含むほかの検査が 0 違反で「まだ分からない」も無いときだけ書く。書いた後は旗なしの床が全部を数える",
             "正本 4 file（憲法・rules・語彙・要件書）・anchors/・adr/ とその中の file・design-intent 自体は symlink でなく実体",
         ]),
     ),
@@ -437,7 +443,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             "「日本語（原語）」の括弧の中身は丸ごと英字語の免除になる（機械側の限界）。日本語の専門語の判定は敵対レビュー（天井）。",
             "終了コードは、違反（1）と「まだ分からない」（2）が同時に立てば 1。",
             "版管理の見え方（別の版管理・根の無い枝・浅い写し・記録の無い版管理・環境変数）は床の外で選べる。床が応じるのは環境変数の遮断・全ての参照の照合・同じ形式の anchor の中身の照合・列の根の digest の固定まで。履歴ごと書き換える細工（強制の push・参照の付け替え）と、床の実装 の定数（根の digest・写しの取り方・承認者・対話面・裁定 id の形）を書き換える細工は床の外＝取り込みの審査と remote の保護が受け持つ。",
-            "列の根の digest は床の定数なので、床の実装 は folio2 の憲法 v1.0 の凍結に結び付いている。根を作り直す移行では床の定数を直す（取り込みの審査で読む）。",
+            "列の根の digest は床の定数の表（root_digests・鍵は憲法の名）なので、床の実装 は表の各行の憲法の凍結に結び付いている。憲法の名は digest の外に在り、表が証するのは列の根の中身で、どの repo の列かは証さない。行を足すのと根を作り直す移行では床の定数を直す（行 D-11・取り込みの審査で読む）。",
         ]),
     ),
 ]);

@@ -25,6 +25,8 @@
 //! 22. design-intent の写しに --check → 0 ∧ 実の生成区間の prose_note の行が「憲法・rules・要件書・語彙〕」を含み「憲法・rules・要件書〕」を含まない。
 //! 23. 凍結 anchor の自己検査: adr-region.txt が 117 行・22263 byte・(d) の要約値（測れなければ落とす）。
 //!
+//! 便 121（docs/design/delivery-121.md §1 (d)(g)）: 列の根を憲法の名で引く表 root_digests に替えた（1 の定数を 25326 byte と新しい要約値に）。
+//!
 //! 便 89（docs/design/delivery-89.md §1）: 残る 6 本の正本（天井の正本・規則の表・入口の正本・要件書・語彙・相談窓口）の側の歯は tests/schema_docs.rs へ移した（字は 1 字も変えていない）。
 
 use std::fs;
@@ -35,9 +37,11 @@ use std::process::{Command, Output, Stdio};
 /// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測（便 58 (b) で承認者の値域に
 /// orchestrator 席 を足し、便 69 (b) で注 prose_note の母集団に 語彙 を足し、便 92 (d) で帰結の欄 produced と
 /// その注を、便 101 (d) で改訂の欄 revises を足した後の値・tests/fixtures/schema/adr-region.txt と同じ byte）。
-const REGION_LINES: usize = 136;
-const REGION_BYTES: usize = 24202;
-const REGION_SHA256: &str = "0c95ab5011ff3a09ec3b6cdb4dd0bc3a6150ca5ca11ee92c7e233e96520f9ef3";
+/// 便 121 (d): 列の根の欄を表 root_digests の 2 行（folio2 の行）にし、注 anchor_note の 2 項の書き換えと 1 項の挿入・
+/// 注 limits_note の末項を直した後の値（anchor は字面の置き換えで作り、導出と byte 一致を adr.rs の単体の歯が見る）。
+const REGION_LINES: usize = 138;
+const REGION_BYTES: usize = 25326;
+const REGION_SHA256: &str = "7a500d7a811bd698dac4f8feb10756785e449e973f3e9f434e737767f16f2ee1";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改め、便 119 で導出物の検査の命令の名と
