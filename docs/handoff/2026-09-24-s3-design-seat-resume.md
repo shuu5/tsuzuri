@@ -2,7 +2,9 @@
 
 次の席が最初に読む file。読む順: この file → docs/handoff/2026-09-24-v3-kickoff.md → docs/handoff/2026-09-24-v2-leftovers-for-v3.md（scribe2 席の送り物・c17b4b2）→ docs/grill/2026-09-24-D-tech-stack.md。
 
-## 1. いまどこか
+## 1. いまどこか（2026-09-24T14:0xZ 更新）
+- 論点 D: ADR-2（比較試作で決める）発効済み。試作 4 つ完了・結果は design-note/bakeoff-surface.yaml §6・作業場 ~/projects/local-projects/scribe3-spikes（自前 git）・hub は tailnet-serve（`tailnet-serve list` で URL・停止は `tailnet-serve stop --dir …/scribe3-spikes/hub`）・生きた server 3 つ（port 8791〜8793・pid は spikes/live/*/pid・止めるのは s3 席）。**本決定の 1 問（grill 記録 §8・推奨 = Leptos）を持ち主へ提示済み・答え待ち**。答えが来たら ADR-3 を書く。
+- 以下は 13:1xZ 時点の記述（経緯として残す）。
 - 論点 D（技術スタック）の 1 問を持ち主に提示済み・**答え待ち**。問いと推奨は docs/grill/2026-09-24-D-tech-stack.md §5（推奨 = (a) Rust の同期 server + build 無しの HTML/JS・撤退条件つき）。裁定はまだ無い＝ADR・vocabulary・srs には何も書いていない。
 - 討論は「器の穴」の直しを待って止めていた。持ち主の指示: 討論の前に scribe2 側を直させる。
 

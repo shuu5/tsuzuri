@@ -1,7 +1,7 @@
 # grill 論点 D — 技術スタック（討論の記録・正本は design-intent/ の YAML）
 
 - 出自: docs/handoff/2026-09-24-v3-kickoff.md §1（持ち主の要望・2026-09-24）・§2 論点 D（持ち主が最重要と名指し）
-- 状態: 討論中（裁定なし）。裁定が出たら ADR へ書き、この file は経緯だけを残す
+- 状態: 裁定 1（2026-09-24T13:26Z・ADR-2 = 比較試作で決める・発効）。試作の結果は design-intent/design-note/bakeoff-surface.yaml §6。技術の本決定は次の裁定待ち
 - 逐語は台帳へ（この file には写さない）
 
 ## 1. 確認した事実（verified・2026-09-24）
@@ -47,6 +47,9 @@
 ## 6. 経緯
 
 - 2026-09-24: s3 席が事実を確認し、§3〜§5 を持ち主へ提示（答え待ち）
+- 2026-09-24T13:17Z: 持ち主が「途中で stack を変える負担」と「compile 言語で閉じる意味」を提起し、比較試作を提案。s3 席は Rust frontend を候補に戻し、依存の crate 数を実測（Leptos 226・Dioxus 182・Yew 108・host 向け解決）
+- 2026-09-24T13:26Z: 裁定「それでよいので試作を進めて」→ ADR-2 発効（記帳先 scribe2 台帳 s2-07l.214）。作業場 ~/projects/local-projects/scribe3-spikes に契約 v0.1 を書き、opus の agent 4 つ（server・素の JS・Svelte+Vite・Leptos）を並列に起動
+- 2026-09-24T13:45Z: 4 つとも完了。結果は設計ノート bakeoff-surface §6 と作業場の hub。技術の本決定の 1 問を持ち主へ（§8）
 - 2026-09-24（起こし直し後）: 新しい席が器の brief の注入（[scribe2/SessionStart]・orchestrator の指示文）と `folio check`（違反 0・まだ分からない 2）を実測。答えは未着のため §5 の 1 問を再掲して待つ
 
 ## 7. 論点 A への持ち越し（2026-09-24・s3 席の実測）
@@ -56,3 +59,12 @@
 - 持ち越し: 論点 A で「器の口として init を 1 本持つ（marker・宣言・state dir・登録を 1 発で・doctor が欠落を名指す）」を要件候補に挙げる。
 - 直しは scribe2 席へ Claude Code の session 間メッセージで依頼（2026-09-24・持ち主の指示「討論の前に修正させる」）。
 - scribe2 の台帳へ起票済み: s2-07l.609（持ち主の裁定 3 点の逐語つき・2026-09-24）。論点 A の要件候補はこの便を出所として引く。
+
+## 8. 本決定への問い（2026-09-24・試作の結果を受けて）
+
+s3 席の推奨 = **(e) Rust の wasm（Leptos）** を面の技術に採る。条件 3 つ: (1) 契約の型は共有 crate に置き、画面の論理は純粋な関数に寄せて host の cargo test で試す。(2) 依存の予算は面の crate を core と別枠にし、cargo deny の unmaintained 2 件は裁定 id つきの例外行で持つ。(3) 撤退条件 = 差分 build が閾値（rules 行で凍結）を超えるか、Leptos の版上げで往復が閾値を超えたら、素の JavaScript + 契約から生成した型（JSON schema）へ戻る。server と契約が固定なので戻る費用は client の写し直しだけ（試作で 3 つとも 1 時間以内に書けたことが根拠）。
+
+退ける案: 素の JavaScript は最速で最軽だが手写し 13 か所が契約の成長とともに負債になる（生成で塞げるが、生成器という機構を 1 つ足す）。TypeScript は型の世界が 2 つになり境界を検めず、容器の toolchain も足す。
+
+問い（1 問）: 面の技術を Rust の wasm（Leptos）に決めてよいか。前提 = 依存 171 crate と clean build 30〜45 秒を、型の共有と Rust の歯に乗ることの対価として受け入れる。受け入れないなら推奨は素の JavaScript + 生成した型に変わる。
+

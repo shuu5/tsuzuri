@@ -59,8 +59,19 @@ sections:
       持ち主の使用感は tailnet 越しの browser で同じ server に 3 つの client を切り替えて確かめる。
   - n: 6
     type: prose
-    title: 結果（追記する）
+    title: 結果（2026-09-24・4 つの agent の報告から転記・model は全部 opus）
     body: |
-      まだ測っていない。client ごとの物差しの値は、試作が終わり次第この節に表で追記する。
+      3 つの client とも 2 画面を完成し、契約の確認を全部通した。撤退条件（完成 1 つ以下）には当たらない。
+      席の往復: 素の JavaScript = 実行 5 回・直し 3 件（全部 CSS と資源）。TypeScript = build 3 回・直し 2 件（a11y の警告と favicon）。Rust wasm = 往復 3 回・直し 3 件（挙動 2・見た目 1）で compile の誤りは 0（agent が Leptos 0.8 の API を先に選んで書いた前提つき）。server = compile の誤り 0。
+      手書きの量: 素の JavaScript 470・TypeScript 516・Rust wasm 709（うち歯 108）・server 1,726（うち統合の歯 362）。
+      build の時間（clean と 1 行直した後）: 素の JavaScript は無し。TypeScript は容器込みで約 2.4 と約 2.0。Rust wasm は 27 から 45 と約 4.5（初回 57）。server は 3.8 と 0.19。単位は秒。
+      依存と門: 素の JavaScript 0。TypeScript 45 package（直接 5・全部 dev）で npm audit 0 件。Rust wasm 171 crate（直接 8）で cargo deny の advisories が unmaintained 2 件（paste・proc-macro-error2）で落ち、脆弱性 0。server 13 crate で cargo deny 全部 ok。
+      新しい host に足す道具: 素の JavaScript 0。TypeScript は podman の node の image。Rust wasm は wasm32 の target と trunk（prebuilt）と、trunk が自動で取る wasm-bindgen と wasm-opt。
+      契約の型の住処: 素の JavaScript は JSDoc に 13 か所の手写し（検査されない）。TypeScript は 13 型と path と event 名 7 か所の手写し（実行時も検査しない）。Rust wasm と server は共有 crate で手写し 0。
+      Rust の歯: 素の JavaScript と TypeScript は試せない（TypeScript の純関数は node の test なら可）。Rust wasm は純粋な論理と型の round-trip を cargo test 7 本で試せ、DOM と SSE の部分は wasm-bindgen-test が要る。server は unit 11 と統合 1。
+      配る大きさ: 素の JavaScript 15,975・TypeScript 46,450・Rust wasm 318,303（wasm 279,784）。単位は byte。
+      読み: harness としての差は型の住処と歯の置き場に出た。Rust wasm の代価は依存と clean build の時間。TypeScript は型が 2 つの世界に分かれ、どちらも境界を検めない。
+      契約への疑問は 4 者に共通のものが 1 つ（state は命じた値か適用できた値か）で、作業場の contract.md §7 に v0.2 の論点として統合した。
+      生きた面と screenshot と物差しの表は作業場の hub（tailnet で配信）に置いた。
 
 sources: []
