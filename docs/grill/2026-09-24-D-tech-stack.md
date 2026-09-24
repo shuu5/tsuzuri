@@ -47,3 +47,10 @@
 ## 6. 経緯
 
 - 2026-09-24: s3 席が事実を確認し、§3〜§5 を持ち主へ提示（答え待ち）
+
+## 7. 論点 A への持ち越し（2026-09-24・s3 席の実測）
+
+- scribe3 は `.vessel` marker と `.vessel.toml` を欠いたまま席が立っていた（state dir・git 設定・登録 row は手作業で再現済み）。marker が無いので plugin の SessionStart hook が黙り、orchestrator の指示文（決定はしご = scribe2 C17 の行を含む）が席に入っていなかった。doctor はこの欠落を出さない。
+- 根: 器に「新しい置き場を載せる口」が無く、立ち上げは runbook（管理席の cache）と手作業に頼っている（consumer-sync.md は N2 で散文の手順を持たないと掲げる）。
+- 持ち越し: 論点 A で「器の口として init を 1 本持つ（marker・宣言・state dir・登録を 1 発で・doctor が欠落を名指す）」を要件候補に挙げる。
+- 直しは scribe2 席へ Claude Code の session 間メッセージで依頼（2026-09-24・持ち主の指示「討論の前に修正させる」）。
