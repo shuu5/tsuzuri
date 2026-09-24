@@ -11,6 +11,9 @@
 //! 5. 設計ノートの欄の決まりの床の定数（生成区間の check.command）の命令の名は folio derive --check で、--dir と --out を足せば撃てて 0。
 //! 6. 実の置き場から導出でき（導出元の設計ノートを持つ file だけ・各 file は行の数と goal の数が等しい）、版管理の導出物（contracts/ の下）は
 //!    その集合と一致して --check が 0（実の置き場には書かない）。
+//! 7. 便 120（docs/design/delivery-120.md §1 (d) の 4）: 凍結の対 need-conditional.yaml と need-conditional-schema.toml
+//!    （verify と done が要否 conditional）から導出した行 a は verify と done を持ち、行 b は持たない（行の値のまま写す）。
+//!    導出物に要否の字は写さず、--check が 0。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -424,4 +427,45 @@ fn f119_the_real_design_intent_derives_and_its_committed_copy_matches() {
         0,
         &["一致", "数えない: schema.toml（導出元なし）"],
     );
+}
+
+// ── 7. 要否 conditional の欄は行の値のまま写す（便 120） ──
+
+#[test]
+fn f120_conditional_fields_are_copied_as_the_row_has_them() {
+    let w = Work::empty("f120-conditional");
+    let fixtures = repo_root().join("tests/fixtures/design-note");
+    fs::copy(
+        fixtures.join("need-conditional-schema.toml"),
+        w.root.join("contracts/schema.toml"),
+    )
+    .unwrap();
+    fs::create_dir_all(w.dir().join("design-note")).unwrap();
+    fs::copy(
+        fixtures.join("need-conditional.yaml"),
+        w.dir().join("design-note/need-conditional.yaml"),
+    )
+    .unwrap();
+    assert_code(&w.derive("--write"), 0, &["書いた 1 file"]);
+    let body = fs::read_to_string(w.out().join("need-conditional.toml")).unwrap();
+    let block = |id: &str| -> Vec<String> {
+        body.split("[[contract]]")
+            .find(|b| b.lines().any(|l| l == format!("id = \"{id}\"")))
+            .unwrap_or_else(|| panic!("行 {id} が無い: {body}"))
+            .lines()
+            .map(str::to_string)
+            .collect()
+    };
+    let has = |lines: &[String], key: &str| lines.iter().any(|l| l.starts_with(&format!("{key} = ")));
+    let a = block("a");
+    let b = block("b");
+    for key in ["verify", "done", "goal"] {
+        assert!(has(&a, key), "行 a に {key} が無い: {body}");
+    }
+    for key in ["verify", "done"] {
+        assert!(!has(&b, key), "行 b に {key} が在る: {body}");
+    }
+    assert!(has(&b, "goal"), "行 b に goal が無い: {body}");
+    assert!(!body.contains("conditional"), "要否の字を写した: {body}");
+    assert_code(&w.derive("--check"), 0, &["一致"]);
 }

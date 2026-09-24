@@ -87,8 +87,9 @@ pub(crate) const EXTERNAL_PATH: &str = "contracts/schema.toml";
 pub(crate) const EXTERNAL_HEAD: &str = "schema = 1";
 pub(crate) const EXTERNAL_ROWS_KEY: &str = "field";
 pub(crate) const EXTERNAL_ROW_FIELDS: &[&str] = &["name", "need", "shape"];
-/// 導出 file の need / shape の値域（読めない値は「まだ分からない」）。
-pub(crate) const EXTERNAL_NEED: &[&str] = &["required", "optional"];
+/// 導出 file の need / shape の値域（読めない値は「まだ分からない」）。conditional は器の条件付きの欄（約束の行を持つ親の行だけ
+/// 省ける・省いてよいかの判定は器の受付が持つ）で、床は値域に在ることだけを見て欄の有無を数えない（便 120・判断の記録 ADR-16 決定 (2)）。
+pub(crate) const EXTERNAL_NEED: &[&str] = &["required", "optional", "conditional"];
 pub(crate) const EXTERNAL_SHAPE: &[&str] = &["text", "list"];
 pub(crate) const ROW_ID_PATTERN: &str = "^[a-z][a-z0-9-]*$";
 pub(crate) const FIGURE_ENTRY: Keys = Keys {

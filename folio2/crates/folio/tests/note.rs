@@ -4,6 +4,8 @@
 //! 設計ノートの file を置く・変異を 1 つ当てて `folio check --dir` を回す。
 //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる。
 //! 凍結 fixture は要件書 AC7 / AC8 / AC13 の red_test が名指す tests/fixtures/design-note/ の 3 組だけ。
+//! 便 120（docs/design/delivery-120.md §1 (d)）の歯 f120_ は、同じ dir の手書きの凍結の対 need-conditional.yaml と
+//! need-conditional-schema.toml（器の導出 file の verify と done が要否 conditional）を使う。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -100,6 +102,18 @@ impl Work {
             .join(group)
             .join(file);
         fs::copy(&from, to).unwrap_or_else(|e| panic!("{}: 置けない: {e}", from.display()));
+    }
+
+    /// 便 120 の凍結の対を置く（契約表を持つ設計ノートを対の 1 本にするため実の見本 example.yaml を外す）。
+    fn put_need_conditional(&self) {
+        let from = repo_root().join("tests/fixtures/design-note");
+        fs::remove_file(self.note("example.yaml")).unwrap();
+        fs::copy(
+            from.join("need-conditional.yaml"),
+            self.note("need-conditional.yaml"),
+        )
+        .unwrap();
+        fs::copy(from.join("need-conditional-schema.toml"), self.external()).unwrap();
     }
 
     /// file の字面の変異（1 か所だけ）。
@@ -261,6 +275,68 @@ fn note_extra_contract_field_without_derived_field_fails() {
         "note",
         &["契約表の欄「extra」が器の導出 file に無い"],
     );
+}
+
+// ── 便 120: 器の導出 file の要否 conditional（docs/design/delivery-120.md §1 (d)） ──
+
+/// 合格・違反 0・まだ分からない 0。
+fn assert_clean_pass(out: &Output) {
+    assert_passes(out);
+    assert!(
+        stdout(out).contains("folio check: 合格（違反 0・まだ分からない 0）"),
+        "{}",
+        stdout(out)
+    );
+}
+
+#[test]
+fn f120_conditional_fields_pass_with_and_without_values() {
+    let w = Work::new("f120-pair");
+    w.put_need_conditional();
+    let schema = fs::read_to_string(w.external()).unwrap();
+    assert!(
+        schema.contains("need = \"conditional\""),
+        "対の導出 file が conditional を持たない"
+    );
+    let note = fs::read_to_string(w.note("need-conditional.yaml")).unwrap();
+    let row_b = note
+        .lines()
+        .find(|l| l.trim_start().starts_with("- {id: b,"))
+        .expect("行 b が無い");
+    assert!(
+        !row_b.contains("verify:") && !row_b.contains("done:"),
+        "行 b が verify か done を持つ: {row_b}"
+    );
+    assert_clean_pass(&w.check());
+}
+
+#[test]
+fn f120_needs_outside_the_domain_stay_unknown() {
+    for (i, value) in ["sometimes", "Conditional", "required?"].iter().enumerate() {
+        let w = Work::new(&format!("f120-need-{i}"));
+        w.put_need_conditional();
+        w.mutate_file(
+            &w.external(),
+            "name = \"verify\"\nneed = \"conditional\"\n",
+            &format!("name = \"verify\"\nneed = \"{value}\"\n"),
+        );
+        assert_unknown(&w.check(), &format!("need「{value}」を知らない"));
+    }
+}
+
+#[test]
+fn f120_the_real_copy_has_the_current_shape_and_passes() {
+    let text = fs::read_to_string(repo_root().join("contracts/schema.toml")).unwrap();
+    assert!(
+        text.contains("need = \"conditional\""),
+        "repo の写しが conditional を持たない"
+    );
+    assert!(
+        text.lines().any(|l| l == "[[promise-field]]"),
+        "repo の写しが約束の行の欄の表を持たない"
+    );
+    let w = Work::new("f120-real");
+    assert_clean_pass(&w.check());
 }
 
 // ── 形の違反（見本の写しに変異 1 つずつ） ──
