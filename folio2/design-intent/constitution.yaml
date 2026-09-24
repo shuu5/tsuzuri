@@ -158,7 +158,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
       - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と正本の要約値から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と今の正本の引き金の要約値から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
     relations: {reqs: [FR5, AC3], rules: [D-12, D-14], articles: [P-4]}
 
   - id: P-4
@@ -418,7 +418,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "A3 / C13（依存の予算・値は folio2 専用）"}
       - {kind: folio2-ruling, ref: "裁定 #3（依存予算は folio2 専用値）・G7=A（裁定 #3 の根拠「C8」は「C13」の誤りとして訂正）"}
-    mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: cargo deny + R-6 の予算（Rust が入ってから）。それまでは人が確かめる。}
+    mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: cargo deny + R-6 の予算で数える。Rust の crate は便 0（2026-09-17）から在るが、cargo deny の設定も予算を数える検査の段も未実装である（2026-09-24）。それまでは人が確かめる。}
     relations: {reqs: [CON2], rules: [R-6, R-15]}
 
   - id: A-4
@@ -475,7 +475,7 @@ articles:
     plain: 「今回だけ特別」のスイッチを足す変更は、機械が止めます。変えたいときは正式に改訂します。
     rationale:
       - {kind: v1-incident, ref: "ADR-0047 §2.2（例外機構を導入しない＝逃げ道と規律を一致させる）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本と rules の全節（top_level・meta・前文・条・規範文・mechanism・rules 行）で未知の欄を schema 検査が落とす（床は folio check）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本と rules のうち、最上位の節の未知の節（top_level）と、meta・前文・前文の mechanism・条・条の mechanism・規範文・rules 行（閾値行と開発規律行）のそれぞれが直に持つ欄の未知の欄と、meta・前文・前文の mechanism・条の mechanism が表でない形と、mechanism の必須の欄 kind・live の欠けを、schema 検査が落とす（床は folio check・最上位の節のほかは便 128〔台帳 f2-648.176〕の着地から）。条の中の行（rationale・retreat・relations・amended_by）の欄と、この一覧に入らない最上位の節の中の欄と、mechanism の鍵そのものの不在とほかの部位の必須の欄はまだ数えない（後続の便・台帳の控え）。}
     note: scribe2 N3（host 固有の分岐を code に焼かない）とは別の条。番号の一致は意図していない。
     relations: {articles: [A-2], sections: [§6]}
 
@@ -516,7 +516,7 @@ articles:
       - {id: N-6.2, pattern: ubiquitous, strength: must-not, text: 配信の出力と、支度表・台帳の中身を、認証なしの公開ネットに晒さない。}
     plain: 見せる先は自分の端末どうしの私設ネット（tailnet）か、同じ端末の中（loopback）だけで、そのどちらでもない先へ向けた配信は機械が起動を止めます。配信で見せるページや、支度表・台帳の中身を、認証なしの公開の場所に出しません。承認済みの文書を版管理（公開 repo）へ置くのは別の話で、A-1 の「出す」として確認します。
     rationale:
-      - {kind: folio2-ruling, ref: "要件書 CON3（tailnet のみ）・FR7・G8=A（出す（公開）の Never）・G14=A（承認済み HTML は design-intent/preview/ へ・生 IP は除去）"}
+      - {kind: folio2-ruling, ref: "要件書 CON3（出所の時点の字は tailnet のみ。同じ端末の中を通す向きへは判断の記録 ADR-12 が改め、今の CON3 は見せる先の制限をこの条へ委ねる＝根拠の向きは CON3 からこの条へ）・FR7・G8=A（出す（公開）の Never）・G14=A（承認済み HTML は design-intent/preview/ へ・生 IP は除去）"}
       - {kind: v1-incident, ref: "tailnet-serve の下限（tailnet の住所が無いと起動を拒む）"}
     mechanism: {kind: reject, live: now, stage: post, polarity: fail-closed, note: 接続先が同じ端末の中（loopback）でも tailnet の範囲でもないとき serve が起動を拒み、住所を明示しない起動は tailnet の住所を解けなければ拒む（FR7 の確かめ方・day-1 は tailnet-serve script）。}
     note: CON3 の強さは Never 相当なのに見本では A-1（Ask-first）に対応していたねじれを解いた。v0.1 の「生成物」は G14=A（PUBLIC repo への commit）と矛盾したため配信面に絞った。

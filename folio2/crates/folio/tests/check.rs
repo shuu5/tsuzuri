@@ -972,7 +972,8 @@ const F91_ROWS: [(&str, &[&str]); 15] = [
     ("R-3", &["P-4.2", "AC2"]),
     ("R-4", &["AC6"]),
     ("R-5", &["P-2.4"]),
-    ("R-12", &["P-4.2", "R-2"]),
+    // R-12 の R-9 は一括 17（天井の 30 周目 実態 F-2）で足した（この行を数える口は R-9 の床）
+    ("R-12", &["P-4.2", "R-2", "R-9"]),
     ("R-13", &["P-4.2"]),
     ("R-14", &["P-4.1", "P-11.1", "N-3.1", "R-7"]),
     ("R-15", &["P-10.3", "A-3.1", "CON2", "ADR-4"]),
@@ -1040,7 +1041,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
         assert_eq!(got, *want, "{id} の refs");
         total += got.len();
     }
-    assert_eq!(total, 43, "refs の id の合計");
+    assert_eq!(total, 44, "refs の id の合計");
 }
 
 #[test]

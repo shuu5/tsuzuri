@@ -31,7 +31,7 @@ sections:
     title: 口（外から呼ばれる受け口）
     rows:
       - {id: validate, name: 検査, input: 型付き記述 1 本, output: 診断（規則の id・対象・証拠・修正候補）, refuses: 仕上がりの段（R-14）を通らない記述, ref: [FR15, R-14]}
-      - {id: index, name: 索引, input: 正本の集合, output: 索引の節点（id・種類・所属 file・欄の要約値・1 行の題）と辺（両端の節点の id と型）, refuses: なし, ref: [FR14], note: 着地済み（2026-09-22・要件書 FR14 の口）}
+      - {id: index, name: 索引, input: 正本の集合, output: 索引の節点（id・種類・所属 file・欄の要約値・1 行の題）と辺（両端の節点の id と型）, refuses: なし, ref: [FR14], note: 着地済み（2026-09-22・要件書 FR14 の口）。図の生成の 3 つの口（検査・描画・埋め込み）とは別の口で、図の元になる索引を返すので同じ表に並べる}
       - {id: render, name: 描画, input: 検査に通った型付き記述, output: 図の本体（SVG）, refuses: 検査を通っていない記述, ref: [FR15]}
       - {id: embed, name: 埋め込み, input: 図の本体, output: 部品目録の class だけで塗られた図の部品, refuses: 部品目録に無い class を持つ本体（R-3）, ref: [FR15, R-3]}
   - n: 4
@@ -52,7 +52,7 @@ sections:
     type: contract-table
     title: 契約表
     rows:
-      - {id: a, title: 図の生成の口 3 つを 1 便で置く, req: [FR15], section: "1", verify: [cargo nextest run -p folio figure], size: M, done: 型付き記述の見本 1 本が仕上がりの段を通り図の本体が部品として埋まる, depends: []}
+      - {id: a, title: 図の生成の口 3 つ（検査・描画・埋め込み）を 1 便で置く, req: [FR15], section: "1", verify: [cargo nextest run -p folio figure], size: M, done: 型付き記述の見本 1 本が仕上がりの段を通り図の本体が部品として埋まる, depends: []}
 
 figures:
   - id: fig-1

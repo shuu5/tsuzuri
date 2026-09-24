@@ -62,15 +62,47 @@ const RULES: &str = "rules.yaml";
 const META_HEAD: &str = "\nmeta:\n  id: folio2-constitution\n";
 /// 前文の頭。
 const PRECEDENCE_HEAD: &str = "\nprecedence:\n";
-/// 前文の mechanism の行。
-const PRECEDENCE_MECHANISM: &str =
-    "  mechanism: {kind: none, live: now, note: 判断の規則であって機械では検査できない。生成区間（P-14）の先頭に写す。}\n";
+/// 前文の mechanism の行の頭（行の残りは note の字に依らないよう実の憲法の正本から読む・`mechanism_line`）。
+const PRECEDENCE_MECHANISM_HEAD: &str = "  mechanism: {kind: none";
 /// 条 N-3 の頭。
 const N3_HEAD: &str = "  - id: N-3\n";
-/// 条 N-3 の mechanism の行。
-const N3_MECHANISM: &str = "    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本と rules の全節（top_level・meta・前文・条・規範文・mechanism・rules 行）で未知の欄を schema 検査が落とす（床は folio check）。}\n";
-/// 条 N-3 の mechanism の表の頭。
-const N3_MECHANISM_MAP: &str = "    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本と rules";
+/// 条 N-3 の mechanism の行の頭（同上）。
+const N3_MECHANISM_HEAD: &str = "    mechanism: {kind: build-check";
+
+/// 実の憲法の正本（design-intent/constitution.yaml）で、`head` の直後の区画（`stop` の前まで）にある、`prefix` で始まる
+/// 最初の行を改行まで返す。mechanism の note の字は一括の直しで変わりうるので、歯は行の頭だけを持ち、行の全字は
+/// 写しの元の正本から組む（note の字に依らない形・一括 17 改訂 d）。
+fn mechanism_line(head: &str, prefix: &str, stop: &str) -> String {
+    let text = fs::read_to_string(repo_root().join("design-intent").join(CONSTITUTION)).unwrap();
+    let start = text
+        .find(head)
+        .unwrap_or_else(|| panic!("区画の頭が無い: {head:?}"))
+        + head.len();
+    let rest = &text[start..];
+    let at = if rest.starts_with(prefix) {
+        0
+    } else {
+        rest.find(&format!("\n{prefix}"))
+            .unwrap_or_else(|| panic!("行が無い: {prefix:?}"))
+            + 1
+    };
+    assert!(
+        !rest[..at].contains(stop),
+        "行が区画の外にある: {head:?} {prefix:?}"
+    );
+    let end = rest[at..].find('\n').map_or(rest.len(), |i| at + i + 1);
+    rest[at..end].to_string()
+}
+
+/// 前文の mechanism の行（改行まで）。
+fn precedence_mechanism() -> String {
+    mechanism_line(PRECEDENCE_HEAD, PRECEDENCE_MECHANISM_HEAD, "\narticles:")
+}
+
+/// 条 N-3 の mechanism の行（改行まで）。
+fn n3_mechanism() -> String {
+    mechanism_line(N3_HEAD, N3_MECHANISM_HEAD, "\n  - id: ")
+}
 /// 規範文 N-3.1 の頭。
 const N31_HEAD: &str = "{id: N-3.1, ";
 /// 憲法の schema.meta.optional の行。
@@ -213,7 +245,8 @@ fn f128_constitution_unknown_fields_are_violations() {
         r.all
     );
 
-    let n3_mech = N3_MECHANISM_MAP.replacen("{kind:", "{bogus_m: x, kind:", 1);
+    let n3_line = n3_mechanism();
+    let n3_mech = n3_line.replacen("{kind:", "{bogus_m: x, kind:", 1);
     let cases: [(&str, &str, String, String); 4] = [
         (
             "meta",
@@ -229,7 +262,7 @@ fn f128_constitution_unknown_fields_are_violations() {
         ),
         (
             "article-mechanism",
-            N3_MECHANISM_MAP,
+            &n3_line,
             n3_mech,
             unknown(CONSTITUTION, "条 N-3 の mechanism", "bogus_m"),
         ),
@@ -260,8 +293,8 @@ fn f128_constitution_unknown_fields_are_violations() {
     let w = Work::new("precedence-mechanism");
     w.mutate(
         CONSTITUTION,
-        PRECEDENCE_MECHANISM,
-        &PRECEDENCE_MECHANISM.replacen("{kind:", "{bogus_pm: x, kind:", 1),
+        &precedence_mechanism(),
+        &precedence_mechanism().replacen("{kind:", "{bogus_pm: x, kind:", 1),
     );
     w.check().amendment_and(
         "precedence-mechanism",
@@ -318,8 +351,8 @@ fn f128_lists_are_per_holder() {
     w.mutate(CONSTITUTION, N31_HEAD, &format!("{N31_HEAD}note: x, "));
     w.mutate(
         CONSTITUTION,
-        N3_MECHANISM_MAP,
-        &N3_MECHANISM_MAP.replacen("{kind:", "{relations: x, kind:", 1),
+        &n3_mechanism(),
+        &n3_mechanism().replacen("{kind:", "{relations: x, kind:", 1),
     );
     w.mutate(
         CONSTITUTION,
@@ -360,14 +393,14 @@ fn f128_mechanism_shape_is_a_violation() {
         let w = Work::new(&format!("shape-{case}"));
         w.mutate(
             CONSTITUTION,
-            N3_MECHANISM,
+            &n3_mechanism(),
             &format!("    mechanism: {value}\n"),
         );
         w.check().only(case, &lines);
     }
 
     let w = Work::new("shape-precedence");
-    w.mutate(CONSTITUTION, PRECEDENCE_MECHANISM, "  mechanism: 無効\n");
+    w.mutate(CONSTITUTION, &precedence_mechanism(), "  mechanism: 無効\n");
     w.check().amendment_and(
         "shape-precedence",
         "[schema] constitution.yaml: 前文（precedence）の mechanism が表でない",

@@ -2,7 +2,7 @@ schema = 1
 
 [[contract]]
 id = "a"
-title = "図の生成の口 3 つを 1 便で置く"
+title = "図の生成の口 3 つ（検査・描画・埋め込み）を 1 便で置く"
 req = ["FR15"]
 section = "1"
 verify = ["cargo nextest run -p folio figure"]
