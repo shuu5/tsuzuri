@@ -210,7 +210,7 @@ articles:
       - {kind: folio2-ruling, ref: "裁定 #4（正本 YAML・HTML は生成物）"}
       - {kind: v1-incident, ref: "v1 憲法の正本が手書き HTML（origin 22,748 byte）で、消費側（scribe2）が 834 行の HTML parser を自作した（ADR-0051 層分離・ADR-0045 逐語 extract）。生成物は 90,122 byte"}
       - {kind: v1-incident, ref: "ADR-0033 §2.3 で Option B（両面手書き + gate）を選び、45 日後（2026-05-29 → 07-13）の ADR-0050 で Option A'（正本から derive）へ全面転換。ADR-0052（手動同鏡は人の規律に依存し実際に drift）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（folio inject --check〔CLAUDE.md の生成区間〕・folio build --check〔配信先の全面〕・folio face と folio figure と folio schema の --check。読み物の folio render --check は 2026-09-21 に退役）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（folio inject --check〔CLAUDE.md の生成区間〕・folio build --check〔配信先の全面〕・folio face と folio figure と folio schema の --check・契約表から器の形へ組む導出物の検査の命令〔要件 FR11 の契機＝配信の組み立てから切り離した独立の命令 folio derive --check・便 119 で 2026-09-24 に着地〕。読み物の folio render --check は 2026-09-21 に退役）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
     retreat: {kind: spike, condition: 憲法の改訂表現（del/ins・amended_by）が YAML で表せないと spike 1 で分かったら、憲法だけ二正本 + byte 束縛へ退避する。}
     relations: {reqs: [FR4, FR6], rules: [D-13], articles: [P-14]}
 

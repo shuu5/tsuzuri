@@ -1,12 +1,12 @@
-# folio2 天井の正本（v0.13・orchestrator 席）
+# folio2 天井の正本（v0.14・orchestrator 席）
 # 位置: 判断の記録 ADR-8 決定 (1)(3)(4)・ADR-10（v0.2 = 1 周目の結果を受けた問いの文と読む欄の改訂）。観点 4 つ（文書の型に依らない）・観点ごとの問いの文と読む欄・文書の一覧・所見の欄の決まり・起動の記録の欄・重さと 3 値の値域・材料の束の要約値の規則を持つ。v0.3（判断の記録 ADR-11 決定 (4)①）= 観点ごとの 3 値・所見と記録の欄の決まり・束の中身と要約値の規則・反証の規則は、人が書く節をやめて末尾の生成区間（schema の節・正本は実装の定数・folio が導出する）に移した。人が書くのは meta・重さ（weights）・読む文書の行（documents）・観点の行（viewpoints）。
-# 状態: v0.13 は発効（2026-09-23 23:49 JST 持ち主「全部推奨で良い」・一括 14 の問 3 = 文書どうしの整合の観点の読む文書に索引の欄の決まり graph の閉じた一覧 3 つ）。v0.10 は発効（2026-09-22 11:42 JST 持ち主「全部承認する」・一括 11 = 天井の 22 周目の整合 F-1 と 23 周目の整合 F-1 = 文書の一覧の 語彙・要件書・相談窓口 の 3 行に、生成区間への所見の直す先は実装の側だという断りを足した〔ほかの 5 行と同じ 1 文・便 77 で 8 file すべてが生成区間の印を持つ〕。23 周目の整合 F-4 = 文書どうしの整合の読む文書の入口の行に相談窓口の節（intake）を足した〔入口の正本の相談窓口の節が要件 FR1 / FR2 と相談窓口の正本を人の文で言い直しており、どの観点の読む欄にも入っていなかった〕。観点・重さ・生成区間は不変・持ち主の承認済み）。v0.9 は発効（2026-09-21・一括 10 = 天井の 18 周目の整合 F-1 と 20 周目の整合 F-3 = 文書の一覧の 入口 と この正本 の行に、生成区間への所見の直す先は実装の側だという断りを足した〔規則の表・判断の記録・設計ノートの 3 行と同じ 1 文〕。観点・重さ・読む欄・生成区間は不変・持ち主の承認済み）。v0.8 は発効（2026-09-21・天井の 12 周目の整合 F-7 = 整合の観点の読む文書に入口（棚と読む順番）を足し、読み手の想定を 9 種に・問いの文の文書の列に入口を足した。観点・重さ・生成区間・ほかの 3 観点は不変。承認 = f2-648 notes 2026-09-21 10:17 JST 逐語「承認する」・要件書 v1.19 と同じ承認）。v0.7 = 2026-09-21 発効（11 周目の整合 F-5 = 実態との整合の読む文書に憲法と規則の表）。 ／ v0.11 は発効（2026-09-22 20:52 JST 持ち主「全部承認する」・一括 12 の問 4 = 観点の読む文書の欄に 8 対を足して実測に合わせた〔便 98 が束を節まで絞る前の宣言の是正〕。観点の数と重さと文書の一覧と生成区間は不変） ／ v0.12 は発効（2026-09-22 20:52 JST 持ち主「全部承認する」・一括 12 の問 4 の 2 と 3 = 読む文書の一覧に索引の欄の決まり（graph.yaml）を足し〔生成区間を持つ file が読む文書の一覧に無いと、そこを書き換えても周の引き金が立たない穴が残る〕、材料の束の骨格の 6 語を生成区間へ写した〔P-5.6〕。観点の数と重さと観点の読む欄は不変） ／ v0.13 は発効（一括 14・2026-09-23 23:49 JST 持ち主「全部推奨で良い」・便 102 の 🔴 1 と天井の 26 周目の整合 F-2 = 文書どうしの整合の観点の読む文書に索引の欄の決まり（graph.yaml）の閉じた一覧 3 つを足し、読み手の想定と問いの文の文書の列を 10 種に。印の要約値と門が測るのは観点が読む文書だけなので、読む文書の一覧に在ってもどの観点も読まない文書は、書き換えても印が古くならなかった。観点の数と重さと文書の一覧とほかの 3 観点と生成区間は不変）
+# 状態: v0.14 は発効（2026-09-24 09:46 JST 持ち主「裁定はすべて承認する」・f2-648 notes・要件書 第 1.34 版〔版 B・判断の記録 ADR-16 決定 (7)〕と同じ承認）= 忠実さ・読みやすさ・文書どうしの整合の 3 観点の読む欄に、要件書の M3 の範囲の節 scope_m3 を足した（v0.13 = 2026-09-23 発効・一括 14）。
 # 読み方: folio は AI を起動しない。観点ごとに材料の束（bundle）を組み、席か器が AI を回して所見（finding）と起動の記録（record）を同じ置き場へ書く。床は所見の形と記録の有無と束の要約値の一致だけを数え、所見の意味の当否は判定しない（P-1）。
 
 meta:
   id: folio2-ceiling
   title: 天井の正本（観点・所見の欄の決まり・起動の記録）
-  version: v0.13
+  version: v0.14
   status: effective
   generated: 2026-09-19
   approval:
@@ -36,6 +36,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-22, stamp: 発効（f2-648 notes 2026-09-22 20:52 JST・対話面 R-8・一括 12 の問 4 (2)(3)〔便 1 本で運ぶ〕への回答）, verbatim: 全部承認する, version: v0.12}
     - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-23, stamp: "v0.13 の起草（一括 14・便 102 の 🔴 1 と天井 26 周目 整合 F-2 = 文書どうしの整合の観点の読む文書に索引の欄の決まり graph の閉じた一覧 3 つ・読み手の想定と問いの文の文書の列を 10 種に。観点の数と重さと文書の一覧とほかの 3 観点と生成区間は不変）", version: v0.13}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-23, stamp: "発効（f2-648 notes 2026-09-23 23:49 JST・対話面 R-8・一括 14 の問 3〔整合の観点だけに足す〕への回答・推奨どおり）", verbatim: 全部推奨で良い, version: v0.13}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-24, stamp: "v0.14 の起草（要件書 第 1.34 版〔版 B〕が最上位に足す M3 の範囲の節 scope_m3 を、要件書の scope か scope_m1 を読む 3 観点〔忠実さ・読みやすさ・文書どうしの整合〕の読む欄に同じ形で足す。便 117 の設計ノートの §1 (h) の 3〔天井の観点が scope_m3 を読まず束の落とした節の行に記録される〕を塞ぐ。観点の数と重さと問いの文と文書の一覧と実態の観点と生成区間は不変）", version: v0.14}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-24, stamp: "発効（f2-648 notes 2026-09-24 09:46 JST・対話面 R-8・要件書 第 1.34 版〔版 B〕の問 1 への回答・同じ承認）", verbatim: 裁定はすべて承認する, version: v0.14}
 
 # 所見の重さ。refute に挙げた重さの所見だけ、別の文脈の AI が中立に反証する（ADR-8 決定 (3)）。反証が「まだ分からない」なら所見は残す。重さの基準は各観点の問いの文が持つ（v0.2）
 weights:
@@ -65,7 +67,7 @@ viewpoints:
       - {doc: constitution, fields: [articles.plain, articles.statements.text]}
       - {doc: rules, fields: [thresholds, discipline]}
       - {doc: vocabulary, fields: [terms, field_terms]}
-      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs, nonfunctional, scope_m1]}
+      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs, nonfunctional, scope_m1, scope_m3]}
       - {doc: intake, fields: [questions]}
       - {doc: adr, fields: [plain, decision, options.text, figures.refs, note]}
       - {doc: design-note, fields: [sections, figures.refs]}
@@ -78,7 +80,7 @@ viewpoints:
       - {doc: constitution, fields: [articles.title, articles.plain, precedence, sources]}
       - {doc: rules, fields: [thresholds, discipline]}
       - {doc: vocabulary, fields: [terms]}
-      - {doc: srs, fields: [goals, scope, requirements.title, requirements.plain, nonfunctional, constraints, acceptance, figures]}
+      - {doc: srs, fields: [goals, scope, scope_m3, requirements.title, requirements.plain, nonfunctional, constraints, acceptance, figures]}
       - {doc: intake, fields: [questions]}
       - {doc: adr, fields: [title, plain, decision, context, note]}
       - {doc: design-note, fields: [sections]}
@@ -89,7 +91,7 @@ viewpoints:
     reads:
       - {doc: constitution, fields: [articles, precedence]}
       - {doc: rules, fields: [thresholds, discipline]}
-      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1, scope_m3]}
       - {doc: adr, fields: [context, decision, options, basis, consequences, retreat, note]}
       - {doc: design-note, fields: [sections]}
       - {doc: intake, fields: [targets, questions]}

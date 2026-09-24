@@ -90,7 +90,7 @@ field_terms:
 identifiers:
   - {group: file と形式, words: [yaml, html, css, js, json, md, claude.md, file, path, repo, svg, toml], why: file 名・形式名・置き場の呼び名}
   - {group: 道具と製品, words: [folio, folio2, bd, scribe2, cargo, deny, tmux, python3, opus, sonnet, xhigh, mcp, playwright, chrome, github, archify, node.js, oss], why: 固有名。可変のモデル名は要件書 CON5 が持つ}
-  - {group: 命令と旗, words: [inject, serve, build, merge, write, check, print, commit, push, retire, graph], why: folio の命令名と git の操作名}
+  - {group: 命令と旗, words: [inject, serve, build, merge, write, check, print, commit, push, retire, graph, init, derive], why: folio の命令名と git の操作名}
   - {group: code の語, words: [crate, class, data-component, token, plugin, skill, script, workflow, agent, lens, spawn, effort, notes, url, ip, id, ai, ok, rules, byte, hook, guard, fixture, anchor, profile, oracle, self-host, spike, tailnet, adr, design-intent, git, ci, m0, m1, m3, v1, v2, v3, v4, subcommand, in-loop, post, schema, sources, srs, showcase, trailer], why: 語彙の見出し語の原語か、code・道具の語。日本語を先に添えて使う}
   - {group: 席と言語, words: [planner, admin, orchestrator, fable, high, bash, rust], why: 席の名前（planner と admin は 2026-09-19 までの 2 席の名・orchestrator は今の 1 席の名）・現行のモデル名と念入りさ（要件書 CON5 が持つ）・言語名}
 
