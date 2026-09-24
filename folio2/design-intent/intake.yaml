@@ -22,7 +22,7 @@ answers:
 targets:
   - {id: constitution, type: 憲法, with: [vocabulary, rules], note: 付録の語彙と rules は憲法の中}
   - {id: srs, type: 要件書, with: []}
-  - {id: adr, type: 判断の記録, with: [], note: 最初は 0 本の棚}
+  - {id: adr, type: 判断の記録, with: [], note: 最初は判断の記録が無いか、骨格が書いた 1 本だけの棚}
   - {id: design-note, type: 設計ノート, with: [], note: 実装の直前に書く＝「まだ無い」の棚に置く}
   - {id: inject, type: 憲法の注入（CLAUDE.md の生成区間）, with: []}
 
@@ -30,7 +30,7 @@ targets:
 questions:
   - {id: q1, ask: 何があっても守る線（憲法）を決めておきますか, recommend: はい, why: 守る線が無いと、道具も AI も「止まる基準」を持てない, yes: [constitution], no: []}
   - {id: q2, ask: 「できた」の線（要件書）を先に書きますか, recommend: はい, why: 何ができたら完成かを先に書かないと、作ったものを測れない, yes: [srs], no: []}
-  - {id: q3, ask: 戻せない判断を 1 本ずつ記録に残しますか, recommend: はい, why: 後から「なぜそうしたか」を辿れる。最初は 0 本の棚を置くだけ, yes: [adr], no: []}
+  - {id: q3, ask: 戻せない判断を 1 本ずつ記録に残しますか, recommend: はい, why: 後から「なぜそうしたか」を辿れる。最初は判断の記録が無いか、骨格の命令（folio init）が書いた 1 本（欄の決まりを採る判断・提案中）だけの棚を置く, yes: [adr], no: []}
   - {id: q4, ask: 作り方（設計ノート）を持ちますか（書くのは実装の直前）, recommend: はい, why: 早く書くと実装と食い違う。棚には「まだ無い」と出す, yes: [design-note], no: []}
   - {id: q5, ask: 憲法を AI の手元（CLAUDE.md）へ写しますか, recommend: はい, why: 写しておくと AI が毎回の作業で憲法を読む, yes: [inject], no: []}
 
