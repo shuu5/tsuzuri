@@ -1,7 +1,7 @@
 # grill 論点 C — 表示面（session が制御する browser の面）の残り（討論の記録・正本は design-intent/ の YAML）
 
 - 出自: docs/handoff/2026-09-24-v3-kickoff.md §1（持ち主の逐語 3 点目）・§2 論点 C・docs/handoff/2026-09-24-v2-leftovers-for-v3.md §2 の 1・比較試作の結果（design-note/bakeoff-surface.yaml §6〜§7）
-- 状態: 討論中（裁定なし）
+- 状態: 討論中。裁定 1（2026-09-24T22:50Z・逐語は台帳へ）= click と入力も最初から用意する（対話的な表示面）。持ち主の指摘 = menu の無い独立した簡素な browser を組み込み remote でも local でも使えること（試作は Firefox で開いた）。§8 で答える
 - 逐語は台帳へ
 
 ## 1. 決まっていること（verified）
@@ -40,3 +40,33 @@
 
 ## 7. 経緯
 - 2026-09-25: s3 席が headless の Chrome の実測を行い §3〜§6 を持ち主へ提示（答え待ち）
+- 2026-09-24T22:50Z: 持ち主の答え = 対話（click・入力）は最初から要る。指摘 = 独立した簡素な browser（menu 無し）を remote / local の両方で。→ §4 の (a) は落ち、(c) を土台に §8 の形を提案
+
+## 8. 対話を最初から持つ形（2026-09-24T22:50Z・s3 席の提案）
+
+### 8.1 見落としの認め
+§4〜§6 は「席の目」だけを問い、持ち主の窓（menu の無い独立した簡素な browser）を browser の tab に任せていた。これは持ち主の逐語（kickoff §1「ユーザー操作用のメニューなどを排除した session 側がコントロールする表示面」）の読み落とし。改める。
+
+### 8.2 形（推奨）
+**描くのは 1 つ。見るのは 2 つ。**
+- **描く**: 表示 server が Chrome を 1 つ常駐で持ち、CDP（Chrome DevTools Protocol・websocket）で制御する。navigate・viewport（本物の DPR と UA の模擬）・reload・click・入力・待ち・screenshot・DOM の読みは全部この 1 つに対して行う。
+- **席の目**: 同じ CDP に screenshot / DOM / console を求める（client 2 = headless の目）。
+- **持ち主の窓**: 表示 server がその Chrome の画面を配信（CDP の screencast・JPEG の連続）し、持ち主の窓は画面を映して click と key を server へ返すだけの簡素な面。窓の中身は canvas 1 枚と状態 1 行で menu は無い。持ち主の操作も席の操作も同じ Chrome に届くので、「席が今何をしているか」を持ち主がそのまま見られる。
+- **窓の殻（remote / local で同じ page）**: local = 器が Chrome の app mode（--app=URL・tab も menu も無い窓）で開く。remote（別の PC・スマホ）= 同じ page を PWA として home 画面 / desktop に入れると menu の無い独立窓になる（tailnet の HTTPS は tailscale serve が持つ・この host で既に /dash に使用中）。Tauri の殻は「後から任意」のまま。
+- **裁定面**: 同じ窓の中の tab（対話面）。これは普通の page（Leptos）。
+- **なぜ iframe を捨てるか**: 開発中の app は別 origin（別 port）なので、iframe の中へ click や入力を送ることも DOM を読むことも browser が禁じる。試作の表示面が「見るだけ」で済んだのはこのため。対話を最初から持つなら描画を server 側の Chrome に寄せるしかない。
+- **スマホの模擬**: 1 段目 = CDP の device emulation（DPR・UA・touch）で本物に近い。2 段目 = 本物の emulator の画面配信は同じ「画面を配信し入力を返す」形に載るので、要るときに足しても面の作りは変わらない。
+
+### 8.3 依存（A-3 の材料・verified）
+- CDP の client = 同期の websocket 1 本。候補 tungstenite 0.30（default-features 無し）= 解決 17 crate（自前を含む）。async の実行系は要らず、core でなく境界（server）の crate に置く（憲法 P-26.3）。自前で websocket を書く案（依存 0・約 200〜300 行）は決定はしごの「1 行で書けるか」を越えるので退ける。
+- Chrome は host の物（Google Chrome 148 が在る・Playwright の chromium も在る）。器が Invocation で撃つ（scribe2 ADR-0062 の形）。
+- 画面配信は SSE（JPEG を base64）で始めて依存を足さず、帯域が足りなければ websocket へ（同じ tungstenite で足りる）。
+
+### 8.4 代償と撤退
+- 画面は画像なので持ち主の窓では文字の選択や拡大の鮮明さが落ちる（裁定面は普通の page なので影響なし）。
+- 常駐 Chrome の停止検知と再起動（P-11）と予算（P-23）を server が持つ。
+- 撤退（measure）: tailnet 越しの配信で 1 秒あたりの frame が閾値（rules 行で凍結・初期値は面の便で測る）を割るなら、持ち主の窓を「iframe で直に描く（見るだけ）」へ切り替える口を残す（契約の navigate / viewport は両方に効く）。
+
+### 8.5 問い（1 問）
+表示面を「server が持つ 1 つの Chrome を CDP で動かし、持ち主の窓はその画面を映して click と key を返すだけの簡素な面（local は app mode の窓・remote は PWA の独立窓）」の形にしてよいか。前提 = 依存を 1 本（同期の websocket）足す（A-3）。この前提を受け入れないなら、自前の websocket（約 300 行）で同じ形にする。
+
