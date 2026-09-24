@@ -1,4 +1,4 @@
-# scribe3 憲法 — 正本（v1.0 草案・s3:design 席が scribe2 と folio2 の憲法を合流させて起草・発効は持ち主の承認）
+# scribe3 憲法 — 正本（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）
 "schema":
   "version": 1
   "top_level":
@@ -155,14 +155,14 @@
 meta:
   id: scribe3-constitution
   version: v1.0
-  status: draft
-  binding: false
+  status: effective
+  binding: true
   baseline: 未記入
   generated: 2026-09-25
   owner: 持ち主
   author: s3:design 席（Claude Fable 5.1・起草）
   counts: {always: 27, ask-first: 4, never: 7}
-  approval: {who: 未記入, date: 未記入, ruling: 未記入, verbatim: 未記入, surface: 規則の表の行 R-8 の対話面}
+  approval: {who: 持ち主, date: 2026-09-25, ruling: s2-07l.214（裁定 id = user 2026-09-24T22:39Z・notes に逐語）, verbatim: これでよい, surface: R-8}
 
 north_star:
   statement: 持ち主は裁定だけを自分の手に残し、設計から実装と運用までを AI の席に任せられる。器（scribe）と設計の道具（folio）と面は 1 つの repo・1 つの憲法・1 つの台帳で動き、守るべき線は全部が機械に読める形で置かれ、破られたら黙らずに止まる。

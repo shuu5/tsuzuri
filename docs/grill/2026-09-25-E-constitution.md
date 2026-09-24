@@ -1,7 +1,7 @@
 # grill 論点 E — 憲法の合流（討論の記録・正本は design-intent/constitution.yaml）
 
 - 出自: docs/handoff/2026-09-24-v3-kickoff.md §2 論点 E・ADR-4 決定 (4)（憲法の最小版 v1.0 が凍結と M3 の判定点の前提）
-- 状態: 裁定あり（2026-09-24T22:40Z「これでよい」）。裁定 id の記帳を scribe2-2a に依頼中。届いたら承認欄 → effective → 凍結
+- 状態: **発効**（裁定 id = user 2026-09-24T22:39Z・記帳先 s2-07l.214・承認欄記入済み）。凍結は folio2 の列の根の表に行が足されるのを待つ（digest 35eb6b36…）
 - 逐語は台帳へ
 
 ## 1. 事実（verified・2026-09-25）
