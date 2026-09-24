@@ -1,0 +1,66 @@
+# 設計ノート bakeoff-surface — 面の比較試作の組み立て（判断の記録 ADR-2・draft）。試作の作業場は repo の外（~/projects/local-projects/scribe3-spikes）。契約の全文は作業場の contract.md（結果が出たら要件書と契約表へ写す）。
+meta:
+  id: bakeoff-surface
+  title: 面の比較試作 — 表示 server と契約を固定し client を 3 つ作り分ける
+  version: v0.1
+  status: draft
+  generated: 2026-09-24
+  profile: design-note
+  note: 判断の記録 ADR-2 の組み立て。結果の数値は §6 に追記する。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      裁定面と表示面の 2 画面を、同じ表示 server と契約に対して 3 つの client の技術で作り分け、決めた物差しで測る。
+      測るのは技術そのものの速さではなく、席が正しい画面に至るまでの往復と、build と依存と toolchain の重さと、契約の型が 1 か所に住むかである。
+      試作は採用しない。結果の数値だけをこの設計ノートに残し、技術の本決定は次の判断の記録が行う。
+  - n: 2
+    type: parts-table
+    title: 部品
+    rows:
+      - {id: server, name: 表示 server, role: Rust の同期 server 1 つ。面の file を配り、台帳の読み書きと表示面への命令の中継を行う, ref: [ADR-2]}
+      - {id: contract, name: 契約, role: server と client の間の URL と JSON の形と event の形を 1 か所に書いた型付きの決まり。3 つの client が同じものを守る, ref: [ADR-2]}
+      - {id: ruling, name: 裁定面, role: 台帳の便の一覧と中身を見せ、裁定の逐語を受け取って裁定 id を発行し記帳する画面, ref: [ADR-2]}
+      - {id: stage, name: 表示面, role: 席の命令（URL・viewport・reload）どおりに iframe を描く menu の無い画面。命令は SSE で受ける, ref: [ADR-2]}
+      - {id: client-vanilla, name: client 1 = 素の JavaScript, role: build 無しの HTML と JavaScript, ref: [ADR-2]}
+      - {id: client-ts, name: client 2 = TypeScript, role: Svelte と Vite で build する SPA。npm の install は podman の node の容器で行う, ref: [ADR-2]}
+      - {id: client-leptos, name: client 3 = Rust の wasm, role: Leptos の csr を trunk で build する。契約の型は server と同じ Rust の struct を共有する, ref: [ADR-2]}
+  - n: 3
+    type: ports-table
+    title: 契約の口（要点・全文は作業場の contract.md）
+    rows:
+      - {id: ledger-list, name: 台帳の一覧, input: 無し, output: 便の一覧（id・題・状態・優先度・更新時刻）の JSON, refuses: なし}
+      - {id: ledger-item, name: 便の中身, input: 便の id, output: 便の本文と notes の JSON, refuses: 無い id}
+      - {id: ruling-post, name: 裁定の受付, input: 便の id と裁定の逐語, output: 発行した裁定 id（UTC の分つき）と記帳時刻, refuses: 逐語が空・無い id}
+      - {id: stage-command, name: 表示面への命令, input: 命令の種類（URL・viewport・reload）と引数, output: 命令の通し番号, refuses: 知らない種類・形の違う引数}
+      - {id: stage-events, name: 表示面の event, input: 無し, output: 命令の SSE の流れ（通し番号つき・接続時に最後の状態を先に流す）, refuses: なし}
+      - {id: stage-ack, name: 表示面の受領, input: 通し番号と成否, output: 無し, refuses: 知らない通し番号}
+      - {id: static, name: 面の配布, input: 面の file の置き場（起動引数）, output: その置き場の file, refuses: 置き場の外の path}
+  - n: 4
+    type: teeth-table
+    title: 物差し（client ごとに同じ表で測る）
+    rows:
+      - {id: rounds, name: 席の往復, red_when: 2 画面が契約どおりに動くまでに席が build か実行を回した回数と、直した誤りの種類を報告に残していない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+      - {id: lines, name: 手書きの量, red_when: 席が書いた file の行数（生成物と vendor を除く）を数えていない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+      - {id: build-time, name: build の時間, red_when: clean の build と 1 行直した後の build の壁時計の時間を測っていない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+      - {id: deps, name: 依存の本数と門, red_when: 解決された package か crate の本数と、監査の道具（cargo deny か npm の audit）が通るかを記録していない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+      - {id: toolchain, name: 新しい host に足す道具, red_when: 素の Rust の toolchain に加えて入れた道具と命令の一覧を記録していない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+      - {id: type-share, name: 契約の型の住処, red_when: 契約の型を server と client のどちらが持ち、二重に書いた箇所があるかを記録していない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+      - {id: tests, name: 歯の置き場, red_when: client の論理を Rust の歯で試せるか（試せない場合は何が要るか）を記録していない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+      - {id: bundle, name: 配る大きさ, red_when: 面の初回の読み込みで browser が取る byte の合計を測っていない, fixture: docs/grill/2026-09-24-D-tech-stack.md, ref: [ADR-2]}
+  - n: 5
+    type: prose
+    title: 置き場と後始末
+    body: |
+      試作は repo の外の作業場に置く。作業場は自前の版管理を持ち、server と契約と 3 つの client を並べる。
+      採用しなかった client は削除でなく退役の移動で残す。試作の code は v3 の workspace へ持ち込まない。
+      持ち主の使用感は tailnet 越しの browser で同じ server に 3 つの client を切り替えて確かめる。
+  - n: 6
+    type: prose
+    title: 結果（追記する）
+    body: |
+      まだ測っていない。client ごとの物差しの値は、試作が終わり次第この節に表で追記する。
+
+sources: []

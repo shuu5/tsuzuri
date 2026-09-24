@@ -1,8 +1,16 @@
 # 語彙 — 正本（folio init の雛形・語は利用者が足す）
-terms: []
+terms:
+  - {id: vessel, term: 器, en: vessel, short: 便を起こし席を立てて記録を残す仕組み（scribe2 の本体）, def: 便（1 回の作業）を起こし、席（AI の作業席）を立て、記録（record）と台帳を持つ仕組み。v3 では folio（設計の正本と床）と合流する。}
+  - {id: surface, term: 面, en: surface, short: 人か席が見て操作する画面の層, def: 器が配る画面の層。v3 では裁定面と表示面の 2 つを 1 つの表示 server と契約 1 本で持つ。}
+  - {id: ruling-surface, term: 裁定面, en: ruling surface, short: 台帳を見せて持ち主の裁定を受け取る画面, def: 台帳の便の一覧と中身を持ち主に見せ、裁定の逐語を受け取って裁定 id を機械が発行し台帳へ記帳する画面。}
+  - {id: stage-surface, term: 表示面, en: stage surface, short: 席が命令で制御する menu の無い browser の画面, def: 席が命令（この URL を出せ・viewport をこう・reload）を送り、持ち主の browser がそのとおりに描く画面。app ごとに表示の仕組みを作らず器が 1 つだけ持つ。}
+  - {id: contract, term: 契約, en: contract, short: server と client の間で守る決まりの型, def: 表示 server と client の間の口（URL・要求と応答の JSON の形・event の形）を 1 か所に書いた型付きの決まり。client を作り分けても契約は 1 本のまま。}
+  - {id: bakeoff, term: 比較試作, en: bake-off, short: 同じ画面を複数の技術で作って測り比べる小さな試し, def: server と契約を固定し、同じ 2 画面を複数の client の技術で作り分けて、決めた物差しで測り比べる試し。結果は設計ノートに数値で残し、試作そのものは採用しない。}
+  - {id: display-server, term: 表示 server, en: display server, short: 面を配り命令を中継する 1 つの server, def: 面の file を配り、台帳の読み書きと表示面への命令の中継を行う 1 つの server。持ち主の browser と席の headless の目の 2 種の client が繋がる。}
 field_terms: []
 identifiers:
   - {group: 骨格の雛形の語, words: [folio, ai, intake, rules, file, id, schema, repo], why: 骨格の雛形に出る識別子（命令名・file 名・code の語）}
+  - {group: 技術の名, words: [Rust, TypeScript, JavaScript, HTML, CSS, JSON, wasm, Leptos, Dioxus, Yew, Svelte, React, Vite, cargo, npm, trunk, node, podman, serde, SSE, iframe, URL, viewport, reload, DPR, UA, browser, headless, menu, server, client, spike, scribe2, scribe3, folio2, toolchain, build, event, record, app, hook, SDK, GUI, CLI, tailnet, localhost, API, Claude, Code, code, compile, compiler, design, framework, harness, host, merge, review, risk, s3, scribe, SPA, v3, workspace, bakeoff-surface, contract, md, csr, install], why: 判断の記録と設計ノートの本文に出る製品名・言語名・code の語}
 # folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
 schema:
   top_level: [terms, field_terms, identifiers, schema]

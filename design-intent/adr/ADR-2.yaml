@@ -1,0 +1,43 @@
+# 判断の記録 ADR-2 — 面の技術は比較試作で決める（提案中・持ち主の口頭の裁定 2026-09-24T13:2xZ「それでよいので試作を進めて」・裁定 id は台帳が立ち次第記帳）
+# 討論の経緯は docs/grill/2026-09-24-D-tech-stack.md。候補の比較と依存の実測（crate 数）は同 file と s3:design 席の会話記録。
+id: ADR-2
+title: 面の技術は今決めず、表示 server と契約を固定して client を 3 つ作り分ける比較試作で測ってから決める
+status: proposed
+date: 2026-09-24
+context: |
+  v3 の面（裁定面と表示面）をどの技術で作るかは、途中で替えると書き直しになるので最初に決めたい。
+  候補は素の JavaScript・TypeScript の SPA・Rust の wasm（Leptos）の 3 つで、実行時の速さでは差が出ず、差が出るのは席が正しい画面に至るまでの往復・build の時間・依存の本数と監査の門・新しい host に足す toolchain の手数・契約の型が 1 か所に住むか、である。
+  scribe と folio は Claude Code の harness であり、code を書くのは主に席で読むのは持ち主なので、compiler が落とす誤りの範囲が広い言語ほど review の負担が減る見込みがある。一方で Leptos は版ごとの API の変更が大きく、席が古い API を書く往復が増える risk がある。どちらも試作でしか測れない。
+  依存の本数は実測で Leptos が最多・Yew が最少で、TypeScript 側も桁は同じ（素の JavaScript だけが桁違いに少ない）。
+decision: |
+  (1) 表示 server は Rust の同期 server 1 つに固定し、server と client の間の契約を 1 本の型付きの決まりとして先に書く。
+  (2) 裁定面と表示面の 2 画面を、同じ server と契約に対して素の JavaScript・TypeScript（Svelte と Vite）・Rust の wasm（Leptos）の 3 つの client で作り分ける。
+  (3) 物差しは設計ノート bakeoff-surface の歯の表に置き、結果を数値で同じ設計ノートに残す。
+  (4) 試作は repo の外の作業場に置き、採用しなかった client は削除でなく退役の移動で残す。試作の code は v3 の workspace へ merge しない。
+  (5) 技術の本決定は結果を見て次の判断の記録で行う。
+options:
+  - id: a
+    name: 比較試作で測ってから決める
+    text: server と契約を固定し、同じ 2 画面を 3 つの client で作り分けて物差しで測る。
+    verdict: adopted
+    reason: 途中で技術を替える費用が client の写し直しだけに収まり、席の往復と build と依存の差が推測でなく実測で残る。
+  - id: b
+    name: 今すぐ素の JavaScript に決める
+    text: 表現力の上限を受け入れて build 無しの HTML と JavaScript で始める。
+    verdict: rejected
+    reason: 要件の複雑さがどこまで要るかが未確定で、後で framework へ移ると書き直しになる。
+  - id: c
+    name: 今すぐ Rust の wasm に決める
+    text: 言語を Rust 1 本に閉じ、型を server と共有する。
+    verdict: rejected
+    reason: 席が Leptos の API を正しく書けるかと build の時間が未測定で、compile 速度の順位に反する risk を測らずに負う。
+basis: [P-1]
+retreat:
+  kind: spike
+  condition: 3 つの client のうち 2 画面を完成できたものが 1 つ以下なら、物差しが比較にならないので試作の枠（画面の数か client の数）を持ち主に問い直す。数えるのは s3:design 席。
+plain: |
+  画面をどの技術で作るかを、今は決めません。まず土台（server と、server と画面の間の約束）を 1 つに固定し、同じ 2 つの画面を 3 つの作り方で作ってみて、決めておいた物差しで測ります。
+  測るのは、AI が正しい画面に辿り着くまでの手数、組み立てにかかる時間、頼る部品の数、新しい機械に入れる道具の数、約束の型が 1 か所で済むか、です。
+  試作は本体の外に置き、使わなかったものは消さずに退けます。結果を見てから、次の記録で本決めします。
+  この記録はまだ提案中で、台帳の裁定 id が付いたときに発効します。
+note: 持ち主の口頭の裁定 2026-09-24T13:2xZ（s3:design 席の対話面）。逐語と裁定 id は scribe2 の台帳へ起票を依頼中（scribe3 の台帳は未設置・論点 F）。
