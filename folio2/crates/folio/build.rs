@@ -4,6 +4,8 @@
 //! 値域の閉じた一覧をもう 1 本 `OUT_DIR` に書く（鍵の一覧は file から・人は鍵も値も書かない）。
 //! 便 52（ADR-11 決定 (4)③）から部品目録の上限（部品ごとの鍵が max_ で始まる欄・どの欄かは書き並べない）と
 //! 図の型の名札（figure_body_classes.type_ids）も同じ source に定数として導出する（面の生成器は手書きの写しを持たない）。
+//! 便 128（ADR-11 決定 (3)(ア)）から憲法の正本の schema の 5 部位（meta・precedence・article・mechanism・statement）の
+//! 欄の一覧（required の列と、required と optional を繋いだ閉じた列）も同じ file に導出する（床が未知の欄を数える一覧）。
 //! 人は型の一覧を書かない。導出できない部品目録・憲法は組み立てを失敗させる（黙って空の一覧にしない）。
 
 use std::collections::HashSet;
@@ -38,7 +40,7 @@ fn main() {
     println!("cargo:rerun-if-changed={}", path.display());
     let source = fs::read_to_string(&path)
         .map_err(|e| format!("読めない（{e}）"))
-        .and_then(|text| constitution_enums(&text));
+        .and_then(|text| Ok(constitution_enums(&text)? + &constitution_fields(&text)?));
     let source = match source {
         Ok(s) => s,
         Err(e) => {
@@ -119,6 +121,89 @@ pub fn constitution_enums(text: &str) -> Result<String, String> {
     ));
     for (key, ty) in &keys {
         out.push_str(&format!("    ({key:?}, &{ty}::NAMES),\n"));
+    }
+    out.push_str("];\n");
+    Ok(out)
+}
+
+/// 憲法の欄の一覧を導出する 5 部位（部位の名だけは導出の側が書く・一覧の中身は file から）。
+const CONSTITUTION_PARTS: [&str; 5] = ["meta", "precedence", "article", "mechanism", "statement"];
+
+/// 憲法の正本の文字列を受け、schema の 5 部位ごとに required の列と、required と optional を file の順に繋いだ閉じた列を
+/// Rust の source に組む（便 128 (b)）。部位ごとの定数 `<部位>_REQUIRED` と `<部位>_FIELDS`（部位の名の大文字）と、
+/// （部位の名・required・閉じた列）の対の列 `FIELDS` を書く。optional が無い部位は空の列。文書が 1 つでない・schema が
+/// 表でない・部位が表でない・required が字の一覧でない・optional が在って字の一覧でない・同じ部位の中に同じ名が 2 度在る、は
+/// Err（理由の文に部位の名を入れる）。
+pub fn constitution_fields(text: &str) -> Result<String, String> {
+    let docs = YamlLoader::load_from_str(text).map_err(|e| format!("読めない（{e}）"))?;
+    let root = match docs.as_slice() {
+        [doc] => doc,
+        _ => return Err("文書が 1 つでない".to_string()),
+    };
+    let schema = root
+        .as_hash()
+        .and_then(|m| m.get(&Yaml::String("schema".to_string())))
+        .and_then(Yaml::as_hash)
+        .ok_or_else(|| "schema が表でない".to_string())?;
+    let list = |part: &str, body: &yaml_rust2::yaml::Hash, key: &str| -> Result<Vec<String>, String> {
+        let Some(value) = body.get(&Yaml::String(key.to_string())) else {
+            return if key == "optional" {
+                Ok(Vec::new())
+            } else {
+                Err(format!("schema.{part}.{key} が字の一覧でない"))
+            };
+        };
+        value
+            .as_vec()
+            .ok_or_else(|| format!("schema.{part}.{key} が字の一覧でない"))?
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("schema.{part}.{key} に字でない値"))
+            })
+            .collect()
+    };
+
+    let mut out = String::new();
+    out.push_str("// 組み立て時に build.rs が憲法の正本（design-intent/constitution.yaml）の schema の 5 部位から導出した。人は書かない。\n");
+    for part in CONSTITUTION_PARTS {
+        let body = schema
+            .get(&Yaml::String(part.to_string()))
+            .and_then(Yaml::as_hash)
+            .ok_or_else(|| format!("schema.{part} が表でない"))?;
+        let required = list(part, body, "required")?;
+        let optional = list(part, body, "optional")?;
+        let mut closed: Vec<&str> = Vec::with_capacity(required.len() + optional.len());
+        for name in required.iter().chain(&optional) {
+            if closed.contains(&name.as_str()) {
+                return Err(format!("schema.{part} に同じ名「{name}」が 2 度在る"));
+            }
+            closed.push(name.as_str());
+        }
+        let konst = part.to_ascii_uppercase();
+        let lits = |names: &[&str]| names.iter().map(|n| format!("{n:?}")).collect::<Vec<_>>().join(", ");
+        let required: Vec<&str> = required.iter().map(String::as_str).collect();
+        out.push_str(&format!(
+            "/// 憲法の {part} の必須の欄（schema.{part}.required・file の順）。\npub const {konst}_REQUIRED: [&str; {}] = [{}];\n",
+            required.len(),
+            lits(&required)
+        ));
+        out.push_str(&format!(
+            "/// 憲法の {part} の欄の閉じた一覧（schema.{part} の required と optional・file の順）。\npub const {konst}_FIELDS: [&str; {}] = [{}];\n",
+            closed.len(),
+            lits(&closed)
+        ));
+    }
+    out.push_str(&format!(
+        "/// 憲法の部位の名と（required の列・閉じた列）の対（部位の順）。\npub const FIELDS: [(&str, &[&str], &[&str]); {}] = [\n",
+        CONSTITUTION_PARTS.len()
+    ));
+    for part in CONSTITUTION_PARTS {
+        let konst = part.to_ascii_uppercase();
+        out.push_str(&format!(
+            "    ({part:?}, &{konst}_REQUIRED, &{konst}_FIELDS),\n"
+        ));
     }
     out.push_str("];\n");
     Ok(out)

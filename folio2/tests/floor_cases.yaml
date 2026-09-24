@@ -3,7 +3,7 @@
 # 敵対レビュー 1 周目（B1〜B3 / M1〜M7 / m1）・2 周目（fc-1〜fc-9 / fp-1〜fp-7 / loophole-1〜13 / content-1・2・5・11 / fixrun-1〜6）・
 # 3 周目（loophole-v3-1〜6・9〜11・15 / fp3-2・4〜7・9・10 / content-limits-1・2・6・13）・4 周目（loophole-v4-1〜5・7 / F-1〜F-3）・5 周目（doc-v5-1〜2 / loophole-v5-1〜9）の再現と、正の経路（欄の決まりの写し・範囲の増減・空の値・貼れる差分・改行入りの値・浅い写し）を含む。
 # 写しは既定で git の 1 commit（床は版管理の無い写しを「まだ分からない」に落とす）。no_git: true の case だけ版管理なし。
-expected_cases: 143
+expected_cases: 146
 
 shared:
   p8_title_old: &p8_title_old 撤退条件を決定と同時に書く
@@ -798,3 +798,9 @@ cases_srs_item:
 # 土台の行 R-3 の注は受入基準 AC2 を書きながら、行 R-3 は AC2 を受ける型付きの欄を持たない。件数は固定しない（同じ形の言及が多い）。
 cases_mentions:
   - {id: mentions-rule-row-counts-the-frozen-base, why: 凍結した土台に行 R-17 を足すと散文の言及が型付きの欄に無いものを数える（便 93 (g)）, mutate: [{file: rules.yaml, path: "thresholds[16]", value: {id: R-17, article: N-2, what: 設計文書の中で番号を持つ行の散文の欄に現れた、その行以外の番号のうち、その行の型付きの欄に無いものの数, value: 0 件, kind: build-check, status: 仮, ruling: *ruling, ruled_at: 2026-09-12, stage: post, population: 正本の中で番号を持つ行の、型付きの欄の外に在る散文の欄}, add: true}, {file: constitution.yaml, path: "articles[id=N-2].relations.rules", value: [R-16, R-17]}], expect_rc: 1, expect_msg: R-3 の散文が AC2 を指すのに}
+
+# 憲法と規則の表の未知の欄と mechanism の形の崩れ（便 128・憲法 N-3.1・P-10.1）。一覧は道具を組み立てた憲法の正本と規則の表の床の定数。
+cases_unknown_fields:
+  - {id: unknown-field-article, why: 条に閉じた一覧に無い欄を足すと落ちる（N-3・29 周目 実態 F-1）, mutate: [{file: constitution.yaml, path: "articles[id=P-8].bogus_a", value: x, add: true}], expect_rc: 1, expect_n: 1, expect_msg: 条 P-8 の未知の欄「bogus_a」}
+  - {id: unknown-field-discipline-stage, why: 開発規律行に閾値行の欄 stage を書くと落ちる（台帳 f2-648.176）, mutate: [{file: rules.yaml, path: "discipline[id=D-1].stage", value: post, add: true}], expect_rc: 1, expect_n: 1, expect_msg: 行 D-1 の未知の欄「stage」}
+  - {id: mechanism-not-a-map, why: 条の mechanism を表でない字（無効化の旗の形）にすると落ちる（N-3.1）, mutate: [{file: constitution.yaml, path: "articles[id=P-8].mechanism", value: 無効}], expect_rc: 1, expect_n: 1, expect_msg: 条 P-8 の mechanism が表でない}

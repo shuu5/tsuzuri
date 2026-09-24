@@ -6,7 +6,7 @@
 //! （便 54・面の名札も床の木の表の鍵もこの型の name から出る）。
 //! 床（`check.rs` の `check_rules`）は最上位の節の閉じた一覧を file の schema.top_level ではなく `RULES_TOP_LEVEL` から読む
 //! （file の側で節を足して通す口を塞ぐ・N-3.1）。実の file の生成区間と命令 `folio schema` の対象に足すのは後続の段
-//! （便 53）＝それまで `FLOOR` と行の欄の定数の読み手は歯だけなので、未使用の警告はこの file だけ黙らせる。
+//! （便 53）。行の欄の定数は床（`check.rs` の `check_rules`）も読む（便 128・未知の欄）。未使用の警告はこの file だけ黙らせる。
 
 #![allow(dead_code)]
 

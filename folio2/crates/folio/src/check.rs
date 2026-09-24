@@ -4,7 +4,8 @@
 //! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）と、入口の正本の形（便 12・entrance）と、
 //! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）と、天井の正本の形（便 37・ceiling）と、
 //! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ）と、置き場の憲法の値域が組み立てた値域の部分集合か（便 122・FR25・
-//! 条の値は置き場の値域で引く・部分集合でない鍵と引けない鍵は「まだ分からない」）。
+//! 条の値は置き場の値域で引く・部分集合でない鍵と引けない鍵は「まだ分からない」）と、憲法の meta・前文・条・規範文・mechanism と
+//! 規則の表の行の未知の欄・mechanism の形の崩れ（便 128・一覧は組み立てた憲法の正本と規則の表の床の定数から）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
@@ -512,10 +513,58 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
     range
 }
 
+/// 表の欄のうち閉じた一覧に無いものを、1 つにつき種別 未知の欄 の違反 1 件にする（便 128・N-3.1・例外の口なし）。
+/// 表でない holder は黙る（形の崩れは `map_holder` が数える）。
+fn closed_fields(file: &str, at: &str, row: &Node, allowed: &[&str], report: &mut Report) {
+    for (key, _) in row.as_map().unwrap_or_default() {
+        if !allowed.contains(&key.as_str()) {
+            report.violation("未知の欄", format!("{file}: {at} の未知の欄「{key}」"));
+        }
+    }
+}
+
+/// 鍵は在るが値が表でない holder（字・一覧・数・null）を種別 schema の違反 1 件にする（便 128・無効化の旗の形を塞ぐ）。
+/// 表なら返し、鍵が無い・表でないは None（表でない holder の中の欄は数えない）。
+fn map_holder<'a>(file: &str, at: &str, holder: Option<&'a Node>, report: &mut Report) -> Option<&'a Node> {
+    let node = holder?;
+    if node.as_map().is_some() {
+        return Some(node);
+    }
+    report.violation("schema", format!("{file}: {at} が表でない"));
+    None
+}
+
+/// mechanism 1 つの形（便 128 (b)）: 表でない・導出した必須の欄（kind・live）の欠け（null も欠け）・閉じた一覧に無い欄。
+fn check_mechanism(file: &str, at: &str, holder: Option<&Node>, report: &mut Report) {
+    let Some(m) = map_holder(file, at, holder, report) else {
+        return;
+    };
+    for key in ce::MECHANISM_REQUIRED {
+        if matches!(m.get(key), None | Some(Node::Null)) {
+            report.violation("schema", format!("{file}: {at} の必須の欄 {key} が無い"));
+        }
+    }
+    closed_fields(file, at, m, &ce::MECHANISM_FIELDS, report);
+}
+
 fn check_constitution(root: &Node, range: &PlaceRange, report: &mut Report) {
     const FILE: &str = "constitution.yaml";
     if let Some(top) = schema_top_level(FILE, root, report) {
         unknown_sections(FILE, root, &top, report);
+    }
+    // 便 128: 欄の閉じた一覧は道具を組み立てた憲法の正本の schema から（置き場の schema 節は読まない）
+    if let Some(meta) = map_holder(FILE, "meta", root.get("meta"), report) {
+        closed_fields(FILE, "meta", meta, &ce::META_FIELDS, report);
+    }
+    const PRECEDENCE: &str = "前文（precedence）";
+    if let Some(prec) = map_holder(FILE, PRECEDENCE, root.get("precedence"), report) {
+        closed_fields(FILE, PRECEDENCE, prec, &ce::PRECEDENCE_FIELDS, report);
+        check_mechanism(
+            FILE,
+            &format!("{PRECEDENCE}の mechanism"),
+            prec.get("mechanism"),
+            report,
+        );
     }
     non_empty(
         FILE,
@@ -545,15 +594,18 @@ fn check_constitution(root: &Node, range: &PlaceRange, report: &mut Report) {
         if article.get("plain").is_none_or(Node::is_blank) {
             report.violation("R-10", format!("{id}: plain が無い"));
         }
+        closed_fields(FILE, &format!("条 {id}"), article, &ce::ARTICLE_FIELDS, report);
+        check_mechanism(
+            FILE,
+            &format!("条 {id} の mechanism"),
+            article.get("mechanism"),
+            report,
+        );
         let statements = rows(FILE, article, "statements", report);
         for st in &statements {
-            non_empty(
-                FILE,
-                &format!("条 {id} の規範文 {}", row_id(st)),
-                st,
-                &["id", "text"],
-                report,
-            );
+            let at = format!("条 {id} の規範文 {}", row_id(st));
+            non_empty(FILE, &at, st, &["id", "text"], report);
+            closed_fields(FILE, &at, st, &ce::STATEMENT_FIELDS, report);
         }
         check_article_enums(&id, article, &statements, range, report);
         check_statement_polarity(&id, &statements, report);
@@ -665,19 +717,18 @@ fn check_statement_polarity(id: &str, statements: &[&Node], report: &mut Report)
 
 /// 規則の表。最上位の節の閉じた一覧は file の schema.top_level ではなく床の定数（`rules::RULES_TOP_LEVEL`）から読む
 /// （便 51・file の側で節を足して通す口を塞ぐ・N-3.1）。file の schema.top_level の有無は見ない（写しの一致は `folio schema` の側）。
+/// 行の欄の閉じた一覧も file の生成区間ではなく床の定数（閾値行・開発規律行の required と optional）から読む（便 128）。
 fn check_rules(root: &Node, report: &mut Report) {
     const FILE: &str = "rules.yaml";
     unknown_sections(FILE, root, &rules::RULES_TOP_LEVEL, report);
+    let thresholds = [&rules::THRESHOLD_REQUIRED[..], &rules::THRESHOLD_OPTIONAL[..]].concat();
+    let discipline = [&rules::DISCIPLINE_REQUIRED[..], &rules::DISCIPLINE_OPTIONAL[..]].concat();
     let mut all = Vec::new();
-    for section in ["thresholds", "discipline"] {
+    for (section, allowed) in [("thresholds", &thresholds), ("discipline", &discipline)] {
         for row in rows(FILE, root, section, report) {
-            non_empty(
-                FILE,
-                &format!("行 {}", row_id(row)),
-                row,
-                &["id", "article", "what"],
-                report,
-            );
+            let at = format!("行 {}", row_id(row));
+            non_empty(FILE, &at, row, &["id", "article", "what"], report);
+            closed_fields(FILE, &at, row, allowed, report);
             check_rule_refs(row, report);
             all.push(row);
         }

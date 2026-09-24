@@ -2,6 +2,7 @@
 //! `design-intent/constitution.yaml` の schema.enums に在る鍵を、組み立て時に build.rs が閉じた一覧（型・ALL・NAMES・
 //! name・from_name）へ導出し `OUT_DIR` に書いたものを取り込む。人は鍵も値も書かない（決定 (3)(ア)・P-6.4）。
 //! 本便で使うのは RetreatKind（判断の記録の床）と Strength（注入）の 2 つ。残りは面の生成器の表（便 50）が使う。
+//! 便 128 から同じ file に、憲法の schema の 5 部位の欄の一覧（`<部位>_REQUIRED`・`<部位>_FIELDS`・`FIELDS`）も在る（床の未知の欄）。
 
 #![allow(dead_code)]
 
@@ -55,6 +56,37 @@ mod tests {
                 .collect();
             assert_eq!(&file_values[..], *names, "schema.enums.{key} の値の列が導出した NAMES と違う");
         }
+    }
+
+    /// 便 128 (c): 導出した 5 部位の required の列と閉じた列が、正本の schema の同じ部位の required の列と、required と
+    /// optional を file の順に繋いだ列に、長さ・字・並びまで一致する（正本の側は file から読む）。
+    #[test]
+    fn constitution_fields_match_the_file_in_length_text_and_order() {
+        let root = constitution();
+        let schema = root.get("schema").expect("schema が無い");
+        let names = |part: &str, key: &str| -> Vec<String> {
+            match schema.get(part).and_then(|p| p.get(key)) {
+                None => Vec::new(),
+                Some(list) => list
+                    .as_seq()
+                    .unwrap_or_else(|| panic!("schema.{part}.{key} が一覧でない"))
+                    .iter()
+                    .map(|v| v.as_str().expect("字でない値").to_string())
+                    .collect(),
+            }
+        };
+        let parts: Vec<&str> = FIELDS.iter().map(|(p, _, _)| *p).collect();
+        assert_eq!(parts, ["meta", "precedence", "article", "mechanism", "statement"]);
+        for (part, required, closed) in FIELDS {
+            let file_required = names(part, "required");
+            assert!(!file_required.is_empty(), "schema.{part}.required が空");
+            assert_eq!(required, &file_required[..], "schema.{part}.required と導出が違う");
+            let mut file_closed = file_required.clone();
+            file_closed.extend(names(part, "optional"));
+            assert_eq!(closed, &file_closed[..], "schema.{part} の閉じた列と導出が違う");
+        }
+        assert_eq!(MECHANISM_REQUIRED[..], FIELDS[3].1[..]);
+        assert_eq!(STATEMENT_FIELDS[..], FIELDS[4].2[..]);
     }
 
     /// 導出の側から独立の凍結の針（P-10.1）。

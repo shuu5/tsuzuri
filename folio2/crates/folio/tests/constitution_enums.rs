@@ -2,6 +2,7 @@
 //! 純粋な関数 `constitution_enums`（憲法の正本の文字列 → 導出した Rust の source か理由の文）を直に呼ぶ。
 //! 実の正本で Ok・鍵の数だけ型が出る（数は file から数える）・変異 5 つがそれぞれ Err で文に鍵の名が入る。
 //! 便 50（delivery-50.md §1 (d)(e) 4）: 定数 ENUMS（鍵の名と NAMES の対の列）が鍵の数だけ対を持つ。
+//! 便 128（delivery-128.md §1 (c) 歯 6）: 純粋な関数 `constitution_fields`（憲法の 5 部位の欄の一覧）の Ok と Err の 4 つの形。
 
 #[allow(dead_code)]
 #[path = "../build.rs"]
@@ -130,6 +131,40 @@ fn constitution_enums_rejects_a_number_as_a_value() {
     );
     let err = build::constitution_enums(&text).expect_err("数の値なのに Ok");
     assert!(err.contains("retreat_kind"), "{err}");
+}
+
+/// 便 128 §1 (c) 歯 6: 憲法の 5 部位の欄の一覧の導出（constitution_fields）は実の正本で Ok で 5 部位の名が全部出て、
+/// 部位が表でない・required が字の一覧でない・optional に字でない値・同じ名の 2 度、はそれぞれ Err で理由の文に部位の名が入る。
+#[test]
+fn f128_constitution_fields_refuses_broken_parts() {
+    let text = constitution();
+    let source = build::constitution_fields(&text).expect("実の憲法から導出できない");
+    for part in ["meta", "precedence", "article", "mechanism", "statement"] {
+        assert!(source.contains(&format!("    ({part:?}, &")), "部位 {part} が無い: {source}");
+    }
+    let cases = [
+        (
+            "meta",
+            "\n  meta:\n    required: [",
+            "\n  meta: x\n  meta_moved:\n    required: [",
+        ),
+        (
+            "statement",
+            "required: [id, pattern, strength, text]",
+            "required: x",
+        ),
+        (
+            "article",
+            "optional: [relations, retreat,",
+            "optional: [1, relations, retreat,",
+        ),
+        ("mechanism", "required: [kind, live]", "required: [kind, live, kind]"),
+    ];
+    for (part, from, to) in cases {
+        let err = build::constitution_fields(&mutate(&text, from, to))
+            .expect_err(&format!("{part} の変異なのに Ok"));
+        assert!(err.contains(part), "{part}: {err}");
+    }
 }
 
 #[test]
