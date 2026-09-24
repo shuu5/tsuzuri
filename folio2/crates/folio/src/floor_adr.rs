@@ -47,6 +47,10 @@ pub(crate) const RETREAT_KIND: &[&str] = &RetreatKind::NAMES;
 pub(crate) const APPROVER: &[&str] = &["持ち主", "planner 席", "orchestrator 席"];
 pub(crate) const SURFACE: &[&str] = &["R-8"];
 pub(crate) const EFFECTIVE_STATUS: &[&str] = &["accepted", "retired"];
+/// 凍結 anchor の写しの条の 5 欄と規範文の 4 欄（anchor.projection_article_fields / statement_fields）。天井の周の引き金の
+/// 憲法の一覧も同じ配列を指す（便 126・ADR-18 決定 (1) ①・`ceiling.rs` の trigger）。
+pub(crate) const ANCHOR_ARTICLE_FIELDS: &[&str] = &["id", "title", "tier", "binds", "statements"];
+pub(crate) const ANCHOR_STATEMENT_FIELDS: &[&str] = &["id", "text", "pattern", "strength"];
 pub(crate) const OPTION: Keys = Keys {
     required: &["id", "name", "text", "verdict", "reason"],
     optional: &[],
@@ -391,14 +395,8 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                     "digest",
                 ]),
             ),
-            (
-                "projection_article_fields",
-                Floor::Strs(&["id", "title", "tier", "binds", "statements"]),
-            ),
-            (
-                "statement_fields",
-                Floor::Strs(&["id", "text", "pattern", "strength"]),
-            ),
+            ("projection_article_fields", Floor::Strs(ANCHOR_ARTICLE_FIELDS)),
+            ("statement_fields", Floor::Strs(ANCHOR_STATEMENT_FIELDS)),
             (
                 "scope_minimum",
                 Floor::Strs(&["schema", "precedence", "articles"]),

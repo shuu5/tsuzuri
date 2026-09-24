@@ -552,7 +552,7 @@ fn main() -> ExitCode {
             write_set,
         } => {
             if gate {
-                let outcome = gate::run(&dir, &write_set);
+                let outcome = gate::run(&dir, &write_set, graph::stamp_table);
                 println!("{}", outcome.stdout);
                 return ExitCode::from(outcome.verdict.exit_code() as u8);
             }

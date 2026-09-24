@@ -22,6 +22,7 @@ use crate::ceiling_src::{
 };
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
 use crate::floor::{Floor, floor_diff, strip_notes};
+use crate::floor_adr::{ANCHOR_ARTICLE_FIELDS, ANCHOR_STATEMENT_FIELDS, EFFECTIVE_STATUS};
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
@@ -65,6 +66,70 @@ pub const RESULT_REQUIRED: [&str; 6] = ["id", "refute", "model", "effort", "at",
 
 /// 反証の規則の文（逐語・反証の束の question.yaml へ写す）。
 pub const REFUTE_RULE: &str = "所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。";
+
+// ── 周の引き金の閉じた一覧（規範の欄・便 126・docs/design/delivery-126.md §1 (b)・ADR-18 決定 (1)）──
+// 文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと。引き金の要約値（`gate.rs` の
+// `trigger_digest`）はこの定数だけを読み、床の木の trigger の葉も同じ配列を指す。
+
+/// 行の一覧の節（節の名・各行から取る欄）。
+pub(crate) type TriggerRows = [(&'static str, &'static [&'static str])];
+
+/// 憲法: 凍結 anchor の写しと同じ条の欄と規範文の欄（判断の記録の床の定数の配列そのもの）。
+pub(crate) const TRIGGER_CONSTITUTION_ARTICLES: &[&str] = ANCHOR_ARTICLE_FIELDS;
+pub(crate) const TRIGGER_CONSTITUTION_STATEMENTS: &[&str] = ANCHOR_STATEMENT_FIELDS;
+/// 判断の記録: status の値がこのどれかの記録（発効の値域）ごとに fields。
+pub(crate) const TRIGGER_ADR_STATUS: &[&str] = EFFECTIVE_STATUS;
+pub(crate) const TRIGGER_ADR_FIELDS: [&str; 8] = [
+    "id",
+    "status",
+    "decision",
+    "retreat",
+    "amends",
+    "revises",
+    "supersedes",
+    "superseded_by",
+];
+/// 要件書: 要件と非機能要件の行の欄・受入基準の行の欄・制約の行の欄・丸ごと取る節。
+const TRIGGER_SRS_REQUIREMENT: [&str; 7] = [
+    "id",
+    "shall",
+    "strength",
+    "pattern",
+    "when",
+    "verify",
+    "milestone",
+];
+const TRIGGER_SRS_ACCEPTANCE: [&str; 4] = ["id", "title", "verifies", "red_test.sentence"];
+const TRIGGER_SRS_CONSTRAINT: [&str; 2] = ["id", "text"];
+pub(crate) const TRIGGER_SRS_ROWS: [(&str, &[&str]); 4] = [
+    ("requirements", &TRIGGER_SRS_REQUIREMENT),
+    ("nonfunctional", &TRIGGER_SRS_REQUIREMENT),
+    ("acceptance", &TRIGGER_SRS_ACCEPTANCE),
+    ("constraints", &TRIGGER_SRS_CONSTRAINT),
+];
+pub(crate) const TRIGGER_SRS_WHOLE: [&str; 4] = ["goals", "scope", "scope_m1", "scope_m3"];
+/// 規則の表: sections の各行の fields（注・裁定・来歴〔note・ruling・ruled_at・refs・basis〕を除く中身の欄）。
+pub(crate) const TRIGGER_RULES_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
+pub(crate) const TRIGGER_RULES_FIELDS: [&str; 10] = [
+    "id",
+    "article",
+    "what",
+    "value",
+    "kind",
+    "status",
+    "stage",
+    "population",
+    "same_failure",
+    "projection",
+];
+/// 天井の正本: 重さの節を丸ごと・文書の行の id と file・観点の行の読み手と問いと読む欄（観点の名は数えない）。
+pub(crate) const TRIGGER_CEILING_WHOLE: [&str; 1] = ["weights"];
+const TRIGGER_CEILING_DOCUMENT: [&str; 2] = ["id", "file"];
+const TRIGGER_CEILING_VIEWPOINT: [&str; 4] = ["id", "reader", "question", "reads"];
+pub(crate) const TRIGGER_CEILING_ROWS: [(&str, &[&str]); 2] = [
+    ("documents", &TRIGGER_CEILING_DOCUMENT),
+    ("viewpoints", &TRIGGER_CEILING_VIEWPOINT),
+];
 
 /// 床の木（天井の正本の最上位の節 `schema` の正本・便 47 §1 (a)）。欄と順と字面は凍結 anchor
 /// tests/fixtures/schema/ceiling-region.txt のとおり（`derive` の結果が byte 一致・単体の歯が数える）。葉は上の定数と同じ配列。
@@ -157,6 +222,56 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         "refute_note",
         Floor::Val(
             "反証の束の中身（名の byte 順）・反証役が書く結果の file の欄（全部空でない文）・反証役へ渡す規則の文（逐語）",
+        ),
+    ),
+    (
+        "trigger",
+        Floor::Map(&[
+            (
+                "constitution",
+                Floor::Map(&[
+                    ("articles", Floor::Strs(TRIGGER_CONSTITUTION_ARTICLES)),
+                    ("statements", Floor::Strs(TRIGGER_CONSTITUTION_STATEMENTS)),
+                ]),
+            ),
+            (
+                "adr",
+                Floor::Map(&[
+                    ("status", Floor::Strs(TRIGGER_ADR_STATUS)),
+                    ("fields", Floor::Strs(&TRIGGER_ADR_FIELDS)),
+                ]),
+            ),
+            (
+                "srs",
+                Floor::Map(&[
+                    (TRIGGER_SRS_ROWS[0].0, Floor::Strs(TRIGGER_SRS_ROWS[0].1)),
+                    (TRIGGER_SRS_ROWS[1].0, Floor::Strs(TRIGGER_SRS_ROWS[1].1)),
+                    (TRIGGER_SRS_ROWS[2].0, Floor::Strs(TRIGGER_SRS_ROWS[2].1)),
+                    (TRIGGER_SRS_ROWS[3].0, Floor::Strs(TRIGGER_SRS_ROWS[3].1)),
+                    ("whole", Floor::Strs(&TRIGGER_SRS_WHOLE)),
+                ]),
+            ),
+            (
+                "rules",
+                Floor::Map(&[
+                    ("sections", Floor::Strs(&TRIGGER_RULES_SECTIONS)),
+                    ("fields", Floor::Strs(&TRIGGER_RULES_FIELDS)),
+                ]),
+            ),
+            (
+                "ceiling",
+                Floor::Map(&[
+                    ("whole", Floor::Strs(&TRIGGER_CEILING_WHOLE)),
+                    (TRIGGER_CEILING_ROWS[0].0, Floor::Strs(TRIGGER_CEILING_ROWS[0].1)),
+                    (TRIGGER_CEILING_ROWS[1].0, Floor::Strs(TRIGGER_CEILING_ROWS[1].1)),
+                ]),
+            ),
+        ]),
+    ),
+    (
+        "trigger_note",
+        Floor::Val(
+            "周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ条の欄と規範文の欄。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)",
         ),
     ),
 ]);
@@ -474,11 +589,54 @@ mod tests {
             panic!("FLOOR は表");
         };
         let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
-        assert_eq!(notes, 8);
+        assert_eq!(notes, 9);
         let mut out = Vec::new();
         floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
         assert_eq!(out.len(), fields.len() - notes, "{out:?}");
         assert!(out.iter().all(|p| p.ends_with("（欠落）")), "{out:?}");
+    }
+
+    /// 引き金の一覧の名はどれも実在の文書と節を指し、範囲の節・凍結 anchor の写しの配列・発効の値域を取りこぼさない
+    /// （便 126 §1 (e) の 9）。各行から取る欄の名の実在は凍結 anchor との byte 一致が縛る。
+    #[test]
+    fn f126_trigger_lists_name_real_documents_and_sections() {
+        let Floor::Map(fields) = &FLOOR else {
+            panic!("FLOOR は表");
+        };
+        let Some((_, Floor::Map(docs))) = fields.iter().find(|(k, _)| *k == "trigger") else {
+            panic!("FLOOR に trigger の表が無い");
+        };
+        for (doc, _) in docs.iter() {
+            assert!(DOCUMENT_IDS.contains(doc), "{doc}: 読む文書の id に無い");
+        }
+        let srs: Vec<&str> = TRIGGER_SRS_ROWS
+            .iter()
+            .map(|(s, _)| *s)
+            .chain(TRIGGER_SRS_WHOLE)
+            .collect();
+        for section in &srs {
+            assert!(crate::check::SRS_TOP_LEVEL.contains(section), "{section}: 要件書の節に無い");
+        }
+        for section in crate::check::SRS_TOP_LEVEL {
+            if section == "goals" || section == "scope" || section.starts_with("scope_") {
+                assert!(TRIGGER_SRS_WHOLE.contains(&section), "{section}: 目的と範囲の節を取りこぼす");
+            }
+        }
+        for section in TRIGGER_RULES_SECTIONS {
+            assert!(crate::rules::RULES_TOP_LEVEL.contains(&section), "{section}: 規則の表の節に無い");
+        }
+        for section in TRIGGER_CEILING_ROWS.iter().map(|(s, _)| *s).chain(TRIGGER_CEILING_WHOLE) {
+            assert!(CEILING_TOP_LEVEL.contains(&section), "{section}: 天井の正本の節に無い");
+        }
+        assert_eq!(TRIGGER_ADR_STATUS, crate::adr::floor_strs(&["effective_status"]));
+        assert_eq!(
+            TRIGGER_CONSTITUTION_ARTICLES,
+            crate::adr::floor_strs(&["anchor", "projection_article_fields"])
+        );
+        assert_eq!(
+            TRIGGER_CONSTITUTION_STATEMENTS,
+            crate::adr::floor_strs(&["anchor", "statement_fields"])
+        );
     }
 
     #[test]

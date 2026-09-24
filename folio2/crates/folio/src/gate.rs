@@ -6,16 +6,29 @@
 //! 正本の要約値は観点の reads が指す文書の file（file 形はその file・dir 形は直下の .yaml）の全文を `<dir>` からの
 //! 相対 path の byte 順に連結した sha256。印（`stamp.rs`）も欄 sources をこの関数で測る（便 104・2 面に実装しない）。
 //! 何も書かない。標準出力は 1 行「folio ceiling: <3 値>（<理由>）」。
+//!
+//! 便 126（docs/design/delivery-126.md §1 (b)(c)・ADR-18 決定 (1)(4)(5)）: 古さは印の欄 trigger（引き金の要約値）で判定する。
+//! 引き金の要約値は天井の床の定数の規範の欄の一覧（`ceiling.rs` の TRIGGER_*）だけを写した木の正規化の sha256 で、印も
+//! この `trigger_digest` で測る。合格で引き金が同じなら通し、正本の要約値だけが違えば印の nodes と rest を今の表と突き合わせて
+//! 変わった節点の数を理由の行に添える（今の表は命令の入口が渡す＝層 3 の `graph.rs` を名指さない）。
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
+use crate::anchor;
+use crate::ceiling::{
+    TRIGGER_ADR_FIELDS, TRIGGER_ADR_STATUS, TRIGGER_CEILING_ROWS, TRIGGER_CEILING_WHOLE,
+    TRIGGER_RULES_FIELDS, TRIGGER_RULES_SECTIONS, TRIGGER_SRS_ROWS, TRIGGER_SRS_WHOLE, TriggerRows,
+};
 use crate::ceiling_src::{self, STAMP_FILE};
-use crate::cursor::R;
+use crate::cursor::{self, R};
 use crate::sha256;
 use crate::verdict::Verdict;
-use crate::yaml::{self, Node};
+use crate::yaml::{self, Node, Value};
+
+/// 置き場と天井の正本から（残差の要約値・節点ごとの要約値の表）を組む関数（命令の入口が `graph::stamp_table` を渡す）。
+pub(crate) type NodeTable = fn(&Path, &ceiling_src::Ceiling) -> R<(String, Vec<(String, String)>)>;
 
 /// 1 回の実行の結果。`stdout` は 1 行。
 pub struct Outcome {
@@ -40,7 +53,8 @@ impl Outcome {
 // ── 命令の口 ──
 
 /// `write_set` の各 path は repo の根からの相対（接頭辞 + / - / ~ は剥がす）。`dir` は同じ根からの `--dir`。
-pub fn run(dir: &Path, write_set: &[String]) -> Outcome {
+/// `table` は今の節点の表を組む関数（§1 (c) の 3）。判定の順は §1 (c) の 2 のとおりで、最初に当たったもので決まる。
+pub(crate) fn run(dir: &Path, write_set: &[String], table: NodeTable) -> Outcome {
     let root = dir_parts(dir);
     if !write_set.iter().any(|p| is_design_source(&root, p)) {
         return Outcome::new(Verdict::Pass, "設計文書の正本を書き換えない便");
@@ -54,10 +68,15 @@ pub fn run(dir: &Path, write_set: &[String]) -> Outcome {
         Ok(c) => c,
         Err(e) => return Outcome::new(Verdict::Unknown, e),
     };
-    match sources_digest(dir, &ceiling) {
-        Ok(now) if now == stamp.sources => {}
-        Ok(_) => return Outcome::new(Verdict::Unknown, "印が古い"),
-        Err(e) => return Outcome::new(Verdict::Unknown, e),
+    let Some(trigger) = &stamp.trigger else {
+        return Outcome::new(Verdict::Unknown, "印が古い（引き金の要約値の欄が無い）");
+    };
+    match trigger_digest(dir) {
+        Ok(now) if now == *trigger => {}
+        Ok(_) => return Outcome::new(Verdict::Unknown, "印が古い（引き金の要約値が違う）"),
+        Err(e) => {
+            return Outcome::new(Verdict::Unknown, format!("引き金の要約値が測れない: {e}"));
+        }
     }
     let mut unknown = Vec::new();
     let mut failed = Vec::new();
@@ -77,7 +96,40 @@ pub fn run(dir: &Path, write_set: &[String]) -> Outcome {
     if !failed.is_empty() {
         return Outcome::new(Verdict::Fail, format!("不合格の観点: {}", failed.join("・")));
     }
-    Outcome::new(Verdict::Pass, "印が 4 観点とも合格・正本の要約値が同じ")
+    match sources_digest(dir, &ceiling) {
+        Ok(now) if now == stamp.sources => {
+            return Outcome::new(
+                Verdict::Pass,
+                "印が 4 観点とも合格・引き金の要約値が同じ・正本の要約値が同じ",
+            );
+        }
+        Ok(_) => {}
+        Err(e) => return Outcome::new(Verdict::Unknown, e),
+    }
+    // 正本の要約値だけが違う: 印の後に変わった節点を数えて添える（数えられなければ通さない・P-4.1 / P-4.2）
+    let Some((rest, nodes)) = &stamp.nodes else {
+        return Outcome::new(Verdict::Unknown, "印の節点の表が読めない");
+    };
+    let (now_rest, now_nodes) = match table(dir, &ceiling) {
+        Ok(t) => t,
+        Err(e) => {
+            return Outcome::new(
+                Verdict::Unknown,
+                format!("印の後に変わった節点が数えられない: {e}"),
+            );
+        }
+    };
+    let then: BTreeMap<&str, &str> = nodes.iter().map(|(i, d)| (i.as_str(), d.as_str())).collect();
+    let now: BTreeMap<&str, &str> = now_nodes.iter().map(|(i, d)| (i.as_str(), d.as_str())).collect();
+    let changed = then.iter().filter(|(id, d)| now.get(*id) != Some(*d)).count()
+        + now.keys().filter(|id| !then.contains_key(*id)).count();
+    let outside = if *rest == now_rest { "" } else { "と節点の外の字" };
+    Outcome::new(
+        Verdict::Pass,
+        format!(
+            "印が 4 観点とも合格・引き金の要約値が同じ・印の後に引き金の外の変更が在る（節点 {changed} 個{outside}・次の引き金の周が読む）"
+        ),
+    )
 }
 
 // ── 設計文書の判定（§1 (b)）──
@@ -118,10 +170,13 @@ fn is_design_source(root: &[String], path: &str) -> bool {
 
 // ── 印の判定（§1 (c)）──
 
-/// 印から読む欄（sources と観点ごとの 3 値）。
+/// 印から読む欄（sources・trigger・観点ごとの 3 値・rest と nodes）。trigger は欄が無ければ None、rest と nodes は
+/// どちらかが無いか読めなければ None（門は通す前に読めないと言う）。
 struct Stamp {
     sources: String,
+    trigger: Option<String>,
     viewpoints: Vec<(String, String)>,
+    nodes: Option<(String, Vec<(String, String)>)>,
 }
 
 /// 印を読む。無ければ None。
@@ -155,10 +210,155 @@ fn read_stamp(dir: &Path) -> R<Option<Stamp>> {
                 .collect::<Option<Vec<_>>>()
         })
         .ok_or_else(|| "viewpoints が読めない".to_string())?;
+    let trigger = root.get("trigger").and_then(Node::as_str).map(str::to_string);
+    let rows = match root.get("nodes") {
+        Some(Node::Null) => Some(Vec::new()),
+        Some(Node::Seq(rows)) => rows
+            .iter()
+            .map(|row| {
+                let id = row.get("id").and_then(Node::as_str)?;
+                let digest = row.get("digest").and_then(Node::as_str)?;
+                Some((id.to_string(), digest.to_string()))
+            })
+            .collect::<Option<Vec<_>>>(),
+        _ => None,
+    };
+    let rest = root.get("rest").and_then(Node::as_str).map(str::to_string);
     Ok(Some(Stamp {
         sources,
+        trigger,
         viewpoints,
+        nodes: rest.zip(rows),
     }))
+}
+
+// ── 引き金の要約値（§1 (b) の 3）──
+
+/// 今の引き金の要約値（「sha256 <16 進>」）。文書を型付きで読み（`cursor::load`）、天井の床の定数の規範の欄の一覧だけを
+/// 写した木（最上位は文書の id を鍵にした表）を正規化（`yaml::canonical`）して測る。印（`stamp.rs`）もこの関数で測る
+/// （P-15.2）。文書の file は天井の正本の documents で解く。欄や節が無ければ null、行の一覧の節が一覧でない・行が表で
+/// ないなど、どの手順で失敗しても Err（理由 1 つ）。
+pub(crate) fn trigger_digest(dir: &Path) -> R<String> {
+    let documents = documents(dir)?;
+    let file = |id: &str| {
+        documents
+            .iter()
+            .find(|(d, _)| d == id)
+            .map(|(_, f)| f.clone())
+            .ok_or_else(|| format!("{id}: 文書の一覧に無い"))
+    };
+    let key = |k: &str| Value::Str(k.to_string());
+    let mut tree: Vec<(Value, Value)> = Vec::new();
+
+    // 憲法: 凍結 anchor の写しの式（範囲 articles だけ）
+    let name = file("constitution")?;
+    let constitution = cursor::load(dir, &name)?;
+    let projected = anchor::project(&constitution, &["articles".to_string()])
+        .map_err(|e| format!("{name}: {e}"))?;
+    tree.push((key("constitution"), projected));
+
+    // 判断の記録: 発効した記録（状態が値域のどれかで承認欄が表）ごとに fields
+    tree.push((key("adr"), effective_adrs(dir, &file("adr")?)?));
+
+    // 要件書: 行の一覧の節と丸ごとの節
+    let name = file("srs")?;
+    let srs = cursor::load(dir, &name)?;
+    tree.push((key("srs"), sections(&name, &srs, &TRIGGER_SRS_ROWS, &TRIGGER_SRS_WHOLE)?));
+
+    // 規則の表: sections の各行の fields
+    let name = file("rules")?;
+    let rules = cursor::load(dir, &name)?;
+    let fields: &'static [&'static str] = &TRIGGER_RULES_FIELDS;
+    let rows: Vec<(&'static str, &'static [&'static str])> =
+        TRIGGER_RULES_SECTIONS.iter().map(|s| (*s, fields)).collect();
+    tree.push((key("rules"), sections(&name, &rules, &rows, &[])?));
+
+    // 天井の正本: 丸ごとの節と行の一覧の節
+    let name = file("ceiling")?;
+    let ceiling = cursor::load(dir, &name)?;
+    tree.push((
+        key("ceiling"),
+        sections(&name, &ceiling, &TRIGGER_CEILING_ROWS, &TRIGGER_CEILING_WHOLE)?,
+    ));
+
+    let text = yaml::canonical(&Value::Map(tree))?;
+    Ok(format!("sha256 {}", sha256::hex(text.as_bytes())))
+}
+
+/// 行の一覧の節（節の名を鍵に、各行を欄の表にした一覧）と丸ごとの節（節の名を鍵に、木を丸ごと）の表。
+fn sections(name: &str, doc: &Value, rows: &TriggerRows, whole: &[&str]) -> R<Value> {
+    let mut out: Vec<(Value, Value)> = Vec::new();
+    for (section, fields) in rows {
+        let value = match doc.get(section) {
+            None | Some(Value::Null) => Value::Null,
+            Some(Value::Seq(items)) => Value::Seq(
+                items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, row)| {
+                        row.as_map()
+                            .map(|_| pick(row, fields))
+                            .ok_or_else(|| format!("{name}: {section}[{i}] が表でない"))
+                    })
+                    .collect::<R<Vec<_>>>()?,
+            ),
+            Some(_) => return Err(format!("{name}: {section} が一覧でない")),
+        };
+        out.push((Value::Str(section.to_string()), value));
+    }
+    for section in whole {
+        let value = doc.get(section).cloned().unwrap_or(Value::Null);
+        out.push((Value::Str(section.to_string()), value));
+    }
+    Ok(Value::Map(out))
+}
+
+/// 行 1 つを欄の表に写す（点を含む欄は入れ子を辿った値・鍵は点を含む字のまま・無ければ null）。
+fn pick(row: &Value, fields: &[&str]) -> Value {
+    Value::Map(
+        fields
+            .iter()
+            .map(|f| {
+                let value = f
+                    .split('.')
+                    .try_fold(row, |node, k| node.get(k))
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                (Value::Str(f.to_string()), value)
+            })
+            .collect(),
+    )
+}
+
+/// 判断の記録の dir の直下の .yaml（欄の決まり schema.yaml を除く・名の byte 順）のうち発効したもの（`anchor.rs` の
+/// `is_effective` と同じ判定）を、fields の欄の表にして並べた一覧。
+fn effective_adrs(dir: &Path, file: &str) -> R<Value> {
+    if !file.ends_with('/') {
+        return Err(format!("{file}: 判断の記録の置き場が dir 形でない"));
+    }
+    let path = dir.join(file);
+    if path.is_symlink() {
+        return Err(format!("{file}: symlink は認めない"));
+    }
+    let mut out = Vec::new();
+    for (name, is_file) in ceiling_src::read_dir_names(&path)? {
+        if !is_file || !name.ends_with(".yaml") || name == "schema.yaml" {
+            continue;
+        }
+        if path.join(&name).is_symlink() {
+            return Err(format!("{file}{name}: symlink は認めない"));
+        }
+        let record = cursor::load(dir, &format!("{file}{name}"))?;
+        let effective = record
+            .get("status")
+            .and_then(Value::as_str)
+            .is_some_and(|s| TRIGGER_ADR_STATUS.contains(&s))
+            && matches!(record.get("approval"), Some(Value::Map(_)));
+        if effective {
+            out.push(pick(&record, &TRIGGER_ADR_FIELDS));
+        }
+    }
+    Ok(Value::Seq(out))
 }
 
 /// 今の正本の要約値（「sha256 <16 進>」）。観点の reads が指す文書だけを全文で集める（印の sources も同じ関数・便 104）。

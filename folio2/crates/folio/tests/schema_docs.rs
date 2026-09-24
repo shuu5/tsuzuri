@@ -56,6 +56,7 @@
 //! 便 123（docs/design/delivery-123.md §1 (c)(f)）: 5 file の生成区間の注 top_level_note から条 id の名指し「・N-3」を落とした
 //! （行数は不変・byte 数は各 6 減る）。F77_REGIONS の 3 行・RULES_REGION_*・F95_GRAPH_* を、独立に直した anchor を sha256sum で
 //! 測り直した byte 数と要約値に。f85_ の歯の本文に字で書いていた行数・byte 数・要約値は RULES_REGION_* を引く形に寄せた。
+//! 便 126（delivery-126.md §1 (f)）: 天井の正本の生成区間に trigger・trigger_note の 18 行（CEILING_REGION_* を測り直した値に）。
 
 use std::fs;
 use std::io::Write;
@@ -65,10 +66,10 @@ use std::process::{Command, Output, Stdio};
 use yaml_rust2::{Yaml, YamlLoader};
 
 /// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
-const CEILING_REGION_LINES: usize = 27;
-const CEILING_REGION_BYTES: usize = 3176;
+const CEILING_REGION_LINES: usize = 45;
+const CEILING_REGION_BYTES: usize = 4537;
 const CEILING_REGION_SHA256: &str =
-    "1cc1401cc474f16b272e02cfa434e4fb5b00aead4b803b1d0adcb2fe9e4f5386";
+    "6d095a75be4c5113b653bfcc938f4ef8fdaddb87f322796a6a66117579d7484e";
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
 const RULES_REGION_LINES: usize = 30;

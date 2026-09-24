@@ -248,7 +248,7 @@ fn article_ids(root: Option<&Value>) -> (Vec<String>, Vec<(String, Option<&Value
 }
 
 /// (e) 現行の写し。範囲の各節（articles 以外はその木）と、条の 5 欄・規範文の 4 欄。
-fn project(c: &Value, scope: &[String]) -> Result<Value, String> {
+pub(crate) fn project(c: &Value, scope: &[String]) -> Result<Value, String> {
     let article_fields = adr::floor_strs(&["anchor", "projection_article_fields"]);
     let statement_fields = adr::floor_strs(&["anchor", "statement_fields"]);
     let get = |node: &Value, k: &str| node.get(k).cloned().unwrap_or(Value::Null);

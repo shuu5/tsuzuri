@@ -221,14 +221,16 @@ impl Round {
     }
 }
 
-/// 印から要約値 4 種（sources / faces / rest / 各行の bundle）と at を落とす（anchor の形・§1 (c)）。rest は写しの
-/// reads を書き替えると母集団が動くので凍結しない（便 99・delivery-99.md §1 (e)）。nodes の表は落とさない。
+/// 印から要約値 5 種（sources / trigger / faces / rest / 各行の bundle）と at を落とす（anchor の形・§1 (c)）。rest は写しの
+/// reads を書き替えると母集団が動くので凍結しない（便 99・delivery-99.md §1 (e)）。trigger も reads が入るので周ごとに違う
+/// （便 126・delivery-126.md §1 (d) の 6）。nodes の表は落とさない。
 fn without_digests(stamp: &str) -> String {
     stamp
         .split_inclusive('\n')
         .filter(|line| {
             !line.starts_with("at: ")
                 && !line.starts_with("sources: ")
+                && !line.starts_with("trigger: ")
                 && !line.starts_with("faces: ")
                 && !line.starts_with("rest: ")
         })
@@ -569,7 +571,10 @@ fn f99_the_stamp_carries_the_node_table() {
     let stamp = stamp.expect("印が無い");
     assert_eq!(
         top_keys(&stamp),
-        ["round", "at", "verdict", "sources", "faces", "viewpoints", "refutes", "reads", "rest", "nodes"],
+        [
+            "round", "at", "verdict", "sources", "trigger", "faces", "viewpoints", "refutes", "reads", "rest",
+            "nodes"
+        ],
         "印の欄の並び"
     );
     let anchor = findings_fixture("stamp-expected.yaml");
@@ -682,6 +687,78 @@ fn f104_the_stamp_sources_is_the_canonical_digest() {
         assert_eq!(hex, want, "印の sources が正本の要約値と違う");
     }
     assert_eq!(got, value(&aligned, "sources"), "読む欄を揃えた周と sources が違う");
+}
+
+// ── 便 126: 印の欄 trigger（docs/design/delivery-126.md §1 (e) の 7・8） ──
+
+/// 写しの file の字 `from` を 1 か所だけ `to` に置き換える（1 か所でなければ歯を落とす）。
+fn edit_once(path: &Path, from: &str, to: &str) {
+    let text = fs::read_to_string(path).unwrap();
+    assert_eq!(text.matches(from).count(), 1, "{}: 「{from}」が 1 か所でない", path.display());
+    fs::write(path, text.replacen(from, to, 1)).unwrap();
+}
+
+#[test]
+fn f126_the_stamp_carries_the_trigger_after_sources() {
+    let round = Round::passing("f126-keys");
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let stamp = stamp.expect("印が無い");
+    let keys = top_keys(&stamp);
+    let at = keys.iter().position(|k| *k == "sources").expect("印に sources が無い");
+    assert_eq!(keys.get(at + 1), Some(&"trigger"), "sources の直後に trigger が無い: {keys:?}");
+    assert_eq!(
+        keys,
+        [
+            "round", "at", "verdict", "sources", "trigger", "faces", "viewpoints", "refutes", "reads", "rest",
+            "nodes"
+        ],
+        "印の欄の並び"
+    );
+    let hex = value(&stamp, "trigger").strip_prefix("sha256 ").expect("trigger が sha256 の形でない");
+    assert!(
+        hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "trigger: {hex}"
+    );
+}
+
+#[test]
+fn f126_the_gate_reads_the_trigger_the_stamp_wrote() {
+    const VERSION: &str = "  version: v0.3\n";
+    const PLAIN: &str = "    plain: 質問が出て、どれにもおすすめが付きます。\n";
+    const SHALL: &str = "    shall: folio は易しい質問を推奨回答つきで出す。\n";
+    let round = Round::passing("f126-gate");
+    let run = round.stamp();
+    let srs = round.src.join("srs.yaml");
+    let fresh = folio_gate(&round);
+    edit_once(&srs, VERSION, "  version: v0.4\n");
+    let version = folio_gate(&round);
+    edit_once(&srs, "  version: v0.4\n", VERSION);
+    edit_once(&srs, PLAIN, "    plain: 質問が出て、どれにもおすすめが付く。\n");
+    let plain = folio_gate(&round);
+    edit_once(&srs, SHALL, "    shall: folio は易しい質問を推奨回答つきで必ず出す。\n");
+    let shall = folio_gate(&round);
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+
+    assert_eq!(code(&fresh, "--gate"), 0, "{}", stdout(&fresh));
+    assert!(stdout(&fresh).contains("正本の要約値が同じ"), "{}", stdout(&fresh));
+
+    // meta の版だけ: 節点は同じ・節点の外の字が変わった
+    assert_eq!(code(&version, "--gate"), 0, "{}", stdout(&version));
+    assert!(stdout(&version).contains("節点 0 個と節点の外の字"), "{}", stdout(&version));
+
+    // 要件の平易文: 節点 1 個・節点の外の字は同じ（本物の rest で残差を比べる）
+    let out = stdout(&plain);
+    assert_eq!(code(&plain, "--gate"), 0, "{out}");
+    assert!(out.contains("節点 1 個・次の引き金の周が読む"), "{out}");
+    assert!(!out.contains("節点の外の字"), "{out}");
+
+    // 同じ要件の規範文: 引き金の要約値が違う
+    assert_eq!(code(&shall, "--gate"), 2, "{}", stdout(&shall));
+    assert!(stdout(&shall).contains("引き金の要約値が違う"), "{}", stdout(&shall));
 }
 
 #[test]
