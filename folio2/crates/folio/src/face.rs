@@ -13,6 +13,7 @@
 //! 天井の名札（便 40・delivery-40.md §1 (c)(d)・ADR-8 決定 (4)・P-3.3）: 5 面の site-bar に床の名札（freshness-stamp）の
 //! 直後に部品 ceiling-stamp を置く。字は `ceiling_stamp` の 1 つで組む（面ごとに組み直さない）ので 5 面で同じになる。
 //! 出所は天井の印 preview/ceiling-stamp.yaml の 1 つ（便 83・P-6.3）で、印が無ければ 4 観点とも「まだ分からない」（未実施）を出す（P-4.2）。
+//! 印の正本の要約値が今の正本と違えば「印の後に変わった所はまだ読まれていない」を添える（便 127・ADR-18 決定 (6)・P-3.3）。
 
 use std::fs;
 use std::path::Path;
@@ -23,6 +24,7 @@ use crate::constitution_enums as ce;
 use crate::cursor::{R, X, esc, load};
 use crate::figure;
 use crate::findings;
+use crate::gate;
 use crate::shelf::ANNEXES;
 use crate::stamp;
 use crate::verdict::Verdict;
@@ -165,22 +167,29 @@ pub fn hint(label: &str, body: &str) -> String {
     )
 }
 
+/// 印の正本の要約値が今の正本と違うときの添え書き（判断の記録 ADR-18 決定 (6) の逐語・便 127）。
+const UNREAD: &str = "印の後に変わった所はまだ読まれていない";
+
 /// 天井の名札の字（部品 ceiling-stamp の中身・便 40 §1 (c)・便 83 §1 (b)(d)）。出所は天井の印
 /// `<dir>/preview/ceiling-stamp.yaml`（`stamp::marks`）と天井の正本の viewpoints の名（`findings::viewpoint_names`）の 2 つだけ。
 /// 印が在るとき「天井 <b>名 3 値</b> · …（<印の at>・束 <8 字>/…）」——日付と要約値は印の値のまま（面の側で数え直さない）。
-/// 印が無いとき「天井 <b>名 まだ分からない</b> · …（未実施）」。印の観点の id の列が正本と順まで同じでなければ Err
-/// （印・正本が読めないときも Err＝面は導出できない・P-4.1）。字の後ろに説明の小窓を 1 つ置く（5 面で同じ字）。
+/// 印の sources が今の正本の要約値（門と印と同じ関数 `gate::sources_digest`・P-6.3）と違えば、閉じ括弧の直後に
+/// `<b>印の後に変わった所はまだ読まれていない</b>` を添える（便 127・delivery-127.md §1 (b)・3 値のどれにも同じ）。
+/// 測れなければ Err（天井の正本が load で読めない・読む文書が無い＝面は導出できない・P-4.1）。引き金と節点の数は読まない。
+/// 印が無いとき「天井 <b>名 まだ分からない</b> · …（未実施）」（要約値は測らない）。印の観点の id の列が正本と順まで
+/// 同じでなければ Err（印・正本が読めないときも Err＝面は導出できない・P-4.1）。字の後ろに説明の小窓を 1 つ置く（5 面で同じ字）。
 pub fn ceiling_stamp(dir: &Path) -> R<String> {
     let names = findings::viewpoint_names(dir)?;
-    let (cells, tail) = match stamp::marks(dir)? {
+    let (cells, tail, note) = match stamp::marks(dir)? {
         None => (
             names
                 .iter()
                 .map(|(_, name)| format!("<b>{} {}</b>", esc(name), Verdict::Unknown))
                 .collect::<Vec<_>>(),
             "未実施".to_string(),
+            String::new(),
         ),
-        Some((at, marks)) => {
+        Some(stamp::Marks { at, sources, rows: marks }) => {
             let ids: Vec<&str> = marks.iter().map(|m| m.id.as_str()).collect();
             let want: Vec<&str> = names.iter().map(|(id, _)| id.as_str()).collect();
             if ids != want {
@@ -196,12 +205,20 @@ pub fn ceiling_stamp(dir: &Path) -> R<String> {
                 .zip(&names)
                 .map(|(m, (_, name))| format!("<b>{} {}</b>", esc(name), esc(&m.verdict)))
                 .collect();
+            let now = ceiling_src::load(dir)
+                .and_then(|ceiling| gate::sources_digest(dir, &ceiling))
+                .map_err(|e| format!("天井の名札: 正本の要約値が測れない: {e}"))?;
+            let note = if now == sources {
+                String::new()
+            } else {
+                format!("<b>{UNREAD}</b>")
+            };
             let digests: Vec<String> = marks.iter().map(|m| esc(&m.bundle)).collect();
-            (cells, format!("{}・束 {}", esc(&at), digests.join("/")))
+            (cells, format!("{}・束 {}", esc(&at), digests.join("/")), note)
         }
     };
     Ok(format!(
-        "天井 {}（{tail}）{}",
+        "天井 {}（{tail}）{note}{}",
         cells.join(" · "),
         hint_q(&ceiling_hint()?)
     ))

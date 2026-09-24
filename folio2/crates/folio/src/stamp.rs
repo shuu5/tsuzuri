@@ -267,9 +267,17 @@ pub struct Mark {
     pub bundle: String,
 }
 
-/// 面の天井の名札のために印を読む。返りは（top-level の at・観点の行を印の順に）。印の file が無ければ None。
-/// symlink・読めない・parse できない・欄 at が読めない・viewpoints が一覧でない・行の欄が読めないは Err（P-4.1）。
-pub fn marks(dir: &Path) -> R<Option<(String, Vec<Mark>)>> {
+/// 面の天井の名札のために印から読む字（top-level の at と sources・観点の行を印の順に）。
+pub struct Marks {
+    pub at: String,
+    /// 印の正本の要約値（名札が今の正本の要約値と比べる・便 127・delivery-127.md §1 (b) の 1）
+    pub sources: String,
+    pub rows: Vec<Mark>,
+}
+
+/// 面の天井の名札のために印を読む。印の file が無ければ None。symlink・読めない・parse できない・欄 at か sources が
+/// 読めない・viewpoints が一覧でない・行の欄が読めないは Err（P-4.1）。欄 trigger は読まない（名札は引き金を比べない）。
+pub fn marks(dir: &Path) -> R<Option<Marks>> {
     let path = dir.join(STAMP_FILE);
     if path.is_symlink() {
         return Err(format!("{STAMP_FILE}: symlink は認めない"));
@@ -289,11 +297,12 @@ pub fn marks(dir: &Path) -> R<Option<(String, Vec<Mark>)>> {
             .ok_or_else(|| format!("{STAMP_FILE}: {at}{key} が読めない"))
     };
     let at = field(&root, "at", "")?;
+    let sources = field(&root, "sources", "")?;
     let rows = root
         .get("viewpoints")
         .and_then(Node::as_seq)
         .ok_or_else(|| format!("{STAMP_FILE}: viewpoints が一覧でない"))?;
-    let marks = rows
+    let rows = rows
         .iter()
         .enumerate()
         .map(|(i, row)| {
@@ -306,7 +315,7 @@ pub fn marks(dir: &Path) -> R<Option<(String, Vec<Mark>)>> {
             })
         })
         .collect::<R<Vec<_>>>()?;
-    Ok(Some((at, marks)))
+    Ok(Some(Marks { at, sources, rows }))
 }
 
 /// 流れの形（`{…}`・`[…]`）の中に素のまま置ける値はそのまま、置けない値は `"` で囲む。

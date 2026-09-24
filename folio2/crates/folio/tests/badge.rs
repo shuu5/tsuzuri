@@ -4,13 +4,20 @@
 //! - 1. 逐語（合格 ×4・不合格・まだ分からない）・2. 未実施（印なし）・3. 5 面で同じ字・
 //!   4. --check の一致と DRIFT・5. 部品目録（--print の byte 一致・--check 5 面）・6. 面の凍結 fixture 7 本の byte 一致
 //! - f83_: 印の値との一致・未実施・壊れた印・正本と食い違う印・旗が無いこと・5 面の小窓
+//! - f127_（docs/design/delivery-127.md §1 (e)）: 印の正本の要約値が今の正本と違えば添え書き・3 値のどれにも同じ・
+//!   測れなければ まだ分からない（読む文書が無い・天井の正本が load で読めない）
 //!
 //! 凍結 fixture の更新は生成器の出力を写す形になるので、(c) の字面の逐語（1・2）を独立の物差しとして置く（P-10.2）。
+//! 印の欄 sources は、歯の側の独立の物差し `fresh_sources`（yaml-rust2 と sha256sum・folio の code を呼ばない）で測る。
 //! 版管理の下の file は書き換えない（`--out` と印は必ず一時 dir の中）。
 
+use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
+
+use yaml_rust2::YamlLoader;
 
 /// 天井の正本の観点（id・名）。正本の順。
 const VIEWPOINTS: [(&str, &str); 4] = [
@@ -131,8 +138,89 @@ fn mark_with(verdicts: [&str; 4]) -> String {
     mark_text("2026-09-19T05:00:00Z", &rows)
 }
 
-/// `<dir>/preview/ceiling-stamp.yaml` に書く。
+/// 印の仮の正本の要約値の行（`mark_text` が書く）。
+const PLACEHOLDER_SOURCES: &str = "\nsources: sha256 00\n";
+
+/// 印の正本の要約値が今の正本と違うときの名札の添え書き（ADR-18 決定 (6) の逐語）。
+const UNREAD: &str = "印の後に変わった所はまだ読まれていない";
+
+/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（`tests/bundle.rs` と同じ形）。
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut child = Command::new("sha256sum")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sha256sum を起動できない");
+    child
+        .stdin
+        .take()
+        .expect("sha256sum の標準入力が無い")
+        .write_all(bytes)
+        .expect("sha256sum へ書けない");
+    let out = child.wait_with_output().expect("sha256sum を待てない");
+    assert!(out.status.success(), "sha256sum が失敗した");
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let hex = text.split_whitespace().next().unwrap_or_default().to_string();
+    assert_eq!(hex.len(), 64, "sha256sum の出力が 16 進 64 字でない: {text}");
+    hex
+}
+
+/// 今の正本の要約値の独立の物差し（delivery-127.md §1 (e)・P-10.1・P-10.2）: 天井の正本を yaml-rust2 で読み、viewpoints の
+/// 順に reads の doc（重複は 1 度）を documents の file に解き、file 形はその file・dir 形（末尾 `/`）は直下の通常 file で
+/// 名が `.yaml` のものを、`<dir>` からの相対 path の byte 順に全文で連結して sha256sum で測る。folio の code を呼ばない。
+fn fresh_sources(dir: &Path) -> String {
+    let text = fs::read_to_string(dir.join("ceiling.yaml")).unwrap();
+    let root = YamlLoader::load_from_str(&text).unwrap().remove(0);
+    let documents: Vec<(&str, &str)> = root["documents"]
+        .as_vec()
+        .expect("documents が一覧でない")
+        .iter()
+        .map(|row| (row["id"].as_str().unwrap(), row["file"].as_str().unwrap()))
+        .collect();
+    let mut seen: Vec<&str> = Vec::new();
+    let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    for vp in root["viewpoints"].as_vec().expect("viewpoints が一覧でない") {
+        for read in vp["reads"].as_vec().expect("reads が一覧でない") {
+            let doc = read["doc"].as_str().unwrap();
+            if seen.contains(&doc) {
+                continue;
+            }
+            seen.push(doc);
+            let file = documents
+                .iter()
+                .find(|(id, _)| *id == doc)
+                .map(|(_, f)| *f)
+                .unwrap_or_else(|| panic!("{doc}: documents に無い"));
+            if !file.ends_with('/') {
+                files.insert(file.to_string(), fs::read(dir.join(file)).unwrap());
+                continue;
+            }
+            for entry in fs::read_dir(dir.join(file)).unwrap() {
+                let entry = entry.unwrap();
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if entry.file_type().unwrap().is_file() && name.ends_with(".yaml") {
+                    files.insert(format!("{file}{name}"), fs::read(entry.path()).unwrap());
+                }
+            }
+        }
+    }
+    let bytes: Vec<u8> = files.into_values().flatten().collect();
+    format!("sha256 {}", sha256_hex(&bytes))
+}
+
+/// `<dir>/preview/ceiling-stamp.yaml` に書く。印の仮の sources（`sha256 00`）は今の写しの正本の要約値
+/// （`fresh_sources`）に置き換える＝印は今の写しに対して新しい（便 127・delivery-127.md §1 (e) の helper の直し）。
 fn put_mark(dir: &Path, text: &str) {
+    let text = if text.contains(PLACEHOLDER_SOURCES) {
+        text.replacen(
+            PLACEHOLDER_SOURCES,
+            &format!("\nsources: {}\n", fresh_sources(dir)),
+            1,
+        )
+    } else {
+        text.to_string()
+    };
     fs::create_dir_all(dir.join("preview")).unwrap();
     fs::write(dir.join(MARK), text).unwrap();
 }
@@ -746,4 +834,120 @@ fn f83_five_faces_carry_the_same_hint() {
         body.contains(&link),
         "小窓に用語集への導線 {link} が無い: {body}"
     );
+}
+
+// ── 便 127（delivery-127.md §1 (e)）──
+
+/// `STAMP_PASS` 形の字の閉じ括弧と小窓の開きの間に添え書きを挟む。
+fn with_unread(stamp: &str) -> String {
+    let at = format!("）{HINT_OPEN}");
+    assert_eq!(stamp.matches(&at).count(), 1, "閉じ括弧と小窓の開きが 1 度でない: {stamp}");
+    stamp.replacen(&at, &format!("）<b>{UNREAD}</b>{HINT_OPEN}"), 1)
+}
+
+/// `<dir>/<name>` の末尾に行 `# f127` を足す。
+fn append_line(dir: &Path, name: &str) {
+    let mut text = fs::read_to_string(dir.join(name)).unwrap();
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str("# f127\n");
+    fs::write(dir.join(name), text).unwrap();
+}
+
+/// 写しの天井の正本の観点 fidelity の reads に `extra` を足す（置き換える字はちょうど 1 度在る）。
+fn add_fidelity_read(dir: &Path, extra: &str) {
+    let path = dir.join("ceiling.yaml");
+    let text = fs::read_to_string(&path).unwrap();
+    let from = "reads: [{doc: srs, fields: [requirements.plain]}]}";
+    assert_eq!(text.matches(from).count(), 1, "置き換える字が 1 度でない");
+    let to = format!("reads: [{{doc: srs, fields: [requirements.plain]}}, {extra}]}}");
+    fs::write(&path, text.replacen(from, &to, 1)).unwrap();
+}
+
+#[test]
+fn f127_the_note_appears_only_after_a_read_document_changes_and_is_the_same_on_five_faces() {
+    let td = temp_dir("f127-note");
+    let work = face_copy(&td);
+    put_mark(&work, &mark_with(["合格", "合格", "合格", "合格"]));
+    let fresh = five_faces(&work, &td);
+    // どの観点も読まない rules.yaml を変える
+    append_line(&work, "rules.yaml");
+    let unread_doc = five_faces(&work, &td);
+    // 観点が読む srs.yaml を変える
+    append_line(&work, "srs.yaml");
+    let read_doc = five_faces(&work, &td);
+    let _ = fs::remove_dir_all(&td);
+
+    for (step, pages) in [("新しい印", &fresh), ("rules.yaml を変えた後", &unread_doc)] {
+        for (name, html) in pages {
+            let stamp = stamp_of(html, name);
+            assert!(stamp.starts_with(STAMP_PASS), "{step}: {name}: {stamp}");
+            assert!(!stamp.contains(UNREAD), "{step}: {name}: 添え書きが在る: {stamp}");
+        }
+    }
+    let want = with_unread(STAMP_PASS);
+    let stamps: Vec<String> = read_doc
+        .iter()
+        .map(|(name, html)| stamp_of(html, name))
+        .collect();
+    for ((name, _), stamp) in read_doc.iter().zip(&stamps) {
+        assert!(
+            stamp.starts_with(&want),
+            "srs.yaml を変えた後: {name}: 添え書きが閉じ括弧の直後に無い\n--- 期待\n{want}\n--- 面\n{stamp}"
+        );
+        assert_eq!(stamp, &stamps[0], "{name} の名札が index.html と違う");
+    }
+}
+
+#[test]
+fn f127_the_note_is_the_same_for_every_verdict() {
+    let td = temp_dir("f127-verdicts");
+    let work = face_copy(&td);
+    // 仮の sources のまま（put_mark を通さずに直に書く）
+    let text = mark_with(["不合格", "合格", "まだ分からない", "合格"]);
+    assert!(text.contains(PLACEHOLDER_SOURCES));
+    fs::write(work.join(MARK), text).unwrap();
+    let html = write_face("index", None, &work, &td.join("index.html"));
+    let _ = fs::remove_dir_all(&td);
+
+    assert_once(
+        &html,
+        "<span data-component=\"ceiling-stamp\">天井 <b>忠実さ 不合格</b> · <b>読みやすさ 合格</b> · <b>文書どうしの整合 まだ分からない</b> · <b>実態との整合 合格</b>（2026-09-19T05:00:00Z・束 2bd67637/ded1548e/91ca924d/24ce1b87）<b>印の後に変わった所はまだ読まれていない</b><span class=\"hint\">",
+        "不合格・合格・まだ分からない・合格（仮の sources）",
+    );
+}
+
+/// 4 観点とも合格の新しい印を置いてから天井の正本の観点 fidelity の reads に `extra` を足し、入口の面を撃つ。
+/// 戻り値 = (出力, 面を書いたか)。
+fn face_after_extra_read(case: &str, extra: &str) -> (Output, bool) {
+    let td = temp_dir(case);
+    let work = face_copy(&td);
+    put_mark(&work, &mark_with(["合格", "合格", "合格", "合格"]));
+    add_fidelity_read(&work, extra);
+    let out = td.join("index.html");
+    let run = run_face("index", None, &work, &out);
+    let wrote = out.exists();
+    let _ = fs::remove_dir_all(&td);
+    (run, wrote)
+}
+
+#[test]
+fn f127_the_face_is_unknown_when_a_read_document_is_missing() {
+    let (run, wrote) = face_after_extra_read("f127-missing", "{doc: graph, fields: [nodes]}");
+    assert_code(&run, "folio face（読む文書 graph.yaml が無い）", 2);
+    assert!(!wrote, "まだ分からないのに面を書いた");
+    let err = stderr(&run);
+    assert!(err.contains("正本の要約値が測れない"), "{err}");
+    assert!(err.contains("graph.yaml"), "{err}");
+}
+
+#[test]
+fn f127_the_face_is_unknown_when_the_ceiling_source_does_not_load() {
+    let (run, wrote) = face_after_extra_read("f127-load", "{doc: nowhere, fields: [x]}");
+    assert_code(&run, "folio face（一覧に無い行き先 nowhere）", 2);
+    assert!(!wrote, "まだ分からないのに面を書いた");
+    let err = stderr(&run);
+    assert!(err.contains("正本の要約値が測れない"), "{err}");
+    assert!(err.contains("nowhere"), "{err}");
 }
