@@ -33,6 +33,7 @@ mod gitcheck;
 mod graph;
 mod hello;
 mod ids;
+mod init;
 mod inject;
 mod intake;
 mod lineage;
@@ -289,6 +290,12 @@ enum Command {
         /// 全体像の短い出力（種類ごとの節点・型ごとの辺・file ごとの節点の数）を標準出力へ書く
         #[arg(long)]
         digest: bool,
+    },
+    /// 新しい置き場に最初の文書一式（骨格・11 file）を書く。正本が 1 つでも在れば何も書かずに断る（書いた 0・断り 1・書けない 2）
+    Init {
+        /// 骨格を書く置き場（既定なし・相対なら撃った場所からの相対）
+        #[arg(long)]
+        dir: PathBuf,
     },
     /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
     Serve {
@@ -622,6 +629,16 @@ fn main() -> ExitCode {
             }
             if let Some(line) = &outcome.stderr {
                 eprintln!("folio graph: {line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Init { dir } => {
+            let outcome = init::run(&dir);
+            for line in &outcome.stdout {
+                println!("{line}");
+            }
+            for line in &outcome.stderr {
+                eprintln!("folio init: {line}");
             }
             ExitCode::from(outcome.verdict.exit_code() as u8)
         }

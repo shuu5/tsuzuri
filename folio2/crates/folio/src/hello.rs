@@ -1,5 +1,6 @@
 //! `folio hello`（便 21・docs/design/delivery-21.md §1）。AI のセッションが始まったときに 1 行だけ
-//! 「設計文書がまだ無い・相談は folio intake から」と知らせる（FR3 の型 state）。出すのは design-intent が
+//! 「設計文書がまだ無い・最初の文書一式は folio init から」と知らせる（FR3 の型 state・行き先は FR22 の骨格の命令・
+//! 便 125・docs/design/delivery-125.md §1 (b)）。出すのは design-intent が
 //! 未整備のあいだだけで、止める設定 1 つで切れ、同じプロジェクトには 1 回しか出さない。整備済みなら設計文書の索引の
 //! 数と全体像の口 `folio graph --digest` を 1 行で毎回出す（便 96・docs/design/delivery-96.md §1 (d)）。
 //! repo には何も書かない——印は `--state` の下だけ（N-1）。正規表現も外部 crate も使わない。
@@ -12,7 +13,7 @@ use crate::sha256;
 use crate::verdict::Verdict;
 
 /// 未整備のときに出す 1 行（これだけを標準出力へ書く）。
-const GREETING: &str = "folio: この project には設計文書（design-intent）がまだ無い。AI に「folio intake」と頼むと相談が始まる（止めるには .folio-quiet を置く）";
+const GREETING: &str = "folio: この project には設計文書（design-intent）がまだ無い。folio init --dir <置き場> で最初の文書一式（骨格）を書く（止めるには .folio-quiet を置く）";
 
 /// 整備済みだが索引を組めないときに出す 1 行（便 96）。
 const NO_INDEX: &str = "folio: 設計文書はあるが索引を組めない（まだ分からない）";

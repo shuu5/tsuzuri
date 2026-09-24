@@ -1,6 +1,7 @@
 //! `folio hello` の歯（便 21・docs/design/delivery-21.md §1 (c)）。binary 経由だけで測る（unit は置かない）。
 //! 3 状態の行数・1 回きり・印を書けない・1 行の中身・判定の順と印の名を見る。
 //! `--state` は必ず一時 dir（持ち主の印の置き場を触らない）。
+//! 便 125（docs/design/delivery-125.md §1 (f)）: 未整備の 1 行の行き先を相談窓口の命令から骨格の命令 folio init に替えた。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -261,10 +262,12 @@ fn hello_greets_even_when_the_mark_cannot_be_written() {
     );
 }
 
+/// 便 125（docs/design/delivery-125.md §1 (f)・FR3 / AC27）: 未整備の 1 行は骨格の命令 folio init を名指し、相談窓口の命令を名指さない。
 #[test]
-fn hello_line_names_intake_and_the_quiet_file() {
+fn hello_line_names_init_and_the_quiet_file() {
     let w = Work::new("line");
     let line = assert_greets(&w.hello());
-    assert!(line.contains("folio intake"), "{line}");
+    assert!(line.contains("folio init"), "{line}");
     assert!(line.contains(".folio-quiet"), "{line}");
+    assert!(!line.contains("folio intake"), "{line}");
 }
