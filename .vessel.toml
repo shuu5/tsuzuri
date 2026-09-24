@@ -1,0 +1,7 @@
+# scribe3 の vessel 宣言（器 scribe2 が便を起こすときに読む）。設計の段で、まだ Rust の workspace を持たない。
+# 値は器の上限（rules 行 runner.allowed_commands）の内側。Rust を持つ段になったら folio2 の形（cargo の行）へ改める。
+schema = 1
+allowed-commands = ["git"]
+common-verify = ["git diff --quiet"]
+requirements = "design-intent/srs.yaml"
+entrance-flip = "unmeasured"
