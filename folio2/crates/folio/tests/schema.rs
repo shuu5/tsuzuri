@@ -27,6 +27,9 @@
 //!
 //! 便 121（docs/design/delivery-121.md §1 (d)(g)）: 列の根を憲法の名で引く表 root_digests に替えた（1 の定数を 25326 byte と新しい要約値に）。
 //!
+//! 便 130（docs/design/delivery-130.md §1 (b)(c)(e)）: 判断の記録の側の注 5 か所と設計ノートの側の注 index_note の古い字を直した
+//! （1 の定数を 25693 byte、8 の定数を 16806 byte と新しい要約値に）。歯 f130_ の 2 本が古い字の不在と新しい字の在ることを見る。
+//!
 //! 便 89（docs/design/delivery-89.md §1）: 残る 6 本の正本（天井の正本・規則の表・入口の正本・要件書・語彙・相談窓口）の側の歯は tests/schema_docs.rs へ移した（字は 1 字も変えていない）。
 
 use std::fs;
@@ -39,16 +42,17 @@ use std::process::{Command, Output, Stdio};
 /// その注を、便 101 (d) で改訂の欄 revises を足した後の値・tests/fixtures/schema/adr-region.txt と同じ byte）。
 /// 便 121 (d): 列の根の欄を表 root_digests の 2 行（folio2 の行）にし、注 anchor_note の 2 項の書き換えと 1 項の挿入・
 /// 注 limits_note の末項を直した後の値（anchor は字面の置き換えで作り、導出と byte 一致を adr.rs の単体の歯が見る）。
+/// 便 130 (b)(e): 注 enums_note・anchor_note の 10 項目め・limits_note の 4・6・12 項目めの字を直した後の値（行数は不変）。
 const REGION_LINES: usize = 138;
-const REGION_BYTES: usize = 25326;
-const REGION_SHA256: &str = "7a500d7a811bd698dac4f8feb10756785e449e973f3e9f434e737767f16f2ee1";
+const REGION_BYTES: usize = 25693;
+const REGION_SHA256: &str = "8aca8f764952001b1e2eca1b7f69c1b61e6edb09a7389a466df0120b9789ddc5";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改め、便 119 で導出物の検査の命令の名と
-/// 注 3 つを直した後の値）。
+/// 注 3 つを直した後の値）。便 130 (b)(e): 注 index_note の正本の指し先を graph.rs の定数に直した後の値（行数は不変）。
 const NOTE_REGION_LINES: usize = 137;
-const NOTE_REGION_BYTES: usize = 16721;
-const NOTE_REGION_SHA256: &str = "d10d261b77f94b3410fdda4f4e3672f94ba11647d1e14ff222685b4e895ed83b";
+const NOTE_REGION_BYTES: usize = 16806;
+const NOTE_REGION_SHA256: &str = "21dc7f7cb7304f2da4890cb501aab731697d6b2a620899c23c5610791f994a20";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
 /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
@@ -623,4 +627,57 @@ fn r9_population_anchor_holds() {
     let hex = sha256_hex(anchor.as_bytes())
         .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
     assert_eq!(hex, REGION_SHA256, "sha256sum で測った anchor の要約値");
+}
+
+// ── 便 130: 判断の記録と設計ノートの欄の決まりの注の古い字 ──
+
+// ── f130 1. 実の判断の記録の欄の決まりの生成区間に古い字 7 つが無く、新しい字 6 つが在る ──
+
+#[test]
+fn f130_the_adr_region_notes_carry_no_stale_milestone_text() {
+    let text = fs::read_to_string(repo_root().join("design-intent/adr/schema.yaml")).unwrap();
+    let cur = region(&text);
+    for stale in [
+        "と同じ（食い違えば落ちる）",
+        "P-10.1（live は M0）は未発効",
+        "＝M0 で床の入力に取り込む",
+        "便 0 の検査（CI）で置く",
+        "（便 0 の検査の領分）",
+        "＝M0 で決める",
+        "形は M0 で決める。",
+    ] {
+        assert!(!cur.contains(stale), "古い字が残る: {stale}");
+    }
+    for fresh in [
+        "置き場の憲法の retreat_kind にこの列に無い値が在れば「まだ分からない」（部分集合の比較・順と重複は問わない・FR25・便 122）",
+        "P-10.1 の機構の状態は憲法の条 P-10 の機構の欄が持つ（ここには写さない）",
+        "tests/floor_cases.yaml は歯の入力で、床の入力ではない（fixture の不在は床では検出されず、歯 crates/folio/tests/floor_cases.rs が落とす",
+        "条の廃止の機構は無い＝limits_note の条の廃止（status）の項）",
+        "の機構と今の状態は憲法の条 P-17 の機構の欄が持つ（ここには写さない）",
+        "M0 では決めておらず、台帳 f2-648.100 に起票した（判断の記録 ADR-2 の帰結）",
+    ] {
+        assert!(cur.contains(fresh), "新しい字が無い: {fresh}");
+    }
+}
+
+// ── f130 2. 実の設計ノートの欄の決まりの生成区間の index_note は graph.rs の定数を正本と名指す ──
+
+#[test]
+fn f130_the_note_region_index_note_names_the_graph_constants() {
+    let text =
+        fs::read_to_string(repo_root().join("design-intent/design-note/schema.yaml")).unwrap();
+    let line = region(&text)
+        .lines()
+        .find(|l| l.trim_start().starts_with("index_note: "))
+        .expect("注 index_note の行が無い");
+    assert!(
+        line.contains(
+            "閉じた一覧の正本は実装の型付きの定数（crates/folio/src/graph.rs）で、その写しは索引の欄の決まり design-intent/graph.yaml の生成区間に在る"
+        ),
+        "{line}"
+    );
+    assert!(
+        !line.contains("design-intent/graph.yaml が正本として持つ"),
+        "{line}"
+    );
 }

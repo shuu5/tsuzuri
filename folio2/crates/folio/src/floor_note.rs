@@ -394,7 +394,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ("node_kinds_ref", Floor::Val("design-intent/graph.yaml node_kinds")),
             ("edge_fields_ref", Floor::Val("design-intent/graph.yaml edge")),
             ("edge_types_ref", Floor::Val("design-intent/graph.yaml edge_types")),
-            ("index_note", Floor::Val("要件書 FR14。機械が読む id の索引は、設計文書の正本から毎回組み直す導出物として口 folio graph --print が出す（2026-09-22 着地・実装 crates/folio/src/graph.rs・台帳 f2-648.132）。索引は節点（設計文書の中で id を持つ行）と辺（両端の節点の id と型）を持ち、節点と辺の欄も、節点の種類と辺の型の閉じた一覧も、索引の欄の決まり design-intent/graph.yaml が正本として持つ＝この節はその置き場を指すだけで写しを持たない（P-6.3）。判断の記録 ADR-14 決定 (1) のとおり節点は id を持つ行に閉じるので、設計ノートの節と契約表の行は節点にならない。索引の中身そのものは版管理に置かず、中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）")),
+            ("index_note", Floor::Val("要件書 FR14。機械が読む id の索引は、設計文書の正本から毎回組み直す導出物として口 folio graph --print が出す（2026-09-22 着地・実装 crates/folio/src/graph.rs・台帳 f2-648.132）。索引は節点（設計文書の中で id を持つ行）と辺（両端の節点の id と型）を持ち、節点と辺の欄と、節点の種類と辺の型の閉じた一覧の正本は実装の型付きの定数（crates/folio/src/graph.rs）で、その写しは索引の欄の決まり design-intent/graph.yaml の生成区間に在る＝この節はその置き場を指すだけで写しを持たない（P-6.3）。判断の記録 ADR-14 決定 (1) のとおり節点は id を持つ行に閉じるので、設計ノートの節と契約表の行は節点にならない。索引の中身そのものは版管理に置かず、中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）")),
         ]),
     ),
     (
