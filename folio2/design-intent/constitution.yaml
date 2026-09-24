@@ -159,7 +159,7 @@ articles:
       - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
       - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と正本の要約値から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
-    relations: {reqs: [FR5, AC3], rules: [D-12], articles: [P-4]}
+    relations: {reqs: [FR5, AC3], rules: [D-12, D-14], articles: [P-4]}
 
   - id: P-4
     title: 黙って飛ばさない（fail-closed）
@@ -263,7 +263,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "engine-design §12（parser-differential の whack-a-mole を round 1 / round 2 の 2 連続で実証 → user 判断で fail-closed へ転換）"}
     mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。回数を数えて止めるのは席と器（scribe2）で、folio は数える面を持たない＝この実態と実測の正本は rules 行 R-7 の注であり、ここには写さない。}
-    relations: {rules: [R-7, D-4], articles: [P-1]}
+    relations: {rules: [R-7, D-4, D-14], articles: [P-1]}
 
   - id: P-12
     title: 承認は 1 つの面から、言葉どおりに残す
@@ -278,7 +278,7 @@ articles:
       - {kind: scribe2-article, ref: "C7 / C7.2（対話面は 1 つ・逐語で記帳）"}
       - {kind: folio2-ruling, ref: "G8=A（C7 を足す）・運用実績（G1〜G16・P1〜P5 の裁定はすべて bd notes の逐語）・受入 (c)"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
-    relations: {rules: [R-8, D-10], sections: [§6]}
+    relations: {rules: [R-8, D-10, D-14], sections: [§6]}
 
   - id: P-13
     title: 拘束するのは設計文書、前の版は道具、自分を作るのは最後

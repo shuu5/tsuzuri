@@ -967,7 +967,7 @@ fn f90_adrs_that_is_not_a_list_is_a_violation() {
 const F91_R4_REFS: &str = ", refs: [AC6]}";
 
 /// 便 91 (b) の書き写した 27 対（行 → refs）と、便 93 (d) が R-16 に足した 2 対。
-const F91_ROWS: [(&str, &[&str]); 14] = [
+const F91_ROWS: [(&str, &[&str]); 15] = [
     ("R-1", &["P-4.2", "P-6.3", "D-3"]),
     ("R-3", &["P-4.2", "AC2"]),
     ("R-4", &["AC6"]),
@@ -982,7 +982,12 @@ const F91_ROWS: [(&str, &[&str]); 14] = [
     ("D-3", &["R-1"]),
     ("D-10", &["P-5.2", "R-8"]),
     ("D-11", &["P-5.6"]),
-    ("D-12", &["ADR-8", "ADR-13", "ADR-18"]),
+    ("D-12", &["ADR-8", "ADR-13", "ADR-18", "D-14", "ADR-19"]),
+    // D-14 は判断の記録 ADR-19 の発効で新設（2026-09-24）
+    (
+        "D-14",
+        &["P-3", "P-12", "R-7", "D-12", "ADR-8", "ADR-13", "ADR-18", "ADR-19"],
+    ),
 ];
 
 /// 写しの rules.yaml に変異を当てた結果が 不合格 1・違反はちょうど 1 件（rules.yaml の場所）で `words` を全部含む。
@@ -1016,7 +1021,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
     );
     assert!(violations(&out).is_empty(), "{:?}", violations(&out));
     let text = fs::read_to_string(w.rules()).unwrap();
-    assert_eq!(text.matches("refs: [").count(), 14, "refs の行の数");
+    assert_eq!(text.matches("refs: [").count(), 15, "refs の行の数");
     let mut total = 0;
     for line in text.lines().filter(|l| l.contains("refs: [")) {
         let id = line
@@ -1035,7 +1040,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
         assert_eq!(got, *want, "{id} の refs");
         total += got.len();
     }
-    assert_eq!(total, 33, "refs の id の合計");
+    assert_eq!(total, 43, "refs の id の合計");
 }
 
 #[test]

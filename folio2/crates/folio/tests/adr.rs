@@ -321,13 +321,14 @@ fn f92_the_real_records_carry_the_produced_field() {
         [
             "ADR-1.yaml",
             "ADR-13.yaml",
+            "ADR-19.yaml",
             "ADR-2.yaml",
             "ADR-3.yaml",
             "ADR-4.yaml",
             "ADR-8.yaml"
         ]
     );
-    assert_eq!(ids.len(), 16, "{ids:?}");
+    assert_eq!(ids.len(), 17, "{ids:?}");
     assert!(
         ids.iter()
             .all(|id| !["P-", "A-", "N-"].iter().any(|p| id.starts_with(p))),
