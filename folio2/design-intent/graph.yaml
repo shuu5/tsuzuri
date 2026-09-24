@@ -39,12 +39,12 @@ schema:
     - figures
     - produced
     - amends
-  edge_types_note: 辺の型の閉じた一覧（順も固定・ADR-13 決定 (2)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_TYPES で、この節はその写しである。figures は伝播に使わない（決定 (2)）。観点が読む文書の欄（reads）と入口の棚の関係は、文書を節点にする便で足す
+  edge_types_note: 辺の型の閉じた一覧（順も固定・ADR-13 決定 (2)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_TYPES で、この節はその写しである。figures は伝播に使わない（決定 (2)）。観点が読む文書と入口の棚の関係は辺にしない＝文書そのものを節点にしないので（判断の記録 ADR-14 決定 (1)）、その関係は天井の正本の読む欄の表と入口の棚から引く
   edge_fields:
     constitution.yaml: [relations]
     rules.yaml: [article, refs]
     srs.yaml: [basis, goals, rules, adrs, verifies, verify.ac]
     adr: [basis, produced]
-  edge_fields_note: 辺の欄の閉じた一覧（正本の file ごと・欄の名）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は周の引き金にならない（判断の記録 ADR-13 決定 (8)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す
+  edge_fields_note: 辺の欄の閉じた一覧（正本の file ごと・欄の名）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は節点の要約値を動かさない。周の引き金になるかは天井の正本の引き金の一覧が決め、この欄のうち受入基準の verifies・要件の verify.ac・規則の表の行の article は規範の欄として引き金に入る（判断の記録 ADR-18 決定 (1)・ADR-20）。ほかの辺の欄に id を足すだけの変更は周の引き金にならない（ADR-13 決定 (8)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す
   digest_note: 節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値。天井の印はこの要約値の表と、節点にも辺の欄にも属さない残りの byte の要約値（残差）を持つ（ADR-13 決定 (8)）
 # folio:schema:end

@@ -74,6 +74,9 @@ pub const REFUTE_RULE: &str = "所見を出した文脈から独立して中立�
 /// 行の一覧の節（節の名・各行から取る欄）。
 pub(crate) type TriggerRows = [(&'static str, &'static [&'static str])];
 
+/// 憲法の写しの範囲 = 条 A-2 の改訂の範囲（schema 節と前文は丸ごと・条は下の欄・便 129・ADR-20 決定 (2)）。
+/// 置き場の schema.amendment_scope は読まない（判断の記録の床の定数 anchor.scope_minimum と同じ 3 語は単体の歯が数える）。
+pub(crate) const TRIGGER_CONSTITUTION_SCOPE: [&str; 3] = ["schema", "precedence", "articles"];
 /// 憲法: 凍結 anchor の写しと同じ条の欄と規範文の欄（判断の記録の床の定数の配列そのもの）。
 pub(crate) const TRIGGER_CONSTITUTION_ARTICLES: &[&str] = ANCHOR_ARTICLE_FIELDS;
 pub(crate) const TRIGGER_CONSTITUTION_STATEMENTS: &[&str] = ANCHOR_STATEMENT_FIELDS;
@@ -230,6 +233,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             (
                 "constitution",
                 Floor::Map(&[
+                    ("scope", Floor::Strs(&TRIGGER_CONSTITUTION_SCOPE)),
                     ("articles", Floor::Strs(TRIGGER_CONSTITUTION_ARTICLES)),
                     ("statements", Floor::Strs(TRIGGER_CONSTITUTION_STATEMENTS)),
                 ]),
@@ -271,7 +275,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "trigger_note",
         Floor::Val(
-            "周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ条の欄と規範文の欄。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)",
+            "周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20 が改訂）",
         ),
     ),
 ]);
@@ -637,6 +641,27 @@ mod tests {
             TRIGGER_CONSTITUTION_STATEMENTS,
             crate::adr::floor_strs(&["anchor", "statement_fields"])
         );
+    }
+
+    /// 憲法の写しの範囲は判断の記録の床の定数 anchor.scope_minimum と長さ・字・並びまで同じで、床の木の
+    /// trigger.constitution の行は scope・articles・statements（便 129 §1 (c) の 4・包含でなく等しさ＝閉じた一覧）。
+    #[test]
+    fn f129_trigger_constitution_scope_is_the_anchor_scope_minimum() {
+        assert_eq!(
+            TRIGGER_CONSTITUTION_SCOPE.as_slice(),
+            crate::adr::floor_strs(&["anchor", "scope_minimum"])
+        );
+        let Floor::Map(fields) = &FLOOR else {
+            panic!("FLOOR は表");
+        };
+        let Some((_, Floor::Map(docs))) = fields.iter().find(|(k, _)| *k == "trigger") else {
+            panic!("FLOOR に trigger の表が無い");
+        };
+        let Some((_, Floor::Map(rows))) = docs.iter().find(|(k, _)| *k == "constitution") else {
+            panic!("trigger に constitution の表が無い");
+        };
+        let names: Vec<&str> = rows.iter().map(|(k, _)| *k).collect();
+        assert_eq!(names, ["scope", "articles", "statements"]);
     }
 
     #[test]

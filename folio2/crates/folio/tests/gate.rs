@@ -8,6 +8,7 @@
 //! （凍結 anchor ceiling-region.txt の trigger の欄と写しの文書を yaml-rust2 で読み、正規化の json を sha256sum で測る・
 //! folio の code を呼ばない）で測った値に置き換える。節点の数を見る歯は folio graph --print の節点の行から nodes の表を組み、
 //! rest の仮の値と一緒に印の末尾に足す。
+//! 便 129（docs/design/delivery-129.md §1 (e) の 1）: 独立の実装は憲法を凍結 anchor の trigger.constitution の scope の範囲で写す。
 //!
 //! 版管理の下の file は書き換えない（`--dir` は必ず一時 dir の中）。
 
@@ -246,8 +247,19 @@ fn trigger_hex(dir: &Path) -> String {
         let file = &documents[doc];
         let value = match doc {
             "constitution" => {
+                let scope = names(&lists["scope"]);
                 let (af, sf) = (names(&lists["articles"]), names(&lists["statements"]));
                 let c = load_yaml(&dir.join(file));
+                // 範囲の各節のうち articles 以外は丸ごと（便 129）
+                let mut out: BTreeMap<String, J> = scope
+                    .iter()
+                    .filter(|s| *s != "articles")
+                    .map(|s| (s.clone(), field(&c, s).map_or(J::Null, J::of)))
+                    .collect();
+                if !scope.iter().any(|s| s == "articles") {
+                    top.insert(doc.to_string(), J::Obj(out));
+                    continue;
+                }
                 let articles = c["articles"].as_vec().cloned().unwrap_or_default();
                 let projected = articles
                     .iter()
@@ -267,7 +279,8 @@ fn trigger_hex(dir: &Path) -> String {
                         )
                     })
                     .collect();
-                J::Obj(BTreeMap::from([("articles".to_string(), J::Arr(projected))]))
+                out.insert("articles".to_string(), J::Arr(projected));
+                J::Obj(out)
             }
             "adr" => {
                 let (status, fields) = (names(&lists["status"]), names(&lists["fields"]));
@@ -708,4 +721,44 @@ fn f126_the_gate_does_not_pass_without_the_node_table() {
     let out = stdout(&run);
     assert_eq!(code(&run), 2, "{out}");
     assert!(out.contains("印の節点の表が読めない"), "{out}");
+}
+
+// ── 便 129: 憲法の前文と schema 節も引き金に入る（docs/design/delivery-129.md §1 (c) の 1） ──
+
+#[test]
+fn f129_the_gate_is_stale_on_a_precedence_or_schema_edit() {
+    // （元の字・変えた字・終了コード・標準出力に要る字）。元の字が空なら何も変えない
+    let cases: [(&str, &str, i32, [&str; 2]); 4] = [
+        ("", "", 0, ["通す", "正本の要約値が同じ"]),
+        (
+            "  plain: 迷ったら、揃っている方を選びます。\n",
+            "  plain: 迷ったら、揃っている方を選ぶ。\n",
+            2,
+            ["印が古い", "引き金の要約値が違う"],
+        ),
+        (
+            "    tier: [always, ask-first, never]\n",
+            "    tier: [always, never, ask-first]\n",
+            2,
+            ["印が古い", "引き金の要約値が違う"],
+        ),
+        (
+            "articles: [A-1], sections: [§6]}",
+            "articles: [A-1, N-1], sections: [§6]}",
+            0,
+            ["通す", "引き金の外の変更"],
+        ),
+    ];
+    for (i, (from, to, want, words)) in cases.into_iter().enumerate() {
+        let repo = Repo::new(&format!("f129-{i}"));
+        repo.put_stamp_with_nodes();
+        if !from.is_empty() {
+            repo.edit("constitution.yaml", from, to);
+        }
+        let run = repo.gate(&["design-intent/constitution.yaml"]);
+        repo.done();
+        let out = stdout(&run);
+        assert_eq!(code(&run), want, "写し {i}: {out}");
+        assert!(words.iter().all(|w| out.contains(w)), "写し {i}: {out}");
+    }
 }

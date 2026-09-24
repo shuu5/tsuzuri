@@ -477,7 +477,8 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
 /// 便 119: 床の凍結の土台の導出物の検査の命令の名（folio build --check → folio derive --check）で残差の 2 行だけが動いた値。
 /// 便 121: 土台の欄の決まりの列の根の欄が表の 2 行（root_digests と folio2 の行）になり、残差の 2 行だけが動いた値。
 /// 便 126: 土台の天井の正本の生成区間に trigger・trigger_note の 18 行が入り（観点が天井の正本を読む＝残差）、残差の 2 行だけが動いた値。
-const F99_ANCHOR_SHA256: &str = "7874472e73f1a6f76ab922c0369b548f64b22bdd42e825453a6d0eb60c272a51";
+/// 便 129: 土台の天井の正本の生成区間に trigger.constitution の scope の 1 行が入り trigger_note の字が変わり、残差の 2 行だけが動いた値。
+const F99_ANCHOR_SHA256: &str = "c76bd9acddcfccb3c0caaa7d396ca4cbfe474937891ae3cd7b8a3e9e85016946";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。

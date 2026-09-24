@@ -57,6 +57,7 @@
 //! （行数は不変・byte 数は各 6 減る）。F77_REGIONS の 3 行・RULES_REGION_*・F95_GRAPH_* を、独立に直した anchor を sha256sum で
 //! 測り直した byte 数と要約値に。f85_ の歯の本文に字で書いていた行数・byte 数・要約値は RULES_REGION_* を引く形に寄せた。
 //! 便 126（delivery-126.md §1 (f)）: 天井の正本の生成区間に trigger・trigger_note の 18 行（CEILING_REGION_* を測り直した値に）。
+//! 便 129（delivery-129.md §1 (c)(e)）: 引き金の憲法の scope の 1 行と 3 つの注の字（CEILING_REGION_*・F95_GRAPH_* を測り直した値に）。
 
 use std::fs;
 use std::io::Write;
@@ -66,10 +67,10 @@ use std::process::{Command, Output, Stdio};
 use yaml_rust2::{Yaml, YamlLoader};
 
 /// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
-const CEILING_REGION_LINES: usize = 45;
-const CEILING_REGION_BYTES: usize = 4537;
+const CEILING_REGION_LINES: usize = 46;
+const CEILING_REGION_BYTES: usize = 4655;
 const CEILING_REGION_SHA256: &str =
-    "6d095a75be4c5113b653bfcc938f4ef8fdaddb87f322796a6a66117579d7484e";
+    "8eacece06c52ecda9f12919241b83d420f454141c6c439f39cfb8c520f802bf0";
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
 const RULES_REGION_LINES: usize = 30;
@@ -1048,8 +1049,8 @@ fn f89_schema_teeth_are_split_and_under_the_cap() {
 const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
 /// 便 99 で node の digest と edge_fields・edge_fields_note・digest_note を足した値（docs/design/delivery-99.md §1 (f)）。
 const F95_GRAPH_LINES: usize = 35;
-const F95_GRAPH_BYTES: usize = 3601;
-const F95_GRAPH_SHA256: &str = "da15ba4a87eb45f772c05717751b6e310e9bb41f2e3df94590587646ca65ca04";
+const F95_GRAPH_BYTES: usize = 4068;
+const F95_GRAPH_SHA256: &str = "c318f899640d7d603d38ba26c4bc293112e2147276f465ad7e28b1ad73b93a6c";
 
 /// 生成区間の変異（node_kinds の行の 判断の記録 の末尾の 1 字）。
 const F95_DRIFT_FROM: &str = ", 判断の記録]\n";
@@ -1140,5 +1141,48 @@ fn f95_the_closed_lists_are_the_same_as_the_index() {
     }
     for ty in &seen_types {
         assert!(types.contains(ty), "型 {ty} が edge_types の外");
+    }
+}
+
+// ── 便 129（delivery-129.md §1 (c) の 2・3）: 引き金の憲法の範囲と 3 つの注の字 ──
+
+fn f129_real_region(file: &str) -> String {
+    let text = fs::read_to_string(repo_root().join("design-intent").join(file)).unwrap();
+    region(&text).to_string()
+}
+
+#[test]
+fn f129_the_ceiling_region_lists_the_constitution_scope() {
+    let reg = f129_real_region("ceiling.yaml");
+    let lines: Vec<&str> = reg.lines().collect();
+    let at = lines.iter().position(|l| *l == "    constitution:").expect("constitution の行が無い");
+    assert_eq!(lines[at + 1], "      scope: [schema, precedence, articles]", "{reg}");
+    assert!(lines[at + 2].starts_with("      articles: "), "{reg}");
+    let text = fs::read_to_string(repo_root().join("design-intent/constitution.yaml")).unwrap();
+    let c = YamlLoader::load_from_str(&text).unwrap().remove(0);
+    let scope = strs(&c["schema"]["amendment_scope"], "amendment_scope");
+    assert_eq!(scope, ["schema", "precedence", "articles"], "実の憲法の改訂の範囲");
+    for new in [
+        "constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。",
+        "何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20 が改訂）",
+    ] {
+        assert!(reg.contains(new), "trigger_note に「{new}」が無い");
+    }
+    assert!(!reg.contains("同じ条の欄と規範文の欄。"), "trigger_note に古い字が残る");
+}
+
+#[test]
+fn f129_the_graph_region_notes_follow_adr20_and_adr14() {
+    let reg = f129_real_region("graph.yaml");
+    for new in [
+        "この欄に id を足すだけの変更は節点の要約値を動かさない。",
+        "この欄のうち受入基準の verifies・要件の verify.ac・規則の表の行の article は規範の欄として引き金に入る（判断の記録 ADR-18 決定 (1)・ADR-20）。",
+        "ほかの辺の欄に id を足すだけの変更は周の引き金にならない（ADR-13 決定 (8)）。",
+        "文書そのものを節点にしないので（判断の記録 ADR-14 決定 (1)）",
+    ] {
+        assert!(reg.contains(new), "graph.yaml の生成区間に「{new}」が無い");
+    }
+    for old in ["周の引き金にならない（判断の記録 ADR-13 決定 (8)）", "文書を節点にする便で足す"] {
+        assert!(!reg.contains(old), "graph.yaml の生成区間に古い字「{old}」が残る");
     }
 }

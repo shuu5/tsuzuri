@@ -19,7 +19,7 @@ use std::path::{Component, Path, PathBuf};
 use crate::anchor;
 use crate::ceiling::{
     TRIGGER_ADR_FIELDS, TRIGGER_ADR_STATUS, TRIGGER_CEILING_ROWS, TRIGGER_CEILING_WHOLE,
-    TRIGGER_RULES_FIELDS, TRIGGER_RULES_SECTIONS, TRIGGER_SRS_ROWS, TRIGGER_SRS_WHOLE, TriggerRows,
+    TRIGGER_CONSTITUTION_SCOPE, TRIGGER_RULES_FIELDS, TRIGGER_RULES_SECTIONS, TRIGGER_SRS_ROWS, TRIGGER_SRS_WHOLE, TriggerRows,
 };
 use crate::ceiling_src::{self, STAMP_FILE};
 use crate::cursor::{self, R};
@@ -250,11 +250,11 @@ pub(crate) fn trigger_digest(dir: &Path) -> R<String> {
     let key = |k: &str| Value::Str(k.to_string());
     let mut tree: Vec<(Value, Value)> = Vec::new();
 
-    // 憲法: 凍結 anchor の写しの式（範囲 articles だけ）
+    // 憲法: 凍結 anchor の写しの式（範囲 = 改訂の範囲の定数・schema 節と前文は丸ごと・便 129）
     let name = file("constitution")?;
     let constitution = cursor::load(dir, &name)?;
-    let projected = anchor::project(&constitution, &["articles".to_string()])
-        .map_err(|e| format!("{name}: {e}"))?;
+    let scope: Vec<String> = TRIGGER_CONSTITUTION_SCOPE.iter().map(|s| s.to_string()).collect();
+    let projected = anchor::project(&constitution, &scope).map_err(|e| format!("{name}: {e}"))?;
     tree.push((key("constitution"), projected));
 
     // 判断の記録: 発効した記録（状態が値域のどれかで承認欄が表）ごとに fields

@@ -104,7 +104,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "edge_types_note",
         Floor::Val(
-            "辺の型の閉じた一覧（順も固定・ADR-13 決定 (2)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_TYPES で、この節はその写しである。figures は伝播に使わない（決定 (2)）。観点が読む文書の欄（reads）と入口の棚の関係は、文書を節点にする便で足す",
+            "辺の型の閉じた一覧（順も固定・ADR-13 決定 (2)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_TYPES で、この節はその写しである。figures は伝播に使わない（決定 (2)）。観点が読む文書と入口の棚の関係は辺にしない＝文書そのものを節点にしないので（判断の記録 ADR-14 決定 (1)）、その関係は天井の正本の読む欄の表と入口の棚から引く",
         ),
     ),
     (
@@ -119,7 +119,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "edge_fields_note",
         Floor::Val(
-            "辺の欄の閉じた一覧（正本の file ごと・欄の名）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は周の引き金にならない（判断の記録 ADR-13 決定 (8)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す",
+            "辺の欄の閉じた一覧（正本の file ごと・欄の名）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は節点の要約値を動かさない。周の引き金になるかは天井の正本の引き金の一覧が決め、この欄のうち受入基準の verifies・要件の verify.ac・規則の表の行の article は規範の欄として引き金に入る（判断の記録 ADR-18 決定 (1)・ADR-20）。ほかの辺の欄に id を足すだけの変更は周の引き金にならない（ADR-13 決定 (8)）。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す",
         ),
     ),
     (

@@ -46,6 +46,7 @@ schema:
   refute_note: 反証の束の中身（名の byte 順）・反証役が書く結果の file の欄（全部空でない文）・反証役へ渡す規則の文（逐語）
   trigger:
     constitution:
+      scope: [schema, precedence, articles]
       articles: [id, title, tier, binds, statements]
       statements: [id, text, pattern, strength]
     adr:
@@ -61,5 +62,5 @@ schema:
       sections: [thresholds, discipline]
       fields: [id, article, what, value, kind, status, stage, population, same_failure, projection]
     ceiling: {whole: [weights], documents: [id, file], viewpoints: [id, reader, question, reads]}
-  trigger_note: 周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ条の欄と規範文の欄。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)
+  trigger_note: 周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20 が改訂）
 # folio:schema:end
