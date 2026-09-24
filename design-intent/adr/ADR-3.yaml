@@ -1,0 +1,28 @@
+# 判断の記録 ADR-3 — 面の技術は Rust の wasm（Leptos）に決める（提案中・持ち主の裁定 2026-09-24T22:08Z「それでうまくいったんならRustがいいんじゃない？」・裁定 id は scribe2 の台帳への記帳待ち）
+# 根拠の実測は design-note/bakeoff-surface.yaml §6（比較試作の結果）。問いと推奨は docs/grill/2026-09-24-D-tech-stack.md §8。
+id: ADR-3
+title: 面の技術は Rust の wasm（Leptos）に決め、契約の型は共有 crate に置き、依存の予算は面の crate を別枠にし、撤退は素の JavaScript と生成した型へ
+status: proposed
+date: 2026-09-25
+context: |
+  比較試作（ADR-2）で 3 つの client が同じ 2 画面を完成した。差は型の住処と歯の置き場に出た。素の JavaScript と TypeScript は契約の写しが 13 から 20 か所あり検査されない。Rust の wasm は写し 0 で、画面の論理を host の cargo test に乗せられ、compile の誤りは 0 だった。
+  Rust の wasm の代価は依存 171 crate（unmaintained 2 件で cargo deny が落ちる）と clean build 30 から 45 秒である。差分 build は約 4.5 秒で許容の範囲。
+decision: |
+  (1) 面（裁定面と表示面）は Rust の wasm（Leptos の csr・trunk）で作る。表示 server は Rust の同期 server のまま（ADR-2 決定 (1)）。
+  (2) 契約の型は server と面が共有する 1 つの crate に置く。面の側に電文の写しを書かない。画面の論理は純粋な関数に寄せ、host の cargo test で試す。DOM と SSE を触る部分だけ browser の runner で試す。
+  (3) 依存の予算は面の crate を core と別枠にする。cargo deny の unmaintained 2 件は裁定 id つきの例外行で持ち、版上げのたびに見直す。
+  (4) 撤退は素の JavaScript と契約から生成した型へ。server と契約は固定なので戻る費用は client の写し直しだけ。
+options:
+  - {id: a, name: Rust の wasm（Leptos）, text: 型を共有 crate に置き論理を Rust の歯に乗せる。, verdict: adopted, reason: 試作で往復 3 回・compile の誤り 0・手写し 0 を実測し、harness として review の負担が最も小さい。}
+  - {id: b, name: 素の JavaScript, text: build 無しの HTML と JavaScript。, verdict: rejected, reason: 最速で最軽だが手写し 13 か所が契約の成長とともに負債になる。撤退先として残す。}
+  - {id: c, name: TypeScript（Svelte と Vite）, text: 容器で build する SPA。, verdict: rejected, reason: 型の世界が 2 つになりどちらも境界を検めず、容器の toolchain も足す。}
+basis: [P-1, ADR-2]
+retreat:
+  kind: measure
+  condition: 差分 build の時間か Leptos の版上げ 1 回の往復回数が rules 行で凍結する閾値を超えたら、決定 (4) の撤退先へ戻す。数えるのは s3:design 席。閾値の初期値は面の実装の最初の便で rules 行に書く。
+plain: |
+  画面は Rust で作ります。試作で 3 つの作り方を比べたところ、Rust は約束の型を 1 か所で持てて、機械の検査に乗り、書き直しの回数も少なかったからです。
+  代わりに、頼る部品が多く、まっさらから組み立てる時間が長めです。これは受け入れます。
+  もし組み立ての時間や、部品の版上げの手間が決めた線を超えたら、素の JavaScript に戻します。土台は同じなので、戻る費用は画面の写し直しだけです。
+  この記録はまだ提案中で、台帳に裁定 id が付いたときに発効します。
+note: 持ち主の裁定 2026-09-24T22:08Z（s3:design 席の対話面・逐語「それでうまくいったんならRustがいいんじゃない？」・s3 席の読み = §8 の推奨〔Leptos・条件 3 つ〕の承認）。裁定 id は scribe2 の台帳 s2-07l.214 notes への記帳を依頼中。
