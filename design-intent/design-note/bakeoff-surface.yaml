@@ -84,5 +84,14 @@ sections:
       小物は server の実装の読みをそのまま採る（dpr は小数・省略は欄ごと省く・裁定 id の連番は分ごとの全体通し・POST の Content-Type 無しも受ける・余分な欄は無視・待ち受け address と ping の間隔は起動引数・誤りの文は読み手の文そのまま・API の path は相対でも可）。
       表示面は tab を離れても繋いだままにする。url が無いあいだの空の枠は viewport の寸法で描く。
       これらは作業場の contract.md §7 の論点への答えで、面の実装の便（ADR-3）の契約表に写す。
+  - n: 8
+    type: prose
+    title: 対話的な表示面の試作の結果（2026-09-25・論点 C）
+    body: |
+      持ち主の裁定（click と入力は最初から・menu の無い独立した窓・Rust と Chrome で試作して検証してから）を受け、作業場に契約 v0.3 を書いて 2 つの agent で試作した。
+      形: 表示 server が host の Chrome を子 process として起こし、CDP を同期の websocket 1 本で握る。席の命令（navigate・viewport・reload・click・type・key・scroll・wait）と席の目（screenshot・DOM・console）と持ち主の窓への画面配信（JPEG の SSE）と窓からの入力の中継（mouse・wheel・key・text）を同じ Chrome に対して行う。窓は Leptos の 1 画面で、状態 1 行と canvas 1 枚だけを持つ。
+      結果: 全部動いた。歯は unit と Chrome を起こす統合の 2 本（検証用 app と、裁定面で記帳する実 app の周）で 5 回連続で緑。localhost の click から次の frame までは中央値 35 ms（命令）と 24 ms（窓の入力）、動いている画面は 60 fps、1 frame は 9 から 13 KB。server の依存は 23 crate で cargo deny は全部 ok、clean build は 2.6 秒。窓は 171 crate（Leptos）、clean build 24 秒、手写しの型 0。
+      欠け: headless の画面配信は DPR を無視し CSS px の寸法で届く（screenshot は正しい）。websocket の握手の照合を省いた。Chrome の自動再起動は無い。app mode の窓と本物の IME と tailnet 越しの遅延は未測定。
+      詳細と数値の出所は docs/grill/2026-09-25-C-stage-surface.md §9 と作業場の stage-server/report.md・client-window/report.md。
 
 sources: []

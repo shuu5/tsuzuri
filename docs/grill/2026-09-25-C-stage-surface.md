@@ -71,3 +71,21 @@
 表示面を「server が持つ 1 つの Chrome を CDP で動かし、持ち主の窓はその画面を映して click と key を返すだけの簡素な面（local は app mode の窓・remote は PWA の独立窓）」の形にしてよいか。前提 = 依存を 1 本（同期の websocket）足す（A-3）。この前提を受け入れないなら、自前の websocket（約 300 行）で同じ形にする。
 - 2026-09-24T22:57Z: 持ち主の裁定 = 「Rust・Chrome・入力や click の反映まで含めて試作して検証してから決める」。→ 作業場に契約 v0.3（contract-stage.md）と検証用 target-app を置き、agent 2 つ（stage-server = Rust + CDP + 画面配信 + 入力の中継・client-window = Leptos の窓 + PWA + app mode）を opus・予算 700k / 600k で並列に起動（2026-09-24T22:57Z）。結果は §9 に追記し、本決定の問いを出し直す
 
+## 9. 対話的な表示面の試作の結果（2026-09-24T23:57Z・agent 2 つの report から転記・作業場 stage-server/ と client-window/）
+
+**動いた（verified）**。Rust の同期 server が host の Chrome を起こし、CDP を websocket 1 本で握り、命令 8 種（navigate・viewport・reload・click・type・key・scroll・wait）・screenshot（PNG の byte）・DOM・console・画面配信（JPEG の SSE）・窓からの入力の中継（mouse・wheel・key・text）が全部動いた。歯は unit 10 本と Chrome を実際に起こす統合 2 本（検証用 app と、比較試作の裁定面へ navigate して行を click し逐語を打って記帳し jsonl が 1 行増える実 app の周）で、5 回連続で緑。持ち主の窓（Leptos）は frame を描き、click（スマホ viewport の縮小表示でも座標が合う）・文字入力（IME の確定を含む）・Backspace・wheel・2 秒の再接続・PWA の service worker が動いた。
+
+| 物差し | stage-server | 窓 |
+|---|---|---|
+| click → 次の frame（localhost） | 中央値 35 ms（命令）/ 24 ms（窓からの入力） | — |
+| frame | 60 fps・1 frame 9〜13 KB（JPEG q60） | 窓側で 22〜33 fps |
+| 依存 | 23 crate（tungstenite の必須依存で +12）・cargo deny 全部 ok | 171 crate（Leptos と同じ） |
+| build clean / 差分 | 2.6 s / 0.28 s | 24 s / 3 s |
+| 手書き | 新規 1,513 + 写し 435 + 歯 612 + 型 165 | 614 |
+| 型の住処 | 共有 crate（contract-rs/src/stage.rs） | 共有 crate・手写し 0 |
+| --no-sandbox | 不要（adequately sandboxed を確認） | — |
+
+**動かなかった・欠けている（verified）**。(1) headless の Chrome の画面配信は DPR を無視し、390×844 dpr 3 でも 390×844 の JPEG が届く（screenshot は 1170×2532 で正しい）＝窓はスマホの画面を CSS px の解像度でしか見られない。(2) websocket の握手の照合（Sec-WebSocket-Accept）を省いた（相手は自分が起こした localhost の Chrome）。(3) I/O thread が 2 ms ごとに送信の列を見に戻る（待機中 CPU 約 0.5%）。(4) Chrome が死んだら server の再起動が要る（自動再起動なし・黙らず 500 を返す）。(5) app mode の窓（local の殻）は host に画面が無く未実行。(6) 本物の IME と soft keyboard は未試験。(7) tailnet 越しの遅延と fps は未測定（localhost のみ）→ hub の生きた窓で持ち主が体感できる。
+
+**読み（deduced）**。形は成立した。async の実行系は要らず、依存は websocket 1 本（+12 crate）で済む。DPR の件は「headed の Chrome（Xvfb か本物の画面）で配信する」「配信は CSS px のまま・鮮明さが要るときは screenshot を併用」「CDP の Emulation で width と height を dpr 倍にして dpr 1 で描く（layout が変わるので不可）」の 3 択で、推奨は 2 つ目（窓は見て操作する面・精査は screenshot）。
+
