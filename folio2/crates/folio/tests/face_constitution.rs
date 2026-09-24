@@ -423,7 +423,7 @@ fn f80_no_missing_line_when_the_numbers_are_dense() {
 fn f80_amendment_rows_carry_the_previous_text() {
     let html = real_html("am-count");
     let total = source_amendments().len();
-    assert_eq!(total, 4, "正本の amended_by の項の実測が変わった");
+    assert_eq!(total, 5, "正本の amended_by の項の実測が変わった");
     let rows = amendment_rows(&html);
     let amended: Vec<&String> = rows.iter().filter(|r| !r.contains("を置換（")).collect();
     assert_eq!(amended.len(), total, "amended_by の行の数が正本と違う");
