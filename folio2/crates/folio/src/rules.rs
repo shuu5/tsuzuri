@@ -148,7 +148,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "top_level_note",
         Floor::Val(
-            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。thresholds と discipline は人が書き、schema は生成区間",
+            "最上位の節の閉じた一覧（ほかの節は床が落とす）。thresholds と discipline は人が書き、schema は生成区間",
         ),
     ),
     (

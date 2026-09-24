@@ -70,7 +70,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "top_level_note",
         Floor::Val(
-            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。meta は人が書き、schema は生成区間。索引の中身そのものはこの file に置かない＝毎回 folio graph --print が正本から組み直す導出物である（判断の記録 ADR-13 決定 (4)・P-6.3 / P-6.4）",
+            "最上位の節の閉じた一覧（ほかの節は床が落とす）。meta は人が書き、schema は生成区間。索引の中身そのものはこの file に置かない＝毎回 folio graph --print が正本から組み直す導出物である（判断の記録 ADR-13 決定 (4)・P-6.3 / P-6.4）",
         ),
     ),
     (

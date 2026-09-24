@@ -13,7 +13,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::adr::Adr;
 use crate::catalog::FigureType;
@@ -26,6 +26,7 @@ use crate::floor_note::{
     NEEDS_ROWS, PARTS_ROW, PORTS_ROW, PROSE, ROW_ID_PATTERN, SECTION, SHAPE_ENUM, STATUS_ENUM,
     STATUS_EXAMPLE, STATUS_RETIRED, SURFACE_ENUM, TEETH_ROW, TYPE_ENUM, VERSION_PATTERN,
 };
+use crate::gitcheck;
 use crate::link;
 use crate::prose;
 use crate::refs;
@@ -232,16 +233,28 @@ pub(crate) fn has_contract_table(root: &Node) -> bool {
 
 // ── (a) 器の導出 file（行走査で読む） ──
 
-/// `<dir>` の親 dir の `contracts/schema.toml` を読む。読めない・期待する形でない は「まだ分からない」。
+/// 器の導出 file の path を解く唯一の式（便 123・ADR-16 決定 (2)(キ)・床と面の生成器と導出の命令が共有する）。
+/// 置き場を含む版管理の根が在ればその下（置き場そのものが根でも同じ）、無ければ置き場の親の下。
+/// 根の下に file が無くても親へは倒さない（探す先は 1 つ・P-4.1）。Err は読めない理由の字。
+pub(crate) fn external_path(dir: &Path) -> Result<PathBuf, String> {
+    if let Some(top) = gitcheck::toplevel(dir) {
+        return Ok(top.join(EXTERNAL_PATH));
+    }
+    dir.parent()
+        .map(|p| p.join(EXTERNAL_PATH))
+        .ok_or_else(|| "正本の置き場の親 dir が無い".to_string())
+}
+
+/// 器の導出 file（`external_path` で解く）を読む。読めない・期待する形でない は「まだ分からない」。
 pub(crate) fn load_external(dir: &Path, report: &mut Report) -> Option<Vec<Field>> {
     let mut unreadable = |why: String| -> Option<Vec<Field>> {
         report.unknown(format!("{EXTERNAL_PATH}: 器の導出 file が読めない: {why}"));
         None
     };
-    let Some(parent) = dir.parent() else {
-        return unreadable("正本の置き場の親 dir が無い".to_string());
+    let path = match external_path(dir) {
+        Ok(p) => p,
+        Err(why) => return unreadable(why),
     };
-    let path = parent.join(EXTERNAL_PATH);
     if path.is_symlink() {
         return unreadable("symlink は認めない".to_string());
     }

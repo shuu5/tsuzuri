@@ -86,6 +86,14 @@ fn git<S: AsRef<OsStr>>(cwd: &Path, args: &[S]) -> Option<Out> {
     })
 }
 
+/// `dir` を含む版管理の根（git の toplevel を正規化した path）。git が無い・版管理の外・待ち上限を超えた・
+/// 正規化できない は None（便 123・器の導出 file の解決先・ADR-16 決定 (2)(キ)）。
+pub(crate) fn toplevel(dir: &Path) -> Option<PathBuf> {
+    let here = fs::canonicalize(dir).ok()?;
+    let out = git(&here, &["rev-parse", "--show-toplevel"]).filter(Out::ok)?;
+    fs::canonicalize(PathBuf::from(out.text().trim_end_matches(['\n', '\r']))).ok()
+}
+
 /// 版管理と照合できた anchors/ の集合（未追跡の検査は列の最新の版が決まってから回す）。
 pub(crate) struct Tracked {
     tracked: BTreeSet<String>,

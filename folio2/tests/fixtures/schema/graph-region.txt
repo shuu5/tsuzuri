@@ -1,6 +1,6 @@
 schema:
   top_level: [meta, schema]
-  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。meta は人が書き、schema は生成区間。索引の中身そのものはこの file に置かない＝毎回 folio graph --print が正本から組み直す導出物である（判断の記録 ADR-13 決定 (4)・P-6.3 / P-6.4）
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。meta は人が書き、schema は生成区間。索引の中身そのものはこの file に置かない＝毎回 folio graph --print が正本から組み直す導出物である（判断の記録 ADR-13 決定 (4)・P-6.3 / P-6.4）
   node: {required: [id, kind, file, digest, title]}
   node_note: 索引の節点 1 つの欄。id は設計文書の全体で 1 つに定まる id、kind は node_kinds の値、file は正本の置き場からの相対の path、digest は節点の本文の要約値（式は digest_note）、title は空白を 1 つに畳んで Unicode の字で 36 に切った 1 行の題
   node_kinds: [条, 規範文, 規則行, 目的, 要件, 非機能要件, 受入基準, 制約, 登場人物, 出力, 判断の記録]

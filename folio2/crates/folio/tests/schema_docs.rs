@@ -52,6 +52,10 @@
 //!
 //! 便 117（docs/design/delivery-117.md §1 (b)(d)）: 要件書の最上位の節の閉じた一覧に scope_m3 を足した（生成区間は導出・anchor は手で 1 行）。
 //! F77_REGIONS の srs.yaml を wc と sha256sum で測り直した 30 行・1189 byte と要約値に・F86_SRS_* はその行を指す形に寄せた。
+//!
+//! 便 123（docs/design/delivery-123.md §1 (c)(f)）: 5 file の生成区間の注 top_level_note から条 id の名指し「・N-3」を落とした
+//! （行数は不変・byte 数は各 6 減る）。F77_REGIONS の 3 行・RULES_REGION_*・F95_GRAPH_* を、独立に直した anchor を sha256sum で
+//! 測り直した byte 数と要約値に。f85_ の歯の本文に字で書いていた行数・byte 数・要約値は RULES_REGION_* を引く形に寄せた。
 
 use std::fs;
 use std::io::Write;
@@ -68,9 +72,9 @@ const CEILING_REGION_SHA256: &str =
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
 const RULES_REGION_LINES: usize = 30;
-const RULES_REGION_BYTES: usize = 2269;
+const RULES_REGION_BYTES: usize = 2263;
 const RULES_REGION_SHA256: &str =
-    "d3f7f85d910a08c767cfe908219b1a89ceb906982a49dc2fb45313cbe9f6cf7f";
+    "e3feaf2e4b8ff2108e487ad0a0d145e6b710abebe72e79f1e16e9727134433f1";
 
 /// 便 76 (b) 凍結 anchor: index.yaml の生成区間（設計判断の席が独立に組んだ・tests/fixtures/schema/index-region.txt と同じ byte）。
 const INDEX_REGION_LINES: usize = 9;
@@ -84,22 +88,22 @@ const F77_REGIONS: [(&str, &str, usize, usize, &str); 3] = [
         "srs.yaml",
         "tests/fixtures/schema/srs-region.txt",
         30,
-        1189,
-        "0a06c5630693cc4157376d034838d92c48635433d8948248b94b71023a45afc8",
+        1183,
+        "e9a27f7e8b401a2acec57c63360b8f1e8d107a7fd9c00a53a1fe32da3c6c9664",
     ),
     (
         "vocabulary.yaml",
         "tests/fixtures/schema/vocabulary-region.txt",
         3,
-        238,
-        "2746b140abdf5bfafa2b3b907b2bce91c9ee21e3af5488ba09420006f0170161",
+        232,
+        "d5b25508fcb13a9f34ef2b8bb6172f2658c387d441c828c6759e2515fc4644b0",
     ),
     (
         "intake.yaml",
         "tests/fixtures/schema/intake-region.txt",
         3,
-        262,
-        "38fd3ff44e9aa6a398344d3385cb4281c77daf62d3839410e5da3814183aee8b",
+        256,
+        "0f6a498f0c308603740e02debfc79fbfbde72d69ea1a6ca101c8a7b320eecd97",
     ),
 ];
 
@@ -856,18 +860,16 @@ const F85_RULES_ANCHOR: &str = "tests/fixtures/schema/rules-region.txt";
 fn f85_rules_region_matches_the_new_anchor() {
     let w = Work::new("f85-anchor");
     let out = w.schema(&["--check"]);
-    assert_outcome(&out, 0, &["一致", "rules.yaml・2269 byte"]);
+    let bytes = format!("rules.yaml・{RULES_REGION_BYTES} byte");
+    assert_outcome(&out, 0, &["一致", bytes.as_str()]);
     let anchor_text = fs::read_to_string(repo_root().join(F85_RULES_ANCHOR)).unwrap();
     let text = w.read_rules();
     assert_eq!(region(&text), anchor_text, "rules.yaml の生成区間が anchor と byte 一致");
-    assert_eq!(anchor_text.lines().count(), 30, "anchor の行数");
-    assert_eq!(anchor_text.len(), 2269, "anchor の byte 数");
+    assert_eq!(anchor_text.lines().count(), RULES_REGION_LINES, "anchor の行数");
+    assert_eq!(anchor_text.len(), RULES_REGION_BYTES, "anchor の byte 数");
     let hex = sha256_hex(anchor_text.as_bytes())
         .unwrap_or_else(|why| panic!("要約値を測れない（素通りにしない）: {why}"));
-    assert_eq!(
-        hex, "d3f7f85d910a08c767cfe908219b1a89ceb906982a49dc2fb45313cbe9f6cf7f",
-        "sha256sum で測った anchor の要約値"
-    );
+    assert_eq!(hex, RULES_REGION_SHA256, "sha256sum で測った anchor の要約値");
 }
 
 // ── f85_ 2. deny の意味の字・R-13 / R-14 の値と種別は不変 ──
@@ -1045,8 +1047,8 @@ fn f89_schema_teeth_are_split_and_under_the_cap() {
 const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
 /// 便 99 で node の digest と edge_fields・edge_fields_note・digest_note を足した値（docs/design/delivery-99.md §1 (f)）。
 const F95_GRAPH_LINES: usize = 35;
-const F95_GRAPH_BYTES: usize = 3607;
-const F95_GRAPH_SHA256: &str = "7e2515a7727d84e4df0449d54577f842778f4e244701622986f3098c51eb947b";
+const F95_GRAPH_BYTES: usize = 3601;
+const F95_GRAPH_SHA256: &str = "da15ba4a87eb45f772c05717751b6e310e9bb41f2e3df94590587646ca65ca04";
 
 /// 生成区間の変異（node_kinds の行の 判断の記録 の末尾の 1 字）。
 const F95_DRIFT_FROM: &str = ", 判断の記録]\n";

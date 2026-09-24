@@ -191,7 +191,7 @@ enum Command {
     /// byte 一致を数える（--check）。配信の組み立てから切り離した独立の命令で、面の生成器も様式の file も呼ばない
     #[command(name = floor_note::DERIVED_SUBCOMMAND, group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Derive {
-        /// 正本の置き場（design-note/ と、その親 dir の contracts/schema.toml を読む）
+        /// 正本の置き場（design-note/ と、版管理の根〔無ければ置き場の親 dir〕の contracts/schema.toml を読む）
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
         /// 導出物の置き場（既定なし・消費側が宣言する・相対なら --dir からの相対・絶対ならそのまま）

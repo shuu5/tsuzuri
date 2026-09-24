@@ -9,6 +9,7 @@
 //! `figure.rs` の `render` が図の道具で描いたものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない
 //! （全部か無しか・FR15）。
 //! 状態の閉じた一覧 `STATUS` と文書 id の形 `is_doc_id` は便 109 で `shelf.rs` へ降ろした（ADR-15・層 1 読む）。
+//! 器の導出 file の置き場は便 123 から床の読み手と同じ式 `note::external_path`（版管理の根・無ければ置き場の親）で解く。
 
 use std::fs;
 use std::path::Path;
@@ -17,6 +18,8 @@ use crate::catalog::Component;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{self, Frame, anchor, hint};
 use crate::face_index_read;
+use crate::floor_note::EXTERNAL_PATH;
+use crate::note;
 use crate::shelf::{STATUS, is_doc_id};
 
 /// 設計ノートの面が使う部品（8 種・判断の記録の面の section-lead-callout の代わりに figure-panel・便 40 で ceiling-stamp を足した）。
@@ -116,9 +119,8 @@ const REFUSES_NONE: &str = "なし";
 /// 契約表の行の固定の置き場（この 7 つは hint に回さない）。
 const CONTRACT_FIXED: [&str; 7] = ["id", "title", "req", "section", "verify", "size", "done"];
 
-// ── 器（scribe2）の導出 file の読み方（note.rs と同じ字面を自前に持つ）──
+// ── 器（scribe2）の導出 file の読み方（note.rs と同じ字面を自前に持つ・path は床の定数と解く式を共有・便 123）──
 
-const EXTERNAL_PATH: &str = "contracts/schema.toml";
 const EXTERNAL_HEAD: &str = "schema = 1";
 const EXTERNAL_ROWS_KEY: &str = "field";
 const EXTERNAL_ROW_FIELDS: [&str; 3] = ["name", "need", "shape"];
@@ -525,14 +527,11 @@ fn id_links(env: &Env<'_>, x: &X<'_>) -> R<Vec<String>> {
     x.seq()?.iter().map(|q| id_link(env, q)).collect()
 }
 
-/// `<dir>` の親 dir の `contracts/schema.toml` を行走査で読み、field の name を宣言の順に返す。
+/// 器の導出 file（床と同じ式 `note::external_path` で解く）を行走査で読み、field の name を宣言の順に返す。
 /// 読めない・期待する形でない は「まだ分からない」（要件書 FR10・AC8）。
 fn load_external(dir: &Path) -> R<Vec<String>> {
     let bad = |why: String| format!("{EXTERNAL_PATH}: 器の導出 file が読めない: {why}");
-    let parent = dir
-        .parent()
-        .ok_or_else(|| bad("正本の置き場の親 dir が無い".to_string()))?;
-    let path = parent.join(EXTERNAL_PATH);
+    let path = note::external_path(dir).map_err(bad)?;
     if path.is_symlink() {
         return Err(bad("symlink は認めない".to_string()));
     }

@@ -98,5 +98,5 @@ identifiers:
 # folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
 schema:
   top_level: [terms, field_terms, identifiers, schema]
-  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。terms と field_terms と identifiers は人が書き、schema は生成区間
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。terms と field_terms と identifiers は人が書き、schema は生成区間
 # folio:schema:end

@@ -77,7 +77,7 @@ pub(crate) const SRS_FLOOR: Floor = Floor::Map(&[
     (
         "top_level_note",
         Floor::Val(
-            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。schema のほかの節は人が書き、schema は生成区間",
+            "最上位の節の閉じた一覧（ほかの節は床が落とす）。schema のほかの節は人が書き、schema は生成区間",
         ),
     ),
     (
@@ -144,7 +144,7 @@ pub(crate) const VOCABULARY_FLOOR: Floor = Floor::Map(&[
     (
         "top_level_note",
         Floor::Val(
-            "最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。terms と field_terms と identifiers は人が書き、schema は生成区間",
+            "最上位の節の閉じた一覧（ほかの節は床が落とす）。terms と field_terms と identifiers は人が書き、schema は生成区間",
         ),
     ),
 ]);

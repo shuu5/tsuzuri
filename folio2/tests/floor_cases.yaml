@@ -456,7 +456,7 @@ cases_anchor:
   - {id: anchors-all-deleted-tracked, why: 版管理にある anchor を作業ツリーで消すと落ちる（HEAD 照合）, mutate: [{dir: anchors, delete_dir: true}], expect_rc: 1, expect_msg: 版管理（HEAD）にあるが作業ツリーに無い}
   - {id: anchors-deleted-committed, why: anchor の削除を commit してから同じ版で凍結し直す手口は版管理の履歴で落ちる（loophole-v4-3）, mutate: [{dir: anchors, delete_dir: true}, {git_commit: true}, {file: constitution.yaml, path: "articles[id=P-8].statements[0].text", value: *p8_new}, {freeze_anchor: true}], expect_rc: 1, expect_msg: 版管理の履歴に在ったが作業ツリーに無い, expect_no_file: [anchors/constitution-v1.0.yaml]}
   - {id: anchors-gitignored, why: anchors/ を版管理から除外すると落ちる（loophole-v4-3 の変種）, mutate: [{git_ignore_anchors: true}], expect_rc: 1, expect_msg: 版管理から除外（ignore）されている}
-  - {id: nested-git-root, why: design-intent 自体を版管理の根にすると落ちる（loophole-v4-3 の変種・床の script と別の版管理）, mutate: [{git_nested: true}], expect_rc: 1, expect_msg: design-intent 自体が版管理の根}
+  - {id: nested-git-root, why: design-intent 自体を版管理の根にすると落ちる（loophole-v4-3 の変種・床の script と別の版管理）。便 123 から器の導出 file もその根の下で探すので 読めない が先に立って 2・違反の字は出る, mutate: [{git_nested: true}], expect_rc: 2, expect_msg: design-intent 自体が版管理の根}
 
 cases_amendment:
   - id: amendment-complete

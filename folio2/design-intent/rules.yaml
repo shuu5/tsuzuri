@@ -8,7 +8,7 @@
 schema:
   version: 1
   top_level: [schema, thresholds, discipline]
-  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす・N-3）。thresholds と discipline は人が書き、schema は生成区間
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。thresholds と discipline は人が書き、schema は生成区間
   threshold_row:
     required: [id, article, what, value, kind, status, ruling, ruled_at, stage]
     optional: [basis, projection, same_failure, population, note, refs]
