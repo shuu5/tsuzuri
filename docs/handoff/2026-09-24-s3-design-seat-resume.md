@@ -1,6 +1,6 @@
 # s3:design 席の作業記憶（起こし直しの前・2026-09-24T13:1xZ）
 
-次の席が最初に読む file。読む順: この file → docs/handoff/2026-09-24-v3-kickoff.md → docs/grill/2026-09-24-D-tech-stack.md。
+次の席が最初に読む file。読む順: この file → docs/handoff/2026-09-24-v3-kickoff.md → docs/handoff/2026-09-24-v2-leftovers-for-v3.md（scribe2 席の送り物・c17b4b2）→ docs/grill/2026-09-24-D-tech-stack.md。
 
 ## 1. いまどこか
 - 論点 D（技術スタック）の 1 問を持ち主に提示済み・**答え待ち**。問いと推奨は docs/grill/2026-09-24-D-tech-stack.md §5（推奨 = (a) Rust の同期 server + build 無しの HTML/JS・撤退条件つき）。裁定はまだ無い＝ADR・vocabulary・srs には何も書いていない。
@@ -23,3 +23,13 @@
 - grill は 1 論点 1 問・推奨 1 つ・散文で問う（AskUserQuestion は使わない・grill-me skill）。
 - 討論の記録は docs/grill/ の markdown、正本は design-intent/ の YAML。逐語は tracked に写さない（台帳へ）。
 - この repo は remote 無し・master へ直接 commit（前席と同じ運用）。
+
+## 5. v2 の残りの割り当て（2026-09-24・scribe2 席の送り物 §2 の 8 項目 → 論点）
+- 論点 D（進行中）: 直接は無し。1（器が席の状態を構造で知る口）・7（run の終端 event）・8（init / doctor を GUI から撃つ）はどれも server 側の口なので、比較試作で「server と契約を固定し client だけ作り分ける」枠を補強する。
+- 論点 A（合流の形・init）: 2（口座 × anchor の trust を器が持つ・serde_json は A3）・3（doctor は「何が無いか・次の 1 手」を必ず 1 行）・8（command は init と doctor の 2 つ上限）。
+- 論点 C（表示面）: 1（描画でなく hook / SDK / 状態 file から席の状態を読む・literal の等値で dialog を塞ぐ形を持ち込まない）。
+- 論点 B（GUI）: 8（init / doctor を GUI から撃てる）。
+- 論点 E（憲法）: 5（scribe2 索引表の出所不一致 10 / 25 行と C7 要旨の古さを持ち込まない）・6（EARS の型は folio2 の門で最初から閉じる）。
+- 論点 F（台帳）: 7（run の終端を event で持つ・札の不在で推さない）・§3 の open 便の扱い（.214 据え置き・.19 は送って close）。
+- 要件書の受入: 4（folio v1 の SRS 生成器の 11 項目が folio2 で解けているかを srs.yaml の受入で確かめる）。
+
