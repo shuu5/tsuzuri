@@ -69,4 +69,5 @@
 
 ### 8.5 問い（1 問）
 表示面を「server が持つ 1 つの Chrome を CDP で動かし、持ち主の窓はその画面を映して click と key を返すだけの簡素な面（local は app mode の窓・remote は PWA の独立窓）」の形にしてよいか。前提 = 依存を 1 本（同期の websocket）足す（A-3）。この前提を受け入れないなら、自前の websocket（約 300 行）で同じ形にする。
+- 2026-09-24T22:57Z: 持ち主の裁定 = 「Rust・Chrome・入力や click の反映まで含めて試作して検証してから決める」。→ 作業場に契約 v0.3（contract-stage.md）と検証用 target-app を置き、agent 2 つ（stage-server = Rust + CDP + 画面配信 + 入力の中継・client-window = Leptos の窓 + PWA + app mode）を opus・予算 700k / 600k で並列に起動（2026-09-24T22:57Z）。結果は §9 に追記し、本決定の問いを出し直す
 
