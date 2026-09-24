@@ -1,0 +1,87 @@
+# 入口 — 正本（folio init の雛形・案内文は利用者が書き換える）
+meta:
+  id: index
+  title: 設計文書の入口
+  version: v0.1
+  status: draft
+  generated: 2026-09-24
+  approval: []
+audience:
+  label: 誰のための文書か
+  short: 持ち主（非エンジニア）と AI
+  text: 設計文書の持ち主（非エンジニア）と、その文書を読んで作業する AI。両方が同じページを読む。
+shelf:
+  title: このプロジェクトの文書
+  explain: この棚には、相談窓口が決める文書の型と、型どうしのつながりが出る。道具自身の設定のファイル（相談の質問・AI の審査の決まり・索引の決まり）は棚に出さない。いま読める面の数はこの見出しに出て、それぞれの文書の中身の数は下のカードに出る。
+  legend:
+    - {id: readable, text: 読める}
+    - {id: absent, text: まだ無い}
+    - {id: binds, text: 矢印 = 縛る／順序（前のものが後のものを決める）}
+    - {id: inside, text: 点線 = 中にある（独立したページではない）}
+  documents:
+    - {id: constitution, type: 憲法, use: 譲らない線。何があっても守ること、確認してから変えること、絶対にやらないこと。, absent: null}
+    - {id: srs, type: 要件書, use: やること。何ができたら「完成」と言うか。, absent: null}
+    - {id: design-note, type: 設計ノート, use: 中の組み立て方。作り始める直前に書く。, absent: 実装の直前に書く}
+    - {id: adr, type: 判断の記録, use: あとから戻せない判断をしたときだけ、1 本ずつ書き足す記録。, absent: まだ戻せない判断は無い}
+  annexes:
+    - {id: vocabulary, type: 語彙, inside: constitution}
+    - {id: rules, type: 数値の表, inside: constitution}
+  relations:
+    - {id: binds, from: constitution, to: srs, label: 縛る, hint: 前のもの（憲法）が後のもの（要件書）を決める。要件は憲法に反せない}
+    - {id: before-build, from: srs, to: design-note, label: 実装の前に, hint: 要件書が決まってから、実装の直前に設計ノートを書く}
+    - {id: inside, from: constitution, to: vocabulary, label: 中にある, hint: 独立したページではなく、憲法の中の節（語彙と数値の表）}
+    - {id: amends, from: adr, to: constitution, label: 憲法を改訂する, hint: 憲法の文を変えるときは、判断の記録と持ち主の承認が先に要る}
+lanes:
+  title: あなたは誰？ — 3 つの読み方
+  lead: 全部読む必要はない。目的別に、どのページのどこから読めばよいかを示す。
+  rows:
+    - id: first
+      mark: 初
+      who: はじめて読む人
+      why: 「これは何のためのもの？」を 10 分でつかむ
+      minutes: 10
+      stops:
+        - {doc: constitution, at: s0, label: 目指すことと誰のため}
+        - {doc: srs, at: s1, label: ゴール}
+    - id: owner
+      mark: 決
+      who: 決める人（持ち主）
+      why: 「何ができたら完成か」と「何を確認してから変えるか」と「なぜそう決めたか」
+      minutes: 15
+      stops:
+        - {doc: srs, at: s5, label: 受入基準}
+        - {doc: constitution, at: s3, label: 確認してから変える}
+        - {doc: constitution, at: s5, label: 数値の表}
+        - {doc: adr, at: ADR-1, label: なぜそう決めたか（最初の判断の記録）}
+    - id: builder
+      mark: 作
+      who: 作る人（AI・エンジニア）
+      why: 機械が守る形と数値の出どころ
+      minutes: 20
+      stops:
+        - {doc: constitution, at: s2, label: いつも守る}
+        - {doc: constitution, at: s6, label: 変えるときの手続き}
+        - {doc: srs, at: s7, label: 対応表}
+intake:
+  title: 文書を足したい・減らしたいとき
+  lead: 文書がまだ無いときは、先に最初の文書一式を置き場に書く。そのうえで、どの文書を使うかを AI と相談して決める。途中で足すときも同じ窓口。
+  heading: AI に「folio intake」と頼む
+  command: folio intake
+  text: 易しい質問が 5 つまで出る。どの質問にも「おすすめ」がついているので、答えなくても止まらない。結果は支度表 1 枚。承認するのはここ 1 回だけ。
+  steps:
+    - 質問 5 つ（おすすめ付き）
+    - 支度表 1 枚
+    - 承認（1 回）
+    - 決まった文書の面が生成される
+  note: 文書がまだ無いプロジェクトでは、AI の作業が始まったときに 1 行だけ知らせ、最初の文書一式を書く命令（folio init）を案内する（うるさければ設定 1 か所で切れる）。相談窓口は、その文書一式が在る置き場で使う。
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  top_level: [meta, audience, shelf, lanes, intake, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。meta・audience・shelf・lanes・intake は人が書き、schema は生成区間
+  shelf:
+    documents: [constitution, srs, design-note, adr]
+    annexes: [vocabulary, rules]
+    relations: [binds, before-build, inside, amends]
+    legend: [readable, absent, binds, inside]
+  shelf_note: 棚の閉じた id の集合（documents = 文書・annexes = 付録・relations = 文書どうしの関係・legend = 凡例）。棚の行はこの id に 1 つずつ要る。行の中身は人が書き、置き場の class や面の file 名のような見た目の値は面の生成器が持つ（P-2.3）。何にするかの裁定の正本は判断の記録 ADR-5 決定 (2) と入口の正本の承認欄
+# folio:schema:end

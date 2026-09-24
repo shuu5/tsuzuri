@@ -1,0 +1,82 @@
+# 規則の表 — 数値と開発規律の正本（folio init の雛形・行は利用者が書き換える）
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  version: 1
+  top_level: [schema, thresholds, discipline]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。thresholds と discipline は人が書き、schema は生成区間
+  threshold_row:
+    required: [id, article, what, value, kind, status, ruling, ruled_at, stage]
+    optional: [basis, projection, same_failure, population, note, refs]
+  discipline_row:
+    required: [id, article, what, kind, status, ruling, ruled_at]
+    optional: [note, refs]
+  refs_note: その行の散文が依っている、article の条以外の id の一覧（ほかの行・要件書の id・判断の記録・別の条と規範文）。各項は id の形（P-5.2）で、その行自身の id と article の値は書かない。未解決は行 R-4 の 1 つ目の数えが拾い、判断の記録の未実在は A-2 の網が拾う（R-4 の what と値と母集団は変えない）
+  enums:
+    kind: [deny, build-check, detect, human-review]
+    status: [仮, 凍結, 未定]
+    stage: [in-loop, post]
+  enums_note: stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）
+  kind_meaning:
+    deny: 機械が測って、値域の外なら落とす（上限の超過・下限の不足・固定の値との違い。憲法の reject / build-check に対応）
+    build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）
+    detect: 記録・起票のみ・止めない（憲法の none に対応）
+    human-review: 人が守る作法（憲法の human-review に対応・D 行）
+  kind_map_to_constitution:
+    deny: [reject, build-check]
+    build-check: [build-check]
+    detect: [none]
+  kind_map_to_constitution_note: R 行にだけ適用する（D 行は作法＝条の機構とは別）。右辺は憲法の値域 mechanism_kind の値
+  excluded:
+    what: [時間（「60 分以内」）, 費用（「300k token 以下」）]
+    why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。
+  reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。
+# folio:schema:end
+# 行は人が書く（閾値行と開発規律行）
+"thresholds":
+  - "id": "R-8"
+    "article": "P-1"
+    "what": "承認の対話面（どの対話面を通った承認を受け取るか）"
+    "value": "持ち主と作業する席の対話面（記帳先 = 台帳の notes + 文書の承認欄）"
+    "kind": "build-check"
+    "status": "仮"
+    "ruling": "未記入"
+    "ruled_at": "未記入"
+    "stage": "post"
+  - "id": "R-16"
+    "article": "P-1"
+    "what": "設計ノートの散文の門（規範の印の一覧と、印を持つ文に許さない「数と単位」の単位の一覧）"
+    "value":
+      "marks":
+        - "しなければならない"
+        - "してはならない"
+        - "してはいけない"
+        - "SHALL"
+        - "MUST"
+      "prohibition":
+        "word": "禁止"
+        "clause_ends":
+          - "。"
+          - "）"
+          - "・"
+          - "、"
+          - null
+      "units":
+        - "秒"
+        - "分"
+        - "時間"
+        - "日"
+        - "件"
+        - "本"
+        - "行"
+        - "byte"
+        - "KB"
+        - "MB"
+        - "%"
+        - "s"
+        - "ms"
+    "kind": "build-check"
+    "status": "仮"
+    "ruling": "未記入"
+    "ruled_at": "未記入"
+    "stage": "post"
+"discipline": []

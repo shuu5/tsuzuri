@@ -1,0 +1,120 @@
+# 天井の正本 — 観点と読む文書（folio init の雛形・利用者が書き換える）
+meta:
+  id: ceiling
+  title: 天井の正本
+  version: v0.1
+  status: draft
+  generated: 2026-09-24
+  approval: []
+weights:
+  values: [止める, 直す, 参考]
+  refute: [止める]
+documents:
+  - {id: constitution, file: constitution.yaml}
+  - {id: rules, file: rules.yaml}
+  - {id: vocabulary, file: vocabulary.yaml}
+  - {id: srs, file: srs.yaml}
+  - {id: index, file: index.yaml}
+  - {id: intake, file: intake.yaml}
+  - {id: adr, file: adr/}
+  - {id: design-note, file: design-note/}
+  - {id: ceiling, file: ceiling.yaml}
+  - {id: graph, file: graph.yaml}
+viewpoints:
+  - id: fidelity
+    name: 忠実さ
+    reader: 元の文と平易文の両方を読み、意味の差だけを拾う編集者
+    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文・決定の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは語彙の正本の同じ語を指しているか。平易文が引く規則の表の値は表の値と同じか。図の根拠が指す先は、図の中身と合っているか。判断の記録の欄の決まりが「機械では弁別できない」とする改番（本文も変えたうえでの番号の付け替え）が起きていないか＝床は削除と新設として通すので数えない。重さ = 止める（言い換えが義務・要件・決定を変える）・直す（落としや足しはあるが義務は変わらない）・参考（提案）。参照 id の解決・欄の非空・件数は床の領分なので挙げない。判定できない箇所は「まだ分からない」と書く。
+    reads:
+      - {doc: constitution, fields: [articles.plain, articles.statements.text]}
+      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: vocabulary, fields: [terms, field_terms]}
+      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs, nonfunctional, scope_m1, scope_m3]}
+      - {doc: intake, fields: [questions]}
+      - {doc: adr, fields: [plain, decision, options.text, figures.refs, note]}
+      - {doc: design-note, fields: [sections, figures.refs]}
+  - id: readability
+    name: 読みやすさ
+    reader: この道具を初めて見る非エンジニア
+    question: 入口から歩いて「何が決まりで・何ができたら完成で・なぜそう決めたか」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。
+    reads:
+      - {doc: index, fields: [audience, shelf, lanes, intake]}
+      - {doc: constitution, fields: [articles.title, articles.plain, precedence, sources]}
+      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: vocabulary, fields: [terms]}
+      - {doc: srs, fields: [goals, scope, scope_m3, requirements.title, requirements.plain, nonfunctional, constraints, acceptance, figures]}
+      - {doc: intake, fields: [questions]}
+      - {doc: adr, fields: [title, plain, decision, context, note]}
+      - {doc: design-note, fields: [sections]}
+  - id: coherence
+    name: 文書どうしの整合
+    reader: 10 種の文書を横に並べて矛盾を探す審査役
+    question: 憲法・規則の表・要件書・判断の記録・設計ノート・相談窓口・天井の正本・語彙・入口・索引の欄の決まりの間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く、判断の記録が規則を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。判断の記録は決定だけでなく前提（context）と退けた案（options）も読む。重さ = 止める（2 つの文書が両立しない義務や決定を持つ = どちらかが誤り。条が名指す置き場を越えた記述〔台帳に規則・型付きデータに裁定 等〕もここ）・直す（二重の記述・条に反しない越境・意味のずれ・両立はする）・参考（提案）。床が数える一致（参照 id の解決・欄の非空・番号・件数）は挙げない。
+    reads:
+      - {doc: constitution, fields: [articles, precedence]}
+      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1, scope_m3]}
+      - {doc: adr, fields: [context, decision, options, basis, consequences, retreat, note]}
+      - {doc: design-note, fields: [sections]}
+      - {doc: intake, fields: [targets, questions]}
+      - {doc: ceiling, fields: [documents, viewpoints]}
+      - {doc: vocabulary, fields: [terms, field_terms]}
+      - {doc: index, fields: [shelf, lanes, intake]}
+      - {doc: graph, fields: [schema.node_kinds, schema.edge_types, schema.edge_fields]}
+  - id: reality
+    name: 実態との整合
+    reader: 設計文書と版管理の中身を突き合わせる実装者
+    question: 設計文書が言うこと（要件・非機能要件・決定・契約表の行・帰結）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、実装と違う決定、着地したのに文書が古いままの箇所、帰結に書いた後続が起きていない箇所を挙げる。憲法の条の機構の注と規則の表の行の注が言う実装の状態（未実装である・数える口が無い・判定は「まだ分からない」）が、版管理の中の実装と合うかも見る（日付を添えた記述なので古くなりうる）。重さ = 止める（文書が実態と逆のことを約束している）・直す（古い・欠けている記述）・参考（提案）。床が数える一致（参照 id の解決・着地の印・欄の一致）は挙げない。
+    reads:
+      - {doc: constitution, fields: [articles.mechanism, articles.statements.text]}
+      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
+      - {doc: adr, fields: [decision, consequences, note]}
+      - {doc: design-note, fields: [sections]}
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  top_level: [meta, weights, documents, viewpoints, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。meta・weights・documents・viewpoints は人が書き、schema は生成区間
+  verdicts: {values: [合格, 不合格, まだ分からない]}
+  verdicts_note: 観点ごとの 3 値（順も固定）。1 つでも「まだ分からない」なら天井は合格にならない。何にするかの裁定の正本は要件書 FR5 と判断の記録 ADR-8 決定 (4)
+  viewpoints: [fidelity, readability, coherence, reality]
+  viewpoints_note: 観点の閉じた id の列（順も固定）。viewpoints の行はこの id に 1 つずつ要る。何にするかの裁定の正本は判断の記録 ADR-8 決定 (1)。観点を増やさないことは憲法 N-5
+  documents: [constitution, rules, vocabulary, srs, index, intake, ceiling, adr, design-note, graph]
+  documents_note: 読む文書の閉じた id の集合（順は問わない）。documents の行はこの id に 1 つずつ要る。所見の場所の doc と観点の reads の doc はこの行に解く
+  finding:
+    required: [id, viewpoint, place, weight, evidence]
+    optional: [refute, note]
+    place: {required: [doc, at]}
+    refute: {values: [支持, 退けた, まだ分からない]}
+  finding_note: 所見 1 件の欄の決まり。place は documents の id と、欄か節か行の id。evidence は正本の逐語の引用（床が実在を照合する）。weight の値域と反証に回す重さは人が書く weights の節が持つ
+  record: {required: [model, effort, at, read, bundle]}
+  record_note: 起動の記録の欄（観点ごとに 1 つ・合格の観点にも必須）。1 つでも欠けるか bundle の要約値が束と合わなければ、床がその観点を「まだ分からない」に落とす（判断の記録 ADR-8 決定 (3)）
+  bundle:
+    contents: [sources, faces, question, finding, reads]
+    digest: sha256-files-1
+    skeleton: [meta, id, title, status, date, schema]
+  bundle_note: 材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）。skeleton は sources の写しで常に残す最上位の節の閉じた一覧（観点が読むと宣言した欄に関わらず残す＝どの版の何を読んでいるかを決める欄）
+  refute:
+    contents: [finding.yaml, question.yaml, reads.yaml, schema.yaml, sources.txt]
+    result_required: [id, refute, model, effort, at, bundle]
+    rule: 所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。
+  refute_note: 反証の束の中身（名の byte 順）・反証役が書く結果の file の欄（全部空でない文）・反証役へ渡す規則の文（逐語）
+  trigger:
+    constitution:
+      articles: [id, title, tier, binds, statements]
+      statements: [id, text, pattern, strength]
+    adr:
+      status: [accepted, retired]
+      fields: [id, status, decision, retreat, amends, revises, supersedes, superseded_by]
+    srs:
+      requirements: [id, shall, strength, pattern, when, verify, milestone]
+      nonfunctional: [id, shall, strength, pattern, when, verify, milestone]
+      acceptance: [id, title, verifies, red_test.sentence]
+      constraints: [id, text]
+      whole: [goals, scope, scope_m1, scope_m3]
+    rules:
+      sections: [thresholds, discipline]
+      fields: [id, article, what, value, kind, status, stage, population, same_failure, projection]
+    ceiling: {whole: [weights], documents: [id, file], viewpoints: [id, reader, question, reads]}
+  trigger_note: 周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ条の欄と規範文の欄。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)
+# folio:schema:end

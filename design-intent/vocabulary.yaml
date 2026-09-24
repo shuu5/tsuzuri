@@ -1,0 +1,10 @@
+# 語彙 — 正本（folio init の雛形・語は利用者が足す）
+terms: []
+field_terms: []
+identifiers:
+  - {group: 骨格の雛形の語, words: [folio, ai, intake, rules, file, id, schema, repo], why: 骨格の雛形に出る識別子（命令名・file 名・code の語）}
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  top_level: [terms, field_terms, identifiers, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。terms と field_terms と identifiers は人が書き、schema は生成区間
+# folio:schema:end

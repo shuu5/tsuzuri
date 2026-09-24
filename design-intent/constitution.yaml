@@ -1,0 +1,196 @@
+# 憲法 — 床の受付の宣言（folio init の雛形・名と本文は利用者が決めて書き換える）
+"schema":
+  "version": 1
+  "top_level":
+    - "schema"
+    - "meta"
+    - "north_star"
+    - "precedence"
+    - "articles"
+    - "rules_pointer"
+    - "amendment"
+    - "glossary_pointer"
+    - "sources"
+  "meta":
+    "required":
+      - "id"
+      - "version"
+      - "status"
+      - "binding"
+      - "baseline"
+      - "generated"
+      - "owner"
+      - "author"
+      - "counts"
+      - "approval"
+    "optional":
+      - "changes_from_v0_1"
+      - "changes_from_v0_2"
+  "precedence":
+    "required":
+      - "text"
+      - "plain"
+      - "binds"
+      - "mechanism"
+      - "rationale"
+    "optional": []
+  "article":
+    "required":
+      - "id"
+      - "title"
+      - "tier"
+      - "binds"
+      - "statements"
+      - "plain"
+      - "rationale"
+      - "mechanism"
+    "optional":
+      - "relations"
+      - "retreat"
+      - "amended_by"
+      - "supersedes_v1"
+      - "note"
+  "mechanism":
+    "required":
+      - "kind"
+      - "live"
+    "optional":
+      - "note"
+      - "stage"
+      - "polarity"
+    "stage_polarity_required_for":
+      - "reject"
+      - "build-check"
+  "amendment_scope":
+    - "schema"
+    - "precedence"
+    - "articles"
+  "statement":
+    "required":
+      - "id"
+      - "pattern"
+      - "strength"
+      - "text"
+    "one_sentence": true
+    "one_polarity": true
+    "numbers": "forbidden"
+    "language": "ja-first"
+  "plain":
+    "required": true
+  "enums":
+    "tier":
+      - "always"
+      - "ask-first"
+      - "never"
+    "binds":
+      - "tool"
+      - "practice"
+      - "both"
+    "pattern":
+      - "ubiquitous"
+      - "event"
+      - "state"
+      - "unwanted"
+      - "optional"
+    "strength":
+      - "must"
+      - "must-not"
+      - "should"
+    "rationale_kind":
+      - "v1-incident"
+      - "scribe2-article"
+      - "folio2-ruling"
+    "mechanism_kind":
+      - "reject"
+      - "build-check"
+      - "human-review"
+      - "none"
+    "mechanism_live":
+      - "now"
+      - "M0"
+      - "delivery-0"
+      - "M1"
+      - "adr"
+    "retreat_kind":
+      - "spike"
+      - "measure"
+      - "ruling"
+    "stage":
+      - "in-loop"
+      - "post"
+    "polarity":
+      - "fail-open"
+      - "fail-closed"
+  "mechanism_live_meaning":
+    "now": "発効（design-intent/ と CLAUDE.md の配置）の時点で、不合格を出せる検査が実在する"
+    "M0": "要件書 M0 の受入で実在する"
+    "delivery-0": "便 0（CI と編集時 guard）で実在する"
+    "M1": "M1 で実在する"
+    "adr": "判断の記録（ADR）の正本 schema が置かれたときに実在する"
+  "mechanism_kind_meaning":
+    "reject": "実行時に機械が操作そのものを拒む（操作は起きない）。操作の口を持たないこと（削除の経路が無い等）も含む"
+    "build-check": "生成・検査の時点で機械が判定し、不合格なら成果物を出さない"
+    "human-review": "人が目で確かめる（機械可読な根拠があればそれを見る）"
+    "none": "機構なし（note に理由が必須）"
+  "mechanism_live_rule": "kind が reject / build-check でも live が now でない条は、その検査結果を「まだ分からない」として出す（P-4.2）。"
+  "tier_mechanism_allowed":
+    "always":
+      - "reject"
+      - "build-check"
+      - "human-review"
+      - "none"
+    "ask-first":
+      - "human-review"
+      - "reject"
+      - "build-check"
+    "never":
+      - "reject"
+      - "build-check"
+  "tier_precedence":
+    - "never"
+    - "ask-first"
+    - "always"
+  "preamble": "precedence"
+
+meta:
+  id: floor-declaration
+  version: v1.0
+  status: draft
+  binding: false
+  baseline: 未記入
+  generated: 2026-09-24
+  owner: 持ち主
+  author: 未記入
+  counts: {always: 1, ask-first: 0, never: 0}
+  approval: {who: 未記入, date: 未記入, ruling: 未記入, verbatim: 未記入, surface: 規則の表の行 R-8 の対話面}
+
+north_star:
+  statement: 未記入
+  for_whom: 未記入
+  judged_by: 未記入
+
+precedence:
+  text: 条どうしの順位は、利用者の本来の憲法の順位に従う。
+  plain: 条どうしが食い違ったときは、あなたの本来の憲法が決めた順位で解きます。
+  binds: both
+  mechanism: {kind: none, live: now, note: 判断の規則であって機械では検査できない。}
+  rationale:
+    - {kind: scribe2-article, ref: 本来の憲法の順位の節（番号は利用者が書く）}
+
+articles:
+  - id: P-1
+    title: 承認の受け方と散文の門の値
+    tier: always
+    binds: both
+    statements:
+      - {id: P-1.1, pattern: ubiquitous, strength: must, text: 本来の憲法の条（番号は利用者が書く）に従い、承認は規則の表の行 R-8 の対話面を通ったものだけを受け取り、散文の門は行 R-16 の値で数える。}
+    plain: 承認は決まった対話面を通ったものだけを受け取り、設計ノートの散文の門は規則の表の値で数えます。どちらも、あなたの本来の憲法の条に従います。
+    rationale:
+      - {kind: scribe2-article, ref: 本来の憲法の条（番号は利用者が書く）}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄と設計ノートの散文を、床が行 R-8 と行 R-16 の値で数える。}
+    relations: {rules: [R-8, R-16]}
+
+rules_pointer: 数値の決まりは規則の表にまとめ、条文は数値を書かずに行の番号で呼ぶ。
+amendment: 未記入
+glossary_pointer: この章は、この文書に出てくる言葉の意味をまとめた一覧です。語と定義の元は語彙の file 1 つに置きます。
+sources: []
