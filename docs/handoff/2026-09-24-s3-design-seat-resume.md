@@ -3,7 +3,7 @@
 次の席が最初に読む file。読む順: この file → docs/handoff/2026-09-24-v3-kickoff.md → docs/handoff/2026-09-24-v2-leftovers-for-v3.md（scribe2 席の送り物・c17b4b2）→ docs/grill/2026-09-24-D-tech-stack.md。
 
 ## 1. いまどこか（2026-09-24T22:08Z 更新・器が口座を移動中）
-- **裁定あり 2026-09-24T22:08Z**: 持ち主「それでうまくいったんならRustがいいんじゃない？」= 面の技術は Rust の wasm（Leptos）。ADR-3 は **accepted**（裁定 id = user 2026-09-24T22:07Z・記帳先 s2-07l.214 notes・scribe2 席が記帳）。**次の席の最初の手 = 契約 v0.2（作業場 contract.md §7）を決めて設計ノートへ写す**。
+- **裁定あり 2026-09-24T22:08Z**: 持ち主「それでうまくいったんならRustがいいんじゃない？」= 面の技術は Rust の wasm（Leptos）。ADR-3 は **accepted**（裁定 id = user 2026-09-24T22:07Z・記帳先 s2-07l.214 notes・scribe2 席が記帳）。契約 v0.2 は席の決定として design-note/bakeoff-surface.yaml §7 に書いた。**論点 A の 1 問（docs/grill/2026-09-25-A-merge-shape.md §5・推奨 = 憲法 → 面の便 → code の持ち込み）を提示済み・答え待ち**。持ち主は「移動はしない・討論を続ける」と言明（hook の表示は移動中のまま・持ち主の言を優先）。
 - その後: 契約 v0.2（作業場 contract.md §7 の論点を決める）→ 論点 A（合流の形・init 1 発・scribe2 席の設計 doc の path を待つ）へ。生きた server 3 つ（port 8791〜8793）と hub（tailnet-serve）は動いたまま。止めるなら spikes/live/*/pid と ℹ 稼働中のサーバはありませんでした: /home/shuu5/projects/local-projects/scribe3/…/scribe3-spikes/hub。
 - 論点 D: ADR-2（比較試作で決める）発効済み。試作 4 つ完了・結果は design-note/bakeoff-surface.yaml §6・作業場 ~/projects/local-projects/scribe3-spikes（自前 git）・hub は tailnet-serve（`tailnet-serve list` で URL・停止は `tailnet-serve stop --dir …/scribe3-spikes/hub`）・生きた server 3 つ（port 8791〜8793・pid は spikes/live/*/pid・止めるのは s3 席）。**本決定の 1 問（grill 記録 §8・推奨 = Leptos）を持ち主へ提示済み・答え待ち**。答えが来たら ADR-3 を書く。
 - 以下は 13:1xZ 時点の記述（経緯として残す）。
