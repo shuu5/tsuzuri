@@ -1,0 +1,30 @@
+# 判断の記録 ADR-4 — 合流の形と順序（提案中・持ち主の裁定 2026-09-24T22:22Z「よい」・裁定 id は scribe2 の台帳への記帳待ち）
+# 討論の記録は docs/grill/2026-09-25-A-merge-shape.md。folio2 側の前提は folio2 側の判断の記録（番号 21・M3 の出口の利用者 = v3 の置き場）。
+id: ADR-4
+title: v3 は scribe3 の 1 つの workspace に合流し、folio と scribe の境界は導出物の file のまま、順序は憲法の最小版から面の便を経て code の持ち込みへ
+status: proposed
+date: 2026-09-25
+context: |
+  v3 は scribe2 の core と folio2 と面の層を 1 つの repo に合流させる世代で、白紙の書き直しではない。合流先が新しい repo（scribe3）であることは folio2 側の判断の記録（番号 21）の承認で決まっている。
+  folio2 側の判断の記録（番号 21）は M3 の出口の利用者を v3 の置き場と読み替え、folio の実装が v3 の repo へ移る前に判定点 3 つ（置き場で床が合格・契約表の導出物が着地して差分 0・器がその導出物を読んで便を通す）の記帳を求める。判定点の 1 つ目には凍結が要り、凍結には v3 の憲法 v1.0 の承認が要る。
+  今の器（scribe2）は導出物の契約 file を読んで便を運べる。scribe2 は新しい repo を器に載せる口（host init と init と doctor）を設計し便に起票している。
+decision: |
+  (1) repo と workspace: v3 は scribe3 の 1 つの cargo workspace に置く。crate は folio・scribe（core）・scribe-boundary・面の契約の型（serde だけ）・面（Leptos の wasm）・xtask の 6 つ。表示 server は boundary に置く。
+  (2) folio と scribe の境界: 設計ノートの契約表から導出した file を器が読む、既に在る形を採る。同じ workspace で型を直に渡す形は合流の後の別の判断に回す。
+  (3) code の持ち込み: scribe2 と folio2 の履歴を保って持ち込む（元の repo は書き換えない）。書き直さない。
+  (4) 順序: 憲法の最小版 v1.0 の承認と凍結 → 面の実装（ADR-3）を scribe3 の最初の便として今の器 scribe2 で運ぶ（契約表 → 導出物 → 器が読む）→ scribe2 と folio2 の code の持ち込み。論点の順は D → E → A の残り → C → B → F。
+  (5) 器の口: scribe2 の host-init の形（host init は host に 1 回・init は repo に 1 回・doctor）を v3 の要件に採る。
+options:
+  - {id: a, name: 憲法から面の便を経て code へ, text: 決定 (4) の順序。, verdict: adopted, reason: folio2 の M3 の出口を素直に満たし、器の口と受付を scribe3 で実地に使い、設計と code が最初から揃う。}
+  - {id: b, name: code を先に持ち込む, text: 今すぐ 2 つの repo を持ち込み、設計は追って書く。, verdict: rejected, reason: folio2 側の判断の記録（番号 21）の撤退条件を踏んで問い直しが立ち、設計と code の乖離を最初から抱える。}
+  - {id: c, name: 面を別の repo で先に作る, text: 面だけ別の repo で進めて後で合流する。, verdict: rejected, reason: repo が 1 つ増え、合流が 2 回になる。}
+basis: [P-1, ADR-2, ADR-3]
+retreat:
+  kind: ruling
+  condition: 面の便を今の器で運べない（器の受付が導出物を通さない・init の口が scribe3 で立たない）ことが 2 回続いたら、順序を code 先行（案 b）に戻すかを持ち主に問う。数えるのは s3:design 席。
+plain: |
+  v3 の置き場は scribe3 の 1 つにまとめ、中の部品は 6 つに分けます。設計の道具（folio）と器（scribe）のあいだは、今すでに動いている「設計の表から機械が作る写しの file を器が読む」形のままにします。
+  進め方は、まず短い憲法を決めて凍結し、次に画面の実装を scribe3 の最初の便として今の器で運び、そのあとで scribe2 と folio2 の中身を履歴ごと持ち込みます。
+  この順にするのは、folio2 側の取り決め（自分以外の場所で道具が合格するのを見届けてから中身を移す）を守るためです。
+  この記録はまだ提案中で、台帳に裁定 id が付いたときに発効します。
+note: 持ち主の裁定 2026-09-24T22:22Z（s3:design 席の対話面・逐語「よい」・問いは docs/grill/2026-09-25-A-merge-shape.md §5）。裁定 id は scribe2 の台帳 s2-07l.214 notes への記帳を依頼中。
