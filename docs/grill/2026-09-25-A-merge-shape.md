@@ -1,7 +1,7 @@
 # grill 論点 A — 合流の形と順序（討論の記録・正本は design-intent/ の YAML）
 
 - 出自: docs/handoff/2026-09-24-v3-kickoff.md §2 論点 A・docs/handoff/2026-09-24-v2-leftovers-for-v3.md §2 の 2・3・8
-- 状態: 裁定あり（2026-09-24T22:22Z「よい」・ADR-4 提案中・裁定 id は台帳待ち）
+- 状態: 裁定あり（2026-09-24T22:21Z「よい」・ADR-4 発効・記帳先 s2-07l.214）
 - 逐語は台帳へ（この file には写さない）
 
 ## 1. 確認した事実（verified・2026-09-25）
@@ -47,3 +47,4 @@ init の口: scribe2 の host-init.md の形（host init / init / doctor）を�
 ## 6. 経緯
 - 2026-09-25: s3 席が事実を確認し §2〜§5 を持ち主へ提示（答え待ち）
 - 2026-09-24T22:22Z: 持ち主「よい」→ ADR-4 を起こす（proposed）。次は論点 E（憲法の最小版 v1.0 の草案）
+- 2026-09-25: scribe2 席の助言 = init は宣言が在れば skip なので .vessel.toml は scribe3 側で直接 cargo の形へ・trunk は器の上限（cargo / git / bats）の外なので xtask の subcommand から起こす（上限は動かさない）。ADR-4 の note に写した

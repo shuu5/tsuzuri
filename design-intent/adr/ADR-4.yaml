@@ -1,8 +1,8 @@
-# 判断の記録 ADR-4 — 合流の形と順序（提案中・持ち主の裁定 2026-09-24T22:22Z「よい」・裁定 id は scribe2 の台帳への記帳待ち）
+# 判断の記録 ADR-4 — 合流の形と順序（発効 2026-09-25・持ち主の裁定 2026-09-24T22:21Z・記帳先 = scribe2 の台帳 s2-07l.214 notes）
 # 討論の記録は docs/grill/2026-09-25-A-merge-shape.md。folio2 側の前提は folio2 側の判断の記録（番号 21・M3 の出口の利用者 = v3 の置き場）。
 id: ADR-4
 title: v3 は scribe3 の 1 つの workspace に合流し、folio と scribe の境界は導出物の file のまま、順序は憲法の最小版から面の便を経て code の持ち込みへ
-status: proposed
+status: accepted
 date: 2026-09-25
 context: |
   v3 は scribe2 の core と folio2 と面の層を 1 つの repo に合流させる世代で、白紙の書き直しではない。合流先が新しい repo（scribe3）であることは folio2 側の判断の記録（番号 21）の承認で決まっている。
@@ -26,5 +26,11 @@ plain: |
   v3 の置き場は scribe3 の 1 つにまとめ、中の部品は 6 つに分けます。設計の道具（folio）と器（scribe）のあいだは、今すでに動いている「設計の表から機械が作る写しの file を器が読む」形のままにします。
   進め方は、まず短い憲法を決めて凍結し、次に画面の実装を scribe3 の最初の便として今の器で運び、そのあとで scribe2 と folio2 の中身を履歴ごと持ち込みます。
   この順にするのは、folio2 側の取り決め（自分以外の場所で道具が合格するのを見届けてから中身を移す）を守るためです。
-  この記録はまだ提案中で、台帳に裁定 id が付いたときに発効します。
-note: 持ち主の裁定 2026-09-24T22:22Z（s3:design 席の対話面・逐語「よい」・問いは docs/grill/2026-09-25-A-merge-shape.md §5）。裁定 id は scribe2 の台帳 s2-07l.214 notes への記帳を依頼中。
+  この記録はあなたの承認で発効しています。承認の記帳先は scribe2 の台帳です。
+approval:
+  who: 持ち主
+  date: 2026-09-25
+  ruling: s2-07l.214（裁定 id = user 2026-09-24T22:21Z・notes に逐語）
+  verbatim: よい
+  surface: R-8
+note: 裁定の時刻は会話記録の user turn の timestamp 22:21:34Z（scribe2 席の実測）。面の便の前に scribe3 の宣言（.vessel.toml）を cargo の形へ直接編集で改め、wasm の組み立て（trunk）は xtask の下に置いて allowed-commands を cargo のままにする（scribe2 席の助言 2026-09-25・上限の rules 行を動かさない）。
