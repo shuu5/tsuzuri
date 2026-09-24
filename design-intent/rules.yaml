@@ -31,19 +31,22 @@ schema:
     why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。
   reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。
 # folio:schema:end
-# 行は人が書く（閾値行と開発規律行）
+# 行は人が書く（閾値行と開発規律行）。初版の裁定 id は憲法の発効の承認を裁定とみなし発効時に全行へ付ける（P-17.3）。出所の欄（note）は前の版の行 id。
 "thresholds":
-  - "id": "R-8"
-    "article": "P-1"
-    "what": "承認の対話面（どの対話面を通った承認を受け取るか）"
-    "value": "持ち主と作業する席の対話面（記帳先 = 台帳の notes + 文書の承認欄）"
-    "kind": "build-check"
-    "status": "仮"
-    "ruling": "未記入"
-    "ruled_at": "未記入"
-    "stage": "post"
+  - {"id": "R-1", "article": "P-13", "what": "席の手元の生成区間（CLAUDE.md と SessionStart の brief）の本文の総バイト数", "value": "8,000 byte 以下", "kind": "deny", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = folio2 R2（凍結）。器の brief の実測は 2,213 byte（2026-09-24）"}
+  - {"id": "R-2", "article": "P-26", "what": "依存の予算（直接依存の本数・1 PR に足せる本数・増分 check の実測差の閾値）と使ってよいライセンスの一覧", "value": "直接依存 12 本 以下（core）・面の crate は別枠（初期値は面の便で決める）・追加は 1 PR 1 本・増分 check +0.3 秒 超は理由必須・ライセンスは MIT / Apache-2.0 / Unicode-3.0 / CC0-1.0 / BSL-1.0 の許可一覧", "kind": "deny", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = scribe2 R-C13-1・folio2 R6（未定だったもの）・判断の記録 ADR-3 決定 (3)"}
+  - {"id": "R-3", "article": "P-10", "what": "同じ種類の失敗の繰り返し上限（超えたら止めて人へ）", "value": "2 回", "kind": "deny", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "in-loop", "note": "出所 = folio2 R7"}
+  - {"id": "R-4", "article": "P-22", "what": "大きさの上限（core の総行数・1 module の行数・歯と source の行数比・関数の粒度）", "value": "core 20,000 行 以下・1 module 1,500 行 以下・歯:source 1.0 以下・関数 60 行 以下と複雑度 15 以下と引数 5 以下", "kind": "deny", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = scribe2 R-C4-1〜R-C4-4"}
+  - {"id": "R-5", "article": "P-26", "what": "compile の検出線（増分 check の秒数・CI の分数・link の割合・記録の間隔・起票の閾値）", "value": "増分 check p50 10 秒 以下・CI 5 分 以下・link 20% 以下・週次で記録・前回比 +20% の悪化で原因 crate を名指した起票", "kind": "detect", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = scribe2 R-C13-3（PR は止めない）"}
+  - {"id": "R-6", "article": "P-23", "what": "1 run の token の上限と検知", "value": "未定", "kind": "deny", "status": "未定", "ruling": "未記入", "ruled_at": "未記入", "stage": "in-loop", "note": "出所 = scribe2 R-C6-1。値は code の持ち込みのときに scribe2 の宣言 file から写す"}
+  - {"id": "R-7", "article": "P-11", "what": "席の停止の検知条件と再起動先・新規投入の線", "value": "未定", "kind": "deny", "status": "未定", "ruling": "未記入", "ruled_at": "未記入", "stage": "in-loop", "note": "出所 = scribe2 R-C9-1。値は code の持ち込みのときに scribe2 の宣言 file から写す"}
+  - {"id": "R-8", "article": "P-12", "what": "承認の対話面（どの対話面を通った承認を受け取るか）", "value": "持ち主と orchestrator 席の対話面（記帳先 = 台帳の notes の逐語 + 文書の承認欄 + 器の承認の event）", "kind": "build-check", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = folio2 R8・scribe2 R-C7-1（user 直）"}
+  - {"id": "R-9", "article": "P-25", "what": "変異生存率の記録の間隔（deny 化の裁定材料）", "value": "週次で記録・deny 化の裁定材料は実測 2 周分", "kind": "detect", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = scribe2 R-C12-1"}
+  - {"id": "R-10", "article": "P-24", "what": "lint で deny にする書き方の一覧", "value": "unwrap・expect・panic・todo・unimplemented・unreachable・process の exit・slice の添字・debug の macro（dbg）・直接の stdout と stderr の print・使わない must-use の値・unsafe（forbid）", "kind": "deny", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = scribe2 C11（workspace の clippy.toml と Cargo.toml の lints）"}
+  - {"id": "R-11", "article": "P-14", "what": "編集の時点で止める guard（極性一覧で stage = in-loop）の本数の下限", "value": "1 本 以上", "kind": "deny", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = folio2 R13"}
+  - {"id": "R-12", "article": "P-6", "what": "AI へ常時渡す説明文の合計（器と道具が所有する AI 係と skill の名前 + 説明）", "value": "2,000 字 以下", "kind": "deny", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "stage": "post", "note": "出所 = folio2 R1"}
   - "id": "R-16"
-    "article": "P-1"
+    "article": "N-2"
     "what": "設計ノートの散文の門（規範の印の一覧と、印を持つ文に許さない「数と単位」の単位の一覧）"
     "value":
       "marks":
@@ -79,4 +82,9 @@ schema:
     "ruling": "未記入"
     "ruled_at": "未記入"
     "stage": "post"
-"discipline": []
+    "note": "出所 = folio2 R16（骨格の雛形が持つ値そのまま）"
+"discipline":
+  - {"id": "D-1", "article": "P-16", "what": "並列で AI を起動する全ての起動点で、使うモデルと予算（token の上限）を明示し、席の設定を継承させない。作業者の内側は opus まで、1 件ずつの判定は sonnet 可", "kind": "human-review", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "note": "出所 = folio2 D1・D2・D4"}
+  - {"id": "D-2", "article": "P-7", "what": "並列実行の返り値は file に落とし、通知は要約だけにする（agent は自分の出力 file だけ書く）", "kind": "human-review", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "note": "出所 = folio2 D5"}
+  - {"id": "D-3", "article": "P-12", "what": "持ち主への問い（承認の要求・反対側からの確認・相談窓口の質問）は対話面（R-8）の散文で 1 論点 1 問として出し、選択式の問いの窓を使わない", "kind": "human-review", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "note": "出所 = folio2 D10・s3:design 席の運用（grill は 1 論点 1 問・推奨 1 つ）"}
+  - {"id": "D-4", "article": "N-6", "what": "版管理へ載せる file に tailnet の住所・機器名（host 名）・口座名を書かない", "kind": "human-review", "status": "仮", "ruling": "未記入", "ruled_at": "未記入", "note": "出所 = folio2 D8"}
