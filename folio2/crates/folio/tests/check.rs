@@ -739,9 +739,9 @@ fn retired_render_help_does_not_list_render() {
 /// 一覧を足すときはこの歯と憲法 P-1 の機構の注を同じ便で直す（P-1.2・天井の 12 周目の実態 F-1）。
 #[test]
 fn p1_commands_closed_list() {
-    const CLOSED: [&str; 12] = [
-        "check", "inject", "parts", "face", "figure", "build", "intake", "hello", "ceiling", "schema",
-        "graph", "serve",
+    const CLOSED: [&str; 13] = [
+        "check", "inject", "parts", "face", "figure", "build", "derive", "intake", "hello", "ceiling",
+        "schema", "graph", "serve",
     ];
     let out = Command::new(env!("CARGO_BIN_EXE_folio"))
         .arg("--help")

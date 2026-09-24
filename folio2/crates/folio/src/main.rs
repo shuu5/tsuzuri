@@ -9,6 +9,7 @@ mod ceiling_src;
 mod check;
 mod constitution_enums;
 mod cursor;
+mod derive;
 mod entrance;
 mod face;
 mod face_adr;
@@ -180,6 +181,23 @@ enum Command {
         #[arg(long)]
         write: bool,
         /// 配信先の 3 面 + 判断の記録の面 + 設計ノートの面 + 様式 2 本と正本の byte 一致を検査する（無い 2・不一致 1・一致 0）
+        #[arg(long)]
+        check: bool,
+    },
+    /// 契約表を持つ設計ノートから器の形の導出物（1 文書 1 file の <文書 id>.toml）を置き場へ書く（--write）・置き場の導出物との
+    /// byte 一致を数える（--check）。配信の組み立てから切り離した独立の命令で、面の生成器も様式の file も呼ばない
+    #[command(name = floor_note::DERIVED_SUBCOMMAND, group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
+    Derive {
+        /// 正本の置き場（design-note/ と、その親 dir の contracts/schema.toml を読む）
+        #[arg(long, default_value = "design-intent")]
+        dir: PathBuf,
+        /// 導出物の置き場（既定なし・消費側が宣言する・相対なら --dir からの相対・絶対ならそのまま）
+        #[arg(long)]
+        out: PathBuf,
+        /// 違う導出物だけを置き場へ書く（全部か無しか・導出元の無い .toml は消さずに名を出す）
+        #[arg(long)]
+        write: bool,
+        /// 導出元を持つ導出物と置き場の file の byte 一致を数える（一致 0・違う・置き場に無い 1・導出できない・置き場が無い 2）
         #[arg(long)]
         check: bool,
     },
@@ -452,6 +470,26 @@ fn main() -> ExitCode {
             };
             let outcome = site::run(&dir, &out, mode);
             if let Some(line) = &outcome.stdout {
+                println!("{line}");
+            }
+            if let Some(line) = &outcome.stderr {
+                eprintln!("{line}");
+            }
+            ExitCode::from(outcome.verdict.exit_code() as u8)
+        }
+        Command::Derive {
+            dir,
+            out,
+            write,
+            check: _,
+        } => {
+            let mode = if write {
+                derive::Mode::Write
+            } else {
+                derive::Mode::Check
+            };
+            let outcome = derive::run(&dir, &out, mode);
+            for line in &outcome.stdout {
                 println!("{line}");
             }
             if let Some(line) = &outcome.stderr {

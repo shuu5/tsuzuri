@@ -114,7 +114,7 @@ schema:
     empty_list_note: 器の読み手は空の配列を拒む（緩めない）ので、空の一覧は key ごと省いて表す。YAML 正本の側では空の一覧（depends が空 等）を書いてよく、導出器が省く
     value_grammar: [text, list-of-text, number, bool]
     placement: 消費側（器 scribe2）の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）
-    check: {command: folio build --check, verdict_on_diff: nonzero, stage: post}
+    check: {command: folio derive --check, verdict_on_diff: nonzero, stage: post}
     derived_note: 判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため
   landing:
     source_of_truth: scribe2 の記録（record）

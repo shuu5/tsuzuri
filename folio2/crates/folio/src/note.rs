@@ -3,7 +3,7 @@
 //! 数えるのは 欄の決まり（同じ dir の `schema.yaml`）の schema 節が定める形（文書と meta の欄・節の番号と型・
 //! 型ごとの行の欄と値域・承認欄の要否）と、契約表の節の欄（器 scribe2 の導出 file `contracts/schema.toml` から読む・
 //! 欄の一覧も値域も自分の型にも散文にも持たない・FR10）と、参照 id の解決（folio2 が所有する id 空間）である。
-//! 散文の門（FR12・rules 行 R-16）は便 24 で入り、索引（FR14）は 2026-09-22 に着地した（folio graph --print・graph.rs）。導出物（FR11）は未実装（欄の決まりの注が明記する）。
+//! 散文の門（FR12・rules 行 R-16）は便 24 で入り、索引（FR14）は 2026-09-22 に着地した（folio graph --print・graph.rs）。導出物（FR11）は便 119 の独立の命令 folio derive（derive.rs）が、ここの読み手 3 つ（load_notes・has_contract_table・load_external）を共有して組む。
 //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、`design-note/schema.yaml` の schema 節はその写し
 //! （判断の記録の欄の決まり `adr.rs` と同じ作り・N-3.1）。パターンの文字列は定数として字面で持つだけで、
 //! 形の判定は字の走査で行う（正規表現は使わない）。器の導出 file（TOML）も行走査で読む（外部 crate を足さない）。
@@ -44,17 +44,17 @@ const PROSE_GATE: &str = "prose-gate";
 // ── 入口 ──
 
 /// 読めた設計ノート 1 本（file 名・id（file 名の stem）・木）。
-struct NoteDoc {
-    file: String,
-    id: String,
-    root: Node,
+pub(crate) struct NoteDoc {
+    pub(crate) file: String,
+    pub(crate) id: String,
+    pub(crate) root: Node,
 }
 
 /// 器（scribe2）の導出 file の 1 欄。
-struct Field {
-    name: String,
-    need: String,
-    shape: String,
+pub(crate) struct Field {
+    pub(crate) name: String,
+    pub(crate) need: String,
+    pub(crate) shape: String,
 }
 
 /// (a) `<dir>/design-note/` の欄の決まりの写しと設計ノートを検査する。
@@ -167,7 +167,7 @@ fn read(path: &Path) -> Result<yaml::Doc, String> {
 
 /// dir の直下の `.yaml`（`schema.yaml` を除く）を名の昇順に読む。
 /// symlink・読めない・parse できない・最上位が欄の表でない は「まだ分からない」（他の 6 file と同じ読み手）。
-fn load_notes(nd: &Path, report: &mut Report) -> Vec<NoteDoc> {
+pub(crate) fn load_notes(nd: &Path, report: &mut Report) -> Vec<NoteDoc> {
     let mut names: Vec<String> = match fs::read_dir(nd) {
         Ok(entries) => entries
             .filter_map(Result::ok)
@@ -222,7 +222,7 @@ fn load_notes(nd: &Path, report: &mut Report) -> Vec<NoteDoc> {
 }
 
 /// 契約表の節を 1 つでも持つか。
-fn has_contract_table(root: &Node) -> bool {
+pub(crate) fn has_contract_table(root: &Node) -> bool {
     root.get("sections")
         .and_then(Node::as_seq)
         .unwrap_or_default()
@@ -233,7 +233,7 @@ fn has_contract_table(root: &Node) -> bool {
 // ── (a) 器の導出 file（行走査で読む） ──
 
 /// `<dir>` の親 dir の `contracts/schema.toml` を読む。読めない・期待する形でない は「まだ分からない」。
-fn load_external(dir: &Path, report: &mut Report) -> Option<Vec<Field>> {
+pub(crate) fn load_external(dir: &Path, report: &mut Report) -> Option<Vec<Field>> {
     let mut unreadable = |why: String| -> Option<Vec<Field>> {
         report.unknown(format!("{EXTERNAL_PATH}: 器の導出 file が読めない: {why}"));
         None

@@ -100,7 +100,7 @@ schema:
     semantic_check_owner: scribe2
     semantic_check_note: 行の id の一意・要件の欄が要件書に実在・節の欄が同じ文書に実在し本文が非空・依存の解決と輪の無さ・検証の欄の形・触る型の閉包が書き込み範囲に収まること、は器（scribe2）の 1 つの関数（編集時・黙って飛ばさない）が持つ。folio2 は持たない（ADR-3 決定 (3)・要件書 scope_m1.not_build）
     folio_check: [yaml-form, derived-diff-zero, own-id-space]
-    folio_check_note: 契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）。このうち導出物の差分 0（derived-diff-zero）は未実装である = 要件書 FR11 の便が入るまで folio はこの検査を回さず、folio build --check もこれを数えない（その間この検査の結果は「まだ分からない」として扱う・P-4.2）
+    folio_check_note: 契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）。このうち導出物の差分 0（derived-diff-zero）は、配信の組み立て（folio build）から切り離した独立の命令 folio derive --check が数える（便 119・判断の記録 ADR-16 決定 (5)）。folio check と folio build はこの検査を回さない
   derived:
     format: toml-subset
     extension: .toml
@@ -114,8 +114,8 @@ schema:
     empty_list_note: 器の読み手は空の配列を拒む（緩めない）ので、空の一覧は key ごと省いて表す。YAML 正本の側では空の一覧（depends が空 等）を書いてよく、導出器が省く
     value_grammar: [text, list-of-text, number, bool]
     placement: 消費側（器 scribe2）の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）
-    check: {command: folio build --check, verdict_on_diff: nonzero, stage: post}
-    derived_note: 判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。導出物を組む口と差分を数える口は未実装である（要件書 FR11 の便で入る・それまで derived の節は決めた形の記録）
+    check: {command: folio derive --check, verdict_on_diff: nonzero, stage: post}
+    derived_note: 判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。導出物を組む口（folio derive --write）と差分を数える口（folio derive --check）は便 119 で入った。どちらも面の生成器も様式の file も呼ばず、導出物の置き場（--out）は消費側が宣言する（既定なし・判断の記録 ADR-16 決定 (5)）。値に二重引用符・逆斜線・改行が在る行は、escape しない形では書けないので導出せず「まだ分からない」とする
   landing:
     source_of_truth: scribe2 の記録（record）
     read_port: 統合先の commit（squash）の本文の末尾の印（trailer・契約 id と要件 id・器が書く）
@@ -154,7 +154,7 @@ schema:
     post: [yaml-form, derived-diff-zero, own-id-space, prose-gate, prose-mentions]
     polarity_list_feed: true
     p18_4_judged_by: R-13
-    guards_note: 設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は未実装である（要件書 FR11 の便が入るまで、極性一覧へは「まだ無い検査」として寄せる）。prose-mentions は規則の表の行 R-17 の床の歯（2026-09-22 着地・実装 crates/folio/src/mentions.rs・台帳 f2-648.131）で、対象の file の閉じた一覧に design-note/ が在る＝設計ノートの散文の欄に現れた id が、その行の型付きの欄にも相手の行の型付きの欄にも無ければ事後に数える
+    guards_note: 設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は folio derive --check が数える（便 119・事後の検出で、編集の時点で止める仕掛けの代わりにしない）。prose-mentions は規則の表の行 R-17 の床の歯（2026-09-22 着地・実装 crates/folio/src/mentions.rs・台帳 f2-648.131）で、対象の file の閉じた一覧に design-note/ が在る＝設計ノートの散文の欄に現れた id が、その行の型付きの欄にも相手の行の型付きの欄にも無ければ事後に数える
 # folio:schema:end
 
 mapping:

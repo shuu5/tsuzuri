@@ -474,7 +474,8 @@ fn f96_a_broken_source_makes_the_digest_inconclusive() {
 
 const F99_SCRIPT: &str = "tests/fixtures/schema/node-digest.py";
 const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
-const F99_ANCHOR_SHA256: &str = "49286329ce63895f7e52e5e9046d321ec6036b9feaf507022f566fb14426b11b";
+/// 便 119: 床の凍結の土台の導出物の検査の命令の名（folio build --check → folio derive --check）で残差の 2 行だけが動いた値。
+const F99_ANCHOR_SHA256: &str = "45741553abe272237d1997dbd2c77d549a956b8253dc5eca8fced6fc67ec125d";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。

@@ -1,0 +1,23 @@
+schema = 1
+
+[[contract]]
+id = "a"
+title = "導出物を組む口"
+req = ["FR11"]
+section = "1"
+write-set = ["+src/new.rs", "src/old.rs"]
+verify = ["cargo nextest run -p folio --test derive f119_"]
+size = "M"
+done = "凍結 anchor と byte 一致する"
+goal = "契約表から器の形の導出物を組む。 字下げした行も trim して繋ぐ（#・& は字のまま）。 空行は落とす。"
+
+[[contract]]
+id = "b"
+title = "差分を数える口"
+req = ["FR11", "AC9"]
+section = "2"
+verify = ["cargo nextest run -p folio --test derive f119_", "cargo clippy --workspace --all-targets -- -D warnings"]
+size = "S"
+done = "1 字の差で非 0 になる"
+depends = ["a"]
+goal = "差分を数える。"

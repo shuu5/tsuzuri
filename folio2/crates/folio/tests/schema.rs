@@ -15,6 +15,8 @@
 //!
 //! 便 57（docs/design/delivery-57.md §1 (c)）: 設計ノートの側の注 4 つに「未実装である」を足した（8 の定数を 15305 byte と新しい要約値に）。
 //! 20. 設計ノートの側の実の生成区間が凍結 anchor tests/fixtures/schema/note-region.txt と byte 一致 ∧ 注 folio_check_note の行に「未実装である」を含む。
+//!     便 119（docs/design/delivery-119.md §1 (c)(f)）: 注 3 つは「未実装である」を含まず字 folio derive --check を含む形に改め、名を
+//!     schema_design_note_region_matches_the_frozen_anchor_and_names_the_derive_command に（8 の定数を 16721 byte と新しい要約値に）。
 //!
 //! 便 58（docs/design/delivery-58.md §1 (e)）: 承認者の値域に orchestrator 席 を足した（1 の定数を 22254 byte と新しい要約値に）。
 //! 21. 判断の記録の側の実の生成区間が凍結 anchor tests/fixtures/schema/adr-region.txt と byte 一致 ∧ approver の行に orchestrator 席 を含む。
@@ -38,10 +40,11 @@ const REGION_BYTES: usize = 24202;
 const REGION_SHA256: &str = "0c95ab5011ff3a09ec3b6cdb4dd0bc3a6150ca5ca11ee92c7e233e96520f9ef3";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
-/// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改めた後の値）。
+/// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改め、便 119 で導出物の検査の命令の名と
+/// 注 3 つを直した後の値）。
 const NOTE_REGION_LINES: usize = 137;
-const NOTE_REGION_BYTES: usize = 16424;
-const NOTE_REGION_SHA256: &str = "bcc821c9ccf458e06cc2591896901a5e3c11358762117e9e5eb59df631e99a8f";
+const NOTE_REGION_BYTES: usize = 16721;
+const NOTE_REGION_SHA256: &str = "d10d261b77f94b3410fdda4f4e3672f94ba11647d1e14ff222685b4e895ed83b";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
 /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
@@ -545,12 +548,12 @@ fn schema_write_restores_the_design_note_region_and_is_idempotent() {
     assert_outcome(&w.schema(&["--check"]), 0, &["一致"]);
 }
 
-// ── 便 57: 設計ノートの側の注に「未実装である」 ──
+// ── 便 57 → 便 119: 設計ノートの側の注は導出物の命令を名指す ──
 
-// ── 20. 実の生成区間は凍結 anchor と byte 一致・注 folio_check_note に「未実装である」を含む ──
+// ── 20. 実の生成区間は凍結 anchor と byte 一致・注 3 つが folio derive --check を名指し「未実装である」を含まない ──
 
 #[test]
-fn schema_design_note_region_matches_the_frozen_anchor_and_says_unimplemented() {
+fn schema_design_note_region_matches_the_frozen_anchor_and_names_the_derive_command() {
     let text =
         fs::read_to_string(repo_root().join("design-intent/design-note/schema.yaml")).unwrap();
     let cur = region(&text);
@@ -558,13 +561,14 @@ fn schema_design_note_region_matches_the_frozen_anchor_and_says_unimplemented() 
         fs::read_to_string(repo_root().join("tests/fixtures/schema/note-region.txt")).unwrap();
     assert_eq!(cur, anchor, "実の生成区間が凍結 anchor と byte 一致");
     assert_eq!(cur.len(), NOTE_REGION_BYTES);
-    // 注 3 つ（folio_check_note・derived_note・guards_note）は「未実装である」を含む（index_note は便 103 で落ちた）
+    // 注 3 つ（folio_check_note・derived_note・guards_note）は「未実装である」を含まず、導出物の命令を名指す（便 119）
     for key in ["folio_check_note", "derived_note", "guards_note"] {
         let line = cur
             .lines()
             .find(|l| l.trim_start().starts_with(&format!("{key}: ")))
             .unwrap_or_else(|| panic!("注 {key} の行が無い"));
-        assert!(line.contains("未実装である"), "{key}: {line}");
+        assert!(!line.contains("未実装である"), "{key}: {line}");
+        assert!(line.contains("folio derive --check"), "{key}: {line}");
     }
 }
 

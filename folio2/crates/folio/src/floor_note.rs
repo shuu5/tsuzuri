@@ -1,7 +1,7 @@
 //! 設計ノートの床の定数（便 114・docs/design/delivery-114.md §1・ADR-15 決定 (2)(3)・責務の層 1 読む）。`note.rs` から
 //! 欄の集合の型 `Keys` とその 2 つの method・欄の決まりの定数・床の木 `FLOOR` を字を変えずに降ろした。検査の本体と
 //! 置き場と違反の種別は `note.rs` に残る。見え方は `note.rs` の検査が読む定数と欄の集合の型・必須の欄・2 つの method だけを広げた。
-//! 読み手は `note.rs` の検査・`schema.rs`（欄の決まりの生成区間の導出）。
+//! 読み手は `note.rs` の検査・`schema.rs`（欄の決まりの生成区間の導出）・`derive.rs`（導出物の命令・便 119）。
 
 use crate::floor::{Floor, keys_floor};
 
@@ -95,6 +95,19 @@ pub(crate) const FIGURE_ENTRY: Keys = Keys {
     required: &["id", "type", "caption", "spec"],
     optional: &["refs", "note"],
 };
+/// 導出物の拡張子と配列の名（derived の節・導出の命令 `derive.rs` と写しが同じ定数を引く・便 119）。
+pub(crate) const DERIVED_EXTENSION: &str = ".toml";
+pub(crate) const DERIVED_ARRAY: &str = "contract";
+
+/// 導出物の命令の名の字（命令の口 `main.rs` の clap の name と写しの command が同じ字を引く・便 119）。
+macro_rules! derived_subcommand {
+    () => {
+        "derive"
+    };
+}
+pub(crate) const DERIVED_SUBCOMMAND: &str = derived_subcommand!();
+/// 導出物の差分を数える命令（derived の節の check の command）。
+pub(crate) const DERIVED_CHECK_COMMAND: &str = concat!("folio ", derived_subcommand!(), " --check");
 
 /// 床の定数（値は欄の決まり design-note/schema.yaml の schema 節の字面と 1 字も違わない）。`_note` で終わる欄は
 /// 人が読む説明の注（便 46・ADR-9）で、生成区間に在る順と字面のまま持つ＝床の突き合わせ（`floor_diff`）は読まず、
@@ -270,17 +283,17 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                 "folio_check",
                 Floor::Strs(&["yaml-form", "derived-diff-zero", "own-id-space"]),
             ),
-            ("folio_check_note", Floor::Val("契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）。このうち導出物の差分 0（derived-diff-zero）は未実装である = 要件書 FR11 の便が入るまで folio はこの検査を回さず、folio build --check もこれを数えない（その間この検査の結果は「まだ分からない」として扱う・P-4.2）")),
+            ("folio_check_note", Floor::Val("契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）。このうち導出物の差分 0（derived-diff-zero）は、配信の組み立て（folio build）から切り離した独立の命令 folio derive --check が数える（便 119・判断の記録 ADR-16 決定 (5)）。folio check と folio build はこの検査を回さない")),
         ]),
     ),
     (
         "derived",
         Floor::Map(&[
             ("format", Floor::Val("toml-subset")),
-            ("extension", Floor::Val(".toml")),
+            ("extension", Floor::Val(DERIVED_EXTENSION)),
             ("granularity", Floor::Val("one-file-per-doc")),
             ("head", Floor::Val(EXTERNAL_HEAD)),
-            ("array", Floor::Val("contract")),
+            ("array", Floor::Val(DERIVED_ARRAY)),
             (
                 "row_fields",
                 Floor::Val("external_schema の field の name をそのまま + goal"),
@@ -307,12 +320,12 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             (
                 "check",
                 Floor::Map(&[
-                    ("command", Floor::Val("folio build --check")),
+                    ("command", Floor::Val(DERIVED_CHECK_COMMAND)),
                     ("verdict_on_diff", Floor::Val("nonzero")),
                     ("stage", Floor::Val("post")),
                 ]),
             ),
-            ("derived_note", Floor::Val("判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。導出物を組む口と差分を数える口は未実装である（要件書 FR11 の便で入る・それまで derived の節は決めた形の記録）")),
+            ("derived_note", Floor::Val("判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。導出物を組む口（folio derive --write）と差分を数える口（folio derive --check）は便 119 で入った。どちらも面の生成器も様式の file も呼ばず、導出物の置き場（--out）は消費側が宣言する（既定なし・判断の記録 ADR-16 決定 (5)）。値に二重引用符・逆斜線・改行が在る行は、escape しない形では書けないので導出せず「まだ分からない」とする")),
         ]),
     ),
     (
@@ -429,7 +442,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ),
             ("polarity_list_feed", Floor::Val("true")),
             ("p18_4_judged_by", Floor::Val("R-13")),
-            ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は未実装である（要件書 FR11 の便が入るまで、極性一覧へは「まだ無い検査」として寄せる）。prose-mentions は規則の表の行 R-17 の床の歯（2026-09-22 着地・実装 crates/folio/src/mentions.rs・台帳 f2-648.131）で、対象の file の閉じた一覧に design-note/ が在る＝設計ノートの散文の欄に現れた id が、その行の型付きの欄にも相手の行の型付きの欄にも無ければ事後に数える")),
+            ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は folio derive --check が数える（便 119・事後の検出で、編集の時点で止める仕掛けの代わりにしない）。prose-mentions は規則の表の行 R-17 の床の歯（2026-09-22 着地・実装 crates/folio/src/mentions.rs・台帳 f2-648.131）で、対象の file の閉じた一覧に design-note/ が在る＝設計ノートの散文の欄に現れた id が、その行の型付きの欄にも相手の行の型付きの欄にも無ければ事後に数える")),
         ]),
     ),
 ]);
