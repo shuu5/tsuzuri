@@ -1,7 +1,7 @@
-# folio check の歯の fixture（4 file 形・crates/folio/tests/link.rs）。変異 = schema.enums.retreat_kind から ruling を外す（床の定数と食い違う）→ 1。parity の入力にはしない。
+# folio check の歯の fixture（4 file 形・crates/folio/tests/link.rs）。変異 = schema.enums.retreat_kind に床の定数に無い drift を足す（部分集合でない）→ 2（便 122）。parity の入力にはしない。
 schema:
   top_level: [schema, meta, precedence, articles]
-  enums: {retreat_kind: [spike, measure]}
+  enums: {retreat_kind: [spike, measure, ruling, drift]}
   amendment_scope: [schema, precedence, articles]
 meta:
   id: fixture-constitution

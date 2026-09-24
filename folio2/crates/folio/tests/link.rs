@@ -2,6 +2,7 @@
 //! tests/fixtures/link/ の 3 組（違反 0 の最小の手書き 4 file + adr/schema.yaml + adr/ADR-1.yaml に変異 1 つ）で 不合格 1。
 //! 各組の違反はちょうど 1 件で、その種類と文言まで見る（別の理由で落ちた組を緑にしない）。
 //! ただし `amended-by-orphan/` は便 7 の凍結 anchor の列の検査で「anchor が消された」が足されて 2 件。
+//! `retreat-kind-drift/` は便 122 から違反 0・まだ分からない（撤退条件の種類は部分集合で数える）。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -50,9 +51,20 @@ fn assert_single_violation(name: &str, kind: &str, needle: &str) {
     assert!(stdout(&out).contains("不合格"), "{name}");
 }
 
+/// 撤退条件の種類は部分集合で数える（便 122・FR25）。床の定数に無い値 drift を持つ値域は違反でなく「まだ分からない」で、
+/// 合格にならない。部分集合なら黙る側は tests/constitution_range.rs の歯 5 が実の design-intent の写しで見る。
 #[test]
-fn link_retreat_kind_drift_fails() {
-    assert_single_violation("retreat-kind-drift", "adr", "retreat_kind");
+fn link_retreat_kind_drift_is_unknown_and_not_pass() {
+    let name = "retreat-kind-drift";
+    let out = folio_check(&repo_root().join("tests/fixtures/link").join(name));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{name}: {}{err}", stdout(&out));
+    assert!(violations(&out).is_empty(), "{name}: {:?}", violations(&out));
+    assert!(
+        err.lines().any(|l| l
+            == "# まだ分からない: constitution.yaml: schema.enums.retreat_kind の「drift」が判断の記録の床の撤退条件の種類 [spike, measure, ruling] に無い＝判断の記録の撤退条件を置き場の値域で数えられない（FR25）"),
+        "{name}: {err}"
+    );
 }
 
 #[test]

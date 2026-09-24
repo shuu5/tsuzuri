@@ -3,11 +3,12 @@
 //! 判断の記録（adr/）の欄の決まり（便 5・adr）と、判断の記録と正本 4 file・凍結 anchor の列の突き合わせ（便 6・link）と、
 //! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）と、入口の正本の形（便 12・entrance）と、
 //! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）と、天井の正本の形（便 37・ceiling）と、
-//! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ・組み立て時に憲法から導出した型で引く）。
+//! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ）と、置き場の憲法の値域が組み立てた値域の部分集合か（便 122・FR25・
+//! 条の値は置き場の値域で引く・部分集合でない鍵と引けない鍵は「まだ分からない」）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
@@ -178,7 +179,8 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
     match load_all(dir, &mut report) {
         Some(src) => {
             let history = anchor::history_ids(dir);
-            check_constitution(&src.constitution, &mut report);
+            let range = place_range(&src.constitution, &mut report);
+            check_constitution(&src.constitution, &range, &mut report);
             check_rules(&src.rules, &mut report);
             check_vocabulary(&src.vocabulary, &mut report);
             check_srs(&src.srs, &mut report);
@@ -443,7 +445,74 @@ fn duplicate_statement_ids<'a>(rows: impl IntoIterator<Item = &'a Node>, report:
     }
 }
 
-fn check_constitution(root: &Node, report: &mut Report) {
+/// 置き場の憲法の値域（鍵の名 → 値の列・file の順・同じ値は 1 つに）。条の値はこの表で引く（便 122）。
+type PlaceRange = HashMap<String, Vec<String>>;
+
+/// 置き場の憲法の値域の節（schema.enums）の各鍵が、組み立てた版（`constitution_enums::ENUMS`）の同じ鍵の値の部分集合かを
+/// 数える（便 122・FR25・ADR-16 決定 (2)(ウ)・順と重複は問わない）。部分集合でない鍵（組み立てた版に無い値・無い鍵）と、
+/// 引けない鍵（組み立てた版の鍵が節に無い・値が文字列の一覧でない・節が表でない）は鍵ごとに「まだ分からない」（測れない）1 件。
+/// 違反は出さない。返す表は文字列の一覧の鍵だけを持つ（部分集合でない鍵も入れる＝置き場の値域にも無い値は違反のまま）。
+/// 値域を置き場ごとに広げる口は持たない（N-3.1）。
+fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
+    const FILE: &str = "constitution.yaml";
+    let mut range = PlaceRange::new();
+    let Some(section) = root
+        .get("schema")
+        .and_then(|s| s.get("enums"))
+        .and_then(Node::as_map)
+    else {
+        report.pending(format!(
+            "{FILE}: schema.enums（置き場の憲法の値域の節）が表でない＝条の値を置き場の値域で引けない（FR25）"
+        ));
+        return range;
+    };
+    for (key, body) in section {
+        let values: Option<Vec<&str>> = body
+            .as_seq()
+            .and_then(|l| l.iter().map(Node::as_str).collect());
+        let Some(values) = values else {
+            report.pending(format!(
+                "{FILE}: schema.enums.{key} が文字列の一覧でない＝条の値を置き場の値域で引けない（FR25）"
+            ));
+            continue;
+        };
+        let mut list: Vec<String> = Vec::new();
+        for v in values {
+            if !list.iter().any(|x| x == v) {
+                list.push(v.to_string());
+            }
+        }
+        match ce::ENUMS.iter().find(|(k, _)| *k == key.as_str()) {
+            None => report.pending(format!(
+                "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い・FR25）"
+            )),
+            Some((_, built)) => {
+                let outside: Vec<String> = list
+                    .iter()
+                    .filter(|v| !built.contains(&v.as_str()))
+                    .map(|v| format!("「{v}」"))
+                    .collect();
+                if !outside.is_empty() {
+                    report.pending(format!(
+                        "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い・FR25）",
+                        outside.join("・")
+                    ));
+                }
+            }
+        }
+        range.insert(key.clone(), list);
+    }
+    for (key, _) in ce::ENUMS {
+        if !section.iter().any(|(k, _)| k.as_str() == key) {
+            report.pending(format!(
+                "{FILE}: schema.enums に鍵 {key} が無い＝条の {key} の値を置き場の値域で引けない（FR25）"
+            ));
+        }
+    }
+    range
+}
+
+fn check_constitution(root: &Node, range: &PlaceRange, report: &mut Report) {
     const FILE: &str = "constitution.yaml";
     if let Some(top) = schema_top_level(FILE, root, report) {
         unknown_sections(FILE, root, &top, report);
@@ -486,7 +555,7 @@ fn check_constitution(root: &Node, report: &mut Report) {
                 report,
             );
         }
-        check_article_enums(&id, article, &statements, report);
+        check_article_enums(&id, article, &statements, range, report);
         check_statement_polarity(&id, &statements, report);
         duplicate_statement_ids(statements, report);
     }
@@ -494,19 +563,29 @@ fn check_constitution(root: &Node, report: &mut Report) {
 }
 
 /// 条 1 つの値域を持つ欄 10 か所（便 55・ADR-11 決定 (3)(ア)）= 条の tier / binds・規範文の pattern / strength・
-/// rationale の各行の kind・mechanism の kind / live / stage / polarity・retreat の kind。在る欄だけ、値を憲法の正本から
-/// 組み立て時に導出した型（`constitution_enums`）の from_name で引き、引けなければ（文字列でない値も同じ）種別 schema の違反 1 件。
-/// 欄が無い・null のときと、rationale / mechanism / retreat が一覧や表でないときは黙る（必須の欄の有無は別の話）。
-fn check_article_enums(id: &str, article: &Node, statements: &[&Node], report: &mut Report) {
+/// rationale の各行の kind・mechanism の kind / live / stage / polarity・retreat の kind。在る欄だけ、値を置き場の値域
+/// （`place_range` が返した表・便 122）の同じ鍵の値の列で引き、無ければ（文字列でない値も同じ）種別 schema の違反 1 件。
+/// 表に鍵が無い（引けない鍵・`place_range` が「まだ分からない」を出した）欄と、欄が無い・null のときと、
+/// rationale / mechanism / retreat が一覧や表でないときは黙る（必須の欄の有無は別の話）。
+fn check_article_enums(
+    id: &str,
+    article: &Node,
+    statements: &[&Node],
+    range: &PlaceRange,
+    report: &mut Report,
+) {
     const FILE: &str = "constitution.yaml";
-    let mut field = |holder: &Node, name: &str, path: &str, key: &str, known: fn(&str) -> bool| {
+    let mut field = |holder: &Node, name: &str, path: &str, key: &str| {
         let Some(value) = holder.get(name) else {
             return;
         };
         if matches!(value, Node::Null) {
             return;
         }
-        if !value.as_str().is_some_and(known) {
+        let Some(known) = range.get(key) else {
+            return;
+        };
+        if !value.as_str().is_some_and(|v| known.iter().any(|k| k == v)) {
             report.violation(
                 "schema",
                 format!(
@@ -516,12 +595,8 @@ fn check_article_enums(id: &str, article: &Node, statements: &[&Node], report: &
             );
         }
     };
-    field(article, "tier", "tier", "tier", |v| {
-        ce::Tier::from_name(v).is_some()
-    });
-    field(article, "binds", "binds", "binds", |v| {
-        ce::Binds::from_name(v).is_some()
-    });
+    field(article, "tier", "tier", "tier");
+    field(article, "binds", "binds", "binds");
     for st in statements {
         let sid = row_id(st);
         field(
@@ -529,14 +604,12 @@ fn check_article_enums(id: &str, article: &Node, statements: &[&Node], report: &
             "pattern",
             &format!("statements の {sid} の pattern"),
             "pattern",
-            |v| ce::Pattern::from_name(v).is_some(),
         );
         field(
             st,
             "strength",
             &format!("statements の {sid} の strength"),
             "strength",
-            |v| ce::Strength::from_name(v).is_some(),
         );
     }
     if let Some(Node::Seq(items)) = article.get("rationale") {
@@ -546,35 +619,24 @@ fn check_article_enums(id: &str, article: &Node, statements: &[&Node], report: &
                 "kind",
                 &format!("rationale の {} 行目の kind", i + 1),
                 "rationale_kind",
-                |v| ce::RationaleKind::from_name(v).is_some(),
             );
         }
     }
     if let Some(m) = article.get("mechanism") {
-        field(m, "kind", "mechanism.kind", "mechanism_kind", |v| {
-            ce::MechanismKind::from_name(v).is_some()
-        });
-        field(m, "live", "mechanism.live", "mechanism_live", |v| {
-            ce::MechanismLive::from_name(v).is_some()
-        });
-        field(m, "stage", "mechanism.stage", "stage", |v| {
-            ce::Stage::from_name(v).is_some()
-        });
-        field(m, "polarity", "mechanism.polarity", "polarity", |v| {
-            ce::Polarity::from_name(v).is_some()
-        });
+        field(m, "kind", "mechanism.kind", "mechanism_kind");
+        field(m, "live", "mechanism.live", "mechanism_live");
+        field(m, "stage", "mechanism.stage", "stage");
+        field(m, "polarity", "mechanism.polarity", "polarity");
     }
     if let Some(r) = article.get("retreat") {
-        field(r, "kind", "retreat.kind", "retreat_kind", |v| {
-            ce::RetreatKind::from_name(v).is_some()
-        });
+        field(r, "kind", "retreat.kind", "retreat_kind");
     }
 }
 
 /// 規則の表 R-11（便 59・day-1 の Python の床から戻した式）: 規範文の strength と文末の一致 = must-not ⇔ 文末が「ない。」／
 /// must・should ⇔ それ以外。式は床の定数（憲法の schema.one_polarity は宣言で、床はその値を読まない・規則の表 R-11 の what が正本・
-/// ADR-11 決定 (3)(エ)）。合わない 1 本につき種別 R-11 の違反 1 件。strength が値域の外（`check_article_enums` が種別 schema で
-/// 数える）・text が字でない（非空の検査が数える）ときは黙る＝二重に出さない。
+/// ADR-11 決定 (3)(エ)）。合わない 1 本につき種別 R-11 の違反 1 件。strength が組み立てた値域の外（`check_article_enums` が種別 schema で
+/// 数えるか、置き場の値域に在れば `place_range` が「まだ分からない」を出す）・text が字でない（非空の検査が数える）ときは黙る＝二重に出さない。
 fn check_statement_polarity(id: &str, statements: &[&Node], report: &mut Report) {
     for st in statements {
         let Some(strength) = st

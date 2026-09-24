@@ -1,6 +1,6 @@
 //! `folio check` の判断の記録（adr/）と正本 4 file・凍結 anchor の列の突き合わせ（便 6・docs/design/delivery-6.md §1）。
 //! day-1 の床 `scripts/check_draft.py` の adr・refs・vocab の節のうち便 5 が残した突き合わせを同じ式で写す:
-//! 撤退条件の種類の一致・対話面の行・改訂の範囲・判断の記録の id の参照・凍結 anchor の列に在った id・
+//! 撤退条件の種類の部分集合（便 122 から・外の値は「まだ分からない」）・対話面の行・改訂の範囲・判断の記録の id の参照・凍結 anchor の列に在った id・
 //! 判断の記録の本文の英字語・改訂来歴（amended_by ⇔ amends）の双方向。
 //! 凍結 anchor の列そのもの（digest の検算・索引・版管理との照合・現行の写しとの一致）は便 7。
 //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs`）で読み、値は持ち直さない。正規表現は使わない。
@@ -98,7 +98,8 @@ fn amendment_scope(constitution: &Node) -> Vec<String> {
     }
 }
 
-/// (a) 撤退条件の種類。床の定数と憲法の値域の一覧の長さ・字面・順。
+/// (a) 撤退条件の種類。憲法の値域の一覧が床の定数の部分集合か（便 122・FR25・順と重複は問わない）。
+/// 床の定数に無い値（文字列でない値も同じ）が在れば「まだ分からない」（測れない）1 件で、違反は出さない。
 fn retreat_kind(constitution: &Node, report: &mut Report) {
     let floor = adr::floor_strs(&["enums", "retreat_kind"]);
     let Some(items) = constitution
@@ -112,21 +113,22 @@ fn retreat_kind(constitution: &Node, report: &mut Report) {
         );
         return;
     };
-    let same = items.len() == floor.len()
-        && items
-            .iter()
-            .zip(floor.iter())
-            .all(|(n, f)| n.as_str() == Some(f));
-    if !same {
-        let written: Vec<String> = items.iter().map(|n| py_str(Some(n))).collect();
-        report.violation(
-            "adr",
-            format!(
-                "床の retreat_kind [{}] が憲法の値域 [{}] と食い違う（憲法が正・床の定数を直す）",
-                floor.join(", "),
-                written.join(", ")
-            ),
-        );
+    let mut outside: Vec<String> = Vec::new();
+    for n in items {
+        if n.as_str().is_some_and(|v| floor.contains(&v)) {
+            continue;
+        }
+        let shown = format!("「{}」", py_str(Some(n)));
+        if !outside.contains(&shown) {
+            outside.push(shown);
+        }
+    }
+    if !outside.is_empty() {
+        report.pending(format!(
+            "constitution.yaml: schema.enums.retreat_kind の{}が判断の記録の床の撤退条件の種類 [{}] に無い＝判断の記録の撤退条件を置き場の値域で数えられない（FR25）",
+            outside.join("・"),
+            floor.join(", ")
+        ));
     }
 }
 

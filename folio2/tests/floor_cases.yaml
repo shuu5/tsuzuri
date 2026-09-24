@@ -3,7 +3,7 @@
 # 敵対レビュー 1 周目（B1〜B3 / M1〜M7 / m1）・2 周目（fc-1〜fc-9 / fp-1〜fp-7 / loophole-1〜13 / content-1・2・5・11 / fixrun-1〜6）・
 # 3 周目（loophole-v3-1〜6・9〜11・15 / fp3-2・4〜7・9・10 / content-limits-1・2・6・13）・4 周目（loophole-v4-1〜5・7 / F-1〜F-3）・5 周目（doc-v5-1〜2 / loophole-v5-1〜9）の再現と、正の経路（欄の決まりの写し・範囲の増減・空の値・貼れる差分・改行入りの値・浅い写し）を含む。
 # 写しは既定で git の 1 commit（床は版管理の無い写しを「まだ分からない」に落とす）。no_git: true の case だけ版管理なし。
-expected_cases: 142
+expected_cases: 143
 
 shared:
   p8_title_old: &p8_title_old 撤退条件を決定と同時に書く
@@ -21,7 +21,7 @@ shared:
   scope_old: &scope_old '["schema","precedence","articles"]'
   scope_new: &scope_new '["schema","precedence","articles","north_star"]'
   tier_old_json: &tier_old_json '["always","ask-first","never"]'
-  tier_new_json: &tier_new_json '["always","ask-first","never","maybe"]'
+  tier_new_json: &tier_new_json '["never","ask-first","always"]'
   ruling: &ruling f2-648.2 notes 2026-09-12（fixture）
   approval_owner: &approval_owner {who: 持ち主, date: 2026-09-12, ruling: *ruling, verbatim: 承認する, surface: R-8}
   grill_fx: &grill_fx {when: 2026-09-12, who: fixture, where: fixture, summary: fixture の反対側からの確認。}
@@ -126,11 +126,11 @@ shared:
     plain: 検査のための後継です。
   adr5_schema: &adr5_schema
     id: ADR-5
-    title: 段の値域に新しい値（maybe）を足す（fixture・schema 節の架空の改訂）
+    title: 段の値域の値の並びを替える（fixture・schema 節の架空の改訂）
     status: accepted
     date: 2026-09-12
     context: fixture。schema 節の差分が判断の記録で説明されることの検査。
-    decision: 段の値域の欄（schema.enums.tier）に新しい値（maybe）を足す。
+    decision: 段の値域の欄（schema.enums.tier）の値の並びを替える。
     options: *opts_fx
     basis: [A-2, N-3]
     retreat: *retreat_fx
@@ -374,7 +374,7 @@ shared:
   ab9: &ab9 [{adr: ADR-9, date: 2026-09-12, approved_by: 持ち主, ruling: *ruling, previous_text: must, rationale: fixture}]
   ab10: &ab10 [{adr: ADR-10, date: 2026-09-12, approved_by: 持ち主, ruling: *ruling, previous_text: *p8_title_old, rationale: fixture}]
   ab12: &ab12 [{adr: ADR-12, date: 2026-09-12, approved_by: 持ち主, ruling: *ruling, previous_text: *p8_old, rationale: fixture}]
-  tier_new: &tier_new [always, ask-first, never, maybe]
+  tier_new: &tier_new [never, ask-first, always]
   scope_widened: &scope_widened [schema, precedence, articles, north_star]
   # 正の経路の共通の段
   step3: &step3
@@ -682,6 +682,12 @@ cases_amendment:
     why: schema 節の改訂も欄単位の対（一覧は json の 1 値）で説明されれば緑（M5 正）
     mutate: [{file: adr/ADR-5.yaml, create: *adr5_schema}, {file: constitution.yaml, path: schema.enums.tier, value: *tier_new}, {file: constitution.yaml, path: meta.version, value: v1.1}, {freeze_anchor: true}]
     expect_rc: 0
+  - id: schema-amendment-outside-built-range
+    why: 組み立てた版の外の値を値域に足す改訂は、記録で説明しても「まだ分からない」で凍結しない（便 122・FR25・AC22）
+    mutate: [{file: adr/ADR-5.yaml, create: *adr5_schema}, {file: adr/ADR-5.yaml, path: title, value: "段の値域に新しい値（maybe）を足す（fixture・schema 節の架空の改訂）"}, {file: adr/ADR-5.yaml, path: decision, value: "段の値域の欄（schema.enums.tier）に新しい値（maybe）を足す。"}, {file: adr/ADR-5.yaml, path: "amends[0].new_text", value: '["always","ask-first","never","maybe"]'}, {file: constitution.yaml, path: schema.enums.tier, value: [always, ask-first, never, maybe]}, {file: constitution.yaml, path: meta.version, value: v1.1}, {freeze_anchor: true}]
+    expect_rc: 2
+    expect_msg: "schema.enums.tier: 組み立て時の値域に無い値がある（「maybe」"
+    expect_no_file: [anchors/constitution-v1.1.yaml]
   - id: schema-amendment-text-mismatch
     why: schema 節の改訂で対が差分に一致しなければ落ちる（M5）
     mutate: [{file: adr/ADR-5.yaml, create: *adr5_schema}, {file: adr/ADR-5.yaml, path: "amends[0].new_text", value: "[x]"}, {file: constitution.yaml, path: schema.enums.tier, value: *tier_new}, {file: constitution.yaml, path: meta.version, value: v1.1}, {freeze_anchor: true}]
