@@ -1,4 +1,4 @@
-# 判断の記録 ADR-6 — 器の名は tsuzuri（綴）（発効 2026-09-25・持ち主の裁定 user 2026-09-25T00:4xZ・記帳先 = scribe2 の台帳 s2-07l.214 notes）
+# 判断の記録 ADR-6 — 器の名は tsuzuri（綴）（発効 2026-09-25・持ち主の裁定 user 2026-09-25T00:39Z・記帳先 = scribe2 の台帳 s2-07l.214 notes）
 # 討論の記録は docs/grill/2026-09-25-G-name.md。改名の手順は docs/handoff/2026-09-25-rename-to-tsuzuri.md（script は同じ dir の rename-to-tsuzuri.sh）。
 id: ADR-6
 title: 器の名は tsuzuri（綴）とし、名は 1 つの定数から導く値として置き場と道具と台帳の名がそれに従い、人が打つ CLI の名は短い別綴りで台帳の prefix と揃える
@@ -44,7 +44,7 @@ plain: |
 approval:
   who: 持ち主
   date: 2026-09-25
-  ruling: s2-07l.214（裁定 id = user 2026-09-25T00:4xZ・notes に逐語・分は scribe2 席が会話記録で実測）
+  ruling: s2-07l.214（裁定 id = user 2026-09-25T00:39Z・notes に逐語・分は scribe2 席が会話記録で実測）
   verbatim: プロジェクトの名前はtsuzuriにする。ただしCLIコマンドはもっと短くしたい
   surface: R-8
-note: 続く裁定「prefixもCLIコマンドと揃えたい」（同じ時刻帯）も s2-07l.214 の notes に逐語で在る。CLI と prefix の綴りは別の 1 問で決め、決まったらこの記録の決定 (3) に綴りを足す。
+note: 名を決め直すという裁定（user 2026-09-25T00:32Z）と、続く裁定「prefixもCLIコマンドと揃えたい」（user 2026-09-25T00:42Z）も s2-07l.214 の notes に逐語で在る（scribe2 席の実測）。CLI と prefix の綴りは別の 1 問で決め、決まったらこの記録の決定 (3) に綴りを足す。

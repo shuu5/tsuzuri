@@ -2,7 +2,7 @@
 
 前提: 持ち主の裁定で器の名は tsuzuri。改名は **この repo の席（scribe3-13）を閉じてから** 1 度で行う。script は `docs/handoff/rename-to-tsuzuri.sh`（既定は dry-run・`RUN=1` で実行・段ごとに ok / skip を出す・2 度目は全段 skip）。
 
-## 名の写し（実測・2026-09-25T00:4xZ）
+## 名の写し（実測・2026-09-25T00:39Z（名）/ 00:42Z（prefix））
 | 場所 | 今 | 後 | 誰が |
 |---|---|---|---|
 | repo の dir | ~/projects/local-projects/scribe3 | …/tsuzuri | script |
