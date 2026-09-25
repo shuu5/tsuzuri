@@ -840,3 +840,128 @@ fn f138_srs_card_marks_an_unknown_effective_version() {
     let _ = fs::remove_dir_all(&td);
     up_once(&html, "更新 2026-09-01・v0.3");
 }
+
+// ── 便 139: 入口の棚の判断の記録のカードに番号と見出しの一覧（docs/design/delivery-139.md §1 (c)）──
+
+/// 写しの ADR-2 の見出しを `title` に替え、ADR-2 を写して id を ADR-10・見出しを 十番目の記録 にした記録を
+/// 足して入口の面を書く。戻り値 = 面の本文。
+fn index_with_two_records(case: &str, title: &str) -> String {
+    let (td, work) = index_fixture_copy(case);
+    let adr2 = work.join("adr/ADR-2.yaml");
+    let base = fs::read_to_string(&adr2).unwrap();
+    let ten = base.replacen(
+        "id: ADR-2\ntitle: 見本の判断の記録\n",
+        "id: ADR-10\ntitle: 十番目の記録\n",
+        1,
+    );
+    assert_ne!(base, ten, "写しの ADR-10 が作れていない");
+    fs::write(work.join("adr/ADR-10.yaml"), ten).unwrap();
+    if title != "見本の判断の記録" {
+        edit(&adr2, |s| {
+            s.replacen(
+                "title: 見本の判断の記録\n",
+                &format!("title: \"{title}\"\n"),
+                1,
+            )
+        });
+    }
+    let (_, html) = index_from(case, &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    html
+}
+
+/// 棚の判断の記録の card（`<article` から `</article>` まで）。
+fn adr_article(html: &str) -> String {
+    format!(
+        "<article{}</article>",
+        between(adr_card(html), "<article", "</article>")
+    )
+}
+
+/// 一覧の 1 行（番号のリンクと見出し）。
+fn title_row(n: u64, title: &str) -> String {
+    format!("<li><a class=\"xref\" href=\"adr-{n}.html\">ADR-{n}</a><span>{title}</span></li>")
+}
+
+/// 折りたたみの全体（名札と行）。
+fn title_list(rows: &[String]) -> String {
+    format!(
+        "<details class=\"note\"><summary>番号と見出しの一覧（{} 本）</summary><div><ul class=\"basis\">\n{}\n</ul></div></details>",
+        rows.len(),
+        rows.join("\n")
+    )
+}
+
+#[test]
+fn f139_adr_card_lists_each_number_with_its_title_in_number_order() {
+    let html = index_with_two_records("f139-order", "見本の判断の記録");
+    let card = adr_article(&html);
+    assert_eq!(card.matches("<details").count(), 1, "{card}");
+    let want = title_list(&[title_row(2, "見本の判断の記録"), title_row(10, "十番目の記録")]);
+    assert_eq!(card.matches(&want).count(), 1, "「{want}」が無い: {card}");
+    assert!(
+        card.contains(
+            "<span class=\"state ok\">● 2 本</span><span>ADR-2〜ADR-10（提案中 2）</span>"
+        ),
+        "{card}"
+    );
+    // 更新の行の後で card の最後
+    let up = card.find("<span class=\"up\">更新 ").unwrap();
+    let at = card.find(&want).unwrap();
+    assert!(up < at, "折りたたみが更新の行より前: {card}");
+    assert!(
+        card.ends_with(&format!("{want}\n</article>")),
+        "折りたたみが card の最後でない: {card}"
+    );
+}
+
+#[test]
+fn f139_adr_title_is_escaped_verbatim_and_not_cut() {
+    let raw = "<b>前</b> & 後 — 長い見出しの後半も切らずに出す";
+    let html = index_with_two_records("f139-escape", raw);
+    let card = adr_article(&html);
+    let row = title_row(2, &esc(raw));
+    assert_eq!(card.matches(&row).count(), 1, "「{row}」が無い: {card}");
+    assert!(card.contains("長い見出しの後半も切らずに出す"), "{card}");
+    assert!(!html.contains("<b>前</b>"), "生のタグが面に在る");
+}
+
+#[test]
+fn f139_adr_card_has_no_hit_area_and_opens_the_newest() {
+    let html = index_with_two_records("f139-hit", "見本の判断の記録");
+    let card = adr_article(&html);
+    assert!(!card.contains("sc-hit"), "判断の記録の card に当たり判定: {card}");
+    let row = "<p class=\"sc-row\"><span class=\"up\">更新 2026-09-06</span><a class=\"xref\" href=\"adr-2.html\">ADR-2</a>・<a class=\"xref\" href=\"adr-10.html\">ADR-10</a><a class=\"sc-open\" href=\"adr-10.html\">開く →</a></p>";
+    assert_eq!(card.matches(row).count(), 1, "「{row}」が無い: {card}");
+    assert_eq!(
+        html.matches("<a class=\"sc-hit\"").count(),
+        3,
+        "当たり判定はほかの 3 枚の card だけ"
+    );
+}
+
+#[test]
+fn f139_real_adr_card_lists_every_record_title() {
+    let (td, _, html) = real_index("f139-real");
+    let _ = fs::remove_dir_all(&td);
+    let mut rows: Vec<(u64, String)> = fs::read_dir(design_intent().join("adr"))
+        .unwrap()
+        .filter_map(|e| {
+            let name = e.unwrap().file_name().to_string_lossy().into_owned();
+            if !name.starts_with("ADR-") || !name.ends_with(".yaml") {
+                return None;
+            }
+            let y = load_yaml_at(&design_intent().join("adr"), &name);
+            let n: u64 = text(&y, "id").split('-').nth(1).unwrap().parse().unwrap();
+            Some((n, esc(text(&y, "title"))))
+        })
+        .collect();
+    rows.sort_by_key(|(n, _)| *n);
+    assert!(!rows.is_empty(), "実の正本に判断の記録が無い");
+    let lines: Vec<String> = rows.iter().map(|(n, t)| title_row(*n, t)).collect();
+    let want = title_list(&lines);
+    let card = adr_article(&html);
+    assert_eq!(card.matches(&want).count(), 1, "「{want}」が無い: {card}");
+    let list = between(&card, "<ul class=\"basis\">", "</ul>");
+    assert_eq!(list.matches("<li>").count(), rows.len(), "{list}");
+}

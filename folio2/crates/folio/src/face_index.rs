@@ -60,6 +60,9 @@ const SHEET_APPROVED: &str = "承認済み";
 const SHEET_VERBATIM: &str = "言葉どおりの記録";
 const SHEET_MADE_BY: &str = "（folio intake の生成物・手で直さない）";
 
+/// 判断の記録の card の折りたたみの名札（β・便 139）。本数は数えたものだけ（ここには書かない）。
+const ADR_TITLES: &str = "番号と見出しの一覧";
+
 fn dc(c: Component) -> String {
     FRAME.dc(c)
 }
@@ -284,7 +287,7 @@ fn adr_rows(o: &mut Vec<String>, adr: &[Record]) {
         .map(|r| format!("<a class=\"xref\" href=\"{}\">{}</a>", r.file(), r.id))
         .collect::<Vec<_>>()
         .join("・");
-    // 「開く →」と当たり判定は最も新しい番号の記録の面へ
+    // 「開く →」は最も新しい番号の記録の面へ。当たり判定は置かない（効けば下の一覧を覆う・便 139）
     let file = last.file();
     let updated = adr
         .iter()
@@ -292,8 +295,22 @@ fn adr_rows(o: &mut Vec<String>, adr: &[Record]) {
         .max()
         .unwrap_or_default();
     o.push(format!(
-        "<p class=\"sc-row\"><span class=\"up\">更新 {updated}</span>{links}<a class=\"sc-open\" href=\"{file}\">開く →</a><a class=\"sc-hit\" href=\"{file}\" aria-hidden=\"true\" tabindex=\"-1\"></a></p>"
+        "<p class=\"sc-row\"><span class=\"up\">更新 {updated}</span>{links}<a class=\"sc-open\" href=\"{file}\">開く →</a></p>"
     ));
+    // 番号と見出しの一覧（畳んだまま・1 本 1 行・id の数の昇順・見出しは正本の title の逐語で切らない）
+    o.push(format!(
+        "<details class=\"note\"><summary>{ADR_TITLES}（{} 本）</summary><div><ul class=\"basis\">",
+        adr.len()
+    ));
+    for r in adr {
+        o.push(format!(
+            "<li><a class=\"xref\" href=\"{}\">{}</a><span>{}</span></li>",
+            r.file(),
+            r.id,
+            r.title
+        ));
+    }
+    o.push("</ul></div></details>".to_string());
 }
 
 /// 設計ノートの card の 2 行（設計ノートが 1 本以上のとき）。1 行目は本数と状態ごとの数・2 行目は更新と

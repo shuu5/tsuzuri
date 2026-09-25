@@ -227,10 +227,12 @@ fn face_index_shelf_adr_card_is_readable_with_one_record() {
     for want in [
         "<a class=\"xref\" href=\"adr-2.html\">ADR-2</a>",
         "<a class=\"sc-open\" href=\"adr-2.html\">開く →</a>",
-        "<a class=\"sc-hit\" href=\"adr-2.html\"",
+        "<li><a class=\"xref\" href=\"adr-2.html\">ADR-2</a><span>見本の判断の記録</span></li>",
     ] {
         assert!(card.contains(want), "{want} が無い: {card}");
     }
+    // 当たり判定は置かない（効けば一覧を覆う・便 139）
+    assert!(!card.contains("sc-hit"), "{card}");
     assert_eq!(
         html.matches("ページはまだ無い").count(),
         0,

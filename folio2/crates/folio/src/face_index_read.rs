@@ -71,6 +71,8 @@ pub struct Record {
     pub(crate) status: &'static str,
     /// 日付（escape 済み）
     pub(crate) date: String,
+    /// 見出し（正本の title の逐語・escape 済み・切らない・便 139）
+    pub(crate) title: String,
 }
 
 impl Record {
@@ -245,12 +247,13 @@ pub fn records(dir: &Path) -> R<Vec<Record>> {
         let id = a.f("id")?.id()?.to_string();
         let num = adr_number(&id)
             .ok_or_else(|| format!("{name}: id「{id}」の番号が ASCII の数字列でない"))?;
-        a.ef("title")?;
+        let title = a.ef("title")?;
         out.push(Record {
             num,
             status: a.f("status")?.lookup(ADR_STATUS, "判断の記録の状態")?,
             date: a.ef("date")?,
             id,
+            title,
         });
     }
     out.sort_by_key(|r| r.num);
