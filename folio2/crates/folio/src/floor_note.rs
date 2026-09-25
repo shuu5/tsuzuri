@@ -315,7 +315,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             (
                 "placement",
                 Floor::Val(
-                    "消費側（器 scribe2）の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）",
+                    "消費側の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）",
                 ),
             ),
             (
@@ -447,3 +447,23 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         ]),
     ),
 ]);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 便 140: 導出物の置き場の字は消費側の repo を指し、器の名を焼かない（ADR-21 決定 (1)・CON8）。
+    #[test]
+    fn f140_derived_placement_names_no_vessel() {
+        let derived = crate::floor::derive(&FLOOR);
+        let lines: Vec<&str> = derived
+            .lines()
+            .filter(|l| l.starts_with("    placement: "))
+            .collect();
+        assert_eq!(
+            lines,
+            ["    placement: 消費側の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）"]
+        );
+        assert!(!derived.contains("（器 scribe2）"));
+    }
+}

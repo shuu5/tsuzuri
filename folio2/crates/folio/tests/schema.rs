@@ -50,9 +50,10 @@ const REGION_SHA256: &str = "8aca8f764952001b1e2eca1b7f69c1b61e6edb09a7389a466df
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改め、便 119 で導出物の検査の命令の名と
 /// 注 3 つを直した後の値）。便 130 (b)(e): 注 index_note の正本の指し先を graph.rs の定数に直した後の値（行数は不変）。
+/// 便 140 (b): placement の字から（器 scribe2）を外した後の値（17 byte 減・行数は不変）。
 const NOTE_REGION_LINES: usize = 137;
-const NOTE_REGION_BYTES: usize = 16806;
-const NOTE_REGION_SHA256: &str = "21dc7f7cb7304f2da4890cb501aab731697d6b2a620899c23c5610791f994a20";
+const NOTE_REGION_BYTES: usize = 16789;
+const NOTE_REGION_SHA256: &str = "558fc1742fe371f71868912369d716cbc693210a576175ffb3b83cad1b7f151e";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
 /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
@@ -680,4 +681,16 @@ fn f130_the_note_region_index_note_names_the_graph_constants() {
         !line.contains("design-intent/graph.yaml が正本として持つ"),
         "{line}"
     );
+}
+
+// ── f140. 実の生成区間と凍結 anchor の placement は消費側の repo を指し、器の名を焼かない ──
+#[test]
+fn f140_the_note_region_placement_names_no_vessel() {
+    let want = "    placement: 消費側の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）\n";
+    for path in ["design-intent/design-note/schema.yaml", "tests/fixtures/schema/note-region.txt"] {
+        let text = fs::read_to_string(repo_root().join(path)).unwrap();
+        let n = text.lines().filter(|l| l.starts_with("    placement: ")).count();
+        assert_eq!(n, 1, "{path}");
+        assert!(text.contains(want) && !text.contains("（器 scribe2）"), "{path}");
+    }
 }
