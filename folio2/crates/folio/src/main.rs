@@ -360,6 +360,13 @@ fn main() -> ExitCode {
             for msg in report.unknowns.iter().chain(&report.pendings) {
                 eprintln!("# まだ分からない: {msg}");
             }
+            // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
+            if !materials.not_yet_live.is_empty() {
+                eprintln!(
+                    "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: {}",
+                    materials.not_yet_live.join("・")
+                );
+            }
             let verdict = report.verdict();
             out(format!(
                 "folio check: {verdict}（違反 {}・まだ分からない {}）",

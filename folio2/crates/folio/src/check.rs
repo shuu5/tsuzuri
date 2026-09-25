@@ -169,6 +169,28 @@ pub struct Materials {
     pub adr: Option<adr::Adr>,
     /// id の消失と改番の検査が読んだ現行の id。
     pub ids: Option<ids::Current>,
+    /// 機構がまだ無い条の一覧（便 131・ADR-23 決定 (3)・床の判定の外）。正本が読めなければ空。
+    pub not_yet_live: Vec<String>,
+}
+
+/// 憲法の条のうち機構の種別が reject か build-check で live が now でない条を、条の並びのまま「<id>（<live>）」の字の列にする
+/// （便 131・ADR-23 決定 (3)）。欄の欠け・字でない値・組み立てた値域の外の条は数えない（値域と形の検査が別に数える）。
+pub(crate) fn not_yet_live_articles(root: &Node) -> Vec<String> {
+    let Some(articles) = root.get("articles").and_then(Node::as_seq) else {
+        return Vec::new();
+    };
+    articles
+        .iter()
+        .filter_map(|article| {
+            let id = article.get("id").and_then(Node::as_str)?;
+            let m = article.get("mechanism")?;
+            let kind = m.get("kind").and_then(Node::as_str).and_then(ce::MechanismKind::from_name)?;
+            let live = m.get("live").and_then(Node::as_str).and_then(ce::MechanismLive::from_name)?;
+            let waits = matches!(kind, ce::MechanismKind::Reject | ce::MechanismKind::BuildCheck)
+                && live != ce::MechanismLive::Now;
+            waits.then(|| format!("{id}（{}）", live.name()))
+        })
+        .collect()
 }
 
 /// `dir` の正本 7 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を材料に載せて返す）。
@@ -177,8 +199,10 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
     let mut state = None;
     let mut adr_records = None;
     let mut ids_cur = None;
+    let mut not_yet_live = Vec::new();
     match load_all(dir, &mut report) {
         Some(src) => {
+            not_yet_live = not_yet_live_articles(&src.constitution);
             let history = anchor::history_ids(dir);
             let range = place_range(&src.constitution, &mut report);
             check_constitution(&src.constitution, &range, &mut report);
@@ -256,6 +280,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
         state,
         adr: adr_records,
         ids: ids_cur,
+        not_yet_live,
     };
     (report, materials)
 }
