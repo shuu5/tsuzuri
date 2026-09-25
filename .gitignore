@@ -1,6 +1,4 @@
-
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-.beads/proxieddb/
+# beads の台帳（scribe2 と同じ形: 設定と説明だけ追跡・issues と interactions は追跡しない）
+.beads/issues.jsonl
+.beads/interactions.jsonl
+.beads/hooks/
