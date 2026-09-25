@@ -99,10 +99,18 @@ pub(crate) const FIGURE_TYPE_ENUM_REF: &str = "design-intent/preview/parts.json 
 /// 憲法の正本の meta.id・値 = その列の根の anchor の digest（16 進 64 字）。閉じた一覧で、行を足すのは folio2 の便
 /// （持ち主の承認の裁定 id を名指す・行 D-11）。最初の版は表に持たせない（anchor の節の first_version が全行で共通）。
 /// 初版の行は folio2 の憲法 第 1.0 版の凍結の digest（便 121 の前の root_digest の値のまま）。
-pub(crate) const ROOT_DIGESTS: &[(&str, &str)] = &[(
-    "folio2-constitution",
-    "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed",
-)];
+/// 2 行目は scribe3 の憲法 第 1.0 版（scribe3 の版 e52d24c）の始まりの凍結の木の digest（便 133・ADR-16 決定 (7) ⑦・
+/// ADR-21 決定 (4)・利用者の持ち主の承認の裁定 id = scribe2 台帳 s2-07l.214）。
+pub(crate) const ROOT_DIGESTS: &[(&str, &str)] = &[
+    (
+        "folio2-constitution",
+        "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed",
+    ),
+    (
+        "scribe3-constitution",
+        "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9de832f8c5356",
+    ),
+];
 
 /// 床の定数（値は day-1 の床の FLOOR と同じ）。`_note` で終わる欄は人が読む説明の注（便 45・ADR-9）で、
 /// adr/schema.yaml の生成区間に在る順と字面のまま持つ＝床の突き合わせ（`floor_diff`）は読まず、`folio schema` の導出だけが使う。
