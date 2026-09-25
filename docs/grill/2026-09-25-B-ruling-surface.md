@@ -36,3 +36,4 @@
 
 ## 7. 経緯
 - 2026-09-25T01:31Z: 論点 B を開いた（1 問目 = v1 の範囲・推奨 (a) 裁定の輪だけ）。台帳の根の epic は scribe2 席の (a) の合図待ち
+- 2026-09-25T02:4xZ: 根の epic は持ち主が素の terminal で置いた（t3-hub）。子の memo「裁定の控え」は席が canonical の bdw 経由で置いた（t3-hub.1・以後の裁定の逐語はここの notes）。席の対象は t3:orchestrator に確定。.vessel.toml に path の種別の宣言を足した（2481b39）。1 問目は答え待ち
