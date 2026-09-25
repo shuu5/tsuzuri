@@ -299,11 +299,8 @@ fn adr_rows(o: &mut Vec<String>, adr: &[Record]) {
         .join("・");
     // 「開く →」は最も新しい番号の記録の面へ。当たり判定は置かない（効けば下の一覧を覆う・便 139）
     let file = last.file();
-    let updated = adr
-        .iter()
-        .map(|r| r.date.as_str())
-        .max()
-        .unwrap_or_default();
+    // 更新 は各記録の面の日付の最大（便 147）
+    let updated = face::shelf_updated(adr.iter().map(|r| r.dated.as_str()));
     o.push(format!(
         "<p class=\"sc-row\"><span class=\"up\">更新 {updated}</span>{links}<a class=\"sc-open\" href=\"{file}\">開く →</a></p>"
     ));
@@ -343,15 +340,12 @@ fn note_rows(o: &mut Vec<String>, notes: &[Note]) {
         .map(|q| format!("<a class=\"xref\" href=\"{}\">{}</a>", q.file(), q.id))
         .collect::<Vec<_>>()
         .join("・");
-    // 「開く →」と当たり判定は生成日が最も新しい 1 本へ（同じ日付が 2 本以上なら id の順で後の 1 本）
-    let updated = notes
-        .iter()
-        .map(|q| q.generated.as_str())
-        .max()
-        .unwrap_or_default();
+    // 更新 は各設計ノートの面の日付の最大（便 147）。「開く →」と当たり判定はその日付の 1 本へ
+    // （同じ日付が 2 本以上なら id の順で後の 1 本）
+    let updated = face::shelf_updated(notes.iter().map(|q| q.dated.as_str()));
     let last = notes
         .iter()
-        .rfind(|q| q.generated == updated)
+        .rfind(|q| q.dated == updated)
         .map(Note::file)
         .unwrap_or_default();
     o.push(format!(

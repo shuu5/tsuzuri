@@ -347,6 +347,33 @@ pub fn approval_date(x: &X<'_>, unread: &[&str]) -> R<Option<String>> {
     x.g("approval")?.map(|ap| ap.ef("date")).transpose()
 }
 
+// ── 型ごとの面の日付と入口の棚の 更新（便 147・delivery-147.md §1 (b) の 1・2）──
+// 判断の記録と設計ノートの面の鮮度の札・足の行と、入口の棚のカードが同じ口と同じ一覧を読む（P-6.3）。
+
+/// 判断の記録で承認欄を読まない状態（提案中）。
+pub const ADR_UNREAD: &[&str] = &["proposed"];
+/// 設計ノートで承認欄を読まない状態（draft と見本）。
+pub const NOTE_UNREAD: &[&str] = &["draft", "example"];
+
+/// 判断の記録の面の（名・日付）: 承認欄の日付（提案中は読まない）・無ければ（生成・記録の欄 date）（便 146）。
+pub fn adr_dated(a: &X<'_>) -> R<(&'static str, String)> {
+    named(approval_date(a, ADR_UNREAD)?, || a.ef("date"))
+}
+
+/// 設計ノートの面の（名・日付）: 承認欄の日付（draft と見本は読まない）・無ければ（生成・meta.generated）
+/// （便 146）。
+pub fn note_dated(meta: &X<'_>) -> R<(&'static str, String)> {
+    named(approval_date(meta, NOTE_UNREAD)?, || meta.ef("generated"))
+}
+
+/// 入口の棚のカードの 更新 の日付。定め = **その型の文書の面が鮮度の札に出す日付（効いた日）のうち最も新しいもの**。
+/// 型ごとに、憲法 = 今の版の承認の日付（draft は生成日・便 144）／要件書 = 承認欄の最後の 承認 の行（無ければ
+/// 生成日・便 145）／判断の記録 = 各記録の `adr_dated` の最大／設計ノート = 各設計ノートの `note_dated` の最大。
+/// 日付の列（escape 済み）の最大を返し、1 つも無ければ空の字。日付は正本の字のまま比べる（便 147）。
+pub fn shelf_updated<'a>(dates: impl IntoIterator<Item = &'a str>) -> String {
+    dates.into_iter().max().unwrap_or_default().to_string()
+}
+
 /// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図・
 /// 判断の記録は `ADR-<1 以上の数>`（記録の面は 1 本 1 枚なので行き先は記録の id そのもの・便 66）。
 pub fn stop_anchor(doc: &str, at: &str) -> R<()> {
@@ -559,6 +586,47 @@ mod face_labels_tests {
         let m = X::root(&v, "meta");
         assert_eq!(last_approval(&m), Ok(None));
         assert_eq!(dated(&m, None), Ok(("生成", "2026-09-03".to_string())));
+    }
+
+    #[test]
+    fn f147_type_dates_and_shelf_updated() {
+        // 凍結の針（delivery-147.md §1 (b) の 2 の字を手で写した）
+        assert_eq!(ADR_UNREAD, &["proposed"]);
+        assert_eq!(NOTE_UNREAD, &["draft", "example"]);
+        let ap = "approval: {date: \"2026-09-<10>\", who: 持ち主}";
+        let approved = Ok(("承認", "2026-09-&lt;10&gt;".to_string()));
+        // adr_dated: 発効と廃止は承認欄・提案中と承認欄の無い記録は記録の日付
+        let adr = |doc: &str| {
+            let v = yaml::parse_typed(doc).unwrap();
+            adr_dated(&X::root(&v, "a"))
+        };
+        let recorded = Ok(("生成", "2026-09-&lt;07&gt;".to_string()));
+        let date = "date: \"2026-09-<07>\"";
+        for st in ["accepted", "retired"] {
+            assert_eq!(adr(&format!("{{status: {st}, {date}, {ap}}}")), approved, "{st}");
+            assert_eq!(adr(&format!("{{status: {st}, {date}}}")), recorded, "{st}");
+        }
+        assert_eq!(adr(&format!("{{status: proposed, {date}, {ap}}}")), recorded);
+        assert_eq!(adr(&format!("{{status: proposed, {date}}}")), recorded);
+        // note_dated: 発効は承認欄・draft と見本と承認欄の無い発効は生成日
+        let note = |doc: &str| {
+            let v = yaml::parse_typed(doc).unwrap();
+            note_dated(&X::root(&v, "meta"))
+        };
+        let generated = Ok(("生成", "2026-09-&lt;07&gt;".to_string()));
+        let made = "generated: \"2026-09-<07>\"";
+        assert_eq!(note(&format!("{{status: effective, {made}, {ap}}}")), approved);
+        assert_eq!(note(&format!("{{status: effective, {made}}}")), generated);
+        for st in ["draft", "example"] {
+            assert_eq!(note(&format!("{{status: {st}, {made}, {ap}}}")), generated, "{st}");
+        }
+        // shelf_updated: 最大・1 つだけならそれ・空の列は空の字
+        assert_eq!(
+            shelf_updated(["2026-09-08", "2026-09-11", "2026-09-09"]),
+            "2026-09-11"
+        );
+        assert_eq!(shelf_updated(["2026-09-08"]), "2026-09-08");
+        assert_eq!(shelf_updated(std::iter::empty::<&str>()), "");
     }
 
     #[test]

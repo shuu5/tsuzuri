@@ -1155,3 +1155,189 @@ fn f146_real_index_stamp_shelf_and_foot_follow_the_last_approval() {
         assert!(!html.contains(stale.as_str()), "実の入口に生成日の札「{stale}」が在る");
     }
 }
+
+// ── 便 147: 棚のカードの 更新 は各文書の面の鮮度の札の日付の最大（docs/design/delivery-147.md §1 (c) の 2〜4）──
+
+/// card の中の span.up がちょうど 1 つで、その字が `want` であること。
+fn up_span(card: &str, want: &str, what: &str) {
+    assert_eq!(
+        card.matches("<span class=\"up\">").count(),
+        1,
+        "{what}: card の span.up が 1 つでない: {card}"
+    );
+    let span = format!("<span class=\"up\">{want}</span>");
+    assert_eq!(card.matches(&span).count(), 1, "{what}:「{span}」がちょうど 1 つでない: {card}");
+}
+
+/// 写しの正本の書き換え。
+type Rewrite = fn(&str) -> String;
+
+/// 写しの ADR-2 を写した ADR-10 を足し、ADR-10 を `ten`・ADR-2 を `two` で書き換えて入口の面を書く。
+fn index_with_edited_records(case: &str, ten: Rewrite, two: Option<Rewrite>) -> String {
+    let (td, work) = index_fixture_copy(case);
+    let adr2 = work.join("adr/ADR-2.yaml");
+    let base = fs::read_to_string(&adr2).unwrap();
+    let copy = base.replacen("id: ADR-2\n", "id: ADR-10\n", 1);
+    assert_ne!(base, copy, "写しの ADR-10 が作れていない");
+    fs::write(work.join("adr/ADR-10.yaml"), &copy).unwrap();
+    edit(&work.join("adr/ADR-10.yaml"), ten);
+    if let Some(two) = two {
+        edit(&adr2, two);
+    }
+    let (_, html) = index_from(case, &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    html
+}
+
+/// 記録の状態と欄 date を替え、`approved` が在れば承認欄（その日付）を足す。
+fn adr_state(s: &str, status: &str, date: &str, approved: Option<&str>) -> String {
+    let mut out = s.replacen(
+        "status: proposed\ndate: 2026-09-06\n",
+        &format!("status: {status}\ndate: {date}\n"),
+        1,
+    );
+    assert_ne!(s, out, "写しの状態と日付に当たっていない");
+    if let Some(d) = approved {
+        out = out.replacen(
+            "amends: []\n",
+            &format!("approval: {{who: 持ち主, date: {d}, ruling: 裁定 F-3, verbatim: 承認する, surface: R-8}}\namends: []\n"),
+            1,
+        );
+    }
+    out
+}
+
+#[test]
+fn f147_adr_card_updated_is_the_latest_record_face_date() {
+    let cases: [(&str, Rewrite, Option<Rewrite>, &str); 4] = [
+        (
+            "f147-adr-accepted",
+            |s| adr_state(s, "accepted", "2026-09-07", Some("2026-09-10")),
+            None,
+            "2026-09-10",
+        ),
+        (
+            "f147-adr-proposed",
+            |s| adr_state(s, "proposed", "2026-09-07", Some("2026-09-10")),
+            None,
+            "2026-09-07",
+        ),
+        (
+            "f147-adr-retired",
+            |s| adr_state(s, "retired", "2026-09-07", Some("2026-09-08")),
+            Some(|s| adr_state(s, "accepted", "2026-09-09", None)),
+            "2026-09-09",
+        ),
+        (
+            "f147-adr-both",
+            |s| adr_state(s, "accepted", "2026-09-07", Some("2026-09-10")),
+            Some(|s| adr_state(s, "accepted", "2026-09-06", Some("2026-09-11"))),
+            "2026-09-11",
+        ),
+    ];
+    for (case, ten, two, want) in cases {
+        let html = index_with_edited_records(case, ten, two);
+        let card = adr_article(&html);
+        up_span(&card, &format!("更新 {want}"), case);
+        assert_eq!(html.matches(&format!("更新 {want}</span>")).count(), 1, "{case}");
+        // 「開く →」は最も新しい番号の記録のまま（便 139）
+        assert!(
+            card.contains("<a class=\"sc-open\" href=\"adr-10.html\">開く →</a>"),
+            "{case}: {card}"
+        );
+    }
+}
+
+#[test]
+fn f147_real_adr_card_updated_is_the_latest_record_face_date() {
+    // 歯の側の手書きの読み: 提案中か承認欄が表でなければ欄 date・そうでなければ承認欄の date
+    let dir = design_intent().join("adr");
+    let mut dates: Vec<String> = Vec::new();
+    for e in fs::read_dir(&dir).unwrap() {
+        let name = e.unwrap().file_name().to_string_lossy().into_owned();
+        if !name.starts_with("ADR-") || !name.ends_with(".yaml") {
+            continue;
+        }
+        let y = load_yaml_at(&dir, &name);
+        let unread = y["status"].as_str() == Some("proposed") || y["approval"].as_hash().is_none();
+        let date = if unread {
+            text(&y, "date")
+        } else {
+            text(&y["approval"], "date")
+        };
+        dates.push(esc(date));
+    }
+    assert!(!dates.is_empty(), "実の正本に判断の記録が無い");
+    let want = dates.into_iter().max().unwrap();
+    let (td, _, html) = real_index("f147-real");
+    let _ = fs::remove_dir_all(&td);
+    up_span(&adr_article(&html), &format!("更新 {want}"), "実の判断の記録");
+}
+
+/// 写しの full を写した 2 本目 second（draft・生成 2026-09-20）を足し、full を `full` で書き換えて入口の面を書く。
+fn index_with_two_notes(case: &str, full: Rewrite) -> String {
+    let (td, work) = index_fixture_copy(case);
+    let path = work.join("design-note/full.yaml");
+    let base = fs::read_to_string(&path).unwrap();
+    let second = base
+        .replacen("  id: full\n", "  id: second\n", 1)
+        .replacen("  generated: 2026-09-18\n", "  generated: 2026-09-20\n", 1);
+    assert!(second.contains("  id: second\n") && second.contains("  generated: 2026-09-20\n"));
+    fs::write(work.join("design-note/second.yaml"), second).unwrap();
+    edit(&path, full);
+    let (_, html) = index_from(case, &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    html
+}
+
+/// 設計ノートの状態を替え、`approved` が在れば承認欄（その日付）を足す。
+fn note_state(s: &str, status: &str, approved: Option<&str>) -> String {
+    let mut out = s.replacen("  status: draft\n", &format!("  status: {status}\n"), 1);
+    if let Some(d) = approved {
+        out = out.replacen(
+            "  generated: 2026-09-18\n",
+            &format!("  generated: 2026-09-18\n  approval: {{date: {d}, who: 持ち主}}\n"),
+            1,
+        );
+    }
+    out
+}
+
+#[test]
+fn f147_note_card_updated_is_the_latest_note_face_date() {
+    let cases: [(&str, Rewrite, &str, &str); 4] = [
+        (
+            "f147-note-draft",
+            |s| note_state(s, "draft", Some("2026-09-21")),
+            "2026-09-20",
+            "note-second.html",
+        ),
+        (
+            "f147-note-effective",
+            |s| note_state(s, "effective", Some("2026-09-21")),
+            "2026-09-21",
+            "note-full.html",
+        ),
+        (
+            "f147-note-bare",
+            |s| note_state(s, "effective", None),
+            "2026-09-20",
+            "note-second.html",
+        ),
+        (
+            "f147-note-tie",
+            |s| note_state(s, "effective", Some("2026-09-20")),
+            "2026-09-20",
+            "note-second.html",
+        ),
+    ];
+    for (case, full, want, open) in cases {
+        let html = index_with_two_notes(case, full);
+        let card = note_card(&html);
+        up_span(&card, &format!("更新 {want}"), case);
+        let row = format!(
+            "<a class=\"sc-open\" href=\"{open}\">開く →</a><a class=\"sc-hit\" href=\"{open}\" aria-hidden=\"true\" tabindex=\"-1\"></a>"
+        );
+        assert_eq!(card.matches(&row).count(), 1, "{case}:「{row}」が無い: {card}");
+    }
+}

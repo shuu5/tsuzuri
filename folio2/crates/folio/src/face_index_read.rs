@@ -70,8 +70,8 @@ pub struct Record {
     pub(crate) id: String,
     /// 状態の名札（β・`ADR_STATUS`）
     pub(crate) status: &'static str,
-    /// 日付（escape 済み）
-    pub(crate) date: String,
+    /// 面の日付（`face::adr_dated` の日付＝記録の面の鮮度の札と同じ・escape 済み・便 147）
+    pub(crate) dated: String,
     /// 見出し（正本の title の逐語・escape 済み・切らない・便 139）
     pub(crate) title: String,
 }
@@ -94,8 +94,8 @@ pub struct Note {
     pub(crate) id: String,
     /// 状態の名札（β・`shelf::STATUS`）
     pub(crate) status: &'static str,
-    /// 生成日（escape 済み）
-    pub(crate) generated: String,
+    /// 面の日付（`face::note_dated` の日付＝設計ノートの面の鮮度の札と同じ・escape 済み・便 147）
+    pub(crate) dated: String,
     /// 題（escape 済み）
     title: String,
 }
@@ -249,10 +249,13 @@ pub fn records(dir: &Path) -> R<Vec<Record>> {
         let num = adr_number(&id)
             .ok_or_else(|| format!("{name}: id「{id}」の番号が ASCII の数字列でない"))?;
         let title = a.ef("title")?;
+        let status = a.f("status")?.lookup(ADR_STATUS, "判断の記録の状態")?;
+        // 欄 date は承認欄が在っても必須で読む（便 147）
+        a.ef("date")?;
         out.push(Record {
             num,
-            status: a.f("status")?.lookup(ADR_STATUS, "判断の記録の状態")?,
-            date: a.ef("date")?,
+            status,
+            dated: face::adr_dated(&a)?.1,
             id,
             title,
         });
@@ -307,11 +310,14 @@ pub fn notes(dir: &Path) -> R<Vec<Note>> {
             ));
         }
         let title = esc(&required(&m, "title")?);
+        let status = m
+            .f("status")?
+            .lookup(shelf::STATUS, "設計ノートの状態")?;
+        // 欄 generated は承認欄が在っても必須で読む（便 147）
+        required(&m, "generated")?;
         out.push(Note {
-            status: m
-                .f("status")?
-                .lookup(shelf::STATUS, "設計ノートの状態")?,
-            generated: esc(&required(&m, "generated")?),
+            status,
+            dated: face::note_dated(&m)?.1,
             id,
             title,
         });
@@ -379,9 +385,11 @@ fn constitution_card(c: &X<'_>, rows: &[Amend]) -> R<Readable> {
         ));
     }
     let ap = approved(&m, rows)?;
+    // 更新 の定めは 1 か所（便 147）
+    let date = face::shelf_updated([ap.date.as_str()]);
     Ok(Readable {
         summary: format!("{} 条（{}）", tiers.len(), parts.join(" · ")),
-        updated: format!("{}・{}{}", ap.date, m.ef("version")?, ap.standing.card()),
+        updated: format!("{date}・{}{}", m.ef("version")?, ap.standing.card()),
     })
 }
 
@@ -405,8 +413,9 @@ fn srs_card(s: &X<'_>) -> R<Readable> {
         parts.push(format!("{name} {counted}"));
     }
     let standing = face::standing(&m)?;
-    // 表紙の日付と同じ口（便 145）
-    let (_, date) = face::dated(&m, face::last_approval(&m)?)?;
+    // 表紙の日付と同じ口（便 145）・更新 の定めは 1 か所（便 147）
+    let (_, dated) = face::dated(&m, face::last_approval(&m)?)?;
+    let date = face::shelf_updated([dated.as_str()]);
     // 版の欄が効いている版と違えば札を添える（便 138）
     Ok(Readable {
         summary: parts.join(" · "),
