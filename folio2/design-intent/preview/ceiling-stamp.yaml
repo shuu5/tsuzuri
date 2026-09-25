@@ -1,18 +1,18 @@
 # folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
-round: 2026-09-25-round33
-at: 2026-09-25T00:59:56Z
+round: 2026-09-25-round34
+at: 2026-09-25T01:46:01Z
 verdict: 合格
-sources: sha256 b93cec0739430c0607e7b9ec6423d9640527c46db4b5d757735be32df81a4d97
-trigger: sha256 f13af3893eb52eae235f5a4824b755b4fdfc1e618096328852db6680af4cf1ad
-faces: sha256 40ad1751b648c7967df74b1becbb74b8ce68eb1313cbb446f35b7b09acccfa1e
+sources: sha256 13da4de545e1d3fb64e7f0fa065a5f3d8942abee466412fc29ee504f99382a74
+trigger: sha256 8a0442bbba968a2aad7ff37cb216790df6530c9ba65d99e21b563b7a8c5a5c86
+faces: sha256 0c4789689bc48836ecfc16e20975155050b084d094dc1c56ba82236210cf9cdb
 viewpoints:
-  - {id: fidelity, verdict: 合格, findings: 3, stops: 0, bundle: e91af596, model: opus, effort: default, at: 2026-09-25T00:58:43Z}
-  - {id: readability, verdict: 合格, findings: 6, stops: 0, bundle: 62ab6d10, model: opus, effort: default, at: 2026-09-25T00:56:38Z}
-  - {id: coherence, verdict: 合格, findings: 4, stops: 0, bundle: 30b24fe8, model: opus, effort: default, at: 2026-09-25T00:56:50Z}
-  - {id: reality, verdict: 合格, findings: 4, stops: 0, bundle: 72ca315f, model: opus, effort: default, at: 2026-09-25T00:59:56Z}
+  - {id: fidelity, verdict: 合格, findings: 1, stops: 0, bundle: 86b1d707, model: opus, effort: default, at: 2026-09-25T01:43:20Z}
+  - {id: readability, verdict: 合格, findings: 5, stops: 0, bundle: 10f07313, model: opus, effort: default, at: 2026-09-25T01:42:04Z}
+  - {id: coherence, verdict: 合格, findings: 4, stops: 0, bundle: bf1fe139, model: opus, effort: default, at: 2026-09-25T01:46:01Z}
+  - {id: reality, verdict: 合格, findings: 2, stops: 0, bundle: b186e80a, model: opus, effort: default, at: 2026-09-25T01:44:51Z}
 refutes: []
 reads: [adr, ceiling, constitution, design-note, graph, index, intake, rules, srs, vocabulary]
-rest: sha256 4a07e6080f8660a4ad5911b1e1397243ab63d7fd595dbbd307ed7ffa442abb43
+rest: sha256 a38ad9ddc1f3344e10143de8a689afc3d3c78a792ea39621edbb1c3ca35af04b
 nodes:
   - {id: A-1, digest: e0b0124d}
   - {id: A-1.1, digest: df732d5b}
@@ -66,10 +66,10 @@ nodes:
   - {id: ADR-19, digest: 6027f951}
   - {id: ADR-2, digest: 79e5df4f}
   - {id: ADR-20, digest: f87696e0}
-  - {id: ADR-21, digest: af061e84}
-  - {id: ADR-22, digest: 93ef3c88}
-  - {id: ADR-23, digest: 06f61175}
-  - {id: ADR-3, digest: 2898cf3f}
+  - {id: ADR-21, digest: 7192d361}
+  - {id: ADR-22, digest: 40753a2f}
+  - {id: ADR-23, digest: 01148b78}
+  - {id: ADR-3, digest: fcb9457c}
   - {id: ADR-4, digest: bfc2b9af}
   - {id: ADR-5, digest: ea177b73}
   - {id: ADR-6, digest: 8535e94a}
@@ -83,14 +83,14 @@ nodes:
   - {id: CON5, digest: 173a5ec9}
   - {id: CON6, digest: 442bbf92}
   - {id: CON7, digest: bd5d479d}
-  - {id: CON8, digest: 16a45ffd}
+  - {id: CON8, digest: f1e15add}
   - {id: CON9, digest: fb991f7f}
   - {id: D-1, digest: d98f2bab}
   - {id: D-10, digest: 13e44933}
   - {id: D-11, digest: 257e57e0}
   - {id: D-12, digest: 2910a212}
   - {id: D-13, digest: 686119c9}
-  - {id: D-14, digest: 6c1d7369}
+  - {id: D-14, digest: 582520b7}
   - {id: D-2, digest: 1e4c2762}
   - {id: D-3, digest: ca2c7318}
   - {id: D-4, digest: e738eec2}
@@ -103,7 +103,7 @@ nodes:
   - {id: FR10, digest: 44396ade}
   - {id: FR11, digest: 9b80f084}
   - {id: FR12, digest: 3459856f}
-  - {id: FR13, digest: 673ff677}
+  - {id: FR13, digest: 53b2428f}
   - {id: FR14, digest: 61c64454}
   - {id: FR15, digest: fc6b30c2}
   - {id: FR16, digest: 6d58a656}
@@ -114,7 +114,7 @@ nodes:
   - {id: FR20, digest: e1e9ce66}
   - {id: FR21, digest: 760fa065}
   - {id: FR22, digest: 5cd5ab35}
-  - {id: FR23, digest: 33a58ff0}
+  - {id: FR23, digest: 4d831d7a}
   - {id: FR24, digest: 1ea02d17}
   - {id: FR25, digest: 77b0cbf6}
   - {id: FR3, digest: 6fca6241}
@@ -143,7 +143,7 @@ nodes:
   - {id: N-6, digest: 3a75bdbd}
   - {id: N-6.1, digest: ab2be4da}
   - {id: N-6.2, digest: 5466a8a9}
-  - {id: NFR1, digest: ecfcdc41}
+  - {id: NFR1, digest: 230984bb}
   - {id: NFR2, digest: b9d87a04}
   - {id: NFR3, digest: 125002e8}
   - {id: P-1, digest: 8b0e9bb3}
@@ -217,7 +217,7 @@ nodes:
   - {id: R-10, digest: 377927ce}
   - {id: R-11, digest: fb12d643}
   - {id: R-12, digest: 57c69630}
-  - {id: R-13, digest: f78cef89}
+  - {id: R-13, digest: 9ca37e21}
   - {id: R-14, digest: d6c26874}
   - {id: R-15, digest: 217bf6bf}
   - {id: R-16, digest: 4ff34b48}
