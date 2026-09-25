@@ -333,6 +333,8 @@ fn main() -> ExitCode {
                 Flag::None
             };
             let (mut report, materials) = check::check_dir(&dir, flag);
+            // 索引と天井の印が組めない置き場を合格と言わない（便 136・層 2 の check_dir からは呼ばない）
+            graph::check_index(&dir, &mut report);
             // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
             let after = freeze::after(
                 &dir,

@@ -561,7 +561,7 @@ fn rules_rows() -> Result<String, String> {
         ),
         (s("discipline"), Value::Seq(Vec::new())),
     ]);
-    yaml::write(&table, RULES_ROWS_HEAD)
+    yaml::write_plain(&table, RULES_ROWS_HEAD)
 }
 
 // ── 組み立て ──

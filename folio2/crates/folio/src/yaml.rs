@@ -670,22 +670,67 @@ fn write_canonical(value: &Value, at: &str, out: &mut String) -> Result<(), Stri
 /// 文字列（キーを含む）は必ず二重引用符で囲む。1 行目に `header`（「# 」で始まる注釈）を置く。
 /// 書けない値（指数表記になる浮動小数）は Err（欄の道つき）。
 pub fn write(value: &Value, header: &str) -> Result<String, String> {
+    write_with(value, header, quoted)
+}
+
+/// 裸の書き手（便 136 §1 (b) の 3）。形は `write` と同じで、文字列（キーを含む）は裸で書いても読み戻せる字
+/// （`plain_ok`）だけを裸で書き、ほかは二重引用符で囲む。索引の正本を書く所（init の規則の表・floor_cases）が使う＝
+/// 行の逐語で切る索引の読み手（graph.rs の Scan）が節点の頭と節の見出しを拾える形で書く。
+pub fn write_plain(value: &Value, header: &str) -> Result<String, String> {
+    write_with(value, header, |s, out| {
+        if plain_ok(s) {
+            out.push_str(s);
+        } else {
+            quoted(s, out);
+        }
+    })
+}
+
+/// 文字列の書き手（二重引用符か裸か）。
+type StrOut = fn(&str, &mut String);
+
+fn write_with(value: &Value, header: &str, str_out: StrOut) -> Result<String, String> {
     let mut out = String::new();
     out.push_str(header);
     out.push('\n');
     match value {
-        Value::Seq(items) if !items.is_empty() => write_block(value, 0, "", &mut out)?,
-        Value::Map(entries) if !entries.is_empty() => write_block(value, 0, "", &mut out)?,
+        Value::Seq(items) if !items.is_empty() => write_block(value, 0, "", str_out, &mut out)?,
+        Value::Map(entries) if !entries.is_empty() => write_block(value, 0, "", str_out, &mut out)?,
         other => {
-            write_scalar(other, "", &mut out)?;
+            write_scalar(other, "", str_out, &mut out)?;
             out.push('\n');
         }
     }
     Ok(out)
 }
 
+/// 裸で書いても同じ字の文字列に読み戻せるか（保守的・迷う字は引用符に倒す）。空でない・先頭が指示子でも `.` でも
+/// 空白でもない・末尾が空白でも `:` でもない・`: ` と ` #` を含まない・制御文字と引用符と逆斜線と流れの括弧と
+/// 半角の読点を含まない・plain の型の解き方で同じ字の文字列に解ける（数・真偽・null・日付に読まれない）。
+fn plain_ok(s: &str) -> bool {
+    let (Some(first), Some(last)) = (s.chars().next(), s.chars().last()) else {
+        return false;
+    };
+    let bad_char = |c: char| {
+        c.is_control()
+            || matches!(
+                c,
+                '"' | '\'' | '\\' | '[' | ']' | '{' | '}' | ',' | '\u{2028}' | '\u{2029}' | '\u{feff}' | '\u{fffe}'
+                    | '\u{ffff}'
+            )
+    };
+    !"-?:#&*!|>%@`.".contains(first)
+        && !first.is_whitespace()
+        && !last.is_whitespace()
+        && last != ':'
+        && !s.contains(": ")
+        && !s.contains(" #")
+        && !s.chars().any(bad_char)
+        && resolve_plain(s) == Some(Value::Str(s.to_string()))
+}
+
 /// 空でない一覧・表を `indent` 空白の字下げで 1 行ずつ書く。
-fn write_block(value: &Value, indent: usize, at: &str, out: &mut String) -> Result<(), String> {
+fn write_block(value: &Value, indent: usize, at: &str, str_out: StrOut, out: &mut String) -> Result<(), String> {
     let pad = " ".repeat(indent);
     match value {
         Value::Seq(items) => {
@@ -694,14 +739,14 @@ fn write_block(value: &Value, indent: usize, at: &str, out: &mut String) -> Resu
                 if is_block(item) {
                     // 子の区間を indent + 2 で書き、1 行目の字下げを「- 」に替える
                     let mut child = String::new();
-                    write_block(item, indent + 2, &here, &mut child)?;
+                    write_block(item, indent + 2, &here, str_out, &mut child)?;
                     out.push_str(&pad);
                     out.push_str("- ");
                     out.push_str(&child[indent + 2..]);
                 } else {
                     out.push_str(&pad);
                     out.push_str("- ");
-                    write_scalar(item, &here, out)?;
+                    write_scalar(item, &here, str_out, out)?;
                     out.push('\n');
                 }
             }
@@ -716,21 +761,21 @@ fn write_block(value: &Value, indent: usize, at: &str, out: &mut String) -> Resu
                 };
                 let here = format!("{at}.{key}");
                 out.push_str(&pad);
-                quoted(key, out);
+                str_out(key, out);
                 out.push(':');
                 if is_block(v) {
                     out.push('\n');
-                    write_block(v, indent + 2, &here, out)?;
+                    write_block(v, indent + 2, &here, str_out, out)?;
                 } else {
                     out.push(' ');
-                    write_scalar(v, &here, out)?;
+                    write_scalar(v, &here, str_out, out)?;
                     out.push('\n');
                 }
             }
         }
         other => {
             out.push_str(&pad);
-            write_scalar(other, at, out)?;
+            write_scalar(other, at, str_out, out)?;
             out.push('\n');
         }
     }
@@ -747,7 +792,7 @@ fn is_block(value: &Value) -> bool {
 }
 
 /// 1 行に収まる値（scalar・空の一覧・空の表）。
-fn write_scalar(value: &Value, at: &str, out: &mut String) -> Result<(), String> {
+fn write_scalar(value: &Value, at: &str, str_out: StrOut, out: &mut String) -> Result<(), String> {
     match value {
         Value::Null => out.push_str("null"),
         Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
@@ -757,7 +802,7 @@ fn write_scalar(value: &Value, at: &str, out: &mut String) -> Result<(), String>
             None => return Err(format!("書けない値「{f}」（欄の道 {at}）")),
         },
         Value::Date(s) => out.push_str(s),
-        Value::Str(s) => quoted(s, out),
+        Value::Str(s) => str_out(s, out),
         Value::Seq(_) => out.push_str("[]"),
         Value::Map(_) => out.push_str("{}"),
     }
@@ -884,6 +929,63 @@ mod tests {
         ]);
         round_trip(&v);
         assert!(write(&Value::Float(1e20), "# x").is_err());
+    }
+
+    /// 便 136 §1 (c) の 1-1: 裸の書き手は裸で読み戻せる字だけを裸で書き、読み直すと同じ木。write は全部を引用符のまま。
+    #[test]
+    fn f136_plain_writer_writes_bare_only_what_reads_back() {
+        for ok in ["R-1", "P-1.1", "ADR-1", "thresholds", "日本語の字", "句点。", "閉じ括弧）", "byte", "注の字"] {
+            assert!(plain_ok(ok), "{ok}");
+        }
+        for ng in [
+            "",
+            "yes",
+            "null",
+            "~",
+            "12",
+            "01",
+            "1.5",
+            "2026-09-17",
+            "a: b",
+            "a #b",
+            "#a",
+            "-a",
+            ".a",
+            " a",
+            "a ",
+            "a:",
+            "%a",
+            "a,b",
+            "[a",
+            "a}",
+            "a\"b",
+            "a\\b",
+            "a\nb",
+        ] {
+            assert!(!plain_ok(ng), "{ng:?}");
+        }
+        let s = |x: &str| Value::Str(x.to_string());
+        let v = Value::Map(vec![
+            (
+                s("thresholds"),
+                Value::Seq(vec![Value::Map(vec![
+                    (s("id"), s("R-1")),
+                    (s("what"), s("上限、読点, 半角")),
+                    (s("note"), Value::Null),
+                ])]),
+            ),
+            (s("discipline"), Value::Seq(Vec::new())),
+        ]);
+        let text = write_plain(&v, "# 注").unwrap();
+        assert_eq!(
+            text,
+            "# 注\nthresholds:\n  - id: R-1\n    what: \"上限、読点, 半角\"\n    note: null\ndiscipline: []\n"
+        );
+        assert_eq!(parse_typed(&text).unwrap(), v);
+        assert_eq!(
+            write(&v, "# 注").unwrap(),
+            "# 注\n\"thresholds\":\n  - \"id\": \"R-1\"\n    \"what\": \"上限、読点, 半角\"\n    \"note\": null\n\"discipline\": []\n"
+        );
     }
 
     #[test]

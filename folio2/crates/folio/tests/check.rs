@@ -1380,3 +1380,72 @@ fn f117_the_real_region_lists_scope_m3_after_scope_m1() {
         assert!(listed.contains(key), "最上位の節「{key}」が一覧に無い: {listed:?}");
     }
 }
+
+// 便 136（docs/design/delivery-136.md §1 (c) の 2）: 索引の正本の節点の行の id か節の見出しの key が引用符つき（ほか行の
+// 逐語で切れない形）の写しは、床が種類 索引の節点 の違反で落とす（graph --print と天井の印が組めない置き場を合格と言わない）。
+
+const F136_KIND: &str = "[索引の節点] ";
+
+fn f136_graph_print(dir: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_folio"))
+        .args(["graph", "--print", "--dir"])
+        .arg(dir)
+        .output()
+        .expect("folio を起動できない")
+}
+
+#[test]
+fn f136_quoted_rule_row_fails_the_floor_before_graph() {
+    let w = Work::new("f136-rule-row");
+    w.mutate_rules("  - {id: R-1, ", "  - {\"id\": \"R-1\", ");
+    let out = w.check();
+    assert_eq!(out.status.code(), Some(1), "{}", stdout(&out));
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "{v:?}");
+    assert!(v[0].starts_with(&format!("{F136_KIND}rules.yaml")), "{v:?}");
+    assert!(v[0].contains(" R-1 ") && v[0].contains("引用符つき"), "{v:?}");
+    let graph = f136_graph_print(&w.dir());
+    let err = String::from_utf8_lossy(&graph.stderr);
+    assert_eq!(graph.status.code(), Some(2), "{err}");
+    assert!(err.contains("索引だけ: R-1"), "{err}");
+}
+
+#[test]
+fn f136_quoted_forms_in_each_source_fail_the_floor() {
+    // (case・file・変異の元・先・違反の中の字〔None = 件数を pin しない〕)
+    let cases: [(&str, &str, &str, &str, Option<&str>); 7] = [
+        ("p1-value", "constitution.yaml", "\n  - id: P-1\n", "\n  - id: \"P-1\"\n", Some(" P-1 ")),
+        ("p11-single", "constitution.yaml", "{id: P-1.1, ", "{id: 'P-1.1', ", Some(" P-1.1 ")),
+        ("goal1-key", "srs.yaml", "  - {id: GOAL1, ", "  - {\"id\": GOAL1, ", Some(" GOAL1 ")),
+        ("adr1-value", "adr/ADR-1.yaml", "\nid: ADR-1\n", "\nid: \"ADR-1\"\n", Some(" ADR-1 ")),
+        ("adr1-key", "adr/ADR-1.yaml", "\nid: ADR-1\n", "\n\"id\": ADR-1\n", Some("id の行が無い")),
+        ("p1-comment", "constitution.yaml", "\n  - id: P-1\n", "\n  - id: P-1  # 注\n", Some(" P-1 ")),
+        ("thresholds-key", "rules.yaml", "\nthresholds:\n", "\n\"thresholds\":\n", None),
+    ];
+    for (case, file, from, to, word) in cases {
+        let w = Work::new(&format!("f136-{case}"));
+        mutate_file(&w.dir().join(file), from, to);
+        let out = w.check();
+        assert_eq!(out.status.code(), Some(1), "{case}: {}", stdout(&out));
+        let v = violations(&out);
+        assert!(!v.is_empty(), "{case}");
+        for line in &v {
+            assert!(line.starts_with(&format!("{F136_KIND}{file}")), "{case}: {v:?}");
+            assert!(line.contains("引用符つき"), "{case}: {v:?}");
+        }
+        if let Some(word) = word {
+            assert_eq!(v.len(), 1, "{case}: {v:?}");
+            assert!(v[0].contains(word), "{case}: {v:?}");
+        }
+        let graph = f136_graph_print(&w.dir());
+        assert_eq!(graph.status.code(), Some(2), "{case}: {}", String::from_utf8_lossy(&graph.stderr));
+    }
+}
+
+#[test]
+fn f136_bare_copy_passes() {
+    let w = Work::new("f136-bare");
+    let out = w.check();
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert!(!stdout(&out).contains(F136_KIND), "{}", stdout(&out));
+}

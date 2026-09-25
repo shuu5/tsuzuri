@@ -11,7 +11,7 @@ use crate::ceiling_src::Ceiling;
 use crate::floor::Floor;
 use crate::gate;
 use crate::sha256;
-use crate::verdict::Verdict;
+use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Node};
 
 /// 節点の種類（11・順も固定）。
@@ -683,6 +683,76 @@ pub(crate) fn stamp_table(dir: &Path, ceiling: &Ceiling) -> Result<(String, Vec<
     Ok((format!("sha256 {}", sha256::hex(&rest)), nodes.into_iter().collect()))
 }
 
+/// 床の違反の種類（便 136）。入口の正本の違反の種類 index と読み違えない字。
+pub const INDEX_KIND: &str = "索引の節点";
+
+/// 行の逐語の id を突き合わせる字にする: 行の末尾の注釈（空白と `#` 以降）と前後の空白と引用符を外す。
+fn bare_id(id: &str) -> &str {
+    let cut = id
+        .char_indices()
+        .find(|&(i, c)| c == '#' && id[..i].ends_with(char::is_whitespace))
+        .map_or(id, |(i, _)| &id[..i]);
+    cut.trim().trim_matches(['"', '\'']).trim()
+}
+
+/// 床の口（便 136 §1 (b) の 1）: `graph --print` と `stamp_table` と同じ build と Scan で節点の集合を組み、食い違いを
+/// 種類 `INDEX_KIND` の違反に数える（索引と印が組めない置き場を床が合格と言わない・P-4.1）。索引を組めないときは、
+/// 床がほかに何も数えていなければ「まだ分からない」を 1 件足す（読めない正本は床が先に数えている＝同じ原因を 2 度数えない）。
+pub fn check_index(dir: &Path, report: &mut Report) {
+    let silent = report.violations.is_empty() && report.unknowns.is_empty() && report.pendings.is_empty();
+    let files = build(dir).and_then(|index| Ok((index, source_files(dir)?)));
+    let (index, files) = match files {
+        Ok(built) => built,
+        Err(e) => {
+            if silent {
+                report.unknown(format!("索引を組めない: {e}"));
+            }
+            return;
+        }
+    };
+    // file ごとに切り分ける（切れない file はその file の違反 1 件で、その file の節点は数えない）
+    let mut scanned: BTreeMap<String, String> = BTreeMap::new();
+    let mut cut: Vec<String> = Vec::new();
+    for name in files {
+        let mut scan = Scan::default();
+        let result = read_text(dir, &name).and_then(|text| scan.file(&name, &text)).and_then(|_| {
+            match scan.nodes.keys().find(|id| scanned.contains_key(*id)) {
+                Some(id) => Err(format!("行の逐語に節点 {id} が 2 度ある")),
+                None => Ok(()),
+            }
+        });
+        if let Err(e) = result {
+            report.violation(
+                INDEX_KIND,
+                format!("{name}: 行の逐語で切れない（{e}・id の key か値が引用符つきか裸の形でない）"),
+            );
+            continue;
+        }
+        scanned.extend(scan.nodes.into_keys().map(|id| (id, name.clone())));
+        cut.push(name);
+    }
+    let mut index_only: BTreeSet<&str> = BTreeSet::new();
+    for (id, (_, file, _)) in &index.nodes {
+        if cut.contains(file) && !scanned.contains_key(id) {
+            index_only.insert(id);
+            report.violation(
+                INDEX_KIND,
+                format!(
+                    "{file}: 索引の節点 {id} の行を行の逐語で切れない（id か節の見出しの key が引用符つきか裸の形でない＝folio graph --print と天井の印が組めない）"
+                ),
+            );
+        }
+    }
+    for (id, file) in &scanned {
+        if !index.nodes.contains_key(id) && !index_only.contains(bare_id(id)) {
+            report.violation(
+                INDEX_KIND,
+                format!("{file}: 行の逐語の節点 {id} が索引の節点に無い（id が引用符つきか裸の形でない）"),
+            );
+        }
+    }
+}
+
 /// 節点の数と表に出た辺の数だけを返す口（`folio hello` の 1 行が使う・組み方を 2 面に増やさない・便 96）。
 pub fn counts(dir: &Path) -> Result<(usize, usize), String> {
     let index = build(dir)?;
@@ -725,5 +795,33 @@ pub fn run(dir: &Path, digest: bool) -> Outcome {
             stderr: Some(format!("まだ分からない（{msg}）")),
             verdict: Verdict::Unknown,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 便 136 §1 (c) の 1-2: 索引を組めないとき、床がほかに何も数えていなければ まだ分からない を 1 件足し、
+    /// 違反か まだ分からない が在れば足さない（同じ原因を 2 度数えず、不合格を まだ分からない に変えない）。
+    #[test]
+    fn f136_unbuildable_index_is_unknown_only_when_the_floor_is_silent() {
+        let td = std::env::temp_dir().join(format!("folio-graph-f136-{}", std::process::id()));
+        fs::create_dir_all(&td).unwrap();
+        let mut silent = Report::default();
+        check_index(&td, &mut silent);
+        assert!(silent.violations.is_empty());
+        assert_eq!(silent.unknowns.len(), 1);
+        assert!(silent.unknowns[0].starts_with("索引を組めない: "), "{:?}", silent.unknowns);
+        let mut failed = Report::default();
+        failed.violation("adr", "読めない");
+        check_index(&td, &mut failed);
+        assert!(failed.unknowns.is_empty());
+        assert_eq!((failed.violations.len(), failed.verdict()), (1, Verdict::Fail));
+        let mut unknown = Report::default();
+        unknown.unknown("読めない");
+        check_index(&td, &mut unknown);
+        assert_eq!((unknown.violations.len(), unknown.unknowns.len()), (0, 1));
+        fs::remove_dir_all(&td).unwrap();
     }
 }

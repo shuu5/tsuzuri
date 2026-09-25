@@ -725,3 +725,26 @@ fn site_floor_check_does_not_run_the_floor() {
     assert!(stdout(&drift).is_empty(), "{}", stdout(&drift));
     assert!(!stderr(&drift).contains("床"), "{}", stderr(&drift));
 }
+
+/// 便 136（docs/design/delivery-136.md §1 (c) の 3）: 規則の表の行 R-1 の key と id を二重引用符つきにして commit した写しは、
+/// 索引が組めないので build の床が不合格で何も書かない（配信先の dir を作らない）。
+#[test]
+fn f136_quoted_rule_row_stops_the_build_floor() {
+    let (td, dir) = real_copy("f136-rule-row", false);
+    let path = dir.join("rules.yaml");
+    let before = fs::read_to_string(&path).unwrap();
+    let from = "  - {id: R-1, ";
+    assert_eq!(before.matches(from).count(), 1, "変異の当て先が 1 か所でない");
+    fs::write(&path, before.replacen(from, "  - {\"id\": \"R-1\", ", 1)).unwrap();
+    git(&td, &["init", "-q"]);
+    git(&td, &["add", "-A"]);
+    git(&td, &["commit", "-q", "-m", "fixture"]);
+    let site = td.join("site");
+    let run = folio_build(&dir, &site, "--write");
+    let exists = site.exists();
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(code(&run, "folio build --write"), 1, "{}", stderr(&run));
+    assert!(stdout(&run).contains("床 = 不合格（違反 1・"), "{}", stdout(&run));
+    assert!(!exists, "床が不合格なのに配信先の dir を作った");
+}

@@ -196,7 +196,8 @@ fn load(path: &Path) -> Result<Value, String> {
 }
 
 fn dump(path: &Path, v: &Value) -> Result<(), String> {
-    let t = yaml::write(v, "# floor_cases")?;
+    // 裸で書ける字は裸で書く（runner の yaml.safe_dump と同じ向き・床の索引の検査が節点の頭を行の逐語で拾える形・便 136）
+    let t = yaml::write_plain(v, "# floor_cases")?;
     fs::write(path, t).map_err(|e| format!("{}: 書けない: {e}", path.display()))
 }
 
