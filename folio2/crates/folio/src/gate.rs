@@ -52,10 +52,29 @@ impl Outcome {
 
 // ── 命令の口 ──
 
+/// 理由の字（便 142 §1 (b) の 3）: `--dir` が今の dir の下に無い。
+const UNKNOWN_DIR_OUTSIDE: &str =
+    "--dir が今の dir の下に無い・write-set の根と照らせない・作業ツリーの一番上から撃つ";
+/// 理由の字の頭: write-set の path が `--dir` と同じ根からの相対で読めない。
+const UNKNOWN_OTHER_ROOT: &str = "--dir と write-set の根が違う";
+/// 理由の字の末尾（撃ち直し方）。
+const FROM_THE_TOP: &str = "作業ツリーの一番上から撃つ";
+
 /// `write_set` の各 path は repo の根からの相対（接頭辞 + / - / ~ は剥がす）。`dir` は同じ根からの `--dir`。
 /// `table` は今の節点の表を組む関数（§1 (c) の 3）。判定の順は §1 (c) の 2 のとおりで、最初に当たったもので決まる。
+/// その前に、`--dir` と write-set を同じ根（今の dir）で照らせるかを確かめる（便 142・照らせなければ まだ分からない）。
 pub(crate) fn run(dir: &Path, write_set: &[String], table: NodeTable) -> Outcome {
-    let root = dir_parts(dir);
+    // 根の突き合わせ（便 142）: 照らせなければ設計文書の判定より前に まだ分からない（P-4.1 / P-4.2）
+    let Some(root) = dir_parts(dir) else {
+        return Outcome::new(Verdict::Unknown, UNKNOWN_DIR_OUTSIDE);
+    };
+    if let Some(p) = write_set.iter().find(|p| other_root(&root, p)) {
+        let p = p.trim_start_matches(['+', '-', '~']);
+        return Outcome::new(
+            Verdict::Unknown,
+            format!("{UNKNOWN_OTHER_ROOT}＝{p}・{FROM_THE_TOP}"),
+        );
+    }
     if !write_set.iter().any(|p| is_design_source(&root, p)) {
         return Outcome::new(Verdict::Pass, "設計文書の正本を書き換えない便");
     }
@@ -139,22 +158,45 @@ fn parts(path: &str) -> Vec<&str> {
     path.split('/').filter(|s| !s.is_empty() && *s != ".").collect()
 }
 
-/// `--dir` の要素。絶対 path なら今の dir からの相対に直せるときだけ直す。
-fn dir_parts(dir: &Path) -> Vec<String> {
+/// `--dir` の今の dir からの要素（字面で解く・symlink は解かない・便 142 §1 (b) の 1）。絶対 path は今の dir の下なら
+/// 今の dir からの相対に直す。`.` は落とし、`..` は 1 つ前の要素を外す。今の dir の下に無い（外へ出る・下に無い絶対
+/// path・今の dir が取れない・UTF-8 でない要素）なら None。
+fn dir_parts(dir: &Path) -> Option<Vec<String>> {
     let rel: PathBuf = if dir.is_absolute() {
-        std::env::current_dir()
-            .ok()
-            .and_then(|cwd| dir.strip_prefix(cwd).ok().map(Path::to_path_buf))
-            .unwrap_or_else(|| dir.to_path_buf())
+        let cwd = std::env::current_dir().ok()?;
+        dir.strip_prefix(cwd).ok()?.to_path_buf()
     } else {
         dir.to_path_buf()
     };
-    rel.components()
-        .filter_map(|c| match c {
-            Component::Normal(s) => s.to_str().map(str::to_string),
-            _ => None,
-        })
-        .collect()
+    let mut out: Vec<String> = Vec::new();
+    for c in rel.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop()?;
+            }
+            Component::Normal(s) => out.push(s.to_str()?.to_string()),
+            Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(out)
+}
+
+/// write-set の path が `--dir` と同じ根（作業ツリーの一番上）からの相対で読めないか（便 142 §1 (b) の 2）: 絶対 path・
+/// `..` の要素を持つ・`--dir` の要素の列の途中から後ろの部分の下に在り、列の全部では始まらない。
+fn other_root(root: &[String], path: &str) -> bool {
+    let path = path.trim_start_matches(['+', '-', '~']);
+    if path.starts_with('/') {
+        return true;
+    }
+    let parts = parts(path);
+    if parts.contains(&"..") {
+        return true;
+    }
+    let under = |base: &[String]| {
+        parts.len() > base.len() && parts.iter().zip(base).all(|(a, b)| *a == b)
+    };
+    !under(root) && (1..root.len()).any(|k| under(&root[k..]))
 }
 
 /// 設計文書の正本か: `<dir>` の下・`<dir>/preview/` の下でない・どの要素も retired でない。
@@ -447,5 +489,34 @@ mod gate_tests {
         assert!(!yes("crates/folio/src/gate.rs"));
         assert!(!yes("docs/design/delivery-73.md"));
         assert!(!yes("design-intent-x/srs.yaml"));
+    }
+
+    #[test]
+    fn f142_the_dir_and_the_write_set_share_one_root() {
+        let one = |s: &[&str]| Some(s.iter().map(|p| p.to_string()).collect::<Vec<_>>());
+        assert_eq!(dir_parts(Path::new("design-intent")), one(&["design-intent"]));
+        assert_eq!(dir_parts(Path::new("./design-intent")), one(&["design-intent"]));
+        assert_eq!(dir_parts(Path::new("a/../design-intent")), one(&["design-intent"]));
+        let below = std::env::current_dir().unwrap().join("x/design-intent");
+        assert_eq!(dir_parts(&below), one(&["x", "design-intent"]));
+        assert_eq!(dir_parts(Path::new("../design-intent")), None);
+        assert_eq!(dir_parts(Path::new("/nonexistent-f142/design-intent")), None);
+
+        let deep: Vec<String> = [".worktrees", "x", "design-intent"].map(String::from).to_vec();
+        let other = |p: &str| other_root(&deep, p);
+        assert!(other("design-intent/srs.yaml"));
+        assert!(other("+design-intent/adr/ADR-9.yaml"));
+        assert!(other("x/design-intent/srs.yaml"));
+        assert!(!other(".worktrees/x/design-intent/srs.yaml"));
+        assert!(!other("crates/folio/src/gate.rs"));
+        assert!(!other("design-intent"));
+
+        let top = vec!["design-intent".to_string()];
+        let other = |p: &str| other_root(&top, p);
+        assert!(!other("design-intent/srs.yaml"));
+        assert!(!other("~./design-intent/srs.yaml"));
+        assert!(!other("crates/folio/src/gate.rs"));
+        assert!(other("/abs/design-intent/srs.yaml"));
+        assert!(other("crates/../design-intent/srs.yaml"));
     }
 }

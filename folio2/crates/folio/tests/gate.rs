@@ -447,6 +447,26 @@ impl Repo {
             .expect("folio を起動できない")
     }
 
+    /// `folio ceiling --gate --dir <dir> --write-set <paths…>`（今の dir = `cwd`・便 142）。
+    fn gate_at(&self, cwd: &Path, dir: &Path, write_set: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_folio"))
+            .current_dir(cwd)
+            .args(["ceiling", "--gate", "--dir"])
+            .arg(dir)
+            .arg("--write-set")
+            .args(write_set)
+            .output()
+            .expect("folio を起動できない")
+    }
+
+    /// 一時 dir を本流の一番上に、その .worktrees/x/ を作業ツリーの一番上に見立て、置き場（印を含む）を写す（便 142）。
+    /// 作業ツリーの一番上の絶対 path（symlink を解いた字）を返す。
+    fn above_the_worktree(&self) -> PathBuf {
+        let top = self.td.join(".worktrees/x");
+        copy_tree(&self.dir(), &top.join("design-intent"));
+        fs::canonicalize(&top).unwrap()
+    }
+
     fn done(self) {
         let _ = fs::remove_dir_all(&self.td);
     }
@@ -761,4 +781,79 @@ fn f129_the_gate_is_stale_on_a_precedence_or_schema_edit() {
         assert_eq!(code(&run), want, "写し {i}: {out}");
         assert!(words.iter().all(|w| out.contains(w)), "写し {i}: {out}");
     }
+}
+
+// ── 便 142: 作業ツリーの一番上以外から撃つと まだ分からない（docs/design/delivery-142.md §1 (c) の 2・3） ──
+
+#[test]
+fn f142_the_gate_is_unknown_from_above_the_worktree() {
+    let repo = Repo::new("f142-above");
+    repo.put_stamp("stamp-pass.yaml", true);
+    let top = repo.above_the_worktree();
+    let main = fs::canonicalize(&repo.td).unwrap();
+    let write_set = ["design-intent/srs.yaml", "crates/folio/src/gate.rs"];
+    let runs = [
+        (repo.gate_at(&main, Path::new(".worktrees/x/design-intent"), &write_set), 2),
+        (repo.gate_at(&main, &top.join("design-intent"), &write_set), 2),
+        (repo.gate_at(&top, Path::new("design-intent"), &write_set), 0),
+        (repo.gate_at(&top, &top.join("design-intent"), &write_set), 0),
+    ];
+    let code_only = repo.gate_at(
+        &main,
+        Path::new(".worktrees/x/design-intent"),
+        &["crates/folio/src/gate.rs"],
+    );
+    repo.done();
+    for (i, (run, want)) in runs.iter().enumerate() {
+        let out = stdout(run);
+        assert_eq!(code(run), *want, "撃ち方 {i}: {out}");
+        if *want == 2 {
+            assert!(
+                out.contains("まだ分からない")
+                    && out.contains("--dir と write-set の根が違う＝design-intent/srs.yaml")
+                    && out.contains("作業ツリーの一番上から撃つ"),
+                "撃ち方 {i}: {out}"
+            );
+        } else {
+            assert!(out.contains("通す") && out.contains("正本の要約値が同じ"), "撃ち方 {i}: {out}");
+        }
+    }
+    let out = stdout(&code_only);
+    assert_eq!(code(&code_only), 0, "{out}");
+    assert!(out.contains("設計文書の正本を書き換えない便"), "{out}");
+}
+
+#[test]
+fn f142_the_gate_is_unknown_when_the_dir_is_outside_the_cwd() {
+    let repo = Repo::new("f142-outside");
+    repo.put_stamp("stamp-pass.yaml", true);
+    let top = repo.above_the_worktree();
+    let other = repo.td.join("other");
+    let crates = top.join("crates");
+    fs::create_dir_all(&other).unwrap();
+    fs::create_dir_all(&crates).unwrap();
+    let place = top.join("design-intent");
+    let srs = ["design-intent/srs.yaml"];
+    let outside = [
+        repo.gate_at(&other, &place, &srs),
+        repo.gate_at(&other, Path::new("../.worktrees/x/design-intent"), &srs),
+        repo.gate_at(&crates, Path::new("../design-intent"), &srs),
+        repo.gate_at(&other, &place, &["crates/folio/src/gate.rs"]),
+    ];
+    let abs = place.join("srs.yaml");
+    let absolute = repo.gate_at(&top, Path::new("design-intent"), &[abs.to_str().unwrap()]);
+    repo.done();
+    for (i, run) in outside.iter().enumerate() {
+        let out = stdout(run);
+        assert_eq!(code(run), 2, "撃ち方 {i}: {out}");
+        assert!(
+            out.contains("まだ分からない")
+                && out.contains("--dir が今の dir の下に無い")
+                && out.contains("作業ツリーの一番上から撃つ"),
+            "撃ち方 {i}: {out}"
+        );
+    }
+    let out = stdout(&absolute);
+    assert_eq!(code(&absolute), 2, "{out}");
+    assert!(out.contains("--dir と write-set の根が違う"), "{out}");
 }
