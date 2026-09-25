@@ -727,3 +727,153 @@ fn f118_real_srs_has_an_m3_block_only_with_scope_m3() {
         "実の要件書の面の M3 の塊の数が scope_m3 の有無と違う"
     );
 }
+
+// ── 便 138: 面の頭の 3 か所は効いている版 effective_version を出す（docs/design/delivery-138.md §1 (b)(c)）──
+
+/// 2 つの札の字（歯の側の手書き・§1 (b) の 1）。
+const PENDING: &str = "起草・承認待ち";
+const UNKNOWN_EFFECTIVE: &str = "効く版はまだ分からない";
+
+/// 鮮度の札の字（面の fixture の generated は 2026-09-01）。
+fn stamp(version: &str, label: &str) -> String {
+    format!(
+        "<span data-component=\"freshness-stamp\">生成 <b>2026-09-01</b> · <b>{version}</b>（{label}）</span>"
+    )
+}
+
+/// 表紙の状態の字。
+fn cover_status(state: &str) -> String {
+    format!(
+        "<p class=\"cover-status\"><span class=\"k\">状態</span><span>{state}（<a href=\"#approval\">承認欄へ</a>）</span></p>"
+    )
+}
+
+/// 承認欄のリードの字（面の fixture の status_note は「v0.3 = 2026-09-05 発効」）。
+fn lead(label: &str) -> String {
+    format!("<p class=\"lead\">{label} — v0.3 = 2026-09-05 発効</p>")
+}
+
+fn once(html: &str, want: &str, what: &str) {
+    assert_eq!(html.matches(want).count(), 1, "{what}「{want}」がちょうど 1 つでない");
+}
+
+#[test]
+fn f138_pending_version_names_the_effective_and_the_draft() {
+    let (run, html, _) = fixture_srs("f138-pending", |srs| {
+        srs.replacen("  version: v0.3\n", "  version: v0.4\n", 1)
+    });
+    ok(&run);
+    once(
+        &html,
+        &stamp("v0.3", "発効・拘束力あり・v0.4 は起草・承認待ち"),
+        "鮮度の札",
+    );
+    once(
+        &html,
+        &cover_status("v0.3 が発効・拘束力あり（承認 2026-09-05）・v0.4 は起草・承認待ち"),
+        "表紙の状態",
+    );
+    once(&html, &lead("発効・拘束力あり（v0.4 は起草・承認待ち）"), "承認欄のリード");
+    once(&html, "<title>folio2 — 要件書（v0.4）</title>", "題");
+    once(&html, "<dt>version</dt><dd>v0.4</dd>", "機械のための面の version");
+    once(
+        &html,
+        "<dt>effective_version</dt><dd>v0.3</dd>",
+        "機械のための面の effective_version",
+    );
+    assert!(!html.contains("<b>v0.4</b>（発効・拘束力あり）"), "起草中の v0.4 を発効と出す");
+    assert!(
+        !html.contains("<span>発効・拘束力あり（承認"),
+        "表紙の発効が版を名指さない"
+    );
+}
+
+#[test]
+fn f138_equal_versions_keep_the_effective_labels() {
+    let (run, html, _) = fixture_srs("f138-equal", |srs| srs);
+    ok(&run);
+    once(&html, &stamp("v0.3", "発効・拘束力あり"), "鮮度の札");
+    for label in [PENDING, UNKNOWN_EFFECTIVE] {
+        assert!(!html.contains(label), "版が揃った面に「{label}」が在る");
+    }
+    once(
+        &html,
+        "<dt>effective_version</dt><dd>v0.3</dd>",
+        "機械のための面の effective_version",
+    );
+    assert!(html == frozen_srs(), "版が揃った面が凍結 fixture と一致しない");
+}
+
+#[test]
+fn f138_missing_effective_version_is_unknown() {
+    let (run, html, written) = fixture_srs("f138-unknown", |srs| {
+        let cut = srs.replacen("  effective_version: v0.3\n", "", 1);
+        assert_ne!(cut, srs, "写しに effective_version の行が無い");
+        cut
+    });
+    ok(&run);
+    assert!(written, "effective_version の無い写しで面を書かない");
+    once(&html, &stamp("v0.3", UNKNOWN_EFFECTIVE), "鮮度の札");
+    once(
+        &html,
+        &cover_status("発効・拘束力あり（承認 2026-09-05）・効く版はまだ分からない"),
+        "表紙の状態",
+    );
+    once(&html, &lead("発効・拘束力あり（効く版はまだ分からない）"), "承認欄のリード");
+    assert!(!html.contains("<dt>effective_version</dt>"), "機械のための面に effective_version が在る");
+    let fresh = span(&html, "<span data-component=\"freshness-stamp\">", "</span>\n");
+    assert!(!fresh.contains("発効・拘束力あり"), "鮮度の札が発効と出す: {fresh}");
+}
+
+#[test]
+fn f138_draft_does_not_read_effective_version() {
+    let (run, html, _) = fixture_srs("f138-draft", |srs| {
+        srs.replacen("  version: v0.3\n", "  version: v0.4\n", 1)
+            .replacen("  status: effective\n", "  status: draft\n", 1)
+    });
+    ok(&run);
+    once(&html, &stamp("v0.4", "未承認・拘束力なし"), "鮮度の札");
+    once(
+        &html,
+        &cover_status("未承認のため拘束力なし → 持ち主の承認で発効"),
+        "表紙の状態",
+    );
+    for label in [PENDING, UNKNOWN_EFFECTIVE] {
+        assert!(!html.contains(label), "draft の面に「{label}」が在る");
+    }
+}
+
+#[test]
+fn f138_real_srs_head_follows_the_meta() {
+    let s = srs();
+    let meta = &s["meta"];
+    let version = esc(meta["version"].as_str().expect("meta.version が無い"));
+    let effective = meta["effective_version"].as_str().map(esc);
+    assert_eq!(meta["status"].as_str(), Some("effective"), "実の要件書が発効でない");
+    let html = real_srs("f138-real");
+    let generated = span(&html, "<span data-component=\"freshness-stamp\">生成 <b>", "</b>")
+        .rsplit("<b>")
+        .next()
+        .unwrap()
+        .to_string();
+    let want = match &effective {
+        Some(ev) if *ev == version => format!("<b>{version}</b>（発効・拘束力あり）"),
+        Some(ev) => format!("<b>{ev}</b>（発効・拘束力あり・{version} は{PENDING}）"),
+        None => format!("<b>{version}</b>（{UNKNOWN_EFFECTIVE}）"),
+    };
+    once(
+        &html,
+        &format!("<span data-component=\"freshness-stamp\">生成 <b>{generated}</b> · {want}</span>"),
+        "実の要件書の鮮度の札",
+    );
+    let head = format!(
+        "{}{}",
+        span(&html, "<span data-component=\"freshness-stamp\">", "</span>\n"),
+        span(&html, "<p class=\"cover-status\">", "</p>")
+    );
+    assert_eq!(
+        head.contains(PENDING),
+        effective.as_ref().is_some_and(|ev| *ev != version),
+        "頭の起草・承認待ちの有無が version と effective_version の差と違う: {head}"
+    );
+}

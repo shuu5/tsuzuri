@@ -804,3 +804,39 @@ fn lane_adr_stop_anchor_rejects_other_shapes() {
     assert!(stderr(&run).contains("行き先"), "{}", stderr(&run));
     assert!(!exists, "導出できないのに出力先に書いた");
 }
+
+// ── 便 138: 入口の棚の要件書のカードの更新の行に版の立場の札（docs/design/delivery-138.md §1 (b) の 3・(c) の 7・8）──
+
+/// 写しの要件書を `f` で書き換えて入口の面を書く。戻り値 = 面の本文。
+fn index_with_srs(case: &str, f: impl FnOnce(&str) -> String) -> String {
+    let (td, work) = index_fixture_copy(case);
+    edit(&work.join("srs.yaml"), f);
+    let (_, html) = index_from(case, &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    html
+}
+
+fn up_once(html: &str, want: &str) {
+    let span = format!("<span class=\"up\">{want}</span>");
+    assert_eq!(html.matches(&span).count(), 1, "「{span}」がちょうど 1 つでない");
+}
+
+#[test]
+fn f138_srs_card_marks_a_pending_version() {
+    let html = index_with_srs("f138-card-pending", |s| {
+        s.replacen("  version: v0.3\n", "  version: v0.4\n", 1)
+    });
+    up_once(&html, "更新 2026-09-01・v0.4（起草・承認待ち・発効は v0.3）");
+}
+
+#[test]
+fn f138_srs_card_marks_an_unknown_effective_version() {
+    let html = index_with_srs("f138-card-unknown", |s| {
+        s.replacen("  effective_version: v0.3\n", "", 1)
+    });
+    up_once(&html, "更新 2026-09-01・v0.3（効く版はまだ分からない）");
+    let (td, work) = index_fixture_copy("f138-card-equal");
+    let (_, html) = index_from("f138-card-equal", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    up_once(&html, "更新 2026-09-01・v0.3");
+}

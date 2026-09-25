@@ -219,6 +219,86 @@ pub const TONE: &[(&str, &str)] = &[
 /// 入口の状態の名札。
 pub const INDEX_STATUS: &[(&str, &str)] = &[("draft", "下書き・拘束力なし"), ("effective", "発効")];
 
+// ── 版の立場（便 138・delivery-138.md §1 (b) の 1）──
+// 要件書の欄 meta の version・status・effective_version から、効いている版と版の欄の立場を 1 つの口で決める。
+// 新しいか古いかは比べない（字が違えば Pending）。
+
+/// 版の欄が効いている版より先に進んでいるときの札。
+pub const PENDING: &str = "起草・承認待ち";
+/// 発効なのに効いている版の欄が無いときの札（P-4.2）。
+pub const UNKNOWN_EFFECTIVE: &str = "効く版はまだ分からない";
+
+/// 版の立場。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Standing {
+    /// 状態が draft（効いている版は読まない）。
+    Draft,
+    /// 効いている版 = 版の欄。
+    Effective,
+    /// 効いている版（escape 済み）≠ 版の欄。
+    Pending(String),
+    /// 発効だが効いている版の欄が無い。
+    Unknown,
+}
+
+/// 欄 meta の版の立場。状態が文書の状態の表に無い・effective_version が scalar でないなら Err。
+pub fn standing(m: &X<'_>) -> R<Standing> {
+    let status = m.f("status")?;
+    status.lookup(DOC_STATUS, "文書の状態")?;
+    if status.v.as_str() != Some("effective") {
+        return Ok(Standing::Draft);
+    }
+    Ok(match m.g("effective_version")? {
+        None => Standing::Unknown,
+        Some(ev) => {
+            let ev = ev.text()?;
+            if ev == m.f("version")?.text()? {
+                Standing::Effective
+            } else {
+                Standing::Pending(crate::cursor::esc(&ev))
+            }
+        }
+    })
+}
+
+impl Standing {
+    /// 鮮度の札の版と名札（`version`・`label` は escape 済み）。
+    pub fn stamp(&self, version: &str, label: &str) -> (String, String) {
+        match self {
+            Standing::Pending(ev) => (ev.clone(), format!("{label}・{version} は{PENDING}")),
+            Standing::Unknown => (version.to_string(), UNKNOWN_EFFECTIVE.to_string()),
+            Standing::Draft | Standing::Effective => (version.to_string(), label.to_string()),
+        }
+    }
+
+    /// 表紙の状態（`state` は今の字）。
+    pub fn cover(&self, version: &str, state: String) -> String {
+        match self {
+            Standing::Pending(ev) => format!("{ev} が{state}・{version} は{PENDING}"),
+            Standing::Unknown => format!("{state}・{UNKNOWN_EFFECTIVE}"),
+            Standing::Draft | Standing::Effective => state,
+        }
+    }
+
+    /// 承認欄のリードの名札。
+    pub fn lead(&self, version: &str, label: &str) -> String {
+        match self {
+            Standing::Pending(_) => format!("{label}（{version} は{PENDING}）"),
+            Standing::Unknown => format!("{label}（{UNKNOWN_EFFECTIVE}）"),
+            Standing::Draft | Standing::Effective => label.to_string(),
+        }
+    }
+
+    /// 入口の棚のカードの更新の行に添える字。
+    pub fn card(&self) -> String {
+        match self {
+            Standing::Pending(ev) => format!("（{PENDING}・発効は {ev}）"),
+            Standing::Unknown => format!("（{UNKNOWN_EFFECTIVE}）"),
+            Standing::Draft | Standing::Effective => String::new(),
+        }
+    }
+}
+
 /// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図・
 /// 判断の記録は `ADR-<1 以上の数>`（記録の面は 1 本 1 枚なので行き先は記録の id そのもの・便 66）。
 pub fn stop_anchor(doc: &str, at: &str) -> R<()> {
@@ -252,4 +332,89 @@ pub fn method_label(x: &X<'_>) -> R<String> {
             .join(" + "));
     }
     Ok(x.lookup(METHOD, "確かめ方")?.to_string())
+}
+
+#[cfg(test)]
+mod face_labels_tests {
+    use super::*;
+    use crate::yaml;
+
+    fn standing_of(meta: &str) -> R<Standing> {
+        let v = yaml::parse_typed(meta).unwrap();
+        standing(&X::root(&v, "meta"))
+    }
+
+    #[test]
+    fn f138_standing_reads_status_version_and_effective_version() {
+        // 凍結の針（delivery-138.md §1 (b) の 1 の字を手で写した）
+        assert_eq!(PENDING, "起草・承認待ち");
+        assert_eq!(UNKNOWN_EFFECTIVE, "効く版はまだ分からない");
+        let s = |m: &str| standing_of(m).unwrap();
+        assert_eq!(
+            s("{version: v0.3, status: effective, effective_version: v0.3}"),
+            Standing::Effective
+        );
+        assert_eq!(
+            s("{version: v0.4, status: effective, effective_version: v0.3}"),
+            Standing::Pending("v0.3".to_string())
+        );
+        assert_eq!(s("{version: v0.3, status: effective}"), Standing::Unknown);
+        assert_eq!(
+            s("{version: v0.4, status: draft, effective_version: v0.3}"),
+            Standing::Draft
+        );
+        assert_eq!(s("{version: v0.4, status: draft}"), Standing::Draft);
+        // 効いている版は escape する
+        assert_eq!(
+            s("{version: v0.4, status: effective, effective_version: \"<v0.3>\"}"),
+            Standing::Pending("&lt;v0.3&gt;".to_string())
+        );
+        // 表の外の状態と一覧の effective_version は導出できない
+        let e = standing_of("{version: v0.3, status: retired, effective_version: v0.3}").unwrap_err();
+        assert_eq!(e, "meta.status: 文書の状態 の表に無い値「retired」");
+        assert!(
+            standing_of("{version: v0.3, status: effective, effective_version: [v0.3]}").is_err()
+        );
+        // 札の字（§1 (b) の 2・3 の表）
+        let p = Standing::Pending("v1.41".to_string());
+        assert_eq!(
+            p.stamp("v1.42", "発効・拘束力あり"),
+            (
+                "v1.41".to_string(),
+                "発効・拘束力あり・v1.42 は起草・承認待ち".to_string()
+            )
+        );
+        assert_eq!(
+            p.cover("v1.42", "発効・拘束力あり（承認 2026-09-25）".to_string()),
+            "v1.41 が発効・拘束力あり（承認 2026-09-25）・v1.42 は起草・承認待ち"
+        );
+        assert_eq!(
+            p.lead("v1.42", "発効・拘束力あり"),
+            "発効・拘束力あり（v1.42 は起草・承認待ち）"
+        );
+        assert_eq!(p.card(), "（起草・承認待ち・発効は v1.41）");
+        let u = Standing::Unknown;
+        assert_eq!(
+            u.stamp("v0.3", "発効・拘束力あり"),
+            ("v0.3".to_string(), "効く版はまだ分からない".to_string())
+        );
+        assert_eq!(
+            u.cover("v0.3", "発効・拘束力あり（承認 2026-09-05）".to_string()),
+            "発効・拘束力あり（承認 2026-09-05）・効く版はまだ分からない"
+        );
+        assert_eq!(
+            u.lead("v0.3", "発効・拘束力あり"),
+            "発効・拘束力あり（効く版はまだ分からない）"
+        );
+        assert_eq!(u.card(), "（効く版はまだ分からない）");
+        for k in [Standing::Effective, Standing::Draft] {
+            assert_eq!(
+                k.stamp("v0.3", "発効・拘束力あり"),
+                ("v0.3".to_string(), "発効・拘束力あり".to_string())
+            );
+            assert_eq!(k.cover("v0.3", "x".to_string()), "x");
+            assert_eq!(k.lead("v0.3", "x"), "x");
+            assert_eq!(k.card(), "");
+        }
+    }
 }

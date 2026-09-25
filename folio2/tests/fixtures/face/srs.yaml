@@ -10,6 +10,7 @@ meta:
   title: 見本の要件書
   version: v0.3
   status: effective
+  effective_version: v0.3
   status_note: v0.3 = 2026-09-05 発効
   generated: 2026-09-01
   promise: "約束の 1 文（<b>太字</b> と A & B と \"引用\" をそのまま書いた）"

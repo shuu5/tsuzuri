@@ -398,9 +398,10 @@ fn srs_card(s: &X<'_>) -> R<Readable> {
         }
         parts.push(format!("{name} {counted}"));
     }
+    // 版の欄が効いている版と違えば札を添える（便 138）
     Ok(Readable {
         summary: parts.join(" · "),
-        updated: updated(&m)?,
+        updated: format!("{}{}", updated(&m)?, face::standing(&m)?.card()),
     })
 }
 

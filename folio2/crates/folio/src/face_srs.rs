@@ -496,12 +496,14 @@ pub(crate) fn slots(owner: bool, node: &str) -> (String, String) {
 fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
+    // 鮮度の札は効いている版を出す（便 138）
+    let (shown, label) = face::standing(m)?.stamp(&version, status);
     ctx.frame.head(
         o,
         &format!("folio2 — 要件書（{version}）"),
         &m.ef("generated")?,
-        &version,
-        status,
+        &shown,
+        &label,
         stamp,
     );
     Ok(())
@@ -571,10 +573,11 @@ fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
                 when = Some(row.ef("when")?);
             }
         }
-        match when {
+        let state = match when {
             Some(w) => format!("発効・拘束力あり（承認 {w}）"),
             None => "発効・拘束力あり".to_string(),
-        }
+        };
+        face::standing(m)?.cover(&m.ef("version")?, state)
     } else {
         "未承認のため拘束力なし → 持ち主の承認で発効".to_string()
     };
@@ -879,6 +882,7 @@ fn figures_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
 
 fn approval(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
+    let status = face::standing(m)?.lead(&m.ef("version")?, status);
     // status_note は最初の「。」までが要旨・後ろが版ごとの来歴（便 81 (c)）。来歴は折りたたみの中だけに出す。
     let (lead, history) = match m.g("status_note")? {
         Some(n) => {
