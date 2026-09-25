@@ -249,16 +249,31 @@ fn site_check_has_three_values() {
 
 // ── 実の正本（AC2 の機構）──
 
-/// 実の正本の判断の記録の数（`adr/` の下の `ADR-<数>.yaml` の本数）。
-fn real_records() -> usize {
-    fs::read_dir(design_intent().join("adr"))
+/// `adr/` の下に実在する判断の記録の番号（`ADR-<数>.yaml` の数・昇順）。
+/// 廃止は状態で表し番号を空けたままにする（P-7.2）ので、連番（1..=本数）とは仮定しない。
+fn record_ids(adr: &Path) -> Vec<u32> {
+    let mut ids: Vec<u32> = fs::read_dir(adr)
         .unwrap()
-        .filter(|e| {
-            let name = e.as_ref().unwrap().file_name();
-            let name = name.to_string_lossy();
-            name.starts_with("ADR-") && name.ends_with(".yaml")
+        .filter_map(|e| {
+            let name = e.unwrap().file_name().to_string_lossy().into_owned();
+            name.strip_prefix("ADR-")?
+                .strip_suffix(".yaml")?
+                .parse()
+                .ok()
         })
-        .count()
+        .collect();
+    ids.sort_unstable();
+    ids
+}
+
+/// 判断の記録の面の期待の file 名（実在する番号ごとに `adr-<数>.html`・番号の昇順）。
+fn adr_page_names(ids: &[u32]) -> Vec<String> {
+    ids.iter().map(|n| format!("adr-{n}.html")).collect()
+}
+
+/// 実の正本の判断の記録の番号（`design-intent/adr/` の下）。
+fn real_records() -> Vec<u32> {
+    record_ids(&design_intent().join("adr"))
 }
 
 /// 実の正本の設計ノートの id（`design-note/` の下の `.yaml` から欄の決まりを除いた stem・字の昇順）。
@@ -280,18 +295,19 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
     let td = temp_dir("real");
     let site = td.join("site");
     let build = folio_build(&design_intent(), &site, "--write");
-    let records = real_records();
+    let ids = real_records();
+    let records = ids.len();
     let notes = real_notes();
     // 3 面 + 様式 2 本 + 判断の記録の面（記録の数だけ）+ 設計ノートの面（設計ノートの数だけ）
     let total = 3 + 2 + records + notes.len();
-    let adr_pages: Vec<PathBuf> = (1..=records)
-        .map(|n| site.join(format!("adr-{n}.html")))
-        .collect();
-    let all_adr = adr_pages.iter().all(|p| p.is_file());
+    let all_adr = adr_page_names(&ids)
+        .iter()
+        .all(|name| site.join(name).is_file());
+    let last_id = *ids.last().expect("判断の記録が 1 本も無い");
     let all_notes = notes
         .iter()
         .all(|id| site.join(format!("note-{id}.html")).is_file());
-    let last = format!("ADR-{records}");
+    let last = format!("ADR-{last_id}");
     let last_note = notes.last().cloned().expect("設計ノートが 1 本も無い");
     let mut pages = Command::new(env!("CARGO_BIN_EXE_folio"));
     pages
@@ -303,7 +319,7 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
         ("index", "index.html".to_string()),
         ("constitution", "constitution.html".to_string()),
         ("srs", "srs.html".to_string()),
-        ("adr", format!("adr-{records}.html")),
+        ("adr", format!("adr-{last_id}.html")),
         ("note", format!("note-{last_note}.html")),
     ] {
         pages
@@ -343,7 +359,7 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
             .arg("--dir")
             .arg(design_intent())
             .arg("--out")
-            .arg(site.join(format!("adr-{records}.html")))
+            .arg(site.join(format!("adr-{last_id}.html")))
             .arg("--check")
             .output()
             .unwrap(),
@@ -414,6 +430,42 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
             stdout(out)
         );
     }
+}
+
+/// 欠番のある写し（ADR-1 と ADR-3 だけ・ADR-2 を欠く）でも、面の期待は実在する番号の集合から組まれ、
+/// 組み立ての写しはその期待どおりの面を出す（P-7.2・f2-648.175）。
+#[test]
+fn site_expects_adr_faces_from_the_existing_ids_not_a_sequence() {
+    let (td, work) = fixture_copy("gap");
+    let adr = work.join("adr");
+    let base = fs::read_to_string(adr.join("ADR-2.yaml")).unwrap();
+    assert_eq!(
+        base.matches("ADR-2").count(),
+        1,
+        "写しの元の番号の出現が id の 1 か所でない"
+    );
+    fs::remove_file(adr.join("ADR-2.yaml")).unwrap();
+    for n in [1, 3] {
+        fs::write(
+            adr.join(format!("ADR-{n}.yaml")),
+            base.replace("id: ADR-2", &format!("id: ADR-{n}")),
+        )
+        .unwrap();
+    }
+    let ids = record_ids(&adr);
+    let names = adr_page_names(&ids);
+    let site = td.join("site");
+    let run = folio_build(&work, &site, "--write");
+    let present: Vec<bool> = names.iter().map(|n| site.join(n).is_file()).collect();
+    let missing_gap = !site.join("adr-2.html").exists();
+    let _ = fs::remove_dir_all(&td);
+
+    assert_eq!(ids, vec![1, 3]);
+    assert_eq!(names, vec!["adr-1.html", "adr-3.html"]);
+    // 凍結 fixture の写しは床が「まだ分からない」（便 56）= 書いて 2
+    assert_eq!(code(&run, "folio build --write"), 2, "{}", stderr(&run));
+    assert_eq!(present, vec![true, true], "{}", stdout(&run));
+    assert!(missing_gap, "欠番の面 adr-2.html が出ている");
 }
 
 // ── 全部か無しか ──
