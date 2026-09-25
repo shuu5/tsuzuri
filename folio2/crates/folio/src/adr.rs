@@ -930,21 +930,23 @@ mod tests {
         );
     }
 
-    /// 列の根の表はちょうど 2 行（便 133 §1 (c)1）: folio2 の行が先・scribe3 の行が 2 行目で、鍵と digest の全桁は
-    /// 歯の中の手で写した字（凍結 anchor・P-10.1）。行を足す次の便はこの字も同じ要求で直す。
+    /// 列の根の表はちょうど 2 行（便 134 §1 (c)1）: folio2 の行が先・tsuzuri の行が 2 行目で、鍵と digest の全桁は
+    /// 歯の中の手で写した字（凍結 anchor・P-10.1）。改名の前の名 scribe3-constitution からは何も引かない。
+    /// 行を足す次の便はこの字も同じ要求で直す。
     #[test]
-    fn f133_the_root_table_holds_folio2_and_scribe3() {
+    fn f134_the_root_table_holds_folio2_and_tsuzuri() {
         const FOLIO2: (&str, &str) = (
             "folio2-constitution",
             "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed",
         );
-        const SCRIBE3: (&str, &str) = (
-            "scribe3-constitution",
+        const TSUZURI: (&str, &str) = (
+            "tsuzuri-constitution",
             "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9de832f8c5356",
         );
-        assert_eq!(ROOT_DIGESTS, [FOLIO2, SCRIBE3]);
-        assert_eq!(root_digest(Some(SCRIBE3.0)), Some(SCRIBE3.1));
+        assert_eq!(ROOT_DIGESTS, [FOLIO2, TSUZURI]);
+        assert_eq!(root_digest(Some(TSUZURI.0)), Some(TSUZURI.1));
         assert_eq!(root_digest(Some(FOLIO2.0)), Some(FOLIO2.1));
+        assert_eq!(root_digest(Some("scribe3-constitution")), None);
     }
 
     /// 承認者の値域は 持ち主・planner 席・orchestrator 席 の 3 つ（席の呼び名の裁定 2026-09-20・便 58 §1 (a)1・

@@ -8,7 +8,8 @@
 //! 1. folio2 の床と 1 行の写し／2. 名の書き換えは床で落ちる／3. 別の中身の根は名でも行でも落ちる／
 //! 4. 始まりの凍結が 2 つを書き、書いた後の床が合格／5. どちらか 1 本在れば断る／
 //! 6. ほかの検査に違反か「まだ分からない」・表に無い名（--freeze-anchor も）／7. 写しは置き場の名の行だけ（folio schema）／
-//! 8. scribe3 の名は表の 2 行目を写し、床が folio2 の根をその行と照らして落とす（便 133・docs/design/delivery-133.md §1 (c)2）。
+//! 8. tsuzuri の名は表の 2 行目を写し、床が folio2 の根をその行と照らして落とす（便 133 が旧 scribe3 の名で足し・
+//!    docs/design/delivery-133.md §1 (c)2・便 134 が改名の後の名に改めた・docs/design/delivery-134.md §1 (c)2）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,9 +23,10 @@ const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const FOLIO2: &str = "folio2-constitution";
 /// 表に無い名（歯のための名）。
 const OTHER: &str = "renamed-constitution";
-/// scribe3 の憲法の名と列の根の digest（scribe3 の版 e52d24c の始まりの凍結・便 133・crate の中の表は読まない）。
-const SCRIBE3: &str = "scribe3-constitution";
-const SCRIBE3_ROOT: &str = "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9de832f8c5356";
+/// tsuzuri の憲法の名と列の根の digest（旧 scribe3 の版 e52d24c の始まりの凍結・便 133・版 1c93e70 の改名で名を
+/// 改めた・便 134・digest は名の外で不変・crate の中の表は読まない）。
+const TSUZURI: &str = "tsuzuri-constitution";
+const TSUZURI_ROOT: &str = "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9de832f8c5356";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -471,12 +473,12 @@ fn f121_schema_copies_only_the_named_row() {
     assert!(text(&out.stderr).contains("meta.id"), "{}", show(&out));
 }
 
-/// scribe3 の名（8）: folio schema --write が列の根の欄を scribe3 の行 1 行にし、commit の後の床は
-/// 写しの folio2 の根を表の scribe3 の行と照らして違うの違反ちょうど 1 件で 1。
+/// tsuzuri の名（8）: folio schema --write が列の根の欄を tsuzuri の行 1 行にし、commit の後の床は
+/// 写しの folio2 の根を表の tsuzuri の行と照らして違うの違反ちょうど 1 件で 1。
 #[test]
-fn f133_scribe3_name_picks_its_row() {
-    let w = Work::new("scribe3", "design-intent", true, |_| {});
-    rename(&w.dir(), FOLIO2, SCRIBE3);
+fn f134_tsuzuri_name_picks_its_row() {
+    let w = Work::new("tsuzuri", "design-intent", true, |_| {});
+    rename(&w.dir(), FOLIO2, TSUZURI);
     let out = w.schema("--write");
     assert_eq!(out.status.code(), Some(0), "{}", show(&out));
     let path = w.dir().join("adr/schema.yaml");
@@ -484,7 +486,7 @@ fn f133_scribe3_name_picks_its_row() {
         table_lines(&path),
         [
             "    root_digests:".to_string(),
-            format!("      {SCRIBE3}: {SCRIBE3_ROOT}"),
+            format!("      {TSUZURI}: {TSUZURI_ROOT}"),
         ]
     );
     let file = fs::read_to_string(&path).unwrap();
@@ -502,7 +504,7 @@ fn f133_scribe3_name_picks_its_row() {
     assert_eq!(v.len(), 1, "{v:?}");
     assert!(
         v[0].starts_with("[anchor] ")
-            && v[0].contains(&format!("列の根の表の {SCRIBE3} の行"))
+            && v[0].contains(&format!("列の根の表の {TSUZURI} の行"))
             && !v[0].contains("表に無い"),
         "{v:?}"
     );
