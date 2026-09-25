@@ -1,4 +1,13 @@
-# s3:design 席の作業記憶（起こし直しの前・2026-09-24T13:1xZ）
+# t3:design 席の作業記憶（旧 s3:design・改名後に再開・2026-09-25T01:23Z 更新）
+
+## 0. 改名後の現在地（2026-09-25T01:23Z・verified）
+- repo = ~/projects/local-projects/tsuzuri（旧 scribe3・ADR-6）。state dir = ~/.local/state/scribe2-v2-state-tsuzuri。tmux の対象 = t3:design・口座 black6。作業場 = ~/projects/local-projects/tsuzuri-spikes・site = ~/projects/local-projects/tsuzuri-site。
+- **憲法 v1.0 は凍結済み**（folio2 便 134 の binary・`folio schema --write` 275ae53 → `--freeze-start` 5cc8892・anchors/ 3 file・`folio check` 合格 違反 0 まだ分からない 0）。folio の binary は ~/projects/local-projects/folio2/target/debug/folio（33a7dd4）。
+- **台帳は起こした**（`bd init --prefix t3`・6383e85）が、**最初の bead（根の epic）を起票の門が create-without-parent で断る**（bead 0 本の台帳は根を置けない = 器の穴）。持ち主に 1 問（当座: 裁定で rules 行 ledger.denied_writes から語を 1 つ外して根の epic を置く／本式: 門に「bead 0 本の台帳の最初の create は通す」を足す便）。scribe2-f1 へ穴として起票を依頼済み。根が置けるまで裁定の逐語は引き続き scribe2 の台帳 s2-07l.214 の notes へ（scribe2 席が記帳）。
+- 生きた server: 8791〜8793（相対 path・cwd が改名に付いてきたので無変更）・8803（v0.4 の binary で起こし直し・pid は tsuzuri-spikes/live/stage/pid）・hub :8100 と site :8101（tailnet-serve を新 docroot で登録し直し）。
+- 次 = 根の bead の裁定 → 論点 B（裁定面の GUI）→ 論点 A の残り（面の便の契約表・.vessel.toml の cargo 化・trunk を xtask の下に）・ADR-5 (2) の端末の一覧。
+- 以下は改名前の記述（経緯として残す・path の scribe3 は tsuzuri と読む）。
+
 
 次の席が最初に読む file。読む順: この file → docs/handoff/2026-09-24-v3-kickoff.md → docs/handoff/2026-09-24-v2-leftovers-for-v3.md（scribe2 席の送り物・c17b4b2）→ docs/grill/2026-09-24-D-tech-stack.md。
 
