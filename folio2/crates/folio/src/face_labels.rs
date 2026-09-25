@@ -302,13 +302,17 @@ impl Standing {
 // ── 表紙の日付（便 145・delivery-145.md §1 (b) の 1）──
 // 要件書の承認の日付は承認欄の最後の 承認 の行（表紙の状態・入口のカード・鮮度の札・版の札が同じ口から取る）。
 
-/// 欄 meta の承認欄の最後の 承認 の行の日付（escape 済み）。draft か 承認 の行が無ければ None。
+/// 欄 meta の承認欄の最後の 承認 の行の日付（escape 済み）。draft か承認欄か 承認 の行が無ければ None
+/// （入口の承認欄は床が数えないので、無ければ生成日に落とす・便 146）。
 pub fn last_approval(m: &X<'_>) -> R<Option<String>> {
     if standing(m)? == Standing::Draft {
         return Ok(None);
     }
+    let Some(rows) = m.g("approval")? else {
+        return Ok(None);
+    };
     let mut when = None;
-    for row in m.f("approval")?.seq()? {
+    for row in rows.seq()? {
         if row.f("role")?.v.as_str() == Some("承認") {
             when = Some(row.ef("when")?);
         }
@@ -316,12 +320,31 @@ pub fn last_approval(m: &X<'_>) -> R<Option<String>> {
     Ok(when)
 }
 
-/// 表紙の日付の（名・日付）。承認の日付が在れば（承認・その日付）・無ければ（生成・meta.generated）。
-pub fn dated(m: &X<'_>, approved: Option<String>) -> R<(&'static str, String)> {
+/// 面の日付の（名・日付）。承認の日付が在れば（承認・その日付）・無ければ（生成・`fallback` の日付）。名の値域は
+/// この 2 つだけ。承認の日付が在るときは `fallback` を呼ばない（便 146）。
+pub fn named(
+    approved: Option<String>,
+    fallback: impl FnOnce() -> R<String>,
+) -> R<(&'static str, String)> {
     Ok(match approved {
         Some(date) => ("承認", date),
-        None => ("生成", m.ef("generated")?),
+        None => ("生成", fallback()?),
     })
+}
+
+/// 表紙の日付の（名・日付）。承認の日付が在れば（承認・その日付）・無ければ（生成・meta.generated）。
+pub fn dated(m: &X<'_>, approved: Option<String>) -> R<(&'static str, String)> {
+    named(approved, || m.ef("generated"))
+}
+
+/// 承認欄が 1 つの表（判断の記録・設計ノート）の承認の日付（escape 済み）。状態が `unread`（承認を読まない状態）に
+/// 在るか、承認欄 approval が無ければ None。状態の欄が無ければ Err（便 146）。
+pub fn approval_date(x: &X<'_>, unread: &[&str]) -> R<Option<String>> {
+    let status = x.f("status")?.text()?;
+    if unread.contains(&status.as_str()) {
+        return Ok(None);
+    }
+    x.g("approval")?.map(|ap| ap.ef("date")).transpose()
 }
 
 /// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図・
@@ -488,6 +511,54 @@ mod face_labels_tests {
         // 表の外の状態は導出できない
         let e = read("version: v0.3, status: retired, effective_version: v0.3", rows).0;
         assert_eq!(e, Err("meta.status: 文書の状態 の表に無い値「retired」".to_string()));
+    }
+
+    #[test]
+    fn f146_named_and_approval_date_pick_the_approval() {
+        // named: 承認の日付が在れば読み手を呼ばない（delivery-146.md §1 (c) の 1）
+        let unread = || -> R<String> { panic!("承認の日付が在るのに代わりの日付を読んだ") };
+        assert_eq!(
+            named(Some("2026-09-08".to_string()), unread),
+            Ok(("承認", "2026-09-08".to_string()))
+        );
+        assert_eq!(
+            named(None, || Ok("2026-09-06".to_string())),
+            Ok(("生成", "2026-09-06".to_string()))
+        );
+        assert_eq!(named(None, || Err("読めない".to_string())), Err("読めない".to_string()));
+        // approval_date: 承認欄が 1 つの表（判断の記録・設計ノート）
+        let date = |doc: &str, skip: &[&str]| {
+            let v = yaml::parse_typed(doc).unwrap();
+            approval_date(&X::root(&v, "a"), skip)
+        };
+        let adr: &[&str] = &["proposed"];
+        let note: &[&str] = &["draft", "example"];
+        let ap = "approval: {date: \"2026-09-<08>\", who: 持ち主}";
+        let got = Ok(Some("2026-09-&lt;08&gt;".to_string()));
+        for (doc, skip) in [
+            (format!("{{status: accepted, {ap}}}"), adr),
+            (format!("{{status: retired, {ap}}}"), adr),
+            (format!("{{status: effective, {ap}}}"), note),
+            (format!("{{status: retired, {ap}}}"), note),
+        ] {
+            assert_eq!(date(&doc, skip), got, "{doc}");
+        }
+        for (doc, skip) in [
+            (format!("{{status: proposed, {ap}}}"), adr),
+            (format!("{{status: draft, {ap}}}"), note),
+            (format!("{{status: example, {ap}}}"), note),
+            ("{status: accepted}".to_string(), adr),
+            ("{status: retired, approval: null}".to_string(), adr),
+            ("{status: effective}".to_string(), note),
+        ] {
+            assert_eq!(date(&doc, skip), Ok(None), "{doc}");
+        }
+        assert_eq!(date(&format!("{{{ap}}}"), adr), Err("a: 欄 status が無い".to_string()));
+        // 承認欄の無い発効の meta: last_approval は None・dated は（生成・生成日）
+        let v = yaml::parse_typed("{version: v0.5, status: effective, generated: 2026-09-03}").unwrap();
+        let m = X::root(&v, "meta");
+        assert_eq!(last_approval(&m), Ok(None));
+        assert_eq!(dated(&m, None), Ok(("生成", "2026-09-03".to_string())));
     }
 
     #[test]

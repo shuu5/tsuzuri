@@ -461,20 +461,8 @@ impl Frame {
     }
 
     /// head と site-bar（skip-link から main の開始まで）。値は escape 済み。`ceiling` = 天井の名札の字（`ceiling_stamp` で
-    /// 組み立て済み・床の名札 freshness-stamp の直後に部品 ceiling-stamp として置く・便 40）。
-    pub fn head(
-        &self,
-        o: &mut Vec<String>,
-        title: &str,
-        generated: &str,
-        version: &str,
-        status: &str,
-        ceiling: &str,
-    ) {
-        self.head_dated(o, title, ("生成", generated), version, status, ceiling);
-    }
-
-    /// `head` の鮮度の札の日付を（名・日付）で選ぶ形（名は `dated` の 承認 か 生成・便 145）。
+    /// 組み立て済み・床の名札 freshness-stamp の直後に部品 ceiling-stamp として置く・便 40）。鮮度の札の日付は
+    /// （名・日付）の組（名は `named` の 承認 か 生成・便 145・146）。
     pub fn head_dated(
         &self,
         o: &mut Vec<String>,
@@ -585,8 +573,9 @@ impl Frame {
     }
 
     /// prevnext・foot（ft-plain と機械のための面）・doc-locator・body と html の閉じ。`dl` は組み立て済みの HTML。
-    pub fn foot(&self, o: &mut Vec<String>, version: &str, generated: &str, dl: &str) {
-        self.foot_aside(o, version, generated, dl, "");
+    /// 足の行の日付は鮮度の札と同じ（名・日付）の組（便 146）。
+    pub fn foot(&self, o: &mut Vec<String>, version: &str, dated: (&str, &str), dl: &str) {
+        self.foot_aside(o, version, dated, dl, "");
     }
 
     /// `foot` と同じ・doc-locator の行の末尾（入口へ戻る の後）に組み立て済みの `aside` を差し込む（便 74）。
@@ -594,7 +583,7 @@ impl Frame {
         &self,
         o: &mut Vec<String>,
         version: &str,
-        generated: &str,
+        (dated, date): (&str, &str),
         dl: &str,
         aside: &str,
     ) {
@@ -604,7 +593,7 @@ impl Frame {
         ));
         o.push("<footer class=\"foot\">".to_string());
         o.push(format!(
-            "<p class=\"ft-plain\">このページは正本 {} から folio が生成した · {} {version}（{generated}）· 手で直さない</p>",
+            "<p class=\"ft-plain\">このページは正本 {} から folio が生成した · {} {version}（{dated} {date}）· 手で直さない</p>",
             self.source, self.name
         ));
         o.push(format!(

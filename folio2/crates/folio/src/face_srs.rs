@@ -648,7 +648,7 @@ pub(crate) fn figure_close(o: &mut Vec<String>, fn_: &str, m: &X<'_>) -> R<()> {
     o.push(format!(
         "<figcaption><span class=\"ver\">{fn_} · {} {} · srs.yaml</span></figcaption>",
         m.ef("version")?,
-        m.ef("generated")?
+        face::dated(m, face::last_approval(m)?)?.1
     ));
     o.push("</figure>".to_string());
     Ok(())
@@ -933,7 +933,7 @@ fn approval(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
 
 fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let version = m.ef("version")?;
-    let generated = m.ef("generated")?;
+    let (dated, date) = face::dated(m, face::last_approval(m)?)?;
     let mut dl = format!(
         "<dt>id</dt><dd>{}</dd><dt>version</dt><dd>{version}</dd><dt>status</dt><dd>{}</dd>",
         m.ef("id")?,
@@ -956,7 +956,7 @@ fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     if !ctx.figures.is_empty() {
         dl.push_str(&format!("<dt>figures</dt><dd>{}</dd>", ctx.figures.len()));
     }
-    ctx.frame.foot(o, &version, &generated, &dl);
+    ctx.frame.foot(o, &version, (dated, &date), &dl);
     Ok(())
 }
 

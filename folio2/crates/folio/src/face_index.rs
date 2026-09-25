@@ -113,14 +113,21 @@ pub fn derive(dir: &Path) -> R<String> {
 
 // ── 骨格 ──
 
+/// 鮮度の札・棚の札・足の行の（名・日付）: 要件書と同じ口（承認欄の最後の 承認 の行・draft か承認欄か 承認 の行が
+/// 無ければ生成日・便 146）。
+fn dated(m: &X<'_>) -> R<(&'static str, String)> {
+    face::dated(m, face::last_approval(m)?)
+}
+
 fn head(o: &mut Vec<String>, m: &X<'_>, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(INDEX_STATUS, "入口の状態")?;
     m.f("id")?.text()?;
-    FRAME.head(
+    let (dated, date) = dated(m)?;
+    FRAME.head_dated(
         o,
         &format!("folio2 — 設計文書の入口（{version}）"),
-        &m.ef("generated")?,
+        (dated, &date),
         &version,
         status,
         stamp,
@@ -261,7 +268,7 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
     o.push(format!(
         "<figcaption><span class=\"ver\">棚 · {} {} · index.yaml</span></figcaption>",
         m.ef("version")?,
-        m.ef("generated")?
+        dated(m)?.1
     ));
     o.push("</figure>".to_string());
     Ok(())
@@ -671,12 +678,12 @@ fn sheet_section(
 
 fn foot(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
     let version = m.ef("version")?;
+    let (dated, date) = dated(m)?;
     o.push("<footer class=\"foot\">".to_string());
     o.push(format!(
-        "<p class=\"ft-plain\">このページは正本 {} と他の正本から folio が生成した · {} {version}（{}）· 手で直さない</p>",
+        "<p class=\"ft-plain\">このページは正本 {} と他の正本から folio が生成した · {} {version}（{dated} {date}）· 手で直さない</p>",
         FRAME.source,
         FRAME.name,
-        m.ef("generated")?
     ));
     o.push(format!(
         "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl><dt>id</dt><dd>{}</dd><dt>version</dt><dd>{version}</dd><dt>status</dt><dd>{}</dd><dt>sources</dt><dd>{}</dd></dl></details>",

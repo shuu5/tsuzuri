@@ -995,3 +995,95 @@ fn f145_real_srs_cover_dates_follow_the_last_approval() {
         "実の要件書の版の札が生成日を出す"
     );
 }
+
+// ── 便 146: 図 1〜3 の札と足の行の日付は版の札と同じ（足の行は名を添える・docs/design/delivery-146.md §1 (c)）──
+
+/// 図 n の札の字（名を添えない・版の札と同じ日付）。
+fn srs_caption(n: usize, version: &str, date: &str) -> String {
+    format!("<figcaption><span class=\"ver\">図 {n} · {version} {date} · srs.yaml</span></figcaption>")
+}
+
+/// 要件書の面の足の行の字（`dated` = 日付の名と日付）。
+fn srs_foot(version: &str, dated: &str) -> String {
+    format!(
+        "<p class=\"ft-plain\">このページは正本 srs.yaml から folio が生成した · 要件書 {version}（{dated}）· 手で直さない</p>"
+    )
+}
+
+#[test]
+fn f146_srs_figure_captions_and_foot_follow_the_last_approval() {
+    let edit = |srs: &str, from: &str, to: &str| {
+        let e = srs.replacen(from, to, 1);
+        assert_ne!(e, srs, "写しに「{from}」が無い");
+        e
+    };
+    let added = "    - {role: 承認, who: 持ち主, when: 2026-09-09, stamp: 発効, verbatim: 承認する, version: v0.3}\n";
+    // (写しの名, 変異, 図の札の日付, 足の行の名と日付)
+    type Mutate = Box<dyn Fn(String) -> String>;
+    let cases: [(&str, Mutate, &str, &str); 4] = [
+        ("same", Box::new(|s| s), "2026-09-05", "承認 2026-09-05"),
+        (
+            "added",
+            Box::new(move |s| edit(&s, APPROVED_ROW, &format!("{APPROVED_ROW}{added}"))),
+            "2026-09-09",
+            "承認 2026-09-09",
+        ),
+        (
+            "none",
+            Box::new(move |s| edit(&s, APPROVED_ROW, "")),
+            "2026-09-01",
+            "生成 2026-09-01",
+        ),
+        (
+            "draft",
+            Box::new(move |s| edit(&s, "  status: effective\n", "  status: draft\n")),
+            "2026-09-01",
+            "生成 2026-09-01",
+        ),
+    ];
+    for (case, mutate, date, dated) in cases {
+        let (run, html, _) = fixture_srs(&format!("f146-{case}"), mutate);
+        ok(&run);
+        for n in 1..=3 {
+            once(&html, &srs_caption(n, "v0.3", date), &format!("{case} の図 {n} の札"));
+        }
+        once(&html, &srs_foot("v0.3", dated), &format!("{case} の足の行"));
+        assert_eq!(
+            html.matches("<p class=\"ft-plain\">").count(),
+            1,
+            "{case} の足の行が 1 つでない"
+        );
+    }
+}
+
+#[test]
+fn f146_real_srs_figure_captions_and_foot_follow_the_last_approval() {
+    let s = srs();
+    let meta = &s["meta"];
+    let version = esc(meta["version"].as_str().expect("meta.version が無い"));
+    let generated = esc(meta["generated"].as_str().expect("meta.generated が無い"));
+    // 歯の側の手書きの読み: 承認欄の最後の 承認 の行の when
+    let date = meta["approval"]
+        .as_vec()
+        .expect("meta.approval が一覧でない")
+        .iter()
+        .filter(|row| row["role"].as_str() == Some("承認"))
+        .filter_map(|row| row["when"].as_str())
+        .next_back()
+        .map(esc)
+        .expect("実の要件書に 承認 の行が無い");
+    assert_ne!(date, generated, "実の要件書の承認の日付が生成日と同じ（歯が生成日と区別できない）");
+    let html = real_srs("f146-real");
+    for n in 1..=3 {
+        once(&html, &srs_caption(n, &version, &date), &format!("実の要件書の図 {n} の札"));
+        assert!(
+            !html.contains(&srs_caption(n, &version, &generated)),
+            "実の要件書の図 {n} の札が生成日を出す"
+        );
+    }
+    once(&html, &srs_foot(&version, &format!("承認 {date}")), "実の要件書の足の行");
+    assert!(
+        !html.contains(&format!("要件書 {version}（{generated}）")),
+        "実の要件書の足の行が名の無い生成日を出す"
+    );
+}

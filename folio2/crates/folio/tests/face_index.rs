@@ -1081,3 +1081,77 @@ fn f139_real_adr_card_lists_every_record_title() {
     let list = between(&card, "<ul class=\"basis\">", "</ul>");
     assert_eq!(list.matches("<li>").count(), rows.len(), "{list}");
 }
+
+// ── 便 146: 鮮度の札・棚の札・足の行の日付は承認欄の最後の 承認 の行（draft か承認欄か 承認 の行が無ければ生成日・
+// docs/design/delivery-146.md §1 (c) の 8・9）──
+
+/// 入口の面の（鮮度の札の頭・棚の札・足の行の日付の部分）。
+fn index_dates(dated: &str, date: &str, version: &str) -> [String; 3] {
+    [
+        format!("<span data-component=\"freshness-stamp\">{dated} <b>{date}</b> · <b>{version}</b>（"),
+        format!("<figcaption><span class=\"ver\">棚 · {version} {date} · index.yaml</span></figcaption>"),
+        format!(" · 入口 {version}（{dated} {date}）· 手で直さない</p>"),
+    ]
+}
+
+fn assert_index_dates(html: &str, dated: &str, date: &str, version: &str, what: &str) {
+    for want in index_dates(dated, date, version) {
+        assert_eq!(html.matches(&want).count(), 1, "{what}「{want}」がちょうど 1 つでない");
+    }
+}
+
+#[test]
+fn f146_index_stamp_shelf_and_foot_follow_the_last_approval() {
+    let generated = "  generated: 2026-09-03\n";
+    let rows = "  approval:\n    - {role: 作成, who: 起草の席, when: 2026-09-03}\n    - {role: 承認, who: 持ち主, when: 2026-09-05}\n    - {role: 承認, who: 持ち主, when: 2026-09-07}\n    - {role: 作成, who: 起草の席, when: 2026-09-08}\n";
+    // (写しの名, 発効にするか, 承認欄を足すか, 日付の名, 日付)
+    let cases = [
+        ("f146-draft", false, false, "生成", "2026-09-03"),
+        ("f146-effective", true, true, "承認", "2026-09-07"),
+        ("f146-effective-bare", true, false, "生成", "2026-09-03"),
+    ];
+    for (case, effective, with_rows, dated, date) in cases {
+        let (td, work) = index_fixture_copy(case);
+        if effective {
+            edit(&work.join("index.yaml"), |t| {
+                t.replacen("  status: draft\n", "  status: effective\n", 1)
+            });
+        }
+        if with_rows {
+            edit(&work.join("index.yaml"), |t| {
+                t.replacen(generated, &format!("{generated}{rows}"), 1)
+            });
+        }
+        let (_, html) = index_from(case, &work, &td);
+        let _ = fs::remove_dir_all(&td);
+        assert_index_dates(&html, dated, date, "v0.1", case);
+        if dated == "承認" {
+            for stale in &index_dates("生成", "2026-09-03", "v0.1")[..2] {
+                assert!(!html.contains(stale.as_str()), "{case}: 生成日の札「{stale}」が在る");
+            }
+        }
+    }
+}
+
+#[test]
+fn f146_real_index_stamp_shelf_and_foot_follow_the_last_approval() {
+    let i = load_yaml("index.yaml");
+    let meta = &i["meta"];
+    let version = esc(text(meta, "version"));
+    let generated = esc(text(meta, "generated"));
+    // 歯の側の手書きの読み: 承認欄の最後の 承認 の行の when
+    let date = seq(&meta["approval"], "meta.approval")
+        .iter()
+        .filter(|row| row["role"].as_str() == Some("承認"))
+        .filter_map(|row| row["when"].as_str())
+        .next_back()
+        .map(esc)
+        .expect("実の入口に 承認 の行が無い");
+    assert_ne!(date, generated, "実の入口の承認の日付が生成日と同じ（歯が生成日と区別できない）");
+    let (td, _, html) = real_index("f146-real");
+    let _ = fs::remove_dir_all(&td);
+    assert_index_dates(&html, "承認", &date, &version, "実の入口");
+    for stale in &index_dates("生成", &generated, &version)[..2] {
+        assert!(!html.contains(stale.as_str()), "実の入口に生成日の札「{stale}」が在る");
+    }
+}

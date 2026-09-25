@@ -490,11 +490,17 @@ fn entries<'a>(a: &X<'a>, key: &str) -> R<Vec<X<'a>>> {
 
 // ── 骨格 ──
 
+/// 鮮度の札と足の行の（名・日付）: 承認欄の日付（提案中は読まない）・無ければ（生成・記録の欄 date）（便 146）。
+fn dated(a: &X<'_>) -> R<(&'static str, String)> {
+    face::named(face::approval_date(a, &["proposed"])?, || a.ef("date"))
+}
+
 fn head(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, stamp: &str) -> R<()> {
-    f.head(
+    let (dated, date) = dated(a)?;
+    f.head_dated(
         o,
         &format!("folio2 — 判断の記録 {id}（{}）", st.label),
-        &a.ef("date")?,
+        (dated, &date),
         id,
         st.label,
         stamp,
@@ -856,7 +862,8 @@ fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts, chip: &
     if n.figures > 0 {
         dl.push_str(&format!("<dt>figures</dt><dd>{}</dd>", n.figures));
     }
-    f.foot_aside(o, id, &date, &dl, chip);
+    let (dated, stamp) = dated(a)?;
+    f.foot_aside(o, id, (dated, &stamp), &dl, chip);
     Ok(())
 }
 

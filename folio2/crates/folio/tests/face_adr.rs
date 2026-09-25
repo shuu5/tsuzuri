@@ -1321,3 +1321,82 @@ fn f137_real_sources_draw_every_revises_row() {
     let _ = fs::remove_dir_all(&td);
     assert!(drawn > 0, "実の正本の revises の行を 1 つも数えていない");
 }
+
+// ── 便 146: 鮮度の札と足の行の日付は承認欄の日付（提案中は読まない・無ければ記録の日付と名 生成・
+// docs/design/delivery-146.md §1 (c) の 5・6）──
+
+/// 鮮度の札の頭（名・日付・記録の id まで）。
+fn adr_stamp(dated: &str, date: &str, id: &str) -> String {
+    format!("<span data-component=\"freshness-stamp\">{dated} <b>{date}</b> · <b>{id}</b>（")
+}
+
+/// 判断の記録の面の足の行の日付の部分。
+fn adr_foot(id: &str, dated: &str, date: &str) -> String {
+    format!(" · 判断の記録 {id}（{dated} {date}）· 手で直さない</p>")
+}
+
+fn once_in(html: &str, want: &str, what: &str) {
+    assert_eq!(html.matches(want).count(), 1, "{what}「{want}」がちょうど 1 つでない");
+}
+
+#[test]
+fn f146_adr_stamp_and_foot_follow_the_approval() {
+    let approval = "amends: []\napproval: {who: 持ち主, date: 2026-09-08, ruling: f2-648.219 notes, verbatim: 承認する, surface: R-8}";
+    let date_cell = "<span class=\"m\"><span class=\"k\">日付</span><span class=\"v\">2026-09-06</span></span>";
+    // (写しの名, 状態, 承認欄を足すか, 日付の名, 日付)
+    let cases = [
+        ("f146-proposed", "proposed", false, "生成", "2026-09-06"),
+        ("f146-proposed-ap", "proposed", true, "生成", "2026-09-06"),
+        ("f146-accepted", "accepted", true, "承認", "2026-09-08"),
+        ("f146-retired-ap", "retired", true, "承認", "2026-09-08"),
+        ("f146-retired", "retired", false, "生成", "2026-09-06"),
+    ];
+    for (case, status, with_approval, dated, date) in cases {
+        let (run, html) = mutated(case, |t| {
+            let mut t = t.replacen("status: proposed", &format!("status: {status}"), 1);
+            if with_approval {
+                t = t.replacen("amends: []", approval, 1);
+            }
+            if status == "retired" {
+                t = t.replacen("amends: []", "amends: []\nsuperseded_by: ADR-1", 1);
+            }
+            if status == "proposed" && !with_approval {
+                t.push_str("# 変異なし\n");
+            }
+            t
+        });
+        assert_eq!(code(&run, case), 0, "{case}: {}", stderr(&run));
+        once_in(&html, &adr_stamp(dated, date, "ADR-2"), &format!("{case} の鮮度の札"));
+        once_in(&html, &adr_foot("ADR-2", dated, date), &format!("{case} の足の行"));
+        once_in(&html, date_cell, &format!("{case} の表紙の日付の枡"));
+        if dated == "承認" {
+            assert!(
+                !html.contains("<span data-component=\"freshness-stamp\">生成 "),
+                "{case}: 承認の日付の在る面に 生成 の札が在る"
+            );
+        }
+    }
+}
+
+#[test]
+fn f146_real_adr_faces_date_the_approval() {
+    let td = temp_dir("f146-real");
+    let mut approved = 0;
+    for id in real_ids() {
+        let (_, html) = real_face(&td, &id);
+        let a = load_yaml_at(&design_intent().join("adr"), &format!("{id}.yaml"));
+        // 歯の側の手書きの読み: 提案中でなく承認欄が表なら承認欄の date・無ければ記録の date と名 生成
+        let status = a["status"].as_str().expect("status が無い");
+        let (dated, date) = match a["approval"]["date"].as_str() {
+            Some(d) if status != "proposed" && a["approval"].as_hash().is_some() => {
+                approved += 1;
+                ("承認", esc(d))
+            }
+            _ => ("生成", esc(a["date"].as_str().expect("date が無い"))),
+        };
+        once_in(&html, &adr_stamp(dated, &date, &id), &format!("{id} の鮮度の札"));
+        once_in(&html, &adr_foot(&id, dated, &date), &format!("{id} の足の行"));
+    }
+    let _ = fs::remove_dir_all(&td);
+    assert!(approved > 0, "承認欄を持つ実の判断の記録を 1 本も数えていない");
+}

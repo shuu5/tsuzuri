@@ -124,11 +124,11 @@ pub fn derive(dir: &Path) -> R<String> {
         tier_chapter(&mut o, &ctx, i, key, tier)?;
     }
     rules_chapter(&mut o, &c, &r)?;
-    amendment_chapter(&mut o, &ctx, &c, &m)?;
+    amendment_chapter(&mut o, &ctx, &c, &m, &ap)?;
     glossary_chapter(&mut o, &c, &v)?;
     sources_chapter(&mut o, &c)?;
     approval(&mut o, &m, &ap, &rows)?;
-    foot(&mut o, &ctx, &m)?;
+    foot(&mut o, &ctx, &m, &ap)?;
     // 本文の判断の記録の番号を判断の記録の面へのリンクに（便 135・要件書の面と同じ 1 つの口）
     Ok(face::link_ids(&format!("{}\n", o.join("\n")), false, |id| {
         face::adr_face(dir, id)
@@ -175,14 +175,18 @@ fn chapter_name(ctx: &Ctx<'_>, i: usize) -> &'static str {
 
 // ── 骨格 ──
 
+/// 鮮度の札・図 1 の札・足の行の（名・日付）: 今の版の承認（draft は生成日・便 145・146）。
+fn dated_of(m: &X<'_>, ap: &Approved) -> R<(&'static str, String)> {
+    let approved = (ap.standing != face::Standing::Draft).then(|| ap.date.clone());
+    face::dated(m, approved)
+}
+
 fn head(o: &mut Vec<String>, m: &X<'_>, ap: &Approved, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     // 今の版を名指す発効した判断が無ければ鮮度の札に「まだ分からない」（便 144）
     let (shown, label) = ap.standing.stamp(&version, status);
-    // 日付は今の版の承認（draft は生成日・便 145）
-    let approved = (ap.standing != face::Standing::Draft).then(|| ap.date.clone());
-    let (dated, date) = face::dated(m, approved)?;
+    let (dated, date) = dated_of(m, ap)?;
     FRAME.head_dated(
         o,
         &format!("folio2 — 憲法（不変原則・{version}）"),
@@ -744,7 +748,13 @@ fn stepper_li(no: &str, s: &Step<'_>) -> String {
     )
 }
 
-fn amendment_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>) -> R<()> {
+fn amendment_chapter(
+    o: &mut Vec<String>,
+    ctx: &Ctx<'_>,
+    c: &X<'_>,
+    m: &X<'_>,
+    ap: &Approved,
+) -> R<()> {
     let am = c.f("amendment")?;
     let step_xs = am.f("steps")?.seq()?;
     if step_xs.len() > MAX_RAIL_NODES {
@@ -823,7 +833,7 @@ fn amendment_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>) -
     o.push(format!(
         "<figcaption><span class=\"ver\">図 1 · {} {} · constitution.yaml</span></figcaption>",
         m.ef("version")?,
-        m.ef("generated")?
+        dated_of(m, ap)?.1
     ));
     o.push("</figure>".to_string());
 
@@ -1001,9 +1011,9 @@ fn approval(o: &mut Vec<String>, m: &X<'_>, now: &Approved, rows: &[Amend]) -> R
     Ok(())
 }
 
-fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
+fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>, ap: &Approved) -> R<()> {
     let version = m.ef("version")?;
-    let generated = m.ef("generated")?;
+    let (dated, date) = dated_of(m, ap)?;
     let mut dl = format!(
         "<dt>id</dt><dd>{}</dd><dt>version</dt><dd>{version}</dd><dt>status</dt><dd>{}</dd>",
         m.ef("id")?,
@@ -1021,7 +1031,7 @@ fn foot(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
         .collect::<Vec<_>>()
         .join(" / ");
     dl.push_str(&format!("<dt>items</dt><dd>{items}</dd>"));
-    FRAME.foot(o, &version, &generated, &dl);
+    FRAME.foot(o, &version, (dated, &date), &dl);
     Ok(())
 }
 

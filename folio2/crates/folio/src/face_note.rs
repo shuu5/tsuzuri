@@ -600,11 +600,20 @@ fn quoted_pair(line: &str) -> Option<(String, String)> {
 
 // ── 骨格 ──
 
+/// 鮮度の札・版の札・足の行の（名・日付）: 承認欄の日付（draft と見本は読まない）・無ければ（生成・meta.generated）
+/// （便 146）。
+fn dated(meta: &X<'_>) -> R<(&'static str, String)> {
+    face::named(face::approval_date(meta, &["draft", "example"])?, || {
+        meta.ef("generated")
+    })
+}
+
 fn head(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, st: &Status, stamp: &str) -> R<()> {
-    f.head(
+    let (dated, date) = dated(meta)?;
+    f.head_dated(
         o,
         &format!("folio2 — 設計ノート {id}（{}）", st.label),
-        &meta.ef("generated")?,
+        (dated, &date),
         &format!("{id} {}", meta.ef("version")?),
         st.label,
         stamp,
@@ -639,7 +648,7 @@ fn cover(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, st: &Status, n:
     o.push(meta_span("状態", st.label));
     o.push(meta_span(
         "版",
-        &format!("{} / {}", meta.ef("version")?, meta.ef("generated")?),
+        &format!("{} / {}", meta.ef("version")?, dated(meta)?.1),
     ));
     o.push(meta_span("節", &n.section_line()));
     o.push(meta_span("図", &format!("{} 枚", n.figures)));
@@ -989,7 +998,7 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, st: &Status) -
 
 /// 脚（`chip` = 用語集への札・doc-locator の行の末尾・便 74）。
 fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts, chip: &str) -> R<()> {
-    let generated = meta.ef("generated")?;
+    let (dated, date) = dated(meta)?;
     let version = meta.ef("version")?;
     let dl = format!(
         "<dt>id</dt><dd>{id}</dd><dt>status</dt><dd>{}</dd><dt>version</dt><dd>{version}</dd><dt>profile</dt><dd>{}</dd><dt>sections</dt><dd>{}</dd><dt>figures</dt><dd>{}</dd>",
@@ -998,6 +1007,6 @@ fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts, chip
         n.sections,
         n.figures
     );
-    f.foot_aside(o, &format!("{id} {version}"), &generated, &dl, chip);
+    f.foot_aside(o, &format!("{id} {version}"), (dated, &date), &dl, chip);
     Ok(())
 }

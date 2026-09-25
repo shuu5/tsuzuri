@@ -1247,3 +1247,71 @@ fn f145_fixture_constitution_dates_by_status() {
     once(&effective, &version_tag("v0.9", "2026-09-02"));
     assert!(!effective.contains(&version_tag("v0.9", "2026-09-01")), "発効の版の札が生成日を出す");
 }
+
+// ── 便 146: 図 1 の札と足の行の日付は鮮度の札と同じ（足の行は名を添える・docs/design/delivery-146.md §1 (c) の 4）──
+
+/// 図 1 の札の字（名を添えない）。
+fn caption_of(version: &str, date: &str) -> String {
+    format!("<figcaption><span class=\"ver\">図 1 · {version} {date} · constitution.yaml</span></figcaption>")
+}
+
+/// 憲法の面の足の行の字（`dated` = 日付の名と日付）。
+fn foot_of(version: &str, dated: &str) -> String {
+    format!(
+        "<p class=\"ft-plain\">このページは正本 constitution.yaml から folio が生成した · 憲法 {version}（{dated}）· 手で直さない</p>"
+    )
+}
+
+#[test]
+fn f146_constitution_figure_caption_and_foot_follow_the_current_approval() {
+    // 実の置き場の写し: 今の版の承認の日付
+    let (td, work) = real_copy("f146-real");
+    let (version, generated, _) = source_meta(&work);
+    let date = source_rows(&work)
+        .iter()
+        .filter(|r| r.version == version)
+        .map(|r| r.date.clone())
+        .max()
+        .expect("今の版を名指す発効した判断が無い");
+    assert_ne!(date, generated, "今の版の承認が生成日と同じ日で歯が見分けられない");
+    let html = face_of("f146-real", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    once(&html, &caption_of(&version, &date));
+    once(&html, &foot_of(&version, &format!("承認 {date}")));
+    assert!(!html.contains(&caption_of(&version, &generated)), "図 1 の札が生成日を出す");
+    assert!(
+        !html.contains(&format!("憲法 {version}（{generated}）")),
+        "足の行が名の無い生成日を出す"
+    );
+
+    // 面の fixture の憲法（generated 2026-09-01・初回の承認 2026-09-02・adr/ なし）
+    let fixture = repo_root().join("tests/fixtures/face");
+    let face = |case: &str, effective: bool| {
+        let td = temp_dir(case);
+        let work = td.join("src");
+        fs::create_dir_all(&work).unwrap();
+        for name in [
+            "constitution.yaml",
+            "rules.yaml",
+            "vocabulary.yaml",
+            "srs.yaml",
+            "ceiling.yaml",
+        ] {
+            fs::copy(fixture.join(name), work.join(name)).unwrap();
+        }
+        if effective {
+            edit_constitution(&work, "\n  status: draft\n", "\n  status: effective\n");
+            edit_constitution(&work, "\n  binding: false\n", "\n  binding: true\n");
+        }
+        let html = face_of(case, &td, &work);
+        let _ = fs::remove_dir_all(&td);
+        html
+    };
+    let draft = face("f146-draft", false);
+    once(&draft, &caption_of("v0.9", "2026-09-01"));
+    once(&draft, &foot_of("v0.9", "生成 2026-09-01"));
+    let effective = face("f146-effective", true);
+    once(&effective, &caption_of("v0.9", "2026-09-02"));
+    once(&effective, &foot_of("v0.9", "承認 2026-09-02"));
+    assert!(!effective.contains(&caption_of("v0.9", "2026-09-01")), "発効の図 1 の札が生成日を出す");
+}

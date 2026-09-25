@@ -1056,3 +1056,52 @@ fn f74_note_cover_names_the_reader() {
         "正本に「読み手」の字が在る（欄を足していないはず）"
     );
 }
+
+// ── 便 146: 鮮度の札・版の札・足の行の日付は承認欄の日付（draft と見本は読まない・無ければ生成日・
+// docs/design/delivery-146.md §1 (c) の 7）──
+
+#[test]
+fn f146_note_stamp_cover_and_foot_follow_the_approval() {
+    let note = "  note: 手書きの見本。面の骨格だけを測る。";
+    let approval = format!(
+        "{note}\n  approval: {{who: 持ち主, date: 2026-09-21, ruling: f2-648.219 notes, verbatim: 承認する, surface: R-8}}"
+    );
+    // (写しの名, 状態, 承認欄を足すか, 日付の名, 日付)
+    let cases = [
+        ("f146-draft", "draft", false, "生成", "2026-09-18"),
+        ("f146-draft-ap", "draft", true, "生成", "2026-09-18"),
+        ("f146-effective", "effective", true, "承認", "2026-09-21"),
+    ];
+    for (case, status, with_approval, dated, date) in cases {
+        let (run, html) = mutated(case, |t| {
+            let mut t = t.replacen("status: draft", &format!("status: {status}"), 1);
+            if with_approval {
+                t = t.replacen(note, &approval, 1);
+            }
+            if !with_approval {
+                t.push_str("# 変異なし\n");
+            }
+            t
+        });
+        assert_eq!(code(&run, case), 0, "{case}: {}", stderr(&run));
+        let once = |want: &str, what: &str| {
+            assert_eq!(html.matches(want).count(), 1, "{case} の{what}「{want}」がちょうど 1 つでない");
+        };
+        once(
+            &format!("<span data-component=\"freshness-stamp\">{dated} <b>{date}</b> · <b>full v0.1</b>（"),
+            "鮮度の札",
+        );
+        once(
+            &format!("<span class=\"m\"><span class=\"k\">版</span><span class=\"v\">v0.1 / {date}</span></span>"),
+            "版の札",
+        );
+        once(&format!(" · 設計ノート full v0.1（{dated} {date}）· 手で直さない</p>"), "足の行");
+        if dated == "承認" {
+            assert!(
+                !html.contains("<span data-component=\"freshness-stamp\">生成 "),
+                "{case}: 承認の日付の在る面に生成日の鮮度の札が在る"
+            );
+            assert!(!html.contains("2026-09-18"), "{case}: 生成日が面に残る");
+        }
+    }
+}
