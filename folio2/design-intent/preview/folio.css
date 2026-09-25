@@ -174,7 +174,7 @@ ins{overflow-wrap:anywhere;color:var(--ok);background:var(--ok-tint);text-decora
 .sc-open{margin-top:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:.8125rem;padding:6px 12px;border-radius:8px;background:var(--brand);color:var(--on-accent)}
 .sc-open:hover{text-decoration:none;filter:brightness(1.1)}
 .sc-hit{position:absolute;inset:0;border-radius:inherit;z-index:0}
-[data-component="shelf-card"] .sc-open,[data-component="shelf-card"] .sc-row a,[data-component="shelf-card"] .annex-chips a{position:relative;z-index:1}
+[data-component="shelf-card"] .sc-open,[data-component="shelf-card"] .sc-row a:not(.sc-hit),[data-component="shelf-card"] .annex-chips a{position:relative;z-index:1}
 [data-component="shelf-card"]:has(.sc-open){cursor:pointer}
 [data-component="shelf-card"]:has(.sc-open:hover){border-color:var(--brand)}
 .shelf-here{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:700;color:var(--ink-soft);border:1px dashed var(--line);border-radius:var(--radius-chip);padding:2px 10px}
