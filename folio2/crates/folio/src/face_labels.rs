@@ -122,25 +122,25 @@ pub fn mechanism_kind_label(k: ce::MechanismKind) -> &'static str {
     }
 }
 
-/// 機構の live → 名札。
+/// 機構の live → 名札（now でない 4 値は 1 つの名札・「まだ分からない」の字は使わない・ADR-23 決定 (4)・便 132）。
 pub fn mechanism_live_label(l: ce::MechanismLive) -> &'static str {
     match l {
         ce::MechanismLive::Now => "いま動く",
-        ce::MechanismLive::M0 => "M0 で動く",
-        ce::MechanismLive::Delivery0 => "便 0 で動く",
-        ce::MechanismLive::M1 => "M1 で動く",
-        ce::MechanismLive::Adr => "判断の記録の欄の決まりの後",
+        ce::MechanismLive::M0
+        | ce::MechanismLive::Delivery0
+        | ce::MechanismLive::M1
+        | ce::MechanismLive::Adr => "機構がまだ無い",
     }
 }
 
-/// 機構の live → 意味（段の中身は要件書の正本が持つので、段の名と定義の在る節を指すだけ・便 84）。
+/// 機構の live → 意味（now でない 4 値は床が判定しないことと憲法の段の値を正本の字のまま残す・便 132）。
 pub fn mechanism_live_meaning(l: ce::MechanismLive) -> &'static str {
     match l {
         ce::MechanismLive::Now => "今の folio に在る",
-        ce::MechanismLive::M0 => "M0 = 要件書の scope の 作る の側に在る段",
-        ce::MechanismLive::Delivery0 => "便 0 = 最初の便の段",
-        ce::MechanismLive::M1 => "M1 = 要件書の scope_m1 の 作る の側に在る段",
-        ce::MechanismLive::Adr => "判断の記録の欄の決まりが定まった後",
+        ce::MechanismLive::M0 => "床は判定しない・憲法の段の値は M0",
+        ce::MechanismLive::Delivery0 => "床は判定しない・憲法の段の値は delivery-0",
+        ce::MechanismLive::M1 => "床は判定しない・憲法の段の値は M1",
+        ce::MechanismLive::Adr => "床は判定しない・憲法の段の値は adr",
     }
 }
 

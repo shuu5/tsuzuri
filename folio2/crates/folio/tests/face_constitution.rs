@@ -455,14 +455,19 @@ fn f80_amendment_previous_text_is_verbatim() {
 
 // ── 便 84: 機構の小窓のいつから動くかの意味と用語集の欄の名前の節（docs/design/delivery-84.md §1 (c)） ──
 
-/// いつから動くかの（正本の値, 名札）5 つ（歯の側で持つ）。
+/// いつから動くかの（正本の値, 名札）5 つ（歯の側で持つ・now でない 4 値は 1 つの名札・便 132）。
 const LIVE_LABELS: [(&str, &str); 5] = [
     ("now", "いま動く"),
-    ("M0", "M0 で動く"),
-    ("delivery-0", "便 0 で動く"),
-    ("M1", "M1 で動く"),
-    ("adr", "判断の記録の欄の決まりの後"),
+    ("M0", "機構がまだ無い"),
+    ("delivery-0", "機構がまだ無い"),
+    ("M1", "機構がまだ無い"),
+    ("adr", "機構がまだ無い"),
 ];
+
+/// 機構の小窓の本文のうち名札の部分（機構の注「 — 」の前）。
+fn chip_head(body: &str) -> &str {
+    body.split(" — ").next().unwrap()
+}
 
 /// 正本 design-intent/constitution.yaml の各条の機構の「いつから動くか」の値（重複を畳まない）。
 fn source_live_values() -> Vec<String> {
@@ -536,9 +541,13 @@ fn f84_mechanism_chip_explains_the_stage() {
             "正本に在る「{value}」の意味が機構の小窓に無い"
         );
     }
+    // 名札の数え上げは機構の注の前だけ（注が「機構がまだ無い条」の字を持つ条が在る・便 132）
+    let mut labels: Vec<&str> = LIVE_LABELS.iter().map(|(_, l)| *l).collect();
+    labels.dedup();
     let mut seen = 0;
     for b in &bodies {
-        for (_, label) in LIVE_LABELS {
+        let b = chip_head(b);
+        for label in &labels {
             for (at, _) in b.match_indices(label) {
                 seen += 1;
                 assert!(
@@ -549,6 +558,41 @@ fn f84_mechanism_chip_explains_the_stage() {
         }
     }
     assert!(seen >= bodies.len(), "機構の小窓に名札が無いものがある");
+}
+
+// ── 便 132: 機構がまだ無い条の名札（docs/design/delivery-132.md §1 (c)） ──
+
+#[test]
+fn f132_articles_without_a_mechanism_say_so() {
+    let html = real_html("f132-none");
+    let heads: Vec<String> = hint_bodies(&html, "機構")
+        .iter()
+        .map(|b| chip_head(b).to_string())
+        .collect();
+    assert!(!heads.is_empty(), "機構の小窓が無い");
+    // 本数は正本から数える（歯に数を書かない・便 43 / 44 と同じ向き）
+    let live = source_live_values();
+    let mut values: Vec<&String> = live.iter().filter(|v| *v != "now").collect();
+    assert!(!values.is_empty(), "正本に live が now でない条が無い（前提が崩れた）");
+    values.sort();
+    values.dedup();
+    for v in values {
+        let want = format!("機構がまだ無い（床は判定しない・憲法の段の値は {v}）");
+        let n = live.iter().filter(|w| *w == v).count();
+        let got = heads.iter().filter(|h| h.contains(&want)).count();
+        assert_eq!(got, n, "「{want}」の小窓の数が正本の {v} の条の数と違う");
+    }
+    for h in &heads {
+        for old in [
+            "まだ分からない",
+            "M0 で動く",
+            "便 0 で動く",
+            "M1 で動く",
+            "判断の記録の欄の決まりの後",
+        ] {
+            assert!(!h.contains(old), "機構の小窓の名札に「{old}」が在る: {h}");
+        }
+    }
 }
 
 #[test]
