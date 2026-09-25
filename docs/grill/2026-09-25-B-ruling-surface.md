@@ -184,7 +184,7 @@ pipeline の表示を「走行を節点の種類に足し（辺 3 型・不変�
 
 ### 16.1 bug の原因と直し（verified・2026-09-25T07:57Z）
 - 席が ssh で起こした Chrome の環境に IME の変数が 0 本（GTK_IM_MODULE / QT_IM_MODULE / XMODIFIERS）。ThinkPad の sway の session は fcitx5 が動き `QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx LANG=ja_JP.UTF-8` を持つが、ADR-5 の実証の起動行は display の 4 変数しか渡していなかった。
-- 直し: 起動行に `LANG GTK_IM_MODULE QT_IM_MODULE XMODIFIERS` を足し、Chrome に `--enable-wayland-ime --wayland-text-input-version=3` を付ける（mock の窓は起こし直し済み・持ち主の打鍵で確認待ち）。**ADR-5 の端末の一覧（器の宣言の [[device]] 行）に「画面の環境」だけでなく「入力の環境（IME の変数と flag）」を持たせる**（ADR-7 で ADR-5 に枝を足す）。
+- 直し: 起動行に `LANG GTK_IM_MODULE QT_IM_MODULE XMODIFIERS` を足し、Chrome に `--enable-wayland-ime --wayland-text-input-version=3` を付ける。**もう 1 つの原因（uncertain）**: 同じ profile の Chrome が既に動いていると、新しい `google-chrome --app=…` は URL を既存の process に渡して終わり、窓は古い環境の process が開く（env と flag が効かない）。→ 席が起こす Chrome は **専用の profile（`--user-data-dir=~/.local/state/tsuzuri/chrome-app`）** で起こす（持ち主の普段の Chrome と混ざらない・CDP の port も別 = 9224）。mock の窓はこの形で起こし直した（IME の env が process に載っていることを実測）・持ち主の打鍵で確認待ち。**ADR-5 の端末の一覧（器の宣言の [[device]] 行）に「画面の環境」だけでなく「入力の環境（IME の変数と flag）」と「専用の profile の置き場」を持たせる**（ADR-7 で ADR-5 に枝を足す）。
 
 ### 16.2 v2 の設計指針（本裁定の前に mock v2 を作る）
 - **形で語る**: 説明の文は既定で出さない。使い方と専門語は hover / tooltip / 「?」の印で出す。初心者 mode（tooltip と手引きが出る）と経験者 mode（出ない）を切り替える（切替は URL と localStorage・既定は初心者）。文字の量の物差し: home の最初の画面の本文は 300 字以下（数字と題を除く）。
