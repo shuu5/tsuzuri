@@ -89,3 +89,9 @@
 
 **読み（deduced）**。形は成立した。async の実行系は要らず、依存は websocket 1 本（+12 crate）で済む。DPR の件は「headed の Chrome（Xvfb か本物の画面）で配信する」「配信は CSS px のまま・鮮明さが要るときは screenshot を併用」「CDP の Emulation で width と height を dpr 倍にして dpr 1 で描く（layout が変わるので不可）」の 3 択で、推奨は 2 つ目（窓は見て操作する面・精査は screenshot）。
 
+## 10. 持ち主の実測と直し（2026-09-25T00:16Z）
+- 持ち主の裁定（逐語は台帳へ）: tailnet 越し（Firefox・RTT 30〜50 ms の経路〔tailscale ping で実測: Windows の desktop 32 ms・ThinkPad 49 ms〕）で、動きがもっさり・scroll が遅い・page2 への遷移が非常に遅い・文字入力の表示が遅い・日本語入力の確定で二重表示。**解決は必須**。
+- 原因（code を読んで特定・deduced）: (1) 入力が 1 event ごとに新しい TCP 接続の POST で順送り（server は全応答 Connection: close）→ 1 event ≈ 2 RTT。(2) 画面配信に流量制御が無く 60 fps を SSE へ押し込む → TCP の buffer に溜まり古い画面を見る。(3) base64 の JPEG。(4) 日本語入力は input と compositionend の両方で送っており、Firefox は compositionend の後に isComposing=false の input が来るので二重。
+- 直し（契約 v0.4・作業場 contract-stage-v04.md）: 窓と server を WebSocket 1 本に（下りは binary の JPEG・上りは入力と受領）・未受領 1 枚の流量制御と最新優先・RTT に応じた quality の自動調整・mousemove と wheel の rAF ごとの間引き・IME は Chrome と Firefox の両順序を純関数の歯で通し本物の Firefox でも確認・状態の行に RTT を表示。RTT 40 ms を模した中継で直す前後を測る。
+- agent 2 つ（server・窓・opus）を 2026-09-25T00:16Z に起動。
+
