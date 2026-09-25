@@ -94,6 +94,23 @@
 - 原因（code を読んで特定・deduced）: (1) 入力が 1 event ごとに新しい TCP 接続の POST で順送り（server は全応答 Connection: close）→ 1 event ≈ 2 RTT。(2) 画面配信に流量制御が無く 60 fps を SSE へ押し込む → TCP の buffer に溜まり古い画面を見る。(3) base64 の JPEG。(4) 日本語入力は input と compositionend の両方で送っており、Firefox は compositionend の後に isComposing=false の input が来るので二重。
 - 直し（契約 v0.4・作業場 contract-stage-v04.md）: 窓と server を WebSocket 1 本に（下りは binary の JPEG・上りは入力と受領）・未受領 1 枚の流量制御と最新優先・RTT に応じた quality の自動調整・mousemove と wheel の rAF ごとの間引き・IME は Chrome と Firefox の両順序を純関数の歯で通し本物の Firefox でも確認・状態の行に RTT を表示。RTT 40 ms を模した中継で直す前後を測る。
 - agent 2 つ（server・窓・opus）を 2026-09-25T00:16Z に起動。
+- 窓側の直しの結果（2026-09-25T00:37Z・fix-window の report から転記・作業場 client-window/report.md「v0.4 の直し」）: WebSocket 1 本・rAF の間引き・未受領 1 枚の流量制御・IME の純関数（host の cargo test 14 件 pass）が入った。RTT 40 ms を模した中継越し（MCP の Chromium）で直す前後を同じ手順で測った:
+
+| 物差し | v0.3 | v0.4 |
+|---|---|---|
+| click → 窓に描かれるまで（中央値） | 122 ms | 118 ms |
+| 10 字打って最後の字が描かれるまで | 100 ms | 69 ms |
+| wheel 20 発 → 最後の scroll が描かれるまで | 約 1000 ms | 495 ms |
+| page2 の link → page2 が描かれるまで | 157 ms | 114 ms |
+| 動いている画面の fps | 26.9 | 18.9 |
+| 下りの byte/s | 約 290 KB/s | 約 155 KB/s |
+| 帯域 1.5 Mbit/s で scroll 3 秒連打の後、落ち着くまで | 約 6.3 s（3 回とも） | 150〜195 ms |
+
+  - 「もっさり」の主因は帯域が細いときの溜まり（流量制御なし）で、最後の行で再現し、直ったことを確かめた。
+  - 日本語入力の二重: 本物の Firefox 150 の event 列（compositionend → input[isComposing=false]）で v0.3 の窓に二重を再現し、v0.4 の窓では 5 通りすべて 1 回だけ届いた。Chromium の本物の変換（Chrome の順序）でも二重なし。
+  - 代価: fps が下がった（未受領 1 枚 = 1 枚ごとに 1 往復・RTT 40 ms で上限約 20 fps）。滑らかさが要るなら「未受領 2 枚まで」を契約で選べるようにする案（窓は今のままで対応できる）。
+  - 未確認: 持ち主の tailnet と実機の Firefox・画質を落とす経路・dpr 3・再接続・OS の本物の IME。
+  - 位置づけ: 持ち主の裁定（§11）で表示面の正本は端末の Chrome（ssh + app mode + CDP）になったので、この窓は **fallback**（ssh が届かない端末・スマホ）の証明として残す。server 側（fix-stage-server）は作業中。
 
 ## 11. 持ち主の本来の要件 = 席が持ち主の端末の Chrome を起動して操作する（2026-09-25T00:24Z）
 - 持ち主の逐語の要旨（台帳へ）: Firefox に縛られない・Chrome で統一してよい・menu の無い app mode で表示・**server 側の Claude Code session が ThinkPad 側の Chrome を制御して起動し、持ち主に見せる面を自律的に操作する**。
