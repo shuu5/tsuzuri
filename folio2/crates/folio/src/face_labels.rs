@@ -133,14 +133,14 @@ pub fn mechanism_live_label(l: ce::MechanismLive) -> &'static str {
     }
 }
 
-/// 機構の live → 意味（now でない 4 値は床が判定しないことと憲法の段の値を正本の字のまま残す・便 132）。
+/// 機構の live → 意味（now でない 4 値は床が判定しないことと憲法が書く実在の予定を正本の字のまま残す・便 132・141）。
 pub fn mechanism_live_meaning(l: ce::MechanismLive) -> &'static str {
     match l {
         ce::MechanismLive::Now => "今の folio に在る",
-        ce::MechanismLive::M0 => "床は判定しない・憲法の段の値は M0",
-        ce::MechanismLive::Delivery0 => "床は判定しない・憲法の段の値は delivery-0",
-        ce::MechanismLive::M1 => "床は判定しない・憲法の段の値は M1",
-        ce::MechanismLive::Adr => "床は判定しない・憲法の段の値は adr",
+        ce::MechanismLive::M0 => "床は判定しない・憲法が書く実在の予定は M0",
+        ce::MechanismLive::Delivery0 => "床は判定しない・憲法が書く実在の予定は delivery-0",
+        ce::MechanismLive::M1 => "床は判定しない・憲法が書く実在の予定は M1",
+        ce::MechanismLive::Adr => "床は判定しない・憲法が書く実在の予定は adr",
     }
 }
 
@@ -415,6 +415,33 @@ mod face_labels_tests {
             assert_eq!(k.cover("v0.3", "x".to_string()), "x");
             assert_eq!(k.lead("v0.3", "x"), "x");
             assert_eq!(k.card(), "");
+        }
+    }
+
+    #[test]
+    fn f141_live_meanings_name_the_plan_and_keep_the_value() {
+        // 凍結の針（delivery-141.md §1 (b) の 1 の字を手で写した）
+        let plan = "床は判定しない・憲法が書く実在の予定は ";
+        assert_eq!(ce::MechanismLive::ALL.len(), 5);
+        for l in ce::MechanismLive::ALL {
+            let meaning = mechanism_live_meaning(l);
+            if l == ce::MechanismLive::Now {
+                assert_eq!(meaning, "今の folio に在る");
+            } else {
+                assert_eq!(meaning, format!("{plan}{}", l.name()), "{}", l.name());
+                assert_eq!(mechanism_live_label(l), "機構がまだ無い");
+            }
+            assert!(!meaning.contains('段'), "{meaning}");
+            assert!(!mechanism_live_label(l).contains('段'));
+        }
+        // 4 値の字を 1 つずつ（値の字は正本の live のまま）
+        for (l, v) in [
+            (ce::MechanismLive::M0, "M0"),
+            (ce::MechanismLive::Delivery0, "delivery-0"),
+            (ce::MechanismLive::M1, "M1"),
+            (ce::MechanismLive::Adr, "adr"),
+        ] {
+            assert_eq!(mechanism_live_meaning(l), format!("{plan}{v}"));
         }
     }
 }

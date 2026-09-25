@@ -602,7 +602,7 @@ fn f132_articles_without_a_mechanism_say_so() {
     values.sort();
     values.dedup();
     for v in values {
-        let want = format!("機構がまだ無い（床は判定しない・憲法の段の値は {v}）");
+        let want = format!("機構がまだ無い（床は判定しない・憲法が書く実在の予定は {v}）");
         let n = live.iter().filter(|w| *w == v).count();
         let got = heads.iter().filter(|h| h.contains(&want)).count();
         assert_eq!(got, n, "「{want}」の小窓の数が正本の {v} の条の数と違う");
@@ -617,6 +617,68 @@ fn f132_articles_without_a_mechanism_say_so() {
         ] {
             assert!(!h.contains(old), "機構の小窓の名札に「{old}」が在る: {h}");
         }
+    }
+}
+
+// ── 便 141: 機構がまだ無い条の名札から「段」を外す（docs/design/delivery-141.md §1 (c)） ──
+
+/// 機構がまだ無い条の名札（歯の側で手で写した字・値は正本の live の字のまま続ける）。
+fn plan_chip(v: &str) -> String {
+    format!("機構がまだ無い（床は判定しない・憲法が書く実在の予定は {v}）")
+}
+
+#[test]
+fn f141_each_live_value_names_the_plan_in_the_chip() {
+    // 実の置き場の写しの live: M1 の先頭 3 つを M0・delivery-0・adr に替え、4 つの値を 1 枚の面に並べる。
+    let (td, work) = real_copy("f141-values");
+    let path = work.join("constitution.yaml");
+    let mut text = fs::read_to_string(&path).unwrap();
+    let m1 = text.matches("live: M1,").count();
+    assert!(m1 >= 4, "正本に live: M1 が 4 つ以上無い（前提が崩れた）: {m1}");
+    for v in ["M0", "delivery-0", "adr"] {
+        text = text.replacen("live: M1,", &format!("live: {v},"), 1);
+    }
+    fs::write(&path, &text).unwrap();
+    let out = td.join("constitution.html");
+    let run = folio_face(&work, &out);
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    let heads: Vec<String> = hint_bodies(&html, "機構")
+        .iter()
+        .map(|b| chip_head(b).to_string())
+        .collect();
+    assert!(!heads.is_empty(), "機構の小窓が無い");
+    for (v, n) in [("M0", 1), ("delivery-0", 1), ("adr", 1), ("M1", m1 - 3)] {
+        let want = plan_chip(v);
+        let got = heads.iter().filter(|h| h.contains(&want)).count();
+        assert_eq!(got, n, "「{want}」の小窓の数が写しの {v} の条の数と違う");
+    }
+    for h in &heads {
+        assert!(!h.contains('段'), "機構の小窓の名札に「段」が在る: {h}");
+    }
+}
+
+#[test]
+fn f141_no_chip_head_names_the_tier() {
+    let real = real_html("f141-tier");
+    let anchor =
+        fs::read_to_string(repo_root().join("tests/fixtures/face/expected.html")).unwrap();
+    for (what, html) in [("実の憲法の面", &real), ("凍結 anchor", &anchor)] {
+        assert!(!html.contains("憲法の段の値"), "{what} に「憲法の段の値」が在る");
+        let bodies = hint_bodies(html, "機構");
+        assert!(!bodies.is_empty(), "{what} に機構の小窓が無い");
+        for b in &bodies {
+            let h = chip_head(b);
+            assert!(!h.contains('段'), "{what} の機構の小窓の名札に「段」が在る: {h}");
+        }
+    }
+    for v in ["M0", "delivery-0"] {
+        assert_eq!(
+            anchor.matches(&plan_chip(v)).count(),
+            1,
+            "凍結 anchor に {v} の新しい名札が 1 つでない"
+        );
     }
 }
 
