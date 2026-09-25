@@ -199,7 +199,16 @@ pipeline の表示を「走行を節点の種類に足し（辺 3 型・不変�
 ### 16.3 問い
 持ち主の評価は全部取り込む（裁定は要らない）。次の 1 問は mock v2 を見てから。
 
-## 17. 経緯
+## 18. mock v2 への持ち主の評価と、mock v3 の指針（2026-09-25T14:29Z・逐語は t3-hub.1）
+- **日本語入力は直った（verified・持ち主の実機）**: 専用 profile + IME の env + `--enable-wayland-ime` の起動行で入る。ADR-5 の端末の行に「入力の環境」と「専用 profile」を足す（ADR-7 で）。
+- **概要はデータとして書く（今後の目標）**: mock の要約が薄いのは mock だから。本番は節点ごとの概要（非エンジニア向け / エンジニア向け）を design-intent（plain 欄）と台帳（bead の description の先頭の要約の欄）に**データとして**持ち、面は写すだけ。要約の無い節点は床が数える（「要約なし」を 0 にするのが目標）。
+- **語は「英語を使うべき所は英語」**: pipeline の段（Queued / Running / Blocked / Landed / Failed …）・issue の状態（open / closed / in_progress）・run / ADR / epic などの技術語は英語のまま出し、「?」で注釈。言い換えるのは「逐語」のような一般に使わない日本語だけ（逐語 → あなたの言葉（原文のまま）・裁定 → あなたの決定・束 → まとめて承認・板 → dashboard）。語彙表を「英語のまま + 注釈」「言い換え」の 2 欄に直す。
+- **地図は番号と複数の圧縮面**: 条・決まりの文・規則・ADR は id（番号）を必ず出す（順が分かる）。全体を見通す圧縮面は 1 つでは情報を落とすだけなので、**切り替えられる面を複数**持つ: (a) 圧縮（今の 4 帯・id と題）(b) 一覧（id + 題 + 概要 1 行・種類で絞る・並べ替え）(c) グラフ（節点と辺の図・層で配置・hub は畳む・hover で題）(d) 表（種類 × 種類の数の行列）。切替は 1 つの tab 列・URL に残す。
+- **口座の面（account board）は器の側の別の面**: 口座の残量（各 window の used_pct・resets_at）と口座ごとの usage の負荷（どの project のどの席と作業が今どの口座を使っているか）を可視化する面は、複数 project × 複数口座の管理画面なので **project の dashboard とは別の面**として器（scribe の core）が管理する。関係: account board（上）→ 各 project の dashboard（下・詳細）。project の dashboard は各 project の orchestrator がデータのやり取りと browser の制御を行い、account board は器が管理する。**mock で示すこと**: 口座 × window の残量の表（used_pct の帯・reset までの時間）・口座の群（Tier1 / Tier2）と anchor（project）の対応・いま各口座を使っている席と作業（project 名・段・経過）・口座の移動の履歴（GroupMovePending）・限度で止まっている席の印・**project の dashboard への飛び方**（同じ窓で開くか、新しい窓〔端末の Chrome の app mode の別窓〕で開くか、の 2 案を mock で並べて示す。席の推奨: account board は器の窓 1 つ・project の dashboard は project ごとの窓 = ADR-5 の「席が窓を起こす」と一致・窓の一覧は account board が持つ）。
+- **mock v3 の範囲**: (1) project dashboard（mock2）の直し = 語彙の 2 欄化・地図の番号と 4 面の切替・概要の欄の見本を数本だけ実文で（憲法の条の plain 欄・ADR の plain 欄は実データ）(2) account board（新・mock3/account/）= 実データ（scribe2 の state dir の host.toml の口座と群と anchor・fleet の AllowanceMeasured / AllowanceUnmeasured / GroupMovePending / SeatRegistered・各 project の seat の state）(3) 2 つの面の関係の図と、飛び方の 2 案。
+- 受入条件（足す）: 地図の 4 面それぞれで id が全節点に出る・切替が URL に残る・account board の残量は event の実データから組み、読めない口座は「測れていない」・account board から各 project の dashboard へ 1 click・限度で止まった席が account board と project dashboard の両方で同じ記号。
+
+## 19. 経緯
 - 2026-09-25T01:31Z: 論点 B を開いた（1 問目 = v1 の範囲・推奨 (a) 裁定の輪だけ）。台帳の根の epic は scribe2 席の (a) の合図待ち
 - 2026-09-25T01:4xZ: 根の epic は持ち主が素の terminal で置いた（t3-hub）。子の memo「裁定の控え」は席が canonical の bdw 経由で置いた（t3-hub.1・以後の裁定の逐語はここの notes）。席の対象は t3:orchestrator に確定。.vessel.toml に path の種別の宣言を足した（2481b39）。1 問目は答え待ち
 - 2026-09-25T01:50Z: 検討 agent 3 つの出力を §8 に統合し、決めの列（§8.5）と 1 問（§9）を提示。HTML の提示面を tsuzuri-site/ruling-surface.html に置いた
@@ -222,3 +231,4 @@ pipeline の表示を「走行を節点の種類に足し（辺 3 型・不変�
 - 2026-09-25T04:41Z: mock 完成（tsuzuri-site/mock/・5 頁・graph.json 節点 1,548・辺 2,198・受入条件 7 本合格・report は scratchpad/mock-report.md）。逐語を含む元 data は配信の外へ移した。本裁定の前に見てほしい仮定: 板の 4 列への段の写像（Reviewed の扱い）・方針を近傍の辿りに含めるか（切った 12〜20 の原因）・節点の種類の数（宣言 19 vs §11.2 の 17）・ADR の発効が索引に無い（status の列）
 - 2026-09-25T07:58Z: 持ち主の評価（mock v1 は不可・bug と 7 点）→ §16。IME の原因を実測して窓を起こし直した。器が口座を移動中（black1 → black6）のため作業記憶を残して待つ。次 = mock v2
 - 2026-09-25T08:24Z: **mock v2 完成**（tsuzuri-site/mock2/・受入 8 本合格・1280 / 390・初心者 / 経験者・home の本文 219 字 / 204 字・語彙表に無い見出し 0・hover card の欠け 0・横 scroll 0・verbatim / notes の混入 0・report は scratchpad/mock2-report.md）。agent の発見: **器の record に「利用枠の限度で断られた」event が無い**（fleet の log に used_pct=100 は無く、state.jsonl は 03:14〜04:20Z に busy / idle の組が 12 回）→ 本番で「限度で止まっている」を正しく出すには器が限度の event を記録する必要（v3 の要件候補・scribe2 へ送付）。mock の 02:52Z used_pct=100 と 07:50Z GroupMovePending は見本の event と注記。ThinkPad は ssh が届かず（timeout）窓は開けていない → URL で見てもらう
+- 2026-09-25T14:29Z: 持ち主の評価（mock v2）→ §18。日本語入力は直った（verified）。次 = mock v3（project dashboard の直し + account board の新設 + 2 面の関係）。器が口座を移動中（black1 → black5）
