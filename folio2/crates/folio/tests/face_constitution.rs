@@ -1,6 +1,7 @@
 //! 憲法の面（`folio face --face constitution`）の歯（便 79・docs/design/delivery-79.md §1 (c)）。binary 経由。
 //! - 数値の表の閾値行の値の枡: 閉じた表の日本語の小見出し（表に無い鍵は「まだ分からない」）・表でない値は素のまま
 //! - 裁定の枡: 最新の 1 件だけを出し、過去の裁定は小窓「前の裁定 <N> 件」へ畳む（件数は正本を直に読んで数える）
+//! - 便 135: 本文の判断の記録の番号は正本の在る番号だけ adr-n.html へのリンク（逐語を比べる歯は包みを外して比べる）
 //!
 //! 実の置き場 design-intent/ と図の道具 vendor/archify/ を一時 dir へ写して面を書く（版管理の下の面は書き換えない）。
 
@@ -90,6 +91,30 @@ fn esc(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
+}
+
+/// 判断の記録の面へのリンクの包みを外す（便 135・歯の側の手書きの式）。`<a class="xref" href="adr-` で始まるリンクごとに、
+/// 中の字が判断の記録の番号（ADR- に数字列）で行き先がその番号の面（adr-<数>.html）であることを確かめてから、字だけを残す。
+fn unlink_adr(html: &str) -> String {
+    const OPEN: &str = "<a class=\"xref\" href=\"adr-";
+    let mut out = String::new();
+    let mut rest = html;
+    while let Some(at) = rest.find(OPEN) {
+        out.push_str(&rest[..at]);
+        let (n, tail) = rest[at + OPEN.len()..]
+            .split_once(".html\">")
+            .expect("リンクの行き先の閉じが無い");
+        let (text, tail) = tail.split_once("</a>").expect("リンクの閉じが無い");
+        assert!(
+            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()),
+            "行き先が判断の記録の面でない: adr-{n}"
+        );
+        assert_eq!(text, format!("ADR-{n}"), "リンクの中の字が行き先の番号でない");
+        out.push_str(text);
+        rest = tail;
+    }
+    out.push_str(rest);
+    out
 }
 
 /// 写しの置き場に変異を当て（None なら当てない）、`--write` の結果と面の本文を返す（面が出来ていなければ本文は空）。
@@ -245,7 +270,7 @@ fn source_rows_by_previous() -> (Vec<String>, Vec<String>) {
 #[test]
 fn f79_rules_ruling_shows_only_the_latest() {
     // 前の裁定を持つ行の全部で、小窓より前に見える字は最新の裁定と ruled_at だけ（行の id と数は正本から読む）。
-    let html = real_html("latest");
+    let html = unlink_adr(&real_html("latest"));
     let (folded, _) = source_rows_by_previous();
     for id in &folded {
         let c = cell(&html, id, "裁定");
@@ -262,7 +287,7 @@ fn f79_rules_ruling_shows_only_the_latest() {
 fn f79_rules_ruling_folds_the_previous_ones() {
     // 前の裁定を持つ行の全部で、小窓の名札の件数と本体の「前の裁定 = 」の数が、歯の側で正本を直に数えた数と一致し、
     // 過去の裁定の字が 1 件ずつ本体に在る（生成器の数えを写さない）。
-    let html = real_html("folds");
+    let html = unlink_adr(&real_html("folds"));
     let (folded, _) = source_rows_by_previous();
     for id in &folded {
         let n = source_previous(id);
@@ -281,7 +306,7 @@ fn f79_rules_ruling_folds_the_previous_ones() {
 #[test]
 fn f79_rules_ruling_without_previous_is_unchanged() {
     // 前の裁定を持たない行の全部で、裁定の枡に小窓が無く、字面が「{ruling}（{ruled_at}）」のまま（歯の側で正本から組む）。
-    let html = real_html("unchanged");
+    let html = unlink_adr(&real_html("unchanged"));
     let (_, plain) = source_rows_by_previous();
     for id in &plain {
         let (ruling, at) = source_ruling(id);
@@ -438,7 +463,7 @@ fn f80_amendment_rows_carry_the_previous_text() {
 
 #[test]
 fn f80_amendment_previous_text_is_verbatim() {
-    let html = real_html("am-verbatim");
+    let html = unlink_adr(&real_html("am-verbatim"));
     let rows = amendment_rows(&html);
     let mut face_prev: Vec<String> = rows.iter().flat_map(|r| hint_bodies(r, "前の文")).collect();
     let mut face_why: Vec<String> = rows.iter().flat_map(|r| hint_bodies(r, "理由")).collect();
@@ -646,4 +671,89 @@ fn f84_glossary_heading_counts_from_the_source() {
         1,
         "{want} が章 07 に 1 回でない"
     );
+}
+
+// ── 便 135: 本文の判断の記録の番号を判断の記録の面へのリンクに（docs/design/delivery-135.md §1 (c)）──
+
+/// 面の本文（`<body>` から後）のうち `<svg>` の中を除いた字。
+fn body_outside_svg(html: &str) -> String {
+    let mut rest = &html[html.find("<body>").expect("body が無い")..];
+    let mut out = String::new();
+    while let Some(at) = rest.find("<svg") {
+        out.push_str(&rest[..at]);
+        let end = rest[at..].find("</svg>").expect("svg の閉じが無い");
+        rest = &rest[at + end + "</svg>".len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// 判断の記録の番号の出現（byte の位置・番号の数字列）。床の形（前が英数字でも「-」でもない ADR- に 1〜9 で始まる
+/// 数字列が続き、後ろが英数字でない）を歯の側で手で写す。
+fn adr_mentions(text: &str) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    for (at, _) in text.match_indices("ADR-") {
+        let before = text[..at].chars().next_back();
+        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-') {
+            continue;
+        }
+        let n: String = text[at + 4..].chars().take_while(char::is_ascii_digit).collect();
+        let after = text[at + 4 + n.len()..].chars().next();
+        if n.is_empty() || n.starts_with('0') || after.is_some_and(|c| c.is_ascii_alphanumeric()) {
+            continue;
+        }
+        out.push((at, n));
+    }
+    out
+}
+
+#[test]
+fn f135_every_adr_mention_on_the_real_constitution_is_a_link() {
+    let html = real_html("f135-adr");
+    let body = body_outside_svg(&html);
+    let mentions = adr_mentions(&body);
+    assert!(!mentions.is_empty(), "判断の記録の番号が 1 つも無い");
+    for (at, n) in &mentions {
+        let open = format!("<a class=\"xref\" href=\"adr-{n}.html\">");
+        let end = at + "ADR-".len() + n.len();
+        assert!(
+            body[..*at].ends_with(&open) && body[end..].starts_with("</a>"),
+            "ADR-{n} がリンクでない: {}",
+            &body[at.saturating_sub(120)..(end + 40).min(body.len())]
+        );
+        assert!(
+            design_intent().join("adr").join(format!("ADR-{n}.yaml")).is_file(),
+            "ADR-{n} の正本が無い"
+        );
+    }
+    let mut depth = 0i32;
+    for (at, _) in html.match_indices('<') {
+        let t = &html[at..];
+        if t.starts_with("<a ") || t.starts_with("<a>") {
+            depth += 1;
+            assert!(depth <= 1, "入れ子のリンクが在る");
+        } else if t.starts_with("</a>") {
+            depth -= 1;
+        }
+    }
+    assert_eq!(depth, 0, "a の開きと閉じが揃わない");
+    assert!(
+        html.contains("<dt>判断の記録</dt><dd><a class=\"xref\" href=\"adr-11.html\">ADR-11</a></dd>"),
+        "改訂の例の判断の記録の欄が ADR-11 へのリンクでない"
+    );
+}
+
+#[test]
+fn f135_number_without_a_page_stays_plain_on_the_constitution() {
+    let (run, html) = face_with(
+        "f135-plain",
+        Some(|t| t.replacen("ruling: \"f2-648 notes", "ruling: \"ADR-99・ADR-11・f2-648 notes", 1)),
+    );
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    let c = cell(&html, "R-1", "裁定");
+    assert!(
+        c.starts_with("ADR-99・<a class=\"xref\" href=\"adr-11.html\">ADR-11</a>・f2-648 notes"),
+        "R-1 の裁定の枡が ADR-99 の字と ADR-11 のリンクで始まらない: {c}"
+    );
+    assert!(!html.contains("adr-99.html"), "正本の無い ADR-99 がリンクになった");
 }

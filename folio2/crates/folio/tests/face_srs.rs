@@ -6,6 +6,8 @@
 //! - 承認欄の lead が status_note の要旨（最初の「。」まで）だけで、来歴は折りたたみの中に逐語で在る
 //! - 便 118: M3 の範囲の節 scope_m3 は、在れば章 02 の段の範囲の塊を M1 の直後に 1 つ足し（名札 M3・注の小窓も同じ形）、
 //!   無い・null なら面は凍結 fixture と byte 一致する（scope と scope_m1 は必須のまま・docs/design/delivery-118.md §1 (d)）
+//! - 便 135: 本文の判断の記録の番号は正本の在る番号だけ adr-n.html へのリンク・範囲の節の番号は図の根拠と同じ行き先へ
+//!   （docs/design/delivery-135.md §1 (c)）
 //!
 //! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
 
@@ -229,7 +231,7 @@ fn f81_approval_history_is_folded() {
     let inner = span(body, open, "</p></div></details>")
         .strip_prefix(open)
         .unwrap();
-    assert_eq!(inner, esc(&history), "折りたたみの中が来歴の逐語でない");
+    assert_eq!(unlink_adr(inner), esc(&history), "折りたたみの中が来歴の逐語でない");
 }
 
 // ── 便 84: 用語集の欄の名前の節（docs/design/delivery-84.md §1 (c)） ──
@@ -417,10 +419,25 @@ fn m3_section() -> String {
 /// 面の fixture の 5 file を一時 dir の下の src/ へ写し（要件書だけ `edit` で書き換える）、要件書の面を書く。
 /// 結果・面の本文・面の file が書かれたかを返す（一時 dir は消す）。
 fn fixture_srs(case: &str, edit: impl FnOnce(String) -> String) -> (Output, String, bool) {
+    fixture_srs_with(case, &[], edit)
+}
+
+/// `fixture_srs` と同じ・面の fixture の判断の記録 `adrs`（adr/ の下の file 名）も写しの adr/ へ添える（便 135）。
+fn fixture_srs_with(
+    case: &str,
+    adrs: &[&str],
+    edit: impl FnOnce(String) -> String,
+) -> (Output, String, bool) {
     let fixture = repo_root().join("tests/fixtures/face");
     let td = temp_dir(case);
     let work = td.join("src");
     fs::create_dir_all(&work).unwrap();
+    if !adrs.is_empty() {
+        fs::create_dir_all(work.join("adr")).unwrap();
+    }
+    for name in adrs {
+        fs::copy(fixture.join("adr").join(name), work.join("adr").join(name)).unwrap();
+    }
     for name in [
         "constitution.yaml",
         "rules.yaml",
@@ -551,6 +568,152 @@ fn f118_null_scope_m3_is_unchanged_and_scope_m1_stays_required() {
         assert!(err.contains(&format!("欄 {key} が無い")), "{key}: {err}");
         assert!(!written, "{key} を落とした写しで面を書いた");
     }
+}
+
+// ── 便 135: 判断の記録の番号と範囲の節の番号を行き先へのリンクに（docs/design/delivery-135.md §1 (c)(e)）──
+
+/// 判断の記録の面へのリンクの包みを外す（歯の側の手書きの式・生成側の式を写さない）。`<a class="xref" href="adr-` で
+/// 始まるリンクごとに、中の字が判断の記録の番号（ADR- に数字列）で行き先がその番号の面（adr-<数>.html）であることを
+/// 確かめてから、開きと閉じを外して字だけを残す。
+fn unlink_adr(html: &str) -> String {
+    const OPEN: &str = "<a class=\"xref\" href=\"adr-";
+    let mut out = String::new();
+    let mut rest = html;
+    while let Some(at) = rest.find(OPEN) {
+        out.push_str(&rest[..at]);
+        let (n, tail) = rest[at + OPEN.len()..]
+            .split_once(".html\">")
+            .expect("リンクの行き先の閉じが無い");
+        let (text, tail) = tail.split_once("</a>").expect("リンクの閉じが無い");
+        assert!(
+            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()),
+            "行き先が判断の記録の面でない: adr-{n}"
+        );
+        assert_eq!(text, format!("ADR-{n}"), "リンクの中の字が行き先の番号でない");
+        out.push_str(text);
+        rest = tail;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// 面の本文（`<body>` から後）のうち `<svg>` の中を除いた字。
+fn body_outside_svg(html: &str) -> String {
+    let mut rest = &html[html.find("<body>").expect("body が無い")..];
+    let mut out = String::new();
+    while let Some(at) = rest.find("<svg") {
+        out.push_str(&rest[..at]);
+        let end = rest[at..].find("</svg>").expect("svg の閉じが無い");
+        rest = &rest[at + end + "</svg>".len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// 判断の記録の番号の出現（byte の位置・番号の数字列）。床の形（前が英数字でも「-」でもない ADR- に 1〜9 で始まる
+/// 数字列が続き、後ろが英数字でない）を歯の側で手で写す。
+fn adr_mentions(text: &str) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    for (at, _) in text.match_indices("ADR-") {
+        let before = text[..at].chars().next_back();
+        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-') {
+            continue;
+        }
+        let n: String = text[at + 4..].chars().take_while(char::is_ascii_digit).collect();
+        let after = text[at + 4 + n.len()..].chars().next();
+        if n.is_empty() || n.starts_with('0') || after.is_some_and(|c| c.is_ascii_alphanumeric()) {
+            continue;
+        }
+        out.push((at, n));
+    }
+    out
+}
+
+/// 面の本文の判断の記録の番号が全部 adr-<数>.html へのリンクで、行き先の正本が在り、`<a` の入れ子が無いことを数える
+/// （1 つ以上在ることも）。歯の側の数え。
+fn assert_every_adr_mention_is_a_link(html: &str, face: &str) {
+    let body = body_outside_svg(html);
+    let mentions = adr_mentions(&body);
+    assert!(!mentions.is_empty(), "{face}: 判断の記録の番号が 1 つも無い");
+    for (at, n) in &mentions {
+        let open = format!("<a class=\"xref\" href=\"adr-{n}.html\">");
+        let end = at + "ADR-".len() + n.len();
+        assert!(
+            body[..*at].ends_with(&open) && body[end..].starts_with("</a>"),
+            "{face}: ADR-{n} がリンクでない: {}",
+            &body[at.saturating_sub(120)..(end + 40).min(body.len())]
+        );
+        assert!(
+            design_intent().join("adr").join(format!("ADR-{n}.yaml")).is_file(),
+            "{face}: ADR-{n} の正本が無い"
+        );
+    }
+    let mut depth = 0i32;
+    for (at, _) in html.match_indices('<') {
+        let t = &html[at..];
+        if t.starts_with("<a ") || t.starts_with("<a>") {
+            depth += 1;
+            assert!(depth <= 1, "{face}: 入れ子のリンクが在る");
+        } else if t.starts_with("</a>") {
+            depth -= 1;
+        }
+    }
+    assert_eq!(depth, 0, "{face}: a の開きと閉じが揃わない");
+}
+
+#[test]
+fn f135_scope_m3_numbers_link_to_their_pages() {
+    let html = real_srs("f135-m3");
+    let b = callouts(&html);
+    assert_eq!(b.len(), 3, "章 02 の段の範囲の塊が 3 つでない");
+    let build = span(b[2], "<div class=\"cid\">M3 で作る</div>", "</p>");
+    for link in [
+        "<a class=\"xref\" href=\"adr-16.html\">ADR-16</a>",
+        "<a class=\"xref\" href=\"adr-21.html\">ADR-21</a>",
+        "<a class=\"xref\" href=\"constitution.html#p-6\">P-6.3</a>",
+        "<a class=\"xref\" href=\"#ac23\">AC23</a>",
+        "<a class=\"xref\" href=\"#ac24\">AC24</a>",
+        "<a class=\"xref\" href=\"#ac25\">AC25</a>",
+        "<a class=\"xref\" href=\"#fr22\">FR22</a>",
+        "<a class=\"xref\" href=\"#fr23\">FR23</a>",
+        "<a class=\"xref\" href=\"#fr24\">FR24</a>",
+        "<a class=\"xref\" href=\"#fr25\">FR25</a>",
+        "<a class=\"xref\" href=\"#fr11\">FR11</a>",
+    ] {
+        assert_eq!(build.matches(link).count(), 1, "M3 で作るの枠に「{link}」が 1 つでない: {build}");
+    }
+    assert_eq!(build.matches("<a ").count(), 11, "M3 で作るの枠のリンクが 11 本でない: {build}");
+}
+
+#[test]
+fn f135_every_adr_mention_on_the_real_srs_is_a_link() {
+    assert_every_adr_mention_is_a_link(&real_srs("f135-adr"), "要件書の面");
+}
+
+#[test]
+fn f135_numbers_without_a_page_and_ids_outside_the_scope_stay_plain() {
+    let m3 = "scope_m3:\n  build:\n    - \"判断の記録 ADR-2 と ADR-99・要件 FR1 と FR99・条 P-1\"\n  not_build:\n    - \"なし\"\n\n";
+    let (run, html, _) = fixture_srs_with("f135-plain", &["ADR-2.yaml"], |srs| {
+        let old = "not_frozen: 時間と token の数値はここに書かない。";
+        assert!(srs.contains(old), "写しに not_frozen の行が無い");
+        add_before_actors(&srs.replacen(old, "not_frozen: \"ADR-2 と FR2 を読む。\"", 1), m3)
+    });
+    ok(&run);
+    let b = callouts(&html);
+    assert_eq!(b.len(), 3, "章 02 の段の範囲の塊が 3 つでない");
+    for want in [
+        "<a class=\"xref\" href=\"adr-2.html\">ADR-2</a> と ADR-99・",
+        "要件 <a class=\"xref\" href=\"#fr1\">FR1</a> と FR99・",
+        "条 <a class=\"xref\" href=\"constitution.html#p-1\">P-1</a>",
+    ] {
+        assert!(b[2].contains(want), "M3 の塊に「{want}」が無い: {}", b[2]);
+    }
+    assert!(!html.contains("adr-99.html"), "正本の無い ADR-99 がリンクになった");
+    assert!(!html.contains("href=\"#fr99\""), "要件に無い FR99 がリンクになった");
+    assert!(
+        html.contains("<span class=\"ck\">凍結しないもの</span><p><a class=\"xref\" href=\"adr-2.html\">ADR-2</a> と FR2 を読む。</p>"),
+        "範囲の節の外の凍結しないものの枠が ADR-2 だけのリンクでない"
+    );
 }
 
 #[test]

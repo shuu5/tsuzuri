@@ -125,7 +125,10 @@ pub fn derive(dir: &Path) -> R<String> {
     sources_chapter(&mut o, &c)?;
     approval(&mut o, &m)?;
     foot(&mut o, &ctx, &m)?;
-    Ok(format!("{}\n", o.join("\n")))
+    // 本文の判断の記録の番号を判断の記録の面へのリンクに（便 135・要件書の面と同じ 1 つの口）
+    Ok(face::link_ids(&format!("{}\n", o.join("\n")), false, |id| {
+        face::adr_face(dir, id)
+    }))
 }
 
 /// 段の名を「・」で繋いだもの。

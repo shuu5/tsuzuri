@@ -161,39 +161,52 @@ impl<'a> Ctx<'a> {
     /// rules 行は憲法の面・判断の記録は `adr-<数>.html`。どの形でもない id は Err。
     fn ref_link(&self, dir: &Path, x: &X<'_>) -> R<String> {
         let id = x.id()?;
-        let bad = || {
+        let href = self.target(dir, id).map_err(|()| {
             format!(
                 "{}: 根拠の id「{id}」は id の形でない（条・rules 行・要件・判断の記録）",
                 x.at
             )
-        };
-        let need = |ok: bool| ok.then_some(()).ok_or_else(bad);
+        })?;
+        Ok(match href {
+            Some(h) => format!("<a class=\"xref\" href=\"{h}\">{id}</a>"),
+            None => format!("{id}（まだ分からない）"),
+        })
+    }
+
+    /// id 1 つの行き先（図の根拠と範囲の節が共有する・便 135）。在れば Some（要件書の id は同じ面の anchor・条は
+    /// 枝番を外した条の anchor・rules 行は憲法の面・判断の記録は `face::adr_face`）・行き先が無ければ None・
+    /// どの形でもない id は Err。
+    pub(crate) fn target(&self, dir: &Path, id: &str) -> Result<Option<String>, ()> {
+        let need = |ok: bool| ok.then_some(()).ok_or(());
         let prefix = |ps: &[&str]| ps.iter().find_map(|p| id.strip_prefix(p));
-        let href = if let Some(rest) = prefix(&["P-", "A-", "N-"]) {
+        let constitution = |aid: &str| format!("constitution.html#{}", anchor(aid));
+        Ok(if let Some(rest) = prefix(&["P-", "A-", "N-"]) {
             let aid = match rest.split_once('.') {
                 Some((n, sub)) if digits(n) && digits(sub) => &id[..id.len() - sub.len() - 1],
                 None if digits(rest) => id,
-                _ => return Err(bad()),
+                _ => return Err(()),
             };
             self.arts
                 .iter()
                 .any(|(k, _)| *k == aid)
-                .then(|| article_link(aid, id))
+                .then(|| constitution(aid))
         } else if let Some(rest) = prefix(&["R-", "D-"]) {
             need(digits(rest))?;
-            self.rule_ids.contains(&id).then(|| article_link(id, id))
+            self.rule_ids.contains(&id).then(|| constitution(id))
         } else if let Some(rest) = prefix(&["FR", "NFR", "AC", "CON", "GOAL"]) {
             need(digits(rest))?;
-            self.has_req(id).then(|| xref(id, id))
+            self.has_req(id).then(|| format!("#{}", anchor(id)))
         } else if let Some(rest) = id.strip_prefix("ADR-") {
             need(digits(rest))?;
-            let file = dir.join("adr").join(format!("{id}.yaml"));
-            file.is_file()
-                .then(|| format!("<a class=\"xref\" href=\"{}.html\">{id}</a>", anchor(id)))
+            face::adr_face(dir, id)
         } else {
-            return Err(bad());
-        };
-        Ok(href.unwrap_or_else(|| format!("{id}（まだ分からない）")))
+            return Err(());
+        })
+    }
+
+    /// 範囲の節の字（escape 済み）の番号を行き先へのリンクにする（便 135・行き先の無い番号は字のまま）。
+    fn link_scope(&self, dir: &Path, html: &str) -> String {
+        face::link_ids(html, true, |id| self.target(dir, id).ok().flatten())
     }
 
     pub(crate) fn req(&self, x: &X<'_>) -> R<&Item<'a>> {
@@ -265,7 +278,7 @@ pub fn derive(dir: &Path) -> R<String> {
     cover(&mut o, &ctx, &m)?;
     toc(&mut o, &ctx);
     goals_chapter(&mut o, &ctx)?;
-    scope_chapter(&mut o, &ctx, &s, &m)?;
+    scope_chapter(&mut o, &ctx, dir, &s, &m)?;
     crate::face_srs_items::fr_chapter(&mut o, &ctx, &m)?;
     crate::face_srs_items::nfr_chapter(&mut o, &ctx)?;
     crate::face_srs_items::ac_chapter(&mut o, &ctx, &s)?;
@@ -277,7 +290,10 @@ pub fn derive(dir: &Path) -> R<String> {
     }
     approval(&mut o, &ctx, &m)?;
     foot(&mut o, &ctx, &m)?;
-    Ok(format!("{}\n", o.join("\n")))
+    // 本文の判断の記録の番号を判断の記録の面へのリンクに（便 135・正本の無い番号は字のまま）
+    Ok(face::link_ids(&format!("{}\n", o.join("\n")), false, |id| {
+        face::adr_face(dir, id)
+    }))
 }
 
 // ── 読みと検査 ──
@@ -708,7 +724,13 @@ fn joined(x: &X<'_>) -> R<String> {
         .join(" ／ "))
 }
 
-fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<()> {
+fn scope_chapter(
+    o: &mut Vec<String>,
+    ctx: &Ctx<'_>,
+    dir: &Path,
+    s: &X<'_>,
+    m: &X<'_>,
+) -> R<()> {
     let actors_x = s.f("actors")?;
     let actors = actors_x.seq()?;
     let mut inputs = Vec::new();
@@ -789,7 +811,7 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
         let note = if key != "scope"
             && let Some(n) = sc.g("note")?
         {
-            format!(" {}", hint("注", &n.e()?))
+            format!(" {}", hint("注", &ctx.link_scope(dir, &n.e()?)))
         } else {
             String::new()
         };
@@ -801,13 +823,19 @@ fn scope_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, s: &X<'_>, m: &X<'_>) -> R<
             "card accent ok",
             None,
             &format!("{label} で作る"),
-            &format!("<p class=\"cd\">{}</p>", joined(&sc.f("build")?)?),
+            &format!(
+                "<p class=\"cd\">{}</p>",
+                ctx.link_scope(dir, &joined(&sc.f("build")?)?)
+            ),
         ));
         o.push(card(
             "card accent",
             None,
             &format!("{label} では作らない <span class=\"pill\">対象外</span>"),
-            &format!("<p class=\"cd\">{}{note}</p>", joined(&sc.f("not_build")?)?),
+            &format!(
+                "<p class=\"cd\">{}{note}</p>",
+                ctx.link_scope(dir, &joined(&sc.f("not_build")?)?)
+            ),
         ));
         o.push("</div>".to_string());
     }

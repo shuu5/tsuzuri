@@ -230,7 +230,7 @@ fn starts_with_at(chars: &[char], start: usize, prefix: &str) -> bool {
 }
 
 /// `start` から参照 id が始まるなら、その終わりの位置。
-fn id_end(chars: &[char], start: usize) -> Option<usize> {
+pub(crate) fn id_end(chars: &[char], start: usize) -> Option<usize> {
     if start > 0 {
         let prev = chars[start - 1];
         if prev.is_ascii_alphanumeric() || prev == '-' {

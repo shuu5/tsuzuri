@@ -144,6 +144,82 @@ pub fn anchor(id: &str) -> String {
     id.to_ascii_lowercase()
 }
 
+/// 判断の記録の面の file 名（便 135・delivery-135.md §1 (b) の 1）。正本 `<dir>/adr/<id>.yaml` が file として在れば
+/// `adr-<数>.html`（`folio build` が面を出す番号の規則と同じ）・無ければ None。
+pub fn adr_face(dir: &Path, id: &str) -> Option<String> {
+    dir.join("adr")
+        .join(format!("{id}.yaml"))
+        .is_file()
+        .then(|| format!("{}.html", anchor(id)))
+}
+
+/// 組み立てた HTML の字の部分の番号を行き先へのリンクにする（便 135・delivery-135.md §1 (b) の 1）。タグの外の字だけを
+/// 走査し、`<a>`・`<head>`・`<script>`・`<svg>` の中と注釈は触らない。番号は床と同じ口で拾う（判断の記録は
+/// `link::adr_end`・`all` が真なら条・rules 行・要件の id も `refs::id_end`）。`href` が行き先を返した番号だけを
+/// `<a class="xref" href="<行き先>">` で包み、字は 1 字も変えない（P-6.1）。
+pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) -> String {
+    let chars: Vec<char> = html.chars().collect();
+    let at = |i: usize, s: &str| s.chars().enumerate().all(|(k, c)| chars.get(i + k) == Some(&c));
+    let find = |from: usize, s: &str| (from..chars.len()).find(|&j| at(j, s));
+    let mut out = String::with_capacity(html.len());
+    // 触らない要素（a・head・script・svg）の深さ
+    let mut shut = 0usize;
+    let mut i = 0;
+    while i < chars.len() {
+        let start = i;
+        if at(i, "<!--") {
+            i = find(i + 4, "-->").map_or(chars.len(), |j| j + 3);
+        } else if chars[i] == '<' {
+            // タグの終わり（引用符の中の「>」は数えない）
+            let mut quote = None;
+            i += 1;
+            while i < chars.len() {
+                let c = chars[i];
+                i += 1;
+                match quote {
+                    Some(q) if c == q => quote = None,
+                    Some(_) => {}
+                    None if c == '"' || c == '\'' => quote = Some(c),
+                    None if c == '>' => break,
+                    None => {}
+                }
+            }
+            let close = chars.get(start + 1) == Some(&'/');
+            let name: String = chars[start + 1 + usize::from(close)..i]
+                .iter()
+                .take_while(|c| c.is_ascii_alphanumeric())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            if matches!(name.as_str(), "a" | "head" | "script" | "svg") && chars[i - 1] == '>' {
+                if close {
+                    shut = shut.saturating_sub(1);
+                } else if chars[i - 2] != '/' {
+                    shut += 1;
+                    // script の中身は字でもタグでもない（閉じタグの前まで写す）
+                    if name == "script" {
+                        i = find(i, "</script").unwrap_or(chars.len());
+                    }
+                }
+            }
+        } else if shut == 0
+            && let Some(end) = crate::link::adr_end(&chars, i)
+                .or_else(|| all.then(|| crate::refs::id_end(&chars, i)).flatten())
+        {
+            let id: String = chars[i..end].iter().collect();
+            match href(&id) {
+                Some(h) => out.push_str(&format!("<a class=\"xref\" href=\"{h}\">{id}</a>")),
+                None => out.push_str(&id),
+            }
+            i = end;
+            continue;
+        } else {
+            i += 1;
+        }
+        out.extend(&chars[start..i]);
+    }
+    out
+}
+
 /// 最初の「 — 」（前後に半角空白 1 つずつの全角ダッシュ）で前と後に割る（無ければ全体と None）。
 pub fn split_dash(s: &str) -> (&str, Option<&str>) {
     match s.split_once(" — ") {
@@ -915,6 +991,31 @@ mod face_tests {
                 .parse(ce::Strength::from_name, "強度")
                 .unwrap_err(),
             X::root(&v, "s").lookup(DOC_STATUS, "強度").unwrap_err()
+        );
+    }
+
+    /// 便 135 §1 (c) 1: 字の部分の番号だけを包み、head・属性・a・svg の中と床の形に当たらない字と行き先の無い番号は
+    /// 1 字も変えない（出力の全字で数える）。`all` が真なら条・要件・rules 行も包む。
+    #[test]
+    fn f135_link_ids_wraps_only_the_text_outside_links() {
+        let to = |id: &str| (id != "ADR-3").then(|| format!("to-{id}"));
+        let src = "<head><title>ADR-1</title></head><p title=\"ADR-1 > ADR-2\">ADR-1・ADR-12a・xADR-1・ADR-0・ADR-3</p><!-- ADR-1 --><a href=\"x\">ADR-1</a><svg><text>ADR-1</text></svg>(ADR-1)";
+        assert_eq!(
+            link_ids(src, false, to),
+            "<head><title>ADR-1</title></head><p title=\"ADR-1 > ADR-2\"><a class=\"xref\" href=\"to-ADR-1\">ADR-1</a>・ADR-12a・xADR-1・ADR-0・ADR-3</p><!-- ADR-1 --><a href=\"x\">ADR-1</a><svg><text>ADR-1</text></svg>(<a class=\"xref\" href=\"to-ADR-1\">ADR-1</a>)"
+        );
+        // all が偽なら条・要件・rules 行は字のまま
+        let src = "<p>条 P-6.3・FR1・R-4・ADR-2・FR1a</p>";
+        assert_eq!(link_ids(src, false, to), "<p>条 P-6.3・FR1・R-4・<a class=\"xref\" href=\"to-ADR-2\">ADR-2</a>・FR1a</p>");
+        assert_eq!(
+            link_ids(src, true, to),
+            "<p>条 <a class=\"xref\" href=\"to-P-6.3\">P-6.3</a>・<a class=\"xref\" href=\"to-FR1\">FR1</a>・<a class=\"xref\" href=\"to-R-4\">R-4</a>・<a class=\"xref\" href=\"to-ADR-2\">ADR-2</a>・FR1a</p>"
+        );
+        // script の中身と自己終了の svg
+        let src = "<script>if (a<b) { ADR-1 }</script><svg/>ADR-1";
+        assert_eq!(
+            link_ids(src, false, to),
+            "<script>if (a<b) { ADR-1 }</script><svg/><a class=\"xref\" href=\"to-ADR-1\">ADR-1</a>"
         );
     }
 

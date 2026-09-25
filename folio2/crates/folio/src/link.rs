@@ -278,32 +278,41 @@ fn walk(node: &Node, at: &str, f: &mut dyn FnMut(&str, &str)) {
 /// （4 桁の ADR-0047 は 1〜9 で始まらないので形に当たらない）。
 pub(crate) fn scan_adr_ids(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
-    let head: Vec<char> = "ADR-".chars().collect();
     let mut out = Vec::new();
     let mut i = 0;
     while i < chars.len() {
-        let free_before = i == 0 || !(chars[i - 1].is_ascii_alphanumeric() || chars[i - 1] == '-');
-        if free_before
-            && chars.get(i..i + head.len()) == Some(&head[..])
-            && chars
-                .get(i + head.len())
-                .is_some_and(|c| matches!(c, '1'..='9'))
-        {
-            let start = i + head.len();
-            let end = start
-                + chars[start..]
-                    .iter()
-                    .take_while(|c| c.is_ascii_digit())
-                    .count();
-            if chars.get(end).is_none_or(|c| !c.is_ascii_alphanumeric()) {
+        match adr_end(&chars, i) {
+            Some(end) => {
                 out.push(chars[i..end].iter().collect());
                 i = end;
-                continue;
             }
+            None => i += 1,
         }
-        i += 1;
     }
     out
+}
+
+/// `i` から判断の記録の id が始まるなら、その終わりの位置（scan_adr_ids と面のリンクの口が共有する）。
+pub(crate) fn adr_end(chars: &[char], i: usize) -> Option<usize> {
+    let head: Vec<char> = "ADR-".chars().collect();
+    let free_before = i == 0 || !(chars[i - 1].is_ascii_alphanumeric() || chars[i - 1] == '-');
+    if free_before
+        && chars.get(i..i + head.len()) == Some(&head[..])
+        && chars
+            .get(i + head.len())
+            .is_some_and(|c| matches!(c, '1'..='9'))
+    {
+        let start = i + head.len();
+        let end = start
+            + chars[start..]
+                .iter()
+                .take_while(|c| c.is_ascii_digit())
+                .count();
+        if chars.get(end).is_none_or(|c| !c.is_ascii_alphanumeric()) {
+            return Some(end);
+        }
+    }
+    None
 }
 
 /// (d) 判断の記録の id の参照（正本 4 file は A-2・判断の記録と欄の決まりの plain は adr）と、

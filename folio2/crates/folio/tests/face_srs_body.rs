@@ -117,6 +117,30 @@ fn esc(s: &str) -> String {
         .replace('\'', "&#x27;")
 }
 
+/// 判断の記録の面へのリンクの包みを外す（便 135・歯の側の手書きの式）。`<a class="xref" href="adr-` で始まるリンクごとに、
+/// 中の字が判断の記録の番号（ADR- に数字列）で行き先がその番号の面（adr-<数>.html）であることを確かめてから、字だけを残す。
+fn unlink_adr(html: &str) -> String {
+    const OPEN: &str = "<a class=\"xref\" href=\"adr-";
+    let mut out = String::new();
+    let mut rest = html;
+    while let Some(at) = rest.find(OPEN) {
+        out.push_str(&rest[..at]);
+        let (n, tail) = rest[at + OPEN.len()..]
+            .split_once(".html\">")
+            .expect("リンクの行き先の閉じが無い");
+        let (text, tail) = tail.split_once("</a>").expect("リンクの閉じが無い");
+        assert!(
+            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()),
+            "行き先が判断の記録の面でない: adr-{n}"
+        );
+        assert_eq!(text, format!("ADR-{n}"), "リンクの中の字が行き先の番号でない");
+        out.push_str(text);
+        rest = tail;
+    }
+    out.push_str(rest);
+    out
+}
+
 /// 実の正本から一時 file へ書く。戻り値 = (一時 dir, 面の本文)。
 fn real_face(case: &str) -> (PathBuf, PathBuf, String) {
     let td = temp_dir(case);
@@ -282,6 +306,7 @@ fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
 #[test]
 fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
     let (td, _, html) = real_srs("srs-census");
+    let html = unlink_adr(&html);
     let _ = fs::remove_dir_all(&td);
     let s = load_yaml("srs.yaml");
     let v = load_yaml("vocabulary.yaml");
