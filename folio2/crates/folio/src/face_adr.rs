@@ -9,6 +9,9 @@
 //! 前に置く。中身は設計ノートの面の図の章と同じ字面（便 34 からは `face.rs` の共有の図の枠）で、図の本体（SVG）は
 //! `figure.rs` の `render` が図の道具で描いたものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない
 //! （全部か無しか）。図が無い面は便 32 までと byte 不変。
+//! 改訂の欄（便 137・docs/design/delivery-137.md §1 (b)）: 表紙の札を条文の改訂（amends）と判断の記録の改訂（revises）
+//! の 2 つに分け（0 件でも出す）、章 05 の頭に空の欄の断りを 1 段落にまとめ、中身の在る欄は名札と同じ字の h3 の下に
+//! 並べる。revises の行は相手の面へのリンク・決定・向きの名札（表 REVISE）・summary の逐語。
 
 use std::fs;
 use std::path::Path;
@@ -117,6 +120,15 @@ const STATUS: &[(&str, &str)] = &[
 /// 案の判定（verdict）→ 名札。
 const VERDICT: &[(&str, &str)] = &[("adopted", "採用"), ("rejected", "退けた")];
 
+/// 改訂の向き（revises[].kind）→ 名札（鍵の並びは床の定数 REVISE_KIND と同じ・便 137）。
+const REVISE: &[(&str, &str)] = &[("narrow", "狭める"), ("widen", "広げる")];
+
+/// 条文の改訂（amends）の欄の名札（表紙の札と章 05 の h3）。
+const AMENDS_LABEL: &str = "条文の改訂";
+
+/// 判断の記録の改訂（revises）の欄の名札（表紙の札と章 05 の h3）。
+const REVISES_LABEL: &str = "判断の記録の改訂";
+
 /// 撤退条件の種類（retreat.kind）→ 判断の記録の面の名札（憲法の面の名札 `face::retreat_kind_label` と字面が違う）。
 /// 憲法の値域から導出した型への網羅の場合分け（便 50・その他の枝なし = 値が足されても消えても組み立てが通らない）。
 fn retreat_kind_label(k: ce::RetreatKind) -> &'static str {
@@ -156,6 +168,7 @@ struct Counts {
     rejected: usize,
     basis: usize,
     amends: usize,
+    revises: usize,
     figures: usize,
 }
 
@@ -456,18 +469,23 @@ fn counts(a: &X<'_>, figures: usize) -> R<Counts> {
             adopted += 1;
         }
     }
-    let amends = match a.g("amends")? {
-        Some(x) => x.seq()?.len(),
-        None => 0,
-    };
     Ok(Counts {
         options: options.len(),
         adopted,
         rejected: options.len() - adopted,
         basis: a.f("basis")?.seq()?.len(),
-        amends,
+        amends: entries(a, "amends")?.len(),
+        revises: entries(a, "revises")?.len(),
         figures,
     })
+}
+
+/// 任意の一覧の欄の要素（無い・null は空）。
+fn entries<'a>(a: &X<'a>, key: &str) -> R<Vec<X<'a>>> {
+    match a.g(key)? {
+        Some(x) => x.seq(),
+        None => Ok(Vec::new()),
+    }
 }
 
 // ── 骨格 ──
@@ -511,7 +529,8 @@ fn cover(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, n: &C
         ),
     ));
     o.push(meta_span("根拠", &format!("{} 件", n.basis)));
-    o.push(meta_span("改訂", &format!("{} 件", n.amends)));
+    o.push(meta_span(AMENDS_LABEL, &format!("{} 件", n.amends)));
+    o.push(meta_span(REVISES_LABEL, &format!("{} 件", n.revises)));
     o.push(meta_span(
         "撤退条件",
         retreat_sentence(
@@ -681,17 +700,23 @@ fn basis_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ct
     Ok(())
 }
 
-/// 章 05（改訂・帰結・反対側からの確認・置き換え・注）。
+/// 章 05（改訂・帰結・反対側からの確認・置き換え・注）。空の改訂の欄の断りは頭の 1 段落にまとめ、
+/// 中身の在る欄は名札と同じ字の h3 の下に並べる（便 137）。
 fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()> {
     band(o, f, 5);
     o.push("<div class=\"chapbody\">".to_string());
-    let amends = match a.g("amends")? {
-        Some(x) => x.seq()?,
-        None => Vec::new(),
-    };
-    if amends.is_empty() {
-        o.push("<p>条文の改訂なし</p>".to_string());
-    } else {
+    let amends = entries(a, "amends")?;
+    let revises = entries(a, "revises")?;
+    let none: Vec<String> = [(AMENDS_LABEL, amends.is_empty()), (REVISES_LABEL, revises.is_empty())]
+        .iter()
+        .filter(|(_, empty)| *empty)
+        .map(|(label, _)| format!("{label}なし"))
+        .collect();
+    if !none.is_empty() {
+        o.push(format!("<p>{}</p>", none.join("・")));
+    }
+    if !amends.is_empty() {
+        o.push(format!("<h3>{AMENDS_LABEL}</h3>"));
         o.push("<ul>".to_string());
         for e in &amends {
             o.push(format!(
@@ -701,6 +726,20 @@ fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &C
                 e.ef("field")?,
                 e.ef("previous_text")?,
                 e.ef("new_text")?
+            ));
+        }
+        o.push("</ul>".to_string());
+    }
+    if !revises.is_empty() {
+        o.push(format!("<h3>{REVISES_LABEL}</h3>"));
+        o.push("<ul>".to_string());
+        for e in &revises {
+            o.push(format!(
+                "<li>{} の決定 {} を{}: {}</li>",
+                id_link(dir, ctx, &e.f("target")?)?,
+                e.ef("decision")?,
+                e.f("kind")?.lookup(REVISE, "改訂の向き")?,
+                e.ef("summary")?
             ));
         }
         o.push("</ul>".to_string());
@@ -808,9 +847,10 @@ fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts, chip: &
         .collect::<R<Vec<_>>>()?
         .join("・");
     let mut dl = format!(
-        "<dt>id</dt><dd>{id}</dd><dt>status</dt><dd>{}</dd><dt>date</dt><dd>{date}</dd><dt>basis</dt><dd>{basis}</dd><dt>amends</dt><dd>{}</dd>",
+        "<dt>id</dt><dd>{id}</dd><dt>status</dt><dd>{}</dd><dt>date</dt><dd>{date}</dd><dt>basis</dt><dd>{basis}</dd><dt>amends</dt><dd>{}</dd><dt>revises</dt><dd>{}</dd>",
         a.ef("status")?,
-        n.amends
+        n.amends,
+        n.revises
     );
     // 図の数は 1 枚以上のときだけ（図なしの面は便 32 までと byte 不変）
     if n.figures > 0 {
@@ -844,6 +884,23 @@ mod face_adr_tests {
         assert_eq!(
             retreat_kind(&X::root(&v, "adr/ADR-1.yaml.retreat.kind")).unwrap_err(),
             "adr/ADR-1.yaml.retreat.kind: 撤退条件の種類 の表に無い値「guess」"
+        );
+    }
+
+    /// 凍結の針（便 137 §1 (c) 1）: 改訂の向きの表の鍵の並びは床の定数 REVISE_KIND と同じで、表と 2 つの欄の名札の字を固定する。
+    #[test]
+    fn f137_revise_kind_labels_follow_the_floor_enum() {
+        let keys: Vec<&str> = REVISE.iter().map(|(k, _)| *k).collect();
+        assert_eq!(keys, crate::floor_adr::REVISE_KIND);
+        assert_eq!(REVISE, [("narrow", "狭める"), ("widen", "広げる")]);
+        assert_eq!(AMENDS_LABEL, "条文の改訂");
+        assert_eq!(REVISES_LABEL, "判断の記録の改訂");
+        let v = Value::Str("shrink".into());
+        assert_eq!(
+            X::root(&v, "adr/ADR-1.yaml.revises[0].kind")
+                .lookup(REVISE, "改訂の向き")
+                .unwrap_err(),
+            "adr/ADR-1.yaml.revises[0].kind: 改訂の向き の表に無い値「shrink」"
         );
     }
 }

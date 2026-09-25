@@ -5,6 +5,8 @@
 //!   枝番付きの条 id・AC14 の赤の fixture・mode
 //! - 図の章（便 33・FR15）: 写し（ADR-2・図 1 枚）の figure-panel と型の名札と根拠のリンクと cover-meta・図なしの面は
 //!   図の章の外が byte で同じ・通らない図で 2 と前の面の保持・型外・道具の不在・実の正本の figure-panel の数
+//! - 改訂の欄（便 137）: 表紙の札 2 つ・章 05 の空の断りの 1 段落・h3 の下の amends と revises の行・向きの表の外で 2・
+//!   実の正本の全本で札の件数と revises の全行の逐語
 //!
 //! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
 
@@ -441,26 +443,28 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
         );
         let basis = a["basis"].as_vec().unwrap();
         // 根拠のリンク = basis の数 + 図の節の refs の数（図の枠の「根拠:」も同じ xref・便 33）
+        // + 改訂の欄の行の数（相手の面へのリンク・便 137）
         let figures = a["figures"].as_vec().map_or(0, Vec::len);
         let fig_refs: usize = a["figures"].as_vec().map_or(0, |v| {
             v.iter()
                 .map(|f| f["refs"].as_vec().map_or(0, Vec::len))
                 .sum()
         });
+        let revises = a["revises"].as_vec().map_or(0, Vec::len);
         assert_eq!(
             count("class=\"xref\""),
-            basis.len() + fig_refs,
-            "{id}: 根拠のリンクの数（basis + 図の refs）"
+            basis.len() + fig_refs + revises,
+            "{id}: 根拠のリンクの数（basis + 図の refs + revises）"
         );
         assert!(
             !html.contains("（まだ分からない）"),
             "{id}: 行き先の無い根拠が在る"
         );
-        // 根拠の群の一覧（li の数 = 根拠の数・li は行き先のリンクと題の span）
+        // 根拠の群の一覧（li の数 = 根拠の数・li は行き先のリンクと題の span）+ 改訂の欄の行（便 137）
         assert_eq!(
             count("<li><a class=\"xref\""),
-            basis.len(),
-            "{id}: ul.basis の li の数"
+            basis.len() + revises,
+            "{id}: ul.basis と改訂の欄の li の数"
         );
         assert_eq!(count("</a><span>"), basis.len(), "{id}: 題の span の数");
 
@@ -1096,4 +1100,224 @@ fn f82_adr_without_a_note_has_no_fold() {
     assert_eq!(html.matches(NOTE_FOLD).count(), 0, "注の無い正本に折りたたみが在る");
     assert_eq!(html.matches("<summary>注</summary>").count(), 0);
     assert_eq!(html.matches("<h3>注</h3>").count(), 0, "注の無い正本に h3 の注が在る");
+}
+
+// ── 改訂の欄（便 137・docs/design/delivery-137.md §1 (c)・天井の 34 周目の読みやすさ F-1）──
+
+/// 表紙の札 1 つの字面（名札と件数）。
+fn cover_count(label: &str, n: usize) -> String {
+    format!("<span class=\"m\"><span class=\"k\">{label}</span><span class=\"v\">{n} 件</span></span>")
+}
+
+/// 札が 2 つ（条文の改訂・判断の記録の改訂）で、名札「改訂」だけの札が無い。
+fn assert_cover_counts(html: &str, amends: usize, revises: usize, what: &str) {
+    assert_eq!(
+        html.matches(&cover_count("条文の改訂", amends)).count(),
+        1,
+        "{what}: 札「条文の改訂 {amends} 件」が 1 つでない"
+    );
+    assert_eq!(
+        html.matches(&cover_count("判断の記録の改訂", revises)).count(),
+        1,
+        "{what}: 札「判断の記録の改訂 {revises} 件」が 1 つでない"
+    );
+    assert!(
+        !html.contains("<span class=\"k\">改訂</span>"),
+        "{what}: 名札「改訂」だけの札が残る"
+    );
+}
+
+/// 章 05（s5 の帯から次の帯の直前まで）。
+fn chapter5(html: &str) -> &str {
+    let s5 = html.find("<section id=\"s5\"").expect("章 05 が無い");
+    let end = html[s5 + 1..]
+        .find("<section id=")
+        .map_or(html.len(), |e| s5 + 1 + e);
+    &html[s5..end]
+}
+
+#[test]
+fn f137_revises_rows_show_the_link_decision_kind_and_summary() {
+    let (run, html) = mutated("f137-rows", |t| {
+        t.replacen(
+            "amends: []\n",
+            "amends: []\nrevises:\n  - {target: ADR-1, decision: (2), kind: narrow, summary: 「<b>前</b>」を狭く読む}\n  - {target: ADR-9, decision: (1), kind: widen, summary: 相手の無い改訂}\n",
+            1,
+        )
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert_cover_counts(&html, 0, 2, "revises 2 行");
+    assert_eq!(
+        html.matches("<p>条文の改訂なし</p>").count(),
+        1,
+        "断りが「条文の改訂なし」の 1 つでない"
+    );
+    assert!(
+        !html.contains("判断の記録の改訂なし"),
+        "revises が在るのに断りが在る"
+    );
+    assert_eq!(
+        html.matches("<h3>判断の記録の改訂</h3>").count(),
+        1,
+        "h3「判断の記録の改訂」が 1 つでない"
+    );
+    assert!(!html.contains("<h3>条文の改訂</h3>"), "amends が空なのに h3 が在る");
+    let row1 = "<li><a class=\"xref\" href=\"adr-1.html\">ADR-1</a> の決定 (2) を狭める: 「&lt;b&gt;前&lt;/b&gt;」を狭く読む</li>";
+    let row2 = "<li>ADR-9（まだ分からない） の決定 (1) を広げる: 相手の無い改訂</li>";
+    let ch5 = chapter5(&html);
+    let (Some(r1), Some(r2)) = (ch5.find(row1), ch5.find(row2)) else {
+        panic!("章 05 に revises の行が逐語で無い: {ch5}");
+    };
+    assert!(r1 < r2, "revises の行が正本の順でない");
+    assert!(
+        ch5.find("<h3>判断の記録の改訂</h3>").unwrap() < r1,
+        "revises の行が h3 の下に無い"
+    );
+    assert_eq!(html.matches(row1).count(), 1);
+    assert_eq!(html.matches(row2).count(), 1);
+    assert!(!html.contains("<b>前</b>"), "summary の山括弧が生のまま");
+    assert!(
+        !html.contains("href=\"adr-9.html\""),
+        "行き先の無い相手をリンクにした"
+    );
+    let ap = html.find("<section id=\"approval\"").expect("承認欄が無い");
+    assert!(html.find(row2).unwrap() < ap, "revises の行が承認欄の後");
+    assert!(
+        html.contains("<dt>amends</dt><dd>0</dd><dt>revises</dt><dd>2</dd>"),
+        "機械のための面が amends 0 と revises 2 を数えない"
+    );
+}
+
+#[test]
+fn f137_a_record_without_revisions_says_both_are_none() {
+    let html = fixture_html("f137-none");
+    assert_cover_counts(&html, 0, 0, "改訂の無い記録");
+    assert_eq!(
+        chapter5(&html)
+            .matches("<p>条文の改訂なし・判断の記録の改訂なし</p>")
+            .count(),
+        1,
+        "断りが両方の 1 段落でない"
+    );
+    assert!(!html.contains("<p>条文の改訂なし</p>"), "片方だけの断りが在る");
+    assert!(
+        !html.contains("<p>判断の記録の改訂なし</p>"),
+        "片方だけの断りが在る"
+    );
+    assert!(!html.contains("<h3>条文の改訂</h3>"), "空の欄に h3 が在る");
+    assert!(!html.contains("<h3>判断の記録の改訂</h3>"), "空の欄に h3 が在る");
+    assert!(
+        html.contains("<dt>amends</dt><dd>0</dd><dt>revises</dt><dd>0</dd>"),
+        "機械のための面が 0 と 0 を数えない"
+    );
+}
+
+#[test]
+fn f137_amends_go_under_their_own_heading() {
+    let (run, html) = mutated("f137-amends", |t| {
+        t.replacen(
+            "amends: []\n",
+            "amends:\n  - {version: v1.1, target: P-1, field: text, previous_text: 前の字, new_text: 後の<i>字</i>}\n",
+            1,
+        )
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert_cover_counts(&html, 1, 0, "amends 1 行");
+    assert_eq!(
+        chapter5(&html).matches("<p>判断の記録の改訂なし</p>").count(),
+        1,
+        "断りが「判断の記録の改訂なし」の 1 つでない"
+    );
+    assert!(!html.contains("条文の改訂なし"), "amends が在るのに断りが在る");
+    assert!(
+        chapter5(&html).contains(
+            "<h3>条文の改訂</h3>\n<ul>\n<li>v1.1 P-1.text: 「前の字」→「後の&lt;i&gt;字&lt;/i&gt;」</li>\n</ul>"
+        ),
+        "amends の行が h3「条文の改訂」の下に逐語で無い: {html}"
+    );
+    assert!(!html.contains("<h3>判断の記録の改訂</h3>"), "revises が無いのに h3 が在る");
+    assert!(
+        html.contains("<dt>amends</dt><dd>1</dd><dt>revises</dt><dd>0</dd>"),
+        "機械のための面が amends 1 と revises 0 を数えない"
+    );
+}
+
+#[test]
+fn f137_unknown_when_a_revise_kind_is_outside_the_table() {
+    unknown(
+        "f137-kind",
+        |t| {
+            t.replacen(
+                "amends: []\n",
+                "amends: []\nrevises:\n  - {target: ADR-1, decision: (2), kind: shrink, summary: 向きが表の外}\n",
+                1,
+            )
+        },
+        "改訂の向き の表に無い値「shrink」",
+    );
+}
+
+#[test]
+fn f137_real_sources_draw_every_revises_row() {
+    let td = temp_dir("f137-census");
+    let mut drawn = 0;
+    for id in real_ids() {
+        let (_, html) = real_face(&td, &id);
+        let a = load_yaml_at(&design_intent().join("adr"), &format!("{id}.yaml"));
+        let amends = a["amends"].as_vec().map_or(0, Vec::len);
+        let revises = a["revises"].as_vec().cloned().unwrap_or_default();
+        assert_cover_counts(&html, amends, revises.len(), &id);
+        assert_eq!(
+            html.matches("<h3>判断の記録の改訂</h3>").count(),
+            usize::from(!revises.is_empty()),
+            "{id}: h3「判断の記録の改訂」の有無"
+        );
+        assert_eq!(
+            html.matches("<h3>条文の改訂</h3>").count(),
+            usize::from(amends > 0),
+            "{id}: h3「条文の改訂」の有無"
+        );
+        let none = match (amends == 0, revises.is_empty()) {
+            (true, true) => Some("条文の改訂なし・判断の記録の改訂なし"),
+            (true, false) => Some("条文の改訂なし"),
+            (false, true) => Some("判断の記録の改訂なし"),
+            (false, false) => None,
+        };
+        if let Some(none) = none {
+            assert_eq!(
+                chapter5(&html).matches(&format!("<p>{none}</p>")).count(),
+                1,
+                "{id}: 断り「{none}」が 1 つでない"
+            );
+        }
+        for r in &revises {
+            let target = r["target"].as_str().unwrap();
+            let kind = match r["kind"].as_str().unwrap() {
+                "narrow" => "狭める",
+                "widen" => "広げる",
+                other => panic!("{id}: 向き「{other}」は 2 つのどれでもない"),
+            };
+            let row = format!(
+                "<li><a class=\"xref\" href=\"{}.html\">{target}</a> の決定 {} を{kind}: {}</li>",
+                target.to_ascii_lowercase(),
+                esc(r["decision"].as_str().unwrap()),
+                esc(r["summary"].as_str().unwrap())
+            );
+            assert_eq!(
+                chapter5(&html).matches(&row).count(),
+                1,
+                "{id}: revises の行が逐語で 1 回ない: {row}"
+            );
+            drawn += 1;
+        }
+        assert!(
+            html.contains(&format!(
+                "<dt>amends</dt><dd>{amends}</dd><dt>revises</dt><dd>{}</dd>",
+                revises.len()
+            )),
+            "{id}: 機械のための面の件数"
+        );
+    }
+    let _ = fs::remove_dir_all(&td);
+    assert!(drawn > 0, "実の正本の revises の行を 1 つも数えていない");
 }
