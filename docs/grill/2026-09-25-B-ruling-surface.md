@@ -150,7 +150,36 @@
 ## 12. 問い（1 問・2 問目以降は §11.6 の順）
 統合グラフを「毎回組み直す導出物」として 1 つ持ち、裁定面・席の精査・床の検査の 3 つがそれを共有する形（§11.2〜11.5）を v1 の土台にしてよいか。提示面は tailnet の site の同じ頁の §7 に足した。
 
-## 13. 経緯
+## 14. 追加の要件 — pipeline の表示を beads と design-intent に連動させる（2026-09-25T04:15Z）
+持ち主の裁定（user 2026-09-25T04:14Z・逐語は t3-hub.1）: 「beads design-intentの表示に加えてそれと連動する形でpipelineの表示もできる必要がある」。§8.5-6（承認欄の逐語は今のまま）は「推奨で良い」で仮に積んだ = 決めの列は全部積んだ。
+
+### 14.1 前提の実測（verified・scribe2 の器）
+- 便の段（pipeline.md §4）: Queued → Blocked（承認待ち）→ Spawned（runner が worktree で書く）→ Questioned（runner の質問）→ Implemented → Gated（verdict PASS / FAIL / INCONCLUSIVE）→ Landed｜Stopped｜Failed。段の正本は器の event log（`RunStage stage=… detail=…`）。
+- event の種類（fleet/events.jsonl と pipe/<run>/events.jsonl・scribe2 の実数）: AllowanceMeasured 19,590・RunStage 2,285・RunDone 742・AllowanceUnmeasured 660・RunCreated 639・DispatchMark 537・SeatStopped 408・SeatSpawned 395・RunCost 323・RunStopped 91・QuestionRaised 56・SeatRegistered 34・GroupMovePending 27・QuestionAnswered 8・GroupPressureNotified 8。
+- 走行（run）の id は `<bead id>-<UTC の秒>`（例 s2-07l.132-20260920T063806Z）。走行ごとの置き場 `<state dir>/pipe/<run>/` に contract.toml（契約の写し）・vessel.toml・lens.toml・verdict.json（gate）・review.json（審査）・repo（worktree）。1 つの契約 bead に走行が複数付く（やり直し・.531 は 5 回）。
+- 便と設計の結び: 契約 bead の acceptance の pointer 行 `design = <doc>#<row>`（契約表の行）。走行 → 契約 bead は run id の前半。走行 → 口座は SeatSpawned / RunCost の account。走行 → 問い（runner の質問）は QuestionRaised（about・逐語）。
+
+### 14.2 模型への足し方（§11.2 の「器の event は節点の属性で辺にしない」を改める）
+- **走行（run）を節点の種類に足す**（節点 18 種目）。理由: 持ち主が見たい「この便は何回目の走行で、どこで止まったか」「この走行はどの設計の行と条に根拠づくか」「この質問はどの走行から出たか」は、走行が節点でないと辿れない（属性では 1 便 1 値しか持てず、やり直しの履歴が消える）。
+- **辺（結びの 3 型を足す・計 30 型）**: `run_of`（走行 → 契約 bead・正本 = run id の前半 = 器の event RunCreated）・`raised`（走行 → 問い・正本 = QuestionRaised と問いの bead の metadata `source`）・`ran_by`（走行 → 口座・正本 = SeatSpawned の account。口座は節点にせず走行の属性の札で足りる = 却下案「口座を節点に」は増殖）。
+- **走行の属性**（辺にしない）: 段（最新の RunStage）・段の理由（detail）・gate の verdict・審査の結果・費用（RunCost）・開始と終了の時刻（RunCreated / RunDone / RunStopped）・worktree の有無（retired）。正本は器の event log（読むだけ・台帳へ写さない = C15）。
+- **入力の追加**: `<state dir>/fleet/events.jsonl` と `pipe/<run>/events.jsonl`・verdict.json・review.json。統合グラフの導出は state dir を宣言（host の面）から解く。読めなければ走行の種類だけ「まだ分からない」（他の種類は組む・fail-open の極性は §11.3 の注入と同じ）。
+- **不変条件を 2 本足す（G11・G12）**: G11 走行は run_of をちょうど 1 つ持ち、先の bead が在る（宙に浮いた走行 0）／G12 Questioned の走行は raised の先の問いが在り、QuestionAnswered が在れば問いは closed（問いの状態と走行の段が食い違わない）。
+
+### 14.3 眺め（§8.2 の「今の板」を pipeline の板に育てる）
+- **pipeline の板**（home の「今の板」= 段ごとの列: 待ち〔Queued / Blocked〕・動いている〔Spawned / Implemented / Gated〕・止まっている〔Questioned / Failed / Stopped〕・着地〔Landed・今日〕）。各札 = 契約 bead の題 36 字 + 走行の回数 + 段の理由の 1 行（止まっているは必須）+ 口座の札 + 経過時間。Q2「なぜ止まっているか」と Q9「器は黙っていないか」（最後の event の時刻）に直接効く。
+- **走行の時間軸**（契約 bead の頁）: 走行ごとに 1 行、段の遷移を横に並べる（Queued → Spawned → Gated(FAIL) → Failed / 2 回目 → Landed）。verdict と review の要点を札で。Q7「難航」に効く。
+- **連動（同じ id で 3 つの面が光る）**: 板の札を押す → その契約 bead の近傍図（設計の行・条・問い）が card に開く → 設計の行を押すと同じ行を指す他の便が光る → 問いを押すと裁定面の card へ。逆に裁定面の問いの card の「止めている便 2」は板の札を指す。全部 `/g/<id>` の URL（走行は `/g/<run id>`）。
+- **層の割り当て**: 走行は「作業」の層（円・小さめ）。辺の族: run_of と ran_by は「含む」（点線）・raised は「根拠」。段の色は板の 4 語（待ち・動いている・止まっている・着地）と同じ 4 色で、図でも同じ。
+- **スマホ幅**: 板は列を縦に積む（空の列は畳む）・時間軸は段の語の鎖に落とす。横 scroll 0。
+
+### 14.4 受入条件（足す 3 本）
+(1) 5 回やり直した契約 bead の fixture で、走行の節点が 5 つ・run_of が 5 本・時間軸に 5 行・板には最新の段だけが 1 札で出る (2) Questioned の走行の fixture で、問いの bead が無ければ G12 が名指し、在れば板の札から問いの card へ 1 click で着く (3) state dir が読めない fixture で、走行の種類だけ「まだ分からない」と出て、設計と台帳の節点は組める。
+
+### 14.5 問い（1 問）
+pipeline の表示を「走行を節点の種類に足し（辺 3 型・不変条件 2 本）、home の今の板を段ごとの pipeline の板に育て、契約 bead の頁に走行の時間軸を置き、板・近傍図・裁定面が同じ id で連動する」形（§14.2〜14.4）にしてよいか。§11.2 の「器の event は節点の属性で辺にしない」は「走行だけ節点・他の event は走行の属性」に改める。推奨: この形。答えの後に mock（pipeline の板を含む）へ。
+
+## 15. 経緯
 - 2026-09-25T01:31Z: 論点 B を開いた（1 問目 = v1 の範囲・推奨 (a) 裁定の輪だけ）。台帳の根の epic は scribe2 席の (a) の合図待ち
 - 2026-09-25T01:4xZ: 根の epic は持ち主が素の terminal で置いた（t3-hub）。子の memo「裁定の控え」は席が canonical の bdw 経由で置いた（t3-hub.1・以後の裁定の逐語はここの notes）。席の対象は t3:orchestrator に確定。.vessel.toml に path の種別の宣言を足した（2481b39）。1 問目は答え待ち
 - 2026-09-25T01:50Z: 検討 agent 3 つの出力を §8 に統合し、決めの列（§8.5）と 1 問（§9）を提示。HTML の提示面を tsuzuri-site/ruling-surface.html に置いた
@@ -168,3 +197,4 @@
 - 2026-09-25T04:04Z: 仮の裁定「推奨で良い」= §8.5-3 席を起こす差し込みを開ける（1 行の指し示し）。次 = §8.5-4（束の逐語）
 - 2026-09-25T04:09Z: 仮の裁定「それでよい」= §8.5-4 束の逐語。次 = §8.5-5（束は設計 doc・状態の正本は器の event・home は待ちの帯 + 今の板）
 - 2026-09-25T04:12Z: 仮の裁定「それで良い」= §8.5-5 束は設計 doc・正本は event・home。次 = §8.5-6（承認欄の逐語は今のまま）
+- 2026-09-25T04:15Z: 仮の裁定「推奨で良い」= §8.5-6 承認欄の逐語は今のまま（決めの列は全部積んだ）。追加の要件 = pipeline の表示の連動 → §14 を書き 1 問を提示
