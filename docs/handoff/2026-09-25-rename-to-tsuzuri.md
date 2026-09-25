@@ -21,7 +21,7 @@
 | 作業場の文中の旧 path | README・hub/index.html・server/report.md | sed で新 path | script |
 
 ## 順序
-1. 持ち主が scribe3-13 の席を閉じる（tmux の window は残してよい）。
+1. 持ち主が scribe3-13 の席を閉じる（tmux の window は残してよいが、window の shell は `cd ~` で旧 dir から出る。script の precheck は旧 dir を cwd に持つ process が 1 つでもあれば断る）。ThinkPad への ssh tunnel（scratchpad の tunnel.pid）は閉じる前に止めた。ThinkPad の Chrome の窓は残っていてよい。
 2. scribe2 席（か持ち主）が `RUN=1 bash ~/projects/local-projects/scribe3/docs/handoff/rename-to-tsuzuri.sh` を 1 度実行。
 3. scribe2 席が tick の unit を外し（`seat tick uninstall`）、新 state dir で `seat register` → `seat tick install` → `seat launch --role orchestrator --target s3:design`。
 4. 新しい s3 席が docs/handoff/2026-09-24-s3-design-seat-resume.md を読み、配信と試作 server を起こし直し、CLI と prefix の裁定を受けて `bd init`。
