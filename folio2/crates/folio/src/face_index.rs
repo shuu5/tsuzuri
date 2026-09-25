@@ -21,6 +21,7 @@ use std::path::Path;
 use crate::catalog::Component;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{self, INDEX_STATUS, hint, hint_q, stop_anchor};
+use crate::face_constitution_read::amendments;
 #[cfg(test)]
 use crate::face_index_read::PARTS;
 use crate::face_index_read::{
@@ -89,7 +90,9 @@ pub fn derive(dir: &Path) -> R<String> {
     let r = X::root(&r_doc, "rules.yaml");
     let n = X::root(&n_doc, INTAKE);
 
-    let ctx = context(&i, &c, &s, &v, &r, adr, notes)?;
+    // 憲法のカードの更新の日付は今の版の承認の日付（便 144・憲法の面と同じ口）
+    let rows = amendments(dir)?;
+    let ctx = context(&i, (&c, &rows), &s, &v, &r, adr, notes)?;
     let sheet = sheet_head(&n)?;
     let filled = sheet_body(dir, &n, &sheet, &ctx.annex_types)?;
     let m = i.f("meta")?;

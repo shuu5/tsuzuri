@@ -819,3 +819,324 @@ fn f135_number_without_a_page_stays_plain_on_the_constitution() {
     );
     assert!(!html.contains("adr-99.html"), "正本の無い ADR-99 がリンクになった");
 }
+
+// ── 便 144: 表紙の状態に今の版の承認・承認欄に版ごとの承認の行（docs/design/delivery-144.md §1 (c) の 2〜5）──
+
+/// 発効した判断の状態（欄の決まりの effective_status を歯の側で手で写す）。
+const EFFECTIVE: [&str; 2] = ["accepted", "retired"];
+
+/// 版を上げた発効した判断の承認 1 行（歯の側の手書きの読み・字は escape 済み）。
+struct Row {
+    id: String,
+    version: String,
+    who: String,
+    date: String,
+    verbatim: String,
+    ruling: String,
+    surface: String,
+}
+
+fn yaml_at(path: &Path) -> Yaml {
+    YamlLoader::load_from_str(&fs::read_to_string(path).unwrap())
+        .unwrap()
+        .remove(0)
+}
+
+fn s<'a>(y: &'a Yaml, key: &str) -> &'a str {
+    y[key]
+        .as_str()
+        .unwrap_or_else(|| panic!("欄 {key} が文字列でない: {y:?}"))
+}
+
+/// 置き場 `dir` の adr/ の ADR-<数>.yaml を番号の順に直に読み、発効した判断（状態が EFFECTIVE で承認欄が表）の amends の
+/// 各項の版を出た順に重ねずに 1 行ずつ返す。
+fn source_rows(dir: &Path) -> Vec<Row> {
+    let mut files: Vec<(u64, PathBuf)> = fs::read_dir(dir.join("adr"))
+        .unwrap()
+        .filter_map(|e| {
+            let path = e.unwrap().path();
+            let name = path.file_name()?.to_str()?.to_string();
+            let n = name.strip_prefix("ADR-")?.strip_suffix(".yaml")?;
+            if n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            Some((n.parse().ok()?, path))
+        })
+        .collect();
+    files.sort();
+    let mut rows = Vec::new();
+    for (_, path) in files {
+        let y = yaml_at(&path);
+        let ap = &y["approval"];
+        if !EFFECTIVE.contains(&s(&y, "status")) || ap.as_hash().is_none() {
+            continue;
+        }
+        let mut versions: Vec<String> = Vec::new();
+        for item in y["amends"].as_vec().into_iter().flatten() {
+            if item.as_hash().is_none() {
+                continue;
+            }
+            let v = esc(s(item, "version"));
+            if !versions.contains(&v) {
+                versions.push(v);
+            }
+        }
+        for version in versions {
+            rows.push(Row {
+                id: esc(s(&y, "id")),
+                version,
+                who: esc(s(ap, "who")),
+                date: esc(s(ap, "date")),
+                verbatim: esc(s(ap, "verbatim")),
+                ruling: esc(s(ap, "ruling")),
+                surface: esc(s(ap, "surface")),
+            });
+        }
+    }
+    rows
+}
+
+/// 置き場 `dir` の憲法の（版・生成日・初回の承認の日付）。
+fn source_meta(dir: &Path) -> (String, String, String) {
+    let c = yaml_at(&dir.join("constitution.yaml"));
+    let m = &c["meta"];
+    (
+        esc(s(m, "version")),
+        esc(s(m, "generated")),
+        esc(s(&m["approval"], "date")),
+    )
+}
+
+/// 版ごとの承認の行の字（§1 (b) の 2 の 5 つの枡を歯の側で手で写す）。
+fn sign_of(r: &Row) -> String {
+    format!(
+        "<div class=\"sign\"><span class=\"role\">承認</span><span class=\"who\">{}</span><span class=\"when\">{} · 版 {} · 逐語「{}」</span><span class=\"when\">判断の記録: {}／裁定: {}／対話面: {}</span><span class=\"stamp\">発効</span></div>",
+        r.who, r.date, r.version, r.verbatim, r.id, r.ruling, r.surface
+    )
+}
+
+/// 承認欄の sign の行（出た順）。
+fn signs(html: &str) -> Vec<&str> {
+    let at = html
+        .find("<section id=\"approval\"")
+        .expect("承認欄が無い");
+    let rest = &html[at..];
+    let block = rest
+        .find("\"approval-block\"")
+        .expect("承認欄の部品が無い");
+    rest[block..]
+        .lines()
+        .skip(1)
+        .take_while(|l| l.starts_with("<div class=\"sign\">"))
+        .collect()
+}
+
+/// 写しの置き場から面を組み（code 0 を確かめる）、判断の記録のリンクの包みを外した本文を返す。
+fn face_of(case: &str, td: &Path, work: &Path) -> String {
+    let out = td.join("constitution.html");
+    let run = folio_face(work, &out);
+    assert_eq!(code(&run, "folio face --write"), 0, "{case}: {}", stderr(&run));
+    unlink_adr(&fs::read_to_string(&out).unwrap())
+}
+
+/// 鮮度の札・表紙の状態・承認欄のリードの字。
+fn stamp_of(generated: &str, version: &str, label: &str) -> String {
+    format!("生成 <b>{generated}</b> · <b>{version}</b>（{label}）</span>")
+}
+
+fn cover_of(state: &str) -> String {
+    format!(
+        "<p class=\"cover-status\"><span class=\"k\">状態</span><span>{state}（<a href=\"#approval\">承認欄へ</a>）</span></p>"
+    )
+}
+
+fn lead_of(lead: &str) -> String {
+    format!("<h2>作成 / 承認</h2>\n<p class=\"lead\">{lead}</p>")
+}
+
+fn once(html: &str, want: &str) {
+    assert_eq!(html.matches(want).count(), 1, "「{want}」がちょうど 1 つでない");
+}
+
+/// 写しの判断の記録 `ids` の状態を提案中に戻す。
+fn to_proposed(work: &Path, ids: &[String]) {
+    for id in ids {
+        let path = work.join("adr").join(format!("{id}.yaml"));
+        let before = fs::read_to_string(&path).unwrap();
+        let after = before.replacen("\nstatus: accepted\n", "\nstatus: proposed\n", 1);
+        assert_ne!(before, after, "{id} を提案中に戻せていない");
+        fs::write(&path, after).unwrap();
+    }
+}
+
+const EFFECTIVE_LABEL: &str = "発効・拘束力あり";
+const UNKNOWN: &str = "効く版はまだ分からない";
+
+#[test]
+fn f144_cover_names_the_approval_of_the_current_version() {
+    let (td, work) = real_copy("f144-cover");
+    let (version, generated, first) = source_meta(&work);
+    let rows = source_rows(&work);
+    let naming: Vec<&Row> = rows.iter().filter(|r| r.version == version).collect();
+    assert!(!naming.is_empty(), "今の版 {version} を名指す発効した判断が無い");
+    let date = naming.iter().map(|r| r.date.clone()).max().unwrap();
+    let mut ids: Vec<String> = Vec::new();
+    for r in &naming {
+        if !ids.contains(&r.id) {
+            ids.push(r.id.clone());
+        }
+    }
+    let html = face_of("f144-cover", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    once(
+        &html,
+        &cover_of(&format!(
+            "{EFFECTIVE_LABEL}（承認 {date}・判断の記録 {}）",
+            ids.join("・")
+        )),
+    );
+    assert_ne!(date, first, "今の版の承認が初回と同じ日で歯が見分けられない");
+    assert!(
+        !html.contains(&format!("{EFFECTIVE_LABEL}（承認 {first}）")),
+        "表紙の状態が初回の承認の日付を出す"
+    );
+    once(&html, &stamp_of(&generated, &version, EFFECTIVE_LABEL));
+    once(&html, &lead_of(EFFECTIVE_LABEL));
+}
+
+#[test]
+fn f144_approval_lists_every_amending_version() {
+    let (td, work) = real_copy("f144-rows");
+    let (_, generated, first) = source_meta(&work);
+    let rows = source_rows(&work);
+    assert!(!rows.is_empty(), "版を上げた発効した判断が無い");
+    let html = face_of("f144-rows", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    let got = signs(&html);
+    assert_eq!(got.len(), 2 + rows.len(), "{got:#?}");
+    assert!(
+        got[0].starts_with("<div class=\"sign\"><span class=\"role\">作成</span>")
+            && got[0].contains(&format!("<span class=\"when\">{generated}</span>")),
+        "{}",
+        got[0]
+    );
+    assert!(
+        got[1].starts_with("<div class=\"sign\"><span class=\"role\">承認</span>")
+            && got[1].contains(&format!("<span class=\"when\">{first} · 逐語「")),
+        "{}",
+        got[1]
+    );
+    for (i, r) in rows.iter().enumerate() {
+        assert_eq!(got[2 + i], sign_of(r), "版ごとの承認の行 {} 本目", i + 1);
+    }
+}
+
+#[test]
+fn f144_unknown_when_no_decision_names_the_version() {
+    // 版の欄を先に進めた写し
+    let (td, work) = real_copy("f144-unknown-next");
+    let (version, generated, first) = source_meta(&work);
+    let rows = source_rows(&work);
+    let path = work.join("constitution.yaml");
+    let before = fs::read_to_string(&path).unwrap();
+    let after = before.replacen(
+        &format!("\n  version: {version}\n"),
+        &format!("\n  version: {version}-next\n"),
+        1,
+    );
+    assert_ne!(before, after, "版の欄を進められていない");
+    fs::write(&path, after).unwrap();
+    let html = face_of("f144-unknown-next", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    let latest = rows
+        .iter()
+        .map(|r| r.date.clone())
+        .chain([first.clone()])
+        .max()
+        .unwrap();
+    let next = format!("{version}-next");
+    once(&html, &stamp_of(&generated, &next, UNKNOWN));
+    once(
+        &html,
+        &cover_of(&format!("{EFFECTIVE_LABEL}（承認 {latest}）・{UNKNOWN}")),
+    );
+    once(&html, &lead_of(&format!("{EFFECTIVE_LABEL}（{UNKNOWN}）")));
+    assert!(
+        !html.contains(&format!("<b>{next}</b>（{EFFECTIVE_LABEL}）")),
+        "今の版を発効と出す札が在る"
+    );
+    assert_eq!(signs(&html).len(), 2 + rows.len());
+
+    // 今の版を名指す判断を提案中に戻した写し
+    let (td, work) = real_copy("f144-unknown-proposed");
+    let naming: Vec<String> = rows
+        .iter()
+        .filter(|r| r.version == version)
+        .map(|r| r.id.clone())
+        .collect();
+    assert!(!naming.is_empty(), "今の版を名指す発効した判断が無い");
+    to_proposed(&work, &naming);
+    let left = source_rows(&work);
+    let html = face_of("f144-unknown-proposed", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    let latest = left
+        .iter()
+        .map(|r| r.date.clone())
+        .chain([first.clone()])
+        .max()
+        .unwrap();
+    once(&html, &stamp_of(&generated, &version, UNKNOWN));
+    once(
+        &html,
+        &cover_of(&format!("{EFFECTIVE_LABEL}（承認 {latest}）・{UNKNOWN}")),
+    );
+    once(&html, &lead_of(&format!("{EFFECTIVE_LABEL}（{UNKNOWN}）")));
+    assert!(
+        !html.contains(&format!("<b>{version}</b>（{EFFECTIVE_LABEL}）")),
+        "今の版を発効と出す札が在る"
+    );
+    let got = signs(&html);
+    assert_eq!(got.len(), 2 + left.len(), "{got:#?}");
+    for id in &naming {
+        assert!(
+            !got.iter().any(|l| l.contains(&format!("判断の記録: {id}／"))),
+            "提案中に戻した {id} の承認の行が在る"
+        );
+    }
+}
+
+#[test]
+fn f144_without_amending_decisions_the_first_approval_stays() {
+    // 版を上げた判断を全部提案中に戻した写し
+    let (td, work) = real_copy("f144-first");
+    let (version, generated, first) = source_meta(&work);
+    let mut ids: Vec<String> = source_rows(&work).into_iter().map(|r| r.id).collect();
+    ids.dedup();
+    to_proposed(&work, &ids);
+    assert!(source_rows(&work).is_empty(), "版を上げた発効した判断が残る");
+    let html = face_of("f144-first", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    once(&html, &cover_of(&format!("{EFFECTIVE_LABEL}（承認 {first}）")));
+    once(&html, &stamp_of(&generated, &version, EFFECTIVE_LABEL));
+    once(&html, &lead_of(EFFECTIVE_LABEL));
+    assert_eq!(signs(&html).len(), 2);
+
+    // adr/ の無い面の fixture の写し
+    let td = temp_dir("f144-no-adr");
+    let work = td.join("src");
+    fs::create_dir_all(&work).unwrap();
+    let fixture = repo_root().join("tests/fixtures/face");
+    for name in [
+        "constitution.yaml",
+        "rules.yaml",
+        "vocabulary.yaml",
+        "srs.yaml",
+        "ceiling.yaml",
+    ] {
+        fs::copy(fixture.join(name), work.join(name)).unwrap();
+    }
+    assert!(!work.join("adr").exists());
+    let html = face_of("f144-no-adr", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(signs(&html).len(), 2);
+}

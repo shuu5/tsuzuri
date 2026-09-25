@@ -826,7 +826,7 @@ fn f138_srs_card_marks_a_pending_version() {
     let html = index_with_srs("f138-card-pending", |s| {
         s.replacen("  version: v0.3\n", "  version: v0.4\n", 1)
     });
-    up_once(&html, "更新 2026-09-01・v0.4（起草・承認待ち・発効は v0.3）");
+    up_once(&html, "更新 2026-09-05・v0.4（起草・承認待ち・発効は v0.3）");
 }
 
 #[test]
@@ -834,11 +834,127 @@ fn f138_srs_card_marks_an_unknown_effective_version() {
     let html = index_with_srs("f138-card-unknown", |s| {
         s.replacen("  effective_version: v0.3\n", "", 1)
     });
-    up_once(&html, "更新 2026-09-01・v0.3（効く版はまだ分からない）");
+    up_once(&html, "更新 2026-09-05・v0.3（効く版はまだ分からない）");
     let (td, work) = index_fixture_copy("f138-card-equal");
     let (_, html) = index_from("f138-card-equal", &work, &td);
     let _ = fs::remove_dir_all(&td);
+    up_once(&html, "更新 2026-09-05・v0.3");
+}
+
+// ── 便 144: 入口の棚の憲法と要件書のカードの更新の日付を承認の日付に（docs/design/delivery-144.md §1 (c) の 6〜8）──
+
+/// 写しの憲法を effective にし、`version` が在れば amends がその版を名指す発効した判断 ADR-3（承認 2026-09-07・写しの
+/// ADR-2 から手で組む）を置いて入口の面を書く。戻り値 = 面の本文。
+fn index_with_amending(case: &str, version: Option<&str>) -> String {
+    let (td, work) = index_fixture_copy(case);
+    edit(&work.join("constitution.yaml"), |s| {
+        s.replacen("  status: draft\n", "  status: effective\n", 1)
+    });
+    if let Some(v) = version {
+        let base = fs::read_to_string(work.join("adr/ADR-2.yaml")).unwrap();
+        let mut three = base.clone();
+        for (from, to) in [
+            ("id: ADR-2\n", "id: ADR-3\n".to_string()),
+            ("status: proposed\n", "status: accepted\n".to_string()),
+            (
+                "amends: []\n",
+                format!(
+                    "approval: {{who: 持ち主, date: 2026-09-07, ruling: 裁定 F-3, verbatim: 承認する, surface: R-8}}\namends:\n  - {{target: P-1, field: text, version: {v}, previous_text: 前の文, new_text: 後の文}}\n"
+                ),
+            ),
+        ] {
+            let next = three.replacen(from, &to, 1);
+            assert_ne!(three, next, "写しの ADR-3 に「{from}」が当たっていない");
+            three = next;
+        }
+        fs::write(work.join("adr/ADR-3.yaml"), three).unwrap();
+    }
+    let (_, html) = index_from(case, &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    html
+}
+
+#[test]
+fn f144_constitution_card_shows_the_approval_of_the_current_version() {
+    let html = index_with_amending("f144-card-effective", Some("v0.9"));
+    up_once(&html, "更新 2026-09-07・v0.9");
+    let html = index_with_amending("f144-card-unknown", Some("v0.8"));
+    up_once(&html, "更新 2026-09-07・v0.9（効く版はまだ分からない）");
+    let html = index_with_amending("f144-card-first", None);
+    up_once(&html, "更新 2026-09-02・v0.9");
+    assert!(!html.contains("更新 2026-09-01・v0.9"), "発効の憲法のカードが生成日を出す");
+}
+
+#[test]
+fn f144_srs_card_shows_the_last_approval() {
+    let (td, work) = index_fixture_copy("f144-srs-card");
+    let (_, html) = index_from("f144-srs-card", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    up_once(&html, "更新 2026-09-05・v0.3");
+    up_once(&html, "更新 2026-09-01・v0.9");
+    let html = index_with_srs("f144-srs-card-later", |s| {
+        s.replacen(
+            "stamp: 発効, verbatim: 承認する, version: v0.3}\n",
+            "stamp: 発効, verbatim: 承認する, version: v0.3}\n    - {role: 承認, who: 持ち主, when: 2026-09-09, stamp: 発効, verbatim: 承認する, version: v0.3}\n",
+            1,
+        )
+    });
+    up_once(&html, "更新 2026-09-09・v0.3");
+    let html = index_with_srs("f144-srs-card-draft", |s| {
+        s.replacen("  status: effective\n", "  status: draft\n", 1)
+    });
     up_once(&html, "更新 2026-09-01・v0.3");
+}
+
+/// 実の正本の憲法の今の版の承認の日付（歯の側の手書きの読み: 発効した判断〔状態が accepted か retired で承認欄が表〕の
+/// amends が今の版を名指すものの承認の日付の最大・無ければ初回の承認）。
+fn source_constitution_approval(version: &str, first: &str) -> String {
+    let dir = design_intent().join("adr");
+    let mut dates: Vec<String> = Vec::new();
+    for e in fs::read_dir(&dir).unwrap() {
+        let name = e.unwrap().file_name().to_string_lossy().into_owned();
+        if !name.starts_with("ADR-") || !name.ends_with(".yaml") {
+            continue;
+        }
+        let y = load_yaml_at(&dir, &name);
+        let effective = matches!(y["status"].as_str(), Some("accepted" | "retired"));
+        if !effective || y["approval"].as_hash().is_none() {
+            continue;
+        }
+        let names = y["amends"]
+            .as_vec()
+            .is_some_and(|a| a.iter().any(|i| i["version"].as_str() == Some(version)));
+        if names {
+            dates.push(text(&y["approval"], "date").to_string());
+        }
+    }
+    dates.into_iter().max().unwrap_or_else(|| first.to_string())
+}
+
+#[test]
+fn f144_real_cards_follow_the_approvals() {
+    let (td, _, html) = real_index("f144-real");
+    let _ = fs::remove_dir_all(&td);
+    let c = load_yaml("constitution.yaml");
+    let cm = &c["meta"];
+    let version = text(cm, "version");
+    let date = source_constitution_approval(version, text(&cm["approval"], "date"));
+    let want = format!("<span class=\"up\">更新 {}・{}", esc(&date), esc(version));
+    assert_eq!(html.matches(&want).count(), 1, "「{want}」がちょうど 1 つでない");
+    let s = load_yaml("srs.yaml");
+    let sm = &s["meta"];
+    let last = seq(&sm["approval"], "srs.yaml meta.approval")
+        .iter()
+        .filter(|r| r["role"].as_str() == Some("承認"))
+        .map(|r| text(r, "when"))
+        .next_back()
+        .expect("要件書の承認欄に承認の行が無い");
+    let want = format!(
+        "<span class=\"up\">更新 {}・{}",
+        esc(last),
+        esc(text(sm, "version"))
+    );
+    assert_eq!(html.matches(&want).count(), 1, "「{want}」がちょうど 1 つでない");
 }
 
 // ── 便 139: 入口の棚の判断の記録のカードに番号と見出しの一覧（docs/design/delivery-139.md §1 (c)）──

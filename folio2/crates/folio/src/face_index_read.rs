@@ -10,7 +10,8 @@ use std::sync::LazyLock;
 use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X, esc};
-use crate::face::{self, Frame, anchor, tier_of};
+use crate::face::{self, Frame, Standing, anchor, tier_of};
+use crate::face_constitution_read::{Amend, approved};
 use crate::shelf::{self, ANNEXES, SHELF_DOCS, SHELF_RELATIONS, Shelf};
 use crate::yaml::Value;
 
@@ -348,8 +349,8 @@ pub(crate) fn exact<'a, T: Copy>(
     Ok(found)
 }
 
-/// 憲法のカード（条の数と段ごとの数・counts と数えた数の一致）。
-fn constitution_card(c: &X<'_>) -> R<Readable> {
+/// 憲法のカード（条の数と段ごとの数・counts と数えた数の一致）。更新の日付は今の版の承認の日付（便 144）。
+fn constitution_card(c: &X<'_>, rows: &[Amend]) -> R<Readable> {
     let m = c.f("meta")?;
     let mut tiers = Vec::new();
     for a in c.f("articles")?.seq()? {
@@ -377,13 +378,15 @@ fn constitution_card(c: &X<'_>) -> R<Readable> {
             tiers.len()
         ));
     }
+    let ap = approved(&m, rows)?;
     Ok(Readable {
         summary: format!("{} 条（{}）", tiers.len(), parts.join(" · ")),
-        updated: updated(&m)?,
+        updated: format!("{}・{}{}", ap.date, m.ef("version")?, ap.standing.card()),
     })
 }
 
-/// 要件書のカード（機能・非機能・受入基準の数・counts と数えた数の一致）。
+/// 要件書のカード（機能・非機能・受入基準の数・counts と数えた数の一致）。更新の日付は承認欄の最後の承認の行
+/// （要件書の面の表紙の状態と同じ式・draft か承認の行が無ければ生成日・便 144）。
 fn srs_card(s: &X<'_>) -> R<Readable> {
     let m = s.f("meta")?;
     let counts = m.f("counts")?;
@@ -401,20 +404,26 @@ fn srs_card(s: &X<'_>) -> R<Readable> {
         }
         parts.push(format!("{name} {counted}"));
     }
+    let standing = face::standing(&m)?;
+    let mut date = m.ef("generated")?;
+    if standing != Standing::Draft {
+        for row in m.f("approval")?.seq()? {
+            if row.f("role")?.v.as_str() == Some("承認") {
+                date = row.ef("when")?;
+            }
+        }
+    }
     // 版の欄が効いている版と違えば札を添える（便 138）
     Ok(Readable {
         summary: parts.join(" · "),
-        updated: format!("{}{}", updated(&m)?, face::standing(&m)?.card()),
+        updated: format!("{date}・{}{}", m.ef("version")?, standing.card()),
     })
 }
 
-fn updated(m: &X<'_>) -> R<String> {
-    Ok(format!("{}・{}", m.ef("generated")?, m.ef("version")?))
-}
-
+/// `c` = 憲法の正本と版を上げた発効した判断の行（`face_constitution_read::amendments`）の組。
 pub(crate) fn context(
     i: &X<'_>,
-    c: &X<'_>,
+    (c, rows): (&X<'_>, &[Amend]),
     s: &X<'_>,
     v: &X<'_>,
     r: &X<'_>,
@@ -432,7 +441,7 @@ pub(crate) fn context(
             _ => return Err(format!("{}: null か文字列でない", absent_x.at)),
         };
         let readable = match id {
-            "constitution" => Some(constitution_card(c)?),
+            "constitution" => Some(constitution_card(c, rows)?),
             "srs" => Some(srs_card(s)?),
             _ => None,
         };

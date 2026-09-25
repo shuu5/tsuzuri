@@ -2,10 +2,18 @@
 //! から条と文脈と改訂の段の型・読みと検査（context・値域の突き合わせ・数の突き合わせ）・欠番・関係の欄のリンクの列・改訂の段の読みを字を変えずに降ろした。
 //! 面の口 `derive` と HTML を書く側と枠と名札と数の口は `face_constitution.rs` に残る。面の口と字面の逃がしを呼び、関係の欄からリンクの列も
 //! 組むので層 1 には置かない。見え方は書く側が名指すものだけを広げた。
+//! 版を上げた発効した判断の読み（amendments）と今の版の承認（approved）は便 144（delivery-144.md §1 (b) の 1）で足した。
+//! 憲法の面と入口の棚の憲法のカードが同じ口を呼ぶ。
 
+use std::fs;
+use std::path::Path;
+
+use crate::adr;
 use crate::constitution_enums as ce;
-use crate::cursor::{R, X, esc};
-use crate::face::{Tier, anchor, section_anchor, split_dash, tier_label, tier_of};
+use crate::cursor::{self, R, X, esc};
+use crate::face::{
+    DOC_STATUS, Standing, Tier, anchor, section_anchor, split_dash, tier_label, tier_of,
+};
 
 /// 条 1 つ（id・escape した title・段）。
 pub(crate) struct Art<'a> {
@@ -232,6 +240,138 @@ pub(crate) fn relations(ctx: &Ctx<'_>, rel: &X<'_>) -> R<Vec<String>> {
         }
     }
     Ok(links)
+}
+
+// ── 版を上げた判断と今の版の承認（便 144・delivery-144.md §1 (b) の 1）──
+
+/// 版を上げた発効した判断の承認 1 行（判断 1 本 × amends が名指す版 1 つ・字はどれも escape 済み）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Amend {
+    pub(crate) id: String,
+    pub(crate) version: String,
+    pub(crate) who: String,
+    pub(crate) date: String,
+    pub(crate) verbatim: String,
+    pub(crate) ruling: String,
+    pub(crate) surface: String,
+}
+
+/// `adr/` の直下の ADR-<数>.yaml を番号の昇順に読み、発効した判断（状態が欄の決まりの effective_status で承認欄が表）の
+/// amends の表の項が名指す版を出た順に重ねずに集め、1 行ずつ返す。`adr/` が dir でなければ空（憲法の面は `adr/` を要さない）。
+pub(crate) fn amendments(dir: &Path) -> R<Vec<Amend>> {
+    let root = dir.join("adr");
+    if !root.is_dir() {
+        return Ok(Vec::new());
+    }
+    let entries = fs::read_dir(&root).map_err(|e| format!("adr/: 読めない: {e}"))?;
+    let mut names: Vec<(u64, String)> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("adr/: 読めない: {e}"))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let n = name
+            .strip_prefix("ADR-")
+            .and_then(|s| s.strip_suffix(".yaml"))
+            .filter(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|d| d.parse::<u64>().ok());
+        if let Some(n) = n {
+            names.push((n, format!("adr/{name}")));
+        }
+    }
+    names.sort();
+    let effective = adr::floor_strs(&["effective_status"]);
+    let mut out = Vec::new();
+    for (_, name) in names {
+        let doc = cursor::load(dir, &name)?;
+        let a = X::root(&doc, &name);
+        let status = a.f("status")?.text()?;
+        if !effective.contains(&status.as_str()) {
+            continue;
+        }
+        let Some(ap) = a.g("approval")?.filter(|x| x.v.as_map().is_some()) else {
+            continue;
+        };
+        let Some(amends) = a.g("amends")? else {
+            continue;
+        };
+        let id = a.ef("id")?;
+        let mut versions: Vec<String> = Vec::new();
+        for item in amends.seq()? {
+            if item.v.as_map().is_none() {
+                continue;
+            }
+            let version = item.ef("version")?;
+            if !versions.contains(&version) {
+                versions.push(version);
+            }
+        }
+        for version in versions {
+            out.push(Amend {
+                id: id.clone(),
+                version,
+                who: ap.ef("who")?,
+                date: ap.ef("date")?,
+                verbatim: ap.ef("verbatim")?,
+                ruling: ap.ef("ruling")?,
+                surface: ap.ef("surface")?,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// 今の版の承認（版の立場・日付・今の版を名指す判断の id の一覧）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Approved {
+    pub(crate) standing: Standing,
+    pub(crate) date: String,
+    pub(crate) ids: Vec<String>,
+}
+
+/// 欄 meta と版を上げた判断の行 → 今の版の承認。状態が文書の状態の表に無ければ Err。draft は行を読まず生成日。
+/// effective は、版の欄と字が同じ（escape した字どうし）版を名指す行が在れば Effective（その承認の最も新しい日付・id は行の順）、
+/// 行が 1 つも無ければ Effective（初回の承認の日付）、行は在るが今の版を名指すものが無ければ Unknown（在る承認の最も新しい日付）。
+/// 版の新旧は比べない（便 138 と同じ）。
+pub(crate) fn approved(m: &X<'_>, rows: &[Amend]) -> R<Approved> {
+    let status = m.f("status")?;
+    status.lookup(DOC_STATUS, "文書の状態")?;
+    if status.v.as_str() != Some("effective") {
+        return Ok(Approved {
+            standing: Standing::Draft,
+            date: m.ef("generated")?,
+            ids: Vec::new(),
+        });
+    }
+    let first = m.f("approval")?.ef("date")?;
+    let version = m.ef("version")?;
+    let naming: Vec<&Amend> = rows.iter().filter(|a| a.version == version).collect();
+    let latest = |dates: Vec<&String>| dates.into_iter().max().cloned();
+    Ok(if rows.is_empty() {
+        Approved {
+            standing: Standing::Effective,
+            date: first,
+            ids: Vec::new(),
+        }
+    } else if naming.is_empty() {
+        let mut dates: Vec<&String> = rows.iter().map(|a| &a.date).collect();
+        dates.push(&first);
+        Approved {
+            standing: Standing::Unknown,
+            date: latest(dates).unwrap_or_default(),
+            ids: Vec::new(),
+        }
+    } else {
+        let mut ids: Vec<String> = Vec::new();
+        for a in &naming {
+            if !ids.contains(&a.id) {
+                ids.push(a.id.clone());
+            }
+        }
+        Approved {
+            standing: Standing::Effective,
+            date: latest(naming.iter().map(|a| &a.date).collect()).unwrap_or_default(),
+            ids,
+        }
+    })
 }
 
 /// 改訂の段 1 つの読み（n・担当・持ち主か・what の前後・条へのリンクの素）。

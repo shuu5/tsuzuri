@@ -19,7 +19,8 @@ use crate::face::{
     rule_status_class, stage_label, strength_label, strength_meaning, val,
 };
 use crate::face_constitution_read::{
-    Art, Ctx, Step, check_counts, context, missing_numbers, relations, step,
+    Amend, Approved, Art, Ctx, Step, amendments, approved, check_counts, context,
+    missing_numbers, relations, step,
 };
 use crate::rules;
 
@@ -109,10 +110,13 @@ pub fn derive(dir: &Path) -> R<String> {
     let m = c.f("meta")?;
     check_counts(&ctx, &m.f("counts")?)?;
     let stamp = face::ceiling_stamp(dir)?;
+    // 版を上げた発効した判断の行と今の版の承認（便 144）
+    let rows = amendments(dir)?;
+    let ap = approved(&m, &rows)?;
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &m, &stamp)?;
-    cover(&mut o, &ctx, &c, &m)?;
+    head(&mut o, &m, &ap, &stamp)?;
+    cover(&mut o, &ctx, &c, &m, &ap)?;
     toc(&mut o, &ctx, &c, &r)?;
     north_star(&mut o, &c)?;
     reading(&mut o, &ctx, &v)?;
@@ -123,7 +127,7 @@ pub fn derive(dir: &Path) -> R<String> {
     amendment_chapter(&mut o, &ctx, &c, &m)?;
     glossary_chapter(&mut o, &c, &v)?;
     sources_chapter(&mut o, &c)?;
-    approval(&mut o, &m)?;
+    approval(&mut o, &m, &ap, &rows)?;
     foot(&mut o, &ctx, &m)?;
     // 本文の判断の記録の番号を判断の記録の面へのリンクに（便 135・要件書の面と同じ 1 つの口）
     Ok(face::link_ids(&format!("{}\n", o.join("\n")), false, |id| {
@@ -171,21 +175,23 @@ fn chapter_name(ctx: &Ctx<'_>, i: usize) -> &'static str {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, m: &X<'_>, stamp: &str) -> R<()> {
+fn head(o: &mut Vec<String>, m: &X<'_>, ap: &Approved, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
+    // 今の版を名指す発効した判断が無ければ鮮度の札に「まだ分からない」（便 144）
+    let (shown, label) = ap.standing.stamp(&version, status);
     FRAME.head(
         o,
         &format!("folio2 — 憲法（不変原則・{version}）"),
         &m.ef("generated")?,
-        &version,
-        status,
+        &shown,
+        &label,
         stamp,
     );
     Ok(())
 }
 
-fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>) -> R<()> {
+fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>, ap: &Approved) -> R<()> {
     let ns = c.f("north_star")?;
     let total = ctx.arts.len();
     o.push(format!("<header {}>", dc(Component::DocCoverBand)));
@@ -227,8 +233,17 @@ fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>) -> R<()> {
         m.ef("generated")?
     ));
     o.push("</div>".to_string());
+    // 承認の日付は今の版の承認・今の版を名指す判断の番号を添える（便 144）
     let state = if is_effective(m)? {
-        format!("発効・拘束力あり（承認 {}）", m.f("approval")?.ef("date")?)
+        let decisions = if ap.ids.is_empty() {
+            String::new()
+        } else {
+            format!("・判断の記録 {}", ap.ids.join("・"))
+        };
+        ap.standing.cover(
+            &m.ef("version")?,
+            format!("発効・拘束力あり（承認 {}{decisions}）", ap.date),
+        )
     } else {
         "未承認のため拘束力なし → 持ち主の承認で発効".to_string()
     };
@@ -943,7 +958,7 @@ fn sources_chapter(o: &mut Vec<String>, c: &X<'_>) -> R<()> {
     Ok(())
 }
 
-fn approval(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
+fn approval(o: &mut Vec<String>, m: &X<'_>, now: &Approved, rows: &[Amend]) -> R<()> {
     let ap = m.f("approval")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     let stamp = if is_effective(m)? {
@@ -951,7 +966,11 @@ fn approval(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
     } else {
         "<span class=\"stamp todo\">未承認</span>"
     };
-    FRAME.approval_band(o, "作成 / 承認", status);
+    FRAME.approval_band(
+        o,
+        "作成 / 承認",
+        &now.standing.lead(&m.ef("version")?, status),
+    );
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!("<div {}>", dc(Component::ApprovalBlock)));
     o.push(format!(
@@ -967,6 +986,13 @@ fn approval(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
         ap.ef("ruling")?,
         ap.ef("surface")?
     ));
+    // 版ごとの承認の行（版を上げた発効した判断の承認欄から逐語で・判断の番号の順・便 144）
+    for a in rows {
+        o.push(format!(
+            "<div class=\"sign\"><span class=\"role\">承認</span><span class=\"who\">{}</span><span class=\"when\">{} · 版 {} · 逐語「{}」</span><span class=\"when\">判断の記録: {}／裁定: {}／対話面: {}</span><span class=\"stamp\">発効</span></div>",
+            a.who, a.date, a.version, a.verbatim, a.id, a.ruling, a.surface
+        ));
+    }
     o.push("</div>".to_string());
     o.push("</div>".to_string());
     Ok(())
@@ -1014,5 +1040,89 @@ mod face_constitution_tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), 15);
+    }
+
+    /// 版を上げた判断の行（who・逐語・裁定・対話面は見ない字）。
+    fn row(id: &str, version: &str, date: &str) -> Amend {
+        let x = "x".to_string();
+        Amend {
+            id: id.to_string(),
+            version: version.to_string(),
+            who: x.clone(),
+            date: date.to_string(),
+            verbatim: x.clone(),
+            ruling: x.clone(),
+            surface: x,
+        }
+    }
+
+    fn approved_of(meta: &str, rows: &[Amend]) -> R<Approved> {
+        let v = crate::yaml::parse_typed(meta).unwrap();
+        approved(&X::root(&v, "meta"), rows)
+    }
+
+    #[test]
+    fn f144_approved_follows_the_decisions_naming_the_version() {
+        use crate::face::Standing;
+        let meta = |status: &str, version: &str, first: &str| {
+            format!(
+                "{{version: \"{version}\", status: {status}, generated: 2026-09-01, approval: {{date: {first}}}}}"
+            )
+        };
+        let ok = |m: &str, rows: &[Amend]| approved_of(m, rows).unwrap();
+        let want = |standing: Standing, date: &str, ids: &[&str]| Approved {
+            standing,
+            date: date.to_string(),
+            ids: ids.iter().map(|s| s.to_string()).collect(),
+        };
+        let effective = meta("effective", "v1.1", "2026-09-02");
+        // 行の無い発効の正本 = 初回の承認
+        assert_eq!(
+            ok(&effective, &[]),
+            want(Standing::Effective, "2026-09-02", &[])
+        );
+        // 今の版を名指す行が 2 本 = 最も新しい日付（最初の行ではない）と id 2 つ（行の順）
+        let rows = [
+            row("ADR-2", "v1.0", "2026-09-09"),
+            row("ADR-3", "v1.1", "2026-09-05"),
+            row("ADR-4", "v1.1", "2026-09-07"),
+        ];
+        assert_eq!(
+            ok(&effective, &rows),
+            want(Standing::Effective, "2026-09-07", &["ADR-3", "ADR-4"])
+        );
+        // 名指す行が無い = Unknown と在る承認の最も新しい日付（初回の承認を含む）
+        assert_eq!(
+            ok(&effective, &[row("ADR-2", "v1.0", "2026-09-03")]),
+            want(Standing::Unknown, "2026-09-03", &[])
+        );
+        assert_eq!(
+            ok(&effective, &[row("ADR-2", "v1.0", "2026-09-01")]),
+            want(Standing::Unknown, "2026-09-02", &[])
+        );
+        // draft は行を読まず生成日
+        assert_eq!(
+            ok(&meta("draft", "v1.1", "2026-09-02"), &rows),
+            want(Standing::Draft, "2026-09-01", &[])
+        );
+        // 版の字は escape した字どうしで比べる
+        assert_eq!(
+            ok(
+                &meta("effective", "<v1.1>", "2026-09-02"),
+                &[row("ADR-5", "&lt;v1.1&gt;", "2026-09-08")]
+            ),
+            want(Standing::Effective, "2026-09-08", &["ADR-5"])
+        );
+        assert_eq!(
+            ok(
+                &meta("effective", "<v1.1>", "2026-09-02"),
+                &[row("ADR-5", "<v1.1>", "2026-09-08")]
+            )
+            .standing,
+            Standing::Unknown
+        );
+        // 表の外の状態は Err
+        let e = approved_of(&meta("retired", "v1.1", "2026-09-02"), &rows).unwrap_err();
+        assert_eq!(e, "meta.status: 文書の状態 の表に無い値「retired」");
     }
 }
