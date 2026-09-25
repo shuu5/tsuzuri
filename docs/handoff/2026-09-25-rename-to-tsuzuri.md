@@ -17,7 +17,7 @@
 | 配信 | tailnet-serve の docroot が旧 path（hub :8100・site :8101）| 止めて新 path で起こし直す | s3 席（新） |
 | 生きた試作 server | 8791〜8793・8803（旧 path の dir を配る）| 止めて起こし直す（pid は tsuzuri-spikes/live/*/pid）| s3 席（新） |
 | 憲法の id | scribe3-constitution | tsuzuri-constitution（済・凍結前）| s3 席（済）|
-| 台帳 | 無し | `bd init` を新 dir で（prefix は CLI の名の裁定の後）| s3 席（新） |
+| 台帳 | 無し | `bd init --prefix t3` を新 dir で（裁定済み）| s3 席（新） |
 | 作業場の文中の旧 path | README・hub/index.html・server/report.md | sed で新 path | script |
 
 ## 順序

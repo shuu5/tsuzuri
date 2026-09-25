@@ -1,7 +1,7 @@
 # 判断の記録 ADR-6 — 器の名は tsuzuri（綴）（発効 2026-09-25・持ち主の裁定 user 2026-09-25T00:39Z・記帳先 = scribe2 の台帳 s2-07l.214 notes）
 # 討論の記録は docs/grill/2026-09-25-G-name.md。改名の手順は docs/handoff/2026-09-25-rename-to-tsuzuri.md（script は同じ dir の rename-to-tsuzuri.sh）。
 id: ADR-6
-title: 器の名は tsuzuri（綴）とし、名は 1 つの定数から導く値として置き場と道具と台帳の名がそれに従い、人が打つ CLI の名は短い別綴りで台帳の prefix と揃える
+title: 器の名は tsuzuri（綴）とし、名は 1 つの定数から導く値として置き場と道具と台帳の名がそれに従い、人が打つ CLI の名は tz・台帳の prefix は t3 とする
 status: accepted
 date: 2026-09-25
 context: |
@@ -11,8 +11,8 @@ context: |
 decision: |
   (1) 器の名は tsuzuri（綴）とする。repo の dir・cargo の workspace・state dir・plugin・marker・着地の印はこの名から導く。
   (2) 名は 1 つの定数（build 時の値）で持ち、code は名で分岐しない（N-7・N-3）。名を変える手順は init の段として器が持つ（ADR-4 の (5)）。
-  (3) 人が打つ CLI の名は器の名と別の定数で持ち、短い綴りにする。台帳の prefix は CLI の名と同じ綴りにする。綴りは持ち主の裁定で決める（席の推奨は tz）。
-  (4) 台帳の裁定 id の形（英字 1 字 + 数字 1 字 + 横線）は改名前の名の形が code に焼かれたもので、(2) に反する。v3 の床は裁定 id の形を台帳の prefix から導く値にする。合流前は folio2 に小さな便を頼み、prefix の綴りを通す形へ直す。
+  (3) 人が打つ CLI の名は器の名と別の定数で持ち、短い綴り tz にする。台帳の prefix は t3 とし、数字は世代（scribe の v3）を残す。CLI の名と prefix はそれぞれ定数で持つ。
+  (4) 台帳の裁定 id の形（英字 1 字 + 数字 1 字 + 横線）は改名前の名の形が code に焼かれたもので、(2) に反する。v3 の床は裁定 id の形を台帳の prefix から導く値にする。t3 は今の床を通るので合流前の folio2 の直しは要らない。
   (5) 置き場の改名（repo の dir・state dir・host の面の anchors・口座ごとの projects の dir・tmux の対象・tick の unit・配信の docroot）は手順書に従い scribe2 席と 1 度で行う。過去の判断の記録と討論の記録に残る scribe3 の語は改名前の仮の名として残し、書き換えない。憲法の id だけは凍結前なので tsuzuri-constitution に改める。
   (6) ADR-4 の「scribe3 の 1 つの workspace」は tsuzuri の workspace と読む。
 options:
@@ -38,7 +38,7 @@ retreat:
 plain: |
   このプロジェクトの名前を tsuzuri（綴）に決めます。「綴る（書く）」と「綴じる（束ねる）」の 2 つの意味で、scribe と folio の両方を表します。
   名前は 1 か所の設定値から全部に行き渡るようにして、後から変えられるようにします。
-  打ち込むコマンドの名前は別に短くし、台帳の番号の頭もそれに揃えます。綴りはあなたの承認で決めます。
+  打ち込むコマンドの名前は tz、台帳の番号の頭は t3 にします。3 は「scribe の 3 代目」であることを残す印です。
   フォルダや設定の名前の付け替えは手順書に従って 1 度で行います。
   この記録はあなたの承認で発効しています。承認の記帳先は scribe2 の台帳です。
 approval:
@@ -47,4 +47,4 @@ approval:
   ruling: s2-07l.214（裁定 id = user 2026-09-25T00:39Z・notes に逐語・分は scribe2 席が会話記録で実測）
   verbatim: プロジェクトの名前はtsuzuriにする。ただしCLIコマンドはもっと短くしたい
   surface: R-8
-note: 名を決め直すという裁定（user 2026-09-25T00:32Z）と、続く裁定「prefixもCLIコマンドと揃えたい」（user 2026-09-25T00:42Z）も s2-07l.214 の notes に逐語で在る（scribe2 席の実測）。CLI と prefix の綴りは別の 1 問で決め、決まったらこの記録の決定 (3) に綴りを足す。
+note: 名を決め直すという裁定（user 2026-09-25T00:32Z）・「prefixもCLIコマンドと揃えたい」（user 2026-09-25T00:42Z）・綴りの裁定「CLIはtz, prefixはt3でいいか、v3だってことも残す意味で」（user 2026-09-25T00:5xZ・分は scribe2 席が実測）も s2-07l.214 の notes に逐語で在る。最後の裁定が 00:42Z の「揃える」を上書きし、決定 (3) はそれに従う。
