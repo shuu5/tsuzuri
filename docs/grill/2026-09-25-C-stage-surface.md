@@ -111,6 +111,22 @@
   - 代価: fps が下がった（未受領 1 枚 = 1 枚ごとに 1 往復・RTT 40 ms で上限約 20 fps）。滑らかさが要るなら「未受領 2 枚まで」を契約で選べるようにする案（窓は今のままで対応できる）。
   - 未確認: 持ち主の tailnet と実機の Firefox・画質を落とす経路・dpr 3・再接続・OS の本物の IME。
   - 位置づけ: 持ち主の裁定（§11）で表示面の正本は端末の Chrome（ssh + app mode + CDP）になったので、この窓は **fallback**（ssh が届かない端末・スマホ）の証明として残す。server 側（fix-stage-server）は作業中。
+- server 側の直しの結果（2026-09-25T00:46Z・fix-stage-server の report から転記・作業場 stage-server/report.md「v0.4」）: WebSocket 1 本・未受領 1 枚の流量制御・RTT に応じた画質の自動調整・遅延中継・前後の測定。既存の歯は緑のまま、WebSocket の歯 2 本追加、clippy 0・cargo deny 通過。RTT 40 ms の中継越し（窓の代わりは decode せず即 ack）:
+
+| 物差し | v0.3 | v0.4 | v0.3 + 帯域 4 Mbit/s | v0.4 + 帯域 4 Mbit/s |
+|---|---|---|---|---|
+| click → 次の frame | 106 ms | 64 ms | 144 ms | 92 ms |
+| wheel 20 発の最後の frame | 1011 ms | 466 ms | 1073 ms | 481 ms |
+| page2 の click → page2 の frame | 116 ms | 99 ms | 145 ms | 114 ms |
+| 10 字の最後の字の frame | 440 ms | 61 ms | 502 ms | 124 ms |
+| 動いている画面の fps | 60 | 24.4 | 29.2 | 14.8 |
+| 1 秒あたりの byte | 1029 KB | 314 KB | 499 KB | 190 KB |
+| 窓が受けた frame の古さ | 27 ms | 35 ms | 1827 ms | 59 ms |
+| 動いている最中の click → frame | 103 ms | 69 ms | 6.9 s〜30 s でも来ず | 119 ms |
+
+  - 入力の遅さの原因は 1 event 1 POST の順送り。画面の溜まりは帯域不足のときだけ（v0.3 は数秒前の画面を見せる）= 持ち主の「もっさり・遷移が遅い」の型。画質の自動調整は 1 Mbit/s で効いた（quality 40・960×600 に落ち、窓が去ると戻る）。
+  - 注意: fps は RTT に縛られる（未受領 1 枚 = 1 往復 1 枚・RTT 40 ms で上限 24 fps）。v0.3 の値は接続確立の代価が乗っておらず実際より良い。握手は自前 HTTP の先頭を覗いて tungstenite へ渡す形。frame の時刻は epoch ms の数値・幅と高さは JPEG の実寸（契約 v0.4 の疑問 1 の案を採用）。ack が 5 秒来なければ次を送る保険（契約外）。依存 crate は 23 → 33（sha1・http・httparse・data-encoding 等）。
+  - 生きた :8803 は旧 binary（v0.3）のまま。改名の後に新しい席が v0.4 の binary で起こし直す（窓の dist は v0.4 なので揃えるまで hub の窓は繋がらない）。
 
 ## 11. 持ち主の本来の要件 = 席が持ち主の端末の Chrome を起動して操作する（2026-09-25T00:24Z）
 - 持ち主の逐語の要旨（台帳へ）: Firefox に縛られない・Chrome で統一してよい・menu の無い app mode で表示・**server 側の Claude Code session が ThinkPad 側の Chrome を制御して起動し、持ち主に見せる面を自律的に操作する**。
