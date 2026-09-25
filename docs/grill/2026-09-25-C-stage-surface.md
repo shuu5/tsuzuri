@@ -95,3 +95,11 @@
 - 直し（契約 v0.4・作業場 contract-stage-v04.md）: 窓と server を WebSocket 1 本に（下りは binary の JPEG・上りは入力と受領）・未受領 1 枚の流量制御と最新優先・RTT に応じた quality の自動調整・mousemove と wheel の rAF ごとの間引き・IME は Chrome と Firefox の両順序を純関数の歯で通し本物の Firefox でも確認・状態の行に RTT を表示。RTT 40 ms を模した中継で直す前後を測る。
 - agent 2 つ（server・窓・opus）を 2026-09-25T00:16Z に起動。
 
+## 11. 持ち主の本来の要件 = 席が持ち主の端末の Chrome を起動して操作する（2026-09-25T00:24Z）
+- 持ち主の逐語の要旨（台帳へ）: Firefox に縛られない・Chrome で統一してよい・menu の無い app mode で表示・**server 側の Claude Code session が ThinkPad 側の Chrome を制御して起動し、持ち主に見せる面を自律的に操作する**。
+- s3 席の読み直し: 「remote / local の差は URL だけ」（kickoff §2 の scribe2 席の読み）は誤り。remote では持ち主の端末側で browser が動くので、席がそこへ届く口（端末側の Chrome の起動と CDP の中継）が要る。画面配信の窓は、端末に届けない場合（スマホ・端末側に何も入れられない周）の代替に格下げ。
+- **実証（verified・2026-09-25T00:24Z）**: server から ThinkPad へ tailnet 越しの ssh（鍵・RTT 49 ms）で入り、sway（Wayland）の session の環境（WAYLAND_DISPLAY=wayland-1・DISPLAY=:0・XDG_RUNTIME_DIR）を付けて  を起動 → ThinkPad の画面に menu の無い窓が開く。server 側で  の tunnel を張り、 が Chrome 146 を返す。playwright-core（MCP の install を借用・connectOverCDP）で繋ぎ、+1 を 2 回 click・名前欄に「ThinkPad の Chrome を席が操作」を入力・screenshot 取得 → data-count=2・data-name 一致・PNG 41,666 byte。接続 630 ms・click 2 回と入力の合計 3.7 秒（Playwright の fill は CDP 往復が多い・RTT 49 ms × 往復数。直に CDP を撃てば短い）。
+- 決定はしごの読み: 端末側の「agent」を新しく作らずに、**既に在る道具（ssh + Chrome の app mode + CDP + tunnel）で足りた**（3 段目「標準の道具で足りるか」で止まる）。端末側に常駐の agent が要るのは (a) ssh の無い端末（Windows の desktop・スマホ）(b) 端末側からの逆接続（NAT）(c) 起動と終了と窓の一覧の管理を器の型で持ちたいとき。
+- 持ち主の端末での IME・scroll・遷移の速さ: 端末の Chrome が描くので **native**（画面配信の遅さと IME の二重は起きない）。席の操作だけが RTT を払う。
+- 残る設計の決め: (1) 端末の一覧と接続の型（host.toml の [[device]] 行 = 名・ssh の宛先・Chrome の path・display の環境・OS）を器が持つ。(2) 席の目（screenshot / DOM）は端末の Chrome から CDP で取る。(3) 端末が無い / 届かない周は server 側の headless Chrome + 画面配信（試作済み）へ落ちる。(4) Windows の desktop は OpenSSH server（Windows 標準機能）を有効にすれば同じ形で届く。スマホは画面配信の窓（PWA）か emulator。
+
