@@ -1,4 +1,4 @@
-# scribe3 憲法 — 正本（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）
+# tsuzuri 憲法 — 正本（改名前の仮の名は scribe3・ADR-6）（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）
 "schema":
   "version": 1
   "top_level":
@@ -153,7 +153,7 @@
   "preamble": "precedence"
 
 meta:
-  id: scribe3-constitution
+  id: tsuzuri-constitution
   version: v1.0
   status: effective
   binding: true

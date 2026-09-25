@@ -1,0 +1,50 @@
+# 判断の記録 ADR-6 — 器の名は tsuzuri（綴）（発効 2026-09-25・持ち主の裁定 user 2026-09-25T00:4xZ・記帳先 = scribe2 の台帳 s2-07l.214 notes）
+# 討論の記録は docs/grill/2026-09-25-G-name.md。改名の手順は docs/handoff/2026-09-25-rename-to-tsuzuri.md（script は同じ dir の rename-to-tsuzuri.sh）。
+id: ADR-6
+title: 器の名は tsuzuri（綴）とし、名は 1 つの定数から導く値として置き場と道具と台帳の名がそれに従い、人が打つ CLI の名は短い別綴りで台帳の prefix と揃える
+status: accepted
+date: 2026-09-25
+context: |
+  v3 は scribe2 の器と folio2 の設計の道具を 1 つに合流させる世代である（ADR-4）。持ち主は「scribe と folio を合わせた新しい名にしたい」「名は scribe2 と同じように可変にしておきたい」「CLI の名はもっと短く」「台帳の prefix も CLI と揃えたい」と裁定した。
+  scribe2 は器の名を 1 つの定数から導き、marker・git の設定の鍵・state dir・plugin・着地の印がそれに従う。folio2 の床は裁定 id の形を「英字 1 字 + 数字 1 字 + 横線」と code に焼いており、これは scribe2 と folio2 の名の形（s2・f2）の写しである。
+  候補 6 つ（tsuzuri・chancery・quire・amanuensis・bindery・foliant）を出し、crates と PATH と GitHub と host の置き場で衝突を実測した。tsuzuri は「綴る = 書く（scribe）」と「綴じる = 紙葉を束ねる（folio）」を 1 語で持つ。
+decision: |
+  (1) 器の名は tsuzuri（綴）とする。repo の dir・cargo の workspace・state dir・plugin・marker・着地の印はこの名から導く。
+  (2) 名は 1 つの定数（build 時の値）で持ち、code は名で分岐しない（N-7・N-3）。名を変える手順は init の段として器が持つ（ADR-4 の (5)）。
+  (3) 人が打つ CLI の名は器の名と別の定数で持ち、短い綴りにする。台帳の prefix は CLI の名と同じ綴りにする。綴りは持ち主の裁定で決める（席の推奨は tz）。
+  (4) 台帳の裁定 id の形（英字 1 字 + 数字 1 字 + 横線）は改名前の名の形が code に焼かれたもので、(2) に反する。v3 の床は裁定 id の形を台帳の prefix から導く値にする。合流前は folio2 に小さな便を頼み、prefix の綴りを通す形へ直す。
+  (5) 置き場の改名（repo の dir・state dir・host の面の anchors・口座ごとの projects の dir・tmux の対象・tick の unit・配信の docroot）は手順書に従い scribe2 席と 1 度で行う。過去の判断の記録と討論の記録に残る scribe3 の語は改名前の仮の名として残し、書き換えない。憲法の id だけは凍結前なので tsuzuri-constitution に改める。
+  (6) ADR-4 の「scribe3 の 1 つの workspace」は tsuzuri の workspace と読む。
+options:
+  - id: a
+    name: tsuzuri（綴）
+    text: 決定 (1) から (6)。
+    verdict: adopted
+    reason: 書く（scribe）と綴じる（folio）を 1 語で持ち、日本語の設計文書と釣り合う。crates と PATH の衝突は publish しない限り無い。
+  - id: b
+    name: chancery（書記局）
+    text: 裁定と文書を記録して発行する役所の名。
+    verdict: rejected
+    reason: 裁定面の意味は強いが「書く」「綴じる」の両方を持たない。持ち主は tsuzuri を選んだ。
+  - id: c
+    name: scribe3 のまま
+    text: 名を変えない。
+    verdict: rejected
+    reason: folio を統合した世代の名として片方しか表さない。持ち主が名を決め直すと裁定した。
+basis: [P-27, N-3, N-7, ADR-4]
+retreat:
+  kind: measure
+  condition: 名を導く定数を 1 か所変えても、名の写しが code か生成物に 1 つでも残ることを doctor か歯が見つけたら、その写しを値に戻す便を起こす。数えるのは s3:design 席。
+plain: |
+  このプロジェクトの名前を tsuzuri（綴）に決めます。「綴る（書く）」と「綴じる（束ねる）」の 2 つの意味で、scribe と folio の両方を表します。
+  名前は 1 か所の設定値から全部に行き渡るようにして、後から変えられるようにします。
+  打ち込むコマンドの名前は別に短くし、台帳の番号の頭もそれに揃えます。綴りはあなたの承認で決めます。
+  フォルダや設定の名前の付け替えは手順書に従って 1 度で行います。
+  この記録はあなたの承認で発効しています。承認の記帳先は scribe2 の台帳です。
+approval:
+  who: 持ち主
+  date: 2026-09-25
+  ruling: s2-07l.214（裁定 id = user 2026-09-25T00:4xZ・notes に逐語・分は scribe2 席が会話記録で実測）
+  verbatim: プロジェクトの名前はtsuzuriにする。ただしCLIコマンドはもっと短くしたい
+  surface: R-8
+note: 続く裁定「prefixもCLIコマンドと揃えたい」（同じ時刻帯）も s2-07l.214 の notes に逐語で在る。CLI と prefix の綴りは別の 1 問で決め、決まったらこの記録の決定 (3) に綴りを足す。
