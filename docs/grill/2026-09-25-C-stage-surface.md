@@ -1,7 +1,7 @@
 # grill 論点 C — 表示面（session が制御する browser の面）の残り（討論の記録・正本は design-intent/ の YAML）
 
 - 出自: docs/handoff/2026-09-24-v3-kickoff.md §1（持ち主の逐語 3 点目）・§2 論点 C・docs/handoff/2026-09-24-v2-leftovers-for-v3.md §2 の 1・比較試作の結果（design-note/bakeoff-surface.yaml §6〜§7）
-- 状態: 討論中。裁定 1（2026-09-24T22:50Z・逐語は台帳へ）= click と入力も最初から用意する（対話的な表示面）。持ち主の指摘 = menu の無い独立した簡素な browser を組み込み remote でも local でも使えること（試作は Firefox で開いた）。§8 で答える
+- 状態: **裁定あり（2026-09-25T00:28Z「試してみたがかなりいい感じだ。スムーズに動く。それで決めて良い」→ ADR-5 提案中・裁定 id は台帳待ち）**。経緯: 裁定 1（2026-09-24T22:50Z・逐語は台帳へ）= click と入力も最初から用意する（対話的な表示面）。持ち主の指摘 = menu の無い独立した簡素な browser を組み込み remote でも local でも使えること（試作は Firefox で開いた）。§8 で答える
 - 逐語は台帳へ
 
 ## 1. 決まっていること（verified）
@@ -102,4 +102,4 @@
 - 決定はしごの読み: 端末側の「agent」を新しく作らずに、**既に在る道具（ssh + Chrome の app mode + CDP + tunnel）で足りた**（3 段目「標準の道具で足りるか」で止まる）。端末側に常駐の agent が要るのは (a) ssh の無い端末（Windows の desktop・スマホ）(b) 端末側からの逆接続（NAT）(c) 起動と終了と窓の一覧の管理を器の型で持ちたいとき。
 - 持ち主の端末での IME・scroll・遷移の速さ: 端末の Chrome が描くので **native**（画面配信の遅さと IME の二重は起きない）。席の操作だけが RTT を払う。
 - 残る設計の決め: (1) 端末の一覧と接続の型（host.toml の [[device]] 行 = 名・ssh の宛先・Chrome の path・display の環境・OS）を器が持つ。(2) 席の目（screenshot / DOM）は端末の Chrome から CDP で取る。(3) 端末が無い / 届かない周は server 側の headless Chrome + 画面配信（試作済み）へ落ちる。(4) Windows の desktop は OpenSSH server（Windows 標準機能）を有効にすれば同じ形で届く。スマホは画面配信の窓（PWA）か emulator。
-
+- 2026-09-25T00:28Z: 持ち主が ThinkPad の窓を試し「スムーズに動く。それで決めて良い」→ ADR-5（表示面の形）を起こす（proposed）

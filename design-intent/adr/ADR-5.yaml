@@ -1,0 +1,43 @@
+# 判断の記録 ADR-5 — 表示面の形（提案中・持ち主の裁定「試してみたがかなりいい感じだ。スムーズに動く。それで決めて良い」・裁定 id は scribe2 の台帳への記帳待ち）
+# 討論の記録は docs/grill/2026-09-25-C-stage-surface.md（§8〜§11）。実証は §11（ThinkPad の Chrome を server の席が起動し操作した）。
+id: ADR-5
+title: 表示面は席が持ち主の端末の Chrome を ssh 経由で app mode で起動し CDP で操作する形とし、端末の一覧は器の宣言が持ち、届かない端末は画面配信の窓へ落とす
+status: proposed
+date: 2026-09-25
+context: |
+  持ち主の要件は「Claude Code の席が、menu の無い独立した簡素な browser を remote でも local でも起動し、持ち主に見せる面を自律的に操作する」で、click と入力は最初から要る。
+  最初の試作（server 側の headless Chrome の画面を配信し窓が入力を返す形）は同じ host では速かったが、tailnet 越し（往復 30 から 50 ms）では動きが遅く scroll と遷移と文字入力が遅れ、Firefox で日本語入力が二重になった。原因は 1 操作 1 接続の入力と流量制御の無い配信と IME の event の順序で、直しは進めたが、持ち主の本来の要件は端末側の browser を席が動かすことだった。
+  端末側の形を実証した。server から ThinkPad へ tailnet 越しの ssh で入り、画面の環境を付けて Chrome を app mode で起動し、CDP を ssh の tunnel で引いて click と入力と screenshot を行った。持ち主は「スムーズに動く」と確認した。端末の Chrome が描くので scroll も遷移も日本語入力も端末で native に処理され、往復を払うのは席の操作だけである。
+  新しい道具は作っていない。ssh と Chrome と CDP と tunnel は全部既に在る（決定はしごの「標準の道具で足りるか」で止まる）。
+decision: |
+  (1) 表示面の本命は、席が持ち主の端末の Chrome を ssh 経由で app mode（tab も menu も無い窓）で起動し、CDP を tunnel で引いて操作する形とする。命令（navigate・viewport・reload・click・入力・key・scroll・待ち）と席の目（screenshot・DOM・console）は端末の Chrome に対して行う。
+  (2) 端末の一覧（名・ssh の宛先・Chrome の場所・画面の環境・OS）は器の宣言（host の面）の行として持ち、席は端末の名で命令する。端末の値は code に焼かない（N-7）。
+  (3) ssh で届かない端末（スマホ・ssh の無い PC）は、server 側の headless Chrome の画面を配信し窓が入力を返す形へ落とす。その窓は試作の v0.4（WebSocket・流量制御・IME の両順序）を土台にする。
+  (4) 端末側の常駐の agent は作らない。要る条件（ssh の無い端末が常用になる・端末側からの逆接続が要る・起動と終了と窓の一覧を器の型で持ちたい）が出たら別の判断の記録で起こす。
+  (5) Windows の端末は標準の OpenSSH server を有効にして同じ形で届ける。app ごとに表示の仕組みを作らない（N-5.2）。見せる先は端末の中と tailnet の中に限る（N-6）。
+options:
+  - id: a
+    name: 端末の Chrome を席が起動して操作する
+    text: 決定 (1) から (5)。
+    verdict: adopted
+    reason: 実証で動き、持ち主が「スムーズに動く」と確認した。端末が描くので遅さと IME の問題が起きず、新しい道具を作らない。
+  - id: b
+    name: 画面配信の窓を本命にする
+    text: server 側の headless Chrome の画面を配信し、窓が入力を返す。
+    verdict: rejected
+    reason: tailnet 越しで遅く日本語入力が二重になった。直しても端末の native の描画には及ばない。届かない端末の代替として残す。
+  - id: c
+    name: 端末側の常駐 agent を先に作る
+    text: 端末に器の agent を入れ、逆接続で Chrome を管理する。
+    verdict: rejected
+    reason: 決定はしごで ssh と Chrome で足りると分かった。要る条件が出るまで作らない。
+basis: [P-27, N-5, N-6, N-7, ADR-3, ADR-4]
+retreat:
+  kind: measure
+  condition: 持ち主の常用の端末のうち ssh で届かないものが 1 台でも出て、画面配信の窓では持ち主が「遅い」と 1 度でも言ったら、決定 (4) の常駐 agent の判断を起こす。数えるのは s3:design 席。
+plain: |
+  画面の見せ方を決めます。AI の席が、あなたの PC の Chrome を「メニューの無い窓」として起動し、遠隔で動かします。あなたの PC が描くので、動きも文字入力も普段どおりの速さです。
+  どの PC に届けるかは器の設定に書き、席は PC の名前で命令します。ssh で届かないスマホなどには、代わりに画面を映す窓を使います。
+  新しい常駐の道具は作りません。必要になったら別の記録で決めます。
+  この記録はまだ提案中で、台帳に裁定 id が付いたときに発効します。
+note: 持ち主の裁定の逐語「試してみたがかなりいい感じだ。スムーズに動く。それで決めて良い」（s3:design 席の対話面）。同じ論点の裁定の列（対話は最初から・独立した簡素な窓・試作で検証してから・遅さと IME の解決は必須・席が端末の Chrome を起動して操作する）は台帳の notes に写す。
