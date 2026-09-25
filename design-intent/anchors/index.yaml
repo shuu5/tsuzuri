@@ -1,0 +1,6 @@
+# folio2 凍結 anchor の索引（追記のみ・ADR-2）。列 = entries の順。手で直さない・消さない・空にしない。
+"kind": "constitution-anchor-index"
+"entries":
+  - "version": "v1.0"
+    "previous": null
+    "digest": "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9de832f8c5356"
