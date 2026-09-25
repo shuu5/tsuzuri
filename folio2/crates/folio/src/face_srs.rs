@@ -498,10 +498,12 @@ fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>, stamp: &str) -> R<()> {
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     // 鮮度の札は効いている版を出す（便 138）
     let (shown, label) = face::standing(m)?.stamp(&version, status);
-    ctx.frame.head(
+    // 日付は承認欄の最後の承認の行（無ければ生成日・便 145）
+    let (dated, date) = face::dated(m, face::last_approval(m)?)?;
+    ctx.frame.head_dated(
         o,
         &format!("folio2 — 要件書（{version}）"),
-        &m.ef("generated")?,
+        (dated, &date),
         &shown,
         &label,
         stamp,
@@ -561,18 +563,11 @@ fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
         .map(|(i, id)| format!("<a href=\"#{}\">図 {}</a>", cursor::esc(id), i + 1))
         .collect();
     o.push(meta_span("図", &figs.join(" · ")));
-    o.push(meta_span(
-        "版",
-        &format!("{} / {}", m.ef("version")?, m.ef("generated")?),
-    ));
+    let when = face::last_approval(m)?;
+    let (_, date) = face::dated(m, when.clone())?;
+    o.push(meta_span("版", &format!("{} / {date}", m.ef("version")?)));
     o.push("</div>".to_string());
     let state = if is_effective(m)? {
-        let mut when = None;
-        for row in m.f("approval")?.seq()? {
-            if row.f("role")?.v.as_str() == Some("承認") {
-                when = Some(row.ef("when")?);
-            }
-        }
         let state = match when {
             Some(w) => format!("発効・拘束力あり（承認 {w}）"),
             None => "発効・拘束力あり".to_string(),

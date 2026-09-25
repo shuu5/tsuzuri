@@ -734,10 +734,16 @@ fn f118_real_srs_has_an_m3_block_only_with_scope_m3() {
 const PENDING: &str = "起草・承認待ち";
 const UNKNOWN_EFFECTIVE: &str = "効く版はまだ分からない";
 
-/// 鮮度の札の字（面の fixture の generated は 2026-09-01）。
+/// 発効の鮮度の札の字（面の fixture の承認欄の最後の承認の行は 2026-09-05・便 145）。
 fn stamp(version: &str, label: &str) -> String {
+    stamp_dated("承認 2026-09-05", version, label)
+}
+
+/// 鮮度の札の字（`dated` = 日付の名と日付・面の fixture の generated は 2026-09-01）。
+fn stamp_dated(dated: &str, version: &str, label: &str) -> String {
+    let (name, date) = dated.split_once(' ').expect("日付の名と日付の間に空白が無い");
     format!(
-        "<span data-component=\"freshness-stamp\">生成 <b>2026-09-01</b> · <b>{version}</b>（{label}）</span>"
+        "<span data-component=\"freshness-stamp\">{name} <b>{date}</b> · <b>{version}</b>（{label}）</span>"
     )
 }
 
@@ -832,7 +838,11 @@ fn f138_draft_does_not_read_effective_version() {
             .replacen("  status: effective\n", "  status: draft\n", 1)
     });
     ok(&run);
-    once(&html, &stamp("v0.4", "未承認・拘束力なし"), "鮮度の札");
+    once(
+        &html,
+        &stamp_dated("生成 2026-09-01", "v0.4", "未承認・拘束力なし"),
+        "鮮度の札",
+    );
     once(
         &html,
         &cover_status("未承認のため拘束力なし → 持ち主の承認で発効"),
@@ -851,11 +861,9 @@ fn f138_real_srs_head_follows_the_meta() {
     let effective = meta["effective_version"].as_str().map(esc);
     assert_eq!(meta["status"].as_str(), Some("effective"), "実の要件書が発効でない");
     let html = real_srs("f138-real");
-    let generated = span(&html, "<span data-component=\"freshness-stamp\">生成 <b>", "</b>")
-        .rsplit("<b>")
-        .next()
-        .unwrap()
-        .to_string();
+    // 日付の名と日付の部分（便 145 で名が 承認 か 生成 になった・日付は f145_ の歯が見る）
+    let open = "<span data-component=\"freshness-stamp\">";
+    let dated = span(&html, open, " · ")[open.len()..].to_string();
     let want = match &effective {
         Some(ev) if *ev == version => format!("<b>{version}</b>（発効・拘束力あり）"),
         Some(ev) => format!("<b>{ev}</b>（発効・拘束力あり・{version} は{PENDING}）"),
@@ -863,7 +871,7 @@ fn f138_real_srs_head_follows_the_meta() {
     };
     once(
         &html,
-        &format!("<span data-component=\"freshness-stamp\">生成 <b>{generated}</b> · {want}</span>"),
+        &format!("{open}{dated} · {want}</span>"),
         "実の要件書の鮮度の札",
     );
     let head = format!(
@@ -875,5 +883,115 @@ fn f138_real_srs_head_follows_the_meta() {
         head.contains(PENDING),
         effective.as_ref().is_some_and(|ev| *ev != version),
         "頭の起草・承認待ちの有無が version と effective_version の差と違う: {head}"
+    );
+}
+
+// ── 便 145: 鮮度の札と版の札の日付は承認欄の最後の承認の行（無ければ生成日・docs/design/delivery-145.md §1 (c)）──
+
+/// 表紙の版の札の字。
+fn version_tag(version_date: &str) -> String {
+    format!("<span class=\"m\"><span class=\"k\">版</span><span class=\"v\">{version_date}</span></span>")
+}
+
+/// 面の fixture の承認欄の 承認 の行（写しの変異の足場）。
+const APPROVED_ROW: &str =
+    "    - {role: 承認, who: 持ち主, when: 2026-09-05, stamp: 発効, verbatim: 承認する, version: v0.3}\n";
+
+#[test]
+fn f145_srs_cover_dates_follow_the_last_approval() {
+    let row = |when: &str, role: &str| {
+        format!("    - {{role: {role}, who: 持ち主, when: {when}, stamp: 発効, verbatim: 承認する, version: v0.3}}\n")
+    };
+    let edit = |srs: &str, from: &str, to: &str| {
+        let e = srs.replacen(from, to, 1);
+        assert_ne!(e, srs, "写しに「{from}」が無い");
+        e
+    };
+    let effective = "発効・拘束力あり";
+    // (写しの名, 変異, 鮮度の札, 版の札, 表紙の状態)
+    type Mutate = Box<dyn Fn(String) -> String>;
+    let cases: [(&str, Mutate, String, &str, &str); 6] = [
+        (
+            "same",
+            Box::new(|s| s),
+            stamp_dated("承認 2026-09-05", "v0.3", effective),
+            "v0.3 / 2026-09-05",
+            "発効・拘束力あり（承認 2026-09-05）",
+        ),
+        (
+            "added",
+            Box::new(move |s| edit(&s, APPROVED_ROW, &format!("{APPROVED_ROW}{}", row("2026-09-09", "承認")))),
+            stamp_dated("承認 2026-09-09", "v0.3", effective),
+            "v0.3 / 2026-09-09",
+            "発効・拘束力あり（承認 2026-09-09）",
+        ),
+        (
+            "authored",
+            Box::new(move |s| edit(&s, APPROVED_ROW, &format!("{APPROVED_ROW}{}", row("2026-09-09", "作成")))),
+            stamp_dated("承認 2026-09-05", "v0.3", effective),
+            "v0.3 / 2026-09-05",
+            "発効・拘束力あり（承認 2026-09-05）",
+        ),
+        (
+            "none",
+            Box::new(move |s| edit(&s, APPROVED_ROW, "")),
+            stamp_dated("生成 2026-09-01", "v0.3", effective),
+            "v0.3 / 2026-09-01",
+            "発効・拘束力あり",
+        ),
+        (
+            "pending",
+            Box::new(move |s| edit(&s, "  version: v0.3\n", "  version: v0.4\n")),
+            stamp_dated("承認 2026-09-05", "v0.3", "発効・拘束力あり・v0.4 は起草・承認待ち"),
+            "v0.4 / 2026-09-05",
+            "v0.3 が発効・拘束力あり（承認 2026-09-05）・v0.4 は起草・承認待ち",
+        ),
+        (
+            "draft",
+            Box::new(move |s| edit(&s, "  status: effective\n", "  status: draft\n")),
+            stamp_dated("生成 2026-09-01", "v0.3", "未承認・拘束力なし"),
+            "v0.3 / 2026-09-01",
+            "未承認のため拘束力なし → 持ち主の承認で発効",
+        ),
+    ];
+    for (case, mutate, fresh, tag, state) in cases {
+        let (run, html, _) = fixture_srs(&format!("f145-{case}"), mutate);
+        ok(&run);
+        once(&html, &fresh, &format!("{case} の鮮度の札"));
+        once(&html, &version_tag(tag), &format!("{case} の版の札"));
+        once(&html, &cover_status(state), &format!("{case} の表紙の状態"));
+        let stamp = span(&html, "<span data-component=\"freshness-stamp\">", "</span>\n");
+        assert_eq!(stamp.matches("<b>").count(), 2, "{case} の鮮度の札の太字が 2 つでない: {stamp}");
+    }
+}
+
+#[test]
+fn f145_real_srs_cover_dates_follow_the_last_approval() {
+    let s = srs();
+    let meta = &s["meta"];
+    let version = esc(meta["version"].as_str().expect("meta.version が無い"));
+    let generated = esc(meta["generated"].as_str().expect("meta.generated が無い"));
+    // 歯の側の手書きの読み: 承認欄の最後の 承認 の行の when
+    let date = meta["approval"]
+        .as_vec()
+        .expect("meta.approval が一覧でない")
+        .iter()
+        .filter(|row| row["role"].as_str() == Some("承認"))
+        .filter_map(|row| row["when"].as_str())
+        .next_back()
+        .map(esc)
+        .expect("実の要件書に 承認 の行が無い");
+    assert_ne!(date, generated, "実の要件書の承認の日付が生成日と同じ（歯が生成日と区別できない）");
+    let html = real_srs("f145-real");
+    let open = format!("<span data-component=\"freshness-stamp\">承認 <b>{date}</b> · ");
+    once(&html, &open, "実の要件書の鮮度の札");
+    once(&html, &version_tag(&format!("{version} / {date}")), "実の要件書の版の札");
+    assert!(
+        !html.contains(&format!("<span data-component=\"freshness-stamp\">生成 <b>{generated}</b>")),
+        "実の要件書の鮮度の札が生成日を出す"
+    );
+    assert!(
+        !html.contains(&version_tag(&format!("{version} / {generated}"))),
+        "実の要件書の版の札が生成日を出す"
     );
 }

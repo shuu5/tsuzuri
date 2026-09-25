@@ -299,6 +299,31 @@ impl Standing {
     }
 }
 
+// ── 表紙の日付（便 145・delivery-145.md §1 (b) の 1）──
+// 要件書の承認の日付は承認欄の最後の 承認 の行（表紙の状態・入口のカード・鮮度の札・版の札が同じ口から取る）。
+
+/// 欄 meta の承認欄の最後の 承認 の行の日付（escape 済み）。draft か 承認 の行が無ければ None。
+pub fn last_approval(m: &X<'_>) -> R<Option<String>> {
+    if standing(m)? == Standing::Draft {
+        return Ok(None);
+    }
+    let mut when = None;
+    for row in m.f("approval")?.seq()? {
+        if row.f("role")?.v.as_str() == Some("承認") {
+            when = Some(row.ef("when")?);
+        }
+    }
+    Ok(when)
+}
+
+/// 表紙の日付の（名・日付）。承認の日付が在れば（承認・その日付）・無ければ（生成・meta.generated）。
+pub fn dated(m: &X<'_>, approved: Option<String>) -> R<(&'static str, String)> {
+    Ok(match approved {
+        Some(date) => ("承認", date),
+        None => ("生成", m.ef("generated")?),
+    })
+}
+
 /// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図・
 /// 判断の記録は `ADR-<1 以上の数>`（記録の面は 1 本 1 枚なので行き先は記録の id そのもの・便 66）。
 pub fn stop_anchor(doc: &str, at: &str) -> R<()> {
@@ -416,6 +441,53 @@ mod face_labels_tests {
             assert_eq!(k.lead("v0.3", "x"), "x");
             assert_eq!(k.card(), "");
         }
+    }
+
+    #[test]
+    fn f145_last_approval_and_dated_read_the_approval_rows() {
+        // 行の並び 作成・承認・承認・作成（delivery-145.md §1 (c) の 1）
+        let rows = "approval: [{role: 作成, when: 2026-09-01}, {role: 承認, when: 2026-09-03}, \
+                    {role: 承認, when: \"2026-09-<05>\"}, {role: 作成, when: 2026-09-07}]";
+        let read = |head: &str, rows: &str| {
+            let v = yaml::parse_typed(&format!("{{{head}, generated: 2026-09-01, {rows}}}")).unwrap();
+            let m = X::root(&v, "meta");
+            let last = last_approval(&m);
+            let d = last.clone().and_then(|a| dated(&m, a));
+            (last, d)
+        };
+        let approved = (
+            Ok(Some("2026-09-&lt;05&gt;".to_string())),
+            Ok(("承認", "2026-09-&lt;05&gt;".to_string())),
+        );
+        for head in [
+            "version: v0.3, status: effective, effective_version: v0.3",
+            "version: v0.4, status: effective, effective_version: v0.3",
+            "version: v0.3, status: effective",
+        ] {
+            assert_eq!(read(head, rows), approved, "{head}");
+        }
+        let generated = (Ok(None), Ok(("生成", "2026-09-01".to_string())));
+        let none = "approval: [{role: 作成, when: 2026-09-01}, {role: レビュー, when: 2026-09-02}]";
+        assert_eq!(
+            read("version: v0.3, status: effective, effective_version: v0.3", none),
+            generated
+        );
+        assert_eq!(read("version: v0.3, status: effective", "approval: []"), generated);
+        for head in [
+            "version: v0.3, status: draft, effective_version: v0.3",
+            "version: v0.4, status: draft",
+        ] {
+            assert_eq!(read(head, rows), generated, "{head}");
+        }
+        // 生成日も escape する
+        let v = yaml::parse_typed("{version: v0.3, status: draft, generated: \"<g>\"}").unwrap();
+        assert_eq!(
+            dated(&X::root(&v, "meta"), None),
+            Ok(("生成", "&lt;g&gt;".to_string()))
+        );
+        // 表の外の状態は導出できない
+        let e = read("version: v0.3, status: retired, effective_version: v0.3", rows).0;
+        assert_eq!(e, Err("meta.status: 文書の状態 の表に無い値「retired」".to_string()));
     }
 
     #[test]

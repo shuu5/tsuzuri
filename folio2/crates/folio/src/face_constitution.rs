@@ -180,10 +180,13 @@ fn head(o: &mut Vec<String>, m: &X<'_>, ap: &Approved, stamp: &str) -> R<()> {
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     // 今の版を名指す発効した判断が無ければ鮮度の札に「まだ分からない」（便 144）
     let (shown, label) = ap.standing.stamp(&version, status);
-    FRAME.head(
+    // 日付は今の版の承認（draft は生成日・便 145）
+    let approved = (ap.standing != face::Standing::Draft).then(|| ap.date.clone());
+    let (dated, date) = face::dated(m, approved)?;
+    FRAME.head_dated(
         o,
         &format!("folio2 — 憲法（不変原則・{version}）"),
-        &m.ef("generated")?,
+        (dated, &date),
         &shown,
         &label,
         stamp,
@@ -230,7 +233,7 @@ fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>, ap: &Approved
     o.push(format!(
         "<span class=\"m\"><span class=\"k\">版</span><span class=\"v\">{} / {}</span></span>",
         m.ef("version")?,
-        m.ef("generated")?
+        ap.date
     ));
     o.push("</div>".to_string());
     // 承認の日付は今の版の承認・今の版を名指す判断の番号を添える（便 144）

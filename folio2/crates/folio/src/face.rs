@@ -471,6 +471,19 @@ impl Frame {
         status: &str,
         ceiling: &str,
     ) {
+        self.head_dated(o, title, ("生成", generated), version, status, ceiling);
+    }
+
+    /// `head` の鮮度の札の日付を（名・日付）で選ぶ形（名は `dated` の 承認 か 生成・便 145）。
+    pub fn head_dated(
+        &self,
+        o: &mut Vec<String>,
+        title: &str,
+        (dated, date): (&str, &str),
+        version: &str,
+        status: &str,
+        ceiling: &str,
+    ) {
         o.push("<!DOCTYPE html>".to_string());
         o.push("<html lang=\"ja\" class=\"no-js\">".to_string());
         o.push("<head>".to_string());
@@ -510,7 +523,7 @@ impl Frame {
             self.chapters()
         ));
         o.push(format!(
-            "<span {}>生成 <b>{generated}</b> · <b>{version}</b>（{status}）</span>",
+            "<span {}>{dated} <b>{date}</b> · <b>{version}</b>（{status}）</span>",
             self.dc(Component::FreshnessStamp)
         ));
         o.push(format!(

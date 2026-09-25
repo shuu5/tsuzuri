@@ -939,9 +939,9 @@ fn face_of(case: &str, td: &Path, work: &Path) -> String {
     unlink_adr(&fs::read_to_string(&out).unwrap())
 }
 
-/// 鮮度の札・表紙の状態・承認欄のリードの字。
-fn stamp_of(generated: &str, version: &str, label: &str) -> String {
-    format!("生成 <b>{generated}</b> · <b>{version}</b>（{label}）</span>")
+/// 鮮度の札・表紙の状態・承認欄のリードの字（鮮度の札の日付は今の版の承認の日付・便 145）。
+fn stamp_of(approved: &str, version: &str, label: &str) -> String {
+    format!("承認 <b>{approved}</b> · <b>{version}</b>（{label}）</span>")
 }
 
 fn cover_of(state: &str) -> String {
@@ -975,7 +975,7 @@ const UNKNOWN: &str = "効く版はまだ分からない";
 #[test]
 fn f144_cover_names_the_approval_of_the_current_version() {
     let (td, work) = real_copy("f144-cover");
-    let (version, generated, first) = source_meta(&work);
+    let (version, _, first) = source_meta(&work);
     let rows = source_rows(&work);
     let naming: Vec<&Row> = rows.iter().filter(|r| r.version == version).collect();
     assert!(!naming.is_empty(), "今の版 {version} を名指す発効した判断が無い");
@@ -1000,7 +1000,7 @@ fn f144_cover_names_the_approval_of_the_current_version() {
         !html.contains(&format!("{EFFECTIVE_LABEL}（承認 {first}）")),
         "表紙の状態が初回の承認の日付を出す"
     );
-    once(&html, &stamp_of(&generated, &version, EFFECTIVE_LABEL));
+    once(&html, &stamp_of(&date, &version, EFFECTIVE_LABEL));
     once(&html, &lead_of(EFFECTIVE_LABEL));
 }
 
@@ -1035,7 +1035,7 @@ fn f144_approval_lists_every_amending_version() {
 fn f144_unknown_when_no_decision_names_the_version() {
     // 版の欄を先に進めた写し
     let (td, work) = real_copy("f144-unknown-next");
-    let (version, generated, first) = source_meta(&work);
+    let (version, _, first) = source_meta(&work);
     let rows = source_rows(&work);
     let path = work.join("constitution.yaml");
     let before = fs::read_to_string(&path).unwrap();
@@ -1055,7 +1055,7 @@ fn f144_unknown_when_no_decision_names_the_version() {
         .max()
         .unwrap();
     let next = format!("{version}-next");
-    once(&html, &stamp_of(&generated, &next, UNKNOWN));
+    once(&html, &stamp_of(&latest, &next, UNKNOWN));
     once(
         &html,
         &cover_of(&format!("{EFFECTIVE_LABEL}（承認 {latest}）・{UNKNOWN}")),
@@ -1085,7 +1085,7 @@ fn f144_unknown_when_no_decision_names_the_version() {
         .chain([first.clone()])
         .max()
         .unwrap();
-    once(&html, &stamp_of(&generated, &version, UNKNOWN));
+    once(&html, &stamp_of(&latest, &version, UNKNOWN));
     once(
         &html,
         &cover_of(&format!("{EFFECTIVE_LABEL}（承認 {latest}）・{UNKNOWN}")),
@@ -1109,7 +1109,7 @@ fn f144_unknown_when_no_decision_names_the_version() {
 fn f144_without_amending_decisions_the_first_approval_stays() {
     // 版を上げた判断を全部提案中に戻した写し
     let (td, work) = real_copy("f144-first");
-    let (version, generated, first) = source_meta(&work);
+    let (version, _, first) = source_meta(&work);
     let mut ids: Vec<String> = source_rows(&work).into_iter().map(|r| r.id).collect();
     ids.dedup();
     to_proposed(&work, &ids);
@@ -1117,7 +1117,7 @@ fn f144_without_amending_decisions_the_first_approval_stays() {
     let html = face_of("f144-first", &td, &work);
     let _ = fs::remove_dir_all(&td);
     once(&html, &cover_of(&format!("{EFFECTIVE_LABEL}（承認 {first}）")));
-    once(&html, &stamp_of(&generated, &version, EFFECTIVE_LABEL));
+    once(&html, &stamp_of(&first, &version, EFFECTIVE_LABEL));
     once(&html, &lead_of(EFFECTIVE_LABEL));
     assert_eq!(signs(&html).len(), 2);
 
@@ -1139,4 +1139,111 @@ fn f144_without_amending_decisions_the_first_approval_stays() {
     let html = face_of("f144-no-adr", &td, &work);
     let _ = fs::remove_dir_all(&td);
     assert_eq!(signs(&html).len(), 2);
+}
+
+// ── 便 145: 鮮度の札と版の札の日付は今の版の承認の日付（draft は生成日・docs/design/delivery-145.md §1 (c) の 4・5）──
+
+/// 表紙の版の札の字。
+fn version_tag(version: &str, date: &str) -> String {
+    format!("<span class=\"m\"><span class=\"k\">版</span><span class=\"v\">{version} / {date}</span></span>")
+}
+
+/// 鮮度の札の全体（日付の名と日付を含む）。
+fn freshness(dated: &str, date: &str, version: &str, label: &str) -> String {
+    format!("<span data-component=\"freshness-stamp\">{dated} <b>{date}</b> · <b>{version}</b>（{label}）</span>")
+}
+
+/// 写しの憲法の字を置き換える（当たらなければ落とす）。
+fn edit_constitution(work: &Path, from: &str, to: &str) {
+    let path = work.join("constitution.yaml");
+    let before = fs::read_to_string(&path).unwrap();
+    let after = before.replacen(from, to, 1);
+    assert_ne!(before, after, "写しに「{from}」が無い");
+    fs::write(&path, after).unwrap();
+}
+
+#[test]
+fn f145_constitution_cover_dates_follow_the_current_approval() {
+    // 実の置き場の写し: 今の版の承認の日付
+    let (td, work) = real_copy("f145-real");
+    let (version, generated, first) = source_meta(&work);
+    let rows = source_rows(&work);
+    let date = rows
+        .iter()
+        .filter(|r| r.version == version)
+        .map(|r| r.date.clone())
+        .max()
+        .expect("今の版を名指す発効した判断が無い");
+    assert_ne!(date, generated, "今の版の承認が生成日と同じ日で歯が見分けられない");
+    let html = face_of("f145-real", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    once(&html, &freshness("承認", &date, &version, EFFECTIVE_LABEL));
+    once(&html, &version_tag(&version, &date));
+    assert!(
+        !html.contains(&format!("<span data-component=\"freshness-stamp\">生成 <b>{generated}</b>")),
+        "鮮度の札が生成日を出す"
+    );
+    assert!(!html.contains(&version_tag(&version, &generated)), "版の札が生成日を出す");
+
+    // 版の欄を先に進めた写し: 在る承認の最も新しい日付
+    let (td, work) = real_copy("f145-next");
+    edit_constitution(
+        &work,
+        &format!("\n  version: {version}\n"),
+        &format!("\n  version: {version}-next\n"),
+    );
+    let html = face_of("f145-next", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    let latest = rows
+        .iter()
+        .map(|r| r.date.clone())
+        .chain([first.clone()])
+        .max()
+        .unwrap();
+    once(&html, &version_tag(&format!("{version}-next"), &latest));
+    once(&html, &stamp_of(&latest, &format!("{version}-next"), UNKNOWN));
+
+    // 版を上げた判断を全部提案中に戻した写し: 初回の承認の日付
+    let (td, work) = real_copy("f145-first");
+    let mut ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+    ids.dedup();
+    to_proposed(&work, &ids);
+    let html = face_of("f145-first", &td, &work);
+    let _ = fs::remove_dir_all(&td);
+    once(&html, &version_tag(&version, &first));
+    once(&html, &freshness("承認", &first, &version, EFFECTIVE_LABEL));
+}
+
+#[test]
+fn f145_fixture_constitution_dates_by_status() {
+    // 面の fixture の憲法（generated 2026-09-01・初回の承認 2026-09-02・adr/ なし）
+    let fixture = repo_root().join("tests/fixtures/face");
+    let face = |case: &str, effective: bool| {
+        let td = temp_dir(case);
+        let work = td.join("src");
+        fs::create_dir_all(&work).unwrap();
+        for name in [
+            "constitution.yaml",
+            "rules.yaml",
+            "vocabulary.yaml",
+            "srs.yaml",
+            "ceiling.yaml",
+        ] {
+            fs::copy(fixture.join(name), work.join(name)).unwrap();
+        }
+        if effective {
+            edit_constitution(&work, "\n  status: draft\n", "\n  status: effective\n");
+            edit_constitution(&work, "\n  binding: false\n", "\n  binding: true\n");
+        }
+        let html = face_of(case, &td, &work);
+        let _ = fs::remove_dir_all(&td);
+        html
+    };
+    let draft = face("f145-draft", false);
+    once(&draft, &freshness("生成", "2026-09-01", "v0.9", "未承認・拘束力なし"));
+    once(&draft, &version_tag("v0.9", "2026-09-01"));
+    let effective = face("f145-effective", true);
+    once(&effective, &freshness("承認", "2026-09-02", "v0.9", EFFECTIVE_LABEL));
+    once(&effective, &version_tag("v0.9", "2026-09-02"));
+    assert!(!effective.contains(&version_tag("v0.9", "2026-09-01")), "発効の版の札が生成日を出す");
 }

@@ -10,7 +10,7 @@ use std::sync::LazyLock;
 use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X, esc};
-use crate::face::{self, Frame, Standing, anchor, tier_of};
+use crate::face::{self, Frame, anchor, tier_of};
 use crate::face_constitution_read::{Amend, approved};
 use crate::shelf::{self, ANNEXES, SHELF_DOCS, SHELF_RELATIONS, Shelf};
 use crate::yaml::Value;
@@ -405,14 +405,8 @@ fn srs_card(s: &X<'_>) -> R<Readable> {
         parts.push(format!("{name} {counted}"));
     }
     let standing = face::standing(&m)?;
-    let mut date = m.ef("generated")?;
-    if standing != Standing::Draft {
-        for row in m.f("approval")?.seq()? {
-            if row.f("role")?.v.as_str() == Some("承認") {
-                date = row.ef("when")?;
-            }
-        }
-    }
+    // 表紙の日付と同じ口（便 145）
+    let (_, date) = face::dated(&m, face::last_approval(&m)?)?;
     // 版の欄が効いている版と違えば札を添える（便 138）
     Ok(Readable {
         summary: parts.join(" · "),
