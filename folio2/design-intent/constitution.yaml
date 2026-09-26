@@ -485,7 +485,7 @@ articles:
     binds: practice
     statements:
       - {id: N-4.1, pattern: unwanted, strength: must, text: 条文の改訂が、判断の記録・裁定 id・承認の逐語のいずれかを欠くなら、それを拒む。}
-    plain: 判断の記録・決定の番号（裁定 id）・あなたの OK の言葉、この 3 つが揃っていない書き換えは、機械が止めます。
+    plain: 判断の記録・持ち主が決めた記録の番号（裁定 id）・あなたの OK の言葉、この 3 つが揃っていない憲法の条文の書き換え（改訂）は、機械が止めます。
     rationale:
       - {kind: scribe2-article, ref: "N4 / N4.2（新 ADR + delta marker + 裁定 id）"}
       - {kind: folio2-ruling, ref: "G5=A（N-4 新設）"}

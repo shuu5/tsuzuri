@@ -1,18 +1,18 @@
 # folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
-round: 2026-09-26-round40
-at: 2026-09-26T00:46:33Z
+round: 2026-09-26-round42
+at: 2026-09-26T02:52:49Z
 verdict: 合格
-sources: sha256 cfadec90d6eebb09a5ac8a1c1a7922bd2c4184fcb4dc4be9f6370330183c58e8
-trigger: sha256 8c7d7fd900065df5b372360dc4fa1ac91d802c548e7f165c0be6e6041c8b507a
-faces: sha256 ed26099f6f802c2fd6f12afb0ebac75602556ced60db34c3cb5ed283c4739f2f
+sources: sha256 e467747ff5eafd9a049bda4a3cac41af2758ca37709ec4744aea728bf1dcfd31
+trigger: sha256 0922e47772859766ddfced3d917432f8ce12dbcdbc2b1ce00765e5e4b94618af
+faces: sha256 e7b3d360b6863d36968e83cd9e3e4fa38b81df39878422f0b629f60e2dc2f2eb
 viewpoints:
-  - {id: fidelity, verdict: 合格, findings: 1, stops: 0, bundle: 09ddea46, model: opus, effort: default, at: 2026-09-26T00:46:21Z}
-  - {id: readability, verdict: 合格, findings: 4, stops: 0, bundle: 1e9989d2, model: opus, effort: default, at: 2026-09-26T00:45:38Z}
-  - {id: coherence, verdict: 合格, findings: 2, stops: 0, bundle: 6119ee1e, model: opus, effort: default, at: 2026-09-26T00:45:22Z}
-  - {id: reality, verdict: 合格, findings: 1, stops: 0, bundle: 1e980f89, model: opus, effort: default, at: 2026-09-26T00:46:33Z}
+  - {id: fidelity, verdict: 合格, findings: 1, stops: 0, bundle: 9c00a838, model: opus, effort: default, at: 2026-09-26T02:52:25Z}
+  - {id: readability, verdict: 合格, findings: 3, stops: 0, bundle: 11550db0, model: opus, effort: default, at: 2026-09-26T02:52:49Z}
+  - {id: coherence, verdict: 合格, findings: 4, stops: 0, bundle: 8ab719ef, model: opus, effort: default, at: 2026-09-26T02:52:32Z}
+  - {id: reality, verdict: 合格, findings: 1, stops: 0, bundle: a5295ac5, model: opus, effort: default, at: 2026-09-26T02:52:44Z}
 refutes: []
 reads: [adr, ceiling, constitution, design-note, graph, index, intake, rules, srs, vocabulary]
-rest: sha256 f4d155be86cdbdf94f9a5956117897b3ba7f2e6826b3e6140d5c867c1dfa61a5
+rest: sha256 6beea144f83853b51109438f2e01d22887dd8a3f4c1d25fba5aa216b75525314
 nodes:
   - {id: A-1, digest: e0b0124d}
   - {id: A-1.1, digest: df732d5b}
@@ -35,7 +35,7 @@ nodes:
   - {id: AC15, digest: 30443849}
   - {id: AC16, digest: bd724847}
   - {id: AC17, digest: 44743fef}
-  - {id: AC18, digest: 56aef918}
+  - {id: AC18, digest: 5805e859}
   - {id: AC19, digest: 5e38f256}
   - {id: AC2, digest: 225374e5}
   - {id: AC20, digest: 94eb6c47}
@@ -62,14 +62,14 @@ nodes:
   - {id: ADR-15, digest: d5b3f5f2}
   - {id: ADR-16, digest: 238f25f7}
   - {id: ADR-17, digest: 96915774}
-  - {id: ADR-18, digest: eacc28ec}
+  - {id: ADR-18, digest: 8930a016}
   - {id: ADR-19, digest: 6027f951}
   - {id: ADR-2, digest: 61437c44}
   - {id: ADR-20, digest: f87696e0}
-  - {id: ADR-21, digest: b79320c1}
+  - {id: ADR-21, digest: 5ee05cda}
   - {id: ADR-22, digest: 16d328ff}
   - {id: ADR-23, digest: 83955f45}
-  - {id: ADR-24, digest: e8503eb8}
+  - {id: ADR-24, digest: 7d1f2c82}
   - {id: ADR-3, digest: e7814894}
   - {id: ADR-4, digest: bfc2b9af}
   - {id: ADR-5, digest: ea177b73}
@@ -89,7 +89,7 @@ nodes:
   - {id: D-1, digest: d98f2bab}
   - {id: D-10, digest: 13e44933}
   - {id: D-11, digest: 257e57e0}
-  - {id: D-12, digest: 2910a212}
+  - {id: D-12, digest: ca8e2940}
   - {id: D-13, digest: 686119c9}
   - {id: D-14, digest: 008292c8}
   - {id: D-2, digest: 1e4c2762}
@@ -112,7 +112,7 @@ nodes:
   - {id: FR18, digest: 8071cccc}
   - {id: FR19, digest: cd086c50}
   - {id: FR2, digest: fe4e622d}
-  - {id: FR20, digest: f4e17cb9}
+  - {id: FR20, digest: 8b5f095d}
   - {id: FR21, digest: 760fa065}
   - {id: FR22, digest: 5cd5ab35}
   - {id: FR23, digest: 4d831d7a}
@@ -137,7 +137,7 @@ nodes:
   - {id: N-2.2, digest: eb936f44}
   - {id: N-3, digest: 48e91f2d}
   - {id: N-3.1, digest: 3d3e88ec}
-  - {id: N-4, digest: 7dcb3b6a}
+  - {id: N-4, digest: c8f2e371}
   - {id: N-4.1, digest: 8a92790c}
   - {id: N-5, digest: 28d99765}
   - {id: N-5.1, digest: 57f67582}
