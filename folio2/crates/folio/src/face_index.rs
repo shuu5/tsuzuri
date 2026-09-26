@@ -18,6 +18,7 @@
 
 use std::path::Path;
 
+use crate::adr;
 use crate::catalog::Component;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{self, INDEX_STATUS, hint, hint_q, stop_anchor};
@@ -97,10 +98,12 @@ pub fn derive(dir: &Path) -> R<String> {
     let filled = sheet_body(dir, &n, &sheet, &ctx.annex_types)?;
     let m = i.f("meta")?;
     let stamp = face::ceiling_stamp(dir)?;
+    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+    let name = adr::name_of(dir);
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &m, &stamp)?;
-    cover(&mut o, &i, &c)?;
+    head(&mut o, name.as_deref(), &m, &stamp)?;
+    cover(&mut o, name.as_deref(), &i, &c)?;
     shelf(&mut o, &ctx, &i, &m)?;
     status_line(&mut o, &ctx);
     intake_line(&mut o, &i)?;
@@ -119,14 +122,14 @@ fn dated(m: &X<'_>) -> R<(&'static str, String)> {
     face::dated(m, face::last_approval(m)?)
 }
 
-fn head(o: &mut Vec<String>, m: &X<'_>, stamp: &str) -> R<()> {
+fn head(o: &mut Vec<String>, name: Option<&str>, m: &X<'_>, stamp: &str) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(INDEX_STATUS, "入口の状態")?;
     m.f("id")?.text()?;
     let (dated, date) = dated(m)?;
     FRAME.head_dated(
         o,
-        &format!("folio2 — 設計文書の入口（{version}）"),
+        (name, &format!("設計文書の入口（{version}）")),
         (dated, &date),
         &version,
         status,
@@ -146,14 +149,17 @@ fn head(o: &mut Vec<String>, m: &X<'_>, stamp: &str) -> R<()> {
 }
 
 /// hub-cover。meta の title と憲法の north_star の statement はここでだけ読む（検査もここ 1 か所）。
-fn cover(o: &mut Vec<String>, i: &X<'_>, c: &X<'_>) -> R<()> {
+fn cover(o: &mut Vec<String>, name: Option<&str>, i: &X<'_>, c: &X<'_>) -> R<()> {
     let title = i.f("meta")?.ef("title")?;
     let statement = c.f("north_star")?.ef("statement")?;
     let au = i.f("audience")?;
     let text = au.ef("text")?;
     o.push(format!("<header {}>", dc(Component::HubCover)));
-    o.push("<p class=\"cover-eyebrow\"><span class=\"doc-type\">入口 (index)</span> <span>folio2 — 設計文書（design-intent）</span></p>".to_string());
-    o.push(format!("<h1>folio2 — {title}</h1>"));
+    o.push(format!(
+        "<p class=\"cover-eyebrow\"><span class=\"doc-type\">入口 (index)</span> <span>{}</span></p>",
+        adr::named(name, " — ", "設計文書（design-intent）")
+    ));
+    o.push(format!("<h1>{}</h1>", adr::named(name, " — ", &title)));
     o.push(format!(
         "<p class=\"north-star\">目指すこと: <q>{statement}</q> — <a href=\"constitution.html#s0\">憲法 §0 で読む</a></p>"
     ));

@@ -9,6 +9,7 @@
 use std::path::Path;
 use std::sync::LazyLock;
 
+use crate::adr;
 use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X, esc};
@@ -113,10 +114,12 @@ pub fn derive(dir: &Path) -> R<String> {
     // 版を上げた発効した判断の行と今の版の承認（便 144）
     let rows = amendments(dir)?;
     let ap = approved(&m, &rows)?;
+    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+    let name = adr::name_of(dir);
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &m, &ap, &stamp)?;
-    cover(&mut o, &ctx, &c, &m, &ap)?;
+    head(&mut o, name.as_deref(), &m, &ap, &stamp)?;
+    cover(&mut o, name.as_deref(), &ctx, &c, &m, &ap)?;
     toc(&mut o, &ctx, &c, &r)?;
     north_star(&mut o, &c)?;
     reading(&mut o, &ctx, &v)?;
@@ -181,7 +184,13 @@ fn dated_of(m: &X<'_>, ap: &Approved) -> R<(&'static str, String)> {
     face::dated(m, approved)
 }
 
-fn head(o: &mut Vec<String>, m: &X<'_>, ap: &Approved, stamp: &str) -> R<()> {
+fn head(
+    o: &mut Vec<String>,
+    name: Option<&str>,
+    m: &X<'_>,
+    ap: &Approved,
+    stamp: &str,
+) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     // 今の版を名指す発効した判断が無ければ鮮度の札に「まだ分からない」（便 144）
@@ -189,7 +198,7 @@ fn head(o: &mut Vec<String>, m: &X<'_>, ap: &Approved, stamp: &str) -> R<()> {
     let (dated, date) = dated_of(m, ap)?;
     FRAME.head_dated(
         o,
-        &format!("folio2 — 憲法（不変原則・{version}）"),
+        (name, &format!("憲法（不変原則・{version}）")),
         (dated, &date),
         &shown,
         &label,
@@ -198,15 +207,32 @@ fn head(o: &mut Vec<String>, m: &X<'_>, ap: &Approved, stamp: &str) -> R<()> {
     Ok(())
 }
 
-fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, c: &X<'_>, m: &X<'_>, ap: &Approved) -> R<()> {
+fn cover(
+    o: &mut Vec<String>,
+    name: Option<&str>,
+    ctx: &Ctx<'_>,
+    c: &X<'_>,
+    m: &X<'_>,
+    ap: &Approved,
+) -> R<()> {
     let ns = c.f("north_star")?;
     let total = ctx.arts.len();
     o.push(format!("<header {}>", dc(Component::DocCoverBand)));
-    o.push("<p class=\"cover-eyebrow\"><span class=\"doc-type\">憲法 (Constitution)</span> <span>folio2 — 不変原則</span></p>".to_string());
     o.push(format!(
-        "<h1>folio2 の憲法 — {total} の約束を「{}」の {} 段で</h1>",
-        tier_names(ctx),
-        ctx.tiers.len()
+        "<p class=\"cover-eyebrow\"><span class=\"doc-type\">憲法 (Constitution)</span> <span>{}</span></p>",
+        adr::named(name, " — ", "不変原則")
+    ));
+    o.push(format!(
+        "<h1>{}</h1>",
+        adr::named(
+            name,
+            " の",
+            &format!(
+                "憲法 — {total} の約束を「{}」の {} 段で",
+                tier_names(ctx),
+                ctx.tiers.len()
+            )
+        )
     ));
     o.push(format!("<p class=\"cover-sub\">{}</p>", ns.ef("for_whom")?));
     o.push(format!(

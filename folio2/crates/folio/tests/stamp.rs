@@ -578,7 +578,7 @@ fn f99_the_stamp_carries_the_node_table() {
         "印の欄の並び"
     );
     let anchor = findings_fixture("stamp-expected.yaml");
-    assert_eq!((anchor.lines().count(), anchor.len()), (34, 1_342), "凍結 anchor の行数と byte 数");
+    assert_eq!((anchor.lines().count(), anchor.len()), (34, 1_343), "凍結 anchor の行数と byte 数");
     assert_eq!(without_digests(&stamp), anchor, "印:\n{stamp}");
 }
 
@@ -759,6 +759,25 @@ fn f126_the_gate_reads_the_trigger_the_stamp_wrote() {
     // 同じ要件の規範文: 引き金の要約値が違う
     assert_eq!(code(&shall, "--gate"), 2, "{}", stdout(&shall));
     assert!(stdout(&shall).contains("引き金の要約値が違う"), "{}", stdout(&shall));
+}
+
+// ── 便 154: 名の無い置き場の印（docs/design/delivery-154.md §1 (c) の 2 の 5） ──
+
+#[test]
+fn f154_an_unnamed_place_stamps_without_a_name() {
+    let round = Round::passing("f154-unnamed");
+    edit_once(
+        &round.src.join("constitution.yaml"),
+        "  id: fixture-constitution\n",
+        "  id: 未記入\n",
+    );
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let stamp = stamp.expect("印が無い");
+    assert!(stamp.starts_with("# 天井の印 — 生成物（"), "印:\n{stamp}");
+    assert!(!stamp.contains("folio2"), "印:\n{stamp}");
 }
 
 #[test]

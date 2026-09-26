@@ -11,6 +11,7 @@
 
 use std::path::Path;
 
+use crate::adr;
 use crate::catalog::Component;
 use crate::cursor::{self, R, X};
 use crate::face::{
@@ -272,10 +273,12 @@ pub fn derive(dir: &Path) -> R<String> {
     let m = s.f("meta")?;
     check_counts(&ctx, &m.f("counts")?)?;
     let stamp = face::ceiling_stamp(dir)?;
+    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+    let name = adr::name_of(dir);
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &ctx, &m, &stamp)?;
-    cover(&mut o, &ctx, &m)?;
+    head(&mut o, name.as_deref(), &ctx, &m, &stamp)?;
+    cover(&mut o, name.as_deref(), &ctx, &m)?;
     toc(&mut o, &ctx);
     goals_chapter(&mut o, &ctx)?;
     scope_chapter(&mut o, &ctx, dir, &s, &m)?;
@@ -493,7 +496,13 @@ pub(crate) fn slots(owner: bool, node: &str) -> (String, String) {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>, stamp: &str) -> R<()> {
+fn head(
+    o: &mut Vec<String>,
+    name: Option<&str>,
+    ctx: &Ctx<'_>,
+    m: &X<'_>,
+    stamp: &str,
+) -> R<()> {
     let version = m.ef("version")?;
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     // 鮮度の札は効いている版を出す（便 138）
@@ -502,7 +511,7 @@ fn head(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>, stamp: &str) -> R<()> {
     let (dated, date) = face::dated(m, face::last_approval(m)?)?;
     ctx.frame.head_dated(
         o,
-        &format!("folio2 — 要件書（{version}）"),
+        (name, &format!("要件書（{version}）")),
         (dated, &date),
         &shown,
         &label,
@@ -523,14 +532,15 @@ fn meta_span(k: &str, v: &str) -> String {
     format!("<span class=\"m\"><span class=\"k\">{k}</span><span class=\"v\">{v}</span></span>")
 }
 
-fn cover(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
+fn cover(o: &mut Vec<String>, name: Option<&str>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     let title = m.ef("title")?;
     o.push(format!(
         "<header {}>",
         ctx.frame.dc(Component::DocCoverBand)
     ));
     o.push(format!(
-        "<p class=\"cover-eyebrow\"><span class=\"doc-type\">要件書 (SRS)</span> <span>folio2 — {title}</span></p>"
+        "<p class=\"cover-eyebrow\"><span class=\"doc-type\">要件書 (SRS)</span> <span>{}</span></p>",
+        adr::named(name, " — ", &title)
     ));
     o.push(format!("<h1>{title}</h1>"));
     o.push(format!(

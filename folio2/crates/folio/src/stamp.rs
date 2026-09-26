@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
+use crate::adr;
 use crate::ceiling_src::{self, Ceiling, Files, STAMP_FILE};
 use crate::cursor::R;
 use crate::findings::{self, Counted};
@@ -26,9 +27,8 @@ use crate::sha256;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
 
-/// 印の先頭の注釈（1 行）。
-const HEADER: &str =
-    "# folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）";
+/// 印の先頭の注釈（1 行・頭に置き場の名〔導けなければ名なし〕を付ける・便 154）。
+const HEADER: &str = "天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）";
 
 /// 1 回の実行の結果。`stdout` は 1 行。
 pub struct Outcome {
@@ -137,7 +137,8 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
         .collect();
 
     let mut text = format!(
-        "{HEADER}\nround: {}\nat: {}\nverdict: {verdict}\nsources: {sources}\ntrigger: {trigger}\nfaces: {faces}\nviewpoints:\n",
+        "# {}\nround: {}\nat: {}\nverdict: {verdict}\nsources: {sources}\ntrigger: {trigger}\nfaces: {faces}\nviewpoints:\n",
+        adr::named(adr::name_of(dir).as_deref(), " ", HEADER),
         plain(&round),
         plain(&at)
     );

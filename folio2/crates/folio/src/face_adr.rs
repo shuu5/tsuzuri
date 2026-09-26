@@ -23,6 +23,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::adr;
 use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{self, R, X};
@@ -279,10 +280,12 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     counts.revised_by = revised.len();
     let f = frame(CHAPTERS.len() + usize::from(!figs.is_empty()), dir, id)?;
     let stamp = face::ceiling_stamp(dir)?;
+    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+    let place = adr::name_of(dir);
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, &f, &a, id, &st, &stamp)?;
-    cover(&mut o, &f, &a, id, &st, &counts)?;
+    head(&mut o, place.as_deref(), &f, &a, id, &st, &stamp)?;
+    cover(&mut o, place.as_deref(), &f, &a, id, &st, &counts)?;
     toc(&f, &mut o, figs.len());
     prose_chapter(&mut o, &f, 1, &a.ef("context")?);
     prose_chapter(&mut o, &f, 2, &a.ef("decision")?);
@@ -586,12 +589,20 @@ fn entries<'a>(a: &X<'a>, key: &str) -> R<Vec<X<'a>>> {
 
 // ── 骨格 ──
 
-fn head(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, stamp: &str) -> R<()> {
+fn head(
+    o: &mut Vec<String>,
+    place: Option<&str>,
+    f: &Frame,
+    a: &X<'_>,
+    id: &str,
+    st: &Status,
+    stamp: &str,
+) -> R<()> {
     // 鮮度の札と足の行の（名・日付）は入口のカードと同じ口（便 146・147）
     let (dated, date) = face::adr_dated(a)?;
     f.head_dated(
         o,
-        &format!("folio2 — 判断の記録 {id}（{}）", st.label),
+        (place, &format!("判断の記録 {id}（{}）", st.label)),
         (dated, &date),
         id,
         st.label,
@@ -604,10 +615,19 @@ fn meta_span(k: &str, v: &str) -> String {
     format!("<span class=\"m\"><span class=\"k\">{k}</span><span class=\"v\">{v}</span></span>")
 }
 
-fn cover(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, n: &Counts) -> R<()> {
+fn cover(
+    o: &mut Vec<String>,
+    place: Option<&str>,
+    f: &Frame,
+    a: &X<'_>,
+    id: &str,
+    st: &Status,
+    n: &Counts,
+) -> R<()> {
     o.push(format!("<header {}>", f.dc(Component::DocCoverBand)));
     o.push(format!(
-        "<p class=\"cover-eyebrow\"><span class=\"doc-type\">判断の記録 (ADR)</span> <span>folio2 — {id}</span></p>"
+        "<p class=\"cover-eyebrow\"><span class=\"doc-type\">判断の記録 (ADR)</span> <span>{}</span></p>",
+        adr::named(place, " — ", id)
     ));
     // h1 は短い名（title は文の長さなので副題へ・便 27 §1 (a)）
     o.push(format!("<h1>判断の記録 {id}</h1>"));

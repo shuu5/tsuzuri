@@ -253,20 +253,36 @@ fn texts(st: &State, b: &Built) -> Result<(String, String), String> {
         (s("kind"), s("constitution-anchor-index")),
         (s("entries"), Value::Seq(entries)),
     ]);
+    // 頭の注の置き場の名は凍結の状態が持つ憲法の meta.id から（導けなければ名なし・便 154）
+    let place = st.name.as_deref().and_then(adr::display_name);
     let anchor_header = format!(
-        "# folio2 憲法 {cur_ver} の凍結 anchor（ADR-2）。写し（範囲 {}・条は {}・規範文は id・{}）+ 発効の承認の写し + この版の承認一覧 + digest。手で直さない・消さない・同じ版は上書きしない（folio check --freeze-anchor が全検査 0 違反のときだけ作る）。",
-        st.scope.join("・"),
-        article_fields.join("・"),
-        statement_fields
-            .iter()
-            .filter(|f| **f != "id")
-            .copied()
-            .collect::<Vec<_>>()
-            .join("・")
+        "# {}",
+        adr::named(
+            place,
+            " ",
+            &format!(
+                "憲法 {cur_ver} の凍結 anchor（ADR-2）。写し（範囲 {}・条は {}・規範文は id・{}）+ 発効の承認の写し + この版の承認一覧 + digest。手で直さない・消さない・同じ版は上書きしない（folio check --freeze-anchor が全検査 0 違反のときだけ作る）。",
+                st.scope.join("・"),
+                article_fields.join("・"),
+                statement_fields
+                    .iter()
+                    .filter(|f| **f != "id")
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join("・")
+            )
+        )
     );
-    let index_header = "# folio2 凍結 anchor の索引（追記のみ・ADR-2）。列 = entries の順。手で直さない・消さない・空にしない。";
+    let index_header = format!(
+        "# {}",
+        adr::named(
+            place,
+            " ",
+            "凍結 anchor の索引（追記のみ・ADR-2）。列 = entries の順。手で直さない・消さない・空にしない。"
+        )
+    );
     yaml::write(&Value::Map(b.tree.clone()), &anchor_header)
-        .and_then(|a| yaml::write(&index, index_header).map(|i| (a, i)))
+        .and_then(|a| yaml::write(&index, &index_header).map(|i| (a, i)))
 }
 
 /// 凍結 anchor と索引を書く（anchors/ が無ければ作る）。
@@ -451,4 +467,44 @@ fn freeze_start(
         ids_path.display(),
         ids::count(cur)
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state(name: &str) -> State {
+        State {
+            c: Value::Null,
+            scope: vec!["articles".to_string()],
+            cur_proj: Value::Null,
+            cur_ver: "v1.0".to_string(),
+            meta_approval: Value::Null,
+            index: None,
+            newest: None,
+            newest_doc: None,
+            seen_in_git: false,
+            records_exist: false,
+            anchors_dir: PathBuf::from("anchors"),
+            name: Some(name.to_string()),
+            chain_exists: false,
+        }
+    }
+
+    /// 凍結 anchor と索引の頭の注は置き場の名で始まり、名が導けなければ名なしで始まる（便 154 §1 (c)1）。
+    #[test]
+    fn f154_the_anchor_and_index_headers_name_the_place() {
+        let built = Built {
+            tree: vec![(s("kind"), s("constitution-anchor"))],
+            digest: "0".repeat(64),
+            previous: Value::Null,
+            n_approvals: 0,
+        };
+        let (a, i) = texts(&state("kumo-constitution"), &built).unwrap();
+        assert!(a.starts_with("# kumo 憲法 v1.0 の凍結 anchor（ADR-2）。"), "{a}");
+        assert!(i.starts_with("# kumo 凍結 anchor の索引（"), "{i}");
+        let (a, i) = texts(&state("未記入"), &built).unwrap();
+        assert!(a.starts_with("# 憲法 v1.0 の凍結 anchor（ADR-2）。"), "{a}");
+        assert!(i.starts_with("# 凍結 anchor の索引（"), "{i}");
+    }
 }

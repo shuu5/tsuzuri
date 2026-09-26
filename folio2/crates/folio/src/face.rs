@@ -18,6 +18,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::adr;
 use crate::catalog::{self, Component};
 use crate::ceiling_src;
 use crate::constitution_enums as ce;
@@ -462,11 +463,12 @@ impl Frame {
 
     /// head と site-bar（skip-link から main の開始まで）。値は escape 済み。`ceiling` = 天井の名札の字（`ceiling_stamp` で
     /// 組み立て済み・床の名札 freshness-stamp の直後に部品 ceiling-stamp として置く・便 40）。鮮度の札の日付は
-    /// （名・日付）の組（名は `named` の 承認 か 生成・便 145・146）。
+    /// （名・日付）の組（名は `named` の 承認 か 生成・便 145・146）。題は（置き場の名・題）の組で、題の頭に「<名> — 」を
+    /// 付け、site-bar の名札は名が有るときだけ出す（名は `adr::name_of`・便 154）。
     pub fn head_dated(
         &self,
         o: &mut Vec<String>,
-        title: &str,
+        (place, title): (Option<&str>, &str),
         (dated, date): (&str, &str),
         version: &str,
         status: &str,
@@ -479,7 +481,7 @@ impl Frame {
         o.push(
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".to_string(),
         );
-        o.push(format!("<title>{title}</title>"));
+        o.push(format!("<title>{}</title>", adr::named(place, " — ", title)));
         o.push(self.favicon.to_string());
         o.push("<link rel=\"stylesheet\" href=\"folio.css\">".to_string());
         o.push("<script src=\"folio-ui.js\"></script>".to_string());
@@ -487,7 +489,12 @@ impl Frame {
         o.push("<body>".to_string());
         o.push("<a class=\"skip-link\" href=\"#main\">本文へ移動</a>".to_string());
         o.push("<header class=\"site-bar\">".to_string());
-        o.push("<span class=\"brand\"><span class=\"long\">folio2</span><span class=\"short\">f2</span></span>".to_string());
+        if let Some(n) = place {
+            o.push(format!(
+                "<span class=\"brand\"><span class=\"long\">{n}</span><span class=\"short\">{}</span></span>",
+                adr::short_name(n)
+            ));
+        }
         let nav = NAV
             .iter()
             .enumerate()

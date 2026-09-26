@@ -88,6 +88,43 @@ pub(crate) fn place_name(dir: &Path) -> Result<String, String> {
         .ok_or_else(|| format!("{FILE}: meta.id が無い（字でない）"))
 }
 
+/// 置き場の憲法の meta.id の末尾（便 154・`<名>-constitution` の <名> が置き場の名）。
+pub(crate) const NAME_SUFFIX: &str = "-constitution";
+
+/// 憲法の meta.id → 置き場の名（便 154）。`<名>-constitution` で <名> が契約表の行の id と同じ形のときだけ <名>、
+/// それ以外は None（名を出さない）。形の確かめは `note.rs` の `is_lower_id`（床の定数 ROW_ID_PATTERN）の書き写し＝
+/// 片方を変えるなら両方を変える。
+pub(crate) fn display_name(id: &str) -> Option<&str> {
+    let name = id.strip_suffix(NAME_SUFFIX)?;
+    let mut chars = name.chars();
+    (chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'))
+    .then_some(name)
+}
+
+/// 置き場の dir → 置き場の名（便 154・`place_name` を `display_name` に通す・読めなければ None）。
+pub(crate) fn name_of(dir: &Path) -> Option<String> {
+    place_name(dir)
+        .ok()
+        .and_then(|id| display_name(&id).map(str::to_string))
+}
+
+/// 名が有れば「<名><区切り><残り>」、無ければ残りだけ（便 154）。
+pub(crate) fn named(name: Option<&str>, sep: &str, rest: &str) -> String {
+    match name {
+        Some(n) => format!("{n}{sep}{rest}"),
+        None => rest.to_string(),
+    }
+}
+
+/// 狭い幅の名札（便 154）＝頭の 1 字と末尾の数字の並び（folio2 → f2・中の数字は拾わない＝k8s → k）。
+pub(crate) fn short_name(name: &str) -> String {
+    let head: String = name.chars().take(1).collect();
+    let rest = &name[head.len()..];
+    let digits = rest.len() - rest.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+    format!("{head}{}", &rest[rest.len() - digits..])
+}
+
 const SCHEMA_FILE: &str = "adr/schema.yaml";
 
 /// 読めた欄の決まり（adr/schema.yaml の木）と判断の記録（id と木の組・名前順）。
@@ -947,6 +984,45 @@ mod tests {
         assert_eq!(root_digest(Some(TSUZURI.0)), Some(TSUZURI.1));
         assert_eq!(root_digest(Some(FOLIO2.0)), Some(FOLIO2.1));
         assert_eq!(root_digest(Some("scribe3-constitution")), None);
+    }
+
+    /// 置き場の名は憲法の meta.id の `<名>-constitution` の <名>（行の id の形のときだけ・便 154 §1 (b)1）。
+    /// 狭い幅の名札は頭の 1 字と末尾の数字の並び・名を付けた字は名が無ければ残りだけ。
+    #[test]
+    fn f154_the_place_name_comes_from_the_constitution_id() {
+        for (id, name) in [
+            ("folio2-constitution", "folio2"),
+            ("fixture-constitution", "fixture"),
+            ("tsuzuri-constitution", "tsuzuri"),
+            ("kumo-2-constitution", "kumo-2"),
+        ] {
+            assert_eq!(display_name(id), Some(name), "{id}");
+        }
+        for ng in [
+            "未記入",
+            "folio2",
+            "-constitution",
+            "Kumo-constitution",
+            "2kumo-constitution",
+            "ku_mo-constitution",
+            "kumo-Constitution",
+            "kumo-constitution-x",
+            "くも-constitution",
+        ] {
+            assert_eq!(display_name(ng), None, "{ng}");
+        }
+        assert_eq!(name_of(Path::new("/nonexistent/place")), None);
+        for (name, short) in [
+            ("folio2", "f2"),
+            ("tsuzuri", "t"),
+            ("s12", "s12"),
+            ("a2", "a2"),
+            ("k8s", "k"),
+        ] {
+            assert_eq!(short_name(name), short, "{name}");
+        }
+        assert_eq!(named(Some("kumo"), " — ", "要件書"), "kumo — 要件書");
+        assert_eq!(named(None, " — ", "要件書"), "要件書");
     }
 
     /// 承認者の値域は 持ち主・planner 席・orchestrator 席 の 3 つ（席の呼び名の裁定 2026-09-20・便 58 §1 (a)1・

@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+use crate::adr;
 use crate::cursor::{self, R, X};
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
@@ -17,11 +18,12 @@ use crate::yaml::{self, Value};
 /// 相談窓口の正本。
 const INTAKE: &str = "intake.yaml";
 
-/// 支度表の 1 行目の注釈（固定・数と日付は書かない・P-6.3）。
-const HEADER: &str = "# folio2 支度表（folio intake の生成物・手で直さない・承認は対話面と台帳で）";
+/// 支度表の 1 行目の注釈（固定・数と日付は書かない・P-6.3・頭に置き場の名〔導けなければ名なし〕を付ける・便 154）。
+const HEADER: &str = "支度表（folio intake の生成物・手で直さない・承認は対話面と台帳で）";
 
-/// 支度表の meta の id と status（承認の後に status を変えるのは人）。
-const SHEET_ID: &str = "folio2-intake-sheet";
+/// 支度表の meta の id（`<置き場の名>-intake-sheet`・名が無ければ intake-sheet・便 154）と status（承認の後に status を
+/// 変えるのは人）。
+const SHEET_ID: &str = "intake-sheet";
 const DRAFT: &str = "draft";
 
 /// 回答の値（intake.yaml の answers の values・yes / no の行き先の選び分け）。
@@ -106,7 +108,11 @@ fn build(dir: &Path, answers_path: Option<&Path>, mode: Mode) -> R<Outcome> {
         }
         Mode::Write => {
             let documents = map_documents(&intake.questions, &answers, &intake.targets)?;
-            let text = yaml::write(&sheet_value(&intake, &documents, &answers), HEADER)
+            // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+            let name = adr::name_of(dir);
+            let header = format!("# {}", adr::named(name.as_deref(), " ", HEADER));
+            let id = adr::named(name.as_deref(), "-", SHEET_ID);
+            let text = yaml::write(&sheet_value(&intake, &id, &documents, &answers), &header)
                 .map_err(|e| format!("{}: {e}", sheet_path.display()))?;
             if !sheet_path.parent().is_some_and(Path::is_dir) {
                 return Err(format!("{}: 出力先の親 dir が無い", sheet_path.display()));
@@ -434,7 +440,7 @@ fn seq(items: &[String]) -> Value {
 }
 
 /// 支度表の値の木（intake.yaml の sheet の節が決める 5 つの欄・数と日付は書かない）。
-fn sheet_value(intake: &Intake, documents: &[Doc], answers: &[Answer]) -> Value {
+fn sheet_value(intake: &Intake, id: &str, documents: &[Doc], answers: &[Answer]) -> Value {
     let documents: Vec<Value> = documents
         .iter()
         .map(|d| {
@@ -473,7 +479,7 @@ fn sheet_value(intake: &Intake, documents: &[Doc], answers: &[Answer]) -> Value 
         (
             "meta",
             map(vec![
-                ("id", s(SHEET_ID)),
+                ("id", s(id)),
                 ("version", s(&intake.version)),
                 ("status", s(DRAFT)),
             ]),

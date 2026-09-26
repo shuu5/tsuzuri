@@ -780,7 +780,7 @@ fn f138_pending_version_names_the_effective_and_the_draft() {
         "表紙の状態",
     );
     once(&html, &lead("発効・拘束力あり（v0.4 は起草・承認待ち）"), "承認欄のリード");
-    once(&html, "<title>folio2 — 要件書（v0.4）</title>", "題");
+    once(&html, "<title>fixture — 要件書（v0.4）</title>", "題");
     once(&html, "<dt>version</dt><dd>v0.4</dd>", "機械のための面の version");
     once(
         &html,

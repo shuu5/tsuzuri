@@ -45,6 +45,8 @@ pub(crate) struct Current {
     anchors_dir: PathBuf,
     /// id の一覧の file（`ids-*.yaml`）が anchors/ に 1 本でも在る（便 121 の始まりの凍結の断り）
     pub(crate) exists: bool,
+    /// 置き場の名（頭の注に出す・憲法の meta.id から導けなければ None・便 154）
+    name: Option<String>,
 }
 
 /// 字面の UTF-8 の byte 列の sha256 の 16 進（前後の空白は落とさない）。
@@ -219,6 +221,7 @@ pub(crate) fn check_ids(
         version,
         anchors_dir,
         exists: !names.is_empty(),
+        name: adr::name_of(dir),
     }
 }
 
@@ -316,7 +319,14 @@ pub(crate) fn build(cur: &Current) -> Result<String, String> {
     anchor::digest_of(&Value::Map(tree.clone())).and_then(|d| {
         tree.push((s("digest"), s(&d)));
         let header = format!(
-            "# folio2 要件・判断・受入基準の id の一覧の凍結 anchor（要件書 {version} の時点・P-7.1）。行 = id・節・要約値（欄の字面の UTF-8 の sha256・欄は projection.fields の先に在る方）。手で直さない・消さない・同じ版は上書きしない（folio check --freeze-ids が全検査 0 違反のときだけ作る）。"
+            "# {}",
+            adr::named(
+                cur.name.as_deref(),
+                " ",
+                &format!(
+                    "要件・判断・受入基準の id の一覧の凍結 anchor（要件書 {version} の時点・P-7.1）。行 = id・節・要約値（欄の字面の UTF-8 の sha256・欄は projection.fields の先に在る方）。手で直さない・消さない・同じ版は上書きしない（folio check --freeze-ids が全検査 0 違反のときだけ作る）。"
+                )
+            )
         );
         yaml::write(&Value::Map(tree), &header)
     })
@@ -338,5 +348,21 @@ mod tests {
             summary("abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    /// id の一覧の頭の注は置き場の名で始まり、名が無ければ名なしで始まる（便 154 §1 (c)1）。
+    #[test]
+    fn f154_the_ids_header_names_the_place() {
+        let cur = |name: Option<&str>| Current {
+            rows: Vec::new(),
+            version: Some("v0.1".to_string()),
+            anchors_dir: PathBuf::from("anchors"),
+            exists: false,
+            name: name.map(str::to_string),
+        };
+        let named = build(&cur(Some("kumo"))).unwrap();
+        assert!(named.starts_with("# kumo 要件・判断・受入基準の id の一覧"), "{named}");
+        let plain = build(&cur(None)).unwrap();
+        assert!(plain.starts_with("# 要件・判断・受入基準の id の一覧"), "{plain}");
     }
 }
