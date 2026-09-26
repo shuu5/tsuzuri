@@ -1,0 +1,52 @@
+# 判断の記録 ADR-8 — 人が打つ binary は tz の 1 つ（発効 2026-09-26・持ち主の裁定 user 2026-09-26T00:22Z・記帳先 = tsuzuri の台帳 t3-hub.1 notes）
+# 討論の記録は docs/grill/2026-09-25-A-merge-shape.md §7。folio の口の一覧は folio2 の席の回答（同 §7）。
+id: ADR-8
+title: 人が打つ binary は tz の 1 つとし、folio の 15 の口は tz の subcommand に吸収して folio という名の command は無くし、folio の crate は library として残す
+status: accepted
+date: 2026-09-26
+context: |
+  ADR-4 は v3 の crate を 6 つ（folio・scribe の core・boundary・契約の型・面・xtask）とし、folio と scribe の境界を「導出物の file を器が読む」形にした。ADR-6 は人が打つ CLI の名を tz とした。しかし人が打つ binary が 1 つか 2 つかはどの判断の記録も明示していなかった。
+  持ち主は「tz と folio2 の 2 つの command にはせず、folio2 という名は無くして tz の subcommand に整理して吸収する」と裁定した。
+  folio2 の席の実測では folio の口は 15 ある（check・inject・parts・face・figure・build・derive・intake・hello・ceiling・schema・graph・init・serve）。終了 code は全口とも 合格 0・不合格 1・まだ分からない 2 で揃っている。folio2 側の M3 の出口の判定点は binary の名に依らず、「tz の subcommand として床が合格」と読み替えて成り立つ。
+decision: |
+  (1) 人が打つ binary は tz の 1 つ。folio という名の command は v3 には無い。
+  (2) folio の口は同じ名の subcommand に移す（tz check・tz schema・tz derive・tz ceiling・tz init・tz parts・tz face・tz figure・tz build・tz intake・tz hello）。引数と終了 code は folio2 の口のまま。
+  (3) folio graph（設計の索引だけの眺め）は導出グラフの tz graph（ADR-7 決定 (2)）に吸収し、索引だけの眺めは tz graph --design の絞りとする。
+  (4) folio inject（CLAUDE.md への注入）は v3 では使わない。憲法と役割の注入は器の brief が機械的に行う（持ち主の裁定 2026-09-25T03:19Z）。口は tz inject として残さず、注入先の変更は面の便の契約で決める。
+  (5) folio serve は tailnet の配信の道具と重なる。要否は面の便で見て、要らなければ退役する（可逆）。
+  (6) folio の crate（library）は残す。ADR-4 の 6 つの crate と「導出物の file を器が読む」境界は変えない。crate の名を改めるかは code の持ち込み（ADR-4 決定 (4) の最後の段）で決める。folio2 の repo は code を持ち込むまで今の command のまま動く。
+options:
+  - id: a
+    name: tz の 1 つに吸収
+    text: 決定 (1) から (6)。
+    verdict: adopted
+    reason: 持ち主の裁定。口の名と終了 code は変えないので folio2 の床の合格をそのまま読み替えられる。
+  - id: b
+    name: tz と folio の 2 つの binary
+    text: 器の口は tz、設計の道具の口は folio のまま。
+    verdict: rejected
+    reason: 合流した世代で名が 2 つ残り、持ち主が「無くして吸収」と裁定した。
+  - id: c
+    name: crate の名も今改める
+    text: folio の crate を tsuzuri の名に改める。
+    verdict: rejected
+    reason: code の持ち込みの前に改めると folio2 の履歴と食い違う。持ち込みの段で決める（増殖の防止）。
+basis: [P-27, N-3, ADR-4, ADR-6]
+revises:
+  - target: ADR-4
+    decision: (1)
+    kind: widen
+    summary: 6 つの crate のうち boundary が folio の口も持ち、人が打つ binary は tz の 1 つと定めた。
+retreat:
+  kind: ruling
+  condition: 面の便で folio inject か folio serve の代わりが要ることが分かったら、口を tz に足すかを持ち主に問う。
+plain: |
+  打ち込むコマンドは tz の 1 つだけにします。設計の道具（folio）の命令は、tz の下の命令として同じ名前で使えます。folio という名前のコマンドは無くします。
+  部品としての folio は残し、名前を変えるかは中身を移すときに決めます。
+  この記録はあなたの承認で発効しています。承認の記帳先は tsuzuri の台帳です。
+approval:
+  who: 持ち主
+  date: 2026-09-26
+  ruling: t3-hub.1（裁定 id = user 2026-09-26T00:22Z・notes に逐語）
+  verbatim: folio2という名前は無くしてtzコマンドのサブコマンドなどに整理して吸収してほしいのだが。
+  surface: R-8
