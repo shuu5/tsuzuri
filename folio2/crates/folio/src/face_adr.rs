@@ -12,6 +12,10 @@
 //! 改訂の欄（便 137・docs/design/delivery-137.md §1 (b)）: 表紙の札を条文の改訂（amends）と判断の記録の改訂（revises）
 //! の 2 つに分け（0 件でも出す）、章 05 の頭に空の欄の断りを 1 段落にまとめ、中身の在る欄は名札と同じ字の h3 の下に
 //! 並べる。revises の行は相手の面へのリンク・決定・向きの名札（表 REVISE）・summary の逐語。
+//! 逆向きの導線（便 148・docs/design/delivery-148.md §1 (b)）: 正本の revises は改訂する側だけが持つので、改訂される
+//! 側の面は `adr/` の発効の全記録の revises を走査して行を導出する（P-6.3）。行が 1 つ以上なら章 05 の自分の revises の
+//! 一覧の後・帰結の前に h3 と一覧を、表紙に札を 1 つ足す（0 件の面は便 147 までと byte 不変）。走査が読めなければ面を
+//! 導出しない（P-4.1）。
 
 use std::fs;
 use std::path::Path;
@@ -129,6 +133,12 @@ const AMENDS_LABEL: &str = "条文の改訂";
 /// 判断の記録の改訂（revises）の欄の名札（表紙の札と章 05 の h3）。
 const REVISES_LABEL: &str = "判断の記録の改訂";
 
+/// ほかの判断の記録から受けた改訂（逆向きの行）の名札（表紙の札と章 05 の h3・便 148）。
+const REVISED_BY_LABEL: &str = "ほかの判断の記録による改訂";
+
+/// 逆向きの行を読む改訂する側の状態（発効だけ・便 148 §1 (d) の 3）。
+const REVISED_BY_STATUS: &[&str] = &["accepted"];
+
 /// 撤退条件の種類（retreat.kind）→ 判断の記録の面の名札（憲法の面の名札 `face::retreat_kind_label` と字面が違う）。
 /// 憲法の値域から導出した型への網羅の場合分け（便 50・その他の枝なし = 値が足されても消えても組み立てが通らない）。
 fn retreat_kind_label(k: ce::RetreatKind) -> &'static str {
@@ -169,7 +179,17 @@ struct Counts {
     basis: usize,
     amends: usize,
     revises: usize,
+    /// ほかの記録から受けた改訂の行の数（正本の欄でなく走査の数・表紙の札だけが使う）
+    revised_by: usize,
     figures: usize,
+}
+
+/// ほかの判断の記録から受けた改訂の 1 行（改訂する側の id・decision と summary は escape 済み）。
+struct RevisedBy {
+    by: String,
+    decision: String,
+    kind: &'static str,
+    summary: String,
 }
 
 /// 根拠の id の行き先を解くための、他の正本の id と題の一覧。
@@ -219,7 +239,9 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         Some(x) => x.seq()?,
         None => Vec::new(),
     };
-    let counts = counts(&a, figs.len())?;
+    let revised = revised_by(dir, id)?;
+    let mut counts = counts(&a, figs.len())?;
+    counts.revised_by = revised.len();
     let f = frame(CHAPTERS.len() + usize::from(!figs.is_empty()), dir, id)?;
     let stamp = face::ceiling_stamp(dir)?;
 
@@ -231,7 +253,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     prose_chapter(&mut o, &f, 2, &a.ef("decision")?);
     options_chapter(&mut o, &f, &a)?;
     basis_chapter(&mut o, &f, &a, dir, &ctx)?;
-    amends_chapter(&mut o, &f, &a, dir, &ctx)?;
+    amends_chapter(&mut o, &f, &a, dir, &ctx, &revised)?;
     if !figs.is_empty() {
         figures_chapter(&mut o, &f, CHAPTERS.len() + 1, &figs, dir, &ctx)?;
     }
@@ -327,6 +349,44 @@ fn record_title(dir: &Path, id: &str) -> String {
         Ok(doc) => field_title(&X::root(&doc, id), "title"),
         Err(_) => String::new(),
     }
+}
+
+/// ほかの判断の記録から `id` が受けた改訂の行（便 148 §1 (b) の 2）。改訂する側の id の数の順・正本の順に、
+/// 状態が REVISED_BY_STATUS の記録の revises だけを読む。記録が読めない・状態の欄が無い・revises が一覧でない・
+/// target が判断の記録の id の形でない・向きが表 REVISE の外なら Err（改訂されていないと黙って出さない・P-4.1）。
+fn revised_by(dir: &Path, id: &str) -> R<Vec<RevisedBy>> {
+    let mut rows = Vec::new();
+    for by in record_ids(dir)? {
+        if by == id {
+            continue;
+        }
+        let name = format!("adr/{by}.yaml");
+        let doc = cursor::load(dir, &name)?;
+        let r = X::root(&doc, &name);
+        if !REVISED_BY_STATUS.contains(&r.f("status")?.text()?.as_str()) {
+            continue;
+        }
+        for e in entries(&r, "revises")? {
+            let tx = e.f("target")?;
+            let target = tx.id()?;
+            if check_id_shape(target).is_err() {
+                return Err(format!(
+                    "{}: id「{target}」が判断の記録の id の形でない",
+                    tx.at
+                ));
+            }
+            let kind = e.f("kind")?.lookup(REVISE, "改訂の向き")?;
+            if target == id {
+                rows.push(RevisedBy {
+                    by: by.clone(),
+                    decision: e.ef("decision")?,
+                    kind,
+                    summary: e.ef("summary")?,
+                });
+            }
+        }
+    }
+    Ok(rows)
 }
 
 /// 根拠の id の群と行き先と題。4 形のどれでもない id は Err。
@@ -476,6 +536,7 @@ fn counts(a: &X<'_>, figures: usize) -> R<Counts> {
         basis: a.f("basis")?.seq()?.len(),
         amends: entries(a, "amends")?.len(),
         revises: entries(a, "revises")?.len(),
+        revised_by: 0,
         figures,
     })
 }
@@ -533,6 +594,10 @@ fn cover(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, st: &Status, n: &C
     o.push(meta_span("根拠", &format!("{} 件", n.basis)));
     o.push(meta_span(AMENDS_LABEL, &format!("{} 件", n.amends)));
     o.push(meta_span(REVISES_LABEL, &format!("{} 件", n.revises)));
+    // 受けた改訂は 1 つ以上のときだけ（改訂されていない面は便 147 までと byte 不変・便 148）
+    if n.revised_by > 0 {
+        o.push(meta_span(REVISED_BY_LABEL, &format!("{} 件", n.revised_by)));
+    }
     o.push(meta_span(
         "撤退条件",
         retreat_sentence(
@@ -703,8 +768,16 @@ fn basis_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ct
 }
 
 /// 章 05（改訂・帰結・反対側からの確認・置き換え・注）。空の改訂の欄の断りは頭の 1 段落にまとめ、
-/// 中身の在る欄は名札と同じ字の h3 の下に並べる（便 137）。
-fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ctx) -> R<()> {
+/// 中身の在る欄は名札と同じ字の h3 の下に並べる（便 137）。ほかの記録から受けた改訂（`revised`）は自分の revises の
+/// 後・帰結の前に（断りは正本の欄の字なので変えない・便 148）。
+fn amends_chapter(
+    o: &mut Vec<String>,
+    f: &Frame,
+    a: &X<'_>,
+    dir: &Path,
+    ctx: &Ctx,
+    revised: &[RevisedBy],
+) -> R<()> {
     band(o, f, 5);
     o.push("<div class=\"chapbody\">".to_string());
     let amends = entries(a, "amends")?;
@@ -742,6 +815,20 @@ fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &C
                 e.ef("decision")?,
                 e.f("kind")?.lookup(REVISE, "改訂の向き")?,
                 e.ef("summary")?
+            ));
+        }
+        o.push("</ul>".to_string());
+    }
+    if !revised.is_empty() {
+        o.push(format!("<h3>{REVISED_BY_LABEL}</h3>"));
+        o.push("<ul>".to_string());
+        for r in revised {
+            o.push(format!(
+                "<li>{} がこの判断の決定 {} を{}: {}</li>",
+                link_text(&resolve(dir, ctx, &r.by)?, &r.by),
+                r.decision,
+                r.kind,
+                r.summary
             ));
         }
         o.push("</ul>".to_string());
@@ -905,5 +992,15 @@ mod face_adr_tests {
                 .unwrap_err(),
             "adr/ADR-1.yaml.revises[0].kind: 改訂の向き の表に無い値「shrink」"
         );
+    }
+
+    /// 凍結の針（便 148 §1 (c) 1）: 逆向きの名札の字と読む状態（発効だけ）を固定し、名札が正本の 2 つの欄の名札の字を
+    /// 含まない（表紙の札と h3 を字で取り違えない）。
+    #[test]
+    fn f148_revised_by_label_and_status_are_frozen_needles() {
+        assert_eq!(REVISED_BY_LABEL, "ほかの判断の記録による改訂");
+        assert_eq!(REVISED_BY_STATUS, ["accepted"]);
+        assert!(!REVISED_BY_LABEL.contains("条文の改訂"));
+        assert!(!REVISED_BY_LABEL.contains("判断の記録の改訂"));
     }
 }
