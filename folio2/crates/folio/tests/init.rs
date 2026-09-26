@@ -49,7 +49,7 @@ const REFUSE: [&str; 11] = [
 ];
 
 /// 骨格自身の番号。
-const OWN: [&str; 5] = ["ADR-1", "P-1", "P-1.1", "R-8", "R-16"];
+const OWN: [&str; 6] = ["ADR-1", "P-1", "P-1.1", "R-2", "R-8", "R-16"];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -642,24 +642,33 @@ fn f125_sources_match_folio2() {
     assert!(!schema_text.is_empty(), "憲法の schema の節が無い");
     assert!(!schema_text.contains('#'), "憲法の schema の節に # が在る");
 
-    // 条は P-1 の 1 本で行 R-8 と R-16 を縛る
+    // 条は P-1 の 1 本で行 R-2・R-8・R-16 を縛る
     let articles = seq(&mine, "articles");
     assert_eq!(articles.len(), 1);
     assert_eq!(str_of(&articles[0], "id"), "P-1");
     let rules = articles[0].get("relations").and_then(|r| r.get("rules")).unwrap();
-    assert_eq!(strs(rules), ["R-8", "R-16"]);
+    assert_eq!(strs(rules), ["R-2", "R-8", "R-16"]);
 
-    // 行 R-16 の what と value
-    let row = |v: &Value| {
+    // 行 R-2 の what・value・kind と行 R-16 の what と value（行の状態と裁定は写さない）
+    let row = |v: &Value, id: &str| {
         seq(v, "thresholds")
             .iter()
-            .find(|r| r.get("id").and_then(Value::as_str) == Some("R-16"))
+            .find(|r| r.get("id").and_then(Value::as_str) == Some(id))
             .cloned()
-            .expect("行 R-16 が無い")
+            .unwrap_or_else(|| panic!("行 {id} が無い"))
     };
-    let (m16, t16) = (row(&w.typed("rules.yaml")), row(&folio2_typed("rules.yaml")));
+    let (mr, tr) = (w.typed("rules.yaml"), folio2_typed("rules.yaml"));
+    let (m2, t2) = (row(&mr, "R-2"), row(&tr, "R-2"));
+    for key in ["what", "value", "kind"] {
+        assert_eq!(m2.get(key), t2.get(key), "行 R-2 の {key}");
+    }
+    let (m16, t16) = (row(&mr, "R-16"), row(&tr, "R-16"));
     assert_eq!(m16.get("what"), t16.get("what"));
     assert_eq!(m16.get("value"), t16.get("value"));
+    for r in seq(&mr, "thresholds") {
+        assert_eq!(str_of(r, "status"), "仮", "{r:?}");
+        assert_eq!(str_of(r, "ruling"), "未記入", "{r:?}");
+    }
     assert!(
         seq(&w.typed("rules.yaml"), "thresholds")
             .iter()
@@ -767,4 +776,139 @@ fn f125_no_folio2_ids_in_the_skeleton() {
         .collect();
     assert!(!adr_stops.is_empty());
     assert!(adr_stops.iter().all(|at| *at == "ADR-1"), "{adr_stops:?}");
+}
+
+/// 歯 8（便 152・群 A の通し）: 根の直下の design-intent に init して commit した後、手直しなしで床・注入・欄の決まり・
+/// 組み立て・4 面が答える。組み立ては様式の file が無いので 2 で、配信先を作らない（便 153 が延ばす）。
+#[test]
+fn f152_the_skeleton_runs_every_command_without_hand_edits() {
+    let w = Work::new("run-all");
+    let place = w.root.join("design-intent");
+    let init = folio(&["init"], &place);
+    assert_eq!(init.status.code(), Some(0), "{}", both(&init));
+    git(&w.root, &["add", "-A"]);
+    git(&w.root, &["commit", "-q", "-m", "skeleton"]);
+
+    let check = folio(&["check"], &place);
+    assert_eq!(check.status.code(), Some(2), "{}", both(&check));
+    assert!(
+        stdout(&check).contains("違反 0・まだ分からない 2"),
+        "{}",
+        both(&check)
+    );
+
+    let md = w.root.join("CLAUDE.md");
+    fs::write(
+        &md,
+        "# 一時の CLAUDE.md\n\n<!-- constitution:begin -->\n<!-- constitution:end -->\n",
+    )
+    .unwrap();
+    let md_arg = md.to_str().unwrap();
+    for mode in ["--write", "--check"] {
+        let inject = folio(&["inject", "--claude-md", md_arg, mode], &place);
+        assert_eq!(inject.status.code(), Some(0), "inject {mode}: {}", both(&inject));
+    }
+    let injected = fs::read_to_string(&md).unwrap();
+    assert!(
+        injected.contains("P-1.1") && injected.contains("R-2"),
+        "{injected}"
+    );
+
+    let schema = folio(&["schema", "--check"], &place);
+    assert_eq!(schema.status.code(), Some(0), "{}", both(&schema));
+
+    let site = w.root.join("site");
+    let build = folio(
+        &["build", "--write", "--out", site.to_str().unwrap()],
+        &place,
+    );
+    assert_eq!(build.status.code(), Some(2), "{}", both(&build));
+    assert!(
+        stdout(&build).contains("床 = まだ分からない（違反 0・まだ分からない 2）"),
+        "{}",
+        both(&build)
+    );
+    let errs = stderr(&build);
+    assert_eq!(errs.lines().count(), 1, "{errs}");
+    assert!(errs.contains("preview/folio.css: 読めない"), "{errs}");
+    assert!(!site.exists(), "配信先を作った");
+
+    for (face, id) in [
+        ("adr", Some("ADR-1")),
+        ("constitution", None),
+        ("srs", None),
+        ("index", None),
+    ] {
+        let out = w.root.join(format!("face-{face}.html"));
+        let mut args = vec!["face", "--face", face, "--out", out.to_str().unwrap(), "--write"];
+        if let Some(id) = id {
+            args.extend(["--id", id]);
+        }
+        let run = folio(&args, &place);
+        assert_eq!(run.status.code(), Some(0), "face {face}: {}", both(&run));
+        let html = fs::read_to_string(&out).unwrap();
+        assert!(html.starts_with("<!DOCTYPE html>"), "face {face}");
+    }
+}
+
+/// 歯 9（便 152・台帳 .196）: 骨格の憲法の雛形は外の憲法を指さず、自分を正本とする形（名 未記入・根拠は空・改訂は表）。
+#[test]
+fn f152_the_constitution_template_stands_on_its_own() {
+    let w = Work::new("constitution");
+    w.init_ok();
+    let range = id_range(&w.place(), "constitution.yaml");
+    for word in ["本来の憲法", "scribe2", "床の受付の宣言", "floor-declaration"] {
+        assert!(!range.contains(word), "憲法の雛形に「{word}」");
+    }
+    let c = w.typed("constitution.yaml");
+    assert_eq!(str_of(c.get("meta").unwrap(), "id"), "未記入");
+
+    let precedence = c.get("precedence").unwrap();
+    assert!(seq(precedence, "rationale").is_empty(), "前文の根拠");
+    assert_eq!(
+        str_of(precedence, "text"),
+        "段どうしが衝突したら「絶対にやらない ＞ 確認してから ＞ いつも守る」の順で解く。"
+    );
+    let articles = seq(&c, "articles");
+    assert!(!articles.is_empty());
+    for article in articles {
+        assert!(seq(article, "rationale").is_empty(), "{article:?}");
+        for statement in seq(article, "statements") {
+            let text = str_of(statement, "text");
+            assert!(!text.contains("憲法"), "{text}");
+        }
+    }
+
+    let amendment = c.get("amendment").unwrap();
+    let keys: Vec<&str> = amendment
+        .as_map()
+        .expect("amendment が表でない")
+        .iter()
+        .map(|(k, _)| k.as_str().unwrap())
+        .collect();
+    assert_eq!(keys, ["declaration", "steps", "effective_step"]);
+    let step = amendment.get("effective_step").unwrap();
+    assert_eq!(step.get("n"), Some(&Value::Int("0".to_string())));
+    assert_eq!(str_of(step, "who"), "持ち主");
+}
+
+/// 歯 10（便 152）: 骨格の数える範囲（生成区間と憲法の schema の節を除く）に folio2 固有の字が 0 回・folio2 自身には 1 回以上。
+#[test]
+fn f152_no_folio2_words_in_the_skeleton() {
+    let w = Work::new("words");
+    w.init_ok();
+    let words = ["folio2", "f2-", "scribe2"];
+    let mut theirs = [0usize; 3];
+    for file in FILES {
+        let mine = id_range(&w.place(), file);
+        let own = id_range(&folio2(), file);
+        for (k, word) in words.iter().enumerate() {
+            assert!(!mine.contains(word), "{file} に「{word}」");
+            theirs[k] += own.matches(word).count();
+        }
+    }
+    assert!(
+        theirs.iter().all(|n| *n > 0),
+        "folio2 自身に 0 回の語が在る＝数えが効いていない: {theirs:?}"
+    );
 }

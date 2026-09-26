@@ -1,9 +1,10 @@
 //! `folio init --dir <置き場>`（便 125・docs/design/delivery-125.md §1・判断の記録 ADR-16 決定 (3)・(2)(オ)(カ)・FR22）。
 //! 新しい置き場に最初の文書一式（骨格）11 本を新規作成でだけ書く。断りの名が 1 つでも在れば 1 byte も書かずに 1。
 //! 生成区間は空の印で書いてから `schema::run`（Write）を同じ呼び出しの中で呼んで埋める（`folio schema --write` と同じ導出）。
-//! 人が書く部分は雛形の定数と、組み立て時に焼いた folio2 の正本 5 本から読む字（憲法の schema の節と行 R-16 は型付きで
+//! 人が書く部分は雛形の定数と、組み立て時に焼いた folio2 の正本 5 本から読む字（憲法の schema の節と行 R-2・R-16 は型付きで
 //! 読み書きし、入口・天井・相談窓口の節は行で写して最小の欄に絞り、folio2 固有の id を持つ全角の括弧を落とす）。
-//! 日付の欄は撃った日の UTC。注入の対象にしない。置き場の外には何も書かない。書き始めた後に書けなくなったら止めて 2（消さない）。
+//! 要件書と憲法の雛形は面の生成器が要る欄を空か未記入で持つ（便 152・docs/design/delivery-152.md §1 (b)）。
+//! 日付の欄は撃った日の UTC。CLAUDE.md は書かない。置き場の外には何も書かない。書き始めた後に書けなくなったら止めて 2（消さない）。
 
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;
@@ -54,18 +55,18 @@ const SRC_CEILING: &str = include_str!("../../../design-intent/ceiling.yaml");
 const SRC_INTAKE: &str = include_str!("../../../design-intent/intake.yaml");
 
 /// 骨格自身の番号（写した字の括弧を落とす式で、folio2 固有の id に数えない）。
-const OWN_IDS: [&str; 5] = ["ADR-1", "P-1", "P-1.1", "R-8", "R-16"];
+const OWN_IDS: [&str; 6] = ["ADR-1", "P-1", "P-1.1", "R-2", "R-8", "R-16"];
 
 /// 日付の字の置き場（雛形の中の印・撃った日の UTC の年-月-日に替える）。
 const DATE: &str = "{DATE}";
 
 // ── 雛形（人が書く部分・利用者が本来の中身に書き換える）──
 
-const CONSTITUTION_HEAD: &str = "# 憲法 — 床の受付の宣言（folio init の雛形・名と本文は利用者が決めて書き換える）";
+const CONSTITUTION_HEAD: &str = "# 憲法 — 正本（folio init の雛形・名と条は利用者が決めて書き換える）";
 
 const CONSTITUTION_BODY: &str = r#"
 meta:
-  id: floor-declaration
+  id: 未記入
   version: v1.0
   status: draft
   binding: false
@@ -82,28 +83,29 @@ north_star:
   judged_by: 未記入
 
 precedence:
-  text: 条どうしの順位は、利用者の本来の憲法の順位に従う。
-  plain: 条どうしが食い違ったときは、あなたの本来の憲法が決めた順位で解きます。
+  text: 段どうしが衝突したら「絶対にやらない ＞ 確認してから ＞ いつも守る」の順で解く。
+  plain: 段どうしが食い違ったときは、「絶対にやらない」「確認してから」「いつも守る」の順に優先して解きます。
   binds: both
   mechanism: {kind: none, live: now, note: 判断の規則であって機械では検査できない。}
-  rationale:
-    - {kind: scribe2-article, ref: 本来の憲法の順位の節（番号は利用者が書く）}
+  rationale: []
 
 articles:
   - id: P-1
-    title: 承認の受け方と散文の門の値
+    title: 承認の受け方と検査の値
     tier: always
     binds: both
     statements:
-      - {id: P-1.1, pattern: ubiquitous, strength: must, text: 本来の憲法の条（番号は利用者が書く）に従い、承認は規則の表の行 R-8 の対話面を通ったものだけを受け取り、散文の門は行 R-16 の値で数える。}
-    plain: 承認は決まった対話面を通ったものだけを受け取り、設計ノートの散文の門は規則の表の値で数えます。どちらも、あなたの本来の憲法の条に従います。
-    rationale:
-      - {kind: scribe2-article, ref: 本来の憲法の条（番号は利用者が書く）}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄と設計ノートの散文を、床が行 R-8 と行 R-16 の値で数える。}
-    relations: {rules: [R-8, R-16]}
+      - {id: P-1.1, pattern: ubiquitous, strength: must, text: 承認は規則の表の行 R-8 の対話面を通ったものだけを受け取り、散文の門は行 R-16 の値で数え、AI の手元へ写す生成区間は行 R-2 の値に収める。}
+    plain: 承認は決まった対話面を通ったものだけを受け取り、設計ノートの散文の門は規則の表の値で数え、AI の手元へ写す区間は規則の表の上限に収めます。
+    rationale: []
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄と設計ノートの散文を床が行 R-8 と行 R-16 の値で数え、写す区間の大きさを注入が行 R-2 の値で数える。}
+    relations: {rules: [R-2, R-8, R-16]}
 
 rules_pointer: 数値の決まりは規則の表にまとめ、条文は数値を書かずに行の番号で呼ぶ。
-amendment: 未記入
+amendment:
+  declaration: 未記入
+  steps: []
+  effective_step: {n: 0, who: 持ち主, what: 未記入, article: []}
 glossary_pointer: この章は、この文書に出てくる言葉の意味をまとめた一覧です。語と定義の元は語彙の file 1 つに置きます。
 sources: []
 "#;
@@ -115,7 +117,7 @@ const VOCABULARY: &str = r#"# 語彙 — 正本（folio init の雛形・語は�
 terms: []
 field_terms: []
 identifiers:
-  - {group: 骨格の雛形の語, words: [folio, ai, intake, rules, file, id, schema, repo], why: 骨格の雛形に出る識別子（命令名・file 名・code の語）}
+  - {group: 骨格の雛形の語, words: [folio, ai, intake, rules, file, id, schema, repo, claude.md], why: 骨格の雛形に出る識別子（命令名・file 名・code の語）}
 "#;
 
 const SRS: &str = r#"# 要件書 — 正本（folio init の雛形・要件は利用者が書く）
@@ -125,7 +127,22 @@ meta:
   version: v0.1
   status: draft
   generated: {DATE}
+  promise: 未記入
+  counts: {fr: 0, nfr: 0, ac: 0, con: 0}
   approval: []
+goals: []
+scope: {build: [], not_build: []}
+scope_m1: {build: [], not_build: []}
+actors:
+  - {id: tool, name: 未記入, role: 道具}
+outputs: []
+rail: []
+requirements: []
+nonfunctional: []
+acceptance: []
+not_frozen: 未記入
+constraints: []
+glossary_pointer: 未記入
 "#;
 
 const INDEX_HEAD: &str = r#"# 入口 — 正本（folio init の雛形・案内文は利用者が書き換える）
@@ -517,34 +534,35 @@ fn constitution_schema() -> Result<String, String> {
     yaml::write(&Value::Map(vec![(s("schema"), schema)]), CONSTITUTION_HEAD)
 }
 
-/// 規則の表の thresholds と discipline の 2 節（行 R-8 は雛形・行 R-16 は what と value を folio2 から読む）。
+/// 規則の表の thresholds と discipline の 2 節（行 R-8 は雛形・行 R-2 は what と value と kind を、行 R-16 は what と
+/// value を folio2 から読む）。
 fn rules_rows() -> Result<String, String> {
     let root = typed(SRC_RULES, "rules.yaml")?;
-    let rows: Vec<&Value> = root
-        .get("thresholds")
-        .and_then(Value::as_seq)
-        .unwrap_or(&[])
-        .iter()
-        .filter(|r| r.get("id").and_then(Value::as_str) == Some("R-16"))
-        .collect();
-    let [r16] = rows.as_slice() else {
-        return Err(format!(
-            "焼いた rules.yaml の行 R-16 がちょうど 1 つでない（{} 行）",
-            rows.len()
-        ));
-    };
-    let field = |k: &str| {
-        r16.get(k)
+    let field = |id: &str, k: &str| -> Result<Value, String> {
+        let rows: Vec<&Value> = root
+            .get("thresholds")
+            .and_then(Value::as_seq)
+            .unwrap_or(&[])
+            .iter()
+            .filter(|r| r.get("id").and_then(Value::as_str) == Some(id))
+            .collect();
+        let [r] = rows.as_slice() else {
+            return Err(format!(
+                "焼いた rules.yaml の行 {id} がちょうど 1 つでない（{} 行）",
+                rows.len()
+            ));
+        };
+        r.get(k)
             .cloned()
-            .ok_or_else(|| format!("焼いた rules.yaml の行 R-16 に {k} が無い"))
+            .ok_or_else(|| format!("焼いた rules.yaml の行 {id} に {k} が無い"))
     };
-    let row = |id: &str, what: Value, value: Value| {
+    let row = |id: &str, what: Value, value: Value, kind: Value| {
         Value::Map(vec![
             (s("id"), s(id)),
             (s("article"), s("P-1")),
             (s("what"), what),
             (s("value"), value),
-            (s("kind"), s("build-check")),
+            (s("kind"), kind),
             (s("status"), s("仮")),
             (s("ruling"), s("未記入")),
             (s("ruled_at"), s("未記入")),
@@ -555,8 +573,19 @@ fn rules_rows() -> Result<String, String> {
         (
             s("thresholds"),
             Value::Seq(vec![
-                row("R-8", s(R8_WHAT), s(R8_VALUE)),
-                row("R-16", field("what")?, field("value")?),
+                row(
+                    "R-2",
+                    field("R-2", "what")?,
+                    field("R-2", "value")?,
+                    field("R-2", "kind")?,
+                ),
+                row("R-8", s(R8_WHAT), s(R8_VALUE), s("build-check")),
+                row(
+                    "R-16",
+                    field("R-16", "what")?,
+                    field("R-16", "value")?,
+                    s("build-check"),
+                ),
             ]),
         ),
         (s("discipline"), Value::Seq(Vec::new())),
