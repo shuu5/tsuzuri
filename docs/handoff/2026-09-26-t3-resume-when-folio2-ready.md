@@ -19,20 +19,22 @@
 | 討論の記録 | docs/grill/2026-09-25-B-ruling-surface.md（裁定面）・-C-（表示面）・-A-（合流の形） | 経緯つき |
 
 ## 2. 再開の手順（上から順・各段は 1 つの命令か 1 つの問い）
+0. **remote を作る**（持ち主の承認の後）: `origin` の名で `main` を持つ remote（推奨 = GitHub の private repo・.beads の remote と同じ持ち方）。`.vessel.toml` に `remote = "origin"` を足すかは land の push の要否で決める。
 1. **folio2 の binary を取り直す**: `cd ~/projects/local-projects/folio2 && git pull && cargo build`（席の権能で撃てなければ folio2 席に頼む）。
 2. **床を撃ち直す**: `folio check --dir design-intent`・`folio schema --write --dir design-intent`（生成区間の差があれば書き直して同じ commit）・`folio derive --dir design-intent --out ../contracts --check`。落ちたら直してから先へ（合格 = 出口 ①②）。
 3. **folio2 側の字の変更を写すか決める**: 要件書の自己規定（meta.effective 等）が変わっていたら、tsuzuri の srs.yaml を揃えるかは設計席の裁量（床は字を検査しない）。
 4. **器の側の前提（§3）を消し込む**: 未回答が残っていれば scribe2 席へ再送。
 5. **便 a を器の列に戻す**: `bdw update t3-hub.2 --status open`（defer を戻す）→ notes に「再開（合図 = folio2 の群 A 着地 <日付>）」の 1 行。
-6. **器が拾うのを見る**: t3 の dispatch の列に t3-hub.2 が載る（`[DISPATCH] bead=t3-hub.2 …`）ことを scribe2 席に確認。受付で断られたら理由（Refuse の名）を grill B §18 に記録して直す。
+6. **t3 の dispatch の周を起こす**（§3 の 2・管理席か持ち主の手）→ 列に t3-hub.2 が載る（`[DISPATCH] bead=t3-hub.2 …`）ことを確認。受付で断られたら理由（Refuse の名）を grill B §18 に記録して直す。
 7. **便 a の着地の後**: 便 b〜k の bead を契約表の depends のとおり順に起票（`--deps blocks:<前の bead>`・pointer = `contracts/surface.toml#<行 id>`）。1 本ずつ。
 8. **code の持ち込み（ADR-4 決定 (3)）**: 便 b の後、scribe2 と folio2 の code を履歴つきで持ち込む段は別の判断の記録（crate の名の扱い = ADR-8 決定 (6)）。便 c 以降はその後。
 
-## 3. 器の側で未確定のもの（scribe2 席に照会中・2026-09-26T15:0xZ・回答が来たらここを更新）
-1. remote の無い repo（tsuzuri）を便の対象にできるか（land と審査の材料の取り方）。だめなら remote の形（private repo か local の bare）。
-2. t3 の dispatcher の列が動いているか・動かすのは誰の手番か。
-3. 端末の一覧の行（host.toml の device 行）の起票の有無（ADR-5 決定 (2)・ADR-7 決定 (14)・要件 FR16）。
-4. 席の停止の切り替えの command 名と、待ちの席へ 1 行を送る新設の口の起票の有無（要件 FR9・FR12）。
+## 3. 器の側の前提（scribe2-aa の回答 2026-09-26T15:2xZ・verified = scribe2 main 8198b92）
+1. **remote と branch**: `.vessel.toml` の remote は任意（無ければ land は push を省き `remote=none`）。ただし器は base を `refs/remotes/origin/main` の名で読むので、**branch `main` と `origin` の名の remote が要る**（local の bare でも可・実績は GitHub の private repo・CI の gate〔ci-cmd〕を使うなら GitHub）。→ branch は 2026-09-26 に master から main へ改名済み。remote は持ち主の承認（A-1 の「出す」）を得てから作る（§2 の 0）。
+2. **t3 の dispatcher**: tsuzuri の列は動いていない。動かすのは tsuzuri 側の手番で、`scribe2 pipe dispatch --state-dir <tsuzuri の state dir> --repo <tsuzuri> --runner "<runner の行>" --lens "<lens の行>"` を 1 回撃てば以後は便の終端の周が次を自動で撃つ（host の面の宣言は不要）。runner / lens の行の雛形は scribe2 の admin の道具（~/.cache/scribe2-admin/mk-run.sh の出力 runner.cmd / lens.cmd）と同じ形で binary と claude の包みの path を tsuzuri 用に置く。**設計席（orchestrator）は launch の権能を持たないので、撃つのは管理席か持ち主**。
+3. **端末の行（device）**: scribe2 側に memo は無い。tsuzuri の要件 FR16 として設計だけ置く扱いで合意。要件が固まった時点で s2-07l に memo を 1 本（scribe2 席に起票を依頼済み・2026-09-26）。
+4. **器の CLI**: `scribe2 seat heartbeat off|on|status --state-dir S --target T` は在る。「待ちの席へ 1 行を送る口」は無い（deliver_within は tick と pipe の内部・CLI から撃てない・起票も無い）→ s2-07l に memo を起票（scribe2 席に依頼済み・宛先の席の入力欄の門を通す 1 行の口）。着地まで面の server は停止の hook の経路だけで席を起こす（FR9 の 2 経路のうち 1 つ）。
+- 群の訂正: tsuzuri は 2026-09-26T09:40Z の群の再編で Tier1 → **Tier2**（Tier1 は scribe2 と folio2）。14:37Z に Tier2 の記録が black5 になり t3:orchestrator は black5 で起こし直された。
 
 ## 4. 待ちの間に設計席が進めてよいもの（実装は起こさない）
 - 面の便の契約表の磨き（行の write-set と verify の名の見直し・歯の fixture の置き場の規約）。
