@@ -3,10 +3,12 @@
 //! - FR8（差分）: 既に在る支度表の answered の回答は引き継ぎ、問うのは答えの無い質問だけ（推奨で進めた行は引き継がない）
 //! - `--print` の 3 形（支度表なし・差分・全部答え済み）と、file を書かないこと
 //! - 導出できない 6 つ（どれも 2・支度表は出来ない／変わらない）・出力先の親 dir が無い・旗の使い方の誤り
+//! - 便 160（docs/design/delivery-160.md §1 (c)）: 別の process の同じ歯が、この process の写しを消さない
 //!
 //! 入力は版管理の `design-intent/` を丸ごと一時 dir へ写したもの（支度表は写しの中にだけ生まれる）。
 
 use std::fs;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -20,14 +22,33 @@ fn fixture(name: &str) -> PathBuf {
 
 const SHEET: &str = "intake-sheet.yaml";
 
-/// `design-intent/` の写しを持つ一時 dir を作る（前の回の残りは消す）。
-fn work(case: &str) -> PathBuf {
-    let td = std::env::temp_dir().join(format!("folio-sheet-{case}"));
+/// `design-intent/` の写しを持つ一時 dir（歯の終わりに消す）。
+struct Work {
+    root: PathBuf,
+}
+
+impl Deref for Work {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.root
+    }
+}
+
+impl Drop for Work {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+/// `design-intent/` の写しを持つ一時 dir を作る（名に process の id・前の回の残りは消す）。
+fn work(case: &str) -> Work {
+    let td = std::env::temp_dir().join(format!("folio-sheet-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
     copy_tree(&repo_root().join("design-intent"), &td);
     // 実の正本の支度表（持ち主の裁定 2026-09-18「aで」）は写しから外し、歯は支度表なしから始める
     let _ = fs::remove_file(td.join(SHEET));
-    td
+    Work { root: td }
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -282,9 +303,51 @@ fn sheet_needs_exactly_one_of_print_and_write() {
     assert_eq!(both.status.code(), Some(2), "{}", show(&both));
     let neither = Command::new(env!("CARGO_BIN_EXE_folio"))
         .args(["intake", "--dir"])
-        .arg(&dir)
+        .arg(&*dir)
         .output()
         .expect("folio を起動できない");
     assert_eq!(neither.status.code(), Some(2), "{}", show(&neither));
     assert!(!dir.join(SHEET).exists());
+}
+
+// ── 便 160（別の process の写し）──
+
+/// 子の役の印。値が親の process の id のときだけ子として走る。
+const F160_CHILD: &str = "FOLIO_F160_CHILD";
+const F160_NAME: &str = "f160_another_process_leaves_this_copy_alone";
+/// 子が標準エラーに出す path の行の頭。
+const F160_LINE: &str = "f160-child-path: ";
+
+#[test]
+fn f160_another_process_leaves_this_copy_alone() {
+    let parent = std::os::unix::process::parent_id().to_string();
+    if std::env::var(F160_CHILD).ok().as_deref() == Some(parent.as_str()) {
+        // 子: 同じ host の別の写しで同じ歯が走るのと同じ形で、同じ case の写しを作る
+        let dir = work("f160-same");
+        eprintln!("{F160_LINE}{}", dir.display());
+        return;
+    }
+
+    let dir = work("f160-same");
+    let mark = dir.join("f160-mark");
+    fs::write(&mark, "parent").unwrap();
+    let other = work("f160-other");
+    assert_ne!(&*dir, &*other, "同じ process の別の case と同じ path");
+
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args([F160_NAME, "--exact", "--nocapture"])
+        .env(F160_CHILD, std::process::id().to_string())
+        .output()
+        .expect("test binary を撃ち直せない");
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    let err = stderr(&out);
+    let paths: Vec<&str> = err
+        .lines()
+        .filter_map(|line| line.strip_prefix(F160_LINE))
+        .collect();
+    assert_eq!(paths.len(), 1, "子が path を 1 行出さない: {}", show(&out));
+    let child = Path::new(paths[0]);
+    assert_ne!(child, &*dir, "子の写しが親と同じ path");
+    assert!(mark.exists(), "子が親の写しを消した");
+    assert!(!child.exists(), "子の写しが子の終わりに残った: {}", child.display());
 }
