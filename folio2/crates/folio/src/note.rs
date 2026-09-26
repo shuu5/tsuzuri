@@ -15,10 +15,11 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::adr::Adr;
+use crate::adr::{Adr, UNFILLED, has_ledger_id, in_enum, unfilled};
 use crate::catalog::FigureType;
 use crate::check::{duplicate_ids, non_empty, row_id, unknown_sections};
 use crate::floor::{floor_diff, strip_notes};
+use crate::floor_adr::{APPROVER, RULING_PATTERN};
 use crate::floor_note::{
     APPROVAL_REQUIRED, CONTRACT_TABLE, DOC, DOC_META, EFFECTIVE_STATUS, EXTERNAL_HEAD,
     EXTERNAL_NEED, EXTERNAL_PATH, EXTERNAL_ROW_FIELDS, EXTERNAL_ROWS_KEY, EXTERNAL_SHAPE,
@@ -528,10 +529,33 @@ fn check_meta(file: &str, note: &NoteDoc, note_ids: &HashSet<&str>, report: &mut
     for (i, row) in approval.iter().enumerate() {
         let at = format!("meta の approval[{i}]");
         non_empty(file, &at, row, APPROVAL_REQUIRED, report);
+        // 値域と形は判断の記録の承認欄と同じ定数と判定・形を持たない逐語だけが印を空と見る（便 161）
+        if let Some(v) = field(row, "who")
+            && !in_enum(row.get("who"), APPROVER)
+        {
+            report.violation(
+                KIND,
+                format!("{file}: {at}: who「{v}」が一覧に無い（判断の記録の承認者の値域）"),
+            );
+        }
         if let Some(v) = field(row, "date")
             && !is_date(v)
         {
             report.violation(KIND, format!("{file}: {at}: date「{v}」が年-月-日でない"));
+        }
+        if let Some(v) = field(row, "ruling")
+            && !has_ledger_id(v)
+        {
+            report.violation(
+                KIND,
+                format!("{file}: {at}: ruling「{v}」に台帳 id（{RULING_PATTERN}）が無い"),
+            );
+        }
+        if field(row, "verbatim").is_some_and(unfilled) {
+            report.violation(
+                KIND,
+                format!("{file}: {at} の verbatim が {UNFILLED}（init の雛形の印・空と同じ）"),
+            );
         }
         if let Some(v) = field(row, "surface")
             && !SURFACE_ENUM.contains(&v)

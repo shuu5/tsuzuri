@@ -6,6 +6,7 @@
 //! 凍結 fixture は要件書 AC7 / AC8 / AC13 の red_test が名指す tests/fixtures/design-note/ の 3 組だけ。
 //! 便 120（docs/design/delivery-120.md §1 (d)）の歯 f120_ は、同じ dir の手書きの凍結の対 need-conditional.yaml と
 //! need-conditional-schema.toml（器の導出 file の verify と done が要否 conditional）を使う。
+//! 便 161（docs/design/delivery-161.md §1 (c)）の歯 f161_ は fixture を足さず、見本の承認欄を口 approve と row_with で置く。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -715,5 +716,206 @@ fn f103_the_post_guards_carry_the_mentions_tooth() {
             line.contains(word),
             "guards_note が {word} を名指さない: {line}"
         );
+    }
+}
+
+// ── 便 161: 承認欄の形は判断の記録の承認欄と同じ（docs/design/delivery-161.md §1 (c)） ──
+
+/// 良い 1 項（違反 0）の 5 欄。
+const GOOD_ROW: [(&str, &str); 5] = [
+    ("who", "持ち主"),
+    ("date", "2026-09-18"),
+    ("ruling", "f2-648.37 notes"),
+    ("verbatim", "承認する"),
+    ("surface", "R-8"),
+];
+
+/// 良い 1 項から `changes` の欄だけを替えた承認欄の 1 項（値は全部引用符で囲む）。
+fn row_with(changes: &[(&str, &str)]) -> String {
+    let fields: Vec<String> = GOOD_ROW
+        .iter()
+        .map(|(key, good)| {
+            let value = changes
+                .iter()
+                .find(|(k, _)| k == key)
+                .map_or(*good, |(_, v)| v);
+            format!("{key}: \"{value}\"")
+        })
+        .collect();
+    format!("{{{}}}", fields.join(", "))
+}
+
+/// 5 欄とも印の 1 項。
+fn unfilled_row() -> String {
+    row_with(&GOOD_ROW.map(|(key, _)| (key, "未記入")))
+}
+
+/// 見本 example.yaml の status を替え、承認欄に `rows` を置く。
+fn approve(w: &Work, status: &str, rows: &[String]) {
+    let items: String = rows.iter().map(|r| format!("    - {r}\n")).collect();
+    w.mutate(
+        "\n  status: example\n",
+        &format!("\n  status: {status}\n  approval:\n{items}"),
+    );
+}
+
+const VERBATIM_MARK: &str =
+    "meta の approval[0] の verbatim が 未記入（init の雛形の印・空と同じ）";
+
+/// 不合格 1・違反はちょうど 5 行で、5 欄とも印の項 n の行が承認者・日付・裁定 id・逐語・対話面の順に並ぶ。
+fn assert_five_lines(out: &Output, n: usize) {
+    assert_eq!(out.status.code(), Some(1), "{}{}", stdout(out), stderr(out));
+    let at = format!("meta の approval[{n}]");
+    let want = [
+        format!("{at}: who「未記入」が一覧に無い（判断の記録の承認者の値域）"),
+        format!("{at}: date「未記入」が年-月-日でない"),
+        format!("{at}: ruling「未記入」に台帳 id（"),
+        format!("{at} の verbatim が 未記入（init の雛形の印・空と同じ）"),
+        format!("{at}: surface「未記入」が一覧に無い"),
+    ];
+    let v = violations(out);
+    assert_eq!(v.len(), want.len(), "違反の行数: {v:?}");
+    for (line, w) in v.iter().zip(&want) {
+        assert!(
+            line.starts_with("[note] design-note/example.yaml: "),
+            "{v:?}"
+        );
+        assert!(line.contains(w.as_str()), "「{w}」が無い: {v:?}");
+    }
+    assert!(
+        stdout(out).contains("folio check: 不合格（違反 5・"),
+        "{}",
+        stdout(out)
+    );
+}
+
+#[test]
+fn f161_the_verbatim_mark_is_empty() {
+    for (i, (status, verbatim)) in [
+        ("effective", "未記入"),
+        ("effective", "　未記入 "),
+        ("draft", "未記入"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let w = Work::new(&format!("f161-verbatim-{i}"));
+        approve(&w, status, &[row_with(&[("verbatim", verbatim)])]);
+        assert_single_violation(&w.check(), "note", &[VERBATIM_MARK]);
+    }
+    let w = Work::new("f161-verbatim-contains");
+    approve(
+        &w,
+        "effective",
+        &[row_with(&[("verbatim", "未記入の欄は無いので承認する")])],
+    );
+    assert_passes(&w.check());
+}
+
+#[test]
+fn f161_who_and_ruling_take_the_adr_shape() {
+    let w = Work::new("f161-who-mark");
+    approve(&w, "effective", &[row_with(&[("who", "未記入")])]);
+    assert_single_violation(
+        &w.check(),
+        "note",
+        &["meta の approval[0]: who「未記入」が一覧に無い（判断の記録の承認者の値域）"],
+    );
+
+    let w = Work::new("f161-ruling-mark");
+    approve(&w, "effective", &[row_with(&[("ruling", "未記入")])]);
+    assert_single_violation(
+        &w.check(),
+        "note",
+        &[
+            "meta の approval[0]: ruling「未記入」に台帳 id（",
+            "）が無い",
+        ],
+    );
+
+    let w = Work::new("f161-who-blank");
+    approve(&w, "effective", &[row_with(&[("who", "")])]);
+    assert_single_violation(&w.check(), "欄の非空", &["meta の approval[0] の who が空"]);
+
+    let w = Work::new("f161-five-effective");
+    approve(&w, "effective", &[unfilled_row()]);
+    assert_five_lines(&w.check(), 0);
+
+    let w = Work::new("f161-five-draft");
+    approve(&w, "draft", &[unfilled_row()]);
+    assert_five_lines(&w.check(), 0);
+
+    let w = Work::new("f161-five-second");
+    approve(&w, "effective", &[row_with(&[]), unfilled_row()]);
+    assert_five_lines(&w.check(), 1);
+}
+
+/// 判断の記録の欄の決まりの生成区間の approver の値。
+fn adr_approvers() -> Vec<String> {
+    let region = schema_region("design-intent/adr/schema.yaml");
+    let line = region
+        .lines()
+        .map(str::trim_start)
+        .find_map(|l| l.strip_prefix("approver: ["))
+        .expect("approver の行が無い");
+    line.strip_suffix(']')
+        .expect("approver の行が ] で終わらない")
+        .split(", ")
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn f161_who_and_ruling_agree_with_the_adr_approval() {
+    let approvers = adr_approvers();
+    assert_eq!(approvers.len(), 3, "approver の値: {approvers:?}");
+    let src = fs::read_to_string(repo_root().join("crates/folio/src/note.rs")).unwrap();
+    for a in &approvers {
+        assert!(
+            !src.contains(&format!("\"{a}\"")),
+            "note.rs が承認者の値「{a}」を自分で持つ"
+        );
+    }
+    let rulings_ok = ["f2-648.2 notes", "s2-07l.149", "f2-648 notes 2026-09-27"];
+    let whos_bad = ["持ち主（shuu5）", "未記入", "席", " 持ち主 "];
+    let rulings_bad = ["口頭", "未記入", "F2-648", "f2-"];
+    let mut cases: Vec<(String, &str, bool)> = approvers
+        .iter()
+        .zip(rulings_ok)
+        .map(|(a, r)| (a.clone(), r, true))
+        .collect();
+    cases.extend(
+        whos_bad
+            .iter()
+            .zip(rulings_bad)
+            .map(|(a, r)| ((*a).to_string(), r, false)),
+    );
+    for (i, (who, ruling, good)) in cases.iter().enumerate() {
+        let w = Work::new(&format!("f161-agree-{i}"));
+        w.mutate_file(
+            &w.dir().join("adr/ADR-2.yaml"),
+            "approval: {who: 持ち主, date: 2026-09-13, ruling: f2-648.2 notes 2026-09-13 09:35,",
+            &format!("approval: {{who: \"{who}\", date: 2026-09-13, ruling: \"{ruling}\","),
+        );
+        approve(
+            &w,
+            "effective",
+            &[row_with(&[("who", who), ("ruling", ruling)])],
+        );
+        let out = w.check();
+        let v = violations(&out);
+        let has =
+            |prefix: &str, word: &str| v.iter().any(|l| l.starts_with(prefix) && l.contains(word));
+        let adr_who = has("[N-4]", "ADR-2.approval.who");
+        let adr_ruling = has("[N-4]", "ADR-2.approval.ruling");
+        let note_who = has("[note] design-note/example.yaml", "who「");
+        let note_ruling = has("[note] design-note/example.yaml", "ruling「");
+        assert_eq!(adr_who, note_who, "who「{who}」: {v:?}");
+        assert_eq!(adr_ruling, note_ruling, "ruling「{ruling}」: {v:?}");
+        assert_eq!(note_who, !good, "who「{who}」: {v:?}");
+        assert_eq!(note_ruling, !good, "ruling「{ruling}」: {v:?}");
+        if *good {
+            assert_passes(&out);
+        }
     }
 }
