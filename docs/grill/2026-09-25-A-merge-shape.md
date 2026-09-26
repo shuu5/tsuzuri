@@ -48,3 +48,10 @@ init の口: scribe2 の host-init.md の形（host init / init / doctor）を�
 - 2026-09-25: s3 席が事実を確認し §2〜§5 を持ち主へ提示（答え待ち）
 - 2026-09-24T22:22Z: 持ち主「よい」→ ADR-4 を起こす（proposed）。次は論点 E（憲法の最小版 v1.0 の草案）
 - 2026-09-25: scribe2 席の助言 = init は宣言が在れば skip なので .vessel.toml は scribe3 側で直接 cargo の形へ・trunk は器の上限（cargo / git / bats）の外なので xtask の subcommand から起こす（上限は動かさない）。ADR-4 の note に写した
+
+## 7. 追記 — folio の CLI は tz に吸収する（持ち主 user 2026-09-26T00:22Z・逐語は t3-hub.1）
+
+- **持ち主の指示**: tz と folio2 の 2 つの command にはしない。folio2 という名は無くし、tz の subcommand に整理して吸収する。
+- **今の決めとの関係（verified）**: ADR-4 決定 (1) は crate を 6 つ（folio・scribe（core）・scribe-boundary・面の契約の型・面・xtask）とし、決定 (2) は folio と scribe の境界を「導出物の file を器が読む」形にした。ADR-6 は人が打つ CLI の名を tz とした。**人が打つ binary が 1 つ（tz）か 2 つ（tz + folio）かは、どの ADR も明示していない**。今回の指示でそれを 1 つに決める。
+- **席の案（推奨）**: 人が打つ binary は **tz の 1 つ**。folio の口は tz の subcommand に移す: `folio check` → `tz check`・`folio schema` → `tz schema`・`folio derive` → `tz derive`・`folio ceiling` → `tz ceiling`・`folio init` → `tz init`。`folio graph`（設計の索引だけ）は統合グラフの `tz graph`（grill B §11.2）に吸収され、索引だけの眺めは `tz graph --design` の絞りにする。folio の **crate（library）は残る**（ADR-4 (1) の 6 crate は変えない・境界の「導出物の file」も変えない・変わるのは boundary crate が folio の口も持つことだけ）。crate の名を folio から改めるかは code の持ち込み（ADR-4 (4) の最後の段）のときに決める（今は決めない・増殖の防止）。folio2 の repo は、code を持ち込むまでは folio2 の command のまま動く（ADR-4 (4) の順序は変えない）。
+- **記録の形**: ADR-4 の決定 (1) に「人が打つ binary は tz の 1 つ・folio の口は tz の subcommand」を amend する ADR（番号は ADR-7 の後）。裁定 id = user 2026-09-26T00:22Z。folio2 の席へ知らせる（M3 の出口の判定点に「tz の subcommand として床が合格」を読み替える必要があるか、folio2 側の判断の記録 21 を確かめてもらう）。
