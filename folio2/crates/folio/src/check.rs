@@ -3,8 +3,8 @@
 //! 判断の記録（adr/）の欄の決まり（便 5・adr）と、判断の記録と正本 4 file・凍結 anchor の列の突き合わせ（便 6・link）と、
 //! 凍結 anchor の列のうち版管理を見ない部分（便 7・anchor）と、入口の正本の形（便 12・entrance）と、
 //! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）と、天井の正本の形（便 37・ceiling）と、
-//! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ）と、置き場の憲法の値域が組み立てた値域の部分集合か（便 122・FR25・
-//! 条の値は置き場の値域で引く・部分集合でない鍵と引けない鍵は「まだ分からない」）と、憲法の meta・前文・条・規範文・mechanism と
+//! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ）と、置き場の憲法の値域が組み立てた値域と集合で等しいか（便 122・便 157・FR25・
+//! 条の値は置き場の値域で引く・広げた鍵と狭めた鍵と引けない鍵は「まだ分からない」）と、憲法の meta・前文・条・規範文・mechanism と
 //! 規則の表の行の未知の欄・mechanism の形の崩れ（便 128・一覧は組み立てた憲法の正本と規則の表の床の定数から）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
@@ -478,11 +478,12 @@ fn duplicate_statement_ids<'a>(rows: impl IntoIterator<Item = &'a Node>, report:
 /// 置き場の憲法の値域（鍵の名 → 値の列・file の順・同じ値は 1 つに）。条の値はこの表で引く（便 122）。
 type PlaceRange = HashMap<String, Vec<String>>;
 
-/// 置き場の憲法の値域の節（schema.enums）の各鍵が、組み立てた版（`constitution_enums::ENUMS`）の同じ鍵の値の部分集合かを
-/// 数える（便 122・FR25・ADR-16 決定 (2)(ウ)・順と重複は問わない）。部分集合でない鍵（組み立てた版に無い値・無い鍵）と、
+/// 置き場の憲法の値域の節（schema.enums）の各鍵が、組み立てた版（`constitution_enums::ENUMS`）の同じ鍵の値と集合で等しいかを
+/// 数える（便 122・便 157・FR25・ADR-16 決定 (2)(ウ)・順と重複は問わない）。広げた鍵（組み立てた版に無い値・無い鍵）と、
+/// 狭めた鍵（組み立てた版の値が無い・外した値を組み立てた版の順に名指し、広げた字の直後に出す）と、
 /// 引けない鍵（組み立てた版の鍵が節に無い・値が文字列の一覧でない・節が表でない）は鍵ごとに「まだ分からない」（測れない）1 件。
-/// 違反は出さない。返す表は文字列の一覧の鍵だけを持つ（部分集合でない鍵も入れる＝置き場の値域にも無い値は違反のまま）。
-/// 値域を置き場ごとに広げる口は持たない（N-3.1）。
+/// 違反は出さない。返す表は文字列の一覧の鍵だけを持つ（広げた鍵も狭めた鍵も入れる＝置き場の値域にも無い値は違反のまま）。
+/// 値域を置き場ごとに広げる口も狭める口も持たない（N-3.1）。
 fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
     const FILE: &str = "constitution.yaml";
     let mut range = PlaceRange::new();
@@ -526,6 +527,17 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
                     report.pending(format!(
                         "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い・FR25）",
                         outside.join("・")
+                    ));
+                }
+                let missing: Vec<String> = built
+                    .iter()
+                    .filter(|b| !list.iter().any(|v| v == *b))
+                    .map(|b| format!("「{b}」"))
+                    .collect();
+                if !missing.is_empty() {
+                    report.pending(format!(
+                        "{FILE}: schema.enums.{key}: 組み立て時の値域に在る値が無い（{}・値域を置き場ごとに狭める口は無い・FR25）",
+                        missing.join("・")
                     ));
                 }
             }

@@ -4,6 +4,8 @@
 //! `folio check` を撃つ。値域の節は憲法の改訂の差分の範囲（schema）に入るので、値域を変える変異では改憲の違反（種別 N-4）がちょうど
 //! 1 件出る。歯は N-4 がちょうど 1 件であることを確かめてから、それを除いた違反の行と「まだ分からない」の行を全部数える。
 //! 凍結 anchor（P-10.1）は手書きの tests/fixtures/check/enum-range-anchor.yaml（組み立てた値域 10 鍵）。
+//! 便 157（docs/design/delivery-157.md §1 (c)）: 床は部分集合でなく集合で等しいかを数え、狭めた鍵も「まだ分からない」1 件
+//! （外した値を組み立てた版の順に名指す・広げた字の直後）。外の置き場の段は `folio init` の骨格を git の 1 commit にした写し。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -89,6 +91,35 @@ impl Work {
         git(&root, &["add", "-A"]);
         git(&root, &["commit", "-q", "-m", "fixture"]);
         Work { root }
+    }
+
+    /// `folio init` の骨格の置き場（外の置き場と同じ形・根の直下の design-intent・git の 1 commit）。
+    fn skeleton(case: &str) -> Work {
+        let root =
+            std::env::temp_dir().join(format!("folio-range-{case}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        git(&root, &["init", "-q"]);
+        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+            .arg("init")
+            .arg("--dir")
+            .arg(root.join("design-intent"))
+            .output()
+            .expect("folio を起動できない");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let w = Work { root };
+        w.commit("skeleton");
+        w
+    }
+
+    fn commit(&self, message: &str) {
+        git(&self.root, &["add", "-A"]);
+        git(&self.root, &["commit", "-q", "-m", message]);
     }
 
     fn constitution(&self) -> PathBuf {
@@ -249,13 +280,29 @@ fn built_outside(key: &str, values: &str) -> String {
     )
 }
 
-/// 歯 1: 部分集合なら床が続き、条の値は置き場の値域で引かれる。
+/// 狭めた鍵の「まだ分からない」の字（便 157・外した値は組み立てた版の順）。
+fn built_missing(key: &str, values: &str) -> String {
+    format!(
+        "constitution.yaml: schema.enums.{key}: 組み立て時の値域に在る値が無い（{values}・値域を置き場ごとに狭める口は無い・FR25）"
+    )
+}
+
+/// 値域の「まだ分からない」の行（広げた字・狭めた字・引けない鍵）。
+fn range_pendings(r: &Run) -> Vec<&String> {
+    r.pendings
+        .iter()
+        .filter(|p| p.starts_with("constitution.yaml: schema.enums"))
+        .collect()
+}
+
+/// 歯 1: 並べ替えただけの値域なら床が続き、条の値は置き場の値域で引かれる。
+/// 便 157: 値を外した値域では条の値は置き場の値域で引き続け（違反のまま）、狭めた鍵の「まだ分からない」1 件が並ぶ。
 #[test]
-fn f122_subset_range_is_silent_and_article_values_are_looked_up_in_the_place_range() {
-    let w = Work::new("subset");
+fn f122_reordered_range_is_silent_and_article_values_are_looked_up_in_the_place_range() {
+    let w = Work::new("reordered");
     w.mutate(
         "mechanism_live: [now, M0, delivery-0, M1, adr]",
-        "mechanism_live: [adr, M1, delivery-0, now]",
+        "mechanism_live: [adr, M1, delivery-0, M0, now]",
     );
     let r = w.check();
     r.one_amendment();
@@ -263,6 +310,10 @@ fn f122_subset_range_is_silent_and_article_values_are_looked_up_in_the_place_ran
     assert!(r.pendings.is_empty(), "{}", r.all);
     assert_eq!(r.verdict, "folio check: 不合格（違反 1・まだ分からない 0）", "{}", r.all);
 
+    w.mutate(
+        "mechanism_live: [adr, M1, delivery-0, M0, now]",
+        "mechanism_live: [adr, M1, delivery-0, now]",
+    );
     w.mutate(
         P1_MECHANISM,
         "{kind: build-check, live: M0, stage: post, polarity: fail-closed, note: 公開する命令",
@@ -275,8 +326,14 @@ fn f122_subset_range_is_silent_and_article_values_are_looked_up_in_the_place_ran
         "{}",
         r.all
     );
-    assert!(r.pendings.is_empty(), "{}", r.all);
-    assert_eq!(r.code, Some(1), "{}", r.all);
+    assert_eq!(
+        r.pendings,
+        [built_missing("mechanism_live", "「M0」")],
+        "{}",
+        r.all
+    );
+    assert_eq!(r.verdict, "folio check: 不合格（違反 2・まだ分からない 1）", "{}", r.all);
+    assert_ne!(r.code, Some(0), "{}", r.all);
 }
 
 /// 歯 2: 組み立てた値域の外の値は「まだ分からない」で合格にならず、置き場の値域に在る値は違反にならない。
@@ -421,23 +478,137 @@ fn f122_frozen_anchor_passes_and_outside_values_are_pending_per_key() {
     assert_ne!(r.code, Some(0), "{}", r.all);
 }
 
-/// 歯 5: 判断の記録の床も撤退条件の種類を部分集合で数える（値を外した・並べ替えただけの一覧は黙る）。
+/// 歯 5: 判断の記録の床も撤退条件の種類を部分集合で数える（並べ替えただけの一覧は黙る）。
+/// 便 157: 値を外した一覧は値域の床が狭めた鍵として数える（f157_narrowed_range_is_pending_and_never_pass の ⑤）。
 #[test]
-fn f122_narrowed_or_reordered_retreat_kind_is_silent() {
-    for (case, to) in [
-        ("retreat-narrowed", "retreat_kind: [ruling, spike]"),
-        ("retreat-reordered", "retreat_kind: [ruling, measure, spike]"),
-    ] {
-        let w = Work::new(case);
-        w.mutate("retreat_kind: [spike, measure, ruling]", to);
-        let r = w.check();
-        r.one_amendment();
-        assert!(r.others.is_empty(), "{case}: {}", r.all);
-        assert!(r.pendings.is_empty(), "{case}: {}", r.all);
-        assert_eq!(
-            r.verdict, "folio check: 不合格（違反 1・まだ分からない 0）",
-            "{case}: {}",
-            r.all
-        );
+fn f122_reordered_retreat_kind_is_silent() {
+    let w = Work::new("retreat-reordered");
+    w.mutate(
+        "retreat_kind: [spike, measure, ruling]",
+        "retreat_kind: [ruling, measure, spike]",
+    );
+    let r = w.check();
+    r.one_amendment();
+    assert!(r.others.is_empty(), "{}", r.all);
+    assert!(r.pendings.is_empty(), "{}", r.all);
+    assert_eq!(r.verdict, "folio check: 不合格（違反 1・まだ分からない 0）", "{}", r.all);
+}
+
+/// 歯 6（便 157）: 狭めた値域は「まだ分からない」で合格にならない。外した値は組み立てた版の順に名指し、字は鍵の順で、
+/// 同じ鍵では広げた字の直後。撤退条件の種類も同じ（判断の記録の床は黙る）。`folio init` の骨格の置き場でも同じ。
+#[test]
+fn f157_narrowed_range_is_pending_and_never_pass() {
+    // ① strength から should を外す
+    let w = Work::new("narrowed");
+    w.mutate("strength: [must, must-not, should]", "strength: [must, must-not]");
+    let r = w.check();
+    r.one_amendment();
+    assert!(r.others.is_empty(), "{}", r.all);
+    assert_eq!(r.pendings, [built_missing("strength", "「should」")], "{}", r.all);
+    assert_eq!(r.verdict, "folio check: 不合格（違反 1・まだ分からない 1）", "{}", r.all);
+    assert_ne!(r.code, Some(0), "{}", r.all);
+
+    // ② should を may に替える
+    w.mutate("strength: [must, must-not]", "strength: [must, must-not, may]");
+    let r = w.check();
+    r.one_amendment();
+    assert!(r.others.is_empty(), "{}", r.all);
+    assert_eq!(
+        r.pendings,
+        [
+            built_outside("strength", "「may」"),
+            built_missing("strength", "「should」"),
+        ],
+        "{}",
+        r.all
+    );
+
+    // ③ そのまま binds を tool だけにする（外した値は組み立てた版の順）
+    w.mutate("binds: [tool, practice, both]", "binds: [tool]");
+    let r = w.check();
+    assert_eq!(
+        r.pendings,
+        [
+            built_missing("binds", "「practice」・「both」"),
+            built_outside("strength", "「may」"),
+            built_missing("strength", "「should」"),
+        ],
+        "{}",
+        r.all
+    );
+    assert_ne!(r.code, Some(0), "{}", r.all);
+
+    // ④ strength を must だけにする
+    w.mutate("strength: [must, must-not, may]", "strength: [must]");
+    let r = w.check();
+    assert_eq!(
+        r.pendings,
+        [
+            built_missing("binds", "「practice」・「both」"),
+            built_missing("strength", "「must-not」・「should」"),
+        ],
+        "{}",
+        r.all
+    );
+    assert_ne!(r.code, Some(0), "{}", r.all);
+
+    // ⑤ 撤退条件の種類から measure を外す（判断の記録の床は黙る）
+    let w = Work::new("retreat-narrowed");
+    w.mutate("retreat_kind: [spike, measure, ruling]", "retreat_kind: [spike, ruling]");
+    let r = w.check();
+    r.one_amendment();
+    assert!(r.others.is_empty(), "{}", r.all);
+    assert_eq!(r.pendings, [built_missing("retreat_kind", "「measure」")], "{}", r.all);
+    assert_eq!(r.verdict, "folio check: 不合格（違反 1・まだ分からない 1）", "{}", r.all);
+
+    // ⑥ folio init の骨格の置き場
+    let w = Work::skeleton("skeleton");
+    let base = w.check();
+    assert!(base.n4.is_empty() && base.others.is_empty(), "{}", base.all);
+    assert!(range_pendings(&base).is_empty(), "{}", base.all);
+    // 骨格の値域は引用符付きの block の形
+    w.mutate(
+        "\"strength\":\n      - \"must\"\n      - \"must-not\"\n      - \"should\"\n",
+        "\"strength\":\n      - \"must\"\n      - \"must-not\"\n",
+    );
+    w.commit("narrow strength");
+    let r = w.check();
+    assert!(r.n4.is_empty() && r.others.is_empty(), "{}", r.all);
+    assert_eq!(r.pendings.len(), base.pendings.len() + 1, "{}", r.all);
+    assert_eq!(
+        range_pendings(&r),
+        [&built_missing("strength", "「should」")],
+        "{}",
+        r.all
+    );
+    assert_eq!(r.code, Some(2), "{}", r.all);
+}
+
+/// 歯 7（便 157）: 凍結 anchor の各鍵から末尾の値を 1 つずつ外すと、鍵ごとに「まだ分からない」1 件が anchor の鍵の順に並ぶ。
+#[test]
+fn f157_every_narrowed_key_is_pending_per_key() {
+    let lines = anchor_lines();
+    let mut narrowed: Vec<String> = Vec::new();
+    let mut expected: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        let key = lines[i].trim_end_matches(':').to_string();
+        narrowed.push(lines[i].clone());
+        let mut j = i + 1;
+        while j < lines.len() && lines[j].starts_with(' ') {
+            j += 1;
+        }
+        assert!(j > i + 1, "鍵 {key} に値が無い");
+        narrowed.extend(lines[i + 1..j - 1].iter().cloned());
+        let last = lines[j - 1].trim().trim_start_matches("- ");
+        expected.push(built_missing(&key, &format!("「{last}」")));
+        i = j;
     }
+    assert_eq!(expected.len(), 10, "anchor の鍵が 10 でない");
+    let w = Work::new("anchor-narrowed");
+    w.set_enums(&indent(&narrowed));
+    let r = w.check();
+    r.one_amendment();
+    assert_eq!(r.pendings, expected, "{}", r.all);
+    assert_ne!(r.code, Some(0), "{}", r.all);
 }
