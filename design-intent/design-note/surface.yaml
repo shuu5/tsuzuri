@@ -236,6 +236,84 @@ sections:
         size: M
         done: (1) 11 の口で終了 code と出力が folio2 と一致 (2) tz graph --design が設計の索引だけを出す (3) tz inject が無い (4) folio という名の binary が workspace に無い
         depends: [a]
+  - n: 17
+    type: parts-table
+    title: 導出グラフの節点の種類（閉じた一覧・20・判断の記録 ADR-7 決定 (2)）
+    rows:
+      - {id: n-folio, name: 設計文書の 11 種, role: 条・規範文・規則行・目的・要件・非機能要件・受入基準・制約・登場人物・出力・判断の記録（索引の欄の決まり graph.yaml の node_kinds の写し・正本は folio の実装の定数）, ref: [FR2]}
+      - {id: n-note-row, name: 設計ノートの行, role: id を持つ行（部品・口・欄・歯・契約表の行）。id は <文書 id>#<行 id>。文書そのものは節点にしない, ref: [FR2]}
+      - {id: n-epic, name: epic, role: 台帳の epic（根と束）, ref: [FR2]}
+      - {id: n-task, name: task（契約）, role: acceptance に設計の pointer 行を持つ bead。memo の label を持たない, ref: [FR2, FR10]}
+      - {id: n-memo, name: memo, role: label intake:memo を持つ bead。昇格先の無い memo は未反映に数える, ref: [FR2, FR13]}
+      - {id: n-question, name: question（問い）, role: 席が置く問いの bead。touches と premises を metadata に持つ, ref: [FR2, FR4, FR6]}
+      - {id: n-ruling, name: あなたの決定（裁定）, role: 問いの bead の notes の定型行から導く。裁定 id は server が発行, ref: [FR2, FR6]}
+      - {id: n-receipt, name: orchestrator の受け, role: 問いの bead の notes の「受け」の定型行から導く, ref: [FR2, FR9]}
+      - {id: n-policy, name: 全体への指示（方針）, role: 根の直下の memo「方針」の notes の定型行から導く, ref: [FR2, FR8]}
+      - {id: n-run, name: run（走行）, role: 器の event log の RunCreated から導く。属性（段・理由・verdict・審査・費用・時刻）は辺にしない, ref: [FR2, FR10]}
+  - n: 18
+    type: parts-table
+    title: 導出グラフの辺の型（閉じた一覧・30 + 候補 1・判断の記録 ADR-7 決定 (2)）
+    rows:
+      - {id: e-folio, name: 設計文書の 17 型, role: in-article・relations.articles・relations.reqs・relations.rules・relations.sections・amended_by・article・refs・basis・goals・rules・adrs・verify.ac・verifies・figures・produced・amends（graph.yaml の edge_types の写し）, ref: [FR2]}
+      - {id: e-beads, name: 台帳の 4 型, role: parent-child・blocks・relates-to・discovered-from（bd の依存の種類のうち使う 4 つ）, ref: [FR2]}
+      - {id: e-design, name: design, role: 契約 → 設計ノートの行。正本 = bead の acceptance の pointer 行, ref: [FR2, FR10]}
+      - {id: e-ruled-by, name: ruled_by, role: 判断の記録・規則行・発効した文書 → 裁定。正本 = 承認欄の型付きの 2 欄（台帳 id と裁定 id）。「裁定 → 変えた節点」は逆向きとして導き書かない, ref: [FR2, FR3]}
+      - {id: e-answers, name: answers, role: 裁定 → 問い。正本 = notes の定型行（server が書く）, ref: [FR2, FR6]}
+      - {id: e-touches, name: touches, role: 問い → 任意の節点。正本 = bead の metadata の閉じた key（席が問いを置くとき）, ref: [FR2, FR4]}
+      - {id: e-premises, name: premises, role: 問い → 方針。正本 = metadata, ref: [FR2, FR8]}
+      - {id: e-source, name: source, role: memo → 裁定か走行。正本 = metadata（器が memo の plan に写す）, ref: [FR2]}
+      - {id: e-run-of, name: run_of, role: 走行 → 契約 bead。正本 = run id の前半（器の event RunCreated）, ref: [FR2, FR10]}
+      - {id: e-raised, name: raised, role: 走行 → 問い。正本 = 器の event QuestionRaised と問いの bead の metadata source, ref: [FR2, FR10]}
+      - {id: e-ran-by, name: ran_by, role: 走行 → 口座。口座は節点にせず走行の属性の札で出す（正本 = SeatSpawned の account）, ref: [FR2, FR10]}
+      - {id: e-promoted-to, name: promoted_to（候補）, role: memo → 昇格先（設計の行か契約）。正本は未定（metadata の key の候補）。型の名と正本は便 c で決める, ref: [FR13]}
+  - n: 19
+    type: parts-table
+    title: 不変条件（閉じた一覧・12・tz graph --check が 3 値で数える）
+    rows:
+      - {id: g-1, name: 辺の両端が実在する, role: 片端の無い辺は違反。読めない出所の辺は「まだ分からない」, ref: [FR3]}
+      - {id: g-2, name: open の契約は設計の行をちょうど 1 つ指す, role: pointer が解けない・2 つ以上・無い契約は違反, ref: [FR3]}
+      - {id: g-3, name: 発効した記録は裁定の行を持つ, role: accepted の判断の記録と規則行は ruled_by を持ち、先の bead の notes にその裁定の行が在る, ref: [FR3]}
+      - {id: g-4, name: 問いは処分を持つ, role: touches を 1 つ以上持ち、見た版から要約値が変われば古い印, ref: [FR3, FR4]}
+      - {id: g-5, name: 孤児 0, role: 全 bead が根から parent-child で届く。未着地の契約行はどれかの bead に指される, ref: [FR3]}
+      - {id: g-6, name: 輪 0, role: blocks に循環が無く parent-child は木, ref: [FR3]}
+      - {id: g-7, name: 宙に浮いた裁定 0, role: 裁定は問い（answers）か発効した記録（ruled_by の先）のどちらかに結ばれる, ref: [FR3]}
+      - {id: g-8, name: 4 象限の違反 0, role: memo の label と pointer 行の両方在る・両方無い bead は違反（epic と裁定の bead は除く）, ref: [FR3]}
+      - {id: g-9, name: 名指した id は欄にも在る, role: 本文で名指した id が欄か辺に無ければ数える（規則行 R-17 と同じ・detect から 2 周の実測の後に deny）, ref: [FR3]}
+      - {id: g-10, name: id の族が互いに素, role: 設計文書・設計ノートの行・台帳・走行の 4 族の id が repo 内で一意, ref: [FR3]}
+      - {id: g-11, name: 走行は契約を 1 つ持つ, role: run_of をちょうど 1 つ持ち、先の bead が在る（宙に浮いた走行 0）, ref: [FR3, FR10]}
+      - {id: g-12, name: Questioned の走行は問いを持つ, role: raised の先の問いが在り、QuestionAnswered が在れば問いは closed, ref: [FR3, FR10]}
+  - n: 20
+    type: fields-table
+    title: 契約の型（契約の型の crate に置く型の一覧・便 b）
+    rows:
+      - {id: surface-event, name: 面の event（SeatState・QuestionPosted・RulingRead・RunStage の閉じた enum）, need: required, shape: table}
+      - {id: surface-state, name: 面の状態（席の状態・次の一手・最終更新）, need: required, shape: table}
+      - {id: question-nudge, name: 問いの合図（問いの bead の id）, need: required, shape: text}
+      - {id: ruling-request, name: 裁定の要求（問いの id・見た版の要約値・逐語）, need: required, shape: table}
+      - {id: ruling-response, name: 裁定の応答（裁定 id・記帳時刻）, need: required, shape: table}
+      - {id: batch-request, name: 束の要求（問いの id の列・束の逐語・個別の逐語）, need: required, shape: table}
+      - {id: batch-response, name: 束の応答（束の id・行ごとの結果）, need: required, shape: table}
+      - {id: item-outcome, name: 行ごとの結果（書いた・飛ばした・断った）, need: required, shape: text}
+      - {id: policy-request, name: 方針の要求（範囲・逐語）, need: required, shape: table}
+      - {id: ledger-write, name: 台帳への書き（AppendNotes・CloseItem・CreateChild の閉じた enum・bdw の argv を組む）, need: required, shape: table}
+      - {id: graph-node, name: グラフの節点（id・種類・所属 file・要約値・題 36 字）, need: required, shape: table}
+      - {id: graph-edge, name: グラフの辺（from・to・型）, need: required, shape: table}
+      - {id: pipeline-card, name: pipeline の札（契約 bead・走行の回数・段・段の理由・口座・経過）, need: required, shape: table}
+      - {id: account-board, name: account board の data（群と口座・session の行・project の指標・次の一手）, need: required, shape: table}
+      - {id: next-move, name: 次の一手（閉じた 7 種）, need: required, shape: text}
+      - {id: ledger-judge, name: 台帳の判定（順調・停滞・滞り・積み増し・台帳なし）, need: required, shape: text}
+  - n: 21
+    type: ports-table
+    title: 器に頼む口と読む file（面は書かない・器の版上げで足すものは note に）
+    rows:
+      - {id: v-tick-last, name: 席の合図の健康（読む）, input: 席の置き場の tick-last（ts と decision と reason）, output: healthy か stale（now − ts ≤ 2 × seat.tick_interval_s）, refuses: なし（無ければ「まだ分からない」）, ref: [FR12]}
+      - {id: v-heartbeat-off, name: 席の停止（読む）, input: 席の置き場の heartbeat-off（ts）, output: 停止中か, refuses: なし, ref: [FR12]}
+      - {id: v-move-signal, name: 退避の合図（読む）, input: 席の置き場の move-signal（群の記録の ts）と rules 行 seat.move_grace_s, output: 退避までの残り秒, refuses: なし, ref: [FR12]}
+      - {id: v-group-record, name: 群の記録（読む）, input: groups/<群>.account と history, output: 今の口座・移った時刻・理由・前の口座, refuses: なし, ref: [FR12]}
+      - {id: v-events, name: 器の event log（読む）, input: fleet/events.jsonl と pipe/<run>/events.jsonl, output: 走行の属性・席の状態・承認の event, refuses: なし（読めなければ走行だけ「まだ分からない」）, ref: [FR10]}
+      - {id: v-heartbeat-cli, name: 停止の切り替え（撃つ）, input: 器の CLI（seat heartbeat off か on と target）, output: 器の結果, refuses: 知らない target, ref: [FR12], note: command の名は scribe2 席に確認中。面は file を書かない}
+      - {id: v-deliver, name: 待ちの席へ 1 行（撃つ）, input: 器の配達の口（deliver_within を包む口）と席の target と 1 行, output: 届いたか, refuses: 席が考え中（停止の hook に回す）, ref: [FR9], note: 新設の口。器の側の起票は scribe2 席に確認中}
+      - {id: v-device, name: 端末の一覧（読む）, input: 器の宣言（host の面）の端末の行（名・ssh の宛先・Chrome の場所・画面の環境・入力の環境・専用の profile・OS）, output: 端末の名で引ける行, refuses: 知らない名, ref: [FR16], note: 器の版上げで足す行。scribe2 席に確認中}
 
 figures: []
 sources:

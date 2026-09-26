@@ -211,6 +211,7 @@ articles:
       - {kind: folio2-ruling, ref: folio2 P6（枝 1〜4）}
       - {kind: scribe2-article, ref: scribe2 C1.2（宣言 file 由来の生成物）}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 導出物の差分 0 の検査（folio derive --check・folio inject --check）。}
+    relations: {rules: [R-18, R-19, R-20, R-21, R-22, R-23, R-24]}
   - id: P-3
     title: 番号は増やすだけ（append only）
     tier: always
@@ -606,7 +607,7 @@ articles:
       - {kind: folio2-ruling, ref: folio2 N2（枝 1〜2）}
       - {kind: scribe2-article, ref: scribe2 N2（手書きの規範文 0 行）}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 設計ノートの散文の門（行 R-16）と手書きの規範文 0 行の検査。}
-    relations: {rules: [R-16]}
+    relations: {rules: [R-16, R-17]}
   - id: N-3
     title: 例外の仕組みを作らない
     tier: never

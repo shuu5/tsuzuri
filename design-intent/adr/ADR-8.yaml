@@ -31,7 +31,7 @@ options:
     text: folio の crate を tsuzuri の名に改める。
     verdict: rejected
     reason: code の持ち込みの前に改めると folio2 の履歴と食い違う。持ち込みの段で決める（増殖の防止）。
-basis: [P-27, N-3, ADR-4, ADR-6]
+basis: [P-27, N-3, ADR-4, ADR-6, ADR-7]
 revises:
   - target: ADR-4
     decision: (1)

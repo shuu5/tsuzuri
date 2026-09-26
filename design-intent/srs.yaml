@@ -119,6 +119,7 @@ requirements:
     verify: {method: test, how: 節点の形と帯の class を snapshot で pin し、hub の fixture で光る節点が 20 以下で hub が展開されないことを見る, ac: [AC4, AC9]}
     goals: [GOAL2]
     figures: []
+    rules: [R-20]
     adrs: [ADR-7]
   - id: FR6
     title: 問いの card と答え
@@ -167,6 +168,7 @@ requirements:
     verify: {method: test, how: 偽の器で配達と停止の hook の 2 経路を撃ち、event の 1 行と席の受けの行を見る, ac: [AC1]}
     goals: [GOAL1]
     figures: []
+    rules: [R-21]
     adrs: [ADR-7]
   - id: FR10
     title: pipeline の板と走行の節点
@@ -191,6 +193,7 @@ requirements:
     verify: {method: test, how: 7 種の fixture で判じられる 1 つと順を snapshot で見る, ac: [AC9]}
     goals: [GOAL1, GOAL3]
     figures: []
+    rules: [R-24]
     adrs: [ADR-7]
   - id: FR12
     title: 口座と席の健康
@@ -203,6 +206,7 @@ requirements:
     verify: {method: test, how: tick が古い・heartbeat-off が在る・move-signal が在る の fixture で状態の語と残り秒を見て、state dir の byte が不変であることを見る, ac: [AC10, AC11]}
     goals: [GOAL3]
     figures: []
+    rules: [R-22]
     adrs: [ADR-7]
   - id: FR13
     title: 台帳の指標と未反映の一覧
@@ -215,6 +219,7 @@ requirements:
     verify: {method: test, how: 一時の台帳の fixture で判定の 5 値と未反映の 3 種の数を見る, ac: [AC12]}
     goals: [GOAL2, GOAL3]
     figures: []
+    rules: [R-18]
     adrs: [ADR-7]
   - id: FR14
     title: 語彙と文の予算と hover の規則
@@ -227,6 +232,7 @@ requirements:
     verify: {method: test, how: 全画面の「?」と card を描いて字数と行数を数え、hover の置き場を browser の runner で撃つ, ac: [AC9]}
     goals: [GOAL1]
     figures: []
+    rules: [R-19, R-20]
     adrs: [ADR-7]
   - id: FR15
     title: 概要は data で持つ
@@ -277,6 +283,7 @@ nonfunctional:
     verify: {method: test, how: browser の runner で全画面 × 2 幅 × 2 mode を描いて 12 条を数える, ac: [AC9]}
     goals: [GOAL1]
     figures: []
+    rules: [R-23]
     adrs: [ADR-7]
   - id: NFR2
     title: 更新の遅れ
@@ -289,6 +296,7 @@ nonfunctional:
     verify: {method: test, how: 一時の台帳へ 1 行書いてから SSE に届くまでの時間を測る, ac: [AC1]}
     goals: [GOAL1]
     figures: []
+    rules: [R-21]
     adrs: [ADR-7]
   - id: NFR3
     title: 依存の予算と見せる先
@@ -301,6 +309,7 @@ nonfunctional:
     verify: {method: test, how: cargo deny と bind の宛先の歯で見る, ac: [AC9]}
     goals: [GOAL4]
     figures: []
+    rules: [R-2]
     adrs: [ADR-3]
 
 acceptance:
