@@ -800,3 +800,83 @@ fn f136_quoted_rule_row_stops_the_build_floor() {
     assert!(stdout(&run).contains("床 = 不合格（違反 1・"), "{}", stdout(&run));
     assert!(!exists, "床が不合格なのに配信先の dir を作った");
 }
+
+/// 便 153（docs/design/delivery-153.md §1 (c) の 2・ADR-27 決定 (2)）: 置き場の様式が在ればその字を出し、無いときだけ
+/// 組み立て時に焼いた folio2 の様式を出す。在るのに読めない様式（dir・壊れた symlink・途中が file）は まだ分からない で
+/// 配信先を作らない。
+#[test]
+fn f153_build_falls_back_to_the_baked_style_only_when_the_place_has_none() {
+    let (td, work) = fixture_copy("f153-baked");
+    let preview = work.join("preview");
+    let repo_style = |name: &str| fs::read(design_intent().join("preview").join(name)).unwrap();
+
+    // 1. 置き場の様式（凍結 fixture の最小の様式・repo の正本と違う字）が在れば、その字を出す
+    let site = td.join("site-own");
+    let run = folio_build(&work, &site, "--write");
+    assert_eq!(code(&run, "folio build --write"), 2, "{}", stderr(&run));
+    for name in ["folio.css", "folio-ui.js"] {
+        let own = fs::read(fixture().join(name)).unwrap();
+        assert!(own != repo_style(name), "{name}: fixture が repo の正本と同じ");
+        assert!(
+            fs::read(site.join(name)).unwrap() == own,
+            "{name}: 置き場の様式を出していない"
+        );
+    }
+
+    // 2. 2 本を消すと 7 file を書き、2 本とも repo の正本と byte で同じ・--check は 0
+    for name in ["folio.css", "folio-ui.js"] {
+        fs::remove_file(preview.join(name)).unwrap();
+    }
+    let site = td.join("site-baked");
+    let run = folio_build(&work, &site, "--write");
+    assert_eq!(code(&run, "folio build --write"), 2, "{}", stderr(&run));
+    assert!(
+        stdout(&run).contains("folio build: 書いた（7 file・"),
+        "{}{}",
+        stdout(&run),
+        stderr(&run)
+    );
+    for name in ["folio.css", "folio-ui.js"] {
+        assert!(
+            fs::read(site.join(name)).unwrap() == repo_style(name),
+            "{name}: 焼いた様式が repo の正本と byte で違う"
+        );
+    }
+    let check = folio_build(&work, &site, "--check");
+    assert_eq!(code(&check, "folio build --check"), 0, "{}", stderr(&check));
+
+    // 3・4. folio.css が dir か壊れた symlink なら 2 で「folio.css: 読めない」・配信先を作らない
+    let css = preview.join("folio.css");
+    fs::create_dir(&css).unwrap();
+    let dir_site = td.join("site-dir");
+    let dir_run = folio_build(&work, &dir_site, "--write");
+    fs::remove_dir(&css).unwrap();
+    std::os::unix::fs::symlink(td.join("no-such.css"), &css).unwrap();
+    let link_site = td.join("site-link");
+    let link_run = folio_build(&work, &link_site, "--write");
+    fs::remove_file(&css).unwrap();
+    for (case, run, out) in [("dir", &dir_run, &dir_site), ("symlink", &link_run, &link_site)] {
+        assert_eq!(code(run, "folio build --write"), 2, "{case}: {}", stderr(run));
+        assert!(
+            stderr(run).contains("folio.css: 読めない"),
+            "{case}: {}",
+            stderr(run)
+        );
+        assert!(!out.exists(), "{case}: 読めない様式で配信先を作った");
+    }
+
+    // 5. preview が file（途中が file）なら 2 で配信先を作らない
+    fs::remove_dir_all(&preview).unwrap();
+    fs::write(&preview, "file\n").unwrap();
+    let file_site = td.join("site-file");
+    let file_run = folio_build(&work, &file_site, "--write");
+    let file_exists = file_site.exists();
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(
+        code(&file_run, "folio build --write"),
+        2,
+        "{}",
+        stderr(&file_run)
+    );
+    assert!(!file_exists, "preview が file なのに配信先を作った");
+}

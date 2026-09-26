@@ -5,9 +5,13 @@
 //! 行内の様式（許す性質だけ）を数える。
 //! 面と様式の定義は外部 crate も正規表現も使わない手書きの走査で読む。
 //! 閉じた一覧そのものの取り込みは `catalog.rs`（便 108・ADR-15・層 1 読む）へ降ろした。
+//! 焼いた正本（便 153・ADR-27 決定 (2)）: 置き場に部品目録か様式が無いときだけ、組み立て時に焼いた folio2 の字で埋める。
+//! 「無い」は `absent`（file が見つからないときだけ）で判定し、在るのに読めない file は今までどおり まだ分からない。
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use crate::catalog::{
@@ -21,6 +25,21 @@ pub const FACES: [&str; 5] = ["index", "constitution", "srs", "adr", "note"];
 
 /// 検査する 3 つの属性。
 const ATTRS: [&str; 3] = ["class", "style", "data-component"];
+
+// ── 焼いた正本（便 153）──
+
+/// 組み立て時に焼いた folio2 の部品目録（design-intent/preview/parts.json）。
+pub const BAKED_CATALOG: &str = include_str!("../../../design-intent/preview/parts.json");
+/// 組み立て時に焼いた folio2 の様式の定義（design-intent/preview/folio.css）。
+pub const BAKED_CSS: &str = include_str!("../../../design-intent/preview/folio.css");
+/// 組み立て時に焼いた folio2 の面の振る舞い（design-intent/preview/folio-ui.js）。
+pub const BAKED_UI_JS: &str = include_str!("../../../design-intent/preview/folio-ui.js");
+
+/// 無いの判定: symlink を辿らずに引いて、見つからない（NotFound）ときだけ真。dir・壊れた symlink・権限が無い・
+/// 途中が file は「無い」にしない（ADR-27 決定 (2)・P-4.1）。
+pub fn absent(path: &Path) -> bool {
+    matches!(fs::symlink_metadata(path), Err(e) if e.kind() == ErrorKind::NotFound)
+}
 
 // ── --print ──
 
@@ -60,9 +79,16 @@ fn json_list<'a>(items: impl Iterator<Item = &'a str>, out: &mut String) {
 
 // ── --check ──
 
-/// 1 回の検査。`pages` は「<面の名>=<path>」（空なら dir の下の preview/ の 3 面）・`css` が None なら dir の下の preview/folio.css。
+/// 1 回の検査。`pages` は「<面の名>=<path>」（空なら dir の下の preview/ の 3 面）・`css` が None なら dir の下の preview/folio.css
+/// （無ければ焼いた様式）。
 pub fn check(dir: &Path, css: Option<&Path>, pages: &[String]) -> Report {
     let mut report = Report::default();
+
+    // 0. 置き場が dir でなければ数えない（焼いた字で埋めるのは置き場の中に file が無いときだけ）
+    if !dir.is_dir() {
+        report.unknown(format!("置き場 {}: dir でない", dir.display()));
+        return report;
+    }
 
     // 1. 部品目録と組み立て時の写しの一致（違えば以下は数えない）
     if let Err(msg) = catalog_matches(&dir.join("preview/parts.json")) {
@@ -91,7 +117,12 @@ pub fn check(dir: &Path, css: Option<&Path>, pages: &[String]) -> Report {
 
     // 様式の定義
     let css_path = css.map_or_else(|| dir.join("preview/folio.css"), Path::to_path_buf);
-    let classes = match fs::read_to_string(&css_path) {
+    let css_text = if css.is_none() && absent(&css_path) {
+        Ok(Cow::Borrowed(BAKED_CSS))
+    } else {
+        fs::read_to_string(&css_path).map(Cow::Owned)
+    };
+    let classes = match css_text {
         Ok(text) => match css_classes(&text) {
             Ok(set) => Some(set),
             Err(e) => {
@@ -115,9 +146,13 @@ pub fn check(dir: &Path, css: Option<&Path>, pages: &[String]) -> Report {
 }
 
 /// 実行時の部品目録を読み、組み立て時に導出した一覧（型 4 つと密度 profile）・上限（部品ごとの max_ で始まる欄の名と値）・図の型の
-/// 名札（type_ids の対と順）と過不足なく同じ順で一致するか。違えば Err（まだ分からない）。
+/// 名札（type_ids の対と順）と過不足なく同じ順で一致するか。違えば Err（まだ分からない）。部品目録が無ければ焼いた字で数える。
 fn catalog_matches(path: &Path) -> Result<(), String> {
-    let text = fs::read_to_string(path).map_err(|e| format!("parts.json: 読めない（{e}）"))?;
+    let text = if absent(path) {
+        Cow::Borrowed(BAKED_CATALOG)
+    } else {
+        Cow::Owned(fs::read_to_string(path).map_err(|e| format!("parts.json: 読めない（{e}）"))?)
+    };
     let doc = yaml::parse(&text).map_err(|e| format!("parts.json: 読めない（{e}）"))?;
     if let Some(d) = doc.duplicates.first() {
         return Err(format!(

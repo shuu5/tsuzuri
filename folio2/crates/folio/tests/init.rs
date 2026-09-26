@@ -779,7 +779,8 @@ fn f125_no_folio2_ids_in_the_skeleton() {
 }
 
 /// 歯 8（便 152・群 A の通し）: 根の直下の design-intent に init して commit した後、手直しなしで床・注入・欄の決まり・
-/// 組み立て・4 面が答える。組み立ては様式の file が無いので 2 で、配信先を作らない（便 153 が延ばす）。
+/// 組み立て・4 面が答える。便 153（delivery-153.md §1 (c) の 1）: 組み立ては置き場に様式が無いので焼いた様式を出し、
+/// 6 file を書いて床の まだ分からない だけで 2・--check は 0・配信先の 4 面の部品の検査は 0（置き場に preview/ を作らない）。
 #[test]
 fn f152_the_skeleton_runs_every_command_without_hand_edits() {
     let w = Work::new("run-all");
@@ -828,10 +829,19 @@ fn f152_the_skeleton_runs_every_command_without_hand_edits() {
         "{}",
         both(&build)
     );
-    let errs = stderr(&build);
-    assert_eq!(errs.lines().count(), 1, "{errs}");
-    assert!(errs.contains("preview/folio.css: 読めない"), "{errs}");
-    assert!(!site.exists(), "配信先を作った");
+    assert!(stdout(&build).contains("書いた（6 file・"), "{}", both(&build));
+    assert!(stderr(&build).is_empty(), "{}", both(&build));
+    for name in ["folio.css", "folio-ui.js"] {
+        let got = fs::read(site.join(name)).unwrap();
+        let want = fs::read(folio2().join("preview").join(name)).unwrap();
+        assert!(got == want, "{name} が repo の正本と byte で違う");
+    }
+    assert!(!place.join("preview").exists(), "置き場に preview/ を作った");
+    let build_check = folio(
+        &["build", "--check", "--out", site.to_str().unwrap()],
+        &place,
+    );
+    assert_eq!(build_check.status.code(), Some(0), "{}", both(&build_check));
 
     for (face, id) in [
         ("adr", Some("ADR-1")),
@@ -849,6 +859,24 @@ fn f152_the_skeleton_runs_every_command_without_hand_edits() {
         let html = fs::read_to_string(&out).unwrap();
         assert!(html.starts_with("<!DOCTYPE html>"), "face {face}");
     }
+
+    let pages: Vec<String> = [
+        ("index", "index.html"),
+        ("constitution", "constitution.html"),
+        ("srs", "srs.html"),
+        ("adr", "adr-1.html"),
+    ]
+    .iter()
+    .map(|(face, file)| format!("{face}={}", site.join(file).display()))
+    .collect();
+    let mut args = vec!["parts", "--check"];
+    for page in &pages {
+        args.extend(["--page", page.as_str()]);
+    }
+    let parts = folio(&args, &place);
+    assert_eq!(parts.status.code(), Some(0), "{}", both(&parts));
+    assert!(stdout(&parts).contains("違反 0"), "{}", both(&parts));
+    assert!(!place.join("preview").exists(), "置き場に preview/ を作った");
 }
 
 /// 歯 9（便 152・台帳 .196）: 骨格の憲法の雛形は外の憲法を指さず、自分を正本とする形（名 未記入・根拠は空・改訂は表）。

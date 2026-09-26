@@ -12,12 +12,13 @@
 //! 構造の床（便 56・delivery-56.md §1 (a)・要件書 v1.11 の FR5）: `--write` は最初に床（`check::check_dir`・旗なし＝
 //! 下書きも凍結もしない）を回し、標準出力の 1 行目に床の 3 値を出す。不合格なら配信先へ 1 file も書かず 1・
 //! まだ分からないなら今までどおり書いて 2・合格なら書いて 0。`--check` は床を回さない（出力も終了コードも今のまま）。
+//! 焼いた様式（便 153・ADR-27 決定 (2)）: 置き場の preview/ に様式の file が無いときだけ、組み立て時に焼いた字を出す。
 
 use std::fs;
 use std::path::Path;
 
 use crate::cursor::R;
-use crate::{check, graph};
+use crate::{check, graph, parts};
 use crate::phase::Flag;
 use crate::verdict::Verdict;
 use crate::{face_adr, face_constitution, face_index, face_index_read, face_note, face_srs};
@@ -27,7 +28,7 @@ use crate::{face_adr, face_constitution, face_index, face_index_read, face_note,
 pub enum Source {
     /// 面の生成器（面の名）
     Face(&'static str),
-    /// `<dir>/preview/<file の名>` の byte の写し
+    /// `<dir>/preview/<file の名>` の byte の写し（無ければ組み立て時に焼いた字）
     Style,
 }
 
@@ -134,10 +135,7 @@ fn build_all(dir: &Path) -> R<Vec<(String, Vec<u8>)>> {
     for (name, source) in OUTPUTS {
         let bytes = match source {
             Source::Face(face) => derive(face, dir)?.into_bytes(),
-            Source::Style => {
-                let path = dir.join("preview").join(name);
-                fs::read(&path).map_err(|e| format!("{}: 読めない: {e}", path.display()))?
-            }
+            Source::Style => style(dir, name)?,
         };
         built.push((name.to_string(), bytes));
     }
@@ -150,6 +148,19 @@ fn build_all(dir: &Path) -> R<Vec<(String, Vec<u8>)>> {
         built.push((note.file(), html.into_bytes()));
     }
     Ok(built)
+}
+
+/// 様式 1 本の byte: 置き場の `preview/<名>` が無ければ焼いた字・在れば今までどおり読む（読めなければ Err）。
+fn style(dir: &Path, name: &str) -> R<Vec<u8>> {
+    let path = dir.join("preview").join(name);
+    if parts::absent(&path) {
+        return match name {
+            "folio.css" => Ok(parts::BAKED_CSS.as_bytes().to_vec()),
+            "folio-ui.js" => Ok(parts::BAKED_UI_JS.as_bytes().to_vec()),
+            n => Err(format!("{n}: 焼いた様式に無い")),
+        };
+    }
+    fs::read(&path).map_err(|e| format!("{}: 読めない: {e}", path.display()))
 }
 
 /// 面の名 → 便 14〜16 の生成器（`face.rs` の run と同じ選び方）。

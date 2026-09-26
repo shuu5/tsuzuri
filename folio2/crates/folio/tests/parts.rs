@@ -511,3 +511,79 @@ fn parts_mode_is_exactly_one() {
         assert_eq!(out.status.code(), Some(2), "{args:?}: {}", stderr(&out));
     }
 }
+
+/// 便 153（docs/design/delivery-153.md §1 (c) の 3・ADR-27 決定 (2)）: 置き場に部品目録と様式が無ければ焼いた目録と様式で
+/// 数える。在るのに読めない部品目録・様式（dir・壊れた symlink・途中が file）と dir でない置き場は まだ分からない。
+#[test]
+fn f153_parts_check_uses_the_baked_catalog_and_style_when_the_place_has_none() {
+    let td = temp_dir("f153-baked");
+    let page = generated_index(&td);
+    let page_arg = format!("index={}", page.display());
+    let place = td.join("place");
+    fs::create_dir(&place).unwrap();
+
+    // 空の置き場: 焼いた目録と様式で数えて 0・違反 0
+    let out = parts_check(&place, &["--page", &page_arg]);
+    let text = stdout(&out);
+    assert_eq!(code(&out), 0, "empty: {text}{}", stderr(&out));
+    assert!(text.contains("違反 0"), "empty: {text}");
+
+    let preview = place.join("preview");
+    fs::create_dir(&preview).unwrap();
+    let catalog = preview.join("parts.json");
+    let css = preview.join("folio.css");
+    let missing = td.join("no-such");
+    let mut cases: Vec<(&str, Output, &str)> = Vec::new();
+
+    // parts.json が dir・壊れた symlink
+    fs::create_dir(&catalog).unwrap();
+    cases.push((
+        "catalog-dir",
+        parts_check(&place, &["--page", &page_arg]),
+        "parts.json: 読めない",
+    ));
+    fs::remove_dir(&catalog).unwrap();
+    std::os::unix::fs::symlink(&missing, &catalog).unwrap();
+    cases.push((
+        "catalog-link",
+        parts_check(&place, &["--page", &page_arg]),
+        "parts.json: 読めない",
+    ));
+    fs::remove_file(&catalog).unwrap();
+
+    // folio.css が壊れた symlink・dir
+    std::os::unix::fs::symlink(&missing, &css).unwrap();
+    cases.push((
+        "css-link",
+        parts_check(&place, &["--page", &page_arg]),
+        "様式の定義",
+    ));
+    fs::remove_file(&css).unwrap();
+    fs::create_dir(&css).unwrap();
+    cases.push((
+        "css-dir",
+        parts_check(&place, &["--page", &page_arg]),
+        "様式の定義",
+    ));
+    fs::remove_dir(&css).unwrap();
+
+    // preview が file（途中が file）
+    fs::remove_dir(&preview).unwrap();
+    fs::write(&preview, "file\n").unwrap();
+    cases.push((
+        "preview-file",
+        parts_check(&place, &["--page", &page_arg]),
+        "parts.json: 読めない",
+    ));
+
+    // 無い --dir
+    cases.push((
+        "no-dir",
+        parts_check(&td.join("no-such-place"), &["--page", &page_arg]),
+        "dir でない",
+    ));
+    let _ = fs::remove_dir_all(&td);
+    for (case, out, wording) in &cases {
+        assert_unknown(out, case, wording);
+    }
+}
