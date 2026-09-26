@@ -1,18 +1,18 @@
 # folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
-round: 2026-09-25-round36
-at: 2026-09-25T14:13:14Z
+round: 2026-09-26-round39
+at: 2026-09-25T23:40:43Z
 verdict: 合格
-sources: sha256 53d22784ca51ad42d12f29acefd8d51b622ca12f5584b0e35da9592ae61c6f5d
-trigger: sha256 5af457a177e781a94d6ab253502f638bce486d418d65c0d7d40d59526544916b
-faces: sha256 5f18af0853bbad88d4eaa53394d6e8663c1ed26b245037f4d9a2952b8f0c760d
+sources: sha256 36b564147c518a059a7b8e60a07a6443d4fd29d4777c1b4b6c9a469701ee6493
+trigger: sha256 043b12d9380bc2363b45b0ffc908184e162576f28259b494384caf1f26aa6f86
+faces: sha256 3758d5f02e756fb66d5611ec9b4aca58f36aeb64a869b2ba8786042fe6d928e6
 viewpoints:
-  - {id: fidelity, verdict: 合格, findings: 2, stops: 0, bundle: 16ea027f, model: opus, effort: default, at: 2026-09-25T14:08:09Z}
-  - {id: readability, verdict: 合格, findings: 4, stops: 0, bundle: 9e9ee0b4, model: opus, effort: default, at: 2026-09-25T14:08:30Z}
-  - {id: coherence, verdict: 合格, findings: 2, stops: 0, bundle: 7b24958e, model: opus, effort: default, at: 2026-09-25T14:08:13Z}
-  - {id: reality, verdict: 合格, findings: 2, stops: 0, bundle: a5fa87ce, model: opus, effort: default, at: 2026-09-25T14:13:14Z}
+  - {id: fidelity, verdict: 合格, findings: 2, stops: 0, bundle: 7589f4bf, model: opus, effort: default, at: 2026-09-25T23:39:56Z}
+  - {id: readability, verdict: 合格, findings: 3, stops: 0, bundle: 25825236, model: opus, effort: default, at: 2026-09-25T23:39:10Z}
+  - {id: coherence, verdict: 合格, findings: 3, stops: 0, bundle: c239bfc9, model: opus, effort: default, at: 2026-09-25T23:40:17Z}
+  - {id: reality, verdict: 合格, findings: 1, stops: 0, bundle: c2a3fe1a, model: opus, effort: default, at: 2026-09-25T23:40:43Z}
 refutes: []
 reads: [adr, ceiling, constitution, design-note, graph, index, intake, rules, srs, vocabulary]
-rest: sha256 6e35ab8c9ac79566e5250d22769ce44e2b016190dd0a3c059707f788b5e960f1
+rest: sha256 9dd0fee477c41eb87f2a3f599ed1b0b991b39071209d626892ae217b51fcf5d5
 nodes:
   - {id: A-1, digest: e0b0124d}
   - {id: A-1.1, digest: df732d5b}
@@ -33,9 +33,9 @@ nodes:
   - {id: AC13, digest: 7fe3c746}
   - {id: AC14, digest: 96958328}
   - {id: AC15, digest: 30443849}
-  - {id: AC16, digest: be171490}
+  - {id: AC16, digest: bd724847}
   - {id: AC17, digest: 44743fef}
-  - {id: AC18, digest: 375891bd}
+  - {id: AC18, digest: 56aef918}
   - {id: AC19, digest: 5e38f256}
   - {id: AC2, digest: 225374e5}
   - {id: AC20, digest: 94eb6c47}
@@ -60,15 +60,16 @@ nodes:
   - {id: ADR-13, digest: ccc47b03}
   - {id: ADR-14, digest: 0cdc7631}
   - {id: ADR-15, digest: d5b3f5f2}
-  - {id: ADR-16, digest: 97c7ed7d}
+  - {id: ADR-16, digest: 238f25f7}
   - {id: ADR-17, digest: 96915774}
-  - {id: ADR-18, digest: 1952ec45}
+  - {id: ADR-18, digest: b543a7c5}
   - {id: ADR-19, digest: 6027f951}
   - {id: ADR-2, digest: 79e5df4f}
   - {id: ADR-20, digest: f87696e0}
   - {id: ADR-21, digest: b79320c1}
   - {id: ADR-22, digest: 16d328ff}
   - {id: ADR-23, digest: 83955f45}
+  - {id: ADR-24, digest: 215ddf7a}
   - {id: ADR-3, digest: e7814894}
   - {id: ADR-4, digest: bfc2b9af}
   - {id: ADR-5, digest: ea177b73}
@@ -83,7 +84,7 @@ nodes:
   - {id: CON5, digest: 173a5ec9}
   - {id: CON6, digest: 442bbf92}
   - {id: CON7, digest: bd5d479d}
-  - {id: CON8, digest: 5a015053}
+  - {id: CON8, digest: 8e4207cc}
   - {id: CON9, digest: fb991f7f}
   - {id: D-1, digest: d98f2bab}
   - {id: D-10, digest: 13e44933}
@@ -101,17 +102,17 @@ nodes:
   - {id: D-9, digest: e95ee916}
   - {id: FR1, digest: ab26d6f7}
   - {id: FR10, digest: 44396ade}
-  - {id: FR11, digest: 9b80f084}
+  - {id: FR11, digest: 3a42342f}
   - {id: FR12, digest: 3459856f}
-  - {id: FR13, digest: dee6fe15}
+  - {id: FR13, digest: 2bb3ecfd}
   - {id: FR14, digest: 61c64454}
   - {id: FR15, digest: fc6b30c2}
   - {id: FR16, digest: 6d58a656}
   - {id: FR17, digest: 42d3884f}
-  - {id: FR18, digest: 9b1b8664}
+  - {id: FR18, digest: 8071cccc}
   - {id: FR19, digest: cd086c50}
   - {id: FR2, digest: fe4e622d}
-  - {id: FR20, digest: b19c3f4e}
+  - {id: FR20, digest: 5f7edc9b}
   - {id: FR21, digest: 760fa065}
   - {id: FR22, digest: 5cd5ab35}
   - {id: FR23, digest: 4d831d7a}
@@ -143,7 +144,7 @@ nodes:
   - {id: N-6, digest: 3a75bdbd}
   - {id: N-6.1, digest: ab2be4da}
   - {id: N-6.2, digest: 5466a8a9}
-  - {id: NFR1, digest: 230984bb}
+  - {id: NFR1, digest: d55fd557}
   - {id: NFR2, digest: b9d87a04}
   - {id: NFR3, digest: 125002e8}
   - {id: P-1, digest: 8b0e9bb3}

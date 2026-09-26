@@ -456,10 +456,19 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
             basis.len() + fig_refs + revises,
             "{id}: 根拠のリンクの数（basis + 図の refs + revises）"
         );
-        assert!(
-            !html.contains("（まだ分からない）"),
-            "{id}: 行き先の無い根拠が在る"
-        );
+        // 行き先の無い印は id の直後に付く（face_adr.rs の link_text）。散文の「（まだ分からない）」は数えない
+        let targets = basis
+            .iter()
+            .map(|b| b.as_str().unwrap().to_string())
+            .chain(a["revises"].as_vec().into_iter().flatten().map(|r| {
+                r["target"].as_str().unwrap().to_string()
+            }));
+        for b in targets {
+            assert!(
+                !html.contains(&format!("{b}（まだ分からない）")),
+                "{id}: 行き先の無い根拠が在る（{b}）"
+            );
+        }
         // 根拠の群の一覧（li の数 = 根拠の数・li は行き先のリンクと題の span）+ 改訂の欄の行（便 137）
         assert_eq!(
             count("<li><a class=\"xref\""),
