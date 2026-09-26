@@ -1,7 +1,7 @@
-# scribe3 の vessel 宣言（器 scribe2 が便を起こすときに読む）。設計の段で、まだ Rust の workspace を持たない。
-# 値は器の上限（rules 行 runner.allowed_commands）の内側。Rust を持つ段になったら folio2 の形（cargo の行）へ改める。
+# tsuzuri の vessel 宣言（器 scribe2 が便を起こすときに読む）。面の便 a（workspace の骨格）の前に cargo を足した（判断の記録 ADR-4 の注・scribe2 席の回答 2026-09-26: 受付は base の木の宣言を読むので同じ便の write-set では効かない）。
+# 値は器の上限（rules 行 runner.allowed_commands）の内側。common-verify は便 a が Cargo.toml を置いた後に cargo xtask check へ改める（便 a の write-set）。
 schema = 1
-allowed-commands = ["git"]
+allowed-commands = ["cargo", "git"]
 common-verify = ["git diff --quiet"]
 requirements = "design-intent/srs.yaml"
 entrance-flip = "unmeasured"

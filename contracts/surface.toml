@@ -8,7 +8,7 @@ section = "5"
 write-set = ["+Cargo.toml", "+crates/tsuzuri-contract/Cargo.toml", "+crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-core/Cargo.toml", "+crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-boundary/Cargo.toml", "+crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-surface/Cargo.toml", "+crates/tsuzuri-surface/src/lib.rs", "+xtask/Cargo.toml", "+xtask/src/main.rs", ".vessel.toml"]
 verify = ["cargo nextest run -p tsuzuri-contract --no-tests=fail skeleton_"]
 size = "S"
-done = "(1) cargo build が workspace の 5 つで通る (2) 骨格の歯 1 本が緑 (3) .vessel.toml の allowed-commands が cargo と git で common-verify が cargo xtask check (4) 依存は serde だけ"
+done = "(1) cargo build が workspace の 5 つで通る (2) 骨格の歯 1 本が緑 (3) .vessel.toml の common-verify が cargo xtask check になる（allowed-commands の cargo は便の前に main で足してある） (4) 依存は serde だけ"
 goal = "cargo の workspace と 4 つの crate（契約の型・中核・境界・面）と xtask の空の骨格を置き、器の宣言（.vessel.toml）を cargo の形に改める。 骨格は空の lib と 1 本の歯だけを持ち、依存は serde に限る。trunk は xtask の下に置き、器の allowed-commands は cargo と git のままにする。"
 
 [[contract]]

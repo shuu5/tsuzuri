@@ -1,5 +1,5 @@
 # 設計ノート surface — 面の便の組み立て（判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 の実装の便・draft）。要件は srs.yaml の FR1〜FR17・NFR1〜NFR3。見本は tsuzuri-site/mock3。
-# 契約表の行は器（scribe2）が読む導出物 contracts/surface.toml に写る（tz derive --write --out contracts）。行の欄の決まりは contracts/schema.toml（器の生成物の写し）。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface.toml に写る（folio derive --dir design-intent --out ../contracts --write）。行の欄の決まりは contracts/schema.toml（器の生成物の写し）。便の契約 bead の pointer は `design = contracts/surface.toml#<行 id>`（scribe2 席の回答 2026-09-26・.toml は全文を読み goal を持てる）。
 meta:
   id: surface
   title: 面の便 — 契約の型・導出グラフ・面の server・2 つの board・席の hook・表示面を便の列で運ぶ
@@ -142,7 +142,7 @@ sections:
         write-set: ["+Cargo.toml", "+crates/tsuzuri-contract/Cargo.toml", "+crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-core/Cargo.toml", "+crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-boundary/Cargo.toml", "+crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-surface/Cargo.toml", "+crates/tsuzuri-surface/src/lib.rs", "+xtask/Cargo.toml", "+xtask/src/main.rs", ".vessel.toml"]
         verify: ["cargo nextest run -p tsuzuri-contract --no-tests=fail skeleton_"]
         size: S
-        done: (1) cargo build が workspace の 5 つで通る (2) 骨格の歯 1 本が緑 (3) .vessel.toml の allowed-commands が cargo と git で common-verify が cargo xtask check (4) 依存は serde だけ
+        done: (1) cargo build が workspace の 5 つで通る (2) 骨格の歯 1 本が緑 (3) .vessel.toml の common-verify が cargo xtask check になる（allowed-commands の cargo は便の前に main で足してある） (4) 依存は serde だけ
         depends: []
       - id: b
         title: 契約の型（面の event・状態・問いの合図・裁定と束と方針の要求と応答・台帳への書きの enum・グラフの節点と辺・板の型）
