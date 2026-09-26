@@ -857,3 +857,70 @@ fn f142_the_gate_is_unknown_when_the_dir_is_outside_the_cwd() {
     assert_eq!(code(&absolute), 2, "{out}");
     assert!(out.contains("--dir と write-set の根が違う"), "{out}");
 }
+
+// ── 便 150: --dir が設計文書の置き場でなければ まだ分からない（docs/design/delivery-150.md §1 (c) の 2・3） ──
+
+#[test]
+fn f150_the_gate_is_unknown_when_the_dir_is_not_a_place() {
+    let repo = Repo::new("f150-not-a-place");
+    repo.put_stamp("stamp-pass.yaml", true);
+    fs::create_dir_all(repo.td.join("empty")).unwrap();
+    let cwd = fs::canonicalize(&repo.td).unwrap();
+    let missing = cwd.join("design-intnet");
+    let both = ["design-intent/srs.yaml", "crates/folio/src/gate.rs"];
+    let dirs: [(&Path, &[&str]); 6] = [
+        (Path::new("design-intnet"), &both),
+        (Path::new("design-intent/adr"), &both),
+        (Path::new("empty"), &both),
+        (Path::new("design-intent/srs.yaml"), &both),
+        (&missing, &both),
+        (Path::new("design-intnet"), &["crates/folio/src/gate.rs"]),
+    ];
+    let runs: Vec<(String, Output)> = dirs
+        .iter()
+        .map(|(dir, ws)| (dir.display().to_string(), repo.gate_at(&cwd, dir, ws)))
+        .collect();
+    let outside = repo.gate_at(&cwd, Path::new("../nope"), &both);
+    repo.done();
+    for (dir, run) in &runs {
+        let out = stdout(run);
+        assert_eq!(code(run), 2, "{dir}: {out}");
+        let reason = format!(
+            "--dir が設計文書の置き場でない（{dir}・constitution.yaml が無い）・作業ツリーの一番上から撃つ"
+        );
+        assert!(out.contains("まだ分からない") && out.contains(&reason), "{dir}: {out}");
+    }
+    let out = stdout(&outside);
+    assert_eq!(code(&outside), 2, "{out}");
+    assert!(
+        out.contains("--dir が今の dir の下に無い") && !out.contains("置き場でない"),
+        "{out}"
+    );
+}
+
+#[test]
+fn f150_the_gate_reads_the_place_as_before() {
+    let repo = Repo::new("f150-place");
+    let cwd = fs::canonicalize(&repo.td).unwrap();
+    let place = Path::new("design-intent");
+    let code_only = repo.gate_at(&cwd, place, &["crates/folio/src/gate.rs"]);
+    let no_stamp = repo.gate_at(&cwd, place, &["design-intent/srs.yaml"]);
+    repo.put_stamp("stamp-pass.yaml", true);
+    let absolute = cwd.join("design-intent");
+    let fresh: Vec<Output> = [place, Path::new("./design-intent/"), &absolute]
+        .iter()
+        .map(|dir| repo.gate_at(&cwd, dir, &["design-intent/srs.yaml"]))
+        .collect();
+    repo.done();
+    let out = stdout(&code_only);
+    assert_eq!(code(&code_only), 0, "{out}");
+    assert!(out.contains("通す") && out.contains("設計文書の正本を書き換えない便"), "{out}");
+    let out = stdout(&no_stamp);
+    assert_eq!(code(&no_stamp), 2, "{out}");
+    assert!(out.contains("まだ分からない") && out.contains("印が無い"), "{out}");
+    for (i, run) in fresh.iter().enumerate() {
+        let out = stdout(run);
+        assert_eq!(code(run), 0, "撃ち方 {i}: {out}");
+        assert!(out.contains("通す") && out.contains("正本の要約値が同じ"), "撃ち方 {i}: {out}");
+    }
+}

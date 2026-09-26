@@ -59,6 +59,10 @@ const UNKNOWN_DIR_OUTSIDE: &str =
 const UNKNOWN_OTHER_ROOT: &str = "--dir と write-set の根が違う";
 /// 理由の字の末尾（撃ち直し方）。
 const FROM_THE_TOP: &str = "作業ツリーの一番上から撃つ";
+/// 理由の字の頭（便 150 §1 (b) の 2）: `--dir` が設計文書の置き場でない。
+const UNKNOWN_NOT_A_PLACE: &str = "--dir が設計文書の置き場でない";
+/// 置き場の印の file（便 150 §1 (b) の 1）: `folio check` が最初に読む正本（`check.rs` の FILES の先頭）。
+const PLACE_MARK: &str = "constitution.yaml";
 
 /// `write_set` の各 path は repo の根からの相対（接頭辞 + / - / ~ は剥がす）。`dir` は同じ根からの `--dir`。
 /// `table` は今の節点の表を組む関数（§1 (c) の 3）。判定の順は §1 (c) の 2 のとおりで、最初に当たったもので決まる。
@@ -73,6 +77,16 @@ pub(crate) fn run(dir: &Path, write_set: &[String], table: NodeTable) -> Outcome
         return Outcome::new(
             Verdict::Unknown,
             format!("{UNKNOWN_OTHER_ROOT}＝{p}・{FROM_THE_TOP}"),
+        );
+    }
+    // 置き場の確かめ（便 150）: 置き場でない `--dir` では write-set のどれが置き場の file かを照らせない（P-4.1 / P-4.2）
+    if !is_place(dir) {
+        return Outcome::new(
+            Verdict::Unknown,
+            format!(
+                "{UNKNOWN_NOT_A_PLACE}（{}・{PLACE_MARK} が無い）・{FROM_THE_TOP}",
+                dir.display()
+            ),
         );
     }
     if !write_set.iter().any(|p| is_design_source(&root, p)) {
@@ -197,6 +211,11 @@ fn other_root(root: &[String], path: &str) -> bool {
         parts.len() > base.len() && parts.iter().zip(base).all(|(a, b)| *a == b)
     };
     !under(root) && (1..root.len()).any(|k| under(&root[k..]))
+}
+
+/// `--dir` が設計文書の置き場か（便 150 §1 (b) の 1）: 直下に印 PLACE_MARK が file として在る（中身は読まない）。
+fn is_place(dir: &Path) -> bool {
+    dir.join(PLACE_MARK).is_file()
 }
 
 /// 設計文書の正本か: `<dir>` の下・`<dir>/preview/` の下でない・どの要素も retired でない。
@@ -518,5 +537,35 @@ mod gate_tests {
         assert!(!other("crates/folio/src/gate.rs"));
         assert!(other("/abs/design-intent/srs.yaml"));
         assert!(other("crates/../design-intent/srs.yaml"));
+    }
+
+    #[test]
+    fn f150_the_place_is_a_dir_with_the_mark() {
+        assert_eq!(PLACE_MARK, format!("{}.yaml", crate::check::FILES[0]));
+        let td = std::env::temp_dir().join(format!("folio-f150-place-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&td);
+        let dir = |name: &str| {
+            let d = td.join(name);
+            fs::create_dir_all(&d).unwrap();
+            d
+        };
+        let place = dir("place");
+        fs::write(place.join(PLACE_MARK), "").unwrap();
+        let empty = dir("empty");
+        let named = dir("named");
+        fs::create_dir_all(named.join(PLACE_MARK)).unwrap();
+        let others = dir("others");
+        fs::write(others.join("ceiling.yaml"), "").unwrap();
+        fs::write(others.join("index.yaml"), "").unwrap();
+        let answers = [
+            is_place(&place),
+            is_place(&td.join("missing")),
+            is_place(&empty),
+            is_place(&named),
+            is_place(&others),
+            is_place(&place.join(PLACE_MARK)),
+        ];
+        let _ = fs::remove_dir_all(&td);
+        assert_eq!(answers, [true, false, false, false, false, false]);
     }
 }
