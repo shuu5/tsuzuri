@@ -1,18 +1,18 @@
 # folio2 天井の印 — 生成物（folio ceiling --stamp が書く・手で直さない・P-6.2）
-round: 2026-09-27-round49
-at: 2026-09-26T15:26:44Z
+round: 2026-09-27-round51
+at: 2026-09-26T16:10:15Z
 verdict: 合格
-sources: sha256 78d6dd0399b8c813dc85e9e7d083a906fc75af3c53c519f26756e7c917576115
-trigger: sha256 c6997f34713742387a9164849f38e5793ae99110529b7ba99b136a2368882f7c
-faces: sha256 1098771f10c1996e67d312b8fd01e9910062335359bf48f81c1566a7805c0e0d
+sources: sha256 7bafcec69bfa9bb3799131c24657b5a70591513bd3f4f8809dad750fa1145126
+trigger: sha256 26a3ac880ee1347bdd90f465b72997a740bea2a8b3fb810e520e0869d0546dc2
+faces: sha256 52c8b8a47ef7c47510e27e80336263def057b59095cf946b2c3d97d158517f32
 viewpoints:
-  - {id: fidelity, verdict: 合格, findings: 2, stops: 0, bundle: b06f5002, model: opus, effort: default, at: 2026-09-26T15:22:31Z}
-  - {id: readability, verdict: 合格, findings: 6, stops: 0, bundle: 11f0f603, model: opus, effort: default, at: 2026-09-26T15:23:10Z}
-  - {id: coherence, verdict: 合格, findings: 7, stops: 0, bundle: 7b107d7e, model: opus, effort: default, at: 2026-09-26T15:26:44Z}
-  - {id: reality, verdict: 合格, findings: 3, stops: 0, bundle: 4e1c934d, model: opus, effort: default, at: 2026-09-26T15:22:58Z}
+  - {id: fidelity, verdict: 合格, findings: 4, stops: 0, bundle: f7477ad7, model: opus, effort: default, at: 2026-09-26T16:09:19Z}
+  - {id: readability, verdict: 合格, findings: 7, stops: 0, bundle: 77be1c94, model: opus, effort: default, at: 2026-09-26T16:06:59Z}
+  - {id: coherence, verdict: 合格, findings: 3, stops: 0, bundle: 12787a67, model: opus, effort: default, at: 2026-09-26T16:10:15Z}
+  - {id: reality, verdict: 合格, findings: 3, stops: 0, bundle: 37c8fd97, model: opus, effort: default, at: 2026-09-26T16:09:01Z}
 refutes: []
 reads: [adr, ceiling, constitution, design-note, graph, index, intake, rules, srs, vocabulary]
-rest: sha256 7e7cfad0081a3337d09beca8db478beb6758cdabb03e88b418559acbb5b75d40
+rest: sha256 2afe7269cd7c7880fb25e1b690bfaca9f7f14e9fc523538f2afbed3108f96129
 nodes:
   - {id: A-1, digest: e0b0124d}
   - {id: A-1.1, digest: df732d5b}
@@ -53,7 +53,7 @@ nodes:
   - {id: AC7, digest: 1c3680a3}
   - {id: AC8, digest: 967acdeb}
   - {id: AC9, digest: 78d27412}
-  - {id: ADR-1, digest: 9654fde6}
+  - {id: ADR-1, digest: c205432c}
   - {id: ADR-10, digest: 3e93ce22}
   - {id: ADR-11, digest: 64980ee8}
   - {id: ADR-12, digest: 05ddccd3}
@@ -63,15 +63,15 @@ nodes:
   - {id: ADR-16, digest: 238f25f7}
   - {id: ADR-17, digest: 96915774}
   - {id: ADR-18, digest: a1fc6fef}
-  - {id: ADR-19, digest: 6027f951}
+  - {id: ADR-19, digest: 52612450}
   - {id: ADR-2, digest: 61437c44}
-  - {id: ADR-20, digest: f87696e0}
+  - {id: ADR-20, digest: fc66211a}
   - {id: ADR-21, digest: 5eeea3d9}
   - {id: ADR-22, digest: 16d328ff}
   - {id: ADR-23, digest: 83955f45}
   - {id: ADR-24, digest: 8e389cf1}
   - {id: ADR-25, digest: 389cbd6e}
-  - {id: ADR-26, digest: caea44d4}
+  - {id: ADR-26, digest: bee8d789}
   - {id: ADR-3, digest: e7814894}
   - {id: ADR-4, digest: bfc2b9af}
   - {id: ADR-5, digest: ea177b73}
@@ -91,12 +91,12 @@ nodes:
   - {id: D-1, digest: d98f2bab}
   - {id: D-10, digest: 13e44933}
   - {id: D-11, digest: 257e57e0}
-  - {id: D-12, digest: fcdc7042}
+  - {id: D-12, digest: 8eda18d6}
   - {id: D-13, digest: 686119c9}
-  - {id: D-14, digest: f5a45415}
-  - {id: D-16, digest: 32b76e6a}
-  - {id: D-17, digest: ade51b02}
-  - {id: D-18, digest: 1ad2cdff}
+  - {id: D-14, digest: 2921bb39}
+  - {id: D-16, digest: a2f909e3}
+  - {id: D-17, digest: cca9309a}
+  - {id: D-18, digest: f38e325f}
   - {id: D-2, digest: 1e4c2762}
   - {id: D-3, digest: ca2c7318}
   - {id: D-4, digest: e738eec2}
@@ -117,7 +117,7 @@ nodes:
   - {id: FR18, digest: 8071cccc}
   - {id: FR19, digest: cd086c50}
   - {id: FR2, digest: fe4e622d}
-  - {id: FR20, digest: 8c236f71}
+  - {id: FR20, digest: e4e53704}
   - {id: FR21, digest: 760fa065}
   - {id: FR22, digest: 5cd5ab35}
   - {id: FR23, digest: 4d831d7a}
@@ -229,8 +229,8 @@ nodes:
   - {id: R-16, digest: 4ff34b48}
   - {id: R-17, digest: b8258174}
   - {id: R-2, digest: af486c93}
-  - {id: R-21, digest: 46877e85}
-  - {id: R-22, digest: 2a6c8ee9}
+  - {id: R-21, digest: cba350c8}
+  - {id: R-22, digest: 99065880}
   - {id: R-3, digest: cc9337b9}
   - {id: R-4, digest: 0f50d006}
   - {id: R-5, digest: bef68658}
