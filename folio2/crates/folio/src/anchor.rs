@@ -662,7 +662,21 @@ pub fn check_anchor(
 
     // (i) 現行との一致（`--freeze-anchor` と `--freeze-start` では凍結の前提の検査に替わる）
     if matches!(flag, Flag::FreezeAnchor | Flag::FreezeStart) {
-        // freeze.rs の (c) と始まりの凍結（便 121）が受け持つ
+        // freeze.rs の (c) と始まりの凍結（便 121）が受け持つ。始まりの凍結は書く承認一覧（欄 adr は空・
+        // 憲法 meta.approval の写し 1 項）を凍結の後の床と同じ関数で確かめる（便 155・P-15.2）
+        if matches!(flag, Flag::FreezeStart) {
+            let mut row = vec![(Value::Str("adr".to_string()), Value::Null)];
+            for f in adr::floor_strs(&["approval", "required"]) {
+                let v = meta_approval.get(f).cloned().unwrap_or(Value::Null);
+                row.push((Value::Str(f.to_string()), v));
+            }
+            let at = format!(
+                "{}（凍結で書く承認一覧・憲法 meta.approval の写し）",
+                floor(&["anchor", "file_name"]).replace("<version>", &cur_ver)
+            );
+            let approvals = Value::Seq(vec![Value::Map(row)]);
+            check_approvals(dir, &at, Some(&approvals), adr, report);
+        }
     } else if index.is_none() && anchors.is_empty() && !records_exist {
         report.pending(format!(
             "凍結 anchor が 0 本（{}）＝A-2 / N-4 の差分検査は「まだ分からない」（P-10.3）。発効版で --freeze-anchor を実行する",

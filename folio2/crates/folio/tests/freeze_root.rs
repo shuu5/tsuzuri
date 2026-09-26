@@ -9,7 +9,9 @@
 //! 4. 始まりの凍結が 2 つを書き、書いた後の床が合格／5. どちらか 1 本在れば断る／
 //! 6. ほかの検査に違反か「まだ分からない」・表に無い名（--freeze-anchor も）／7. 写しは置き場の名の行だけ（folio schema）／
 //! 8. tsuzuri の名は表の 2 行目を写し、床が folio2 の根をその行と照らして落とす（便 133 が旧 scribe3 の名で足し・
-//!    docs/design/delivery-133.md §1 (c)2・便 134 が改名の後の名に改めた・docs/design/delivery-134.md §1 (c)2）。
+//!    docs/design/delivery-133.md §1 (c)2・便 134 が改名の後の名に改めた・docs/design/delivery-134.md §1 (c)2）／
+//! 9. 始まりの凍結は書く承認一覧を凍結の後の床と同じ関数で確かめ、承認欄の空いた憲法を凍結しない
+//!    （便 155・docs/design/delivery-155.md §1 (c)）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,6 +29,9 @@ const OTHER: &str = "renamed-constitution";
 /// 改めた・便 134・digest は名の外で不変・crate の中の表は読まない）。
 const TSUZURI: &str = "tsuzuri-constitution";
 const TSUZURI_ROOT: &str = "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9de832f8c5356";
+/// 始まりの凍結が書く承認一覧の違反の頭（便 155・手書き）。
+const APPROVAL_AT: &str =
+    "[anchor] constitution-v1.0.yaml（凍結で書く承認一覧・憲法 meta.approval の写し）: ";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -94,6 +99,19 @@ impl Work {
         }
         prep(&root.join("design-intent"));
         git(&root, &["init", "-q"]);
+        let w = Work { root };
+        w.commit();
+        w
+    }
+
+    /// 一時の根の直下の design-intent に `folio init` をしてから git init と 1 commit（外の置き場と同じ形・便 155）。
+    fn init(case: &str) -> Work {
+        let root = std::env::temp_dir().join(format!("folio-f155-{case}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        git(&root, &["init", "-q"]);
+        let out = folio(&["init", "--dir"], &root.join("design-intent"), &[]);
+        assert_eq!(out.status.code(), Some(0), "{}", show(&out));
         let w = Work { root };
         w.commit();
         w
@@ -186,6 +204,28 @@ fn remove(dir: &Path, files: &[&str]) {
 
 fn no_anchors(dir: &Path) {
     fs::remove_dir_all(dir.join("anchors")).unwrap();
+}
+
+/// 憲法 meta.approval の欄を書き換える（床の土台の写しの 1 行の承認欄）。
+fn approval(dir: &Path, from: &str, to: &str) {
+    edit(&dir.join("constitution.yaml"), |t| t.replacen(from, to, 1));
+}
+
+/// 憲法の承認欄の裁定 id を 未記入 にする。
+fn blank_ruling(dir: &Path) {
+    approval(
+        dir,
+        "ruling: \"f2-648.1 notes 2026-09-12 20:2x（発効承認）\", verbatim:",
+        "ruling: 未記入, verbatim:",
+    );
+}
+
+/// 始まりの凍結が書く承認一覧の違反の行。
+fn approval_rows(out: &Output) -> Vec<String> {
+    violations(out)
+        .into_iter()
+        .filter(|l| l.starts_with(APPROVAL_AT))
+        .collect()
 }
 
 /// anchors/ の名と byte 列（無ければ空）。
@@ -508,4 +548,96 @@ fn f134_tsuzuri_name_picks_its_row() {
             && !v[0].contains("表に無い"),
         "{v:?}"
     );
+}
+
+/// 9 の 1（便 155）: 骨格のままの置き場で、check と --freeze-ids と --emit-amends は 2 で違反 0 のまま、
+/// --freeze-start は承認欄の違反と表に無い名の違反のちょうど 2 件で 1 を返し、anchors/ を作らない。
+#[test]
+fn f155_skeleton_freeze_start_refuses_the_empty_approval() {
+    let w = Work::init("skeleton");
+    for flags in [&[][..], &["--freeze-ids"], &["--emit-amends"]] {
+        let out = w.check(flags);
+        assert_eq!(out.status.code(), Some(2), "{flags:?}: {}", show(&out));
+        assert!(violations(&out).is_empty(), "{flags:?}: {}", show(&out));
+        assert!(!w.dir().join("anchors").exists(), "{flags:?} が anchors/ を作った");
+    }
+    let out = w.check(&["--freeze-start"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert_eq!(v.len(), 2, "{v:?}");
+    assert_eq!(
+        approval_rows(&out),
+        [format!("{APPROVAL_AT}approvals[0].ruling に台帳 id が無い")],
+        "{v:?}"
+    );
+    assert_eq!(
+        v.iter()
+            .filter(|l| l.starts_with("[anchor] ") && l.contains("表に無い"))
+            .count(),
+        1,
+        "{v:?}"
+    );
+    assert!(text(&out.stderr).contains("凍結しない"), "{}", show(&out));
+    assert!(!w.dir().join("anchors").exists(), "--freeze-start が anchors/ を作った");
+}
+
+/// 9 の 2（便 155）: 床の土台の写しで裁定 id を 未記入 にすると、列の無い置き場の --freeze-start は承認欄の行を
+/// ちょうど 1 件足し、id の一覧だけが在る置き場の --freeze-anchor は足さない。どちらも 1 で anchors/ は変わらない。
+#[test]
+fn f155_freeze_start_checks_the_approval_and_freeze_anchor_is_unchanged() {
+    let w = Work::new("f155-start", FLOOR_BASE, true, |d| {
+        no_anchors(d);
+        blank_ruling(d);
+    });
+    let before = anchors_snapshot(&w.dir());
+    let out = w.check(&["--freeze-start"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    assert_eq!(
+        approval_rows(&out),
+        [format!("{APPROVAL_AT}approvals[0].ruling に台帳 id が無い")],
+        "{}",
+        show(&out)
+    );
+    assert_eq!(anchors_snapshot(&w.dir()), before, "--freeze-start: anchors/ が変わった");
+    drop(w);
+
+    let w = Work::new("f155-anchor", FLOOR_BASE, true, |d| {
+        remove(d, &["constitution-v1.0.yaml", "index.yaml"]);
+        blank_ruling(d);
+    });
+    let before = anchors_snapshot(&w.dir());
+    let out = w.check(&["--freeze-anchor"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    assert!(approval_rows(&out).is_empty(), "{}", show(&out));
+    assert_eq!(anchors_snapshot(&w.dir()), before, "--freeze-anchor: anchors/ が変わった");
+}
+
+/// 9 の 3（便 155）: 凍結の前の確かめは凍結の後の床と同じ関数に同じ項（欄 adr は空）を渡す。承認者が空の字なら
+/// who / ruling / verbatim の違反ちょうど 1 件、meta.approval に欄 adr が在っても承認欄の違反 0 件。どちらも 1 で書かない。
+#[test]
+fn f155_freeze_start_approval_is_the_floor_row() {
+    fn blank_who(d: &Path) {
+        approval(d, "{who: 持ち主（shuu5）,", "{who: \"\",");
+    }
+    fn with_adr(d: &Path) {
+        approval(d, "{who:", "{adr: ADR-1, who:");
+    }
+    let cases = [
+        (
+            "f155-who",
+            blank_who as fn(&Path),
+            vec![format!("{APPROVAL_AT}approvals[0] に who / ruling / verbatim が無い")],
+        ),
+        ("f155-adr", with_adr, Vec::new()),
+    ];
+    for (case, prep, want) in cases {
+        let w = Work::new(case, FLOOR_BASE, true, |d| {
+            no_anchors(d);
+            prep(d);
+        });
+        let out = w.check(&["--freeze-start"]);
+        assert_eq!(out.status.code(), Some(1), "{case}: {}", show(&out));
+        assert_eq!(approval_rows(&out), want, "{case}: {}", show(&out));
+        assert!(!w.dir().join("anchors").exists(), "{case}: anchors/ を作った");
+    }
 }
