@@ -323,12 +323,14 @@ fn f92_the_real_records_carry_the_produced_field() {
             "ADR-13.yaml",
             "ADR-19.yaml",
             "ADR-2.yaml",
+            // ADR-26（一括 27・2026-09-26）は規則の行 R-21・R-22・D-16〜D-18 を産んだ
+            "ADR-26.yaml",
             "ADR-3.yaml",
             "ADR-4.yaml",
             "ADR-8.yaml"
         ]
     );
-    assert_eq!(ids.len(), 17, "{ids:?}");
+    assert_eq!(ids.len(), 22, "{ids:?}");
     assert!(
         ids.iter()
             .all(|id| !["P-", "A-", "N-"].iter().any(|p| id.starts_with(p))),

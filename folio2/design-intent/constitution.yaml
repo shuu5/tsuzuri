@@ -159,7 +159,7 @@ articles:
       - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
       - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と今の正本の引き金の要約値から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
-    relations: {reqs: [FR5, AC3], rules: [D-12, D-14], articles: [P-4]}
+    relations: {reqs: [FR5, AC3], rules: [D-12, D-14, R-22, D-16], articles: [P-4]}
 
   - id: P-4
     title: 黙って飛ばさない（fail-closed）
@@ -212,7 +212,7 @@ articles:
       - {kind: v1-incident, ref: "ADR-0033 §2.3 で Option B（両面手書き + gate）を選び、45 日後（2026-05-29 → 07-13）の ADR-0050 で Option A'（正本から derive）へ全面転換。ADR-0052（手動同鏡は人の規律に依存し実際に drift）"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 正本から再生成して差分 0 でなければ落とす（folio inject --check〔CLAUDE.md の生成区間〕・folio build --check〔配信先の全面〕・folio face と folio figure と folio schema の --check・契約表から器の形へ組む導出物の検査の命令〔要件 FR11 の契機＝配信の組み立てから切り離した独立の命令 folio derive --check・便 119 で 2026-09-24 に着地〕。読み物の folio render --check は 2026-09-21 に退役）。消費側が別の正本層を宣言する文書（例えば scribe2 憲法は HTML が正本）は folio の生成対象外で、読むだけ。}
     retreat: {kind: spike, condition: 憲法の改訂表現（del/ins・amended_by）が YAML で表せないと spike 1 で分かったら、憲法だけ二正本 + byte 束縛へ退避する。}
-    relations: {reqs: [FR4, FR6], rules: [D-13], articles: [P-14]}
+    relations: {reqs: [FR4, FR6], rules: [D-13, D-18], articles: [P-14]}
 
   - id: P-7
     title: 番号は増やすだけ（append only）
@@ -263,7 +263,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "engine-design §12（parser-differential の whack-a-mole を round 1 / round 2 の 2 連続で実証 → user 判断で fail-closed へ転換）"}
     mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: 便・並列実行の再試行回数を R-7 で上限にし、超えたら止める。「同じ種類」の判定は R-7 行の same_failure 欄が定める。回数を数えて止めるのは席と器（scribe2）で、folio は数える面を持たない＝この実態と実測の正本は rules 行 R-7 の注であり、ここには写さない。}
-    relations: {rules: [R-7, D-4, D-14], articles: [P-1]}
+    relations: {rules: [R-7, D-4, D-14, R-21], articles: [P-1]}
 
   - id: P-12
     title: 承認は 1 つの面から、言葉どおりに残す
@@ -278,7 +278,7 @@ articles:
       - {kind: scribe2-article, ref: "C7 / C7.2（対話面は 1 つ・逐語で記帳）"}
       - {kind: folio2-ruling, ref: "G8=A（C7 を足す）・運用実績（G1〜G16・P1〜P5 の裁定はすべて bd notes の逐語）・受入 (c)"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。数えるのは、判断の記録と設計ノートの承認欄（欄 who・date・ruling・verbatim・surface の欄充足）と、憲法の meta.approval（凍結 anchor の写しとの一致）である。要件書・入口・天井の正本・相談窓口・索引の欄の決まりの正本の meta.approval の行（欄 role・who・when・stamp・verbatim・version）は裁定 id と対話面の欄を持たず、床はその欄充足をまだ数えない（後続・台帳の控え）。支度表は設計文書の正本に数えない（語彙の設計文書の項）。その行の逐語と、stamp の字に書く裁定 id と対話面は人が確かめる。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
-    relations: {rules: [R-8, D-10, D-14], sections: [§6]}
+    relations: {rules: [R-8, D-10, D-14, D-17], sections: [§6]}
 
   - id: P-13
     title: 拘束するのは設計文書、前の版は道具、自分を作るのは最後
