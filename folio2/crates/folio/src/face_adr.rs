@@ -16,6 +16,9 @@
 //! 側の面は `adr/` の発効の全記録の revises を走査して行を導出する（P-6.3）。行が 1 つ以上なら章 05 の自分の revises の
 //! 一覧の後・帰結の前に h3 と一覧を、表紙に札を 1 つ足す（0 件の面は便 147 までと byte 不変）。走査が読めなければ面を
 //! 導出しない（P-4.1）。
+//! 強調の印（便 149・docs/design/delivery-149.md §1 (b)）: 散文の 6 つの欄（context と decision は列挙で分けた後の
+//! 断片ごと・案の text と reason・帰結の各行・注）は、escape の後に左から順に対になった印 STRONG_MARK を strong の
+//! 要素に写す（閉じない印と中身が空の対は生のまま）。題・平易文・逐語の引用などほかの欄は写さない。
 
 use std::fs;
 use std::path::Path;
@@ -138,6 +141,38 @@ const REVISED_BY_LABEL: &str = "ほかの判断の記録による改訂";
 
 /// 逆向きの行を読む改訂する側の状態（発効だけ・便 148 §1 (d) の 3）。
 const REVISED_BY_STATUS: &[&str] = &["accepted"];
+
+/// 散文の強調の印（markdown の星 2 つ・便 149）。
+const STRONG_MARK: &str = "**";
+
+/// 印の対を写す先の要素の開きと閉じ（属性なし・部品目録の外にならない・便 149）。
+const STRONG_TAG: (&str, &str) = ("<strong>", "</strong>");
+
+/// escape 済みの断片の印の対を左から順に strong の要素に写す（便 149 §1 (b) の 2）。中身は escape 済みのまま。
+/// 閉じない印（後に印が無い）はそこから末尾まで・中身が空の対は星 4 つのまま出す。入れ子は作らず、1 つの星は触らない。
+fn strong(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(open) = rest.find(STRONG_MARK) {
+        let after = &rest[open + STRONG_MARK.len()..];
+        let Some(close) = after.find(STRONG_MARK) else {
+            break;
+        };
+        out.push_str(&rest[..open]);
+        let inner = &after[..close];
+        if inner.is_empty() {
+            out.push_str(STRONG_MARK);
+            out.push_str(STRONG_MARK);
+        } else {
+            out.push_str(STRONG_TAG.0);
+            out.push_str(inner);
+            out.push_str(STRONG_TAG.1);
+        }
+        rest = &after[close + STRONG_MARK.len()..];
+    }
+    out.push_str(rest);
+    out
+}
 
 /// 撤退条件の種類（retreat.kind）→ 判断の記録の面の名札（憲法の面の名札 `face::retreat_kind_label` と字面が違う）。
 /// 憲法の値域から導出した型への網羅の場合分け（便 50・その他の枝なし = 値が足されても消えても組み立てが通らない）。
@@ -668,22 +703,22 @@ fn item_marks(body: &str) -> Vec<(usize, usize)> {
 }
 
 /// 章 01・02（帯 + chapbody）。`body` は escape 済み。文の頭の印が 2 つ以上なら前置きの p と ol へ分け、
-/// 1 つ以下なら p 1 つ（便 27 §1 (b)）。
+/// 1 つ以下なら p 1 つ（便 27 §1 (b)）。強調の印は分けた後の断片ごとに写す（便 149）。
 fn prose_chapter(o: &mut Vec<String>, f: &Frame, n: usize, body: &str) {
     band(o, f, n);
     o.push("<div class=\"chapbody\">".to_string());
     let marks = item_marks(body);
     if marks.len() < 2 {
-        o.push(format!("<p>{body}</p>"));
+        o.push(format!("<p>{}</p>", strong(body)));
     } else {
         let intro = body[..marks[0].0].trim();
         if !intro.is_empty() {
-            o.push(format!("<p class=\"intro\">{intro}</p>"));
+            o.push(format!("<p class=\"intro\">{}</p>", strong(intro)));
         }
         o.push("<ol class=\"items\">".to_string());
         for (k, (_, end)) in marks.iter().enumerate() {
             let stop = marks.get(k + 1).map_or(body.len(), |(start, _)| *start);
-            o.push(format!("<li>{}</li>", body[*end..stop].trim()));
+            o.push(format!("<li>{}</li>", strong(body[*end..stop].trim())));
         }
         o.push("</ol>".to_string());
     }
@@ -706,10 +741,10 @@ fn options_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>) -> R<()> {
             opt.ef("name")?,
             verdict.lookup(VERDICT, "判定")?
         ));
-        o.push(format!("<p class=\"norm\">{}</p>", opt.ef("text")?));
+        o.push(format!("<p class=\"norm\">{}</p>", strong(&opt.ef("text")?)));
         o.push(format!(
             "<div class=\"plain\"><span class=\"pk\">理由</span>{}</div>",
-            opt.ef("reason")?
+            strong(&opt.ef("reason")?)
         ));
         o.push(format!(
             "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl><dt>verdict</dt><dd>{}</dd></dl></details>",
@@ -837,7 +872,7 @@ fn amends_chapter(
         o.push("<h3>この判断で変わること</h3>".to_string());
         o.push("<ul>".to_string());
         for c in cs.seq()? {
-            o.push(format!("<li>{}</li>", c.e()?));
+            o.push(format!("<li>{}</li>", strong(&c.e()?)));
         }
         o.push("</ul>".to_string());
     }
@@ -862,7 +897,7 @@ fn amends_chapter(
     if let Some(note) = a.g("note")? {
         o.push(format!(
             "<details class=\"note\"><summary>注</summary><div><p>{}</p></div></details>",
-            note.e()?
+            strong(&note.e()?)
         ));
     }
     o.push("</div>".to_string());
@@ -1002,5 +1037,37 @@ mod face_adr_tests {
         assert_eq!(REVISED_BY_STATUS, ["accepted"]);
         assert!(!REVISED_BY_LABEL.contains("条文の改訂"));
         assert!(!REVISED_BY_LABEL.contains("判断の記録の改訂"));
+    }
+
+    /// 便 149 §1 (c) 1: 印の字と写す先を固定し、左から順の対だけが strong になる（閉じない・空・1 つの星は生のまま）。
+    #[test]
+    fn f149_strong_turns_left_to_right_pairs_into_strong() {
+        assert_eq!(STRONG_MARK, "**");
+        assert_eq!(STRONG_TAG, ("<strong>", "</strong>"));
+        // 2 組
+        assert_eq!(
+            strong("前**甲**中**乙**後"),
+            "前<strong>甲</strong>中<strong>乙</strong>後"
+        );
+        // 閉じない印・1 組の後の閉じない印・中身が空の対
+        assert_eq!(strong("前**閉じない"), "前**閉じない");
+        assert_eq!(
+            strong("**甲**と**閉じない"),
+            "<strong>甲</strong>と**閉じない"
+        );
+        assert_eq!(strong("空の****対"), "空の****対");
+        // 入れ子にならず左から順に 2 組
+        assert_eq!(
+            strong("**外**内**外**"),
+            "<strong>外</strong>内<strong>外</strong>"
+        );
+        // 1 つの星と印の無い字は触らない
+        assert_eq!(strong("欄の *_note の説明"), "欄の *_note の説明");
+        assert_eq!(strong("印の無い字"), "印の無い字");
+        // escape した中身は文字参照のまま
+        assert_eq!(
+            strong("**&lt;b&gt;A &amp; B&lt;/b&gt;**"),
+            "<strong>&lt;b&gt;A &amp; B&lt;/b&gt;</strong>"
+        );
     }
 }

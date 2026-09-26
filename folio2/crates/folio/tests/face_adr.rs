@@ -9,6 +9,8 @@
 //!   実の正本の全本で札の件数と revises の全行の逐語
 //! - 受けた改訂の逆向きの行（便 148）: 写しの発効の ADR-1 の revises が ADR-2 の面の章 05 と表紙の札に出る・提案中と
 //!   廃止は読まない・読めない改訂する側で 2・実の正本の全本で逆向きの札と行の逐語と順・ADR-18 と ADR-16 の実例
+//! - 強調の印（便 149）: 写しの ADR-2 の散文の 6 つの欄の対が strong・題と平易文は生のまま・列挙の断片をまたぐ対と
+//!   閉じない印と空の対は生のまま・実の正本の全本で strong の数と逐語と順・生の印 0・ADR-24 の決定 (1) の実例
 //!
 //! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
 
@@ -1642,4 +1644,154 @@ fn f148_adr18_and_adr16_link_back_to_their_revisers() {
             "ADR-16 の面に {by} への行が無い"
         );
     }
+}
+
+// ── 便 149: 散文の強調の印を strong に写す（docs/design/delivery-149.md §1 (c) の 2〜5・天井の 39 周目の読みやすさの傍記）──
+
+/// 歯の側の手書きの読み: 印（星 2 つ）で割った断片のうち、閉じの在る（後に断片が続く）空でない中身（生の字）を順に。
+fn strong_pairs(s: &str) -> Vec<String> {
+    let parts: Vec<&str> = s.split("**").collect();
+    (1..parts.len().saturating_sub(1))
+        .step_by(2)
+        .filter(|&i| !parts[i].is_empty())
+        .map(|i| parts[i].to_string())
+        .collect()
+}
+
+/// 散文の 6 つの欄を面の順に（context・decision・案ごとの text と reason・帰結の各行・注）。
+fn prose_fields(a: &Yaml) -> Vec<String> {
+    let text = |y: &Yaml, what: &str| y.as_str().unwrap_or_else(|| panic!("{what} が文字列でない")).to_string();
+    let mut fields = vec![text(&a["context"], "context"), text(&a["decision"], "decision")];
+    for o in a["options"].as_vec().expect("options が一覧でない") {
+        fields.push(text(&o["text"], "案の text"));
+        fields.push(text(&o["reason"], "案の reason"));
+    }
+    for c in a["consequences"].as_vec().into_iter().flatten() {
+        fields.push(text(c, "帰結の行"));
+    }
+    if let Some(note) = a["note"].as_str() {
+        fields.push(note.to_string());
+    }
+    fields
+}
+
+/// 章 n（s<n> の帯から次の帯の直前まで）。
+fn chapter(html: &str, n: usize) -> &str {
+    let at = html
+        .find(&format!("<section id=\"s{n}\""))
+        .unwrap_or_else(|| panic!("章 {n} が無い"));
+    let end = html[at + 1..]
+        .find("<section id=")
+        .map_or(html.len(), |e| at + 1 + e);
+    &html[at..end]
+}
+
+#[test]
+fn f149_prose_fields_turn_paired_marks_into_strong() {
+    let (run, html) = mutated("f149-fields", |t| {
+        t.replacen("title: 見本の判断の記録", "title: 見本の**判断**の記録", 1)
+            .replacen(
+                "plain: 見本の判断の記録です。",
+                "plain: 見本の**判断の記録**です。",
+                1,
+            )
+            .replacen("正本の欄だけで", "**正本の<欄>**だけで", 1)
+            .replacen("1 本置き、面の生成器の", "1 本置き、**面の生成器**の", 1)
+            .replacen("欄の決まりの必須の欄だけ", "欄の決まりの**必須の欄**だけ", 1)
+            .replacen("せず、面の骨格だけ", "せず、**面の骨格**だけ", 1)
+            .replacen("面の生成器は正本 1 本から", "面の生成器は**正本 1 本**から", 1)
+            .replacen(
+                "\nfigures:\n",
+                "\nnote: 注の前 <i>字</i> と **注の強調** の後\nfigures:\n",
+                1,
+            )
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    for want in [
+        "<p>見本の面を出すのに、<strong>正本の&lt;欄&gt;</strong>だけで 1 枚を組めるかがまだ分からない。</p>".to_string(),
+        "<p>見本の判断の記録を 1 本置き、<strong>面の生成器</strong>の凍結 fixture にする。</p>".to_string(),
+        "<p class=\"norm\">欄の決まりの<strong>必須の欄</strong>だけを手で書く。</p>".to_string(),
+        "<div class=\"plain\"><span class=\"pk\">理由</span>正本の写しにせず、<strong>面の骨格</strong>だけを測れる。</div>".to_string(),
+        "<li>面の生成器は<strong>正本 1 本</strong>から 1 枚を組む。</li>".to_string(),
+        format!("{NOTE_FOLD}注の前 &lt;i&gt;字&lt;/i&gt; と <strong>注の強調</strong> の後</p></div></details>"),
+    ] {
+        once_in(&html, &want, "strong の行");
+    }
+    assert_eq!(html.matches("<strong>").count(), 6, "strong の開きが 6 つでない");
+    assert_eq!(html.matches("</strong>").count(), 6, "strong の閉じが 6 つでない");
+    // 題と平易文は写さない
+    once_in(&html, "<p class=\"sub-title\">見本の**判断**の記録</p>", "副題の生の印");
+    once_in(
+        &html,
+        "<p class=\"txt\">見本の**判断の記録**です。決め方の形だけを見せます。</p>",
+        "平易文の生の印",
+    );
+}
+
+#[test]
+fn f149_marks_across_items_unclosed_and_empty_stay_raw() {
+    let html = with_context(
+        "f149-items",
+        "前置きの**強い字**を持つ。(1) 一つめで**開いた印が。(2) 二つめで閉じる**字。(3) 空の****対と *_note と**閉じない字。(4) 四つめは**項目の中**で閉じる。",
+    );
+    let ch1 = chapter(&html, 1);
+    once_in(ch1, "<p class=\"intro\">前置きの<strong>強い字</strong>を持つ。</p>", "前置きの段落");
+    once_in(
+        ch1,
+        "<ol class=\"items\">\n<li>一つめで**開いた印が。</li>\n<li>二つめで閉じる**字。</li>\n<li>空の****対と *_note と**閉じない字。</li>\n<li>四つめは<strong>項目の中</strong>で閉じる。</li>\n</ol>",
+        "一覧の 4 項目",
+    );
+    assert_eq!(html.matches("<strong>").count(), 2, "strong が前置きと 4 項目めの 2 つでない");
+    assert_eq!(html.matches("</strong>").count(), 2);
+}
+
+#[test]
+fn f149_real_sources_draw_every_pair_as_strong_in_order() {
+    let td = temp_dir("f149-census");
+    let mut drawn = 0;
+    for id in real_ids() {
+        let (_, html) = real_face(&td, &id);
+        let a = load_yaml_at(&design_intent().join("adr"), &format!("{id}.yaml"));
+        let pairs: Vec<String> = prose_fields(&a).iter().flat_map(|f| strong_pairs(f)).collect();
+        assert_eq!(
+            html.matches("<strong>").count(),
+            pairs.len(),
+            "{id}: strong の数が対の数と違う"
+        );
+        let mut at = 0;
+        for p in &pairs {
+            let want = format!("<strong>{}</strong>", esc(p));
+            let pos = html[at..]
+                .find(&want)
+                .unwrap_or_else(|| panic!("{id}: 対が逐語で正本の順に無い: {want}"));
+            at += pos + want.len();
+            drawn += 1;
+        }
+        assert!(!html.contains("**"), "{id}: 面に生の印が在る");
+        if id == "ADR-9" {
+            assert!(html.contains("*_note"), "ADR-9: 1 つの星が生のまま無い");
+        }
+    }
+    let _ = fs::remove_dir_all(&td);
+    assert!(drawn > 0, "実の正本の印の対を 1 つも数えていない");
+}
+
+#[test]
+fn f149_adr24_decision_1_is_strong_not_raw() {
+    let td = temp_dir("f149-adr24");
+    let (_, html) = real_face(&td, "ADR-24");
+    let _ = fs::remove_dir_all(&td);
+    let ch2 = chapter(&html, 2);
+    let first = ch2
+        .find("<ol class=\"items\">\n<li>")
+        .map(|at| &ch2[at + "<ol class=\"items\">\n".len()..])
+        .expect("ADR-24 の章 02 に一覧が無い");
+    assert!(
+        first.starts_with(
+            "<li><strong>門の「無ければ 通す」を、同じ根で照らせるときに限る（ADR-18 決定 (5) を狭める）。</strong>"
+        ),
+        "ADR-24 の決定 (1) の見出しが strong でない: {}",
+        &first[..first.find("</li>").unwrap_or(first.len())]
+    );
+    assert!(!html.contains("**"), "ADR-24 の面に生の印が在る");
 }
