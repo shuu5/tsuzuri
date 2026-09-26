@@ -11,7 +11,9 @@
 //! 8. tsuzuri の名は表の 2 行目を写し、床が folio2 の根をその行と照らして落とす（便 133 が旧 scribe3 の名で足し・
 //!    docs/design/delivery-133.md §1 (c)2・便 134 が改名の後の名に改めた・docs/design/delivery-134.md §1 (c)2）／
 //! 9. 始まりの凍結は書く承認一覧を凍結の後の床と同じ関数で確かめ、承認欄の空いた憲法を凍結しない
-//!    （便 155・docs/design/delivery-155.md §1 (c)）。
+//!    （便 155・docs/design/delivery-155.md §1 (c)）／
+//! 10. 承認一覧の承認者と逐語の雛形の印「未記入」は空と同じで、日付は年-月-日。凍結の前も後も同じ本文の行で落ち、
+//!     判断の記録の承認欄の逐語の印も落ちる（便 158・docs/design/delivery-158.md §1 (c)）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -218,6 +220,26 @@ fn blank_ruling(dir: &Path) {
         "ruling: \"f2-648.1 notes 2026-09-12 20:2x（発効承認）\", verbatim:",
         "ruling: 未記入, verbatim:",
     );
+}
+
+/// init の骨格の憲法の承認欄の 4 欄（対話面の前まで）を書き換える。
+fn skeleton_approval(dir: &Path, who: &str, date: &str, ruling: &str, verbatim: &str) {
+    approval(
+        dir,
+        "approval: {who: 未記入, date: 未記入, ruling: 未記入, verbatim: 未記入,",
+        &format!("approval: {{who: {who}, date: {date}, ruling: {ruling}, verbatim: {verbatim},"),
+    );
+}
+
+/// 凍結済みの anchor の承認一覧（approvals の節）の欄 `key` の行を書き換える（meta_approval の写しは変えない）。
+fn anchor_approval(dir: &Path, key: &str, from: &str, to: &str) {
+    edit(&dir.join("anchors/constitution-v1.0.yaml"), |t| {
+        let (head, tail) = t.split_once("\napprovals:\n").expect("approvals の節が無い");
+        format!(
+            "{head}\napprovals:\n{}",
+            tail.replacen(&format!("\n  {key}: {from}\n"), &format!("\n  {key}: {to}\n"), 1)
+        )
+    });
 }
 
 /// 始まりの凍結が書く承認一覧の違反の行。
@@ -639,5 +661,116 @@ fn f155_freeze_start_approval_is_the_floor_row() {
         assert_eq!(out.status.code(), Some(1), "{case}: {}", show(&out));
         assert_eq!(approval_rows(&out), want, "{case}: {}", show(&out));
         assert!(!w.dir().join("anchors").exists(), "{case}: anchors/ を作った");
+    }
+}
+
+/// 10 の 1（便 158）: 骨格の承認欄の裁定 id だけを台帳 id の形にすると、--freeze-start は承認者と逐語の印の行と
+/// 表に無い名のちょうど 2 件で 1。日付だけ 未記入 なら承認欄の行は日付の形。どちらも anchors/ を作らない。
+#[test]
+fn f158_skeleton_freeze_start_reads_the_mark_and_the_date() {
+    let cases = [
+        (
+            "f158-mark",
+            ["未記入", "未記入", "p1-1", "未記入"],
+            format!("{APPROVAL_AT}approvals[0] の who / verbatim が 未記入（init の雛形の印・空と同じ）"),
+        ),
+        (
+            "f158-date",
+            ["持ち主", "未記入", "p1-1", "承認する"],
+            format!("{APPROVAL_AT}approvals[0].date「未記入」が年-月-日でない"),
+        ),
+    ];
+    for (case, [who, date, ruling, verbatim], want) in cases {
+        let w = Work::init(case);
+        skeleton_approval(&w.dir(), who, date, ruling, verbatim);
+        w.commit();
+        let out = w.check(&["--freeze-start"]);
+        assert_eq!(out.status.code(), Some(1), "{case}: {}", show(&out));
+        let v = violations(&out);
+        assert_eq!(v.len(), 2, "{case}: {v:?}");
+        assert_eq!(approval_rows(&out), [want], "{case}: {v:?}");
+        assert_eq!(
+            v.iter()
+                .filter(|l| l.starts_with("[anchor] ") && l.contains("表に無い"))
+                .count(),
+            1,
+            "{case}: {v:?}"
+        );
+        assert!(!w.dir().join("anchors").exists(), "{case}: anchors/ を作った");
+    }
+}
+
+/// 10 の 2（便 158）: 床の土台の写しで、凍結の前（列の無い置き場の憲法 meta.approval → --freeze-start）と
+/// 凍結の後（凍結済みの anchor の承認一覧 → 素の check）に同じ書き換えを当てると、承認欄の行は頭を除いて同じ本文。
+#[test]
+fn f158_the_mark_and_the_date_are_the_same_rows_before_and_after_the_freeze() {
+    // 欄・今の値・書き換えた値・憲法の行の前後の字・承認欄の行の本文（頭の「<file>: 」の後）
+    let cases = [
+        ("who", "持ち主（shuu5）", "未記入", "{", ",", Some("approvals[0] の who が 未記入（init の雛形の印・空と同じ）")),
+        ("who", "持ち主（shuu5）", "\"　未記入 \"", "{", ",", Some("approvals[0] の who が 未記入（init の雛形の印・空と同じ）")),
+        ("date", "2026-09-12", "2026/09/12", " ", ",", Some("approvals[0].date「2026/09/12」が年-月-日でない")),
+        ("date", "2026-09-12", "2026-9-12", " ", ",", Some("approvals[0].date「2026-9-12」が年-月-日でない")),
+        ("date", "2026-09-12", "\"2026-09-12 20:20\"", " ", ",", Some("approvals[0].date「2026-09-12 20:20」が年-月-日でない")),
+        ("verbatim", "承認する", "未記入の欄は無いので承認する", " ", ",", None),
+    ];
+    for (n, (key, from, to, pre, post, want)) in cases.into_iter().enumerate() {
+        let want: Vec<String> = want.into_iter().map(str::to_string).collect();
+        let w = Work::new(&format!("f158-before-{n}"), FLOOR_BASE, true, |d| {
+            no_anchors(d);
+            approval(d, &format!("{pre}{key}: {from}{post}"), &format!("{pre}{key}: {to}{post}"));
+        });
+        let out = w.check(&["--freeze-start"]);
+        assert_eq!(out.status.code(), Some(1), "{key} {to}: {}", show(&out));
+        let before: Vec<String> = approval_rows(&out)
+            .iter()
+            .map(|l| l[APPROVAL_AT.len()..].to_string())
+            .collect();
+        assert_eq!(before, want, "{key} {to}: {}", show(&out));
+        assert!(!w.dir().join("anchors").exists(), "{key} {to}: anchors/ を作った");
+        drop(w);
+
+        let w = Work::new(&format!("f158-after-{n}"), FLOOR_BASE, true, |d| {
+            anchor_approval(d, key, from, to);
+        });
+        let out = w.check(&[]);
+        assert_eq!(out.status.code(), Some(1), "{key} {to}: {}", show(&out));
+        let head = "[anchor] constitution-v1.0.yaml: ";
+        let after: Vec<String> = violations(&out)
+            .iter()
+            .filter(|l| l.starts_with(head) && l.contains("approvals["))
+            .map(|l| l[head.len()..].to_string())
+            .collect();
+        assert_eq!(after, before, "{key} {to}: {}", show(&out));
+    }
+}
+
+/// 10 の 3（便 158）: 判断の記録の承認欄の逐語の印は N-4 の 1 行で落ち、印を含むだけの字は通る。
+/// 承認者の印は値域外の 1 行だけ（印の行を 2 重に積まない）。
+#[test]
+fn f158_adr_approval_verbatim_mark_is_empty() {
+    let mark = "[N-4] ADR-1.approval.verbatim が 未記入（init の雛形の印・空と同じ）";
+    let cases = [
+        ("verbatim: すべて承認する,", "verbatim: 未記入,", Some(mark)),
+        ("verbatim: すべて承認する,", "verbatim: \" 未記入　\",", Some(mark)),
+        ("verbatim: すべて承認する,", "verbatim: 未記入の欄は無い,", None),
+        ("{who: 持ち主,", "{who: 未記入,", Some("who が値域外")),
+    ];
+    for (n, (from, to, want)) in cases.into_iter().enumerate() {
+        let w = Work::new(&format!("f158-adr-{n}"), FLOOR_BASE, true, |d| {
+            edit(&d.join("adr/ADR-1.yaml"), |t| t.replacen(from, to, 1));
+        });
+        let out = w.check(&[]);
+        let v = violations(&out);
+        match want {
+            None => {
+                assert_eq!(out.status.code(), Some(0), "{to}: {}", show(&out));
+                assert!(v.is_empty(), "{to}: {v:?}");
+            }
+            Some(want) => {
+                assert_eq!(out.status.code(), Some(1), "{to}: {}", show(&out));
+                assert_eq!(v.len(), 1, "{to}: {v:?}");
+                assert!(v[0].starts_with("[N-4] ") && v[0].contains(want), "{to}: {v:?}");
+            }
+        }
     }
 }

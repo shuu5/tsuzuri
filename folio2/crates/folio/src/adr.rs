@@ -601,6 +601,13 @@ fn check_approval(at: &str, ap: &Node, report: &mut Report) {
             report.violation(KIND, format!("{at}.{k} が空"));
         }
     }
+    // 形の決まりを持たない逐語だけが印を空と見る（便 158）
+    if scalar(ap.get("verbatim")).is_some_and(unfilled) {
+        report.violation(
+            KIND,
+            format!("{at}.verbatim が {UNFILLED}（init の雛形の印・空と同じ）"),
+        );
+    }
     check_date(KIND, &format!("{at}.date"), ap.get("date"), report);
     if !in_enum(ap.get("who"), APPROVER) {
         report.violation(KIND, format!("{at}.who が値域外: {}", show(ap.get("who"))));
@@ -836,6 +843,14 @@ pub(crate) fn non_empty(node: Option<&Node>) -> bool {
     }
 }
 
+/// `folio init` の雛形の印（便 158）。形の決まりを持たない非空の欄では空と同じに見る。
+pub(crate) const UNFILLED: &str = "未記入";
+
+/// 前後の空白を落として雛形の印そのものか（印を含むだけの字は印でない）。
+pub(crate) fn unfilled(s: &str) -> bool {
+    s.trim() == UNFILLED
+}
+
 pub(crate) fn check_date(kind: &str, at: &str, node: Option<&Node>, report: &mut Report) {
     if !scalar(node).is_some_and(is_date) {
         report.violation(kind, format!("{at}「{}」が年-月-日でない", show(node)));
@@ -847,7 +862,7 @@ fn digits(s: &str) -> bool {
 }
 
 /// 年 4 桁-月 2 桁-日 2 桁（date_format）。
-fn is_date(s: &str) -> bool {
+pub(crate) fn is_date(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 10
         && b[4] == b'-'

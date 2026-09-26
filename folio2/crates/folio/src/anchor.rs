@@ -928,7 +928,7 @@ fn check_file(
     })
 }
 
-/// (f) approvals の各項と判断の記録の承認欄。
+/// (f) approvals の各項と判断の記録の承認欄。確かめの順は 空 → 台帳 id の形 → 雛形の印 → 日付（便 158）。
 fn check_approvals(
     dir: &Path,
     name: &str,
@@ -960,6 +960,30 @@ fn check_approvals(
             report.violation(
                 "anchor",
                 format!("{name}: approvals[{n}].ruling に台帳 id が無い"),
+            );
+            continue;
+        }
+        // 形の決まりを持たない承認者と逐語だけが雛形の印を空と見る（便 158・裁定 id の印は台帳 id の形が落とす）
+        let marked: Vec<&str> = ["who", "verbatim"]
+            .into_iter()
+            .filter(|k| adr::unfilled(&py_str(ap.get(k))))
+            .collect();
+        if !marked.is_empty() {
+            report.violation(
+                "anchor",
+                format!(
+                    "{name}: approvals[{n}] の {} が {}（init の雛形の印・空と同じ）",
+                    marked.join(" / "),
+                    adr::UNFILLED
+                ),
+            );
+            continue;
+        }
+        let date = py_str(ap.get("date"));
+        if !adr::is_date(&date) {
+            report.violation(
+                "anchor",
+                format!("{name}: approvals[{n}].date「{date}」が年-月-日でない"),
             );
             continue;
         }
