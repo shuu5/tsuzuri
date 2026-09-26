@@ -983,8 +983,8 @@ const F91_ROWS: [(&str, &[&str]); 15] = [
     ("D-3", &["R-1"]),
     ("D-10", &["P-5.2", "R-8"]),
     ("D-11", &["P-5.6"]),
-    // D-12 の refs は一括 24 の承認（2026-09-26）で ADR-24 と P-4 を足した
-    ("D-12", &["ADR-8", "ADR-13", "ADR-18", "D-14", "ADR-19", "ADR-24", "P-4"]),
+    // D-12 の refs は一括 24 の承認（2026-09-26）で ADR-24 と P-4 を、一括 25 の改訂 c で ADR-25 を足した
+    ("D-12", &["ADR-8", "ADR-13", "ADR-18", "D-14", "ADR-19", "ADR-24", "P-4", "ADR-25"]),
     // D-14 は判断の記録 ADR-19 の発効で新設（2026-09-24）
     (
         "D-14",
@@ -1042,7 +1042,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
         assert_eq!(got, *want, "{id} の refs");
         total += got.len();
     }
-    assert_eq!(total, 46, "refs の id の合計");
+    assert_eq!(total, 47, "refs の id の合計");
 }
 
 #[test]

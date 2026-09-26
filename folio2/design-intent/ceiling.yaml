@@ -1,13 +1,14 @@
-# folio2 天井の正本（v0.15・orchestrator 席）
+# folio2 天井の正本（v0.16・orchestrator 席）
 # 位置: 判断の記録 ADR-8 決定 (1)(3)(4)・ADR-10（v0.2 = 1 周目の結果を受けた問いの文と読む欄の改訂）。観点 4 つ（文書の型に依らない）・観点ごとの問いの文と読む欄・文書の一覧・所見の欄の決まり・起動の記録の欄・重さと 3 値の値域・材料の束の要約値の規則を持つ。v0.3（判断の記録 ADR-11 決定 (4)①）= 観点ごとの 3 値・所見と記録の欄の決まり・束の中身と要約値の規則・反証の規則は、人が書く節をやめて末尾の生成区間（schema の節・正本は実装の定数・folio が導出する）に移した。人が書くのは meta・重さ（weights）・読む文書の行（documents）・観点の行（viewpoints）。
-# 状態: v0.15 は発効（2026-09-24 11:51 JST 持ち主「全部推奨で」・f2-648 notes・判断の記録 ADR-18 と要件書 第 1.36 版と同じ承認）= 周の引き金を規範の欄の要約値の変化に絞った（判断の記録 ADR-18 決定 (1)）。規範の欄の一覧の正本は実装の型付きの定数で、その写しは末尾の生成区間に入る（便ア〔台帳 f2-648.178〕が 2026-09-24 に入れた。それまでは生成区間に引き金の一覧が無く、門は正本の要約値で古さを測っていた・一括 17 で着地の後の字にした）。人が書く節（重さ・文書の一覧・観点の行）は v0.14 から 1 字も変えない。
-# 前の版: v0.14 は発効（2026-09-24 09:46 JST 持ち主「裁定はすべて承認する」・f2-648 notes・要件書 第 1.34 版〔版 B・判断の記録 ADR-16 決定 (7)〕と同じ承認）= 忠実さ・読みやすさ・文書どうしの整合の 3 観点の読む欄に、要件書の M3 の範囲の節 scope_m3 を足した（v0.13 = 2026-09-23 発効・一括 14）。
+# 状態: v0.16 は発効（2026-09-26 15:22 JST 持ち主「また３問についてもすべて承認する」・2026-09-26 15:28 JST「一括２５は承認する」・f2-648 notes・対話面 R-8・一括 25 の問 1 = 要件書 第 1.47 版と判断の記録 ADR-25 と同じ承認）= 文書どうしの整合と実態との整合の 2 観点の読む欄の判断の記録（adr）の行に改訂の欄（revises）を足した（台帳 f2-648.225。束の正本の写し（sources/）は観点の読む欄が挙げた最上位の節だけを残すので〔便 98〕、判断の記録が持つ改訂の欄はどの観点の写しにも入らず、席は 37〜42 周目の反証の依頼文で正本を読むよう補っていた。忠実さと読みやすさの読む欄・観点の数・重さ・文書の一覧・読み手・問いの文・生成区間は不変。枝の上の 43 周目〔整合・実態 止める → ADR-25〕と 44 周目〔4 観点合格・印〕を経た）。
+# 前の版: v0.15 は発効（2026-09-24 11:51 JST 持ち主「全部推奨で」・f2-648 notes・判断の記録 ADR-18 と要件書 第 1.36 版と同じ承認）= 周の引き金を規範の欄の要約値の変化に絞った（判断の記録 ADR-18 決定 (1)）。規範の欄の一覧の正本は実装の型付きの定数で、その写しは末尾の生成区間に入る（便ア〔台帳 f2-648.178〕が 2026-09-24 に入れた。それまでは生成区間に引き金の一覧が無く、門は正本の要約値で古さを測っていた・一括 17 で着地の後の字にした）。人が書く節（重さ・文書の一覧・観点の行）は v0.14 から 1 字も変えない。
+# 前の前の版: v0.14 = 2026-09-24 09:46 JST 発効・要件書 第 1.34 版と同じ承認・3 観点の読む欄に scope_m3（v0.13 = 2026-09-23 発効・一括 14）
 # 読み方: folio は AI を起動しない。観点ごとに材料の束（bundle）を組み、席か器が AI を回して所見（finding）と起動の記録（record）を同じ置き場へ書く。床は所見の形と記録の有無と束の要約値の一致だけを数え、所見の意味の当否は判定しない（P-1）。
 
 meta:
   id: folio2-ceiling
   title: 天井の正本（観点・所見の欄の決まり・起動の記録）
-  version: v0.15
+  version: v0.16
   status: effective
   generated: 2026-09-19
   approval:
@@ -41,6 +42,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-24, stamp: "発効（f2-648 notes 2026-09-24 09:46 JST・対話面 R-8・要件書 第 1.34 版〔版 B〕の問 1 への回答・同じ承認）", verbatim: 裁定はすべて承認する, version: v0.14}
     - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-24, stamp: "v0.15 の起草（判断の記録 ADR-18 決定 (1)(7)・周の引き金を規範の欄の要約値の変化に絞る。規範の欄の一覧の写しは便アが末尾の生成区間へ導出する。人が書く節〔重さ・文書の一覧・観点の行〕と観点の数は不変）", version: v0.15}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-24, stamp: "発効（f2-648 notes 2026-09-24 11:51 JST・対話面 R-8・報告 8102 の 8 問への回答・判断の記録 ADR-18 の問 1 = 案 a・要件書 第 1.36 版と同じ承認）", verbatim: 全部推奨で, version: v0.15}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-26, stamp: "v0.16 の起草（一括 25・台帳 f2-648.225 = 文書どうしの整合と実態との整合の観点の読む欄の判断の記録の行に改訂の欄 revises を足す。束の正本の写しに判断の記録 8 本の改訂の欄が入る。忠実さと読みやすさの読む欄と観点の数と重さと文書の一覧と読み手と問いの文と生成区間は不変）", version: v0.16}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-26, stamp: "発効（f2-648 notes 2026-09-26 15:22 JST（逐語「また３問についてもすべて承認する」）と 2026-09-26 15:28 JST（逐語「一括２５は承認する」・再確認）・対話面 R-8・一括 25〔問 1〜問 3〕の承認要求への回答・要件書 第 1.47 版と判断の記録 ADR-25 と同じ承認）", verbatim: 一括２５は承認する, version: v0.16}
 
 # 所見の重さ。refute に挙げた重さの所見だけ、別の文脈の AI が中立に反証する（ADR-8 決定 (3)）。反証が「まだ分からない」なら所見は残す。重さの基準は各観点の問いの文が持つ（v0.2）
 weights:
@@ -95,7 +98,7 @@ viewpoints:
       - {doc: constitution, fields: [articles, precedence]}
       - {doc: rules, fields: [thresholds, discipline]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1, scope_m3]}
-      - {doc: adr, fields: [context, decision, options, basis, consequences, retreat, note]}
+      - {doc: adr, fields: [context, decision, revises, options, basis, consequences, retreat, note]}
       - {doc: design-note, fields: [sections]}
       - {doc: intake, fields: [targets, questions]}
       - {doc: ceiling, fields: [documents, viewpoints]}
@@ -110,7 +113,7 @@ viewpoints:
       - {doc: constitution, fields: [articles.mechanism, articles.statements.text]}
       - {doc: rules, fields: [thresholds, discipline]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
-      - {doc: adr, fields: [decision, consequences, note]}
+      - {doc: adr, fields: [decision, revises, consequences, note]}
       - {doc: design-note, fields: [sections]}
 
 # 決まりの部分（生成区間）。観点ごとの 3 値・観点と読む文書の閉じた id・所見と起動の記録の欄・束の中身と要約値の規則・反証の束と結果の欄と規則の文。何にするかの裁定の正本は設計文書（要件書 FR5・判断の記録 ADR-8）で、機械が執行する規則の正本は実装の定数（判断の記録 ADR-11 決定 (3)(イ)(ウ)(オ)）。直すときは実装の側を便で直す。憲法の schema の節（file が正本）とは向きが逆である（規則の表の schema の節は同じ向き = 生成区間・判断の記録 ADR-11 決定 (4)②）
