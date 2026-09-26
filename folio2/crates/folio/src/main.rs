@@ -99,10 +99,10 @@ enum Command {
         /// CLAUDE.md の path
         #[arg(long, default_value = "CLAUDE.md")]
         claude_md: PathBuf,
-        /// 区間の中身を導出で置き換えて書く（差が無ければ書かない）
+        /// 区間の中身を導出で置き換えて書く（差が無ければ書かない・CLAUDE.md が無ければ区間だけの file を作り、marker が 1 本も無ければ末尾に区間を足す）
         #[arg(long)]
         write: bool,
-        /// 区間と導出の byte 一致・区間の外の規範語の行を検査する
+        /// 区間と導出の byte 一致・区間の外の規範語の行（folio2 の置き場だけ・外の置き場は数えない 1 行を出す）を検査する
         #[arg(long)]
         check: bool,
         /// 導出した本文を標準出力へ書く

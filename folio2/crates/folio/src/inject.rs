@@ -1,11 +1,16 @@
 //! `folio inject`（便 2・docs/design/delivery-2.md §1）。憲法の前文と規範文を CLAUDE.md の生成区間へ書く・検査する。
 //! day-1 の script `scripts/inject_check.py` の写し。--write・--check・--print は同じ導出関数 `derive` を使う。
 //! 終了コードは便 0 と同じ 3 値（R-2 の超過は script の 3 ではなく 違反 = 1）。
+//! 便 159: --write は CLAUDE.md が無ければ区間だけの file を作り、marker が 1 本も無ければ末尾に区間を足す。
+//! --check の区間の外の規範語は folio2 の所有する CLAUDE.md だけで数える（条 N-2 の機構の注）。
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 
+use crate::adr;
 use crate::constitution_enums::Strength;
+use crate::floor_adr::ROOT_DIGESTS;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node};
 
@@ -127,6 +132,29 @@ fn normative_outside(md: &str, region: (usize, usize)) -> Vec<String> {
         .collect()
 }
 
+/// 置き場の憲法の名（meta.id）が読めて、列の根の表の最初の行（folio2 の行）の鍵と違うときだけ名（便 159）。
+/// 名が読めないか表が空なら None＝区間の外を数える。
+fn foreign_name(dir: &Path) -> Option<String> {
+    let (own, _) = ROOT_DIGESTS.first()?;
+    adr::place_name(dir).ok().filter(|name| name != own)
+}
+
+/// dir の項目として無い（行き先の無い symlink は項目として在る＝無いと見ない）。
+fn absent(path: &Path) -> bool {
+    matches!(fs::symlink_metadata(path), Err(e) if e.kind() == ErrorKind::NotFound)
+}
+
+/// CLAUDE.md を書く。書けなければ「書けない」の まだ分からない。
+fn write_md(claude_md: &Path, text: &str, msg: String) -> Outcome {
+    match fs::write(claude_md, text) {
+        Ok(()) => Outcome::new(Verdict::Pass, msg),
+        Err(e) => Outcome::new(
+            Verdict::Unknown,
+            format!("{}: 書けない: {e}", claude_md.display()),
+        ),
+    }
+}
+
 fn load_yaml(path: &Path) -> Result<Node, String> {
     let text =
         fs::read_to_string(path).map_err(|e| format!("{}: 読めない: {e}", path.display()))?;
@@ -168,8 +196,20 @@ pub fn run(dir: &Path, claude_md: &Path, mode: Mode) -> Outcome {
             messages: vec![format!("{n} 行 / {size} byte / R-2 上限 {limit}")],
         };
     }
+    let want = format!("\n{body}\n");
     let md = match fs::read_to_string(claude_md) {
         Ok(md) => md,
+        Err(_) if mode == Mode::Write && absent(claude_md) => {
+            let at = std::path::absolute(claude_md).unwrap_or_else(|_| claude_md.to_path_buf());
+            return write_md(
+                claude_md,
+                &format!("{BEGIN}{want}{END}\n"),
+                format!(
+                    "{}: 無いので区間だけの file を作った（{n} 行 / {size} byte）",
+                    at.display()
+                ),
+            );
+        }
         Err(e) => {
             return Outcome::new(
                 Verdict::Unknown,
@@ -178,43 +218,62 @@ pub fn run(dir: &Path, claude_md: &Path, mode: Mode) -> Outcome {
         }
     };
     let Some(region) = region_of(&md) else {
+        if mode == Mode::Write && !md.contains(BEGIN) && !md.contains(END) {
+            // 利用者の字は 1 byte も変えない。挟みは最後の 1 字で決める（改行なら 1 つ・改行でなければ 2 つ・空なら無し）。
+            let gap = match md.chars().last() {
+                None => "",
+                Some('\n') => "\n",
+                Some(_) => "\n\n",
+            };
+            let at = std::path::absolute(claude_md).unwrap_or_else(|_| claude_md.to_path_buf());
+            return write_md(
+                claude_md,
+                &format!("{md}{gap}{BEGIN}{want}{END}\n"),
+                format!(
+                    "{}: marker が無いので末尾に区間を足した（{n} 行 / {size} byte）",
+                    at.display()
+                ),
+            );
+        }
         return Outcome::new(
             Verdict::Unknown,
             "marker が 1 対でない（0 本・2 本以上・逆順）",
         );
     };
-    let want = format!("\n{body}\n");
     if mode == Mode::Write {
         let new = format!("{}{want}{}", &md[..region.0], &md[region.1..]);
         if new != md {
-            if let Err(e) = fs::write(claude_md, new) {
-                return Outcome::new(
-                    Verdict::Unknown,
-                    format!("{}: 書けない: {e}", claude_md.display()),
-                );
-            }
-            return Outcome::new(Verdict::Pass, format!("wrote {n} 行 / {size} byte"));
+            return write_md(claude_md, &new, format!("wrote {n} 行 / {size} byte"));
         }
         return Outcome::new(Verdict::Pass, format!("差が無い（{n} 行 / {size} byte）"));
     }
-    let outside = normative_outside(&md, region);
-    if let Some(first) = outside.first() {
-        return Outcome::new(
-            Verdict::Fail,
-            format!("区間の外に規範語で終わる行が {} 行: {first}", outside.len()),
-        );
+    let foreign = foreign_name(dir);
+    if foreign.is_none() {
+        let outside = normative_outside(&md, region);
+        if let Some(first) = outside.first() {
+            return Outcome::new(
+                Verdict::Fail,
+                format!("区間の外に規範語で終わる行が {} 行: {first}", outside.len()),
+            );
+        }
     }
     let cur = &md[region.0..region.1];
-    if cur.trim().is_empty() {
-        return Outcome::new(Verdict::Unknown, "区間が空（未注入）");
-    }
-    if cur != want {
-        return Outcome::new(
+    let mut out = if cur.trim().is_empty() {
+        Outcome::new(Verdict::Unknown, "区間が空（未注入）")
+    } else if cur != want {
+        Outcome::new(
             Verdict::Fail,
             format!("区間 {} byte ≠ 導出 {} byte", cur.len(), want.len()),
-        );
+        )
+    } else {
+        Outcome::new(Verdict::Pass, format!("{n} 行 / {size} byte 一致"))
+    };
+    if let Some(name) = foreign {
+        out.messages.push(format!(
+            "# 区間の外の規範語の行は数えていない（置き場の憲法の名「{name}」が列の根の表の folio2 の行と違う＝folio2 の所有する CLAUDE.md でない・判定の外）"
+        ));
     }
-    Outcome::new(Verdict::Pass, format!("{n} 行 / {size} byte 一致"))
+    out
 }
 
 #[cfg(test)]

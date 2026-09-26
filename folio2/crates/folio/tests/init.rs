@@ -798,18 +798,19 @@ fn f152_the_skeleton_runs_every_command_without_hand_edits() {
         both(&check)
     );
 
+    // 便 159: CLAUDE.md を置かずに注入する（--write が区間だけの file を作る）。
     let md = w.root.join("CLAUDE.md");
-    fs::write(
-        &md,
-        "# 一時の CLAUDE.md\n\n<!-- constitution:begin -->\n<!-- constitution:end -->\n",
-    )
-    .unwrap();
     let md_arg = md.to_str().unwrap();
     for mode in ["--write", "--check"] {
         let inject = folio(&["inject", "--claude-md", md_arg, mode], &place);
         assert_eq!(inject.status.code(), Some(0), "inject {mode}: {}", both(&inject));
     }
     let injected = fs::read_to_string(&md).unwrap();
+    assert!(
+        injected.starts_with("<!-- constitution:begin -->")
+            && injected.ends_with("<!-- constitution:end -->\n"),
+        "{injected}"
+    );
     assert!(
         injected.contains("P-1.1") && injected.contains("R-2"),
         "{injected}"
