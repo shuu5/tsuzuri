@@ -9,6 +9,8 @@
 //! folio の code を呼ばない）で測った値に置き換える。節点の数を見る歯は folio graph --print の節点の行から nodes の表を組み、
 //! rest の仮の値と一緒に印の末尾に足す。
 //! 便 129（docs/design/delivery-129.md §1 (e) の 1）: 独立の実装は憲法を凍結 anchor の trigger.constitution の scope の範囲で写す。
+//! 便 151（docs/design/delivery-151.md §1 (c)(e)）: 独立の実装は判断の記録を状態を問わず全部写す（anchor から status の葉が消えた）。
+//! 向きが逆になる既存の 2 通り（ADR-2 の発効・ADR-2 の決定の字）は f151_ の 2 本へ移した。
 //!
 //! 版管理の下の file は書き換えない（`--dir` は必ず一時 dir の中）。
 
@@ -283,7 +285,8 @@ fn trigger_hex(dir: &Path) -> String {
                 J::Obj(out)
             }
             "adr" => {
-                let (status, fields) = (names(&lists["status"]), names(&lists["fields"]));
+                // 状態を問わず記録ごとに fields（便 151）
+                let fields = names(&lists["fields"]);
                 let sub = dir.join(file);
                 let mut files: Vec<String> = fs::read_dir(&sub)
                     .unwrap()
@@ -293,16 +296,12 @@ fn trigger_hex(dir: &Path) -> String {
                     .filter(|n| n.ends_with(".yaml") && n != "schema.yaml")
                     .collect();
                 files.sort();
-                let mut out = Vec::new();
-                for name in files {
-                    let record = load_yaml(&sub.join(&name));
-                    let effective = record["status"].as_str().is_some_and(|s| status.iter().any(|w| w == s))
-                        && matches!(field(&record, "approval"), Some(Yaml::Hash(_)));
-                    if effective {
-                        out.push(row_of(&record, &fields));
-                    }
-                }
-                J::Arr(out)
+                J::Arr(
+                    files
+                        .iter()
+                        .map(|name| row_of(&load_yaml(&sub.join(name)), &fields))
+                        .collect(),
+                )
             }
             "rules" => {
                 let (sections, fields) = (names(&lists["sections"]), names(&lists["fields"]));
@@ -595,7 +594,7 @@ fn f126_the_gate_passes_a_plain_edit_and_counts_one_node() {
 
 #[test]
 fn f126_the_gate_is_stale_on_each_normative_edit() {
-    let cases: [(&str, &str, &str); 5] = [
+    let cases: [(&str, &str, &str); 4] = [
         (
             "constitution.yaml",
             "text: 道具は検査の結果を知らせる。}",
@@ -616,11 +615,6 @@ fn f126_the_gate_is_stale_on_each_normative_edit() {
             "    question: 人が書いた自由文（",
             "    question: 人の書いた自由文（",
         ),
-        (
-            "adr/ADR-2.yaml",
-            "\nstatus: proposed\n",
-            "\nstatus: accepted\napproval: {who: 持ち主, date: 2026-09-07, ruling: 裁定 F-9, verbatim: 承認する, surface: R-8}\n",
-        ),
     ];
     for (i, (file, from, to)) in cases.into_iter().enumerate() {
         let repo = Repo::new(&format!("f126-norm-{i}"));
@@ -640,7 +634,7 @@ fn f126_the_gate_is_stale_on_each_normative_edit() {
 #[test]
 fn f126_the_gate_passes_edits_outside_the_trigger() {
     // （file・元の字・変えた字・読む文書の file か＝節点の数を添えるか）
-    let cases: [(&str, &str, &str, bool); 9] = [
+    let cases: [(&str, &str, &str, bool); 8] = [
         (
             "constitution.yaml",
             "    plain: 道具は知らせるところまでで、決めるのはあなたです。\n",
@@ -661,12 +655,6 @@ fn f126_the_gate_passes_edits_outside_the_trigger() {
         ),
         ("rules.yaml", "    ruling: 裁定 F-5\n", "    ruling: 裁定 F-6\n", true),
         ("srs.yaml", "  version: v0.3\n", "  version: v0.4\n", true),
-        (
-            "adr/ADR-2.yaml",
-            "decision: 見本の判断の記録を 1 本置き",
-            "decision: 見本の判断の記録を 2 本置き",
-            true,
-        ),
         (
             "design-note/full.yaml",
             "      面の骨格を 1 枚で測る。",
@@ -922,5 +910,88 @@ fn f150_the_gate_reads_the_place_as_before() {
         let out = stdout(run);
         assert_eq!(code(run), 0, "撃ち方 {i}: {out}");
         assert!(out.contains("通す") && out.contains("正本の要約値が同じ"), "撃ち方 {i}: {out}");
+    }
+}
+
+// ── 便 151: 引き金は判断の記録を状態を問わず全部写し、状態の欄を写さない（docs/design/delivery-151.md §1 (c) の 1・2） ──
+
+/// 写しの ADR-2（提案中）の決定の字。
+const ADR2_DECISION: (&str, &str) = (
+    "decision: 見本の判断の記録を 1 本置き",
+    "decision: 見本の判断の記録を 2 本置き",
+);
+
+/// 写しの ADR-2 の id を `id` に替えた提案中の記録の字。
+fn proposed_record(repo: &Repo, id: &str) -> String {
+    let text = fs::read_to_string(repo.dir().join("adr/ADR-2.yaml")).unwrap();
+    assert!(text.contains("\nstatus: proposed\n"), "写しの ADR-2 が提案中でない");
+    text.replacen("\nid: ADR-2\n", &format!("\nid: {id}\n"), 1)
+}
+
+#[test]
+fn f151_a_proposed_adr_moves_the_trigger() {
+    let control = Repo::new("f151-control");
+    control.put_stamp_with_nodes();
+    let run = control.gate(&["design-intent/srs.yaml"]);
+    control.done();
+    let out = stdout(&run);
+    assert_eq!(code(&run), 0, "対照: {out}");
+    assert!(out.contains("通す") && out.contains("正本の要約値が同じ"), "対照: {out}");
+
+    let decision = Repo::new("f151-decision");
+    decision.put_stamp_with_nodes();
+    decision.edit("adr/ADR-2.yaml", ADR2_DECISION.0, ADR2_DECISION.1);
+    let edited = decision.gate(&["design-intent/adr/ADR-2.yaml"]);
+    decision.done();
+
+    let added = Repo::new("f151-added");
+    added.put_stamp_with_nodes();
+    fs::write(added.dir().join("adr/ADR-3.yaml"), proposed_record(&added, "ADR-3")).unwrap();
+    let new = added.gate(&["+design-intent/adr/ADR-3.yaml"]);
+    added.done();
+
+    for (case, run) in [("提案中の ADR-2 の決定の字", &edited), ("提案中の ADR-3 を足す", &new)] {
+        let out = stdout(run);
+        assert_eq!(code(run), 2, "{case}: {out}");
+        assert!(
+            out.contains("印が古い") && out.contains("引き金の要約値が違う"),
+            "{case}: {out}"
+        );
+    }
+}
+
+#[test]
+fn f151_the_adr_status_and_approval_do_not_move_the_trigger() {
+    let adopted = Repo::new("f151-adopted");
+    adopted.put_stamp_with_nodes();
+    adopted.edit(
+        "adr/ADR-2.yaml",
+        "\nstatus: proposed\n",
+        "\nstatus: accepted\napproval: {who: 持ち主, date: 2026-09-07, ruling: 裁定 F-9, verbatim: 承認する, surface: R-8}\n",
+    );
+    let accepted = adopted.gate(&["design-intent/adr/ADR-2.yaml"]);
+    adopted.done();
+
+    let retired = Repo::new("f151-retired");
+    retired.put_stamp_with_nodes();
+    fs::create_dir_all(retired.dir().join("adr/retired")).unwrap();
+    fs::write(retired.dir().join("adr/retired/ADR-0.yaml"), proposed_record(&retired, "ADR-0")).unwrap();
+    let below = retired.gate(&["design-intent/srs.yaml", "+design-intent/adr/retired/ADR-0.yaml"]);
+    retired.done();
+
+    let schema = Repo::new("f151-schema");
+    schema.put_stamp_with_nodes();
+    fs::write(schema.dir().join("adr/schema.yaml"), "schema: {note: 見本の欄の決まり}\n").unwrap();
+    let rules = schema.gate(&["+design-intent/adr/schema.yaml"]);
+    schema.done();
+
+    for (case, run, word) in [
+        ("ADR-2 を発効へ・承認欄を足す", &accepted, "引き金の外の変更"),
+        ("adr/retired/ に記録を置く", &below, "正本の要約値が同じ"),
+        ("adr/schema.yaml を置く", &rules, "引き金の外の変更"),
+    ] {
+        let out = stdout(run);
+        assert_eq!(code(run), 0, "{case}: {out}");
+        assert!(out.contains("通す") && out.contains(word), "{case}: {out}");
     }
 }

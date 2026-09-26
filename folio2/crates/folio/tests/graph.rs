@@ -479,7 +479,8 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
 /// 便 126: 土台の天井の正本の生成区間に trigger・trigger_note の 18 行が入り（観点が天井の正本を読む＝残差）、残差の 2 行だけが動いた値。
 /// 便 129: 土台の天井の正本の生成区間に trigger.constitution の scope の 1 行が入り trigger_note の字が変わり、残差の 2 行だけが動いた値。
 /// 便 140: 土台の設計ノートの欄の決まりの placement の字から（器 scribe2）が外れ（17 byte 減）、残差の 2 行だけが動いた値。
-const F99_ANCHOR_SHA256: &str = "10bd11d5526fc203249b2550ebe1cdd9f3ab0ffe89a57dea24b8eb81add95d74";
+/// 便 151: 土台の天井の正本の生成区間から trigger.adr の status の葉が外れ trigger_note の字が変わり（36 byte 減）、残差の 2 行だけが動いた値。
+const F99_ANCHOR_SHA256: &str = "3b722a222fd8059f301fdc04a4400c5279085bea9ebd9ece834f901489b3eee2";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。

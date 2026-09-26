@@ -30,9 +30,7 @@ schema:
       scope: [schema, precedence, articles]
       articles: [id, title, tier, binds, statements]
       statements: [id, text, pattern, strength]
-    adr:
-      status: [accepted, retired]
-      fields: [id, status, decision, retreat, amends, revises, supersedes, superseded_by]
+    adr: {fields: [id, decision, retreat, amends, revises, supersedes, superseded_by]}
     srs:
       requirements: [id, shall, strength, pattern, when, verify, milestone]
       nonfunctional: [id, shall, strength, pattern, when, verify, milestone]
@@ -43,4 +41,4 @@ schema:
       sections: [thresholds, discipline]
       fields: [id, article, what, value, kind, status, stage, population, same_failure, projection]
     ceiling: {whole: [weights], documents: [id, file], viewpoints: [id, reader, question, reads]}
-  trigger_note: 周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20 が改訂）
+  trigger_note: 周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は状態を問わず判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20・ADR-26 が改訂）

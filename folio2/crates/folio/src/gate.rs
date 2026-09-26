@@ -18,7 +18,7 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::anchor;
 use crate::ceiling::{
-    TRIGGER_ADR_FIELDS, TRIGGER_ADR_STATUS, TRIGGER_CEILING_ROWS, TRIGGER_CEILING_WHOLE,
+    TRIGGER_ADR_FIELDS, TRIGGER_CEILING_ROWS, TRIGGER_CEILING_WHOLE,
     TRIGGER_CONSTITUTION_SCOPE, TRIGGER_RULES_FIELDS, TRIGGER_RULES_SECTIONS, TRIGGER_SRS_ROWS, TRIGGER_SRS_WHOLE, TriggerRows,
 };
 use crate::ceiling_src::{self, STAMP_FILE};
@@ -318,8 +318,8 @@ pub(crate) fn trigger_digest(dir: &Path) -> R<String> {
     let projected = anchor::project(&constitution, &scope).map_err(|e| format!("{name}: {e}"))?;
     tree.push((key("constitution"), projected));
 
-    // 判断の記録: 発効した記録（状態が値域のどれかで承認欄が表）ごとに fields
-    tree.push((key("adr"), effective_adrs(dir, &file("adr")?)?));
+    // 判断の記録: 状態を問わず記録ごとに fields（便 151・ADR-26 決定 (3)）
+    tree.push((key("adr"), adr_records(dir, &file("adr")?)?));
 
     // 要件書: 行の一覧の節と丸ごとの節
     let name = file("srs")?;
@@ -391,9 +391,9 @@ fn pick(row: &Value, fields: &[&str]) -> Value {
     )
 }
 
-/// 判断の記録の dir の直下の .yaml（欄の決まり schema.yaml を除く・名の byte 順）のうち発効したもの（`anchor.rs` の
-/// `is_effective` と同じ判定）を、fields の欄の表にして並べた一覧。
-fn effective_adrs(dir: &Path, file: &str) -> R<Value> {
+/// 判断の記録の dir の直下の .yaml（欄の決まり schema.yaml を除く・名の byte 順）を状態を問わず全部、fields の欄の表に
+/// して並べた一覧（下の dir は読まない・便 151・ADR-26 決定 (3)）。
+fn adr_records(dir: &Path, file: &str) -> R<Value> {
     if !file.ends_with('/') {
         return Err(format!("{file}: 判断の記録の置き場が dir 形でない"));
     }
@@ -410,14 +410,7 @@ fn effective_adrs(dir: &Path, file: &str) -> R<Value> {
             return Err(format!("{file}{name}: symlink は認めない"));
         }
         let record = cursor::load(dir, &format!("{file}{name}"))?;
-        let effective = record
-            .get("status")
-            .and_then(Value::as_str)
-            .is_some_and(|s| TRIGGER_ADR_STATUS.contains(&s))
-            && matches!(record.get("approval"), Some(Value::Map(_)));
-        if effective {
-            out.push(pick(&record, &TRIGGER_ADR_FIELDS));
-        }
+        out.push(pick(&record, &TRIGGER_ADR_FIELDS));
     }
     Ok(Value::Seq(out))
 }

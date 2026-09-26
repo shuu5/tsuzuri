@@ -22,7 +22,7 @@ use crate::ceiling_src::{
 };
 use crate::check::{duplicate_ids, non_empty, row_id, rows, unknown_sections};
 use crate::floor::{Floor, floor_diff, strip_notes};
-use crate::floor_adr::{ANCHOR_ARTICLE_FIELDS, ANCHOR_STATEMENT_FIELDS, EFFECTIVE_STATUS};
+use crate::floor_adr::{ANCHOR_ARTICLE_FIELDS, ANCHOR_STATEMENT_FIELDS};
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::Node;
@@ -80,11 +80,9 @@ pub(crate) const TRIGGER_CONSTITUTION_SCOPE: [&str; 3] = ["schema", "precedence"
 /// 憲法: 凍結 anchor の写しと同じ条の欄と規範文の欄（判断の記録の床の定数の配列そのもの）。
 pub(crate) const TRIGGER_CONSTITUTION_ARTICLES: &[&str] = ANCHOR_ARTICLE_FIELDS;
 pub(crate) const TRIGGER_CONSTITUTION_STATEMENTS: &[&str] = ANCHOR_STATEMENT_FIELDS;
-/// 判断の記録: status の値がこのどれかの記録（発効の値域）ごとに fields。
-pub(crate) const TRIGGER_ADR_STATUS: &[&str] = EFFECTIVE_STATUS;
-pub(crate) const TRIGGER_ADR_FIELDS: [&str; 8] = [
+/// 判断の記録: 状態を問わず記録ごとに fields（状態の欄を写さない＝発効の記帳だけでは動かない・便 151・ADR-26 決定 (3)）。
+pub(crate) const TRIGGER_ADR_FIELDS: [&str; 7] = [
     "id",
-    "status",
     "decision",
     "retreat",
     "amends",
@@ -240,10 +238,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ),
             (
                 "adr",
-                Floor::Map(&[
-                    ("status", Floor::Strs(TRIGGER_ADR_STATUS)),
-                    ("fields", Floor::Strs(&TRIGGER_ADR_FIELDS)),
-                ]),
+                Floor::Map(&[("fields", Floor::Strs(&TRIGGER_ADR_FIELDS))]),
             ),
             (
                 "srs",
@@ -275,7 +270,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "trigger_note",
         Floor::Val(
-            "周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は status の値の判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20 が改訂）",
+            "周の引き金の閉じた一覧（規範の欄）。文書の id ごとに、節の名と各行から取る欄（点は入れ子の欄）。whole は節を丸ごと、adr は状態を問わず判断の記録ごとに fields、rules は sections の各行の fields、constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。この写しを決まった順に並べた要約値が引き金の要約値で、印と門が同じ関数で測る。何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20・ADR-26 が改訂）",
         ),
     ),
 ]);
@@ -600,8 +595,8 @@ mod tests {
         assert!(out.iter().all(|p| p.ends_with("（欠落）")), "{out:?}");
     }
 
-    /// 引き金の一覧の名はどれも実在の文書と節を指し、範囲の節・凍結 anchor の写しの配列・発効の値域を取りこぼさない
-    /// （便 126 §1 (e) の 9）。各行から取る欄の名の実在は凍結 anchor との byte 一致が縛る。
+    /// 引き金の一覧の名はどれも実在の文書と節を指し、範囲の節・凍結 anchor の写しの配列を取りこぼさない
+    /// （便 126 §1 (e) の 9・発効の値域は便 151 で引き金から外れた）。各行から取る欄の名の実在は凍結 anchor との byte 一致が縛る。
     #[test]
     fn f126_trigger_lists_name_real_documents_and_sections() {
         let Floor::Map(fields) = &FLOOR else {
@@ -632,7 +627,6 @@ mod tests {
         for section in TRIGGER_CEILING_ROWS.iter().map(|(s, _)| *s).chain(TRIGGER_CEILING_WHOLE) {
             assert!(CEILING_TOP_LEVEL.contains(&section), "{section}: 天井の正本の節に無い");
         }
-        assert_eq!(TRIGGER_ADR_STATUS, crate::adr::floor_strs(&["effective_status"]));
         assert_eq!(
             TRIGGER_CONSTITUTION_ARTICLES,
             crate::adr::floor_strs(&["anchor", "projection_article_fields"])

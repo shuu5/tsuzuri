@@ -58,6 +58,7 @@
 //! 測り直した byte 数と要約値に。f85_ の歯の本文に字で書いていた行数・byte 数・要約値は RULES_REGION_* を引く形に寄せた。
 //! 便 126（delivery-126.md §1 (f)）: 天井の正本の生成区間に trigger・trigger_note の 18 行（CEILING_REGION_* を測り直した値に）。
 //! 便 129（delivery-129.md §1 (c)(e)）: 引き金の憲法の scope の 1 行と 3 つの注の字（CEILING_REGION_*・F95_GRAPH_* を測り直した値に）。
+//! 便 151（delivery-151.md §1 (b)(e)）: 引き金の adr から status の葉と状態の欄が外れ trigger_note の字が変わった（CEILING_REGION_* を測り直した値に）。
 
 use std::fs;
 use std::io::Write;
@@ -67,10 +68,10 @@ use std::process::{Command, Output, Stdio};
 use yaml_rust2::{Yaml, YamlLoader};
 
 /// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
-const CEILING_REGION_LINES: usize = 46;
-const CEILING_REGION_BYTES: usize = 4655;
+const CEILING_REGION_LINES: usize = 44;
+const CEILING_REGION_BYTES: usize = 4619;
 const CEILING_REGION_SHA256: &str =
-    "8eacece06c52ecda9f12919241b83d420f454141c6c439f39cfb8c520f802bf0";
+    "2379a408d1e6ad7661bd0ad4cdd550fa787a45e44fd7dd4d455cd1d7d96854a8";
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
 const RULES_REGION_LINES: usize = 30;
@@ -1164,7 +1165,7 @@ fn f129_the_ceiling_region_lists_the_constitution_scope() {
     assert_eq!(scope, ["schema", "precedence", "articles"], "実の憲法の改訂の範囲");
     for new in [
         "constitution は凍結 anchor の写しと同じ範囲（schema 節と前文は丸ごと・条は条の欄と規範文の欄）。",
-        "何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20 が改訂）",
+        "何にするかの裁定の正本は判断の記録 ADR-18 決定 (1)（ADR-20・ADR-26 が改訂）",
     ] {
         assert!(reg.contains(new), "trigger_note に「{new}」が無い");
     }
