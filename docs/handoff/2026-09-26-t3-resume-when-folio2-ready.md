@@ -32,8 +32,8 @@
 ## 3. 器の側の前提（scribe2-aa の回答 2026-09-26T15:2xZ・verified = scribe2 main 8198b92）
 1. **remote と branch**: `.vessel.toml` の remote は任意（無ければ land は push を省き `remote=none`）。ただし器は base を `refs/remotes/origin/main` の名で読むので、**branch `main` と `origin` の名の remote が要る**（local の bare でも可・実績は GitHub の private repo・CI の gate〔ci-cmd〕を使うなら GitHub）。→ branch は 2026-09-26 に master から main へ改名済み。remote は持ち主の承認（14:56Z）で GitHub の private repo shuu5/tsuzuri を origin として作った（§2 の 0）。
 2. **t3 の dispatcher**: tsuzuri の列は動いていない。動かすのは tsuzuri 側の手番で、`scribe2 pipe dispatch --state-dir <tsuzuri の state dir> --repo <tsuzuri> --runner "<runner の行>" --lens "<lens の行>"` を 1 回撃てば以後は便の終端の周が次を自動で撃つ（host の面の宣言は不要）。runner / lens の行の雛形は scribe2 の admin の道具（~/.cache/scribe2-admin/mk-run.sh の出力 runner.cmd / lens.cmd）と同じ形で binary と claude の包みの path を tsuzuri 用に置く。**設計席（orchestrator）は launch の権能を持たないので、撃つのは管理席か持ち主**。
-3. **端末の行（device）**: scribe2 側に memo は無い。tsuzuri の要件 FR16 として設計だけ置く扱いで合意。要件が固まった時点で s2-07l に memo を 1 本（scribe2 席に起票を依頼済み・2026-09-26）。
-4. **器の CLI**: `scribe2 seat heartbeat off|on|status --state-dir S --target T` は在る。「待ちの席へ 1 行を送る口」は無い（deliver_within は tick と pipe の内部・CLI から撃てない・起票も無い）→ s2-07l に memo を起票（scribe2 席に依頼済み・宛先の席の入力欄の門を通す 1 行の口）。着地まで面の server は停止の hook の経路だけで席を起こす（FR9 の 2 経路のうち 1 つ）。
+3. **端末の行（device）**: scribe2 側に memo は無い。tsuzuri の要件 FR16 として設計だけ置く扱いで合意。scribe2 の台帳に memo **s2-07l.658**（起票済み 2026-09-26・昇格条件 = 持ち主の裁定・host の面の表が増えるので ADR 条件）。
+4. **器の CLI**: `scribe2 seat heartbeat off|on|status --state-dir S --target T` は在る。「待ちの席へ 1 行を送る口」は無い（deliver_within は tick と pipe の内部・CLI から撃てない・起票も無い）→ scribe2 の台帳に memo **s2-07l.659**（起票済み 2026-09-26・昇格条件 = 持ち主の裁定）。着地まで面の server は停止の hook の経路だけで席を起こす（FR9 の 2 経路のうち 1 つ）。
 - 群の訂正: tsuzuri は 2026-09-26T09:40Z の群の再編で Tier1 → **Tier2**（Tier1 は scribe2 と folio2）。14:37Z に Tier2 の記録が black5 になり t3:orchestrator は black5 で起こし直された。
 
 ## 4. 待ちの間に設計席が進めてよいもの（実装は起こさない）
