@@ -362,6 +362,10 @@ fn main() -> ExitCode {
             for msg in report.unknowns.iter().chain(&report.pendings) {
                 eprintln!("# まだ分からない: {msg}");
             }
+            // 便 156（FR5）: 行 R-17 が無くて散文の言及の歯が数えなかったら、判定を変えずに 1 行（機構の行より前）
+            if materials.mentions_off {
+                eprintln!("{}", mentions::OFF);
+            }
             // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
             if !materials.not_yet_live.is_empty() {
                 eprintln!(

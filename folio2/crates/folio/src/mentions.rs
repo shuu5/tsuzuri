@@ -3,7 +3,8 @@
 //! 機械の読みは 5 つの閉じた一覧で閉じる＝対象の file（9 種）・id を持つ行（節点の索引の 5 種）・散文の欄
 //! （型付きの欄 21 語と来歴 6 語と最上位 2 節の補集合）・受け皿の表・数えない言及の語形（10 語）。どれもこの file の定数（P-5.1）。
 //! 対は無向で見る（どちらかの行の型付きの欄に相手が在れば満たす）。規範文の id は親の条へ丸めてから照合する。
-//! 歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ黙り、値が 0 件 でなければ「まだ分からない」（P-4.2）。
+//! 歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ数えずに判定の外の 1 行 `OFF` を出させ（便 156・FR5）、
+//! 値が 0 件 でなければ「まだ分からない」（P-4.2）。
 //! id を拾う口は refs.rs の `scan_ids` と link.rs の `scan_adr_ids`（正規表現は使わない）。
 
 use std::collections::{HashMap, HashSet};
@@ -20,6 +21,9 @@ use crate::yaml::{self, Node};
 const ROW_ID: &str = "R-17";
 const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
 const VALUE: &str = "0 件";
+
+/// 行 R-17 が無くて数えなかったときに folio check が標準エラーへ出す 1 行（便 156・床の判定の外）。
+pub const OFF: &str = "# 行 R-17 が規則の表に無い＝散文の言及の歯は数えていない（床の判定の外・値 0 件 の行 R-17 を足して撃ち直すと数える）";
 
 /// 対象の file（行 R-17 の母集団が名指す 9 つ・支度表は入れない）。判断の記録と設計ノートは dir の中の記録。
 pub const TARGETS: [&str; 9] = [
@@ -128,8 +132,8 @@ fn ids_in(text: &str) -> Vec<String> {
     out
 }
 
-/// 行 R-17 の入り口。行が無ければ None（歯は黙る）。値が 0 件 でなければ「まだ分からない」を立てて None。
-fn switch(rules: &Node, report: &mut Report) -> Option<()> {
+/// 行 R-17 の入り口。行が無ければ None。値が 0 件 でなければ「まだ分からない」を立てて Some(false)。数えるなら Some(true)。
+fn switch(rules: &Node, report: &mut Report) -> Option<bool> {
     let row = RULE_SECTIONS
         .iter()
         .filter_map(|s| rules.get(s))
@@ -142,9 +146,9 @@ fn switch(rules: &Node, report: &mut Report) -> Option<()> {
             "rules.yaml: {ROW_ID} の値「{}」が {VALUE} でない＝散文の言及の歯は数えられない",
             value.unwrap_or("?")
         ));
-        return None;
+        return Some(false);
     }
-    Some(())
+    Some(true)
 }
 
 /// 節点の索引（id → 種類）: 条と規範文・規則の表の 2 節・要件書の 7 節・判断の記録。
@@ -282,16 +286,18 @@ fn design_notes(dir: &Path) -> Vec<(String, Node)> {
         .collect()
 }
 
-/// 行 R-17 を数える。`files` は正本 7 file（file 名と木）。
-pub(crate) fn check_mentions(dir: &Path, files: &[(&str, &Node)], adr: &Adr, report: &mut Report) {
+/// 行 R-17 を数える。`files` は正本 7 file（file 名と木）。行 R-17 が無くて数えなかったときだけ false（入口が `OFF` を出す）。
+pub(crate) fn check_mentions(dir: &Path, files: &[(&str, &Node)], adr: &Adr, report: &mut Report) -> bool {
     let get = |name: &str| files.iter().find(|(n, _)| *n == name).map(|(_, node)| *node);
     let (Some(constitution), Some(rules), Some(srs)) =
         (get("constitution.yaml"), get("rules.yaml"), get("srs.yaml"))
     else {
-        return;
+        return true;
     };
-    if switch(rules, report).is_none() {
-        return;
+    match switch(rules, report) {
+        None => return false,
+        Some(false) => return true,
+        Some(true) => {}
     }
     let index = index(constitution, rules, srs, adr);
     let notes = design_notes(dir);
@@ -338,4 +344,5 @@ pub(crate) fn check_mentions(dir: &Path, files: &[(&str, &Node)], adr: &Adr, rep
             }
         }
     }
+    true
 }

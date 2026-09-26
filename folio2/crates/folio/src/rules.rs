@@ -12,9 +12,30 @@
 
 use crate::constitution_enums::{MechanismKind, Stage};
 use crate::floor::Floor;
+use crate::yaml::Node;
 
 /// 規則の表の最上位の節の閉じた一覧（`FLOOR` の top_level・thresholds と discipline は人が書き、schema は生成区間・ほかの名は未知の節）。
 pub const RULES_TOP_LEVEL: [&str; 3] = ["schema", "thresholds", "discipline"];
+
+/// 違反の名札の閉じた一覧（便 156）: 行 id と、置き場の規則の表にその行が無いときの検査の名。名札は文言の字面（行 D-11 の写しの外）。
+pub const LABELS: [(&str, &str); 3] = [("R-9", "語彙"), ("R-10", "平易文"), ("R-11", "強度と文末")];
+
+/// 違反の名札（便 156）。置き場の規則の表（thresholds か discipline）に行 `row` が在れば行 id、無ければ検査の名。
+pub fn label(rules: &Node, row: &'static str) -> &'static str {
+    let has = RULES_TOP_LEVEL[1..]
+        .iter()
+        .filter_map(|s| rules.get(s))
+        .filter_map(Node::as_seq)
+        .flatten()
+        .any(|r| r.get("id").and_then(Node::as_str) == Some(row));
+    if has {
+        return row;
+    }
+    LABELS
+        .iter()
+        .find(|(id, _)| *id == row)
+        .map_or(row, |(_, name)| name)
+}
 
 /// 閾値の行（R-n）が必ず持つ欄。
 pub const THRESHOLD_REQUIRED: [&str; 9] = [
