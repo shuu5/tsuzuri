@@ -10,6 +10,7 @@ use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatSta
 use tsuzuri_contract::wire;
 
 use super::{Body, NO_CONTENT, NOT_READ, state_class, state_key};
+use crate::account::home::{EXPERT_CHARS, wrap_words};
 use crate::frame::{self, Block};
 use crate::view::{Fetched, clock};
 
@@ -322,12 +323,14 @@ pub struct HistRow {
     pub to: String,
 }
 
-/// 「詳しく」の中身（席の名・群の今の口座・登録の口座と同じかの印）。
+/// 「詳しく」の中身（席の名・群の今の口座・登録の口座と同じかの印・doctor の席の行）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct More {
     pub target: String,
     pub current: Reading<String>,
     pub same: Reading<Sign>,
+    /// doctor の席の行を経験者向けの 1 行の字数に畳んだ行（見本の gm1 int xo）。
+    pub doctor: Vec<String>,
 }
 
 /// block の中身。
@@ -617,7 +620,32 @@ pub fn more(card: &SeatCard) -> More {
         target: card.target.clone(),
         current: map(&card.group, |g| g.account.clone()),
         same,
+        doctor: wrap_words(&seat_line(card), EXPERT_CHARS),
     }
+}
+
+/// 「詳しく」の出所の字（見本の gm1 src・電文を組む器の出力と file の名）。
+pub const MORE_SRC: &str =
+    "席の dir の state.jsonl と tick-last・器の doctor と seat tick status と fleet usage --show の出力";
+
+/// 器の doctor の席の行の形（見本の doctorSeatLines の欄の順・電文に無い役の欄は置かない・無い値は `?`）。
+pub fn seat_line(card: &SeatCard) -> String {
+    let heartbeat = match card.heartbeat {
+        Reading::Known(true) => "on",
+        Reading::Known(false) => "off",
+        Reading::Unknown => "?",
+    };
+    let tick = match card.tick_healthy {
+        Reading::Known(true) => "healthy",
+        Reading::Known(false) => "stale",
+        Reading::Unknown => "?",
+    };
+    format!(
+        "seat: target={} account={} model={} heartbeat={heartbeat} tick={tick}",
+        card.target,
+        card.account.as_deref().unwrap_or("?"),
+        card.model.as_deref().unwrap_or("?"),
+    )
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -632,12 +660,12 @@ mod dom {
     use tsuzuri_contract::board::Reading;
 
     use super::{
-        BLOCK, Band, HistRow, LEGEND, Low, MORE, More, OK, OROW, PATH, Seat, Sign, Span, Strip,
-        Top, WindowRow, content, sample_svg, span_of, strip_svg, with_span,
+        BLOCK, Band, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OK, OROW, PATH, Seat, Sign, Span,
+        Strip, Top, WindowRow, content, sample_svg, span_of, strip_svg, with_span,
     };
     use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::{hs, term};
+    use crate::widgets::help::{HelpCtx, hs, shows_internal, term};
 
     /// 砂時計（限度の記号・見本の IC.hourglass）。
     const HOURGLASS: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 5 6 5 9s-5 4-5 9h10c0-5-5-6-5-9s5-4 5-9" /><path d="M9.5 19h5l-2.5-2.5z" fill="currentColor" stroke="none"/></svg>"#;
@@ -927,7 +955,14 @@ mod dom {
     }
 
     fn more_view(more: More) -> AnyView {
-        let (open, toggle) = fold("seat:more".to_string(), || false);
+        let ctx = use_context::<HelpCtx>();
+        let expert = move || ctx.is_some_and(|c| shows_internal(c.mode.get()));
+        let (open, toggle) = fold("seat:more".to_string(), expert);
+        let doctor = more
+            .doctor
+            .into_iter()
+            .map(|l| view! { <div><code>{l}</code></div> })
+            .collect_view();
         view! {
             <details class="gmore" prop:open=open on:toggle=toggle>
                 <summary><span class="rm-t">{MORE}</span></summary>
@@ -940,6 +975,8 @@ mod dom {
                             {sign_view(more.same)}
                         </span>
                     </div>
+                    <div class="gm1 src">{MORE_SRC}</div>
+                    <div class="gm1 int xo">{doctor}</div>
                 </div>
             </details>
         }
