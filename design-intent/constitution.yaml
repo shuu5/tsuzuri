@@ -523,7 +523,7 @@ articles:
       - {kind: scribe2-article, ref: scribe2 C13（C13.1〜C13.5）}
       - {kind: folio2-ruling, ref: folio2 A3（予算の行）}
     mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: cargo deny と許可の一覧と compile 時間の記録。面の crate の予算は core と別枠（判断の記録 ADR-3 決定 (3)）。}
-    relations: {rules: [R-2, R-5]}
+    relations: {rules: [R-2, R-5, R-25]}
   - id: P-27
     title: 決定はしごを段の順に通る
     tier: always

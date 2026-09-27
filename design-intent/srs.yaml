@@ -1,9 +1,9 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
-# 第 0.5 版（2026-09-27）: 条 P-16 の改訂（判断の記録 ADR-12）の発効に合わせ、制約 CON6 に相談の窓の念入りさと「席の model を下げる変更は判断の記録を要する」を足し、要件 FR19 の根拠に条 P-16 を足した。第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
+# 第 0.6 版（2026-09-27）: 非機能要件 NFR3 に面の crate の依存の予算の行 R-25 を結んだ。第 0.5 版（2026-09-27）: 条 P-16 の改訂（判断の記録 ADR-12）の発効に合わせ、制約 CON6 に相談の窓の念入りさと「席の model を下げる変更は判断の記録を要する」を足し、要件 FR19 の根拠に条 P-16 を足した。第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
 meta:
   id: srs
   title: 要件書
-  version: v0.5
+  version: v0.6
   status: draft
   generated: 2026-09-27
   approval: []
@@ -345,7 +345,7 @@ nonfunctional:
     verify: {method: test, how: cargo deny と bind の宛先の歯で見る, ac: [AC9]}
     goals: [GOAL4]
     figures: []
-    rules: [R-2]
+    rules: [R-2, R-25]
     adrs: [ADR-3]
 
 acceptance:

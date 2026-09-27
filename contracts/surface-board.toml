@@ -9,7 +9,8 @@ write-set = ["crates/tsuzuri-surface/src/lib.rs", "+crates/tsuzuri-surface/src/p
 verify = ["cargo nextest run -p tsuzuri-surface --no-tests=fail project_"]
 size = "L"
 done = "(1) 節点の形と帯の class が snapshot で pin される (2) card の順（題・概要・理由・推奨・答え・つながり）が pin される (3) 4 面の切り替えと段数と畳みが URL に残る (4) hover の置き場と猶予が browser の runner で通る (5) 論理は中核の関数の呼び出しだけで面の crate に判定の分岐が無い"
-goal = "面の crate に project board を置く。問いの card・地図の 4 面・近傍・次の一手・pipeline の板・orchestrator と口座・台帳の指標・「?」の注釈と hover の card。 描画の決まり（帯・形・色・縁・文の予算・hover の置き場）は mock v3 と同じ物差しで測る。論理は中核の crate の関数を呼ぶだけにする。 この便は土台の便の server（便 e）が着地した後に起こす（依存は台帳の blocks で張る・契約表の depends は同じ文書の中だけ）。"
+depends = ["g-min"]
+goal = "面の crate に project board を置く。問いの card・地図の 4 面・近傍・次の一手・pipeline の板・orchestrator と口座・台帳の指標・「?」の注釈と hover の card。 描画の決まり（帯・形・色・縁・文の予算・hover の置き場）は mock v3 と同じ物差しで測る。論理は中核の crate の関数を呼ぶだけにする。 この便は土台の便の server（便 e）が着地した後に起こす（依存は台帳の blocks で張る・契約表の depends は同じ文書の中だけ）。 最小の画面は先に便 g-min が置く（§8）。この便は地図と近傍と次の一手と pipeline の板と指標と注釈を足す。"
 
 [[contract]]
 id = "h"
@@ -51,8 +52,19 @@ id = "k"
 title = "tz の口（folio の口を同じ名の subcommand に・graph は tz graph に吸収・inject は持たない・終了 code と出力の一致）"
 req = ["FR17"]
 section = "6"
-write-set = ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/src/cli/mod.rs", "+crates/tsuzuri-boundary/src/cli/folio.rs", "+crates/tsuzuri-boundary/tests/tz.rs", "+tests/fixtures/tz/parity/"]
+write-set = ["crates/tsuzuri-boundary/src/lib.rs", "crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/src/cli/mod.rs", "+crates/tsuzuri-boundary/src/cli/folio.rs", "+crates/tsuzuri-boundary/tests/tz.rs", "+tests/fixtures/tz/parity/"]
 verify = ["cargo nextest run -p tsuzuri-boundary --no-tests=fail tz_"]
 size = "M"
 done = "(1) 11 の口で終了 code と出力が folio2 と一致 (2) tz graph --design が設計の索引だけを出す (3) tz inject が無い (4) folio という名の binary が workspace に無い"
 goal = "folio2 の code を持ち込んだ後、folio の口を同じ名の tz の subcommand にし、引数と終了 code と出力を folio2 の口と一致させる。graph は tz graph に吸収し、inject は持たない。 この便は code の持ち込み（ADR-4 決定 (3)）の後に起こす。"
+
+[[contract]]
+id = "g-min"
+title = "最小の project board（問いの一覧・台帳の一覧・最終更新・測れていないの表示・wasm の組み立て）"
+req = ["FR1", "FR6", "NFR3"]
+section = "8"
+write-set = ["Cargo.toml", "Cargo.lock", ".gitignore", "crates/tsuzuri-surface/Cargo.toml", "crates/tsuzuri-surface/src/lib.rs", "+crates/tsuzuri-surface/src/main.rs", "+crates/tsuzuri-surface/src/view.rs", "+crates/tsuzuri-surface/src/board.rs", "+crates/tsuzuri-surface/src/net.rs", "+crates/tsuzuri-surface/index.html", "+crates/tsuzuri-surface/style.css", "+crates/tsuzuri-surface/Trunk.toml", "+crates/tsuzuri-surface/tests/board_min.rs", "+tests/fixtures/ledger/board-8.jsonl", "xtask/src/main.rs"]
+verify = ["cargo nextest run -p tsuzuri-surface --no-tests=fail board_min_", "cargo nextest run -p xtask --no-tests=fail skeleton_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+size = "M"
+done = "(1) 並べ方の関数が bead 8 本の fixture で、問いを古い順に、台帳を epic の下に task と memo の順に並べる (2) 測れていないの印を受けた画面の状態が 0 件でなく測れていないになる (3) cargo run -q -p xtask -- surface-build が trunk を呼び、面の crate の dist に index.html と wasm の file を出して rc 0 で終わる (4) xtask の歯が crate ごとの直接依存の名を一覧と照らし、面の crate は規則の行 R-25 の本数以下で、ほかの crate の名は増えない (5) host の build と clippy が workspace の全部で通る"
+goal = "最初の本物の画面を早く出すために、project board の最小の形を先に置く（作る順の計画 2026-09-27・持ち主の承認）。 面の crate に Leptos（csr）の画面を 1 枚置く。出すのは、問いの一覧（open の question を古い順）・台帳の一覧（epic の下に task と memo・状態の印）・最終更新の時刻の 3 つ。 data は server の口（台帳の一覧と変化の知らせ）から読む。読めないときは 0 件でなく測れていないと出す。 並べ方と状態の印と測れていないの判定は純粋な関数（view の module）に置き、host の cargo test で試す。DOM と通信を触る部分は wasm の target のときだけ組み立て、host の build と clippy が workspace の全部で通る形にする。 組み立ては xtask の下から trunk を呼ぶ（cargo run -q -p xtask -- surface-build）。出力は面の crate の dist の dir で、版管理の外に置く。server は面の file の置き場としてこの dir を引数で受ける。 依存は Leptos の一式を足す。面の crate の依存の予算は規則の行 R-25 が持つ。便 a の xtask の歯（Cargo.lock の外の package の許可の一覧）は、crate ごとの直接依存の名の一覧を照らす形に改める。 toolchain の file の wasm の target と CI の trunk は、便の前に設計席が main で足す。この便は土台の便 e-min の着地の後に起こす（依存は台帳の blocks で張る）。"
