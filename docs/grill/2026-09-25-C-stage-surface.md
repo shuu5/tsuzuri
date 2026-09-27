@@ -136,3 +136,24 @@
 - 持ち主の端末での IME・scroll・遷移の速さ: 端末の Chrome が描くので **native**（画面配信の遅さと IME の二重は起きない）。席の操作だけが RTT を払う。
 - 残る設計の決め: (1) 端末の一覧と接続の型（host.toml の [[device]] 行 = 名・ssh の宛先・Chrome の path・display の環境・OS）を器が持つ。(2) 席の目（screenshot / DOM）は端末の Chrome から CDP で取る。(3) 端末が無い / 届かない周は server 側の headless Chrome + 画面配信（試作済み）へ落ちる。(4) Windows の desktop は OpenSSH server（Windows 標準機能）を有効にすれば同じ形で届く。スマホは画面配信の窓（PWA）か emulator。
 - 2026-09-25T00:28Z: 持ち主が ThinkPad の窓を試し「スムーズに動く。それで決めて良い」→ ADR-5（表示面の形）を起こす（proposed）
+
+## 12. 対象の範囲 — web・native・スマホのアプリ（2026-09-27T05:37Z・持ち主の全体像のすり合わせ・逐語は t3-hub.1）
+持ち主の全体像: 席が browser を remote でも local でも操作し、web のアプリ・native のアプリ・スマホのアプリの開発を、見せながら・意見を受けながら進める。
+
+**今の決定が届く範囲（verified = ADR-5 と試作）**: ADR-5 が決めたのは Chrome で描ける物だけ。native のアプリとスマホのアプリを見せて操作する経路は、どの判断の記録にも無い。
+
+| 対象 | 見せる | 操作する | 席の目 | 指し示しの文脈 | 状態 |
+|---|---|---|---|---|---|
+| web のアプリ | 端末の Chrome（app mode） | CDP | screenshot・DOM・console | 画像と要素 | 設計済み（ADR-5） |
+| スマホの幅の web | Chrome の viewport の切り替え・配信の窓 | CDP | 同上 | 同上 | 設計済み（配信の窓は試作 v0.4） |
+| WebView 系の native（Electron・WebView2 の Tauri） | アプリ自身の窓 | CDP（アプリの remote debugging の口） | 同上 | 同上 | 未設計・同じ仕組みで届く見込み（inferred・spike が要る） |
+| 純粋な native（GTK・Qt・Win32・egui など） | 画面の配信か端末の窓 | 入力の注入 | screenshot だけ | 画像だけ | 未設計・新しい経路が要る |
+| スマホのアプリ（Android・iOS） | emulator か実機の画面の配信 | adb などの入力 | screenshot と UI の木 | 画像と UI の木 | 未設計・重い（iOS は macOS が要る） |
+
+**席の読み（deduced）**
+- N-5.2（app ごとに表示の仕組みを作らない）を守るなら、足す経路は 2 本まで = (1) CDP を話す物は全部 CDP（web・WebView 系）(2) CDP を話さない物は「画面の配信と入力の戻し」の 1 本（試作 v0.4 の窓を headless Chrome の画面から X の仮想画面へ一般にする）。
+- 指し示しの「画像を貼る」（論点 H の (c)）は対象を選ばないので、native とスマホでも持ち主の指摘は届く。届かないのは席が自分で見て操作する側。
+
+**推奨の順**: v1 = web とスマホの幅の web。次 = WebView 系の native（同じ CDP・spike 1 本）。その後 = 画面の配信の一般化（純粋な native とスマホのアプリ）を別の判断の記録で。
+
+**問い（1 問）**: 最初に実物で使うアプリの種類は何か。web から始めて、WebView 系の native・純粋な native とスマホのアプリの順に広げてよいか。推奨: この順。先に native かスマホのアプリが要るなら順を入れ替える。
