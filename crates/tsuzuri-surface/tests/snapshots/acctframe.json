@@ -1,0 +1,57 @@
+{
+  "class": "top vessel",
+  "brand": "器",
+  "header": [
+    {"part": "brand", "key": "acct_board", "class": "brand", "items": [], "badge": ""},
+    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["tab_home", "tab_session", "tab_projects"], "badge": "badge num"},
+    {"part": "mode", "key": "mode", "class": "seg", "items": ["beginner", "expert"], "badge": ""}
+  ],
+  "tabs": [
+    {
+      "id": "home",
+      "key": "tab_home",
+      "rows": [
+        {
+          "class": "hgrid",
+          "blocks": [
+            {"id": "nxall", "heading": "next_all", "class": "panel"},
+            {"id": "winsp", "heading": "open_windows", "class": "panel"}
+          ]
+        },
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "groups", "heading": "group", "class": "gtop"},
+            {"id": "allowance", "heading": "allowance", "class": "panel"},
+            {"id": "moves", "heading": "moves", "class": "panel fold mvp"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "session",
+      "key": "tab_session",
+      "rows": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "sessions", "heading": "sessions", "class": "panel"},
+            {"id": "ledger", "heading": "ledger_state", "class": "panel"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "projects",
+      "key": "tab_projects",
+      "rows": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "ptab", "heading": "dashboards", "class": "panel"}
+          ]
+        }
+      ]
+    }
+  ]
+}
