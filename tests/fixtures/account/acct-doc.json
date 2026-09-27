@@ -1,0 +1,171 @@
+{
+  "at": 1790510400,
+  "accounts": {"known": [
+    {"label": "acct-1", "retired": false, "occupant": "Tier1", "model": "opus", "usage": {"known": [
+      {"window": "five_hour", "used_pct": 42, "resets_at": 1790512200, "counted": true},
+      {"window": "seven_day", "used_pct": 61, "resets_at": 1790683200, "counted": true},
+      {"window": "seven_day_model", "used_pct": 30, "resets_at": 1790683200, "counted": false}
+    ]}},
+    {"label": "acct-2", "retired": false, "occupant": "Tier2", "model": "sonnet", "usage": {"known": [
+      {"window": "five_hour", "used_pct": 100, "resets_at": 1790513100, "counted": true},
+      {"window": "seven_day", "used_pct": 81, "resets_at": null, "counted": true},
+      {"window": "seven_day_model", "used_pct": 12, "resets_at": 1790596800, "counted": false}
+    ]}},
+    {"label": "acct-3", "retired": true, "occupant": null, "model": null, "usage": "unknown"}
+  ]},
+  "groups": {"known": [
+    {
+      "row": {"group": "Tier1", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": []},
+      "since": 1790503200,
+      "previous": "acct-2",
+      "recorded": true,
+      "members": [
+        {"project": "proj-a", "seat_account": "acct-1", "matches": {"known": true}},
+        {"project": "proj-c", "seat_account": null, "matches": "unknown"}
+      ],
+      "refused": null
+    },
+    {
+      "row": {"group": "Tier2", "account": "acct-2", "candidates": ["acct-2"], "next_account": null, "remaining": []},
+      "since": null,
+      "previous": null,
+      "recorded": false,
+      "members": [
+        {"project": "proj-b", "seat_account": "acct-1", "matches": {"known": false}}
+      ],
+      "refused": "acct-3:retired"
+    }
+  ]},
+  "moves": {"known": [
+    {"at": 1790503200, "group": "Tier1", "from": "acct-2", "to": "acct-1"},
+    {"at": 1790460300, "group": "Tier2", "from": null, "to": "acct-2"}
+  ]},
+  "projects": [
+    {
+      "name": "proj-a",
+      "group": "Tier1",
+      "state_dir_known": true,
+      "seat": {"known": {
+        "at": 1790510400,
+        "target": "proj-a-orch",
+        "state": "run",
+        "since": 1790505060,
+        "tick_healthy": {"known": true},
+        "heartbeat": {"known": true},
+        "account": "acct-1",
+        "model": "opus",
+        "group": {"known": {"group": "Tier1", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": []}},
+        "usage": {"known": [
+          {"window": "five_hour", "used_pct": 42, "resets_at": 1790512200, "counted": true},
+          {"window": "seven_day", "used_pct": 61, "resets_at": 1790683200, "counted": true},
+          {"window": "seven_day_model", "used_pct": 30, "resets_at": 1790683200, "counted": false}
+        ]},
+        "spans": {"known": [
+          {"from": 1790467200, "to": 1790505000, "state": "wait"},
+          {"from": 1790505000, "to": 1790505060, "state": "silent"},
+          {"from": 1790505060, "to": 1790510400, "state": "run"}
+        ]},
+        "moves": {"known": [
+          {"at": 1790503200, "from": "acct-2", "to": "acct-1"}
+        ]}
+      }},
+      "move_left_s": null,
+      "runs": {"known": {"wait": 1, "run": 2, "stop": 0, "land": 3}},
+      "ledger": {"known": {
+        "at": 1790510400,
+        "judge": "on-track",
+        "open": {"task": 9, "memo": 3, "question": 2, "epic": 2},
+        "blocked": 3,
+        "ready": 5,
+        "stale": 1,
+        "net_drop_24h": 2,
+        "net_drop_7d": 4,
+        "closed_7d": 6,
+        "closed_per_day": 0.9,
+        "lead": {"p50": 4.0, "p90": 11.5},
+        "days": [
+          {"end": 1789430400, "created": 1, "closed": 0, "open": 13},
+          {"end": 1789516800, "created": 0, "closed": 1, "open": 12},
+          {"end": 1789603200, "created": 2, "closed": 1, "open": 13},
+          {"end": 1789689600, "created": 0, "closed": 0, "open": 13},
+          {"end": 1789776000, "created": 1, "closed": 2, "open": 12},
+          {"end": 1789862400, "created": 0, "closed": 0, "open": 12},
+          {"end": 1789948800, "created": 1, "closed": 0, "open": 13},
+          {"end": 1790035200, "created": 0, "closed": 1, "open": 12},
+          {"end": 1790121600, "created": 1, "closed": 1, "open": 12},
+          {"end": 1790208000, "created": 0, "closed": 1, "open": 11},
+          {"end": 1790294400, "created": 1, "closed": 2, "open": 10},
+          {"end": 1790380800, "created": 0, "closed": 0, "open": 10},
+          {"end": 1790467200, "created": 1, "closed": 1, "open": 10},
+          {"end": 1790553600, "created": 0, "closed": 1, "open": 9}
+        ],
+        "epics": [{"epic": "proj-a", "closed": 6, "total": 15}],
+        "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "age_p50_days": 5.5},
+        "unreflected": 3,
+        "unreflected_unknown": ["ruling", "request"]
+      }},
+      "next": {"known": {
+        "checks": [
+          {"kind": "limit-or-move", "result": "miss", "count": 0, "target": null},
+          {"kind": "unresponsive", "result": "miss", "count": 0, "target": null},
+          {"kind": "stalled-run", "result": "miss", "count": 0, "target": null},
+          {"kind": "batch-approval", "result": "not-judged", "count": 0, "target": null},
+          {"kind": "question", "result": "hit", "count": 1, "target": "proj-a.7"},
+          {"kind": "awaiting-effect", "result": "not-judged", "count": 0, "target": null},
+          {"kind": "nothing", "result": "miss", "count": 0, "target": null}
+        ],
+        "lead": "question"
+      }},
+      "board": "/proj-a/"
+    },
+    {
+      "name": "proj-b",
+      "group": "Tier2",
+      "state_dir_known": true,
+      "seat": {"known": {
+        "at": 1790510400,
+        "target": "proj-b-orch",
+        "state": "wait",
+        "since": 1790508900,
+        "tick_healthy": {"known": false},
+        "heartbeat": {"known": false},
+        "account": "acct-1",
+        "model": "sonnet",
+        "group": {"known": {"group": "Tier2", "account": "acct-2", "candidates": ["acct-2"], "next_account": null, "remaining": []}},
+        "usage": "unknown",
+        "spans": {"known": [
+          {"from": 1790508900, "to": 1790510400, "state": "wait"}
+        ]},
+        "moves": {"known": []}
+      }},
+      "move_left_s": 1101,
+      "runs": {"known": {"wait": 0, "run": 0, "stop": 1, "land": 0}},
+      "ledger": "unknown",
+      "next": "unknown",
+      "board": "/proj-b/"
+    },
+    {
+      "name": "proj-c",
+      "group": "Tier1",
+      "state_dir_known": false,
+      "seat": "unknown",
+      "move_left_s": null,
+      "runs": "unknown",
+      "ledger": "unknown",
+      "next": "unknown",
+      "board": null
+    }
+  ],
+  "sessions": [
+    {"project": "proj-a", "role": "orchestrator", "name": "proj-a-orch", "account": "acct-1", "state": "run", "stage": null, "since": 1790505060, "spans": {"known": [
+      {"from": 1790505000, "to": 1790505060, "state": "silent"},
+      {"from": 1790505060, "to": 1790510400, "state": "run"}
+    ]}},
+    {"project": "proj-a", "role": "pipeline", "name": "proj-a.3-20260927T113000Z", "account": "acct-1", "state": "run", "stage": "Running", "since": 1790508600, "spans": "unknown"},
+    {"project": "proj-b", "role": "orchestrator", "name": "proj-b-orch", "account": "acct-1", "state": "wait", "stage": null, "since": 1790508900, "spans": {"known": [
+      {"from": 1790508900, "to": 1790510400, "state": "wait"}
+    ]}},
+    {"project": "proj-c", "role": "orchestrator", "name": "proj-c-orch", "account": null, "state": "unknown", "stage": null, "since": null, "spans": "unknown"}
+  ],
+  "dormant": []
+}

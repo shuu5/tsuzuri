@@ -2,6 +2,7 @@
 //! 面の側に電文の写しを書かない。電文の形は JSON で、字の形は `wire` の 2 関数だけが決める。
 //! 型の外形は tests/contract_form.rs の snapshot の歯が pin する。
 
+pub mod account;
 pub mod board;
 pub mod graph;
 pub mod ledger;
