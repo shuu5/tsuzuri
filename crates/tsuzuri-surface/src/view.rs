@@ -1,5 +1,6 @@
 //! 画面の中身を決める純粋な関数（便 g-min）: 並べ方・状態の印・測れていないの判定・時刻の字。
-//! DOM と通信に触らないので host の cargo test で試す（描くのは board・読むのは net）。
+//! DOM と通信に触らないので host の cargo test で試す（描くのは project の下の block・読むのは net）。
+//! 件数と見出しは block の module が持つ（便 g-frame・見出しの語は vocab から引く）。
 
 use std::cmp::Ordering;
 
@@ -213,40 +214,6 @@ pub fn mark(status: &str) -> Mark {
         _ => ("?", "知らない状態", "st-other"),
     };
     Mark { glyph, word, class }
-}
-
-/// 測れていないの字。
-pub const UNMEASURED: &str = "測れていない";
-
-/// 問いの件数の字（測れていなければ 0 件と書かない）。
-pub fn questions_label(screen: &Screen) -> String {
-    match &screen.board {
-        Reading::Known(b) => format!("問い {} 件", b.questions.len()),
-        Reading::Unknown => format!("問い {UNMEASURED}"),
-    }
-}
-
-/// 台帳の件数の字（epic も数える・測れていなければ 0 件と書かない）。
-pub fn ledger_label(screen: &Screen) -> String {
-    match &screen.board {
-        Reading::Known(b) => {
-            let n: usize = b
-                .groups
-                .iter()
-                .map(|g| g.children.len() + usize::from(g.epic.is_some()))
-                .sum();
-            format!("台帳 {n} 件")
-        }
-        Reading::Unknown => format!("台帳 {UNMEASURED}"),
-    }
-}
-
-/// 最終更新の字。
-pub fn updated_label(screen: &Screen) -> String {
-    match screen.updated_at {
-        Some(at) => format!("最終更新 {}", clock(at)),
-        None => "最終更新 まだ無い".to_string(),
-    }
 }
 
 /// epoch 秒を UTC の字にする（`2026-09-27 07:39:00 UTC`）。

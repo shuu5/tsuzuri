@@ -1,0 +1,46 @@
+{
+  "header": [
+    {"part": "brand", "key": "project", "class": "brand", "items": []},
+    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["home", "map"]},
+    {"part": "updated", "key": "last_record", "class": "chip num", "items": []},
+    {"part": "mode", "key": "mode", "class": "seg", "items": ["beginner", "expert"]}
+  ],
+  "pages": [
+    {
+      "id": "home",
+      "heading": "home",
+      "class": "home",
+      "columns": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "next", "heading": "next", "class": "panel"},
+            {"id": "ask", "heading": "ask_open", "class": "panel"},
+            {"id": "pipe", "heading": "pipeline", "class": "panel"}
+          ]
+        },
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "orch", "heading": "orch_acct", "class": "panel seatcard"},
+            {"id": "ledger", "heading": "ledger_block", "class": "panel"},
+            {"id": "legend", "heading": "status", "class": "panel"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "map",
+      "heading": "map",
+      "class": "stack",
+      "columns": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "map", "heading": "map", "class": "panel"}
+          ]
+        }
+      ]
+    }
+  ]
+}

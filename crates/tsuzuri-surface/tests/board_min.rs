@@ -1,6 +1,7 @@
 //! 便 g-min の歯: 並べ方（bead 8 本の fixture）・測れていないの判定・状態の印・時刻の字。
 //! fixture は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で読み、
 //! 一覧の口と同じ電文（LedgerList）にしてから画面の状態へ渡す。
+//! 件数は block の module（ask・ledger）が数える（便 g-frame で見出しの字を vocab へ移した）。
 
 use std::path::Path;
 
@@ -8,9 +9,8 @@ use tsuzuri_boundary::server::ledger;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::view::{
-    self, Board, Fetched, Screen, UNMEASURED, clock, id_order, mark, questions_label, updated_label,
-};
+use tsuzuri_surface::project::{self, ask};
+use tsuzuri_surface::view::{self, Board, Fetched, Screen, clock, id_order, mark};
 
 fn fixture_rows() -> Vec<LedgerRow> {
     let path =
@@ -78,8 +78,8 @@ fn board_min_screen_reads_known_ledger() {
     let screen = Screen::initial().after_read(&body(Reading::Known(rows.clone())), 1_790_495_000);
     assert_eq!(screen.board, Reading::Known(view::board(&rows)));
     assert_eq!(screen.updated_at, Some(1_790_495_000));
-    assert_eq!(questions_label(&screen), "問い 2 件");
-    assert_eq!(view::ledger_label(&screen), "台帳 5 件");
+    assert_eq!(ask::count(&screen), Reading::Known(2));
+    assert_eq!(project::ledger::count(&screen), Reading::Known(5));
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn board_min_unmeasured_is_not_zero() {
             groups: vec![],
         })
     );
-    assert_eq!(questions_label(&empty), "問い 0 件");
+    assert_eq!(ask::count(&empty), Reading::Known(0));
 
     let known = Screen::initial().after_read(&body(Reading::Known(fixture_rows())), 20);
     for fetched in [
@@ -102,8 +102,8 @@ fn board_min_unmeasured_is_not_zero() {
     ] {
         let screen = known.after_read(&fetched, 30);
         assert_eq!(screen.board, Reading::Unknown, "{fetched:?}");
-        assert_eq!(questions_label(&screen), format!("問い {UNMEASURED}"));
-        assert_eq!(view::ledger_label(&screen), format!("台帳 {UNMEASURED}"));
+        assert_eq!(ask::count(&screen), Reading::Unknown);
+        assert_eq!(project::ledger::count(&screen), Reading::Unknown);
         // 最終更新は最後に読めた時刻のまま（読めなかった時刻に進めない）。
         assert_eq!(screen.updated_at, Some(20));
     }
@@ -113,8 +113,8 @@ fn board_min_unmeasured_is_not_zero() {
 
     let start = Screen::initial();
     assert_eq!(start.board, Reading::Unknown);
-    assert_eq!(questions_label(&start), format!("問い {UNMEASURED}"));
-    assert_eq!(updated_label(&start), "最終更新 まだ無い");
+    assert_eq!(ask::count(&start), Reading::Unknown);
+    assert_eq!(start.updated_at, None);
 }
 
 #[test]
@@ -140,11 +140,6 @@ fn board_min_clock_is_utc() {
     assert_eq!(clock(0), "1970-01-01 00:00:00 UTC");
     assert_eq!(clock(1_790_494_740), "2026-09-27 07:39:00 UTC");
     assert_eq!(clock(1_709_208_000), "2024-02-29 12:00:00 UTC");
-    let screen = Screen {
-        board: Reading::Unknown,
-        updated_at: Some(1_790_494_740),
-    };
-    assert_eq!(updated_label(&screen), "最終更新 2026-09-27 07:39:00 UTC");
 }
 
 #[test]

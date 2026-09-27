@@ -1,98 +1,159 @@
-//! 最小の project board の描画（wasm の target のときだけ組み立てる・Leptos の csr）。
-//! 出すのは問いの一覧・台帳の一覧・最終更新の 3 つ。何を出すか・どの順かは view が決め、ここは描くだけ。
+//! 頁の描画（wasm の target のときだけ組み立てる・Leptos の csr）: header と頁の枠を frame の値のとおりに並べる。
+//! block の中身は project の下の module が描く。ここは枠を描き、mode と頁を URL から読んで URL に残すだけ。
 
 use leptos::prelude::*;
-use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::LedgerRow;
 
+use crate::frame::{self, BRAND, Block, HEADER, Mode, PageId};
 use crate::net;
-use crate::view::{self, Board, EpicGroup, Screen, UNMEASURED};
+use crate::project::{self, ask, ledger, legend, map, next, pipeline, seat};
+use crate::view::{Screen, clock};
+use crate::vocab::label;
+use crate::widgets::help::{HelpCtx, TipLayer, hs};
+
+/// 題の印（見本の IC.logo）。
+const LOGO: &str = r##"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>"##;
+
+/// nav の印（見本の IC.home・IC.map）。
+fn nav_icon(page: PageId) -> &'static str {
+    match page {
+        PageId::Home => {
+            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>"#
+        }
+        PageId::Map => {
+            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg>"#
+        }
+    }
+}
 
 /// body に画面を載せる。
 pub fn mount() {
     leptos::mount::mount_to_body(App);
 }
 
+/// 今の URL の query（読めなければ空）。
+fn search() -> String {
+    window().location().search().unwrap_or_default()
+}
+
+/// mode を URL の query に残す（頁は読み直さない）。
+fn keep_mode_in_url(mode: Mode) {
+    let url = frame::with_param(&search(), "mode", mode.key());
+    if let Ok(history) = window().history() {
+        let _ =
+            history.replace_state_with_url(&web_sys::wasm_bindgen::JsValue::NULL, "", Some(&url));
+    }
+}
+
 #[component]
 fn App() -> impl IntoView {
+    let query = search();
+    let page = PageId::from_query(&query);
+    let mode = RwSignal::new(Mode::from_query(&query));
+    let help = HelpCtx {
+        open: RwSignal::new(None),
+        mode,
+    };
+    provide_context(help);
+    // body の class で「?」の出し分けを決める（見本の ui.css の body.mode-beginner）。
+    Effect::new(move |_| {
+        if let Some(body) = document().body() {
+            body.set_class_name(mode.get().body_class());
+        }
+    });
     let screen = RwSignal::new(Screen::initial());
     net::follow(screen);
     view! {
-        <main class="board">
-            <header class="top">
-                <h1>"project board"</h1>
-                <span class="updated">{move || screen.with(view::updated_label)}</span>
-            </header>
-            <section class="questions">
-                <h2>{move || screen.with(view::questions_label)}</h2>
-                {move || screen.with(|s| match &s.board {
-                    Reading::Known(board) => questions(board),
-                    Reading::Unknown => unmeasured(),
-                })}
-            </section>
-            <section class="ledger">
-                <h2>{move || screen.with(view::ledger_label)}</h2>
-                {move || screen.with(|s| match &s.board {
-                    Reading::Known(board) => ledger(board),
-                    Reading::Unknown => unmeasured(),
-                })}
-            </section>
-        </main>
+        {top(page, mode, screen)}
+        <main class="page">{page_view(page, screen)}</main>
+        <TipLayer/>
     }
 }
 
-/// 測れていないの表示（0 件の空の一覧と区別する）。
-fn unmeasured() -> AnyView {
-    view! { <p class="unmeasured">{UNMEASURED}</p> }.into_any()
-}
-
-fn questions(board: &Board) -> AnyView {
-    if board.questions.is_empty() {
-        return view! { <p class="empty">"open の問いは無い"</p> }.into_any();
-    }
-    let items = board
-        .questions
+/// 上端の帯: 題・頁の link・最終更新・mode の切り替え（frame の HEADER の順）。
+fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl IntoView {
+    let parts = HEADER
         .iter()
-        .map(|q| view! { <li class="row">{row(q)}</li> })
+        .map(|part| match part.part {
+            "brand" => view! {
+                <a class=part.class href=move || frame::href(PageId::Home, mode.get()) aria-label=label(part.key)>
+                    <span inner_html=LOGO></span>
+                    <span class="name">{BRAND}</span>
+                </a>
+            }
+            .into_any(),
+            "nav" => {
+                let links = frame::nav_links(page)
+                    .into_iter()
+                    .map(|l| {
+                        view! {
+                            <a href=move || frame::href(l.page, mode.get()) class=l.class data-v=l.key data-term=l.key>
+                                <span inner_html=nav_icon(l.page)></span>
+                                <span class="lbl hd-t">{label(l.key)}</span>
+                            </a>
+                        }
+                    })
+                    .collect_view();
+                view! {
+                    <nav class=part.class aria-label=label(part.key)>{links}</nav>
+                    <span class="grow"></span>
+                }
+                .into_any()
+            }
+            "updated" => {
+                let at = move || match screen.with(|s| s.updated_at) {
+                    Some(t) => clock(t).into_any(),
+                    None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
+                };
+                view! { {hs(part.key)}<span class=part.class>{at}</span> }.into_any()
+            }
+            _ => {
+                let choices = Mode::ALL
+                    .into_iter()
+                    .map(|m| {
+                        let pressed = move || (mode.get() == m).to_string();
+                        let pick = move |_| {
+                            mode.set(m);
+                            keep_mode_in_url(m);
+                        };
+                        view! { <button type="button" data-mode=m.key() aria-pressed=pressed on:click=pick>{label(m.key())}</button> }
+                    })
+                    .collect_view();
+                view! { <div class=part.class role="group" aria-label=label(part.key) data-term=part.key>{choices}</div> }
+                    .into_any()
+            }
+        })
         .collect_view();
-    view! { <ol class="rows">{items}</ol> }.into_any()
+    view! { <header class="top">{parts}</header> }
 }
 
-fn ledger(board: &Board) -> AnyView {
-    if board.groups.is_empty() {
-        return view! { <p class="empty">"台帳に bead は無い"</p> }.into_any();
-    }
-    board.groups.iter().map(group).collect_view().into_any()
-}
-
-fn group(group: &EpicGroup) -> AnyView {
-    let head = match &group.epic {
-        Some(epic) => row(epic),
-        None => view! { <span class="title">"epic の外"</span> }.into_any(),
-    };
-    let children = group
-        .children
-        .iter()
-        .map(|c| view! { <li class="row">{row(c)}</li> })
+/// 頁の枠（frame の列と block の並びのとおり）。
+fn page_view(page: PageId, screen: RwSignal<Screen>) -> impl IntoView {
+    let frame = frame::page(page);
+    let columns = frame
+        .columns
+        .into_iter()
+        .map(|c| {
+            let blocks = c
+                .blocks
+                .into_iter()
+                .map(|b| block_view(b, screen))
+                .collect_view();
+            view! { <div class=c.class>{blocks}</div> }
+        })
         .collect_view();
-    view! {
-        <div class="epic">
-            <div class="row epic-head">{head}</div>
-            <ul class="rows children">{children}</ul>
-        </div>
-    }
-    .into_any()
+    view! { <div class=frame.class>{columns}</div> }
 }
 
-/// 1 行（状態の印・id・題・種類）。状態の bd の語は印の title に残す。
-fn row(r: &LedgerRow) -> AnyView {
-    let mark = view::mark(&r.status);
-    let tip = format!("{}（{}）", mark.word, r.status);
-    view! {
-        <span class=format!("mark {}", mark.class) title=tip>{mark.glyph}</span>
-        <span class="id">{r.id.to_string()}</span>
-        <span class="title">{r.title.clone()}</span>
-        <span class="kind">{r.kind.clone()}</span>
+/// block の id から中身を描く module を選ぶ。
+fn block_view(block: Block, screen: RwSignal<Screen>) -> AnyView {
+    match block.id {
+        id if id == next::BLOCK.id => next::view(),
+        id if id == ask::BLOCK.id => ask::view(screen),
+        id if id == pipeline::BLOCK.id => pipeline::view(),
+        id if id == seat::BLOCK.id => seat::view(),
+        id if id == ledger::BLOCK.id => ledger::view(screen),
+        id if id == legend::BLOCK.id => legend::view(),
+        id if id == map::BLOCK.id => map::view(),
+        _ => ().into_any(),
     }
-    .into_any()
 }
