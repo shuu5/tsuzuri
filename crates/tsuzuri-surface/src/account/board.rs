@@ -37,6 +37,8 @@ fn tab_icon(tab: Tab) -> &'static str {
 
 /// body に account board を載せる。
 pub fn mount() {
+    // 自分の窓の名（project board の「戻る」がこの名でこの窓を見つける）。
+    let _ = window().set_name(windows::ACCOUNT_WIN);
     leptos::mount::mount_to_body(App);
 }
 
