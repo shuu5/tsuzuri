@@ -2,6 +2,8 @@
 //! id を持つ行を節点に、型付きの欄が指す id を辺にして、2 つの表と要約の 1 行を標準出力へ出す（`folio graph --print`）。
 //! 索引は導出物で repo へは書かない（ADR-13 決定 (4)・P-6.3）。組めなければ表を出さずに「まだ分からない」（P-4.2）。
 //! 節点の種類と辺の型の閉じた一覧の正本はこの file の定数（P-5.1・ADR-13 決定 (1)(2)）。欄の値を読み、散文は走査しない。
+//! 便 180（docs/design/delivery-180.md §1・要件 FR14 第 1.52 版）: `--print --summary` は表の代わりに、節点ごとに
+//! 所属 file の中の id の行の番号・平易文の欄の字・技術の要約の字（受入基準は題の全文）を添えた 1 行の JSON（JSON Lines）を出す。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -10,7 +12,7 @@ use std::path::Path;
 use crate::floor::Floor;
 use crate::sha256;
 use crate::verdict::{Report, Verdict};
-use crate::yaml::{self, Node};
+use crate::yaml::{self, Node, json_str};
 
 /// 節点の種類（11・順も固定）。
 pub const NODE_KINDS: [&str; 11] = [
@@ -142,6 +144,10 @@ const TYPES_HEAD: &str =
 const FILES_HEAD: &str = "# file ごとの節点（1 行 = file / 数・タブ区切り・file の名の byte 順）";
 const NEXT_LINE: &str = "# 索引そのもの（節点と辺の全行）は folio graph --print";
 
+/// 技術の要約の欄（規範文・本文・what・決定）。節点の行にこの順で最初に在る字を採る（条はその最初の規範文の字・
+/// 受入基準は題の全文・便 180）。
+const ENG_FIELDS: [&str; 4] = ["shall", "text", "what", "decision"];
+
 /// 規則の表の 2 節。
 const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
 
@@ -172,12 +178,15 @@ const RELATIONS: [(&str, usize); 4] = [("articles", 1), ("reqs", 2), ("rules", 3
 /// 欄が指した参照の 3 つ組（端・端・型）。
 type Ref = (String, String, &'static str);
 
-/// 索引: 節点（id → 種類・file・題）と、欄が指した参照と、行の逐語から組んだ節点の要約値（--print だけが組む）。
+/// 索引: 節点（id → 種類・file・題）と、欄が指した参照と、行の逐語から組んだ節点の要約値と id の行の番号（--print
+/// だけが組む）と、節点の平易文と技術の要約の字（無ければ None・便 180）。
 #[derive(Default)]
 struct Index {
     nodes: BTreeMap<String, (&'static str, String, String)>,
     refs: BTreeSet<Ref>,
     digests: BTreeMap<String, String>,
+    lines: BTreeMap<String, usize>,
+    texts: BTreeMap<String, (Option<String>, Option<String>)>,
 }
 
 impl Index {
@@ -186,6 +195,14 @@ impl Index {
         self.nodes
             .entry(id.to_string())
             .or_insert((NODE_KINDS[kind], file.to_string(), title));
+    }
+
+    /// 節点の平易文（行の欄 plain）と技術の要約 `eng` の字を覚える。
+    fn texts(&mut self, id: &str, row: &Node, eng: Option<&str>) {
+        let plain = row.get("plain").and_then(Node::as_str).map(str::to_string);
+        self.texts
+            .entry(id.to_string())
+            .or_insert((plain, eng.map(str::to_string)));
     }
 
     fn edge(&mut self, from: &str, to: &str, ty: usize) {
@@ -234,6 +251,31 @@ impl Index {
         out
     }
 
+    /// 節点ごとの 1 行の JSON（--print --summary・便 180）。欄は id・kind・file・line・title・plain・eng の順で空白を
+    /// 挟まない。題は表と同じ字・line は所属 file の中でその id が書かれた行（1 始まり）・plain と eng は無ければ null。
+    fn jsonl(&self) -> String {
+        let mut out = String::new();
+        for (id, (kind, file, title)) in &self.nodes {
+            let (plain, eng) = self.texts.get(id).cloned().unwrap_or_default();
+            let line = self.lines.get(id).copied().unwrap_or_default();
+            for (key, value) in [("{\"id\":", id.as_str()), (",\"kind\":", *kind), (",\"file\":", file.as_str())] {
+                out.push_str(key);
+                json_str(value, &mut out);
+            }
+            out.push_str(&format!(",\"line\":{line},\"title\":"));
+            json_str(title, &mut out);
+            for (key, value) in [(",\"plain\":", plain), (",\"eng\":", eng)] {
+                out.push_str(key);
+                match value {
+                    Some(text) => json_str(&text, &mut out),
+                    None => out.push_str("null"),
+                }
+            }
+            out.push_str("}\n");
+        }
+        out
+    }
+
     /// 短い出力（便 96）: 種類ごとの節点・型ごとの辺（表に出た数 / 端が節点でない数）・file ごとの節点の 3 表と
     /// 要約の 2 行。1 表と 2 表は閉じた一覧の全数をその順で出す（数が 0 の行も出す）。
     fn digest(&self) -> String {
@@ -261,6 +303,11 @@ impl Index {
         out.push_str(&format!("{NEXT_LINE}\n"));
         out
     }
+}
+
+/// 行の技術の要約: ENG_FIELDS のうち最初に字の値を持つ欄の字（空の値の欄は飛ばす）。
+fn eng(row: &Node) -> Option<&str> {
+    ENG_FIELDS.iter().find_map(|k| row.get(k).and_then(Node::as_str))
 }
 
 /// 題を 1 行にする: 空白の連なりを 1 つに畳み、前後を落とし、Unicode の字で上限に切る。
@@ -311,9 +358,12 @@ fn constitution(index: &mut Index, root: &Node) {
             continue;
         };
         index.node(aid, 0, file, article.get("title"));
+        let first = section(article, "statements").iter().find(|st| id_of(st).is_some());
+        index.texts(aid, article, first.and_then(eng));
         for st in section(article, "statements") {
             if let Some(sid) = id_of(st) {
                 index.node(sid, 1, file, st.get("text"));
+                index.texts(sid, st, eng(st));
                 index.edge(aid, sid, 0);
                 index.edge(sid, aid, 0);
             }
@@ -335,6 +385,7 @@ fn rules(index: &mut Index, root: &Node) {
                 continue;
             };
             index.node(rid, 2, "rules.yaml", row.get("what"));
+            index.texts(rid, row, eng(row));
             index.field(rid, row.get("article"), 6);
             index.field(rid, row.get("refs"), 7);
         }
@@ -349,6 +400,9 @@ fn srs(index: &mut Index, root: &Node) {
                 continue;
             };
             index.node(id, kind, "srs.yaml", row.get(title));
+            // 受入基準（種類 6）は 4 つの欄を持たないので、技術の要約は題の全文（表の 36 字で切らない字）
+            let text = if kind == 6 { row.get(title).and_then(Node::as_str) } else { eng(row) };
+            index.texts(id, row, text);
             for (key, ty) in SRS_FIELDS {
                 index.field(id, row.get(key), ty);
             }
@@ -367,6 +421,7 @@ fn adr(index: &mut Index, dir: &Path) -> Result<(), String> {
         };
         let file = format!("adr/{name}");
         index.node(id, 10, &file, root.get("title"));
+        index.texts(id, &root, eng(&root));
         index.field(id, root.get("basis"), 8);
         index.field(id, root.get("produced"), 15);
         index.field(id, root.get("figures"), 14);
@@ -530,10 +585,11 @@ fn drop_pairs(line: &str, names: &[&str]) -> String {
     line
 }
 
-/// 行の逐語で切り分けた節点の要約値（id → 16 進 8 字）。
+/// 行の逐語で切り分けた節点の要約値（id → 16 進 8 字）と、id が書かれた行の番号（id → 1 始まり・便 180）。
 #[derive(Default)]
 struct Scan {
     nodes: BTreeMap<String, String>,
+    lines: BTreeMap<String, usize>,
 }
 
 impl Scan {
@@ -542,14 +598,15 @@ impl Scan {
         let lines: Vec<&str> = text.split_inclusive('\n').collect();
         let mut owned = vec![false; lines.len()];
         if name.starts_with("adr/") {
-            let id = lines
+            let (at, id) = lines
                 .iter()
-                .find_map(|l| l.strip_prefix("id: "))
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
+                .enumerate()
+                .find_map(|(n, l)| l.strip_prefix("id: ").map(|id| (n, id.trim())))
+                .filter(|(_, id)| !id.is_empty())
                 .ok_or_else(|| format!("{name} に id の行が無い"))?;
             let all: Vec<usize> = (0..lines.len()).collect();
             self.cut(&lines, &mut owned, all, 0, EDGE_FIELDS[3].1, id)?;
+            self.lines.insert(id.to_string(), at + 1);
         } else {
             let fields = EDGE_FIELDS.iter().find(|(f, _)| *f == name).map_or(&[][..], |(_, f)| *f);
             let sections = node_sections(name);
@@ -571,6 +628,7 @@ impl Scan {
                         Some((sub, sub_flow)) => {
                             let sub_end = block_end(&lines, k, 6, sub_flow);
                             self.cut(&lines, &mut owned, (k..sub_end).collect(), 8, fields, sub)?;
+                            self.lines.insert(sub.to_string(), k + 1);
                             k = sub_end;
                         }
                         None => {
@@ -580,6 +638,7 @@ impl Scan {
                     }
                 }
                 self.cut(&lines, &mut owned, kept, 4, fields, id)?;
+                self.lines.insert(id.to_string(), i + 1);
                 i = end;
             }
         }
@@ -736,15 +795,17 @@ pub struct Outcome {
     pub verdict: Verdict,
 }
 
-/// 組めたら標準出力の字（`digest` なら短い出力・でなければ索引）と 合格、組めなければ表を出さずに「まだ分からない」。
-/// 索引は節点の要約値の欄を持つ（便 99）: 索引の節点と行の逐語から切り出した節点が食い違えば表を出さない（P-4.1）。
-pub fn run(dir: &Path, digest: bool) -> Outcome {
+/// 組めたら標準出力の字（`digest` なら短い出力・`summary` なら節点ごとの 1 行の JSON・でなければ索引）と 合格、組めなければ
+/// 表を出さずに「まだ分からない」。索引は節点の要約値の欄を持つ（便 99）: 索引の節点と行の逐語から切り出した節点が
+/// 食い違えば表を出さない（P-4.1）。節点ごとの 1 行の id の行の番号も同じ行の逐語から取る（便 180）。
+pub fn run(dir: &Path, digest: bool, summary: bool) -> Outcome {
     let built = build(dir).and_then(|mut index| {
         if !digest {
             let mut scan = Scan::default();
             for name in source_files(dir)? {
                 scan.file(&name, &read_text(dir, &name)?)?;
             }
+            index.lines = std::mem::take(&mut scan.lines);
             index.digests = scan.agree(&index)?;
         }
         Ok(index)
@@ -753,6 +814,8 @@ pub fn run(dir: &Path, digest: bool) -> Outcome {
         Ok(index) => Outcome {
             stdout: Some(if digest {
                 index.digest()
+            } else if summary {
+                index.jsonl()
             } else {
                 index.render()
             }),

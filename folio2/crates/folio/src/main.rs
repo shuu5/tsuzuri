@@ -281,8 +281,8 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
-    /// 設計文書の正本から節点と辺の索引を組み、2 つの表と要約の 1 行（--print）か、3 つの表と要約の 2 行の短い出力（--digest）を
-    /// 標準出力へ出す（repo へは書かない・組めなければ まだ分からない）
+    /// 設計文書の正本から節点と辺の索引を組み、2 つの表と要約の 1 行（--print）か、節点ごとの 1 行の JSON（--print --summary）か、
+    /// 3 つの表と要約の 2 行の短い出力（--digest）を標準出力へ出す（repo へは書かない・組めなければ まだ分からない）
     #[command(group(ArgGroup::new("mode").required(true).args(["print", "digest"])))]
     Graph {
         /// 正本の置き場（constitution.yaml・rules.yaml・srs.yaml・adr/ADR-*.yaml を読む）
@@ -294,6 +294,9 @@ enum Command {
         /// 全体像の短い出力（種類ごとの節点・型ごとの辺・file ごとの節点の数）を標準出力へ書く
         #[arg(long)]
         digest: bool,
+        /// --print の表の代わりに、節点ごとに id の行の番号・平易文・技術の要約を添えた 1 行の JSON（JSON Lines）を書く
+        #[arg(long, conflicts_with = "digest")]
+        summary: bool,
     },
     /// 新しい置き場に最初の文書一式（骨格・11 file）を書く。正本が 1 つでも在れば何も書かずに断る（書いた 0・断り 1・書けない 2）
     Init {
@@ -649,8 +652,9 @@ fn run(cli: Cli) -> ExitCode {
             dir,
             print: _,
             digest,
+            summary,
         } => {
-            let outcome = graph::run(&dir, digest);
+            let outcome = graph::run(&dir, digest, summary);
             if let Some(body) = &outcome.stdout {
                 print!("{body}");
             }
