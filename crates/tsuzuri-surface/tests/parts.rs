@@ -1,5 +1,5 @@
-//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 5 つの block は測れていない・口の path は 9 本で互いに違う
-//! （便 g-ask で問いの一覧の口と答えを送る口を、便 g-graph でグラフの眺めの口を足した）・
+//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 5 つの block は測れていない・口の path は 10 本で互いに違う
+//! （便 g-ask で問いの一覧の口と答えを送る口を、便 g-graph でグラフの眺めの口を、便 g-node で近傍の口の path の頭を足した）・
 //! 読み直しの合図の event の名は契約の型の crate の定数から引く・hover の card の置き場と猶予と行の切り方・
 //! 定数が rules の file の行 R-20 と行 R-19 の字と同じ。
 
@@ -13,7 +13,7 @@ use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::graph;
 use tsuzuri_surface::project::{
-    Body, NO_CONTENT, NOT_READ, ask, askpage, ledger, map, next, pipeline, seat,
+    Body, NO_CONTENT, NOT_READ, ask, askpage, ledger, map, next, nodearound, pipeline, seat,
 };
 use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS, Screen};
 use tsuzuri_surface::widgets::hover::{
@@ -132,7 +132,8 @@ fn parts_ledger_lists_read_three_values() {
     }
 }
 
-/// 口の path は 9 本で互いに違い、定数に 1 本ずつ在る（8 本は block の module・9 本目はグラフの module・便 g-graph）。
+/// 口の path は 10 本で互いに違い、定数に 1 本ずつ在る（8 本は block の module・9 本目はグラフの module・便 g-graph・
+/// 10 本目は近傍の口の path の頭で nodearound の module・便 g-node）。
 #[test]
 fn parts_paths_distinct_in_block_modules() {
     let paths = [
@@ -145,6 +146,7 @@ fn parts_paths_distinct_in_block_modules() {
         ask::PATH,
         ask::RULING_PATH,
         graph::PATH,
+        nodearound::PATH,
     ];
     assert_eq!(
         paths,
@@ -157,16 +159,17 @@ fn parts_paths_distinct_in_block_modules() {
             "/api/graph",
             "/api/questions",
             "/api/ruling",
-            "/api/graph/view"
+            "/api/graph/view",
+            "/api/around"
         ]
     );
     let mut sorted = paths.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), 9, "口の path が重なる: {paths:?}");
+    assert_eq!(sorted.len(), 10, "口の path が重なる: {paths:?}");
 
-    // src の `"/api/…"` の字: 8 本は project の下の module に 1 度ずつ・グラフの口の字は mapview の下のグラフの module の
-    // file に 1 度だけ・ほかは変化の知らせの口だけ。
+    // src の `"/api/…"` の字: 9 本は project の下の module に 1 度ずつ（近傍の口の字は nodearound の module の file）・
+    // グラフの口の字は mapview の下のグラフの module の file に 1 度だけ・ほかは変化の知らせの口だけ。
     let mut found: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     for (path, text) in sources() {
         let mut rest = text.as_str();
@@ -182,11 +185,17 @@ fn parts_paths_distinct_in_block_modules() {
     }
     let project_dir = crate_dir().join("src/project");
     let graph_file = crate_dir().join("src/mapview/graph.rs");
+    let around_file = crate_dir().join("src/project/nodearound.rs");
     for p in paths {
         let at = found.remove(p).unwrap_or_default();
         assert_eq!(at.len(), 1, "{p} の字が src に 1 度でない: {at:?}");
         if p == graph::PATH {
             assert_eq!(at[0], graph_file, "{p} がグラフの module に無い: {at:?}");
+        } else if p == nodearound::PATH {
+            assert_eq!(
+                at[0], around_file,
+                "{p} が nodearound の module に無い: {at:?}"
+            );
         } else {
             assert!(
                 at[0].starts_with(&project_dir),

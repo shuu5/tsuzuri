@@ -1,7 +1,8 @@
 //! 便 g-map の歯: 種類から帯と語の鍵への閉じた表・圧縮の面の帯の順と札の並び・読めない帯と 0 件の帯・
 //! 一覧の面の絞りと並べ替え・表の面の行列の数と cell の組の絞り・URL の query・全部の札と行の id・
-//! 近傍は測れていない・着地済みの外形と依存・使う class と語の鍵が在る。
+//! 着地済みの外形と依存・使う class と語の鍵が在る。
 //! 圧縮の面の条と規則行と、一覧の面の id の並べ替えは id の自然な順（便 g-graph が直した）。
+//! 近傍の歯は節点の頁の歯（nodepage.rs・便 g-node が近傍の測れていないの歯を消した）。
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -17,9 +18,7 @@ use tsuzuri_surface::mapview::list::{
     Listing, NO_STATE, Query, Sort, listing, pair_value, parse_pair, with_choice, with_pair,
 };
 use tsuzuri_surface::mapview::table::{Matrix, matrix};
-use tsuzuri_surface::mapview::{
-    View, around, decode, encode, natural, param, set_param, with_view,
-};
+use tsuzuri_surface::mapview::{View, decode, encode, natural, param, set_param, with_view};
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ, map};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
@@ -640,13 +639,6 @@ fn mapview_every_tag_and_row_shows_id() {
     listed.sort_unstable();
     assert_eq!(listed, want);
     assert!(l.rows.iter().all(|r| !r.id.is_empty()));
-}
-
-/// (8) 近傍は測れていないと理由の 1 行（グラフの面の歯は mapgraph.rs）。
-#[test]
-fn mapview_graph_and_around_are_unmeasured() {
-    assert_eq!(around::body(), Body::Unmeasured(around::REASON));
-    assert!(!around::REASON.trim().is_empty());
 }
 
 /// (9) 着地済みの外形（BLOCK・口の path・body）と、電文の型として読めない本文は測れていない・外の依存は足さない。

@@ -3,8 +3,12 @@
 //! 並びと鍵と class は見本（docs/design/mock3 の index.html・ask.html・map.html・ui.css）に揃える。
 //! 問いの頁（便 g-ask）: 頁の順は home・ask・map、header の質問の link に open の問いの数の印を付ける。
 //! 抜けの検査の頁（便 g-gaps）: 頁の順は home・ask・map・gaps（見本の header と同じ 4 つ）。
+//! 節点の頁（便 g-node）: query の page=node と id で開き、nav には出さない（nav の順と頁の一覧は 4 つのまま）。
 
-use crate::project::{ask, askpage, gaps, ledger, legend, map, next, pipeline, seat};
+use crate::mapview::encode;
+use crate::project::{
+    ask, askpage, gaps, ledger, legend, map, next, node as node_block, nodearound, pipeline, seat,
+};
 
 /// 1 つの block の枠（DOM の id・見出しの語の鍵・section の class）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,17 +25,19 @@ pub struct Column {
     pub blocks: Vec<Block>,
 }
 
-/// 頁（home・問い・地図・抜けの検査）。
+/// 頁（home・問い・地図・抜けの検査・節点）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PageId {
     Home,
     Ask,
     Map,
     Gaps,
+    /// 節点の頁（nav には出さない）。
+    Node,
 }
 
 impl PageId {
-    /// 頁の全部（nav の順）。
+    /// nav の頁の全部（nav の順・節点の頁は入れない）。
     pub const ALL: [PageId; 4] = [PageId::Home, PageId::Ask, PageId::Map, PageId::Gaps];
 
     pub fn id(self) -> &'static str {
@@ -40,6 +46,7 @@ impl PageId {
             PageId::Ask => "ask",
             PageId::Map => "map",
             PageId::Gaps => "gaps",
+            PageId::Node => "node",
         }
     }
 
@@ -49,6 +56,7 @@ impl PageId {
             Some("ask") => PageId::Ask,
             Some("map") => PageId::Map,
             Some("gaps") => PageId::Gaps,
+            Some("node") => PageId::Node,
             _ => PageId::Home,
         }
     }
@@ -134,12 +142,26 @@ pub fn gaps() -> Page {
     }
 }
 
+/// 節点の頁（見本の bead.html・block は頭と概要の node と、つながりの around の 2 つ）。
+pub fn node() -> Page {
+    Page {
+        id: PageId::Node,
+        heading: "nb_self",
+        class: STACK,
+        columns: vec![Column {
+            class: STACK,
+            blocks: vec![node_block::BLOCK, nodearound::BLOCK],
+        }],
+    }
+}
+
 pub fn page(id: PageId) -> Page {
     match id {
         PageId::Home => home(),
         PageId::Ask => ask(),
         PageId::Map => map(),
         PageId::Gaps => gaps(),
+        PageId::Node => node(),
     }
 }
 
@@ -262,7 +284,13 @@ pub fn href(page: PageId, mode: Mode) -> String {
         PageId::Ask => format!("?page=ask&mode={}", mode.key()),
         PageId::Map => format!("?page=map&mode={}", mode.key()),
         PageId::Gaps => format!("?page=gaps&mode={}", mode.key()),
+        PageId::Node => format!("?page=node&mode={}", mode.key()),
     }
+}
+
+/// 節点の頁への link（節点の id は `%XX` にする・mode を URL に残す）。
+pub fn node_href(id: &str, mode: Mode) -> String {
+    format!("?page=node&id={}&mode={}", encode(id), mode.key())
 }
 
 /// query の 1 つの値（`?a=1&b=2` の形・無ければ None）。
@@ -315,7 +343,8 @@ pub fn snapshot() -> String {
         .collect();
     out.push_str(&header.join(",\n"));
     out.push_str("\n  ],\n  \"pages\": [\n");
-    let pages: Vec<String> = pages().iter().map(page_json).collect();
+    // nav の 4 つの頁の後に、nav に出さない節点の頁。
+    let pages: Vec<String> = pages().iter().chain([&node()]).map(page_json).collect();
     out.push_str(&pages.join(",\n"));
     out.push_str("\n  ]\n}\n");
     out

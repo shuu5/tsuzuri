@@ -2,18 +2,21 @@
 //! data の口が無い block は測れていない・8 つの module・mode が URL に残る・「?」の注釈の分け方。
 //! 便 g-ask で頁は home・ask・map の 3 つになり、home から block ask を外して問いの頁へ移した。
 //! 便 g-gaps で頁は home・ask・map・gaps の 4 つ・module は 9 つになった。
+//! 便 g-node で nav に出さない節点の頁（block は node と around）を足し、module は 11 になった（nav は 4 つのまま）。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use tsuzuri_boundary::server::ledger as server_ledger;
 use tsuzuri_contract::board::Reading;
+use tsuzuri_contract::graph::AroundDoc;
 use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, HEADER, Mode, PageId};
+use tsuzuri_surface::frame::{self, HEADER, Mode, Page, PageId};
 use tsuzuri_surface::project::{
-    self, Body, STATES, ask, askpage, gaps, ledger, legend, map, next, pipeline, seat, state_class,
+    self, Body, STATES, ask, askpage, gaps, ledger, legend, map, next, node, nodearound, pipeline,
+    seat, state_class,
 };
 use tsuzuri_surface::view::{Fetched, Screen};
 use tsuzuri_surface::vocab::vocab;
@@ -34,6 +37,13 @@ fn fixture_rows() -> Vec<LedgerRow> {
         panic!("fixture が server の読みで Unknown");
     };
     items.into_iter().map(|i| i.row).collect()
+}
+
+/// 枠の頁の全部（nav の 4 つと、nav に出さない節点の頁）。
+fn all_pages() -> Vec<Page> {
+    let mut all = frame::pages().to_vec();
+    all.push(frame::node());
+    all
 }
 
 fn known_screen() -> Screen {
@@ -90,11 +100,14 @@ fn frame_home_blocks_in_order_and_map_page() {
     assert_eq!(frame::ask().block_ids(), vec!["ask", "hist"]);
     assert_eq!(frame::map().block_ids(), vec!["map"]);
     assert_eq!(frame::gaps().block_ids(), vec!["gaps"]);
+    assert_eq!(frame::node().block_ids(), vec!["node", "around"]);
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
     assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
-    for id in PageId::ALL {
+    for id in PageId::ALL.into_iter().chain([PageId::Node]) {
         assert_eq!(frame::page(id).id, id);
     }
+    assert_eq!(frame::page(PageId::Node), frame::node());
+    assert_eq!(PageId::Node.id(), "node");
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
     // header の頁の link は ホーム・質問・地図・抜けの検査 の順（nav の部品の中の鍵と同じ）。
@@ -111,7 +124,7 @@ fn frame_home_blocks_in_order_and_map_page() {
 #[test]
 fn frame_headings_come_from_vocab() {
     let mut keys: Vec<&str> = Vec::new();
-    for page in frame::pages() {
+    for page in all_pages() {
         keys.push(page.heading);
         keys.extend(
             page.columns
@@ -215,7 +228,7 @@ fn used_classes() -> BTreeSet<String> {
             rest = &rest[end..];
         }
     }
-    for page in frame::pages() {
+    for page in all_pages() {
         add(page.class);
         for c in &page.columns {
             add(c.class);
@@ -262,6 +275,17 @@ fn used_classes() -> BTreeSet<String> {
     for (class, _) in Card::default().rows() {
         add(class);
     }
+    let around: AroundDoc = wire::decode(&read("../../tests/fixtures/surface/around-doc.json"))
+        .expect("近傍の fixture");
+    if let Some(h) = node::head(&around) {
+        add(&h.shape);
+        add(h.band.class_name());
+    }
+    if let Some(c) = node::center(&around) {
+        for b in node::summary(c) {
+            add(b.class);
+        }
+    }
     out
 }
 
@@ -270,8 +294,8 @@ fn frame_classes_are_in_stylesheet() {
     let css = stylesheet_classes();
     // stylesheet は見本の ui.css の写し（見本の規則の class を持つ）。
     for c in [
-        "page", "panel", "home", "stack", "top", "nav", "seg", "q", "tip", "legend5", "l4", "items",
-        "ask", "qcard", "badge", "fold",
+        "page", "panel", "home", "stack", "top", "nav", "seg", "q", "tip", "legend5", "l4",
+        "items", "ask", "qcard", "badge", "fold",
     ] {
         assert!(css.contains(c), "stylesheet に見本の class {c} が無い");
     }
@@ -366,7 +390,8 @@ fn frame_item_shape_follows_status() {
     assert!(!by("bm").alert);
 }
 
-/// block と地図の頁と抜けの検査の頁は project の下の 9 つの module に 1 つずつ・枠の module は中身を持たない。
+/// block と地図の頁と抜けの検査の頁と節点の頁の 2 つは project の下の 11 の module に 1 つずつ・
+/// 枠の module は中身を持たない。
 #[test]
 fn frame_one_module_per_block() {
     let modules = [
@@ -379,6 +404,8 @@ fn frame_one_module_per_block() {
         ("ledger", ledger::BLOCK.id),
         ("legend", legend::BLOCK.id),
         ("map", map::BLOCK.id),
+        ("node", node::BLOCK.id),
+        ("nodearound", nodearound::BLOCK.id),
     ];
     let dir = crate_dir().join("src/project");
     let mut files: Vec<String> = std::fs::read_dir(&dir)
@@ -398,7 +425,8 @@ fn frame_one_module_per_block() {
             "{module}.rs が block {id} の枠を持たない"
         );
     }
-    let mut all: Vec<&str> = frame::pages().iter().flat_map(|p| p.block_ids()).collect();
+    assert_eq!(files.len(), 11);
+    let mut all: Vec<&str> = all_pages().iter().flat_map(|p| p.block_ids()).collect();
     let mut declared: Vec<&str> = modules.iter().map(|(_, id)| *id).collect();
     all.sort_unstable();
     declared.sort_unstable();
@@ -440,6 +468,27 @@ fn frame_mode_lives_in_url() {
             assert_eq!(PageId::from_query(&href), page, "{href}");
         }
     }
+    // 節点の頁は page=node で開き、link は id を `%XX` にして mode を残す（nav には出さない）。
+    assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
+    assert_eq!(
+        frame::href(PageId::Node, Mode::Expert),
+        "?page=node&mode=expert"
+    );
+    let link = frame::node_href("e.2:20260927T0000Z-1", Mode::Beginner);
+    assert_eq!(link, "?page=node&id=e.2%3A20260927T0000Z-1&mode=beginner");
+    assert_eq!(PageId::from_query(&link), PageId::Node);
+    assert_eq!(Mode::from_query(&link), Mode::Beginner);
+    assert!(
+        frame::nav_links(PageId::Node)
+            .iter()
+            .all(|l| l.page != PageId::Node)
+    );
+    assert!(
+        frame::nav_links(PageId::Node)
+            .iter()
+            .all(|l| l.class.is_empty())
+    );
+
     let links = frame::nav_links(PageId::Map);
     let on: Vec<&str> = links
         .iter()

@@ -6,6 +6,8 @@
 //! 中身の関数は読みの結果（3 値）を受けて中身を返す純粋な関数。next・pipeline・seat・map と ledger の指標の段は、
 //! 3 値のどれを受けても測れていないの印と理由の 1 行を返す（本文を読んで中身を返すのは後の block の便）。
 //! 畳める段（details）の開き閉じは鍵ごとの記録（`Folds`）から読み、toggle で書き戻す（組み直しの後も保つ・便 g-steady）。
+//! 節点の頁（便 g-node）は node（頭と概要）と nodearound（つながり・口の path の頭 /api/around に query を付けて読む）の 2 つ。
+//! 2 つの block は nodearound の module が持つ 1 つの読みを分ける。
 
 use std::collections::BTreeMap;
 
@@ -20,6 +22,8 @@ pub mod ledger;
 pub mod legend;
 pub mod map;
 pub mod next;
+pub mod node;
+pub mod nodearound;
 pub mod pipeline;
 pub mod seat;
 

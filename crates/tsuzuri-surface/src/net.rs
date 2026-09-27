@@ -4,6 +4,8 @@
 //! 読みの後は view の決め方で置くかを決める（同じ本文は置かない・一度の読めないは 1 秒後に読み直す・便 g-steady）。
 //! 知らせが切れている間は、今の中身が正しいと言えないので登録された口を全部「読めない」にする（要件 NFR2・決め方を通さない）。
 //! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
+//! path が query で変わる口（節点の近傍・便 g-node）は `read_path` に path の字の signal を渡し、
+//! 読みの結果と応答の状態の数の組を受ける。path が変わったときと知らせの合図で読み直し、接続は同じ 1 本を使う。
 
 use std::cell::{Cell, RefCell};
 use std::time::Duration;
@@ -25,9 +27,14 @@ pub const EVENTS_PATH: &str = "/api/surface/events";
 thread_local! {
     /// 登録された口（path と読みの結果）。同じ path は 1 つの signal を分ける。
     static READS: RefCell<Vec<(&'static str, ArcRwSignal<Fetched>)>> = const { RefCell::new(Vec::new()) };
+    /// path が変わる口（今の path と、読みの結果と応答の状態の数の組）。頁の一生の間だけ持つ。
+    static WATCHES: RefCell<Vec<(String, ArcRwSignal<Status>)>> = const { RefCell::new(Vec::new()) };
     /// 知らせの接続を張ったか（頁に 1 本だけ）。
     static CONNECTED: Cell<bool> = const { Cell::new(false) };
 }
+
+/// 読みの結果と応答の状態の数（応答が無ければ None）の組。
+type Status = (Fetched, Option<u16>);
 
 /// 今の時刻（epoch 秒）。
 pub fn now() -> EpochSecs {
@@ -36,24 +43,30 @@ pub fn now() -> EpochSecs {
 
 /// 口を読む（届かない・200 でない・本文が字でなければ Failed）。
 async fn fetch(path: &str) -> Fetched {
+    fetch_status(path).await.0
+}
+
+/// 口を読み、応答の状態の数も返す（応答が無ければ状態の数は None）。
+async fn fetch_status(path: &str) -> Status {
     let Some(window) = web_sys::window() else {
-        return Fetched::Failed;
+        return (Fetched::Failed, None);
     };
     let Ok(value) = JsFuture::from(window.fetch_with_str(path)).await else {
-        return Fetched::Failed;
+        return (Fetched::Failed, None);
     };
     let Ok(response) = value.dyn_into::<Response>() else {
-        return Fetched::Failed;
+        return (Fetched::Failed, None);
     };
+    let status = Some(response.status());
     if !response.ok() {
-        return Fetched::Failed;
+        return (Fetched::Failed, status);
     }
     let Ok(text) = response.text() else {
-        return Fetched::Failed;
+        return (Fetched::Failed, status);
     };
     match JsFuture::from(text).await.ok().and_then(|t| t.as_string()) {
-        Some(body) => Fetched::Body(body),
-        None => Fetched::Failed,
+        Some(body) => (Fetched::Body(body), status),
+        None => (Fetched::Failed, status),
     }
 }
 
@@ -72,7 +85,10 @@ pub async fn post(path: &str, body: String) -> Option<(u16, String)> {
         .await
         .ok()?;
     let response = value.dyn_into::<Response>().ok()?;
-    let text = JsFuture::from(response.text().ok()?).await.ok()?.as_string()?;
+    let text = JsFuture::from(response.text().ok()?)
+        .await
+        .ok()?
+        .as_string()?;
     Some((response.status(), text))
 }
 
@@ -101,10 +117,37 @@ fn registered() -> Vec<(&'static str, ArcRwSignal<Fetched>)> {
     READS.with_borrow(|reads| reads.clone())
 }
 
+/// path が変わる口の `slot` 番目を `attempt` 回目に読む（読む間に path が変われば置かない・決め方は `load_at` と同じ）。
+fn load_watch(slot: usize, attempt: u32) {
+    let Some((path, signal)) = WATCHES.with_borrow(|w| w.get(slot).cloned()) else {
+        return;
+    };
+    if path.is_empty() {
+        return;
+    }
+    spawn_local(async move {
+        let got = fetch_status(&path).await;
+        let moved = WATCHES.with_borrow(|w| w.get(slot).is_none_or(|(p, _)| *p != path));
+        if moved || signal.with_untracked(|now| *now == got) {
+            return;
+        }
+        match signal.with_untracked(|now| settle(&now.0, &got.0, attempt)) {
+            Settle::Retry => set_timeout(
+                move || load_watch(slot, attempt + 1),
+                Duration::from_millis(RETRY_MS),
+            ),
+            Settle::Set | Settle::Keep => signal.set(got),
+        }
+    });
+}
+
 /// 登録された口を全部読み直す（書きの口へ送った後に block も呼ぶ）。
 pub fn reload_all() {
     for (path, signal) in registered() {
         load(path, signal);
+    }
+    for slot in 0..WATCHES.with_borrow(Vec::len) {
+        load_watch(slot, 1);
     }
 }
 
@@ -113,6 +156,35 @@ fn lose_all() {
     for (_, signal) in registered() {
         signal.set(Fetched::Failed);
     }
+    for (_, signal) in WATCHES.with_borrow(|w| w.clone()) {
+        signal.set((Fetched::Failed, None));
+    }
+}
+
+/// path が変わる口の読みの組の signal（path が変わるたびに「まだ読んでいない」に戻して読み直す・
+/// 知らせの合図でも読み直す・知らせの接続は `read` と同じ 1 本）。
+pub fn read_path(path: Signal<String>) -> ReadSignal<(Fetched, Option<u16>)> {
+    let signal = ArcRwSignal::new((Fetched::NotRead, None));
+    let slot = WATCHES.with_borrow_mut(|w| {
+        w.push((String::new(), signal.clone()));
+        w.len() - 1
+    });
+    let out = signal.clone();
+    Effect::new(move |before: Option<String>| {
+        let now = path.get();
+        if before.as_ref() != Some(&now) {
+            WATCHES.with_borrow_mut(|w| {
+                if let Some(entry) = w.get_mut(slot) {
+                    entry.0.clone_from(&now);
+                }
+            });
+            out.set((Fetched::NotRead, None));
+            load_watch(slot, 1);
+        }
+        now
+    });
+    connect();
+    ReadSignal::from(signal.read_only())
 }
 
 /// 口の読みの結果の signal（初めての path は登録して 1 回読む・知らせの接続がまだ無ければ張る）。

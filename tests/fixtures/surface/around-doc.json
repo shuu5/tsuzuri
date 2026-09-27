@@ -1,0 +1,39 @@
+{
+  "center": "FR1",
+  "steps": 2,
+  "fold": "none",
+  "rows": [
+    {
+      "node": {"id": "P-1", "kind": "条", "file": "constitution.yaml", "digest": null, "title": "面は測れないことを 0 と書かない"},
+      "status": null, "col": -1, "via": "FR1", "type": "basis", "degree": 3
+    },
+    {
+      "node": {"id": "ADR-1", "kind": "判断の記録", "file": "adr/ADR-1.yaml", "digest": null, "title": "導出グラフを面の正本にする"},
+      "status": null, "col": -1, "via": "FR1", "type": "adrs", "degree": 2
+    },
+    {
+      "node": {"id": "FR1", "kind": "要件", "file": "srs.yaml", "digest": null, "title": "project board を 1 枚の頁で見る"},
+      "status": null, "col": 0, "via": null, "type": null, "degree": 4
+    },
+    {
+      "node": {"id": "AC1", "kind": "受入基準", "file": "srs.yaml", "digest": null, "title": "頁の枠が見本と同じ並びになる"},
+      "status": null, "col": 1, "via": "FR1", "type": "verifies", "degree": 1
+    },
+    {
+      "node": {"id": "e.2", "kind": "question", "file": null, "digest": null, "title": "近傍の段数を URL に残すか"},
+      "status": "open", "col": 1, "via": "FR1", "type": "touches", "degree": 2
+    },
+    {
+      "node": {"id": "e.2:20260927T0000Z-1", "kind": "ruling", "file": null, "digest": null, "title": "段数は URL の k に残す"},
+      "status": null, "col": 2, "via": "e.2", "type": "answers", "degree": 1
+    }
+  ],
+  "basis": 2,
+  "impact": 3,
+  "shown": 6,
+  "total": 6,
+  "cut_hub": 0,
+  "cut_cap": 0,
+  "hubs": [],
+  "unread": []
+}

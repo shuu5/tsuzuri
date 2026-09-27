@@ -2,13 +2,16 @@
 //! block の中身は project の下の module が描く。ここは枠を描き、mode と頁を URL から読んで URL に残すだけ。
 //! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。
 //! 質問の link の数の印は問いの一覧の口（ask の module の口）の件数を出す（便 g-ask）。
+//! 節点の頁（便 g-node）は query の page=node で開き、block は node と around の 2 つ（nav には出さない）。
 
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
 
 use crate::frame::{self, BRAND, Block, HEADER, Mode, PageId};
 use crate::net;
-use crate::project::{self, ask, askpage, gaps, ledger, legend, map, next, pipeline, seat};
+use crate::project::{
+    self, ask, askpage, gaps, ledger, legend, map, next, node, nodearound, pipeline, seat,
+};
 use crate::view::{Screen, clock};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, hs};
@@ -32,6 +35,8 @@ fn nav_icon(page: PageId) -> &'static str {
         PageId::Gaps => {
             r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/><path d="M8.5 11h5"/></svg>"#
         }
+        // 節点の頁は nav に出さない。
+        PageId::Node => "",
     }
 }
 
@@ -184,6 +189,8 @@ fn block_view(block: Block, screen: RwSignal<Screen>) -> AnyView {
         id if id == legend::BLOCK.id => legend::view(),
         id if id == map::BLOCK.id => map::view(),
         id if id == gaps::BLOCK.id => gaps::view(),
+        id if id == node::BLOCK.id => node::view(),
+        id if id == nodearound::BLOCK.id => nodearound::view(),
         _ => ().into_any(),
     }
 }
