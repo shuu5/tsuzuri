@@ -33,6 +33,7 @@ pub mod batch;
 pub mod board;
 pub mod clock;
 pub mod coalesce;
+mod config;
 pub mod design;
 pub mod events;
 pub mod files;
@@ -44,7 +45,7 @@ pub mod ruling;
 pub mod runs;
 pub mod seat;
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -76,27 +77,7 @@ use self::ruling::{Delivery, Outcome, Writer};
 use self::runs::Runs;
 use self::seat::Seats;
 
-/// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program・
-/// bdw の program・席の target・器の CLI の program）。席の target と state dir の両方が在るときだけ、
-/// 裁定を席へ配達し、席の card を組む（便 e-seat）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Config {
-    pub repo: PathBuf,
-    pub bind: SocketAddr,
-    pub files: PathBuf,
-    /// 台帳の読みに撃つ program（既定は `ledger::BD`）。
-    pub bd: OsString,
-    /// 器の state dir（None なら走行の出所は読めず、裁定を席へ配達しない）。
-    pub state_dir: Option<PathBuf>,
-    /// 設計の索引の読みに撃つ program（既定は `design::FOLIO`）。
-    pub folio: OsString,
-    /// 台帳の書きに撃つ program（既定は `tsuzuri_contract::ledger::BDW`・便 e-ask）。
-    pub bdw: OsString,
-    /// 裁定を配達し、card を組む席の target（None なら配達せず、card を組まない）。
-    pub seat: Option<String>,
-    /// 配達と席の読みに撃つ器の CLI の program（既定は `ruling::SCRIBE2`）。
-    pub scribe2: OsString,
-}
+pub use self::config::Config;
 
 /// tailnet の IPv4 の範囲（100.64.0.0/10）。
 pub const TAILNET_V4: (Ipv4Addr, u32) = (Ipv4Addr::new(100, 64, 0, 0), 10);

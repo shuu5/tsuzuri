@@ -12,8 +12,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use tsuzuri_boundary::server::{Config, Server, design, ledger, ruling};
-use tsuzuri_contract::ledger::BDW;
+use tsuzuri_boundary::server::{Config, Server};
 
 const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>]";
 
@@ -82,19 +81,26 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             return Err(format!("{name} の値が空"));
         }
     }
-    Ok(Config {
-        repo: PathBuf::from(repo),
-        bind: bind
-            .parse::<SocketAddr>()
-            .map_err(|_| format!("bind 先 {bind} は 住所:port の形でない"))?,
-        files: PathBuf::from(files),
-        bd: bd.unwrap_or(ledger::BD).into(),
+    let bind = bind
+        .parse::<SocketAddr>()
+        .map_err(|_| format!("bind 先 {bind} は 住所:port の形でない"))?;
+    let mut config = Config {
         state_dir: state_dir.map(PathBuf::from),
-        folio: folio.unwrap_or(design::FOLIO).into(),
-        bdw: bdw.unwrap_or(BDW).into(),
         seat: seat.map(str::to_string),
-        scribe2: scribe2.unwrap_or(ruling::SCRIBE2).into(),
-    })
+        ..Config::new(PathBuf::from(repo), bind, PathBuf::from(files))
+    };
+    // 省いた program は Config::new の既定の値のまま。
+    for (slot, value) in [
+        (&mut config.bd, bd),
+        (&mut config.folio, folio),
+        (&mut config.bdw, bdw),
+        (&mut config.scribe2, scribe2),
+    ] {
+        if let Some(value) = value {
+            *slot = value.into();
+        }
+    }
+    Ok(config)
 }
 
 fn serve(rest: &[&str]) -> u8 {

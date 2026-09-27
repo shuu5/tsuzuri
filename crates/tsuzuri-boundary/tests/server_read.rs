@@ -14,10 +14,9 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO, FOLIO_TIMEOUT};
-use tsuzuri_boundary::server::{Config, Server, ruling};
+use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::{PipelineBoard, Reading};
 use tsuzuri_contract::graph::{GraphDoc, GraphSource, NodeKind, Verdict};
-use tsuzuri_contract::ledger::BDW;
 use tsuzuri_contract::stats::{LedgerStats, NextStep};
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::{self, Graph, Inputs};
@@ -146,18 +145,17 @@ impl Place {
 
     fn config(&self) -> Config {
         Config {
-            repo: self.repo.clone(),
-            bind: "127.0.0.1:0".parse().expect("bind 先"),
-            files: self.files.clone(),
             bd: self.root.join("bd").into(),
             state_dir: match self.log {
                 Log::NoStateDir => None,
                 _ => Some(self.state.clone()),
             },
             folio: self.folio_program().into(),
-            bdw: BDW.into(),
-            seat: None,
-            scribe2: ruling::SCRIBE2.into(),
+            ..Config::new(
+                self.repo.clone(),
+                "127.0.0.1:0".parse().expect("bind 先"),
+                self.files.clone(),
+            )
         }
     }
 

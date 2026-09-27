@@ -20,7 +20,7 @@ use tsuzuri_boundary::server::ledger::{BD_TIMEOUT, BD_WAIT};
 use tsuzuri_boundary::server::{Config, Server, ruling};
 use tsuzuri_contract::board::{PipelineBoard, Reading};
 use tsuzuri_contract::graph::{GraphDoc, GraphSource, GraphView};
-use tsuzuri_contract::ledger::{BDW, BeadId, LedgerItem, LedgerList};
+use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerList};
 use tsuzuri_contract::stats::{LedgerStats, NextStep};
 use tsuzuri_contract::surface::RulingRequest;
 use tsuzuri_contract::wire;
@@ -101,15 +101,14 @@ impl Place {
 
     fn config(&self) -> Config {
         Config {
-            repo: self.repo.clone(),
-            bind: "127.0.0.1:0".parse().expect("bind 先"),
-            files: self.files.clone(),
             bd: self.root.join("bd").into(),
             state_dir: Some(self.state.clone()),
             folio: self.root.join("folio").into(),
-            bdw: BDW.into(),
-            seat: None,
-            scribe2: ruling::SCRIBE2.into(),
+            ..Config::new(
+                self.repo.clone(),
+                "127.0.0.1:0".parse().expect("bind 先"),
+                self.files.clone(),
+            )
         }
     }
 

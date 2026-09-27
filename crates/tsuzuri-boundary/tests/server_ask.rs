@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::server::ledger::epoch_secs;
-use tsuzuri_boundary::server::{Config, Server, design, ledger, ruling};
+use tsuzuri_boundary::server::{Config, Server, ledger, ruling};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BDW, BeadId, LedgerWrite};
 use tsuzuri_contract::question::{QuestionCard, QuestionList};
@@ -138,15 +138,16 @@ impl Place {
 
     fn config(&self, seat: Option<&str>, state_dir: bool) -> Config {
         Config {
-            repo: self.repo.clone(),
-            bind: "127.0.0.1:0".parse().expect("bind 先"),
-            files: self.files.clone(),
             bd: self.root.join("bd").into(),
             state_dir: state_dir.then(|| self.state.clone()),
-            folio: design::FOLIO.into(),
             bdw: self.root.join("bdw").into(),
             seat: seat.map(str::to_string),
             scribe2: self.root.join("scribe2").into(),
+            ..Config::new(
+                self.repo.clone(),
+                "127.0.0.1:0".parse().expect("bind 先"),
+                self.files.clone(),
+            )
         }
     }
 

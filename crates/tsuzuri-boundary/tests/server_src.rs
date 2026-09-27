@@ -12,9 +12,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::server::ledger::{BD, BD_ARGS, BD_TIMEOUT};
-use tsuzuri_boundary::server::{Config, Server, design, ruling};
+use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BDW, LedgerItem, LedgerList, LedgerRow};
+use tsuzuri_contract::ledger::{LedgerItem, LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
 
 /// 偽の bd の振る舞い（記録の後の最後の行）。
@@ -106,15 +106,12 @@ impl Place {
 
     fn config(&self, bd: impl Into<std::ffi::OsString>) -> Config {
         Config {
-            repo: self.repo.clone(),
-            bind: "127.0.0.1:0".parse().expect("bind 先"),
-            files: self.files.clone(),
             bd: bd.into(),
-            state_dir: None,
-            folio: design::FOLIO.into(),
-            bdw: BDW.into(),
-            seat: None,
-            scribe2: ruling::SCRIBE2.into(),
+            ..Config::new(
+                self.repo.clone(),
+                "127.0.0.1:0".parse().expect("bind 先"),
+                self.files.clone(),
+            )
         }
     }
 
