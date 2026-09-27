@@ -1,12 +1,15 @@
 //! block「台帳」（見本の `#ledger` と index.html の ledgerBlock・ledger.js の描き方の関数・便 g-ledger）:
-//! 指標の段（上段の 4 数・主な指標の行・burndown・memo の段・「詳しく」・未反映の数）と台帳の一覧（便 g-min の中身を見本の class で描き直す）。
+//! 指標の段（上段の 4 数・主な指標の行・burndown・memo の段・「詳しく」・未反映の数と一覧）と台帳の一覧（便 g-min の中身を見本の class で描き直す）。
 //! 指標は口 /api/metrics（本文は契約の型の Reading で包んだ LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、ここは写すだけ
 //! （数え直しと判定の分岐を持たない）。段の並びと段ごとの項は配置の表（`LAYOUT`）の値で持ち、DOM は表を上から順にたどる。
+//! 未反映の一覧は口 /api/unreflected（本文は契約の型の UnreflectedList）から読み、電文の行の順と数をそのまま写す（行 g-unref-panel）。
 //! 一覧は epic の下に task・memo の順。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::board::{LedgerJudge, Reading};
-use tsuzuri_contract::stats::{DayCount, LedgerStats, OpenCounts, UnreflectedKind};
+use tsuzuri_contract::stats::{
+    DayCount, LedgerStats, OpenCounts, UnreflectedKind, UnreflectedList, UnreflectedRow,
+};
 use tsuzuri_contract::wire;
 
 use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, item};
@@ -25,11 +28,14 @@ pub const PATH: &str = "/api/ledger";
 /// 指標の段の口（便 g-parts）。
 pub const METRICS_PATH: &str = "/api/metrics";
 
+/// 未反映の一覧の口（本文は契約の型の UnreflectedList・便 e-view）。
+pub const UNREF_PATH: &str = "/api/unreflected";
+
 /// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
-pub const PATHS: &[&str] = &[PATH, METRICS_PATH];
+pub const PATHS: &[&str] = &[PATH, METRICS_PATH, UNREF_PATH];
 
 /// この file の畳める段の開き閉じの鍵の形（行 hs-derived）。
-pub const FOLDS: &[&str] = &["ledger:more"];
+pub const FOLDS: &[&str] = &["ledger:more", "ledger:unref"];
 
 /// 指標の段の上段の語の鍵（見本の 4 数 = open task・memo・未反映・純減 24h）。
 pub const METRICS: [&str; 4] = ["l_task", "l_memo", "l_unref", "l_net24"];
@@ -626,6 +632,120 @@ pub fn body(screen: &Screen) -> Body<Vec<Group>> {
     }
 }
 
+/// 未反映の段は最初は開く（見本の id unref の details）。
+pub const UNREF_OPEN: bool = true;
+
+/// 未反映の一覧に出す行の数の上限（超える分は残りの数の 1 行）。
+pub const UNREF_MAX: usize = 20;
+
+/// 未反映の一覧の口が読めないときの理由。
+pub const UNREF_REASON: &str =
+    "未反映の一覧の口が読めない（server にまだ無い・届かない・知らせが切れた）";
+
+/// 口は読めたが、3 種の全部が「まだ分からない」ときの理由。
+pub const UNREF_UNKNOWN: &str = "server が台帳を読めないので、未反映の一覧はまだ分からない";
+
+/// 測れて 0 件のときの 1 行。
+pub const UNREF_EMPTY: &str = "未反映のものは無い";
+
+/// 未反映の種類ごとの次の 1 手の語の鍵（1 か所の表）。
+pub const UNREF_NEXT: [(UnreflectedKind, &str); 3] = [
+    (UnreflectedKind::Memo, "nx_promote"),
+    (UnreflectedKind::Ruling, "nx_declare"),
+    (UnreflectedKind::Request, "nx_reflect"),
+];
+
+/// 未反映の一覧の 1 行（id・題・種類の名・年齢の字・次の 1 手の語の鍵）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnrefRow {
+    pub id: String,
+    pub title: String,
+    pub kind: &'static str,
+    pub age: String,
+    pub next: &'static str,
+}
+
+/// 未反映の一覧（先頭から UNREF_MAX までの行・超えた数・分からない種類の名）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnrefList {
+    pub rows: Vec<UnrefRow>,
+    pub more: Option<usize>,
+    pub unknown: Vec<&'static str>,
+}
+
+/// 次の 1 手の語の鍵（表から引く）。
+fn next_key(kind: UnreflectedKind) -> &'static str {
+    UNREF_NEXT
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, n)| *n)
+        .expect("次の 1 手の表は 3 つの全部を持つ")
+}
+
+/// 電文の 1 行を一覧の 1 行にする（年齢の秒を日数の字に）。
+fn unref_row(kind: UnreflectedKind, row: &UnreflectedRow) -> UnrefRow {
+    UnrefRow {
+        id: row.id.clone(),
+        title: row.title.clone(),
+        kind: kind_name(kind),
+        age: age(row.age_s.map(|s| s as f64 / 86400.0)),
+        next: next_key(kind),
+    }
+}
+
+/// 未反映の一覧の口の本文を一覧にする（種類は UnreflectedKind の ALL の順・行は電文の順のまま・
+/// 並べ直しと数え直しをしない）。
+pub fn unref_list(fetched: &Fetched) -> Body<UnrefList> {
+    let list = match fetched {
+        Fetched::NotRead => return Body::Unmeasured(NOT_READ),
+        Fetched::Failed => return Body::Unmeasured(UNREF_REASON),
+        Fetched::Body(text) => match wire::decode::<UnreflectedList>(text) {
+            Ok(list) => list,
+            Err(_) => return Body::Unmeasured(NO_CONTENT),
+        },
+    };
+    let mut rows = Vec::new();
+    let mut unknown = Vec::new();
+    for kind in UnreflectedKind::ALL {
+        let reading = match kind {
+            UnreflectedKind::Memo => &list.memos,
+            UnreflectedKind::Ruling => &list.rulings,
+            UnreflectedKind::Request => &list.requests,
+        };
+        match reading {
+            Reading::Known(items) => rows.extend(items.iter().map(|r| unref_row(kind, r))),
+            Reading::Unknown => unknown.push(kind_name(kind)),
+        }
+    }
+    if unknown.len() == UnreflectedKind::ALL.len() {
+        return Body::Unmeasured(UNREF_UNKNOWN);
+    }
+    if rows.is_empty() && unknown.is_empty() {
+        return Body::Empty(UNREF_EMPTY);
+    }
+    let more = rows.len().checked_sub(UNREF_MAX).filter(|n| *n > 0);
+    rows.truncate(UNREF_MAX);
+    Body::Filled(UnrefList {
+        rows,
+        more,
+        unknown,
+    })
+}
+
+/// 上限を超えた残りの数の 1 行。
+pub fn more_line(n: usize) -> String {
+    format!("ほか {n} 件")
+}
+
+/// 未反映の数の chip の class（0 は class z を足す）。
+pub fn unref_chip(count: u32) -> &'static str {
+    if count == 0 {
+        "chip num unref-n z"
+    } else {
+        "chip num unref-n"
+    }
+}
+
 /// 画面の状態の signal は context から受ける（無いときは Screen の initial で作る）。
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
@@ -643,15 +763,18 @@ mod dom {
 
     use super::{
         BLOCK, BURN_CAPTION, EpicBar, Group, Judge, LAYOUT, METRICS_PATH, Metrics, NONE, Net,
-        OUTSIDE, Part, Tier, body, burn_svg, content, count, spark_svg,
+        OUTSIDE, Part, Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, body, burn_svg,
+        content, count, more_line, spark_svg, unref_chip, unref_list,
     };
+    use crate::frame::{self, Mode};
     use crate::project::{Body, UNKNOWN, fold, item_view, section, state_icon, unmeasured};
-    use crate::view::Screen;
+    use crate::view::{Fetched, Screen};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal};
 
     pub fn view(screen: RwSignal<Screen>) -> AnyView {
         let fetched = crate::net::read(METRICS_PATH);
+        let unref = crate::net::read(UNREF_PATH);
         let got = move || fetched.with(|f| screen.with(|s| content(f, s)));
         let extra = move || {
             let judge = match got() {
@@ -667,7 +790,7 @@ mod dom {
         let body = move || match got() {
             Body::Filled(m) => LAYOUT
                 .iter()
-                .map(|(tier, parts)| tier_view(*tier, parts, &m, screen))
+                .map(|(tier, parts)| tier_view(*tier, parts, &m, screen, unref))
                 .collect_view()
                 .into_any(),
             Body::Unmeasured(reason) | Body::Empty(reason) => LAYOUT
@@ -699,7 +822,13 @@ mod dom {
     }
 
     /// 1 つの段（表の項を順に）。
-    fn tier_view(tier: Tier, parts: &[Part], m: &Metrics, screen: RwSignal<Screen>) -> AnyView {
+    fn tier_view(
+        tier: Tier,
+        parts: &[Part],
+        m: &Metrics,
+        screen: RwSignal<Screen>,
+        unref: ReadSignal<Fetched>,
+    ) -> AnyView {
         match tier {
             Tier::Top => {
                 let boxes = parts.iter().map(|p| box_view(*p, m)).collect_view();
@@ -736,7 +865,10 @@ mod dom {
             }
             Tier::Unref => parts
                 .iter()
-                .map(|p| line_view(*p, m))
+                .map(|p| match p {
+                    Part::UnrefCount => unref_view(*p, m, unref),
+                    _ => line_view(*p, m),
+                })
                 .collect_view()
                 .into_any(),
             Tier::List => parts
@@ -773,7 +905,7 @@ mod dom {
         .into_any()
     }
 
-    /// 札と字の 1 項（主な指標の行・「詳しく」・burndown・未反映の数）。
+    /// 札と字の 1 項（主な指標の行・「詳しく」・burndown）。
     fn line_view(part: Part, m: &Metrics) -> AnyView {
         match part {
             Part::Net7 => view! { <span>{hs(part.key())}" "{net_view(&m.net7)}</span> }.into_any(),
@@ -791,27 +923,89 @@ mod dom {
                 let rows = m.epics.iter().map(epic_view).collect_view();
                 view! { <span>{hs(part.key())}</span><div class="lep">{rows}</div> }.into_any()
             }
-            Part::UnrefCount => {
-                let kinds = m
-                    .unref
-                    .unknown
-                    .iter()
-                    .map(|k| view! { <span class="chip num">{*k}" "{state_icon(UNKNOWN)}</span> })
-                    .collect_view();
-                view! {
-                    <div class="lcap">
-                        {hs(part.key())}
-                        <span class="chip num">{m.unref.count}</span>
-                        <span class="lchips">{kinds}</span>
-                    </div>
-                }
-                .into_any()
-            }
             _ => {
                 let text = m.text(part).unwrap_or_else(|| NONE.to_string());
                 view! { <span>{hs(part.key())}" "<span class="num">{text}</span></span> }.into_any()
             }
         }
+    }
+
+    /// 未反映の段（見出しに数と分からない種類の chip・中に未反映の一覧・記録の鍵 ledger:unref）。
+    fn unref_view(part: Part, m: &Metrics, unref: ReadSignal<Fetched>) -> AnyView {
+        let kinds = m
+            .unref
+            .unknown
+            .iter()
+            .map(|k| view! { <span class="chip num">{*k}" "{state_icon(UNKNOWN)}</span> })
+            .collect_view();
+        let ctx = use_context::<HelpCtx>();
+        let mode = move || match ctx {
+            Some(c) => c.mode.get(),
+            None => Mode::from_query(&window().location().search().unwrap_or_default()),
+        };
+        let list = move || match unref_list(&unref.get()) {
+            Body::Unmeasured(reason) => unmeasured(reason),
+            Body::Empty(line) => view! { <div class="small muted">{line}</div> }.into_any(),
+            Body::Filled(l) => unref_rows(&l, mode()),
+        };
+        let (open, toggle) = fold("ledger:unref".to_string(), || UNREF_OPEN);
+        view! {
+            <details class="fold lep" id="unref" prop:open=open on:toggle=toggle>
+                <summary>
+                    {hs(part.key())}
+                    <span class=unref_chip(m.unref.count)>{m.unref.count}</span>
+                    <span class="lchips">{kinds}</span>
+                </summary>
+                {list}
+            </details>
+        }
+        .into_any()
+    }
+
+    /// 未反映の一覧の行（見本の unrefHTML・id・題・種類・年齢・次の 1 手の 5 列）と、残りの数と分からない種類の行。
+    fn unref_rows(l: &UnrefList, mode: Mode) -> AnyView {
+        let table = (!l.rows.is_empty()).then(|| {
+            let rows = l.rows.iter().map(|r| unref_row_view(r, mode)).collect_view();
+            view! {
+                <div class="ulist">
+                    <div class="urow hrow">
+                        <span>"id"</span>
+                        <span>{label("col_title")}</span>
+                        {hs("u_kind")}
+                        {hs("u_age")}
+                        {hs("u_next")}
+                    </div>
+                    {rows}
+                </div>
+            }
+        });
+        let more = l
+            .more
+            .map(|n| view! { <div class="small muted">{more_line(n)}</div> });
+        let unknown = l
+            .unknown
+            .iter()
+            .map(|k| {
+                view! {
+                    <div class="small muted">{*k}" "{state_icon(UNKNOWN)}" "{label("gap_unknown")}</div>
+                }
+            })
+            .collect_view();
+        view! { {table}{more}{unknown} }.into_any()
+    }
+
+    /// 未反映の 1 行（id は節点の頁への link）。
+    fn unref_row_view(r: &UnrefRow, mode: Mode) -> AnyView {
+        view! {
+            <div class="urow">
+                <a class="u-id mono" href=frame::node_href(&r.id, mode)>{r.id.clone()}</a>
+                <span class="u-t">{r.title.clone()}</span>
+                <span>{r.kind}</span>
+                <span class="num">{r.age.clone()}</span>
+                <span class="u-n">{label(r.next)}</span>
+            </div>
+        }
+        .into_any()
     }
 
     /// 純減の矢印と数（見本の netHTML）。

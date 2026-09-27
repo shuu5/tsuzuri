@@ -45,7 +45,11 @@ fn hsderive_consts_match_note() {
         ("askpage", &[], &["ask:hist"]),
         ("batch", &["/api/batch"], &[]),
         ("gaps", &[], &["gaps:{}"]),
-        ("ledger", &["/api/ledger", "/api/metrics"], &["ledger:more"]),
+        (
+            "ledger",
+            &["/api/ledger", "/api/metrics", "/api/unreflected"],
+            &["ledger:more", "ledger:unref"],
+        ),
         ("legend", &[], &[]),
         ("map", &["/api/graph"], &[]),
         ("next", &["/api/next"], &[]),
@@ -57,7 +61,10 @@ fn hsderive_consts_match_note() {
     ];
     assert_eq!(CONSTS, want);
     assert_eq!(ask::PATHS, [ask::PATH, ask::RULING_PATH]);
-    assert_eq!(ledger::PATHS, [ledger::PATH, ledger::METRICS_PATH]);
+    assert_eq!(
+        ledger::PATHS,
+        [ledger::PATH, ledger::METRICS_PATH, ledger::UNREF_PATH]
+    );
     for (paths, path) in [
         (batch::PATHS, batch::PATH),
         (map::PATHS, map::PATH),
