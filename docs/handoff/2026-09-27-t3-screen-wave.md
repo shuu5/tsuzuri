@@ -94,3 +94,12 @@ scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900
 - 着地済みの振る舞いを変える行は、その振る舞いを pin する着地済みの歯を先に grep し、見つけた歯の file を write-set に足して、直す期待を節に書く。
 - 節に書く材料: 呼ぶ着地済みの物の path・pub か・wasm の target に限るか・形（引数と返り）・class が stylesheet に在るか・語の鍵が辞書に在るか。散文に二重引用符と逆斜線を書かない（folio derive が止まる）。許す範囲は歯が見る条件と同じ広さにする（狭く書くと正しい実装が門で落ちる）。
 - hub の割り（server の口の振り分け・surface の block と頁の登録）は、std だけの build.rs で dir を読んで登録を生成する案（M2）と、波ごとに先に足場を置く案（M1）を持ち主に諮っている（台帳 t3-hub.52.1 の notes）。
+
+## 15. 登録の生成の波の現在地（2026-09-27T19:0xZ・席の移動 black2 → black4 の前に残す）
+- 持ち主の裁定（t3-hub.1 notes 17:36Z）で案 M2 を採った。判断の記録 ADR-13・設計ノート design-intent/design-note/surface-hub.yaml（7 行）・epic t3-hub.54（子 .54.1〜.54.7）。設計席の判断の完全版は t3-hub.54 の notes。
+- 着地: hb-proc（.54.1）・hb-config（.54.2）・hb-route（.54.3）・hb-post（.54.4）・hs-blocks（.54.5）。server の口は GET 12・POST 4 が src/server/routes の下の 1 口 1 file になり、面の block は src/project の下の file から列挙 Module が生成される。ADR-13 の 2 つの前提（include の中の絶対 path の mod 宣言が trunk の wasm でも組める・統合 test に OUT_DIR が渡る）は実測で成り立った。規則の行 R-2 の増分 check は境界 0.17 → 0.26 秒・面 0.82 → 0.31 秒（docs/measure/r2-*.txt）＝撤退の条件に当たらない。
+- 走っている: hs-pages（.54.6・審査 PASS・実装中）。tests/snapshots/frame.json はこの行では消さず、歯 hspage_ が header と 5 頁の字を比べる写しに使う。
+- 待ち: hs-derived（.54.7・hs-pages の着地待ち・事前の点検で直し済み e52354f）。frame.json を ~ で消し、FOLD_KEYS を block ごとの FOLDS から導く。t3-hub.52.2（project board の題の字）は .54.7 の後。
+- hs-pages の節に残る小さな不正確（askcard_page_frame_and_nav は frame.json も PageId の ALL も HEADER も読まず nav の語と badge の列を持つ・生成の PageId の ALL は配列・from_query と href は Home を名で持つ・build.rs の rerun の行は引用符の literal のまま・acctwire の行の添字 2 と 3 は 0 から数える）。実装役の問いが来たら、この事実で答える。
+- 学び（§14 に足す）: (1) 新しい歯の名は、着地済みの verify の filter の語（40 を越える・graph_・server_・project_ など部分の字で当たりやすい）を接頭辞の後に含めない。行の done に「名から接頭辞を除いた字はどの語も含まない（歯が自分の file を読む）」を置く。(2) 消す file（~）との比べは done に書けない（着地の後の木に無い）。比べの写しは 1 行残して次の行で消す。(3) 着地した行の新しい歯は、次の行の write-set の外の歯になる。次の行を流す前に、着地した歯が見る字を grep して節に書く（hsblock の FOLD_KEYS の数 6・hbconf の mod.rs の 3 行）。数を歯に残すと結びが戻るので、和や集合で見る形にする。(4) 行を流す前に、審査役の見方で行を読み HEAD の code で答える点検の agent を 1 本撃つと、審査の周が減る。
+- 着地の後の手: restart.sh で server を組み直し、実物の画面（project board の 5 block・頁の nav・account board）を点検する。Playwright は閉じ、.playwright-mcp は repo の外へ移す。
