@@ -3,13 +3,13 @@
 meta:
   id: surface-base
   title: 面の便（土台）— workspace の骨格・契約の型・導出グラフ・台帳の指標・面の server・席の hook
-  version: v0.19
+  version: v0.20
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。第 0.4 版（同日）は便 a の着地（6d2a7cd）の後の便 b の行の直しで、依存の file と xtask の歯の file を write-set に足し、snapshot を名指しの 1 file にし、完了の条件を便 b の時点で測れる形にした。第 0.5 版（同日）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 e から最小の server を行 e-min として先に分けた。行 e-min の write-set には、検証の語（contract_form_）に当たる歯を持つ file を全部入れた（器の受付の指摘）。第 0.6 版（同日）は台帳の export の file が古いままになる実測を受け、読みの出所を改める行 e-src を足した。第 0.7 版（同日）は行 c の入力を 3 つの字（設計の道具の索引・bd の一覧・器の event log）に改め、YAML の読み手の依存を足さない形にした。第 0.8 版（同日）は fixture の置き場を dir から名指しの file に改めた（器の受付は新しい dir を解けない）。第 0.11 版（同日）は行 d を書き直した（入力と数え方と電文の型と pipeline の板の対応の表を節に書き、便 c の後に画面の block の便と並べて走らせる）。第 0.12 版（同日）は読む側の口の行 e-read を足した（便 c と便 d の値を server の口に出す）。第 0.13 版（同日）は問いの card と席の card の電文の型の行 b-cards と、問いの一覧の口と裁定の受付の行 e-ask を足した。第 0.14 版（同日）は席と口座の読みの行 e-seat を足した。第 0.15 版（同日）は辺の向きと、地図のグラフの眺めと、近傍の電文の行 c-view を足した（便 c の近傍は根拠と影響の向きが逆だったので、この行で直す）。第 0.16 版（同日）は地図のグラフの眺めと近傍と未反映の一覧を配る口の行 e-view を足した。第 0.17 版（同日）は読みの合流の行 e-coalesce を足した（実物の画面で、変化の知らせのたびに口が一斉に台帳を読み、読みが上限の 5 秒を越えて block が測れていないに落ちた）。第 0.18 版（同日）はまとめて承認と方針の欄の受付の行 e-batch を足した。第 0.19 版（同日）は時間切れの子 process の孫が残って台帳の読みを詰まらせる不具合を直す行 e-reap を足した。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。第 0.4 版（同日）は便 a の着地（6d2a7cd）の後の便 b の行の直しで、依存の file と xtask の歯の file を write-set に足し、snapshot を名指しの 1 file にし、完了の条件を便 b の時点で測れる形にした。第 0.5 版（同日）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 e から最小の server を行 e-min として先に分けた。行 e-min の write-set には、検証の語（contract_form_）に当たる歯を持つ file を全部入れた（器の受付の指摘）。第 0.6 版（同日）は台帳の export の file が古いままになる実測を受け、読みの出所を改める行 e-src を足した。第 0.7 版（同日）は行 c の入力を 3 つの字（設計の道具の索引・bd の一覧・器の event log）に改め、YAML の読み手の依存を足さない形にした。第 0.8 版（同日）は fixture の置き場を dir から名指しの file に改めた（器の受付は新しい dir を解けない）。第 0.11 版（同日）は行 d を書き直した（入力と数え方と電文の型と pipeline の板の対応の表を節に書き、便 c の後に画面の block の便と並べて走らせる）。第 0.12 版（同日）は読む側の口の行 e-read を足した（便 c と便 d の値を server の口に出す）。第 0.13 版（同日）は問いの card と席の card の電文の型の行 b-cards と、問いの一覧の口と裁定の受付の行 e-ask を足した。第 0.14 版（同日）は席と口座の読みの行 e-seat を足した。第 0.15 版（同日）は辺の向きと、地図のグラフの眺めと、近傍の電文の行 c-view を足した（便 c の近傍は根拠と影響の向きが逆だったので、この行で直す）。第 0.16 版（同日）は地図のグラフの眺めと近傍と未反映の一覧を配る口の行 e-view を足した。第 0.17 版（同日）は読みの合流の行 e-coalesce を足した（実物の画面で、変化の知らせのたびに口が一斉に台帳を読み、読みが上限の 5 秒を越えて block が測れていないに落ちた）。第 0.18 版（同日）はまとめて承認と方針の欄の受付の行 e-batch を足した。第 0.19 版（同日）は時間切れの子 process の孫が残って台帳の読みを詰まらせる不具合を直す行 e-reap を足した。第 0.20 版（同日）は不変条件 g-12 を器の event から組む形に直す行 c-g12 を足した（器の問いは台帳の bead にしない＝scribe2 の席の回答）。
 
 sections:
   - n: 1
@@ -43,7 +43,7 @@ sections:
       入力は 3 つの字で、関数は file も子 process も触らない。設計の索引（設計の道具の graph の口が出す節点と辺の表・タブ区切り）・台帳の一覧（bd の読み取りの口が返す JSON）・器の event log（1 行 1 件の JSON）。読めない入力はその種類の節点だけ「まだ分からない」にして、ほかの種類は組む。設計文書の YAML は読まない（YAML の読み手の依存を足さない）。
       節点。設計の索引の節点は表の行をそのまま写す（種類は 条・規範文・規則行・目的・要件・非機能要件・受入基準・制約・登場人物・出力・判断の記録 の 11）。bead の種類はこの順に決めて、どの bead も 1 つに当たる。bd の種類が epic なら epic、label intake:memo を持てば memo、label intake:question を持てば問い、それ以外は契約。走行は event log の RunCreated の 1 件が 1 つ。裁定と受けと方針は、bead の notes の定型行 1 行から 1 つずつ導く。定型行は行頭の字で見分け、「裁定 id = 」は裁定、「受け id = 」は受け、「方針 id = 」は方針で、id はその字の後から最初の「・」までの字。設計ノートの行はこの便では節点にしない。
       辺。設計の索引の辺は表の行を写す。型は 3 列目の字で、閉じた一覧の 17 型（in-article・relations.articles・relations.reqs・relations.rules・relations.sections・amended_by・article・refs・basis・goals・rules・adrs・verify.ac・verifies・figures・produced・amends）の内側だけを組み、一覧に無い字の行は組まずに数える。台帳の辺は bead の dependencies の欄から組み、型は parent-child・blocks・relates-to・discovered-from の 4 つで、ほかの型は組まずに数える。answers は裁定から、その定型行を持つ問いの bead へ。touches は問いの bead の metadata の touches の欄の id へ。premises は問いの metadata の premises の欄の方針へ。source は memo の metadata の source の欄の裁定か走行へ。run_of は走行から、run の id の前半（時刻の前の字）の bead へ。raised は走行から、event の QuestionRaised が名指す問いへ。口座は節点にせず、走行の属性に持つ。design と ruled_by の辺は、先の節点（設計ノートの行と承認欄）がこの便に無いので組まない。契約の pointer の行（acceptance の中の「design = 」で始まる行）は契約の属性に持つ。
-      不変条件のうち、この便で数えるのは 9 本。g-1 組んだ辺の両端の節点が実在する。g-2 open の契約は pointer の行をちょうど 1 つ持つ（closed の契約は数えない）。g-4 open の問いは metadata の touches の欄に id を 1 つ以上持つ。g-5 根（親を持たない epic）でない bead は、parent-child をたどって根に着く。g-6 blocks に輪が無く、parent-child は木。g-8 memo の label と pointer の行の両方を持つ bead が無い。g-10 設計の索引と台帳と走行の id が互いに重ならない。g-11 走行は run_of の先の bead を持つ。g-12 段が Questioned の走行は raised の辺を持つ。残りの 3 本（g-3 発効した記録は裁定の行を持つ・g-7 宙に浮いた裁定 0・g-9 名指した id は欄にも在る）は、材料が 3 つの入力に無いので、つねに「まだ分からない」を返す。
+      不変条件のうち、この便で数えるのは 9 本。g-1 組んだ辺の両端の節点が実在する。g-2 open の契約は pointer の行をちょうど 1 つ持つ（closed の契約は数えない）。g-4 open の問いは metadata の touches の欄に id を 1 つ以上持つ。g-5 根（親を持たない epic）でない bead は、parent-child をたどって根に着く。g-6 blocks に輪が無く、parent-child は木。g-8 memo の label と pointer の行の両方を持つ bead が無い。g-10 設計の索引と台帳と走行の id が互いに重ならない。g-11 走行は run_of の先の bead を持つ。g-12 段が Questioned の走行は raised の辺を持つ（この決め方は行 c-g12 で、その走行の中に答えの無い QuestionRaised を持つ、に改めた）。残りの 3 本（g-3 発効した記録は裁定の行を持つ・g-7 宙に浮いた裁定 0・g-9 名指した id は欄にも在る）は、材料が 3 つの入力に無いので、つねに「まだ分からない」を返す。
       近傍は、1 つの節点から根拠の側（辺を逆にたどる）と影響の側（辺を順にたどる）を各 2 段たどって返す。次数が 30 を超える節点は hub で、hub から先は広げず、切った理由と hub の次数を返す（規則の行 R-20 の値）。
       この便の近傍は辺の from から to へたどる側を影響の側と呼んでいて、根拠と影響が逆だった。向きと段数と畳みと出す行の選び方は便 c-view（15 節）が直す。
       fixture。実物の入力の見本（tests/fixtures/graph/real の索引と event log、tests/fixtures/ledger の bd-list-8.json）は設計席が置いた。この便が作るのは 5 つ。violations.json は数える 9 本のそれぞれについて入力の組を 1 つ持ち、組ごとに、違反になるはずの条件の一覧を欄に持つ（1 つの欠陥が 2 本に当たる組は 2 本を書く）。hub-619.json は子を 619 本持つ epic を 1 つ含む。runs-5.json は同じ bead の走行を 5 つ含む。no-state.json は event log の字が空の入力。unruled.json は定型行の無い閉じた問いを 1 つ含む。
@@ -233,6 +233,15 @@ sections:
         size: S
         done: (1) 子 process を撃つ関数（ledger の module の capture）は、子を新しい process group に入れる（group の id は子の pid） (2) 時間切れのとき・標準出力を取れないとき・子の終わりを待てないときは、子の process group の全体を止めてから子を待って片付ける (3) 歯の中で書く sh の script（孫の sleep 30 を背景で撃ち、孫の pid を file に書き、孫を待つ）を 300 ミリ秒の時間切れで撃つと capture は None を返し、返った時から 2 秒の内に孫の pid の /proc の stat が無くなるか状態の字が Z になる (4) 歯の中で書く script で、字 ok を出して rc 0 で終わるものは ok と改行の byte を返し、rc 1 で終わるものは None を返す (5) 止める関数 stop_with に在らない道具の path を渡すと、false を返し、子だけを止めて待って片付け（子の pid の /proc の stat が無い）、panic しない。道具 kill を渡して group へ送れたときは true を返す (6) unsafe の字と、足す外の依存は 0 本
         depends: [e-coalesce]
+      - id: c-g12
+        title: 不変条件 g-12 を器の event から組む（Questioned の走行は、その走行の中に答えの無い QuestionRaised を持つ）
+        req: [FR3, FR10]
+        section: "20"
+        write-set: ["crates/tsuzuri-core/src/graph/mod.rs", "crates/tsuzuri-core/src/graph/build.rs", "crates/tsuzuri-core/src/graph/check.rs", "crates/tsuzuri-core/tests/gview.rs", "+crates/tsuzuri-core/tests/gquestion.rs", "+tests/fixtures/graph/questions-4.json"]
+        verify: ["cargo nextest run -p tsuzuri-core --no-tests=fail gquestion_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) 中核の走行の属性（graph の module の RunAttr）が答えの無い問いの数の欄 unanswered（usize）を持ち、event log から組む (2) 走行の問いは、その走行の QuestionRaised の event の 1 つずつで、n 番目の問いは n 番目の QuestionRaised から次の QuestionRaised の直前（無ければ log の終わり）までに同じ走行の QuestionAnswered が在れば答えが在る (3) fixture の questions-4.json（走行 4 つ）で、走行 q-a は QuestionRaised の後に段が Questioned で unanswered 1、走行 q-b は QuestionRaised・段 Questioned・QuestionAnswered・段 Spawned で unanswered 0、走行 q-c は QuestionRaised・QuestionAnswered・段 Questioned で unanswered 0、走行 q-d は QuestionRaised・QuestionAnswered・QuestionRaised・段 Questioned で unanswered 1 (4) 同じ fixture で g-12 は違反で、名指すのは走行 q-c だけ (5) QuestionRaised の event に問いの id の欄（question）が無くても (2) の数え方は変わらない（fixture の QuestionRaised は detail だけを持つ） (6) 着地済みの fixture runs-5.json で g-12 は今の通り走行 r.1-20260927T000400Z を名指す違反のまま (7) 走行の event log が読めないときの g-12 は今の通りまだ分からない (8) 電文の型（契約の crate の RunAttr）と server の口の本文は変えない (9) 足す外の依存は 0 本
+        depends: [c]
   - n: 9
     type: prose
     title: 便 e-min — 最小の server
@@ -389,6 +398,18 @@ sections:
       孫は止まった後、親が居ないので、OS の側（init か subreaper）が片付ける。server は孫を待たない。
       在りか（着地済み）。capture は ledger の module の公開の関数（pub fn）で、ledger の module は server の module の下の公開の module（pub mod ledger）、server の module は crate の公開の module（lib.rs の pub mod server）なので、結合の歯（tests の下の file）から tsuzuri_boundary::server::ledger::capture と stop_with で届く（server/mod.rs と lib.rs は触らない）。
       測り方。歯は新しい歯の file（server_reap.rs）に置き、名を server_reap_ で始める。done (3) と (4) は capture を、(5) は stop_with を撃つ（(5) の子は、歯の中で新しい process group に入れて撃つ sh の sleep 30）。歯は temp の置き場に一意の名の dir を作り、sh の script を書いて撃つ。孫が生きているかは、/proc の下の孫の pid の stat を読み、無いか、状態の字（3 つ目の欄）が Z なら止まったと見る。待つのは 50 ミリ秒ずつで、2 秒まで。
+      依存は足さない。
+
+  - n: 20
+    type: prose
+    title: 便 c-g12 — 不変条件 g-12 を器の event から組む
+    body: |
+      実物で確かめた（2026-09-27T13:0xZ）。器（scribe2）の QuestionRaised の event は、走行の id と bead と detail（問いの字）だけを持ち、問いの id の欄（question）を持たない。着地済みの組み立て（build の module の add_runs）は、raised の辺を QuestionRaised の question の欄からだけ組むので、実物の log からは raised の辺が 1 本も組めない。着地済みの g-12（段が Questioned の走行は raised の辺を持つ）は、作業役が質問して止まっている間ずっと違反と出る。
+      scribe2 の席の回答（2026-09-27）: 器の意図では、作業役の問いは台帳の bead にしない（scribe2 の憲法 C15・台帳は task と裁定だけを持つ）。問いは event log の中で、走行の id と、その走行の中で何番目の QuestionRaised か、で決まる（scribe2 の pipe の questions_of_run・n 番目の問いの区間は n 番目の QuestionRaised から次の QuestionRaised の直前まで）。答えは pipe answer が書く QuestionAnswered。
+      直し方。中核の走行の属性 RunAttr（crates/tsuzuri-core/src/graph/mod.rs・欄は stage と account・Default を derive 済み）に、答えの無い問いの数 unanswered を足す。add_runs は走行ごとに QuestionRaised と QuestionAnswered の event を順に数え、区間の決まりの通りに答えの無い問いを数える。g-12（check の module の g12_raised）は、段が Questioned で unanswered が 0 の走行を名指す違反にする（raised の辺は見ない）。読めない出所のときにまだ分からないにする決まり（judge に Source の Runs を渡す）は変えない。raised の辺を question の欄から組む所は残す（欄が在る入力では今の通り辺を組む）。
+      電文は変えない。server の口の本文（契約の crate の RunAttr・欄は stage と account）と、面の抜けの検査の頁の名（止まった run の question が記録にある）は触らない。中核の RunAttr を struct の字で組む所は、着地済みの歯 tests/gview.rs の 1 か所だけ（欄を足すので直す）。server の側（crates/tsuzuri-boundary/src/server/board.rs）は中核の RunAttr の stage と account を名で写すだけなので触らない。
+      fixture。questions-4.json は着地済みの runs-5.json と同じ形（about・design_index・ledger・events）で、design_index と ledger は runs-5.json と同じ中身を写し、events だけを 4 つの走行（q-a・q-b・q-c・q-d・どれも bead r.1 の走行で、走行の id は r.1- に時刻を続けた形・RunCreated から始める）に差し替える。QuestionRaised と QuestionAnswered の event は detail だけを持ち、question の欄を持たない（実物の形）。
+      測り方。新しい歯は新しい歯の file（gquestion.rs）に置き、名を gquestion_ で始める。fixture を読んで組む手助けの関数は、着地済みの歯 tests/graph.rs の build_from と同じ形を歯の file の中に書く（tests/graph.rs は触らない）。
       依存は足さない。
 
 figures: []
