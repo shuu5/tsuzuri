@@ -1,18 +1,18 @@
 {
   "cards": {
     "known": [
-      {"contract": "px.1", "runs": 1, "stage": "Queued", "reason": null, "account": "black4", "elapsed_s": 300},
-      {"contract": "px.10", "runs": 1, "stage": "Landed", "reason": null, "account": "black4", "elapsed_s": 120},
+      {"contract": "px.1", "runs": 1, "stage": "Queued", "reason": null, "account": "acct-4", "elapsed_s": 300},
+      {"contract": "px.10", "runs": 1, "stage": "Landed", "reason": null, "account": "acct-4", "elapsed_s": 120},
       {"contract": "px.2", "runs": 2, "stage": "Blocked", "reason": null, "account": null, "elapsed_s": 45},
-      {"contract": "px.3", "runs": 1, "stage": "Running", "reason": null, "account": "black4", "elapsed_s": 7200},
-      {"contract": "px.4", "runs": 3, "stage": "Gated", "reason": null, "account": "black1", "elapsed_s": 59},
-      {"contract": "px.5", "runs": 2, "stage": "Questioned", "reason": "about:write-set", "account": "black4", "elapsed_s": 3600},
-      {"contract": "px.6", "runs": 1, "stage": "Failed", "reason": "verify が赤", "account": "black2", "elapsed_s": 86400},
-      {"contract": "px.7", "runs": 4, "stage": "Stopped", "reason": null, "account": "black4", "elapsed_s": 60},
-      {"contract": "px.8", "runs": 1, "stage": "Landed", "reason": null, "account": "black4", "elapsed_s": 900},
+      {"contract": "px.3", "runs": 1, "stage": "Running", "reason": null, "account": "acct-4", "elapsed_s": 7200},
+      {"contract": "px.4", "runs": 3, "stage": "Gated", "reason": null, "account": "acct-1", "elapsed_s": 59},
+      {"contract": "px.5", "runs": 2, "stage": "Questioned", "reason": "about:write-set", "account": "acct-4", "elapsed_s": 3600},
+      {"contract": "px.6", "runs": 1, "stage": "Failed", "reason": "verify が赤", "account": "acct-2", "elapsed_s": 86400},
+      {"contract": "px.7", "runs": 4, "stage": "Stopped", "reason": null, "account": "acct-4", "elapsed_s": 60},
+      {"contract": "px.8", "runs": 1, "stage": "Landed", "reason": null, "account": "acct-4", "elapsed_s": 900},
       {"contract": "px.11", "runs": 1, "stage": "Landed", "reason": null, "account": null, "elapsed_s": null},
-      {"contract": "px.9", "runs": 2, "stage": "Landed", "reason": null, "account": "black1", "elapsed_s": 120},
-      {"contract": "px.12", "runs": 1, "stage": "Landed", "reason": null, "account": "black4", "elapsed_s": 30}
+      {"contract": "px.9", "runs": 2, "stage": "Landed", "reason": null, "account": "acct-1", "elapsed_s": 120},
+      {"contract": "px.12", "runs": 1, "stage": "Landed", "reason": null, "account": "acct-4", "elapsed_s": 30}
     ]
   }
 }

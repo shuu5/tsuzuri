@@ -20,7 +20,7 @@
       "seat": "t3:orchestrator",
       "role": "orchestrator",
       "health": "waiting",
-      "account": "black4",
+      "account": "acct-4",
       "move_left_s": 1200
     },
     {
@@ -38,7 +38,7 @@
           "seat": "t3:orchestrator",
           "role": "orchestrator",
           "health": "waiting",
-          "account": "black4",
+          "account": "acct-4",
           "move_left_s": 1200
         }
       ],
@@ -56,7 +56,7 @@
         "seat": "t3:orchestrator",
         "role": "orchestrator",
         "health": "waiting",
-        "account": "black4",
+        "account": "acct-4",
         "move_left_s": 1200
       },
       "at": 1790494620
@@ -380,7 +380,7 @@
   "graph::RunAttr": [
     {
       "stage": "Gated",
-      "account": "black4"
+      "account": "acct-4"
     },
     {
       "stage": null,
@@ -465,7 +465,7 @@
       "runs": {
         "t3-hub.3-20260927T073916Z": {
           "stage": "Gated",
-          "account": "black4"
+          "account": "acct-4"
         }
       },
       "invariants": [
@@ -765,7 +765,7 @@
       "runs": 2,
       "stage": "Running",
       "reason": "verify",
-      "account": "black4",
+      "account": "acct-4",
       "elapsed_s": 185
     },
     {
@@ -786,7 +786,7 @@
             "runs": 2,
             "stage": "Running",
             "reason": "verify",
-            "account": "black4",
+            "account": "acct-4",
             "elapsed_s": 185
           }
         ]
@@ -823,13 +823,13 @@
       "groups": [
         {
           "group": "Tier1",
-          "account": "black4",
+          "account": "acct-4",
           "candidates": [
-            "black1",
-            "black3",
-            "black5"
+            "acct-1",
+            "acct-3",
+            "acct-5"
           ],
-          "next_account": "black5",
+          "next_account": "acct-5",
           "remaining": [
             {
               "window": "5h",
@@ -847,7 +847,7 @@
           "project": "tsuzuri",
           "role": "pipeline",
           "session": "t3-hub.3-20260927T073916Z",
-          "account": "black4",
+          "account": "acct-4",
           "stage": "Running",
           "elapsed_s": 185,
           "health": "working"
@@ -1149,12 +1149,12 @@
     {
       "at": 1790408220,
       "from": null,
-      "to": "black3"
+      "to": "acct-3"
     },
     {
       "at": 1790491020,
-      "from": "black3",
-      "to": "black4"
+      "from": "acct-3",
+      "to": "acct-4"
     }
   ],
   "seat::SeatCard": [
@@ -1169,18 +1169,18 @@
       "heartbeat": {
         "known": false
       },
-      "account": "black4",
+      "account": "acct-4",
       "model": "opus",
       "group": {
         "known": {
           "group": "Tier1",
-          "account": "black4",
+          "account": "acct-4",
           "candidates": [
-            "black1",
-            "black3",
-            "black5"
+            "acct-1",
+            "acct-3",
+            "acct-5"
           ],
-          "next_account": "black5",
+          "next_account": "acct-5",
           "remaining": [
             {
               "window": "5h",
@@ -1224,12 +1224,12 @@
           {
             "at": 1790408220,
             "from": null,
-            "to": "black3"
+            "to": "acct-3"
           },
           {
             "at": 1790491020,
-            "from": "black3",
-            "to": "black4"
+            "from": "acct-3",
+            "to": "acct-4"
           }
         ]
       }

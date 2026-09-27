@@ -384,7 +384,7 @@ fn seatblock_band_only_on_limit_or_move_wait() {
     assert_eq!(
         filled("wait").band,
         Some(Band {
-            l1: vec![format!("{MOVE_WAIT} black4 → black5")],
+            l1: vec![format!("{MOVE_WAIT} acct-4 → acct-5")],
             l2: None,
         })
     );
@@ -392,20 +392,20 @@ fn seatblock_band_only_on_limit_or_move_wait() {
         filled("limit").band,
         Some(Band {
             l1: vec![LIMIT_LINE.to_string()],
-            l2: Some(format!("{NEXT_TARGET} black6")),
+            l2: Some(format!("{NEXT_TARGET} acct-6")),
         })
     );
     // 限度で、しかも移動待ち（2 つとも出し、次の移り先も出す）。
     let mut both = card("limit");
-    both.account = Some("black9".to_string());
+    both.account = Some("acct-9".to_string());
     assert_eq!(
         seat::band(&both),
         Some(Band {
             l1: vec![
                 LIMIT_LINE.to_string(),
-                format!("{MOVE_WAIT} black9 → black4")
+                format!("{MOVE_WAIT} acct-9 → acct-4")
             ],
-            l2: Some(format!("{NEXT_TARGET} black6")),
+            l2: Some(format!("{NEXT_TARGET} acct-6")),
         })
     );
     // 群が分からないときは移動待ちと判じない（限度でなければ帯を出さない）。
@@ -430,13 +430,13 @@ fn seatblock_history_newest_first_with_count() {
         vec![
             HistRow {
                 at: "10:00Z".to_string(),
-                from: Some("black3".to_string()),
-                to: "black4".to_string(),
+                from: Some("acct-3".to_string()),
+                to: "acct-4".to_string(),
             },
             HistRow {
                 at: "09-26 22:05Z".to_string(),
                 from: None,
-                to: "black3".to_string(),
+                to: "acct-3".to_string(),
             },
         ]
     );
@@ -474,7 +474,7 @@ fn seatblock_unknown_parts_only_unmeasured() {
     }
 
     let u = filled("unknown");
-    assert_eq!(u.low.account.as_deref(), Some("black4"));
+    assert_eq!(u.low.account.as_deref(), Some("acct-4"));
     assert_eq!(u.low.usage, Reading::Unknown);
     assert_eq!(u.more.target, "tsuzuri-orch");
     for span in Span::ALL {
@@ -486,7 +486,7 @@ fn seatblock_unknown_parts_only_unmeasured() {
     assert_eq!(w.strip(Span::H24).rects, Reading::Unknown);
     assert_eq!(w.strip(Span::H24).marks, Reading::Known(vec![]));
     assert_eq!(w.low.group, Reading::Known("tsuzuri-g".to_string()));
-    assert_eq!(w.more.current, Reading::Known("black5".to_string()));
+    assert_eq!(w.more.current, Reading::Known("acct-5".to_string()));
     assert_eq!(w.more.same, Reading::Known(NG));
     assert_eq!(filled("run").more.same, Reading::Known(OK));
 }
@@ -624,7 +624,7 @@ fn seatblock_landed_shape_and_no_new_deps() {
         Reading::Known(g) => g,
         Reading::Unknown => panic!("run の群が測れていない"),
     };
-    assert_eq!(g.next_account.as_deref(), Some("black5"));
+    assert_eq!(g.next_account.as_deref(), Some("acct-5"));
 
     let manifest = read("Cargo.toml");
     let mut names = Vec::new();

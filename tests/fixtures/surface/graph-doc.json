@@ -71,7 +71,7 @@
     "t3.q2": {"kind": "question", "status": "closed", "labels": ["問い"], "pointers": [], "touches": []}
   },
   "runs": {
-    "r-1": {"stage": "Landed", "account": "black4"},
+    "r-1": {"stage": "Landed", "account": "acct-4"},
     "r-3": {"stage": "Spawned", "account": null},
     "r-12": {"stage": null, "account": null}
   },

@@ -6,9 +6,9 @@
     "since": 1790502600,
     "tick_healthy": {"known": true},
     "heartbeat": {"known": true},
-    "account": "black4",
+    "account": "acct-4",
     "model": "opus",
-    "group": {"known": {"group": "tsuzuri-g", "account": "black4", "candidates": ["black4", "black5"], "next_account": "black5", "remaining": []}},
+    "group": {"known": {"group": "tsuzuri-g", "account": "acct-4", "candidates": ["acct-4", "acct-5"], "next_account": "acct-5", "remaining": []}},
     "usage": {"known": [
       {"window": "five_hour", "used_pct": 42, "resets_at": 1790512200, "counted": true},
       {"window": "seven_day", "used_pct": 85, "resets_at": 1790521200, "counted": true},
@@ -22,8 +22,8 @@
       {"from": 1790505060, "to": 1790510400, "state": "run"}
     ]},
     "moves": {"known": [
-      {"at": 1790460300, "from": null, "to": "black3"},
-      {"at": 1790503200, "from": "black3", "to": "black4"}
+      {"at": 1790460300, "from": null, "to": "acct-3"},
+      {"at": 1790503200, "from": "acct-3", "to": "acct-4"}
     ]}
   },
   "wait": {
@@ -33,9 +33,9 @@
     "since": 1790508900,
     "tick_healthy": {"known": false},
     "heartbeat": {"known": false},
-    "account": "black4",
+    "account": "acct-4",
     "model": "opus",
-    "group": {"known": {"group": "tsuzuri-g", "account": "black5", "candidates": ["black4", "black5"], "next_account": null, "remaining": []}},
+    "group": {"known": {"group": "tsuzuri-g", "account": "acct-5", "candidates": ["acct-4", "acct-5"], "next_account": null, "remaining": []}},
     "usage": "unknown",
     "spans": "unknown",
     "moves": {"known": []}
@@ -47,9 +47,9 @@
     "since": 1790503200,
     "tick_healthy": {"known": true},
     "heartbeat": {"known": true},
-    "account": "black4",
+    "account": "acct-4",
     "model": "opus",
-    "group": {"known": {"group": "tsuzuri-g", "account": "black4", "candidates": ["black4", "black6"], "next_account": "black6", "remaining": []}},
+    "group": {"known": {"group": "tsuzuri-g", "account": "acct-4", "candidates": ["acct-4", "acct-6"], "next_account": "acct-6", "remaining": []}},
     "usage": {"known": [
       {"window": "five_hour", "used_pct": 100, "resets_at": 1790513100, "counted": true},
       {"window": "seven_day", "used_pct": 81, "resets_at": null, "counted": true},
@@ -59,7 +59,7 @@
       {"from": 1790503200, "to": 1790510400, "state": "limit"}
     ]},
     "moves": {"known": [
-      {"at": 1790410400, "from": "black3", "to": "black4"}
+      {"at": 1790410400, "from": "acct-3", "to": "acct-4"}
     ]}
   },
   "silent": {
@@ -85,7 +85,7 @@
     "since": 1790510340,
     "tick_healthy": "unknown",
     "heartbeat": "unknown",
-    "account": "black4",
+    "account": "acct-4",
     "model": null,
     "group": "unknown",
     "usage": "unknown",

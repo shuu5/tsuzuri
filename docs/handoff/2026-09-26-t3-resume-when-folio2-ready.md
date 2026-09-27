@@ -44,7 +44,7 @@
 | 要件書 v0.2（FR1〜FR17・NFR1〜3・AC1〜14） | design-intent/srs.yaml | draft（面の便の要件） |
 | 設計ノート surface（部品・口・歯・便 a〜k の契約表・節点 20・辺 31・不変条件 12・契約の型・器に頼む口） | design-intent/design-note/surface.yaml | effective（持ち主 14:37Z「よい」） |
 | 器が読む導出物 | contracts/schema.toml（scribe2 fd39667 の写し）・contracts/surface.toml（`folio derive` の出力・差分 0） | 着地済み |
-| 見本（本番ではない） | ~/projects/local-projects/tsuzuri-site/mock3/（配信 http://100.127.217.108:8101/mock3/）・受入の測定 script は席の作業場 fix1/ fix8/ fix11/ | 確定（直し 11 まで） |
+| 見本（本番ではない） | ~/projects/local-projects/tsuzuri-site/mock3/（配信 http://<tailnet の住所>:8101/mock3/）・受入の測定 script は席の作業場 fix1/ fix8/ fix11/ | 確定（直し 11 まで） |
 | 討論の記録 | docs/grill/2026-09-25-B-ruling-surface.md（裁定面）・-C-（表示面）・-A-（合流の形） | 経緯つき |
 
 ## 2. 再開の手順（上から順・各段は 1 つの命令か 1 つの問い）
@@ -63,7 +63,7 @@
 2. **t3 の dispatcher**: tsuzuri の列は動いていない。動かすのは tsuzuri 側の手番で、`scribe2 pipe dispatch --state-dir <tsuzuri の state dir> --repo <tsuzuri> --runner "<runner の行>" --lens "<lens の行>"` を 1 回撃てば以後は便の終端の周が次を自動で撃つ（host の面の宣言は不要）。runner / lens の行の雛形は scribe2 の admin の道具（~/.cache/scribe2-admin/mk-run.sh の出力 runner.cmd / lens.cmd）と同じ形で binary と claude の包みの path を tsuzuri 用に置く。**設計席（orchestrator）は launch の権能を持たないので、撃つのは管理席か持ち主**。
 3. **端末の行（device）**: scribe2 側に memo は無い。tsuzuri の要件 FR16 として設計だけ置く扱いで合意。scribe2 の台帳に memo **s2-07l.658**（起票済み 2026-09-26・昇格条件 = 持ち主の裁定・host の面の表が増えるので ADR 条件）。
 4. **器の CLI**: `scribe2 seat heartbeat off|on|status --state-dir S --target T` は在る。待ちの席へ 1 行を送る口 **`scribe2 seat deliver --state-dir S --target T --ruling <記帳 id>` も着地した**（scribe2 main bed08a9・memo s2-07l.659 の昇格・持ち主経由の連絡 2026-09-27）。送る行は器が固定した 1 行（「scribe2 seat: 裁定 <id> が届いた（在りかは裁定面の記帳）」）、記帳 id は ASCII の英数字と . - _ : の 64 byte 以下、送るのは登録 row が在り最終の打刻が Idle で入力欄が空の席だけ。rc 0 = 届いた・rc 1 = 断りか未確認と理由の 13 語・rc 2 = event log が読めない。→ 設計ノート surface v0.2 の §20（記帳 id の形）と §21（口の行）に反映済み。**器には席どうしの連絡の経路が無いので、器の側への連絡は持ち主経由**（scribe2 orchestrator の言）。
-- 群の訂正: tsuzuri は 2026-09-26T09:40Z の群の再編で Tier1 → **Tier2**（Tier1 は scribe2 と folio2）。14:37Z に Tier2 の記録が black5 になり t3:orchestrator は black5 で起こし直された。
+- 群の訂正: tsuzuri は 2026-09-26T09:40Z の群の再編で Tier1 → **Tier2**（Tier1 は scribe2 と folio2）。14:37Z に Tier2 の記録が acct-5 になり t3:orchestrator は acct-5 で起こし直された。
 
 ## 4. 待ちの間に設計席が進めてよいもの（実装は起こさない）
 - 面の便の契約表の磨き（行の write-set と verify の名の見直し・歯の fixture の置き場の規約）。

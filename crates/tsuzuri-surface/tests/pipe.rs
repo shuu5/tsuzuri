@@ -306,11 +306,11 @@ fn pipe_hover_card_rows() {
     };
     assert_eq!(
         hover("px.5"),
-        ["題 5", "run · Questioned", "↻2 · black4 · 1h", SOURCE].map(str::to_string)
+        ["題 5", "run · Questioned", "↻2 · acct-4 · 1h", SOURCE].map(str::to_string)
     );
     assert_eq!(
         hover("px.3"),
-        ["px.3", "run · Running", "↻1 · black4 · 2h", SOURCE].map(str::to_string)
+        ["px.3", "run · Running", "↻1 · acct-4 · 2h", SOURCE].map(str::to_string)
     );
     assert_eq!(
         hover("px.11"),

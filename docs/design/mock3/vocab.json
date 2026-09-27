@@ -1142,7 +1142,7 @@
   },
   "candidates": {
    "label": "候補と次の移り先",
-   "plain": "群が次に移る口座の決め方\n{fig:reserve}\n{cand:next:black5} 次の移り先\n{cand:resv:Tier1 の予約} 他の群の予約\n{cand:ng:5h 85%} 門で落ちた理由\n▸\n門 = 次の 5 つを全部通る\n✓ 今の口座でない\n✓ 他の群の今の口座でない\n✓ 退役でない\n✓ 300 秒以内の実測 = 鮮度\n✓ 3 つの窓とも閾値未満 {thr:85}\n鍵 = 次の順で並べる\n↓ 7d と model の残量の小さい方\n↑ 7d の reset が早い\n・ 宣言順\n! model の行なし = 末尾\n・ 5 時間の窓は門だけ\n予約 = Tier1 → Tier2 の順に取る\n✗ 群どうしで同じにならない\n✓ pipeline は予約の口座も使える\n! 鮮度の外 = 測れていない札\n・ doctor は測らない = none になる\n・ 契約 s2-07l.648",
+   "plain": "群が次に移る口座の決め方\n{fig:reserve}\n{cand:next:acct-5} 次の移り先\n{cand:resv:Tier1 の予約} 他の群の予約\n{cand:ng:5h 85%} 門で落ちた理由\n▸\n門 = 次の 5 つを全部通る\n✓ 今の口座でない\n✓ 他の群の今の口座でない\n✓ 退役でない\n✓ 300 秒以内の実測 = 鮮度\n✓ 3 つの窓とも閾値未満 {thr:85}\n鍵 = 次の順で並べる\n↓ 7d と model の残量の小さい方\n↑ 7d の reset が早い\n・ 宣言順\n! model の行なし = 末尾\n・ 5 時間の窓は門だけ\n予約 = Tier1 → Tier2 の順に取る\n✗ 群どうしで同じにならない\n✓ pipeline は予約の口座も使える\n! 鮮度の外 = 測れていない札\n・ doctor は測らない = none になる\n・ 契約 s2-07l.648",
    "internal": "門 ∧ 鍵 = min(100−7d, 100−model[orchestrator の model]) desc\nmodel の行なしは末尾, 7d resets_at asc, 宣言順\n予約 = 群の宣言順（Tier 数字昇順）の貪欲・記録しない\n`acct.js reservationsAt` = doctor の next=<label|none>\n契約 s2-07l.648"
   },
   "pressure": {
@@ -1217,7 +1217,7 @@
   },
   "next_target": {
    "label": "次の移り先",
-   "plain": "逼迫したときに器が移す口座\n{cand:next:black5} 次の移り先\n・ 予約込みで毎回導く\n= doctor の next と同じ\n! none = なし か 鮮度の外\n▸\n・ 鮮度の外 = 計測してから判じる\n・ 鮮度 = rules usage_fresh_s 300 秒\n→ 候補と次の移り先\n・ 契約 s2-07l.648",
+   "plain": "逼迫したときに器が移す口座\n{cand:next:acct-5} 次の移り先\n・ 予約込みで毎回導く\n= doctor の next と同じ\n! none = なし か 鮮度の外\n▸\n・ 鮮度の外 = 計測してから判じる\n・ 鮮度 = rules usage_fresh_s 300 秒\n→ 候補と次の移り先\n・ 契約 s2-07l.648",
    "internal": "reservationsAt(t).by[群].next\n= doctor next=<label|none>（契約 s2-07l.648）"
   },
   "no_target": {

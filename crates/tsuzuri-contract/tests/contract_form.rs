@@ -94,7 +94,7 @@ fn seat_view() -> SeatView {
         seat: "t3:orchestrator".into(),
         role: SeatRole::Orchestrator,
         health: SeatHealth::Waiting,
-        account: Some("black4".into()),
+        account: Some("acct-4".into()),
         move_left_s: Some(1200),
     }
 }
@@ -105,7 +105,7 @@ fn pipeline_card() -> PipelineCard {
         runs: 2,
         stage: Stage::Running,
         reason: Some("verify".into()),
-        account: Some("black4".into()),
+        account: Some("acct-4".into()),
         elapsed_s: Some(185),
     }
 }
@@ -178,7 +178,7 @@ fn bead_attr() -> BeadAttr {
 fn run_attr() -> RunAttr {
     RunAttr {
         stage: Some("Gated".into()),
-        account: Some("black4".into()),
+        account: Some("acct-4".into()),
     }
 }
 
@@ -327,9 +327,9 @@ fn question_card() -> QuestionCard {
 fn group_row() -> GroupRow {
     GroupRow {
         group: "Tier1".into(),
-        account: "black4".into(),
-        candidates: vec!["black1".into(), "black3".into(), "black5".into()],
-        next_account: Some("black5".into()),
+        account: "acct-4".into(),
+        candidates: vec!["acct-1".into(), "acct-3".into(), "acct-5".into()],
+        next_account: Some("acct-5".into()),
         remaining: vec![QuotaLeft {
             window: "5h".into(),
             left_pct: 62,
@@ -374,12 +374,12 @@ fn account_moves() -> Vec<AccountMove> {
         AccountMove {
             at: AT - 86_400,
             from: None,
-            to: "black3".into(),
+            to: "acct-3".into(),
         },
         AccountMove {
             at: AT - 3_600,
-            from: Some("black3".into()),
-            to: "black4".into(),
+            from: Some("acct-3".into()),
+            to: "acct-4".into(),
         },
     ]
 }
@@ -798,9 +798,9 @@ fn forms() -> Vec<Box<dyn Form>> {
                 at: AT,
                 groups: vec![GroupRow {
                     group: "Tier1".into(),
-                    account: "black4".into(),
-                    candidates: vec!["black1".into(), "black3".into(), "black5".into()],
-                    next_account: Some("black5".into()),
+                    account: "acct-4".into(),
+                    candidates: vec!["acct-1".into(), "acct-3".into(), "acct-5".into()],
+                    next_account: Some("acct-5".into()),
                     remaining: vec![
                         QuotaLeft {
                             window: "5h".into(),
@@ -816,7 +816,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     project: "tsuzuri".into(),
                     role: SeatRole::Pipeline,
                     session: "t3-hub.3-20260927T073916Z".into(),
-                    account: "black4".into(),
+                    account: "acct-4".into(),
                     stage: Some(Stage::Running),
                     elapsed_s: Some(185),
                     health: SeatHealth::Working,
@@ -1023,7 +1023,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     since: Some(AT - 3_600),
                     tick_healthy: Reading::Known(true),
                     heartbeat: Reading::Known(false),
-                    account: Some("black4".into()),
+                    account: Some("acct-4".into()),
                     model: Some("opus".into()),
                     group: Reading::Known(group_row()),
                     usage: Reading::Known(quota_used()),

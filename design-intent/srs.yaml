@@ -378,7 +378,7 @@ constraints:
   - {id: CON5, title: 見せる先, text: 見せる先の制限は条 N-6 が持つ（ここには写さない）。, basis: [N-6], source: 憲法 N-6}
 
 sources:
-  - {id: mock3, name: mock v3（面の見本・静的 HTML）, where: ~/projects/local-projects/tsuzuri-site/mock3/（配信 http://100.127.217.108:8101/mock3/・直しの report は席の作業場・外部 pointer なので参照の母集団に入れない）}
+  - {id: mock3, name: mock v3（面の見本・静的 HTML）, where: ~/projects/local-projects/tsuzuri-site/mock3/（配信 http://<tailnet の住所>:8101/mock3/・直しの report は席の作業場・外部 pointer なので参照の母集団に入れない）}
   - {id: grill-b, name: 討論の記録 B（裁定面）, where: docs/grill/2026-09-25-B-ruling-surface.md}
   - {id: grill-c, name: 討論の記録 C（表示面）, where: docs/grill/2026-09-25-C-stage-surface.md}
 
