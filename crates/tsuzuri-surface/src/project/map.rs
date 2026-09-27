@@ -1,7 +1,11 @@
-//! 地図の頁（見本の map.html）。口（/api/graph）はまだ server に無いので、枠と見出しと測れていないの印と理由の 1 行だけを置く。
-//! 中身（4 面の切り替え・帯・札）は後の便がこの module に足す。
+//! 地図の頁（見本の map.html・便 g-map）: 見出しと節点の数・面の切り替えの tab（4 つ）・今の面の中身。
+//! 口（/api/graph）の本文を契約の型の GraphDoc に読み、面の中身は mapview の下の module が組む。
+//! 今の面は URL の query の view に残す（無い・知らない値は圧縮の面）。
 
-use super::{Body, pending};
+use tsuzuri_contract::graph::GraphDoc;
+use tsuzuri_contract::wire;
+
+use super::{Body, NO_CONTENT, NOT_READ};
 use crate::frame::Block;
 use crate::view::Fetched;
 
@@ -18,25 +22,88 @@ pub const PATH: &str = "/api/graph";
 pub const REASON: &str =
     "地図の 7 つの出所を組む口が読めない（server にまだ無い・届かない・知らせが切れた）";
 
-/// 中身（この便は 3 値のどれでも測れていない）。
+/// 口の本文を電文に読む（まだ読んでいない・読めない・電文の型として読めないは理由）。
+/// 電文が読めない本文の理由は、中身の無い block と同じ（便 g-parts の歯が 3 値の理由を pin する）。
+pub fn doc(fetched: &Fetched) -> Result<GraphDoc, &'static str> {
+    match fetched {
+        Fetched::NotRead => Err(NOT_READ),
+        Fetched::Failed => Err(REASON),
+        Fetched::Body(text) => wire::decode::<GraphDoc>(text).map_err(|_| NO_CONTENT),
+    }
+}
+
+/// 中身の有無（測れていない・電文あり）。0 件と測れていないは帯ごとに面の中身が分ける。
 pub fn body(fetched: &Fetched) -> Body<()> {
-    pending(fetched, REASON)
+    match doc(fetched) {
+        Err(reason) => Body::Unmeasured(reason),
+        Ok(_) => Body::Filled(()),
+    }
 }
 
 /// 見出しは頁の題（h1）にする（見本の map.html と同じ）。
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
+    dom::view()
+}
+
+/// 地図の頁の DOM（wasm の target のときだけ）。
+#[cfg(target_arch = "wasm32")]
+mod dom {
+    use leptos::ev;
     use leptos::prelude::*;
 
+    use super::{BLOCK, PATH, doc};
+    use crate::mapview::{View, compact, current, graph, list, navigate, table, with_view};
+    use crate::project::{body_view, unmeasured};
+    use crate::vocab::label;
     use crate::widgets::help::h1;
 
-    let fetched = crate::net::read(PATH);
-    let content = move || super::body_view(fetched.with(body));
-    view! {
-        <section class=BLOCK.class id=BLOCK.id>
-            <header>{h1(BLOCK.heading)}</header>
-            {content}
-        </section>
+    pub fn view() -> AnyView {
+        let fetched = crate::net::read(PATH);
+        let parsed = Memo::new(move |_| fetched.with(doc));
+        let search = RwSignal::new(current());
+        let back = window_event_listener(ev::popstate, move |_| search.set(current()));
+        on_cleanup(move || back.remove());
+        let count = move || {
+            parsed.with(|d| {
+                d.as_ref()
+                    .ok()
+                    .map(|d| view! { <span class="chip num">{d.nodes.len()}</span> })
+            })
+        };
+        let tabs = View::ALL
+            .into_iter()
+            .map(|v| {
+                let on = move || search.with(|s| View::from_query(s) == v);
+                let pick = move |_| navigate(search, |s| with_view(s, v), true);
+                view! {
+                    <button type="button" role="tab" id=format!("tab-{}", v.name()) aria-controls="view" data-view=v.name()
+                        aria-selected=move || on().to_string() tabindex=move || if on() { "0" } else { "-1" } on:click=pick>
+                        <span class="hd" data-v=v.key()><span class="hd-t" data-term=v.key()>{label(v.key())}</span></span>
+                    </button>
+                }
+            })
+            .collect_view();
+        let content = move || {
+            let v = search.with(|s| View::from_query(s));
+            parsed.with(|d| match d {
+                Err(reason) => unmeasured(reason),
+                Ok(d) => match v {
+                    View::Compact => compact::view(d),
+                    View::List => list::view(d, search),
+                    View::Graph => body_view(graph::body()),
+                    View::Table => table::view(d, search),
+                },
+            })
+        };
+        let labelled = move || format!("tab-{}", search.with(|s| View::from_query(s)).name());
+        view! {
+            <section class=BLOCK.class id=BLOCK.id>
+                <header class="row">{h1(BLOCK.heading)}{count}</header>
+                <div class="tabs" role="tablist" aria-label=label("views") data-term="views">{tabs}</div>
+                <div id="view" role="tabpanel" aria-labelledby=labelled>{content}</div>
+            </section>
+        }
+        .into_any()
     }
-    .into_any()
 }

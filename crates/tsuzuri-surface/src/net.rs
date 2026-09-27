@@ -2,6 +2,7 @@
 //! block は自分の口の path を `read` に渡し、読みの結果（3 値）の signal を受ける。登録した口は頁を開いたときに 1 回読む。
 //! 知らせの接続は頁に 1 本だけ持ち、開いた・読み直しの合図の event を受けたで登録された口を全部読み直す。
 //! 知らせが切れている間は、今の中身が正しいと言えないので登録された口を全部「読めない」にする（要件 NFR2）。
+//! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
 
 use std::cell::{Cell, RefCell};
 
@@ -10,9 +11,9 @@ use leptos::task::spawn_local;
 use tsuzuri_contract::EpochSecs;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys::Date;
-use web_sys::wasm_bindgen::JsCast;
 use web_sys::wasm_bindgen::closure::Closure;
-use web_sys::{EventSource, Response};
+use web_sys::wasm_bindgen::{JsCast, JsValue};
+use web_sys::{EventSource, Headers, Request, RequestInit, Response};
 
 use crate::view::{Fetched, RELOAD_EVENTS};
 
@@ -54,6 +55,25 @@ async fn fetch(path: &str) -> Fetched {
     }
 }
 
+/// 本文つきの POST を送り、状態の数と本文の字を返す（届かない・応答が読めなければ None）。
+/// 本文は引数の字だけを送り、ほかの所に書かない。
+pub async fn post(path: &str, body: String) -> Option<(u16, String)> {
+    let window = web_sys::window()?;
+    let init = RequestInit::new();
+    init.set_method("POST");
+    init.set_body(&JsValue::from_str(&body));
+    let headers = Headers::new().ok()?;
+    headers.set("Content-Type", "application/json").ok()?;
+    init.set_headers(&headers);
+    let request = Request::new_with_str_and_init(path, &init).ok()?;
+    let value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .ok()?;
+    let response = value.dyn_into::<Response>().ok()?;
+    let text = JsFuture::from(response.text().ok()?).await.ok()?.as_string()?;
+    Some((response.status(), text))
+}
+
 /// 1 つの口を読み、結果を signal に置く。
 fn load(path: &'static str, signal: ArcRwSignal<Fetched>) {
     spawn_local(async move {
@@ -67,8 +87,8 @@ fn registered() -> Vec<(&'static str, ArcRwSignal<Fetched>)> {
     READS.with_borrow(|reads| reads.clone())
 }
 
-/// 登録された口を全部読み直す。
-fn reload_all() {
+/// 登録された口を全部読み直す（書きの口へ送った後に block も呼ぶ）。
+pub fn reload_all() {
     for (path, signal) in registered() {
         load(path, signal);
     }
