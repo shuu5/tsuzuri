@@ -6,6 +6,7 @@ pub mod account;
 pub mod board;
 pub mod graph;
 pub mod ledger;
+pub mod project;
 pub mod question;
 pub mod seat;
 pub mod stats;

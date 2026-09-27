@@ -9,12 +9,13 @@
 
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
+use tsuzuri_contract::project::PATH as PROJECT_PATH;
 
 use crate::account::windows::ACCOUNT_WIN;
-use crate::frame::{self, BACK, BACK_WRAP, BRAND, BackStep, Block, HEADER, Mode, PageId};
+use crate::frame::{self, BACK, BACK_WRAP, BackStep, Block, HEADER, Mode, PageId};
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
-use crate::view::{Screen, clock, clock_short};
+use crate::view::{Screen, board_title, brand, clock, clock_short, kept_name};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, qmark, term};
 use crate::widgets::hover::{CardLayer, HoverCtx};
@@ -119,8 +120,28 @@ fn back_to_board() {
     }
 }
 
+/// project の名の口を読み、読みの結果が変わるたびに名を進め、名が変わるたびに頁の題を置く（行 g-brand）。
+/// 一度読めた名は読めない間も持ち続け、読めるまでは None（題の字は frame の BRAND）。
+fn project_name() -> RwSignal<Option<String>> {
+    let fetched = net::read(PROJECT_PATH);
+    let name = RwSignal::new(None);
+    Effect::new(move |_| {
+        let f = fetched.get();
+        let next = kept_name(name.get_untracked(), &f);
+        if name.with_untracked(|n| *n != next) {
+            name.set(next);
+        }
+    });
+    Effect::new(move |_| {
+        let title = name.with(|n| board_title(n.as_deref()));
+        document().set_title(&title);
+    });
+    name
+}
+
 /// 上端の帯: 戻る・題・頁の link・最終更新・mode の切り替え（frame の BACK と HEADER の順）。
 fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl IntoView {
+    let name = project_name();
     let back = view! {
         <span class=BACK_WRAP>
             <button type="button" class=BACK.class aria-label=label(BACK.key) on:click=move |_| back_to_board()>
@@ -136,7 +157,7 @@ fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl Int
             "brand" => view! {
                 <a class=part.class href=move || frame::href(PageId::Home, mode.get()) aria-label=label(part.key)>
                     <span inner_html=LOGO></span>
-                    <span class="name">{BRAND}</span>
+                    <span class="name">{move || name.with(|n| brand(n.as_deref()).to_string())}</span>
                 </a>
             }
             .into_any(),

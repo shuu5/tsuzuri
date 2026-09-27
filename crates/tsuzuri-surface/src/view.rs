@@ -9,8 +9,11 @@ use std::cmp::Ordering;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList, LedgerRow};
+use tsuzuri_contract::project::ProjectName;
 use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
+
+use crate::frame::BRAND;
 
 /// 問いの bead の種類。
 pub const QUESTION_KIND: &str = "question";
@@ -58,6 +61,31 @@ pub fn settle(now: &Fetched, new: &Fetched, attempt: u32) -> Settle {
         (Fetched::Body(_), Fetched::Failed) if attempt <= 1 => Settle::Retry,
         _ => Settle::Set,
     }
+}
+
+/// 頁の題の board の語（index.html の title の後ろの字と同じ）。
+pub const BOARD_WORDS: &str = "project board";
+
+/// project の名の口を読んだ後の名（行 g-brand）: 本文が ProjectName に読めて名が空でなければその名、
+/// ほかは前の名（一度読めた名は、読めない間も次に読めるまで持ち続ける）。
+pub fn kept_name(before: Option<String>, fetched: &Fetched) -> Option<String> {
+    match fetched {
+        Fetched::Body(body) => match wire::decode::<ProjectName>(body) {
+            Ok(p) if !p.name.is_empty() => Some(p.name),
+            _ => before,
+        },
+        Fetched::NotRead | Fetched::Failed => before,
+    }
+}
+
+/// header の題の字（名が在ればそれ、無ければ frame の BRAND）。
+pub fn brand(name: Option<&str>) -> &str {
+    name.unwrap_or(BRAND)
+}
+
+/// 頁の題（題の字・空白・長い横棒・空白・board の語）。
+pub fn board_title(name: Option<&str>) -> String {
+    format!("{} \u{2014} {BOARD_WORDS}", brand(name))
 }
 
 /// 1 つの epic とその下の bead（epic の外の bead は `epic` が None の組に入る）。
