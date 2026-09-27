@@ -8,6 +8,7 @@ use tsuzuri_contract::wire;
 
 use super::{Body, NO_CONTENT, NOT_READ};
 use crate::frame::Block;
+use crate::mapview::View;
 use crate::view::Fetched;
 
 pub const BLOCK: Block = Block {
@@ -47,6 +48,18 @@ pub fn body(fetched: &Fetched) -> Body<()> {
     }
 }
 
+/// tab の上の key で移る面（右の矢印は次・左の矢印は前・端は反対の端へ回る・ほかの key は None・見本の map.html）。
+pub fn tab_step(now: View, key: &str) -> Option<View> {
+    let n = View::ALL.len();
+    let i = View::ALL.iter().position(|v| *v == now)?;
+    let j = match key {
+        "ArrowRight" => (i + 1) % n,
+        "ArrowLeft" => (i + n - 1) % n,
+        _ => return None,
+    };
+    Some(View::ALL[j])
+}
+
 /// 見出しは頁の題（h1）にする（見本の map.html と同じ）。
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
@@ -58,8 +71,9 @@ pub fn view() -> leptos::prelude::AnyView {
 mod dom {
     use leptos::ev;
     use leptos::prelude::*;
+    use web_sys::wasm_bindgen::JsCast;
 
-    use super::{BLOCK, PATH, doc};
+    use super::{BLOCK, PATH, doc, tab_step};
     use crate::mapview::{View, compact, current, graph, list, navigate, table, with_view};
     use crate::project::unmeasured;
     use crate::vocab::label;
@@ -78,6 +92,20 @@ mod dom {
                     .map(|d| view! { <span class="chip num">{d.nodes.len()}</span> })
             })
         };
+        let step = move |e: ev::KeyboardEvent| {
+            let now = search.with_untracked(|s| View::from_query(s));
+            let Some(next) = tab_step(now, &e.key()) else {
+                return;
+            };
+            e.prevent_default();
+            navigate(search, |s| with_view(s, next), true);
+            let el = document()
+                .get_element_by_id(&format!("tab-{}", next.name()))
+                .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok());
+            if let Some(el) = el {
+                let _ = el.focus();
+            }
+        };
         let tabs = View::ALL
             .into_iter()
             .map(|v| {
@@ -85,7 +113,7 @@ mod dom {
                 let pick = move |_| navigate(search, |s| with_view(s, v), true);
                 view! {
                     <button type="button" role="tab" id=format!("tab-{}", v.name()) aria-controls="view" data-view=v.name()
-                        aria-selected=move || on().to_string() tabindex=move || if on() { "0" } else { "-1" } on:click=pick>
+                        aria-selected=move || on().to_string() tabindex=move || if on() { "0" } else { "-1" } on:click=pick on:keydown=step>
                         <span class="hd" data-v=v.key()><span class="hd-t" data-term=v.key()>{label(v.key())}</span></span>
                     </button>
                 }
