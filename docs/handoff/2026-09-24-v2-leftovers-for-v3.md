@@ -18,6 +18,10 @@
 8. **人が打つ command が多い**（持ち主の裁定 13:04Z）: v2 は init と doctor の 2 つを上限にする設計を .609 で書く。v3 の GUI（論点 B）はその 2 つすら GUI から撃てる形にする。
 9. **妥協の起動（scribe2 の SRS FR69・2026-09-27 追記）**（持ち主の裁定 user 2026-09-27T05:39Z・台帳 s2-07l.669）: 閾値未満の口座が 1 つも無い周も、上限に当たっていない口座のうち最も空いた口座で席を立てる。妥協した理由は記録と席の指示文に出し、席は止まって持ち主の裁定を待つ。scribe2 では生きている FR 66 本のうち、未着地はこの 1 本だけ。ADR-0049 で口座を群が持つ形になり、席は群の今の口座で立つ。いま仕える 8 つの anchor は全部 Tier1 / Tier2 に属するので、FR69 の場面（群に属さない席が自分で口座を選ぶ）は起きない。v2 では実装も廃止もせず、v3 に送る。v3 の口座の持ち方を設計するときに、「余裕の無い周でも対話面（orchestrator の席）を消さない」要件として決め直す。
 10. **無人の席を feedback の下書きの画面が止める**（2026-09-27 追記・台帳 s2-07l.669）: Claude Code の SendFeedback が下書きを積むと、/exit の後に下書きの review 画面が出て席が止まる。folio2 の席は群の移動の途中で 41 分止まった。起動行の `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1` は使用感の調査しか止めない。host の共有 settings の `"feedbackDrafts": "off"` で塞いだが、これは追跡外で host ごとに要る。v3 の起動行は最初から `CLAUDE_CODE_SEND_FEEDBACK=0` を持つか、同じ設定を `--settings` で渡す。項目 1（器が画面を読めない）の具体例の 1 つでもある。
+11. **core の module の境界（持ち込む前の整理で v2 では行わない分）**（2026-09-27 追記・持ち主の裁定 user 2026-09-27T07:06Z・台帳 s2-07l.669・census は scribe2 の docs/design/carry-prep.md §6）: scribe2 の core の 16 module のうち 9 つ（account・fleet・headless・hook・ledger・pipe・polarity・rules・seat）が 1 つの強連結成分を成す（互いに参照し合い、1 つだけを取り出せない）。v2 では次の 3 つを行わず、v3 へ送る。
+    - 輪を切る: 状態の置き場の型（`StateDir`）と vessel の marker を leaf へ出しても、辺は 1 本も消えない。最小の切断は item の参照で 151 以上。単独で輪から 1 module を外せる割り方は、polarity の型（`Polarity` / `Timing` / `OnFailure`）を登録簿から分けることだけ。v3 の crate の境界を設計するときに、層の順（polarity → rules → fleet → headless → seat → hook → account → pipe → ledger が最小の逆辺の並び）を材料にする。
+    - JSON の道具（`fleet/json_lite.rs` 239 行・std だけ、`fleet/json_tree.rs` 770 行・polarity の型だけに依る）の leaf への移動: 極性の登録簿が site の path を file の path から導くので、純移動にならない。v3 で serde_json を入れるか（A3）と一緒に決める。
+    - `seat::cycle`（中身は席の起動と起こし直しの 1,099 行）の改名: 名は廃止した FR28 の用語のまま。`seat::launch` にすると子の `launch` と重なり、clippy の `module_inception` に当たる。rules 行の id `seat.cycle_*` と記録の字面 `seat-cycle` は跨版で残すので、v3 で名を決めるときに旧名の読み手を決める。
 
 ## 3. scribe2 の台帳の現在値（2026-09-24T13:3xZ）
 - open: s2-07l.214（v3 の設計・据え置き）・.604（行 k の land で close）・.608（行 u の land で close）・.609（init 1 発・設計中）・.610（行 k の契約・走行中）・.19（本 file に送って close）。
