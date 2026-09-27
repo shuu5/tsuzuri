@@ -44,4 +44,5 @@ schema:
     projection_article_fields: [id, title, tier, binds, statements]
     statement_fields: [id, text, pattern, strength]
     scope_minimum: [schema, precedence, articles]
+  seal: {file: adr-seals.yaml, kind: adr-seals, outside: [status, superseded_by]}
 plain: 判断の記録の書き方の決まりです。

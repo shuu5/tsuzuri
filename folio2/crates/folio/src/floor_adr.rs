@@ -1,7 +1,7 @@
 //! 判断の記録の床の定数（便 113・docs/design/delivery-113.md §1・ADR-15 決定 (2)(3)・責務の層 1 読む）。`adr.rs` から
 //! 欄の集合の型 `Keys`・欄の決まりの定数・床の木 `FLOOR` を字を変えずに降ろした。検査の本体と床の読み口（`floor_strs`・
 //! `floor_val`・`floor_num`）は `adr.rs` に残る。見え方は `adr.rs` の検査が読む定数と欄の集合の 2 欄だけを道具の中へ広げた。
-//! 読み手は `adr.rs` の検査・`link.rs`（改訂の来歴の欄の集合）・`schema.rs`（欄の決まりの生成区間の導出）。
+//! 読み手は `adr.rs` の検査・`link.rs`（改訂の来歴の欄の集合）・`schema.rs`（欄の決まりの生成区間の導出）・`seal.rs`（封の定数・便 170）。
 
 use crate::constitution_enums::RetreatKind;
 use crate::floor::{Floor, keys_floor};
@@ -47,6 +47,11 @@ pub(crate) const RETREAT_KIND: &[&str] = &RetreatKind::NAMES;
 pub(crate) const APPROVER: &[&str] = &["持ち主", "planner 席", "orchestrator 席"];
 pub(crate) const SURFACE: &[&str] = &["R-8"];
 pub(crate) const EFFECTIVE_STATUS: &[&str] = &["accepted", "retired"];
+/// 封の一覧（便 170・ADR-30 決定 (3)）: anchor.dir の下の file 名・kind の値・要約値から除く欄（退役で変えてよい 2 欄）。
+/// 要約値そのものは置き場ごとの data で、ここには焼かない（P-5.1）。
+pub(crate) const SEAL_FILE: &str = "adr-seals.yaml";
+pub(crate) const SEAL_KIND: &str = "adr-seals";
+pub(crate) const SEAL_OUTSIDE: &[&str] = &["status", "superseded_by"];
 /// 凍結 anchor の写しの条の 5 欄と規範文の 4 欄（anchor.projection_article_fields / statement_fields）。天井の周の引き金の
 /// 憲法の一覧も同じ配列を指す（便 126・ADR-18 決定 (1) ①・`ceiling.rs` の trigger）。
 pub(crate) const ANCHOR_ARTICLE_FIELDS: &[&str] = &["id", "title", "tier", "binds", "statements"];
@@ -432,6 +437,20 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             "始まりの凍結は folio check --freeze-start で、憲法の列（索引か constitution- で始まる anchor）と id の一覧（ids- で始まる anchor）がどちらも 0 本の置き場でだけ、最初の版の anchor と索引と id の一覧を同時に書く（どちらか 1 本でも在れば何も書かずに断る）。数えから外すのは 2 つの基準の不在の「まだ分からない」だけで、列の根の表の照らしを含むほかの検査が 0 違反で「まだ分からない」も無いときだけ書く。書いた後は旗なしの床が全部を数える",
             "正本 4 file（憲法・rules・語彙・要件書）・anchors/・adr/ とその中の file・design-intent 自体は symlink でなく実体",
         ]),
+    ),
+    (
+        "seal",
+        Floor::Map(&[
+            ("file", Floor::Val(SEAL_FILE)),
+            ("kind", Floor::Val(SEAL_KIND)),
+            ("outside", Floor::Strs(SEAL_OUTSIDE)),
+        ]),
+    ),
+    (
+        "seal_note",
+        Floor::Val(
+            "ADR-30 決定 (3)。発効した判断の記録（effective_status）の本文を anchor.dir の下の封の一覧（file）で凍らせる。行 = id と要約値（outside の欄を除く記録の木を anchor の digest と同じ json に直列化した sha256）で、足した順に並ぶ。本文が行と違う・発効しているのに行が無い・行が在るのに発効した記録が無い・同じ id の行が 2 つ・digest が中身と合わない は落とし、封の一覧が無ければ「まだ分からない」。判断を変えるときは新しい判断の記録を立て、前の記録は status と superseded_by だけを変えて退役させる（P-7.2）。生成は folio check --freeze-adrs で、全検査が 0 違反で「まだ分からない」も無いときだけ欠けた行を末尾に足す（在る行は書き換えない・本文が行と違えば断る・N-1.1）。行と file の欠けは凍結の旗の前提の検査に数えない",
+        ),
     ),
     (
         "limits_note",

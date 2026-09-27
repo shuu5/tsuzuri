@@ -915,7 +915,12 @@ fn f161_who_and_ruling_agree_with_the_adr_approval() {
         assert_eq!(note_who, !good, "who「{who}」: {v:?}");
         assert_eq!(note_ruling, !good, "ruling「{ruling}」: {v:?}");
         if *good {
-            assert_passes(&out);
+            // 発効した ADR-2 の承認欄を写しの上で変えた＝違反は封の 1 行だけ（便 170・ADR-30 決定 (3)）
+            assert_eq!(v.len(), 1, "who「{who}」: {v:?}");
+            assert!(
+                v[0].starts_with("[adr] ADR-2: 発効した判断の記録の本文が封（anchors/adr-seals.yaml）の行と違う"),
+                "who「{who}」: {v:?}"
+            );
         }
     }
 }

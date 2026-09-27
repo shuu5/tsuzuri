@@ -3,6 +3,7 @@
 //! (1) P-1 の title を変え版を v1.1 にして `--emit-amends` → 1・標準出力は見出しと差分 1 行だけ／(2) 変異なしで `--emit-amends` → 0・見出しだけ／
 //! (3) 変異なしで `--freeze-anchor` → 1・「新しくない」・anchors/ は不変／(4) 合成した改訂で `--freeze-anchor` → 0・v1.1 の anchor と索引の追記・続けて旗なし → 0／
 //! (5) (4) の amends の new_text を 1 字違えて `--freeze-anchor` → 1・「凍結しない」・v1.1 の anchor は作られない。
+//! 便 170: 合成した改訂の判断の記録は土台に無い新しい ADR-11 で足し、(4) は `--freeze-anchor` の後に `--freeze-adrs` で封を足す。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -149,12 +150,13 @@ fn bump_title(dir: &Path) {
     });
 }
 
-/// 合成した改訂: 版上げ + adr/ADR-5.yaml（amends の new_text は `new_text`）+ P-1 の amended_by。
+/// 合成した改訂: 版上げ + 新しい adr/ADR-11.yaml（amends の new_text は `new_text`）+ P-1 の amended_by。
+/// 便 170: 土台の発効した ADR-5 を上書きすると封と違うので、土台に無い新しい番号で足す。
 fn synthetic_amendment(dir: &Path, new_text: &str) {
     bump_title(dir);
     let adr = format!(
         "# 合成した改訂の判断の記録（歯の中で作る）。\n\
-id: ADR-5\n\
+id: ADR-11\n\
 title: 条 P-1 の見出しを改める\n\
 status: accepted\n\
 date: 2026-09-17\n\
@@ -171,12 +173,12 @@ grill: {{when: 2026-09-17, who: 持ち主, where: 対話面, summary: 反対側�
 amends:\n\
   - {{target: P-1, field: title, version: v1.1, previous_text: {OLD_TITLE}, new_text: {new_text}}}\n"
     );
-    fs::write(dir.join("adr/ADR-5.yaml"), adr).unwrap();
+    fs::write(dir.join("adr/ADR-11.yaml"), adr).unwrap();
     edit(&dir.join("constitution.yaml"), |t| {
         t.replacen(
             &format!("  - id: P-1\n    title: {NEW_TITLE}\n"),
             &format!(
-                "  - id: P-1\n    title: {NEW_TITLE}\n    amended_by: [{{adr: ADR-5, date: 2026-09-17, approved_by: 持ち主, ruling: \"{RULING}\", previous_text: {OLD_TITLE}, rationale: 改訂の手順を通すため。}}]\n"
+                "  - id: P-1\n    title: {NEW_TITLE}\n    amended_by: [{{adr: ADR-11, date: 2026-09-17, approved_by: 持ち主, ruling: \"{RULING}\", previous_text: {OLD_TITLE}, rationale: 改訂の手順を通すため。}}]\n"
             ),
             1,
         )
@@ -267,13 +269,27 @@ fn freeze_synthetic_amendment_is_frozen() {
         .expect("anchor に digest が無い")
         .to_string();
     assert_eq!(digest.len(), 64);
-    assert!(anchor.contains("\"adr\": \"ADR-5\""), "{anchor}");
+    assert!(anchor.contains("\"adr\": \"ADR-11\""), "{anchor}");
     let index = fs::read_to_string(w.dir().join("anchors/index.yaml")).unwrap();
     assert!(
         index.ends_with(&format!(
             "- \"version\": \"v1.0\"\n    \"previous\": null\n    \"digest\": \"acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed\"\n  - \"version\": \"v1.1\"\n    \"previous\": \"v1.0\"\n    \"digest\": \"{digest}\"\n"
         )),
         "{index}"
+    );
+    // 便 170: 凍結の旗は封の行の欠けを数えない＝新しい ADR-11 の封は --freeze-adrs で足す
+    let sealed = w.check(&["--freeze-adrs"]);
+    assert_eq!(
+        sealed.status.code(),
+        Some(0),
+        "{}\n{}",
+        text(&sealed.stdout),
+        text(&sealed.stderr)
+    );
+    assert!(
+        text(&sealed.stderr).contains("封を足した: ") && text(&sealed.stderr).contains("足した行 ADR-11・"),
+        "{}",
+        text(&sealed.stderr)
     );
     let again = w.check(&[]);
     assert_eq!(

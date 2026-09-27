@@ -46,6 +46,7 @@ mod prose;
 mod refs;
 mod rules;
 mod schema;
+mod seal;
 mod serve;
 mod sha256;
 mod sheet;
@@ -89,6 +90,9 @@ enum Command {
         /// 憲法の列と id の一覧がどちらも無い置き場でだけ、全検査が 0 違反で測れないも無いときに最初の版の anchor と索引と id の一覧を同時に書く（書いたら commit する）
         #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids"])]
         freeze_start: bool,
+        /// 全検査が 0 違反で測れないも無いときだけ、発効した判断の記録の封の欠けた行を anchors/adr-seals.yaml の末尾に足す（在る行と本文が違えば断る・書いたら commit する）
+        #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start"])]
+        freeze_adrs: bool,
     },
     /// 憲法の前文と規範文を CLAUDE.md の生成区間へ書く（--write）・検査する（--check）・出す（--print）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "print"])))]
@@ -326,6 +330,7 @@ fn run(cli: Cli) -> ExitCode {
             freeze_anchor,
             freeze_ids,
             freeze_start,
+            freeze_adrs,
         } => {
             let flag = if emit_amends {
                 Flag::EmitAmends
@@ -335,6 +340,8 @@ fn run(cli: Cli) -> ExitCode {
                 Flag::FreezeIds
             } else if freeze_start {
                 Flag::FreezeStart
+            } else if freeze_adrs {
+                Flag::FreezeAdrs
             } else {
                 Flag::None
             };
@@ -348,6 +355,7 @@ fn run(cli: Cli) -> ExitCode {
                 materials.state.as_ref(),
                 materials.adr.as_ref(),
                 materials.ids.as_ref(),
+                materials.seals.as_ref(),
                 &mut report,
             );
             if let After::Refused(msg) = &after {

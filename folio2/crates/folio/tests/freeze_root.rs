@@ -412,6 +412,26 @@ fn f121_freeze_start_writes_both_and_the_floor_passes() {
         "書いた id の一覧が土台の凍結済みの file と byte 一致しない"
     );
     w.commit();
+    // 便 170: 始まりの凍結は判断の記録の封を書かない＝素の床は封の一覧の不在の「まだ分からない」1 行だけ
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(2), "{}", show(&out));
+    assert!(violations(&out).is_empty(), "{}", show(&out));
+    assert!(
+        text(&out.stdout).contains("まだ分からない（違反 0・まだ分からない 1）")
+            && text(&out.stderr).contains("anchors/adr-seals.yaml（判断の記録の封の一覧）が無い"),
+        "{}",
+        show(&out)
+    );
+    // --freeze-adrs が封の一覧を書き（土台の凍結済みの封と byte 一致）、commit の後の床は合格
+    let out = w.check(&["--freeze-adrs"]);
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    assert!(text(&out.stderr).contains("封を足した: "), "{}", show(&out));
+    assert!(
+        fs::read(w.dir().join("anchors/adr-seals.yaml")).unwrap()
+            == fs::read(base.join("adr-seals.yaml")).unwrap(),
+        "書いた封の一覧が土台の凍結済みの file と byte 一致しない"
+    );
+    w.commit();
     let out = w.check(&[]);
     assert_eq!(out.status.code(), Some(0), "{}", show(&out));
     assert!(
@@ -760,14 +780,15 @@ fn f158_adr_approval_verbatim_mark_is_empty() {
             edit(&d.join("adr/ADR-1.yaml"), |t| t.replacen(from, to, 1));
         });
         let out = w.check(&[]);
-        let v = violations(&out);
+        // 発効した ADR-1 の承認欄を写しの上で変えた＝封の違反 1 行（便 170）を確かめて外す
+        let mut v = violations(&out);
+        let seal = "[adr] ADR-1: 発効した判断の記録の本文が封（anchors/adr-seals.yaml）の行と違う";
+        assert_eq!(v.iter().filter(|l| l.starts_with(seal)).count(), 1, "{to}: {v:?}");
+        v.retain(|l| !l.starts_with(seal));
+        assert_eq!(out.status.code(), Some(1), "{to}: {}", show(&out));
         match want {
-            None => {
-                assert_eq!(out.status.code(), Some(0), "{to}: {}", show(&out));
-                assert!(v.is_empty(), "{to}: {v:?}");
-            }
+            None => assert!(v.is_empty(), "{to}: {v:?}"),
             Some(want) => {
-                assert_eq!(out.status.code(), Some(1), "{to}: {}", show(&out));
                 assert_eq!(v.len(), 1, "{to}: {v:?}");
                 assert!(v[0].starts_with("[N-4] ") && v[0].contains(want), "{to}: {v:?}");
             }

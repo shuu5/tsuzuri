@@ -183,9 +183,8 @@ fn assert_digest(vp_dir: &Path, hex: &str, concat_len: usize) {
 
 // ── (e) 凍結 anchor の期待 ──
 
-const FIDELITY_FILES: [&str; 13] = [
-    "faces/adr-1.html",
-    "faces/adr-2.html",
+/// 便 170（ADR-30 決定 (4)）: 配信先の判断の記録の面（adr-1.html・adr-2.html）は束に写さない。
+const FIDELITY_FILES: [&str; 11] = [
     "faces/constitution.html",
     "faces/note-full.html",
     "faces/srs.html",
@@ -199,9 +198,7 @@ const FIDELITY_FILES: [&str; 13] = [
     "sources/srs.yaml",
 ];
 
-const REALITY_FILES: [&str; 11] = [
-    "faces/adr-1.html",
-    "faces/adr-2.html",
+const REALITY_FILES: [&str; 9] = [
     "faces/note-full.html",
     "faces/srs.html",
     "finding.yaml",
@@ -214,6 +211,7 @@ const REALITY_FILES: [&str; 11] = [
 ];
 
 /// 観点の id・file の一覧（digest.txt を除く）・連結の byte 数・要約値（便 98 の絞った束・delivery-98.md §1 (d)）。
+/// 便 170: 判断の記録の面 2 枚（計 244 byte）を束から外した後の値（独立の script bundle-anchor.py の出力の写し）。
 fn expected() -> Vec<(&'static str, Vec<&'static str>, usize, &'static str)> {
     let fidelity = FIDELITY_FILES.to_vec();
     let mut readability = fidelity.clone();
@@ -224,26 +222,26 @@ fn expected() -> Vec<(&'static str, Vec<&'static str>, usize, &'static str)> {
         (
             "fidelity",
             fidelity,
-            11_738,
-            "d2e153b29a2b46b88295d10f782163636a5613649ceb9efa80dcebfb48473782",
+            11_494,
+            "23ac7bd276cd04ce9559b1e4ec68ed57c4b140872ef411163467cd102ed21f36",
         ),
         (
             "readability",
             readability,
-            11_867,
-            "877fcb5b03de9be5f6d8c4c1f61602e0f578a15e054cff9109eeb37834d08c68",
+            11_623,
+            "c99342f29012e546a7e65dc96c2f1104a006dc2aa0fe565d7058427210e63e46",
         ),
         (
             "coherence",
             coherence,
-            11_489,
-            "b0030a3fa1e1dc4d4e4710bbba07ec65f80bf1fa14bd2b4c75eea186b26f281d",
+            11_245,
+            "98f79b4338ebffbd4dd9c8fc920028b61a16f35df410a1016be0bdd37bf8fd27",
         ),
         (
             "reality",
             REALITY_FILES.to_vec(),
-            7_560,
-            "d8734c77995da9034593d27e757890ec9133c86444a466b05c85a1a9e1250d89",
+            7_316,
+            "051dc2391f525d11ff77b660e92676cc5189a199479bbd7fe6e8fff85e640966",
         ),
     ]
 }
@@ -280,6 +278,30 @@ fn bundle_write_matches_the_frozen_anchor() {
         let got: Vec<String> = tree(&vp_dir).into_keys().collect();
         assert_eq!(got, want, "{id}: file の一覧");
         assert_digest(&vp_dir, hex, concat_len);
+    }
+    let _ = fs::remove_dir_all(&td);
+}
+
+/// 便 170 §1 (c)10（ADR-30 決定 (4)）: 配信先に判断の記録の面（adr-1.html・adr-2.html）が在っても、4 観点の束の faces/ に
+/// adr- の面は無く、要件書の面と判断の記録の正本の写し（sources/adr/）は在る。
+#[test]
+fn f170_the_bundle_copies_no_adr_face() {
+    let (td, src, faces) = fixture_copy("f170-no-adr-face");
+    for name in ["adr-1.html", "adr-2.html"] {
+        assert!(faces.join(name).is_file(), "配信先に {name} が無い（土台が変わった）");
+    }
+    let out = td.join("bundle");
+    let run = folio_ceiling(&src, &faces, &out);
+    assert_eq!(code(&run, "folio ceiling --write"), 0, "{}", stderr(&run));
+    for id in ["fidelity", "readability", "coherence", "reality"] {
+        let files: Vec<String> = tree(&out.join(id)).into_keys().collect();
+        assert!(
+            !files.iter().any(|f| f.starts_with("faces/adr-")),
+            "{id}: 判断の記録の面を写した: {files:?}"
+        );
+        for want in ["faces/srs.html", "sources/adr/ADR-1.yaml"] {
+            assert!(files.iter().any(|f| f == want), "{id}: {want} が無い: {files:?}");
+        }
     }
     let _ = fs::remove_dir_all(&td);
 }
@@ -774,7 +796,7 @@ const VIEWPOINTS: [&str; 4] = ["fidelity", "readability", "coherence", "reality"
 
 #[test]
 fn bundle_on_the_real_source_builds_four_bundles() {
-    let (td, dir, _site, out) = real_bundle("real");
+    let (td, dir, site, out) = real_bundle("real");
     let dirs = VIEWPOINTS;
     for id in dirs {
         let vp_dir = out.join(id);
@@ -815,7 +837,10 @@ fn bundle_on_the_real_source_builds_four_bundles() {
         .iter()
         .filter(|n| n.starts_with("ADR-") && n.ends_with(".yaml"))
         .count();
-    assert_eq!(adr_faces, source_adr_faces, "faces/: {faces:?}");
+    // 便 170（ADR-30 決定 (4)）: 配信先には判断の記録の面が記録の数だけ在り、束には 1 枚も写さない
+    let site_adr_faces = names(&site).iter().filter(|n| n.starts_with("adr-")).count();
+    assert_eq!(site_adr_faces, source_adr_faces, "配信先の判断の記録の面");
+    assert_eq!(adr_faces, 0, "faces/: {faces:?}");
     assert_eq!(note_faces, ["note-example.html", "note-figures.html"]);
     assert!(!faces.contains(&"folio.css".to_string()), "{faces:?}");
     let _ = fs::remove_dir_all(&td);

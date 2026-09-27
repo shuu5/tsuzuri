@@ -110,6 +110,7 @@ schema:
     - 版管理（git）との照合＝環境変数（GIT_DIR / GIT_WORK_TREE 等）は継承せず、全ての参照（--all）の履歴を見る。落とすもの = 先頭（HEAD）に anchor があって作業ツリーに無い・履歴に一度でも在った anchor が無い（削除を commit しても）・履歴に在った同じ形式の anchor と中身が違う（差し替え・書き換え。固定の欄・digest の方式・写しの取り方が今と違う古い anchor は移行の痕跡として見ない）・anchors/ か anchor file が版管理から除外（ignore）されている（追跡済みでも、file の pattern でも）・最新版以外の anchor が追跡されていない（凍結した anchor は commit する）・design-intent 自体が版管理の根・版管理の根が design-intent の上に無い。「まだ分からない」（終了コード 2）にするもの = 版管理が無い・commit が 1 つも無い（HEAD 無し）・読めない写し、と anchor が 1 本も無い浅い写し（shallow・anchor が揃った浅い写しは残りの検査で進む）＝写しで回すときも git init + commit の中で回す。版管理は比較元ではなく「消された・差し替えられた anchor」を早く止める補助で、列の真偽は索引と digest と根の定数が受け持つ
     - 同じ版の anchor は上書きしない・anchor と索引は消さない・空にしない。生成は folio check --freeze-anchor で、全検査が 0 違反かつ「まだ分からない」が無く、版が最新より新しく、差分とその版の発効した判断があるときだけ書く。列の始め直し（最初の版が first_version でない・版管理の先頭か履歴に anchor が在った・記録が在るのに anchor が無い・根の digest が床の定数と違う）は認めない
     - 正本 4 file（憲法・rules・語彙・要件書）・anchors/・adr/ とその中の file・design-intent 自体は symlink でなく実体
+  seal: {file: adr-seals.yaml, kind: adr-seals, outside: [status, superseded_by]}
   limits_note:
     - 前文（precedence）と schema 節の差分は amended_by を持てない（憲法 schema の precedence.optional が空）ので、それを amends に持つ発効した判断の記録の実在と欄単位の対の一致だけを確かめる。前文に amended_by を足すのは A-2 の改訂で行う。
     - 改番と番号の再利用は「同じ本文の付け替え」「過去の版に在って最新 anchor に無い番号の再登場」の 2 つの形だけを見る。本文も変えて付け替えた改番は弁別できない（削除 + 新設として通る）。

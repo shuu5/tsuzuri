@@ -3,6 +3,8 @@
 //! 各組の違反はちょうど 1 件で、その種類と場所と文言まで見る（別の理由で落ちた組を緑にしない）。
 //! 図の節（便 33）は design-intent の写し（copy_tree + git init・tests/note.rs の Work と同じ形）の ADR-1.yaml に
 //! 図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複）で 不合格 1 を見る。
+//! 便 170（ADR-30 決定 (3)・便 172 が運ぶ）: 発効した ADR-1 と ADR-13 を写しの上で変える歯は、封の違反 1 行を
+//! 確かめて外した残りを見る。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -136,7 +138,8 @@ impl Work {
     }
 
     /// 写しの ADR-13 に、本流から消した改訂の欄の行（REVISES_ROW）を植え直す（判断の記録 ADR-30 決定 (2)
-    /// で本流の行は消えた・欄の床は便 170 まで在るので、変異の当て先は歯が自分で置く）。
+    /// で本流の行は消えた・欄の床は便 173 まで在るので、変異の当て先は歯が自分で置く）。発効した ADR-13 の本文が
+    /// 変わる＝封の違反 1 行が立つ（便 172）。
     fn plant_revises(&self) {
         self.mutate_file(
             "ADR-13.yaml",
@@ -213,7 +216,18 @@ fn adr_effective_without_approval_fails() {
 
 // ── 図の節（便 33） ──
 
-/// 写しの ADR-1 に変異を当てた結果が 不合格 1・違反はちょうど 1 件（種別 adr・ADR-1 の場所）で `words` を全部含む。
+/// 発効した ADR-1 の本文を写しの上で変えた床の違反から、封の違反 1 行（便 170・ADR-30 決定 (3)）を確かめて外した残り。
+fn beyond_the_seal(out: &Output) -> Vec<String> {
+    let mut v = violations(out);
+    let before = v.len();
+    v.retain(|l| {
+        !(l.starts_with("[adr] ADR-1: 発効した判断の記録の本文が封（anchors/adr-seals.yaml）の行と違う"))
+    });
+    assert_eq!(before - v.len(), 1, "ADR-1 の封の違反が 1 行でない: {:?}", violations(out));
+    v
+}
+
+/// 写しの ADR-1 に変異を当てた結果が 不合格 1・違反は封の 1 行と変異の 1 件（種別 adr・ADR-1 の場所）で `words` を全部含む。
 fn assert_figure_violation(w: &Work, words: &[&str]) {
     let out = w.check();
     assert_eq!(
@@ -223,19 +237,20 @@ fn assert_figure_violation(w: &Work, words: &[&str]) {
         stdout(&out),
         String::from_utf8_lossy(&out.stderr)
     );
-    let v = violations(&out);
-    assert_eq!(v.len(), 1, "違反は変異の 1 件だけのはず: {v:?}");
+    let v = beyond_the_seal(&out);
+    assert_eq!(v.len(), 1, "封のほかの違反は変異の 1 件だけのはず: {v:?}");
     assert!(v[0].starts_with("[adr] ADR-1"), "{v:?}");
     for word in words {
         assert!(v[0].contains(word), "「{word}」が無い: {v:?}");
     }
     assert!(
-        stdout(&out).contains("folio check: 不合格（違反 1・"),
+        stdout(&out).contains("folio check: 不合格（違反 2・"),
         "{}",
         stdout(&out)
     );
 }
 
+/// 欄の揃った図は欄の決まりの違反を立てない（発効した ADR-1 に足した本文の変化は封の違反 1 行だけ・便 170）。
 #[test]
 fn adr_figure_with_all_fields_passes() {
     let w = Work::new("figure-ok");
@@ -243,14 +258,15 @@ fn adr_figure_with_all_fields_passes() {
     let out = w.check();
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(1),
         "{}{}",
         stdout(&out),
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    let v = beyond_the_seal(&out);
+    assert!(v.is_empty(), "{v:?}");
     assert!(
-        stdout(&out).contains("folio check: 合格（違反 0・まだ分からない 0）"),
+        stdout(&out).contains("folio check: 不合格（違反 1・まだ分からない 0）"),
         "{}",
         stdout(&out)
     );
@@ -384,7 +400,18 @@ fn f92_an_adr_that_does_not_exist_is_a_violation() {
 const REVISES_ROW: &str = "  - {target: ADR-8, decision: (4), kind: narrow, summary: 天井が合格でない間に設計文書の便の着地を既定で止める範囲を、repo 全体から便が書き換える file の側へ狭める（不合格の側は今のまま repo 全体で止める）}\n";
 const REVISES_HEAD: &str = "\nrevises:\n  - {target: ADR-8, decision: (4), kind: narrow,";
 
-/// 写しの ADR-13 に変異を当てた結果が 不合格 1・違反はちょうど 1 件（種別 adr・ADR-13 の場所）で `words` を全部含む。
+/// 写しの ADR-13 に行を植えた床の違反から、封の違反 1 行（便 172・ADR-30 決定 (3)）を確かめて外した残り。
+fn beyond_the_adr13_seal(out: &Output) -> Vec<String> {
+    let mut v = violations(out);
+    let before = v.len();
+    v.retain(|l| {
+        !(l.starts_with("[adr] ADR-13: 発効した判断の記録の本文が封（anchors/adr-seals.yaml）の行と違う"))
+    });
+    assert_eq!(before - v.len(), 1, "ADR-13 の封の違反が 1 行でない: {:?}", violations(out));
+    v
+}
+
+/// 写しの ADR-13 に変異を当てた結果が 不合格 1・違反は封の 1 行と変異の 1 件（種別 adr・ADR-13 の場所）で `words` を全部含む。
 fn assert_adr13_violation(w: &Work, words: &[&str]) {
     let out = w.check();
     assert_eq!(
@@ -394,8 +421,8 @@ fn assert_adr13_violation(w: &Work, words: &[&str]) {
         stdout(&out),
         String::from_utf8_lossy(&out.stderr)
     );
-    let v = violations(&out);
-    assert_eq!(v.len(), 1, "違反は変異の 1 件だけのはず: {v:?}");
+    let v = beyond_the_adr13_seal(&out);
+    assert_eq!(v.len(), 1, "封のほかの違反は変異の 1 件だけのはず: {v:?}");
     assert!(v[0].starts_with("[adr] ADR-13"), "{v:?}");
     for word in words {
         assert!(v[0].contains(word), "「{word}」が無い: {v:?}");
@@ -421,17 +448,18 @@ fn f101_a_planted_revises_row_passes_and_the_real_records_carry_none() {
             path.display()
         );
     }
-    // 形の正しい行を植えた写しは、素の床で 終了コード 0・違反 0（欄の床は便 170 まで在る）
+    // 形の正しい行を植えた写しは、欄の決まりの違反 0（欄の床は便 173 まで在る）・違反は封の 1 行だけ（便 172）
     w.plant_revises();
     let out = w.check();
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(1),
         "{}{}",
         stdout(&out),
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(violations(&out).is_empty(), "{:?}", violations(&out));
+    let v = beyond_the_adr13_seal(&out);
+    assert!(v.is_empty(), "{v:?}");
 }
 
 #[test]

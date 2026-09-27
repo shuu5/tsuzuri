@@ -10,6 +10,7 @@ use crate::yaml::Value;
 
 /// `folio check` の旗（2 つ以上同時は引数の断り）。`FreezeIds` は便 88（`ids.rs`）。
 /// `FreezeStart` は便 121（憲法の列と id の一覧がどちらも無い置き場で 2 つを同時に書く・ADR-16 決定 (2)(イ)）。
+/// `FreezeAdrs` は便 170（判断の記録の封の欠けた行を足す・`seal.rs`・ADR-30 決定 (3)）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flag {
     None,
@@ -17,6 +18,7 @@ pub enum Flag {
     FreezeAnchor,
     FreezeIds,
     FreezeStart,
+    FreezeAdrs,
 }
 
 /// 便 8 までの検査が残した列の結果（`anchor::check_anchor` が返す）。

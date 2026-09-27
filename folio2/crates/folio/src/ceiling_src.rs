@@ -45,12 +45,14 @@ const FILE: &str = "ceiling.yaml";
 /// 束の要約値の file（要約値の計算には数えない）。
 pub const DIGEST_FILE: &str = "digest.txt";
 
-/// 文書の id → 面の file の名の形（`site.rs` の配信先の名の写し・床の定数）。`None` = 面は無い。
+/// 文書の id → 面の file の名の形（`site.rs` の配信先の名の写し・床の定数）。`None` = 束に面を写さない。
+/// 判断の記録の面（`adr-<数>.html`）は配信先に在っても写さない（便 170・ADR-30 決定 (4)・天井は判断の記録の題と状態だけを
+/// 読むので、題と状態は sources/adr/ の絞った写しで渡す。面そのものと sources/adr/ の写しは変えない）。
 pub const FACE_NAMES: [(&str, Option<FaceName>); 10] = [
     ("index", Some(FaceName::Exact("index.html"))),
     ("constitution", Some(FaceName::Exact("constitution.html"))),
     ("srs", Some(FaceName::Exact("srs.html"))),
-    ("adr", Some(FaceName::Affix("adr-", ".html"))),
+    ("adr", None),
     ("design-note", Some(FaceName::Affix("note-", ".html"))),
     ("rules", None),
     ("vocabulary", None),
@@ -64,7 +66,7 @@ pub const FACE_NAMES: [(&str, Option<FaceName>); 10] = [
 pub enum FaceName {
     /// 名の全体一致
     Exact(&'static str),
-    /// 頭と尾（`adr-<数>.html`・`note-<文書 id>.html`）
+    /// 頭と尾（`note-<文書 id>.html`）
     Affix(&'static str, &'static str),
 }
 
@@ -639,11 +641,11 @@ mod ceiling_src_tests {
         let form = |doc: &str| FACE_NAMES.iter().find(|(id, _)| *id == doc).unwrap().1;
         assert!(form("index").unwrap().matches("index.html"));
         assert!(!form("index").unwrap().matches("index.htm"));
-        assert!(form("adr").unwrap().matches("adr-12.html"));
-        assert!(!form("adr").unwrap().matches("adr-.html"));
         assert!(form("design-note").unwrap().matches("note-full.html"));
+        assert!(!form("design-note").unwrap().matches("note-.html"));
         assert!(!form("design-note").unwrap().matches("folio.css"));
-        for doc in ["rules", "vocabulary", "intake", "ceiling", "graph"] {
+        // 判断の記録の面は束に写さない（便 170）
+        for doc in ["adr", "rules", "vocabulary", "intake", "ceiling", "graph"] {
             assert!(form(doc).is_none(), "{doc}");
         }
     }

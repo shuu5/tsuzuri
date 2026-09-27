@@ -2,6 +2,7 @@
 //! 規則は Python の runner `tests/run_floor_cases.py` の写し: case ごとに凍結した土台 `tests/fixtures/floor_base/design-intent/` を一時 dir へ写し、既定で git の 1 commit にし、
 //! mutate の段を順に当てて folio を回し、終了コード・出力の語・file の有無・違反件数を照合する。fixture は読むだけで書かない。
 //! 1 本の歯が全 case を回し、落ちた case を名指す。型付きの読み書きと digest は src の yaml.rs / sha256.rs を取り込んで使う。
+//! 便 170: folio を撃つ前ごとに写しの判断の記録の封の一覧を組み直す（`reseal`・この fixture は封を測らない）。
 
 #[path = "../src/sha256.rs"]
 #[allow(dead_code)]
@@ -294,7 +295,79 @@ struct Run {
     stderr: String,
 }
 
+/// 便 170（ADR-30 決定 (3)）: 写しの封の一覧を今の発効した判断の記録で組み直す。case は土台の発効した記録を書き換えて
+/// 改訂の経路を作る＝この fixture は封を測らない（封の歯は tests/seal.rs）。封の一覧の file が無い写し（anchors/ を消した
+/// case）は触らない。床が読まない記録（重複キー・読めない）は行にしない。
+fn reseal(dir: &Path) -> Result<(), String> {
+    let path = dir.join("anchors/adr-seals.yaml");
+    if !path.is_file() {
+        return Ok(());
+    }
+    let s = |x: &str| Value::Str(x.to_string());
+    let mut rows: Vec<(u64, String, String)> = Vec::new();
+    let Ok(entries) = fs::read_dir(dir.join("adr")) else {
+        return Ok(());
+    };
+    for entry in entries {
+        let entry = io(entry, "adr/ を読めない")?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.ends_with(".yaml") || name == "schema.yaml" {
+            continue;
+        }
+        let Ok(t) = fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        if !yaml::parse(&t).is_ok_and(|d| d.duplicates.is_empty()) {
+            continue;
+        }
+        let Ok(doc) = yaml::parse_typed(&t) else {
+            continue;
+        };
+        if !matches!(
+            doc.get("status").and_then(Value::as_str),
+            Some("accepted" | "retired")
+        ) {
+            continue;
+        }
+        let Some(id) = doc.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let n = id
+            .strip_prefix("ADR-")
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(u64::MAX);
+        let body: Vec<(Value, Value)> = doc
+            .as_map()
+            .unwrap_or_default()
+            .iter()
+            .filter(|(k, _)| !matches!(k.as_str(), Some("status" | "superseded_by")))
+            .cloned()
+            .collect();
+        let sum = sha256::hex(yaml::canonical(&Value::Map(body))?.as_bytes());
+        rows.push((n, id.to_string(), sum));
+    }
+    rows.sort();
+    let rows = rows
+        .into_iter()
+        .map(|(_, id, sum)| Value::Map(vec![(s("id"), s(&id)), (s("sum"), s(&sum))]))
+        .collect();
+    let mut tree = Value::Map(vec![
+        (s("kind"), s("adr-seals")),
+        (s("digest_algo"), s("sha256-json-1")),
+        (
+            s("outside"),
+            Value::Seq(vec![s("status"), s("superseded_by")]),
+        ),
+        (s("rows"), Value::Seq(rows)),
+    ]);
+    let digest = digest_of(&tree)?;
+    map_set(&mut tree, "digest", s(&digest))?;
+    let text = yaml::write(&tree, "# floor_cases の封（runner が folio を撃つ前ごとに組み直す）")?;
+    io(fs::write(&path, text), "封の一覧を書けない")
+}
+
 fn folio(dir: &Path, flags: &[&str], env: &[(&str, PathBuf)]) -> Result<Run, String> {
+    reseal(dir)?;
     let out = io(
         Command::new(env!("CARGO_BIN_EXE_folio"))
             .arg("check")

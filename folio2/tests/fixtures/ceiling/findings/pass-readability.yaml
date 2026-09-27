@@ -4,5 +4,5 @@ record:
   effort: high
   at: 2026-09-19T05:00:00Z
   read: [index, constitution, srs, adr, design-note]
-  bundle: sha256-files-1 877fcb5b03de9be5f6d8c4c1f61602e0f578a15e054cff9109eeb37834d08c68
+  bundle: sha256-files-1 c99342f29012e546a7e65dc96c2f1104a006dc2aa0fe565d7058427210e63e46
 findings: []

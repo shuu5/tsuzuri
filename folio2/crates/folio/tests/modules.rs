@@ -44,6 +44,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("prose", 2),
     ("refs", 2),
     ("rules", 2),
+    ("seal", 2),
     ("vocab", 2),
     ("bundle", 3),
     ("derive", 3),

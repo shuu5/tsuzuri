@@ -5,7 +5,8 @@
 //! 相談窓口の正本の形（便 18・intake）と、設計ノートの正本の形（便 23・note）と、天井の正本の形（便 37・ceiling）と、
 //! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ）と、置き場の憲法の値域が組み立てた値域と集合で等しいか（便 122・便 157・FR25・
 //! 条の値は置き場の値域で引く・広げた鍵と狭めた鍵と引けない鍵は「まだ分からない」）と、憲法の meta・前文・条・規範文・mechanism と
-//! 規則の表の行の未知の欄・mechanism の形の崩れ（便 128・一覧は組み立てた憲法の正本と規則の表の床の定数から）。
+//! 規則の表の行の未知の欄・mechanism の形の崩れ（便 128・一覧は組み立てた憲法の正本と規則の表の床の定数から）と、
+//! 発効した判断の記録の本文の封（便 170・seal）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
@@ -28,6 +29,7 @@ use crate::note;
 use crate::phase::{Flag, State};
 use crate::refs;
 use crate::rules;
+use crate::seal;
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::{self, Node};
@@ -169,6 +171,8 @@ pub struct Materials {
     pub adr: Option<adr::Adr>,
     /// id の消失と改番の検査が読んだ現行の id。
     pub ids: Option<ids::Current>,
+    /// 判断の記録の封の検査が残した凍結の材料（便 170）。
+    pub seals: Option<seal::Seals>,
     /// 機構がまだ無い条の一覧（便 131・ADR-23 決定 (3)・床の判定の外）。正本が読めなければ空。
     pub not_yet_live: Vec<String>,
     /// 規則の表に行 R-17 が無く、散文の言及の歯が数えなかった（便 156・床の判定の外）。
@@ -201,6 +205,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
     let mut state = None;
     let mut adr_records = None;
     let mut ids_cur = None;
+    let mut seals = None;
     let mut not_yet_live = Vec::new();
     let mut mentions_off = false;
     match load_all(dir, &mut report) {
@@ -249,6 +254,8 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                     flag,
                     &mut report,
                 ));
+                // 発効した判断の記録の本文の封（便 170・ADR-30 決定 (3)）
+                seals = Some(seal::check_seals(dir, &records.records, flag, &mut report));
                 adr_records = Some(records);
             }
             note::check_note(
@@ -283,6 +290,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
         state,
         adr: adr_records,
         ids: ids_cur,
+        seals,
         not_yet_live,
         mentions_off,
     };

@@ -15,6 +15,7 @@ use crate::anchor;
 use crate::ids;
 use crate::lineage;
 use crate::phase::{After, Flag, State, not_frozen_by};
+use crate::seal;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Value};
 
@@ -41,13 +42,15 @@ fn ver_key(v: &str) -> Vec<(usize, String)> {
         .collect()
 }
 
-/// 旗の後始末。便 8 までの全検査の後に呼ぶ（`state` は列の結果・読めずに止まったなら None・`ids` は便 88 の id の一覧）。
+/// 旗の後始末。便 8 までの全検査の後に呼ぶ（`state` は列の結果・読めずに止まったなら None・`ids` は便 88 の id の一覧・
+/// `seals` は便 170 の判断の記録の封）。
 pub fn after(
     dir: &Path,
     flag: Flag,
     state: Option<&State>,
     adr: Option<&Adr>,
     ids: Option<&ids::Current>,
+    seals: Option<&seal::Seals>,
     report: &mut Report,
 ) -> After {
     match (flag, state, adr) {
@@ -61,6 +64,10 @@ pub fn after(
             None => After::Freeze(not_frozen_by(report, "--freeze-ids")),
         },
         (Flag::FreezeStart, ..) => freeze_start(dir, state, ids, report),
+        (Flag::FreezeAdrs, ..) => match seals {
+            Some(s) => seal::freeze(s, report),
+            None => After::Freeze(not_frozen_by(report, "--freeze-adrs")),
+        },
     }
 }
 

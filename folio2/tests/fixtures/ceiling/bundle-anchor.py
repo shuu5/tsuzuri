@@ -22,12 +22,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE = os.path.join(HERE, "bundle", "source")
 FACES_DIR = os.path.join(HERE, "bundle", "faces")
 
-# 文書の id → 面の名の形（("exact", 名) か ("affix", 頭, 尾)）。無い id は面を持たない
+# 文書の id → 面の名の形（("exact", 名) か ("affix", 頭, 尾)）。無い id は面を束に写さない（adr は便 170・ADR-30 決定 (4)）
 FACES = {
     "index": ("exact", "index.html"),
     "constitution": ("exact", "constitution.html"),
     "srs": ("exact", "srs.html"),
-    "adr": ("affix", "adr-", ".html"),
     "design-note": ("affix", "note-", ".html"),
 }
 

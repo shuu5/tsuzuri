@@ -746,7 +746,7 @@ record:
   effort: high
   at: 2026-09-19T05:00:00Z
   read: [srs, adr, design-note]
-  bundle: sha256-files-1 d8734c77995da9034593d27e757890ec9133c86444a466b05c85a1a9e1250d89
+  bundle: sha256-files-1 051dc2391f525d11ff77b660e92676cc5189a199479bbd7fe6e8fff85e640966
 findings:
   - id: R-1
     viewpoint: reality
@@ -867,7 +867,8 @@ const REFUTE_FILES: [&str; 5] = [
     "sources.txt",
 ];
 const REFUTE_CONCAT_LEN: usize = 2_338;
-const REFUTE_DIGEST: &str = "ec8643e3a9942c05096c506eaf6c11a35d26a323c53a4852148f248cbdea0d46";
+/// 便 170: sources.txt の要約値が束から判断の記録の面を外した値に変わった後の値（連結の byte 数は不変）。
+const REFUTE_DIGEST: &str = "f4374dcb92b987745a5d96ac36b269690867779c9ec89a45bc682c71265c0d27";
 
 const REFUTE_FINDING: &str = "id: F-1\nviewpoint: fidelity\nplace: {doc: srs, at: requirements.FR2.plain}\nweight: 止める\nevidence: |\n  合格か不合格のどちらかを出します。\nnote: |\n  規範文の 3 値のうち「まだ分からない」を平易文が落としている。\n";
 
@@ -877,8 +878,9 @@ const REFUTE_QUESTION: &str = "id: fidelity\nname: 忠実さ\nreader: |\n  元�
 /// 親の観点の reads.yaml の写し（便 98 の落とした節の注釈を含む・delivery-98.md §1 (c) の 1 つ目の逐語）。
 const REFUTE_READS: &str = "- {doc: constitution, fields: [articles.plain, articles.statements.text]}\n- {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title]}\n- {doc: adr, fields: [plain, decision, options.text, figures.refs]}\n- {doc: design-note, fields: [sections, figures.refs]}\n# 落とした節 adr/ADR-2.yaml: context, basis, retreat, amends, consequences\n# 落とした節 constitution.yaml: north_star, precedence, rules_pointer, amendment, glossary_pointer, sources\n# 落とした節 design-note/full.yaml: sources\n# 落とした節 srs.yaml: goals, scope, scope_m1, actors, outputs, rail, verdicts, nonfunctional, not_frozen, constraints, glossary_pointer, figures\n# 常に残す節: meta, id, title, status, date, schema\n";
 
+/// 便 170: 親の観点の束から判断の記録の面を外した後の fidelity の要約値（bundle-anchor.txt と同じ字）。
 const REFUTE_SOURCES: &str =
-    "sha256-files-1 d2e153b29a2b46b88295d10f782163636a5613649ceb9efa80dcebfb48473782\n";
+    "sha256-files-1 23ac7bd276cd04ce9559b1e4ec68ed57c4b140872ef411163467cd102ed21f36\n";
 
 const REFUTE_SCHEMA: &str = "# 反証の結果の欄の決まり（folio ceiling --refute が組んだ・結果は同じ dir の result.yaml に書く）\nresult:\n  required: [id, refute, model, effort, at, bundle]\n  values: [支持, 退けた, まだ分からない]\n";
 
