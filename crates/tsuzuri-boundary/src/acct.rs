@@ -86,6 +86,21 @@ impl Acct {
         }
     }
 
+    /// 器の program。
+    pub fn scribe2(&self) -> &OsStr {
+        &self.scribe2
+    }
+
+    /// 引数の state dir（群の宣言の host.toml の置き場）。
+    pub fn host_state_dir(&self) -> &Path {
+        &self.state_dir
+    }
+
+    /// 子 process の cwd。
+    pub fn cwd(&self) -> &Path {
+        &self.cwd
+    }
+
     /// anchor の state dir（git の返した 1 行の前後の空白を除いた字・git が落ちる・5 秒で返らない・空なら None）。
     pub fn state_dir(&self, anchor: &Path) -> Option<PathBuf> {
         let mut args: Vec<&OsStr> = vec![OsStr::new("-C"), anchor.as_os_str()];
