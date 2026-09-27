@@ -3,7 +3,7 @@
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v0.3
+  version: v0.4
   status: effective
   generated: 2026-09-28
   profile: design-note
@@ -87,8 +87,8 @@ sections:
       g-ask-around（M）: 問いの card のつながりの段に近傍の図を埋め込む（段を初めて開いたときだけ読む）。file = surface/project/ask.rs・surface/project/nodearound.rs・surface/net.rs（置き場だけ）。依存 = なし。拠る = 見本・要件 FR5・FR6。
       g-hist-ruling（S）: これまでの決定の行に、その問いに答えた決定の節点への link。file = surface/project/askpage.rs。依存 = なし。拠る = 見本・要件 FR2・FR6。
       h-sess-axis（S）: session の表の見出しに幅ごとの目盛の時刻、狭い幅では見出しの後に同じ目盛の段。file = surface/account/session.rs。依存 = なし。拠る = 見本・要件 FR12・NFR1。
-      c-limit-pipe（S）: 中核の session の行で、run の口座の窓が使い切りなら pipeline の session を Limit と印す。file = core/account/project.rs と置き場だけの歯と fixture。依存 = なし。拠る = 席の決め（限度の KPI）・要件 FR12。
-      h-board-url（M）: 開く button で各 project の board を開く（git config の tsuzuri.boardport の port だけを電文に載せ、面が URL を組む）。file = contract/account.rs・tests/fixtures/account/acct-doc.json・core/account/project.rs・boundary/acct.rs・surface/account/windows.rs と着地済みの歯 3 つ。依存 = なし（c-limit-pipe と同じ core の file なので 5 節の順）。拠る = t3-hub.53.1・要件 FR1。
+      c-limit-pipe（S）: 中核の session の行で、器が走行に書く段 RateLimited（runner が上限で止まったとき器が書く RunStage の event）を写して pipeline の session を Limit と印す（tsuzuri は数の閾値を持たない・orchestrator の席の限度も器の判定の写しなので数え方がそろう）。file = core/account/project.rs・歯 plimit（新）・置き場だけの歯 acctpcore。依存 = なし。拠る = 席の決め（限度の KPI）・持ち主の裁定 t3-hub.53.8 の筋（器の値を写し判じない）・要件 FR12。後の面の小さな行: 語の辞書の limited の internal の字と、history の注釈の時点のつまみの字（FR12 v0.8 で作らない）を直す。
+      h-board-url（M）: 開く button で各 project の board を開く（git config の tsuzuri.boardport の port だけを電文に載せ、面が URL を組む）。file = contract/account.rs・tests/fixtures/account/acct-doc.json・boundary/acct.rs・surface/account/windows.rs と着地済みの歯 3 つ（server_acct・acctwin・acctproj）と新しい歯 bport（境界と面）。中核は書かない（port の読みと置きは境界だけ）。依存 = なし。拠る = t3-hub.53.1・要件 FR1。
       保留の 2 行（第 4 波の起草から）。
       c-summary-design（M）: 電文の節点に行の位置と 2 つの概要（plain と eng）の欄を足し、folio graph --print --summary の欄を写す。file = contract/graph.rs と契約の snapshot・core/graph/build.rs（読みの形・見込み）と、節点を struct の字で組む着地済みの歯。依存 = folio2 の --summary の着地。拠る = 席の決め（走査を置かない）・要件 FR15。
       f-gate（M）: 問いの起票の門 tz hook question-gate（1 段・4 種・hub を除く・30 越えは まだ分からない・止めるときは処分の無い id を全部名指す・要約値が古ければ止める）。file = core/gate.rs（新）・core/lib.rs・boundary/hook/mod.rs（新）・boundary/hook/question_gate.rs（新）・boundary/lib.rs・boundary/main.rs・tests/fixtures/guard の fixture（新）。依存 = srs の直し（FR4 と AC6）が main に在ること。拠る = t3-hub.55.2・要件 FR4・受入 AC6。
@@ -160,7 +160,7 @@ sections:
       surface/project/seat.rs: g-seat-more → g-seat-split → c-seat-tick → c-seat-grace → c-seat-group → g-seat-thr → g-seat-hb。
       contract/graph.rs と core/graph/build.rs: c-summary-design → c-dn-rows → c-summary-ledger → c-updated。
       core/graph/check.rs: c-g3g7 → c-g9。core/ledger/unreflected.rs と core/next_step.rs: c-unref-kinds → c-next-effect。
-      core/account/project.rs: c-limit-pipe → h-board-url → e-acct-qopen → e-acct-unref → c-dormant。
+      core/account/project.rs: c-limit-pipe → e-acct-qopen → e-acct-unref → c-dormant。
       contract/account.rs と boundary/acct.rs と tests/fixtures/account/acct-doc.json: h-board-url → c-acct-thr → e-acct-qopen → e-acct-unref → c-acct-spark。core/account/host.rs: c-acct-thr → c-acct-spark。
       surface/project/ask.rs: g-ask-around → c-q-blocking → g-card-adopt-b → g-tick-adopt → f-undelivered。surface/project/askpage.rs: g-hist-ruling → g-card-adopt-b。
       surface/project/pipeline.rs と next.rs: g-card-adopt-a → g-tick-adopt → f-undelivered。
