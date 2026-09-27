@@ -27,6 +27,8 @@
 
 - **scribe2-46 の回答（2026-09-27T07:3xZ）**: CI の無い consumer で close まで器が連鎖させる形は v2 に無い（close は push → CI → close の 3 段目）。便の終端では terminal=undeclared でも器が 1 周を自動で撃つので、blocks の依存が無い次の bead は自動で起きる。着地した bead に blocks で依存する bead は、手で close した後に 1 周を撃つ。ci-cmd に CI でない command を宣言する形は採らない（測っていないものを success と名乗る）。当面は設計席が close と 1 周を手で撃ち、便が増えたら GitHub の CI を置くかを持ち主に問う。`.cargo/config.toml` の件は scribe2 の memo s2-07l.676（v3 の実装役の権限と審査の勧めの設計の材料）。
 
+- **CI と作る順（2026-09-27T07:30Z〜07:45Z・持ち主の裁定 2 本・逐語は t3-hub.1）**: GitHub の CI を置いた（.github/workflows/ci.yml・rust-toolchain.toml 1.98.1 と wasm の target・CI に trunk）。.vessel.toml の remote = origin を戻した＝器が push → CI → close → 次の 1 周をつなぐ。作る順は「画面を早く出す順」に決定（docs/handoff/2026-09-27-t3-build-plan.md）。bead = t3-hub.3（便 b・走行中）→ t3-hub.4（便 e-min）→ t3-hub.5（便 g-min = 最初の本物の画面）。その後の順 = 行 e の残りと行 f → 行 c と行 d → 行 g の残り → 行 i と指し示し → 行 h・j・k と相談の窓 → code の持ち込み → 対象を広げる。行を足すときの作法: 新しい file は「+」・前の便が作った file は「+」無し・依存を足す便は Cargo.toml と Cargo.lock と xtask/src/main.rs を write-set に入れる・守られた file（.cargo/config.toml）は入れない・CI と toolchain の file は設計席が main で直す。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|

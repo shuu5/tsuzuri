@@ -1,7 +1,7 @@
-# t3 の作る順の計画（2026-09-27・設計席の提案・持ち主の承認の前）
+# t3 の作る順の計画（2026-09-27・持ち主の承認 user 2026-09-27T07:39Z で案アに決定・逐語は t3-hub.1）
 
 持ち主の指示（2026-09-27T07:3xZ・逐語は t3-hub.1）: CI を置いた上で開発を進める。ただし全体像の計画を先に報告する（何から作るか・GUI はいつできるか）。
-この file は提案で、承認の後に設計ノート（surface-base・surface-board）の契約表の行の分け方と順を改める。正本は design-intent/ が持つ。
+承認の後、設計ノートの契約表に行 e-min（surface-base 第 0.5 版）と行 g-min（surface-board 第 0.2 版）を足し、面の crate の依存の予算を規則の行 R-25 に置いた。正本は design-intent/ が持つ。台帳の bead = t3-hub.3（便 b）→ t3-hub.4（便 e-min）→ t3-hub.5（便 g-min）を blocks の依存でつないだ。
 
 ## 1. 今（verified）
 - 便 a（workspace の骨格）は着地（6d2a7cd）。CI（.github/workflows/ci.yml）は success。器の宣言の remote は戻した＝次の便から器が push → CI → close → 次の便の起動を自動でつなぐ。
