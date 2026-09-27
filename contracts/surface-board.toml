@@ -1,0 +1,58 @@
+schema = 1
+
+[[contract]]
+id = "g"
+title = "project board（問いの card・地図の 4 面・近傍・次の一手・pipeline の板・orchestrator と口座・台帳の指標・「?」と hover）"
+req = ["FR1", "FR5", "FR6", "FR10", "FR11", "FR12", "FR13", "FR14"]
+section = "2"
+write-set = ["crates/tsuzuri-surface/src/lib.rs", "+crates/tsuzuri-surface/src/project/mod.rs", "+crates/tsuzuri-surface/src/project/ask.rs", "+crates/tsuzuri-surface/src/project/map.rs", "+crates/tsuzuri-surface/src/project/pipeline.rs", "+crates/tsuzuri-surface/src/project/home.rs", "+crates/tsuzuri-surface/src/widgets/mod.rs", "+crates/tsuzuri-surface/src/widgets/hover.rs", "+crates/tsuzuri-surface/src/widgets/help.rs", "+crates/tsuzuri-surface/tests/project.rs", "+crates/tsuzuri-surface/index.html", "+crates/tsuzuri-surface/style.css"]
+verify = ["cargo nextest run -p tsuzuri-surface --no-tests=fail project_"]
+size = "L"
+done = "(1) 節点の形と帯の class が snapshot で pin される (2) card の順（題・概要・理由・推奨・答え・つながり）が pin される (3) 4 面の切り替えと段数と畳みが URL に残る (4) hover の置き場と猶予が browser の runner で通る (5) 論理は中核の関数の呼び出しだけで面の crate に判定の分岐が無い"
+goal = "面の crate に project board を置く。問いの card・地図の 4 面・近傍・次の一手・pipeline の板・orchestrator と口座・台帳の指標・「?」の注釈と hover の card。 描画の決まり（帯・形・色・縁・文の予算・hover の置き場）は mock v3 と同じ物差しで測る。論理は中核の crate の関数を呼ぶだけにする。 この便は土台の便の server（便 e）が着地した後に起こす（依存は台帳の blocks で張る・契約表の depends は同じ文書の中だけ）。"
+
+[[contract]]
+id = "h"
+title = "account board（HOME・session の表・各 project の tab・新しい窓と「戻る」・停止の切り替え・退避までの残り秒）"
+req = ["FR1", "FR11", "FR12", "FR13"]
+section = "3"
+write-set = ["crates/tsuzuri-surface/src/lib.rs", "+crates/tsuzuri-surface/src/account/mod.rs", "+crates/tsuzuri-surface/src/account/home.rs", "+crates/tsuzuri-surface/src/account/session.rs", "+crates/tsuzuri-surface/src/account/project.rs", "+crates/tsuzuri-boundary/src/server/account.rs", "+crates/tsuzuri-surface/tests/account.rs", "+tests/fixtures/account/seat-health/", "+tests/fixtures/account/move-grace/"]
+verify = ["cargo nextest run -p tsuzuri-surface --no-tests=fail account_", "cargo nextest run -p tsuzuri-boundary --no-tests=fail account_"]
+size = "L"
+done = "(1) 3 つの tab と並べ方と 3 つの幅が URL に残る (2) 新しい窓の名と「戻る」の 3 段 (3) tick が stale なら応答なし・heartbeat-off なら停止・切り替えは器の CLI の argv だけで state dir の byte 不変 (4) 残り秒が「記録の時刻 + 猶予 − 今」で起こし直した席には出ない"
+depends = ["g"]
+goal = "面の crate に account board を置く。HOME（群と口座・各 project の次の一手・畳んだ移動の履歴）・session の表（並べ方と稼働の記録の 3 つの幅）・各 project の tab（表・要対応の重い順）。 project board は名前つきの新しい窓で開き、「戻る」は窓を閉じて account board へ戻る。停止の切り替えは器の CLI を撃ち、移動中の席には退避までの残り秒を出す。"
+
+[[contract]]
+id = "i"
+title = "表示面（端末の一覧から ssh で Chrome を専用の profile の app mode で起こし CDP を tunnel で操作する・届かない端末は配信に落とす）"
+req = ["FR16"]
+section = "4"
+write-set = ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/stage/mod.rs", "+crates/tsuzuri-boundary/src/stage/terminal.rs", "+crates/tsuzuri-boundary/src/stage/cdp.rs", "+crates/tsuzuri-boundary/src/stage/relay.rs", "+crates/tsuzuri-boundary/tests/stage.rs", "+tests/fixtures/stage/terminals.toml"]
+verify = ["cargo nextest run -p tsuzuri-boundary --no-tests=fail stage_"]
+size = "L"
+done = "(1) 起動の引数（専用の profile・app mode・入力の環境）が snapshot と一致 (2) CDP の命令の列が snapshot と一致 (3) ssh で届かない端末の行は配信に落ちる (4) 端末の値は code に無く器の宣言の行から読む"
+goal = "席が端末の一覧（器の宣言の行）から端末の名で命令し、ssh 経由で Chrome を専用の profile の app mode で起こし、CDP を tunnel で引いて操作する駆動を境界の crate に置く。 入力の環境は端末の行から起動の環境へ渡す。ssh で届かない端末は server 側の headless Chrome の配信に落とす。 この便は土台の便の契約の型（便 b）が着地した後に起こす（依存は台帳の blocks で張る）。"
+
+[[contract]]
+id = "j"
+title = "受入 12 条の測定（browser の runner・全画面 × 2 幅 × 2 mode・1 件でも落ちる）"
+req = ["NFR1", "NFR3"]
+section = "5"
+write-set = ["+crates/tsuzuri-surface/tests/accept.rs", "+tests/fixtures/surface/accept-12/", "+xtask/src/accept.rs", "xtask/src/main.rs"]
+verify = ["cargo nextest run -p tsuzuri-surface --no-tests=fail accept_"]
+size = "M"
+done = "(1) 12 条それぞれに 1 件仕込んだ fixture で違反 1 が出る (2) 現物の全画面で 12 条とも 0 (3) 結果が report に残る (4) 面の crate の依存が rules 行 R-2 の別枠の予算に収まる"
+depends = ["g", "h"]
+goal = "mock v3 の測定 script を種にして、本番の面を browser の runner で全画面 × 2 幅 × 2 mode で描き、受入の 12 条を数える歯を置く。 1 条でも 1 件あれば落ちる。数えた結果は report に残す。"
+
+[[contract]]
+id = "k"
+title = "tz の口（folio の口を同じ名の subcommand に・graph は tz graph に吸収・inject は持たない・終了 code と出力の一致）"
+req = ["FR17"]
+section = "6"
+write-set = ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/src/cli/mod.rs", "+crates/tsuzuri-boundary/src/cli/folio.rs", "+crates/tsuzuri-boundary/tests/tz.rs", "+tests/fixtures/tz/parity/"]
+verify = ["cargo nextest run -p tsuzuri-boundary --no-tests=fail tz_"]
+size = "M"
+done = "(1) 11 の口で終了 code と出力が folio2 と一致 (2) tz graph --design が設計の索引だけを出す (3) tz inject が無い (4) folio という名の binary が workspace に無い"
+goal = "folio2 の code を持ち込んだ後、folio の口を同じ名の tz の subcommand にし、引数と終了 code と出力を folio2 の口と一致させる。graph は tz graph に吸収し、inject は持たない。 この便は code の持ち込み（ADR-4 決定 (3)）の後に起こす。"

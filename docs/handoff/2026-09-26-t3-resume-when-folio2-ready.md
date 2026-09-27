@@ -9,6 +9,9 @@
 
 - **実測（2026-09-27T03:1xZ・folio binary = folio2 8472b5c 相当）**: 群 A の 8 本のうち 7 本 closed（残り .185 = 説明の字）。新しい置き場では init → commit → inject・schema・derive・graph・build が通る（凍結の前なので check は まだ分からない 2）。**tsuzuri の正本では folio build が止まる**（design-note/surface.yaml の承認欄 = 床は一覧・面の生成器は表で読む・folio2 の .243・便 163 は契約だけ）→ ceiling も止まる。再開の判定点は「tsuzuri で build と ceiling が通る」まで待つ。folio2-13 に最短の列と見込みを照会中。
 
+- **folio2-13 の回答（2026-09-27T03:2xZ）**: 自己点検で「一括 30 の改訂 e / f は周を落とさないための磨きに手を広げていた」と認め、一括 30 を凍結して席の先頭を tsuzuri の道の便に切り替えた（持ち主の叱責 12:1x JST）。最短の列 = 便 163（.243 承認欄を面も一覧で読む）・165（.247 面が counts を数えて導く・promise と scope を任意に）・166（.248 要件の adrs を根拠の札に）。見込み 2〜3 時間（推測）。着地で tsuzuri 席へ知らせる（binary の更新 → schema --write → 5 か所 → ceiling の写しでの実測を添える）。48〜52 周目は字の上では 09-26 の裁定の範囲内（53 周目が 1 回残る）。(1) に要らない枝（一括 30・ADR-29・d162・d164・d168）は後へ回した。d162 が着地すると tsuzuri は schema --write で 4 file の書き直しが要る。
+- **tsuzuri 側の 5 か所は 2026-09-27 に直した**: 要件書 v0.3（道具の登場人物 1 つ = tsuzuri・入れる側 4・出る側 4・要件の basis は憲法の条だけ）と、設計ノート surface の章 21 → 9（便の散文と契約表を surface-base〔便 a〜f・章 8〕と surface-board〔便 g〜k・章 7〕へ字を変えずに移した・surface-base と surface-board は draft で持ち主の承認待ち）。導出物は contracts/surface-base.toml と surface-board.toml（旧 surface.toml は外した）。t3-hub.2 の pointer は contracts/surface-base.toml#a。写しで承認欄を表にして build を撃つと、次の止まり所は「srs.yaml.meta に counts が無い」= 便 165 の着地待ち。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
@@ -28,7 +31,7 @@
 4. **器の側の前提（§3）を消し込む**: 未回答が残っていれば scribe2 席へ再送。
 5. **便 a を器の列に戻す**: `bdw update t3-hub.2 --status open`（defer を戻す）→ notes に「再開（合図 = folio2 の群 A 着地 <日付>）」の 1 行。
 6. **t3 の dispatch の周を起こす**（§3 の 2・管理席か持ち主の手）→ 列に t3-hub.2 が載る（`[DISPATCH] bead=t3-hub.2 …`）ことを確認。受付で断られたら理由（Refuse の名）を grill B §18 に記録して直す。
-7. **便 a の着地の後**: 便 b〜k の bead を契約表の depends のとおり順に起票（`--deps blocks:<前の bead>`・pointer = `contracts/surface.toml#<行 id>`）。1 本ずつ。
+7. **便 a の着地の後**: 便 b〜k の bead を契約表の depends のとおり順に起票（`--deps blocks:<前の bead>`・pointer = `contracts/surface-base.toml#<行 id>（便 g〜k は surface-board.toml）`）。1 本ずつ。
 8. **code の持ち込み（ADR-4 決定 (3)）**: 便 b の後、scribe2 と folio2 の code を履歴つきで持ち込む段は別の判断の記録（crate の名の扱い = ADR-8 決定 (6)）。便 c 以降はその後。
 
 ## 3. 器の側の前提（scribe2-aa の回答 2026-09-26T15:2xZ・verified = scribe2 main 8198b92）

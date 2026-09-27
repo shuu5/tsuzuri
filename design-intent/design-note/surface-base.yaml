@@ -1,0 +1,116 @@
+# 設計ノート surface-base — 面の便の土台（便 a〜f）。判断の記録 ADR-3・ADR-4・ADR-7・ADR-8 の実装の便。要件は srs.yaml。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-base.toml に写る（folio derive --dir design-intent --out ../contracts --write）。便の契約 bead の pointer は design = contracts/surface-base.toml#<行 id>。
+meta:
+  id: surface-base
+  title: 面の便（土台）— workspace の骨格・契約の型・導出グラフ・台帳の指標・面の server・席の hook
+  version: v0.1
+  status: draft
+  generated: 2026-09-27
+  profile: design-note
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。発効は持ち主の承認で行う。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      面の便のうち、画面を持たない土台の 6 便（骨格・契約の型・導出グラフと不変条件・台帳の指標と次の一手・面の server・席の hook）を契約表の行にする。
+      部品・口・歯・節点・辺・不変条件・契約の型・器に頼む口の閉じた一覧は設計ノート surface が持ち、ここには写さない。
+  - n: 2
+    type: prose
+    title: 便 a — workspace の骨格
+    body: |
+      cargo の workspace と 4 つの crate（契約の型・中核・境界・面）と xtask の空の骨格を置き、器の宣言（.vessel.toml）を cargo の形に改める。
+      骨格は空の lib と 1 本の歯だけを持ち、依存は serde に限る。trunk は xtask の下に置き、器の allowed-commands は cargo と git のままにする。
+  - n: 3
+    type: prose
+    title: 便 b — 契約の型
+    body: |
+      server と面と hook が共有する型を契約の型の crate に置く。面の event・面の状態・問いの合図・裁定の要求と応答・束の要求と応答・方針の要求・台帳への書き（閉じた enum で bdw の argv を組む）・グラフの節点と辺・板の型。
+      面の側に電文の写しを書かない。型の外形は snapshot の歯で pin する。
+  - n: 4
+    type: prose
+    title: 便 c — 導出グラフと不変条件と近傍
+    body: |
+      設計文書と設計ノートの行と台帳と走行を 1 つのグラフに毎回組み直す純粋な関数を中核の crate に置く。不変条件の 12 本を 3 値で数え、近傍（根拠の側と影響の側・各 2 段・hub は畳む）を返す。
+      入力は design-intent の YAML と issues.jsonl と器の event log で、読めない出所はその種類だけ「まだ分からない」にする。tz graph の --check と --around の口は境界の crate が薄く包む。
+  - n: 5
+    type: prose
+    title: 便 d — 台帳の指標と未反映と次の一手
+    body: |
+      台帳の指標（open task・純減・closed/日・未反映・burndown・判定・memo と「詳しく」の項）と、未反映の 3 種（昇格先の無い memo・処分の無い裁定・反映されていない要望）と、次の一手の 7 種の判定を中核の crate の純粋な関数に置く。
+      判定の閾値は rules 行から読む（数を code に書かない）。作業中の数と最古は出さない。
+  - n: 6
+    type: prose
+    title: 便 e — 面の server
+    body: |
+      同期の server を境界の crate に置く。台帳の読み・裁定と束と方針の受付・承認の event の書き・SSE の配信・面の file の配布。
+      台帳への書きは閉じた enum から bdw の argv を組む 1 経路だけで、repo の file も state dir の file も書かない。id は server だけが発行する。見た版が古い要求は 1 byte も書かずに断る。
+  - n: 7
+    type: prose
+    title: 便 f — 席の hook と問いの起票の門
+    body: |
+      裁定が届いたときの席の起こし（器の配達の口と停止の hook の 2 経路）と、問いの起票の門（PreToolUse の guard・近傍の処分の宣言・束の要約値）を境界の crate に置く。
+      席は自前の周期の読みを持たない。門は処分の無い id を全部名指して止める。
+  - n: 8
+    type: contract-table
+    title: 契約表
+    rows:
+      - id: a
+        title: workspace の骨格（4 つの crate と xtask・器の宣言を cargo の形へ）
+        req: [FR17]
+        section: "2"
+        write-set: ["+Cargo.toml", "+crates/tsuzuri-contract/Cargo.toml", "+crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-core/Cargo.toml", "+crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-boundary/Cargo.toml", "+crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-surface/Cargo.toml", "+crates/tsuzuri-surface/src/lib.rs", "+xtask/Cargo.toml", "+xtask/src/main.rs", ".vessel.toml"]
+        verify: ["cargo nextest run -p tsuzuri-contract --no-tests=fail skeleton_"]
+        size: S
+        done: (1) cargo build が workspace の 5 つで通る (2) 骨格の歯 1 本が緑 (3) .vessel.toml の common-verify が cargo xtask check になる（allowed-commands の cargo は便の前に main で足してある） (4) 依存は serde だけ
+        depends: []
+      - id: b
+        title: 契約の型（面の event・状態・問いの合図・裁定と束と方針の要求と応答・台帳への書きの enum・グラフの節点と辺・板の型）
+        req: [FR2, FR6, FR7, FR8, FR9]
+        section: "3"
+        write-set: ["crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-contract/src/surface.rs", "+crates/tsuzuri-contract/src/ledger.rs", "+crates/tsuzuri-contract/src/graph.rs", "+crates/tsuzuri-contract/src/board.rs", "+crates/tsuzuri-contract/tests/contract_form.rs", "+crates/tsuzuri-contract/tests/snapshots/"]
+        verify: ["cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_"]
+        size: M
+        done: (1) 型の外形の snapshot が pin される (2) 台帳への書きの enum の全 variant が bdw の argv に組め、起票の門の判定で deny 0 (3) serde の往復が全型で一致
+        depends: [a]
+      - id: c
+        title: 導出グラフと不変条件の 12 本と近傍（純粋な関数・毎回組み直し・読めない種類だけ「まだ分からない」）
+        req: [FR2, FR3, FR5]
+        section: "4"
+        write-set: ["crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/src/graph/check.rs", "+crates/tsuzuri-core/src/graph/around.rs", "+crates/tsuzuri-core/tests/graph.rs", "+tests/fixtures/graph/hub-619/", "+tests/fixtures/graph/unruled/", "+tests/fixtures/graph/runs-5/", "+tests/fixtures/graph/no-state/"]
+        verify: ["cargo nextest run -p tsuzuri-core --no-tests=fail graph_"]
+        size: L
+        done: (1) 節点の種類と辺の型が ADR-7 決定 (2) の一覧と一致 (2) 不変条件ごとに違反 1 本の fixture がその 1 本だけを名指す (3) hub の fixture で近傍 2 段が hub を展開せず総数を出す (4) state dir を欠く fixture で走行だけ「まだ分からない」
+        depends: [b]
+      - id: d
+        title: 台帳の指標と未反映の 3 種と次の一手の 7 種（閾値は rules 行から読む）
+        req: [FR11, FR13, FR15]
+        section: "5"
+        write-set: ["crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/ledger/mod.rs", "+crates/tsuzuri-core/src/ledger/metrics.rs", "+crates/tsuzuri-core/src/ledger/unreflected.rs", "+crates/tsuzuri-core/src/next_move.rs", "+crates/tsuzuri-core/tests/ledger.rs", "+tests/fixtures/ledger/judge/", "design-intent/rules.yaml"]
+        verify: ["cargo nextest run -p tsuzuri-core --no-tests=fail ledger_"]
+        size: M
+        done: (1) 判定の 5 値と未反映の 3 種が fixture の期待と一致 (2) 閾値は rules 行 3 本から読み code に数が無い (3) 次の一手の 7 種の順が snapshot で pin される (4) 作業中の数と最古が出力に無い
+        depends: [c]
+      - id: e
+        title: 面の server（台帳の読み・裁定と束と方針の受付・承認の event・SSE・bdw 経由の 1 経路の書き）
+        req: [FR6, FR7, FR8, FR9, NFR2]
+        section: "6"
+        write-set: ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/server/mod.rs", "+crates/tsuzuri-boundary/src/server/ledger.rs", "+crates/tsuzuri-boundary/src/server/ruling.rs", "+crates/tsuzuri-boundary/src/server/events.rs", "+crates/tsuzuri-boundary/src/server/graph.rs", "+crates/tsuzuri-boundary/tests/server.rs", "+tests/fixtures/surface/batch-3.yaml", "+tests/fixtures/surface/batch-a1.yaml", "+tests/fixtures/surface/stale-version.yaml"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --no-tests=fail server_"]
+        size: L
+        done: (1) 3 問の束で裁定 id 3 つと束の id と notes の末尾と closed と event の 1 行 (2) A-1 の印を含む束は 400 で台帳の byte 不変 (3) 古い版は 409 で byte 不変・取り消しで open に戻る (4) 台帳への書きは enum から bdw の argv を組む 1 経路だけ (5) 問いの合図から SSE まで 200 ミリ秒以内
+        depends: [b, c, d]
+      - id: f
+        title: 席の hook（裁定の配達と停止の hook の 2 経路）と問いの起票の門（近傍の処分の宣言）
+        req: [FR4, FR9]
+        section: "7"
+        write-set: ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/hook/mod.rs", "+crates/tsuzuri-boundary/src/hook/deliver.rs", "+crates/tsuzuri-boundary/src/hook/stop.rs", "+crates/tsuzuri-boundary/src/hook/question_gate.rs", "+crates/tsuzuri-boundary/tests/hook.rs", "+tests/fixtures/guard/question-3/"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --no-tests=fail hook_"]
+        size: M
+        done: (1) 問いの起票 3 通り（deny と id の列挙・allow・古い要約値で deny） (2) 待ちの席へ配達の 1 行・考え中の席は停止の hook が続けさせる (3) 裁定から 2 分で受けが無ければ面の状態に「届いていない」
+        depends: [e]
+
+figures: []
+sources:
+  - {id: mock3, name: mock v3（面の見本）, where: ~/projects/local-projects/tsuzuri-site/mock3/（外部 pointer・参照の母集団に入れない）}
