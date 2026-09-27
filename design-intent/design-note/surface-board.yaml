@@ -306,7 +306,7 @@ sections:
         write-set: ["crates/tsuzuri-surface/src/account/windows.rs", "crates/tsuzuri-surface/src/account/board.rs", "+crates/tsuzuri-surface/tests/acctwin.rs"]
         verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail acctwin_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
         size: S
-        done: (1) 窓の名の関数は project の名 tsuzuri で tz-tsuzuri を返し、account board の窓の名の定数は tz-account (2) 開く URL の関数は、電文の board の字に mode を足した字を返し、board が無い project は無しを返す (3) 窓の一覧の移り方は、開いていない窓を開くと新しい、開いている窓を開くと前面へ、閉じた窓は閉じたで、一覧は開いた順に並び、頁の一生の間だけ持つ (4) button の字は、開いている窓は前面へ、ほかは語の鍵 open_new (5) src の account の下の file に localStorage・sessionStorage・cookie の字が無い (6) Cargo.toml と語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        done: (1) 窓の名の関数は project の名 tsuzuri で tz-tsuzuri を返し、account board の窓の名の定数は tz-account (2) 開く URL の関数は、電文の board の字に mode を足した字を返し、board が無い project は無しを返す (3) 窓の一覧の移り方は、一覧に無い窓と閉じた窓を開くと新しい（一覧に無い窓は末尾に足し、閉じた窓は位置を変えずに開いているにする）、開いている窓を開くと前面へ、handle の closed が真になった窓は閉じたで、一覧は開いた順に並び、頁の一生の間だけ持つ (4) button の字は、開いている窓は前面へ、ほかは語の鍵 open_new (5) src の account の下の file に localStorage・sessionStorage・cookie の字が無い (6) Cargo.toml と語の辞書と stylesheet は触らず、足す外の依存は 0 本
         depends: [h-frame]
       - id: h-hb
         title: 停止の切り替えの button と確かめの段と送る（応答の出し方）
@@ -700,7 +700,7 @@ sections:
       開いている窓の一覧（HOME の winsp・class items wins）は頁の一生の間だけ持つ。見本は localStorage の tz-wins に残すが、この便は残さない（未決）。
       在りか（着地済み）。web-sys の Window の feature は面の crate の Cargo.toml に在る（open と focus と name は Window の feature だけで使える）。語の鍵 open_windows・open_new・not_yet は語の辞書に在る。
       開く URL の決まり（done (2) の出所）。開く URL は、電文の ProjectRow の board の字の後に ?mode= と今の mode の key（着地済みの frame の Mode の key・beginner か expert）を付けた字（例 /proj-a/ と expert で /proj-a/?mode=expert）。board が無い project は無し。
-      窓の一覧の決まり（done (3)(4) の出所）。一覧の 1 項は、project の名・窓の名（tz-<project の名>）・状態（開いている か 閉じた）。一覧の移り方は純粋な関数で決める。一覧に無い project を開くと、末尾に開いているで足す（結果は新しい）。一覧に在る project を開くと、状態を開いているにして位置は変えない（結果は前面へ）。handle の closed が真になった project は閉じたにする。一覧は開いた順（初めて足した順）に並べ、頁の一生の間だけ持つ（localStorage・sessionStorage・cookie を使わない）。一覧の行と開く button の字は、開いている窓は字「前面へ」（語の辞書に鍵が無いので module の定数に置く）、ほかは語の鍵 open_new。
+      窓の一覧の決まり（done (3)(4) の出所）。一覧の 1 項は、project の名・窓の名（tz-<project の名>）・状態（開いている か 閉じた）。一覧の移り方は純粋な関数で決める。一覧に無い project を開くと、末尾に開いているで足す（結果は新しい）。一覧に在る project を開くと、状態を開いているにして位置は変えない。結果は、その項が開いているなら前面へ、閉じたなら新しい（handle が死んだ窓は、開く手順のとおり window の open で開き直す）。handle の closed が真になった project は閉じたにする。一覧は開いた順（初めて足した順）に並べ、頁の一生の間だけ持つ（localStorage・sessionStorage・cookie を使わない）。一覧の行と開く button の字は、開いている窓は字「前面へ」（語の辞書に鍵が無いので module の定数に置く）、ほかは語の鍵 open_new。
       関数の名（ほかの行が呼ぶ）。windows の module に、窓の名の関数 win_name・account board の窓の名の定数 ACCOUNT_WIN（字 tz-account）・開く URL の関数 open_url・一覧の移り方の関数 after_open（開いたとき）と after_close（handle の closed が真になったとき）・開く関数 open（wasm の target のときだけ・引数は project の名と開く URL）を置く。便 h-home と便 h-proj の開く button は open を呼ぶ。about:blank の確かめは web-sys の Location の feature を使う（Cargo.toml に在る）。
       窓の名を付ける所。account board の窓の名 tz-account は、account の board.rs の mount で window の name に入れる（この行の write-set に board.rs を足す）。
       着地済みの枠との関係（便 h-frame・3100107）。windows の module の BLOCK と view の名と body は変えず（着地済みの歯 acctframe_blocks_unmeasured_until_read が body を pin する）、中身は新しい関数で組み、view はその関数を使う。file を足さない。
