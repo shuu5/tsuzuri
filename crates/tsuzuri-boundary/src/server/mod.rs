@@ -10,9 +10,9 @@
 //! 同じ時に届いた要求は、台帳の読みと設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
 //! 分け合うのは起動で作る 1 つの `Source` と 1 つの `Design` とその clone（変化の見張りの読みも含む）で、
 //! 読み終えた字は次の要求に持ち回さない。裁定の受付は合流せず、新しい子 process で読み直す。
-//! GET の口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
-//! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13）。
-//! 変化の知らせ（SSE）と POST の 4 つの口はここに在り、どの口にも当たらない GET は面の file の配布。
+//! GET の口と POST の 4 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
+//! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
+//! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
 
 pub mod batch;
 pub mod board;
@@ -45,14 +45,10 @@ use std::sync::{Arc, Mutex, Once};
 use std::thread;
 use std::time::Duration;
 
-use tsuzuri_contract::account::HEARTBEAT_PATH;
-use tsuzuri_contract::surface::{
-    BatchRequest, PolicyRequest, Refusal, RefusalResponse, RulingRequest,
-};
+use tsuzuri_contract::surface::{Refusal, RefusalResponse};
 use tsuzuri_contract::wire;
 
 use crate::acct::Acct;
-use crate::accthb;
 
 use self::board::Sources;
 use self::design::Design;
@@ -60,7 +56,7 @@ use self::events::Hub;
 use self::files::Served;
 use self::http::{Request, Response};
 use self::ledger::Source;
-use self::ruling::{Delivery, Outcome, Writer};
+use self::ruling::{Delivery, Writer};
 use self::runs::Runs;
 use self::seat::Seats;
 
@@ -264,20 +260,14 @@ fn handle(stream: TcpStream, shared: &Shared) {
     let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
     let response = match http::read_request(&stream) {
         Err(_) => Response::text(400, "bad-request"),
-        Ok(req) if req.method == "POST" && req.path() == ruling::PATH => post_ruling(&req, shared),
-        Ok(req) if req.method == "POST" && req.path() == batch::PATH => post_batch(&req, shared),
-        Ok(req) if req.method == "POST" && req.path() == policy::PATH => post_policy(&req, shared),
-        Ok(req) if req.method == "POST" && req.path() == HEARTBEAT_PATH => {
-            post_heartbeat(&req, shared)
-        }
-        Ok(req) if req.method != "GET" => Response::text(405, "method").header("Allow", "GET"),
-        Ok(req) if req.path() == "/api/surface/events" => {
+        Ok(req) if req.method == "GET" && req.path() == "/api/surface/events" => {
             let _ = events::stream(&stream, &shared.hub);
             return;
         }
-        // GET の口（`route::dispatch`）に当たらなければ面の file の配布。
+        // 口（`route::dispatch`・method を問わない）に当たらなければ、GET でない要求は 405、GET は面の file の配布。
         Ok(req) => match route::dispatch(&req, shared) {
             Some(response) => response,
+            None if req.method != "GET" => Response::text(405, "method").header("Allow", "GET"),
             None => match files::serve(&shared.files, req.path()) {
                 Served::File { content_type, body } => Response::new(200, content_type, body),
                 Served::Outside => Response::text(403, "outside"),
@@ -310,73 +300,6 @@ fn refusal(reason: Refusal) -> Response {
         reason.http_status(),
         wire::encode(&RefusalResponse { reason }),
     )
-}
-
-/// 裁定の受付（守りは `guarded`）。断りと 4xx と 5xx は、notes への追記の前なら何も書いていない。
-fn post_ruling(req: &Request, shared: &Shared) -> Response {
-    let body = match guarded(req, |t| wire::decode::<RulingRequest>(t).ok()) {
-        Ok(body) => body,
-        Err(response) => return response,
-    };
-    let outcome = ruling::accept(&body, &shared.sources.ledger, &shared.writer, events::now());
-    match outcome {
-        Outcome::Recorded(response) => json(200, wire::encode(&response)),
-        Outcome::Refused(reason) => refusal(reason),
-        Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
-        Outcome::IdShape => Response::text(500, "ruling-id-shape"),
-        Outcome::AppendFailed => Response::text(502, "ledger-append"),
-        Outcome::CloseFailed(id) => Response::text(502, &format!("ledger-close {id}")),
-    }
-}
-
-/// 束の受付（守りは `guarded`）。断りと 4xx と 5xx は何も書いていない。
-/// 502 の本文は、2 回とも書き終えた行だけを書いたとして持つ BatchResponse。
-fn post_batch(req: &Request, shared: &Shared) -> Response {
-    let body = match guarded(req, |t| wire::decode::<BatchRequest>(t).ok()) {
-        Ok(body) => body,
-        Err(response) => return response,
-    };
-    match batch::accept(&body, &shared.sources.ledger, &shared.writer, events::now()) {
-        batch::Outcome::Recorded(response) => json(200, wire::encode(&response)),
-        batch::Outcome::Refused(reason) => refusal(reason),
-        batch::Outcome::Duplicate => Response::text(400, "duplicate"),
-        batch::Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
-        batch::Outcome::IdShape => Response::text(500, "ruling-id-shape"),
-        batch::Outcome::WriteFailed(response) => json(502, wire::encode(&response)),
-    }
-}
-
-/// 方針の受付（守りは `guarded`）。断りと 4xx と 5xx は何も書いていない。
-fn post_policy(req: &Request, shared: &Shared) -> Response {
-    let body = match guarded(req, |t| wire::decode::<PolicyRequest>(t).ok()) {
-        Ok(body) => body,
-        Err(response) => return response,
-    };
-    match policy::accept(&body, &shared.sources.ledger, &shared.writer, events::now()) {
-        policy::Outcome::Recorded(response) => json(200, wire::encode(&response)),
-        policy::Outcome::Refused(reason) => refusal(reason),
-        policy::Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
-        policy::Outcome::BadScope => Response::text(400, "scope"),
-        policy::Outcome::NoMemo => Response::text(503, "no-policy-memo"),
-        policy::Outcome::IdShape => Response::text(500, "policy-id-shape"),
-        policy::Outcome::AppendFailed => Response::text(502, "ledger-append"),
-    }
-}
-
-/// 停止の切り替えの受付（守りは `guarded`・本文の読みは `accthb::accept`）。
-/// state dir が無ければ器を撃たず 404 no-project。200 の本文は JSON、ほかは字。
-fn post_heartbeat(req: &Request, shared: &Shared) -> Response {
-    let body = match guarded(req, |t| Some(t.to_string())) {
-        Ok(body) => body,
-        Err(response) => return response,
-    };
-    let Some(acct) = &shared.acct else {
-        return Response::text(404, accthb::NO_PROJECT);
-    };
-    match accthb::accept(acct, &body) {
-        (200, text) => Response::json(200, text),
-        (status, text) => Response::text(status, &text),
-    }
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
