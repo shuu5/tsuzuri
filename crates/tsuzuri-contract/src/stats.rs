@@ -1,11 +1,11 @@
-//! 台帳の指標と次の一手の電文（設計ノート surface-base 便 d・判断の記録 ADR-7 決定 (6)・(8)）。
+//! 台帳の指標と次の一手と未反映の一覧の電文（設計ノート surface-base 便 d・便 e-view・判断の記録 ADR-7 決定 (6)・(8)）。
 //! 数え方は中核の crate が持ち、ここは電文の形だけを決める。作業中の数と最古の task の欄は持たない。
 //! 台帳が読めなければ指標は `Reading::Unknown` で運び、判定は台帳なしにする。
 
 use serde::{Deserialize, Serialize};
 
 use crate::EpochSecs;
-use crate::board::{LedgerJudge, NextMove};
+use crate::board::{LedgerJudge, NextMove, Reading};
 use crate::ledger::BeadId;
 
 /// 種類ごとの open の数。
@@ -68,6 +68,22 @@ impl UnreflectedKind {
         UnreflectedKind::Ruling,
         UnreflectedKind::Request,
     ];
+}
+
+/// 未反映の 1 件（bead の id の字・題・年齢の秒・作った時刻が読めなければ年齢は None）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnreflectedRow {
+    pub id: String,
+    pub title: String,
+    pub age_s: Option<u64>,
+}
+
+/// 未反映の一覧（種類ごとに、読めた一覧か「まだ分からない」・便 e-view）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UnreflectedList {
+    pub memos: Reading<Vec<UnreflectedRow>>,
+    pub rulings: Reading<Vec<UnreflectedRow>>,
+    pub requests: Reading<Vec<UnreflectedRow>>,
 }
 
 /// 台帳の指標（時点・判定・主指標・日ごとの 14 本・epic の進み・memo・未反映）。

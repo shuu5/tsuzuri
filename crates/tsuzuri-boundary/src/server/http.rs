@@ -32,6 +32,17 @@ impl Request {
             .map_or(self.target.as_str(), |(p, _)| p)
     }
 
+    /// target の query（`?` の後）で鍵 `key` の最初の値（鍵と値は `+` を空白に、`%XX` を byte に戻して読む）。
+    /// 鍵が無ければ None。`=` の無い鍵の値は空の字。形の悪い `%` はそのまま残し、UTF-8 でない byte は置き換える。
+    pub fn query(&self, key: &str) -> Option<String> {
+        let (_, query) = self.target.split_once('?')?;
+        query
+            .split('&')
+            .map(|pair| pair.split_once('=').unwrap_or((pair, "")))
+            .find(|(k, _)| unescape(k) == key)
+            .map(|(_, v)| unescape(v))
+    }
+
     /// 本文が `BODY_MAX` を越える。
     pub fn too_large(&self) -> bool {
         self.content_length > BODY_MAX
@@ -57,6 +68,26 @@ impl Request {
             .and_then(|h| authority(h.trim(), default_port));
         from.is_some() && from == to
     }
+}
+
+/// query の字を戻す（`+` は空白・`%XX` は byte・形の悪い `%` はそのまま）。
+fn unescape(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    let hex = |at: usize| bytes.get(at).and_then(|b| (*b as char).to_digit(16));
+    while i < bytes.len() {
+        match (bytes[i], hex(i + 1), hex(i + 2)) {
+            (b'+', _, _) => out.push(b' '),
+            (b'%', Some(h), Some(l)) => {
+                out.push((h * 16 + l) as u8);
+                i += 2;
+            }
+            (b, _, _) => out.push(b),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// `host[:port]` を（小文字の host・port）にする（port を省けば `default_port`・IPv6 は `[…]` の形）。
@@ -292,6 +323,34 @@ mod tests {
         ] {
             assert!(!with(host, origin).same_origin(), "{host:?} {origin:?}");
         }
+    }
+
+    #[test]
+    fn server_view_http_query_unescapes() {
+        let with = |target: &str| super::Request {
+            method: "GET".into(),
+            target: target.into(),
+            host: None,
+            origin: None,
+            content_length: 0,
+            body: Vec::new(),
+        };
+        let req =
+            with("/api/around?id=R%2D25&k=&fold&q=a+b%20c&id=x&%6B2=%E8%A8%AD&bad=%4&odd=%zz%");
+        assert_eq!(req.path(), "/api/around");
+        assert_eq!(req.query("id").as_deref(), Some("R-25"), "最初の値");
+        assert_eq!(req.query("k").as_deref(), Some(""));
+        assert_eq!(req.query("fold").as_deref(), Some(""), "`=` の無い鍵");
+        assert_eq!(req.query("q").as_deref(), Some("a b c"));
+        assert_eq!(req.query("k2").as_deref(), Some("設"), "鍵も戻す");
+        assert_eq!(req.query("bad").as_deref(), Some("%4"));
+        assert_eq!(req.query("odd").as_deref(), Some("%zz%"));
+        assert_eq!(req.query("steps"), None);
+        assert_eq!(with("/api/around").query("id"), None);
+        assert_eq!(
+            with("/api/around?id=%FF").query("id").as_deref(),
+            Some("\u{FFFD}")
+        );
     }
 
     #[test]

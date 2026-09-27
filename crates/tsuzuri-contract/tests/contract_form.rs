@@ -25,7 +25,7 @@ use tsuzuri_contract::question::{QuestionCard, QuestionList};
 use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState};
 use tsuzuri_contract::stats::{
     CheckResult, DayCount, EpicProgress, LeadDays, LedgerStats, MemoStats, NextCheck, NextStep,
-    OpenCounts, UnreflectedKind,
+    OpenCounts, UnreflectedKind, UnreflectedList, UnreflectedRow,
 };
 use tsuzuri_contract::surface::{
     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
@@ -282,6 +282,22 @@ fn hub_cut() -> HubCut {
         id: "t3-hub".into(),
         degree: 31,
     }
+}
+
+/// 年齢の在る memo と、作った時刻の読めない memo。
+fn unreflected_rows() -> Vec<UnreflectedRow> {
+    vec![
+        UnreflectedRow {
+            id: "t3-hub.9".into(),
+            title: "[memo] 控え".into(),
+            age_s: Some(604_800),
+        },
+        UnreflectedRow {
+            id: "t3-hub.10".into(),
+            title: "[memo] 時刻の無い控え".into(),
+            age_s: None,
+        },
+    ]
 }
 
 fn ledger_item() -> LedgerItem {
@@ -935,6 +951,28 @@ fn forms() -> Vec<Box<dyn Form>> {
                     .collect(),
                 lead: NextMove::StalledRun,
             }],
+        ),
+        form("stats::UnreflectedRow", unreflected_rows()),
+        form(
+            "stats::UnreflectedList",
+            vec![
+                UnreflectedList {
+                    memos: Reading::Known(unreflected_rows()),
+                    rulings: Reading::Unknown,
+                    requests: Reading::Unknown,
+                },
+                UnreflectedList {
+                    memos: Reading::Known(vec![]),
+                    rulings: Reading::Known(vec![]),
+                    requests: Reading::Known(vec![]),
+                },
+                // 台帳が読めない。
+                UnreflectedList {
+                    memos: Reading::Unknown,
+                    rulings: Reading::Unknown,
+                    requests: Reading::Unknown,
+                },
+            ],
         ),
         // question
         form(

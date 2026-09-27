@@ -1004,6 +1004,54 @@
       "lead": "stalled-run"
     }
   ],
+  "stats::UnreflectedRow": [
+    {
+      "id": "t3-hub.9",
+      "title": "[memo] 控え",
+      "age_s": 604800
+    },
+    {
+      "id": "t3-hub.10",
+      "title": "[memo] 時刻の無い控え",
+      "age_s": null
+    }
+  ],
+  "stats::UnreflectedList": [
+    {
+      "memos": {
+        "known": [
+          {
+            "id": "t3-hub.9",
+            "title": "[memo] 控え",
+            "age_s": 604800
+          },
+          {
+            "id": "t3-hub.10",
+            "title": "[memo] 時刻の無い控え",
+            "age_s": null
+          }
+        ]
+      },
+      "rulings": "unknown",
+      "requests": "unknown"
+    },
+    {
+      "memos": {
+        "known": []
+      },
+      "rulings": {
+        "known": []
+      },
+      "requests": {
+        "known": []
+      }
+    },
+    {
+      "memos": "unknown",
+      "rulings": "unknown",
+      "requests": "unknown"
+    }
+  ],
   "question::QuestionCard": [
     {
       "id": "t3-hub.7",

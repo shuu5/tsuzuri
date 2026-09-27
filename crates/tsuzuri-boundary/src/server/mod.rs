@@ -11,6 +11,9 @@
 //! - GET /api/metrics — 台帳の指標（LedgerStats）
 //! - GET /api/next — 次の一手（NextStep）
 //! - GET /api/graph — 導出グラフ（GraphDoc）
+//! - GET /api/graph/view — 地図のグラフの眺め（GraphView・便 e-view）
+//! - GET /api/around?id=&k=&fold= — 節点の近傍（AroundDoc・便 e-view）
+//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・便 e-view）
 //! - GET /api/questions — 問いの一覧（QuestionList）
 //! - GET /api/seat — 席の card（SeatCard）
 //! - POST /api/ruling — 裁定の受付（RulingRequest → RulingResponse か RefusalResponse）
@@ -36,9 +39,11 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use tsuzuri_contract::graph::Fold;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::{RefusalResponse, RulingRequest};
 use tsuzuri_contract::wire;
+use tsuzuri_core::graph::around::{AROUND_STEPS, AROUND_STEPS_RANGE};
 
 use self::board::Sources;
 use self::design::Design;
@@ -242,14 +247,15 @@ fn handle(stream: TcpStream, shared: &Shared) {
             let _ = events::stream(&stream, &shared.hub);
             return;
         }
-        Ok(req) => route(req.path(), shared),
+        Ok(req) => route(&req, shared),
     };
     let _ = response.write_to(&stream);
 }
 
 /// GET の口を選ぶ。
-fn route(path: &str, shared: &Shared) -> Response {
+fn route(req: &Request, shared: &Shared) -> Response {
     let sources = &shared.sources;
+    let path = req.path();
     match path {
         "/api/ledger" => return json(200, wire::encode(&ledger::list(&sources.ledger))),
         "/api/pipeline" => {
@@ -279,6 +285,18 @@ fn route(path: &str, shared: &Shared) -> Response {
             let texts = sources.gather(true, true);
             return json(200, wire::encode(&board::graph(&texts)));
         }
+        "/api/graph/view" => {
+            let texts = sources.gather(true, true);
+            return json(200, wire::encode(&board::view(&texts)));
+        }
+        "/api/around" => return around(req, sources),
+        "/api/unreflected" => {
+            let texts = sources.gather(false, false);
+            return json(
+                200,
+                wire::encode(&board::unreflected(&texts, events::now())),
+            );
+        }
         "/api/questions" => {
             let text = sources.ledger.text().unwrap_or_default();
             return json(200, wire::encode(&tsuzuri_core::question::list(&text)));
@@ -299,6 +317,34 @@ fn route(path: &str, shared: &Shared) -> Response {
         Served::File { content_type, body } => Response::new(200, content_type, body),
         Served::Outside => Response::text(403, "outside"),
         Served::Missing => Response::text(404, "no-file"),
+    }
+}
+
+/// 節点の近傍（query は id・k・fold の順に読み、最初に当たった断りを返す）。
+/// id が無いか空は 400 no-id・k が 1 から 3 の整数でなければ 400 steps・fold が 4 つの字のどれでもなければ 400 fold・
+/// 節点が無ければ 404 no-node。字を集めるのは query が読めた後だけ。
+fn around(req: &Request, sources: &Sources) -> Response {
+    let Some(id) = req.query("id").filter(|id| !id.is_empty()) else {
+        return Response::text(400, "no-id");
+    };
+    let steps = match req.query("k") {
+        None => AROUND_STEPS,
+        Some(k) => match k.parse::<u8>() {
+            Ok(k) if AROUND_STEPS_RANGE.contains(&k) => k,
+            _ => return Response::text(400, "steps"),
+        },
+    };
+    let fold = match req.query("fold").as_deref() {
+        None | Some("none") => Fold::None,
+        Some("up") => Fold::Up,
+        Some("down") => Fold::Down,
+        Some("both") => Fold::Both,
+        Some(_) => return Response::text(400, "fold"),
+    };
+    let texts = sources.gather(true, true);
+    match board::around(&texts, &id, steps, fold) {
+        Some(doc) => json(200, wire::encode(&doc)),
+        None => Response::text(404, "no-node"),
     }
 }
 

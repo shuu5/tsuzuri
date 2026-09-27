@@ -3,6 +3,9 @@
 //! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats）
 //! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
 //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
+//! - GET /api/graph/view — 地図のグラフの眺め（GraphView・便 e-view）
+//! - GET /api/around — 節点の近傍（AroundDoc・便 e-view）
+//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・台帳だけを読む・便 e-view）
 //!
 //! 字は要求のたびに集める。台帳は bd の読み（`ledger::Source`）が返した字、設計の索引は設計の道具の
 //! 標準出力（`design::Design`）、走行は器の event log の file（`runs::Runs`）。読めない出所は空の字で渡し、
@@ -13,11 +16,13 @@ use std::thread;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, Reading};
 use tsuzuri_contract::graph::{
-    BeadAttr, GraphDoc, GraphSource, InvariantCheck, RunAttr, SkippedEdges, Verdict,
+    AroundDoc, BeadAttr, Fold, GraphDoc, GraphSource, GraphView, InvariantCheck, RunAttr,
+    SkippedEdges, Verdict,
 };
 use tsuzuri_contract::seat::SeatCard;
-use tsuzuri_contract::stats::{LedgerStats, NextStep};
+use tsuzuri_contract::stats::{LedgerStats, NextStep, UnreflectedList, UnreflectedRow};
 use tsuzuri_core::graph::{self, Graph, Inputs, Invariant};
+use tsuzuri_core::ledger::{Unreflected, UnreflectedItem};
 
 use super::design::Design;
 use super::ledger::Source;
@@ -93,6 +98,43 @@ pub fn graph(texts: &Texts) -> GraphDoc {
     let g = graph::build(&texts.inputs());
     let invariants = graph::check(&g);
     doc(&g, &invariants)
+}
+
+/// 地図のグラフの眺め（導出グラフを組んで眺めの関数に渡す・便 e-view）。
+pub fn view(texts: &Texts) -> GraphView {
+    graph::view(&graph::build(&texts.inputs()))
+}
+
+/// 節点の近傍（中心の節点が無いか、段数が幅の外なら None・便 e-view）。
+pub fn around(texts: &Texts, center: &str, steps: u8, fold: Fold) -> Option<AroundDoc> {
+    graph::around(&graph::build(&texts.inputs()), center, steps, fold)
+}
+
+/// 未反映の一覧（台帳が読めなければ 3 つとも「まだ分からない」・便 e-view）。
+pub fn unreflected(texts: &Texts, now: EpochSecs) -> UnreflectedList {
+    list(&tsuzuri_core::ledger::unreflected(&texts.ledger, now))
+}
+
+/// 中核の crate の未反映の一覧を電文に写す。
+pub fn list(u: &Unreflected) -> UnreflectedList {
+    let rows = |r: &Reading<Vec<UnreflectedItem>>| match r {
+        Reading::Known(items) => Reading::Known(
+            items
+                .iter()
+                .map(|i| UnreflectedRow {
+                    id: i.id.clone(),
+                    title: i.title.clone(),
+                    age_s: i.age_s,
+                })
+                .collect(),
+        ),
+        Reading::Unknown => Reading::Unknown,
+    };
+    UnreflectedList {
+        memos: rows(&u.memos),
+        rulings: rows(&u.rulings),
+        requests: rows(&u.requests),
+    }
 }
 
 /// 中核の crate の Graph と check の値を電文に写す。
