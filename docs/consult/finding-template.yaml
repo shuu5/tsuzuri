@@ -1,0 +1,19 @@
+# 所見の型（判断の記録 ADR-10 決定 (3)・要件 FR19）。欄を欠かさない。値が無い欄は「なし」と書く。
+id: <相談 id>-<n>            # 例 t3-hub.3-1
+consult: <相談 id>
+date: <YYYY-MM-DD>
+model: <使った model と念入りさ>   # 例 Fable 5.1・high
+bundle_digest: <読んだ束の要約値か、読んだ日時>
+conclusion: <結論を 1 文で>
+options:                      # 2 つ以上・採るのは 1 つ
+  - {id: a, name: <案の名>, text: <中身>, verdict: adopted, reason: <理由>}
+  - {id: b, name: <案の名>, text: <中身>, verdict: rejected, reason: <理由>}
+recommendation: <推奨と、その前提>
+basis: [<根拠の id。条・要件・規則の行・判断の記録・bead>]
+claims:                       # 主張ごとの確かさ
+  - {text: <主張>, confidence: verified, how: <どう確かめたか>}
+  - {text: <主張>, confidence: inferred, how: <推測の根拠>}
+ask_owner:                    # 持ち主に問うべき事（承認が要る決定）。無ければ空の一覧
+  - <問い>
+touches: [<変える見込みの節点の id>]
+notes: <補足。長い検討は notes.md に置き、ここは指すだけ>

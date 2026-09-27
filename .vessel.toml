@@ -9,4 +9,4 @@ requirements = "design-intent/srs.yaml"
 entrance-flip = "unmeasured"
 # path の種別の宣言（scribe2 ADR-0047・seat-roles.md §24）: 討論の記録と作業記憶は設計文書、design-intent/ は設計意図
 design-intent-paths = ["design-intent/"]
-design-doc-paths = ["docs/design/", "docs/grill/", "docs/handoff/"]
+design-doc-paths = ["docs/design/", "docs/grill/", "docs/handoff/", "docs/consult/"]

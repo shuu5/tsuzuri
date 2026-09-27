@@ -1,9 +1,9 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
-# 第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
+# 第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
 meta:
   id: srs
   title: 要件書
-  version: v0.3
+  version: v0.4
   status: draft
   generated: 2026-09-27
   approval: []
@@ -23,6 +23,8 @@ scope:
     - 席の hook（裁定の注入・問いの起票の門・停止の hook）
     - 表示面（席が端末の Chrome を起こして操作する）
     - tz の口（folio の口の吸収・graph・init・doctor）
+    - 指し示し（持ち主が画像と囲みと一言を席へ渡す）
+    - 相談の窓 consult（model を選べる別の窓・型付きの所見）
   not_build:
     - 承認欄の自動記入と「決まったこと」の板（v1.1）
     - 時間軸の眺め（14 日の着地・便の回数）（v2）
@@ -32,7 +34,7 @@ scope:
 
 actors:
   - {id: owner, name: 持ち主（非エンジニア）, role: 面で答える・決める・方針を書く}
-  - {id: orchestrator, name: orchestrator 席, role: 問いを置き処分を宣言する}
+  - {id: orchestrator, name: 席（orchestrator と相談の窓 consult）, role: 問いを置き処分を宣言する・相談の所見を出す}
   - {id: vessel, name: 器（今は scribe2・合流後は tz）, role: 便を運び席を起こし口座を移す}
   - {id: terminal, name: 持ち主の端末, role: 席が ssh で Chrome を起こす先}
   - {id: tsuzuri, name: tsuzuri（tz の口・面の server・床）, role: 道具}
@@ -268,6 +270,42 @@ requirements:
     goals: [GOAL4]
     figures: []
     adrs: [ADR-8]
+  - id: FR18
+    title: 指し示し（画像と囲みと一言を席へ渡す）
+    pattern: event
+    strength: must
+    when: 持ち主が裁定面の指し示しの欄から指摘を送ったとき
+    shall: 面の server は指摘に id を発行し、一言と全体の画像と囲みごとの切り抜きと頁の文脈と囲みの中の要素の素性（上限つき・入力欄の値は伏せる）を state dir に置き、台帳に bead 1 本を置く。取り込み方は、表示面の画面と DOM の写しを同時に取って裁定面で囲む・アプリの窓の上で要素を指すか範囲を囲む・画像を貼るか落として囲む、の 3 つ。指摘は承認として数えず問いを閉じない。
+    plain: 画面の一部や画像を、一言と一緒に席へ渡せます。渡し方は 3 つで、席には囲んだ部分の画像とそこに在る部品の情報が届きます。承認としては数えません。
+    basis: [P-7, P-12, N-6]
+    verify: {method: test, how: 固定の DOM の写しと矩形で要素の列を比べ、偽の CDP で 3 つの取り込み方の命令の列と置き場の file を見る, ac: [AC15]}
+    goals: [GOAL1, GOAL4]
+    figures: []
+    adrs: [ADR-9]
+  - id: FR19
+    title: 相談の窓 consult と型付きの所見
+    pattern: event
+    strength: must
+    when: 相談の窓が所見を出したとき
+    shall: 所見を出す口は欄（結論・候補と採否・推奨・根拠の id・主張ごとの確かさ・持ち主に問うべき事・触る節点・使った model・読んだ束の要約値）を検め、欠けていれば受けない。受けた所見は置き場に書き、orchestrator へは所見の id を指す固定の 1 行だけを器の口で送る。orchestrator は所見ごとに処分を宣言し、処分の無い所見は未反映の一覧に載る。相談の窓は repo と台帳を直に書かない。
+    plain: 相談の結論は決まった形の file に書き、元の窓へは「結論が届いた」の 1 行だけを送ります。元の窓は結論を採るか採らないかを必ず記録します。
+    basis: [P-7, P-12, P-19, N-2]
+    verify: {method: test, how: 欄の欠けた所見が断られ、揃った所見で置き場の file と台帳の 1 行と器の口の argv が出ることを見る, ac: [AC16]}
+    goals: [GOAL1, GOAL2]
+    figures: []
+    adrs: [ADR-10]
+  - id: FR20
+    title: 表示面の対象を広げる（中身が web の native・スマホの emulator・純粋な native）
+    pattern: ubiquitous
+    strength: should
+    when: つねに
+    shall: 表示面は、CDP を話す対象（web・中身が web の native）を CDP で、話さない対象（スマホの emulator・純粋な native）を画面の配信と入力の戻しの 1 本の経路で見せて操作する。対象ごとに別の表示の仕組みを作らない。
+    plain: 席が見せて操作できる対象を、web から native やスマホの emulator へ広げます。見せる仕組みは 2 つだけにします。
+    basis: [N-5, N-6, N-7]
+    verify: {method: test, how: 対象の種類ごとの端末の行の fixture で、選ばれる経路が 2 本のどちらかであることを見る, ac: [AC17]}
+    goals: [GOAL4]
+    figures: []
+    adrs: [ADR-11]
 
 nonfunctional:
   - id: NFR1
@@ -325,6 +363,9 @@ acceptance:
   - {id: AC12, title: 一時の台帳の fixture で判定の 5 値と未反映の 3 種の数が期待と一致し、要約の無い節点が名指される, plain: 台帳の判定と、まだ反映されていないものの数が正しく出る。, verifies: [FR13, FR15], red_test: {sentence: 判定ごとの fixture と未反映 3 種を 1・2・3 件持つ fixture で数と id を見る, fixture: tests/fixtures/ledger/judge/}}
   - {id: AC13, title: 偽の ssh と偽の Chrome で起動の引数（専用の profile・app mode・入力の環境）と CDP の命令の列が snapshot と一致し、届かない端末は配信に落ちる, plain: 席があなたの PC の browser を正しい設定で開き、届かない端末には server の画面を配る。, verifies: [FR16], red_test: {sentence: 端末の行 2 つ（ssh 可・不可）の fixture で argv と命令の列と落ちる先を見る, fixture: tests/fixtures/stage/terminals.toml}}
   - {id: AC14, title: folio の口ごとに tz の subcommand の終了 code と出力が folio2 の口と一致する, plain: 設計の道具の命令が tz の下で同じ結果を返す。, verifies: [FR17], red_test: {sentence: 同じ fixture を folio と tz に渡して終了 code と出力を比べる, fixture: tests/fixtures/tz/parity/}}
+  - {id: AC15, title: 固定の DOM の写しと矩形から要素の列が期待と一致し、上限を超える囲みは切って総数を出し、画像と写しは state dir だけに書かれる, plain: 囲んだ場所に在る部品が正しく選ばれ、画像は席の機械の中だけに置かれる。, verifies: [FR18], red_test: {sentence: 写しの fixture と矩形 3 つで要素の id の列を比べ、repo の中に file が増えないことを見る, fixture: tests/fixtures/point/snapshot-3/}}
+  - {id: AC16, title: 欄の欠けた所見は断られ、揃った所見は置き場の file と台帳の 1 行と器の口の argv を 1 つずつ出し、相談の窓からの repo の編集は断られる, plain: 形の整っていない結論は受け取らず、整った結論だけが元の窓へ知らされる。, verifies: [FR19], red_test: {sentence: 欄を 1 つ欠いた所見と揃った所見の 2 つで断りと書き出しを見る, fixture: tests/fixtures/consult/finding-2/}}
+  - {id: AC17, title: 対象の種類ごとの端末の行で選ばれる経路が CDP か画面の配信のどちらかになり、知らない種類は断られる, plain: 見せる仕組みが 2 つだけであることを機械が確かめる。, verifies: [FR20], red_test: {sentence: 対象の種類 4 つと知らない種類 1 つの fixture で経路と断りを見る, fixture: tests/fixtures/stage/targets.toml}}
 
 not_frozen: 更新の遅れの数値（NFR2）と文の予算の数値（FR14）は面の便の最初の実測で rules 行に書く。判定の閾値（FR13）は見本の値で始め、2 周の実測の後に凍結する。
 
@@ -333,6 +374,7 @@ constraints:
   - {id: CON2, title: folio2 の出口, text: folio の実装が tsuzuri へ移る前に、置き場で床が合格・契約表の導出物が着地して差分 0・器がその導出物を読んで便を通す、の 3 つを記帳する。, basis: [P-1], source: folio2 の判断の記録 21・判断の記録 ADR-4}
   - {id: CON3, title: 面は器の file を書かない, text: 面と server が書くのは台帳（bdw 経由）と器の event だけで、state dir の file と repo の file を書く経路を持たない。, basis: [N-2, P-14], source: 判断の記録 ADR-7 決定 (7)}
   - {id: CON4, title: mock は見本, text: tsuzuri-site の mock は仕様の見本であり本番ではない。本番の面は Rust の wasm（判断の記録 ADR-3）で作る。, basis: [P-6], source: 判断の記録 ADR-7 決定 (13)}
+  - {id: CON6, title: 席のモデル, text: orchestrator の席は Opus 5.5・念入りさ xhigh で動かす。相談の窓 consult の既定は Fable で、持ち主が相談ごとに選ぶ。条 P-16 の改訂（判断の記録 ADR-12）が発効するまで、t3 の orchestrator は最上位の model のままで動かす。, basis: [P-16], source: 持ち主の裁定 2026-09-27（t3-hub.1）・判断の記録 ADR-10, adrs: [ADR-10, ADR-12]}
   - {id: CON5, title: 見せる先, text: 見せる先の制限は条 N-6 が持つ（ここには写さない）。, basis: [N-6], source: 憲法 N-6}
 
 sources:

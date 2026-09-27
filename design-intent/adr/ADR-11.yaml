@@ -1,0 +1,51 @@
+# 判断の記録 ADR-11 — 表示面の対象を広げる順（発効 2026-09-27・持ち主の裁定 user 2026-09-27T05:44Z・記帳先 = tsuzuri の台帳 t3-hub.1 notes）
+# 討論の記録は docs/grill/2026-09-25-C-stage-surface.md §12。
+id: ADR-11
+title: 表示面の対象は web から始め、中身が web の native・スマホの emulator と純粋な native の順に広げ、足す経路は CDP と画面の配信の 2 本に限る
+status: accepted
+date: 2026-09-27
+context: |
+  持ち主の全体像は、席が web のアプリ・native のアプリ・スマホのアプリの開発を、見せながら意見を受けながら進めることである。スマホの emulator は最初から持ち主の要望に在った（討論の記録 C は 2 段目の「本物の emulator の画面の配信」として控えていた）。
+  ADR-5 が決めたのは Chrome で描ける物だけで、native のアプリとスマホのアプリを見せて操作する経路は、どの判断の記録にも無かった。
+decision: |
+  (1) 広げる順は、web とスマホの幅の web → 中身が web の native（Electron・WebView2 を使う Tauri など）→ スマホの emulator と純粋な native。
+  (2) 足す経路は 2 本に限る。CDP を話す物は全部 CDP で見せて操作する。CDP を話さない物は「画面を配信し入力を返す」1 本の経路で見せて操作する。
+  (3) スマホの emulator は要件である。画面の配信の経路に載せ、席の目は画面の画像と UI の木を使う。
+  (4) 中身が web の native は、アプリの remote debugging の口へ同じ CDP でつなぐ。試作 1 本で確かめてから要件と便の行にする。
+  (5) 画面の配信の経路は、試作 v0.4 の窓（headless の Chrome の画面を配信し入力を返す）を、仮想の画面の配信へ一般にする形で作る。形は別の判断の記録で決める。
+  (6) 指し示しの「画像を貼る」は対象を選ばないので、どの段でも持ち主の指摘は届く。
+options:
+  - id: a
+    name: web から順に広げ経路は 2 本
+    text: 決定 (1) から (6)。
+    verdict: adopted
+    reason: 設計済みの web から実物で使い始められ、アプリの種類ごとに表示の仕組みを増やさない。
+  - id: b
+    name: アプリの種類ごとに表示の仕組みを作る
+    text: native 用・スマホ用にそれぞれ別の道具を作る。
+    verdict: rejected
+    reason: 条 N-5 が app ごとの表示の仕組みを作らないと定めている。
+  - id: c
+    name: web だけにする
+    text: native とスマホのアプリは対象にしない。
+    verdict: rejected
+    reason: 持ち主の要望（スマホの emulator を含む）に届かない。
+basis: [N-5, N-6, N-7, ADR-5]
+revises:
+  - target: ADR-5
+    decision: (1)
+    kind: widen
+    summary: 表示面の対象を端末の Chrome から、中身が web の native とスマホの emulator と純粋な native へ広げ、足す経路を CDP と画面の配信の 2 本に限った。
+retreat:
+  kind: spike
+  condition: 中身が web の native の試作で CDP がつながらないか、emulator の画面の配信が host で動かないと分かったら、その段の形を持ち主に問い直す。
+plain: |
+  席が見せて操作できる対象を、順に広げます。最初は web のアプリとスマホの幅の web です。次に、中身が web でできている native のアプリ、その次にスマホの emulator と純粋な native のアプリです。
+  見せる仕組みは 2 つだけにします。Chrome と同じ口で話せる物はその口で、話せない物は画面を配って操作を返す形で扱います。
+  この記録はあなたの承認で発効しています。承認の記帳先は tsuzuri の台帳です。
+approval:
+  who: 持ち主
+  date: 2026-09-27
+  ruling: t3-hub.1（裁定 id = user 2026-09-27T05:44Z・notes に逐語）
+  verbatim: １．それで広げて。もともと少なくともスマホのエミュレーターについては絶対伝えていたがな。
+  surface: R-8
