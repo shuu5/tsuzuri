@@ -31,7 +31,12 @@ thread_local! {
     static WATCHES: RefCell<Vec<(String, ArcRwSignal<Status>)>> = const { RefCell::new(Vec::new()) };
     /// 知らせの接続を張ったか（頁に 1 本だけ）。
     static CONNECTED: Cell<bool> = const { Cell::new(false) };
+    /// 1 秒の時計の signal（初めて `ticker` を呼んだときに作る・頁に 1 本だけ）。
+    static TICK: RefCell<Option<ArcRwSignal<EpochSecs>>> = const { RefCell::new(None) };
 }
+
+/// 時計の signal を書き直す間（ミリ秒）。
+pub const TICK_MS: u64 = 1000;
 
 /// 読みの結果と応答の状態の数（応答が無ければ None）の組。
 type Status = (Fetched, Option<u16>);
@@ -39,6 +44,20 @@ type Status = (Fetched, Option<u16>);
 /// 今の時刻（epoch 秒）。
 pub fn now() -> EpochSecs {
     (Date::now() / 1000.0) as EpochSecs
+}
+
+/// 1 秒ごとに今の時刻を置く signal（初めての呼びで作り interval を 1 本張る・2 度目からは同じ signal を返す）。
+pub fn ticker() -> ReadSignal<EpochSecs> {
+    let signal = TICK.with_borrow_mut(|tick| {
+        tick.get_or_insert_with(|| {
+            let signal = ArcRwSignal::new(now());
+            let out = signal.clone();
+            set_interval(move || out.set(now()), Duration::from_millis(TICK_MS));
+            signal
+        })
+        .clone()
+    });
+    ReadSignal::from(signal.read_only())
 }
 
 /// 口を読む（届かない・200 でない・本文が字でなければ Failed）。

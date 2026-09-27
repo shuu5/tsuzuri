@@ -239,6 +239,20 @@ pub fn grace_text(secs: u64) -> String {
     format!("{secs} 秒")
 }
 
+/// 今の経過の字（since が無ければ「―」・今と電文の at の大きい方から since を引く・負は 0）。
+/// 端末の時計が電文の at より遅れても、電文を読んだ時点の字より小さくしない。
+pub fn elapsed_at(since: Option<EpochSecs>, at: EpochSecs, now: EpochSecs) -> String {
+    since.map_or_else(
+        || NONE_MARK.to_string(),
+        |s| age(now.max(at).saturating_sub(s)),
+    )
+}
+
+/// 今の退避までの残り秒（電文の at の時点の残り秒から今 − at を引く・今が at より前なら引かない・0 で止める）。
+pub fn grace_left(left: u64, at: EpochSecs, now: EpochSecs) -> u64 {
+    left.saturating_sub(now.saturating_sub(at))
+}
+
 /// 表の 1 行。
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessRow {
@@ -255,7 +269,9 @@ pub struct SessRow {
     pub state: &'static str,
     /// 段の字（pipeline で段が在る行だけ・ほかは状態の語を出す）。
     pub stage: Option<&'static str>,
-    /// 経過の字（since が無ければ「―」）。
+    /// 今の状態になった時刻（電文の同じ行の since・DOM は 1 秒の時計で経過の字を組み直す）。
+    pub since: Option<EpochSecs>,
+    /// 経過の字（電文の at の時点・since が無ければ「―」）。
     pub elapsed: String,
     /// 稼働の記録の区間（幅を選ぶたびに `strip` で SVG にする）。
     pub spans: Reading<Vec<SeatSpan>>,
@@ -442,9 +458,8 @@ pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
             .stage
             .filter(|_| line.role == SeatRole::Pipeline)
             .map(stage_word),
-        elapsed: line
-            .since
-            .map_or_else(|| NONE_MARK.to_string(), |s| age(doc.at.saturating_sub(s))),
+        since: line.since,
+        elapsed: elapsed_at(line.since, doc.at, doc.at),
         spans: line.spans.clone(),
         signs: orchestrator.then(|| signs(doc, line)),
         moving: if orchestrator {
@@ -520,8 +535,8 @@ mod dom {
 
     use super::{
         BLOCK, C_PROJ, C_ROLE, C_STAGE, C_STRIP, COLUMNS, GHEAD, Group, HROW, Head, Move,
-        NONE_MARK, SESS, SessRow, Signs, Sort, TKHB, Table, content, grace_text, hb_class, sort_of,
-        strip, tick_class, with_sort,
+        NONE_MARK, SESS, SessRow, Signs, Sort, TKHB, Table, content, elapsed_at, grace_left,
+        grace_text, hb_class, sort_of, strip, tick_class, with_sort,
     };
     use crate::account::PATH;
     use crate::account::heartbeat::{self, States, Toggle};
@@ -552,10 +567,11 @@ mod dom {
         let sort = RwSignal::new(sort_of(&query));
         let span = RwSignal::new(span_of(&query));
         let hb: States = RwSignal::new(Default::default());
+        let tick = crate::net::ticker();
         let body = move || match fetched.with(|f| content(f, sort.get())) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
-            Body::Filled(table) => table_view(table, span, hb),
+            Body::Filled(table) => table_view(table, span, tick, hb),
         };
         let extra = view! { {sort_bar(sort)}{span_bar(span)} }.into_any();
         section(BLOCK, extra, body.into_any())
@@ -608,7 +624,12 @@ mod dom {
         .into_any()
     }
 
-    fn table_view(table: Table, span: RwSignal<Span>, hb: States) -> AnyView {
+    fn table_view(
+        table: Table,
+        span: RwSignal<Span>,
+        tick: ReadSignal<EpochSecs>,
+        hb: States,
+    ) -> AnyView {
         let at = table.at;
         let head = COLUMNS
             .into_iter()
@@ -617,7 +638,7 @@ mod dom {
         let groups = table
             .groups
             .into_iter()
-            .map(|g| group_view(g, at, span, hb))
+            .map(|g| group_view(g, at, span, tick, hb))
             .collect_view();
         view! {
             <div class=SESS>
@@ -661,7 +682,13 @@ mod dom {
         }
     }
 
-    fn group_view(group: Group, at: EpochSecs, span: RwSignal<Span>, hb: States) -> AnyView {
+    fn group_view(
+        group: Group,
+        at: EpochSecs,
+        span: RwSignal<Span>,
+        tick: ReadSignal<EpochSecs>,
+        hb: States,
+    ) -> AnyView {
         let n = group.rows.len();
         let head = group.head.map(|h| {
             view! { <div class=GHEAD>{head_view(h)}<span class="chip num">{n}</span></div> }
@@ -669,12 +696,19 @@ mod dom {
         let rows = group
             .rows
             .into_iter()
-            .map(|r| row_view(r, at, span, hb))
+            .map(|r| row_view(r, at, span, tick, hb))
             .collect_view();
         view! { {head}{rows} }.into_any()
     }
 
-    fn row_view(row: SessRow, at: EpochSecs, span: RwSignal<Span>, hb: States) -> AnyView {
+    /// 表の 1 行（経過の字は 1 秒の時計で組み直す）。
+    fn row_view(
+        row: SessRow,
+        at: EpochSecs,
+        span: RwSignal<Span>,
+        tick: ReadSignal<EpochSecs>,
+        hb: States,
+    ) -> AnyView {
         let session = match row.session.clone() {
             Some(name) => view! { <span class="mono">{name}</span> }.into_any(),
             None => view! { <span class="sub">{term("seat_none", label("seat_none"))}</span> }
@@ -691,14 +725,16 @@ mod dom {
             Reading::Unknown => NONE_MARK.into_any(),
         };
         let below = row.toggle.clone().map(|t| heartbeat::below(t, hb));
+        let since = row.since;
+        let elapsed = move || elapsed_at(since, at, tick.get());
         view! {
             <div class=row.class.clone()>
                 <div class=C_PROJ data-t="">{row.project.clone()}</div>
                 <div class=C_ROLE>{term(row.role_key, label(row.role_key))}</div>
                 <div>{session}</div>
                 <div class="mono">{account}</div>
-                <div class=C_STAGE>{stage_view(&row, hb)}</div>
-                <div class="num">{row.elapsed.clone()}</div>
+                <div class=C_STAGE>{stage_view(&row, at, tick, hb)}</div>
+                <div class="num">{elapsed}</div>
                 <div class=C_STRIP>{svg}</div>
             </div>
             {below}
@@ -706,19 +742,28 @@ mod dom {
         .into_any()
     }
 
-    fn stage_view(row: &SessRow, hb: States) -> AnyView {
+    /// 段の欄（退避までの残り秒は 1 秒の時計で電文の at からの差を引き直す）。
+    fn stage_view(
+        row: &SessRow,
+        at: EpochSecs,
+        tick: ReadSignal<EpochSecs>,
+        hb: States,
+    ) -> AnyView {
         let word = match row.stage {
             Some(s) => s.to_string(),
             None => label(state_key(row.state)),
         };
         let moving = row.moving.map(|m| match m {
-            Move::Grace(secs) => view! {
-                <span class=m.class()>
-                    <span aria-hidden="true">"⇥"</span>
-                    <b class="num">{term(m.key(), grace_text(secs))}</b>
-                </span>
+            Move::Grace(secs) => {
+                let left = move || term(m.key(), grace_text(grace_left(secs, at, tick.get())));
+                view! {
+                    <span class=m.class()>
+                        <span aria-hidden="true">"⇥"</span>
+                        <b class="num">{left}</b>
+                    </span>
+                }
+                .into_any()
             }
-            .into_any(),
             Move::Wait => {
                 view! { <span class=m.class()>{term(m.key(), label(m.key()))}</span> }.into_any()
             }
