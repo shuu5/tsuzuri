@@ -135,6 +135,16 @@ impl Work {
         fs::write(&path, before.replacen(from, to, 1)).unwrap();
     }
 
+    /// 写しの ADR-13 に、本流から消した改訂の欄の行（REVISES_ROW）を植え直す（判断の記録 ADR-30 決定 (2)
+    /// で本流の行は消えた・欄の床は便 170 まで在るので、変異の当て先は歯が自分で置く）。
+    fn plant_revises(&self) {
+        self.mutate_file(
+            "ADR-13.yaml",
+            "\n\ndecision: |",
+            &format!("\n\nrevises:\n{REVISES_ROW}\ndecision: |"),
+        );
+    }
+
     fn check(&self) -> Output {
         folio_check(&self.dir())
     }
@@ -370,7 +380,7 @@ fn f92_an_adr_that_does_not_exist_is_a_violation() {
 
 // ── 改訂の欄 revises（便 101・docs/design/delivery-101.md §1 (g)） ──
 
-/// 変異の当て先 = 実の ADR-13 の revises の項の 1 行（ADR-8 の決定 (4) を狭める）。
+/// 変異の当て先 = 写しの ADR-13 に植える revises の項の 1 行（ADR-8 の決定 (4) を狭める・本流 62111b1 の実の行の写し）。
 const REVISES_ROW: &str = "  - {target: ADR-8, decision: (4), kind: narrow, summary: 天井が合格でない間に設計文書の便の着地を既定で止める範囲を、repo 全体から便が書き換える file の側へ狭める（不合格の側は今のまま repo 全体で止める）}\n";
 const REVISES_HEAD: &str = "\nrevises:\n  - {target: ADR-8, decision: (4), kind: narrow,";
 
@@ -393,8 +403,26 @@ fn assert_adr13_violation(w: &Work, words: &[&str]) {
 }
 
 #[test]
-fn f101_the_real_record_carries_the_revises_row() {
+fn f101_a_planted_revises_row_passes_and_the_real_records_carry_none() {
     let w = Work::new("f101-real");
+    // 判断の記録 ADR-30 決定 (2): 本流の判断の記録は改訂の欄を持たない
+    let mut paths: Vec<_> = fs::read_dir(w.dir().join("adr"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    paths.sort();
+    for path in &paths {
+        let text = fs::read_to_string(path).unwrap();
+        assert!(
+            !text
+                .lines()
+                .any(|l| l == "revises:" || l.starts_with("revises: ")),
+            "{}: 改訂の欄が残っている",
+            path.display()
+        );
+    }
+    // 形の正しい行を植えた写しは、素の床で 終了コード 0・違反 0（欄の床は便 170 まで在る）
+    w.plant_revises();
     let out = w.check();
     assert_eq!(
         out.status.code(),
@@ -404,56 +432,12 @@ fn f101_the_real_record_carries_the_revises_row() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(violations(&out).is_empty(), "{:?}", violations(&out));
-    // read_dir の順は file system に依るので、file 名で並べてから見る（CI で順が入れ替わり落ちた）
-    let mut paths: Vec<_> = fs::read_dir(w.dir().join("adr"))
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
-    paths.sort();
-    // 実の記録のうち revises の欄を持つ file と、その行（file 名 → 行）。欄を持つ file の全数は固定しない
-    // （判断の記録が増えて欄を持てば増える＝ADR-16 で増えた）。欄を最初に持った 2 本（ADR-13 と ADR-14）
-    // の行の形だけを見る
-    let mut rows: Vec<(String, Vec<String>)> = Vec::new();
-    for path in paths {
-        let text = fs::read_to_string(&path).unwrap();
-        if !text.lines().any(|l| l == "revises:") {
-            continue;
-        }
-        let after = text.split_once("\nrevises:\n").unwrap().1;
-        rows.push((
-            path.file_name().unwrap().to_string_lossy().into_owned(),
-            after
-                .lines()
-                .take_while(|l| l.starts_with("  - "))
-                .map(str::to_string)
-                .collect(),
-        ));
-    }
-    let files: Vec<&str> = rows.iter().map(|(f, _)| f.as_str()).collect();
-    assert!(files.contains(&"ADR-13.yaml"), "{files:?}");
-    assert!(files.contains(&"ADR-14.yaml"), "{files:?}");
-    for (_, lines) in &rows {
-        assert!(!lines.is_empty(), "{rows:?}");
-        for line in lines {
-            assert!(line.starts_with("  - {target: ADR-"), "{line}");
-        }
-    }
-    let first = |file: &str| rows.iter().find(|(f, _)| f == file).unwrap().1[0].clone();
-    assert!(
-        first("ADR-13.yaml")
-            .starts_with("  - {target: ADR-8, decision: (4), kind: narrow, summary: "),
-        "{rows:?}"
-    );
-    assert!(
-        first("ADR-14.yaml")
-            .starts_with("  - {target: ADR-13, decision: (1), kind: narrow, summary: "),
-        "{rows:?}"
-    );
 }
 
 #[test]
 fn f101_an_article_id_target_is_a_violation() {
     let w = Work::new("f101-article");
+    w.plant_revises();
     w.mutate_file(
         "ADR-13.yaml",
         REVISES_HEAD,
@@ -465,6 +449,7 @@ fn f101_an_article_id_target_is_a_violation() {
 #[test]
 fn f101_the_record_itself_as_target_is_a_violation() {
     let w = Work::new("f101-self");
+    w.plant_revises();
     w.mutate_file(
         "ADR-13.yaml",
         REVISES_HEAD,
@@ -477,6 +462,7 @@ fn f101_the_record_itself_as_target_is_a_violation() {
 #[test]
 fn f101_an_adr_that_does_not_exist_is_a_violation() {
     let w = Work::new("f101-missing");
+    w.plant_revises();
     w.mutate_file(
         "ADR-13.yaml",
         REVISES_HEAD,
@@ -488,6 +474,7 @@ fn f101_an_adr_that_does_not_exist_is_a_violation() {
 #[test]
 fn f101_a_kind_outside_the_enum_is_a_violation() {
     let w = Work::new("f101-kind");
+    w.plant_revises();
     w.mutate_file(
         "ADR-13.yaml",
         REVISES_HEAD,
@@ -499,6 +486,7 @@ fn f101_a_kind_outside_the_enum_is_a_violation() {
 #[test]
 fn f101_revises_that_is_not_a_list_is_a_violation() {
     let w = Work::new("f101-not-list");
+    w.plant_revises();
     w.mutate_file(
         "ADR-13.yaml",
         REVISES_HEAD,
@@ -510,6 +498,7 @@ fn f101_revises_that_is_not_a_list_is_a_violation() {
 #[test]
 fn f101_the_same_decision_twice_is_a_violation() {
     let w = Work::new("f101-dup");
+    w.plant_revises();
     w.mutate_file(
         "ADR-13.yaml",
         REVISES_ROW,

@@ -158,7 +158,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "ADR-0028 §2.1 / ADR-0045 §2.3（二層 enforcement・CEILING=PENDING）"}
       - {kind: folio2-ruling, ref: "裁定 #6（gate I は実行したら blocking・未実行は Pending）・G15=A（P-3 を置き場を定める条へ弱める）"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と今の正本の引き金の要約値から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 層の別は命令の別（天井 = folio ceiling --check〔AI の所見を数える〕だけ・ほかの命令の --check と folio check はすべて床。folio ceiling --stamp〔周の結果から印を導出する〕と --gate〔印と便の書き換える file の一覧から 3 値を決定的に返す〕は、命令の名が天井の側に在っても床の性質を持つ＝AI を動かさず決定的である）と面の名札（天井の名札・便 40）で表す。検査を一覧として持ち、その各行に層の欄を付けて数える口は未実装なので、その部分の充足は「まだ分からない」として扱う（P-4.2）。未実行の天井は P-4.2 により「まだ分からない」（FR5・AC3）。}
     relations: {reqs: [FR5, AC3], rules: [D-12, D-14, R-22, D-16], articles: [P-4]}
 
   - id: P-4

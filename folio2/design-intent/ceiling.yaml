@@ -1,13 +1,13 @@
-# folio2 天井の正本（v0.17・orchestrator 席）
-# 状態: v0.17 は発効（2026-09-27 00:40 JST 持ち主「承認する」・f2-648 notes・対話面 R-8・一括 27 の問 1 = 判断の記録 ADR-26 と要件書 第 1.48 版と同じ承認）= 判断の記録 ADR-26 決定 (3)(4)。人が書く節（重さ・文書の一覧・観点の行）は 1 字も変えない。判断の記録の状態の欄を周の引き金から外した一覧の写しは、引き金の便（判断の記録 ADR-26 決定 (3) の実装の便）が末尾の生成区間へ導出する。v0.17 から版の発効は規則の表の行 D-17 に従う（承認欄に「席の裁定」の行を記帳した時点・持ち主はいつでも覆せる）
+# folio2 天井の正本（v0.18・orchestrator 席）
+# 状態: v0.18 は発効（2026-09-27 12:50 JST 持ち主「承認する」・f2-648 notes・対話面 R-8・構造の直し A → C → B = 判断の記録 ADR-30 と要件書 第 1.49 版と同じ承認）= 判断の記録 ADR-30 決定 (4)(7)。4 観点の読む欄の判断の記録（adr）を題と状態（title・status）だけにし、規則の表（rules）を閾値の行（thresholds）だけにし、入口（index）の読む順番（lanes）を外した。問いの文は読む欄と両立しない字と、面に残る開発規律の行と判断の記録の本文を挙げない断りだけを直した。重さ・文書の一覧・観点の数と読み手は変えない
 # 位置: 判断の記録 ADR-8 決定 (1)(3)(4)・ADR-10（v0.2 = 1 周目の結果を受けた問いの文と読む欄の改訂）。観点 4 つ（文書の型に依らない）・観点ごとの問いの文と読む欄・文書の一覧・所見の欄の決まり・起動の記録の欄・重さと 3 値の値域・材料の束の要約値の規則を持つ。v0.3（判断の記録 ADR-11 決定 (4)①）= 観点ごとの 3 値・所見と記録の欄の決まり・束の中身と要約値の規則・反証の規則は、人が書く節をやめて末尾の生成区間（schema の節・正本は実装の定数・folio が導出する）に移した。人が書くのは meta・重さ（weights）・読む文書の行（documents）・観点の行（viewpoints）。
-# 前の版: v0.16 は発効（2026-09-26 15:22 JST 持ち主「また３問についてもすべて承認する」・2026-09-26 15:28 JST「一括２５は承認する」・f2-648 notes・対話面 R-8・一括 25 の問 1 = 要件書 第 1.47 版と判断の記録 ADR-25 と同じ承認）= 文書どうしの整合と実態との整合の 2 観点の読む欄の判断の記録（adr）の行に改訂の欄（revises）を足した（台帳 f2-648.225。束の正本の写し（sources/）は観点の読む欄が挙げた最上位の節だけを残すので〔便 98〕、判断の記録が持つ改訂の欄はどの観点の写しにも入らず、席は 37〜42 周目の反証の依頼文で正本を読むよう補っていた。忠実さと読みやすさの読む欄・観点の数・重さ・文書の一覧・読み手・問いの文・生成区間は不変。枝の上の 43 周目〔整合・実態 止める → ADR-25〕と 44 周目〔4 観点合格・印〕を経た）。
+# 前の版: v0.17 は発効（2026-09-27 00:40 JST 持ち主「承認する」・f2-648 notes・対話面 R-8・一括 27 の問 1 = 判断の記録 ADR-26 と要件書 第 1.48 版と同じ承認）= 判断の記録 ADR-26 決定 (3)(4)。人が書く節（重さ・文書の一覧・観点の行）は 1 字も変えない。判断の記録の状態の欄を周の引き金から外した一覧の写しは、引き金の便（判断の記録 ADR-26 決定 (3) の実装の便）が末尾の生成区間へ導出する。v0.17 から版の発効は規則の表の行 D-17 に従う（承認欄に「席の裁定」の行を記帳した時点・持ち主はいつでも覆せる）
 # 読み方: folio は AI を起動しない。観点ごとに材料の束（bundle）を組み、席か器が AI を回して所見（finding）と起動の記録（record）を同じ置き場へ書く。床は所見の形と記録の有無と束の要約値の一致だけを数え、所見の意味の当否は判定しない（P-1）。
 
 meta:
   id: folio2-ceiling
   title: 天井の正本（観点・所見の欄の決まり・起動の記録）
-  version: v0.17
+  version: v0.18
   status: effective
   generated: 2026-09-19
   approval:
@@ -45,6 +45,8 @@ meta:
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-26, stamp: "発効（f2-648 notes 2026-09-26 15:22 JST（逐語「また３問についてもすべて承認する」）と 2026-09-26 15:28 JST（逐語「一括２５は承認する」・再確認）・対話面 R-8・一括 25〔問 1〜問 3〕の承認要求への回答・要件書 第 1.47 版と判断の記録 ADR-25 と同じ承認）", verbatim: 一括２５は承認する, version: v0.16}
     - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-26, stamp: "v0.17 の起草（一括 27・判断の記録 ADR-26 決定 (3)(4)・起草役 opus 5.5。周の引き金の判断の記録の行から状態の欄と発効の絞りを外す〔写しは引き金の便が生成区間へ〕・版の発効を規則の表の行 D-17 の形に。人が書く節と観点の数は不変）", version: v0.17}
     - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-27, stamp: "発効（f2-648 notes 2026-09-27 00:40 JST・対話面 R-8・一括 27〔問 1〕の承認要求への回答・判断の記録 ADR-26 と要件書 第 1.48 版と同じ承認）", verbatim: 承認する, version: v0.17}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-27, stamp: "v0.18 の起草（構造の直し A → C → B・判断の記録 ADR-30 決定 (4)(7)・起草役 opus 5.5。4 観点の読む欄の判断の記録を題と状態に・規則の表を閾値の行に・入口の読む順番を外す・問いの文の読む欄と両立しない字と面に残る分を挙げない断り〔改訂 a〕。重さと文書の一覧と観点の数と読み手と生成区間は不変）", version: v0.18}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-27, stamp: "発効（f2-648 notes 2026-09-27 12:50 JST・対話面 R-8・構造の直し A → C → B の承認〔天井は判断の記録の題と状態だけを読む・読む欄から運用の規則を外す〕・判断の記録 ADR-30 と要件書 第 1.49 版と同じ承認）", verbatim: 承認する, version: v0.18}
 
 # 所見の重さ。refute に挙げた重さの所見だけ、別の文脈の AI が中立に反証する（ADR-8 決定 (3)）。反証が「まだ分からない」なら所見は残す。重さの基準は各観点の問いの文が持つ（v0.2）
 weights:
@@ -69,52 +71,52 @@ viewpoints:
   - id: fidelity
     name: 忠実さ
     reader: 元の文と平易文の両方を読み、意味の差だけを拾う編集者
-    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文・決定の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは語彙の正本の同じ語を指しているか。平易文が引く規則の表の値は表の値と同じか。図の根拠が指す先は、図の中身と合っているか。判断の記録の欄の決まりが「機械では弁別できない」とする改番（本文も変えたうえでの番号の付け替え）が起きていないか＝床は削除と新設として通すので数えない（判断の記録 ADR-8 決定 (1)① の 4 つ目・欄の決まりの限界の注）。重さ = 止める（言い換えが義務・要件・決定を変える）・直す（落としや足しはあるが義務は変わらない）・参考（提案）。参照 id の解決・欄の非空・件数は床の領分なので挙げない。判定できない箇所は「まだ分からない」と書く。
+    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは語彙の正本の同じ語を指しているか。平易文が引く規則の表の値は表の値と同じか。図の根拠が指す先は、図の中身と合っているか。判断の記録の欄の決まりが「機械では弁別できない」とする改番（本文も変えたうえでの番号の付け替え）が起きていないか＝床は削除と新設として通すので数えない（判断の記録 ADR-8 決定 (1)① の 4 つ目・欄の決まりの限界の注）。重さ = 止める（言い換えが義務・要件・決定を変える）・直す（落としや足しはあるが義務は変わらない）・参考（提案）。参照 id の解決・欄の非空・件数は床の領分なので挙げない。判定できない箇所は「まだ分からない」と書く。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。
     reads:
       - {doc: constitution, fields: [articles.plain, articles.statements.text]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: vocabulary, fields: [terms, field_terms]}
       - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs, nonfunctional, scope_m1, scope_m3]}
       - {doc: intake, fields: [questions]}
-      - {doc: adr, fields: [plain, decision, options.text, figures.refs, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections, figures.refs]}
   - id: readability
     name: 読みやすさ
     reader: この道具を初めて見る非エンジニア
-    question: 入口から歩いて「何が決まりで・何ができたら完成で・なぜそう決めたか」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。
+    question: 入口から歩いて「何が決まりで・何ができたら完成か」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。
     reads:
-      - {doc: index, fields: [audience, shelf, lanes, intake]}
+      - {doc: index, fields: [audience, shelf, intake]}
       - {doc: constitution, fields: [articles.title, articles.plain, precedence, sources]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: vocabulary, fields: [terms]}
       - {doc: srs, fields: [goals, scope, scope_m3, requirements.title, requirements.plain, nonfunctional, constraints, acceptance, figures]}
       - {doc: intake, fields: [questions]}
-      - {doc: adr, fields: [title, plain, decision, context, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections]}
   - id: coherence
     name: 文書どうしの整合
     reader: 10 種の文書を横に並べて矛盾を探す審査役
-    question: 憲法・規則の表・要件書・判断の記録・設計ノート・相談窓口・天井の正本・語彙・入口・索引の欄の決まりの間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く、判断の記録が規則を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。判断の記録は決定だけでなく前提（context）と退けた案（options）も読む。重さ = 止める（2 つの文書が両立しない義務や決定を持つ = どちらかが誤り。条が名指す置き場を越えた記述〔台帳に規則・型付きデータに裁定 等〕もここ）・直す（二重の記述・条に反しない越境・意味のずれ・両立はする）・参考（提案）。床が数える一致（参照 id の解決・欄の非空・番号・件数）は挙げない。
+    question: 憲法・規則の表・要件書・判断の記録・設計ノート・相談窓口・天井の正本・語彙・入口・索引の欄の決まりの間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。重さ = 止める（2 つの文書が両立しない義務や決定を持つ = どちらかが誤り。条が名指す置き場を越えた記述〔台帳に規則・型付きデータに裁定 等〕もここ）・直す（二重の記述・条に反しない越境・意味のずれ・両立はする）・参考（提案）。床が数える一致（参照 id の解決・欄の非空・番号・件数）は挙げない。
     reads:
       - {doc: constitution, fields: [articles, precedence]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1, scope_m3]}
-      - {doc: adr, fields: [context, decision, revises, options, basis, consequences, retreat, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections]}
       - {doc: intake, fields: [targets, questions]}
       - {doc: ceiling, fields: [documents, viewpoints]}
       - {doc: vocabulary, fields: [terms, field_terms]}
-      - {doc: index, fields: [shelf, lanes, intake]}
+      - {doc: index, fields: [shelf, intake]}
       - {doc: graph, fields: [schema.node_kinds, schema.edge_types, schema.edge_fields]}
   - id: reality
     name: 実態との整合
     reader: 設計文書と版管理の中身を突き合わせる実装者
-    question: 設計文書が言うこと（要件・非機能要件・決定・契約表の行・帰結）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、実装と違う決定、着地したのに文書が古いままの箇所、帰結に書いた後続が起きていない箇所を挙げる。憲法の条の機構の注と規則の表の行の注が言う実装の状態（未実装である・数える口が無い・判定は「まだ分からない」）が、版管理の中の実装と合うかも見る（日付を添えた記述なので古くなりうる）。重さ = 止める（文書が実態と逆のことを約束している）・直す（古い・欠けている記述）・参考（提案）。床が数える一致（参照 id の解決・着地の印・欄の一致）は挙げない。
+    question: 設計文書が言うこと（要件・非機能要件・契約表の行）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、着地したのに文書が古いままの箇所を挙げる。憲法の条の機構の注と規則の表の行の注が言う実装の状態（未実装である・数える口が無い・判定は「まだ分からない」）が、版管理の中の実装と合うかも見る（日付を添えた記述なので古くなりうる）。重さ = 止める（文書が実態と逆のことを約束している）・直す（古い・欠けている記述）・参考（提案）。床が数える一致（参照 id の解決・着地の印・欄の一致）は挙げない。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。
     reads:
       - {doc: constitution, fields: [articles.mechanism, articles.statements.text]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
-      - {doc: adr, fields: [decision, revises, consequences, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections]}
 
 # 決まりの部分（生成区間）。観点ごとの 3 値・観点と読む文書の閉じた id・所見と起動の記録の欄・束の中身と要約値の規則・反証の束と結果の欄と規則の文。何にするかの裁定の正本は設計文書（要件書 FR5・判断の記録 ADR-8）で、機械が執行する規則の正本は実装の定数（判断の記録 ADR-11 決定 (3)(イ)(ウ)(オ)）。直すときは実装の側を便で直す。憲法の schema の節（file が正本）とは向きが逆である（規則の表の schema の節は同じ向き = 生成区間・判断の記録 ADR-11 決定 (4)②）

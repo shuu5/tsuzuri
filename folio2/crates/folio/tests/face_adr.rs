@@ -1335,7 +1335,8 @@ fn f137_real_sources_draw_every_revises_row() {
         );
     }
     let _ = fs::remove_dir_all(&td);
-    assert!(drawn > 0, "実の正本の revises の行を 1 つも数えていない");
+    // 判断の記録 ADR-30 決定 (2): 本流の判断の記録は改訂の欄を持たない（行の描き方は写しの歯が確かめる）
+    assert_eq!(drawn, 0, "実の正本に revises の行が残っている");
 }
 
 // ── 便 146: 鮮度の札と足の行の日付は承認欄の日付（提案中は読まない・無ければ記録の日付と名 生成・
@@ -1620,28 +1621,22 @@ fn f148_real_sources_draw_every_revised_by_row() {
         }
     }
     let _ = fs::remove_dir_all(&td);
-    assert!(drawn > 0, "実の正本の逆向きの行を 1 つも数えていない");
+    // 判断の記録 ADR-30 決定 (2): 本流の判断の記録は改訂の欄を持たないので、逆向きの行も無い
+    assert_eq!(drawn, 0, "実の正本に逆向きの行が残っている");
 }
 
 #[test]
-fn f148_adr18_and_adr16_link_back_to_their_revisers() {
+fn f148_adr18_and_adr16_have_no_back_links_after_adr30() {
+    // 判断の記録 ADR-30 決定 (2) で ADR-24・ADR-21・ADR-22 の改訂の欄を消したので、ADR-18 と ADR-16 の面に
+    // 逆向きの行は出ない（前は ADR-24 と ADR-21・ADR-22 への行を見ていた）
     let td = temp_dir("f148-real");
     let (_, adr18) = real_face(&td, "ADR-18");
     let (_, adr16) = real_face(&td, "ADR-16");
     let _ = fs::remove_dir_all(&td);
-    assert!(
-        chapter5(&adr18).contains(
-            "<li><a class=\"xref\" href=\"adr-24.html\">ADR-24</a> がこの判断の決定 (5) を狭める:"
-        ),
-        "ADR-18 の面に ADR-24 への行が無い"
-    );
-    for by in ["ADR-21", "ADR-22"] {
+    for (id, html) in [("ADR-18", &adr18), ("ADR-16", &adr16)] {
         assert!(
-            chapter5(&adr16).contains(&format!(
-                "<li><a class=\"xref\" href=\"{}.html\">{by}</a> がこの判断の決定 ",
-                by.to_ascii_lowercase()
-            )),
-            "ADR-16 の面に {by} への行が無い"
+            !chapter5(html).contains("<h3>ほかの判断の記録による改訂</h3>"),
+            "{id} の面に逆向きの行が残っている"
         );
     }
 }
