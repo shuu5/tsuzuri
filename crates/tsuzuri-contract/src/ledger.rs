@@ -84,6 +84,28 @@ pub struct LedgerItem {
     pub notes: String,
 }
 
+impl LedgerItem {
+    /// 見た版の要約値（id・題・状態・本文・notes をこの順に改行 1 つでつないだ字の FNV-1a 64 bit・16 字の 16 進の小文字）。
+    pub fn digest(&self) -> String {
+        let text = [
+            self.row.id.as_str(),
+            &self.row.title,
+            &self.row.status,
+            &self.description,
+            &self.notes,
+        ]
+        .join("\n");
+        format!("{:016x}", fnv1a64(text.as_bytes()))
+    }
+}
+
+/// FNV-1a の 64 bit（初期値 0xcbf29ce484222325・乗数 0x100000001b3）。
+pub fn fnv1a64(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, &b| {
+        (hash ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
 /// 台帳の一覧（口 ledger-list の出力・便 e-min）。台帳が読めなければ行は `Unknown`（0 件と区別する）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LedgerList {

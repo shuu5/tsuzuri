@@ -18,8 +18,10 @@ use tsuzuri_contract::graph::{
 };
 use tsuzuri_contract::ledger::{
     BDW, BdLine, BeadId, ChildType, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
-    MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL,
+    MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL, fnv1a64,
 };
+use tsuzuri_contract::question::{QuestionCard, QuestionList};
+use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState};
 use tsuzuri_contract::stats::{
     CheckResult, DayCount, EpicProgress, LeadDays, LedgerStats, MemoStats, NextCheck, NextStep,
     OpenCounts, UnreflectedKind,
@@ -203,6 +205,90 @@ fn invariant_checks() -> Vec<InvariantCheck> {
     ]
 }
 
+fn ledger_item() -> LedgerItem {
+    LedgerItem {
+        row: ledger_row(),
+        description: "本文".into(),
+        notes: "裁定 t3-hub.5:20260926T1437Z-1".into(),
+    }
+}
+
+/// 定型行を全部持つ問いの card。
+fn question_card() -> QuestionCard {
+    QuestionCard {
+        id: bead("t3-hub.7"),
+        title: "画面の色".into(),
+        posted_at: AT,
+        plain: Some("画面の色を決める".into()),
+        eng: Some("CSS の変数を 2 組持つ".into()),
+        reason: Some("夜に読む".into()),
+        recommend: Some("暗い色を既定にする".into()),
+        a1: true,
+        touches: vec!["surface-base#b-cards".into(), "ADR-7".into()],
+        digest: ledger_item().digest(),
+    }
+}
+
+fn group_row() -> GroupRow {
+    GroupRow {
+        group: "Tier1".into(),
+        account: "black4".into(),
+        candidates: vec!["black1".into(), "black3".into(), "black5".into()],
+        next_account: Some("black5".into()),
+        remaining: vec![QuotaLeft {
+            window: "5h".into(),
+            left_pct: 62,
+        }],
+    }
+}
+
+fn quota_used() -> Vec<QuotaUsed> {
+    vec![
+        QuotaUsed {
+            window: "5h".into(),
+            used_pct: 38,
+            resets_at: Some(AT + 3_600),
+            counted: true,
+        },
+        QuotaUsed {
+            window: "7d-opus".into(),
+            used_pct: 90,
+            resets_at: None,
+            counted: false,
+        },
+    ]
+}
+
+fn seat_spans() -> Vec<SeatSpan> {
+    vec![
+        SeatSpan {
+            from: AT - 7_200,
+            to: AT - 3_600,
+            state: SeatState::Run,
+        },
+        SeatSpan {
+            from: AT - 3_600,
+            to: AT,
+            state: SeatState::Wait,
+        },
+    ]
+}
+
+fn account_moves() -> Vec<AccountMove> {
+    vec![
+        AccountMove {
+            at: AT - 86_400,
+            from: None,
+            to: "black3".into(),
+        },
+        AccountMove {
+            at: AT - 3_600,
+            from: Some("black3".into()),
+            to: "black4".into(),
+        },
+    ]
+}
+
 /// 全型の見本（この順が snapshot の file の key の順）。
 fn forms() -> Vec<Box<dyn Form>> {
     let refusals = vec![
@@ -382,14 +468,7 @@ fn forms() -> Vec<Box<dyn Form>> {
         form("ledger::BeadId", vec![bead("t3-hub"), bead("t3-hub.5")]),
         form("ledger::ChildType", vec![ChildType::Task, ChildType::Epic]),
         form("ledger::LedgerRow", vec![ledger_row(), root_row()]),
-        form(
-            "ledger::LedgerItem",
-            vec![LedgerItem {
-                row: ledger_row(),
-                description: "本文".into(),
-                notes: "裁定 t3-hub.5:20260926T1437Z-1".into(),
-            }],
-        ),
+        form("ledger::LedgerItem", vec![ledger_item()]),
         form(
             "ledger::LedgerList",
             vec![
@@ -714,6 +793,79 @@ fn forms() -> Vec<Box<dyn Form>> {
                 lead: NextMove::StalledRun,
             }],
         ),
+        // question
+        form(
+            "question::QuestionCard",
+            vec![
+                question_card(),
+                // 定型行も A-1 の印も名指しも無い問い。
+                QuestionCard {
+                    id: bead("t3-hub.8"),
+                    title: "素の問い".into(),
+                    posted_at: AT + 60,
+                    plain: None,
+                    eng: None,
+                    reason: None,
+                    recommend: None,
+                    a1: false,
+                    touches: vec![],
+                    digest: "cbf29ce484222325".into(),
+                },
+            ],
+        ),
+        form(
+            "question::QuestionList",
+            vec![
+                QuestionList {
+                    cards: Reading::Known(vec![question_card()]),
+                },
+                QuestionList {
+                    cards: Reading::Known(vec![]),
+                },
+                QuestionList {
+                    cards: Reading::Unknown,
+                },
+            ],
+        ),
+        // seat
+        form("seat::SeatState", SeatState::ALL.to_vec()),
+        form("seat::QuotaUsed", quota_used()),
+        form("seat::SeatSpan", seat_spans()),
+        form("seat::AccountMove", account_moves()),
+        form(
+            "seat::SeatCard",
+            vec![
+                SeatCard {
+                    at: AT,
+                    target: "t3:orchestrator".into(),
+                    state: SeatState::Wait,
+                    since: Some(AT - 3_600),
+                    tick_healthy: Reading::Known(true),
+                    heartbeat: Reading::Known(false),
+                    account: Some("black4".into()),
+                    model: Some("opus".into()),
+                    group: Reading::Known(group_row()),
+                    usage: Reading::Known(quota_used()),
+                    spans: Reading::Known(seat_spans()),
+                    moves: Reading::Known(account_moves()),
+                },
+                // 器も口座も読めない席。
+                SeatCard {
+                    at: AT,
+                    target: "t3:orchestrator".into(),
+                    state: SeatState::Unknown,
+                    since: None,
+                    tick_healthy: Reading::Unknown,
+                    heartbeat: Reading::Unknown,
+                    account: None,
+                    model: None,
+                    group: Reading::Unknown,
+                    usage: Reading::Unknown,
+                    spans: Reading::Unknown,
+                    moves: Reading::Unknown,
+                },
+            ],
+        ),
     ]
 }
 
@@ -904,6 +1056,85 @@ fn contract_form_ledger_row_labels() {
 }
 
 #[test]
+fn contract_form_ledger_item_digest() {
+    // FNV-1a 64 bit の公開の見本。
+    assert_eq!(fnv1a64(b""), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(fnv1a64(b"a"), 0xaf63_dc4c_8601_ec8c);
+    assert_eq!(fnv1a64(b"foobar"), 0x8594_4171_f739_67e8);
+    let item = ledger_item();
+    let digest = item.digest();
+    assert_eq!(digest, "0874e9bb3b87f545");
+    assert_eq!(
+        digest,
+        format!(
+            "{:016x}",
+            fnv1a64("t3-hub.5\n契約の型\nopen\n本文\n裁定 t3-hub.5:20260926T1437Z-1".as_bytes())
+        )
+    );
+    // 同じ中身なら同じ値（数えない欄は値を動かさない）。
+    assert_eq!(item.clone().digest(), digest);
+    let other_row = LedgerItem {
+        row: LedgerRow {
+            kind: "epic".into(),
+            updated_at: AT + 1,
+            parent: None,
+            labels: vec![],
+            ..ledger_row()
+        },
+        ..ledger_item()
+    };
+    assert_eq!(other_row.digest(), digest);
+    // どの欄の 1 字が変わっても値が変わる（区切りの位置が動くだけでも変わる）。
+    let changed = [
+        LedgerItem {
+            row: LedgerRow {
+                id: bead("t3-hub.6"),
+                ..ledger_row()
+            },
+            ..ledger_item()
+        },
+        LedgerItem {
+            row: LedgerRow {
+                title: "契約の形".into(),
+                ..ledger_row()
+            },
+            ..ledger_item()
+        },
+        LedgerItem {
+            row: LedgerRow {
+                status: "opem".into(),
+                ..ledger_row()
+            },
+            ..ledger_item()
+        },
+        LedgerItem {
+            description: "本分".into(),
+            ..ledger_item()
+        },
+        LedgerItem {
+            notes: "裁定 t3-hub.5:20260926T1437Z-2".into(),
+            ..ledger_item()
+        },
+        LedgerItem {
+            description: "本文\n裁定".into(),
+            notes: " t3-hub.5:20260926T1437Z-1".into(),
+            ..ledger_item()
+        },
+    ];
+    let mut seen = BTreeSet::from([digest.clone()]);
+    for c in &changed {
+        let d = c.digest();
+        assert_eq!(d.len(), 16, "{d}");
+        assert!(
+            d.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+            "16 進の小文字でない {d}"
+        );
+        assert!(seen.insert(d.clone()), "{c:?}: 値が変わらない {d}");
+    }
+}
+
+#[test]
 fn contract_form_closed_lists() {
     fn distinct<T: Serialize>(all: &[T]) -> usize {
         all.iter()
@@ -920,6 +1151,23 @@ fn contract_form_closed_lists() {
     assert_eq!(distinct(&Stage::ALL), 8);
     assert_eq!(distinct(&CheckResult::ALL), 3);
     assert_eq!(distinct(&UnreflectedKind::ALL), 3);
+    assert_eq!(distinct(&SeatState::ALL), 5);
+    let seat_words: Vec<String> = SeatState::ALL
+        .iter()
+        .map(|s| wire::encode(s).expect("語"))
+        .collect();
+    assert_eq!(
+        seat_words,
+        [
+            "\"run\"",
+            "\"wait\"",
+            "\"limit\"",
+            "\"silent\"",
+            "\"unknown\""
+        ],
+        "席の状態の ALL の順と字"
+    );
+    assert!(wire::decode::<SeatState>("\"stopped\"").is_err());
     let labels: BTreeSet<&str> = NextMove::ALL.iter().map(|m| m.label()).collect();
     assert_eq!(labels.len(), 7, "次の一手の名が重なる");
     let mut sorted = NextMove::ALL.to_vec();

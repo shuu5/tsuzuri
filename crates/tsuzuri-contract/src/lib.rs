@@ -5,6 +5,8 @@
 pub mod board;
 pub mod graph;
 pub mod ledger;
+pub mod question;
+pub mod seat;
 pub mod stats;
 pub mod surface;
 
