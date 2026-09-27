@@ -1,0 +1,61 @@
+# 判断の記録 ADR-13 — 登録を組み立ての時に生成する（発効 2026-09-27・持ち主の裁定 user 2026-09-27T17:36Z・記帳先 = tsuzuri の台帳 t3-hub.1 notes）
+# 調べの控えは docs/handoff/2026-09-27-t3-screen-wave.md §14 と hub の割りの案（M1〜M5）。実装の行は設計ノート surface-hub。
+id: ADR-13
+title: 口と block と頁の登録は、標準 library だけの組み立ての script が dir を読んで生成し、新しい機能は新しい file だけで足せる形にする
+status: accepted
+date: 2026-09-27
+context: |
+  便を並べて走らせると、同じ file を書く便は器が直列にする。着地した 48 行のうち、自分の新しい file だけで済んだ行は 13 行だった。
+  直列の点は登録の所に集まっている。server の口の振り分け（server の根の file の 2 つの関数）、面の block の module の列と描き分け（project の根の file と、描きの file（board.rs））、頁の列（枠の file の頁の列挙と頁の関数と header の nav の字）である。どの機能の行も、この 3 か所のどれかに 1 行を足すので、互いに重ならない機能でも並べて走らせられない。
+  器には、同じ file に行を足すだけの項（append-only の write-set の項）が無い。scribe2 の席は 2026-09-27 に、足す予定も無いと答えた（着地の rebase でぶつかるため）。
+  外の部品（inventory・linkme）を使えば登録を file ごとに散らせるが、依存の追加は条 A-3 と規則の行 R-2 の予算に触る。
+decision: |
+  (1) 高い頻度で足す登録の 3 つを、crate の組み立ての script（build.rs）の生成に替える。境界の crate の server の口（GET と POST）、面の crate の project board の block、面の crate の頁である。
+  (2) 組み立ての script は標準 library だけで書き、足す外の依存は 0 本にする。dir の中の source の file（.rs）の名を名の順に読み、module の宣言（絶対の path の属性つき）と、その列の上の 1 つの列挙（enum）と、列挙の上の関数を 組み立ての出力の dir（OUT_DIR）の file に書き、登録の所は取り込みの macro（include）でその file を読む。中身が同じなら file を書き直さない。
+  (3) 振り分けと選び分けは、生成した 1 つの列挙の上の 1 つの関数にし、順は列挙の宣言の順だけから取る（条 P-21）。重なりが無いことは歯で測る。
+  (4) crate の根の file（lib.rs）の公開の module の宣言（pub mod）の行と、server の module の根の file（mod.rs）の論理の module の行は、今までどおり手で書く（足すのは稀で、足場の行が持つ）。契約の型の crate と中核の crate には組み立ての script を置かない。
+  (5) 生成した列は歯で見えるようにする。列挙の全部の名が dir の file の名と同じであることと、着地済みの登録が全部在ることを、歯が dir を読んで比べる。
+  (6) 各 crate の最初の行（境界は口の行 hb-route・面は block の行 hs-blocks）で、組み立ての script を足す前と後の増分 check の秒を測り、記録の file に残す（規則の行 R-2）。
+options:
+  - id: M1
+    name: 先に足場を置く
+    text: 波ごとに、機能の行より前に 1 本の行が登録の 1 行と空の module を全部置く（着地済みの g-frame と h-frame の形）。
+    verdict: rejected
+    reason: 機能の数だけ先に決めておく必要があり、波の途中で足した機能はまた登録の file を書く。撤退の先としては残す。
+  - id: M2
+    name: 組み立ての script が登録を生成する
+    text: 決定 (1) から (6)。
+    verdict: adopted
+    reason: 新しい機能は dir に file を足すだけで登録に載り、登録の file を誰も書かない。外の依存は増えず、生成の列は列挙なので網羅の検査は compile が持つ。
+  - id: M3
+    name: 1 行の登録の file
+    text: 登録だけを持つ小さな file を置き、機能の行はそこに 1 行を足す。
+    verdict: rejected
+    reason: 器は write-set を file ごとに直列にするので、file が小さくても同じ file を書く便は並ばない。
+  - id: M4
+    name: 器に足すだけの write-set の項
+    text: 器の write-set に、行を足すだけの項を置き、同じ file を書く便を並べて走らせる。
+    verdict: rejected
+    reason: scribe2 に足すだけの項は無く、scribe2 の席の答え（2026-09-27）は、着地の積み直し（rebase）がぶつかるので足さない、である。
+  - id: M5
+    name: 外の crate で登録を散らす
+    text: 外の部品（inventory・linkme）を使い、各 file が自分を登録する。
+    verdict: rejected
+    reason: 外の依存を足すことになり、条 A-3 の確認と規則の行 R-2 の予算に触る。wasm の target での動きも確かめていない。
+basis: [P-21, P-26, A-3, R-2, R-4]
+retreat:
+  kind: measure
+  condition: 各 crate の最初の生成の行（境界は hb-route・面は hs-blocks）で、増分 check の秒（生成の対象の dir の file を 1 つ書き換えた後の cargo check の Finished の秒・3 回の中央値）が、足す前より 0.3 秒を越えて増え、理由が記録の file に無いとき、または trunk の wasm の組み立て（xtask の surface-build）が生成した module を解けないときは、その crate を先に足場を置く案（M1）へ戻す。数えるのは実装役で、記録の file の字を行の歯が読み、確かめるのは設計席。
+plain: |
+  新しい画面の部品や server の口を足すとき、今は必ず「一覧」の file を書き換えるので、同時に作業できる数が減っていました。
+  これからは、組み立ての時に小さな script が dir の中の file を数え、一覧を自動で作ります。新しい部品は新しい file を置くだけで一覧に載ります。
+  外の部品は増やしません。一覧が正しいことは歯が毎回確かめます。
+  組み立ての時間が目立って伸びたら、前のやり方（先に一覧の行を置いておく）に戻します。
+  この記録はあなたの承認で発効しています。承認の記帳先は tsuzuri の台帳です。
+approval:
+  who: 持ち主
+  date: 2026-09-27
+  ruling: t3-hub.1（裁定 id = user 2026-09-27T17:36Z・notes に逐語）
+  verbatim: 推奨で進めて
+  surface: R-8
+note: 実装の行は設計ノート surface-hub の hb-proc・hb-config・hb-route・hb-post（境界）と hs-blocks・hs-pages・hs-derived（面）。
