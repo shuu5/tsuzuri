@@ -4,6 +4,7 @@
 //! card の部分の並び（配置の表）・card の中身・送る button の状態・鍵の判定・要求の本文・応答から card の状態を決める関数は
 //! 純粋な関数にして host で試し、DOM と通信は wasm の target のときだけ組み立てる。
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
+//! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる（便 g-ask-focus）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
@@ -357,6 +358,31 @@ pub fn outcome(reply: Option<(u16, &str)>) -> Outcome {
     }
 }
 
+/// URL の query で問いを名指す鍵（`?id=`・見本の ask.html の終わりの script）。
+pub const FOCUS_KEY: &str = "id";
+
+/// URL の query で名指された問いの id（`%XX` を戻した字・無いか空なら None）。
+pub fn focus(query: &str) -> Option<String> {
+    crate::frame::param(query, FOCUS_KEY)
+        .map(crate::mapview::decode)
+        .filter(|id| !id.is_empty())
+}
+
+/// card の要素の id（字 q と 0 から数えた位置・番号 1 は q0＝見本の qcard の id）。
+pub fn anchor(number: usize) -> String {
+    format!("q{}", number.saturating_sub(1))
+}
+
+/// card の要素の class（名指された card は target を足す・見本の `.qcard.target`）。
+pub fn card_class(target: bool) -> &'static str {
+    if target { "qcard target" } else { "qcard" }
+}
+
+/// 名指された id の card の番号（一覧に無ければ None＝答え済み）。
+pub fn target_number(cards: &[Card], id: &str) -> Option<usize> {
+    cards.iter().find(|c| c.id.as_str() == id).map(|c| c.number)
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     dom::view()
@@ -372,11 +398,13 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, body,
-        can_send, count, key_action, outcome, request_body,
+        BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, anchor, body,
+        can_send, card_class, count, focus, key_action, outcome, request_body, target_number,
     };
+    use crate::frame::{Mode, node_href};
     use crate::project::{Body, body_view, fold, section, unmeasured};
     use crate::vocab::label;
+    use crate::widgets::help::HelpCtx;
 
     /// 見本の IC.warn・IC.clock・IC.person・IC.code・IC.check・IC.link。
     const WARN: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5"/><circle cx="12" cy="18" r=".8" fill="currentColor"/></svg>"#;
@@ -410,7 +438,22 @@ mod dom {
         })
     }
 
+    /// 名指された card を画面の上端へ寄せる（描いた後の frame で・要素が無ければ何もしない）。
+    fn scroll_to(number: usize) {
+        let id = anchor(number);
+        request_animation_frame(move || {
+            if let Some(el) = document().get_element_by_id(&id) {
+                el.scroll_into_view_with_bool(true);
+            }
+        });
+    }
+
     pub fn view() -> AnyView {
+        let search = window().location().search().unwrap_or_default();
+        let target = focus(&search);
+        let fallback = Mode::from_query(&search);
+        let mode = use_context::<HelpCtx>().map(|c| c.mode);
+        let scrolled = StoredValue::new(false);
         let fetched = crate::net::read(PATH);
         let drafts: Drafts = StoredValue::new(Vec::new());
         let extra = move || match fetched.with(count) {
@@ -421,12 +464,22 @@ mod dom {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
             Body::Filled(cards) => {
+                let focused = target.as_deref();
+                if let Some(id) = focused
+                    && !scrolled.get_value()
+                    && let Some(n) = target_number(&cards, id)
+                {
+                    scrolled.set_value(true);
+                    scroll_to(n);
+                }
                 let now = crate::net::now();
+                let m = mode.map_or(fallback, |m| m.get());
                 cards
                     .into_iter()
                     .map(|c| {
                         let d = draft(drafts, &c.id);
-                        card_view(c, d, now)
+                        let on = focused == Some(c.id.as_str());
+                        card_view(c, d, now, on, m)
                     })
                     .collect_view()
                     .into_any()
@@ -435,15 +488,18 @@ mod dom {
         section(BLOCK, extra.into_any(), list.into_any())
     }
 
-    fn card_view(card: Card, d: Draft, now: u64) -> AnyView {
+    fn card_view(card: Card, d: Draft, now: u64, target: bool, mode: Mode) -> AnyView {
         let parts = LAYOUT
             .iter()
-            .map(|slot| part_view(*slot, &card, &d, now))
+            .map(|slot| part_view(*slot, &card, &d, now, mode))
             .collect_view();
-        view! { <article class="qcard" data-q=card.id.to_string()>{parts}</article> }.into_any()
+        view! {
+            <article class=card_class(target) id=anchor(card.number) data-q=card.id.to_string()>{parts}</article>
+        }
+        .into_any()
     }
 
-    fn part_view(slot: Slot, card: &Card, d: &Draft, now: u64) -> AnyView {
+    fn part_view(slot: Slot, card: &Card, d: &Draft, now: u64, mode: Mode) -> AnyView {
         match slot.part {
             Part::Head => {
                 let a1 = card.a1.then(|| {
@@ -452,7 +508,7 @@ mod dom {
                 view! {
                     <div class=slot.class>
                         <span class="nb">{card.number}</span>
-                        <span class="t"><span data-t="">{card.title.clone()}</span></span>
+                        <a class="t" href=node_href(card.id.as_str(), mode)><span data-t="">{card.title.clone()}</span></a>
                         {a1}
                         <span class="chip num"><span inner_html=CLOCK></span><span>{age(now, card.posted_at)}</span></span>
                     </div>

@@ -1,6 +1,7 @@
 //! block「これまでの決定」（問いの頁・便 g-ask）: 答え済みの問いを畳める段に並べる（見本の ask.html の `#hist`）。
 //! 中は台帳の一覧（口 /api/ledger・定数は ledger の module に 1 本）から、label intake:question を持つ closed の bead を
 //! id の自然な順（数は数として比べる）に出す。段は最初は閉じていて、見出しに件数を出す。
+//! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる（便 g-ask-focus）。
 //! 選んで並べる関数と件数は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::board::Reading;
@@ -86,21 +87,62 @@ pub fn body(fetched: &Fetched) -> Body<Vec<Item>> {
     }
 }
 
+/// 段が最初に開くか（OPEN が真か、URL で名指された問いが答え済みの項に在れば開く）。
+pub fn opens(fetched: &Fetched, focus: Option<&str>) -> bool {
+    OPEN || focus.is_some_and(|id| match body(fetched) {
+        Body::Filled(items) => focus_index(&items, id).is_some(),
+        _ => false,
+    })
+}
+
+/// 名指された問いの項の位置（0 から数える・無ければ None）。
+pub fn focus_index(items: &[Item], id: &str) -> Option<usize> {
+    items.iter().position(|it| it.id == id)
+}
+
+/// 段の一覧の位置の行を選ぶ字（CSS の nth-child は 1 から数える）。
+pub fn row_selector(index: usize) -> String {
+    format!("#{} ul.items > li:nth-child({})", BLOCK.id, index + 1)
+}
+
+/// 名指された行に置く背景（見本の script が li に置く色と同じ）。
+pub const HIGHLIGHT: &str = "background:var(--panel-2)";
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     use leptos::prelude::*;
 
     use crate::widgets::help::h2;
 
+    let search = window().location().search().unwrap_or_default();
+    let target = super::ask::focus(&search);
+    let lit = StoredValue::new(false);
     let fetched = crate::net::read(super::ledger::PATH);
     let chip = move || match fetched.with(count) {
         Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
         Reading::Unknown => ().into_any(),
     };
+    let initial = {
+        let target = target.clone();
+        move || fetched.with(|f| opens(f, target.as_deref()))
+    };
     let list = move || match fetched.with(body) {
         Body::Unmeasured(reason) => super::unmeasured(reason),
         Body::Empty(line) => super::body_view(Body::Empty(line)),
         Body::Filled(items) => {
+            if let Some(id) = target.as_deref()
+                && !lit.get_value()
+                && let Some(i) = focus_index(&items, id)
+            {
+                lit.set_value(true);
+                let selector = row_selector(i);
+                request_animation_frame(move || {
+                    if let Ok(Some(el)) = document().query_selector(&selector) {
+                        let _ = el.set_attribute("style", HIGHLIGHT);
+                        el.scroll_into_view_with_bool(true);
+                    }
+                });
+            }
             let rows = items
                 .iter()
                 .map(|it| super::item_view(it, None))
@@ -108,7 +150,7 @@ pub fn view() -> leptos::prelude::AnyView {
             view! { <ul class="items">{rows}</ul> }.into_any()
         }
     };
-    let (open, toggle) = super::fold("ask:hist".to_string(), || OPEN);
+    let (open, toggle) = super::fold("ask:hist".to_string(), initial);
     view! {
         <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
             <summary>{h2(BLOCK.heading)}{chip}</summary>
