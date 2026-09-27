@@ -86,3 +86,11 @@ scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900
   - 関数の名を節で確定した: ProjectTexts・doc・assemble（e-acct-proj）、Acct::new・state_dir・doc・marks（e-acct）、accept（e-acct-hb）、win_name・ACCOUNT_WIN・open_url・after_open・after_close・open（h-win）。
 - 審査で差し戻されたら: pipe の下の review.json を読み、足りない材料を節に書いて commit-design.sh → preflight → dispatch.sh。承認（pipe approve --words）は持ち主の承認として残るので設計席の言葉では撃たない。
 - 着地の後の手: restart.sh で server を起こし直し、実物の画面で account board（?board=account）を点検する。h-wire の後に hub の file を「1 機能 = 1 新 file」へ割る行を書く。project board の題の字を project の名にする直しも残る。
+
+## 14. 行を書く作法 — 幻の write-set の項を出さない（2026-09-27T17:1xZ・hub の割りの調べと scribe2 の答えから）
+- verify の nextest の行は `cargo nextest run -p <crate> --test <file> --no-tests=fail <接頭辞>` の形で書く（歯が src に在る行は `--lib`）。器の §41 は filter の語を名に含む #[test] fn の file を全部 write-set に要るとするが、`--test <file>` は置き場を tests/<file>.rs に狭める（scribe2 closure/derive.rs §28・scribe2 の答え: intake・preflight・gate はこの形を受ける・verified）。今の filter の語 frame_ は 8 file、server_ は 19 file に当たる（acctframe_ も frame_ を含む）。
+- 新しい wire の型は、tests/contract_form.rs と snapshots/contract_form.json に足さず、自分の歯の file と snapshot を新しく置く（前例 b-acct の tests/acctdoc.rs）。既存の閉じた型の値を足すときだけ contract_form を触る。
+- 消す file は write-set に `~` を付ける（着地で消える file）、縮むだけは `-`（scribe2 contract-source.md §24・write_set.rs の Gone）。器に append-only の項は無く、足す予定も無い（1 行の登録でも同じ file なら直列）。
+- 着地済みの振る舞いを変える行は、その振る舞いを pin する着地済みの歯を先に grep し、見つけた歯の file を write-set に足して、直す期待を節に書く。
+- 節に書く材料: 呼ぶ着地済みの物の path・pub か・wasm の target に限るか・形（引数と返り）・class が stylesheet に在るか・語の鍵が辞書に在るか。散文に二重引用符と逆斜線を書かない（folio derive が止まる）。許す範囲は歯が見る条件と同じ広さにする（狭く書くと正しい実装が門で落ちる）。
+- hub の割り（server の口の振り分け・surface の block と頁の登録）は、std だけの build.rs で dir を読んで登録を生成する案（M2）と、波ごとに先に足場を置く案（M1）を持ち主に諮っている（台帳 t3-hub.52.1 の notes）。
