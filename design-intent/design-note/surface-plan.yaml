@@ -1,12 +1,14 @@
-# 設計ノート surface-plan — （下書き・持ち主の承認待ち）見本 mock v3 に揃える残りの仕事の計画（現在地・決定・残りの行・並べ方・他の席待ち・運び方）。要件は srs.yaml。
+# 設計ノート surface-plan — （発効 2026-09-28・持ち主の裁定 t3-hub.56:20260927T2259Z-1・記帳先 = t3-hub.1 notes）見本 mock v3 に揃える残りの仕事の計画（現在地・決定・残りの行・並べ方・他の席待ち・運び方）。要件は srs.yaml。
 # 契約表を持たない（器が読む導出物は作らない）。行の契約の字は波ごとの設計ノートが持ち、この文書は行の 1 行の要約と順と拠る裁定だけを持つ。
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v0.1
-  status: draft
+  version: v0.2
+  status: effective
   generated: 2026-09-28
   profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
   note: 設計ノート surface-board（傘の行 g・h・i・j・k）と surface-base（傘の行 e・f）の子の行を、どの波で、どの順で流すかを 1 か所で持つ計画。これまで見本と本番の差の調べ・行の割り・順・席の決めは追跡されない作業場の file にしか無く、全体の統制がとれないという持ち主の指摘（2026-09-27）を受けて置く。持ち主が board で承認したら status を effective にし、承認欄に裁定 id を書く。
 
 sections:
