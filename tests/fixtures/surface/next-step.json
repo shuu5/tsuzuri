@@ -1,0 +1,50 @@
+{
+  "stalled": {
+    "checks": [
+      {"kind": "limit-or-move", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "unresponsive", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "stalled-run", "result": "hit", "count": 2, "target": "nx.7"},
+      {"kind": "batch-approval", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "question", "result": "hit", "count": 3, "target": "nx.2"},
+      {"kind": "awaiting-effect", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "nothing", "result": "miss", "count": 0, "target": null}
+    ],
+    "lead": "stalled-run"
+  },
+  "question": {
+    "checks": [
+      {"kind": "limit-or-move", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "unresponsive", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "stalled-run", "result": "miss", "count": 0, "target": null},
+      {"kind": "batch-approval", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "question", "result": "hit", "count": 1, "target": "nq.4"},
+      {"kind": "awaiting-effect", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "nothing", "result": "miss", "count": 0, "target": null}
+    ],
+    "lead": "question"
+  },
+  "nothing": {
+    "checks": [
+      {"kind": "limit-or-move", "result": "miss", "count": 0, "target": null},
+      {"kind": "unresponsive", "result": "miss", "count": 0, "target": null},
+      {"kind": "stalled-run", "result": "miss", "count": 0, "target": null},
+      {"kind": "batch-approval", "result": "miss", "count": 0, "target": null},
+      {"kind": "question", "result": "miss", "count": 0, "target": null},
+      {"kind": "awaiting-effect", "result": "miss", "count": 0, "target": null},
+      {"kind": "nothing", "result": "hit", "count": 0, "target": null}
+    ],
+    "lead": "nothing"
+  },
+  "not-judged": {
+    "checks": [
+      {"kind": "limit-or-move", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "unresponsive", "result": "miss", "count": 0, "target": null},
+      {"kind": "stalled-run", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "batch-approval", "result": "hit", "count": 4, "target": null},
+      {"kind": "question", "result": "hit", "count": 5, "target": "nq.1"},
+      {"kind": "awaiting-effect", "result": "not-judged", "count": 0, "target": null},
+      {"kind": "nothing", "result": "miss", "count": 0, "target": null}
+    ],
+    "lead": "batch-approval"
+  }
+}
