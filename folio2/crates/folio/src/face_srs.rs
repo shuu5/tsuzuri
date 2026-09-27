@@ -282,8 +282,8 @@ pub fn derive(dir: &Path) -> R<String> {
     toc(&mut o, &ctx);
     goals_chapter(&mut o, &ctx)?;
     scope_chapter(&mut o, &ctx, dir, &s, &m)?;
-    crate::face_srs_items::fr_chapter(&mut o, &ctx, &m)?;
-    crate::face_srs_items::nfr_chapter(&mut o, &ctx)?;
+    crate::face_srs_items::fr_chapter(&mut o, &ctx, dir, &m)?;
+    crate::face_srs_items::nfr_chapter(&mut o, &ctx, dir)?;
     crate::face_srs_items::ac_chapter(&mut o, &ctx, &s)?;
     crate::face_srs_items::con_chapter(&mut o, &ctx)?;
     crate::face_srs_rtm::rtm_chapter(&mut o, &ctx)?;

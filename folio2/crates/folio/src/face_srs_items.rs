@@ -2,12 +2,15 @@
 //! 便 100 で `face_srs.rs` から 1 字も変えずに移した。文脈（`Ctx`）と共有の口（`band`・`figure_open`・`figure_close`・
 //! `fig_req`・`article_link`・`xref`・`slots`）は `face_srs.rs` のもの。
 
+use std::path::Path;
+
+use crate::adr;
 use crate::catalog::Component;
 use crate::constitution_enums as ce;
 use crate::cursor::{R, X};
 use crate::face::{
-    METHOD, TONE, anchor, card, hint, hint_q, method_label, pattern_label, strength_label,
-    strength_meaning, strength_prio,
+    METHOD, TONE, adr_face, anchor, card, hint, hint_q, method_label, pattern_label,
+    strength_label, strength_meaning, strength_prio,
 };
 use crate::face_srs::{
     Ctx, Item, article_link, band, fig_req, figure_close, figure_open, slots, xref,
@@ -37,7 +40,7 @@ fn legend_line() -> String {
     )
 }
 
-pub(crate) fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
+pub(crate) fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, m: &X<'_>) -> R<()> {
     band(o, ctx, 3, None);
     o.push("<div class=\"chapbody\">".to_string());
     o.push(legend_line());
@@ -110,7 +113,7 @@ pub(crate) fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()>
 
     o.push("<div class=\"stack\">".to_string());
     for it in &ctx.fr {
-        item_row(o, ctx, it, false)?;
+        item_row(o, ctx, dir, it, false)?;
     }
     o.push("</div>".to_string());
 
@@ -157,20 +160,20 @@ pub(crate) fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()>
     Ok(())
 }
 
-pub(crate) fn nfr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
+pub(crate) fn nfr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
     band(o, ctx, 4, None);
     o.push("<div class=\"chapbody\">".to_string());
     o.push(legend_line());
     o.push("<div class=\"stack\">".to_string());
     for it in &ctx.nfr {
-        item_row(o, ctx, it, true)?;
+        item_row(o, ctx, dir, it, true)?;
     }
     o.push("</div>".to_string());
     o.push("</div>".to_string());
     Ok(())
 }
 
-fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, it: &Item<'_>, nfr: bool) -> R<()> {
+fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, it: &Item<'_>, nfr: bool) -> R<()> {
     let x = &it.x;
     let pattern = x.f("pattern")?;
     let ears = pattern_label(pattern.parse(ce::Pattern::from_name, "型")?);
@@ -239,6 +242,27 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, it: &Item<'_>, nfr: bool) -> R<(
         for q in rules.seq()? {
             let id = ctx.rule(&q)?;
             basis.push(article_link(id, &format!("rules {id}")));
+        }
+    }
+    // 判断の記録（adrs・便 166）: 形は床の check.rs と同じ式・面が在れば番号だけのリンク（本文の番号と同じ形・便 135）、
+    // 無ければ「（まだ分からない）」
+    if let Some(adrs) = x.g("adrs")? {
+        for q in adrs.seq()? {
+            let id = q
+                .v
+                .as_str()
+                .filter(|v| v.starts_with("ADR-") && adr::is_basis_id(v))
+                .ok_or_else(|| {
+                    format!(
+                        "{}: adrs「{}」が判断の記録の id の形でない",
+                        q.at,
+                        q.v.as_str().unwrap_or("?")
+                    )
+                })?;
+            basis.push(match adr_face(dir, id) {
+                Some(h) => format!("判断の記録 <a class=\"xref\" href=\"{h}\">{id}</a>"),
+                None => format!("判断の記録 {id}（まだ分からない）"),
+            });
         }
     }
     if !basis.is_empty() {
