@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.5
+  version: v0.6
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。
 
 sections:
   - n: 1
@@ -118,6 +118,15 @@ sections:
         size: L
         done: (1) 頁の枠を返す純粋な関数の値（block の id の並びと、block ごとの見出しの語の鍵と class の名）が snapshot の file と 1 字も違わず、home の頁の block の id は next・ask・pipe・orch・ledger・legend の 6 つでこの順、地図の頁の id は map (2) stylesheet は見本の ui.css の規則を写したもので、画面が使う class の名は全部 stylesheet に在る（歯が class の名の集合を照らす） (3) data の口がまだ無い 4 つ（next・pipe・orch・地図の頁）と ledger の指標の段は、0 でなく測れていないの印と理由の 1 行を出し、ask と ledger の一覧と legend は中身を出す (4) 6 つの block と地図の頁は project の下の 7 つの module に 1 つずつ在り、枠の module は block の中身を持たない (5) 見出しの語と「?」の注釈の字は vocab の file から引き、画面の code に日本語の見出しの字を直に書かない (6) 初心者と経験者の mode の切り替えが URL に残る (7) 足す外の依存は 0 本で、面の crate の直接依存は 8 本以下のまま
         depends: [g-min]
+      - id: g-parts
+        title: block に共通の部品（block ごとの読みの口・読みの結果の 3 値・hover の card の層）
+        req: [FR14, NFR2, NFR3]
+        section: "10"
+        write-set: ["Cargo.lock", "crates/tsuzuri-contract/src/surface.rs", "crates/tsuzuri-surface/Cargo.toml", "crates/tsuzuri-surface/src/net.rs", "crates/tsuzuri-surface/src/view.rs", "crates/tsuzuri-surface/src/board.rs", "crates/tsuzuri-surface/src/project/mod.rs", "crates/tsuzuri-surface/src/project/next.rs", "crates/tsuzuri-surface/src/project/ask.rs", "crates/tsuzuri-surface/src/project/pipeline.rs", "crates/tsuzuri-surface/src/project/seat.rs", "crates/tsuzuri-surface/src/project/ledger.rs", "crates/tsuzuri-surface/src/project/map.rs", "crates/tsuzuri-surface/src/widgets/mod.rs", "crates/tsuzuri-surface/src/widgets/help.rs", "crates/tsuzuri-surface/src/widgets/hover.rs", "crates/tsuzuri-surface/tests/board_min.rs", "crates/tsuzuri-surface/tests/frame.rs", "+crates/tsuzuri-surface/tests/parts.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail parts_", "cargo nextest run -p tsuzuri-surface --no-tests=fail frame_", "cargo nextest run -p tsuzuri-surface --no-tests=fail board_min_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 読みの結果は 3 値（まだ読んでいない・本文・読めない）で、5 つの block の中身の関数は「まだ読んでいない」と「読めない」を受けると 0 件でなく測れていないと空でない理由の 1 行を返す (2) 口の path は 6 本（/api/ledger・/api/next・/api/pipeline・/api/seat・/api/metrics・/api/graph）で、block の module の定数に 1 本ずつ在り、互いに違う (3) 読み直しの合図の event の名は契約の型の crate の定数 2 つ（ledger-changed と board-changed）で、面の crate の code は event の名の字を直に書かない (4) hover の card の置き場の関数は、pointer の右 16 ピクセルに置き、窓の右端を越えるときは pointer の左へ返し、窓の下端を越えるときは下端に収まるまで上へ寄せる (5) 猶予の判定の関数は、要素を出てから 150 ミリ秒以内で、card の矩形までの距離が出た点より縮んだときだけ card を残す (6) card の行は 4 行で、1 行が 36 字を超えるときは 35 字と「…」に切る (7) 足す外の依存は 0 本で、面の crate の直接依存は 8 本以下のまま
+        depends: [g-frame]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -141,6 +150,21 @@ sections:
       data の口がまだ無い 4 つ（next・pipe・orch・地図の頁）は、見出しと、0 でなく測れていないの印と、理由の 1 行を出す。ledger の block の指標の段も同じく測れていないと出す。中身は後の便が module ごとに足す。
       見出しの語と「?」の注釈の字は見本の vocab.json を面の crate に写して引く。初心者と経験者の mode は URL に残す。hover の card と「?」の注釈の部品は widgets の下に置き、この便では「?」の注釈だけを動かす。
       頁の枠と block の見出しは純粋な関数の値にして host の cargo test で pin する。DOM を触る部分は wasm の target のときだけ組み立てる。この便は server と中核の crate と契約の型の crate を触らない。
+
+  - n: 10
+    type: prose
+    title: 便 g-parts — block に共通の部品
+    body: |
+      block の便を 1 つずつ並べて走らせるために、block が共通に使う部品を先に置く。この便の後、block の便は自分の module の file と自分の歯の file だけを書く。
+      読みの口。block は自分の口を 1 本読む。口の path は閉じた 6 本で、ask と ledger の一覧は /api/ledger（着地済み）、next は /api/next、pipeline は /api/pipeline、seat は /api/seat、ledger の指標の段は /api/metrics、地図の頁は /api/graph。path は block の module の定数に置く。/api/ledger の外の 5 本は server にまだ無い（後の便が足す）。無い口は 200 を返さないので「読めない」になる。
+      読みの結果は 3 値にする（まだ読んでいない・本文・読めない）。通信の module は、path を受けて読みの結果の signal を返す関数を持つ。頁を開いたときに 1 回読み、読み直しの合図を受けたら登録された口を全部読み直す。
+      読み直しの合図は、変化の知らせ（SSE・/api/surface/events）の接続が開いたときと、event の名が ledger-changed か board-changed の知らせを受けたとき。board-changed は器の event の記録か設計文書が変わったことを表す名で、契約の型の crate の面の module に定数として足す（ledger-changed の定数は着地済み）。接続は頁に 1 本だけ持つ。接続が切れたら、登録された口の結果を全部「読めない」にする。
+      block の中身の関数は、読みの結果を受けて中身を返す純粋な関数にする。この便では next・pipeline・seat・地図の頁・ledger の指標の段の 5 つを、3 値のどれを受けても測れていないと理由の 1 行を返す形にする（本文を受けたときの理由は「この block の中身はまだ無い」）。本文を読んで中身を返すのは後の block の便。ask と ledger の一覧は今の中身のまま、同じ通信の関数で読む。
+      hover の card。card の層を頁に 1 つ置き、block は「要素に card を付ける関数」を呼ぶだけにする。card は 4 行（題・種類・値・出所）と「詳しく」で、1 行は 36 字まで（超える行は 35 字と「…」）。
+      置き場は pointer の右 16 ピクセル・縦は pointer の高さ。card の右端が窓の右端を越えるときは pointer の左 16 ピクセルに card の右端を置く。card の下端が窓の下端を越えるときは、下端に収まるまで上へ寄せる。
+      猶予は 150 ミリ秒。要素を出た点と今の pointer の点を比べ、card の矩形までの距離が縮んでいて、出てから 150 ミリ秒以内なら card を残す。それ以外は消す。置き場と猶予の判定と行の切り方は純粋な関数にして host の cargo test で pin する。
+      web-sys の feature は、後の block の便が Cargo.toml を触らずに済むよう、この便でまとめて足す（Document・Element・HtmlElement・DomRect・Event・EventTarget・MouseEvent・PointerEvent・KeyboardEvent・WheelEvent・History・Location・Headers・Request・RequestInit・HtmlInputElement・HtmlTextAreaElement・SvgElement）。feature を足すだけで、外の依存の package は増やさない。
+      この便は server と中核の crate を触らない。契約の型の crate は定数 1 つを足すだけ。
 
 figures: []
 sources:
