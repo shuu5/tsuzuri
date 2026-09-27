@@ -29,6 +29,9 @@
 
 - **CI と作る順（2026-09-27T07:30Z〜07:45Z・持ち主の裁定 2 本・逐語は t3-hub.1）**: GitHub の CI を置いた（.github/workflows/ci.yml・rust-toolchain.toml 1.98.1 と wasm の target・CI に trunk）。.vessel.toml の remote = origin を戻した＝器が push → CI → close → 次の 1 周をつなぐ。作る順は「画面を早く出す順」に決定（docs/handoff/2026-09-27-t3-build-plan.md）。bead = t3-hub.3（便 b・走行中）→ t3-hub.4（便 e-min）→ t3-hub.5（便 g-min = 最初の本物の画面）。その後の順 = 行 e の残りと行 f → 行 c と行 d → 行 g の残り → 行 i と指し示し → 行 h・j・k と相談の窓 → code の持ち込み → 対象を広げる。行を足すときの作法: 新しい file は「+」・前の便が作った file は「+」無し・依存を足す便は Cargo.toml と Cargo.lock と xtask/src/main.rs を write-set に入れる・守られた file（.cargo/config.toml）は入れない・CI と toolchain の file は設計席が main で直す。
 
+- **最初の本物の画面（2026-09-27T08:28Z・verified）**: 便 b（48f36b7）・便 e-min（4d35b4a）・便 g-min（6f9e320）が着地。設計席が main で `cargo run -q -p xtask -- surface-build` を撃ち、server を tailnet の住所の port 8120 で起こした（binary と dist の写しは ~/.cache/tsuzuri-admin/serve/・log は同じ dir の serve.log・起動の行は `tz surface serve --repo <repo> --bind <tailnet の住所>:8120 --files <dist>`）。browser で開いて、問い 0 件・台帳 7 件・最終更新が実 data で出ることを確かめた（console の error は favicon の 404 だけ）。便 e-src（t3-hub.6・台帳の読みの出所を bd の読み取りの口に）は器が自動で起こして実装中。e-src が着地したら server の binary を作り直して起こし直す。次の設計 = 段 3（行 e の受付と行 f の hook）: 行 e の depends から c と d を外し、グラフの口は別の行に分け、検証の語を server_ から重ならない語に改める（器の歯の探しは語の部分一致）。
+- **器の口の使い方の実測**: `scribe2 pipe preflight --bead <id> --design <pointer>` で受付の断りを先に見られる。`scribe2 contracts check` は tsuzuri の contracts/ を読まない（docs=0）。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
