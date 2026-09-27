@@ -95,12 +95,16 @@ impl BeadAttr {
     }
 }
 
-/// 走行の属性（段と口座・口座は節点にしない）。
+/// 走行の属性（段と口座と答えの無い問いの数・口座は節点にしない）。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct RunAttr {
     /// 最後の event の段（器の語のまま）。
     pub stage: Option<String>,
     pub account: Option<String>,
+    /// 答えの無い問いの数。問いは走行の QuestionRaised の 1 つずつで、
+    /// n 番目の問いは n 番目の QuestionRaised から次の QuestionRaised の直前までに
+    /// 同じ走行の QuestionAnswered が在れば答えが在る。
+    pub unanswered: usize,
 }
 
 /// 組まずに数えた辺の行（型が閉じた一覧に無い）。

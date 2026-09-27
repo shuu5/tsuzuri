@@ -1,0 +1,30 @@
+{
+  "about": "同じ bead（r.1）の走行を 4 つ含む入力。QuestionRaised と QuestionAnswered は器の実物の形で detail だけを持ち、問いの id の欄（question）を持たない。q-a は答えの無い問いで止まり、q-b は答えを得て進み、q-c は答えの後に問いの無いまま Questioned なので g-12 が名指し、q-d は 2 つ目の問いで止まる",
+  "design_index": [
+    "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+  ],
+  "ledger": [
+    {"id": "r", "title": "根", "status": "open", "issue_type": "epic"},
+    {"id": "r.1", "title": "5 回やり直した契約", "status": "in_progress", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+     "dependencies": [{"issue_id": "r.1", "depends_on_id": "r", "type": "parent-child"}]}
+  ],
+  "events": [
+    {"schema": 1, "ts": "2026-09-27T00:00:00Z", "kind": "RunCreated", "run": "r.1-20260927T000000Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:00:20Z", "kind": "QuestionRaised", "run": "r.1-20260927T000000Z", "bead": "r.1", "detail": "write-set が足りない"},
+    {"schema": 1, "ts": "2026-09-27T00:00:30Z", "kind": "RunStage", "run": "r.1-20260927T000000Z", "bead": "r.1", "stage": "Questioned", "detail": "about:write-set"},
+    {"schema": 1, "ts": "2026-09-27T00:01:00Z", "kind": "RunCreated", "run": "r.1-20260927T000100Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:01:20Z", "kind": "QuestionRaised", "run": "r.1-20260927T000100Z", "bead": "r.1", "detail": "verify の行が足りない"},
+    {"schema": 1, "ts": "2026-09-27T00:01:30Z", "kind": "RunStage", "run": "r.1-20260927T000100Z", "bead": "r.1", "stage": "Questioned", "detail": "about:verify"},
+    {"schema": 1, "ts": "2026-09-27T00:01:40Z", "kind": "QuestionAnswered", "run": "r.1-20260927T000100Z", "bead": "r.1", "detail": "verify の行を足した"},
+    {"schema": 1, "ts": "2026-09-27T00:01:50Z", "kind": "RunStage", "run": "r.1-20260927T000100Z", "bead": "r.1", "stage": "Spawned", "detail": "base:0000000,account:acct-1"},
+    {"schema": 1, "ts": "2026-09-27T00:02:00Z", "kind": "RunCreated", "run": "r.1-20260927T000200Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:02:20Z", "kind": "QuestionRaised", "run": "r.1-20260927T000200Z", "bead": "r.1", "detail": "done の行が足りない"},
+    {"schema": 1, "ts": "2026-09-27T00:02:30Z", "kind": "QuestionAnswered", "run": "r.1-20260927T000200Z", "bead": "r.1", "detail": "done の行を足した"},
+    {"schema": 1, "ts": "2026-09-27T00:02:40Z", "kind": "RunStage", "run": "r.1-20260927T000200Z", "bead": "r.1", "stage": "Questioned", "detail": "about:done"},
+    {"schema": 1, "ts": "2026-09-27T00:03:00Z", "kind": "RunCreated", "run": "r.1-20260927T000300Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:03:10Z", "kind": "QuestionRaised", "run": "r.1-20260927T000300Z", "bead": "r.1", "detail": "goal の字が分からない"},
+    {"schema": 1, "ts": "2026-09-27T00:03:20Z", "kind": "QuestionAnswered", "run": "r.1-20260927T000300Z", "bead": "r.1", "detail": "goal の字を直した"},
+    {"schema": 1, "ts": "2026-09-27T00:03:30Z", "kind": "QuestionRaised", "run": "r.1-20260927T000300Z", "bead": "r.1", "detail": "design の行が分からない"},
+    {"schema": 1, "ts": "2026-09-27T00:03:40Z", "kind": "RunStage", "run": "r.1-20260927T000300Z", "bead": "r.1", "stage": "Questioned", "detail": "about:design"}
+  ]
+}

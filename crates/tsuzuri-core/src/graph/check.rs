@@ -246,16 +246,12 @@ fn g11_run_of(g: &Graph) -> Verdict {
 /// 走行の段の Questioned（器の語）。
 pub const QUESTIONED: &str = "Questioned";
 
-/// g-12 段が Questioned の走行は raised の辺を持つ。
+/// g-12 段が Questioned の走行は答えの無い問いを持つ（器の問いは event log の中だけに在り、raised の辺は見ない）。
 fn g12_raised(g: &Graph) -> Verdict {
-    let raised: BTreeSet<&str> = pairs(g, EdgeType::Raised)
-        .into_iter()
-        .map(|(f, _)| f)
-        .collect();
     let bad = g
         .runs
         .iter()
-        .filter(|(run, r)| r.stage.as_deref() == Some(QUESTIONED) && !raised.contains(run.as_str()))
+        .filter(|(_, r)| r.stage.as_deref() == Some(QUESTIONED) && r.unanswered == 0)
         .map(|(run, _)| run.clone())
         .collect();
     judge(g, &[Source::Runs], bad)

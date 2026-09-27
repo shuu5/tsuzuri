@@ -320,12 +320,15 @@ fn event_account(event: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-/// event log から走行の節点と run_of・raised の辺を組む。段と口座は走行の属性に持つ。
+/// event log から走行の節点と run_of・raised の辺を組む。段と口座と答えの無い問いの数は走行の属性に持つ。
+/// raised の辺は QuestionRaised が問いの id の欄（question）を持つときだけ組む（器の実物は持たない）。
 /// 同じ run の RunCreated の 2 件目は節点を足さない。RunCreated の無い run の event は読み捨てる。
 fn add_runs(g: &mut Graph, events: &[Value]) {
     let mut order: Vec<String> = Vec::new();
     let mut attrs: BTreeMap<String, RunAttr> = BTreeMap::new();
     let mut raised: Vec<GraphEdge> = Vec::new();
+    // 走行ごとの、最後の問いがまだ答えを持たないか。
+    let mut open: BTreeMap<String, bool> = BTreeMap::new();
     for event in events {
         let kind = event
             .get("kind")
@@ -344,10 +347,15 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
         if let Some(account) = event_account(event) {
             attr.account = Some(account);
         }
-        if kind == "QuestionRaised"
-            && let Some(q) = event.get("question").and_then(Value::as_str)
-        {
-            raised.push(edge(run, q, EdgeType::Raised));
+        if kind == "QuestionRaised" {
+            attr.unanswered += 1;
+            open.insert(run.to_string(), true);
+            if let Some(q) = event.get("question").and_then(Value::as_str) {
+                raised.push(edge(run, q, EdgeType::Raised));
+            }
+        }
+        if kind == "QuestionAnswered" && open.insert(run.to_string(), false) == Some(true) {
+            attr.unanswered -= 1;
         }
     }
     for run in order {
