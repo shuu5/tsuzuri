@@ -1,0 +1,6 @@
+# 規則の行 R-2 の測り（境界の crate の最初の生成の行・surface-hub 行 hb-route）。
+# 増分 check: cargo check -p tsuzuri-boundary --all-targets の Finished の行の秒・3 回の中央値。
+# before は組み立ての script を足す前の木で server の mod.rs を書き換えた後（0.17・0.23・0.14）、
+# after は足した後の木で口の file（src/server/routes/metrics.rs）を書き換えた後（0.26・0.32・0.26）。
+before_s = 0.17
+after_s = 0.26

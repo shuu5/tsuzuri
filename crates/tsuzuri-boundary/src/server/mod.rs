@@ -10,24 +10,9 @@
 //! 同じ時に届いた要求は、台帳の読みと設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
 //! 分け合うのは起動で作る 1 つの `Source` と 1 つの `Design` とその clone（変化の見張りの読みも含む）で、
 //! 読み終えた字は次の要求に持ち回さない。裁定の受付は合流せず、新しい子 process で読み直す。
-//! - GET /api/ledger — 台帳の一覧（LedgerList）
-//! - GET /api/ledger/<id> — 台帳の 1 本（LedgerItem）
-//! - GET /api/pipeline — pipeline の板（PipelineBoard）
-//! - GET /api/metrics — 台帳の指標（LedgerStats）
-//! - GET /api/next — 次の一手（NextStep）
-//! - GET /api/graph — 導出グラフ（GraphDoc）
-//! - GET /api/graph/view — 地図のグラフの眺め（GraphView・便 e-view）
-//! - GET /api/around?id=&k=&fold= — 節点の近傍（AroundDoc・便 e-view）
-//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・便 e-view）
-//! - GET /api/questions — 問いの一覧（QuestionList）
-//! - GET /api/seat — 席の card（SeatCard）
-//! - POST /api/ruling — 裁定の受付（RulingRequest → RulingResponse か RefusalResponse）
-//! - POST /api/batch — 束の受付（BatchRequest → BatchResponse か RefusalResponse）
-//! - POST /api/policy — 方針の受付（PolicyRequest → PolicyResponse か RefusalResponse）
-//! - GET /api/account — account board の読み（AccountDoc・行 h-wire）
-//! - POST /api/account/heartbeat — 停止の切り替えの受付（HeartbeatRequest → HeartbeatResponse か字・行 h-wire）
-//! - GET /api/surface/events — 変化の知らせ（SSE）
-//! - それ以外の GET — 面の file の配布
+//! GET の口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
+//! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13）。
+//! 変化の知らせ（SSE）と POST の 4 つの口はここに在り、どの口にも当たらない GET は面の file の配布。
 
 pub mod batch;
 pub mod board;
@@ -41,28 +26,30 @@ pub mod http;
 pub mod ledger;
 pub mod policy;
 pub mod proc;
+pub mod route;
 pub mod ruling;
 pub mod runs;
 pub mod seat;
+
+/// 口の列（組み立ての script が src/server/routes から生成する）。
+mod routes {
+    include!(concat!(env!("OUT_DIR"), "/routes.rs"));
+}
 
 use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, Once, Weak};
+use std::sync::{Arc, Mutex, Once};
 use std::thread;
 use std::time::Duration;
 
-use tsuzuri_contract::account::{HEARTBEAT_PATH, PATH as ACCOUNT_PATH};
-use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::graph::Fold;
-use tsuzuri_contract::ledger::BeadId;
+use tsuzuri_contract::account::HEARTBEAT_PATH;
 use tsuzuri_contract::surface::{
     BatchRequest, PolicyRequest, Refusal, RefusalResponse, RulingRequest,
 };
 use tsuzuri_contract::wire;
-use tsuzuri_core::graph::around::{AROUND_STEPS, AROUND_STEPS_RANGE};
 
 use crate::acct::Acct;
 use crate::accthb;
@@ -78,6 +65,7 @@ use self::runs::Runs;
 use self::seat::Seats;
 
 pub use self::config::Config;
+pub use self::routes::Route;
 
 /// tailnet の IPv4 の範囲（100.64.0.0/10）。
 pub const TAILNET_V4: (Ipv4Addr, u32) = (Ipv4Addr::new(100, 64, 0, 0), 10);
@@ -287,106 +275,17 @@ fn handle(stream: TcpStream, shared: &Shared) {
             let _ = events::stream(&stream, &shared.hub);
             return;
         }
-        Ok(req) => route(&req, shared),
-    };
-    let _ = response.write_to(&stream);
-}
-
-/// GET の口を選ぶ。
-fn route(req: &Request, shared: &Shared) -> Response {
-    let sources = &shared.sources;
-    let path = req.path();
-    match path {
-        "/api/ledger" => return json(200, wire::encode(&ledger::list(&sources.ledger))),
-        "/api/pipeline" => {
-            let texts = sources.gather(false, true);
-            return json(200, wire::encode(&board::pipeline(&texts, events::now())));
-        }
-        "/api/metrics" => {
-            let texts = sources.gather(false, false);
-            return json(200, wire::encode(&board::metrics(&texts, events::now())));
-        }
-        "/api/next" => {
-            // 席の card と台帳の字は並べて集める（待ちは 1 本分の上限まで）。
-            let now = events::now();
-            let (texts, card) = thread::scope(|s| {
-                let card = s.spawn(|| shared.seats.known(now));
-                let texts = sources.gather(false, true);
-                (texts, card.join().ok().flatten())
-            });
-            let step = match &card {
-                Some(card) => board::next_seat(&texts, card, now),
-                None => board::next(&texts, now),
-            };
-            return json(200, wire::encode(&step));
-        }
-        seat::PATH => return json(200, wire::encode(&shared.seats.card(events::now()))),
-        ACCOUNT_PATH => return account(shared),
-        "/api/graph" => {
-            let texts = sources.gather(true, true);
-            return json(200, wire::encode(&board::graph(&texts)));
-        }
-        "/api/graph/view" => {
-            let texts = sources.gather(true, true);
-            return json(200, wire::encode(&board::view(&texts)));
-        }
-        "/api/around" => return around(req, sources),
-        "/api/unreflected" => {
-            let texts = sources.gather(false, false);
-            return json(
-                200,
-                wire::encode(&board::unreflected(&texts, events::now())),
-            );
-        }
-        "/api/questions" => {
-            let text = sources.ledger.text().unwrap_or_default();
-            return json(200, wire::encode(&tsuzuri_core::question::list(&text)));
-        }
-        _ => {}
-    }
-    if let Some(id) = path.strip_prefix("/api/ledger/") {
-        let Ok(id) = BeadId::new(id) else {
-            return Response::text(400, "id-shape");
-        };
-        return match ledger::item(&sources.ledger, &id) {
-            ledger::Lookup::Found(item) => json(200, wire::encode(&item)),
-            ledger::Lookup::Missing => Response::text(404, "no-item"),
-            ledger::Lookup::Unknown => Response::text(503, "ledger-unknown"),
-        };
-    }
-    match files::serve(&shared.files, path) {
-        Served::File { content_type, body } => Response::new(200, content_type, body),
-        Served::Outside => Response::text(403, "outside"),
-        Served::Missing => Response::text(404, "no-file"),
-    }
-}
-
-/// 節点の近傍（query は id・k・fold の順に読み、最初に当たった断りを返す）。
-/// id が無いか空は 400 no-id・k が 1 から 3 の整数でなければ 400 steps・fold が 4 つの字のどれでもなければ 400 fold・
-/// 節点が無ければ 404 no-node。字を集めるのは query が読めた後だけ。
-fn around(req: &Request, sources: &Sources) -> Response {
-    let Some(id) = req.query("id").filter(|id| !id.is_empty()) else {
-        return Response::text(400, "no-id");
-    };
-    let steps = match req.query("k") {
-        None => AROUND_STEPS,
-        Some(k) => match k.parse::<u8>() {
-            Ok(k) if AROUND_STEPS_RANGE.contains(&k) => k,
-            _ => return Response::text(400, "steps"),
+        // GET の口（`route::dispatch`）に当たらなければ面の file の配布。
+        Ok(req) => match route::dispatch(&req, shared) {
+            Some(response) => response,
+            None => match files::serve(&shared.files, req.path()) {
+                Served::File { content_type, body } => Response::new(200, content_type, body),
+                Served::Outside => Response::text(403, "outside"),
+                Served::Missing => Response::text(404, "no-file"),
+            },
         },
     };
-    let fold = match req.query("fold").as_deref() {
-        None | Some("none") => Fold::None,
-        Some("up") => Fold::Up,
-        Some("down") => Fold::Down,
-        Some("both") => Fold::Both,
-        Some(_) => return Response::text(400, "fold"),
-    };
-    let texts = sources.gather(true, true);
-    match board::around(&texts, &id, steps, fold) {
-        Some(doc) => json(200, wire::encode(&doc)),
-        None => Response::text(404, "no-node"),
-    }
+    let _ = response.write_to(&stream);
 }
 
 /// POST の口の守り（Origin が Host と違えば 403・本文が `http::BODY_MAX` を越えれば 413・
@@ -462,45 +361,6 @@ fn post_policy(req: &Request, shared: &Shared) -> Response {
         policy::Outcome::IdShape => Response::text(500, "policy-id-shape"),
         policy::Outcome::AppendFailed => Response::text(502, "ledger-append"),
     }
-}
-
-/// account board の読み。state dir が無ければ器も git も撃たず、口座と群と移動が Unknown で列が空の電文。
-/// 最初の要求で acct の印の取り直しを始める（要求は取り直しを待たない）。
-fn account(shared: &Shared) -> Response {
-    let doc = match &shared.acct {
-        Some(acct) => {
-            shared
-                .acct_watch
-                .call_once(|| watch_acct_marks(Arc::clone(acct), &shared.acct_marks));
-            acct.doc(events::now())
-        }
-        None => tsuzuri_core::account::project::assemble(
-            events::now(),
-            Reading::Unknown,
-            Reading::Unknown,
-            Reading::Unknown,
-            Vec::new(),
-            Vec::new(),
-        ),
-    };
-    json(200, wire::encode(&doc))
-}
-
-/// acct の印の一覧を、始めてすぐと `ACCT_MARKS_EVERY` ごとに `Acct::marks` で置き換える別の thread
-/// （一覧の持ち手が落ちれば止まる）。
-fn watch_acct_marks(acct: Arc<Acct>, marks: &Arc<Mutex<Vec<PathBuf>>>) {
-    let weak: Weak<Mutex<Vec<PathBuf>>> = Arc::downgrade(marks);
-    thread::spawn(move || {
-        loop {
-            let current = acct.marks();
-            let Some(marks) = weak.upgrade() else {
-                return;
-            };
-            *lock(&marks) = current;
-            drop(marks);
-            thread::sleep(ACCT_MARKS_EVERY);
-        }
-    });
 }
 
 /// 停止の切り替えの受付（守りは `guarded`・本文の読みは `accthb::accept`）。
