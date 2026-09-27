@@ -1,5 +1,6 @@
 //! 便 g-frame の歯: 頁の枠の snapshot・block の並び・見出しの語が vocab に在る・画面の class が stylesheet に在る・
-//! data の口が無い block は測れていない・7 つの module・mode が URL に残る・「?」の注釈の分け方。
+//! data の口が無い block は測れていない・8 つの module・mode が URL に残る・「?」の注釈の分け方。
+//! 便 g-ask で頁は home・ask・map の 3 つになり、home から block ask を外して問いの頁へ移した。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -7,10 +8,11 @@ use std::path::{Path, PathBuf};
 use tsuzuri_boundary::server::ledger as server_ledger;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, HEADER, Mode, PageId};
 use tsuzuri_surface::project::{
-    self, Body, STATES, ask, ledger, legend, map, next, pipeline, seat, state_class,
+    self, Body, STATES, ask, askpage, ledger, legend, map, next, pipeline, seat, state_class,
 };
 use tsuzuri_surface::view::{Fetched, Screen};
 use tsuzuri_surface::vocab::vocab;
@@ -74,15 +76,33 @@ fn frame_snapshot_matches_file() {
 
 #[test]
 fn frame_home_blocks_in_order_and_map_page() {
+    // home は見本と同じ: 左の列が next・pipe・ledger・legend、右の列が orch。
+    let columns: Vec<Vec<&str>> = frame::home()
+        .columns
+        .iter()
+        .map(|c| c.blocks.iter().map(|b| b.id).collect())
+        .collect();
     assert_eq!(
-        frame::home().block_ids(),
-        vec!["next", "ask", "pipe", "orch", "ledger", "legend"]
+        columns,
+        vec![vec!["next", "pipe", "ledger", "legend"], vec!["orch"]]
     );
+    assert_eq!(frame::ask().block_ids(), vec!["ask", "hist"]);
     assert_eq!(frame::map().block_ids(), vec!["map"]);
-    assert_eq!(frame::map().id.id(), "map");
-    assert_eq!(frame::home().id.id(), "home");
+    let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
+    assert_eq!(ids, vec!["home", "ask", "map"]);
+    for id in PageId::ALL {
+        assert_eq!(frame::page(id).id, id);
+    }
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
+    // header の頁の link は ホーム・質問・地図 の順（nav の部品の中の鍵と同じ）。
+    let keys: Vec<&str> = frame::nav_links(PageId::Home)
+        .iter()
+        .map(|l| l.key)
+        .collect();
+    assert_eq!(keys, HEADER[1].items.to_vec());
+    let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
+    assert_eq!(words, vec!["ホーム", "質問", "地図"]);
 }
 
 /// 見出しの語の鍵（枠・header・nav・指標・凡例・注釈の部品）は全部 vocab の file に在る。
@@ -171,12 +191,17 @@ fn stylesheet_classes() -> BTreeSet<String> {
     out
 }
 
-/// 画面が使う class の名: src の `class="…"` の字・枠の値・関数が組む class。
+/// 見本が規則を持たない目印の class（見本の ask.html と同じ名・便 g-ask の契約が名指す 4 つ）。
+const MARKERS: [&str; 4] = ["plain", "send", "nb-d", "nb-body"];
+
+/// 画面が使う class の名: src の `class="…"` の字・枠の値・関数が組む class（目印の class は除く）。
 fn used_classes() -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     let mut add = |s: &str| {
         for c in s.split_whitespace() {
-            out.insert(c.to_string());
+            if !MARKERS.contains(&c) {
+                out.insert(c.to_string());
+            }
         }
     };
     for (_, text) in sources() {
@@ -200,9 +225,18 @@ fn used_classes() -> BTreeSet<String> {
     for part in HEADER {
         add(part.class);
     }
-    for page in [PageId::Home, PageId::Map] {
+    for page in PageId::ALL {
         for link in frame::nav_links(page) {
             add(link.class);
+            add(link.badge);
+        }
+    }
+    for slot in ask::LAYOUT {
+        add(slot.class);
+    }
+    for (plain, eng) in [(Some("a"), Some("b")), (None, None)] {
+        for line in ask::summary(plain, eng) {
+            add(line.class);
         }
     }
     for mode in Mode::ALL {
@@ -232,6 +266,7 @@ fn frame_classes_are_in_stylesheet() {
     // stylesheet は見本の ui.css の写し（見本の規則の class を持つ）。
     for c in [
         "page", "panel", "home", "stack", "top", "nav", "seg", "q", "tip", "legend5", "l4", "items",
+        "ask", "qcard", "badge", "fold",
     ] {
         assert!(css.contains(c), "stylesheet に見本の class {c} が無い");
     }
@@ -266,12 +301,15 @@ fn frame_blocks_without_data_are_unmeasured() {
     }
 
     let screen = known_screen();
-    let Body::Filled(questions) = ask::body(&screen) else {
+    let cards = Fetched::Body(read("../../tests/fixtures/surface/question-list.json"));
+    let Body::Filled(questions) = ask::body(&cards) else {
         panic!("問いの一覧が中身を出さない");
     };
-    let ids: Vec<&str> = questions.iter().map(|q| q.id.as_str()).collect();
-    assert_eq!(ids, vec!["bm.5", "bm.4"]);
-    assert!(questions.iter().all(|q| q.alert));
+    let ids: Vec<(usize, &str)> = questions
+        .iter()
+        .map(|q| (q.number, q.id.as_str()))
+        .collect();
+    assert_eq!(ids, vec![(1, "qa.2"), (2, "qa.10")]);
     let Body::Filled(groups) = ledger::body(&screen) else {
         panic!("台帳の一覧が中身を出さない");
     };
@@ -284,14 +322,21 @@ fn frame_blocks_without_data_are_unmeasured() {
 
     // 読めない一覧は 0 件でなく測れていない・0 件は 0 件。
     let lost = screen.after_lost();
-    assert!(matches!(ask::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
+    assert!(matches!(ask::body(&Fetched::Failed), Body::Unmeasured(r) if !r.is_empty()));
     assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
     let empty_body = wire::encode(&LedgerList {
         rows: Reading::Known(vec![]),
     })
     .expect("電文");
     let empty = Screen::initial().after_read(&Fetched::Body(empty_body), 1);
-    assert!(matches!(ask::body(&empty), Body::Empty(_)));
+    let no_cards = wire::encode(&QuestionList {
+        cards: Reading::Known(vec![]),
+    })
+    .expect("電文");
+    assert!(matches!(
+        ask::body(&Fetched::Body(no_cards)),
+        Body::Empty(_)
+    ));
     assert!(matches!(ledger::body(&empty), Body::Empty(_)));
 }
 
@@ -316,12 +361,13 @@ fn frame_item_shape_follows_status() {
     assert!(!by("bm").alert);
 }
 
-/// block と地図の頁は project の下の 7 つの module に 1 つずつ・枠の module は中身を持たない。
+/// block と地図の頁は project の下の 8 つの module に 1 つずつ・枠の module は中身を持たない。
 #[test]
 fn frame_one_module_per_block() {
     let modules = [
         ("next", next::BLOCK.id),
         ("ask", ask::BLOCK.id),
+        ("askpage", askpage::BLOCK.id),
         ("pipeline", pipeline::BLOCK.id),
         ("seat", seat::BLOCK.id),
         ("ledger", ledger::BLOCK.id),
@@ -346,8 +392,7 @@ fn frame_one_module_per_block() {
             "{module}.rs が block {id} の枠を持たない"
         );
     }
-    let mut all: Vec<&str> = frame::home().block_ids();
-    all.extend(frame::map().block_ids());
+    let mut all: Vec<&str> = frame::pages().iter().flat_map(|p| p.block_ids()).collect();
     let mut declared: Vec<&str> = modules.iter().map(|(_, id)| *id).collect();
     all.sort_unstable();
     declared.sort_unstable();
@@ -369,6 +414,8 @@ fn frame_mode_lives_in_url() {
     assert_eq!(Mode::from_query("?page=map&mode=expert"), Mode::Expert);
     assert_eq!(Mode::from_query("?mode=bogus"), Mode::Beginner);
     assert_eq!(PageId::from_query("?page=map&mode=expert"), PageId::Map);
+    assert_eq!(PageId::from_query("?page=ask"), PageId::Ask);
+    assert_eq!(PageId::from_query("?page=bogus"), PageId::Home);
     assert_eq!(PageId::from_query("?mode=expert"), PageId::Home);
     assert_eq!(frame::with_param("", "mode", "expert"), "?mode=expert");
     assert_eq!(
@@ -380,7 +427,7 @@ fn frame_mode_lives_in_url() {
         "?mode=expert&page=map"
     );
     for mode in Mode::ALL {
-        for page in [PageId::Home, PageId::Map] {
+        for page in PageId::ALL {
             let href = frame::href(page, mode);
             assert_eq!(Mode::from_query(&href), mode, "{href}");
             assert_eq!(PageId::from_query(&href), page, "{href}");

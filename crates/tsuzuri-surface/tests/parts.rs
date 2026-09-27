@@ -1,4 +1,5 @@
-//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 5 つの block は測れていない・口の path は 6 本で互いに違う・
+//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 5 つの block は測れていない・口の path は 8 本で互いに違う
+//! （便 g-ask で問いの一覧の口と答えを送る口を足した）・
 //! 読み直しの合図の event の名は契約の型の crate の定数から引く・hover の card の置き場と猶予と行の切り方・
 //! 定数が rules の file の行 R-20 と行 R-19 の字と同じ。
 
@@ -7,10 +8,11 @@ use std::path::{Path, PathBuf};
 
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList};
+use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::{
-    Body, NO_CONTENT, NOT_READ, ask, ledger, map, next, pipeline, seat,
+    Body, NO_CONTENT, NOT_READ, ask, askpage, ledger, map, next, pipeline, seat,
 };
 use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS, Screen};
 use tsuzuri_surface::widgets::hover::{
@@ -96,20 +98,32 @@ fn parts_pending_blocks_unmeasured_for_all_three() {
     assert_eq!(NO_CONTENT, "この block の中身はまだ無い");
 }
 
-/// ask と ledger の一覧も同じ 3 値を受け、まだ読んでいないと読めないは 0 件でなく測れていない。
+/// ask・これまでの決定・ledger の一覧も同じ 3 値を受け、まだ読んでいないと読めないは 0 件でなく測れていない。
 #[test]
 fn parts_ledger_lists_read_three_values() {
     let empty = wire::encode(&LedgerList {
         rows: Reading::Known(vec![]),
     })
     .expect("電文");
+    let no_cards = wire::encode(&QuestionList {
+        cards: Reading::Known(vec![]),
+    })
+    .expect("電文");
+    assert!(matches!(
+        ask::body(&Fetched::Body(no_cards)),
+        Body::Empty(_)
+    ));
+    assert!(matches!(
+        askpage::body(&Fetched::Body(empty.clone())),
+        Body::Empty(_)
+    ));
     let known = Screen::initial().after_read(&Fetched::Body(empty), 5);
-    assert!(matches!(ask::body(&known), Body::Empty(_)));
     for fetched in [Fetched::NotRead, Fetched::Failed] {
+        assert!(matches!(ask::body(&fetched), Body::Unmeasured(r) if !r.is_empty()));
+        assert!(matches!(askpage::body(&fetched), Body::Unmeasured(r) if !r.is_empty()));
         for screen in [Screen::initial(), known.clone()] {
             let s = screen.after_read(&fetched, 9);
             assert_eq!(s.board, Reading::Unknown, "{fetched:?}");
-            assert!(matches!(ask::body(&s), Body::Unmeasured(r) if !r.is_empty()));
             assert!(matches!(ledger::body(&s), Body::Unmeasured(r) if !r.is_empty()));
             // 最終更新は読めた時刻のまま（読めない読みで進めない）。
             assert_eq!(s.updated_at, screen.updated_at);
@@ -117,9 +131,9 @@ fn parts_ledger_lists_read_three_values() {
     }
 }
 
-/// 口の path は 6 本で互いに違い、block の module の定数に 1 本ずつ在る。
+/// 口の path は 8 本で互いに違い、block の module の定数に 1 本ずつ在る。
 #[test]
-fn parts_paths_six_distinct_in_block_modules() {
+fn parts_paths_distinct_in_block_modules() {
     let paths = [
         ledger::PATH,
         next::PATH,
@@ -127,6 +141,8 @@ fn parts_paths_six_distinct_in_block_modules() {
         seat::PATH,
         ledger::METRICS_PATH,
         map::PATH,
+        ask::PATH,
+        ask::RULING_PATH,
     ];
     assert_eq!(
         paths,
@@ -136,15 +152,17 @@ fn parts_paths_six_distinct_in_block_modules() {
             "/api/pipeline",
             "/api/seat",
             "/api/metrics",
-            "/api/graph"
+            "/api/graph",
+            "/api/questions",
+            "/api/ruling"
         ]
     );
     let mut sorted = paths.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), 6, "口の path が重なる: {paths:?}");
+    assert_eq!(sorted.len(), 8, "口の path が重なる: {paths:?}");
 
-    // src の `"/api/…"` の字: 6 本は project の下の module に 1 度ずつ・ほかは変化の知らせの口だけ。
+    // src の `"/api/…"` の字: 8 本は project の下の module に 1 度ずつ・ほかは変化の知らせの口だけ。
     let mut found: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     for (path, text) in sources() {
         let mut rest = text.as_str();
