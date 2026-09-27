@@ -170,6 +170,7 @@ requirements:
     figures: []
     rules: [R-21]
     adrs: [ADR-7]
+    note: 配達の口は器の seat deliver（scribe2 main bed08a9 で着地）で、送る行は器が固定した 1 行、渡すのは記帳 id だけ（形は設計ノート surface §20 の ruling-id）。考え中の席は器が busy で断るので停止の hook の経路で拾う。
   - id: FR10
     title: pipeline の板と走行の節点
     pattern: ubiquitous

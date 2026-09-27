@@ -3,13 +3,13 @@
 meta:
   id: surface
   title: 面の便 — 契約の型・導出グラフ・面の server・2 つの board・席の hook・表示面を便の列で運ぶ
-  version: v0.1
+  version: v0.2
   status: effective
   generated: 2026-09-26
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-26, ruling: t3-hub.1（裁定 id = user 2026-09-26T14:37Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 持ち主の承認（2026-09-26T14:37Z）で effective。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。
+  note: 持ち主の承認（2026-09-26T14:37Z）で effective（v0.1）。v0.2（2026-09-27）= 器の seat deliver の着地に合わせた直しだけ（§3 の裁定と束の出力・§20 に記帳 id の形・§21 の器の口 3 行）で、決定と契約表の行は変えない。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。
 
 sections:
   - n: 1
@@ -41,8 +41,8 @@ sections:
       - {id: events, name: 面の event（SSE）, input: 無し（Last-Event-ID で再開）, output: SeatState・QuestionPosted・RulingRead・RunStage の流れ, refuses: なし, ref: [FR9, NFR2]}
       - {id: state, name: 面の状態, input: 無し, output: 席の状態・次の一手・最終更新, refuses: なし, ref: [FR11]}
       - {id: question-nudge, name: 問いの合図, input: 問いの bead の id, output: 受領, refuses: 台帳に無い id, ref: [FR6]}
-      - {id: ruling, name: 裁定の受付, input: 問いの id と見た版の要約値と逐語, output: 裁定 id（UTC の分つき）と記帳時刻, refuses: 逐語が空・無い id・古い版・A-1 の印を持つ問いに個別の逐語が無い, ref: [FR6, FR7]}
-      - {id: ruling-batch, name: 束の受付, input: 問いの id の列と束の逐語と個別の逐語, output: 束の id と行ごとの結果, refuses: A-1 の印を持つ問いを含む・古い版・空の束, ref: [FR7]}
+      - {id: ruling, name: 裁定の受付, input: 問いの id と見た版の要約値と逐語, output: 記帳 id（形は §20 の ruling-id）と記帳時刻, refuses: 逐語が空・無い id・古い版・A-1 の印を持つ問いに個別の逐語が無い, ref: [FR6, FR7]}
+      - {id: ruling-batch, name: 束の受付, input: 問いの id の列と束の逐語と個別の逐語, output: 束の id（形は §20 の ruling-id）と行ごとの結果, refuses: A-1 の印を持つ問いを含む・古い版・空の束, ref: [FR7]}
       - {id: policy, name: 方針の受付, input: 範囲と逐語, output: 方針の id, refuses: 逐語が空, ref: [FR8]}
       - {id: pipeline-board, name: pipeline の板, input: 無し, output: 4 列の札（契約 bead・走行の回数・段の理由・口座・経過）, refuses: なし（state dir が読めなければ走行だけ「まだ分からない」）, ref: [FR10]}
       - {id: account-board, name: account board の data, input: 時点（省けば今）, output: 群と口座・session の表・各 project の指標・次の一手, refuses: なし, ref: [FR11, FR12, FR13]}
@@ -291,6 +291,7 @@ sections:
       - {id: question-nudge, name: 問いの合図（問いの bead の id）, need: required, shape: text}
       - {id: ruling-request, name: 裁定の要求（問いの id・見た版の要約値・逐語）, need: required, shape: table}
       - {id: ruling-response, name: 裁定の応答（裁定 id・記帳時刻）, need: required, shape: table}
+      - {id: ruling-id, name: "記帳 id の形（ASCII の英数字と . - _ : だけの 1 語・64 byte 以下）", need: required, shape: text, note: "1 問の裁定は <問い bead id>:<UTC の年月日 T 時分 Z>-<n>（例 t3-hub.5:20260926T1437Z-1）・束は batch:<同じ時刻>-<n>・方針は policy:<同じ時刻>-<n>。器の seat deliver の id-shape（ASCII の英数字と . - _ : の 64 byte 以下）を通る形で、server だけが発行する。討論 B §8.1 の @ と # を使う形は id-shape で断られるので採らない。面の外で席が記帳する裁定（今の「user <UTC の分>Z」）は面ができるまでの形として残す"}
       - {id: batch-request, name: 束の要求（問いの id の列・束の逐語・個別の逐語）, need: required, shape: table}
       - {id: batch-response, name: 束の応答（束の id・行ごとの結果）, need: required, shape: table}
       - {id: item-outcome, name: 行ごとの結果（書いた・飛ばした・断った）, need: required, shape: text}
@@ -311,9 +312,9 @@ sections:
       - {id: v-move-signal, name: 退避の合図（読む）, input: 席の置き場の move-signal（群の記録の ts）と rules 行 seat.move_grace_s, output: 退避までの残り秒, refuses: なし, ref: [FR12]}
       - {id: v-group-record, name: 群の記録（読む）, input: groups/<群>.account と history, output: 今の口座・移った時刻・理由・前の口座, refuses: なし, ref: [FR12]}
       - {id: v-events, name: 器の event log（読む）, input: fleet/events.jsonl と pipe/<run>/events.jsonl, output: 走行の属性・席の状態・承認の event, refuses: なし（読めなければ走行だけ「まだ分からない」）, ref: [FR10]}
-      - {id: v-heartbeat-cli, name: 停止の切り替え（撃つ）, input: 器の CLI（seat heartbeat off か on と target）, output: 器の結果, refuses: 知らない target, ref: [FR12], note: command の名は scribe2 席に確認中。面は file を書かない}
-      - {id: v-deliver, name: 待ちの席へ 1 行（撃つ）, input: 器の配達の口（deliver_within を包む口）と席の target と 1 行, output: 届いたか, refuses: 席が考え中（停止の hook に回す）, ref: [FR9], note: 新設の口。器の側の起票は scribe2 席に確認中}
-      - {id: v-device, name: 端末の一覧（読む）, input: 器の宣言（host の面）の端末の行（名・ssh の宛先・Chrome の場所・画面の環境・入力の環境・専用の profile・OS）, output: 端末の名で引ける行, refuses: 知らない名, ref: [FR16], note: 器の版上げで足す行。scribe2 席に確認中}
+      - {id: v-heartbeat-cli, name: 停止の切り替え（撃つ）, input: 器の CLI（scribe2 seat heartbeat off か on か status と --state-dir と --target）, output: 器の結果, refuses: 知らない target, ref: [FR12], note: 在る（scribe2 席の回答 2026-09-26）。面は file を書かない}
+      - {id: v-deliver, name: "待ちの席へ 1 行（撃つ）", input: "器の CLI（scribe2 seat deliver と --state-dir と --target と --ruling <記帳 id>）", output: "rc 0 = 届いた（stdout に target と ruling と consumed）・rc 1 = 断りか未確認と理由の 1 語（stderr）・rc 2 = 器の event log が読めない", refuses: "理由の閉じた 13 語（id-empty・id-shape・id-long・state-dir・store・no-row・busy・state-missing・state-unreadable・no-rule・pane-missing・input-busy・input-unknown）。busy は停止の hook の経路へ回し、input-busy は周期の読みで撃ち直し、未確認は撃ち直さず、どれも裁定から 2 分で席の受けが無ければ面に「席に届いていない」", ref: [FR9], note: "着地 = scribe2 main bed08a9（scribe2 の要件書 FR79 と受入 AC49・判断の記録 ADR-0077・設計 seat-heartbeat.md §15）。送る行は「scribe2 seat: 裁定 <記帳 id> が届いた（在りかは裁定面の記帳）」の固定の 1 行で、自由な文は送れない。席の UserPromptSubmit の hook がこの行を見て台帳から逐語を注入する（便 f）。器は撃ち手と書き込みの有無と裁定の中身を確かめない"}
+      - {id: v-device, name: 端末の一覧（読む）, input: 器の宣言（host の面）の端末の行（名・ssh の宛先・Chrome の場所・画面の環境・入力の環境・専用の profile・OS）, output: 端末の名で引ける行, refuses: 知らない名, ref: [FR16], note: 器の版上げで足す行。scribe2 の台帳の memo s2-07l.658（昇格は持ち主の裁定・host の面の表が増えるので判断の記録の条件）}
 
 figures: []
 sources:
