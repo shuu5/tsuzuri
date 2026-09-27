@@ -4,4 +4,11 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+# tz の入口（便 e-min・tz surface serve）。
+[[bin]]
+name = "tz"
+path = "src/main.rs"
+
+# 外の依存は足さない（標準 library だけで書く・xtask の歯 skeleton_ が直接依存の名を測る）。
 [dependencies]
+tsuzuri-contract = { path = "../tsuzuri-contract" }

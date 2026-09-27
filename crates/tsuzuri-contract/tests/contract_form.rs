@@ -14,7 +14,8 @@ use tsuzuri_contract::board::{
 };
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
 use tsuzuri_contract::ledger::{
-    BDW, BeadId, ChildType, LedgerItem, LedgerRow, LedgerWrite, NOTES_REPLACE_FLAG, PARENT_FLAG,
+    BDW, BdLine, BeadId, ChildType, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
+    NOTES_REPLACE_FLAG, PARENT_FLAG,
 };
 use tsuzuri_contract::surface::{
     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
@@ -326,6 +327,21 @@ fn forms() -> Vec<Box<dyn Form>> {
                 notes: "裁定 t3-hub.5:20260926T1437Z-1".into(),
             }],
         ),
+        form(
+            "ledger::LedgerList",
+            vec![
+                LedgerList {
+                    rows: Reading::Known(vec![ledger_row()]),
+                },
+                LedgerList {
+                    rows: Reading::Known(vec![]),
+                },
+                LedgerList {
+                    rows: Reading::Unknown,
+                },
+            ],
+        ),
+        form("ledger::LedgerChanged", vec![LedgerChanged { at: AT }]),
         form("ledger::LedgerWrite", ledger_writes()),
         // graph
         form("graph::NodeKind", NodeKind::ALL.to_vec()),
@@ -570,6 +586,33 @@ fn contract_form_ids_refuse_bad_shape() {
             .is_err()
     );
     assert!(wire::decode::<NodeKind>("\"file\"").is_err());
+}
+
+#[test]
+fn contract_form_bd_line_reads() {
+    // 知らない欄は読み捨て、省かれた種類・本文・notes は空で読む。
+    let line = r#"{"id":"t3-hub.5","title":"契約の型","status":"open","priority":2,"updated_at":"2026-09-27T07:39:00Z","labels":["x"]}"#;
+    let bd: BdLine = wire::decode(line).expect("bd の行");
+    assert!(!bd.is_tombstone());
+    let item = bd.into_item(AT);
+    assert_eq!(item.row.id, bead("t3-hub.5"));
+    assert_eq!(item.row.kind, "");
+    assert_eq!(item.row.updated_at, AT);
+    assert_eq!(item.description, "");
+    // 形の悪い id と欠けた更新時刻は読まない。
+    for bad in [
+        r#"{"id":"-x","title":"t","status":"open","updated_at":"2026-09-27T07:39:00Z"}"#,
+        r#"{"id":"t3-hub.5","title":"t","status":"open"}"#,
+    ] {
+        assert!(wire::decode::<BdLine>(bad).is_err(), "{bad} を読む");
+    }
+    let gone =
+        r#"{"id":"t3-hub.6","title":"t","status":"tombstone","updated_at":"2026-09-27T07:39:00Z"}"#;
+    assert!(
+        wire::decode::<BdLine>(gone)
+            .expect("bd の行")
+            .is_tombstone()
+    );
 }
 
 #[test]

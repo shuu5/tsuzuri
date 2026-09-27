@@ -1,0 +1,5 @@
+{"id":"fx-min","title":"最小の server の見本の根","description":"便 e-min の歯の見本","status":"open","priority":1,"issue_type":"epic","created_at":"2026-09-27T07:00:00Z","updated_at":"2026-09-27T07:39:00Z"}
+{"id":"fx-min.1","title":"台帳の一覧を読む","description":"一覧の口","notes":"裁定 fx-min.1:20260927T0739Z-1","status":"in_progress","priority":2,"issue_type":"task","created_at":"2026-09-27T07:01:00Z","updated_at":"2026-09-27T16:39:00.123456789+09:00","labels":["surface"],"dependencies":[{"issue_id":"fx-min.1","depends_on_id":"fx-min","type":"parent-child"}]}
+{"id":"fx-min.2","title":"変化を SSE で知らせる","status":"open","priority":2,"issue_type":"task","created_at":"2026-09-27T07:02:00Z","updated_at":"2026-09-27T07:40:00Z"}
+{"id":"fx-min.3","title":"面の file を配る","status":"closed","priority":3,"issue_type":"task","created_at":"2026-09-27T07:03:00Z","updated_at":"2026-09-27T07:41:00Z","closed_at":"2026-09-27T07:41:00Z"}
+{"id":"fx-min.4","title":"問いの見本","description":"A か B か","status":"open","priority":2,"issue_type":"question","created_at":"2026-09-27T07:04:00Z","updated_at":"2026-09-27T07:42:00-00:30"}

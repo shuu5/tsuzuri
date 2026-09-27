@@ -89,6 +89,9 @@ dependencies = [
 [[package]]
 name = "tsuzuri-boundary"
 version = "0.1.0"
+dependencies = [
+ "tsuzuri-contract",
+]
 
 [[package]]
 name = "tsuzuri-contract"

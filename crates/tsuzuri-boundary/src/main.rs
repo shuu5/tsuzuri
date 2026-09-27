@@ -1,0 +1,83 @@
+//! tz の入口（便 e-min）。終了 code は 合格 0・不合格 1・まだ分からない 2。
+//! tz surface serve --repo <dir> --bind <住所:port> --files <dir>
+//! bind 先は loopback か tailnet の住所だけ（条 N-6）。tailnet の住所はこの引数で受ける（行 D-4）。
+
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use tsuzuri_boundary::server::{Config, Server};
+
+const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir>";
+
+/// 不合格（断り・使い方の誤り）。
+const FAIL: u8 = 1;
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let rc = match args
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        ["surface", "serve", rest @ ..] => serve(rest),
+        _ => usage("subcommand"),
+    };
+    ExitCode::from(rc)
+}
+
+fn usage(what: &str) -> u8 {
+    eprintln!("tz: {what}\n{USAGE}");
+    FAIL
+}
+
+/// `--名 値` か `--名=値` の 3 つの引数を読む。
+fn parse(rest: &[&str]) -> Result<Config, String> {
+    let (mut repo, mut bind, mut files) = (None, None, None);
+    let mut it = rest.iter();
+    while let Some(arg) = it.next() {
+        let (name, value) = match arg.split_once('=') {
+            Some((n, v)) => (n, v),
+            None => (*arg, *it.next().ok_or_else(|| format!("{arg} の値が無い"))?),
+        };
+        let slot = match name {
+            "--repo" => &mut repo,
+            "--bind" => &mut bind,
+            "--files" => &mut files,
+            _ => return Err(format!("知らない引数 {name}")),
+        };
+        if slot.replace(value).is_some() {
+            return Err(format!("{name} が 2 度ある"));
+        }
+    }
+    let (Some(repo), Some(bind), Some(files)) = (repo, bind, files) else {
+        return Err("--repo と --bind と --files の 3 つが要る".into());
+    };
+    Ok(Config {
+        repo: PathBuf::from(repo),
+        bind: bind
+            .parse::<SocketAddr>()
+            .map_err(|_| format!("bind 先 {bind} は 住所:port の形でない"))?,
+        files: PathBuf::from(files),
+    })
+}
+
+fn serve(rest: &[&str]) -> u8 {
+    let config = match parse(rest) {
+        Ok(config) => config,
+        Err(e) => return usage(&e),
+    };
+    let server = match Server::bind(&config) {
+        Ok(server) => server,
+        Err(e) => {
+            eprintln!("tz surface serve: 起動を断る: {e}");
+            return FAIL;
+        }
+    };
+    match server.local_addr() {
+        Ok(addr) => eprintln!("tz surface serve: http://{addr}/"),
+        Err(e) => eprintln!("tz surface serve: 口の住所が読めない: {e}"),
+    }
+    server.run()
+}

@@ -202,6 +202,34 @@
       "notes": "裁定 t3-hub.5:20260926T1437Z-1"
     }
   ],
+  "ledger::LedgerList": [
+    {
+      "rows": {
+        "known": [
+          {
+            "id": "t3-hub.5",
+            "kind": "task",
+            "title": "契約の型",
+            "status": "open",
+            "updated_at": 1790494620
+          }
+        ]
+      }
+    },
+    {
+      "rows": {
+        "known": []
+      }
+    },
+    {
+      "rows": "unknown"
+    }
+  ],
+  "ledger::LedgerChanged": [
+    {
+      "at": 1790494620
+    }
+  ],
   "ledger::LedgerWrite": [
     {
       "op": "append-notes",

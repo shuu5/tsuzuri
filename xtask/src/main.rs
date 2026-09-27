@@ -93,8 +93,27 @@ mod read {
         None
     }
 
+    /// `[section]` の中の key の名の一覧（`key = …` の行の左辺）。
+    pub(super) fn section_keys(text: &str, section: &str) -> Vec<String> {
+        let header = format!("[{section}]");
+        let mut inside = false;
+        let mut keys = Vec::new();
+        for line in text.lines() {
+            let line = line.trim();
+            if line.starts_with('[') {
+                inside = line == header;
+            } else if inside
+                && !line.starts_with('#')
+                && let Some((k, _)) = line.split_once('=')
+            {
+                keys.push(k.trim().trim_matches('"').to_string());
+            }
+        }
+        keys
+    }
+
     /// `[section]` の中の `key = "…"` の値。
-    fn string_value(text: &str, section: &str, key: &str) -> Option<String> {
+    pub(super) fn string_value(text: &str, section: &str, key: &str) -> Option<String> {
         let header = format!("[{section}]");
         let mut inside = false;
         for line in text.lines() {
@@ -150,7 +169,7 @@ mod read {
 
 #[cfg(test)]
 mod tests {
-    use super::read::{lock_packages, member_names, string_array};
+    use super::read::{lock_packages, member_names, section_keys, string_array, string_value};
     use super::workspace_root;
 
     const MEMBERS: [&str; 5] = [
@@ -226,5 +245,33 @@ mod tests {
         let mut want = MEMBERS.to_vec();
         want.sort_unstable();
         assert_eq!(inside, want);
+    }
+
+    /// 境界の crate（最小の server と tz の入口・便 e-min）は外の依存を足さない（標準 library だけ）。
+    /// 直接依存は workspace の member だけで、binary の名は tz。
+    #[test]
+    fn skeleton_boundary_std_only_and_bin_tz() {
+        let manifest =
+            std::fs::read_to_string(workspace_root().join("crates/tsuzuri-boundary/Cargo.toml"))
+                .expect("境界の crate の Cargo.toml");
+        for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            let stray: Vec<String> = section_keys(&manifest, section)
+                .into_iter()
+                .filter(|k| !MEMBERS.contains(&k.as_str()))
+                .collect();
+            assert!(stray.is_empty(), "[{section}] に外の依存: {stray:?}");
+        }
+        assert!(
+            !manifest.contains("[target."),
+            "target ごとの依存の節を持たない"
+        );
+        assert_eq!(
+            section_keys(&manifest, "dependencies"),
+            vec!["tsuzuri-contract".to_string()]
+        );
+        assert_eq!(
+            string_value(&manifest, "[bin]", "name").as_deref(),
+            Some("tz")
+        );
     }
 }
