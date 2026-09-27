@@ -3,8 +3,8 @@
 //! 各組の違反はちょうど 1 件で、その種類と場所と文言まで見る（別の理由で落ちた組を緑にしない）。
 //! 図の節（便 33）は design-intent の写し（copy_tree + git init・tests/note.rs の Work と同じ形）の ADR-1.yaml に
 //! 図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複）で 不合格 1 を見る。
-//! 便 170（ADR-30 決定 (3)・便 172 が運ぶ）: 発効した ADR-1 と ADR-13 を写しの上で変える歯は、封の違反 1 行を
-//! 確かめて外した残りを見る。
+//! 便 170（ADR-30 決定 (2)(3)）: 改訂の欄 revises の歯（便 101）は欄ごと消した。発効した ADR-1 を写しの上で変える歯は、
+//! 封の違反 1 行を確かめて外した残りを見る。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -123,29 +123,6 @@ impl Work {
             "変異の当て先が 1 か所でない: {from:?}"
         );
         fs::write(self.adr1(), before.replacen(from, to, 1)).unwrap();
-    }
-
-    /// 写しの adr/<name> の字面の変異（1 か所だけ・便 101）。
-    fn mutate_file(&self, name: &str, from: &str, to: &str) {
-        let path = self.dir().join("adr").join(name);
-        let before = fs::read_to_string(&path).unwrap();
-        assert_eq!(
-            before.matches(from).count(),
-            1,
-            "変異の当て先が 1 か所でない: {name}: {from:?}"
-        );
-        fs::write(&path, before.replacen(from, to, 1)).unwrap();
-    }
-
-    /// 写しの ADR-13 に、本流から消した改訂の欄の行（REVISES_ROW）を植え直す（判断の記録 ADR-30 決定 (2)
-    /// で本流の行は消えた・欄の床は便 173 まで在るので、変異の当て先は歯が自分で置く）。発効した ADR-13 の本文が
-    /// 変わる＝封の違反 1 行が立つ（便 172）。
-    fn plant_revises(&self) {
-        self.mutate_file(
-            "ADR-13.yaml",
-            "\n\ndecision: |",
-            &format!("\n\nrevises:\n{REVISES_ROW}\ndecision: |"),
-        );
     }
 
     fn check(&self) -> Output {
@@ -394,143 +371,3 @@ fn f92_an_adr_that_does_not_exist_is_a_violation() {
     assert_figure_violation(&w, &["ADR-1.produced[1]", "ADR-99", "実在しない"]);
 }
 
-// ── 改訂の欄 revises（便 101・docs/design/delivery-101.md §1 (g)） ──
-
-/// 変異の当て先 = 写しの ADR-13 に植える revises の項の 1 行（ADR-8 の決定 (4) を狭める・本流 62111b1 の実の行の写し）。
-const REVISES_ROW: &str = "  - {target: ADR-8, decision: (4), kind: narrow, summary: 天井が合格でない間に設計文書の便の着地を既定で止める範囲を、repo 全体から便が書き換える file の側へ狭める（不合格の側は今のまま repo 全体で止める）}\n";
-const REVISES_HEAD: &str = "\nrevises:\n  - {target: ADR-8, decision: (4), kind: narrow,";
-
-/// 写しの ADR-13 に行を植えた床の違反から、封の違反 1 行（便 172・ADR-30 決定 (3)）を確かめて外した残り。
-fn beyond_the_adr13_seal(out: &Output) -> Vec<String> {
-    let mut v = violations(out);
-    let before = v.len();
-    v.retain(|l| {
-        !(l.starts_with("[adr] ADR-13: 発効した判断の記録の本文が封（anchors/adr-seals.yaml）の行と違う"))
-    });
-    assert_eq!(before - v.len(), 1, "ADR-13 の封の違反が 1 行でない: {:?}", violations(out));
-    v
-}
-
-/// 写しの ADR-13 に変異を当てた結果が 不合格 1・違反は封の 1 行と変異の 1 件（種別 adr・ADR-13 の場所）で `words` を全部含む。
-fn assert_adr13_violation(w: &Work, words: &[&str]) {
-    let out = w.check();
-    assert_eq!(
-        out.status.code(),
-        Some(1),
-        "{}{}",
-        stdout(&out),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let v = beyond_the_adr13_seal(&out);
-    assert_eq!(v.len(), 1, "封のほかの違反は変異の 1 件だけのはず: {v:?}");
-    assert!(v[0].starts_with("[adr] ADR-13"), "{v:?}");
-    for word in words {
-        assert!(v[0].contains(word), "「{word}」が無い: {v:?}");
-    }
-}
-
-#[test]
-fn f101_a_planted_revises_row_passes_and_the_real_records_carry_none() {
-    let w = Work::new("f101-real");
-    // 判断の記録 ADR-30 決定 (2): 本流の判断の記録は改訂の欄を持たない
-    let mut paths: Vec<_> = fs::read_dir(w.dir().join("adr"))
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
-    paths.sort();
-    for path in &paths {
-        let text = fs::read_to_string(path).unwrap();
-        assert!(
-            !text
-                .lines()
-                .any(|l| l == "revises:" || l.starts_with("revises: ")),
-            "{}: 改訂の欄が残っている",
-            path.display()
-        );
-    }
-    // 形の正しい行を植えた写しは、欄の決まりの違反 0（欄の床は便 173 まで在る）・違反は封の 1 行だけ（便 172）
-    w.plant_revises();
-    let out = w.check();
-    assert_eq!(
-        out.status.code(),
-        Some(1),
-        "{}{}",
-        stdout(&out),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let v = beyond_the_adr13_seal(&out);
-    assert!(v.is_empty(), "{v:?}");
-}
-
-#[test]
-fn f101_an_article_id_target_is_a_violation() {
-    let w = Work::new("f101-article");
-    w.plant_revises();
-    w.mutate_file(
-        "ADR-13.yaml",
-        REVISES_HEAD,
-        "\nrevises:\n  - {target: P-6, decision: (4), kind: narrow,",
-    );
-    assert_adr13_violation(&w, &["revises", "P-6", "target が判断の記録の id でない"]);
-}
-
-#[test]
-fn f101_the_record_itself_as_target_is_a_violation() {
-    let w = Work::new("f101-self");
-    w.plant_revises();
-    w.mutate_file(
-        "ADR-13.yaml",
-        REVISES_HEAD,
-        "\nrevises:\n  - {target: ADR-13, decision: (4), kind: narrow,",
-    );
-    assert_adr13_violation(&w, &["revises", "target が判断の記録の id でない"]);
-}
-
-/// 実在は link.rs の網が数える（床の枝は重ねない）。
-#[test]
-fn f101_an_adr_that_does_not_exist_is_a_violation() {
-    let w = Work::new("f101-missing");
-    w.plant_revises();
-    w.mutate_file(
-        "ADR-13.yaml",
-        REVISES_HEAD,
-        "\nrevises:\n  - {target: ADR-99, decision: (4), kind: narrow,",
-    );
-    assert_adr13_violation(&w, &["ADR-13.revises[0].target", "ADR-99", "実在しない"]);
-}
-
-#[test]
-fn f101_a_kind_outside_the_enum_is_a_violation() {
-    let w = Work::new("f101-kind");
-    w.plant_revises();
-    w.mutate_file(
-        "ADR-13.yaml",
-        REVISES_HEAD,
-        "\nrevises:\n  - {target: ADR-8, decision: (4), kind: replace,",
-    );
-    assert_adr13_violation(&w, &["kind", "replace", "値域でない"]);
-}
-
-#[test]
-fn f101_revises_that_is_not_a_list_is_a_violation() {
-    let w = Work::new("f101-not-list");
-    w.plant_revises();
-    w.mutate_file(
-        "ADR-13.yaml",
-        REVISES_HEAD,
-        "\nrevises:\n  {target: ADR-8, decision: (4), kind: narrow,",
-    );
-    assert_adr13_violation(&w, &["revises が一覧でない"]);
-}
-
-#[test]
-fn f101_the_same_decision_twice_is_a_violation() {
-    let w = Work::new("f101-dup");
-    w.plant_revises();
-    w.mutate_file(
-        "ADR-13.yaml",
-        REVISES_ROW,
-        &format!("{REVISES_ROW}{REVISES_ROW}"),
-    );
-    assert_adr13_violation(&w, &["decision", "(4)", "2 行に在る"]);
-}

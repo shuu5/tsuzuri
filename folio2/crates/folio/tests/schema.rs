@@ -43,11 +43,11 @@ use std::process::{Command, Output, Stdio};
 /// 便 121 (d): 列の根の欄を表 root_digests の 2 行（folio2 の行）にし、注 anchor_note の 2 項の書き換えと 1 項の挿入・
 /// 注 limits_note の末項を直した後の値（anchor は字面の置き換えで作り、導出と byte 一致を adr.rs の単体の歯が見る）。
 /// 便 130 (b)(e): 注 enums_note・anchor_note の 10 項目め・limits_note の 4・6・12 項目めの字を直した後の値（行数は不変）。
-/// 便 172（便 170 の封・ADR-30 決定 (3)）: 封の欄 seal と注 seal_note の 2 行を limits_note の前に足した後の値
-/// （anchor は字面の挿入で作った）。
-const REGION_LINES: usize = 140;
-const REGION_BYTES: usize = 26772;
-const REGION_SHA256: &str = "bfec83ea48093dc064fddc3b1761f1c0b037cc3cbcc52774c9430527374ea0dc";
+/// 便 170 (b)1: 改訂の欄 revises の 9 行（optional の項・revise_kind・revises_entry・revises_note の 6 行）を削り、封の欄 seal と
+/// 注 seal_note の 2 行を limits_note の前に足した後の値（anchor は字面の削除と挿入で作った）。
+const REGION_LINES: usize = 131;
+const REGION_BYTES: usize = 25271;
+const REGION_SHA256: &str = "8885ca9532668b4f8e1b54f3678edaa393499874478f8b0a605c9ccc29d675fc";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改め、便 119 で導出物の検査の命令の名と

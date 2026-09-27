@@ -18,8 +18,6 @@ pub(crate) const RULING_PATTERN: &str = r"[a-z]\d-[0-9a-z]+(\.\d+)?";
 pub(crate) const OWNER: &str = "持ち主";
 /// 帰結の欄（便 92・ADR-13 決定 (3-b)（ウ））。その判断が発効で生んだものの id の一覧で、根拠の欄 basis とは別に持つ。
 pub(crate) const PRODUCED: &str = "produced";
-/// 改訂の欄（便 101・ADR-13 決定 (14)）。発効した判断が生きたまま、その決定の範囲を別の判断が変えた対の一覧で、改訂する側だけが持つ。
-pub(crate) const REVISES: &str = "revises";
 pub(crate) const RECORD: Keys = Keys {
     required: &[
         "id", "title", "status", "date", "context", "decision", "options", "basis", "retreat",
@@ -27,7 +25,6 @@ pub(crate) const RECORD: Keys = Keys {
     ],
     optional: &[
         "amends",
-        REVISES,
         "grill",
         "approval",
         "consequences",
@@ -41,7 +38,6 @@ pub(crate) const RECORD: Keys = Keys {
 pub(crate) const NON_EMPTY: &[&str] = &["title", "context", "decision", "plain"];
 pub(crate) const STATUS: &[&str] = &["proposed", "accepted", "retired"];
 pub(crate) const VERDICT: &[&str] = &["adopted", "rejected"];
-pub(crate) const REVISE_KIND: &[&str] = &["narrow", "widen"];
 /// 撤退条件の種類 = 憲法の値域 schema.enums.retreat_kind から組み立て時に導出した名の列（便 49・手書きの写しは持たない）。
 pub(crate) const RETREAT_KIND: &[&str] = &RetreatKind::NAMES;
 pub(crate) const APPROVER: &[&str] = &["持ち主", "planner 席", "orchestrator 席"];
@@ -68,10 +64,6 @@ pub(crate) const RETREAT: Keys = Keys {
 };
 pub(crate) const AMENDS_ENTRY: Keys = Keys {
     required: &["target", "field", "version", "previous_text", "new_text"],
-    optional: &[],
-};
-pub(crate) const REVISES_ENTRY: Keys = Keys {
-    required: &["target", "decision", "kind", "summary"],
     optional: &[],
 };
 pub(crate) const GRILL: Keys = Keys {
@@ -171,7 +163,6 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ("retreat_kind", Floor::Strs(RETREAT_KIND)),
             ("approver", Floor::Strs(APPROVER)),
             ("surface", Floor::Strs(SURFACE)),
-            ("revise_kind", Floor::Strs(REVISE_KIND)),
         ]),
     ),
     (
@@ -308,42 +299,6 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                 "renumber",
                 Floor::Val(
                     "規範文の改番（同じ本文を消して別の id で足す）と、過去の版の anchor に在って最新 anchor に無い番号の再利用は落ちる（P-7.1）。本文も変えて付け替えた改番は「削除 + 新設」と弁別できない（限界）",
-                ),
-            ),
-        ]),
-    ),
-    ("revises_entry", keys_floor!(REVISES_ENTRY)),
-    (
-        "revises_note",
-        Floor::Map(&[
-            (
-                "target",
-                Floor::Val(
-                    "改訂する先の判断の記録の id（ADR-n）。自分の id は書かない。実在は判断の記録の全欄の走査が数える。条の改訂は amends と amended_by が持ち、判断を丸ごと置き換える形は supersedes / superseded_by が持つ＝この欄は「発効した判断が生きたまま、その決定の範囲が別の判断で変わる」ときだけに使う",
-                ),
-            ),
-            (
-                "decision",
-                Floor::Val(
-                    "改訂する決定の番号（その判断の decision の中の番号の字・例 (4)）。1 本の記録の中で target と decision の対は一意＝同じ決定を 2 行で書かない",
-                ),
-            ),
-            (
-                "kind",
-                Floor::Val(
-                    "改訂の向き。narrow = 決定の範囲を狭める／widen = 広げる。床は値域だけを見て、向きが本当かは人が読む（P-12.2）",
-                ),
-            ),
-            (
-                "summary",
-                Floor::Val(
-                    "その決定の何をどう変えたかの 1 文。逐語の突き合わせ（amends の previous_text / new_text）は持たない＝判断の記録は版ごとの凍結 anchor を持たないので、床が字面を突き合わせる相手が無い（P-10.2）",
-                ),
-            ),
-            (
-                "reverse",
-                Floor::Val(
-                    "改訂される側に来歴の欄は置かない（片側だけ）。改訂の有無は改訂する側のこの欄から数える＝条の改訂の来歴（amended_by）と違い、凍結 anchor との消し込みが無いので双方向にしても床が確かめられるものが増えない",
                 ),
             ),
         ]),

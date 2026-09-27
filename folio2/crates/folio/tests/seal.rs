@@ -1,5 +1,5 @@
 //! 判断の記録の封（`anchors/adr-seals.yaml`）と `folio check --freeze-adrs` の歯（便 170・docs/design/delivery-170.md §1 (c) の 2〜7・
-//! 判断の記録 ADR-30 決定 (3)・便 170 を割った便 172 が運ぶ。(c) の 1 の改訂の欄の歯は便 173）。
+//! 判断の記録 ADR-30 決定 (3)・便 170 を割った便 172 が運ぶ）と、(c) の 1 の改訂の欄の歯（ADR-30 決定 (2)・便 173 の f173_）。
 //! 土台は凍結した写し（tests/fixtures/floor_base/design-intent/・封の一覧 10 行）の写し全部を一時 dir に作り git init と 1 commit を行う。
 //! 新しい発効した記録は最小の手書き tests/fixtures/adr/seal-ADR-11.yaml で、その要約値（outside の欄を除く記録の木の json の
 //! sha256）は歯が字で持つ。(7) だけは folio2 自身の design-intent/ の写し。
@@ -225,6 +225,23 @@ fn assert_appended(before: &str, after: &str, sum: &str) {
     assert!(rest.starts_with(&row), "末尾が ADR-11 の行でない:\n{rest}");
     assert_eq!(rest.len(), row.len() + 64 + 2, "digest の後に字が在る:\n{rest}");
     assert_ne!(before, after);
+}
+
+#[test]
+fn f173_a_record_with_revises_is_an_unknown_field() {
+    let w = Work::new("revises", FLOOR_BASE);
+    let path = w.dir().join("adr/ADR-2.yaml");
+    let t = fs::read_to_string(&path).unwrap();
+    fs::write(
+        &path,
+        format!("{t}revises:\n  - {{target: ADR-1, decision: (1), kind: narrow, summary: 狭く読む}}\n"),
+    )
+    .unwrap();
+    assert_violations(
+        &w.check(&[]),
+        &["[adr] ADR-2: 未知の欄（N-3）: revises", &differs("ADR-2")],
+        "ADR-2 に revises",
+    );
 }
 
 #[test]

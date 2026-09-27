@@ -19,8 +19,7 @@ use crate::floor::{Floor, floor_diff_for, strip_notes};
 use crate::floor_adr::{
     AMENDS_ENTRY, APPROVAL, APPROVER, EFFECTIVE_STATUS, FIGURE_ENTRY, FIGURE_TYPE_ENUM_REF, FLOOR,
     GRILL, ID_PATTERN, Keys, NON_EMPTY, OPTION, OPTIONS_ADOPTED, OPTIONS_MIN, OWNER, PRODUCED,
-    RECORD, RETREAT, RETREAT_KIND, REVISE_KIND, REVISES, REVISES_ENTRY, ROOT_DIGESTS,
-    RULING_PATTERN, STATUS, SURFACE, VERDICT,
+    RECORD, RETREAT, RETREAT_KIND, ROOT_DIGESTS, RULING_PATTERN, STATUS, SURFACE, VERDICT,
 };
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
@@ -436,8 +435,6 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
         }
     }
 
-    check_revises(id, d, report);
-
     let approval = present(d, "approval");
     if in_enum(d.get("status"), EFFECTIVE_STATUS) && approval.is_none_or(Node::is_blank) {
         report.violation(
@@ -465,59 +462,6 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
     }
 
     check_figures(id, d, report);
-}
-
-/// (d) 任意の改訂の欄（便 101）。欄の集合・4 欄の非空・target は自分でない判断の記録の id・kind の値域・
-/// target と decision の対は 1 本の記録の中で一意。実在は link.rs の網が数える。
-fn check_revises(id: &str, d: &Node, report: &mut Report) {
-    let items: &[Node] = match present(d, REVISES) {
-        None => return,
-        Some(Node::Seq(items)) => items,
-        Some(_) => {
-            report.violation("adr", format!("{id}: {REVISES} が一覧でない"));
-            return;
-        }
-    };
-    let mut seen: Vec<(&str, &str)> = Vec::new();
-    for (i, e) in items.iter().enumerate() {
-        let at = format!("{id}.{REVISES}[{i}]");
-        if !check_keys("adr", &at, e, &REVISES_ENTRY, report) {
-            continue;
-        }
-        for k in REVISES_ENTRY.required {
-            if !non_empty(e.get(k)) {
-                report.violation("adr", format!("{at}.{k} が空"));
-            }
-        }
-        let target = scalar(e.get("target"));
-        if target.is_some_and(|t| !t.trim().is_empty())
-            && !target.is_some_and(|t| is_adr_id(t) && t != id)
-        {
-            report.violation(
-                "adr",
-                format!(
-                    "{at}.target が判断の記録の id でない（自分の id も書かない）: {}",
-                    show(e.get("target"))
-                ),
-            );
-        }
-        if non_empty(e.get("kind")) && !in_enum(e.get("kind"), REVISE_KIND) {
-            report.violation(
-                "adr",
-                format!("{at}: kind「{}」が値域でない", show(e.get("kind"))),
-            );
-        }
-        if let (Some(t), Some(dec)) = (target, scalar(e.get("decision"))) {
-            if seen.contains(&(t, dec)) {
-                report.violation(
-                    "adr",
-                    format!("{at}: {t} の decision「{dec}」が 2 行に在る（対は一意）"),
-                );
-            } else {
-                seen.push((t, dec));
-            }
-        }
-    }
 }
 
 /// (d) 任意の図の節（便 33）。欄の集合・id と caption の非空・型は部品目録の一覧・spec は表・refs は basis と同じ
@@ -957,7 +901,7 @@ mod tests {
             unreachable!()
         };
         let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
-        assert_eq!(notes, 25);
+        assert_eq!(notes, 24);
         let mut out = Vec::new();
         crate::floor::floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
         // 空の写し = 値の欄が全部（欠落）・注は 1 本も立たない

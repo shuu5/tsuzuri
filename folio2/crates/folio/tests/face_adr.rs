@@ -5,10 +5,9 @@
 //!   枝番付きの条 id・AC14 の赤の fixture・mode
 //! - 図の章（便 33・FR15）: 写し（ADR-2・図 1 枚）の figure-panel と型の名札と根拠のリンクと cover-meta・図なしの面は
 //!   図の章の外が byte で同じ・通らない図で 2 と前の面の保持・型外・道具の不在・実の正本の figure-panel の数
-//! - 改訂の欄（便 137）: 表紙の札 2 つ・章 05 の空の断りの 1 段落・h3 の下の amends と revises の行・向きの表の外で 2・
-//!   実の正本の全本で札の件数と revises の全行の逐語
-//! - 受けた改訂の逆向きの行（便 148）: 写しの発効の ADR-1 の revises が ADR-2 の面の章 05 と表紙の札に出る・提案中と
-//!   廃止は読まない・読めない改訂する側で 2・実の正本の全本で逆向きの札と行の逐語と順・ADR-18 と ADR-16 の実例
+//! - 改訂の欄（便 137・便 170）: 表紙の札は条文の改訂の 1 つ・章 05 の空の断りの 1 段落・h3 の下の amends の行。
+//!   判断の記録の改訂（revises）の札と行と受けた改訂の逆向きの行（便 148）は便 170（ADR-30 決定 (2)）で面から消え、
+//!   正本に revises の行が在っても面の字は変わらない
 //! - 強調の印（便 149）: 写しの ADR-2 の散文の 6 つの欄の対が strong・題と平易文は生のまま・列挙の断片をまたぐ対と
 //!   閉じない印と空の対は生のまま・実の正本の全本で strong の数と逐語と順・生の印 0・ADR-24 の決定 (1) の実例
 //!
@@ -446,41 +445,31 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
             "{id}: 採用は 1 つ"
         );
         let basis = a["basis"].as_vec().unwrap();
-        // 根拠のリンク = basis の数 + 図の節の refs の数（図の枠の「根拠:」も同じ xref・便 33）
-        // + 改訂の欄の行の数（相手の面へのリンク・便 137）
+        // 根拠のリンク = basis の数 + 図の節の refs の数（図の枠の「根拠:」も同じ xref・便 33）。
+        // 判断の記録の改訂の行と受けた改訂の行（便 137・便 148）は便 170 で面から消えた
         let figures = a["figures"].as_vec().map_or(0, Vec::len);
         let fig_refs: usize = a["figures"].as_vec().map_or(0, |v| {
             v.iter()
                 .map(|f| f["refs"].as_vec().map_or(0, Vec::len))
                 .sum()
         });
-        let revises = a["revises"].as_vec().map_or(0, Vec::len);
-        // + ほかの記録から受けた改訂の行の数（改訂する側の面へのリンク・便 148）
-        let revised_by = real_revised_by(&id).len();
         assert_eq!(
             count("class=\"xref\""),
-            basis.len() + fig_refs + revises + revised_by,
-            "{id}: 根拠のリンクの数（basis + 図の refs + revises + 受けた改訂）"
+            basis.len() + fig_refs,
+            "{id}: 根拠のリンクの数（basis + 図の refs）"
         );
         // 行き先の無い印は id の直後に付く（face_adr.rs の link_text）。散文の「（まだ分からない）」は数えない
-        let targets = basis
-            .iter()
-            .map(|b| b.as_str().unwrap().to_string())
-            .chain(a["revises"].as_vec().into_iter().flatten().map(|r| {
-                r["target"].as_str().unwrap().to_string()
-            }));
-        for b in targets {
+        for b in basis.iter().map(|b| b.as_str().unwrap()) {
             assert!(
                 !html.contains(&format!("{b}（まだ分からない）")),
                 "{id}: 行き先の無い根拠が在る（{b}）"
             );
         }
-        // 根拠の群の一覧（li の数 = 根拠の数・li は行き先のリンクと題の span）+ 改訂の欄の行（便 137）
-        // + 受けた改訂の行（便 148）
+        // 根拠の群の一覧（li の数 = 根拠の数・li は行き先のリンクと題の span）
         assert_eq!(
             count("<li><a class=\"xref\""),
-            basis.len() + revises + revised_by,
-            "{id}: ul.basis と改訂の欄と受けた改訂の li の数"
+            basis.len(),
+            "{id}: ul.basis の li の数"
         );
         assert_eq!(count("</a><span>"), basis.len(), "{id}: 題の span の数");
 
@@ -1125,22 +1114,19 @@ fn cover_count(label: &str, n: usize) -> String {
     format!("<span class=\"m\"><span class=\"k\">{label}</span><span class=\"v\">{n} 件</span></span>")
 }
 
-/// 札が 2 つ（条文の改訂・判断の記録の改訂）で、名札「改訂」だけの札が無い。
-fn assert_cover_counts(html: &str, amends: usize, revises: usize, what: &str) {
+/// 改訂の札は条文の改訂の 1 つだけ（便 170 で判断の記録の改訂の札を削った）で、名札「改訂」だけの札も無い。
+fn assert_cover_counts(html: &str, amends: usize, what: &str) {
     assert_eq!(
         html.matches(&cover_count("条文の改訂", amends)).count(),
         1,
         "{what}: 札「条文の改訂 {amends} 件」が 1 つでない"
     );
-    assert_eq!(
-        html.matches(&cover_count("判断の記録の改訂", revises)).count(),
-        1,
-        "{what}: 札「判断の記録の改訂 {revises} 件」が 1 つでない"
-    );
-    assert!(
-        !html.contains("<span class=\"k\">改訂</span>"),
-        "{what}: 名札「改訂」だけの札が残る"
-    );
+    for label in ["判断の記録の改訂", "ほかの判断の記録による改訂", "改訂"] {
+        assert!(
+            !html.contains(&format!("<span class=\"k\">{label}</span>")),
+            "{what}: 名札「{label}」の札が残る"
+        );
+    }
 }
 
 /// 章 05（s5 の帯から次の帯の直前まで）。
@@ -1152,80 +1138,53 @@ fn chapter5(html: &str) -> &str {
     &html[s5..end]
 }
 
+/// 便 170 §1 (c)9（ADR-30 決定 (2)）: 凍結 fixture の写しと、正本に revises の 1 行を足した写し（ほかの発効した記録から
+/// ADR-2 を名指す revises の行も足す）の面の両方で、札は「条文の改訂 0 件」の 1 つ・断りは「条文の改訂なし」の 1 段落・
+/// 判断の記録の改訂の札・h3・行・受けた改訂の逆向きの行・機械の面の revises が無い。
 #[test]
-fn f137_revises_rows_show_the_link_decision_kind_and_summary() {
-    let (run, html) = mutated("f137-rows", |t| {
+fn f173_the_adr_face_draws_no_revision_of_records() {
+    let plain = fixture_html("f170-plain");
+    let (td, work) = fixture_copy("f170-revises");
+    edit(&work.join("adr/ADR-2.yaml"), |t| {
         t.replacen(
             "amends: []\n",
-            "amends: []\nrevises:\n  - {target: ADR-1, decision: (2), kind: narrow, summary: 「<b>前</b>」を狭く読む}\n  - {target: ADR-9, decision: (1), kind: widen, summary: 相手の無い改訂}\n",
+            "amends: []\nrevises:\n  - {target: ADR-1, decision: (2), kind: narrow, summary: 前の字を狭く読む}\n",
             1,
         )
     });
+    fs::write(
+        work.join("adr/ADR-1.yaml"),
+        "id: ADR-1\nstatus: accepted\nrevises:\n  - {target: ADR-2, decision: (1), kind: widen, summary: 範囲を広げる}\n",
+    )
+    .unwrap();
+    let out = td.join("adr-2.html");
+    let run = folio_face("adr", Some("ADR-2"), &work, &out, "--write");
+    let revised = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
     assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
-    assert_cover_counts(&html, 0, 2, "revises 2 行");
-    assert_eq!(
-        html.matches("<p>条文の改訂なし</p>").count(),
-        1,
-        "断りが「条文の改訂なし」の 1 つでない"
-    );
-    assert!(
-        !html.contains("判断の記録の改訂なし"),
-        "revises が在るのに断りが在る"
-    );
-    assert_eq!(
-        html.matches("<h3>判断の記録の改訂</h3>").count(),
-        1,
-        "h3「判断の記録の改訂」が 1 つでない"
-    );
-    assert!(!html.contains("<h3>条文の改訂</h3>"), "amends が空なのに h3 が在る");
-    let row1 = "<li><a class=\"xref\" href=\"adr-1.html\">ADR-1</a> の決定 (2) を狭める: 「&lt;b&gt;前&lt;/b&gt;」を狭く読む</li>";
-    let row2 = "<li>ADR-9（まだ分からない） の決定 (1) を広げる: 相手の無い改訂</li>";
-    let ch5 = chapter5(&html);
-    let (Some(r1), Some(r2)) = (ch5.find(row1), ch5.find(row2)) else {
-        panic!("章 05 に revises の行が逐語で無い: {ch5}");
-    };
-    assert!(r1 < r2, "revises の行が正本の順でない");
-    assert!(
-        ch5.find("<h3>判断の記録の改訂</h3>").unwrap() < r1,
-        "revises の行が h3 の下に無い"
-    );
-    assert_eq!(html.matches(row1).count(), 1);
-    assert_eq!(html.matches(row2).count(), 1);
-    assert!(!html.contains("<b>前</b>"), "summary の山括弧が生のまま");
-    assert!(
-        !html.contains("href=\"adr-9.html\""),
-        "行き先の無い相手をリンクにした"
-    );
-    let ap = html.find("<section id=\"approval\"").expect("承認欄が無い");
-    assert!(html.find(row2).unwrap() < ap, "revises の行が承認欄の後");
-    assert!(
-        html.contains("<dt>amends</dt><dd>0</dd><dt>revises</dt><dd>2</dd>"),
-        "機械のための面が amends 0 と revises 2 を数えない"
-    );
-}
-
-#[test]
-fn f137_a_record_without_revisions_says_both_are_none() {
-    let html = fixture_html("f137-none");
-    assert_cover_counts(&html, 0, 0, "改訂の無い記録");
-    assert_eq!(
-        chapter5(&html)
-            .matches("<p>条文の改訂なし・判断の記録の改訂なし</p>")
-            .count(),
-        1,
-        "断りが両方の 1 段落でない"
-    );
-    assert!(!html.contains("<p>条文の改訂なし</p>"), "片方だけの断りが在る");
-    assert!(
-        !html.contains("<p>判断の記録の改訂なし</p>"),
-        "片方だけの断りが在る"
-    );
-    assert!(!html.contains("<h3>条文の改訂</h3>"), "空の欄に h3 が在る");
-    assert!(!html.contains("<h3>判断の記録の改訂</h3>"), "空の欄に h3 が在る");
-    assert!(
-        html.contains("<dt>amends</dt><dd>0</dd><dt>revises</dt><dd>0</dd>"),
-        "機械のための面が 0 と 0 を数えない"
-    );
+    for (what, html) in [("凍結 fixture", &plain), ("revises を足した写し", &revised)] {
+        assert_cover_counts(html, 0, what);
+        let ch5 = chapter5(html);
+        assert_eq!(
+            ch5.matches("<p>条文の改訂なし</p>").count(),
+            1,
+            "{what}: 断りが「条文の改訂なし」の 1 段落でない"
+        );
+        for gone in [
+            "判断の記録の改訂",
+            "ほかの判断の記録による改訂",
+            "<dt>revises</dt>",
+            "を狭める",
+            "を広げる",
+        ] {
+            assert!(!html.contains(gone), "{what}: 「{gone}」が残る");
+        }
+        assert!(
+            html.contains("<dt>amends</dt><dd>0</dd><dt>figures</dt>"),
+            "{what}: 機械のための面が amends 0 の次に figures でない"
+        );
+    }
+    assert!(revised == plain, "revises の行が面の字を変えた");
 }
 
 #[test]
@@ -1238,12 +1197,7 @@ fn f137_amends_go_under_their_own_heading() {
         )
     });
     assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
-    assert_cover_counts(&html, 1, 0, "amends 1 行");
-    assert_eq!(
-        chapter5(&html).matches("<p>判断の記録の改訂なし</p>").count(),
-        1,
-        "断りが「判断の記録の改訂なし」の 1 つでない"
-    );
+    assert_cover_counts(&html, 1, "amends 1 行");
     assert!(!html.contains("条文の改訂なし"), "amends が在るのに断りが在る");
     assert!(
         chapter5(&html).contains(
@@ -1251,92 +1205,10 @@ fn f137_amends_go_under_their_own_heading() {
         ),
         "amends の行が h3「条文の改訂」の下に逐語で無い: {html}"
     );
-    assert!(!html.contains("<h3>判断の記録の改訂</h3>"), "revises が無いのに h3 が在る");
     assert!(
-        html.contains("<dt>amends</dt><dd>1</dd><dt>revises</dt><dd>0</dd>"),
-        "機械のための面が amends 1 と revises 0 を数えない"
+        html.contains("<dt>amends</dt><dd>1</dd><dt>figures</dt>"),
+        "機械のための面が amends 1 を数えない"
     );
-}
-
-#[test]
-fn f137_unknown_when_a_revise_kind_is_outside_the_table() {
-    unknown(
-        "f137-kind",
-        |t| {
-            t.replacen(
-                "amends: []\n",
-                "amends: []\nrevises:\n  - {target: ADR-1, decision: (2), kind: shrink, summary: 向きが表の外}\n",
-                1,
-            )
-        },
-        "改訂の向き の表に無い値「shrink」",
-    );
-}
-
-#[test]
-fn f137_real_sources_draw_every_revises_row() {
-    let td = temp_dir("f137-census");
-    let mut drawn = 0;
-    for id in real_ids() {
-        let (_, html) = real_face(&td, &id);
-        let a = load_yaml_at(&design_intent().join("adr"), &format!("{id}.yaml"));
-        let amends = a["amends"].as_vec().map_or(0, Vec::len);
-        let revises = a["revises"].as_vec().cloned().unwrap_or_default();
-        assert_cover_counts(&html, amends, revises.len(), &id);
-        assert_eq!(
-            html.matches("<h3>判断の記録の改訂</h3>").count(),
-            usize::from(!revises.is_empty()),
-            "{id}: h3「判断の記録の改訂」の有無"
-        );
-        assert_eq!(
-            html.matches("<h3>条文の改訂</h3>").count(),
-            usize::from(amends > 0),
-            "{id}: h3「条文の改訂」の有無"
-        );
-        let none = match (amends == 0, revises.is_empty()) {
-            (true, true) => Some("条文の改訂なし・判断の記録の改訂なし"),
-            (true, false) => Some("条文の改訂なし"),
-            (false, true) => Some("判断の記録の改訂なし"),
-            (false, false) => None,
-        };
-        if let Some(none) = none {
-            assert_eq!(
-                chapter5(&html).matches(&format!("<p>{none}</p>")).count(),
-                1,
-                "{id}: 断り「{none}」が 1 つでない"
-            );
-        }
-        for r in &revises {
-            let target = r["target"].as_str().unwrap();
-            let kind = match r["kind"].as_str().unwrap() {
-                "narrow" => "狭める",
-                "widen" => "広げる",
-                other => panic!("{id}: 向き「{other}」は 2 つのどれでもない"),
-            };
-            let row = format!(
-                "<li><a class=\"xref\" href=\"{}.html\">{target}</a> の決定 {} を{kind}: {}</li>",
-                target.to_ascii_lowercase(),
-                esc(r["decision"].as_str().unwrap()),
-                esc(r["summary"].as_str().unwrap())
-            );
-            assert_eq!(
-                chapter5(&html).matches(&row).count(),
-                1,
-                "{id}: revises の行が逐語で 1 回ない: {row}"
-            );
-            drawn += 1;
-        }
-        assert!(
-            html.contains(&format!(
-                "<dt>amends</dt><dd>{amends}</dd><dt>revises</dt><dd>{}</dd>",
-                revises.len()
-            )),
-            "{id}: 機械のための面の件数"
-        );
-    }
-    let _ = fs::remove_dir_all(&td);
-    // 判断の記録 ADR-30 決定 (2): 本流の判断の記録は改訂の欄を持たない（行の描き方は写しの歯が確かめる）
-    assert_eq!(drawn, 0, "実の正本に revises の行が残っている");
 }
 
 // ── 便 146: 鮮度の札と足の行の日付は承認欄の日付（提案中は読まない・無ければ記録の日付と名 生成・
@@ -1416,229 +1288,6 @@ fn f146_real_adr_faces_date_the_approval() {
     }
     let _ = fs::remove_dir_all(&td);
     assert!(approved > 0, "承認欄を持つ実の判断の記録を 1 本も数えていない");
-}
-
-// ── 便 148: ほかの判断の記録から受けた改訂の逆向きの行（docs/design/delivery-148.md §1 (c) の 2〜6・天井の 40 周目の
-// 読みやすさ F-3）──
-
-/// 写しの ADR-1（改訂する側）の本文（状態と revises の行・行は yaml の一覧の要素の字面のまま）。
-fn reviser(status: &str, rows: &str) -> String {
-    format!("id: ADR-1\nstatus: {status}\nrevises:\n{rows}")
-}
-
-/// 写しの ADR-1 を `adr1` に書き換え、ADR-2 の面を `--write` で組む（面が出来ていなければ本文は空）。
-fn revised_face(case: &str, adr1: &str) -> (Output, String) {
-    let (td, work) = fixture_copy(case);
-    fs::write(work.join("adr/ADR-1.yaml"), adr1).unwrap();
-    let out = td.join("adr-2.html");
-    let run = folio_face("adr", Some("ADR-2"), &work, &out, "--write");
-    let html = fs::read_to_string(&out).unwrap_or_default();
-    let _ = fs::remove_dir_all(&td);
-    (run, html)
-}
-
-/// 表紙の逆向きの札の字面。
-fn revised_by_badge(n: usize) -> String {
-    cover_count("ほかの判断の記録による改訂", n)
-}
-
-/// 逆向きの 1 行の字面（decision と summary は正本の逐語・escape は歯の側）。
-fn revised_by_row(by: &str, decision: &str, kind: &str, summary: &str) -> String {
-    format!(
-        "<li><a class=\"xref\" href=\"{}.html\">{by}</a> がこの判断の決定 {} を{kind}: {}</li>",
-        by.to_ascii_lowercase(),
-        esc(decision),
-        esc(summary)
-    )
-}
-
-/// 歯の側の手書きの読み: 実の正本の発効の記録の revises のうち `id` を相手にする行を、改訂する側の id の数の順・
-/// 正本の順に（改訂する側・decision・向きの名札・summary）。
-fn real_revised_by(id: &str) -> Vec<(String, String, &'static str, String)> {
-    let mut rows = Vec::new();
-    for by in real_ids() {
-        let a = load_yaml_at(&design_intent().join("adr"), &format!("{by}.yaml"));
-        if by == id || a["status"].as_str() != Some("accepted") {
-            continue;
-        }
-        for r in a["revises"].as_vec().into_iter().flatten() {
-            if r["target"].as_str() != Some(id) {
-                continue;
-            }
-            let kind = match r["kind"].as_str().unwrap() {
-                "narrow" => "狭める",
-                "widen" => "広げる",
-                other => panic!("{by}: 向き「{other}」は 2 つのどれでもない"),
-            };
-            rows.push((
-                by.clone(),
-                r["decision"].as_str().unwrap().to_string(),
-                kind,
-                r["summary"].as_str().unwrap().to_string(),
-            ));
-        }
-    }
-    rows
-}
-
-/// 写しの ADR-1 の 3 行（ADR-2 の決定 (2) を狭める・相手の違う ADR-9・ADR-2 の決定 (1) を広げる）。
-const F148_ROWS: &str = "  - {target: ADR-2, decision: (2), kind: narrow, summary: 「<b>前</b>」を狭く読む}\n  - {target: ADR-9, decision: (1), kind: widen, summary: 相手の違う行}\n  - {target: ADR-2, decision: (1), kind: widen, summary: 範囲を広げる}\n";
-
-#[test]
-fn f148_revised_by_rows_link_back_to_the_reviser() {
-    let base = fixture_html("f148-base");
-    let (run, html) = revised_face("f148-rows", &reviser("accepted", F148_ROWS));
-    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
-    once_in(&html, &revised_by_badge(2), "表紙の逆向きの札");
-    assert_eq!(
-        html.matches("<span class=\"k\">ほかの判断の記録による改訂</span>").count(),
-        1,
-        "逆向きの札が 1 つでない"
-    );
-    // 正本の欄の札・断り・機械のための面は変わらない
-    assert_cover_counts(&html, 0, 0, "受けた改訂 2 行");
-    let ch5 = chapter5(&html);
-    assert_eq!(
-        ch5.matches("<p>条文の改訂なし・判断の記録の改訂なし</p>").count(),
-        1,
-        "章 05 の断りが変わった"
-    );
-    assert!(
-        html.contains("<dt>amends</dt><dd>0</dd><dt>revises</dt><dd>0</dd><dt>figures</dt>"),
-        "機械のための面が変わった"
-    );
-    let row1 = revised_by_row("ADR-1", "(2)", "狭める", "「<b>前</b>」を狭く読む");
-    let row2 = revised_by_row("ADR-1", "(1)", "広げる", "範囲を広げる");
-    let block = format!("<h3>ほかの判断の記録による改訂</h3>\n<ul>\n{row1}\n{row2}\n</ul>\n");
-    assert_eq!(ch5.matches(&block).count(), 1, "章 05 に逆向きの一覧が逐語で無い: {ch5}");
-    assert!(
-        ch5.find(&block).unwrap() < ch5.find("<h3>この判断で変わること</h3>").unwrap(),
-        "逆向きの一覧が帰結の後"
-    );
-    assert!(!html.contains("相手の違う行"), "相手の違う行が出た");
-    assert!(!html.contains("<b>前</b>"), "summary の山括弧が生のまま");
-    // 札の 1 行と h3 の一覧を除くと、改訂されていない面と byte で同じ
-    let stripped = cut_line(&html, &revised_by_badge(2)).replacen(&block, "", 1);
-    assert!(stripped == base, "札と一覧のほかが改訂されていない面と違う");
-}
-
-#[test]
-fn f148_only_an_accepted_reviser_is_read() {
-    let base = fixture_html("f148-status-base");
-    for status in ["accepted", "proposed", "retired"] {
-        let case = format!("f148-status-{status}");
-        let (run, html) = revised_face(&case, &reviser(status, F148_ROWS));
-        assert_eq!(code(&run, &case), 0, "{case}: {}", stderr(&run));
-        if status == "accepted" {
-            once_in(&html, &revised_by_badge(2), &format!("{case} の逆向きの札"));
-        } else {
-            assert!(html == base, "{case}: 発効でない改訂する側を読んだ");
-        }
-    }
-}
-
-/// 写しの ADR-1 が読めないなら ADR-2 の面は 2（まだ分からない）で、面を書かない。
-fn reviser_unknown(case: &str, adr1: &str, wording: &str) {
-    let (run, html) = revised_face(case, adr1);
-    assert_eq!(code(&run, "folio face"), 2, "{case}: {}", stderr(&run));
-    let err = stderr(&run);
-    for want in ["まだ分からない", "adr/ADR-1.yaml", wording] {
-        assert!(err.contains(want), "{case}: 「{want}」が無い: {err}");
-    }
-    assert!(html.is_empty(), "{case}: 導出できないのに面を書いた");
-}
-
-#[test]
-fn f148_unknown_when_a_reviser_row_cannot_be_read() {
-    reviser_unknown(
-        "f148-kind",
-        &reviser(
-            "accepted",
-            "  - {target: ADR-2, decision: (2), kind: shrink, summary: 向きが表の外}\n",
-        ),
-        "改訂の向き の表に無い値「shrink」",
-    );
-    reviser_unknown(
-        "f148-not-list",
-        "id: ADR-1\nstatus: accepted\nrevises: 一覧でない字\n",
-        "adr/ADR-1.yaml.revises: 一覧でない",
-    );
-    reviser_unknown(
-        "f148-target",
-        &reviser(
-            "accepted",
-            "  - {target: adr two, decision: (2), kind: narrow, summary: 相手が id の形でない}\n",
-        ),
-        "adr/ADR-1.yaml.revises[0].target",
-    );
-    reviser_unknown(
-        "f148-no-status",
-        "id: ADR-1\nrevises:\n  - {target: ADR-2, decision: (2), kind: narrow, summary: 状態が無い}\n",
-        "欄 status が無い",
-    );
-    reviser_unknown(
-        "f148-unreadable",
-        "id: ADR-1\nstatus: [accepted\n",
-        "adr/ADR-1.yaml: 読めない",
-    );
-}
-
-#[test]
-fn f148_real_sources_draw_every_revised_by_row() {
-    let td = temp_dir("f148-census");
-    let mut drawn = 0;
-    for id in real_ids() {
-        let (_, html) = real_face(&td, &id);
-        let rows = real_revised_by(&id);
-        let has = usize::from(!rows.is_empty());
-        assert_eq!(
-            html.matches("<span class=\"k\">ほかの判断の記録による改訂</span>").count(),
-            has,
-            "{id}: 逆向きの札の有無"
-        );
-        if has == 1 {
-            once_in(&html, &revised_by_badge(rows.len()), &format!("{id} の逆向きの札"));
-        }
-        let ch5 = chapter5(&html);
-        assert_eq!(
-            html.matches("<h3>ほかの判断の記録による改訂</h3>").count(),
-            has,
-            "{id}: h3 の有無"
-        );
-        assert_eq!(
-            ch5.matches("<h3>ほかの判断の記録による改訂</h3>").count(),
-            has,
-            "{id}: 章 05 の h3 の有無"
-        );
-        let mut at = 0;
-        for (by, decision, kind, summary) in &rows {
-            let row = revised_by_row(by, decision, kind, summary);
-            assert_eq!(ch5.matches(&row).count(), 1, "{id}: 逆向きの行が逐語で 1 回ない: {row}");
-            let pos = ch5.find(&row).unwrap();
-            assert!(pos >= at, "{id}: 逆向きの行が改訂する側の順でない: {row}");
-            at = pos + row.len();
-            drawn += 1;
-        }
-    }
-    let _ = fs::remove_dir_all(&td);
-    // 判断の記録 ADR-30 決定 (2): 本流の判断の記録は改訂の欄を持たないので、逆向きの行も無い
-    assert_eq!(drawn, 0, "実の正本に逆向きの行が残っている");
-}
-
-#[test]
-fn f148_adr18_and_adr16_have_no_back_links_after_adr30() {
-    // 判断の記録 ADR-30 決定 (2) で ADR-24・ADR-21・ADR-22 の改訂の欄を消したので、ADR-18 と ADR-16 の面に
-    // 逆向きの行は出ない（前は ADR-24 と ADR-21・ADR-22 への行を見ていた）
-    let td = temp_dir("f148-real");
-    let (_, adr18) = real_face(&td, "ADR-18");
-    let (_, adr16) = real_face(&td, "ADR-16");
-    let _ = fs::remove_dir_all(&td);
-    for (id, html) in [("ADR-18", &adr18), ("ADR-16", &adr16)] {
-        assert!(
-            !chapter5(html).contains("<h3>ほかの判断の記録による改訂</h3>"),
-            "{id} の面に逆向きの行が残っている"
-        );
-    }
 }
 
 // ── 便 149: 散文の強調の印を strong に写す（docs/design/delivery-149.md §1 (c) の 2〜5・天井の 39 周目の読みやすさの傍記）──
