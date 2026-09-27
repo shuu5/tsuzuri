@@ -125,7 +125,7 @@ sections:
         write-set: ["Cargo.lock", "crates/tsuzuri-boundary/Cargo.toml", "crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/src/server/mod.rs", "+crates/tsuzuri-boundary/src/server/http.rs", "+crates/tsuzuri-boundary/src/server/ledger.rs", "+crates/tsuzuri-boundary/src/server/events.rs", "+crates/tsuzuri-boundary/src/server/files.rs", "+crates/tsuzuri-boundary/tests/server_min.rs", "+tests/fixtures/ledger/min-5.jsonl", "crates/tsuzuri-contract/src/lib.rs", "crates/tsuzuri-contract/src/ledger.rs", "crates/tsuzuri-contract/tests/contract_form.rs", "crates/tsuzuri-contract/tests/snapshots/contract_form.json", "xtask/src/main.rs"]
         verify: ["cargo nextest run -p tsuzuri-boundary --no-tests=fail server_min_", "cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
         size: M
-        done: (1) bead 5 本の fixture で台帳の一覧の口が 5 本を契約の型の形で返し、1 本の口が id で 1 本を返す (2) 台帳の file が無いか壊れているとき、一覧の口は 0 件でなく測れていないの印を返す (3) bind 先の判定の関数が loopback と tailnet の範囲だけを通し、それ以外の宛先では起動が rc 1 で断られる (4) fixture の写しの file を書き換えると SSE の口に変化の event が 2 秒以内に 1 件出る (5) 面の file の口は置き場の外の path を断り、GET でない要求は 405 で何も書かない (6) 足す外の依存は 0 本で、binary の名は tz
+        done: (1) bead 5 本の fixture で台帳の一覧の口が 5 本を契約の型の形で返し、1 本の口が id で 1 本を返す (2) 台帳の file が無いか壊れているとき、一覧の口は 0 件でなく測れていないの印を返す (3) bind 先の判定の関数が loopback と tailnet の範囲だけを通し、それ以外の宛先では起動が rc 1 で断られる (4) fixture の写しの file を書き換えると SSE の口に変化の event が 1.5 秒以内に 1 件出る（周期の読みは 500 ミリ秒ごと・規則の行 R-21） (5) 面の file の口は置き場の外の path を断り、GET でない要求は 405 で何も書かない (6) 足す外の依存は 0 本で、binary の名は tz
         depends: [b]
   - n: 9
     type: prose
@@ -134,7 +134,7 @@ sections:
       最初の本物の画面を早く出すために、server の最小の形と tz の入口を先に置く（作る順の計画 2026-09-27・持ち主の承認）。
       server は標準 library だけで書く同期の server で、1 つの process と 1 つの port で動く。起動は tz surface serve で、引数は repo の置き場・bind 先・面の file の置き場の 3 つ。終了 code は 合格 0・不合格 1・まだ分からない 2。
       口は 4 つ。台帳の一覧（GET /api/ledger）・台帳の 1 本（GET /api/ledger/<id>）・変化の知らせ（GET /api/surface/events・SSE）・面の file の配布（それ以外の GET）。書く口は持たない。
-      台帳は .beads の issues.jsonl を読むだけで、500 ミリ秒ごとに file の更新時刻と長さを見て、変わったら SSE で知らせる。読めないときは 0 件でなく測れていないの印を返す。
+      台帳は .beads の issues.jsonl を読むだけで、500 ミリ秒ごとに file の更新時刻と長さを見て、変わったら 1.5 秒以内に SSE で知らせる（要件 NFR2・規則の行 R-21）。読めないときは 0 件でなく測れていないの印を返す。
       bind 先は同じ端末の中（loopback）か tailnet の中だけで、それ以外は起動を断る（条 N-6）。tailnet の住所は引数で受け、版管理の file に書かない（行 D-4）。
       台帳の一覧の型は契約の型の crate に足し、snapshot の file に写す。
 
