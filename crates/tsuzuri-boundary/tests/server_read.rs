@@ -369,10 +369,12 @@ fn server_read_four_routes_match_core() {
         tsuzuri_core::pipeline::board(&ledger, &events, t).board
     });
 
-    let (stats, from, to) = metrics(addr);
+    let (body, from, to) = get(addr, "/api/metrics");
+    let stats: Reading<LedgerStats> = decode!(body);
     assert!(matches!(stats, Reading::Known(_)), "{stats:?}");
-    same_at_some_now("metrics", &stats, from, to, |t| {
-        tsuzuri_core::ledger::stats(&ledger, t)
+    // 小数は電文の字を読み直すと最後の 1 桁がずれることが在るので、読んだ値でなく電文の字で比べる。
+    same_at_some_now("metrics", &body, from, to, |t| {
+        wire::encode(&tsuzuri_core::ledger::stats(&ledger, t)).expect("指標の電文")
     });
 
     let (step, from, to) = next(addr);
