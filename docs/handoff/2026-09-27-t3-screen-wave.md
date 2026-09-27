@@ -95,7 +95,7 @@ scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900
 - 節に書く材料: 呼ぶ着地済みの物の path・pub か・wasm の target に限るか・形（引数と返り）・class が stylesheet に在るか・語の鍵が辞書に在るか。散文に二重引用符と逆斜線を書かない（folio derive が止まる）。許す範囲は歯が見る条件と同じ広さにする（狭く書くと正しい実装が門で落ちる）。
 - hub の割り（server の口の振り分け・surface の block と頁の登録）は、std だけの build.rs で dir を読んで登録を生成する案（M2）と、波ごとに先に足場を置く案（M1）を持ち主に諮っている（台帳 t3-hub.52.1 の notes）。
 
-## 15. 登録の生成の波の現在地（2026-09-27T19:0xZ・席の移動 black2 → black4 の前に残す）
+## 15. 登録の生成の波の現在地（2026-09-27T19:0xZ・席の移動の前に残す）
 - 持ち主の裁定（t3-hub.1 notes 17:36Z）で案 M2 を採った。判断の記録 ADR-13・設計ノート design-intent/design-note/surface-hub.yaml（7 行）・epic t3-hub.54（子 .54.1〜.54.7）。設計席の判断の完全版は t3-hub.54 の notes。
 - 着地: hb-proc（.54.1）・hb-config（.54.2）・hb-route（.54.3）・hb-post（.54.4）・hs-blocks（.54.5）。server の口は GET 12・POST 4 が src/server/routes の下の 1 口 1 file になり、面の block は src/project の下の file から列挙 Module が生成される。ADR-13 の 2 つの前提（include の中の絶対 path の mod 宣言が trunk の wasm でも組める・統合 test に OUT_DIR が渡る）は実測で成り立った。規則の行 R-2 の増分 check は境界 0.17 → 0.26 秒・面 0.82 → 0.31 秒（docs/measure/r2-*.txt）＝撤退の条件に当たらない。
 - 走っている: hs-pages（.54.6・審査 PASS・実装中）。tests/snapshots/frame.json はこの行では消さず、歯 hspage_ が header と 5 頁の字を比べる写しに使う。
@@ -103,3 +103,13 @@ scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900
 - hs-pages の節に残る小さな不正確（askcard_page_frame_and_nav は frame.json も PageId の ALL も HEADER も読まず nav の語と badge の列を持つ・生成の PageId の ALL は配列・from_query と href は Home を名で持つ・build.rs の rerun の行は引用符の literal のまま・acctwire の行の添字 2 と 3 は 0 から数える）。実装役の問いが来たら、この事実で答える。
 - 学び（§14 に足す）: (1) 新しい歯の名は、着地済みの verify の filter の語（40 を越える・graph_・server_・project_ など部分の字で当たりやすい）を接頭辞の後に含めない。行の done に「名から接頭辞を除いた字はどの語も含まない（歯が自分の file を読む）」を置く。(2) 消す file（~）との比べは done に書けない（着地の後の木に無い）。比べの写しは 1 行残して次の行で消す。(3) 着地した行の新しい歯は、次の行の write-set の外の歯になる。次の行を流す前に、着地した歯が見る字を grep して節に書く（hsblock の FOLD_KEYS の数 6・hbconf の mod.rs の 3 行）。数を歯に残すと結びが戻るので、和や集合で見る形にする。(4) 行を流す前に、審査役の見方で行を読み HEAD の code で答える点検の agent を 1 本撃つと、審査の周が減る。
 - 着地の後の手: restart.sh で server を組み直し、実物の画面（project board の 5 block・頁の nav・account board）を点検する。Playwright は閉じ、.playwright-mcp は repo の外へ移す。
+
+## 16. 第 3〜5 波の現在地（2026-09-27T22:5xZ・席の移動の前に残す）
+- 着地: 第 3 波の 17 行は全部（surface-wave3a・3b・最後に h-proj-more 11d03d3 と c-next-batch a0ef946）。第 4 波の k-graph（epic t3-hub.55 の .55.1）と h-cards-home（.53.7）。server は 21:5xZ に組み直して点検した（h-proj-more と第 4 波の着地の後はまだ組み直していない）。
+- 器の既知の欠陥（s2 の memo s2-07l.688・直しは dd656a1）: 列車の先端でない便は terminal:ci:unmeasurable で終わり bead が閉じない。先端の CI が success で自分の sha が祖先なら手で閉じてよい（s2 の助言）。道具 ~/.cache/tsuzuri-admin/close-unmeasurable.sh --loop 120 が同じ確かめで閉じる（席を起こし直したら背景で起こし直す）。
+- 受付の門の学び: 審査が teeth-outside-write-set で落とした行を流し直すとき、at の path が write-set に覆われていないと受付が静かに断る（散文は読まない）。審査が誤りで書かない file は置き場だけの `=<path>` で足し、行が main に入ったら `scribe2 pipe dispatch release <bead>` で古い launched の印を外す（c-next-batch で実証）。
+- 持ち主への問いは board の質問の頁に置く運用にした（`bdw create --parent <epic> --labels intake:question --metadata '{"touches":[..]}'`・本文の行頭に 概要 = / 技術 = / 理由 = / 推奨 = ）。22:33Z に持ち主が 6 問に答えた（逐語は各問いの notes と t3-hub.1）。t3-hub.53.1 は案 A（git config tsuzuri.boardport・port だけ）。
+- 未解決: 裁定の配達。server が撃つ scribe2 seat deliver は席が busy だと refused reason=busy で、席に届かない（serve.log に「配達が落ちた」）。s2 に届け方（器の queue か tsuzuri の再送か席の hook か）を問うている。答えまでは席が台帳（問いの notes）から裁定を読む。
+- 持ち主の指摘（22:4xZ）: 計画と決定が追跡されない scratch にしか無く、設計ノートにまとめないと全体の統制がとれない。対応: 計画の設計ノート surface-plan（現在地・決定・残りの行・並べ方・他席待ち・運び方）と、裁定を srs.yaml・rules.yaml に書く patch を起草中（scratch の plan/）。起こし直したら folio で確かめて design-intent に入れ、board の質問で持ち主に承認を取る。
+- 起草中・点検中（scratch の wave5/ に出力が残る・起こし直したら folio check で確かめてから使う）: g-node-timeline・g-title・g-card-node・g-help-sym・g-seat-more・g-ledger-card（事前の点検まで）、g-ask-around・g-hist-ruling・h-sess-axis・c-limit-pipe・h-board-url（起草）。保留: c-summary-design（folio2 の `folio graph --print --summary` の着地待ち）・f-gate（裁定 55.2 の絞りで書き直す）。
+- 起こし直したら: (1) close-unmeasurable の見張りと 3 時間ごとの台帳の自己点検の cron を置き直す (2) restart.sh で server を組み直す (3) plan と wave5 の出力を確かめて設計ノートに入れる (4) s2 の配達の答えを見る。
