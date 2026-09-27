@@ -10,9 +10,11 @@ use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
 use super::windows::{NOT_YET_KEY, OPEN_NEW_KEY, open_url};
 use crate::frame::{self, Block, Mode};
 use crate::project::Body;
-use crate::project::ledger::{JUDGES, Judge, Net, judge, net};
+use crate::project::ledger::{
+    JUDGES, Judge, Net, SPARK_H, SPARK_W, age, judge, net, spark, spark_svg,
+};
 use crate::project::next::{big, key as next_key};
-use crate::project::seat::{NG, OK, Sign, top};
+use crate::project::seat::{NG, OK, Sign, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
 
@@ -380,6 +382,89 @@ pub struct ProjLine {
     pub orch: Orch,
     pub acc: Acc,
     pub open: Open,
+    /// 詳しくの段（行を押すと開く）。
+    pub more: More,
+}
+
+/// 詳しくの台帳の項の語の鍵（見本の ledMore の順）。
+pub const MORE_LED: [&str; 6] = ["l_ready", "l_blocked", "l_memo", "l_lead", "l_stale", "l_net7"];
+
+/// 行を押しても開閉しない要素の selector（button・link・「?」）。
+pub const NO_TOGGLE: &str = "button, a, .q";
+
+/// 詳しくの台帳の項（見本の ledMore）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct LedMore {
+    /// MORE_LED の鍵と字の組（l_net7 の字は net7 の text）。
+    pub items: [(&'static str, String); 6],
+    /// 7 日の純減の矢印と数。
+    pub net7: Net,
+    /// 14 日の sparkline の svg の字。
+    pub spark: String,
+}
+
+/// 詳しくの段の値。
+#[derive(Debug, Clone, PartialEq)]
+pub struct More {
+    /// 台帳が Unknown なら None。
+    pub ledger: Option<LedMore>,
+    /// この project の session（状態の値と名・電文の順・名が空の行は除く）。
+    pub sessions: Vec<(&'static str, String)>,
+    /// 口座の移動の履歴の数（席と履歴が読めなければ None）。
+    pub hist: Option<usize>,
+}
+
+/// 電文の projects の i 行目の詳しくの段。
+pub fn more(doc: &AccountDoc, index: usize) -> More {
+    let p = &doc.projects[index];
+    let ledger = match &p.ledger {
+        Reading::Known(s) => {
+            let net7 = net(s.net_drop_7d);
+            let values = [
+                s.ready.to_string(),
+                s.blocked.to_string(),
+                s.open.memo.to_string(),
+                age(s.lead.as_ref().map(|l| l.p50)),
+                s.stale.to_string(),
+                net7.text.clone(),
+            ];
+            let mut it = values.into_iter();
+            Some(LedMore {
+                items: MORE_LED.map(|k| (k, it.next().unwrap_or_default())),
+                net7,
+                spark: spark_svg(&spark(&s.days, SPARK_W, SPARK_H)),
+            })
+        }
+        Reading::Unknown => None,
+    };
+    let sessions = doc
+        .sessions
+        .iter()
+        .filter(|s| s.project == p.name && !s.name.is_empty())
+        .map(|s| (state_value(s.state), s.name.clone()))
+        .collect();
+    let hist = match &p.seat {
+        Reading::Known(card) => match &card.moves {
+            Reading::Known(m) => Some(m.len()),
+            Reading::Unknown => None,
+        },
+        Reading::Unknown => None,
+    };
+    More {
+        ledger,
+        sessions,
+        hist,
+    }
+}
+
+/// 字を字数に収める（見本の fitLines の 1 歩: 先頭から字数の字・末尾の空白と「・」「（」「(」を除き … を足す）。
+pub fn fit_cut(text: &str, count: usize) -> String {
+    if text.chars().count() <= count {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(count).collect();
+    let trimmed = head.trim_end_matches(|c: char| c.is_whitespace() || matches!(c, '・' | '（' | '('));
+    format!("{trimmed}…")
 }
 
 /// 群の見出しの行（群の名と今の口座・群の無い project の見出しは名が None）。
@@ -505,6 +590,7 @@ pub fn row(doc: &AccountDoc, index: usize, mode: Mode) -> ProjLine {
         orch: orch(p),
         acc: acc(doc, p),
         open: open(p, mode),
+        more: more(doc, index),
     }
 }
 
@@ -517,20 +603,29 @@ pub fn view() -> leptos::prelude::AnyView {
 /// block の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use std::collections::BTreeMap;
+
+    use leptos::ev;
+    use leptos::html::Span;
     use leptos::prelude::*;
     use tsuzuri_contract::board::Reading;
+    use web_sys::wasm_bindgen::JsCast;
 
     use super::{
-        BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_UN2, C_WAIT, COLUMNS, Group,
-        GroupHead, HROW, Led, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort, PTAB, ProjLine,
-        RC4, TKM, Table, content, hbm_class, psort_of, with_psort,
+        Acc, BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_UN2, C_WAIT, COLUMNS,
+        Group, GroupHead, HROW, Led, NO_TOGGLE, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort,
+        PTAB, ProjLine, RC4, Run, TKM, Table, content, fit_cut, hbm_class, psort_of, with_psort,
     };
     use crate::account::PATH;
     use crate::account::windows;
     use crate::frame::Mode;
+    use crate::project::ledger::Net;
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::{HelpCtx, hs, term};
+    use crate::widgets::help::{HelpCtx, hs, shows_internal, term};
+
+    /// 行ごとの詳しくの開き閉じ（project の名ごと・頁の一生の間だけ）。
+    type Opened = RwSignal<BTreeMap<String, bool>>;
 
     /// 今の URL の query（読めなければ空）。
     fn search() -> String {
@@ -552,12 +647,15 @@ mod dom {
         let fetched = crate::net::read(PATH);
         let sort = RwSignal::new(psort_of(&search()));
         let mode = use_context::<HelpCtx>().map(|c| c.mode);
+        let opened: Opened = RwSignal::new(BTreeMap::new());
+        // 記録に値が無い行は mode から初めの値を取る（見本の isOpen・経験者は開く）。
+        let expert = Signal::derive(move || mode.is_some_and(|m| shows_internal(m.get())));
         let body = move || {
             let m = mode.map_or(Mode::Beginner, |m| m.get());
             match fetched.with(|f| content(f, sort.get(), m)) {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(line) => body_view(Body::Empty(line)),
-                Body::Filled(table) => table_view(table),
+                Body::Filled(table) => table_view(table, opened, expert),
             }
         };
         section(BLOCK, sort_bar(sort), body.into_any())
@@ -588,12 +686,16 @@ mod dom {
         .into_any()
     }
 
-    fn table_view(table: Table) -> AnyView {
+    fn table_view(table: Table, opened: Opened, expert: Signal<bool>) -> AnyView {
         let head = COLUMNS
             .into_iter()
             .map(|k| view! { <div class=format!("h-{k}")>{hs(k)}</div> })
             .collect_view();
-        let groups = table.groups.into_iter().map(group_view).collect_view();
+        let groups = table
+            .groups
+            .into_iter()
+            .map(|g| group_view(g, opened, expert))
+            .collect_view();
         view! {
             <div class=PTAB>
                 <div class=HROW>{head}</div>
@@ -603,9 +705,13 @@ mod dom {
         .into_any()
     }
 
-    fn group_view(group: Group) -> AnyView {
+    fn group_view(group: Group, opened: Opened, expert: Signal<bool>) -> AnyView {
         let head = group.head.map(head_view);
-        let rows = group.rows.into_iter().map(row_view).collect_view();
+        let rows = group
+            .rows
+            .into_iter()
+            .map(|r| row_view(r, opened, expert))
+            .collect_view();
         view! { {head}{rows} }.into_any()
     }
 
@@ -629,28 +735,64 @@ mod dom {
         .into_any()
     }
 
-    fn row_view(row: ProjLine) -> AnyView {
+    fn row_view(row: ProjLine, opened: Opened, expert: Signal<bool>) -> AnyView {
         let need_word = match row.need.lead {
             Some(_) => format!("({}) {}", &row.need.key[3..], label(row.need.key)),
             None => label(row.need.key),
         };
         let need_icon = row.need.lead.is_none().then(|| state_icon(UNKNOWN));
-        let runs = row
-            .runs
-            .iter()
-            .map(|r| {
-                view! {
-                    <span class=r.class.clone()>
-                        <span class="dot" aria-hidden="true"></span>
-                        <span class="n num">{r.text.clone()}</span>
-                    </span>
+        let more = more_view(&row);
+        // 2 段目は描いた後と窓の幅が変わった後に幅へ収める（見本の fitLines）。
+        let l2 = NodeRef::<Span>::new();
+        let fit = {
+            let line = row.need.line.clone().unwrap_or_default();
+            move || {
+                if let Some(el) = l2.get_untracked() {
+                    fit_line(&el, &line);
                 }
-            })
-            .collect_view();
-        let acc_mark = row
-            .acc
-            .mark
-            .map(|s| view! { <span class=s.class aria-hidden="true">{s.glyph}</span> });
+            }
+        };
+        request_animation_frame(fit.clone());
+        let resize = window_event_listener(ev::resize, move |_| fit());
+        on_cleanup(move || resize.remove());
+        // 記録の無い行は mode の初めの値（見本の isOpen）。
+        let name = row.name.clone();
+        let is_open = {
+            let key = name.clone();
+            move || {
+                opened
+                    .with(|m| m.get(&key).copied())
+                    .unwrap_or_else(|| expert.get())
+            }
+        };
+        let class = {
+            let (base, is_open) = (row.class.clone(), is_open.clone());
+            move || {
+                if is_open() {
+                    format!("{base} open")
+                } else {
+                    base.clone()
+                }
+            }
+        };
+        let expanded = {
+            let is_open = is_open.clone();
+            move || is_open().to_string()
+        };
+        // 行のどこを押しても開閉する（button・link・「?」の中は除く）。
+        let toggle = move |ev: web_sys::MouseEvent| {
+            let inside = ev
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                .and_then(|el| el.closest(NO_TOGGLE).ok().flatten());
+            if inside.is_some() {
+                return;
+            }
+            let now = untrack(&is_open);
+            opened.update(|m| {
+                m.insert(name.clone(), !now);
+            });
+        };
         let key = row.open.key();
         let open = match row.open {
             Open::New(url) => {
@@ -673,26 +815,104 @@ mod dom {
             .into_any(),
         };
         view! {
-            <div class=row.class.clone()>
+            <div class=class aria-expanded=expanded on:click=toggle>
                 <div class=C_PN>
                     <b data-t="">{row.name.clone()}</b>
                     <span class="small muted" data-t="">{row.group.clone().unwrap_or_default()}</span>
                 </div>
                 <div class=C_NEED>
                     <span class="l1">{need_icon}<b>{need_word}</b></span>
-                    <span class="l2">{row.need.line.clone().unwrap_or_default()}</span>
+                    <span class="l2" node_ref=l2>{row.need.line.clone().unwrap_or_default()}</span>
                 </div>
                 <div class=C_WAIT><span class="l1"><b class="num">{row.wait}</b></span></div>
                 <div class=C_UN2 data-term="l_unref"><span class="l1"><b class="num">{row.unref}</b></span></div>
                 <div class=C_LED>{led_view(row.led)}</div>
-                <div class=C_RUN><span class=RC4 data-term="runs4">{runs}</span></div>
+                <div class=C_RUN>{runs_view(&row.runs)}</div>
                 <div class=C_ORCH>{orch_view(row.orch)}</div>
-                <div class=C_ACC>
-                    <span class="mono">{row.acc.account.clone().unwrap_or_else(|| NONE_MARK.to_string())}</span>
-                    {acc_mark}
-                </div>
+                <div class=C_ACC>{acc_view(&row.acc)}</div>
                 <div class=C_OPEN>{open}</div>
+                {more}
             </div>
+        }
+        .into_any()
+    }
+
+    /// 詳しくの段（台帳の項と sparkline・session・口座の履歴・狭い幅で隠れる 4 列の値・見本の projTable の more）。
+    fn more_view(row: &ProjLine) -> AnyView {
+        let more = &row.more;
+        let ledger = match &more.ledger {
+            Some(l) => {
+                let items = l
+                    .items
+                    .clone()
+                    .into_iter()
+                    .map(|(key, text)| {
+                        let value = if key == "l_net7" {
+                            net_view(&l.net7)
+                        } else {
+                            text.into_any()
+                        };
+                        view! { <span class="mi"><span class="lk">{hs(key)}</span><b class="num">{value}</b></span> }
+                    })
+                    .collect_view();
+                view! {
+                    {items}
+                    <span class="mi sp" inner_html=l.spark.clone()></span>
+                }
+                .into_any()
+            }
+            None => view! { <span class="mi muted">{label("j_none")}</span> }.into_any(),
+        };
+        let list = (!more.sessions.is_empty()).then(|| {
+            let names = more
+                .sessions
+                .iter()
+                .map(|(state, name)| view! { {state_icon(state)}<span class="mono">{name.clone()}</span> })
+                .collect_view();
+            view! { <span class="mi slist">{names}</span> }
+        });
+        let hist = more
+            .hist
+            .map_or_else(|| NONE_MARK.to_string(), |n| n.to_string());
+        view! {
+            <div class="c-more">
+                {ledger}
+                <span class="mi"><span class="lk">{hs("session")}</span><b class="num">{more.sessions.len()}</b></span>
+                {list}
+                <span class="mi"><span class="lk">{hs("acct_hist")}</span><b class="num">{hist}</b></span>
+                <span class="mi m-run">{runs_view(&row.runs)}</span>
+                <span class="mi m-orch">{orch_view(row.orch.clone())}</span>
+                <span class="mi m-acc">{acc_view(&row.acc)}</span>
+                <span class="mi m-led">{led_view(row.led.clone())}</span>
+            </div>
+        }
+        .into_any()
+    }
+
+    /// run の 4 列（wait・run・stop・land の順）。
+    fn runs_view(runs: &[Run]) -> AnyView {
+        let items = runs
+            .iter()
+            .map(|r| {
+                view! {
+                    <span class=r.class.clone()>
+                        <span class="dot" aria-hidden="true"></span>
+                        <span class="n num">{r.text.clone()}</span>
+                    </span>
+                }
+            })
+            .collect_view();
+        view! { <span class=RC4 data-term="runs4">{items}</span> }.into_any()
+    }
+
+    /// 席の口座と、群の今の口座と同じかの印。
+    fn acc_view(acc: &Acc) -> AnyView {
+        let mark = acc
+            .mark
+            .map(|s| view! { <span class=s.class aria-hidden="true">{s.glyph}</span> });
+        view! {
+            <span class="mono">{acc.account.clone().unwrap_or_else(|| NONE_MARK.to_string())}</span>
+            {mark}
         }
         .into_any()
     }
@@ -700,15 +920,7 @@ mod dom {
     fn led_view(led: Led) -> AnyView {
         let j = led.judge;
         let task = led.task.map(|n| view! { <b class="num">{n}</b> });
-        let net = led.net24.map(|n| {
-            let aria = format!("{} {}", n.word, n.text);
-            view! {
-                <span class=n.class aria-label=aria>
-                    <b>{n.arrow}</b>
-                    <span class="num">{n.text}</span>
-                </span>
-            }
-        });
+        let net = led.net24.map(|n| net_view(&n));
         view! {
             <span class="l1">
                 <span class=j.class data-term=j.key tabindex="0">
@@ -740,5 +952,34 @@ mod dom {
             <span class=hb>"hb "{hb_word}</span>
         }
         .into_any()
+    }
+
+    /// 純減の矢印と数（見本の netHTML）。
+    fn net_view(n: &Net) -> AnyView {
+        let aria = format!("{} {}", n.word, n.text);
+        view! {
+            <span class=n.class aria-label=aria>
+                <b>{n.arrow}</b>
+                <span class="num">{n.text.clone()}</span>
+            </span>
+        }
+        .into_any()
+    }
+
+    /// 2 段目を幅に収める（元の字に戻し、はみ出す間 1 字ずつ減らして … で切り、切ったら元の字を読み上げに置く）。
+    fn fit_line(el: &web_sys::HtmlElement, line: &str) {
+        el.set_inner_text(line);
+        let _ = el.remove_attribute("aria-label");
+        let over = |e: &web_sys::HtmlElement| e.scroll_width() > e.client_width() + 1;
+        if !over(el) {
+            return;
+        }
+        for count in (1..line.chars().count()).rev() {
+            el.set_inner_text(&fit_cut(line, count));
+            if !over(el) {
+                break;
+            }
+        }
+        let _ = el.set_attribute("aria-label", line);
     }
 }
