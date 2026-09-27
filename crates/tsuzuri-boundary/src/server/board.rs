@@ -1,7 +1,7 @@
 //! 読む側の口（便 e-read）: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
 //! - GET /api/pipeline — pipeline の板（PipelineBoard）
 //! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats）
-//! - GET /api/next — 次の一手（NextStep）
+//! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
 //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
 //!
 //! 字は要求のたびに集める。台帳は bd の読み（`ledger::Source`）が返した字、設計の索引は設計の道具の
@@ -15,6 +15,7 @@ use tsuzuri_contract::board::{PipelineBoard, Reading};
 use tsuzuri_contract::graph::{
     BeadAttr, GraphDoc, GraphSource, InvariantCheck, RunAttr, SkippedEdges, Verdict,
 };
+use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::stats::{LedgerStats, NextStep};
 use tsuzuri_core::graph::{self, Graph, Inputs, Invariant};
 
@@ -80,6 +81,11 @@ pub fn metrics(texts: &Texts, now: EpochSecs) -> Reading<LedgerStats> {
 /// 次の一手。
 pub fn next(texts: &Texts, now: EpochSecs) -> NextStep {
     tsuzuri_core::next_step::next_step(&texts.ledger, &texts.events, now)
+}
+
+/// 席の card も受けた次の一手（席の card が読めるとき・便 e-seat）。
+pub fn next_seat(texts: &Texts, card: &SeatCard, now: EpochSecs) -> NextStep {
+    tsuzuri_core::next_step::next_step_seat(&texts.ledger, &texts.events, now, Some(card))
 }
 
 /// 導出グラフを組み、不変条件を数えて電文にする。

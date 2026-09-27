@@ -4,6 +4,7 @@
 //! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
 //! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。POST を受ける口は /api/ruling だけで、
 //! ほかの GET でない要求は 405 で何も書かない。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
+//! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
 //! - GET /api/ledger — 台帳の一覧（LedgerList）
 //! - GET /api/ledger/<id> — 台帳の 1 本（LedgerItem）
 //! - GET /api/pipeline — pipeline の板（PipelineBoard）
@@ -11,6 +12,7 @@
 //! - GET /api/next — 次の一手（NextStep）
 //! - GET /api/graph — 導出グラフ（GraphDoc）
 //! - GET /api/questions — 問いの一覧（QuestionList）
+//! - GET /api/seat — 席の card（SeatCard）
 //! - POST /api/ruling — 裁定の受付（RulingRequest → RulingResponse か RefusalResponse）
 //! - GET /api/surface/events — 変化の知らせ（SSE）
 //! - それ以外の GET — 面の file の配布
@@ -23,6 +25,7 @@ pub mod http;
 pub mod ledger;
 pub mod ruling;
 pub mod runs;
+pub mod seat;
 
 use std::ffi::OsString;
 use std::fmt;
@@ -45,9 +48,11 @@ use self::http::{Request, Response};
 use self::ledger::Source;
 use self::ruling::{Delivery, Outcome, Writer};
 use self::runs::Runs;
+use self::seat::Seats;
 
 /// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program・
-/// bdw の program・席の target・器の CLI の program）。
+/// bdw の program・席の target・器の CLI の program）。席の target と state dir の両方が在るときだけ、
+/// 裁定を席へ配達し、席の card を組む（便 e-seat）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub repo: PathBuf,
@@ -61,9 +66,9 @@ pub struct Config {
     pub folio: OsString,
     /// 台帳の書きに撃つ program（既定は `tsuzuri_contract::ledger::BDW`・便 e-ask）。
     pub bdw: OsString,
-    /// 裁定を配達する席の target（None なら配達しない）。
+    /// 裁定を配達し、card を組む席の target（None なら配達せず、card を組まない）。
     pub seat: Option<String>,
-    /// 配達に撃つ器の CLI の program（既定は `ruling::SCRIBE2`）。
+    /// 配達と席の読みに撃つ器の CLI の program（既定は `ruling::SCRIBE2`）。
     pub scribe2: OsString,
 }
 
@@ -131,6 +136,7 @@ struct Shared {
     files: PathBuf,
     hub: Arc<Hub>,
     writer: Writer,
+    seats: Seats,
 }
 
 /// 要求の頭を読む時間の上限。
@@ -168,10 +174,18 @@ impl Server {
             design: Design::new(&config.repo, &config.folio),
             runs: Runs::new(config.state_dir.as_deref()),
         };
+        let seats = Seats::new(
+            &config.scribe2,
+            config.state_dir.as_deref(),
+            config.seat.as_deref(),
+            &config.repo,
+        );
         let (design, runs) = (sources.design.clone(), sources.runs.clone());
+        let seat_marks = seats.marks();
         let hub = Hub::start(sources.ledger.clone(), move || {
             let mut marks = runs.marks();
             marks.extend(design.marks());
+            marks.extend(seat_marks.iter().cloned());
             marks
         });
         let delivery = match (&config.seat, &config.state_dir) {
@@ -194,6 +208,7 @@ impl Server {
                 files,
                 hub,
                 writer,
+                seats,
             }),
         })
     }
@@ -246,9 +261,20 @@ fn route(path: &str, shared: &Shared) -> Response {
             return json(200, wire::encode(&board::metrics(&texts, events::now())));
         }
         "/api/next" => {
-            let texts = sources.gather(false, true);
-            return json(200, wire::encode(&board::next(&texts, events::now())));
+            // 席の card と台帳の字は並べて集める（待ちは 1 本分の上限まで）。
+            let now = events::now();
+            let (texts, card) = thread::scope(|s| {
+                let card = s.spawn(|| shared.seats.known(now));
+                let texts = sources.gather(false, true);
+                (texts, card.join().ok().flatten())
+            });
+            let step = match &card {
+                Some(card) => board::next_seat(&texts, card, now),
+                None => board::next(&texts, now),
+            };
+            return json(200, wire::encode(&step));
         }
+        seat::PATH => return json(200, wire::encode(&shared.seats.card(events::now()))),
         "/api/graph" => {
             let texts = sources.gather(true, true);
             return json(200, wire::encode(&board::graph(&texts)));

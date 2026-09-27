@@ -3,11 +3,14 @@
 //! 件数と対象の id を返し、最初に当たった 1 つを大きく出す。入力は台帳の一覧の字と event log の字と今の時刻。
 //! この便の入力で判じるのは 3 種（止まっている走行・質問・なし）。限度と移動・応答なし・束の承認・発効待ちは
 //! 材料（席と口座の状態・束・発効待ちの記録）が入力に無いので判じない。
+//! 便 e-seat は席の card も受ける関数（`next_step_seat`）を足す。限度と移動と応答なしを席の card から判じ、
+//! なしと大きく出す 1 つは同じ決め方で決め直す。席の card を受けない `next_step` の値は変えない。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{NextMove, Reading, Stage};
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
+use tsuzuri_contract::seat::{SeatCard, SeatState};
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 
 use crate::ledger::{Bead, read};
@@ -83,9 +86,45 @@ fn check(kind: NextMove, found: Option<Found>) -> NextCheck {
     }
 }
 
+/// 席の card から判じる 2 種（限度と移動・応答なし）。card が無いか状態が unknown なら判じない。
+/// 限度と移動は、状態が limit か、登録の口座が群の今の口座と違うときに当たる（対象は無し・件数は 1）。
+/// 応答なしは、状態が silent のときに当たる（対象は無し・件数は 1）。
+fn seat_found(kind: NextMove, seat: Option<&SeatCard>) -> Option<Found> {
+    let card = seat.filter(|c| c.state != SeatState::Unknown)?;
+    let hit = match kind {
+        NextMove::LimitOrMove => {
+            let moved = match (&card.account, &card.group) {
+                (Some(account), Reading::Known(group)) => *account != group.account,
+                _ => false,
+            };
+            card.state == SeatState::Limit || moved
+        }
+        NextMove::Unresponsive => card.state == SeatState::Silent,
+        _ => return None,
+    };
+    Some(Found {
+        count: usize::from(hit),
+        target: None,
+    })
+}
+
 /// 台帳の一覧の字と event log の字と今の時刻から次の一手を判じる。
 /// なしは、判じた種類のどれも当たらないときに当たる（だから大きく出す 1 つはいつも在る）。
 pub fn next_step(ledger: &str, events: &str, now: EpochSecs) -> NextStep {
+    judge(ledger, events, now, None)
+}
+
+/// 席の card も受けて次の一手を判じる（card が無ければ限度と移動と応答なしは判じない）。
+pub fn next_step_seat(
+    ledger: &str,
+    events: &str,
+    now: EpochSecs,
+    seat: Option<&SeatCard>,
+) -> NextStep {
+    judge(ledger, events, now, seat)
+}
+
+fn judge(ledger: &str, events: &str, now: EpochSecs, seat: Option<&SeatCard>) -> NextStep {
     let beads = read(ledger);
     let beads = beads.as_deref();
     let mut checks: Vec<NextCheck> = NextMove::ALL
@@ -95,6 +134,7 @@ pub fn next_step(ledger: &str, events: &str, now: EpochSecs) -> NextStep {
             let found = match m {
                 NextMove::StalledRun => stalled_run(beads, events, now),
                 NextMove::Question => question(beads, now),
+                NextMove::LimitOrMove | NextMove::Unresponsive => seat_found(m, seat),
                 _ => None,
             };
             check(m, found)

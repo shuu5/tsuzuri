@@ -1,0 +1,163 @@
+{
+  "run": {
+    "tick_status": "seat tick status: target=proj-1:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395\nseat tick status: target=proj-2:0.1 last=- age=- healthy=no heartbeat=off step=5 next=0\n",
+    "doctor": "host: name=host-1 state-dir=/srv/host-1/state\nseat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1\nseat: role=orchestrator anchor=/srv/host-1/proj-2 target=proj-2:0.1 account=acct-3 model=sonnet pane=%2\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\ngroup=g-b accounts=acct-3 anchors=1 seat-accounts=acct-3 current=acct-3 next=none refused=-\n",
+    "usage": "usage: account=acct-1 five_hour=83% resets=2026-09-27T12:00:00Z seven_day=120% resets=none model=Opus:300% resets=2026-09-28T00:00:00Z\nusage: account=acct-3 unmeasured reason=no-token\n",
+    "state_log": "{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790420000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790430000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790440000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"idle\",\"event\":\"notify\",\"ts\":1790450000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790500000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"busy\",\"event\":\"tool\",\"ts\":1790505000,\"sid\":\"s-1\"}\n",
+    "tick_last": "ts=1790510390 decision=noop reason=seat-busy\n",
+    "host_toml": "[host]\nname = \"host-1\"\n\n[[account-group]]\nname = \"g-b\"\nanchors = [\"/srv/host-1/proj-2\"]\n\n[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-0\", \"/srv/host-1/proj-1/\"]\n\n[[account-group]]\nname = \"g-c\"\nanchors = [\"/srv/host-1/proj-1\"]\n",
+    "records": [
+      "account=acct-1\nts=2026-09-27T08:00:00Z\nreason=account-pressed\nprevious=acct-2\n",
+      "account=acct-2\nts=2026-09-26T10:00:00Z\nreason=initial\n"
+    ],
+    "card": {
+      "at": 1790510400, "target": "proj-1:0.1", "state": "run", "since": 1790500000,
+      "tick_healthy": {"known": true}, "heartbeat": {"known": true},
+      "account": "acct-1", "model": "opus",
+      "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": [
+        {"window": "five_hour", "left_pct": 17}, {"window": "seven_day", "left_pct": 0}, {"window": "seven_day_model", "left_pct": 0}
+      ]}},
+      "usage": {"known": [
+        {"window": "five_hour", "used_pct": 83, "resets_at": 1790510400, "counted": true},
+        {"window": "seven_day", "used_pct": 120, "resets_at": null, "counted": true},
+        {"window": "seven_day_model", "used_pct": 255, "resets_at": 1790553600, "counted": true}
+      ]},
+      "spans": {"known": [
+        {"from": 1790430000, "to": 1790440000, "state": "run"},
+        {"from": 1790440000, "to": 1790500000, "state": "wait"},
+        {"from": 1790500000, "to": 1790510400, "state": "run"}
+      ]},
+      "moves": {"known": [
+        {"at": 1790416800, "from": null, "to": "acct-2"},
+        {"at": 1790496000, "from": "acct-2", "to": "acct-1"}
+      ]}
+    }
+  },
+  "wait": {
+    "tick_status": "seat tick status: target=proj-1:0.1 last=1790510000 age=400 healthy=no heartbeat=off step=5 next=1790510405\n",
+    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-2 model=sonnet pane=%1\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-2 current=acct-1 next=none refused=-\n",
+    "usage": "usage: account=acct-2 five_hour=100% resets=none seven_day=40% resets=2026-09-30T00:00:00Z model=opus:10% resets=none\nusage: account=acct-1 unmeasured reason=no-token\n",
+    "state_log": "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790505000,\"sid\":\"s-2\"}\nnot json\n{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790508000,\"sid\":\"s-2\"}\n{\"schema\":1,\"state\":\"idle\",\"event\":\"notify\",\"ts\":1790509000,\"sid\":\"s-2\"}\n",
+    "tick_last": "ts=1790510000 decision=noop reason=seat-idle\n",
+    "host_toml": "[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-1\"]\n",
+    "records": [],
+    "card": {
+      "at": 1790510400, "target": "proj-1:0.1", "state": "wait", "since": 1790508000,
+      "tick_healthy": {"known": false}, "heartbeat": {"known": false},
+      "account": "acct-2", "model": "sonnet",
+      "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": null, "remaining": []}},
+      "usage": {"known": [
+        {"window": "five_hour", "used_pct": 100, "resets_at": null, "counted": true},
+        {"window": "seven_day", "used_pct": 40, "resets_at": 1790726400, "counted": true},
+        {"window": "seven_day_model", "used_pct": 10, "resets_at": null, "counted": false}
+      ]},
+      "spans": {"known": [
+        {"from": 1790505000, "to": 1790508000, "state": "run"},
+        {"from": 1790508000, "to": 1790510400, "state": "wait"}
+      ]},
+      "moves": {"known": []}
+    }
+  },
+  "limit": {
+    "tick_status": "seat tick status: target=proj-1:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395\n",
+    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\n",
+    "usage": "usage: account=acct-1 five_hour=100% resets=2026-09-27T13:00:00Z seven_day=81% resets=none model=opus:80% resets=none\n",
+    "state_log": "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790500000,\"sid\":\"s-3\"}\n",
+    "tick_last": "ts=1790503200 decision=move reason=account-pressed\n",
+    "host_toml": "[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-1\"]\n",
+    "records": [
+      "account=acct-1\nts=2026-09-27T09:00:00Z\nreason=account-pressed\nprevious=\n"
+    ],
+    "card": {
+      "at": 1790510400, "target": "proj-1:0.1", "state": "limit", "since": 1790503200,
+      "tick_healthy": {"known": true}, "heartbeat": {"known": true},
+      "account": "acct-1", "model": "opus",
+      "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": [
+        {"window": "five_hour", "left_pct": 0}, {"window": "seven_day", "left_pct": 19}, {"window": "seven_day_model", "left_pct": 20}
+      ]}},
+      "usage": {"known": [
+        {"window": "five_hour", "used_pct": 100, "resets_at": 1790514000, "counted": true},
+        {"window": "seven_day", "used_pct": 81, "resets_at": null, "counted": true},
+        {"window": "seven_day_model", "used_pct": 80, "resets_at": null, "counted": true}
+      ]},
+      "spans": {"known": [
+        {"from": 1790500000, "to": 1790510400, "state": "run"}
+      ]},
+      "moves": {"known": [
+        {"at": 1790499600, "from": null, "to": "acct-1"}
+      ]}
+    }
+  },
+  "silent": {
+    "tick_status": "seat tick status: target=proj-2:0.1 last=- age=- healthy=no heartbeat=off step=5 next=0\n",
+    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\n",
+    "usage": "usage: account=acct-1 unmeasured reason=no-token\n",
+    "state_log": "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790400000,\"sid\":\"s-4\"}\n",
+    "tick_last": "ts=1790509000 decision=nudge reason=state-stale\n",
+    "host_toml": "[[account-group]]\nname = \"g-a\"\nanchors = [\n  \"/srv/host-1/proj-1\",\n]\n\n[[account-group]]\nname = \"g-b\"\nanchors = [\"/srv/host-1/proj-2\"]\n",
+    "records": [
+      "account=acct-1\nts=2026-09-27T09:00:00Z\nreason=initial\n"
+    ],
+    "card": {
+      "at": 1790510400, "target": "proj-1:0.1", "state": "silent", "since": 1790509000,
+      "tick_healthy": "unknown", "heartbeat": "unknown",
+      "account": "acct-1", "model": "opus",
+      "group": "unknown",
+      "usage": "unknown",
+      "spans": {"known": []},
+      "moves": "unknown"
+    }
+  },
+  "no-state": {
+    "tick_status": "seat tick status: target=proj-1:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395\n",
+    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\n",
+    "usage": "usage: account=acct-1 five_hour=83% resets=2026-09-27T12:00:00Z seven_day=120% resets=none model=Opus:300% resets=2026-09-28T00:00:00Z\n",
+    "state_log": null,
+    "tick_last": "ts=1790510390 decision=noop reason=seat-idle\n",
+    "host_toml": "[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-1\"]\n",
+    "records": [
+      "account=acct-1\nts=2026-09-27T08:00:00Z\nreason=account-pressed\nprevious=acct-2\n",
+      "account=acct-2\nts=2026-09-26T10:00:00Z\nreason=initial\n"
+    ],
+    "card": {
+      "at": 1790510400, "target": "proj-1:0.1", "state": "unknown", "since": null,
+      "tick_healthy": {"known": true}, "heartbeat": {"known": true},
+      "account": "acct-1", "model": "opus",
+      "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": [
+        {"window": "five_hour", "left_pct": 17}, {"window": "seven_day", "left_pct": 0}, {"window": "seven_day_model", "left_pct": 0}
+      ]}},
+      "usage": {"known": [
+        {"window": "five_hour", "used_pct": 83, "resets_at": 1790510400, "counted": true},
+        {"window": "seven_day", "used_pct": 120, "resets_at": null, "counted": true},
+        {"window": "seven_day_model", "used_pct": 255, "resets_at": 1790553600, "counted": true}
+      ]},
+      "spans": "unknown",
+      "moves": {"known": [
+        {"at": 1790416800, "from": null, "to": "acct-2"},
+        {"at": 1790496000, "from": "acct-2", "to": "acct-1"}
+      ]}
+    }
+  },
+  "unread": {
+    "tick_status": null,
+    "doctor": null,
+    "usage": null,
+    "state_log": "{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790509000,\"sid\":\"s-6\"}\n",
+    "tick_last": "ts=1790510390 decision=noop reason=seat-idle\n",
+    "host_toml": "[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-1\"]\n",
+    "records": [
+      "account=acct-1\nts=2026-09-27T09:00:00Z\nreason=initial\n"
+    ],
+    "card": {
+      "at": 1790510400, "target": "proj-1:0.1", "state": "wait", "since": 1790509000,
+      "tick_healthy": "unknown", "heartbeat": "unknown",
+      "account": null, "model": null,
+      "group": "unknown",
+      "usage": "unknown",
+      "spans": {"known": [
+        {"from": 1790509000, "to": 1790510400, "state": "wait"}
+      ]},
+      "moves": "unknown"
+    }
+  }
+}
