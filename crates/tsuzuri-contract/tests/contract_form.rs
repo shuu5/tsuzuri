@@ -13,8 +13,9 @@ use tsuzuri_contract::board::{
     ProjectMetrics, QuotaLeft, Reading, SessionRow, Stage,
 };
 use tsuzuri_contract::graph::{
-    BeadAttr, EdgeType, GraphDoc, GraphEdge, GraphNode, GraphSource, InvariantCheck, NodeKind,
-    RunAttr, SkippedEdges, Verdict, title36,
+    AroundDoc, AroundRow, BeadAttr, EdgeEnd, EdgeType, Fold, GraphDoc, GraphEdge, GraphNode,
+    GraphSource, GraphView, HubCut, InvariantCheck, NodeKind, RunAttr, SkippedEdges, Verdict,
+    ViewEdge, ViewNode, title36,
 };
 use tsuzuri_contract::ledger::{
     BDW, BdLine, BeadId, ChildType, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
@@ -203,6 +204,84 @@ fn invariant_checks() -> Vec<InvariantCheck> {
             ids: vec![],
         },
     ]
+}
+
+fn task_node() -> GraphNode {
+    GraphNode {
+        id: "t3-hub.3".into(),
+        kind: NodeKind::Task,
+        file: None,
+        digest: None,
+        title: "契約の型".into(),
+    }
+}
+
+fn run_node() -> GraphNode {
+    GraphNode {
+        id: "t3-hub.3-20260927T073916Z".into(),
+        kind: NodeKind::Run,
+        file: None,
+        digest: None,
+        title: "t3-hub.3-20260927T073916Z".into(),
+    }
+}
+
+/// 状態を持つ bead の節点と、状態の無い走行の節点。
+fn view_nodes() -> Vec<ViewNode> {
+    vec![
+        ViewNode {
+            node: task_node(),
+            status: Some("open".into()),
+            rank: 0,
+            kids: 2,
+            degree: 5,
+        },
+        ViewNode {
+            node: run_node(),
+            status: None,
+            rank: 1,
+            kids: 0,
+            degree: 1,
+        },
+    ]
+}
+
+fn view_edge() -> ViewEdge {
+    ViewEdge {
+        from: "t3-hub.3-20260927T073916Z".into(),
+        to: "t3-hub.3".into(),
+        edge_type: EdgeType::RunOf,
+        count: 1,
+    }
+}
+
+/// 中心の行と、影響の側の 1 段目の行。
+fn around_rows() -> Vec<AroundRow> {
+    vec![
+        AroundRow {
+            node: task_node(),
+            status: Some("open".into()),
+            col: 0,
+            via: None,
+            edge_type: None,
+            degree: 5,
+        },
+        AroundRow {
+            node: run_node(),
+            status: Some("Landed".into()),
+            col: 1,
+            via: Some("t3-hub.3".into()),
+            edge_type: Some(EdgeType::RunOf),
+            degree: 1,
+        },
+    ]
+}
+
+fn hub_cut() -> HubCut {
+    HubCut {
+        id: "t3-hub".into(),
+        degree: 31,
+    }
 }
 
 fn ledger_item() -> LedgerItem {
@@ -589,6 +668,70 @@ fn forms() -> Vec<Box<dyn Form>> {
                         design: 0,
                         ledger: 0,
                     },
+                },
+            ],
+        ),
+        form("graph::EdgeEnd", EdgeEnd::ALL.to_vec()),
+        form("graph::ViewNode", view_nodes()),
+        form("graph::ViewEdge", vec![view_edge()]),
+        form(
+            "graph::GraphView",
+            vec![
+                GraphView {
+                    nodes: view_nodes(),
+                    edges: vec![view_edge()],
+                    shown: 2,
+                    folded: 2,
+                    cut: 1,
+                    total: 5,
+                    unread: vec![GraphSource::Design],
+                },
+                // 節点の無いグラフ。
+                GraphView {
+                    nodes: vec![],
+                    edges: vec![],
+                    shown: 0,
+                    folded: 0,
+                    cut: 0,
+                    total: 0,
+                    unread: GraphSource::ALL.to_vec(),
+                },
+            ],
+        ),
+        form("graph::Fold", Fold::ALL.to_vec()),
+        form("graph::AroundRow", around_rows()),
+        form("graph::HubCut", vec![hub_cut()]),
+        form(
+            "graph::AroundDoc",
+            vec![
+                AroundDoc {
+                    center: "t3-hub.3".into(),
+                    steps: 2,
+                    fold: Fold::Up,
+                    rows: around_rows(),
+                    basis: 1,
+                    impact: 1,
+                    shown: 2,
+                    total: 32,
+                    cut_hub: 30,
+                    cut_cap: 0,
+                    hubs: vec![hub_cut()],
+                    unread: vec![],
+                },
+                // 中心だけの近傍。
+                AroundDoc {
+                    center: "t3-hub.3".into(),
+                    steps: 1,
+                    fold: Fold::Both,
+                    rows: vec![around_rows().remove(0)],
+                    basis: 0,
+                    impact: 0,
+                    shown: 1,
+                    total: 1,
+                    cut_hub: 0,
+                    cut_cap: 0,
+                    hubs: vec![],
+                    unread: vec![GraphSource::Runs],
                 },
             ],
         ),
@@ -1145,6 +1288,17 @@ fn contract_form_closed_lists() {
     assert_eq!(distinct(&NodeKind::ALL), 20);
     assert_eq!(distinct(&EdgeType::ALL), 30);
     assert_eq!(distinct(&GraphSource::ALL), 3);
+    assert_eq!(distinct(&EdgeEnd::ALL), 2);
+    let fold_words: Vec<String> = Fold::ALL
+        .iter()
+        .map(|f| wire::encode(f).expect("語"))
+        .collect();
+    assert_eq!(
+        fold_words,
+        ["\"none\"", "\"up\"", "\"down\"", "\"both\""],
+        "畳みの ALL の順と字"
+    );
+    assert!(wire::decode::<Fold>("\"all\"").is_err());
     assert_eq!(distinct(&Verdict::ALL), 3);
     assert_eq!(distinct(&NextMove::ALL), 7);
     assert_eq!(distinct(&LedgerJudge::ALL), 5);

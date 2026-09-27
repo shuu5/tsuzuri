@@ -520,6 +520,229 @@
       }
     }
   ],
+  "graph::EdgeEnd": [
+    "from",
+    "to"
+  ],
+  "graph::ViewNode": [
+    {
+      "node": {
+        "id": "t3-hub.3",
+        "kind": "task",
+        "file": null,
+        "digest": null,
+        "title": "契約の型"
+      },
+      "status": "open",
+      "rank": 0,
+      "kids": 2,
+      "degree": 5
+    },
+    {
+      "node": {
+        "id": "t3-hub.3-20260927T073916Z",
+        "kind": "run",
+        "file": null,
+        "digest": null,
+        "title": "t3-hub.3-20260927T073916Z"
+      },
+      "status": null,
+      "rank": 1,
+      "kids": 0,
+      "degree": 1
+    }
+  ],
+  "graph::ViewEdge": [
+    {
+      "from": "t3-hub.3-20260927T073916Z",
+      "to": "t3-hub.3",
+      "type": "run_of",
+      "count": 1
+    }
+  ],
+  "graph::GraphView": [
+    {
+      "nodes": [
+        {
+          "node": {
+            "id": "t3-hub.3",
+            "kind": "task",
+            "file": null,
+            "digest": null,
+            "title": "契約の型"
+          },
+          "status": "open",
+          "rank": 0,
+          "kids": 2,
+          "degree": 5
+        },
+        {
+          "node": {
+            "id": "t3-hub.3-20260927T073916Z",
+            "kind": "run",
+            "file": null,
+            "digest": null,
+            "title": "t3-hub.3-20260927T073916Z"
+          },
+          "status": null,
+          "rank": 1,
+          "kids": 0,
+          "degree": 1
+        }
+      ],
+      "edges": [
+        {
+          "from": "t3-hub.3-20260927T073916Z",
+          "to": "t3-hub.3",
+          "type": "run_of",
+          "count": 1
+        }
+      ],
+      "shown": 2,
+      "folded": 2,
+      "cut": 1,
+      "total": 5,
+      "unread": [
+        "design"
+      ]
+    },
+    {
+      "nodes": [],
+      "edges": [],
+      "shown": 0,
+      "folded": 0,
+      "cut": 0,
+      "total": 0,
+      "unread": [
+        "design",
+        "ledger",
+        "runs"
+      ]
+    }
+  ],
+  "graph::Fold": [
+    "none",
+    "up",
+    "down",
+    "both"
+  ],
+  "graph::AroundRow": [
+    {
+      "node": {
+        "id": "t3-hub.3",
+        "kind": "task",
+        "file": null,
+        "digest": null,
+        "title": "契約の型"
+      },
+      "status": "open",
+      "col": 0,
+      "via": null,
+      "type": null,
+      "degree": 5
+    },
+    {
+      "node": {
+        "id": "t3-hub.3-20260927T073916Z",
+        "kind": "run",
+        "file": null,
+        "digest": null,
+        "title": "t3-hub.3-20260927T073916Z"
+      },
+      "status": "Landed",
+      "col": 1,
+      "via": "t3-hub.3",
+      "type": "run_of",
+      "degree": 1
+    }
+  ],
+  "graph::HubCut": [
+    {
+      "id": "t3-hub",
+      "degree": 31
+    }
+  ],
+  "graph::AroundDoc": [
+    {
+      "center": "t3-hub.3",
+      "steps": 2,
+      "fold": "up",
+      "rows": [
+        {
+          "node": {
+            "id": "t3-hub.3",
+            "kind": "task",
+            "file": null,
+            "digest": null,
+            "title": "契約の型"
+          },
+          "status": "open",
+          "col": 0,
+          "via": null,
+          "type": null,
+          "degree": 5
+        },
+        {
+          "node": {
+            "id": "t3-hub.3-20260927T073916Z",
+            "kind": "run",
+            "file": null,
+            "digest": null,
+            "title": "t3-hub.3-20260927T073916Z"
+          },
+          "status": "Landed",
+          "col": 1,
+          "via": "t3-hub.3",
+          "type": "run_of",
+          "degree": 1
+        }
+      ],
+      "basis": 1,
+      "impact": 1,
+      "shown": 2,
+      "total": 32,
+      "cut_hub": 30,
+      "cut_cap": 0,
+      "hubs": [
+        {
+          "id": "t3-hub",
+          "degree": 31
+        }
+      ],
+      "unread": []
+    },
+    {
+      "center": "t3-hub.3",
+      "steps": 1,
+      "fold": "both",
+      "rows": [
+        {
+          "node": {
+            "id": "t3-hub.3",
+            "kind": "task",
+            "file": null,
+            "digest": null,
+            "title": "契約の型"
+          },
+          "status": "open",
+          "col": 0,
+          "via": null,
+          "type": null,
+          "degree": 5
+        }
+      ],
+      "basis": 0,
+      "impact": 0,
+      "shown": 1,
+      "total": 1,
+      "cut_hub": 0,
+      "cut_cap": 0,
+      "hubs": [],
+      "unread": [
+        "runs"
+      ]
+    }
+  ],
   "board::Stage": [
     "Queued",
     "Blocked",

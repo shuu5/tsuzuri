@@ -7,10 +7,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
-use tsuzuri_core::graph::around::{AROUND_STEPS, HUB_DEGREE};
 use tsuzuri_core::graph::build::DESIGN_EDGE_TYPES;
 use tsuzuri_core::graph::check::{INVARIANTS, UNMEASURED};
-use tsuzuri_core::graph::{CutReason, Graph, Inputs, Source, Verdict, around, build, check};
+use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -238,103 +237,6 @@ fn graph_violation_names_the_ids() {
     assert_eq!(
         verdict_of(&g, "g-1"),
         Verdict::Violation(vec!["gone.1".to_string()])
-    );
-}
-
-#[test]
-fn graph_hub_619_is_not_expanded() {
-    let g = build_from(&fixture("hub-619.json"));
-    assert!(g.unread.is_empty());
-    let children = g
-        .edges
-        .iter()
-        .filter(|e| e.edge_type == EdgeType::ParentChild && e.to == "h")
-        .count();
-    assert_eq!(children, 619);
-
-    let a = around(&g, "h").expect("epic の近傍");
-    assert!(
-        a.basis.is_empty() && a.impact.is_empty(),
-        "hub を展開しない"
-    );
-    assert_eq!(a.cut.len(), 1);
-    assert_eq!(a.cut[0].id, "h");
-    assert_eq!(a.cut[0].reason, CutReason::Hub);
-    assert_eq!(a.cut[0].degree, 619);
-
-    // 子から見ても、hub の親から先（兄弟）へは広げない。
-    let c = around(&g, "h.1").expect("子の近傍");
-    let ids: Vec<&str> = c.impact.iter().map(|r| r.id.as_str()).collect();
-    assert_eq!(ids, vec!["h"]);
-    assert_eq!(c.impact[0].edge_type, EdgeType::ParentChild);
-    assert_eq!(c.cut.len(), 1);
-    assert_eq!((c.cut[0].id.as_str(), c.cut[0].degree), ("h", 619));
-    let basis: Vec<&str> = c.basis.iter().map(|r| r.id.as_str()).collect();
-    assert_eq!(
-        basis,
-        vec!["h.1-20260927T000000Z"],
-        "走行の run_of を逆に 1 段"
-    );
-}
-
-#[test]
-fn graph_around_walks_two_steps_each_side() {
-    let (design_index, ledger, events) = real_inputs();
-    let g = build(&Inputs {
-        design_index: &design_index,
-        ledger: &ledger,
-        events: &events,
-    });
-    let a = around(&g, "R-25").expect("R-25 の近傍");
-    assert!(
-        a.basis
-            .iter()
-            .chain(&a.impact)
-            .all(|r| (1..=AROUND_STEPS).contains(&r.step))
-    );
-    let impact1: Vec<&str> = a
-        .impact
-        .iter()
-        .filter(|r| r.step == 1)
-        .map(|r| r.id.as_str())
-        .collect();
-    assert_eq!(impact1, vec!["ADR-3", "NFR3", "P-26", "R-2"]);
-    assert!(a.impact.iter().any(|r| r.step == 2), "影響の側の 2 段目");
-    assert!(a.basis.iter().any(|r| r.step == 2), "根拠の側の 2 段目");
-    // R-2 の先（ADR-3・P-26）は 1 段目で着いているので、2 段目に重ねて出さない。
-    for side in [&a.basis, &a.impact] {
-        let mut ids: Vec<&str> = side.iter().map(|r| r.id.as_str()).collect();
-        let n = ids.len();
-        ids.sort_unstable();
-        ids.dedup();
-        assert_eq!(ids.len(), n, "同じ節点を 2 度出さない");
-        assert!(!ids.contains(&"R-25"), "中心は出さない");
-    }
-    assert!(around(&g, "no-such-id").is_none());
-}
-
-/// hub の閾値の定数が rules の file の行 R-20 の字（hub の閾値（次数）N 超）と同じ。
-#[test]
-fn graph_hub_threshold_matches_rule_r20() {
-    let rules = read("design-intent/rules.yaml");
-    let row = rules
-        .lines()
-        .find(|l| l.contains("id: R-20,"))
-        .expect("rules の file に行 R-20 が在る");
-    let value = row
-        .split_once("value: \"")
-        .and_then(|(_, rest)| rest.split_once('"'))
-        .map(|(v, _)| v)
-        .expect("行 R-20 の value");
-    let n: usize = value
-        .split_once("hub の閾値（次数）")
-        .and_then(|(_, rest)| rest.split_once('超'))
-        .and_then(|(n, _)| n.trim().parse().ok())
-        .expect("hub の閾値の数");
-    assert_eq!(n, HUB_DEGREE, "{row}");
-    assert!(
-        value.contains(&format!("近傍は各 {AROUND_STEPS} 段")),
-        "{row}"
     );
 }
 

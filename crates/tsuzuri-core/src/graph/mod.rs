@@ -1,20 +1,22 @@
 //! 導出グラフ（設計ノート surface-base 便 c・判断の記録 ADR-7 決定 (2)）。
 //! 設計の索引・台帳の一覧・器の event log の 3 つの字から、1 つのグラフを毎回組み直す（`build`）。
-//! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返す（`around`）。
+//! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返し（`around`）、グラフの面の眺めを返す（`view`・便 c-view）。
 //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
 
 pub mod around;
 pub mod build;
 pub mod check;
+pub mod view;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
-use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind};
+use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, GraphSource, NodeKind};
 
-pub use around::{Around, Cut, CutReason, Reached, around};
+pub use around::around;
 pub use build::build;
 pub use check::{Invariant, Verdict, check};
+pub use view::view;
 
 /// 組む材料の 3 つの字。
 #[derive(Debug, Clone, Copy)]
@@ -62,6 +64,15 @@ impl Source {
     /// 節点の種類の出所（設計ノートの行はこの便では組まないので None）。
     pub fn of(kind: NodeKind) -> Option<Source> {
         Source::ALL.into_iter().find(|s| s.kinds().contains(&kind))
+    }
+
+    /// 契約の型の出所への写し（字は同じ）。
+    pub fn wire(self) -> GraphSource {
+        match self {
+            Source::Design => GraphSource::Design,
+            Source::Ledger => GraphSource::Ledger,
+            Source::Runs => GraphSource::Runs,
+        }
     }
 }
 
@@ -145,5 +156,43 @@ impl Graph {
     /// id の節点（無ければ None）。
     pub fn node(&self, id: &str) -> Option<&GraphNode> {
         self.nodes.iter().find(|n| n.id == id)
+    }
+
+    /// id から節点への表（同じ id が 2 つ在れば先の節点・`node` と同じ）。
+    pub fn index(&self) -> BTreeMap<&str, &GraphNode> {
+        let mut index = BTreeMap::new();
+        for n in &self.nodes {
+            index.entry(n.id.as_str()).or_insert(n);
+        }
+        index
+    }
+
+    /// 節点ごとの次数（辺でつながる隣の節点の数）。
+    /// 同じ隣は辺が何本でも 1 と数え、自分へ戻る辺と、端の節点が無い辺は数えない。
+    pub fn degrees(&self) -> BTreeMap<&str, usize> {
+        let index = self.index();
+        let mut next: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+        for e in &self.edges {
+            let both = index.contains_key(e.from.as_str()) && index.contains_key(e.to.as_str());
+            if e.from == e.to || !both {
+                continue;
+            }
+            next.entry(&e.from).or_default().insert(&e.to);
+            next.entry(&e.to).or_default().insert(&e.from);
+        }
+        next.into_iter().map(|(id, s)| (id, s.len())).collect()
+    }
+
+    /// 節点の状態（bead は属性の状態の字・走行は属性の段の字・ほかは無し）。
+    pub fn status(&self, node: &GraphNode) -> Option<String> {
+        if node.kind == NodeKind::Run {
+            return self.runs.get(&node.id).and_then(|r| r.stage.clone());
+        }
+        self.beads.get(&node.id).map(|b| b.status.clone())
+    }
+
+    /// 読めなかった出所の契約の型の列。
+    pub fn unread_wire(&self) -> Vec<GraphSource> {
+        self.unread.iter().map(|s| s.wire()).collect()
     }
 }

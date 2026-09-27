@@ -2,7 +2,9 @@
 //! 設計文書の 11 種と 17 型は folio の語（graph.yaml の node_kinds と edge_types の写し）をそのまま電文の語にする。
 //! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は便 c で決めるのでここには置かない。
 //! 導出グラフの電文（GraphDoc）は便 e-read で足す（中核の crate の Graph と check の値の写し）。
+//! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）は便 c-view で足す。
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -311,4 +313,203 @@ pub struct GraphDoc {
     /// 不変条件の 12 本の判定（id の順）。
     pub invariants: Vec<InvariantCheck>,
     pub skipped: SkippedEdges,
+}
+
+/// 辺の端（閉じた 2）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EdgeEnd {
+    From,
+    To,
+}
+
+impl EdgeEnd {
+    /// 閉じた一覧（順も固定）。
+    pub const ALL: [EdgeEnd; 2] = [EdgeEnd::From, EdgeEnd::To];
+}
+
+/// 条を含む側から条でない側へ向く型（条から出る辺は from が根拠の側）。
+const ARTICLE_SIDE_TYPES: [EdgeType; 6] = [
+    EdgeType::InArticle,
+    EdgeType::ArticleRef,
+    EdgeType::RelationsArticles,
+    EdgeType::RelationsReqs,
+    EdgeType::RelationsRules,
+    EdgeType::RelationsSections,
+];
+
+/// 辺の 2 つの端のうち根拠の側（上から順に当てる）。
+/// 条を含む型で from が条・to が条でなければ from、verify.ac と amended_by は from、それ以外は to。
+/// 対の型（in-article の両向き・article と relations.rules・verify.ac と verifies・amended_by と amends）は、
+/// どちらの向きの辺でも同じ節点が根拠の側になる。
+pub fn basis_end(edge_type: EdgeType, from: NodeKind, to: NodeKind) -> EdgeEnd {
+    if ARTICLE_SIDE_TYPES.contains(&edge_type)
+        && from == NodeKind::Article
+        && to != NodeKind::Article
+    {
+        return EdgeEnd::From;
+    }
+    match edge_type {
+        EdgeType::VerifyAc | EdgeType::AmendedBy => EdgeEnd::From,
+        _ => EdgeEnd::To,
+    }
+}
+
+/// id の字を数字の並びとそれ以外の字の並びに分ける。
+fn chunks(s: &str) -> impl Iterator<Item = &str> {
+    let mut rest = s;
+    std::iter::from_fn(move || {
+        let first = rest.chars().next()?;
+        let digit = first.is_ascii_digit();
+        let end = rest
+            .char_indices()
+            .find(|(_, c)| c.is_ascii_digit() != digit)
+            .map_or(rest.len(), |(i, _)| i);
+        let (head, tail) = rest.split_at(end);
+        rest = tail;
+        Some(head)
+    })
+}
+
+/// id の自然な順（数字の並びは数として、それ以外は字の順で比べる・R-2 は R-10 より前）。
+/// 数として同じ並び（01 と 1）は最後に字の順で比べる（同じ字だけが同じ）。
+pub fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let mut xs = chunks(a);
+    let mut ys = chunks(b);
+    loop {
+        let ord = match (xs.next(), ys.next()) {
+            (None, None) => return a.cmp(b),
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) => {
+                let digits = |s: &str| s.bytes().all(|c| c.is_ascii_digit());
+                if digits(x) && digits(y) {
+                    let x = x.trim_start_matches('0');
+                    let y = y.trim_start_matches('0');
+                    x.len().cmp(&y.len()).then_with(|| x.cmp(y))
+                } else {
+                    x.cmp(y)
+                }
+            }
+        };
+        if ord != Ordering::Equal {
+            return ord;
+        }
+    }
+}
+
+/// 眺めの節点（節点・状態・段・子の数・次数）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewNode {
+    pub node: GraphNode,
+    /// bead は属性の状態の字、走行は属性の段の字、ほかは無し。
+    pub status: Option<String>,
+    /// まとめた辺を影響の側から根拠の側へたどる最も長い道の辺の数。
+    pub rank: u32,
+    /// この節点へ畳んだ節点の数。
+    pub kids: u32,
+    /// 辺でつながる隣の節点の数。
+    pub degree: u32,
+}
+
+/// 眺めのまとめた辺（from は影響の側・to は根拠の側の畳み先）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewEdge {
+    pub from: String,
+    pub to: String,
+    #[serde(rename = "type")]
+    pub edge_type: EdgeType,
+    /// まとめた辺の本数。
+    pub count: u32,
+}
+
+/// グラフの眺めの電文（畳んで上限で切ったグラフの面）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GraphView {
+    /// 出す節点（節点の種類の順・同じなら id の自然な順）。
+    pub nodes: Vec<ViewNode>,
+    /// まとめた辺（from の id の自然な順・to の id の自然な順・辺の型の順）。
+    pub edges: Vec<ViewEdge>,
+    pub shown: u32,
+    /// 畳まれた節点のうち、畳み先が出す節点に入っているものの数。
+    pub folded: u32,
+    /// 上限で切った候補の数と、畳まれずに辺の無い節点の数の和。
+    pub cut: u32,
+    /// グラフの節点の数。
+    pub total: u32,
+    pub unread: Vec<GraphSource>,
+}
+
+/// 近傍の畳み（閉じた 4・up は根拠の側を畳む・down は影響の側を畳む）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Fold {
+    #[default]
+    None,
+    Up,
+    Down,
+    Both,
+}
+
+impl Fold {
+    /// 閉じた一覧（順も固定）。
+    pub const ALL: [Fold; 4] = [Fold::None, Fold::Up, Fold::Down, Fold::Both];
+
+    /// 根拠の側を畳むか。
+    pub fn folds_basis(self) -> bool {
+        matches!(self, Fold::Up | Fold::Both)
+    }
+
+    /// 影響の側を畳むか。
+    pub fn folds_impact(self) -> bool {
+        matches!(self, Fold::Down | Fold::Both)
+    }
+}
+
+/// 近傍の行（中心は列 0 で via と type が無い）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AroundRow {
+    pub node: GraphNode,
+    /// 眺めと同じ決め方の状態。
+    pub status: Option<String>,
+    /// 列（根拠の側は段の数の負・影響の側は正・-3 から 3）。
+    pub col: i8,
+    /// 1 つ前の節点。
+    pub via: Option<String>,
+    /// 着いた辺の型。
+    #[serde(rename = "type")]
+    pub edge_type: Option<EdgeType>,
+    pub degree: u32,
+}
+
+/// 広げなかった hub（id と次数）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HubCut {
+    pub id: String,
+    pub degree: u32,
+}
+
+/// 1 つの節点の近傍の電文。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AroundDoc {
+    pub center: String,
+    pub steps: u8,
+    pub fold: Fold,
+    /// 出す行（列の小さい順・種類の順・id の自然な順）。
+    pub rows: Vec<AroundRow>,
+    /// 畳みなしでたどったときの、出す行のうち列が負の数。
+    pub basis: u32,
+    /// 畳みなしでたどったときの、出す行のうち列が正の数。
+    pub impact: u32,
+    /// 出す行の数（中心を含む）。
+    pub shown: u32,
+    /// 着いた節点の数と、中心の 1 と、hub で隠れた数の和。
+    pub total: u32,
+    /// hub で隠れた数（hub ごとの次数から 1 を引いた数の和）。
+    pub cut_hub: u32,
+    /// 上限で切った数。
+    pub cut_cap: u32,
+    /// 広げなかった hub（見つけた順）。
+    pub hubs: Vec<HubCut>,
+    pub unread: Vec<GraphSource>,
 }
