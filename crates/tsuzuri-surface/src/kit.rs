@@ -93,19 +93,18 @@ pub fn pending(fetched: &Fetched, unread: &'static str) -> Body<()> {
     })
 }
 
-/// 畳める段の開き閉じの鍵の 6 つの形（`{}` は不変条件の id か問いの id・便 g-steady）。
-pub const FOLD_KEYS: [&str; 6] = [
-    "ledger:more",
-    "seat:hist",
-    "seat:more",
-    "ask:hist",
-    "gaps:{}",
-    "ask:around:{}",
-];
+/// 畳める段の開き閉じの鍵の形（Module の ALL の順に各 module の FOLDS をつないだ列・`{}` は不変条件の id か
+/// 問いの id・便 g-steady・行 hs-derived）。
+pub fn fold_keys() -> Vec<&'static str> {
+    crate::project::Module::ALL
+        .into_iter()
+        .flat_map(|m| m.folds().iter().copied())
+        .collect()
+}
 
-/// 鍵の字が 6 つの形のどれかに合うか（`{}` の所は空でない字）。
+/// 鍵の字が fold_keys の形のどれかに合うか（`{}` の所は空でない字）。
 pub fn fold_key_ok(key: &str) -> bool {
-    FOLD_KEYS.iter().any(|form| match form.strip_suffix("{}") {
+    fold_keys().iter().any(|form| match form.strip_suffix("{}") {
         Some(prefix) => key
             .strip_prefix(prefix)
             .is_some_and(|rest| !rest.is_empty()),

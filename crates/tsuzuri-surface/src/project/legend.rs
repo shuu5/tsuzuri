@@ -10,6 +10,12 @@ pub const BLOCK: Block = Block {
     class: "panel",
 };
 
+/// この file が字を持つ口の path（無い・行 hs-derived）。
+pub const PATHS: &[&str] = &[];
+
+/// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
+pub const FOLDS: &[&str] = &[];
+
 /// 凡例の 1 項（記号の値・語の鍵）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Entry {

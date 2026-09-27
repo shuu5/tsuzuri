@@ -29,6 +29,12 @@ pub const PATH: &str = "/api/questions";
 /// 答えを送る口（POST・契約の型の RulingRequest・server の便 e-ask）。
 pub const RULING_PATH: &str = "/api/ruling";
 
+/// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
+pub const PATHS: &[&str] = &[PATH, RULING_PATH];
+
+/// この file の畳める段の開き閉じの鍵の形（`{}` は問いの id・行 hs-derived）。
+pub const FOLDS: &[&str] = &["ask:around:{}"];
+
 /// 口が読めないときの理由。
 pub const REASON: &str =
     "問いの一覧の口が読めない（server にまだ無い・届かない・知らせが切れた）";

@@ -25,6 +25,12 @@ pub const PATH: &str = "/api/ledger";
 /// 指標の段の口（便 g-parts）。
 pub const METRICS_PATH: &str = "/api/metrics";
 
+/// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
+pub const PATHS: &[&str] = &[PATH, METRICS_PATH];
+
+/// この file の畳める段の開き閉じの鍵の形（行 hs-derived）。
+pub const FOLDS: &[&str] = &["ledger:more"];
+
 /// 指標の段の上段の語の鍵（見本の 4 数 = open task・memo・未反映・純減 24h）。
 pub const METRICS: [&str; 4] = ["l_task", "l_memo", "l_unref", "l_net24"];
 

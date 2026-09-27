@@ -17,6 +17,12 @@ pub const BLOCK: Block = Block {
     class: "fold panel",
 };
 
+/// この file が字を持つ口の path（無い・台帳の口は ledger の module が持つ・行 hs-derived）。
+pub const PATHS: &[&str] = &[];
+
+/// この file の畳める段の開き閉じの鍵の形（行 hs-derived）。
+pub const FOLDS: &[&str] = &["ask:hist"];
+
 /// 段が最初に開いているか（閉じている）。
 pub const OPEN: bool = false;
 

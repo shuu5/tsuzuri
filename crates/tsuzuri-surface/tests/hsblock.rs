@@ -140,7 +140,7 @@ fn hsblock_kit_holds_shared() {
         "pub const NOT_READ:",
         "pub const NO_CONTENT:",
         "pub fn pending(",
-        "pub const FOLD_KEYS:",
+        "pub fn fold_keys(",
         "pub fn fold_key_ok(",
         "pub struct Folds(",
     ] {
@@ -167,7 +167,10 @@ fn hsblock_kit_holds_shared() {
     assert!(project::fold_key_ok("gaps:x"));
     assert_eq!(project::STATES.len(), 5);
     assert_eq!(project::UNKNOWN, "unknown");
-    assert_eq!(project::FOLD_KEYS.len(), 6);
+    assert_eq!(
+        project::fold_keys().len(),
+        Module::ALL.iter().map(|m| m.folds().len()).sum::<usize>()
+    );
     assert!(project::Folds::default().recorded("ledger:more").is_none());
     assert!(!project::ALERT_STYLE.is_empty());
     assert!(!project::LEDGER_UNREAD.is_empty());

@@ -14,6 +14,12 @@ pub const BLOCK: Block = Block {
     class: "stack",
 };
 
+/// この file が字を持つ口の path（無い・近傍の口は nodearound の module が持つ・行 hs-derived）。
+pub const PATHS: &[&str] = &[];
+
+/// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
+pub const FOLDS: &[&str] = &[];
+
 /// 電文に要約の欄がまだ無いときの概要の字。
 pub const NO_SUMMARY: &str = "要約なし";
 

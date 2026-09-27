@@ -1,9 +1,10 @@
 //! 便 g-steady の歯: 読みの後の決め方（置く・置かない・読み直す）・知らせが切れたときは決め方を通さない・
 //! 畳める段の開き閉じの記録（鍵ごとに 1 つの値）・project の下の details の要素は全部記録から読んで toggle で書き戻す。
 
-use std::path::{Path, PathBuf};
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 
-use tsuzuri_surface::project::{FOLD_KEYS, Folds, fold_key_ok};
+use tsuzuri_surface::project::{Folds, Module, fold_key_ok};
 use tsuzuri_surface::view::{Fetched, RETRY_MS, Settle, settle};
 
 fn crate_dir() -> PathBuf {
@@ -125,20 +126,20 @@ fn steady_folds_write_back_keeps_mode_until_owner_toggles() {
     assert!(!f.open(key, false));
 }
 
-/// 鍵の形は 6 つ（{} は id）で、形に合う字だけを通す。
+/// 鍵の形は着地済みの 6 つを全部含み（{} は id・数と順は見ない）、形に合う字だけを通す。
 #[test]
 fn steady_fold_key_forms() {
-    assert_eq!(
-        FOLD_KEYS,
-        [
-            "ledger:more",
-            "seat:hist",
-            "seat:more",
-            "ask:hist",
-            "gaps:{}",
-            "ask:around:{}"
-        ]
-    );
+    let forms = tsuzuri_surface::project::fold_keys();
+    for want in [
+        "ledger:more",
+        "seat:hist",
+        "seat:more",
+        "ask:hist",
+        "gaps:{}",
+        "ask:around:{}",
+    ] {
+        assert!(forms.contains(&want), "fold_keys に {want} が無い: {forms:?}");
+    }
     for ok in [
         "ledger:more",
         "seat:hist",
@@ -159,25 +160,6 @@ fn steady_fold_key_forms() {
     ] {
         assert!(!fold_key_ok(bad), "{bad}");
     }
-}
-
-/// src/project の下の .rs の file（名の順）。
-fn project_sources() -> Vec<(PathBuf, String)> {
-    let dir: &Path = &crate_dir().join("src/project");
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("src/project を読む")
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "rs"))
-        .collect();
-    paths.sort();
-    paths
-        .into_iter()
-        .map(|p| {
-            let text = std::fs::read_to_string(&p).expect("src の file");
-            (p, text)
-        })
-        .collect()
 }
 
 /// 記録の関数を呼ぶ所の最初の字の引数（`fold("…"` か `fold(format!("…"`）。
@@ -209,12 +191,15 @@ fn fold_keys(text: &str) -> Vec<String> {
     out
 }
 
-/// (5) project の下の details の要素は全部、記録を呼ぶ所と同じ数で、prop の open と toggle に結び、鍵は 6 つの形。
+/// (5) project の下の details の要素は全部、記録を呼ぶ所と同じ数で、prop の open と toggle に結び、
+/// module ごとに数と鍵の字の集合がその module の folds と同じ。
 #[test]
 fn steady_details_use_fold_record() {
-    let mut details = 0;
-    let mut keys = Vec::new();
-    for (path, text) in project_sources() {
+    for module in Module::ALL {
+        let path = crate_dir()
+            .join("src/project")
+            .join(format!("{}.rs", module.name()));
+        let text = std::fs::read_to_string(&path).expect("src の file");
         let name = path.display().to_string();
         let tags: Vec<&str> = text
             .match_indices("<details")
@@ -237,17 +222,17 @@ fn steady_details_use_fold_record() {
             here.len(),
             "{name} の details と記録を呼ぶ所の数"
         );
-        details += tags.len();
-        keys.extend(here);
-    }
-    assert_eq!(details, 6, "project の下の details の数");
-    let mut forms = keys.clone();
-    forms.sort();
-    let mut want: Vec<String> = FOLD_KEYS.iter().map(|k| k.to_string()).collect();
-    want.sort();
-    assert_eq!(forms, want, "鍵の字が表の形と合わない");
-    for k in &keys {
-        assert!(fold_key_ok(&k.replace("{}", "x")), "{k}");
+        assert_eq!(
+            here.len(),
+            module.folds().len(),
+            "{name} の記録を呼ぶ所と folds の数"
+        );
+        let got: BTreeSet<&str> = here.iter().map(String::as_str).collect();
+        let want: BTreeSet<&str> = module.folds().iter().copied().collect();
+        assert_eq!(got, want, "{name} の鍵の字が folds と合わない");
+        for k in &here {
+            assert!(fold_key_ok(&k.replace("{}", "x")), "{k}");
+        }
     }
 }
 

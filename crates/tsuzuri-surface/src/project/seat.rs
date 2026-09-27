@@ -22,6 +22,12 @@ pub const BLOCK: Block = Block {
 /// 読みの口（便 g-parts）。
 pub const PATH: &str = "/api/seat";
 
+/// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
+pub const PATHS: &[&str] = &[PATH];
+
+/// この file の畳める段の開き閉じの鍵の形（行 hs-derived）。
+pub const FOLDS: &[&str] = &["seat:hist", "seat:more"];
+
 /// 口が読めないときの理由。
 pub const REASON: &str =
     "orchestrator の状態と口座を読む口が読めない（server にまだ無い・届かない・知らせが切れた）";

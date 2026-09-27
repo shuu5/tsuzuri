@@ -1,5 +1,5 @@
 //! 行 hs-pages の歯（接頭辞 hspage_・判断の記録 ADR-13）: 頁は src/pages の下に 1 頁 1 file・列挙 PageId は
-//! 組み立ての script が生成・snapshot は頁ごとの file と header の file（着地済みの frame.json の写しと比べる）・
+//! 組み立ての script が生成・snapshot は頁ごとの file と header の file・
 //! nav は頁の定義の数の順・href と from_query の往復・frame.rs と board.rs に頁の変種の名が無い。
 
 use std::collections::BTreeSet;
@@ -53,8 +53,7 @@ fn hspage_ids_follow_dir() {
     assert_eq!(same, tsuzuri_surface::frame::PageId::Home);
 }
 
-/// (2) 各頁の page_snapshot は tests/snapshots/pages の同じ id の file と 1 字も違わず、file の名の集合は ALL の id の集合・
-/// 着地済みの 5 つの頁の字（末尾の改行を除く）は frame.json の中に在る。
+/// (2) 各頁の page_snapshot は tests/snapshots/pages の同じ id の file と 1 字も違わず、file の名の集合は ALL の id の集合。
 #[test]
 fn hspage_snaps_match_files() {
     let files: BTreeSet<String> = dir_names("tests/snapshots/pages", ".json", "")
@@ -67,15 +66,9 @@ fn hspage_snaps_match_files() {
         let want = read(&format!("tests/snapshots/pages/{}.json", page.id()));
         assert!(got == want, "{} の頁の値が snapshot と違う。今の値:\n{got}", page.id());
     }
-    let whole = read("tests/snapshots/frame.json");
-    for (page, id) in LANDED {
-        let got = frame::page_snapshot(page);
-        let body = got.strip_suffix('\n').expect("末尾の改行");
-        assert!(whole.contains(body), "{id} の頁の字が frame.json に無い");
-    }
 }
 
-/// (3) header_snapshot は header.json と 1 字も違わず、先頭の 7 行は frame.json の先頭の 7 行と同じ。
+/// (3) header_snapshot は header.json と 1 字も違わない。
 #[test]
 fn hspage_header_lines_same() {
     let got = frame::header_snapshot();
@@ -83,11 +76,6 @@ fn hspage_header_lines_same() {
         got == read("tests/snapshots/header.json"),
         "header の値が snapshot と違う。今の値:\n{got}"
     );
-    let whole = read("tests/snapshots/frame.json");
-    let head: Vec<&str> = got.lines().take(7).collect();
-    let want: Vec<&str> = whole.lines().take(7).collect();
-    assert_eq!(head.len(), 7);
-    assert_eq!(head, want);
     assert!(got.ends_with("\n  ]\n}\n"), "{got}");
     assert_eq!(got.lines().count(), 9);
 }

@@ -29,6 +29,12 @@ pub const BLOCK: Block = Block {
 /// 束を送る口（POST・契約の型の BatchRequest・server の便 e-batch）。
 pub const PATH: &str = "/api/batch";
 
+/// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
+pub const PATHS: &[&str] = &[PATH];
+
+/// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
+pub const FOLDS: &[&str] = &[];
+
 /// 書いた行の数の前の字。
 pub const WRITTEN: &str = "書いた行";
 

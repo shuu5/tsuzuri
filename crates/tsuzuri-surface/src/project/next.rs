@@ -20,6 +20,12 @@ pub const BLOCK: Block = Block {
 /// 読みの口（便 g-parts）。
 pub const PATH: &str = "/api/next";
 
+/// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
+pub const PATHS: &[&str] = &[PATH];
+
+/// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
+pub const FOLDS: &[&str] = &[];
+
 /// 口が読めないときの理由。
 pub const REASON: &str =
     "次の一手を判じる口が読めない（server にまだ無い・届かない・知らせが切れた）";

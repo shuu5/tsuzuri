@@ -181,6 +181,20 @@ fn generate(dir: &Path, names: &[String]) -> Result<String, String> {
     writeln!(s, "        }}").map_err(w)?;
     writeln!(s, "    }}").map_err(w)?;
     writeln!(s).map_err(w)?;
+    for (func, item, doc) in [
+        ("paths", "PATHS", "口の path"),
+        ("folds", "FOLDS", "畳める段の開き閉じの鍵の形"),
+    ] {
+        writeln!(s, "    /// module の{doc}（その module の {item}・行 hs-derived）。").map_err(w)?;
+        writeln!(s, "    pub fn {func}(self) -> &'static [&'static str] {{").map_err(w)?;
+        writeln!(s, "        match self {{").map_err(w)?;
+        for name in names {
+            writeln!(s, "            Module::{} => {name}::{item},", variant(name)).map_err(w)?;
+        }
+        writeln!(s, "        }}").map_err(w)?;
+        writeln!(s, "    }}").map_err(w)?;
+        writeln!(s).map_err(w)?;
+    }
     writeln!(s, "    /// module の中身を描く（wasm の target のときだけ）。").map_err(w)?;
     writeln!(s, "    #[cfg(target_arch = \"wasm32\")]").map_err(w)?;
     writeln!(s, "    pub fn view(self) -> leptos::prelude::AnyView {{").map_err(w)?;

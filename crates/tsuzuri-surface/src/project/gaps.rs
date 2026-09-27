@@ -16,6 +16,12 @@ pub const BLOCK: Block = Block {
     class: "panel",
 };
 
+/// この file が字を持つ口の path（無い・グラフの口は map の module が持つ・行 hs-derived）。
+pub const PATHS: &[&str] = &[];
+
+/// この file の畳める段の開き閉じの鍵の形（`{}` は不変条件の id・行 hs-derived）。
+pub const FOLDS: &[&str] = &["gaps:{}"];
+
 /// 口が読めないときの理由。
 pub const REASON: &str =
     "不変条件の判定を運ぶ口が読めない（server にまだ無い・届かない・知らせが切れた）";
