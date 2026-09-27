@@ -1,0 +1,25 @@
+name: ci
+
+# 器（scribe2）の land の終端が、push した commit の判定をここから読む（既定の 1 行 = gh run list --commit <sha>）。
+# 撃つのは器の common-verify（.vessel.toml）と同じ 1 行で、検査の中身は xtask の check が持つ（build → 歯の全部 → clippy）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# GITHUB_TOKEN は読取りのみ
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # action は commit の SHA で pin する（scribe2 の ci.yml と同じ版）
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      # toolchain の版と components は rust-toolchain.toml の 1 本が持つ
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659  # v1.17.0
+      - uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6  # v2.87.7
+        with:
+          tool: cargo-nextest
+      - run: cargo run -q -p xtask -- check
