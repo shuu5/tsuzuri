@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.16
+  version: v0.17
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。第 0.17 版（同日）は中くらいの幅（761px から 900px）で header の中身が縦に潰れる不具合を直す行 g-top-fix を足した。
 
 sections:
   - n: 1
@@ -244,6 +244,15 @@ sections:
         size: S
         done: (1) 窓ごとの 1 行（seat の module の window_row の返す WindowRow）は窓の短い字の欄を持ち、five_hour は 5h、seven_day は 7d、seven_day_model は model で、知らない窓（例 one_hour）は電文の字のまま (2) 短い字の表は seat の module の定数で、3 つの窓の短い字はどれも 5 字以下 (3) 窓の名の欄（class wl）は短い字だけを出し、「?」の button を持たない。語の鍵を持つ窓の字は、help の module に足す公開の関数 term で組み、字に pointer が乗ると窓の語の鍵の説明の card が出て、離れると閉じ、押すと留まる（qmark と同じ開き方） (4) term が組む span は data-term に語の鍵を持ち tabindex 0 を持つ (5) 知らない窓の字は term を通さず字のまま出す (6) 語の辞書と stylesheet は触らず、足す外の依存は 0 本
         depends: [g-seat, g-steady]
+      - id: g-top-fix
+        title: header の最終の記録を短い時刻の chip にして、中くらいの幅で header を潰さない
+        req: [FR14, NFR2]
+        section: "24"
+        write-set: ["crates/tsuzuri-surface/src/board.rs", "crates/tsuzuri-surface/src/view.rs", "+crates/tsuzuri-surface/tests/topbar.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail topbar_", "cargo nextest run -p tsuzuri-surface --no-tests=fail frame_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) view の module に、時刻と今の時刻（どちらも epoch 秒）を受けて短い時刻の字を返す公開の関数 clock_short を足し、2 つの差が 20 時間以内なら時と分と Z（例 1790513580 と 1790513600 で 12:53Z）、20 時間を超えれば月と日と空白と時と分と Z（例 1790427180 と 1790513600 で 09-26 12:53Z）を返し、差は向きを問わない (2) 差がちょうど 20 時間（72000 秒）のときは時と分と Z だけ (3) header の最終の記録の部品は、見出しの語と「?」の button を出さず、class chip num の span の中の字を clock_short の字にし、その字を help の module の term（語の鍵 last_record）で組み、span の title の属性に着地済みの clock の字を持つ (4) まだ 1 度も読めていないときの出し方（測れていないの印と語の鍵 not_yet）は変えない (5) 頁の枠の HEADER の値は変えず、着地済みの枠の歯（frame_）はそのまま通る (6) 語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        depends: [g-node, g-seat-fix]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -490,6 +499,16 @@ sections:
       在りか（着地済み）。seat の module は crates/tsuzuri-surface/src/project/seat.rs（WINDOWS・window_row・WindowRow・window_view）。help の module は crates/tsuzuri-surface/src/widgets/help.rs（wasm の target のときだけの dom の module に qmark・hs・TipLayer）。語の辞書に five_hour・seven_day・seven_day_model の説明が在る。
       この便は、見本の閾値の欄（┆85 の字）と、使った割合の推移の線（spark）を足さない（席の card の電文に閾値と推移が無い・後の行で server の側から足す）。
       測り方。短い字の表と WindowRow の短い字の欄は host の cargo test で pin する（歯の file は着地済みの seatblock.rs・名は seatblock_ で始める）。term と窓の名の欄の DOM は wasm の target のときだけ組み立て、surface-build で組めることを見る。
+      依存は足さない。
+
+  - n: 24
+    type: prose
+    title: 便 g-top-fix — header を中くらいの幅で潰さない
+    body: |
+      実物の画面（2026-09-27T12:53Z に測った）で、幅 780px のとき header の中身が収まらず、頁の link の字（ホーム・抜けの検査）と見出しの語（最終の記録）と mode の切り替えが縦に折れ、頁が横に 34px はみ出していた（document の scrollWidth 814）。stylesheet は幅 760px 以下で header を 2 段に組み替えるので、潰れるのは 761px から 900px ほどの幅（縦に持った tablet の幅）。見本の同じ幅（780px）では 1 行に収まる。差は header の最終の記録の部品で、着地済みの画面は見出しの語と「?」の button（約 110px）と長い時刻の字（2026-09-27 12:53:41 UTC・約 170px）を並べ、見本の同じ場所の部品（約 130px）より約 150px 広い。
+      直し方。最終の記録の部品を 1 つの chip（class chip num）にし、中の字を短い時刻（view の module に足す clock_short）にする。短い時刻は見本の hmd と同じ決め方で、今の時刻との差が 20 時間以内なら時と分と Z（12:53Z）、超えれば月と日を前に足す（09-26 12:53Z）。今の時刻は描く時の net の now。chip の字は help の module の term（便 g-seat-fix が足した・語の鍵と字を受けて、pointer が乗ると説明の card を出す span）で組み、語の鍵は last_record。見出しの語と「?」の button は出さない（説明は chip の字に pointer を乗せると出る）。長い時刻の字（着地済みの clock）は span の title の属性に残す。まだ 1 度も読めていないときの出し方は変えない。
+      在りか（着地済み）。header を組む所は board の module の top（部品 updated の枝）。clock と Screen は view の module（crates/tsuzuri-surface/src/view.rs）。term は crates/tsuzuri-surface/src/widgets/help.rs の dom の module（wasm の target のときだけ）。頁の枠の HEADER は frame の module（触らない）。
+      測り方。clock_short は純粋な関数にして host の cargo test で pin する（新しい歯の file は topbar.rs・名は topbar_ で始める）。header の DOM は wasm の target のときだけ組み立て、surface-build で組めることを見る。幅ごとの収まりは host で測れないので、着地の後に設計席が実物の画面で測る。
       依存は足さない。
 
 figures: []
