@@ -1,5 +1,5 @@
 # tsuzuri の vessel 宣言（器 scribe2 が便を起こすときに読む）。面の便 a（workspace の骨格）の前に cargo を足した（判断の記録 ADR-4 の注・scribe2 席の回答 2026-09-26: 受付は base の木の宣言を読むので同じ便の write-set では効かない）。
-# 値は器の上限（rules 行 runner.allowed_commands）の内側。common-verify は便 a が Cargo.toml を置いた後に cargo xtask check へ改める（便 a の write-set）。
+# 値は器の上限（rules 行 runner.allowed_commands）の内側。common-verify は便 a が Cargo.toml を置いた後に cargo run -q -p xtask -- check へ改める（便 a の write-set）。
 schema = 1
 allowed-commands = ["cargo", "git"]
 # push 先の remote の宣言は CI を置くまで書かない（2026-09-27・設計席）: 器の land の終端は push の後に CI の判定を待ち、CI の無い repo では「測れない」で止まって台帳を閉じない（scribe2 contract-source.md §5）。

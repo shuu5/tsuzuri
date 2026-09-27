@@ -20,6 +20,8 @@
 
 - **2 周目（2026-09-27T07:17Z）と訂正**: 直した契約で審査 PASS → Spawned（走行 t3-hub.2-20260927T071750Z・base 374ca31）。**訂正（verified）: 列の 1 周（`pipe dispatch`）と列を見る口（`pipe dispatch ls`）は権能なしの口で、設計席も撃てる**（scribe2 dispatcher.md §5・席が `bash ~/.cache/tsuzuri-admin/dispatch.sh` を撃って `dispatch=started:0,resumed:0,waiting:1`・guard は止めない）。止められたのは `pipe intake` の側で、「dispatch は持ち主か管理席」と書いた上の段と §3 の 2 は読み違い。器に常駐の dispatcher は無く、1 周の契機は 便の終端・手動の 1 周・印の直後 の 3 つだけ（時計の契機は無い）。手動が要るのは 最初の 1 回・審査 FAIL の契約を直した後・host の再起動や driver の死亡の後・列が空の時に bead を足した後。以後は設計席が撃つ。
 
+- **2 周目の結末と 3 周目（2026-09-27T07:20Z〜）**: 2 周目は Gated=FAIL（検証の行 `cargo xtask check` が rc 101 = alias が無い）。原因（verified = 走行の runner.stdout.log）: 実装役の権限の検査が `.cargo/config.toml` を守られた file として書かせない（write-set に在っても）。直し = alias をやめて `cargo run -q -p xtask -- check` の行にした（設計ノート surface-base 第 0.3 版）。学び: 便の write-set に `.cargo/config.toml` のような守られた設定の file を入れない。`.worktrees/` は便 a が .gitignore に足す。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
