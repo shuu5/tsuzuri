@@ -2,7 +2,8 @@
 //! 標準 library だけで書く同期の server で、1 つの process と 1 つの port で動く。1 接続 1 thread。
 //! 台帳は bd の読み取りの口を子 process で撃って読む（§10・便 e-src）。
 //! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
-//! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。POST を受ける口は /api/ruling だけで、
+//! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。束と方針の受付の口は便 e-batch が足す（`batch`・`policy`）。
+//! POST を受ける口は /api/ruling・/api/batch・/api/policy だけで、
 //! ほかの GET でない要求は 405 で何も書かない。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
 //! 同じ時に届いた要求は、台帳の読みと設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
@@ -20,9 +21,12 @@
 //! - GET /api/questions — 問いの一覧（QuestionList）
 //! - GET /api/seat — 席の card（SeatCard）
 //! - POST /api/ruling — 裁定の受付（RulingRequest → RulingResponse か RefusalResponse）
+//! - POST /api/batch — 束の受付（BatchRequest → BatchResponse か RefusalResponse）
+//! - POST /api/policy — 方針の受付（PolicyRequest → PolicyResponse か RefusalResponse）
 //! - GET /api/surface/events — 変化の知らせ（SSE）
 //! - それ以外の GET — 面の file の配布
 
+pub mod batch;
 pub mod board;
 pub mod coalesce;
 pub mod design;
@@ -30,6 +34,7 @@ pub mod events;
 pub mod files;
 pub mod http;
 pub mod ledger;
+pub mod policy;
 pub mod ruling;
 pub mod runs;
 pub mod seat;
@@ -45,7 +50,9 @@ use std::time::Duration;
 
 use tsuzuri_contract::graph::Fold;
 use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_contract::surface::{RefusalResponse, RulingRequest};
+use tsuzuri_contract::surface::{
+    BatchRequest, PolicyRequest, Refusal, RefusalResponse, RulingRequest,
+};
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::around::{AROUND_STEPS, AROUND_STEPS_RANGE};
 
@@ -246,6 +253,8 @@ fn handle(stream: TcpStream, shared: &Shared) {
     let response = match http::read_request(&stream) {
         Err(_) => Response::text(400, "bad-request"),
         Ok(req) if req.method == "POST" && req.path() == ruling::PATH => post_ruling(&req, shared),
+        Ok(req) if req.method == "POST" && req.path() == batch::PATH => post_batch(&req, shared),
+        Ok(req) if req.method == "POST" && req.path() == policy::PATH => post_policy(&req, shared),
         Ok(req) if req.method != "GET" => Response::text(405, "method").header("Allow", "GET"),
         Ok(req) if req.path() == "/api/surface/events" => {
             let _ = events::stream(&stream, &shared.hub);
@@ -352,32 +361,78 @@ fn around(req: &Request, sources: &Sources) -> Response {
     }
 }
 
-/// 裁定の受付（Origin が Host と違えば 403・本文が `http::BODY_MAX` を越えれば 413・読めない本文は 400）。
-/// 断りと 4xx と 5xx は、notes への追記の前なら何も書いていない。
-fn post_ruling(req: &Request, shared: &Shared) -> Response {
+/// POST の口の守り（Origin が Host と違えば 403・本文が `http::BODY_MAX` を越えれば 413・
+/// 契約の型として読めない本文は 400 bad-body）。通れば `decode` で読んだ本文
+/// （境界の crate は serde に直接依存しないので、読みは呼ぶ側が `wire::decode` で渡す）。
+fn guarded<T>(req: &Request, decode: impl FnOnce(&str) -> Option<T>) -> Result<T, Response> {
     if !req.same_origin() {
-        return Response::text(403, "origin");
+        return Err(Response::text(403, "origin"));
     }
     if req.too_large() {
-        return Response::text(413, "too-large");
+        return Err(Response::text(413, "too-large"));
     }
-    let Some(body) = std::str::from_utf8(&req.body)
+    std::str::from_utf8(&req.body)
         .ok()
-        .and_then(|t| wire::decode::<RulingRequest>(t).ok())
-    else {
-        return Response::text(400, "bad-body");
+        .and_then(decode)
+        .ok_or_else(|| Response::text(400, "bad-body"))
+}
+
+/// 断りの応答（状態の code は `Refusal::http_status`・本文は RefusalResponse）。
+fn refusal(reason: Refusal) -> Response {
+    json(
+        reason.http_status(),
+        wire::encode(&RefusalResponse { reason }),
+    )
+}
+
+/// 裁定の受付（守りは `guarded`）。断りと 4xx と 5xx は、notes への追記の前なら何も書いていない。
+fn post_ruling(req: &Request, shared: &Shared) -> Response {
+    let body = match guarded(req, |t| wire::decode::<RulingRequest>(t).ok()) {
+        Ok(body) => body,
+        Err(response) => return response,
     };
     let outcome = ruling::accept(&body, &shared.sources.ledger, &shared.writer, events::now());
     match outcome {
         Outcome::Recorded(response) => json(200, wire::encode(&response)),
-        Outcome::Refused(reason) => json(
-            reason.http_status(),
-            wire::encode(&RefusalResponse { reason }),
-        ),
+        Outcome::Refused(reason) => refusal(reason),
         Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
         Outcome::IdShape => Response::text(500, "ruling-id-shape"),
         Outcome::AppendFailed => Response::text(502, "ledger-append"),
         Outcome::CloseFailed(id) => Response::text(502, &format!("ledger-close {id}")),
+    }
+}
+
+/// 束の受付（守りは `guarded`）。断りと 4xx と 5xx は何も書いていない。
+/// 502 の本文は、2 回とも書き終えた行だけを書いたとして持つ BatchResponse。
+fn post_batch(req: &Request, shared: &Shared) -> Response {
+    let body = match guarded(req, |t| wire::decode::<BatchRequest>(t).ok()) {
+        Ok(body) => body,
+        Err(response) => return response,
+    };
+    match batch::accept(&body, &shared.sources.ledger, &shared.writer, events::now()) {
+        batch::Outcome::Recorded(response) => json(200, wire::encode(&response)),
+        batch::Outcome::Refused(reason) => refusal(reason),
+        batch::Outcome::Duplicate => Response::text(400, "duplicate"),
+        batch::Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
+        batch::Outcome::IdShape => Response::text(500, "ruling-id-shape"),
+        batch::Outcome::WriteFailed(response) => json(502, wire::encode(&response)),
+    }
+}
+
+/// 方針の受付（守りは `guarded`）。断りと 4xx と 5xx は何も書いていない。
+fn post_policy(req: &Request, shared: &Shared) -> Response {
+    let body = match guarded(req, |t| wire::decode::<PolicyRequest>(t).ok()) {
+        Ok(body) => body,
+        Err(response) => return response,
+    };
+    match policy::accept(&body, &shared.sources.ledger, &shared.writer, events::now()) {
+        policy::Outcome::Recorded(response) => json(200, wire::encode(&response)),
+        policy::Outcome::Refused(reason) => refusal(reason),
+        policy::Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
+        policy::Outcome::BadScope => Response::text(400, "scope"),
+        policy::Outcome::NoMemo => Response::text(503, "no-policy-memo"),
+        policy::Outcome::IdShape => Response::text(500, "policy-id-shape"),
+        policy::Outcome::AppendFailed => Response::text(502, "ledger-append"),
     }
 }
 

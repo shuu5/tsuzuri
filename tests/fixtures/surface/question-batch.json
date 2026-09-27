@@ -1,0 +1,8 @@
+[
+{"id":"fx-b","title":"根の epic","description":"束と方針の見本の根","status":"open","priority":1,"issue_type":"epic","created_at":"2026-09-20T01:00:00Z","updated_at":"2026-09-20T01:00:00Z","labels":[]},
+{"id":"fx-b.1","title":"方針","description":"全体への指示を受ける memo","status":"open","priority":2,"issue_type":"task","created_at":"2026-09-21T01:00:00Z","updated_at":"2026-09-21T01:00:00Z","notes":"方針の memo の notes の 1 行","labels":["intake:memo"],"parent":"fx-b"},
+{"id":"fx-b.2","title":"問い — 色の数","description":"概要 = 画面の色を 2 つに減らしてよいか\n技術 = style.css の変数を 5 から 2 へ\n理由 = 見分けの負担を減らす\n推奨 = 減らす","status":"open","priority":1,"issue_type":"task","created_at":"2026-09-25T01:00:00Z","updated_at":"2026-09-25T01:00:00Z","notes":"fx-b.2 の notes の 1 行","labels":["intake:question"],"parent":"fx-b"},
+{"id":"fx-b.3","title":"問い — 字の大きさ","description":"概要 = 本文の字を 1 段大きくしてよいか\n技術 = font-size を 14px から 16px へ\n理由 = 読みやすさ\n推奨 = 大きくする","status":"in_progress","priority":1,"issue_type":"task","created_at":"2026-09-25T02:00:00Z","updated_at":"2026-09-25T02:00:00Z","notes":"fx-b.3 の notes の 1 行","labels":["intake:question"],"parent":"fx-b"},
+{"id":"fx-b.4","title":"問い — 範囲を変える問い","description":"概要 = 範囲を広げてよいか\n推奨 = 広げない","status":"open","priority":1,"issue_type":"task","created_at":"2026-09-25T03:00:00Z","updated_at":"2026-09-25T03:00:00Z","labels":["intake:question","A-1:scope"],"parent":"fx-b"},
+{"id":"fx-b.5","title":"問い — 答えの済んだ問い","description":"概要 = 閉じた問い","status":"closed","priority":1,"issue_type":"task","created_at":"2026-09-24T01:00:00Z","updated_at":"2026-09-24T02:00:00Z","closed_at":"2026-09-24T02:00:00Z","notes":"裁定 id = fx-b.5:20260924T0200Z-1・問い = fx-b.5・逐語 = はい","labels":["intake:question"],"parent":"fx-b"}
+]
