@@ -1,11 +1,11 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
-# 第 0.7 版（2026-09-27）: 非機能要件 NFR3 の字に面の crate の予算の行 R-25 を名指した（器の契約の審査の指摘）。第 0.6 版（2026-09-27）: 非機能要件 NFR3 に面の crate の依存の予算の行 R-25 を結んだ。第 0.5 版（2026-09-27）: 条 P-16 の改訂（判断の記録 ADR-12）の発効に合わせ、制約 CON6 に相談の窓の念入りさと「席の model を下げる変更は判断の記録を要する」を足し、要件 FR19 の根拠に条 P-16 を足した。第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
+# 第 0.8 版（2026-09-28）: 持ち主の裁定を写した（t3-hub.55.2 で要件 FR4 と受入 AC6 の門の近傍を討論の記録 B §11.3 の絞りに改め、t3-hub.55.3 の門を席の設定に入れる時機を FR4 の note に書き、t3-hub.52.16 で FR1 に画面の設定を browser に残すことを、t3-hub.53.8 と t3-hub.53.10 で FR12 に閾値と逼迫の印と account board の部品を、t3-hub.53.9 で FR13 にほかの project の台帳と design-intent を読むことを足し、作らない部品を scope の not_build に足した）。第 0.7 版（2026-09-27）: 非機能要件 NFR3 の字に面の crate の予算の行 R-25 を名指した（器の契約の審査の指摘）。第 0.6 版（2026-09-27）: 非機能要件 NFR3 に面の crate の依存の予算の行 R-25 を結んだ。第 0.5 版（2026-09-27）: 条 P-16 の改訂（判断の記録 ADR-12）の発効に合わせ、制約 CON6 に相談の窓の念入りさと「席の model を下げる変更は判断の記録を要する」を足し、要件 FR19 の根拠に条 P-16 を足した。第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
 meta:
   id: srs
   title: 要件書
-  version: v0.7
+  version: v0.8
   status: draft
-  generated: 2026-09-27
+  generated: 2026-09-28
   approval: []
 
 goals:
@@ -31,6 +31,7 @@ scope:
     - 撤退条件の結線・天井の整合の観点・「仮に変えたら」（v2）
     - 端末側の常駐の agent（ADR-5 決定 (4)）
     - 同じ workspace で型を直に渡す境界（ADR-4 決定 (2)・合流の後の別の判断）
+    - account board の時点のつまみ（過去の時点に戻して見る）と関係の頁（持ち主の裁定 t3-hub.53.10 で作らないと決めた）
 
 actors:
   - {id: owner, name: 持ち主（非エンジニア）, role: 面で答える・決める・方針を書く}
@@ -64,13 +65,14 @@ requirements:
     pattern: ubiquitous
     strength: must
     when: つねに
-    shall: 面は project ごとの project board と器の側の account board の 2 つとし、account board は HOME・session・各 project の 3 つの tab を持つ。project board は account board から名前つきの新しい窓で開き、既に開いていれば前面に出し、「戻る」は自分の窓を閉じて account board へ戻る。
-    plain: 画面は 2 つです。project ごとの画面と、複数の project と口座をまとめて見る画面です。project の画面は新しい窓で開き、「戻る」で窓を閉じて元へ戻ります。
+    shall: 面は project ごとの project board と器の側の account board の 2 つとし、account board は HOME・session・各 project の 3 つの tab を持つ。project board は account board から名前つきの新しい窓で開き、既に開いていれば前面に出し、「戻る」は自分の窓を閉じて account board へ戻る。mode（初心者と経験者）と、account board から開いた窓の一覧と、最初の案内を見終えた印の 3 つは、その browser の保存に残す。これは便利のための写しで正本ではなく、台帳と設計文書と器の値は browser に置かず、保存が消えても面は URL と server の読みから同じ画面を組む。
+    plain: 画面は 2 つです。project ごとの画面と、複数の project と口座をまとめて見る画面です。project の画面は新しい窓で開き、「戻る」で窓を閉じて元へ戻ります。初心者と経験者の切り替えや開いた窓の一覧は、その browser に覚えさせます（消えても画面は元どおり組めます）。
     basis: [P-2]
     verify: {method: test, how: 2 つの窓の名と「戻る」の 3 段（前面・開く・閉じる）を browser の runner で撃つ, ac: [AC9]}
     goals: [GOAL1, GOAL3]
     figures: []
     adrs: [ADR-7]
+    note: 画面の設定（mode・開いた窓の一覧・最初の案内の済み印）をその browser に残すのは持ち主の裁定 t3-hub.52.16（裁定 id = t3-hub.52.16:20260927T2233Z-1）。
   - id: FR2
     title: 導出グラフ（設計文書と設計ノートと台帳と走行を 1 つに結ぶ）
     pattern: event
@@ -100,13 +102,14 @@ requirements:
     pattern: event
     strength: must
     when: 席が問いを台帳に置こうとしたとき
-    shall: 門（PreToolUse の guard）は、問いが touches を 1 つ以上持ち、近傍（根拠と影響の各 1 段）の全節点に処分（touches か not-relevant）が宣言され、束の要約値が今の版と一致するときだけ通す。通さないときは処分の無い id を全部名指す。
-    plain: 席が質問を出すとき、関係する文書や bead を全部見たか（見て「関係ない」と言ったか）を機械が確かめます。見落としがあれば、その id を全部挙げて止めます。
+    shall: 門（PreToolUse の guard）は、問いが touches を 1 つ以上持ち、touches の各節点から根拠と影響の各 1 段の近傍のうち、種類が条・規則行・発効した判断の記録・要件の 4 つの節点（次数が 30 を越える hub は除く）の全部に処分（touches か not-relevant）が宣言され、束の要約値が今の版と一致するときだけ通す。通さないときは処分の無い id を全部名指す。処分の要る節点が 30 を越える問いは「まだ分からない」として通さず、touches を絞った問いに分けさせる。
+    plain: 席が質問を出すとき、関係する決まり・規則・決定・要件を 1 段先まで全部見たか（見て「関係ない」と言ったか）を機械が確かめます。見落としがあれば、その id を全部挙げて止めます。見るものが多すぎる質問は、分けて出し直させます。
     basis: [P-14, P-19]
-    verify: {method: test, how: 処分の無い id が 1 つ在る・全部在る・要約値が古い の 3 通りで allow と deny を見る, ac: [AC6]}
+    verify: {method: test, how: 処分の無い id が 1 つ在る・全部在る・要約値が古い・処分の要る節点が 30 を越える の 4 通りで allow と deny と まだ分からない を見て、hub と 4 種の外の節点が名指されないことを見る, ac: [AC6]}
     goals: [GOAL2]
     figures: []
     adrs: [ADR-7]
+    note: 近傍の絞り（1 段・4 種・hub を除く・処分が 30 を越える問いは まだ分からない）は討論の記録 B の §11.3 の偽陽性の切り方で、持ち主の裁定 t3-hub.55.2（裁定 id = t3-hub.55.2:20260927T2233Z-1）で字を改めた。門は便 f-gate の着地の後に席の設定（PreToolUse・matcher Bash）に入れる（持ち主の裁定 t3-hub.55.3・裁定 id = t3-hub.55.3:20260927T2233Z-1）。
   - id: FR5
     title: 帯と形と地図と近傍の描き方
     pattern: ubiquitous
@@ -200,27 +203,29 @@ requirements:
     pattern: ubiquitous
     strength: must
     when: つねに
-    shall: project の群は今の口座 1 つと候補の集合を持ち、次の移り先は器の doctor と同じ導出の値を写す。席の合図の健康（tick）と停止（heartbeat）は器の 2 つの file を読み、応答なしは tick が stale のときだけ出す。停止の切り替えは器の CLI を撃ち、面は state dir の file を書かない。移動中の席には退避までの残り秒（群の記録の時刻 + 猶予 − 今）を出し、移り先で起こし直した席には出さない。
-    plain: どの口座を使っていて、次はどこへ移るか、席が元気かを見せます。席の元気は器が書く 2 つの file で判じ、画面から器の file を書くことはありません。
+    shall: project の群は今の口座 1 つと候補の集合を持ち、次の移り先は器の doctor と同じ導出の値を写す。席の合図の健康（tick）と停止（heartbeat）は器の 2 つの file を読み、応答なしは tick が stale のときだけ出す。停止の切り替えは器の CLI を撃ち、面は state dir の file を書かない。移動中の席には退避までの残り秒（群の記録の時刻 + 猶予 − 今）を出し、移り先で起こし直した席には出さない。使用量の閾値（窓ごとの cap）と逼迫の印と、移り先の候補が門で落ちた理由は、器の rules 行と event と doctor の値を写して出し、面も server も閾値を持たず判じない。account board は休止中の project の印と、口座ごとの 7 日の使用量の小さな図と測った時刻の列を器の event log から写して出し、過去の時点に戻して見るつまみと仕組みを説明する関係の頁は持たない。
+    plain: どの口座を使っていて、次はどこへ移るか、席が元気かを見せます。席の元気は器が書く 2 つの file で判じ、画面から器の file を書くことはありません。使用量の上限の目安と逼迫の印は器の値をそのまま写します。休止中の project と、口座ごとの 7 日の使い方の小さな図も出します。
     basis: [N-2, N-7]
     verify: {method: test, how: tick が古い・heartbeat-off が在る・move-signal が在る の fixture で状態の語と残り秒を見て、state dir の byte が不変であることを見る, ac: [AC10, AC11]}
     goals: [GOAL3]
     figures: []
     rules: [R-22]
     adrs: [ADR-7]
+    note: 閾値と逼迫の印と候補の断りの理由を写して出すのは持ち主の裁定 t3-hub.53.8（裁定 id = t3-hub.53.8:20260927T2233Z-1）、account board の部品（休止中の印と 7 日の小さな図と測った時刻の列を作り、時点のつまみと関係の頁は作らない）は持ち主の裁定 t3-hub.53.10（裁定 id = t3-hub.53.10:20260927T2233Z-1）。
   - id: FR13
     title: 台帳の指標と未反映の一覧
     pattern: ubiquitous
     strength: must
     when: つねに
-    shall: 台帳の指標は open task・純減（24h と 7d）・closed/日・未反映・burndown・判定（順調・停滞・滞り・積み増し・台帳なし）・memo で、ready / blocked・lead p50・stale・sparkline・epic の進みは「詳しく」に置き、作業中の数と最古は出さない。判定の閾値は rules 行が持つ。design-intent に未反映のもの（昇格先の無い memo・処分の宣言の無い裁定・反映されていない要望）は一覧で出す。
-    plain: 積んである仕事の数と片付く速さと、判定を 1 語で見せます。まだ設計に反映されていない memo や答えは一覧に出します。閾値は規則の表にあり、後から変えられます。
+    shall: 台帳の指標は open task・純減（24h と 7d）・closed/日・未反映・burndown・判定（順調・停滞・滞り・積み増し・台帳なし）・memo で、ready / blocked・lead p50・stale・sparkline・epic の進みは「詳しく」に置き、作業中の数と最古は出さない。判定の閾値は rules 行が持つ。design-intent に未反映のもの（昇格先の無い memo・処分の宣言の無い裁定・反映されていない要望）は一覧で出す。account board は各 project の anchor の台帳と design-intent を読むだけで（書かない）、project ごとに決定待ち（open の問いの数）と未反映の数を出す。
+    plain: 積んである仕事の数と片付く速さと、判定を 1 語で見せます。まだ設計に反映されていない memo や答えは一覧に出します。閾値は規則の表にあり、後から変えられます。複数の project をまとめた画面でも、各 project の決定待ちと未反映の数を読んで出します（読むだけで書きません）。
     basis: [P-19, N-2]
     verify: {method: test, how: 一時の台帳の fixture で判定の 5 値と未反映の 3 種の数を見る, ac: [AC12]}
     goals: [GOAL2, GOAL3]
     figures: []
     rules: [R-18]
     adrs: [ADR-7]
+    note: ほかの project の台帳と design-intent を読むのは持ち主の裁定 t3-hub.53.9（裁定 id = t3-hub.53.9:20260927T2233Z-1）。
   - id: FR14
     title: 語彙と文の予算と hover の規則
     pattern: ubiquitous
@@ -354,7 +359,7 @@ acceptance:
   - {id: AC3, title: 見た版が古い要求は 409 で何も書かず、取り消しは前の id を名指して問いを open に戻す, plain: 古い画面から答えると何も書かずに断られる。取り消しは消さずに書き足して質問を開き直す。, verifies: [FR7], red_test: {sentence: 版の要約値を 1 字変えた要求で 409 と byte の一致を見て、取り消しの行で open に戻ることを見る, fixture: tests/fixtures/surface/stale-version.yaml}}
   - {id: AC4, title: 子 619 の hub を持つ fixture で近傍 2 段が hub を展開せず cut の理由と総数を出し、光る節点は 20 以下, plain: つながりが 619 本ある大きな bead を開いても、画面は全部を広げず「619 本・畳んだ」と出す。, verifies: [FR2, FR5], red_test: {sentence: hub の fixture で around 2 段の snapshot が一致し光る節点が 20 以下, fixture: tests/fixtures/graph/hub-619/}}
   - {id: AC5, title: accepted の ADR の裁定が台帳に無ければ tz graph --check が id と次の 1 手を名指して落ち、台帳が読めなければ「まだ分からない」で合格にしない, plain: 承認済みのはずの記録に台帳の裏付けが無いと、機械がその記録の番号を挙げて止まる。台帳が読めないときは「合格」と言わない。, verifies: [FR3], red_test: {sentence: 裁定の行を 1 つ消した fixture で違反 1 と id を見て、台帳の無い fixture で 2 を見る, fixture: tests/fixtures/graph/unruled/}}
-  - {id: AC6, title: 問いの起票 3 通り（処分の無い id が 1 つ在れば deny してその id を列挙・全部処分すれば allow・束の要約値が古ければ deny）, plain: 見落としがあれば止まり、全部見ていれば通り、画面が古ければ止まる。, verifies: [FR4], red_test: {sentence: 3 つの fixture で allow と deny と名指しの id の列を見る, fixture: tests/fixtures/guard/question-3/}}
+  - {id: AC6, title: 問いの起票 4 通り（1 段の近傍の 4 種の節点のうち hub を除く節点に処分の無い id が 1 つ在れば deny してその id を列挙・全部処分すれば allow・束の要約値が古ければ deny・処分の要る節点が 30 を越えれば まだ分からない で断る）, plain: 見落としがあれば止まり、全部見ていれば通り、画面が古ければ止まり、見るものが多すぎれば分けるよう求めて止まる。, verifies: [FR4], red_test: {sentence: 4 つの fixture で allow と deny と まだ分からない と名指しの id の列を見て、hub と 4 種の外の節点が名指されないことを見る, fixture: tests/fixtures/guard/question-4/}}
   - {id: AC7, title: 5 回やり直した契約 bead の fixture で走行の節点が 5 つ・走行から契約 bead への辺が 5 本・板には最新の段だけが 1 札で出て、Questioned の走行に問いが無ければ不変条件の 12 本目が名指す, plain: 5 回やり直した便は 5 本の走行として残り、板には最新の 1 枚だけが出る。質問中なのに質問が無ければ機械が名指す。, verifies: [FR3, FR10], red_test: {sentence: 走行 5 本の fixture と問いの無い Questioned の fixture で節点の数と札の数と違反の id を見る, fixture: tests/fixtures/graph/runs-5/}}
   - {id: AC8, title: state dir が読めない fixture で走行の種類だけ「まだ分からない」と出て設計と台帳の節点は組める, plain: 器の記録が読めなくても、文書と台帳の図は出て、走行のところだけ「まだ分からない」と出る。, verifies: [FR2], red_test: {sentence: state dir を欠いた fixture で走行の種類の判定と他の種類の節点の数を見る, fixture: tests/fixtures/graph/no-state/}}
   - {id: AC9, title: 面の受入 12 条が全画面 × 2 幅 × 2 mode で違反 0, plain: 画面の崩れや長すぎる説明が 1 つも無いことを機械が数えて見せる。, verifies: [FR1, FR5, FR11, FR14, NFR1, NFR3], red_test: {sentence: 1 画面に 1 字のはみ出しを仕込んだ fixture で違反 1 が出て、現物で 0 になる, fixture: tests/fixtures/surface/accept-12/}}
