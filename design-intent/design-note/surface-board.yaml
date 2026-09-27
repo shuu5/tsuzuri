@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.8
+  version: v0.9
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。
 
 sections:
   - n: 1
@@ -163,6 +163,24 @@ sections:
         size: L
         done: (1) 種類から帯への対応は閉じた表で、契約の型の節点の種類の 20 個の全部が 7 つの帯のちょうど 1 つに当たり、種類から語の鍵への対応も 20 個の全部を持つ (2) fixture の電文で、圧縮の面の帯の順（constitution・rules・ADR・SRS・design-note・beads・pipeline）と、帯ごとの札の id の並びが期待と一致し、beads の帯は種類の 7 行に分かれる (3) 読めなかった出所の帯は 0 件でなく測れていないを出し、読めて 0 件の帯は 0 件の帯を出す (4) 一覧の面の絞り（帯・種類・種類の組）と並べ替え（id・状態）の結果の id の並びが期待と一致する (5) 表の面の行列の数が fixture の辺から数えた期待と一致し、cell が持つ種類の組で一覧の面が絞られる (6) 面の切り替えと絞りと並べ替えが URL の query（view・band・kind・sort・pair）に残り、知らない view の値は圧縮の面になる (7) 圧縮と一覧の全部の札と行に節点の id が出る (8) グラフの面と近傍の module は、この便では測れていないと理由の 1 行を返す (9) 着地済みの関数の外形（BLOCK・口の path の定数・Body<()> を返す body の名と引数と返りの型）を変えず、本文が電文の型として読めないときは測れていないを返し、足す外の依存は 0 本
         depends: [g-parts]
+      - id: g-seat
+        title: block「orchestrator と口座」の中身（状態の記号・から・合図の健康・稼働の記録・登録の口座と群・窓ごとの割合・状態の帯・口座の履歴）
+        req: [FR12, FR14, NFR2]
+        section: "15"
+        write-set: ["crates/tsuzuri-surface/src/project/seat.rs", "+crates/tsuzuri-surface/tests/seatblock.rs", "+tests/fixtures/surface/seat-card.json"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail seatblock_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) fixture の席の card の 5 組（run・wait・limit・silent・unknown）で、状態の記号の class と語の鍵と「から」の時刻の字が期待と一致する (2) 稼働の記録は幅の 3 つ（24h・6h・3h）で区間の矩形の位置と幅が期待と一致し、口座の移動は縦線になり、幅の選びが URL の query の span に残る (3) 窓ごとの割合は、使った割合と戻るまでの字を出し、数えない窓は薄く出し、割合が 100 以上の棒と 80 を超える棒に別の class を付ける (4) 状態の帯は、限度のときと、登録の口座が群の今の口座と違うときだけ出し、平時は出さない (5) 口座の履歴は新しい順で、見出しに件数を出す (6) 電文の欄のうち「まだ分からない」の部分は、その部分だけ 0 や空でなく測れていないを出し、読めた部分は出す (7) 口が読めないかまだ読んでいないときは block の全体が測れていないと理由の 1 行になる (8) 着地済みの関数の外形（BLOCK・口の path の定数・Body<()> を返す body の名と引数と返りの型）を変えず、本文が電文の型として読めないときは測れていないを返し、足す外の依存は 0 本
+        depends: [g-parts]
+      - id: g-ask
+        title: 問いの頁と問いの card（題・概要・理由・推奨・答えの欄・つながり・答えを送る・これまでの決定）
+        req: [FR6, FR14, NFR2]
+        section: "16"
+        write-set: ["crates/tsuzuri-surface/src/frame.rs", "crates/tsuzuri-surface/src/board.rs", "crates/tsuzuri-surface/src/net.rs", "crates/tsuzuri-surface/src/project/mod.rs", "crates/tsuzuri-surface/src/project/ask.rs", "+crates/tsuzuri-surface/src/project/askpage.rs", "crates/tsuzuri-surface/tests/frame.rs", "crates/tsuzuri-surface/tests/snapshots/frame.json", "+crates/tsuzuri-surface/tests/askcard.rs", "+tests/fixtures/surface/question-list.json"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail askcard_", "cargo nextest run -p tsuzuri-surface --no-tests=fail frame_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 頁の枠の値に問いの頁（id は ask）が足され、block の id は qlist と hist の 2 つでこの順になり、snapshot の file と 1 字も違わない (2) card の部分の順が、題・概要（非エンジニア向けとエンジニア向け）・理由・推奨・答えの欄・つながりで、fixture の 2 本の card の字が期待と一致し、概要の無い card は「要約なし」を出す (3) 送る button は、答えの欄が空白だけのときと送っている間は押せない (4) 送った後の card の状態は応答で決まり、200 は記録した id と時刻、409 は読み直しの知らせ、ほかの断りは理由の字で、200 の外では答えの欄の字が残る (5) 要求の本文は契約の型の RulingRequest で、見た版の要約値は card の digest の字をそのまま入れる (6) home の block「問いの一覧」は口 /api/questions の card を古い順に出し、1 本ずつ問いの頁の card への link を持つ (7) A-1 の印を持つ card は印を出す (8) 口が読めないかまだ読んでいないときは 0 件でなく測れていないと理由の 1 行を出し、読めて 0 本なら 0 件の 1 行を出す (9) 足す外の依存は 0 本
+        depends: [g-parts]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -259,6 +277,37 @@ sections:
       在りか。節点の種類の型 NodeKind（20 個・ALL の定数）と辺の型 EdgeType と節点と辺の型（GraphNode・GraphEdge）と題を 36 字で切る関数 title36 は、契約の型の crate の graph の module に着地済み。語の鍵 map・views・bands・matrix・view_compact・view_list・view_graph・view_table・col_band・col_kind・col_id・col_state・sort・st_unknown と、「b:」の 7 つと「k:」の 27 個は語の辞書に在る。class の tabs・band・band-constitution・band-rules・band-adr・band-srs・band-design-note・band-beads・band-pipeline・art7・kids・tag・tid・tt・subh・cards7・filters・items・rows・rowb・nid・ttl・meta・bchip・gist・none・mx・mxwrap・mxlist・pair・pairnote・path・bn・shape・empty は stylesheet に在る。語の辞書（crates/tsuzuri-surface/vocab.json）と stylesheet（crates/tsuzuri-surface/style.css）は着地済みで、この便は触らない。使う語の鍵と class は全部そこに在るものだけにする。
       着地済みの関数の外形は変えない。変えないのは、BLOCK の値・口の path の定数・読みの結果を受けて Body<()> を返す関数（body）の名と引数と返りの型。枠の歯（tests/frame.rs）はこの関数を呼んでいて、この便の write-set の外に在るので、そのまま通す（本文が電文の型として読めないとき、この関数は測れていないを返す）。中身を返す関数は別の名で足す。並べ方と絞りと数え方は純粋な関数にして host の cargo test で pin し、DOM は wasm の target のときだけ組み立てる。
       fixture は小さくする（節点 40 個以下・辺 60 本以下）。
+
+  - n: 15
+    type: prose
+    title: 便 g-seat — block「orchestrator と口座」の中身
+    body: |
+      block「orchestrator と口座」の中身を置く。見本は docs/design/mock3/index.html の orch の block（renderSeat・lowHTML・bandHTML・histHTML）と、docs/design/mock3/ui.js の stripSVG・stIcon・tkhbHTML と、docs/design/mock3/acct.js の meter。書くのは自分の module の file と、自分の歯の file と、fixture の 1 つだけ。
+      data は口 /api/seat から読む（契約の型の SeatCard・便 b-cards が足す電文なので、この便は便 b-cards の着地の後に起こす）。状態の判定は server の側が済ませていて、面は写すだけにする。口は server にまだ無いので（後の便が足す）、着地の直後の画面は測れていないを出す。
+      電文の形。SeatCard の欄は、at・target・state（閉じた 5 値 run・wait・limit・silent・unknown）・since・tick_healthy・heartbeat・account・model・group（群の名と今の口座と候補と次の移り先）・usage（窓ごとの 1 行の列で、1 行は window・used_pct・resets_at・counted）・spans（区間の列で、1 行は from・to・state）・moves（移動の列で、1 行は at・from・to）。tick_healthy・heartbeat・group・usage・spans・moves は、読めたか「まだ分からない」かを持つ。
+      上段（class orow）。左は大きい状態の記号と語（class big・語の class は state stlabel st-<値>・語の鍵は st_run・st_wait・st_limit・st_silent・st_unknown）と、「から」の時刻（語の鍵 since・時刻は時と分と Z）。その下に合図の行（class tkrow）で、tick の健康（語の鍵 tick_health・読めて健康なら ✓・健康でなければ !）と heartbeat（語の鍵 heartbeat・on か off）を出す。停止の切り替えの button は出さない（書く口は後の便）。
+      右は稼働の記録（class strip・語の鍵 history）。幅は 24h・6h・3h の 3 つで、選びは URL の query の span に残す（無いか知らない値は 24h）。帯は SVG で、横の幅は 288、区間ごとに矩形を置く。矩形の左端は（区間の始まり − 窓の始まり）÷ 窓の長さ × 288、幅は区間の長さ ÷ 窓の長さ × 288（1 未満は 1）で、窓の外にはみ出す区間は窓の端で切る。窓の右端は電文の at。口座の移動は、その時刻の位置に縦線を置く。過去の時点を見るつまみは後の便が足す。
+      下段（class olow）。登録の口座（語の鍵 reg_account）と群の名（語の鍵 group）を出す。窓ごとの割合（class usage と wrow と meter）は、窓の名・棒・使った割合・戻るまでの字（戻る時刻 − at を、60 分未満は分の数と m、24 時間未満は時間の数と h、それ以上は日の数と d・戻る時刻が無ければ「―」）。棒の class は、割合が 100 以上なら w100、80 を超えれば w80。数えない窓（counted が偽）は薄く出す。
+      状態の帯は平時には出さない。出すのは 2 つの場合で、状態が limit のときは「限度で止まっている」、登録の口座が群の今の口座と違うときは「移動待ち」と 2 つの口座の名。群の次の移り先が在れば、その名も出す。
+      口座の履歴は畳める段（class fold ahistd・語の鍵 acct_hist）で、最初は閉じている。見出しに件数、中は新しい順。「詳しく」（class gmore）の中に、席の名と、群の今の口座と登録の口座が同じかの印を出す。
+      電文の中の「まだ分からない」の部分は、その部分だけ測れていないの記号を出し、読めた部分は出す（0 や空の字で埋めない）。口が読めないとき・まだ読んでいないとき・本文が電文の型として読めないときは、block の全体が測れていないの印と理由の 1 行になる（要件 NFR2）。
+      在りか。語の辞書（crates/tsuzuri-surface/vocab.json）と stylesheet（crates/tsuzuri-surface/style.css）は着地済みで、この便は触らない。class の名は見本の字のまま使い、語の鍵は語の辞書に在るものだけを使う。測れていないの印と理由の 1 行は、面の crate の project の module の部品（Body の Unmeasured・unmeasured・語の鍵 st_unknown）を使う。状態の記号の部品（state_icon・state_class・state_key）は面の crate の project の module に着地済み。
+      着地済みの関数の外形は変えない。変えないのは、BLOCK の値・口の path の定数・読みの結果を受けて Body<()> を返す関数（body）の名と引数と返りの型。枠の歯（tests/frame.rs）はこの関数を呼んでいて、この便の write-set の外に在るので、そのまま通す。中身を返す関数は別の名で足す。字と座標の関数は純粋な関数にして host の cargo test で pin し、DOM は wasm の target のときだけ組み立てる。
+  - n: 16
+    type: prose
+    title: 便 g-ask — 問いの頁と問いの card
+    body: |
+      持ち主が問いを読んで答える頁を置く。見本は docs/design/mock3/ask.html の qcard と、これまでの決定の段。束の承認と方針の欄（見本の右の列）は後の便が足すので、この便は出さない。
+      data は口 /api/questions から読む（契約の型の QuestionList・便 b-cards が足す電文なので、この便は便 b-cards の着地の後に起こす）。答えは口 /api/ruling へ POST で送る（server の口は便 e-ask が足す。着地までは口が読めないので、画面は測れていないを出す）。これまでの決定は台帳の一覧（/api/ledger・着地済み）から、label intake:question を持つ closed の bead を id の自然な順に出す。
+      電文の形。QuestionCard の欄は、id・title・posted_at・plain（非エンジニア向けの概要）・eng（エンジニア向けの概要）・reason（理由）・recommend（推奨）・a1（A-1 の印）・touches（名指した節点の id の列）・digest（見た版の要約値）。plain・eng・reason・recommend は無いことが在る。QuestionList の欄は cards（読めた card の列か「まだ分からない」）。要求は RulingRequest（question・seen_digest・verbatim）、応答は RulingResponse（ruling・recorded_at）。
+      頁の枠。頁を 1 つ足す。頁の id は ask で、URL の query の page=ask で開く。block は 2 つで、qlist（見出しの語の鍵 ask_open・問いの card の列）と hist（見出しの語の鍵 rulings・これまでの決定・畳める段）。頁の題の語の鍵は questions。頁の枠の値と snapshot の file と枠の歯（block と module の対応の表）に、この頁と 2 つの block を足す。中身は新しい module（project の下の askpage）に置く。header の頁の link は増やさない（問いの頁へは home の block から入る）。
+      card（class qcard）の部分の順は、題・概要・理由・推奨・答えの欄・つながり。頭（class head）に、番号・題（36 字で切る）・A-1 の印（語の鍵 a1・印を持つ card だけ）・置かれてからの経過。概要（class qsum）は 2 行で、非エンジニア向け（語の鍵 summary_plain）とエンジニア向け（語の鍵 summary_eng）。片方だけ無ければ「―」、両方無ければ「要約なし」の 1 行。理由（class qreason・語の鍵 reason）はつねに出す。推奨（class rec・語の鍵 recommend）。答えの欄（class answer）は、字の欄（語の鍵 own_words）と送る button（語の鍵 ruling）。つながり（語の鍵 around）は畳める段で、最初は閉じていて、見出しに名指した節点の数（語の鍵 touches）を出し、中は節点の id の一覧（近傍の図は後の便）。
+      送る。button は、答えの欄が空白だけのときと、送っている間は押せない。字の変換の途中（IME）の Enter は何もしない。Ctrl か Meta と Enter で送る。要求の見た版の要約値には、card の digest の字をそのまま入れる。応答が 200 なら、card に記録した id と時刻を出し、答えの欄を閉じ、問いの一覧を読み直す。409 なら「質問が更新された」と出して一覧を読み直し、答えの欄の字は残す。ほかの 4xx と 5xx と届かないときは、理由の字（断りの応答の理由か、状態の数）を出し、答えの欄の字は残す。持ち主の字は、送る要求の本文の外には書かない（URL にも、画面の外の保存の場所にも残さない）。
+      home の block「問いの一覧」（module は ask）は、台帳の一覧の読みをやめて、口 /api/questions の card を古い順に番号つきで出し、1 本ずつ問いの頁のその card への link（page=ask と card の番号の目印）を持つ。件数の chip はそのまま。問いの見分けは server の側（label intake:question）に寄せ、面は bd の種類で選ばない。
+      読めて 0 本なら 0 件の 1 行を出す。口が読めないとき・まだ読んでいないとき・本文が電文の型として読めないときは、0 件でなく測れていないの印と理由の 1 行を出す（要件 NFR2）。
+      通信の module に、本文つきの POST を送って状態の数と本文の字を返す関数を 1 つ足す（面の crate の net・着地済みの読みの関数は変えない）。
+      在りか。語の辞書（crates/tsuzuri-surface/vocab.json）と stylesheet（crates/tsuzuri-surface/style.css）は着地済みで、この便は触らない。class の名は見本の字のまま使い、語の鍵は語の辞書に在るものだけを使う。測れていないの印と理由の 1 行は、面の crate の project の module の部品（Body の Unmeasured・unmeasured・語の鍵 st_unknown）を使う。頁の枠の値と頁の id の型は面の crate の frame の module、頁を描く所と block から module を選ぶ所は board の module、block の共通の部品は project の module に着地済み。枠の歯と snapshot は crates/tsuzuri-surface/tests/frame.rs と tests/snapshots/frame.json。class の qcard・head・qsum・qreason・rec・answer・btn・primary・warn・fold・items は stylesheet に在る。
+      card の中身と送る button の状態と、応答から card の状態を決める関数は純粋な関数にして host の cargo test で pin し、DOM と通信は wasm の target のときだけ組み立てる。
 
 figures: []
 sources:
