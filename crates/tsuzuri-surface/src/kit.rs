@@ -4,8 +4,10 @@
 
 use std::collections::BTreeMap;
 
+use tsuzuri_contract::graph::GraphDoc;
 use tsuzuri_contract::ledger::LedgerRow;
 
+use crate::mapview;
 use crate::view::{self, Fetched, QUESTION_KIND};
 
 /// block の中身（測れていない・0 件・中身あり）。0 件と測れていないを分ける（要件 NFR2）。
@@ -71,6 +73,19 @@ pub fn item(row: &LedgerRow) -> Item {
         title: row.title.clone(),
         aside: format!("{} {} · {}", mark.glyph, mark.word, row.kind),
     }
+}
+
+/// 電文の節点を一覧の 1 項にする（印と問いの赤は眺めと同じ・右の字は空・節点に無い id は None）。
+/// 表示の印と題を id で引くだけで、判定は数えない。
+pub fn node_item(doc: &GraphDoc, id: &str) -> Option<Item> {
+    let node = doc.nodes.iter().find(|n| n.id == id)?;
+    Some(Item {
+        shape: mapview::shape_class(doc, node),
+        alert: mapview::open_question(doc, node),
+        id: node.id.clone(),
+        title: node.title.clone(),
+        aside: String::new(),
+    })
 }
 
 /// 台帳の一覧の口が読めないときの理由。
@@ -154,9 +169,9 @@ mod dom {
     use leptos::prelude::*;
 
     use super::{ALERT_STYLE, Body, Folds, Item, UNKNOWN, state_class, state_key};
-    use crate::frame::Block;
+    use crate::frame::{Block, Mode, node_href};
     use crate::vocab::label;
-    use crate::widgets::help::h2;
+    use crate::widgets::help::{HelpCtx, h2};
 
     thread_local! {
         /// 畳める段の開き閉じの記録（頁の一生の間だけ）。
@@ -233,7 +248,14 @@ mod dom {
         }
     }
 
-    /// 一覧の 1 項（`lead` は印の代わりに置く番号など・None なら印）。
+    /// 今の mode を返す関数（context が無ければ今の URL の query から・link に mode を残す）。
+    fn mode_of() -> impl Fn() -> Mode + Copy + Send + Sync + 'static {
+        let ctx = use_context::<HelpCtx>();
+        let url = Mode::from_query(&window().location().search().unwrap_or_default());
+        move || ctx.map_or(url, |c| c.mode.get())
+    }
+
+    /// 一覧の 1 項（`lead` は印の代わりに置く番号など・None なら印）。題は節点の頁への link。
     pub fn item_view(item: &Item, number: Option<usize>) -> AnyView {
         let lead = match number {
             Some(n) => view! { <span class="nb">{n}</span> }.into_any(),
@@ -243,10 +265,13 @@ mod dom {
                     .into_any()
             }
         };
+        let mode = mode_of();
+        let id = item.id.clone();
+        let href = move || node_href(&id, mode());
         view! {
             <li>
                 {lead}
-                <span class="ttl"><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></span>
+                <a class="ttl" href=href><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
                 <span class="aside">{item.aside.clone()}</span>
             </li>
         }

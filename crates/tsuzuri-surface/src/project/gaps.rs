@@ -3,10 +3,12 @@
 //! 札の数・一覧の並び・段が最初に開いているか・名の表・20 件の切り方は純粋な関数にして host で試し、
 //! DOM は wasm の target のときだけ、この値を順にたどって組み立てる。
 
+use std::collections::BTreeMap;
+
 use tsuzuri_contract::graph::{GraphDoc, InvariantCheck, Verdict};
 use tsuzuri_contract::wire;
 
-use super::{Body, NOT_READ};
+use super::{Body, Item, NOT_READ, node_item};
 use crate::frame::Block;
 use crate::view::Fetched;
 
@@ -164,33 +166,46 @@ pub fn rows(checks: &[InvariantCheck]) -> Vec<Row> {
         .collect()
 }
 
-/// 頁の中身（札と一覧）。
+/// 頁の中身（札と一覧と、名指しの id のうち電文の節点に在るものの一覧の 1 項）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gaps {
     pub tiles: Vec<Tile>,
     pub rows: Vec<Row>,
+    pub found: BTreeMap<String, Item>,
 }
 
-/// 口の本文を判定の列に読む（まだ読んでいない・読めない・電文の型として読めないは理由）。
-pub fn checks(fetched: &Fetched) -> Result<Vec<InvariantCheck>, &'static str> {
+/// 口の本文を電文に読む（まだ読んでいない・読めない・電文の型として読めないは理由）。
+fn doc(fetched: &Fetched) -> Result<GraphDoc, &'static str> {
     match fetched {
         Fetched::NotRead => Err(NOT_READ),
         Fetched::Failed => Err(REASON),
-        Fetched::Body(text) => wire::decode::<GraphDoc>(text)
-            .map(|d| d.invariants)
-            .map_err(|_| UNREADABLE),
+        Fetched::Body(text) => wire::decode::<GraphDoc>(text).map_err(|_| UNREADABLE),
     }
+}
+
+/// 口の本文を判定の列に読む（理由は電文に読むときと同じ）。
+pub fn checks(fetched: &Fetched) -> Result<Vec<InvariantCheck>, &'static str> {
+    doc(fetched).map(|d| d.invariants)
 }
 
 /// 頁の中身（測れていない・0 本・札と一覧）。測れていないときは合格と出さない（要件 NFR2）。
 pub fn body(fetched: &Fetched) -> Body<Gaps> {
-    match checks(fetched) {
+    match doc(fetched) {
         Err(reason) => Body::Unmeasured(reason),
-        Ok(checks) if checks.is_empty() => Body::Empty(EMPTY),
-        Ok(checks) => Body::Filled(Gaps {
-            tiles: tiles(&checks),
-            rows: rows(&checks),
-        }),
+        Ok(d) if d.invariants.is_empty() => Body::Empty(EMPTY),
+        Ok(d) => {
+            let rows = rows(&d.invariants);
+            let found = rows
+                .iter()
+                .flat_map(|r| &r.named)
+                .filter_map(|id| node_item(&d, id).map(|item| (id.clone(), item)))
+                .collect();
+            Body::Filled(Gaps {
+                tiles: tiles(&d.invariants),
+                rows,
+                found,
+            })
+        }
     }
 }
 
@@ -203,10 +218,12 @@ pub fn view() -> leptos::prelude::AnyView {
 /// 抜けの検査の頁の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use std::collections::BTreeMap;
+
     use leptos::prelude::*;
 
-    use super::{BLOCK, Body, Gaps, Row, Tile, body, mark_class};
-    use crate::project::{body_view, fold, map, unmeasured};
+    use super::{BLOCK, Body, Gaps, Item, Row, Tile, body, mark_class};
+    use crate::project::{body_view, fold, item_view, map, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{h1, hs};
 
@@ -221,13 +238,18 @@ mod dom {
         .into_any()
     }
 
-    fn row_view(r: Row) -> AnyView {
+    fn row_view(r: Row, found: &BTreeMap<String, Item>) -> AnyView {
         // 名指しか残りの数が在るときだけ一覧を出す。
         let has_list = !r.named.is_empty() || r.more.is_some();
+        // 電文の節点に在る id は節点の頁への link・無い id は頁が無いので字だけ。
         let named = r
             .named
             .into_iter()
-            .map(|id| view! { <li><span class="ttl"><span class="nid">{id}</span></span></li> })
+            .map(|id| match found.get(&id) {
+                Some(item) => item_view(item, None),
+                None => view! { <li><span class="ttl"><span class="nid">{id}</span></span></li> }
+                    .into_any(),
+            })
             .collect_view();
         let more = r.more.map(|n| {
             view! { <li><span class="gi unknown" aria-hidden="true">"+"</span><span class="ttl num">{n}</span></li> }
@@ -253,8 +275,13 @@ mod dom {
     }
 
     fn filled(g: Gaps) -> AnyView {
-        let tiles = g.tiles.into_iter().map(tile_view).collect_view();
-        let rows = g.rows.into_iter().map(row_view).collect_view().into_any();
+        let Gaps { tiles, rows, found } = g;
+        let tiles = tiles.into_iter().map(tile_view).collect_view();
+        let rows = rows
+            .into_iter()
+            .map(|r| row_view(r, &found))
+            .collect_view()
+            .into_any();
         view! {
             <div class="gtiles">{tiles}</div>
             {panel(rows)}
