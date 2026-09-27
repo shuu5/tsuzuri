@@ -1,13 +1,15 @@
-# 設計ノート surface-base — 面の便の土台（便 a〜f）。判断の記録 ADR-3・ADR-4・ADR-7・ADR-8 の実装の便。要件は srs.yaml。
+# 設計ノート surface-base — （発効 2026-09-27・持ち主の裁定 user 2026-09-27T03:19Z・記帳先 = t3-hub.1 notes）面の便の土台（便 a〜f）。判断の記録 ADR-3・ADR-4・ADR-7・ADR-8 の実装の便。要件は srs.yaml。
 # 契約表の行は器（scribe2）が読む導出物 contracts/surface-base.toml に写る（folio derive --dir design-intent --out ../contracts --write）。便の契約 bead の pointer は design = contracts/surface-base.toml#<行 id>。
 meta:
   id: surface-base
   title: 面の便（土台）— workspace の骨格・契約の型・導出グラフ・台帳の指標・面の server・席の hook
   version: v0.1
-  status: draft
+  status: effective
   generated: 2026-09-27
   profile: design-note
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。発効は持ち主の承認で行う。
+  approval:
+    - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。
 
 sections:
   - n: 1
