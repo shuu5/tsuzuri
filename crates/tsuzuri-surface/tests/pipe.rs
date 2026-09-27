@@ -3,12 +3,13 @@
 
 use std::path::PathBuf;
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Reading, Stage};
 use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::pipeline::{
     self, Column, LANES, Lead, NO_AGE, RUN_KEY, SHOW, SOURCE, UNKNOWN_REASON, age, cards, columns,
-    content, open_columns, title_of, with_open,
+    content, kcard, landed_today, open_columns, title_of, with_open,
 };
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
@@ -70,8 +71,19 @@ fn ledger_body() -> Fetched {
     )
 }
 
+/// 描く時の今（UTC の日の正午・fixture の経過の在る着地の札は全部が今日に入る）。
+const NOW: EpochSecs = 1_790_510_400;
+
+/// px.11 の札（経過の無い着地・今日の着地に入らないので板の列には出ない）。
+fn px11() -> PipelineCard {
+    fixture_cards()
+        .into_iter()
+        .find(|c| c.contract.as_str() == "px.11")
+        .expect("fixture の px.11")
+}
+
 fn filled() -> Vec<Column> {
-    match content(&Fetched::Body(fixture_text()), &ledger_body()) {
+    match content(&Fetched::Body(fixture_text()), &ledger_body(), NOW) {
         Body::Filled(cols) => cols,
         other => panic!("fixture の板が中身を出さない: {other:?}"),
     }
@@ -116,12 +128,12 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
             vec!["px.2", "px.1"],
             vec!["px.4", "px.3"],
             vec!["px.7", "px.5", "px.6"],
-            vec!["px.12", "px.9", "px.10", "px.8", "px.11"],
+            vec!["px.12", "px.9", "px.10", "px.8"],
         ]
     );
-    // 見出しの横の数は列の札の全部。
+    // 見出しの横の数は列の札の全部（Landed の列は今日の着地だけ・経過の無い px.11 は入らない）。
     let counts: Vec<usize> = cols.iter().map(|c| c.cards.len()).collect();
-    assert_eq!(counts, vec![2, 2, 3, 5]);
+    assert_eq!(counts, vec![2, 2, 3, 4]);
     // 状態の記号: 待ち・動いている・止まった（待ちの記号）・取り込み（記号でなく取り込みの印）。
     let states: Vec<Option<&str>> = cols.iter().map(|c| c.cards[0].state).collect();
     assert_eq!(states, vec![Some("wait"), Some("run"), Some("wait"), None]);
@@ -134,8 +146,8 @@ fn pipe_more_button_and_open_column_in_url() {
     let cols = filled();
     let land = &cols[3];
     assert_eq!(ids(land, false), vec!["px.12", "px.9", "px.10"]);
-    assert_eq!(land.more(false), Some(2));
-    assert_eq!(ids(land, true).len(), 5);
+    assert_eq!(land.more(false), Some(1));
+    assert_eq!(ids(land, true).len(), 4);
     assert_eq!(land.more(true), None);
     // ちょうど 3 枚の列は「+n」を出さない。
     let stop = &cols[2];
@@ -188,7 +200,7 @@ fn pipe_titles_from_ledger_cut_to_36() {
 
     // 台帳の一覧の口が読めなければ、札は全部 id だけ（板は測れていないにしない）。
     for ledger in [Fetched::NotRead, Fetched::Failed] {
-        let Body::Filled(cols) = content(&Fetched::Body(fixture_text()), &ledger) else {
+        let Body::Filled(cols) = content(&Fetched::Body(fixture_text()), &ledger, NOW) else {
             panic!("台帳が読めないと板が中身を出さない");
         };
         assert!(
@@ -206,7 +218,7 @@ fn pipe_titles_from_ledger_cut_to_36() {
     assert_eq!(find("px.9").lead, Lead::Runs(2));
     assert_eq!(find("px.5").class, "kcard why-stop");
     assert_eq!(find("px.1").class, "kcard");
-    assert_eq!(find("px.11").age, NO_AGE);
+    assert_eq!(kcard(&px11(), &rows).age, NO_AGE);
 }
 
 /// (4) 読めて 0 枚なら 0 件の帯（run の語と 0）と空の 4 列・まだ分からない・読めない・まだ読んでいないは測れていない。
@@ -225,9 +237,11 @@ fn pipe_empty_band_and_unmeasured() {
         pipeline::body(&Fetched::Body(empty.clone())),
         Body::Empty(RUN_KEY)
     );
-    assert!(matches!(content(&Fetched::Body(empty), &ledger), Body::Empty(k) if k == RUN_KEY));
+    assert!(
+        matches!(content(&Fetched::Body(empty), &ledger, NOW), Body::Empty(k) if k == RUN_KEY)
+    );
     assert_eq!(vocab().label(RUN_KEY), "run");
-    let blank = columns(&[], &[]);
+    let blank = columns(&[], &[], NOW);
     assert_eq!(blank.len(), 4);
     assert!(
         blank
@@ -258,7 +272,7 @@ fn pipe_empty_band_and_unmeasured() {
             "{fetched:?}"
         );
         assert_eq!(
-            content(&fetched, &ledger),
+            content(&fetched, &ledger, NOW),
             Body::Unmeasured(want),
             "{fetched:?}"
         );
@@ -313,7 +327,7 @@ fn pipe_hover_card_rows() {
         ["px.3", "run · Running", "↻1 · acct-4 · 2h", SOURCE].map(str::to_string)
     );
     assert_eq!(
-        hover("px.11"),
+        kcard(&px11(), &ledger_rows()).hover.rows().map(|(_, t)| t),
         ["題 11", "run · Landed", "↻1 · ― · ―", SOURCE].map(str::to_string)
     );
     assert_eq!(
@@ -386,7 +400,7 @@ fn pipe_keys_in_vocab_and_classes_in_stylesheet() {
         })
     };
     let mut used: Vec<String> = Vec::new();
-    for col in filled().iter().chain(columns(&[], &[]).iter()) {
+    for col in filled().iter().chain(columns(&[], &[], NOW).iter()) {
         used.extend(col.class.split_whitespace().map(str::to_string));
         for k in &col.cards {
             used.extend(k.class.split_whitespace().map(str::to_string));
@@ -402,6 +416,132 @@ fn pipe_keys_in_vocab_and_classes_in_stylesheet() {
     for c in used {
         assert!(has(&c), "stylesheet に class {c} が無い");
     }
+}
+
+fn card(id: &str, stage: Stage, elapsed_s: Option<u64>) -> PipelineCard {
+    PipelineCard {
+        contract: BeadId::new(id).expect("id"),
+        runs: 1,
+        stage,
+        reason: None,
+        account: None,
+        elapsed_s,
+    }
+}
+
+fn board_body(cards: Vec<PipelineCard>) -> Fetched {
+    Fetched::Body(
+        wire::encode(&PipelineBoard {
+            cards: Reading::Known(cards),
+        })
+        .expect("電文"),
+    )
+}
+
+/// 便 g-pipe-today (1)(2): 今日（UTC）の着地は、段が Landed で経過が在り、今から経過を引いた時刻が今日の始まり以上。
+#[test]
+fn pipe_landed_today_boundaries() {
+    assert_eq!(NOW % 86_400, 43_200, "NOW は UTC の日の正午");
+    let cases = [
+        (Stage::Landed, Some(3_600), true),
+        (Stage::Landed, Some(43_200), true),
+        (Stage::Landed, Some(43_201), false),
+        (Stage::Landed, None, false),
+        (Stage::Running, Some(60), false),
+        (Stage::Landed, Some(0), true),
+        (Stage::Landed, Some(NOW + 1), false),
+    ];
+    for (stage, elapsed, want) in cases {
+        assert_eq!(
+            landed_today(&card("px.1", stage, elapsed), NOW),
+            want,
+            "{stage:?} {elapsed:?}"
+        );
+    }
+    // 段が Landed でない札は、経過が今日に入っても偽。
+    for stage in Stage::ALL.into_iter().filter(|s| *s != Stage::Landed) {
+        assert!(!landed_today(&card("px.1", stage, Some(60)), NOW), "{stage:?}");
+    }
+    // 日の始まりちょうどの今は、経過 0 だけが今日。
+    let midnight = NOW - 43_200;
+    assert!(landed_today(&card("px.1", Stage::Landed, Some(0)), midnight));
+    assert!(!landed_today(&card("px.1", Stage::Landed, Some(1)), midnight));
+    // 今の関数の型（札と今の時刻を受けて真偽）。
+    let f: fn(&PipelineCard, EpochSecs) -> bool = landed_today;
+    assert!(f(&card("px.1", Stage::Landed, Some(1)), NOW));
+}
+
+/// 便 g-pipe-today (3)(4): Landed の列は今日の着地だけ・数の字は今日の着地の数・ほかの 3 列は今の時刻に依らない。
+#[test]
+fn pipe_landed_column_only_today() {
+    let mut cs = fixture_cards();
+    cs.push(card("px.20", Stage::Landed, Some(43_201)));
+    cs.push(card("px.21", Stage::Landed, Some(17 * 86_400)));
+    cs.push(card("px.22", Stage::Landed, Some(43_200)));
+    let rows = ledger_rows();
+    let cols = columns(&cs, &rows, NOW);
+    assert_eq!(
+        ids(&cols[3], true),
+        vec!["px.12", "px.9", "px.10", "px.8", "px.22"]
+    );
+    assert_eq!(cols[3].cards.len(), 5, "数の字は今日の着地の数");
+    assert!(
+        cols[3]
+            .cards
+            .iter()
+            .all(|k| landed_today(cs.iter().find(|c| c.contract.as_str() == k.id).unwrap(), NOW))
+    );
+    // content も同じ列を組む。
+    let Body::Filled(via) = content(&board_body(cs.clone()), &ledger_body(), NOW) else {
+        panic!("板が中身を出さない");
+    };
+    assert_eq!(via, cols);
+
+    // ほかの 3 列の札の入り方と並びは今の時刻に依らない（fixture の並びのまま）。
+    // 日の始まりの 10 秒後に描くと、経過の最も短い 30 秒の着地も昨日。
+    let later = columns(&cs, &rows, NOW - 43_200 + 10);
+    assert_eq!(cols[..3], later[..3]);
+    let others: Vec<Vec<&str>> = cols[..3].iter().map(|c| ids(c, true)).collect();
+    assert_eq!(
+        others,
+        vec![
+            vec!["px.2", "px.1"],
+            vec!["px.4", "px.3"],
+            vec!["px.7", "px.5", "px.6"],
+        ]
+    );
+    // そのときの Landed の列は空。
+    assert!(later[3].cards.is_empty());
+    assert_eq!(later[3].class, "col c-land is-empty");
+}
+
+/// 便 g-pipe-today (5): 今日の着地が 0 本でほかの列に札が在れば、Landed の列は空の列で、板は測れていないにも 0 件にもならない。
+#[test]
+fn pipe_no_landed_today_is_empty_column() {
+    let cs = vec![
+        card("px.1", Stage::Queued, Some(300)),
+        card("px.8", Stage::Landed, Some(17 * 86_400)),
+        card("px.11", Stage::Landed, None),
+    ];
+    let got = content(&board_body(cs), &ledger_body(), NOW);
+    let Body::Filled(cols) = got else {
+        panic!("板が中身を出さない: {got:?}");
+    };
+    assert_eq!(cols.len(), 4);
+    assert_eq!(ids(&cols[0], true), vec!["px.1"]);
+    assert_eq!(cols[0].class, "col c-wait");
+    assert!(cols[3].cards.is_empty());
+    assert_eq!(cols[3].class, "col c-land is-empty");
+    assert_eq!(cols[3].more(false), None);
+}
+
+/// 便 g-pipe-today (6): 描く所は content に描く時の net の now を渡す。
+#[test]
+fn pipe_view_passes_net_now() {
+    let src = read("src/project/pipeline.rs");
+    let dom = &src[src.find("mod dom").expect("dom の module")..];
+    assert!(dom.contains("crate::net::now()"), "view が net の now を呼ばない");
+    assert!(dom.contains("content(p, l, now)"), "view が content に now を渡さない");
 }
 
 /// (8) 着地済みの外形（BLOCK・口の path・body の名と引数と返りの型）と、面の crate の直接依存が増えない。

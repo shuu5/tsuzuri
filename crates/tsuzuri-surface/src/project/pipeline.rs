@@ -3,6 +3,7 @@
 //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
 //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Reading};
 use tsuzuri_contract::graph::title36;
 use tsuzuri_contract::ledger::LedgerRow;
@@ -182,8 +183,21 @@ pub fn body(fetched: &Fetched) -> Body<()> {
     }
 }
 
-/// 板の中身（4 列）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
-pub fn content(pipe: &Fetched, ledger: &Fetched) -> Body<Vec<Column>> {
+/// 1 日の秒。
+const DAY: EpochSecs = 86_400;
+
+/// 今日（UTC）の着地か（段が Landed で経過が在り、今の時刻から経過を引いた時刻が今の時刻を含む UTC の日の始まり以上）。
+/// 経過は server が読んだ時の今からの秒なので、読んだ時と描く時の差の数秒は許す。
+pub fn landed_today(card: &PipelineCard, now: EpochSecs) -> bool {
+    card.stage.column() == PipelineColumn::Landed
+        && card
+            .elapsed_s
+            .and_then(|e| now.checked_sub(e))
+            .is_some_and(|at| at >= now / DAY * DAY)
+}
+
+/// 板の中身（4 列・Landed の列は今日の着地だけ）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
+pub fn content(pipe: &Fetched, ledger: &Fetched, now: EpochSecs) -> Body<Vec<Column>> {
     match cards(pipe) {
         Err(reason) => Body::Unmeasured(reason),
         Ok(c) if c.is_empty() => Body::Empty(RUN_KEY),
@@ -192,7 +206,7 @@ pub fn content(pipe: &Fetched, ledger: &Fetched) -> Body<Vec<Column>> {
                 Reading::Known(rows) => rows,
                 Reading::Unknown => Vec::new(),
             };
-            Body::Filled(columns(&c, &rows))
+            Body::Filled(columns(&c, &rows, now))
         }
     }
 }
@@ -205,13 +219,15 @@ pub fn title_of(rows: &[LedgerRow], id: &str) -> Option<String> {
 }
 
 /// 札を 4 列に組む（列は板の順・列の中は経過の短い順・経過の無い札は後・同じなら bead の id の順）。
-pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow]) -> Vec<Column> {
+/// Landed の列は今日（UTC）の着地だけ（`landed_today`）。
+pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Vec<Column> {
     LANES
         .into_iter()
         .map(|lane| {
             let mut mine: Vec<&PipelineCard> = cards
                 .iter()
                 .filter(|c| c.stage.column() == lane.column)
+                .filter(|c| lane.column != PipelineColumn::Landed || landed_today(c, now))
                 .collect();
             mine.sort_by(|a, b| {
                 let key = |c: &PipelineCard| (c.elapsed_s.is_none(), c.elapsed_s);
@@ -344,14 +360,17 @@ mod dom {
         let pipe = crate::net::read(PATH);
         let rows = crate::net::read(ledger::PATH);
         let open = RwSignal::new(open_columns(&search()));
-        let body = move || match pipe.with(|p| rows.with(|l| content(p, l))) {
-            Body::Unmeasured(reason) => unmeasured(reason),
-            Body::Empty(key) => view! {
-                <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
-                {board_view(columns(&[], &[]), open)}
+        let body = move || {
+            let now = crate::net::now();
+            match pipe.with(|p| rows.with(|l| content(p, l, now))) {
+                Body::Unmeasured(reason) => unmeasured(reason),
+                Body::Empty(key) => view! {
+                    <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
+                    {board_view(columns(&[], &[], now), open)}
+                }
+                .into_any(),
+                Body::Filled(cols) => board_view(cols, open),
             }
-            .into_any(),
-            Body::Filled(cols) => board_view(cols, open),
         };
         section(BLOCK, ().into_any(), body.into_any())
     }
