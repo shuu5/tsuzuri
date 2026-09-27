@@ -16,6 +16,8 @@
 
 - **持ち主の再開の裁定（2026-09-27T07:04Z・逐語は t3-hub.1）**: 便 a の骨格から再開する。設計席が撃ったもの = t3-hub.2 の defer を戻した（open）。器の宣言の remote は外した（verified = scribe2 contract-source.md §5: 宣言した remote が在ると land の終端は push の後に CI の判定を `pipe.ci_wait_s` まで待ち、CI の無い repo では「測れない」で止まって台帳を閉じず rc 1）＝着地は local の main まで（terminal=undeclared・rc 0）で、push と台帳の close は設計席が手で行う。入口の flip の宣言（entrance-flip = unmeasured）は既に在る。**残る手番 = 持ち主か管理席が `bash ~/.cache/tsuzuri-admin/dispatch.sh` を 1 回撃つ**（runner と lens の行は同じ置き場・形は scribe2 の管理の道具 migrate-soap-copilot と同じ・`--rules` は付けない＝器の埋め込みの表を使う）。CI（GitHub Actions）を置くかは持ち主への問い（置いたら remote の宣言を戻す）。folio2 の binary は 03b9323（構造の直し C まで着地）で床は合格 0/0。天井の周は folio2 の知らせが来るまで回さない。
 
+- **最初の周（2026-09-27T07:13Z・持ち主が dispatch.sh を撃った・verified = 器の event log）**: 起動は通った（`dispatch=started:1`・走行 t3-hub.2-20260927T071348Z）。受付の後の契約の審査が FAIL（便 a の行の穴 = cargo xtask check に要る alias の file が write-set に無い・歯が完了の条件の (1)(3)(4) を測らない）。設計席が便 a の行を直した（設計ノート surface-base 第 0.2 版・write-set に Cargo.lock と .cargo/config.toml と .gitignore・検証の行 4 本・xtask の歯 3 本）。審査 FAIL の便は契約の file の中身が変わるまで列に入らない（scribe2 dispatcher.md §8）ので、直しの push の後に dispatch.sh をもう 1 回撃つ。同じ日に憲法 第 1.1 版（条 P-16・判断の記録 ADR-12）が発効。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
