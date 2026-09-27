@@ -2,13 +2,16 @@
 //! 標準 library だけで書く同期の server で、1 つの process と 1 つの port で動く。1 接続 1 thread。
 //! 台帳は bd の読み取りの口を子 process で撃って読む（§10・便 e-src）。
 //! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
-//! 書く口は持たない（GET でない要求は 405 で何も書かない）。
+//! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。POST を受ける口は /api/ruling だけで、
+//! ほかの GET でない要求は 405 で何も書かない。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! - GET /api/ledger — 台帳の一覧（LedgerList）
 //! - GET /api/ledger/<id> — 台帳の 1 本（LedgerItem）
 //! - GET /api/pipeline — pipeline の板（PipelineBoard）
 //! - GET /api/metrics — 台帳の指標（LedgerStats）
 //! - GET /api/next — 次の一手（NextStep）
 //! - GET /api/graph — 導出グラフ（GraphDoc）
+//! - GET /api/questions — 問いの一覧（QuestionList）
+//! - POST /api/ruling — 裁定の受付（RulingRequest → RulingResponse か RefusalResponse）
 //! - GET /api/surface/events — 変化の知らせ（SSE）
 //! - それ以外の GET — 面の file の配布
 
@@ -18,6 +21,7 @@ pub mod events;
 pub mod files;
 pub mod http;
 pub mod ledger;
+pub mod ruling;
 pub mod runs;
 
 use std::ffi::OsString;
@@ -30,17 +34,20 @@ use std::thread;
 use std::time::Duration;
 
 use tsuzuri_contract::ledger::BeadId;
+use tsuzuri_contract::surface::{RefusalResponse, RulingRequest};
 use tsuzuri_contract::wire;
 
 use self::board::Sources;
 use self::design::Design;
 use self::events::Hub;
 use self::files::Served;
-use self::http::Response;
+use self::http::{Request, Response};
 use self::ledger::Source;
+use self::ruling::{Delivery, Outcome, Writer};
 use self::runs::Runs;
 
-/// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program）。
+/// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program・
+/// bdw の program・席の target・器の CLI の program）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub repo: PathBuf,
@@ -48,10 +55,16 @@ pub struct Config {
     pub files: PathBuf,
     /// 台帳の読みに撃つ program（既定は `ledger::BD`）。
     pub bd: OsString,
-    /// 器の state dir（None なら走行の出所は読めない）。
+    /// 器の state dir（None なら走行の出所は読めず、裁定を席へ配達しない）。
     pub state_dir: Option<PathBuf>,
     /// 設計の索引の読みに撃つ program（既定は `design::FOLIO`）。
     pub folio: OsString,
+    /// 台帳の書きに撃つ program（既定は `tsuzuri_contract::ledger::BDW`・便 e-ask）。
+    pub bdw: OsString,
+    /// 裁定を配達する席の target（None なら配達しない）。
+    pub seat: Option<String>,
+    /// 配達に撃つ器の CLI の program（既定は `ruling::SCRIBE2`）。
+    pub scribe2: OsString,
 }
 
 /// tailnet の IPv4 の範囲（100.64.0.0/10）。
@@ -117,6 +130,7 @@ struct Shared {
     sources: Sources,
     files: PathBuf,
     hub: Arc<Hub>,
+    writer: Writer,
 }
 
 /// 要求の頭を読む時間の上限。
@@ -160,12 +174,26 @@ impl Server {
             marks.extend(design.marks());
             marks
         });
+        let delivery = match (&config.seat, &config.state_dir) {
+            (Some(target), Some(state_dir)) => Some(Delivery {
+                program: config.scribe2.clone(),
+                state_dir: state_dir.clone(),
+                target: target.clone(),
+            }),
+            _ => None,
+        };
+        let writer = Writer {
+            repo: config.repo.clone(),
+            bdw: config.bdw.clone(),
+            delivery,
+        };
         Ok(Server {
             listener,
             shared: Arc::new(Shared {
                 sources,
                 files,
                 hub,
+                writer,
             }),
         })
     }
@@ -193,6 +221,7 @@ fn handle(stream: TcpStream, shared: &Shared) {
     let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
     let response = match http::read_request(&stream) {
         Err(_) => Response::text(400, "bad-request"),
+        Ok(req) if req.method == "POST" && req.path() == ruling::PATH => post_ruling(&req, shared),
         Ok(req) if req.method != "GET" => Response::text(405, "method").header("Allow", "GET"),
         Ok(req) if req.path() == "/api/surface/events" => {
             let _ = events::stream(&stream, &shared.hub);
@@ -224,6 +253,10 @@ fn route(path: &str, shared: &Shared) -> Response {
             let texts = sources.gather(true, true);
             return json(200, wire::encode(&board::graph(&texts)));
         }
+        "/api/questions" => {
+            let text = sources.ledger.text().unwrap_or_default();
+            return json(200, wire::encode(&tsuzuri_core::question::list(&text)));
+        }
         _ => {}
     }
     if let Some(id) = path.strip_prefix("/api/ledger/") {
@@ -240,6 +273,35 @@ fn route(path: &str, shared: &Shared) -> Response {
         Served::File { content_type, body } => Response::new(200, content_type, body),
         Served::Outside => Response::text(403, "outside"),
         Served::Missing => Response::text(404, "no-file"),
+    }
+}
+
+/// 裁定の受付（Origin が Host と違えば 403・本文が `http::BODY_MAX` を越えれば 413・読めない本文は 400）。
+/// 断りと 4xx と 5xx は、notes への追記の前なら何も書いていない。
+fn post_ruling(req: &Request, shared: &Shared) -> Response {
+    if !req.same_origin() {
+        return Response::text(403, "origin");
+    }
+    if req.too_large() {
+        return Response::text(413, "too-large");
+    }
+    let Some(body) = std::str::from_utf8(&req.body)
+        .ok()
+        .and_then(|t| wire::decode::<RulingRequest>(t).ok())
+    else {
+        return Response::text(400, "bad-body");
+    };
+    let outcome = ruling::accept(&body, &shared.sources.ledger, &shared.writer, events::now());
+    match outcome {
+        Outcome::Recorded(response) => json(200, wire::encode(&response)),
+        Outcome::Refused(reason) => json(
+            reason.http_status(),
+            wire::encode(&RefusalResponse { reason }),
+        ),
+        Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
+        Outcome::IdShape => Response::text(500, "ruling-id-shape"),
+        Outcome::AppendFailed => Response::text(502, "ledger-append"),
+        Outcome::CloseFailed(id) => Response::text(502, &format!("ledger-close {id}")),
     }
 }
 

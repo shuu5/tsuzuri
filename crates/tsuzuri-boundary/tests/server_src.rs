@@ -12,9 +12,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::server::ledger::{BD, BD_ARGS, BD_TIMEOUT};
-use tsuzuri_boundary::server::{Config, Server, design};
+use tsuzuri_boundary::server::{Config, Server, design, ruling};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{LedgerItem, LedgerList, LedgerRow};
+use tsuzuri_contract::ledger::{BDW, LedgerItem, LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
 
 /// 偽の bd の振る舞い（記録の後の最後の行）。
@@ -112,6 +112,9 @@ impl Place {
             bd: bd.into(),
             state_dir: None,
             folio: design::FOLIO.into(),
+            bdw: BDW.into(),
+            seat: None,
+            scribe2: ruling::SCRIBE2.into(),
         }
     }
 

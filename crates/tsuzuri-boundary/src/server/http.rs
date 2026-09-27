@@ -5,14 +5,23 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 /// 要求の頭の上限（byte）。
 const HEAD_MAX: usize = 16 * 1024;
 
+/// 受ける本文の上限（byte）。越える本文は持たずに読み捨てる（口は 413 を返す）。
+pub const BODY_MAX: u64 = 65_536;
+
 /// 読み捨てる本文の上限（byte）。越える本文は読まずに接続を閉じる。
 const BODY_DRAIN_MAX: u64 = 1024 * 1024;
 
-/// 要求（本文は読み捨てる・書く口を持たないので使わない）。
+/// 要求（頭の Host と Origin・Content-Length・`BODY_MAX` 以下の本文）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Request {
     pub method: String,
     pub target: String,
+    pub host: Option<String>,
+    pub origin: Option<String>,
+    /// 頭の Content-Length（無ければ 0）。
+    pub content_length: u64,
+    /// 本文（Content-Length が `BODY_MAX` を越えれば空）。
+    pub body: Vec<u8>,
 }
 
 impl Request {
@@ -22,10 +31,60 @@ impl Request {
             .split_once('?')
             .map_or(self.target.as_str(), |(p, _)| p)
     }
+
+    /// 本文が `BODY_MAX` を越える。
+    pub fn too_large(&self) -> bool {
+        self.content_length > BODY_MAX
+    }
+
+    /// Origin の頭が無いか、その host と port が Host の頭と同じ（Origin が在って Host が無ければ違う扱い）。
+    pub fn same_origin(&self) -> bool {
+        let Some(origin) = &self.origin else {
+            return true;
+        };
+        let Some((scheme, rest)) = origin.trim().split_once("://") else {
+            return false;
+        };
+        let default_port = match scheme.to_ascii_lowercase().as_str() {
+            "http" => 80,
+            "https" => 443,
+            _ => return false,
+        };
+        let from = authority(rest, default_port);
+        let to = self
+            .host
+            .as_deref()
+            .and_then(|h| authority(h.trim(), default_port));
+        from.is_some() && from == to
+    }
 }
 
-/// 要求の頭を読み、Content-Length の本文を上限まで読み捨てる
-/// （読み残しの在る接続を閉じると応答が相手に届かないことがある）。
+/// `host[:port]` を（小文字の host・port）にする（port を省けば `default_port`・IPv6 は `[…]` の形）。
+fn authority(s: &str, default_port: u16) -> Option<(String, u16)> {
+    let (host, port) = if s.starts_with('[') {
+        let end = s.find(']')?;
+        match &s[end + 1..] {
+            "" => (&s[..=end], None),
+            rest => (&s[..=end], Some(rest.strip_prefix(':')?)),
+        }
+    } else {
+        match s.rsplit_once(':') {
+            Some((h, p)) => (h, Some(p)),
+            None => (s, None),
+        }
+    };
+    if host.is_empty() || host.contains(['/', '@', ' ']) {
+        return None;
+    }
+    let port = match port {
+        Some(p) => p.parse().ok()?,
+        None => default_port,
+    };
+    Some((host.to_ascii_lowercase(), port))
+}
+
+/// 要求の頭を読み、Content-Length の本文を `BODY_MAX` まで持ち、越える本文は上限まで読み捨てる
+/// （読み残しの在る接続を閉じると応答が相手に届かないことがある）。本文が切れていれば誤り。
 pub fn read_request(stream: impl Read) -> io::Result<Request> {
     let mut reader = BufReader::new(stream);
     let mut head = 0usize;
@@ -49,25 +108,40 @@ pub fn read_request(stream: impl Read) -> io::Result<Request> {
     if !version.starts_with("HTTP/1.") || !target.starts_with('/') {
         return Err(bad("要求の行の形"));
     }
-    let request = Request {
+    let mut request = Request {
         method: method.to_string(),
         target: target.to_string(),
+        host: None,
+        origin: None,
+        content_length: 0,
+        body: Vec::new(),
     };
-    let mut body = 0u64;
     loop {
         next_line(&mut reader, &mut line)?;
         let header = line.trim_end_matches(['\r', '\n']);
         if header.is_empty() {
             break;
         }
-        if let Some((k, v)) = header.split_once(':')
-            && k.trim().eq_ignore_ascii_case("content-length")
-        {
-            body = v.trim().parse().map_err(|_| bad("Content-Length の形"))?;
+        let Some((k, v)) = header.split_once(':') else {
+            continue;
+        };
+        let (k, v) = (k.trim(), v.trim());
+        if k.eq_ignore_ascii_case("content-length") {
+            request.content_length = v.parse().map_err(|_| bad("Content-Length の形"))?;
+        } else if k.eq_ignore_ascii_case("host") {
+            request.host = Some(v.to_string());
+        } else if k.eq_ignore_ascii_case("origin") {
+            request.origin = Some(v.to_string());
         }
     }
-    if body <= BODY_DRAIN_MAX {
-        io::copy(&mut reader.take(body), &mut io::sink())?;
+    let length = request.content_length;
+    if length <= BODY_MAX {
+        reader.take(length).read_to_end(&mut request.body)?;
+        if request.body.len() as u64 != length {
+            return Err(bad("本文が切れている"));
+        }
+    } else if length <= BODY_DRAIN_MAX {
+        io::copy(&mut reader.take(length), &mut io::sink())?;
     }
     Ok(request)
 }
@@ -84,6 +158,9 @@ fn reason(status: u16) -> &'static str {
         403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
+        409 => "Conflict",
+        413 => "Content Too Large",
+        502 => "Bad Gateway",
         503 => "Service Unavailable",
         _ => "Internal Server Error",
     }
@@ -164,6 +241,56 @@ mod tests {
                 "{:?}",
                 String::from_utf8_lossy(bad)
             );
+        }
+    }
+
+    #[test]
+    fn server_ask_http_keeps_body_and_heads() {
+        let raw = b"POST /api/ruling HTTP/1.1\r\nhost: 127.0.0.1:8080\r\nOrigin: http://127.0.0.1:8080\r\nContent-Length: 2\r\n\r\n{}";
+        let req = read_request(&raw[..]).expect("要求");
+        assert_eq!(req.body, b"{}");
+        assert_eq!(req.host.as_deref(), Some("127.0.0.1:8080"));
+        assert!(req.same_origin() && !req.too_large());
+        let cut = b"POST /api/ruling HTTP/1.1\r\nContent-Length: 5\r\n\r\n{}";
+        assert!(read_request(&cut[..]).is_err(), "本文が切れている");
+        let big = format!(
+            "POST /api/ruling HTTP/1.1\r\nContent-Length: {}\r\n\r\n{}",
+            super::BODY_MAX + 1,
+            "x".repeat(super::BODY_MAX as usize + 1)
+        );
+        let req = read_request(big.as_bytes()).expect("要求");
+        assert!(req.too_large() && req.body.is_empty());
+    }
+
+    #[test]
+    fn server_ask_http_same_origin() {
+        let with = |host: Option<&str>, origin: Option<&str>| super::Request {
+            method: "POST".into(),
+            target: "/".into(),
+            host: host.map(str::to_string),
+            origin: origin.map(str::to_string),
+            content_length: 0,
+            body: Vec::new(),
+        };
+        for (host, origin) in [
+            (Some("a:1"), None),
+            (None, None),
+            (Some("a:1"), Some("http://a:1")),
+            (Some("A"), Some("http://a:80")),
+            (Some("a:443"), Some("https://a")),
+            (Some("[::1]:9"), Some("http://[::1]:9")),
+        ] {
+            assert!(with(host, origin).same_origin(), "{host:?} {origin:?}");
+        }
+        for (host, origin) in [
+            (Some("a:1"), Some("http://a:2")),
+            (Some("a:1"), Some("http://b:1")),
+            (None, Some("http://a:1")),
+            (Some("a:1"), Some("null")),
+            (Some("a:1"), Some("ftp://a:1")),
+            (Some("[::1]:9"), Some("http://[::2]:9")),
+        ] {
+            assert!(!with(host, origin).same_origin(), "{host:?} {origin:?}");
         }
     }
 
