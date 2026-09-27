@@ -4,6 +4,8 @@
 //! 行の全部が `{fig:名}` の 1 つなら、その行は手順と流れの図（widgets の fig）を描く。
 
 use crate::frame::Mode;
+use crate::mapview::band::Band;
+use crate::project::seat::{Span, span_of};
 use crate::vocab::{Term, vocab};
 
 /// 行の中の 1 片。
@@ -155,6 +157,92 @@ pub fn shows_internal(mode: Mode) -> bool {
     mode == Mode::Expert
 }
 
+/// 幅の字（`24h` → `24 時間`・見本の spanKey の replace と同じ）。
+pub fn span_words(span: Span) -> String {
+    span.key().replace('h', " 時間")
+}
+
+/// 目盛の間の字（見本の SPANS の tickL と同じ）。
+pub fn tick_words(span: Span) -> String {
+    let secs = span.tick();
+    if secs.is_multiple_of(3600) {
+        format!("{} 時間", secs / 3600)
+    } else {
+        format!("{} 分", secs / 60)
+    }
+}
+
+/// 注釈の置き換えの字（`{SPAN}` と `{TICK}`）を今の幅の字に替える（見本の tipContent と同じ）。
+pub fn fill(s: &str, span: Span) -> String {
+    s.replace("{SPAN}", &span_words(span))
+        .replace("{TICK}", &tick_words(span))
+}
+
+/// 鍵の注釈を URL の query の幅で置き換えて組む（語彙に無ければ None）。
+pub fn note_in(key: &str, search: &str) -> Option<Note> {
+    let term = vocab().term(key)?;
+    let span = span_of(search);
+    Some(note_of(&Term {
+        label: term.label.clone(),
+        note: fill(&term.note, span),
+        internal: fill(&term.internal, span),
+    }))
+}
+
+/// 記号の見本の HTML の字（見本の symHTML と同じ並び・この面で描く名だけ Some・ほかは None）。
+/// 値は閉じた集合と数字と英数字 1 字に限るので escape の要る字は入らない。
+pub fn sym_html(sym: &str) -> Option<String> {
+    let (head, rest) = sym.split_once(':')?;
+    match head {
+        "gi" => {
+            let mark = match rest {
+                "ok" => "✓",
+                "ng" => "!",
+                "unknown" => "",
+                _ => return None,
+            };
+            Some(format!(
+                "<span class=\"gi {rest} sm\" aria-hidden=\"true\">{mark}</span>"
+            ))
+        }
+        "nxm" => {
+            let (value, tag) = rest.split_once(':').unwrap_or((rest, ""));
+            let tag_ok = tag.is_empty()
+                || (tag.chars().count() == 1 && tag.chars().all(|c| c.is_ascii_alphanumeric()));
+            if !matches!(value, "on" | "off" | "na") || !tag_ok {
+                return None;
+            }
+            let tag = if tag.is_empty() { "c" } else { tag };
+            Some(format!(
+                "<span class=\"nxm {value}\" aria-hidden=\"true\">{tag}</span>"
+            ))
+        }
+        "thr" => (!rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())).then(|| {
+            format!("<span class=\"thrs\" aria-hidden=\"true\"><i></i>{rest}</span>")
+        }),
+        "tk" => {
+            let (class, mark) = match rest {
+                "healthy" => ("tk tk-healthy", "gi:ok"),
+                "stale" => ("tk tk-stale", "gi:ng"),
+                "absent" => ("tk", "gi:unknown"),
+                "unreadable" => ("tk", "gi:ng"),
+                _ => return None,
+            };
+            let mark = sym_html(mark)?;
+            Some(format!(
+                "<span class=\"tkhb smpl\"><span class=\"{class}\">{mark}<b>{rest}</b></span></span>"
+            ))
+        }
+        "band" => Band::from_name(rest).map(|b| {
+            format!(
+                "<span class=\"shape {} fill\" aria-hidden=\"true\"></span>",
+                b.class_name()
+            )
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::{HelpCtx, TipLayer, h1, h2, hs, qmark, term};
 
@@ -163,7 +251,7 @@ mod dom {
     use leptos::ev;
     use leptos::prelude::*;
 
-    use super::{Inline, Line, fig_of, note, place, shows_internal, tip_class};
+    use super::{Inline, Line, fig_of, note_in, place, shows_internal, sym_html, tip_class};
     use crate::frame::Mode;
     use crate::project::{STATES, state_icon};
     use crate::vocab::label;
@@ -300,12 +388,15 @@ mod dom {
             .into_any()
     }
 
-    /// 記号の見本（状態の記号は実物と同じ部品・ほかは名の字のまま）。
+    /// 記号の見本（状態の記号は実物と同じ部品・sym_html が描く名は実物と同じ class の字・ほかは名の字のまま）。
     fn sym_view(sym: &str) -> AnyView {
         if let Some(v) = sym.strip_prefix("st:")
             && let Some((state, _)) = STATES.iter().find(|(s, _)| *s == v)
         {
             return state_icon(state);
+        }
+        if let Some(html) = sym_html(sym) {
+            return view! { <span inner_html=html></span> }.into_any();
         }
         let shown = sym.rsplit(':').next().unwrap_or(sym).to_string();
         view! { <span>{shown}</span> }.into_any()
@@ -360,7 +451,8 @@ mod dom {
         };
         let content = move || {
             let open = c.open.get()?;
-            let n = note(open.key)?;
+            // 出すときの幅で置き換える（出た後に幅を替えても出ている注釈は替えない・見本と同じ）。
+            let n = note_in(open.key, &window().location().search().unwrap_or_default())?;
             let expert = shows_internal(c.mode.get());
             let head = (!n.head.is_empty())
                 .then(|| view! { <div class="n1">{inline_view(&n.head)}</div> });
