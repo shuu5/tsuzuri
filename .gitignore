@@ -2,3 +2,6 @@
 .beads/issues.jsonl
 .beads/interactions.jsonl
 .beads/hooks/
+# cargo の build の出力と器の作業場（便の worktree）は版管理の外
+/target/
+/.worktrees/
