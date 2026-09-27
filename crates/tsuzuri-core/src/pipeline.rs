@@ -1,0 +1,233 @@
+//! pipeline の板（設計ノート surface-base 便 d・判断の記録 ADR-7 決定 (5)）。
+//! 入力は台帳の一覧の字と器の event log の字と今の時刻で、file も子 process も時計も触らない。
+//! 札は bead ごとに 1 枚で、その bead の走行のうち RunCreated がいちばん新しい 1 つの、最後の event で段を決める
+//! （event log は追記の順なので、後の行ほど新しい）。段を決める event は `STAGE_EVENTS` の 4 種で、
+//! ほかの event（RunCost・SeatSpawned など）は段を変えない。器の event から段への対応は `stage_of` の閉じた表。
+//! 走行を 1 つも持たない open の契約は Blocked か Queued の札にする。Stopped はこの便の入力に材料が無いので作らない。
+
+use std::collections::BTreeMap;
+
+use serde_json::Value;
+use tsuzuri_contract::EpochSecs;
+use tsuzuri_contract::board::{PipelineBoard, PipelineCard, Reading, Stage};
+use tsuzuri_contract::graph::NodeKind;
+use tsuzuri_contract::ledger::BeadId;
+
+use crate::graph::build::{read_events, run_bead};
+use crate::ledger::{Bead, epoch_secs, read};
+
+/// 段を決める event の種類。
+pub const STAGE_EVENTS: [&str; 4] = ["RunCreated", "RunStage", "RunDone", "QuestionRaised"];
+
+/// 落ちた審査の detail の頭（Reviewed と Gated で、この字で始まれば Failed）。
+pub const FAILED_VERDICTS: [&str; 2] = ["verdict:FAIL", "verdict:INCONCLUSIVE"];
+
+/// 通った審査の detail の頭（Reviewed でこの字で始まれば Running）。
+pub const PASSED_VERDICT: &str = "verdict:PASS";
+
+/// 口座の札の頭（detail の中）。
+pub const ACCOUNT_TAG: &str = "account:";
+
+/// 板と、表に無い段の走行の数（札を作らずに数える）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct Board {
+    pub board: PipelineBoard,
+    pub unmapped: u32,
+}
+
+/// 器の event から板の段と段の理由（閉じた表・None は表に無い段）。
+/// kind は event の種類、stage は RunStage の段の名、detail は event の detail の字。
+pub fn stage_of(kind: &str, stage: Option<&str>, detail: &str) -> Option<(Stage, Option<String>)> {
+    let failed = FAILED_VERDICTS.iter().any(|v| detail.starts_with(v));
+    let to = match (kind, stage) {
+        ("RunDone", _) => Stage::Landed,
+        ("QuestionRaised", _) => Stage::Questioned,
+        ("RunCreated", _) => Stage::Running,
+        ("RunStage", Some("Reviewed" | "Gated")) if failed => {
+            return Some((Stage::Failed, Some(detail.to_string())));
+        }
+        ("RunStage", Some("Gated")) => Stage::Gated,
+        ("RunStage", Some("Reviewed")) if detail.starts_with(PASSED_VERDICT) => Stage::Running,
+        ("RunStage", Some("Spawned" | "Implemented")) => Stage::Running,
+        _ => return None,
+    };
+    Some((to, None))
+}
+
+/// detail の中の口座の札のうち最後のもの。
+fn detail_account(event: &Value) -> Option<String> {
+    event
+        .get("detail")
+        .and_then(Value::as_str)?
+        .split([',', ' '])
+        .filter_map(|tok| tok.strip_prefix(ACCOUNT_TAG))
+        .rfind(|a| !a.is_empty())
+        .map(str::to_string)
+}
+
+fn text<'a>(event: &'a Value, key: &str) -> Option<&'a str> {
+    event.get(key).and_then(Value::as_str)
+}
+
+/// 1 つの走行の読み（段を決めた最後の event と、口座の札の最後のもの）。
+#[derive(Default)]
+struct RunState<'a> {
+    last: Option<&'a Value>,
+    account: Option<String>,
+}
+
+/// bead ごとの走行（RunCreated の数と、いちばん新しい走行）。
+struct BeadRuns {
+    runs: u32,
+    latest: String,
+}
+
+/// 台帳の一覧と event log の字と今の時刻から板を組む。
+/// event log が読めなければ札は「まだ分からない」。台帳が読めなければ走行の無い契約の札を作らない。
+pub fn board(ledger: &str, events: &str, now: EpochSecs) -> Board {
+    of_inputs(read(ledger).as_deref(), events, now)
+}
+
+/// 読めた bead（None は台帳が読めない）と event log の字から板を組む。
+pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) -> Board {
+    let Some(events) = read_events(events) else {
+        return Board {
+            board: PipelineBoard {
+                cards: Reading::Unknown,
+            },
+            unmapped: 0,
+        };
+    };
+    let mut runs: BTreeMap<&str, RunState> = BTreeMap::new();
+    let mut per_bead: BTreeMap<String, BeadRuns> = BTreeMap::new();
+    let mut order: Vec<String> = Vec::new();
+    for event in &events {
+        let kind = text(event, "kind").unwrap_or_default();
+        let Some(run) = text(event, "run") else {
+            continue;
+        };
+        if kind == "RunCreated" && !runs.contains_key(run) {
+            let Some(bead) = text(event, "bead").or_else(|| run_bead(run)) else {
+                continue;
+            };
+            runs.insert(run, RunState::default());
+            let entry = per_bead.entry(bead.to_string()).or_insert_with(|| {
+                order.push(bead.to_string());
+                BeadRuns {
+                    runs: 0,
+                    latest: String::new(),
+                }
+            });
+            entry.runs += 1;
+            entry.latest = run.to_string();
+        }
+        // RunCreated の無い走行の event は読み捨てる。
+        let Some(state) = runs.get_mut(run) else {
+            continue;
+        };
+        if let Some(account) = detail_account(event) {
+            state.account = Some(account);
+        }
+        if STAGE_EVENTS.contains(&kind) {
+            state.last = Some(event);
+        }
+    }
+
+    let mut cards = Vec::new();
+    let mut unmapped = 0;
+    for bead in &order {
+        let entry = &per_bead[bead];
+        let state = &runs[entry.latest.as_str()];
+        let Ok(contract) = BeadId::new(bead.as_str()) else {
+            continue;
+        };
+        let Some(last) = state.last else {
+            continue;
+        };
+        let Some((stage, reason)) = stage_of(
+            text(last, "kind").unwrap_or_default(),
+            text(last, "stage"),
+            text(last, "detail").unwrap_or_default(),
+        ) else {
+            unmapped += 1;
+            continue;
+        };
+        cards.push(PipelineCard {
+            contract,
+            runs: entry.runs,
+            stage,
+            reason,
+            account: state.account.clone(),
+            elapsed_s: text(last, "ts")
+                .and_then(epoch_secs)
+                .map(|at| now.saturating_sub(at)),
+        });
+    }
+
+    for b in beads.unwrap_or_default() {
+        if b.kind != NodeKind::Task || !b.is_open(now) || per_bead.contains_key(&b.id) {
+            continue;
+        }
+        let Ok(contract) = BeadId::new(b.id.as_str()) else {
+            continue;
+        };
+        let blocked = b.has_open_blocker(beads.unwrap_or_default(), now);
+        cards.push(PipelineCard {
+            contract,
+            runs: 0,
+            stage: if blocked {
+                Stage::Blocked
+            } else {
+                Stage::Queued
+            },
+            reason: None,
+            account: None,
+            elapsed_s: None,
+        });
+    }
+
+    Board {
+        board: PipelineBoard {
+            cards: Reading::Known(cards),
+        },
+        unmapped,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{detail_account, stage_of};
+    use serde_json::json;
+    use tsuzuri_contract::board::Stage;
+
+    #[test]
+    fn stats_stage_of_closed_table() {
+        let s = |kind, stage, detail| stage_of(kind, stage, detail).map(|(s, _)| s);
+        assert_eq!(s("RunDone", Some("Landed"), ""), Some(Stage::Landed));
+        assert_eq!(
+            s("RunStage", Some("Reviewed"), "verdict:PASS"),
+            Some(Stage::Running)
+        );
+        assert_eq!(s("RunStage", Some("Reviewed"), ""), None);
+        assert_eq!(
+            s("RunStage", Some("Gated"), "turn:taken"),
+            Some(Stage::Gated)
+        );
+        assert_eq!(s("RunStage", Some("Merging"), ""), None);
+        assert_eq!(s("RunCost", None, ""), None);
+        assert_eq!(
+            stage_of("RunStage", Some("Gated"), "verdict:FAIL"),
+            Some((Stage::Failed, Some("verdict:FAIL".to_string())))
+        );
+    }
+
+    #[test]
+    fn stats_detail_account_takes_the_last() {
+        assert_eq!(
+            detail_account(&json!({"detail": "account:a,base:x account:b"})),
+            Some("b".to_string())
+        );
+        assert_eq!(detail_account(&json!({"account": "a"})), None);
+        assert_eq!(detail_account(&json!({"detail": "account:"})), None);
+    }
+}

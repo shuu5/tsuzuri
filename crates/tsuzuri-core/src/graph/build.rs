@@ -123,32 +123,37 @@ fn read_design(text: &str) -> Option<Design> {
     Some(design)
 }
 
-/// bd の読み取りの口が返す配列の 1 本のうち、グラフが読む欄（知らない欄は読み捨てる）。
-/// bd は空の欄を省くので、省ける欄は Option で読む。
+/// bd の読み取りの口が返す配列の 1 本のうち、グラフと台帳の指標が読む欄（知らない欄は読み捨てる）。
+/// bd は空の欄を省くので、省ける欄は Option で読む。時刻は RFC 3339 の字のまま。
 #[derive(Debug, Deserialize)]
-struct BdBead {
-    id: String,
-    title: Option<String>,
-    status: Option<String>,
-    issue_type: Option<String>,
-    labels: Option<Vec<String>>,
-    notes: Option<String>,
+pub(crate) struct BdBead {
+    pub(crate) id: String,
+    pub(crate) title: Option<String>,
+    pub(crate) description: Option<String>,
+    pub(crate) status: Option<String>,
+    pub(crate) issue_type: Option<String>,
+    pub(crate) labels: Option<Vec<String>>,
+    pub(crate) notes: Option<String>,
     #[serde(alias = "acceptance")]
-    acceptance_criteria: Option<String>,
+    pub(crate) acceptance_criteria: Option<String>,
     #[serde(default)]
-    metadata: Value,
-    dependencies: Option<Vec<BdDependency>>,
+    pub(crate) metadata: Value,
+    pub(crate) parent: Option<String>,
+    pub(crate) created_at: Option<String>,
+    pub(crate) updated_at: Option<String>,
+    pub(crate) closed_at: Option<String>,
+    pub(crate) dependencies: Option<Vec<BdDependency>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct BdDependency {
-    depends_on_id: String,
+pub(crate) struct BdDependency {
+    pub(crate) depends_on_id: String,
     #[serde(rename = "type")]
-    dep_type: String,
+    pub(crate) dep_type: String,
 }
 
 /// 台帳の一覧を読む（字が空か JSON の配列として読めなければ None）。
-fn read_ledger(text: &str) -> Option<Vec<BdBead>> {
+pub(crate) fn read_ledger(text: &str) -> Option<Vec<BdBead>> {
     if text.trim().is_empty() {
         return None;
     }
@@ -156,7 +161,7 @@ fn read_ledger(text: &str) -> Option<Vec<BdBead>> {
 }
 
 /// bead の種類（epic・memo・問い・契約の順に決める・どの bead も 1 つに当たる）。
-fn bead_kind(issue_type: &str, labels: &[String]) -> NodeKind {
+pub(crate) fn bead_kind(issue_type: &str, labels: &[String]) -> NodeKind {
     let has = |label: &str| labels.iter().any(|l| l == label);
     if issue_type == "epic" {
         NodeKind::Epic
@@ -276,7 +281,7 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
 }
 
 /// event log を読む（字が空か、JSON の object として読めない行が在れば None）。
-fn read_events(text: &str) -> Option<Vec<Value>> {
+pub(crate) fn read_events(text: &str) -> Option<Vec<Value>> {
     if text.trim().is_empty() {
         return None;
     }

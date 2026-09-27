@@ -1,0 +1,40 @@
+{
+  "note": "台帳の判定の 7 組（見本の自己検査 docs/design/mock3/ledger.js と同じ組）。input が null の組は台帳が読めない。want は電文の語（LedgerJudge）。",
+  "cases": [
+    {
+      "case": "stale > open の半分 → 滞り",
+      "input": {"open_tasks": 10, "stale": 6, "net_drop_7d": -1, "closed_per_day": 1.0},
+      "want": "clogged"
+    },
+    {
+      "case": "純減 7d > 0 → 積み増し",
+      "input": {"open_tasks": 10, "stale": 2, "net_drop_7d": 3, "closed_per_day": 1.0},
+      "want": "piling-up"
+    },
+    {
+      "case": "closed/日 < 0.1 → 停滞",
+      "input": {"open_tasks": 10, "stale": 2, "net_drop_7d": 0, "closed_per_day": 0.05},
+      "want": "stalled"
+    },
+    {
+      "case": "closed/日 = 0.1 → 停滞にしない",
+      "input": {"open_tasks": 10, "stale": 2, "net_drop_7d": 0, "closed_per_day": 0.1},
+      "want": "on-track"
+    },
+    {
+      "case": "純減 ≤ 0・stale 少 → 順調",
+      "input": {"open_tasks": 10, "stale": 2, "net_drop_7d": -2, "closed_per_day": 1.0},
+      "want": "on-track"
+    },
+    {
+      "case": "台帳が無い → 台帳なし",
+      "input": null,
+      "want": "no-ledger"
+    },
+    {
+      "case": "open の task 0 → 滞りにしない",
+      "input": {"open_tasks": 0, "stale": 0, "net_drop_7d": 0, "closed_per_day": 1.0},
+      "want": "on-track"
+    }
+  ]
+}

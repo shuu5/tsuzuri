@@ -17,6 +17,10 @@ use tsuzuri_contract::ledger::{
     BDW, BdLine, BeadId, ChildType, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
     MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL,
 };
+use tsuzuri_contract::stats::{
+    CheckResult, DayCount, EpicProgress, LeadDays, LedgerStats, MemoStats, NextCheck, NextStep,
+    OpenCounts, UnreflectedKind,
+};
 use tsuzuri_contract::surface::{
     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
     PolicyResponse, QuestionNudge, Refusal, RefusalResponse, RulingId, RulingRequest,
@@ -473,6 +477,124 @@ fn forms() -> Vec<Box<dyn Form>> {
                 }],
             }],
         ),
+        // stats
+        form(
+            "stats::LedgerStats",
+            vec![
+                LedgerStats {
+                    at: AT,
+                    judge: LedgerJudge::PilingUp,
+                    open: OpenCounts {
+                        task: 9,
+                        memo: 3,
+                        question: 2,
+                        epic: 2,
+                    },
+                    blocked: 3,
+                    ready: 5,
+                    stale: 3,
+                    net_drop_24h: 0,
+                    net_drop_7d: 2,
+                    closed_7d: 5,
+                    closed_per_day: 0.5,
+                    lead: Some(LeadDays {
+                        p50: 4.0,
+                        p90: 11.5,
+                    }),
+                    days: vec![
+                        DayCount {
+                            end: AT - 86_400,
+                            created: 1,
+                            closed: 0,
+                            open: 9,
+                        },
+                        DayCount {
+                            end: AT,
+                            created: 1,
+                            closed: 1,
+                            open: 9,
+                        },
+                    ],
+                    epics: vec![EpicProgress {
+                        epic: bead("t3-hub"),
+                        closed: 6,
+                        total: 9,
+                    }],
+                    memo: MemoStats {
+                        open: 3,
+                        awaiting_promotion: 2,
+                        closed_7d: 1,
+                        age_p50_days: Some(9.5),
+                    },
+                    unreflected: 3,
+                    unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Request],
+                },
+                // 閉じた task も memo も無い台帳。
+                LedgerStats {
+                    at: AT,
+                    judge: LedgerJudge::Stalled,
+                    open: OpenCounts {
+                        task: 0,
+                        memo: 0,
+                        question: 0,
+                        epic: 0,
+                    },
+                    blocked: 0,
+                    ready: 0,
+                    stale: 0,
+                    net_drop_24h: 0,
+                    net_drop_7d: 0,
+                    closed_7d: 0,
+                    closed_per_day: 0.0,
+                    lead: None,
+                    days: vec![],
+                    epics: vec![],
+                    memo: MemoStats {
+                        open: 0,
+                        awaiting_promotion: 0,
+                        closed_7d: 0,
+                        age_p50_days: None,
+                    },
+                    unreflected: 0,
+                    unreflected_unknown: UnreflectedKind::ALL.to_vec(),
+                },
+            ],
+        ),
+        form(
+            "stats::NextStep",
+            vec![NextStep {
+                checks: NextMove::ALL
+                    .iter()
+                    .map(|&kind| match kind {
+                        NextMove::StalledRun => NextCheck {
+                            kind,
+                            result: CheckResult::Hit,
+                            count: 2,
+                            target: Some(bead("t3-hub.3")),
+                        },
+                        NextMove::Question => NextCheck {
+                            kind,
+                            result: CheckResult::Hit,
+                            count: 1,
+                            target: Some(bead("t3-hub.7")),
+                        },
+                        NextMove::Nothing => NextCheck {
+                            kind,
+                            result: CheckResult::Miss,
+                            count: 0,
+                            target: None,
+                        },
+                        _ => NextCheck {
+                            kind,
+                            result: CheckResult::NotJudged,
+                            count: 0,
+                            target: None,
+                        },
+                    })
+                    .collect(),
+                lead: NextMove::StalledRun,
+            }],
+        ),
     ]
 }
 
@@ -675,6 +797,10 @@ fn contract_form_closed_lists() {
     assert_eq!(distinct(&NextMove::ALL), 7);
     assert_eq!(distinct(&LedgerJudge::ALL), 5);
     assert_eq!(distinct(&Stage::ALL), 8);
+    assert_eq!(distinct(&CheckResult::ALL), 3);
+    assert_eq!(distinct(&UnreflectedKind::ALL), 3);
+    let labels: BTreeSet<&str> = NextMove::ALL.iter().map(|m| m.label()).collect();
+    assert_eq!(labels.len(), 7, "次の一手の名が重なる");
     let mut sorted = NextMove::ALL.to_vec();
     sorted.sort();
     assert_eq!(

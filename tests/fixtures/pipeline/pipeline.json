@@ -1,0 +1,88 @@
+{
+  "note": "器の event から板の段への対応の表の 1 行ごとに走行を 1 つ持つ event log（events は 1 行 1 件の JSON の行の配列）と台帳の一覧と今の時刻（2026-09-27T02:00:00Z）と、期待の札。fx-pl.2 は走行を 2 つ持ち、新しい方で段を決める。fx-pl.6 は口座の札を 2 つ持ち、後の方を取る。fx-pl.12 は表に無い段（Merging）で札にならず unmapped に数える。fx-pl.13 と fx-pl.14 は走行の無い open の契約。fx-pl.15 は走行の無い閉じた契約、fx-pl.m は memo、fx-pl.q は問い、fx-pl は epic で、どれも札にならない。",
+  "now": 1790474400,
+  "ledger": [
+    {"id": "fx-pl", "title": "(EPIC) 板の見本の根", "status": "open", "issue_type": "epic", "created_at": "2026-09-26T00:00:00Z"},
+    {"id": "fx-pl.1", "title": "RunDone → Landed", "status": "closed", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "closed_at": "2026-09-27T00:10:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.2", "title": "Reviewed verdict:FAIL → Failed", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.3", "title": "Reviewed verdict:INCONCLUSIVE → Failed", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.4", "title": "Gated verdict:FAIL → Failed", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.5", "title": "Gated verdict:INCONCLUSIVE → Failed", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.6", "title": "Gated のそれ以外 → Gated", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.7", "title": "RunCreated → Running", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.8", "title": "Reviewed verdict:PASS → Running", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.9", "title": "Spawned → Running", "status": "in_progress", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.10", "title": "Implemented → Running", "status": "in_progress", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.11", "title": "QuestionRaised → Questioned", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.12", "title": "表に無い段", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.13", "title": "走行の無い契約（blocks の先が open）", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl",
+      "dependencies": [{"issue_id": "fx-pl.13", "depends_on_id": "fx-pl.14", "type": "blocks"}]},
+    {"id": "fx-pl.14", "title": "走行の無い契約", "status": "open", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.15", "title": "走行の無い閉じた契約", "status": "closed", "issue_type": "task", "created_at": "2026-09-26T00:00:00Z", "closed_at": "2026-09-26T12:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.m", "title": "[memo] 板に出ない memo", "status": "open", "issue_type": "task", "labels": ["intake:memo"], "created_at": "2026-09-26T00:00:00Z", "parent": "fx-pl"},
+    {"id": "fx-pl.q", "title": "問い — fx-pl.11 の走行が起こした問い", "status": "open", "issue_type": "task", "labels": ["intake:question"], "created_at": "2026-09-27T00:55:00Z", "parent": "fx-pl"}
+  ],
+  "events": [
+    {"schema": 1, "ts": "2026-09-27T00:00:00Z", "kind": "DispatchMark", "bead": "fx-pl.1", "mark": "launched", "detail": "run"},
+    {"schema": 1, "ts": "2026-09-27T00:00:00Z", "kind": "RunCreated", "run": "fx-pl.1-20260927T000000Z", "bead": "fx-pl.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:01:00Z", "kind": "RunStage", "run": "fx-pl.1-20260927T000000Z", "bead": "fx-pl.1", "stage": "Spawned", "detail": "base:0a,account:acct-1"},
+    {"schema": 1, "ts": "2026-09-27T00:10:00Z", "kind": "RunDone", "run": "fx-pl.1-20260927T000000Z", "bead": "fx-pl.1", "stage": "Landed", "detail": "sha:0a main:0a"},
+
+    {"schema": 1, "ts": "2026-09-27T00:01:00Z", "kind": "RunCreated", "run": "fx-pl.2-20260927T000100Z", "bead": "fx-pl.2", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:02:00Z", "kind": "RunStage", "run": "fx-pl.2-20260927T000100Z", "bead": "fx-pl.2", "stage": "Reviewed", "detail": "verdict:FAIL kind:other"},
+    {"schema": 1, "ts": "2026-09-27T00:03:00Z", "kind": "RunCreated", "run": "fx-pl.2-20260927T000300Z", "bead": "fx-pl.2", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:04:00Z", "kind": "RunStage", "run": "fx-pl.2-20260927T000300Z", "bead": "fx-pl.2", "stage": "Reviewed", "detail": "verdict:FAIL kind:literal-mismatch"},
+
+    {"schema": 1, "ts": "2026-09-27T00:05:00Z", "kind": "RunCreated", "run": "fx-pl.3-20260927T000500Z", "bead": "fx-pl.3", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:06:00Z", "kind": "RunStage", "run": "fx-pl.3-20260927T000500Z", "bead": "fx-pl.3", "stage": "Reviewed", "detail": "verdict:INCONCLUSIVE kind:section-material-missing"},
+
+    {"schema": 1, "ts": "2026-09-27T00:07:00Z", "kind": "RunCreated", "run": "fx-pl.4-20260927T000700Z", "bead": "fx-pl.4", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:08:00Z", "kind": "RunStage", "run": "fx-pl.4-20260927T000700Z", "bead": "fx-pl.4", "stage": "Reviewed", "detail": "verdict:PASS"},
+    {"schema": 1, "ts": "2026-09-27T00:08:00Z", "kind": "RunStage", "run": "fx-pl.4-20260927T000700Z", "bead": "fx-pl.4", "stage": "Spawned", "detail": "base:0b,account:acct-2"},
+    {"schema": 1, "ts": "2026-09-27T00:20:00Z", "kind": "RunStage", "run": "fx-pl.4-20260927T000700Z", "bead": "fx-pl.4", "stage": "Implemented"},
+    {"schema": 1, "ts": "2026-09-27T00:21:00Z", "kind": "RunStage", "run": "fx-pl.4-20260927T000700Z", "bead": "fx-pl.4", "stage": "Gated", "detail": "verdict:FAIL"},
+
+    {"schema": 1, "ts": "2026-09-27T00:22:00Z", "kind": "RunCreated", "run": "fx-pl.5-20260927T002200Z", "bead": "fx-pl.5", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:23:00Z", "kind": "RunStage", "run": "fx-pl.5-20260927T002200Z", "bead": "fx-pl.5", "stage": "Gated", "detail": "verdict:INCONCLUSIVE"},
+
+    {"schema": 1, "ts": "2026-09-27T00:24:00Z", "kind": "RunCreated", "run": "fx-pl.6-20260927T002400Z", "bead": "fx-pl.6", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:25:00Z", "kind": "RunStage", "run": "fx-pl.6-20260927T002400Z", "bead": "fx-pl.6", "stage": "Spawned", "detail": "base:0c,account:acct-1"},
+    {"schema": 1, "ts": "2026-09-27T00:30:00Z", "kind": "RunStage", "run": "fx-pl.6-20260927T002400Z", "bead": "fx-pl.6", "stage": "Gated", "detail": "verdict:PASS,account:acct-3"},
+    {"schema": 1, "ts": "2026-09-27T00:31:00Z", "kind": "RunCost", "run": "fx-pl.6-20260927T002400Z", "bead": "fx-pl.6", "source": "lens", "usage": "in:2,out:1", "turns": 1, "wall_ms": 1000},
+
+    {"schema": 1, "ts": "2026-09-27T00:40:00Z", "kind": "RunCreated", "run": "fx-pl.7-20260927T004000Z", "bead": "fx-pl.7", "stage": "Intake", "detail": "classes:"},
+
+    {"schema": 1, "ts": "2026-09-27T00:41:00Z", "kind": "RunCreated", "run": "fx-pl.8-20260927T004100Z", "bead": "fx-pl.8", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:42:00Z", "kind": "RunStage", "run": "fx-pl.8-20260927T004100Z", "bead": "fx-pl.8", "stage": "Reviewed", "detail": "verdict:PASS"},
+
+    {"schema": 1, "ts": "2026-09-27T00:43:00Z", "kind": "RunCreated", "run": "fx-pl.9-20260927T004300Z", "bead": "fx-pl.9", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:44:00Z", "kind": "RunStage", "run": "fx-pl.9-20260927T004300Z", "bead": "fx-pl.9", "stage": "Reviewed", "detail": "verdict:PASS"},
+    {"schema": 1, "ts": "2026-09-27T00:45:00Z", "kind": "RunStage", "run": "fx-pl.9-20260927T004300Z", "bead": "fx-pl.9", "stage": "Spawned", "detail": "base:0d,account:acct-2"},
+    {"schema": 1, "ts": "2026-09-27T00:45:00Z", "kind": "SeatSpawned", "run": "fx-pl.9-20260927T004300Z", "bead": "fx-pl.9", "seat": "fx-pl.9-20260927T004300Z", "pid": 1},
+
+    {"schema": 1, "ts": "2026-09-27T00:46:00Z", "kind": "RunCreated", "run": "fx-pl.10-20260927T004600Z", "bead": "fx-pl.10", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:50:00Z", "kind": "RunStage", "run": "fx-pl.10-20260927T004600Z", "bead": "fx-pl.10", "stage": "Implemented"},
+
+    {"schema": 1, "ts": "2026-09-27T00:51:00Z", "kind": "RunCreated", "run": "fx-pl.11-20260927T005100Z", "bead": "fx-pl.11", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:55:00Z", "kind": "QuestionRaised", "run": "fx-pl.11-20260927T005100Z", "bead": "fx-pl.11", "question": "fx-pl.q"},
+
+    {"schema": 1, "ts": "2026-09-27T01:00:00Z", "kind": "RunCreated", "run": "fx-pl.12-20260927T010000Z", "bead": "fx-pl.12", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T01:01:00Z", "kind": "RunStage", "run": "fx-pl.12-20260927T010000Z", "bead": "fx-pl.12", "stage": "Merging"}
+  ],
+  "unmapped": 1,
+  "cards": [
+    {"contract": "fx-pl.1", "runs": 1, "stage": "Landed", "reason": null, "account": "acct-1", "elapsed_s": 6600},
+    {"contract": "fx-pl.2", "runs": 2, "stage": "Failed", "reason": "verdict:FAIL kind:literal-mismatch", "account": null, "elapsed_s": 6960},
+    {"contract": "fx-pl.3", "runs": 1, "stage": "Failed", "reason": "verdict:INCONCLUSIVE kind:section-material-missing", "account": null, "elapsed_s": 6840},
+    {"contract": "fx-pl.4", "runs": 1, "stage": "Failed", "reason": "verdict:FAIL", "account": "acct-2", "elapsed_s": 5940},
+    {"contract": "fx-pl.5", "runs": 1, "stage": "Failed", "reason": "verdict:INCONCLUSIVE", "account": null, "elapsed_s": 5820},
+    {"contract": "fx-pl.6", "runs": 1, "stage": "Gated", "reason": null, "account": "acct-3", "elapsed_s": 5400},
+    {"contract": "fx-pl.7", "runs": 1, "stage": "Running", "reason": null, "account": null, "elapsed_s": 4800},
+    {"contract": "fx-pl.8", "runs": 1, "stage": "Running", "reason": null, "account": null, "elapsed_s": 4680},
+    {"contract": "fx-pl.9", "runs": 1, "stage": "Running", "reason": null, "account": "acct-2", "elapsed_s": 4500},
+    {"contract": "fx-pl.10", "runs": 1, "stage": "Running", "reason": null, "account": null, "elapsed_s": 4200},
+    {"contract": "fx-pl.11", "runs": 1, "stage": "Questioned", "reason": null, "account": null, "elapsed_s": 3900},
+    {"contract": "fx-pl.13", "runs": 0, "stage": "Blocked", "reason": null, "account": null, "elapsed_s": null},
+    {"contract": "fx-pl.14", "runs": 0, "stage": "Queued", "reason": null, "account": null, "elapsed_s": null}
+  ]
+}

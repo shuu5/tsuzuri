@@ -5,6 +5,7 @@
 pub mod board;
 pub mod graph;
 pub mod ledger;
+pub mod stats;
 pub mod surface;
 
 /// 時刻（UTC の epoch 秒）。器の tick-last と heartbeat-off と同じ単位。
