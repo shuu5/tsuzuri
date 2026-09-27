@@ -18,6 +18,8 @@
 
 - **最初の周（2026-09-27T07:13Z・持ち主が dispatch.sh を撃った・verified = 器の event log）**: 起動は通った（`dispatch=started:1`・走行 t3-hub.2-20260927T071348Z）。受付の後の契約の審査が FAIL（便 a の行の穴 = cargo xtask check に要る alias の file が write-set に無い・歯が完了の条件の (1)(3)(4) を測らない）。設計席が便 a の行を直した（設計ノート surface-base 第 0.2 版・write-set に Cargo.lock と .cargo/config.toml と .gitignore・検証の行 4 本・xtask の歯 3 本）。審査 FAIL の便は契約の file の中身が変わるまで列に入らない（scribe2 dispatcher.md §8）ので、直しの push の後に dispatch.sh をもう 1 回撃つ。同じ日に憲法 第 1.1 版（条 P-16・判断の記録 ADR-12）が発効。
 
+- **2 周目（2026-09-27T07:17Z）と訂正**: 直した契約で審査 PASS → Spawned（走行 t3-hub.2-20260927T071750Z・base 374ca31）。**訂正（verified）: 列の 1 周（`pipe dispatch`）と列を見る口（`pipe dispatch ls`）は権能なしの口で、設計席も撃てる**（scribe2 dispatcher.md §5・席が `bash ~/.cache/tsuzuri-admin/dispatch.sh` を撃って `dispatch=started:0,resumed:0,waiting:1`・guard は止めない）。止められたのは `pipe intake` の側で、「dispatch は持ち主か管理席」と書いた上の段と §3 の 2 は読み違い。器に常駐の dispatcher は無く、1 周の契機は 便の終端・手動の 1 周・印の直後 の 3 つだけ（時計の契機は無い）。手動が要るのは 最初の 1 回・審査 FAIL の契約を直した後・host の再起動や driver の死亡の後・列が空の時に bead を足した後。以後は設計席が撃つ。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
