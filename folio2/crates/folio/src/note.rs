@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use crate::adr::{Adr, UNFILLED, has_ledger_id, in_enum, unfilled};
 use crate::catalog::FigureType;
 use crate::check::{duplicate_ids, non_empty, row_id, unknown_sections};
-use crate::floor::{floor_diff, strip_notes};
+use crate::floor::{floor_diff_for, strip_notes};
 use crate::floor_adr::{APPROVER, RULING_PATTERN};
 use crate::floor_note::{
     APPROVAL_REQUIRED, CONTRACT_TABLE, DOC, DOC_META, EFFECTIVE_STATUS, EXTERNAL_HEAD,
@@ -150,8 +150,10 @@ fn check_schema_copy(nd: &Path, report: &mut Report) {
         ));
         return;
     };
+    // 外の置き場の字と folio2 の置き場にだけ在る欄は置き場の名で決まる（便 174・`folio schema` と同じ名）
+    let name = nd.parent().and_then(|d| crate::adr::place_name(d).ok());
     let mut drift = Vec::new();
-    floor_diff(&strip_notes(schema), &FLOOR, "", &mut drift);
+    floor_diff_for(&strip_notes(schema), &FLOOR, name.as_deref(), "", &mut drift);
     for path in drift {
         report.violation(
             KIND,

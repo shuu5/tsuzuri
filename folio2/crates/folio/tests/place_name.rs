@@ -6,6 +6,9 @@
 //! 1. 名を替えた置き場は自分の名を出し folio2 を出さない／2. 骨格のままなら名を出さない／
 //! 3. folio2 自身の面・支度表・始まりの凍結の 3 file は folio2 の名のまま／4. 名の無い置き場の 5 種の面に名札も名も無い。
 //!
+//! 便 174（docs/design/delivery-174.md §1 (c)・ADR-16 決定 (2)(オ)）: 5. 外の置き場（骨格の名を替え、規則の表の R-7 が別の意味・
+//! R-13 が無い）の 9 本の生成区間は行 R-8・R-16 のほかの folio2 の番号を名指さない／6. folio2 自身の置き場の生成区間は番号を持ったまま。
+//!
 //! 版管理の下の file は書き換えない（`--dir` の写しと `--out` は必ず一時 dir の中）。
 
 use std::fs;
@@ -316,4 +319,134 @@ fn f154_every_face_of_an_unnamed_place_shows_no_name() {
             assert!(!html.contains(bad), "{file} に「{bad}」が在る");
         }
     }
+}
+
+// ── 便 174: 生成区間は外の置き場で folio2 の番号を名指さない ──
+
+/// 外の置き場でも名指してよい行（ADR-16 決定 (2)(オ)）。
+const F174_RESERVED: [&str; 2] = ["R-8", "R-16"];
+/// 生成区間を持つ 9 本。
+const F174_FILES: [&str; 9] = [
+    "adr/schema.yaml",
+    "design-note/schema.yaml",
+    "ceiling.yaml",
+    "rules.yaml",
+    "index.yaml",
+    "srs.yaml",
+    "vocabulary.yaml",
+    "intake.yaml",
+    "graph.yaml",
+];
+/// folio2 の置き場にだけ在る設計ノートの欄の決まりの 5 欄（値が folio2 の規則の表の行）。
+const F174_HOME_ROWS: [&str; 5] = [
+    "    body_classes_rules_row: R-3\n",
+    "    quality_rules_row: R-14\n",
+    "    tool_version_rules_row: R-15\n",
+    "    retry_rules_row: R-7\n",
+    "    p18_4_judged_by: R-13\n",
+];
+
+/// 生成区間の印の間の字。
+fn f174_region(text: &str) -> String {
+    text.lines()
+        .skip_while(|l| !l.starts_with("# folio:schema:begin"))
+        .skip(1)
+        .take_while(|l| !l.starts_with("# folio:schema:end"))
+        .map(|l| format!("{l}\n"))
+        .collect()
+}
+
+/// id の形の語（前の字が英字でないもの・歯の中の手書き）: ADR-n・NFR/GOAL/CON/FR/AC と数・P-/N-/A- と数（. と数が続いてよい）・
+/// R-/D- と数・便 と数。
+fn f174_ids(text: &str) -> Vec<String> {
+    let c: Vec<char> = text.chars().collect();
+    let num = |at: usize| c.iter().skip(at).take_while(|x| x.is_ascii_digit()).count();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < c.len() {
+        let head: String = c.iter().skip(i).take(4).collect();
+        let prefix = ["ADR-", "NFR", "GOAL", "CON", "FR", "AC"]
+            .iter()
+            .find(|p| head.starts_with(**p))
+            .map(|p| p.chars().count())
+            .or_else(|| {
+                (matches!(c[i], 'P' | 'N' | 'A' | 'R' | 'D') && c.get(i + 1) == Some(&'-')).then_some(2)
+            })
+            .or_else(|| (c[i] == '便').then(|| 1 + c.iter().skip(i + 1).take_while(|x| **x == ' ').count()));
+        let fresh = i == 0 || !c[i - 1].is_ascii_alphabetic();
+        match prefix {
+            Some(p) if fresh && num(i + p) > 0 => {
+                let mut len = p + num(i + p);
+                if matches!(c[i], 'P' | 'N' | 'A') && p == 2 && c.get(i + len) == Some(&'.') && num(i + len + 1) > 0 {
+                    len += 1 + num(i + len + 1);
+                }
+                out.push(c[i..i + len].iter().filter(|x| **x != ' ').collect());
+                i += len;
+            }
+            _ => i += 1,
+        }
+    }
+    out
+}
+
+/// 置き場の 9 本の生成区間: 予約の外の id と判断の記録の決定の番号を持たず、予約の 2 行は名指す。
+fn f174_regions_name_only_reserved_rows(place: &Path) {
+    let mut seen = Vec::new();
+    for file in F174_FILES {
+        let region = f174_region(&fs::read_to_string(place.join(file)).unwrap());
+        assert!(!region.is_empty(), "{file}: 生成区間が無い");
+        let ids = f174_ids(&region);
+        let left: Vec<&String> = ids.iter().filter(|i| !F174_RESERVED.contains(&i.as_str())).collect();
+        assert!(left.is_empty(), "{file} の生成区間が folio2 の番号を名指す: {left:?}");
+        assert!(!region.contains("決定 ("), "{file} の生成区間が判断の記録の決定を名指す");
+        seen.extend(ids);
+    }
+    for id in F174_RESERVED {
+        assert!(seen.iter().any(|i| i == id), "予約の行 {id} を名指さない");
+    }
+}
+
+/// 歯 5: 外の置き場（骨格を tsuzuri の名に替え、規則の表に別の意味の R-7 を足す・R-13 は無い）の 9 本の生成区間は予約の 2 行の
+/// ほかの番号を名指さず（骨格の命令の字も --write の後の字も）、folio2 にだけ在る 5 欄を書かず、--check 0 で、床は設計ノートの
+/// 写しを落とさない。
+#[test]
+fn f174_a_tsuzuri_shaped_place_names_no_folio2_number() {
+    let w = Work::outer("f174-tsuzuri", Some("tsuzuri"));
+    edit(
+        &w.place().join("rules.yaml"),
+        "  - id: R-8\n",
+        "  - id: R-7\n    article: P-1\n    what: 席の停止の検知条件と再起動先・新規投入の線\n    value: 未定\n    kind: deny\n    status: 未定\n    ruling: 未記入\n    ruled_at: 未記入\n    stage: in-loop\n  - id: R-8\n",
+    );
+    // 骨格の命令が書いた字（名は未記入）と、tsuzuri の名で書き直した字（列の根の表の tsuzuri の行が入る）の両方
+    f174_regions_name_only_reserved_rows(&w.place());
+    for flag in ["--write", "--check"] {
+        let out = folio(&["schema", flag], &w.place());
+        assert_eq!(out.status.code(), Some(0), "schema {flag}: {}", both(&out));
+    }
+    f174_regions_name_only_reserved_rows(&w.place());
+    let note = fs::read_to_string(w.place().join("design-note/schema.yaml")).unwrap();
+    for row in F174_HOME_ROWS {
+        assert!(!note.contains(row), "外の置き場に folio2 の欄 {row}");
+    }
+    let check = both(&folio(&["check"], &w.place()));
+    assert!(!check.contains("床の定数と違う"), "{check}");
+}
+
+/// 歯 6: folio2 自身の置き場（repo の正本の憲法と 9 本の写し）の生成区間は番号を持ったまま --check 0。
+#[test]
+fn f174_folio2_keeps_its_numbers() {
+    let w = Work::empty("f174-folio2");
+    let real = repo_root().join("design-intent");
+    for file in F174_FILES.iter().chain(["constitution.yaml"].iter()) {
+        let to = w.place().join(file);
+        fs::create_dir_all(to.parent().unwrap()).unwrap();
+        fs::copy(real.join(file), &to).unwrap();
+    }
+    let out = folio(&["schema", "--check"], &w.place());
+    assert_eq!(out.status.code(), Some(0), "{}", both(&out));
+    let note = f174_region(&fs::read_to_string(w.place().join("design-note/schema.yaml")).unwrap());
+    for row in F174_HOME_ROWS {
+        assert!(note.contains(row), "folio2 の欄 {row} が無い");
+    }
+    assert!(note.contains("（JSON の 5 型の欄の決まりそのまま・ADR-4 決定 (1)）"), "{note}");
 }

@@ -14,6 +14,9 @@
 //!    （便 155・docs/design/delivery-155.md §1 (c)）／
 //! 10. 承認一覧の承認者と逐語の雛形の印「未記入」は空と同じで、日付は年-月-日。凍結の前も後も同じ本文の行で落ち、
 //!     判断の記録の承認欄の逐語の印も落ちる（便 158・docs/design/delivery-158.md §1 (c)）。
+//!
+//! 便 174（docs/design/delivery-174.md §1 (e)）: 名を folio2 の外の名に替えた写しは、設計ノートの欄の決まりの写しも外の置き場の
+//! 形に揃える（`abroad_note`・列の根の表を空にする `empty_table` と同じ扱い）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -198,6 +201,29 @@ fn empty_table(dir: &Path) {
     });
 }
 
+/// 設計ノートの欄の決まりの写しを外の置き場の形にする（便 174）: folio2 の置き場にだけ在る 5 欄の行を落とし、図の spec の
+/// 字から判断の記録の番号の項を落とす（期待の字は手書き・注の欄は床が読まないので触らない）。
+fn abroad_note(dir: &Path) {
+    edit(&dir.join("design-note/schema.yaml"), |t| {
+        let mut t = t.replacen(
+            "（JSON の 5 型の欄の決まりそのまま・ADR-4 決定 (1)）",
+            "（JSON の 5 型の欄の決まりそのまま）",
+            1,
+        );
+        for line in [
+            "    body_classes_rules_row: R-3\n",
+            "    quality_rules_row: R-14\n",
+            "    tool_version_rules_row: R-15\n",
+            "    retry_rules_row: R-7\n",
+            "    p18_4_judged_by: R-13\n",
+        ] {
+            assert!(t.contains(line), "{line}");
+            t = t.replacen(line, "", 1);
+        }
+        t
+    });
+}
+
 fn remove(dir: &Path, files: &[&str]) {
     for f in files {
         fs::remove_file(dir.join("anchors").join(f)).unwrap();
@@ -333,6 +359,7 @@ fn f121_folio2_floor_passes_and_the_copy_holds_its_own_row() {
 fn f121_renamed_constitution_fails_the_floor_twice() {
     let w = Work::new("rename", FLOOR_BASE, true, |_| {});
     rename(&w.dir(), FOLIO2, OTHER);
+    abroad_note(&w.dir());
     w.commit();
     let out = w.check(&[]);
     assert_eq!(out.status.code(), Some(1), "{}", show(&out));
@@ -497,6 +524,7 @@ fn f121_freeze_start_writes_nothing_on_any_finding() {
         no_anchors(d);
         rename(d, FOLIO2, OTHER);
         empty_table(d);
+        abroad_note(d);
     });
     let out = w.check(&["--freeze-start"]);
     assert_eq!(out.status.code(), Some(1), "{}", show(&out));

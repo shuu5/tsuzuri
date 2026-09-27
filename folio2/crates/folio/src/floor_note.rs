@@ -2,6 +2,8 @@
 //! 欄の集合の型 `Keys` とその 2 つの method・欄の決まりの定数・床の木 `FLOOR` を字を変えずに降ろした。検査の本体と
 //! 置き場と違反の種別は `note.rs` に残る。見え方は `note.rs` の検査が読む定数と欄の集合の型・必須の欄・2 つの method だけを広げた。
 //! 読み手は `note.rs` の検査・`schema.rs`（欄の決まりの生成区間の導出）・`derive.rs`（導出物の命令・便 119）。
+//! 型付きの欄のうち folio2 の規則の表の行を名指す 5 欄（figures の 4 欄と guards の p18_4_judged_by）は `Floor::Home`＝folio2 の
+//! 置き場にだけ写し、外の置き場には書かない（便 174・ADR-16 決定 (2)(オ)＝外の置き場で床が id で名指すのは行 R-8 と R-16 だけ）。
 
 use crate::floor::{Floor, keys_floor};
 
@@ -415,14 +417,14 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                 "body_classes_ref",
                 Floor::Val("design-intent/preview/parts.json figure_body_classes"),
             ),
-            ("body_classes_rules_row", Floor::Val("R-3")),
+            ("body_classes_rules_row", Floor::Home(&Floor::Val("R-3"))),
             ("semantic_attrs", Floor::Val("keep")),
             ("viewer_chrome", Floor::Val("discard")),
-            ("quality_rules_row", Floor::Val("R-14")),
-            ("tool_version_rules_row", Floor::Val("R-15")),
+            ("quality_rules_row", Floor::Home(&Floor::Val("R-14"))),
+            ("tool_version_rules_row", Floor::Home(&Floor::Val("R-15"))),
             ("network_commands", Floor::Val("forbid")),
             ("skill_listing", Floor::Val("forbid")),
-            ("retry_rules_row", Floor::Val("R-7")),
+            ("retry_rules_row", Floor::Home(&Floor::Val("R-7"))),
             ("retry_record", Floor::Val("ledger")),
             ("figures_note", Floor::Val("図の正本は設計ノートの figures 節に型付き記述で置き、別 file にも散文にも持たない（ADR-4 決定 (1)）。生成は要件書 FR15（検査を通らない図は生成しない・前の生成物を上書きしない・凍結 anchor が落ちたら「まだ分からない」・決定 (2)(6)）。図の本体の意味の属性は捨てず（semantic_attrs = keep・決定 (3)）、閲覧の仕掛けは捨て（viewer_chrome = discard・決定 (3)）、意味を表す class は部品目録に載り色・字の大きさ・線の太さは design token で塗る（body_classes・R-3・決定 (3)）。道具の通信する命令は使わず（network_commands = forbid）、AI 向けの説明（skill）として載せない（skill_listing = forbid・R-1 の母集団外・決定 (5)）。修正の往復は R-7 が上限で、往復の記録は台帳に残し撤退条件の測定に使う（retry_record = ledger・決定 (7)）。図の対（持ち主の裁定 2026-09-19・f2-648 notes）＝設計ノートの図は、非エンジニア向けの手順図（専門の言葉を使わず「誰が・どの順で・何をして・だめならどうなるか」）と、エンジニア向けの順序図（命令の名・旗・終了コード・file 名をそのまま）を対で置く。見本は design-note/figures.yaml。これは書き方の指針であり床は数えない")),
         ]),
@@ -442,7 +444,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                 ]),
             ),
             ("polarity_list_feed", Floor::Val("true")),
-            ("p18_4_judged_by", Floor::Val("R-13")),
+            ("p18_4_judged_by", Floor::Home(&Floor::Val("R-13"))),
             ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は folio derive --check が数える（便 119・事後の検出で、編集の時点で止める仕掛けの代わりにしない）。prose-mentions は規則の表の行 R-17 の床の歯（2026-09-22 着地・実装 crates/folio/src/mentions.rs・台帳 f2-648.131）で、対象の file の閉じた一覧に design-note/ が在る＝設計ノートの散文の欄に現れた id が、その行の型付きの欄にも相手の行の型付きの欄にも無ければ事後に数える")),
         ]),
     ),

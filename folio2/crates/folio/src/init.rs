@@ -10,6 +10,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use crate::floor::ids_in;
 use crate::schema;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
@@ -259,59 +260,6 @@ fn civil(days: u64) -> String {
 }
 
 // ── folio2 固有の id と括弧の落とし ──
-
-/// 字の中の id の形（前の字が英字でないもの）を全部取る。形 = ADR- と数・便 と数（間の空白は任意）・
-/// FR / NFR / AC / CON に続く数・P- / N- / A- に数（. と数が続いてもよい）・R- / D- に数。
-pub fn ids_in(text: &str) -> Vec<String> {
-    let c: Vec<char> = text.chars().collect();
-    let digits = |from: usize| c[from..].iter().take_while(|x| x.is_ascii_digit()).count();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < c.len() {
-        if i > 0 && c[i - 1].is_ascii_alphabetic() {
-            i += 1;
-            continue;
-        }
-        let rest: String = c[i..c.len().min(i + 4)].iter().collect();
-        let mut found: Option<(usize, String)> = None;
-        if rest.starts_with("ADR-") && digits(i + 4) > 0 {
-            let n = digits(i + 4);
-            found = Some((4 + n, c[i..i + 4 + n].iter().collect()));
-        } else if c[i] == '便' {
-            let sp = c[i + 1..].iter().take_while(|x| **x == ' ').count();
-            let n = digits(i + 1 + sp);
-            if n > 0 {
-                let num: String = c[i + 1 + sp..i + 1 + sp + n].iter().collect();
-                found = Some((1 + sp + n, format!("便{num}")));
-            }
-        } else if let Some(p) = ["NFR", "CON", "FR", "AC"]
-            .iter()
-            .find(|p| rest.starts_with(**p) && digits(i + p.chars().count()) > 0)
-        {
-            let len = p.chars().count();
-            let n = digits(i + len);
-            found = Some((len + n, c[i..i + len + n].iter().collect()));
-        } else if matches!(c[i], 'P' | 'N' | 'A' | 'R' | 'D')
-            && c.get(i + 1) == Some(&'-')
-            && digits(i + 2) > 0
-        {
-            let mut len = 2 + digits(i + 2);
-            if matches!(c[i], 'P' | 'N' | 'A') && c.get(i + len) == Some(&'.') && digits(i + len + 1) > 0
-            {
-                len += 1 + digits(i + len + 1);
-            }
-            found = Some((len, c[i..i + len].iter().collect()));
-        }
-        match found {
-            Some((len, id)) => {
-                out.push(id);
-                i += len;
-            }
-            None => i += 1,
-        }
-    }
-    out
-}
 
 /// 骨格自身の番号でない id を持つか。
 fn has_foreign_id(text: &str) -> bool {

@@ -83,11 +83,12 @@ impl Outcome {
     }
 }
 
-/// 置き場の憲法の名（constitution.yaml の meta.id）で導く file（便 121・ADR-16 決定 (2)(ア)）。判断の記録の欄の決まりの
-/// 列の根の表は置き場の名の行だけを写す＝ほかの 8 本は名を使わない。
+/// 置き場の憲法の名（constitution.yaml の meta.id）を最初に使う file（便 121・ADR-16 決定 (2)(ア)）。判断の記録の欄の決まりの
+/// 列の根の表は置き場の名の行だけを写す。9 本とも名で外の置き場の字を選ぶ（便 174・`floor.rs` の規則 7）ので、名は 1 度だけ
+/// 読み、読めなければ先頭のこの file の手前で「まだ分からない」。
 const NAMED: &str = "adr/schema.yaml";
 
-/// 対象の file 1 本を --write / --check に掛ける。合格なら標準出力の 1 行を返す。`name` は置き場の憲法の名（`NAMED` だけ）。
+/// 対象の file 1 本を --write / --check に掛ける。合格なら標準出力の 1 行を返す。`name` は置き場の憲法の名。
 fn run_one(
     dir: &Path,
     file: &str,
@@ -132,24 +133,21 @@ fn run_one(
 }
 
 pub fn run(dir: &Path, mode: Mode) -> Outcome {
+    let name = match adr::place_name(dir) {
+        Ok(n) => n,
+        // 黙って空の表を書かない（P-4.1）＝先頭の file の手前で「まだ分からない」
+        Err(e) => {
+            return Outcome::refused(
+                Verdict::Unknown,
+                format!(
+                    "{NAMED}: 置き場の憲法の名（meta.id）を読めない＝列の根の表の行を選べない（{e}）"
+                ),
+            );
+        }
+    };
     let mut stdout = Vec::new();
     for (file, floor) in TARGETS {
-        let name = match *file {
-            NAMED => match adr::place_name(dir) {
-                Ok(n) => Some(n),
-                // 黙って空の表を書かない（P-4.1）＝その file の手前で「まだ分からない」
-                Err(e) => {
-                    return Outcome::refused(
-                        Verdict::Unknown,
-                        format!(
-                            "{file}: 置き場の憲法の名（meta.id）を読めない＝列の根の表の行を選べない（{e}）"
-                        ),
-                    );
-                }
-            },
-            _ => None,
-        };
-        match run_one(dir, file, floor, name.as_deref(), mode) {
+        match run_one(dir, file, floor, Some(&name), mode) {
             Ok(line) => stdout.push(line),
             Err(outcome) => return outcome,
         }
@@ -164,6 +162,8 @@ pub fn run(dir: &Path, mode: Mode) -> Outcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::floor::{HOME, floor_diff_for, has_ledger_id, ids_in, strip_notes, text_for};
+    use crate::yaml;
 
     #[test]
     fn schema_region_needs_one_pair_of_marker_lines_in_order() {
@@ -177,6 +177,64 @@ mod tests {
         assert_eq!(
             region_of(&format!("{BEGIN}\n{END}")),
             Some((BEGIN.len() + 1, BEGIN.len() + 1))
+        );
+    }
+
+    /// 便 174 の歯 2: 9 本の床の外の置き場の導出は印を持たず、型付きの欄で字が変わるのは閉じた 2 欄だけで空にならず、
+    /// 同じ名の突き合わせは差 0。folio2 の置き場の名で突き合わせると、列の根の表（判断の記録）・folio2 にだけ在る 5 欄と図の spec（設計ノート）・
+    /// 双方向の字（規則の表）の 3 本だけが違う。
+    #[test]
+    fn f174_abroad_derivation_names_only_reserved_rows() {
+        const ABROAD: Option<&str> = Some("x-constitution");
+        const RESERVED: [&str; 2] = ["R-8", "R-16"];
+        fn typed(node: &Floor, path: &str, out: &mut Vec<String>) {
+            match node {
+                Floor::Map(fields) => {
+                    for (k, v) in fields.iter().filter(|(k, _)| !k.ends_with("_note")) {
+                        typed(v, &format!("{path}.{k}"), out);
+                    }
+                }
+                Floor::Seq(items) => items.iter().for_each(|x| typed(x, path, out)),
+                // 外の置き場には書かない欄
+                Floor::Home(_) => {}
+                Floor::Val(v) => match text_for(v) {
+                    Some(t) if t == *v => {}
+                    Some(_) => out.push(path.to_string()),
+                    None => out.push(format!("{path}（空）")),
+                },
+                Floor::Strs(items) => {
+                    if items.iter().any(|v| text_for(v).as_deref() != Some(*v)) {
+                        out.push(path.to_string());
+                    }
+                }
+                Floor::Num(_) | Floor::Pick(_) => {}
+            }
+        }
+        let mut changed = Vec::new();
+        for (id, floor) in TARGETS {
+            let text = derive_for(floor, ABROAD);
+            let left: Vec<String> = ids_in(&text)
+                .into_iter()
+                .filter(|i| !RESERVED.contains(&i.as_str()))
+                .collect();
+            assert!(left.is_empty(), "{id}: {left:?}");
+            assert!(!text.contains("決定 (") && !has_ledger_id(&text), "{id}");
+            typed(floor, id, &mut changed);
+            let doc = yaml::parse(&text).unwrap();
+            let schema = doc.root.get("schema").unwrap();
+            let differs = [NAMED, "design-note/schema.yaml", "rules.yaml"].contains(id);
+            for (name, empty) in [(ABROAD, true), (Some(HOME), !differs)] {
+                let mut out = Vec::new();
+                floor_diff_for(&strip_notes(schema), floor, name, "", &mut out);
+                assert_eq!(out.is_empty(), empty, "{id} {name:?}: {out:?}");
+            }
+        }
+        assert_eq!(
+            changed,
+            [
+                "design-note/schema.yaml.figures.spec",
+                "rules.yaml.reverse_reference"
+            ]
         );
     }
 }
