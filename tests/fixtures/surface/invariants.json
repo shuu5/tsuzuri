@@ -1,0 +1,22 @@
+{
+  "nodes": [],
+  "edges": [],
+  "unread": [],
+  "beads": {},
+  "runs": {},
+  "invariants": [
+    {"id": "g-1", "verdict": "pass", "violations": 0, "ids": []},
+    {"id": "g-2", "verdict": "violation", "violations": 2, "ids": ["t3-hub.9", "t3-hub.15"]},
+    {"id": "g-3", "verdict": "unknown", "violations": 0, "ids": []},
+    {"id": "g-4", "verdict": "pass", "violations": 0, "ids": []},
+    {"id": "g-5", "verdict": "pass", "violations": 0, "ids": []},
+    {"id": "g-6", "verdict": "pass", "violations": 0, "ids": []},
+    {"id": "g-7", "verdict": "pass", "violations": 0, "ids": []},
+    {"id": "g-8", "verdict": "pass", "violations": 0, "ids": []},
+    {"id": "g-9", "verdict": "unknown", "violations": 0, "ids": []},
+    {"id": "g-10", "verdict": "violation", "violations": 25, "ids": ["n-1", "n-2", "n-3", "n-4", "n-5", "n-6", "n-7", "n-8", "n-9", "n-10", "n-11", "n-12", "n-13", "n-14", "n-15", "n-16", "n-17", "n-18", "n-19", "n-20", "n-21", "n-22", "n-23", "n-24", "n-25"]},
+    {"id": "g-11", "verdict": "pass", "violations": 0, "ids": []},
+    {"id": "g-12", "verdict": "unknown", "violations": 0, "ids": []}
+  ],
+  "skipped": {"design": 0, "ledger": 0}
+}

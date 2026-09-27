@@ -8,7 +8,7 @@ use tsuzuri_contract::board::Reading;
 
 use crate::frame::{self, BRAND, Block, HEADER, Mode, PageId};
 use crate::net;
-use crate::project::{self, ask, askpage, ledger, legend, map, next, pipeline, seat};
+use crate::project::{self, ask, askpage, gaps, ledger, legend, map, next, pipeline, seat};
 use crate::view::{Screen, clock};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, hs};
@@ -17,7 +17,7 @@ use crate::widgets::hover::{CardLayer, HoverCtx};
 /// 題の印（見本の IC.logo）。
 const LOGO: &str = r##"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>"##;
 
-/// nav の印（見本の IC.home・IC.ask・IC.map）。
+/// nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）。
 fn nav_icon(page: PageId) -> &'static str {
     match page {
         PageId::Home => {
@@ -28,6 +28,9 @@ fn nav_icon(page: PageId) -> &'static str {
         }
         PageId::Map => {
             r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg>"#
+        }
+        PageId::Gaps => {
+            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/><path d="M8.5 11h5"/></svg>"#
         }
     }
 }
@@ -180,6 +183,7 @@ fn block_view(block: Block, screen: RwSignal<Screen>) -> AnyView {
         id if id == ledger::BLOCK.id => ledger::view(screen),
         id if id == legend::BLOCK.id => legend::view(),
         id if id == map::BLOCK.id => map::view(),
+        id if id == gaps::BLOCK.id => gaps::view(),
         _ => ().into_any(),
     }
 }

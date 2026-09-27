@@ -1,7 +1,7 @@
 {
   "header": [
     {"part": "brand", "key": "project", "class": "brand", "items": []},
-    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["home", "questions", "map"]},
+    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["home", "questions", "map", "gaps"]},
     {"part": "updated", "key": "last_record", "class": "chip num", "items": []},
     {"part": "mode", "key": "mode", "class": "seg", "items": ["beginner", "expert"]}
   ],
@@ -51,6 +51,19 @@
           "class": "stack",
           "blocks": [
             {"id": "map", "heading": "map", "class": "panel"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gaps",
+      "heading": "gaps",
+      "class": "stack",
+      "columns": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "gaps", "heading": "gaps", "class": "panel"}
           ]
         }
       ]

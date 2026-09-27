@@ -1,6 +1,7 @@
 //! 便 g-frame の歯: 頁の枠の snapshot・block の並び・見出しの語が vocab に在る・画面の class が stylesheet に在る・
 //! data の口が無い block は測れていない・8 つの module・mode が URL に残る・「?」の注釈の分け方。
 //! 便 g-ask で頁は home・ask・map の 3 つになり、home から block ask を外して問いの頁へ移した。
+//! 便 g-gaps で頁は home・ask・map・gaps の 4 つ・module は 9 つになった。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -12,7 +13,7 @@ use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, HEADER, Mode, PageId};
 use tsuzuri_surface::project::{
-    self, Body, STATES, ask, askpage, ledger, legend, map, next, pipeline, seat, state_class,
+    self, Body, STATES, ask, askpage, gaps, ledger, legend, map, next, pipeline, seat, state_class,
 };
 use tsuzuri_surface::view::{Fetched, Screen};
 use tsuzuri_surface::vocab::vocab;
@@ -88,21 +89,22 @@ fn frame_home_blocks_in_order_and_map_page() {
     );
     assert_eq!(frame::ask().block_ids(), vec!["ask", "hist"]);
     assert_eq!(frame::map().block_ids(), vec!["map"]);
+    assert_eq!(frame::gaps().block_ids(), vec!["gaps"]);
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home", "ask", "map"]);
+    assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
     for id in PageId::ALL {
         assert_eq!(frame::page(id).id, id);
     }
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
-    // header の頁の link は ホーム・質問・地図 の順（nav の部品の中の鍵と同じ）。
+    // header の頁の link は ホーム・質問・地図・抜けの検査 の順（nav の部品の中の鍵と同じ）。
     let keys: Vec<&str> = frame::nav_links(PageId::Home)
         .iter()
         .map(|l| l.key)
         .collect();
     assert_eq!(keys, HEADER[1].items.to_vec());
     let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
-    assert_eq!(words, vec!["ホーム", "質問", "地図"]);
+    assert_eq!(words, vec!["ホーム", "質問", "地図", "抜けの検査"]);
 }
 
 /// 見出しの語の鍵（枠・header・nav・指標・凡例・注釈の部品）は全部 vocab の file に在る。
@@ -245,6 +247,9 @@ fn used_classes() -> BTreeSet<String> {
     for (v, _) in STATES {
         add(&state_class(v));
     }
+    for v in gaps::ORDER {
+        add(&gaps::mark_class(gaps::mark(v)));
+    }
     for row in fixture_rows() {
         add(&project::item(&row).shape);
     }
@@ -361,13 +366,14 @@ fn frame_item_shape_follows_status() {
     assert!(!by("bm").alert);
 }
 
-/// block と地図の頁は project の下の 8 つの module に 1 つずつ・枠の module は中身を持たない。
+/// block と地図の頁と抜けの検査の頁は project の下の 9 つの module に 1 つずつ・枠の module は中身を持たない。
 #[test]
 fn frame_one_module_per_block() {
     let modules = [
         ("next", next::BLOCK.id),
         ("ask", ask::BLOCK.id),
         ("askpage", askpage::BLOCK.id),
+        ("gaps", gaps::BLOCK.id),
         ("pipeline", pipeline::BLOCK.id),
         ("seat", seat::BLOCK.id),
         ("ledger", ledger::BLOCK.id),
@@ -415,6 +421,7 @@ fn frame_mode_lives_in_url() {
     assert_eq!(Mode::from_query("?mode=bogus"), Mode::Beginner);
     assert_eq!(PageId::from_query("?page=map&mode=expert"), PageId::Map);
     assert_eq!(PageId::from_query("?page=ask"), PageId::Ask);
+    assert_eq!(PageId::from_query("?page=gaps"), PageId::Gaps);
     assert_eq!(PageId::from_query("?page=bogus"), PageId::Home);
     assert_eq!(PageId::from_query("?mode=expert"), PageId::Home);
     assert_eq!(frame::with_param("", "mode", "expert"), "?mode=expert");

@@ -43,11 +43,11 @@ fn bead(id: &str) -> BeadId {
     BeadId::new(id).expect("bead の id")
 }
 
-/// 頁の順は home・ask・map、問いの頁の block は ask と hist、header の link は ホーム・質問・地図。
+/// 頁の順は home・ask・map・gaps、問いの頁の block は ask と hist、header の link は ホーム・質問・地図・抜けの検査。
 #[test]
 fn askcard_page_frame_and_nav() {
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home", "ask", "map"]);
+    assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
     let page = frame::ask();
     assert_eq!(page.block_ids(), vec!["ask", "hist"]);
     assert_eq!(page.heading, "questions");
@@ -58,9 +58,9 @@ fn askcard_page_frame_and_nav() {
     );
     let links = frame::nav_links(PageId::Ask);
     let words: Vec<String> = links.iter().map(|l| vocab().label(l.key)).collect();
-    assert_eq!(words, vec!["ホーム", "質問", "地図"]);
+    assert_eq!(words, vec!["ホーム", "質問", "地図", "抜けの検査"]);
     let badges: Vec<&str> = links.iter().map(|l| l.badge).collect();
-    assert_eq!(badges, vec!["", BADGE, ""]);
+    assert_eq!(badges, vec!["", BADGE, "", ""]);
     assert_eq!(BADGE, "badge");
     let on: Vec<&str> = links
         .iter()

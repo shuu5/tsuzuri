@@ -2,8 +2,9 @@
 //! 純粋な値だけを持ち、block の中身は持たない（中身は project の下の module ごとに置く）。
 //! 並びと鍵と class は見本（docs/design/mock3 の index.html・ask.html・map.html・ui.css）に揃える。
 //! 問いの頁（便 g-ask）: 頁の順は home・ask・map、header の質問の link に open の問いの数の印を付ける。
+//! 抜けの検査の頁（便 g-gaps）: 頁の順は home・ask・map・gaps（見本の header と同じ 4 つ）。
 
-use crate::project::{ask, askpage, ledger, legend, map, next, pipeline, seat};
+use crate::project::{ask, askpage, gaps, ledger, legend, map, next, pipeline, seat};
 
 /// 1 つの block の枠（DOM の id・見出しの語の鍵・section の class）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,23 +21,25 @@ pub struct Column {
     pub blocks: Vec<Block>,
 }
 
-/// 頁（home・問い・地図）。
+/// 頁（home・問い・地図・抜けの検査）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PageId {
     Home,
     Ask,
     Map,
+    Gaps,
 }
 
 impl PageId {
     /// 頁の全部（nav の順）。
-    pub const ALL: [PageId; 3] = [PageId::Home, PageId::Ask, PageId::Map];
+    pub const ALL: [PageId; 4] = [PageId::Home, PageId::Ask, PageId::Map, PageId::Gaps];
 
     pub fn id(self) -> &'static str {
         match self {
             PageId::Home => "home",
             PageId::Ask => "ask",
             PageId::Map => "map",
+            PageId::Gaps => "gaps",
         }
     }
 
@@ -45,6 +48,7 @@ impl PageId {
         match param(search, "page") {
             Some("ask") => PageId::Ask,
             Some("map") => PageId::Map,
+            Some("gaps") => PageId::Gaps,
             _ => PageId::Home,
         }
     }
@@ -117,16 +121,30 @@ pub fn map() -> Page {
     }
 }
 
+/// 抜けの検査の頁（見本の gaps.html・block は gaps の 1 つ）。
+pub fn gaps() -> Page {
+    Page {
+        id: PageId::Gaps,
+        heading: "gaps",
+        class: STACK,
+        columns: vec![Column {
+            class: STACK,
+            blocks: vec![gaps::BLOCK],
+        }],
+    }
+}
+
 pub fn page(id: PageId) -> Page {
     match id {
         PageId::Home => home(),
         PageId::Ask => ask(),
         PageId::Map => map(),
+        PageId::Gaps => gaps(),
     }
 }
 
 /// 頁の全部（nav の順）。
-pub fn pages() -> [Page; 3] {
+pub fn pages() -> [Page; 4] {
     PageId::ALL.map(page)
 }
 
@@ -151,7 +169,7 @@ pub const HEADER: [HeaderPart; 4] = [
         part: "nav",
         key: "dashboard",
         class: "nav",
-        items: &["home", "questions", "map"],
+        items: &["home", "questions", "map", "gaps"],
     },
     HeaderPart {
         part: "updated",
@@ -243,6 +261,7 @@ pub fn href(page: PageId, mode: Mode) -> String {
         PageId::Home => format!("?mode={}", mode.key()),
         PageId::Ask => format!("?page=ask&mode={}", mode.key()),
         PageId::Map => format!("?page=map&mode={}", mode.key()),
+        PageId::Gaps => format!("?page=gaps&mode={}", mode.key()),
     }
 }
 
