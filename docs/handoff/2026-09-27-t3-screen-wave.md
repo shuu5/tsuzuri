@@ -71,4 +71,4 @@ RunDone（Landed）を event log で確かめてから、`git status` → `cargo
 便 174 と便 176 が着地（folio2 main efe3e7b）。pin を上げる手順: binary を efe3e7b に替える → `folio schema --dir design-intent --write` → commit（門を通さずに入れる）→ 天井の周。番号を落とした後の注の字の小さな壊れ 4 件は、周が所見に挙げたら folio2 へ id を知らせる（folio2 台帳 f2-648.261）。画面の波の後に行う。
 
 ## 12. push 先の宣言を戻す時機（2026-09-27T11:5xZ）
-scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900 秒）。PATH の scribe2 は入れ替え済み。live の driver が古い binary のまま終端で宣言を読むかを scribe2 に問い中。答えを見てから .vessel.toml に remote = "origin" を戻す（.vessel.toml の変更は live の走行を全部の審査のやり直しにする）。
+scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900 秒）。PATH の scribe2 は入れ替え済み。scribe2 の回答: 終端は着地の直後の main の .vessel.toml を読む。古い binary の driver（`readlink /proc/<pid>/exe` が `(deleted)` で終わる）が宣言を読むと 20 ms ごとの照合をする。t3-hub.24（g-graph）の driver が古い binary なので、**t3-hub.24 が終端に着いてから** .vessel.toml に remote = "origin" を戻す（.vessel.toml の変更は live の走行を全部の審査のやり直しにする）。戻す前に、live の driver に古い binary が残っていないかを readlink で確かめる。
