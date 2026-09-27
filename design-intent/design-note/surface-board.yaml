@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.10
+  version: v0.11
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。
 
 sections:
   - n: 1
@@ -190,6 +190,15 @@ sections:
         size: S
         done: (1) 頁の枠の値に抜けの検査の頁（id は gaps・block の id は gaps の 1 つ）が足され、頁の順は home・ask・map・gaps、header の頁の link も同じ順の 4 つになり、snapshot の file と 1 字も違わない (2) 数の札は 3 枚で、順は違反・まだ分からない・合格、数は fixture の 12 本の判定の数と一致する (3) 一覧は違反・まだ分からない・合格の順（同じ判定の中は id の数の順）で 12 行になり、行は記号と名と違反の数を持ち、違反の行の段だけが最初は開いている (4) 12 本の id と名の対応の表は 12 行で、id は g-1 から g-12 の全部を持ち、電文に在って表に無い id の行は id の字を名の代わりに出す (5) 名指しの一覧は 20 件までで、超える分は残りの数の 1 行になる (6) 口が読めないか・まだ読んでいないか・本文が電文の型として読めないときは、12 本とも合格と出さず、測れていないと理由の 1 行を返す (7) 足す外の依存は 0 本
         depends: [g-ask]
+      - id: g-ledger-fix
+        title: block「台帳」の指標の段が、口の本文の形（読めたか、まだ分からないか）を読めるようにする
+        req: [FR13, NFR2]
+        section: "18"
+        write-set: ["crates/tsuzuri-surface/src/project/ledger.rs", "crates/tsuzuri-surface/tests/ledgerblock.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail ledgerblock_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) 実物の口の本文の写し（tests/fixtures/surface/metrics-body.json）を読みの結果として渡すと、指標の段は測れていないでなく中身を返し、上段の open の task の数が写しの known の下の open の task の数（2 の値）と一致する (2) 本文が字 unknown（JSON の文字列）のとき、指標の段は測れていないと、台帳が読めない理由の 1 行を返し、その理由は、口が読めないときの理由とも、本文が電文の型として読めないときの理由とも違う字 (3) 本文が known も unknown も持たない JSON（例は空の object）のときは、今と同じく、電文の型として読めない理由を返す (4) 着地済みの関数の外形（stats・metrics・content の名と引数と返りの型）を変えず、着地済みの歯は、fixture の字を known の鍵で包んで渡す形に直して全部通る (5) 足す外の依存は 0 本
+        depends: [g-ledger]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -338,6 +347,17 @@ sections:
       口が読めないとき・まだ読んでいないとき・本文が電文の型として読めないときは、合格と出さず、測れていないの印と理由の 1 行を出す（要件 NFR2）。
       測り方。札の数・一覧の並び・段が最初に開いているか・名の表・20 件の切り方は、純粋な関数の値にして host の cargo test で pin し、DOM はこの値を順にたどって組み立てる。DOM は wasm の target のときだけ組み立てる。fixture の invariants.json は 12 本の判定（違反 2 本・まだ分からない 3 本・合格 7 本・うち 1 本は違反の id を 25 個持つ）で、5000 byte 以下にする。
       在りか。面の crate は契約の型の crate に依存している（Cargo.toml は触らない）。GraphDoc と InvariantCheck と Verdict は契約の型の crate の graph の module に着地済み。頁の枠の値と頁の id の型は面の crate の frame の module、頁を描く所と block から module を選ぶ所は board の module、block の共通の部品と module の宣言は project の module に在る。語の鍵 gaps・gap_ok・gap_ng・gap_unknown・st_unknown は語の辞書に在る。class の gtiles・gtile・gi・ok・ng・unknown・n・gitem・ttl・aside・body・items・panel は stylesheet に規則が在る。語の辞書と stylesheet は触らない。
+
+  - n: 18
+    type: prose
+    title: 便 g-ledger-fix — 指標の段が口の本文の形を読む
+    body: |
+      便 g-ledger の着地（e7f9754）の後、実物の画面で指標の段が測れていないのままになった。口 /api/metrics の本文は、指標（LedgerStats）そのものでなく、読めたか「まだ分からない」かの型（契約の型の crate の板の module の Reading）で包んだ形で、着地した code は包みを読まずに指標そのものとして読んでいた。便 g-ledger の節の字（口の本文は、読めた LedgerStats か「まだ分からない」）が形を書いていなかったのが原因で、この便で直す。
+      口の本文の形。読めたときは、鍵 known の下に LedgerStats の object を持つ object。読めないときは、字 unknown（JSON の文字列）。この形は Reading の serde の形（鍵は小文字）で、server は Reading の値を電文にして返している（境界の crate の板の module の metrics・便 e-read の着地 fb8053f）。
+      直し方。指標を読む関数（面の crate の project の下の ledger の module の stats・引数は読みの結果）は、本文を Reading の LedgerStats として読む。known なら指標を返す。unknown なら、台帳が読めない理由の 1 行を返す。理由の字は module の定数に置き（本文の字なので語の辞書の鍵を使わない）、口が読めないときの理由（METRICS_REASON）とも、電文の型として読めないときの理由（project の module の NO_CONTENT）とも違う字にする。読めない本文（known も unknown も持たない）は今と同じ理由を返す。
+      実物の本文の写し。設計席が、動いている server の口の本文をそのまま写した file を置いた（tests/fixtures/surface/metrics-body.json・この便の write-set の外で、読むだけ）。歯はこの file を読みの結果として渡し、指標の段が中身を返すことと、open の task の数が写しの中の数と同じことを見る。着地済みの fixture（ledger-stats.json・指標そのものの形の 2 組）は変えず、着地済みの歯は、fixture の指標を known の鍵で包んだ字にしてから渡す形に直す。
+      在りか。Reading は契約の型の crate の板の module（crates/tsuzuri-contract/src/board.rs）、LedgerStats は stats の module、電文を読む関数は契約の型の crate の wire の decode。面の crate は契約の型の crate に依存している（Cargo.toml は触らない）。指標の段の関数（stats・metrics・content）を呼ぶ歯は crates/tsuzuri-surface/tests/ledgerblock.rs だけ（枠の歯は呼ばない）。
+      依存は足さない。
 
 figures: []
 sources:
