@@ -5,9 +5,11 @@
 //! 逼迫の印（見本の上限の字と強調の class）・候補ごとの門で落ちた理由・24 時間の線・測った時刻の列は出さない（未決・R-22）。
 
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::account::{AccountDoc, AccountRow, GroupCard, MoveRow, ProjectRow};
+use tsuzuri_contract::account::{
+    AccountDoc, AccountRow, GroupCard, MoveRow, ProjectRow, SessionLine,
+};
 use tsuzuri_contract::board::{NextMove, Reading};
-use tsuzuri_contract::seat::QuotaUsed;
+use tsuzuri_contract::seat::{QuotaUsed, SeatState};
 use tsuzuri_contract::stats::{CheckResult, NextStep};
 
 use crate::frame::Block;
@@ -16,6 +18,7 @@ use crate::project::next::{big, key};
 use crate::project::seat::{NG, OK, Sign, WINDOWS, WindowRow, hmd, short, window_row};
 use crate::view::Fetched;
 use crate::vocab::label;
+use crate::widgets::hover::Card;
 
 /// 各 project の次の一手（1 段目の左）。
 pub const NXALL: Block = Block {
@@ -215,6 +218,95 @@ pub struct GroupView {
     pub next_account: Option<String>,
     /// 次の移り先の字（無しは語の鍵 no_target の字）。
     pub next: String,
+    /// 群の project の限度で止まった session の数（見出しの横の `.kpi-s`）。
+    pub limited: usize,
+    /// 枠の末尾の詳しくの段（見本の `.gmore`）。
+    pub more: GroupMore,
+}
+
+/// 経験者向けの 1 行の字数（要件 FR14）。
+pub const EXPERT_CHARS: usize = 60;
+
+/// 空白で区切った語を 1 行の字数に畳む（字数を超える語は字数ごとの片に切る・見本の doctorLine の畳み）。
+pub fn wrap_words(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let pieces = text.split_whitespace().flat_map(|w| {
+        let chars: Vec<char> = w.chars().collect();
+        chars
+            .chunks(width)
+            .map(|c| c.iter().collect::<String>())
+            .collect::<Vec<_>>()
+    });
+    let mut lines: Vec<String> = Vec::new();
+    for p in pieces {
+        match lines.last_mut() {
+            Some(l) if l.chars().count() + 1 + p.chars().count() <= width => {
+                l.push(' ');
+                l.push_str(&p);
+            }
+            _ => lines.push(p),
+        }
+    }
+    lines
+}
+
+/// 器の doctor の群の行の形（見本の doctorLine と同じ 6 つの欄の順）。
+pub fn doctor_line(card: &GroupCard) -> String {
+    let row = &card.row;
+    let mut seats: Vec<&str> = Vec::new();
+    for s in card.members.iter().filter_map(|m| m.seat_account.as_deref()) {
+        if !seats.contains(&s) {
+            seats.push(s);
+        }
+    }
+    let seats = if seats.is_empty() {
+        "none".to_string()
+    } else {
+        seats.join(",")
+    };
+    format!(
+        "group={} accounts={} anchors={} seat-accounts={} current={} next={}",
+        row.group,
+        row.candidates.join(","),
+        card.members.len(),
+        seats,
+        row.account,
+        row.next_account.as_deref().unwrap_or("none"),
+    )
+}
+
+/// 群の枠の詳しくの段（記録の数・出所・doctor の群の行）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupMore {
+    /// 記録の数の字（`記録 1 件`・移動が読めなければ `記録 ―`）。
+    pub records: String,
+    /// 出所の字（見本の gm1 src）。
+    pub src: String,
+    /// doctor の群の行を 60 字に畳んだ行。
+    pub doctor: Vec<String>,
+}
+
+/// 群の詳しくの段を組む（記録 1 件は移動の段の 1 行）。
+pub fn group_more(card: &GroupCard, moves: &Reading<Vec<MoveRow>>) -> GroupMore {
+    let name = &card.row.group;
+    let records = match moves {
+        Reading::Known(m) => format!("記録 {} 件", m.iter().filter(|r| &r.group == name).count()),
+        Reading::Unknown => format!("記録 {NONE}"),
+    };
+    GroupMore {
+        records,
+        src: format!("groups/{name}.account・host.toml の群の行"),
+        doctor: wrap_words(&doctor_line(card), EXPERT_CHARS),
+    }
+}
+
+/// 群の project の session のうち限度で止まった数（電文の state の写しだけを数える）。
+pub fn limited(card: &GroupCard, sessions: &[SessionLine]) -> usize {
+    sessions
+        .iter()
+        .filter(|s| s.state == SeatState::Limit)
+        .filter(|s| card.members.iter().any(|m| m.project == s.project))
+        .count()
 }
 
 /// 口座の行の窓（行が無い・usage が読めない・窓が無いは None）。
@@ -225,8 +317,14 @@ fn usage_of<'a>(row: Option<&'a AccountRow>, window: &str) -> Option<&'a QuotaUs
     }
 }
 
-/// 群の枠を 1 つ組む（`accounts` は電文の口座の列・読めなければ None）。
-pub fn group_view(card: &GroupCard, accounts: Option<&[AccountRow]>, at: EpochSecs) -> GroupView {
+/// 群の枠を 1 つ組む（`accounts` は電文の口座の列・読めなければ None・`sessions` と `moves` は電文の列）。
+pub fn group_view(
+    card: &GroupCard,
+    accounts: Option<&[AccountRow]>,
+    sessions: &[SessionLine],
+    moves: &Reading<Vec<MoveRow>>,
+    at: EpochSecs,
+) -> GroupView {
     let row = &card.row;
     let acct = accounts.and_then(|a| a.iter().find(|r| r.label == row.account));
     let since = if card.recorded {
@@ -266,6 +364,8 @@ pub fn group_view(card: &GroupCard, accounts: Option<&[AccountRow]>, at: EpochSe
             .next_account
             .clone()
             .unwrap_or_else(|| label(NO_TARGET_KEY)),
+        limited: limited(card, sessions),
+        more: group_more(card, moves),
     }
 }
 
@@ -320,6 +420,74 @@ pub struct AcctRow {
     pub label: String,
     pub occupant: Occupant,
     pub cells: Cells,
+    /// 名の欄の hover の card（`acct_card`）。
+    pub card: Card,
+}
+
+/// 口座の行を組む器の出力の名（口座の card の出所）。
+pub const ACCT_SRC: &str = "fleet usage --show・doctor の口座の行";
+
+/// 口座の名の欄の hover の card（見本の `__tz_card` の acct の枝・窓ごとの戻る時刻と model と動く session）。
+pub fn acct_card(row: &AccountRow, sessions: &[SessionLine], at: EpochSecs) -> Card {
+    let occ = if row.retired {
+        label(RETIRED_KEY)
+    } else {
+        match &row.occupant {
+            Some(g) => format!("{} {g}", label("occupant")),
+            None => label(FREE_KEY),
+        }
+    };
+    let known = match &row.usage {
+        Reading::Known(u) if !row.retired => Some(u),
+        _ => None,
+    };
+    let value = if row.retired {
+        NONE.to_string()
+    } else if let Some(u) = known {
+        let parts: Vec<String> = WINDOWS
+            .into_iter()
+            .filter_map(|w| u.iter().find(|q| q.window == w))
+            .map(|q| format!("{} {}%", short(&q.window), q.used_pct))
+            .collect();
+        if parts.is_empty() {
+            NONE.to_string()
+        } else {
+            parts.join(" · ")
+        }
+    } else {
+        label(UNKNOWN_KEY)
+    };
+    let mut more: Vec<String> = Vec::new();
+    if let Some(u) = known {
+        for w in WINDOWS {
+            let Some(r) = u.iter().find(|q| q.window == w).and_then(|q| q.resets_at) else {
+                continue;
+            };
+            let mut line = format!("{} ↻ {}", short(w), hmd(r, at));
+            if let (true, Some(m)) = (w == "seven_day_model", &row.model) {
+                line.push_str(&format!(" · {m}"));
+            }
+            more.push(line);
+        }
+    }
+    let mine: Vec<&str> = sessions
+        .iter()
+        .filter(|s| s.account.as_deref() == Some(row.label.as_str()))
+        .map(|s| s.name.as_str())
+        .collect();
+    more.push(if mine.is_empty() {
+        "session 0".to_string()
+    } else {
+        let names: Vec<&str> = mine.iter().take(2).copied().collect();
+        format!("session {} · {}", mine.len(), names.join(" / "))
+    });
+    Card {
+        title: row.label.clone(),
+        kind: format!("{} · {occ}", label("accounts")),
+        value,
+        src: ACCT_SRC.to_string(),
+        more,
+    }
 }
 
 /// 口座 × 窓の見出しの語の鍵（名・占有・3 つの窓）。
@@ -328,16 +496,19 @@ pub const ACCT_HEADS: [&str; 5] = ["accounts", "occupant", "five_hour", "seven_d
 /// 口座 × 窓の列の幅（stylesheet の 7 列から出さない 2 列を除いた 5 列）。
 pub const ACCT_COLS: &str = "grid-template-columns: 80px 156px repeat(3, minmax(0, 1fr))";
 
-/// 口座の行を 1 行にする（窓の時刻は電文の at）。
-pub fn acct_row(row: &AccountRow, at: EpochSecs) -> AcctRow {
+/// 口座の行を 1 行にする（窓の時刻は電文の at・card の session は電文の列）。
+pub fn acct_row(row: &AccountRow, sessions: &[SessionLine], at: EpochSecs) -> AcctRow {
+    let card = acct_card(row, sessions, at);
     if row.retired {
         return AcctRow {
             label: row.label.clone(),
             occupant: Occupant::Retired,
             cells: Cells::Retired,
+            card,
         };
     }
     AcctRow {
+        card,
         label: row.label.clone(),
         occupant: row
             .occupant
@@ -359,6 +530,17 @@ pub struct MvRow {
     pub group: String,
     pub from: String,
     pub to: String,
+}
+
+/// 移動の行の hover の card（見本の `__tz_card` の mv の枝・記録の種類と出所）。
+pub fn mv_card(m: &MvRow) -> Card {
+    Card {
+        title: format!("{} → {}", m.from, m.to),
+        kind: format!("{} · {}", label("moves"), m.group),
+        value: format!("◷ 記録 {}", m.at),
+        src: format!("groups/history/{} ほか", m.group),
+        more: Vec::new(),
+    }
 }
 
 /// 移動の段（初めの行と畳める残り・残りの見出しの字）。
@@ -443,13 +625,18 @@ pub fn home(doc: &AccountDoc) -> Home {
         next: list(next_all(doc), NO_PROJECTS),
         groups: match &doc.groups {
             Reading::Known(g) => list(
-                g.iter().map(|c| group_view(c, accounts, doc.at)).collect(),
+                g.iter()
+                    .map(|c| group_view(c, accounts, &doc.sessions, &doc.moves, doc.at))
+                    .collect(),
                 NO_GROUPS,
             ),
             Reading::Unknown => Body::Unmeasured(GROUPS_UNREAD),
         },
         accounts: match accounts {
-            Some(a) => list(a.iter().map(|r| acct_row(r, doc.at)).collect(), NO_ACCOUNTS),
+            Some(a) => list(
+                a.iter().map(|r| acct_row(r, &doc.sessions, doc.at)).collect(),
+                NO_ACCOUNTS,
+            ),
             None => Body::Unmeasured(ACCOUNTS_UNREAD),
         },
         moves: match &doc.moves {
@@ -500,7 +687,8 @@ mod dom {
     use crate::project::seat::WindowRow;
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::{HelpCtx, h2, hs};
+    use crate::widgets::help::{HelpCtx, h2, hs, shows_internal};
+    use crate::widgets::hover::attach;
 
     /// 測れていない・0 件の段（中身ありは `filled` が組む）。
     fn body_or<T>(body: Body<T>, filled: impl FnOnce(T) -> AnyView) -> AnyView {
@@ -587,15 +775,29 @@ mod dom {
     /// 群の枠の段（見本の `.gtop`・段の見出しは置かず、群の card の列だけ）。
     pub fn groups_view(block: Block) -> AnyView {
         let home = read();
+        let mode = use_context::<HelpCtx>().map(|c| c.mode);
         let body = move || {
             body_or(home.get().groups, |cards| {
-                cards.into_iter().map(group_card).collect_view().into_any()
+                cards
+                    .into_iter()
+                    .map(|g| group_card(g, mode))
+                    .collect_view()
+                    .into_any()
             })
         };
         view! { <section class=block.class id=block.id>{body}</section> }.into_any()
     }
 
-    fn group_card(g: GroupView) -> AnyView {
+    fn group_card(g: GroupView, mode: Option<RwSignal<Mode>>) -> AnyView {
+        // 経験者は詳しくを初めから開く（見本の gmore の open）。
+        let expert = mode.is_some_and(|m| shows_internal(m.get_untracked()));
+        let limit = (g.limited > 0).then(|| state_icon("limit"));
+        let doctor = g
+            .more
+            .doctor
+            .into_iter()
+            .map(|l| view! { <div><code>{l}</code></div> })
+            .collect_view();
         let since = if g.recorded {
             view! { <span class="num">{g.since}</span> }.into_any()
         } else {
@@ -627,7 +829,10 @@ mod dom {
         let data = g.name.clone();
         view! {
             <section class="gcard" data-group=data>
-                <header>{hs("group")}<b class="gname" data-t="">{g.name}</b></header>
+                <header>
+                    {hs("group")}<b class="gname" data-t="">{g.name}</b>
+                    <span class="kpi-s">{limit}{hs("limited")}<b class="num">{g.limited}</b></span>
+                </header>
                 <div class="gcur">
                     <div class="lab">{hs("current_account")}</div>
                     <div class="acc mono">{g.account}</div>
@@ -642,6 +847,14 @@ mod dom {
                 <div class="glab">{hs("candidates")}</div>
                 <ul class="cands2 smpl">{cands}</ul>
                 <div class="glab">{hs("next_target")}<span class="mono">{g.next}</span></div>
+                <details class="gmore" open=expert>
+                    <summary><span class="rm-t">{label("p_more")}</span><span class="rm-a" aria-hidden="true">"▸"</span></summary>
+                    <div class="gm">
+                        <div class="gm1"><span class="num">{g.more.records}</span></div>
+                        <div class="gm1 src">{g.more.src}</div>
+                        <div class="gm1 int xo">{doctor}</div>
+                    </div>
+                </details>
             </section>
         }
         .into_any()
@@ -679,8 +892,9 @@ mod dom {
                 .collect_view()
                 .into_any(),
         };
+        let card = a.card;
         view! {
-            <div class="c-name"><span class="aname">{a.label}</span></div>
+            <div class="c-name" tabindex="0" use:attach=card><span class="aname">{a.label}</span></div>
             <div>{occ}</div>
             {cells}
         }
@@ -743,8 +957,9 @@ mod dom {
     }
 
     fn mv_li(m: MvRow) -> AnyView {
+        let card = super::mv_card(&m);
         view! {
-            <li>
+            <li tabindex="0" use:attach=card>
                 <span class="ic moved" aria-hidden="true">"→"</span>
                 <span class="num">{m.at}</span>
                 <span class="what"><b data-t="">{m.group}</b>" "<span class="mono">{format!("{} → {}", m.from, m.to)}</span></span>
