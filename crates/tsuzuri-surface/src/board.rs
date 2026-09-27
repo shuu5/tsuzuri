@@ -12,10 +12,7 @@ use tsuzuri_contract::board::Reading;
 use crate::account::windows::ACCOUNT_WIN;
 use crate::frame::{self, BACK, BACK_WRAP, BRAND, BackStep, Block, HEADER, Mode, PageId};
 use crate::net;
-use crate::project::{
-    self, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound, pipeline, policy,
-    seat,
-};
+use crate::project::{self, Module, ask, ledger};
 use crate::view::{Screen, clock, clock_short};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, qmark, term};
@@ -93,9 +90,11 @@ fn App() -> impl IntoView {
         let f = fetched.get();
         screen.update(|s| *s = s.after_read(&f, net::now()));
     });
+    // 台帳の block は画面の状態を context から受ける（行 hs-blocks）。
+    provide_context(screen);
     view! {
         {top(page, mode, screen)}
-        <main class="page">{page_view(page, screen)}</main>
+        <main class="page">{page_view(page)}</main>
         <TipLayer/>
         <CardLayer/>
     }
@@ -220,39 +219,23 @@ fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl Int
 }
 
 /// 頁の枠（frame の列と block の並びのとおり）。
-fn page_view(page: PageId, screen: RwSignal<Screen>) -> impl IntoView {
+fn page_view(page: PageId) -> impl IntoView {
     let frame = frame::page(page);
     let columns = frame
         .columns
         .into_iter()
         .map(|c| {
-            let blocks = c
-                .blocks
-                .into_iter()
-                .map(|b| block_view(b, screen))
-                .collect_view();
+            let blocks = c.blocks.into_iter().map(block_view).collect_view();
             view! { <div class=c.class>{blocks}</div> }
         })
         .collect_view();
     view! { <div class=frame.class>{columns}</div> }
 }
 
-/// block の id から中身を描く module を選ぶ。
-fn block_view(block: Block, screen: RwSignal<Screen>) -> AnyView {
-    match block.id {
-        id if id == next::BLOCK.id => next::view(),
-        id if id == ask::BLOCK.id => ask::view(),
-        id if id == askpage::BLOCK.id => askpage::view(),
-        id if id == batch::BLOCK.id => batch::view(),
-        id if id == policy::BLOCK.id => policy::view(),
-        id if id == pipeline::BLOCK.id => pipeline::view(),
-        id if id == seat::BLOCK.id => seat::view(),
-        id if id == ledger::BLOCK.id => ledger::view(screen),
-        id if id == legend::BLOCK.id => legend::view(),
-        id if id == map::BLOCK.id => map::view(),
-        id if id == gaps::BLOCK.id => gaps::view(),
-        id if id == node::BLOCK.id => node::view(),
-        id if id == nodearound::BLOCK.id => nodearound::view(),
-        _ => ().into_any(),
-    }
+/// block の id から中身を描く module を選ぶ（生成した列の中から枠の id の同じ module・無ければ空）。
+fn block_view(block: Block) -> AnyView {
+    Module::ALL
+        .into_iter()
+        .find(|m| m.block().id == block.id)
+        .map_or_else(|| ().into_any(), Module::view)
 }

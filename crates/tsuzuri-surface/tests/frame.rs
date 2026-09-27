@@ -17,8 +17,8 @@ use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
 use tsuzuri_surface::project::{
-    self, Body, STATES, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
-    pipeline, policy, seat, state_class,
+    self, Body, Module, STATES, ask, gaps, ledger, legend, map, next, node, pipeline, seat,
+    state_class,
 };
 use tsuzuri_surface::view::{Fetched, Screen};
 use tsuzuri_surface::vocab::vocab;
@@ -405,25 +405,10 @@ fn frame_item_shape_follows_status() {
     assert!(!by("bm").alert);
 }
 
-/// block と地図の頁と抜けの検査の頁と節点の頁の 2 つと問いの頁の右の列の 2 つは project の下の 13 の module に 1 つずつ・
-/// 枠の module は中身を持たない。
+/// block と地図の頁と抜けの検査の頁と節点の頁の 2 つと問いの頁の右の列の 2 つは project の下の module に 1 つずつ・
+/// 枠の module は中身を持たない（行 hs-blocks: module の列は生成した Module の ALL から導く）。
 #[test]
 fn frame_one_module_per_block() {
-    let modules = [
-        ("next", next::BLOCK.id),
-        ("ask", ask::BLOCK.id),
-        ("askpage", askpage::BLOCK.id),
-        ("batch", batch::BLOCK.id),
-        ("policy", policy::BLOCK.id),
-        ("gaps", gaps::BLOCK.id),
-        ("pipeline", pipeline::BLOCK.id),
-        ("seat", seat::BLOCK.id),
-        ("ledger", ledger::BLOCK.id),
-        ("legend", legend::BLOCK.id),
-        ("map", map::BLOCK.id),
-        ("node", node::BLOCK.id),
-        ("nodearound", nodearound::BLOCK.id),
-    ];
     let dir = crate_dir().join("src/project");
     let mut files: Vec<String> = std::fs::read_dir(&dir)
         .expect("src/project")
@@ -432,19 +417,21 @@ fn frame_one_module_per_block() {
         .filter(|n| n != "mod.rs")
         .collect();
     files.sort();
-    let mut want: Vec<String> = modules.iter().map(|(m, _)| format!("{m}.rs")).collect();
-    want.sort();
+    let want: Vec<String> = Module::ALL
+        .iter()
+        .map(|m| format!("{}.rs", m.name()))
+        .collect();
     assert_eq!(files, want);
-    for (module, id) in modules {
+    for m in Module::ALL {
+        let (module, id) = (m.name(), m.block().id);
         let text = read(&format!("src/project/{module}.rs"));
         assert!(
             text.contains(&format!("id: \"{id}\"")),
             "{module}.rs が block {id} の枠を持たない"
         );
     }
-    assert_eq!(files.len(), 13);
     let mut all: Vec<&str> = all_pages().iter().flat_map(|p| p.block_ids()).collect();
-    let mut declared: Vec<&str> = modules.iter().map(|(_, id)| *id).collect();
+    let mut declared: Vec<&str> = Module::ALL.iter().map(|m| m.block().id).collect();
     all.sort_unstable();
     declared.sort_unstable();
     assert_eq!(all, declared, "枠の block と module の block が 1 対 1");

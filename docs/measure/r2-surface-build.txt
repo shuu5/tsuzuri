@@ -1,0 +1,5 @@
+# 規則の行 R-2 の測り（行 hs-blocks・この crate の最初の生成の行）
+# 増分 check の秒: src/project/ledger.rs を 1 行書き換えた後の cargo check -p tsuzuri-surface --all-targets の Finished の行の秒・3 回の中央値
+# before = 足す前の木（HEAD 87949da・0.76 / 0.82 / 0.89）・after = build.rs と生成した列を足した木（0.31 / 0.29 / 0.35）
+before_s = 0.82
+after_s = 0.31

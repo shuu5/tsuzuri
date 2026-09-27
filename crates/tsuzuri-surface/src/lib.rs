@@ -4,9 +4,11 @@
 //! 地図の頁の面の部品（帯・圧縮・一覧・表・グラフと近傍）は mapview に置く（便 g-map・block の module は project の下の map）。
 //! DOM（board と各 module の view）と通信（net）は wasm の target のときだけ組み立てる（trunk が xtask の surface-build から呼ばれる）。
 //! account board（便 h-frame）は account に置く: 入口は URL の query の board が account のときだけ選ぶ（同じ index.html と wasm）。
+//! block に共通の部品は kit に置く（project が再公開する・行 hs-blocks）。
 
 pub mod account;
 pub mod frame;
+pub mod kit;
 pub mod mapview;
 pub mod project;
 pub mod view;

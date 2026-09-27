@@ -620,8 +620,11 @@ pub fn body(screen: &Screen) -> Body<Vec<Group>> {
     }
 }
 
+/// 画面の状態の signal は context から受ける（無いときは Screen の initial で作る）。
 #[cfg(target_arch = "wasm32")]
-pub fn view(screen: leptos::prelude::RwSignal<Screen>) -> leptos::prelude::AnyView {
+pub fn view() -> leptos::prelude::AnyView {
+    use leptos::prelude::{RwSignal, use_context};
+    let screen = use_context::<RwSignal<Screen>>().unwrap_or_else(|| RwSignal::new(Screen::initial()));
     dom::view(screen)
 }
 
