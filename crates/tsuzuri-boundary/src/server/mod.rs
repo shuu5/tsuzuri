@@ -3,7 +3,8 @@
 //! 台帳は bd の読み取りの口を子 process で撃って読む（§10・便 e-src）。
 //! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
 //! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。束と方針の受付の口は便 e-batch が足す（`batch`・`policy`）。
-//! POST を受ける口は /api/ruling・/api/batch・/api/policy だけで、
+//! account board の読みの口と停止の切り替えの口は行 h-wire が足す（`crate::acct`・`crate::accthb`）。
+//! POST を受ける口は /api/ruling・/api/batch・/api/policy・/api/account/heartbeat だけで、
 //! ほかの GET でない要求は 405 で何も書かない。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
 //! 同じ時に届いた要求は、台帳の読みと設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
@@ -23,6 +24,8 @@
 //! - POST /api/ruling — 裁定の受付（RulingRequest → RulingResponse か RefusalResponse）
 //! - POST /api/batch — 束の受付（BatchRequest → BatchResponse か RefusalResponse）
 //! - POST /api/policy — 方針の受付（PolicyRequest → PolicyResponse か RefusalResponse）
+//! - GET /api/account — account board の読み（AccountDoc・行 h-wire）
+//! - POST /api/account/heartbeat — 停止の切り替えの受付（HeartbeatRequest → HeartbeatResponse か字・行 h-wire）
 //! - GET /api/surface/events — 変化の知らせ（SSE）
 //! - それ以外の GET — 面の file の配布
 
@@ -39,15 +42,17 @@ pub mod ruling;
 pub mod runs;
 pub mod seat;
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Once, Weak};
 use std::thread;
 use std::time::Duration;
 
+use tsuzuri_contract::account::{HEARTBEAT_PATH, PATH as ACCOUNT_PATH};
+use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::Fold;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::{
@@ -55,6 +60,9 @@ use tsuzuri_contract::surface::{
 };
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::around::{AROUND_STEPS, AROUND_STEPS_RANGE};
+
+use crate::acct::Acct;
+use crate::accthb;
 
 use self::board::Sources;
 use self::design::Design;
@@ -153,7 +161,19 @@ struct Shared {
     hub: Arc<Hub>,
     writer: Writer,
     seats: Seats,
+    /// account board の読み（state dir が無ければ None）。
+    acct: Option<Arc<Acct>>,
+    /// acct の変化の印の一覧（初めは空・口 /api/account の最初の要求から `ACCT_MARKS_EVERY` ごとに取り直す）。
+    acct_marks: Arc<Mutex<Vec<PathBuf>>>,
+    /// acct の印の取り直しを 1 回だけ始める。
+    acct_watch: Once,
 }
+
+/// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
+pub const GIT: &str = "git";
+
+/// acct の変化の印の一覧を取り直す間隔（一覧が変わるのは席が移ったときだけ・file の変化は `events::POLL` ごとに見る）。
+pub const ACCT_MARKS_EVERY: Duration = Duration::from_secs(60);
 
 /// 要求の頭を読む時間の上限。
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
@@ -164,8 +184,14 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 impl Server {
     /// bind 先を判定し、置き場を確かめ、口を開き、台帳の周期の読みと板の印の見張りを始める
     /// （最初の読みは戻る前に取るので、bd が返さなければ `ledger::BD_TIMEOUT` まで待つ）。
-    /// state dir は確かめない（無い置き場は走行の出所が読めない扱い）。
+    /// state dir は確かめない（無い置き場は走行の出所が読めない扱い）。git の program は `GIT`。
     pub fn bind(config: &Config) -> Result<Server, StartError> {
+        Server::bind_with(config, OsStr::new(GIT))
+    }
+
+    /// `bind` と同じで、account board の読みが撃つ git の program を受ける。
+    /// state dir が在るときだけ account board の読みを作る（器は口 /api/account の要求まで撃たない）。
+    pub fn bind_with(config: &Config, git: &OsStr) -> Result<Server, StartError> {
         if !bind_allowed(config.bind.ip()) {
             return Err(StartError::BindRefused(config.bind));
         }
@@ -198,10 +224,22 @@ impl Server {
         );
         let (design, runs) = (sources.design.clone(), sources.runs.clone());
         let seat_marks = seats.marks();
+        let acct = config.state_dir.as_ref().map(|state_dir| {
+            Arc::new(Acct::new(
+                config.scribe2.clone(),
+                git,
+                config.bd.clone(),
+                state_dir.clone(),
+                config.repo.clone(),
+            ))
+        });
+        let acct_marks = Arc::new(Mutex::new(Vec::new()));
+        let held_marks = Arc::clone(&acct_marks);
         let hub = Hub::start(sources.ledger.clone(), move || {
             let mut marks = runs.marks();
             marks.extend(design.marks());
             marks.extend(seat_marks.iter().cloned());
+            marks.extend(lock(&held_marks).iter().cloned());
             marks
         });
         let delivery = match (&config.seat, &config.state_dir) {
@@ -225,6 +263,9 @@ impl Server {
                 hub,
                 writer,
                 seats,
+                acct,
+                acct_marks,
+                acct_watch: Once::new(),
             }),
         })
     }
@@ -255,6 +296,9 @@ fn handle(stream: TcpStream, shared: &Shared) {
         Ok(req) if req.method == "POST" && req.path() == ruling::PATH => post_ruling(&req, shared),
         Ok(req) if req.method == "POST" && req.path() == batch::PATH => post_batch(&req, shared),
         Ok(req) if req.method == "POST" && req.path() == policy::PATH => post_policy(&req, shared),
+        Ok(req) if req.method == "POST" && req.path() == HEARTBEAT_PATH => {
+            post_heartbeat(&req, shared)
+        }
         Ok(req) if req.method != "GET" => Response::text(405, "method").header("Allow", "GET"),
         Ok(req) if req.path() == "/api/surface/events" => {
             let _ = events::stream(&stream, &shared.hub);
@@ -294,6 +338,7 @@ fn route(req: &Request, shared: &Shared) -> Response {
             return json(200, wire::encode(&step));
         }
         seat::PATH => return json(200, wire::encode(&shared.seats.card(events::now()))),
+        ACCOUNT_PATH => return account(shared),
         "/api/graph" => {
             let texts = sources.gather(true, true);
             return json(200, wire::encode(&board::graph(&texts)));
@@ -434,6 +479,65 @@ fn post_policy(req: &Request, shared: &Shared) -> Response {
         policy::Outcome::IdShape => Response::text(500, "policy-id-shape"),
         policy::Outcome::AppendFailed => Response::text(502, "ledger-append"),
     }
+}
+
+/// account board の読み。state dir が無ければ器も git も撃たず、口座と群と移動が Unknown で列が空の電文。
+/// 最初の要求で acct の印の取り直しを始める（要求は取り直しを待たない）。
+fn account(shared: &Shared) -> Response {
+    let doc = match &shared.acct {
+        Some(acct) => {
+            shared
+                .acct_watch
+                .call_once(|| watch_acct_marks(Arc::clone(acct), &shared.acct_marks));
+            acct.doc(events::now())
+        }
+        None => tsuzuri_core::account::project::assemble(
+            events::now(),
+            Reading::Unknown,
+            Reading::Unknown,
+            Reading::Unknown,
+            Vec::new(),
+            Vec::new(),
+        ),
+    };
+    json(200, wire::encode(&doc))
+}
+
+/// acct の印の一覧を、始めてすぐと `ACCT_MARKS_EVERY` ごとに `Acct::marks` で置き換える別の thread
+/// （一覧の持ち手が落ちれば止まる）。
+fn watch_acct_marks(acct: Arc<Acct>, marks: &Arc<Mutex<Vec<PathBuf>>>) {
+    let weak: Weak<Mutex<Vec<PathBuf>>> = Arc::downgrade(marks);
+    thread::spawn(move || {
+        loop {
+            let current = acct.marks();
+            let Some(marks) = weak.upgrade() else {
+                return;
+            };
+            *lock(&marks) = current;
+            drop(marks);
+            thread::sleep(ACCT_MARKS_EVERY);
+        }
+    });
+}
+
+/// 停止の切り替えの受付（守りは `guarded`・本文の読みは `accthb::accept`）。
+/// state dir が無ければ器を撃たず 404 no-project。200 の本文は JSON、ほかは字。
+fn post_heartbeat(req: &Request, shared: &Shared) -> Response {
+    let body = match guarded(req, |t| Some(t.to_string())) {
+        Ok(body) => body,
+        Err(response) => return response,
+    };
+    let Some(acct) = &shared.acct else {
+        return Response::text(404, accthb::NO_PROJECT);
+    };
+    match accthb::accept(acct, &body) {
+        (200, text) => Response::json(200, text),
+        (status, text) => Response::text(status, &text),
+    }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// 電文の字の応答（字は契約の型の crate の `wire` が作る・境界の crate は serde に直接依存しない）。

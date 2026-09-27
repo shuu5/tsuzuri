@@ -4,6 +4,7 @@
 //! 便 g-gaps で頁は home・ask・map・gaps の 4 つ・module は 9 つになった。
 //! 便 g-node で nav に出さない節点の頁（block は node と around）を足し、module は 11 になった（nav は 4 つのまま）。
 //! 便 g-batch で問いの頁を 2 列にし（右の列は side stack で batch と policy）、module は 13 になった。
+//! 行 h-wire で header の HEADER の前に「戻る」の部品 BACK を足した（snapshot の header の先頭の 1 行）。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ use tsuzuri_contract::graph::AroundDoc;
 use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, HEADER, Mode, Page, PageId};
+use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
 use tsuzuri_surface::project::{
     self, Body, STATES, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
     pipeline, policy, seat, state_class,
@@ -145,7 +146,7 @@ fn frame_headings_come_from_vocab() {
                 .flat_map(|c| c.blocks.iter().map(|b| b.heading)),
         );
     }
-    for part in HEADER {
+    for part in [BACK].iter().chain(HEADER.iter()) {
         keys.push(part.key);
         keys.extend(part.items);
     }
@@ -250,9 +251,10 @@ fn used_classes() -> BTreeSet<String> {
             }
         }
     }
-    for part in HEADER {
+    for part in [BACK].iter().chain(HEADER.iter()) {
         add(part.class);
     }
+    add(BACK_WRAP);
     for page in PageId::ALL {
         for link in frame::nav_links(page) {
             add(link.class);

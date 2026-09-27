@@ -5,6 +5,7 @@
 //! 抜けの検査の頁（便 g-gaps）: 頁の順は home・ask・map・gaps（見本の header と同じ 4 つ）。
 //! 節点の頁（便 g-node）: query の page=node と id で開き、nav には出さない（nav の順と頁の一覧は 4 つのまま）。
 //! 問いの頁の右の列（便 g-batch）: class side stack の列に batch と policy の 2 つの block。
+//! header の「戻る」（行 h-wire）: HEADER の前の部品 BACK と、account board の窓へ戻る段の列（`back_steps`）。
 
 use crate::mapview::encode;
 use crate::project::{
@@ -218,6 +219,42 @@ pub const HEADER: [HeaderPart; 4] = [
     },
 ];
 
+/// header の「戻る」の部品（HEADER の前に描く・行 h-wire・見本の ui.js の topHTML の `.backwrap` の中の `.upto`）。
+pub const BACK: HeaderPart = HeaderPart {
+    part: "back",
+    key: "acct_back",
+    class: "upto",
+    items: &[],
+};
+
+/// 「戻る」の部品を包む span の class（見本の `.backwrap`）。
+pub const BACK_WRAP: &str = "backwrap";
+
+/// account board の窓を新しく開くときの URL（同じ index.html の query の board が account）。
+pub const ACCOUNT_URL: &str = "?board=account";
+
+/// 「戻る」の 1 段（見本の ui.js の backToBoard）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackStep {
+    /// account board の窓（`tz-account`）を前面へ。
+    Front,
+    /// account board を新しい窓で開く（URL の字）。
+    OpenNew(&'static str),
+    /// 自分の窓を閉じる。
+    CloseSelf,
+}
+
+/// 「戻る」の段の列: account board の窓が在れば前面へ、無ければ `ACCOUNT_URL` を新しい窓で開き、
+/// どちらの後も自分の窓を閉じる。
+pub fn back_steps(account_open: bool) -> Vec<BackStep> {
+    let first = if account_open {
+        BackStep::Front
+    } else {
+        BackStep::OpenNew(ACCOUNT_URL)
+    };
+    vec![first, BackStep::CloseSelf]
+}
+
 /// 題の字（project の名）。
 pub const BRAND: &str = "tsuzuri";
 
@@ -340,8 +377,10 @@ pub fn with_param(search: &str, key: &str, value: &str) -> String {
 /// 枠の値の JSON の字（snapshot の file と 1 字も違わないことを歯が見る）。
 pub fn snapshot() -> String {
     let mut out = String::from("{\n  \"header\": [\n");
-    let header: Vec<String> = HEADER
-        .iter()
+    // 「戻る」の部品は HEADER の前。
+    let header: Vec<String> = [&BACK]
+        .into_iter()
+        .chain(HEADER.iter())
         .map(|h| {
             format!(
                 "    {{\"part\": {}, \"key\": {}, \"class\": {}, \"items\": [{}]}}",

@@ -4,11 +4,13 @@
 //! 質問の link の数の印は問いの一覧の口（ask の module の口）の件数を出す（便 g-ask）。
 //! 節点の頁（便 g-node）は query の page=node で開き、block は node と around の 2 つ（nav には出さない）。
 //! 問いの頁の右の列（便 g-batch）は batch と policy の 2 つの block。
+//! header の先頭の「戻る」（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
 
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
 
-use crate::frame::{self, BRAND, Block, HEADER, Mode, PageId};
+use crate::account::windows::ACCOUNT_WIN;
+use crate::frame::{self, BACK, BACK_WRAP, BRAND, BackStep, Block, HEADER, Mode, PageId};
 use crate::net;
 use crate::project::{
     self, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound, pipeline, policy,
@@ -16,11 +18,17 @@ use crate::project::{
 };
 use crate::view::{Screen, clock, clock_short};
 use crate::vocab::label;
-use crate::widgets::help::{HelpCtx, TipLayer, term};
+use crate::widgets::help::{HelpCtx, TipLayer, qmark, term};
 use crate::widgets::hover::{CardLayer, HoverCtx};
 
 /// 題の印（見本の IC.logo）。
 const LOGO: &str = r##"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>"##;
+
+/// 戻るの印（見本の IC.up）。
+const UP: &str = r#"<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>"#;
+
+/// 空の URL で開いた新しい窓の href。
+const BLANK: &str = "about:blank";
 
 /// nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）。
 fn nav_icon(page: PageId) -> &'static str {
@@ -93,8 +101,55 @@ fn App() -> impl IntoView {
     }
 }
 
-/// 上端の帯: 題・頁の link・最終更新・mode の切り替え（frame の HEADER の順）。
+/// account board へ戻る: 空の URL と窓の名 tz-account で開き、about:blank なら窓が無かった
+/// （frame の `back_steps` の段のとおり、前面へか新しく開くかの後に自分の窓を閉じる）。
+fn back_to_board() {
+    let me = window();
+    let win = me
+        .open_with_url_and_target("", ACCOUNT_WIN)
+        .ok()
+        .flatten();
+    let account_open = win
+        .as_ref()
+        .is_some_and(|w| w.location().href().is_ok_and(|href| href != BLANK));
+    for step in frame::back_steps(account_open) {
+        match step {
+            BackStep::Front => {
+                if let Some(w) = &win {
+                    let _ = w.focus();
+                }
+            }
+            BackStep::OpenNew(url) => {
+                if let Some(w) = &win {
+                    // 空の窓の URL は、この頁の origin と path に query を足した字。
+                    let loc = me.location();
+                    let base = format!(
+                        "{}{}",
+                        loc.origin().unwrap_or_default(),
+                        loc.pathname().unwrap_or_default()
+                    );
+                    let _ = w.location().set_href(&format!("{base}{url}"));
+                    let _ = w.focus();
+                }
+            }
+            BackStep::CloseSelf => {
+                let _ = me.close();
+            }
+        }
+    }
+}
+
+/// 上端の帯: 戻る・題・頁の link・最終更新・mode の切り替え（frame の BACK と HEADER の順）。
 fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl IntoView {
+    let back = view! {
+        <span class=BACK_WRAP>
+            <button type="button" class=BACK.class aria-label=label(BACK.key) on:click=move |_| back_to_board()>
+                <span inner_html=UP></span>
+                <span class="lbl">{label(BACK.key)}</span>
+            </button>
+            {qmark(BACK.key)}
+        </span>
+    };
     let parts = HEADER
         .iter()
         .map(|part| match part.part {
@@ -161,7 +216,7 @@ fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl Int
             }
         })
         .collect_view();
-    view! { <header class="top">{parts}</header> }
+    view! { <header class="top">{back}{parts}</header> }
 }
 
 /// 頁の枠（frame の列と block の並びのとおり）。
