@@ -12,9 +12,12 @@ use tsuzuri_contract::stats::{
 };
 use tsuzuri_contract::wire;
 
+use super::seat::hm;
 use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, item};
 use crate::frame::Block;
-use crate::view::{Fetched, Screen};
+use crate::view::{Fetched, Screen, clock};
+use crate::vocab::label;
+use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
     id: "ledger",
@@ -480,6 +483,8 @@ pub struct Metrics {
     pub lead: String,
     pub spark: Spark,
     pub epics: Vec<EpicBar>,
+    /// burndown の図の hover の card（行 g-ledger-card）。
+    pub burn_card: Card,
 }
 
 impl Metrics {
@@ -599,6 +604,55 @@ pub fn panel(s: &LedgerStats, screen: &Screen) -> Metrics {
         lead: age(s.lead.map(|l| l.p50)),
         spark: spark(&s.days, SPARK_W, SPARK_H),
         epics,
+        burn_card: burn_card(s),
+    }
+}
+
+/// burndown の数の出所（台帳の読み）。
+pub const BURN_SRC: &str = "bd list --all の task";
+
+/// burndown の図の card（見本の ledgerCard の burn の枝）: 題・純減 24h と 7d と closed/日・
+/// 14 日の始めと終わりの open・出所と時点。詳しくは最後の日から 1 日おきに選んだ日を古い順に。
+pub fn burn_card(s: &LedgerStats) -> Card {
+    let n24 = net(s.net_drop_24h);
+    let n7 = net(s.net_drop_7d);
+    let kind = format!(
+        "{}{} 24h · {}{} 7d · {} {}",
+        n24.arrow,
+        n24.text,
+        n7.arrow,
+        n7.text,
+        label("l_rate"),
+        fixed1(s.closed_per_day)
+    );
+    let value = match (s.days.first(), s.days.last()) {
+        (Some(first), Some(last)) => {
+            format!("open {} → {}（{} 日）", first.open, last.open, s.days.len())
+        }
+        _ => format!("open {NONE}"),
+    };
+    let n = s.days.len();
+    let more = s
+        .days
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| (n - 1 - i).is_multiple_of(2))
+        .map(|(_, d)| {
+            format!(
+                "{} open {} · +{} / −{}",
+                &clock(d.end)[5..10],
+                d.open,
+                d.created,
+                d.closed
+            )
+        })
+        .collect();
+    Card {
+        title: label("l_burn"),
+        kind,
+        value,
+        src: format!("{BURN_SRC} · 時点 {}", hm(s.at)),
+        more,
     }
 }
 
@@ -771,6 +825,7 @@ mod dom {
     use crate::view::{Fetched, Screen};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal};
+    use crate::widgets::hover::attach;
 
     pub fn view(screen: RwSignal<Screen>) -> AnyView {
         let fetched = crate::net::read(METRICS_PATH);
@@ -840,7 +895,8 @@ mod dom {
             }
             Tier::Burn => {
                 let items = parts.iter().map(|p| line_view(*p, m)).collect_view();
-                view! { <div class="lmid">{items}</div> }.into_any()
+                view! { <div class="lmid" tabindex="0" use:attach=m.burn_card.clone()>{items}</div> }
+                    .into_any()
             }
             Tier::Memo => {
                 let boxes = parts.iter().map(|p| box_view(*p, m)).collect_view();
@@ -1031,13 +1087,22 @@ mod dom {
         .into_any()
     }
 
-    /// epic の進みの 1 行（題が引けなければ id だけ）。
+    /// epic の進みの 1 行（題が引けなければ id だけ・題は節点の頁への link）。
     fn epic_view(e: &EpicBar) -> AnyView {
         let name = e.title.clone().unwrap_or_else(|| e.id.clone());
         let ratio = format!("{} / {}", e.closed, e.total);
+        let ctx = use_context::<HelpCtx>();
+        let id = e.id.clone();
+        let href = move || {
+            let mode = match ctx {
+                Some(c) => c.mode.get(),
+                None => Mode::from_query(&window().location().search().unwrap_or_default()),
+            };
+            frame::node_href(&id, mode)
+        };
         view! {
             <div class="ep">
-                <span><span class="nid">{e.id.clone()}</span>" "<span data-t="">{name}</span></span>
+                <a href=href><span class="nid">{e.id.clone()}</span>" "<span data-t="">{name}</span></a>
                 <span class="bar" role="img" aria-label=ratio.clone()><i style=format!("width:{}%", e.pct)></i></span>
                 <span class="meta num">{ratio}</span>
             </div>
