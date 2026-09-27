@@ -727,6 +727,7 @@ fn mapview_classes_and_keys_exist() {
         "src/mapview/list.rs",
         "src/mapview/table.rs",
         "src/mapview/graph.rs",
+        "src/mapview/graph/dom.rs",
         "src/mapview/around.rs",
     ];
     for f in files {
