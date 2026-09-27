@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.17
+  version: v0.18
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。第 0.17 版（同日）は中くらいの幅（761px から 900px）で header の中身が縦に潰れる不具合を直す行 g-top-fix を足した。同版で行 g-batch の write-set に tests/nodepage.rs を足し、行 g-top-fix の verify から frame_ の行を外した（受付の断り = 便 g-node の着地で frame_ の字を持つ歯の file が 1 つ増えた）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。第 0.17 版（同日）は中くらいの幅（761px から 900px）で header の中身が縦に潰れる不具合を直す行 g-top-fix を足した。同版で行 g-batch の write-set に tests/nodepage.rs を足し、行 g-top-fix の verify から frame_ の行を外した（受付の断り = 便 g-node の着地で frame_ の字を持つ歯の file が 1 つ増えた）。第 0.18 版（同日）は行 h（account board）を 8 行（h-frame・h-home・h-sess・h-led・h-proj・h-win・h-hb・h-wire）に切り直して足した（server 側は surface-base の b-acct〜e-acct-hb・見本の頁の写しは docs/design/mock3/account）。
 
 sections:
   - n: 1
@@ -32,6 +32,7 @@ sections:
     body: |
       面の crate に account board を置く。HOME（群と口座・各 project の次の一手・畳んだ移動の履歴）・session の表（並べ方と稼働の記録の 3 つの幅）・各 project の tab（表・要対応の重い順）。
       project board は名前つきの新しい窓で開き、「戻る」は窓を閉じて account board へ戻る。停止の切り替えは器の CLI を撃ち、移動中の席には退避までの残り秒を出す。
+      この行は大きさが L で受付を通らないので、第 0.18 版で行 h-frame・h-home・h-sess・h-led・h-proj・h-win・h-hb・h-wire（面）と surface-base の行 b-acct・e-acct-host・e-acct-proj・e-acct・e-acct-hb（server）に切り直した。この行そのものは器に流さない。
   - n: 4
     type: prose
     title: 便 i — 表示面（端末の Chrome）
@@ -253,6 +254,78 @@ sections:
         size: S
         done: (1) view の module に、時刻と今の時刻（どちらも epoch 秒）を受けて短い時刻の字を返す公開の関数 clock_short を足し、2 つの差が 20 時間以内なら時と分と Z（例 1790513580 と 1790513600 で 12:53Z）、20 時間を超えれば月と日と空白と時と分と Z（例 1790427180 と 1790513600 で 09-26 12:53Z）を返し、差は向きを問わない (2) 差がちょうど 20 時間（72000 秒）のときは時と分と Z だけ (3) header の最終の記録の部品は、見出しの語と「?」の button を出さず、class chip num の span の中の字を clock_short の字にし、その字を help の module の term（語の鍵 last_record）で組み、span の title の属性に着地済みの clock の字を持つ (4) まだ 1 度も読めていないときの出し方（測れていないの印と語の鍵 not_yet）は変えない (5) 頁の枠の HEADER の値は変えず、着地済みの歯は xtask の check（歯の全部を撃つ）でそのまま通る (6) 語の辞書と stylesheet は触らず、足す外の依存は 0 本
         depends: [g-node, g-seat-fix]
+      - id: h-frame
+        title: account board の枠（account の module の骨組み・3 つの tab と URL・header・入口の振り分け・block の module の空の形）
+        req: [FR1, FR14, NFR2]
+        section: "25"
+        write-set: ["crates/tsuzuri-surface/src/lib.rs", "crates/tsuzuri-surface/src/main.rs", "+crates/tsuzuri-surface/src/account/mod.rs", "+crates/tsuzuri-surface/src/account/board.rs", "+crates/tsuzuri-surface/src/account/home.rs", "+crates/tsuzuri-surface/src/account/session.rs", "+crates/tsuzuri-surface/src/account/ledger.rs", "+crates/tsuzuri-surface/src/account/projects.rs", "+crates/tsuzuri-surface/src/account/windows.rs", "+crates/tsuzuri-surface/tests/acctframe.rs", "+crates/tsuzuri-surface/tests/snapshots/acctframe.json"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail acctframe_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) URL の query の board が account のときだけ account board の入口を選ぶ関数は、?board=account で真、board が無いか別の字で偽で、偽のときの project board の入口と頁の決め方は変わらない (2) tab の型は home・session・projects の 3 つで、query の tab から決める関数は、session と projects のほかと無いときは home を返し、tab への link の関数は home と beginner で ?board=account&tab=home&mode=beginner、projects と expert で ?board=account&tab=projects&mode=expert を返す (3) header の部品は、題（語の鍵 acct_board）・tab の 3 つの link（語の鍵 tab_home・tab_session・tab_projects・数の印の class badge）・mode の切り替え（語の鍵 mode）の順で、枠の値の JSON の字が snapshot の file の acctframe.json と 1 字も違わない (4) tab ごとの block は、home が nxall と winsp（class hgrid）・groups（class gtop）・allowance・moves、session が sessions と ledger、projects が ptab で、block ごとに 1 つの module（home・windows・session・ledger・projects）が描き、block の id と見出しの語の鍵が枠の値と一致する (5) 数の印の関数は、fixture の acct-doc.json で、home が次の一手の lead がなしでない project の数、session が状態が limit か silent の行の数、projects は home の数が 1 以上なら字「!」で、0 なら出さない (6) 口が読めないか・まだ読んでいないか・本文が AccountDoc として読めないときは、どの block も測れていないと理由の 1 行になる (7) 口の path は契約の型の crate の account の module の PATH を使い、面の crate の src に /api/ で始まる新しい字が無い（着地済みの歯 parts_paths_distinct_in_block_modules がそのまま通る） (8) src の account の下の file に localStorage・sessionStorage・cookie の字が無い (9) 語の辞書・stylesheet・Cargo.toml は触らず、足す外の依存は 0 本
+        depends: []
+      - id: h-home
+        title: account board の HOME（次の一手の並び・群の枠・口座 × 窓・移動）
+        req: [FR11, FR12, FR14, NFR2]
+        section: "26"
+        write-set: ["crates/tsuzuri-surface/src/account/home.rs", "+crates/tsuzuri-surface/tests/accthome.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail accthome_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 次の一手の並びは、fixture の acct-doc.json の project を、lead の閉じた 7 種の順（NextMove の ALL の順）で並べ、同じ種は project の宣言の順で、next が Unknown の project は末尾で測れていないの印を持つ (2) 1 行は、project の名と群の名と、lead の語と 1 行と、6 つの印（限度と移動・応答なし・止まっている走行・束の承認・質問・発効待ち）を持ち、印は判じた当たりが on、当たらないが off、判じなかったが na の class を持つ (3) 群の枠は群の宣言の順で、今の口座・いつから（hmd の字）・前の口座・3 つの窓の使った割合（今の口座の口座の行から・Unknown は「―」）・project の列（一致は ✓ の class gi ok、不一致は ! の class gi ng、Unknown は class gi unknown）・候補の列と次の移り先（無しは語の鍵 no_target）を持ち、記録なしの群はいつからの代わりに記録なしの字を出す (4) 口座 × 窓の行は口座の行の順で、占有の群の名か語の鍵 free_for_pipeline、3 つの窓は着地済みの seat の module の window_row と bar_class の値のまま、退役の口座は窓の代わりに語の鍵 retired を出す (5) 移動は新しい順で、初めの 8 行を出し、残りは畳める段に入れ、段の見出しに残りの数を出す (6) 群の列・口座の列・移動の列のどれかが Unknown のときは、その段だけ測れていないと理由の 1 行になり、ほかの段は出る (7) 逼迫の印（used が cap 以上）と候補ごとの門で落ちた理由と 24 時間の線は出さない (8) 語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        depends: [h-frame]
+      - id: h-sess
+        title: account board の session の表（4 つの並べ方・3 つの幅の稼働の記録・tick と heartbeat・退避までの残り秒）
+        req: [FR1, FR12, FR14, NFR2]
+        section: "27"
+        write-set: ["crates/tsuzuri-surface/src/account/session.rs", "+crates/tsuzuri-surface/tests/acctsess.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail acctsess_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 並べ方は project・account・stage・elapsed の 4 つで、query の sort から決める関数は、ほかの字と無いときは project、書く関数は project のときに sort を消す (2) project の並べは project の宣言の順で群の見出しを持ち、見出しの中は orchestrator が先でほかは名の順、account の並べは口座の行の順で見出しに占有の群の名か語の鍵 free_for_pipeline、口座が無い行は末尾、stage の並べは 3 つの束（limit と silent と止まった run・wait と run・unknown）、elapsed の並べは since の古い順で since の無い行が末尾で、fixture の 4 行で期待の順と一致する (3) 稼働の記録は着地済みの seat の module の span_of と with_span（query の鍵 span）と rects と strip_svg で組み、窓の右端は電文の at (4) orchestrator の行は、tick の健康（席の card の tick_healthy・Unknown は測れていない）と heartbeat（on か off）を出し、退避までの残り秒が在る行だけ class mvgrace で秒の字を出し、席の口座が群の今の口座と違う行は class mvwait を出す (5) 席が無い project の行は、session の欄に語の鍵 seat_none を出す (6) 口が読めないか・まだ読んでいないか・本文が AccountDoc として読めないときは、表の全体が測れていないと理由の 1 行になる (7) 語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        depends: [h-frame]
+      - id: h-led
+        title: account board の台帳の処理状況の表（4 つの並べ方・詳しく）
+        req: [FR13, FR14, NFR2]
+        section: "28"
+        write-set: ["crates/tsuzuri-surface/src/account/ledger.rs", "+crates/tsuzuri-surface/tests/acctled.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail acctled_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) 並べ方は judge・project・net・backlog の 4 つで、query の lsort から決める関数は、ほかの字と無いときは judge、書く関数は judge のときに lsort を消す (2) judge の並べは判定の閉じた 5 値の宣言の順、net の並べは 7 日の純減が小さい順で同じなら 24 時間の純減が小さい順、backlog の並べは open の task が多い順で、どれも台帳が Unknown の project は末尾、同じ値は project の宣言の順 (3) 1 行は判定の語・project の名・open の task の数と 24 時間の純減・closed/日の数を持ち、詳しくの段に ready・blocked・stale・7 日の純減・lead の p50 を持つ (4) 列の最大と最小の印（class xm hi と lo）は、値が 2 つ以上在って最大と最小が違うときだけ付く (5) 台帳が Unknown の project の行は語の鍵 st_unknown と「―」を出す (6) 詳しくの段の開き閉じは頁の一生の間だけ持ち、URL と画面の外の保存に書かない (7) 語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        depends: [h-frame]
+      - id: h-proj
+        title: account board の各 project の表（9 列・4 つの並べ方・詳しく）
+        req: [FR1, FR11, FR13, FR14, NFR2]
+        section: "29"
+        write-set: ["crates/tsuzuri-surface/src/account/projects.rs", "+crates/tsuzuri-surface/tests/acctproj.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail acctproj_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 列は project・p_need・p_wait・l_unref・ledger_block・runs4・seat・accounts・p_open の 9 つで、見出しの語の鍵がこの順 (2) 並べ方は need・group・judge・unref の 4 つで、query の psort から決める関数は、ほかの字と無いときは need、書く関数は need のときに psort を消す (3) need の並べは lead の閉じた 7 種の順で同じなら project の宣言の順、group の並べは群の宣言の順で群が変わる所に群の見出しの行を持つ (4) runs4 の欄は wait・run・stop・land の 4 つの数で、0 の数は class z を持ち、Unknown は「―」 (5) accounts の欄は席の口座と、群の今の口座と同じなら ✓、違えば ! を持つ (6) p_open の欄は、board の URL を持つ project だけ開く button（語の鍵 open_new）を持ち、持たない project は語の鍵 not_yet の押せない字を出す (7) p_wait と l_unref は、この便では電文に値が無いので「―」を出す (8) 語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        depends: [h-frame]
+      - id: h-win
+        title: project board を名前つきの新しい窓で開く（在れば前面へ・開いている窓の一覧）
+        req: [FR1, FR14]
+        section: "30"
+        write-set: ["crates/tsuzuri-surface/src/account/windows.rs", "+crates/tsuzuri-surface/tests/acctwin.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail acctwin_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) 窓の名の関数は project の名 tsuzuri で tz-tsuzuri を返し、account board の窓の名の定数は tz-account (2) 開く URL の関数は、電文の board の字に mode を足した字を返し、board が無い project は無しを返す (3) 窓の一覧の移り方は、開いていない窓を開くと新しい、開いている窓を開くと前面へ、閉じた窓は閉じたで、一覧は開いた順に並び、頁の一生の間だけ持つ (4) button の字は、開いている窓は前面へ、ほかは語の鍵 open_new (5) src の account の下の file に localStorage・sessionStorage・cookie の字が無い (6) Cargo.toml と語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        depends: [h-frame]
+      - id: h-hb
+        title: 停止の切り替えの button と確かめの段と送る（応答の出し方）
+        req: [FR12, FR14, NFR2]
+        section: "31"
+        write-set: ["crates/tsuzuri-surface/src/account/session.rs", "+crates/tsuzuri-surface/src/account/heartbeat.rs", "+crates/tsuzuri-surface/tests/accthb.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail accthb_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) orchestrator の行の button の字は、heartbeat が on なら語の鍵 hb_to_off、off なら hb_to_on で、heartbeat が Unknown の行は button を持たない (2) button を押すと、確かめの段（dialog の要素は使わず、行の下の段）が開き、語の鍵 hb_dlg_lead と hb_dlg_scope の字と、撃つ字「scribe2 seat heartbeat <to> --target <席の名>」を出す (3) 要求の本文は HeartbeatRequest で、project と to だけを持ち、HEARTBEAT_PATH へ着地済みの net の post で送る (4) 応答の出し方は、200 で口を全部読み直し（net の reload_all）、404 の no-project と no-seat と 400 の bad-body と 502 の vessel-failed はそれぞれ節の字を出し、届かなければ口に届かないを出す (5) 送っている間は button を押せない (6) Cargo.toml と語の辞書と stylesheet は触らず、足す外の依存は 0 本
+        depends: [h-sess]
+      - id: h-wire
+        title: つなぐ行（server に 2 つの口と変化の印を登録・project board の header に「戻る」）
+        req: [FR1, FR12, NFR2]
+        section: "32"
+        write-set: ["crates/tsuzuri-boundary/src/server/mod.rs", "+crates/tsuzuri-boundary/tests/server_acctwire.rs", "crates/tsuzuri-surface/src/frame.rs", "crates/tsuzuri-surface/src/board.rs", "crates/tsuzuri-surface/tests/frame.rs", "crates/tsuzuri-surface/tests/snapshots/frame.json", "+crates/tsuzuri-surface/tests/acctwire.rs"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --no-tests=fail acctwire_", "cargo nextest run -p tsuzuri-surface --no-tests=fail acctwire_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) GET の PATH（/api/account）は 200 で、偽の器と偽の git と一時の state dir から、acct の module の読みの関数を直に呼んだ値と同じ電文を返す (2) POST の HEARTBEAT_PATH は、Origin が Host と違えば 403・本文が 65536 byte を越えれば 413 で器を撃たず、ほかは accthb の module の受付の関数の状態の数と本文を返す (3) --state-dir が無いとき、GET の PATH は 200 で、口座と群と移動が Unknown で project の列が空の電文を返し、器を 1 回も撃たない (4) acct の module の変化の印の file のどれかの字が変わると、つないである SSE の口に board-changed が 5 秒以内に届く (5) project board の header の部品は、先頭に「戻る」の部品（語の鍵 acct_back・class upto）を持ち、頁の枠の値の JSON の字（frame の module の snapshot）が直した snapshot の file と 1 字も違わない（acctwire_ の歯が file を読んで比べる） (6) 戻るの振る舞いを決める関数は、tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じるの 3 段を返す (7) 着地済みの口の歯と枠の歯が全部通り、足す外の依存は 0 本
+        depends: [h-frame, h-win, h-hb, g-top-fix]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -509,6 +582,105 @@ sections:
       直し方。最終の記録の部品を 1 つの chip（class chip num）にし、中の字を短い時刻（view の module に足す clock_short）にする。短い時刻は見本の hmd と同じ決め方で、今の時刻との差が 20 時間以内なら時と分と Z（12:53Z）、超えれば月と日を前に足す（09-26 12:53Z）。今の時刻は描く時の net の now。chip の字は help の module の term（便 g-seat-fix が足した・語の鍵と字を受けて、pointer が乗ると説明の card を出す span）で組み、語の鍵は last_record。見出しの語と「?」の button は出さない（説明は chip の字に pointer を乗せると出る）。長い時刻の字（着地済みの clock）は span の title の属性に残す。まだ 1 度も読めていないときの出し方は変えない。
       在りか（着地済み）。header を組む所は board の module の top（部品 updated の枝）。clock と Screen は view の module（crates/tsuzuri-surface/src/view.rs）。term は crates/tsuzuri-surface/src/widgets/help.rs の dom の module（wasm の target のときだけ）。頁の枠の HEADER は frame の module（触らない）。
       測り方。clock_short は純粋な関数にして host の cargo test で pin する（新しい歯の file は topbar.rs・名は topbar_ で始める）。header の DOM は wasm の target のときだけ組み立て、surface-build で組めることを見る。幅ごとの収まりは host で測れないので、着地の後に設計席が実物の画面で測る。
+      依存は足さない。
+
+  - n: 25
+    type: prose
+    title: 便 h-frame — account board の枠
+    body: |
+      account board の頁の枠を、面の crate の新しい module account に置く。見本は docs/design/mock3/account/index.html（見本の頁の写し・data の file は口座名と home の path を持つので写さない）と docs/design/mock3/ui.js の topHTML（PAGE_KIND が account の枝）と acctTabHref。
+      入口。面の入口（crates/tsuzuri-surface/src/main.rs）は、URL の query の board が account のときだけ account の module の mount を呼び、ほかは今のまま board の module の mount を呼ぶ。同じ index.html と wasm を配るので、trunk と xtask の surface-build は変えない。
+      tab と URL。tab は home・session・projects の 3 つ（見本の ACCT_TABS）。query の tab に残し、既定は home。tab への link は ?board=account&tab=<tab>&mode=<mode>。並べ方の sort・lsort・psort と幅の span は tab をまたいで残す（各 block の便が書く）。query の読みと書きは着地済みの frame の module の param と with_param を使う（frame の module は触らない）。
+      header。題（語の鍵 acct_board・見本の IC.vessel の印と字「器」）・tab の 3 つの link（語の鍵 tab_home・tab_session・tab_projects・印の class badge num）・mode の切り替え（語の鍵 mode・class seg）。header の class は top vessel。関係の頁への link と、時点のつまみと、休止中の chip は出さない（未決）。最終の記録の chip は着地済みの view の module の clock で出す（g-top-fix の clock_short が着地していれば、それを使う）。
+      block。home の tab は、1 段目が class hgrid の中に nxall（語の鍵 next_all）と winsp（語の鍵 open_windows）、2 段目が class gtop の群の枠、3 段目が allowance（class panel）、4 段目が moves（class panel fold mvp の畳める段）。session の tab は sessions と ledger（語の鍵 sessions と ledger_state）。projects の tab は ptab（語の鍵 dashboards）。block ごとに 1 つの module（home・windows・session・ledger・projects）で、この便は中身を描かず、読めたら中身はまだ無いの字を出す。
+      data。口は 1 つで、契約の型の crate の account の module の PATH を着地済みの net の read に渡す（全部の block が 1 つの signal を分け合う）。本文は AccountDoc として読む。読めないとき・まだ読んでいないとき・本文が AccountDoc として読めないときは、block ごとに測れていないの印と理由の 1 行（着地済みの project の module の pending と unmeasured と Body）。
+      数の印。home の数は次の一手の lead がなしでない project の数、session の数は状態が limit か silent の行の数、projects は home の数が 1 以上のとき字「!」（見本の BAD）。0 は出さない。
+      在りか（着地済み）。Fetched と clock は crates/tsuzuri-surface/src/view.rs、read・reload_all・post・now は net.rs（wasm の target のときだけ）、param・with_param・Mode・Block は frame.rs、Body・pending・unmeasured・state_icon・section は project の mod.rs、HelpCtx・TipLayer・h1・h2・hs・qmark・term は widgets/help.rs、CardLayer・HoverCtx は widgets/hover.rs、label は vocab.rs。語の鍵 acct_board・tab_home・tab_session・tab_projects・mode・next_all・open_windows・allowance・moves・sessions・ledger_state・dashboards・last_record・not_yet・st_unknown は語の辞書に在る。class top・vessel・nav・badge・num・seg・hgrid・gtop・panel・fold・mvp・stack は stylesheet に在る。
+      触らない file。frame.rs・board.rs・net.rs・view.rs・project の下の全部・widgets の下の全部・vocab.json・style.css・Cargo.toml・tests の既存の全部。
+      測り方。tab と URL と入口の振り分けと数の印は純粋な関数にして host の cargo test で pin する。枠の値は JSON の字にして snapshot の file（tests/snapshots/acctframe.json）と比べる。DOM は wasm の target のときだけ組み、surface-build で組めることを見る。新しい歯は acctframe.rs に置き、名を acctframe_ で始める。
+      依存は足さない。
+  - n: 26
+    type: prose
+    title: 便 h-home — HOME
+    body: |
+      HOME の 4 段を描く。見本は account/index.html の render の home の枝（nxrows・over・arows・mvli）と acct.js の nextAll・meter。
+      次の一手の並び（class nxall と nxrow）。電文の project の行の next（NextStep）の lead で並べる。1 行は project の名（class nxp）・lead の語と 1 行（class nxtop・nxk・nxl）・6 つの印（class nxms と nxm・on・off・na）・開く button（便 h-win の関数）。lead の語は語の鍵 nx_a から nx_g（閉じた 7 種の順に写す）。
+      群の枠（class gcard）。見出し（語の鍵 group と群の名）、今の口座（class gcur・語の鍵 current_account・since_rec・previous）、窓ごとの使った割合（class gpw と pws と pw・語の鍵 pressure）、project の列（class projs と pchip・印は class gi ok・gi ng・gi unknown）、候補（語の鍵 candidates・次の移り先は語の鍵 next_target・無しは no_target）。見本の cap の字（/ 85）と hot の class と、候補ごとの門で落ちた理由は出さない（未決・R-22）。
+      口座 × 窓（class acct-grid）。見出しは語の鍵 accounts・occupant・five_hour・seven_day・seven_day_model。行は口座の名（class c-name・aname）・占有（class occ grp か occ free・語の鍵 free_for_pipeline）・3 つの窓（class c-w と meter・着地済みの seat の module の window_row と bar_class と until）・退役は語の鍵 retired。見本の spark と measured_at の列は出さない（電文に値が無い）。class c-occ は stylesheet に規則が無いので使わない。
+      移動（class mv）。新しい順に 8 行、残りは畳む（見本の SHOWMV）。1 行は時刻（着地済みの seat の module の hmd）・群の名・前 → 後。
+      在りか（着地済み）。window_row・WindowRow・bar_class・until・hm・hmd・short は crates/tsuzuri-surface/src/project/seat.rs。NextMove の ALL（宣言の順が優先の順）は契約の型の crate の board の module、NextStep（欄は checks と lead）と NextCheck は stats の module。語の鍵 nx_a・nx_b・nx_c・nx_d・nx_e・nx_f・nx_g・group・current_account・since_rec・previous・pressure・members・candidates・next_target・no_target・occupant・free_for_pipeline・retired・five_hour・seven_day・seven_day_model・accounts は語の辞書に在る。
+      触らない file。account の下の自分の file（home.rs）のほかの全部。
+      測り方。並べと 1 行の値と印の class は純粋な関数にして host の cargo test で pin する（fixture は便 b-acct の acct-doc.json）。新しい歯は accthome.rs に置き、名を accthome_ で始める。
+      依存は足さない。
+  - n: 27
+    type: prose
+    title: 便 h-sess — session の表
+    body: |
+      session の表を描く。見本は account/index.html の sessRow・sessTable・stageCell と ui.js の tkhbHTML。
+      行。電文の sessions の行を 1 つずつ。列は project（class c-proj）・role（class c-role・語の鍵 role:orchestrator か role:pipeline）・session（class c-ses・席が無ければ語の鍵 seat_none）・accounts（class c-acct）・stage（class c-stage・状態の記号は着地済みの project の module の state_icon）・elapsed（class c-el）・稼働の記録（class c-strip strip24）。見出しの行は class srow hrow。
+      並べ方（見本の SORTS）。project・account・stage・elapsed。query の sort に残し、既定の project のときは消す。束の見出しは class ghead。stage の束の語の鍵は stopped_group・moving_group・no_record。
+      稼働の記録。着地済みの seat の module の Span と span_of と with_span（query の鍵 span）と rects と strip_svg を使う。窓の右端は電文の at。幅の切り替えは着地済みの形のまま（class seg）。
+      合図の行。orchestrator の行は tick の健康（語の鍵 tick_health）と heartbeat（語の鍵 heartbeat）を class tkhb の中に出す。退避までの残り秒（電文の move_left_s）は class mvgrace と語の鍵 move_grace、席の口座が群の今の口座と違う行は class mvwait と語の鍵 seat_mismatch。
+      在りか（着地済み）。seat の module（crates/tsuzuri-surface/src/project/seat.rs）の Span・span_of・with_span・SPAN_KEY・rects・strip_svg・strip_class・hm・hmd。state_icon と state_key と STATES は project の mod.rs。語の鍵 sessions・project・role・session・accounts・stage・elapsed・history・span・sort_by・sort_project・sort_account・sort_stage・sort_elapsed・stopped_group・moving_group・no_record・seat_none・tick_health・heartbeat・move_grace・seat_mismatch は語の辞書に在る。class sess・srow・hrow・ghead・c-strip・strip24・tkhb・mvgrace・mvwait・sortbar・seg は stylesheet に在る。
+      触らない file。session.rs のほかの全部。
+      測り方。並べ・束・行の値・合図の class は純粋な関数にして host の cargo test で pin する。新しい歯は acctsess.rs に置き、名を acctsess_ で始める。
+      依存は足さない。
+  - n: 28
+    type: prose
+    title: 便 h-led — 台帳の処理状況の表
+    body: |
+      台帳の処理状況の表を描く。見本は account/index.html の ledTable・ledOrder・ledMore・extremes と ledger.js の judge。
+      行は電文の project の行の ledger（LedgerStats）と judge。見出しは語の鍵 l_judge・project・l_task・l_rate・l_unref（class jtab と jrow と hrow）。1 行は判定（class c-j）・project（class c-p）・task と 24 時間の純減（class c-n c-task）・closed/日の棒（class rbar）・未反映（この便は電文に値が無いので「―」）。詳しくの段（class rowmore と c-more）は ready・blocked・stale・7 日の純減・lead の p50（語の鍵 l_ready・l_blocked・l_stale・l_net7・l_lead）。
+      並べ方は judge・project・net・backlog（query の lsort・既定の judge のときは消す・語の鍵 sort_judge・sort_project・sort_net・sort_backlog）。
+      在りか（着地済み）。LedgerStats の欄（at・judge・open・blocked・ready・stale・net_drop_24h・net_drop_7d・closed_7d・closed_per_day・lead・days）は契約の型の crate の stats の module。LedgerJudge の ALL は board の module。台帳の block（project の下の ledger の module）の関数は project board のもので、この便は呼ばない（見た目の class だけ揃える）。
+      触らない file。account の下の ledger.rs のほかの全部。
+      測り方。並べと印と行の値は純粋な関数にして host の cargo test で pin する。新しい歯は acctled.rs に置き、名を acctled_ で始める。
+      依存は足さない。
+  - n: 29
+    type: prose
+    title: 便 h-proj — 各 project の表
+    body: |
+      各 project の表を描く。見本は account/index.html の projTable（9 列・PSORTS）。
+      列（class ptab と prow）。project（class c-pn）・要対応（class c-need・lead の語と 1 行）・決定待ち（class c-wait）・未反映（class c-un2）・台帳（class c-led）・run の 4 列（class c-run と rc4 と rq q-wait・q-run・q-stop・q-land・0 は z）・orchestrator（class c-orch・状態の記号と tick と heartbeat）・accounts（class c-acc）・開く（class c-open）。
+      並べ方は need・group・judge・unref（query の psort・既定の need のときは消す）。group の並べは群の見出しの行（class pgh）を持つ。
+      決定待ちと未反映は、この便では電文に値が無いので「―」（未決: ほかの project の台帳と design-intent を読むか）。
+      在りか（着地済み）。語の鍵 project・p_need・p_wait・l_unref・ledger_block・runs4・seat・accounts・p_open・sort_need・sort_group・sort_judge・sort_unref・open_new・not_yet は語の辞書に在る。class は stylesheet に在る（ptab・prow・hrow・c-more・rowmore）。
+      触らない file。projects.rs のほかの全部。
+      測り方。並べと各欄の値と class は純粋な関数にして host の cargo test で pin する。新しい歯は acctproj.rs に置き、名を acctproj_ で始める。
+      依存は足さない。
+  - n: 30
+    type: prose
+    title: 便 h-win — 名前つきの新しい窓
+    body: |
+      project board を名前つきの新しい窓で開く（要件 FR1・持ち主の裁定 2026-09-26 の案 2）。見本は account/index.html の openWin・drawWins と relation.html。
+      窓の名は tz-<project の名>。account board の窓の名は tz-account で、mount の時に自分の窓の名にする。開くときは、この頁が開いた窓の handle が生きていれば前面へ、無ければ window の open に空の URL と窓の名を渡し、返った窓が about:blank なら URL を入れる（新しい）、そうでなければ前面へ。
+      開く URL は電文の project の行の board の字に mode を足した字。board を持たない project は開けない（語の鍵 not_yet）。
+      開いている窓の一覧（HOME の winsp・class items wins）は頁の一生の間だけ持つ。見本は localStorage の tz-wins に残すが、この便は残さない（未決）。
+      在りか（着地済み）。web-sys の Window の feature は面の crate の Cargo.toml に在る（open と focus と name は Window の feature だけで使える）。語の鍵 open_windows・open_new・not_yet は語の辞書に在る。
+      触らない file。windows.rs のほかの全部。Cargo.toml。
+      測り方。窓の名・URL・一覧の移り方・button の字は純粋な関数にして host の cargo test で pin する。新しい歯は acctwin.rs に置き、名を acctwin_ で始める。
+      依存は足さない。
+  - n: 31
+    type: prose
+    title: 便 h-hb — 停止の切り替えの button
+    body: |
+      session の表の orchestrator の行に停止の切り替えを置く（要件 FR12）。見本は ui.js の tkhbHTML・openHB・hbCmd（見本は撃たずに画面の状態だけ変える）。
+      button（class btn hbbtn）の字は、heartbeat が on なら語の鍵 hb_to_off、off なら hb_to_on。押すと行の下に確かめの段を開く。dialog の要素は面の crate の web-sys の feature に無いので使わない（Cargo.toml は触らない）。段は語の鍵 hb_dlg_lead と hb_dlg_scope の字と、撃つ字（class cmd）と、やめると撃つの 2 つの button を持つ。撃つ字は state dir を出さず「scribe2 seat heartbeat <to> --target <席の名>」。
+      送る。本文は HeartbeatRequest（project と to）で、契約の型の crate の account の module の HEARTBEAT_PATH へ、着地済みの net の post で送る。応答の出し方は done のとおり。応答の字（止めた・戻した・理由の字）は見出しでない本文の字なので、語の辞書を使わずに module の定数に置く。
+      在りか（着地済み）。post と reload_all は net.rs。語の鍵 hb_to_off・hb_to_on・hb_dlg_lead・hb_dlg_scope は語の辞書に在る。class hbbtn・tkhb・btn・primary は stylesheet に在る。
+      触らない file。session.rs と heartbeat.rs のほかの全部。
+      測り方。button の字・段の字・要求の本文・応答の出し方は純粋な関数にして host の cargo test で pin する。新しい歯は accthb.rs に置き、名を accthb_ で始める。
+      依存は足さない。
+  - n: 32
+    type: prose
+    title: 便 h-wire — つなぐ行
+    body: |
+      project board の便と重なる file を触るのはこの行だけにする。
+      server。口の振り分け（crates/tsuzuri-boundary/src/server/mod.rs の route と handle）に、GET の PATH と POST の HEARTBEAT_PATH（どちらも契約の型の crate の account の module の定数）を足す。POST は着地済みの guarded（Origin と本文の大きさ）を通してから accthb の module の受付の関数を呼ぶ。起動（Server の bind）で acct の module の読みを作り、変化の印の closure に acct の module の印の file を足す。起動の引数は足さない（--state-dir と --scribe2 と --bd を使う）。
+      project board の「戻る」。header の部品の先頭に「戻る」（語の鍵 acct_back・class backwrap と upto・見本の ui.js の topHTML と backToBoard）を足す。振る舞いは、tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じる。frame の module の HEADER と snapshot の file と枠の歯を直す。
+      在りか（着地済み）。guarded・route・handle・Shared・Hub の起動は server/mod.rs、Hub は server/events.rs、HEADER は frame.rs、top は board.rs。
+      この行は g-top-fix（board.rs と view.rs を触る）の着地の後に起こす。e-acct と e-acct-hb の着地の後に起こす順は台帳の blocks で張る。
+      測り方。server の口の歯は server_acctwire.rs に、戻るの関数の歯は acctwire.rs に置き、名はどちらも acctwire_ で始める。
       依存は足さない。
 
 figures: []
