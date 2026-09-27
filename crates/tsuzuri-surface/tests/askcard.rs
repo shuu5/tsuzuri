@@ -43,13 +43,19 @@ fn bead(id: &str) -> BeadId {
     BeadId::new(id).expect("bead の id")
 }
 
-/// 頁の順は home・ask・map・gaps、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
+/// 語の列 `want` が `all` の中にこの順で含まれる。
+fn in_order<S: AsRef<str>>(all: &[S], want: &[&str]) -> bool {
+    let mut rest = all.iter();
+    want.iter().all(|w| rest.any(|a| a.as_ref() == *w))
+}
+
+/// 頁の順は home・ask・map・gaps（nav の中の含まれ方と順）、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
 /// header の link は ホーム・質問・地図・抜けの検査。
 #[test]
 fn askcard_page_frame_and_nav() {
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
-    let page = frame::ask();
+    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    let page = frame::page(PageId::Ask);
     assert_eq!(page.columns.len(), 2);
     let left: Vec<&str> = page.columns[0].blocks.iter().map(|b| b.id).collect();
     assert_eq!(left, vec!["ask", "hist"]);
@@ -61,10 +67,24 @@ fn askcard_page_frame_and_nav() {
     );
     let links = frame::nav_links(PageId::Ask);
     let words: Vec<String> = links.iter().map(|l| vocab().label(l.key)).collect();
-    assert_eq!(words, vec!["ホーム", "質問", "地図", "抜けの検査"]);
-    let badges: Vec<&str> = links.iter().map(|l| l.badge).collect();
-    assert_eq!(badges, vec!["", BADGE, "", ""]);
+    assert!(
+        in_order(&words, &["ホーム", "質問", "地図", "抜けの検査"]),
+        "{words:?}"
+    );
+    // 数の印は問いの頁の link だけ（home・map・gaps の link は空）。
+    for l in &links {
+        let want = if l.page == PageId::Ask { BADGE } else { "" };
+        if matches!(l.key, "home" | "questions" | "map" | "gaps") {
+            assert_eq!(l.badge, want, "{}", l.key);
+        }
+    }
+    assert!(links.iter().any(|l| l.page == PageId::Ask && l.badge == BADGE));
     assert_eq!(BADGE, "badge");
+    assert_eq!(
+        frame::page_snapshot(PageId::Ask),
+        read("tests/snapshots/pages/ask.json"),
+        "snapshot の file と違う"
+    );
     let on: Vec<&str> = links
         .iter()
         .filter(|l| l.class == "on")

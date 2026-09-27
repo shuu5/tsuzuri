@@ -5,6 +5,7 @@
 //! 節点の頁（便 g-node）は query の page=node で開き、block は node と around の 2 つ（nav には出さない）。
 //! 問いの頁の右の列（便 g-batch）は batch と policy の 2 つの block。
 //! header の先頭の「戻る」（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
+//! nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）は頁の定義の icon の字（行 hs-pages）。
 
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
@@ -26,26 +27,6 @@ const UP: &str = r#"<svg viewBox="0 0 24 24" width="14" height="14" fill="none" 
 
 /// 空の URL で開いた新しい窓の href。
 const BLANK: &str = "about:blank";
-
-/// nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）。
-fn nav_icon(page: PageId) -> &'static str {
-    match page {
-        PageId::Home => {
-            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>"#
-        }
-        PageId::Ask => {
-            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M10 9.5a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2"/><circle cx="12" cy="14.5" r=".6" fill="currentColor"/></svg>"#
-        }
-        PageId::Map => {
-            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg>"#
-        }
-        PageId::Gaps => {
-            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/><path d="M8.5 11h5"/></svg>"#
-        }
-        // 節点の頁は nav に出さない。
-        PageId::Node => "",
-    }
-}
 
 /// body に画面を載せる。
 pub fn mount() {
@@ -175,7 +156,7 @@ fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl Int
                         };
                         view! {
                             <a href=move || frame::href(l.page, mode.get()) class=l.class data-v=l.key data-term=l.key>
-                                <span inner_html=nav_icon(l.page)></span>
+                                <span inner_html=l.page.def().icon></span>
                                 <span class="lbl hd-t">{label(l.key)}</span>
                                 {badge}
                             </a>

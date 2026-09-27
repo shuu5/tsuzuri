@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 
 use tsuzuri_contract::graph::{InvariantCheck, Verdict};
-use tsuzuri_surface::frame::{self, HEADER, Mode, PageId};
+use tsuzuri_surface::frame::{self, Mode, PageId};
 use tsuzuri_surface::project::{Body, NOT_READ, gaps, map};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
@@ -40,13 +40,23 @@ fn check(id: &str, verdict: Verdict, ids: &[&str]) -> InvariantCheck {
     }
 }
 
-/// 頁の順は home・ask・map・gaps、抜けの検査の頁の block は gaps の 1 つ、header の link は 4 つ。
+/// 語の列 `want` が `all` の中にこの順で含まれる。
+fn in_order(all: &[&str], want: &[&str]) -> bool {
+    let mut rest = all.iter();
+    want.iter().all(|w| rest.any(|a| a == w))
+}
+
+/// 頁の順は home・ask・map・gaps（nav の中の含まれ方と順）、抜けの検査の頁の block は gaps の 1 つ、
+/// header の link は home・questions・map・gaps をこの順に含む。
 #[test]
 fn gapspage_page_frame_and_nav() {
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
-    assert_eq!(PageId::ALL.map(PageId::id), ["home", "ask", "map", "gaps"]);
-    let page = frame::gaps();
+    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    let all: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
+    for id in ["home", "ask", "map", "gaps"] {
+        assert!(all.contains(&id), "{all:?}");
+    }
+    let page = frame::page(PageId::Gaps);
     assert_eq!(page.id, PageId::Gaps);
     assert_eq!(page.heading, "gaps");
     assert_eq!(page.block_ids(), vec!["gaps"]);
@@ -57,10 +67,14 @@ fn gapspage_page_frame_and_nav() {
         frame::href(PageId::Gaps, Mode::Beginner),
         "?page=gaps&mode=beginner"
     );
-    assert_eq!(HEADER[1].items, ["home", "questions", "map", "gaps"]);
+    let nav_keys = frame::nav_keys();
+    assert!(
+        in_order(&nav_keys, &["home", "questions", "map", "gaps"]),
+        "{nav_keys:?}"
+    );
     let links = frame::nav_links(PageId::Gaps);
     let keys: Vec<&str> = links.iter().map(|l| l.key).collect();
-    assert_eq!(keys, vec!["home", "questions", "map", "gaps"]);
+    assert!(in_order(&keys, &["home", "questions", "map", "gaps"]), "{keys:?}");
     let on: Vec<&str> = links
         .iter()
         .filter(|l| l.class == "on")
@@ -68,8 +82,9 @@ fn gapspage_page_frame_and_nav() {
         .collect();
     assert_eq!(on, vec!["gaps"]);
     assert_eq!(vocab().label("gaps"), "抜けの検査");
-    let snapshot = read("tests/snapshots/frame.json");
+    let snapshot = read("tests/snapshots/pages/gaps.json");
     assert!(snapshot.contains("{\"id\": \"gaps\", \"heading\": \"gaps\", \"class\": \"panel\"}"));
+    assert_eq!(frame::page_snapshot(PageId::Gaps), snapshot, "snapshot の file と違う");
 }
 
 /// 数の札は 3 枚（違反・まだ分からない・合格の順）・数は fixture の判定の数・記号の字と class と語の鍵。

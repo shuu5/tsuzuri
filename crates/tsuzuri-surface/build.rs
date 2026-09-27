@@ -1,6 +1,7 @@
 //! project board の block の列を src/project の dir から生成する（行 hs-blocks・判断の記録 ADR-13）。
 //! mod.rs でない .rs の file ごとに path の属性と pub mod の宣言を置き、列挙 Module と ALL・name・block・view を足す。
 //! 字は組み立ての出力の dir の project_blocks.rs に書く（今の字と同じなら書き直さない）。trunk の wasm の組み立ても同じ字を得る。
+//! project board の頁も src/pages の dir から同じ書き方で pages.rs に生成する（列挙 PageId と ALL・id・def・行 hs-pages）。
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -8,14 +9,24 @@ use std::path::Path;
 fn main() -> Result<(), String> {
     println!("cargo:rerun-if-changed=src/project");
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/pages");
     let manifest = std::env::var("CARGO_MANIFEST_DIR").map_err(|e| format!("CARGO_MANIFEST_DIR: {e}"))?;
     let out_dir = std::env::var("OUT_DIR").map_err(|e| format!("OUT_DIR: {e}"))?;
     let dir = Path::new(&manifest).join("src").join("project");
     let names = block_names(&dir)?;
     let text = generate(&dir, &names)?;
-    let out = Path::new(&out_dir).join("project_blocks.rs");
-    if std::fs::read_to_string(&out).ok().as_deref() != Some(text.as_str()) {
-        std::fs::write(&out, text).map_err(|e| format!("{}: {e}", out.display()))?;
+    write_if_changed(&Path::new(&out_dir).join("project_blocks.rs"), &text)?;
+    let dir = Path::new(&manifest).join("src").join("pages");
+    let names = block_names(&dir)?;
+    let text = generate_pages(&dir, &names)?;
+    write_if_changed(&Path::new(&out_dir).join("pages.rs"), &text)?;
+    Ok(())
+}
+
+/// 今の字と違うときだけ書く。
+fn write_if_changed(out: &Path, text: &str) -> Result<(), String> {
+    if std::fs::read_to_string(out).ok().as_deref() != Some(text) {
+        std::fs::write(out, text).map_err(|e| format!("{}: {e}", out.display()))?;
     }
     Ok(())
 }
@@ -38,7 +49,8 @@ fn block_names(dir: &Path) -> Result<Vec<String>, String> {
         }
         if !name_ok(name) {
             return Err(format!(
-                "block の file の名は英小文字で始まり英小文字と数字と下線だけ: {file}"
+                "{} の file の名は英小文字で始まり英小文字と数字と下線だけ: {file}",
+                dir.display()
             ));
         }
         names.push(name.to_string());
@@ -72,9 +84,8 @@ fn variant(name: &str) -> String {
     out
 }
 
-/// 生成する字（内側の doc と内側の属性を置かない）。
-fn generate(dir: &Path, names: &[String]) -> Result<String, String> {
-    let mut s = String::new();
+/// 名ごとの path の属性と pub mod の宣言。
+fn modules(s: &mut String, dir: &Path, names: &[String]) -> Result<(), String> {
     let w = |e: std::fmt::Error| e.to_string();
     for name in names {
         let path = dir.join(format!("{name}.rs"));
@@ -84,6 +95,57 @@ fn generate(dir: &Path, names: &[String]) -> Result<String, String> {
         writeln!(s, "#[path = {path:?}]").map_err(w)?;
         writeln!(s, "pub mod {name};").map_err(w)?;
     }
+    Ok(())
+}
+
+/// 頁の生成する字（内側の doc と内側の属性を置かない）。
+fn generate_pages(dir: &Path, names: &[String]) -> Result<String, String> {
+    let mut s = String::new();
+    let w = |e: std::fmt::Error| e.to_string();
+    modules(&mut s, dir, names)?;
+    writeln!(s).map_err(w)?;
+    writeln!(s, "/// project board の頁（src/pages の file ごとに 1 つ・名の順）。").map_err(w)?;
+    writeln!(s, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]").map_err(w)?;
+    writeln!(s, "pub enum PageId {{").map_err(w)?;
+    for name in names {
+        writeln!(s, "    {},", variant(name)).map_err(w)?;
+    }
+    writeln!(s, "}}").map_err(w)?;
+    writeln!(s).map_err(w)?;
+    writeln!(s, "impl PageId {{").map_err(w)?;
+    writeln!(s, "    /// 全部の頁（名の順・nav の順は frame の nav）。").map_err(w)?;
+    writeln!(s, "    pub const ALL: [PageId; {}] = [", names.len()).map_err(w)?;
+    for name in names {
+        writeln!(s, "        PageId::{},", variant(name)).map_err(w)?;
+    }
+    writeln!(s, "    ];").map_err(w)?;
+    writeln!(s).map_err(w)?;
+    writeln!(s, "    /// 頁の id（file の名から拡張子を除いた字・URL の query の page の値）。").map_err(w)?;
+    writeln!(s, "    pub fn id(self) -> &'static str {{").map_err(w)?;
+    writeln!(s, "        match self {{").map_err(w)?;
+    for name in names {
+        writeln!(s, "            PageId::{} => {name:?},", variant(name)).map_err(w)?;
+    }
+    writeln!(s, "        }}").map_err(w)?;
+    writeln!(s, "    }}").map_err(w)?;
+    writeln!(s).map_err(w)?;
+    writeln!(s, "    /// 頁の定義（その頁の PAGE）。").map_err(w)?;
+    writeln!(s, "    pub fn def(self) -> crate::frame::PageDef {{").map_err(w)?;
+    writeln!(s, "        match self {{").map_err(w)?;
+    for name in names {
+        writeln!(s, "            PageId::{} => {name}::PAGE,", variant(name)).map_err(w)?;
+    }
+    writeln!(s, "        }}").map_err(w)?;
+    writeln!(s, "    }}").map_err(w)?;
+    writeln!(s, "}}").map_err(w)?;
+    Ok(s)
+}
+
+/// 生成する字（内側の doc と内側の属性を置かない）。
+fn generate(dir: &Path, names: &[String]) -> Result<String, String> {
+    let mut s = String::new();
+    let w = |e: std::fmt::Error| e.to_string();
+    modules(&mut s, dir, names)?;
     writeln!(s).map_err(w)?;
     writeln!(s, "/// project board の block の module（src/project の file ごとに 1 つ・名の順）。").map_err(w)?;
     writeln!(s, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]").map_err(w)?;

@@ -84,7 +84,7 @@ type ColumnShape = (&'static str, Vec<(&'static str, &'static str, &'static str)
 /// (1) 問いの頁は 2 列: 左の列は ask と hist・右の列は side stack で batch と policy・snapshot の file と 1 字も違わない。
 #[test]
 fn batchpanel_page_frame_two_columns() {
-    let page = frame::ask();
+    let page = frame::page(PageId::Ask);
     assert_eq!(page.id, PageId::Ask);
     let columns: Vec<ColumnShape> = page
         .columns
@@ -119,8 +119,8 @@ fn batchpanel_page_frame_two_columns() {
     assert_eq!(batch::BLOCK, page.columns[1].blocks[0]);
     assert_eq!(policy::BLOCK, page.columns[1].blocks[1]);
     assert_eq!(
-        frame::snapshot(),
-        read("tests/snapshots/frame.json"),
+        frame::page_snapshot(PageId::Ask),
+        read("tests/snapshots/pages/ask.json"),
         "snapshot の file と違う"
     );
     assert_eq!(vocab().label("batch"), "まとめて承認");

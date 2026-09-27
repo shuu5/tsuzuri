@@ -1,0 +1,13 @@
+    {
+      "id": "map",
+      "heading": "map",
+      "class": "stack",
+      "columns": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "map", "heading": "map", "class": "panel"}
+          ]
+        }
+      ]
+    }

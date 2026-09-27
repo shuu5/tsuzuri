@@ -6,12 +6,11 @@
 //! 節点の頁（便 g-node）: query の page=node と id で開き、nav には出さない（nav の順と頁の一覧は 4 つのまま）。
 //! 問いの頁の右の列（便 g-batch）: class side stack の列に batch と policy の 2 つの block。
 //! header の「戻る」（行 h-wire）: HEADER の前の部品 BACK と、account board の窓へ戻る段の列（`back_steps`）。
+//! 頁は src/pages の下に 1 頁 1 file（行 hs-pages・判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
+//! ここは頁の定義（`PageDef`）から頁の枠・nav・link・snapshot を導く（頁の変種の名を持たない）。
 
 use crate::mapview::encode;
-use crate::project::{
-    ask, askpage, batch, gaps, ledger, legend, map, next, node as node_block, nodearound, pipeline,
-    policy, seat,
-};
+pub use crate::pages::PageId;
 
 /// 1 つの block の枠（DOM の id・見出しの語の鍵・section の class）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,41 +27,32 @@ pub struct Column {
     pub blocks: Vec<Block>,
 }
 
-/// 頁（home・問い・地図・抜けの検査・節点）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PageId {
-    Home,
-    Ask,
-    Map,
-    Gaps,
-    /// 節点の頁（nav には出さない）。
-    Node,
+impl PageId {
+    /// URL の query の `page=` から頁を決める（id の同じ頁・無い・知らない値は home）。
+    pub fn from_query(search: &str) -> Self {
+        let want = param(search, "page");
+        PageId::ALL
+            .into_iter()
+            .find(|p| Some(p.id()) == want)
+            .unwrap_or(PageId::Home)
+    }
 }
 
-impl PageId {
-    /// nav の頁の全部（nav の順・節点の頁は入れない）。
-    pub const ALL: [PageId; 4] = [PageId::Home, PageId::Ask, PageId::Map, PageId::Gaps];
-
-    pub fn id(self) -> &'static str {
-        match self {
-            PageId::Home => "home",
-            PageId::Ask => "ask",
-            PageId::Map => "map",
-            PageId::Gaps => "gaps",
-            PageId::Node => "node",
-        }
-    }
-
-    /// URL の query の `page=` から頁を決める（無い・知らない値は home）。
-    pub fn from_query(search: &str) -> Self {
-        match param(search, "page") {
-            Some("ask") => PageId::Ask,
-            Some("map") => PageId::Map,
-            Some("gaps") => PageId::Gaps,
-            Some("node") => PageId::Node,
-            _ => PageId::Home,
-        }
-    }
+/// 1 つの頁の定義（src/pages の下の file ごとの `PAGE`）。
+#[derive(Debug, Clone, Copy)]
+pub struct PageDef {
+    /// nav の語の鍵（頁の見出し）。
+    pub heading: &'static str,
+    /// 列を包む class。
+    pub class: &'static str,
+    /// nav の順（1 から・無ければ nav に出さない）。
+    pub nav: Option<u8>,
+    /// nav の link に open の問いの数の印を付けるか。
+    pub badge: bool,
+    /// nav の印の SVG の字（nav に出さない頁は空）。
+    pub icon: &'static str,
+    /// 頁の列。
+    pub columns: fn() -> Vec<Column>,
 }
 
 /// 1 つの頁の枠（頁の id・nav の語の鍵・列を包む class・列）。
@@ -90,96 +80,35 @@ pub const STACK: &str = "stack";
 /// 右の列の class（見本の ask.html の `aside.side.stack`）。
 pub const SIDE: &str = "side stack";
 
-/// home の頁: 次の一手・pipeline・台帳・凡例 ｜ orchestrator と口座（2 列の grid・見本の `.home`）。
-pub fn home() -> Page {
-    Page {
-        id: PageId::Home,
-        heading: "home",
-        class: "home",
-        columns: vec![
-            Column {
-                class: STACK,
-                blocks: vec![next::BLOCK, pipeline::BLOCK, ledger::BLOCK, legend::BLOCK],
-            },
-            Column {
-                class: STACK,
-                blocks: vec![seat::BLOCK],
-            },
-        ],
-    }
-}
-
-/// 問いの頁: 問いの card の列・これまでの決定 ｜ まとめて承認・全体への指示（見本の ask.html の `.ask` の 2 列）。
-pub fn ask() -> Page {
-    Page {
-        id: PageId::Ask,
-        heading: "questions",
-        class: "ask",
-        columns: vec![
-            Column {
-                class: STACK,
-                blocks: vec![ask::BLOCK, askpage::BLOCK],
-            },
-            Column {
-                class: SIDE,
-                blocks: vec![batch::BLOCK, policy::BLOCK],
-            },
-        ],
-    }
-}
-
-/// 地図の頁（枠と見出しだけ・中身は後の便）。
-pub fn map() -> Page {
-    Page {
-        id: PageId::Map,
-        heading: "map",
-        class: STACK,
-        columns: vec![Column {
-            class: STACK,
-            blocks: vec![map::BLOCK],
-        }],
-    }
-}
-
-/// 抜けの検査の頁（見本の gaps.html・block は gaps の 1 つ）。
-pub fn gaps() -> Page {
-    Page {
-        id: PageId::Gaps,
-        heading: "gaps",
-        class: STACK,
-        columns: vec![Column {
-            class: STACK,
-            blocks: vec![gaps::BLOCK],
-        }],
-    }
-}
-
-/// 節点の頁（見本の bead.html・block は頭と概要の node と、つながりの around の 2 つ）。
-pub fn node() -> Page {
-    Page {
-        id: PageId::Node,
-        heading: "nb_self",
-        class: STACK,
-        columns: vec![Column {
-            class: STACK,
-            blocks: vec![node_block::BLOCK, nodearound::BLOCK],
-        }],
-    }
-}
-
+/// 頁の枠（頁の定義の値のとおり）。
 pub fn page(id: PageId) -> Page {
-    match id {
-        PageId::Home => home(),
-        PageId::Ask => ask(),
-        PageId::Map => map(),
-        PageId::Gaps => gaps(),
-        PageId::Node => node(),
+    let def = id.def();
+    Page {
+        id,
+        heading: def.heading,
+        class: def.class,
+        columns: (def.columns)(),
     }
 }
 
-/// 頁の全部（nav の順）。
-pub fn pages() -> [Page; 4] {
-    PageId::ALL.map(page)
+/// nav の頁（頁の定義の nav が在る頁を nav の数の順に）。
+pub fn nav() -> Vec<PageId> {
+    let mut out: Vec<(u8, PageId)> = PageId::ALL
+        .into_iter()
+        .filter_map(|p| p.def().nav.map(|n| (n, p)))
+        .collect();
+    out.sort_by_key(|(n, _)| *n);
+    out.into_iter().map(|(_, p)| p).collect()
+}
+
+/// nav の頁の枠（nav の順）。
+pub fn pages() -> Vec<Page> {
+    nav().into_iter().map(page).collect()
+}
+
+/// nav の頁の語の鍵（nav の順・header の nav の部品の中の鍵）。
+pub fn nav_keys() -> Vec<&'static str> {
+    nav().into_iter().map(|p| p.def().heading).collect()
 }
 
 /// header の 1 つの部品（役・語の鍵・class・中の語の鍵）。
@@ -192,6 +121,7 @@ pub struct HeaderPart {
 }
 
 /// header の部品（題・頁の link・最終更新・mode の切り替え・この順）。
+/// nav の部品の中の鍵は頁から導く（`nav_keys`・ここは空）。
 pub const HEADER: [HeaderPart; 4] = [
     HeaderPart {
         part: "brand",
@@ -203,7 +133,7 @@ pub const HEADER: [HeaderPart; 4] = [
         part: "nav",
         key: "dashboard",
         class: "nav",
-        items: &["home", "questions", "map", "gaps"],
+        items: &[],
     },
     HeaderPart {
         part: "updated",
@@ -307,15 +237,18 @@ pub struct NavLink {
 /// header の質問の link の数の印の class（見本の `.nav .badge`）。
 pub const BADGE: &str = "badge";
 
-/// nav の link（header の nav の部品の順）。
+/// nav の link（nav の順・数の印は頁の定義の badge が真の頁だけ）。
 pub fn nav_links(current: PageId) -> Vec<NavLink> {
-    pages()
-        .iter()
-        .map(|p| NavLink {
-            key: p.heading,
-            page: p.id,
-            class: if p.id == current { "on" } else { "" },
-            badge: if p.id == PageId::Ask { BADGE } else { "" },
+    nav()
+        .into_iter()
+        .map(|p| {
+            let def = p.def();
+            NavLink {
+                key: def.heading,
+                page: p,
+                class: if p == current { "on" } else { "" },
+                badge: if def.badge { BADGE } else { "" },
+            }
         })
         .collect()
 }
@@ -327,12 +260,10 @@ pub fn badge(open: Option<usize>) -> Option<String> {
 
 /// 頁への link（同じ path の query だけ・mode を URL に残す）。
 pub fn href(page: PageId, mode: Mode) -> String {
-    match page {
-        PageId::Home => format!("?mode={}", mode.key()),
-        PageId::Ask => format!("?page=ask&mode={}", mode.key()),
-        PageId::Map => format!("?page=map&mode={}", mode.key()),
-        PageId::Gaps => format!("?page=gaps&mode={}", mode.key()),
-        PageId::Node => format!("?page=node&mode={}", mode.key()),
+    if page == PageId::Home {
+        format!("?mode={}", mode.key())
+    } else {
+        format!("?page={}&mode={}", page.id(), mode.key())
     }
 }
 
@@ -374,29 +305,39 @@ pub fn with_param(search: &str, key: &str, value: &str) -> String {
     format!("?{}", parts.join("&"))
 }
 
-/// 枠の値の JSON の字（snapshot の file と 1 字も違わないことを歯が見る）。
-pub fn snapshot() -> String {
+/// header の値の JSON の字（tests/snapshots/header.json と 1 字も違わないことを歯が見る）。
+/// nav の部品の中の鍵は頁から導いた `nav_keys`。
+pub fn header_snapshot() -> String {
     let mut out = String::from("{\n  \"header\": [\n");
+    let keys = nav_keys();
     // 「戻る」の部品は HEADER の前。
     let header: Vec<String> = [&BACK]
         .into_iter()
         .chain(HEADER.iter())
         .map(|h| {
+            let items = if h.part == "nav" {
+                keys.as_slice()
+            } else {
+                h.items
+            };
             format!(
                 "    {{\"part\": {}, \"key\": {}, \"class\": {}, \"items\": [{}]}}",
                 quote(h.part),
                 quote(h.key),
                 quote(h.class),
-                list(h.items)
+                list(items)
             )
         })
         .collect();
     out.push_str(&header.join(",\n"));
-    out.push_str("\n  ],\n  \"pages\": [\n");
-    // nav の 4 つの頁の後に、nav に出さない節点の頁。
-    let pages: Vec<String> = pages().iter().chain([&node()]).map(page_json).collect();
-    out.push_str(&pages.join(",\n"));
     out.push_str("\n  ]\n}\n");
+    out
+}
+
+/// 頁 1 つの枠の値の JSON の字（tests/snapshots/pages の下の同じ id の file と 1 字も違わないことを歯が見る）。
+pub fn page_snapshot(id: PageId) -> String {
+    let mut out = page_json(&page(id));
+    out.push('\n');
     out
 }
 

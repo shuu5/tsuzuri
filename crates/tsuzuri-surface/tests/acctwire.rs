@@ -26,10 +26,10 @@ fn acctwire_back_part_before_header() {
     assert_eq!(BACK_WRAP, "backwrap");
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, ["brand", "nav", "updated", "mode"], "HEADER は変わらない");
-    assert_eq!(HEADER[1].items, ["home", "questions", "map", "gaps"]);
-    let want = read("tests/snapshots/frame.json");
-    let got = frame::snapshot();
-    assert!(got == want, "頁の枠の値が snapshot と違う。今の値:\n{got}");
+    assert_eq!(frame::nav_keys(), ["home", "questions", "map", "gaps"]);
+    let want = read("tests/snapshots/header.json");
+    let got = frame::header_snapshot();
+    assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
     let lines: Vec<&str> = got.lines().collect();
     assert_eq!(
         lines[2],

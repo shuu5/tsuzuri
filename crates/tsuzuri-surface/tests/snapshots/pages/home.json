@@ -1,0 +1,22 @@
+    {
+      "id": "home",
+      "heading": "home",
+      "class": "home",
+      "columns": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "next", "heading": "next", "class": "panel"},
+            {"id": "pipe", "heading": "pipeline", "class": "panel"},
+            {"id": "ledger", "heading": "ledger_block", "class": "panel"},
+            {"id": "legend", "heading": "status", "class": "panel"}
+          ]
+        },
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "orch", "heading": "orch_acct", "class": "panel seatcard"}
+          ]
+        }
+      ]
+    }

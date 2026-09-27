@@ -1,0 +1,9 @@
+{
+  "header": [
+    {"part": "back", "key": "acct_back", "class": "upto", "items": []},
+    {"part": "brand", "key": "project", "class": "brand", "items": []},
+    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["home", "questions", "map", "gaps"]},
+    {"part": "updated", "key": "last_record", "class": "chip num", "items": []},
+    {"part": "mode", "key": "mode", "class": "seg", "items": ["beginner", "expert"]}
+  ]
+}

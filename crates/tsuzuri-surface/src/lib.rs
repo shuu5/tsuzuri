@@ -10,6 +10,7 @@ pub mod account;
 pub mod frame;
 pub mod kit;
 pub mod mapview;
+pub mod pages;
 pub mod project;
 pub mod view;
 pub mod vocab;

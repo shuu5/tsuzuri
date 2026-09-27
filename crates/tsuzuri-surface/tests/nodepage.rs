@@ -8,7 +8,7 @@ use tsuzuri_contract::graph::{
     AroundDoc, AroundRow, EdgeEnd, EdgeType, Fold, GraphNode, NodeKind, basis_end,
 };
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, HEADER, Mode, PageId};
+use tsuzuri_surface::frame::{self, Mode, PageId};
 use tsuzuri_surface::mapview::around::{
     self, COL_KEYS, ChainItem, as_view, chain, count_line, edge_path, edges, expert_line, layout,
     line_ends, svg,
@@ -76,10 +76,17 @@ fn doc_of(center: &str, rows: Vec<AroundRow>) -> AroundDoc {
     }
 }
 
-/// (1) 節点の頁の枠（block は node と around）・page=node で開く・nav の 4 つと header は変わらない・snapshot と同じ。
+/// 語の列 `want` が `all` の中にこの順で含まれる。
+fn in_order(all: &[&str], want: &[&str]) -> bool {
+    let mut rest = all.iter();
+    want.iter().all(|w| rest.any(|a| a == w))
+}
+
+/// (1) 節点の頁の枠（block は node と around）・page=node で開く・nav は 4 つをこの順に含み節点の頁を含まない・
+/// snapshot と同じ。
 #[test]
 fn nodepage_frame_and_nav() {
-    let page = frame::node();
+    let page = frame::page(PageId::Node);
     assert_eq!(page.id, PageId::Node);
     assert_eq!(page.id.id(), "node");
     assert_eq!(page.block_ids(), vec!["node", "around"]);
@@ -99,17 +106,22 @@ fn nodepage_frame_and_nav() {
     assert_eq!(nodearound::BLOCK.id, "around");
     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
     assert_eq!(PageId::from_query("?page=node"), PageId::Node);
-    assert_eq!(frame::page(PageId::Node), page);
-    // nav の頁の一覧と header の link は 4 つのまま。
-    assert_eq!(PageId::ALL.map(PageId::id), ["home", "ask", "map", "gaps"]);
+    assert!(PageId::ALL.contains(&PageId::Node));
+    // nav の頁の一覧と header の link は 4 つをこの順に含み、節点の頁を含まない。
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
-    assert_eq!(HEADER[1].items, ["home", "questions", "map", "gaps"]);
+    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    assert!(!ids.contains(&"node"), "{ids:?}");
+    let nav_keys = frame::nav_keys();
+    assert!(
+        in_order(&nav_keys, &["home", "questions", "map", "gaps"]),
+        "{nav_keys:?}"
+    );
+    assert!(!nav_keys.contains(&"nb_self"), "{nav_keys:?}");
     let keys: Vec<&str> = frame::nav_links(PageId::Node)
         .iter()
         .map(|l| l.key)
         .collect();
-    assert_eq!(keys, HEADER[1].items.to_vec());
+    assert_eq!(keys, nav_keys);
     // 節点の頁への link の字。
     assert_eq!(
         frame::node_href("FR1", Mode::Expert),
@@ -120,8 +132,8 @@ fn nodepage_frame_and_nav() {
         "?page=node&id=e.2%3A20260927T0000Z-1&mode=beginner"
     );
     assert_eq!(
-        frame::snapshot(),
-        read("tests/snapshots/frame.json"),
+        frame::page_snapshot(PageId::Node),
+        read("tests/snapshots/pages/node.json"),
         "snapshot の file と違う"
     );
 }

@@ -1,0 +1,14 @@
+    {
+      "id": "node",
+      "heading": "nb_self",
+      "class": "stack",
+      "columns": [
+        {
+          "class": "stack",
+          "blocks": [
+            {"id": "node", "heading": "summary_plain", "class": "stack"},
+            {"id": "around", "heading": "around", "class": "panel"}
+          ]
+        }
+      ]
+    }

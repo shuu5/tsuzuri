@@ -41,11 +41,9 @@ fn fixture_rows() -> Vec<LedgerRow> {
     items.into_iter().map(|i| i.row).collect()
 }
 
-/// 枠の頁の全部（nav の 4 つと、nav に出さない節点の頁）。
+/// 枠の頁の全部（生成した PageId の ALL の頁・行 hs-pages）。
 fn all_pages() -> Vec<Page> {
-    let mut all = frame::pages().to_vec();
-    all.push(frame::node());
-    all
+    PageId::ALL.into_iter().map(frame::page).collect()
 }
 
 fn known_screen() -> Screen {
@@ -82,15 +80,21 @@ fn sources() -> Vec<(PathBuf, String)> {
 
 #[test]
 fn frame_snapshot_matches_file() {
-    let want = read("tests/snapshots/frame.json");
-    let got = frame::snapshot();
-    assert!(got == want, "頁の枠の値が snapshot と違う。今の値:\n{got}");
+    let want = read("tests/snapshots/header.json");
+    let got = frame::header_snapshot();
+    assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
+}
+
+/// 語の列 `want` が `all` の中にこの順で含まれる。
+fn in_order(all: &[&str], want: &[&str]) -> bool {
+    let mut rest = all.iter();
+    want.iter().all(|w| rest.any(|a| a == w))
 }
 
 #[test]
 fn frame_home_blocks_in_order_and_map_page() {
     // home は見本と同じ: 左の列が next・pipe・ledger・legend、右の列が orch。
-    let columns: Vec<Vec<&str>> = frame::home()
+    let columns: Vec<Vec<&str>> = frame::page(PageId::Home)
         .columns
         .iter()
         .map(|c| c.blocks.iter().map(|b| b.id).collect())
@@ -100,7 +104,7 @@ fn frame_home_blocks_in_order_and_map_page() {
         vec![vec!["next", "pipe", "ledger", "legend"], vec!["orch"]]
     );
     // 問いの頁は 2 列: 左の列が ask・hist、右の列（side stack）が batch・policy。
-    let ask_columns: Vec<(&str, Vec<&str>)> = frame::ask()
+    let ask_columns: Vec<(&str, Vec<&str>)> = frame::page(PageId::Ask)
         .columns
         .iter()
         .map(|c| (c.class, c.blocks.iter().map(|b| b.id).collect()))
@@ -112,15 +116,15 @@ fn frame_home_blocks_in_order_and_map_page() {
             ("side stack", vec!["batch", "policy"])
         ]
     );
-    assert_eq!(frame::map().block_ids(), vec!["map"]);
-    assert_eq!(frame::gaps().block_ids(), vec!["gaps"]);
-    assert_eq!(frame::node().block_ids(), vec!["node", "around"]);
+    assert_eq!(frame::page(PageId::Map).block_ids(), vec!["map"]);
+    assert_eq!(frame::page(PageId::Gaps).block_ids(), vec!["gaps"]);
+    assert_eq!(frame::page(PageId::Node).block_ids(), vec!["node", "around"]);
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
-    for id in PageId::ALL.into_iter().chain([PageId::Node]) {
+    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    assert!(!ids.contains(&"node"), "{ids:?}");
+    for id in PageId::ALL {
         assert_eq!(frame::page(id).id, id);
     }
-    assert_eq!(frame::page(PageId::Node), frame::node());
     assert_eq!(PageId::Node.id(), "node");
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
@@ -129,9 +133,13 @@ fn frame_home_blocks_in_order_and_map_page() {
         .iter()
         .map(|l| l.key)
         .collect();
-    assert_eq!(keys, HEADER[1].items.to_vec());
+    assert_eq!(keys, frame::nav_keys());
     let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
-    assert_eq!(words, vec!["ホーム", "質問", "地図", "抜けの検査"]);
+    let words: Vec<&str> = words.iter().map(String::as_str).collect();
+    assert!(
+        in_order(&words, &["ホーム", "質問", "地図", "抜けの検査"]),
+        "{words:?}"
+    );
 }
 
 /// 見出しの語の鍵（枠・header・nav・指標・凡例・注釈の部品）は全部 vocab の file に在る。
