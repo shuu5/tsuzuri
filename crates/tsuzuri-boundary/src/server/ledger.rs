@@ -7,6 +7,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
@@ -86,8 +87,12 @@ impl Source {
     }
 }
 
+/// 子の process group の全体へ KILL の signal を送る道具の名（便 e-reap）。
+pub const KILL: &str = "kill";
+
 /// 子 process を 1 本撃ち、rc 0 で `timeout` の内に返した標準出力を返す（それ以外は None）。
 /// cwd は `cwd`・標準入力は空・標準エラーは捨てる。
+/// 子は新しい process group に入れ（group の id は子の pid）、止めるときは孫まで group ごと止める（便 e-reap）。
 pub fn capture<I, S>(program: &OsStr, args: I, cwd: &Path, timeout: Duration) -> Option<Vec<u8>>
 where
     I: IntoIterator<Item = S>,
@@ -100,6 +105,7 @@ where
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
+        .process_group(0)
         .spawn()
         .ok()?;
     let Some(mut stdout) = child.stdout.take() else {
@@ -129,10 +135,28 @@ where
     status.success().then_some(out)
 }
 
-/// 子 process を止めて片付ける。
-fn stop(mut child: Child) {
-    let _ = child.kill();
+/// 子 process を group ごと止めて片付ける。
+fn stop(child: Child) {
+    stop_with(child, OsStr::new(KILL));
+}
+
+/// 子の process group（id は子の pid）の全体へ道具 `kill` で KILL の signal を送り、子を待って片付ける。
+/// group へ送れたら true。道具が撃てないか失敗したら子だけを止めて false。
+/// 孫は待たない（親が居ないので OS の側が片付ける）。
+pub fn stop_with(mut child: Child, kill: &OsStr) -> bool {
+    let group = format!("-{}", child.id());
+    let sent = Command::new(kill)
+        .args(["-KILL", "--", &group])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    if !sent {
+        let _ = child.kill();
+    }
     let _ = child.wait();
+    sent
 }
 
 /// bd の出力（bead の JSON の配列）を読む（server の読みの経路はこれだけ）。
