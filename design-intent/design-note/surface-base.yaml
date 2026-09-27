@@ -3,13 +3,13 @@
 meta:
   id: surface-base
   title: 面の便（土台）— workspace の骨格・契約の型・導出グラフ・台帳の指標・面の server・席の hook
-  version: v0.11
+  version: v0.12
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。第 0.4 版（同日）は便 a の着地（6d2a7cd）の後の便 b の行の直しで、依存の file と xtask の歯の file を write-set に足し、snapshot を名指しの 1 file にし、完了の条件を便 b の時点で測れる形にした。第 0.5 版（同日）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 e から最小の server を行 e-min として先に分けた。行 e-min の write-set には、検証の語（contract_form_）に当たる歯を持つ file を全部入れた（器の受付の指摘）。第 0.6 版（同日）は台帳の export の file が古いままになる実測を受け、読みの出所を改める行 e-src を足した。第 0.7 版（同日）は行 c の入力を 3 つの字（設計の道具の索引・bd の一覧・器の event log）に改め、YAML の読み手の依存を足さない形にした。第 0.8 版（同日）は fixture の置き場を dir から名指しの file に改めた（器の受付は新しい dir を解けない）。第 0.11 版（同日）は行 d を書き直した（入力と数え方と電文の型と pipeline の板の対応の表を節に書き、便 c の後に画面の block の便と並べて走らせる）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。第 0.4 版（同日）は便 a の着地（6d2a7cd）の後の便 b の行の直しで、依存の file と xtask の歯の file を write-set に足し、snapshot を名指しの 1 file にし、完了の条件を便 b の時点で測れる形にした。第 0.5 版（同日）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 e から最小の server を行 e-min として先に分けた。行 e-min の write-set には、検証の語（contract_form_）に当たる歯を持つ file を全部入れた（器の受付の指摘）。第 0.6 版（同日）は台帳の export の file が古いままになる実測を受け、読みの出所を改める行 e-src を足した。第 0.7 版（同日）は行 c の入力を 3 つの字（設計の道具の索引・bd の一覧・器の event log）に改め、YAML の読み手の依存を足さない形にした。第 0.8 版（同日）は fixture の置き場を dir から名指しの file に改めた（器の受付は新しい dir を解けない）。第 0.11 版（同日）は行 d を書き直した（入力と数え方と電文の型と pipeline の板の対応の表を節に書き、便 c の後に画面の block の便と並べて走らせる）。第 0.12 版（同日）は読む側の口の行 e-read を足した（便 c と便 d の値を server の口に出す）。
 
 sections:
   - n: 1
@@ -151,6 +151,15 @@ sections:
         size: M
         done: (1) 偽の bd が bead 8 本の fixture を返すとき、一覧の口が 8 本を返し、closed の 2 本の状態と、親と label を契約の型の形で返す (2) 偽の bd が rc 1 で終わる・JSON でない字を返す・5 秒を超えて返さない、の 3 通りで、一覧の口は 0 件でなく測れていないの印を返す (3) 2 つの印の file のどちらかの更新時刻か長さが変わると、1.5 秒以内に読み直して SSE の口に変化の event が 1 件出る (4) 印が動かなくても 5 秒ごとに読み直し、中身が変わっていれば event が出る (5) 偽の bd が受けた引数が --readonly list --all --limit 0 --json の列と一致し、cwd が repo の置き場である (6) 足す外の依存は 0 本
         depends: [e-min]
+      - id: e-read
+        title: 読む側の口（pipeline の板・台帳の指標・次の一手・導出グラフを server の口に出し、変化を SSE で知らせる）
+        req: [FR2, FR3, FR10, FR11, FR13, NFR2]
+        section: "11"
+        write-set: ["Cargo.lock", "xtask/src/main.rs", "crates/tsuzuri-boundary/Cargo.toml", "crates/tsuzuri-boundary/src/main.rs", "crates/tsuzuri-boundary/src/server/mod.rs", "crates/tsuzuri-boundary/src/server/ledger.rs", "crates/tsuzuri-boundary/src/server/events.rs", "+crates/tsuzuri-boundary/src/server/board.rs", "+crates/tsuzuri-boundary/src/server/design.rs", "+crates/tsuzuri-boundary/src/server/runs.rs", "crates/tsuzuri-boundary/tests/server_min.rs", "crates/tsuzuri-boundary/tests/server_src.rs", "+crates/tsuzuri-boundary/tests/server_read.rs", "crates/tsuzuri-contract/src/graph.rs", "crates/tsuzuri-contract/tests/contract_form.rs", "crates/tsuzuri-contract/tests/snapshots/contract_form.json"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --no-tests=fail server_read_", "cargo nextest run -p tsuzuri-boundary --no-tests=fail server_src_", "cargo nextest run -p tsuzuri-boundary --no-tests=fail server_min_", "cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
+        size: M
+        done: (1) 偽の bd（bead 8 本の fixture）と偽の設計の道具（実物の索引の fixture）と event log の fixture を置いた server で、4 つの口が 200 を返し、本文が契約の型で読め、中核の関数を同じ 3 つの字と同じ時刻で直に呼んだ値と一致する (2) --state-dir を省くか event log の file が無いとき、pipeline の口の札は「まだ分からない」で、グラフの口は読めなかった出所に走行を持ち、設計と台帳の節点は組まれている (3) 設計の道具が rc 1 で終わる・program が無い・5 秒で返らない の 3 つで、グラフの口は読めなかった出所に設計を持ち、台帳と走行の節点は組まれている (4) event log に 1 行足してから 5 秒以内に board-changed の知らせが SSE に届き、設計文書の file を書き換えても同じく届く (5) 4 つの口を読んだ前後で repo の dir と state dir の全 file の byte が変わらない (6) 4 つの口への GET でない要求は 405 で何も書かない (7) グラフの電文の型の外形が snapshot の file に pin される (8) tz surface serve が --state-dir と --folio を受け、省いても起動する (9) 足す外の依存は 0 本で、境界の crate の直接依存に足すのは中核の crate の 1 つだけ
+        depends: [c, d, e-src]
   - n: 9
     type: prose
     title: 便 e-min — 最小の server
@@ -171,6 +180,22 @@ sections:
       変化の印は .beads の issues.jsonl と interactions.jsonl の 2 つの file の更新時刻と長さで、500 ミリ秒ごとに見る。どちらかが変わったら 1.5 秒以内に読み直して SSE で知らせる。前の file は席の書きで、後の file は器の close を含む状態の変更で動く。
       印の取りこぼしを拾うために、印が動かなくても 5 秒ごとに読み直す。読みの結果が前と同じなら知らせない。issues.jsonl の中身を読む経路は残さない。
       台帳の一覧の型に親と label を足す。問いは label intake:question、memo は label intake:memo で見分ける（設計ノート surface の節点の一覧）。fixture（bd の出力の形の 8 本）は設計席が置いた。
+
+  - n: 11
+    type: prose
+    title: 便 e-read — 読む側の口
+    body: |
+      便 c と便 d の関数の値を server の口に出す。server は 3 つの字を集めて中核の関数に渡し、電文を返す。書く口は足さない。
+      3 つの字の集め方。台帳の一覧は、着地済みの bd の読み（便 e-src の子 process）が返した字をそのまま使う。設計の索引は、設計の道具を子 process で撃って標準出力を字にする。argv は「<program> graph --print --dir <repo>/design-intent」で、cwd は repo。rc が 0 でない・program が無い・5 秒で返らない のどれかなら、設計の出所は読めない。器の event log は file「<state dir>/fleet/events.jsonl」を読む。file が無いか読めなければ、走行の出所は読めない。今の時刻は server が時計から取り、関数に引数で渡す。
+      引数を 2 つ足す。--state-dir <dir> は器の state dir の置き場で、省いたら走行の出所は読めない扱いにする。--folio <program> は設計の道具の program で、省いたら folio。どちらも省ける。host 固有の値と住所は code に書かず、引数で受ける（行 D-4）。
+      口は 4 つ足す。GET /api/pipeline は pipeline の板（PipelineBoard）。GET /api/metrics は台帳の指標（LedgerStats）。GET /api/next は次の一手（NextStep）。GET /api/graph は導出グラフ（GraphDoc）。読めない出所が在っても 200 で返し、電文の中のその部分だけを「まだ分からない」にする。口は要求のたびに字を集めて組み直す（グラフは repo に書かず毎回組み直す）。GET でない要求は 405 で、何も書かない。
+      グラフの電文 GraphDoc は、契約の型の crate の graph の module に足す。欄は、節点の一覧・辺の一覧・読めなかった出所の一覧・bead の属性（種類・状態・label・pointer の行・touches）・走行の属性（段・口座）・不変条件の 12 本の判定（id・3 値・違反の数・違反の id の一覧）・組まずに数えた辺の数。中核の crate の Graph と check の値を電文に写す関数は境界の crate に置く。型の外形は便 b の snapshot の歯で pin する。
+      変化の知らせ。event log の file と、設計文書の dir（<repo>/design-intent の下の全 file）の変化の印（更新の時刻と長さ）を 500 ミリ秒ごとに見て、変わったら board-changed の event を SSE（/api/surface/events）に流す。event の名は契約の型の crate の面の module の定数 BOARD_CHANGED_EVENT（便 g-parts が足した）から引く。要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」をこの知らせで満たす。台帳の変化の知らせ（ledger-changed）は着地済みのまま。
+      依存。境界の crate の直接依存に中核の crate を 1 つ足す（workspace の中の crate・外の package は増えない）。xtask の歯（crate ごとの直接依存の名の一覧）に、その 1 行を足す。
+      歯は偽の program を使う。偽の bd は便 e-src の歯と同じ形（fixture を標準出力へ出す script）。偽の設計の道具は tests/fixtures/graph/real/design-index.tsv を標準出力へ出す script。event log は tests/fixtures/graph/real/events.jsonl を一時の state dir に写して使う。
+      在りか（着地済み）。境界の crate の server の module（crates/tsuzuri-boundary/src/server の下）に、口の振り分けと起動の引数の型（mod.rs の Config）・bd の子 process の読み（ledger.rs の Source）・変化の印の周期の読みと SSE の配信（events.rs の Hub と stamp）・応答の型（http.rs）・面の file の配布（files.rs）が在る。tz の入口と引数の読みは crates/tsuzuri-boundary/src/main.rs に在る。契約の型の crate に、電文を字にする関数（wire の encode）・板の型（board の module の PipelineBoard）・節点と辺の型（graph の module の GraphNode と GraphEdge）・event の名の定数（surface の module の BOARD_CHANGED_EVENT と ledger の module の LEDGER_CHANGED_EVENT）が在る。中核の crate に、グラフを組む関数と不変条件を数える関数と入力の型（graph の module の build・check・Inputs）が在る。指標と次の一手と板の関数と、その電文の型（LedgerStats・NextStep）は便 d が足すので、この便は便 d の着地の後に起こす。xtask の歯の直接依存の名の一覧は xtask/src/main.rs の DIRECT_DEPS に在る。fixture の 3 つ（tests/fixtures/ledger/bd-list-8.json・tests/fixtures/graph/real/design-index.tsv・tests/fixtures/graph/real/events.jsonl）は着地済みで、この便は新しい fixture の file を作らない。
+      起動の引数の型に欄を足すので、着地済みの歯の file（tests/server_min.rs と tests/server_src.rs）の引数の組み立ても直す。歯の中身は変えない。
+      この便は面の crate と中核の crate の code を触らない。
 
 figures: []
 sources:
