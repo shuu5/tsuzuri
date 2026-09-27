@@ -32,6 +32,10 @@
 - **最初の本物の画面（2026-09-27T08:28Z・verified）**: 便 b（48f36b7）・便 e-min（4d35b4a）・便 g-min（6f9e320）が着地。設計席が main で `cargo run -q -p xtask -- surface-build` を撃ち、server を tailnet の住所の port 8120 で起こした（binary と dist の写しは ~/.cache/tsuzuri-admin/serve/・log は同じ dir の serve.log・起動の行は `tz surface serve --repo <repo> --bind <tailnet の住所>:8120 --files <dist>`）。browser で開いて、問い 0 件・台帳 7 件・最終更新が実 data で出ることを確かめた（console の error は favicon の 404 だけ）。便 e-src（t3-hub.6・台帳の読みの出所を bd の読み取りの口に）は器が自動で起こして実装中。e-src が着地したら server の binary を作り直して起こし直す。次の設計 = 段 3（行 e の受付と行 f の hook）: 行 e の depends から c と d を外し、グラフの口は別の行に分け、検証の語を server_ から重ならない語に改める（器の歯の探しは語の部分一致）。
 - **器の口の使い方の実測**: `scribe2 pipe preflight --bead <id> --design <pointer>` で受付の断りを先に見られる。`scribe2 contracts check` は tsuzuri の contracts/ を読まない（docs=0）。
 
+- **速さの直し（2026-09-27T09:1xZ〜・持ち主の指摘「見た目も機能も貧弱・速度を上げられないか」）**: 詰まりは設計席の側（便を薄く切りすぎ・1 本ずつ直列・契約の穴での空振り）。直し = (1) 見本（mock v3）の頁を docs/design/mock3 に写し、見た目と頁の枠を先に揃える行 g-frame（t3-hub.7）(2) write-set が重ならない便を並べて流す（g-frame ∥ c = t3-hub.8）(3) 設計の索引は設計の道具の graph の口の出力を使い、YAML の読み手を足さない (4) fixture は名指しの file（器は新しい dir を解けない）(5) 行の節は審査役がそれだけで測れる字にする（閉じた一覧・定義・閾値を節に書く）。行 c は審査で 7 回止まった（材料の不足と定義の重なり）＝大きい行は節を先に全部書いてから起こす。
+- **folio2 の構造の直し A・B・C が全部着地（main 1ca1ae1）**: tsuzuri は revises を消し、schema を書き直し、天井の観点を置き換え、発効した判断の記録 11 本を封で凍結した（anchors/adr-seals.yaml）。以後、発効した判断の記録の本文は変えない。撃つ binary は写し（~/.cache/tsuzuri-admin/folio/folio → folio-1ca1ae1）に pin し、folio2 の知らせを受けてから上げる。天井の周は folio2 の写しでの検証の知らせを待つ。
+- **器の終端の CI の照合が GitHub の API の限度を使い切る（scribe2 の memo s2-07l.689）**: 20 ミリ秒ごとに gh を撃つ作りで、tsuzuri の着地 4 本も撃っていた。.vessel.toml の remote の宣言をまた外した（7f0de9a）。着地は local の main まで・push と CI の確かめと close と次の 1 周は設計席の手。gh は 2026-09-27T10:26Z まで撃たない。器の直しの知らせが来たら宣言を戻す。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
