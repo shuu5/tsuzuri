@@ -10,7 +10,7 @@ schema:
   discipline_row:
     required: [id, article, what, kind, status, ruling, ruled_at]
     optional: [note, refs]
-  refs_note: その行の散文が依っている、article の条以外の id の一覧（ほかの行・要件書の id・判断の記録・別の条と規範文）。各項は id の形（P-5.2）で、その行自身の id と article の値は書かない。未解決は行 R-4 の 1 つ目の数えが拾い、判断の記録の未実在は A-2 の網が拾う（R-4 の what と値と母集団は変えない）
+  refs_note: その行の散文が依っている、article の条以外の id の一覧（ほかの行・要件書の id・判断の記録・別の条と規範文）。各項は id の形で、その行自身の id と article の値は書かない。
   enums:
     kind: [deny, build-check, detect, human-review]
     status: [仮, 凍結, 未定]
@@ -29,7 +29,7 @@ schema:
   excluded:
     what: [時間（「60 分以内」）, 費用（「300k token 以下」）]
     why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。
-  reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。
+  reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る。
 # folio:schema:end
 # 行は人が書く（閾値行と開発規律行）。初版の裁定 id は憲法の発効の承認を裁定とみなし発効時に全行へ付ける（P-17.3）。出所の欄（note）は前の版の行 id。
 thresholds:
