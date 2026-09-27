@@ -120,6 +120,11 @@ pub const HEADER: [HeaderPart; 3] = [
 /// 題の字（見本の `.name`）。
 pub const BRAND: &str = "器";
 
+/// 頁の題（見本の title・題の字と語の鍵 acct_board の語を「 — 」でつなぐ）。
+pub fn page_title() -> String {
+    format!("{BRAND} — {}", crate::vocab::label("acct_board"))
+}
+
 /// 最終の記録の chip（header の部品に数えず、tab の link の後に置く・語の鍵と class）。
 pub const UPDATED_KEY: &str = "last_record";
 pub const UPDATED_CLASS: &str = "chip num";

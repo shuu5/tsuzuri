@@ -584,6 +584,7 @@ mod dom {
         .into_any()
     }
 
+    /// 群の枠の段（見本の `.gtop`・段の見出しは置かず、群の card の列だけ）。
     pub fn groups_view(block: Block) -> AnyView {
         let home = read();
         let body = move || {
@@ -591,7 +592,7 @@ mod dom {
                 cards.into_iter().map(group_card).collect_view().into_any()
             })
         };
-        section(block, ().into_any(), body.into_any())
+        view! { <section class=block.class id=block.id>{body}</section> }.into_any()
     }
 
     fn group_card(g: GroupView) -> AnyView {
@@ -635,7 +636,7 @@ mod dom {
                         <span>{hs("previous")}<span class="mono">{g.previous}</span></span>
                     </div>
                 </div>
-                <div class="gpw">{hs("pressure")}<span class="pws">{pws}</span></div>
+                <div class="gpw">{hs("used")}<span class="pws">{pws}</span></div>
                 <div class="glab">{hs("members")}</div>
                 <div class="projs">{members}</div>
                 <div class="glab">{hs("candidates")}</div>

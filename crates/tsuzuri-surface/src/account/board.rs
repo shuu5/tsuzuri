@@ -7,7 +7,7 @@ use tsuzuri_contract::EpochSecs;
 
 use super::{
     BRAND, HEADER, PATH, TOP, Tab, UPDATED_CLASS, UPDATED_KEY, badge, doc, home, ledger, page,
-    projects, session, tab_href, tab_links, windows,
+    page_title, projects, session, tab_href, tab_links, windows,
 };
 use crate::frame::{self, Block, Mode};
 use crate::net;
@@ -39,6 +39,8 @@ fn tab_icon(tab: Tab) -> &'static str {
 pub fn mount() {
     // 自分の窓の名（project board の「戻る」がこの名でこの窓を見つける）。
     let _ = window().set_name(windows::ACCOUNT_WIN);
+    // 頁の題（index.html は project board と同じ file なので、ここで account board の題に替える）。
+    document().set_title(&page_title());
     leptos::mount::mount_to_body(App);
 }
 
