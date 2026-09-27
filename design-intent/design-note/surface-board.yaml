@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.9
+  version: v0.10
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。
 
 sections:
   - n: 1
@@ -181,6 +181,15 @@ sections:
         size: M
         done: (1) 頁の枠の値が、頁の順は home・ask・map、home の block の並びは左の列が next・pipe・ledger・legend で右の列が orch、問いの頁の block の id は ask と hist の 2 つでこの順になり、snapshot の file と 1 字も違わない (2) header の頁の link は ホーム・質問・地図 の 3 つでこの順になり、質問の link の数の印は open の問いの数を出し、数が読めないときと 0 のときは印を出さない (3) card の部分の並びの値が、題・概要・理由・推奨・答えの欄・つながりの順で、fixture の 2 本の card の字が期待と一致し、概要が片方だけ無い card は無い側に「―」を、両方無い card は「要約なし」を出し、A-1 の印は印を持つ card だけに出る (4) 問いの一覧は電文の順（古い順）のまま番号を 1 から付け、つながりの段は最初は閉じていて、見出しの数と中の id の一覧が card の touches と一致する (5) 送る button の状態の関数は、答えの欄が空白だけのときと送っている間は押せないを返す (6) 鍵の判定の関数は、字の変換の途中の Enter は何もしない、Ctrl か Meta と Enter は送る、Enter だけは送らないを返す (7) 要求の本文を組む関数は契約の型の RulingRequest を字にし、見た版の要約値は card の digest の字と同じで、逐語は答えの欄の字と同じ (8) 応答から card の状態を決める関数は、200 は記録した id と時刻、409 は読み直しの知らせ、ほかの断りと届かないときは理由の字を返し、200 の外では答えの欄の字を残す (9) これまでの決定の関数は、fixture の台帳の一覧から label intake:question を持つ closed の bead だけを選び、id の自然な順（数は数として比べる）に並べ、見出しに件数を出し、段は最初は閉じている (10) 読めて 0 本なら 0 件の 1 行を返し、口が読めないか・まだ読んでいないか・本文が電文の型として読めないときは 0 件でなく測れていないと理由の 1 行を返す (11) 問いの頁の 2 つの module の code に、画面の外の保存の口の名（localStorage・sessionStorage・cookie）の字が無い (12) 足す外の依存は 0 本
         depends: [g-parts]
+      - id: g-gaps
+        title: 抜けの検査の頁（不変条件の 12 本の判定・数の札・名指しの一覧）
+        req: [FR3, FR14, NFR2]
+        section: "17"
+        write-set: ["crates/tsuzuri-surface/src/frame.rs", "crates/tsuzuri-surface/src/board.rs", "crates/tsuzuri-surface/src/project/mod.rs", "+crates/tsuzuri-surface/src/project/gaps.rs", "crates/tsuzuri-surface/tests/frame.rs", "crates/tsuzuri-surface/tests/snapshots/frame.json", "+crates/tsuzuri-surface/tests/gapspage.rs", "+tests/fixtures/surface/invariants.json"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail gapspage_", "cargo nextest run -p tsuzuri-surface --no-tests=fail frame_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) 頁の枠の値に抜けの検査の頁（id は gaps・block の id は gaps の 1 つ）が足され、頁の順は home・ask・map・gaps、header の頁の link も同じ順の 4 つになり、snapshot の file と 1 字も違わない (2) 数の札は 3 枚で、順は違反・まだ分からない・合格、数は fixture の 12 本の判定の数と一致する (3) 一覧は違反・まだ分からない・合格の順（同じ判定の中は id の数の順）で 12 行になり、行は記号と名と違反の数を持ち、違反の行の段だけが最初は開いている (4) 12 本の id と名の対応の表は 12 行で、id は g-1 から g-12 の全部を持ち、電文に在って表に無い id の行は id の字を名の代わりに出す (5) 名指しの一覧は 20 件までで、超える分は残りの数の 1 行になる (6) 口が読めないか・まだ読んでいないか・本文が電文の型として読めないときは、12 本とも合格と出さず、測れていないと理由の 1 行を返す (7) 足す外の依存は 0 本
+        depends: [g-ask]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -314,6 +323,20 @@ sections:
       着地済みの歯との関係。module ask の今の関数（画面の状態を受ける count と body）は、着地済みの歯の file（tests/frame.rs・tests/board_min.rs・tests/parts.rs）が呼んでいる。この便は module ask の読みの出所を変えるので、3 つの歯の file のうち module ask を呼ぶ所を新しい関数に合わせて直す（3 つとも write-set に在る）。台帳の一覧の並べ方の関数（view の module）と、その歯は変えない。
       在りか。この便が使う語の鍵は 12 個で、全部が語の辞書に在る（questions・ask_open・rulings・reason・recommend・own_words・ruling・around・touches・summary_plain・summary_eng・a1）。送った後の card の字（記録した・質問が更新された・理由の字）と「要約なし」は、見出しでない本文の字なので、語の辞書の鍵を使わずに module の定数に置く。面の crate は契約の型の crate に依存している（crates/tsuzuri-surface/Cargo.toml の dependencies の tsuzuri-contract・着地済み）ので、Cargo.toml は触らない。web-sys の feature（Request・RequestInit・Headers・HtmlTextAreaElement・KeyboardEvent）は便 g-parts が足してある。語の辞書（crates/tsuzuri-surface/vocab.json）と stylesheet（crates/tsuzuri-surface/style.css）は着地済みで、この便は触らない。class の名は見本の字のまま使い、語の鍵は語の辞書に在るものだけを使う。測れていないの印と理由の 1 行は、面の crate の project の module の部品（Body の Unmeasured・unmeasured・語の鍵 st_unknown）を使う。頁の枠の値と頁の id の型は面の crate の frame の module、頁を描く所と block から module を選ぶ所は board の module、block の共通の部品は project の module に着地済み。枠の歯と snapshot は crates/tsuzuri-surface/tests/frame.rs と tests/snapshots/frame.json。stylesheet に規則が在る class は、qcard・head・nb・t・warn・chip・num・qsum・ln・eng・qreason・rec・answer・btn・primary・fold・panel・items・muted・ask・stack・badge（header の質問の link の数の印・規則は「.nav .badge」）。A-1 の印は class warn、置かれてからの経過は class chip と num。見本が規則を持たない目印の class（plain・send・nb-d・nb-body）は、見本と同じ名で付けてよい（枠の歯が stylesheet と照らすのは、頁の枠の値が持つ class だけで、この便が枠の値に足す class は badge と、着地済みの panel・stack・fold だけ）。
       測り方。card の部分の並びと、段が最初に開いているかは、純粋な関数の値（配置の表）にして host の歯で pin し、DOM はこの値を順にたどって組み立てる。card の中身・送る button の状態・鍵の判定（変換の途中か・Ctrl か Meta が押されているか・鍵の名を受けて、何もしない・送る・送らないを返す）・要求の本文を組む関数・応答から card の状態を決める関数・これまでの決定を選んで並べる関数・header の数の印の関数は、どれも純粋な関数にして host の cargo test で pin する。DOM と通信は wasm の target のときだけ組み立てる。
+
+  - n: 17
+    type: prose
+    title: 便 g-gaps — 抜けの検査の頁
+    body: |
+      不変条件の 12 本の判定を 1 つの頁で見せる。見本は docs/design/mock3/gaps.html。数え方は中核の crate が済ませていて、面は電文を写すだけにする（面の code に判定の分岐を書かない）。
+      data は口 /api/graph から読む（契約の型の GraphDoc・着地済み）。使う欄は invariants で、1 行（InvariantCheck）の欄は id（g-1 から g-12）・verdict（閉じた 3 値で、字は pass・violation・unknown）・violations（違反の数）・ids（違反の節点の id の列）。読みは面の crate の net の read を使う。
+      頁の枠。頁を 1 つ足す。頁の id は gaps で、URL の query の page=gaps で開き、頁の題の語の鍵は gaps。頁の順は home・ask・map・gaps で、header の頁の link もこの順に 4 つになる（見本の header と同じ）。block は 1 つで、id は gaps（見出しの語の鍵 gaps）。中身は新しい module（project の下の gaps）に置く。頁の枠の値と snapshot の file と枠の歯（頁の順・block と module の対応の表・project の下の file の数）に、この頁と block を足す。この便は便 g-ask（頁の枠を直す便）の着地の後に起こす。
+      数の札（class gtiles と gtile）は 3 枚で、順は違反・まだ分からない・合格。1 枚は記号（class gi と、違反は ng・まだ分からないは unknown・合格は ok）と数と語（語の鍵は gap_ng・gap_unknown・gap_ok）。記号の字は、違反が「✕」、まだ分からないが「?」、合格が「✓」。
+      一覧は 12 行で、順は違反・まだ分からない・合格、同じ判定の中は id の数の順。1 行は畳める段（class gitem）で、違反の行だけが最初は開いている。見出しに記号と名と違反の数（0 なら出さない）。中は、違反の節点の id の一覧（class items）を 20 件まで出し、超える分は残りの数の 1 行にする。
+      12 本の名は、module の定数の表に置く（見本の字・本文の字なので語の辞書の鍵を使わない）。g-1 は「線の両端が実在する」、g-2 は「open の task は design-note の行を 1 つ指す」、g-3 は「発効した ADR と rule に、あなたの決定が結ばれている」、g-4 は「question は関わる所を 1 つ以上持つ」、g-5 は「迷子の項目がない（全部が epic から辿れる）」、g-6 は「blocks の線が輪になっていない」、g-7 は「宙に浮いたあなたの決定がない」、g-8 は「台帳の種類の約束を守っている」、g-9 は「題で名指した項目に線が引かれている」、g-10 は「番号の形が重ならない」、g-11 は「run はどれも 1 つの task に属する」、g-12 は「止まった run の question が記録にある」。電文に在って表に無い id の行は、id の字を名の代わりに出す。
+      口が読めないとき・まだ読んでいないとき・本文が電文の型として読めないときは、合格と出さず、測れていないの印と理由の 1 行を出す（要件 NFR2）。
+      測り方。札の数・一覧の並び・段が最初に開いているか・名の表・20 件の切り方は、純粋な関数の値にして host の cargo test で pin し、DOM はこの値を順にたどって組み立てる。DOM は wasm の target のときだけ組み立てる。fixture の invariants.json は 12 本の判定（違反 2 本・まだ分からない 3 本・合格 7 本・うち 1 本は違反の id を 25 個持つ）で、5000 byte 以下にする。
+      在りか。面の crate は契約の型の crate に依存している（Cargo.toml は触らない）。GraphDoc と InvariantCheck と Verdict は契約の型の crate の graph の module に着地済み。頁の枠の値と頁の id の型は面の crate の frame の module、頁を描く所と block から module を選ぶ所は board の module、block の共通の部品と module の宣言は project の module に在る。語の鍵 gaps・gap_ok・gap_ng・gap_unknown・st_unknown は語の辞書に在る。class の gtiles・gtile・gi・ok・ng・unknown・n・gitem・ttl・aside・body・items・panel は stylesheet に規則が在る。語の辞書と stylesheet は触らない。
 
 figures: []
 sources:
