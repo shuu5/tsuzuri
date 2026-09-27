@@ -265,6 +265,18 @@ pub fn clock(at: EpochSecs) -> String {
     )
 }
 
+/// epoch 秒を短い UTC の字にする（見本の hmd と同じ決め方）: 今の時刻との差が 20 時間以内なら
+/// `12:53Z`、超えれば月と日を前に足す（`09-26 12:53Z`）。差は向きを問わない。
+pub fn clock_short(at: EpochSecs, now: EpochSecs) -> String {
+    let secs = at % 86_400;
+    let hm = format!("{:02}:{:02}Z", secs / 3600, secs % 3600 / 60);
+    if at.abs_diff(now) <= 20 * 3600 {
+        return hm;
+    }
+    let (_, m, d) = civil_from_days(at / 86_400);
+    format!("{m:02}-{d:02} {hm}")
+}
+
 /// 1970-01-01 からの日数を (年, 月, 日) にする（先発グレゴリオ暦）。
 fn civil_from_days(days: u64) -> (u64, u64, u64) {
     let z = days + 719_468;

@@ -14,9 +14,9 @@ use crate::project::{
     self, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound, pipeline, policy,
     seat,
 };
-use crate::view::{Screen, clock};
+use crate::view::{Screen, clock, clock_short};
 use crate::vocab::label;
-use crate::widgets::help::{HelpCtx, TipLayer, hs};
+use crate::widgets::help::{HelpCtx, TipLayer, term};
 use crate::widgets::hover::{CardLayer, HoverCtx};
 
 /// 題の印（見本の IC.logo）。
@@ -135,11 +135,14 @@ fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl Int
                 .into_any()
             }
             "updated" => {
-                let at = move || match screen.with(|s| s.updated_at) {
-                    Some(t) => clock(t).into_any(),
+                // 字は短い時刻で、pointer を乗せると語の説明を出す（長い時刻は title に残す）。
+                let updated = move || screen.with(|s| s.updated_at);
+                let title = move || updated().map(clock);
+                let at = move || match updated() {
+                    Some(t) => term(part.key, clock_short(t, net::now())),
                     None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
                 };
-                view! { {hs(part.key)}<span class=part.class>{at}</span> }.into_any()
+                view! { <span class=part.class title=title>{at}</span> }.into_any()
             }
             _ => {
                 let choices = Mode::ALL
