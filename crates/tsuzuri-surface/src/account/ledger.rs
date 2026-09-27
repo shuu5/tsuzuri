@@ -2,6 +2,7 @@
 //! （account/index.html の ledTable・ledOrder・ledMore・extremes と ledger.js の judge）。
 //! 行は電文の projects の 1 行ずつ（台帳は ProjectRow の ledger）。並べ方は 4 つ（judge・project・net・backlog）で URL の query の `lsort=` に残す。
 //! 判定の写し・純減の矢印・小数 1 桁・日数の字は着地済みの project の ledger の module の値と関数を使う（その block の DOM は呼ばない）。
+//! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
 //! 未反映の数は読めない種類を 0 と数えた和で確かな値と言えないので、この便は「―」を出す（未決）。
 //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
 //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -14,7 +15,9 @@ use tsuzuri_contract::stats::LedgerStats;
 
 use crate::frame::{self, Block};
 use crate::project::Body;
-use crate::project::ledger::{JUDGES, Judge, NONE, Net, age, fixed1, judge, net};
+use crate::project::ledger::{
+    JUDGES, Judge, NONE, Net, SPARK_H, SPARK_W, age, fixed1, judge, net, spark, spark_svg,
+};
 use crate::view::Fetched;
 
 pub const BLOCK: Block = Block {
@@ -224,6 +227,8 @@ pub struct Cells {
     pub net7: Net,
     /// lead の p50 の字（無ければ「―」）。
     pub lead: String,
+    /// 14 日の created と closed の sparkline の svg の字（project board の台帳の block と同じ関数で組む）。
+    pub spark: String,
 }
 
 /// 表の 1 行。
@@ -350,6 +355,7 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
                     stale: s.stale,
                     net7: net(s.net_drop_7d),
                     lead: age(s.lead.map(|l| l.p50)),
+                    spark: spark_svg(&spark(&s.days, SPARK_W, SPARK_H)),
                 }),
                 Reading::Unknown => Reading::Unknown,
             };
@@ -557,7 +563,7 @@ mod dom {
         .into_any()
     }
 
-    /// 詳しくの段（ready・blocked・stale・7 日の純減・lead の p50）。
+    /// 詳しくの段（ready・blocked・stale・7 日の純減・lead の p50・最後に 14 日の sparkline）。
     fn more_view(c: &Cells) -> AnyView {
         let values = [
             c.ready.to_string().into_any(),
@@ -566,13 +572,18 @@ mod dom {
             net_view(&c.net7),
             c.lead.clone().into_any(),
         ];
-        MORE.into_iter()
+        let items = MORE
+            .into_iter()
             .zip(values)
             .map(|(key, value)| {
                 view! { <span class="mi"><span class="lk">{hs(key)}</span><b class="num">{value}</b></span> }
             })
-            .collect_view()
-            .into_any()
+            .collect_view();
+        view! {
+            {items}
+            <span class="mi sp" inner_html=c.spark.clone()></span>
+        }
+        .into_any()
     }
 
     /// 純減の矢印と数（見本の netHTML）。
