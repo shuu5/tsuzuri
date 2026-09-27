@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.14
+  version: v0.15
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。
 
 sections:
   - n: 1
@@ -226,6 +226,15 @@ sections:
         size: M
         done: (1) 読みの後の決め方の関数は、今の値と新しい値が同じ本文なら置かないを返し、違う本文なら置くを返し、まだ読んでいないから本文へは置くを返す (2) 同じ関数は、今の値が本文で、新しい値が読めないで、1 回目なら読み直すを返し、2 回目なら置くを返し、今の値がまだ読んでいないで新しい値が読めないなら 1 回目でも置くを返し、今の値も新しい値も読めないなら置かないを返す (3) 知らせが切れたとき（通信の module の lose_all）は、今までどおり全部の口を読めないにする（この関数を通さない） (4) 畳める段の開き閉じの記録は、鍵ごとに 1 つの値を持ち、初めての鍵は与えた初めの値を返し、置いた値はその後の読みで返り、別の鍵の値を変えない (5) src の project の下の module の details の要素は全部、開き閉じを記録から読んで toggle で書き戻し、その鍵は節の表の 6 つの形の字と一致する（歯は src の字を読んで、details の要素の数と記録を使う所の数が同じことを見る） (6) 経験者の mode で開いて出す台帳の「詳しく」は、記録に値が無いときだけ mode から初めの値を取る (7) 着地済みの関数の外形（各 block の BLOCK・口の path の定数・body の名と引数と返りの型・net の read と reload_all と post の名と引数と返りの型）を変えず、着地済みの歯が全部通り、足す外の依存は 0 本
         depends: [g-ledger-fix]
+      - id: g-batch
+        title: 問いの頁の右の列（まとめて承認の block と全体への指示の block・送る・応答の出し方）
+        req: [FR7, FR8, FR14, NFR2]
+        section: "22"
+        write-set: ["crates/tsuzuri-surface/src/frame.rs", "crates/tsuzuri-surface/src/board.rs", "crates/tsuzuri-surface/src/project/mod.rs", "+crates/tsuzuri-surface/src/project/batch.rs", "+crates/tsuzuri-surface/src/project/policy.rs", "crates/tsuzuri-surface/tests/frame.rs", "crates/tsuzuri-surface/tests/snapshots/frame.json", "crates/tsuzuri-surface/tests/askcard.rs", "crates/tsuzuri-surface/tests/gapspage.rs", "crates/tsuzuri-surface/tests/parts.rs", "+crates/tsuzuri-surface/tests/batchpanel.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail batchpanel_", "cargo nextest run -p tsuzuri-surface --no-tests=fail frame_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 問いの頁の枠の値が 2 列になり、左の列は ask と hist（今のまま）、右の列は class side stack で batch と policy の 2 つの block を持ち、snapshot の file と 1 字も違わない (2) まとめて承認の行は、fixture の問いの一覧（question-list.json の 2 本）で一覧の順の 1 から始まる番号と 36 字に切った題を持ち、A-1 の印を持つ 1 本目の行は選ぶ box を持たずに印を持ち、2 本目の行は選ぶ box を持って初めは選ばれている (3) 選んだ card の関わる所の数は touches の和集合の数、重なりの数は 2 つ以上の選んだ card が持つ touches の数で、歯の中で組む 3 本の card（touches が FR1 と FR2・FR2 と ADR-7・ADR-7）を全部選ぶと 3 と 2、1 本目だけなら 2 と 0 (4) 束を送る button は、逐語が空白だけか、選んだ card が 0 本か、送っている間は押せない (5) 束の要求の本文は、選んだ card だけを一覧の順に、問いの id と見た版の要約値（card の digest）と個別の逐語なしで持ち、束の逐語は欄の字で、A-1 の印を持つ card は選べないので入らない (6) 束の応答の出し方は、200 で記録した・束の id・書いた行の数を出して欄を空にして読み直し、409 で質問が更新されたを出して読み直して欄の字を残し、ほかの 4xx と 5xx で理由の字を出して欄の字を残し、502 で本文が束の応答として読めれば書いた行の数も出し、届かなければ口に届かないを出す (7) 全体への指示の範囲は、この論点と全体の 2 つの button の切り替えで、問いが 1 本以上在れば初めはこの論点で問いの選びの初めの項は一覧の 1 本目、問いが 0 本ならこの論点は押せず初めは全体、要求の scope は全体なら字 all で、この論点なら選んだ問いの id (8) 指示を送る button は、逐語が空白だけか送っている間は押せず、応答の出し方は、200 で記録した・方針の id を出して欄を空にし、400 の scope と 503 の no-policy-memo はそれぞれ節の字を出して欄の字を残す (9) どちらの欄も、字の変換の途中の Enter は何もせず、Ctrl か Meta と Enter で送る（着地済みの鍵の判定の関数を使う） (10) 口の path の歯（tests/parts.rs の parts_paths_distinct_in_block_modules）の一覧に /api/batch と /api/policy が足され、その字は src の中で batch と policy の module の file に 1 度ずつ在る (11) 問いの一覧の口が読めないか・まだ読んでいないか・本文が電文の型として読めないときは、2 つの block とも測れていないと理由の 1 行を出す (12) module の code に localStorage・sessionStorage・cookie の字が無い (13) 足す外の依存は 0 本
+        depends: [g-ask, g-node]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -444,6 +453,23 @@ sections:
       鍵の表（6 つの形）。台帳の「詳しく」は ledger:more。orchestrator と口座の口座の履歴は seat:hist、同じ block の「詳しく」は seat:more。これまでの決定は ask:hist。抜けの検査の行は gaps:<不変条件の id>（例 gaps:g-1）。問いの card のつながりは ask:around:<問いの id>。初めの値は今の code と同じにする（台帳の「詳しく」は経験者の mode なら開く・抜けの検査は違反の行だけ開く・ほかは閉じる）。台帳の「詳しく」は、記録に値が無いときだけ mode から初めの値を取り、持ち主が開き閉じを変えた後は mode を切り替えても記録の値を使う。
       在りか（着地済み）。読みの結果の型 Fetched（3 値・PartialEq を持つ）は view の module、口ごとの読みと知らせの接続と POST は通信の module（crates/tsuzuri-surface/src/net.rs・wasm の target のときだけ組み立てる・関数 load・reload_all・lose_all・read・post）。details の要素は、project の下の ledger（class gmore）・seat（class fold ahistd と gmore）・askpage（block hist）・gaps（class gitem）・ask（card のつながりの段）の 6 か所。mode は widgets の help の module の HelpCtx の mode と shows_internal で読む。面の crate は Cargo.toml を触らない（web-sys の Event と Element は便 g-parts が足してある）。
       測り方。読みの後の決め方と、開き閉じの記録の表は、host の cargo test で pin する。details の要素が記録を使うことは、歯が src の project の下の file の字を読んで、details の要素の数と、記録の関数を呼ぶ所の数が同じで、使う鍵の字が表の形に合うことで測る。新しい歯は新しい歯の file（steady.rs）に置き、名を steady_ で始める。
+      依存は足さない。
+
+  - n: 22
+    type: prose
+    title: 便 g-batch — 問いの頁の右の列
+    body: |
+      問いの頁の右の列に、まとめて承認の block と、全体への指示（方針）の block を置く。見本は docs/design/mock3/ask.html の side（id batch と id policy の 2 つの panel）。受ける口は server の便 e-batch が足す（POST /api/batch と POST /api/policy・着地までは送っても口が無いので、応答の出し方の通りに理由を出す）。
+      頁の枠。問いの頁（frame の module の ask）を 2 列にする。左の列は今のまま（class stack・block は ask と hist）。右の列は class side stack で、block は batch（見出しの語の鍵 batch・class panel・module は新しい batch）と policy（見出しの語の鍵 policy・class panel・module は新しい policy）。頁を描く所（board の module）の block から module を選ぶ所に 2 つを足す。頁の枠の値と snapshot の file と枠の歯（block と module の対応の表・project の下の file の数）を直す。枠の歯の語（frame_）の字を持つ歯の file（tests/askcard.rs と tests/gapspage.rs）は、問いの頁の列の数を見る所だけを直す。
+      data。2 つの block とも、問いの一覧を着地済みの口 /api/questions から読む（ask の module の PATH を net の read に渡す・同じ path の読みは 1 つの signal を分け合う）。電文の読みは ask の module の cards（着地済み）を使う。
+      まとめて承認の block。行の一覧（class items）は、問いの一覧の順に 1 行ずつ、1 から始まる番号（class nb）と題（class ttl・契約の型の crate の graph の module の title36 で切る）。A-1 の印を持つ card の行は、選ぶ box の代わりに印（class gi ng と字「!」）と、A-1 の注の記号（class warn・語の鍵 a1）を持つ。ほかの行は選ぶ box（checkbox・aria-label は番号の字）を持ち、初めは選ばれている。2 つの chip は class metas row の行に置く。その下に 2 つの chip（class chip num）で、選んだ card の関わる所の数（語の鍵 touches・touches の和集合の数）と、重なりの数（2 つ以上の選んだ card が持つ touches の数・注の記号つき）。その下に逐語の欄（textarea・語の鍵 own_words を aria-label と placeholder に）と、送る button（class btn primary・字は語の鍵 batch）。
+      束を送る。button は、逐語が空白だけか、選んだ card が 0 本か、送っている間は押せない。要求の本文は契約の型の BatchRequest で、items は選んだ card を一覧の順に、question は card の id、seen_digest は card の digest の字そのまま、verbatim は無し。束の verbatim は欄の字。POST は通信の module の post（着地済み）で /api/batch へ。応答の出し方。200 は本文を BatchResponse として読み、記録した（ask の module の RECORDED）と束の id と書いた行の数を出し、欄を空にして、口を全部読み直す（net の reload_all）。409 は質問が更新された（ask の module の STALE）を出して読み直し、欄の字を残す。502 で本文が BatchResponse として読めれば、送れなかった（REFUSED）と書いた行の数を出して読み直し、欄の字を残す。ほかの 4xx と 5xx は、本文が RefusalResponse なら理由の字（ask の module の refusal_text）、text なら状態の数と本文の字を出し、欄の字を残す。届かなければ口に届かない（NOT_REACHED）。
+      全体への指示の block。範囲の切り替え（class seg・role group・aria-label は字「範囲」）は、字「この論点」と字「全体」の 2 つの button で、押した方が aria-pressed true。問いが 1 本以上在れば初めはこの論点が押されていて、問いが 0 本ならこの論点は押せず初めは全体。この論点が押されている間だけ、その下に問いの選び（select の要素・aria-label は字「論点」・項は問いの一覧の順の番号と 36 字に切った題・初めの項は 1 本目）を出す。その下に逐語の欄（textarea・aria-label は語の鍵 policy の字）と、送る button（class btn・字は語の鍵 policy）。範囲の字（範囲・この論点・全体・論点）と、送った後の本文の字（方針の memo が台帳に無い・範囲が今の問いでない）は、見出しでない本文の字なので module の定数に置く。
+      指示を送る。button は、逐語が空白だけか送っている間は押せない。要求の本文は契約の型の PolicyRequest で、scope は全体なら字 all、この論点なら選んだ問いの id、verbatim は欄の字。POST は /api/policy へ。応答の出し方。200 は本文を PolicyResponse として読み、記録した と方針の id を出して欄を空にする（問いは閉じないので読み直さない）。400 で本文が text の scope なら範囲が今の問いでないを出して読み直し、503 で text の no-policy-memo なら方針の memo が台帳に無いを出し、どちらも欄の字を残す。ほかは束と同じ。
+      入力の鍵。2 つの欄とも、ask の module の key_action（変換の途中か・Ctrl か Meta か・鍵の名を受けて、何もしない・送る・送らないを返す・着地済み）で決める。持ち主の字は、送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
+      口の path。2 つの口の path の定数（/api/batch と /api/policy）を、batch と policy の module に 1 つずつ置く。着地済みの口の path の歯（crates/tsuzuri-surface/tests/parts.rs の parts_paths_distinct_in_block_modules）は、口の path の定数の一覧を持ち、src の中の /api/ で始まる字の在りかを見る。この便は一覧に 2 本を足し、2 つの字は project の下の batch と policy の module に 1 度ずつ在るとする（ほかの決まりは変えない）。
+      在りか（着地済み）。QuestionCard（欄は id・title・posted_at・plain・eng・reason・recommend・a1・touches・digest）と QuestionList は契約の型の crate の question の module。BatchRequest・BatchItem・BatchResponse・BatchItemResult・ItemOutcome・PolicyRequest・PolicyResponse・Refusal・RefusalResponse は契約の型の crate の面の module（src/surface.rs）。ask の module に、cards・key_action・KeyAction・refusal_text・RECORDED・STALE・NOT_REACHED・REFUSED・BAD_REPLY と、送る button の判定 can_send が在る。測れていないの部品は project の module。語の鍵 batch・policy・own_words・touches・a1・st_unknown は語の辞書に在る。stylesheet に規則が在る class は、side・stack・panel・items・metas・nb・ttl・gi・ng・warn・chip・num・btn・primary・row・seg。語の辞書と stylesheet は触らない。面の crate は Cargo.toml を触らない（web-sys の HtmlTextAreaElement と HtmlInputElement と KeyboardEvent は便 g-parts が足してある・select の要素の値は event の target の value で読む）。
+      測り方。行の一覧・2 つの数・送る button の判定・要求の本文・応答の出し方・範囲の初めの値と問いの選びの項と scope の字は、どれも純粋な関数にして host の cargo test で pin する。DOM と通信は wasm の target のときだけ組み立てる。新しい歯は新しい歯の file（batchpanel.rs）に置き、名を batchpanel_ で始める。fixture は着地済みの question-list.json（card 2 本・1 本が A-1 の印を持つ）を使い、ほかの入力は歯の中で組む。
       依存は足さない。
 
 figures: []
