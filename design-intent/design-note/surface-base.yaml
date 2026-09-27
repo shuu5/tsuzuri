@@ -60,7 +60,8 @@ sections:
       次の一手は、閉じた 7 種を規則の行 R-24 の順に判じ、最初に当たった 1 つと、その対象の id と件数を返す。この便の入力で判じられるのは 3 種。止まっている走行は、板の段が Questioned か Failed か Stopped の札で、その bead が open のもの（対象はいちばん古い札の bead）。質問は open の問い（対象は created_at がいちばん古い 1 本）。なしは、どれにも当たらないとき。残りの 4 種（限度と移動・応答なし・束の承認・発効待ち）は材料（席と口座の状態・束・発効待ちの記録）が入力に無いので判じず、判じなかった種類の一覧を電文に持つ（後の便が材料と一緒に足す）。event log の字が読めなければ、止まっている走行も判じなかった種類に入れる。
       pipeline の板。札は bead ごとに 1 枚で、その bead の走行のうち RunCreated がいちばん新しい 1 つの、最後の event で段を決める。走行の回数は同じ bead の RunCreated の数。口座は、その走行の event の detail の「account:」の後の字のうち最後のもの。経過は今の時刻から最後の event の時刻を引いた秒。器の event から板の段への対応は閉じた表で持つ。RunDone は Landed。RunStage の Reviewed と Gated で detail が「verdict:FAIL」か「verdict:INCONCLUSIVE」で始まれば Failed（段の理由は detail の字）。RunStage の Gated でそれ以外は Gated。RunCreated と、RunStage の Reviewed（verdict が PASS）・Spawned・Implemented は Running。最後の event が QuestionRaised なら Questioned。走行を 1 つも持たない open の契約は、blocks の先に open の bead が在れば Blocked、無ければ Queued。Stopped はこの便の入力に材料が無いので作らない。表に無い段の名の走行は札を作らず、数だけを返す。event log の字が読めなければ、板の札は「まだ分からない」。
       fixture はこの便が作る。judge.json は見本の自己検査と同じ 7 組（滞り・積み増し・停滞・closed/日 がちょうど 0.1 なら順調・順調・台帳なし・open の task が 0 本なら滞りにしない）。stats-30.json は bead 30 本の台帳の一覧と今の時刻と、期待の指標の値。pipeline.json は対応の表の 1 行ごとに走行を 1 つ持つ event log と、期待の札。next.json は 3 種と event log が読めない組の 4 組。
-      依存は足さない。
+      依存は足さない。中核の crate は便 c の着地で契約の型の crate と serde と serde_json に依存している（crates/tsuzuri-core/Cargo.toml の dependencies の 3 行）ので、Cargo.toml も Cargo.lock も触らない。
+      歯が照らす規則の行の字（design-intent/rules.yaml・着地済み）。行 R-18 の value は「滞り = stale が open の task の 0.5 超・積み増し = 純減 7d が 0 超・停滞 = closed/日 が 0.1 未満・順に当てて最初の 1 つ・stale = 7 日 更新なし」。行 R-24 の value は「限度と移動 → 応答なし → 止まっている走行 → 束の承認 → 質問 → 発効待ち → なし の順に判じ 1 つを出す・応答なしは tick が stale のときだけ」。歯は rules の file から id が R-18 と R-24 の行を探し、定数の数（0.5・0・0.1・7）と 7 種の順の字がその行の value の字に在ることを確かめる。
   - n: 6
     type: prose
     title: 便 e — 面の server
