@@ -103,10 +103,28 @@ pub fn with_fold(search: &str, fold: Fold) -> String {
     set_param(search, FOLD_PARAM, fold_name(fold))
 }
 
+/// 中心の id を引数で受けた口の path（段数と畳みは URL の query から・query の id は見ない・問いの card の図）。
+pub fn center_path(center: &str, search: &str) -> String {
+    path(center, k_of(search), fold_of(search))
+}
+
 /// URL の query から口の path（id が無いか空なら None で、口を読まない）。
 pub fn request(search: &str) -> Option<String> {
-    id_of(search).map(|id| path(&id, k_of(search), fold_of(search)))
+    id_of(search).map(|id| center_path(&id, search))
 }
+
+/// 埋め込みの図の口の path（段を開くまでは空の字＝通信の module は空の path を読まない）。
+pub fn embed_path(center: &str, search: &str, opened: bool) -> String {
+    if opened {
+        center_path(center, search)
+    } else {
+        String::new()
+    }
+}
+
+/// 埋め込みの図で、口が中心の節点を見つけないときの理由。
+pub const NO_NODE: &str =
+    "近傍の口がこの id の節点を見つけない（台帳か設計の索引が読めないか、節点が無い）";
 
 /// 畳みの button の側（閉じた 2）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -217,8 +235,16 @@ pub fn unmeasured_reason(state: &PageState) -> Option<&'static str> {
     }
 }
 
+/// 埋め込みの図の理由の 1 行（見つからないも理由で出す・ほかは測れていないときの理由と同じ）。
+pub fn embed_reason(state: &PageState) -> Option<&'static str> {
+    match state {
+        PageState::NotFound => Some(NO_NODE),
+        other => unmeasured_reason(other),
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
-pub use dom::{Source, mode_of, source, view};
+pub use dom::{Embeds, Source, embeds, mode_of, source, view};
 
 /// つながりの block の DOM と事件の受け取り（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
@@ -233,8 +259,8 @@ mod dom {
     use web_sys::wasm_bindgen::JsCast;
 
     use super::{
-        BLOCK, K_CHOICES, PageState, SideButton, buttons, fold_of, k_of, request, state, toggle,
-        unmeasured_reason, with_fold, with_k,
+        BLOCK, K_CHOICES, PageState, SideButton, buttons, embed_path, embed_reason, fold_of, k_of,
+        request, state, toggle, unmeasured_reason, with_fold, with_k,
     };
     use crate::frame::{self, Mode};
     use crate::mapview::around::{
@@ -323,6 +349,92 @@ mod dom {
             }
         };
         view! { {content} }.into_any()
+    }
+
+    /// 埋め込みの図の 1 つの口の読み（読みの結果と応答の状態の数）。
+    type Read = ReadSignal<(Fetched, Option<u16>)>;
+
+    /// 埋め込みの図の置き場の中身（読みを作る owner と、中心の id ごとの印と読みの列）。
+    struct Places {
+        owner: Option<Owner>,
+        rows: Vec<(String, ArcRwSignal<bool>, Read)>,
+    }
+
+    /// 問いの頁に 1 つの埋め込みの図の置き場（段数と畳みは URL の query の k と fold・全部の図が分ける）。
+    #[derive(Clone, Copy)]
+    pub struct Embeds {
+        search: RwSignal<String>,
+        places: StoredValue<Places>,
+    }
+
+    /// 埋め込みの図の置き場を作る（呼んだ block の owner の下で読みを作る・card の組み直しで捨てられない）。
+    pub fn embeds() -> Embeds {
+        // 読みは呼んだ block の owner に持たせ、card を組み直す closure の owner に持たせない。
+        let owner = Owner::current();
+        Embeds {
+            search: RwSignal::new(current()),
+            places: StoredValue::new(Places {
+                owner,
+                rows: Vec::new(),
+            }),
+        }
+    }
+
+    impl Embeds {
+        /// 中心の id の段が開いた（初めて開いたときから口を読む・2 度目からは何もしない）。
+        pub fn open(self, center: &str) {
+            let (mark, _) = self.place(center);
+            if !mark.get_untracked() {
+                mark.set(true);
+            }
+        }
+
+        /// 中心の id の近傍の図（section と見出しで包まない・測れていないと見つからないは理由の 1 行）。
+        pub fn view(self, center: String) -> AnyView {
+            let (_, read) = self.place(&center);
+            let search = self.search;
+            let pin = RwSignal::new(None::<String>);
+            let mode = mode_of(search);
+            let content = move || {
+                let st = read.with(|(f, s)| state(f, *s));
+                match (embed_reason(&st), st) {
+                    (Some(reason), _) => unmeasured(reason),
+                    (None, PageState::Doc(doc)) => panel(doc, search, pin, mode),
+                    (None, _) => ().into_any(),
+                }
+            };
+            view! { {content} }.into_any()
+        }
+
+        /// 中心の id の印と読み（無ければ作る・読みは持った owner の下で頁の一生の間 1 つ）。
+        fn place(self, center: &str) -> (ArcRwSignal<bool>, Read) {
+            let found = self.places.with_value(|p| {
+                p.rows
+                    .iter()
+                    .find(|(id, _, _)| id == center)
+                    .map(|(_, mark, read)| (mark.clone(), *read))
+            });
+            if let Some(found) = found {
+                return found;
+            }
+            let mark = ArcRwSignal::new(false);
+            let search = self.search;
+            let make = {
+                let (id, mark) = (center.to_string(), mark.clone());
+                move || {
+                    let path = Signal::derive(move || search.with(|q| embed_path(&id, q, mark.get())));
+                    crate::net::read_path(path)
+                }
+            };
+            let owner = self.places.with_value(|p| p.owner.clone());
+            let read = match owner {
+                Some(o) => o.with(make),
+                None => make(),
+            };
+            self.places
+                .update_value(|p| p.rows.push((center.to_string(), mark.clone(), read)));
+            (mark, read)
+        }
     }
 
     /// event の的の節点の id（節点の箱の中でなければ None）。

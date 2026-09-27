@@ -402,6 +402,7 @@ mod dom {
         can_send, card_class, count, focus, key_action, outcome, request_body, target_number,
     };
     use crate::frame::{Mode, node_href};
+    use crate::project::nodearound::{Embeds, embeds};
     use crate::project::{Body, body_view, fold, section, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::HelpCtx;
@@ -456,6 +457,8 @@ mod dom {
         let scrolled = StoredValue::new(false);
         let fetched = crate::net::read(PATH);
         let drafts: Drafts = StoredValue::new(Vec::new());
+        // つながりの段の図の読みはこの block が持つ（一覧の読み直しで card を組み直しても作り直さない）。
+        let places = embeds();
         let extra = move || match fetched.with(count) {
             Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
             Reading::Unknown => ().into_any(),
@@ -479,7 +482,7 @@ mod dom {
                     .map(|c| {
                         let d = draft(drafts, &c.id);
                         let on = focused == Some(c.id.as_str());
-                        card_view(c, d, now, on, m)
+                        card_view(c, d, now, on, m, places)
                     })
                     .collect_view()
                     .into_any()
@@ -488,10 +491,17 @@ mod dom {
         section(BLOCK, extra.into_any(), list.into_any())
     }
 
-    fn card_view(card: Card, d: Draft, now: u64, target: bool, mode: Mode) -> AnyView {
+    fn card_view(
+        card: Card,
+        d: Draft,
+        now: u64,
+        target: bool,
+        mode: Mode,
+        places: Embeds,
+    ) -> AnyView {
         let parts = LAYOUT
             .iter()
-            .map(|slot| part_view(*slot, &card, &d, now, mode))
+            .map(|slot| part_view(*slot, &card, &d, now, mode, places))
             .collect_view();
         view! {
             <article class=card_class(target) id=anchor(card.number) data-q=card.id.to_string()>{parts}</article>
@@ -499,7 +509,14 @@ mod dom {
         .into_any()
     }
 
-    fn part_view(slot: Slot, card: &Card, d: &Draft, now: u64, mode: Mode) -> AnyView {
+    fn part_view(
+        slot: Slot,
+        card: &Card,
+        d: &Draft,
+        now: u64,
+        mode: Mode,
+        places: Embeds,
+    ) -> AnyView {
         match slot.part {
             Part::Head => {
                 let a1 = card.a1.then(|| {
@@ -554,20 +571,23 @@ mod dom {
             Part::Answer => answer_view(slot, card.clone(), d.clone()),
             Part::Around => {
                 let key = slot.key.unwrap_or_default();
-                let ids = card
-                    .touches
-                    .iter()
-                    .map(|t| view! { <li><span class="nid">{t.clone()}</span></li> })
-                    .collect_view();
                 let initial = slot.open.unwrap_or(false);
-                let (open, toggle) = fold(format!("ask:around:{}", card.id), move || initial);
+                let (open, record) = fold(format!("ask:around:{}", card.id), move || initial);
+                // つながりは開いたときに組む（段が開いた event で口を読み始め、開き閉じは記録へ書き戻す）。
+                let center = card.id.to_string();
+                let toggle = move |ev: web_sys::Event| {
+                    if event_target::<web_sys::Element>(&ev).has_attribute("open") {
+                        places.open(&center);
+                    }
+                    record(ev);
+                };
                 view! {
                     <details class=slot.class prop:open=open on:toggle=toggle>
                         <summary>
                             <span data-term=key>{label(key)}</span>
                             <span class="chip num" data-term="touches"><span inner_html=LINK></span>{label("touches")}" "{card.touches.len()}</span>
                         </summary>
-                        <div class="nb-body"><ul class="items">{ids}</ul></div>
+                        <div class="nb-body">{places.view(card.id.to_string())}</div>
                     </details>
                 }
                 .into_any()
