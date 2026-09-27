@@ -3,6 +3,7 @@
 //! 行は電文の sessions の 1 行ずつ。並べ方は 4 つ（project・account・stage・elapsed）で URL の query の `sort=` に残す。
 //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
 //! orchestrator の行の合図（tick の健康・heartbeat・退避までの残り秒・移動待ち）は電文の projects の同じ名の行から引く。
+//! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
 //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::EpochSecs;
@@ -11,6 +12,7 @@ use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::{SeatSpan, SeatState};
 use tsuzuri_contract::surface::SeatRole;
 
+use super::heartbeat::{Toggle, toggle};
 use crate::frame::{self, Block};
 use crate::project::Body;
 use crate::project::pipeline::age;
@@ -260,6 +262,8 @@ pub struct SessRow {
     /// orchestrator の行だけ。
     pub signs: Option<Signs>,
     pub moving: Option<Move>,
+    /// 停止の切り替え（orchestrator の行で席の名が在り heartbeat が読めるときだけ・便 h-hb）。
+    pub toggle: Option<Toggle>,
 }
 
 /// 束の見出し。
@@ -448,6 +452,7 @@ pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
         } else {
             None
         },
+        toggle: toggle(doc, line),
     }
 }
 
@@ -519,6 +524,7 @@ mod dom {
         strip, tick_class, with_sort,
     };
     use crate::account::PATH;
+    use crate::account::heartbeat::{self, States, Toggle};
     use crate::project::seat::{Sign, Span, span_of, with_span};
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, state_key, unmeasured};
     use crate::vocab::label;
@@ -545,10 +551,11 @@ mod dom {
         let query = search();
         let sort = RwSignal::new(sort_of(&query));
         let span = RwSignal::new(span_of(&query));
+        let hb: States = RwSignal::new(Default::default());
         let body = move || match fetched.with(|f| content(f, sort.get())) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
-            Body::Filled(table) => table_view(table, span),
+            Body::Filled(table) => table_view(table, span, hb),
         };
         let extra = view! { {sort_bar(sort)}{span_bar(span)} }.into_any();
         section(BLOCK, extra, body.into_any())
@@ -601,7 +608,7 @@ mod dom {
         .into_any()
     }
 
-    fn table_view(table: Table, span: RwSignal<Span>) -> AnyView {
+    fn table_view(table: Table, span: RwSignal<Span>, hb: States) -> AnyView {
         let at = table.at;
         let head = COLUMNS
             .into_iter()
@@ -610,7 +617,7 @@ mod dom {
         let groups = table
             .groups
             .into_iter()
-            .map(|g| group_view(g, at, span))
+            .map(|g| group_view(g, at, span, hb))
             .collect_view();
         view! {
             <div class=SESS>
@@ -654,7 +661,7 @@ mod dom {
         }
     }
 
-    fn group_view(group: Group, at: EpochSecs, span: RwSignal<Span>) -> AnyView {
+    fn group_view(group: Group, at: EpochSecs, span: RwSignal<Span>, hb: States) -> AnyView {
         let n = group.rows.len();
         let head = group.head.map(|h| {
             view! { <div class=GHEAD>{head_view(h)}<span class="chip num">{n}</span></div> }
@@ -662,12 +669,12 @@ mod dom {
         let rows = group
             .rows
             .into_iter()
-            .map(|r| row_view(r, at, span))
+            .map(|r| row_view(r, at, span, hb))
             .collect_view();
         view! { {head}{rows} }.into_any()
     }
 
-    fn row_view(row: SessRow, at: EpochSecs, span: RwSignal<Span>) -> AnyView {
+    fn row_view(row: SessRow, at: EpochSecs, span: RwSignal<Span>, hb: States) -> AnyView {
         let session = match row.session.clone() {
             Some(name) => view! { <span class="mono">{name}</span> }.into_any(),
             None => view! { <span class="sub">{term("seat_none", label("seat_none"))}</span> }
@@ -683,21 +690,23 @@ mod dom {
             Reading::Known(s) => view! { <div inner_html=s></div> }.into_any(),
             Reading::Unknown => NONE_MARK.into_any(),
         };
+        let below = row.toggle.clone().map(|t| heartbeat::below(t, hb));
         view! {
             <div class=row.class.clone()>
                 <div class=C_PROJ data-t="">{row.project.clone()}</div>
                 <div class=C_ROLE>{term(row.role_key, label(row.role_key))}</div>
                 <div>{session}</div>
                 <div class="mono">{account}</div>
-                <div class=C_STAGE>{stage_view(&row)}</div>
+                <div class=C_STAGE>{stage_view(&row, hb)}</div>
                 <div class="num">{row.elapsed.clone()}</div>
                 <div class=C_STRIP>{svg}</div>
             </div>
+            {below}
         }
         .into_any()
     }
 
-    fn stage_view(row: &SessRow) -> AnyView {
+    fn stage_view(row: &SessRow, hb: States) -> AnyView {
         let word = match row.stage {
             Some(s) => s.to_string(),
             None => label(state_key(row.state)),
@@ -717,7 +726,7 @@ mod dom {
         view! {
             {state_icon(row.state)}
             <span class="sstg">{word}{moving}</span>
-            {row.signs.clone().map(signs_view)}
+            {row.signs.clone().map(|s| signs_view(s, row.toggle.clone(), hb))}
         }
         .into_any()
     }
@@ -731,17 +740,20 @@ mod dom {
         }
     }
 
-    fn signs_view(signs: Signs) -> AnyView {
+    /// 合図の行（切り替えが在れば heartbeat の後に button）。
+    fn signs_view(signs: Signs, toggle: Option<Toggle>, states: States) -> AnyView {
         let tk = tick_class(&signs.tick);
         let hb = hb_class(&signs.heartbeat);
         let hb_word = match signs.heartbeat {
             Reading::Known(w) => view! { <b>{w}</b> }.into_any(),
             Reading::Unknown => state_icon(UNKNOWN),
         };
+        let button = toggle.map(|t| heartbeat::button(t, states));
         view! {
             <span class=TKHB>
                 <span class=tk>{sign_view(signs.tick)}{hs("tick_health")}</span>
                 <span class=hb>{hs("heartbeat")}{hb_word}</span>
+                {button}
             </span>
         }
         .into_any()

@@ -14,6 +14,7 @@ use crate::frame::{Block, Mode, STACK, param};
 use crate::project::{Body, NO_CONTENT, NOT_READ};
 use crate::view::Fetched;
 
+pub mod heartbeat;
 pub mod home;
 pub mod ledger;
 pub mod projects;
