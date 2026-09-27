@@ -3,13 +3,13 @@
 meta:
   id: surface-base
   title: 面の便（土台）— workspace の骨格・契約の型・導出グラフ・台帳の指標・面の server・席の hook
-  version: v0.3
+  version: v0.4
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。第 0.4 版（同日）は便 a の着地（6d2a7cd）の後の便 b の行の直しで、依存の file と xtask の歯の file を write-set に足し、snapshot を名指しの 1 file にし、完了の条件を便 b の時点で測れる形にした。
 
 sections:
   - n: 1
@@ -32,7 +32,9 @@ sections:
     title: 便 b — 契約の型
     body: |
       server と面と hook が共有する型を契約の型の crate に置く。面の event・面の状態・問いの合図・裁定の要求と応答・束の要求と応答・方針の要求・台帳への書き（閉じた enum で bdw の argv を組む）・グラフの節点と辺・板の型。
-      面の側に電文の写しを書かない。型の外形は snapshot の歯で pin する。
+      面の側に電文の写しを書かない。型の外形は snapshot の歯で pin する。snapshot は全型の見本の値を JSON にした 1 つの file で、歯は標準 library で字を比べる（snapshot の道具の依存は足さない）。
+      電文の形は JSON なので、依存に serde_json を 1 本足す（条 A-3 の持ち主の確認の後に便を起こす）。便 a の xtask の歯（Cargo.lock の外の package の許可の一覧）に serde_json とそれが連れて来る package を足す。
+      台帳への書きの歯は、argv の形（notes を置き換える旗が無い・子を作る argv は親を持つ）を契約の型の crate の中で測る。器の起票の門の判定の純関数に掛ける歯は、器の code の持ち込みの後の便で足す。
   - n: 4
     type: prose
     title: 便 c — 導出グラフと不変条件と近傍
@@ -74,10 +76,10 @@ sections:
         title: 契約の型（面の event・状態・問いの合図・裁定と束と方針の要求と応答・台帳への書きの enum・グラフの節点と辺・板の型）
         req: [FR2, FR6, FR7, FR8, FR9]
         section: "3"
-        write-set: ["crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-contract/src/surface.rs", "+crates/tsuzuri-contract/src/ledger.rs", "+crates/tsuzuri-contract/src/graph.rs", "+crates/tsuzuri-contract/src/board.rs", "+crates/tsuzuri-contract/tests/contract_form.rs", "+crates/tsuzuri-contract/tests/snapshots/"]
-        verify: ["cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_"]
+        write-set: ["Cargo.toml", "Cargo.lock", "crates/tsuzuri-contract/Cargo.toml", "crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-contract/src/surface.rs", "+crates/tsuzuri-contract/src/ledger.rs", "+crates/tsuzuri-contract/src/graph.rs", "+crates/tsuzuri-contract/src/board.rs", "+crates/tsuzuri-contract/tests/contract_form.rs", "+crates/tsuzuri-contract/tests/snapshots/contract_form.json", "xtask/src/main.rs"]
+        verify: ["cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
         size: M
-        done: (1) 型の外形の snapshot が pin される (2) 台帳への書きの enum の全 variant が bdw の argv に組め、起票の門の判定で deny 0 (3) serde の往復が全型で一致
+        done: (1) 全型の見本の値を JSON にした字が snapshot の file と 1 字も違わない（比べるのは標準 library だけ） (2) 台帳への書きの enum の全 variant が bdw の argv に組め、どの argv も notes を置き換える旗を持たず、子を作る argv は必ず親を持つ (3) JSON への往復が全型で一致 (4) 足す依存は serde_json の 1 本だけで、xtask の歯の許可の一覧が serde_json とそれが連れて来る package を名指す
         depends: [a]
       - id: c
         title: 導出グラフと不変条件の 12 本と近傍（純粋な関数・毎回組み直し・読めない種類だけ「まだ分からない」）

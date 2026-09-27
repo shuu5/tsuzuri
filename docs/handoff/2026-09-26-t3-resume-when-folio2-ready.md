@@ -22,6 +22,9 @@
 
 - **2 周目の結末と 3 周目（2026-09-27T07:20Z〜）**: 2 周目は Gated=FAIL（検証の行 `cargo xtask check` が rc 101 = alias が無い）。原因（verified = 走行の runner.stdout.log）: 実装役の権限の検査が `.cargo/config.toml` を守られた file として書かせない（write-set に在っても）。直し = alias をやめて `cargo run -q -p xtask -- check` の行にした（設計ノート surface-base 第 0.3 版）。学び: 便の write-set に `.cargo/config.toml` のような守られた設定の file を入れない。`.worktrees/` は便 a が .gitignore に足す。
 
+- **便 a の着地（2026-09-27T07:25Z・verified）**: 3 周目（走行 t3-hub.2-20260927T072139Z）が Gated PASS → Landed 6d2a7cd。設計席が main で `cargo run -q -p xtask -- check` を撃って rc 0 を確かめ、origin へ push し、t3-hub.2 を close した。次 = 便 b（契約の型）。便 b は依存に serde_json を 1 本足すので、条 A-3 の持ち主の確認の後に bead を起こす（行は surface-base 第 0.4 版で直した・pointer は contracts/surface-base.toml#b・`--deps` は不要〔便 a は closed〕）。
+- **folio2-d5 の回答（2026-09-27T07:3xZ）**: 構造の直し C は着地済み（03b9323）。A（便 170）は取り込み中で 1〜2 時間の見込み。着地したら binary の版と一緒に知らせが来る。**それまで今の binary のまま・下の手順は撃たない**。着地の後の tsuzuri の手順 = (1) 発効した判断の記録の revises の塊を消す（ADR-7・8・11。規範を運んでいたら規則の表か要件書へ）(2) `folio schema --dir design-intent --write` (3) ceiling.yaml の viewpoints の節を、新しい binary の `folio init --dir <空の一時 dir>/design-intent` が書く節で置き換える（meta・documents・weights は触らない）(4) commit → `folio check --dir design-intent --freeze-adrs`（封 anchors/adr-seals.yaml）→ commit → 床が合格。以後、発効した判断の記録は本文を変えず、判断を変えるときは新しい記録を立てる。天井の周の合図 = folio2 が tsuzuri の写しで新しい道具の周を 1 回回し、結果を知らせる（今日中の見込み）。周を起こすのは「支持の 止める の直しを確かめるとき」と「M の出口の前」だけにする形を勧められた（採るかは tsuzuri の判断）。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|

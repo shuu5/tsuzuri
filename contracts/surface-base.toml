@@ -16,12 +16,12 @@ id = "b"
 title = "契約の型（面の event・状態・問いの合図・裁定と束と方針の要求と応答・台帳への書きの enum・グラフの節点と辺・板の型）"
 req = ["FR2", "FR6", "FR7", "FR8", "FR9"]
 section = "3"
-write-set = ["crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-contract/src/surface.rs", "+crates/tsuzuri-contract/src/ledger.rs", "+crates/tsuzuri-contract/src/graph.rs", "+crates/tsuzuri-contract/src/board.rs", "+crates/tsuzuri-contract/tests/contract_form.rs", "+crates/tsuzuri-contract/tests/snapshots/"]
-verify = ["cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_"]
+write-set = ["Cargo.toml", "Cargo.lock", "crates/tsuzuri-contract/Cargo.toml", "crates/tsuzuri-contract/src/lib.rs", "+crates/tsuzuri-contract/src/surface.rs", "+crates/tsuzuri-contract/src/ledger.rs", "+crates/tsuzuri-contract/src/graph.rs", "+crates/tsuzuri-contract/src/board.rs", "+crates/tsuzuri-contract/tests/contract_form.rs", "+crates/tsuzuri-contract/tests/snapshots/contract_form.json", "xtask/src/main.rs"]
+verify = ["cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
 size = "M"
-done = "(1) 型の外形の snapshot が pin される (2) 台帳への書きの enum の全 variant が bdw の argv に組め、起票の門の判定で deny 0 (3) serde の往復が全型で一致"
+done = "(1) 全型の見本の値を JSON にした字が snapshot の file と 1 字も違わない（比べるのは標準 library だけ） (2) 台帳への書きの enum の全 variant が bdw の argv に組め、どの argv も notes を置き換える旗を持たず、子を作る argv は必ず親を持つ (3) JSON への往復が全型で一致 (4) 足す依存は serde_json の 1 本だけで、xtask の歯の許可の一覧が serde_json とそれが連れて来る package を名指す"
 depends = ["a"]
-goal = "server と面と hook が共有する型を契約の型の crate に置く。面の event・面の状態・問いの合図・裁定の要求と応答・束の要求と応答・方針の要求・台帳への書き（閉じた enum で bdw の argv を組む）・グラフの節点と辺・板の型。 面の側に電文の写しを書かない。型の外形は snapshot の歯で pin する。"
+goal = "server と面と hook が共有する型を契約の型の crate に置く。面の event・面の状態・問いの合図・裁定の要求と応答・束の要求と応答・方針の要求・台帳への書き（閉じた enum で bdw の argv を組む）・グラフの節点と辺・板の型。 面の側に電文の写しを書かない。型の外形は snapshot の歯で pin する。snapshot は全型の見本の値を JSON にした 1 つの file で、歯は標準 library で字を比べる（snapshot の道具の依存は足さない）。 電文の形は JSON なので、依存に serde_json を 1 本足す（条 A-3 の持ち主の確認の後に便を起こす）。便 a の xtask の歯（Cargo.lock の外の package の許可の一覧）に serde_json とそれが連れて来る package を足す。 台帳への書きの歯は、argv の形（notes を置き換える旗が無い・子を作る argv は親を持つ）を契約の型の crate の中で測る。器の起票の門の判定の純関数に掛ける歯は、器の code の持ち込みの後の便で足す。"
 
 [[contract]]
 id = "c"
