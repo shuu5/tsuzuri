@@ -82,14 +82,14 @@ fn in_order(all: &[&str], want: &[&str]) -> bool {
     want.iter().all(|w| rest.any(|a| a == w))
 }
 
-/// (1) 節点の頁の枠（block は node と around）・page=node で開く・nav は 4 つをこの順に含み節点の頁を含まない・
+/// (1) 節点の頁の枠（block は node と around と、便 g-node-timeline が足した timeline）・page=node で開く・nav は 4 つをこの順に含み節点の頁を含まない・
 /// snapshot と同じ。
 #[test]
 fn nodepage_frame_and_nav() {
     let page = frame::page(PageId::Node);
     assert_eq!(page.id, PageId::Node);
     assert_eq!(page.id.id(), "node");
-    assert_eq!(page.block_ids(), vec!["node", "around"]);
+    assert_eq!(page.block_ids(), vec!["node", "around", "timeline"]);
     let blocks: Vec<(&str, &str, &str)> = page
         .columns
         .iter()
@@ -99,7 +99,8 @@ fn nodepage_frame_and_nav() {
         blocks,
         vec![
             ("node", "summary_plain", "stack"),
-            ("around", "around", "panel")
+            ("around", "around", "panel"),
+            ("timeline", "timeline", "panel")
         ]
     );
     assert_eq!(node::BLOCK.id, "node");

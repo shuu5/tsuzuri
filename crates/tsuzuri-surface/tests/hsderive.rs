@@ -1,4 +1,4 @@
-//! 行 hs-derived の歯（接頭辞 hsderive_・判断の記録 ADR-13）: 13 の block の module の口の path と畳める段の鍵の形は
+//! 行 hs-derived の歯（接頭辞 hsderive_・判断の記録 ADR-13）: block の module の口の path と畳める段の鍵の形は
 //! module ごとの定数 PATHS と FOLDS・Module の paths と folds はその定数を返す・kit の fold_keys は Module の ALL の順に
 //! folds をつないだ列・写しの snapshot は消した。
 
@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use tsuzuri_surface::project::{
     self, Module, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
-    pipeline, policy, seat,
+    pipeline, policy, seat, timeline,
 };
 
 fn crate_dir() -> PathBuf {
@@ -20,8 +20,8 @@ fn read(rel: &str) -> String {
 /// module の名・PATHS・FOLDS。
 type Consts = (&'static str, &'static [&'static str], &'static [&'static str]);
 
-/// 着地済みの 13 の module の定数。
-const CONSTS: [Consts; 13] = [
+/// 着地済みの module の定数（名の順）。
+const CONSTS: &[Consts] = &[
     ("ask", ask::PATHS, ask::FOLDS),
     ("askpage", askpage::PATHS, askpage::FOLDS),
     ("batch", batch::PATHS, batch::FOLDS),
@@ -35,12 +35,13 @@ const CONSTS: [Consts; 13] = [
     ("pipeline", pipeline::PATHS, pipeline::FOLDS),
     ("policy", policy::PATHS, policy::FOLDS),
     ("seat", seat::PATHS, seat::FOLDS),
+    ("timeline", timeline::PATHS, timeline::FOLDS),
 ];
 
-/// (1) 13 の module の PATHS と FOLDS は着地の時の値（PATHS は定数の名で書いた path）。
+/// (1) 着地済みの module の PATHS と FOLDS は着地の時の値（PATHS は定数の名で書いた path）。
 #[test]
 fn hsderive_consts_match_note() {
-    let want: [Consts; 13] = [
+    let want: &[Consts] = &[
         ("ask", &["/api/questions", "/api/ruling"], &["ask:around:{}"]),
         ("askpage", &[], &["ask:hist"]),
         ("batch", &["/api/batch"], &[]),
@@ -58,6 +59,7 @@ fn hsderive_consts_match_note() {
         ("pipeline", &["/api/pipeline"], &[]),
         ("policy", &["/api/policy"], &[]),
         ("seat", &["/api/seat"], &["seat:hist", "seat:more"]),
+        ("timeline", &[], &[]),
     ];
     assert_eq!(CONSTS, want);
     assert_eq!(ask::PATHS, [ask::PATH, ask::RULING_PATH]);
@@ -77,7 +79,7 @@ fn hsderive_consts_match_note() {
         assert_eq!(paths, [path]);
     }
     // PATHS は定数の名で書き、/api/ の字を新しく書かない（file の字の数は歯 parts_ が見る）。
-    for (name, _, _) in CONSTS {
+    for &(name, _, _) in CONSTS {
         let text = read(&format!("src/project/{name}.rs"));
         let line = text
             .lines()
@@ -96,13 +98,14 @@ fn hsderive_consts_match_note() {
 fn hsderive_module_returns_consts() {
     for m in Module::ALL {
         let (_, paths, folds) = CONSTS
-            .into_iter()
+            .iter()
+            .copied()
             .find(|(n, _, _)| *n == m.name())
             .unwrap_or_else(|| panic!("{} の定数が表に無い", m.name()));
         assert_eq!(m.paths(), paths, "{} の paths", m.name());
         assert_eq!(m.folds(), folds, "{} の folds", m.name());
     }
-    for (name, _, _) in CONSTS {
+    for &(name, _, _) in CONSTS {
         assert!(
             Module::ALL.iter().any(|m| m.name() == name),
             "{name} が Module の ALL に無い"

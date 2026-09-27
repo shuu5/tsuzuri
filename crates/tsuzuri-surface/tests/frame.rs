@@ -5,6 +5,7 @@
 //! 便 g-node で nav に出さない節点の頁（block は node と around）を足し、module は 11 になった（nav は 4 つのまま）。
 //! 便 g-batch で問いの頁を 2 列にし（右の列は side stack で batch と policy）、module は 13 になった。
 //! 行 h-wire で header の HEADER の前に「戻る」の部品 BACK を足した（snapshot の header の先頭の 1 行）。
+//! 行 g-node-timeline で節点の頁の around の後に run の時間軸の block timeline を足した。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -118,7 +119,10 @@ fn frame_home_blocks_in_order_and_map_page() {
     );
     assert_eq!(frame::page(PageId::Map).block_ids(), vec!["map"]);
     assert_eq!(frame::page(PageId::Gaps).block_ids(), vec!["gaps"]);
-    assert_eq!(frame::page(PageId::Node).block_ids(), vec!["node", "around"]);
+    assert_eq!(
+        frame::page(PageId::Node).block_ids(),
+        vec!["node", "around", "timeline"]
+    );
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
     assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
     assert!(!ids.contains(&"node"), "{ids:?}");

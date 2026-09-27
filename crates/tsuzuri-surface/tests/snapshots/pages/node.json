@@ -7,7 +7,8 @@
           "class": "stack",
           "blocks": [
             {"id": "node", "heading": "summary_plain", "class": "stack"},
-            {"id": "around", "heading": "around", "class": "panel"}
+            {"id": "around", "heading": "around", "class": "panel"},
+            {"id": "timeline", "heading": "timeline", "class": "panel"}
           ]
         }
       ]
