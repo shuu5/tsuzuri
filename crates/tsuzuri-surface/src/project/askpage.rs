@@ -4,7 +4,10 @@
 //! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる（便 g-ask-focus）。
 //! 選んで並べる関数と件数は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
+use std::collections::BTreeMap;
+
 use tsuzuri_contract::board::Reading;
+use tsuzuri_contract::graph::{EdgeType, GraphDoc};
 use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
 
@@ -108,13 +111,78 @@ pub fn row_selector(index: usize) -> String {
 /// 名指された行に置く背景（見本の script が li に置く色と同じ）。
 pub const HIGHLIGHT: &str = "background:var(--panel-2)";
 
+/// グラフの口の本文から、問いの id ごとにそれに答えた決定の id（型 answers の辺の to から from・便 g-hist-ruling）。
+/// 同じ問いへの辺が 2 本以上なら電文の順の最後（答え直した今の決定）。読めなければ空。
+pub fn ruling_links(fetched: &Fetched) -> BTreeMap<String, String> {
+    let Fetched::Body(text) = fetched else {
+        return BTreeMap::new();
+    };
+    let Ok(doc) = wire::decode::<GraphDoc>(text) else {
+        return BTreeMap::new();
+    };
+    doc.edges
+        .into_iter()
+        .filter(|e| e.edge_type == EdgeType::Answers)
+        .map(|e| (e.to, e.from))
+        .collect()
+}
+
+/// 段の 1 行（台帳の項と、その問いに答えた決定の id・無ければ None）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistEntry {
+    pub item: Item,
+    pub ruling: Option<String>,
+}
+
+/// 項の順のまま、項ごとに答えた決定の id を添える（グラフが読めなければどれも None）。
+pub fn hist_rows(items: &[Item], graph: &Fetched) -> Vec<HistEntry> {
+    let links = ruling_links(graph);
+    items
+        .iter()
+        .map(|it| HistEntry {
+            item: it.clone(),
+            ruling: links.get(&it.id).cloned(),
+        })
+        .collect()
+}
+
+/// 決定の link の字: server の形の id（問いの id・字 :・UTC の分・字 -・数）なら時分と Z（例 13:00Z）、
+/// ほかの形（手書きの古い id）は id のまま。年月日の値の範囲は見ない。
+pub fn ruling_text(id: &str) -> String {
+    let Some((head, tail)) = id.rsplit_once(':') else {
+        return id.to_string();
+    };
+    let b = tail.as_bytes();
+    let digits = |r: std::ops::Range<usize>| b[r].iter().all(u8::is_ascii_digit);
+    let server = !head.is_empty()
+        && b.len() >= 16
+        && digits(0..8)
+        && b[8] == b'T'
+        && digits(9..13)
+        && b[13] == b'Z'
+        && b[14] == b'-'
+        && digits(15..b.len());
+    if server {
+        format!("{}:{}Z", &tail[9..11], &tail[11..13])
+    } else {
+        id.to_string()
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     use leptos::prelude::*;
 
-    use crate::widgets::help::h2;
+    use crate::frame::Mode;
+    use crate::widgets::help::{HelpCtx, h2};
 
+    let graph = crate::net::read(super::map::PATH);
     let search = window().location().search().unwrap_or_default();
+    let mode = {
+        let ctx = use_context::<HelpCtx>();
+        let url = Mode::from_query(&search);
+        move || ctx.map_or(url, |c| c.mode.get())
+    };
     let target = super::ask::focus(&search);
     let lit = StoredValue::new(false);
     let fetched = crate::net::read(super::ledger::PATH);
@@ -143,9 +211,10 @@ pub fn view() -> leptos::prelude::AnyView {
                     }
                 });
             }
-            let rows = items
-                .iter()
-                .map(|it| super::item_view(it, None))
+            let rows = graph
+                .with(|g| hist_rows(&items, g))
+                .into_iter()
+                .map(|entry| hist_li(entry, mode))
                 .collect_view();
             view! { <ul class="items">{rows}</ul> }.into_any()
         }
@@ -156,6 +225,36 @@ pub fn view() -> leptos::prelude::AnyView {
             <summary>{h2(BLOCK.heading)}{chip}</summary>
             {list}
         </details>
+    }
+    .into_any()
+}
+
+/// 段の 1 行（印・題は問いの頁への link・右の小さい字は答えた決定の頁への link、無ければ状態の字）。
+#[cfg(target_arch = "wasm32")]
+fn hist_li(
+    entry: HistEntry,
+    mode: impl Fn() -> crate::frame::Mode + Copy + Send + Sync + 'static,
+) -> leptos::prelude::AnyView {
+    use leptos::prelude::*;
+
+    use crate::frame::node_href;
+
+    let HistEntry { item, ruling } = entry;
+    let style = if item.alert { super::ALERT_STYLE } else { "" };
+    let id = item.id.clone();
+    let href = move || node_href(&id, mode());
+    view! {
+        <li>
+            <span class=item.shape.clone() style=style aria-hidden="true"></span>
+            <a class="ttl" href=href><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
+            <span class="aside">{match ruling {
+                Some(rid) => view! {
+                    <a href={let rid = rid.clone(); move || node_href(&rid, mode())}>{ruling_text(&rid)}</a>
+                }
+                .into_any(),
+                None => item.aside.clone().into_any(),
+            }}</span>
+        </li>
     }
     .into_any()
 }
