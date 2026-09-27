@@ -2,12 +2,13 @@
 //! block の中身は account の下の module が描く。ここは枠を描き、tab と mode を URL から読んで URL に残すだけ。
 //! 関係の頁への link・時点のつまみ・休止中の chip は出さない（未決）。最終の記録の chip は tab の link の後に置く。
 
+use leptos::ev;
 use leptos::prelude::*;
 use tsuzuri_contract::EpochSecs;
 
 use super::{
     BRAND, HEADER, PATH, TOP, Tab, UPDATED_CLASS, UPDATED_KEY, badge, doc, home, ledger, page,
-    page_title, projects, session, tab_href, tab_links, windows,
+    page_title, projects, session, tab_href, tab_links, tab_url, windows,
 };
 use crate::frame::{self, Block, Mode};
 use crate::net;
@@ -60,9 +61,16 @@ fn keep_mode_in_url(mode: Mode) {
 
 #[component]
 fn App() -> impl IntoView {
-    let query = search();
-    let tab = Tab::from_query(&query);
-    let mode = RwSignal::new(Mode::from_query(&query));
+    // 頁の今の URL の query（tab の押しと戻ると進むで替わる・今の tab はここから導く）。
+    let query = RwSignal::new(search());
+    let mode = RwSignal::new(Mode::from_query(&query.get_untracked()));
+    // 戻ると進むは履歴の URL から tab と mode を戻す（URL が状態の正）。
+    let back = window_event_listener(ev::popstate, move |_| {
+        let now = search();
+        mode.set(Mode::from_query(&now));
+        query.set(now);
+    });
+    on_cleanup(move || back.remove());
     provide_context(HelpCtx {
         open: RwSignal::new(None),
         mode,
@@ -85,8 +93,9 @@ fn App() -> impl IntoView {
         }
     });
     view! {
-        {top(tab, mode, read, updated)}
-        <main class="page">{page_view(tab)}</main>
+        {top(query, mode, read, updated)}
+        // query が替わるたびに今の tab の block を組み直す（block は組むときに URL の並べ方と幅を読む）。
+        <main class="page">{move || page_view(query.with(|q| Tab::from_query(q)))}</main>
         <TipLayer/>
         <CardLayer/>
     }
@@ -94,11 +103,12 @@ fn App() -> impl IntoView {
 
 /// 上端の帯: 題・tab の link・最終の記録・mode の切り替え（account の HEADER の順）。
 fn top(
-    tab: Tab,
+    query: RwSignal<String>,
     mode: RwSignal<Mode>,
     read: Memo<Option<tsuzuri_contract::account::AccountDoc>>,
     updated: RwSignal<Option<EpochSecs>>,
 ) -> impl IntoView {
+    let tab = Memo::new(move |_| query.with(|q| Tab::from_query(q)));
     let parts = HEADER
         .iter()
         .map(|part| match part.part {
@@ -110,7 +120,7 @@ fn top(
             }
             .into_any(),
             "nav" => {
-                let links = tab_links(tab)
+                let links = tab_links(tab.get_untracked())
                     .into_iter()
                     .map(|l| {
                         let n = move || read.with(|d| d.as_ref().and_then(|d| badge(l.tab, d)));
@@ -120,8 +130,33 @@ fn top(
                                 view! { <span class=l.badge aria-label=aria>{n}</span> }
                             })
                         };
+                        // 今の tab だけ on（tab_links の class）と aria-current。
+                        let class = move || {
+                            tab_links(tab.get())
+                                .into_iter()
+                                .find(|c| c.tab == l.tab)
+                                .map_or("", |c| c.class)
+                        };
+                        let current = move || (tab.get() == l.tab).then_some("page");
+                        // 押しは頁を読み直さず履歴に積む（新しい窓や tab で開く押しは browser の既定のまま・見本の setTab）。
+                        let press = move |e: ev::MouseEvent| {
+                            if e.ctrl_key() || e.meta_key() || e.shift_key() {
+                                return;
+                            }
+                            e.prevent_default();
+                            let url = tab_url(&search(), l.tab);
+                            if let Ok(history) = window().history() {
+                                let _ = history.push_state_with_url(
+                                    &web_sys::wasm_bindgen::JsValue::NULL,
+                                    "",
+                                    Some(&url),
+                                );
+                            }
+                            query.set(url);
+                            window().scroll_to_with_x_and_y(0.0, 0.0);
+                        };
                         view! {
-                            <a href=move || tab_href(l.tab, mode.get()) class=l.class data-tab=l.tab.id() data-v=l.key data-term=l.key>
+                            <a href=move || tab_href(l.tab, mode.get()) class=class aria-current=current on:click=press data-tab=l.tab.id() data-v=l.key data-term=l.key>
                                 <span inner_html=tab_icon(l.tab)></span>
                                 <span class="lbl hd-t">{label(l.key)}</span>
                                 {mark}

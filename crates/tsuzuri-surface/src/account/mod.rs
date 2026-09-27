@@ -4,13 +4,14 @@
 //! block ごとに 1 つの module（home・windows・session・ledger・projects）が描く。この便は中身を描かず、
 //! 読めたら中身はまだ無いの字を、読めない・まだ読んでいない・本文が電文として読めないときは測れていないと理由の 1 行を出す。
 //! 口は 1 つ（契約の型の crate の account の module の PATH）で、全部の block が net の同じ signal を分け合う。
+//! tab の押しは頁を読み直さず、tab_url の URL を履歴に積む（見本の setTab・戻ると進むは board が popstate で受ける）。
 
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::wire;
 
-use crate::frame::{Block, Mode, STACK, param};
+use crate::frame::{Block, Mode, STACK, param, with_param};
 use crate::project::{Body, NO_CONTENT, NOT_READ};
 use crate::view::Fetched;
 
@@ -74,6 +75,11 @@ impl Tab {
 /// tab への link（account board の入口と tab と mode を URL に残す）。
 pub fn tab_href(tab: Tab, mode: Mode) -> String {
     format!("?board=account&tab={}&mode={}", tab.id(), mode.key())
+}
+
+/// tab を押したときに履歴に積む URL（今の URL の query の tab だけを替え、並べ方・幅・mode は残す・見本の setTab）。
+pub fn tab_url(search: &str, tab: Tab) -> String {
+    with_param(search, "tab", tab.id())
 }
 
 /// header の 1 つの部品（役・語の鍵・class・中の語の鍵・数の印の class）。
