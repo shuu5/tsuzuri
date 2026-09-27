@@ -4,6 +4,7 @@
 //! （event log は追記の順なので、後の行ほど新しい）。段を決める event は `STAGE_EVENTS` の 4 種で、
 //! ほかの event（RunCost・SeatSpawned など）は段を変えない。器の event から段への対応は `stage_of` の閉じた表。
 //! 走行を 1 つも持たない open の契約は Blocked か Queued の札にする。Stopped はこの便の入力に材料が無いので作らない。
+//! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む（行 e-runs）。
 
 use std::collections::BTreeMap;
 
@@ -12,6 +13,7 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, PipelineCard, Reading, Stage};
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
+use tsuzuri_contract::runs::{RunCost, RunLine, RunStep, RunsDoc};
 
 use crate::graph::build::{read_events, run_bead};
 use crate::ledger::{Bead, epoch_secs, read};
@@ -191,6 +193,100 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
             cards: Reading::Known(cards),
         },
         unmapped,
+    }
+}
+
+/// detail を `,` と空白で切った札のうち `tag` で始まる最初の札の残り（空なら None）。
+fn detail_tag(detail: &str, tag: &str) -> Option<String> {
+    detail
+        .split([',', ' '])
+        .find_map(|tok| tok.strip_prefix(tag))
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+}
+
+/// event の欄の整数（無いか u64 に読めなければ 0）。
+fn count(event: &Value, key: &str) -> u64 {
+    event.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+/// bead の走行の時間軸（行 e-runs・要件 FR10）。走行は `of_inputs` と同じ決まりで作る:
+/// 欄 run を持つ event のうち kind が RunCreated の最初の 1 件で作り、作る前の event と作らない走行の event は読み捨てる。
+/// 作った走行の event ごとに、口座の札（後ほど勝つ）・段（欄 stage を持つ event 1 つに 1 つ）・費用（RunCost の和）を読む。
+/// event log が読めなければ runs は「まだ分からない」。
+pub fn runs_of(events: &str, bead: &BeadId) -> RunsDoc {
+    let Some(events) = read_events(events) else {
+        return RunsDoc {
+            bead: bead.clone(),
+            runs: Reading::Unknown,
+        };
+    };
+    // run の id から列の位置（None はほかの bead の走行）。
+    let mut seen: BTreeMap<&str, Option<usize>> = BTreeMap::new();
+    let mut lines: Vec<RunLine> = Vec::new();
+    for event in &events {
+        let kind = text(event, "kind").unwrap_or_default();
+        let Some(run) = text(event, "run") else {
+            continue;
+        };
+        if kind == "RunCreated" && !seen.contains_key(run) {
+            let Some(of) = text(event, "bead").or_else(|| run_bead(run)) else {
+                continue;
+            };
+            let at = (of == bead.as_str()).then(|| {
+                lines.push(RunLine {
+                    run: run.to_string(),
+                    started_at: text(event, "ts").and_then(epoch_secs),
+                    account: None,
+                    steps: Vec::new(),
+                    cost: RunCost::default(),
+                });
+                lines.len() - 1
+            });
+            seen.insert(run, at);
+        }
+        let Some(&Some(at)) = seen.get(run) else {
+            continue;
+        };
+        let line = &mut lines[at];
+        if let Some(account) = detail_account(event) {
+            line.account = Some(account);
+        }
+        if let Some(stage) = text(event, "stage") {
+            let detail = text(event, "detail");
+            line.steps.push(RunStep {
+                at: text(event, "ts").and_then(epoch_secs),
+                stage: stage.to_string(),
+                detail: detail.map(str::to_string),
+                verdict: detail.and_then(|d| detail_tag(d, "verdict:")),
+                verdict_kind: detail.and_then(|d| detail_tag(d, "kind:")),
+            });
+        }
+        if kind == "RunCost" {
+            let cost = &mut line.cost;
+            cost.events += 1;
+            cost.turns += count(event, "turns");
+            cost.wall_ms += count(event, "wall_ms");
+            for tok in text(event, "usage").unwrap_or_default().split(',') {
+                let Some((key, value)) = tok.split_once(':') else {
+                    continue;
+                };
+                let Ok(n) = value.parse::<u64>() else {
+                    continue;
+                };
+                match key {
+                    "in" => cost.tokens_in += n,
+                    "out" => cost.tokens_out += n,
+                    "cache_read" => cost.cache_read += n,
+                    "cache_create" => cost.cache_create += n,
+                    _ => {}
+                }
+            }
+        }
+    }
+    RunsDoc {
+        bead: bead.clone(),
+        runs: Reading::Known(lines),
     }
 }
 
