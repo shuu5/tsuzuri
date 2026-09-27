@@ -1,0 +1,29 @@
+{
+  "nodes": [
+    {"node": {"id": "P-1", "kind": "条", "file": "design-intent/constitution.yaml", "digest": null, "title": "根拠の条"}, "status": null, "rank": 0, "kids": 2, "degree": 5},
+    {"node": {"id": "R-1", "kind": "規則行", "file": "design-intent/rules.yaml", "digest": null, "title": "規則の行"}, "status": null, "rank": 1, "kids": 0, "degree": 1},
+    {"node": {"id": "FR1", "kind": "要件", "file": "design-intent/srs.yaml", "digest": null, "title": "要件の行"}, "status": null, "rank": 2, "kids": 0, "degree": 4},
+    {"node": {"id": "AC1", "kind": "受入基準", "file": "design-intent/srs.yaml", "digest": null, "title": "受入基準の行"}, "status": null, "rank": 3, "kids": 0, "degree": 1},
+    {"node": {"id": "ADR-1", "kind": "判断の記録", "file": "design-intent/adr/ADR-1.yaml", "digest": null, "title": "判断の記録"}, "status": null, "rank": 1, "kids": 0, "degree": 2},
+    {"node": {"id": "e", "kind": "epic", "file": null, "digest": null, "title": "見本の epic"}, "status": "open", "rank": 3, "kids": 2, "degree": 2},
+    {"node": {"id": "e.1", "kind": "task", "file": null, "digest": null, "title": "見本の契約"}, "status": "open", "rank": 4, "kids": 0, "degree": 2},
+    {"node": {"id": "e.1-20260927T000000Z", "kind": "run", "file": null, "digest": null, "title": "見本の走行"}, "status": "Landed", "rank": 5, "kids": 0, "degree": 1}
+  ],
+  "edges": [
+    {"from": "AC1", "to": "FR1", "type": "verify.ac", "count": 1},
+    {"from": "AC1", "to": "FR1", "type": "verifies", "count": 1},
+    {"from": "ADR-1", "to": "P-1", "type": "basis", "count": 1},
+    {"from": "FR1", "to": "ADR-1", "type": "adrs", "count": 1},
+    {"from": "FR1", "to": "P-1", "type": "basis", "count": 1},
+    {"from": "R-1", "to": "P-1", "type": "relations.rules", "count": 1},
+    {"from": "R-1", "to": "P-1", "type": "article", "count": 1},
+    {"from": "e", "to": "FR1", "type": "touches", "count": 1},
+    {"from": "e.1", "to": "e", "type": "parent-child", "count": 1},
+    {"from": "e.1-20260927T000000Z", "to": "e.1", "type": "run_of", "count": 1}
+  ],
+  "shown": 8,
+  "folded": 4,
+  "cut": 1,
+  "total": 13,
+  "unread": []
+}

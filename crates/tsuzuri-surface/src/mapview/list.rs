@@ -175,12 +175,11 @@ pub fn state_rank(doc: &GraphDoc, node: &GraphNode) -> u8 {
 
 /// 一覧の面の中身を組む（組の絞り・帯・種類の順に絞り、並べ替える）。
 pub fn listing(doc: &GraphDoc, q: &Query) -> Listing {
-    // 電文の順（constitution と rules の並べ替えに使う）を持って絞る。
-    let mut nodes: Vec<(usize, &GraphNode)> = doc.nodes.iter().enumerate().collect();
+    let mut nodes: Vec<&GraphNode> = doc.nodes.iter().collect();
     let mut pair = None;
     if let Some((from, to)) = q.pair {
         let hit = pair_ends(doc, from, to);
-        nodes.retain(|(_, n)| hit.contains(n.id.as_str()));
+        nodes.retain(|n| hit.contains(n.id.as_str()));
         pair = Some(PairNote {
             from,
             to,
@@ -188,30 +187,26 @@ pub fn listing(doc: &GraphDoc, q: &Query) -> Listing {
         });
     }
     if let Some(band) = q.band {
-        nodes.retain(|(_, n)| band_of(n.kind) == band);
+        nodes.retain(|n| band_of(n.kind) == band);
     }
     if let Some(kind) = q.kind {
-        nodes.retain(|(_, n)| n.kind == kind);
+        nodes.retain(|n| n.kind == kind);
     }
     match q.sort {
-        Sort::Id => nodes.sort_by(|(i, a), (j, b)| {
-            let (x, y) = (band_of(a.kind), band_of(b.kind));
-            x.cmp(&y).then_with(|| {
-                if matches!(x, Band::Constitution | Band::Rules) {
-                    i.cmp(j)
-                } else {
-                    natural(&a.id, &b.id)
-                }
-            })
+        // 帯の順、次に、どの帯も id の自然な順（電文の順は字の順なので頼らない・便 g-graph）。
+        Sort::Id => nodes.sort_by(|a, b| {
+            band_of(a.kind)
+                .cmp(&band_of(b.kind))
+                .then_with(|| natural(&a.id, &b.id))
         }),
-        Sort::State => nodes.sort_by(|(_, a), (_, b)| {
+        Sort::State => nodes.sort_by(|a, b| {
             state_rank(doc, a)
                 .cmp(&state_rank(doc, b))
                 .then_with(|| natural(&a.id, &b.id))
         }),
     }
     Listing {
-        rows: nodes.into_iter().map(|(_, n)| row(doc, n)).collect(),
+        rows: nodes.into_iter().map(|n| row(doc, n)).collect(),
         kinds: NodeKind::ALL
             .into_iter()
             .filter(|k| doc.nodes.iter().any(|n| n.kind == *k))

@@ -1,5 +1,6 @@
 //! 地図の頁（見本の map.html・便 g-map）: 見出しと節点の数・面の切り替えの tab（4 つ）・今の面の中身。
 //! 口（/api/graph）の本文を契約の型の GraphDoc に読み、面の中身は mapview の下の module が組む。
+//! グラフの面だけは自分の口（/api/graph/view）を graph の module の中で読む（便 g-graph）。
 //! 今の面は URL の query の view に残す（無い・知らない値は圧縮の面）。
 
 use tsuzuri_contract::graph::GraphDoc;
@@ -54,7 +55,7 @@ mod dom {
 
     use super::{BLOCK, PATH, doc};
     use crate::mapview::{View, compact, current, graph, list, navigate, table, with_view};
-    use crate::project::{body_view, unmeasured};
+    use crate::project::unmeasured;
     use crate::vocab::label;
     use crate::widgets::help::h1;
 
@@ -91,7 +92,7 @@ mod dom {
                 Ok(d) => match v {
                     View::Compact => compact::view(d),
                     View::List => list::view(d, search),
-                    View::Graph => body_view(graph::body()),
+                    View::Graph => graph::view(search),
                     View::Table => table::view(d, search),
                 },
             })

@@ -1,6 +1,7 @@
 //! 便 g-map の歯: 種類から帯と語の鍵への閉じた表・圧縮の面の帯の順と札の並び・読めない帯と 0 件の帯・
 //! 一覧の面の絞りと並べ替え・表の面の行列の数と cell の組の絞り・URL の query・全部の札と行の id・
-//! グラフの面と近傍は測れていない・着地済みの外形と依存・使う class と語の鍵が在る。
+//! 近傍は測れていない・着地済みの外形と依存・使う class と語の鍵が在る。
+//! 圧縮の面の条と規則行と、一覧の面の id の並べ替えは id の自然な順（便 g-graph が直した）。
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -17,7 +18,7 @@ use tsuzuri_surface::mapview::list::{
 };
 use tsuzuri_surface::mapview::table::{Matrix, matrix};
 use tsuzuri_surface::mapview::{
-    View, around, decode, encode, graph, natural, param, set_param, with_view,
+    View, around, decode, encode, natural, param, set_param, with_view,
 };
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ, map};
 use tsuzuri_surface::view::Fetched;
@@ -178,9 +179,9 @@ fn mapview_compact_bands_and_tags_in_order() {
         ids,
         vec![
             vec![
-                "P-1", "P-1.1", "P-1.2", "A-2", "A-2.1", "N-1", "N-1.2", "N-1.10", "P-9.1"
+                "A-2", "A-2.1", "N-1", "N-1.2", "N-1.10", "P-1", "P-1.1", "P-1.2", "P-9.1"
             ],
-            vec!["R-25", "D-3", "R-4"],
+            vec!["D-3", "R-4", "R-25"],
             vec!["ADR-2", "ADR-7", "ADR-10"],
             vec!["AC-3", "FR2", "FR14", "G-1", "NFR2"],
             vec!["surface-board#g-frame", "surface-board#g-map"],
@@ -212,7 +213,7 @@ fn mapview_compact_bands_and_tags_in_order() {
         ]
     );
 
-    // constitution: 条の札は電文の順・規範文は条の下に自然な順・条の無い規範文は後に札で出す。
+    // constitution: 条の札は id の自然な順・規範文は条の下に自然な順・条の無い規範文は後に札で出す。
     let Cards::Articles { articles, loose } = &bs[0].cards else {
         panic!("constitution が条の札でない: {:?}", bs[0].cards);
     };
@@ -228,9 +229,9 @@ fn mapview_compact_bands_and_tags_in_order() {
     assert_eq!(
         arts,
         vec![
-            ("P-1", vec!["P-1.1", "P-1.2"]),
             ("A-2", vec!["A-2.1"]),
             ("N-1", vec!["N-1.2", "N-1.10"]),
+            ("P-1", vec!["P-1.1", "P-1.2"]),
         ]
     );
     assert_eq!(
@@ -272,7 +273,8 @@ fn mapview_compact_bands_and_tags_in_order() {
     let Cards::Tags(rules) = &bs[1].cards else {
         panic!("rules が札でない");
     };
-    assert_eq!(rules[2].title, "abcdefghij abcdefghij abcdefgh");
+    assert_eq!(rules[1].id, "R-4");
+    assert_eq!(rules[1].title, "abcdefghij abcdefghij abcdefgh");
     assert_eq!(cut30("  a   b  "), "a b");
     let q10 = &lanes[3].tags[1];
     assert!(q10.alert);
@@ -338,18 +340,18 @@ fn mapview_list_filters_and_sorts() {
     assert_eq!(
         list_of(&doc, "?page=map&view=list"),
         vec![
-            "P-1",
-            "P-1.2",
-            "P-1.1",
             "A-2",
             "A-2.1",
             "N-1",
-            "N-1.10",
             "N-1.2",
+            "N-1.10",
+            "P-1",
+            "P-1.1",
+            "P-1.2",
             "P-9.1",
-            "R-25",
             "D-3",
             "R-4",
+            "R-25",
             "ADR-2",
             "ADR-7",
             "ADR-10",
@@ -640,12 +642,10 @@ fn mapview_every_tag_and_row_shows_id() {
     assert!(l.rows.iter().all(|r| !r.id.is_empty()));
 }
 
-/// (8) グラフの面と近傍は測れていないと理由の 1 行。
+/// (8) 近傍は測れていないと理由の 1 行（グラフの面の歯は mapgraph.rs）。
 #[test]
 fn mapview_graph_and_around_are_unmeasured() {
-    assert_eq!(graph::body(), Body::Unmeasured(graph::REASON));
     assert_eq!(around::body(), Body::Unmeasured(around::REASON));
-    assert!(!graph::REASON.trim().is_empty());
     assert!(!around::REASON.trim().is_empty());
 }
 

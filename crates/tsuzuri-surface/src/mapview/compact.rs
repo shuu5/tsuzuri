@@ -1,5 +1,6 @@
 //! 圧縮の面（見本の map.html の compact）: 帯ごとに 1 つの箱を帯の順に置き、箱の中に札（印・id・題 30 字）を並べる。
-//! constitution は条の札の下に規範文の id・rules は電文の順・ADR と SRS ほかは id の自然な順・beads は種類の 7 行。
+//! constitution は条の札（id の自然な順）の下に規範文の id・ほかの帯は id の自然な順・beads は種類の 7 行。
+//! 電文の順は字の順（P-1 の次が P-10）なので、条も規則行も電文の順に頼らない（便 g-graph）。
 //! 読めなかった出所の帯は測れていない（理由の 1 行）・読めて 0 件の帯は 0 件の帯（要件 NFR2）。
 
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
@@ -51,7 +52,7 @@ pub enum Cards {
     /// 読めて 0 件。
     Empty,
     Tags(Vec<Tag>),
-    /// 条の札（電文の順）と、条の見つからない規範文の札（id の自然な順）。
+    /// 条の札（id の自然な順）と、条の見つからない規範文の札（id の自然な順）。
     Articles {
         articles: Vec<Article>,
         loose: Vec<Tag>,
@@ -135,7 +136,6 @@ fn band_box(doc: &GraphDoc, band: Band) -> BandBox {
     let cards = match band {
         _ if mine.is_empty() => Cards::Empty,
         Band::Constitution => articles(doc, &mine),
-        Band::Rules => Cards::Tags(mine.iter().map(|n| tag(doc, n)).collect()),
         Band::Beads => Cards::Lanes(lanes(doc, &mine)),
         _ => Cards::Tags(natural_tags(doc, mine)),
     };
@@ -155,13 +155,14 @@ pub fn article_of(norm: &str) -> Option<&str> {
         .map(|(article, _)| article)
 }
 
-/// constitution の帯: 条の札（電文の順）の下に規範文の id（自然な順）。
+/// constitution の帯: 条の札（id の自然な順）の下に規範文の id（自然な順）。
 fn articles(doc: &GraphDoc, nodes: &[&GraphNode]) -> Cards {
-    let arts: Vec<&GraphNode> = nodes
+    let mut arts: Vec<&GraphNode> = nodes
         .iter()
         .copied()
         .filter(|n| n.kind == NodeKind::Article)
         .collect();
+    arts.sort_by(|a, b| natural(&a.id, &b.id));
     let mut norms: Vec<&GraphNode> = nodes
         .iter()
         .copied()
