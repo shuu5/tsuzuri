@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.18
+  version: v0.19
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。第 0.17 版（同日）は中くらいの幅（761px から 900px）で header の中身が縦に潰れる不具合を直す行 g-top-fix を足した。同版で行 g-batch の write-set に tests/nodepage.rs を足し、行 g-top-fix の verify から frame_ の行を外した（受付の断り = 便 g-node の着地で frame_ の字を持つ歯の file が 1 つ増えた）。第 0.18 版（同日）は行 h（account board）を 8 行（h-frame・h-home・h-sess・h-led・h-proj・h-win・h-hb・h-wire）に切り直して足した（server 側は surface-base の b-acct〜e-acct-hb・見本の頁の写しは docs/design/mock3/account）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。第 0.17 版（同日）は中くらいの幅（761px から 900px）で header の中身が縦に潰れる不具合を直す行 g-top-fix を足した。同版で行 g-batch の write-set に tests/nodepage.rs を足し、行 g-top-fix の verify から frame_ の行を外した（受付の断り = 便 g-node の着地で frame_ の字を持つ歯の file が 1 つ増えた）。第 0.18 版（同日）は行 h（account board）を 8 行（h-frame・h-home・h-sess・h-led・h-proj・h-win・h-hb・h-wire）に切り直して足した（server 側は surface-base の b-acct〜e-acct-hb・見本の頁の写しは docs/design/mock3/account）。第 0.19 版（同日）は pipeline の Landed の列が今日でない着地も並べる不具合を直す行 g-pipe-today を足した。
 
 sections:
   - n: 1
@@ -326,6 +326,15 @@ sections:
         size: M
         done: (1) GET の PATH（/api/account）は 200 で、偽の器と偽の git と一時の state dir から、acct の module の読みの関数を直に呼んだ値と同じ電文を返す (2) POST の HEARTBEAT_PATH は、Origin が Host と違えば 403・本文が 65536 byte を越えれば 413 で器を撃たず、ほかは accthb の module の受付の関数の状態の数と本文を返す (3) --state-dir が無いとき、GET の PATH は 200 で、口座と群と移動が Unknown で project の列が空の電文を返し、器を 1 回も撃たない (4) acct の module の変化の印の file のどれかの字が変わると、つないである SSE の口に board-changed が 5 秒以内に届く (5) project board の header の部品は、先頭に「戻る」の部品（語の鍵 acct_back・class upto）を持ち、頁の枠の値の JSON の字（frame の module の snapshot）が直した snapshot の file と 1 字も違わない（acctwire_ の歯が file を読んで比べる） (6) 戻るの振る舞いを決める関数は、tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じるの 3 段を返す (7) 着地済みの口の歯と枠の歯が全部通り、足す外の依存は 0 本
         depends: [h-frame, h-win, h-hb, g-top-fix]
+      - id: g-pipe-today
+        title: pipeline の Landed の列を今日（UTC）の着地だけにする
+        req: [FR1, FR14]
+        section: "33"
+        write-set: ["crates/tsuzuri-surface/src/project/pipeline.rs", "crates/tsuzuri-surface/tests/pipe.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail pipe_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) pipeline の module に、札と今の時刻（epoch 秒）を受けて今日の着地かを返す公開の関数 landed_today を足し、段が Landed で elapsed_s が在り、今の時刻から elapsed_s を引いた時刻が、今の時刻を含む UTC の日の始まり（今の時刻を 86400 で割った商に 86400 を掛けた値）以上のときだけ真を返す (2) 今の時刻 1790510400 で、段 Landed の elapsed_s 3600 は真、43200 は真、43201 は偽、elapsed_s の無い Landed は偽、段 Running の elapsed_s 60 は偽 (3) 札を列に組む関数 columns と、板の中身の関数 content は今の時刻を引数に持ち、Landed の列には landed_today が真の札だけを入れ、ほかの 3 つの列の札の入り方と並びは変えない (4) Landed の列の数の字は、今日の着地の札の数 (5) 今日の着地が 0 本でほかの列に札が在るときは、Landed の列は空の列（class に is-empty）で、板は測れていないにも 0 件にもならない (6) 画面の描く所は、描く時の net の now を渡す (7) 足す外の依存は 0 本
+        depends: [g-pipe]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -681,6 +690,16 @@ sections:
       在りか（着地済み）。guarded・route・handle・Shared・Hub の起動は server/mod.rs、Hub は server/events.rs、HEADER は frame.rs、top は board.rs。
       この行は g-top-fix（board.rs と view.rs を触る）の着地の後に起こす。e-acct と e-acct-hb の着地の後に起こす順は台帳の blocks で張る。
       測り方。server の口の歯は server_acctwire.rs に、戻るの関数の歯は acctwire.rs に置き、名はどちらも acctwire_ で始める。
+      依存は足さない。
+
+  - n: 33
+    type: prose
+    title: 便 g-pipe-today — Landed の列を今日の着地だけにする
+    body: |
+      実物で見つけた（2026-09-27T13:3xZ・scribe2 の repo を同じ画面で読んだ時）。pipeline の block の Landed の列は見出しが Landed（今日）なのに、口 /api/pipeline の札の全部の着地（17 日前のものまで 270 本）を並べていた。tsuzuri の着地は全部が今日だったので、これまで見えなかった。見本の決め方（docs/design/mock3/acct.js の runColsAt の注）は、land の列は今日（UTC）の Landed だけ。
+      直し方。札（契約の型の crate の board の module の PipelineCard・欄は contract・runs・stage・reason・account・elapsed_s）の elapsed_s は、server が読んだ時の今から最後の event の時刻を引いた秒。面は描く時の今の時刻から elapsed_s を引いて着地の時刻とみなし、今日の UTC の日の始まり以上なら今日の着地とする（読んだ時と描く時の差の数秒は許す）。関数 landed_today を足し、columns と content に今の時刻の引数を足して Landed の列だけを絞る。server の口と電文は変えない。
+      在りか（着地済み）。columns・content・body・kcard・LANES・PipelineColumn の決め方は crates/tsuzuri-surface/src/project/pipeline.rs。着地済みの歯は crates/tsuzuri-surface/tests/pipe.rs（名は pipe_ で始まる・fixture は tests/fixtures/surface/pipeline-board.json）。columns と content を呼ぶ歯は、fixture の着地の札が今日に入る今の時刻を渡すように直す。body の形は変えない（frame と parts の歯が使う）。
+      測り方。新しい歯も tests/pipe.rs に置き、名を pipe_ で始める。
       依存は足さない。
 
 figures: []
