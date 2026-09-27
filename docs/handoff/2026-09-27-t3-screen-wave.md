@@ -3,14 +3,15 @@
 持ち主の指摘（2026-09-27・逐語は t3-hub.1）= 最初の画面は見本（mock v3）に機能も見た目も遠い・速さを上げたい。作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・承認済み）の順は変えず、便を並べて走らせる。
 
 ## 1. 並べ方（write-set が重ならない便は同時に走る）
-| 波 | 便 | 触る所 | 状態（10:50Z） |
+| 波 | 便 | 触る所 | 状態（11:40Z） |
 |---|---|---|---|
 | 0 | g-frame（枠と見た目）・c（導出グラフ） | 面・中核 | 着地 2a638ad・58a3ea6 |
 | 1 | g-parts（block の読みの口と hover の card）∥ d（指標・未反映・次の一手・pipeline の板） | 面 ∥ 契約の型と中核 | 着地 8da13ac・715840c |
 | 2 | e-read（読む側の口 4 つと board-changed）∥ g-pipe ∥ g-next ∥ b-cards（問いと席の card の型） | 境界 ∥ 面 ∥ 契約の型 | 着地 fb8053f・63f7ebb・6bdbcee・3a453c2 |
-| 3 | e-ask（問いの一覧の口と裁定の受付）∥ g-ledger ∥ g-seat ∥ g-ask（問いの頁と頁の枠の直し）∥ g-map（圧縮・一覧・表） | 境界と中核 ∥ 面の module 1 つずつ | 走行中（10:50Z） |
-| 4 | 席と口座の読みと未反映の一覧の口（server）∥ 地図のグラフと近傍 ∥ 抜けの検査の頁 ∥ 節点の頁 | 境界と中核 ∥ 面 | 未起草 |
-| 5 | 束の承認と方針の欄と取り消し ∥ f（hook）∥ account board（行 h） | 境界 ∥ 面 | 未起草 |
+| 3 | e-ask ∥ g-ledger ∥ g-seat ∥ g-ask（問いの頁と頁の枠の直し）∥ g-map（圧縮・一覧・表） | 境界と中核 ∥ 面の module 1 つずつ | 着地 8d2faf9・e7f9754・8329a61・040bb05・3602b56 |
+| 4 | c-view（辺の向き・グラフの眺め・近傍の電文）∥ g-gaps（抜けの検査の頁）∥ e-seat（席と口座の読み）∥ g-ledger-fix ∥ g-graph（地図のグラフの面） | 契約の型と中核 ∥ 面 ∥ 境界 | c-view 着地 41b138a・g-gaps 着地 9cfea63・ほかは走行中（11:40Z） |
+| 5 | e-view（口 /api/graph/view・/api/around・/api/unreflected）∥ 節点の頁と近傍の図 ∥ 未反映の一覧 | 境界 ∥ 面 | 未起草（e-view は e-seat の着地の後） |
+| 6 | 束の承認と方針の欄と取り消し ∥ f（hook）∥ account board（行 h） | 境界 ∥ 面 | 未起草 |
 
 block の便は自分の module の file と自分の歯の file と fixture だけを書く（便 g-parts が関数の外形と口の path を先に決める）。枠の歯 tests/frame.rs は block の便の write-set に入れない。
 
@@ -52,3 +53,17 @@ RunDone（Landed）を event log で確かめてから、`git status` → `cargo
 - 走行を止めるのは literal の 1 行だけ（変数・引用符・`cd &&`・`2>&1`・pipe を付けない）: `scribe2 pipe stop --run <id> --state-dir <絶対 path> --repo <絶対 path>`。Questioned の走行は答えが付くまで live で、write-set を変える直しは止めてから行う。
 - 群の所属は `<state dir>/host.toml` の `[[account-group]]`（宣言順で最初に anchor を含む群）。tsuzuri は Tier1。
 - 限度の判定（席の逼迫）は 5 時間窓と 7 日窓をつねに数え、model の窓は席の model と同じ行だけ数える。閾値は器の rules 行（85・95・95）。面は tick-last の reason（account-pressed・state-stale）を写す。
+
+## 9. 事故の記録 — 設計席の commit が着地を巻き戻した（2026-09-27T11:08Z〜11:15Z）
+- 起きたこと: anchor（main の checkout）で design-intent を編集して作業の木が汚れている間に着地が入ると、器は ref だけを進め、作業の木と index を揃えない（器の仕様・scribe2 の回答・memo s2-07l.695）。その index のまま commit して、着地 3 本（g-seat・g-map・g-ask）の 27 file を巻き戻した（48eebea・233669f）。
+- 戻し: 巻き戻された file を着地の commit の中身のまま取り出して commit した（ffde5f1）。
+- 塞ぎ方（今の作法）: 設計の編集は anchor でなく別の worktree で行う。置き場は `~/.cache/tsuzuri-admin/design-wt`（branch design-seat）。編集の前に `~/.cache/tsuzuri-admin/design-sync.sh`、commit は `~/.cache/tsuzuri-admin/commit-design.sh <message の file>`（folio の schema・check・derive を回し、置き場の外の差分が在れば commit せず、main へは ff で入れて push する）。anchor では file を編集しない。画面の写真の file も anchor に置かない。
+- land-window の `busy queue=- following=- unpushed=<sha>` は、着地の途中でなく push 待ちの着地が残っているだけ（commit してよい）。
+
+## 10. 実物の画面で見つけた食い違い（host の歯は通るが画面が動かない型）
+- 口の本文の包み: /api/metrics の本文は Reading で包んだ形（known の鍵の下に指標・読めないときは字 unknown）。便 g-ledger は包みを読まずに落ちた（行 g-ledger-fix で直す）。契約の行には口の本文の形を書き、実物の本文の写しを fixture に置く（設計席が置ける・tests/fixtures の下）。
+- 着地のたびに実物の画面を開いて、block ごとに中身が出ているかを見る（server の組み直しは `~/.cache/tsuzuri-admin/serve/restart.sh`）。
+- 小数を持つ電文を読み直して比べる歯は、最後の 1 桁がずれて時刻によって落ちる。電文の字で比べる（8fdfd1b）。
+
+## 11. folio2 の知らせ（2026-09-27T11:1xZ）
+便 174 と便 176 が着地（folio2 main efe3e7b）。pin を上げる手順: binary を efe3e7b に替える → `folio schema --dir design-intent --write` → commit（門を通さずに入れる）→ 天井の周。番号を落とした後の注の字の小さな壊れ 4 件は、周が所見に挙げたら folio2 へ id を知らせる（folio2 台帳 f2-648.261）。画面の波の後に行う。
