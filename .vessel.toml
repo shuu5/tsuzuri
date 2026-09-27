@@ -2,8 +2,8 @@
 # 値は器の上限（rules 行 runner.allowed_commands）の内側。common-verify は便 a が Cargo.toml を置いた後に cargo xtask check へ改める（便 a の write-set）。
 schema = 1
 allowed-commands = ["cargo", "git"]
-# push 先の remote の名（器の land が push する・持ち主の裁定 user 2026-09-26T14:56Z「１．よい」= GitHub の private repo shuu5/tsuzuri）
-remote = "origin"
+# push 先の remote の宣言は CI を置くまで書かない（2026-09-27・設計席）: 器の land の終端は push の後に CI の判定を待ち、CI の無い repo では「測れない」で止まって台帳を閉じない（scribe2 contract-source.md §5）。
+# origin（GitHub の private repo shuu5/tsuzuri・持ち主の裁定 user 2026-09-26T14:56Z）は在り、器は base を origin の main から読む。着地は local の main までで、push と台帳の close は設計席が手で行う。
 common-verify = ["git diff --quiet"]
 requirements = "design-intent/srs.yaml"
 entrance-flip = "unmeasured"

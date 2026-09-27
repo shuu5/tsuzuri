@@ -14,6 +14,8 @@
 
 - **再開の合図が来た（folio2-d5・2026-09-27T05:0xZ）**: 便 163・165・166・168 が着地し target/debug/folio は 62111b1。tsuzuri の正本（380cf8b）で席が撃って確かめた（verified）: check 合格 0/0・schema --check 一致（書き直し不要）・derive --check 一致・**build --write rc 0（17 file）**・graph --digest 節点 223・ceiling --write rc 0（4 観点）・--gate は実装だけの write-set で「通す」。inject --check は rc 2（folio の inject が上限の行を id R-2 で決め打ち）だが **tsuzuri は inject を使わない**（ADR-8 決定 (4)）ので判定の外と folio2 に回答。**天井の周は tsuzuri では回さない**: folio2 の構造の直し（A = 発効した判断の記録を凍結された来歴に・B = 天井が運用の規則を読まない・C = 周は止めるの確かめと M の出口だけ・門は直していない支持の止めるだけを見る）が着地するまで（folio2 の勧め・持ち主が 09-27 に承認した直し・着地で知らせが来る）。A の後は ADR-7 / 8 の改訂の欄の扱いが変わる見込み。**残る手番 = 持ち主の再開の裁定 → t3-hub.2 の defer を戻す → tsuzuri の dispatch の周を 1 回起こす**（席は launch の権能が無い＝scribe2 席か持ち主が撃つ・runner と lens の行の雛形は ~/.cache/scribe2-admin/mk-run.sh と同じ形）。不確か（uncertain）: 便 a が common-verify を cargo の行に変えた後、次の便の受付が入口の flip の宣言（entrance-flip = unmeasured のまま）を求める見込み（scribe2 pipeline.md §5 の NoEntranceRed）＝便 b の前に確かめる。
 
+- **持ち主の再開の裁定（2026-09-27T07:04Z・逐語は t3-hub.1）**: 便 a の骨格から再開する。設計席が撃ったもの = t3-hub.2 の defer を戻した（open）。器の宣言の remote は外した（verified = scribe2 contract-source.md §5: 宣言した remote が在ると land の終端は push の後に CI の判定を `pipe.ci_wait_s` まで待ち、CI の無い repo では「測れない」で止まって台帳を閉じず rc 1）＝着地は local の main まで（terminal=undeclared・rc 0）で、push と台帳の close は設計席が手で行う。入口の flip の宣言（entrance-flip = unmeasured）は既に在る。**残る手番 = 持ち主か管理席が `bash ~/.cache/tsuzuri-admin/dispatch.sh` を 1 回撃つ**（runner と lens の行は同じ置き場・形は scribe2 の管理の道具 migrate-soap-copilot と同じ・`--rules` は付けない＝器の埋め込みの表を使う）。CI（GitHub Actions）を置くかは持ち主への問い（置いたら remote の宣言を戻す）。folio2 の binary は 03b9323（構造の直し C まで着地）で床は合格 0/0。天井の周は folio2 の知らせが来るまで回さない。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
