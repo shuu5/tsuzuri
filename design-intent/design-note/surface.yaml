@@ -76,7 +76,7 @@ sections:
       - {id: n-epic, name: epic, role: 台帳の epic（根と束）, ref: [FR2]}
       - {id: n-task, name: task（契約）, role: acceptance に設計の pointer 行を持つ bead。memo の label を持たない, ref: [FR2, FR10]}
       - {id: n-memo, name: memo, role: label intake:memo を持つ bead。昇格先の無い memo は未反映に数える, ref: [FR2, FR13]}
-      - {id: n-question, name: question（問い）, role: 席が置く問いの bead。touches と premises を metadata に持つ, ref: [FR2, FR4, FR6]}
+      - {id: n-question, name: question（問い）, role: label intake:question を持つ bead（席が置く問い）。touches と premises を metadata に持つ, ref: [FR2, FR4, FR6]}
       - {id: n-ruling, name: あなたの決定（裁定）, role: 問いの bead の notes の定型行から導く。裁定 id は server が発行, ref: [FR2, FR6]}
       - {id: n-receipt, name: orchestrator の受け, role: 問いの bead の notes の「受け」の定型行から導く, ref: [FR2, FR9]}
       - {id: n-policy, name: 全体への指示（方針）, role: 根の直下の memo「方針」の notes の定型行から導く, ref: [FR2, FR8]}
