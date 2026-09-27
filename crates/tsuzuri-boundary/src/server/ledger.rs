@@ -1,32 +1,134 @@
-//! 台帳の読み（.beads の issues.jsonl を読むだけ・書かない）。
-//! file が無いか 1 行でも読めなければ、一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
+//! 台帳の読み（bd の読み取りの口を子 process で 1 本撃つだけ・書かない・便 e-src）。
+//! 撃つ形は `bd --readonly list --all --limit 0 --json`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
+//! 起動できない・rc が 0 でない・JSON として読めない・5 秒を超えて返さない、のどれでも
+//! 一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
+//! .beads の issues.jsonl は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
 
-use std::path::{Path, PathBuf};
+use std::ffi::OsString;
+use std::io::Read;
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BdLine, BeadId, LedgerItem, LedgerList};
 use tsuzuri_contract::wire;
 
-/// repo の置き場の中の台帳の file。
-pub fn path(repo: &Path) -> PathBuf {
-    repo.join(".beads").join("issues.jsonl")
+/// 既定の program の名（引数 --bd で替える）。
+pub const BD: &str = "bd";
+
+/// bd に渡す引数の列（読み取りだけ・closed を含む全部・件数の上限なし・JSON）。
+pub const BD_ARGS: [&str; 6] = ["--readonly", "list", "--all", "--limit", "0", "--json"];
+
+/// bd が返すまでの上限（要件 NFR2 の上限・規則の行 R-21 の値）。越えれば止めて Unknown。
+pub const BD_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 子 process の終わりを確かめる間隔。
+const WAIT_STEP: Duration = Duration::from_millis(5);
+
+/// 台帳の読みの出所（repo の置き場と bd の program）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Source {
+    pub repo: PathBuf,
+    pub bd: OsString,
 }
 
-/// 台帳の file を読む（無いか読めなければ Unknown）。
-pub fn read(path: &Path) -> Reading<Vec<LedgerItem>> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => parse(&text),
+impl Source {
+    pub fn new(repo: impl Into<PathBuf>, bd: impl Into<OsString>) -> Source {
+        Source {
+            repo: repo.into(),
+            bd: bd.into(),
+        }
+    }
+
+    /// 変化の印の 2 つの file（席の書きで動く issues.jsonl と、器の close を含む状態の変更で動く interactions.jsonl）。
+    pub fn marks(&self) -> Vec<PathBuf> {
+        let beads = self.repo.join(".beads");
+        vec![beads.join("issues.jsonl"), beads.join("interactions.jsonl")]
+    }
+
+    /// bd を撃って台帳を読む。
+    pub fn read(&self) -> Reading<Vec<LedgerItem>> {
+        match self.run() {
+            Some(out) => String::from_utf8(out).map_or(Reading::Unknown, |text| parse_bd(&text)),
+            None => Reading::Unknown,
+        }
+    }
+
+    /// bd を 1 本撃ち、rc 0 で `BD_TIMEOUT` の内に返した標準出力を返す（それ以外は None）。
+    fn run(&self) -> Option<Vec<u8>> {
+        let deadline = Instant::now() + BD_TIMEOUT;
+        let mut child = Command::new(&self.bd)
+            .args(BD_ARGS)
+            .current_dir(&self.repo)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        let Some(mut stdout) = child.stdout.take() else {
+            stop(child);
+            return None;
+        };
+        // 標準出力は別の thread で読み切る（pipe が詰まって子が止まらないように）。
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let mut out = Vec::new();
+            let _ = tx.send(stdout.read_to_end(&mut out).map(|_| out));
+        });
+        let Ok(Ok(out)) = rx.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        else {
+            stop(child);
+            return None;
+        };
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if Instant::now() < deadline => thread::sleep(WAIT_STEP),
+                _ => {
+                    stop(child);
+                    return None;
+                }
+            }
+        };
+        status.success().then_some(out)
+    }
+}
+
+/// 子 process を止めて片付ける。
+fn stop(mut child: Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// bd の出力（bead の JSON の配列）を読む（server の読みの経路はこれだけ）。
+/// 1 本でも読めなければ全体を Unknown にする（壊れた台帳の一部だけを見せない）。
+pub fn parse_bd(text: &str) -> Reading<Vec<LedgerItem>> {
+    match wire::decode::<Vec<BdLine>>(text) {
+        Ok(lines) => items(lines.into_iter().map(Ok::<_, wire::Error>)),
         Err(_) => Reading::Unknown,
     }
 }
 
-/// issues.jsonl の字を読む（空の行は飛ばし、bd が消した bead は出さない）。
-/// 1 行でも読めなければ全体を Unknown にする（壊れた台帳の一部だけを見せない）。
+/// bead を 1 本 1 行に並べた字（空の行は飛ばす）を読む。file は開かない純粋な関数で、
+/// 面の歯が fixture を server と同じ規則で読むために残す（server の読みの経路では使わない）。
 pub fn parse(text: &str) -> Reading<Vec<LedgerItem>> {
+    items(
+        text.lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(wire::decode::<BdLine>),
+    )
+}
+
+/// bd の bead の列を中身にする（bd が消した bead は出さない・1 本でも読めなければ Unknown）。
+fn items<E>(lines: impl Iterator<Item = Result<BdLine, E>>) -> Reading<Vec<LedgerItem>> {
     let mut items = Vec::new();
-    for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        let Ok(bd) = wire::decode::<BdLine>(line) else {
+    for bd in lines {
+        let Ok(bd) = bd else {
             return Reading::Unknown;
         };
         if bd.is_tombstone() {
@@ -41,9 +143,9 @@ pub fn parse(text: &str) -> Reading<Vec<LedgerItem>> {
 }
 
 /// 台帳の一覧（口 GET /api/ledger）。
-pub fn list(path: &Path) -> LedgerList {
+pub fn list(source: &Source) -> LedgerList {
     LedgerList {
-        rows: match read(path) {
+        rows: match source.read() {
             Reading::Known(items) => Reading::Known(items.into_iter().map(|i| i.row).collect()),
             Reading::Unknown => Reading::Unknown,
         },
@@ -60,8 +162,8 @@ pub enum Lookup {
     Unknown,
 }
 
-pub fn item(path: &Path, id: &BeadId) -> Lookup {
-    match read(path) {
+pub fn item(source: &Source, id: &BeadId) -> Lookup {
+    match source.read() {
         Reading::Known(items) => items
             .into_iter()
             .find(|i| &i.row.id == id)
@@ -146,7 +248,7 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{epoch_secs, parse};
+    use super::{Source, epoch_secs, parse, parse_bd};
     use tsuzuri_contract::board::Reading;
 
     #[test]
@@ -179,14 +281,46 @@ mod tests {
             r#"{"id":"fx.1","title":"t","status":"open","updated_at":"2026-09-27T07:39:00Z"}"#;
         let gone =
             r#"{"id":"fx.2","title":"t","status":"tombstone","updated_at":"2026-09-27T07:39:00Z"}"#;
-        let Reading::Known(items) = parse(&format!("{good}\n\n{gone}\n")) else {
+        let Reading::Known(items) = parse_bd(&format!("[{good},\n{gone}]\n")) else {
             panic!("読める台帳が Unknown");
         };
         assert_eq!(items.len(), 1);
-        assert_eq!(parse(""), Reading::Known(vec![]));
+        assert_eq!(parse_bd("[]"), Reading::Known(vec![]));
         let bad_time = good.replace("07:39:00Z", "07:39:00");
+        for broken in [
+            format!("[{good},{{"),
+            format!("[{bad_time}]"),
+            good.to_string(),
+            String::new(),
+            "not json".to_string(),
+        ] {
+            assert_eq!(parse_bd(&broken), Reading::Unknown, "{broken}");
+        }
+        // 1 本 1 行の形（面の歯の fixture の読み）も同じ規則で読む。
+        let Reading::Known(items) = parse(&format!("{good}\n\n{gone}\n")) else {
+            panic!("読める行が Unknown");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(parse(""), Reading::Known(vec![]));
         for broken in [format!("{good}\n{{"), bad_time, "not json".to_string()] {
             assert_eq!(parse(&broken), Reading::Unknown, "{broken}");
         }
+    }
+
+    #[test]
+    fn server_src_marks_are_two_files() {
+        assert_eq!(
+            Source::new("/r", "bd").marks(),
+            [
+                std::path::Path::new("/r/.beads/issues.jsonl"),
+                std::path::Path::new("/r/.beads/interactions.jsonl"),
+            ]
+        );
+    }
+
+    #[test]
+    fn server_src_unstartable_bd_is_unknown() {
+        let source = Source::new(std::env::temp_dir(), "/nonexistent/tz-no-such-bd");
+        assert_eq!(source.read(), Reading::Unknown);
     }
 }

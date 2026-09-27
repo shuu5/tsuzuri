@@ -1,5 +1,6 @@
 //! 面の server の最小の形（設計ノート surface-base §9・便 e-min）。
 //! 標準 library だけで書く同期の server で、1 つの process と 1 つの port で動く。1 接続 1 thread。
+//! 台帳は bd の読み取りの口を子 process で撃って読む（§10・便 e-src）。
 //! 口は 4 つで、書く口は持たない（GET でない要求は 405 で何も書かない）。
 //! - GET /api/ledger — 台帳の一覧（LedgerList）
 //! - GET /api/ledger/<id> — 台帳の 1 本（LedgerItem）
@@ -11,6 +12,7 @@ pub mod files;
 pub mod http;
 pub mod ledger;
 
+use std::ffi::OsString;
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -25,13 +27,16 @@ use tsuzuri_contract::wire;
 use self::events::Hub;
 use self::files::Served;
 use self::http::Response;
+use self::ledger::Source;
 
-/// 起動の引数（repo の置き場・bind 先・面の file の置き場）。
+/// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub repo: PathBuf,
     pub bind: SocketAddr,
     pub files: PathBuf,
+    /// 台帳の読みに撃つ program（既定は `ledger::BD`）。
+    pub bd: OsString,
 }
 
 /// tailnet の IPv4 の範囲（100.64.0.0/10）。
@@ -94,7 +99,7 @@ pub struct Server {
 }
 
 struct Shared {
-    ledger: PathBuf,
+    ledger: Source,
     files: PathBuf,
     hub: Arc<Hub>,
 }
@@ -106,7 +111,8 @@ const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl Server {
-    /// bind 先を判定し、置き場を確かめ、口を開き、台帳の周期の読みを始める。
+    /// bind 先を判定し、置き場を確かめ、口を開き、台帳の周期の読みを始める
+    /// （最初の読みは戻る前に取るので、bd が返さなければ `ledger::BD_TIMEOUT` まで待つ）。
     pub fn bind(config: &Config) -> Result<Server, StartError> {
         if !bind_allowed(config.bind.ip()) {
             return Err(StartError::BindRefused(config.bind));
@@ -127,7 +133,7 @@ impl Server {
                 path: config.files.clone(),
             })?;
         let listener = TcpListener::bind(config.bind).map_err(StartError::Io)?;
-        let ledger = ledger::path(&config.repo);
+        let ledger = Source::new(&config.repo, &config.bd);
         let hub = Hub::start(ledger.clone());
         Ok(Server {
             listener,

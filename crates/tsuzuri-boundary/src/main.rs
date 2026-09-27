@@ -1,14 +1,16 @@
 //! tz の入口（便 e-min）。終了 code は 合格 0・不合格 1・まだ分からない 2。
-//! tz surface serve --repo <dir> --bind <住所:port> --files <dir>
+//! tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>]
 //! bind 先は loopback か tailnet の住所だけ（条 N-6）。tailnet の住所はこの引数で受ける（行 D-4）。
+//! --bd は台帳の読みに撃つ program（既定 bd・便 e-src）。
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use tsuzuri_boundary::server::{Config, Server};
+use tsuzuri_boundary::server::{Config, Server, ledger};
 
-const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir>";
+const USAGE: &str =
+    "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>]";
 
 /// 不合格（断り・使い方の誤り）。
 const FAIL: u8 = 1;
@@ -32,9 +34,9 @@ fn usage(what: &str) -> u8 {
     FAIL
 }
 
-/// `--名 値` か `--名=値` の 3 つの引数を読む。
+/// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd を読む。
 fn parse(rest: &[&str]) -> Result<Config, String> {
-    let (mut repo, mut bind, mut files) = (None, None, None);
+    let (mut repo, mut bind, mut files, mut bd) = (None, None, None, None);
     let mut it = rest.iter();
     while let Some(arg) = it.next() {
         let (name, value) = match arg.split_once('=') {
@@ -45,6 +47,7 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             "--repo" => &mut repo,
             "--bind" => &mut bind,
             "--files" => &mut files,
+            "--bd" => &mut bd,
             _ => return Err(format!("知らない引数 {name}")),
         };
         if slot.replace(value).is_some() {
@@ -60,6 +63,11 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             .parse::<SocketAddr>()
             .map_err(|_| format!("bind 先 {bind} は 住所:port の形でない"))?,
         files: PathBuf::from(files),
+        bd: match bd {
+            Some("") => return Err("--bd の値が空".into()),
+            Some(bd) => bd.into(),
+            None => ledger::BD.into(),
+        },
     })
 }
 

@@ -43,8 +43,9 @@ impl std::fmt::Display for BeadId {
     }
 }
 
-/// 台帳の一覧の 1 行（口 ledger-list の出力: id・種類・題・状態・更新時刻）。
-/// 種類と状態は bd の語をそのまま写す（bd の版で増える語を面が断らない）。
+/// 台帳の一覧の 1 行（口 ledger-list の出力: id・種類・題・状態・更新時刻・親・label）。
+/// 種類と状態と label は bd の語をそのまま写す（bd の版で増える語を面が断らない）。
+/// 問いと memo は label で見分ける（`QUESTION_LABEL`・`MEMO_LABEL`・設計ノート surface の節点の一覧）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LedgerRow {
     pub id: BeadId,
@@ -52,6 +53,27 @@ pub struct LedgerRow {
     pub title: String,
     pub status: String,
     pub updated_at: EpochSecs,
+    /// 親の bead（根は None）。
+    pub parent: Option<BeadId>,
+    pub labels: Vec<String>,
+}
+
+/// 問い（席が置く問い）の label。
+pub const QUESTION_LABEL: &str = "intake:question";
+
+/// memo の label。
+pub const MEMO_LABEL: &str = "intake:memo";
+
+impl LedgerRow {
+    /// 問いの bead か（label `intake:question` を持つ）。
+    pub fn is_question(&self) -> bool {
+        self.labels.iter().any(|l| l == QUESTION_LABEL)
+    }
+
+    /// memo の bead か（label `intake:memo` を持つ）。
+    pub fn is_memo(&self) -> bool {
+        self.labels.iter().any(|l| l == MEMO_LABEL)
+    }
 }
 
 /// bead の中身（口 ledger-item の出力: 本文と notes。近傍の材料はグラフの口が返す）。
@@ -78,8 +100,9 @@ pub struct LedgerChanged {
 /// SSE の event の名（台帳の変化）。
 pub const LEDGER_CHANGED_EVENT: &str = "ledger-changed";
 
-/// bd の issues.jsonl の 1 行のうち server が読む欄（電文ではない・知らない欄は読み捨てる）。
-/// 空になりうる欄（種類・本文・notes）は bd が省くので既定を空にする。更新時刻は RFC 3339 の字のまま。
+/// bd の読み取りの口（`bd --readonly list --all --limit 0 --json`）が返す配列の 1 本のうち server が読む欄
+/// （電文ではない・知らない欄は読み捨てる・便 e-src）。
+/// 空になりうる欄（種類・本文・notes・親・label）は bd が省くので既定を空にする。更新時刻は RFC 3339 の字のまま。
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct BdLine {
     pub id: BeadId,
@@ -92,6 +115,10 @@ pub struct BdLine {
     pub description: String,
     #[serde(default)]
     pub notes: String,
+    #[serde(default)]
+    pub parent: Option<BeadId>,
+    #[serde(default)]
+    pub labels: Vec<String>,
 }
 
 impl BdLine {
@@ -109,6 +136,8 @@ impl BdLine {
                 title: self.title,
                 status: self.status,
                 updated_at,
+                parent: self.parent,
+                labels: self.labels,
             },
             description: self.description,
             notes: self.notes,

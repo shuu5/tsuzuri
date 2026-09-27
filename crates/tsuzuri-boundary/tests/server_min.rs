@@ -1,9 +1,11 @@
 //! 最小の server の歯（接頭辞 server_min_・設計ノート surface-base 便 e-min の完了の条件）。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立て、要求は素の TCP で撃つ。
+//! 台帳は偽の bd（作業場の out.json を返す shell の script・便 e-src）が返す。
 
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
@@ -17,10 +19,29 @@ use tsuzuri_contract::wire;
 const INDEX: &str = "<!doctype html><title>tz</title>";
 const SECRET: &str = "置き場の外の秘密";
 
-/// 歯ごとの作業場（repo の置き場と面の file の置き場と、置き場の外の file）。
+/// 歯ごとの作業場（repo の置き場と面の file の置き場と、置き場の外の file と偽の bd）。
 struct Place {
+    root: PathBuf,
     repo: PathBuf,
     files: PathBuf,
+}
+
+/// bead 5 本の fixture（bd の 1 本 1 行の形）。
+fn fixture() -> String {
+    fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/min-5.jsonl"),
+    )
+    .expect("fixture")
+}
+
+/// 1 本 1 行の字を bd の読み取りの口の出力の形（JSON の配列）にする。
+fn bd_array(lines: &str) -> String {
+    let lines: Vec<&str> = lines
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    format!("[\n{}\n]\n", lines.join(",\n"))
 }
 
 impl Place {
@@ -36,18 +57,35 @@ impl Place {
         fs::write(files.join("index.html"), INDEX).expect("index.html");
         fs::write(files.join("sub/app.js"), "console.log(1)").expect("app.js");
         fs::write(root.join("secret.txt"), SECRET).expect("置き場の外の file");
-        Place { repo, files }
+        let bd = root.join("bd");
+        fs::write(
+            &bd,
+            format!(
+                "#!/bin/sh\nexec cat '{}'\n",
+                root.join("out.json").display()
+            ),
+        )
+        .expect("偽の bd");
+        fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).expect("偽の bd の権限");
+        Place { root, repo, files }
     }
 
+    /// 変化の印（席の書きで動く file）。
     fn ledger(&self) -> PathBuf {
         self.repo.join(".beads/issues.jsonl")
     }
 
-    /// bead 5 本の fixture を台帳へ写す。
+    /// 偽の bd が返す字を置く（書きかけの字を読ませないよう、別の名で書いてから置き換える）。
+    fn bd_returns(&self, text: &str) {
+        let tmp = self.root.join("out.json.tmp");
+        fs::write(&tmp, text).expect("偽の bd の出力");
+        fs::rename(&tmp, self.root.join("out.json")).expect("偽の bd の出力を置く");
+    }
+
+    /// bead 5 本の fixture を偽の bd に返させ、印の file も置く。
     fn with_fixture(self) -> Place {
-        let fixture =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/min-5.jsonl");
-        fs::copy(fixture, self.ledger()).expect("fixture の写し");
+        self.bd_returns(&bd_array(&fixture()));
+        fs::write(self.ledger(), fixture()).expect("印の file");
         self
     }
 
@@ -56,6 +94,7 @@ impl Place {
             repo: self.repo.clone(),
             bind: bind.parse().expect("bind 先"),
             files: self.files.clone(),
+            bd: self.root.join("bd").into(),
         }
     }
 
@@ -164,6 +203,21 @@ fn server_min_ledger_list_returns_five() {
     .map(|(a, b, c, d, e)| (a.into(), b.into(), c.into(), d.into(), e))
     .to_vec();
     assert_eq!(got, Reading::Known(want));
+    // 親と label（bd が省いた欄は空）。
+    let list: LedgerList = wire::decode(&get(addr, "/api/ledger").body).expect("契約の型の形");
+    let Reading::Known(full) = list.rows else {
+        panic!("一覧が Unknown");
+    };
+    let tails: Vec<(Option<String>, Vec<String>)> = full
+        .into_iter()
+        .map(|r| (r.parent.map(|p| p.to_string()), r.labels))
+        .collect();
+    assert_eq!(tails[0], (None, vec![]));
+    assert_eq!(
+        tails[1],
+        (Some("fx-min".to_string()), vec!["surface".to_string()])
+    );
+    assert!(tails[2..].iter().all(|t| t == &(None, vec![])), "{tails:?}");
     // 絞りの引数は今は読まない（一覧は同じ）。
     assert!(
         matches!(rows(&get(addr, "/api/ledger?status=open")), Reading::Known(r) if r.len() == 5)
@@ -192,27 +246,26 @@ fn server_min_ledger_item_by_id() {
 
 #[test]
 fn server_min_ledger_unreadable_is_unknown() {
-    // 台帳の file が無い。
+    // 偽の bd が返す字が無い（cat が rc 1 で終わる）。
     let place = Place::new("unknown");
     let addr = place.serve();
     assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Unknown);
     assert_eq!(get(addr, "/api/ledger/fx-min").status, 503);
     // 空の台帳は 0 件で、読めない台帳と区別する。
-    fs::write(place.ledger(), "").expect("空の台帳");
+    place.bd_returns("[]\n");
     assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Known(vec![]));
-    // 壊れた台帳（読める行の後に JSON でない行・更新時刻の形の悪い行）。
-    let good = fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/min-5.jsonl"),
-    )
-    .expect("fixture");
+    // 壊れた台帳（切れた配列・更新時刻の形の悪い bead・id の形の悪い bead・配列でない字）。
+    let good = fixture();
     for broken in [
-        format!("{good}{{\"id\":"),
-        good.replace("2026-09-27T07:40:00Z", "昨日"),
-        format!(
+        bd_array(&good).replace("\n]\n", ",{\"id\":"),
+        bd_array(&good.replace("2026-09-27T07:40:00Z", "昨日")),
+        bd_array(&format!(
             "{good}{{\"id\":\"-bad\",\"title\":\"t\",\"status\":\"open\",\"updated_at\":\"2026-09-27T07:39:00Z\"}}\n"
-        ),
+        )),
+        good.clone(),
+        String::new(),
     ] {
-        fs::write(place.ledger(), &broken).expect("壊れた台帳");
+        place.bd_returns(&broken);
         assert_eq!(
             rows(&get(addr, "/api/ledger")),
             Reading::Unknown,
@@ -220,9 +273,8 @@ fn server_min_ledger_unreadable_is_unknown() {
         );
         assert_eq!(get(addr, "/api/ledger/fx-min").status, 503);
     }
-    // 台帳の path が dir（読めない）。
-    fs::remove_file(place.ledger()).expect("消す");
-    fs::create_dir(place.ledger()).expect("dir");
+    // 印の file の中身は読まない（印だけが在っても台帳は Unknown のまま）。
+    fs::write(place.ledger(), good).expect("印の file");
     assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Unknown);
 }
 
@@ -349,16 +401,16 @@ fn server_min_sse_change_within_1500ms() {
     let events = |b: &str| b.matches("event: ledger-changed\n").count();
     assert_eq!(events(&buf), 0, "変化の前に知らせが出る: {buf}");
 
-    // fixture の写しを書き換える（1 行を足す）。
+    // 台帳に 1 本を足す（bd の出力と、席の書きで動く印の file の両方）。
+    let added = "{\"id\":\"fx-min.5\",\"title\":\"t\",\"status\":\"open\",\"updated_at\":\"2026-09-27T07:43:00Z\"}\n";
     let changed = Instant::now();
+    place.bd_returns(&bd_array(&format!("{}{added}", fixture())));
     OpenOptions::new()
         .append(true)
         .open(place.ledger())
-        .expect("台帳を開く")
-        .write_all(
-            b"{\"id\":\"fx-min.5\",\"title\":\"t\",\"status\":\"open\",\"updated_at\":\"2026-09-27T07:43:00Z\"}\n",
-        )
-        .expect("台帳を書き換える");
+        .expect("印の file を開く")
+        .write_all(added.as_bytes())
+        .expect("印の file を書き換える");
     read_until(
         &mut s,
         &mut buf,

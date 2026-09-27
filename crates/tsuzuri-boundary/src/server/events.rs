@@ -1,19 +1,41 @@
-//! 変化の知らせ（口 GET /api/surface/events・SSE）。
-//! 台帳の file の更新時刻と長さを 500 ミリ秒ごとに見て、変わったら接続中の全員に 1 件ずつ送る
-//! （規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
+//! 変化の知らせ（口 GET /api/surface/events・SSE・便 e-src）。
+//! 変化の印（.beads の issues.jsonl と interactions.jsonl の更新時刻と長さ）を 500 ミリ秒ごとに見て、
+//! どちらかが動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
+//! 印の取りこぼしを拾うために、印が動かなくても 5 秒ごとに読み直す。
+//! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerChanged};
 use tsuzuri_contract::wire;
 
-/// 周期の読みの間隔（規則の行 R-21）。
+use super::ledger::Source;
+
+/// 印を見る間隔（規則の行 R-21）。
 pub const POLL: Duration = Duration::from_millis(500);
+
+/// 印が動かなくても読み直す間隔（取りこぼしを拾う）。
+pub const REREAD: Duration = Duration::from_secs(5);
+
+/// 周期の読みの 2 つの間隔。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Timing {
+    /// 印を見る間隔。
+    pub poll: Duration,
+    /// 印が動かなくても読み直す間隔。
+    pub reread: Duration,
+}
+
+/// server の周期の読みの間隔。
+pub const TIMING: Timing = Timing {
+    poll: POLL,
+    reread: REREAD,
+};
 
 /// 変化の無いときに送る注釈の行の間隔（切れた接続を見つけて片付ける）。
 pub const KEEPALIVE: Duration = Duration::from_secs(15);
@@ -32,11 +54,30 @@ pub struct Hub {
 }
 
 impl Hub {
-    /// 台帳の file の周期の読みを始める（Hub が落ちれば読みも止まる）。
-    pub fn start(ledger: PathBuf) -> Arc<Hub> {
+    /// 台帳の周期の読みを始める（Hub が落ちれば読みも止まる）。
+    pub fn start(source: Source) -> Arc<Hub> {
+        Hub::watch(source.marks(), move || source.read(), TIMING)
+    }
+
+    /// 印の file と読みの関数で周期の読みを始める。最初の印と読みは戻る前に取る
+    /// （戻った後の変化は取りこぼさない）。
+    pub fn watch<R, F>(marks: Vec<PathBuf>, mut read: F, timing: Timing) -> Arc<Hub>
+    where
+        R: PartialEq + Send + 'static,
+        F: FnMut() -> R + Send + 'static,
+    {
         let hub = Arc::new(Hub::default());
         let weak = Arc::downgrade(&hub);
-        thread::spawn(move || watch(&weak, &ledger));
+        let seen = stamps(&marks);
+        let read_at = Instant::now();
+        let last = read();
+        let state = Watch {
+            marks,
+            seen,
+            read_at,
+            last,
+        };
+        thread::spawn(move || watch(&weak, state, read, timing));
         hub
     }
 
@@ -70,18 +111,46 @@ fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-fn watch(hub: &Weak<Hub>, ledger: &Path) {
-    let mut last = stamp(ledger);
+/// 印の file の全部の更新時刻と長さ。
+fn stamps(marks: &[PathBuf]) -> Vec<Option<(SystemTime, u64)>> {
+    marks.iter().map(|m| stamp(m)).collect()
+}
+
+/// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果）。
+struct Watch<R> {
+    marks: Vec<PathBuf>,
+    seen: Vec<Option<(SystemTime, u64)>>,
+    read_at: Instant,
+    last: R,
+}
+
+fn watch<R: PartialEq>(
+    hub: &Weak<Hub>,
+    mut state: Watch<R>,
+    mut read: impl FnMut() -> R,
+    timing: Timing,
+) {
     loop {
-        thread::sleep(POLL);
+        thread::sleep(timing.poll);
+        if hub.strong_count() == 0 {
+            return;
+        }
+        // 印は読みの前に取る（読みの途中の変化は次の周で拾う）。
+        let current = stamps(&state.marks);
+        if current == state.seen && state.read_at.elapsed() < timing.reread {
+            continue;
+        }
+        state.seen = current;
+        state.read_at = Instant::now();
+        let reading = read();
+        if reading == state.last {
+            continue;
+        }
+        state.last = reading;
         let Some(hub) = hub.upgrade() else {
             return;
         };
-        let current = stamp(ledger);
-        if current != last {
-            last = current;
-            hub.ledger_changed(now());
-        }
+        hub.ledger_changed(now());
     }
 }
 
@@ -105,7 +174,94 @@ pub fn stream(mut w: impl Write, hub: &Hub) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::Hub;
+    use super::{Hub, Timing};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
+
+    /// 印の 2 つの file の置き場（2 つめは初めは無い）。
+    fn marks(name: &str) -> Vec<PathBuf> {
+        let dir = std::env::temp_dir().join(format!("tz-events-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("置き場");
+        std::fs::write(dir.join("a"), "1").expect("印 a");
+        vec![dir.join("a"), dir.join("b")]
+    }
+
+    /// 中身を替えられる読み（読んだ回数を数える）。
+    fn reader() -> (
+        Arc<Mutex<u32>>,
+        Arc<AtomicUsize>,
+        impl FnMut() -> u32 + Send,
+    ) {
+        let content = Arc::new(Mutex::new(0));
+        let reads = Arc::new(AtomicUsize::new(0));
+        let (c, r) = (Arc::clone(&content), Arc::clone(&reads));
+        let read = move || {
+            r.fetch_add(1, Ordering::SeqCst);
+            *c.lock().expect("lock")
+        };
+        (content, reads, read)
+    }
+
+    #[test]
+    fn server_src_watch_marks_trigger_reread() {
+        let marks = marks("marks");
+        let (content, reads, read) = reader();
+        let timing = Timing {
+            poll: Duration::from_millis(20),
+            reread: Duration::from_secs(60),
+        };
+        let hub = Hub::watch(marks.clone(), read, timing);
+        let rx = hub.subscribe();
+        assert_eq!(reads.load(Ordering::SeqCst), 1, "最初の読みは戻る前");
+        // 印が動かなければ読み直さない（中身が変わっても知らせない）。
+        *content.lock().expect("lock") = 1;
+        thread::sleep(Duration::from_millis(200));
+        assert!(rx.try_recv().is_err());
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
+        // 後の印（初めは無い file）ができると読み直して 1 件。
+        std::fs::write(&marks[1], "x").expect("印 b");
+        let frame = rx.recv_timeout(Duration::from_secs(1)).expect("1 件");
+        assert!(frame.contains("event: ledger-changed\n"), "{frame}");
+        thread::sleep(Duration::from_millis(200));
+        assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
+        assert_eq!(reads.load(Ordering::SeqCst), 2);
+        // 前の印の長さが動いても、読みの結果が同じなら知らせない。
+        std::fs::write(&marks[0], "22").expect("印 a");
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(reads.load(Ordering::SeqCst), 3);
+        assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
+    }
+
+    #[test]
+    fn server_src_watch_rereads_without_marks() {
+        let marks = marks("reread");
+        let (content, reads, read) = reader();
+        let timing = Timing {
+            poll: Duration::from_millis(20),
+            reread: Duration::from_millis(150),
+        };
+        let hub = Hub::watch(marks, read, timing);
+        let rx = hub.subscribe();
+        *content.lock().expect("lock") = 1;
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("印なしの読み直しで 1 件");
+        // 同じ中身の読み直しは続くが知らせない。
+        let before = reads.load(Ordering::SeqCst);
+        thread::sleep(Duration::from_millis(500));
+        assert!(reads.load(Ordering::SeqCst) >= before + 2);
+        assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
+        // Hub が落ちれば読みも止まる。
+        drop(rx);
+        drop(hub);
+        thread::sleep(Duration::from_millis(100));
+        let after = reads.load(Ordering::SeqCst);
+        thread::sleep(Duration::from_millis(400));
+        assert_eq!(reads.load(Ordering::SeqCst), after);
+    }
 
     #[test]
     fn server_min_hub_sends_to_each_subscriber() {

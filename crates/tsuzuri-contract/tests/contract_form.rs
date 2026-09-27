@@ -15,7 +15,7 @@ use tsuzuri_contract::board::{
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
 use tsuzuri_contract::ledger::{
     BDW, BdLine, BeadId, ChildType, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
-    NOTES_REPLACE_FLAG, PARENT_FLAG,
+    MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL,
 };
 use tsuzuri_contract::surface::{
     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
@@ -107,6 +107,21 @@ fn ledger_row() -> LedgerRow {
         title: "契約の型".into(),
         status: "open".into(),
         updated_at: AT,
+        parent: Some(bead("t3-hub")),
+        labels: vec![QUESTION_LABEL.into()],
+    }
+}
+
+/// 親も label も無い行（根の bead）。
+fn root_row() -> LedgerRow {
+    LedgerRow {
+        id: bead("t3-hub"),
+        kind: "epic".into(),
+        title: "根".into(),
+        status: "closed".into(),
+        updated_at: AT,
+        parent: None,
+        labels: vec![],
     }
 }
 
@@ -318,7 +333,7 @@ fn forms() -> Vec<Box<dyn Form>> {
         // ledger
         form("ledger::BeadId", vec![bead("t3-hub"), bead("t3-hub.5")]),
         form("ledger::ChildType", vec![ChildType::Task, ChildType::Epic]),
-        form("ledger::LedgerRow", vec![ledger_row()]),
+        form("ledger::LedgerRow", vec![ledger_row(), root_row()]),
         form(
             "ledger::LedgerItem",
             vec![LedgerItem {
@@ -590,7 +605,7 @@ fn contract_form_ids_refuse_bad_shape() {
 
 #[test]
 fn contract_form_bd_line_reads() {
-    // 知らない欄は読み捨て、省かれた種類・本文・notes は空で読む。
+    // 知らない欄は読み捨て、省かれた種類・本文・notes・親・label は空で読む。
     let line = r#"{"id":"t3-hub.5","title":"契約の型","status":"open","priority":2,"updated_at":"2026-09-27T07:39:00Z","labels":["x"]}"#;
     let bd: BdLine = wire::decode(line).expect("bd の行");
     assert!(!bd.is_tombstone());
@@ -598,11 +613,22 @@ fn contract_form_bd_line_reads() {
     assert_eq!(item.row.id, bead("t3-hub.5"));
     assert_eq!(item.row.kind, "");
     assert_eq!(item.row.updated_at, AT);
+    assert_eq!(item.row.parent, None);
+    assert_eq!(item.row.labels, vec!["x".to_string()]);
     assert_eq!(item.description, "");
-    // 形の悪い id と欠けた更新時刻は読まない。
+    // 親と label は行へ写る。
+    let child = r#"{"id":"t3-hub.7","title":"問い","status":"closed","updated_at":"2026-09-27T07:39:00Z","parent":"t3-hub","labels":["intake:question"],"dependencies":[{"issue_id":"t3-hub.7","depends_on_id":"t3-hub","type":"parent-child"}]}"#;
+    let row = wire::decode::<BdLine>(child)
+        .expect("bd の行")
+        .into_item(AT)
+        .row;
+    assert_eq!(row.parent, Some(bead("t3-hub")));
+    assert!(row.is_question() && !row.is_memo(), "{row:?}");
+    // 形の悪い id と親と欠けた更新時刻は読まない。
     for bad in [
         r#"{"id":"-x","title":"t","status":"open","updated_at":"2026-09-27T07:39:00Z"}"#,
         r#"{"id":"t3-hub.5","title":"t","status":"open"}"#,
+        r#"{"id":"t3-hub.5","title":"t","status":"open","updated_at":"2026-09-27T07:39:00Z","parent":"a b"}"#,
     ] {
         assert!(wire::decode::<BdLine>(bad).is_err(), "{bad} を読む");
     }
@@ -613,6 +639,27 @@ fn contract_form_bd_line_reads() {
             .expect("bd の行")
             .is_tombstone()
     );
+}
+
+#[test]
+fn contract_form_ledger_row_labels() {
+    assert_eq!(QUESTION_LABEL, "intake:question");
+    assert_eq!(MEMO_LABEL, "intake:memo");
+    let question = ledger_row();
+    assert!(question.is_question() && !question.is_memo());
+    let memo = LedgerRow {
+        labels: vec!["surface".into(), MEMO_LABEL.into()],
+        ..ledger_row()
+    };
+    assert!(memo.is_memo() && !memo.is_question());
+    let plain = root_row();
+    assert!(!plain.is_memo() && !plain.is_question());
+    // label の語の一部だけでは見分けない。
+    let near = LedgerRow {
+        labels: vec!["intake:questions".into(), "intake".into()],
+        ..ledger_row()
+    };
+    assert!(!near.is_question() && !near.is_memo());
 }
 
 #[test]

@@ -186,7 +186,20 @@
       "kind": "task",
       "title": "契約の型",
       "status": "open",
-      "updated_at": 1790494620
+      "updated_at": 1790494620,
+      "parent": "t3-hub",
+      "labels": [
+        "intake:question"
+      ]
+    },
+    {
+      "id": "t3-hub",
+      "kind": "epic",
+      "title": "根",
+      "status": "closed",
+      "updated_at": 1790494620,
+      "parent": null,
+      "labels": []
     }
   ],
   "ledger::LedgerItem": [
@@ -196,7 +209,11 @@
         "kind": "task",
         "title": "契約の型",
         "status": "open",
-        "updated_at": 1790494620
+        "updated_at": 1790494620,
+        "parent": "t3-hub",
+        "labels": [
+          "intake:question"
+        ]
       },
       "description": "本文",
       "notes": "裁定 t3-hub.5:20260926T1437Z-1"
@@ -211,7 +228,11 @@
             "kind": "task",
             "title": "契約の型",
             "status": "open",
-            "updated_at": 1790494620
+            "updated_at": 1790494620,
+            "parent": "t3-hub",
+            "labels": [
+              "intake:question"
+            ]
           }
         ]
       }
