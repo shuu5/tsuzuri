@@ -1,10 +1,12 @@
 //! 次の一手（設計ノート surface-base 便 d・判断の記録 ADR-7 決定 (6)・規則の行 R-24）。
 //! 閉じた 7 種を宣言の順（優先の順）に判じ、7 種それぞれの結果（当たった・当たらない・判じなかった）と
 //! 件数と対象の id を返し、最初に当たった 1 つを大きく出す。入力は台帳の一覧の字と event log の字と今の時刻。
-//! この便の入力で判じるのは 3 種（止まっている走行・質問・なし）。限度と移動・応答なし・束の承認・発効待ちは
-//! 材料（席と口座の状態・束・発効待ちの記録）が入力に無いので判じない。
+//! この便の入力で判じるのは 3 種（止まっている走行・質問・なし）。限度と移動・応答なし・発効待ちは
+//! 材料（席と口座の状態・発効待ちの記録）が入力に無いので判じない。
 //! 便 e-seat は席の card も受ける関数（`next_step_seat`）を足す。限度と移動と応答なしを席の card から判じ、
 //! なしと大きく出す 1 つは同じ決め方で決め直す。席の card を受けない `next_step` の値は変えない。
+//! 行 c-next-batch は束の承認を台帳の字から判じる。束の受付と束の block と同じ一覧（`open_questions`）の
+//! A-1 の印の無い問いが `BATCH_MIN` 本以上なら当たる（要件 FR7: A-1 の問いは束に入れない）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{NextMove, Reading, Stage};
@@ -15,9 +17,13 @@ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 
 use crate::ledger::{Bead, read};
 use crate::pipeline;
+use crate::question::open_questions;
 
 /// 止まっている走行の段。
 pub const STALLED_STAGES: [Stage; 3] = [Stage::Questioned, Stage::Failed, Stage::Stopped];
+
+/// 束の承認が当たる、A-1 の印の無い open の問いの最小の本数。
+pub const BATCH_MIN: usize = 2;
 
 /// 判じた当たり（件数と対象）。件数 0 は当たらない。
 struct Found {
@@ -62,6 +68,19 @@ fn question(beads: Option<&[Bead]>, now: EpochSecs) -> Option<Found> {
             .iter()
             .min_by_key(|b| (b.created.is_none(), b.created))
             .and_then(|b| BeadId::new(b.id.as_str()).ok()),
+    })
+}
+
+/// 束の承認: A-1 の印の無い open の問いが `BATCH_MIN` 本以上なら、その本数（対象は無し）。
+/// 問いの一覧が読めなければ判じない。
+fn batch(ledger: &str) -> Option<Found> {
+    let Reading::Known(qs) = open_questions(ledger) else {
+        return None;
+    };
+    let n = qs.iter().filter(|q| !q.card.a1).count();
+    Some(Found {
+        count: if n >= BATCH_MIN { n } else { 0 },
+        target: None,
     })
 }
 
@@ -133,6 +152,7 @@ fn judge(ledger: &str, events: &str, now: EpochSecs, seat: Option<&SeatCard>) ->
         .map(|m| {
             let found = match m {
                 NextMove::StalledRun => stalled_run(beads, events, now),
+                NextMove::BatchApproval => batch(ledger),
                 NextMove::Question => question(beads, now),
                 NextMove::LimitOrMove | NextMove::Unresponsive => seat_found(m, seat),
                 _ => None,
