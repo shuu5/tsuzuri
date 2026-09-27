@@ -74,3 +74,15 @@ RunDone（Landed）を event log で確かめてから、`git status` → `cargo
 
 ## 12. push 先の宣言を戻す時機（2026-09-27T11:5xZ）
 scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900 秒）。PATH の scribe2 は入れ替え済み。scribe2 の回答: 終端は着地の直後の main の .vessel.toml を読む。古い binary の driver（`readlink /proc/<pid>/exe` が `(deleted)` で終わる）が宣言を読むと 20 ms ごとの照合をする。t3-hub.24（g-graph）の driver が古い binary なので、**t3-hub.24 が終端に着いてから** .vessel.toml に remote = "origin" を戻す（.vessel.toml の変更は live の走行を全部の審査のやり直しにする）。戻す前に、live の driver に古い binary が残っていないかを readlink で確かめる。
+
+## 13. account board の波の現在地（2026-09-27T14:2xZ・席の移動の前に残す）
+- 行は 13 本（t3-hub.36〜48・子 epic t3-hub.53）。着地は b-acct（.36）・e-acct-host（.37 = 956a1c0）・h-frame（.41 = 3100107）。
+- 事前審査（未着地 10 行の穴の洗い出し）の直しを e85348b で全部入れた。14:19Z に 4 本が走り出した: e-acct-proj（.38）・h-sess（.43）・h-led（.44）・h-win（.46）。残り 6 本は台帳の blocks で待つ（h-home と h-proj は h-win の後・e-acct → e-acct-hb は e-acct-proj の後・h-hb は h-sess の後・h-wire は最後）。
+- e85348b で決めたこと:
+  - ProjectRow の board（project board の URL）は e-acct-proj では全部無し。出所は未決で、開く button は実物では押せない字になる。出所を決める行を後で足す。
+  - pipeline の session の行の state は閾値の無い 2 値（run と wait）。未反映の数はいつも「―」。
+  - h-hb は新しい file heartbeat.rs を足し、account/mod.rs と tests/acctframe.rs（file の名の一覧を固定する着地済みの歯）も直す。
+  - h-wire は HEADER を変えず新しい定数 BACK に置く（HEADER[1] を読む着地済みの歯 2 つを守る）。git の program は Config に欄を足さず bind_with で渡す（Config を字で組む着地済みの歯 8 file を守る）。
+  - 関数の名を節で確定した: ProjectTexts・doc・assemble（e-acct-proj）、Acct::new・state_dir・doc・marks（e-acct）、accept（e-acct-hb）、win_name・ACCOUNT_WIN・open_url・after_open・after_close・open（h-win）。
+- 審査で差し戻されたら: pipe の下の review.json を読み、足りない材料を節に書いて commit-design.sh → preflight → dispatch.sh。承認（pipe approve --words）は持ち主の承認として残るので設計席の言葉では撃たない。
+- 着地の後の手: restart.sh で server を起こし直し、実物の画面で account board（?board=account）を点検する。h-wire の後に hub の file を「1 機能 = 1 新 file」へ割る行を書く。project board の題の字を project の名にする直しも残る。
