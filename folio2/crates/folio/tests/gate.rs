@@ -683,3 +683,134 @@ fn f169_a_dir_item_covers_the_stop_files_under_it() {
         assert!(out.contains(word), "{path}: {out}");
     }
 }
+
+// ── 便 178: 置き場そのものか置き場を下に持つ dir の項目は置き場の file を全部書き換える（docs/design/delivery-178.md §1 (c)） ──
+
+/// 置き場を名指す項目の 4 形（`--dir design-intent`・今の dir = 一時 dir）。
+const PLACE_ITEMS: [&str; 4] = [".", "design-intent", "design-intent/", "./design-intent"];
+
+/// 設計文書の正本を書き換えない便の理由。
+const NO_SOURCE: &str = "設計文書の正本を書き換えない便";
+
+#[test]
+fn f178_a_place_item_stops_on_an_upheld_stop() {
+    let repo = Repo::new("f178-upheld");
+    repo.put_stamp_with_stops(
+        "stamp-pass.yaml",
+        &[
+            "  - {viewpoint: coherence, finding: C-9, refute: 退けた, at: articles.A-1, file: constitution.yaml}",
+            "  - {viewpoint: reality, finding: R-1, refute: 支持, at: ADR-1.decision, file: adr/ADR-1.yaml}",
+        ],
+    );
+    let stop = "止める（反証で支持された 止める の場所の file を書き換える: adr/ADR-1.yaml（reality R-1）";
+    // （write-set・終了コード・標準出力に要る字）: 4 形と接頭辞の形は 1、置き場を名指さない項目は今どおり
+    let mut cases: Vec<(Vec<&str>, i32, &str)> =
+        PLACE_ITEMS.iter().map(|p| (vec![*p, "crates/folio/src/gate.rs"], 1, stop)).collect();
+    cases.extend([
+        (vec!["~./design-intent/"], 1, stop),
+        (vec!["+."], 1, stop),
+        (vec!["design-intent/adr/"], 1, stop),
+        (vec!["design-intent/adr/ADR-2.yaml"], 0, UNREVIEWED),
+        (vec!["design-intent/preview/", "design-intent/adr/retired/"], 0, NO_SOURCE),
+        (vec!["design-intent-x", "design", "crates", "docs/"], 0, NO_SOURCE),
+    ]);
+    let runs: Vec<Output> = cases.iter().map(|(ws, _, _)| repo.gate(ws)).collect();
+    // 作業ツリーの一番上の上から撃つ（便 142）: 置き場を下に持つ dir は 1、根の違う path と置き場でない --dir は今どおり 2
+    let top = repo.above_the_worktree();
+    let main = fs::canonicalize(&repo.td).unwrap();
+    let deep = Path::new(".worktrees/x/design-intent");
+    let above: Vec<(&str, Output)> = [".", ".worktrees", ".worktrees/x/", "./.worktrees/x/design-intent"]
+        .iter()
+        .map(|p| (*p, repo.gate_at(&main, deep, &[*p])))
+        .collect();
+    let other_root = repo.gate_at(&main, deep, &[".", "design-intent/srs.yaml"]);
+    let not_a_place = repo.gate_at(&top, Path::new("design-intnet"), &["."]);
+    repo.done();
+    for ((ws, want, word), run) in cases.iter().zip(&runs) {
+        let out = stdout(run);
+        assert_eq!(code(run), *want, "{ws:?}: {out}");
+        assert!(out.contains(word), "{ws:?}: {out}");
+    }
+    for (p, run) in &above {
+        let out = stdout(run);
+        assert_eq!(code(run), 1, "{p}: {out}");
+        assert!(out.contains(stop), "{p}: {out}");
+    }
+    let out = stdout(&other_root);
+    assert_eq!(code(&other_root), 2, "{out}");
+    assert!(out.contains("--dir と write-set の根が違う＝design-intent/srs.yaml"), "{out}");
+    let out = stdout(&not_a_place);
+    assert_eq!(code(&not_a_place), 2, "{out}");
+    assert!(out.contains("--dir が設計文書の置き場でない（design-intnet・"), "{out}");
+}
+
+#[test]
+fn f178_a_place_item_passes_when_no_stop_is_upheld() {
+    let mut runs: Vec<(String, Output)> = Vec::new();
+    for (case, rows) in [
+        ("f178-none", &[][..]),
+        (
+            "f178-refuted",
+            &["  - {viewpoint: coherence, finding: C-9, refute: 退けた, at: articles.A-1, file: constitution.yaml}"][..],
+        ),
+    ] {
+        let repo = Repo::new(case);
+        repo.put_stamp_with_stops("stamp-pass.yaml", rows);
+        for p in PLACE_ITEMS {
+            runs.push((format!("{case} {p}"), repo.gate(&[p])));
+        }
+        repo.done();
+    }
+    for (case, run) in &runs {
+        let out = stdout(run);
+        assert_eq!(code(run), 0, "{case}: {out}");
+        assert!(
+            out.starts_with(&format!("{PASS_HEAD}合格）に、")) && out.contains(UNREVIEWED) && !out.contains(NO_SOURCE),
+            "{case}: {out}"
+        );
+    }
+}
+
+#[test]
+fn f178_a_place_item_is_unknown_on_an_unrefuted_stop() {
+    let repo = Repo::new("f178-unrefuted");
+    repo.put_stamp_with_stops(
+        "stamp-unknown.yaml",
+        &[
+            "  - {viewpoint: coherence, finding: C-1, refute: 支持, at: requirements.FR1.shall, file: srs.yaml}",
+            "  - {viewpoint: reality, finding: R-2, at: thresholds.R-1, file: rules.yaml}",
+        ],
+    );
+    repo.edit_stamp_row("reality", "}\n", ", wait: 反証}\n");
+    let runs: Vec<Output> = PLACE_ITEMS.iter().map(|p| repo.gate(&[p])).collect();
+    repo.done();
+    let word = "まだ分からない（反証の済んでいない 止める の場所の file を書き換える: rules.yaml（reality R-2）";
+    for (p, run) in PLACE_ITEMS.iter().zip(&runs) {
+        let out = stdout(run);
+        assert_eq!(code(run), 2, "{p}: {out}");
+        assert!(out.contains(word) && !out.contains("C-1"), "{p}: {out}");
+    }
+}
+
+#[test]
+fn f178_a_place_item_is_unknown_without_a_stamp() {
+    let mut runs: Vec<(String, Output, &str)> = Vec::new();
+    let repo = Repo::new("f178-no-stamp");
+    for p in PLACE_ITEMS {
+        runs.push((format!("印が無い {p}"), repo.gate(&[p]), "まだ分からない（印が無い）"));
+    }
+    repo.done();
+    let repo = Repo::new("f178-dropped");
+    repo.put_stamp("stamp-pass.yaml", true);
+    repo.drop_stamp_row("reality");
+    for p in PLACE_ITEMS {
+        let word = "まだ分からない（印の観点の結果が欠けている: reality（無い）";
+        runs.push((format!("観点の行が無い {p}"), repo.gate(&[p]), word));
+    }
+    repo.done();
+    for (case, run, word) in &runs {
+        let out = stdout(run);
+        assert_eq!(code(run), 2, "{case}: {out}");
+        assert!(out.contains(word), "{case}: {out}");
+    }
+}

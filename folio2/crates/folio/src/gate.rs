@@ -11,6 +11,8 @@
 //! 止める の場所の file を書き換えるなら 止める（1）、ほかは 通す（0・印の後の変更は審査していない）。印からは round・
 //! verdict・viewpoints・refutes だけを読む（sources は読まない）。
 //! 便 175（docs/design/delivery-175.md §1 (b)・ADR-30 決定 (5)(6)）: 周の引き金の要約値（`trigger_digest`）を外した。
+//! 便 178（docs/design/delivery-178.md §1 (b)・FR20）: 置き場そのものか置き場を下に持つ dir（作業ツリーの一番上を含む）の
+//! write-set の項目は、置き場の file（preview/ と retired を除く）を全部書き換える項目として読む。
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -91,7 +93,9 @@ pub(crate) fn run(dir: &Path, write_set: &[String]) -> Outcome {
             ),
         );
     }
-    if !write_set.iter().any(|p| is_design_source(&root, p)) {
+    // 置き場を名指す項目（便 178）は置き場の file を全部指す: 置き場には印 PLACE_MARK が在るので正本に当たる
+    let touches = |p: &str| is_design_source(&root, p) || names_the_place(&root, p);
+    if !write_set.iter().any(|p| touches(p)) {
         return Outcome::new(Verdict::Pass, "設計文書の正本を書き換えない便");
     }
     let stamp = match read_stamp(dir) {
@@ -122,12 +126,15 @@ pub(crate) fn run(dir: &Path, write_set: &[String]) -> Outcome {
             format!("{UNKNOWN_VIEWPOINTS}: {}", missing.join("・")),
         );
     }
-    // 書き換える file を場所とする 止める（2 が 1 より先・退けた は見ない）
+    // 書き換える file を場所とする 止める（2 が 1 より先・退けた は見ない）。置き場を名指す項目は空の列の dir（全部の下）
     let items: Vec<(Vec<&str>, bool)> = write_set
         .iter()
-        .filter(|p| is_design_source(&root, p))
+        .filter(|p| touches(p))
         .map(|p| {
             let p = p.trim_start_matches(['+', '-', '~']);
+            if names_the_place(&root, p) {
+                return (Vec::new(), true);
+            }
             (parts(p)[root.len()..].to_vec(), p.ends_with('/'))
         })
         .collect();
@@ -226,6 +233,13 @@ fn is_design_source(root: &[String], path: &str) -> bool {
     }
     let rest = &parts[root.len()..];
     rest[0] != "preview" && !parts.contains(&"retired")
+}
+
+/// 置き場そのものか置き場を下に持つ dir を名指すか（便 178 §1 (b) の 1）: 要素の列（頭の `./`・末尾の `/` は落ちる）が
+/// `--dir` の要素の列そのものか、その前方の部分列（作業ツリーの一番上 `.` は空の列）。
+fn names_the_place(root: &[String], path: &str) -> bool {
+    let parts = parts(path.trim_start_matches(['+', '-', '~']));
+    parts.len() <= root.len() && parts.iter().zip(root).all(|(a, b)| *a == b)
 }
 
 // ── 印の判定（§1 (c)）──
@@ -462,5 +476,33 @@ mod gate_tests {
         ];
         let _ = fs::remove_dir_all(&td);
         assert_eq!(answers, [true, false, false, false, false, false]);
+    }
+
+    #[test]
+    fn f178_an_item_names_the_place_or_a_dir_above_it() {
+        let top = vec!["design-intent".to_string()];
+        let names = |p: &str| names_the_place(&top, p);
+        let place = [".", "./", "", "design-intent", "design-intent/", "./design-intent"];
+        for p in place.into_iter().chain(["+design-intent", "~./design-intent/", "-."]) {
+            assert!(names(p), "{p}");
+        }
+        for p in ["design-intent/srs.yaml", "design-intent/adr/", "design", "design-intent-x", "crates", "docs/"] {
+            assert!(!names(p), "{p}");
+        }
+        let deep: Vec<String> = [".worktrees", "x", "design-intent"].map(String::from).to_vec();
+        let names = |p: &str| names_the_place(&deep, p);
+        for p in [".", ".worktrees", ".worktrees/x/", "./.worktrees/x/design-intent"] {
+            assert!(names(p), "{p}");
+        }
+        for p in ["x", "design-intent", "x/design-intent", ".worktrees/y", ".worktrees/x/design-intent/srs.yaml"] {
+            assert!(!names(p), "{p}");
+        }
+        assert!(names_the_place(&[], "."));
+        assert!(!names_the_place(&[], "srs.yaml"));
+        // 置き場を名指す項目（空の列の dir）は、場所がどこに在っても覆う
+        let dir = Path::new("design-intent");
+        for file in ["srs.yaml", "adr/ADR-1.yaml", "design-note/"] {
+            assert!(covers(dir, &[], true, file), "{file}");
+        }
     }
 }
