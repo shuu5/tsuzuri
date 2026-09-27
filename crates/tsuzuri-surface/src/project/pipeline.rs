@@ -289,6 +289,11 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
     }
 }
 
+/// 札を押した先（契約 bead と同じ id の節点の頁・近傍と問いの card と同じ頁へ行く）。
+pub fn card_href(card: &Kcard, mode: frame::Mode) -> String {
+    frame::node_href(&card.id, mode)
+}
+
 /// URL の query から開いた列（`col=wait,land` の形・知らない名は読み捨てる・板の順）。
 pub fn open_columns(search: &str) -> Vec<PipelineColumn> {
     let names: Vec<&str> = frame::param(search, QUERY_KEY)
@@ -326,10 +331,13 @@ mod dom {
     use leptos::prelude::*;
     use tsuzuri_contract::board::PipelineColumn;
 
-    use super::{BLOCK, Column, Kcard, Lead, PATH, columns, content, open_columns, with_open};
+    use super::{
+        BLOCK, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns, with_open,
+    };
+    use crate::frame::Mode;
     use crate::project::{Body, ledger, section, state_icon, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::hs;
+    use crate::widgets::help::{HelpCtx, hs};
     use crate::widgets::hover::attach;
 
     /// 回数の印（見本の IC.redo）。
@@ -366,37 +374,56 @@ mod dom {
         let pipe = crate::net::read(PATH);
         let rows = crate::net::read(ledger::PATH);
         let open = RwSignal::new(open_columns(&search()));
+        let ctx = use_context::<HelpCtx>();
+        let mode = move || match ctx {
+            Some(c) => c.mode.get(),
+            None => Mode::from_query(&search()),
+        };
         let body = move || {
             let now = crate::net::now();
             match pipe.with(|p| rows.with(|l| content(p, l, now))) {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(key) => view! {
                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
-                    {board_view(columns(&[], &[], now), open)}
+                    {board_view(columns(&[], &[], now), open, mode)}
                 }
                 .into_any(),
-                Body::Filled(cols) => board_view(cols, open),
+                Body::Filled(cols) => board_view(cols, open, mode),
             }
         };
         section(BLOCK, ().into_any(), body.into_any())
     }
 
-    fn board_view(cols: Vec<Column>, open: RwSignal<Vec<PipelineColumn>>) -> AnyView {
+    fn board_view(
+        cols: Vec<Column>,
+        open: RwSignal<Vec<PipelineColumn>>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
         let cols = cols
             .into_iter()
-            .map(|c| column_view(c, open))
+            .map(|c| column_view(c, open, mode))
             .collect_view();
         view! { <div class="board">{cols}</div> }.into_any()
     }
 
-    fn column_view(col: Column, open: RwSignal<Vec<PipelineColumn>>) -> AnyView {
+    fn column_view(
+        col: Column,
+        open: RwSignal<Vec<PipelineColumn>>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
         let column = col.lane.column;
         let is_open = move || open.with(|o| o.contains(&column));
         let count = col.cards.len();
         let class = col.class.clone();
         let key = col.lane.key;
         let shown = col.clone();
-        let cards = move || shown.shown(is_open()).iter().map(kcard_view).collect_view();
+        let cards = move || {
+            shown
+                .shown(is_open())
+                .iter()
+                .map(|c| kcard_view(c, mode()))
+                .collect_view()
+        };
         let more = move || {
             col.more(is_open()).map(|n| {
                 view! {
@@ -416,7 +443,8 @@ mod dom {
         .into_any()
     }
 
-    fn kcard_view(card: &Kcard) -> AnyView {
+    /// 1 枚の札（押すと契約 bead と同じ id の節点の頁へ・指を置くと hover の card）。
+    fn kcard_view(card: &Kcard, mode: Mode) -> AnyView {
         let sym = match card.state {
             Some(v) => state_icon(v),
             None => view! { <span class="st" style="color:var(--s-land)" inner_html=CHECK></span> }
@@ -434,14 +462,14 @@ mod dom {
             }
         };
         view! {
-            <div class=card.class use:attach=card.hover.clone()>
+            <a class=card.class href=card_href(card, mode) use:attach=card.hover.clone()>
                 <div class="t">{sym}{title}</div>
                 <div class="m">
                     <span class="kid">{card.id.clone()}</span>
                     {lead}
                     <span><span inner_html=CLOCK></span><span class="num">{card.age.clone()}</span></span>
                 </div>
-            </div>
+            </a>
         }
         .into_any()
     }
