@@ -15,6 +15,8 @@
 //! 便 169（docs/design/delivery-169.md §1 (b) の 2・ADR-30 決定 (6)）: refutes の行は 止める の所見の全件を
 //! `{viewpoint, finding, refute, at, file}` で書く（反証の済んでいない 止める は欄 refute を書かない・file は `stop_file`）。
 //! 観点の行は、まだ分からない の理由が反証の済んでいない 止める だけのとき末尾に欄 `wait: 反証` を足す。印は周の 3 値に依らず書く。
+//! 便 176（docs/design/delivery-176.md §1 (b)・FR20）: dir 形の文書で at の頭が file 名に解けないときは、置き場の直下の .yaml の
+//! 最上位の meta.id でも解く（ちょうど 1 file のときだけ・`meta_file`）。
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -202,9 +204,10 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
     Ok(text)
 }
 
-/// 止める の場所の file（便 169 §1 (b) の 2）: doc を天井の正本の documents で解き、file 形はその file、dir 形は at の頭
-/// （最初の `.` の前）の `<dir><頭>.yaml` が `--dir` の下に file として在ればそれ、無いか頭が空・`.` 始まり・区切りを含めば
-/// dir そのもの（広い側）。doc が文書の一覧に無ければ Err（印を組まない・全部か無しか）。
+/// 止める の場所の file（便 169 §1 (b) の 2・便 176）: doc を天井の正本の documents で解き、file 形はその file、dir 形は at の頭
+/// （最初の `.` の前）の `<dir><頭>.yaml` が `--dir` の下に file として在ればそれ、無ければ `meta_file` がちょうど 1 つに
+/// 解いた file、頭が空・`.` 始まり・区切りを含むか `<dir><頭>.yaml` が symlink か `meta_file` が解けなければ dir そのもの
+/// （広い側）。doc が文書の一覧に無ければ Err（印を組まない・全部か無しか）。
 fn stop_file(dir: &Path, documents: &[(String, String)], doc: &str, at: &str) -> R<String> {
     let file = documents
         .iter()
@@ -217,10 +220,39 @@ fn stop_file(dir: &Path, documents: &[(String, String)], doc: &str, at: &str) ->
     let head = at.split('.').next().unwrap_or_default();
     let unsafe_head = head.is_empty() || head.starts_with('.') || head.contains(['/', '\\', '\0']);
     let named = format!("{file}{head}.yaml");
-    if !unsafe_head && !dir.join(&named).is_symlink() && dir.join(&named).is_file() {
+    if unsafe_head || dir.join(&named).is_symlink() {
+        Ok(file.to_string())
+    } else if dir.join(&named).is_file() {
         Ok(named)
     } else {
-        Ok(file.to_string())
+        Ok(meta_file(dir, file, head).unwrap_or_else(|| file.to_string()))
+    }
+}
+
+/// 便 176（docs/design/delivery-176.md §1 (b) の 1）: dir 形の置き場 `file` の直下の .yaml（symlink と下の dir は見ない）のうち、
+/// 最上位の meta.id が `head` と同じ file がちょうど 1 つならその file。0 か 2 つ以上か、置き場か .yaml のどれかが読めない
+/// （UTF-8 でない・parse できない・重複キー）なら None（広い側・読み違いで狭めない）。数えるだけなので並びに依らない。
+fn meta_file(dir: &Path, file: &str, head: &str) -> Option<String> {
+    let path = dir.join(file.trim_end_matches('/'));
+    if path.is_symlink() {
+        return None;
+    }
+    let mut hits = Vec::new();
+    for (name, is_file) in ceiling_src::read_dir_names(&path).ok()? {
+        if !is_file || !name.ends_with(".yaml") || path.join(&name).is_symlink() {
+            continue;
+        }
+        let doc = yaml::parse(&fs::read_to_string(path.join(&name)).ok()?).ok()?;
+        if !doc.duplicates.is_empty() {
+            return None;
+        }
+        if doc.root.get("meta").and_then(|m| m.get("id")).and_then(Node::as_str) == Some(head) {
+            hits.push(format!("{file}{name}"));
+        }
+    }
+    match hits.as_slice() {
+        [one] => Some(one.clone()),
+        _ => None,
     }
 }
 
@@ -389,5 +421,92 @@ mod stamp_tests {
         assert_eq!(plain("a: b"), "\"a: b\"");
         assert_eq!(plain(""), "\"\"");
         assert_eq!(plain("x\"y"), "\"x\\\"y\"");
+    }
+
+    /// 便 176（docs/design/delivery-176.md §1 (c) の 3）: meta.id で解くのは、読める .yaml のちょうど 1 つが持つときだけ。
+    #[test]
+    fn f176_the_meta_id_skips_links_and_bails_on_unreadable_files() {
+        let td = std::env::temp_dir().join(format!("folio-f176-meta-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&td);
+        let notes = td.join("design-note");
+        fs::create_dir_all(&notes).unwrap();
+        let put = |name: &str, bytes: &[u8]| fs::write(notes.join(name), bytes).unwrap();
+        put("full.yaml", b"meta: {id: full}\n");
+        put("schema.yaml", b"meta: {id: design-note-schema}\n");
+        let documents = vec![("design-note".to_string(), "design-note/".to_string())];
+        let at = |at: &str| stop_file(&td, &documents, "design-note", at).unwrap();
+        let mut answers = vec![at("design-note-schema.schema.x"), at("full.sections.1"), at("nothing.x")];
+        std::os::unix::fs::symlink(notes.join("schema.yaml"), notes.join("link.yaml")).unwrap();
+        answers.push(at("design-note-schema.schema.x"));
+        put("latin1.yaml", b"meta: {id: caf\xe9}\n");
+        answers.push(at("design-note-schema.schema.x"));
+        fs::remove_file(notes.join("latin1.yaml")).unwrap();
+        put("dup.yaml", b"meta: {id: a}\nmeta: {id: b}\n");
+        answers.push(at("design-note-schema.schema.x"));
+        let _ = fs::remove_dir_all(&td);
+        assert_eq!(
+            answers,
+            [
+                "design-note/schema.yaml",
+                "design-note/full.yaml",
+                "design-note/",
+                "design-note/schema.yaml",
+                "design-note/",
+                "design-note/"
+            ]
+        );
+    }
+
+    /// 便 176（docs/design/delivery-176.md §1 (c) の 3・検証役の提案）: meta.id は字のまま同じ file だけを数え（前方一致・大小文字の
+    /// 違い・最上位の id は当たらない）、読めない .yaml は並びのどこに在っても広い側。名の規則が先で、頭が区切りを含むとき・
+    /// `<頭>.yaml` が symlink のとき・置き場の dir が symlink のとき・file 形の文書では meta.id を見ない。
+    #[test]
+    fn f176_the_meta_id_matches_exactly_whatever_the_order() {
+        let td = std::env::temp_dir().join(format!("folio-f176-exact-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&td);
+        let notes = td.join("design-note");
+        fs::create_dir_all(&notes).unwrap();
+        let put = |name: &str, text: &str| fs::write(notes.join(name), text).unwrap();
+        put("schema.yaml", "meta: {id: design-note-schema}\n");
+        put("longer.yaml", "meta: {id: design-note-schema-v2}\n");
+        put("design.yaml", "meta: {id: design-note}\n");
+        put("upper.yaml", "meta: {id: DESIGN-NOTE-SCHEMA}\n");
+        put("top.yaml", "id: design-note-schema\n");
+        put("alias.yaml", "meta: {id: schema}\n");
+        put("slash.yaml", "meta: {id: a/b}\n");
+        fs::write(td.join("root.yaml"), "meta: {id: FR2}\n").unwrap();
+        let documents = vec![
+            ("design-note".to_string(), "design-note/".to_string()),
+            ("srs".to_string(), "srs.yaml".to_string()),
+            ("linked".to_string(), "linked/".to_string()),
+        ];
+        let at = |doc: &str, at: &str| stop_file(&td, &documents, doc, at).unwrap();
+        let mut answers = vec![
+            at("design-note", "design-note-schema.x"),
+            at("design-note", "schema.x"),
+            at("design-note", "a/b.x"),
+            at("srs", "FR2.shall"),
+        ];
+        put("zz-broken.yaml", "meta: [\n");
+        answers.push(at("design-note", "design-note-schema.x"));
+        fs::remove_file(notes.join("zz-broken.yaml")).unwrap();
+        std::os::unix::fs::symlink(&notes, td.join("linked")).unwrap();
+        answers.push(at("linked", "design-note-schema.x"));
+        std::os::unix::fs::symlink(notes.join("schema.yaml"), notes.join("via.yaml")).unwrap();
+        put("target.yaml", "meta: {id: via}\n");
+        answers.push(at("design-note", "via.x"));
+        let _ = fs::remove_dir_all(&td);
+        assert_eq!(
+            answers,
+            [
+                "design-note/schema.yaml",
+                "design-note/schema.yaml",
+                "design-note/",
+                "srs.yaml",
+                "design-note/",
+                "linked/",
+                "design-note/"
+            ]
+        );
     }
 }

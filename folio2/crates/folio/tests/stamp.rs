@@ -5,6 +5,7 @@
 //! 写す（record.bundle は観点ごとの digest.txt に合わせる）。凍結 anchor stamp-expected.yaml は触らない（P-10.1）。
 //! 便 169（docs/design/delivery-169.md §1 (c) の 5〜7）: 印の refutes の行の場所（at・file）と観点の行の wait を門が読む。
 //! 門の古さを縛った歯（f126_ の門の 1 本）は外した。
+//! 便 176（docs/design/delivery-176.md §1 (c)）: 場所の頭が file 名でなく設計ノートの欄の決まりの meta.id のとき（tsuzuri の形）。
 //!
 //! 版管理の下の file は書き換えない（`--dir` と `--out` は必ず一時 dir の中）。
 
@@ -910,4 +911,64 @@ fn f169_a_viewpoint_unknown_for_another_reason_does_not_wait() {
         "{}",
         stdout(&gate)
     );
+}
+
+// ── 便 176: 止める の場所の頭が file 名でなく meta.id のとき（docs/design/delivery-176.md §1 (c) の 1・2） ──
+
+/// 設計ノートの欄の決まり（tsuzuri の形・file 名は schema.yaml・meta.id は design-note-schema）の最小の字。
+const NOTE_SCHEMA: &str = "meta: {id: design-note-schema, version: 1}\n";
+/// 場所の頭がその meta.id の 止める（tsuzuri の周の 整合 F-4 の場所）。
+const SCHEMA_PLACE: &str = "place: {doc: design-note, at: design-note-schema.schema.figures.retry_rules_row}";
+
+/// 周の写しの design-note/ の下へ `files`（design-note/ からの相対 path・字）を足し、観点 fidelity を支持の 止める 1 件
+/// （場所 SCHEMA_PLACE）にして印を書く。印の場所の file と、`write_set` の 1 本ずつに撃った門の終了コードを返す。
+fn schema_stop(case: &str, files: &[(&str, &str)], write_set: &[&str]) -> (String, Vec<i32>) {
+    let round = Round::passing(case);
+    for (rel, text) in files {
+        let path = round.src.join("design-note").join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, text).unwrap();
+    }
+    round.put("fidelity", &finding_with("stop-upheld.yaml", &[(FR2_PLACE, SCHEMA_PLACE)]));
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    let gates: Vec<i32> = write_set.iter().map(|p| code(&folio_gate(&round, &[p]), p)).collect();
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{case}: {}{}", stdout(&run), stderr(&run));
+    let stamp = stamp.expect("印が無い");
+    let head = "  - {viewpoint: fidelity, finding: F-1, refute: 支持, at: design-note-schema.schema.figures.retry_rules_row, file: ";
+    let rows: Vec<&str> = stamp.lines().filter_map(|l| l.strip_prefix(head)).collect();
+    assert_eq!(rows.len(), 1, "{case}: {stamp}");
+    (rows[0].trim_end_matches('}').to_string(), gates)
+}
+
+#[test]
+fn f176_a_stop_on_the_schema_meta_id_is_its_file() {
+    // 下の dir（retired/）の同じ meta.id は数えない
+    let retired = "meta: {id: design-note-schema, version: 0}\n";
+    let (file, gates) = schema_stop(
+        "f176-schema",
+        &[("schema.yaml", NOTE_SCHEMA), ("retired/schema-v0.yaml", retired)],
+        &["src/design-note/full.yaml", "src/design-note/schema.yaml", "src/design-note/", "src/srs.yaml"],
+    );
+    assert_eq!(file, "design-note/schema.yaml");
+    assert_eq!(gates, [0, 1, 1, 0], "full.yaml・schema.yaml・design-note/・srs.yaml");
+}
+
+#[test]
+fn f176_the_meta_id_narrows_to_exactly_one_readable_file() {
+    let gates = ["src/design-note/full.yaml", "src/design-note/schema.yaml"];
+    // 対照: .yaml でない file は読まない
+    let control = schema_stop("f176-control", &[("schema.yaml", NOTE_SCHEMA), ("notes.txt", "meta: [\n")], &gates);
+    assert_eq!(control, ("design-note/schema.yaml".to_string(), vec![0, 1]), "対照");
+    let twin = "meta: {id: design-note-schema, version: 2}\n";
+    for (case, files) in [
+        ("f176-none", vec![]),
+        ("f176-twin", vec![("schema.yaml", NOTE_SCHEMA), ("twin.yaml", twin)]),
+        ("f176-broken", vec![("schema.yaml", NOTE_SCHEMA), ("broken.yaml", "meta: [\n")]),
+    ] {
+        let (file, got) = schema_stop(case, &files, &gates);
+        assert_eq!(file, "design-note/", "{case}");
+        assert_eq!(got, [1, 1], "{case}");
+    }
 }
