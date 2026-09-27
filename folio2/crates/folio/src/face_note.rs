@@ -424,10 +424,9 @@ fn status(meta: &X<'_>) -> R<Status> {
         "example" => "見本・拘束力なし".to_string(),
         "draft" => "未承認・拘束力なし → 持ち主の承認で発効".to_string(),
         "effective" => {
-            let ap = meta
-                .g("approval")?
+            let date = face::note_approval_date(meta)?
                 .ok_or_else(|| format!("{}: effective に承認欄が無い", meta.at))?;
-            format!("発効・拘束力あり（承認 {}）", ap.ef("date")?)
+            format!("発効・拘束力あり（承認 {date}）")
         }
         _ => {
             let sb = meta
@@ -992,18 +991,23 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, st: &Status) -
     f.approval_band(o, "承認", st.label);
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!("<div {}>", f.dc(Component::ApprovalBlock)));
-    match meta.g("approval")? {
-        Some(ap) => o.push(format!(
+    // 署名の行は承認欄の項ごとに正本の順で 1 行（便 163）
+    let rows = face::note_approvals(meta)?;
+    for ap in &rows {
+        o.push(format!(
             "<div class=\"sign\"><span class=\"role\">承認</span><span class=\"who\">{}</span><span class=\"when\">{}</span><span class=\"when\">逐語「{}」</span><span class=\"stamp\">{}</span></div>",
             ap.ef("who")?,
             ap.ef("date")?,
             ap.ef("verbatim")?,
             ap.ef("ruling")?
-        )),
-        None if st.example => {
+        ));
+    }
+    if rows.is_empty() {
+        if st.example {
             o.push("<p>見本（拘束力なし）は承認欄を持たない。</p>".to_string());
+        } else {
+            o.push("<p>未（持ち主の逐語と日付が入ると発効）</p>".to_string());
         }
-        None => o.push("<p>未（持ち主の逐語と日付が入ると発効）</p>".to_string()),
     }
     o.push("</div>".to_string());
     o.push("</div>".to_string());

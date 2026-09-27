@@ -337,7 +337,7 @@ pub fn dated(m: &X<'_>, approved: Option<String>) -> R<(&'static str, String)> {
     named(approved, || m.ef("generated"))
 }
 
-/// 承認欄が 1 つの表（判断の記録・設計ノート）の承認の日付（escape 済み）。状態が `unread`（承認を読まない状態）に
+/// 承認欄が 1 つの表（判断の記録）の承認の日付（escape 済み）。状態が `unread`（承認を読まない状態）に
 /// 在るか、承認欄 approval が無ければ None。状態の欄が無ければ Err（便 146）。
 pub fn approval_date(x: &X<'_>, unread: &[&str]) -> R<Option<String>> {
     let status = x.f("status")?.text()?;
@@ -360,10 +360,36 @@ pub fn adr_dated(a: &X<'_>) -> R<(&'static str, String)> {
     named(approval_date(a, ADR_UNREAD)?, || a.ef("date"))
 }
 
-/// 設計ノートの面の（名・日付）: 承認欄の日付（draft と見本は読まない）・無ければ（生成・meta.generated）
-/// （便 146）。
+/// 設計ノートの承認欄の項（床の row_list と同じく項の一覧・便 163）。無いか null なら空・一覧でなければ Err
+/// （表 1 つは床も まだ分からない）・表でない項も Err（黙って飛ばさない）。
+pub fn note_approvals<'a>(meta: &X<'a>) -> R<Vec<X<'a>>> {
+    let Some(ap) = meta.g("approval")? else {
+        return Ok(Vec::new());
+    };
+    let rows = ap.seq()?;
+    for row in &rows {
+        row.pairs()?;
+    }
+    Ok(rows)
+}
+
+/// 設計ノートの承認の日付（escape 済み）: 最後の項の日付（便 163）。状態が draft か見本なら読まない（None）・
+/// 承認欄が無いか空なら None。状態の欄が無ければ Err。
+pub fn note_approval_date(meta: &X<'_>) -> R<Option<String>> {
+    let status = meta.f("status")?.text()?;
+    if NOTE_UNREAD.contains(&status.as_str()) {
+        return Ok(None);
+    }
+    note_approvals(meta)?
+        .last()
+        .map(|row| row.ef("date"))
+        .transpose()
+}
+
+/// 設計ノートの面の（名・日付）: 承認欄の最後の項の日付（draft と見本は読まない）・無ければ（生成・meta.generated）
+/// （便 146・163）。
 pub fn note_dated(meta: &X<'_>) -> R<(&'static str, String)> {
-    named(approval_date(meta, NOTE_UNREAD)?, || meta.ef("generated"))
+    named(note_approval_date(meta)?, || meta.ef("generated"))
 }
 
 /// 入口の棚のカードの 更新 の日付。定め = **その型の文書の面が鮮度の札に出す日付（効いた日）のうち最も新しいもの**。
@@ -553,7 +579,7 @@ mod face_labels_tests {
             Ok(("生成", "2026-09-06".to_string()))
         );
         assert_eq!(named(None, || Err("読めない".to_string())), Err("読めない".to_string()));
-        // approval_date: 承認欄が 1 つの表（判断の記録・設計ノート）
+        // approval_date: 承認欄が 1 つの表（判断の記録・設計ノートは note_dated が項の一覧で読む）
         let date = |doc: &str, skip: &[&str]| {
             let v = yaml::parse_typed(doc).unwrap();
             approval_date(&X::root(&v, "a"), skip)
@@ -615,6 +641,7 @@ mod face_labels_tests {
         };
         let generated = Ok(("生成", "2026-09-&lt;07&gt;".to_string()));
         let made = "generated: \"2026-09-<07>\"";
+        let ap = "approval: [{date: \"2026-09-<10>\", who: 持ち主}]";
         assert_eq!(note(&format!("{{status: effective, {made}, {ap}}}")), approved);
         assert_eq!(note(&format!("{{status: effective, {made}}}")), generated);
         for st in ["draft", "example"] {
@@ -627,6 +654,44 @@ mod face_labels_tests {
         );
         assert_eq!(shelf_updated(["2026-09-08"]), "2026-09-08");
         assert_eq!(shelf_updated(std::iter::empty::<&str>()), "");
+    }
+
+    #[test]
+    fn f163_note_dated_reads_the_last_item_of_the_list() {
+        // 設計ノートの承認欄は項の一覧（床の row_list と同じ・delivery-163.md §1 (c) の 3）
+        let note = |doc: &str| {
+            let v = yaml::parse_typed(doc).unwrap();
+            note_dated(&X::root(&v, "meta"))
+        };
+        let made = "generated: 2026-09-01";
+        let generated = Ok(("生成", "2026-09-01".to_string()));
+        // 発効と廃止の 2 項の一覧 → 最後の項の日付
+        let two = "approval: [{date: 2026-09-05, who: 持ち主}, {date: \"2026-09-<09>\", who: 持ち主}]";
+        for st in ["effective", "retired"] {
+            assert_eq!(
+                note(&format!("{{status: {st}, {made}, {two}}}")),
+                Ok(("承認", "2026-09-&lt;09&gt;".to_string())),
+                "{st}"
+            );
+        }
+        // 後の項が前の項より古くても最後の項（最大の日付でない）
+        let older = "approval: [{date: 2026-09-23, who: 持ち主}, {date: 2026-09-21, who: 持ち主}]";
+        assert_eq!(
+            note(&format!("{{status: effective, {made}, {older}}}")),
+            Ok(("承認", "2026-09-21".to_string()))
+        );
+        // draft と見本は読まない・承認欄が無い・null・空の一覧は生成日
+        for st in ["draft", "example"] {
+            assert_eq!(note(&format!("{{status: {st}, {made}, {two}}}")), generated, "{st}");
+        }
+        for ap in ["", ", approval: null", ", approval: []"] {
+            assert_eq!(note(&format!("{{status: effective, {made}{ap}}}")), generated, "{ap}");
+        }
+        // 表 1 つは一覧でない（床も まだ分からない）
+        assert_eq!(
+            note(&format!("{{status: effective, {made}, approval: {{date: 2026-09-05, who: 持ち主}}}}")),
+            Err("meta.approval: 一覧でない".to_string())
+        );
     }
 
     #[test]

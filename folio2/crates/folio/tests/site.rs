@@ -801,6 +801,150 @@ fn f136_quoted_rule_row_stops_the_build_floor() {
     assert!(!exists, "床が不合格なのに配信先の dir を作った");
 }
 
+// ── 便 163: 設計ノートの承認欄は床も面も項の一覧（docs/design/delivery-163.md §1 (c) の 1・2）──
+
+/// 承認欄の 1 項（持ち主 × R-8・床の組の判定の前でも後でも通る組）。
+fn f163_sign(date: &str, verbatim: &str) -> String {
+    format!("{{who: 持ち主, date: {date}, ruling: f2-648.243 notes {date}, verbatim: {verbatim}, surface: R-8}}")
+}
+
+/// 実の置き場の写しに最小の設計ノート signed.yaml（状態 `status`・承認欄の字 `approval`・散文 1 節）を足して
+/// commit し、素の check と build --write を撃つ。戻り値 = (check, build, note-signed.html の字〔無ければ None〕,
+/// 配信先の dir が在るか)。
+fn f163_signed(case: &str, status: &str, approval: &str) -> (Output, Output, Option<String>, bool) {
+    let (td, dir) = real_copy(case, false);
+    let note = format!(
+        "meta:\n  id: signed\n  title: 署名の行の歯\n  version: v0.1\n  status: {status}\n  generated: 2026-09-20\n  profile: design-note\n{approval}\nsections:\n  - n: 1\n    type: prose\n    title: 目的\n    body: |\n      承認欄の項ごとに署名の行が出ることを測るための最小の設計ノート。\n"
+    );
+    fs::write(dir.join("design-note/signed.yaml"), note).unwrap();
+    git(&td, &["init", "-q"]);
+    git(&td, &["add", "-A"]);
+    git(&td, &["commit", "-q", "-m", "fixture"]);
+    let check = folio_check(&dir);
+    let site = td.join("site");
+    let build = folio_build(&dir, &site, "--write");
+    let html = fs::read_to_string(site.join("note-signed.html")).ok();
+    let exists = site.exists();
+    let _ = fs::remove_dir_all(&td);
+    (check, build, html, exists)
+}
+
+#[test]
+fn f163_note_approval_list_builds_one_sign_per_item() {
+    let first = ("2026-09-23", "承認する");
+    let second = ("2026-09-21", "改めて承認する");
+    let list = |items: &[(&str, &str)]| {
+        let rows: String = items
+            .iter()
+            .map(|(d, v)| format!("\n    - {}", f163_sign(d, v)))
+            .collect();
+        format!("  approval:{rows}")
+    };
+    // (写しの名, 状態, 項, 状態の行, 日付の名, 日付)
+    let cases = [
+        (
+            "f163-one",
+            "effective",
+            vec![first],
+            "発効・拘束力あり（承認 2026-09-23）",
+            "承認",
+            "2026-09-23",
+        ),
+        (
+            "f163-two",
+            "effective",
+            vec![first, second],
+            "発効・拘束力あり（承認 2026-09-21）",
+            "承認",
+            "2026-09-21",
+        ),
+        (
+            "f163-draft",
+            "draft",
+            vec![first],
+            "未承認・拘束力なし → 持ち主の承認で発効",
+            "生成",
+            "2026-09-20",
+        ),
+    ];
+    for (case, status, items, line, dated, date) in cases {
+        let (check, build, html, _) = f163_signed(case, status, &list(&items));
+        assert_eq!(code(&check, "folio check"), 0, "{case}: {}", stdout(&check));
+        assert_eq!(
+            code(&build, "folio build --write"),
+            0,
+            "{case}: {}{}",
+            stdout(&build),
+            stderr(&build)
+        );
+        let html = html.unwrap_or_else(|| panic!("{case}: note-signed.html が無い"));
+        // 署名の行は項の数と同じで正本の項の順（字は歯の側で組む）
+        assert_eq!(
+            html.matches("<div class=\"sign\">").count(),
+            items.len(),
+            "{case}: 署名の行の数が項の数でない"
+        );
+        let mut from = 0;
+        for (d, v) in &items {
+            let sign = format!(
+                "<div class=\"sign\"><span class=\"role\">承認</span><span class=\"who\">持ち主</span><span class=\"when\">{d}</span><span class=\"when\">逐語「{v}」</span><span class=\"stamp\">f2-648.243 notes {d}</span></div>"
+            );
+            let at = html[from..]
+                .find(&sign)
+                .unwrap_or_else(|| panic!("{case}: 署名の行「{sign}」が正本の順に無い"));
+            from += at + sign.len();
+        }
+        assert_eq!(html.matches(line).count(), 1, "{case}: 状態の行「{line}」が無い");
+        let stamp = format!(
+            "<span data-component=\"freshness-stamp\">{dated} <b>{date}</b> · <b>signed v0.1</b>（"
+        );
+        assert_eq!(html.matches(&stamp).count(), 1, "{case}: 鮮度の札「{stamp}」が無い");
+    }
+}
+
+#[test]
+fn f163_floor_and_face_refuse_a_single_table_alike() {
+    let table = format!("  approval: {}", f163_sign("2026-09-23", "承認する"));
+    let floor = "meta の approval が表の一覧でない";
+    // (写しの名, 状態, 承認欄の字, build の字)
+    let cases = [
+        (
+            "f163-table-effective",
+            "effective",
+            table.clone(),
+            "design-note/signed.yaml.meta.approval: 一覧でない",
+        ),
+        (
+            "f163-table-draft",
+            "draft",
+            table,
+            "design-note/signed.yaml.meta.approval: 一覧でない",
+        ),
+        (
+            "f163-scalar-item",
+            "draft",
+            "  approval:\n    - 承認する".to_string(),
+            "design-note/signed.yaml.meta.approval[0]: 表でない",
+        ),
+    ];
+    for (case, status, approval, refused) in cases {
+        let (check, build, _, exists) = f163_signed(case, status, &approval);
+        let told = format!("{}{}", stdout(&check), stderr(&check));
+        assert_eq!(code(&check, "folio check"), 2, "{case}: {told}");
+        assert!(told.contains(floor), "{case}: {told}");
+        assert_eq!(
+            code(&build, "folio build --write"),
+            2,
+            "{case}: {}{}",
+            stdout(&build),
+            stderr(&build)
+        );
+        let said = format!("{}{}", stdout(&build), stderr(&build));
+        assert!(said.contains(refused), "{case}: {said}");
+        assert!(!exists, "{case}: 面を導出できないのに配信先の dir を作った");
+    }
+}
+
 /// 便 153（docs/design/delivery-153.md §1 (c) の 2・ADR-27 決定 (2)）: 置き場の様式が在ればその字を出し、無いときだけ
 /// 組み立て時に焼いた folio2 の様式を出す。在るのに読めない様式（dir・壊れた symlink・途中が file）は まだ分からない で
 /// 配信先を作らない。

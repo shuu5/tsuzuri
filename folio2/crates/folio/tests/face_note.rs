@@ -840,7 +840,7 @@ fn face_note_shows_the_effective_and_retired_states() {
     let (effective, html) = mutated("effective", |t| {
         t.replacen("status: draft", "status: effective", 1).replacen(
             "  note: 手書きの見本。面の骨格だけを測る。",
-            "  note: 手書きの見本。面の骨格だけを測る。\n  approval: {who: 持ち主, date: 2026-09-18, ruling: f2-648.43 notes 2026-09-18, verbatim: 承認する, surface: R-8}",
+            "  note: 手書きの見本。面の骨格だけを測る。\n  approval: [{who: 持ち主, date: 2026-09-18, ruling: f2-648.43 notes 2026-09-18, verbatim: 承認する, surface: R-8}]",
             1,
         )
     });
@@ -1064,7 +1064,7 @@ fn f74_note_cover_names_the_reader() {
 fn f146_note_stamp_cover_and_foot_follow_the_approval() {
     let note = "  note: 手書きの見本。面の骨格だけを測る。";
     let approval = format!(
-        "{note}\n  approval: {{who: 持ち主, date: 2026-09-21, ruling: f2-648.219 notes, verbatim: 承認する, surface: R-8}}"
+        "{note}\n  approval: [{{who: 持ち主, date: 2026-09-21, ruling: f2-648.219 notes, verbatim: 承認する, surface: R-8}}]"
     );
     // (写しの名, 状態, 承認欄を足すか, 日付の名, 日付)
     let cases = [

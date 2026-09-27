@@ -1290,13 +1290,13 @@ fn index_with_two_notes(case: &str, full: Rewrite) -> String {
     html
 }
 
-/// 設計ノートの状態を替え、`approved` が在れば承認欄（その日付）を足す。
+/// 設計ノートの状態を替え、`approved` が在れば承認欄（その日付の 1 項の一覧・便 163）を足す。
 fn note_state(s: &str, status: &str, approved: Option<&str>) -> String {
     let mut out = s.replacen("  status: draft\n", &format!("  status: {status}\n"), 1);
     if let Some(d) = approved {
         out = out.replacen(
             "  generated: 2026-09-18\n",
-            &format!("  generated: 2026-09-18\n  approval: {{date: {d}, who: 持ち主}}\n"),
+            &format!("  generated: 2026-09-18\n  approval: [{{date: {d}, who: 持ち主}}]\n"),
             1,
         );
     }
