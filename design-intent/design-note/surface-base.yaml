@@ -388,7 +388,7 @@ sections:
       止め方。子を撃つ関数（ledger の module の capture・台帳・設計の索引・席の card・裁定の書き・届けの全部がこの 1 つを通る）は、子を新しい process group に入れる（標準 library の unix の CommandExt の process_group に 0 を渡す・group の id は子の pid になる）。止めるとき（時間切れ・標準出力を取れない・子の終わりを待てない）は、先に group の全体へ KILL の signal を送り、次に子を待って片付ける。group へ送るのは、道具 kill を撃つ（引数は -KILL と -- と、負の符号をつけた group の id・道具の名は module の定数）。道具が撃てないか失敗したときは、今の止め方（子の kill）に戻る。止める所は公開の関数 stop_with（子と道具の名を受け、group へ送れたかを bool で返す）にし、capture は道具の名の定数を渡して呼ぶ。unsafe と外の crate は使わない（libc の crate は依存に足さない）。
       孫は止まった後、親が居ないので、OS の側（init か subreaper）が片付ける。server は孫を待たない。
       在りか（着地済み）。capture は ledger の module の公開の関数（pub fn）で、ledger の module は server の module の下の公開の module（pub mod ledger）、server の module は crate の公開の module（lib.rs の pub mod server）なので、結合の歯（tests の下の file）から tsuzuri_boundary::server::ledger::capture と stop_with で届く（server/mod.rs と lib.rs は触らない）。
-      測り方。歯は新しい歯の file（server_reap.rs）に置き、名を server_reap_ で始める。done (3) と (4) は capture を、(5) は stop_with を撃つ（(5) の子は歯の中で撃つ sh の sleep 30）。歯は temp の置き場に一意の名の dir を作り、sh の script を書いて撃つ。孫が生きているかは、/proc の下の孫の pid の stat を読み、無いか、状態の字（3 つ目の欄）が Z なら止まったと見る。待つのは 50 ミリ秒ずつで、2 秒まで。
+      測り方。歯は新しい歯の file（server_reap.rs）に置き、名を server_reap_ で始める。done (3) と (4) は capture を、(5) は stop_with を撃つ（(5) の子は、歯の中で新しい process group に入れて撃つ sh の sleep 30）。歯は temp の置き場に一意の名の dir を作り、sh の script を書いて撃つ。孫が生きているかは、/proc の下の孫の pid の stat を読み、無いか、状態の字（3 つ目の欄）が Z なら止まったと見る。待つのは 50 ミリ秒ずつで、2 秒まで。
       依存は足さない。
 
 figures: []
