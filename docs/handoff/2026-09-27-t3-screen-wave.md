@@ -65,5 +65,10 @@ RunDone（Landed）を event log で確かめてから、`git status` → `cargo
 - 着地のたびに実物の画面を開いて、block ごとに中身が出ているかを見る（server の組み直しは `~/.cache/tsuzuri-admin/serve/restart.sh`）。
 - 小数を持つ電文を読み直して比べる歯は、最後の 1 桁がずれて時刻によって落ちる。電文の字で比べる（8fdfd1b）。
 
+- 見た目の細部の直しの候補（11:56Z に実物の画面で見た・後で 1 行にまとめる）: block「orchestrator と口座」の窓の名（five_hour・seven_day_model）が「?」と割合の字に重なる／地図と抜けの検査の頁で header の最終の記録が「まだ無い」のまま（台帳の読みが home の頁でしか走らない）。
+
 ## 11. folio2 の知らせ（2026-09-27T11:1xZ）
 便 174 と便 176 が着地（folio2 main efe3e7b）。pin を上げる手順: binary を efe3e7b に替える → `folio schema --dir design-intent --write` → commit（門を通さずに入れる）→ 天井の周。番号を落とした後の注の字の小さな壊れ 4 件は、周が所見に挙げたら folio2 へ id を知らせる（folio2 台帳 f2-648.261）。画面の波の後に行う。
+
+## 12. push 先の宣言を戻す時機（2026-09-27T11:5xZ）
+scribe2 の CI の照合の直しが着地（8f6072d・30 秒ごと・上限 900 秒）。PATH の scribe2 は入れ替え済み。live の driver が古い binary のまま終端で宣言を読むかを scribe2 に問い中。答えを見てから .vessel.toml に remote = "origin" を戻す（.vessel.toml の変更は live の走行を全部の審査のやり直しにする）。
