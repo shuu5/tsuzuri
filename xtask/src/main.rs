@@ -60,7 +60,7 @@ fn check(root: &Path) -> i32 {
     0
 }
 
-/// 歯が読む file の簡易な読み（依存を serde に限るので TOML の crate を使わない）。
+/// 歯が読む file の簡易な読み（依存を serde と serde_json に限るので TOML の crate を使わない）。
 #[cfg(test)]
 mod read {
     use std::path::Path;
@@ -161,8 +161,9 @@ mod tests {
         "xtask",
     ];
 
-    /// serde と serde の導出（serde_derive）が連れて来る package。
-    const SERDE_CLOSURE: [&str; 7] = [
+    /// workspace の外の package の許可の一覧: serde と serde の導出（serde_derive）が連れて来るもの（便 a）と、
+    /// serde_json とそれが連れて来るもの（便 b）。
+    const ALLOWED_OUTSIDE: [&str; 11] = [
         "serde",
         "serde_core",
         "serde_derive",
@@ -170,6 +171,10 @@ mod tests {
         "quote",
         "syn",
         "unicode-ident",
+        "serde_json",
+        "itoa",
+        "memchr",
+        "zmij",
     ];
 
     #[test]
@@ -192,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn skeleton_lock_outside_is_serde_only() {
+    fn skeleton_lock_outside_is_allowed() {
         let lock =
             std::fs::read_to_string(workspace_root().join("Cargo.lock")).expect("Cargo.lock");
         let packages = lock_packages(&lock);
@@ -204,10 +209,14 @@ mod tests {
         let stray: Vec<&str> = outside
             .iter()
             .copied()
-            .filter(|n| !SERDE_CLOSURE.contains(n))
+            .filter(|n| !ALLOWED_OUTSIDE.contains(n))
             .collect();
-        assert!(stray.is_empty(), "serde の外の package: {stray:?}");
+        assert!(stray.is_empty(), "許可の一覧の外の package: {stray:?}");
         assert!(outside.contains(&"serde"), "serde が Cargo.lock に無い");
+        assert!(
+            outside.contains(&"serde_json"),
+            "serde_json が Cargo.lock に無い"
+        );
         let mut inside: Vec<&str> = packages
             .iter()
             .filter(|(_, ext)| !*ext)

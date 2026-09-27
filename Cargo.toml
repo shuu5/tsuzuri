@@ -1,5 +1,5 @@
-# tsuzuri の workspace（設計ノート surface-base 便 a）: 契約の型・中核・境界・面の 4 crate と xtask。
-# 依存は serde に限る（外の package は serde と serde の導出が連れて来るものだけ・xtask の歯 skeleton_ が Cargo.lock で測る）。
+# tsuzuri の workspace（設計ノート surface-base 便 a・b）: 契約の型・中核・境界・面の 4 crate と xtask。
+# 依存は serde と serde_json に限る（外の package は serde・serde の導出・serde_json が連れて来るものだけ・xtask の歯 skeleton_ が Cargo.lock で測る）。
 [workspace]
 resolver = "3"
 members = [
@@ -17,3 +17,4 @@ publish = false
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"

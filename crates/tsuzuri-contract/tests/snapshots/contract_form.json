@@ -1,0 +1,438 @@
+{
+  "surface::RulingId": [
+    "t3-hub.5:20260926T1437Z-1",
+    "batch:20260926T1437Z-1",
+    "policy:20260926T1437Z-2"
+  ],
+  "surface::SeatRole": [
+    "orchestrator",
+    "pipeline"
+  ],
+  "surface::SeatHealth": [
+    "waiting",
+    "working",
+    "unresponsive",
+    "stopped",
+    "unknown"
+  ],
+  "surface::SeatView": [
+    {
+      "seat": "t3:orchestrator",
+      "role": "orchestrator",
+      "health": "waiting",
+      "account": "black4",
+      "move_left_s": 1200
+    },
+    {
+      "seat": "t3:pipeline",
+      "role": "pipeline",
+      "health": "unknown",
+      "account": null,
+      "move_left_s": null
+    }
+  ],
+  "surface::SurfaceState": [
+    {
+      "seats": [
+        {
+          "seat": "t3:orchestrator",
+          "role": "orchestrator",
+          "health": "waiting",
+          "account": "black4",
+          "move_left_s": 1200
+        }
+      ],
+      "next_move": "question",
+      "updated_at": 1790494620,
+      "undelivered": [
+        "t3-hub.5:20260926T1437Z-1"
+      ]
+    }
+  ],
+  "surface::SurfaceEvent": [
+    {
+      "event": "SeatState",
+      "seat": {
+        "seat": "t3:orchestrator",
+        "role": "orchestrator",
+        "health": "waiting",
+        "account": "black4",
+        "move_left_s": 1200
+      },
+      "at": 1790494620
+    },
+    {
+      "event": "QuestionPosted",
+      "question": "t3-hub.7",
+      "at": 1790494620
+    },
+    {
+      "event": "RulingRead",
+      "ruling": "t3-hub.7:20260926T1437Z-1",
+      "seat": "t3:orchestrator",
+      "at": 1790494620
+    },
+    {
+      "event": "RunStage",
+      "run": "t3-hub.3-20260927T073916Z",
+      "contract": "t3-hub.3",
+      "stage": "Gated",
+      "reason": null,
+      "at": 1790494620
+    }
+  ],
+  "surface::QuestionNudge": [
+    {
+      "question": "t3-hub.7"
+    }
+  ],
+  "surface::RulingRequest": [
+    {
+      "question": "t3-hub.7",
+      "seen_digest": "3fa2b91c",
+      "verbatim": "よい"
+    }
+  ],
+  "surface::RulingResponse": [
+    {
+      "ruling": "t3-hub.7:20260926T1437Z-1",
+      "recorded_at": 1790494620
+    }
+  ],
+  "surface::BatchRequest": [
+    {
+      "items": [
+        {
+          "question": "t3-hub.7",
+          "seen_digest": "3fa2b91c",
+          "verbatim": null
+        },
+        {
+          "question": "t3-hub.8",
+          "seen_digest": "0b1c2d3e",
+          "verbatim": "推奨で"
+        }
+      ],
+      "verbatim": "全部よい"
+    }
+  ],
+  "surface::ItemOutcome": [
+    {
+      "outcome": "written",
+      "ruling": "t3-hub.7:20260926T1437Z-1"
+    },
+    {
+      "outcome": "skipped",
+      "ruling": "t3-hub.8:20260926T1437Z-1"
+    },
+    {
+      "outcome": "refused",
+      "reason": "stale-version"
+    }
+  ],
+  "surface::BatchResponse": [
+    {
+      "batch": "batch:20260926T1437Z-1",
+      "items": [
+        {
+          "question": "t3-hub.7",
+          "outcome": "written",
+          "ruling": "t3-hub.7:20260926T1437Z-1"
+        },
+        {
+          "question": "t3-hub.9",
+          "outcome": "refused",
+          "reason": "a1-in-batch"
+        }
+      ]
+    }
+  ],
+  "surface::PolicyRequest": [
+    {
+      "scope": "t3-hub",
+      "verbatim": "画面を早く出す"
+    }
+  ],
+  "surface::PolicyResponse": [
+    {
+      "policy": "policy:20260926T1437Z-1",
+      "recorded_at": 1790494620
+    }
+  ],
+  "surface::Refusal": [
+    "empty-verbatim",
+    "unknown-question",
+    "stale-version",
+    "a1-needs-own-verbatim",
+    "a1-in-batch",
+    "empty-batch"
+  ],
+  "surface::RefusalResponse": [
+    {
+      "reason": "stale-version"
+    }
+  ],
+  "ledger::BeadId": [
+    "t3-hub",
+    "t3-hub.5"
+  ],
+  "ledger::ChildType": [
+    "task",
+    "epic"
+  ],
+  "ledger::LedgerRow": [
+    {
+      "id": "t3-hub.5",
+      "kind": "task",
+      "title": "契約の型",
+      "status": "open",
+      "updated_at": 1790494620
+    }
+  ],
+  "ledger::LedgerItem": [
+    {
+      "row": {
+        "id": "t3-hub.5",
+        "kind": "task",
+        "title": "契約の型",
+        "status": "open",
+        "updated_at": 1790494620
+      },
+      "description": "本文",
+      "notes": "裁定 t3-hub.5:20260926T1437Z-1"
+    }
+  ],
+  "ledger::LedgerWrite": [
+    {
+      "op": "append-notes",
+      "id": "t3-hub.5",
+      "line": "裁定 t3-hub.5:20260926T1437Z-1・逐語 = よい"
+    },
+    {
+      "op": "close-item",
+      "id": "t3-hub.5",
+      "reason": "裁定 t3-hub.5:20260926T1437Z-1"
+    },
+    {
+      "op": "create-child",
+      "parent": "t3-hub",
+      "title": "方針",
+      "child_type": "task",
+      "description": "全体への指示の控え"
+    },
+    {
+      "op": "append-notes",
+      "id": "t3-hub.5",
+      "line": "--notes"
+    },
+    {
+      "op": "create-child",
+      "parent": "t3-hub",
+      "title": "--notes=x",
+      "child_type": "epic",
+      "description": "--parent="
+    }
+  ],
+  "graph::NodeKind": [
+    "条",
+    "規範文",
+    "規則行",
+    "目的",
+    "要件",
+    "非機能要件",
+    "受入基準",
+    "制約",
+    "登場人物",
+    "出力",
+    "判断の記録",
+    "note-row",
+    "epic",
+    "task",
+    "memo",
+    "question",
+    "ruling",
+    "receipt",
+    "policy",
+    "run"
+  ],
+  "graph::EdgeType": [
+    "in-article",
+    "relations.articles",
+    "relations.reqs",
+    "relations.rules",
+    "relations.sections",
+    "amended_by",
+    "article",
+    "refs",
+    "basis",
+    "goals",
+    "rules",
+    "adrs",
+    "verify.ac",
+    "verifies",
+    "figures",
+    "produced",
+    "amends",
+    "parent-child",
+    "blocks",
+    "relates-to",
+    "discovered-from",
+    "design",
+    "ruled_by",
+    "answers",
+    "touches",
+    "premises",
+    "source",
+    "run_of",
+    "raised",
+    "ran_by"
+  ],
+  "graph::GraphNode": [
+    {
+      "id": "ADR-7",
+      "kind": "判断の記録",
+      "file": "adr/ADR-7.yaml",
+      "digest": "9c1e0a4b",
+      "title": "裁定面は project board と account board の"
+    },
+    {
+      "id": "t3-hub.3",
+      "kind": "task",
+      "file": null,
+      "digest": null,
+      "title": "契約の型"
+    }
+  ],
+  "graph::GraphEdge": [
+    {
+      "from": "t3-hub.3",
+      "to": "surface-base#b",
+      "type": "design"
+    }
+  ],
+  "board::Stage": [
+    "Queued",
+    "Blocked",
+    "Running",
+    "Gated",
+    "Questioned",
+    "Failed",
+    "Stopped",
+    "Landed"
+  ],
+  "board::PipelineColumn": [
+    "Queued/Blocked",
+    "Running/Gated",
+    "Questioned/Failed/Stopped",
+    "Landed"
+  ],
+  "board::PipelineCard": [
+    {
+      "contract": "t3-hub.3",
+      "runs": 2,
+      "stage": "Running",
+      "reason": "verify",
+      "account": "black4",
+      "elapsed_s": 185
+    },
+    {
+      "contract": "t3-hub.4",
+      "runs": 0,
+      "stage": "Queued",
+      "reason": null,
+      "account": null,
+      "elapsed_s": null
+    }
+  ],
+  "board::PipelineBoard": [
+    {
+      "cards": {
+        "known": [
+          {
+            "contract": "t3-hub.3",
+            "runs": 2,
+            "stage": "Running",
+            "reason": "verify",
+            "account": "black4",
+            "elapsed_s": 185
+          }
+        ]
+      }
+    },
+    {
+      "cards": {
+        "known": []
+      }
+    },
+    {
+      "cards": "unknown"
+    }
+  ],
+  "board::NextMove": [
+    "limit-or-move",
+    "unresponsive",
+    "stalled-run",
+    "batch-approval",
+    "question",
+    "awaiting-effect",
+    "nothing"
+  ],
+  "board::LedgerJudge": [
+    "on-track",
+    "stalled",
+    "clogged",
+    "piling-up",
+    "no-ledger"
+  ],
+  "board::AccountBoard": [
+    {
+      "at": 1790494620,
+      "groups": [
+        {
+          "group": "Tier1",
+          "account": "black4",
+          "candidates": [
+            "black1",
+            "black3",
+            "black5"
+          ],
+          "next_account": "black5",
+          "remaining": [
+            {
+              "window": "5h",
+              "left_pct": 62
+            },
+            {
+              "window": "7d",
+              "left_pct": 40
+            }
+          ]
+        }
+      ],
+      "sessions": [
+        {
+          "project": "tsuzuri",
+          "role": "pipeline",
+          "session": "t3-hub.3-20260927T073916Z",
+          "account": "black4",
+          "stage": "Running",
+          "elapsed_s": 185,
+          "health": "working"
+        }
+      ],
+      "projects": [
+        {
+          "project": "tsuzuri",
+          "judge": "on-track",
+          "open_tasks": 9,
+          "net_drop_24h": 2,
+          "net_drop_7d": -1,
+          "closed_per_day": 1.5,
+          "unreflected": 3,
+          "memos": 4,
+          "next_move": "batch-approval"
+        }
+      ]
+    }
+  ]
+}
