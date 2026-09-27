@@ -1,9 +1,8 @@
 //! 頁の枠（便 g-frame）: header の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
 //! 純粋な値だけを持ち、block の中身は持たない（中身は project の下の module ごとに置く）。
-//! 並びと鍵と class は見本（docs/design/mock3 の index.html・ask.html・map.html・ui.css）に揃える。
-//! 問いの頁（便 g-ask）: 頁の順は home・ask・map、header の質問の link に open の問いの数の印を付ける。
+//! 並びと鍵と class は見本（docs/design/mock3 の index.html・map.html・ui.css）に揃える。
 
-use crate::project::{ask, askpage, ledger, legend, map, next, pipeline, seat};
+use crate::project::{ask, ledger, legend, map, next, pipeline, seat};
 
 /// 1 つの block の枠（DOM の id・見出しの語の鍵・section の class）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,22 +19,17 @@ pub struct Column {
     pub blocks: Vec<Block>,
 }
 
-/// 頁（home・問い・地図）。
+/// 頁（home と地図）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PageId {
     Home,
-    Ask,
     Map,
 }
 
 impl PageId {
-    /// 頁の全部（nav の順）。
-    pub const ALL: [PageId; 3] = [PageId::Home, PageId::Ask, PageId::Map];
-
     pub fn id(self) -> &'static str {
         match self {
             PageId::Home => "home",
-            PageId::Ask => "ask",
             PageId::Map => "map",
         }
     }
@@ -43,7 +37,6 @@ impl PageId {
     /// URL の query の `page=` から頁を決める（無い・知らない値は home）。
     pub fn from_query(search: &str) -> Self {
         match param(search, "page") {
-            Some("ask") => PageId::Ask,
             Some("map") => PageId::Map,
             _ => PageId::Home,
         }
@@ -72,7 +65,7 @@ impl Page {
 /// 列の class（見本の `.stack`）。
 pub const STACK: &str = "stack";
 
-/// home の頁: 次の一手・pipeline・台帳・凡例 ｜ orchestrator と口座（2 列の grid・見本の `.home`）。
+/// home の頁: 次の一手・問いの一覧・pipeline ｜ orchestrator と口座・台帳・凡例（2 列の grid・見本の `.home`）。
 pub fn home() -> Page {
     Page {
         id: PageId::Home,
@@ -81,26 +74,13 @@ pub fn home() -> Page {
         columns: vec![
             Column {
                 class: STACK,
-                blocks: vec![next::BLOCK, pipeline::BLOCK, ledger::BLOCK, legend::BLOCK],
+                blocks: vec![next::BLOCK, ask::BLOCK, pipeline::BLOCK],
             },
             Column {
                 class: STACK,
-                blocks: vec![seat::BLOCK],
+                blocks: vec![seat::BLOCK, ledger::BLOCK, legend::BLOCK],
             },
         ],
-    }
-}
-
-/// 問いの頁: 問いの card の列・これまでの決定（見本の ask.html の `.ask` の左の列・右の列は後の便）。
-pub fn ask() -> Page {
-    Page {
-        id: PageId::Ask,
-        heading: "questions",
-        class: "ask",
-        columns: vec![Column {
-            class: STACK,
-            blocks: vec![ask::BLOCK, askpage::BLOCK],
-        }],
     }
 }
 
@@ -120,14 +100,13 @@ pub fn map() -> Page {
 pub fn page(id: PageId) -> Page {
     match id {
         PageId::Home => home(),
-        PageId::Ask => ask(),
         PageId::Map => map(),
     }
 }
 
 /// 頁の全部（nav の順）。
-pub fn pages() -> [Page; 3] {
-    PageId::ALL.map(page)
+pub fn pages() -> [Page; 2] {
+    [home(), map()]
 }
 
 /// header の 1 つの部品（役・語の鍵・class・中の語の鍵）。
@@ -151,7 +130,7 @@ pub const HEADER: [HeaderPart; 4] = [
         part: "nav",
         key: "dashboard",
         class: "nav",
-        items: &["home", "questions", "map"],
+        items: &["home", "map"],
     },
     HeaderPart {
         part: "updated",
@@ -212,12 +191,7 @@ pub struct NavLink {
     pub page: PageId,
     /// 今の頁なら `on`（見本の `.nav a.on`）。
     pub class: &'static str,
-    /// 数の印の class（問いの頁の link だけ `badge`・ほかは空）。
-    pub badge: &'static str,
 }
-
-/// header の質問の link の数の印の class（見本の `.nav .badge`）。
-pub const BADGE: &str = "badge";
 
 /// nav の link（header の nav の部品の順）。
 pub fn nav_links(current: PageId) -> Vec<NavLink> {
@@ -227,21 +201,14 @@ pub fn nav_links(current: PageId) -> Vec<NavLink> {
             key: p.heading,
             page: p.id,
             class: if p.id == current { "on" } else { "" },
-            badge: if p.id == PageId::Ask { BADGE } else { "" },
         })
         .collect()
-}
-
-/// 質問の link の数の印の字（open の問いの数・数が読めないときと 0 のときは出さない）。
-pub fn badge(open: Option<usize>) -> Option<String> {
-    open.filter(|n| *n > 0).map(|n| n.to_string())
 }
 
 /// 頁への link（同じ path の query だけ・mode を URL に残す）。
 pub fn href(page: PageId, mode: Mode) -> String {
     match page {
         PageId::Home => format!("?mode={}", mode.key()),
-        PageId::Ask => format!("?page=ask&mode={}", mode.key()),
         PageId::Map => format!("?page=map&mode={}", mode.key()),
     }
 }

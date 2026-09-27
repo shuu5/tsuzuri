@@ -1,6 +1,6 @@
 //! project board の block（便 g-frame）: 1 つの block（と地図の頁）に 1 つの module。
 //! 各 module は枠の値（`BLOCK`）と中身の純粋な関数を持ち、DOM は wasm の target のときだけ組み立てる。
-//! 問いの頁（便 g-ask）は ask（問いの card の列・口 /api/questions）と askpage（これまでの決定・台帳の一覧の口）の 2 つ。
+//! 中身を持つのは ask（問いの一覧）・ledger（台帳の一覧）・legend（凡例）の 3 つ。
 //! 各 block は自分の読みの口の path を module の定数に持ち、通信（net）の同じ関数で読む（便 g-parts）。
 //! 中身の関数は読みの結果（3 値）を受けて中身を返す純粋な関数。next・pipeline・seat・map と ledger の指標の段は、
 //! 3 値のどれを受けても測れていないの印と理由の 1 行を返す（本文を読んで中身を返すのは後の block の便）。
@@ -10,7 +10,6 @@ use tsuzuri_contract::ledger::LedgerRow;
 use crate::view::{self, Fetched, QUESTION_KIND};
 
 pub mod ask;
-pub mod askpage;
 pub mod ledger;
 pub mod legend;
 pub mod map;

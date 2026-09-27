@@ -1,14 +1,12 @@
 //! 頁の描画（wasm の target のときだけ組み立てる・Leptos の csr）: header と頁の枠を frame の値のとおりに並べる。
 //! block の中身は project の下の module が描く。ここは枠を描き、mode と頁を URL から読んで URL に残すだけ。
 //! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。
-//! 質問の link の数の印は問いの一覧の口（ask の module の口）の件数を出す（便 g-ask）。
 
 use leptos::prelude::*;
-use tsuzuri_contract::board::Reading;
 
 use crate::frame::{self, BRAND, Block, HEADER, Mode, PageId};
 use crate::net;
-use crate::project::{self, ask, askpage, ledger, legend, map, next, pipeline, seat};
+use crate::project::{self, ask, ledger, legend, map, next, pipeline, seat};
 use crate::view::{Screen, clock};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, hs};
@@ -17,14 +15,11 @@ use crate::widgets::hover::{CardLayer, HoverCtx};
 /// 題の印（見本の IC.logo）。
 const LOGO: &str = r##"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>"##;
 
-/// nav の印（見本の IC.home・IC.ask・IC.map）。
+/// nav の印（見本の IC.home・IC.map）。
 fn nav_icon(page: PageId) -> &'static str {
     match page {
         PageId::Home => {
             r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>"#
-        }
-        PageId::Ask => {
-            r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M10 9.5a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2"/><circle cx="12" cy="14.5" r=".6" fill="currentColor"/></svg>"#
         }
         PageId::Map => {
             r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg>"#
@@ -68,7 +63,7 @@ fn App() -> impl IntoView {
         }
     });
     provide_context(HoverCtx::default());
-    // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は読めた時刻）。
+    // 問いの一覧と台帳の一覧は 1 つの口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は読めた時刻）。
     let fetched = net::read(ledger::PATH);
     let screen = RwSignal::new(Screen::initial());
     Effect::new(move |_| {
@@ -96,24 +91,13 @@ fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl Int
             }
             .into_any(),
             "nav" => {
-                let questions = net::read(ask::PATH);
-                let open = move || match questions.with(ask::count) {
-                    Reading::Known(n) => Some(n),
-                    Reading::Unknown => None,
-                };
                 let links = frame::nav_links(page)
                     .into_iter()
                     .map(|l| {
-                        let badge = move || {
-                            let n = if l.badge.is_empty() { None } else { open() };
-                            frame::badge(n)
-                                .map(|n| view! { <span class=l.badge>{n}</span> })
-                        };
                         view! {
                             <a href=move || frame::href(l.page, mode.get()) class=l.class data-v=l.key data-term=l.key>
                                 <span inner_html=nav_icon(l.page)></span>
                                 <span class="lbl hd-t">{label(l.key)}</span>
-                                {badge}
                             </a>
                         }
                     })
@@ -173,8 +157,7 @@ fn page_view(page: PageId, screen: RwSignal<Screen>) -> impl IntoView {
 fn block_view(block: Block, screen: RwSignal<Screen>) -> AnyView {
     match block.id {
         id if id == next::BLOCK.id => next::view(),
-        id if id == ask::BLOCK.id => ask::view(),
-        id if id == askpage::BLOCK.id => askpage::view(),
+        id if id == ask::BLOCK.id => ask::view(screen),
         id if id == pipeline::BLOCK.id => pipeline::view(),
         id if id == seat::BLOCK.id => seat::view(),
         id if id == ledger::BLOCK.id => ledger::view(screen),
