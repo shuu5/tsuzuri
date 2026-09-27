@@ -53,20 +53,20 @@ sections:
     type: teeth-table
     title: 歯（壊すと落ちる自動の検査・受入の 12 条を含む）
     rows:
-      - {id: batch-3, name: 3 問の束, red_when: 裁定 id が別々でない・束の id が違う・notes の末尾の行が無い・event が無い, fixture: tests/fixtures/surface/batch-3.yaml, ref: [AC1]}
-      - {id: batch-a1, name: A-1 の印は束に入らない, red_when: A-1 の印を含む束が通るか台帳の byte が変わる, fixture: tests/fixtures/surface/batch-a1.yaml, ref: [AC2]}
-      - {id: stale-version, name: 古い版は書かない, red_when: 古い版の要求で 1 byte でも書くか取り消しで問いが open に戻らない, fixture: tests/fixtures/surface/stale-version.yaml, ref: [AC3]}
-      - {id: hub-cut, name: hub は広げない, red_when: 子 619 の hub が展開されるか光る節点が 20 を超える, fixture: tests/fixtures/graph/hub-619/, ref: [AC4]}
-      - {id: unruled, name: 裏付けの無い accepted, red_when: 裁定の行の無い accepted の記録を名指さないか、台帳が読めないのに合格が出る, fixture: tests/fixtures/graph/unruled/, ref: [AC5]}
-      - {id: question-gate, name: 問いの起票の門, red_when: 処分の無い id が在るのに allow が出るか、名指しの id の列が欠ける, fixture: tests/fixtures/guard/question-3/, ref: [AC6]}
-      - {id: runs-5, name: 走行の節点, red_when: 走行の節点が 5 つでない・板の札が 1 つでない・問いの無い Questioned を名指さない, fixture: tests/fixtures/graph/runs-5/, ref: [AC7]}
-      - {id: no-state, name: state dir が読めない, red_when: 走行以外の種類まで「まだ分からない」になるか、走行が 0 件と出る, fixture: tests/fixtures/graph/no-state/, ref: [AC8]}
-      - {id: accept-12, name: 面の受入 12 条, red_when: はみ出し・重なり・横 scroll・hover の欠け・語彙外の見出し・散文 300 字超・page error・文の予算・id 無し・URL に残らない切り替え・逐語の混入・外部の library のどれかが 1 でも出る, fixture: tests/fixtures/surface/accept-12/, ref: [AC9, NFR1]}
-      - {id: seat-health, name: 席の健康, red_when: stale な tick で応答なしが出ない・heartbeat-off で停止が出ない・切り替えで state dir の byte が変わる, fixture: tests/fixtures/account/seat-health/, ref: [AC10]}
-      - {id: move-grace, name: 退避までの残り秒, red_when: 残り秒が「記録の時刻 + 猶予 − 今」でない・起こし直した席に出る, fixture: tests/fixtures/account/move-grace/, ref: [AC11]}
-      - {id: ledger-judge, name: 台帳の判定と未反映, red_when: 判定の 5 値か未反映の 3 種の数が期待と違う・要約の無い節点が名指されない, fixture: tests/fixtures/ledger/judge/, ref: [AC12]}
+      - {id: batch-3, name: 3 問の束, red_when: 裁定 id が別々でない・束の id が違う・notes の末尾の行が無い・event が無い, fixture: tests/fixtures/surface/batch-3.json, ref: [AC1]}
+      - {id: batch-a1, name: A-1 の印は束に入らない, red_when: A-1 の印を含む束が通るか台帳の byte が変わる, fixture: tests/fixtures/surface/batch-a1.json, ref: [AC2]}
+      - {id: stale-version, name: 古い版は書かない, red_when: 古い版の要求で 1 byte でも書くか取り消しで問いが open に戻らない, fixture: tests/fixtures/surface/stale-version.json, ref: [AC3]}
+      - {id: hub-cut, name: hub は広げない, red_when: 子 619 の hub が展開されるか光る節点が 20 を超える, fixture: tests/fixtures/graph/hub-619.json, ref: [AC4]}
+      - {id: unruled, name: 裏付けの無い accepted, red_when: 裁定の行の無い accepted の記録を名指さないか、台帳が読めないのに合格が出る, fixture: tests/fixtures/graph/unruled.json, ref: [AC5]}
+      - {id: question-gate, name: 問いの起票の門, red_when: 処分の無い id が在るのに allow が出るか、名指しの id の列が欠ける, fixture: tests/fixtures/guard/question-3.json, ref: [AC6]}
+      - {id: runs-5, name: 走行の節点, red_when: 走行の節点が 5 つでない・板の札が 1 つでない・問いの無い Questioned を名指さない, fixture: tests/fixtures/graph/runs-5.json, ref: [AC7]}
+      - {id: no-state, name: state dir が読めない, red_when: 走行以外の種類まで「まだ分からない」になるか、走行が 0 件と出る, fixture: tests/fixtures/graph/no-state.json, ref: [AC8]}
+      - {id: accept-12, name: 面の受入 12 条, red_when: はみ出し・重なり・横 scroll・hover の欠け・語彙外の見出し・散文 300 字超・page error・文の予算・id 無し・URL に残らない切り替え・逐語の混入・外部の library のどれかが 1 でも出る, fixture: tests/fixtures/surface/accept-12.json, ref: [AC9, NFR1]}
+      - {id: seat-health, name: 席の健康, red_when: stale な tick で応答なしが出ない・heartbeat-off で停止が出ない・切り替えで state dir の byte が変わる, fixture: tests/fixtures/account/seat-health.json, ref: [AC10]}
+      - {id: move-grace, name: 退避までの残り秒, red_when: 残り秒が「記録の時刻 + 猶予 − 今」でない・起こし直した席に出る, fixture: tests/fixtures/account/move-grace.json, ref: [AC11]}
+      - {id: ledger-judge, name: 台帳の判定と未反映, red_when: 判定の 5 値か未反映の 3 種の数が期待と違う・要約の無い節点が名指されない, fixture: tests/fixtures/ledger/judge.json, ref: [AC12]}
       - {id: stage-argv, name: 端末の起動, red_when: 起動の引数か CDP の命令の列が snapshot と違う・届かない端末が配信に落ちない, fixture: tests/fixtures/stage/terminals.toml, ref: [AC13]}
-      - {id: tz-parity, name: tz と folio の一致, red_when: 口のどれかで終了 code か出力が folio2 と違う, fixture: tests/fixtures/tz/parity/, ref: [AC14]}
+      - {id: tz-parity, name: tz と folio の一致, red_when: 口のどれかで終了 code か出力が folio2 と違う, fixture: tests/fixtures/tz/parity.json, ref: [AC14]}
   - n: 17
     type: parts-table
     title: 導出グラフの節点の種類（閉じた一覧・20・判断の記録 ADR-7 決定 (2)）

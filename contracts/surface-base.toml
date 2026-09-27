@@ -28,7 +28,7 @@ id = "c"
 title = "導出グラフと不変条件の 12 本と近傍（純粋な関数・毎回組み直し・読めない種類だけ「まだ分からない」）"
 req = ["FR2", "FR3", "FR5"]
 section = "4"
-write-set = ["Cargo.lock", "crates/tsuzuri-core/Cargo.toml", "xtask/src/main.rs", "crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/src/graph/check.rs", "+crates/tsuzuri-core/src/graph/around.rs", "+crates/tsuzuri-core/tests/graph.rs", "+tests/fixtures/graph/hub-619/", "+tests/fixtures/graph/unruled/", "+tests/fixtures/graph/runs-5/", "+tests/fixtures/graph/no-state/", "tests/fixtures/graph/real/design-index.tsv", "tests/fixtures/graph/real/events.jsonl"]
+write-set = ["Cargo.lock", "crates/tsuzuri-core/Cargo.toml", "xtask/src/main.rs", "crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/src/graph/check.rs", "+crates/tsuzuri-core/src/graph/around.rs", "+crates/tsuzuri-core/tests/graph.rs", "+tests/fixtures/graph/hub-619.json", "+tests/fixtures/graph/unruled.json", "+tests/fixtures/graph/runs-5.json", "+tests/fixtures/graph/no-state.json", "+tests/fixtures/graph/violations.json", "tests/fixtures/graph/real/design-index.tsv", "tests/fixtures/graph/real/events.jsonl"]
 verify = ["cargo nextest run -p tsuzuri-core --no-tests=fail graph_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
 size = "L"
 done = "(1) 実物の見本の 3 つの入力から組んだグラフの節点の種類と辺の型が、設計ノート surface の §17 と §18 の一覧の内側に収まり、索引の節点の数と台帳の bead の数と走行の数が入力と一致 (2) 不変条件ごとに違反 1 本の fixture がその 1 本だけを名指す (3) 子 619 の hub の fixture で近傍 2 段が hub を展開せず、切った理由と総数を出す (4) event log を欠く入力で走行の種類だけ「まだ分からない」になり、設計と台帳の節点は組める (5) 中核の crate の直接依存は serde と serde_json と契約の型の crate だけ"
@@ -40,7 +40,7 @@ id = "d"
 title = "台帳の指標と未反映の 3 種と次の一手の 7 種（閾値は rules 行から読む）"
 req = ["FR11", "FR13", "FR15"]
 section = "5"
-write-set = ["crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/ledger/mod.rs", "+crates/tsuzuri-core/src/ledger/metrics.rs", "+crates/tsuzuri-core/src/ledger/unreflected.rs", "+crates/tsuzuri-core/src/next_move.rs", "+crates/tsuzuri-core/tests/ledger.rs", "+tests/fixtures/ledger/judge/", "design-intent/rules.yaml"]
+write-set = ["crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/ledger/mod.rs", "+crates/tsuzuri-core/src/ledger/metrics.rs", "+crates/tsuzuri-core/src/ledger/unreflected.rs", "+crates/tsuzuri-core/src/next_move.rs", "+crates/tsuzuri-core/tests/ledger.rs", "+tests/fixtures/ledger/judge.json", "design-intent/rules.yaml"]
 verify = ["cargo nextest run -p tsuzuri-core --no-tests=fail ledger_"]
 size = "M"
 done = "(1) 判定の 5 値と未反映の 3 種が fixture の期待と一致 (2) 閾値は rules 行 3 本から読み code に数が無い (3) 次の一手の 7 種の順が snapshot で pin される (4) 作業中の数と最古が出力に無い"
@@ -52,7 +52,7 @@ id = "e"
 title = "面の server（台帳の読み・裁定と束と方針の受付・承認の event・SSE・bdw 経由の 1 経路の書き）"
 req = ["FR6", "FR7", "FR8", "FR9", "NFR2"]
 section = "6"
-write-set = ["crates/tsuzuri-boundary/src/lib.rs", "crates/tsuzuri-boundary/src/server/mod.rs", "crates/tsuzuri-boundary/src/server/ledger.rs", "+crates/tsuzuri-boundary/src/server/ruling.rs", "crates/tsuzuri-boundary/src/server/events.rs", "+crates/tsuzuri-boundary/src/server/graph.rs", "+crates/tsuzuri-boundary/tests/server.rs", "+tests/fixtures/surface/batch-3.yaml", "+tests/fixtures/surface/batch-a1.yaml", "+tests/fixtures/surface/stale-version.yaml"]
+write-set = ["crates/tsuzuri-boundary/src/lib.rs", "crates/tsuzuri-boundary/src/server/mod.rs", "crates/tsuzuri-boundary/src/server/ledger.rs", "+crates/tsuzuri-boundary/src/server/ruling.rs", "crates/tsuzuri-boundary/src/server/events.rs", "+crates/tsuzuri-boundary/src/server/graph.rs", "+crates/tsuzuri-boundary/tests/server.rs", "+tests/fixtures/surface/batch-3.json", "+tests/fixtures/surface/batch-a1.json", "+tests/fixtures/surface/stale-version.json"]
 verify = ["cargo nextest run -p tsuzuri-boundary --no-tests=fail server_"]
 size = "L"
 done = "(1) 3 問の束で裁定 id 3 つと束の id と notes の末尾と closed と event の 1 行 (2) A-1 の印を含む束は 400 で台帳の byte 不変 (3) 古い版は 409 で byte 不変・取り消しで open に戻る (4) 台帳への書きは enum から bdw の argv を組む 1 経路だけ (5) 問いの合図から SSE まで 200 ミリ秒以内"
@@ -64,7 +64,7 @@ id = "f"
 title = "席の hook（裁定の配達と停止の hook の 2 経路）と問いの起票の門（近傍の処分の宣言）"
 req = ["FR4", "FR9"]
 section = "7"
-write-set = ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/hook/mod.rs", "+crates/tsuzuri-boundary/src/hook/deliver.rs", "+crates/tsuzuri-boundary/src/hook/stop.rs", "+crates/tsuzuri-boundary/src/hook/question_gate.rs", "+crates/tsuzuri-boundary/tests/hook.rs", "+tests/fixtures/guard/question-3/"]
+write-set = ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/hook/mod.rs", "+crates/tsuzuri-boundary/src/hook/deliver.rs", "+crates/tsuzuri-boundary/src/hook/stop.rs", "+crates/tsuzuri-boundary/src/hook/question_gate.rs", "+crates/tsuzuri-boundary/tests/hook.rs", "+tests/fixtures/guard/question-3.json"]
 verify = ["cargo nextest run -p tsuzuri-boundary --no-tests=fail hook_"]
 size = "M"
 done = "(1) 問いの起票 3 通り（deny と id の列挙・allow・古い要約値で deny） (2) 待ちの席へ配達の 1 行・考え中の席は停止の hook が続けさせる (3) 裁定から 2 分で受けが無ければ面の状態に「届いていない」"

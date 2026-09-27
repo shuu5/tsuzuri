@@ -17,7 +17,7 @@ id = "h"
 title = "account board（HOME・session の表・各 project の tab・新しい窓と「戻る」・停止の切り替え・退避までの残り秒）"
 req = ["FR1", "FR11", "FR12", "FR13"]
 section = "3"
-write-set = ["crates/tsuzuri-surface/src/lib.rs", "+crates/tsuzuri-surface/src/account/mod.rs", "+crates/tsuzuri-surface/src/account/home.rs", "+crates/tsuzuri-surface/src/account/session.rs", "+crates/tsuzuri-surface/src/account/project.rs", "+crates/tsuzuri-boundary/src/server/account.rs", "+crates/tsuzuri-surface/tests/account.rs", "+tests/fixtures/account/seat-health/", "+tests/fixtures/account/move-grace/"]
+write-set = ["crates/tsuzuri-surface/src/lib.rs", "+crates/tsuzuri-surface/src/account/mod.rs", "+crates/tsuzuri-surface/src/account/home.rs", "+crates/tsuzuri-surface/src/account/session.rs", "+crates/tsuzuri-surface/src/account/project.rs", "+crates/tsuzuri-boundary/src/server/account.rs", "+crates/tsuzuri-surface/tests/account.rs", "+tests/fixtures/account/seat-health.json", "+tests/fixtures/account/move-grace.json"]
 verify = ["cargo nextest run -p tsuzuri-surface --no-tests=fail account_", "cargo nextest run -p tsuzuri-boundary --no-tests=fail account_"]
 size = "L"
 done = "(1) 3 つの tab と並べ方と 3 つの幅が URL に残る (2) 新しい窓の名と「戻る」の 3 段 (3) tick が stale なら応答なし・heartbeat-off なら停止・切り替えは器の CLI の argv だけで state dir の byte 不変 (4) 残り秒が「記録の時刻 + 猶予 − 今」で起こし直した席には出ない"
@@ -40,7 +40,7 @@ id = "j"
 title = "受入 12 条の測定（browser の runner・全画面 × 2 幅 × 2 mode・1 件でも落ちる）"
 req = ["NFR1", "NFR3"]
 section = "5"
-write-set = ["+crates/tsuzuri-surface/tests/accept.rs", "+tests/fixtures/surface/accept-12/", "+xtask/src/accept.rs", "xtask/src/main.rs"]
+write-set = ["+crates/tsuzuri-surface/tests/accept.rs", "+tests/fixtures/surface/accept-12.json", "+xtask/src/accept.rs", "xtask/src/main.rs"]
 verify = ["cargo nextest run -p tsuzuri-surface --no-tests=fail accept_"]
 size = "M"
 done = "(1) 12 条それぞれに 1 件仕込んだ fixture で違反 1 が出る (2) 現物の全画面で 12 条とも 0 (3) 結果が report に残る (4) 面の crate の依存が rules 行 R-2 の別枠の予算に収まる"
@@ -52,7 +52,7 @@ id = "k"
 title = "tz の口（folio の口を同じ名の subcommand に・graph は tz graph に吸収・inject は持たない・終了 code と出力の一致）"
 req = ["FR17"]
 section = "6"
-write-set = ["crates/tsuzuri-boundary/src/lib.rs", "crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/src/cli/mod.rs", "+crates/tsuzuri-boundary/src/cli/folio.rs", "+crates/tsuzuri-boundary/tests/tz.rs", "+tests/fixtures/tz/parity/"]
+write-set = ["crates/tsuzuri-boundary/src/lib.rs", "crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/src/cli/mod.rs", "+crates/tsuzuri-boundary/src/cli/folio.rs", "+crates/tsuzuri-boundary/tests/tz.rs", "+tests/fixtures/tz/parity.json"]
 verify = ["cargo nextest run -p tsuzuri-boundary --no-tests=fail tz_"]
 size = "M"
 done = "(1) 11 の口で終了 code と出力が folio2 と一致 (2) tz graph --design が設計の索引だけを出す (3) tz inject が無い (4) folio という名の binary が workspace に無い"
