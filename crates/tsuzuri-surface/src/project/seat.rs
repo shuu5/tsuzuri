@@ -109,6 +109,55 @@ impl Span {
             Span::H3 => 10_800,
         }
     }
+
+    /// 目盛の間（秒・見本の SPANS の tick）。
+    pub fn tick(self) -> u64 {
+        match self {
+            Span::H24 => 21_600,
+            Span::H6 => 3_600,
+            Span::H3 => 1_800,
+        }
+    }
+}
+
+/// 稼働の記録の下の目盛の 1 つ（見本の spanAxis の span）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tick {
+    /// 左からの位置（百分率・小数 2 桁の字）。
+    pub left: String,
+    /// 時と分の字（`18:00`）。
+    pub label: String,
+}
+
+/// 目盛の位置の上限（百分率・これを越える目盛は右端の字と重なるので落とす）。
+const TICK_MAX: f64 = 92.0;
+
+/// 目盛の数の上限（越えれば 1 つおきに残す・見本の spanTicks）。
+const TICK_MANY: usize = 6;
+
+/// 窓の目盛（窓の右端は `at`・tick の倍数の時刻・見本の spanTicks と spanAxis）。
+pub fn span_ticks(at: EpochSecs, span: Span) -> Vec<Tick> {
+    let start = at.saturating_sub(span.secs());
+    let tick = span.tick();
+    let mut times = Vec::new();
+    let mut t = start.div_ceil(tick) * tick;
+    while t <= at {
+        times.push(t);
+        t += tick;
+    }
+    if times.len() > TICK_MANY {
+        times = times.into_iter().step_by(2).collect();
+    }
+    times
+        .into_iter()
+        .filter_map(|t| {
+            let pct = (t - start) as f64 / span.secs() as f64 * 100.0;
+            (pct <= TICK_MAX).then(|| Tick {
+                left: format!("{pct:.2}"),
+                label: hm(t).trim_end_matches('Z').to_string(),
+            })
+        })
+        .collect()
 }
 
 /// URL の query から幅（`span=6h` の形・無いか知らない値は 24h）。
@@ -220,12 +269,14 @@ pub struct Rect {
     pub class: &'static str,
 }
 
-/// 1 つの幅の稼働の記録（区間の矩形と口座の移動の縦線の x）。
+/// 1 つの幅の稼働の記録（区間の矩形と口座の移動の縦線の x と下の目盛）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Strip {
     pub span: Span,
     pub rects: Reading<Vec<Rect>>,
     pub marks: Reading<Vec<f64>>,
+    /// 目盛（電文の at から出す・区間が読めなくても在る）。
+    pub ticks: Vec<Tick>,
 }
 
 /// 窓ごとの割合の 1 行（見本の `.wrow`）。
@@ -367,6 +418,7 @@ pub fn strip(card: &SeatCard, span: Span) -> Strip {
         span,
         rects: map(&card.spans, |s| rects(s, card.at, span)),
         marks: map(&card.moves, |m| marks(m, card.at, span)),
+        ticks: span_ticks(card.at, span),
     }
 }
 
@@ -444,6 +496,51 @@ pub fn strip_svg(rects: &[Rect], marks: &[f64]) -> String {
 
 fn line(class: &str, x: f64) -> String {
     format!("<line class=\"{class}\" x1=\"{x}\" x2=\"{x}\" y1=\"0\" y2=\"{HEIGHT}\"/>")
+}
+
+/// 稼働の記録の凡例（記号の名と語の鍵・見本の stripLegend の順・起動と終了の縦線は描かないので置かない）。
+pub const LEGEND: [(&str, &str); 7] = [
+    ("run", "lg_run"),
+    ("wait", "lg_wait"),
+    ("silent", "lg_silent"),
+    ("limit", "lg_limit"),
+    ("unknown", "lg_unknown"),
+    ("acct", "lg_acct"),
+    ("now", "lg_now"),
+];
+
+/// 凡例の見本の横の幅（SVG の座標）。
+const SAMPLE_W: f64 = 28.0;
+
+/// 凡例の見本の高さ（SVG の座標）。
+const SAMPLE_H: f64 = 12.0;
+
+/// 凡例の 1 つの見本の SVG の字（状態は矩形・口座の移動と今は縦線・知らない名は中の無い svg）。
+pub fn sample_svg(name: &str) -> String {
+    let inner = match name {
+        "run" | "wait" | "limit" | "silent" | "unknown" => {
+            let height = if matches!(name, "wait" | "unknown") {
+                SAMPLE_H * LOW
+            } else {
+                SAMPLE_H
+            };
+            format!(
+                "<rect class=\"{}\" x=\"0\" y=\"{}\" width=\"{SAMPLE_W}\" height=\"{height}\"/>",
+                strip_class(name),
+                SAMPLE_H - height
+            )
+        }
+        "acct" | "now" => {
+            let x = SAMPLE_W / 2.0;
+            format!(
+                "<line class=\"mk mk-{name}\" x1=\"{x}\" x2=\"{x}\" y1=\"0\" y2=\"{SAMPLE_H}\"/>"
+            )
+        }
+        _ => String::new(),
+    };
+    format!(
+        "<svg class=\"ssample\" width=\"{SAMPLE_W}\" height=\"{SAMPLE_H}\" viewBox=\"0 0 {SAMPLE_W} {SAMPLE_H}\" aria-hidden=\"true\">{inner}</svg>"
+    )
 }
 
 /// 下段。
@@ -535,8 +632,8 @@ mod dom {
     use tsuzuri_contract::board::Reading;
 
     use super::{
-        BLOCK, Band, HistRow, Low, MORE, More, OK, OROW, PATH, Seat, Sign, Span, Strip, Top,
-        WindowRow, content, span_of, strip_svg, with_span,
+        BLOCK, Band, HistRow, LEGEND, Low, MORE, More, OK, OROW, PATH, Seat, Sign, Span, Strip,
+        Top, WindowRow, content, sample_svg, span_of, strip_svg, with_span,
     };
     use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
     use crate::vocab::label;
@@ -691,6 +788,30 @@ mod dom {
                 }
             })
             .collect_view();
+        let axis_strips = strips.clone();
+        let axis = move || {
+            let now = span.get();
+            let ticks = axis_strips
+                .iter()
+                .find(|s| s.span == now)
+                .map(|s| s.ticks.clone())
+                .unwrap_or_default();
+            ticks
+                .into_iter()
+                .map(|t| {
+                    let style = format!("left:{}%", t.left);
+                    view! { <span style=style>{t.label}</span> }
+                })
+                .collect_view()
+        };
+        let legend = LEGEND
+            .into_iter()
+            .map(|(name, key)| {
+                view! {
+                    <span class="sleg-i"><span inner_html=sample_svg(name)></span><span>{label(key)}</span></span>
+                }
+            })
+            .collect_view();
         let svg = move || {
             let now = span.get();
             let Some(strip) = strips.iter().find(|s| s.span == now) else {
@@ -718,6 +839,8 @@ mod dom {
                     <span class="spanbar">{hs("span")}<span class="seg" role="group">{buttons}</span></span>
                 </div>
                 {svg}
+                <div class="saxis" aria-hidden="true">{axis}</div>
+                <div class="sleg" aria-label=label("history")>{legend}</div>
             </div>
         }
         .into_any()
