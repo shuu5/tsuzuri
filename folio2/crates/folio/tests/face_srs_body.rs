@@ -1,7 +1,7 @@
 //! `folio face --face srs`（要件書の面）の本体の歯（便 15・36・64・70）。binary 経由。
 //! - 凍結 fixture（tests/fixtures/face/）との byte 一致（P-10.1・回帰の anchor で唯一の判定にしない）・escape
 //! - 実の正本で生成した面が `folio parts --check` に合格する・逐語と件数の census（yaml-rust2 で正本を直に読む）
-//! - check の 3 値・導出できない入力 8 つ
+//! - check の 3 値・導出できない入力 7 つ・counts を読まない（便 165）
 //! - 用語集の章（便 36・憲法の面の章 07 と同じ形）・受入基準の章の凡例（便 64）・章の見出しの助数詞（便 70）
 //!
 //! 便 105（docs/design/delivery-105.md §1 (b)）で `face.rs` から字を変えずに移した。図の章の歯は
@@ -557,9 +557,28 @@ fn srs_unknown(case: &str, from: &str, to: &str) {
     assert!(!exists, "{case}: 導出できないのに出力先に書いた");
 }
 
+/// 便 165（docs/design/delivery-165.md §1 (c) の 4）: 要件書の面は meta.counts を読まない。4 つの鍵とも行とずらしても、
+/// 行ごと消しても、面は凍結 fixture と byte 一致する（表紙と章の数は数えた数）。
 #[test]
-fn face_srs_unknown_when_counts_differ_from_the_rows() {
-    srs_unknown("counts", "counts: {fr: 2,", "counts: {fr: 3,");
+fn f165_face_srs_does_not_read_counts() {
+    let line = "  counts: {fr: 2, nfr: 1, ac: 1, con: 1}\n";
+    for (case, to) in [
+        ("shifted", "  counts: {fr: 3, nfr: 5, ac: 0, con: 9}\n"),
+        ("dropped", ""),
+    ] {
+        let (td, work) = fixture_copy(&format!("f165-counts-{case}"));
+        edit(&work.join("srs.yaml"), |t| {
+            assert!(t.contains(line), "写しに counts の行が無い");
+            t.replacen(line, to, 1)
+        });
+        let out = td.join("srs.html");
+        let run = folio_face("srs", &work, &out, "--write");
+        let written = fs::read(&out).unwrap_or_default();
+        let _ = fs::remove_dir_all(&td);
+        assert_eq!(code(&run, case), 0, "{case}: {}", stderr(&run));
+        let frozen = fs::read(fixture().join("expected-srs.html")).unwrap();
+        assert_same_bytes(&written, &frozen, &format!("{case}: expected-srs.html"));
+    }
 }
 
 #[test]

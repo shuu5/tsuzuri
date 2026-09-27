@@ -270,8 +270,8 @@ pub fn derive(dir: &Path) -> R<String> {
     let v = X::root(&v_doc, "vocabulary.yaml");
 
     let ctx = context(&s, &c, &r)?;
+    // meta.counts は読まない（表紙と章の数は数えた数・便 165）
     let m = s.f("meta")?;
-    check_counts(&ctx, &m.f("counts")?)?;
     let stamp = face::ceiling_stamp(dir)?;
     // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
     let name = adr::name_of(dir);
@@ -388,23 +388,6 @@ fn context<'a>(s: &X<'a>, c: &X<'a>, r: &X<'a>) -> R<Ctx<'a>> {
         frame: frame(!figures.is_empty()),
         figures,
     })
-}
-
-/// meta の counts（fr・nfr・ac・con）= 数えた数。
-fn check_counts(ctx: &Ctx<'_>, counts: &X<'_>) -> R<()> {
-    for (key, counted) in [
-        ("fr", ctx.fr.len()),
-        ("nfr", ctx.nfr.len()),
-        ("ac", ctx.acs.len()),
-        ("con", ctx.cons.len()),
-    ] {
-        let x = counts.f(key)?;
-        let written = x.count()?;
-        if written != counted as u64 {
-            return Err(format!("{}: {written} だが数えた行は {counted}", x.at));
-        }
-    }
-    Ok(())
 }
 
 fn is_effective(m: &X<'_>) -> R<bool> {
@@ -543,10 +526,13 @@ fn cover(o: &mut Vec<String>, name: Option<&str>, ctx: &Ctx<'_>, m: &X<'_>) -> R
         adr::named(name, " — ", &title)
     ));
     o.push(format!("<h1>{title}</h1>"));
-    o.push(format!(
-        "<div class=\"summary-card\"><span class=\"ic\">要</span><div><p class=\"lab\">この文書が約束すること（1 文）</p><p class=\"txt\">{}</p></div></div>",
-        m.ef("promise")?
-    ));
+    // promise は任意の欄（無い・null なら要約の札を出さない・便 165）
+    if let Some(promise) = m.g("promise")? {
+        o.push(format!(
+            "<div class=\"summary-card\"><span class=\"ic\">要</span><div><p class=\"lab\">この文書が約束すること（1 文）</p><p class=\"txt\">{}</p></div></div>",
+            promise.e()?
+        ));
+    }
     o.push("<div class=\"cover-meta\">".to_string());
     for (k, href, rows) in [
         ("機能要件", "s3", &ctx.fr),
@@ -806,16 +792,18 @@ fn scope_chapter(
     o.push("</div>".to_string());
     figure_close(o, "図 1", m)?;
 
-    o.push("<h3>作るもの / 作らないもの</h3>".to_string());
-    // 段の範囲の節（鍵・名札・必須か）。scope_m3 は任意の節で、無ければ描かない（便 118・便 117 の §1 (h) の 2・ADR-16 決定 (1)）。
-    for (key, label, required) in [
-        ("scope", "M0", true),
-        ("scope_m1", "M1", true),
-        ("scope_m3", "M3", false),
-    ] {
-        let Some(sc) = (if required { Some(s.f(key)?) } else { s.g(key)? }) else {
-            continue;
-        };
+    // 段の範囲の節（鍵・名札）はどれも任意の節で、在る節だけ塊を出す（便 118 の scope_m3・便 165 で scope と scope_m1 も）。
+    // 1 つも無ければ小見出しも出さない。
+    let mut scopes = Vec::new();
+    for (key, label) in [("scope", "M0"), ("scope_m1", "M1"), ("scope_m3", "M3")] {
+        if let Some(sc) = s.g(key)? {
+            scopes.push((key, label, sc));
+        }
+    }
+    if !scopes.is_empty() {
+        o.push("<h3>作るもの / 作らないもの</h3>".to_string());
+    }
+    for (key, label, sc) in scopes {
         let note = if key != "scope"
             && let Some(n) = sc.g("note")?
         {

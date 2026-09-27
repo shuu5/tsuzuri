@@ -128,7 +128,6 @@ meta:
   status: draft
   generated: {DATE}
   promise: 未記入
-  counts: {fr: 0, nfr: 0, ac: 0, con: 0}
   approval: []
 goals: []
 scope: {build: [], not_build: []}

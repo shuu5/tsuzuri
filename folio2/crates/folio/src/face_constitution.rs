@@ -304,10 +304,14 @@ fn chapter_h2(ctx: &Ctx<'_>, i: usize, c: &X<'_>, r: &X<'_>) -> R<String> {
             r.f("thresholds")?.seq()?.len(),
             r.f("discipline")?.seq()?.len()
         ),
-        6 => format!(
-            "変えるときの手続き — {} 段",
-            c.f("amendment")?.f("steps")?.seq()?.len()
-        ),
+        // 字の amendment は段の数を付けない（便 165・帯の h2 と同じ字）
+        6 => match prose(&c.f("amendment")?) {
+            Some(_) => AMEND_H2.to_string(),
+            None => format!(
+                "{AMEND_H2} — {} 段",
+                c.f("amendment")?.f("steps")?.seq()?.len()
+            ),
+        },
         7 => "本文に出てくる専門語のやさしい説明".to_string(),
         _ => "この憲法はどこから来たか".to_string(),
     })
@@ -774,6 +778,14 @@ fn stepper_li(no: &str, s: &Step<'_>) -> String {
     )
 }
 
+/// 章 06 の h2 の字の頭（字の amendment ではこれだけ・表では「 — n 段」を付ける）。
+const AMEND_H2: &str = "変えるときの手続き";
+
+/// amendment が字（scalar）ならその字（便 165）。表・一覧・null は None（表の読みへ・表でなければ まだ分からない）。
+fn prose(am: &X<'_>) -> Option<String> {
+    am.text().ok()
+}
+
 fn amendment_chapter(
     o: &mut Vec<String>,
     ctx: &Ctx<'_>,
@@ -782,93 +794,17 @@ fn amendment_chapter(
     ap: &Approved,
 ) -> R<()> {
     let am = c.f("amendment")?;
-    let step_xs = am.f("steps")?.seq()?;
-    if step_xs.len() > MAX_RAIL_NODES {
-        return Err(format!(
-            "{}: 改訂の段が {} で上限 {MAX_RAIL_NODES}（部品目録の pipeline-rail の max_nodes）を超える",
-            am.at,
-            step_xs.len()
-        ));
-    }
-    let steps = step_xs
-        .iter()
-        .map(|x| step(ctx, x))
-        .collect::<R<Vec<_>>>()?;
-    let effective = step(ctx, &am.f("effective_step")?)?;
-    let count = steps.len();
-
-    let h2 = format!("変えるときの手続き — {count} 段");
-    FRAME.band(o, 6, "改訂", &h2, Some(&am.ef("declaration")?));
-    o.push("<div class=\"chapbody\">".to_string());
-    o.push(format!(
-        "<figure {} data-role=\"diagram\" id=\"fig-amend-flow\">",
-        dc(Component::FigurePanel)
-    ));
-    let legend = "<div class=\"fig-legend\"><span class=\"lg\"><span class=\"sw warn\"></span>持ち主の手番</span><span class=\"lg\"><span class=\"sw neutral\"></span>AI・機械がやる</span><span class=\"lg\"><span class=\"sw line\"></span>番号の順に進む</span></div>";
-    o.push(format!(
-        "<div class=\"fig-title\"><span class=\"fn\">図 1</span>憲法が変わるときに通る道 — {count} 段・誰がやるか <span class=\"fig-tools\">{}<button class=\"zoom-btn\" type=\"button\">拡大</button></span><button class=\"zoom-close\" type=\"button\">✕ 閉じる</button></div>",
-        hint("凡例", legend)
-    ));
-    o.push(format!(
-        "<ol {} style=\"--rail-n:{count}\">",
-        dc(Component::PipelineRail)
-    ));
-    for s in &steps {
-        let nt = match &s.tail {
-            Some(t) => format!("{} {}", s.head, hint_q(t)),
-            None => s.head.clone(),
-        };
-        let reqs = s
-            .arts
-            .iter()
-            .map(|a| {
-                format!(
-                    "<a class=\"fig-req\" href=\"#{}\"><span class=\"no\">{}</span>{}</a>",
-                    anchor(a.id),
-                    a.id,
-                    a.title
-                )
-            })
-            .collect::<String>();
-        let node = format!(
-            "<article {}{} id=\"a-step-{}\"><span class=\"actor\">担当: {}</span><p class=\"nt\">{nt}</p><p class=\"fig-reqs\">{reqs}</p></article>",
-            dc(Component::RailNode),
-            if s.owner { " class=\"tone-warn\"" } else { "" },
-            s.n,
-            s.who
-        );
-        o.push(format!(
-            "<li class=\"rail-col\"><span class=\"rail-step\"><span class=\"no\">{}</span></span>",
-            s.n
-        ));
-        if s.owner {
-            o.push(format!("<div class=\"rail-slot filled\">{node}</div>"));
-            o.push(
-                "<div class=\"rail-slot\"><span class=\"lane-hint\">機械は待つ</span></div></li>"
-                    .to_string(),
-            );
-        } else {
-            o.push(
-                "<div class=\"rail-slot\"><span class=\"lane-hint\">あなたの出番なし</span></div>"
-                    .to_string(),
-            );
-            o.push(format!("<div class=\"rail-slot filled\">{node}</div></li>"));
+    match prose(&am) {
+        // 字なら章の本文に行ごとに逐語（空白だけの行を除く）・図 1 と段の一覧は出さない（便 165）
+        Some(text) => {
+            FRAME.band(o, 6, "改訂", AMEND_H2, None);
+            o.push("<div class=\"chapbody\">".to_string());
+            for line in text.lines().filter(|l| !l.trim().is_empty()) {
+                o.push(format!("<p>{}</p>", esc(line)));
+            }
         }
+        None => amendment_flow(o, ctx, &am, m, ap)?,
     }
-    o.push("</ol>".to_string());
-    o.push(format!(
-        "<figcaption><span class=\"ver\">図 1 · {} {} · constitution.yaml</span></figcaption>",
-        m.ef("version")?,
-        dated_of(m, ap)?.1
-    ));
-    o.push("</figure>".to_string());
-
-    o.push(format!("<ol {}>", dc(Component::Stepper)));
-    o.push(stepper_li("0", &effective));
-    for s in &steps {
-        o.push(stepper_li(&s.n.to_string(), s));
-    }
-    o.push("</ol>".to_string());
 
     // 改訂の例（supersedes_v1 を持つ条・amended_by の項ごと・正本の順）
     for art in &ctx.arts {
@@ -949,6 +885,104 @@ fn amendment_chapter(
         ));
     }
     o.push("</div>".to_string());
+    Ok(())
+}
+
+/// 表の amendment の帯と図 1 と段の一覧（declaration / steps / effective_step・字は便 165 の前と同じ）。
+fn amendment_flow(
+    o: &mut Vec<String>,
+    ctx: &Ctx<'_>,
+    am: &X<'_>,
+    m: &X<'_>,
+    ap: &Approved,
+) -> R<()> {
+    let step_xs = am.f("steps")?.seq()?;
+    if step_xs.len() > MAX_RAIL_NODES {
+        return Err(format!(
+            "{}: 改訂の段が {} で上限 {MAX_RAIL_NODES}（部品目録の pipeline-rail の max_nodes）を超える",
+            am.at,
+            step_xs.len()
+        ));
+    }
+    let steps = step_xs
+        .iter()
+        .map(|x| step(ctx, x))
+        .collect::<R<Vec<_>>>()?;
+    let effective = step(ctx, &am.f("effective_step")?)?;
+    let count = steps.len();
+
+    let h2 = format!("{AMEND_H2} — {count} 段");
+    FRAME.band(o, 6, "改訂", &h2, Some(&am.ef("declaration")?));
+    o.push("<div class=\"chapbody\">".to_string());
+    o.push(format!(
+        "<figure {} data-role=\"diagram\" id=\"fig-amend-flow\">",
+        dc(Component::FigurePanel)
+    ));
+    let legend = "<div class=\"fig-legend\"><span class=\"lg\"><span class=\"sw warn\"></span>持ち主の手番</span><span class=\"lg\"><span class=\"sw neutral\"></span>AI・機械がやる</span><span class=\"lg\"><span class=\"sw line\"></span>番号の順に進む</span></div>";
+    o.push(format!(
+        "<div class=\"fig-title\"><span class=\"fn\">図 1</span>憲法が変わるときに通る道 — {count} 段・誰がやるか <span class=\"fig-tools\">{}<button class=\"zoom-btn\" type=\"button\">拡大</button></span><button class=\"zoom-close\" type=\"button\">✕ 閉じる</button></div>",
+        hint("凡例", legend)
+    ));
+    o.push(format!(
+        "<ol {} style=\"--rail-n:{count}\">",
+        dc(Component::PipelineRail)
+    ));
+    for s in &steps {
+        let nt = match &s.tail {
+            Some(t) => format!("{} {}", s.head, hint_q(t)),
+            None => s.head.clone(),
+        };
+        let reqs = s
+            .arts
+            .iter()
+            .map(|a| {
+                format!(
+                    "<a class=\"fig-req\" href=\"#{}\"><span class=\"no\">{}</span>{}</a>",
+                    anchor(a.id),
+                    a.id,
+                    a.title
+                )
+            })
+            .collect::<String>();
+        let node = format!(
+            "<article {}{} id=\"a-step-{}\"><span class=\"actor\">担当: {}</span><p class=\"nt\">{nt}</p><p class=\"fig-reqs\">{reqs}</p></article>",
+            dc(Component::RailNode),
+            if s.owner { " class=\"tone-warn\"" } else { "" },
+            s.n,
+            s.who
+        );
+        o.push(format!(
+            "<li class=\"rail-col\"><span class=\"rail-step\"><span class=\"no\">{}</span></span>",
+            s.n
+        ));
+        if s.owner {
+            o.push(format!("<div class=\"rail-slot filled\">{node}</div>"));
+            o.push(
+                "<div class=\"rail-slot\"><span class=\"lane-hint\">機械は待つ</span></div></li>"
+                    .to_string(),
+            );
+        } else {
+            o.push(
+                "<div class=\"rail-slot\"><span class=\"lane-hint\">あなたの出番なし</span></div>"
+                    .to_string(),
+            );
+            o.push(format!("<div class=\"rail-slot filled\">{node}</div></li>"));
+        }
+    }
+    o.push("</ol>".to_string());
+    o.push(format!(
+        "<figcaption><span class=\"ver\">図 1 · {} {} · constitution.yaml</span></figcaption>",
+        m.ef("version")?,
+        dated_of(m, ap)?.1
+    ));
+    o.push("</figure>".to_string());
+
+    o.push(format!("<ol {}>", dc(Component::Stepper)));
+    o.push(stepper_li("0", &effective));
+    for s in &steps {
+        o.push(stepper_li(&s.n.to_string(), s));
+    }
+    o.push("</ol>".to_string());
     Ok(())
 }
 

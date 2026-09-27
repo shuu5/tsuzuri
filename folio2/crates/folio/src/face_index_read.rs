@@ -393,24 +393,17 @@ fn constitution_card(c: &X<'_>, rows: &[Amend]) -> R<Readable> {
     })
 }
 
-/// 要件書のカード（機能・非機能・受入基準の数・counts と数えた数の一致）。更新の日付は承認欄の最後の承認の行
+/// 要件書のカード（機能・非機能・受入基準の数えた数・counts は読まない＝便 165）。更新の日付は承認欄の最後の承認の行
 /// （要件書の面の表紙の状態と同じ式・draft か承認の行が無ければ生成日・便 144）。
 fn srs_card(s: &X<'_>) -> R<Readable> {
     let m = s.f("meta")?;
-    let counts = m.f("counts")?;
     let mut parts = Vec::new();
-    for (key, section, name) in [
-        ("fr", "requirements", "機能"),
-        ("nfr", "nonfunctional", "非機能"),
-        ("ac", "acceptance", "受入基準"),
+    for (section, name) in [
+        ("requirements", "機能"),
+        ("nonfunctional", "非機能"),
+        ("acceptance", "受入基準"),
     ] {
-        let counted = s.f(section)?.seq()?.len();
-        let x = counts.f(key)?;
-        let written = x.count()?;
-        if written != counted as u64 {
-            return Err(format!("{}: {written} だが数えた行は {counted}", x.at));
-        }
-        parts.push(format!("{name} {counted}"));
+        parts.push(format!("{name} {}", s.f(section)?.seq()?.len()));
     }
     let standing = face::standing(&m)?;
     // 表紙の日付と同じ口（便 145）・更新 の定めは 1 か所（便 147）

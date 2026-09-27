@@ -5,7 +5,8 @@
 //! - 受入基準の章に英字の欄名の字面が 0 回で、日本語の名札が行の数だけ
 //! - 承認欄の lead が status_note の要旨（最初の「。」まで）だけで、来歴は折りたたみの中に逐語で在る
 //! - 便 118: M3 の範囲の節 scope_m3 は、在れば章 02 の段の範囲の塊を M1 の直後に 1 つ足し（名札 M3・注の小窓も同じ形）、
-//!   無い・null なら面は凍結 fixture と byte 一致する（scope と scope_m1 は必須のまま・docs/design/delivery-118.md §1 (d)）
+//!   無い・null なら面は凍結 fixture と byte 一致する（docs/design/delivery-118.md §1 (d)）
+//! - 便 165: scope と scope_m1 も任意の節で、落とすとその塊だけが面から消える（docs/design/delivery-165.md §1 (c) の 5）
 //! - 便 135: 本文の判断の記録の番号は正本の在る番号だけ adr-n.html へのリンク・範囲の節の番号は図の根拠と同じ行き先へ
 //!   （docs/design/delivery-135.md §1 (c)）
 //!
@@ -556,17 +557,38 @@ fn f118_handwritten_scope_m3_adds_one_escaped_block() {
 }
 
 #[test]
-fn f118_null_scope_m3_is_unchanged_and_scope_m1_stays_required() {
+fn f118_null_scope_m3_is_unchanged() {
     let (run, html, _) = fixture_srs("f118-null", |srs| add_before_actors(&srs, "scope_m3:\n\n"));
     ok(&run);
     assert!(html == frozen_srs(), "scope_m3 が null の面が凍結 fixture と一致しない");
-    for key in ["scope", "scope_m1"] {
-        let (run, _, written) =
-            fixture_srs(&format!("f118-drop-{key}"), |srs| drop_section(&srs, key));
-        let err = String::from_utf8_lossy(&run.stderr);
-        assert_eq!(code(&run, key), 2, "{key} を落とした写しが 2 で終わらない: {err}");
-        assert!(err.contains(&format!("欄 {key} が無い")), "{key}: {err}");
-        assert!(!written, "{key} を落とした写しで面を書いた");
+}
+
+// ── 便 165: scope と scope_m1 も任意の節（docs/design/delivery-165.md §1 (c) の 5）──
+
+#[test]
+fn f165_a_missing_scope_or_scope_m1_drops_only_its_block() {
+    let frozen = frozen_srs();
+    let blocks = callouts(&frozen);
+    assert_eq!(blocks.len(), 2, "凍結 fixture の章 02 の段の範囲の塊が 2 つでない");
+    for (i, (key, label)) in [("scope", "M0"), ("scope_m1", "M1")].into_iter().enumerate() {
+        assert!(
+            blocks[i].contains(&format!("<div class=\"cid\">{label} で作る</div>")),
+            "凍結 fixture の {i} 番目の塊の名札が {label} でない"
+        );
+        let (run, html, written) =
+            fixture_srs(&format!("f165-drop-{key}"), |srs| drop_section(&srs, key));
+        ok(&run);
+        assert!(written, "{key} を落とした写しで面を書かない");
+        let b = callouts(&html);
+        assert_eq!(b.len(), 1, "{key} を落とした面の章 02 の塊が 1 つでない");
+        assert!(
+            !b[0].contains(&format!("<div class=\"cid\">{label} で作る</div>")),
+            "{key} を落とした面に {label} の塊が在る"
+        );
+        assert!(
+            html == frozen.replacen(blocks[i], "", 1),
+            "{key} を落とした面が凍結 fixture から {label} の塊を除いた字と一致しない"
+        );
     }
 }
 
