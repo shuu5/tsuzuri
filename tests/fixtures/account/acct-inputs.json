@@ -1,0 +1,67 @@
+{
+  "texts": {
+    "host_toml": "# 群の宣言（架空の口座と project）\n[defaults]\nmodel = \"opus\"\n\n[[account]]\nlabel = \"acct-1\"\nplan = \"max\"\n\n[[account]]\nlabel = \"acct-2\"  # 注釈\n\n[[account]]\nlabel = \"acct-3\"\n\n[[account]]\nlabel = \"acct-4\"\n\n[[account-group]]\nname = \"main\"\nanchors = [\"/work/proj-a\", \"/work/proj-c\"]\naccounts = [\"acct-1\", \"acct-2\", \"acct-4\"]\n\n[[account-group]]\nname = \"aux\"\nanchors = [\n  \"/work/proj-b\",  # 注釈\n]\naccounts = [\"acct-2\", \"acct-3\"]\n\n[seat]\nname = \"not-a-group\"\n",
+    "usage": "usage: account=acct-1 five_hour=83% resets=2026-09-27T15:00:00Z seven_day=40% resets=2026-10-01T00:00:00Z model=opus:12% resets=none\nusage: account=acct-2 five_hour=5% resets=none seven_day=300% resets=none model=sonnet:0% resets=none\nusage: account=acct-3 unmeasured reason=no-token\n",
+    "doctor": "doctor: state dir ok\ngroup=main accounts=acct-1,acct-2,acct-4 anchors=2 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\ngroup=aux accounts=acct-2,acct-3 anchors=1 seat-accounts=acct-1 current=acct-2 next=none refused=acct-3:retired\naccount=acct-1 dir=/work/accounts/acct-1 retired=no\naccount=acct-2 dir=/work/accounts/acct-2 retired=no\naccount=acct-3 dir=/work/accounts/acct-3 retired=yes\naccount=acct-4 dir=/work/accounts/acct-4 retired=no\nseat: role=orchestrator anchor=/work/proj-a target=proj-a:0.1 account=acct-1 model=opus heartbeat=on tick=ok\n",
+    "seat_doctors": {
+      "/work/proj-a": "doctor: state dir ok\nseat: role=pipeline anchor=/work/proj-a target=proj-a:1.1 account=acct-2 model=opus heartbeat=on tick=ok\nseat: role=orchestrator anchor=/work/proj-z target=proj-z:0.1 account=acct-4 model=opus heartbeat=on tick=ok\nseat: role=orchestrator anchor=/work/proj-a target=proj-a:0.1 account=acct-1 model=opus heartbeat=on tick=ok\n",
+      "/work/proj-b": "doctor: state dir ok\nseat: role=orchestrator anchor=/work/proj-b/ target=proj-b:0.1 account=acct-1 model=sonnet heartbeat=off tick=ok\n"
+    },
+    "records": {
+      "main.account": "account=acct-1\nts=2026-09-27T12:00:00Z\nreason=account-pressed\nprevious=acct-2\n",
+      "main.request.20260927T115900Z.1": "account=acct-4\nts=2026-09-27T11:59:00Z\nreason=manual\nprevious=acct-1\n",
+      "old.account": "account=acct-3\nts=2026-09-27T13:00:00Z\nreason=manual\nprevious=acct-2\n"
+    },
+    "history": {
+      "main.account.20260927T100000Z.1": "account=acct-2\nts=2026-09-27T10:00:00Z\nreason=account-pressed\nprevious=acct-1\n",
+      "main.account.20260926T080000Z.1": "account=acct-1\nts=2026-09-26T08:00:00Z\nreason=initial\n",
+      "aux.account.20260927T100000Z.1": "account=acct-2\nts=2026-09-27T10:00:00Z\nreason=manual\nprevious=\n",
+      "aux.account.20260925T000000Z.1": "account=acct-3\nreason=broken\nprevious=acct-2\n",
+      "aux.refused.20260927T110000Z.1": "account=acct-3\nts=2026-09-27T11:00:00Z\nreason=retired\nprevious=acct-2\n",
+      "probe.account.20260927T090000Z.1": "account=acct-4\nts=2026-09-27T09:00:00Z\nreason=probe\nprevious=acct-1\n"
+    }
+  },
+  "accounts": {"known": [
+    {"label": "acct-1", "retired": false, "occupant": "main", "model": "opus", "usage": {"known": [
+      {"window": "five_hour", "used_pct": 83, "resets_at": 1790521200, "counted": true},
+      {"window": "seven_day", "used_pct": 40, "resets_at": 1790812800, "counted": true},
+      {"window": "seven_day_model", "used_pct": 12, "resets_at": null, "counted": true}
+    ]}},
+    {"label": "acct-2", "retired": false, "occupant": "aux", "model": "sonnet", "usage": {"known": [
+      {"window": "five_hour", "used_pct": 5, "resets_at": null, "counted": true},
+      {"window": "seven_day", "used_pct": 255, "resets_at": null, "counted": true},
+      {"window": "seven_day_model", "used_pct": 0, "resets_at": null, "counted": true}
+    ]}},
+    {"label": "acct-3", "retired": true, "occupant": null, "model": null, "usage": "unknown"},
+    {"label": "acct-4", "retired": false, "occupant": null, "model": null, "usage": "unknown"}
+  ]},
+  "groups": {"known": [
+    {
+      "row": {"group": "main", "account": "acct-1", "candidates": ["acct-1", "acct-2", "acct-4"], "next_account": "acct-2", "remaining": []},
+      "since": 1790510400,
+      "previous": "acct-2",
+      "recorded": true,
+      "members": [
+        {"project": "proj-a", "seat_account": "acct-1", "matches": {"known": true}},
+        {"project": "proj-c", "seat_account": null, "matches": "unknown"}
+      ],
+      "refused": null
+    },
+    {
+      "row": {"group": "aux", "account": "acct-2", "candidates": ["acct-2", "acct-3"], "next_account": null, "remaining": []},
+      "since": null,
+      "previous": null,
+      "recorded": false,
+      "members": [
+        {"project": "proj-b", "seat_account": "acct-1", "matches": {"known": false}}
+      ],
+      "refused": "acct-3:retired"
+    }
+  ]},
+  "moves": {"known": [
+    {"at": 1790510400, "group": "main", "from": "acct-2", "to": "acct-1"},
+    {"at": 1790503200, "group": "main", "from": "acct-1", "to": "acct-2"},
+    {"at": 1790503200, "group": "aux", "from": null, "to": "acct-2"},
+    {"at": 1790409600, "group": "main", "from": null, "to": "acct-1"}
+  ]}
+}
