@@ -785,6 +785,9 @@ fn check_rules(root: &Node, report: &mut Report) {
         }
     }
     duplicate_ids(FILE, all, report);
+    for v in rules::key_violations(root) {
+        report.violation("schema", format!("{FILE}: {v}"));
+    }
 }
 
 /// 規則の表の行の refs（便 91 §1 (c)）。各項は id の形で、その行自身の id でも article の値でもない（article の条以外）。

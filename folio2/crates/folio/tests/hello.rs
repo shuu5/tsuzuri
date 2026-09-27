@@ -138,7 +138,7 @@ fn copy_tree(src: &Path, dst: &Path) {
 }
 
 /// 凍結した土台の索引の数（便 94 の凍結 anchor の数え）を持つ 1 行。
-const BASE_LINE: &str = "folio: 設計文書 189 節点・576 辺。全体像は folio graph --digest";
+const BASE_LINE: &str = "folio: 設計文書 190 節点・578 辺。全体像は folio graph --digest";
 
 #[test]
 fn f96_hello_with_sources_names_the_counts() {

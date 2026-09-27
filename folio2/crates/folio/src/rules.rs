@@ -47,15 +47,82 @@ pub const THRESHOLD_REQUIRED: [&str; 9] = [
 /// 実在は refs.rs と link.rs の網が数える（重ねない）。
 pub const ROW_REFS: &str = "refs";
 
+/// 行の欄 key の字（便 179）。行の id は置き場ごとに意味が違うので、道具は値を読む閾値の行を id でなくこの欄で引く。
+/// 値は `KEYS` の閉じた一覧の 1 つで、同じ値の閾値の行は置き場に 1 本まで（床は `key_violations`）。
+pub const ROW_KEY: &str = "key";
+
 /// 閾値の行が持ってよい欄。
-pub const THRESHOLD_OPTIONAL: [&str; 6] = [
+pub const THRESHOLD_OPTIONAL: [&str; 7] = [
     "basis",
     "projection",
     "same_failure",
     "population",
     "note",
     ROW_REFS,
+    ROW_KEY,
 ];
+
+/// 設計ノートの面の章の上限の行の印（欄 key の値・面の生成器 `face_note.rs` と床 `note.rs` が `chapter_cap` で読む）。
+pub const NOTE_CHAPTERS: &str = "note-chapters";
+
+/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179）。
+pub const KEYS: [&str; 1] = [NOTE_CHAPTERS];
+
+/// 章の上限の値の形「<正の整数> 章 以下」の数の後ろの字。
+const CHAPTER_TAIL: &str = " 章 以下";
+
+/// 置き場の規則の表の閾値の行のうち、欄 key が `key` の 1 本（便 179）。無い・2 本以上は Err（呼び手は まだ分からない にする）。
+pub fn keyed<'a>(rules: &'a Node, key: &str) -> Result<&'a Node, String> {
+    let rows: Vec<&Node> = rules
+        .get(RULES_TOP_LEVEL[1])
+        .and_then(Node::as_seq)
+        .unwrap_or_default()
+        .iter()
+        .filter(|r| r.get(ROW_KEY).and_then(Node::as_str) == Some(key))
+        .collect();
+    match rows[..] {
+        [row] => Ok(row),
+        [] => Err(format!("欄 {ROW_KEY} が {key} の閾値の行が無い")),
+        _ => Err(format!("欄 {ROW_KEY} が {key} の閾値の行が {} 本ある", rows.len())),
+    }
+}
+
+/// 設計ノートの章の上限（欄 key が note-chapters の閾値の行の value「<正の整数> 章 以下」の数・便 179）。
+/// 面の生成器と床が同じ関数で読む。行が無い・2 本以上・値の形が違うは Err（道具は既定の値を持たない・P-4.2）。
+pub fn chapter_cap(rules: &Node) -> Result<usize, String> {
+    let row = keyed(rules, NOTE_CHAPTERS)?;
+    let value = row.get("value").and_then(Node::as_str).unwrap_or_default();
+    value
+        .strip_suffix(CHAPTER_TAIL)
+        .filter(|n| !n.starts_with('0') && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| {
+            let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
+            format!("行 {id} の value「{value}」が「<正の整数>{CHAPTER_TAIL}」の形でない")
+        })
+}
+
+/// 欄 key の床（便 179）: 値が `KEYS` に無い行と、同じ値を持つ 2 本目以降の閾値の行の字（種別 schema の違反・`check.rs` が出す）。
+pub fn key_violations(rules: &Node) -> Vec<String> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out = Vec::new();
+    let rows = rules.get(RULES_TOP_LEVEL[1]).and_then(Node::as_seq).unwrap_or_default();
+    for row in rows {
+        let Some(v) = row.get(ROW_KEY) else { continue };
+        let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
+        match v.as_str() {
+            Some(k) if KEYS.contains(&k) && seen.contains(&k) => {
+                out.push(format!("行 {id} の {ROW_KEY}「{k}」を持つ閾値の行が 2 本以上ある"));
+            }
+            Some(k) if KEYS.contains(&k) => seen.push(k),
+            _ => out.push(format!(
+                "行 {id} の {ROW_KEY}「{}」が閉じた一覧 {KEYS:?} に無い",
+                v.as_str().unwrap_or("?")
+            )),
+        }
+    }
+    out
+}
 
 /// 作法の行（D-n）が必ず持つ欄。
 pub const DISCIPLINE_REQUIRED: [&str; 7] = [
@@ -161,7 +228,7 @@ const KIND_DETECT_MAPS_TO: [&str; 1] = [MechanismKind::None.name()];
 /// 凍結から外したもの（測る仕組みが別）。
 const EXCLUDED_WHAT: [&str; 2] = ["時間（「60 分以内」）", "費用（「300k token 以下」）"];
 
-/// 床の定数の木（値は実の rules.yaml の schema 節の字面と 1 字も違わない・足したのは `_note` の 3 欄だけ）。
+/// 床の定数の木（値は実の rules.yaml の schema 節の字面と 1 字も違わない・足したのは `_note` で終わる欄だけ）。
 /// `_note` で終わる欄は人が読む説明の注で、`folio schema` の導出だけが使う。
 pub(crate) const FLOOR: Floor = Floor::Map(&[
     ("version", Floor::Num(1)),
@@ -198,11 +265,18 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ("kind", Floor::Strs(&RuleKind::NAMES)),
             ("status", Floor::Strs(&RuleStatus::NAMES)),
             ("stage", Floor::Strs(&Stage::NAMES)),
+            ("key", Floor::Strs(&KEYS)),
         ]),
     ),
     (
         "enums_note",
         Floor::Val("stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）"),
+    ),
+    (
+        "key_note",
+        Floor::Val(
+            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。口の読む行が無いか 2 本以上在るか、値の形が違えば、その口の判定は まだ分からない",
+        ),
     ),
     (
         "kind_meaning",
@@ -297,6 +371,42 @@ mod tests {
         };
         assert_eq!(*top, ["schema", "thresholds", "discipline"]);
         assert_eq!(RULES_TOP_LEVEL, ["schema", "thresholds", "discipline"]);
+    }
+
+    /// 便 179 (c)5: 章の上限は欄 key が note-chapters の閾値の行の value「<正の整数> 章 以下」だけを読み、行の id に依らない。
+    /// 行が無い（欄 key の無い行・開発規律の行に在る）・2 本・値の形が違う は Err（既定の値に倒れない）。
+    #[test]
+    fn f179_chapter_cap_reads_the_keyed_row_and_only_the_positive_integer_form() {
+        let doc = |rows: &str| crate::yaml::parse(&format!("thresholds:\n{rows}discipline: []\n")).unwrap().root;
+        let row = |id: &str, v: &str| format!("  - {{id: {id}, value: \"{v}\", key: note-chapters}}\n");
+        assert_eq!(chapter_cap(&doc(&row("R-19", "12 章 以下"))), Ok(12));
+        assert_eq!(chapter_cap(&doc(&row("R-26", "40 章 以下"))), Ok(40));
+        for bad in ["12章以下", "12 章", "12 章 以上", "0 章 以下", "012 章 以下", "１２ 章 以下", "-1 章 以下", " 章 以下", "99999999999999999999999 章 以下"] {
+            let e = chapter_cap(&doc(&row("R-19", bad))).unwrap_err();
+            assert!(e.contains("R-19") && e.contains("の形でない"), "{bad}: {e}");
+        }
+        let none = chapter_cap(&doc("  - {id: R-19, value: \"12 章 以下\"}\n")).unwrap_err();
+        assert!(none.contains("note-chapters の閾値の行が無い"), "{none}");
+        let two = chapter_cap(&doc(&format!("{}{}", row("R-19", "12 章 以下"), row("R-26", "40 章 以下"))));
+        assert!(two.unwrap_err().contains("2 本ある"));
+        let discipline = "thresholds: []\ndiscipline:\n  - {id: D-1, value: \"12 章 以下\", key: note-chapters}\n";
+        let e = chapter_cap(&crate::yaml::parse(discipline).unwrap().root).unwrap_err();
+        assert!(e.contains("行が無い"), "{e}");
+    }
+
+    /// 便 179 (c)5: 欄 key の床は、閉じた一覧に無い値と、同じ値を持つ 2 本目の閾値の行を字にし、1 本だけなら何も出さない。
+    #[test]
+    fn f179_key_is_a_closed_list_and_one_threshold_row_per_key() {
+        let v = |rows: &str| key_violations(&crate::yaml::parse(&format!("thresholds:\n{rows}")).unwrap().root);
+        assert!(v("  - {id: R-19, key: note-chapters}\n  - {id: R-1}\n").is_empty());
+        let typo = v("  - {id: R-19, key: note-chapter}\n");
+        assert_eq!(typo.len(), 1, "{typo:?}");
+        assert!(typo[0].contains("行 R-19 の key「note-chapter」が閉じた一覧"), "{typo:?}");
+        let listed = v("  - {id: R-19, key: [note-chapters]}\n");
+        assert_eq!(listed.len(), 1, "{listed:?}");
+        let two = v("  - {id: R-19, key: note-chapters}\n  - {id: R-26, key: note-chapters}\n");
+        assert_eq!(two, ["行 R-26 の key「note-chapters」を持つ閾値の行が 2 本以上ある"]);
+        assert_eq!(KEYS, ["note-chapters"]);
     }
 
     /// 種別と憲法の機構の対応の右辺は憲法の値域 mechanism_kind の名（1 か所から出る）。

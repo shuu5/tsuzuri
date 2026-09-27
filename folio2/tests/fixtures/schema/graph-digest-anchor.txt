@@ -1,7 +1,7 @@
 # 種類ごとの節点（1 行 = 種類 / 数・タブ区切り・閉じた一覧の順）
 条	27
 規範文	66
-規則行	26
+規則行	27
 目的	4
 要件	19
 非機能要件	3
@@ -14,10 +14,10 @@
 in-article	132	0
 relations.articles	33	0
 relations.reqs	25	0
-relations.rules	47	0
+relations.rules	48	0
 relations.sections	0	5
 amended_by	0	0
-article	26	0
+article	27	0
 refs	0	0
 basis	232	0
 goals	27	0
@@ -40,7 +40,7 @@ adr/ADR-7.yaml	1
 adr/ADR-8.yaml	1
 adr/ADR-9.yaml	1
 constitution.yaml	93
-rules.yaml	26
+rules.yaml	27
 srs.yaml	60
-# 節点 189・辺 576・型 10・端が節点でない参照 26
+# 節点 190・辺 578・型 10・端が節点でない参照 26
 # 索引そのもの（節点と辺の全行）は folio graph --print

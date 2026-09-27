@@ -21,7 +21,9 @@ use crate::face::{self, Frame, anchor, hint};
 use crate::face_index_read;
 use crate::floor_note::EXTERNAL_PATH;
 use crate::note;
+use crate::rules;
 use crate::shelf::{STATUS, is_doc_id};
+use crate::yaml;
 
 /// 設計ノートの面が使う部品（8 種・判断の記録の面の section-lead-callout の代わりに figure-panel・便 40 で ceiling-stamp を足した）。
 pub const PARTS: [Component; 8] = [
@@ -35,27 +37,9 @@ pub const PARTS: [Component; 8] = [
     Component::ItemRow,
 ];
 
-/// 章の帯の class と kicker の絵記号。class は band-1〜6 を 2 回・絵記号は要件書の面の 6 つを同じ順で回す。
-/// 章の数だけ先頭から切り出して `Frame` に渡す（`static` なので切り出しは 'static）。
-static BANDS: [(&str, &str); 12] = [
-    (
-        "band-1",
-        "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
-    ),
-    (
-        "band-2",
-        "<path d=\"M3 7l9-4 9 4-9 4-9-4z\"/><path d=\"M3 7v10l9 4 9-4V7\"/>",
-    ),
-    ("band-3", "<path d=\"M20 6L9 17l-5-5\"/>"),
-    ("band-4", "<path d=\"M4 18h16M6 14V8M12 14V4M18 14v-4\"/>"),
-    (
-        "band-5",
-        "<path d=\"M9 11l3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>",
-    ),
-    (
-        "band-6",
-        "<path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/>",
-    ),
+/// 章の帯の class と kicker の絵記号（要件書の面の 6 つと同じ順）。章の数だけ先頭から順に回して `Frame` に渡す
+/// （7 章目からは同じ組を繰り返す・章の上限は規則の表の欄 key が note-chapters の行の値で、表の長さではない・便 179）。
+static BANDS: [(&str, &str); 6] = [
     (
         "band-1",
         "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
@@ -75,9 +59,6 @@ static BANDS: [(&str, &str); 12] = [
         "<path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/>",
     ),
 ];
-
-/// 章の上限（帯の表の長さ・承認欄は数えない）。
-const MAX_CHAPTERS: usize = 12;
 
 /// 判断の記録の面の FRAME の favicon の字面。
 const FAVICON: &str = "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235f45a6'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E要%3C/text%3E%3C/svg%3E\">";
@@ -244,11 +225,15 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         Some(x) => x.seq()?,
         None => Vec::new(),
     };
-    let chapters = secs.len() + usize::from(!figs.is_empty());
-    if chapters > MAX_CHAPTERS {
-        return Err(format!(
-            "{name}: 章が {chapters} 本ある＝章が多すぎる（上限 {MAX_CHAPTERS}）"
-        ));
+    // 章の上限は規則の表の欄 key が note-chapters の閾値の行から、床と同じ関数で読んで数える（便 179）
+    let r_node = fs::read_to_string(dir.join("rules.yaml"))
+        .map_err(|e| format!("rules.yaml: 読めない: {e}"))
+        .and_then(|t| yaml::parse(&t))?;
+    let cap = rules::chapter_cap(&r_node.root)
+        .map_err(|e| format!("rules.yaml: 設計ノートの章の上限が読めない: {e}"))?;
+    let chapters = note::chapters(secs.len(), figs.len());
+    if let Some(m) = note::over_cap(&name, chapters, cap) {
+        return Err(m);
     }
     let fields = if secs.iter().any(|s| s.key == CONTRACT_TABLE) {
         load_external(dir)?
@@ -281,7 +266,8 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         // 読める面の nav にこの面は無い（どの nav にも aria-current を付けない）
         current: 3,
         first: 1,
-        bands: &BANDS[..chapters],
+        // 7 章目からは帯の組を繰り返す（Frame の bands は 'static なので 1 面に 1 本だけ leak する・source と同じ）
+        bands: Box::leak((0..chapters).map(|i| BANDS[i % BANDS.len()]).collect()),
         prev,
         next,
         parts: &PARTS,

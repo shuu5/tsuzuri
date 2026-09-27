@@ -906,6 +906,93 @@ fn face_note_unknown_when_there_are_too_many_chapters() {
     );
 }
 
+// ── 章の上限は置き場の規則の表の欄 key の行から読む（便 179・docs/design/delivery-179.md §1 (c)）──
+
+/// 写しの rules.yaml と full.yaml に変異を当てて `--write` を撃ち、結果と面の本文を返す（面が出来ていなければ本文は空）。
+fn with_rules(
+    case: &str,
+    rules: impl FnOnce(&str) -> String,
+    note: impl FnOnce(&str) -> String,
+) -> (Output, String) {
+    let (td, work) = fixture_copy(case);
+    edit(&work.join("rules.yaml"), rules);
+    edit(&work.join("design-note/full.yaml"), note);
+    let out = td.join("note-full.html");
+    let run = folio_face("note", Some("full"), &work, &out, "--write");
+    let html = fs::read_to_string(&out).unwrap_or_default();
+    let _ = fs::remove_dir_all(&td);
+    (run, html)
+}
+
+/// full.yaml（節 6・図 1）に節 7〜`last` を足す（章 = last + 図の章 1）。
+fn more_sections(last: usize) -> impl FnOnce(&str) -> String {
+    move |t: &str| {
+        let extra: String = (7..=last)
+            .map(|n| format!("  - {{n: {n}, type: prose, title: 追加 {n}, body: 追加の節。}}\n"))
+            .collect();
+        t.replacen("\nfigures:\n", &format!("{extra}\nfigures:\n"), 1)
+    }
+}
+
+#[test]
+fn f179_face_reads_the_cap_from_the_keyed_row_whatever_its_id() {
+    // 章 14（節 13 + 図の章）: 行の値 12 では 2 で、行の id を R-26 に・値を 14 章 以下にすると導出でき、7 章目から帯の組を繰り返す
+    let (run, html) = with_rules("f179-cap-12", |t| t.to_string() + "\n", more_sections(13));
+    assert_eq!(code(&run, "folio face"), 2, "{}", stderr(&run));
+    assert!(stderr(&run).contains("design-note/full.yaml: 章が 14 本ある＝章が多すぎる（上限 12）"), "{}", stderr(&run));
+    assert!(html.is_empty(), "上限を超えたのに面を書いた");
+    let (run, html) = with_rules(
+        "f179-cap-14",
+        |t| t.replacen("  - id: R-2\n", "  - id: R-26\n", 1).replacen("\"12 章 以下\"", "\"14 章 以下\"", 1),
+        more_sections(13),
+    );
+    assert_eq!(code(&run, "folio face"), 0, "{}", stderr(&run));
+    for (n, band) in [(1, "band-1"), (6, "band-6"), (7, "band-1"), (12, "band-6"), (13, "band-1"), (14, "band-2")] {
+        assert!(html.contains(&format!("<section id=\"s{n}\" ")), "章 {n} が無い");
+        let at = html.find(&format!("<section id=\"s{n}\" ")).unwrap();
+        let head = &html[at..at + html[at..].find('>').unwrap()];
+        assert!(head.contains(&format!("class=\"{band}\"")), "章 {n} の帯が {band} でない: {head}");
+    }
+    // 章の帯の crumb の分母は帯の章 14 + 承認欄 1
+    assert!(html.contains(" 14/15</span>"), "章の数 14 が面に出ていない");
+    assert!(!html.contains("<section id=\"s15\" "), "章 15 が在る");
+}
+
+/// 行だけを崩した写し（章 7 の今の fixture のまま）で `--write` が 2・まだ分からない・`wording` を出し、面を書かない。
+fn unknown_cap(case: &str, rules: impl FnOnce(&str) -> String, wording: &str) {
+    let (run, html) = with_rules(case, rules, |t| t.to_string() + "\n");
+    assert_eq!(code(&run, "folio face"), 2, "{case}: {}", stderr(&run));
+    assert!(stderr(&run).contains("まだ分からない"), "{case}: {}", stderr(&run));
+    assert!(stderr(&run).contains("設計ノートの章の上限が読めない"), "{case}: {}", stderr(&run));
+    assert!(stderr(&run).contains(wording), "{case}: 「{wording}」が無い: {}", stderr(&run));
+    assert!(html.is_empty(), "{case}: 導出できないのに面を書いた");
+}
+
+#[test]
+fn f179_face_is_unknown_when_the_keyed_row_is_missing_doubled_or_malformed() {
+    // どれも既定の値に倒れない（道具は章の上限の値を持たない）
+    unknown_cap(
+        "f179-missing",
+        |t| t.replacen("    key: note-chapters\n", "", 1),
+        "note-chapters の閾値の行が無い",
+    );
+    unknown_cap(
+        "f179-doubled",
+        |t| t.replacen("\ndiscipline:", "  - {id: R-3, value: \"40 章 以下\", key: note-chapters}\n\ndiscipline:", 1),
+        "2 本ある",
+    );
+    unknown_cap(
+        "f179-malformed",
+        |t| t.replacen("\"12 章 以下\"", "\"12章以下\"", 1),
+        "行 R-2 の value「12章以下」が「<正の整数> 章 以下」の形でない",
+    );
+    unknown_cap(
+        "f179-zero",
+        |t| t.replacen("\"12 章 以下\"", "\"0 章 以下\"", 1),
+        "の形でない",
+    );
+}
+
 // ── mode ──
 
 #[test]

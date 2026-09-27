@@ -144,7 +144,7 @@ articles:
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 全面の class と data-component を部品目録の値域と突合し目録外 0（R-3）、token 由来 100%、床が掛からないページ 0（NFR2・AC2）、図の型は R-5 の一覧内。day-1 は見本の検品道具（check-v4 / probe-v4）で動く。}
     retreat: {kind: spike, condition: 単一生成器で v1 要件書相当の密度が出せない（spike 5）なら再検討する。}
     supersedes_v1: {doc: folio v1 憲章, article: "P-2: format は HTML + common.css のみ", ruling: "裁定 #4", rationale: 見た目が割れた原因は形式（HTML か Markdown か）ではなく、所有者が 2 つあったこと。}
-    relations: {reqs: [FR4, NFR2, AC2], rules: [R-3, R-5]}
+    relations: {reqs: [FR4, NFR2, AC2], rules: [R-3, R-5, R-19]}
 
   - id: P-3
     title: 検査は二層 — 機械の床と AI の天井

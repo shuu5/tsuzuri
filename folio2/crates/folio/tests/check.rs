@@ -1464,3 +1464,27 @@ fn f136_bare_copy_passes() {
     assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
     assert!(!stdout(&out).contains(F136_KIND), "{}", stdout(&out));
 }
+
+// ── 行の欄 key（便 179・docs/design/delivery-179.md §1 (c)）──
+
+#[test]
+fn f179_rules_key_outside_the_closed_list_or_doubled_is_a_schema_violation() {
+    let typo = Work::new("f179-key-typo");
+    typo.mutate_rules("key: note-chapters, ", "key: note-chapter, ");
+    let v = violations(&typo.check());
+    assert!(
+        v.iter().any(|l| l.starts_with("[schema] rules.yaml: 行 R-19 の key「note-chapter」が閉じた一覧")),
+        "{v:?}"
+    );
+    let two = Work::new("f179-key-two");
+    two.mutate_rules("{id: R-2, article: P-14, ", "{id: R-2, article: P-14, key: note-chapters, ");
+    let v = violations(&two.check());
+    assert!(
+        v.iter().any(|l| l.contains("rules.yaml: 行 R-19 の key「note-chapters」を持つ閾値の行が 2 本以上ある")),
+        "{v:?}"
+    );
+    let discipline = Work::new("f179-key-discipline");
+    discipline.mutate_rules("{id: D-1, article: ", "{id: D-1, key: note-chapters, article: ");
+    let v = violations(&discipline.check());
+    assert!(v.iter().any(|l| l.contains("行 D-1") && l.contains("key")), "{v:?}");
+}

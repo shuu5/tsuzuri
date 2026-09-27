@@ -31,6 +31,7 @@ use crate::gitcheck;
 use crate::link;
 use crate::prose;
 use crate::refs;
+use crate::rules;
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
 
@@ -95,6 +96,10 @@ pub fn check_note(
     let gate = prose::gate(rules)
         .inspect_err(|e| report.unknown(format!("rules.yaml: R-16 の value が読めない: {e}")))
         .ok();
+    // 章の上限は検査のたびに規則の表の欄 key が note-chapters の閾値の行から読む（面の生成器と同じ関数・便 179）
+    let cap = rules::chapter_cap(rules)
+        .inspect_err(|e| report.unknown(format!("rules.yaml: 設計ノートの章の上限が読めない: {e}")))
+        .ok();
     let known = base_known_ids(constitution, rules, srs, adr);
     let requirements = requirement_ids(srs);
     let note_ids: HashSet<&str> = notes.iter().map(|n| n.id.as_str()).collect();
@@ -108,7 +113,22 @@ pub fn check_note(
             gate.as_ref(),
             report,
         );
+        let len = |k| note.root.get(k).and_then(Node::as_seq).map_or(0, <[Node]>::len);
+        let file = format!("{DIR}/{}", note.file);
+        if let Some(m) = cap.and_then(|c| over_cap(&file, chapters(len("sections"), len("figures")), c)) {
+            report.violation(KIND, m);
+        }
     }
+}
+
+/// 設計ノートの章の数（節の数に、図が 1 枚でも在れば図の章 1 を足す・承認欄は数えない）。面の生成器と床が同じ関数で数える（便 179）。
+pub(crate) fn chapters(sections: usize, figures: usize) -> usize {
+    sections + usize::from(figures > 0)
+}
+
+/// 章の数が上限を超えるときの字（面の生成器と床が同じ字を出す・便 179）。
+pub(crate) fn over_cap(file: &str, chapters: usize, cap: usize) -> Option<String> {
+    (chapters > cap).then(|| format!("{file}: 章が {chapters} 本ある＝章が多すぎる（上限 {cap}）"))
 }
 
 // ── (b) 欄の決まりの写し ──
@@ -937,5 +957,20 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(crate::floor::derive(&FLOOR), anchor);
+    }
+
+    /// 便 179 (c)6: 章の数は節の数に図の章 1 を足し（図の枚数に依らない・承認欄は数えない）、上限を超えたときだけ面と床が同じ字を返す。
+    #[test]
+    fn f179_chapters_add_one_figure_chapter_and_over_cap_names_the_counts() {
+        assert_eq!(chapters(24, 0), 24);
+        assert_eq!(chapters(5, 3), 6);
+        assert_eq!(chapters(0, 1), 1);
+        assert_eq!(chapters(0, 0), 0);
+        assert_eq!(over_cap("design-note/x.yaml", 12, 12), None);
+        assert_eq!(over_cap("design-note/x.yaml", 34, 40), None);
+        assert_eq!(
+            over_cap("design-note/x.yaml", 13, 12).as_deref(),
+            Some("design-note/x.yaml: 章が 13 本ある＝章が多すぎる（上限 12）")
+        );
     }
 }

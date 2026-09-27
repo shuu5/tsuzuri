@@ -172,6 +172,7 @@ R-13	7df47069
 R-14	360a93a9
 R-15	217bf6bf
 R-16	e226a0c0
+R-19	755fee68
 R-2	70f1bbfc
 R-3	c194e00e
 R-4	f5400fc8
@@ -189,4 +190,4 @@ scribe2	98133617
 three-faces	111536ed
 verdict	f2d63709
 # 残差 sha256 58dcfb7cb69b3dfa676e5180fde8a160a27ac6bddd763e7d2bec4cbbf23d312a
-# 節点 189・本文の byte 243360・辺の欄の byte 4812・残差の byte 141464・合計 389636
+# 節点 190・本文の byte 243666・辺の欄の byte 4832・残差の byte 141464・合計 389962

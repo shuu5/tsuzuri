@@ -77,10 +77,10 @@ const CEILING_REGION_SHA256: &str =
     "1cc1401cc474f16b272e02cfa434e4fb5b00aead4b803b1d0adcb2fe9e4f5386";
 
 /// 便 53 (b) 凍結 anchor: rules.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/rules-region.txt と同じ byte）。
-const RULES_REGION_LINES: usize = 30;
-const RULES_REGION_BYTES: usize = 2263;
+const RULES_REGION_LINES: usize = 32;
+const RULES_REGION_BYTES: usize = 2699;
 const RULES_REGION_SHA256: &str =
-    "e3feaf2e4b8ff2108e487ad0a0d145e6b710abebe72e79f1e16e9727134433f1";
+    "ac6a1c72957946f15ddfca9fb3c5022f970917e55a285e3b05637843bb0007f9";
 
 /// 便 76 (b) 凍結 anchor: index.yaml の生成区間（設計判断の席が独立に組んだ・tests/fixtures/schema/index-region.txt と同じ byte）。
 const INDEX_REGION_LINES: usize = 9;

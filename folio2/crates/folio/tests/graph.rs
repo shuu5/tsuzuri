@@ -232,10 +232,10 @@ fn f94_the_frozen_base_index_matches_the_anchor() {
     let text = printed(&repo_root().join("tests/fixtures/floor_base/design-intent"));
     let parts = split(&text);
     let counts = anchor.lines().nth(1).expect("anchor の 2 行目が無い");
-    assert_eq!(counts, "# 節点 189・辺 576・型 10・端が節点でない参照 26");
+    assert_eq!(counts, "# 節点 190・辺 578・型 10・端が節点でない参照 26");
     assert_eq!(parts.summary, counts, "要約の 1 行");
-    assert_eq!(text.lines().count(), 768, "出力の行数");
-    assert_eq!(text.len(), 31_277, "出力の byte 数（便 99 で要約値の欄を足した）");
+    assert_eq!(text.lines().count(), 771, "出力の行数");
+    assert_eq!(text.len(), 31_451, "出力の byte 数（便 99 で要約値の欄を足した）");
     for (name, bytes) in [
         ("節点の表", joined(&parts.nodes)),
         ("辺の表", joined(&parts.edges)),
@@ -483,7 +483,8 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
 /// 便 172: 土台の判断の記録の欄の決まりに封の欄 seal の 1 行が入り（82 byte 増）、残差の 2 行だけが動いた値。
 /// 便 173: 土台の判断の記録の欄の決まりから改訂の欄 revises の 3 か所が外れ（119 byte 減）、残差の 2 行だけが動いた値。
 /// 便 175: 土台の天井の正本の生成区間から trigger と trigger_note の 17 行が外れ、残差の 2 行だけが動いた値。
-const F99_ANCHOR_SHA256: &str = "13d3b25d8cba6b6652fb93f8a3993b5c33816890b1107469f05bdc7b8228e045";
+/// 便 179: 土台の規則の表に章の上限の行 R-19（欄 key）が入り、節点 R-19 の 1 行と節点の数の行だけが動いた値。
+const F99_ANCHOR_SHA256: &str = "904ac4d2e5316e6b81a0d4ddf9917076979863c3994dbf278bd375565e2e1e7e";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。
@@ -517,8 +518,8 @@ fn digest_column(text: &str) -> BTreeMap<String, String> {
 #[test]
 fn f99_the_independent_script_matches_the_anchor() {
     let anchor = fs::read(repo_root().join(F99_ANCHOR)).expect("凍結 anchor を読めない");
-    assert_eq!(anchor.iter().filter(|b| **b == b'\n').count(), 192, "anchor の行数");
-    assert_eq!(anchor.len(), 3_007, "anchor の byte 数");
+    assert_eq!(anchor.iter().filter(|b| **b == b'\n').count(), 193, "anchor の行数");
+    assert_eq!(anchor.len(), 3_021, "anchor の byte 数");
     let hex = sha256_hex(&anchor).unwrap_or_else(|e| panic!("anchor の要約値を測れない: {e}"));
     assert_eq!(hex, F99_ANCHOR_SHA256, "sha256sum で測った anchor の要約値");
     if let Some(out) = independent(&repo_root().join(FLOOR_BASE)) {
@@ -532,7 +533,7 @@ fn f99_the_index_carries_the_digest_column() {
     let text = printed(&repo_root().join(FLOOR_BASE));
     let parts = split(&text);
     assert_eq!(Some(parts.summary), anchor.lines().nth(1), "要約の 1 行");
-    assert_eq!((text.lines().count(), text.len()), (768, 31_277), "出力の行数と byte 数");
+    assert_eq!((text.lines().count(), text.len()), (771, 31_451), "出力の行数と byte 数");
     for line in &parts.nodes {
         let digest = line.split('\t').nth(3).unwrap_or_default();
         assert!(
@@ -540,10 +541,11 @@ fn f99_the_index_carries_the_digest_column() {
             "4 列目が 16 進の小文字 8 字でない: {line}"
         );
     }
-    assert_eq!(digest_column(&text).len(), 189, "節点の数");
+    assert_eq!(digest_column(&text).len(), 190, "節点の数");
     let edges = sha256_hex(&joined(&parts.edges)).unwrap();
     assert_eq!(edges, anchor_hex(&anchor, "辺の表"), "辺の表の要約値");
-    assert!(edges.starts_with("a09c3f55"), "辺の表の要約値が便 94 の値から動いた: {edges}");
+    // 便 179 で土台に辺 2 本（P-2 → R-19 の relations.rules・R-19 → P-2 の article）が入った値（便 99 は辺の表を動かさなかった）
+    assert!(edges.starts_with("4c16023a"), "辺の表の要約値が便 179 の値から動いた: {edges}");
     let nodes = sha256_hex(&joined(&parts.nodes)).unwrap();
     assert_eq!(nodes, anchor_hex(&anchor, "節点の表"), "節点の表の要約値");
     let whole = sha256_hex(text.as_bytes()).unwrap();
@@ -561,7 +563,7 @@ fn f99_the_digest_column_is_the_independent_value() {
             (id.to_string(), hex.to_string())
         })
         .collect();
-    assert_eq!(want.len(), 189, "anchor の節点の数");
+    assert_eq!(want.len(), 190, "anchor の節点の数");
     let got = digest_column(&printed(&repo_root().join(FLOOR_BASE)));
     assert_eq!(got, want, "索引の 4 列目が独立の実装の値と違う");
 }
@@ -583,7 +585,7 @@ fn f99_an_edge_only_change_moves_no_digest() {
     );
     work.replace("adr/ADR-1.yaml", "basis: [P-8, ", "basis: [P-1, P-8, ");
     let after = digest_column(&printed(&work.dir()));
-    assert_eq!(after.len(), 189, "節点の数");
+    assert_eq!(after.len(), 190, "節点の数");
     assert_eq!(before, after, "辺の欄だけの変更で要約値が動いた");
 }
 

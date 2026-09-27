@@ -109,7 +109,7 @@ const N31_HEAD: &str = "{id: N-3.1, ";
 const SCHEMA_META_OPTIONAL: &str = "    optional: [changes_from_v0_1, changes_from_v0_2]\n";
 /// 規則の表の生成区間の threshold_row.optional の行。
 const THRESHOLD_ROW_OPTIONAL: &str =
-    "    optional: [basis, projection, same_failure, population, note, refs]\n";
+    "    optional: [basis, projection, same_failure, population, note, refs, key]\n";
 
 /// design-intent の写しの一時 dir（歯の終わりに消す）。器（scribe2）の導出 file は写しの根の contracts/ に置く。
 struct Work {

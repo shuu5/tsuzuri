@@ -1,5 +1,5 @@
 # 便 94 の凍結 anchor（便 99 で節点の行に要約値の欄を足して作り直した）— tests/fixtures/floor_base/design-intent から組んだ索引（席が独立の script で組み sha256sum で測った・2026-09-22）
-# 節点 189・辺 576・型 10・端が節点でない参照 26
-節点の表 sha256 = 79d4c248118598ffba90aa1db87fd6bc23bbb59bb12314786683c2481c61a8d2
-辺の表 sha256 = a09c3f558bcd16a6be1999eba9cbdedf1df116020ea5437eeae6ef5d86f4945c
-出力全体 sha256 = 939fe249003aecb49e5f646f9527913bfd4d6f3023e7c231265b71e5fc66fa88（768 行・31,277 byte）
+# 節点 190・辺 578・型 10・端が節点でない参照 26
+節点の表 sha256 = be4ddcd8beae78b018128c1c376a01d9dd761608f362a0200a6a035913f99dd2
+辺の表 sha256 = 4c16023a354eb997506558139352724000c2d9c4dcc47e4041d0cdd6efb06d29
+出力全体 sha256 = 986fb5ff0595a460af9ca2abada91e0d71a4d8468f465d96fef0df7aacc48b8a（771 行・31,451 byte）
