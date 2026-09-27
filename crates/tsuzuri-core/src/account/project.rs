@@ -39,6 +39,9 @@ pub const RUN_STAGE_EVENTS: [&str; 5] = [
     "QuestionRaised",
 ];
 
+/// 器が run を上限で止めた段の名（器の RunStage の段 RateLimited・器の印の写しで tsuzuri は判じない）。
+pub const RATE_LIMITED: &str = "RateLimited";
+
 /// 止まりの列に入る段の名。
 const STOP_STAGES: [&str; 3] = ["Questioned", "Failed", "Stopped"];
 
@@ -421,7 +424,8 @@ pub fn project_rows(
 
 /// session の行の列（project の宣言の順に、その project の orchestrator の行と、生きていて終わっていない
 /// pipeline の run の行を RunCreated の順に）。席の card が「まだ分からない」の project は席なしの行にする。
-/// pipeline の行の状態は、段が Questioned・Failed・Stopped なら wait、席が立っていれば run、ほかは wait。
+/// pipeline の行の状態は、段を決める最後の event が器の上限の印（RunStage の段 `RATE_LIMITED`）なら limit、
+/// 段が Questioned・Failed・Stopped なら wait、席が立っていれば run、ほかは wait。
 pub fn session_lines(
     host: &HostTexts,
     projects: &BTreeMap<String, ProjectTexts>,
@@ -474,6 +478,9 @@ pub fn session_lines(
                     )
                 })
                 .map(|(s, _)| s);
+            let limited = last.is_some_and(|e| {
+                text(e, "kind") == Some("RunStage") && text(e, "stage") == Some(RATE_LIMITED)
+            });
             let stalled = stage
                 .is_some_and(|s| matches!(s, Stage::Questioned | Stage::Failed | Stage::Stopped));
             out.push(SessionLine {
@@ -481,7 +488,9 @@ pub fn session_lines(
                 role: SeatRole::Pipeline,
                 name: run.id.to_string(),
                 account: run.account(),
-                state: if !stalled && run.seated() {
+                state: if limited {
+                    SeatState::Limit
+                } else if !stalled && run.seated() {
                     SeatState::Run
                 } else {
                     SeatState::Wait
