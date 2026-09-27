@@ -31,6 +31,7 @@
 
 pub mod batch;
 pub mod board;
+pub mod clock;
 pub mod coalesce;
 pub mod design;
 pub mod events;
@@ -38,6 +39,7 @@ pub mod files;
 pub mod http;
 pub mod ledger;
 pub mod policy;
+pub mod proc;
 pub mod ruling;
 pub mod runs;
 pub mod seat;

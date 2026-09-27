@@ -5,21 +5,19 @@
 //! .beads の issues.jsonl は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
 //! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 
-use std::ffi::{OsStr, OsString};
-use std::io::Read;
-use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::ffi::OsString;
+use std::path::PathBuf;
+use std::time::Duration;
 
-use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BdLine, BeadId, LedgerItem, LedgerList};
 use tsuzuri_contract::wire;
 
 use super::coalesce::{Coalesce, GRACE};
+
+/// 子 process を撃つ部品と時刻の読みは `proc` と `clock` に在り、今までの名のまま再公開する（行 hb-proc）。
+pub use super::clock::epoch_secs;
+pub use super::proc::{KILL, capture, stop_with};
 
 /// 既定の program の名（引数 --bd で替える）。
 pub const BD: &str = "bd";
@@ -32,9 +30,6 @@ pub const BD_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// 走っている読みに合流した呼び出しが待つ上限（`BD_TIMEOUT` に 1 秒を足す・便 e-coalesce）。
 pub const BD_WAIT: Duration = BD_TIMEOUT.saturating_add(GRACE);
-
-/// 子 process の終わりを確かめる間隔。
-const WAIT_STEP: Duration = Duration::from_millis(5);
 
 /// 台帳の読みの出所（repo の置き場と bd の program）。
 /// clone は読みの合流の場を分け合う（比べるのは repo と bd だけ）。
@@ -85,78 +80,6 @@ impl Source {
         let out = capture(&self.bd, BD_ARGS, &self.repo, BD_TIMEOUT)?;
         String::from_utf8(out).ok()
     }
-}
-
-/// 子の process group の全体へ KILL の signal を送る道具の名（便 e-reap）。
-pub const KILL: &str = "kill";
-
-/// 子 process を 1 本撃ち、rc 0 で `timeout` の内に返した標準出力を返す（それ以外は None）。
-/// cwd は `cwd`・標準入力は空・標準エラーは捨てる。
-/// 子は新しい process group に入れ（group の id は子の pid）、止めるときは孫まで group ごと止める（便 e-reap）。
-pub fn capture<I, S>(program: &OsStr, args: I, cwd: &Path, timeout: Duration) -> Option<Vec<u8>>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-{
-    let deadline = Instant::now() + timeout;
-    let mut child = Command::new(program)
-        .args(args)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
-        .ok()?;
-    let Some(mut stdout) = child.stdout.take() else {
-        stop(child);
-        return None;
-    };
-    // 標準出力は別の thread で読み切る（pipe が詰まって子が止まらないように）。
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let mut out = Vec::new();
-        let _ = tx.send(stdout.read_to_end(&mut out).map(|_| out));
-    });
-    let Ok(Ok(out)) = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) else {
-        stop(child);
-        return None;
-    };
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() < deadline => thread::sleep(WAIT_STEP),
-            _ => {
-                stop(child);
-                return None;
-            }
-        }
-    };
-    status.success().then_some(out)
-}
-
-/// 子 process を group ごと止めて片付ける。
-fn stop(child: Child) {
-    stop_with(child, OsStr::new(KILL));
-}
-
-/// 子の process group（id は子の pid）の全体へ道具 `kill` で KILL の signal を送り、子を待って片付ける。
-/// group へ送れたら true。道具が撃てないか失敗したら子だけを止めて false。
-/// 孫は待たない（親が居ないので OS の側が片付ける）。
-pub fn stop_with(mut child: Child, kill: &OsStr) -> bool {
-    let group = format!("-{}", child.id());
-    let sent = Command::new(kill)
-        .args(["-KILL", "--", &group])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success());
-    if !sent {
-        let _ = child.kill();
-    }
-    let _ = child.wait();
-    sent
 }
 
 /// bd の出力（bead の JSON の配列）を読む（server の読みの経路はこれだけ）。
@@ -225,80 +148,6 @@ pub fn item(source: &Source, id: &BeadId) -> Lookup {
             .map_or(Lookup::Missing, Lookup::Found),
         Reading::Unknown => Lookup::Unknown,
     }
-}
-
-/// RFC 3339 の時刻（`YYYY-MM-DDTHH:MM:SS[.frac](Z|±HH:MM)`）を UTC の epoch 秒にする。
-/// 形が違う・日付が無い・1970 年より前なら None。
-pub fn epoch_secs(s: &str) -> Option<EpochSecs> {
-    let num = |from: usize, to: usize| -> Option<i64> {
-        let t = s.get(from..to)?;
-        t.bytes()
-            .all(|b| b.is_ascii_digit())
-            .then(|| t.parse().ok())?
-    };
-    let b = s.as_bytes();
-    let seps = [(4, b'-'), (7, b'-'), (13, b':'), (16, b':')];
-    if b.len() < 20 || seps.iter().any(|&(i, c)| b[i] != c) || !matches!(b[10], b'T' | b't' | b' ')
-    {
-        return None;
-    }
-    let (year, month, day) = (num(0, 4)?, num(5, 7)?, num(8, 10)?);
-    let (hour, min, sec) = (num(11, 13)?, num(14, 16)?, num(17, 19)?);
-    if !(1..=12).contains(&month)
-        || day < 1
-        || day > days_in_month(year, month)
-        || hour > 23
-        || min > 59
-        || sec > 60
-    {
-        return None;
-    }
-    let mut rest = s.get(19..)?;
-    if let Some(frac) = rest.strip_prefix('.') {
-        let digits = frac.bytes().take_while(u8::is_ascii_digit).count();
-        if digits == 0 {
-            return None;
-        }
-        rest = &frac[digits..];
-    }
-    let offset = match rest.as_bytes() {
-        [b'Z' | b'z'] => 0,
-        [sign @ (b'+' | b'-'), _, _, b':', _, _] => {
-            let (oh, om) = (num(s.len() - 5, s.len() - 3)?, num(s.len() - 2, s.len())?);
-            if oh > 23 || om > 59 {
-                return None;
-            }
-            let o = oh * 3600 + om * 60;
-            if *sign == b'-' { -o } else { o }
-        }
-        _ => return None,
-    };
-    let total = days_from_civil(year, month, day) * 86_400 + hour * 3600 + min * 60 + sec - offset;
-    EpochSecs::try_from(total).ok()
-}
-
-fn is_leap(y: i64) -> bool {
-    y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
-}
-
-fn days_in_month(y: i64, m: i64) -> i64 {
-    match m {
-        2 if is_leap(y) => 29,
-        2 => 28,
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    }
-}
-
-/// 1970-01-01 からの日数（先発グレゴリオ暦）。
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
 }
 
 #[cfg(test)]
