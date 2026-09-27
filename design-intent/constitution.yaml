@@ -1,4 +1,4 @@
-# tsuzuri 憲法 — 正本（改名前の仮の名は scribe3・ADR-6）（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）
+# tsuzuri 憲法 — 正本（改名前の仮の名は scribe3・ADR-6）（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）。第 1.1 版（2026-09-27）は条 P-16 の改訂（判断の記録 ADR-12・反対側からの検証 docs/grill/2026-09-27-J-p16-amend-grill.md）
 "schema":
   "version": 1
   "top_level":
@@ -154,7 +154,7 @@
 
 meta:
   id: tsuzuri-constitution
-  version: v1.0
+  version: v1.1
   status: effective
   binding: true
   baseline: 未記入
@@ -376,18 +376,23 @@ articles:
       - {kind: folio2-ruling, ref: folio2 P15（枝 1〜2）}
     mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 編集時の guard と事後の検査が同じ判定関数を共有する型。}
   - id: P-16
-    title: 設計判断を下す席は、その時点で最上位のモデルで動かす
+    title: 席のモデルは名指しで決め、込み入った設計判断には相談の窓を使える
+    amended_by:
+      - {adr: ADR-12, date: 2026-09-27, approved_by: 持ち主, ruling: t3-hub.1（裁定 id = user 2026-09-27T07:04Z が字の承認・user 2026-09-27T07:14Z が 3 本目の規範文の型と強さの承認・notes に逐語）, previous_text: 設計判断を下す席は、その時点で最上位のモデルで動かす, rationale: 持ち主が orchestrator を軽い model で動かし、相談の窓の model を選ぶ運用に改めたので、見出しを新しい規範文に合わせた。}
+      - {adr: ADR-12, date: 2026-09-27, approved_by: 持ち主, ruling: t3-hub.1（裁定 id = user 2026-09-27T07:04Z が字の承認・user 2026-09-27T07:14Z が 3 本目の規範文の型と強さの承認・notes に逐語）, previous_text: 設計判断を下す席は、その時点で最上位の AI モデルで動かす。, rationale: 全部の orchestrator を最上位の model で動かすと重すぎた。席ごとの model と念入りさを要件書の制約 CON6 で名指す形に改めた。}
+      - {adr: ADR-12, date: 2026-09-27, approved_by: 持ち主, ruling: t3-hub.1（裁定 id = user 2026-09-27T07:04Z が字の承認・user 2026-09-27T07:14Z が 3 本目の規範文の型と強さの承認・notes に逐語）, previous_text: （新設）, rationale: P-16.3 の新設。込み入った設計判断に、持ち主が選んだ model の相談の窓の所見を材料として使えるようにした（判断の記録 ADR-10）。}
     tier: always
     binds: practice
     statements:
-      - {id: P-16.1, pattern: ubiquitous, strength: must, text: 設計判断を下す席は、その時点で最上位の AI モデルで動かす。}
+      - {id: P-16.1, pattern: ubiquitous, strength: must, text: 席ごとの AI モデルと念入りさは、要件書の制約で名指す。}
       - {id: P-16.2, pattern: ubiquitous, strength: must-not, text: 道具（並列実行・便・作業者）の内側には最上位のモデルを求めない。}
-    plain: 設計を決める席には、そのとき一番賢い AI を使います。作業を並べて回す中身の AI には、それを求めません。
+      - {id: P-16.3, pattern: optional, strength: must, text: 込み入った設計判断では、持ち主が選んだモデルで動く相談の窓の所見を材料にできる。}
+    plain: どの席にどの AI を使い、どれだけ念入りに考えさせるかは、要件書に名前で書きます。既定と選び方を書けば、名前で書いたことになります。込み入った設計の判断では、あなたが選んだ AI の相談の窓の結論を材料にできます。作業を並べて回す中身の AI には、一番賢い AI を求めません。席の AI を軽いものへ下げるときは、理由を判断の記録に残します。
     rationale:
       - {kind: folio2-ruling, ref: folio2 P16（枝 1〜2）}
-    mechanism: {kind: human-review, live: now, note: 席の起動の設定と行 D-1 の作法。}
+    mechanism: {kind: human-review, live: now, note: 要件書の制約 CON6 と、席の起動の設定と、相談の窓の所見の model の欄を照らす。行 D-1 の作法。}
     relations: {rules: [D-1]}
-    retreat: {kind: ruling, condition: 「最上位」の判定が割れて運用が止まるなら、要件書の制約で名指しする形へ退避する。}
+    retreat: {kind: measure, condition: 判断の記録 ADR-12 の撤退条件（発効の後の最初の 10 本のうち、相談の窓の所見を受けて改められたものが 3 本以上）に当たったら、込み入った設計判断は必ず所見を経る形へ改めるかを持ち主に問う。}
   - id: P-17
     title: 数値の表を変えるときは、裁定 id を行に付ける
     tier: always

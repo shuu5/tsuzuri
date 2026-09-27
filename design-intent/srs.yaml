@@ -1,9 +1,9 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
-# 第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
+# 第 0.5 版（2026-09-27）: 条 P-16 の改訂（判断の記録 ADR-12）の発効に合わせ、制約 CON6 に相談の窓の念入りさと「席の model を下げる変更は判断の記録を要する」を足し、要件 FR19 の根拠に条 P-16 を足した。第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
 meta:
   id: srs
   title: 要件書
-  version: v0.4
+  version: v0.5
   status: draft
   generated: 2026-09-27
   approval: []
@@ -289,7 +289,7 @@ requirements:
     when: 相談の窓が所見を出したとき
     shall: 所見を出す口は欄（結論・候補と採否・推奨・根拠の id・主張ごとの確かさ・持ち主に問うべき事・触る節点・使った model・読んだ束の要約値）を検め、欠けていれば受けない。受けた所見は置き場に書き、orchestrator へは所見の id を指す固定の 1 行だけを器の口で送る。orchestrator は所見ごとに処分を宣言し、処分の無い所見は未反映の一覧に載る。相談の窓は repo と台帳を直に書かない。
     plain: 相談の結論は決まった形の file に書き、元の窓へは「結論が届いた」の 1 行だけを送ります。元の窓は結論を採るか採らないかを必ず記録します。
-    basis: [P-7, P-12, P-19, N-2]
+    basis: [P-7, P-12, P-16, P-19, N-2]
     verify: {method: test, how: 欄の欠けた所見が断られ、揃った所見で置き場の file と台帳の 1 行と器の口の argv が出ることを見る, ac: [AC16]}
     goals: [GOAL1, GOAL2]
     figures: []
@@ -374,7 +374,7 @@ constraints:
   - {id: CON2, title: folio2 の出口, text: folio の実装が tsuzuri へ移る前に、置き場で床が合格・契約表の導出物が着地して差分 0・器がその導出物を読んで便を通す、の 3 つを記帳する。, basis: [P-1], source: folio2 の判断の記録 21・判断の記録 ADR-4}
   - {id: CON3, title: 面は器の file を書かない, text: 面と server が書くのは台帳（bdw 経由）と器の event だけで、state dir の file と repo の file を書く経路を持たない。, basis: [N-2, P-14], source: 判断の記録 ADR-7 決定 (7)}
   - {id: CON4, title: mock は見本, text: tsuzuri-site の mock は仕様の見本であり本番ではない。本番の面は Rust の wasm（判断の記録 ADR-3）で作る。, basis: [P-6], source: 判断の記録 ADR-7 決定 (13)}
-  - {id: CON6, title: 席のモデル, text: orchestrator の席は Opus 5.5・念入りさ xhigh で動かす。相談の窓 consult の既定は Fable で、持ち主が相談ごとに選ぶ。条 P-16 の改訂（判断の記録 ADR-12）が発効するまで、t3 の orchestrator は最上位の model のままで動かす。, basis: [P-16], source: 持ち主の裁定 2026-09-27（t3-hub.1）・判断の記録 ADR-10, adrs: [ADR-10, ADR-12]}
+  - {id: CON6, title: 席のモデル, text: orchestrator の席は Opus 5.5・念入りさ xhigh で動かす。相談の窓 consult は既定が Fable・念入りさ xhigh で、model と念入りさを持ち主が相談ごとに選ぶ。席の model を下げる変更は判断の記録を要する。, basis: [P-16], source: 持ち主の裁定 2026-09-27（t3-hub.1）・判断の記録 ADR-10 と ADR-12, adrs: [ADR-10, ADR-12]}
   - {id: CON5, title: 見せる先, text: 見せる先の制限は条 N-6 が持つ（ここには写さない）。, basis: [N-6], source: 憲法 N-6}
 
 sources:
