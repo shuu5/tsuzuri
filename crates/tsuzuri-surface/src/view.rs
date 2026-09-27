@@ -14,6 +14,7 @@ use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 
 use crate::frame::BRAND;
+use crate::vocab::label;
 
 /// 問いの bead の種類。
 pub const QUESTION_KIND: &str = "question";
@@ -86,6 +87,29 @@ pub fn brand(name: Option<&str>) -> &str {
 /// 頁の題（題の字・空白・長い横棒・空白・board の語）。
 pub fn board_title(name: Option<&str>) -> String {
     format!("{} \u{2014} {BOARD_WORDS}", brand(name))
+}
+
+/// 頁の題の語の字の数の上限（見本の ui.js の cut の 24・行 g-title）。
+pub const SUBJECT_CHARS: usize = 24;
+
+/// 頁の見出しの語に替える字（節点の頁の節点の題・行 g-title）。None なら見出しの語。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PageSubject(pub Option<String>);
+
+/// 頁ごとの題（題の字・空白・長い横棒・空白・語・行 g-title）。語は subject が在って空白だけでなければ
+/// subject、ほかは見出しの語の鍵の語で、SUBJECT_CHARS の字を超えれば先頭の 1 字少ない字と「…」にする。
+pub fn doc_title(name: Option<&str>, heading: &str, subject: Option<&str>) -> String {
+    let word = match subject {
+        Some(s) if !s.trim().is_empty() => s.to_string(),
+        _ => label(heading),
+    };
+    let word = if word.chars().count() > SUBJECT_CHARS {
+        let head: String = word.chars().take(SUBJECT_CHARS - 1).collect();
+        format!("{head}\u{2026}")
+    } else {
+        word
+    };
+    format!("{} \u{2014} {word}", brand(name))
 }
 
 /// 1 つの epic とその下の bead（epic の外の bead は `epic` が None の組に入る）。

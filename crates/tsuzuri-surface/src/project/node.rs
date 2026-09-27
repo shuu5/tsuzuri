@@ -7,6 +7,7 @@ use tsuzuri_contract::graph::{AroundDoc, AroundRow, NodeKind, title36};
 use crate::frame::{Block, Mode};
 use crate::mapview::band::{Band, band_of, kind_key};
 use crate::mapview::{encode, is_open};
+use crate::project::nodearound::PageState;
 
 pub const BLOCK: Block = Block {
     id: "node",
@@ -106,6 +107,18 @@ pub fn answer_href(id: &str, mode: Mode) -> String {
     format!("?page=ask&id={}&mode={}", encode(id), mode.key())
 }
 
+/// 頁の題の語に替える字（行 g-title）: 電文なら中心の行の題（空白だけ・中心の行が無ければ None）、
+/// 見つからないなら None、まだ読んでいない・読めないなら前の値（読み直しの間も題を保つ）。
+pub fn kept_subject(before: Option<String>, state: &PageState) -> Option<String> {
+    match state {
+        PageState::Doc(doc) => center(doc)
+            .map(|row| row.node.title.clone())
+            .filter(|t| !t.trim().is_empty()),
+        PageState::NotFound => None,
+        PageState::NotRead | PageState::Unread(_) => before,
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;
 
@@ -114,10 +127,11 @@ pub use dom::view;
 mod dom {
     use leptos::prelude::*;
 
-    use super::{BLOCK, Head, answer_href, center, head, summary};
+    use super::{BLOCK, Head, PageState, answer_href, center, head, kept_subject, summary};
     use crate::mapview::band_chip;
-    use crate::project::nodearound::{PageState, id_of, mode_of, source, state, unmeasured_reason};
+    use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
     use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, state_icon, unmeasured};
+    use crate::view::PageSubject;
     use crate::vocab::label;
     use crate::widgets::help::{h1, h2};
 
@@ -132,6 +146,16 @@ mod dom {
         let Some(read) = src.read else {
             return not_found(id);
         };
+        // 頁の題の語に節点の題を置く（context に PageSubject が無ければ置かない・行 g-title）。
+        if let Some(subject) = use_context::<RwSignal<PageSubject>>() {
+            Effect::new(move |_| {
+                let st = read.with(|(f, s)| state(f, *s));
+                let next = subject.with_untracked(|PageSubject(s)| kept_subject(s.clone(), &st));
+                if subject.with_untracked(|PageSubject(s)| *s != next) {
+                    subject.set(PageSubject(next));
+                }
+            });
+        }
         let mode = mode_of(search);
         let content = move || {
             let st = read.with(|(f, s)| state(f, *s));

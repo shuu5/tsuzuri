@@ -1,6 +1,7 @@
 //! header の題を project の名にする面の歯（接頭辞 brand_・設計ノート surface-wave3b 行 g-brand の完了の条件）。
 //! 名の進め方と題の字は view の純粋な関数を host で撃つ。board.rs と index.html と自分の file の字は
 //! CARGO_MANIFEST_DIR から読む（題の span の中身と set_title の呼びは wasm の target のときだけ組む）。
+//! 行 g-title の後は board.rs の頁の題を doc_title で置く（board_title は index.html の題の字として残る）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -132,7 +133,7 @@ fn brand_top_reads_name_and_sets_title() {
         "net::read(PROJECT_PATH)",
         "kept_name(",
         "set_title(",
-        "board_title(",
+        "doc_title(",
     ] {
         assert!(text.contains(word), "board.rs に {word} が無い");
     }

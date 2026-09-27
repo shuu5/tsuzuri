@@ -6,6 +6,7 @@
 //! 問いの頁の右の列（便 g-batch）は batch と policy の 2 つの block。
 //! header の先頭の「戻る」（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
 //! nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）は頁の定義の icon の字（行 hs-pages）。
+//! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題（行 g-title）。
 
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
@@ -15,7 +16,7 @@ use crate::account::windows::ACCOUNT_WIN;
 use crate::frame::{self, BACK, BACK_WRAP, BackStep, Block, HEADER, Mode, PageId};
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
-use crate::view::{Screen, board_title, brand, clock, clock_short, kept_name};
+use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, qmark, term};
 use crate::widgets::hover::{CardLayer, HoverCtx};
@@ -74,6 +75,8 @@ fn App() -> impl IntoView {
     });
     // 台帳の block は画面の状態を context から受ける（行 hs-blocks）。
     provide_context(screen);
+    // 頁の題の語に替える字（節点の頁の block が節点の題を置く・行 g-title）。
+    provide_context(RwSignal::new(PageSubject::default()));
     view! {
         {top(page, mode, screen)}
         <main class="page">{page_view(page)}</main>
@@ -122,7 +125,11 @@ fn back_to_board() {
 
 /// project の名の口を読み、読みの結果が変わるたびに名を進め、名が変わるたびに頁の題を置く（行 g-brand）。
 /// 一度読めた名は読めない間も持ち続け、読めるまでは None（題の字は frame の BRAND）。
-fn project_name() -> RwSignal<Option<String>> {
+/// 題の語は頁の見出しの語で、context の PageSubject が在ればその字（行 g-title）。
+fn project_name(page: PageId) -> RwSignal<Option<String>> {
+    let subject = use_context::<RwSignal<PageSubject>>()
+        .unwrap_or_else(|| RwSignal::new(PageSubject::default()));
+    let heading = page.def().heading;
     let fetched = net::read(PROJECT_PATH);
     let name = RwSignal::new(None);
     Effect::new(move |_| {
@@ -133,7 +140,9 @@ fn project_name() -> RwSignal<Option<String>> {
         }
     });
     Effect::new(move |_| {
-        let title = name.with(|n| board_title(n.as_deref()));
+        let title = name.with(|n| {
+            subject.with(|PageSubject(s)| doc_title(n.as_deref(), heading, s.as_deref()))
+        });
         document().set_title(&title);
     });
     name
@@ -141,7 +150,7 @@ fn project_name() -> RwSignal<Option<String>> {
 
 /// 上端の帯: 戻る・題・頁の link・最終更新・mode の切り替え（frame の BACK と HEADER の順）。
 fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl IntoView {
-    let name = project_name();
+    let name = project_name(page);
     let back = view! {
         <span class=BACK_WRAP>
             <button type="button" class=BACK.class aria-label=label(BACK.key) on:click=move |_| back_to_board()>
