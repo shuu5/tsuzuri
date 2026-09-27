@@ -1,11 +1,13 @@
 //! project board の block（便 g-frame）: 1 つの block（と地図の頁）に 1 つの module。
 //! 各 module は枠の値（`BLOCK`）と中身の純粋な関数を持ち、DOM は wasm の target のときだけ組み立てる。
 //! 中身を持つのは ask（問いの一覧）・ledger（台帳の一覧）・legend（凡例）の 3 つ。
-//! data の口がまだ無い next・pipeline・seat・map は測れていないの印と理由の 1 行を出す（後の便が module ごとに足す）。
+//! 各 block は自分の読みの口の path を module の定数に持ち、通信（net）の同じ関数で読む（便 g-parts）。
+//! 中身の関数は読みの結果（3 値）を受けて中身を返す純粋な関数。next・pipeline・seat・map と ledger の指標の段は、
+//! 3 値のどれを受けても測れていないの印と理由の 1 行を返す（本文を読んで中身を返すのは後の block の便）。
 
 use tsuzuri_contract::ledger::LedgerRow;
 
-use crate::view::{self, QUESTION_KIND};
+use crate::view::{self, Fetched, QUESTION_KIND};
 
 pub mod ask;
 pub mod ledger;
@@ -84,15 +86,31 @@ pub fn item(row: &LedgerRow) -> Item {
 pub const LEDGER_UNREAD: &str =
     "台帳の一覧の口が読めない（届かない・知らせが切れた）ので今の一覧が正しいと言えない";
 
+/// 口をまだ読んでいないときの理由（頁を開いた直後）。
+pub const NOT_READ: &str = "この block の口をまだ読んでいない";
+
+/// 口の本文を読めたが、中身を組む関数がまだ無いときの理由（後の block の便が足す）。
+pub const NO_CONTENT: &str = "この block の中身はまだ無い";
+
+/// 中身の関数がまだ無い block の中身: 3 値のどれを受けても測れていない（理由は 3 値ごとに違う）。
+/// `unread` は口が読めないときの理由。
+pub fn pending(fetched: &Fetched, unread: &'static str) -> Body<()> {
+    Body::Unmeasured(match fetched {
+        Fetched::NotRead => NOT_READ,
+        Fetched::Body(_) => NO_CONTENT,
+        Fetched::Failed => unread,
+    })
+}
+
 #[cfg(target_arch = "wasm32")]
-pub use dom::{item_view, section, state_icon, unmeasured};
+pub use dom::{body_view, item_view, section, state_icon, unmeasured};
 
 /// block に共通の DOM の部品（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
     use leptos::prelude::*;
 
-    use super::{ALERT_STYLE, Item, UNKNOWN, state_class, state_key};
+    use super::{ALERT_STYLE, Body, Item, UNKNOWN, state_class, state_key};
     use crate::frame::Block;
     use crate::vocab::label;
     use crate::widgets::help::h2;
@@ -132,6 +150,15 @@ mod dom {
             </div>
         }
         .into_any()
+    }
+
+    /// 中身の無い block の中身（測れていない・0 件の 1 行・中身ありは何も出さない）。
+    pub fn body_view(body: Body<()>) -> AnyView {
+        match body {
+            Body::Unmeasured(reason) => unmeasured(reason),
+            Body::Empty(line) => view! { <div class="empty"><span>{line}</span></div> }.into_any(),
+            Body::Filled(()) => ().into_any(),
+        }
     }
 
     /// 一覧の 1 項（`lead` は印の代わりに置く番号など・None なら印）。

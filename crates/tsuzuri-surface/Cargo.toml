@@ -10,10 +10,34 @@ publish.workspace = true
 tsuzuri-contract = { path = "../tsuzuri-contract" }
 
 # DOM と通信（board と net）は wasm の target のときだけ組み立てる（便 g-min・Leptos の csr）。
+# web-sys の feature は後の block の便が manifest を触らずに済むよう便 g-parts でまとめて足した（外の package は増やさない）。
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { version = "0.8", features = ["csr"] }
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["EventSource", "MessageEvent", "Response", "Window"] }
+web-sys = { version = "0.3", features = [
+    "Document",
+    "DomRect",
+    "Element",
+    "Event",
+    "EventSource",
+    "EventTarget",
+    "Headers",
+    "History",
+    "HtmlElement",
+    "HtmlInputElement",
+    "HtmlTextAreaElement",
+    "KeyboardEvent",
+    "Location",
+    "MessageEvent",
+    "MouseEvent",
+    "PointerEvent",
+    "Request",
+    "RequestInit",
+    "Response",
+    "SvgElement",
+    "WheelEvent",
+    "Window",
+] }
 
 # 歯は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で fixture を読む。
 [dev-dependencies]

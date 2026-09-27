@@ -1,12 +1,14 @@
 //! 画面の中身を決める純粋な関数（便 g-min）: 並べ方・状態の印・測れていないの判定・時刻の字。
 //! DOM と通信に触らないので host の cargo test で試す（描くのは project の下の block・読むのは net）。
 //! 件数と見出しは block の module が持つ（便 g-frame・見出しの語は vocab から引く）。
+//! 読みの結果の 3 値と読み直しの合図の event の名は block に共通の部品（便 g-parts）。
 
 use std::cmp::Ordering;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList, LedgerRow};
+use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 
 /// 問いの bead の種類。
@@ -15,12 +17,18 @@ pub const QUESTION_KIND: &str = "question";
 /// epic の bead の種類。
 pub const EPIC_KIND: &str = "epic";
 
-/// 台帳の一覧の口から読んだ結果（net が作る）。
+/// 読み直しの合図の event の名（台帳の変化と、器の event の記録か設計文書の変化・便 g-parts）。
+/// 字は契約の型の crate の定数から引き、面の code に直に書かない。
+pub const RELOAD_EVENTS: [&str; 2] = [LEDGER_CHANGED_EVENT, BOARD_CHANGED_EVENT];
+
+/// block の口から読んだ結果の 3 値（net が作る・便 g-parts）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fetched {
+    /// まだ読んでいない（頁を開いた直後）。
+    NotRead,
     /// 口が 200 で返した本文。
     Body(String),
-    /// 口に届かない・200 でない・本文が読めない。
+    /// 口に届かない・200 でない・本文が読めない・知らせが切れた。
     Failed,
 }
 
@@ -75,14 +83,14 @@ impl Screen {
     }
 }
 
-/// 口の本文を台帳の行に読む（届かない・電文が読めない・台帳が読めないは Unknown）。
+/// 口の本文を台帳の行に読む（まだ読んでいない・届かない・電文が読めない・台帳が読めないは Unknown）。
 pub fn read_rows(fetched: &Fetched) -> Reading<Vec<LedgerRow>> {
     match fetched {
         Fetched::Body(body) => match wire::decode::<LedgerList>(body) {
             Ok(list) => list.rows,
             Err(_) => Reading::Unknown,
         },
-        Fetched::Failed => Reading::Unknown,
+        Fetched::NotRead | Fetched::Failed => Reading::Unknown,
     }
 }
 

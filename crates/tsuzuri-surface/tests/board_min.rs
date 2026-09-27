@@ -96,6 +96,7 @@ fn board_min_unmeasured_is_not_zero() {
 
     let known = Screen::initial().after_read(&body(Reading::Known(fixture_rows())), 20);
     for fetched in [
+        Fetched::NotRead,
         Fetched::Failed,
         body(Reading::Unknown),
         Fetched::Body("not json".to_string()),

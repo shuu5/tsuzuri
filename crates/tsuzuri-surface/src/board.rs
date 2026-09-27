@@ -1,5 +1,6 @@
 //! 頁の描画（wasm の target のときだけ組み立てる・Leptos の csr）: header と頁の枠を frame の値のとおりに並べる。
 //! block の中身は project の下の module が描く。ここは枠を描き、mode と頁を URL から読んで URL に残すだけ。
+//! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。
 
 use leptos::prelude::*;
 
@@ -9,6 +10,7 @@ use crate::project::{self, ask, ledger, legend, map, next, pipeline, seat};
 use crate::view::{Screen, clock};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, hs};
+use crate::widgets::hover::{CardLayer, HoverCtx};
 
 /// 題の印（見本の IC.logo）。
 const LOGO: &str = r##"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>"##;
@@ -60,12 +62,19 @@ fn App() -> impl IntoView {
             body.set_class_name(mode.get().body_class());
         }
     });
+    provide_context(HoverCtx::default());
+    // 問いの一覧と台帳の一覧は 1 つの口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は読めた時刻）。
+    let fetched = net::read(ledger::PATH);
     let screen = RwSignal::new(Screen::initial());
-    net::follow(screen);
+    Effect::new(move |_| {
+        let f = fetched.get();
+        screen.update(|s| *s = s.after_read(&f, net::now()));
+    });
     view! {
         {top(page, mode, screen)}
         <main class="page">{page_view(page, screen)}</main>
         <TipLayer/>
+        <CardLayer/>
     }
 }
 

@@ -244,16 +244,24 @@ fn frame_classes_are_in_stylesheet() {
 /// data の口がまだ無い 4 つと ledger の指標の段は測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
 #[test]
 fn frame_blocks_without_data_are_unmeasured() {
-    for (id, body) in [
-        (next::BLOCK.id, next::body()),
-        (pipeline::BLOCK.id, pipeline::body()),
-        (seat::BLOCK.id, seat::body()),
-        (map::BLOCK.id, map::body()),
-        ("ledger の指標", ledger::metrics()),
+    for fetched in [
+        Fetched::NotRead,
+        Fetched::Failed,
+        Fetched::Body("{}".to_string()),
     ] {
-        match body {
-            Body::Unmeasured(reason) => assert!(!reason.trim().is_empty(), "{id} の理由が空"),
-            other => panic!("{id} が測れていないでない: {other:?}"),
+        for (id, body) in [
+            (next::BLOCK.id, next::body(&fetched)),
+            (pipeline::BLOCK.id, pipeline::body(&fetched)),
+            (seat::BLOCK.id, seat::body(&fetched)),
+            (map::BLOCK.id, map::body(&fetched)),
+            ("ledger の指標", ledger::metrics(&fetched)),
+        ] {
+            match body {
+                Body::Unmeasured(reason) => {
+                    assert!(!reason.trim().is_empty(), "{id} の理由が空");
+                }
+                other => panic!("{id} が {fetched:?} で測れていないでない: {other:?}"),
+            }
         }
     }
 

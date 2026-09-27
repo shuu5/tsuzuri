@@ -130,6 +130,9 @@ pub enum SurfaceEvent {
     },
 }
 
+/// SSE の event の名（器の event の記録か設計文書の変化・便 g-parts）。面は受けたら登録された口を全部読み直す。
+pub const BOARD_CHANGED_EVENT: &str = "board-changed";
+
 /// 問いの合図（席が問いを bdw で置いた後に server へ送る）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuestionNudge {

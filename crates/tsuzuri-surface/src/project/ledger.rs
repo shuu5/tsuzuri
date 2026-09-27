@@ -1,11 +1,12 @@
 //! block「台帳」（見本の `#ledger`）: 指標の段（見本の 4 数）と台帳の一覧（便 g-min の中身を見本の class で描き直す）。
-//! 指標の段は組む口がまだ無いので測れていないと出す（中身は後の便が足す）。一覧は epic の下に task・memo の順。
+//! 指標の段の口（/api/metrics）はまだ server に無いので測れていないと出す（中身は後の便が足す）。一覧は epic の下に task・memo の順。
+//! 一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
 
 use tsuzuri_contract::board::Reading;
 
-use super::{Body, Item, LEDGER_UNREAD, item};
+use super::{Body, Item, LEDGER_UNREAD, item, pending};
 use crate::frame::Block;
-use crate::view::Screen;
+use crate::view::{Fetched, Screen};
 
 pub const BLOCK: Block = Block {
     id: "ledger",
@@ -13,11 +14,18 @@ pub const BLOCK: Block = Block {
     class: "panel",
 };
 
+/// 台帳の一覧の口（server の便 e-min・問いの一覧も読む）。
+pub const PATH: &str = "/api/ledger";
+
+/// 指標の段の口（便 g-parts）。
+pub const METRICS_PATH: &str = "/api/metrics";
+
 /// 指標の段の語の鍵（見本の 4 数 = open task・memo・未反映・純減 24h）。
 pub const METRICS: [&str; 4] = ["l_task", "l_memo", "l_unref", "l_net24"];
 
-/// 指標の段が測れていない理由。
-pub const METRICS_REASON: &str = "台帳の指標（積みと速度）を組む口がまだ無い";
+/// 指標の段の口が読めないときの理由。
+pub const METRICS_REASON: &str =
+    "台帳の指標（積みと速度）を組む口が読めない（server にまだ無い・届かない・知らせが切れた）";
 
 /// 測れて 0 件のときの 1 行。
 pub const EMPTY: &str = "台帳に bead は無い";
@@ -32,9 +40,9 @@ pub struct Group {
     pub children: Vec<Item>,
 }
 
-/// 指標の段（この便はいつも測れていない）。
-pub fn metrics() -> Body<()> {
-    Body::Unmeasured(METRICS_REASON)
+/// 指標の段（この便は 3 値のどれでも測れていない）。
+pub fn metrics(fetched: &Fetched) -> Body<()> {
+    pending(fetched, METRICS_REASON)
 }
 
 /// 台帳の件数（epic も数える・測れていなければ Unknown）。
@@ -88,10 +96,8 @@ pub fn view(screen: leptos::prelude::RwSignal<Screen>) -> leptos::prelude::AnyVi
             }
         })
         .collect_view();
-    let reason = match metrics() {
-        Body::Unmeasured(reason) => super::unmeasured(reason),
-        _ => ().into_any(),
-    };
+    let fetched = crate::net::read(METRICS_PATH);
+    let reason = move || super::body_view(fetched.with(metrics));
     let list = move || match screen.with(body) {
         Body::Unmeasured(reason) => super::unmeasured(reason),
         Body::Empty(line) => view! { <div class="empty"><span>{line}</span></div> }.into_any(),

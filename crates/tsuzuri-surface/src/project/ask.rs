@@ -1,5 +1,6 @@
 //! block「問いの一覧」（便 g-min の中身を見本の class で描き直す）: open の question を古い順に番号つきで並べる。
 //! 並べ方は view（便 g-min）が決め、ここは一覧の項と件数にする。答えの欄は後の便が足す。
+//! 読みの口は台帳の一覧と同じ（`ledger::PATH`）で、頁（board）が通信の同じ関数で読んで画面の状態にする。
 
 use tsuzuri_contract::board::Reading;
 
