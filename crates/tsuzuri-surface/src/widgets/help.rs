@@ -1,6 +1,7 @@
 //! 「?」の注釈（見本の ui.js の qmark・tipContent・noteParts と同じ形）: 見出しの横の「?」を押すと語の説明を留める。
 //! 本文は語彙の注釈の字を行に分ける: 1 行目 = 要点・2 行目から = 項（記号 + 本文）・行「▸」より後 = 詳しく。
 //! 行の中の `{…}` は記号の見本、`` `…` `` は code にする。経験者には内部の名も出す。
+//! 行の全部が `{fig:名}` の 1 つなら、その行は手順と流れの図（widgets の fig）を描く。
 
 use crate::frame::Mode;
 use crate::vocab::{Term, vocab};
@@ -125,6 +126,14 @@ pub fn inline(s: &str) -> Vec<Inline> {
     out
 }
 
+/// 図の記号だけの行（`{fig:名}` の 1 片）の図の名（見本の itemHTML の figli と同じ見分け方）。
+pub fn fig_of(l: &Line) -> Option<&str> {
+    match (l.sym.as_slice(), l.text.as_slice()) {
+        ([], [Inline::Sym(s)]) => s.strip_prefix("fig:").filter(|n| !n.is_empty()),
+        _ => None,
+    }
+}
+
 /// 注釈の箱の class（出ているか・留めたか）。
 pub fn tip_class(open: bool, pinned: bool) -> &'static str {
     match (open, pinned) {
@@ -154,10 +163,11 @@ mod dom {
     use leptos::ev;
     use leptos::prelude::*;
 
-    use super::{Inline, Line, note, place, shows_internal, tip_class};
+    use super::{Inline, Line, fig_of, note, place, shows_internal, tip_class};
     use crate::frame::Mode;
     use crate::project::{STATES, state_icon};
     use crate::vocab::label;
+    use crate::widgets::fig;
 
     /// 開いている注釈（語の鍵・置き場・留めたか）。
     #[derive(Debug, Clone, PartialEq)]
@@ -305,9 +315,13 @@ mod dom {
         let items = lines
             .iter()
             .map(|l| {
+                // 図の記号だけの行は図を描く（見本の itemHTML の figli・記号と本文の span は置かない）。
+                if let Some(svg) = fig_of(l).and_then(fig::svg) {
+                    return view! { <li class="figli" inner_html=svg></li> }.into_any();
+                }
                 let sym = (!l.sym.is_empty())
                     .then(|| view! { <span class="sy">{inline_view(&l.sym)}</span> });
-                view! { <li>{sym}<span class="it">{inline_view(&l.text)}</span></li> }
+                view! { <li>{sym}<span class="it">{inline_view(&l.text)}</span></li> }.into_any()
             })
             .collect_view();
         view! { <ul class="nl">{items}</ul> }.into_any()
