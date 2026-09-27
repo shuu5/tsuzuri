@@ -1,0 +1,414 @@
+//! 3 つの字からグラフを組む。読めない字はその出所を `Graph::unread` に挙げ、ほかの出所は組む。
+//! 設計の索引の節点と辺は表の行を写す。bead の種類は epic・memo・問い・契約の順に決める。
+//! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
+//! 設計ノートの行・design の辺・ruled_by の辺はこの便では組まない（先の節点が入力に無い）。
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
+use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
+use tsuzuri_contract::ledger::{MEMO_LABEL, QUESTION_LABEL};
+
+use super::{BeadAttr, Graph, Inputs, RunAttr, Source};
+
+/// 設計文書の種類の数（`NodeKind::ALL` の先頭の 11）。
+pub const DESIGN_KINDS: usize = 11;
+
+/// 設計文書の辺の型の数（`EdgeType::ALL` の先頭の 17）。
+pub const DESIGN_EDGE_TYPES: usize = 17;
+
+/// 台帳の辺の型（bd の依存の種類のうち使う 4 つ）。
+pub const LEDGER_EDGE_TYPES: [EdgeType; 4] = [
+    EdgeType::ParentChild,
+    EdgeType::Blocks,
+    EdgeType::RelatesTo,
+    EdgeType::DiscoveredFrom,
+];
+
+/// 契約の pointer の行の頭（acceptance の中）。
+pub const POINTER_PREFIX: &str = "design = ";
+
+/// notes の定型行の頭と、導く節点の種類（裁定・受け・方針）。
+pub const TYPED_LINES: [(&str, NodeKind); 3] = [
+    ("裁定 id = ", NodeKind::Ruling),
+    ("受け id = ", NodeKind::Receipt),
+    ("方針 id = ", NodeKind::Policy),
+];
+
+/// 定型行の id の終わりの字。
+const ID_END: char = '・';
+
+/// 3 つの字から導出グラフを組む。
+pub fn build(inputs: &Inputs) -> Graph {
+    let mut g = Graph::default();
+    match read_design(inputs.design_index) {
+        Some(design) => {
+            g.nodes.extend(design.nodes);
+            g.edges.extend(design.edges);
+            g.skipped.design_edges = design.skipped;
+        }
+        None => g.unread.push(Source::Design),
+    }
+    match read_ledger(inputs.ledger) {
+        Some(beads) => add_ledger(&mut g, beads),
+        None => g.unread.push(Source::Ledger),
+    }
+    match read_events(inputs.events) {
+        Some(events) => add_runs(&mut g, &events),
+        None => g.unread.push(Source::Runs),
+    }
+    g
+}
+
+/// 語から閉じた enum の値を読む（契約の型の crate の serde の名が正本）。
+fn named<T: DeserializeOwned>(name: &str) -> Option<T> {
+    serde_json::from_value(Value::String(name.to_string())).ok()
+}
+
+fn edge(from: &str, to: &str, edge_type: EdgeType) -> GraphEdge {
+    GraphEdge {
+        from: from.to_string(),
+        to: to.to_string(),
+        edge_type,
+    }
+}
+
+/// 設計の索引から組んだ節点と辺と、組まずに数えた辺の行の数。
+struct Design {
+    nodes: Vec<GraphNode>,
+    edges: Vec<GraphEdge>,
+    skipped: usize,
+}
+
+/// 設計の索引を読む。節点の行は 5 列（id・種類・file・要約値・題）、辺の行は 3 列（端・端・型）。
+/// `#` で始まる行と空の行は読み捨てる。字が空か、列の数か種類が合わない行が在れば読めない（None）。
+fn read_design(text: &str) -> Option<Design> {
+    if text.trim().is_empty() {
+        return None;
+    }
+    let mut design = Design {
+        nodes: Vec::new(),
+        edges: Vec::new(),
+        skipped: 0,
+    };
+    for line in text.lines().map(|l| l.trim_end_matches('\r')) {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        match line.split('\t').collect::<Vec<_>>()[..] {
+            [id, kind, file, digest, title] => {
+                let kind = named::<NodeKind>(kind)
+                    .filter(|k| NodeKind::ALL[..DESIGN_KINDS].contains(k))?;
+                design.nodes.push(GraphNode {
+                    id: id.to_string(),
+                    kind,
+                    file: Some(file.to_string()),
+                    digest: Some(digest.to_string()),
+                    title: title.to_string(),
+                });
+            }
+            [from, to, edge_type] => {
+                match named::<EdgeType>(edge_type)
+                    .filter(|t| EdgeType::ALL[..DESIGN_EDGE_TYPES].contains(t))
+                {
+                    Some(t) => design.edges.push(edge(from, to, t)),
+                    None => design.skipped += 1,
+                }
+            }
+            _ => return None,
+        }
+    }
+    Some(design)
+}
+
+/// bd の読み取りの口が返す配列の 1 本のうち、グラフが読む欄（知らない欄は読み捨てる）。
+/// bd は空の欄を省くので、省ける欄は Option で読む。
+#[derive(Debug, Deserialize)]
+struct BdBead {
+    id: String,
+    title: Option<String>,
+    status: Option<String>,
+    issue_type: Option<String>,
+    labels: Option<Vec<String>>,
+    notes: Option<String>,
+    #[serde(alias = "acceptance")]
+    acceptance_criteria: Option<String>,
+    #[serde(default)]
+    metadata: Value,
+    dependencies: Option<Vec<BdDependency>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BdDependency {
+    depends_on_id: String,
+    #[serde(rename = "type")]
+    dep_type: String,
+}
+
+/// 台帳の一覧を読む（字が空か JSON の配列として読めなければ None）。
+fn read_ledger(text: &str) -> Option<Vec<BdBead>> {
+    if text.trim().is_empty() {
+        return None;
+    }
+    serde_json::from_str(text).ok()
+}
+
+/// bead の種類（epic・memo・問い・契約の順に決める・どの bead も 1 つに当たる）。
+fn bead_kind(issue_type: &str, labels: &[String]) -> NodeKind {
+    let has = |label: &str| labels.iter().any(|l| l == label);
+    if issue_type == "epic" {
+        NodeKind::Epic
+    } else if has(MEMO_LABEL) {
+        NodeKind::Memo
+    } else if has(QUESTION_LABEL) {
+        NodeKind::Question
+    } else {
+        NodeKind::Task
+    }
+}
+
+/// metadata の欄の id（欄は字 1 つか字の配列・metadata は object か、object を JSON にした字）。
+fn metadata_ids(metadata: &Value, key: &str) -> Vec<String> {
+    let parsed;
+    let object = match metadata {
+        Value::String(s) => {
+            parsed = serde_json::from_str::<Value>(s).unwrap_or(Value::Null);
+            &parsed
+        }
+        other => other,
+    };
+    match object.get(key) {
+        Some(Value::String(s)) if !s.is_empty() => vec![s.clone()],
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// notes の定型行（種類・id・行）。id は頭の字の後から最初の「・」までの字。
+fn typed_lines(notes: &str) -> Vec<(NodeKind, String, &str)> {
+    notes
+        .lines()
+        .map(|l| l.trim_end_matches('\r'))
+        .filter_map(|line| {
+            TYPED_LINES.iter().find_map(|(prefix, kind)| {
+                let rest = line.strip_prefix(prefix)?;
+                let id = rest.split(ID_END).next().unwrap_or(rest).trim();
+                (!id.is_empty()).then(|| (*kind, id.to_string(), line))
+            })
+        })
+        .collect()
+}
+
+/// 台帳の bead から節点と辺を組む。
+fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
+    let mut derived: BTreeSet<(NodeKind, String)> = BTreeSet::new();
+    for bead in beads {
+        let labels = bead.labels.unwrap_or_default();
+        let kind = bead_kind(bead.issue_type.as_deref().unwrap_or_default(), &labels);
+        g.nodes.push(GraphNode {
+            id: bead.id.clone(),
+            kind,
+            file: None,
+            digest: None,
+            title: title36(bead.title.as_deref().unwrap_or_default()),
+        });
+        for dep in bead.dependencies.unwrap_or_default() {
+            match named::<EdgeType>(&dep.dep_type).filter(|t| LEDGER_EDGE_TYPES.contains(t)) {
+                Some(t) => g.edges.push(edge(&bead.id, &dep.depends_on_id, t)),
+                None => g.skipped.ledger_edges += 1,
+            }
+        }
+        for (line_kind, id, line) in typed_lines(bead.notes.as_deref().unwrap_or_default()) {
+            if derived.insert((line_kind, id.clone())) {
+                g.nodes.push(GraphNode {
+                    id: id.clone(),
+                    kind: line_kind,
+                    file: None,
+                    digest: None,
+                    title: title36(line),
+                });
+            }
+            if line_kind == NodeKind::Ruling && kind == NodeKind::Question {
+                g.edges.push(edge(&id, &bead.id, EdgeType::Answers));
+            }
+        }
+        let touches = metadata_ids(&bead.metadata, "touches");
+        if kind == NodeKind::Question {
+            for to in &touches {
+                g.edges.push(edge(&bead.id, to, EdgeType::Touches));
+            }
+            for to in metadata_ids(&bead.metadata, "premises") {
+                g.edges.push(edge(&bead.id, &to, EdgeType::Premises));
+            }
+        }
+        if kind == NodeKind::Memo {
+            for to in metadata_ids(&bead.metadata, "source") {
+                g.edges.push(edge(&bead.id, &to, EdgeType::Source));
+            }
+        }
+        let pointers = bead
+            .acceptance_criteria
+            .as_deref()
+            .unwrap_or_default()
+            .lines()
+            .map(|l| l.trim_end_matches('\r'))
+            .filter(|l| l.starts_with(POINTER_PREFIX))
+            .map(str::to_string)
+            .collect();
+        g.beads.insert(
+            bead.id,
+            BeadAttr {
+                kind,
+                status: bead.status.unwrap_or_default(),
+                labels,
+                pointers,
+                touches,
+            },
+        );
+    }
+}
+
+/// event log を読む（字が空か、JSON の object として読めない行が在れば None）。
+fn read_events(text: &str) -> Option<Vec<Value>> {
+    if text.trim().is_empty() {
+        return None;
+    }
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| {
+            serde_json::from_str::<Value>(l)
+                .ok()
+                .filter(Value::is_object)
+        })
+        .collect()
+}
+
+/// run の id の前半（時刻の前の字）。後半が器の時刻の形（`20260927T071348Z`）でなければ None。
+pub fn run_bead(run: &str) -> Option<&str> {
+    let (bead, at) = run.rsplit_once('-')?;
+    let b = at.as_bytes();
+    let stamp = b.len() == 16
+        && b[8] == b'T'
+        && b[15] == b'Z'
+        && b[..8].iter().chain(&b[9..15]).all(u8::is_ascii_digit);
+    (stamp && !bead.is_empty()).then_some(bead)
+}
+
+/// event の口座（欄 account か、detail の `account:<名>` の札）。
+fn event_account(event: &Value) -> Option<String> {
+    if let Some(a) = event.get("account").and_then(Value::as_str) {
+        return Some(a.to_string());
+    }
+    event
+        .get("detail")
+        .and_then(Value::as_str)?
+        .split([',', ' '])
+        .find_map(|tok| tok.strip_prefix("account:"))
+        .filter(|a| !a.is_empty())
+        .map(str::to_string)
+}
+
+/// event log から走行の節点と run_of・raised の辺を組む。段と口座は走行の属性に持つ。
+/// 同じ run の RunCreated の 2 件目は節点を足さない。RunCreated の無い run の event は読み捨てる。
+fn add_runs(g: &mut Graph, events: &[Value]) {
+    let mut order: Vec<String> = Vec::new();
+    let mut attrs: BTreeMap<String, RunAttr> = BTreeMap::new();
+    let mut raised: Vec<GraphEdge> = Vec::new();
+    for event in events {
+        let kind = event
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let Some(run) = event.get("run").and_then(Value::as_str) else {
+            continue;
+        };
+        if kind == "RunCreated" && !attrs.contains_key(run) {
+            order.push(run.to_string());
+        }
+        let attr = attrs.entry(run.to_string()).or_default();
+        if let Some(stage) = event.get("stage").and_then(Value::as_str) {
+            attr.stage = Some(stage.to_string());
+        }
+        if let Some(account) = event_account(event) {
+            attr.account = Some(account);
+        }
+        if kind == "QuestionRaised"
+            && let Some(q) = event.get("question").and_then(Value::as_str)
+        {
+            raised.push(edge(run, q, EdgeType::Raised));
+        }
+    }
+    for run in order {
+        g.nodes.push(GraphNode {
+            id: run.clone(),
+            kind: NodeKind::Run,
+            file: None,
+            digest: None,
+            title: title36(&run),
+        });
+        if let Some(bead) = run_bead(&run) {
+            g.edges.push(edge(&run, bead, EdgeType::RunOf));
+        }
+        let attr = attrs.remove(&run).unwrap_or_default();
+        g.runs.insert(run, attr);
+    }
+    let runs = &g.runs;
+    let raised: Vec<GraphEdge> = raised
+        .into_iter()
+        .filter(|e| runs.contains_key(&e.from))
+        .collect();
+    g.edges.extend(raised);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{metadata_ids, run_bead, typed_lines};
+    use serde_json::json;
+    use tsuzuri_contract::graph::NodeKind;
+
+    #[test]
+    fn graph_run_bead_reads_the_front() {
+        assert_eq!(run_bead("t3-hub.2-20260927T071348Z"), Some("t3-hub.2"));
+        assert_eq!(run_bead("t3-hub.2"), None);
+        assert_eq!(run_bead("free-run"), None);
+        assert_eq!(run_bead("-20260927T071348Z"), None);
+        assert_eq!(run_bead("x-20260927X071348Z"), None);
+    }
+
+    #[test]
+    fn graph_typed_lines_cut_at_the_dot() {
+        let notes = "見本\n裁定 id = user 2026-09-27T03:19Z・束 b1・よい\n受け id = r-1\n 方針 id = p-1・頭に空白\n方針 id = ・空";
+        let got: Vec<(NodeKind, String)> = typed_lines(notes)
+            .into_iter()
+            .map(|(k, id, _)| (k, id))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (NodeKind::Ruling, "user 2026-09-27T03:19Z".to_string()),
+                (NodeKind::Receipt, "r-1".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn graph_metadata_ids_read_object_and_string() {
+        assert_eq!(
+            metadata_ids(&json!({"touches": ["A-1", "FR2"]}), "touches"),
+            vec!["A-1", "FR2"]
+        );
+        assert_eq!(
+            metadata_ids(&json!("{\"source\":\"r-1\"}"), "source"),
+            vec!["r-1"]
+        );
+        assert!(metadata_ids(&json!(null), "touches").is_empty());
+        assert!(metadata_ids(&json!({"touches": []}), "touches").is_empty());
+    }
+}

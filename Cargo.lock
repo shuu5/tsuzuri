@@ -1535,6 +1535,11 @@ dependencies = [
 [[package]]
 name = "tsuzuri-core"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tsuzuri-contract",
+]
 
 [[package]]
 name = "tsuzuri-surface"

@@ -286,11 +286,14 @@ mod tests {
     ];
 
     /// crate ごとの直接依存の名の一覧（member の dir と、依存の全部の節（target ごとの節も）の名・名の順）。
-    /// 外の部品は便ごとに足した名だけ: serde（便 a）・serde_json（便 b）・Leptos の一式（便 g-min・規則の行 R-25）。
+    /// 外の部品は便ごとに足した名だけ: serde（便 a）・serde_json（便 b・中核は便 c）・Leptos の一式（便 g-min・規則の行 R-25）。
     /// 名を足す便はこの一覧を直す。一覧に無い名が manifest に在れば落ちる。
     const DIRECT_DEPS: [(&str, &[&str]); 5] = [
         ("crates/tsuzuri-contract", &["serde", "serde_json"]),
-        ("crates/tsuzuri-core", &[]),
+        (
+            "crates/tsuzuri-core",
+            &["serde", "serde_json", "tsuzuri-contract"],
+        ),
         ("crates/tsuzuri-boundary", &["tsuzuri-contract"]),
         (
             SURFACE_DIR,
