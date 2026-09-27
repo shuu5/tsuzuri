@@ -3,7 +3,7 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.19
+  version: v0.20
   status: effective
   generated: 2026-09-27
   profile: design-note
@@ -326,6 +326,15 @@ sections:
         size: M
         done: (1) GET の PATH（/api/account）は 200 で、偽の器と偽の git と一時の state dir から、acct の module の読みの関数を直に呼んだ値と at を除いて同じ電文を返す (2) POST の HEARTBEAT_PATH は、Origin が Host と違えば 403・本文が 65536 byte を越えれば 413 で器を撃たず、state dir の無い server は受付の関数を呼ばずに 404 と no-project を返し、ほかは accthb の module の受付の関数の状態の数と本文を返す (3) --state-dir が無いとき、GET の PATH は 200 で、口座と群と移動が Unknown で project の列が空の電文を返し、器を 1 回も撃たない (4) GET の PATH を 1 回撃って acct の印の一覧が取り直された後に、acct の module の変化の印の file のどれかの字が変わると、つないである SSE の口に board-changed が 5 秒以内に届き、GET の PATH を撃たない server は acct のために器を撃たない (5) project board の header は、HEADER の 4 つの部品の前に「戻る」の部品（frame の module の定数 BACK・語の鍵 acct_back・class upto）を持ち、HEADER は変わらず、頁の枠の値の JSON の字（frame の module の snapshot）が直した snapshot の file と 1 字も違わない（acctwire_ の歯が file を読んで比べる） (6) 戻るの振る舞いを決める関数は、tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じるの 3 段を返す (7) 着地済みの口の歯と枠の歯が全部通り、足す外の依存は 0 本
         depends: [h-frame, h-win, h-hb, g-top-fix]
+      - id: h-look
+        title: account board の見た目の小さな食い違い 3 つ（頁の題・群の枠の段の見出しの重なり・使った割合の見出しの語）
+        req: [FR12, FR14]
+        section: "34"
+        write-set: ["crates/tsuzuri-surface/src/account/mod.rs", "crates/tsuzuri-surface/src/account/board.rs", "crates/tsuzuri-surface/src/account/home.rs", "+crates/tsuzuri-surface/tests/acctlook.rs"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail acctlook_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) account の mod.rs の pub な純粋な関数 page_title は、account の mod.rs の BRAND の字「器」と、語の辞書の語の鍵 acct_board の語「account board」を「 — 」でつないだ字「器 — account board」を返し、account の board.rs の mount は document の title をその字にする（project board の頁の title は変えない） (2) 群の枠の段（block groups）は見出しの行を描かず、群の card の列だけを描く（home.rs の groups_view は、着地済みの section を呼ばず、class gtop と id groups の section の中に中身だけを置く・歯は home.rs の字の groups_view の本文に section の呼びが無いことを見る） (3) 群の card の窓ごとの使った割合の見出しは語の鍵 used（語 使った割合）で、home.rs の字に hs の引数としての pressure が無い（歯は home.rs の字を読んで見る） (4) 着地済みの歯は全部通り、語の辞書と stylesheet と Cargo.toml は触らず、足す外の依存は 0 本
+        depends: []
       - id: g-pipe-today
         title: pipeline の Landed の列を今日（UTC）の着地だけにする
         req: [FR1, FR14]
@@ -755,6 +764,19 @@ sections:
       在りか（着地済み）。columns・content・body・kcard・LANES・PipelineColumn の決め方は crates/tsuzuri-surface/src/project/pipeline.rs。着地済みの歯は crates/tsuzuri-surface/tests/pipe.rs（名は pipe_ で始まる・fixture は tests/fixtures/surface/pipeline-board.json）。columns と content を呼ぶ歯は、fixture の着地の札が今日に入る今の時刻を渡すように直す。body の形は変えない（frame と parts の歯が使う）。
       呼ぶ所（確かめた）。columns と content を呼ぶのは、pipeline の module の中（content の中の columns・wasm の target のときだけの view の中の content と columns）と、着地済みの歯 tests/pipe.rs だけで、src のほかの file とほかの歯の file は呼ばない（ledger の module の content は同じ名の別の関数）。今の時刻は通信の module の now（crates/tsuzuri-surface/src/net.rs・wasm の target のときだけ・epoch 秒を返す）を view の中で呼んで渡す。
       測り方。新しい歯も tests/pipe.rs に置き、名を pipe_ で始める。done (6) は wasm の target のときだけの code なので、xtask の surface-build が組めることで見る。
+      依存は足さない。
+
+  - n: 34
+    type: prose
+    title: 便 h-look — account board の見た目の小さな食い違い 3 つ
+    body: |
+      実物の点検（2026-09-27T15:5xZ・h-wire の着地の後・verified）で見つけた 3 つを直す。台帳 t3-hub.53.3。
+      頁の題。account board の入口も project board と同じ crates/tsuzuri-surface/index.html を配るので、頁の title は index.html の字「tsuzuri — project board」のままになる。見本 docs/design/mock3/account/index.html の title は「器 — account board（mock v3）」。account の mod.rs に pub な純粋な関数 page_title（引数なし・返りは String）を置き、account の mod.rs の着地済みの pub な定数 BRAND（字 器）と、着地済みの crate::vocab::label（語の鍵の字を受けて語の String を返す・wasm の target に限らない・語の辞書の vocab.json を include_str で持つ）で引いた語の鍵 acct_board の語（account board）を、字「 — 」でつないで返す。account の board.rs の mount（wasm の target のときだけの module・自分の窓の名を入れた後に mount_to_body を呼ぶ）で、leptos の document() の set_title にその字を渡す。web-sys の Document の feature は Cargo.toml に在る（確かめた）。index.html と project board の頁は触らない。
+      群の枠の段の見出し。home の module の block groups（見出しの語の鍵 group・class gtop）は、着地済みの project の mod.rs の section（wasm の target のときだけ・section の中に header と h2 の見出しと中身を描く）で描かれるので、段の見出し「project の群」を出し、その下の各群の card（class gcard）も見出し「project の群」と群の名を出して、同じ語が 2 回並ぶ。見本の .gtop は見出しを持たず、card の列だけを持つ（見本の render の home の枝の div class gtop）。だから home.rs の groups_view は section を呼ばず、section の要素（class は block の class・id は block の id）の中に中身（群の card の列か、測れていないと理由の 1 行）だけを置く。block の定数 GROUPS（id・見出しの語の鍵・class）は変えない（着地済みの歯 acctframe_blocks_per_tab_and_module が block の表を pin する・見出しの語の鍵は枠の値として残る）。
+      使った割合の見出し。群の card の窓ごとの使った割合（class gpw の div）の見出しは、今は語の鍵 pressure（語 逼迫の閾値）を hs に渡している。見本はここに閾値（cap の字 / 85）を添えるが、tsuzuri は閾値を出さない約束（未決・規則の行 R-22・§26 の群の枠の段落）なので、閾値の語が使った割合の数の上に立つ。見出しの語の鍵を used（語 使った割合・語の辞書に在る・確かめた）に替える。GroupView の欄の名 pressure と、その値の組み方は変えない。着地済みの歯 accthome_vocab_css_deps_and_frame（tests/accthome.rs）は語の鍵 pressure が語の辞書に在ることだけを見るので、直さずに通る。
+      在りかと道。hs は crates/tsuzuri-surface/src/widgets/help.rs の pub fn（&'static str の語の鍵を受けて AnyView を返す・wasm の target のときだけ）。groups_view は home.rs の中の mod dom（wasm の target のときだけ）の pub fn で、Block を受けて AnyView を返す。account の mod.rs の純粋な部分（mod dom より前）に view! の字を書かない（着地済みの歯 acctframe_blocks_per_tab_and_module が見る）。account の下の file に /api/ と localStorage と sessionStorage と cookie の字を書かず、file を足さない（着地済みの歯が見る）。歯は crate の外の integration test で、lib.rs の pub mod account と account の mod.rs の pub な page_title と BRAND を呼べる。
+      測り方。頁の題は page_title を host の cargo test で pin する。群の枠の段の見出しと使った割合の見出しは DOM にだけ現れるので、歯は src/account/home.rs の字を読み、groups_view の本文（pub fn groups_view から次の fn までの字）に section( の呼びが無いことと、hs の引数の字 pressure が home.rs に無く used が在ることを見る。DOM は surface-build で組めることを見る。新しい歯は acctlook.rs に置き、名を acctlook_ で始める（着地済みの行の filter の語 acctframe_・accthome_・acctsess_・acctled_・acctproj_・acctwin_・accthb_・acctwire_ を名に含めない）。
+      触らない file。account の mod.rs と board.rs と home.rs のほかの全部・index.html・vocab.json・style.css・Cargo.toml・tests の既存の全部。
       依存は足さない。
 
 figures: []
