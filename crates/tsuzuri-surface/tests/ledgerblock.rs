@@ -38,8 +38,13 @@ fn set(name: &str) -> LedgerStats {
         .unwrap_or_else(|| panic!("fixture の組 {name}"))
 }
 
+/// 口の本文の形（指標を known の鍵で包んだ字）。
+fn wrap(s: &LedgerStats) -> Fetched {
+    Fetched::Body(wire::encode(&Reading::Known(s.clone())).expect("電文"))
+}
+
 fn body_of(name: &str) -> Fetched {
-    Fetched::Body(wire::encode(&set(name)).expect("電文"))
+    wrap(&set(name))
 }
 
 fn ledger_rows() -> Vec<LedgerRow> {
@@ -135,7 +140,7 @@ fn ledgerblock_judge_table_five_values() {
     for v in LedgerJudge::ALL {
         let mut s = set("filled");
         s.judge = v;
-        let f = Fetched::Body(wire::encode(&s).expect("電文"));
+        let f = wrap(&s);
         let Body::Filled(m) = content(&f, &Screen::initial()) else {
             panic!("中身が無い");
         };
@@ -228,7 +233,7 @@ fn ledgerblock_unreflected_copies_wire() {
     let mut s = set("filled");
     s.unreflected = 41;
     s.unreflected_unknown = vec![];
-    let f = Fetched::Body(wire::encode(&s).expect("電文"));
+    let f = wrap(&s);
     let Body::Filled(m2) = content(&f, &screen) else {
         panic!("中身が無い");
     };
@@ -446,6 +451,10 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
         (Fetched::Failed, ledger::METRICS_REASON),
         (Fetched::Body("{}".to_string()), NO_CONTENT),
         (Fetched::Body("まだ分からない".to_string()), NO_CONTENT),
+        (
+            Fetched::Body("\"unknown\"".to_string()),
+            ledger::METRICS_UNKNOWN,
+        ),
     ] {
         match content(&fetched, &screen) {
             Body::Unmeasured(reason) => {
@@ -471,6 +480,60 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
     let lost = screen.after_lost();
     assert_eq!(ledger::count(&lost), Reading::Unknown);
     assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
+}
+
+/// (9) 実物の口の本文の写し（Reading で包んだ指標）は中身を出し、上段の open の task の数は写しの known の下の数。
+#[test]
+fn ledgerblock_real_metrics_body() {
+    let text = read("../../tests/fixtures/surface/metrics-body.json");
+    // 写しを鍵 → 指標の map として読み（Reading を通さず）、known の下の数を期待にする。
+    let mut raw: BTreeMap<String, LedgerStats> =
+        wire::decode(&text).expect("写しは鍵 known の下に指標を持つ");
+    assert_eq!(raw.keys().collect::<Vec<_>>(), vec!["known"]);
+    let inner = raw.remove("known").expect("鍵 known");
+    assert_eq!(inner.open.task, 2);
+    let fetched = Fetched::Body(text);
+    let m = match content(&fetched, &known_screen()) {
+        Body::Filled(m) => m,
+        other => panic!("実物の本文が中身を出さない: {other:?}"),
+    };
+    assert_eq!(m.text(Part::Task), Some(inner.open.task.to_string()));
+    assert_eq!(m.open, inner.open);
+    assert_eq!(ledger::metrics(&fetched), Body::Filled(()));
+    assert_eq!(stats(&fetched), Ok(inner));
+}
+
+/// (10) 本文が字 unknown なら台帳が読めない理由（口が読めない・電文が読めないとは違う字）・
+/// known も unknown も持たない本文と、包まない指標そのものは電文が読めない理由。
+#[test]
+fn ledgerblock_unknown_body_reason() {
+    let unknown = Fetched::Body(wire::encode(&Reading::<LedgerStats>::Unknown).expect("電文"));
+    assert_eq!(
+        wire::encode(&Reading::<LedgerStats>::Unknown).expect("電文"),
+        "\"unknown\""
+    );
+    let reason = ledger::METRICS_UNKNOWN;
+    assert_eq!(
+        content(&unknown, &Screen::initial()),
+        Body::Unmeasured(reason)
+    );
+    assert_eq!(ledger::metrics(&unknown), Body::Unmeasured(reason));
+    assert_eq!(stats(&unknown), Err(reason));
+    assert!(!reason.trim().is_empty() && !reason.contains('\n'));
+    for other in [ledger::METRICS_REASON, NO_CONTENT, NOT_READ] {
+        assert_ne!(reason, other);
+    }
+    for text in [
+        "{}".to_string(),
+        r#"{"other":1}"#.to_string(),
+        wire::encode(&set("filled")).expect("電文"),
+    ] {
+        assert_eq!(
+            stats(&Fetched::Body(text.clone())),
+            Err(NO_CONTENT),
+            "{text}"
+        );
+    }
 }
 
 /// (8) 着地済みの外形（BLOCK・口の path・metrics・一覧の body と count）と、足す外の依存は 0 本。

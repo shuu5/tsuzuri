@@ -1,6 +1,6 @@
 //! block「台帳」（見本の `#ledger` と index.html の ledgerBlock・ledger.js の描き方の関数・便 g-ledger）:
 //! 指標の段（上段の 4 数・主な指標の行・burndown・memo の段・「詳しく」・未反映の数）と台帳の一覧（便 g-min の中身を見本の class で描き直す）。
-//! 指標は口 /api/metrics（契約の型の LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、ここは写すだけ
+//! 指標は口 /api/metrics（本文は契約の型の Reading で包んだ LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、ここは写すだけ
 //! （数え直しと判定の分岐を持たない）。段の並びと段ごとの項は配置の表（`LAYOUT`）の値で持ち、DOM は表を上から順にたどる。
 //! 一覧は epic の下に task・memo の順。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -31,6 +31,9 @@ pub const METRICS: [&str; 4] = ["l_task", "l_memo", "l_unref", "l_net24"];
 /// 指標の段の口が読めないときの理由。
 pub const METRICS_REASON: &str =
     "台帳の指標（積みと速度）を組む口が読めない（server にまだ無い・届かない・知らせが切れた）";
+
+/// 口は読めたが、server が台帳を読めず指標が「まだ分からない」ときの理由。
+pub const METRICS_UNKNOWN: &str = "server が台帳を読めないので、指標（積みと速度）はまだ分からない";
 
 /// 測れて 0 件のときの 1 行。
 pub const EMPTY: &str = "台帳に bead は無い";
@@ -493,12 +496,17 @@ impl Metrics {
     }
 }
 
-/// 指標の口の本文を電文に読む（まだ読んでいない・読めない・電文が読めないは理由）。
+/// 指標の口の本文を電文に読む（本文は読めた指標か「まだ分からない」・まだ読んでいない・読めない・
+/// 台帳が読めない・電文が読めないは理由）。
 pub fn stats(fetched: &Fetched) -> Result<LedgerStats, &'static str> {
     match fetched {
         Fetched::NotRead => Err(NOT_READ),
         Fetched::Failed => Err(METRICS_REASON),
-        Fetched::Body(text) => wire::decode::<LedgerStats>(text).map_err(|_| NO_CONTENT),
+        Fetched::Body(text) => match wire::decode::<Reading<LedgerStats>>(text) {
+            Ok(Reading::Known(s)) => Ok(s),
+            Ok(Reading::Unknown) => Err(METRICS_UNKNOWN),
+            Err(_) => Err(NO_CONTENT),
+        },
     }
 }
 
