@@ -152,7 +152,7 @@ sections:
         write-set: ["crates/tsuzuri-surface/src/project/ledger.rs", "+crates/tsuzuri-surface/tests/ledgerblock.rs", "+tests/fixtures/surface/ledger-stats.json"]
         verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail ledgerblock_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
         size: M
-        done: (1) fixture の指標の電文から、上段の 4 つの数（open の task・open の memo・未反映・純減 24h）と純減の矢印（負は ↓・正は ↑・0 は →）が期待と一致する (2) 判定の 5 値のそれぞれが、記号（! ↑ → ✓ ―）と class と語の鍵に 1 か所の表で写る (3) burndown の図は 14 日で、棒の高さと線の点の座標が見本の式で計算した fixture の期待と一致する (4) 未反映は電文の数をそのまま出し、電文が分からないと名指す種類は 0 でなく測れていないの記号を出し、面の側で台帳の一覧から数え直さない (5) 年齢の字が 4 つの形（値なしは ―・1 日未満は時間の h・10 日未満は小数 1 桁の d・それ以上は整数の d）で期待と一致する (6) 「詳しく」の中に ready と blocked と lead の中央値と stale と sparkline と epic の進みが在り、作業中の数と最古の task はどこにも出さない (7) 口が読めないかまだ読んでいないときは 0 でなく測れていないと理由の 1 行を出し、台帳の一覧は今のまま出す (8) 着地済みの関数の外形（BLOCK・口の path の定数・Body<()> を返す metrics の名と引数と返りの型・台帳の一覧の body と count）を変えず、本文が電文の型として読めないときは測れていないを返し、足す外の依存は 0 本
+        done: (1) fixture の指標の電文から、上段の 4 つの数（open の task・open の memo・未反映・純減 24h）と純減の矢印（負は ↓・正は ↑・0 は →）が期待と一致する (2) 判定の 5 値のそれぞれが、記号（! ↑ → ✓ ―）と class と語の鍵に 1 か所の表で写る (3) burndown の図は 14 日で、棒の高さと線の点の座標が見本の式で計算した fixture の期待と一致する (4) 未反映は電文の数をそのまま出し、電文が分からないと名指す種類は 0 でなく測れていないの記号を出し、面の側で台帳の一覧から数え直さない (5) 年齢の字が 4 つの形（値なしは ―・1 日未満は時間の h・10 日未満は小数 1 桁の d・それ以上は整数の d）で期待と一致する (6) closed/日 と純減 7d は「詳しく」の外の見えている所に在り、「詳しく」の中に ready と blocked と lead の中央値と stale と sparkline と epic の進みが在り、作業中の数と最古の task はどこにも出さない (7) 口が読めないかまだ読んでいないときは 0 でなく測れていないと理由の 1 行を出し、台帳の一覧は今のまま出す (8) 着地済みの関数の外形（BLOCK・口の path の定数・Body<()> を返す metrics の名と引数と返りの型・台帳の一覧の body と count）を変えず、本文が電文の型として読めないときは測れていないを返し、足す外の依存は 0 本
         depends: [g-parts]
       - id: g-map
         title: 地図の頁の中身（面の切り替えの tab・圧縮の面・一覧の面・表の面・帯と種類の対応）
@@ -253,7 +253,8 @@ sections:
       data は口 /api/metrics から読む（契約の型の LedgerStats・着地済み）。数え方と判定は中核の crate が済ませていて、面は写すだけにする。面の code に、数え直しと判定の分岐を書かない。
       上段（class l4）は 4 つの数で、open の task・open の memo・未反映・純減 24h（語の鍵は l_task・l_memo・l_unref・l_net24）。純減は矢印と数で出し、負は ↓（純減）、正は ↑（純増）、0 は →（横ばい）。見出しの横に判定の 1 語を出す。判定の 5 値は、滞りが「!」、積み増しが「↑」、停滞が「→」、順調が「✓」、台帳なしが「―」で、class と語の鍵（j_bad・j_up・j_stall・j_ok・j_none）への対応は 1 か所の表に置く。
       中段（class lmid）は burndown の図（14 日・線は open の task・棒は閉じた数 / 日）。座標の式は見本の burndown と同じにする。memo の段（class mpro）は 4 つの数で、open・昇格待ち・直近 7 日に閉じた数・年齢の中央値（語の鍵は m_open・m_wait・m_promo7・m_age）。
-      「詳しく」（見本の details の class gmore・経験者の mode では開いて出す）の中に、ready・blocked・lead の中央値・stale・sparkline（14 日の created と closed）・closed/日・純減 7d を置く。epic の進み（閉じた数 / 全体の棒）は畳んだ段に置く。作業中の数と最古の task は出さない。
+      主な指標は見えている所に置く（要件 FR13）。上段の 4 つの数の下に 1 行を足し、closed/日（小数 1 桁）と純減 7d（矢印と数）を出す。
+      「詳しく」（見本の details の class gmore・経験者の mode では開いて出す）の中に置くのは 6 つで、ready・blocked・lead の中央値・stale・sparkline（14 日の created と closed）・epic の進み（閉じた数 / 全体の棒）。open の問いの数と open の epic の数も「詳しく」の中に出す。作業中の数と最古の task はどこにも出さない。
       未反映は数だけを出す。電文の unreflected の数をそのまま出し、電文の unreflected_unknown が名指す種類（memo・ruling・request）は、その名と測れていないの記号を出す（0 と書かない）。未反映の行の一覧は、行を運ぶ電文がまだ無いので、この便では出さない（後の便が電文と一緒に足す）。面の側で台帳の一覧から数え直さない。
       memo の年齢の中央値の字は、値なしは「―」、1 日未満は時間の数と h、10 日未満は小数 1 桁の日の数と d、それ以上は整数の日の数と d。lead の中央値も同じ形で出す。
       電文の形（着地済み・契約の型の crate の stats の module）。LedgerStats の欄は、at・judge（判定の 5 値）・open（task・memo・question・epic の数）・blocked・ready・stale・net_drop_24h・net_drop_7d・closed_7d・closed_per_day・lead（p50 と p90 の日数・無いことが在る）・days（14 日の列で、1 日は end・created・closed・open）・epics（epic の id と閉じた数と全体の数）・memo（open・awaiting_promotion・closed_7d・age_p50_days）・unreflected（数）・unreflected_unknown（分からない種類の列）。口の本文は、読めた LedgerStats か「まだ分からない」。epic の題は台帳の一覧（/api/ledger）から id で引き、引けなければ id だけを出す。
