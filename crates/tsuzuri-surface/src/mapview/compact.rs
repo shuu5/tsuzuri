@@ -7,6 +7,8 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
 
 use super::band::{BEADS_LANES, Band, band_of, kind_key, unread_reason};
 use super::{natural, open_question, shape_class};
+use crate::widgets::hover::Card;
+use crate::widgets::nodecard::node_card;
 
 /// 札の題の字数の上限。
 pub const TAG_TITLE_MAX: usize = 30;
@@ -27,6 +29,8 @@ pub struct Tag {
     pub shape: String,
     /// open の問い（印は赤）。
     pub alert: bool,
+    /// 札の hover の card（節点の card）。
+    pub card: Card,
 }
 
 /// 条の札と、その条の規範文の id（見本の `.art7`）。
@@ -34,6 +38,8 @@ pub struct Tag {
 pub struct Article {
     pub tag: Tag,
     pub norms: Vec<String>,
+    /// 規範文の hover の card（norms と同じ順）。
+    pub norm_cards: Vec<Card>,
 }
 
 /// beads の帯の種類の 1 行（小見出しと数と札）。
@@ -108,6 +114,7 @@ pub fn tag(doc: &GraphDoc, node: &GraphNode) -> Tag {
         ),
         shape: shape_class(doc, node),
         alert,
+        card: node_card(doc, node),
     }
 }
 
@@ -171,13 +178,17 @@ fn articles(doc: &GraphDoc, nodes: &[&GraphNode]) -> Cards {
     norms.sort_by(|a, b| natural(&a.id, &b.id));
     let articles = arts
         .iter()
-        .map(|a| Article {
-            tag: tag(doc, a),
-            norms: norms
+        .map(|a| {
+            let mine: Vec<&GraphNode> = norms
                 .iter()
+                .copied()
                 .filter(|s| article_of(&s.id) == Some(a.id.as_str()))
-                .map(|s| s.id.clone())
-                .collect(),
+                .collect();
+            Article {
+                tag: tag(doc, a),
+                norms: mine.iter().map(|s| s.id.clone()).collect(),
+                norm_cards: mine.iter().map(|s| node_card(doc, s)).collect(),
+            }
         })
         .collect();
     let loose = norms
@@ -224,6 +235,7 @@ mod dom {
     use crate::project::{ALERT_STYLE, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{h2, hs};
+    use crate::widgets::hover::attach;
 
     /// 測れていない帯の数の字。
     const NO_COUNT: &str = "―";
@@ -283,19 +295,20 @@ mod dom {
                         let kids = a
                             .norms
                             .into_iter()
-                            .map(|id| {
+                            .zip(a.norm_cards)
+                            .map(|(id, card)| {
                                 let href = {
                                     let id = id.clone();
                                     move || frame::node_href(&id, mode())
                                 };
-                                view! { <a href=href>{id}</a> }
+                                view! { <a href=href use:attach=card>{id}</a> }
                             })
                             .collect_view();
                         let tag_id = a.tag.id.clone();
                         let href = move || frame::node_href(&tag_id, mode());
                         view! {
                             <div class=class>
-                                <a href=href>{tag_head(&a.tag)}</a>
+                                <a href=href use:attach=a.tag.card.clone()>{tag_head(&a.tag)}</a>
                                 <div class="kids">{kids}</div>
                             </div>
                         }
@@ -339,6 +352,6 @@ mod dom {
     fn tag_view(t: &Tag, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
         let id = t.id.clone();
         let href = move || frame::node_href(&id, mode());
-        view! { <a class=t.class.clone() href=href>{tag_head(t)}</a> }.into_any()
+        view! { <a class=t.class.clone() href=href use:attach=t.card.clone()>{tag_head(t)}</a> }.into_any()
     }
 }

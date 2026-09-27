@@ -11,6 +11,8 @@ use super::{
     VIEW_PARAM, View, kinds_by_id, natural, open_question, param, set_param, shape_class, state,
     unread_reasons,
 };
+use crate::widgets::hover::Card;
+use crate::widgets::nodecard::node_card;
 
 /// 帯の絞りを残す URL の query の鍵。
 pub const BAND_PARAM: &str = "band";
@@ -119,6 +121,8 @@ pub struct Row {
     pub kind: NodeKind,
     /// 状態の字（bead は属性の状態・走行は属性の段・無ければ None）。
     pub state: Option<String>,
+    /// 行の題の hover の card（節点の card）。
+    pub card: Card,
 }
 
 impl Row {
@@ -225,6 +229,7 @@ fn row(doc: &GraphDoc, node: &GraphNode) -> Row {
         band: band_of(node.kind),
         kind: node.kind,
         state: state(doc, node).map(str::to_string),
+        card: node_card(doc, node),
     }
 }
 
@@ -248,6 +253,7 @@ mod dom {
     use crate::project::{ALERT_STYLE, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::hs;
+    use crate::widgets::hover::attach;
 
     /// 絞らない選択肢の字。
     const ANY: &str = "―";
@@ -341,7 +347,7 @@ mod dom {
                 <span class=r.shape.clone() style=style aria-hidden="true"></span>
                 <div class="rowb">
                     <span class="nid">{r.id.clone()}</span>
-                    <a class="ttl" href=href><span data-t="">{r.title.clone()}</span></a>
+                    <a class="ttl" href=href use:attach=r.card.clone()><span data-t="">{r.title.clone()}</span></a>
                     <span class="meta">{band_chip(r.band)}<span>{meta}</span></span>
                     <span class="gist none">{NO_GIST}</span>
                 </div>
