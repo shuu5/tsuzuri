@@ -819,3 +819,260 @@ fn f82_the_anchor_is_compared_before_the_replacement() {
         "書いた図の本体に英語の説明が残っている"
     );
 }
+
+// ── 12. 焼いた図の道具（便 168・docs/design/delivery-168.md §1 (c)・ADR-27 決定 (1)）──
+
+/// git を呼ぶ（tests/init.rs と同じ形）。環境変数 GIT_* は継承しない。
+fn git(cwd: &Path, args: &[&str]) {
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(key);
+        }
+    }
+    let out = cmd
+        .current_dir(cwd)
+        .args([
+            "-c",
+            "user.email=fx@example",
+            "-c",
+            "user.name=fx",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git を起動できない");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// 一時 dir の下に git の init → `folio init` → 要件書に凍結 anchor の図 1 枚 → commit の骨格を組む。親（作業の根）に
+/// 道具の写しは置かない。TMPDIR にする tmp/ も作る。戻り値 = (一時 dir, 作業の根, 置き場)。
+fn skeleton_with_a_figure(case: &str) -> (PathBuf, PathBuf, PathBuf) {
+    let td = temp_dir(case);
+    let root = td.join("work");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(td.join("tmp")).unwrap();
+    git(&root, &["init", "-q"]);
+    let place = root.join("design-intent");
+    let init = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("init")
+        .arg("--dir")
+        .arg(&place)
+        .output()
+        .expect("folio を起動できない");
+    assert_eq!(code(&init, "folio init"), 0, "{}", stderr(&init));
+    edit(&place.join("srs.yaml"), |t| {
+        t.replacen(
+            "glossary_pointer: 未記入\n",
+            &format!(
+                "glossary_pointer: 未記入\nfigures:\n{}",
+                fig_row("fig-anchor", &figure_fixture().join("anchor/spec.json"))
+            ),
+            1,
+        )
+    });
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "skeleton"]);
+    (td, root, place)
+}
+
+/// `folio build --dir <place> --out <td>/site <mode>` を TMPDIR = <td>/tmp で撃つ。shim を渡すと PATH の先頭に置く。
+fn build_in(td: &Path, place: &Path, mode: &str, shim: Option<&Path>) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    cmd.arg("build")
+        .arg("--dir")
+        .arg(place)
+        .arg("--out")
+        .arg(td.join("site"))
+        .arg(mode)
+        .env("TMPDIR", td.join("tmp"));
+    if let Some(dir) = shim {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let mut dirs = vec![dir.to_path_buf()];
+        dirs.extend(std::env::split_paths(&path));
+        cmd.env("PATH", std::env::join_paths(dirs).unwrap());
+    }
+    cmd.output().expect("folio を起動できない")
+}
+
+/// TMPDIR にした tmp/ に残った entry の数（名に依らず数える）。
+fn leftovers(td: &Path) -> usize {
+    fs::read_dir(td.join("tmp")).unwrap().count()
+}
+
+/// PATH の中の本物の node。
+fn real_node() -> PathBuf {
+    let path = std::env::var_os("PATH").expect("PATH が無い");
+    std::env::split_paths(&path)
+        .map(|d| d.join("node"))
+        .find(|p| p.is_file())
+        .expect("PATH に node が無い")
+}
+
+/// 骨格を組み、`setup` を作業の根に当てて build --write と --check を撃つ。親に写しが無いので焼いた道具で 6 file を書き、
+/// srs.html に図の本体を持ち、--check は 0・tmp に何も残らず・親に vendor/archify を作らない。
+fn builds_with_the_baked_tool(case: &str, setup: impl FnOnce(&Path)) {
+    let (td, root, place) = skeleton_with_a_figure(case);
+    setup(&root);
+    let write = build_in(&td, &place, "--write", None);
+    let html = fs::read(td.join("site/srs.html")).unwrap_or_default();
+    let check = build_in(&td, &place, "--check", None);
+    let left = leftovers(&td);
+    let made = !parts_absent(&root.join("vendor/archify"));
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&write, "build --write"), 2, "{}", stderr(&write));
+    assert!(
+        stdout(&write).contains("書いた（6 file・"),
+        "{}{}",
+        stdout(&write),
+        stderr(&write)
+    );
+    let body = frozen_body_ja();
+    assert!(
+        html.windows(body.len()).any(|w| w == body.as_slice()),
+        "srs.html に図の本体（凍結 anchor に置き換えを当てた byte 列）が無い"
+    );
+    assert_eq!(code(&check, "build --check"), 0, "{}", stderr(&check));
+    assert_eq!(left, 0, "TMPDIR に一時の置き場が残った");
+    assert!(!made, "置き場の親に vendor/archify を作った");
+}
+
+/// symlink を辿らずに引いて見つからないときだけ真。
+fn parts_absent(path: &Path) -> bool {
+    matches!(fs::symlink_metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+}
+
+#[test]
+fn f168_a_skeleton_with_a_figure_builds_without_the_tool_beside_it() {
+    builds_with_the_baked_tool("f168-a", |_| {});
+}
+
+#[test]
+fn f168_a_vendor_dir_without_the_tool_is_no_tool() {
+    builds_with_the_baked_tool("f168-other", |root| {
+        fs::create_dir_all(root.join("vendor/other")).unwrap();
+        fs::write(root.join("vendor/other/x"), "x").unwrap();
+    });
+}
+
+#[test]
+fn f168_the_tool_beside_the_place_is_the_one_that_runs() {
+    let (td, root, place) = skeleton_with_a_figure("f168-beside");
+    let copy = root.join("vendor/archify");
+    copy_dir(&vendor(), &copy);
+    // 撃たれたら写しの中に file ran を足す 1 行（図の出力は変えない＝anchor は保たれる）
+    edit(&copy.join("bin/archify.mjs"), |t| {
+        t.replacen(
+            "const skillRoot = path.resolve(__dirname, '..');\n",
+            "const skillRoot = path.resolve(__dirname, '..');\nfs.appendFileSync(path.join(skillRoot, 'ran'), 'ran\\n');\n",
+            1,
+        )
+    });
+    let write = build_in(&td, &place, "--write", None);
+    let ran = fs::read(copy.join("ran")).unwrap_or_default();
+    let left = leftovers(&td);
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&write, "build --write"), 2, "{}", stderr(&write));
+    assert!(
+        stdout(&write).contains("書いた（6 file・"),
+        "{}{}",
+        stdout(&write),
+        stderr(&write)
+    );
+    assert!(!ran.is_empty(), "親の写しの道具が撃たれていない");
+    assert_eq!(left, 0, "親に写しが在るのに一時の置き場へ書き出した");
+}
+
+#[test]
+fn f168_a_tool_beside_the_place_that_cannot_run_is_not_swapped() {
+    type Break = fn(&Path);
+    let cases: [(&str, Break, &str); 4] = [
+        ("drift", |root| drift_tool(root), ANCHOR_DRIFT),
+        (
+            "no-entry",
+            |root| fs::remove_file(root.join("vendor/archify/bin/archify.mjs")).unwrap(),
+            "図の道具が無い",
+        ),
+        (
+            "dangling",
+            |root| {
+                fs::remove_dir_all(root.join("vendor/archify")).unwrap();
+                std::os::unix::fs::symlink(
+                    root.join("vendor/nowhere"),
+                    root.join("vendor/archify"),
+                )
+                .unwrap();
+            },
+            "図の道具が無い",
+        ),
+        (
+            "file",
+            |root| {
+                fs::remove_dir_all(root.join("vendor/archify")).unwrap();
+                fs::write(root.join("vendor/archify"), "x").unwrap();
+            },
+            "図の道具が無い",
+        ),
+    ];
+    for (case, broken, wording) in cases {
+        let (td, root, place) = skeleton_with_a_figure(&format!("f168-not-{case}"));
+        copy_dir(&vendor(), &root.join("vendor/archify"));
+        broken(&root);
+        let write = build_in(&td, &place, "--write", None);
+        let site = td.join("site").exists();
+        let left = leftovers(&td);
+        let _ = fs::remove_dir_all(&td);
+        assert_eq!(code(&write, case), 2, "{case}: {}", stderr(&write));
+        assert!(
+            stderr(&write).contains("まだ分からない"),
+            "{case}: {}",
+            stderr(&write)
+        );
+        assert!(
+            stderr(&write).contains(wording),
+            "{case}: 「{wording}」が無い: {}",
+            stderr(&write)
+        );
+        assert!(!site, "{case}: 配信先を作った");
+        assert_eq!(left, 0, "{case}: 一時の置き場を作った");
+    }
+}
+
+#[test]
+fn f168_the_baked_tool_is_held_to_the_frozen_anchor() {
+    use std::os::unix::fs::PermissionsExt;
+    let (td, root, place) = skeleton_with_a_figure("f168-anchor");
+    // 本物の node を撃った後に出力（5 つ目の引数）の Archify を Archifx に替える shim
+    let shim = td.join("shim");
+    fs::create_dir_all(&shim).unwrap();
+    let node = shim.join("node");
+    fs::write(
+        &node,
+        format!(
+            "#!/bin/sh\n'{}' \"$@\" || exit $?\nsed -i 's/Archify/Archifx/g' \"$5\"\n",
+            real_node().display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    let write = build_in(&td, &place, "--write", Some(&shim));
+    let site = td.join("site").exists();
+    let left = leftovers(&td);
+    let made = !parts_absent(&root.join("vendor/archify"));
+    let _ = fs::remove_dir_all(&td);
+    assert_eq!(code(&write, "build --write"), 2, "{}", stderr(&write));
+    assert!(
+        stderr(&write).contains("まだ分からない"),
+        "{}",
+        stderr(&write)
+    );
+    assert!(stderr(&write).contains(ANCHOR_DRIFT), "{}", stderr(&write));
+    assert!(!site, "凍結 anchor が落ちたのに配信先を作った");
+    assert_eq!(left, 0, "TMPDIR に一時の置き場が残った");
+    assert!(!made, "置き場の親に vendor/archify を作った");
+}

@@ -9,6 +9,9 @@
 //!
 //! 凍結 anchor（型付き記述 1 本と図の本体の写し・P-10.1）は compile 時に取り込み、命令と面の経路の導出の前に
 //! 照合する。落ちたら判定を「まだ分からない」に落とし、出力も前の生成物も書かない（便 60・ADR-4 決定 (6)・P-10.3）。
+//!
+//! 置き場の親に道具の写し（vendor/archify）が無いときだけ、組み立て時に焼いた写しを 1 回の命令で 1 度だけ一時の置き場へ
+//! 書き出して撃ち、命令の終わりに `sweep` で消す（便 168・ADR-27 決定 (1)）。焼いた道具にも凍結 anchor が掛かる。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,6 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::cursor::{self, R, X};
 use crate::face;
+use crate::parts;
 use crate::shelf;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
@@ -33,6 +37,15 @@ const FIGURE_TYPES: &[(&str, &str)] = &[
 
 /// 図の道具の置き場（正本の置き場の親 dir からの相対・便 28 の導出 file と同じ「親 dir」の規則）。
 const TOOL: &str = "vendor/archify/bin/archify.mjs";
+
+/// 図の道具の写しの dir（正本の置き場の親 dir からの相対・無いの判定はここで行う・便 168）。
+const TOOL_DIR: &str = "vendor/archify";
+
+// 組み立て時に build.rs が焼いた図の道具の写し TOOL_FILES（便 168・path の byte 順・LICENSE を含む）
+include!(concat!(env!("OUT_DIR"), "/archify_files.rs"));
+
+/// 焼いた道具を書き出した一時の置き場（1 回の命令で 1 度・書き出せなかった Err も覚える）。
+static BAKED: OnceLock<R<PathBuf>> = OnceLock::new();
 
 /// 仕上がりの段（R-14・旗を持たない）。
 const QUALITY: &str = "showcase";
@@ -306,11 +319,15 @@ fn tool_type(name: &str) -> R<&'static str> {
         .ok_or_else(|| format!("図の型「{name}」は図の道具の型でない"))
 }
 
-/// 図の道具の path（正本の置き場の親 dir の下・symlink は認めない）。
+/// 図の道具の path（正本の置き場の親 dir の下・symlink は認めない）。親 dir の写しの dir が無い（`parts::absent`）
+/// ときだけ焼いた道具を使う（便 168 (b) 2）。写しが在るのに入口が使えなければ焼いたものへ替えない（P-4.1）。
 fn tool_path(dir: &Path) -> R<PathBuf> {
     let parent = dir
         .parent()
         .ok_or_else(|| "正本の置き場の親 dir が無い".to_string())?;
+    if parts::absent(&parent.join(TOOL_DIR)) {
+        return baked_tool();
+    }
     let path = parent.join(TOOL);
     if path.is_symlink() {
         return Err(format!(
@@ -322,6 +339,52 @@ fn tool_path(dir: &Path) -> R<PathBuf> {
         return Err(format!("{}: 図の道具が無い", path.display()));
     }
     Ok(path)
+}
+
+// ── 焼いた道具（便 168 (b) 3・4）──
+
+/// 焼いた道具の入口。最初の 1 回だけ（1 回の命令で 1 度）一時の置き場へ書き出し、以後は同じ path を返す。
+fn baked_tool() -> R<PathBuf> {
+    BAKED
+        .get_or_init(|| unpack(&scratch("folio-archify")))
+        .clone()
+        .map(|root| root.join(TOOL))
+}
+
+/// 焼いた写しを `root/vendor/archify/` へ書く。`root` は新しく作り（在れば Err）、途中で書けなければ消して Err。
+fn unpack(root: &Path) -> R<PathBuf> {
+    fs::create_dir(root).map_err(|e| format!("{}: 一時の置き場を作れない: {e}", root.display()))?;
+    let written = TOOL_FILES.iter().try_for_each(|(rel, bytes)| {
+        let path = root.join(TOOL_DIR).join(rel);
+        if let Some(up) = path.parent() {
+            fs::create_dir_all(up)
+                .map_err(|e| format!("{}: 一時の置き場を作れない: {e}", up.display()))?;
+        }
+        fs::write(&path, bytes)
+            .map_err(|e| format!("{}: 焼いた道具を書き出せない: {e}", path.display()))
+    });
+    match written {
+        Ok(()) => Ok(root.to_path_buf()),
+        Err(e) => {
+            let _ = fs::remove_dir_all(root);
+            Err(e)
+        }
+    }
+}
+
+/// 一時の置き場の名（`$TMPDIR/<頭>-<process の番号>-<ns>`・deliver と共有する）。
+fn scratch(head: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    std::env::temp_dir().join(format!("{head}-{}-{nanos}", std::process::id()))
+}
+
+/// 命令の終わりに、焼いた道具を書き出した一時の置き場だけを消す（書き出していなければ何もしない・N-1.1）。
+pub fn sweep() {
+    if let Some(Ok(root)) = BAKED.get() {
+        let _ = fs::remove_dir_all(root);
+    }
 }
 
 // ── 型付き記述の書き出し（Value → JSON の 1 行・決定的）──
@@ -377,10 +440,7 @@ fn quote(s: &str) -> String {
 
 /// 一時 dir を作って道具を 1 回撃ち、図の本体を返す。一時 dir は結果に関わらず消す。
 fn deliver(tool: &Path, kind: &str, json: &str, id: &str) -> R<String> {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
-    let td = std::env::temp_dir().join(format!("folio-figure-{}-{nanos}", std::process::id()));
+    let td = scratch("folio-figure");
     fs::create_dir_all(&td).map_err(|e| format!("{}: 一時 dir を作れない: {e}", td.display()))?;
     let result = deliver_in(&td, tool, kind, json, id);
     let _ = fs::remove_dir_all(&td);
@@ -694,6 +754,47 @@ mod figure_tests {
             )
             .unwrap_err(),
             "図の型「context-band」は図の道具の型でない"
+        );
+    }
+
+    #[test]
+    fn f168_the_baked_tool_is_the_copy_frozen_in_r15() {
+        // 焼いた file は path の byte 順で、許諾の写し LICENSE を含む
+        let paths: Vec<&str> = TOOL_FILES.iter().map(|(p, _)| *p).collect();
+        let mut sorted = paths.clone();
+        sorted.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        assert_eq!(paths, sorted, "焼いた順が path の byte 順でない");
+        assert!(
+            paths.contains(&"LICENSE"),
+            "許諾の写し LICENSE を焼いていない"
+        );
+        // 連結の要約値と file の数が正本 rules.yaml の R-15 の value に在る（既存の読み手で読む）
+        let bytes: Vec<u8> = TOOL_FILES
+            .iter()
+            .flat_map(|(_, b)| b.iter().copied())
+            .collect();
+        let hex = crate::sha256::hex(&bytes);
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent");
+        let rules = cursor::load(&dir, "rules.yaml").unwrap();
+        let rows = X::root(&rules, "rules.yaml")
+            .f("thresholds")
+            .unwrap()
+            .seq()
+            .unwrap();
+        let row = rows
+            .iter()
+            .find(|r| r.f("id").and_then(|x| x.text()).as_deref() == Ok("R-15"))
+            .expect("R-15 が無い");
+        let value = row.f("value").unwrap().text().unwrap();
+        assert!(
+            value.contains(&hex),
+            "焼いた要約値 {hex}（{} file）が R-15 に無い: {value}",
+            TOOL_FILES.len()
+        );
+        assert!(
+            value.contains(&format!("写し {} file", TOOL_FILES.len())),
+            "焼いた file の数 {} が R-15 に無い: {value}",
+            TOOL_FILES.len()
         );
     }
 }

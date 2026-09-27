@@ -312,7 +312,13 @@ enum Command {
 }
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let code = run(Cli::parse());
+    // 焼いた図の道具を書き出した一時の置き場は命令の終わりに消す（便 168・書き出していなければ何もしない）
+    figure::sweep();
+    code
+}
+
+fn run(cli: Cli) -> ExitCode {
     match cli.command {
         Command::Check {
             dir,

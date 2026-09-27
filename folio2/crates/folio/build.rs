@@ -6,12 +6,14 @@
 //! 図の型の名札（figure_body_classes.type_ids）も同じ source に定数として導出する（面の生成器は手書きの写しを持たない）。
 //! 便 128（ADR-11 決定 (3)(ア)）から憲法の正本の schema の 5 部位（meta・precedence・article・mechanism・statement）の
 //! 欄の一覧（required の列と、required と optional を繋いだ閉じた列）も同じ file に導出する（床が未知の欄を数える一覧）。
+//! 便 168（ADR-27 決定 (1)）から図の道具の写し `vendor/archify/` の全 file を path の byte 順に焼いた列も `OUT_DIR` に書く
+//! （置き場の親に写しが無いときに撃つ道具・焼く元は repo の写し 1 つ・P-6.3）。
 //! 人は型の一覧を書かない。導出できない部品目録・憲法は組み立てを失敗させる（黙って空の一覧にしない）。
 
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use yaml_rust2::{Yaml, YamlLoader};
 
@@ -49,6 +51,77 @@ fn main() {
         }
     };
     fs::write(out_dir.join("constitution_enums.rs"), source).expect("OUT_DIR へ書けない");
+
+    // 図の道具の写し（便 168）: dir を名指すので中の file の変更・足す・消すで走り直す
+    let path = Path::new(&manifest).join(TOOL);
+    println!("cargo:rerun-if-changed={}", path.display());
+    let source = match tool_files(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("図の道具の写し {} を焼けない: {e}", path.display());
+            std::process::exit(1);
+        }
+    };
+    fs::write(out_dir.join("archify_files.rs"), source).expect("OUT_DIR へ書けない");
+}
+
+/// 図の道具の写しの path（crate から見た相対・rules 行 R-15 の写し）。
+const TOOL: &str = "../../vendor/archify";
+
+/// 図の道具の写しの全 file を相対 path の byte 順（vendor/README.md の要約値の規則と同じ順）に並べ、（相対 path・
+/// `include_bytes!`）の対の列 TOOL_FILES を Rust の source に組む（便 168 (b) 1）。symlink など file でも dir でもないもの・
+/// UTF-8 でない名・許諾の写し LICENSE が無い、は Err（MIT の写しを許諾の字なしに焼かない）。
+fn tool_files(root: &Path) -> Result<String, String> {
+    let mut files: Vec<(String, PathBuf)> = Vec::new();
+    walk(root, "", &mut files)?;
+    files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    if !files.iter().any(|(rel, _)| rel == "LICENSE") {
+        return Err("許諾の写し LICENSE が無い".to_string());
+    }
+    let mut out = String::new();
+    out.push_str(
+        "// 組み立て時に build.rs が図の道具の写し（vendor/archify/）から焼いた。人は書かない。\n",
+    );
+    out.push_str(&format!(
+        "/// 焼いた図の道具の写し（相対 path と中身の対・path の byte 順）。\npub const TOOL_FILES: [(&str, &[u8]); {}] = [\n",
+        files.len()
+    ));
+    for (rel, path) in &files {
+        let abs = path
+            .to_str()
+            .ok_or_else(|| format!("{rel}: path が UTF-8 でない"))?;
+        out.push_str(&format!("    ({rel:?}, include_bytes!({abs:?})),\n"));
+    }
+    out.push_str("];\n");
+    Ok(out)
+}
+
+/// `dir` の下の file を（相対 path・path）で `out` へ足す（symlink を辿らない）。
+fn walk(dir: &Path, prefix: &str, out: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|e| format!("{}: 読めない（{e}）", dir.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("{}: 読めない（{e}）", dir.display()))?;
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|n| format!("{}: 名が UTF-8 でない", Path::new(&n).display()))?;
+        let rel = if prefix.is_empty() {
+            name
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let kind = entry
+            .file_type()
+            .map_err(|e| format!("{rel}: 種類を読めない（{e}）"))?;
+        if kind.is_dir() {
+            walk(&entry.path(), &rel, out)?;
+        } else if kind.is_file() {
+            out.push((rel, entry.path()));
+        } else {
+            return Err(format!("{rel}: file でも dir でもない（symlink など）"));
+        }
+    }
+    Ok(())
 }
 
 /// 憲法の正本の文字列を受け、schema.enums の表に在る鍵を file の順に全部、閉じた一覧（enum）の Rust の source に組む
