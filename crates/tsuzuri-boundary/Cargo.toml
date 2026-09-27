@@ -10,5 +10,7 @@ name = "tz"
 path = "src/main.rs"
 
 # 外の依存は足さない（標準 library だけで書く・xtask の歯 skeleton_ が直接依存の名を測る）。
+# 中核の crate は workspace の中の crate（便 e-read・グラフと指標と次の一手と板の関数）。
 [dependencies]
 tsuzuri-contract = { path = "../tsuzuri-contract" }
+tsuzuri-core = { path = "../tsuzuri-core" }

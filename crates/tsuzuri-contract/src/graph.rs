@@ -1,6 +1,9 @@
 //! 導出グラフの型: 節点の種類（閉じた 20）・辺の型（閉じた 30）・節点と辺（判断の記録 ADR-7 決定 (2)・設計ノート surface §17・§18）。
 //! 設計文書の 11 種と 17 型は folio の語（graph.yaml の node_kinds と edge_types の写し）をそのまま電文の語にする。
 //! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は便 c で決めるのでここには置かない。
+//! 導出グラフの電文（GraphDoc）は便 e-read で足す（中核の crate の Graph と check の値の写し）。
+
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -222,4 +225,90 @@ pub struct GraphEdge {
     pub to: String,
     #[serde(rename = "type")]
     pub edge_type: EdgeType,
+}
+
+/// 導出グラフの入力の出所（閉じた 3・便 e-read）。読めない出所はその種類の節点だけ「まだ分からない」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GraphSource {
+    /// 設計の索引（設計文書の 11 種）。
+    Design,
+    /// 台帳（bead の 4 種と notes から導く 3 種）。
+    Ledger,
+    /// 器の event log（走行）。
+    Runs,
+}
+
+impl GraphSource {
+    /// 閉じた一覧（順も固定）。
+    pub const ALL: [GraphSource; 3] = [GraphSource::Design, GraphSource::Ledger, GraphSource::Runs];
+}
+
+/// bead の属性（辺にしない欄: 種類・状態・label・pointer の行・touches）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BeadAttr {
+    pub kind: NodeKind,
+    pub status: String,
+    pub labels: Vec<String>,
+    /// acceptance の中の「design = 」で始まる行（契約の pointer の行）。
+    pub pointers: Vec<String>,
+    /// metadata の touches の欄の id。
+    pub touches: Vec<String>,
+}
+
+/// 走行の属性（段と口座・口座は節点にしない）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunAttr {
+    /// 最後の event の段（器の語のまま）。
+    pub stage: Option<String>,
+    pub account: Option<String>,
+}
+
+/// 不変条件の判定（3 値）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Verdict {
+    Pass,
+    Violation,
+    Unknown,
+}
+
+impl Verdict {
+    /// 閉じた一覧（順も固定）。
+    pub const ALL: [Verdict; 3] = [Verdict::Pass, Verdict::Violation, Verdict::Unknown];
+}
+
+/// 1 本の不変条件の判定（id・3 値・違反の数・違反の id の一覧）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvariantCheck {
+    pub id: String,
+    pub verdict: Verdict,
+    pub violations: u32,
+    /// 違反が名指す id（名の順・重複なし・違反でなければ空）。
+    pub ids: Vec<String>,
+}
+
+/// 組まずに数えた辺の行の数（型が閉じた一覧に無い）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkippedEdges {
+    /// 設計の索引の辺のうち 17 型の外。
+    pub design: u32,
+    /// 台帳の dependencies のうち 4 型の外。
+    pub ledger: u32,
+}
+
+/// 導出グラフの電文（口 GET /api/graph・便 e-read）。repo に書かず、要求のたびに組み直す。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GraphDoc {
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    /// 読めなかった出所（その種類の節点は「まだ分からない」）。
+    pub unread: Vec<GraphSource>,
+    /// bead の id ごとの属性。
+    pub beads: BTreeMap<String, BeadAttr>,
+    /// 走行の id ごとの属性。
+    pub runs: BTreeMap<String, RunAttr>,
+    /// 不変条件の 12 本の判定（id の順）。
+    pub invariants: Vec<InvariantCheck>,
+    pub skipped: SkippedEdges,
 }

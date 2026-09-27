@@ -3,6 +3,9 @@
 //! どちらかが動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
 //! 印の取りこぼしを拾うために、印が動かなくても 5 秒ごとに読み直す。
 //! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
+//! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
+//! 動いたら board-changed を 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
+//! board-changed の data は ledger-changed と同じ形（`{"at":<epoch 秒>}`）。
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -12,6 +15,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerChanged};
+use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 
 use super::ledger::Source;
@@ -54,9 +58,42 @@ pub struct Hub {
 }
 
 impl Hub {
-    /// 台帳の周期の読みを始める（Hub が落ちれば読みも止まる）。
-    pub fn start(source: Source) -> Arc<Hub> {
-        Hub::watch(source.marks(), move || source.read(), TIMING)
+    /// 台帳の周期の読みと、板の印の周期の見張りを始める（Hub が落ちればどちらも止まる）。
+    /// `board` は板の印の file の一覧を返す関数で、周ごとに撃ち直す（増えた file と消えた file も印の変化）。
+    pub fn start<B>(source: Source, board: B) -> Arc<Hub>
+    where
+        B: FnMut() -> Vec<PathBuf> + Send + 'static,
+    {
+        let hub = Hub::watch(source.marks(), move || source.read(), TIMING);
+        Hub::watch_board(&hub, board, POLL);
+        hub
+    }
+
+    /// 板の印の file の一覧を `poll` ごとに取り直し、印（path と更新時刻と長さ）が動いたら
+    /// board-changed を送る。最初の印は戻る前に取る（戻った後の変化は取りこぼさない）。
+    pub fn watch_board<B>(hub: &Arc<Hub>, mut board: B, poll: Duration)
+    where
+        B: FnMut() -> Vec<PathBuf> + Send + 'static,
+    {
+        let weak = Arc::downgrade(hub);
+        let mut seen = board_stamps(&board());
+        thread::spawn(move || {
+            loop {
+                thread::sleep(poll);
+                if weak.strong_count() == 0 {
+                    return;
+                }
+                let current = board_stamps(&board());
+                if current == seen {
+                    continue;
+                }
+                seen = current;
+                let Some(hub) = weak.upgrade() else {
+                    return;
+                };
+                hub.board_changed(now());
+            }
+        });
     }
 
     /// 印の file と読みの関数で周期の読みを始める。最初の印と読みは戻る前に取る
@@ -90,13 +127,22 @@ impl Hub {
 
     /// 台帳の変化を全員に送る（切れた受け手は外す）。
     pub fn ledger_changed(&self, at: u64) {
+        self.send(LEDGER_CHANGED_EVENT, at);
+    }
+
+    /// 板の変化（器の event log か設計文書）を全員に送る（切れた受け手は外す）。
+    pub fn board_changed(&self, at: u64) {
+        self.send(BOARD_CHANGED_EVENT, at);
+    }
+
+    fn send(&self, event: &str, at: u64) {
         let data = wire::encode(&LedgerChanged { at }).expect("LedgerChanged は JSON になる");
         let id = {
             let mut seq = lock(&self.seq);
             *seq += 1;
             *seq
         };
-        let frame = format!("id: {id}\nevent: {LEDGER_CHANGED_EVENT}\ndata: {data}\n\n");
+        let frame = format!("id: {id}\nevent: {event}\ndata: {data}\n\n");
         lock(&self.subscribers).retain(|tx| tx.send(frame.clone()).is_ok());
     }
 }
@@ -105,7 +151,8 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now() -> u64 {
+/// 今の時刻（UTC の epoch 秒・時計が 1970 年より前なら 0）。
+pub fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
@@ -114,6 +161,13 @@ fn now() -> u64 {
 /// 印の file の全部の更新時刻と長さ。
 fn stamps(marks: &[PathBuf]) -> Vec<Option<(SystemTime, u64)>> {
     marks.iter().map(|m| stamp(m)).collect()
+}
+
+/// 板の印（file の path と、その更新時刻と長さ）。
+type BoardStamps = Vec<(PathBuf, Option<(SystemTime, u64)>)>;
+
+fn board_stamps(files: &[PathBuf]) -> BoardStamps {
+    files.iter().map(|f| (f.clone(), stamp(f))).collect()
 }
 
 /// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果）。
@@ -261,6 +315,40 @@ mod tests {
         let after = reads.load(Ordering::SeqCst);
         thread::sleep(Duration::from_millis(400));
         assert_eq!(reads.load(Ordering::SeqCst), after);
+    }
+
+    #[test]
+    fn server_read_watch_board_sends_on_marks() {
+        let marks = marks("board");
+        let dir = marks[0].parent().expect("置き場").to_path_buf();
+        let hub = Arc::new(Hub::default());
+        let d = dir.clone();
+        let files = move || {
+            let mut f: Vec<PathBuf> = std::fs::read_dir(&d)
+                .expect("置き場")
+                .map(|e| e.expect("entry").path())
+                .collect();
+            f.sort();
+            f
+        };
+        Hub::watch_board(&hub, files, Duration::from_millis(20));
+        let rx = hub.subscribe();
+        thread::sleep(Duration::from_millis(100));
+        assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
+        // 在る file の長さが動く・file が増える・file が消える、のどれも 1 件。
+        for change in [
+            Box::new(|| std::fs::write(&marks[0], "22").expect("印 a")) as Box<dyn Fn()>,
+            Box::new(|| std::fs::write(&marks[1], "x").expect("印 b")),
+            Box::new(|| std::fs::remove_file(&marks[1]).expect("印 b を消す")),
+        ] {
+            change();
+            let frame = rx.recv_timeout(Duration::from_secs(1)).expect("1 件");
+            assert!(frame.contains("event: board-changed\n"), "{frame}");
+            assert!(frame.contains("data: {\"at\":"), "{frame}");
+            thread::sleep(Duration::from_millis(100));
+            assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

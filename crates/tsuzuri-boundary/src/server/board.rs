@@ -1,0 +1,206 @@
+//! 読む側の口（便 e-read）: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
+//! - GET /api/pipeline — pipeline の板（PipelineBoard）
+//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats）
+//! - GET /api/next — 次の一手（NextStep）
+//! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
+//!
+//! 字は要求のたびに集める。台帳は bd の読み（`ledger::Source`）が返した字、設計の索引は設計の道具の
+//! 標準出力（`design::Design`）、走行は器の event log の file（`runs::Runs`）。読めない出所は空の字で渡し、
+//! 中核の関数がその部分だけを「まだ分からない」にする。今の時刻は呼ぶ側が時計から取って引数で渡す。
+
+use std::thread;
+
+use tsuzuri_contract::EpochSecs;
+use tsuzuri_contract::board::{PipelineBoard, Reading};
+use tsuzuri_contract::graph::{
+    BeadAttr, GraphDoc, GraphSource, InvariantCheck, RunAttr, SkippedEdges, Verdict,
+};
+use tsuzuri_contract::stats::{LedgerStats, NextStep};
+use tsuzuri_core::graph::{self, Graph, Inputs, Invariant};
+
+use super::design::Design;
+use super::ledger::Source;
+use super::runs::Runs;
+
+/// 読みの出所の 3 つ（台帳・設計の索引・器の event log）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sources {
+    pub ledger: Source,
+    pub design: Design,
+    pub runs: Runs,
+}
+
+/// 集めた 3 つの字（読めない出所と集めなかった出所は空の字）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Texts {
+    pub design: String,
+    pub ledger: String,
+    pub events: String,
+}
+
+impl Texts {
+    /// 中核の crate の入力の形。
+    pub fn inputs(&self) -> Inputs<'_> {
+        Inputs {
+            design_index: &self.design,
+            ledger: &self.ledger,
+            events: &self.events,
+        }
+    }
+}
+
+impl Sources {
+    /// 台帳の字と、要るときだけ設計の索引と event log の字を集める
+    /// （2 つの子 process は並べて撃つので、待ちは 1 本分の上限まで）。
+    pub fn gather(&self, design: bool, events: bool) -> Texts {
+        thread::scope(|s| {
+            let index = design.then(|| s.spawn(|| self.design.text()));
+            let ledger = self.ledger.text();
+            let events = if events { self.runs.text() } else { None };
+            let index = index.and_then(|h| h.join().ok().flatten());
+            Texts {
+                design: index.unwrap_or_default(),
+                ledger: ledger.unwrap_or_default(),
+                events: events.unwrap_or_default(),
+            }
+        })
+    }
+}
+
+/// pipeline の板（event log が読めなければ札は「まだ分からない」）。
+pub fn pipeline(texts: &Texts, now: EpochSecs) -> PipelineBoard {
+    tsuzuri_core::pipeline::board(&texts.ledger, &texts.events, now).board
+}
+
+/// 台帳の指標（台帳が読めなければ「まだ分からない」）。
+pub fn metrics(texts: &Texts, now: EpochSecs) -> Reading<LedgerStats> {
+    tsuzuri_core::ledger::stats(&texts.ledger, now)
+}
+
+/// 次の一手。
+pub fn next(texts: &Texts, now: EpochSecs) -> NextStep {
+    tsuzuri_core::next_step::next_step(&texts.ledger, &texts.events, now)
+}
+
+/// 導出グラフを組み、不変条件を数えて電文にする。
+pub fn graph(texts: &Texts) -> GraphDoc {
+    let g = graph::build(&texts.inputs());
+    let invariants = graph::check(&g);
+    doc(&g, &invariants)
+}
+
+/// 中核の crate の Graph と check の値を電文に写す。
+pub fn doc(g: &Graph, invariants: &[Invariant]) -> GraphDoc {
+    GraphDoc {
+        nodes: g.nodes.clone(),
+        edges: g.edges.clone(),
+        unread: g.unread.iter().map(|s| source(*s)).collect(),
+        beads: g
+            .beads
+            .iter()
+            .map(|(id, b)| {
+                let attr = BeadAttr {
+                    kind: b.kind,
+                    status: b.status.clone(),
+                    labels: b.labels.clone(),
+                    pointers: b.pointers.clone(),
+                    touches: b.touches.clone(),
+                };
+                (id.clone(), attr)
+            })
+            .collect(),
+        runs: g
+            .runs
+            .iter()
+            .map(|(id, r)| {
+                let attr = RunAttr {
+                    stage: r.stage.clone(),
+                    account: r.account.clone(),
+                };
+                (id.clone(), attr)
+            })
+            .collect(),
+        invariants: invariants.iter().map(invariant).collect(),
+        skipped: SkippedEdges {
+            design: count(g.skipped.design_edges),
+            ledger: count(g.skipped.ledger_edges),
+        },
+    }
+}
+
+fn source(s: graph::Source) -> GraphSource {
+    match s {
+        graph::Source::Design => GraphSource::Design,
+        graph::Source::Ledger => GraphSource::Ledger,
+        graph::Source::Runs => GraphSource::Runs,
+    }
+}
+
+fn invariant(inv: &Invariant) -> InvariantCheck {
+    let (verdict, ids) = match &inv.verdict {
+        graph::Verdict::Pass => (Verdict::Pass, Vec::new()),
+        graph::Verdict::Violation(ids) => (Verdict::Violation, ids.clone()),
+        graph::Verdict::Unknown => (Verdict::Unknown, Vec::new()),
+    };
+    InvariantCheck {
+        id: inv.id.to_string(),
+        verdict,
+        violations: count(ids.len()),
+        ids,
+    }
+}
+
+fn count(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Texts, doc, graph};
+    use tsuzuri_contract::graph::{GraphSource, Verdict};
+    use tsuzuri_core::graph::{Invariant, build};
+
+    #[test]
+    fn server_read_doc_copies_verdicts() {
+        let g = build(&Texts::default().inputs());
+        let got = doc(
+            &g,
+            &[
+                Invariant {
+                    id: "g-1",
+                    verdict: tsuzuri_core::graph::Verdict::Pass,
+                },
+                Invariant {
+                    id: "g-2",
+                    verdict: tsuzuri_core::graph::Verdict::Violation(vec!["a".into(), "b".into()]),
+                },
+                Invariant {
+                    id: "g-3",
+                    verdict: tsuzuri_core::graph::Verdict::Unknown,
+                },
+            ],
+        );
+        assert_eq!(got.unread, GraphSource::ALL.to_vec());
+        let brief: Vec<(&str, Verdict, u32, Vec<String>)> = got
+            .invariants
+            .iter()
+            .map(|i| (i.id.as_str(), i.verdict, i.violations, i.ids.clone()))
+            .collect();
+        assert_eq!(
+            brief,
+            vec![
+                ("g-1", Verdict::Pass, 0, vec![]),
+                ("g-2", Verdict::Violation, 2, vec!["a".into(), "b".into()]),
+                ("g-3", Verdict::Unknown, 0, vec![]),
+            ]
+        );
+    }
+
+    #[test]
+    fn server_read_empty_texts_are_unread() {
+        let doc = graph(&Texts::default());
+        assert!(doc.nodes.is_empty());
+        assert_eq!(doc.invariants.len(), 12);
+        assert_eq!(doc.unread, GraphSource::ALL.to_vec());
+    }
+}

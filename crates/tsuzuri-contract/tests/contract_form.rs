@@ -12,7 +12,10 @@ use tsuzuri_contract::board::{
     AccountBoard, GroupRow, LedgerJudge, NextMove, PipelineBoard, PipelineCard, PipelineColumn,
     ProjectMetrics, QuotaLeft, Reading, SessionRow, Stage,
 };
-use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
+use tsuzuri_contract::graph::{
+    BeadAttr, EdgeType, GraphDoc, GraphEdge, GraphNode, GraphSource, InvariantCheck, NodeKind,
+    RunAttr, SkippedEdges, Verdict, title36,
+};
 use tsuzuri_contract::ledger::{
     BDW, BdLine, BeadId, ChildType, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
     MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL,
@@ -155,6 +158,47 @@ fn ledger_writes() -> Vec<LedgerWrite> {
             title: "--notes=x".into(),
             child_type: ChildType::Epic,
             description: "--parent=".into(),
+        },
+    ]
+}
+
+fn bead_attr() -> BeadAttr {
+    BeadAttr {
+        kind: NodeKind::Task,
+        status: "open".into(),
+        labels: vec!["surface".into()],
+        pointers: vec!["design = contracts/surface-base.toml#b".into()],
+        touches: vec![],
+    }
+}
+
+fn run_attr() -> RunAttr {
+    RunAttr {
+        stage: Some("Gated".into()),
+        account: Some("black4".into()),
+    }
+}
+
+/// 3 値の判定の見本（合格・違反・まだ分からない）。
+fn invariant_checks() -> Vec<InvariantCheck> {
+    vec![
+        InvariantCheck {
+            id: "g-1".into(),
+            verdict: Verdict::Pass,
+            violations: 0,
+            ids: vec![],
+        },
+        InvariantCheck {
+            id: "g-2".into(),
+            verdict: Verdict::Violation,
+            violations: 2,
+            ids: vec!["t3-hub.3".into(), "t3-hub.4".into()],
+        },
+        InvariantCheck {
+            id: "g-3".into(),
+            verdict: Verdict::Unknown,
+            violations: 0,
+            ids: vec![],
         },
     ]
 }
@@ -393,6 +437,81 @@ fn forms() -> Vec<Box<dyn Form>> {
                 to: "surface-base#b".into(),
                 edge_type: EdgeType::Design,
             }],
+        ),
+        form("graph::GraphSource", GraphSource::ALL.to_vec()),
+        form("graph::BeadAttr", vec![bead_attr()]),
+        form(
+            "graph::RunAttr",
+            vec![
+                run_attr(),
+                RunAttr {
+                    stage: None,
+                    account: None,
+                },
+            ],
+        ),
+        form("graph::Verdict", Verdict::ALL.to_vec()),
+        form("graph::InvariantCheck", invariant_checks()),
+        form(
+            "graph::SkippedEdges",
+            vec![SkippedEdges {
+                design: 3,
+                ledger: 0,
+            }],
+        ),
+        form(
+            "graph::GraphDoc",
+            vec![
+                GraphDoc {
+                    nodes: vec![
+                        GraphNode {
+                            id: "t3-hub.3".into(),
+                            kind: NodeKind::Task,
+                            file: None,
+                            digest: None,
+                            title: "契約の型".into(),
+                        },
+                        GraphNode {
+                            id: "t3-hub.3-20260927T073916Z".into(),
+                            kind: NodeKind::Run,
+                            file: None,
+                            digest: None,
+                            title: "t3-hub.3-20260927T073916Z".into(),
+                        },
+                    ],
+                    edges: vec![GraphEdge {
+                        from: "t3-hub.3-20260927T073916Z".into(),
+                        to: "t3-hub.3".into(),
+                        edge_type: EdgeType::RunOf,
+                    }],
+                    unread: vec![GraphSource::Design],
+                    beads: [("t3-hub.3".to_string(), bead_attr())].into(),
+                    runs: [("t3-hub.3-20260927T073916Z".to_string(), run_attr())].into(),
+                    invariants: invariant_checks(),
+                    skipped: SkippedEdges {
+                        design: 0,
+                        ledger: 1,
+                    },
+                },
+                // どの出所も読めない。
+                GraphDoc {
+                    nodes: vec![],
+                    edges: vec![],
+                    unread: GraphSource::ALL.to_vec(),
+                    beads: Default::default(),
+                    runs: Default::default(),
+                    invariants: vec![InvariantCheck {
+                        id: "g-1".into(),
+                        verdict: Verdict::Unknown,
+                        violations: 0,
+                        ids: vec![],
+                    }],
+                    skipped: SkippedEdges {
+                        design: 0,
+                        ledger: 0,
+                    },
+                },
+            ],
         ),
         // board
         form("board::Stage", Stage::ALL.to_vec()),
@@ -794,6 +913,8 @@ fn contract_form_closed_lists() {
     }
     assert_eq!(distinct(&NodeKind::ALL), 20);
     assert_eq!(distinct(&EdgeType::ALL), 30);
+    assert_eq!(distinct(&GraphSource::ALL), 3);
+    assert_eq!(distinct(&Verdict::ALL), 3);
     assert_eq!(distinct(&NextMove::ALL), 7);
     assert_eq!(distinct(&LedgerJudge::ALL), 5);
     assert_eq!(distinct(&Stage::ALL), 8);

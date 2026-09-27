@@ -359,6 +359,167 @@
       "type": "design"
     }
   ],
+  "graph::GraphSource": [
+    "design",
+    "ledger",
+    "runs"
+  ],
+  "graph::BeadAttr": [
+    {
+      "kind": "task",
+      "status": "open",
+      "labels": [
+        "surface"
+      ],
+      "pointers": [
+        "design = contracts/surface-base.toml#b"
+      ],
+      "touches": []
+    }
+  ],
+  "graph::RunAttr": [
+    {
+      "stage": "Gated",
+      "account": "black4"
+    },
+    {
+      "stage": null,
+      "account": null
+    }
+  ],
+  "graph::Verdict": [
+    "pass",
+    "violation",
+    "unknown"
+  ],
+  "graph::InvariantCheck": [
+    {
+      "id": "g-1",
+      "verdict": "pass",
+      "violations": 0,
+      "ids": []
+    },
+    {
+      "id": "g-2",
+      "verdict": "violation",
+      "violations": 2,
+      "ids": [
+        "t3-hub.3",
+        "t3-hub.4"
+      ]
+    },
+    {
+      "id": "g-3",
+      "verdict": "unknown",
+      "violations": 0,
+      "ids": []
+    }
+  ],
+  "graph::SkippedEdges": [
+    {
+      "design": 3,
+      "ledger": 0
+    }
+  ],
+  "graph::GraphDoc": [
+    {
+      "nodes": [
+        {
+          "id": "t3-hub.3",
+          "kind": "task",
+          "file": null,
+          "digest": null,
+          "title": "契約の型"
+        },
+        {
+          "id": "t3-hub.3-20260927T073916Z",
+          "kind": "run",
+          "file": null,
+          "digest": null,
+          "title": "t3-hub.3-20260927T073916Z"
+        }
+      ],
+      "edges": [
+        {
+          "from": "t3-hub.3-20260927T073916Z",
+          "to": "t3-hub.3",
+          "type": "run_of"
+        }
+      ],
+      "unread": [
+        "design"
+      ],
+      "beads": {
+        "t3-hub.3": {
+          "kind": "task",
+          "status": "open",
+          "labels": [
+            "surface"
+          ],
+          "pointers": [
+            "design = contracts/surface-base.toml#b"
+          ],
+          "touches": []
+        }
+      },
+      "runs": {
+        "t3-hub.3-20260927T073916Z": {
+          "stage": "Gated",
+          "account": "black4"
+        }
+      },
+      "invariants": [
+        {
+          "id": "g-1",
+          "verdict": "pass",
+          "violations": 0,
+          "ids": []
+        },
+        {
+          "id": "g-2",
+          "verdict": "violation",
+          "violations": 2,
+          "ids": [
+            "t3-hub.3",
+            "t3-hub.4"
+          ]
+        },
+        {
+          "id": "g-3",
+          "verdict": "unknown",
+          "violations": 0,
+          "ids": []
+        }
+      ],
+      "skipped": {
+        "design": 0,
+        "ledger": 1
+      }
+    },
+    {
+      "nodes": [],
+      "edges": [],
+      "unread": [
+        "design",
+        "ledger",
+        "runs"
+      ],
+      "beads": {},
+      "runs": {},
+      "invariants": [
+        {
+          "id": "g-1",
+          "verdict": "unknown",
+          "violations": 0,
+          "ids": []
+        }
+      ],
+      "skipped": {
+        "design": 0,
+        "ledger": 0
+      }
+    }
+  ],
   "board::Stage": [
     "Queued",
     "Blocked",

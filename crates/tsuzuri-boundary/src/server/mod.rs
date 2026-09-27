@@ -1,16 +1,24 @@
 //! 面の server の最小の形（設計ノート surface-base §9・便 e-min）。
 //! 標準 library だけで書く同期の server で、1 つの process と 1 つの port で動く。1 接続 1 thread。
 //! 台帳は bd の読み取りの口を子 process で撃って読む（§10・便 e-src）。
-//! 口は 4 つで、書く口は持たない（GET でない要求は 405 で何も書かない）。
+//! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
+//! 書く口は持たない（GET でない要求は 405 で何も書かない）。
 //! - GET /api/ledger — 台帳の一覧（LedgerList）
 //! - GET /api/ledger/<id> — 台帳の 1 本（LedgerItem）
+//! - GET /api/pipeline — pipeline の板（PipelineBoard）
+//! - GET /api/metrics — 台帳の指標（LedgerStats）
+//! - GET /api/next — 次の一手（NextStep）
+//! - GET /api/graph — 導出グラフ（GraphDoc）
 //! - GET /api/surface/events — 変化の知らせ（SSE）
 //! - それ以外の GET — 面の file の配布
 
+pub mod board;
+pub mod design;
 pub mod events;
 pub mod files;
 pub mod http;
 pub mod ledger;
+pub mod runs;
 
 use std::ffi::OsString;
 use std::fmt;
@@ -24,12 +32,15 @@ use std::time::Duration;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::wire;
 
+use self::board::Sources;
+use self::design::Design;
 use self::events::Hub;
 use self::files::Served;
 use self::http::Response;
 use self::ledger::Source;
+use self::runs::Runs;
 
-/// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program）。
+/// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub repo: PathBuf,
@@ -37,6 +48,10 @@ pub struct Config {
     pub files: PathBuf,
     /// 台帳の読みに撃つ program（既定は `ledger::BD`）。
     pub bd: OsString,
+    /// 器の state dir（None なら走行の出所は読めない）。
+    pub state_dir: Option<PathBuf>,
+    /// 設計の索引の読みに撃つ program（既定は `design::FOLIO`）。
+    pub folio: OsString,
 }
 
 /// tailnet の IPv4 の範囲（100.64.0.0/10）。
@@ -99,7 +114,7 @@ pub struct Server {
 }
 
 struct Shared {
-    ledger: Source,
+    sources: Sources,
     files: PathBuf,
     hub: Arc<Hub>,
 }
@@ -111,8 +126,9 @@ const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl Server {
-    /// bind 先を判定し、置き場を確かめ、口を開き、台帳の周期の読みを始める
+    /// bind 先を判定し、置き場を確かめ、口を開き、台帳の周期の読みと板の印の見張りを始める
     /// （最初の読みは戻る前に取るので、bd が返さなければ `ledger::BD_TIMEOUT` まで待つ）。
+    /// state dir は確かめない（無い置き場は走行の出所が読めない扱い）。
     pub fn bind(config: &Config) -> Result<Server, StartError> {
         if !bind_allowed(config.bind.ip()) {
             return Err(StartError::BindRefused(config.bind));
@@ -133,11 +149,24 @@ impl Server {
                 path: config.files.clone(),
             })?;
         let listener = TcpListener::bind(config.bind).map_err(StartError::Io)?;
-        let ledger = Source::new(&config.repo, &config.bd);
-        let hub = Hub::start(ledger.clone());
+        let sources = Sources {
+            ledger: Source::new(&config.repo, &config.bd),
+            design: Design::new(&config.repo, &config.folio),
+            runs: Runs::new(config.state_dir.as_deref()),
+        };
+        let (design, runs) = (sources.design.clone(), sources.runs.clone());
+        let hub = Hub::start(sources.ledger.clone(), move || {
+            let mut marks = runs.marks();
+            marks.extend(design.marks());
+            marks
+        });
         Ok(Server {
             listener,
-            shared: Arc::new(Shared { ledger, files, hub }),
+            shared: Arc::new(Shared {
+                sources,
+                files,
+                hub,
+            }),
         })
     }
 
@@ -176,14 +205,32 @@ fn handle(stream: TcpStream, shared: &Shared) {
 
 /// GET の口を選ぶ。
 fn route(path: &str, shared: &Shared) -> Response {
-    if path == "/api/ledger" {
-        return json(200, wire::encode(&ledger::list(&shared.ledger)));
+    let sources = &shared.sources;
+    match path {
+        "/api/ledger" => return json(200, wire::encode(&ledger::list(&sources.ledger))),
+        "/api/pipeline" => {
+            let texts = sources.gather(false, true);
+            return json(200, wire::encode(&board::pipeline(&texts, events::now())));
+        }
+        "/api/metrics" => {
+            let texts = sources.gather(false, false);
+            return json(200, wire::encode(&board::metrics(&texts, events::now())));
+        }
+        "/api/next" => {
+            let texts = sources.gather(false, true);
+            return json(200, wire::encode(&board::next(&texts, events::now())));
+        }
+        "/api/graph" => {
+            let texts = sources.gather(true, true);
+            return json(200, wire::encode(&board::graph(&texts)));
+        }
+        _ => {}
     }
     if let Some(id) = path.strip_prefix("/api/ledger/") {
         let Ok(id) = BeadId::new(id) else {
             return Response::text(400, "id-shape");
         };
-        return match ledger::item(&shared.ledger, &id) {
+        return match ledger::item(&sources.ledger, &id) {
             ledger::Lookup::Found(item) => json(200, wire::encode(&item)),
             ledger::Lookup::Missing => Response::text(404, "no-item"),
             ledger::Lookup::Unknown => Response::text(503, "ledger-unknown"),

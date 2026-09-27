@@ -4,9 +4,9 @@
 //! 一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
 //! .beads の issues.jsonl は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
@@ -52,50 +52,58 @@ impl Source {
 
     /// bd を撃って台帳を読む。
     pub fn read(&self) -> Reading<Vec<LedgerItem>> {
-        match self.run() {
-            Some(out) => String::from_utf8(out).map_or(Reading::Unknown, |text| parse_bd(&text)),
-            None => Reading::Unknown,
-        }
+        self.text().map_or(Reading::Unknown, |text| parse_bd(&text))
     }
 
-    /// bd を 1 本撃ち、rc 0 で `BD_TIMEOUT` の内に返した標準出力を返す（それ以外は None）。
-    fn run(&self) -> Option<Vec<u8>> {
-        let deadline = Instant::now() + BD_TIMEOUT;
-        let mut child = Command::new(&self.bd)
-            .args(BD_ARGS)
-            .current_dir(&self.repo)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .ok()?;
-        let Some(mut stdout) = child.stdout.take() else {
-            stop(child);
-            return None;
-        };
-        // 標準出力は別の thread で読み切る（pipe が詰まって子が止まらないように）。
-        let (tx, rx) = mpsc::channel();
-        thread::spawn(move || {
-            let mut out = Vec::new();
-            let _ = tx.send(stdout.read_to_end(&mut out).map(|_| out));
-        });
-        let Ok(Ok(out)) = rx.recv_timeout(deadline.saturating_duration_since(Instant::now()))
-        else {
-            stop(child);
-            return None;
-        };
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break status,
-                Ok(None) if Instant::now() < deadline => thread::sleep(WAIT_STEP),
-                _ => {
-                    stop(child);
-                    return None;
-                }
-            }
-        };
-        status.success().then_some(out)
+    /// bd を撃ち、返した字をそのまま返す（導出グラフと指標の入力・便 e-read）。
+    /// 起動できない・rc が 0 でない・UTF-8 でない・`BD_TIMEOUT` を越える、のどれでも None。
+    pub fn text(&self) -> Option<String> {
+        let out = capture(&self.bd, BD_ARGS, &self.repo, BD_TIMEOUT)?;
+        String::from_utf8(out).ok()
     }
+}
+
+/// 子 process を 1 本撃ち、rc 0 で `timeout` の内に返した標準出力を返す（それ以外は None）。
+/// cwd は `cwd`・標準入力は空・標準エラーは捨てる。
+pub fn capture<I, S>(program: &OsStr, args: I, cwd: &Path, timeout: Duration) -> Option<Vec<u8>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let deadline = Instant::now() + timeout;
+    let mut child = Command::new(program)
+        .args(args)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let Some(mut stdout) = child.stdout.take() else {
+        stop(child);
+        return None;
+    };
+    // 標準出力は別の thread で読み切る（pipe が詰まって子が止まらないように）。
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut out = Vec::new();
+        let _ = tx.send(stdout.read_to_end(&mut out).map(|_| out));
+    });
+    let Ok(Ok(out)) = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) else {
+        stop(child);
+        return None;
+    };
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => thread::sleep(WAIT_STEP),
+            _ => {
+                stop(child);
+                return None;
+            }
+        }
+    };
+    status.success().then_some(out)
 }
 
 /// 子 process を止めて片付ける。

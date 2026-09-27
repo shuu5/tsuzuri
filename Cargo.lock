@@ -1522,6 +1522,7 @@ name = "tsuzuri-boundary"
 version = "0.1.0"
 dependencies = [
  "tsuzuri-contract",
+ "tsuzuri-core",
 ]
 
 [[package]]

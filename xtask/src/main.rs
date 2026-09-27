@@ -294,7 +294,10 @@ mod tests {
             "crates/tsuzuri-core",
             &["serde", "serde_json", "tsuzuri-contract"],
         ),
-        ("crates/tsuzuri-boundary", &["tsuzuri-contract"]),
+        (
+            "crates/tsuzuri-boundary",
+            &["tsuzuri-contract", "tsuzuri-core"],
+        ),
         (
             SURFACE_DIR,
             &[
@@ -440,7 +443,7 @@ name = "y"
     }
 
     /// 境界の crate（最小の server と tz の入口・便 e-min）は外の依存を足さない（標準 library だけ）。
-    /// 直接依存は workspace の member だけで、binary の名は tz。
+    /// 直接依存は workspace の member だけ（契約の型の crate と、便 e-read で足した中核の crate）で、binary の名は tz。
     #[test]
     fn skeleton_boundary_std_only_and_bin_tz() {
         let manifest =
@@ -459,7 +462,7 @@ name = "y"
         );
         assert_eq!(
             section_keys(&manifest, "dependencies"),
-            vec!["tsuzuri-contract".to_string()]
+            vec!["tsuzuri-contract".to_string(), "tsuzuri-core".to_string()]
         );
         assert_eq!(
             string_value(&manifest, "[bin]", "name").as_deref(),

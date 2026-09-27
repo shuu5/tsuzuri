@@ -1,16 +1,17 @@
 //! tz の入口（便 e-min）。終了 code は 合格 0・不合格 1・まだ分からない 2。
-//! tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>]
+//! tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>]
 //! bind 先は loopback か tailnet の住所だけ（条 N-6）。tailnet の住所はこの引数で受ける（行 D-4）。
 //! --bd は台帳の読みに撃つ program（既定 bd・便 e-src）。
+//! --state-dir は器の state dir（省けば走行の出所は読めない）・--folio は設計の索引の読みに撃つ program
+//! （既定 folio）（便 e-read）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use tsuzuri_boundary::server::{Config, Server, ledger};
+use tsuzuri_boundary::server::{Config, Server, design, ledger};
 
-const USAGE: &str =
-    "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>]";
+const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>]";
 
 /// 不合格（断り・使い方の誤り）。
 const FAIL: u8 = 1;
@@ -34,9 +35,10 @@ fn usage(what: &str) -> u8 {
     FAIL
 }
 
-/// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd を読む。
+/// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd・--state-dir・--folio を読む（省ける引数の空の値は断る）。
 fn parse(rest: &[&str]) -> Result<Config, String> {
     let (mut repo, mut bind, mut files, mut bd) = (None, None, None, None);
+    let (mut state_dir, mut folio) = (None, None);
     let mut it = rest.iter();
     while let Some(arg) = it.next() {
         let (name, value) = match arg.split_once('=') {
@@ -48,6 +50,8 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             "--bind" => &mut bind,
             "--files" => &mut files,
             "--bd" => &mut bd,
+            "--state-dir" => &mut state_dir,
+            "--folio" => &mut folio,
             _ => return Err(format!("知らない引数 {name}")),
         };
         if slot.replace(value).is_some() {
@@ -57,17 +61,20 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
     let (Some(repo), Some(bind), Some(files)) = (repo, bind, files) else {
         return Err("--repo と --bind と --files の 3 つが要る".into());
     };
+    for (name, value) in [("--bd", bd), ("--state-dir", state_dir), ("--folio", folio)] {
+        if value == Some("") {
+            return Err(format!("{name} の値が空"));
+        }
+    }
     Ok(Config {
         repo: PathBuf::from(repo),
         bind: bind
             .parse::<SocketAddr>()
             .map_err(|_| format!("bind 先 {bind} は 住所:port の形でない"))?,
         files: PathBuf::from(files),
-        bd: match bd {
-            Some("") => return Err("--bd の値が空".into()),
-            Some(bd) => bd.into(),
-            None => ledger::BD.into(),
-        },
+        bd: bd.unwrap_or(ledger::BD).into(),
+        state_dir: state_dir.map(PathBuf::from),
+        folio: folio.unwrap_or(design::FOLIO).into(),
     })
 }
 

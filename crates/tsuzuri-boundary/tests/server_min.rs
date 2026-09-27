@@ -11,7 +11,7 @@ use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::server::{Config, Server, StartError, bind_allowed};
+use tsuzuri_boundary::server::{Config, Server, StartError, bind_allowed, design};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, LedgerChanged, LedgerItem, LedgerList};
 use tsuzuri_contract::wire;
@@ -95,6 +95,8 @@ impl Place {
             bind: bind.parse().expect("bind 先"),
             files: self.files.clone(),
             bd: self.root.join("bd").into(),
+            state_dir: None,
+            folio: design::FOLIO.into(),
         }
     }
 

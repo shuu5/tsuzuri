@@ -12,7 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::server::ledger::{BD, BD_ARGS, BD_TIMEOUT};
-use tsuzuri_boundary::server::{Config, Server};
+use tsuzuri_boundary::server::{Config, Server, design};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LedgerItem, LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
@@ -110,6 +110,8 @@ impl Place {
             bind: "127.0.0.1:0".parse().expect("bind 先"),
             files: self.files.clone(),
             bd: bd.into(),
+            state_dir: None,
+            folio: design::FOLIO.into(),
         }
     }
 
