@@ -1,5 +1,6 @@
 # tsuzuri の workspace（設計ノート surface-base 便 a・b）: 契約の型・中核・境界・面の 4 crate と xtask。
-# 依存は serde と serde_json に限る（外の package は serde・serde の導出・serde_json が連れて来るものだけ・xtask の歯 skeleton_ が Cargo.lock で測る）。
+# 直接依存は crate ごとの名の一覧に限る（xtask の歯 skeleton_ が各 member の manifest で測る）。
+# core の側は serde と serde_json。面の crate は別枠の予算（規則の行 R-25: 8 本以下）で Leptos の一式を wasm の target のときだけ持つ。
 [workspace]
 resolver = "3"
 members = [

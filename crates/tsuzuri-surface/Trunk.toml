@@ -1,0 +1,7 @@
+# 面の組み立て（xtask の surface-build が呼ぶ）。出力の dist は版管理の外（.gitignore）。
+# 配るのは tz surface serve --files crates/tsuzuri-surface/dist。
+[build]
+target = "index.html"
+dist = "dist"
+release = true
+public_url = "/"

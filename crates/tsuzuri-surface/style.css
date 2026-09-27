@@ -1,0 +1,105 @@
+/* 最小の project board（便 g-min）。描画の決まりの全部（帯・形・色・縁）は便 g が mock v3 の物差しで足す。 */
+:root {
+  color-scheme: light dark;
+  --fg: #1d1f23;
+  --muted: #5f6570;
+  --line: #d9dce1;
+  --bg: #ffffff;
+  --warn: #9a3412;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e8eb;
+    --muted: #9aa1ab;
+    --line: #353a42;
+    --bg: #16181c;
+    --warn: #fdba74;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.6 system-ui, sans-serif;
+}
+
+.board {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 24px;
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+h1 {
+  font-size: 18px;
+  margin: 8px 0;
+}
+
+h2 {
+  font-size: 15px;
+  margin: 20px 0 8px;
+}
+
+.updated,
+.id,
+.kind,
+.empty {
+  color: var(--muted);
+}
+
+.unmeasured {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+
+.row .title {
+  flex: 1;
+}
+
+.id,
+.kind {
+  font-size: 12px;
+}
+
+.epic {
+  margin-bottom: 12px;
+}
+
+.epic-head {
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+
+.children {
+  padding-left: 20px;
+}
+
+.mark {
+  width: 1.2em;
+  text-align: center;
+}
+
+.st-closed ~ .title {
+  color: var(--muted);
+}

@@ -1,0 +1,8 @@
+{"id":"bm.5","title":"先に置いた問い","description":"A か B か","status":"open","priority":2,"issue_type":"question","created_at":"2026-09-27T07:05:00Z","updated_at":"2026-09-27T07:45:00Z"}
+{"id":"bm.2","title":"画面の覚え書き","status":"open","priority":3,"issue_type":"memo","created_at":"2026-09-27T07:02:00Z","updated_at":"2026-09-27T07:11:00Z"}
+{"id":"bm","title":"最小の画面の見本の根","description":"便 g-min の歯の見本","status":"in_progress","priority":1,"issue_type":"epic","created_at":"2026-09-27T07:00:00Z","updated_at":"2026-09-27T07:30:00Z"}
+{"id":"bm.10","title":"最終更新を出す","status":"open","priority":2,"issue_type":"task","created_at":"2026-09-27T07:10:00Z","updated_at":"2026-09-27T07:20:00Z"}
+{"id":"bm.4","title":"後に置いた問い","description":"C か D か","status":"open","priority":2,"issue_type":"question","created_at":"2026-09-27T07:04:00Z","updated_at":"2026-09-27T16:50:00+09:00"}
+{"id":"bm.1","title":"問いの一覧を出す","notes":"作業中","status":"in_progress","priority":2,"issue_type":"task","created_at":"2026-09-27T07:01:00Z","updated_at":"2026-09-27T07:12:00Z","dependencies":[{"issue_id":"bm.1","depends_on_id":"bm","type":"parent-child"}]}
+{"id":"bm.3","title":"台帳の一覧を出す","status":"closed","priority":2,"issue_type":"task","created_at":"2026-09-27T07:03:00Z","updated_at":"2026-09-27T07:13:00Z","closed_at":"2026-09-27T07:13:00Z"}
+{"id":"bm.6","title":"答えた問い","status":"closed","priority":2,"issue_type":"question","created_at":"2026-09-27T07:06:00Z","updated_at":"2026-09-27T07:40:00Z","closed_at":"2026-09-27T07:40:00Z"}

@@ -5,3 +5,5 @@
 # cargo の build の出力と器の作業場（便の worktree）は版管理の外
 /target/
 /.worktrees/
+# 面の組み立ての出力（xtask の surface-build が trunk で作る）も版管理の外
+/crates/tsuzuri-surface/dist/

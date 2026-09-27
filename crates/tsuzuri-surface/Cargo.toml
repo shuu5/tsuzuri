@@ -4,4 +4,17 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+# 面の crate の直接依存は別枠の予算（規則の行 R-25: 8 本以下・xtask の歯 skeleton_ が名の一覧で測る）。
+# 並べ方と状態の印と測れていないの判定（view）は host でも組み立てる。
 [dependencies]
+tsuzuri-contract = { path = "../tsuzuri-contract" }
+
+# DOM と通信（board と net）は wasm の target のときだけ組み立てる（便 g-min・Leptos の csr）。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["EventSource", "MessageEvent", "Response", "Window"] }
+
+# 歯は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で fixture を読む。
+[dev-dependencies]
+tsuzuri-boundary = { path = "../tsuzuri-boundary" }
