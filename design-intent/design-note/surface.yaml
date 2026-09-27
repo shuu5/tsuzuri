@@ -108,7 +108,7 @@ sections:
       - {id: g-5, name: 孤児 0, role: 全 bead が根から parent-child で届く。未着地の契約行はどれかの bead に指される, ref: [FR3]}
       - {id: g-6, name: 輪 0, role: blocks に循環が無く parent-child は木, ref: [FR3]}
       - {id: g-7, name: 宙に浮いた裁定 0, role: 裁定は問い（answers）か発効した記録（ruled_by の先）のどちらかに結ばれる, ref: [FR3]}
-      - {id: g-8, name: 4 象限の違反 0, role: memo の label と pointer 行の両方在る・両方無い bead は違反（epic と問いと裁定の bead は除く）, ref: [FR3]}
+      - {id: g-8, name: memo と契約の重なり 0, role: memo の label と pointer 行の両方を持つ bead は違反。両方とも無い open の bead は g-2 が数える（便 c の契約の審査で重なりを解いた・2026-09-27）, ref: [FR3]}
       - {id: g-9, name: 名指した id は欄にも在る, role: 本文で名指した id が欄か辺に無ければ数える（規則行 R-17 と同じ・detect から 2 周の実測の後に deny）, ref: [FR3]}
       - {id: g-10, name: id の族が互いに素, role: 設計文書・設計ノートの行・台帳・走行の 4 族の id が repo 内で一意, ref: [FR3]}
       - {id: g-11, name: 走行は契約を 1 つ持つ, role: run_of をちょうど 1 つ持ち、先の bead が在る（宙に浮いた走行 0）, ref: [FR3, FR10]}
