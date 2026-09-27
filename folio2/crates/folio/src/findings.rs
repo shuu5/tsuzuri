@@ -52,8 +52,20 @@ pub(crate) struct Counted {
     pub(crate) stops: usize,
     /// digest.txt の 16 進の先頭 8 字（読めたときだけ・印の要約値）
     pub(crate) digest: Option<String>,
-    /// 止める の所見ごとの反証の結果（所見の id・refute の値・読めたものだけ・所見の順）
-    pub(crate) refutes: Vec<(String, String)>,
+    /// 止める の所見の全件の行（所見の順・反証の済んでいないものも・便 169）
+    pub(crate) refutes: Vec<Refute>,
+    /// まだ分からない の理由が反証の済んでいない 止める だけ（規則 7・所見 file の verdict が まだ分からない でない・便 169）
+    pub(crate) waiting: bool,
+}
+
+/// 止める の所見 1 件の行（便 169・docs/design/delivery-169.md §1 (b) の 1）: 所見の id・読めた反証の結果の値（済んで
+/// いなければ None）・場所の doc と at（所見の place の字・無ければ空）。
+#[derive(Clone)]
+pub(crate) struct Refute {
+    pub(crate) id: String,
+    pub(crate) value: Option<String>,
+    pub(crate) doc: String,
+    pub(crate) at: String,
 }
 
 impl Counted {
@@ -66,6 +78,7 @@ impl Counted {
             stops: 0,
             digest: None,
             refutes: Vec::new(),
+            waiting: false,
         }
     }
 }
@@ -237,11 +250,12 @@ pub(crate) fn count_viewpoint(
             stops,
             digest: digest8,
             refutes,
+            waiting: false,
         };
     }
     let sheet = sheet.expect("理由が無ければ所見 file は読めている");
 
-    // 7. 止める の反証
+    // 7. 止める の反証（理由がこれだけで所見 file の verdict が まだ分からない でなければ反証待ち・便 169）
     for id in &sheet.unrefuted {
         reasons.push(format!("反証が未（{id}）"));
     }
@@ -253,6 +267,7 @@ pub(crate) fn count_viewpoint(
             stops,
             digest: digest8,
             refutes,
+            waiting: sheet.verdict != "まだ分からない",
         };
     }
     // 8.〜10. file の verdict と残る所見
@@ -290,6 +305,7 @@ pub(crate) fn count_viewpoint(
         stops,
         digest: digest8,
         refutes,
+        waiting: false,
     }
 }
 
@@ -390,8 +406,8 @@ struct Sheet {
     remaining_stops: Vec<String>,
     /// 反証で退けた 止める の所見の id（規則 9 の再判定待ち・便 41）
     refuted_stops: Vec<String>,
-    /// 止める の所見の（id・反証の結果の値）（値が読めたものだけ・印・便 72）
-    refutes: Vec<(String, String)>,
+    /// 止める の所見の全件の行（印・便 72・便 169）
+    refutes: Vec<Refute>,
 }
 
 /// `results` = 止める の所見ごとに反証役の result.yaml も読む（`--check`・便 42 §1 (d)）。`--refute` は所見 file の欄の
@@ -656,9 +672,19 @@ fn count_findings(
                 Some(r) => Some(Some(r)),
                 None => refute,
             };
-            if let Some(Some(v)) = &refute {
-                sheet.refutes.push((id.clone(), v.clone()));
-            }
+            let place = |key: &str| {
+                item.get("place")
+                    .and_then(|p| p.get(key))
+                    .and_then(Node::as_str)
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            sheet.refutes.push(Refute {
+                id: id.clone(),
+                value: refute.clone().flatten(),
+                doc: place("doc"),
+                at: place("at"),
+            });
             match refute {
                 None => sheet.unrefuted.push(id.clone()),
                 Some(Some(v)) if v == "退けた" => sheet.refuted_stops.push(id.clone()),

@@ -12,6 +12,9 @@
 //! 全部か無しか: 観点のどれかの束・所見 file・起動の記録が読めない、または面の写しが観点で食い違うときは
 //! まだ分からない（終了 2）で file を触らない。既に同じ byte なら書かない。判定の 3 値は印の中身で、命令は書けたら 0。
 //! 印の file 名 `STAMP_FILE` は便 110 で `ceiling_src.rs` へ降ろした（ADR-15・層 1 読む・門も同じ名を読む）。
+//! 便 169（docs/design/delivery-169.md §1 (b) の 2・ADR-30 決定 (6)）: refutes の行は 止める の所見の全件を
+//! `{viewpoint, finding, refute, at, file}` で書く（反証の済んでいない 止める は欄 refute を書かない・file は `stop_file`）。
+//! 観点の行は、まだ分からない の理由が反証の済んでいない 止める だけのとき末尾に欄 `wait: 反証` を足す。印は周の 3 値に依らず書く。
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -20,8 +23,8 @@ use std::path::Path;
 use crate::adr;
 use crate::ceiling_src::{self, Ceiling, Files, STAMP_FILE};
 use crate::cursor::R;
-use crate::findings::{self, Counted};
-use crate::gate;
+use crate::findings::{self, Counted, Refute};
+use crate::gate::{self, WAIT_REFUTE};
 use crate::graph;
 use crate::sha256;
 use crate::verdict::Verdict;
@@ -143,8 +146,14 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
         plain(&at)
     );
     for r in &rows {
+        // 反証待ちだけの まだ分からない は門が file ごとの判定に任せる（便 169 §1 (b) の 2）
+        let wait = if r.counted.verdict == Verdict::Unknown && r.counted.waiting {
+            format!(", wait: {WAIT_REFUTE}")
+        } else {
+            String::new()
+        };
         text.push_str(&format!(
-            "  - {{id: {}, verdict: {}, findings: {}, stops: {}, bundle: {}, model: {}, effort: {}, at: {}}}\n",
+            "  - {{id: {}, verdict: {}, findings: {}, stops: {}, bundle: {}, model: {}, effort: {}, at: {}{wait}}}\n",
             plain(&r.id),
             r.counted.verdict,
             r.counted.findings,
@@ -155,16 +164,25 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
             plain(&r.at)
         ));
     }
+    let documents = gate::documents(dir)?;
     let mut refutes = Vec::new();
     for r in &rows {
-        let mut own: Vec<&(String, String)> = r.counted.refutes.iter().collect();
-        own.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
-        for (finding, refute) in own {
+        let mut own: Vec<&Refute> = r.counted.refutes.iter().collect();
+        own.sort_by(|a, b| a.id.as_bytes().cmp(b.id.as_bytes()));
+        for stop in own {
+            let file = stop_file(dir, &documents, &stop.doc, &stop.at)
+                .map_err(|e| format!("{}: {}: {e}", r.id, stop.id))?;
+            let refute = stop
+                .value
+                .as_deref()
+                .map(|v| format!(", refute: {}", plain(v)))
+                .unwrap_or_default();
             refutes.push(format!(
-                "  - {{viewpoint: {}, finding: {}, refute: {}}}\n",
+                "  - {{viewpoint: {}, finding: {}{refute}, at: {}, file: {}}}\n",
                 plain(&r.id),
-                plain(finding),
-                plain(refute)
+                plain(&stop.id),
+                plain(&stop.at),
+                plain(&file)
             ));
         }
     }
@@ -182,6 +200,28 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
         text.push_str(&format!("  - {{id: {}, digest: {digest}}}\n", plain(&id)));
     }
     Ok(text)
+}
+
+/// 止める の場所の file（便 169 §1 (b) の 2）: doc を天井の正本の documents で解き、file 形はその file、dir 形は at の頭
+/// （最初の `.` の前）の `<dir><頭>.yaml` が `--dir` の下に file として在ればそれ、無いか頭が空・`.` 始まり・区切りを含めば
+/// dir そのもの（広い側）。doc が文書の一覧に無ければ Err（印を組まない・全部か無しか）。
+fn stop_file(dir: &Path, documents: &[(String, String)], doc: &str, at: &str) -> R<String> {
+    let file = documents
+        .iter()
+        .find(|(id, _)| id == doc)
+        .map(|(_, f)| f.as_str())
+        .ok_or_else(|| format!("止める の場所の doc「{doc}」が文書の一覧に無い"))?;
+    if !file.ends_with('/') {
+        return Ok(file.to_string());
+    }
+    let head = at.split('.').next().unwrap_or_default();
+    let unsafe_head = head.is_empty() || head.starts_with('.') || head.contains(['/', '\\', '\0']);
+    let named = format!("{file}{head}.yaml");
+    if !unsafe_head && !dir.join(&named).is_symlink() && dir.join(&named).is_file() {
+        Ok(named)
+    } else {
+        Ok(file.to_string())
+    }
 }
 
 /// 観点 1 つの行。束（要約値）・所見 file・起動の記録の model / effort / at / read が読めなければ Err。

@@ -11,6 +11,8 @@
 //! 便 129（docs/design/delivery-129.md §1 (e) の 1）: 独立の実装は憲法を凍結 anchor の trigger.constitution の scope の範囲で写す。
 //! 便 151（docs/design/delivery-151.md §1 (c)(e)）: 独立の実装は判断の記録を状態を問わず全部写す（anchor から status の葉が消えた）。
 //! 向きが逆になる既存の 2 通り（ADR-2 の発効・ADR-2 の決定の字）は f151_ の 2 本へ移した。
+//! 便 169（docs/design/delivery-169.md §1 (c)(e)）: 門は印の古さで止めない。古さと節点の数で答えを縛った歯（便 126・129・151）
+//! は外し、f169_ の 5 本に置き換えた。印の refutes の行は歯の中で書き替えて作る（trigger の独立の実装は印の仮の値に使う）。
 //!
 //! 版管理の下の file は書き換えない（`--dir` は必ず一時 dir の中）。
 
@@ -28,9 +30,6 @@ const PLACEHOLDER: &str =
 /// fixture の印の trigger の仮の値（便 126）。
 const TRIGGER_PLACEHOLDER: &str =
     "trigger: sha256 0000000000000000000000000000000000000000000000000000000000000000\n";
-/// 印の末尾に足す rest の仮の値（便 126）。
-const REST_PLACEHOLDER: &str =
-    "rest: sha256 0000000000000000000000000000000000000000000000000000000000000000\n";
 
 /// 天井の正本の観点の reads が指す文書の file（bundle fixture の ceiling.yaml・file 形と dir 形）。
 const READ_FILES: [&str; 6] = [
@@ -393,30 +392,45 @@ impl Repo {
         self.write_stamp(&text);
     }
 
-    /// fresh の合格の印に、rest の仮の値と今の節点の表（folio graph --print の節点の行の 1 列目と 4 列目）を足して置く。
-    fn put_stamp_with_nodes(&self) {
-        self.put_stamp("stamp-pass.yaml", true);
-        let print = Command::new(env!("CARGO_BIN_EXE_folio"))
-            .args(["graph", "--print", "--dir"])
-            .arg(self.dir())
-            .output()
-            .expect("folio を起動できない");
-        assert_eq!(code(&print), 0, "{}", String::from_utf8_lossy(&print.stderr));
-        let mut text = self.read_stamp();
-        text.push_str(REST_PLACEHOLDER);
-        text.push_str("nodes:\n");
-        let mut rows = 0;
-        for line in stdout(&print).lines().take_while(|l| !l.starts_with("# 辺")) {
-            if line.starts_with('#') {
-                continue;
-            }
-            let cols: Vec<&str> = line.split('\t').collect();
-            assert_eq!(cols.len(), 5, "節点の行の欄の数: {line}");
-            text.push_str(&format!("  - {{id: {}, digest: {}}}\n", cols[0], cols[3]));
-            rows += 1;
-        }
-        assert!(rows > 0, "節点の行が無い");
-        self.write_stamp(&text);
+    /// fresh の `name` の印の refutes の節を `rows`（字下げ込みの行・空なら `refutes: []`）に替えて置く（便 169）。
+    fn put_stamp_with_stops(&self, name: &str, rows: &[&str]) {
+        self.put_stamp(name, true);
+        let text = self.read_stamp();
+        let start = text.find("\nrefutes:").expect("印に refutes が無い") + 1;
+        let end = text.find("\nreads: ").expect("印に reads が無い") + 1;
+        let body = if rows.is_empty() {
+            "refutes: []\n".to_string()
+        } else {
+            format!("refutes:\n{}", rows.iter().map(|r| format!("{r}\n")).collect::<String>())
+        };
+        self.write_stamp(&format!("{}{body}{}", &text[..start], &text[end..]));
+    }
+
+    /// 印の観点 `id` の行（改行込み）。
+    fn stamp_row(&self, id: &str) -> String {
+        let head = format!("  - {{id: {id}, ");
+        let line = self
+            .read_stamp()
+            .lines()
+            .find(|l| l.starts_with(&head))
+            .unwrap_or_else(|| panic!("印に観点 {id} の行が無い"))
+            .to_string();
+        format!("{line}\n")
+    }
+
+    /// 印の観点 `id` の行の字 `from` を 1 か所だけ `to` に替える（便 169）。
+    fn edit_stamp_row(&self, id: &str, from: &str, to: &str) {
+        let line = self.stamp_row(id);
+        assert_eq!(line.matches(from).count(), 1, "{id} の行に「{from}」が 1 か所でない");
+        let text = self.read_stamp();
+        self.write_stamp(&text.replacen(&line, &line.replacen(from, to, 1), 1));
+    }
+
+    /// 印の観点 `id` の行を外す（便 169）。
+    fn drop_stamp_row(&self, id: &str) {
+        let line = self.stamp_row(id);
+        let text = self.read_stamp();
+        self.write_stamp(&text.replacen(&line, "", 1));
     }
 
     fn read_stamp(&self) -> String {
@@ -512,19 +526,6 @@ fn gate_stops_on_a_failed_viewpoint() {
     assert!(out.contains("止める") && out.contains("coherence"), "{out}");
 }
 
-// ── 4. 印が古い ──
-
-#[test]
-fn gate_is_unknown_when_the_stamp_is_stale() {
-    let repo = Repo::new("stale");
-    repo.put_stamp("stamp-pass.yaml", false);
-    let run = repo.gate(&["design-intent/srs.yaml"]);
-    repo.done();
-    assert_eq!(code(&run), 2, "{}", stdout(&run));
-    let out = stdout(&run);
-    assert!(out.contains("まだ分からない") && out.contains("印が古い"), "{out}");
-}
-
 // ── 5. まだ分からない観点 ──
 
 #[test]
@@ -569,208 +570,6 @@ fn gate_ignores_preview_and_retired_paths() {
     );
 }
 
-// ── 便 126: 引き金の要約値で古さを判定する（docs/design/delivery-126.md §1 (e) の 1〜6） ──
-
-/// 要件 FR1 の平易文（引き金の外・節点 FR1 の中）。
-const FR1_PLAIN: (&str, &str) = (
-    "    plain: 質問が出て、どれにもおすすめが付きます。\n",
-    "    plain: 質問が出て、どれにもおすすめが付く。\n",
-);
-
-#[test]
-fn f126_the_gate_passes_a_plain_edit_and_counts_one_node() {
-    let repo = Repo::new("f126-plain");
-    repo.put_stamp_with_nodes();
-    repo.edit("srs.yaml", FR1_PLAIN.0, FR1_PLAIN.1);
-    let run = repo.gate(&["design-intent/srs.yaml"]);
-    repo.done();
-    let out = stdout(&run);
-    assert_eq!(code(&run), 0, "{out}");
-    assert!(
-        out.contains("通す") && out.contains("引き金の外の変更") && out.contains("節点 1 個"),
-        "{out}"
-    );
-}
-
-#[test]
-fn f126_the_gate_is_stale_on_each_normative_edit() {
-    let cases: [(&str, &str, &str); 4] = [
-        (
-            "constitution.yaml",
-            "text: 道具は検査の結果を知らせる。}",
-            "text: 道具は検査の結果を必ず知らせる。}",
-        ),
-        (
-            "srs.yaml",
-            "    shall: folio は易しい質問を推奨回答つきで出す。\n",
-            "    shall: folio は易しい質問を推奨回答つきで必ず出す。\n",
-        ),
-        (
-            "rules.yaml",
-            "    what: AI へ常時渡す説明文の合計\n",
-            "    what: AI へ常時渡す説明文の総量\n",
-        ),
-        (
-            "ceiling.yaml",
-            "    question: 人が書いた自由文（",
-            "    question: 人の書いた自由文（",
-        ),
-    ];
-    for (i, (file, from, to)) in cases.into_iter().enumerate() {
-        let repo = Repo::new(&format!("f126-norm-{i}"));
-        repo.put_stamp("stamp-pass.yaml", true);
-        repo.edit(file, from, to);
-        let run = repo.gate(&[&format!("design-intent/{file}")]);
-        repo.done();
-        let out = stdout(&run);
-        assert_eq!(code(&run), 2, "{file}: {out}");
-        assert!(
-            out.contains("印が古い") && out.contains("引き金の要約値が違う"),
-            "{file}: {out}"
-        );
-    }
-}
-
-#[test]
-fn f126_the_gate_passes_edits_outside_the_trigger() {
-    // （file・元の字・変えた字・読む文書の file か＝節点の数を添えるか）
-    let cases: [(&str, &str, &str, bool); 8] = [
-        (
-            "constitution.yaml",
-            "    plain: 道具は知らせるところまでで、決めるのはあなたです。\n",
-            "    plain: 道具は知らせるところまでで、決めるのはあなた。\n",
-            true,
-        ),
-        (
-            "srs.yaml",
-            "plain: 答えを入れると表が出る。,",
-            "plain: 答えを入れると表が出ます。,",
-            true,
-        ),
-        (
-            "rules.yaml",
-            "    note: 測り方を凍結してから再計測\n",
-            "    note: 測り方を凍結してから測り直す\n",
-            true,
-        ),
-        ("rules.yaml", "    ruling: 裁定 F-5\n", "    ruling: 裁定 F-6\n", true),
-        ("srs.yaml", "  version: v0.3\n", "  version: v0.4\n", true),
-        (
-            "design-note/full.yaml",
-            "      面の骨格を 1 枚で測る。",
-            "      面の骨格を 1 枚で量る。",
-            true,
-        ),
-        (
-            "ceiling.yaml",
-            "{id: srs, file: srs.yaml, note: 要件書}",
-            "{id: srs, file: srs.yaml, note: 要件の書}",
-            false,
-        ),
-        ("ceiling.yaml", "    name: 忠実さ\n", "    name: 忠実性\n", false),
-    ];
-    for (i, (file, from, to, read)) in cases.into_iter().enumerate() {
-        let repo = Repo::new(&format!("f126-outside-{i}"));
-        repo.put_stamp_with_nodes();
-        repo.edit(file, from, to);
-        let run = repo.gate(&[&format!("design-intent/{file}")]);
-        repo.done();
-        let out = stdout(&run);
-        assert_eq!(code(&run), 0, "{file}「{to}」: {out}");
-        assert!(out.contains("通す"), "{file}: {out}");
-        let word = if read { "引き金の外の変更" } else { "正本の要約値が同じ" };
-        assert!(out.contains(word), "{file}「{to}」: {out}");
-    }
-}
-
-#[test]
-fn f126_a_stamp_without_the_trigger_is_stale() {
-    let repo = Repo::new("f126-no-trigger");
-    repo.put_stamp("stamp-pass.yaml", true);
-    let stamp = repo.read_stamp();
-    let line = stamp
-        .lines()
-        .find(|l| l.starts_with("trigger: "))
-        .expect("印に trigger の行が無い")
-        .to_string();
-    repo.write_stamp(&stamp.replacen(&format!("{line}\n"), "", 1));
-    let run = repo.gate(&["design-intent/srs.yaml"]);
-    repo.done();
-    let out = stdout(&run);
-    assert_eq!(code(&run), 2, "{out}");
-    assert!(
-        out.contains("印が古い") && out.contains("引き金の要約値の欄が無い"),
-        "{out}"
-    );
-}
-
-#[test]
-fn f126_the_gate_is_unknown_when_the_trigger_cannot_be_measured() {
-    let repo = Repo::new("f126-unmeasurable");
-    repo.put_stamp("stamp-pass.yaml", true);
-    let path = repo.dir().join("constitution.yaml");
-    let mut text = fs::read_to_string(&path).unwrap();
-    text.push_str("\narticles: []\n");
-    fs::write(&path, text).unwrap();
-    let run = repo.gate(&["design-intent/constitution.yaml"]);
-    repo.done();
-    let out = stdout(&run);
-    assert_eq!(code(&run), 2, "{out}");
-    assert!(out.contains("引き金の要約値が測れない"), "{out}");
-}
-
-#[test]
-fn f126_the_gate_does_not_pass_without_the_node_table() {
-    let repo = Repo::new("f126-no-nodes");
-    repo.put_stamp("stamp-pass.yaml", true);
-    repo.edit("srs.yaml", FR1_PLAIN.0, FR1_PLAIN.1);
-    let run = repo.gate(&["design-intent/srs.yaml"]);
-    repo.done();
-    let out = stdout(&run);
-    assert_eq!(code(&run), 2, "{out}");
-    assert!(out.contains("印の節点の表が読めない"), "{out}");
-}
-
-// ── 便 129: 憲法の前文と schema 節も引き金に入る（docs/design/delivery-129.md §1 (c) の 1） ──
-
-#[test]
-fn f129_the_gate_is_stale_on_a_precedence_or_schema_edit() {
-    // （元の字・変えた字・終了コード・標準出力に要る字）。元の字が空なら何も変えない
-    let cases: [(&str, &str, i32, [&str; 2]); 4] = [
-        ("", "", 0, ["通す", "正本の要約値が同じ"]),
-        (
-            "  plain: 迷ったら、揃っている方を選びます。\n",
-            "  plain: 迷ったら、揃っている方を選ぶ。\n",
-            2,
-            ["印が古い", "引き金の要約値が違う"],
-        ),
-        (
-            "    tier: [always, ask-first, never]\n",
-            "    tier: [always, never, ask-first]\n",
-            2,
-            ["印が古い", "引き金の要約値が違う"],
-        ),
-        (
-            "articles: [A-1], sections: [§6]}",
-            "articles: [A-1, N-1], sections: [§6]}",
-            0,
-            ["通す", "引き金の外の変更"],
-        ),
-    ];
-    for (i, (from, to, want, words)) in cases.into_iter().enumerate() {
-        let repo = Repo::new(&format!("f129-{i}"));
-        repo.put_stamp_with_nodes();
-        if !from.is_empty() {
-            repo.edit("constitution.yaml", from, to);
-        }
-        let run = repo.gate(&["design-intent/constitution.yaml"]);
-        repo.done();
-        let out = stdout(&run);
-        assert_eq!(code(&run), want, "写し {i}: {out}");
-        assert!(words.iter().all(|w| out.contains(w)), "写し {i}: {out}");
-    }
-}
-
 // ── 便 142: 作業ツリーの一番上以外から撃つと まだ分からない（docs/design/delivery-142.md §1 (c) の 2・3） ──
 
 #[test]
@@ -803,7 +602,7 @@ fn f142_the_gate_is_unknown_from_above_the_worktree() {
                 "撃ち方 {i}: {out}"
             );
         } else {
-            assert!(out.contains("通す") && out.contains("正本の要約値が同じ"), "撃ち方 {i}: {out}");
+            assert!(out.contains("通す") && out.contains("印の後の変更は審査していない"), "撃ち方 {i}: {out}");
         }
     }
     let out = stdout(&code_only);
@@ -909,89 +708,202 @@ fn f150_the_gate_reads_the_place_as_before() {
     for (i, run) in fresh.iter().enumerate() {
         let out = stdout(run);
         assert_eq!(code(run), 0, "撃ち方 {i}: {out}");
-        assert!(out.contains("通す") && out.contains("正本の要約値が同じ"), "撃ち方 {i}: {out}");
+        assert!(out.contains("通す") && out.contains("印の後の変更は審査していない"), "撃ち方 {i}: {out}");
     }
 }
 
-// ── 便 151: 引き金は判断の記録を状態を問わず全部写し、状態の欄を写さない（docs/design/delivery-151.md §1 (c) の 1・2） ──
+// ── 便 169: 門は書き換える file に反証で支持された 止める が在るかだけを見て、印の古さで止めない（docs/design/delivery-169.md §1 (c)） ──
 
-/// 写しの ADR-2（提案中）の決定の字。
-const ADR2_DECISION: (&str, &str) = (
-    "decision: 見本の判断の記録を 1 本置き",
-    "decision: 見本の判断の記録を 2 本置き",
+/// 通す理由の頭と末尾（印の周・判定は印の字）。
+const PASS_HEAD: &str = "folio ceiling: 通す（印の周 gate-case（判定 ";
+const UNREVIEWED: &str = "印の後の変更は審査していない";
+
+/// 写しの要件 FR1 の規範文（引き金の中）。
+const FR1_SHALL: (&str, &str) = (
+    "    shall: folio は易しい質問を推奨回答つきで出す。\n",
+    "    shall: folio は易しい質問を推奨回答つきで必ず出す。\n",
 );
 
-/// 写しの ADR-2 の id を `id` に替えた提案中の記録の字。
-fn proposed_record(repo: &Repo, id: &str) -> String {
-    let text = fs::read_to_string(repo.dir().join("adr/ADR-2.yaml")).unwrap();
-    assert!(text.contains("\nstatus: proposed\n"), "写しの ADR-2 が提案中でない");
-    text.replacen("\nid: ADR-2\n", &format!("\nid: {id}\n"), 1)
+#[test]
+fn f169_a_stale_stamp_without_an_upheld_stop_passes() {
+    let stale = Repo::new("f169-stale");
+    stale.put_stamp("stamp-pass.yaml", false);
+    stale.edit("srs.yaml", FR1_SHALL.0, FR1_SHALL.1);
+    let run = stale.gate(&["design-intent/srs.yaml", "+design-intent/adr/ADR-3.yaml"]);
+    stale.done();
+    let out = stdout(&run);
+    assert_eq!(code(&run), 0, "{out}");
+    assert!(
+        out.starts_with(&format!("{PASS_HEAD}合格）に、")) && out.contains(UNREVIEWED),
+        "{out}"
+    );
+
+    // 反証待ちだけの まだ分からない 観点（wait: 反証）は file ごとの判定に任せる
+    let waiting = Repo::new("f169-stale-wait");
+    waiting.put_stamp("stamp-unknown.yaml", false);
+    waiting.edit_stamp_row("reality", "}\n", ", wait: 反証}\n");
+    let run = waiting.gate(&["design-intent/srs.yaml"]);
+    waiting.done();
+    let out = stdout(&run);
+    assert_eq!(code(&run), 0, "{out}");
+    assert!(
+        out.starts_with(&format!("{PASS_HEAD}まだ分からない）に、")) && out.contains(UNREVIEWED),
+        "{out}"
+    );
 }
 
 #[test]
-fn f151_a_proposed_adr_moves_the_trigger() {
-    let control = Repo::new("f151-control");
-    control.put_stamp_with_nodes();
-    let run = control.gate(&["design-intent/srs.yaml"]);
-    control.done();
-    let out = stdout(&run);
-    assert_eq!(code(&run), 0, "対照: {out}");
-    assert!(out.contains("通す") && out.contains("正本の要約値が同じ"), "対照: {out}");
-
-    let decision = Repo::new("f151-decision");
-    decision.put_stamp_with_nodes();
-    decision.edit("adr/ADR-2.yaml", ADR2_DECISION.0, ADR2_DECISION.1);
-    let edited = decision.gate(&["design-intent/adr/ADR-2.yaml"]);
-    decision.done();
-
-    let added = Repo::new("f151-added");
-    added.put_stamp_with_nodes();
-    fs::write(added.dir().join("adr/ADR-3.yaml"), proposed_record(&added, "ADR-3")).unwrap();
-    let new = added.gate(&["+design-intent/adr/ADR-3.yaml"]);
-    added.done();
-
-    for (case, run) in [("提案中の ADR-2 の決定の字", &edited), ("提案中の ADR-3 を足す", &new)] {
+fn f169_the_gate_stops_only_on_the_file_of_an_upheld_stop() {
+    let repo = Repo::new("f169-upheld");
+    repo.put_stamp_with_stops(
+        "stamp-pass.yaml",
+        &[
+            "  - {viewpoint: coherence, finding: C-9, refute: 退けた, at: articles.A-1, file: constitution.yaml}",
+            "  - {viewpoint: fidelity, finding: F-1, refute: 支持, at: requirements.FR1.plain, file: srs.yaml}",
+            "  - {viewpoint: reality, finding: R-1, refute: 支持, at: ADR-1.decision, file: adr/ADR-1.yaml}",
+            "  - {viewpoint: coherence, finding: C-2, refute: 支持, at: sections.x, file: design-note/}",
+        ],
+    );
+    // （write-set・終了コード・標準出力に要る字）
+    let cases: [(&[&str], i32, &str); 7] = [
+        (&["design-intent/srs.yaml", "crates/folio/src/gate.rs"], 1, "srs.yaml（fidelity F-1）"),
+        (&["~./design-intent/adr/ADR-1.yaml"], 1, "adr/ADR-1.yaml（reality R-1）"),
+        (&["+design-intent/design-note/new.yaml"], 1, "design-note/（coherence C-2）"),
+        (&["design-intent/adr/ADR-2.yaml"], 0, UNREVIEWED),
+        (&["design-intent/constitution.yaml"], 0, UNREVIEWED),
+        (&["design-intent/rules.yaml", "design-intent/preview/ceiling-stamp.yaml"], 0, UNREVIEWED),
+        (&["crates/folio/src/gate.rs"], 0, "設計文書の正本を書き換えない便"),
+    ];
+    let runs: Vec<Output> = cases.iter().map(|(ws, _, _)| repo.gate(ws)).collect();
+    repo.done();
+    for ((ws, want, word), run) in cases.iter().zip(&runs) {
         let out = stdout(run);
-        assert_eq!(code(run), 2, "{case}: {out}");
-        assert!(
-            out.contains("印が古い") && out.contains("引き金の要約値が違う"),
-            "{case}: {out}"
-        );
+        assert_eq!(code(run), *want, "{ws:?}: {out}");
+        assert!(out.contains(word), "{ws:?}: {out}");
+        if *want == 1 {
+            assert!(
+                out.contains("止める（反証で支持された 止める の場所の file を書き換える: "),
+                "{ws:?}: {out}"
+            );
+        }
     }
 }
 
 #[test]
-fn f151_the_adr_status_and_approval_do_not_move_the_trigger() {
-    let adopted = Repo::new("f151-adopted");
-    adopted.put_stamp_with_nodes();
-    adopted.edit(
-        "adr/ADR-2.yaml",
-        "\nstatus: proposed\n",
-        "\nstatus: accepted\napproval: {who: 持ち主, date: 2026-09-07, ruling: 裁定 F-9, verbatim: 承認する, surface: R-8}\n",
+fn f169_an_unrefuted_stop_file_is_unknown() {
+    let repo = Repo::new("f169-unrefuted");
+    repo.put_stamp_with_stops(
+        "stamp-unknown.yaml",
+        &[
+            "  - {viewpoint: coherence, finding: C-1, refute: 支持, at: requirements.FR1.shall, file: srs.yaml}",
+            "  - {viewpoint: reality, finding: R-2, at: requirements.FR2.shall, file: srs.yaml}",
+            "  - {viewpoint: fidelity, finding: F-2, refute: まだ分からない, at: thresholds.R-1, file: rules.yaml}",
+        ],
     );
-    let accepted = adopted.gate(&["design-intent/adr/ADR-2.yaml"]);
-    adopted.done();
+    repo.edit_stamp_row("reality", "}\n", ", wait: 反証}\n");
+    let srs = repo.gate(&["design-intent/srs.yaml"]);
+    let rules = repo.gate(&["design-intent/rules.yaml"]);
+    let other = repo.gate(&["design-intent/constitution.yaml"]);
+    repo.done();
+    let head = "まだ分からない（反証の済んでいない 止める の場所の file を書き換える: ";
+    let out = stdout(&srs);
+    assert_eq!(code(&srs), 2, "{out}");
+    assert!(out.contains(&format!("{head}srs.yaml（reality R-2）")) && !out.contains("C-1"), "{out}");
+    let out = stdout(&rules);
+    assert_eq!(code(&rules), 2, "{out}");
+    assert!(out.contains(&format!("{head}rules.yaml（fidelity F-2）")), "{out}");
+    let out = stdout(&other);
+    assert_eq!(code(&other), 0, "{out}");
+    assert!(out.contains(UNREVIEWED), "{out}");
+}
 
-    let retired = Repo::new("f151-retired");
-    retired.put_stamp_with_nodes();
-    fs::create_dir_all(retired.dir().join("adr/retired")).unwrap();
-    fs::write(retired.dir().join("adr/retired/ADR-0.yaml"), proposed_record(&retired, "ADR-0")).unwrap();
-    let below = retired.gate(&["design-intent/srs.yaml", "+design-intent/adr/retired/ADR-0.yaml"]);
-    retired.done();
+#[test]
+fn f169_the_gate_is_unknown_without_a_readable_stamp() {
+    let missing = "まだ分からない（印の観点の結果が欠けている: ";
+    let mut runs: Vec<(&str, Output, String)> = Vec::new();
 
-    let schema = Repo::new("f151-schema");
-    schema.put_stamp_with_nodes();
-    fs::write(schema.dir().join("adr/schema.yaml"), "schema: {note: 見本の欄の決まり}\n").unwrap();
-    let rules = schema.gate(&["+design-intent/adr/schema.yaml"]);
-    schema.done();
+    let repo = Repo::new("f169-none");
+    runs.push(("印が無い", repo.gate(&["design-intent/srs.yaml"]), "印が無い".to_string()));
+    repo.done();
 
-    for (case, run, word) in [
-        ("ADR-2 を発効へ・承認欄を足す", &accepted, "引き金の外の変更"),
-        ("adr/retired/ に記録を置く", &below, "正本の要約値が同じ"),
-        ("adr/schema.yaml を置く", &rules, "引き金の外の変更"),
-    ] {
+    let repo = Repo::new("f169-dropped");
+    repo.put_stamp("stamp-pass.yaml", true);
+    repo.drop_stamp_row("reality");
+    runs.push(("観点の行が無い", repo.gate(&["design-intent/srs.yaml"]), format!("{missing}reality（無い）")));
+    repo.done();
+
+    let repo = Repo::new("f169-no-wait");
+    repo.put_stamp("stamp-unknown.yaml", true);
+    runs.push((
+        "wait の無い まだ分からない",
+        repo.gate(&["design-intent/srs.yaml"]),
+        format!("{missing}reality（まだ分からない）"),
+    ));
+    repo.done();
+
+    let repo = Repo::new("f169-dropped-upheld");
+    repo.put_stamp("stamp-fail.yaml", true);
+    repo.drop_stamp_row("reality");
+    runs.push((
+        "支持の 止める の file と欠けた観点",
+        repo.gate(&["design-intent/srs.yaml"]),
+        format!("{missing}reality（無い）"),
+    ));
+    repo.done();
+
+    let repo = Repo::new("f169-not-three");
+    repo.put_stamp("stamp-pass.yaml", true);
+    repo.edit_stamp_row("reality", "verdict: 合格,", "verdict: 合格？,");
+    runs.push(("3 値でない", repo.gate(&["design-intent/srs.yaml"]), format!("{missing}reality（無い）")));
+    repo.done();
+
+    let repo = Repo::new("f169-other-wait");
+    repo.put_stamp("stamp-unknown.yaml", true);
+    repo.edit_stamp_row("reality", "}\n", ", wait: 反証か}\n");
+    runs.push((
+        "wait が 反証 でない",
+        repo.gate(&["design-intent/srs.yaml"]),
+        format!("{missing}reality（まだ分からない）"),
+    ));
+    repo.done();
+
+    let repo = Repo::new("f169-old-rows");
+    repo.put_stamp_with_stops("stamp-fail.yaml", &["  - {viewpoint: coherence, finding: C-1, refute: 支持}"]);
+    runs.push((
+        "行に file が無い",
+        repo.gate(&["design-intent/srs.yaml"]),
+        "印が読めない: refutes が読めない".to_string(),
+    ));
+    repo.done();
+
+    for (case, run, word) in &runs {
         let out = stdout(run);
-        assert_eq!(code(run), 0, "{case}: {out}");
-        assert!(out.contains("通す") && out.contains(word), "{case}: {out}");
+        assert_eq!(code(run), 2, "{case}: {out}");
+        assert!(out.contains("まだ分からない") && out.contains(word.as_str()), "{case}: {out}");
+    }
+}
+
+#[test]
+fn f169_a_dir_item_covers_the_stop_files_under_it() {
+    let repo = Repo::new("f169-dir-item");
+    repo.put_stamp_with_stops(
+        "stamp-pass.yaml",
+        &[
+            "  - {viewpoint: coherence, finding: C-2, refute: 支持, at: ADR-1.decision, file: adr/ADR-1.yaml}",
+            "  - {viewpoint: reality, finding: R-2, at: sections.x, file: design-note/}",
+        ],
+    );
+    let cases: [(&str, i32, &str); 4] = [
+        ("design-intent/adr/", 1, "adr/ADR-1.yaml（coherence C-2）"),
+        ("~./design-intent/adr", 1, "adr/ADR-1.yaml（coherence C-2）"),
+        ("design-intent/design-note/", 2, "design-note/（reality R-2）"),
+        ("design-intent/adr/ADR-2.yaml", 0, UNREVIEWED),
+    ];
+    let runs: Vec<Output> = cases.iter().map(|(p, _, _)| repo.gate(&[p])).collect();
+    repo.done();
+    for ((path, want, word), run) in cases.iter().zip(&runs) {
+        let out = stdout(run);
+        assert_eq!(code(run), *want, "{path}: {out}");
+        assert!(out.contains(word), "{path}: {out}");
     }
 }

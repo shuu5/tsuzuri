@@ -571,7 +571,7 @@ fn run(cli: Cli) -> ExitCode {
             write_set,
         } => {
             if gate {
-                let outcome = gate::run(&dir, &write_set, graph::stamp_table);
+                let outcome = gate::run(&dir, &write_set);
                 println!("{}", outcome.stdout);
                 return ExitCode::from(outcome.verdict.exit_code() as u8);
             }

@@ -11,6 +11,11 @@
 //! 引き金の要約値は天井の床の定数の規範の欄の一覧（`ceiling.rs` の TRIGGER_*）だけを写した木の正規化の sha256 で、印も
 //! この `trigger_digest` で測る。合格で引き金が同じなら通し、正本の要約値だけが違えば印の nodes と rest を今の表と突き合わせて
 //! 変わった節点の数を理由の行に添える（今の表は命令の入口が渡す＝層 3 の `graph.rs` を名指さない）。
+//!
+//! 便 169（docs/design/delivery-169.md §1 (b) の 3・ADR-30 決定 (6)・FR20）: 門は印の古さで止めない。印が無い・読めない・
+//! 観点の結果が欠けている・反証の済んでいない 止める の場所の file を書き換えるなら まだ分からない（2）、反証で支持された
+//! 止める の場所の file を書き換えるなら 止める（1）、ほかは 通す（0・印の後の変更は審査していない）。印からは round・
+//! verdict・viewpoints・refutes だけを読む（sources・trigger・rest・nodes は読まない）。引き金の要約値は印が書くので残す。
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -26,9 +31,6 @@ use crate::cursor::{self, R};
 use crate::sha256;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Node, Value};
-
-/// 置き場と天井の正本から（残差の要約値・節点ごとの要約値の表）を組む関数（命令の入口が `graph::stamp_table` を渡す）。
-pub(crate) type NodeTable = fn(&Path, &ceiling_src::Ceiling) -> R<(String, Vec<(String, String)>)>;
 
 /// 1 回の実行の結果。`stdout` は 1 行。
 pub struct Outcome {
@@ -63,11 +65,21 @@ const FROM_THE_TOP: &str = "作業ツリーの一番上から撃つ";
 const UNKNOWN_NOT_A_PLACE: &str = "--dir が設計文書の置き場でない";
 /// 置き場の印の file（便 150 §1 (b) の 1）: `folio check` が最初に読む正本（`check.rs` の FILES の先頭）。
 const PLACE_MARK: &str = "constitution.yaml";
+/// 印の観点の行の欄 wait の値（便 169）: まだ分からない の理由が反証の済んでいない 止める だけ（印が書き、門が読む）。
+pub(crate) const WAIT_REFUTE: &str = "反証";
+/// 理由の字の頭（便 169 §1 (b) の 3）: 天井の正本の観点の行が印に無いか 3 値でない、または反証待ちでない まだ分からない。
+const UNKNOWN_VIEWPOINTS: &str = "印の観点の結果が欠けている";
+/// 理由の字の頭: 反証の済んでいない 止める の場所の file を書き換える。
+const UNKNOWN_UNREFUTED: &str = "反証の済んでいない 止める の場所の file を書き換える";
+/// 理由の字の頭: 反証で支持された 止める の場所の file を書き換える。
+const FAIL_UPHELD: &str = "反証で支持された 止める の場所の file を書き換える";
+/// 通す理由の字の末尾（P-3.3・通す は天井の合格ではない）。
+const PASS_UNREVIEWED: &str = "書き換える file を場所とする反証で支持された 止める は無い・印の後の変更は審査していない";
 
 /// `write_set` の各 path は repo の根からの相対（接頭辞 + / - / ~ は剥がす）。`dir` は同じ根からの `--dir`。
-/// `table` は今の節点の表を組む関数（§1 (c) の 3）。判定の順は §1 (c) の 2 のとおりで、最初に当たったもので決まる。
+/// 判定の順は便 169 §1 (b) の 3 のとおりで、最初に当たったもので決まる。
 /// その前に、`--dir` と write-set を同じ根（今の dir）で照らせるかを確かめる（便 142・照らせなければ まだ分からない）。
-pub(crate) fn run(dir: &Path, write_set: &[String], table: NodeTable) -> Outcome {
+pub(crate) fn run(dir: &Path, write_set: &[String]) -> Outcome {
     // 根の突き合わせ（便 142）: 照らせなければ設計文書の判定より前に まだ分からない（P-4.1 / P-4.2）
     let Some(root) = dir_parts(dir) else {
         return Outcome::new(Verdict::Unknown, UNKNOWN_DIR_OUTSIDE);
@@ -101,68 +113,65 @@ pub(crate) fn run(dir: &Path, write_set: &[String], table: NodeTable) -> Outcome
         Ok(c) => c,
         Err(e) => return Outcome::new(Verdict::Unknown, e),
     };
-    let Some(trigger) = &stamp.trigger else {
-        return Outcome::new(Verdict::Unknown, "印が古い（引き金の要約値の欄が無い）");
-    };
-    match trigger_digest(dir) {
-        Ok(now) if now == *trigger => {}
-        Ok(_) => return Outcome::new(Verdict::Unknown, "印が古い（引き金の要約値が違う）"),
-        Err(e) => {
-            return Outcome::new(Verdict::Unknown, format!("引き金の要約値が測れない: {e}"));
-        }
-    }
-    let mut unknown = Vec::new();
-    let mut failed = Vec::new();
+    // 観点の結果が欠けている（P-4.1 / P-4.2）: 反証待ちだけの まだ分からない は file ごとの判定に任せる
+    let mut missing = Vec::new();
     for vp in &ceiling.viewpoints {
-        match stamp.viewpoints.iter().find(|(id, _)| *id == vp.id) {
-            Some((_, v)) if v == "合格" => {}
-            Some((_, v)) if v == "不合格" => failed.push(vp.id.as_str()),
-            _ => unknown.push(vp.id.as_str()),
+        match stamp.viewpoints.iter().find(|v| v.id == vp.id) {
+            Some(v) if v.verdict == "合格" || v.verdict == "不合格" => {}
+            Some(v) if v.verdict == "まだ分からない" => {
+                if v.wait.as_deref() != Some(WAIT_REFUTE) {
+                    missing.push(format!("{}（まだ分からない）", vp.id));
+                }
+            }
+            _ => missing.push(format!("{}（無い）", vp.id)),
         }
     }
-    if !unknown.is_empty() {
+    if !missing.is_empty() {
         return Outcome::new(
             Verdict::Unknown,
-            format!("まだ分からない観点: {}", unknown.join("・")),
+            format!("{UNKNOWN_VIEWPOINTS}: {}", missing.join("・")),
         );
     }
-    if !failed.is_empty() {
-        return Outcome::new(Verdict::Fail, format!("不合格の観点: {}", failed.join("・")));
+    // 書き換える file を場所とする 止める（2 が 1 より先・退けた は見ない）
+    let items: Vec<(Vec<&str>, bool)> = write_set
+        .iter()
+        .filter(|p| is_design_source(&root, p))
+        .map(|p| {
+            let p = p.trim_start_matches(['+', '-', '~']);
+            (parts(p)[root.len()..].to_vec(), p.ends_with('/'))
+        })
+        .collect();
+    let hit = |s: &&StampStop| items.iter().any(|(rel, slash)| covers(dir, rel, *slash, &s.file));
+    // 反証の済んでいない 止める = refute が無いか まだ分からない（値域の外も済んでいないと読む）
+    let unrefuted = |s: &&StampStop| !matches!(s.refute.as_deref(), Some("支持" | "退けた"));
+    if let Some(s) = stamp.stops.iter().filter(unrefuted).find(hit) {
+        return Outcome::new(
+            Verdict::Unknown,
+            format!("{UNKNOWN_UNREFUTED}: {}（{} {}）", s.file, s.viewpoint, s.finding),
+        );
     }
-    match sources_digest(dir, &ceiling) {
-        Ok(now) if now == stamp.sources => {
-            return Outcome::new(
-                Verdict::Pass,
-                "印が 4 観点とも合格・引き金の要約値が同じ・正本の要約値が同じ",
-            );
-        }
-        Ok(_) => {}
-        Err(e) => return Outcome::new(Verdict::Unknown, e),
+    let upheld = |s: &&StampStop| s.refute.as_deref() == Some("支持");
+    if let Some(s) = stamp.stops.iter().filter(upheld).find(hit) {
+        return Outcome::new(
+            Verdict::Fail,
+            format!("{FAIL_UPHELD}: {}（{} {}）", s.file, s.viewpoint, s.finding),
+        );
     }
-    // 正本の要約値だけが違う: 印の後に変わった節点を数えて添える（数えられなければ通さない・P-4.1 / P-4.2）
-    let Some((rest, nodes)) = &stamp.nodes else {
-        return Outcome::new(Verdict::Unknown, "印の節点の表が読めない");
-    };
-    let (now_rest, now_nodes) = match table(dir, &ceiling) {
-        Ok(t) => t,
-        Err(e) => {
-            return Outcome::new(
-                Verdict::Unknown,
-                format!("印の後に変わった節点が数えられない: {e}"),
-            );
-        }
-    };
-    let then: BTreeMap<&str, &str> = nodes.iter().map(|(i, d)| (i.as_str(), d.as_str())).collect();
-    let now: BTreeMap<&str, &str> = now_nodes.iter().map(|(i, d)| (i.as_str(), d.as_str())).collect();
-    let changed = then.iter().filter(|(id, d)| now.get(*id) != Some(*d)).count()
-        + now.keys().filter(|id| !then.contains_key(*id)).count();
-    let outside = if *rest == now_rest { "" } else { "と節点の外の字" };
     Outcome::new(
         Verdict::Pass,
-        format!(
-            "印が 4 観点とも合格・引き金の要約値が同じ・印の後に引き金の外の変更が在る（節点 {changed} 個{outside}・次の引き金の周が読む）"
-        ),
+        format!("印の周 {}（判定 {}）に、{PASS_UNREVIEWED}", stamp.round, stamp.verdict),
     )
+}
+
+/// write-set の設計文書の path（`--dir` の要素を外した要素の列）が 止める の場所の file に当たるか（便 169 §1 (b) の 3）:
+/// 同じ file・場所が dir 形でその下に在る・write-set の項目が dir（末尾が / か `--dir` の下の dir）で場所がその下に在る。
+fn covers(dir: &Path, rel: &[&str], slash: bool, file: &str) -> bool {
+    let place = parts(file);
+    let under = |long: &[&str], short: &[&str]| long.len() >= short.len() && long[..short.len()] == *short;
+    if rel == place.as_slice() || (file.ends_with('/') && under(rel, &place)) {
+        return true;
+    }
+    (slash || dir.join(rel.join("/")).is_dir()) && under(&place, rel)
 }
 
 // ── 設計文書の判定（§1 (b)）──
@@ -231,13 +240,27 @@ fn is_design_source(root: &[String], path: &str) -> bool {
 
 // ── 印の判定（§1 (c)）──
 
-/// 印から読む欄（sources・trigger・観点ごとの 3 値・rest と nodes）。trigger は欄が無ければ None、rest と nodes は
-/// どちらかが無いか読めなければ None（門は通す前に読めないと言う）。
+/// 印から読む欄（便 169: round・verdict・観点の行・止める の行だけ）。
 struct Stamp {
-    sources: String,
-    trigger: Option<String>,
-    viewpoints: Vec<(String, String)>,
-    nodes: Option<(String, Vec<(String, String)>)>,
+    round: String,
+    verdict: String,
+    viewpoints: Vec<StampViewpoint>,
+    stops: Vec<StampStop>,
+}
+
+/// 印の観点の行（id・3 値の字・欄 wait〔無ければ None〕）。
+struct StampViewpoint {
+    id: String,
+    verdict: String,
+    wait: Option<String>,
+}
+
+/// 印の refutes の行（観点・所見・反証の結果〔済んでいなければ None〕・場所の file）。
+struct StampStop {
+    viewpoint: String,
+    finding: String,
+    refute: Option<String>,
+    file: String,
 }
 
 /// 印を読む。無ければ None。
@@ -253,43 +276,54 @@ fn read_stamp(dir: &Path) -> R<Option<Stamp>> {
     let root = yaml::parse(&text)
         .map_err(|e| format!("parse できない: {e}"))?
         .root;
-    let sources = root
-        .get("sources")
-        .and_then(Node::as_str)
-        .ok_or_else(|| "sources が読めない".to_string())?
-        .to_string();
+    let text = |node: &Node, key: &str| {
+        node.get(key)
+            .and_then(Node::as_str)
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string)
+    };
+    let round = text(&root, "round").ok_or_else(|| "round が読めない".to_string())?;
+    let verdict = text(&root, "verdict").ok_or_else(|| "verdict が読めない".to_string())?;
     let viewpoints = root
         .get("viewpoints")
         .and_then(Node::as_seq)
         .and_then(|rows| {
             rows.iter()
                 .map(|row| {
-                    let id = row.get("id").and_then(Node::as_str)?;
-                    let verdict = row.get("verdict").and_then(Node::as_str)?;
-                    Some((id.to_string(), verdict.to_string()))
+                    Some(StampViewpoint {
+                        id: text(row, "id")?,
+                        verdict: text(row, "verdict")?,
+                        wait: row.get("wait").map(|w| w.as_str().unwrap_or_default().to_string()),
+                    })
                 })
                 .collect::<Option<Vec<_>>>()
         })
         .ok_or_else(|| "viewpoints が読めない".to_string())?;
-    let trigger = root.get("trigger").and_then(Node::as_str).map(str::to_string);
-    let rows = match root.get("nodes") {
-        Some(Node::Null) => Some(Vec::new()),
-        Some(Node::Seq(rows)) => rows
-            .iter()
-            .map(|row| {
-                let id = row.get("id").and_then(Node::as_str)?;
-                let digest = row.get("digest").and_then(Node::as_str)?;
-                Some((id.to_string(), digest.to_string()))
-            })
-            .collect::<Option<Vec<_>>>(),
-        _ => None,
-    };
-    let rest = root.get("rest").and_then(Node::as_str).map(str::to_string);
+    let stops = root
+        .get("refutes")
+        .and_then(Node::as_seq)
+        .and_then(|rows| {
+            rows.iter()
+                .map(|row| {
+                    let refute = match row.get("refute") {
+                        None => None,
+                        Some(r) => Some(r.as_str()?.to_string()),
+                    };
+                    Some(StampStop {
+                        viewpoint: text(row, "viewpoint")?,
+                        finding: text(row, "finding")?,
+                        refute,
+                        file: text(row, "file")?,
+                    })
+                })
+                .collect::<Option<Vec<_>>>()
+        })
+        .ok_or_else(|| "refutes が読めない".to_string())?;
     Ok(Some(Stamp {
-        sources,
-        trigger,
+        round,
+        verdict,
         viewpoints,
-        nodes: rest.zip(rows),
+        stops,
     }))
 }
 

@@ -3,6 +3,8 @@
 //! 一時 dir へ写し、写しの source/ceiling.yaml の 4 観点の reads を pass-coherence.yaml の record.read と同じ 5 文書
 //! （constitution・rules・srs・adr・design-note）に揃えてから `--write` で組み、pass-coherence.yaml を 4 観点の findings.yaml に
 //! 写す（record.bundle は観点ごとの digest.txt に合わせる）。凍結 anchor stamp-expected.yaml は触らない（P-10.1）。
+//! 便 169（docs/design/delivery-169.md §1 (c) の 5〜7）: 印の refutes の行の場所（at・file）と観点の行の wait を門が読む。
+//! 門の古さを縛った歯（f126_ の門の 1 本）は外した。
 //!
 //! 版管理の下の file は書き換えない（`--dir` と `--out` は必ず一時 dir の中）。
 
@@ -403,11 +405,12 @@ fn canonical_or_unknown(dir: &Path) -> Option<String> {
     }
 }
 
-/// `folio ceiling --dir src --gate --write-set src/srs.yaml`（今の dir = 周の一時 dir）。
-fn folio_gate(round: &Round) -> Output {
+/// `folio ceiling --dir src --gate --write-set <paths…>`（今の dir = 周の一時 dir）。
+fn folio_gate(round: &Round, write_set: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_folio"))
         .current_dir(&round.td)
-        .args(["ceiling", "--dir", "src", "--gate", "--write-set", "src/srs.yaml"])
+        .args(["ceiling", "--dir", "src", "--gate", "--write-set"])
+        .args(write_set)
         .output()
         .expect("folio を起動できない")
 }
@@ -525,7 +528,11 @@ fn stamp_carries_the_refute_results() {
     let stamp = stamp.expect("印が無い");
     assert_eq!(value(&stamp, "verdict"), "不合格", "{stamp}");
     assert!(
-        stamp.contains("refutes:\n  - {viewpoint: fidelity, finding: F-1, refute: 支持}\nreads: "),
+        stamp.contains(concat!(
+            "refutes:\n",
+            "  - {viewpoint: fidelity, finding: F-1, refute: 支持, at: requirements.FR2.plain, file: srs.yaml}\n",
+            "reads: "
+        )),
         "{stamp}"
     );
     assert!(
@@ -724,43 +731,6 @@ fn f126_the_stamp_carries_the_trigger_after_sources() {
     );
 }
 
-#[test]
-fn f126_the_gate_reads_the_trigger_the_stamp_wrote() {
-    const VERSION: &str = "  version: v0.3\n";
-    const PLAIN: &str = "    plain: 質問が出て、どれにもおすすめが付きます。\n";
-    const SHALL: &str = "    shall: folio は易しい質問を推奨回答つきで出す。\n";
-    let round = Round::passing("f126-gate");
-    let run = round.stamp();
-    let srs = round.src.join("srs.yaml");
-    let fresh = folio_gate(&round);
-    edit_once(&srs, VERSION, "  version: v0.4\n");
-    let version = folio_gate(&round);
-    edit_once(&srs, "  version: v0.4\n", VERSION);
-    edit_once(&srs, PLAIN, "    plain: 質問が出て、どれにもおすすめが付く。\n");
-    let plain = folio_gate(&round);
-    edit_once(&srs, SHALL, "    shall: folio は易しい質問を推奨回答つきで必ず出す。\n");
-    let shall = folio_gate(&round);
-    round.done();
-    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
-
-    assert_eq!(code(&fresh, "--gate"), 0, "{}", stdout(&fresh));
-    assert!(stdout(&fresh).contains("正本の要約値が同じ"), "{}", stdout(&fresh));
-
-    // meta の版だけ: 節点は同じ・節点の外の字が変わった
-    assert_eq!(code(&version, "--gate"), 0, "{}", stdout(&version));
-    assert!(stdout(&version).contains("節点 0 個と節点の外の字"), "{}", stdout(&version));
-
-    // 要件の平易文: 節点 1 個・節点の外の字は同じ（本物の rest で残差を比べる）
-    let out = stdout(&plain);
-    assert_eq!(code(&plain, "--gate"), 0, "{out}");
-    assert!(out.contains("節点 1 個・次の引き金の周が読む"), "{out}");
-    assert!(!out.contains("節点の外の字"), "{out}");
-
-    // 同じ要件の規範文: 引き金の要約値が違う
-    assert_eq!(code(&shall, "--gate"), 2, "{}", stdout(&shall));
-    assert!(stdout(&shall).contains("引き金の要約値が違う"), "{}", stdout(&shall));
-}
-
 // ── 便 154: 名の無い置き場の印（docs/design/delivery-154.md §1 (c) の 2 の 5） ──
 
 #[test]
@@ -784,9 +754,160 @@ fn f154_an_unnamed_place_stamps_without_a_name() {
 fn f104_the_gate_passes_the_stamp_it_just_wrote() {
     let round = Round::split("f104-gate");
     let run = round.stamp();
-    let gate = folio_gate(&round);
+    let gate = folio_gate(&round, &["src/srs.yaml"]);
     round.done();
     assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
     assert_eq!(code(&gate, "--gate"), 0, "{}{}", stdout(&gate), stderr(&gate));
-    assert!(stdout(&gate).contains("正本の要約値が同じ"), "{}", stdout(&gate));
+    assert!(stdout(&gate).contains("印の後の変更は審査していない"), "{}", stdout(&gate));
+}
+
+// ── 便 169: 印の refutes の行は 止める の場所を持ち、門がそれを読む（docs/design/delivery-169.md §1 (c) の 5〜7） ──
+
+/// 所見 file の fixture `name` の字を `edits`（元の字・替える字）で 1 か所ずつ替える。
+fn finding_with(name: &str, edits: &[(&str, &str)]) -> String {
+    let mut text = findings_fixture(name);
+    for (from, to) in edits {
+        assert_eq!(text.matches(from).count(), 1, "{name}: 「{from}」が 1 か所でない");
+        text = text.replacen(from, to, 1);
+    }
+    text
+}
+
+const FR2_PLACE: &str = "place: {doc: srs, at: requirements.FR2.plain}";
+
+#[test]
+fn f169_the_stamp_writes_the_stop_places_and_the_gate_reads_them() {
+    let round = Round::passing("f169-places");
+    round.put("fidelity", &findings_fixture("stop-upheld.yaml"));
+    round.put(
+        "coherence",
+        &finding_with(
+            "stop-unrefuted.yaml",
+            &[("viewpoint: fidelity", "viewpoint: coherence"), (FR2_PLACE, "place: {doc: adr, at: ADR-1.decision}")],
+        ),
+    );
+    round.put(
+        "reality",
+        &finding_with(
+            "stop-refuted.yaml",
+            &[
+                ("verdict: 不合格", "verdict: 合格"),
+                ("viewpoint: fidelity", "viewpoint: reality"),
+                (FR2_PLACE, "place: {doc: design-note, at: sections.x}"),
+            ],
+        ),
+    );
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    let gates: Vec<(&str, Output)> = ["src/srs.yaml", "src/adr/ADR-1.yaml", "src/design-note/full.yaml", "src/rules.yaml"]
+        .into_iter()
+        .map(|p| (p, folio_gate(&round, &[p])))
+        .collect();
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let stamp = stamp.expect("印が無い");
+    assert!(
+        stamp.contains(concat!(
+            "refutes:\n",
+            "  - {viewpoint: fidelity, finding: F-1, refute: 支持, at: requirements.FR2.plain, file: srs.yaml}\n",
+            "  - {viewpoint: coherence, finding: F-1, at: ADR-1.decision, file: adr/ADR-1.yaml}\n",
+            "  - {viewpoint: reality, finding: F-1, refute: 退けた, at: sections.x, file: design-note/}\n",
+            "reads: "
+        )),
+        "{stamp}"
+    );
+    let waiting: Vec<&str> = stamp.lines().filter(|l| l.contains("wait: ")).collect();
+    assert_eq!(waiting.len(), 1, "{stamp}");
+    assert!(
+        waiting[0].starts_with("  - {id: coherence, verdict: まだ分からない, ") && waiting[0].ends_with(", wait: 反証}"),
+        "{stamp}"
+    );
+    for ((path, run), want) in gates.iter().zip([1, 2, 0, 0]) {
+        assert_eq!(code(run, "--gate"), want, "{path}: {}", stdout(run));
+    }
+
+    // 文書の一覧に無い doc の 止める の周は印を組まない（全部か無しか）
+    let round = Round::passing("f169-nowhere");
+    round.put(
+        "fidelity",
+        &finding_with("stop-upheld.yaml", &[(FR2_PLACE, "place: {doc: nowhere, at: x.y}")]),
+    );
+    let run = round.stamp();
+    let written = round.stamp_path().exists();
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 2, "{}", stdout(&run));
+    assert!(stdout(&run).contains("文書の一覧に無い"), "{}", stdout(&run));
+    assert!(!written, "印が書かれた");
+}
+
+#[test]
+fn f169_a_failed_round_is_stamped_with_its_upheld_stop() {
+    let round = Round::passing("f169-failed");
+    let first = round.stamp();
+    assert_eq!(code(&first, "--stamp 1"), 0, "{}", stdout(&first));
+    round.put("fidelity", &findings_fixture("stop-upheld.yaml"));
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path()).unwrap();
+    let gate = folio_gate(&round, &["src/srs.yaml"]);
+    round.done();
+    assert_eq!(code(&run, "--stamp 2"), 0, "{}", stdout(&run));
+    assert!(stdout(&run).contains("印を書いた"), "{}", stdout(&run));
+    assert_eq!(value(&stamp, "verdict"), "不合格", "{stamp}");
+    assert!(
+        stamp.contains(concat!(
+            "refutes:\n",
+            "  - {viewpoint: fidelity, finding: F-1, refute: 支持, at: requirements.FR2.plain, file: srs.yaml}\n",
+            "reads: "
+        )),
+        "{stamp}"
+    );
+    assert_eq!(code(&gate, "--gate"), 1, "{}", stdout(&gate));
+}
+
+#[test]
+fn f169_a_viewpoint_unknown_for_another_reason_does_not_wait() {
+    let round = Round::passing("f169-other");
+    // AI が判定できない（所見 file の verdict が まだ分からない）と反証の済んでいない 止める
+    round.put(
+        "readability",
+        &finding_with(
+            "stop-unrefuted.yaml",
+            &[("verdict: 合格", "verdict: まだ分からない"), ("viewpoint: fidelity", "viewpoint: readability")],
+        ),
+    );
+    // 所見の欄の違反（根拠が正本に無い）と反証の済んでいない 止める
+    round.put(
+        "coherence",
+        &finding_with(
+            "stop-unrefuted.yaml",
+            &[
+                ("viewpoint: fidelity", "viewpoint: coherence"),
+                ("evidence: 合格か不合格のどちらかを出します。", "evidence: 正本に無い字の根拠。"),
+            ],
+        ),
+    );
+    // 止める が全部退けられた不合格（再判定待ち）
+    round.put(
+        "reality",
+        &finding_with("stop-refuted.yaml", &[("viewpoint: fidelity", "viewpoint: reality")]),
+    );
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    let gate = folio_gate(&round, &["src/rules.yaml"]);
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let stamp = stamp.expect("印が無い");
+    for id in ["readability", "coherence", "reality"] {
+        let head = format!("  - {{id: {id}, verdict: まだ分からない, ");
+        assert!(stamp.lines().any(|l| l.starts_with(&head)), "{id}: {stamp}");
+    }
+    assert!(!stamp.contains("wait:"), "{stamp}");
+    assert_eq!(code(&gate, "--gate"), 2, "{}", stdout(&gate));
+    assert!(
+        stdout(&gate).contains(
+            "印の観点の結果が欠けている: readability（まだ分からない）・coherence（まだ分からない）・reality（まだ分からない）"
+        ),
+        "{}",
+        stdout(&gate)
+    );
 }
