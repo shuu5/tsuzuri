@@ -11,6 +11,7 @@
 //!
 //! 便 175（docs/design/delivery-175.md §1 (c) の 2・ADR-30 決定 (5)(6)）: 7. folio2・骨格・外の置き場の 9 本の生成区間は、周の引き金の
 //! 仕掛け（引き金の一覧・印と門が同じ関数で測る要約値）と、欄の決まりに無い改訂の欄を言わない。
+//! 便 177（docs/design/delivery-177.md §1 (c) の 1）: 8. 同じ 3 つの置き場の生成区間は、印が持たなくなった節点の表と残差を言わない。
 //!
 //! 版管理の下の file は書き換えない（`--dir` の写しと `--out` は必ず一時 dir の中）。
 
@@ -477,4 +478,20 @@ fn f175_no_region_claims_the_round_trigger() {
     let out = folio(&["schema", "--write"], &w.place());
     assert_eq!(out.status.code(), Some(0), "schema --write: {}", both(&out));
     f175_no_false_claims(&w.place(), "tsuzuri", &F175_FALSE);
+}
+
+// ── 便 177: 生成区間は印の節点の表を言わない ──
+
+/// 生成区間に在ってはならない字（手書き・印は節点の表と残差の要約値を書かない）。
+const F177_FALSE: [&str; 2] = ["天井の印はこの要約値の表", "残差"];
+
+/// 歯 8: folio2 自身の置き場・骨格の命令が書いた置き場・tsuzuri の名で書き直した置き場の 9 本の生成区間。
+#[test]
+fn f177_no_region_claims_the_stamp_node_table() {
+    f175_no_false_claims(&repo_root().join("design-intent"), "folio2", &F177_FALSE);
+    let w = Work::outer("f177-tsuzuri", Some("tsuzuri"));
+    f175_no_false_claims(&w.place(), "骨格", &F177_FALSE);
+    let out = folio(&["schema", "--write"], &w.place());
+    assert_eq!(out.status.code(), Some(0), "schema --write: {}", both(&out));
+    f175_no_false_claims(&w.place(), "tsuzuri", &F177_FALSE);
 }

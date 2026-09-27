@@ -7,9 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use crate::ceiling_src::Ceiling;
 use crate::floor::Floor;
-use crate::gate;
 use crate::sha256;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Node};
@@ -125,7 +123,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "digest_note",
         Floor::Val(
-            "節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値。天井の印はこの要約値の表と、節点にも辺の欄にも属さない残りの byte の要約値（残差）を持つ（ADR-13 決定 (8)）",
+            "節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値",
         ),
     ),
 ]);
@@ -654,35 +652,6 @@ impl Scan {
     }
 }
 
-/// 天井の印の 2 欄（便 99・§1 (d)）: 残差の要約値（「sha256 <16 進>」）と節点ごとの要約値の表（id の byte 順）。
-/// 母集団 = 索引の正本と、観点の reads が指す文書の file（dir 形は直下の .yaml）の和集合を相対 path の byte 順に。
-pub(crate) fn stamp_table(dir: &Path, ceiling: &Ceiling) -> Result<(String, Vec<(String, String)>), String> {
-    let index = build(dir)?;
-    let sources = source_files(dir)?;
-    let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    for name in &sources {
-        files.insert(name.clone(), read_text(dir, name)?.into_bytes());
-    }
-    let documents = gate::documents(dir)?;
-    for (doc, _) in ceiling.viewpoints.iter().flat_map(|vp| &vp.reads) {
-        let (_, file) =
-            documents.iter().find(|(id, _)| id == doc).ok_or_else(|| format!("{doc}: 文書の一覧に無い"))?;
-        gate::collect(dir, file, &mut files)?;
-    }
-    let mut scan = Scan::default();
-    let mut rest: Vec<u8> = Vec::new();
-    for (name, bytes) in &files {
-        if sources.contains(name) {
-            let text = std::str::from_utf8(bytes).map_err(|e| format!("{name} を読めない: {e}"))?;
-            rest.extend(scan.file(name, text)?.into_bytes());
-        } else {
-            rest.extend(bytes);
-        }
-    }
-    let nodes = scan.agree(&index)?;
-    Ok((format!("sha256 {}", sha256::hex(&rest)), nodes.into_iter().collect()))
-}
-
 /// 床の違反の種類（便 136）。入口の正本の違反の種類 index と読み違えない字。
 pub const INDEX_KIND: &str = "索引の節点";
 
@@ -695,8 +664,8 @@ fn bare_id(id: &str) -> &str {
     cut.trim().trim_matches(['"', '\'']).trim()
 }
 
-/// 床の口（便 136 §1 (b) の 1）: `graph --print` と `stamp_table` と同じ build と Scan で節点の集合を組み、食い違いを
-/// 種類 `INDEX_KIND` の違反に数える（索引と印が組めない置き場を床が合格と言わない・P-4.1）。索引を組めないときは、
+/// 床の口（便 136 §1 (b) の 1）: `graph --print` と同じ build と Scan で節点の集合を組み、食い違いを
+/// 種類 `INDEX_KIND` の違反に数える（索引が組めない置き場を床が合格と言わない・P-4.1）。索引を組めないときは、
 /// 床がほかに何も数えていなければ「まだ分からない」を 1 件足す（読めない正本は床が先に数えている＝同じ原因を 2 度数えない）。
 pub fn check_index(dir: &Path, report: &mut Report) {
     let silent = report.violations.is_empty() && report.unknowns.is_empty() && report.pendings.is_empty();
@@ -738,7 +707,7 @@ pub fn check_index(dir: &Path, report: &mut Report) {
             report.violation(
                 INDEX_KIND,
                 format!(
-                    "{file}: 索引の節点 {id} の行を行の逐語で切れない（id か節の見出しの key が引用符つきか裸の形でない＝folio graph --print と天井の印が組めない）"
+                    "{file}: 索引の節点 {id} の行を行の逐語で切れない（id か節の見出しの key が引用符つきか裸の形でない＝folio graph --print が組めない）"
                 ),
             );
         }
