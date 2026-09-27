@@ -3,13 +3,13 @@
 meta:
   id: surface-base
   title: 面の便（土台）— workspace の骨格・契約の型・導出グラフ・台帳の指標・面の server・席の hook
-  version: v0.15
+  version: v0.16
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。第 0.4 版（同日）は便 a の着地（6d2a7cd）の後の便 b の行の直しで、依存の file と xtask の歯の file を write-set に足し、snapshot を名指しの 1 file にし、完了の条件を便 b の時点で測れる形にした。第 0.5 版（同日）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 e から最小の server を行 e-min として先に分けた。行 e-min の write-set には、検証の語（contract_form_）に当たる歯を持つ file を全部入れた（器の受付の指摘）。第 0.6 版（同日）は台帳の export の file が古いままになる実測を受け、読みの出所を改める行 e-src を足した。第 0.7 版（同日）は行 c の入力を 3 つの字（設計の道具の索引・bd の一覧・器の event log）に改め、YAML の読み手の依存を足さない形にした。第 0.8 版（同日）は fixture の置き場を dir から名指しの file に改めた（器の受付は新しい dir を解けない）。第 0.11 版（同日）は行 d を書き直した（入力と数え方と電文の型と pipeline の板の対応の表を節に書き、便 c の後に画面の block の便と並べて走らせる）。第 0.12 版（同日）は読む側の口の行 e-read を足した（便 c と便 d の値を server の口に出す）。第 0.13 版（同日）は問いの card と席の card の電文の型の行 b-cards と、問いの一覧の口と裁定の受付の行 e-ask を足した。第 0.14 版（同日）は席と口座の読みの行 e-seat を足した。第 0.15 版（同日）は辺の向きと、地図のグラフの眺めと、近傍の電文の行 c-view を足した（便 c の近傍は根拠と影響の向きが逆だったので、この行で直す）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は器の契約の審査（走行 t3-hub.2-20260927T071348Z・FAIL）の指摘を受けた設計席の直しで、便 a の行に alias の file と Cargo.lock と .gitignore を足し、完了の条件の 4 つを歯と検証の行で測る形にした。便の範囲と完了の条件の意図は変えていない。第 0.3 版（同日）は 2 周目の走行（t3-hub.2-20260927T071750Z・検証の行 1 本が赤）を受けた直しで、実装役の権限の検査が .cargo/config.toml を守られた file として書かせないため、alias をやめて cargo run -q -p xtask -- check の行にした。第 0.4 版（同日）は便 a の着地（6d2a7cd）の後の便 b の行の直しで、依存の file と xtask の歯の file を write-set に足し、snapshot を名指しの 1 file にし、完了の条件を便 b の時点で測れる形にした。第 0.5 版（同日）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 e から最小の server を行 e-min として先に分けた。行 e-min の write-set には、検証の語（contract_form_）に当たる歯を持つ file を全部入れた（器の受付の指摘）。第 0.6 版（同日）は台帳の export の file が古いままになる実測を受け、読みの出所を改める行 e-src を足した。第 0.7 版（同日）は行 c の入力を 3 つの字（設計の道具の索引・bd の一覧・器の event log）に改め、YAML の読み手の依存を足さない形にした。第 0.8 版（同日）は fixture の置き場を dir から名指しの file に改めた（器の受付は新しい dir を解けない）。第 0.11 版（同日）は行 d を書き直した（入力と数え方と電文の型と pipeline の板の対応の表を節に書き、便 c の後に画面の block の便と並べて走らせる）。第 0.12 版（同日）は読む側の口の行 e-read を足した（便 c と便 d の値を server の口に出す）。第 0.13 版（同日）は問いの card と席の card の電文の型の行 b-cards と、問いの一覧の口と裁定の受付の行 e-ask を足した。第 0.14 版（同日）は席と口座の読みの行 e-seat を足した。第 0.15 版（同日）は辺の向きと、地図のグラフの眺めと、近傍の電文の行 c-view を足した（便 c の近傍は根拠と影響の向きが逆だったので、この行で直す）。第 0.16 版（同日）は地図のグラフの眺めと近傍と未反映の一覧を配る口の行 e-view を足した。
 
 sections:
   - n: 1
@@ -197,6 +197,15 @@ sections:
         size: L
         done: (1) 辺の向きの関数は、節の例の 6 本（basis の FR1 から P-1 は to・in-article の P-1 から P-1.1 は from・in-article の P-1.1 から P-1 は to・verify.ac の FR1 から AC1 は from・verifies の AC1 から FR1 は to・parent-child の e.1 から e は to）で期待の端を返し、辺の型の 30 個の全部に、両端の種類が条でないときの端を 1 つ返す（from は verify.ac と amended_by の 2 つだけ） (2) id の自然な順の関数は、R-2 を R-10 より前、t3-hub.9 を t3-hub.10 より前、同じ字は同じと返す (3) 例のグラフの眺めは、出す節点が 8 個でその id と段と子の数が節の表と一致し、まとめた辺が 10 本でその並びが節の表と一致し、shown 8・folded 4・cut 1・total 13 (4) 候補が 40 を超えるグラフ（hub-619.json）の眺めは shown 40・folded 0・cut 582・total 622 で、出す節点の先頭は h（眺めの次数が最も大きい）、辺は 39 本 (5) 輪を持つグラフ（節の例の 2 節点）の眺めは止まらずに返り、段は A-1 が 2・A-2 が 1 (6) 例のグラフの近傍（中心 FR1・段数 2）は、畳みの 4 値のそれぞれで、出す行の id と列と 1 つ前の節点と辺の型の並びと、shown・total・basis・impact の数が節の表と一致する (7) 段数 1 の近傍は 2 段目の行を持たず、段数 0 と 4 と、無い id は無しを返す (8) hub-619.json の近傍は、中心 h で shown 12・total 621・cut_cap 609・cut_hub 0 で hub の一覧が空、中心 h.1 で出す行が h（列 -1）・h.1（列 0）・走行（列 1）の 3 つで cut_hub 618・hub の一覧が h と次数 619 の 1 つ (9) 次数は隣の節点の数で、in-article の両向きの 2 本でつながる隣を 1 と数える（例のグラフの P-1 の次数は 5） (10) 新しい電文の型（GraphView・ViewNode・ViewEdge・AroundDoc・AroundRow・HubCut・Fold・EdgeEnd）の外形が snapshot の file に pin され、Fold の字は none・up・down・both (11) hub の閾値の定数は規則の行 R-20 の字（30 超）と同じで、既定の段数の定数は同じ行の字（各 2 段）と同じ (12) 着地済みの歯（歯の file graph.rs の近傍の 2 本を除く全部）が通り、足す外の依存は 0 本
         depends: [c]
+      - id: e-view
+        title: 眺めの口（地図のグラフの眺め・近傍・未反映の一覧を配る 3 つの GET の口と、未反映の一覧の電文の型）
+        req: [FR2, FR5, FR13, NFR2]
+        section: "16"
+        write-set: ["crates/tsuzuri-contract/src/lib.rs", "crates/tsuzuri-contract/src/stats.rs", "crates/tsuzuri-contract/tests/contract_form.rs", "crates/tsuzuri-contract/tests/snapshots/contract_form.json", "crates/tsuzuri-boundary/src/server/mod.rs", "crates/tsuzuri-boundary/src/server/http.rs", "crates/tsuzuri-boundary/src/server/board.rs", "+crates/tsuzuri-boundary/tests/server_view.rs"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --no-tests=fail server_view_", "cargo nextest run -p tsuzuri-contract --no-tests=fail contract_form_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) GET /api/graph/view は 200 と JSON を返し、本文の字が、同じ 3 つの字から中核の関数（組む関数の値を眺めの関数に渡した値）を電文にした字と 1 字も違わない (2) GET /api/around?id=R-25 は 200 で、本文の字が、中核の近傍の関数を中心 R-25・段数 2・畳みなしで呼んだ値を電文にした字と 1 字も違わず、GET /api/around?id=R-25&k=1&fold=up は段数 1・根拠の側を畳む値と 1 字も違わない (3) query の値は %XX と + を戻してから読み、GET /api/around?id=R%2D25 の本文は id=R-25 の本文と同じ (4) 近傍の口の断りは 4 つで、id が無いか空は 400 と no-id、k が 0・4・数でない字は 400 と steps、fold が知らない字は 400 と fold、節点の無い id は 404 と no-node (5) GET /api/unreflected は 200 で、memos は読めた列で、行の id と題の並びが中核の未反映の関数の memo の並びと一致し、年齢は要求の前後のどれかの時刻で中核の値と一致し、rulings と requests は「まだ分からない」 (6) 偽の bd が落ちる置き場では、未反映の一覧の 3 つとも「まだ分からない」になり、眺めの unread が ledger を持つ (7) 3 つの口に GET でない要求を撃つと 405 で、3 つの口を読んだ前後で repo の dir と state dir の全 file の byte が変わらない (8) 未反映の一覧の電文の型（UnreflectedList と UnreflectedRow）の外形が snapshot の file に pin される (9) 着地済みの口の歯（server_min_・server_src_・server_read_・server_ask_・server_seat_）が全部通り、足す外の依存は 0 本
+        depends: [e-seat, c-view]
   - n: 9
     type: prose
     title: 便 e-min — 最小の server
@@ -302,6 +311,21 @@ sections:
       在りか（着地済み）。節点の種類の型 NodeKind と辺の型 EdgeType と節点と辺の型と、出所の型 GraphSource と、導出グラフの電文 GraphDoc は、契約の型の crate の graph の module（crates/tsuzuri-contract/src/graph.rs・便 b と便 e-read の着地 fb8053f）。型の外形を pin する歯は crates/tsuzuri-contract/tests/contract_form.rs と、その snapshot の file。中核の crate のグラフの型 Graph（欄は nodes・edges・unread・skipped・beads・runs）と出所の型 Source（3 値・字は契約の型の GraphSource と同じ）は crates/tsuzuri-core/src/graph/mod.rs、今の近傍は同じ dir の around.rs（便 c の着地 58a3ea6）。今の近傍の関数と型（Around・Reached・Cut・CutReason）を使っているのは、中核の crate の歯の file（crates/tsuzuri-core/tests/graph.rs）の 2 本の歯と、定数を規則の行と照らす 1 本の歯だけで、境界の crate と画面は使っていない。この 3 本は新しい歯の file（gview.rs）へ新しい期待で移し、graph.rs からは消す。graph.rs のほかの歯は変えない。今の型（Around・Reached・Cut・CutReason）は電文の型に置き換えて消す。中核の Source から契約の型の GraphSource への写しは、境界の crate の板の module に在る（この便は触らない）。中核の関数が電文の unread を埋めるための写しは、中核の graph の module に小さな関数として足す。fixture の hub-619.json は便 c の着地済みの file（tests/fixtures/graph の下・子を 619 本持つ epic の h と、子 h.1 の走行を 1 つ持つ）で、この便は読むだけ。
       契約の型の crate の入口の file（crates/tsuzuri-contract/src/lib.rs）は、歯の語 contract_form_ の字を comment に持つので write-set に入れるが、中身は変えない（新しい型は今の graph の module に足すので、module の宣言は増えない）。歯の語は gview_ にする（今の歯の語 graph_ は、境界の crate の file にも字が在るので使わない）。新しい歯は全部、新しい歯の file に置き、名を gview_ で始める。
       依存は足さない。中核の crate は契約の型の crate と serde と serde_json に依存している（Cargo.toml は触らない）。
+
+  - n: 16
+    type: prose
+    title: 便 e-view — 眺めの口
+    body: |
+      画面の地図のグラフの面と、節点の近傍の図と、未反映の一覧が読む 3 つの口を server に足す。値を決めるのは中核の関数で（便 c-view の着地 41b138a と便 d の着地 715840c）、server は 3 つの字を集めて関数に渡し、値を電文にして返すだけにする。server は何も書かない。
+      口は 3 つ。どれも GET で、200 のときの本文は電文の object そのもの（読めたかの包みは付けない）。
+      1 つ目は GET /api/graph/view。設計の索引と台帳と event log の 3 つの字を集め（板の module の gather に設計と event log の両方を頼む）、中核の組む関数（graph の module の build）の値を眺めの関数（同じ module の view・便 c-view）に渡し、返りの GraphView を電文にして返す。読めなかった出所は電文の unread に入る（断らない）。
+      2 つ目は GET /api/around。query は 3 つで、id（中心の節点の id・必ず要る）・k（段数・1 か 2 か 3・省いたら 2）・fold（畳み・none か up か down か both・省いたら none）。同じ 3 つの字から組んだグラフと、中心と段数と畳みを、中核の近傍の関数（graph の module の around・引数はグラフ・中心の id・段数・畳み・返りは無いことが在る AroundDoc）に渡す。返りが在れば 200 と電文。断りは本文が 1 語の text で、id が無いか空なら 400 と no-id、k が 1 から 3 の整数でなければ 400 と steps、fold が 4 つの字のどれでもなければ 400 と fold、関数の返りが無ければ（節点が無い）404 と no-node。query を読む順は id・k・fold で、最初に当たった断りを返す。
+      3 つ目は GET /api/unreflected。台帳の字だけを集め（設計と event log は頼まない）、中核の未反映の関数（ledger の module の unreflected・引数は台帳の字と今の時刻・返りは種類ごとに、読めた一覧か「まだ分からない」）の値を、新しい電文の型に写して返す。
+      未反映の一覧の電文の型は、契約の型の crate の stats の module に足す。UnreflectedRow の欄は、id（bead の id の字）・title（題）・age_s（年齢の秒・作った時刻が読めなければ無し）。UnreflectedList の欄は、memos・rulings・requests の 3 つで、どれも、読めた UnreflectedRow の列か「まだ分からない」（着地済みの型 Reading）。中核の型（Unreflected と UnreflectedItem）は変えず、写しは境界の crate の板の module に置く（導出グラフの電文と同じ形）。今の中核の関数は、memo は open の memo の全部を年齢の古い順に返し、裁定と要望はつねに「まだ分からない」を返す（材料が入力にまだ無い）。
+      query の読み。要求の型（境界の crate の server の http の module の Request）に、query の 1 つの値を返す関数を足す（引数は鍵・返りは、値の %XX と + を戻した字か、無し）。今の関数 path は変えない。口を選ぶ関数（server の入口の module の route）は今は path だけを受けているので、query を読めるよう、要求を受ける形に直す（呼び手は同じ module の handle の 1 か所）。
+      在りか（着地済み）。GraphView・AroundDoc・Fold は契約の型の crate の graph の module。中核の関数は crates/tsuzuri-core/src/graph の下の view.rs と around.rs。未反映は crates/tsuzuri-core/src/ledger/unreflected.rs。3 つの字を集める関数と、中核の値を電文に写す関数は境界の crate の板の module（crates/tsuzuri-boundary/src/server/board.rs）。電文の字は契約の型の crate の wire の encode が作る（境界の crate は serde に直接依存しない）。今の時刻は events の module の now。契約の型の crate の入口の file（lib.rs）は、歯の語 contract_form_ の字を持つので write-set に入れるが、中身は変えない。境界の crate は契約の型の crate と中核の crate に依存している（Cargo.toml は触らない）。
+      歯は新しい file（server_view.rs）に置き、名を server_view_ で始める。歯の支度（一時の置き場・偽の bd と偽の設計の道具・server を起こして GET を撃つ関数）は、着地済みの歯の file（crates/tsuzuri-boundary/tests/server_read.rs・この便の write-set の外）と同じ形を新しい file に持つ。入力は着地済みの見本（tests/fixtures/graph/real の索引と event log・tests/fixtures/ledger の bd-list-8.json）を使い、fixture の file は足さない。値を比べる歯は、口の本文の字と、中核の値を電文にした字を比べる（小数や時刻を読み直して比べない）。時刻に依る値（年齢）は、要求の前後のどれかの秒で一致すれば通す。
+      依存は足さない。
 
 figures: []
 sources:
