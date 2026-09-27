@@ -7,8 +7,11 @@ use tsuzuri_contract::board::NextMove;
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 use tsuzuri_contract::wire;
 
-use super::{Body, NO_CONTENT, NOT_READ, pipeline};
-use crate::frame::Block;
+use super::node::answer_href;
+use super::{Body, NO_CONTENT, NOT_READ, batch, pipeline};
+use crate::account::windows::ACCOUNT_WIN;
+use crate::account::{Tab, tab_href};
+use crate::frame::{Block, Mode, PageId, href};
 use crate::view::Fetched;
 
 pub const BLOCK: Block = Block {
@@ -49,6 +52,21 @@ pub const NONE_LINE: &str = "orchestrator が動いている / 待っている";
 
 /// 止まっている走行の箱の link の字（block「pipeline」へ頁の中で飛ぶ）。
 pub const PIPE_LINK: &str = "run を見る ›";
+
+/// 限度と移動の箱の link の字（account board の home の tab へ）。
+pub const ACCOUNT_LINK: &str = "account board を見る ›";
+
+/// 応答なしの箱の link の字（account board の session の tab へ）。
+pub const SESSION_LINK: &str = "session を見る ›";
+
+/// 束の承認の箱の link の字（問いの頁の束の block へ・見本の字）。
+pub const BATCH_LINK: &str = "まとめて承認 ›";
+
+/// 質問の箱の link の字（問いの頁の card へ・見本の字）。
+pub const ANSWER_LINK: &str = "答える ›";
+
+/// 発効待ちの箱の link の字（抜けの検査の頁へ・見本の字）。
+pub const GAPS_LINK: &str = "orchestrator に任せる（見るだけ） ›";
 
 /// 種類の語の鍵（表から引く）。
 pub fn key(kind: NextMove) -> &'static str {
@@ -93,6 +111,8 @@ pub struct Big {
     pub what_class: &'static str,
     pub what: String,
     pub link: Option<Link>,
+    /// 電文の対象の id の字（無ければ None）。
+    pub target: Option<String>,
 }
 
 /// block の中身（大きく出す 1 つと、残りの種類の一覧）。
@@ -193,6 +213,35 @@ pub fn big(kind: NextMove, check: Option<&NextCheck>) -> Big {
         what_class: if none { "what small muted" } else { "what" },
         what,
         link,
+        target: target.map(ToString::to_string),
+    }
+}
+
+/// 種類ごとの次の手の頁への link（見本の nextItems の button・止まっている走行は Big の link・なしは無い）。
+/// 質問は対象の id が在ればその card へ、無ければ問いの頁へ。どれも mode を URL に残す。
+pub fn action(kind: NextMove, target: Option<&str>, mode: Mode) -> Option<Link> {
+    let (href, text) = match kind {
+        NextMove::LimitOrMove => (tab_href(Tab::Home, mode), ACCOUNT_LINK),
+        NextMove::Unresponsive => (tab_href(Tab::Session, mode), SESSION_LINK),
+        NextMove::BatchApproval => (
+            format!("{}#{}", href(PageId::Ask, mode), batch::BLOCK.id),
+            BATCH_LINK,
+        ),
+        NextMove::Question => (
+            target.map_or_else(|| href(PageId::Ask, mode), |id| answer_href(id, mode)),
+            ANSWER_LINK,
+        ),
+        NextMove::AwaitingEffect => (href(PageId::Gaps, mode), GAPS_LINK),
+        NextMove::StalledRun | NextMove::Nothing => return None,
+    };
+    Some(Link { href, text })
+}
+
+/// link を開く窓の名（account board へ飛ぶ種類は account board の名前つきの窓・ほかは今の窓）。
+pub fn window_of(kind: NextMove) -> Option<&'static str> {
+    match kind {
+        NextMove::LimitOrMove | NextMove::Unresponsive => Some(ACCOUNT_WIN),
+        _ => None,
     }
 }
 
@@ -206,33 +255,45 @@ pub fn view() -> leptos::prelude::AnyView {
 mod dom {
     use leptos::prelude::*;
 
-    use super::{BLOCK, Big, MISS, Mark, Next, PATH, Row, content};
+    use super::{BLOCK, Big, MISS, Mark, Next, PATH, Row, action, content, window_of};
+    use crate::frame::Mode;
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
-    use crate::widgets::help::hs;
+    use crate::widgets::help::{HelpCtx, hs};
 
     pub fn view() -> AnyView {
         let fetched = crate::net::read(PATH);
+        // 今の mode（context が無ければ今の URL の query から・link に mode を残す）。
+        let ctx = use_context::<HelpCtx>();
+        let url = Mode::from_query(&crate::mapview::current());
+        let mode = move || ctx.map_or(url, |c| c.mode.get());
         let body = move || match fetched.with(content) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
-            Body::Filled(next) => next_view(next),
+            Body::Filled(next) => next_view(next, mode),
         };
         section(BLOCK, ().into_any(), body.into_any())
     }
 
-    fn next_view(next: Next) -> AnyView {
+    fn next_view(next: Next, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
         let rows = next.rest.into_iter().map(row_view).collect_view();
         view! {
-            {big_view(next.big)}
+            {big_view(next.big, mode)}
             <ul class="nxlist">{rows}</ul>
         }
         .into_any()
     }
 
-    fn big_view(big: Big) -> AnyView {
-        let act = big.link.map(|l| {
-            view! { <div class="act"><a class="btn primary" href=l.href>{l.text}</a></div> }
-        });
+    fn big_view(big: Big, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
+        let (kind, link, target) = (big.kind, big.link, big.target);
+        let win = window_of(kind);
+        // Big の link（止まっている走行）が在ればそれを、無ければ種類の次の手の頁への link（mode で href が変わる）。
+        let act = move || {
+            link.clone()
+                .or_else(|| action(kind, target.as_deref(), mode()))
+                .map(|l| {
+                    view! { <div class="act"><a class="btn primary" href=l.href target=win>{l.text}</a></div> }
+                })
+        };
         view! {
             <div class=big.class data-nx=big.key>
                 {hs(big.key)}
