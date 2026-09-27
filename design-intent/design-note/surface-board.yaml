@@ -3,13 +3,13 @@
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.7
+  version: v0.8
   status: effective
   generated: 2026-09-27
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。
 
 sections:
   - n: 1
@@ -154,6 +154,15 @@ sections:
         size: M
         done: (1) fixture の指標の電文から、上段の 4 つの数（open の task・open の memo・未反映・純減 24h）と純減の矢印（負は ↓・正は ↑・0 は →）が期待と一致する (2) 判定の 5 値のそれぞれが、記号（! ↑ → ✓ ―）と class と語の鍵に 1 か所の表で写る (3) burndown の図は 14 日で、棒の高さと線の点の座標が見本の式で計算した fixture の期待と一致する (4) 未反映の一覧は古い順に 20 件までで、超える分は「ほか n 件」と出し、まだ分からない種類は 0 でなく測れていないの記号を出す (5) 年齢の字が 4 つの形（値なしは ―・1 日未満は時間の h・10 日未満は小数 1 桁の d・それ以上は整数の d）で期待と一致する (6) 「詳しく」の中に ready と blocked と lead の中央値と stale と sparkline と epic の進みが在り、作業中の数と最古の task はどこにも出さない (7) 口が読めないかまだ読んでいないときは 0 でなく測れていないと理由の 1 行を出し、台帳の一覧は今のまま出す (8) 着地済みの関数の外形（BLOCK・口の path の定数・Body<()> を返す metrics の名と引数と返りの型・台帳の一覧の body と count）を変えず、本文が電文の型として読めないときは測れていないを返し、足す外の依存は 0 本
         depends: [g-parts]
+      - id: g-map
+        title: 地図の頁の中身（面の切り替えの tab・圧縮の面・一覧の面・表の面・帯と種類の対応）
+        req: [FR2, FR5, FR14, NFR2]
+        section: "14"
+        write-set: ["crates/tsuzuri-surface/src/project/map.rs", "+crates/tsuzuri-surface/src/project/map/band.rs", "+crates/tsuzuri-surface/src/project/map/compact.rs", "+crates/tsuzuri-surface/src/project/map/list.rs", "+crates/tsuzuri-surface/src/project/map/table.rs", "+crates/tsuzuri-surface/src/project/map/graph.rs", "+crates/tsuzuri-surface/src/project/map/around.rs", "+crates/tsuzuri-surface/tests/mapview.rs", "+tests/fixtures/surface/graph-doc.json"]
+        verify: ["cargo nextest run -p tsuzuri-surface --no-tests=fail mapview_", "cargo run -q -p xtask -- surface-build", "cargo run -q -p xtask -- check"]
+        size: L
+        done: (1) 種類から帯への対応は閉じた表で、契約の型の節点の種類の 20 個の全部が 7 つの帯のちょうど 1 つに当たり、種類から語の鍵への対応も 20 個の全部を持つ (2) fixture の電文で、圧縮の面の帯の順（constitution・rules・ADR・SRS・design-note・beads・pipeline）と、帯ごとの札の id の並びが期待と一致し、beads の帯は種類の 7 行に分かれる (3) 読めなかった出所の帯は 0 件でなく測れていないを出し、読めて 0 件の帯は 0 件の帯を出す (4) 一覧の面の絞り（帯・種類・種類の組）と並べ替え（id・状態）の結果の id の並びが期待と一致する (5) 表の面の行列の数が fixture の辺から数えた期待と一致し、cell が持つ種類の組で一覧の面が絞られる (6) 面の切り替えと絞りと並べ替えが URL の query（view・band・kind・sort・pair）に残り、知らない view の値は圧縮の面になる (7) 圧縮と一覧の全部の札と行に節点の id が出る (8) グラフの面と近傍の module は、この便では測れていないと理由の 1 行を返す (9) 着地済みの関数の外形（BLOCK・口の path の定数・Body<()> を返す body の名と引数と返りの型）を変えず、本文が電文の型として読めないときは測れていないを返し、足す外の依存は 0 本
+        depends: [g-parts]
   - n: 8
     type: prose
     title: 便 g-min — 最小の project board
@@ -232,6 +241,24 @@ sections:
       口が読めないとき・まだ読んでいないときは、指標の段は 0 でなく測れていないの印と理由の 1 行を出す（要件 NFR2）。
       在りか。電文の型 LedgerStats は契約の型の crate に在る（便 d が足すので、この便は便 d の着地の後に起こす）。判定の型 LedgerJudge は同じ crate の板の module に着地済み。語の鍵 l_task・l_memo・l_unref・l_net24・l_net7・l_burn・l_epics・l_blocked・l_stale・l_ready・l_lead・j_bad・j_up・j_stall・j_ok・j_none・m_open・m_wait・m_promo7・m_age・memo_promo・unref・u_kind・u_age・u_next・nx_promote・st_unknown は語の辞書に在る。closed/日 の見出しは英語の技術語のまま字で出す（語の辞書に鍵が無い）。class の l4・l4un・l4net・net・net-down・net-up・net-flat・lmid・lcap・lburn・lb-closed・lb-open・lspark・mpro・gmore・gm・gm1・fold・lep・lchips・ulist・urow・hrow・jdg・ep・bar は stylesheet に在る。語の辞書（crates/tsuzuri-surface/vocab.json・便 g-frame が見本から写した）と stylesheet（crates/tsuzuri-surface/style.css・見本の ui.css の写し）は着地済みで、この便は触らない。使う語の鍵と class は全部そこに在るものだけにする。測れていないの印と理由の 1 行は、面の crate の project の module の部品（Body の Unmeasured・unmeasured・語の鍵 st_unknown）を使う。
       着地済みの関数の外形は変えない。変えないのは、BLOCK の値・口の path の定数・読みの結果を受けて Body<()> を返す関数（metrics）の名と引数と返りの型。枠の歯（tests/frame.rs）はこの関数を呼んでいて、この便の write-set の外に在るので、そのまま通す（本文が電文の型として読めないとき、この関数は測れていないを返す）。中身を返す関数は、同じ module に別の名で足す。台帳の一覧の関数（body と count）も変えない。数と字と座標の関数は純粋な関数にして host の cargo test で pin し、DOM は wasm の target のときだけ組み立てる。
+
+  - n: 14
+    type: prose
+    title: 便 g-map — 地図の頁の中身
+    body: |
+      地図の頁の中身を置く。見本は docs/design/mock3/map.html の compact（圧縮）・list（一覧）・table（表）と、docs/design/mock3/ui.js の帯の表（BANDS・BAND_PATH・BEADS_LANES）。書くのは地図の module の file と、その下に足す module の file と、自分の歯の file と、fixture の 1 つだけ。
+      data は口 /api/graph から読む（契約の型の GraphDoc・便 e-read が足す電文なので、この便は便 e-read の着地の後に起こす）。電文は節点の一覧（id・種類・所属 file・題）・辺の一覧（from・to・型）・読めなかった出所の一覧・bead の属性（状態ほか）・走行の属性（段・口座）を持つ。読みは面の crate の net の read を使う。
+      頁の頭に見出しと節点の数を出し、その下に面の切り替えの tab を 4 つ置く（圧縮・一覧・グラフ・表・語の鍵は view_compact・view_list・view_graph・view_table・class は tabs）。今の面は URL の query の view（値は compact・list・graph・table）に残し、値が無いか知らない値なら圧縮の面にする。
+      帯は 7 つで、順は constitution・rules・ADR・SRS・design-note・beads・pipeline。種類から帯への対応は閉じた表で 1 か所に置く。条と規範文は constitution。規則行は rules。判断の記録は ADR。目的・要件・非機能要件・受入基準・制約・登場人物・出力は SRS。設計ノートの行（note-row）は design-note。epic・task・memo・question・ruling・receipt・policy は beads。run は pipeline。beads の帯は種類の 7 行に分け、順は epic・task・memo・question・ruling・receipt・policy。
+      種類から語の鍵への対応も閉じた表で 1 か所に置く。設計文書の 11 種は「k:」に種類の日本語の名をつないだ鍵（k:条・k:規範文・k:規則行・k:目的・k:要件・k:非機能要件・k:受入基準・k:制約・k:登場人物・k:出力・k:判断の記録）。note-row は k:設計ノートの行。epic は k:epic。task は k:契約。memo は k:memo。question は k:問い。ruling は k:裁定。receipt は k:受け。policy は k:方針。run は k:走行。帯の語の鍵は「b:」に帯の名をつないだ鍵。
+      圧縮の面は、帯ごとに 1 つの箱（class は band と band-<帯の名の小文字>）を帯の順に置く。箱の頭に帯の名・出所の path・節点の数を出す。出所の path は見本の BAND_PATH の字。constitution は条の札（class art7）を電文の順に並べ、札の下に、その条の規範文の id を並べる（規範文の id は条の id に「.」と数をつないだ形）。rules は電文の順。ADR と SRS は id の自然な順（数は数として比べる）。beads は種類の行ごとに小見出し（class subh）と数と札。pipeline は走行の札。札（class tag）は印と id と題（30 字で切る）。読めなかった出所に当たる帯は、0 件でなく測れていないの印と理由の 1 行を出す。読めて 0 件の帯は 0 件の帯（class empty）を出す。
+      一覧の面は、絞り（帯・種類）と並べ替え（id・状態）の選択（class filters）と、行の一覧（class items rows）。行は印・id・題（36 字で切る）・帯の chip・種類の語・状態の語。要約は電文にまだ無いので、class gist none で「要約なし」と出す。更新の時刻は電文に無いので、この便では出さず、並べ替えにも入れない。状態は、bead は属性の状態の字、走行は属性の段の字、設計文書の節点は状態なし。並べ替えの id は、帯の順、次に constitution と rules は電文の順、ほかは id の自然な順。並べ替えの状態は、open の問い・open と in_progress・状態なし・それ以外の順で、同じなら id の自然な順。絞りと並べ替えは URL の query の band・kind・sort に残す。種類の組（query の pair・値は「種類|種類」）が在れば、その組の辺の両端の節点だけに絞り、組の名と数と、絞りを外す button を出す。
+      表の面は、種類と種類の辺の数の行列（class mx）。行は辺の from の節点の種類、列は to の節点の種類で、辺が 1 本も無い種類は行にも列にも出さない。数の cell は button で、押すと一覧の面へ移り、その組で絞る。幅の狭い画面のための一覧（class mxlist）も同じ数を出す。
+      グラフの面と近傍は後の便が足す。この便は module の file（graph と around）を置き、中身は測れていないの印と理由の 1 行（この面はまだ無い）を返す関数だけにする。後の便はその file だけを書く。
+      圧縮と一覧の全部の札と行に節点の id を出す。節点の頁はまだ無いので、札と行は link にしない。
+      在りか。節点の種類の型 NodeKind（20 個・ALL の定数）と辺の型 EdgeType と節点と辺の型（GraphNode・GraphEdge）と題を 36 字で切る関数 title36 は、契約の型の crate の graph の module に着地済み。語の鍵 map・views・bands・matrix・view_compact・view_list・view_graph・view_table・col_band・col_kind・col_id・col_state・sort・st_unknown と、「b:」の 7 つと「k:」の 27 個は語の辞書に在る。class の tabs・band・band-constitution・band-rules・band-adr・band-srs・band-design-note・band-beads・band-pipeline・art7・kids・tag・tid・tt・subh・cards7・filters・items・rows・rowb・nid・ttl・meta・bchip・gist・none・mx・mxwrap・mxlist・pair・pairnote・path・bn・shape・empty は stylesheet に在る。語の辞書（crates/tsuzuri-surface/vocab.json）と stylesheet（crates/tsuzuri-surface/style.css）は着地済みで、この便は触らない。使う語の鍵と class は全部そこに在るものだけにする。
+      着地済みの関数の外形は変えない。変えないのは、BLOCK の値・口の path の定数・読みの結果を受けて Body<()> を返す関数（body）の名と引数と返りの型。枠の歯（tests/frame.rs）はこの関数を呼んでいて、この便の write-set の外に在るので、そのまま通す（本文が電文の型として読めないとき、この関数は測れていないを返す）。中身を返す関数は別の名で足す。並べ方と絞りと数え方は純粋な関数にして host の cargo test で pin し、DOM は wasm の target のときだけ組み立てる。
+      fixture は小さくする（節点 40 個以下・辺 60 本以下）。
 
 figures: []
 sources:
