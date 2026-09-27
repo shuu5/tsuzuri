@@ -7,6 +7,8 @@
 - folio2 の群 A の 8 便（持ち出しの食い違い: .189 init の骨格と面の生成器・.196 憲法の雛形・.191 id に焼かれた folio2 の名・.190 引用符付き id・.193 凍結の罠・.194 R-17 の無い置き場・.195 値域を狭める変更・.185 説明の字）が着地した時点で、folio2 席が tsuzuri 席へ SendMessage で知らせる（持ち主にも報告）。
 - 「道具として使える」の判定点 = 外の repo で `folio init` → 正本を書く → `check` / `inject --check` / `schema --check` / `derive --check` / `build` / `ceiling --stamp` / `--gate` が人の手直しなしに通る。tsuzuri は init を使わず手で正本を書いたので、今でも check と derive は通る。
 
+- **実測（2026-09-27T03:1xZ・folio binary = folio2 8472b5c 相当）**: 群 A の 8 本のうち 7 本 closed（残り .185 = 説明の字）。新しい置き場では init → commit → inject・schema・derive・graph・build が通る（凍結の前なので check は まだ分からない 2）。**tsuzuri の正本では folio build が止まる**（design-note/surface.yaml の承認欄 = 床は一覧・面の生成器は表で読む・folio2 の .243・便 163 は契約だけ）→ ceiling も止まる。再開の判定点は「tsuzuri で build と ceiling が通る」まで待つ。folio2-13 に最短の列と見込みを照会中。
+
 ## 1. 揃えてある設計（正本の置き場・全部 folio2 の形・`folio check` 合格）
 | 何 | 置き場 | 状態 |
 |---|---|---|
