@@ -7,6 +7,7 @@
 //! --bdw は台帳の書きに撃つ program（既定 bdw）・--seat は裁定を配達する席の target（--state-dir と両方が
 //! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）（便 e-ask）。
 //! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
+//! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -28,6 +29,7 @@ fn main() -> ExitCode {
         .as_slice()
     {
         ["surface", "serve", rest @ ..] => serve(rest),
+        ["graph", rest @ ..] => tsuzuri_boundary::cli::graph::run(rest),
         _ => usage("subcommand"),
     };
     ExitCode::from(rc)

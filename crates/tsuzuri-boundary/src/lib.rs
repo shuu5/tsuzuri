@@ -2,7 +2,9 @@
 //! 便 e-min で最小の server（台帳の読み・変化の SSE・面の file の配布）と tz の入口を置く。
 //! 便 e-acct で account board の読み（`acct`）を置く（口の登録は便 h-wire）。
 //! 便 e-acct-hb で停止の切り替えの受付（`accthb`）を置く（口の登録は便 h-wire）。
+//! 行 k-graph で tz の口の graph（`cli::graph`・導出グラフと不変条件を端末で撃つ）を置く。
 
 pub mod acct;
 pub mod accthb;
+pub mod cli;
 pub mod server;
