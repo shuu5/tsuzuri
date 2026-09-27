@@ -293,7 +293,7 @@ requirements:
     verify: {method: test, how: 欄の欠けた所見が断られ、揃った所見で置き場の file と台帳の 1 行と器の口の argv が出ることを見る, ac: [AC16]}
     goals: [GOAL1, GOAL2]
     figures: []
-    adrs: [ADR-10]
+    adrs: [ADR-10, ADR-12]
   - id: FR20
     title: 表示面の対象を広げる（中身が web の native・スマホの emulator・純粋な native）
     pattern: ubiquitous
