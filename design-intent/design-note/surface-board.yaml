@@ -220,12 +220,12 @@ sections:
     title: 便 g-next — block「次の一手」の中身
     body: |
       block「次の一手」の中身を置く。見本は docs/design/mock3/index.html の nextHTML。書くのは自分の module の file と、自分の歯の file と、fixture の 1 つだけ。
-      data は口 /api/next から読む（契約の型の NextStep・便 d が足した電文）。電文は閉じた 7 種の 1 つずつについて、判じた結果（当たった・当たらない・判じなかった）と件数と対象の id を順に持ち、大きく出す 1 つを名指す。判定は中核の crate が済ませていて、面は写すだけにする（面の code に判定の分岐を書かない）。
+      data は口 /api/next から読む（契約の型の NextStep・着地済み）。電文は閉じた 7 種の 1 つずつについて、判じた結果（当たった・当たらない・判じなかった）と件数と対象の id を順に持ち、大きく出す 1 つを名指す。判定は中核の crate が済ませていて、面は写すだけにする（面の code に判定の分岐を書かない）。
       7 種と語の鍵の対応は、限度と移動 nx_a・応答なし nx_b・止まっている走行 nx_c・束の承認 nx_d・質問 nx_e・発効待ち nx_f・なし nx_g。順は契約の型の 7 種の宣言の順を引く。
       大きく出す 1 つは、見本の class nxbig の箱に、語（「?」の注釈つき）と中身の字を出す。止まっている走行の中身は件数と、block「pipeline」への頁の中の link。質問の中身は対象の bead の id と件数。なし（どれも当たらない）は class nxbig none の箱。
       残りの種類は、見本の class nxlist の一覧に 7 種の順のまま出す（大きく出した 1 つは除く）。当たった種類は件数、当たらない種類は「―」、判じなかった種類は測れていないの記号を出す（0 や「―」と区別する）。
       口が読めないとき・まだ読んでいないときは、0 件でなく測れていないの印と理由の 1 行を出す（要件 NFR2）。
-      在りか。電文の型 NextStep と 7 種の型 NextMove は契約の型の crate に在る（NextMove は板の module に着地済み・NextStep は便 d が足すので、この便は便 d の着地の後に起こす）。語の鍵 nx_a から nx_g の 7 つと next と st_unknown は語の辞書に在る。class の nxbig・nxlist・none・on・off は stylesheet に在る。語の辞書（crates/tsuzuri-surface/vocab.json・便 g-frame が見本から写した）と stylesheet（crates/tsuzuri-surface/style.css・見本の ui.css の写し）は着地済みで、この便は触らない。使う語の鍵と class は全部そこに在るものだけにする。測れていないの印と理由の 1 行は、面の crate の project の module の部品（Body の Unmeasured・unmeasured・語の鍵 st_unknown）を使う。
+      在りか（どれも着地済み・この便は触らない）。電文の型 NextStep は契約の型の crate の stats の module（crates/tsuzuri-contract/src/stats.rs・便 d の着地 715840c）に在る。NextStep の欄は 2 つで、checks（NextCheck の列・7 種の宣言の順に 7 つ）と lead（大きく出す 1 つ・型は NextMove）。NextCheck の欄は 4 つで、kind（NextMove）・result（CheckResult の 3 値で Hit は当たった・Miss は当たらない・NotJudged は判じなかった）・count（件数）・target（対象の bead の id・無ければ無し）。7 種の型 NextMove は同じ crate の板の module（src/board.rs）に在り、宣言の順は定数 ALL（7 つ・限度と移動から なし まで）。語の鍵 nx_a から nx_g の 7 つと next と st_unknown は語の辞書に在る。class の nxbig・nxlist・none・on・off は stylesheet に在る。語の辞書（crates/tsuzuri-surface/vocab.json・便 g-frame が見本から写した）と stylesheet（crates/tsuzuri-surface/style.css・見本の ui.css の写し）は着地済みで、この便は触らない。使う語の鍵と class は全部そこに在るものだけにする。測れていないの印と理由の 1 行は、面の crate の project の module の部品（Body の Unmeasured・unmeasured・語の鍵 st_unknown）を使う。
       着地済みの関数の外形は変えない。変えないのは、BLOCK の値・口の path の定数・読みの結果を受けて Body<()> を返す関数（body）の名と引数と返りの型。枠の歯（tests/frame.rs）はこの関数を呼んでいて、この便の write-set の外に在るので、そのまま通す（本文が電文の型として読めないとき、この関数は測れていないを返す）。中身を返す関数は、同じ module に別の名で足す。中身を組む関数は純粋な関数にして host の cargo test で pin し、DOM は wasm の target のときだけ組み立てる。
   - n: 13
     type: prose
