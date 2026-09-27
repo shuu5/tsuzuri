@@ -9,6 +9,9 @@
 //! 便 174（docs/design/delivery-174.md §1 (c)・ADR-16 決定 (2)(オ)）: 5. 外の置き場（骨格の名を替え、規則の表の R-7 が別の意味・
 //! R-13 が無い）の 9 本の生成区間は行 R-8・R-16 のほかの folio2 の番号を名指さない／6. folio2 自身の置き場の生成区間は番号を持ったまま。
 //!
+//! 便 175（docs/design/delivery-175.md §1 (c) の 2・ADR-30 決定 (5)(6)）: 7. folio2・骨格・外の置き場の 9 本の生成区間は、周の引き金の
+//! 仕掛け（引き金の一覧・印と門が同じ関数で測る要約値）と、欄の決まりに無い改訂の欄を言わない。
+//!
 //! 版管理の下の file は書き換えない（`--dir` の写しと `--out` は必ず一時 dir の中）。
 
 use std::fs;
@@ -449,4 +452,29 @@ fn f174_folio2_keeps_its_numbers() {
         assert!(note.contains(row), "folio2 の欄 {row} が無い");
     }
     assert!(note.contains("（JSON の 5 型の欄の決まりそのまま・ADR-4 決定 (1)）"), "{note}");
+}
+
+// ── 便 175: 生成区間は周の引き金の仕掛けを言わない ──
+
+/// 生成区間に在ってはならない字（手書き・ADR-30 決定 (2)(5)(6) の後の実装と違う主張・印の節点の表の字は便 177）。
+const F175_FALSE: [&str; 4] = ["引き金", "trigger", "印と門が同じ関数で測る", "revises"];
+
+fn f175_no_false_claims(place: &Path, label: &str, words: &[&str]) {
+    for file in F174_FILES {
+        let region = f174_region(&fs::read_to_string(place.join(file)).unwrap());
+        for word in words {
+            assert!(!region.contains(word), "{label}: {file} の生成区間に「{word}」");
+        }
+    }
+}
+
+/// 歯 7: folio2 自身の置き場・骨格の命令が書いた置き場・tsuzuri の名で書き直した置き場の 9 本の生成区間。
+#[test]
+fn f175_no_region_claims_the_round_trigger() {
+    f175_no_false_claims(&repo_root().join("design-intent"), "folio2", &F175_FALSE);
+    let w = Work::outer("f175-tsuzuri", Some("tsuzuri"));
+    f175_no_false_claims(&w.place(), "骨格", &F175_FALSE);
+    let out = folio(&["schema", "--write"], &w.place());
+    assert_eq!(out.status.code(), Some(0), "schema --write: {}", both(&out));
+    f175_no_false_claims(&w.place(), "tsuzuri", &F175_FALSE);
 }

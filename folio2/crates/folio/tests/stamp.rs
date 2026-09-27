@@ -6,6 +6,7 @@
 //! 便 169（docs/design/delivery-169.md §1 (c) の 5〜7）: 印の refutes の行の場所（at・file）と観点の行の wait を門が読む。
 //! 門の古さを縛った歯（f126_ の門の 1 本）は外した。
 //! 便 176（docs/design/delivery-176.md §1 (c)）: 場所の頭が file 名でなく設計ノートの欄の決まりの meta.id のとき（tsuzuri の形）。
+//! 便 175（docs/design/delivery-175.md §1 (c) の 3）: 印は周の引き金の要約値 trigger を書かない（便 126 の 1 本を f175_ の 1 本に置き換えた）。
 //!
 //! 版管理の下の file は書き換えない（`--dir` と `--out` は必ず一時 dir の中）。
 
@@ -224,16 +225,14 @@ impl Round {
     }
 }
 
-/// 印から要約値 5 種（sources / trigger / faces / rest / 各行の bundle）と at を落とす（anchor の形・§1 (c)）。rest は写しの
-/// reads を書き替えると母集団が動くので凍結しない（便 99・delivery-99.md §1 (e)）。trigger も reads が入るので周ごとに違う
-/// （便 126・delivery-126.md §1 (d) の 6）。nodes の表は落とさない。
+/// 印から要約値 4 種（sources / faces / rest / 各行の bundle）と at を落とす（anchor の形・§1 (c)）。rest は写しの
+/// reads を書き替えると母集団が動くので凍結しない（便 99・delivery-99.md §1 (e)）。nodes の表は落とさない。
 fn without_digests(stamp: &str) -> String {
     stamp
         .split_inclusive('\n')
         .filter(|line| {
             !line.starts_with("at: ")
                 && !line.starts_with("sources: ")
-                && !line.starts_with("trigger: ")
                 && !line.starts_with("faces: ")
                 && !line.starts_with("rest: ")
         })
@@ -580,8 +579,7 @@ fn f99_the_stamp_carries_the_node_table() {
     assert_eq!(
         top_keys(&stamp),
         [
-            "round", "at", "verdict", "sources", "trigger", "faces", "viewpoints", "refutes", "reads", "rest",
-            "nodes"
+            "round", "at", "verdict", "sources", "faces", "viewpoints", "refutes", "reads", "rest", "nodes"
         ],
         "印の欄の並び"
     );
@@ -646,6 +644,23 @@ fn f99_the_stamp_node_rows_are_the_index() {
     assert_eq!(rows, index, "印の nodes が索引の節点の行と同じ数・同じ順で一致しない");
 }
 
+// ── 便 175: 印は周の引き金の要約値を書かない（docs/design/delivery-175.md §1 (c) の 3） ──
+
+/// 印の最上位の欄に trigger が無く、sources の直後が faces（ADR-30 決定 (5)(6)・門も名札も読まない）。
+#[test]
+fn f175_the_stamp_has_no_trigger() {
+    let round = Round::passing("f175-keys");
+    let run = round.stamp();
+    let stamp = fs::read_to_string(round.stamp_path());
+    round.done();
+    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
+    let stamp = stamp.expect("印が無い");
+    let keys = top_keys(&stamp);
+    assert!(!keys.contains(&"trigger"), "印に trigger が在る: {keys:?}");
+    let at = keys.iter().position(|k| *k == "sources").expect("印に sources が無い");
+    assert_eq!(keys.get(at + 1), Some(&"faces"), "sources の直後が faces でない: {keys:?}");
+}
+
 // ── 便 104: 観点ごとに読む欄が違う周（docs/design/delivery-104.md §1 (e)） ──
 
 #[test]
@@ -697,39 +712,13 @@ fn f104_the_stamp_sources_is_the_canonical_digest() {
     assert_eq!(got, value(&aligned, "sources"), "読む欄を揃えた周と sources が違う");
 }
 
-// ── 便 126: 印の欄 trigger（docs/design/delivery-126.md §1 (e) の 7・8） ──
+// ── 写しの字の置き換え（便 126 で入った道具・便 175 で便 126 の歯を外した） ──
 
 /// 写しの file の字 `from` を 1 か所だけ `to` に置き換える（1 か所でなければ歯を落とす）。
 fn edit_once(path: &Path, from: &str, to: &str) {
     let text = fs::read_to_string(path).unwrap();
     assert_eq!(text.matches(from).count(), 1, "{}: 「{from}」が 1 か所でない", path.display());
     fs::write(path, text.replacen(from, to, 1)).unwrap();
-}
-
-#[test]
-fn f126_the_stamp_carries_the_trigger_after_sources() {
-    let round = Round::passing("f126-keys");
-    let run = round.stamp();
-    let stamp = fs::read_to_string(round.stamp_path());
-    round.done();
-    assert_eq!(code(&run, "--stamp"), 0, "{}{}", stdout(&run), stderr(&run));
-    let stamp = stamp.expect("印が無い");
-    let keys = top_keys(&stamp);
-    let at = keys.iter().position(|k| *k == "sources").expect("印に sources が無い");
-    assert_eq!(keys.get(at + 1), Some(&"trigger"), "sources の直後に trigger が無い: {keys:?}");
-    assert_eq!(
-        keys,
-        [
-            "round", "at", "verdict", "sources", "trigger", "faces", "viewpoints", "refutes", "reads", "rest",
-            "nodes"
-        ],
-        "印の欄の並び"
-    );
-    let hex = value(&stamp, "trigger").strip_prefix("sha256 ").expect("trigger が sha256 の形でない");
-    assert!(
-        hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
-        "trigger: {hex}"
-    );
 }
 
 // ── 便 154: 名の無い置き場の印（docs/design/delivery-154.md §1 (c) の 2 の 5） ──

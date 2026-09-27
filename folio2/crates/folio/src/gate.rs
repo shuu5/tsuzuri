@@ -1,36 +1,26 @@
 //! `folio ceiling --gate`（便 73・docs/design/delivery-73.md §1 (a)〜(c)・FR20 / AC18・設計ノート ceiling-gate.md §2）。
 //! 天井の印 `<dir>/preview/ceiling-stamp.yaml`（便 72 の欄の決まり）と便の書き換える file の一覧（`--write-set`）から
-//! 3 値を返す: 設計文書の正本を書き換えない便は 通す（0）・印が 4 観点とも合格で正本の要約値が同じなら 通す（0）・
-//! 不合格 が在れば 止める（1）・印が無い / 古い / まだ分からない が在れば まだ分からない（2）。
+//! 3 値を返す（式は下の便 169 の段）。
 //! 設計文書の正本 = `<dir>` の下に在り、`<dir>/preview/` の下でなく、path のどの要素も retired でないもの。
 //! 正本の要約値は観点の reads が指す文書の file（file 形はその file・dir 形は直下の .yaml）の全文を `<dir>` からの
-//! 相対 path の byte 順に連結した sha256。印（`stamp.rs`）も欄 sources をこの関数で測る（便 104・2 面に実装しない）。
+//! 相対 path の byte 順に連結した sha256。印（`stamp.rs`）が欄 sources をこの関数で測り、面の名札が比べる（便 104・門は読まない）。
 //! 何も書かない。標準出力は 1 行「folio ceiling: <3 値>（<理由>）」。
-//!
-//! 便 126（docs/design/delivery-126.md §1 (b)(c)・ADR-18 決定 (1)(4)(5)）: 古さは印の欄 trigger（引き金の要約値）で判定する。
-//! 引き金の要約値は天井の床の定数の規範の欄の一覧（`ceiling.rs` の TRIGGER_*）だけを写した木の正規化の sha256 で、印も
-//! この `trigger_digest` で測る。合格で引き金が同じなら通し、正本の要約値だけが違えば印の nodes と rest を今の表と突き合わせて
-//! 変わった節点の数を理由の行に添える（今の表は命令の入口が渡す＝層 3 の `graph.rs` を名指さない）。
 //!
 //! 便 169（docs/design/delivery-169.md §1 (b) の 3・ADR-30 決定 (6)・FR20）: 門は印の古さで止めない。印が無い・読めない・
 //! 観点の結果が欠けている・反証の済んでいない 止める の場所の file を書き換えるなら まだ分からない（2）、反証で支持された
 //! 止める の場所の file を書き換えるなら 止める（1）、ほかは 通す（0・印の後の変更は審査していない）。印からは round・
-//! verdict・viewpoints・refutes だけを読む（sources・trigger・rest・nodes は読まない）。引き金の要約値は印が書くので残す。
+//! verdict・viewpoints・refutes だけを読む（sources は読まない）。
+//! 便 175（docs/design/delivery-175.md §1 (b)・ADR-30 決定 (5)(6)）: 周の引き金の要約値（`trigger_digest`）を外した。
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use crate::anchor;
-use crate::ceiling::{
-    TRIGGER_ADR_FIELDS, TRIGGER_CEILING_ROWS, TRIGGER_CEILING_WHOLE,
-    TRIGGER_CONSTITUTION_SCOPE, TRIGGER_RULES_FIELDS, TRIGGER_RULES_SECTIONS, TRIGGER_SRS_ROWS, TRIGGER_SRS_WHOLE, TriggerRows,
-};
 use crate::ceiling_src::{self, STAMP_FILE};
-use crate::cursor::{self, R};
+use crate::cursor::R;
 use crate::sha256;
 use crate::verdict::Verdict;
-use crate::yaml::{self, Node, Value};
+use crate::yaml::{self, Node};
 
 /// 1 回の実行の結果。`stdout` は 1 行。
 pub struct Outcome {
@@ -325,128 +315,6 @@ fn read_stamp(dir: &Path) -> R<Option<Stamp>> {
         viewpoints,
         stops,
     }))
-}
-
-// ── 引き金の要約値（§1 (b) の 3）──
-
-/// 今の引き金の要約値（「sha256 <16 進>」）。文書を型付きで読み（`cursor::load`）、天井の床の定数の規範の欄の一覧だけを
-/// 写した木（最上位は文書の id を鍵にした表）を正規化（`yaml::canonical`）して測る。印（`stamp.rs`）もこの関数で測る
-/// （P-15.2）。文書の file は天井の正本の documents で解く。欄や節が無ければ null、行の一覧の節が一覧でない・行が表で
-/// ないなど、どの手順で失敗しても Err（理由 1 つ）。
-pub(crate) fn trigger_digest(dir: &Path) -> R<String> {
-    let documents = documents(dir)?;
-    let file = |id: &str| {
-        documents
-            .iter()
-            .find(|(d, _)| d == id)
-            .map(|(_, f)| f.clone())
-            .ok_or_else(|| format!("{id}: 文書の一覧に無い"))
-    };
-    let key = |k: &str| Value::Str(k.to_string());
-    let mut tree: Vec<(Value, Value)> = Vec::new();
-
-    // 憲法: 凍結 anchor の写しの式（範囲 = 改訂の範囲の定数・schema 節と前文は丸ごと・便 129）
-    let name = file("constitution")?;
-    let constitution = cursor::load(dir, &name)?;
-    let scope: Vec<String> = TRIGGER_CONSTITUTION_SCOPE.iter().map(|s| s.to_string()).collect();
-    let projected = anchor::project(&constitution, &scope).map_err(|e| format!("{name}: {e}"))?;
-    tree.push((key("constitution"), projected));
-
-    // 判断の記録: 状態を問わず記録ごとに fields（便 151・ADR-26 決定 (3)）
-    tree.push((key("adr"), adr_records(dir, &file("adr")?)?));
-
-    // 要件書: 行の一覧の節と丸ごとの節
-    let name = file("srs")?;
-    let srs = cursor::load(dir, &name)?;
-    tree.push((key("srs"), sections(&name, &srs, &TRIGGER_SRS_ROWS, &TRIGGER_SRS_WHOLE)?));
-
-    // 規則の表: sections の各行の fields
-    let name = file("rules")?;
-    let rules = cursor::load(dir, &name)?;
-    let fields: &'static [&'static str] = &TRIGGER_RULES_FIELDS;
-    let rows: Vec<(&'static str, &'static [&'static str])> =
-        TRIGGER_RULES_SECTIONS.iter().map(|s| (*s, fields)).collect();
-    tree.push((key("rules"), sections(&name, &rules, &rows, &[])?));
-
-    // 天井の正本: 丸ごとの節と行の一覧の節
-    let name = file("ceiling")?;
-    let ceiling = cursor::load(dir, &name)?;
-    tree.push((
-        key("ceiling"),
-        sections(&name, &ceiling, &TRIGGER_CEILING_ROWS, &TRIGGER_CEILING_WHOLE)?,
-    ));
-
-    let text = yaml::canonical(&Value::Map(tree))?;
-    Ok(format!("sha256 {}", sha256::hex(text.as_bytes())))
-}
-
-/// 行の一覧の節（節の名を鍵に、各行を欄の表にした一覧）と丸ごとの節（節の名を鍵に、木を丸ごと）の表。
-fn sections(name: &str, doc: &Value, rows: &TriggerRows, whole: &[&str]) -> R<Value> {
-    let mut out: Vec<(Value, Value)> = Vec::new();
-    for (section, fields) in rows {
-        let value = match doc.get(section) {
-            None | Some(Value::Null) => Value::Null,
-            Some(Value::Seq(items)) => Value::Seq(
-                items
-                    .iter()
-                    .enumerate()
-                    .map(|(i, row)| {
-                        row.as_map()
-                            .map(|_| pick(row, fields))
-                            .ok_or_else(|| format!("{name}: {section}[{i}] が表でない"))
-                    })
-                    .collect::<R<Vec<_>>>()?,
-            ),
-            Some(_) => return Err(format!("{name}: {section} が一覧でない")),
-        };
-        out.push((Value::Str(section.to_string()), value));
-    }
-    for section in whole {
-        let value = doc.get(section).cloned().unwrap_or(Value::Null);
-        out.push((Value::Str(section.to_string()), value));
-    }
-    Ok(Value::Map(out))
-}
-
-/// 行 1 つを欄の表に写す（点を含む欄は入れ子を辿った値・鍵は点を含む字のまま・無ければ null）。
-fn pick(row: &Value, fields: &[&str]) -> Value {
-    Value::Map(
-        fields
-            .iter()
-            .map(|f| {
-                let value = f
-                    .split('.')
-                    .try_fold(row, |node, k| node.get(k))
-                    .cloned()
-                    .unwrap_or(Value::Null);
-                (Value::Str(f.to_string()), value)
-            })
-            .collect(),
-    )
-}
-
-/// 判断の記録の dir の直下の .yaml（欄の決まり schema.yaml を除く・名の byte 順）を状態を問わず全部、fields の欄の表に
-/// して並べた一覧（下の dir は読まない・便 151・ADR-26 決定 (3)）。
-fn adr_records(dir: &Path, file: &str) -> R<Value> {
-    if !file.ends_with('/') {
-        return Err(format!("{file}: 判断の記録の置き場が dir 形でない"));
-    }
-    let path = dir.join(file);
-    if path.is_symlink() {
-        return Err(format!("{file}: symlink は認めない"));
-    }
-    let mut out = Vec::new();
-    for (name, is_file) in ceiling_src::read_dir_names(&path)? {
-        if !is_file || !name.ends_with(".yaml") || name == "schema.yaml" {
-            continue;
-        }
-        if path.join(&name).is_symlink() {
-            return Err(format!("{file}{name}: symlink は認めない"));
-        }
-        let record = cursor::load(dir, &format!("{file}{name}"))?;
-        out.push(pick(&record, &TRIGGER_ADR_FIELDS));
-    }
-    Ok(Value::Seq(out))
 }
 
 /// 今の正本の要約値（「sha256 <16 進>」）。観点の reads が指す文書だけを全文で集める（印の sources も同じ関数・便 104）。

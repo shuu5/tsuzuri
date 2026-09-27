@@ -2,11 +2,11 @@
 //! 周の結果（`--write` が組んだ観点ごとの束・席か器が書いた所見 file・止める の反証の結果 result.yaml）から天井の印を
 //! 決定的に導出し `<dir>/preview/ceiling-stamp.yaml` へ書く。観点ごとの 3 値は `--check` と同じ口
 //! （`findings::count_viewpoint`・配信先を取らないので規則 3〔束が古い〕は当てない＝名札と同じ）で数え、二重に実装しない。
-//! 印の欄は閉じた一覧でこの順: round・at・verdict・sources・trigger・faces・viewpoints・refutes・reads・rest・nodes
-//! （rest と nodes は便 99: 残差の要約値と節点ごとの要約値の表・組み方は `graph::stamp_table`。trigger は便 126: 引き金の
-//! 要約値・門と同じ関数 `gate::trigger_digest` で測る・docs/design/delivery-126.md §1 (c) の 1）。
+//! 印の欄は閉じた一覧でこの順: round・at・verdict・sources・faces・viewpoints・refutes・reads・rest・nodes
+//! （rest と nodes は便 99: 残差の要約値と節点ごとの要約値の表・組み方は `graph::stamp_table`。周の引き金の要約値 trigger は
+//! 便 175〔docs/design/delivery-175.md §1 (b)〕で外した＝門も名札も読まない・ADR-30 決定 (5)(6)）。
 //! 決定性: 時刻・絶対 path・環境の値を書かない（round は置き場の dir の名・at は所見 file の起動の記録から取る）。
-//! 欄 sources は束の写しでなく `--dir` の正本から、門と同じ関数（`gate.rs` の `sources_digest`）で測る（便 104・
+//! 欄 sources は束の写しでなく `--dir` の正本から、名札と同じ関数（`gate.rs` の `sources_digest`）で測る（便 104・
 //! docs/design/delivery-104.md §1 (b)・FR20 の 正本の要約値）。束の sources/ の写しは便 98 で観点ごとに絞られ、同じ文書でも
 //! 観点で byte が違う。欄 faces は束の faces/ の和集合のまま（面は絞られていない・門は faces を突き合わせない）。
 //! 全部か無しか: 観点のどれかの束・所見 file・起動の記録が読めない、または面の写しが観点で食い違うときは
@@ -119,7 +119,6 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
         );
     }
     let sources = gate::sources_digest(dir, &ceiling)?;
-    let trigger = gate::trigger_digest(dir)?;
     let faces = faces_digest(out_dir, &ceiling)?;
 
     let verdicts: Vec<Verdict> = rows.iter().map(|r| r.counted.verdict).collect();
@@ -142,7 +141,7 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
         .collect();
 
     let mut text = format!(
-        "# {}\nround: {}\nat: {}\nverdict: {verdict}\nsources: {sources}\ntrigger: {trigger}\nfaces: {faces}\nviewpoints:\n",
+        "# {}\nround: {}\nat: {}\nverdict: {verdict}\nsources: {sources}\nfaces: {faces}\nviewpoints:\n",
         adr::named(adr::name_of(dir).as_deref(), " ", HEADER),
         plain(&round),
         plain(&at)
@@ -349,7 +348,7 @@ pub struct Marks {
 }
 
 /// 面の天井の名札のために印を読む。印の file が無ければ None。symlink・読めない・parse できない・欄 at か sources が
-/// 読めない・viewpoints が一覧でない・行の欄が読めないは Err（P-4.1）。欄 trigger は読まない（名札は引き金を比べない）。
+/// 読めない・viewpoints が一覧でない・行の欄が読めないは Err（P-4.1）。
 pub fn marks(dir: &Path) -> R<Option<Marks>> {
     let path = dir.join(STAMP_FILE);
     if path.is_symlink() {

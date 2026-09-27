@@ -14,6 +14,9 @@
 //! 便 169（docs/design/delivery-169.md §1 (c)(e)）: 門は印の古さで止めない。古さと節点の数で答えを縛った歯（便 126・129・151）
 //! は外し、f169_ の 5 本に置き換えた。印の refutes の行は歯の中で書き替えて作る（trigger の独立の実装は印の仮の値に使う）。
 //!
+//! 便 175（docs/design/delivery-175.md §1 (b)(c)）: 引き金の要約値の独立の実装（trigger_hex）を外した。fixture の印の trigger の行は
+//! 仮の値のまま置く（門は読まない＝便 175 の前に書いた印〔trigger・rest・nodes を持つ〕も同じ答えで読む見張り）。
+//!
 //! 版管理の下の file は書き換えない（`--dir` は必ず一時 dir の中）。
 
 use std::collections::BTreeMap;
@@ -22,14 +25,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use yaml_rust2::{Yaml, YamlLoader};
-
 /// fixture の印の sources の仮の値。
 const PLACEHOLDER: &str =
     "sources: sha256 0000000000000000000000000000000000000000000000000000000000000000\n";
-/// fixture の印の trigger の仮の値（便 126）。
-const TRIGGER_PLACEHOLDER: &str =
-    "trigger: sha256 0000000000000000000000000000000000000000000000000000000000000000\n";
 
 /// 天井の正本の観点の reads が指す文書の file（bundle fixture の ceiling.yaml・file 形と dir 形）。
 const READ_FILES: [&str; 6] = [
@@ -114,223 +112,6 @@ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
 
 // ── 引き金の要約値の独立の実装（便 126・§1 (e)・folio の code を呼ばない）──
 
-/// 正規化の json の値（表の鍵は byte 順）。
-enum J {
-    Null,
-    /// 数と真偽の字面
-    Raw(String),
-    Str(String),
-    Arr(Vec<J>),
-    Obj(BTreeMap<String, J>),
-}
-
-impl J {
-    fn of(y: &Yaml) -> J {
-        match y {
-            Yaml::Null => J::Null,
-            Yaml::Boolean(b) => J::Raw(b.to_string()),
-            Yaml::Integer(i) => J::Raw(i.to_string()),
-            Yaml::Real(s) => J::Raw(s.clone()),
-            Yaml::String(s) => J::Str(s.clone()),
-            Yaml::Array(items) => J::Arr(items.iter().map(J::of).collect()),
-            Yaml::Hash(h) => J::Obj(
-                h.iter()
-                    .map(|(k, v)| (k.as_str().expect("文字列でない鍵").to_string(), J::of(v)))
-                    .collect(),
-            ),
-            other => panic!("写せない値: {other:?}"),
-        }
-    }
-
-    /// キー順固定・空白なし・非 ASCII はそのまま（json.dumps の ensure_ascii なしと同じ escape）。
-    fn text(&self, out: &mut String) {
-        fn string(s: &str, out: &mut String) {
-            out.push('"');
-            for c in s.chars() {
-                match c {
-                    '"' => out.push_str("\\\""),
-                    '\\' => out.push_str("\\\\"),
-                    '\n' => out.push_str("\\n"),
-                    '\r' => out.push_str("\\r"),
-                    '\t' => out.push_str("\\t"),
-                    '\u{8}' => out.push_str("\\b"),
-                    '\u{c}' => out.push_str("\\f"),
-                    c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-                    c => out.push(c),
-                }
-            }
-            out.push('"');
-        }
-        match self {
-            J::Null => out.push_str("null"),
-            J::Raw(s) => out.push_str(s),
-            J::Str(s) => string(s, out),
-            J::Arr(items) => {
-                out.push('[');
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    item.text(out);
-                }
-                out.push(']');
-            }
-            J::Obj(map) => {
-                out.push('{');
-                for (i, (k, v)) in map.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    string(k, out);
-                    out.push(':');
-                    v.text(out);
-                }
-                out.push('}');
-            }
-        }
-    }
-}
-
-fn load_yaml(path: &Path) -> Yaml {
-    let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: 読めない: {e}", path.display()));
-    YamlLoader::load_from_str(&text).unwrap().remove(0)
-}
-
-fn names(y: &Yaml) -> Vec<String> {
-    y.as_vec()
-        .expect("一覧でない")
-        .iter()
-        .map(|s| s.as_str().expect("字でない").to_string())
-        .collect()
-}
-
-/// 表の欄（無ければ None）。
-fn field<'a>(y: &'a Yaml, key: &str) -> Option<&'a Yaml> {
-    y.as_hash()?.get(&Yaml::String(key.to_string()))
-}
-
-/// 行 1 つを欄の表に（点は入れ子を辿る・無ければ null）。
-fn row_of(row: &Yaml, fields: &[String]) -> J {
-    J::Obj(
-        fields
-            .iter()
-            .map(|f| {
-                let v = f.split('.').try_fold(row, |n, k| field(n, k));
-                (f.clone(), v.map_or(J::Null, J::of))
-            })
-            .collect(),
-    )
-}
-
-/// 行の一覧の節（無い・null は null）。
-fn rows_of(doc: &Yaml, section: &str, fields: &[String]) -> J {
-    match field(doc, section) {
-        None | Some(Yaml::Null) => J::Null,
-        Some(Yaml::Array(rows)) => J::Arr(rows.iter().map(|r| row_of(r, fields)).collect()),
-        Some(other) => panic!("{section} が一覧でない: {other:?}"),
-    }
-}
-
-/// 写しの置き場 `dir` の今の引き金の要約値（16 進 64 字）。一覧は凍結 anchor ceiling-region.txt の trigger の欄から読む。
-fn trigger_hex(dir: &Path) -> String {
-    let region = load_yaml(&repo_root().join("tests/fixtures/schema/ceiling-region.txt"));
-    let trigger = &region["schema"]["trigger"];
-    let ceiling = load_yaml(&dir.join("ceiling.yaml"));
-    let documents: BTreeMap<String, String> = ceiling["documents"]
-        .as_vec()
-        .expect("documents が一覧でない")
-        .iter()
-        .map(|r| (r["id"].as_str().unwrap().to_string(), r["file"].as_str().unwrap().to_string()))
-        .collect();
-    let mut top: BTreeMap<String, J> = BTreeMap::new();
-    for (doc, lists) in trigger.as_hash().expect("trigger が表でない") {
-        let doc = doc.as_str().unwrap();
-        let file = &documents[doc];
-        let value = match doc {
-            "constitution" => {
-                let scope = names(&lists["scope"]);
-                let (af, sf) = (names(&lists["articles"]), names(&lists["statements"]));
-                let c = load_yaml(&dir.join(file));
-                // 範囲の各節のうち articles 以外は丸ごと（便 129）
-                let mut out: BTreeMap<String, J> = scope
-                    .iter()
-                    .filter(|s| *s != "articles")
-                    .map(|s| (s.clone(), field(&c, s).map_or(J::Null, J::of)))
-                    .collect();
-                if !scope.iter().any(|s| s == "articles") {
-                    top.insert(doc.to_string(), J::Obj(out));
-                    continue;
-                }
-                let articles = c["articles"].as_vec().cloned().unwrap_or_default();
-                let projected = articles
-                    .iter()
-                    .map(|a| {
-                        J::Obj(
-                            af.iter()
-                                .map(|f| {
-                                    let v = if f == "statements" {
-                                        let sts = a[f.as_str()].as_vec().cloned().unwrap_or_default();
-                                        J::Arr(sts.iter().map(|s| row_of(s, &sf)).collect())
-                                    } else {
-                                        field(a, f).map_or(J::Null, J::of)
-                                    };
-                                    (f.clone(), v)
-                                })
-                                .collect(),
-                        )
-                    })
-                    .collect();
-                out.insert("articles".to_string(), J::Arr(projected));
-                J::Obj(out)
-            }
-            "adr" => {
-                // 状態を問わず記録ごとに fields（便 151）
-                let fields = names(&lists["fields"]);
-                let sub = dir.join(file);
-                let mut files: Vec<String> = fs::read_dir(&sub)
-                    .unwrap()
-                    .map(|e| e.unwrap())
-                    .filter(|e| e.file_type().unwrap().is_file())
-                    .map(|e| e.file_name().into_string().unwrap())
-                    .filter(|n| n.ends_with(".yaml") && n != "schema.yaml")
-                    .collect();
-                files.sort();
-                J::Arr(
-                    files
-                        .iter()
-                        .map(|name| row_of(&load_yaml(&sub.join(name)), &fields))
-                        .collect(),
-                )
-            }
-            "rules" => {
-                let (sections, fields) = (names(&lists["sections"]), names(&lists["fields"]));
-                let r = load_yaml(&dir.join(file));
-                J::Obj(sections.iter().map(|s| (s.clone(), rows_of(&r, s, &fields))).collect())
-            }
-            _ => {
-                let d = load_yaml(&dir.join(file));
-                let mut out = BTreeMap::new();
-                for (section, list) in lists.as_hash().expect("文書の一覧が表でない") {
-                    let section = section.as_str().unwrap();
-                    if section == "whole" {
-                        for name in names(list) {
-                            let v = field(&d, &name).map_or(J::Null, J::of);
-                            out.insert(name, v);
-                        }
-                    } else {
-                        out.insert(section.to_string(), rows_of(&d, section, &names(list)));
-                    }
-                }
-                J::Obj(out)
-            }
-        };
-        top.insert(doc.to_string(), value);
-    }
-    let mut text = String::new();
-    J::Obj(top).text(&mut text);
-    sha256_hex(text.as_bytes()).expect("引き金の要約値を測れない")
-}
-
 /// 一時 dir（design-intent/ = 正本の写し）。
 struct Repo {
     td: PathBuf,
@@ -374,19 +155,14 @@ impl Repo {
         sha256_hex(&bytes).expect("要約値を測れない")
     }
 
-    /// 印を置く。`fresh` なら sources を今の正本の要約値に、trigger を今の引き金の要約値（独立の実装）に合わせる。
+    /// 印を置く。`fresh` なら sources を今の正本の要約値に合わせる（trigger の行は仮の値のまま・門は読まない）。
     fn put_stamp(&self, name: &str, fresh: bool) {
         let mut text = findings_fixture(name);
         assert!(text.contains(PLACEHOLDER), "{name}: 仮の値が無い");
-        assert!(text.contains(TRIGGER_PLACEHOLDER), "{name}: trigger の仮の値が無い");
         if fresh {
             text = text.replace(
                 PLACEHOLDER,
                 &format!("sources: sha256 {}\n", self.sources_hex()),
-            );
-            text = text.replace(
-                TRIGGER_PLACEHOLDER,
-                &format!("trigger: sha256 {}\n", trigger_hex(&self.dir())),
             );
         }
         self.write_stamp(&text);

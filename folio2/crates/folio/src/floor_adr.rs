@@ -48,8 +48,7 @@ pub(crate) const EFFECTIVE_STATUS: &[&str] = &["accepted", "retired"];
 pub(crate) const SEAL_FILE: &str = "adr-seals.yaml";
 pub(crate) const SEAL_KIND: &str = "adr-seals";
 pub(crate) const SEAL_OUTSIDE: &[&str] = &["status", "superseded_by"];
-/// 凍結 anchor の写しの条の 5 欄と規範文の 4 欄（anchor.projection_article_fields / statement_fields）。天井の周の引き金の
-/// 憲法の一覧も同じ配列を指す（便 126・ADR-18 決定 (1) ①・`ceiling.rs` の trigger）。
+/// 凍結 anchor の写しの条の 5 欄と規範文の 4 欄（anchor.projection_article_fields / statement_fields）。
 pub(crate) const ANCHOR_ARTICLE_FIELDS: &[&str] = &["id", "title", "tier", "binds", "statements"];
 pub(crate) const ANCHOR_STATEMENT_FIELDS: &[&str] = &["id", "text", "pattern", "strength"];
 pub(crate) const OPTION: Keys = Keys {
