@@ -16,7 +16,7 @@ use super::heartbeat::{Toggle, toggle};
 use crate::frame::{self, Block};
 use crate::project::Body;
 use crate::project::pipeline::age;
-use crate::project::seat::{OK, Sign, Span, rects, state_value, strip_svg, top};
+use crate::project::seat::{OK, Sign, Span, rects, span_ticks, state_value, strip_svg, top};
 use crate::view::Fetched;
 
 pub const BLOCK: Block = Block {
@@ -53,6 +53,15 @@ pub const C_PROJ: &str = "c-proj";
 pub const C_ROLE: &str = "c-role";
 pub const C_STAGE: &str = "c-stage";
 pub const C_STRIP: &str = "c-strip strip24";
+
+/// 稼働の記録の見出しの欄の class（見本の `.c-hh`・語の下に目盛の段）。
+pub const C_HH: &str = "c-hh";
+
+/// 目盛の段の class（見本の `.saxis`）。
+pub const SAXIS: &str = "saxis";
+
+/// 狭い幅の目盛の段の class（見本の `.saxis-m`・見出しの行が隠れる幅でだけ出る）。
+pub const SAXIS_M: &str = "saxis-m";
 
 /// 合図の行の class（見本の `.tkhb`）。
 pub const TKHB: &str = "tkhb";
@@ -520,6 +529,14 @@ pub fn strip(spans: &Reading<Vec<SeatSpan>>, at: EpochSecs, span: Span) -> Readi
     }
 }
 
+/// 目盛の段の span の style と時刻の対（seat の span_ticks の順・窓の右端は at・seat の block の DOM と同じ `left:<値>%` の形）。
+pub fn axis_labels(at: EpochSecs, span: Span) -> Vec<(String, String)> {
+    span_ticks(at, span)
+        .into_iter()
+        .map(|t| (format!("left:{}%", t.left), t.label))
+        .collect()
+}
+
 /// 表を組む関数を view が使う（口は account の mod.rs の PATH・本文は doc で読む）。
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
@@ -534,9 +551,9 @@ mod dom {
     use tsuzuri_contract::board::Reading;
 
     use super::{
-        BLOCK, C_PROJ, C_ROLE, C_STAGE, C_STRIP, COLUMNS, GHEAD, Group, HROW, Head, Move,
-        NONE_MARK, SESS, SessRow, Signs, Sort, TKHB, Table, content, elapsed_at, grace_left,
-        grace_text, hb_class, sort_of, strip, tick_class, with_sort,
+        BLOCK, C_HH, C_PROJ, C_ROLE, C_STAGE, C_STRIP, COLUMNS, GHEAD, Group, HROW, Head, Move,
+        NONE_MARK, SAXIS, SAXIS_M, SESS, SessRow, Signs, Sort, TKHB, Table, axis_labels, content,
+        elapsed_at, grace_left, grace_text, hb_class, sort_of, strip, tick_class, with_sort,
     };
     use crate::account::PATH;
     use crate::account::heartbeat::{self, States, Toggle};
@@ -631,9 +648,9 @@ mod dom {
         hb: States,
     ) -> AnyView {
         let at = table.at;
-        let head = COLUMNS
-            .into_iter()
-            .map(|k| view! { <div>{hs(k)}</div> })
+        let head = COLUMNS[..6]
+            .iter()
+            .map(|&k| view! { <div>{hs(k)}</div> })
             .collect_view();
         let groups = table
             .groups
@@ -642,8 +659,27 @@ mod dom {
             .collect_view();
         view! {
             <div class=SESS>
-                <div class=HROW>{head}</div>
+                <div class=HROW>
+                    {head}
+                    <div class=C_HH>{hs("history")}{axis_view(at, span)}</div>
+                </div>
+                <div class=SAXIS_M>{hs("history")}{axis_view(at, span)}</div>
                 {groups}
+            </div>
+        }
+        .into_any()
+    }
+
+    /// 稼働の記録の目盛の段（窓の右端は電文の at・幅を切り替えると目盛も替わる）。
+    fn axis_view(at: EpochSecs, span: RwSignal<Span>) -> AnyView {
+        view! {
+            <div class=SAXIS aria-hidden="true">
+                {move || {
+                    axis_labels(at, span.get())
+                        .into_iter()
+                        .map(|(style, label)| view! { <span style=style>{label}</span> })
+                        .collect_view()
+                }}
             </div>
         }
         .into_any()
