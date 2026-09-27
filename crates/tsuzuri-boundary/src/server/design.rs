@@ -2,11 +2,13 @@
 //! 撃つ形は `<program> graph --print --dir <repo>/design-intent`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
 //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでも設計の出所は読めない（None）。
 //! 設計文書の dir の下の全 file は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
+//! 同じ `Design` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use super::coalesce::{Coalesce, GRACE};
 use super::ledger::capture;
 
 /// 既定の program の名（引数 --folio で替える）。
@@ -21,18 +23,32 @@ pub const FOLIO_ARGS: [&str; 3] = ["graph", "--print", "--dir"];
 /// 設計の道具が返すまでの上限（要件 NFR2 の上限・台帳の読みと同じ）。越えれば止めて読めない。
 pub const FOLIO_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// 走っている読みに合流した呼び出しが待つ上限（`FOLIO_TIMEOUT` に 1 秒を足す・便 e-coalesce）。
+pub const FOLIO_WAIT: Duration = FOLIO_TIMEOUT.saturating_add(GRACE);
+
 /// 設計の索引の読みの出所（repo の置き場と設計の道具の program）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// clone は読みの合流の場を分け合う（比べるのは repo と folio だけ）。
+#[derive(Debug, Clone)]
 pub struct Design {
     pub repo: PathBuf,
     pub folio: OsString,
+    shared: Coalesce<String>,
 }
+
+impl PartialEq for Design {
+    fn eq(&self, other: &Design) -> bool {
+        (&self.repo, &self.folio) == (&other.repo, &other.folio)
+    }
+}
+
+impl Eq for Design {}
 
 impl Design {
     pub fn new(repo: impl Into<PathBuf>, folio: impl Into<OsString>) -> Design {
         Design {
             repo: repo.into(),
             folio: folio.into(),
+            shared: Coalesce::new(),
         }
     }
 
@@ -49,9 +65,12 @@ impl Design {
     }
 
     /// 設計の道具を撃ち、標準出力の字を返す（読めなければ None）。
+    /// 走っている読みが在れば新しく撃たず、その終わりを `FOLIO_WAIT` まで待って同じ結果を返す（便 e-coalesce）。
     pub fn text(&self) -> Option<String> {
-        let out = capture(&self.folio, self.args(), &self.repo, FOLIO_TIMEOUT)?;
-        String::from_utf8(out).ok()
+        self.shared.share(FOLIO_WAIT, || {
+            let out = capture(&self.folio, self.args(), &self.repo, FOLIO_TIMEOUT)?;
+            String::from_utf8(out).ok()
+        })
     }
 
     /// 変化の印の file（設計文書の dir の下の全 file・path の順・dir が無ければ空）。

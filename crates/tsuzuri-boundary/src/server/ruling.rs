@@ -3,7 +3,7 @@
 //! 受付の順:
 //! 1. 逐語が空白だけなら断る（EmptyVerbatim）。
 //! 2. 台帳を bd の読み取りの口で読み直し（持ち回しの値を使わない）、open の問いでなければ断る
-//!    （UnknownQuestion）。台帳が読めなければ 503。
+//!    （UnknownQuestion）。走っている読みには合流しない（便 e-coalesce）。台帳が読めなければ 503。
 //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
 //! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
 //! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない）。
@@ -78,7 +78,8 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
     if req.verbatim.trim().is_empty() {
         return Outcome::Refused(Refusal::EmptyVerbatim);
     }
-    let Some(Reading::Known(questions)) = ledger.text().map(|t| open_questions(&t)) else {
+    // 走っている読みを分け合わず、新しい子 process で読み直す（便 e-coalesce）。
+    let Some(Reading::Known(questions)) = ledger.text_alone().map(|t| open_questions(&t)) else {
         return Outcome::LedgerUnknown;
     };
     let Some(question) = questions.into_iter().find(|q| q.card.id == req.question) else {

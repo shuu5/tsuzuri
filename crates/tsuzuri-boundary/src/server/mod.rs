@@ -5,6 +5,9 @@
 //! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。POST を受ける口は /api/ruling だけで、
 //! ほかの GET でない要求は 405 で何も書かない。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
+//! 同じ時に届いた要求は、台帳の読みと設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
+//! 分け合うのは起動で作る 1 つの `Source` と 1 つの `Design` とその clone（変化の見張りの読みも含む）で、
+//! 読み終えた字は次の要求に持ち回さない。裁定の受付は合流せず、新しい子 process で読み直す。
 //! - GET /api/ledger — 台帳の一覧（LedgerList）
 //! - GET /api/ledger/<id> — 台帳の 1 本（LedgerItem）
 //! - GET /api/pipeline — pipeline の板（PipelineBoard）
@@ -21,6 +24,7 @@
 //! - それ以外の GET — 面の file の配布
 
 pub mod board;
+pub mod coalesce;
 pub mod design;
 pub mod events;
 pub mod files;

@@ -3,6 +3,7 @@
 //! 起動できない・rc が 0 でない・JSON として読めない・5 秒を超えて返さない、のどれでも
 //! 一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
 //! .beads の issues.jsonl は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
+//! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 
 use std::ffi::{OsStr, OsString};
 use std::io::Read;
@@ -17,6 +18,8 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BdLine, BeadId, LedgerItem, LedgerList};
 use tsuzuri_contract::wire;
 
+use super::coalesce::{Coalesce, GRACE};
+
 /// 既定の program の名（引数 --bd で替える）。
 pub const BD: &str = "bd";
 
@@ -26,21 +29,35 @@ pub const BD_ARGS: [&str; 6] = ["--readonly", "list", "--all", "--limit", "0", "
 /// bd が返すまでの上限（要件 NFR2 の上限・規則の行 R-21 の値）。越えれば止めて Unknown。
 pub const BD_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// 走っている読みに合流した呼び出しが待つ上限（`BD_TIMEOUT` に 1 秒を足す・便 e-coalesce）。
+pub const BD_WAIT: Duration = BD_TIMEOUT.saturating_add(GRACE);
+
 /// 子 process の終わりを確かめる間隔。
 const WAIT_STEP: Duration = Duration::from_millis(5);
 
 /// 台帳の読みの出所（repo の置き場と bd の program）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// clone は読みの合流の場を分け合う（比べるのは repo と bd だけ）。
+#[derive(Debug, Clone)]
 pub struct Source {
     pub repo: PathBuf,
     pub bd: OsString,
+    shared: Coalesce<String>,
 }
+
+impl PartialEq for Source {
+    fn eq(&self, other: &Source) -> bool {
+        (&self.repo, &self.bd) == (&other.repo, &other.bd)
+    }
+}
+
+impl Eq for Source {}
 
 impl Source {
     pub fn new(repo: impl Into<PathBuf>, bd: impl Into<OsString>) -> Source {
         Source {
             repo: repo.into(),
             bd: bd.into(),
+            shared: Coalesce::new(),
         }
     }
 
@@ -57,7 +74,13 @@ impl Source {
 
     /// bd を撃ち、返した字をそのまま返す（導出グラフと指標の入力・便 e-read）。
     /// 起動できない・rc が 0 でない・UTF-8 でない・`BD_TIMEOUT` を越える、のどれでも None。
+    /// 走っている読みが在れば新しく撃たず、その終わりを `BD_WAIT` まで待って同じ結果を返す（便 e-coalesce）。
     pub fn text(&self) -> Option<String> {
+        self.shared.share(BD_WAIT, || self.text_alone())
+    }
+
+    /// 走っている読みを分け合わず、新しい子 process で bd を撃つ（裁定の受付の読み直し・便 e-ask）。
+    pub fn text_alone(&self) -> Option<String> {
         let out = capture(&self.bd, BD_ARGS, &self.repo, BD_TIMEOUT)?;
         String::from_utf8(out).ok()
     }
