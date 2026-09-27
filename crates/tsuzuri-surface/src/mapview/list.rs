@@ -241,8 +241,10 @@ mod dom {
         BAND_PARAM, KIND_PARAM, NO_GIST, PairNote, Query, Row, SORT_PARAM, Sort, listing,
         with_choice, with_pair,
     };
+    use crate::frame::{self, Mode};
     use crate::mapview::band::{Band, kind_key, kind_name};
     use crate::mapview::{band_chip, navigate};
+    use crate::project::nodearound::mode_of;
     use crate::project::{ALERT_STYLE, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::hs;
@@ -271,7 +273,8 @@ mod dom {
         let unread = l.unread.iter().copied().map(unmeasured).collect_view();
         let pair = l.pair.map(|p| pair_note(p, search));
         let count = l.rows.len();
-        let rows = l.rows.iter().map(row_view).collect_view();
+        let mode = mode_of(search);
+        let rows = l.rows.iter().map(|r| row_view(r, mode)).collect_view();
         view! {
             {unread}
             {pair}
@@ -327,16 +330,18 @@ mod dom {
         .into_any()
     }
 
-    /// 1 行（節点の頁はまだ無いので link にしない）。
-    fn row_view(r: &Row) -> AnyView {
+    /// 1 行（題が節点の頁への link）。
+    fn row_view(r: &Row, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
         let style = if r.alert { ALERT_STYLE } else { "" };
         let meta = format!("{} · {}", label(kind_key(r.kind)), r.state_word());
+        let id = r.id.clone();
+        let href = move || frame::node_href(&id, mode());
         view! {
             <li>
                 <span class=r.shape.clone() style=style aria-hidden="true"></span>
                 <div class="rowb">
                     <span class="nid">{r.id.clone()}</span>
-                    <span class="ttl"><span data-t="">{r.title.clone()}</span></span>
+                    <a class="ttl" href=href><span data-t="">{r.title.clone()}</span></a>
                     <span class="meta">{band_chip(r.band)}<span>{meta}</span></span>
                     <span class="gist none">{NO_GIST}</span>
                 </div>

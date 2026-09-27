@@ -217,7 +217,10 @@ mod dom {
     use tsuzuri_contract::graph::GraphDoc;
 
     use super::{BandBox, Cards, Tag, compact};
+    use crate::frame::{self, Mode};
     use crate::mapview::band::Band;
+    use crate::mapview::current;
+    use crate::project::nodearound::mode_of;
     use crate::project::{ALERT_STYLE, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{h2, hs};
@@ -226,7 +229,11 @@ mod dom {
     const NO_COUNT: &str = "―";
 
     pub fn view(doc: &GraphDoc) -> AnyView {
-        let boxes = compact(doc).into_iter().map(box_view).collect_view();
+        let mode = mode_of(RwSignal::new(current()));
+        let boxes = compact(doc)
+            .into_iter()
+            .map(|b| box_view(b, mode))
+            .collect_view();
         view! {
             <header>{h2("bands")}</header>
             {boxes}
@@ -234,7 +241,7 @@ mod dom {
         .into_any()
     }
 
-    fn box_view(b: BandBox) -> AnyView {
+    fn box_view(b: BandBox, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
         let count = b
             .count
             .map_or_else(|| NO_COUNT.to_string(), |n| n.to_string());
@@ -247,13 +254,17 @@ mod dom {
                     <code class="path">{band.path()}</code>
                     <span class="n num">{count}</span>
                 </header>
-                {cards_view(b.cards, band)}
+                {cards_view(b.cards, band, mode)}
             </section>
         }
         .into_any()
     }
 
-    fn cards_view(cards: Cards, band: Band) -> AnyView {
+    fn cards_view(
+        cards: Cards,
+        band: Band,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
         match cards {
             Cards::Unmeasured(reason) => unmeasured(reason),
             Cards::Empty => view! {
@@ -261,7 +272,7 @@ mod dom {
             }
             .into_any(),
             Cards::Tags(tags) => {
-                let tags = tags.iter().map(tag_view).collect_view();
+                let tags = tags.iter().map(|t| tag_view(t, mode)).collect_view();
                 view! { <div class="cards7">{tags}</div> }.into_any()
             }
             Cards::Articles { articles, loose } => {
@@ -272,17 +283,25 @@ mod dom {
                         let kids = a
                             .norms
                             .into_iter()
-                            .map(|id| view! { <span>{id}</span> })
+                            .map(|id| {
+                                let href = {
+                                    let id = id.clone();
+                                    move || frame::node_href(&id, mode())
+                                };
+                                view! { <a href=href>{id}</a> }
+                            })
                             .collect_view();
+                        let tag_id = a.tag.id.clone();
+                        let href = move || frame::node_href(&tag_id, mode());
                         view! {
                             <div class=class>
-                                {tag_head(&a.tag)}
+                                <a href=href>{tag_head(&a.tag)}</a>
                                 <div class="kids">{kids}</div>
                             </div>
                         }
                     })
                     .collect_view();
-                let loose = loose.iter().map(tag_view).collect_view();
+                let loose = loose.iter().map(|t| tag_view(t, mode)).collect_view();
                 view! { <div class="cards7">{arts}{loose}</div> }.into_any()
             }
             Cards::Lanes(lanes) => {
@@ -290,7 +309,7 @@ mod dom {
                 let lanes = lanes
                     .into_iter()
                     .map(|l| {
-                        let tags = l.tags.iter().map(tag_view).collect_view();
+                        let tags = l.tags.iter().map(|t| tag_view(t, mode)).collect_view();
                         view! {
                             <div class="subh">
                                 <span class=shape.clone() aria-hidden="true"></span>
@@ -306,7 +325,7 @@ mod dom {
         }
     }
 
-    /// 札の印と id と題（節点の頁はまだ無いので link にしない）。
+    /// 札の印と id と題（包む a が節点の頁への link）。
     fn tag_head(t: &Tag) -> AnyView {
         let style = if t.alert { ALERT_STYLE } else { "" };
         view! {
@@ -316,7 +335,10 @@ mod dom {
         .into_any()
     }
 
-    fn tag_view(t: &Tag) -> AnyView {
-        view! { <div class=t.class.clone()>{tag_head(t)}</div> }.into_any()
+    /// 1 つの札（節点の頁への link）。
+    fn tag_view(t: &Tag, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
+        let id = t.id.clone();
+        let href = move || frame::node_href(&id, mode());
+        view! { <a class=t.class.clone() href=href>{tag_head(t)}</a> }.into_any()
     }
 }
