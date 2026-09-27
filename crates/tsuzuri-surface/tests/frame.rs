@@ -3,6 +3,7 @@
 //! 便 g-ask で頁は home・ask・map の 3 つになり、home から block ask を外して問いの頁へ移した。
 //! 便 g-gaps で頁は home・ask・map・gaps の 4 つ・module は 9 つになった。
 //! 便 g-node で nav に出さない節点の頁（block は node と around）を足し、module は 11 になった（nav は 4 つのまま）。
+//! 便 g-batch で問いの頁を 2 列にし（右の列は side stack で batch と policy）、module は 13 になった。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -15,8 +16,8 @@ use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, HEADER, Mode, Page, PageId};
 use tsuzuri_surface::project::{
-    self, Body, STATES, ask, askpage, gaps, ledger, legend, map, next, node, nodearound, pipeline,
-    seat, state_class,
+    self, Body, STATES, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
+    pipeline, policy, seat, state_class,
 };
 use tsuzuri_surface::view::{Fetched, Screen};
 use tsuzuri_surface::vocab::vocab;
@@ -97,7 +98,19 @@ fn frame_home_blocks_in_order_and_map_page() {
         columns,
         vec![vec!["next", "pipe", "ledger", "legend"], vec!["orch"]]
     );
-    assert_eq!(frame::ask().block_ids(), vec!["ask", "hist"]);
+    // 問いの頁は 2 列: 左の列が ask・hist、右の列（side stack）が batch・policy。
+    let ask_columns: Vec<(&str, Vec<&str>)> = frame::ask()
+        .columns
+        .iter()
+        .map(|c| (c.class, c.blocks.iter().map(|b| b.id).collect()))
+        .collect();
+    assert_eq!(
+        ask_columns,
+        vec![
+            ("stack", vec!["ask", "hist"]),
+            ("side stack", vec!["batch", "policy"])
+        ]
+    );
     assert_eq!(frame::map().block_ids(), vec!["map"]);
     assert_eq!(frame::gaps().block_ids(), vec!["gaps"]);
     assert_eq!(frame::node().block_ids(), vec!["node", "around"]);
@@ -390,7 +403,7 @@ fn frame_item_shape_follows_status() {
     assert!(!by("bm").alert);
 }
 
-/// block と地図の頁と抜けの検査の頁と節点の頁の 2 つは project の下の 11 の module に 1 つずつ・
+/// block と地図の頁と抜けの検査の頁と節点の頁の 2 つと問いの頁の右の列の 2 つは project の下の 13 の module に 1 つずつ・
 /// 枠の module は中身を持たない。
 #[test]
 fn frame_one_module_per_block() {
@@ -398,6 +411,8 @@ fn frame_one_module_per_block() {
         ("next", next::BLOCK.id),
         ("ask", ask::BLOCK.id),
         ("askpage", askpage::BLOCK.id),
+        ("batch", batch::BLOCK.id),
+        ("policy", policy::BLOCK.id),
         ("gaps", gaps::BLOCK.id),
         ("pipeline", pipeline::BLOCK.id),
         ("seat", seat::BLOCK.id),
@@ -425,7 +440,7 @@ fn frame_one_module_per_block() {
             "{module}.rs が block {id} の枠を持たない"
         );
     }
-    assert_eq!(files.len(), 11);
+    assert_eq!(files.len(), 13);
     let mut all: Vec<&str> = all_pages().iter().flat_map(|p| p.block_ids()).collect();
     let mut declared: Vec<&str> = modules.iter().map(|(_, id)| *id).collect();
     all.sort_unstable();

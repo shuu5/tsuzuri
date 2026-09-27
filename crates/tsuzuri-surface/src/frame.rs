@@ -4,10 +4,12 @@
 //! 問いの頁（便 g-ask）: 頁の順は home・ask・map、header の質問の link に open の問いの数の印を付ける。
 //! 抜けの検査の頁（便 g-gaps）: 頁の順は home・ask・map・gaps（見本の header と同じ 4 つ）。
 //! 節点の頁（便 g-node）: query の page=node と id で開き、nav には出さない（nav の順と頁の一覧は 4 つのまま）。
+//! 問いの頁の右の列（便 g-batch）: class side stack の列に batch と policy の 2 つの block。
 
 use crate::mapview::encode;
 use crate::project::{
-    ask, askpage, gaps, ledger, legend, map, next, node as node_block, nodearound, pipeline, seat,
+    ask, askpage, batch, gaps, ledger, legend, map, next, node as node_block, nodearound, pipeline,
+    policy, seat,
 };
 
 /// 1 つの block の枠（DOM の id・見出しの語の鍵・section の class）。
@@ -84,6 +86,9 @@ impl Page {
 /// 列の class（見本の `.stack`）。
 pub const STACK: &str = "stack";
 
+/// 右の列の class（見本の ask.html の `aside.side.stack`）。
+pub const SIDE: &str = "side stack";
+
 /// home の頁: 次の一手・pipeline・台帳・凡例 ｜ orchestrator と口座（2 列の grid・見本の `.home`）。
 pub fn home() -> Page {
     Page {
@@ -103,16 +108,22 @@ pub fn home() -> Page {
     }
 }
 
-/// 問いの頁: 問いの card の列・これまでの決定（見本の ask.html の `.ask` の左の列・右の列は後の便）。
+/// 問いの頁: 問いの card の列・これまでの決定 ｜ まとめて承認・全体への指示（見本の ask.html の `.ask` の 2 列）。
 pub fn ask() -> Page {
     Page {
         id: PageId::Ask,
         heading: "questions",
         class: "ask",
-        columns: vec![Column {
-            class: STACK,
-            blocks: vec![ask::BLOCK, askpage::BLOCK],
-        }],
+        columns: vec![
+            Column {
+                class: STACK,
+                blocks: vec![ask::BLOCK, askpage::BLOCK],
+            },
+            Column {
+                class: SIDE,
+                blocks: vec![batch::BLOCK, policy::BLOCK],
+            },
+        ],
     }
 }
 

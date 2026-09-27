@@ -3,6 +3,7 @@
 //! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。
 //! 質問の link の数の印は問いの一覧の口（ask の module の口）の件数を出す（便 g-ask）。
 //! 節点の頁（便 g-node）は query の page=node で開き、block は node と around の 2 つ（nav には出さない）。
+//! 問いの頁の右の列（便 g-batch）は batch と policy の 2 つの block。
 
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
@@ -10,7 +11,8 @@ use tsuzuri_contract::board::Reading;
 use crate::frame::{self, BRAND, Block, HEADER, Mode, PageId};
 use crate::net;
 use crate::project::{
-    self, ask, askpage, gaps, ledger, legend, map, next, node, nodearound, pipeline, seat,
+    self, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound, pipeline, policy,
+    seat,
 };
 use crate::view::{Screen, clock};
 use crate::vocab::label;
@@ -183,6 +185,8 @@ fn block_view(block: Block, screen: RwSignal<Screen>) -> AnyView {
         id if id == next::BLOCK.id => next::view(),
         id if id == ask::BLOCK.id => ask::view(),
         id if id == askpage::BLOCK.id => askpage::view(),
+        id if id == batch::BLOCK.id => batch::view(),
+        id if id == policy::BLOCK.id => policy::view(),
         id if id == pipeline::BLOCK.id => pipeline::view(),
         id if id == seat::BLOCK.id => seat::view(),
         id if id == ledger::BLOCK.id => ledger::view(screen),

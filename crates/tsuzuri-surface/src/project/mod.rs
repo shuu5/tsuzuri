@@ -8,6 +8,8 @@
 //! 畳める段（details）の開き閉じは鍵ごとの記録（`Folds`）から読み、toggle で書き戻す（組み直しの後も保つ・便 g-steady）。
 //! 節点の頁（便 g-node）は node（頭と概要）と nodearound（つながり・口の path の頭 /api/around に query を付けて読む）の 2 つ。
 //! 2 つの block は nodearound の module が持つ 1 つの読みを分ける。
+//! 問いの頁の右の列（便 g-batch）は batch（まとめて承認・口 /api/batch）と policy（全体への指示・口 /api/policy）の 2 つ。
+//! 2 つとも問いの一覧を ask の module の口から読む（同じ path の読みは 1 つの signal を分ける）。
 
 use std::collections::BTreeMap;
 
@@ -17,6 +19,7 @@ use crate::view::{self, Fetched, QUESTION_KIND};
 
 pub mod ask;
 pub mod askpage;
+pub mod batch;
 pub mod gaps;
 pub mod ledger;
 pub mod legend;
@@ -25,6 +28,7 @@ pub mod next;
 pub mod node;
 pub mod nodearound;
 pub mod pipeline;
+pub mod policy;
 pub mod seat;
 
 /// block の中身（測れていない・0 件・中身あり）。0 件と測れていないを分ける（要件 NFR2）。

@@ -43,13 +43,16 @@ fn bead(id: &str) -> BeadId {
     BeadId::new(id).expect("bead の id")
 }
 
-/// 頁の順は home・ask・map・gaps、問いの頁の block は ask と hist、header の link は ホーム・質問・地図・抜けの検査。
+/// 頁の順は home・ask・map・gaps、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
+/// header の link は ホーム・質問・地図・抜けの検査。
 #[test]
 fn askcard_page_frame_and_nav() {
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
     assert_eq!(ids, vec!["home", "ask", "map", "gaps"]);
     let page = frame::ask();
-    assert_eq!(page.block_ids(), vec!["ask", "hist"]);
+    assert_eq!(page.columns.len(), 2);
+    let left: Vec<&str> = page.columns[0].blocks.iter().map(|b| b.id).collect();
+    assert_eq!(left, vec!["ask", "hist"]);
     assert_eq!(page.heading, "questions");
     assert_eq!(PageId::from_query("?page=ask&mode=expert"), PageId::Ask);
     assert_eq!(

@@ -39,6 +39,13 @@
             {"id": "ask", "heading": "ask_open", "class": "panel"},
             {"id": "hist", "heading": "rulings", "class": "fold panel"}
           ]
+        },
+        {
+          "class": "side stack",
+          "blocks": [
+            {"id": "batch", "heading": "batch", "class": "panel"},
+            {"id": "policy", "heading": "policy", "class": "panel"}
+          ]
         }
       ]
     },
