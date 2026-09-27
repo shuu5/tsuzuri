@@ -60,6 +60,21 @@ pub const LOW: f64 = 0.45;
 /// 窓の名（語の鍵は window の字と同じ）。
 pub const WINDOWS: [&str; 3] = ["five_hour", "seven_day", "seven_day_model"];
 
+/// 窓の字と短い字の組（見本の acct.js の WSHORT・窓の名の欄に出す字）。
+pub const SHORT: [(&str, &str); 3] = [
+    ("five_hour", "5h"),
+    ("seven_day", "7d"),
+    ("seven_day_model", "model"),
+];
+
+/// 窓の短い字（知らない窓は電文の字のまま）。
+pub fn short(window: &str) -> String {
+    SHORT
+        .into_iter()
+        .find(|(w, _)| *w == window)
+        .map_or_else(|| window.to_string(), |(_, s)| s.to_string())
+}
+
 /// 稼働の記録の幅（24h・6h・3h）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Span {
@@ -212,6 +227,8 @@ pub struct Strip {
 pub struct WindowRow {
     /// 窓の字（電文のまま）。
     pub window: String,
+    /// 窓の名の欄に出す短い字（`5h`・知らない窓は電文の字のまま）。
+    pub short: String,
     /// 窓の名の語の鍵（知らない窓は None で、字をそのまま出す）。
     pub key: Option<&'static str>,
     /// 行の class（数えない窓は薄く）。
@@ -438,6 +455,7 @@ pub fn low(card: &SeatCard) -> Low {
 pub fn window_row(q: &QuotaUsed, at: EpochSecs) -> WindowRow {
     WindowRow {
         window: q.window.clone(),
+        short: short(&q.window),
         key: WINDOWS.into_iter().find(|w| *w == q.window),
         class: if q.counted { "wrow" } else { "wrow muted" },
         used: format!("{}%", q.used_pct),
@@ -516,7 +534,7 @@ mod dom {
     };
     use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::hs;
+    use crate::widgets::help::{hs, term};
 
     /// 砂時計（限度の記号・見本の IC.hourglass）。
     const HOURGLASS: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 5 6 5 9s-5 4-5 9h10c0-5-5-6-5-9s5-4 5-9" /><path d="M9.5 19h5l-2.5-2.5z" fill="currentColor" stroke="none"/></svg>"#;
@@ -701,8 +719,8 @@ mod dom {
 
     fn window_view(row: WindowRow) -> AnyView {
         let name = match row.key {
-            Some(k) => hs(k),
-            None => row.window.clone().into_any(),
+            Some(k) => term(k, row.short.clone()),
+            None => row.short.clone().into_any(),
         };
         let style = format!("width:{}%", row.width);
         view! {

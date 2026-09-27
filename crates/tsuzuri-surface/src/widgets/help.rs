@@ -147,7 +147,7 @@ pub fn shows_internal(mode: Mode) -> bool {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{HelpCtx, TipLayer, h1, h2, hs, qmark};
+pub use dom::{HelpCtx, TipLayer, h1, h2, hs, qmark, term};
 
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -189,41 +189,73 @@ mod dom {
         Open { key, x, y, pinned }
     }
 
+    /// 押すと留める・同じ語をもう一度押すと外す。
+    fn click(ev: &ev::MouseEvent, key: &'static str) {
+        ev.stop_propagation();
+        if let Some(c) = ctx() {
+            let again = c
+                .open
+                .with_untracked(|o| o.as_ref().is_some_and(|o| o.key == key && o.pinned));
+            c.open.set(if again {
+                None
+            } else {
+                Some(at(ev, key, true))
+            });
+        }
+    }
+
+    /// 指を置くと出す（留めていなければ）。
+    fn enter(ev: &ev::MouseEvent, key: &'static str) {
+        if let Some(c) = ctx()
+            && !c
+                .open
+                .with_untracked(|o| o.as_ref().is_some_and(|o| o.pinned))
+        {
+            c.open.set(Some(at(ev, key, false)));
+        }
+    }
+
+    /// 指が離れると閉じる（留めていなければ）。
+    fn leave() {
+        if let Some(c) = ctx()
+            && c.open
+                .with_untracked(|o| o.as_ref().is_some_and(|o| !o.pinned))
+        {
+            c.open.set(None);
+        }
+    }
+
     /// 「?」の印（初心者の mode だけ見える・押すと留める・指を置くと出す）。
     pub fn qmark(key: &'static str) -> AnyView {
         let aria = format!("{} の説明", label(key));
-        let click = move |ev: ev::MouseEvent| {
-            ev.stop_propagation();
-            if let Some(c) = ctx() {
-                let again = c
-                    .open
-                    .with_untracked(|o| o.as_ref().is_some_and(|o| o.key == key && o.pinned));
-                c.open.set(if again {
-                    None
-                } else {
-                    Some(at(&ev, key, true))
-                });
-            }
-        };
-        let enter = move |ev: ev::MouseEvent| {
-            if let Some(c) = ctx()
-                && !c
-                    .open
-                    .with_untracked(|o| o.as_ref().is_some_and(|o| o.pinned))
-            {
-                c.open.set(Some(at(&ev, key, false)));
-            }
-        };
-        let leave = move |_: ev::MouseEvent| {
-            if let Some(c) = ctx()
-                && c.open
-                    .with_untracked(|o| o.as_ref().is_some_and(|o| !o.pinned))
-            {
-                c.open.set(None);
-            }
-        };
         view! {
-            <button type="button" class="q" data-term=key aria-label=aria on:click=click on:mouseenter=enter on:mouseleave=leave>"?"</button>
+            <button
+                type="button"
+                class="q"
+                data-term=key
+                aria-label=aria
+                on:click=move |ev: ev::MouseEvent| click(&ev, key)
+                on:mouseenter=move |ev: ev::MouseEvent| enter(&ev, key)
+                on:mouseleave=move |_: ev::MouseEvent| leave()
+            >
+                "?"
+            </button>
+        }
+        .into_any()
+    }
+
+    /// 語の説明を持つ字（見本の `data-term` と `tabindex="0"` の字・開き方は「?」と同じ）。
+    pub fn term(key: &'static str, text: String) -> AnyView {
+        view! {
+            <span
+                data-term=key
+                tabindex="0"
+                on:click=move |ev: ev::MouseEvent| click(&ev, key)
+                on:mouseenter=move |ev: ev::MouseEvent| enter(&ev, key)
+                on:mouseleave=move |_: ev::MouseEvent| leave()
+            >
+                {text}
+            </span>
         }
         .into_any()
     }

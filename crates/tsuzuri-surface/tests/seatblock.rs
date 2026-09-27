@@ -9,7 +9,7 @@ use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatSta
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::seat::{
     self, Band, HistRow, LIMIT_LINE, MORE, MOVE_WAIT, NEXT_TARGET, NG, OK, Rect, Seat, Span,
-    WINDOWS, content, span_of, strip_svg, until, with_span,
+    SHORT, WINDOWS, content, span_of, strip_svg, until, with_span,
 };
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
@@ -322,6 +322,53 @@ fn seatblock_usage_rows_and_bar_classes() {
         AT,
     );
     assert_eq!((other.key, other.window.as_str()), (None, "one_hour"));
+}
+
+/// 便 g-seat-fix: 窓の名の欄は短い字（5h・7d・model・知らない窓は電文の字のまま）で、表は 5 字以下の定数。
+#[test]
+fn seatblock_window_short_names() {
+    assert_eq!(
+        SHORT,
+        [
+            ("five_hour", "5h"),
+            ("seven_day", "7d"),
+            ("seven_day_model", "model")
+        ]
+    );
+    assert_eq!(SHORT.map(|(w, _)| w), WINDOWS);
+    for (_, s) in SHORT {
+        assert!(!s.is_empty() && s.chars().count() <= 5, "短い字 {s}");
+    }
+    let row = |window: &str| {
+        seat::window_row(
+            &QuotaUsed {
+                window: window.to_string(),
+                used_pct: 9,
+                resets_at: None,
+                counted: true,
+            },
+            AT,
+        )
+    };
+    for (window, want, key) in [
+        ("five_hour", "5h", Some("five_hour")),
+        ("seven_day", "7d", Some("seven_day")),
+        ("seven_day_model", "model", Some("seven_day_model")),
+        ("one_hour", "one_hour", None),
+    ] {
+        let r = row(window);
+        assert_eq!((r.short.as_str(), r.key), (want, key), "{window}");
+        assert_eq!(r.window, window);
+        assert_eq!(seat::short(window), want);
+    }
+    // fixture の窓の行も短い字を持つ。
+    let Reading::Known(rows) = filled("run").low.usage else {
+        panic!("run の割合が測れていない");
+    };
+    assert!(!rows.is_empty());
+    for r in rows {
+        assert_eq!(r.short, seat::short(&r.window));
+    }
 }
 
 /// (4) 状態の帯は、限度のときと登録の口座が群の今の口座と違うときだけ出し、平時は出さない。
