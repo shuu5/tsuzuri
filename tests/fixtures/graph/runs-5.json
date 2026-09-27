@@ -1,0 +1,25 @@
+{
+  "about": "同じ bead（r.1）の走行を 5 つ含む入力。走行の節点が 5 つ、run_of の辺が 5 本。最後の走行は段が Questioned で問いが無いので g-12 が名指す",
+  "design_index": [
+    "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+  ],
+  "ledger": [
+    {"id": "r", "title": "根", "status": "open", "issue_type": "epic"},
+    {"id": "r.1", "title": "5 回やり直した契約", "status": "in_progress", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+     "dependencies": [{"issue_id": "r.1", "depends_on_id": "r", "type": "parent-child"}]}
+  ],
+  "events": [
+    {"schema": 1, "ts": "2026-09-27T00:00:00Z", "kind": "RunCreated", "run": "r.1-20260927T000000Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:00:30Z", "kind": "RunStage", "run": "r.1-20260927T000000Z", "bead": "r.1", "stage": "Reviewed", "detail": "verdict:FAIL kind:other"},
+    {"schema": 1, "ts": "2026-09-27T00:01:00Z", "kind": "RunCreated", "run": "r.1-20260927T000100Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:01:30Z", "kind": "RunStage", "run": "r.1-20260927T000100Z", "bead": "r.1", "stage": "Spawned", "detail": "base:0000000,account:acct-1"},
+    {"schema": 1, "ts": "2026-09-27T00:01:50Z", "kind": "RunStage", "run": "r.1-20260927T000100Z", "bead": "r.1", "stage": "Gated", "detail": "verdict:FAIL"},
+    {"schema": 1, "ts": "2026-09-27T00:02:00Z", "kind": "RunCreated", "run": "r.1-20260927T000200Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:02:30Z", "kind": "RunStage", "run": "r.1-20260927T000200Z", "bead": "r.1", "stage": "Failed", "detail": "reason:見本"},
+    {"schema": 1, "ts": "2026-09-27T00:03:00Z", "kind": "RunCreated", "run": "r.1-20260927T000300Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:03:30Z", "kind": "RunStage", "run": "r.1-20260927T000300Z", "bead": "r.1", "stage": "Stopped", "detail": "reason:見本"},
+    {"schema": 1, "ts": "2026-09-27T00:04:00Z", "kind": "RunCreated", "run": "r.1-20260927T000400Z", "bead": "r.1", "stage": "Intake", "detail": "classes:"},
+    {"schema": 1, "ts": "2026-09-27T00:04:10Z", "kind": "SeatSpawned", "run": "r.1-20260927T000400Z", "bead": "r.1", "seat": "r.1-20260927T000400Z", "account": "acct-2"},
+    {"schema": 1, "ts": "2026-09-27T00:04:30Z", "kind": "RunStage", "run": "r.1-20260927T000400Z", "bead": "r.1", "stage": "Questioned", "detail": "about:見本"}
+  ]
+}

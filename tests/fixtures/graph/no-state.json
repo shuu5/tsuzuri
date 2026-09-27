@@ -1,0 +1,25 @@
+{
+  "about": "event log の字が空の入力（state dir が読めない）。走行の種類だけ「まだ分からない」になり、設計と台帳の節点は組める。memo の source は走行を指すので、その辺の端は「まだ分からない」",
+  "design_index": [
+    "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）",
+    "A-1\t条\tconstitution.yaml\t00000000\t見本の条",
+    "A-1.1\t規範文\tconstitution.yaml\t00000001\t見本の規範文",
+    "FR1\t要件\tsrs.yaml\t00000002\t見本の要件",
+    "# 辺（1 行 = 端 / 端 / 型・タブ区切り）",
+    "A-1\tA-1.1\tin-article",
+    "A-1.1\tA-1\tin-article",
+    "FR1\tA-1\trefs"
+  ],
+  "ledger": [
+    {"id": "n", "title": "根", "status": "open", "issue_type": "epic"},
+    {"id": "n.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+     "dependencies": [{"issue_id": "n.1", "depends_on_id": "n", "type": "parent-child"}]},
+    {"id": "n.2", "title": "問い", "status": "open", "issue_type": "task", "labels": ["intake:question"],
+     "metadata": {"touches": ["FR1"]},
+     "dependencies": [{"issue_id": "n.2", "depends_on_id": "n", "type": "parent-child"}]},
+    {"id": "n.3", "title": "[memo] 走行から", "status": "open", "issue_type": "task", "labels": ["intake:memo"],
+     "metadata": {"source": "n.1-20260927T000000Z"},
+     "dependencies": [{"issue_id": "n.3", "depends_on_id": "n", "type": "parent-child"}]}
+  ],
+  "events": ""
+}

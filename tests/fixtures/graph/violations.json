@@ -1,0 +1,185 @@
+{
+  "about": "数える 9 本のそれぞれについて入力の組を 1 つ持つ。violates は違反になるはずの条件の一覧（1 つの欠陥が 2 本に当たる組は 2 本を書く）。先頭の組は違反 0 の土台で、ほかの組は土台に欠陥を 1 つ足す",
+  "cases": [
+    {
+      "name": "土台（違反 0）",
+      "violates": [],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条",
+        "FR1\t要件\tsrs.yaml\t00000001\t見本の要件",
+        "FR1\tA-1\trefs"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "見本の受入\ndesign = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]},
+        {"id": "v.2", "title": "閉じた契約（pointer 無し）", "status": "closed", "issue_type": "task",
+         "dependencies": [{"issue_id": "v.2", "depends_on_id": "v", "type": "parent-child"}, {"issue_id": "v.2", "depends_on_id": "v.1", "type": "blocks"}, {"issue_id": "v.2", "depends_on_id": "v.1", "type": "tracks"}]},
+        {"id": "v.3", "title": "問い", "status": "open", "issue_type": "task", "labels": ["intake:question"],
+         "notes": "裁定 id = user 2026-09-27T01:00Z・束 b-1・よい\n受け id = rc-1・受けた",
+         "metadata": {"touches": ["A-1", "v.1"], "premises": ["p-1"]},
+         "dependencies": [{"issue_id": "v.3", "depends_on_id": "v", "type": "parent-child"}]},
+        {"id": "v.4", "title": "方針", "status": "open", "issue_type": "task", "labels": ["intake:memo"],
+         "notes": "方針 id = p-1・全体・見本の方針",
+         "metadata": {"source": "v.1-20260927T000000Z"},
+         "dependencies": [{"issue_id": "v.4", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"schema": 1, "ts": "2026-09-27T00:00:00Z", "kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"},
+        {"schema": 1, "ts": "2026-09-27T00:01:00Z", "kind": "RunStage", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Questioned", "detail": "about:見本"},
+        {"schema": 1, "ts": "2026-09-27T00:01:00Z", "kind": "QuestionRaised", "run": "v.1-20260927T000000Z", "bead": "v.1", "question": "v.3"}
+      ]
+    },
+    {
+      "name": "g-1 設計の索引の辺の端が節点でない",
+      "violates": ["g-1"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条",
+        "FR1\t要件\tsrs.yaml\t00000001\t見本の要件",
+        "FR1\tA-1\trefs",
+        "FR1\tA-9\trefs"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-2 open の契約が pointer の行を持たない",
+      "violates": ["g-2"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]},
+        {"id": "v.2", "title": "pointer の無い契約", "status": "in_progress", "issue_type": "task", "acceptance_criteria": "見本の受入（pointer の行が無い）",
+         "dependencies": [{"issue_id": "v.2", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-4 open の問いが touches を持たない",
+      "violates": ["g-4"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]},
+        {"id": "v.3", "title": "touches の無い問い", "status": "open", "issue_type": "task", "labels": ["intake:question"],
+         "metadata": {"touches": []},
+         "dependencies": [{"issue_id": "v.3", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-5 親を持たない契約（根に着かない）",
+      "violates": ["g-5"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]},
+        {"id": "w.1", "title": "親の無い契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#b"}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-6 blocks の輪",
+      "violates": ["g-6"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}, {"issue_id": "v.1", "depends_on_id": "v.2", "type": "blocks"}]},
+        {"id": "v.2", "title": "契約 2", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#b",
+         "dependencies": [{"issue_id": "v.2", "depends_on_id": "v", "type": "parent-child"}, {"issue_id": "v.2", "depends_on_id": "v.1", "type": "blocks"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-8 memo の label と pointer の行の両方を持つ",
+      "violates": ["g-8"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]},
+        {"id": "v.4", "title": "pointer を持つ memo", "status": "open", "issue_type": "task", "labels": ["intake:memo"], "acceptance_criteria": "design = contracts/x.toml#c",
+         "dependencies": [{"issue_id": "v.4", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-10 設計の索引の id が台帳の id と重なる",
+      "violates": ["g-10"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条",
+        "v\t目的\tsrs.yaml\t00000002\t根と同じ id の目的"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-11 走行の run_of の先の bead が無い（辺の端も無いので g-1 にも当たる）",
+      "violates": ["g-1", "g-11"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"},
+        {"kind": "RunCreated", "run": "gone.1-20260927T000000Z", "bead": "gone.1", "stage": "Intake"}
+      ]
+    },
+    {
+      "name": "g-12 段が Questioned の走行が raised の辺を持たない",
+      "violates": ["g-12"],
+      "design_index": [
+        "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+      ],
+      "ledger": [
+        {"id": "v", "title": "根", "status": "open", "issue_type": "epic"},
+        {"id": "v.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+         "dependencies": [{"issue_id": "v.1", "depends_on_id": "v", "type": "parent-child"}]}
+      ],
+      "events": [
+        {"kind": "RunCreated", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Intake"},
+        {"kind": "RunStage", "run": "v.1-20260927T000000Z", "bead": "v.1", "stage": "Questioned", "detail": "about:見本"}
+      ]
+    }
+  ]
+}

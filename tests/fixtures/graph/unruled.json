@@ -1,0 +1,18 @@
+{
+  "about": "定型行の無い閉じた問いを 1 つ含む入力（u.1）。notes に裁定の語はあるが行頭が「裁定 id = 」でないので、裁定の節点は 0 本で answers の辺も 0 本",
+  "design_index": [
+    "A-1\t条\tconstitution.yaml\t00000000\t見本の条"
+  ],
+  "ledger": [
+    {"id": "u", "title": "根", "status": "open", "issue_type": "epic"},
+    {"id": "u.1", "title": "答えの済んだ問い（定型行なし）", "status": "closed", "issue_type": "task", "labels": ["intake:question"],
+     "notes": "見本の notes の 1 行\n裁定は口頭で済んだ（定型行ではない）\n 裁定 id = 行頭が空白の行・定型行ではない",
+     "metadata": {"touches": ["A-1"]},
+     "dependencies": [{"issue_id": "u.1", "depends_on_id": "u", "type": "parent-child"}]},
+    {"id": "u.2", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
+     "dependencies": [{"issue_id": "u.2", "depends_on_id": "u", "type": "parent-child"}]}
+  ],
+  "events": [
+    {"schema": 1, "ts": "2026-09-27T00:00:00Z", "kind": "RunCreated", "run": "u.2-20260927T000000Z", "bead": "u.2", "stage": "Intake"}
+  ]
+}
