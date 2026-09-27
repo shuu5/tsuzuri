@@ -44,7 +44,7 @@ sections:
       設計文書の YAML は中核の crate では読まない。索引は設計の道具が既に組むので、その出力を使う（YAML の読み手の依存を足さない）。設計ノートの行と概要の字は、この便では節点にしない（後の便）。
       節点の種類は閉じた一覧で、設計の索引が出す 11 種（条・規範文・規則行・目的・要件・非機能要件・受入基準・制約・登場人物・出力・判断の記録）と、台帳の 7 種（epic・契約・memo・問い・裁定・受け・方針）と、走行の 1 種。設計ノートの行は種類の名だけを持ち、この便では節点を作らない。契約は acceptance に設計の pointer の行を持つ bead、memo は label intake:memo、問いは label intake:question で見分ける。裁定と受けと方針は notes の定型行から導き、定型行が無ければ 0 本。
       辺の型は閉じた一覧で、設計の索引が出す型（索引の辺の表の 3 列目の字をそのまま写す）と、台帳の 4 型（parent-child・blocks・relates-to・discovered-from）と、結びの型（design・ruled_by・answers・touches・premises・source）と、走行の 3 型（run_of・raised・ran_by）。一覧に無い型の辺は組まずに数える。
-      不変条件は 12 本で、結果は 3 値（合格・違反・まだ分からない）。g-1 辺の両端が実在する。g-2 open の契約は設計の行をちょうど 1 つ指す。g-3 発効した記録は裁定の行を持つ。g-4 問いは処分を持つ。g-5 孤児 0。g-6 輪 0。g-7 宙に浮いた裁定 0。g-8 memo の label と pointer の行の両方が在るか両方が無い bead は違反。g-9 名指した id は欄にも在る。g-10 id の族が互いに素。g-11 走行は契約を 1 つ持つ。g-12 Questioned の走行は問いを持つ。入力に材料が無くて数えられない条件は「まだ分からない」にする（g-2 の設計ノートの行・g-9 の本文の名指し）。
+      不変条件は 12 本で、結果は 3 値（合格・違反・まだ分からない）。g-1 辺の両端が実在する。g-2 open の契約は設計の行をちょうど 1 つ指す。g-3 発効した記録は裁定の行を持つ。g-4 問いは処分を持つ。g-5 孤児 0。g-6 輪 0。g-7 宙に浮いた裁定 0。g-8 memo の label と pointer の行の両方が在るか両方が無い bead は違反。g-9 名指した id は欄にも在る。g-10 id の族が互いに素。g-11 走行は契約を 1 つ持つ。g-12 Questioned の走行は問いを持つ。この便で数えるのは g-9 を除く 11 本。g-2 は pointer の行の数だけを見て（無いか 2 つ以上は違反）、指す先の設計ノートの行の実在は見ない。g-9 は本文の名指しを読む材料が 3 つの入力に無いので、つねに「まだ分からない」を返す。
       近傍は根拠の側と影響の側を各 2 段たどる。次数が 30 を超える節点は hub で、hub から先は広げず、切った理由と hub の辺の総数を返す（規則の行 R-20 の値）。hub の fixture は子を 619 本持つ epic を 1 つ含む。
       実物の入力の見本（tests/fixtures/graph/real の索引と event log、tests/fixtures/ledger の bd-list-8.json）は設計席が置いた。違反の fixture（不変条件ごとに 1 件の violations.json・hub-619.json・unruled.json・runs-5.json・no-state.json）はこの便が作る。
       依存は serde_json を中核の crate に足す（workspace には便 b で入っている）。入力を読んで口に出す側（子 process と server の口と tz graph の口）は境界の crate の後の便が持つ。
@@ -96,7 +96,7 @@ sections:
         write-set: ["Cargo.lock", "crates/tsuzuri-core/Cargo.toml", "xtask/src/main.rs", "crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/src/graph/check.rs", "+crates/tsuzuri-core/src/graph/around.rs", "+crates/tsuzuri-core/tests/graph.rs", "+tests/fixtures/graph/hub-619.json", "+tests/fixtures/graph/unruled.json", "+tests/fixtures/graph/runs-5.json", "+tests/fixtures/graph/no-state.json", "+tests/fixtures/graph/violations.json", "tests/fixtures/graph/real/design-index.tsv", "tests/fixtures/graph/real/events.jsonl"]
         verify: ["cargo nextest run -p tsuzuri-core --no-tests=fail graph_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
         size: L
-        done: (1) 実物の見本の 3 つの入力から組んだグラフの節点の種類と辺の型が、節の閉じた一覧の内側に収まり、索引の節点の数と台帳の bead の数と走行の数が入力と一致 (2) 不変条件ごとに違反 1 本の fixture がその 1 本だけを名指す (3) 子を 619 本持つ epic の fixture で近傍 2 段が hub（次数 30 超）を展開せず、切った理由と総数 619 を出す (4) event log を欠く入力で走行の種類だけ「まだ分からない」になり、設計と台帳の節点は組める (5) 中核の crate の直接依存は serde と serde_json と契約の型の crate だけ
+        done: (1) 実物の見本の 3 つの入力から組んだグラフの節点の種類と辺の型が、節の閉じた一覧の内側に収まり、索引の節点の数と台帳の bead の数と走行の数が入力と一致 (2) g-9 を除く 11 本は、条件ごとに違反 1 件の fixture がその 1 本だけを違反と名指し、g-9 はどの入力でも「まだ分からない」を返す (3) 子を 619 本持つ epic の fixture で近傍 2 段が hub（次数 30 超）を展開せず、切った理由と総数 619 を出す (4) event log を欠く入力で走行の種類だけ「まだ分からない」になり、設計と台帳の節点は組める (5) 中核の crate の直接依存は serde と serde_json と契約の型の crate だけ
         depends: [b]
       - id: d
         title: 台帳の指標と未反映の 3 種と次の一手の 7 種（閾値は rules 行から読む）
