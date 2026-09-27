@@ -32,11 +32,6 @@ options:
     verdict: rejected
     reason: code の持ち込みの前に改めると folio2 の履歴と食い違う。持ち込みの段で決める（増殖の防止）。
 basis: [P-27, N-3, ADR-4, ADR-6, ADR-7]
-revises:
-  - target: ADR-4
-    decision: (1)
-    kind: widen
-    summary: 6 つの crate のうち boundary が folio の口も持ち、人が打つ binary は tz の 1 つと定めた。
 retreat:
   kind: ruling
   condition: 面の便で folio inject か folio serve の代わりが要ることが分かったら、口を tz に足すかを持ち主に問う。

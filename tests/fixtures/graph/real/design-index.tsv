@@ -1,0 +1,757 @@
+# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）
+A-1	条	constitution.yaml	aab7eb47	消す・外へ出す・使う は確認してから
+A-1.1	規範文	constitution.yaml	b04e3d73	既存の文書やデータを消す、外へ出す、外部の道具や鍵を使う（課金を含む）操
+A-1.2	規範文	constitution.yaml	f07945b4	得た承認は逐語を添えた承認の記録（event）として残す。
+A-2	条	constitution.yaml	b145c3c5	憲法の条文と締める閾値を変えるとき
+A-2.1	規範文	constitution.yaml	b49d1863	条文を改訂するとき、判断の記録と撤退条件を先に書き、持ち主の承認（逐語・
+A-2.2	規範文	constitution.yaml	8234997e	条文（id・見出し・規範文・段・縛る相手）と schema 節・前文が 
+A-2.3	規範文	constitution.yaml	233c41dd	改訂の前と、大きさの上限（R-4）と依存の予算（R-2）の閾値を変える前
+A-3	条	constitution.yaml	4e0b9c7d	依存する外部ソフトの増減
+A-3.1	規範文	constitution.yaml	ea51145a	外部ライブラリを増やす・減らすとき、予算（規則の表の行 R-2）と使って
+A-4	条	constitution.yaml	275ddbe5	自分で自分を作ること（self-host）は既定で許可、取り消せない操作
+A-4.1	規範文	constitution.yaml	dd98e283	器と道具が自分自身の文書・code を変える運用は、既定で許可する。
+A-4.2	規範文	constitution.yaml	c46fbc55	その操作が取り消せない（消す・出す・使う）とき、A-1 として持ち主に確
+A-4.3	規範文	constitution.yaml	a1ea7869	取り込み（merge）・自分の repo への便の起動・外部依存を増やさ
+AC1	受入基準	srs.yaml	ee39eb53	3 問の束で裁定 id が 3 つ別々に出て同じ束 id を持ち、各問い
+AC10	受入基準	srs.yaml	1455ac99	tick が stale なら「応答なし」・heartbeat-off 
+AC11	受入基準	srs.yaml	f20a263b	move-signal と群の記録から残り秒が「記録の時刻 + 猶予 −
+AC12	受入基準	srs.yaml	92635078	一時の台帳の fixture で判定の 5 値と未反映の 3 種の数が期
+AC13	受入基準	srs.yaml	63829e11	偽の ssh と偽の Chrome で起動の引数（専用の profile
+AC14	受入基準	srs.yaml	e7c912b4	folio の口ごとに tz の subcommand の終了 code
+AC15	受入基準	srs.yaml	be993a9b	固定の DOM の写しと矩形から要素の列が期待と一致し、上限を超える囲み
+AC16	受入基準	srs.yaml	78aaf99b	欄の欠けた所見は断られ、揃った所見は置き場の file と台帳の 1 行
+AC17	受入基準	srs.yaml	3f32c188	対象の種類ごとの端末の行で選ばれる経路が CDP か画面の配信のどちらか
+AC2	受入基準	srs.yaml	c12145e1	A-1 の印を持つ問いを含む束は断られ、台帳の file は byte 
+AC3	受入基準	srs.yaml	b431b585	見た版が古い要求は 409 で何も書かず、取り消しは前の id を名指し
+AC4	受入基準	srs.yaml	6b656e82	子 619 の hub を持つ fixture で近傍 2 段が hub
+AC5	受入基準	srs.yaml	a3fbdb37	accepted の ADR の裁定が台帳に無ければ tz graph 
+AC6	受入基準	srs.yaml	ee5f7f41	問いの起票 3 通り（処分の無い id が 1 つ在れば deny して
+AC7	受入基準	srs.yaml	b0b62325	5 回やり直した契約 bead の fixture で走行の節点が 5 
+AC8	受入基準	srs.yaml	eb004cfc	state dir が読めない fixture で走行の種類だけ「まだ分
+AC9	受入基準	srs.yaml	5dd8a2a8	面の受入 12 条が全画面 × 2 幅 × 2 mode で違反 0
+ADR-1	判断の記録	adr/ADR-1.yaml	09559e5e	判断の記録と設計ノートの欄の決まりに folio の床の定数を採る
+ADR-10	判断の記録	adr/ADR-10.yaml	394ba0b8	相談の窓 consult を orchestrator から分けた使い捨
+ADR-11	判断の記録	adr/ADR-11.yaml	3576c4ac	表示面の対象は web から始め、中身が web の native・スマ
+ADR-12	判断の記録	adr/ADR-12.yaml	6d739901	条 P-16 を、席の model は要件書の制約で名指し、込み入った設
+ADR-2	判断の記録	adr/ADR-2.yaml	9deab302	面の技術は今決めず、表示 server と契約を固定して client 
+ADR-3	判断の記録	adr/ADR-3.yaml	375eca3a	面の技術は Rust の wasm（Leptos）に決め、契約の型は共有
+ADR-4	判断の記録	adr/ADR-4.yaml	15c74194	v3 は scribe3 の 1 つの workspace に合流し、f
+ADR-5	判断の記録	adr/ADR-5.yaml	2aecb77f	表示面は席が持ち主の端末の Chrome を ssh 経由で app m
+ADR-6	判断の記録	adr/ADR-6.yaml	0b034b0a	器の名は tsuzuri（綴）とし、名は 1 つの定数から導く値として置
+ADR-7	判断の記録	adr/ADR-7.yaml	1d920a90	裁定面は project board と account board の
+ADR-8	判断の記録	adr/ADR-8.yaml	95baf45a	人が打つ binary は tz の 1 つとし、folio の 15 
+ADR-9	判断の記録	adr/ADR-9.yaml	70cda423	持ち主は画面の一部や画像を一言と一緒に席へ渡せるようにし、最初の版は 3
+CON1	制約	srs.yaml	0e2fbd55	順序
+CON2	制約	srs.yaml	5bd37fb2	folio2 の出口
+CON3	制約	srs.yaml	77fe284b	面は器の file を書かない
+CON4	制約	srs.yaml	9fe60567	mock は見本
+CON5	制約	srs.yaml	31884d4e	見せる先
+CON6	制約	srs.yaml	f1b450bf	席のモデル
+D-1	規則行	rules.yaml	beca1632	並列で AI を起動する全ての起動点で、使うモデルと予算（token の
+D-2	規則行	rules.yaml	c28f326e	並列実行の返り値は file に落とし、通知は要約だけにする（agent
+D-3	規則行	rules.yaml	e89b2572	持ち主への問い（承認の要求・反対側からの確認・相談窓口の質問）は対話面（
+D-4	規則行	rules.yaml	8965a501	版管理へ載せる file に tailnet の住所・機器名（host 
+FR1	要件	srs.yaml	3c8dabd6	面は 2 つ（project board と account board
+FR10	要件	srs.yaml	2cf501c2	pipeline の板と走行の節点
+FR11	要件	srs.yaml	21520834	次の一手（閉じた 7 種）
+FR12	要件	srs.yaml	adb3d0ef	口座と席の健康
+FR13	要件	srs.yaml	81453594	台帳の指標と未反映の一覧
+FR14	要件	srs.yaml	e7808810	語彙と文の予算と hover の規則
+FR15	要件	srs.yaml	cda2044a	概要は data で持つ
+FR16	要件	srs.yaml	272f37b6	表示面（席が端末の Chrome を起こす）
+FR17	要件	srs.yaml	79449b3d	人が打つ binary は tz の 1 つ
+FR18	要件	srs.yaml	ac48983b	指し示し（画像と囲みと一言を席へ渡す）
+FR19	要件	srs.yaml	47f1d929	相談の窓 consult と型付きの所見
+FR2	要件	srs.yaml	662fe211	導出グラフ（設計文書と設計ノートと台帳と走行を 1 つに結ぶ）
+FR20	要件	srs.yaml	ff35b516	表示面の対象を広げる（中身が web の native・スマホの emu
+FR3	要件	srs.yaml	47a87c50	不変条件の 12 本を 3 値で数える
+FR4	要件	srs.yaml	541de906	問いの起票の門（近傍の処分の宣言）
+FR5	要件	srs.yaml	c5cad306	帯と形と地図と近傍の描き方
+FR6	要件	srs.yaml	68784934	問いの card と答え
+FR7	要件	srs.yaml	4207537c	まとめて承認（束）
+FR8	要件	srs.yaml	db2a9835	全体の方針の欄
+FR9	要件	srs.yaml	88b11651	承認の event と席の起こし
+GOAL1	目的	srs.yaml	4f97706e	面で決められる
+GOAL2	目的	srs.yaml	6a8c1e48	全体像を見落とさない
+GOAL3	目的	srs.yaml	030b26f0	口座と席の健康が 1 面で分かる
+GOAL4	目的	srs.yaml	e5f57e6f	席が持ち主の端末で見せる
+N-1	条	constitution.yaml	5652a244	取り消せない削除をしない
+N-1.1	規範文	constitution.yaml	c2e952aa	操作が管理下の対象を回復不能に削除するなら、器と道具はそれを拒む。
+N-1.2	規範文	constitution.yaml	8a6bb65b	退役（廃止）は可逆な移動としてのみ行う。
+N-2	条	constitution.yaml	bb67109e	文章にしか無い規則を、規則として扱わない
+N-2.1	規範文	constitution.yaml	1d65df0a	変更が、散文・記憶・会話にしか無い規則を持ち込むなら、それを規則として扱
+N-2.2	規範文	constitution.yaml	eb936f44	変更が、散文・記憶・会話にしか無い規則を持ち込むなら、検査がそれを落とす
+N-3	条	constitution.yaml	ab321134	例外の仕組みを作らない
+N-3.1	規範文	constitution.yaml	3d3e88ec	変更が規則の例外機構（無効化の旗・「今回だけ」の口）を足すなら、それを拒
+N-4	条	constitution.yaml	13fda72a	判断の記録と裁定 id を伴わない改憲をしない
+N-4.1	規範文	constitution.yaml	8a92790c	条文の改訂が、判断の記録・裁定 id・承認の逐語のいずれかを欠くなら、そ
+N-4.2	規範文	constitution.yaml	3f929cb4	同じ版の中で schema の互換を壊す変更があったら、それを拒む。
+N-5	条	constitution.yaml	97f999a6	文書の種類ごとの AI 係や app ごとの表示の仕組みを作らない
+N-5.1	規範文	constitution.yaml	57f67582	変更が文書の型ごとの AI 係（agent）や検査の観点（lens）を増
+N-5.2	規範文	constitution.yaml	447ff376	変更が app ごとの表示の仕組みを増設するなら、それを拒む。
+N-6	条	constitution.yaml	db76f24f	見せる先を、同じ端末の中と tailnet の中より外へ広げない
+N-6.1	規範文	constitution.yaml	55d14949	配信（serve）と表示 server の接続先（bind 先）が、同じ
+N-6.2	規範文	constitution.yaml	51140420	配信の出力と、台帳と設計文書の中身を、認証なしの公開ネットに晒さない。
+N-7	条	constitution.yaml	43dafbd2	host 固有の値で code を分岐しない
+N-7.1	規範文	constitution.yaml	622ffa0a	code が host 固有の値で分岐するなら、それを拒む。
+N-7.2	規範文	constitution.yaml	bcd5338e	host ごとの値は宣言 file（manifest）に置く。
+NFR1	非機能要件	srs.yaml	50d6f3b7	面の受入 12 条
+NFR2	非機能要件	srs.yaml	50be19b3	更新の遅れ
+NFR3	非機能要件	srs.yaml	34b407da	依存の予算と見せる先
+P-1	条	constitution.yaml	2049c245	規則は型付きデータに置き、番号で呼ぶ
+P-1.1	規範文	constitution.yaml	23a3112c	規則・閾値・型の一覧は型付きデータ（正本 YAML・規則の表の行・宣言 
+P-1.2	規範文	constitution.yaml	650e203b	文書と台帳からは、規則を id で参照する。
+P-1.3	規範文	constitution.yaml	d5cb7b70	台帳はタスクと裁定の記帳先であり、規則を置かない。
+P-1.4	規範文	constitution.yaml	ed357b70	原則と裁定の正本は設計文書、機械が執行する規則の正本は型付きデータとし、
+P-1.5	規範文	constitution.yaml	58038b6c	実装の型付きの定数を規則の正本とするあいだ、その写しを人が読める型付きデ
+P-1.6	規範文	constitution.yaml	c87c322c	規則の種類は閉じた 1 つの型の枝（variant）として表し、網羅の検
+P-10	条	constitution.yaml	7a1cf226	同じ穴が繰り返したら、止めて人へ渡す
+P-10.1	規範文	constitution.yaml	00dc029a	同じ種類の失敗が規則の表の行 R-3 の回数を超えたとき、自動の修正を続
+P-11	条	constitution.yaml	72bddea4	席の停止は機械が検知し、再開し、結果を保つ
+P-11.1	規範文	constitution.yaml	564af2f9	席が止まったとき、器は人手を待たずにそれを検知し、席の仕事を再開し、その
+P-11.2	規範文	constitution.yaml	4a2cd362	便の終端は札の不在で推さず、終端の記録（event）で持つ。
+P-12	条	constitution.yaml	8daeeacc	承認は 1 つの面から、言葉どおりに残す
+P-12.1	規範文	constitution.yaml	31e06f06	持ち主の承認は、規則の表の行 R-8 が指す 1 つの対話面を通ったもの
+P-12.2	規範文	constitution.yaml	816f19f0	受け取った承認は、逐語と日付と裁定 id を添えて台帳の記帳と文書の承認
+P-12.3	規範文	constitution.yaml	2050051b	会話の記憶を承認の根拠にしない。
+P-13	条	constitution.yaml	218d0cbe	憲法と役割を席の手元へ写す（注入）
+P-13.1	規範文	constitution.yaml	905fc070	注入の命令を実行したとき、憲法の前文と規範文を持つ条と席の役割の指示文を
+P-13.2	規範文	constitution.yaml	9759a371	注入の検査は生成区間と正本の差分を検出し、差があれば失敗で終える。
+P-13.3	規範文	constitution.yaml	11f52626	生成区間の総バイト数は規則の表の行 R-1 以下に収める。
+P-14	条	constitution.yaml	ec904985	逸脱は編集の時点で止める（極性一覧）
+P-14.1	規範文	constitution.yaml	7a3f42c7	編集が設計文書か契約か規則の表と食い違うとき、その編集を編集の時点で止め
+P-14.2	規範文	constitution.yaml	8cf20cf7	事後の検査を、編集の時点で止めることの代わりにしない。
+P-14.3	規範文	constitution.yaml	bb65891e	止める仕掛け（guard）は「開く／閉じる」の極性と「編集時／事後」の別
+P-14.4	規範文	constitution.yaml	2129fbf7	編集の時点で止める guard が 1 本も無い構成なら、検査がそれを落
+P-15	条	constitution.yaml	9f0b8141	自動の仕掛けに寄りかからない
+P-15.1	規範文	constitution.yaml	770f92fe	自動で走る仕掛け（hook）を「守られる保証」として設計しない。
+P-15.2	規範文	constitution.yaml	5dbf46d1	編集の時点で止める仕掛けを持つときは、その判定の式を事後の検査が同じ関数
+P-16	条	constitution.yaml	db549072	席のモデルは名指しで決め、込み入った設計判断には相談の窓を使える
+P-16.1	規範文	constitution.yaml	28b53216	席ごとの AI モデルと念入りさは、要件書の制約で名指す。
+P-16.2	規範文	constitution.yaml	47d36850	道具（並列実行・便・作業者）の内側には最上位のモデルを求めない。
+P-16.3	規範文	constitution.yaml	9bc48e80	込み入った設計判断では、持ち主が選んだモデルで動く相談の窓の所見を材料に
+P-17	条	constitution.yaml	afcd8c52	数値の表を変えるときは、裁定 id を行に付ける
+P-17.1	規範文	constitution.yaml	56cc0a51	規則の表（R-n・D-n）の行の追加・変更は、裁定 id と時刻を行に付
+P-17.2	規範文	constitution.yaml	4c1b1b1e	裁定 id の無い規則の表の行の変更があったら、検査がそれを落とす。
+P-17.3	規範文	constitution.yaml	b42bbe24	初版の行は、この憲法の発効の承認を裁定とみなし、発効時にその id と時
+P-17.4	規範文	constitution.yaml	45603a32	振る舞いを縛る閾値行（deny 種別）の値を緩めるとき、A-2.3 の検
+P-18	条	constitution.yaml	4654f606	設計文書の提示層は単一の生成器が所有する
+P-18.1	規範文	constitution.yaml	b70cd503	設計文書の人が読むページはすべて 1 つの生成器から出力する。
+P-18.2	規範文	constitution.yaml	1e4cd78f	手書きのページを配信先と入口の導線に置かない。
+P-18.3	規範文	constitution.yaml	f8b98c07	色・字の大きさ・余白の元の値（design token）は 1 か所で定
+P-18.4	規範文	constitution.yaml	4ccb78ea	部品・図の型・密度 profile は閉じた一覧（部品目録）で持ち、追加
+P-19	条	constitution.yaml	8168496e	道具と器は判断を代行しない
+P-19.1	規範文	constitution.yaml	e0099cd9	道具は文書を生成し、機械で検査し、結果を知らせるところまでを担う。
+P-19.2	規範文	constitution.yaml	4c13b375	道具と器は要否・採否の最終判断を代行する機能を持たない。
+P-2	条	constitution.yaml	f6cc2fc1	正本は 1 つ、ほかはそこから導出する
+P-2.1	規範文	constitution.yaml	cef3a393	設計文書の正本は YAML の 1 file であり、人が読むページも席
+P-2.2	規範文	constitution.yaml	cdbe4843	生成物を手で直さない。
+P-2.3	規範文	constitution.yaml	9a4464a9	同じ内容を 2 つの面が持つとき、一方を正本とし、他方は導出する。
+P-2.4	規範文	constitution.yaml	f02fb0b6	2 つの面を人が書き、一致を検査で強制する設計を採らない。
+P-20	条	constitution.yaml	22dbc751	状態は 1 つの database に置き、描画を読まない
+P-20.1	規範文	constitution.yaml	5d655c3f	host・口座・席・貸出・退役の状態は host の列を持つ 1 つの 
+P-20.2	規範文	constitution.yaml	6521bca1	host ごとの dir・TSV・cache に真実を置かない。
+P-20.3	規範文	constitution.yaml	759accd1	器は席の状態を描画からでなく構造（hook・状態 file・SDK の口
+P-21	条	constitution.yaml	e5319e70	選定・除外・経路は 1 関数 1 列挙で
+P-21.1	規範文	constitution.yaml	d9804dbf	選定・除外・経路づけはそれぞれ 1 つの列挙（enum）の上の 1 つの
+P-21.2	規範文	constitution.yaml	9e9a767e	順序についての散文の注を持たない。
+P-22	条	constitution.yaml	442db82f	大きさの上限は CI が実測して落とす
+P-22.1	規範文	constitution.yaml	acb61c2b	core の総行数・module の行数・歯と source の行数比・
+P-22.2	規範文	constitution.yaml	dfc8e0f9	粒度の lint を allow の属性で黙らせない。
+P-22.3	規範文	constitution.yaml	a3acccff	上限の変更は A-2 だけを通す。
+P-23	条	constitution.yaml	dddec563	予算は実測からしか作れず、起動の口は 1 つ
+P-23.1	規範文	constitution.yaml	7890f620	予算（Budget）は事前の実測（Precheck）を消費してしか作れな
+P-23.2	規範文	constitution.yaml	fefad526	席や便を起こす口は 1 つだけとし、その口は予算を要る。
+P-23.3	規範文	constitution.yaml	11a43911	消費は 1 つの追記だけの記録に残す。
+P-24	条	constitution.yaml	a1007a70	危ない書き方は lint で禁じる
+P-24.1	規範文	constitution.yaml	759a337e	規則の表の行 R-10 の一覧にある書き方（unwrap・expect・
+P-24.2	規範文	constitution.yaml	347d57a8	unsafe な code を禁じ、使わない must-use の値を 
+P-24.3	規範文	constitution.yaml	5f0ea03b	lint の例外は書いた理由を持つ expect の属性だけで許し、歯の
+P-25	条	constitution.yaml	e3b3e692	歯は 1 つの枠組みで持ち、外形は写しで守る
+P-25.1	規範文	constitution.yaml	3f7c30e9	歯（test）は Rust の 1 つの枠組みだけで書き、shell の
+P-25.2	規範文	constitution.yaml	eadf7eaf	外形（命令の出力・生成した文書・極性一覧）は凍結した写し（snapsho
+P-25.3	規範文	constitution.yaml	3ee312af	変異生存率は規則の表の行 R-9 の間隔で記録し、deny への昇格は裁
+P-25.4	規範文	constitution.yaml	d0ca2496	落ちたままの歯の台帳（KNOWN-RED）を持たない。
+P-26	条	constitution.yaml	ead0977a	依存と compile に予算を持つ
+P-26.1	規範文	constitution.yaml	85cd3463	依存は許可の一覧と予算（規則の表の行 R-2）で管理し、追加は予算の範囲
+P-26.2	規範文	constitution.yaml	8106530e	derive の macro は境界の crate に閉じ、機能の全部を
+P-26.3	規範文	constitution.yaml	f36c9ecc	core は非同期（async）の実行系を持たない。
+P-26.4	規範文	constitution.yaml	1a20b25b	compile の秒数は規則の表の行 R-5 の検出線として記録し、悪化
+P-27	条	constitution.yaml	b37c21b2	決定はしごを段の順に通る
+P-27.1	規範文	constitution.yaml	41caaa50	変更を提案・実装するとき、決定はしご（要るか → 既に在るか → 標準 
+P-27.2	規範文	constitution.yaml	48e91d19	走査・記録・規則の表の行・仕掛けを足す提案は、先に消すものを名指す。
+P-3	条	constitution.yaml	259f86e1	番号は増やすだけ（append only）
+P-3.1	規範文	constitution.yaml	94a9e87a	要件・条文・判断・受入基準・契約の id を再利用・改番しない。
+P-3.2	規範文	constitution.yaml	f3ec5f50	廃止は状態（status）で表し、番号は空けたままにする。
+P-4	条	constitution.yaml	ce799024	撤退条件を決定と同時に書く
+P-4.1	規範文	constitution.yaml	8719916a	取り消しにくい判断（判断の記録）には、それを捨てる条件を同時に書く。
+P-5	条	constitution.yaml	0cf74f25	拘束するのは設計文書、前の版は道具
+P-5.1	規範文	constitution.yaml	f087113a	v3 の開発を拘束するのは設計文書（design-intent）である。
+P-5.2	規範文	constitution.yaml	121c2d8c	前の版（scribe2・folio2）を、受入の物差し役にも停止権の持ち
+P-5.3	規範文	constitution.yaml	9ece66a4	設計文書の変更は、判断の記録か版付きの文書として残す。
+P-6	条	constitution.yaml	c9210710	検査は二層 — 機械の床と AI の天井
+P-6.1	規範文	constitution.yaml	7df4f760	機械で決定的に検査できる項目は床に置く。
+P-6.2	規範文	constitution.yaml	2e49995a	意味の検査（読みやすさ・忠実さ・契約の審査）は AI の天井に置く。
+P-6.3	規範文	constitution.yaml	604ac5e0	床の合格を、完成や天井の合格として扱わない。
+P-7	条	constitution.yaml	413cb102	黙って飛ばさない（fail-closed）
+P-7.1	規範文	constitution.yaml	2094fb7e	検査・生成・便の実行ができなかった結果を「異常なし」として扱わない。
+P-7.2	規範文	constitution.yaml	75b45a50	判定できないものは「まだ分からない」として表に出す。
+P-7.3	規範文	constitution.yaml	7bdc154e	断るときは何を断ったかと次の 1 手を名指す。
+P-8	条	constitution.yaml	d0f7a538	値の出所を型で弁別する
+P-8.1	規範文	constitution.yaml	cc86d2a1	宣言した値・出所つきで測った値・導出した値・効いている値を型で区別する。
+P-8.2	規範文	constitution.yaml	294f70f4	宣言した値を効いている値へ昇格させるのは測定を通したときだけとする。
+P-9	条	constitution.yaml	69f30c07	検査の物差しを、検査されるものから独立に持つ
+P-9.1	規範文	constitution.yaml	e19e4631	検査は、生成側からも検査側からも独立した凍結 anchor（固定の fi
+P-9.2	規範文	constitution.yaml	607fac70	生成物どうしの突き合わせを唯一の合格判定にしない。
+P-9.3	規範文	constitution.yaml	aa1e4b24	anchor が維持できなくなった検査の結果は「まだ分からない」に落とす
+R-1	規則行	rules.yaml	a5c262e4	席の手元の生成区間（CLAUDE.md と SessionStart の
+R-10	規則行	rules.yaml	0629c36f	lint で deny にする書き方の一覧
+R-11	規則行	rules.yaml	26635ce3	編集の時点で止める guard（極性一覧で stage = in-loo
+R-12	規則行	rules.yaml	f046c249	AI へ常時渡す説明文の合計（器と道具が所有する AI 係と skill
+R-16	規則行	rules.yaml	9f249e30	設計ノートの散文の門（規範の印の一覧と、印を持つ文に許さない「数と単位」
+R-17	規則行	rules.yaml	8db8909b	散文（注や平易文など）で別の行を指したのに、指した行と指された行のどちら
+R-18	規則行	rules.yaml	f6f9b2dd	台帳の判定の閾値（滞り・積み増し・停滞）
+R-19	規則行	rules.yaml	78dac887	文の予算（「?」の注釈・hover の card・経験者向けの 1 行・
+R-2	規則行	rules.yaml	88122844	依存の予算（直接依存の本数・1 PR に足せる本数・増分 check の
+R-20	規則行	rules.yaml	65d174d4	hover の置き場と近傍の大きさ
+R-21	規則行	rules.yaml	a698cb30	更新の遅れ（器の event から面まで・問いの合図・周期の読み・席の受
+R-22	規則行	rules.yaml	9841b580	席の健康と退避の残り秒（器の値の写し）
+R-23	規則行	rules.yaml	2f8149d6	面の受入 12 条（歯が数える）
+R-24	規則行	rules.yaml	a4033fb9	次の一手の閉じた 7 種と順
+R-25	規則行	rules.yaml	4b15ece0	面の crate の直接依存の予算（core と別枠）
+R-3	規則行	rules.yaml	971e9a8a	同じ種類の失敗の繰り返し上限（超えたら止めて人へ）
+R-4	規則行	rules.yaml	c4615824	大きさの上限（core の総行数・1 module の行数・歯と sou
+R-5	規則行	rules.yaml	ef0a23a2	compile の検出線（増分 check の秒数・CI の分数・lin
+R-6	規則行	rules.yaml	fe66bddd	1 run の token の上限と検知
+R-7	規則行	rules.yaml	ca7c5fda	席の停止の検知条件と再起動先・新規投入の線
+R-8	規則行	rules.yaml	6cc6ddd2	承認の対話面（どの対話面を通った承認を受け取るか）
+R-9	規則行	rules.yaml	9b3e18d5	変異生存率の記録の間隔（deny 化の裁定材料）
+boards	出力	srs.yaml	6a930dc7	2 つの面（project board と account board）
+graph	出力	srs.yaml	42ea4cb9	導出グラフ（毎回組み直す・repo に書かない）
+orchestrator	登場人物	srs.yaml	b741b73f	席（orchestrator と相談の窓 consult）
+owner	登場人物	srs.yaml	791002ea	持ち主（非エンジニア）
+ruling	出力	srs.yaml	b3970b1b	裁定の記帳（台帳の notes の定型行 + 器の event）
+stage	出力	srs.yaml	39553b30	表示面（端末の Chrome の窓）
+terminal	登場人物	srs.yaml	945bd8de	持ち主の端末
+tsuzuri	登場人物	srs.yaml	16b4ca99	tsuzuri（tz の口・面の server・床）
+vessel	登場人物	srs.yaml	3e14ee79	器（今は scribe2・合流後は tz）
+# 辺（1 行 = 端 / 端 / 型・タブ区切り）
+A-1	A-1.1	in-article
+A-1	A-1.2	in-article
+A-1	R-8	relations.rules
+A-1.1	A-1	in-article
+A-1.2	A-1	in-article
+A-2	A-2.1	in-article
+A-2	A-2.2	in-article
+A-2	A-2.3	in-article
+A-2.1	A-2	in-article
+A-2.2	A-2	in-article
+A-2.3	A-2	in-article
+A-3	A-3.1	in-article
+A-3	R-2	relations.rules
+A-3.1	A-3	in-article
+A-4	A-4.1	in-article
+A-4	A-4.2	in-article
+A-4	A-4.3	in-article
+A-4.1	A-4	in-article
+A-4.2	A-4	in-article
+A-4.3	A-4	in-article
+AC1	FR6	verifies
+AC1	FR7	verifies
+AC1	FR8	verifies
+AC1	FR9	verifies
+AC1	NFR2	verifies
+AC10	FR12	verifies
+AC11	FR12	verifies
+AC12	FR13	verifies
+AC12	FR15	verifies
+AC13	FR16	verifies
+AC14	FR17	verifies
+AC15	FR18	verifies
+AC16	FR19	verifies
+AC17	FR20	verifies
+AC2	FR7	verifies
+AC3	FR7	verifies
+AC4	FR2	verifies
+AC4	FR5	verifies
+AC5	FR3	verifies
+AC6	FR4	verifies
+AC7	FR10	verifies
+AC7	FR3	verifies
+AC8	FR2	verifies
+AC9	FR1	verifies
+AC9	FR11	verifies
+AC9	FR14	verifies
+AC9	FR5	verifies
+AC9	NFR1	verifies
+AC9	NFR3	verifies
+ADR-1	P-1	basis
+ADR-10	ADR-7	basis
+ADR-10	N-2	basis
+ADR-10	P-12	basis
+ADR-10	P-16	basis
+ADR-10	P-19	basis
+ADR-10	P-20	basis
+ADR-10	P-7	basis
+ADR-11	ADR-5	basis
+ADR-11	N-5	basis
+ADR-11	N-6	basis
+ADR-11	N-7	basis
+ADR-12	A-2	basis
+ADR-12	ADR-10	basis
+ADR-12	N-4	basis
+ADR-12	P-16	amends
+ADR-12	P-16	basis
+ADR-2	P-1	basis
+ADR-3	ADR-2	basis
+ADR-3	P-1	basis
+ADR-4	ADR-2	basis
+ADR-4	ADR-3	basis
+ADR-4	P-1	basis
+ADR-5	ADR-3	basis
+ADR-5	ADR-4	basis
+ADR-5	N-5	basis
+ADR-5	N-6	basis
+ADR-5	N-7	basis
+ADR-5	P-27	basis
+ADR-6	ADR-4	basis
+ADR-6	N-3	basis
+ADR-6	N-7	basis
+ADR-6	P-27	basis
+ADR-7	ADR-3	basis
+ADR-7	ADR-4	basis
+ADR-7	ADR-5	basis
+ADR-7	N-2	basis
+ADR-7	N-5	basis
+ADR-7	N-6	basis
+ADR-7	P-12	basis
+ADR-7	P-19	basis
+ADR-7	P-2	basis
+ADR-7	P-20	basis
+ADR-7	P-6	basis
+ADR-7	P-7	basis
+ADR-8	ADR-4	basis
+ADR-8	ADR-6	basis
+ADR-8	ADR-7	basis
+ADR-8	N-3	basis
+ADR-8	P-27	basis
+ADR-9	A-1	basis
+ADR-9	ADR-5	basis
+ADR-9	ADR-7	basis
+ADR-9	N-1	basis
+ADR-9	N-5	basis
+ADR-9	N-6	basis
+ADR-9	P-12	basis
+ADR-9	P-19	basis
+ADR-9	P-7	basis
+CON1	P-1	basis
+CON2	P-1	basis
+CON3	N-2	basis
+CON3	P-14	basis
+CON4	P-6	basis
+CON5	N-6	basis
+CON6	ADR-10	adrs
+CON6	ADR-12	adrs
+CON6	P-16	basis
+D-1	P-16	article
+D-2	P-7	article
+D-3	P-12	article
+D-3	R-8	refs
+D-4	N-6	article
+FR1	AC9	verify.ac
+FR1	ADR-7	adrs
+FR1	GOAL1	goals
+FR1	GOAL3	goals
+FR1	P-2	basis
+FR10	AC7	verify.ac
+FR10	ADR-7	adrs
+FR10	GOAL2	goals
+FR10	N-2	basis
+FR10	P-19	basis
+FR11	AC9	verify.ac
+FR11	ADR-7	adrs
+FR11	GOAL1	goals
+FR11	GOAL3	goals
+FR11	P-2	basis
+FR11	R-24	rules
+FR12	AC10	verify.ac
+FR12	AC11	verify.ac
+FR12	ADR-7	adrs
+FR12	GOAL3	goals
+FR12	N-2	basis
+FR12	N-7	basis
+FR12	R-22	rules
+FR13	AC12	verify.ac
+FR13	ADR-7	adrs
+FR13	GOAL2	goals
+FR13	GOAL3	goals
+FR13	N-2	basis
+FR13	P-19	basis
+FR13	R-18	rules
+FR14	AC9	verify.ac
+FR14	ADR-7	adrs
+FR14	GOAL1	goals
+FR14	P-2	basis
+FR14	R-19	rules
+FR14	R-20	rules
+FR15	AC12	verify.ac
+FR15	ADR-7	adrs
+FR15	GOAL2	goals
+FR15	N-2	basis
+FR15	P-6	basis
+FR16	AC13	verify.ac
+FR16	ADR-5	adrs
+FR16	ADR-7	adrs
+FR16	GOAL4	goals
+FR16	N-5	basis
+FR16	N-6	basis
+FR16	N-7	basis
+FR17	AC14	verify.ac
+FR17	ADR-8	adrs
+FR17	GOAL4	goals
+FR17	N-3	basis
+FR17	P-27	basis
+FR18	AC15	verify.ac
+FR18	ADR-9	adrs
+FR18	GOAL1	goals
+FR18	GOAL4	goals
+FR18	N-6	basis
+FR18	P-12	basis
+FR18	P-7	basis
+FR19	AC16	verify.ac
+FR19	ADR-10	adrs
+FR19	ADR-12	adrs
+FR19	GOAL1	goals
+FR19	GOAL2	goals
+FR19	N-2	basis
+FR19	P-12	basis
+FR19	P-16	basis
+FR19	P-19	basis
+FR19	P-7	basis
+FR2	AC4	verify.ac
+FR2	AC8	verify.ac
+FR2	ADR-7	adrs
+FR2	GOAL2	goals
+FR2	N-2	basis
+FR2	P-19	basis
+FR2	P-6	basis
+FR20	AC17	verify.ac
+FR20	ADR-11	adrs
+FR20	GOAL4	goals
+FR20	N-5	basis
+FR20	N-6	basis
+FR20	N-7	basis
+FR3	AC5	verify.ac
+FR3	AC7	verify.ac
+FR3	ADR-7	adrs
+FR3	GOAL2	goals
+FR3	P-19	basis
+FR3	P-4	basis
+FR4	AC6	verify.ac
+FR4	ADR-7	adrs
+FR4	GOAL2	goals
+FR4	P-14	basis
+FR4	P-19	basis
+FR5	AC4	verify.ac
+FR5	AC9	verify.ac
+FR5	ADR-7	adrs
+FR5	GOAL2	goals
+FR5	N-5	basis
+FR5	P-2	basis
+FR5	R-20	rules
+FR6	AC1	verify.ac
+FR6	ADR-7	adrs
+FR6	GOAL1	goals
+FR6	P-12	basis
+FR6	P-19	basis
+FR7	A-1	basis
+FR7	AC1	verify.ac
+FR7	AC2	verify.ac
+FR7	AC3	verify.ac
+FR7	ADR-7	adrs
+FR7	GOAL1	goals
+FR7	P-12	basis
+FR8	AC1	verify.ac
+FR8	ADR-7	adrs
+FR8	GOAL1	goals
+FR8	P-12	basis
+FR9	AC1	verify.ac
+FR9	ADR-7	adrs
+FR9	GOAL1	goals
+FR9	P-12	basis
+FR9	P-14	basis
+FR9	R-21	rules
+N-1	N-1.1	in-article
+N-1	N-1.2	in-article
+N-1.1	N-1	in-article
+N-1.2	N-1	in-article
+N-2	N-2.1	in-article
+N-2	N-2.2	in-article
+N-2	R-16	relations.rules
+N-2	R-17	relations.rules
+N-2.1	N-2	in-article
+N-2.2	N-2	in-article
+N-3	N-3.1	in-article
+N-3.1	N-3	in-article
+N-4	N-4.1	in-article
+N-4	N-4.2	in-article
+N-4.1	N-4	in-article
+N-4.2	N-4	in-article
+N-5	N-5.1	in-article
+N-5	N-5.2	in-article
+N-5.1	N-5	in-article
+N-5.2	N-5	in-article
+N-6	D-4	relations.rules
+N-6	N-6.1	in-article
+N-6	N-6.2	in-article
+N-6.1	N-6	in-article
+N-6.2	N-6	in-article
+N-7	N-7.1	in-article
+N-7	N-7.2	in-article
+N-7.1	N-7	in-article
+N-7.2	N-7	in-article
+NFR1	AC9	verify.ac
+NFR1	ADR-7	adrs
+NFR1	GOAL1	goals
+NFR1	N-6	basis
+NFR1	P-2	basis
+NFR1	R-23	rules
+NFR2	AC1	verify.ac
+NFR2	ADR-7	adrs
+NFR2	GOAL1	goals
+NFR2	P-4	basis
+NFR2	R-21	rules
+NFR3	AC9	verify.ac
+NFR3	ADR-3	adrs
+NFR3	GOAL4	goals
+NFR3	N-6	basis
+NFR3	P-26	basis
+NFR3	R-2	rules
+NFR3	R-25	rules
+P-1	P-1.1	in-article
+P-1	P-1.2	in-article
+P-1	P-1.3	in-article
+P-1	P-1.4	in-article
+P-1	P-1.5	in-article
+P-1	P-1.6	in-article
+P-1	R-16	relations.rules
+P-1.1	P-1	in-article
+P-1.2	P-1	in-article
+P-1.3	P-1	in-article
+P-1.4	P-1	in-article
+P-1.5	P-1	in-article
+P-1.6	P-1	in-article
+P-10	P-10.1	in-article
+P-10	R-3	relations.rules
+P-10.1	P-10	in-article
+P-11	P-11.1	in-article
+P-11	P-11.2	in-article
+P-11	R-7	relations.rules
+P-11.1	P-11	in-article
+P-11.2	P-11	in-article
+P-12	D-3	relations.rules
+P-12	P-12.1	in-article
+P-12	P-12.2	in-article
+P-12	P-12.3	in-article
+P-12	R-8	relations.rules
+P-12.1	P-12	in-article
+P-12.2	P-12	in-article
+P-12.3	P-12	in-article
+P-13	P-13.1	in-article
+P-13	P-13.2	in-article
+P-13	P-13.3	in-article
+P-13	R-1	relations.rules
+P-13.1	P-13	in-article
+P-13.2	P-13	in-article
+P-13.3	P-13	in-article
+P-14	P-14.1	in-article
+P-14	P-14.2	in-article
+P-14	P-14.3	in-article
+P-14	P-14.4	in-article
+P-14	R-11	relations.rules
+P-14.1	P-14	in-article
+P-14.2	P-14	in-article
+P-14.3	P-14	in-article
+P-14.4	P-14	in-article
+P-15	P-15.1	in-article
+P-15	P-15.2	in-article
+P-15.1	P-15	in-article
+P-15.2	P-15	in-article
+P-16	ADR-12	amended_by
+P-16	D-1	relations.rules
+P-16	P-16.1	in-article
+P-16	P-16.2	in-article
+P-16	P-16.3	in-article
+P-16.1	P-16	in-article
+P-16.2	P-16	in-article
+P-16.3	P-16	in-article
+P-17	P-17.1	in-article
+P-17	P-17.2	in-article
+P-17	P-17.3	in-article
+P-17	P-17.4	in-article
+P-17.1	P-17	in-article
+P-17.2	P-17	in-article
+P-17.3	P-17	in-article
+P-17.4	P-17	in-article
+P-18	P-18.1	in-article
+P-18	P-18.2	in-article
+P-18	P-18.3	in-article
+P-18	P-18.4	in-article
+P-18.1	P-18	in-article
+P-18.2	P-18	in-article
+P-18.3	P-18	in-article
+P-18.4	P-18	in-article
+P-19	P-19.1	in-article
+P-19	P-19.2	in-article
+P-19.1	P-19	in-article
+P-19.2	P-19	in-article
+P-2	P-2.1	in-article
+P-2	P-2.2	in-article
+P-2	P-2.3	in-article
+P-2	P-2.4	in-article
+P-2	R-18	relations.rules
+P-2	R-19	relations.rules
+P-2	R-20	relations.rules
+P-2	R-21	relations.rules
+P-2	R-22	relations.rules
+P-2	R-23	relations.rules
+P-2	R-24	relations.rules
+P-2.1	P-2	in-article
+P-2.2	P-2	in-article
+P-2.3	P-2	in-article
+P-2.4	P-2	in-article
+P-20	P-20.1	in-article
+P-20	P-20.2	in-article
+P-20	P-20.3	in-article
+P-20.1	P-20	in-article
+P-20.2	P-20	in-article
+P-20.3	P-20	in-article
+P-21	P-21.1	in-article
+P-21	P-21.2	in-article
+P-21.1	P-21	in-article
+P-21.2	P-21	in-article
+P-22	P-22.1	in-article
+P-22	P-22.2	in-article
+P-22	P-22.3	in-article
+P-22	R-4	relations.rules
+P-22.1	P-22	in-article
+P-22.2	P-22	in-article
+P-22.3	P-22	in-article
+P-23	P-23.1	in-article
+P-23	P-23.2	in-article
+P-23	P-23.3	in-article
+P-23	R-6	relations.rules
+P-23.1	P-23	in-article
+P-23.2	P-23	in-article
+P-23.3	P-23	in-article
+P-24	P-24.1	in-article
+P-24	P-24.2	in-article
+P-24	P-24.3	in-article
+P-24	R-10	relations.rules
+P-24.1	P-24	in-article
+P-24.2	P-24	in-article
+P-24.3	P-24	in-article
+P-25	P-25.1	in-article
+P-25	P-25.2	in-article
+P-25	P-25.3	in-article
+P-25	P-25.4	in-article
+P-25	R-9	relations.rules
+P-25.1	P-25	in-article
+P-25.2	P-25	in-article
+P-25.3	P-25	in-article
+P-25.4	P-25	in-article
+P-26	P-26.1	in-article
+P-26	P-26.2	in-article
+P-26	P-26.3	in-article
+P-26	P-26.4	in-article
+P-26	R-2	relations.rules
+P-26	R-25	relations.rules
+P-26	R-5	relations.rules
+P-26.1	P-26	in-article
+P-26.2	P-26	in-article
+P-26.3	P-26	in-article
+P-26.4	P-26	in-article
+P-27	P-27.1	in-article
+P-27	P-27.2	in-article
+P-27.1	P-27	in-article
+P-27.2	P-27	in-article
+P-3	P-3.1	in-article
+P-3	P-3.2	in-article
+P-3.1	P-3	in-article
+P-3.2	P-3	in-article
+P-4	P-4.1	in-article
+P-4.1	P-4	in-article
+P-5	P-5.1	in-article
+P-5	P-5.2	in-article
+P-5	P-5.3	in-article
+P-5.1	P-5	in-article
+P-5.2	P-5	in-article
+P-5.3	P-5	in-article
+P-6	P-6.1	in-article
+P-6	P-6.2	in-article
+P-6	P-6.3	in-article
+P-6	R-12	relations.rules
+P-6.1	P-6	in-article
+P-6.2	P-6	in-article
+P-6.3	P-6	in-article
+P-7	D-2	relations.rules
+P-7	P-7.1	in-article
+P-7	P-7.2	in-article
+P-7	P-7.3	in-article
+P-7.1	P-7	in-article
+P-7.2	P-7	in-article
+P-7.3	P-7	in-article
+P-8	P-8.1	in-article
+P-8	P-8.2	in-article
+P-8.1	P-8	in-article
+P-8.2	P-8	in-article
+P-9	P-9.1	in-article
+P-9	P-9.2	in-article
+P-9	P-9.3	in-article
+P-9.1	P-9	in-article
+P-9.2	P-9	in-article
+P-9.3	P-9	in-article
+R-1	P-13	article
+R-10	P-24	article
+R-11	P-14	article
+R-12	P-6	article
+R-16	N-2	article
+R-17	N-2	article
+R-18	ADR-7	refs
+R-18	FR13	refs
+R-18	P-2	article
+R-19	ADR-7	refs
+R-19	FR14	refs
+R-19	P-2	article
+R-2	ADR-3	refs
+R-2	P-26	article
+R-20	ADR-7	refs
+R-20	FR14	refs
+R-20	FR5	refs
+R-20	P-2	article
+R-21	ADR-7	refs
+R-21	FR9	refs
+R-21	NFR2	refs
+R-21	P-2	article
+R-22	ADR-7	refs
+R-22	FR12	refs
+R-22	P-2	article
+R-23	AC9	refs
+R-23	ADR-7	refs
+R-23	NFR1	refs
+R-23	P-2	article
+R-24	ADR-7	refs
+R-24	FR11	refs
+R-24	P-2	article
+R-25	ADR-3	refs
+R-25	NFR3	refs
+R-25	P-26	article
+R-25	R-2	refs
+R-3	P-10	article
+R-4	P-22	article
+R-5	P-26	article
+R-6	P-23	article
+R-7	P-11	article
+R-8	P-12	article
+R-9	P-25	article
+# 節点 236・辺 518・型 12・端が節点でない参照 0

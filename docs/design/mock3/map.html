@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tsuzuri — 地図（mock v3）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<main class="page" id="app"></main>
+<script src="ui.js"></script>
+<script>
+TZ.boot('map', function (G) {
+  var esc = TZ.esc, L = TZ.L, IC = TZ.IC, BANDS = TZ.BANDS, bc = TZ.bandCls;
+  var N = G.data.nodes.filter(function (n) { return n.repo === 't3'; });   // 地図は tsuzuri だけ
+  var SUM = null; // 要約は TZ.summaryOf で引く
+  var natural = function (a, b) { return String(a).localeCompare(String(b), 'ja', { numeric: true }); };
+  var srcLine = function (n) { return (n.src && n.src.line) || 1e9; };
+  var byBand = {}; N.forEach(function (n) { (byBand[n.band] = byBand[n.band] || []).push(n); });
+  var VIEWS = [['compact', 'view_compact'], ['list', 'view_list'], ['graph', 'view_graph'], ['table', 'view_table']];
+  var qs = function () { return new URLSearchParams(location.search); };
+  var view = qs().get('view'); if (!VIEWS.some(function (v) { return v[0] === view; })) view = 'compact';
+  var app = document.getElementById('app');
+  app.innerHTML = '<div class="row" style="margin-bottom:16px">' + TZ.H('h1', 'map') + '<span class="chip num">' + N.length + '</span></div>' +
+    '<div class="tabs" role="tablist" aria-label="' + esc(L('views')) + '" data-term="views">' + VIEWS.map(function (v) {
+      return '<button type="button" role="tab" id="tab-' + v[0] + '" aria-controls="view" data-view="' + v[0] + '"><span class="hd" data-v="' + v[1] + '"><span class="hd-t" data-term="' + v[1] + '">' + esc(L(v[1])) + '</span></span></button>'; }).join('') + '</div>' +
+    '<div id="view" role="tabpanel"></div>';
+  function setURL(params, push) {
+    var u = new URL(location.href);
+    Object.keys(params).forEach(function (k) { if (params[k] == null || params[k] === '') u.searchParams.delete(k); else u.searchParams.set(k, params[k]); });
+    history[push ? 'pushState' : 'replaceState'](null, '', u);
+  }
+  function tag(n) { // (a) の札: id + 題
+    return '<a class="tag ' + bc(n.band) + (TZ.isOpenQ(n) ? ' open-q' : '') + (TZ.isSample(n) ? ' smp' : '') + '" href="' + TZ.href(n.key) + '" data-key="' + esc(n.key) + '"><span class="tid">' + TZ.nodeShape(n) + ' ' + esc(n.id) + '</span><span class="tt" data-t>' + esc(TZ.cut(n.title, 30)) + '</span></a>';
+  }
+
+  /* ---------- (a) 圧縮: 7 帯 × 札（id と順） ---------- */
+  function compact() {
+    var stmtOf = {}; (byBand.constitution || []).filter(function (s) { return s.kind === '規範文'; }).forEach(function (s) { var p = 't3:' + s.id.replace(/\.\d+$/, ''); (stmtOf[p] = stmtOf[p] || []).push(s); });
+    Object.keys(stmtOf).forEach(function (k) { stmtOf[k].sort(function (a, b) { return natural(a.id, b.id); }); });
+    function body(b) {
+      var list = byBand[b] || [];
+      if (b === 'constitution') {
+        var arts = list.filter(function (n) { return n.kind === '条'; }).sort(function (x, y) { return srcLine(x) - srcLine(y); });  // 憲法の順（file の順 = P → A → N）
+        return '<div class="cards7">' + arts.map(function (a) {
+          return '<div class="art7 ' + bc(b) + '"><a href="' + TZ.href(a.key) + '" data-key="' + esc(a.key) + '"><span class="tid">' + TZ.nodeShape(a) + ' ' + esc(a.id) + '</span><span class="tt" data-t>' + esc(a.title) + '</span></a>' +
+            '<div class="kids">' + (stmtOf[a.key] || []).map(function (s) { return '<a href="' + TZ.href(s.key) + '" data-key="' + esc(s.key) + '">' + esc(s.id) + '</a>'; }).join('') + '</div></div>';
+        }).join('') + '</div>';
+      }
+      if (b === 'rules') return '<div class="cards7">' + list.slice().sort(function (x, y) { return srcLine(x) - srcLine(y); }).map(tag).join('') + '</div>';
+      if (b === 'ADR') return '<div class="cards7">' + list.slice().sort(function (x, y) { return natural(x.id, y.id); }).map(tag).join('') + '</div>';
+      if (b === 'SRS') return list.length ? '<div class="cards7">' + list.slice().sort(function (x, y) { return natural(x.id, y.id); }).map(tag).join('') + '</div>' : '<div class="empty" data-card="srs0" tabindex="0">' + TZ.EN('k:要件') + '<b class="num">0</b></div>';
+      if (b === 'design-note') { // 設計ノートの行: ノートごと・file の順
+        var notes = {}; list.forEach(function (n) { (notes[n.attrs.note] = notes[n.attrs.note] || []).push(n); });
+        return '<div class="cards7">' + Object.keys(notes).sort().map(function (k) { return '<div class="subh">' + TZ.shape('design-note', { fill: true }) + '<span class="mono">' + esc(k) + '</span><span class="num muted">' + notes[k].length + '</span></div>' + notes[k].sort(function (x, y) { return srcLine(x) - srcLine(y); }).map(tag).join(''); }).join('') + '</div>';
+      }
+      if (b === 'pipeline') return '<div class="empty zrun" data-card="run0" tabindex="0">' + TZ.EN('run') + '<b class="num">0</b></div>';
+      var kinds = TZ.BEADS_LANES; // 近傍図と地図 (c) の種類の行と同じ順
+      return '<div class="cards7">' + kinds.map(function (k) {
+        var ks = list.filter(function (n) { return n.kind === k; }).sort(function (x, y) { return natural(x.id, y.id); });
+        return '<div class="subh">' + TZ.shape('beads', { fill: true }) + TZ.HS('k:' + k) + '<span class="num muted">' + ks.length + '</span></div>' + ks.map(tag).join('');
+      }).join('') + '</div>';
+    }
+    return '<div class="panel" style="margin-bottom:16px"><header>' + TZ.H('h2', 'bands') + '</header>' + TZ.legendHTML(BANDS, []) + '</div>' +
+      BANDS.map(function (b) {
+        var list = byBand[b] || [], ns = list.filter(TZ.isSample).length;
+        var cnt = list.length + (ns ? '<span class="smpn">（' + (ns === list.length ? '見本' : 'うち見本 ' + ns) + '）</span>' : '');
+        return '<section class="band ' + bc(b) + '"><header><span class="bn">' + TZ.HS('b:' + b) + '</span><code class="path">' + esc(TZ.BAND_PATH[b]) + '</code><span class="n">' + cnt + '</span></header>' + body(b) + '</section>';
+      }).join('');
+  }
+
+  /* ---------- (b) 一覧: id + 題 + 概要 1 行・帯と種類で絞る・並べ替え ---------- */
+  function list() {
+    var p = qs(), fb = p.get('band') || '', fk = p.get('kind') || '', sort = p.get('sort') || 'id', pair = p.get('pair') || '';
+    var rows = N.slice();
+    var pairNote = '';
+    if (pair) {
+      var ab = pair.split('|'), hit = {};
+      G.data.edges.forEach(function (e) { var a = G.byKey[e.from], b = G.byKey[e.to]; if (a && b && a.repo === 't3' && a.kind === ab[0] && b.kind === ab[1]) { hit[a.key] = 1; hit[b.key] = 1; } });
+      rows = rows.filter(function (n) { return hit[n.key]; });
+      pairNote = '<div class="pairnote">' + esc(TZ.kindLabel(ab[0])) + ' → ' + esc(TZ.kindLabel(ab[1])) + '<span class="chip num">' + rows.length + '</span><button type="button" class="btn ghost" id="pairclr">×</button></div>';
+    }
+    if (fb) rows = rows.filter(function (n) { return n.band === fb; });
+    if (fk) rows = rows.filter(function (n) { return n.kind === fk; });
+    var stRank = function (n) { var s = TZ.nodeState(n); return { ng: 0, open: 1, unknown: 2, ok: 3 }[s.cls] + ':' + s.label; };
+    rows.sort(sort === 'updated' ? function (a, b) { return String(b.updated || '').localeCompare(String(a.updated || '')) || natural(a.id, b.id); }
+      : sort === 'state' ? function (a, b) { return stRank(a).localeCompare(stRank(b)) || natural(a.id, b.id); }
+      : function (a, b) { return BANDS.indexOf(a.band) - BANDS.indexOf(b.band) || (a.band === 'constitution' || a.band === 'rules' ? srcLine(a) - srcLine(b) : natural(a.id, b.id)); });
+    var kinds = []; N.forEach(function (n) { if (kinds.indexOf(n.kind) < 0) kinds.push(n.kind); });
+    var sel = function (id, k, opts, cur) { return '<label>' + TZ.HS(k) + '<select id="' + id + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>'; };
+    var f = '<div class="filters">' + sel('fb', 'col_band', [['', '―']].concat(BANDS.map(function (b) { return [b, b]; })), fb) +
+      sel('fk', 'col_kind', [['', '―']].concat(kinds.map(function (k) { return [k, TZ.kindLabel(k)]; })), fk) +
+      sel('fs', 'sort', [['id', L('col_id')], ['updated', L('col_updated')], ['state', L('col_state')]], sort) + '<span class="chip num">' + rows.length + '</span></div>';
+    var li = rows.map(function (n) {
+      var s = TZ.summaryOf(n), g = s.plain || s.eng, st = TZ.nodeState(n);
+      return '<li>' + TZ.nodeShape(n) + '<div class="rowb"><span class="nid">' + esc(n.id) + '</span><a class="ttl nl" href="' + TZ.href(n.key) + '" data-key="' + esc(n.key) + '"><span data-t>' + esc(TZ.t36(n.title)) + '</span></a>' +
+        '<span class="meta">' + TZ.bandChip(n.band) + '<span>' + esc(TZ.kindLabel(n.kind)) + ' · ' + esc(st.label) + '</span><span class="num">' + (n.updated ? esc(n.updated.slice(5, 16).replace('T', ' ')) + 'Z' : '―') + '</span></span>' +
+        '<span class="gist' + (g ? '' : ' none') + '"' + (g ? ' data-t' : '') + '>' + (g ? esc(TZ.cut(g, 80)) : '要約なし') + '</span></div></li>';
+    }).join('');
+    return '<section class="panel">' + TZ.legendKey() + pairNote + f + '<ul class="items rows">' + li + '</ul></section>';
+  }
+
+  /* ---------- (c) グラフ: 帯で横に配置・最長路で列・hub は「子 n」に畳む・40 まで ---------- */
+  function graphModel() {
+    // 畳み: 条の文 → 条・question → 親の epic・あなたの決定 → 答えた question の畳み先
+    var rep = {}, kids = {};
+    N.forEach(function (n) { rep[n.key] = n.key; });
+    N.forEach(function (n) { if (n.kind === '規範文') { var p = 't3:' + n.id.replace(/\.\d+$/, ''); if (G.byKey[p]) rep[n.key] = p; } });
+    N.forEach(function (n) { if (n.kind === '問い' && n.attrs.parent && G.byKey['t3:' + n.attrs.parent]) rep[n.key] = 't3:' + n.attrs.parent; });
+    N.forEach(function (n) { if (n.kind === '裁定') { var q = (G.out[n.key] || []).filter(function (e) { return e.type === 'answers'; })[0]; if (q && rep[q.to]) rep[n.key] = rep[q.to]; } });
+    Object.keys(rep).forEach(function (k) { if (rep[k] !== k) kids[rep[k]] = (kids[rep[k]] || 0) + 1; });
+    var E = {}, deg = {};
+    G.data.edges.forEach(function (e) {
+      var a = G.byKey[e.from], b = G.byKey[e.to]; if (!a || !b || a.repo !== 't3' || b.repo !== 't3') return;
+      var up = TZ.upOf(G, e), down = up === e.from ? e.to : e.from;
+      var U = rep[up], D = rep[down]; if (U === D) return;
+      var k = D + '>' + U + '>' + e.type; if (!E[k]) E[k] = { from: D, to: U, type: e.type, n: 0 }; E[k].n++;
+      deg[U] = (deg[U] || 0) + 1; deg[D] = (deg[D] || 0) + 1;
+    });
+    var nodes = Object.keys(deg).filter(function (k) { return rep[k] === k; });
+    var total = N.length, CAP = 40, cut = 0;
+    if (nodes.length > CAP) {
+      nodes.sort(function (a, b) { return (kids[b] ? 1e6 : 0) + deg[b] - ((kids[a] ? 1e6 : 0) + deg[a]) || natural(a, b); });
+      cut = nodes.length - CAP; nodes = nodes.slice(0, CAP);
+    }
+    var keep = {}; nodes.forEach(function (k) { keep[k] = 1; });
+    var edges = Object.keys(E).map(function (k) { return E[k]; }).filter(function (e) { return keep[e.from] && keep[e.to]; });
+    // 最長路（根拠の側 = 左・列 0）
+    var outs = {}; edges.forEach(function (e) { (outs[e.from] = outs[e.from] || []).push(e.to); });
+    var rank = {}, vis = {};
+    function R(k) { if (rank[k] != null) return rank[k]; if (vis[k]) return 0; vis[k] = 1; var r = 0; (outs[k] || []).forEach(function (t) { r = Math.max(r, R(t) + 1); }); vis[k] = 0; rank[k] = r; return r; }
+    nodes.forEach(R);
+    var foldedN = Object.keys(rep).filter(function (k) { return rep[k] !== k && keep[rep[k]]; }).length;
+    var isolated = N.filter(function (n) { return rep[n.key] === n.key && !deg[n.key]; }).length;
+    return { nodes: nodes, edges: edges, rank: rank, kids: kids, cut: cut + isolated, folded: foldedN, total: total, shown: nodes.length };
+  }
+  function graph() {
+    var m = graphModel();
+    var NW = 176, NH = 40, GX = 36, GY = 6, PER = 8, LW = 116, HEAD = 8, PAD = 10;
+    var bands = BANDS.slice();   // 7 帯を全部出す（節点の無い帯も 0 / 測れていない と書く）
+    var has = function (b) { return m.nodes.some(function (k) { return G.byKey[k].band === b; }); };
+    var ranks = []; m.nodes.forEach(function (k) { if (ranks.indexOf(m.rank[k]) < 0) ranks.push(m.rank[k]); }); ranks.sort(function (a, b) { return a - b; });
+    // beads の帯は種類の行に分ける（近傍図と同じ順・TZ.BEADS_LANES）
+    var lanesOf = function (b) { return b === 'beads' ? TZ.BEADS_LANES : ['']; };
+    var cells = {}; m.nodes.forEach(function (k) { var n = G.byKey[k], c = n.band + '|' + TZ.laneOf(n) + '|' + m.rank[k]; (cells[c] = cells[c] || []).push(k); });
+    Object.keys(cells).forEach(function (c) { cells[c].sort(function (a, b) { return srcLine(G.byKey[a]) - srcLine(G.byKey[b]) || natural(a, b); }); });
+    var sub = {}; ranks.forEach(function (r) { sub[r] = 1; bands.forEach(function (b) { lanesOf(b).forEach(function (l) { sub[r] = Math.max(sub[r], Math.ceil((cells[b + '|' + l + '|' + r] || []).length / PER)); }); }); });
+    var colX = {}, x = LW; ranks.forEach(function (r) { colX[r] = x; x += sub[r] * (NW + 8) + GX; });
+    var W = x - GX + 8, bandY = {}, bandH = {}, y = HEAD, lanes = [], laneY = {};
+    bands.forEach(function (b) {
+      bandY[b] = y;
+      if (!has(b)) { bandH[b] = 44; y += 44; return; }
+      lanesOf(b).forEach(function (l, li) {
+        var mx = 0; ranks.forEach(function (r) { mx = Math.max(mx, Math.min(PER, (cells[b + '|' + l + '|' + r] || []).length)); });
+        var h = b === 'beads' && !mx ? 28 : Math.max(1, mx) * (NH + GY) + PAD * 2; // 0 の行 = 28（縮めた図でも 1 語が読める高さ）
+        laneY[b + '|' + l] = y; if (b === 'beads') lanes.push({ y: y, h: h, k: l, n: mx, first: !li }); y += h;
+      });
+      bandH[b] = y - bandY[b];
+    });
+    var pos = {};
+    bands.forEach(function (b) { lanesOf(b).forEach(function (l) { ranks.forEach(function (r) { (cells[b + '|' + l + '|' + r] || []).forEach(function (k, i) { pos[k] = { x: colX[r] + Math.floor(i / PER) * (NW + 8), y: laneY[b + '|' + l] + PAD + (i % PER) * (NH + GY), w: NW, h: NH }; }); }); }); });
+    // 拡大縮小と移動: 中身は <g id="vp">（transform）・帯の名は <g id="blabs">（左端に固定・帯の高さに追随・JS が描き直す）
+    GM = { W: W, H: y + 4, LW: LW, bandY: bandY, bandH: bandH, bands: bands, lanes: lanes };
+    var s = ['<svg class="hlsvg" id="gsvg" role="group" aria-label="' + esc(L('view_graph')) + '"><g id="vp">'];
+    bands.forEach(function (b, i) {
+      s.push('<rect x="-4000" y="' + bandY[b] + '" width="' + (W + 8000) + '" height="' + bandH[b] + '" fill="' + TZ.bandVar(b) + '" fill-opacity="' + (i % 2 ? .05 : .09) + '"/>');
+      if (b === 'beads') lanes.forEach(function (ln) { if (!ln.first) s.push('<line class="lane-sep" x1="-4000" x2="' + (W + 4000) + '" y1="' + ln.y + '" y2="' + ln.y + '"/>'); });
+      if (!has(b)) s.push('<text x="' + LW + '" y="' + (bandY[b] + 27) + '" font-size="12" fill="var(--ink-3)">' + (b === 'design-note' ? 'design-note の行 0' : (b === 'SRS' ? 'requirement' : 'run') + ' 0') + '</text>');
+    });
+    m.edges.forEach(function (e) { var a = pos[e.from], b = pos[e.to]; if (!a || !b) return; s.push('<g class="e" data-u="' + esc(e.to) + '" data-d="' + esc(e.from) + '">' + TZ.edgeSVG(TZ.styleOf(e.type), a.x, a.y + a.h / 2, b.x + b.w, b.y + b.h / 2) + '</g>'); });
+    m.nodes.forEach(function (k) {
+      var n = G.byKey[k], p = pos[k], kc = m.kids[k];
+      var badge = kc ? '<rect x="' + (p.x + p.w - 46) + '" y="' + (p.y + 4) + '" width="42" height="16" rx="8" fill="var(--panel-2)" stroke="var(--line-2)"/><text x="' + (p.x + p.w - 25) + '" y="' + (p.y + 15.5) + '" font-size="10" font-weight="700" text-anchor="middle" fill="var(--ink-2)">' + esc(L('children')) + ' ' + kc + '</text>' : '';
+      s.push(TZ.nodeBox(n, p, false, 12, badge, kc ? p.w - 26 - 50 : null));
+    });
+    s.push('</g><g id="blabs"></g></svg>');
+    var types = []; m.edges.forEach(function (e) { if (types.indexOf(e.type) < 0) types.push(e.type); });
+    // 390 幅: 帯ごとの一覧（印 + 番号 + 題・右に 子 n）
+    var chain = bands.filter(has).map(function (b) {
+      return '<div class="subh">' + TZ.bandChip(b) + '</div><ul class="items">' + m.nodes.filter(function (k) { return G.byKey[k].band === b; }).sort(function (a, c) { return m.rank[a] - m.rank[c] || natural(a, c); })
+        .map(function (k) { return TZ.itemNode(k, m.kids[k] ? esc(L('children')) + ' ' + m.kids[k] : ''); }).join('') + '</ul>';
+    }).join('');
+    return '<section class="panel gpanel"><header>' + TZ.H('h2', 'lines') + '</header>' + TZ.legendHTML(BANDS, types, { hover: true }) +
+      '<div class="gtools"><button type="button" class="btn sm" id="zreset">' + esc(L('zoom_reset')) + '</button><span class="small muted" data-term="zoom_hint" tabindex="0">' + esc(L('zoom_hint')) + '</span></div>' +
+      '<div class="gwrap"><div class="gzoom" id="gz">' + s.join('') + '</div></div><div class="pinbar" aria-live="polite"></div><div class="nb-chain">' + chain + '</div>' +
+      '<div class="cutline num" tabindex="0" data-term="cut" data-tip-expert="shown=' + m.shown + ' folded=' + m.folded + ' cut=' + m.cut + ' total=' + m.total + '">' + m.shown + ' / ' + m.total + ' ・ ' + esc(L('children')) + ' ' + m.folded + ' ・ ✂ ' + m.cut + '</div></section>';
+  }
+
+  /* ---------- (d) 表: 種類 × 種類の辺の数（押すと一覧に絞る） ---------- */
+  function table() {
+    var mx = TZ.matrix(G, 't3');
+    var head = function (k) { var b = G.data.kind_band[k]; return '<span class="bchip ' + bc(b) + '" data-term="b:' + esc(b) + '"><i></i></span>' + esc(TZ.kindLabel(k)); };
+    return '<section class="panel"><header>' + TZ.H('h2', 'matrix') + '</header><div class="mxwrap"><table class="mx"><thead><tr><th></th>' + mx.kinds.map(function (k) { return '<th>' + head(k) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      mx.kinds.map(function (a) { return '<tr><th>' + head(a) + '</th>' + mx.kinds.map(function (b) { var v = mx.M[a + '|' + b]; return '<td>' + (v ? '<button type="button" data-pair="' + esc(a + '|' + b) + '" data-tip-expert="' + esc(Object.keys(mx.T[a + '|' + b]).join(' · ')) + '">' + v + '</button>' : '') + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '</tbody></table></div>' +
+      // 390 幅: 行列を 1 列の一覧に替える（横 scroll の箱を作らない・押すと同じく一覧に絞る）
+      '<ul class="items mxlist">' + Object.keys(mx.M).sort(function (x, y) { return mx.kinds.indexOf(x.split('|')[0]) - mx.kinds.indexOf(y.split('|')[0]) || mx.kinds.indexOf(x.split('|')[1]) - mx.kinds.indexOf(y.split('|')[1]); }).map(function (p) {
+        var ab = p.split('|');
+        return '<li>' + TZ.shape(G.data.kind_band[ab[0]], { fill: true }) + '<span class="pair">' + esc(TZ.kindLabel(ab[0])) + ' → ' + esc(TZ.kindLabel(ab[1])) + ' <code class="small muted">' + esc(Object.keys(mx.T[p]).join(' · ')) + '</code></span><button type="button" data-pair="' + esc(p) + '" class="num">' + mx.M[p] + '</button></li>';
+      }).join('') + '</ul></section>';
+  }
+
+  var R = { compact: compact, list: list, graph: graph, table: table };
+  window.__tz_card = function (el) {
+    var c = el.getAttribute('data-card');
+    if (c === 'srs0') return TZ.card4({ ti: 'requirement 0 本', k: TZ.shape('SRS', { fill: true }) + '<span>requirement</span><span class="bname band-srs">SRS</span>', v: '<span class="gi ok sm">✓</span> 0 と測れた = 要件の行が無い', src: 'design-intent/srs.yaml', more: ['要件書は雛形だけ'] });
+    if (c === 'run0') return TZ.card4({ ti: 'run 0 件', k: TZ.shape('pipeline', { fill: true }) + '<span>run</span><span class="bname band-pipeline">pipeline</span>', v: '<span class="gi ok sm">✓</span> 0 と測れた = RunCreated が無い', src: 'fleet/events.jsonl', srcFull: '~/.local/state/scribe2-v2-state-tsuzuri/fleet/events.jsonl', more: ['器の state dir は在る'] });
+    return null;
+  };
+  window.__tz_audit_extra = function () { // 今の面で id を出していない節点の数
+    var els = TZ.$$('#view [data-key]'), miss = [];
+    els.forEach(function (el) { var n = G.byKey[el.getAttribute('data-key')], box = el.closest('li') || el; if (n && box.textContent.indexOf(n.id) < 0) miss.push(n.id); });
+    return { view: view, nodes: els.length, idMissing: miss.length, idMissingList: miss.slice(0, 5), bandsShown: BANDS.filter(function (b) { return (document.getElementById('view').textContent || '').indexOf(b) >= 0; }).length };
+  };
+  function show(v, push) {
+    view = v;
+    TZ.$$('.tabs [role=tab]').forEach(function (t) { t.setAttribute('aria-selected', String(t.getAttribute('data-view') === v)); t.tabIndex = t.getAttribute('data-view') === v ? 0 : -1; });
+    document.getElementById('view').setAttribute('aria-labelledby', 'tab-' + v);
+    document.getElementById('view').innerHTML = R[v]();
+    wire();
+    if (push !== undefined) setURL({ view: v }, push);
+    setTimeout(TZ.audit, 50);
+  }
+  var GM = null;
+  function initZoom() {
+    var gz = document.getElementById('gz'); if (!gz || !gz.offsetWidth || !GM) return;
+    var svg = document.getElementById('gsvg'), vp = document.getElementById('vp'), bl = document.getElementById('blabs'), M = GM;
+    var s0 = Math.min(1, (gz.clientWidth - M.LW) / (M.W - M.LW));
+    gz.style.height = Math.round(Math.min(720, Math.max(360, M.H * s0 + 8))) + 'px';
+    var V = { s: s0, tx: 0, ty: 0 };
+    var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+    function labels() {
+      var hg = gz.clientHeight, o = '<rect x="0" y="0" width="' + M.LW + '" height="' + hg + '" fill="var(--panel)"/>';
+      M.bands.forEach(function (b) {
+        var y0 = V.ty + M.bandY[b] * V.s, h = M.bandH[b] * V.s; if (y0 > hg || y0 + h < 0) return;
+        var ty = Math.min(Math.max(y0, 0) + 17, y0 + h - 4);
+        o += '<g class="blab" data-band="' + esc(b) + '" data-term="b:' + esc(b) + '"><rect x="0" y="' + y0.toFixed(1) + '" width="' + M.LW + '" height="' + h.toFixed(1) + '" fill="' + TZ.bandVar(b) + '" fill-opacity=".14"/>' +
+          '<rect x="' + (M.LW - 3) + '" y="' + y0.toFixed(1) + '" width="3" height="' + h.toFixed(1) + '" fill="' + TZ.bandVar(b) + '"/>' +
+          (h >= 18 ? '<text x="8" y="' + ty.toFixed(1) + '" font-size="13" font-weight="750" fill="' + TZ.bandVar(b) + '">' + esc(b) + '</text>' : '') +
+          (b !== 'beads' && h >= 44 && ty + 14 < y0 + h - 2 ? '<text x="8" y="' + (ty + 14).toFixed(1) + '" font-size="9" fill="var(--ink-3)" font-family="ui-monospace,monospace">' + esc(TZ.cut(TZ.BAND_PATH[b].replace('design-intent/', 'di/'), 14)) + '</text>' : '') + '</g>';
+      });
+      (M.lanes || []).forEach(function (ln) { // beads の種類の行の名（左端に固定・0 の行は「task 0」の 1 語）
+        var y0 = V.ty + ln.y * V.s, h = ln.h * V.s; if (y0 > hg || y0 + h < 0 || h < 11) return;
+        o += (ln.first ? '' : '<line class="lane-sep" x1="0" x2="' + M.LW + '" y1="' + y0.toFixed(1) + '" y2="' + y0.toFixed(1) + '"/>') +
+          '<text class="lane-lab' + (ln.n ? '' : ' zero') + '" x="' + (M.LW - 8) + '" y="' + (y0 + (ln.n ? Math.min(h - 3, 30) : h / 2 + 4)).toFixed(1) + '" text-anchor="end" data-lane="' + esc(ln.k) + '">' + esc(TZ.laneLabel(ln.k, ln.n)) + '</text>';
+      });
+      bl.innerHTML = o;
+    }
+    function apply() {
+      vp.setAttribute('transform', 'translate(' + (M.LW + V.tx).toFixed(2) + ' ' + V.ty.toFixed(2) + ') scale(' + V.s.toFixed(4) + ') translate(' + (-M.LW) + ' 0)');
+      labels(); gz.__view = { s: V.s, tx: V.tx, ty: V.ty, s0: s0 };
+    }
+    function zoomAt(cx, cy, ns, base) {
+      base = base || V; ns = clamp(ns, 0.2, 4);
+      var X = (cx - M.LW - base.tx) / base.s, Y = (cy - base.ty) / base.s;
+      V = { s: ns, tx: cx - M.LW - X * ns, ty: cy - Y * ns };
+    }
+    gz.addEventListener('wheel', function (e) { e.preventDefault(); var r = gz.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, V.s * Math.exp(-e.deltaY * 0.0015)); apply(); }, { passive: false });
+    var P = {}, st = null, moved = false;
+    var snap = function () { var o = {}; Object.keys(P).forEach(function (k) { o[k] = { x: P[k].x, y: P[k].y }; }); return { V: { s: V.s, tx: V.tx, ty: V.ty }, pts: o }; };
+    gz.addEventListener('pointerdown', function (e) { if (e.button && e.button !== 0) return; P[e.pointerId] = { x: e.clientX, y: e.clientY }; moved = false; st = snap(); });
+    gz.addEventListener('pointermove', function (e) {
+      if (!P[e.pointerId] || !st) return; P[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ids = Object.keys(P), r = gz.getBoundingClientRect();
+      if (ids.length === 1 && st.pts[ids[0]]) {
+        var dx = e.clientX - st.pts[ids[0]].x, dy = e.clientY - st.pts[ids[0]].y;
+        if (!moved && Math.hypot(dx, dy) > 4) { moved = true; svg.__dragged = true; try { gz.setPointerCapture(e.pointerId); } catch (x) { /* noop */ } gz.classList.add('dragging'); }
+        if (moved) { V = { s: st.V.s, tx: st.V.tx + dx, ty: st.V.ty + dy }; apply(); }
+      } else if (ids.length >= 2 && st.pts[ids[0]] && st.pts[ids[1]]) {
+        var a0 = st.pts[ids[0]], b0 = st.pts[ids[1]], a1 = P[ids[0]], b1 = P[ids[1]];
+        var d0 = Math.hypot(a0.x - b0.x, a0.y - b0.y) || 1, d1 = Math.hypot(a1.x - b1.x, a1.y - b1.y);
+        var m0x = (a0.x + b0.x) / 2 - r.left, m0y = (a0.y + b0.y) / 2 - r.top, m1x = (a1.x + b1.x) / 2 - r.left, m1y = (a1.y + b1.y) / 2 - r.top;
+        var ns = clamp(st.V.s * d1 / d0, 0.2, 4), X = (m0x - M.LW - st.V.tx) / st.V.s, Y = (m0y - st.V.ty) / st.V.s;
+        V = { s: ns, tx: m1x - M.LW - X * ns, ty: m1y - Y * ns }; moved = true; svg.__dragged = true; apply();
+      }
+    });
+    function up(e) { delete P[e.pointerId]; gz.classList.remove('dragging'); st = snap(); if (!Object.keys(P).length) setTimeout(function () { svg.__dragged = false; }, 0); }
+    gz.addEventListener('pointerup', up); gz.addEventListener('pointercancel', up);
+    document.getElementById('zreset').addEventListener('click', function () { V = { s: s0, tx: 0, ty: 0 }; apply(); });
+    apply();
+  }
+  function wire() {
+    initZoom();
+    ['fb', 'fk', 'fs'].forEach(function (id) { var el = document.getElementById(id); if (el) el.addEventListener('change', function () { setURL({ band: TZ.$('#fb').value, kind: TZ.$('#fk').value, sort: TZ.$('#fs').value }); show('list'); }); });
+    var pc = document.getElementById('pairclr'); if (pc) pc.addEventListener('click', function () { setURL({ pair: null }); show('list'); });
+    TZ.$$('[data-pair]').forEach(function (b) { b.addEventListener('click', function () { setURL({ view: 'list', pair: b.getAttribute('data-pair'), band: null, kind: null }, true); show('list'); }); });
+  }
+  TZ.$$('.tabs [role=tab]').forEach(function (t) {
+    t.addEventListener('click', function () { show(t.getAttribute('data-view'), true); });
+    t.addEventListener('keydown', function (e) {
+      var i = VIEWS.map(function (v) { return v[0]; }).indexOf(view);
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); var n = VIEWS[(i + (e.key === 'ArrowRight' ? 1 : VIEWS.length - 1)) % VIEWS.length][0]; show(n, true); document.getElementById('tab-' + n).focus(); }
+    });
+  });
+  window.addEventListener('popstate', function () { var v = qs().get('view') || 'compact'; show(R[v] ? v : 'compact'); });
+  show(view);
+});
+</script>
+</body>
+</html>

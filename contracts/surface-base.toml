@@ -28,12 +28,12 @@ id = "c"
 title = "導出グラフと不変条件の 12 本と近傍（純粋な関数・毎回組み直し・読めない種類だけ「まだ分からない」）"
 req = ["FR2", "FR3", "FR5"]
 section = "4"
-write-set = ["crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/src/graph/check.rs", "+crates/tsuzuri-core/src/graph/around.rs", "+crates/tsuzuri-core/tests/graph.rs", "+tests/fixtures/graph/hub-619/", "+tests/fixtures/graph/unruled/", "+tests/fixtures/graph/runs-5/", "+tests/fixtures/graph/no-state/"]
-verify = ["cargo nextest run -p tsuzuri-core --no-tests=fail graph_"]
+write-set = ["Cargo.lock", "crates/tsuzuri-core/Cargo.toml", "xtask/src/main.rs", "crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/src/graph/check.rs", "+crates/tsuzuri-core/src/graph/around.rs", "+crates/tsuzuri-core/tests/graph.rs", "+tests/fixtures/graph/hub-619/", "+tests/fixtures/graph/unruled/", "+tests/fixtures/graph/runs-5/", "+tests/fixtures/graph/no-state/", "tests/fixtures/graph/real/design-index.tsv", "tests/fixtures/graph/real/events.jsonl"]
+verify = ["cargo nextest run -p tsuzuri-core --no-tests=fail graph_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
 size = "L"
-done = "(1) 節点の種類と辺の型が ADR-7 決定 (2) の一覧と一致 (2) 不変条件ごとに違反 1 本の fixture がその 1 本だけを名指す (3) hub の fixture で近傍 2 段が hub を展開せず総数を出す (4) state dir を欠く fixture で走行だけ「まだ分からない」"
+done = "(1) 実物の見本の 3 つの入力から組んだグラフの節点の種類と辺の型が、設計ノート surface の §17 と §18 の一覧の内側に収まり、索引の節点の数と台帳の bead の数と走行の数が入力と一致 (2) 不変条件ごとに違反 1 本の fixture がその 1 本だけを名指す (3) 子 619 の hub の fixture で近傍 2 段が hub を展開せず、切った理由と総数を出す (4) event log を欠く入力で走行の種類だけ「まだ分からない」になり、設計と台帳の節点は組める (5) 中核の crate の直接依存は serde と serde_json と契約の型の crate だけ"
 depends = ["b"]
-goal = "設計文書と設計ノートの行と台帳と走行を 1 つのグラフに毎回組み直す純粋な関数を中核の crate に置く。不変条件の 12 本を 3 値で数え、近傍（根拠の側と影響の側・各 2 段・hub は畳む）を返す。 入力は design-intent の YAML と issues.jsonl と器の event log で、読めない出所はその種類だけ「まだ分からない」にする。tz graph の --check と --around の口は境界の crate が薄く包む。"
+goal = "設計文書と設計ノートの行と台帳と走行を 1 つのグラフに毎回組み直す純粋な関数を中核の crate に置く。不変条件の 12 本を 3 値で数え、近傍（根拠の側と影響の側・各 2 段・hub は畳む）を返す。 入力は 3 つの字で、関数は file も子 process も触らない。設計の索引（設計の道具の graph の口が出す節点と辺の表・タブ区切り）・台帳の一覧（bd の読み取りの口が返す JSON）・器の event log（1 行 1 件の JSON）。読めない入力はその種類だけ「まだ分からない」にする。 設計文書の YAML は中核の crate では読まない。索引は設計の道具が既に組むので、その出力を使う（YAML の読み手の依存を足さない）。設計ノートの行と概要の字は、この便では節点にしない（後の便）。 節点の種類と辺の型と不変条件の閉じた一覧は設計ノート surface の §17 と §18 と §19 が持つ。実物の入力の見本（tests/fixtures/graph/real の索引と event log、tests/fixtures/ledger の bd-list-8.json）は設計席が置いた。違反の fixture の 4 つはこの便が作る。 依存は serde_json を中核の crate に足す（workspace には便 b で入っている）。入力を読んで口に出す側（子 process と server の口と tz graph の口）は境界の crate の後の便が持つ。"
 
 [[contract]]
 id = "d"

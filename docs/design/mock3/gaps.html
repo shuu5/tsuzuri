@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tsuzuri — 抜けの検査（mock v3）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<main class="page" id="app"></main>
+<script src="ui.js"></script>
+<script>
+TZ.boot('gaps', function (G) {
+  var esc = TZ.esc, L = TZ.L;
+  var R = TZ.gaps(G, 't3');                         // 抜けの検査は tsuzuri だけ
+  var GI = { pass: ['ok', '✓', 'gap_ok'], fail: ['ng', '✕', 'gap_ng'], unknown: ['unknown', '?', 'gap_unknown'] };
+  var cnt = { pass: 0, fail: 0, unknown: 0 }; R.forEach(function (r) { cnt[r.status]++; });
+  var tiles = '<div class="gtiles">' + ['fail', 'unknown', 'pass'].map(function (s) {
+    return '<div class="gtile"><span class="gi ' + GI[s][0] + '" aria-hidden="true">' + GI[s][1] + '</span><span class="n">' + cnt[s] + '</span>' + TZ.HS(GI[s][2]) + '</div>';
+  }).join('') + '</div>';
+  var rank = { fail: 0, unknown: 1, pass: 2 };
+  var list = R.slice().sort(function (a, b) { return rank[a.status] - rank[b.status]; }).map(function (r) {
+    var named = r.keys.slice(0, 20).map(function (k) { return TZ.itemNode(k); }).join('') +
+      r.texts.slice(0, 20).map(function (t) { return '<li><span class="gi ng" aria-hidden="true">✕</span><span class="ttl" data-t>' + esc(t) + '</span></li>'; }).join('');
+    var more = r.n > 20 ? '<li><span class="gi unknown" aria-hidden="true">+</span><span class="ttl num">' + (r.n - 20) + '</span></li>' : '';
+    return '<details class="gitem"' + (r.status === 'fail' ? ' open' : '') + '><summary data-tip-expert="' + esc(r.id + ' · ' + r.status) + '"><span class="gi ' + GI[r.status][0] + '" aria-label="' + esc(L(GI[r.status][2])) + '">' + GI[r.status][1] + '</span>' +
+      '<span class="ttl">' + esc(r.name) + '</span><span class="aside">' + (r.n || '') + '</span></summary><div class="body"><p class="small muted" style="margin:0 0 8px">' + esc(r.detail) + '</p>' +
+      (named || more ? '<ul class="items">' + named + more + '</ul>' : '') + '</div></details>';
+  }).join('');
+  document.getElementById('app').innerHTML = '<div class="row" style="margin-bottom:16px">' + TZ.H('h1', 'gaps') + '<span class="chip"><span data-t>tsuzuri</span></span></div>' + tiles + '<section class="panel">' + list + '</section>';
+});
+</script>
+</body>
+</html>

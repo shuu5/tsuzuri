@@ -122,6 +122,8 @@ schema:
     - 同じ版の anchor は上書きしない・anchor と索引は消さない・空にしない。生成は folio check --freeze-anchor で、全検査が 0 違反かつ「まだ分からない」が無く、版が最新より新しく、差分とその版の発効した判断があるときだけ書く。列の始め直し（最初の版が first_version でない・版管理の先頭か履歴に anchor が在った・記録が在るのに anchor が無い・根の digest が列の根の表の置き場の名の行と違う）は認めない。表に無い名の列の根は、凍結の命令が組んだ digest の全桁（表に足す値）を出して凍結しない
     - 始まりの凍結は folio check --freeze-start で、憲法の列（索引か constitution- で始まる anchor）と id の一覧（ids- で始まる anchor）がどちらも 0 本の置き場でだけ、最初の版の anchor と索引と id の一覧を同時に書く（どちらか 1 本でも在れば何も書かずに断る）。数えから外すのは 2 つの基準の不在の「まだ分からない」だけで、列の根の表の照らしを含むほかの検査が 0 違反で「まだ分からない」も無いときだけ書く。書いた後は旗なしの床が全部を数える
     - 正本 4 file（憲法・rules・語彙・要件書）・anchors/・adr/ とその中の file・design-intent 自体は symlink でなく実体
+  seal: {file: adr-seals.yaml, kind: adr-seals, outside: [status, superseded_by]}
+  seal_note: ADR-30 決定 (3)。発効した判断の記録（effective_status）の本文を anchor.dir の下の封の一覧（file）で凍らせる。行 = id と要約値（outside の欄を除く記録の木を anchor の digest と同じ json に直列化した sha256）で、足した順に並ぶ。本文が行と違う・発効しているのに行が無い・行が在るのに発効した記録が無い・同じ id の行が 2 つ・digest が中身と合わない は落とし、封の一覧が無ければ「まだ分からない」。判断を変えるときは新しい判断の記録を立て、前の記録は status と superseded_by だけを変えて退役させる（P-7.2）。生成は folio check --freeze-adrs で、全検査が 0 違反で「まだ分からない」も無いときだけ欠けた行を末尾に足す（在る行は書き換えない・本文が行と違えば断る・N-1.1）。行と file の欠けは凍結の旗の前提の検査に数えない
   limits_note:
     - 前文（precedence）と schema 節の差分は amended_by を持てない（憲法 schema の precedence.optional が空）ので、それを amends に持つ発効した判断の記録の実在と欄単位の対の一致だけを確かめる。前文に amended_by を足すのは A-2 の改訂で行う。
     - 改番と番号の再利用は「同じ本文の付け替え」「過去の版に在って最新 anchor に無い番号の再登場」の 2 つの形だけを見る。本文も変えて付け替えた改番は弁別できない（削除 + 新設として通る）。

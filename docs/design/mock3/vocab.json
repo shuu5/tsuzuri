@@ -1,0 +1,1599 @@
+{
+ "_about": "面の語彙表 mock v3\n・ english = 英語のまま\n・ rephrase = 日本語の見出し\n✓ 見出しは label だけ\n▸\n・ 接頭 k: = 節点の種類\n・ 接頭 b: = 出所の帯\n・ 接頭 e: = 辺の型\n・ stage: など = 技術語\n→ 正本は後で vocabulary.yaml へ",
+ "columns": {
+  "english": "英語のまま + 注釈",
+  "rephrase": "言い換え"
+ },
+ "english": {
+  "pipeline": {
+   "label": "pipeline dashboard",
+   "note": "run の今の段を 4 列で並べた表示",
+   "internal": "RunStage の最新を 4 列に畳む（旧称: 板）"
+  },
+  "project": {
+   "label": "project",
+   "note": "この画面は 1 つの project だけを映す\n→ 全部は account board",
+   "internal": "anchor 単位\naccount board は別の面"
+  },
+  "acct_board": {
+   "label": "account board",
+   "note": "口座と session を 1 面で見る管理画面\n・ 口座の残量\n・ 群が占有する口座\n・ session ごとの口座\n・ 器が持つ面",
+   "internal": "器（scribe の core）の面\nstate dir の fleet event から組む"
+  },
+  "dashboard": {
+   "label": "dashboard",
+   "note": "project ごとの画面\n・ orchestrator が管理",
+   "internal": "project dashboard（旧称: 板）"
+  },
+  "run": {
+   "label": "run",
+   "note": "pipeline が task を 1 回実行したこと\n{ic:redo} やり直すと run が増える",
+   "internal": "run id = <bead id>-<UTC の秒>\n旧称: 便・走行"
+  },
+  "SSE": {
+   "label": "SSE",
+   "note": "server から画面へ更新を押し出す仕組み\n◷ 本番は 5 秒以内に記号が変わる",
+   "internal": "Server-Sent Events"
+  },
+  "col_wait": {
+   "label": "Queued / Blocked",
+   "note": "順番待ちか承認待ちの run\n・ Queued = 順番待ち\n・ Blocked = 承認待ち",
+   "internal": "Intake / Queued / Blocked / Reviewed(PASS)"
+  },
+  "col_run": {
+   "label": "Running / Gated",
+   "note": "動いているか検査中の run\n{st:run} Running = 書いている\n・ Gated = 検査中",
+   "internal": "Spawned / Implemented / Gated(PASS)"
+  },
+  "col_stop": {
+   "label": "Questioned / Failed / Stopped",
+   "note": "止まった run\n! 質問か失敗\n■ 中止\n・ 理由が札に付く",
+   "internal": "Questioned / Failed / Stopped\nGated(FAIL) / Reviewed(FAIL)"
+  },
+  "col_land": {
+   "label": "Landed（今日）",
+   "note": "今日、本線に取り込まれた run",
+   "internal": "Landed・今日"
+  },
+  "stage:Intake": {
+   "label": "Intake",
+   "note": "受付。器が run を作った",
+   "internal": "RunStage stage=Intake"
+  },
+  "stage:Queued": {
+   "label": "Queued",
+   "note": "順番待ち",
+   "internal": "RunStage stage=Queued"
+  },
+  "stage:Blocked": {
+   "label": "Blocked",
+   "note": "あなたの承認を待っている",
+   "internal": "RunStage stage=Blocked"
+  },
+  "stage:Reviewed": {
+   "label": "Reviewed",
+   "note": "起動前の審査（PASS / FAIL）",
+   "internal": "RunStage stage=Reviewed"
+  },
+  "stage:Spawned": {
+   "label": "Spawned",
+   "note": "pipeline が worktree で書き始めた",
+   "internal": "RunStage stage=Spawned"
+  },
+  "stage:Implemented": {
+   "label": "Implemented",
+   "note": "pipeline が書き終えた → 次は検査",
+   "internal": "RunStage stage=Implemented"
+  },
+  "stage:Running": {
+   "label": "Running",
+   "note": "Spawned と Implemented の総称",
+   "internal": "RunStage stage=Running"
+  },
+  "stage:Questioned": {
+   "label": "Questioned",
+   "note": "pipeline が質問して止まっている",
+   "internal": "RunStage stage=Questioned"
+  },
+  "stage:Gated": {
+   "label": "Gated",
+   "note": "検査の段（PASS / FAIL / INCONCLUSIVE）",
+   "internal": "RunStage stage=Gated"
+  },
+  "stage:Landed": {
+   "label": "Landed",
+   "note": "本線に取り込んだ",
+   "internal": "RunStage stage=Landed"
+  },
+  "stage:Failed": {
+   "label": "Failed",
+   "note": "失敗して止まった",
+   "internal": "RunStage stage=Failed"
+  },
+  "stage:Stopped": {
+   "label": "Stopped",
+   "note": "中止した",
+   "internal": "RunStage stage=Stopped"
+  },
+  "status:open": {
+   "label": "open",
+   "note": "開いている = 未完了",
+   "internal": "status=open"
+  },
+  "status:closed": {
+   "label": "closed",
+   "note": "閉じた = 完了か却下",
+   "internal": "status=closed"
+  },
+  "status:in_progress": {
+   "label": "in_progress",
+   "note": "取りかかり中",
+   "internal": "status=in_progress"
+  },
+  "status:effective": {
+   "label": "effective",
+   "note": "発効している",
+   "internal": "status=effective"
+  },
+  "status:accepted": {
+   "label": "accepted",
+   "note": "承認されて発効している",
+   "internal": "status=accepted"
+  },
+  "status:proposed": {
+   "label": "proposed",
+   "note": "提案中 = まだ発効していない",
+   "internal": "status=proposed"
+  },
+  "verdict:PASS": {
+   "label": "PASS",
+   "note": "✓ 合格",
+   "internal": "verdict=PASS"
+  },
+  "verdict:FAIL": {
+   "label": "FAIL",
+   "note": "✗ 不合格",
+   "internal": "verdict=FAIL"
+  },
+  "b:constitution": {
+   "label": "constitution",
+   "note": "憲法 = いちばん上の決めごと\n・ 条 = P-n / A-n / N-n\n・ 条の文 = P-n.m\n▸\n{ic:file} `design-intent/constitution.yaml`",
+   "internal": "`design-intent/constitution.yaml`"
+  },
+  "b:rules": {
+   "label": "rules",
+   "note": "数値と作法の表\n・ rule = R-n / D-n\n→ rule は条を指す\n▸\n{ic:file} `design-intent/rules.yaml`",
+   "internal": "`design-intent/rules.yaml`"
+  },
+  "b:ADR": {
+   "label": "ADR",
+   "note": "取り消しにくい決定の記録\n・ 1 file に 1 件\n・ 番号の順\n▸\n{ic:file} `design-intent/adr/ADR-n.yaml`",
+   "internal": "`design-intent/adr/ADR-n.yaml`"
+  },
+  "b:SRS": {
+   "label": "SRS",
+   "note": "要件書 = requirement FR-n を置く\n! tsuzuri は雛形のまま\n・ 地図の 6 本は見本\n▸\n{ic:file} `design-intent/srs.yaml`\n{ic:file} 見本 `data/sample-srs.json`",
+   "internal": "`design-intent/srs.yaml`"
+  },
+  "b:design-note": {
+   "label": "design-note",
+   "note": "設計の判断を表の行で書く文書\n・ 行は id を持つ\n← task の pointer が指す\n▸\n{ic:file} `design-intent/design-note/*.yaml`\n{ic:file} scribe2 は `docs/design/*.md`",
+   "internal": "`design-intent/design-note/*.yaml`"
+  },
+  "b:beads": {
+   "label": "beads",
+   "note": "台帳 = 動くものの記録\n・ epic と task\n・ memo と question\n・ あなたの決定と指示\n▸\n{ic:file} `.beads/issues.jsonl`",
+   "internal": "`.beads/issues.jsonl`"
+  },
+  "b:pipeline": {
+   "label": "pipeline",
+   "note": "器の event の記録\n・ run の段をここから読む\n▸\n{ic:file} `<state dir>/fleet/events.jsonl`",
+   "internal": "`<state dir>/fleet/events.jsonl`"
+  },
+  "k:規則行": {
+   "label": "rule",
+   "note": "rules.yaml の 1 行\n・ R-n = 数値\n・ D-n = 作法",
+   "internal": "規則行（原文の名）"
+  },
+  "k:判断の記録": {
+   "label": "ADR",
+   "note": "取り消しにくい決定の記録 1 件",
+   "internal": "判断の記録（原文の名）"
+  },
+  "k:目的": {
+   "label": "goal",
+   "note": "srs.yaml の goals の行",
+   "internal": "目的（原文の名）"
+  },
+  "k:要件": {
+   "label": "requirement",
+   "note": "srs.yaml の requirements の行 = FR-n",
+   "internal": "要件（原文の名）"
+  },
+  "k:非機能要件": {
+   "label": "nonfunctional",
+   "note": "srs.yaml の nonfunctional の行",
+   "internal": "非機能要件（原文の名）"
+  },
+  "k:受入基準": {
+   "label": "acceptance",
+   "note": "srs.yaml の acceptance の行",
+   "internal": "受入基準（原文の名）"
+  },
+  "k:制約": {
+   "label": "constraint",
+   "note": "srs.yaml の constraints の行",
+   "internal": "制約（原文の名）"
+  },
+  "k:登場人物": {
+   "label": "actor",
+   "note": "srs.yaml の actors の行",
+   "internal": "登場人物（原文の名）"
+  },
+  "k:出力": {
+   "label": "output",
+   "note": "srs.yaml の outputs の行",
+   "internal": "出力（原文の名）"
+  },
+  "k:設計ノートの行": {
+   "label": "design-note の行",
+   "note": "設計ノートの id の付いた 1 行\n・ 形 = <note>#<row>\n← task の pointer が指す",
+   "internal": "設計ノートの行（原文の名）"
+  },
+  "k:epic": {
+   "label": "epic",
+   "note": "大きな目標\n↓ 下に task と question",
+   "internal": "epic（原文の名）"
+  },
+  "k:契約": {
+   "label": "task",
+   "note": "pipeline に任せる 1 件の仕事\n→ run がこれを実行",
+   "internal": "契約 bead（原文の名）"
+  },
+  "k:memo": {
+   "label": "memo",
+   "note": "覚え書きの bead",
+   "internal": "memo（原文の名）"
+  },
+  "k:問い": {
+   "label": "question",
+   "note": "あなたに決めてほしいこと\n・ label=問い の bead",
+   "internal": "問い（原文の名）"
+  },
+  "k:走行": {
+   "label": "run",
+   "note": "1 つの task の 1 回の実行",
+   "internal": "走行（原文の名）"
+  },
+  "k:受け": {
+   "label": "orchestrator の受け",
+   "note": "裁定を受けて処分を宣言した記録\n・ 台帳の notes の 1 行\n→ あなたの決定を受ける",
+   "internal": "受け（原文の名）"
+  },
+  "e:basis": {
+   "label": "basis",
+   "note": "{edge:basis} 〜を根拠にする",
+   "internal": "edge type=basis"
+  },
+  "e:blocks": {
+   "label": "blocks",
+   "note": "{edge:blocks} 〜が終わるまで止める",
+   "internal": "edge type=blocks"
+  },
+  "e:parent-child": {
+   "label": "parent-child",
+   "note": "{edge:parent-child} 親子 = epic の下の task",
+   "internal": "edge type=parent-child"
+  },
+  "e:in-article": {
+   "label": "in-article",
+   "note": "{edge:in-article} 条の中の文",
+   "internal": "edge type=in-article"
+  },
+  "e:article": {
+   "label": "article",
+   "note": "{edge:article} rule が属する条",
+   "internal": "edge type=article"
+  },
+  "e:relations.rules": {
+   "label": "relations.rules",
+   "note": "{edge:relations.rules} 条が挙げる rule",
+   "internal": "edge type=relations.rules"
+  },
+  "e:amends": {
+   "label": "amends",
+   "note": "{edge:amends} 〜を改める",
+   "internal": "edge type=amends"
+  },
+  "e:supersedes": {
+   "label": "supersedes",
+   "note": "{edge:supersedes} 〜を置き換える",
+   "internal": "edge type=supersedes"
+  },
+  "e:ruled_by": {
+   "label": "ruled_by",
+   "note": "{edge:ruled_by} あなたの決定で発効した",
+   "internal": "edge type=ruled_by"
+  },
+  "e:design": {
+   "label": "design",
+   "note": "{edge:design} task が指す design-note の行",
+   "internal": "edge type=design"
+  },
+  "e:answers": {
+   "label": "answers",
+   "note": "{edge:answers} あなたの決定が答えた question",
+   "internal": "edge type=answers"
+  },
+  "e:touches": {
+   "label": "touches",
+   "note": "{edge:touches} question が関わる所",
+   "internal": "edge type=touches"
+  },
+  "e:premises": {
+   "label": "premises",
+   "note": "{edge:premises} question の前提にした全体への指示",
+   "internal": "edge type=premises"
+  },
+  "e:run_of": {
+   "label": "run_of",
+   "note": "{edge:run_of} run が属する task",
+   "internal": "edge type=run_of"
+  },
+  "e:raised": {
+   "label": "raised",
+   "note": "{edge:raised} run が出した question",
+   "internal": "edge type=raised"
+  },
+  "e:ran_by": {
+   "label": "ran_by",
+   "note": "{edge:ran_by} run が使った口座",
+   "internal": "edge type=ran_by"
+  },
+  "e:relates-to": {
+   "label": "relates-to",
+   "note": "{edge:relates-to} 関連がある",
+   "internal": "edge type=relates-to"
+  },
+  "e:discovered-from": {
+   "label": "discovered-from",
+   "note": "{edge:discovered-from} 〜の途中で見つけた",
+   "internal": "edge type=discovered-from"
+  },
+  "e:source": {
+   "label": "source",
+   "note": "{edge:source} memo の出所",
+   "internal": "edge type=source"
+  },
+  "e:promoted_to": {
+   "label": "promoted_to",
+   "note": "{edge:promoted_to} memo が昇格した先\n→ task\n→ ADR / rule / SRS\n→ 設計ノートの行\n▸\n! 新しい辺の型の候補",
+   "internal": "edge type=promoted_to"
+  },
+  "five_hour": {
+   "label": "five_hour",
+   "note": "5 時間ごとに戻る利用枠\n{thr:85} 閾値 85%",
+   "internal": "AllowanceMeasured window=five_hour"
+  },
+  "seven_day": {
+   "label": "seven_day",
+   "note": "7 日ごとに戻る利用枠\n{thr:95} 閾値 95%",
+   "internal": "AllowanceMeasured window=seven_day"
+  },
+  "seven_day_model": {
+   "label": "seven_day_model",
+   "note": "上位の model（Fable）だけの 7 日の枠\n{thr:95} 閾値 95%",
+   "internal": "AllowanceMeasured window=seven_day_model\nmodel=Fable"
+  },
+  "Tier": {
+   "label": "Tier",
+   "note": "project の群の名\n・ 属する project が決まる\n・ 口座の候補の順も決まる\n→ 群の名",
+   "internal": "host.toml [[account-group]] name"
+  },
+  "retired": {
+   "label": "retired",
+   "note": "器がこの口座を外した\n✗ 残量はもう測らない",
+   "internal": "AccountRetired"
+  },
+  "GroupMovePending": {
+   "label": "GroupMovePending",
+   "note": "/exit の後に shell へ戻らなかった席\n・ account = 移り先\n{ic:redo} 器が起こし直しを続ける\n→ 移動の指示",
+   "internal": "GroupMovePending account=移り先\ndetail=group/anchor/target/reason\nreason=not-a-shell / input-unknown"
+  },
+  "GroupMoved": {
+   "label": "GroupMoved",
+   "note": "移動の承認\n・ account = 移り先\n・ 記録を書いた後に記す",
+   "internal": "GroupMoved account=移り先\ndetail = host.toml の群の宣言の行 = 常設の承認\n記録 `groups/<群>.account`"
+  },
+  "GroupPressureNotified": {
+   "label": "GroupPressureNotified",
+   "note": "逼迫の通知\n・ account = 逼迫した口座\n{thr:85} 使った割合 > 閾値",
+   "internal": "GroupPressureNotified account=逼迫の口座\ndetail=group/window/used/cap\ncap = rules の fleet.group_pressure_*"
+  },
+  "GroupMoveRefused": {
+   "label": "GroupMoveRefused",
+   "note": "移り先なしで移動を断った\n✗ 門を通る候補が無い\n→ 候補と次の移り先",
+   "internal": "GroupMoveRefused detail=reason（no-candidate）"
+  },
+  "seat": {
+   "label": "orchestrator",
+   "note": "project の設計と指示を担う session\n→ 質問を出す\n→ task を pipeline へ",
+   "internal": "seat t3:orchestrator（旧称: 席）"
+  },
+  "tab_home": {
+   "label": "HOME",
+   "note": "account board の既定の tab\n{badge:3} g でない project の数\n・ 次の一手と開いている窓\n・ 群と口座と移動",
+   "internal": "?tab=home（既定）\nbadge = nextAll の top ≠ nx_g の数"
+  },
+  "tab_session": {
+   "label": "session",
+   "note": "session と台帳の処理状況の表\n{badge:3} 限度か応答なしの数",
+   "internal": "?tab=session\nbadge = sessionsAt(t) の st ∈ {limit, silent}"
+  },
+  "tab_projects": {
+   "label": "各 project",
+   "note": "project を 1 つの表に並べる\n{badge:!} 要対応の project がある\n→ 行を押すと詳しく",
+   "internal": "?tab=projects\nbadge = 要対応（次の一手が g でない）が 1 つ以上なら !\n数は HOME の badge と同じなので記号だけ"
+  },
+  "sessions": {
+   "label": "session",
+   "note": "いま在る session の表 = 2 種\n・ orchestrator は 1 つ\n・ pipeline = run ごと",
+   "internal": "seat = SeatRegistered + seat/<seat>/account + state.jsonl\n+ run（RunCreated〜RunDone / RunStopped・RunStage の account:）"
+  },
+  "role": {
+   "label": "role",
+   "note": "session の種類\n・ orchestrator = 設計と指示\n・ pipeline = run を実行",
+   "internal": "SeatRegistered role / run"
+  },
+  "role:orchestrator": {
+   "label": "orchestrator",
+   "note": "設計と指示を担う session\n・ 群の今の口座で動く",
+   "internal": "seat <project>:orchestrator"
+  },
+  "role:pipeline": {
+   "label": "pipeline",
+   "note": "1 つの run を実行する session\n✗ 群の今の口座は使えない\n✓ 空きの口座で動く",
+   "internal": "run（便）・§23 便用の候補から群の今の口座を外す"
+  },
+  "session": {
+   "label": "session",
+   "note": "session の名\n・ orchestrator: target\n・ pipeline は run id",
+   "internal": "seat target / run id"
+  }
+ },
+ "rephrase": {
+  "home": {
+   "label": "ホーム",
+   "plain": "いま何が起きているかを 1 画面で",
+   "internal": "home（index.html）"
+  },
+  "questions": {
+   "label": "質問",
+   "plain": "あなたに決めてほしいこと\n・ 1 つにつき 1 つの問い",
+   "internal": "問い（bead・label=問い）",
+   "orig": "問い"
+  },
+  "map": {
+   "label": "地図",
+   "plain": "7 つの出所を番号つきで一望する",
+   "internal": "俯瞰（7 つの出所の帯・4 面）",
+   "orig": "俯瞰"
+  },
+  "gaps": {
+   "label": "抜けの検査",
+   "plain": "つながりの切れ目を機械が数えた結果\n{gi:ok} 合格\n{gi:ng} 抜けあり\n{gi:unknown} まだ分からない",
+   "internal": "見落とし（不変条件 G1〜G12）",
+   "orig": "見落とし"
+  },
+  "waiting_you": {
+   "label": "あなたの決定待ち",
+   "plain": "あなたが答えるまで進めない質問の数\n! dashboard の在る所だけ",
+   "internal": "open の問い（t3）",
+   "orig": "裁定待ち"
+  },
+  "runs4": {
+   "label": "run の数",
+   "plain": "pipeline dashboard の 4 列ごとの数\n・ Queued / Blocked\n{st:run} Running / Gated\n! 止まった run\n✓ Landed = 今日",
+   "internal": "board.json の run × 段\n`acct.js runColAt`"
+  },
+  "status": {
+   "label": "記号の見方",
+   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n{band:constitution} 四角 = file に書かれた行\n{band:beads} 丸 = 台帳と器の動くもの\n・ 色 = 出所の帯ごとに 1 色",
+   "internal": "稼働状況 5 値（seat state + AllowanceMeasured + tick）"
+  },
+  "st_run": {
+   "label": "動いている",
+   "plain": "{st:run} いま動いている\n・ 点が脈打つ\n◷ 長い = 経過を出す\n✗ 長くても応答なしではない",
+   "internal": "seat state=busy\n長い = busy の経過 > seat.tick_stale_s（1800 s）"
+  },
+  "st_wait": {
+   "label": "待っている",
+   "plain": "{st:wait} 次の指示か順番を待っている",
+   "internal": "seat state=idle・器の生存"
+  },
+  "st_limit": {
+   "label": "限度で止まっている",
+   "plain": "{st:limit} 利用枠を使い切って止まっている\n↻ 横の時刻 = 再開の見込み",
+   "internal": "AllowanceMeasured used_pct>=100\nresets_at まで・model の枠は model が合うとき"
+  },
+  "st_silent": {
+   "label": "応答なし",
+   "plain": "{st:silent} 器の管理 tick が止まっている\n{tk:stale} 最後の tick > 2×周期\n{st:run} busy が長いだけは別\n◷ pipeline は合図 30 分なし\n→ 管理 tick",
+   "internal": "orchestrator: tick-last の ts < 今 − 2 × seat.tick_interval_s\ntick-last が無い席と記録より前の時点は判じない\npipeline: run の最後の event から 30 分"
+  },
+  "st_unknown": {
+   "label": "測れていない",
+   "plain": "{st:unknown} 記録が読めず状態が分からない\n✗ 0 件とは違う",
+   "internal": "unmeasured\nstate dir 無し / 読み失敗 / AllowanceUnmeasured"
+  },
+  "next": {
+   "label": "次の一手",
+   "plain": "いまあなたがすると一番進むこと\n{fig:next}\n・ 先頭の 1 つを大きく\n・ 残りは小さく並べる",
+   "internal": "次の 1 手（dialogue-surface）・閉じた一覧 7 種"
+  },
+  "resume": {
+   "label": "再開の見込み",
+   "plain": "↻ 利用枠が戻る時刻",
+   "internal": "resets_at（AllowanceMeasured）"
+  },
+  "history": {
+   "label": "稼働の記録",
+   "plain": "直近 {SPAN}の session の状態を帯で見る\n{strip:run} busy = 動いている\n{strip:wait} idle = 待っている\n{strip:silent} 応答なし → 管理 tick\n{strip:limit} 限度で止まっている\n▸\n{strip:unknown} 記録なし = 測れていない\n{strip:acct} 口座の移動\n{strip:spawnstop} pipeline の起動 / 終了\n{strip:now} 見ている時点 = 右端\n{strip:ticks} 目盛 = {TICK}ごと\n← 左端 = {SPAN}前\n◷ つまみ = その時刻へ",
+   "internal": "seat state.jsonl（busy / idle）+ AllowanceMeasured（限度）\n+ 器の生存（途絶）の再生\n縦線 = SeatRegistered の口座の変化 / SeatSpawned / SeatStopped"
+  },
+  "external": {
+   "label": "例: 外部の台帳 scribe2 の run",
+   "plain": "tsuzuri の run が 0 なので兄弟の実データ\n・ 読むだけ",
+   "internal": "s2（scribe2 の器の event・読むだけ）",
+   "orig": "便"
+  },
+  "ask_open": {
+   "label": "答えを待つ質問",
+   "plain": "上から古い順\n・ 1 つずつ答える\n・ まとめても答えられる",
+   "internal": "open の問い（posted_at 昇順）"
+  },
+  "batch": {
+   "label": "まとめて承認",
+   "plain": "おすすめどおりの質問を一度に承認\n・ あなたの一言が全部に付く\n✗ 確認が要る操作は入らない",
+   "internal": "束（batch@<分>#n）",
+   "orig": "束"
+  },
+  "own_words": {
+   "label": "あなたの言葉（原文のまま）",
+   "plain": "書いた文はそのまま記録に残る\n✗ 書き換えられない",
+   "internal": "逐語（notes の裁定行）",
+   "orig": "逐語"
+  },
+  "ruling": {
+   "label": "あなたの決定",
+   "plain": "質問へのあなたの答え\n・ 番号と時刻が自動で付く",
+   "internal": "裁定（<問い id>@<UTC の分>#n）",
+   "orig": "裁定"
+  },
+  "rulings": {
+   "label": "これまでの決定",
+   "plain": "答え済みの質問とそのときの決定",
+   "internal": "裁定の一覧（answers の辺）",
+   "orig": "裁定の一覧"
+  },
+  "policy": {
+   "label": "全体への指示",
+   "plain": "全体に伝えたい方針\n→ 両方の session へ\n✗ 承認には数えない",
+   "internal": "方針（memo「方針」の notes）",
+   "orig": "方針"
+  },
+  "around": {
+   "label": "つながり",
+   "plain": "根拠と影響を 2 段先まで見る\n← 根拠\n→ 影響",
+   "internal": "近傍図 = around / 2 段 / 40 まで",
+   "orig": "近傍図"
+  },
+  "touches": {
+   "label": "関わる所",
+   "plain": "この質問の答えで変わりうる項目",
+   "internal": "touches"
+  },
+  "blocking": {
+   "label": "止めている task",
+   "plain": "この質問の答えを待って止まった task",
+   "internal": "blocks / raised"
+  },
+  "summary_plain": {
+   "label": "非エンジニア向け",
+   "plain": "専門語を使わない短い説明\n・ 出所の plain 欄",
+   "internal": "plain 欄"
+  },
+  "summary_eng": {
+   "label": "エンジニア向け",
+   "plain": "条の文や ADR の decision の先頭",
+   "internal": "statements[0].text / decision / what・value"
+  },
+  "timeline": {
+   "label": "run の時間軸",
+   "plain": "この task の run を 1 行ずつ並べる\n{ic:redo} 何回実行したか\n! どの段で止まったか",
+   "internal": "run（run_of）× RunStage",
+   "orig": "走行の時間軸"
+  },
+  "bands": {
+   "label": "出所の帯",
+   "plain": "7 つの帯 = 7 つの正本の file\n↓ 上ほど優先 = 憲法の順\n{band:constitution} 四角 = file の行\n{band:beads} 丸 = 台帳と器\n・ 色 = 帯ごとに 1 色",
+   "internal": "band（出所の正本・precedence 順）"
+  },
+  "lines": {
+   "label": "線の見方",
+   "plain": "この眺めに出ている線の型だけ\n{edge:basis} 実線 = 根拠\n{edge:blocks} 太い赤 = 止める\n{edge:parent-child} 点線 = 親子・属す\n{edge:supersedes} 矢印 = 置き換え",
+   "internal": "辺の型（style は族で決まる・族の名は出さない）"
+  },
+  "matrix": {
+   "label": "数の表",
+   "plain": "種類 × 種類の線の数\n→ 押すと一覧に絞る",
+   "internal": "種類 × 種類の辺の数の行列"
+  },
+  "view_compact": {
+   "label": "圧縮",
+   "plain": "7 つの帯に札を並べる\n・ 札 = 番号と題",
+   "internal": "view=compact"
+  },
+  "view_list": {
+   "label": "一覧",
+   "plain": "番号と題と概要の 1 行の表\n・ 帯と種類で絞る\n↕ 並べ替えられる",
+   "internal": "view=list"
+  },
+  "view_graph": {
+   "label": "グラフ",
+   "plain": "節点と線の図\n・ 帯で横に並べる\n← 根拠の側を左",
+   "internal": "view=graph（最長路で列）\nhub は子 n に畳む / 40 まで"
+  },
+  "view_table": {
+   "label": "表",
+   "plain": "種類 × 種類の線の数\n→ 押すと一覧に絞る",
+   "internal": "view=table"
+  },
+  "views": {
+   "label": "眺め",
+   "plain": "同じ中身を 4 つの形で見る\n・ 切り替えは URL に残る",
+   "internal": "?view=compact|list|graph|table"
+  },
+  "col_id": {
+   "label": "番号",
+   "plain": "項目の id",
+   "internal": "id"
+  },
+  "col_title": {
+   "label": "題",
+   "plain": "36 字までの題",
+   "internal": "title（36 字）"
+  },
+  "col_gist": {
+   "label": "概要",
+   "plain": "非エンジニア向けの 1 行\n・ 無ければエンジニア向け",
+   "internal": "summaries.json の plain / eng"
+  },
+  "col_band": {
+   "label": "帯",
+   "plain": "どの正本の file から来たか",
+   "internal": "band"
+  },
+  "col_kind": {
+   "label": "種類",
+   "plain": "項目の種類",
+   "internal": "kind"
+  },
+  "col_state": {
+   "label": "状態",
+   "plain": "open / closed や発効などの状態",
+   "internal": "status"
+  },
+  "col_updated": {
+   "label": "更新",
+   "plain": "最後に変わった時刻\n・ file は最後の commit",
+   "internal": "updated_at / git log -1"
+  },
+  "sort": {
+   "label": "並べ替え",
+   "plain": "一覧の順を変える",
+   "internal": "sort=id|updated|state"
+  },
+  "src": {
+   "label": "出所",
+   "plain": "この項目が書かれている file と行",
+   "internal": "src.file:line"
+  },
+  "children": {
+   "label": "子",
+   "plain": "畳んだ子の数\n→ 押すと開く",
+   "internal": "hub の子 = parent-child / in-article / answers"
+  },
+  "gap_ok": {
+   "label": "合格",
+   "plain": "{gi:ok} 検査を通った",
+   "internal": "pass"
+  },
+  "gap_ng": {
+   "label": "抜けあり",
+   "plain": "{gi:ng} 直すべき抜けが見つかった\n→ 名指しの項目を見る",
+   "internal": "fail"
+  },
+  "gap_unknown": {
+   "label": "まだ分からない",
+   "plain": "{gi:unknown} 材料が足りず判定できない\n✗ 合格とは数えない",
+   "internal": "unknown（3 値の 3 つ目）"
+  },
+  "mode": {
+   "label": "表示の型",
+   "plain": "初心者と経験者の切り替え\n・ 初心者 = 説明と手引き\n・ 経験者 = 型の名だけ",
+   "internal": "?mode=beginner|expert\nlocalStorage tz-mode"
+  },
+  "not_found": {
+   "label": "見つからない",
+   "plain": "指定の項目が索引に無い",
+   "internal": "key の解決に失敗"
+  },
+  "beginner": {
+   "label": "初心者",
+   "plain": "説明の印「?」と手引きが出る",
+   "internal": "mode=beginner"
+  },
+  "expert": {
+   "label": "経験者",
+   "plain": "説明を畳まず型の名も出す\n・「?」の印は出さない",
+   "internal": "mode=expert"
+  },
+  "external_ledger": {
+   "label": "外部の台帳 scribe2",
+   "plain": "兄弟の project の台帳\n✗ ここからは書かない",
+   "internal": "repo=s2（読むだけ）"
+  },
+  "nb_up2": {
+   "label": "根拠の根拠",
+   "plain": "← 根拠のさらに元",
+   "internal": "col=-2（根拠の側 2 段）"
+  },
+  "nb_up3": {
+   "label": "根拠の 3 段目",
+   "plain": "← 根拠の根拠のさらに元\n・ 段数 3 のときだけ",
+   "internal": "col=-3"
+  },
+  "nb_up": {
+   "label": "根拠",
+   "plain": "← この節点が拠る先\n・ 条と rule\n・ design-note の行\n・ 親の epic",
+   "internal": "col<0（upOf の向き）"
+  },
+  "nb_self": {
+   "label": "この節点",
+   "plain": "いま見ている項目\n← 根拠 ｜ 影響 →",
+   "internal": "col=0（起点）"
+  },
+  "nb_down": {
+   "label": "影響",
+   "plain": "→ この節点に拠るもの\n・ 子の task\n・ blocks で止まるもの\n・ あなたの決定",
+   "internal": "col>0（upOf の逆向き）"
+  },
+  "nb_down2": {
+   "label": "影響の先",
+   "plain": "→ 影響のさらに先",
+   "internal": "col=2（影響の側 2 段）"
+  },
+  "nb_down3": {
+   "label": "影響の 3 段目",
+   "plain": "→ 影響の先のさらに先\n・ 段数 3 のときだけ",
+   "internal": "col=3"
+  },
+  "nb_k": {
+   "label": "段数",
+   "plain": "根拠と影響を何段まで出すか\n・ 1 / 2 / 3\n・ URL の ?k= に残る",
+   "internal": "?k=1|2|3\n畳み ?fold=up|down|both"
+  },
+  "lg_hover": {
+   "label": "hover = 近傍を強調（根拠の側 2・影響の側 2）",
+   "plain": "指を置いた節点の近くを光らせる\n{fig:hover}\n・ 押す = 固定\n・ Esc = 解除\n・ 2 回押す = その頁へ\n▸\n↓ 20 を超えると各 1 段\n! hub は光るが先へ広げない\n・ hub = 線が 8 本を超える節点",
+   "internal": "hlCompute(depth 2 → 1 if >20・hub deg>8 は止める)"
+  },
+  "pinned": {
+   "label": "固定中",
+   "plain": "強調を固定している",
+   "internal": "pin"
+  },
+  "open_node": {
+   "label": "頁へ",
+   "plain": "この節点の頁を開く",
+   "internal": "bead.html?id="
+  },
+  "unpin": {
+   "label": "解除",
+   "plain": "強調の固定を外す",
+   "internal": "unpin"
+  },
+  "zoom_reset": {
+   "label": "元に戻す",
+   "plain": "拡大と移動を最初の表示に戻す",
+   "internal": "transform = 初期値"
+  },
+  "zoom_hint": {
+   "label": "ホイール = 拡大縮小・drag = 移動",
+   "plain": "図の拡大と移動\n・ ホイール = 拡大縮小\n・ drag = 移動\n・ 2 本指 = touch の拡大\n▸\n← 帯の名は左端に固定",
+   "internal": "wheel / pointer drag / pinch"
+  },
+  "answer_here": {
+   "label": "質問の頁で答える",
+   "plain": "→ この question に答える card へ",
+   "internal": "ask.html?id="
+  },
+  "proj_acct": {
+   "label": "この project の口座",
+   "plain": "tsuzuri の orchestrator の口座を掘る\n→ 全部の口座は account board",
+   "internal": "SeatRegistered の最新の account（登録 row）× board.json\naccount board と同じ data と判定"
+  },
+  "reg_account": {
+   "label": "登録の口座",
+   "plain": "orchestrator が今動いている口座\n・ 登録 row が持つ口座",
+   "internal": "SeatRegistered.account（t3:orchestrator）"
+  },
+  "acct_load": {
+   "label": "この口座の負荷",
+   "plain": "この口座を今使っている session\n・ この project の分\n・ ほかの project の数",
+   "internal": "sessionsAt(t) で acct が一致する行"
+  },
+  "others_on": {
+   "label": "ほかの project の session",
+   "plain": "同じ口座を使うほかの project の数",
+   "internal": "sessionsAt(t)・proj ≠ tsuzuri"
+  },
+  "move_state": {
+   "label": "移動の指示",
+   "plain": "群の口座の移動がどこまで進んだか\n{fig:move}\n① 移動の承認\n② /exit 待ち\n③ 新しい口座で起こし直し",
+   "internal": "GroupMoved\n→ GroupMovePending（shell へ戻らなかった）\n→ SeatRegistered（新しい口座）"
+  },
+  "step_approve": {
+   "label": "移動の承認",
+   "plain": "① 器が群の今の口座を移した\n・ 記録を書いた = GroupMoved\n→ 移動の指示",
+   "internal": "GroupMoved account=移り先"
+  },
+  "step_exit": {
+   "label": "退避の合図 → /exit 待ち",
+   "plain": "② 席が shell へ戻るのを待つ\n・ 合図 = /exit\n! 戻らない = 保留が残る\n✗ 合図は event に残らない\n→ 移動の指示",
+   "internal": "inject（読まない）・GroupMovePending"
+  },
+  "step_relaunch": {
+   "label": "起こし直し",
+   "plain": "③ 同じ窓で新しい口座に起こし直した\n・ 登録 row の口座が変わる\n→ 移動の指示",
+   "internal": "SeatRegistered account=移り先"
+  },
+  "acct_hist": {
+   "label": "口座の履歴",
+   "plain": "口座の変化を新しい順に並べる\n・ 登録 row の口座\n・ 群の記録の移動",
+   "internal": "SeatRegistered の account の変化\n+ groups/<群>.account の履歴"
+  },
+  "threshold": {
+   "label": "閾値",
+   "plain": "群を次の候補へ移す境の値\n→ 逼迫の閾値",
+   "internal": "`rules/manifest.toml` fleet.group_pressure_*"
+  },
+  "reason": {
+   "label": "理由",
+   "plain": "orchestrator がおすすめする理由",
+   "internal": "reason"
+  },
+  "recommend": {
+   "label": "おすすめ",
+   "plain": "orchestrator が推す答え\n→ よければ まとめて承認",
+   "internal": "recommend"
+  },
+  "since": {
+   "label": "から",
+   "plain": "◷ この状態になった時刻",
+   "internal": "since"
+  },
+  "parent": {
+   "label": "属する条",
+   "plain": "この文や rule が属する憲法の条",
+   "internal": "parent（article）"
+  },
+  "a1": {
+   "label": "確認が要る操作",
+   "plain": "消す / 出す / 使う 操作の質問\n✗ まとめて承認に入れない\n・ 1 つずつあなたの言葉で",
+   "internal": "A-1（消す / 出す / 使う）・束に入れない"
+  },
+  "cut": {
+   "label": "表示した数",
+   "plain": "図は 40 個までに絞る\n・ 左 = 表示した数\n・ 右 = 全部の数\n✂ 畳んだ・切った数",
+   "internal": "shown / total ・ cut（hub + cap）"
+  },
+  "k:条": {
+   "label": "条",
+   "plain": "憲法の 1 条\n・ P-n = always\n・ A-n = ask-first\n・ N-n = never",
+   "internal": "条（article）",
+   "orig": "条"
+  },
+  "k:規範文": {
+   "label": "条の文",
+   "plain": "条の中の 1 文 = P-n.m",
+   "internal": "規範文（statement）",
+   "orig": "規範文"
+  },
+  "k:裁定": {
+   "label": "あなたの決定",
+   "plain": "質問へのあなたの答え\n・ 台帳の notes の 1 行",
+   "internal": "裁定（原文の名）",
+   "orig": "裁定"
+  },
+  "k:方針": {
+   "label": "全体への指示",
+   "plain": "あなたが全体へ出した方針",
+   "internal": "方針（原文の名）",
+   "orig": "方針"
+  },
+  "overview": {
+   "label": "概況",
+   "plain": "群ごとの今の口座と止まった数\n・ 占有する口座 1 つ\n・ 群の project\n{st:limit} 限度で止まった数",
+   "internal": "group の集計（current_of = 記録 > 種）"
+  },
+  "group": {
+   "label": "project の群",
+   "plain": "1 つの口座を共有する project の組\n・ 占有する口座は 1 つ\n✗ 群どうしで重ならない\n・ orchestrator は全部そこ\n✗ 新しい pipeline は使えない",
+   "internal": "[[account-group]] name / anchors / accounts\n今の口座 = `groups/<群>.account`（記録 > 種）",
+   "orig": "群"
+  },
+  "accounts": {
+   "label": "口座",
+   "plain": "Claude の契約 1 つ分\n・ 利用枠が口座ごとに付く",
+   "internal": "[[account]] label"
+  },
+  "limited": {
+   "label": "限度で止まった session",
+   "plain": "{st:limit} この群で限度で止まった数\n・ 両方の session を数える",
+   "internal": "seatStatus=limit / run の口座の five_hour・seven_day=100"
+  },
+  "allowance": {
+   "label": "口座ごとの残り",
+   "plain": "口座 × 利用枠の表\n・ 帯の長さ = 使った割合\n↻ 右 = 戻るまで\n{thr:85} 目盛 = 閾値",
+   "internal": "AllowanceMeasured の最新（口座 × window）"
+  },
+  "used": {
+   "label": "使った割合",
+   "plain": "利用枠のうち使った割合",
+   "internal": "used_pct"
+  },
+  "reset_in": {
+   "label": "戻るまで",
+   "plain": "↻ 利用枠が戻るまでの残り",
+   "internal": "resets_at − 今"
+  },
+  "measured_at": {
+   "label": "最終計測",
+   "plain": "最後に残量を測れた時刻",
+   "internal": "AllowanceMeasured の ts"
+  },
+  "spark": {
+   "label": "直近 24 時間",
+   "plain": "使った割合の 24 時間の動き\n・ 実線 = 5h か 7d\n・ 点線 = model\n▸\n・ account board の実線 = five_hour\n・ home の実線 = seven_day",
+   "internal": "sparkline（24 h・SVG）"
+  },
+  "stage": {
+   "label": "段",
+   "plain": "session の今の段\n{st:run} orchestrator = 5 値\n・ pipeline = run の段",
+   "internal": "seatStatus / RunStage"
+  },
+  "elapsed": {
+   "label": "経過",
+   "plain": "◷ その状態になってからの時間",
+   "internal": "now − since"
+  },
+  "moves": {
+   "label": "口座の移動",
+   "plain": "群の今の口座が移った記録\n・ どの群が\n・ どこから → どこへ\n◷ いつ\n▸\n・ 1 行 = 記録 1 件\n+ 承認 = GroupMoved\n+ 戻らない席 = GroupMovePending",
+   "internal": "`groups/history/<群>.account.<ts>.0`\n+ GroupMoved + 続く GroupMovePending\nGroupPressureNotified / GroupMoveRefused\n<群>.request / .judged / lock は file で event ではない"
+  },
+  "when": {
+   "label": "いつ",
+   "plain": "◷ 起きた時刻",
+   "internal": "ts"
+  },
+  "to_account": {
+   "label": "どこへ",
+   "plain": "→ 移した先の口座",
+   "internal": "account"
+  },
+  "what": {
+   "label": "何が",
+   "plain": "移動の種類と理由",
+   "internal": "kind・reason"
+  },
+  "dashboards": {
+   "label": "各 project の dashboard",
+   "plain": "project ごとの画面へ 1 回で飛ぶ",
+   "internal": "anchor → project dashboard"
+  },
+  "not_yet": {
+   "label": "まだ無い",
+   "plain": "この project の dashboard はまだ無い",
+   "internal": "empty state"
+  },
+  "at": {
+   "label": "時点",
+   "plain": "この画面をいつの状態で見るか\n◷ つまみで 24 時間を遡る",
+   "internal": "?at=<ms>"
+  },
+  "now_btn": {
+   "label": "今",
+   "plain": "最新の記録の時刻へ戻す",
+   "internal": "at=built_at + 経過"
+  },
+  "relation": {
+   "label": "2 つの面の関係",
+   "plain": "2 つの面の役割と data の流れ\n↑ 上 = account board\n↓ 下 = project の面",
+   "internal": "relation.html"
+  },
+  "jump": {
+   "label": "飛び方",
+   "plain": "account board から project への移り方\n✓ 案 2 = 新しい窓\n✗ 案 1 = 採らなかった\n▸\n・ 持ち主の裁定 2026-09-26",
+   "internal": "案 2 = 名前つき target tz-<project>\nADR-5・ADR-7 に書く / 案 1 = 採らない"
+  },
+  "plan1": {
+   "label": "案 1: 1 つの窓の中で移る（採らなかった案）",
+   "plain": "同じ窓の中身を dashboard に替える案\n✗ 元の面が見えなくなる\n✗ ADR-5 の窓の形と合わない",
+   "internal": "location・history（採らない）"
+  },
+  "plan2": {
+   "label": "案 2: 新しい窓で開く（採った案）",
+   "plain": "project ごとに名前つきの窓を開く\n・ 名前 = tz-<project>\n↑ 在れば前面へ\n▸\n・ 本番 = app mode の別窓\n・ orchestrator が起こす = ADR-5",
+   "internal": "`window.open('', 'tz-<project>')`\n空なら移す / 在れば focus\n本番は CDP と --app"
+  },
+  "open_windows": {
+   "label": "開いている窓",
+   "plain": "account board が持つ project の窓の一覧\n↑ 前面へ = 前に出す\n✓ 戻ると閉じた印",
+   "internal": "window.open の handle\nmock は画面の状態と localStorage tz-wins\n本番は器の window registry"
+  },
+  "pros": {
+   "label": "利点",
+   "plain": "この案の良い所",
+   "internal": "pros"
+  },
+  "cons": {
+   "label": "欠点",
+   "plain": "この案の弱い所",
+   "internal": "cons"
+  },
+  "recommend_seat": {
+   "label": "orchestrator の推奨",
+   "plain": "orchestrator が推す案",
+   "internal": "recommend（席の推奨）",
+   "orig": "席の推奨"
+  },
+  "dormant": {
+   "label": "休止中の session",
+   "plain": "12 時間以上動きの無い session\n・ 改名前の席など\n・ 表から外し数だけ",
+   "internal": "seat の最後の state が 12 h より前"
+  },
+  "jump_limit": {
+   "label": "限度の時刻へ",
+   "plain": "{st:limit} 最後に限度だった時刻へ移る",
+   "internal": "max(t: seatStatus=limit)"
+  },
+  "last_record": {
+   "label": "最終の記録",
+   "plain": "器の記録を読んだ時刻\n◷ 画面の時計はここから進む",
+   "internal": "board.json built_at"
+  },
+  "open_new": {
+   "label": "新しい窓で開く",
+   "plain": "project の窓 tz-<project> を開く\n↑ 在れば前面に出す\n→ 案 2",
+   "internal": "`window.open('', 'tz-<project>')`\nabout:blank なら移す・在れば focus\n本番は CDP の Target.createTarget / --app"
+  },
+  "acct_back": {
+   "label": "account board へ戻る（この窓を閉じる）",
+   "plain": "この窓を閉じて account board へ戻る\n{fig:back}\n① 窓があれば前面へ\n② 無ければ新しく開く\n③ この窓を閉じる\n▸\n! 閉じられない窓もある\n→ この窓は手で閉じてください",
+   "internal": "① `window.open('', 'tz-account')` が窓を返せば focus\n② about:blank なら account/index.html へ移す\n③ `window.close()`（script が開いた窓だけ効く）"
+  },
+  "win_close_hand": {
+   "label": "この窓は手で閉じてください",
+   "plain": "script ではこの窓を閉じられない\n・ 元の面が開いた窓でない",
+   "internal": "window.close() は opener の無い窓では効かない"
+  },
+  "next_all": {
+   "label": "各 project の次の一手",
+   "plain": "project ごとに今いちばん先にすること\n{fig:next}\n{nxm:on:c} あり\n{nxm:off:d} なし\n{nxm:na:e} ― 測れていない\n▸\n・ g だけの project は薄く出す\n= home の次の一手と同じ関数\n! tsuzuri 以外の d〜f は ―",
+   "internal": "`acct.js nextAll(t)`\n= nextAt(project, t, Q) の順位\nQ = TZ.nextQ(G) か null\nrank → 宣言順"
+  },
+  "nx_na": {
+   "label": "―（測れていない）",
+   "plain": "{nxm:na:e} この項を判じる data を読んでいない",
+   "internal": "na"
+  },
+  "state_dir": {
+   "label": "記録の置き場",
+   "plain": "この project の器の記録 = state dir",
+   "internal": "`~/.local/state/scribe2-v2-state-<project>`"
+  },
+  "lg_shape": {
+   "label": "記号の形: 四角 = file の行・丸 = 台帳と run",
+   "plain": "形は 2 種\n{band:constitution} 四角 = file の行\n{band:beads} 丸 = 動くもの\n▸\n・ 四角 = constitution 〜 design-note\n・ 丸 = epic / task / memo / question\n・ 丸 = あなたの決定 / run",
+   "internal": "形 2 種: file の行 / beads・pipeline"
+  },
+  "lg_color": {
+   "label": "色 = 出所の帯",
+   "plain": "色は帯ごとに 1 色 → 出所の帯",
+   "internal": "band → 色 1 つ"
+  },
+  "lg_border": {
+   "label": "縁 = 状態（open の question は赤・起点は太い・closed は灰）",
+   "plain": "縁の色と太さが状態\n! 赤 = open の question\n・ 太い = 起点\n・ 灰 = closed\n▸\n✗ 角の丸さに意味は無い",
+   "internal": "囲みは rx 4 の 1 種・縁で状態"
+  },
+  "current_account": {
+   "label": "今の口座",
+   "plain": "この群が今占有している口座\n・ 記録が指す値\n・ 群の席は全部ここで起きる\n✗ 新しい pipeline は使えない\n▸\n・ 記録なし = 種が既定\n・ 種 = 前の群の種を避けた最初",
+   "internal": "current_of(群) = 記録 > 種\ndoctor の行 group=<名> accounts=… anchors=N\nseat-accounts=… current=<label|seed>"
+  },
+  "since_rec": {
+   "label": "いつから",
+   "plain": "◷ 今の口座へ移った時刻 = 記録の ts",
+   "internal": "groups/<群>.account の ts"
+  },
+  "previous": {
+   "label": "前の口座",
+   "plain": "← 移る前に占有していた口座",
+   "internal": "groups/<群>.account の previous"
+  },
+  "members": {
+   "label": "群の project",
+   "plain": "この群に属する project\n{gi:ok} 今の口座と一致\n{gi:ng} 移動待ち\n{gi:unknown} session なし\n▸\n・ 印 = 席の登録の口座と群の今の口座\n・ 群の門は anchor の席を全部通る",
+   "internal": "anchors × SeatRegistered の最新の account（登録 row）"
+  },
+  "candidates": {
+   "label": "候補と次の移り先",
+   "plain": "群が次に移る口座の決め方\n{fig:reserve}\n{cand:next:black5} 次の移り先\n{cand:resv:Tier1 の予約} 他の群の予約\n{cand:ng:5h 85%} 門で落ちた理由\n▸\n門 = 次の 5 つを全部通る\n✓ 今の口座でない\n✓ 他の群の今の口座でない\n✓ 退役でない\n✓ 300 秒以内の実測 = 鮮度\n✓ 3 つの窓とも閾値未満 {thr:85}\n鍵 = 次の順で並べる\n↓ 7d と model の残量の小さい方\n↑ 7d の reset が早い\n・ 宣言順\n! model の行なし = 末尾\n・ 5 時間の窓は門だけ\n予約 = Tier1 → Tier2 の順に取る\n✗ 群どうしで同じにならない\n✓ pipeline は予約の口座も使える\n! 鮮度の外 = 測れていない札\n・ doctor は測らない = none になる\n・ 契約 s2-07l.648",
+   "internal": "門 ∧ 鍵 = min(100−7d, 100−model[orchestrator の model]) desc\nmodel の行なしは末尾, 7d resets_at asc, 宣言順\n予約 = 群の宣言順（Tier 数字昇順）の貪欲・記録しない\n`acct.js reservationsAt` = doctor の next=<label|none>\n契約 s2-07l.648"
+  },
+  "pressure": {
+   "label": "逼迫の閾値",
+   "plain": "今の口座の枠がこれを超えると移る\n{thr:85} 5h 85%\n{thr:95} 7d 95%\n{thr:95} model 95%",
+   "internal": "`rules/manifest.toml`\nfleet.group_pressure_5h_pct / _7d_pct / _model_pct"
+  },
+  "occupant": {
+   "label": "占有",
+   "plain": "この口座を今占有している群\n{occ:grp:Tier1} 群が占有\n{occ:free:pipeline が使える} 空き",
+   "internal": "各群の current_of の逆引き"
+  },
+  "free_for_pipeline": {
+   "label": "pipeline が使える",
+   "plain": "どの群も占有していない口座\n→ 新しい pipeline はここから",
+   "internal": "便用の候補 = 口座 − 各群の今の口座 − 退役（§23）"
+  },
+  "seat_match": {
+   "label": "今の口座で動いている",
+   "plain": "{gi:ok} 席の口座 = 群の今の口座",
+   "internal": "SeatRegistered.account == current_of(群)"
+  },
+  "seat_mismatch": {
+   "label": "移動待ち",
+   "plain": "{gi:ng} 席の口座 ≠ 群の今の口座\n→ 器が /exit を送る\n{ic:redo} 新しい口座で起こし直す\n・ 指を置くと どこ → どこ",
+   "internal": "SeatRegistered.account != current_of(群)\n→ tick が /exit → launch（§20 / §21）"
+  },
+  "seat_none": {
+   "label": "session なし",
+   "plain": "{gi:unknown} orchestrator の記録が無い\n・ 測れていない",
+   "internal": "state dir か SeatRegistered が無い"
+  },
+  "sort_by": {
+   "label": "並べ方",
+   "plain": "session の表の並べ方\n・ URL の ?sort= に残る",
+   "internal": "?sort=project|account|stage|elapsed"
+  },
+  "sort_project": {
+   "label": "project 順",
+   "plain": "project ごとの見出しで並べる\n↑ orchestrator が上\n↓ pipeline が下",
+   "internal": "sort=project"
+  },
+  "sort_account": {
+   "label": "口座ごと",
+   "plain": "口座ごとの見出しで並べる",
+   "internal": "sort=account"
+  },
+  "sort_stage": {
+   "label": "段ごと",
+   "plain": "止まっているものを上に並べる\n{st:limit} 限度\n{st:silent} 応答なし\n! 止まった run",
+   "internal": "sort=stage\nlimit > silent > 止まった run > 待っている > 動いている"
+  },
+  "sort_elapsed": {
+   "label": "経過の長い順",
+   "plain": "◷ 今の状態が長いものを上に",
+   "internal": "sort=elapsed"
+  },
+  "no_record": {
+   "label": "記録なし",
+   "plain": "{strip:unknown} この時刻の記録が無い",
+   "internal": "稼働の記録の点線"
+  },
+  "stopped_group": {
+   "label": "止まっている",
+   "plain": "止まっている session\n{st:limit} 限度\n{st:silent} 応答なし\n! 質問や失敗の run",
+   "internal": "limit / silent / Questioned / Failed / Stopped / FAIL"
+  },
+  "moving_group": {
+   "label": "動いている・待っている",
+   "plain": "止まっていない session\n{st:run} 動いている\n{st:wait} 待っている",
+   "internal": "run / wait / 動いている段"
+  },
+  "next_target": {
+   "label": "次の移り先",
+   "plain": "逼迫したときに器が移す口座\n{cand:next:black5} 次の移り先\n・ 予約込みで毎回導く\n= doctor の next と同じ\n! none = なし か 鮮度の外\n▸\n・ 鮮度の外 = 計測してから判じる\n・ 鮮度 = rules usage_fresh_s 300 秒\n→ 候補と次の移り先\n・ 契約 s2-07l.648",
+   "internal": "reservationsAt(t).by[群].next\n= doctor next=<label|none>（契約 s2-07l.648）"
+  },
+  "no_target": {
+   "label": "移り先なし",
+   "plain": "門を通る空きの候補が無い\n✗ 器は移動を断る\n! 鮮度の外でもこうなる\n→ 候補と次の移り先",
+   "internal": "next=none・GroupMoveRefused reason=no-candidate"
+  },
+  "span": {
+   "label": "幅",
+   "plain": "稼働の記録の時間の幅\n→ 右端 = 見ている時点\n← 左端 = その幅だけ前\n・ URL の ?span= に残る",
+   "internal": "?span=24h|6h|3h（目盛 6 時間 / 1 時間 / 30 分）"
+  },
+  "orch_acct": {
+   "label": "orchestrator と口座",
+   "plain": "orchestrator の状態と口座\n↑ 上 = 状態と稼働の記録\n↓ 下 = 口座と利用枠",
+   "internal": "seat t3:orchestrator × SeatRegistered の口座 × board.json\naccount board と同じ data と判定"
+  },
+  "reserved": {
+   "label": "予約",
+   "plain": "{cand:resv:Tier1 の予約} 先の群が取った口座\n✗ この群の移り先にならない\n・ 記録せず毎回導く\n→ 候補と次の移り先",
+   "internal": "reservationsAt(t).resv[口座] = 群"
+  },
+  "tick_health": {
+   "label": "管理 tick",
+   "plain": "器の管理 tick の状態 = 4 値\n{tk:healthy} 2×周期 以内\n{tk:stale} それより古い\n{tk:absent} tick-last が無い\n{tk:unreadable} tick-last が読めない\n▸\n{fig:tick}\n✓ 常時オン = 止めない\n◷ 横の時間 = 最後の tick から\n・ reason = busy や heartbeat-off\n― = 記録より前の時点は判じない\n・ 契約 s2-07l.650",
+   "internal": "`<state_dir>/seat/<target>/tick-last`（ts= decision= reason=）\n健全 = 今 − ts ≤ 2 × seat.tick_interval_s\nts= は epoch 秒・absent = tick-last が無い\nscribe2 seat tick status の 4 値（契約 s2-07l.650）"
+  },
+  "heartbeat": {
+   "label": "heartbeat",
+   "plain": "打刻の合図 = 黙った席へ送る\n{hb:on} 送る\n{hb:off} 止めた\n✓ off でも起こし直しは動く\n▸\n✓ 移動の退避も動く\n✓ 群の判定も動く\n・ 契約 s2-07l.649",
+   "internal": "`<state_dir>/seat/<target>/heartbeat-off`（在れば off）\nscribe2 seat heartbeat off|on --state-dir S --target S:W\n契約 s2-07l.649"
+  },
+  "hb_to_off": {
+   "label": "→ off",
+   "plain": "{hb:off} heartbeat を止める\n・ 器の CLI を撃つ",
+   "internal": "scribe2 seat heartbeat off"
+  },
+  "hb_to_on": {
+   "label": "→ on",
+   "plain": "{hb:on} heartbeat を戻す\n・ 器の CLI を撃つ",
+   "internal": "scribe2 seat heartbeat on"
+  },
+  "mock_not_sent": {
+   "label": "mock: 器へは送っていない",
+   "plain": "画面の状態だけ変えた\n✗ 器の CLI は撃たない\n✗ file も書かない",
+   "internal": "HB_OVR（画面の中だけ）"
+  },
+  "hb_dlg_lead": {
+   "label": "器の CLI を撃ちます（GUI は file を直接書かない）:",
+   "plain": "",
+   "internal": "scribe2 seat heartbeat"
+  },
+  "hb_dlg_scope": {
+   "label": "off でも止まるのは合図だけ。死んだ席の起こし直し・移動の退避・群の判定はそのまま動きます。",
+   "plain": "",
+   "internal": "heartbeat-off の効く範囲"
+  },
+  "lg_run": {
+   "label": "busy",
+   "plain": "",
+   "internal": "sg-run"
+  },
+  "lg_wait": {
+   "label": "idle",
+   "plain": "",
+   "internal": "sg-wait"
+  },
+  "lg_silent": {
+   "label": "応答なし",
+   "plain": "",
+   "internal": "sg-silent"
+  },
+  "lg_limit": {
+   "label": "限度",
+   "plain": "",
+   "internal": "sg-limit"
+  },
+  "lg_unknown": {
+   "label": "記録なし",
+   "plain": "",
+   "internal": "sg-unknown"
+  },
+  "lg_acct": {
+   "label": "移動",
+   "plain": "",
+   "internal": "mk-acct"
+  },
+  "lg_spawnstop": {
+   "label": "起動 / 終了",
+   "plain": "",
+   "internal": "mk-spawn / mk-stop"
+  },
+  "lg_now": {
+   "label": "時点",
+   "plain": "",
+   "internal": "mk-now"
+  },
+  "group_name": {
+   "label": "群の名",
+   "plain": "群の名は Tier<数字> に決まっている\n↑ 宣言順 = 数字の小さい順\n✗ 違う名は器が断る\n✗ 順が違っても断る\n▸\n・ 断る = host.toml を読む時点\n・ 契約 s2-07l.647",
+   "internal": "host.toml [[account-group]] name = Tier<n>\n宣言順 = n 昇順（違えば host.toml の読みで断る）\n契約 s2-07l.647"
+  },
+  "sort_net": {
+   "label": "純減の大きい順",
+   "plain": "{net:down} 7 日で一番減った project を上\n・ 同じなら 24 時間の差\n↓ 台帳の無い project は末尾",
+   "internal": "sort=net・net7 asc → net24 asc"
+  },
+  "sort_backlog": {
+   "label": "積みの多い順",
+   "plain": "open の task が多い project を上\n↓ 台帳の無い project は末尾",
+   "internal": "sort=backlog・open task desc"
+  },
+  "ledger_state": {
+   "label": "台帳の処理状況",
+   "plain": "各 project の台帳の積みと速度\n・ task と memo の数\n・ 閉じる速度\n{net:down} 純減かどうか",
+   "internal": "`<anchor>/.beads/issues.jsonl`\n`ledger.js stats`（純関数）"
+  },
+  "ledger_block": {
+   "label": "台帳",
+   "plain": "この project の台帳の積みと速度\n・ 積みと速度\n{net:down} 純減\n・ epic の進み",
+   "internal": ".beads/issues.jsonl（+ mock の見本 28 本）\n`ledger.js`"
+  },
+  "l_task": {
+   "label": "open task",
+   "plain": "閉じていない task の数\n・ bug と feature も task\n✗ memo と question は別\n✗ epic も別",
+   "internal": "kind=task ∧ status≠closed"
+  },
+  "l_ready": {
+   "label": "ready",
+   "plain": "すぐ取りかかれる task\n・ status = open\n✓ 止める相手が全部閉じた",
+   "internal": "status=open ∧ blocks が全部 closed"
+  },
+  "l_blocked": {
+   "label": "blocked",
+   "plain": "止まっている task\n・ status = blocked\n! 止める相手が閉じていない",
+   "internal": "status=blocked ∨ 未解決の blocks"
+  },
+  "l_memo": {
+   "label": "memo",
+   "plain": "控え = memo の数\n・「昇格条件」の欄を持つ\n→ 閉じるより task へ昇格\n・ task と分けて数える",
+   "internal": "label intake:memo ∨ 題が [memo]"
+  },
+  "l_question": {
+   "label": "question",
+   "plain": "open の question の数\n・ 見本を含む\n! 答える列は実だけ",
+   "internal": "label 問い・status≠closed"
+  },
+  "l_epic": {
+   "label": "epic",
+   "plain": "open の epic の数",
+   "internal": "issue_type=epic ∧ status≠closed"
+  },
+  "l_rate": {
+   "label": "closed/日",
+   "plain": "直近 7 日に閉じた task ÷ 7",
+   "internal": "count(closed_at ∈ t−7d〜t) / 7"
+  },
+  "l_net24": {
+   "label": "純減 24h",
+   "plain": "今の open の数 − 24 時間前の数\n{net:down} 純減\n{net:flat} 横ばい\n{net:up} 純増",
+   "internal": "open(t) − open(t−24h)\nopen(x) = created ≤ x < closed"
+  },
+  "l_net7": {
+   "label": "純減 7d",
+   "plain": "今の open の数 − 7 日前の数\n→ 純減 24h と同じ矢印",
+   "internal": "open(t) − open(t−7d)"
+  },
+  "l_lead": {
+   "label": "lead p50",
+   "plain": "作ってから閉じるまでの中央値\n・ 直近 30 日に閉じた task\n・ p90 は hover",
+   "internal": "median(closed_at − created_at)・30 日"
+  },
+  "l_stale": {
+   "label": "stale",
+   "plain": "7 日以上更新の無い open の task",
+   "internal": "now − updated_at ≥ 7d"
+  },
+  "l_spark": {
+   "label": "14 日",
+   "plain": "直近 14 日の日ごとの数\n・ 実線 = closed\n・ 点線 = created",
+   "internal": "days[14]: created / closed"
+  },
+  "l_burn": {
+   "label": "burndown",
+   "plain": "直近 14 日の積みの推移\n・ 線 = open の task\n・ 棒 = その日に閉じた数",
+   "internal": "open(day end) の線 + closed/day の棒"
+  },
+  "l_epics": {
+   "label": "epic の進み",
+   "plain": "epic ごとの進み\n・ 帯 = 直下の閉じた割合\n・ open の数\n◷ いちばん古い open",
+   "internal": "epic の子（parent-child）の closed / 全体"
+  },
+  "memo_promo": {
+   "label": "memo の契約化",
+   "plain": "memo が移ることを昇格と呼ぶ\n{fig:promo}\n→ task\n→ design-intent の行\n▸\n・ memo = 4 節の控え\n・ 出所 / 観測 / 候補\n・ 昇格条件",
+   "internal": "promoted_to（見本）\n実データは閉じた memo で代える"
+  },
+  "m_open": {
+   "label": "open memo",
+   "plain": "閉じていない memo の数",
+   "internal": "kind=memo ∧ status≠closed"
+  },
+  "m_wait": {
+   "label": "昇格待ち",
+   "plain": "昇格条件はあるが昇格先の無い memo\n・ 見出しの有無だけ見る\n✗ 本文は読まない",
+   "internal": "open memo ∧ 見出し 昇格条件 ∧ promoted_to なし"
+  },
+  "m_promo7": {
+   "label": "昇格 7d",
+   "plain": "直近 7 日に昇格した memo の数\n・ 見本 = promoted_to の線\n! 実データ = 閉じた memo",
+   "internal": "memo の closed_at ∈ (t−7d, t]"
+  },
+  "m_age": {
+   "label": "memo の年齢",
+   "plain": "open の memo の経過の中央値\n・ 中央値 = p50",
+   "internal": "median(now − created_at | open memo)"
+  },
+  "unref": {
+   "label": "design-intent に未反映",
+   "plain": "まだ design-intent に写っていないもの\n・ (a) 昇格先の無い memo\n・ (b) 処分の宣言が無い決定\n・ (c) 反映されていない要望\n▸\n= (b) は次の一手の発効待ち\n= 抜けの検査 G7 と同じ関数\n・ (c) = 関わる所が変わっていない",
+   "internal": "(a) memo ∧ ¬promoted_to / (b) gaps G7（見本込み）\n(c) 問い.request ∧ touches の先の updated ≤ answered_at"
+  },
+  "l_unref": {
+   "label": "未反映",
+   "plain": "design-intent にまだ写っていない数\n= 未反映の一覧と同じ数\n! tsuzuri 以外は memo だけ",
+   "internal": "unreflected(G).length\n他の project は open memo ∧ ¬promoted_to"
+  },
+  "nx_promote": {
+   "label": "昇格",
+   "plain": "→ memo を task か design-intent の行へ",
+   "internal": "promoted_to を足す"
+  },
+  "nx_declare": {
+   "label": "処分を宣言",
+   "plain": "あなたの決定の処分を宣言する\n・ どの question に答えたか\n・ どこに効くか",
+   "internal": "answers の線を足す"
+  },
+  "nx_reflect": {
+   "label": "反映",
+   "plain": "→ 要望を関わる所へ反映する",
+   "internal": "touches の先を更新"
+  },
+  "u_kind": {
+   "label": "種類",
+   "plain": "memo か 裁定 か 要望",
+   "internal": "kind"
+  },
+  "u_age": {
+   "label": "年齢",
+   "plain": "◷ 作られてから・要望は答えてから",
+   "internal": "now − created_at / at / answered_at"
+  },
+  "u_next": {
+   "label": "次の 1 手",
+   "plain": "昇格 か 処分を宣言 か 反映",
+   "internal": "nx_promote / nx_declare / nx_reflect"
+  },
+  "state_now": {
+   "label": "今の状態",
+   "plain": "平時は出ない帯\n{thr:85} 逼迫\n{gi:ng} 移動中\n✗ 移り先なし\n{st:limit} 限度",
+   "internal": "逼迫 = 群の今の口座のどれかの窓 ≥ 閾値\n移動中 = 登録 ≠ 群の今の口座 / GroupMovePending\n移り先なし = GroupMoveRefused"
+  },
+  "nx_a": {
+   "label": "限度 / 移動",
+   "plain": "口座が限度か移動が止まっている\n✗ 移り先なし → 口座を足す\n{gi:ng} 席が戻らない → 窓を見る\n{st:limit} 限度だけ → reset を待つ\n→ 次の一手",
+   "internal": "優先 1: GroupMoveRefused（最後の GroupMoved より後）\n> GroupMovePending(target=この席)\n  または settle を過ぎて 登録 ≠ 群の今の口座\n> seatStatus=limit"
+  },
+  "nx_b": {
+   "label": "応答なし",
+   "plain": "{st:silent} 管理 tick が止まっている\n→ 席の窓を見る\n{ic:redo} 起こし直す\n✗ busy が長いだけは出ない",
+   "internal": "優先 2: seatStatus=silent = tick stale"
+  },
+  "nx_c": {
+   "label": "止まっている run",
+   "plain": "判断が要る止まった run\n! Failed か FAIL\n■ Stopped\n→ 再走か止めるか決める\n▸\n✗ 外部の台帳の見本は数えない",
+   "internal": "優先 3: board.json の run（この project・bead ごとの最新）\nQuestioned を除く止まった段"
+  },
+  "nx_d": {
+   "label": "束の承認",
+   "plain": "まとめて承認できる質問が 2 つ以上\n✗ 確認が要る操作は除く\n→ まとめて承認",
+   "internal": "優先 4: open の question（A-1 を除く）≥ 2"
+  },
+  "nx_e": {
+   "label": "質問",
+   "plain": "open の question のいちばん古いもの\n→ 答える",
+   "internal": "優先 5: open の question の posted_at 最小"
+  },
+  "nx_f": {
+   "label": "発効待ち",
+   "plain": "決定はあるが処分の宣言が無い\n= 抜けの検査 G7\n→ orchestrator に任せる",
+   "internal": "優先 6: gaps G7 fail"
+  },
+  "nx_g": {
+   "label": "次の一手なし",
+   "plain": "✓ 今あなたがすることは無い\n{st:run} 動いている\n{st:wait} 待っている",
+   "internal": "優先 7: 上の 6 つが全部 0"
+  },
+  "flow": {
+   "label": "data の流れ",
+   "plain": "どの記録がどの面に流れるかの図",
+   "internal": "data flow"
+  },
+  "move_grace": {
+   "label": "退避までの残り",
+   "plain": "群が移った席が /exit まで残す秒\n⇥ 合図を受けた席\n・ 猶予 = 1800 秒\n✗ 新しい subagent は起こさない\n▸\n・ 起点 = 群の記録の ts\n・ 合図の記録 = move-signal\n・ 猶予の後に /exit を送る\n・ 契約 s2-07l.652",
+   "internal": "`<state_dir>/seat/<target>/move-signal`（ts=<群の記録の ts>）\n残り = 記録の ts + seat.move_grace_s − 今\n`acct.js moveGraceAt`（ADR-0071）"
+  },
+  "l_judge": {
+   "label": "判定",
+   "plain": "台帳の 1 語の判定 = 悪い順\n! 滞り = stale > open 半分\n↑ 積み増し = 純減 7d > 0\n→ 停滞 = closed/日 < 0.1\n✓ 順調 = それ以外\n― 台帳なし = 読めない\n▸\n・ 上から順に当てて最初の 1 つ\n・ 閾値は rules 行の候補\n・ stale = 7 日 更新なし",
+   "internal": "`ledger.js judge`\nbad: stale > 0.5 × open task / up: net7 > 0\nstall: closed/日 < 0.1 / ok / none = 台帳なし\n候補: ledger.judge_stale_ratio 0.5\nledger.judge_gain_7d 0 / ledger.judge_idle_per_day 0.1"
+  },
+  "j_bad": {
+   "label": "滞り",
+   "plain": "! stale が open の task の半分超\n→ 古い task を閉じるか見直す",
+   "internal": "judge=bad（stale > 0.5 × open task）"
+  },
+  "j_up": {
+   "label": "積み増し",
+   "plain": "↑ 7 日で open の task が増えた\n・ 純減 7d > 0",
+   "internal": "judge=up（net7 > 0）"
+  },
+  "j_stall": {
+   "label": "停滞",
+   "plain": "→ ほとんど閉じていない\n・ closed/日 < 0.1",
+   "internal": "judge=stall（perDay < 0.1）"
+  },
+  "j_ok": {
+   "label": "順調",
+   "plain": "✓ 上の 3 つのどれでもない\n・ 滞り / 積み増し / 停滞 でない",
+   "internal": "judge=ok"
+  },
+  "j_none": {
+   "label": "台帳なし",
+   "plain": "― 台帳が読めない",
+   "internal": "judge=none（issues.jsonl が無い）"
+  },
+  "sort_judge": {
+   "label": "判定の悪い順",
+   "plain": "判定の悪い project を上に\n・ ! → ↑ → → → ✓ → ―",
+   "internal": "?lsort=judge（既定）"
+  },
+  "sort_need": {
+   "label": "要対応の重い順",
+   "plain": "要対応の重い project を上に\n・ a → g の順\n・ 同じなら未反映の多い順",
+   "internal": "?psort=need（既定）"
+  },
+  "sort_group": {
+   "label": "群の順",
+   "plain": "群ごとに宣言の順で並べる",
+   "internal": "?psort=group"
+  },
+  "sort_unref": {
+   "label": "未反映の多い順",
+   "plain": "未反映の多い project を上に",
+   "internal": "?psort=unref"
+  },
+  "p_need": {
+   "label": "要対応",
+   "plain": "いま手を加えるべきこと\n■ a〜c = 赤\n■ d〜f = 橙\n・ g = 薄い\n→ 次の一手の先頭と同じ",
+   "internal": "nextAt(project, t).top（HOME の次の一手と同じ関数）"
+  },
+  "p_wait": {
+   "label": "決定待ち",
+   "plain": "答えを待つ質問の数\n・ 束 = まとめて承認できる数\n― = 質問の台帳を読んでいない",
+   "internal": "questions_open / nextQ(G).nonA1"
+  },
+  "p_open": {
+   "label": "開く",
+   "plain": "project の窓を開く\n↑ 開いていれば前面へ",
+   "internal": "window.open('', 'tz-<project>')"
+  },
+  "p_more": {
+   "label": "詳しく",
+   "plain": "行を押すと縦に開く\n・ sparkline と lead\n・ stale\n・ session と口座の履歴",
+   "internal": "details row"
+  }
+ }
+}

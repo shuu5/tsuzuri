@@ -24,52 +24,52 @@ viewpoints:
   - id: fidelity
     name: 忠実さ
     reader: 元の文と平易文の両方を読み、意味の差だけを拾う編集者
-    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文・決定の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは語彙の正本の同じ語を指しているか。平易文が引く規則の表の値は表の値と同じか。図の根拠が指す先は、図の中身と合っているか。判断の記録の欄の決まりが「機械では弁別できない」とする改番（本文も変えたうえでの番号の付け替え）が起きていないか＝床は削除と新設として通すので数えない。重さ = 止める（言い換えが義務・要件・決定を変える）・直す（落としや足しはあるが義務は変わらない）・参考（提案）。参照 id の解決・欄の非空・件数は床の領分なので挙げない。判定できない箇所は「まだ分からない」と書く。
+    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは語彙の正本の同じ語を指しているか。平易文が引く規則の表の値は表の値と同じか。図の根拠が指す先は、図の中身と合っているか。判断の記録の欄の決まりが「機械では弁別できない」とする改番（本文も変えたうえでの番号の付け替え）が起きていないか＝床は削除と新設として通すので数えない。重さ = 止める（言い換えが義務・要件・決定を変える）・直す（落としや足しはあるが義務は変わらない）・参考（提案）。参照 id の解決・欄の非空・件数は床の領分なので挙げない。判定できない箇所は「まだ分からない」と書く。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない。
     reads:
       - {doc: constitution, fields: [articles.plain, articles.statements.text]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: vocabulary, fields: [terms, field_terms]}
       - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs, nonfunctional, scope_m1, scope_m3]}
       - {doc: intake, fields: [questions]}
-      - {doc: adr, fields: [plain, decision, options.text, figures.refs, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections, figures.refs]}
   - id: readability
     name: 読みやすさ
     reader: この道具を初めて見る非エンジニア
-    question: 入口から歩いて「何が決まりで・何ができたら完成で・なぜそう決めたか」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。
+    question: 入口から歩いて「何が決まりで・何ができたら完成か」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない。
     reads:
-      - {doc: index, fields: [audience, shelf, lanes, intake]}
+      - {doc: index, fields: [audience, shelf, intake]}
       - {doc: constitution, fields: [articles.title, articles.plain, precedence, sources]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: vocabulary, fields: [terms]}
       - {doc: srs, fields: [goals, scope, scope_m3, requirements.title, requirements.plain, nonfunctional, constraints, acceptance, figures]}
       - {doc: intake, fields: [questions]}
-      - {doc: adr, fields: [title, plain, decision, context, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections]}
   - id: coherence
     name: 文書どうしの整合
     reader: 10 種の文書を横に並べて矛盾を探す審査役
-    question: 憲法・規則の表・要件書・判断の記録・設計ノート・相談窓口・天井の正本・語彙・入口・索引の欄の決まりの間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く、判断の記録が規則を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。判断の記録は決定だけでなく前提（context）と退けた案（options）も読む。重さ = 止める（2 つの文書が両立しない義務や決定を持つ = どちらかが誤り。条が名指す置き場を越えた記述〔台帳に規則・型付きデータに裁定 等〕もここ）・直す（二重の記述・条に反しない越境・意味のずれ・両立はする）・参考（提案）。床が数える一致（参照 id の解決・欄の非空・番号・件数）は挙げない。
+    question: 憲法・規則の表・要件書・判断の記録・設計ノート・相談窓口・天井の正本・語彙・入口・索引の欄の決まりの間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない。重さ = 止める（2 つの文書が両立しない義務や決定を持つ = どちらかが誤り。条が名指す置き場を越えた記述〔台帳に規則・型付きデータに裁定 等〕もここ）・直す（二重の記述・条に反しない越境・意味のずれ・両立はする）・参考（提案）。床が数える一致（参照 id の解決・欄の非空・番号・件数）は挙げない。
     reads:
       - {doc: constitution, fields: [articles, precedence]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1, scope_m3]}
-      - {doc: adr, fields: [context, decision, options, basis, consequences, retreat, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections]}
       - {doc: intake, fields: [targets, questions]}
       - {doc: ceiling, fields: [documents, viewpoints]}
       - {doc: vocabulary, fields: [terms, field_terms]}
-      - {doc: index, fields: [shelf, lanes, intake]}
+      - {doc: index, fields: [shelf, intake]}
       - {doc: graph, fields: [schema.node_kinds, schema.edge_types, schema.edge_fields]}
   - id: reality
     name: 実態との整合
     reader: 設計文書と版管理の中身を突き合わせる実装者
-    question: 設計文書が言うこと（要件・非機能要件・決定・契約表の行・帰結）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、実装と違う決定、着地したのに文書が古いままの箇所、帰結に書いた後続が起きていない箇所を挙げる。憲法の条の機構の注と規則の表の行の注が言う実装の状態（未実装である・数える口が無い・判定は「まだ分からない」）が、版管理の中の実装と合うかも見る（日付を添えた記述なので古くなりうる）。重さ = 止める（文書が実態と逆のことを約束している）・直す（古い・欠けている記述）・参考（提案）。床が数える一致（参照 id の解決・着地の印・欄の一致）は挙げない。
+    question: 設計文書が言うこと（要件・非機能要件・契約表の行）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、着地したのに文書が古いままの箇所を挙げる。憲法の条の機構の注と規則の表の行の注が言う実装の状態（未実装である・数える口が無い・判定は「まだ分からない」）が、版管理の中の実装と合うかも見る（日付を添えた記述なので古くなりうる）。重さ = 止める（文書が実態と逆のことを約束している）・直す（古い・欠けている記述）・参考（提案）。床が数える一致（参照 id の解決・着地の印・欄の一致）は挙げない。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない。
     reads:
       - {doc: constitution, fields: [articles.mechanism, articles.statements.text]}
-      - {doc: rules, fields: [thresholds, discipline]}
+      - {doc: rules, fields: [thresholds]}
       - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
-      - {doc: adr, fields: [decision, consequences, note]}
+      - {doc: adr, fields: [title, status]}
       - {doc: design-note, fields: [sections]}
 # folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
 schema:

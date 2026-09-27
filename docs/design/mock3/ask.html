@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tsuzuri — 質問（mock v3）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<main class="page" id="app"></main>
+<script src="ui.js"></script>
+<script>
+TZ.boot('ask', function (G) {
+  var esc = TZ.esc, L = TZ.L, IC = TZ.IC;
+  var now = TZ.now();
+  var qs = TZ.openQuestions(G);
+  var isA1 = function (q) { return (q.attrs.labels || []).some(function (l) { return /^A-1/.test(l); }); };
+  var sm = function (svg, n) { return svg.replace('<svg', '<svg width="' + (n || 14) + '" height="' + (n || 14) + '"'); };
+
+  function qcard(q, i) {
+    var a = q.attrs, m = TZ.material(G, q.key), a1 = isA1(q), sum = TZ.summaryOf(q);
+    return '<article class="qcard" id="q' + i + '" data-q="' + esc(q.key) + '">' +
+      '<div class="head"><span class="nb">' + (i + 1) + '</span><a class="t nl" href="bead.html?id=' + encodeURIComponent(q.key) + '" data-key="' + esc(q.key) + '"><span data-t>' + esc(TZ.t36(a.question || q.title)) + '</span></a>' +
+      (a1 ? '<span class="warn" data-term="a1" tabindex="0">' + sm(IC.warn) + '</span>' : '') +
+      '<span class="chip num" data-tip-expert="posted_at ' + esc(a.posted_at) + '">' + sm(IC.clock, 12) + '<span data-since="' + TZ.ms(a.posted_at) + '">' + TZ.durMs(now - TZ.ms(a.posted_at)) + '</span></span></div>' +
+      // 順: 題 → 概要（非エンジニア向け / エンジニア向け）→ 理由（常に表示）→ 推奨 → button → つながり（畳む・既定は閉）
+      '<div class="qsum">' + (sum.plain || sum.eng ? '<div class="ln plain" data-term="summary_plain">' + IC.person + '<span data-t>' + esc(sum.plain || '―') + '</span></div>' +
+        '<div class="ln eng" data-term="summary_eng">' + IC.code + '<span data-t>' + esc(sum.eng || '―') + '</span></div>' : '<div class="ln plain muted">' + IC.person + '<span>要約なし</span></div>') + '</div>' +
+      '<div class="qreason"><b data-term="reason" tabindex="0">' + esc(L('reason')) + '</b><span data-t>' + esc(a.reason || '') + '</span></div>' +
+      '<div class="rec" data-term="recommend">' + IC.check + '<div><b>' + esc(L('recommend')) + '</b> <span data-t>' + esc(a.recommend || '') + '</span></div></div>' +
+      '<div class="answer"><textarea rows="2" aria-label="' + esc(L('own_words')) + '" placeholder="' + esc(L('own_words')) + '"></textarea>' +
+      '<button type="button" class="btn primary send" disabled>' + esc(L('ruling')) + ' ›</button></div>' +
+      '<details class="nb-d"><summary><span data-term="around">' + esc(L('around')) + '</span><span class="chip num" data-term="touches">' + sm(IC.link, 12) + esc(L('touches')) + ' ' + m.touches.length + '</span>' +
+      '<span class="chip num" data-term="blocking">' + sm(IC.stop, 12) + esc(L('blocking')) + ' ' + m.blocking.length + '</span></summary><div class="nb-body"></div></details></article>';
+  }
+
+  // これまでの決定（答え済みの質問・印 + 題）
+  var closed = G.data.nodes.filter(function (n) { return n.kind === '問い' && n.repo === 't3' && n.attrs.status === 'closed'; })
+    .sort(function (a, b) { return a.id.localeCompare(b.id, 'ja', { numeric: true }); });
+  var hist = '<details class="fold panel" id="hist"><summary>' + TZ.H('h2', 'rulings') + '<span class="chip num">' + closed.length + '</span></summary><ul class="items">' +
+    closed.map(function (q) { var r = TZ.rulingOf(G, q.key); return TZ.itemNode(q.key, r ? '<a class="nl" href="' + TZ.href(r.key) + '" data-key="' + esc(r.key) + '">' + TZ.hm(r.attrs.at) + '</a>' : ''); }).join('') + '</ul></details>';
+
+  // まとめて承認（A-1 の質問は入れない）
+  var batchItems = qs.map(function (q, i) {
+    var a1 = isA1(q);
+    return '<li>' + (a1 ? '<span class="gi ng" aria-hidden="true">!</span>' : '<input type="checkbox" checked data-bq="' + esc(q.key) + '" aria-label="' + (i + 1) + '">') +
+      '<span class="nb">' + (i + 1) + '</span><span class="ttl" data-t>' + esc(TZ.t36(q.attrs.question || q.title)) + '</span>' + (a1 ? '<span class="warn" data-term="a1" tabindex="0">' + sm(IC.warn) + '</span>' : '') + '</li>';
+  }).join('');
+  var side = '<aside class="side stack">' +
+    '<section class="panel" id="batch"><header>' + TZ.H('h2', 'batch') + '</header><ul class="items">' + batchItems + '</ul>' +
+    '<div class="metas row" style="margin:8px 0"><span class="chip num" data-term="touches" id="bt"></span><span class="chip num" id="bo" data-tip-expert="選んだ質問の touches の重なり（衝突の兆し）"></span></div>' +
+    '<textarea id="bw" rows="2" aria-label="' + esc(L('own_words')) + '" placeholder="' + esc(L('own_words')) + '"></textarea>' +
+    '<button type="button" class="btn primary" id="bsend" style="width:100%;margin-top:8px" disabled>' + esc(L('batch')) + ' ›</button></section>' +
+    '<section class="panel" id="policy"><header>' + TZ.H('h2', 'policy') + '</header>' +
+    '<div class="seg" role="group" aria-label="範囲" style="margin-bottom:8px"><button type="button" aria-pressed="true" data-scope="topic">この論点</button><button type="button" aria-pressed="false" data-scope="all">全体</button></div>' +
+    '<textarea id="pw" rows="2" aria-label="' + esc(L('policy')) + '"></textarea><button type="button" class="btn" id="psend" style="width:100%;margin-top:8px" disabled>' + esc(L('policy')) + ' ›</button></section></aside>';
+
+  document.getElementById('app').innerHTML = '<div class="row" style="margin-bottom:16px">' + TZ.H('h1', 'questions') + '</div>' +
+    '<div class="ask"><div class="stack"><div class="row">' + TZ.H('h2', 'ask_open') + '<span class="chip num">' + qs.length + '</span></div>' +
+    qs.map(qcard).join('') + hist + '</div>' + side + '</div>';
+
+  // つながりは開いたときに組む（段階的開示）
+  TZ.$$('details.nb-d').forEach(function (d) {
+    d.addEventListener('toggle', function () { if (d.open && !d.__done) { d.__done = 1; d.querySelector('.nb-body').innerHTML = TZ.aroundBlock(d.closest('.qcard').getAttribute('data-q')); } });
+  });
+  // 入力（IME の変換中は何もしない・Ctrl+Enter で送る）
+  function wire(ta, btn, msg) {
+    ta.addEventListener('input', function () { btn.disabled = !ta.value.trim() || (btn.id === 'bsend' && !TZ.$$('[data-bq]:checked').length); });
+    ta.addEventListener('keydown', function (e) { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !btn.disabled) btn.click(); });
+    btn.addEventListener('click', function () { TZ.toast(msg); });
+  }
+  TZ.$$('.qcard').forEach(function (c) { wire(c.querySelector('textarea'), c.querySelector('.send'), '見本: 記録はしません'); });
+  wire(document.getElementById('bw'), document.getElementById('bsend'), '見本: 記録はしません');
+  wire(document.getElementById('pw'), document.getElementById('psend'), '見本: 記録はしません');
+  TZ.$$('#policy .seg button').forEach(function (b) { b.addEventListener('click', function () { TZ.$$('#policy .seg button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); }); });
+  // まとめて承認: 関わる所の和と重なり
+  function recount() {
+    var cnt = {}; TZ.$$('[data-bq]:checked').forEach(function (c) { TZ.material(G, c.getAttribute('data-bq')).touches.forEach(function (k) { cnt[k] = (cnt[k] || 0) + 1; }); });
+    var ks = Object.keys(cnt), ov = ks.filter(function (k) { return cnt[k] > 1; }).length;
+    document.getElementById('bt').innerHTML = sm(IC.link, 12) + esc(L('touches')) + ' ' + ks.length;
+    document.getElementById('bo').innerHTML = TZ.IC.warn.replace('<svg', '<svg width="12" height="12"') + ' ' + ov;
+    var bw = document.getElementById('bw'); document.getElementById('bsend').disabled = !bw.value.trim() || !TZ.$$('[data-bq]:checked').length;
+  }
+  TZ.$$('[data-bq]').forEach(function (c) { c.addEventListener('change', recount); }); recount();
+
+  // ?id= で名指された質問・決定へ
+  var id = TZ.param('id'), n = id && G.byKey[id];
+  if (n) {
+    var qk = n.kind === '裁定' ? n.attrs.question && ('t3:' + n.attrs.question) : n.key;
+    var card = TZ.$('.qcard[data-q="' + qk + '"]');
+    if (card) { card.classList.add('target'); card.scrollIntoView({ block: 'center' }); }
+    else { var h = document.getElementById('hist'); h.open = true; var a = TZ.$('#hist [data-key="' + qk + '"]'); if (a) { a.closest('li').style.background = 'var(--panel-2)'; a.scrollIntoView({ block: 'center' }); } }
+  }
+});
+</script>
+</body>
+</html>

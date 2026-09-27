@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>器 — 2 つの面の関係と飛び方（mock v3）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../ui.css">
+</head>
+<body>
+<main class="page" id="app"></main>
+<script src="../ui.js"></script>
+<script>
+TZ.bootAccount('relation', function (B) {
+  var esc = TZ.esc, L = TZ.L, IC = TZ.IC;
+  var projs = B.projects.map(function (p) { return p.name; });
+
+  /* ---------- 図: account board（上・器・1 窓）→ project dashboard（下・各 orchestrator）・data の流れ ---------- */
+  function fig() {
+    var W = 1000, H = 420, n = projs.length, pw = Math.min(126, Math.floor((W - 80 - (n - 1) * 10) / n)), gap = (W - 80 - n * pw) / (n - 1);
+    var s = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(L('relation')) + '">',
+      '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink-2)"/></marker>',
+      '<marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--st-limit)"/></marker></defs>'];
+    // 器の event（左上）→ account board
+    s.push('<rect x="40" y="24" width="220" height="64" rx="10" fill="var(--panel-2)" stroke="var(--band-pipeline)" stroke-width="2"/>');
+    s.push('<text x="150" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="var(--band-pipeline)">器の event</text>');
+    s.push('<text x="150" y="70" text-anchor="middle" font-size="10.5" fill="var(--ink-3)" font-family="ui-monospace,monospace">fleet/events.jsonl・seat/*</text>');
+    s.push('<rect x="330" y="16" width="420" height="80" rx="12" fill="var(--panel)" stroke="var(--ink)" stroke-width="3"/>');
+    s.push('<text x="540" y="46" text-anchor="middle" font-size="16" font-weight="800" fill="var(--ink)">account board</text>');
+    s.push('<text x="540" y="68" text-anchor="middle" font-size="12" fill="var(--ink-2)">器が管理・窓 1 つ（tz-account）・project の群 ' + B.groups.length + '</text>');
+    s.push('<text x="540" y="86" text-anchor="middle" font-size="11" fill="var(--ink-3)">3 tab = HOME / session / 各 project・窓の一覧は HOME</text>');
+    s.push('<path d="M260 56 H322" stroke="var(--ink-2)" stroke-width="2" fill="none" marker-end="url(#ah)"/>');
+    // project dashboard の列
+    var y0 = 200;
+    projs.forEach(function (p, i) {
+      var x = 40 + i * (pw + gap), has = p === 'tsuzuri';
+      s.push('<path d="M540 96 C 540 150, ' + (x + pw / 2) + ' 150, ' + (x + pw / 2) + ' ' + (y0 - 6) + '" stroke="var(--line-2)" stroke-width="1.5" fill="none" stroke-dasharray="' + (has ? '0' : '4 3') + '" marker-end="url(#ah)"/>');
+      s.push('<rect x="' + x + '" y="' + y0 + '" width="' + pw + '" height="70" rx="10" fill="var(--panel)" stroke="' + (has ? 'var(--accent)' : 'var(--line-2)') + '" stroke-width="' + (has ? 2.5 : 1.2) + '"' + (has ? '' : ' stroke-dasharray="4 3"') + '/>');
+      s.push('<text x="' + (x + pw / 2) + '" y="' + (y0 + 26) + '" text-anchor="middle" font-size="' + (p.length > 12 ? 11 : 13) + '" font-weight="750" fill="var(--ink)"' + (p.length * (p.length > 12 ? 6.6 : 7.8) > pw - 10 ? ' textLength="' + (pw - 10) + '" lengthAdjust="spacingAndGlyphs"' : '') + '>' + esc(p) + '</text>');
+      s.push('<text x="' + (x + pw / 2) + '" y="' + (y0 + 44) + '" text-anchor="middle" font-size="10.5" fill="var(--ink-2)">dashboard</text>');
+      s.push('<text x="' + (x + pw / 2) + '" y="' + (y0 + 60) + '" text-anchor="middle" font-size="10" fill="var(--ink-3)">' + (has ? 'mock v3' : L('not_yet')) + '</text>');
+    });
+    s.push('<text x="' + (W - 40) + '" y="' + (y0 + 90) + '" text-anchor="end" font-size="11" fill="var(--ink-3)">各 project の orchestrator が data と browser を制御・project ごとに窓 1 つ（tz-&lt;project&gt;）</text>');
+    var bx = 40 + projs.indexOf('tsuzuri') * (pw + gap) + pw;
+    s.push('<path d="M' + (bx - 8) + ' ' + (y0 + 8) + ' C ' + (bx + 60) + ' ' + (y0 - 40) + ', 800 110, 752 70" stroke="var(--accent)" stroke-width="2" fill="none" stroke-dasharray="6 3" marker-end="url(#ah)"/>');
+    // tsuzuri の下: 正本 3 つ → dashboard・決定 → 台帳と器の event
+    var tx = 40 + projs.indexOf('tsuzuri') * (pw + gap), cx = tx + pw / 2, yb = 360;
+    var src = [['.beads（台帳）', 'var(--band-beads)'], ['design-intent', 'var(--band-constitution)'], ['器の event', 'var(--band-pipeline)']];
+    var bx0 = Math.max(40, Math.min(W - 40 - 3 * 150 - 20, cx - 235));
+    src.forEach(function (x, i) {
+      var bx = bx0 + i * 160;
+      s.push('<rect x="' + bx + '" y="' + yb + '" width="150" height="44" rx="8" fill="var(--panel-2)" stroke="' + x[1] + '" stroke-width="2"/>');
+      s.push('<text x="' + (bx + 75) + '" y="' + (yb + 27) + '" text-anchor="middle" font-size="12" font-weight="700" fill="' + x[1] + '">' + esc(x[0]) + '</text>');
+      s.push('<path d="M' + (bx + 75) + ' ' + yb + ' C ' + (bx + 75) + ' ' + (yb - 40) + ', ' + (cx - 20 + i * 20) + ' ' + (y0 + 110) + ', ' + (cx - 20 + i * 20) + ' ' + (y0 + 74) + '" stroke="var(--ink-2)" stroke-width="1.6" fill="none" marker-end="url(#ah)"/>');
+    });
+    // 決定（あなたの決定）: dashboard の server → 台帳と器の event
+    s.push('<path d="M' + (tx + pw) + ' ' + (y0 + 50) + ' C ' + (tx + pw + 90) + ' ' + (y0 + 60) + ', ' + (bx0 + 3 * 160 + 40) + ' ' + (yb - 30) + ', ' + (bx0 + 2 * 160 + 150) + ' ' + (yb + 22) + '" stroke="var(--st-limit)" stroke-width="2.2" fill="none" marker-end="url(#ahw)"/>');
+    s.push('<path d="M' + (tx + pw) + ' ' + (y0 + 50) + ' C ' + (tx + pw + 60) + ' ' + (y0 + 120) + ', ' + (bx0 + 75) + ' ' + (yb - 60) + ', ' + (bx0 + 20) + ' ' + (yb) + '" stroke="var(--st-limit)" stroke-width="2.2" fill="none" marker-end="url(#ahw)"/>');
+    s.push('<text x="' + Math.min(W - 260, tx + pw + 16) + '" y="' + (y0 + 112) + '" font-size="11.5" font-weight="700" fill="var(--st-limit)">あなたの決定: dashboard の server が書く</text>');
+    s.push('</svg>');
+    return s.join('');
+  }
+  // 線の凡例: 図と同じ色・太さ・破線の見本
+  var ln = function (st, lab) { return '<span><svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><path d="M1 5 L31 5" fill="none" ' + st + '/></svg>' + esc(lab) + '</span>'; };
+  var flowLeg = '<div class="lgline" style="margin:6px 0 10px">' + ln('stroke="var(--ink-2)" stroke-width="1.6"', '読む') + ln('stroke="var(--st-limit)" stroke-width="2.2"', '書く = あなたの決定') +
+    ln('stroke="var(--line-2)" stroke-width="1.5" stroke-dasharray="4 3"', '開く = 新しい窓') + ln('stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 3"', '戻る = この窓を閉じる') + '</div>';
+  var flowList = '<ul class="items">' +
+    '<li>' + TZ.shape('pipeline', { fill: true }) + '<span class="ttl">器の event と群の記録 → account board</span></li>' +
+    '<li>' + TZ.shape('beads', { fill: true }) + '<span class="ttl">台帳 + design-intent + 器の event → project dashboard</span></li>' +
+    '<li>' + TZ.shape('rules', { fill: true }) + '<span class="ttl">あなたの決定 → dashboard の server → 台帳と器の event</span></li></ul>';
+
+  /* ---------- 飛び方の 2 案（実際に動く見本つき） ---------- */
+  var mq = TZ.param('mode') ? '?mode=' + TZ.mode() : '';
+  function li(t) { return '<li><span class="gi ok" aria-hidden="true">✓</span><span class="ttl" style="white-space:normal">' + esc(t) + '</span></li>'; }
+  function lx(t) { return '<li><span class="gi ng" aria-hidden="true">!</span><span class="ttl" style="white-space:normal">' + esc(t) + '</span></li>'; }
+  var p1 = '<section class="plan dropped"><header class="row" style="margin-bottom:8px">' + TZ.H('h3', 'plan1') + '</header>' +
+    '<ul class="items">' + lx('account board が見えなくなる') + lx('ADR-5 の窓の形と合わない') + '</ul><div class="small muted">持ち主の裁定 2026-09-26 で案 2 に統一</div>' +
+    '<div class="small muted" style="margin-top:8px">' + TZ.HS('pros') + '</div><ul class="items">' + li('窓が 1 つで迷わない') + li('link だけで済む') + '</ul>' +
+    '<div class="small muted" style="margin-top:8px">' + TZ.HS('cons') + '</div><ul class="items">' + lx('2 つの project を並べて見られない') + lx('移るたびに SSE を張り直す') + lx('時点や絞りが移動で消える') + '</ul></section>';
+  var p2 = '<section class="plan rec"><header class="row" style="margin-bottom:8px">' + TZ.H('h3', 'plan2') + '</header>' +
+    '<div class="small muted">' + TZ.HS('pros') + '</div><ul class="items">' + li('account board がいつも見える') + li('窓 tz-<project> = ADR-5 の形') + li('在れば前面へ = 窓が増え続けない') + '</ul>' +
+    '<div class="small muted" style="margin-top:8px">' + TZ.HS('cons') + '</div><ul class="items">' + lx('窓が増え、端末の画面を取り合う') + lx('開いている窓の一覧が要る → HOME') + lx('窓ごとに Chrome と IME を渡す §16.1') + '</ul>' +
+    '<div class="small muted" style="margin-top:8px">' + TZ.HS('acct_back') + '</div><div class="figw">' + TZ.figSVG('back') + '</div>' +
+    '<div class="demo"><div class="go">' + projs.map(function (p) { return p === 'tsuzuri' ? '<button type="button" class="btn primary" data-open="' + esc(p) + '">' + esc(p) + ' ' + esc(L('open_new')) + ' ↗</button>' : ''; }).join('') + '</div>' +
+    '<div class="winlist">' + TZ.H('h3', 'open_windows') + '<ul class="items" id="wins"></ul></div></div></section>';
+
+  document.getElementById('app').innerHTML = '<div class="row" style="margin-bottom:16px">' + TZ.H('h1', 'relation') + '</div>' +
+    '<section class="panel" style="margin-bottom:16px"><header>' + TZ.H('h2', 'flow') + '</header><div class="relfig">' + fig() + '</div>' + flowLeg + flowList + '</section>' +
+    '<section class="panel"><header>' + TZ.H('h2', 'jump') + '</header><div class="plans">' + p1 + p2 + '</div></section>';
+
+  // 案 2 の見本: account board の HOME と同じ形（名前つきの窓 tz-<project>・在れば前面へ・一覧は localStorage tz-wins）
+  try { if (window.name !== 'tz-account') window.name = 'tz-account'; } catch (e) { /* noop */ }
+  var W = {};
+  function load() { try { return JSON.parse(localStorage.getItem('tz-wins') || '{}'); } catch (e) { return {}; } }
+  function save(o) { try { localStorage.setItem('tz-wins', JSON.stringify(o)); } catch (e) { /* noop */ } }
+  function drawWins() {
+    var o = load(), ks = Object.keys(o).filter(function (k) { return o[k] && typeof o[k] === 'object'; });
+    document.getElementById('wins').innerHTML = ks.length ? ks.map(function (k) {
+      var alive = W[k] && !W[k].closed;
+      return '<li>' + TZ.stIcon(alive ? 'run' : 'unknown') + '<span class="ttl"><span data-t>' + esc(k) + '</span> <span class="small muted num">' + TZ.hm(o[k].at) + '</span>' + (o[k].closed ? ' <span class="small muted">閉じた</span>' : '') + '</span><button type="button" class="btn" data-front="' + esc(k) + '">前面へ</button></li>';
+    }).join('') : '<li>' + TZ.stIcon('wait') + '<span class="ttl">0</span></li>';
+    TZ.$$('[data-front]').forEach(function (b) { b.addEventListener('click', function () { openWin(b.getAttribute('data-front')); }); });
+  }
+  function openWin(p) {
+    var name = 'tz-' + p, w = W[p] && !W[p].closed ? W[p] : null, o = load(), how = 'front';
+    if (!w) {
+      try { w = window.open('', name); } catch (e) { w = null; }
+      if (!w) { TZ.toast(p + ': 窓を開けなかった（popup の許可が要る）'); return; }
+      var blank = true; try { blank = w.location.href === 'about:blank'; } catch (e) { blank = false; }
+      if (blank) { w.location.href = new URL('../index.html' + mq, location.href).href; how = 'new'; }
+      W[p] = w;
+    }
+    try { w.focus(); } catch (e) { /* noop */ }
+    o[p] = { at: how === 'new' || !o[p] || !o[p].at ? Date.now() : o[p].at, closed: null }; save(o);
+    TZ.toast(p + ': ' + (how === 'new' ? '新しい窓（本番は orchestrator が app mode の窓を起こす）' : '既に開いている窓を前面へ'));
+    drawWins();
+  }
+  TZ.$$('[data-open]').forEach(function (b) { b.addEventListener('click', function () { openWin(b.getAttribute('data-open')); }); });
+  drawWins();
+});
+</script>
+</body>
+</html>

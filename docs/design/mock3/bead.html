@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tsuzuri — 項目の頁（mock v3）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<main class="page" id="app"></main>
+<script src="ui.js"></script>
+<script>
+TZ.boot('bead', function (G) {
+  var esc = TZ.esc, L = TZ.L, IC = TZ.IC;
+  var key = TZ.param('id') || 't3:P-12', n = G.byKey[key];
+  var app = document.getElementById('app');
+  if (!n) { app.innerHTML = TZ.H('h1', 'not_found') + '<div class="empty" style="margin-top:16px">' + TZ.stIcon('unknown') + '<span data-t>' + esc(key) + '</span></div>'; return; }
+  document.title = 'tsuzuri — ' + TZ.cut(n.title, 24) + '（mock v3）';
+  var st = TZ.nodeState(n), s = TZ.summaryOf(n);
+
+  // 頭: 形 + 種類（見出し）+ 帯 + 番号 + 題 + 状態 + 出所の file と行
+  var head = '<div class="nhead">' + TZ.nodeShape(n, true) + '<div style="min-width:0"><div class="kind">' + TZ.H('h1', 'k:' + n.kind) + TZ.bandChip(n.band) +
+    '<span class="gi ' + st.cls.replace('open', 'unknown') + '" style="width:16px;height:16px;font-size:10px" aria-hidden="true">' + ({ ok: '✓', ng: '!' }[st.cls] || '') + '</span><span>' + esc(st.label) + '</span>' +
+    (n.repo === 's2' ? '<span class="chip ext" data-term="external_ledger">' + IC.folder + esc(L('external_ledger')) + '</span>' : '') + '</div>' +
+    '<div class="cid">' + esc(n.id) + '</div><div class="t" data-t>' + esc(TZ.t36(n.title)) + '</div>' +
+    '<div class="srcline" data-term="src" tabindex="0">' + IC.file + '<span>' + esc(TZ.srcText(n)) + '</span></div>' +
+    (n.kind === '問い' && n.repo === 't3' && TZ.isOpenQ(n) && !TZ.isSample(n) ? '<a class="btn sm primary" style="margin-top:8px" href="ask.html?id=' + encodeURIComponent(n.key) + (TZ.param('mode') ? '&mode=' + TZ.mode() : '') + '">' + esc(L('answer_here')) + ' ›</a>' : '') + '</div></div>';
+
+  // 2 面の概要（非エンジニア向け・エンジニア向け）
+  function box(k, icon, text, extra) {
+    return '<section class="sumbox' + (text ? '' : ' none') + '"><header>' + icon + TZ.H('h2', k) + '</header><p' + (text ? ' data-t' : '') + '>' + (text ? esc(text) : '要約なし' + (s.bead ? '（bead は題だけを持ち込む）' : '')) + '</p>' + (extra || '') + '</section>';
+  }
+  var parentLink = s.parent && G.byKey[s.parent] ? '<ul class="items" style="margin-top:8px">' + TZ.itemNode(s.parent, esc(L('parent'))) + '</ul>' : '';
+  var two = '<div class="two">' + box('summary_plain', IC.person, s.plain, s.plain ? '' : parentLink) + box('summary_eng', IC.code, s.eng, s.plain ? parentLink : '') + '</div>';
+  if (s.src) two += '<div class="small muted" style="margin:-8px 0 16px">' + esc(s.src) + '</div>';
+
+  // つながり
+  var nb = '<section class="panel" style="margin-bottom:16px"><header>' + TZ.H('h2', 'around') + '</header>' + TZ.aroundBlock(key) + '</section>';
+
+  // run の時間軸（task は付いた run を 1 行ずつ・run の頁はその 1 行）
+  var runs = n.kind === '走行' ? [n] : TZ.runsOf(G, key);
+  var tl;
+  if (runs.length) {
+    tl = '<div class="runs">' + runs.map(function (r, i) {
+      var chips = r.attrs.stages.filter(function (x, j, a) { return !j || a[j - 1][1] !== x[1]; }).map(function (x, j) {
+        var c = TZ.STAGE_COL[x[1]] || 'wait';
+        var v = r.attrs.verdicts.filter(function (y) { return y[0] === x[0] && y[1] === x[1]; })[0];
+        if (v && v[2] !== 'PASS') c = 'stop';
+        return (j ? IC.arrow : '') + '<span class="stg c-' + c + '" data-term="stage:' + esc(x[1]) + '" data-tip-expert="' + esc(x[1] + (x[2] ? ' ' + x[2] : '')) + '" tabindex="0">' + esc(x[1]) + (v ? ' ' + esc(v[2]) : '') + '</span>';
+      }).join('');
+      return '<div class="runrow"><a class="nth nl num" href="bead.html?id=' + encodeURIComponent(r.key) + '" data-key="' + esc(r.key) + '">' + IC.redo.replace('<svg', '<svg width="14" height="14"') + ' ' + (n.kind === '走行' ? '' : i + 1) + '</a><div class="stages">' + chips + '</div></div>';
+    }).join('') + '</div>';
+  } else {
+    tl = '<div class="empty" data-term="st_unknown">' + TZ.stIcon('unknown') + TZ.stLabel('unknown') + '</div>';
+  }
+  var tls = '<section class="panel"><header>' + TZ.H('h2', 'timeline') + (runs.length ? '<span class="chip num">' + runs.length + '</span>' : '') + '</header>' + tl + '</section>';
+
+  app.innerHTML = head + two + nb + (n.kind === '契約' || n.kind === '走行' || n.kind === 'epic' ? tls : '');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>器 — account board（mock v3）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../ui.css">
+</head>
+<body>
+<main class="page" id="app"></main>
+<script src="../ui.js"></script>
+<script src="../acct.js"></script>
+<script src="../ledger.js"></script>
+<script>
+/* account board（器の面）: project の群（今の口座 1 つ）・口座の残量と占有・session の表・口座の移動・各 project の dashboard へ。
+ * 規則（account-lifecycle.md §17 / §20 / §23 / §27 / §28）: 群が占有する口座は 1 つ（記録 > 種）・群どうしで重ならない・
+ * 群の orchestrator は全部その口座で動く・新しい pipeline は群の今の口座を使えない。
+ * data は account/data/board.json（build_account.py）。状態の記号と判定の関数は project dashboard と同じ ui.js。 */
+TZ.bootAccount('acct_board', function (B) {
+  var esc = TZ.esc, L = TZ.L, IC = TZ.IC, ms = TZ.ms;
+  var A = TZ.AcctModel(B);
+  var FROM = A.FROM, BUILT = A.BUILT, SPAN = A.SPAN, PROJ = A.PROJ, GROUP = A.GROUP, TICKS = A.TICKS, seats = A.seats, runs = A.runs, lastIdx = A.lastIdx, lastLE = A.lastLE, allowAt = A.allowAt, acctInfo = A.acctInfo, acctState = A.acctState, maxUsed = A.maxUsed, curAt = A.curAt, occupantsAt = A.occupantsAt, seatAcctAt = A.seatAcctAt, runAt = A.runAt, runAlive = A.runAlive, runStopped = A.runStopped, runStatus = A.runStatus, COL = A.COL, strip = A.strip, seatMarks = A.seatMarks, runMarks = A.runMarks, limitTimes = A.limitTimes, spark = A.spark, meter = A.meter, WSHORT = A.WSHORT, sessionsAt = A.sessionsAt;
+  var SORTS = ['project', 'account', 'stage', 'elapsed']; // session の表（台帳の表と各 project の表は別の並べ方 ?lsort= / ?psort=）
+  /* 台帳の処理状況（ledger.js・時点 = ledger.json の built_at） */
+  var LED = B.ledger, LNOW = LED ? TZ.ms(LED.built_at) : null, LST = {}, LSRC = {};
+  (LED ? LED.projects : []).forEach(function (p) { LST[p.name] = p.rows ? TZ.Ledger.stats(p.rows, LNOW) : null; LSRC[p.name] = p.src; });
+  function projOrder() { // 純減の大きい順 = 7 日の差が小さい順（→ 24 h）・積みの多い順 = open の task が多い順・台帳なしは末尾・他の並べ方は宣言順
+    var ps = B.projects.slice(), o = function (p) { return B.projects.indexOf(p); };
+    if (SORT === 'net') ps.sort(function (a, b) { var x = LST[a.name], y = LST[b.name]; return (!x) - (!y) || (x && y ? (x.net7 - y.net7) || (x.net24 - y.net24) : 0) || o(a) - o(b); });
+    if (SORT === 'backlog') ps.sort(function (a, b) { var x = LST[a.name], y = LST[b.name]; return (!x) - (!y) || (x && y ? y.open.task - x.open.task : 0) || o(a) - o(b); });
+    return ps;
+  }
+  var SORT = SORTS.indexOf(TZ.param('sort')) >= 0 ? TZ.param('sort') : 'project';
+  /* 未反映（design-intent に未反映）: tsuzuri = unreflected(graph)（home の一覧と同じ関数）・他の project = 昇格先の無い open の memo（決定と要望の台帳を読んでいない） */
+  var UNREF = {};
+  B.projects.forEach(function (p) {
+    var lp = LED ? LED.projects.filter(function (x) { return x.name === p.name; })[0] : null;
+    if (p.questions_open != null && B.graph && lp && lp.rows) { var hd = {}; lp.rows.forEach(function (r) { if (r[1] === 'memo') hd[r[0]] = r[10] || 0; }); UNREF[p.name] = TZ.unreflected(B.graph, LNOW, hd).length; }
+    else UNREF[p.name] = LST[p.name] ? LST[p.name].memo.unpromoted.length : null;
+  });
+  function unrefN(p) { return UNREF[p]; }
+  /* 次の一手（全 project）: d / e / f の材料は質問の台帳を読める project（tsuzuri = graph）だけ */
+  var QT = B.graph ? TZ.nextQ(B.graph) : null;
+  function nxAll(t) { return A.nextAll(t, function (p) { return PROJ[p] && PROJ[p].questions_open != null ? QT : null; }); }
+
+  function rank(w) { return w.st.v === 'limit' ? 0 : w.st.v === 'silent' ? 1 : w.stopped ? 2 : w.st.v === 'wait' ? 3 : w.st.v === 'run' ? 4 : 5; }
+  function stageCell(w, t) {
+    if (w.role === 'pipeline') return TZ.stIcon(w.st.v) + '<span class="sstg">' + TZ.EN('stage:' + w.stage) + (w.verdict ? '<span class="sub mono">' + esc(w.verdict) + '</span>' : '') + (w.st.v === 'limit' ? '<span class="sub num">↻ ' + TZ.hmd(w.st.resume, t) + '</span>' : '') + '</span>';
+    return TZ.stIcon(w.st.v) + '<span class="sstg">' + TZ.stLabel(w.st.v) + (w.st.long ? '<span class="sub">（長い）</span>' : '') + (w.st.v === 'limit' ? '<span class="sub num">↻ ' + TZ.hmd(w.st.resume, t) + '</span>' : '') +
+      (w.grace ? '<span class="mvgrace" data-term="move_grace" tabindex="0"><span aria-hidden="true">⇥</span><b class="num" data-remain="' + w.grace.end + '">' + w.grace.rem + ' 秒</b>' + (w.grace.sample ? '<span class="smpn">見本</span>' : '') + '</span>'
+        : w.moveWait ? '<span class="mvwait" data-term="seat_mismatch" tabindex="0">' + esc(L('seat_mismatch')) + '</span>' : '') + '</span>' + (w.fx ? TZ.tkhbHTML(w.fx, t) : '');
+  }
+  function sessRow(w, t) {
+    var name = w.name ? '<span class="mono">' + esc(w.role === 'pipeline' ? w.name.replace(/-(\d{8}T\d{6}Z)$/, ' ·$1') : w.name) + '</span>' : '<span class="sub">' + esc(L('seat_none')) + '</span>';
+    return '<div class="srow r-' + w.role + '">' +
+      '<div class="c-proj" data-t>' + esc(w.proj) + '</div>' +
+      '<div class="c-role">' + TZ.EN('role:' + w.role) + '</div>' +
+      '<div class="c-ses" data-card="' + esc(w.key) + '" tabindex="0">' + name + '</div>' +
+      '<div class="c-acct mono">' + (w.acct ? esc(w.acct) : TZ.stIcon('unknown') + '<span class="sub">' + esc(L('st_unknown')) + '</span>') + '</div>' +
+      '<div class="c-stage">' + stageCell(w, t) + '</div>' +
+      '<div class="c-el num"' + (w.since ? ' data-seatclock data-since="' + w.since + '">' + TZ.durMs(t - w.since) : '>―') + '</div>' +
+      '<div class="c-strip strip24">' + strip(w.stateAt, w.marks, t) + '</div></div>';
+  }
+  function sessTable(rows, t) {
+    var head = '<div class="srow hrow">' + ['project', 'role', 'session', 'accounts', 'stage', 'elapsed'].map(function (k) { return '<div>' + TZ.HS(k) + '</div>'; }).join('') + '<div class="c-hh">' + TZ.HS('history') + TZ.spanAxis(t) + '</div></div>' +
+      '<div class="saxis-m">' + TZ.HS('history') + TZ.spanAxis(t) + '</div>';
+    var gh = function (label, n, extra) { return '<div class="ghead">' + label + '<span class="chip num">' + n + '</span>' + (extra || '') + '</div>'; };
+    var byElapsed = function (a, b) { return (a.since || Infinity) - (b.since || Infinity); };
+    var roleFirst = function (a, b) { return (a.role === 'orchestrator' ? 0 : 1) - (b.role === 'orchestrator' ? 0 : 1); };
+    var out = '';
+    if (SORT === 'project') {
+      projOrder().forEach(function (p) {
+        var rs = rows.filter(function (w) { return w.proj === p.name; }).sort(function (a, b) { return roleFirst(a, b) || String(a.name).localeCompare(String(b.name)); });
+        if (!rs.length) return;
+        out += gh('<span class="gname" data-t>' + esc(p.name) + '</span><span class="sub" data-t>' + esc(p.group) + '</span>', rs.length) + rs.map(function (w) { return sessRow(w, t); }).join('');
+      });
+    } else if (SORT === 'account') {
+      var accs = B.accounts.map(function (a) { return a.label; }).concat([null]), occ = occupantsAt(t);
+      accs.forEach(function (a) {
+        var rs = rows.filter(function (w) { return (w.acct || null) === a; }).sort(function (x, y) { return roleFirst(x, y) || x.proj.localeCompare(y.proj); });
+        if (!rs.length) return;
+        out += gh(a ? '<span class="gname mono">' + esc(a) + '</span><span class="sub">' + (occ[a] ? esc(L('occupant')) + ' <span data-t>' + esc(occ[a]) + '</span>' : esc(L('free_for_pipeline'))) + '</span>' : TZ.stIcon('unknown') + '<span class="gname">' + esc(L('st_unknown')) + '</span>', rs.length) + rs.map(function (w) { return sessRow(w, t); }).join('');
+      });
+    } else if (SORT === 'stage') {
+      [['stopped_group', function (w) { return rank(w) <= 2; }], ['moving_group', function (w) { return rank(w) === 3 || rank(w) === 4; }], ['no_record', function (w) { return rank(w) === 5; }]].forEach(function (b) {
+        var rs = rows.filter(b[1]).sort(function (x, y) { return rank(x) - rank(y) || byElapsed(x, y); });
+        if (!rs.length) return;
+        out += gh('<span class="gname">' + esc(L(b[0])) + '</span>', rs.length) + rs.map(function (w) { return sessRow(w, t); }).join('');
+      });
+    } else {
+      out += rows.slice().sort(byElapsed).map(function (w) { return sessRow(w, t); }).join('');
+    }
+    return '<div class="sess">' + head + out + '</div>';
+  }
+  var C4 = TZ.card4, cut = TZ.cut;
+  var gim = function (ok, sym) { return '<span class="gi ' + (ok === null ? 'unknown' : ok ? 'ok' : 'ng') + ' sm" aria-hidden="true">' + (ok === null ? '' : ok ? '✓' : (sym || '!')) + '</span>'; };
+  var sgn = function (n) { return (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n); };
+  function ledCard(v) {
+    var x = LST[v], src = LSRC[v];
+    if (!x) return C4({ ti: esc(v) + ' · 台帳なし', k: gim(null) + '<span>' + esc(L('ledger_state')) + '</span>', v: '<span>' + esc(L('st_unknown')) + ' = issues.jsonl が無い</span>',
+      src: '.beads/issues.jsonl（無い）', srcFull: (PROJ[v] && PROJ[v].anchor || '?') + '/.beads/issues.jsonl（無い）' });
+    var y = x.nSample && LED ? TZ.Ledger.stats(LED.projects.filter(function (p) { return p.name === v; })[0].rows, LNOW, { noSample: true }) : null;
+    var D = TZ.Ledger.days, DAY = TZ.Ledger.DAY;
+    return C4({ ti: esc(v) + ' · ' + esc(L('ledger_state')), k: TZ.Ledger.netHTML(x.net24, '24h') + TZ.Ledger.netHTML(x.net7, '7d') + '<span class="sp"></span><span class="num">closed/日 ' + x.perDay.toFixed(1) + '</span>',
+      v: 'task ' + x.open.task + '（ready ' + x.ready + ' / blocked ' + x.blocked + '）',
+      src: 'issues.jsonl · 時点 ' + TZ.hm(LNOW), srcFull: src + '（title と状態と時刻と依存だけ読む）・集計 = ledger.js',
+      more: ['memo ' + x.open.memo + ' · stale ' + x.stale, 'question ' + x.open.question + ' · epic ' + x.open.epic,
+        'lead p50 ' + D(x.leadP50 != null ? x.leadP50 * DAY : null) + ' / p90 ' + D(x.leadP90 != null ? x.leadP90 * DAY : null) + '（30 日 ' + x.leadN + ' 件）',
+        y ? '見本を外すと task ' + y.open.task + ' · memo ' + y.open.memo + ' · 7d ' + sgn(y.net7) : ''] });
+  }
+  function sortSeg() { return segOf(SORTS, SORT, 'data-sort'); }
+  /* ---------- 台帳の処理状況の表（3 段の読み: 判定 1 語 → 主指標 3 つ → 詳しく ▸ で行を縦に開く） ---------- */
+  var LSORTS = ['judge', 'project', 'net', 'backlog'], PSORTS = ['need', 'group', 'judge', 'unref'];
+  var LSORT = LSORTS.indexOf(TZ.param('lsort')) >= 0 ? TZ.param('lsort') : 'judge';
+  var PSORT = PSORTS.indexOf(TZ.param('psort')) >= 0 ? TZ.param('psort') : 'need';
+  var ROWOPEN = {}; // 行の「詳しく」の開閉（経験者 mode は既定で開く）
+  function isOpen(k) { return k in ROWOPEN ? ROWOPEN[k] : TZ.mode() === 'expert'; }
+  var JG = function (p) { return TZ.Ledger.judge(LST[p]); };
+  function ledOrder() {
+    var ps = B.projects.slice(), o = function (p) { return B.projects.indexOf(p); };
+    if (LSORT === 'judge') ps.sort(function (a, b) { return JG(a.name).rank - JG(b.name).rank || o(a) - o(b); });
+    if (LSORT === 'net') ps.sort(function (a, b) { var x = LST[a.name], y = LST[b.name]; return (!x) - (!y) || (x && y ? (x.net7 - y.net7) || (x.net24 - y.net24) : 0) || o(a) - o(b); });
+    if (LSORT === 'backlog') ps.sort(function (a, b) { var x = LST[a.name], y = LST[b.name]; return (!x) - (!y) || (x && y ? y.open.task - x.open.task : 0) || o(a) - o(b); });
+    return ps;
+  }
+  function extremes(vals) { var v = vals.filter(function (x) { return x != null; }); return v.length > 1 ? { max: Math.max.apply(null, v), min: Math.min.apply(null, v) } : { max: null, min: null }; }
+  function xm(e, v) { return v == null || e.max === e.min ? '' : v === e.max ? ' hi' : v === e.min ? ' lo' : ''; }
+  function rateBar(v, max) { return '<span class="rbar" aria-hidden="true"><i style="width:' + (max ? Math.max(2, Math.round(v / max * 100)) : 0) + '%"></i></span><span class="num">' + v.toFixed(1) + '</span>'; }
+  function ledMore(x, p) {
+    var D = TZ.Ledger.days, DAY = TZ.Ledger.DAY, it = function (k, v) { return '<span class="mi"><span class="lk">' + esc(L(k)) + '</span><b class="num">' + v + '</b></span>'; };
+    return it('l_ready', x.ready) + it('l_blocked', x.blocked) + it('l_memo', x.open.memo) + it('l_lead', D(x.leadP50 != null ? x.leadP50 * DAY : null)) +
+      it('l_stale', x.stale) + it('l_net7', TZ.Ledger.netHTML(x.net7)) + '<span class="mi sp">' + TZ.Ledger.spark14(x, 120, 22) + '</span>' + (x.nSample ? '<span class="mi smpn">見本 ' + x.nSample + '</span>' : '');
+  }
+  var NXIC = {};
+  function ledTable() {
+    var ps = ledOrder(), eT = extremes(ps.map(function (p) { return LST[p.name] ? LST[p.name].open.task : null; })), eR = extremes(ps.map(function (p) { return LST[p.name] ? LST[p.name].perDay : null; })),
+      eU = extremes(ps.map(function (p) { return unrefN(p.name); })), rmax = eR.max || 1;
+    var head = '<div class="jrow hrow"><div class="c-j">' + TZ.HS('l_judge') + '</div><div class="c-p">' + TZ.HS('project') + '</div><div class="c-task">' + TZ.HS('l_task') + '<span class="hsub">↕ 24h</span></div><div class="c-rate">' + TZ.HS('l_rate') + '</div><div class="c-un">' + TZ.HS('l_unref') + '</div><div class="rowmore"></div></div>';
+    var body = ps.map(function (p) {
+      var x = LST[p.name], j = TZ.Ledger.judge(x), un = unrefN(p.name), k = 'led:' + p.name, op = isOpen(k);
+      if (!x) return '<div class="jrow j-none" data-row="' + esc(k) + '"><div class="c-j">' + TZ.Ledger.judgeHTML(j, true) + '</div><div class="c-p" data-card="led:' + esc(p.name) + '" tabindex="0"><span data-t>' + esc(p.name) + '</span></div><div class="c-n c-task muted">―</div><div class="c-n c-rate muted">―</div><div class="c-n c-un muted">―</div><div class="rowmore"></div></div>';
+      return '<div class="jrow j-' + j.v + (op ? ' open' : '') + '" data-row="' + esc(k) + '">' +
+        '<div class="c-j">' + TZ.Ledger.judgeHTML(j, true) + '</div>' +
+        '<div class="c-p" data-card="led:' + esc(p.name) + '" tabindex="0"><span data-t>' + esc(p.name) + '</span></div>' +
+        '<div class="c-n c-task' + xm(eT, x.open.task) + '"><b class="num">' + x.open.task + '</b>' + TZ.Ledger.netHTML(x.net24) + '</div>' +
+        '<div class="c-n c-rate' + xm(eR, x.perDay) + '">' + rateBar(x.perDay, rmax) + '</div>' +
+        '<div class="c-n c-un' + xm(eU, un) + (un ? ' on' : '') + '"><b class="num">' + (un == null ? '―' : un) + '</b></div>' +
+        '<button type="button" class="rowmore" data-toggle="' + esc(k) + '" aria-expanded="' + op + '" aria-label="詳しく"><span class="rm-t">詳しく</span> <span class="rm-a">' + (op ? '▾' : '▸') + '</span></button>' +
+        '<div class="c-more">' + ledMore(x, p) + '</div></div>';
+    }).join('');
+    return '<div class="jtab">' + head + body + '</div><div class="lgline xmleg"><span><i class="xm hi"></i>列の最大</span><span><i class="xm lo"></i>列の最小</span></div>';
+  }
+  function segOf(list, cur, attr, pre) {
+    return '<div class="sortbar">' + TZ.HS('sort_by') + '<div class="seg wrap" role="group" aria-label="' + esc(L('sort_by')) + '">' + list.map(function (k) {
+      return '<button type="button" ' + attr + '="' + k + '" aria-pressed="' + (cur === k) + '" data-term="sort_' + k + '">' + esc(L('sort_' + k)) + '</button>';
+    }).join('') + '</div></div>';
+  }
+
+  /* ---------- 各 project の表（9 列・1 行 2 段まで・行を押すと詳しく）: 持ち主が手を加えるべき情報を前に ---------- */
+  var SEV = { nx_a: 'hi', nx_b: 'hi', nx_c: 'hi', nx_d: 'mid', nx_e: 'mid', nx_f: 'mid', nx_g: 'lo', unknown: 'lo' };
+  function unrefBreak(p) { // memo / 裁定 / 要望 の内訳（tsuzuri = unreflected(G)・他は memo だけ）
+    var PQ = PROJ[p];
+    if (PQ && PQ.questions_open != null && B.graph) { var lp = LED ? LED.projects.filter(function (x) { return x.name === p; })[0] : null, hd = {}; if (lp && lp.rows) lp.rows.forEach(function (r) { if (r[1] === 'memo') hd[r[0]] = r[10] || 0; });
+      var u = TZ.unreflected(B.graph, LNOW, hd), c = { memo: 0, '裁定': 0, '要望': 0 }; u.forEach(function (x) { c[x.kind] = (c[x.kind] || 0) + 1; }); return c; }
+    return LST[p] ? { memo: LST[p].memo.unpromoted.length } : null;
+  }
+  function projTable(NXM) {
+    var o = function (p) { return B.projects.indexOf(p); };
+    var R = B.projects.map(function (p) { return { p: p, nx: NXM[p.name], un: unrefN(p.name), j: JG(p.name) }; });
+    var gi = function (g) { return A.GROUP_ORDER.indexOf(GROUP[g]); };
+    if (PSORT === 'need') R.sort(function (a, b) { return a.nx.rank - b.nx.rank || (b.un || 0) - (a.un || 0) || o(a.p) - o(b.p); });
+    if (PSORT === 'group') R.sort(function (a, b) { return gi(a.p.group) - gi(b.p.group) || o(a.p) - o(b.p); });
+    if (PSORT === 'judge') R.sort(function (a, b) { return a.j.rank - b.j.rank || o(a.p) - o(b.p); });
+    if (PSORT === 'unref') R.sort(function (a, b) { return (b.un == null ? -1 : b.un) - (a.un == null ? -1 : a.un) || o(a.p) - o(b.p); });
+    var sum = B.projects.reduce(function (s, p) { return s + (unrefN(p.name) || 0); }, 0), rmax = extremes(B.projects.map(function (p) { return LST[p.name] ? LST[p.name].perDay : null; })).max || 1;
+    var cols = ['project', 'p_need', 'p_wait', 'l_unref', 'ledger_block', 'runs4', 'seat', 'accounts', 'p_open'];
+    var head = '<div class="prow hrow">' + cols.map(function (k) { return '<div class="h-' + k + '">' + TZ.HS(k) + (k === 'l_unref' ? '<span class="small muted num" title="8 project の合計">Σ ' + sum + '</span>' : '') + '</div>'; }).join('') + '</div>';
+    var lastG = null, out = '';
+    R.forEach(function (x) {
+      var p = x.p, nm = p.name, r = x.nx, k = 'prj:' + nm, op = isOpen(k);
+      if (PSORT === 'group' && p.group !== lastG) { lastG = p.group; var cg = curAt(GROUP[p.group], T); out += '<div class="pgh"><span class="pchip grp" data-card="group:' + esc(p.group) + '" tabindex="0"><span data-t>' + esc(p.group) + '</span></span><span class="small muted">' + esc(L('current_account')) + ' <b class="mono">' + esc(cg.account || '?') + '</b></span></div>'; }
+      var so = seats.filter(function (y) { return y.s.project === nm; })[0], st = so ? TZ.seatStatus(so.fx, T) : null, cur = curAt(GROUP[p.group], T);
+      var need = '<div class="c-need sev-' + SEV[r.top] + '" data-card="nx:' + esc(nm) + '" tabindex="0"><span class="l1">' + (NXIC[r.top] || '') + '<b>' + (r.top === 'unknown' ? esc(L('st_unknown')) : '(' + r.top.slice(3) + ') ' + esc(L(r.top))) + '</b></span><span class="l2">' + esc(TZ.cut(r.line || '', 28)) + '</span></div>';
+      var qo = p.questions_open, nb = r.items.filter(function (y) { return y.k === 'nx_d'; })[0];
+      var wait = '<div class="c-wait"><span class="l1"><b class="num' + (qo ? ' on' : '') + '">' + (qo == null ? '―' : qo) + '</b></span><span class="l2 small muted">' + (nb && !nb.na ? '束 ' + (nb.n || 0) : '') + '</span></div>';
+      var ub = unrefBreak(nm), un = '<div class="c-un2' + (x.un ? ' on' : '') + '" data-term="l_unref" tabindex="0"><span class="l1"><b class="num">' + (x.un == null ? '―' : x.un) + '</b></span><span class="l2 small muted">' + (ub ? Object.keys(ub).filter(function (q) { return ub[q]; }).map(function (q) { return esc(q) + ' ' + ub[q]; }).join(' ') : '') + '</span></div>';
+      var ls = LST[nm], led = '<div class="c-led" data-card="led:' + esc(nm) + '" tabindex="0"><span class="l1">' + TZ.Ledger.judgeHTML(x.j) + (ls ? '<b class="num">' + ls.open.task + '</b>' + TZ.Ledger.netHTML(ls.net24) : '') + '</span>' + (ls ? '<span class="l2">' + rateBar(ls.perDay, rmax) + '</span>' : '') + '</div>';
+      var rc = p.state_dir ? A.runColsAt(nm, T) : null;
+      var run = '<div class="c-run" data-card="pcnt:' + esc(nm) + '" tabindex="0"><span class="rc4" data-term="runs4">' + ['wait', 'run', 'stop', 'land'].map(function (c) { return '<span class="rq q-' + c + (rc && rc[c] ? '' : ' z') + '"><span class="dot" aria-hidden="true"></span><span class="n num">' + (rc ? rc[c] : '―') + '</span></span>'; }).join('') + '</span></div>';
+      var th = so ? TZ.tickHealth(so.fx, T) : null, hb = so ? TZ.hbState(so.fx) : null;
+      var orch = '<div class="c-orch"' + (so ? ' data-card="seat:' + esc(so.key) + '" tabindex="0"' : '') + '>' + (st ? TZ.stIcon(st.v) : TZ.stIcon('unknown')) + (th ? '<span class="tkm tk-' + th.v + '" title="tick ' + esc(th.v) + '">' + TZ.symHTML('gi:' + (th.v === 'healthy' ? 'ok' : th.v === 'stale' || th.v === 'unreadable' ? 'ng' : 'unknown')) + '<span class="small">tick</span></span><span class="hbm hb-' + hb.v + ' small">hb ' + hb.v + '</span>' : '<span class="small muted">' + esc(L('seat_none')) + '</span>') + '</div>';
+      var ra = so ? TZ.seatStatus(so.fx, T).account : null, okm = ra && ra === cur.account;
+      var acc = '<div class="c-acc"' + (so ? ' data-card="gproj:' + esc(p.group + '/' + nm) + '" tabindex="0"' : '') + '><span class="mono">' + esc(ra || '―') + '</span>' + (so ? TZ.symHTML('gi:' + (okm ? 'ok' : 'ng')) : '') + '</div>';
+      var opn = '<div class="c-open">' + (p.dashboard ? openBtn(p, true) : '<span class="btn static dis" title="' + esc(L('not_yet')) + '"><span class="lg">' + esc(L('not_yet')) + '</span><span class="sh">―</span></span>') + '</div>';
+      var more = '<div class="c-more">' + (ls ? ledMore(ls, p) : '<span class="mi muted">台帳なし</span>') +
+        (function () { var ss = ROWS.filter(function (w) { return w.proj === nm && w.name; }); return '<span class="mi"><span class="lk">session</span><b class="num">' + ss.length + '</b></span>' + (ss.length ? '<span class="mi slist">' + ss.map(function (w) { return TZ.stIcon(w.st.v) + '<span class="mono">' + esc(TZ.cut(w.name, 28)) + '</span>'; }).join('') + '</span>' : ''); })() +
+        '<span class="mi"><span class="lk">' + esc(L('acct_hist')) + '</span><b class="num">' + (so ? (so.s.account_hist || []).length : 0) + '</b></span>' +
+        '<span class="mi m-need">' + esc(r.line || '') + '</span><span class="mi m-grp">' + esc(p.group) + '</span><span class="mi m-run">' + run + '</span><span class="mi m-orch">' + orch + '</span><span class="mi m-acc">' + acc + '</span><span class="mi m-led">' + led + '</span></div>';
+      out += '<div class="prow' + (op ? ' open' : '') + ' sev-' + SEV[r.top] + '" data-row="' + esc(k) + '" data-toggle="' + esc(k) + '" aria-expanded="' + op + '" tabindex="-1">' +
+        '<div class="c-pn"><b data-t>' + esc(nm) + '</b><span class="small muted" data-t>' + esc(p.group) + '</span></div>' + need + wait + un + led + run + orch + acc + opn + more + '</div>';
+    });
+    window.__tz_ptab = R.map(function (x) { return { p: x.p.name, top: x.nx.top, un: x.un, judge: x.j.v, q: x.p.questions_open }; });
+    return '<div class="ptab">' + head + out + '</div>';
+  }
+
+  /* 1 行に収める（行は 2 段まで）: 幅に収まらない 2 段目は末尾を削って … にする（全文は hover card） */
+  function fitLines() {
+    TZ.$$('.prow:not(.hrow) .c-need .l2, .prow:not(.hrow) .c-un2 .l2').forEach(function (el) {
+      if (!el.getClientRects().length || el.scrollWidth <= el.clientWidth + 1) return;
+      var full = el.textContent, a = Array.from(full), n = a.length;
+      while (n > 1 && el.scrollWidth > el.clientWidth + 1) { n--; el.textContent = a.slice(0, n).join('').replace(/[\s・（(]+$/, '') + '…'; }
+      el.setAttribute('aria-label', full);
+    });
+  }
+  window.addEventListener('resize', function () { clearTimeout(fitLines.tm); fitLines.tm = setTimeout(function () { if (TAB === 'projects') { render(); } }, 150); });
+  /* ---------- 描く ---------- */
+  var T = TZ.seatNowT(), ROWS = [];
+  function render() {
+    T = TZ.seatNowT();
+    var rows = sessionsAt(T), occ = occupantsAt(T);
+    ROWS = rows;
+    // project の群（今の口座 1 つ）
+    // 群の名 = Tier<数字>・宣言順 = 数字の昇順（違えば器が host.toml の読みで断る = 注記）。並べは数字の昇順（acct.js GROUP_ORDER）
+    var badName = function (g) { var i = B.groups.indexOf(g), j = A.GROUP_ORDER.indexOf(g); return !/^Tier\d+$/.test(g.name) ? 'Tier<数字> でない' : i !== j ? '宣言順 ≠ 数字の順' : null; };
+    var over = A.GROUP_ORDER.map(function (g) {
+      var cur = curAt(g, T), gs = rows.filter(function (w) { return w.group === g.name; });
+      var nLim = gs.filter(function (w) { return w.st.v === 'limit'; }).length;
+      var since = cur.by === 'record' ? '<span class="num">' + TZ.hmd(cur.ts, T) + '</span>' : '<span class="sub">' + (cur.by === 'seed' ? '種（記録なし）' : '最初の記録より前') + '</span>';
+      var pw = B.windows.map(function (w) {
+        var m = allowAt(cur.account, w, T), cap = B.pressure && B.pressure[w] ? B.pressure[w].value : null, live = m && (!m.resets || m.resets > T);
+        var hot = live && cap != null && m.used >= cap;
+        return '<span class="pw' + (hot ? ' hot' : '') + '" data-term="' + w + '" tabindex="0"><span class="wl">' + WSHORT[w] + '</span><b class="num">' + (live ? m.used + '%' : '―') + '</b><span class="cap num">/ ' + (cap != null ? cap : '?') + '</span></span>';
+      }).join('');
+      var members = g.anchors.map(function (an) {
+        var p = an.split('/').pop(), x = seats.filter(function (y) { return y.s.project === p; })[0];
+        var sym, st = x ? TZ.seatStatus(x.fx, T) : null;
+        if (!x) sym = '<span class="gi unknown" aria-label="' + esc(L('seat_none')) + '"></span>';
+        else sym = seatAcctAt(x, T) === cur.account ? '<span class="gi ok" aria-label="' + esc(L('seat_match')) + '">✓</span>' : '<span class="gi ng" aria-label="' + esc(L('seat_mismatch')) + '">!</span>';
+        return '<span class="pchip" data-card="gproj:' + esc(g.name + '/' + p) + '" tabindex="0">' + sym + '<span data-t>' + esc(p) + '</span>' + (st ? TZ.stIcon(st.v) : '') + '</span>';
+      }).join('');
+      // 群の枠は中身を全部見せているので hover card を出さない（持ち主 06:5xZ）。見えていない追加の情報は枠の中の「詳しく ▸」へ
+      var dl9 = doctorLine(g, T).split(' ').reduce(function (o, w) { var l = o[o.length - 1]; if (l != null && Array.from(l + ' ' + w).length <= 60) o[o.length - 1] = l + ' ' + w; else o.push(w); return o; }, []);
+      var gmore = '<details class="gmore"' + (TZ.mode() === 'expert' ? ' open' : '') + '><summary><span class="rm-t">詳しく</span> <span class="rm-a" aria-hidden="true">▸</span></summary><div class="gm">' +
+        '<div class="gm1"><span class="num">記録 ' + (g.records || []).length + ' 件</span><span>種 <span class="mono">' + esc(g.seed) + '</span> = 記録が無いときの既定</span></div>' +
+        '<div class="gm1 src">' + IC.file + '<span>groups/' + esc(g.name) + '.account・host.toml の群の行</span></div>' +
+        '<div class="gm1 int xo">' + dl9.map(function (l) { return '<div><code>' + esc(l) + '</code></div>'; }).join('') + '</div></div></details>';
+      return '<section class="gcard" data-group="' + esc(g.name) + '"><header>' + TZ.HS('group') + '<b class="gname" data-t>' + esc(g.name) + '</b>' + TZ.qmark('group_name') + (badName(g) ? '<span class="why" data-term="group_name" tabindex="0">' + esc(badName(g)) + ' → host.toml の読みで断る</span>' : '') +
+        '<span class="kpi-s' + (nLim ? ' hot' : '') + '">' + (nLim ? TZ.stIcon('limit') : '') + TZ.HS('limited') + '<b class="num">' + nLim + '</b></span></header>' +
+        '<div class="gcur"><div class="lab">' + TZ.HS('current_account') + '</div><div class="acc mono">' + esc(cur.account || '?') + '</div>' +
+        '<div class="meta"><span>' + TZ.HS('since_rec') + since + '</span><span>' + TZ.HS('previous') + '<span class="mono">' + esc(cur.previous || '―') + '</span></span>' +
+        '</div></div>' +
+        '<div class="gpw">' + TZ.HS('pressure') + '<span class="pws">' + pw + '</span></div>' +
+        '<div class="glab">' + TZ.HS('members') + '</div><div class="projs">' + members + '</div>' +
+        '<div class="glab">' + TZ.HS('candidates') + '</div>' + A.candHTML(g, T) + gmore + '</section>';
+    }).join('');
+    // 口座 × window（+ 占有）
+    var hdr = '<div class="hrow">' + TZ.HS('accounts') + '</div><div class="hrow">' + TZ.HS('occupant') + '</div>' + B.windows.map(function (w) { return '<div class="hrow">' + TZ.HS(w) + '</div>'; }).join('') + '<div class="hrow">' + TZ.HS('spark') + '</div><div class="hrow">' + TZ.HS('measured_at') + '</div>';
+    var arows = B.accounts.map(function (a) {
+      var st = acctState(a.label, T);
+      var name = '<div class="c-name" data-card="acct:' + esc(a.label) + '" tabindex="0"><span class="aname">' + esc(a.label) + '</span></div>';
+      var oc = st.v === 'retired' ? '<div class="c-occ"><span class="sub">―</span></div>'
+        : '<div class="c-occ">' + (occ[a.label] ? '<span class="occ grp"><span data-t>' + esc(occ[a.label]) + '</span></span>' : '<span class="occ free">' + esc(L('free_for_pipeline')) + '</span>') + '</div>';
+      if (st.v === 'retired') return name + oc + '<div class="c-w c-ret">' + TZ.stIcon('unknown') + TZ.EN('retired') + '<span class="muted small num">' + TZ.hm(st.retired) + '</span></div><div class="c-sp spark">' + spark(a.label, T) + '</div><div class="c-at muted small">―</div>';
+      return name + oc + B.windows.map(function (w) { return '<div class="c-w" data-w="' + w + '">' + meter(a.label, w, T, st) + '</div>'; }).join('') + '<div class="c-sp spark">' + spark(a.label, T) + '</div>' +
+        '<div class="c-at small num">' + (st.v === 'ok' ? TZ.hm(st.last) : TZ.stIcon('unknown') + '<span>' + (st.last ? TZ.hm(st.last) : '―') + '</span>') + '</div>';
+    }).join('');
+    // 口座の移動（記録 1 件 = 1 行・新しい順）
+    var mv = (B.move_rows || []).filter(function (m) { return ms(m.ts) <= T; }).reverse();
+    window.__mv = mv;
+    var mvli = function (m, i) {
+      var ic, what;
+      if (m.kind === 'move') {
+        var pend = m.pending.filter(function (p) { return ms(p.ts) <= T; });
+        ic = '<span class="ic moved" aria-hidden="true">→</span>';
+        what = '<b data-t>' + esc(m.group) + '</b> <span class="mono">' + esc(m.from || '?') + ' → ' + esc(m.to) + '</span>' +
+          '<span class="sub">' + (m.event ? TZ.EN('GroupMoved') : 'GroupMoved なし（記録だけ）') + (pend.length ? ' · ' + TZ.EN('GroupMovePending') + ' ' + pend.length : '') + (m.request ? ' · 移動の頼み ' + TZ.hm(m.request.ts) : '') + '</span>';
+      } else if (m.kind === 'pressure') {
+        ic = '<span class="ic pressure" aria-hidden="true">!</span>';
+        what = '<b data-t>' + esc(m.group) + '</b> <span class="mono">' + esc(m.account) + '</span> ' + esc(m.window) + ' ' + esc(m.used) + '% ≥ ' + esc(m.cap) + '<span class="sub">' + TZ.EN('GroupPressureNotified') + (m.n > 1 ? ' ×' + m.n + '（〜' + TZ.hm(m.last) + '）' : '') + '</span>';
+      } else {
+        ic = '<span class="ic refused" aria-hidden="true">×</span>';
+        what = '<b data-t>' + esc(m.group) + '</b> <span class="mono">' + esc(m.account || '') + '</span><span class="sub">' + TZ.EN('GroupMoveRefused') + ' ' + esc(m.reason || '') + '</span>';
+      }
+      return '<li' + (m.kind === 'move' ? ' data-card="mv:' + i + '" tabindex="0"' : '') + '>' + ic + '<span class="num">' + TZ.hmd(m.ts, T) + '</span><span class="what">' + what + '</span></li>';
+    };
+    var SHOWMV = 8;
+    var mvh = '<ul class="mv">' + mv.slice(0, SHOWMV).map(mvli).join('') + '</ul>' + (mv.length > SHOWMV ? '<details class="fold"><summary class="num">+' + (mv.length - SHOWMV) + '</summary><ul class="mv">' + mv.slice(SHOWMV).map(function (m, i) { return mvli(m, i + SHOWMV); }).join('') + '</ul></details>' : '');
+    // 各 project の札（直し 7: 案 2 = 新しい窓 に統一・札を押しても窓を開く）
+    // 各 project の次の一手（並列の一覧・判定 = acct.js nextAll = project board の home と同じ関数）
+    var NX = nxAll(T);
+    NXIC = { nx_a: TZ.stIcon('limit'), nx_b: TZ.stIcon('silent'), nx_c: '<span class="nxi stop" aria-hidden="true">' + IC.stop + '</span>', nx_d: '<span class="nxi ask" aria-hidden="true">' + IC.ask + '</span>', nx_e: '<span class="nxi ask" aria-hidden="true">' + IC.ask + '</span>', nx_f: '<span class="nxi gaps" aria-hidden="true">' + IC.gaps + '</span>', nx_g: '<span class="nxi ok" aria-hidden="true">' + IC.check + '</span>', unknown: TZ.stIcon('unknown') };
+    var nxrows = NX.map(function (r) {
+      var p = PROJ[r.project], dim = r.top === 'nx_g' || r.top === 'unknown';
+      var mini = r.items.map(function (x) { return '<span class="nxm ' + (x.na ? 'na' : x.on ? 'on' : 'off') + '" aria-label="' + esc(L(x.k)) + ' ' + (x.na ? '―' : x.on ? 'あり' : 'なし') + '">' + x.k.slice(3) + '</span>'; }).join('');
+      return '<div class="nxrow t-' + r.top + (dim ? ' dim' : '') + '" data-card="nx:' + esc(r.project) + '" tabindex="0"><span class="nxp"><span data-t>' + esc(r.project) + '</span><span class="small muted" data-t>' + esc(p.group) + '</span></span>' +
+        '<span class="nxtop">' + NXIC[r.top] + '<span class="nxk">' + (r.top === 'unknown' ? esc(L('st_unknown')) : '(' + r.top.slice(3) + ') ' + esc(L(r.top))) + '</span><span class="nxl">' + esc(r.line) + '</span></span>' +
+        '<span class="nxms" aria-hidden="false">' + mini + '</span><span class="go">' + (p.dashboard ? openBtn(p) : '<span class="btn static dis">' + esc(L('not_yet')) + '</span>') + '</span></div>';
+    }).join('');
+    // tab の badge（実データ・時点 T）
+    var nNeed = NX.filter(function (r) { return r.top !== 'nx_g' && r.top !== 'unknown'; }).length; // 要対応の project の数（HOME と同じ値 → 各 project は記号「!」だけ）
+    var BAD = { home: nNeed, session: rows.filter(function (w) { return w.st.v === 'limit' || w.st.v === 'silent'; }).length, projects: nNeed ? '!' : 0 };
+    TZ.ACCT_TABS.forEach(function (k) { var e = document.getElementById('tb-' + k); if (e) { e.textContent = BAD[k]; e.hidden = !BAD[k]; e.setAttribute('aria-label', BAD[k]); } });
+    window.__tz_badges = BAD; window.__tz_nx = NX.map(function (r) { return { p: r.project, top: r.top, line: r.line, on: r.items.filter(function (x) { return x.on; }).map(function (x) { return x.k; }), na: r.items.filter(function (x) { return x.na; }).map(function (x) { return x.k; }) }; });
+    syncTabs();
+    var html;
+    if (TAB === 'home') {
+      html = '<div class="hgrid"><section class="panel" id="nxall"><header>' + TZ.H('h2', 'next_all') + '<span class="chip num">' + NX.length + '</span><span class="grow"></span><span class="lgline" data-term="next_all">' + TZ.symHTML('nxm:on:c') + '<span>あり</span>' + TZ.symHTML('nxm:off:d') + '<span>なし</span>' + TZ.symHTML('nxm:na:e') + '<span>測れていない</span></span></header><div class="nxall">' + nxrows + '</div></section>' +
+        '<section class="panel" id="winsp"><header>' + TZ.H('h2', 'open_windows') + '</header><ul class="items wins" id="wins"></ul></section></div>' +
+        '<div class="gtop">' + over + '</div>' +
+        '<section class="panel" style="margin-bottom:16px"><header>' + TZ.H('h2', 'allowance') + '</header><div class="acct-grid">' + hdr + arows + '</div></section>' +
+        '<details class="panel fold mvp" id="moves"' + (MVOPEN ? ' open' : '') + '><summary>' + TZ.H('h2', 'moves') + '<span class="chip num">' + mv.length + '</span></summary>' + mvh + '</details>';
+    } else if (TAB === 'session') {
+      html = '<section class="panel" style="margin-bottom:16px"><header>' + TZ.H('h2', 'sessions') + '<span class="chip num">' + rows.filter(function (w) { return w.name; }).length + '</span>' + sortSeg() + TZ.spanSeg() + '</header>' + TZ.stripLegend() + sessTable(rows, T) + '</section>' +
+        '<section class="panel" style="margin-bottom:16px" id="ledger"><header>' + TZ.H('h2', 'ledger_state') + (LED ? '<span class="chip num" data-term="last_record" tabindex="0">' + TZ.hm(LNOW) + '</span>' : '') + segOf(LSORTS, LSORT, 'data-lsort') + '</header>' + ledTable() + '</section>';
+    } else {
+      var NXM = {}; NX.forEach(function (r) { NXM[r.project] = r; });
+      html = '<section class="panel" id="ptab"><header>' + TZ.H('h2', 'dashboards') + '<span class="chip num">' + B.projects.length + '</span>' + segOf(PSORTS, PSORT, 'data-psort') + '</header>' + projTable(NXM) + '</section>';
+    }
+    document.getElementById('body').innerHTML = html;
+    fitLines();
+    var md = document.getElementById('moves'); if (md) md.addEventListener('toggle', function () { MVOPEN = md.open; });
+    TZ.$$('[data-sort]').forEach(function (b) { b.addEventListener('click', function () { setSort(b.getAttribute('data-sort'), true); }); });
+    TZ.$$('[data-lsort]').forEach(function (b) { b.addEventListener('click', function () { LSORT = b.getAttribute('data-lsort'); setParam('lsort', LSORT === 'judge' ? null : LSORT); }); });
+    TZ.$$('[data-psort]').forEach(function (b) { b.addEventListener('click', function () { PSORT = b.getAttribute('data-psort'); setParam('psort', PSORT === 'need' ? null : PSORT); }); });
+    // 行の「詳しく」: 台帳の表は button・各 project の表は行のどこを押しても（札の button と link は除く）
+    TZ.$$('[data-toggle]').forEach(function (el) {
+      el.addEventListener('click', function (e) {
+        if (el.classList.contains('prow') && e.target.closest('button,a,.q,[data-open]')) return;
+        e.stopPropagation(); var k = el.getAttribute('data-toggle'), row = el.closest('[data-row]'), op = !row.classList.contains('open');
+        ROWOPEN[k] = op; row.classList.toggle('open', op); TZ.$$('[data-toggle="' + k + '"]').forEach(function (x) { x.setAttribute('aria-expanded', op); if (x.classList.contains('rowmore')) { var ra = x.querySelector('.rm-a'); if (ra) ra.textContent = op ? '▾' : '▸'; } });
+      });
+    });
+    TZ.$$('[data-span]').forEach(function (b) { b.addEventListener('click', function () { TZ.setSpan(b.getAttribute('data-span')); render(); setTimeout(TZ.audit, 50); }); });
+    TZ.$$('[data-open]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); openWin(b.getAttribute('data-open')); }); });
+    drawWins();
+  }
+  function setParam(n, v) { var u = new URL(location.href); if (v == null) u.searchParams.delete(n); else u.searchParams.set(n, v); history.pushState({ tab: TAB }, '', u); render(); setTimeout(TZ.audit, 50); }
+  function setSort(k, push) {
+    SORT = SORTS.indexOf(k) >= 0 ? k : 'project';
+    if (push) { var u = new URL(location.href); if (SORT === 'project') u.searchParams.delete('sort'); else u.searchParams.set('sort', SORT); history.pushState({ sort: SORT }, '', u); }
+    render(); setTimeout(TZ.audit, 50);
+  }
+  /* ---------- tab（?tab=home|session|projects・既定 home）: 押すと URL に残し、戻る / reload で保つ ---------- */
+  function tabNow() { var k = TZ.param('tab'); return TZ.ACCT_TABS.indexOf(k) >= 0 ? k : 'home'; }
+  var TAB = tabNow(), MVOPEN = false;
+  function syncTabs() { // tab の link に今の ?at= ?sort= ?span= ?mode= を載せ直す・今の tab に印
+    TZ.$$('.nav a[data-tab]').forEach(function (a) { var k = a.getAttribute('data-tab'); a.setAttribute('href', TZ.acctTabHref(k)); a.classList.toggle('on', k === TAB); if (k === TAB) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  }
+  function setTab(k, push) {
+    TAB = TZ.ACCT_TABS.indexOf(k) >= 0 ? k : 'home';
+    if (push) { var u = new URL(location.href); u.searchParams.set('tab', TAB); history.pushState({ tab: TAB }, '', u); }
+    render(); setTimeout(TZ.audit, 50);
+  }
+  TZ.$$('.nav a[data-tab]').forEach(function (a) { a.addEventListener('click', function (e) { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); setTab(a.getAttribute('data-tab'), true); window.scrollTo(0, 0); }); });
+  window.addEventListener('popstate', function () { SORT = SORTS.indexOf(TZ.param('sort')) >= 0 ? TZ.param('sort') : 'project'; LSORT = LSORTS.indexOf(TZ.param('lsort')) >= 0 ? TZ.param('lsort') : 'judge'; PSORT = PSORTS.indexOf(TZ.param('psort')) >= 0 ? TZ.param('psort') : 'need'; setTab(tabNow(), false); });
+
+  /* ---------- 窓（案 2）: 名前つき target tz-<project>・既に開いていれば前面へ・一覧は HOME（mock = 画面の状態 + localStorage tz-wins） ---------- */
+  try { if (window.name !== 'tz-account') window.name = 'tz-account'; } catch (e) { /* noop */ } // project board の「戻る」が window.open('', 'tz-account') でこの窓を見つける
+  var WH = {}; // window.open の handle（この窓が開いた窓だけ・reload で消える）
+  function loadW() { try { return JSON.parse(localStorage.getItem('tz-wins') || '{}'); } catch (e) { return {}; } }
+  function saveW(o) { try { localStorage.setItem('tz-wins', JSON.stringify(o)); } catch (e) { /* noop */ } }
+  function projURL(p) {
+    var pp = PROJ[p], at = TZ.param('at') ? 'at=' + encodeURIComponent(new Date(T).toISOString().slice(0, 19) + 'Z') : '', mq = TZ.param('mode') ? 'mode=' + TZ.mode() : '', qs = [at, mq].filter(Boolean).join('&');
+    return new URL(pp.dashboard + (qs ? '?' + qs : ''), location.href).href;
+  }
+  function openBtn(p, short) { return '<button type="button" class="btn primary"' + (short ? ' data-short="1"' : '') + ' data-open="' + esc(p.name) + '" data-term="open_new">' + (short ? '開く' : esc(L('open_new'))) + ' ↗</button>'; }
+  function openWin(p) {
+    var pp = PROJ[p]; if (!pp || !pp.dashboard) return;
+    var name = 'tz-' + p, w = WH[p], o = loadW(), how;
+    if (w && !w.closed) { how = 'front'; }
+    else {
+      try { w = window.open('', name); } catch (e) { w = null; }
+      if (!w) { TZ.toast(p + ': 窓を開けなかった（popup の許可が要る）'); return; }
+      var blank = true; try { blank = w.location.href === 'about:blank'; } catch (e) { blank = false; }
+      if (blank) { w.location.href = projURL(p); how = 'new'; } else how = 'front';
+      WH[p] = w;
+    }
+    try { w.focus(); } catch (e) { /* noop */ }
+    o[p] = { at: how === 'new' || !o[p] ? Date.now() : o[p].at, closed: null, front: Date.now() }; saveW(o);
+    TZ.toast(p + ': ' + (how === 'new' ? '新しい窓で開いた（本番は orchestrator が app mode の窓を起こす）' : '既に開いている窓を前面へ'));
+    window.__tz_lastOpen = { p: p, how: how, name: name };
+    drawWins();
+  }
+  var lastWins = null;
+  function drawWins() {
+    TZ.$$('[data-open]').forEach(function (b) { var w = WH[b.getAttribute('data-open')]; b.textContent = w && !w.closed ? '前面へ ↗' : (b.hasAttribute('data-short') ? '開く' : L('open_new')) + ' ↗'; }); // 開いていれば「前面へ」
+    var el = document.getElementById('wins'); if (!el) return;
+    var o = loadW(), ks = Object.keys(o).filter(function (k) { return PROJ[k]; });
+    var st = function (k) { var w = WH[k]; return w && !w.closed ? 'open' : o[k].closed || (w && w.closed) ? 'closed' : 'nohandle'; };
+    var key = ks.map(function (k) { return k + st(k); }).join('|'); if (key === lastWins && el.childNodes.length) return; lastWins = key;
+    var lab = { open: '開いている', closed: '閉じた', nohandle: '開いたはず（この窓の reload で handle なし）' };
+    el.innerHTML = ks.length ? ks.map(function (k) {
+      var s = st(k);
+      return '<li class="w-' + s + '">' + TZ.stIcon(s === 'open' ? 'run' : s === 'closed' ? 'wait' : 'unknown') + '<span class="ttl"><span data-t>' + esc(k) + '</span> <span class="small muted mono">tz-' + esc(k) + '</span> <span class="small">' + esc(lab[s]) + '</span> <span class="small muted num">' + TZ.hm(o[k].at) + '</span></span>' +
+        '<button type="button" class="btn" data-front="' + esc(k) + '">' + (s === 'closed' ? esc(L('open_new')) : '前面へ') + '</button></li>';
+    }).join('') : '<li>' + TZ.stIcon('wait') + '<span class="ttl small muted">0（まだ開いていない）</span></li>';
+    TZ.$$('[data-front]').forEach(function (b) { b.addEventListener('click', function () { openWin(b.getAttribute('data-front')); }); });
+    window.__tz_wins = ks.map(function (k) { return k + ':' + st(k); });
+  }
+  window.addEventListener('storage', function (e) { if (e.key === 'tz-wins') { lastWins = null; drawWins(); } });
+  window.addEventListener('focus', function () { lastWins = null; drawWins(); });
+
+
+  /* ---------- hover card（群・群の project・口座・session・移動・project）: 出所の file を必ず ---------- */
+  var SD = '~/.local/state/scribe2-v2-state';
+  var dirOf = function (p) { var x = PROJ[p]; return x && x.state_dir ? '~/.local/state/' + x.state_dir : '（state dir なし）'; };
+  function doctorLine(g, t) { // 器の doctor の群の行と同じ形
+    var sa = []; g.anchors.forEach(function (an) { var p = an.split('/').pop(); seats.filter(function (y) { return y.s.project === p; }).forEach(function (y) { var a = seatAcctAt(y, t); if (a && sa.indexOf(a) < 0) sa.push(a); }); });
+    var c = curAt(g, t);
+    return 'group=' + g.name + ' accounts=' + g.accounts.join(',') + ' anchors=' + g.anchors.length + ' seat-accounts=' + (sa.join(',') || 'none') + ' current=' + (c.by === 'seed' ? 'seed' : c.account) + ' next=' + (A.candidatesAt(g, t).next || 'none');
+  }
+  var src = function (s) { return '<div class="src">' + IC.file + '<span>' + esc(s) + '</span></div>'; };
+  window.__tz_card = function (el) {
+    var c = el.getAttribute('data-card'), i = c.indexOf(':'), k = c.slice(0, i), v = c.slice(i + 1);
+    if (k === 'group') {
+      var g = GROUP[v]; if (!g) return null; var cur = curAt(g, T);
+      var dl = doctorLine(g, T), dj = dl.indexOf(' seat-accounts=');
+      return C4({ ti: esc(v) + ' · ' + esc(L('current_account')) + ' <span class="mono">' + esc(cur.account) + '</span>',
+        k: '<span>' + esc(L('group')) + '</span><span class="sp"></span><span class="num">記録 ' + (g.records || []).length + ' 件</span>',
+        v: cur.by === 'record' ? '◷ ' + esc(TZ.hmd(cur.ts, T)) + ' から · ← 前 <span class="mono">' + esc(cur.previous || '―') + '</span>' : cur.by === 'seed' ? '記録なし → 種 <span class="mono">' + esc(g.seed) + '</span>' : '最初の記録より前 → その前の口座',
+        src: 'groups/' + v + '.account ほか', srcFull: cur.src + '・' + SD + '/host.toml の [[account-group]] name = "' + v + '"・' + B.sources.pressure,
+        more: ['<b>候補</b> ' + g.accounts.length + ' 口座 → ' + esc(L('candidates')),
+          '<b>閾値</b> ' + B.windows.map(function (w) { return TZ.symHTML('thr:' + (B.pressure[w] ? B.pressure[w].value : '?')) + esc(WSHORT[w]); }).join(' '),
+          '<b>anchor</b> ' + g.anchors.length + ' 件'].concat(g.anchors.map(function (a) { return '・ ' + esc(a.split('/').pop()); })).concat([
+          '<b>種</b> <span class="mono">' + esc(g.seed) + '</span> = 記録が無いときの既定']),
+        ex: TZ.mode() === 'expert' ? dl.split(' ').reduce(function (o, w) { var l = o[o.length - 1]; if (l != null && Array.from(l + ' ' + w).length <= 60) o[o.length - 1] = l + ' ' + w; else o.push(w); return o; }, []) : null });
+    }
+    if (k === 'cand') return A.candCard(v.split('|')[0], v.split('|')[1], T);
+    if (k === 'gproj') {
+      var gn = v.split('/')[0], p = v.split('/')[1], g2 = GROUP[gn], cur2 = curAt(g2, T), x = seats.filter(function (y) { return y.s.project === p; })[0];
+      if (!x) return C4({ ti: esc(p), k: gim(null) + '<span>' + esc(L('seat_none')) + '</span>', v: esc(gn) + ' の今の口座 <span class="mono">' + esc(cur2.account) + '</span>', src: 'SeatRegistered が無い', srcFull: dirOf(p) + '・fleet/events.jsonl の SeatRegistered' });
+      var ra = seatAcctAt(x, T), okm = ra === cur2.account;
+      return C4({ ti: '<span class="mono">' + esc(x.s.target) + '</span>', k: gim(okm) + '<span>' + esc(L(okm ? 'seat_match' : 'seat_mismatch')) + '</span><span class="sp"></span>' + TZ.stIcon(TZ.seatStatus(x.fx, T).v),
+        v: '登録 <span class="mono">' + esc(ra || '?') + '</span> ' + (okm ? '=' : '≠') + ' 群 <span class="mono">' + esc(cur2.account) + '</span>',
+        src: 'seat/…/account · SeatRegistered', srcFull: x.s.src.replace('/state.jsonl', '/account') + '・fleet/events.jsonl の SeatRegistered・' + cur2.src,
+        more: [esc(L(TZ.ST_V[TZ.seatStatus(x.fx, T).v]))] });
+    }
+    if (k === 'acct') {
+      var st = acctState(v, T), occ = occupantsAt(T);
+      var wl = B.windows.map(function (w) { var m = allowAt(v, w, T); return m ? esc(WSHORT[w]) + ' ' + m.used + '%' : ''; }).filter(Boolean).join(' · ');
+      var on = ROWS.filter(function (w) { return w.acct === v && w.name; }).map(function (w) { return w.name; });
+      return C4({ ti: '<span class="mono">' + esc(v) + '</span>', k: (st.v === 'ok' ? TZ.stIcon(maxUsed(v, T) >= 100 ? 'limit' : 'run') : TZ.stIcon('unknown')) + '<span>' + esc(L('accounts')) + '</span><span class="sp"></span><span>' + (st.v === 'retired' ? 'retired' : occ[v] ? esc(L('occupant')) + ' ' + esc(occ[v]) : esc(L('free_for_pipeline'))) + '</span>',
+        v: st.v === 'ok' ? wl : st.v === 'retired' ? 'AccountRetired ◷ ' + TZ.hm(st.retired) : esc(L('st_unknown')),
+        src: 'AllowanceMeasured · ' + (st.v === 'ok' ? '◷ ' + TZ.hm(st.last) : '―'), srcFull: SD + '*/fleet/events.jsonl の AllowanceMeasured / AllowanceUnmeasured（account=' + v + '）・' + B.sources.groups,
+        more: B.windows.map(function (w) { var m = allowAt(v, w, T); return m && m.resets ? esc(WSHORT[w]) + ' ↻ ' + TZ.hm(m.resets) + (m.model ? ' · ' + esc(m.model) : '') : ''; })
+          .concat([st.v !== 'ok' && st.v !== 'retired' ? esc(cut(st.why || '', 30)) : '', 'session ' + on.length + (on.length ? ' · ' + esc(cut(on.slice(0, 2).join(' / '), 22)) : '')]) });
+    }
+    if (k === 'seat') {
+      var xs = seats.filter(function (y) { return y.key === v; })[0]; if (!xs) return null;
+      var mw = ROWS.filter(function (w) { return w.key === 'seat:' + v; })[0];
+      // 器の doctor の席の行と同じ形（契約 s2-07l.650: heartbeat= と tick=healthy|stale|absent|unreadable）
+      return TZ.seatCard(xs.fx, xs.s.target, 'seat ' + xs.s.target + ' · model ' + (xs.s.model || '?'), xs.s.src + '・account・fleet/events.jsonl の SeatRegistered / AllowanceMeasured・' + B.sources.groups,
+        { more: mw && mw.moveWait ? [gim(false) + '<span>' + esc(L('seat_mismatch')) + ' <span class="mono">' + esc(mw.moveWait.from) + ' → ' + esc(mw.moveWait.to) + '</span></span>', '→ 器の tick が /exit の後に起こし直す'] : [],
+          ex: TZ.doctorSeatLines(xs.fx, xs.s, TZ.seatStatus(xs.fx, T).account, T) });
+    }
+    if (k === 'run') {
+      var r = runs.filter(function (q) { return q.run === v; })[0]; if (!r) return null;
+      var a = runAt(r, T), rs = runStatus(r, T);
+      var path = r.st.filter(function (q) { return q.ts <= T; }).map(function (q) { return q.stage; }).filter(function (s, j, arr) { return j === 0 || s !== arr[j - 1]; });
+      return C4({ ti: '<span class="mono">' + esc(cut(r.run, 34)) + '</span>', k: TZ.stIcon(rs.v) + '<span>pipeline · ' + esc(r.project) + '</span>',
+        v: esc(a ? a.stage : '?') + (a && a.verdict ? ' ' + esc(a.verdict) : '') + ' · ' + esc(L(TZ.ST_V[rs.v])),
+        src: 'fleet/events.jsonl · RunStage', srcFull: dirOf(r.project) + '/' + r.src + '・RunStage / SeatSpawned / SeatStopped',
+        more: [esc(path.slice(-3).join(' → ')), '口座 <span class="mono">' + esc((a && a.account) || '測れていない') + '</span> · worker ' + (a && a.live ? '起きている' : '無し'), '出力 ' + r.cost_out + ' token · RunCost ' + r.cost_n + ' 件'] });
+    }
+    if (k === 'mv') {
+      var m = (window.__mv || [])[Number(v)]; if (!m) return null;
+      var msrc = [m.record_src, m.event && m.event.src ? '~/.local/state/' + m.event.src : null, m.request ? m.request.src : null].filter(Boolean).join('・');
+      if (m.kind === 'move') return C4({ ti: '<span class="mono">' + esc((m.from || '?') + ' → ' + m.to) + '</span>', k: '<span class="ic moved">→</span><span>' + esc(L('moves')) + '</span><span class="sp"></span><span data-t>' + esc(m.group) + '</span>',
+        v: '◷ 記録 ' + esc(m.record_ts ? TZ.hmd(m.record_ts, T) : 'なし') + (m.current ? ' · 今の記録' : '') + ' · 承認 ' + (m.event ? '✓' : '✗'),
+        src: 'groups/history/' + m.group + ' ほか', srcFull: msrc,
+        more: ['GroupMoved ◷ ' + esc(m.event ? TZ.hmd(m.event.ts, T) : 'なし') + ' → ' + esc(m.to), m.request ? '移動の頼み ' + esc(TZ.hmd(m.request.ts, T) + ' · ' + m.request.window) : ''].concat(
+          m.pending.map(function (p) { return gim(false) + '<span>保留 ' + esc(TZ.hm(p.ts) + ' · ' + (p.target || '?')) + '</span>'; })) });
+      return C4({ ti: esc(m.kind === 'pressure' ? 'GroupPressureNotified' : 'GroupMoveRefused'), k: (m.kind === 'pressure' ? TZ.symHTML('thr:' + (m.cap || '?')) : gim(false, '✗')) + '<span>' + esc(L('moves')) + '</span><span class="sp"></span><span data-t>' + esc(m.group) + '</span>',
+        v: '<span class="mono">' + esc(m.account || '?') + '</span>' + (m.window ? ' ' + esc(WSHORT[m.window] || m.window) + ' ' + esc(m.used) + '% > ' + esc(m.cap) : '') + (m.reason ? ' · ' + esc(m.reason) : ''),
+        src: 'fleet/events.jsonl · ◷ ' + TZ.hm(m.ts), srcFull: SD + '*/fleet/events.jsonl（detail は group / window / used / cap / reason だけ読む）',
+        more: [m.n > 1 ? m.n + ' 回 · ' + TZ.hm(m.ts) + '〜' + TZ.hm(m.last) : ''] });
+    }
+    if (k === 'proj') {
+      var pp = PROJ[v]; if (!pp) return null;
+      var ss = ROWS.filter(function (w) { return w.proj === v && w.name; });
+      return C4({ ti: esc(v), k: '<span>project · ' + esc(pp.group) + '</span><span class="sp"></span>' + ss.map(function (w) { return TZ.stIcon(w.st.v); }).join(''),
+        v: ss.length ? 'session ' + ss.length + ' · orchestrator ' + ss.filter(function (w) { return w.role === 'orchestrator'; }).length : esc(L('seat_none')),
+        src: pp.anchor.split('/').pop() + ' · state dir', srcFull: pp.anchor + '（anchor）・' + dirOf(v),
+        more: ss.slice(0, 5).map(function (w) { return TZ.stIcon(w.st.v) + '<span><span class="mono">' + esc(cut(w.name, 24)) + '</span> ' + esc(w.acct || '?') + '</span>'; }).concat([pp.dashboard ? 'dashboard = tsuzuri の mock v3' : esc(L('not_yet'))]) });
+    }
+    if (k === 'pcnt') {
+      var pq = PROJ[v]; if (!pq) return null; var rc2 = pq.state_dir ? A.runColsAt(v, T) : null;
+      return C4({ ti: esc(L('runs4')) + ' · ' + esc(v), k: rc2 ? ['wait', 'run', 'stop', 'land'].map(function (c) { return '<span class="rc1 rc-' + c + '">' + ({ wait: '・', run: TZ.stIcon('run'), stop: '!', land: '✓' }[c]) + ' ' + rc2[c] + '</span>'; }).join(' ') : TZ.stIcon('unknown') + '<span>' + esc(L('st_unknown')) + '</span>',
+        v: esc(L('waiting_you')) + ' ' + (pq.questions_open != null ? pq.questions_open : '―'),
+        src: 'fleet/events.jsonl · ◷ ' + TZ.hm(T), srcFull: dirOf(v) + '/fleet/events.jsonl の Run* / Stage*（bead ごとの最新の run）' + (pq.questions_src ? '・' + pq.questions_src : ''),
+        more: (rc2 ? ['wait', 'run', 'stop', 'land'].map(function (c) { return esc(L(TZ.COL_V[c])) + ' ' + rc2[c]; }) : ['state dir が無い']).concat(pq.questions_open == null ? ['― = 質問の台帳を読んでいない'] : []) });
+    }
+    if (k === 'nx') { // 次の一手の 7 項（同じ関数 = acct.js nextAt）
+      var r2 = A.nextAt(v, T, PROJ[v] && PROJ[v].questions_open != null ? QT : null);
+      var mk = r2.items.map(function (x) { return TZ.symHTML('nxm:' + (x.na ? 'na' : x.on ? 'on' : 'off') + ':' + x.k.slice(3)); }).join('') + TZ.symHTML('nxm:' + (r2.top === 'nx_g' ? 'on' : 'off') + ':g');
+      return C4({ ti: esc(v) + ' · ' + (r2.top === 'unknown' ? esc(L('st_unknown')) : '(' + r2.top.slice(3) + ') ' + esc(L(r2.top))), k: '<span>' + esc(L('next_all')) + '</span><span class="sp"></span>' + mk,
+        v: esc(cut(r2.line || '―', 34)), figTop: 'next', figCls: (function () { var on = function (ks) { return r2.items.some(function (x) { return ks.indexOf(x.k) >= 0 && x.on; }); }; return [on(['nx_a']) ? 'nx' : '', on(['nx_b']) ? 'nx' : '', on(['nx_c']) ? 'nx' : '', on(['nx_d', 'nx_e', 'nx_f']) ? 'nx' : '', r2.top === 'nx_g' ? 'ok' : 'off']; })(),
+        src: 'acct.js nextAt · ◷ ' + TZ.hm(T), srcFull: dirOf(v) + '/fleet/events.jsonl（席・run・群の移動）・~/.local/state/scribe2-host/groups/' + (PROJ[v] ? PROJ[v].group : '?') + '.account' + (PROJ[v] && PROJ[v].questions_open != null ? '・mock3/data/graph.json（質問・G7）' : '・質問の台帳は読んでいない') + '・判定 = project board の home と同じ関数',
+        more: r2.items.map(function (x) { return TZ.symHTML('nxm:' + (x.na ? 'na' : x.on ? 'on' : 'off') + ':' + x.k.slice(3)) + '<span>' + esc(L(x.k)) + ' ' + (x.na ? '―' : x.on ? '· ' + esc(cut(x.line || 'あり', 22)) : 'なし') + '</span>'; }) });
+    }
+    if (k === 'led') return ledCard(v);
+    if (k === 'dormant') {
+      return C4({ ti: esc(L('dormant')) + ' ' + B.dormant.length, k: TZ.stIcon('wait') + '<span>12 時間以上 動きなし</span>', v: esc(cut(B.dormant.map(function (d) { return d.seat; }).join(' / '), 34)),
+        src: 'seat/<seat>/state.jsonl の最後', srcFull: '~/.local/state/scribe2-v2-state*/seat/<seat>/state.jsonl の最後の行（12 h より前）',
+        more: B.dormant.map(function (d) { var th = TZ.tickHealth({ tickLast: d.tick_last ? (d.tick_last.ts ? { ts: TZ.ms(d.tick_last.ts) } : { unreadable: true }) : null }, T);
+          return '<span class="mono">' + esc(cut(d.seat, 18)) + '</span> ' + esc(d.account) + ' ◷ ' + TZ.hm(d.last) + ' ' + TZ.symHTML('tk:' + (th.v === 'past' ? 'absent' : th.v)); }),
+        ex: TZ.mode() === 'expert' ? B.dormant.map(function (d) { var th = TZ.tickHealth({ tickLast: d.tick_last ? (d.tick_last.ts ? { ts: TZ.ms(d.tick_last.ts) } : { unreadable: true }) : null }, T); return 'seat: target=' + d.target + ' heartbeat=' + (d.heartbeat_off ? 'off' : 'on') + ' tick=' + (th.v === 'past' ? 'absent' : th.v); }) : null });
+    }
+    return null;
+  };
+
+  /* ---------- 頁の枠（時点のつまみ） ---------- */
+  var lim = limitTimes();
+  document.getElementById('app').innerHTML = '<div class="row" style="margin-bottom:16px">' + TZ.H('h1', 'acct_board') + '<span class="chip num" data-term="last_record" tabindex="0">' + esc(L('last_record')) + ' ' + TZ.hm(BUILT) + '</span>' +
+    (B.dormant && B.dormant.length ? '<span class="chip num dormant" data-card="dormant:all" tabindex="0">' + TZ.stIcon('wait') + esc(L('dormant')) + ' ' + B.dormant.length + '</span>' : '') + '</div>' +
+    '<div class="atbar">' + TZ.HS('at') + '<span class="t num" id="att"></span><input type="range" id="atr" min="0" max="' + Math.round(SPAN / 60000) + '" step="1" aria-label="' + esc(L('at')) + '">' +
+    '<button type="button" class="btn" id="atnow">' + esc(L('now_btn')) + '</button>' + (lim ? '<button type="button" class="btn" id="atlim" data-tip-expert="' + esc(lim.who + ' @ ' + new Date(lim.t).toISOString()) + '">' + TZ.stIcon('limit') + esc(L('jump_limit')) + '</button>' : '') + '</div>' +
+    '<div id="body"></div>';
+  function setAt(t) {
+    if (t == null) { TZ.setSeatView(null); var u0 = new URL(location.href); u0.searchParams.delete('at'); history.replaceState(null, '', u0); }
+    else { TZ.setSeatView(t); var u = new URL(location.href); u.searchParams.set('at', new Date(t).toISOString().slice(0, 19) + 'Z'); history.replaceState(null, '', u); }
+    render(); syncBar(); setTimeout(TZ.audit, 50);
+  }
+  function syncBar() { var t = TZ.seatNowT(); var r = document.getElementById('atr'); if (document.activeElement !== r) r.value = Math.round((Math.min(t, BUILT) - FROM) / 60000); document.getElementById('att').textContent = TZ.hm(t); }
+  document.getElementById('atr').addEventListener('change', function (e) { setAt(FROM + Number(e.target.value) * 60000); });
+  document.getElementById('atr').addEventListener('input', function (e) { document.getElementById('att').textContent = TZ.hm(FROM + Number(e.target.value) * 60000); });
+  document.getElementById('atnow').addEventListener('click', function () { setAt(null); });
+  if (lim) document.getElementById('atlim').addEventListener('click', function () { setAt(lim.t); });
+  render(); syncBar();
+  var lastMin = Math.floor(TZ.seatNowT() / 60000);
+  window.__tz_onTick = function () { var m = Math.floor(TZ.seatNowT() / 60000); if (m !== lastMin) { lastMin = m; render(); syncBar(); } else drawWins(); };
+  window.__tz_audit_extra = function () {
+    var occ = occupantsAt(T);
+    return { span: TZ.spanKey(), next: B.groups.map(function (g) { var c = A.candidatesAt(g, T); return g.name + '→' + (c.next || 'none') + ' [' + c.list.map(function (r) { return r.acct + (r.ok ? ':ok ' + r.rem + '%' : ':' + r.reasons.map(function (x) { return x.txt; }).join('/')); }).join(', ') + ']'; }),
+      stripTicks: (function () { var sv = document.querySelector('.sess .c-strip svg'); return sv ? sv.querySelectorAll('line.tick').length : 0; })(), axis: TZ.$$('.sess .c-hh .saxis span').map(function (x) { return x.textContent; }),
+      at: new Date(T).toISOString(), sort: SORT, moveWait: ROWS.filter(function (w) { return w.moveWait; }).map(function (w) { return w.name + ':' + w.moveWait.from + '>' + w.moveWait.to; }), groups: B.groups.map(function (g) { var c = curAt(g, T); return { name: g.name, current: c.account, by: c.by, ts: c.ts ? new Date(c.ts).toISOString() : null, previous: c.previous, src: c.src }; }),
+      occupants: occ, sessions: ROWS.length, sessionOrder: ROWS.length ? TZ.$$('.sess .srow:not(.hrow)').map(function (r) { return r.querySelector('.c-proj').textContent + '|' + r.querySelector('.c-role').textContent + '|' + r.querySelector('.c-ses').textContent; }) : [],
+      groupHeads: TZ.$$('.sess .ghead .gname').map(function (x) { return x.textContent; }),
+      accounts: B.accounts.length, sparklines: TZ.$$('.spark svg').length, unmeasuredMeters: TZ.$$('.meter.unmeasured').length,
+      limitedSeats: ROWS.filter(function (w) { return w.st.v === 'limit'; }).map(function (w) { return w.name; }), stLimitIcons: TZ.$$('#body .st-limit').length,
+      tab: TAB, badges: window.__tz_badges, nx: window.__tz_nx, wins: window.__tz_wins, projectLinks: TZ.$$('[data-open]').length, sameWindow: TZ.$$('[data-plan="1"]').length, ptab: window.__tz_ptab, ptabCols: TZ.$$('#ptab .prow.hrow > div').length, moveRows: (window.__mv || []).length };
+  };
+});
+</script>
+</body>
+</html>

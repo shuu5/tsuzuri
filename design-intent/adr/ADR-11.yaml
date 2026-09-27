@@ -31,11 +31,6 @@ options:
     verdict: rejected
     reason: 持ち主の要望（スマホの emulator を含む）に届かない。
 basis: [N-5, N-6, N-7, ADR-5]
-revises:
-  - target: ADR-5
-    decision: (1)
-    kind: widen
-    summary: 表示面の対象を端末の Chrome から、中身が web の native とスマホの emulator と純粋な native へ広げ、足す経路を CDP と画面の配信の 2 本に限った。
 retreat:
   kind: spike
   condition: 中身が web の native の試作で CDP がつながらないか、emulator の画面の配信が host で動かないと分かったら、その段の形を持ち主に問い直す。

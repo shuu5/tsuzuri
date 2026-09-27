@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tsuzuri — ホーム（mock v3）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<main class="page" id="app" aria-live="polite"></main>
+<script src="ui.js"></script>
+<script src="acct.js"></script>
+<script src="ledger.js"></script>
+<script>
+TZ.boot('home', function (G) {
+  var esc = TZ.esc, L = TZ.L, IC = TZ.IC, T = G.meta.surface_now.length === 17 ? G.meta.surface_now.replace('Z', ':00Z') : G.meta.surface_now;
+  var QS = TZ.openQuestions(G), nq = QS.length;
+  var MQ = TZ.param('mode') ? '?mode=' + TZ.mode() : '';
+
+  // pipeline dashboard（tsuzuri の run は 0 件 = state dir の fleet に RunCreated が無い・見本は外部の台帳 scribe2）
+  var b = TZ.board(G, T), SHOW = 3;
+  var col = function (c) {
+    var list = b[c];
+    return '<div class="col c-' + c + (list.length ? '' : ' is-empty') + '"><header><span class="dot" aria-hidden="true"></span>' + TZ.HS(TZ.COL_V[c]) + '<span class="cnt num">' + list.length + '</span></header>' +
+      '<div class="cards">' + list.slice(0, SHOW).map(TZ.kcardHTML).join('') + '</div>' +
+      (list.length > SHOW ? '<button type="button" class="more num" data-col="' + c + '" aria-label="' + (list.length - SHOW) + '">+' + (list.length - SHOW) + '</button>' : '') + '</div>';
+  };
+  var pipe = '<section class="panel" id="pipe"><header>' + TZ.H('h2', 'pipeline') + '</header>' +
+    '<div class="empty zrun" data-card="t3runs" tabindex="0">' + TZ.shape('pipeline', { fill: true }) + '<span><span data-t>tsuzuri</span> の ' + TZ.EN('run') + '</span><b class="num">0</b></div>' +
+    '<div class="extmark"><span class="chip ext">' + IC.folder + '</span>' + TZ.H('h3', 'external') + '</div>' +
+    '<div class="board">' + ['wait', 'run', 'stop', 'land'].map(col).join('') + '</div></section>';
+  window.__tz_card = function (el) {
+    if (el.getAttribute('data-card') === 't3runs') return TZ.card4({ ti: 'tsuzuri の run 0 件', k: TZ.shape('pipeline', { fill: true }) + '<span>run</span><span class="bname band-pipeline">pipeline</span>',
+      v: '<span class="gi ok sm">✓</span> 0 と測れた = RunCreated が無い', src: 'fleet/events.jsonl', srcFull: '~/.local/state/scribe2-v2-state-tsuzuri/fleet/events.jsonl', more: ['器の state dir は在る'] });
+    return null;
+  };
+
+  // orchestrator の card: 大きい記号・から・再開の見込み・稼働の帯（再生のつまみ）・縦線 = 口座の移動（account board と同じ注釈）
+  var SD = TZ.SEATD(), D0 = TZ.ms(SD.window_from), SPAN = Math.round((TZ.ms(SD.built_at) - D0) / 60000); // 直近 24 h（器の記録の時点まで）
+  /* 稼働の記録: 右端 = 見ている時点・左端 = 幅（?span=24h|6h|3h）だけ前・縦線 = 口座の移動と目盛（account board と同じ注釈） */
+  function stripSVG(t) { // 描き方は ui.js の TZ.stripSVG（account board と同じ関数・色は CSS の class）
+    var marks = [], prevA = null; (TZ.seatFX().account || []).forEach(function (r) { if (prevA != null && r.account !== prevA) marks.push({ t: r.ts, kind: 'acct' }); prevA = r.account; });
+    return TZ.stripSVG(function (x) { return TZ.seatStatus(TZ.seatFX(), x).v; }, marks, t, 28) + TZ.spanAxis(t);
+  }
+  /* ---------- block「orchestrator と口座」: 上段 = 状態（5 値）・から・稼働の記録／下段 = 登録の口座・project の群・3 窓の usage ---------- */
+  var orch = '<section class="panel seatcard" id="orch"><header>' + TZ.H('h2', 'orch_acct') + '</header><div id="stateband" hidden></div>' +
+    '<div class="orow"><div id="seatbody"></div>' +
+    '<div class="strip"><div class="row small muted" style="justify-content:space-between;flex-wrap:wrap;gap:4px">' + TZ.HS('history') + TZ.spanSeg() + '</div><div id="hstrip"></div>' +
+    TZ.stripLegend() + '<input type="range" id="scrub" min="0" max="' + SPAN + '" step="1" aria-label="' + esc(L('at')) + '">' +
+    '<div class="axis num">' + [0, 6, 12, 18, 24].map(function (h) { return '<span>' + TZ.hm(D0 + h * 3600000).slice(0, 2) + 'Z</span>'; }).join('') + '</div></div></div>' +
+    '<div class="olow" id="acctbody"></div><div id="ahistbody"></div>' +
+    // block の中身は全部見えているので hover card は出さない（持ち主 06:5xZ）。出所と doctor の行（経験者）は「詳しく ▸」へ
+    '<details class="gmore" id="omore"' + (TZ.mode() === 'expert' ? ' open' : '') + '><summary><span class="rm-t">詳しく</span> <span class="rm-a" aria-hidden="true">▸</span></summary><div class="gm" id="omorebody"></div></details></section>';
+  var next = '<section class="panel" id="next"><header>' + TZ.H('h2', 'next') + '</header><div id="nextbody"></div></section>';
+  /* ---------- block「台帳」（ledger.js・account board の表と同じ集計・tsuzuri は実データ 2 本 + mock の見本 28 本） ---------- */
+  var LEDD = TZ.LEDGER(), LNOW = LEDD ? TZ.ms(LEDD.built_at) : null, LP = LEDD ? LEDD.projects.filter(function (p) { return p.name === 'tsuzuri'; })[0] : null;
+  var LS = LP && LP.rows ? TZ.Ledger.stats(LP.rows, LNOW) : null, LS0 = LP && LP.rows ? TZ.Ledger.stats(LP.rows, LNOW, { noSample: true }) : null;
+  var dd = function (v) { return TZ.Ledger.days(v); };
+  var HEADS = {}; (LP && LP.rows ? LP.rows : []).forEach(function (r) { if (r[1] === 'memo') HEADS[r[0]] = r[10] || 0; });
+  var UNREF = LS ? TZ.unreflected(G, LNOW, HEADS) : [];
+  function ledgerBlock() {
+    if (!LS) return '<section class="panel" id="ledger"><header>' + TZ.H('h2', 'ledger_block') + '</header><div class="empty">' + TZ.stIcon('unknown') + '<span>台帳なし（測れていない）</span></div></section>';
+    var box = function (k, n, extra) { return '<div><span class="small muted">' + TZ.HS(k) + '</span><span class="big num">' + n + '</span>' + (extra || '') + '</div>'; };
+    // 4 数 = task open・memo・未反映・純減 24h（持ち主の裁定 07:3xZ）。question と epic の数と 7 日の純減は「詳しく」へ
+    var top = '<div class="l4">' + box('l_task', LS.open.task) + box('l_memo', LS.open.memo) + '<div class="l4un' + (UNREF.length ? ' on' : '') + '"><span class="small muted">' + TZ.HS('l_unref') + '</span><span class="big num">' + UNREF.length + '</span></div>' +
+      '<div class="l4net"><span class="small muted">' + TZ.HS('l_net24') + '</span><span class="big">' + TZ.Ledger.netHTML(LS.net24) + '</span></div></div>';
+    var mid = '<div class="lmid" data-card="lg:burn" tabindex="0"><div class="lcap">' + TZ.HS('l_burn') + '<span>線 = open の task・棒 = 閉じた数 / 日</span></div>' + TZ.Ledger.burndown(LS, 320, 72) +
+      '<div class="lcap num"><span>' + new Date(LNOW - 14 * TZ.Ledger.DAY).toISOString().slice(5, 10) + '</span><span>' + new Date(LNOW).toISOString().slice(5, 10) + '</span></div></div>';
+    var chip = function (k, n) { return '<span class="chip num" data-term="' + k + '" tabindex="0">' + esc(L(k)) + ' ' + n + '</span>'; };
+    var eps = LS.epics.map(function (e) {
+      var pc = e.total ? Math.round(e.closed / e.total * 100) : 0;
+      return '<div class="ep"><a class="nl" href="' + TZ.href('t3:' + e.id) + '" data-key="t3:' + esc(e.id) + '"><span data-t>' + esc(TZ.cut(e.title, 40)) + '</span></a><span class="bar" role="img" aria-label="' + e.closed + ' / ' + e.total + '"><i style="width:' + pc + '%"></i></span>' +
+        '<span class="meta num">' + e.closed + ' / ' + e.total + '・open ' + e.openKids + '</span></div>';
+    }).join('');
+    var mp = LS.memo, mbox = function (k, v) { return '<div><span class="small muted">' + TZ.HS(k) + '</span><span class="big num">' + v + '</span></div>'; };
+    var mpro = '<div class="mpro" aria-label="' + esc(L('memo_promo')) + '">' + mbox('m_open', mp.open) + mbox('m_wait', mp.wait) + mbox('m_promo7', mp.promo7) + mbox('m_age', dd(mp.ageP50)) + '</div>';
+    var un = '<details class="fold lep" open id="unref"><summary><span class="hd-t" data-term="unref">' + esc(L('unref')) + '</span><span class="chip num unref-n' + (UNREF.length ? '' : ' z') + '">' + UNREF.length + '</span>' +
+      '<span class="lchips">' + ['memo', '裁定', '要望'].map(function (k) { return '<span class="chip num">' + esc(k) + ' ' + UNREF.filter(function (u) { return u.kind === k; }).length + '</span>'; }).join('') + '</span></summary>' + TZ.Ledger.unrefHTML(UNREF, 20, LP.src) + '</details>';
+    var bot = '<details class="fold lep"><summary>' + '<span class="hd-t" data-term="l_epics">' + esc(L('l_epics')) + '</span><span class="chip num">' + LS.epics.length + '</span><span class="lchips">' + chip('l_blocked', LS.blocked) + chip('l_stale', LS.stale) + chip('l_ready', LS.ready) + '</span></summary>' + (eps || '<div class="small muted">epic の下の task が無い</div>') + '</details>';
+    var sgn9 = function (n) { return (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n); };
+    var lmore = '<details class="gmore"' + (TZ.mode() === 'expert' ? ' open' : '') + '><summary><span class="rm-t">詳しく</span> <span class="rm-a" aria-hidden="true">▸</span></summary><div class="gm">' +
+      '<div class="gm1 num"><span>question ' + LS.open.question + '</span><span>epic ' + LS.open.epic + '</span><span>' + esc(L('l_net7')) + ' ' + TZ.Ledger.netHTML(LS.net7) + '</span></div>' +
+      '<div class="gm1 num"><span>lead p50 ' + dd(LS.leadP50 != null ? LS.leadP50 * TZ.Ledger.DAY : null) + ' / p90 ' + dd(LS.leadP90 != null ? LS.leadP90 * TZ.Ledger.DAY : null) + '</span><span>closed/日 ' + LS.perDay.toFixed(1) + '</span><span>stale ' + LS.stale + '</span></div>' +
+      (LS0 ? '<div class="gm1 num"><span>見本を外すと task ' + LS0.open.task + ' · memo ' + LS0.open.memo + ' · 7d ' + sgn9(LS0.net7) + '</span><span>昇格待ち ' + LS0.memo.wait + ' · 昇格 7d ' + LS0.memo.promo7 + '</span></div>' : '') +
+      '<div class="gm1 src">' + IC.file + '<span>' + esc(LP.src) + '・集計 = ledger.js</span></div></div></details>';
+    return '<section class="panel" id="ledger"><header>' + TZ.H('h2', 'ledger_block') + '<span class="chip num" data-term="last_record" tabindex="0">' + TZ.hm(LNOW) + '</span>' + (LS.nSample ? '<span class="smpn">（うち見本 ' + LS.nSample + '）</span>' : '') + '</header>' + top + mid + mpro + lmore + bot + un + '</section>';
+  }
+  function ledgerCard(k) {
+    var sgn = function (n) { return (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n); };
+    var o = { src: 'issues.jsonl · 時点 ' + TZ.hm(LNOW), srcFull: LP.src + '・集計 = ledger.js（account board と同じ関数）' };
+    var no = LS0 ? '見本を外すと task ' + LS0.open.task + ' · memo ' + LS0.open.memo + ' · 7d ' + sgn(LS0.net7) : '';
+    o.k = TZ.Ledger.netHTML(LS.net24, '24h') + TZ.Ledger.netHTML(LS.net7, '7d') + '<span class="sp"></span><span class="num">closed/日 ' + LS.perDay.toFixed(1) + '</span>';
+    if (k === 'burn') {
+      o.ti = esc(L('l_burn')) + ' · tsuzuri'; o.v = 'open ' + LS.burn[0].open + ' → ' + LS.burn[LS.burn.length - 1].open + '（14 日）';
+      o.more = LS.days.map(function (d, i) { return i % 2 ? '' : '<span class="num">' + new Date(d.to).toISOString().slice(5, 10) + ' open ' + LS.burn[i].open + ' · +' + d.created + ' / −' + d.closed + '</span>'; }).concat([no]); return TZ.card4(o); }
+    return null;
+  }
+  var legend = '<section class="panel" id="legend"><header>' + TZ.H('h2', 'status') + '</header><div class="legend5">' +
+    ['run', 'wait', 'limit', 'silent', 'unknown'].map(function (v) { return '<span data-term="' + TZ.ST_V[v] + '">' + TZ.stIcon(v) + esc(L(TZ.ST_V[v])) + '</span>'; }).join('') + '</div></section>';
+
+  document.getElementById('app').innerHTML = '<div class="home"><div class="stack">' + next + pipe + ledgerBlock() + legend + '</div><div class="stack">' + orch + '</div></div>';
+  var pill = document.getElementById('seatpill'); if (pill) pill.remove(); // home では orchestrator の状態は block「orchestrator と口座」の 1 か所だけ
+
+  // 「+n」で列を広げる（段階的開示）
+  TZ.$$('.more').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var c = btn.getAttribute('data-col'); btn.previousElementSibling.innerHTML = b[c].map(TZ.kcardHTML).join(''); btn.remove();
+    });
+  });
+
+  // 上段: orchestrator の状態（5 値）・から（1 秒ごと・状態が変わったときだけ組み直す）
+  var lastKey = null, lastStrip = null, lastTk = null;
+  function renderSeat() {
+    var t = TZ.seatNowT(), s = TZ.seatStatus(TZ.seatFX(), t), key = s.v + '|' + (s.since || s.last || '') + '|' + !!s.long;
+    var th = TZ.tickHealth(TZ.seatFX(), t), tk = th.v + '|' + (th.age != null ? TZ.ageTxt(th.age) : '') + '|' + TZ.hbState(TZ.seatFX()).v;
+    if (tk !== lastTk && document.getElementById('tkrow')) { lastTk = tk; document.getElementById('tkrow').innerHTML = TZ.tkhbHTML(TZ.seatFX(), t); }
+    var sc = document.getElementById('scrub'), m = Math.max(0, Math.min(SPAN, Math.round((t - D0) / 60000)));
+    if (document.activeElement !== sc) sc.value = m;
+    var sk = TZ.spanKey() + '|' + Math.floor(t / 60000); if (sk !== lastStrip) { lastStrip = sk; document.getElementById('hstrip').innerHTML = stripSVG(t); }
+    if (key === lastKey) return; lastKey = key;
+    var from = s.v === 'silent' ? s.last : s.since;
+    document.getElementById('seatbody').innerHTML = '<div class="big">' + TZ.stIcon(s.v, true, 'feed') + '<span class="state stlabel st-' + s.v + '">' + esc(L(TZ.ST_V[s.v])) + (s.long ? '<span class="long">（長い）</span>' : '') + '</span>' +
+      (from ? '<span class="since num">' + IC.clock.replace('<svg', '<svg width="14" height="14"') + '<span class="small muted">' + esc(L('since')) + '</span><b>' + TZ.hm(from) + '</b></span>' : '') + '</div>' +
+      '<div class="tkrow" id="tkrow"></div>';
+    document.getElementById('tkrow').innerHTML = TZ.tkhbHTML(TZ.seatFX(), t); lastTk = tk;
+  }
+
+  /* ---------- 下段と状態の帯と次の一手（account board と同じ data = account/data/board.json・同じ判定の関数 = acct.js） ---------- */
+  var BRD = TZ.BOARD(), AM = BRD ? TZ.AcctModel(BRD) : null, PNAME = 'tsuzuri', lastAcctMin = null;
+  var sm = function (svg, n) { return svg.replace('<svg', '<svg width="' + (n || 14) + '" height="' + (n || 14) + '"'); };
+  var CAP = function (w) { return BRD && BRD.pressure && BRD.pressure[w] ? BRD.pressure[w].value : 100; };
+  var SETTLE = BRD && BRD.pressure && BRD.pressure.settle_s ? BRD.pressure.settle_s.value : null;
+  function ctx(t) { return AM ? AM.projCtx(PNAME, t) : null; } // 判定は acct.js（account board の HOME と同じ関数）
+  /* 今の状態の帯: 平時（逼迫なし・移動なし・登録 = 群の今の口座）は出さない */
+  function bandHTML(c, t) {
+    if (!c) return '';
+    var lim = c.st.v === 'limit';
+    var gr = AM.moveGraceAt(c.x, t); // 二段の退避: 合図を受けた席の「退避までの残り秒」（器の契約 s2-07l.652）
+    if (!lim && !c.press.length && !c.wait && !c.ref && !gr) return '';
+    var s1 = [], s2 = [];
+    if (lim) s1.push('限度で止まっている');
+    if (gr) { s1.push('移動中: 退避まで <b class="num" data-remain="' + gr.end + '">' + gr.rem + ' 秒</b>・新しい subagent を起こさない' + TZ.qmark('move_grace') + (gr.sample ? '<span class="smpn">〔見本〕</span>' : '')); s2.push('猶予の後に器が /exit を送る → <span class="mono">' + esc(c.cur.account) + '</span> で起こし直す'); }
+    else if (c.wait && c.inSettle) s1.push('移動中: <span class="mono">' + esc((c.mv.from || '?') + ' → ' + c.mv.to) + '</span>・退避の合図済み');
+    else if (c.wait) s1.push('移動待ち（登録 <span class="mono">' + esc(c.acc) + '</span> ≠ 今の口座 <span class="mono">' + esc(c.cur.account) + '</span>）');
+    if (c.pend) s1.push(TZ.EN('GroupMovePending') + ' reason=' + esc(c.pend.reason || ''));
+    if (c.ref) s1.push('移り先なし（' + TZ.EN('GroupMoveRefused') + '）');
+    if (!lim) c.press.forEach(function (q) { s1.push('逼迫: <span class="mono">' + esc(q.a) + '</span> ' + esc(AM.WSHORT[q.w]) + ' ' + q.used + '% ≥ ' + q.cap); });
+    var to = '<span class="mono">' + esc(c.cur.account) + '</span>';
+    if (gr) { /* s2 は上で書いた */ }
+    else if (c.wait && c.inSettle) s2.push('席が shell に戻るのを待っている（settle ' + SETTLE + ' s）→ ' + to + ' で起こし直す');
+    else if (c.wait && c.pend) s2.push('席が shell に戻らなかった（戻れば ' + to + ' で起こし直す）');
+    else if (c.wait) s2.push('席が shell に戻ると ' + to + ' で起こし直す' + (lim ? '（限度の表示のままでは戻らない）' : ''));
+    else if (c.ref) s2.push('器は移らない（移り先が出るまで今の口座のまま）');
+    else if (c.press.length) { // 移り先 = 器の doctor の next=<label|none> と同じ導出（acct.js reservationsAt・鮮度の外は none）
+      var kx = AM.candidatesAt(c.g, t).next;
+      s2.push(!kx ? '器は移らない（next=none = 移り先なし か 鮮度の外）' : '器が群を移す（' + TZ.EN('GroupMoved') + ' を待つ）・移り先 <span class="mono">' + esc(kx) + '</span>'); }
+    else if (lim) s2.push('reset の時刻（下の usage の ↻）に再開する');
+    return '<div class="sband" role="status">' + TZ.HS('state_now') + '<div class="l1">' + s1.join('・') + '</div><div class="l2">' + sm(IC.redo || IC.clock, 12) + '<span>' + s2.join('・') + '</span></div></div>';
+  }
+  /* 下段: 登録の口座（大きく）・project の群（hover で群の project の一覧と各 orchestrator の口座の一致）・3 窓の usage */
+  function lowHTML(c, t) {
+    if (!AM) return '<div class="empty">' + TZ.stIcon('unknown') + '<span>' + esc(L('st_unknown')) + '</span></div>';
+    if (!c) return '<div class="empty">' + TZ.stIcon('unknown') + '<span>' + esc(L('seat_none')) + '</span></div>';
+    var as = AM.acctState(c.acc, t);
+    var head = '<div class="cur"><div><div class="small muted">' + TZ.HS('reg_account') + '</div><div class="acc mono">' + esc(c.acc || '?') + '</div></div>' +
+      '<div class="gname"><div class="small muted">' + TZ.HS('group') + '</div><span class="pchip grp" data-card="pa:group" tabindex="0" data-t>' + esc(c.g.name) + '</span></div></div>';
+    var wrows = BRD.windows.map(function (w) {
+      return '<div class="wrow"><span class="wl" data-term="' + w + '" tabindex="0">' + esc(AM.WSHORT[w]) + '</span>' + AM.meter(c.acc, w, t, as) + '<span class="th num" data-term="threshold" tabindex="0" aria-label="' + esc(L('threshold')) + ' ' + CAP(w) + '">┆' + CAP(w) + '</span></div>';
+    }).join('');
+    return head + '<div class="usage" aria-label="' + esc(L('allowance')) + '">' + wrows +
+      '<div class="spark sm" data-term="spark" tabindex="0">' + AM.spark(c.acc, t, ['seven_day', 'seven_day_model']) + '</div></div>';
+  }
+  /* 口座の履歴（畳む・既定は閉・見出しに件数） */
+  var histOpen = false;
+  function histHTML(c, t) {
+    if (!c) return '';
+    var ev = [], prev = null;
+    (c.x.fx.account || []).forEach(function (r) { if (prev != null && r.account !== prev && r.ts <= t) ev.push({ t: r.ts, w: esc(L('reg_account')) + ' <span class="mono">' + esc(prev + ' → ' + r.account) + '</span>' }); prev = r.account; });
+    (BRD.move_rows || []).forEach(function (m) { if (m.kind === 'move' && m.group === c.g.name && TZ.ms(m.ts) <= t) ev.push({ t: TZ.ms(m.ts), w: '<span data-t>' + esc(c.g.name) + '</span> ' + esc(L('current_account')) + ' <span class="mono">' + esc((m.from || '?') + ' → ' + m.to) + '</span>' }); });
+    ev.sort(function (a, b) { return b.t - a.t; });
+    return '<details class="fold ahistd"' + (histOpen ? ' open' : '') + '><summary><span class="hd-t" data-term="acct_hist">' + esc(L('acct_hist')) + '</span><span class="chip num">' + ev.length + '</span></summary><ul class="ahist">' +
+      ev.map(function (e) { return '<li><span class="num">' + TZ.hmd(e.t, t) + '</span><span class="w">' + e.w + '</span></li>'; }).join('') + '</ul></details>';
+  }
+  /* 次の一手: 閉じた一覧 7 種（a 限度 / 移動 → b 応答なし → c 止まっている run → d 束の承認 → e 質問 → f 発効待ち → g なし）。先頭の 1 つを大きく、残りを小さく */
+  var Q = TZ.nextQ(G); // d / e / f の材料（質問の台帳 = graph・account board の HOME と同じ関数）
+  function nextItems(c, t) { // 判定 = acct.js の nextAt（account board の HOME の一覧と同じ）・ここは大きく出す中身と行動の button だけ
+    var r = AM ? AM.nextAt(PNAME, t, Q) : null, by = {};
+    (r ? r.items : []).forEach(function (x) { by[x.k] = x; });
+    var it = [], x;
+    x = by.nx_a || { on: false };
+    it.push({ k: 'nx_a', on: x.on, big: !x.on ? null : x.kind === 'ref' ? { what: esc(x.line), act: '<a class="btn primary" href="account/index.html' + MQ + '">口座を足す / 待つ（↻ reset） ›</a>' }
+      : x.kind === 'wait' ? { what: esc(x.line), act: '<span class="btn primary static">席の窓を見る <span class="mono">' + esc(c.x.s.target) + '</span></span>' } : { what: esc(x.line), act: '<span class="btn static">待つ</span>' } });
+    x = by.nx_b || { on: false };
+    it.push({ k: 'nx_b', on: x.on, big: x.on ? { what: esc(x.line), act: '<span class="btn primary static">席の窓を見る / 起こし直す</span>' } : null });
+    x = by.nx_c || { on: false, n: 0 };
+    it.push({ k: 'nx_c', on: x.on, small: x.on ? String(x.n) : null, big: x.on ? { what: '<b class="num">' + x.n + '</b> 件', act: '<a class="btn primary" href="#pipe">run を見る（再走 / 止める） ›</a>' } : null });
+    it.push({ k: 'nx_d', on: Q.nonA1 >= 2, small: Q.nonA1 >= 2 ? Q.nonA1 + ' 件' : null, big: { what: '質問 <b class="num">' + Q.nonA1 + '</b> 件', act: '<a class="btn primary" href="ask.html' + MQ + '#batch">まとめて承認 ›</a>' } });
+    var q0 = Q.q0;
+    it.push({ k: 'nx_e', on: !!q0, small: q0 ? '◷ <span class="num" data-since="' + TZ.ms(q0.attrs.posted_at) + '">' + TZ.durMs(TZ.now() - TZ.ms(q0.attrs.posted_at)) + '</span>' : null,
+      big: q0 ? { what: '<a class="nl" href="' + TZ.href(q0.key) + '" data-key="' + esc(q0.key) + '"><span data-t>' + esc(TZ.t36(q0.attrs.question || q0.title)) + '</span></a>', act: '<a class="btn primary" href="ask.html' + MQ + '#q0">答える ›</a>' } : null });
+    var f = Q.f;
+    it.push({ k: 'nx_f', on: f > 0, small: f ? f + ' 件' : null, big: f ? { what: 'あなたの決定 <b class="num">' + f + '</b> 件に処分の宣言が無い', act: '<a class="btn" href="gaps.html' + MQ + '">orchestrator に任せる（見るだけ） ›</a>' } : null });
+    if (r) window.__tz_next_shared = { top: r.top, on: r.items.filter(function (y) { return y.on; }).map(function (y) { return y.k; }) };
+    return it;
+  }
+  function nextHTML(c, t) {
+    var it = nextItems(c, t), top = it.filter(function (x) { return x.on; })[0];
+    var bigH = top ? '<div class="nxbig" data-nx="' + top.k + '">' + TZ.HS(top.k) + '<div class="what">' + top.big.what + '</div><div class="act">' + top.big.act + '</div></div>'
+      : '<div class="nxbig none" data-nx="nx_g">' + TZ.HS('nx_g') + '<div class="what small muted">orchestrator が動いている / 待っている</div></div>';
+    var rest = it.filter(function (x) { return x !== top; });
+    window.__tz_next = { top: top ? top.k : 'nx_g', on: it.filter(function (x) { return x.on; }).map(function (x) { return x.k; }), at: new Date(t).toISOString() };
+    return bigH + '<ul class="nxlist">' + rest.map(function (x) { return '<li class="' + (x.on ? 'on' : 'off') + '" data-nx="' + x.k + '">' + TZ.HS(x.k) + '<span class="v small">' + (x.on ? x.small || '' : '―') + '</span></li>'; }).join('') +
+      '</ul>';
+  }
+
+  var prevCard = window.__tz_card;
+  window.__tz_card = function (el) {
+    var k = el.getAttribute('data-card') || '';
+    if (k.indexOf('uf:') === 0) return TZ.Ledger.unrefCard(k.slice(3));
+    if (k.indexOf('lg:') === 0 && LS) return ledgerCard(k.slice(3));
+    if (k === 'pa:seat' || k === 'pa:group') {
+      var t = TZ.seatNowT(), c = ctx(t); if (!c) return null;
+      if (k === 'pa:seat') return TZ.card4({ ti: esc(L('reg_account')) + ' <span class="mono">' + esc(c.acc) + '</span>', k: TZ.stIcon(c.st.v) + '<span>' + esc(L(TZ.ST_V[c.st.v])) + '</span><span class="sp"></span><span class="mono">' + esc(c.x.s.target) + '</span>',
+        v: esc(L('group')) + ' ' + esc(c.g.name) + ' の今の口座 <span class="mono">' + esc(c.cur.account) + '</span> ' + (c.acc === c.cur.account ? '✓' : '!'),
+        src: 'seat/' + c.x.s.target + '/account', srcFull: c.x.s.src.replace('/state.jsonl', '/account') + '・fleet/events.jsonl の SeatRegistered' });
+      // 群の hover: 群の project の一覧と各 orchestrator の登録の口座・群の今の口座との一致
+      var rows = AM.sessionsAt(t).filter(function (w) { return w.group === c.g.name && w.role === 'orchestrator'; });
+      var mkOf = function (w) { return !w.name ? '<span class="gi unknown sm" aria-hidden="true"></span>' : w.moveWait ? '<span class="gi ng sm" aria-hidden="true">!</span>' : '<span class="gi ok sm" aria-hidden="true">✓</span>'; };
+      var nOk = rows.filter(function (w) { return w.name && !w.moveWait; }).length;
+      return TZ.card4({ ti: esc(L('group')) + ' ' + esc(c.g.name), k: '<span>' + esc(L('current_account')) + ' <span class="mono">' + esc(c.cur.account) + '</span></span><span class="sp"></span>' + (c.cur.ts ? '<span class="num">◷ ' + TZ.hmd(c.cur.ts, t) + '</span>' : ''),
+        v: rows.map(mkOf).join('') + ' <span>' + nOk + ' / ' + rows.length + ' 席が一致</span>',
+        src: 'groups/' + c.g.name + '.account ほか', srcFull: c.cur.src + '・各 state dir の fleet/events.jsonl の SeatRegistered（判定 = acct.js sessionsAt）',
+        more: rows.map(function (w) { return mkOf(w) + '<span' + (w.proj === PNAME ? ' class="me"' : '') + '>' + esc(w.proj) + ' <span class="mono">' + esc(w.name ? (w.acct || '?') : L('seat_none')) + '</span>' + (w.moveWait ? ' ' + esc(L('seat_mismatch')) : '') + '</span>'; }) });
+    }
+    return prevCard ? prevCard(el) : null;
+  };
+  function renderAcct() {
+    var t = TZ.seatNowT(), m = Math.floor(t / 60000); if (m === lastAcctMin) return; lastAcctMin = m;
+    var c = ctx(t), bd = document.getElementById('stateband'), bh = bandHTML(c, t);
+    bd.innerHTML = bh; bd.hidden = !bh;
+    document.getElementById('acctbody').innerHTML = lowHTML(c, t);
+    var ob = document.getElementById('omorebody'), fx9 = TZ.seatFX();
+    if (ob) ob.innerHTML = (c ? '<div class="gm1"><span class="mono">' + esc(c.x.s.target) + '</span><span>' + esc(L('group')) + ' ' + esc(c.g.name) + ' の今の口座 <span class="mono">' + esc(c.cur.account) + '</span> ' + (c.acc === c.cur.account ? '✓' : '!') + '</span></div>' +
+      '<div class="gm1 src">' + IC.file + '<span>' + esc(c.x.s.src.replace('/state.jsonl', '/')) + ' の state.jsonl・account・tick-last・heartbeat-off</span></div>' : '') +
+      (fx9 && fx9.target ? '<div class="gm1 int xo">' + TZ.doctorSeatLines(fx9, { target: fx9.target, model: fx9.model }, TZ.seatStatus(fx9, t).account, t).map(function (l) { return '<div><code>' + esc(l) + '</code></div>'; }).join('') + '</div>' : '');
+    var hb = document.getElementById('ahistbody'), d = hb.querySelector('details'); if (d) histOpen = d.open; hb.innerHTML = histHTML(c, t);
+    document.getElementById('nextbody').innerHTML = nextHTML(c, t);
+    window.__tz_orch = { at: new Date(t).toISOString(), reg: c && c.acc, group: c && c.g.name, current: c && c.cur.account, state: c && c.st.v, band: bh ? bd.textContent : null };
+  }
+  window.__tz_audit_extra = function () { return { next: window.__tz_next, orch: window.__tz_orch, blocks: TZ.$$('main > .home section.panel').map(function (s) { return s.id || s.querySelector('h2').getAttribute('data-v'); }) }; };
+  window.__tz_onTick = function () { renderSeat(); renderAcct(); };
+  document.getElementById('scrub').addEventListener('input', function (e) { TZ.setSeatView(D0 + Number(e.target.value) * 60000); lastKey = null; lastAcctMin = null; renderSeat(); renderAcct(); });
+  TZ.$$('[data-span]').forEach(function (b) { b.addEventListener('click', function () { TZ.setSpan(b.getAttribute('data-span')); TZ.$$('[data-span]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); lastStrip = null; renderSeat(); setTimeout(TZ.audit, 50); }); });
+  renderSeat(); renderAcct();
+});
+</script>
+</body>
+</html>

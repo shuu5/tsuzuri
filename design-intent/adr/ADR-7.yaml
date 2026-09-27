@@ -40,11 +40,6 @@ options:
     verdict: rejected
     reason: 持ち主に「何と何がつながっているか」が逆に分かりにくく、1,000 節点の絵は形が毎回変わって読めない。
 basis: [P-2, P-6, P-7, P-12, P-19, P-20, N-2, N-5, N-6, ADR-3, ADR-4, ADR-5]
-revises:
-  - target: ADR-5
-    decision: (2)
-    kind: widen
-    summary: 端末の行に入力の環境と専用の profile と IME の flag を足した（決定 (14)）。
 retreat:
   kind: measure
   condition: 本番の面で決定 (12) の受入条件のどれかが 2 便続けて落ちるか、持ち主が「文字が多い」と 2 度言ったら、文の予算と hover の規則を見直す便を起こす。数えるのは t3:orchestrator 席。
