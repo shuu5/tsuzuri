@@ -102,8 +102,9 @@ pub fn view() -> leptos::prelude::AnyView {
             view! { <ul class="items">{rows}</ul> }.into_any()
         }
     };
+    let (open, toggle) = super::fold("ask:hist".to_string(), || OPEN);
     view! {
-        <details class=BLOCK.class id=BLOCK.id open=OPEN>
+        <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
             <summary>{h2(BLOCK.heading)}{chip}</summary>
             {list}
         </details>

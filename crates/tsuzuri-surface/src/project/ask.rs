@@ -369,7 +369,7 @@ mod dom {
         BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, body,
         can_send, count, key_action, outcome, request_body,
     };
-    use crate::project::{Body, body_view, section, unmeasured};
+    use crate::project::{Body, body_view, fold, section, unmeasured};
     use crate::vocab::label;
 
     /// 見本の IC.warn・IC.clock・IC.person・IC.code・IC.check・IC.link。
@@ -497,8 +497,10 @@ mod dom {
                     .iter()
                     .map(|t| view! { <li><span class="nid">{t.clone()}</span></li> })
                     .collect_view();
+                let initial = slot.open.unwrap_or(false);
+                let (open, toggle) = fold(format!("ask:around:{}", card.id), move || initial);
                 view! {
-                    <details class=slot.class open=slot.open.unwrap_or(false)>
+                    <details class=slot.class prop:open=open on:toggle=toggle>
                         <summary>
                             <span data-term=key>{label(key)}</span>
                             <span class="chip num" data-term="touches"><span inner_html=LINK></span>{label("touches")}" "{card.touches.len()}</span>

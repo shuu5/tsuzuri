@@ -1,10 +1,12 @@
 //! 通信（wasm の target のときだけ組み立てる・便 g-parts）: block ごとの読みの口を読み、変化の知らせ（SSE）で読み直す。
 //! block は自分の口の path を `read` に渡し、読みの結果（3 値）の signal を受ける。登録した口は頁を開いたときに 1 回読む。
 //! 知らせの接続は頁に 1 本だけ持ち、開いた・読み直しの合図の event を受けたで登録された口を全部読み直す。
-//! 知らせが切れている間は、今の中身が正しいと言えないので登録された口を全部「読めない」にする（要件 NFR2）。
+//! 読みの後は view の決め方で置くかを決める（同じ本文は置かない・一度の読めないは 1 秒後に読み直す・便 g-steady）。
+//! 知らせが切れている間は、今の中身が正しいと言えないので登録された口を全部「読めない」にする（要件 NFR2・決め方を通さない）。
 //! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
 
 use std::cell::{Cell, RefCell};
+use std::time::Duration;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -15,7 +17,7 @@ use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::wasm_bindgen::{JsCast, JsValue};
 use web_sys::{EventSource, Headers, Request, RequestInit, Response};
 
-use crate::view::{Fetched, RELOAD_EVENTS};
+use crate::view::{Fetched, RELOAD_EVENTS, RETRY_MS, Settle, settle};
 
 /// 変化の知らせの口（SSE・server の便 e-min）。
 pub const EVENTS_PATH: &str = "/api/surface/events";
@@ -74,11 +76,23 @@ pub async fn post(path: &str, body: String) -> Option<(u16, String)> {
     Some((response.status(), text))
 }
 
-/// 1 つの口を読み、結果を signal に置く。
+/// 1 つの口を読み、置くかを決め方（view の settle）で決めて signal に置く。
 fn load(path: &'static str, signal: ArcRwSignal<Fetched>) {
+    load_at(path, signal, 1);
+}
+
+/// `attempt` 回目の読み（同じ本文は置かない・一度の読めないは 1 秒後に読み直す）。
+fn load_at(path: &'static str, signal: ArcRwSignal<Fetched>, attempt: u32) {
     spawn_local(async move {
         let fetched = fetch(path).await;
-        signal.set(fetched);
+        match signal.with_untracked(|now| settle(now, &fetched, attempt)) {
+            Settle::Set => signal.set(fetched),
+            Settle::Keep => {}
+            Settle::Retry => set_timeout(
+                move || load_at(path, signal, attempt + 1),
+                Duration::from_millis(RETRY_MS),
+            ),
+        }
     });
 }
 

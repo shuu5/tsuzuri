@@ -5,6 +5,9 @@
 //! 各 block は自分の読みの口の path を module の定数に持ち、通信（net）の同じ関数で読む（便 g-parts）。
 //! 中身の関数は読みの結果（3 値）を受けて中身を返す純粋な関数。next・pipeline・seat・map と ledger の指標の段は、
 //! 3 値のどれを受けても測れていないの印と理由の 1 行を返す（本文を読んで中身を返すのは後の block の便）。
+//! 畳める段（details）の開き閉じは鍵ごとの記録（`Folds`）から読み、toggle で書き戻す（組み直しの後も保つ・便 g-steady）。
+
+use std::collections::BTreeMap;
 
 use tsuzuri_contract::ledger::LedgerRow;
 
@@ -105,18 +108,100 @@ pub fn pending(fetched: &Fetched, unread: &'static str) -> Body<()> {
     })
 }
 
+/// 畳める段の開き閉じの鍵の 6 つの形（`{}` は不変条件の id か問いの id・便 g-steady）。
+pub const FOLD_KEYS: [&str; 6] = [
+    "ledger:more",
+    "seat:hist",
+    "seat:more",
+    "ask:hist",
+    "gaps:{}",
+    "ask:around:{}",
+];
+
+/// 鍵の字が 6 つの形のどれかに合うか（`{}` の所は空でない字）。
+pub fn fold_key_ok(key: &str) -> bool {
+    FOLD_KEYS.iter().any(|form| match form.strip_suffix("{}") {
+        Some(prefix) => key
+            .strip_prefix(prefix)
+            .is_some_and(|rest| !rest.is_empty()),
+        None => key == *form,
+    })
+}
+
+/// 畳める段の開き閉じの記録（鍵ごとに 1 つの値・頁の一生の間だけ持ち、URL にも保存の口にも書かない）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Folds(BTreeMap<String, bool>);
+
+impl Folds {
+    /// 記録した値（まだ無ければ None）。
+    pub fn recorded(&self, key: &str) -> Option<bool> {
+        self.0.get(key).copied()
+    }
+
+    /// 今の開き閉じ（記録に値が無ければ呼び手が与えた初めの値）。
+    pub fn open(&self, key: &str, initial: bool) -> bool {
+        self.recorded(key).unwrap_or(initial)
+    }
+
+    /// 値を置く（ほかの鍵の値は変えない）。
+    pub fn set(&mut self, key: &str, open: bool) {
+        self.0.insert(key.to_string(), open);
+    }
+
+    /// toggle の後の書き戻し: 今の開き閉じが出している値と違うときだけ置く（置いたら true）。
+    /// 初めの値のとおりに開いた・閉じた toggle は置かないので、記録に値が無い鍵は初めの値に従い続ける。
+    pub fn write_back(&mut self, key: &str, open: bool, initial: bool) -> bool {
+        let changed = self.open(key, initial) != open;
+        if changed {
+            self.set(key, open);
+        }
+        changed
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
-pub use dom::{body_view, item_view, section, state_icon, unmeasured};
+pub use dom::{body_view, fold, item_view, section, state_icon, unmeasured};
 
 /// block に共通の DOM の部品（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use std::cell::RefCell;
+
     use leptos::prelude::*;
 
-    use super::{ALERT_STYLE, Body, Item, UNKNOWN, state_class, state_key};
+    use super::{ALERT_STYLE, Body, Folds, Item, UNKNOWN, state_class, state_key};
     use crate::frame::Block;
     use crate::vocab::label;
     use crate::widgets::help::h2;
+
+    thread_local! {
+        /// 畳める段の開き閉じの記録（頁の一生の間だけ）。
+        static FOLDS: RefCell<Folds> = RefCell::new(Folds::default());
+    }
+
+    /// 畳める段の開き閉じ（details の prop の open に結ぶ）と、toggle の event で記録へ書き戻す handler。
+    /// `initial` は記録に値が無いときの初めの値（台帳の「詳しく」は mode から取る）。
+    pub fn fold(
+        key: String,
+        initial: impl Fn() -> bool + Clone + 'static,
+    ) -> (
+        impl Fn() -> bool + Clone + 'static,
+        impl Fn(web_sys::Event) + 'static,
+    ) {
+        let open = {
+            let (key, initial) = (key.clone(), initial.clone());
+            move || {
+                let init = initial();
+                FOLDS.with_borrow(|f| f.open(&key, init))
+            }
+        };
+        let toggle = move |ev: web_sys::Event| {
+            let now = event_target::<web_sys::Element>(&ev).has_attribute("open");
+            let init = untrack(&initial);
+            FOLDS.with_borrow_mut(|f| f.write_back(&key, now, init));
+        };
+        (open, toggle)
+    }
 
     /// 砂時計（限度の記号・見本の IC.hourglass）。
     const HOURGLASS: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 5 6 5 9s-5 4-5 9h10c0-5-5-6-5-9s5-4 5-9" /><path d="M9.5 19h5l-2.5-2.5z" fill="currentColor" stroke="none"/></svg>"#;

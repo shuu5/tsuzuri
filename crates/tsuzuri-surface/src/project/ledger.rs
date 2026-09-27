@@ -636,7 +636,7 @@ mod dom {
         BLOCK, BURN_CAPTION, EpicBar, Group, Judge, LAYOUT, METRICS_PATH, Metrics, NONE, Net,
         OUTSIDE, Part, Tier, body, burn_svg, content, count, spark_svg,
     };
-    use crate::project::{Body, UNKNOWN, item_view, section, state_icon, unmeasured};
+    use crate::project::{Body, UNKNOWN, fold, item_view, section, state_icon, unmeasured};
     use crate::view::Screen;
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal};
@@ -713,10 +713,12 @@ mod dom {
                     .iter()
                     .map(|p| view! { <div class="gm1 num">{line_view(*p, m)}</div> })
                     .collect_view();
-                let expert =
-                    move || use_context::<HelpCtx>().is_some_and(|c| shows_internal(c.mode.get()));
+                // 記録に値が無いときだけ mode から初めの値を取る（持ち主が開き閉じを変えた後は記録の値）。
+                let ctx = use_context::<HelpCtx>();
+                let expert = move || ctx.is_some_and(|c| shows_internal(c.mode.get()));
+                let (open, toggle) = fold("ledger:more".to_string(), expert);
                 view! {
-                    <details class="gmore" open=expert>
+                    <details class="gmore" prop:open=open on:toggle=toggle>
                         <summary><span class="rm-t">{label("p_more")}</span>" "<span class="rm-a" aria-hidden="true">"▸"</span></summary>
                         <div class="gm">{rows}</div>
                     </details>

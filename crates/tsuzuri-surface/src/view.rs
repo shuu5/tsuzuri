@@ -2,6 +2,7 @@
 //! DOM と通信に触らないので host の cargo test で試す（描くのは project の下の block・読むのは net）。
 //! 件数と見出しは block の module が持つ（便 g-frame・見出しの語は vocab から引く）。
 //! 読みの結果の 3 値と読み直しの合図の event の名は block に共通の部品（便 g-parts）。
+//! 読みの後に signal へ新しい値を置くかの決め方（便 g-steady）もここに置き、net が口の読みごとに呼ぶ。
 
 use std::cmp::Ordering;
 
@@ -30,6 +31,33 @@ pub enum Fetched {
     Body(String),
     /// 口に届かない・200 でない・本文が読めない・知らせが切れた。
     Failed,
+}
+
+/// 読みの後に signal へ新しい値を置くか（閉じた 3 値・便 g-steady）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Settle {
+    /// 新しい値を置く。
+    Set,
+    /// 置かない（block を組み直さない）。
+    Keep,
+    /// 置かずに `RETRY_MS` の後にもう 1 回読む。
+    Retry,
+}
+
+/// 一度の読めないの後に読み直すまでの間（ms）。
+pub const RETRY_MS: u64 = 1000;
+
+/// 1 つの口の読みの後の決め方（`attempt` は何回目の読みか・1 から）。上から順に当てる:
+/// 新しい値が今の値と同じなら置かない・今の値が本文で新しい値が読めないで 1 回目なら読み直す・ほかは置く
+/// （2 回目の読めないは置いて測れていないを出す・要件 NFR2）。
+pub fn settle(now: &Fetched, new: &Fetched, attempt: u32) -> Settle {
+    if now == new {
+        return Settle::Keep;
+    }
+    match (now, new) {
+        (Fetched::Body(_), Fetched::Failed) if attempt <= 1 => Settle::Retry,
+        _ => Settle::Set,
+    }
 }
 
 /// 1 つの epic とその下の bead（epic の外の bead は `epic` が None の組に入る）。

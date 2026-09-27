@@ -514,7 +514,7 @@ mod dom {
         BLOCK, Band, HistRow, Low, MORE, More, OK, OROW, PATH, Seat, Sign, Span, Strip, Top,
         WindowRow, content, span_of, strip_svg, with_span,
     };
-    use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
+    use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::hs;
 
@@ -769,8 +769,9 @@ mod dom {
             ),
             Reading::Unknown => (unknown(), ().into_any()),
         };
+        let (open, toggle) = fold("seat:hist".to_string(), || false);
         view! {
-            <details class="fold ahistd">
+            <details class="fold ahistd" prop:open=open on:toggle=toggle>
                 <summary><span class="hd-t" data-term="acct_hist">{label("acct_hist")}</span>{count}</summary>
                 <ul class="ahist">{rows}</ul>
             </details>
@@ -779,8 +780,9 @@ mod dom {
     }
 
     fn more_view(more: More) -> AnyView {
+        let (open, toggle) = fold("seat:more".to_string(), || false);
         view! {
-            <details class="gmore">
+            <details class="gmore" prop:open=open on:toggle=toggle>
                 <summary><span class="rm-t">{MORE}</span></summary>
                 <div class="gm">
                     <div class="gm1">

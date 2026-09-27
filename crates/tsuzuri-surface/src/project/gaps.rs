@@ -200,7 +200,7 @@ mod dom {
     use leptos::prelude::*;
 
     use super::{BLOCK, Body, Gaps, Row, Tile, body, mark_class};
-    use crate::project::{body_view, map, unmeasured};
+    use crate::project::{body_view, fold, map, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{h1, hs};
 
@@ -227,8 +227,10 @@ mod dom {
             view! { <li><span class="gi unknown" aria-hidden="true">"+"</span><span class="ttl num">{n}</span></li> }
         });
         let list = has_list.then(|| view! { <ul class="items">{named}{more}</ul> });
+        let initial = r.open;
+        let (open, toggle) = fold(format!("gaps:{}", r.id), move || initial);
         view! {
-            <details class="gitem" open=r.open data-id=r.id>
+            <details class="gitem" prop:open=open on:toggle=toggle data-id=r.id>
                 <summary>
                     <span class=mark_class(r.mark) aria-label=label(r.mark.key)>{r.mark.glyph}</span>
                     <span class="ttl">{r.name}</span>
