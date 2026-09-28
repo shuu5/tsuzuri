@@ -52,7 +52,7 @@ fn acctwin_names() {
     assert_eq!(win_name("account"), ACCOUNT_WIN);
 }
 
-/// (2) 開く URL は電文の board の字に mode を足した字・board が無い project は無し。
+/// (2) 開く URL の host の後ろの字は電文の board の port に mode を足した字・board が無い project は無し。
 #[test]
 fn acctwin_open_url_from_board_and_mode() {
     let doc = fixture();
@@ -72,23 +72,23 @@ fn acctwin_open_url_from_board_and_mode() {
         vec![
             (
                 "proj-a",
-                Some("/proj-a/?mode=beginner".to_string()),
-                Some("/proj-a/?mode=expert".to_string())
+                Some(":40001/?mode=beginner".to_string()),
+                Some(":40001/?mode=expert".to_string())
             ),
             (
                 "proj-b",
-                Some("/proj-b/?mode=beginner".to_string()),
-                Some("/proj-b/?mode=expert".to_string())
+                Some(":40002/?mode=beginner".to_string()),
+                Some(":40002/?mode=expert".to_string())
             ),
             ("proj-c", None, None),
         ]
     );
-    // URL の字は電文の board の字から取る（project の名から組まない）。
+    // URL の字は電文の board の port から取る（project の名から組まない）。
     let mut row = doc.projects[0].clone();
-    row.board = Some("/elsewhere/".to_string());
+    row.board = Some(1);
     assert_eq!(
         open_url(&row, Mode::Expert).as_deref(),
-        Some("/elsewhere/?mode=expert")
+        Some(":1/?mode=expert")
     );
     row.board = None;
     assert_eq!(open_url(&row, Mode::Expert), None);
@@ -96,7 +96,7 @@ fn acctwin_open_url_from_board_and_mode() {
     for mode in Mode::ALL {
         assert_eq!(
             open_url(&doc.projects[1], mode),
-            Some(format!("/proj-b/?mode={}", mode.key()))
+            Some(format!(":40002/?mode={}", mode.key()))
         );
     }
 }

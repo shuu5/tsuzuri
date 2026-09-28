@@ -116,7 +116,7 @@
         ],
         "lead": "question"
       }},
-      "board": "/proj-a/"
+      "board": 40001
     },
     {
       "name": "proj-b",
@@ -142,7 +142,7 @@
       "runs": {"known": {"wait": 0, "run": 0, "stop": 1, "land": 0}},
       "ledger": "unknown",
       "next": "unknown",
-      "board": "/proj-b/"
+      "board": 40002
     },
     {
       "name": "proj-c",

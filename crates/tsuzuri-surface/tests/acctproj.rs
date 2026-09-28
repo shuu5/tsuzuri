@@ -364,8 +364,8 @@ fn acctproj_open_cell() {
     assert_eq!(
         opens,
         vec![
-            ("proj-a", Open::New("/proj-a/?mode=expert".into())),
-            ("proj-b", Open::New("/proj-b/?mode=expert".into())),
+            ("proj-a", Open::New(":40001/?mode=expert".into())),
+            ("proj-b", Open::New(":40002/?mode=expert".into())),
             ("proj-c", Open::NotYet),
         ]
     );
@@ -375,7 +375,7 @@ fn acctproj_open_cell() {
     assert_eq!(NOT_YET_KEY, "not_yet");
     assert_eq!(
         projects::open(&doc.projects[0], Mode::Beginner),
-        Open::New("/proj-a/?mode=beginner".into())
+        Open::New(":40001/?mode=beginner".into())
     );
 }
 

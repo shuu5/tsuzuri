@@ -1,5 +1,6 @@
 //! account board の読み（便 e-acct）。群の宣言（引数の state dir の host.toml）の anchor ごとに、git の
-//! `-C <anchor> config --get scribe2.statedir` で state dir を引き、state dir ごとに器の
+//! `-C <anchor> config --get scribe2.statedir` で state dir を、`-C <anchor> config --get tsuzuri.boardport` で
+//! project board の port を引き（電文の行には port だけを置く・便 h-board-url）、state dir ごとに器の
 //! `seat tick status --state-dir <dir>` と `doctor --state-dir <dir>` を 1 回だけ撃ち、口座は引数の state dir で
 //! `fleet usage --show --state-dir <dir>` を 1 回、猶予は `rules get seat.move_grace_s` を 1 回撃つ。
 //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
@@ -19,6 +20,7 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_core::account::host::{HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
 use tsuzuri_core::account::project::{self, ProjectTexts};
+use tsuzuri_core::account::project_name;
 
 use crate::server::ledger::{Source, capture};
 use crate::server::runs::EVENTS_LOG;
@@ -32,6 +34,9 @@ pub const GIT: &str = "git";
 
 /// git に渡す引数の列の後ろ（前に `-C <anchor>` が付く）。
 pub const GIT_ARGS: [&str; 3] = ["config", "--get", "scribe2.statedir"];
+
+/// project board の port を引く git の引数の列の後ろ（前に `-C <anchor>` が付く・anchor の .git/config の鍵）。
+pub const BOARD_ARGS: [&str; 3] = ["config", "--get", "tsuzuri.boardport"];
 
 /// 猶予の秒の出力の引数の列。
 pub const GRACE_ARGS: [&str; 3] = ["rules", "get", "seat.move_grace_s"];
@@ -54,6 +59,8 @@ struct Texts {
     host: HostTexts,
     projects: BTreeMap<String, ProjectTexts>,
     grace: Option<String>,
+    /// 宣言の anchor → git の返した project board の port の字（字の無い anchor は入れない）。
+    boards: BTreeMap<String, String>,
     marks: Vec<PathBuf>,
 }
 
@@ -103,18 +110,37 @@ impl Acct {
 
     /// anchor の state dir（git の返した 1 行の前後の空白を除いた字・git が落ちる・5 秒で返らない・空なら None）。
     pub fn state_dir(&self, anchor: &Path) -> Option<PathBuf> {
-        let mut args: Vec<&OsStr> = vec![OsStr::new("-C"), anchor.as_os_str()];
-        args.extend(GIT_ARGS.iter().map(OsStr::new));
-        let out = capture(&self.git, args, &self.cwd, SCRIBE2_TIMEOUT)?;
-        let text = String::from_utf8(out).ok()?;
-        let dir = text.trim();
-        (!dir.is_empty()).then(|| PathBuf::from(dir))
+        self.git_get(anchor, &GIT_ARGS).map(PathBuf::from)
     }
 
-    /// 電文（持ち回しの字を中核の組み立ての入口に渡す・時計は読まない）。
+    /// anchor の project board の port の字（git の返した字の前後の空白を除いた字・port かどうかは見ない・
+    /// git が落ちる・5 秒で返らない・空なら None）。
+    pub fn board(&self, anchor: &Path) -> Option<String> {
+        self.git_get(anchor, &BOARD_ARGS)
+    }
+
+    /// git に `-C <anchor>` と鍵の引数を渡して撃ち、返した字の前後の空白を除いた字（空なら None）。
+    fn git_get(&self, anchor: &Path, tail: &[&str]) -> Option<String> {
+        let mut args: Vec<&OsStr> = vec![OsStr::new("-C"), anchor.as_os_str()];
+        args.extend(tail.iter().map(OsStr::new));
+        let out = capture(&self.git, args, &self.cwd, SCRIBE2_TIMEOUT)?;
+        let text = String::from_utf8(out).ok()?;
+        let text = text.trim();
+        (!text.is_empty()).then(|| text.to_string())
+    }
+
+    /// 電文（持ち回しの字を中核の組み立ての入口に渡し、project の行ごとに宣言の anchor の board の port を置く・
+    /// 時計は読まない）。
     pub fn doc(&self, now: EpochSecs) -> AccountDoc {
         let texts = self.texts();
-        project::doc(&texts.host, &texts.projects, texts.grace.as_deref(), now)
+        let mut doc = project::doc(&texts.host, &texts.projects, texts.grace.as_deref(), now);
+        let declared = anchors(texts.host.host_toml.as_deref());
+        for (row, anchor) in doc.projects.iter_mut().zip(&declared) {
+            if row.name == project_name(anchor) {
+                row.board = texts.boards.get(anchor).and_then(|t| board_port(t));
+            }
+        }
+        doc
     }
 
     /// 変化の印の file（state dir ごとの event log・orchestrator の席の state.jsonl と tick-last と heartbeat-off・
@@ -164,21 +190,30 @@ impl Acct {
     }
 
     /// 子 process を 2 段に並べて撃ち（待ちは 1 段ごとに 1 本分の上限まで）、file を読む。
-    /// 1 段目は anchor ごとの git と、口座と猶予と引数の state dir の doctor。2 段目は state dir ごとの
-    /// tick status と doctor（引数の state dir の doctor は撃ち直さない）と、state dir の引けた anchor の台帳。
+    /// 1 段目は anchor ごとの git（state dir と board の port）と、口座と猶予と引数の state dir の doctor。
+    /// 2 段目は state dir ごとの tick status と doctor（引数の state dir の doctor は撃ち直さない）と、
+    /// state dir の引けた anchor の台帳。
     fn gather(&self) -> Texts {
         let host_toml = read(&self.state_dir.join(HOST_TOML));
         let anchors = anchors(host_toml.as_deref());
-        let (dirs, usage, grace, doctor) = thread::scope(|s| {
+        let (dirs, boards, usage, grace, doctor) = thread::scope(|s| {
             let dirs: Vec<_> = anchors
                 .iter()
                 .map(|a| s.spawn(|| self.state_dir(Path::new(a))))
+                .collect();
+            let boards: Vec<_> = anchors
+                .iter()
+                .map(|a| s.spawn(|| self.board(Path::new(a))))
                 .collect();
             let usage = s.spawn(|| self.shoot_in(&USAGE_ARGS, &self.state_dir));
             let grace = s.spawn(|| self.shoot(GRACE_ARGS));
             let doctor = self.shoot_in(&DOCTOR_ARGS, &self.state_dir);
             (
                 dirs.into_iter()
+                    .map(|h| h.join().ok().flatten())
+                    .collect::<Vec<_>>(),
+                boards
+                    .into_iter()
                     .map(|h| h.join().ok().flatten())
                     .collect::<Vec<_>>(),
                 usage.join().ok().flatten(),
@@ -233,6 +268,11 @@ impl Acct {
             Some(&outputs[i])
         };
         let mut texts = Texts::default();
+        for (anchor, board) in anchors.iter().zip(boards) {
+            if let Some(board) = board {
+                texts.boards.insert(anchor.clone(), board);
+            }
+        }
         for dir in &unique {
             texts.marks.push(events_log(dir));
         }
@@ -318,6 +358,16 @@ fn files(dir: &Path) -> BTreeMap<String, String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// project board の port の字の値（前後の空白を除いた字が 1 字以上の ASCII の数字だけで 1 以上 65535 以下ならその値・
+/// 符号・コロン・斜線・host の字・中の空白・0・65536 以上は None）。
+pub fn board_port(text: &str) -> Option<u16> {
+    let digits = text.trim();
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u16>().ok().filter(|p| *p != 0)
 }
 
 /// 末尾の「/」を除いて同じ path か。

@@ -94,8 +94,8 @@ pub struct ProjectRow {
     pub runs: Reading<RunCounts>,
     pub ledger: Reading<LedgerStats>,
     pub next: Reading<NextStep>,
-    /// project board の URL の字。
-    pub board: Option<String>,
+    /// project board の port（account board と同じ host で配る・host と住所は持たない・無ければ開けない）。
+    pub board: Option<u16>,
 }
 
 /// session の行（project → 役 → 名 → 口座 → 状態 → 段 → いつから → 稼働の記録）。

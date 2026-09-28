@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::acct::{Acct, GIT_ARGS, GRACE_ARGS};
+use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, GIT_ARGS, GRACE_ARGS};
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
 use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::Reading;
@@ -475,16 +475,18 @@ fn server_acct_argv_exact() {
     for separate in [false, true] {
         let place = Place::new(&format!("argv-{separate}"), separate);
         place.acct().doc(NOW);
-        // git は宣言の anchor ごとに 1 回（同じ anchor は 1 回・書かれた字のまま）。
+        // git は宣言の anchor ごとに state dir と board の port を 1 回ずつ（同じ anchor は 1 回・書かれた字のまま）。
         let mut want: Vec<String> = PROJECTS
             .iter()
-            .map(|(p, tail, _, _)| {
-                format!("-C {}{tail} config --get scribe2.statedir", place.anchor(p))
+            .flat_map(|(p, tail, _, _)| {
+                ["scribe2.statedir", "tsuzuri.boardport"]
+                    .map(|key| format!("-C {}{tail} config --get {key}", place.anchor(p)))
             })
             .collect();
         want.sort();
         assert_eq!(place.calls("git"), want, "{separate}");
         assert_eq!(GIT_ARGS, ["config", "--get", "scribe2.statedir"]);
+        assert_eq!(BOARD_ARGS, ["config", "--get", "tsuzuri.boardport"]);
         // 器は state dir ごとに tick と doctor を 1 回、口座と猶予は 1 回。
         let (sa, sb, sh) = (
             place.state("state-a").display().to_string(),
@@ -629,7 +631,7 @@ fn server_acct_holds_five_seconds() {
         place.calls("bd"),
     );
     assert_eq!(once.0.len(), 6, "5 秒の中の読み: {:?}", once.0);
-    assert_eq!(once.1.len(), 5, "{:?}", once.1);
+    assert_eq!(once.1.len(), 10, "{:?}", once.1);
     assert_eq!(once.2.len(), 3, "{:?}", once.2);
     for calls in [&once.0, &once.1, &once.2] {
         let distinct: BTreeSet<&String> = calls.iter().collect();

@@ -28,11 +28,15 @@ pub fn win_name(project: &str) -> String {
     format!("tz-{project}")
 }
 
-/// 開く URL（電文の board の字に今の mode を足す・board が無い project は開けない）。
+/// 開く URL の host の後ろの字（電文の board の port に今の mode を足す・board が無い project は開けない）。
+/// project board は account board と同じ host で配る（host は頁の location から `board_href` で足す）。
 pub fn open_url(row: &ProjectRow, mode: Mode) -> Option<String> {
-    row.board
-        .as_ref()
-        .map(|board| format!("{board}?mode={}", mode.key()))
+    row.board.map(|port| format!(":{port}/?mode={}", mode.key()))
+}
+
+/// 開く URL（頁の location の protocol〔末尾にコロン〕と hostname〔port を含まない〕に host の後ろの字を足す）。
+pub fn board_href(protocol: &str, hostname: &str, tail: &str) -> String {
+    format!("{protocol}//{hostname}{tail}")
 }
 
 /// 窓の状態（開いている・閉じた）。
@@ -163,8 +167,8 @@ mod dom {
     use tsuzuri_contract::account::AccountDoc;
 
     use super::{
-        BLOCK, EMPTY, NOT_YET_KEY, Win, after_close, after_open, button_text, open_url, row_class,
-        state_mark, state_word, win_name,
+        BLOCK, EMPTY, NOT_YET_KEY, Win, after_close, after_open, board_href, button_text, open_url,
+        row_class, state_mark, state_word, win_name,
     };
     use crate::account::{PATH, doc};
     use crate::frame::Mode;
@@ -215,8 +219,14 @@ mod dom {
     }
 
     /// project board を名前つきの窓で開く: handle が生きていれば前面へ、無ければ空の URL と窓の名で開き、
-    /// about:blank なら URL を入れる（新しい）・そうでなければ前面へ。
+    /// about:blank なら URL（頁の location の protocol と hostname に `url` の字を足す）を入れる（新しい）・
+    /// そうでなければ前面へ。location が読めなければ開かない。
     pub fn open(project: &str, url: &str) {
+        let location = window().location();
+        let (Ok(protocol), Ok(hostname)) = (location.protocol(), location.hostname()) else {
+            return;
+        };
+        let url = &board_href(&protocol, &hostname, url);
         sweep();
         let live = HANDLES.with_borrow(|h| h.get(project).cloned());
         let win = match live {
