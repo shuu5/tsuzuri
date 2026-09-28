@@ -4,19 +4,24 @@
 //! 決定待ちは電文に値が無く、未反映は読めない種類を 0 と数えた和で確かな値と言えないので、どちらも「―」を出す（未決）。
 //! 並べ・行の値・class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{AccountDoc, ProjectRow, RunCounts};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
+use tsuzuri_contract::stats::CheckResult;
 
+use super::home::group_more;
 use super::windows::{NOT_YET_KEY, OPEN_NEW_KEY, open_url};
 use crate::frame::{self, Block, Mode};
 use crate::project::Body;
 use crate::project::ledger::{
-    JUDGES, Judge, Net, SPARK_H, SPARK_W, age, judge, net, spark, spark_svg,
+    JUDGES, Judge, Net, SPARK_H, SPARK_W, age, fixed1, judge, net, spark, spark_svg,
 };
 use crate::project::next::{big, key as next_key};
-use crate::project::seat::{NG, OK, Sign, state_value, top};
+use crate::project::seat::{NG, OK, Sign, hm, hmd, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
+use crate::vocab::label;
+use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
     id: "ptab",
@@ -384,6 +389,8 @@ pub struct ProjLine {
     pub open: Open,
     /// 詳しくの段（行を押すと開く）。
     pub more: More,
+    /// 5 つの欄の hover の card。
+    pub cards: RowCards,
 }
 
 /// 詳しくの台帳の項の語の鍵（見本の ledMore の順）。
@@ -479,6 +486,8 @@ pub struct GroupHead {
 pub struct Group {
     pub head: Option<GroupHead>,
     pub rows: Vec<ProjLine>,
+    /// 見出しの群の chip の card（群の名の見出しだけ・見本の group の枝）。
+    pub card: Option<Card>,
 }
 
 /// 表（並べ方と束の並び）。
@@ -566,6 +575,10 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
         .into_iter()
         .filter(|(_, idx)| !idx.is_empty())
         .map(|(head, idx)| Group {
+            card: head
+                .as_ref()
+                .and_then(|h| h.group.as_deref())
+                .and_then(|name| grp_card(doc, name)),
             head,
             rows: idx.into_iter().map(|i| row(doc, i, mode)).collect(),
         })
@@ -591,6 +604,289 @@ pub fn row(doc: &AccountDoc, index: usize, mode: Mode) -> ProjLine {
         acc: acc(doc, p),
         open: open(p, mode),
         more: more(doc, index),
+        cards: row_cards(doc, p),
+    }
+}
+
+/// 次の一手の出所（電文の next を判じる中核の関数）。
+pub const NX_SRC: &str = "中核の next_step_seat";
+
+/// 次の一手の card の当たらない種の字（見本の nx の枝）。
+pub const NX_MISS: &str = "なし";
+
+/// 分からない値の字（card の中の口座・model・tick・hb）。
+const ASK: &str = "?";
+
+/// 次の一手の 6 種（`NextMove::ALL` からなしを除いた順）。
+fn nx_kinds() -> impl Iterator<Item = NextMove> {
+    NextMove::ALL.into_iter().filter(|k| *k != NextMove::Nothing)
+}
+
+/// 要対応の欄の card（見本の nx の枝: 題・当たりの種の字・1 行・出所・6 種の結果）。
+pub fn nx_card(project: &ProjectRow, at: EpochSecs) -> Card {
+    let n = need(project);
+    let title = match n.lead {
+        Some(_) => format!("{} · ({}) {}", project.name, &n.key[3..], label(n.key)),
+        None => format!("{} · {}", project.name, label(n.key)),
+    };
+    let checks = match &project.next {
+        Reading::Known(s) => s.checks.as_slice(),
+        Reading::Unknown => &[],
+    };
+    let check = |kind: NextMove| checks.iter().find(|c| c.kind == kind);
+    let mut hits: Vec<&str> = nx_kinds()
+        .filter(|k| check(*k).is_some_and(|c| c.result == CheckResult::Hit))
+        .map(|k| &next_key(k)[3..])
+        .collect();
+    if n.lead == Some(NextMove::Nothing) {
+        hits.push(&next_key(NextMove::Nothing)[3..]);
+    }
+    let hits = if hits.is_empty() {
+        NONE_MARK.to_string()
+    } else {
+        hits.join(" ")
+    };
+    let more = nx_kinds()
+        .map(|k| {
+            let tail = match check(k) {
+                Some(c) if c.result == CheckResult::Hit => format!("· {}", big(k, Some(c)).what),
+                Some(c) if c.result == CheckResult::Miss => NX_MISS.to_string(),
+                _ => NONE_MARK.to_string(),
+            };
+            format!("({}) {} {tail}", &next_key(k)[3..], label(next_key(k)))
+        })
+        .collect();
+    Card {
+        title,
+        kind: format!("{} · {hits}", label("next_all")),
+        value: n.line.unwrap_or_else(|| NONE_MARK.to_string()),
+        src: format!("{NX_SRC} · ◷ {}", hm(at)),
+        more,
+    }
+}
+
+/// 台帳の数の出所（account の server が anchor ごとに読む台帳の出力）。
+pub const LED_SRC: &str = "bd list --all の bead";
+
+/// 台帳の欄の card（見本の ledCard: 純減 24h と 7d と closed/日・open の task・出所と時点・memo と stale ほか）。
+pub fn led_card(project: &ProjectRow) -> Card {
+    match &project.ledger {
+        Reading::Known(s) => {
+            let n24 = net(s.net_drop_24h);
+            let n7 = net(s.net_drop_7d);
+            let lead = s.lead.as_ref();
+            Card {
+                title: format!("{} · {}", project.name, label("ledger_state")),
+                kind: format!(
+                    "{}{} 24h · {}{} 7d · {} {}",
+                    n24.arrow,
+                    n24.text,
+                    n7.arrow,
+                    n7.text,
+                    label("l_rate"),
+                    fixed1(s.closed_per_day)
+                ),
+                value: format!(
+                    "task {}（ready {} / blocked {}）",
+                    s.open.task, s.ready, s.blocked
+                ),
+                src: format!("{LED_SRC} · 時点 {}", hm(s.at)),
+                more: vec![
+                    format!("memo {} · stale {}", s.open.memo, s.stale),
+                    format!("question {} · epic {}", s.open.question, s.open.epic),
+                    format!(
+                        "lead p50 {} / p90 {}",
+                        age(lead.map(|l| l.p50)),
+                        age(lead.map(|l| l.p90))
+                    ),
+                ],
+            }
+        }
+        Reading::Unknown => Card {
+            title: format!("{} · {}", project.name, label("j_none")),
+            kind: label("ledger_state"),
+            value: label(state_key(UNKNOWN)),
+            src: LED_SRC.to_string(),
+            more: Vec::new(),
+        },
+    }
+}
+
+/// run の数が読めない行の詳しくの 1 行。
+pub const RUNS_UNKNOWN: &str = "state dir か event log が読めない";
+
+/// 決定待ちの「―」の読み方（見本の pcnt の枝）。
+pub const WAIT_NOTE: &str = "― = 質問の台帳を読んでいない";
+
+/// run の数の欄の card（見本の pcnt の枝: 4 列の数・決定待ち・出所は state dir ごとの event log）。
+pub fn pcnt_card(project: &ProjectRow, at: EpochSecs) -> Card {
+    let (kind, mut more) = match &project.runs {
+        Reading::Known(c) => {
+            let counts = [c.wait, c.run, c.stop, c.land];
+            let kind = RUNS
+                .iter()
+                .zip(counts)
+                .map(|((name, _), n)| format!("{name} {n}"))
+                .collect::<Vec<_>>()
+                .join(" · ");
+            let more = ["col_wait", "col_run", "col_stop", "col_land"]
+                .into_iter()
+                .zip(counts)
+                .map(|(k, n)| format!("{} {n}", label(k)))
+                .collect();
+            (kind, more)
+        }
+        Reading::Unknown => (
+            label(state_key(UNKNOWN)),
+            vec![RUNS_UNKNOWN.to_string()],
+        ),
+    };
+    more.push(WAIT_NOTE.to_string());
+    Card {
+        title: format!("{} · {}", label("runs4"), project.name),
+        kind,
+        value: format!("{} {NONE_MARK}", label("waiting_you")),
+        src: format!("fleet/events.jsonl · ◷ {}", hm(at)),
+        more,
+    }
+}
+
+/// orchestrator の欄の card（見本の seatCard: 状態といつから・口座と tick と hb・model・移動待ち・退避までの残り）。
+/// 席が Unknown の行は card を持たない。
+pub fn orch_card(doc: &AccountDoc, project: &ProjectRow) -> Option<Card> {
+    let Reading::Known(c) = &project.seat else {
+        return None;
+    };
+    let state = label(state_key(state_value(c.state)));
+    let kind = match c.since {
+        Some(s) => format!("{state} · ◷ {} から", hmd(s, doc.at)),
+        None => state,
+    };
+    let tick = match c.tick_healthy {
+        Reading::Known(true) => "healthy",
+        Reading::Known(false) => "stale",
+        Reading::Unknown => ASK,
+    };
+    let hb = match c.heartbeat {
+        Reading::Known(true) => "on",
+        Reading::Known(false) => "off",
+        Reading::Unknown => ASK,
+    };
+    let mut more = vec![format!("model {}", c.model.as_deref().unwrap_or(ASK))];
+    let a = acc(doc, project);
+    let now = project.group.as_deref().and_then(|g| current(doc, g));
+    if let (Some(NG), Some(seat), Some(now)) = (a.mark, a.account.as_deref(), now) {
+        more.push(format!("{} {seat} → {now}", label("seat_mismatch")));
+    }
+    if let Some(s) = project.move_left_s {
+        more.push(format!("{} {s} 秒", label("move_grace")));
+    }
+    Some(Card {
+        title: c.target.clone(),
+        kind,
+        value: format!(
+            "口座 {} · tick {tick} · hb {hb}",
+            c.account.as_deref().unwrap_or(ASK)
+        ),
+        src: format!("seat/{}/state.jsonl ほか", c.target),
+        more,
+    })
+}
+
+/// 口座の欄の card の出所。
+pub const GPROJ_SRC: &str = "doctor の席の行と群の今の記録";
+
+/// 口座の欄の card（見本の gproj の枝: 席の口座と群の今の口座の一致・席の無い project は群の今の口座だけ）。
+pub fn gproj_card(doc: &AccountDoc, project: &ProjectRow) -> Card {
+    let now = project.group.as_deref().and_then(|g| current(doc, g));
+    match &project.seat {
+        Reading::Known(c) => {
+            let a = acc(doc, project);
+            let (kind, rel) = match a.mark {
+                Some(s) if s == NG => (format!("{} {}", s.glyph, label("seat_mismatch")), "≠"),
+                Some(s) => (format!("{} {}", s.glyph, label("seat_match")), "="),
+                None => (label(state_key(UNKNOWN)), ASK),
+            };
+            Card {
+                title: c.target.clone(),
+                kind,
+                value: format!(
+                    "登録 {} {rel} 群 {}",
+                    a.account.as_deref().unwrap_or(ASK),
+                    now.unwrap_or(ASK)
+                ),
+                src: GPROJ_SRC.to_string(),
+                more: vec![label(state_key(state_value(c.state)))],
+            }
+        }
+        Reading::Unknown => Card {
+            title: project.name.clone(),
+            kind: label("seat_none"),
+            value: format!(
+                "{} の今の口座 {}",
+                project.group.as_deref().unwrap_or(NONE_MARK),
+                now.unwrap_or(ASK)
+            ),
+            src: GPROJ_SRC.to_string(),
+            more: Vec::new(),
+        },
+    }
+}
+
+/// 群の見出しの chip の card（見本の group の枝: 今の口座・記録の数・いつからと前の口座・候補と anchor）。
+/// 電文の groups が読めないか群が無ければ None。
+pub fn grp_card(doc: &AccountDoc, name: &str) -> Option<Card> {
+    let Reading::Known(cards) = &doc.groups else {
+        return None;
+    };
+    let g = cards.iter().find(|g| g.row.group == name)?;
+    let previous = g.previous.as_deref().unwrap_or(NONE_MARK);
+    let value = match (g.recorded, g.since) {
+        (true, Some(s)) => format!("◷ {} から · ← 前 {previous}", hmd(s, doc.at)),
+        _ => format!("{} · ← 前 {previous}", label("no_record")),
+    };
+    let mut more = vec![
+        format!(
+            "候補 {} 口座 → {}",
+            g.row.candidates.len(),
+            label("candidates")
+        ),
+        format!("anchor {} 件", g.members.len()),
+    ];
+    more.extend(g.members.iter().map(|m| format!("・ {}", m.project)));
+    Some(Card {
+        title: format!("{name} · {} {}", label("current_account"), g.row.account),
+        kind: format!(
+            "{} · {}",
+            label("group"),
+            group_more(g, &doc.moves).records
+        ),
+        value,
+        src: format!("groups/{name}.account ほか"),
+        more,
+    })
+}
+
+/// 行の 5 つの欄の card（orchestrator と口座の欄は席の在る行だけ）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowCards {
+    pub need: Card,
+    pub led: Card,
+    pub runs: Card,
+    pub orch: Option<Card>,
+    pub acc: Option<Card>,
+}
+
+pub fn row_cards(doc: &AccountDoc, project: &ProjectRow) -> RowCards {
+    RowCards {
+        need: nx_card(project, doc.at),
+        led: led_card(project),
+        runs: pcnt_card(project, doc.at),
+        orch: orch_card(doc, project),
+        acc: match &project.seat {
+            Reading::Known(_) => Some(gproj_card(doc, project)),
+            Reading::Unknown => None,
+        },
     }
 }
 
@@ -623,6 +919,7 @@ mod dom {
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal, term};
+    use crate::widgets::hover::{Card, attach};
 
     /// 行ごとの詳しくの開き閉じ（project の名ごと・頁の一生の間だけ）。
     type Opened = RwSignal<BTreeMap<String, bool>>;
@@ -706,7 +1003,7 @@ mod dom {
     }
 
     fn group_view(group: Group, opened: Opened, expert: Signal<bool>) -> AnyView {
-        let head = group.head.map(head_view);
+        let head = group.head.map(|h| head_view(h, group.card));
         let rows = group
             .rows
             .into_iter()
@@ -715,11 +1012,19 @@ mod dom {
         view! { {head}{rows} }.into_any()
     }
 
-    fn head_view(head: GroupHead) -> AnyView {
+    /// card が在れば要素に付ける（席の無い行の欄と群の無い見出しは card を持たない・Option の card の directive の口）。
+    fn attach_some(el: web_sys::Element, card: Option<Card>) {
+        if let Some(card) = card {
+            attach(el, card);
+        }
+    }
+
+    fn head_view(head: GroupHead, card: Option<Card>) -> AnyView {
         let name = match head.group {
-            Some(g) => {
-                view! { <span class="pchip grp"><span data-t="">{g}</span></span> }.into_any()
+            Some(g) => view! {
+                <span class="pchip grp" tabindex="0" use:attach_some=card><span data-t="">{g}</span></span>
             }
+            .into_any(),
             None => view! { <span class="pchip grp">{NONE_MARK}</span> }.into_any(),
         };
         let now = match head.current {
@@ -820,16 +1125,16 @@ mod dom {
                     <b data-t="">{row.name.clone()}</b>
                     <span class="small muted" data-t="">{row.group.clone().unwrap_or_default()}</span>
                 </div>
-                <div class=C_NEED>
+                <div class=C_NEED tabindex="0" use:attach=row.cards.need.clone()>
                     <span class="l1">{need_icon}<b>{need_word}</b></span>
                     <span class="l2" node_ref=l2>{row.need.line.clone().unwrap_or_default()}</span>
                 </div>
                 <div class=C_WAIT><span class="l1"><b class="num">{row.wait}</b></span></div>
                 <div class=C_UN2 data-term="l_unref"><span class="l1"><b class="num">{row.unref}</b></span></div>
-                <div class=C_LED>{led_view(row.led)}</div>
-                <div class=C_RUN>{runs_view(&row.runs)}</div>
-                <div class=C_ORCH>{orch_view(row.orch)}</div>
-                <div class=C_ACC>{acc_view(&row.acc)}</div>
+                <div class=C_LED tabindex="0" use:attach=row.cards.led.clone()>{led_view(row.led)}</div>
+                <div class=C_RUN tabindex="0" use:attach=row.cards.runs.clone()>{runs_view(&row.runs)}</div>
+                <div class=C_ORCH use:attach_some=row.cards.orch.clone()>{orch_view(row.orch)}</div>
+                <div class=C_ACC use:attach_some=row.cards.acc.clone()>{acc_view(&row.acc)}</div>
                 <div class=C_OPEN>{open}</div>
                 {more}
             </div>
@@ -880,10 +1185,10 @@ mod dom {
                 <span class="mi"><span class="lk">{hs("session")}</span><b class="num">{more.sessions.len()}</b></span>
                 {list}
                 <span class="mi"><span class="lk">{hs("acct_hist")}</span><b class="num">{hist}</b></span>
-                <span class="mi m-run">{runs_view(&row.runs)}</span>
-                <span class="mi m-orch">{orch_view(row.orch.clone())}</span>
-                <span class="mi m-acc">{acc_view(&row.acc)}</span>
-                <span class="mi m-led">{led_view(row.led.clone())}</span>
+                <span class="mi m-run" use:attach=row.cards.runs.clone()>{runs_view(&row.runs)}</span>
+                <span class="mi m-orch" use:attach_some=row.cards.orch.clone()>{orch_view(row.orch.clone())}</span>
+                <span class="mi m-acc" use:attach_some=row.cards.acc.clone()>{acc_view(&row.acc)}</span>
+                <span class="mi m-led" use:attach=row.cards.led.clone()>{led_view(row.led.clone())}</span>
             </div>
         }
         .into_any()
