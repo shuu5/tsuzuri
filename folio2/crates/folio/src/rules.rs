@@ -68,8 +68,11 @@ pub const NOTE_CHAPTERS: &str = "note-chapters";
 /// 計画の名札の行の印（欄 key の値・値は計画のノートの文書 id・床 `plan.rs` と導出の命令 `derive.rs` が `plan_note` で読む・便 183）。
 pub const PLAN_NOTE: &str = crate::floor_note::PLAN_KEY;
 
-/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note を足した）。
-pub const KEYS: [&str; 2] = [NOTE_CHAPTERS, PLAN_NOTE];
+/// 編集時の止めの本数の下限の行の印（欄 key の値・値は「<正の整数> 本以上」・床 `polarity.rs` が `in_loop_min` で読む・便 200）。
+pub const IN_LOOP_MIN: &str = "in-loop-min";
+
+/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note・便 200 で in-loop-min を足した）。
+pub const KEYS: [&str; 3] = [NOTE_CHAPTERS, PLAN_NOTE, IN_LOOP_MIN];
 
 /// 章の上限の値の形「<正の整数> 章 以下」の数の後ろの字。
 const CHAPTER_TAIL: &str = " 章 以下";
@@ -125,6 +128,25 @@ pub fn chapter_cap(rules: &Node) -> Result<usize, String> {
             let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
             format!("行 {id} の value「{value}」が「<正の整数>{CHAPTER_TAIL}」の形でない")
         })
+}
+
+/// 編集時の止めの本数の下限（欄 key が in-loop-min の閾値の行の id と value「<正の整数> 本以上」の数・便 200・ADR-33 決定 (5)）。
+/// 行が無ければ None（数えない）。2 本以上か値の形が違えば Err（呼び手は まだ分からない にする）。
+pub fn in_loop_min(rules: &Node) -> Result<Option<(String, usize)>, String> {
+    let rows = keyed_rows(rules, IN_LOOP_MIN);
+    let row = match rows[..] {
+        [] => return Ok(None),
+        [row] => row,
+        _ => return Err(format!("欄 {ROW_KEY} が {IN_LOOP_MIN} の閾値の行が {} 本ある", rows.len())),
+    };
+    let id = row.get("id").and_then(Node::as_str).unwrap_or("?").to_string();
+    let value = row.get("value").and_then(Node::as_str).unwrap_or_default();
+    value
+        .strip_suffix(" 本以上")
+        .filter(|n| !n.starts_with('0') && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|n| n.parse().ok())
+        .map(|n| Some((id.clone(), n)))
+        .ok_or_else(|| format!("行 {id} の value「{value}」が「<正の整数> 本以上」の形でない"))
 }
 
 /// 欄 key の床（便 179）: 値が `KEYS` に無い行と、同じ値を持つ 2 本目以降の閾値の行の字（種別 schema の違反・`check.rs` が出す）。
@@ -301,7 +323,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "key_note",
         Floor::Val(
-            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない",
+            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない",
         ),
     ),
     (
@@ -432,7 +454,7 @@ mod tests {
         assert_eq!(listed.len(), 1, "{listed:?}");
         let two = v("  - {id: R-19, key: note-chapters}\n  - {id: R-26, key: note-chapters}\n");
         assert_eq!(two, ["行 R-26 の key「note-chapters」を持つ閾値の行が 2 本以上ある"]);
-        assert_eq!(KEYS, ["note-chapters", "plan-note"]);
+        assert_eq!(KEYS, ["note-chapters", "plan-note", "in-loop-min"]);
     }
 
     /// 便 183 (c): 計画のノートの文書 id は欄 key が plan-note の閾値の行の value だけを読む。行が無ければ None（掛けない）、

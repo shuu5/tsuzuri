@@ -43,6 +43,7 @@ mod note;
 mod parts;
 mod phase;
 mod plan;
+mod polarity;
 mod proposed;
 mod prose;
 mod refs;
@@ -103,6 +104,9 @@ enum Command {
         /// 置き場の中の 1 file（置き場からの相対）に標準入力の中身を書いた後の床を、書く前の床と比べ、後にだけ在る違反を返す（編集時の口・通す 0 / 止める 1 / まだ分からない 2・つながりの違反は止めない・file は書かない）
         #[arg(long, value_name = "PATH", conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs", "emit_rulings"])]
         proposed: Option<PathBuf>,
+        /// 止める仕掛けの一覧（極性一覧）を 1 仕掛け 1 行（名 · 段 · 極性 · 出所）と集計の 1 行で標準出力へ書く（便 200・正本が読めなければ まだ分からない 2）
+        #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs", "emit_rulings", "proposed"])]
+        polarity: bool,
     },
     /// 憲法の前文と規範文を CLAUDE.md の生成区間へ書く（--write）・検査する（--check）・出す（--print）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "print"])))]
@@ -386,6 +390,17 @@ fn run(cli: Cli) -> ExitCode {
             proposed: Some(rel),
             ..
         } => proposed_check(&dir, &rel),
+        Command::Check { dir, polarity: true, .. } => match polarity::render(&dir) {
+            Ok(lines) => {
+                lines.iter().for_each(|l| println!("{l}"));
+                ExitCode::SUCCESS
+            }
+            Err(why) => {
+                why.iter().for_each(|w| println!("{UNKNOWN_HEAD}{w}"));
+                println!("folio check --polarity: まだ分からない（一覧を組めない）");
+                ExitCode::from(Verdict::Unknown.exit_code() as u8)
+            }
+        },
         Command::Check {
             dir,
             emit_amends,
@@ -395,6 +410,7 @@ fn run(cli: Cli) -> ExitCode {
             freeze_adrs,
             emit_rulings,
             proposed: None,
+            polarity: false,
         } => {
             let flag = if emit_amends {
                 Flag::EmitAmends
@@ -446,6 +462,9 @@ fn run(cli: Cli) -> ExitCode {
             // 便 156（FR5）: 行 R-17 が無くて散文の言及の歯が数えなかったら、判定を変えずに 1 行（機構の行より前）
             if materials.mentions_off {
                 eprintln!("{}", mentions::OFF);
+            }
+            if materials.in_loop_min_off {
+                eprintln!("{}", polarity::OFF);
             }
             // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
             if !materials.not_yet_live.is_empty() {

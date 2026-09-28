@@ -43,6 +43,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("note", 2),
     ("parts", 2),
     ("plan", 2),
+    ("polarity", 2),
     ("prose", 2),
     ("refs", 2),
     ("rules", 2),

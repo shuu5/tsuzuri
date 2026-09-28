@@ -7,6 +7,8 @@
 //!
 //! 便 156（docs/design/delivery-156.md §1 (c)）: 行 R-17 が無い置き場で数えなかった知らせの 1 行と、名札が置き場の規則の表に在る行だけを
 //! 名指すこと（f156_ の 2 本）。土台は行 R-17 を持たないので、f131_ の 2 本の標準エラーにも知らせが機構の行の前に出る。
+//! 便 200（docs/design/delivery-200.md §1 (d)）: 土台と骨格は欄 key が in-loop-min の行も持たないので、下限を数えなかった知らせが
+//! 行 R-17 の知らせの次に出る（歯は tests/polarity.rs）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,6 +23,8 @@ const FLOOR_BASE_LIST: &str = "# 機構がまだ無い条（床の判定の外�
 const FOLIO2_LIST: &str = "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: P-11（M1）・P-13（M1）・P-15（M1）・P-17（M1）・P-18（M1）・A-3（M1）";
 /// 行 R-17 が無くて散文の言及の歯が数えなかった知らせ（delivery-156.md §1 (b) の 1・手で書く）。
 const OFF: &str = "# 行 R-17 が規則の表に無い＝散文の言及の歯は数えていない（床の判定の外・値 0 件 の行 R-17 を足して撃ち直すと数える）";
+/// 欄 key が in-loop-min の行が無くて編集時の止めの下限を数えなかった知らせ（delivery-200.md §1 (b)・手で書く）。
+const IN_LOOP_OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外・条 P-18.4）";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -172,11 +176,11 @@ fn f131_floor_base_lists_the_articles_before_the_summary() {
     assert_eq!(out.status.code(), Some(0), "{}", show(&out));
     assert_eq!(lines(&out.stdout), [PASS], "{}", show(&out));
     // 土台は行 R-17 を持たないので、数えなかった知らせが機構の行の前に出る（便 156）
-    assert_eq!(lines(&out.stderr), [OFF, FLOOR_BASE_LIST], "{}", show(&out));
+    assert_eq!(lines(&out.stderr), [OFF, IN_LOOP_OFF, FLOOR_BASE_LIST], "{}", show(&out));
 
     let amends = w.check(&["--emit-amends"]);
     assert_eq!(amends.status.code(), Some(0), "{}", show(&amends));
-    assert_eq!(lines(&amends.stderr), [OFF, FLOOR_BASE_LIST, PASS], "{}", show(&amends));
+    assert_eq!(lines(&amends.stderr), [OFF, IN_LOOP_OFF, FLOOR_BASE_LIST, PASS], "{}", show(&amends));
     assert!(!text(&amends.stdout).contains(HEAD), "{}", show(&amends));
 
     // 種別の絞り: human-review の最初の条（P-16）の live を M1 にしても一覧は 14 本のまま
@@ -205,7 +209,7 @@ fn f131_no_line_when_no_article_waits_for_its_mechanism() {
     let out = w.check(&[]);
     assert_eq!(out.status.code(), Some(0), "{}", show(&out));
     assert_eq!(lines(&out.stdout), [PASS], "{}", show(&out));
-    assert_eq!(lines(&out.stderr), [OFF], "{}", show(&out));
+    assert_eq!(lines(&out.stderr), [OFF, IN_LOOP_OFF], "{}", show(&out));
 
     let sk = Work::skeleton("skeleton");
     let out = sk.check(&[]);
@@ -293,7 +297,8 @@ fn f156_a_place_without_r17_says_the_mentions_are_not_counted() {
     let out = w.check(&[]);
     assert_eq!(out.status.code(), Some(2), "{}", show(&out));
     assert_eq!(lines(&out.stdout), [SKELETON_SUMMARY], "{}", show(&out));
-    assert_eq!(lines(&out.stderr).last().map(String::as_str), Some(OFF), "{}", show(&out));
+    let err = lines(&out.stderr);
+    assert_eq!(err[err.len().saturating_sub(2)..], [OFF, IN_LOOP_OFF], "{}", show(&out));
     assert_eq!(off_count(&out), 1, "{}", show(&out));
 
     // 値 0 件 の行 R-17 を足すと言及を数える
