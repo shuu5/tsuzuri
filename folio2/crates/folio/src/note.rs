@@ -267,16 +267,22 @@ pub(crate) fn has_contract_table(root: &Node) -> bool {
 
 // ── (a) 器の導出 file（行走査で読む） ──
 
-/// 器の導出 file の path を解く唯一の式（便 123・ADR-16 決定 (2)(キ)・床と面の生成器と導出の命令が共有する）。
-/// 置き場を含む版管理の根が在ればその下（置き場そのものが根でも同じ）、無ければ置き場の親の下。
-/// 根の下に file が無くても親へは倒さない（探す先は 1 つ・P-4.1）。Err は読めない理由の字。
-pub(crate) fn external_path(dir: &Path) -> Result<PathBuf, String> {
+/// 置き場の根を解く唯一の式（便 123・ADR-16 決定 (2)(キ)）: 置き場を含む版管理の根が在ればそこ（置き場そのものが根でも同じ）、
+/// 無ければ置き場の親。器の導出 file の置き場（`external_path`）と `folio derive --from-root` の --out の起点（便 192）が共有する。
+/// Err は読めない理由の字。
+pub(crate) fn root_of(dir: &Path) -> Result<PathBuf, String> {
     if let Some(top) = gitcheck::toplevel(dir) {
-        return Ok(top.join(EXTERNAL_PATH));
+        return Ok(top);
     }
     dir.parent()
-        .map(|p| p.join(EXTERNAL_PATH))
+        .map(Path::to_path_buf)
         .ok_or_else(|| "正本の置き場の親 dir が無い".to_string())
+}
+
+/// 器の導出 file の path を解く唯一の式（便 123・ADR-16 決定 (2)(キ)・床と面の生成器と導出の命令が共有する）。
+/// 根（`root_of`）の下。根の下に file が無くても親へは倒さない（探す先は 1 つ・P-4.1）。Err は読めない理由の字。
+pub(crate) fn external_path(dir: &Path) -> Result<PathBuf, String> {
+    root_of(dir).map(|top| top.join(EXTERNAL_PATH))
 }
 
 /// 器の導出 file（`external_path` で解く）を読む。読めない・期待する形でない は「まだ分からない」。

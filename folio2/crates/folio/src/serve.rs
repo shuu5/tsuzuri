@@ -1,5 +1,5 @@
-//! `folio serve`（便 17・docs/design/delivery-17.md §1 (b)）。`folio build` の配信先を tailnet の内側だけで
-//! 見せる小さな配信器。bind 先が tailnet の外なら起動を拒む（N-6.1・fail-closed）。台帳や版管理が在る dir は
+//! `folio serve`（便 17・docs/design/delivery-17.md §1 (b)）。`folio build` の配信先を同じ端末の中（loopback）か tailnet の中だけで
+//! 見せる小さな配信器。bind 先がそのどちらでもなければ起動を拒む（N-6.1・fail-closed・断りの字は便 192）。台帳や版管理が在る dir は
 //! 配信先にしない（N-6.2）。標準 library の net と fs だけで書く（外部 crate も正規表現も使わない）。
 //! 接続は 1 つずつ順に処理し（並列にしない）、1 接続 = 1 要求（Connection: close）・GET と HEAD だけ。
 
@@ -136,7 +136,7 @@ fn bind_host(host: Option<&str>) -> Result<Ipv4Addr, (Verdict, String)> {
             } else {
                 Err((
                     Verdict::Fail,
-                    format!("拒否 — bind 先 {ip} は tailnet の外"),
+                    format!("拒否 — bind 先 {ip} は同じ端末の中（loopback）でも tailnet の中でもない"),
                 ))
             }
         }

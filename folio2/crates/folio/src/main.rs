@@ -75,7 +75,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// design-intent の正本 7 file の形を検査し、合格 0 / 不合格 1 / まだ分からない 2 で終わる
+    /// 設計文書の置き場の床（正本 7 file〔憲法・規則の表・語彙・要件書・入口・相談窓口・天井〕の形と、判断の記録・設計ノート・凍結 anchor・索引の欄の決まりと、参照 id と、索引が組めるか）を検査し、合格 0 / 不合格 1 / まだ分からない 2 で終わる
     Check {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
@@ -137,7 +137,7 @@ enum Command {
         #[arg(long)]
         print: bool,
     },
-    /// 正本から見本 3 面の 1 面を導出して書く（--write）・検査する（--check）。本便で生成器を持つのは憲法の面だけ
+    /// 正本から 5 面（入口・憲法・要件書・判断の記録・設計ノート）の 1 面を導出して書く（--write）・検査する（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Face {
         /// 面の名（index・constitution・srs・adr・note）
@@ -204,9 +204,12 @@ enum Command {
         /// 正本の置き場（design-note/ と、版管理の根〔無ければ置き場の親 dir〕の contracts/schema.toml を読む）
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
-        /// 導出物の置き場（既定なし・消費側が宣言する・相対なら --dir からの相対・絶対ならそのまま）
+        /// 導出物の置き場（既定なし・消費側が宣言する・相対なら --dir からの相対〔--from-root なら根からの相対〕・絶対ならそのまま）
         #[arg(long)]
         out: PathBuf,
+        /// --out の相対を、置き場を含む版管理の根（無ければ置き場の親 dir・器の導出 file を探す根と同じ）からの相対に解く
+        #[arg(long)]
+        from_root: bool,
         /// 違う導出物だけを置き場へ書く（全部か無しか・導出元の無い .toml は消さずに名を出す）
         #[arg(long)]
         write: bool,
@@ -309,7 +312,7 @@ enum Command {
         #[arg(long)]
         dir: PathBuf,
     },
-    /// 配信先を tailnet の内側だけで見せる（bind 先が tailnet の外なら起動を拒む）
+    /// 配信先を同じ端末の中（loopback）か tailnet の中だけで見せる（bind 先がそのどちらでもなければ起動を拒む）
     Serve {
         /// 配信先（folio build の --out）
         #[arg(long)]
@@ -534,6 +537,7 @@ fn run(cli: Cli) -> ExitCode {
         Command::Derive {
             dir,
             out,
+            from_root,
             write,
             check: _,
         } => {
@@ -542,7 +546,7 @@ fn run(cli: Cli) -> ExitCode {
             } else {
                 derive::Mode::Check
             };
-            let outcome = derive::run(&dir, &out, mode);
+            let outcome = derive::run(&dir, &out, from_root, mode);
             for line in &outcome.stdout {
                 println!("{line}");
             }

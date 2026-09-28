@@ -71,9 +71,17 @@ struct PlanIndex {
 
 // ── 命令の口 ──
 
-pub fn run(dir: &Path, out: &Path, mode: Mode) -> Outcome {
-    // --out が相対なら --dir からの相対・絶対ならそのまま（folio build と同じ）
-    let out_dir = dir.join(out);
+pub fn run(dir: &Path, out: &Path, from_root: bool, mode: Mode) -> Outcome {
+    // --out が相対なら --dir からの相対（--from-root なら置き場の根 `note::root_of` からの相対・便 192）・絶対ならそのまま（folio build と同じ）
+    let base = if from_root {
+        match note::root_of(dir) {
+            Ok(root) => root,
+            Err(e) => return Outcome::unknown(e),
+        }
+    } else {
+        dir.to_path_buf()
+    };
+    let out_dir = base.join(out);
     let (derived, index) = match derive_all(dir).and_then(|(d, notes)| Ok((d, plan_index(dir, &notes)?))) {
         Ok(d) => d,
         Err(e) => return Outcome::unknown(e),

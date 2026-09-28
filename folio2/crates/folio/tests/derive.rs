@@ -469,3 +469,120 @@ fn f120_conditional_fields_are_copied_as_the_row_has_them() {
     assert!(!body.contains("conditional"), "要否の字を写した: {body}");
     assert_code(&w.derive("--check"), 0, &["一致"]);
 }
+
+// ── 便 192（docs/design/delivery-192.md §1 (c)）: --from-root は --out の相対を置き場の根からの相対に解く ──
+
+/// 置き場を 1 段深く（`<root>/docs/di/`）置いた一時の根。`git` なら根を版管理の根にする。器の導出 file は根の contracts/ に置く。
+fn nested(case: &str, git: bool) -> (Work, PathBuf) {
+    let w = Work::empty(&format!("f192-{case}"));
+    let di = w.root.join("docs/di");
+    fs::create_dir_all(di.join("design-note")).unwrap();
+    fs::copy(
+        repo_root().join(ANCHOR_NOTE),
+        di.join("design-note/derive-anchor.yaml"),
+    )
+    .unwrap();
+    if git {
+        // 環境変数 GIT_* は継承しない（hook の中で撃たれても一時の根に版管理を作る）
+        let mut cmd = Command::new("git");
+        for (key, _) in std::env::vars_os() {
+            if key.to_string_lossy().starts_with("GIT_") {
+                cmd.env_remove(key);
+            }
+        }
+        let init = cmd
+            .args(["init", "-q"])
+            .current_dir(&w.root)
+            .output()
+            .expect("git を起動できない");
+        assert!(init.status.success(), "{}", text(&init));
+    }
+    (w, di)
+}
+
+/// `<root>/docs` を今の dir にして `folio derive --dir di --out <out> <args>` を撃つ（今の dir に依らないことも見る）。
+fn derive_in_docs(w: &Work, out: &str, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_folio"))
+        .arg("derive")
+        .args(args)
+        .args(["--dir", "di", "--out", out])
+        .current_dir(w.root.join("docs"))
+        .output()
+        .expect("folio を起動できない")
+}
+
+#[test]
+fn f192_from_root_resolves_out_from_the_repo_root() {
+    let (w, di) = nested("git", true);
+    // 根からの相対: <root>/contracts/ に書き、同じ宣言の --check が 0
+    assert_code(
+        &derive_in_docs(&w, "contracts", &["--from-root", "--write"]),
+        0,
+        &["書いた 1 file"],
+    );
+    assert_eq!(
+        fs::read(w.root.join("contracts").join(OUT_NAME)).unwrap(),
+        anchor_toml(),
+        "根の contracts/ に導出物が無い"
+    );
+    assert!(!di.join("contracts").exists(), "置き場の下に書いた");
+    assert!(!w.root.join("docs/contracts").exists(), "今の dir の下に書いた");
+    assert_code(
+        &derive_in_docs(&w, "contracts", &["--from-root", "--check"]),
+        0,
+        &["一致"],
+    );
+    // --from-root が無ければ今までどおり --dir からの相対（di/contracts は無い＝2）
+    assert_code(
+        &derive_in_docs(&w, "contracts", &["--check"]),
+        2,
+        &["置き場が無い", "di/contracts"],
+    );
+    // 根からの相対の 1 byte の差は --check が 1
+    let path = w.root.join("contracts").join(OUT_NAME);
+    let mut bytes = anchor_toml();
+    let at = bytes
+        .windows(8)
+        .position(|x| x == b"id = \"a\"")
+        .expect("行 a の id の字面");
+    bytes[at + 6] = b'c';
+    fs::write(&path, &bytes).unwrap();
+    assert_code(
+        &derive_in_docs(&w, "contracts", &["--from-root", "--check"]),
+        1,
+        &["DRIFT", OUT_NAME],
+    );
+}
+
+#[test]
+fn f192_from_root_without_a_repo_is_the_parent_of_the_place() {
+    // 版管理の根が無ければ置き場の親（器の導出 file を探す根と同じ・ADR-16 決定 (2)(キ)）
+    let (w, _) = nested("plain", false);
+    fs::create_dir_all(w.root.join("docs/contracts")).unwrap();
+    fs::copy(
+        repo_root().join("contracts/schema.toml"),
+        w.root.join("docs/contracts/schema.toml"),
+    )
+    .unwrap();
+    assert_code(
+        &derive_in_docs(&w, "contracts", &["--from-root", "--write"]),
+        0,
+        &["書いた 1 file"],
+    );
+    assert_eq!(
+        fs::read(w.root.join("docs/contracts").join(OUT_NAME)).unwrap(),
+        anchor_toml()
+    );
+    assert!(!w.root.join("contracts").join(OUT_NAME).exists(), "親でない根に書いた");
+}
+
+#[test]
+fn f192_absolute_out_is_taken_as_is_with_or_without_from_root() {
+    let (w, _) = nested("abs", true);
+    let abs = w.root.join("elsewhere");
+    let abs_s = abs.to_str().unwrap();
+    assert_code(&derive_in_docs(&w, abs_s, &["--from-root", "--write"]), 0, &["書いた 1 file"]);
+    assert_eq!(fs::read(abs.join(OUT_NAME)).unwrap(), anchor_toml());
+    assert_code(&derive_in_docs(&w, abs_s, &["--check"]), 0, &["一致"]);
+    assert_code(&derive_in_docs(&w, abs_s, &["--from-root", "--check"]), 0, &["一致"]);
+}

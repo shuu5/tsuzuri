@@ -1,5 +1,5 @@
 //! `folio serve` の歯（便 17・docs/design/delivery-17.md §1 (d)）。binary 経由。
-//! - 拒む: tailnet の外の bind 先・配信先が無い・入口が無い・版管理が在る
+//! - 拒む: 同じ端末の中でも tailnet の中でもない bind 先・配信先が無い・入口が無い・版管理が在る
 //! - `--host` 無しの起動（FR7 の確かめ方・環境に tailnet が在るか無いかで枝が分かれるが、どちらの枝も断定する）
 //! - loopback での配信 11 要求（見せる file・閉じ込め・method・拡張子の表）
 //!
@@ -196,8 +196,11 @@ fn serve_refuses_a_bind_host_outside_the_tailnet() {
     for host in ["0.0.0.0", "192.168.0.1", "8.8.8.8"] {
         let run = folio_serve(&["--dir", site.to_str().unwrap(), "--host", host]);
         assert_eq!(code(&run, "folio serve"), 1, "{host}: {}", stderr(&run));
+        // 断りの字は条 N-6.1（第 1.2 版）の拒む先と同じ 1 つの集合を名指す（便 192）
         assert!(
-            stderr(&run).contains("tailnet の外"),
+            stderr(&run).contains(&format!(
+                "拒否 — bind 先 {host} は同じ端末の中（loopback）でも tailnet の中でもない"
+            )),
             "{host}: {}",
             stderr(&run)
         );
