@@ -13,11 +13,14 @@ use tsuzuri_contract::seat::{SeatSpan, SeatState};
 use tsuzuri_contract::surface::SeatRole;
 
 use super::heartbeat::{Toggle, toggle};
+use super::projects::orch_card;
 use crate::frame::{self, Block};
-use crate::project::Body;
 use crate::project::pipeline::age;
-use crate::project::seat::{OK, Sign, Span, rects, span_ticks, state_value, strip_svg, top};
+use crate::project::seat::{OK, Sign, Span, hmd, rects, span_ticks, state_value, strip_svg, top};
+use crate::project::{Body, state_key};
 use crate::view::Fetched;
+use crate::vocab::label;
+use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
     id: "sessions",
@@ -289,6 +292,8 @@ pub struct SessRow {
     pub moving: Option<Move>,
     /// 停止の切り替え（orchestrator の行で席の名が在り heartbeat が読めるときだけ・便 h-hb）。
     pub toggle: Option<Toggle>,
+    /// session の欄の hover の card（`sess_card`）。
+    pub card: Card,
 }
 
 /// 束の見出し。
@@ -477,6 +482,7 @@ pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
             None
         },
         toggle: toggle(doc, line),
+        card: sess_card(doc, index),
     }
 }
 
@@ -537,6 +543,83 @@ pub fn axis_labels(at: EpochSecs, span: Span) -> Vec<(String, String)> {
         .collect()
 }
 
+/// run の行の card の出所（見本の run の枝の出所の字）。
+pub const RUN_SRC: &str = "fleet/events.jsonl · RunStage";
+
+/// run の行の session の欄の card（見本の run の枝: 名・役と project・段と状態・口座といつから）。
+pub fn run_card(line: &SessionLine, at: EpochSecs) -> Card {
+    let stage = line.stage.map_or(NONE_MARK, stage_word);
+    let account = line
+        .account
+        .clone()
+        .unwrap_or_else(|| label("st_unknown"));
+    let mut more = vec![format!("口座 {account}")];
+    if let Some(s) = line.since {
+        more.push(format!("◷ {} から", hmd(s, at)));
+    }
+    Card {
+        title: line.name.clone(),
+        kind: format!("{} · {}", label("role:pipeline"), line.project),
+        value: format!("{stage} · {}", label(state_key(state_value(line.state)))),
+        src: RUN_SRC.to_string(),
+        more,
+    }
+}
+
+/// project の card が詳しくに並べる session の数（見本の proj の枝）。
+pub const PROJ_SHOWN: usize = 5;
+
+/// 席の無い project の行の session の欄の card（見本の proj の枝: 群・session の数・名と口座・board）。
+pub fn proj_card(doc: &AccountDoc, name: &str) -> Card {
+    let named: Vec<&SessionLine> = doc
+        .sessions
+        .iter()
+        .filter(|l| l.project == name && !l.name.is_empty())
+        .collect();
+    let project = project_of(doc, name);
+    let group = project
+        .and_then(|p| p.group.as_deref())
+        .unwrap_or(NONE_MARK);
+    let value = if named.is_empty() {
+        label("seat_none")
+    } else {
+        let orch = named
+            .iter()
+            .filter(|l| l.role == SeatRole::Orchestrator)
+            .count();
+        format!("session {} · orchestrator {orch}", named.len())
+    };
+    let mut more: Vec<String> = named
+        .iter()
+        .take(PROJ_SHOWN)
+        .map(|l| format!("{} {}", l.name, l.account.as_deref().unwrap_or("?")))
+        .collect();
+    more.push(match project.and_then(|p| p.board) {
+        Some(port) => format!("board :{port}"),
+        None => label("not_yet"),
+    });
+    Card {
+        title: name.to_string(),
+        kind: format!("project · {group}"),
+        value,
+        src: format!("{name} · state dir"),
+        more,
+    }
+}
+
+/// 電文の sessions の i 行目の session の欄の card（run の行は run・席の読める orchestrator の行は席・ほかは project）。
+pub fn sess_card(doc: &AccountDoc, index: usize) -> Card {
+    let line = &doc.sessions[index];
+    if line.role == SeatRole::Pipeline {
+        return run_card(line, doc.at);
+    }
+    (!line.name.is_empty())
+        .then(|| project_of(doc, &line.project))
+        .flatten()
+        .and_then(|p| orch_card(doc, p))
+        .unwrap_or_else(|| proj_card(doc, &line.project))
+}
+
 /// 表を組む関数を view が使う（口は account の mod.rs の PATH・本文は doc で読む）。
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
@@ -561,6 +644,7 @@ mod dom {
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, state_key, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{hs, term};
+    use crate::widgets::hover::attach;
 
     /// 今の URL の query（読めなければ空）。
     fn search() -> String {
@@ -767,7 +851,7 @@ mod dom {
             <div class=row.class.clone()>
                 <div class=C_PROJ data-t="">{row.project.clone()}</div>
                 <div class=C_ROLE>{term(row.role_key, label(row.role_key))}</div>
-                <div>{session}</div>
+                <div tabindex="0" use:attach=row.card.clone()>{session}</div>
                 <div class="mono">{account}</div>
                 <div class=C_STAGE>{stage_view(&row, at, tick, hb)}</div>
                 <div class="num">{elapsed}</div>
