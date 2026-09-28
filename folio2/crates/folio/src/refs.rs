@@ -7,8 +7,11 @@ use std::collections::{HashMap, HashSet};
 use crate::verdict::Report;
 use crate::yaml::Node;
 
+// 参照 id の空間の閉じた一覧（下の 4 本）はこの 1 枚だけに置き、link.rs・note.rs・prose.rs・mentions.rs・graph.rs が引く。
+// 索引の欄の決まり graph.yaml の生成区間の ids はその写し（P-5.6・P-6.3・行 D-11・便 195）。
+
 /// 要件書の id を持つ節（解決先）。
-const SRS_ID_SECTIONS: [&str; 7] = [
+pub(crate) const SRS_ID_SECTIONS: [&str; 7] = [
     "goals",
     "requirements",
     "nonfunctional",
@@ -19,13 +22,13 @@ const SRS_ID_SECTIONS: [&str; 7] = [
 ];
 
 /// rules 行の節。
-const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
+pub(crate) const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
 
 /// 憲法の relations の名前空間（閉じた一覧）。
-const RELATION_NAMESPACES: [&str; 4] = ["reqs", "rules", "articles", "sections"];
+pub(crate) const RELATION_NAMESPACES: [&str; 4] = ["reqs", "rules", "articles", "sections"];
 
 /// 要件書の id の頭（数字が直に続く）。
-const SRS_ID_PREFIXES: [&str; 5] = ["FR", "NFR", "AC", "CON", "GOAL"];
+pub(crate) const SRS_ID_PREFIXES: [&str; 5] = ["FR", "NFR", "AC", "CON", "GOAL"];
 
 /// (a)(b)(c) を掛ける。
 pub fn check_refs(

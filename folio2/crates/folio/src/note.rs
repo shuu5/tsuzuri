@@ -373,20 +373,6 @@ fn quoted_pair(line: &str) -> Option<(String, String)> {
 
 // ── id 空間 ──
 
-/// rules 行の節（便 1 と同じ）。
-const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
-
-/// 要件書の id を持つ節（便 1 と同じ）。
-const SRS_ID_SECTIONS: [&str; 7] = [
-    "goals",
-    "requirements",
-    "nonfunctional",
-    "acceptance",
-    "constraints",
-    "actors",
-    "outputs",
-];
-
 /// 節の行（表）。一覧でない節・表でない行は数えない（便 0・便 1 の側が数えてある）。
 fn maps<'a>(root: &'a Node, section: &str) -> Vec<&'a Node> {
     root.get(section)
@@ -406,7 +392,7 @@ fn base_known_ids(
     adr: Option<&Adr>,
 ) -> HashSet<String> {
     let articles = maps(constitution, "articles");
-    let rule_rows: Vec<&Node> = RULE_SECTIONS.iter().flat_map(|s| maps(rules, s)).collect();
+    let rule_rows: Vec<&Node> = refs::RULE_SECTIONS.iter().flat_map(|s| maps(rules, s)).collect();
     let mut known = refs::known_ids(&articles, &rule_rows, srs, &mut Report::default());
     if let Some(adr) = adr {
         known.extend(link::adr_ids(adr).iter().map(|id| (*id).to_string()));
@@ -417,7 +403,7 @@ fn base_known_ids(
 /// 要件書の id（契約表の行の req の解決先）。
 fn requirement_ids(srs: &Node) -> HashSet<String> {
     let mut ids = HashSet::new();
-    for section in SRS_ID_SECTIONS {
+    for section in refs::SRS_ID_SECTIONS {
         for row in maps(srs, section) {
             if let Some(id) = row.get("id").and_then(Node::as_str) {
                 ids.insert(id.to_string());

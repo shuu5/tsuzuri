@@ -6,11 +6,11 @@
 //! 参照 id は形だけを取り、実在の解決は呼び手（便 23 の `note.rs` の参照の解決の母集団）が行う。
 //! 正規表現は使わない（字の走査だけ・便 23 と同じ作り）。
 
+use crate::refs;
 use crate::yaml::Node;
 
-/// 一覧を持つ rules 行の id と、その行が在る節。
+/// 一覧を持つ rules 行の id（行が在る節は refs.rs の RULE_SECTIONS）。
 const ROW_ID: &str = "R-16";
-const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
 
 /// 違反の理由の名（文言に出す）。
 const NO_POINTER: &str = "no-pointer";
@@ -24,10 +24,10 @@ const FENCE: &str = "```";
 const TABLE: char = '|';
 const COMMENT: &str = "<!--";
 
-/// 参照 id の接頭辞（条 id は枝番 `.<数>` を取れる・rules 行 id と要件 id は取れない）。
-const ARTICLE: [&str; 3] = ["P-", "A-", "N-"];
-const RULE: [&str; 2] = ["R-", "D-"];
-const REQUIREMENT: [&str; 5] = ["GOAL", "NFR", "FR", "AC", "CON"];
+/// 参照 id の接頭辞（条 id は枝番 `.<数>` を取れる・rules 行 id と要件 id は取れない）。要件 id の頭は refs.rs の
+/// SRS_ID_PREFIXES（頭どうしは前方一致しない＝照合の順は答えに効かない）。索引の欄の決まりの ids.prefixes はこの写し（便 195）。
+pub(crate) const ARTICLE: [&str; 3] = ["P-", "A-", "N-"];
+pub(crate) const RULE: [&str; 2] = ["R-", "D-"];
 
 /// rules 行 R-16 の value から読んだ一覧（検査 1 回ぶん）。
 pub struct Gate {
@@ -58,7 +58,7 @@ pub struct Marked {
 /// rules の thresholds / discipline から R-16 の行を引き、value（型付きデータ）を読む。
 /// 行が無い・欄が無い・型が違う は Err（呼び手は「まだ分からない」にする＝合格にしない）。
 pub fn gate(rules: &Node) -> Result<Gate, String> {
-    let row = RULE_SECTIONS
+    let row = refs::RULE_SECTIONS
         .iter()
         .filter_map(|s| rules.get(s))
         .filter_map(Node::as_seq)
@@ -248,7 +248,7 @@ fn pointer_at(sentence: &str, i: usize) -> Option<usize> {
             return Some(end);
         }
     }
-    for prefix in RULE.iter().chain(REQUIREMENT.iter()) {
+    for prefix in RULE.iter().chain(refs::SRS_ID_PREFIXES.iter()) {
         if let Some(tail) = rest.strip_prefix(prefix) {
             let n = digits(tail);
             if n > 0 {

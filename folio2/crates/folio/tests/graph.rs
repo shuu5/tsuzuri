@@ -5,12 +5,17 @@
 //! 4. 2 度当てて byte 一致し、写しの file を 1 つも変えない。
 //! 5. 正本を 1 つ消すと終了コード 2 で表が 1 行も出ない。
 //! 6. 改行を含む題が 1 行 36 字以下に畳まれる。
+//!
+//! 便 195（行 gp）: f195_ 1. 実の graph.yaml の生成区間の末尾 4 欄（ids・ids_note・mentions・mentions_note）の型付きの値が期待の字と順
+//! のまま（鍵の過不足も落とす）・2 つの注が正本の定数の置き場を名指す。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+
+use yaml_rust2::{Yaml, YamlLoader};
 
 /// 閉じた一覧の写し（正本は crates/folio/src/graph.rs の NODE_KINDS / EDGE_TYPES・歯は crate の中を読めない）。
 const NODE_KINDS: [&str; 12] = [
@@ -621,4 +626,147 @@ fn f99_a_scan_that_disagrees_is_inconclusive() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("まだ分からない") && err.contains("食い違う") && err.contains("P-1.1"), "{err}");
     assert!(before == after, "写しの file が変わった");
+}
+
+// ── 便 195（行 gp・P-5.6・行 D-11）: 索引の欄の決まり graph.yaml の生成区間に参照 id の空間と行 R-17 の読みの写し ──
+
+/// 期待の字（手で写した・base 7528256 の refs.rs・prose.rs・mentions.rs の定数と同じ字と順）。
+const F195_IDS: [(&str, &[&str]); 3] = [
+    ("rule_sections", &["thresholds", "discipline"]),
+    (
+        "srs_sections",
+        &["goals", "requirements", "nonfunctional", "acceptance", "constraints", "actors", "outputs"],
+    ),
+    ("relation_namespaces", &["reqs", "rules", "articles", "sections"]),
+];
+const F195_PREFIXES: [(&str, &[&str]); 3] = [
+    ("article", &["P-", "A-", "N-"]),
+    ("rule", &["R-", "D-"]),
+    ("srs", &["FR", "NFR", "AC", "CON", "GOAL"]),
+];
+const F195_LISTS: [(&str, &[&str]); 5] = [
+    (
+        "targets",
+        &[
+            "constitution.yaml",
+            "rules.yaml",
+            "srs.yaml",
+            "vocabulary.yaml",
+            "ceiling.yaml",
+            "index.yaml",
+            "intake.yaml",
+            "adr/",
+            "design-note/",
+        ],
+    ),
+    (
+        "typed",
+        &[
+            "article", "articles", "amended_by", "amends", "ac", "adrs", "basis", "figures", "goals", "produced", "reads",
+            "ref", "refs", "relations", "req", "reqs", "rules", "sections", "target", "verifies", "verify",
+        ],
+    ),
+    ("provenance", &["approval", "date", "grill", "ruled_at", "ruling", "source"]),
+    ("top_skipped", &["meta", "schema"]),
+    (
+        "excluded",
+        &["対象外", "本判断の外", "同じ運び方", "同形", "と同じく", "と揃う", "審査の記帳", "根拠から", "へ移した", "と書いたら"],
+    ),
+];
+const F195_SRS_KINDS: [(&str, &str); 7] = [
+    ("goals", "目的"),
+    ("actors", "登場人物"),
+    ("outputs", "出力"),
+    ("requirements", "要件"),
+    ("nonfunctional", "要件"),
+    ("acceptance", "受入基準"),
+    ("constraints", "制約"),
+];
+const F195_ALL: &[&str] = &["条", "規範文", "規則行", "判断の記録", "要件", "制約", "受入基準", "目的", "登場人物", "出力"];
+const F195_RECEIVES: [(&str, &[&str]); 10] = [
+    ("条", F195_ALL),
+    ("規範文", &[]),
+    ("規則行", F195_ALL),
+    ("判断の記録", F195_ALL),
+    ("要件", &["条", "規範文", "規則行", "判断の記録", "受入基準", "目的"]),
+    ("制約", &["条", "規範文", "規則行"]),
+    ("受入基準", &["要件"]),
+    ("目的", &[]),
+    ("登場人物", &[]),
+    ("出力", &[]),
+];
+
+/// 実の graph.yaml の生成区間（印の間の行）を yaml として読む。
+fn f195_region() -> Yaml {
+    let text = fs::read_to_string(repo_root().join("design-intent/graph.yaml")).unwrap();
+    let region: String = text
+        .lines()
+        .skip_while(|l| !l.starts_with("# folio:schema:begin"))
+        .skip(1)
+        .take_while(|l| !l.starts_with("# folio:schema:end"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    YamlLoader::load_from_str(&region).unwrap().remove(0)
+}
+
+/// 一覧の字（一覧でなければ落とす）。
+fn strs(node: &Yaml, at: &str) -> Vec<String> {
+    node.as_vec()
+        .unwrap_or_else(|| panic!("{at} が一覧でない"))
+        .iter()
+        .map(|v| v.as_str().unwrap_or_else(|| panic!("{at} の項が字でない")).to_string())
+        .collect()
+}
+
+/// 表の鍵の順（yaml の順のまま）。
+fn f195_keys(node: &Yaml, at: &str) -> Vec<String> {
+    node.as_hash()
+        .unwrap_or_else(|| panic!("{at} が表でない"))
+        .keys()
+        .map(|k| k.as_str().unwrap_or_else(|| panic!("{at} の鍵が字でない")).to_string())
+        .collect()
+}
+
+/// 歯 1: 実の graph.yaml の生成区間の末尾 4 欄が ids・ids_note・mentions・mentions_note で、型付きの欄の値は期待の字と順のまま
+/// （鍵の過不足も落とす）。2 つの注は正本の定数の置き場を名指す。base の生成区間は ids と mentions を持たない。
+#[test]
+fn f195_the_graph_region_copies_the_id_space_and_the_mention_lists() {
+    let reg = f195_region();
+    let schema = &reg["schema"];
+    let keys = f195_keys(schema, "schema");
+    assert_eq!(keys[keys.len().saturating_sub(4)..], ["ids", "ids_note", "mentions", "mentions_note"], "{keys:?}");
+
+    let ids = &schema["ids"];
+    assert_eq!(f195_keys(ids, "ids"), ["rule_sections", "srs_sections", "relation_namespaces", "prefixes"]);
+    for (key, want) in F195_IDS {
+        assert_eq!(strs(&ids[key], key), want, "ids.{key}");
+    }
+    let prefixes = &ids["prefixes"];
+    assert_eq!(f195_keys(prefixes, "ids.prefixes"), F195_PREFIXES.map(|(k, _)| k));
+    for (key, want) in F195_PREFIXES {
+        assert_eq!(strs(&prefixes[key], key), want, "ids.prefixes.{key}");
+    }
+
+    let mentions = &schema["mentions"];
+    let mut want_keys: Vec<&str> = F195_LISTS.iter().map(|(k, _)| *k).collect();
+    want_keys.extend(["srs_kinds", "receives"]);
+    assert_eq!(f195_keys(mentions, "mentions"), want_keys);
+    for (key, want) in F195_LISTS {
+        assert_eq!(strs(&mentions[key], key), want, "mentions.{key}");
+    }
+    let kinds = &mentions["srs_kinds"];
+    assert_eq!(f195_keys(kinds, "mentions.srs_kinds"), F195_SRS_KINDS.map(|(k, _)| k));
+    for (section, kind) in F195_SRS_KINDS {
+        assert_eq!(kinds[section].as_str(), Some(kind), "mentions.srs_kinds.{section}");
+    }
+    let receives = &mentions["receives"];
+    assert_eq!(f195_keys(receives, "mentions.receives"), F195_RECEIVES.map(|(k, _)| k));
+    for (from, want) in F195_RECEIVES {
+        assert_eq!(strs(&receives[from], from), want, "mentions.receives.{from}");
+    }
+
+    for (note, place) in [("ids_note", "crates/folio/src/refs.rs"), ("mentions_note", "crates/folio/src/mentions.rs")] {
+        let text = schema[note].as_str().unwrap_or_else(|| panic!("{note} が字でない"));
+        assert!(text.contains(place) && text.contains("写し"), "{note}: {text}");
+    }
 }

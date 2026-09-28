@@ -320,3 +320,77 @@ fn p106_edges_point_down() {
     let miss = gaps("一覧に無い", &upward, "src に無い", &frozen);
     assert!(miss.is_empty(), "層が上がる辺が凍結した一覧と食い違う: {miss:?}");
 }
+
+// ── 便 195（行 gp・P-5.6・P-6.3・行 D-11）: 参照 id の空間の閉じた一覧は refs.rs の 1 枚 ──
+
+/// 参照 id の空間の閉じた一覧 4 本の定数名（base 7528256 では RULE_SECTIONS が 6 枚・SRS_ID_SECTIONS が 3 枚）。
+const F195_ONE_SHEET: [&str; 4] = [
+    "RULE_SECTIONS",
+    "SRS_ID_SECTIONS",
+    "SRS_ID_PREFIXES",
+    "RELATION_NAMESPACES",
+];
+
+/// file の `#[cfg(test)]` より前の行のうち、定数 `name` を宣言する行（可視性の印は問わない）の数。
+fn f195_declares(src: &str, name: &str) -> usize {
+    let head = src.split("#[cfg(test)]").next().unwrap_or_default();
+    let want = format!("const {name}:");
+    head.lines()
+        .map(str::trim_start)
+        .map(|l| l.strip_prefix("pub(crate) ").or_else(|| l.strip_prefix("pub ")).unwrap_or(l))
+        .filter(|l| l.starts_with(&want))
+        .count()
+}
+
+/// 歯 2: 4 本を宣言するのは refs.rs だけで各 1 回。散文の門（prose.rs）は要件 id の頭を自分で持たず refs.rs の 1 枚を引く。
+#[test]
+fn f195_the_id_space_lists_are_declared_only_in_refs() {
+    for name in F195_ONE_SHEET {
+        let at: Vec<String> = files()
+            .into_iter()
+            .flat_map(|f| {
+                let n = f195_declares(&read(&f), name);
+                std::iter::repeat_n(f, n)
+            })
+            .collect();
+        assert_eq!(at, ["refs"], "{name} を宣言する file");
+    }
+    let prose = read("prose");
+    let head = prose.split("#[cfg(test)]").next().unwrap_or_default();
+    assert!(!head.contains("\"GOAL\""), "prose.rs が要件 id の頭を自分で持つ");
+    assert!(head.contains("refs::SRS_ID_PREFIXES"), "prose.rs が refs.rs の要件 id の頭を引かない");
+}
+
+/// 正本の file と、参照 id の空間の一覧の字（検証役の非 blocking N1）。
+const F195_SPELLED: [(&str, &str, &[&str]); 6] = [
+    ("refs", "RULE_SECTIONS", &["thresholds", "discipline"]),
+    (
+        "refs",
+        "SRS_ID_SECTIONS",
+        &["goals", "requirements", "nonfunctional", "acceptance", "constraints", "actors", "outputs"],
+    ),
+    ("refs", "RELATION_NAMESPACES", &["reqs", "rules", "articles", "sections"]),
+    ("refs", "SRS_ID_PREFIXES", &["FR", "NFR", "AC", "CON", "GOAL"]),
+    ("prose", "ARTICLE", &["P-", "A-", "N-"]),
+    ("prose", "RULE", &["R-", "D-"]),
+];
+
+/// 歯 2 の 2（検証役の変異 V4）: 1 枚に寄せた 6 file（refs・link・note・prose・mentions・graph）のうち、`#[cfg(test)]` より前で
+/// 参照 id の空間の一覧を字で持つ（空白を除いて数える・式の中の 2 枚目も数える）のは正本の file の 1 回だけ。
+/// ほかの file に残る 2 枚目（vocab.rs・adr.rs・rules.rs・面の 4 file）は本便の外（台帳 f2-648.76 に残す）。
+#[test]
+fn f195_the_merged_files_spell_no_id_space_list() {
+    for (owner, name, items) in F195_SPELLED {
+        let list = items.iter().map(|i| format!("\"{i}\"")).collect::<Vec<_>>().join(",");
+        let at: Vec<&str> = ["refs", "link", "note", "prose", "mentions", "graph"]
+            .into_iter()
+            .flat_map(|f| {
+                let src = read(f);
+                let head = src.split("#[cfg(test)]").next().unwrap_or_default();
+                let flat: String = head.chars().filter(|c| !c.is_whitespace()).collect();
+                std::iter::repeat_n(f, flat.matches(&list).count())
+            })
+            .collect();
+        assert_eq!(at, [owner], "{name} の字を持つ file");
+    }
+}

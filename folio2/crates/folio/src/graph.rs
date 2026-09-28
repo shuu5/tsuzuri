@@ -14,7 +14,10 @@ use std::path::Path;
 
 use crate::floor::Floor;
 use crate::floor_note::CONTRACT_TABLE;
+use crate::mentions;
 use crate::note;
+use crate::prose;
+use crate::refs;
 use crate::sha256;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Node, json_str};
@@ -75,6 +78,7 @@ const GRAPH_TOP_LEVEL: [&str; 2] = ["meta", "schema"];
 
 /// `graph.yaml` の schema 節（生成区間）の床の木（便 95・docs/design/delivery-95.md §1 (c)(d)）。欄の順と字面は凍結
 /// anchor tests/fixtures/schema/graph-region.txt のとおり。閉じた一覧 2 本の葉は上の定数そのもの（同じ一覧を 2 回書かない）。
+/// 末尾の ids と mentions（便 195）は参照 id の空間（refs.rs・prose.rs）と行 R-17 の読み（mentions.rs）の定数の写し（P-5.6・行 D-11）。
 pub(crate) const FLOOR: Floor = Floor::Map(&[
     ("top_level", Floor::Strs(&GRAPH_TOP_LEVEL)),
     (
@@ -139,6 +143,71 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             "節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行・設計ノートの行は契約表の rows の中の字下げ 6 の「- 」の行から）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値",
         ),
     ),
+    (
+        "ids",
+        Floor::Map(&[
+            ("rule_sections", Floor::Strs(&refs::RULE_SECTIONS)),
+            ("srs_sections", Floor::Strs(&refs::SRS_ID_SECTIONS)),
+            ("relation_namespaces", Floor::Strs(&refs::RELATION_NAMESPACES)),
+            (
+                "prefixes",
+                Floor::Map(&[
+                    ("article", Floor::Strs(&prose::ARTICLE)),
+                    ("rule", Floor::Strs(&prose::RULE)),
+                    ("srs", Floor::Strs(&refs::SRS_ID_PREFIXES)),
+                ]),
+            ),
+        ]),
+    ),
+    (
+        "ids_note",
+        Floor::Val(
+            "参照 id の空間の閉じた一覧。参照 id の解決の母集団（行 R-4）と散文の門と散文の言及の読み（行 R-17）が同じ定数を引く。rule_sections は規則の表の行を持つ節、srs_sections は要件書の id を持つ節、relation_namespaces は憲法の条の relations の名前空間である。prefixes は参照 id の頭で、article の頭の id は枝番 .<数> を取れ、rule と srs の頭の id は取れない。正本は実装の型付きの定数 crates/folio/src/refs.rs と prose.rs で、この節はその写しである（P-5.1・P-5.6・行 D-11）",
+        ),
+    ),
+    (
+        "mentions",
+        Floor::Map(&[
+            ("targets", Floor::Strs(&mentions::TARGETS)),
+            ("typed", Floor::Strs(&mentions::TYPED)),
+            ("provenance", Floor::Strs(&mentions::PROVENANCE)),
+            ("top_skipped", Floor::Strs(&mentions::TOP_SKIPPED)),
+            ("excluded", Floor::Strs(&mentions::EXCLUDED)),
+            (
+                "srs_kinds",
+                Floor::Map(&[
+                    (mentions::SRS_SECTIONS[0].0, Floor::Val(mentions::SRS_SECTIONS[0].1.name())),
+                    (mentions::SRS_SECTIONS[1].0, Floor::Val(mentions::SRS_SECTIONS[1].1.name())),
+                    (mentions::SRS_SECTIONS[2].0, Floor::Val(mentions::SRS_SECTIONS[2].1.name())),
+                    (mentions::SRS_SECTIONS[3].0, Floor::Val(mentions::SRS_SECTIONS[3].1.name())),
+                    (mentions::SRS_SECTIONS[4].0, Floor::Val(mentions::SRS_SECTIONS[4].1.name())),
+                    (mentions::SRS_SECTIONS[5].0, Floor::Val(mentions::SRS_SECTIONS[5].1.name())),
+                    (mentions::SRS_SECTIONS[6].0, Floor::Val(mentions::SRS_SECTIONS[6].1.name())),
+                ]),
+            ),
+            (
+                "receives",
+                Floor::Map(&[
+                    (mentions::RECEIVES[0].0, Floor::Strs(mentions::RECEIVES[0].1)),
+                    (mentions::RECEIVES[1].0, Floor::Strs(mentions::RECEIVES[1].1)),
+                    (mentions::RECEIVES[2].0, Floor::Strs(mentions::RECEIVES[2].1)),
+                    (mentions::RECEIVES[3].0, Floor::Strs(mentions::RECEIVES[3].1)),
+                    (mentions::RECEIVES[4].0, Floor::Strs(mentions::RECEIVES[4].1)),
+                    (mentions::RECEIVES[5].0, Floor::Strs(mentions::RECEIVES[5].1)),
+                    (mentions::RECEIVES[6].0, Floor::Strs(mentions::RECEIVES[6].1)),
+                    (mentions::RECEIVES[7].0, Floor::Strs(mentions::RECEIVES[7].1)),
+                    (mentions::RECEIVES[8].0, Floor::Strs(mentions::RECEIVES[8].1)),
+                    (mentions::RECEIVES[9].0, Floor::Strs(mentions::RECEIVES[9].1)),
+                ]),
+            ),
+        ]),
+    ),
+    (
+        "mentions_note",
+        Floor::Val(
+            "散文の言及の歯（行 R-17）の機械の読みを閉じる 5 つの閉じた一覧。targets は対象の file（名が / で終わるものは dir の中の記録）、typed は型付きの辺として読む欄、provenance は来歴の欄、top_skipped は読まない最上位の節で、散文の欄はこの 3 つの補集合である。srs_kinds は要件書の節ごとの行の種類で、id を持つ行の種類は条・規範文・規則行・判断の記録とこの値である。receives は受け皿の表で、鍵は出所の行の種類、値はその行の型付きの欄が受けられる指す先の種類であり、値に無い組（空の一覧の行は全部）は数えない。excluded は数えない言及の語形で、言及を含む 1 文にどれかが在れば数えない。正本は実装の型付きの定数 crates/folio/src/mentions.rs で、この節はその写しである（P-5.6・行 D-11）",
+        ),
+    ),
 ]);
 
 /// 題の字数の上限（Unicode の字）。
@@ -161,9 +230,6 @@ const ENG_FIELDS: [&str; 4] = ["shall", "text", "what", "decision"];
 
 /// 設計ノートの置き場（正本の dir の直下・便 185）。
 const NOTE_DIR: &str = "design-note";
-
-/// 規則の表の 2 節。
-const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
 
 /// 要件書の 7 節・行の種類・題の欄。
 const SRS_SECTIONS: [(&str, usize, &str); 7] = [
@@ -397,7 +463,7 @@ fn constitution(index: &mut Index, root: &Node) {
 
 /// 規則の表: 2 節の行・article・refs。
 fn rules(index: &mut Index, root: &Node) {
-    for name in RULE_SECTIONS {
+    for name in refs::RULE_SECTIONS {
         for row in section(root, name) {
             let Some(rid) = id_of(row) else {
                 continue;
@@ -558,7 +624,7 @@ fn read_text(dir: &Path, name: &str) -> Result<String, String> {
 fn node_sections(name: &str) -> Vec<&'static str> {
     match name {
         "constitution.yaml" => vec!["articles"],
-        "rules.yaml" => RULE_SECTIONS.to_vec(),
+        "rules.yaml" => refs::RULE_SECTIONS.to_vec(),
         "srs.yaml" => SRS_SECTIONS.iter().map(|(s, _, _)| *s).collect(),
         _ => Vec::new(),
     }
@@ -1023,5 +1089,64 @@ mod tests {
         check_index(&td, &mut unknown);
         assert_eq!((unknown.violations.len(), unknown.unknowns.len()), (0, 1));
         fs::remove_dir_all(&td).unwrap();
+    }
+
+    /// 便 195 の歯 5: 外の置き場の名で導出した生成区間でも ids と mentions の型付きの欄は folio2 の置き場と同じ字で、2 つの注は
+    /// folio2 の番号の印を持つ括弧だけが落ちて残る（床の導出の規則 7・字面の置き換えで作った期待と比べる）。
+    #[test]
+    fn f195_abroad_region_keeps_the_lists_and_the_unmarked_notes() {
+        use crate::floor::{HOME, derive_for, ids_in};
+        let tail = |text: String| -> Vec<String> {
+            text.lines().skip_while(|l| *l != "  ids:").map(str::to_string).collect()
+        };
+        let home = tail(derive_for(&FLOOR, Some(HOME)));
+        let abroad = tail(derive_for(&FLOOR, Some("x-constitution")));
+        assert_eq!(home.len(), 62, "{home:?}");
+        assert_eq!(abroad.len(), home.len());
+        for (h, a) in home.iter().zip(&abroad) {
+            let Some((key, text)) = h.split_once(": ").filter(|(k, _)| k.ends_with("_note")) else {
+                assert_eq!(h, a);
+                continue;
+            };
+            let want = match key {
+                "  ids_note" => text.replace("（行 R-4）", "").replace("（行 R-17）", "").replace("（P-5.1・P-5.6・行 D-11）", ""),
+                "  mentions_note" => text.replace("（行 R-17）", "").replace("（P-5.6・行 D-11）", ""),
+                other => panic!("注の欄 {other}"),
+            };
+            assert_eq!(*a, format!("{key}: {want}"));
+            assert!(ids_in(a).is_empty() && !a.contains("決定 ("), "{a}");
+            assert!(ids_in(h).len() >= 2, "folio2 の置き場の注が番号を持たない: {h}");
+        }
+    }
+
+    /// 歯 6（便 195・検証役の非 blocking N1・変異 V3）: 実の graph.yaml の生成区間の ids と mentions の一覧は、正本の定数そのものと
+    /// 字も順も同じ（床の木が定数を引かずに字を手で持つと、定数を変えた途端に落ちる）。
+    #[test]
+    fn f195_the_real_region_equals_the_constants() {
+        let text = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../design-intent/graph.yaml")).unwrap();
+        let root = yaml::parse(&text).unwrap().root;
+        let schema = root.get("schema").unwrap();
+        let strs = |node: &Node| -> Vec<String> {
+            node.as_seq().unwrap().iter().map(|n| n.as_str().unwrap().to_string()).collect()
+        };
+        let ids = schema.get("ids").unwrap();
+        let prefixes = ids.get("prefixes").unwrap();
+        let m = schema.get("mentions").unwrap();
+        let pairs: [(&Node, &[&str]); 11] = [
+            (ids.get("rule_sections").unwrap(), &refs::RULE_SECTIONS),
+            (ids.get("srs_sections").unwrap(), &refs::SRS_ID_SECTIONS),
+            (ids.get("relation_namespaces").unwrap(), &refs::RELATION_NAMESPACES),
+            (prefixes.get("article").unwrap(), &prose::ARTICLE),
+            (prefixes.get("rule").unwrap(), &prose::RULE),
+            (prefixes.get("srs").unwrap(), &refs::SRS_ID_PREFIXES),
+            (m.get("targets").unwrap(), &mentions::TARGETS),
+            (m.get("typed").unwrap(), &mentions::TYPED),
+            (m.get("provenance").unwrap(), &mentions::PROVENANCE),
+            (m.get("top_skipped").unwrap(), &mentions::TOP_SKIPPED),
+            (m.get("excluded").unwrap(), &mentions::EXCLUDED),
+        ];
+        for (node, want) in pairs {
+            assert_eq!(strs(node), want.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        }
     }
 }

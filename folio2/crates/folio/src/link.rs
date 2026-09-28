@@ -17,20 +17,6 @@ use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::{self, Node};
 
-/// 要件書の id を持つ節（便 1 の解決先と同じ）。
-const SRS_ID_SECTIONS: [&str; 7] = [
-    "goals",
-    "requirements",
-    "nonfunctional",
-    "acceptance",
-    "constraints",
-    "actors",
-    "outputs",
-];
-
-/// rules 行の節。
-const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
-
 /// 凍結 anchor の file 名の頭と尻（`constitution-*.yaml`）。
 const ANCHOR_PREFIX: &str = "constitution-";
 const ANCHOR_SUFFIX: &str = ".yaml";
@@ -135,7 +121,7 @@ fn retreat_kind(constitution: &Node, report: &mut Report) {
 
 /// (b) 対話面の各 id が rules 行に在る。
 fn surface(rules: &Node, report: &mut Report) {
-    let rule_ids: HashSet<String> = RULE_SECTIONS
+    let rule_ids: HashSet<String> = refs::RULE_SECTIONS
         .iter()
         .flat_map(|s| rows(rules, s))
         .map(|r| py_str(r.get("id")))
@@ -239,14 +225,14 @@ fn known_ids(
     history: &HashSet<String>,
 ) -> HashSet<String> {
     let mut known: HashSet<String> = history.clone();
-    for section in SRS_ID_SECTIONS {
+    for section in refs::SRS_ID_SECTIONS {
         known.extend(rows(srs, section).map(|r| py_str(r.get("id"))));
     }
     for a in rows(constitution, "articles") {
         known.insert(py_str(a.get("id")));
         known.extend(rows(a, "statements").map(|st| py_str(st.get("id"))));
     }
-    for section in RULE_SECTIONS {
+    for section in refs::RULE_SECTIONS {
         known.extend(rows(rules, section).map(|r| py_str(r.get("id"))));
     }
     known

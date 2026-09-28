@@ -62,6 +62,7 @@
 //! 便 175（delivery-175.md §1 (b)(c)）: 天井の正本の生成区間から trigger と trigger_note の 17 行が外れ、索引の欄の決まりの注から周の引き金の
 //! 2 文が外れた（CEILING_REGION_*・F95_GRAPH_* を、前の anchor を行と字で直した写しを sha256sum で測り直した値に）。
 //! 便 177（delivery-177.md §1 (b)(c)）: 索引の欄の決まりの注 digest_note から印の 1 文が外れた（F95_GRAPH_* を同じ手順で測り直した値に）。
+//! 便 195（行 gp）: 索引の欄の決まりの生成区間の末尾に ids・mentions と 2 つの注を足した（F95_GRAPH_* を測り直した値に・写しの字の歯は tests/graph.rs）。
 
 use std::fs;
 use std::io::Write;
@@ -1053,9 +1054,10 @@ fn f89_schema_teeth_are_split_and_under_the_cap() {
 const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
 /// 便 99 で node の digest と edge_fields・edge_fields_note・digest_note を足した値（docs/design/delivery-99.md §1 (f)）。
 /// 便 185 で node_note・node_kinds・edge_types・edge_fields・edge_fields_note・digest_note に設計ノートの行を足した値（anchor は字面の置き換えで作った）。
-const F95_GRAPH_LINES: usize = 38;
-const F95_GRAPH_BYTES: usize = 3909;
-const F95_GRAPH_SHA256: &str = "4180685ff024c8c3d0ea5d3294a7e5c00e4e58db826a588036611c28f9e8ea80";
+/// 便 195 で末尾に ids・mentions と 2 つの注の 62 行を足した値（anchor は導出を使わない独立の script が組み、wc と sha256sum で測った）。
+const F95_GRAPH_LINES: usize = 100;
+const F95_GRAPH_BYTES: usize = 7372;
+const F95_GRAPH_SHA256: &str = "459a0d588fcd1bba634dab87586014a2a66c31b52c9e3a50d70c1a68c09f0691";
 
 /// 生成区間の変異（node_kinds の行の最後の種類の末尾の 1 字・便 185 で最後の種類が 設計ノートの行 に）。
 const F95_DRIFT_FROM: &str = ", 設計ノートの行]\n";

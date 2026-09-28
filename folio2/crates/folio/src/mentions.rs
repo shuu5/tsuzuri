@@ -1,7 +1,8 @@
 //! 規則の表の行 R-17 の床の歯（便 93・docs/design/delivery-93.md §1）。設計文書の中で id を持つ行の散文の欄に現れた、
 //! その行以外の id のうち、その行の型付きの欄に無いものを数える（値 0 件）。
 //! 機械の読みは 5 つの閉じた一覧で閉じる＝対象の file（9 種）・id を持つ行（節点の索引の 5 種）・散文の欄
-//! （型付きの欄 21 語と来歴 6 語と最上位 2 節の補集合）・受け皿の表・数えない言及の語形（10 語）。どれもこの file の定数（P-5.1）。
+//! （型付きの欄 21 語と来歴 6 語と最上位 2 節の補集合）・受け皿の表・数えない言及の語形（10 語）。どれもこの file の定数（P-5.1）で、
+//! 索引の欄の決まり graph.yaml の生成区間の mentions はその写し（P-5.6・行 D-11・便 195）。
 //! 対は無向で見る（どちらかの行の型付きの欄に相手が在れば満たす）。規範文の id は親の条へ丸めてから照合する。
 //! 歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ数えずに判定の外の 1 行 `OFF` を出させ（便 156・FR5）、
 //! 値が 0 件 でなければ「まだ分からない」（P-4.2）。
@@ -17,9 +18,8 @@ use crate::refs;
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
 
-/// 入り口の行と、その行が在る節と、歯が数える値。
+/// 入り口の行と、歯が数える値（行が在る節は refs.rs の RULE_SECTIONS）。
 const ROW_ID: &str = "R-17";
-const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
 const VALUE: &str = "0 件";
 
 /// 行 R-17 が無くて数えなかったときに folio check が標準エラーへ出す 1 行（便 156・床の判定の外）。
@@ -39,7 +39,7 @@ pub const TARGETS: [&str; 9] = [
 ];
 
 /// 型付きの欄（21 語・便 90 の adrs・便 91 の refs・便 92 の produced を含む）。この欄の中の id は型付きの辺として読む。
-const TYPED: [&str; 21] = [
+pub(crate) const TYPED: [&str; 21] = [
     "article",
     "articles",
     "amended_by",
@@ -64,13 +64,13 @@ const TYPED: [&str; 21] = [
 ];
 
 /// 来歴と反対側からの確認の欄（6 つ）。散文にも型付きの辺にも数えない。
-const PROVENANCE: [&str; 6] = ["approval", "date", "grill", "ruled_at", "ruling", "source"];
+pub(crate) const PROVENANCE: [&str; 6] = ["approval", "date", "grill", "ruled_at", "ruling", "source"];
 
 /// 最上位の 2 節（承認と版の来歴・生成区間）。
-const TOP_SKIPPED: [&str; 2] = ["meta", "schema"];
+pub(crate) const TOP_SKIPPED: [&str; 2] = ["meta", "schema"];
 
 /// 数えない言及の語形（10 語）。言及を含む 1 文（区切りは 。）にどれかが在れば数えない。
-const EXCLUDED: [&str; 10] = [
+pub(crate) const EXCLUDED: [&str; 10] = [
     "対象外",
     "本判断の外",
     "同じ運び方",
@@ -85,7 +85,7 @@ const EXCLUDED: [&str; 10] = [
 
 /// id を持つ行の種類（節点の索引の種類・受け皿の表の鍵）。
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Kind {
+pub(crate) enum Kind {
     Article,
     Statement,
     Rule,
@@ -98,8 +98,26 @@ enum Kind {
     Output,
 }
 
+impl Kind {
+    /// 種類の名（受け皿の表の鍵と値・索引の欄の決まりの写しの字）。要件は要件書の requirements と nonfunctional の両方の行。
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            Kind::Article => "条",
+            Kind::Statement => "規範文",
+            Kind::Rule => "規則行",
+            Kind::Adr => "判断の記録",
+            Kind::Requirement => "要件",
+            Kind::Constraint => "制約",
+            Kind::Acceptance => "受入基準",
+            Kind::Goal => "目的",
+            Kind::Actor => "登場人物",
+            Kind::Output => "出力",
+        }
+    }
+}
+
 /// 要件書の 7 節と行の種類。
-const SRS_SECTIONS: [(&str, Kind); 7] = [
+pub(crate) const SRS_SECTIONS: [(&str, Kind); 7] = [
     ("goals", Kind::Goal),
     ("actors", Kind::Actor),
     ("outputs", Kind::Output),
@@ -109,16 +127,27 @@ const SRS_SECTIONS: [(&str, Kind); 7] = [
     ("constraints", Kind::Constraint),
 ];
 
-/// 受け皿の表: 出所の行の種類が既に持つ型付きの欄が、指す先の種類を受けられるか。受けられない組は数えない。
+/// 受け皿の表（種類の名で引く）: 鍵 = 出所の行の種類・値 = その種類の行が既に持つ型付きの欄が受けられる指す先の種類。
+/// 値に無い組（空の一覧の行は全部）は数えない。種類の名は `Kind::name`。
+pub(crate) const RECEIVES: [(&str, &[&str]); 10] = [
+    ("条", &["条", "規範文", "規則行", "判断の記録", "要件", "制約", "受入基準", "目的", "登場人物", "出力"]),
+    ("規範文", &[]),
+    ("規則行", &["条", "規範文", "規則行", "判断の記録", "要件", "制約", "受入基準", "目的", "登場人物", "出力"]),
+    ("判断の記録", &["条", "規範文", "規則行", "判断の記録", "要件", "制約", "受入基準", "目的", "登場人物", "出力"]),
+    ("要件", &["条", "規範文", "規則行", "判断の記録", "受入基準", "目的"]),
+    ("制約", &["条", "規範文", "規則行"]),
+    ("受入基準", &["要件"]),
+    ("目的", &[]),
+    ("登場人物", &[]),
+    ("出力", &[]),
+];
+
+/// 出所の行の種類が、指す先の種類を受けられるか（受け皿の表を種類の名で引く・表に無い鍵は受けない）。
 fn receives(from: Kind, to: Kind) -> bool {
-    use Kind::*;
-    match from {
-        Article | Rule | Adr => true,
-        Requirement => matches!(to, Article | Statement | Goal | Rule | Acceptance | Adr),
-        Constraint => matches!(to, Article | Statement | Rule),
-        Acceptance => to == Requirement,
-        Statement | Goal | Actor | Output => false,
-    }
+    RECEIVES
+        .iter()
+        .find(|(key, _)| *key == from.name())
+        .is_some_and(|(_, kinds)| kinds.contains(&to.name()))
 }
 
 /// 規範文の id を親の条へ丸める（条 id だけが枝番「.数字」を持つ）。
@@ -134,7 +163,7 @@ fn ids_in(text: &str) -> Vec<String> {
 
 /// 行 R-17 の入り口。行が無ければ None。値が 0 件 でなければ「まだ分からない」を立てて Some(false)。数えるなら Some(true)。
 fn switch(rules: &Node, report: &mut Report) -> Option<bool> {
-    let row = RULE_SECTIONS
+    let row = refs::RULE_SECTIONS
         .iter()
         .filter_map(|s| rules.get(s))
         .filter_map(Node::as_seq)
@@ -165,7 +194,7 @@ fn index(constitution: &Node, rules: &Node, srs: &Node, adr: &Adr) -> HashMap<St
             put(st, Kind::Statement);
         }
     }
-    for name in RULE_SECTIONS {
+    for name in refs::RULE_SECTIONS {
         for row in section(rules, name) {
             put(row, Kind::Rule);
         }
@@ -345,4 +374,76 @@ pub(crate) fn check_mentions(dir: &Path, files: &[(&str, &Node)], adr: &Adr, rep
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 受け皿の表の鍵と行列の順（Kind の宣言の順）。
+    const ALL: [Kind; 10] = [
+        Kind::Article,
+        Kind::Statement,
+        Kind::Rule,
+        Kind::Adr,
+        Kind::Requirement,
+        Kind::Constraint,
+        Kind::Acceptance,
+        Kind::Goal,
+        Kind::Actor,
+        Kind::Output,
+    ];
+
+    /// 便 195 の歯 3: 受け皿の表の答えの全数（10 × 10）。行 = 出所・列 = 指す先（ALL の順）・1 = 受ける。
+    /// 期待の行列は便 93 の match の式（base 7528256）を手で写した字で、表を型付きの定数に置き換えても答えは 1 つも変わらない。
+    #[test]
+    fn f195_receives_answers_every_pair_as_before() {
+        const WANT: [&str; 10] = [
+            "1111111111", // 条
+            "0000000000", // 規範文
+            "1111111111", // 規則行
+            "1111111111", // 判断の記録
+            "1111001100", // 要件（要件書の requirements と nonfunctional の行）
+            "1110000000", // 制約
+            "0000100000", // 受入基準
+            "0000000000", // 目的
+            "0000000000", // 登場人物
+            "0000000000", // 出力
+        ];
+        let mut ones = 0;
+        for (i, (from, row)) in ALL.iter().zip(WANT).enumerate() {
+            for (j, (to, want)) in ALL.iter().zip(row.chars()).enumerate() {
+                assert_eq!(receives(*from, *to), want == '1', "行 {i} → 列 {j}");
+                ones += usize::from(want == '1');
+            }
+        }
+        assert_eq!(ones, 40, "受ける組の数");
+    }
+
+    /// 便 195 の歯 4: 受け皿の表の鍵は 10 の種類の名が宣言の順にちょうど 1 つずつで、値はどれも種類の名（綴りの誤りは受けない組を黙って増やす）。
+    /// 要件書の 7 節の種類の名も種類の名。
+    #[test]
+    fn f195_receives_table_is_keyed_by_the_kind_names() {
+        let names: Vec<&str> = ALL.iter().map(|k| k.name()).collect();
+        let keys: Vec<&str> = RECEIVES.iter().map(|(k, _)| *k).collect();
+        assert_eq!(keys, names);
+        for (key, kinds) in RECEIVES {
+            for to in kinds {
+                assert!(names.contains(to), "{key} の値 {to} が種類の名でない");
+            }
+        }
+        let srs: Vec<(&str, &str)> = SRS_SECTIONS.iter().map(|(s, k)| (*s, k.name())).collect();
+        assert_eq!(
+            srs,
+            [
+                ("goals", "目的"),
+                ("actors", "登場人物"),
+                ("outputs", "出力"),
+                ("requirements", "要件"),
+                ("nonfunctional", "要件"),
+                ("acceptance", "受入基準"),
+                ("constraints", "制約"),
+            ]
+        );
+    }
 }
