@@ -6,7 +6,7 @@ use tsuzuri_core::graph::around::{AROUND_STEPS, AROUND_STEPS_RANGE};
 
 use crate::server::board::{self, Sources};
 use crate::server::http::{Request, Response};
-use crate::server::json;
+use crate::server::{aged, json};
 use crate::server::route::{Entry, Key, Match};
 
 pub(in crate::server) const ROUTE: Entry = Entry {
@@ -38,9 +38,10 @@ fn around(req: &Request, sources: &Sources) -> Response {
         Some("both") => Fold::Both,
         Some(_) => return Response::text(400, "fold"),
     };
-    let texts = sources.gather(true, true);
-    match board::around(&texts, &id, steps, fold) {
+    let (texts, stale) = sources.gather_held(true, true);
+    let response = match board::around(&texts, &id, steps, fold) {
         Some(doc) => json(200, wire::encode(&doc)),
         None => Response::text(404, "no-node"),
-    }
+    };
+    aged(response, stale)
 }

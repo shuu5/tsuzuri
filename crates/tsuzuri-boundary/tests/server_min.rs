@@ -253,9 +253,6 @@ fn server_min_ledger_unreadable_is_unknown() {
     let addr = place.serve();
     assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Unknown);
     assert_eq!(get(addr, "/api/ledger/fx-min").status, 503);
-    // 空の台帳は 0 件で、読めない台帳と区別する。
-    place.bd_returns("[]\n");
-    assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Known(vec![]));
     // 壊れた台帳（切れた配列・更新時刻の形の悪い bead・id の形の悪い bead・配列でない字）。
     let good = fixture();
     for broken in [
@@ -278,6 +275,9 @@ fn server_min_ledger_unreadable_is_unknown() {
     // 印の file の中身は読まない（印だけが在っても台帳は Unknown のまま）。
     fs::write(place.ledger(), good).expect("印の file");
     assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Unknown);
+    // 空の台帳は 0 件で、読めない台帳と区別する。
+    place.bd_returns("[]\n");
+    assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Known(vec![]));
 }
 
 #[test]

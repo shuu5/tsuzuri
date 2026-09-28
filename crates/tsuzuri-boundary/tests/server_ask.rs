@@ -328,8 +328,22 @@ fn server_ask_questions_route_matches_core() {
     let ids: Vec<&str> = cards.iter().map(|c| c.id.as_str()).collect();
     assert_eq!(ids, [WITHOUT_LINES, WITH_LINES]);
 
-    // 偽の bd が落ちれば 200 で「まだ分からない」。
+    // 読めた後に偽の bd が落ちれば、最後に読めた一覧と、最後に読めた時からの秒の頭（行 e-hold）。
     place.bd_fails();
+    let reply = send(addr, "GET", "/api/questions", "", "");
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    let got: QuestionList = wire::decode(&reply.body).expect("問いの一覧の形");
+    assert_eq!(got, tsuzuri_core::question::list(&read_fixture()));
+    assert!(
+        reply.head.to_ascii_lowercase().contains("x-tz-read-age"),
+        "{}",
+        reply.head
+    );
+
+    // 一度も読めていない server は 200 で「まだ分からない」。
+    let place = Place::new("list-down");
+    place.bd_fails();
+    let addr = place.serve();
     let reply = send(addr, "GET", "/api/questions", "", "");
     assert_eq!(reply.status, 200, "{}", reply.body);
     let got: QuestionList = wire::decode(&reply.body).expect("問いの一覧の形");

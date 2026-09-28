@@ -12,6 +12,7 @@
 //! 中核の関数がその部分だけを「まだ分からない」にする。今の時刻は呼ぶ側が時計から取って引数で渡す。
 
 use std::thread;
+use std::time::Instant;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, Reading};
@@ -61,19 +62,25 @@ impl Sources {
     /// 台帳の字と、要るときだけ設計の索引とその要約と event log の字を集める
     /// （子 process は並べて撃つので、待ちは 1 本分の上限まで）。
     pub fn gather(&self, design: bool, events: bool) -> Texts {
+        self.gather_held(design, events).0
+    }
+
+    /// `gather` と同じ字と、台帳の読みが落ちたときの最後に読めた時刻（`Source::got` の stale・行 e-hold）。
+    pub fn gather_held(&self, design: bool, events: bool) -> (Texts, Option<Instant>) {
         thread::scope(|s| {
             let index = design.then(|| s.spawn(|| self.design.text()));
             let summary = design.then(|| s.spawn(|| self.design.summary()));
-            let ledger = self.ledger.text();
+            let ledger = self.ledger.got();
             let events = if events { self.runs.text() } else { None };
             let index = index.and_then(|h| h.join().ok().flatten());
             let summary = summary.and_then(|h| h.join().ok().flatten());
-            Texts {
+            let texts = Texts {
                 design: index.unwrap_or_default(),
-                ledger: ledger.unwrap_or_default(),
+                ledger: ledger.text.unwrap_or_default(),
                 events: events.unwrap_or_default(),
                 summary: summary.unwrap_or_default(),
-            }
+            };
+            (texts, ledger.stale)
         })
     }
 }

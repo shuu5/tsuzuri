@@ -122,6 +122,17 @@ pub struct LedgerChanged {
 /// SSE の event の名（台帳の変化）。
 pub const LEDGER_CHANGED_EVENT: &str = "ledger-changed";
 
+/// 台帳の読みが落ちて最後に読めた字を返した応答の頭の名（値は最後に読めた時からの秒の 10 進の字・行 e-hold）。
+/// 値は規則の行 R-21 に足した値。server が `READ_HOLD_S` とこの名を使い、面の後の行 g-fresh が
+/// `READ_WARN_S` と `READ_HOLD_S` とこの名を使う。
+pub const READ_AGE_HEADER: &str = "X-Tz-Read-Age";
+
+/// 読みが落ちても最後に読めた中身を出し続ける上限の秒（規則の行 R-21）。越えれば中身を測れていないにする。
+pub const READ_HOLD_S: u64 = 60;
+
+/// 最後に読めた時からこの秒を越えれば、面は一番上の帯に読み込み不良の注意の印を出す（規則の行 R-21）。
+pub const READ_WARN_S: u64 = 15;
+
 /// bd の読み取りの口（`bd --readonly list --all --limit 0 --json`）が返す配列の 1 本のうち server が読む欄
 /// （電文ではない・知らない欄は読み捨てる・便 e-src）。
 /// 空になりうる欄（種類・本文・notes・親・label）は bd が省くので既定を空にする。更新時刻は RFC 3339 の字のまま。

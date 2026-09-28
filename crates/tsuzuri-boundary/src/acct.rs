@@ -5,6 +5,7 @@
 //! `fleet usage --show --state-dir <dir>` を 1 回、猶予は `rules get seat.move_grace_s` を 1 回、窓ごとの逼迫の閾値は
 //! `rules get <id>`（`CAP_ROWS` の 3 行・`--state-dir` を付けない）を行ごとに 1 回撃つ（便 c-acct-thr）。
 //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
+//! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す（行 e-hold）。
 //! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last・move-signal と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）。file は書かない。
 //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。集めた字は 5 秒のあいだ持ち回す。
@@ -66,6 +67,8 @@ struct Texts {
     /// 宣言の anchor → git の返した project board の port の字（字の無い anchor は入れない）。
     boards: BTreeMap<String, String>,
     marks: Vec<PathBuf>,
+    /// 台帳の読みが落ちた project の最後に読めた時刻のうち最も古い値（どれも読めれば None・行 e-hold）。
+    stale: Option<Instant>,
 }
 
 /// account board の読みの出所（器・git・bd の program と、引数の state dir と cwd）と、持ち回しの字。
@@ -77,6 +80,8 @@ pub struct Acct {
     state_dir: PathBuf,
     cwd: PathBuf,
     held: Mutex<Option<(Instant, Texts)>>,
+    /// anchor の字 → 台帳の読みの出所（持ち続けて最後に読めた字を次の gather に残す・行 e-hold）。
+    ledgers: Mutex<BTreeMap<String, Source>>,
 }
 
 impl Acct {
@@ -94,6 +99,7 @@ impl Acct {
             state_dir: state_dir.into(),
             cwd: cwd.into(),
             held: Mutex::new(None),
+            ledgers: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -136,6 +142,12 @@ impl Acct {
     /// 電文（持ち回しの字を中核の組み立ての入口に渡し、project の行ごとに宣言の anchor の board の port を置く・
     /// 時計は読まない）。
     pub fn doc(&self, now: EpochSecs) -> AccountDoc {
+        self.doc_read(now).0
+    }
+
+    /// `doc` と同じ電文と、台帳の読みが落ちた project の最後に読めた時刻のうち最も古い値
+    /// （どれも読めれば None・行 e-hold）。
+    pub fn doc_read(&self, now: EpochSecs) -> (AccountDoc, Option<Instant>) {
         let texts = self.texts();
         let mut doc = project::doc(&texts.host, &texts.projects, texts.grace.as_deref(), now);
         let declared = anchors(texts.host.host_toml.as_deref());
@@ -144,7 +156,16 @@ impl Acct {
                 row.board = texts.boards.get(anchor).and_then(|t| board_port(t));
             }
         }
-        doc
+        (doc, texts.stale)
+    }
+
+    /// anchor の台帳の読みの出所（表に在ればその clone・無ければ作って表に置く）。
+    fn ledger(&self, anchor: &str) -> Source {
+        let mut ledgers = self.ledgers.lock().unwrap_or_else(|e| e.into_inner());
+        ledgers
+            .entry(anchor.to_string())
+            .or_insert_with(|| Source::new(anchor, self.bd.clone()))
+            .clone()
     }
 
     /// 変化の印の file（state dir ごとの event log・orchestrator の席の state.jsonl と tick-last と heartbeat-off・
@@ -257,8 +278,10 @@ impl Acct {
                 .iter()
                 .zip(&dirs)
                 .map(|(a, dir)| {
-                    dir.as_ref()
-                        .map(|_| s.spawn(move || Source::new(a, self.bd.clone()).text()))
+                    dir.as_ref().map(|_| {
+                        let source = self.ledger(a);
+                        s.spawn(move || source.got())
+                    })
                 })
                 .collect();
             (
@@ -275,7 +298,7 @@ impl Acct {
                     .collect::<Vec<_>>(),
                 ledgers
                     .into_iter()
-                    .map(|l| l.and_then(|l| l.join().ok().flatten()))
+                    .map(|l| l.and_then(|l| l.join().ok()))
                     .collect::<Vec<_>>(),
             )
         });
@@ -292,7 +315,13 @@ impl Acct {
         for dir in &unique {
             texts.marks.push(events_log(dir));
         }
-        for ((anchor, dir), ledger) in anchors.iter().zip(&dirs).zip(ledgers) {
+        for ((anchor, dir), got) in anchors.iter().zip(&dirs).zip(ledgers) {
+            let ledger = got.and_then(|got| {
+                if let Some(at) = got.stale {
+                    texts.stale = Some(texts.stale.map_or(at, |s| s.min(at)));
+                }
+                got.text
+            });
             let Some((dir, (tick, seat_doctor))) = dir.as_ref().and_then(|d| Some((d, output(d)?)))
             else {
                 texts

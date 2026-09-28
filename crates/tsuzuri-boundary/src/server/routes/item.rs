@@ -6,7 +6,7 @@ use tsuzuri_contract::wire;
 
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
-use crate::server::{Shared, json, ledger};
+use crate::server::{Shared, aged, json, ledger};
 
 /// 口の path の頭。
 const PREFIX: &str = "/api/ledger/";
@@ -25,9 +25,11 @@ fn item(req: &Request, shared: &Shared) -> Response {
     let Ok(id) = BeadId::new(id) else {
         return Response::text(400, "id-shape");
     };
-    match ledger::item(&sources.ledger, &id) {
+    let got = sources.ledger.got();
+    let response = match ledger::item(&got, &id) {
         ledger::Lookup::Found(item) => json(200, wire::encode(&item)),
         ledger::Lookup::Missing => Response::text(404, "no-item"),
         ledger::Lookup::Unknown => Response::text(503, "ledger-unknown"),
-    }
+    };
+    aged(response, got.stale)
 }

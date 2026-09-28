@@ -11,7 +11,7 @@ use tsuzuri_contract::wire;
 use crate::acct::Acct;
 use crate::server::http::Response;
 use crate::server::route::{Entry, Key, Match};
-use crate::server::{ACCT_MARKS_EVERY, Shared, events, json, lock};
+use crate::server::{ACCT_MARKS_EVERY, Shared, aged, events, json, lock};
 
 pub(in crate::server) const ROUTE: Entry = Entry {
     key: Key {
@@ -23,24 +23,28 @@ pub(in crate::server) const ROUTE: Entry = Entry {
 
 /// account board の読み。state dir が無ければ器も git も撃たず、口座と群と移動が Unknown で列が空の電文。
 /// 最初の要求で acct の印の取り直しを始める（要求は取り直しを待たない）。
+/// 台帳の読みが落ちた project が在れば、頭に最も古い最後に読めた時からの秒を付ける（行 e-hold）。
 fn account(shared: &Shared) -> Response {
-    let doc = match &shared.acct {
+    let (doc, stale) = match &shared.acct {
         Some(acct) => {
             shared
                 .acct_watch
                 .call_once(|| watch_acct_marks(Arc::clone(acct), &shared.acct_marks));
-            acct.doc(events::now())
+            acct.doc_read(events::now())
         }
-        None => tsuzuri_core::account::project::assemble(
-            events::now(),
-            Reading::Unknown,
-            Reading::Unknown,
-            Reading::Unknown,
-            Vec::new(),
-            Vec::new(),
+        None => (
+            tsuzuri_core::account::project::assemble(
+                events::now(),
+                Reading::Unknown,
+                Reading::Unknown,
+                Reading::Unknown,
+                Vec::new(),
+                Vec::new(),
+            ),
+            None,
         ),
     };
-    json(200, wire::encode(&doc))
+    aged(json(200, wire::encode(&doc)), stale)
 }
 
 /// acct の印の一覧を、始めてすぐと `ACCT_MARKS_EVERY` ごとに `Acct::marks` で置き換える別の thread

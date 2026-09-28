@@ -4,7 +4,7 @@ use tsuzuri_contract::wire;
 
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
-use crate::server::{Shared, board, events, json};
+use crate::server::{Shared, aged, board, events, json};
 
 pub(in crate::server) const ROUTE: Entry = Entry {
     key: Key {
@@ -16,6 +16,9 @@ pub(in crate::server) const ROUTE: Entry = Entry {
 
 fn metrics(_: &Request, shared: &Shared) -> Response {
     let sources = &shared.sources;
-    let texts = sources.gather(false, false);
-    json(200, wire::encode(&board::metrics(&texts, events::now())))
+    let (texts, stale) = sources.gather_held(false, false);
+    aged(
+        json(200, wire::encode(&board::metrics(&texts, events::now()))),
+        stale,
+    )
 }

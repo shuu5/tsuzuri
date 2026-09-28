@@ -9,7 +9,8 @@
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
 //! 同じ時に届いた要求は、台帳の読みと設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
 //! 分け合うのは起動で作る 1 つの `Source` と 1 つの `Design` とその clone（変化の見張りの読みも含む）で、
-//! 読み終えた字は次の要求に持ち回さない。裁定の受付は合流せず、新しい子 process で読み直す。
+//! 台帳の読めた字は、次の読みが落ちたときだけ `ledger::READ_HOLD`（60 秒）まで返し、その応答の頭
+//! （`READ_AGE_HEADER`）に最後に読めた時からの秒を付ける（行 e-hold）。裁定の受付は合流せず、新しい子 process で読み直す。
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
 //! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
@@ -43,8 +44,9 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Once};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use tsuzuri_contract::ledger::READ_AGE_HEADER;
 use tsuzuri_contract::surface::{Refusal, RefusalResponse};
 use tsuzuri_contract::wire;
 
@@ -304,6 +306,15 @@ fn refusal(reason: Refusal) -> Response {
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// 台帳の読みが落ちて最後に読めた字を返した応答に、頭 `READ_AGE_HEADER` で最後に読めた時からの秒を足す
+/// （`stale` が None なら応答をそのまま返す・行 e-hold）。
+fn aged(response: Response, stale: Option<Instant>) -> Response {
+    match stale {
+        Some(at) => response.header(READ_AGE_HEADER, at.elapsed().as_secs().to_string()),
+        None => response,
+    }
 }
 
 /// 電文の字の応答（字は契約の型の crate の `wire` が作る・境界の crate は serde に直接依存しない）。

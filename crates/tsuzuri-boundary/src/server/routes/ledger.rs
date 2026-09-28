@@ -4,7 +4,7 @@ use tsuzuri_contract::wire;
 
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
-use crate::server::{Shared, json, ledger};
+use crate::server::{Shared, aged, json, ledger};
 
 pub(in crate::server) const ROUTE: Entry = Entry {
     key: Key {
@@ -16,5 +16,6 @@ pub(in crate::server) const ROUTE: Entry = Entry {
 
 fn list(_: &Request, shared: &Shared) -> Response {
     let sources = &shared.sources;
-    json(200, wire::encode(&ledger::list(&sources.ledger)))
+    let got = sources.ledger.got();
+    aged(json(200, wire::encode(&ledger::list(&got))), got.stale)
 }
