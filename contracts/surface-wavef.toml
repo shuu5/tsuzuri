@@ -3,7 +3,7 @@ schema = 1
 [[contract]]
 id = "f-gate"
 title = "問いの起票の門 tz hook question-gate を足す（PreToolUse の Bash の問いの起票を拾い、touches の各節点の 1 段の隣のうち種類が条・規則行・判断の記録・要件で hub でない節点の処分と束の要約値を中核の純粋な関数が判じ、処分の要る節点が 30 を越えれば まだ分からない、止めるときは処分の無い id を全部名指す）"
-req = ["FR4", "AC6"]
+req = ["FR4"]
 section = "3"
 write-set = ["+crates/tsuzuri-core/src/gate.rs", "crates/tsuzuri-core/src/lib.rs", "+crates/tsuzuri-core/tests/qgate.rs", "crates/tsuzuri-boundary/src/hook/mod.rs", "+crates/tsuzuri-boundary/src/hook/question_gate.rs", "crates/tsuzuri-boundary/src/lib.rs", "crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/tests/qgate.rs", "=crates/tsuzuri-boundary/tests/hbconf.rs", "=crates/tsuzuri-boundary/tests/fstop.rs", "+tests/fixtures/guard/question-4/index.tsv", "+tests/fixtures/guard/question-4/ledger.json", "+tests/fixtures/guard/question-4/cases.json"]
 verify = ["cargo nextest run -p tsuzuri-core --test qgate --no-tests=fail qgate_", "cargo nextest run -p tsuzuri-boundary --test qgate --no-tests=fail qgate_", "cargo nextest run -p tsuzuri-boundary --test hbconf --no-tests=fail hbconf_main_parse_fills_the_rest_with_new", "cargo nextest run -p tsuzuri-boundary --test fstop --no-tests=fail fstop_usage_errors_are_one", "cargo run -q -p xtask -- check"]
