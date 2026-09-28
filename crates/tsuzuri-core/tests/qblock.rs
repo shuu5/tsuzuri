@@ -208,7 +208,7 @@ fn with_a1<'a>(v: &'a Value, out: &mut Vec<&'a serde_json::Map<String, Value>>) 
 
 #[test]
 fn qblock_snapshot_carries_ids() {
-    let text = read("../tsuzuri-contract/tests/snapshots/contract_form.json");
+    let text = read("../tsuzuri-contract/tests/snapshots/ledger.json");
     let root: Value = serde_json::from_str(&text).expect("snapshot の JSON");
     let mut cards = Vec::new();
     with_a1(&root, &mut cards);

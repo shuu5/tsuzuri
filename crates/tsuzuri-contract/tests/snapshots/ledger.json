@@ -1,0 +1,199 @@
+{
+  "ledger::BeadId": [
+    "t3-hub",
+    "t3-hub.5"
+  ],
+  "ledger::ChildType": [
+    "task",
+    "epic"
+  ],
+  "ledger::Effect": [
+    "document",
+    "operation"
+  ],
+  "ledger::LedgerRow": [
+    {
+      "id": "t3-hub.5",
+      "kind": "task",
+      "title": "契約の型",
+      "status": "open",
+      "updated_at": 1790494620,
+      "parent": "t3-hub",
+      "labels": [
+        "intake:question"
+      ]
+    },
+    {
+      "id": "t3-hub",
+      "kind": "epic",
+      "title": "根",
+      "status": "closed",
+      "updated_at": 1790494620,
+      "parent": null,
+      "labels": []
+    }
+  ],
+  "ledger::LedgerItem": [
+    {
+      "row": {
+        "id": "t3-hub.5",
+        "kind": "task",
+        "title": "契約の型",
+        "status": "open",
+        "updated_at": 1790494620,
+        "parent": "t3-hub",
+        "labels": [
+          "intake:question"
+        ]
+      },
+      "description": "本文",
+      "notes": "裁定 t3-hub.5:20260926T1437Z-1"
+    }
+  ],
+  "ledger::LedgerList": [
+    {
+      "rows": {
+        "known": [
+          {
+            "id": "t3-hub.5",
+            "kind": "task",
+            "title": "契約の型",
+            "status": "open",
+            "updated_at": 1790494620,
+            "parent": "t3-hub",
+            "labels": [
+              "intake:question"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "rows": {
+        "known": []
+      }
+    },
+    {
+      "rows": "unknown"
+    }
+  ],
+  "ledger::LedgerChanged": [
+    {
+      "at": 1790494620
+    }
+  ],
+  "ledger::LedgerWrite": [
+    {
+      "op": "append-notes",
+      "id": "t3-hub.5",
+      "line": "裁定 t3-hub.5:20260926T1437Z-1・逐語 = よい"
+    },
+    {
+      "op": "close-item",
+      "id": "t3-hub.5",
+      "reason": "裁定 t3-hub.5:20260926T1437Z-1"
+    },
+    {
+      "op": "create-child",
+      "parent": "t3-hub",
+      "title": "方針",
+      "child_type": "task",
+      "description": "全体への指示の控え",
+      "labels": [
+        "intake:question",
+        "policy-scope:all"
+      ],
+      "effect": "operation"
+    },
+    {
+      "op": "append-notes",
+      "id": "t3-hub.5",
+      "line": "--notes"
+    },
+    {
+      "op": "create-child",
+      "parent": "t3-hub",
+      "title": "--notes=x",
+      "child_type": "epic",
+      "description": "--parent=",
+      "labels": [
+        "--notes"
+      ],
+      "effect": null
+    },
+    {
+      "op": "reopen-item",
+      "id": "t3-hub.5",
+      "reason": "裁定 t3-hub.5:20260926T1440Z-1・取り消す = t3-hub.5:20260926T1437Z-1"
+    }
+  ],
+  "question::QuestionCard": [
+    {
+      "id": "t3-hub.7",
+      "title": "画面の色",
+      "posted_at": 1790494620,
+      "plain": "画面の色を決める",
+      "eng": "CSS の変数を 2 組持つ",
+      "reason": "夜に読む",
+      "recommend": "暗い色を既定にする",
+      "a1": true,
+      "touches": [
+        "surface-base#b-cards",
+        "ADR-7"
+      ],
+      "blocking": [
+        "t3-hub.30",
+        "t3-hub.31"
+      ],
+      "digest": "0874e9bb3b87f545"
+    },
+    {
+      "id": "t3-hub.8",
+      "title": "素の問い",
+      "posted_at": 1790494680,
+      "plain": null,
+      "eng": null,
+      "reason": null,
+      "recommend": null,
+      "a1": false,
+      "touches": [],
+      "blocking": [],
+      "digest": "cbf29ce484222325"
+    }
+  ],
+  "question::QuestionList": [
+    {
+      "cards": {
+        "known": [
+          {
+            "id": "t3-hub.7",
+            "title": "画面の色",
+            "posted_at": 1790494620,
+            "plain": "画面の色を決める",
+            "eng": "CSS の変数を 2 組持つ",
+            "reason": "夜に読む",
+            "recommend": "暗い色を既定にする",
+            "a1": true,
+            "touches": [
+              "surface-base#b-cards",
+              "ADR-7"
+            ],
+            "blocking": [
+              "t3-hub.30",
+              "t3-hub.31"
+            ],
+            "digest": "0874e9bb3b87f545"
+          }
+        ]
+      }
+    },
+    {
+      "cards": {
+        "known": []
+      }
+    },
+    {
+      "cards": "unknown"
+    }
+  ]
+}

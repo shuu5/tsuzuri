@@ -1,6 +1,6 @@
 //! 契約の型の外形の歯（接頭辞 contract_form_）。
-//! snapshot は全型の見本の値を JSON にした 1 つの file で、字の比べは標準 library だけで行う。
-//! 字が違えば今の字を CARGO_TARGET_TMPDIR の contract_form.json に書いて落ちる（見て正しければ snapshot へ写す）。
+//! snapshot は型の見本の値を JSON にした群ごとの file（tests/snapshots の群の名の json・群は型の名の module の頭で決まる）で、字の比べは標準 library だけで行う。
+//! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
 
 use std::collections::BTreeSet;
 use std::fmt::Debug;
@@ -1098,9 +1098,18 @@ fn forms() -> Vec<Box<dyn Form>> {
     ]
 }
 
+/// snapshot の群（群の名と、群が見本を持つ module の列・見本の群は型の名の module の頭で決まる）。
+const GROUPS: [(&str, &[&str]); 6] = [
+    ("surface", &["surface"]),
+    ("ledger", &["ledger", "question"]),
+    ("graph", &["graph"]),
+    ("board", &["board"]),
+    ("stats", &["stats"]),
+    ("seat", &["seat"]),
+];
+
 /// snapshot の字（型の名を key にした 1 つの JSON の object・key は `forms` の順・値は電文の欄の順のまま）。
-fn snapshot_text() -> String {
-    let forms = forms();
+fn snapshot_text(forms: &[Box<dyn Form>]) -> String {
     let names: BTreeSet<&str> = forms.iter().map(|f| f.name()).collect();
     assert_eq!(names.len(), forms.len(), "型の名が重なる");
     let entries: Vec<String> = forms
@@ -1115,13 +1124,13 @@ fn snapshot_text() -> String {
     text
 }
 
-#[test]
-fn contract_form_snapshot_matches() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots/contract_form.json");
+/// 群の snapshot（tests/snapshots の群の名の json）の字が群の見本の字と同じことを見る。
+fn snapshot_matches(group: &str, forms: &[Box<dyn Form>]) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/snapshots/{group}.json"));
     let want = std::fs::read_to_string(&path).unwrap_or_default();
-    let got = snapshot_text();
+    let got = snapshot_text(forms);
     if got != want {
-        let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join("contract_form.json");
+        let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("{group}.json"));
         std::fs::write(&out, &got).expect("今の字を書く");
         let line = got
             .lines()
@@ -1136,6 +1145,22 @@ fn contract_form_snapshot_matches() {
             line,
             out.display()
         );
+    }
+}
+
+#[test]
+fn contract_form_snapshot_matches() {
+    let mut groups: Vec<Vec<Box<dyn Form>>> = GROUPS.iter().map(|_| Vec::new()).collect();
+    for f in forms() {
+        let module = f.name().split("::").next().unwrap_or_default();
+        let i = GROUPS
+            .iter()
+            .position(|(_, modules)| modules.contains(&module))
+            .unwrap_or_else(|| panic!("{} はどの群の module でもない", f.name()));
+        groups[i].push(f);
+    }
+    for ((group, _), forms) in GROUPS.iter().zip(&groups) {
+        snapshot_matches(group, forms);
     }
 }
 

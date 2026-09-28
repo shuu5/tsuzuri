@@ -1,0 +1,524 @@
+{
+  "graph::NodeKind": [
+    "条",
+    "規範文",
+    "規則行",
+    "目的",
+    "要件",
+    "非機能要件",
+    "受入基準",
+    "制約",
+    "登場人物",
+    "出力",
+    "判断の記録",
+    "note-row",
+    "epic",
+    "task",
+    "memo",
+    "question",
+    "ruling",
+    "receipt",
+    "policy",
+    "run"
+  ],
+  "graph::EdgeType": [
+    "in-article",
+    "relations.articles",
+    "relations.reqs",
+    "relations.rules",
+    "relations.sections",
+    "amended_by",
+    "article",
+    "refs",
+    "basis",
+    "goals",
+    "rules",
+    "adrs",
+    "verify.ac",
+    "verifies",
+    "figures",
+    "produced",
+    "amends",
+    "parent-child",
+    "blocks",
+    "relates-to",
+    "discovered-from",
+    "design",
+    "ruled_by",
+    "answers",
+    "touches",
+    "premises",
+    "source",
+    "run_of",
+    "raised",
+    "ran_by"
+  ],
+  "graph::GraphNode": [
+    {
+      "id": "ADR-7",
+      "kind": "判断の記録",
+      "file": "adr/ADR-7.yaml",
+      "digest": "9c1e0a4b",
+      "title": "裁定面は project board と account board の",
+      "line": 3,
+      "plain": "決定の画面の形を決めます。",
+      "eng": "面は 2 つとする。"
+    },
+    {
+      "id": "t3-hub.3",
+      "kind": "task",
+      "file": null,
+      "digest": null,
+      "title": "契約の型",
+      "line": null,
+      "plain": null,
+      "eng": null
+    }
+  ],
+  "graph::GraphEdge": [
+    {
+      "from": "t3-hub.3",
+      "to": "surface-base#b",
+      "type": "design"
+    }
+  ],
+  "graph::GraphSource": [
+    "design",
+    "ledger",
+    "runs"
+  ],
+  "graph::BeadAttr": [
+    {
+      "kind": "task",
+      "status": "open",
+      "labels": [
+        "surface"
+      ],
+      "pointers": [
+        "design = contracts/surface-base.toml#b"
+      ],
+      "touches": []
+    }
+  ],
+  "graph::RunAttr": [
+    {
+      "stage": "Gated",
+      "account": "acct-4"
+    },
+    {
+      "stage": null,
+      "account": null
+    }
+  ],
+  "graph::Verdict": [
+    "pass",
+    "violation",
+    "unknown"
+  ],
+  "graph::InvariantCheck": [
+    {
+      "id": "g-1",
+      "verdict": "pass",
+      "violations": 0,
+      "ids": []
+    },
+    {
+      "id": "g-2",
+      "verdict": "violation",
+      "violations": 2,
+      "ids": [
+        "t3-hub.3",
+        "t3-hub.4"
+      ]
+    },
+    {
+      "id": "g-3",
+      "verdict": "unknown",
+      "violations": 0,
+      "ids": []
+    }
+  ],
+  "graph::SkippedEdges": [
+    {
+      "design": 3,
+      "ledger": 0,
+      "design_nodes": 2
+    }
+  ],
+  "graph::GraphDoc": [
+    {
+      "nodes": [
+        {
+          "id": "t3-hub.3",
+          "kind": "task",
+          "file": null,
+          "digest": null,
+          "title": "契約の型",
+          "line": null,
+          "plain": null,
+          "eng": null
+        },
+        {
+          "id": "t3-hub.3-20260927T073916Z",
+          "kind": "run",
+          "file": null,
+          "digest": null,
+          "title": "t3-hub.3-20260927T073916Z",
+          "line": null,
+          "plain": null,
+          "eng": null
+        }
+      ],
+      "edges": [
+        {
+          "from": "t3-hub.3-20260927T073916Z",
+          "to": "t3-hub.3",
+          "type": "run_of"
+        }
+      ],
+      "unread": [
+        "design"
+      ],
+      "beads": {
+        "t3-hub.3": {
+          "kind": "task",
+          "status": "open",
+          "labels": [
+            "surface"
+          ],
+          "pointers": [
+            "design = contracts/surface-base.toml#b"
+          ],
+          "touches": []
+        }
+      },
+      "runs": {
+        "t3-hub.3-20260927T073916Z": {
+          "stage": "Gated",
+          "account": "acct-4"
+        }
+      },
+      "invariants": [
+        {
+          "id": "g-1",
+          "verdict": "pass",
+          "violations": 0,
+          "ids": []
+        },
+        {
+          "id": "g-2",
+          "verdict": "violation",
+          "violations": 2,
+          "ids": [
+            "t3-hub.3",
+            "t3-hub.4"
+          ]
+        },
+        {
+          "id": "g-3",
+          "verdict": "unknown",
+          "violations": 0,
+          "ids": []
+        }
+      ],
+      "skipped": {
+        "design": 0,
+        "ledger": 1,
+        "design_nodes": 0
+      }
+    },
+    {
+      "nodes": [],
+      "edges": [],
+      "unread": [
+        "design",
+        "ledger",
+        "runs"
+      ],
+      "beads": {},
+      "runs": {},
+      "invariants": [
+        {
+          "id": "g-1",
+          "verdict": "unknown",
+          "violations": 0,
+          "ids": []
+        }
+      ],
+      "skipped": {
+        "design": 0,
+        "ledger": 0,
+        "design_nodes": 0
+      }
+    }
+  ],
+  "graph::EdgeEnd": [
+    "from",
+    "to"
+  ],
+  "graph::ViewNode": [
+    {
+      "node": {
+        "id": "t3-hub.3",
+        "kind": "task",
+        "file": null,
+        "digest": null,
+        "title": "契約の型",
+        "line": null,
+        "plain": null,
+        "eng": null
+      },
+      "status": "open",
+      "rank": 0,
+      "kids": 2,
+      "degree": 5,
+      "group": false,
+      "fold": "folded"
+    },
+    {
+      "node": {
+        "id": "t3-hub.3-20260927T073916Z",
+        "kind": "run",
+        "file": null,
+        "digest": null,
+        "title": "t3-hub.3-20260927T073916Z",
+        "line": null,
+        "plain": null,
+        "eng": null
+      },
+      "status": null,
+      "rank": 1,
+      "kids": 0,
+      "degree": 1,
+      "group": false,
+      "fold": "leaf"
+    }
+  ],
+  "graph::ViewEdge": [
+    {
+      "from": "t3-hub.3-20260927T073916Z",
+      "to": "t3-hub.3",
+      "type": "run_of",
+      "count": 1
+    }
+  ],
+  "graph::GraphView": [
+    {
+      "nodes": [
+        {
+          "node": {
+            "id": "t3-hub.3",
+            "kind": "task",
+            "file": null,
+            "digest": null,
+            "title": "契約の型",
+            "line": null,
+            "plain": null,
+            "eng": null
+          },
+          "status": "open",
+          "rank": 0,
+          "kids": 2,
+          "degree": 5,
+          "group": false,
+          "fold": "folded"
+        },
+        {
+          "node": {
+            "id": "t3-hub.3-20260927T073916Z",
+            "kind": "run",
+            "file": null,
+            "digest": null,
+            "title": "t3-hub.3-20260927T073916Z",
+            "line": null,
+            "plain": null,
+            "eng": null
+          },
+          "status": null,
+          "rank": 1,
+          "kids": 0,
+          "degree": 1,
+          "group": false,
+          "fold": "leaf"
+        }
+      ],
+      "edges": [
+        {
+          "from": "t3-hub.3-20260927T073916Z",
+          "to": "t3-hub.3",
+          "type": "run_of",
+          "count": 1
+        }
+      ],
+      "shown": 2,
+      "folded": 2,
+      "cut": 1,
+      "total": 5,
+      "unread": [
+        "design"
+      ],
+      "open": [
+        "t3-hub.3"
+      ],
+      "refused": []
+    },
+    {
+      "nodes": [],
+      "edges": [],
+      "shown": 0,
+      "folded": 0,
+      "cut": 0,
+      "total": 0,
+      "unread": [
+        "design",
+        "ledger",
+        "runs"
+      ],
+      "open": [],
+      "refused": []
+    }
+  ],
+  "graph::BoxFold": [
+    "leaf",
+    "folded",
+    "open"
+  ],
+  "graph::Fold": [
+    "none",
+    "up",
+    "down",
+    "both"
+  ],
+  "graph::AroundRow": [
+    {
+      "node": {
+        "id": "t3-hub.3",
+        "kind": "task",
+        "file": null,
+        "digest": null,
+        "title": "契約の型",
+        "line": null,
+        "plain": null,
+        "eng": null
+      },
+      "status": "open",
+      "col": 0,
+      "via": null,
+      "type": null,
+      "degree": 5
+    },
+    {
+      "node": {
+        "id": "t3-hub.3-20260927T073916Z",
+        "kind": "run",
+        "file": null,
+        "digest": null,
+        "title": "t3-hub.3-20260927T073916Z",
+        "line": null,
+        "plain": null,
+        "eng": null
+      },
+      "status": "Landed",
+      "col": 1,
+      "via": "t3-hub.3",
+      "type": "run_of",
+      "degree": 1
+    }
+  ],
+  "graph::HubCut": [
+    {
+      "id": "t3-hub",
+      "degree": 31
+    }
+  ],
+  "graph::AroundDoc": [
+    {
+      "center": "t3-hub.3",
+      "steps": 2,
+      "fold": "up",
+      "rows": [
+        {
+          "node": {
+            "id": "t3-hub.3",
+            "kind": "task",
+            "file": null,
+            "digest": null,
+            "title": "契約の型",
+            "line": null,
+            "plain": null,
+            "eng": null
+          },
+          "status": "open",
+          "col": 0,
+          "via": null,
+          "type": null,
+          "degree": 5
+        },
+        {
+          "node": {
+            "id": "t3-hub.3-20260927T073916Z",
+            "kind": "run",
+            "file": null,
+            "digest": null,
+            "title": "t3-hub.3-20260927T073916Z",
+            "line": null,
+            "plain": null,
+            "eng": null
+          },
+          "status": "Landed",
+          "col": 1,
+          "via": "t3-hub.3",
+          "type": "run_of",
+          "degree": 1
+        }
+      ],
+      "basis": 1,
+      "impact": 1,
+      "shown": 2,
+      "total": 32,
+      "cut_hub": 30,
+      "cut_cap": 0,
+      "hubs": [
+        {
+          "id": "t3-hub",
+          "degree": 31
+        }
+      ],
+      "unread": []
+    },
+    {
+      "center": "t3-hub.3",
+      "steps": 1,
+      "fold": "both",
+      "rows": [
+        {
+          "node": {
+            "id": "t3-hub.3",
+            "kind": "task",
+            "file": null,
+            "digest": null,
+            "title": "契約の型",
+            "line": null,
+            "plain": null,
+            "eng": null
+          },
+          "status": "open",
+          "col": 0,
+          "via": null,
+          "type": null,
+          "degree": 5
+        }
+      ],
+      "basis": 0,
+      "impact": 0,
+      "shown": 1,
+      "total": 1,
+      "cut_hub": 0,
+      "cut_cap": 0,
+      "hubs": [],
+      "unread": [
+        "runs"
+      ]
+    }
+  ]
+}

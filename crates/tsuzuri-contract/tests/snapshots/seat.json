@@ -1,0 +1,139 @@
+{
+  "seat::SeatState": [
+    "run",
+    "wait",
+    "limit",
+    "silent",
+    "unknown"
+  ],
+  "seat::QuotaUsed": [
+    {
+      "window": "5h",
+      "used_pct": 38,
+      "resets_at": 1790498220,
+      "counted": true
+    },
+    {
+      "window": "7d-opus",
+      "used_pct": 90,
+      "resets_at": null,
+      "counted": false
+    }
+  ],
+  "seat::SeatSpan": [
+    {
+      "from": 1790487420,
+      "to": 1790491020,
+      "state": "run"
+    },
+    {
+      "from": 1790491020,
+      "to": 1790494620,
+      "state": "wait"
+    }
+  ],
+  "seat::AccountMove": [
+    {
+      "at": 1790408220,
+      "from": null,
+      "to": "acct-3"
+    },
+    {
+      "at": 1790491020,
+      "from": "acct-3",
+      "to": "acct-4"
+    }
+  ],
+  "seat::SeatCard": [
+    {
+      "at": 1790494620,
+      "target": "t3:orchestrator",
+      "state": "wait",
+      "since": 1790491020,
+      "tick_healthy": {
+        "known": true
+      },
+      "heartbeat": {
+        "known": false
+      },
+      "account": "acct-4",
+      "model": "opus",
+      "group": {
+        "known": {
+          "group": "Tier1",
+          "account": "acct-4",
+          "candidates": [
+            "acct-1",
+            "acct-3",
+            "acct-5"
+          ],
+          "next_account": "acct-5",
+          "remaining": [
+            {
+              "window": "5h",
+              "left_pct": 62
+            }
+          ]
+        }
+      },
+      "usage": {
+        "known": [
+          {
+            "window": "5h",
+            "used_pct": 38,
+            "resets_at": 1790498220,
+            "counted": true
+          },
+          {
+            "window": "7d-opus",
+            "used_pct": 90,
+            "resets_at": null,
+            "counted": false
+          }
+        ]
+      },
+      "spans": {
+        "known": [
+          {
+            "from": 1790487420,
+            "to": 1790491020,
+            "state": "run"
+          },
+          {
+            "from": 1790491020,
+            "to": 1790494620,
+            "state": "wait"
+          }
+        ]
+      },
+      "moves": {
+        "known": [
+          {
+            "at": 1790408220,
+            "from": null,
+            "to": "acct-3"
+          },
+          {
+            "at": 1790491020,
+            "from": "acct-3",
+            "to": "acct-4"
+          }
+        ]
+      }
+    },
+    {
+      "at": 1790494620,
+      "target": "t3:orchestrator",
+      "state": "unknown",
+      "since": null,
+      "tick_healthy": "unknown",
+      "heartbeat": "unknown",
+      "account": null,
+      "model": null,
+      "group": "unknown",
+      "usage": "unknown",
+      "spans": "unknown",
+      "moves": "unknown"
+    }
+  ]
+}

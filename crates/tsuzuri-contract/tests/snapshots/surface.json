@@ -1,0 +1,174 @@
+{
+  "surface::RulingId": [
+    "t3-hub.5:20260926T1437Z-1",
+    "batch:20260926T1437Z-1"
+  ],
+  "surface::SeatRole": [
+    "orchestrator",
+    "pipeline"
+  ],
+  "surface::SeatHealth": [
+    "waiting",
+    "working",
+    "unresponsive",
+    "stopped",
+    "unknown"
+  ],
+  "surface::SeatView": [
+    {
+      "seat": "t3:orchestrator",
+      "role": "orchestrator",
+      "health": "waiting",
+      "account": "acct-4",
+      "move_left_s": 1200
+    },
+    {
+      "seat": "t3:pipeline",
+      "role": "pipeline",
+      "health": "unknown",
+      "account": null,
+      "move_left_s": null
+    }
+  ],
+  "surface::SurfaceState": [
+    {
+      "seats": [
+        {
+          "seat": "t3:orchestrator",
+          "role": "orchestrator",
+          "health": "waiting",
+          "account": "acct-4",
+          "move_left_s": 1200
+        }
+      ],
+      "next_move": "question",
+      "updated_at": 1790494620,
+      "undelivered": [
+        "t3-hub.5:20260926T1437Z-1"
+      ]
+    }
+  ],
+  "surface::SurfaceEvent": [
+    {
+      "event": "SeatState",
+      "seat": {
+        "seat": "t3:orchestrator",
+        "role": "orchestrator",
+        "health": "waiting",
+        "account": "acct-4",
+        "move_left_s": 1200
+      },
+      "at": 1790494620
+    },
+    {
+      "event": "QuestionPosted",
+      "question": "t3-hub.7",
+      "at": 1790494620
+    },
+    {
+      "event": "RulingRead",
+      "ruling": "t3-hub.7:20260926T1437Z-1",
+      "seat": "t3:orchestrator",
+      "at": 1790494620
+    },
+    {
+      "event": "RunStage",
+      "run": "t3-hub.3-20260927T073916Z",
+      "contract": "t3-hub.3",
+      "stage": "Gated",
+      "reason": null,
+      "at": 1790494620
+    }
+  ],
+  "surface::QuestionNudge": [
+    {
+      "question": "t3-hub.7"
+    }
+  ],
+  "surface::RulingRequest": [
+    {
+      "question": "t3-hub.7",
+      "seen_digest": "3fa2b91c",
+      "verbatim": "よい"
+    }
+  ],
+  "surface::RulingResponse": [
+    {
+      "ruling": "t3-hub.7:20260926T1437Z-1",
+      "recorded_at": 1790494620
+    }
+  ],
+  "surface::BatchRequest": [
+    {
+      "items": [
+        {
+          "question": "t3-hub.7",
+          "seen_digest": "3fa2b91c",
+          "verbatim": null
+        },
+        {
+          "question": "t3-hub.8",
+          "seen_digest": "0b1c2d3e",
+          "verbatim": "推奨で"
+        }
+      ],
+      "verbatim": "全部よい"
+    }
+  ],
+  "surface::ItemOutcome": [
+    {
+      "outcome": "written",
+      "ruling": "t3-hub.7:20260926T1437Z-1"
+    },
+    {
+      "outcome": "skipped",
+      "ruling": "t3-hub.8:20260926T1437Z-1"
+    },
+    {
+      "outcome": "refused",
+      "reason": "stale-version"
+    }
+  ],
+  "surface::BatchResponse": [
+    {
+      "batch": "batch:20260926T1437Z-1",
+      "items": [
+        {
+          "question": "t3-hub.7",
+          "outcome": "written",
+          "ruling": "t3-hub.7:20260926T1437Z-1"
+        },
+        {
+          "question": "t3-hub.9",
+          "outcome": "refused",
+          "reason": "a1-in-batch"
+        }
+      ]
+    }
+  ],
+  "surface::PolicyRequest": [
+    {
+      "scope": "t3-hub",
+      "verbatim": "画面を早く出す"
+    }
+  ],
+  "surface::PolicyResponse": [
+    {
+      "policy": "fx-p.1:20260926T1437Z-1",
+      "recorded_at": 1790494620
+    }
+  ],
+  "surface::Refusal": [
+    "empty-verbatim",
+    "unknown-question",
+    "stale-version",
+    "a1-needs-own-verbatim",
+    "a1-in-batch",
+    "empty-batch"
+  ],
+  "surface::RefusalResponse": [
+    {
+      "reason": "stale-version"
+    }
+  ]
+}

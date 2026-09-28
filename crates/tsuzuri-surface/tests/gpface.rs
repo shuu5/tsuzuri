@@ -309,7 +309,7 @@ fn gpface_contract_words() {
         "graph.rs の NodeKind::Policy の doc"
     );
 
-    let snap = read("../tsuzuri-contract/tests/snapshots/contract_form.json");
+    let snap = read("../tsuzuri-contract/tests/snapshots/surface.json");
     assert!(!snap.contains("\"policy:"), "snapshot に旧い形の方針の id");
     assert!(
         snap.contains("\"policy\": \"fx-p.1:20260926T1437Z-1\""),

@@ -1,0 +1,193 @@
+{
+  "stats::LedgerStats": [
+    {
+      "at": 1790494620,
+      "judge": "piling-up",
+      "open": {
+        "task": 9,
+        "memo": 3,
+        "question": 2,
+        "epic": 2
+      },
+      "blocked": 3,
+      "ready": 5,
+      "stale": 3,
+      "net_drop_24h": 0,
+      "net_drop_7d": 2,
+      "closed_7d": 5,
+      "closed_per_day": 0.5,
+      "lead": {
+        "p50": 4.0,
+        "p90": 11.5
+      },
+      "days": [
+        {
+          "end": 1790408220,
+          "created": 1,
+          "closed": 0,
+          "open": 9
+        },
+        {
+          "end": 1790494620,
+          "created": 1,
+          "closed": 1,
+          "open": 9
+        }
+      ],
+      "epics": [
+        {
+          "epic": "t3-hub",
+          "closed": 6,
+          "total": 9
+        }
+      ],
+      "memo": {
+        "open": 3,
+        "awaiting_promotion": 2,
+        "closed_7d": 1,
+        "age_p50_days": 9.5
+      },
+      "unreflected": 3,
+      "unreflected_kinds": [
+        {
+          "kind": "memo",
+          "count": 3
+        }
+      ],
+      "unreflected_unknown": [
+        "ruling",
+        "request"
+      ]
+    },
+    {
+      "at": 1790494620,
+      "judge": "stalled",
+      "open": {
+        "task": 0,
+        "memo": 0,
+        "question": 0,
+        "epic": 0
+      },
+      "blocked": 0,
+      "ready": 0,
+      "stale": 0,
+      "net_drop_24h": 0,
+      "net_drop_7d": 0,
+      "closed_7d": 0,
+      "closed_per_day": 0.0,
+      "lead": null,
+      "days": [],
+      "epics": [],
+      "memo": {
+        "open": 0,
+        "awaiting_promotion": 0,
+        "closed_7d": 0,
+        "age_p50_days": null
+      },
+      "unreflected": 0,
+      "unreflected_kinds": [],
+      "unreflected_unknown": [
+        "memo",
+        "ruling",
+        "request"
+      ]
+    }
+  ],
+  "stats::NextStep": [
+    {
+      "checks": [
+        {
+          "kind": "limit-or-move",
+          "result": "not-judged",
+          "count": 0,
+          "target": null
+        },
+        {
+          "kind": "unresponsive",
+          "result": "not-judged",
+          "count": 0,
+          "target": null
+        },
+        {
+          "kind": "stalled-run",
+          "result": "hit",
+          "count": 2,
+          "target": "t3-hub.3"
+        },
+        {
+          "kind": "batch-approval",
+          "result": "not-judged",
+          "count": 0,
+          "target": null
+        },
+        {
+          "kind": "question",
+          "result": "hit",
+          "count": 1,
+          "target": "t3-hub.7"
+        },
+        {
+          "kind": "awaiting-effect",
+          "result": "not-judged",
+          "count": 0,
+          "target": null
+        },
+        {
+          "kind": "nothing",
+          "result": "miss",
+          "count": 0,
+          "target": null
+        }
+      ],
+      "lead": "stalled-run"
+    }
+  ],
+  "stats::UnreflectedRow": [
+    {
+      "id": "t3-hub.9",
+      "title": "[memo] 控え",
+      "age_s": 604800
+    },
+    {
+      "id": "t3-hub.10",
+      "title": "[memo] 時刻の無い控え",
+      "age_s": null
+    }
+  ],
+  "stats::UnreflectedList": [
+    {
+      "memos": {
+        "known": [
+          {
+            "id": "t3-hub.9",
+            "title": "[memo] 控え",
+            "age_s": 604800
+          },
+          {
+            "id": "t3-hub.10",
+            "title": "[memo] 時刻の無い控え",
+            "age_s": null
+          }
+        ]
+      },
+      "rulings": "unknown",
+      "requests": "unknown"
+    },
+    {
+      "memos": {
+        "known": []
+      },
+      "rulings": {
+        "known": []
+      },
+      "requests": {
+        "known": []
+      }
+    },
+    {
+      "memos": "unknown",
+      "rulings": "unknown",
+      "requests": "unknown"
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "board::Stage": [
+    "Queued",
+    "Blocked",
+    "Running",
+    "Gated",
+    "Questioned",
+    "Failed",
+    "Stopped",
+    "Landed"
+  ],
+  "board::PipelineColumn": [
+    "Queued/Blocked",
+    "Running/Gated",
+    "Questioned/Failed/Stopped",
+    "Landed"
+  ],
+  "board::PipelineCard": [
+    {
+      "contract": "t3-hub.3",
+      "runs": 2,
+      "stage": "Running",
+      "reason": "verify",
+      "account": "acct-4",
+      "elapsed_s": 185
+    },
+    {
+      "contract": "t3-hub.4",
+      "runs": 0,
+      "stage": "Queued",
+      "reason": null,
+      "account": null,
+      "elapsed_s": null
+    }
+  ],
+  "board::PipelineBoard": [
+    {
+      "cards": {
+        "known": [
+          {
+            "contract": "t3-hub.3",
+            "runs": 2,
+            "stage": "Running",
+            "reason": "verify",
+            "account": "acct-4",
+            "elapsed_s": 185
+          }
+        ]
+      },
+      "misfits": {
+        "known": []
+      }
+    },
+    {
+      "cards": {
+        "known": []
+      },
+      "misfits": {
+        "known": []
+      }
+    },
+    {
+      "cards": "unknown",
+      "misfits": "unknown"
+    }
+  ],
+  "board::NextMove": [
+    "limit-or-move",
+    "unresponsive",
+    "stalled-run",
+    "batch-approval",
+    "question",
+    "awaiting-effect",
+    "nothing"
+  ],
+  "board::LedgerJudge": [
+    "on-track",
+    "stalled",
+    "clogged",
+    "piling-up",
+    "no-ledger"
+  ],
+  "board::AccountBoard": [
+    {
+      "at": 1790494620,
+      "groups": [
+        {
+          "group": "Tier1",
+          "account": "acct-4",
+          "candidates": [
+            "acct-1",
+            "acct-3",
+            "acct-5"
+          ],
+          "next_account": "acct-5",
+          "remaining": [
+            {
+              "window": "5h",
+              "left_pct": 62
+            },
+            {
+              "window": "7d",
+              "left_pct": 40
+            }
+          ]
+        }
+      ],
+      "sessions": [
+        {
+          "project": "tsuzuri",
+          "role": "pipeline",
+          "session": "t3-hub.3-20260927T073916Z",
+          "account": "acct-4",
+          "stage": "Running",
+          "elapsed_s": 185,
+          "health": "working"
+        }
+      ],
+      "projects": [
+        {
+          "project": "tsuzuri",
+          "judge": "on-track",
+          "open_tasks": 9,
+          "net_drop_24h": 2,
+          "net_drop_7d": -1,
+          "closed_per_day": 1.5,
+          "unreflected": 3,
+          "memos": 4,
+          "next_move": "batch-approval"
+        }
+      ]
+    }
+  ]
+}

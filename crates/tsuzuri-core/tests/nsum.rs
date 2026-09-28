@@ -238,7 +238,7 @@ fn node_objects<'a>(v: &'a Value, out: &mut Vec<&'a Value>) {
 #[test]
 fn nsum_snapshot_carries_fields() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../tsuzuri-contract/tests/snapshots/contract_form.json");
+        .join("../tsuzuri-contract/tests/snapshots/graph.json");
     let v: Value = serde_json::from_str(&read(&path)).expect("snapshot は JSON");
     let mut objs = Vec::new();
     node_objects(&v, &mut objs);
