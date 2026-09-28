@@ -14,7 +14,9 @@ use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GRACE_ARGS};
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
-use tsuzuri_contract::account::{AccountDoc, DormantSeat, ProjectRow};
+use tsuzuri_contract::account::{
+    AccountDoc, DormantSeat, ProjectRow, Spark, SparkLine, SparkPoint,
+};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::surface::SeatRole;
@@ -61,6 +63,15 @@ const EVENTS_A: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\
 {\"schema\":1,\"ts\":\"2026-09-27T11:10:00Z\",\"kind\":\"SeatSpawned\",\"run\":\"r.1-20260927T110000Z\",\"bead\":\"r.1\",\"host\":\"host-1\",\"actor\":\"machine\",\"detail\":\"account:acct-2\"}\n\
 {\"schema\":1,\"ts\":\"2026-09-27T11:20:00Z\",\"kind\":\"RunStage\",\"run\":\"r.1-20260927T110000Z\",\"bead\":\"r.1\",\"host\":\"host-1\",\"actor\":\"machine\",\"stage\":\"Implemented\"}\n";
 const EVENTS_B: &str = "{\"schema\":1,\"ts\":\"2026-09-27T09:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"b.1-20260927T090000Z\",\"bead\":\"b.1\",\"host\":\"host-2\",\"actor\":\"machine\",\"stage\":\"Intake\",\"detail\":\"classes:\"}\n";
+
+/// 引数の state dir の測りの行（acct-1 の five_hour と seven_day_model・acct-2 の seven_day・字の混じる JSON でない行・
+/// 行 c-acct-spark）。
+const MEASURED_H: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:50:00Z\",\"kind\":\"AllowanceMeasured\",\"host\":\"host-1\",\"actor\":\"machine\",\"account\":\"acct-1\",\"window\":\"five_hour\",\"endpoint\":\"usage\",\"used_pct\":83}\n\
+{\"schema\":1,\"ts\":\"2026-09-27T11:50:00Z\",\"kind\":\"AllowanceMeasured\",\"host\":\"host-1\",\"actor\":\"machine\",\"account\":\"acct-1\",\"window\":\"seven_day_model\",\"endpoint\":\"usage\",\"used_pct\":12,\"model\":\"opus\"}\n\
+{\"schema\":1,\"ts\":\"2026-09-27T09:00:00Z\",\"kind\":\"AllowanceMeasured\",\"host\":\"host-1\",\"actor\":\"machine\",\"account\":\"acct-2\",\"window\":\"seven_day\",\"endpoint\":\"usage\",\"used_pct\":300}\n\
+AllowanceMeasured {not json\n";
+/// project の state dir の測りの行（線には読まない）。
+const MEASURED_B: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\"AllowanceMeasured\",\"host\":\"host-2\",\"actor\":\"machine\",\"account\":\"acct-3\",\"window\":\"five_hour\",\"endpoint\":\"usage\",\"used_pct\":7}\n";
 
 const LEDGER_A: &str = "[{\"id\":\"r.1\",\"title\":\"t\",\"status\":\"open\",\"issue_type\":\"task\",\"updated_at\":\"2026-09-27T07:39:00Z\"}]\n";
 const LEDGER_E: &str = "[]\n";
@@ -342,6 +353,8 @@ impl Place {
                 .iter()
                 .map(|(n, t)| (n.to_string(), t.to_string()))
                 .collect(),
+            // 口座の線の材料は引数の state dir の event log（行 c-acct-spark）。
+            events: self.file(&self.host_state().join("fleet/events.jsonl")),
             ..HostTexts::default()
         };
         // 偽の器は rules の頭に行の id に依らず grace の字を出す。
@@ -879,6 +892,92 @@ fn server_acct_no_new_dependencies() {
         deps("tsuzuri-core"),
         ["serde", "serde_json", "tsuzuri-contract"]
     );
+}
+
+/// 電文の口座ごとの線（口座の列が読めなければ panic）。
+fn cspk_sparks(doc: &AccountDoc) -> Vec<(String, Reading<Spark>)> {
+    let Reading::Known(rows) = &doc.accounts else {
+        panic!("口座の列が Unknown");
+    };
+    rows.iter()
+        .map(|r| (r.label.clone(), r.spark.clone()))
+        .collect()
+}
+
+/// 窓の線（点は (at, 使った割合) の列）。
+fn cspk_line(window: &str, points: &[(u64, u8)]) -> SparkLine {
+    SparkLine {
+        window: window.to_string(),
+        points: points
+            .iter()
+            .map(|&(at, used_pct)| SparkPoint { at, used_pct })
+            .collect(),
+    }
+}
+
+#[test]
+fn cspk_acct_reads_host_log() {
+    let mut place = Place::new("cspk", true);
+    let names = ["acct-1", "acct-2", "acct-3"].map(str::to_string);
+    let got = place.acct().doc(NOW);
+    assert_eq!(
+        cspk_sparks(&got),
+        names
+            .iter()
+            .map(|n| (n.clone(), Reading::Unknown))
+            .collect::<Vec<_>>(),
+        "引数の state dir に log が無ければ線は Unknown"
+    );
+    assert_eq!(got, place.core_doc(&[]));
+    let host_log = place.host_state().join("fleet/events.jsonl");
+    place.put(host_log.clone(), MEASURED_H);
+    let b_log = place.state("state-b").join("fleet/events.jsonl");
+    place.put(b_log.clone(), &format!("{EVENTS_B}{MEASURED_B}"));
+    let acct = place.acct();
+    let got = acct.doc(NOW);
+    let spark = |measured_at: Option<u64>, lines: [SparkLine; 3]| {
+        Reading::Known(Spark {
+            measured_at,
+            lines: lines.to_vec(),
+        })
+    };
+    let bare = [
+        cspk_line("five_hour", &[]),
+        cspk_line("seven_day", &[]),
+        cspk_line("seven_day_model", &[]),
+    ];
+    assert_eq!(
+        cspk_sparks(&got),
+        [
+            (
+                names[0].clone(),
+                spark(
+                    Some(1_790_509_800),
+                    [
+                        cspk_line("five_hour", &[(1_790_509_800, 83)]),
+                        cspk_line("seven_day", &[]),
+                        cspk_line("seven_day_model", &[(1_790_509_800, 12)]),
+                    ]
+                )
+            ),
+            (
+                names[1].clone(),
+                spark(
+                    Some(1_790_499_600),
+                    [
+                        cspk_line("five_hour", &[]),
+                        cspk_line("seven_day", &[(1_790_499_600, 255)]),
+                        cspk_line("seven_day_model", &[]),
+                    ]
+                )
+            ),
+            (names[2].clone(), spark(None, bare)),
+        ]
+    );
+    assert_eq!(got, place.core_doc(&[]));
+    let marks = acct.marks();
+    assert!(!marks.contains(&host_log), "引数の state dir の log は印にしない");
+    assert!(marks.contains(&b_log));
 }
 
 /// 停止の記録を置くか消し、偽の器の tick-state-a の字の proj-a:0.1 の行の heartbeat の語を合わせる（器と同じ決まり）。

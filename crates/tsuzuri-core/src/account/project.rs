@@ -643,7 +643,7 @@ pub fn assemble(
 
 /// 入口: host の側の字と anchor → project の字の表と猶予の秒の字と今の時刻から電文を組む。
 /// 知らせは宣言の project のうち state dir の引けた project の event log の字を宣言の順に読む。
-/// 休止中の席は `dormant` の値（行 c-dormant）。
+/// 休止中の席は `dormant` の値（行 c-dormant）。口座の線は host の側の字の event log を読む（行 c-acct-spark）。
 pub fn doc(
     host: &HostTexts,
     projects: &BTreeMap<String, ProjectTexts>,
@@ -652,7 +652,7 @@ pub fn doc(
 ) -> AccountDoc {
     let mut doc = assemble(
         now,
-        host::accounts(host),
+        host::accounts_at(host, now),
         host::groups(host),
         host::moves(host),
         project_rows(host, projects, grace, now),

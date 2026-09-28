@@ -26,14 +26,14 @@
       {"window": "five_hour", "used_pct": 83, "resets_at": 1790521200, "counted": true},
       {"window": "seven_day", "used_pct": 40, "resets_at": 1790812800, "counted": true},
       {"window": "seven_day_model", "used_pct": 12, "resets_at": null, "counted": true}
-    ]}},
+    ]}, "spark": "unknown"},
     {"label": "acct-2", "retired": false, "occupant": "aux", "model": "sonnet", "usage": {"known": [
       {"window": "five_hour", "used_pct": 5, "resets_at": null, "counted": true},
       {"window": "seven_day", "used_pct": 255, "resets_at": null, "counted": true},
       {"window": "seven_day_model", "used_pct": 0, "resets_at": null, "counted": true}
-    ]}},
-    {"label": "acct-3", "retired": true, "occupant": null, "model": null, "usage": "unknown"},
-    {"label": "acct-4", "retired": false, "occupant": null, "model": null, "usage": "unknown"}
+    ]}, "spark": "unknown"},
+    {"label": "acct-3", "retired": true, "occupant": null, "model": null, "usage": "unknown", "spark": "unknown"},
+    {"label": "acct-4", "retired": false, "occupant": null, "model": null, "usage": "unknown", "spark": "unknown"}
   ]},
   "groups": {"known": [
     {

@@ -49,7 +49,13 @@ pub struct DormantSeat {
     pub heartbeat: Reading<bool>,
 }
 
-/// 口座の行（名・退役・占有の群・model の窓の model の名・窓ごとの使った割合）。
+/// 口座の 7 日の線の幅の秒（持ち主の裁定 t3-hub.53.10・行 c-acct-spark）。
+pub const SPARK_SPAN_S: u64 = 7 * 24 * 60 * 60;
+
+/// 口座の 7 日の線の刻みの秒（刻みごとに 1 点・1 本 `SPARK_SPAN_S / SPARK_STEP_S` 点以下）。
+pub const SPARK_STEP_S: u64 = 60 * 60;
+
+/// 口座の行（名・退役・占有の群・model の窓の model の名・窓ごとの使った割合・7 日の線）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccountRow {
     pub label: String,
@@ -58,6 +64,31 @@ pub struct AccountRow {
     pub occupant: Option<String>,
     pub model: Option<String>,
     pub usage: Reading<Vec<QuotaUsed>>,
+    /// 器の event log の測りの行の線（log が読めなければ Unknown・行 c-acct-spark）。
+    pub spark: Reading<Spark>,
+}
+
+/// 口座の 7 日の線（最後に測った時刻と窓ごとの線）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Spark {
+    /// 口座の読めた測りの行の ts の最大（窓と古さを問わない・行が無ければ None）。
+    pub measured_at: Option<EpochSecs>,
+    /// 窓ごとの線（five_hour・seven_day・seven_day_model の順）。
+    pub lines: Vec<SparkLine>,
+}
+
+/// 1 つの窓の線（点は at の古い順）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SparkLine {
+    pub window: String,
+    pub points: Vec<SparkPoint>,
+}
+
+/// 線の 1 点（測りの行の ts と使った割合）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SparkPoint {
+    pub at: EpochSecs,
+    pub used_pct: u8,
 }
 
 /// 窓の逼迫の閾値の 1 行（窓の名・器の rules 行の id・行の値・読めなければ cap は Unknown）。

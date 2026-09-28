@@ -8,7 +8,8 @@
 //! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す（行 e-hold）。
 //! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last・move-signal と、
 //! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない・行 c-dormant）と、
-//! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）。file は書かない。
+//! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）と、口座の線の材料の
+//! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
 //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。集めた字は 5 秒のあいだ持ち回す。
 //! ただし変化の印の file（`marks`）の更新時刻と長さが集める前に取った値と違えば、5 秒の中でも集め直す（行 e-acct-hbmark）。
 //! 口の登録と変化の知らせへの印の足しは、つなぐ行 h-wire が行う。
@@ -416,6 +417,7 @@ impl Acct {
         texts.host.usage = usage;
         texts.host.doctor = doctor;
         texts.host.caps = caps;
+        texts.host.events = read(&events_log(&self.state_dir));
         texts.grace = grace;
         texts
     }

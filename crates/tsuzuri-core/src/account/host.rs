@@ -6,13 +6,16 @@
 //! 3 つの列とも「まだ分からない」。残量の字が無いか口座の行が測れていなければ、その口座の usage だけが「まだ分からない」。
 //! 窓ごとの逼迫の閾値は器の rules 行の出力の字を、群の逼迫の知らせと移動の断りは器の event log の行を写すだけで、
 //! 閾値の数を持たず判じない（便 c-acct-thr・規則の行 R-22）。
+//! 口座の 7 日の線は引数の state dir の event log の測りの行を 1 度だけ読み、今から 1 時間の刻みごとに最も新しい行を
+//! 点にする（行 c-acct-spark）。log の字が無ければ線は「まだ分からない」で、最後に測った時刻の古さは判じない。
 
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
 use serde_json::Value;
 use tsuzuri_contract::account::{
-    AccountRow, GroupCard, GroupMember, GroupNotice, MoveRow, WindowCap,
+    AccountRow, GroupCard, GroupMember, GroupNotice, MoveRow, SPARK_SPAN_S, SPARK_STEP_S, Spark,
+    SparkLine, SparkPoint, WindowCap,
 };
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{GroupRow, Reading};
@@ -43,6 +46,9 @@ pub const PRESSURE_EVENT: &str = "GroupPressureNotified";
 
 /// 器の移動の断りの event の種類。
 pub const REFUSED_EVENT: &str = "GroupMoveRefused";
+
+/// 器の口座の測りの event の種類（口座の線の材料・行 c-acct-spark）。
+pub const MEASURED_EVENT: &str = "AllowanceMeasured";
 
 /// 器の知らせの窓の語と窓の名。
 pub const WINDOW_WORDS: [(&str, &str); 3] = [
@@ -81,6 +87,8 @@ pub struct HostTexts {
     /// 席の名 → その席の状態の記録（`state.jsonl`）の字（読めない file の席は無い・行 c-dormant）。
     #[serde(default)]
     pub seat_logs: BTreeMap<String, String>,
+    /// 引数の state dir の event log（`<state dir>/fleet/events.jsonl`）の字（口座の線の材料・行 c-acct-spark）。
+    pub events: Option<String>,
 }
 
 /// 群の宣言の 1 つの群（配列の欄が無ければ空の列・読めなければ None）。
@@ -282,6 +290,7 @@ fn account_line<'a>(doctor: &'a str, account: &str) -> Option<&'a str> {
 
 /// 口座の列（群の宣言の label の順）。群の宣言か host の doctor の字が無ければ「まだ分からない」。
 /// 占有の群は doctor の群の行のうち current が口座と同じ最初の行の群、退役は doctor の口座の行の retired=yes。
+/// 線は「まだ分からない」（線を埋めるのは `accounts_at`）。
 pub fn accounts(texts: &HostTexts) -> Reading<Vec<AccountRow>> {
     let (Some(host), Some(doctor)) = (texts.host_toml.as_deref(), texts.doctor.as_deref()) else {
         return Reading::Unknown;
@@ -303,11 +312,109 @@ pub fn accounts(texts: &HostTexts) -> Reading<Vec<AccountRow>> {
                     usage: line
                         .and_then(windows)
                         .map_or(Reading::Unknown, Reading::Known),
+                    spark: Reading::Unknown,
                     label,
                 }
             })
             .collect(),
     )
+}
+
+/// 読みかけの口座の線（最後に測った時刻と、`WINDOWS` の順の窓ごとの刻み → 刻みの中の最も新しい点）。
+type Draft = (Option<EpochSecs>, [BTreeMap<u64, SparkPoint>; 3]);
+
+/// 測りの行を口座の名・窓の位置・点にする（種類が `MEASURED_EVENT` で口座が空でなく、窓が `WINDOWS` のどれかで、
+/// ts が読めて今より後でなく、used_pct が整数の行だけ・使った割合は 255 で止める）。字 `MEASURED_EVENT` を含まない行は
+/// JSON として読まない。
+fn measured_row(line: &str, now: EpochSecs) -> Option<(String, usize, SparkPoint)> {
+    if !line.contains(MEASURED_EVENT) {
+        return None;
+    }
+    let event: Value = serde_json::from_str(line).ok()?;
+    if event_text(&event, "kind")? != MEASURED_EVENT {
+        return None;
+    }
+    let account = event_text(&event, "account").filter(|a| !a.is_empty())?;
+    let window = event_text(&event, "window")?;
+    let window = WINDOWS.iter().position(|w| *w == window)?;
+    let at = epoch_secs(event_text(&event, "ts")?)?;
+    if at > now {
+        return None;
+    }
+    let used = event.get("used_pct")?.as_u64()?;
+    Some((
+        account.to_string(),
+        window,
+        SparkPoint {
+            at,
+            used_pct: u8::try_from(used).unwrap_or(u8::MAX),
+        },
+    ))
+}
+
+/// 点の無い 3 本の線（最後に測った時刻は None）。
+fn bare() -> Spark {
+    Spark {
+        measured_at: None,
+        lines: WINDOWS
+            .iter()
+            .map(|w| SparkLine {
+                window: w.to_string(),
+                points: Vec::new(),
+            })
+            .collect(),
+    }
+}
+
+/// log を 1 度だけ読んだ口座の名 → 線の表。点は今からの秒が `SPARK_SPAN_S` 未満の行で、刻みは今からの秒を
+/// `SPARK_STEP_S` で割った商、刻みの中は ts の最も新しい行（同じ ts は log の後の行）、線の点は at の古い順。
+fn sparks(log: &str, now: EpochSecs) -> BTreeMap<String, Spark> {
+    let mut drafts: BTreeMap<String, Draft> = BTreeMap::new();
+    for (account, window, point) in log.lines().filter_map(|l| measured_row(l, now)) {
+        let (measured_at, steps) = drafts.entry(account).or_default();
+        *measured_at = Some(measured_at.map_or(point.at, |m| m.max(point.at)));
+        let age = now - point.at;
+        if age >= SPARK_SPAN_S {
+            continue;
+        }
+        let slot = steps[window].entry(age / SPARK_STEP_S).or_insert(point);
+        if slot.at <= point.at {
+            *slot = point;
+        }
+    }
+    drafts
+        .into_iter()
+        .map(|(account, (measured_at, steps))| {
+            let mut spark = bare();
+            spark.measured_at = measured_at;
+            for (line, points) in spark.lines.iter_mut().zip(steps) {
+                line.points = points.into_values().rev().collect();
+            }
+            (account, spark)
+        })
+        .collect()
+}
+
+/// 口座の 7 日の線（引数の state dir の event log の測りの行）。log の字が無ければ「まだ分からない」、
+/// 口座の読めた行が無ければ最後に測った時刻は None で点の無い 3 本。
+pub fn spark(texts: &HostTexts, account: &str, now: EpochSecs) -> Reading<Spark> {
+    let Some(log) = texts.events.as_deref() else {
+        return Reading::Unknown;
+    };
+    Reading::Known(sparks(log, now).remove(account).unwrap_or_else(bare))
+}
+
+/// `accounts` の口座の列の線を、log の 1 度の読みで埋める（log の字が無ければ `accounts` と同じ・
+/// 退役の口座も線を持つ）。
+pub fn accounts_at(texts: &HostTexts, now: EpochSecs) -> Reading<Vec<AccountRow>> {
+    let mut rows = accounts(texts);
+    if let (Reading::Known(rows), Some(log)) = (&mut rows, texts.events.as_deref()) {
+        let table = sparks(log, now);
+        for row in rows {
+            row.spark = Reading::Known(table.get(&row.label).cloned().unwrap_or_else(bare));
+        }
+    }
+    rows
 }
 
 /// 群の記録の `鍵=値` の行の値（空なら None）。

@@ -5,13 +5,25 @@
       {"window": "five_hour", "used_pct": 42, "resets_at": 1790512200, "counted": true},
       {"window": "seven_day", "used_pct": 61, "resets_at": 1790683200, "counted": true},
       {"window": "seven_day_model", "used_pct": 30, "resets_at": 1790683200, "counted": false}
-    ]}},
+    ]}, "spark": {"known": {"measured_at": 1790510100, "lines": [
+      {"window": "five_hour", "points": [{"at": 1790495700, "used_pct": 12}, {"at": 1790502900, "used_pct": 35}, {"at": 1790510100, "used_pct": 42}]},
+      {"window": "seven_day", "points": [{"at": 1790510100, "used_pct": 61}]},
+      {"window": "seven_day_model", "points": [{"at": 1790423700, "used_pct": 22}, {"at": 1790510100, "used_pct": 30}]}
+    ]}}},
     {"label": "acct-2", "retired": false, "occupant": "Tier2", "model": "sonnet", "usage": {"known": [
       {"window": "five_hour", "used_pct": 100, "resets_at": 1790513100, "counted": true},
       {"window": "seven_day", "used_pct": 81, "resets_at": null, "counted": true},
       {"window": "seven_day_model", "used_pct": 12, "resets_at": 1790596800, "counted": false}
-    ]}},
-    {"label": "acct-3", "retired": true, "occupant": null, "model": null, "usage": "unknown"}
+    ]}, "spark": {"known": {"measured_at": 1790510000, "lines": [
+      {"window": "five_hour", "points": [{"at": 1790499200, "used_pct": 64}, {"at": 1790510000, "used_pct": 100}]},
+      {"window": "seven_day", "points": [{"at": 1790510000, "used_pct": 81}]},
+      {"window": "seven_day_model", "points": [{"at": 1790510000, "used_pct": 12}]}
+    ]}}},
+    {"label": "acct-3", "retired": true, "occupant": null, "model": null, "usage": "unknown", "spark": {"known": {"measured_at": 1789900000, "lines": [
+      {"window": "five_hour", "points": []},
+      {"window": "seven_day", "points": []},
+      {"window": "seven_day_model", "points": []}
+    ]}}}
   ]},
   "caps": [
     {"window": "five_hour", "rule": "fleet.group_pressure_5h_pct", "cap": {"known": 85}},
