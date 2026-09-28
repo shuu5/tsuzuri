@@ -100,8 +100,9 @@ schema:
       format: toml
       reader_expects: {head: schema = 1, rows_key: field, row_fields: [name, need, shape]}
       value_domains: from-file
+      known_values: {need: [required, optional, conditional], shape: [text, list]}
       unknown_value: まだ分からない
-    external_schema_note: 器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧も値域も自分の型にも散文にも持たない＝reader_expects は読み手の期待する形であって正本ではなく、need / shape の値域は file の値をそのまま受ける（value_domains = from-file）。欄の追加・値域の変更は器の版上げで足り、folio2 の判断の記録は要らない。file が読めない・期待する形でない・知らない値が在るときは「まだ分からない」（unknown_value）
+    external_schema_note: 器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物で、欄の一覧と need / shape の値域の正本（value_domains = from-file）。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧を自分の型にも散文にも持たない＝reader_expects は読み手の期待する形であって正本ではない。need / shape で folio2 が判定に使えるのは意味を知る値の写し known_values（正本は crates/folio/src/floor_note.rs の EXTERNAL_NEED と EXTERNAL_SHAPE）だけ。欄の追加は器の版上げで足り、器が値域を広げたら folio2 の便で known_values に足す（どちらも判断の記録は要らない）。file が読めない・期待する形でない・known_values の外の値が在るときは「まだ分からない」（unknown_value）
     reads: [design-doc-contract-table, external-schema-file]
     never_reads: [per-run-contract-file]
     reads_note: folio2 が読むのは設計文書の中の契約表（scribe2 では docs/design の [[contract]] の区間）と外部の欄の決まりの file だけ。便ごとの契約 file（run dir の contract.toml）は読まない（scribe2 planner の助言 2026-09-16・形が変わる途中）
@@ -125,7 +126,7 @@ schema:
     value_grammar: [text, list-of-text, number, bool]
     placement: 消費側の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）
     check: {command: folio derive --check, verdict_on_diff: nonzero, stage: post}
-    derived_note: 器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。どちらも面の生成器も様式の file も呼ばず、導出物の置き場（--out）は消費側が宣言する（既定なし）。値に二重引用符・逆斜線・改行が在る行は、escape しない形では書けないので導出せず「まだ分からない」とする
+    derived_note: 器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。面の生成器も様式の file も呼ばず、導出物の置き場（--out）は消費側が宣言する（既定なし）。値に二重引用符・逆斜線・改行が在る行は、escape しない形では書けないので導出せず「まだ分からない」とする
   landing:
     source_of_truth: scribe2 の記録（record）
     read_port: 統合先の commit（squash）の本文の末尾の印（trailer・契約 id と要件 id・器が書く）
@@ -154,7 +155,7 @@ schema:
     network_commands: forbid
     skill_listing: forbid
     retry_record: ledger
-    figures_note: 図の正本は設計ノートの figures 節に型付き記述で置き、別 file にも散文にも持たない。図の本体の意味の属性は捨てず（semantic_attrs = keep）、閲覧の仕掛けは捨て（viewer_chrome = discard）、意味を表す class は部品目録に載り色・字の大きさ・線の太さは design token で塗る（body_classes）。道具の通信する命令は使わず（network_commands = forbid）、AI 向けの説明（skill）として載せない（skill_listing = forbid）。図の対（持ち主の裁定 2026-09-19）＝設計ノートの図は、非エンジニア向けの手順図（専門の言葉を使わず「誰が・どの順で・何をして・だめならどうなるか」）と、エンジニア向けの順序図（命令の名・旗・終了コード・file 名をそのまま）を対で置く。見本は design-note/figures.yaml。これは書き方の指針であり床は数えない
+    figures_note: 図の正本は設計ノートの figures 節に型付き記述で置き、別 file にも散文にも持たない。図の本体の意味の属性は捨てず（semantic_attrs = keep）、閲覧の仕掛けは捨て（viewer_chrome = discard）、意味を表す class は部品目録に載り色・字の大きさ・線の太さは design token で塗る（body_classes）。道具の通信する命令は使わず（network_commands = forbid）、AI 向けの説明（skill）として載せない（skill_listing = forbid）。図の対＝設計ノートの図は、非エンジニア向けの手順図（専門の言葉を使わず「誰が・どの順で・何をして・だめならどうなるか」）と、エンジニア向けの順序図（命令の名・旗・終了コード・file 名をそのまま）を対で置く。見本は design-note/figures.yaml。これは書き方の指針であり床は数えない
   guards:
     in_loop: []
     post: [yaml-form, derived-diff-zero, own-id-space, prose-gate, prose-mentions]
