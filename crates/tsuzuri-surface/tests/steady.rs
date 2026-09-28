@@ -193,13 +193,20 @@ fn fold_keys(text: &str) -> Vec<String> {
 
 /// (5) project の下の details の要素は全部、記録を呼ぶ所と同じ数で、prop の open と toggle に結び、
 /// module ごとに数と鍵の字の集合がその module の folds と同じ。
+/// src/project_dom の下に module と同じ名の file（DOM を割った先）が在れば、その字を後に足して見る。
 #[test]
 fn steady_details_use_fold_record() {
     for module in Module::ALL {
         let path = crate_dir()
             .join("src/project")
             .join(format!("{}.rs", module.name()));
-        let text = std::fs::read_to_string(&path).expect("src の file");
+        let mut text = std::fs::read_to_string(&path).expect("src の file");
+        let dom = crate_dir()
+            .join("src/project_dom")
+            .join(format!("{}.rs", module.name()));
+        if dom.is_file() {
+            text.push_str(&std::fs::read_to_string(&dom).expect("src/project_dom の file"));
+        }
         let name = path.display().to_string();
         let tags: Vec<&str> = text
             .match_indices("<details")

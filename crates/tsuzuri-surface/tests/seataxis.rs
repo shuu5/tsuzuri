@@ -184,11 +184,10 @@ fn saxis_legend_samples() {
     assert!(!other.contains("<rect") && !other.contains("<line"), "{other}");
 }
 
-/// (4) mod dom が目盛と凡例を描く字を持つ。(5) 段の class は stylesheet に在る。
+/// (4) mod dom（src/project_dom/seat.rs）が目盛と凡例を描く字を持つ。(5) 段の class は stylesheet に在る。
 #[test]
 fn saxis_src_draws_legend_axis() {
-    let src = read("src/project/seat.rs");
-    let dom = &src[src.find("mod dom {").expect("mod dom")..];
+    let dom = read("src/project_dom/seat.rs");
     for needle in [
         "class=\"saxis\"",
         "class=\"sleg\"",

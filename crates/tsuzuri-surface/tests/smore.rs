@@ -193,13 +193,12 @@ fn smore_budget_matches_r19() {
     assert_eq!(EXPERT_CHARS, 60);
 }
 
-/// (6) 詳しくの段の DOM の字と、頁が HelpCtx を context に置く前提。
+/// (6) 詳しくの段の DOM（src/project_dom/seat.rs）の字と、頁が HelpCtx を context に置く前提。
 #[test]
 fn smore_dom_text() {
-    let src = read("src/project/seat.rs");
-    let dom = &src[src.find("mod dom {").expect("mod dom が在る")..];
+    let dom = read("src/project_dom/seat.rs");
     let start = dom.find("fn more_view(").expect("more_view が在る");
-    let len = dom[start..].find("\n    }\n").expect("more_view の閉じ");
+    let len = dom[start..].find("\n}").expect("more_view の閉じ");
     let body = &dom[start..start + len];
     for w in ["fold(\"seat:more\"", "use_context::<HelpCtx>()", "shows_internal("] {
         assert!(body.contains(w), "more_view に {w} が無い");
