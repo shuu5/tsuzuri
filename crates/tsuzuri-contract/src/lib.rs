@@ -1,6 +1,6 @@
 //! 契約の型: server と面と hook が共有する型（設計ノート surface §20・surface-base 便 b）。
 //! 面の側に電文の写しを書かない。電文の形は JSON で、字の形は `wire` の 2 関数だけが決める。
-//! 型の外形は tests/contract_form.rs の snapshot の歯が pin する。
+//! 型の外形は群ごとの歯 `tests/cform_*.rs` と snapshot `tests/snapshots/*.json` が pin する（共通の手は `tests/common/mod.rs`）。
 
 pub mod account;
 pub mod board;
