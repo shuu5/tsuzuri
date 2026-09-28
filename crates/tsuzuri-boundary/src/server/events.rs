@@ -1,7 +1,8 @@
 //! 変化の知らせ（口 GET /api/surface/events・SSE・便 e-src）。
-//! 変化の印（.beads の issues.jsonl と interactions.jsonl の更新時刻と長さ）を 500 ミリ秒ごとに見て、
-//! どちらかが動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
-//! 印の取りこぼしを拾うために、印が動かなくても 5 秒ごとに読み直す。
+//! 変化の印（ledger の `Mark`: store の manifest の中身と journal の長さ・store が無ければ jsonl の 2 file の
+//! 更新時刻と長さ）を 500 ミリ秒ごとに見て、動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
+//! 印の取りこぼしを拾うために、印が動かなくても、store の印で前の読みが読めていれば 60 秒ごと、ほかは 5 秒ごとに
+//! 読み直す（jsonl の印は器の素の bd close で動かないことがある・行 e-marks）。
 //! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
 //! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
 //! 動いたら board-changed を 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
@@ -15,11 +16,12 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerChanged};
 use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 
-use super::ledger::Source;
+use super::ledger::{Mark, Source};
 
 /// 印を見る間隔（規則の行 R-21）。
 pub const POLL: Duration = Duration::from_millis(500);
@@ -27,19 +29,25 @@ pub const POLL: Duration = Duration::from_millis(500);
 /// 印が動かなくても読み直す間隔（取りこぼしを拾う）。
 pub const REREAD: Duration = Duration::from_secs(5);
 
-/// 周期の読みの 2 つの間隔。
+/// 台帳の store の印で見るとき、前の読みが読めていれば印が動かなくても読み直す間隔（安全の網）。
+pub const STORE_REREAD: Duration = Duration::from_secs(60);
+
+/// 周期の読みの間隔。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
     /// 印を見る間隔。
     pub poll: Duration,
     /// 印が動かなくても読み直す間隔。
     pub reread: Duration,
+    /// store の印で前の読みが読めていれば、印が動かなくても読み直す間隔。
+    pub store_reread: Duration,
 }
 
 /// server の周期の読みの間隔。
 pub const TIMING: Timing = Timing {
     poll: POLL,
     reread: REREAD,
+    store_reread: STORE_REREAD,
 };
 
 /// 変化の無いときに送る注釈の行の間隔（切れた接続を見つけて片付ける）。
@@ -65,7 +73,8 @@ impl Hub {
     where
         B: FnMut() -> Vec<PathBuf> + Send + 'static,
     {
-        let hub = Hub::watch(source.marks(), move || source.read(), TIMING);
+        let marks = source.clone();
+        let hub = Hub::watch_ledger(move || marks.mark(), move || source.read(), TIMING);
         Hub::watch_board(&hub, board, POLL);
         hub
     }
@@ -101,24 +110,33 @@ impl Hub {
 
     /// 印の file と読みの関数で周期の読みを始める。最初の印と読みは戻る前に取る
     /// （戻った後の変化は取りこぼさない）。
-    pub fn watch<R, F>(marks: Vec<PathBuf>, mut read: F, timing: Timing) -> Arc<Hub>
+    pub fn watch<R, F>(marks: Vec<PathBuf>, read: F, timing: Timing) -> Arc<Hub>
     where
         R: PartialEq + Send + 'static,
         F: FnMut() -> R + Send + 'static,
     {
-        let hub = Arc::new(Hub::default());
-        let weak = Arc::downgrade(&hub);
-        let seen = stamps(&marks);
-        let read_at = Instant::now();
-        let last = read();
-        let state = Watch {
-            marks,
-            seen,
-            read_at,
-            last,
-        };
-        thread::spawn(move || watch(&weak, state, read, timing));
-        hub
+        watch_with(
+            move || stamps(&marks),
+            read,
+            timing.poll,
+            move |_, _| timing.reread,
+        )
+    }
+
+    /// 台帳の印の値（`Mark`）と読みの関数で周期の読みを始める（行 e-marks）。最初の印と読みは戻る前に取る。
+    /// 印が動かなくても、印が Store で前の読みが Known なら `store_reread`、ほかは `reread` ごとに読み直す。
+    pub fn watch_ledger<T, M, F>(mark: M, read: F, timing: Timing) -> Arc<Hub>
+    where
+        T: PartialEq + Send + 'static,
+        M: FnMut() -> Mark + Send + 'static,
+        F: FnMut() -> Reading<T> + Send + 'static,
+    {
+        watch_with(mark, read, timing.poll, move |mark, last| {
+            match (mark, last) {
+                (Mark::Store(_), Reading::Known(_)) => timing.store_reread,
+                _ => timing.reread,
+            }
+        })
     }
 
     /// 受け手を 1 人足す。
@@ -187,27 +205,55 @@ fn board_stamps(board: &mut impl FnMut() -> Vec<PathBuf>) -> BoardStamps {
 }
 
 /// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果）。
-struct Watch<R> {
-    marks: Vec<PathBuf>,
-    seen: Vec<Option<(SystemTime, u64)>>,
+struct Watch<K, R> {
+    seen: K,
     read_at: Instant,
     last: R,
 }
 
-fn watch<R: PartialEq>(
+/// 印の値の関数と読みの関数で周期の読みを始める（`reread` は見た印と最後の読みから読み直しの間隔を決める）。
+fn watch_with<K, R, M, F>(
+    mut mark: M,
+    mut read: F,
+    poll: Duration,
+    reread: impl Fn(&K, &R) -> Duration + Send + 'static,
+) -> Arc<Hub>
+where
+    K: PartialEq + Send + 'static,
+    R: PartialEq + Send + 'static,
+    M: FnMut() -> K + Send + 'static,
+    F: FnMut() -> R + Send + 'static,
+{
+    let hub = Arc::new(Hub::default());
+    let weak = Arc::downgrade(&hub);
+    let seen = mark();
+    let read_at = Instant::now();
+    let last = read();
+    let state = Watch {
+        seen,
+        read_at,
+        last,
+    };
+    thread::spawn(move || watch(&weak, state, mark, read, poll, reread));
+    hub
+}
+
+fn watch<K: PartialEq, R: PartialEq>(
     hub: &Weak<Hub>,
-    mut state: Watch<R>,
+    mut state: Watch<K, R>,
+    mut mark: impl FnMut() -> K,
     mut read: impl FnMut() -> R,
-    timing: Timing,
+    poll: Duration,
+    reread: impl Fn(&K, &R) -> Duration,
 ) {
     loop {
-        thread::sleep(timing.poll);
+        thread::sleep(poll);
         if hub.strong_count() == 0 {
             return;
         }
         // 印は読みの前に取る（読みの途中の変化は次の周で拾う）。
-        let current = stamps(&state.marks);
-        if current == state.seen && state.read_at.elapsed() < timing.reread {
+        let current = mark();
+        if current == state.seen && state.read_at.elapsed() < reread(&current, &state.last) {
             continue;
         }
         state.seen = current;
@@ -299,6 +345,7 @@ mod tests {
         let timing = Timing {
             poll: Duration::from_millis(20),
             reread: Duration::from_secs(60),
+            store_reread: Duration::from_secs(60),
         };
         let hub = Hub::watch(marks.clone(), read, timing);
         let rx = hub.subscribe();
@@ -319,7 +366,10 @@ mod tests {
         put(&marks[0], "22");
         let until = Instant::now() + Duration::from_secs(5);
         while reads.load(Ordering::SeqCst) < 3 {
-            assert!(Instant::now() < until, "印 a の変化で 5 秒以内に読み直さない");
+            assert!(
+                Instant::now() < until,
+                "印 a の変化で 5 秒以内に読み直さない"
+            );
             thread::sleep(Duration::from_millis(10));
         }
         thread::sleep(Duration::from_millis(200));
@@ -337,6 +387,7 @@ mod tests {
         let timing = Timing {
             poll: Duration::from_millis(20),
             reread: Duration::from_millis(150),
+            store_reread: Duration::from_secs(60),
         };
         let hub = Hub::watch(marks, read, timing);
         let rx = hub.subscribe();

@@ -2,7 +2,7 @@
 //! 撃つ形は `bd --readonly list --all --limit 0 --json`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
 //! 起動できない・rc が 0 でない・JSON として読めない・5 秒を超えて返さない、のどれでも
 //! 一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
-//! .beads の issues.jsonl は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
+//! 変化の印は台帳の store の manifest の中身と journal の長さで、store が無ければ issues.jsonl と interactions.jsonl の更新時刻と長さ（jsonl の中身は読まない・行 e-marks）。
 //! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 //! 読めた字（`parse_bd` か中核の台帳の読みが Known の字）は最後に読めた字として持ち、次の読みが落ちたときだけ
 //! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
@@ -10,13 +10,14 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BdLine, BeadId, LedgerItem, LedgerList, READ_HOLD_S};
 use tsuzuri_contract::wire;
 
 use super::coalesce::{Coalesce, GRACE};
+use super::events::stamp;
 
 /// 子 process を撃つ部品と時刻の読みは `proc` と `clock` に在り、今までの名のまま再公開する（行 hb-proc）。
 pub use super::clock::epoch_secs;
@@ -36,6 +37,28 @@ pub const BD_WAIT: Duration = BD_TIMEOUT.saturating_add(GRACE);
 
 /// 読みが落ちても最後に読めた字を返す上限（契約の `READ_HOLD_S` 秒・行 e-hold）。
 pub const READ_HOLD: Duration = Duration::from_secs(READ_HOLD_S);
+
+/// repo の .beads の下の台帳の store の dir（その下が db ごとの dir・行 e-marks）。
+pub const STORE_DIR: &str = "embeddeddolt";
+
+/// db の dir の下の store の file の置き場。
+pub const NOMS: &str = ".dolt/noms";
+
+/// store の manifest（中身を印にする）。
+pub const MANIFEST: &str = "manifest";
+
+/// dolt の chunk journal の定まった名（長さを印にする）。
+pub const JOURNAL: &str = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv";
+
+/// 台帳の変化の印（行 e-marks）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Mark {
+    /// db ごとの NOMS の path と manifest の中身と journal の長さ。
+    /// bd の読みは store の file の更新時刻を動かすので、更新時刻は見ない。
+    Store(Vec<(PathBuf, Option<Vec<u8>>, Option<u64>)>),
+    /// store の無いときの `Source::marks` の 2 file の更新時刻と長さ。
+    Files(Vec<Option<(SystemTime, u64)>>),
+}
 
 /// 台帳の読みの出所（repo の置き場と bd の program）。
 /// clone は読みの合流の場と最後に読めた字を分け合う（比べるのは repo と bd だけ）。
@@ -96,10 +119,43 @@ impl Source {
         vec![beads.join("issues.jsonl"), beads.join("interactions.jsonl")]
     }
 
+    /// 台帳の store の db ごとの NOMS の path（MANIFEST が file のものを path の順に・dir が読めなければ空）。
+    /// db の dir の名は呼ぶたびに dir を読んで決める。
+    pub fn stores(&self) -> Vec<PathBuf> {
+        let Ok(dir) = std::fs::read_dir(self.repo.join(".beads").join(STORE_DIR)) else {
+            return Vec::new();
+        };
+        let mut stores: Vec<PathBuf> = dir
+            .filter_map(|e| Some(e.ok()?.path().join(NOMS)))
+            .filter(|noms| noms.join(MANIFEST).is_file())
+            .collect();
+        stores.sort();
+        stores
+    }
+
+    /// 変化の印（store が在れば manifest の中身と journal の長さ、無ければ `marks` の 2 file の更新時刻と長さ）。
+    pub fn mark(&self) -> Mark {
+        let stores = self.stores();
+        if stores.is_empty() {
+            return Mark::Files(self.marks().iter().map(|m| stamp(m)).collect());
+        }
+        Mark::Store(
+            stores
+                .into_iter()
+                .map(|noms| {
+                    let manifest = std::fs::read(noms.join(MANIFEST)).ok();
+                    let journal = std::fs::metadata(noms.join(JOURNAL)).ok().map(|m| m.len());
+                    (noms, manifest, journal)
+                })
+                .collect(),
+        )
+    }
+
     /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。
     /// 読めた字は最後に読めた字に置く。
     pub fn read(&self) -> Reading<Vec<LedgerItem>> {
-        self.fresh().map_or(Reading::Unknown, |text| parse_bd(&text))
+        self.fresh()
+            .map_or(Reading::Unknown, |text| parse_bd(&text))
     }
 
     /// bd を撃ち、読めた字を返す（導出グラフと指標の入力・便 e-read）。落ちれば上限の内の最後に読めた字（`got`）。
