@@ -1,10 +1,12 @@
 //! 不変条件の 12 本を 3 値（合格・違反・まだ分からない）で数える。
 //! この便で数えるのは 9 本。g-3・g-7・g-9 は材料が 3 つの入力に無いので、つねに「まだ分からない」。
 //! 要る出所が読めなければ「まだ分からない」で、合格にしない。違反は名指す id を持つ。
+//! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
+use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
 use tsuzuri_contract::ledger::MEMO_LABEL;
 
@@ -255,6 +257,43 @@ fn g12_raised(g: &Graph) -> Verdict {
         .map(|(run, _)| run.clone())
         .collect();
     judge(g, &[Source::Runs], bad)
+}
+
+/// 要約を数える種類（設計文書の 11 と、台帳の epic・task・memo・問い）。
+/// 裁定・受け・方針は notes の 1 行から、走行は event log から導き、要約の欄を持たないので数えない。
+pub const SUMMARY_KINDS: [NodeKind; 15] = [
+    NodeKind::ALL[0],
+    NodeKind::ALL[1],
+    NodeKind::ALL[2],
+    NodeKind::ALL[3],
+    NodeKind::ALL[4],
+    NodeKind::ALL[5],
+    NodeKind::ALL[6],
+    NodeKind::ALL[7],
+    NodeKind::ALL[8],
+    NodeKind::ALL[9],
+    NodeKind::ALL[10],
+    NodeKind::Epic,
+    NodeKind::Task,
+    NodeKind::Memo,
+    NodeKind::Question,
+];
+
+/// 要約の無い節点（種類が `SUMMARY_KINDS` に在り、plain と eng のどちらも空でない字を持たない節点の id・字の順・重複なし）。
+/// `summary` は設計の索引の要約の字を読めたか（`add_summary` の返り）。
+/// 設計の索引か台帳が読めないか、要約の字が読めなければ「まだ分からない」（0 件とも名指しとも言わない）。
+pub fn unsummarized(g: &Graph, summary: bool) -> Reading<Vec<String>> {
+    if !summary || !g.is_read(Source::Design) || !g.is_read(Source::Ledger) {
+        return Reading::Unknown;
+    }
+    let has = |s: &Option<String>| s.as_deref().is_some_and(|s| !s.is_empty());
+    let ids: BTreeSet<String> = g
+        .nodes
+        .iter()
+        .filter(|n| SUMMARY_KINDS.contains(&n.kind) && !has(&n.plain) && !has(&n.eng))
+        .map(|n| n.id.clone())
+        .collect();
+    Reading::Known(ids.into_iter().collect())
 }
 
 #[cfg(test)]

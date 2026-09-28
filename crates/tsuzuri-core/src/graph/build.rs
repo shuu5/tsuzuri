@@ -2,7 +2,8 @@
 //! 設計の索引の節点と辺は表の行を写す。bead の種類は epic・memo・問い・契約の順に決める。
 //! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
 //! 設計ノートの行・design の辺・ruled_by の辺はこの便では組まない（先の節点が入力に無い）。
-//! 節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
+//! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）から写す（行は無し）。
+//! 設計の節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,6 +14,7 @@ use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36}
 use tsuzuri_contract::ledger::{MEMO_LABEL, QUESTION_LABEL};
 
 use super::{BeadAttr, Graph, Inputs, RunAttr, Source};
+use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
 
 /// 設計文書の種類の数（`NodeKind::ALL` の先頭の 11）。
 pub const DESIGN_KINDS: usize = 11;
@@ -265,6 +267,7 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
     for bead in beads {
         let labels = bead.labels.unwrap_or_default();
         let kind = bead_kind(bead.issue_type.as_deref().unwrap_or_default(), &labels);
+        let description = bead.description.as_deref().unwrap_or_default();
         g.nodes.push(GraphNode {
             id: bead.id.clone(),
             kind,
@@ -272,8 +275,8 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
             digest: None,
             title: title36(bead.title.as_deref().unwrap_or_default()),
             line: None,
-            plain: None,
-            eng: None,
+            plain: typed(description, PLAIN_PREFIX),
+            eng: typed(description, ENG_PREFIX),
         });
         for dep in bead.dependencies.unwrap_or_default() {
             match named::<EdgeType>(&dep.dep_type).filter(|t| LEDGER_EDGE_TYPES.contains(t)) {
