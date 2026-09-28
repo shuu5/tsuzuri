@@ -15,7 +15,7 @@ use tsuzuri_contract::stats::{CheckResult, NextStep};
 use super::projects::{gproj_card, nx_card};
 use crate::frame::Block;
 use crate::project::Body;
-use crate::project::next::{big, key};
+use crate::project::next::{UNJUDGED_LINE, big, key, unjudged};
 use crate::project::seat::{NG, OK, Sign, WINDOWS, WindowRow, hmd, short, window_row};
 use crate::view::Fetched;
 use crate::vocab::label;
@@ -103,9 +103,10 @@ pub struct NxRow {
     pub card: Card,
 }
 
-/// 並べの順位（lead の `NextMove::ALL` の位置・読めない行は後ろ）。
+/// 並べの順位（lead の `NextMove::ALL` の位置・読めない行となしを判じなかった行は後ろ）。
 fn rank(next: &Reading<NextStep>) -> usize {
     match next {
+        Reading::Known(s) if unjudged(s) => NextMove::ALL.len(),
         Reading::Known(s) => NextMove::ALL
             .iter()
             .position(|k| *k == s.lead)
@@ -141,9 +142,10 @@ pub fn marks(next: &Reading<NextStep>) -> Vec<NxMark> {
         .collect()
 }
 
-/// project の行を並びの 1 行にする（card の時刻は電文の at）。
+/// project の行を並びの 1 行にする（card の時刻は電文の at・なしを判じなかった行は読めない行と同じ測れていない）。
 pub fn nx_row(row: &ProjectRow, at: EpochSecs) -> NxRow {
     let (lead, k, line) = match &row.next {
+        Reading::Known(s) if unjudged(s) => (None, UNKNOWN_KEY, UNJUDGED_LINE.to_string()),
         Reading::Known(s) => {
             let check = s.checks.iter().find(|c| c.kind == s.lead);
             (Some(s.lead), key(s.lead), big(s.lead, check).what)

@@ -16,7 +16,7 @@ use crate::project::Body;
 use crate::project::ledger::{
     JUDGES, Judge, Net, SPARK_H, SPARK_W, age, fixed1, judge, net, spark, spark_svg,
 };
-use crate::project::next::{big, key as next_key};
+use crate::project::next::{UNJUDGED_LINE, big, key as next_key, unjudged};
 use crate::project::seat::{NG, OK, Sign, hm, hmd, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
@@ -172,8 +172,15 @@ pub struct Need {
 }
 
 /// 要対応の欄（1 行は着地済みの次の一手の大きく出す箱の中身の字）。
+/// なしを判じなかった行は読めない行と同じ測れていないで、1 行は project board の測れていないの箱と同じ字。
 pub fn need(project: &ProjectRow) -> Need {
     match &project.next {
+        Reading::Known(step) if unjudged(step) => Need {
+            lead: None,
+            key: state_key(UNKNOWN),
+            sev: sev(None),
+            line: Some(UNJUDGED_LINE.to_string()),
+        },
         Reading::Known(step) => {
             let check = step.checks.iter().find(|c| c.kind == step.lead);
             Need {
@@ -201,9 +208,10 @@ pub fn sev(lead: Option<NextMove>) -> &'static str {
     }
 }
 
-/// need の並べの位（lead の NextMove の ALL の中の位置・next が Unknown はその後ろ）。
+/// need の並べの位（lead の NextMove の ALL の中の位置・next が Unknown となしを判じなかった行はその後ろ）。
 pub fn need_rank(project: &ProjectRow) -> usize {
     match &project.next {
+        Reading::Known(step) if unjudged(step) => NextMove::ALL.len(),
         Reading::Known(step) => NextMove::ALL
             .iter()
             .position(|k| *k == step.lead)
