@@ -297,6 +297,22 @@ impl Place {
     }
 }
 
+/// drop で path を消す守り（歯が通っても落ちても、worktree を模した .git を CARGO_TARGET_TMPDIR の下に残さない）。
+struct Tidy(PathBuf);
+
+impl Drop for Tidy {
+    fn drop(&mut self) {
+        match fs::symlink_metadata(&self.0) {
+            Ok(meta) if meta.is_dir() => {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+            _ => {
+                let _ = fs::remove_file(&self.0);
+            }
+        }
+    }
+}
+
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -564,7 +580,8 @@ fn fstop_worktree_stays_quiet() {
     fs::create_dir_all(&wt).expect("worktree の形の dir");
     fs::create_dir_all(&other).expect("別の dir");
     let git = wt.join(".git");
-    fs::write(&git, format!("gitdir: {}\n", other.display())).expect(".git の file");
+    let tidy = Tidy(git.clone());
+    fs::write(&git,format!("gitdir: {}\n", other.display())).expect(".git の file");
     let out = place.tz(&place.hook_args(&wt), P1);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
@@ -577,6 +594,26 @@ fn fstop_worktree_stays_quiet() {
     let out = place.tz(&place.hook_args(&wt), P1);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(text(&out.stdout), answer());
+
+    drop(tidy);
+    assert!(fs::symlink_metadata(&git).is_err(), "drop の後に .git が残る");
+    let caught = std::panic::catch_unwind(|| {
+        let _tidy = Tidy(git.clone());
+        fs::create_dir(&git).expect(".git の dir");
+        panic!("落ちた歯を模す");
+    });
+    assert!(caught.is_err(), "閉包が panic しない");
+    assert!(fs::symlink_metadata(&git).is_err(), "panic の後に .git が残る");
+
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fstop.rs");
+    let src = fs::read_to_string(&path).expect("tests/fstop.rs を読む");
+    let body = src
+        .split("fn fstop_worktree_stays_quiet()")
+        .nth(1)
+        .expect("歯の fn の字");
+    let guard = body.find("Tidy(git.clone())").expect("守りの字");
+    let write = body.find("fs::write(&git").expect(".git を書く字");
+    assert!(guard < write, "守りが .git を書いた後に束ねられる");
 }
 
 #[test]
