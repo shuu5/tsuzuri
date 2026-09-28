@@ -6,6 +6,7 @@
 //! 節点の頁（便 g-node）: query の page=node と id で開き、nav には出さない（nav の順と頁の一覧は 4 つのまま）。
 //! 問いの頁の右の列（便 g-batch）: class side stack の列に batch と policy の 2 つの block。
 //! header の「戻る」（行 h-wire）: HEADER の前の部品 BACK と、account board の窓へ戻る段の列（`back_steps`）。
+//! 閉じられない窓の注記（行 g-back-note）: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
 //! 頁は src/pages の下に 1 頁 1 file（行 hs-pages・判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
 //! ここは頁の定義（`PageDef`）から頁の枠・nav・link・snapshot を導く（頁の変種の名を持たない）。
 
@@ -197,6 +198,49 @@ pub fn back_steps(account_open: bool) -> Vec<BackStep> {
         BackStep::OpenNew(ACCOUNT_URL)
     };
     vec![first, BackStep::CloseSelf]
+}
+
+/// 空の URL で開いた新しい窓の href。
+pub const BLANK: &str = "about:blank";
+
+/// 窓の名で account board の窓を探した結果（見本の ui.js の backToBoard の front・opened・blocked）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackHow {
+    /// 在った窓を前面へ出した（href が読めない別の origin の窓も在った窓と見る）。
+    Front,
+    /// 窓が無く、空の窓を新しく開いた。
+    Opened,
+    /// 窓が返らなかった（popup の許可が要る）。
+    Blocked,
+}
+
+/// 窓が返ったかと窓の URL（読めなければ None）から結果を決める: 返らなければ Blocked・
+/// about:blank なら Opened・ほか（読めない URL を含む）は Front。
+pub fn back_how(returned: bool, href: Option<&str>) -> BackHow {
+    match (returned, href) {
+        (false, _) => BackHow::Blocked,
+        (true, Some(BLANK)) => BackHow::Opened,
+        (true, _) => BackHow::Front,
+    }
+}
+
+/// 自分の窓の close の後、閉じたかを見るまでの待ち（ミリ秒）。
+pub const BACK_NOTE_MS: u64 = 300;
+
+/// 閉じられない窓の注記の class（見本の `.winnote`）。
+pub const BACK_NOTE: &str = "winnote";
+
+/// 注記の太字の語の鍵。
+pub const BACK_NOTE_KEY: &str = "win_close_hand";
+
+/// 注記の小さい字: 探した結果と、閉じられない理由。
+pub fn back_note(how: BackHow) -> String {
+    let done = match how {
+        BackHow::Front => "account board の窓は前面に出した",
+        BackHow::Opened => "account board を新しい窓で開いた",
+        BackHow::Blocked => "account board の窓を開けなかった（popup の許可が要る）",
+    };
+    format!("{done}・この窓は script が開いた窓でないので閉じられない")
 }
 
 /// 題の字（project の名）。

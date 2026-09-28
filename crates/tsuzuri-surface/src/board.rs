@@ -8,12 +8,14 @@
 //! nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）は頁の定義の icon の字（行 hs-pages）。
 //! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題（行 g-title）。
 
+use std::time::Duration;
+
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::project::PATH as PROJECT_PATH;
 
 use crate::account::windows::ACCOUNT_WIN;
-use crate::frame::{self, BACK, BACK_WRAP, BackStep, Block, HEADER, Mode, PageId};
+use crate::frame::{self, BACK, BACK_WRAP, BackHow, BackStep, Block, HEADER, Mode, PageId};
 use crate::fresh::{self, Fresh};
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
@@ -29,9 +31,6 @@ const LOGO: &str = r##"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
 
 /// 戻るの印（見本の IC.up）。
 const UP: &str = r#"<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>"#;
-
-/// 空の URL で開いた新しい窓の href。
-const BLANK: &str = "about:blank";
 
 /// body に画面を載せる。
 pub fn mount() {
@@ -93,16 +92,17 @@ fn App() -> impl IntoView {
 
 /// account board へ戻る: 空の URL と窓の名 tz-account で開き、about:blank なら窓が無かった
 /// （frame の `back_steps` の段のとおり、前面へか新しく開くかの後に自分の窓を閉じる）。
-fn back_to_board() {
+/// href が読めない窓（別の origin の account board）は在った窓と見る（行 g-back-note）。
+/// close が効かない窓（script が開いた窓でない）は、待ちの後に探した結果を `note` に置く。
+fn back_to_board(note: RwSignal<Option<BackHow>>) {
     let me = window();
     let win = me
         .open_with_url_and_target("", ACCOUNT_WIN)
         .ok()
         .flatten();
-    let account_open = win
-        .as_ref()
-        .is_some_and(|w| w.location().href().is_ok_and(|href| href != BLANK));
-    for step in frame::back_steps(account_open) {
+    let href = win.as_ref().and_then(|w| w.location().href().ok());
+    let how = frame::back_how(win.is_some(), href.as_deref());
+    for step in frame::back_steps(how == BackHow::Front) {
         match step {
             BackStep::Front => {
                 if let Some(w) = &win {
@@ -124,6 +124,15 @@ fn back_to_board() {
             }
             BackStep::CloseSelf => {
                 let _ = me.close();
+                // 閉じたかは読めなければ閉じたと見る（注記を出さない）。
+                set_timeout(
+                    move || {
+                        if !window().closed().unwrap_or(true) {
+                            note.set(Some(how));
+                        }
+                    },
+                    Duration::from_millis(frame::BACK_NOTE_MS),
+                );
             }
         }
     }
@@ -157,9 +166,10 @@ fn project_name(page: PageId) -> RwSignal<Option<String>> {
 /// 上端の帯: 戻る・題・頁の link・最終更新と読みの脈と読み込み不良の印と席の pill・mode の切り替え（frame の BACK と HEADER の順）。
 fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
     let name = project_name(page);
+    let note = RwSignal::new(None);
     let back = view! {
         <span class=BACK_WRAP>
-            <button type="button" class=BACK.class aria-label=label(BACK.key) on:click=move |_| back_to_board()>
+            <button type="button" class=BACK.class aria-label=label(BACK.key) on:click=move |_| back_to_board(note)>
                 <span inner_html=UP></span>
                 <span class="lbl">{label(BACK.key)}</span>
             </button>
@@ -236,7 +246,18 @@ fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
             }
         })
         .collect_view();
-    view! { <header class="top">{back}{parts}</header> }
+    // 閉じられない窓の注記は header の直後（行 g-back-note）。
+    view! { <header class="top">{back}{parts}</header>{move || note.get().map(back_note)} }
+}
+
+/// 閉じられない窓の注記（見本の ui.js の backToBoard の `#winnote`・本番は id で引かないので id を付けない）。
+fn back_note(how: BackHow) -> impl IntoView {
+    view! {
+        <div class=frame::BACK_NOTE role="status">
+            <b>{label(frame::BACK_NOTE_KEY)}</b>
+            <span class="small muted">{frame::back_note(how)}</span>
+        </div>
+    }
 }
 
 /// 頁の枠（frame の列と block の並びのとおり）。
