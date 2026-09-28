@@ -179,6 +179,8 @@ pub struct Materials {
     pub not_yet_live: Vec<String>,
     /// 規則の表に行 R-17 が無く、散文の言及の歯が数えなかった（便 156・床の判定の外）。
     pub mentions_off: bool,
+    /// `--emit-rulings` の標準出力の行（便 186・ADR-31 決定 (4)・床と同じ歩き手と関数・旗の無いときは空）。
+    pub rulings: Vec<String>,
 }
 
 /// 憲法の条のうち機構の種別が reject か build-check で live が now でない条を、条の並びのまま「<id>（<live>）」の字の列にする
@@ -210,6 +212,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
     let mut seals = None;
     let mut not_yet_live = Vec::new();
     let mut mentions_off = false;
+    let mut rulings = Vec::new();
     match load_all(dir, &mut report) {
         Some(src) => {
             not_yet_live = not_yet_live_articles(&src.constitution);
@@ -281,7 +284,11 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                 records: adr_records.as_ref().map_or(&[], |a| &a.records),
                 notes: notes.iter().map(|n| (format!("design-note/{}", n.file), &n.root)).collect(),
             };
-            check_rulings(&ruling::sites(&tree), &mut report);
+            let sites = ruling::sites(&tree);
+            check_rulings(&sites, &mut report);
+            if flag == Flag::EmitRulings {
+                rulings = ruling::emit(dir, &sites);
+            }
             // 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ数える。行 R-17 が無くて数えなかったら知らせる（便 156）
             if let Some(records) = adr_records.as_ref() {
                 mentions_off = !mentions::check_mentions(
@@ -309,6 +316,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
         seals,
         not_yet_live,
         mentions_off,
+        rulings,
     };
     (report, materials)
 }

@@ -1,13 +1,20 @@
 //! 決定の欄の裁定 id（便 181・docs/design/delivery-181.md §1・判断の記録 ADR-31 決定 (1)(3)・責務の層 1 読む）。
 //! 裁定 id の文法（`rulings`・欄の字から全部を切り出し、各々に形の種類 `Form` を付ける）と、決定の欄（骨格が書く欄
 //! `SKELETON`・数えない役 `SKIP_ROLES`）と、正本の木から決定の欄を 1 つずつ拾う歩き手（`sites`）を持つ。
-//! 床の判定（違反・まだ分からない）は `check.rs` の `check_rulings` が持ち、書き出し（ADR-31 決定 (4)・便 C）は
-//! 同じ歩き手と同じ関数を使う。凍結 anchor の承認一覧と、欄の決まりの外の置き場の印（`floor.rs`）も同じ関数で
+//! 床の判定（違反・まだ分からない）は `check.rs` の `check_rulings` が持ち、書き出し（ADR-31 決定 (4)・便 186・`emit`）は
+//! 同じ歩き手と同じ関数を使う（行の番号だけは欄の鍵の行を file の字の event の印で引く）。凍結 anchor の承認一覧と、欄の決まりの外の置き場の印（`floor.rs`）も同じ関数で
 //! 裁定 id の在否を見る（`has_ruling`）。正規表現は使わない（字の走査・文法の字は ASCII だけ）。
 //! 文法の字面 `PATTERN`・形の種類・決定の欄の閉じた一覧 `FIELDS`・骨格の欄・数えない役は、判断の記録の欄の決まり
 //! （adr/schema.yaml）の生成区間に写る（便 182・`floor_adr.rs` の FLOOR）。
 
-use crate::yaml::Node;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+
+use yaml_rust2::parser::{Event, MarkedEventReceiver, Parser};
+use yaml_rust2::scanner::Marker;
+
+use crate::yaml::{json_str, Node};
 
 /// 裁定 id の文法の写し（人が読む字面・床は字の走査で判定する）。語頭の台帳の id と、続く器の問いの印か notes の日時。
 pub(crate) const PATTERN: &str = r"(?<![0-9A-Za-z_.-])[a-z][0-9]-[0-9a-z]+(\.[0-9]+)*(:[0-9]{8}T[0-9]{4}Z-[0-9]+| notes( [0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9][0-9x])?| [0-9]{2}:[0-9][0-9x])( JST)?)?";
@@ -57,15 +64,13 @@ impl Form {
     /// 形の種類の名（書き出しの form の字・欄の決まりの生成区間に写す字）。
     pub(crate) const NAMES: [&'static str; 3] = ["question", "notes-time", "bead"];
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn name(self) -> &'static str {
         Self::NAMES[self as usize]
     }
 }
 
-/// 欄の字から切り出した裁定 id 1 つ（字は欄の字のまま・`bead` は台帳の id の部分）。書き出し（便 C）が 3 つとも読む。
+/// 欄の字から切り出した裁定 id 1 つ（字は欄の字のまま・`bead` は台帳の id の部分）。書き出し（便 186）が 3 つとも読む。
 #[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct Ruling<'a> {
     pub(crate) text: &'a str,
     pub(crate) form: Form,
@@ -176,11 +181,14 @@ fn notes_end(b: &[u8], i: usize) -> Option<usize> {
     Some(lit(b, end, " JST").unwrap_or(end))
 }
 
-/// 拾った決定の欄 1 つ（一覧の項・file・欄の在り処の字・値〔無い欄は None〕）。
+/// 拾った決定の欄 1 つ（一覧の項・file・欄の在り処の字・file の根からの欄の道〔一覧の番号は 0 始まり〕・欄を持つ索引の
+/// 節点の id〔条・規則の表の行・判断の記録・節点の無い欄は None〕・値〔無い欄は None〕）。
 pub(crate) struct Site<'a> {
     pub(crate) field: &'static str,
     pub(crate) file: String,
     pub(crate) at: String,
+    pub(crate) path: String,
+    pub(crate) node: Option<&'a str>,
     pub(crate) value: Option<&'a Node>,
 }
 
@@ -214,48 +222,56 @@ fn file_of(field: &str) -> &str {
 /// 1 つに数える（値 None）。入れ物が表でない・一覧でない形は拾わない（各 file の形の床が数える）。
 pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
     let mut out = Vec::new();
-    let mut push = |field: &'static str, file: &str, at: String, value: Option<&'a Node>| {
+    let mut push = |field: &'static str, file: &str, at: String, path: String, node: Option<&'a str>, value: Option<&'a Node>| {
         out.push(Site {
             field,
             file: file.to_string(),
             at,
+            path,
+            node,
             value,
         });
     };
     let c = tree.constitution;
     if let Some(ap) = c.get("meta").and_then(|m| m.get("approval")).filter(|a| a.as_map().is_some()) {
-        push(ENACTMENT, file_of(ENACTMENT), "meta.approval.ruling".into(), ap.get("ruling"));
+        let path = "meta.approval.ruling";
+        push(ENACTMENT, file_of(ENACTMENT), path.into(), path.into(), None, ap.get("ruling"));
     }
-    for article in maps(c.get("articles")) {
-        let id = article.get("id").and_then(Node::as_str).unwrap_or("?");
-        for (n, am) in maps(article.get("amended_by")).enumerate() {
-            push(AMENDMENT, file_of(AMENDMENT), format!("条 {id} の amended_by[{n}].ruling"), am.get("ruling"));
+    for (a, article) in rows(c.get("articles")) {
+        let id = article.get("id").and_then(Node::as_str);
+        for (n, (k, am)) in rows(article.get("amended_by")).enumerate() {
+            let at = format!("条 {} の amended_by[{n}].ruling", id.unwrap_or("?"));
+            push(AMENDMENT, file_of(AMENDMENT), at, format!("articles[{a}].amended_by[{k}].ruling"), id, am.get("ruling"));
         }
     }
     for (field, section) in [(THRESHOLD, "thresholds"), (DISCIPLINE, "discipline")] {
-        for row in maps(tree.rules.get(section)) {
-            let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
-            push(field, file_of(field), format!("行 {id} の ruling"), row.get("ruling"));
+        for (k, row) in rows(tree.rules.get(section)) {
+            let id = row.get("id").and_then(Node::as_str);
+            let at = format!("行 {} の ruling", id.unwrap_or("?"));
+            push(field, file_of(field), at, format!("{section}[{k}].ruling"), id, row.get("ruling"));
         }
     }
     for (id, record) in tree.records {
         if let Some(ap) = record.get("approval").filter(|a| a.as_map().is_some()) {
-            push(RECORD, &format!("adr/{id}.yaml"), "approval.ruling".into(), ap.get("ruling"));
+            let path = "approval.ruling";
+            push(RECORD, &format!("adr/{id}.yaml"), path.into(), path.into(), Some(id), ap.get("ruling"));
         }
     }
     for (file, root) in &tree.notes {
         for (n, row) in approval_rows(root) {
-            push(NOTE, file, format!("meta.approval[{n}].ruling"), row.get("ruling"));
+            let path = format!("meta.approval[{n}].ruling");
+            push(NOTE, file, path.clone(), path, None, row.get("ruling"));
         }
     }
     for (file, root) in &tree.notes {
-        let tables = maps(root.get("sections"))
-            .filter(|s| s.get("type").and_then(Node::as_str) == Some(crate::floor_note::DECISION_TABLE));
-        for section in tables {
+        let tables = rows(root.get("sections"))
+            .filter(|(_, s)| s.get("type").and_then(Node::as_str) == Some(crate::floor_note::DECISION_TABLE));
+        for (s, section) in tables {
             let n = section.get("n").and_then(Node::as_str).unwrap_or("?");
-            for row in maps(section.get("rows")) {
+            for (k, row) in rows(section.get("rows")) {
                 let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
-                push(TABLE, file, format!("§{n} の行 {id} の ruling"), row.get("ruling"));
+                let path = format!("sections[{s}].rows[{k}].ruling");
+                push(TABLE, file, format!("§{n} の行 {id} の ruling"), path, None, row.get("ruling"));
             }
         }
     }
@@ -264,30 +280,141 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
         for (n, row) in root.into_iter().flat_map(approval_rows) {
             let role = row.get("role").and_then(Node::as_str);
             if !role.is_some_and(|r| SKIP_ROLES.contains(&r)) {
-                push(field, file_of(field), format!("meta.approval[{n}].stamp"), row.get("stamp"));
+                let path = format!("meta.approval[{n}].stamp");
+                push(field, file_of(field), path.clone(), path, None, row.get("stamp"));
             }
         }
     }
     out
 }
 
-/// 一覧の中の表の項（一覧でなければ 0 個・表でない項は飛ばす）。
-fn maps(node: Option<&Node>) -> impl Iterator<Item = &Node> {
+/// 一覧の中の表の項と一覧の番号（一覧でなければ 0 個・表でない項は飛ばす・番号は飛ばす前の番号）。
+fn rows(node: Option<&Node>) -> impl Iterator<Item = (usize, &Node)> {
     node.and_then(Node::as_seq)
-        .unwrap_or_default()
-        .iter()
-        .filter(|n| n.as_map().is_some())
-}
-
-/// meta.approval の行（一覧の番号と表）。
-fn approval_rows(root: &Node) -> impl Iterator<Item = (usize, &Node)> {
-    root.get("meta")
-        .and_then(|m| m.get("approval"))
-        .and_then(Node::as_seq)
         .unwrap_or_default()
         .iter()
         .enumerate()
         .filter(|(_, n)| n.as_map().is_some())
+}
+
+/// meta.approval の行（一覧の番号と表）。
+fn approval_rows(root: &Node) -> impl Iterator<Item = (usize, &Node)> {
+    rows(root.get("meta").and_then(|m| m.get("approval")))
+}
+
+/// 裁定 id の書き出し（ADR-31 決定 (4)・便 186）。歩き手が拾った欄の値（字だけ）から `rulings` で切り出した裁定 id を
+/// 全部、欄の順・切り出した順に 1 件 1 行の JSON にする。欄は ruling・form・bead・node（節点の無い欄は null）・file
+/// （置き場の根からの相対）・line（欄の鍵の行・1 始まり・引けなければ 0）・field（file の根からの欄の道）の順で空白を
+/// 挟まない。値が字でない・無い欄は出さない（床の違反）。
+pub(crate) fn emit(dir: &Path, sites: &[Site]) -> Vec<String> {
+    let mut keys: HashMap<&str, HashMap<String, usize>> = HashMap::new();
+    let mut out = Vec::new();
+    for site in sites {
+        let Some(Node::Scalar(s)) = site.value else {
+            continue;
+        };
+        let line = keys
+            .entry(&site.file)
+            .or_insert_with(|| key_lines(&dir.join(&site.file)))
+            .get(&site.path)
+            .copied()
+            .unwrap_or_default();
+        for r in rulings(s) {
+            let mut o = String::new();
+            for (key, value) in [("ruling", Some(r.text)), ("form", Some(r.form.name())), ("bead", Some(r.bead)), ("node", site.node)] {
+                o.push_str(if o.is_empty() { "{\"" } else { ",\"" });
+                o.push_str(key);
+                o.push_str("\":");
+                match value {
+                    Some(v) => json_str(v, &mut o),
+                    None => o.push_str("null"),
+                }
+            }
+            o.push_str(",\"file\":");
+            json_str(&site.file, &mut o);
+            o.push_str(&format!(",\"line\":{line},\"field\":"));
+            json_str(&site.path, &mut o);
+            o.push('}');
+            out.push(o);
+        }
+    }
+    out
+}
+
+/// file の欄の道ごとの鍵の行（読めない file は空・床が まだ分からない にする）。
+fn key_lines(path: &Path) -> HashMap<String, usize> {
+    fs::read_to_string(path).map(|t| lines_of(&t)).unwrap_or_default()
+}
+
+/// 字の欄の道ごとの鍵の行（1 始まり・同じ表の 2 度目の鍵は数えない＝読み手が最初の値を残すのと同じ）。parse できない字は
+/// 読めた所まで（床が違反か まだ分からない にする）。
+fn lines_of(text: &str) -> HashMap<String, usize> {
+    let mut lines = Lines::default();
+    let _ = Parser::new_from_str(text).load(&mut lines, true);
+    lines.at
+}
+
+/// 欄の道の 1 段（一覧は読んでいる項の番号・表は読んでいる値の鍵〔鍵を待つ間は None〕）。
+enum Step {
+    Seq(usize),
+    Map(Option<String>),
+}
+
+/// 鍵の行を読む event の受け手（床の読み手 `yaml.rs` と同じ yaml-rust2 の event と印）。
+#[derive(Default)]
+struct Lines {
+    stack: Vec<Step>,
+    at: HashMap<String, usize>,
+}
+
+impl Lines {
+    /// 今の欄の道（`a.b[0].c` の形）。
+    fn path(&self) -> String {
+        let mut p = String::new();
+        for step in &self.stack {
+            match step {
+                Step::Seq(n) => p.push_str(&format!("[{n}]")),
+                Step::Map(Some(k)) => {
+                    if !p.is_empty() {
+                        p.push('.');
+                    }
+                    p.push_str(k);
+                }
+                Step::Map(None) => {}
+            }
+        }
+        p
+    }
+
+    /// 値を 1 つ読み終えた（一覧なら次の番号へ・表なら次の鍵を待つ）。
+    fn done(&mut self) {
+        match self.stack.last_mut() {
+            Some(Step::Seq(n)) => *n += 1,
+            Some(Step::Map(k)) => *k = None,
+            None => {}
+        }
+    }
+}
+
+impl MarkedEventReceiver for Lines {
+    fn on_event(&mut self, ev: Event, mark: Marker) {
+        match ev {
+            Event::Scalar(key, ..) if matches!(self.stack.last(), Some(Step::Map(None))) => {
+                self.stack.pop();
+                self.stack.push(Step::Map(Some(key)));
+                let path = self.path();
+                self.at.entry(path).or_insert(mark.line());
+            }
+            Event::Scalar(..) | Event::Alias(_) => self.done(),
+            Event::SequenceStart(..) => self.stack.push(Step::Seq(0)),
+            Event::MappingStart(..) => self.stack.push(Step::Map(None)),
+            Event::SequenceEnd | Event::MappingEnd => {
+                self.stack.pop();
+                self.done();
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -352,6 +479,19 @@ mod tests {
         assert_eq!(SKELETON, [ENACTMENT, THRESHOLD, DISCIPLINE]);
         assert_eq!(SKIP_ROLES, ["作成", "レビュー"]);
         assert_eq!([Form::Question, Form::NotesTime, Form::Bead].map(Form::name), Form::NAMES);
+    }
+
+    /// 歯（便 186）: 欄の道ごとの鍵の行は、段の形・流れの形（行をまたぐ表と引用符の鍵を含む）・一覧の中の一覧で鍵の書かれた
+    /// 行を指し、値が段の字（|）でも鍵の行を指す。同じ表の 2 度目の鍵は数えない。
+    #[test]
+    fn f186_key_lines_follow_block_and_flow_maps() {
+        let text = "meta:\n  approval:\n    - {role: 作成, stamp: 起草}\n    - role: 承認\n      stamp: f2-648\nrows:\n  - {id: R-1,\n     \"ruling\": t3-hub.1}\n  - [a, {ruling: x}]\nruling: |\n  f2-1\nruling: 2 度目\n";
+        let at = lines_of(text);
+        let want = [("meta.approval[0].stamp", 3), ("meta.approval[1].stamp", 5), ("rows[0].id", 7), ("rows[0].ruling", 8), ("rows[1][1].ruling", 9), ("ruling", 10)];
+        for (path, line) in want {
+            assert_eq!(at.get(path), Some(&line), "{path}");
+        }
+        assert_eq!(at.len(), 11, "{at:?}");
     }
 
     /// 歯（便 182）: 決定の欄の一覧は 12 種類で重ならず、骨格の欄と 5 正本の stamp の欄を含む（便 183 で判断の表の行を足した）。

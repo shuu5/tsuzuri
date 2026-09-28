@@ -95,6 +95,9 @@ enum Command {
         /// 全検査が 0 違反で測れないも無いときだけ、発効した判断の記録の封の欠けた行を anchors/adr-seals.yaml の末尾に足す（在る行と本文が違えば断る・書いたら commit する）
         #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start"])]
         freeze_adrs: bool,
+        /// 決定の欄から切り出した裁定 id を全部、1 件 1 行の JSON（ruling・form・bead・node・file・line・field）で標準出力へ書く（違反と要約は標準エラーへ・終了コードは素の床と同じ・一覧が全数なのは 0 のときだけ）
+        #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs"])]
+        emit_rulings: bool,
     },
     /// 憲法の前文と規範文を CLAUDE.md の生成区間へ書く（--write）・検査する（--check）・出す（--print）
     #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "print"])))]
@@ -336,6 +339,7 @@ fn run(cli: Cli) -> ExitCode {
             freeze_ids,
             freeze_start,
             freeze_adrs,
+            emit_rulings,
         } => {
             let flag = if emit_amends {
                 Flag::EmitAmends
@@ -347,6 +351,8 @@ fn run(cli: Cli) -> ExitCode {
                 Flag::FreezeStart
             } else if freeze_adrs {
                 Flag::FreezeAdrs
+            } else if emit_rulings {
+                Flag::EmitRulings
             } else {
                 Flag::None
             };
@@ -367,9 +373,9 @@ fn run(cli: Cli) -> ExitCode {
                 eprintln!("folio check: {msg}");
                 return ExitCode::from(1);
             }
-            // --emit-amends では標準出力を貼れる差分だけにし、違反は標準エラーへ
+            // --emit-amends では標準出力を貼れる差分だけに、--emit-rulings では JSON の行だけにし、違反は標準エラーへ
             let out = |line: String| {
-                if flag == Flag::EmitAmends {
+                if matches!(flag, Flag::EmitAmends | Flag::EmitRulings) {
                     eprintln!("{line}");
                 } else {
                     println!("{line}");
@@ -406,6 +412,9 @@ fn run(cli: Cli) -> ExitCode {
                 }
                 After::Freeze(msg) => eprintln!("folio check: {msg}"),
                 After::Nothing | After::Refused(_) => {}
+            }
+            for line in &materials.rulings {
+                println!("{line}");
             }
             ExitCode::from(verdict.exit_code() as u8)
         }

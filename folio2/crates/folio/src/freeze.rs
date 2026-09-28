@@ -54,7 +54,7 @@ pub fn after(
     report: &mut Report,
 ) -> After {
     match (flag, state, adr) {
-        (Flag::None, ..) => After::Nothing,
+        (Flag::None | Flag::EmitRulings, ..) => After::Nothing,
         (Flag::EmitAmends, Some(st), _) => After::Emit(emit_lines(st, report)),
         (Flag::EmitAmends, None, _) => After::Emit(Vec::new()),
         (Flag::FreezeAnchor, Some(st), Some(adr)) => freeze(dir, st, adr, report),
