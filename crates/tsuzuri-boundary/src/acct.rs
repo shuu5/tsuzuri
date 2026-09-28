@@ -9,6 +9,7 @@
 //! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last・move-signal と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）。file は書かない。
 //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。集めた字は 5 秒のあいだ持ち回す。
+//! ただし変化の印の file（`marks`）の更新時刻と長さが集める前に取った値と違えば、5 秒の中でも集め直す（行 e-acct-hbmark）。
 //! 口の登録と変化の知らせへの印の足しは、つなぐ行 h-wire が行う。
 
 use std::collections::BTreeMap;
@@ -16,7 +17,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
@@ -24,6 +25,7 @@ use tsuzuri_core::account::host::{CAP_ROWS, HostTexts, ORCHESTRATOR, RECORD_KIND
 use tsuzuri_core::account::project::{self, ProjectTexts};
 use tsuzuri_core::account::project_name;
 
+use crate::server::events::stamp;
 use crate::server::ledger::{Source, capture};
 use crate::server::runs::EVENTS_LOG;
 use crate::server::seat::{
@@ -71,6 +73,14 @@ struct Texts {
     stale: Option<Instant>,
 }
 
+/// 印の file ごとの更新時刻と長さ（無ければ None）。
+type Stamps = Vec<Option<(SystemTime, u64)>>;
+
+/// 印の一覧の順に、file の更新時刻と長さを並べる。
+fn stamps(marks: &[PathBuf]) -> Stamps {
+    marks.iter().map(|p| stamp(p)).collect()
+}
+
 /// account board の読みの出所（器・git・bd の program と、引数の state dir と cwd）と、持ち回しの字。
 #[derive(Debug)]
 pub struct Acct {
@@ -79,7 +89,8 @@ pub struct Acct {
     bd: OsString,
     state_dir: PathBuf,
     cwd: PathBuf,
-    held: Mutex<Option<(Instant, Texts)>>,
+    /// 集めた時刻・集める前に取った印の file の更新時刻と長さ・集めた字。
+    held: Mutex<Option<(Instant, Stamps, Texts)>>,
     /// anchor の字 → 台帳の読みの出所（持ち続けて最後に読めた字を次の gather に残す・行 e-hold）。
     ledgers: Mutex<BTreeMap<String, Source>>,
 }
@@ -174,16 +185,24 @@ impl Acct {
         self.texts().marks
     }
 
-    /// 持ち回しの字（`HOLD` を過ぎていれば集め直す・集めるあいだは次の要求を待たせる）。
+    /// 持ち回しの字（`HOLD` を過ぎたか、持ち回しの字の印の file の更新時刻と長さが集める前に取った値と違えば
+    /// 集め直す・集めるあいだは次の要求を待たせる・行 e-acct-hbmark）。印は集める前に取るので、集める途中の変化は
+    /// 次の読みで集め直す。集めた字の印の一覧が前と違う周（初めての集めを含む）だけは集めた後に印を取る。
     fn texts(&self) -> Texts {
         let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((at, texts)) = held.as_ref()
+        let before = held.as_ref().map(|(_, _, texts)| stamps(&texts.marks));
+        if let (Some((at, was, texts)), Some(before)) = (held.as_ref(), before.as_ref())
             && at.elapsed() < HOLD
+            && was == before
         {
             return texts.clone();
         }
         let texts = self.gather();
-        *held = Some((Instant::now(), texts.clone()));
+        let taken = match (held.as_ref(), before) {
+            (Some((_, _, old)), Some(before)) if old.marks == texts.marks => before,
+            _ => stamps(&texts.marks),
+        };
+        *held = Some((Instant::now(), taken, texts.clone()));
         texts
     }
 

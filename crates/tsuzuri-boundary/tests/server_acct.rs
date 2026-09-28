@@ -806,3 +806,123 @@ fn server_acct_no_new_dependencies() {
         ["serde", "serde_json", "tsuzuri-contract"]
     );
 }
+
+/// 停止の記録を置くか消し、偽の器の tick-state-a の字の proj-a:0.1 の行の heartbeat の語を合わせる（器と同じ決まり）。
+fn acchold_switch(place: &Place, off: bool) {
+    let path = place.state("state-a").join("seat/proj-a_0.1/heartbeat-off");
+    if off {
+        fs::write(&path, "").expect("停止の記録を置く");
+    } else {
+        fs::remove_file(&path).expect("停止の記録を消す");
+    }
+    let out = place.root.join("out/tick-state-a");
+    let (from, to) = if off {
+        ("heartbeat=on", "heartbeat=off")
+    } else {
+        ("heartbeat=off", "heartbeat=on")
+    };
+    let text: String = fs::read_to_string(&out)
+        .expect("tick の出力の字")
+        .lines()
+        .map(|l| {
+            let l = if l.contains("target=proj-a:0.1 ") {
+                l.replace(from, to)
+            } else {
+                l.to_string()
+            };
+            format!("{l}\n")
+        })
+        .collect();
+    fs::write(&out, text).expect("tick の出力の字を替える");
+}
+
+/// proj-a の project の行の席の card の heartbeat。
+fn acchold_heartbeat(doc: &AccountDoc) -> Reading<bool> {
+    match &row(doc, "proj-a").seat {
+        Reading::Known(card) => card.heartbeat.clone(),
+        other => panic!("proj-a の席の card が読めない: {other:?}"),
+    }
+}
+
+#[test]
+fn acchold_card_follows_off_file() {
+    let place = Place::new("acchold-off", false);
+    let acct = place.acct();
+    let count = || place.calls("scribe2").len();
+    assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(true));
+    assert_eq!(count(), 9, "{:?}", place.calls("scribe2"));
+    acchold_switch(&place, true);
+    assert_eq!(
+        acchold_heartbeat(&acct.doc(NOW)),
+        Reading::Known(false),
+        "停止の記録の後の読み"
+    );
+    assert_eq!(count(), 18, "{:?}", place.calls("scribe2"));
+    assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(false));
+    acct.marks();
+    assert_eq!(count(), 18, "印が動かなければ持ち回す");
+    acchold_switch(&place, false);
+    assert_eq!(
+        acchold_heartbeat(&acct.doc(NOW)),
+        Reading::Known(true),
+        "停止の記録を消した後の読み"
+    );
+    assert_eq!(count(), 27, "{:?}", place.calls("scribe2"));
+    let calls = place.calls("scribe2");
+    let distinct: BTreeSet<&String> = calls.iter().collect();
+    for argv in distinct {
+        assert_eq!(
+            calls.iter().filter(|c| *c == argv).count(),
+            3,
+            "argv ごとに 3 回: {argv}"
+        );
+    }
+    assert_eq!(place.calls("git").len(), 30, "{:?}", place.calls("git"));
+    assert_eq!(place.calls("bd").len(), 9, "{:?}", place.calls("bd"));
+}
+
+#[test]
+fn acchold_state_log_regathers() {
+    let place = Place::new("acchold-state", false);
+    let acct = place.acct();
+    let session = |doc: &AccountDoc| {
+        let line = doc
+            .sessions
+            .iter()
+            .find(|s| s.name == "proj-a:0.1")
+            .expect("session の行 proj-a:0.1");
+        (line.state, line.since)
+    };
+    let first = acct.doc(NOW);
+    assert_eq!(session(&first), (SeatState::Run, Some(1_790_500_000)));
+    assert_eq!(place.calls("scribe2").len(), 9);
+    let log = place.state("state-a").join("seat/proj-a_0.1/state.jsonl");
+    fs::write(
+        &log,
+        format!(
+            "{STATE_A}{{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790510300,\"sid\":\"s-1\"}}\n"
+        ),
+    )
+    .expect("state.jsonl に idle の行を足す");
+    let second = acct.doc(NOW);
+    assert_eq!(session(&second), (SeatState::Wait, Some(1_790_510_300)));
+    assert_eq!(place.calls("scribe2").len(), 18, "印が動けば集め直す");
+    assert_eq!(acct.doc(NOW), second, "印が動かなければ同じ電文");
+    assert_eq!(place.calls("scribe2").len(), 18, "印が動かなければ持ち回す");
+}
+
+#[test]
+fn acchold_events_doc_names_off() {
+    let text = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("src/server/events.rs"),
+    )
+    .expect("events.rs");
+    let doc: String = text
+        .lines()
+        .filter(|l| l.starts_with("//!"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for word in ["heartbeat-off", "Acct::marks", "e-seat-hbmark"] {
+        assert!(doc.contains(word), "module の doc に {word} が無い");
+    }
+}

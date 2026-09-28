@@ -9,6 +9,8 @@
 //! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
 //! 動いたら board-changed を 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
 //! 便 e-seat は席の状態の file（`<state dir>/seat/<席の dir>/` の state.jsonl と tick-last）の印を板の印に足す。
+//! 席の card の印（行 e-seat-hbmark）と account board の印（`crate::acct` の `Acct::marks`）は同じ dir の停止の記録
+//! heartbeat-off の印も持つ（停止の切り替えで board-changed が出る）。
 //! board-changed の data は ledger-changed と同じ形（`{"at":<epoch 秒>}`）。
 
 use std::io::{self, Write};
