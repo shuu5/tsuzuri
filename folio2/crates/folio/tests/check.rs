@@ -967,7 +967,7 @@ fn f90_adrs_that_is_not_a_list_is_a_violation() {
 const F91_R4_REFS: &str = ", refs: [AC6]}";
 
 /// 便 91 (b) の書き写した 27 対（行 → refs）と、便 93 (d) が R-16 に足した 2 対。
-const F91_ROWS: [(&str, &[&str]); 23] = [
+const F91_ROWS: [(&str, &[&str]); 24] = [
     ("R-1", &["P-4.2", "P-6.3", "D-3"]),
     ("R-3", &["P-4.2", "AC2"]),
     ("R-4", &["AC6"]),
@@ -982,8 +982,9 @@ const F91_ROWS: [(&str, &[&str]); 23] = [
     ("R-17", &["P-4.2", "P-5.6", "ADR-13"]),
     // R-19 は章の上限の行（判断の記録 ADR-11 決定 (3)(エ)・(4)⑦・台帳 f2-648.75 / .250・持ち主の裁定 2026-09-28 案 A）
     ("R-19", &["P-4.1", "P-4.2", "ADR-11"]),
-    // R-18 / D-15 は実装にだけ在った閾値の残りと凍結し直す時機（台帳 f2-648.75 / .186・ADR-11 決定 (3)(エ)・(4)⑦）。R-20 は便 197（.227）の着地の後に足す
+    // R-18 / R-20 / D-15 は実装にだけ在った閾値の残りと凍結し直す時機（台帳 f2-648.75 / .186・ADR-11 決定 (3)(エ)・(4)⑦）。R-20 は便 197（.227）の着地の後に足した
     ("R-18", &["FR1", "P-17.4", "A-2.3", "P-6.3", "D-11", "ADR-11"]),
+    ("R-20", &["P-4.2", "P-10.3", "D-11", "ADR-11"]),
     ("D-15", &["P-7.1", "N-1.1"]),
     ("D-3", &["R-1"]),
     ("D-10", &["P-5.2", "R-8"]),
@@ -1040,7 +1041,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
     );
     assert!(violations(&out).is_empty(), "{:?}", violations(&out));
     let text = fs::read_to_string(w.rules()).unwrap();
-    assert_eq!(text.matches("refs: [").count(), 23, "refs の行の数");
+    assert_eq!(text.matches("refs: [").count(), 24, "refs の行の数");
     let mut total = 0;
     for line in text.lines().filter(|l| l.contains("refs: [")) {
         let id = line
@@ -1059,7 +1060,7 @@ fn f91_the_real_rules_carry_the_refs_field() {
         assert_eq!(got, *want, "{id} の refs");
         total += got.len();
     }
-    assert_eq!(total, 83, "refs の id の合計");
+    assert_eq!(total, 87, "refs の id の合計");
 }
 
 #[test]

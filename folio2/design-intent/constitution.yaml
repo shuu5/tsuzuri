@@ -172,7 +172,7 @@ articles:
     rationale:
       - {kind: v1-incident, ref: "engine-design §12 ②（parser-differential に 2 連続で敗北 → 受理域を絞る fail-closed へ転換）・ADR-0045 no silent skip"}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 床を故意に壊した状態で「まだ分からない」になり、合格にならない（AC3）。判定の値域は 合格 / 不合格 / まだ分からない の 3 値。}
-    relations: {reqs: [FR5, AC3], rules: [D-5, R-14]}
+    relations: {reqs: [FR5, AC3], rules: [D-5, R-14, R-20]}
 
   - id: P-5
     title: 規則は型付きデータに置き、番号で呼ぶ
