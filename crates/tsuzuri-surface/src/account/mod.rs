@@ -5,6 +5,8 @@
 //! 読めたら中身はまだ無いの字を、読めない・まだ読んでいない・本文が電文として読めないときは測れていないと理由の 1 行を出す。
 //! 口は 1 つ（契約の型の crate の account の module の PATH）で、全部の block が net の同じ signal を分け合う。
 //! tab の押しは頁を読み直さず、tab_url の URL を履歴に積む（見本の setTab・戻ると進むは board が popstate で受ける）。
+//! 休止中の chip と card（行 h-dormant）: 休止中の席が 1 つ以上のときだけ最終の記録の chip の後に語と数を出し、
+//! card は席の名と口座と最後の時刻と tick と hb を席ごとに 1 行で出す（見本の dormant:all の枝）。
 
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::{NextMove, Reading};
@@ -12,9 +14,13 @@ use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::wire;
 
 use crate::frame::{Block, Mode, STACK, param, with_param};
+use crate::mapview::graph::cut;
 use crate::mapview::natural;
+use crate::project::seat::hmd;
 use crate::project::{Body, NO_CONTENT, NOT_READ};
 use crate::view::Fetched;
+use crate::vocab::label;
+use crate::widgets::hover::Card;
 
 pub mod cards;
 pub mod heartbeat;
@@ -136,6 +142,61 @@ pub fn page_title() -> String {
 /// 最終の記録の chip（header の部品に数えず、tab の link の後に置く・語の鍵と class）。
 pub const UPDATED_KEY: &str = "last_record";
 pub const UPDATED_CLASS: &str = "chip num";
+
+/// 休止中の chip（最終の記録の chip の後・休止中の席が 1 つ以上のときだけ・語の鍵と class と card の鍵と状態の記号）。
+pub const DORMANT_KEY: &str = "dormant";
+pub const DORMANT_CLASS: &str = "chip num dormant";
+pub const DORMANT_CARD: &str = "dormant:all";
+pub const DORMANT_STATE: &str = "wait";
+
+/// 休止中の card の種類と出所の字。
+pub const DORMANT_KIND: &str = "12 時間以上 動きなし";
+pub const DORMANT_SRC: &str = "seat/<seat>/state.jsonl の最後";
+
+/// 休止中の card の値（席の名を斜線でつないだ字）と詳しくの席の名を切る字数。
+pub const DORMANT_VALUE_CHARS: usize = 34;
+pub const DORMANT_NAME_CHARS: usize = 18;
+
+/// 分からない値の字（休止中の card の口座・tick・hb）。
+const DORMANT_ASK: &str = "?";
+
+/// 休止中の chip の字（語と数・休止中の席が無ければ出さない）。
+pub fn dormant_chip(doc: &AccountDoc) -> Option<String> {
+    let n = doc.dormant.len();
+    (n > 0).then(|| format!("{} {n}", label(DORMANT_KEY)))
+}
+
+/// 休止中の card（見本の dormant:all の枝: 題は chip の字・値は席の名を斜線でつなぐ・詳しくは席ごとの 1 行）。
+pub fn dormant_card(doc: &AccountDoc) -> Option<Card> {
+    let title = dormant_chip(doc)?;
+    let names: Vec<&str> = doc.dormant.iter().map(|s| s.target.as_str()).collect();
+    let word = |r: &Reading<bool>, yes: &'static str, no: &'static str| match r {
+        Reading::Known(true) => yes,
+        Reading::Known(false) => no,
+        Reading::Unknown => DORMANT_ASK,
+    };
+    let more = doc
+        .dormant
+        .iter()
+        .map(|s| {
+            format!(
+                "{} {} ◷ {} · tick {} · hb {}",
+                cut(&s.target, DORMANT_NAME_CHARS),
+                s.account.as_deref().unwrap_or(DORMANT_ASK),
+                hmd(s.last, doc.at),
+                word(&s.tick_healthy, "healthy", "stale"),
+                word(&s.heartbeat, "on", "off"),
+            )
+        })
+        .collect();
+    Some(Card {
+        title,
+        kind: DORMANT_KIND.to_string(),
+        value: cut(&names.join(" / "), DORMANT_VALUE_CHARS),
+        src: DORMANT_SRC.to_string(),
+        more,
+    })
+}
 
 /// tab の 1 つの link（行き先の tab・語の鍵・今の tab なら `on`・数の印の class）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

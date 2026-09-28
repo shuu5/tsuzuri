@@ -1,13 +1,14 @@
 //! account board の頁の描画（wasm の target のときだけ組み立てる・Leptos の csr）: header と tab の枠を account の値のとおりに並べる。
 //! block の中身は account の下の module が描く。ここは枠を描き、tab と mode を URL から読んで URL に残すだけ。
-//! 関係の頁への link・時点のつまみ・休止中の chip は出さない（未決）。最終の記録の chip は tab の link の後に置く。
+//! 関係の頁への link・時点のつまみは出さない（未決）。最終の記録の chip は tab の link の後に、休止中の chip はその直後に置く。
 
 use leptos::ev;
 use leptos::prelude::*;
 
 use super::{
-    BRAND, HEADER, PATH, TOP, Tab, UPDATED_CLASS, UPDATED_KEY, badge, doc, home, ledger, page,
-    page_title, projects, session, tab_href, tab_links, tab_url, windows,
+    BRAND, DORMANT_CARD, DORMANT_CLASS, DORMANT_STATE, HEADER, PATH, TOP, Tab, UPDATED_CLASS,
+    UPDATED_KEY, badge, doc, dormant_card, dormant_chip, home, ledger, page, page_title, projects,
+    session, tab_href, tab_links, tab_url, windows,
 };
 use crate::frame::{self, Block, Mode};
 use crate::fresh::{self, Fresh};
@@ -17,7 +18,7 @@ use crate::store;
 use crate::view::{clock, clock_short};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, term};
-use crate::widgets::hover::{CardLayer, HoverCtx};
+use crate::widgets::hover::{CardLayer, HoverCtx, attach};
 
 /// 題の印（見本の IC.vessel）。
 const VESSEL: &str = r#"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--ink)"/><path d="M6 9h12M6 13h12M6 17h12" stroke="var(--bg)" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="6" r="2" fill="var(--st-run)"/></svg>"#;
@@ -164,6 +165,7 @@ fn top(
                     <nav class=part.class aria-label=label(part.key)>{links}</nav>
                     <span class="grow"></span>
                     {updated_chip()}
+                    {move || dormant_view(read)}
                     {fresh::pulse()}
                     {fresh::mark()}
                 }
@@ -200,6 +202,23 @@ fn updated_chip() -> impl IntoView {
         None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
     };
     view! { <span class=UPDATED_CLASS title=title>{at}</span> }
+}
+
+/// 休止中の chip（行 h-dormant・電文が読めて休止中の席が 1 つ以上のときだけ・状態の記号と語と数・hover で card）。
+fn dormant_view(read: Memo<Option<tsuzuri_contract::account::AccountDoc>>) -> Option<AnyView> {
+    read.with(|d| {
+        let d = d.as_ref()?;
+        let chip = dormant_chip(d)?;
+        let card = dormant_card(d)?;
+        Some(
+            view! {
+                <span class=DORMANT_CLASS data-card=DORMANT_CARD tabindex="0" use:attach=card>
+                    {project::state_icon(DORMANT_STATE)}{chip}
+                </span>
+            }
+            .into_any(),
+        )
+    })
 }
 
 /// tab の枠（段の class と block の並びのとおり）。
