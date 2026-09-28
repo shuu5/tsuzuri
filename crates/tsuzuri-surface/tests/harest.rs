@@ -9,11 +9,10 @@ use tsuzuri_contract::stats::{CheckResult, LedgerStats, UnreflectedCount, Unrefl
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::ledger::{self, HI, LO, Sort, un_class};
 use tsuzuri_surface::account::projects::{
-    PSort, UNREF_KIND_KEY, UnrefKinds, UnrefSum, batch_of, batch_text, kind_label, kinds_of, table,
-    unref_break, unref_sum,
+    PSort, UnrefKinds, UnrefSum, batch_of, batch_text, kinds_of, table, unref_break, unref_sum,
 };
 use tsuzuri_surface::frame::Mode;
-use tsuzuri_surface::project::ledger::kind_name;
+use tsuzuri_surface::project::ledger::{UNREF_KIND_KEY, kind_label, kind_name};
 use tsuzuri_surface::vocab::{SOURCE, vocab};
 
 fn crate_dir() -> PathBuf {

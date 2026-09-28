@@ -5,6 +5,7 @@
 //! 未反映の一覧は口 /api/unreflected（本文は契約の型の UnreflectedList）から読み、電文の行の順と数をそのまま写す（行 g-unref-panel）。
 //! 一覧は epic の下に task・memo の順で、閉じた bead は出さない（全件は地図の方・行 g-ledger-home）。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
 //! epic の進みの行の題と一覧の項の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
+//! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
@@ -333,6 +334,19 @@ pub fn kind_name(kind: UnreflectedKind) -> &'static str {
         .find(|(k, _)| *k == kind)
         .map(|(_, n)| *n)
         .expect("種類の表は 3 つの全部を持つ")
+}
+
+/// 未反映の種類の見出しの語の鍵の接頭（鍵は接頭と kind_name の字）。
+pub const UNREF_KIND_KEY: &str = "unref:";
+
+/// 未反映の種類の見出し（語の辞書の label・見本の unrefBreak と unrefHTML の字）。
+pub fn kind_label(kind: UnreflectedKind) -> String {
+    name_label(kind_name(kind))
+}
+
+/// 未反映の種類の名（kind_name の字）の見出し（語の辞書の label）。
+pub fn name_label(name: &str) -> String {
+    label(&format!("{UNREF_KIND_KEY}{name}"))
 }
 
 /// 未反映の数（電文の数そのまま）と、分からない種類の名（測れていないの記号を添えて出す）。
@@ -874,7 +888,8 @@ mod dom {
     use super::{
         BLOCK, BURN_CAPTION, Card, EpicBar, Group, Judge, LAYOUT, METRICS_PATH, Metrics, NONE,
         Net, OUTSIDE, Part, Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, body, burn_svg,
-        content, count, epic_cards, group_cards, more_line, spark_svg, unref_chip, unref_list,
+        content, count, epic_cards, group_cards, more_line, name_label, spark_svg, unref_chip,
+        unref_list,
     };
     use crate::frame::{self, Mode};
     use crate::project::{Body, UNKNOWN, fold, item_view, map, section, state_icon, unmeasured};
@@ -1061,7 +1076,9 @@ mod dom {
             .unref
             .unknown
             .iter()
-            .map(|k| view! { <span class="chip num">{*k}" "{state_icon(UNKNOWN)}</span> })
+            .map(|k| {
+                view! { <span class="chip num">{name_label(k)}" "{state_icon(UNKNOWN)}</span> }
+            })
             .collect_view();
         let ctx = use_context::<HelpCtx>();
         let mode = move || match ctx {
@@ -1112,7 +1129,7 @@ mod dom {
             .iter()
             .map(|k| {
                 view! {
-                    <div class="small muted">{*k}" "{state_icon(UNKNOWN)}" "{label("gap_unknown")}</div>
+                    <div class="small muted">{name_label(k)}" "{state_icon(UNKNOWN)}" "{label("gap_unknown")}</div>
                 }
             })
             .collect_view();
@@ -1125,7 +1142,7 @@ mod dom {
             <div class="urow">
                 <a class="u-id mono" href=frame::node_href(&r.id, mode)>{r.id.clone()}</a>
                 <span class="u-t">{r.title.clone()}</span>
-                <span>{r.kind}</span>
+                <span>{name_label(r.kind)}</span>
                 <span class="num">{r.age.clone()}</span>
                 <span class="u-n">{label(r.next)}</span>
             </div>

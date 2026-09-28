@@ -13,20 +13,20 @@ use std::cmp::Reverse;
 
 use tsuzuri_contract::account::{AccountDoc, ProjectRow, RunCounts};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
-use tsuzuri_contract::stats::{CheckResult, LedgerStats, UnreflectedKind};
+use tsuzuri_contract::stats::{CheckResult, LedgerStats};
 
 use super::cards::{RowCards, grp_card, row_cards};
 use super::windows::{NOT_YET_KEY, OPEN_NEW_KEY, open_url};
 use crate::frame::{self, Block, Mode};
 use crate::project::Body;
 use crate::project::ledger::{
-    JUDGES, Judge, Net, SPARK_H, SPARK_W, Unref, age, judge, kind_name, net, spark, spark_svg,
+    JUDGES, Judge, Net, SPARK_H, SPARK_W, Unref, age, judge, kind_label, kind_name, net, spark,
+    spark_svg,
 };
 use crate::project::next::{UNJUDGED_LINE, big, key as next_key, unjudged};
 use crate::project::seat::{NG, OK, Sign, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
-use crate::vocab::label;
 use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
@@ -334,14 +334,6 @@ pub fn batch_of(project: &ProjectRow) -> Option<u32> {
 /// 束の承認の件数の字（見本の `束 <件数>`・None は空の字）。
 pub fn batch_text(batch: Option<u32>) -> String {
     batch.map_or_else(String::new, |n| format!("束 {n}"))
-}
-
-/// 未反映の種類の見出しの語の鍵の接頭（鍵は接頭と kind_name の字）。
-pub const UNREF_KIND_KEY: &str = "unref:";
-
-/// 未反映の種類の見出し（語の辞書の label・見本の unrefBreak の字）。
-pub fn kind_label(kind: UnreflectedKind) -> String {
-    label(&format!("{UNREF_KIND_KEY}{}", kind_name(kind)))
 }
 
 /// 未反映の 2 段目（読めた種類の見出しと件数・読めない種類の見出し・どちらも電文の順）。
