@@ -475,12 +475,15 @@ fn seatcard_next_step_from_card() {
             NextMove::Nothing
         };
         assert_eq!(step.lead, want_lead, "{name}");
+        // 空の event log では止まっている走行を判じないので、2 種が当たらない card のなしは判じなかった
+        // （行 c-next-stall）。どちらかが当たればなしは当たらない。
         let nothing = check_of(&step, NextMove::Nothing).result;
-        assert_eq!(
-            nothing == CheckResult::Hit,
-            want_lead == NextMove::Nothing,
-            "{name}"
-        );
+        let want_nothing = if want_lead == NextMove::Nothing {
+            CheckResult::NotJudged
+        } else {
+            CheckResult::Miss
+        };
+        assert_eq!(nothing, want_nothing, "{name}");
     }
     // card が無い・状態が unknown なら 2 種とも判じない（着地済みの関数と同じ値）。
     for card in [None, Some(&unknown)] {
@@ -503,13 +506,14 @@ fn seatcard_next_step_keeps_landed_values() {
     for (ledger, events, now) in next_inputs() {
         let landed = next_step(&ledger, &events, now);
         assert_eq!(next_step_seat(&ledger, &events, now, None), landed);
-        // 2 種が当たらない card では、ほかの種類の結果も大きく出す 1 つも着地済みのまま。
+        // 2 種が当たらない card では、なしのほかの種類の結果も大きく出す 1 つも着地済みのまま
+        // （なしは card の有無で判じた・判じなかったが変わるので比べない・行 c-next-stall）。
         let missed = next_step_seat(&ledger, &events, now, Some(&run));
         assert_eq!(missed.lead, landed.lead);
         for (m, l) in missed.checks.iter().zip(&landed.checks) {
             if matches!(m.kind, NextMove::LimitOrMove | NextMove::Unresponsive) {
                 assert_eq!(m.result, CheckResult::Miss);
-            } else {
+            } else if m.kind != NextMove::Nothing {
                 assert_eq!(m, l);
             }
         }

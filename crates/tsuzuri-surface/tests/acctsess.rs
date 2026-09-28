@@ -660,11 +660,12 @@ fn acctsess_vocab_style_and_deps() {
         assert!(!src.contains(c), "session.rs に {c} が在る");
     }
 
-    // 止まった run の段は中核の crate の next_step の定数の写し。
+    // session の止まった run（見本の runStopped）は、中核の crate の next_step の止まっている走行の段に
+    // Questioned を足した段（行 c-next-stall が次の一手の段から Questioned を除いた）。
     let core = read("../tsuzuri-core/src/next_step.rs");
-    assert!(core.contains(
-        "pub const STALLED_STAGES: [Stage; 3] = [Stage::Questioned, Stage::Failed, Stage::Stopped];"
-    ));
+    assert!(
+        core.contains("pub const STALLED_STAGES: [Stage; 2] = [Stage::Failed, Stage::Stopped];")
+    );
 
     // 依存は足さない（直接の依存は契約の型の crate だけ）。
     let manifest = read("Cargo.toml");

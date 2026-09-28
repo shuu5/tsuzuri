@@ -19,8 +19,14 @@ use crate::ledger::{Bead, read};
 use crate::pipeline;
 use crate::question::open_questions;
 
-/// 止まっている走行の段。
-pub const STALLED_STAGES: [Stage; 3] = [Stage::Questioned, Stage::Failed, Stage::Stopped];
+/// 止まっている走行の段（行 c-next-stall）。Questioned は質問の側で数えない
+/// （見本の stoppedRuns と語の辞書の nx_c と同じ）。
+pub const STALLED_STAGES: [Stage; 2] = [Stage::Failed, Stage::Stopped];
+
+/// この版の入力に材料が無く判じない種類（行 c-next-stall）。なしの判じから外す
+/// （この種類が判じなかったでも、なしを判じなかったにしない）。
+/// 後の行 c-next-effect が発効待ちを判じるときに、ここから外す。
+pub const NO_INPUT: [NextMove; 1] = [NextMove::AwaitingEffect];
 
 /// 束の承認が当たる、A-1 の印の無い open の問いの最小の本数。
 pub const BATCH_MIN: usize = 2;
@@ -31,7 +37,7 @@ struct Found {
     target: Option<BeadId>,
 }
 
-/// 止まっている走行: 段が Questioned か Failed か Stopped の札で、その bead が open のもの
+/// 止まっている走行: 段が Failed か Stopped の札で、その bead が open のもの
 /// （対象はいちばん古い札 = 経過のいちばん長い札の bead）。event log か台帳が読めなければ判じない。
 fn stalled_run(beads: Option<&[Bead]>, events: &str, now: EpochSecs) -> Option<Found> {
     let beads = beads?;
@@ -128,7 +134,10 @@ fn seat_found(kind: NextMove, seat: Option<&SeatCard>) -> Option<Found> {
 }
 
 /// 台帳の一覧の字と event log の字と今の時刻から次の一手を判じる。
-/// なしは、判じた種類のどれも当たらないときに当たる（だから大きく出す 1 つはいつも在る）。
+/// なしは、ほかの種類のどれかが当たれば当たらない。どれも当たらず、`NO_INPUT` に無い種類のどれかを
+/// 判じなかったなら、なしも判じなかった（要件 NFR2: 読めないときは 0 件でなく測れていない）。ほかは当たる。
+/// 大きく出す 1 つはいつも在る（当たる種類が無ければなし）が、なしを判じなかったときの lead のなしは
+/// 測れていないの意味。
 pub fn next_step(ledger: &str, events: &str, now: EpochSecs) -> NextStep {
     judge(ledger, events, now, None)
 }
@@ -161,10 +170,15 @@ fn judge(ledger: &str, events: &str, now: EpochSecs, seat: Option<&SeatCard>) ->
         })
         .collect();
     let any_hit = checks.iter().any(|c| c.result == CheckResult::Hit);
+    let unjudged = checks
+        .iter()
+        .any(|c| c.result == CheckResult::NotJudged && !NO_INPUT.contains(&c.kind));
     checks.push(NextCheck {
         kind: NextMove::Nothing,
         result: if any_hit {
             CheckResult::Miss
+        } else if unjudged {
+            CheckResult::NotJudged
         } else {
             CheckResult::Hit
         },

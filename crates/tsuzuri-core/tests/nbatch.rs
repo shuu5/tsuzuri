@@ -62,8 +62,11 @@ fn judged(ledger: &str, events: &str) -> NextStep {
         .checks
         .iter()
         .find(|c| c.result == CheckResult::Hit)
-        .map(|c| c.kind);
-    assert_eq!(Some(step.lead), first, "lead は並びで最初に Hit の種類");
+        .map_or(NextMove::Nothing, |c| c.kind);
+    assert_eq!(
+        step.lead, first,
+        "lead は並びで最初に Hit の種類（どれも Hit でなければなし）"
+    );
     assert_eq!(
         of(&step, NextMove::AwaitingEffect).result,
         CheckResult::NotJudged

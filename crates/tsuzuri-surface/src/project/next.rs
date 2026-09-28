@@ -52,6 +52,12 @@ pub const MISS: &str = "―";
 /// なし（どれも当たらない）の箱の中身の字。
 pub const NONE_LINE: &str = "orchestrator が動いている / 待っている";
 
+/// なしを判じなかったときの大きい箱の語の鍵（見出しは「測れていない」・行 c-next-stall）。
+pub const UNJUDGED_KEY: &str = "st_unknown";
+
+/// なしを判じなかったときの大きい箱の中身の字。
+pub const UNJUDGED_LINE: &str = "まだ判じていない種類があり、することが無いとは言えない";
+
 /// 止まっている走行の箱の link の字（block「pipeline」へ頁の中で飛ぶ）。
 pub const PIPE_LINK: &str = "run を見る ›";
 
@@ -155,17 +161,35 @@ fn check_of(step: &NextStep, kind: NextMove) -> Option<&NextCheck> {
     step.checks.iter().find(|c| c.kind == kind)
 }
 
+/// lead がなしで、電文のなしの結果が判じなかったか（なしの結果が電文に無ければ偽・行 c-next-stall）。
+/// 判じるのは中核で、ここは電文の結果を読むだけ。
+pub fn unjudged(step: &NextStep) -> bool {
+    step.lead == NextMove::Nothing
+        && check_of(step, NextMove::Nothing).is_some_and(|c| c.result == CheckResult::NotJudged)
+}
+
 /// 電文を中身に組む（大きく出すのは電文の lead・一覧は 7 種の順から lead を除いた並び）。
+/// なしを判じなかったなら、大きい箱は測れていないの箱（`UNJUDGED_KEY` と `UNJUDGED_LINE`）。
 pub fn next(step: &NextStep) -> Next {
     let rest = NextMove::ALL
         .into_iter()
         .filter(|&kind| kind != step.lead)
         .map(|kind| row(kind, check_of(step, kind)))
         .collect();
-    Next {
-        big: big(step.lead, check_of(step, step.lead)),
-        rest,
-    }
+    let big = if unjudged(step) {
+        Big {
+            kind: NextMove::Nothing,
+            key: UNJUDGED_KEY,
+            class: "nxbig none",
+            what_class: "what small muted",
+            what: UNJUDGED_LINE.to_string(),
+            link: None,
+            target: None,
+        }
+    } else {
+        big(step.lead, check_of(step, step.lead))
+    };
+    Next { big, rest }
 }
 
 /// 一覧の 1 行（電文に無い種類は判じなかったと同じ）。

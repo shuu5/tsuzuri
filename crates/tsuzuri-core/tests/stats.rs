@@ -273,12 +273,12 @@ fn stats_next_step_matches_fixture() {
         [NextMove::StalledRun, NextMove::Question, NextMove::Nothing].into(),
         "判じられる 3 種のどれもが 1 組で大きく出る"
     );
-    // 台帳が読めなければ質問も止まっている走行も判じない。なしは当たる。
+    // 台帳が読めなければ質問も止まっている走行も束の承認も判じない。なしも判じない（行 c-next-stall・
+    // 要件 NFR2）。大きく出す 1 つはなし（測れていないの意味）。
     let events = input_text(&cases[0], "events");
     let step = next_step("", &events, now_of(&v));
     for c in &step.checks {
-        let judged = c.result != CheckResult::NotJudged;
-        assert_eq!(judged, c.kind == NextMove::Nothing, "{c:?}");
+        assert_eq!(c.result, CheckResult::NotJudged, "{c:?}");
     }
     assert_eq!(step.lead, NextMove::Nothing);
 }
