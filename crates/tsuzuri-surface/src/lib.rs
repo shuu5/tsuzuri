@@ -7,6 +7,8 @@
 //! block に共通の部品は kit に置く（project が再公開する・行 hs-blocks）。
 
 pub mod account;
+/// 口ごとの読みの印の決め方（net が使い host でも組む・行 g-reads）。
+pub mod flight;
 pub mod frame;
 pub mod kit;
 pub mod mapview;
