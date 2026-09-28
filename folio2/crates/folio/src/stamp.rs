@@ -23,7 +23,7 @@ use std::path::Path;
 
 use crate::adr;
 use crate::ceiling_src::{self, Ceiling, Files, STAMP_FILE};
-use crate::cursor::R;
+use crate::cursor::{self, R};
 use crate::findings::{self, Counted, Refute};
 use crate::gate::{self, WAIT_REFUTE};
 use crate::sha256;
@@ -350,9 +350,11 @@ pub fn marks(dir: &Path) -> R<Option<Marks>> {
     if !path.exists() {
         return Ok(None);
     }
-    let text = fs::read_to_string(&path).map_err(|e| format!("{STAMP_FILE}: 読めない: {e}"))?;
+    // 読めない・parse できないは床の面の段で まだ分からない に数える字（便 187）
+    let text = fs::read_to_string(&path)
+        .map_err(|e| cursor::unreadable(format!("{STAMP_FILE}: 読めない: {e}")))?;
     let root = yaml::parse(&text)
-        .map_err(|e| format!("{STAMP_FILE}: parse できない: {e}"))?
+        .map_err(|e| cursor::unreadable(format!("{STAMP_FILE}: parse できない: {e}")))?
         .root;
     let field = |node: &Node, key: &str, at: &str| {
         node.get(key)

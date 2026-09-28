@@ -13,14 +13,16 @@
 //! 下書きも凍結もしない）を回し、標準出力の 1 行目に床の 3 値を出す。不合格なら配信先へ 1 file も書かず 1・
 //! まだ分からないなら今までどおり書いて 2・合格なら書いて 0。`--check` は床を回さない（出力も終了コードも今のまま）。
 //! 焼いた様式（便 153・ADR-27 決定 (2)）: 置き場の preview/ に様式の file が無いときだけ、組み立て時に焼いた字を出す。
+//! 床の面の段（便 187）: `check_faces` は、床のほかの段が何も数えていないときだけ build と同じ `build_all` を図の道具を
+//! 撃たずに回し、面が組めなければ面の字のまま違反に数える（`folio check` と `--write` の床が呼ぶ・床の合格と面の生成を割らない）。
 
 use std::fs;
 use std::path::Path;
 
 use crate::cursor::R;
-use crate::{check, graph, parts};
+use crate::{check, cursor, figure, graph, parts};
 use crate::phase::Flag;
-use crate::verdict::Verdict;
+use crate::verdict::{Report, Verdict};
 use crate::{face_adr, face_constitution, face_index, face_index_read, face_note, face_srs};
 
 /// 配信先へ出す 1 本の出どころ。
@@ -101,6 +103,7 @@ fn write_after_floor(dir: &Path, out_dir: &Path) -> Outcome {
     let (mut report, _) = check::check_dir(dir, Flag::None);
     // 索引と天井の印が組めない置き場から面を書かない（便 136）
     graph::check_index(dir, &mut report);
+    check_faces(dir, &mut report);
     let floor = report.verdict();
     let floor_line = format!(
         "folio build: 床 = {floor}（違反 {}・まだ分からない {}）",
@@ -127,6 +130,28 @@ fn write_after_floor(dir: &Path, out_dir: &Path) -> Outcome {
         outcome.verdict = Verdict::Unknown;
     }
     outcome
+}
+
+/// 床の違反の種類（便 187）: 面の生成器が組めない形。
+pub const FACE_KIND: &str = "面";
+
+/// 床の口（便 187）: 床のほかの段が何も数えていない（合格の手前）ときだけ、build と同じ `build_all` を、図の道具を
+/// 撃たず（`figure::dry`）同じ正本を読み直さず（`cursor::memo`）回し、面が組めなければ面の字のまま違反 1 件に数える
+/// （床の合格と面の生成を割らない・P-3.3・P-4.1）。面の字が「読めない」（`cursor::unreadable` を通った字）なら違反でなく
+/// まだ分からない 1 件（床のほかの段と同じ・P-4.2）。ほかの段が何かを数えていれば回さない（床は既に合格でなく、同じ原因を
+/// 2 度数えない・`graph::check_index` と同じ形）。
+pub fn check_faces(dir: &Path, report: &mut Report) {
+    if !(report.violations.is_empty() && report.unknowns.is_empty() && report.pendings.is_empty()) {
+        return;
+    }
+    let (built, unreadable) = cursor::memo(|| figure::dry(|| build_all(dir)));
+    let Err(e) = built else { return };
+    // 読めない（正本・様式・印）は床のほかの段と同じく まだ分からない（P-4.2）・それ以外の面の字は形の誤りで違反
+    if unreadable.iter().any(|u| e.contains(u.as_str())) {
+        report.unknown(e);
+    } else {
+        report.violation(FACE_KIND, e);
+    }
 }
 
 /// 出す file を全部 memory の上で用意する（1 本でも用意できなければ Err）。
@@ -160,7 +185,7 @@ fn style(dir: &Path, name: &str) -> R<Vec<u8>> {
             n => Err(format!("{n}: 焼いた様式に無い")),
         };
     }
-    fs::read(&path).map_err(|e| format!("{}: 読めない: {e}", path.display()))
+    fs::read(&path).map_err(|e| cursor::unreadable(format!("{}: 読めない: {e}", path.display())))
 }
 
 /// 面の名 → 便 14〜16 の生成器（`face.rs` の run と同じ選び方）。
@@ -241,6 +266,7 @@ fn check_all(out_dir: &Path, built: &[(String, Vec<u8>)], total: usize) -> Outco
 #[cfg(test)]
 mod site_tests {
     use super::*;
+    use crate::yaml;
 
     #[test]
     fn site_outputs_are_five_files_in_this_order() {
@@ -271,4 +297,51 @@ mod site_tests {
     fn site_derive_takes_only_the_three_face_names() {
         assert!(derive("figure", Path::new("design-intent")).is_err());
     }
+
+    /// 床の面の段の読み直さない口（便 187）: memo の中では 2 度目から 1 度目の木を返し、外では毎回読む。
+    #[test]
+    fn f187_memo_reads_a_file_once_inside_and_every_time_outside() {
+        let td = std::env::temp_dir().join(format!("folio-f187-memo-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&td);
+        fs::create_dir_all(&td).unwrap();
+        fs::write(td.join("a.yaml"), "k: 1\n").unwrap();
+        fs::write(td.join("b.yaml"), "k: [\n").unwrap();
+        let ((first, second, broken), unreadable) = cursor::memo(|| {
+            let first = cursor::load(&td, "a.yaml");
+            fs::remove_file(td.join("a.yaml")).unwrap();
+            (first, cursor::load(&td, "a.yaml"), cursor::load(&td, "b.yaml"))
+        });
+        assert!(first.is_ok() && first == second, "{first:?} / {second:?}");
+        // 読めない字は memo が返す（YAML として読めない b.yaml の 1 件だけ）
+        assert_eq!(unreadable, vec![broken.unwrap_err()]);
+        assert!(cursor::load(&td, "a.yaml").is_err(), "memo の外で写しを返した");
+        let _ = fs::remove_dir_all(&td);
+    }
+
+    /// 床の面の段の図の口（便 187）: dry の中では型と型付き記述の形までを確かめ、道具を撃たずに空の本体を返す。
+    /// 道具の置き場の無い dir でも通り、型が表に無い・記述が表でないは今どおり Err。dry を出たら道具を撃つ口に戻る。
+    #[test]
+    fn f187_dry_render_checks_the_shape_without_the_tool() {
+        let spec = yaml::parse_typed("s: {a: 1}\nt: [1]\n").unwrap();
+        let x = cursor::X::root(&spec, "spec");
+        // 置き場の親に空の道具の dir を置く＝dry の外では焼いた道具を書き出さず「図の道具が無い」で止まる（一時の置き場を残さない）
+        let td = std::env::temp_dir().join(format!("folio-f187-dry-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&td);
+        fs::create_dir_all(td.join("vendor/archify")).unwrap();
+        let dir = td.join("design-intent");
+        let (ok, bad_kind, bad_spec) = figure::dry(|| {
+            (
+                figure::render(&dir, "f1", "archify-workflow", &x.f("s").unwrap()),
+                figure::render(&dir, "f1", "archify-bogus", &x.f("s").unwrap()),
+                figure::render(&dir, "f1", "archify-workflow", &x.f("t").unwrap()),
+            )
+        });
+        assert_eq!(ok, Ok(String::new()));
+        assert!(bad_kind.unwrap_err().contains("図の道具の型でない"));
+        assert!(bad_spec.unwrap_err().contains("型付き記述（spec）が表でない"));
+        let outside = figure::render(&dir, "f1", "archify-workflow", &x.f("s").unwrap());
+        assert!(outside.unwrap_err().contains("図の道具が無い"), "dry の外で道具の置き場を見ない");
+        let _ = fs::remove_dir_all(&td);
+    }
+
 }

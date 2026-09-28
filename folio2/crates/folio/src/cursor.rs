@@ -2,22 +2,70 @@
 //! 正本 1 file を型付きで読む `load`・型付きの木を欄の道つきで辿る `X`・字面の 5 字の逃がし `esc`・id の形 `safe_id` を持つ。
 //! `face.rs`（便 14）から字を変えずに降ろした。正本の byte を型に直して辿るだけで、HTML の骨格も名札も知らない。
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::yaml::{self, Value};
 
 pub type R<T> = Result<T, String>;
 
+thread_local! {
+    /// 読んだ正本の写しと「読めない」の字（`memo` のあいだだけ在る・便 187）。
+    static MEMO: RefCell<Option<Memo>> = const { RefCell::new(None) };
+}
+
+#[derive(Default)]
+struct Memo {
+    trees: HashMap<PathBuf, Value>,
+    unreadable: Vec<String>,
+}
+
+/// `f` のあいだ、`load` は同じ file を 2 度目からは読み直さず、1 度目に読めた木の写しを返す（床が面を組むとき、
+/// 面ごとに同じ正本を読み直さない・便 187）。読めなかった file は覚えない。返すのは `f` の値と、そのあいだに
+/// `unreadable` へ渡った「読めない」の字の一覧（床の面の段が まだ分からない と形の誤りを分ける・P-4.2）。
+pub fn memo<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
+    MEMO.with(|m| *m.borrow_mut() = Some(Memo::default()));
+    let out = f();
+    let memo = MEMO.with(|m| m.borrow_mut().take()).unwrap_or_default();
+    (out, memo.unreadable)
+}
+
+/// 「読めない」（fs の読みの失敗・UTF-8 でない・YAML として読めない・file でない）の字。`memo` のあいだは覚えて返す
+/// （便 187）。重複キーのような形の誤りには使わない。
+pub fn unreadable(msg: String) -> String {
+    MEMO.with(|m| {
+        if let Some(m) = m.borrow_mut().as_mut() {
+            m.unreadable.push(msg.clone());
+        }
+    });
+    msg
+}
+
 /// 正本 1 file を型付きで読む。無い・読めない・UTF-8 でない・重複キー・空の文書は Err（まだ分からない）。
 pub fn load(dir: &Path, name: &str) -> R<Value> {
-    let bytes = fs::read(dir.join(name)).map_err(|e| format!("{name}: 読めない: {e}"))?;
-    let text = String::from_utf8(bytes).map_err(|_| format!("{name}: UTF-8 でない"))?;
-    let doc = yaml::parse(&text).map_err(|e| format!("{name}: 読めない: {e}"))?;
+    let key = dir.join(name);
+    if let Some(v) = MEMO.with(|m| m.borrow().as_ref().and_then(|m| m.trees.get(&key).cloned())) {
+        return Ok(v);
+    }
+    let v = read(dir, name)?;
+    MEMO.with(|m| {
+        if let Some(m) = m.borrow_mut().as_mut() {
+            m.trees.insert(key, v.clone());
+        }
+    });
+    Ok(v)
+}
+
+fn read(dir: &Path, name: &str) -> R<Value> {
+    let bytes = fs::read(dir.join(name)).map_err(|e| unreadable(format!("{name}: 読めない: {e}")))?;
+    let text = String::from_utf8(bytes).map_err(|_| unreadable(format!("{name}: UTF-8 でない")))?;
+    let doc = yaml::parse(&text).map_err(|e| unreadable(format!("{name}: 読めない: {e}")))?;
     if let Some(d) = doc.duplicates.first() {
         return Err(format!("{name}: 重複キー「{}」（{} 行）", d.key, d.line));
     }
-    yaml::parse_typed(&text).map_err(|e| format!("{name}: {e}"))
+    yaml::parse_typed(&text).map_err(|e| unreadable(format!("{name}: {e}")))
 }
 
 // ── 木を辿る口（便 11 の render.rs の X と同じ形）──

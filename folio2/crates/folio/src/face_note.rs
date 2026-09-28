@@ -525,7 +525,7 @@ fn id_links(env: &Env<'_>, x: &X<'_>) -> R<Vec<String>> {
 /// 器の導出 file（床と同じ式 `note::external_path` で解く）を行走査で読み、field の name を宣言の順に返す。
 /// 読めない・期待する形でない は「まだ分からない」（要件書 FR10・AC8）。
 fn load_external(dir: &Path) -> R<Vec<String>> {
-    let bad = |why: String| format!("{EXTERNAL_PATH}: 器の導出 file が読めない: {why}");
+    let bad = |why: String| cursor::unreadable(format!("{EXTERNAL_PATH}: 器の導出 file が読めない: {why}"));
     let path = note::external_path(dir).map_err(bad)?;
     if path.is_symlink() {
         return Err(bad("symlink は認めない".to_string()));
@@ -876,7 +876,8 @@ fn table_chapter(
 fn contract_row(r: &mut Row, row: &X<'_>, secs: &[Sec<'_>], env: &Env<'_>) -> R<()> {
     r.rt = row.ef("title")?;
     r.badges.push(pill(&row.ef("size")?));
-    r.norm = Some(row.ef("done")?);
+    // verify と done は器の導出 file で conditional（在るときだけ出す・要否は床が数える・便 187）
+    r.norm = row.g("done")?.map(|x| x.e()).transpose()?;
 
     // 節（同じ文書の該当の節の章へ・節が無ければ「（まだ分からない）」）
     let sec = row.f("section")?.text()?;
@@ -890,12 +891,14 @@ fn contract_row(r: &mut Row, row: &X<'_>, secs: &[Sec<'_>], env: &Env<'_>) -> R<
     if !reqs.is_empty() {
         r.chips.push(hint("要件", &reqs.join("・")));
     }
-    let verify = row
-        .f("verify")?
-        .seq()?
-        .iter()
-        .map(|q| Ok(format!("<code>{}</code>", q.e()?)))
-        .collect::<R<Vec<_>>>()?;
+    let verify = match row.g("verify")? {
+        Some(v) => v
+            .seq()?
+            .iter()
+            .map(|q| Ok(format!("<code>{}</code>", q.e()?)))
+            .collect::<R<Vec<_>>>()?,
+        None => Vec::new(),
+    };
     if !verify.is_empty() {
         r.chips.push(hint("検証", &verify.join("<br>")));
     }

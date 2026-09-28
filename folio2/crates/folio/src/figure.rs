@@ -13,6 +13,7 @@
 //! 置き場の親に道具の写し（vendor/archify）が無いときだけ、組み立て時に焼いた写しを 1 回の命令で 1 度だけ一時の置き場へ
 //! 書き出して撃ち、命令の終わりに `sweep` で消す（便 168・ADR-27 決定 (1)）。焼いた道具にも凍結 anchor が掛かる。
 
+use std::cell::Cell;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -64,6 +65,20 @@ const ANCHOR_KIND: &str = "architecture";
 
 /// 照合の結果（process の中で 1 回だけ計算する・道具の呼び出しを図ごとに増やさない）。
 static ANCHOR: OnceLock<R<()>> = OnceLock::new();
+
+thread_local! {
+    /// 床の空撃ち（図の道具を撃たない・便 187）のあいだだけ真。
+    static DRY: Cell<bool> = const { Cell::new(false) };
+}
+
+/// `f` のあいだ、`render` は型と型付き記述の形までを確かめて道具を撃たずに空の本体を返す（床が面と同じ関数で
+/// 面を組むための口・便 187）。道具・Node・凍結 anchor は床の外（道具の答えは build が まだ分からない で知らせる）。
+pub fn dry<T>(f: impl FnOnce() -> T) -> T {
+    DRY.with(|d| d.set(true));
+    let out = f();
+    DRY.with(|d| d.set(false));
+    out
+}
 
 pub enum Mode {
     Write,
@@ -201,6 +216,9 @@ pub fn render(dir: &Path, id: &str, kind: &str, spec: &X<'_>) -> R<String> {
         return Err(format!("{}: 型付き記述（spec）が表でない", spec.at));
     }
     let json = to_json(spec.v)?;
+    if DRY.with(Cell::get) {
+        return Ok(String::new());
+    }
     let tool = tool_path(dir)?;
     anchor_holds(dir)?;
     let body = deliver(&tool, kind, &json, id)?;

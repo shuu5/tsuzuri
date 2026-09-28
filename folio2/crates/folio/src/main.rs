@@ -75,7 +75,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// 設計文書の置き場の床（正本 7 file〔憲法・規則の表・語彙・要件書・入口・相談窓口・天井〕の形と、判断の記録・設計ノート・凍結 anchor・索引の欄の決まりと、参照 id と、索引が組めるか）を検査し、合格 0 / 不合格 1 / まだ分からない 2 で終わる
+    /// 設計文書の置き場の床（正本 7 file〔憲法・規則の表・語彙・要件書・入口・相談窓口・天井〕の形と、判断の記録・設計ノート・凍結 anchor・索引の欄の決まりと、参照 id と、索引と面が組めるか）を検査し、合格 0 / 不合格 1 / まだ分からない 2 で終わる
     Check {
         /// 正本の置き場
         #[arg(long, default_value = "design-intent")]
@@ -362,6 +362,8 @@ fn run(cli: Cli) -> ExitCode {
             let (mut report, materials) = check::check_dir(&dir, flag);
             // 索引が組めない置き場を合格と言わない（便 136・層 2 の check_dir からは呼ばない）
             graph::check_index(&dir, &mut report);
+            // 面が組めない置き場を合格と言わない（便 187）
+            site::check_faces(&dir, &mut report);
             // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
             let after = freeze::after(
                 &dir,
