@@ -714,6 +714,26 @@
    "plain": "畳んだ子の数\n→ 押すと開く",
    "internal": "hub の子 = parent-child / in-article / answers"
   },
+  "gf_group": {
+   "label": "組",
+   "plain": "同じ種類の節点を 1 つの箱に畳んだもの\n→ 右下の印を押すと 1 段開く",
+   "internal": "ViewNode.group = true / id は ~ を含む"
+  },
+  "gf_unfold": {
+   "label": "1 段開く",
+   "plain": "畳んだ組の箱を 1 段だけ開く",
+   "internal": "fold = folded → ?open= に id を足す"
+  },
+  "gf_fold": {
+   "label": "畳み直す",
+   "plain": "開いた組の箱を 1 つの箱に戻す",
+   "internal": "fold = open → ?open= から id を外す"
+  },
+  "gf_refused": {
+   "label": "開けなかった",
+   "plain": "見える箱が 40 を越えるので開かなかった",
+   "internal": "GraphView.refused"
+  },
   "gap_ok": {
    "label": "合格",
    "plain": "{gi:ok} 検査を通った",

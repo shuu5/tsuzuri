@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use tsuzuri_contract::graph::{
-    EdgeType, GraphView, NodeKind, ViewEdge, ViewNode, natural_cmp, title36,
+    BoxFold, EdgeType, GraphView, NodeKind, ViewEdge, ViewNode, natural_cmp, title36,
 };
 use tsuzuri_contract::wire;
 
@@ -478,12 +478,23 @@ pub fn node_svg(n: &ViewNode, p: Pos) -> String {
         lc
     };
     let title_fill = if faded { "var(--ink-3)" } else { "var(--ink)" };
-    let aria = format!(
-        "{} {} {}",
-        n.node.id,
-        label(kind_key(n.node.kind)),
-        n.node.title
-    );
+    // 組の箱は 1 行目に題・2 行目に種類の語と組の語・縁は点線（id を字にしない）。
+    let (aria, head, second) = if n.group {
+        fold::group_lines(n, x, y, id_max, &id_fill)
+    } else {
+        (
+            format!("{} {} {}", n.node.id, label(kind_key(n.node.kind)), n.node.title),
+            format!(
+                r#"<text x="{}" y="{}" font-size="10.5" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="{id_fill}" textLength="{id_len:.1}" lengthAdjust="spacingAndGlyphs">{}</text>"#,
+                x + 21.0,
+                y + 16.5,
+                esc(&n.node.id)
+            ),
+            cut(&title36(&n.node.title), BOX_TITLE_CHARS),
+        )
+    };
+    let dash = if n.group { r#" stroke-dasharray="4 2""# } else { "" };
+    let toggle = fold::mark_svg(n, p).unwrap_or_default();
     let badge = badge.map_or_else(String::new, |b| {
         format!(
             r#"<rect x="{}" y="{}" width="42" height="16" rx="8" fill="var(--panel-2)" stroke="var(--line-2)"/><text x="{}" y="{}" font-size="10" font-weight="700" text-anchor="middle" fill="var(--ink-2)">{}</text>"#,
@@ -495,14 +506,12 @@ pub fn node_svg(n: &ViewNode, p: Pos) -> String {
         )
     });
     format!(
-        r#"<g class="node" data-key="{key}" tabindex="0" aria-label="{aria}"><rect class="hit" x="{x}" y="{y}" width="{w}" height="{h}" rx="4" fill="var(--panel)" stroke="{edge}" stroke-width="{ew}"/>{mark}<text x="{}" y="{}" font-size="10.5" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="{id_fill}" textLength="{id_len:.1}" lengthAdjust="spacingAndGlyphs">{key}</text><text x="{}" y="{}" font-size="12" fill="{title_fill}" data-t="">{title}</text>{badge}</g>"#,
-        x + 21.0,
-        y + 16.5,
+        r#"<g class="node" data-key="{key}" tabindex="0" aria-label="{aria}"><rect class="hit" x="{x}" y="{y}" width="{w}" height="{h}" rx="4" fill="var(--panel)" stroke="{edge}" stroke-width="{ew}"{dash}/>{mark}{head}<text x="{}" y="{}" font-size="12" fill="{title_fill}" data-t="">{title}</text>{badge}{toggle}</g>"#,
         x + 8.0,
         y + 32.0,
         key = esc(&n.node.id),
         aria = esc(&aria),
-        title = esc(&cut(&title36(&n.node.title), BOX_TITLE_CHARS)),
+        title = esc(&second),
     )
 }
 
@@ -723,6 +732,9 @@ pub struct ChainRow {
     pub shape: String,
     pub alert: bool,
     pub kids: Option<u32>,
+    /// 組の箱の行か（題だけを出す）。
+    pub group: bool,
+    pub fold: BoxFold,
 }
 
 /// 狭い幅の一覧の 1 つの帯。
@@ -765,6 +777,8 @@ pub fn chain(view: &GraphView) -> Vec<ChainBand> {
                         ),
                         alert,
                         kids: (n.kids > 0).then_some(n.kids),
+                        group: n.group,
+                        fold: n.fold,
                     }
                 })
                 .collect();
@@ -1066,6 +1080,9 @@ impl Zoom {
 pub fn opens_node(key: &str) -> bool {
     matches!(key, "Enter" | " ")
 }
+
+/// 組の箱の開き閉じ（開いた箱の列・口の path・右下の印・開けなかった行・src/mapview/graph/fold.rs）。
+pub mod fold;
 
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;

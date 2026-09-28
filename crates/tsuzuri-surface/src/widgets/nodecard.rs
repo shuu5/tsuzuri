@@ -11,6 +11,7 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, ViewNode};
 
 use crate::mapview::band::{band_of, kind_key};
 use crate::mapview::graph::cut;
+use crate::mapview::graph::fold::fold_key;
 use crate::mapview::list::{NO_GIST, NO_STATE};
 use crate::mapview::state;
 use crate::vocab::label;
@@ -142,13 +143,35 @@ pub fn card_for(node: &GraphNode, status: Option<&str>) -> Card {
     }
 }
 
-/// 眺めの節点の列の id ごとの card（同じ id が 2 つ在れば前の節点の値・近傍の図と一覧が引く）。
+/// 組の箱の card（圧縮された cell・題・種類と帯と組・子の数・開き閉じの語・詳しくは無し）。
+/// 箱の id（~ の字）と「要約なし」は出さない。
+pub fn group_card(n: &ViewNode) -> Card {
+    let kind = n.node.kind;
+    Card {
+        title: n.node.title.clone(),
+        kind: format!(
+            "{}・{}・{}",
+            label(kind_key(kind)),
+            band_of(kind).name(),
+            label("gf_group")
+        ),
+        value: format!("{} {}", label("children"), n.kids),
+        src: fold_key(n.fold).map(label).unwrap_or_default(),
+        more: Vec::new(),
+    }
+}
+
+/// 眺めの節点の列の id ごとの card（同じ id が 2 つ在れば前の節点の値・組の箱は `group_card`・近傍の図と一覧が引く）。
 pub fn view_cards(nodes: &[ViewNode]) -> BTreeMap<String, Card> {
     let mut cards = BTreeMap::new();
     for n in nodes {
-        cards
-            .entry(n.node.id.clone())
-            .or_insert_with(|| card_for(&n.node, n.status.as_deref()));
+        cards.entry(n.node.id.clone()).or_insert_with(|| {
+            if n.group {
+                group_card(n)
+            } else {
+                card_for(&n.node, n.status.as_deref())
+            }
+        });
     }
     cards
 }

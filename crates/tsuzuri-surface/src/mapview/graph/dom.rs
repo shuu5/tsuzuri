@@ -1,18 +1,21 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
 use leptos::ev;
 use leptos::html::Div;
 use leptos::prelude::*;
-use tsuzuri_contract::graph::GraphView;
+use tsuzuri_contract::graph::{BoxFold, GraphView, ViewNode};
 use web_sys::wasm_bindgen::JsCast;
 
+use super::fold::{LEGEND_GROUP, OpenList, fold_key, refused_line};
 use super::{
-    ChainBand, Highlight, LEGEND_BORDERS, LEGEND_HOVER, LEGEND_SHAPES, Layout, Legend, PATH,
-    PinAction, Side, Zoom, band_labels, border, box_height, chain, count_line, degrees, doc,
-    dragged, edge_term, expert_line, highlight, initial_scale, layout, legend, legend_line,
-    open_question, opens_node, pin_next, svg,
+    ChainBand, Highlight, LEGEND_BORDERS, LEGEND_HOVER, LEGEND_SHAPES, Layout, Legend, PinAction,
+    Side, Zoom, band_labels, border, box_height, chain, count_line, degrees, doc, dragged,
+    edge_term, expert_line, highlight, initial_scale, layout, legend, legend_line, open_question,
+    opens_node, pin_next, svg,
 };
+use crate::view::Fetched;
 use crate::frame::{self, Mode};
 use crate::mapview::band::Band;
 use crate::mapview::band_chip;
@@ -47,6 +50,17 @@ impl Model {
     fn has(&self, id: &str) -> bool {
         self.view.nodes.iter().any(|n| n.node.id == id)
     }
+
+    fn node(&self, id: &str) -> Option<&ViewNode> {
+        self.view.nodes.iter().find(|n| n.node.id == id)
+    }
+}
+
+thread_local! {
+    /// 開いた箱の id の列（頁の間だけ・URL にも画面の外の保存にも書かない・地図の中身の読み直しで消えない）。
+    static OPEN: RefCell<OpenList> = RefCell::new(OpenList::default());
+    /// 最後に読めた眺め（開き閉じの後の読み直しの間に出し続ける）。
+    static LAST: RefCell<Option<GraphView>> = const { RefCell::new(None) };
 }
 
 /// 押した点（drag の始まり）。
@@ -59,8 +73,10 @@ struct Press {
 }
 
 /// グラフの面（口の読みの 3 値・読めた眺めの図）。固定と拡大は読み直しの後も保つ。
+/// 口の path は開いた箱の列から組み、箱を押すと path が変わって読み直す（その間は最後に読めた眺めを出す）。
 pub fn view(search: RwSignal<String>) -> AnyView {
-    let fetched = crate::net::read(PATH);
+    let path = RwSignal::new(OPEN.with_borrow(OpenList::path));
+    let fetched = crate::net::read_path(Signal::derive(move || path.get()));
     let ctx = use_context::<HelpCtx>();
     // 今の mode（context が無ければ URL から・節点の頁の link に mode を残す）。
     let mode = move || match ctx {
@@ -70,10 +86,21 @@ pub fn view(search: RwSignal<String>) -> AnyView {
     let pin = RwSignal::new(None::<String>);
     let zoom = StoredValue::new(None::<Zoom>);
     let content = move || {
-        fetched.with(|f| match doc(f) {
+        let got = fetched.with(|(f, _)| match doc(f) {
+            Ok(v) => {
+                OPEN.with_borrow_mut(|o| o.adopt(&v.open));
+                LAST.set(Some(v.clone()));
+                Ok(v)
+            }
+            Err(reason) if matches!(f, Fetched::NotRead) => {
+                LAST.with_borrow(Clone::clone).ok_or(reason)
+            }
+            Err(reason) => Err(reason),
+        });
+        match got {
             Err(reason) => unmeasured(reason),
-            Ok(v) => panel(v, pin, zoom, mode),
-        })
+            Ok(v) => panel(v, pin, zoom, mode, path),
+        }
     };
     view! { {content} }.into_any()
 }
@@ -85,6 +112,15 @@ fn node_key(target: Option<web_sys::EventTarget>) -> Option<String> {
         .ok()
         .flatten()?
         .get_attribute("data-key")
+}
+
+/// event の的の開き閉じの印の箱の id（印の中でなければ None）。
+fn fold_target(target: Option<web_sys::EventTarget>) -> Option<String> {
+    let el: web_sys::Element = target?.dyn_into().ok()?;
+    el.closest("g.fold")
+        .ok()
+        .flatten()?
+        .get_attribute("data-fold")
 }
 
 /// 図に拡大と移動を置き、帯の名を描き直す。
@@ -158,12 +194,15 @@ fn panel(
     pin: RwSignal<Option<String>>,
     zoom: StoredValue<Option<Zoom>>,
     mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    path: RwSignal<String>,
 ) -> AnyView {
     let lay = layout(&v);
     let picture = svg(&v, &lay);
     let lg = legend(&v);
     let bands = chain(&v);
     let count = count_line(&v);
+    let refused = refused_line(&v)
+        .map(|r| view! { <div class="small muted" role="status">{r}</div> });
     let line = expert_line(&v);
     let degree = degrees(&v);
     let cards = view_cards(&v.nodes);
@@ -217,7 +256,25 @@ fn panel(
     });
     on_cleanup(move || escape.remove());
 
-    let hover = move |target: Option<web_sys::EventTarget>| {
+    // 箱の開き閉じ（頁の列を変え、変われば口の path を置き直して読み直す・固定は動かさない）。
+    let toggle = move |id: String, fold: BoxFold| {
+        if let Some(p) = OPEN.with_borrow_mut(|o| o.toggle(&id, fold).then(|| o.path())) {
+            path.set(p);
+        }
+    };
+    let fold_of = move |id: &str| model.with_value(|m| m.node(id).map(|n| n.fold));
+    let press_fold = move |target: Option<web_sys::EventTarget>| {
+        let Some(id) = fold_target(target) else {
+            return false;
+        };
+        if let Some(fold) = fold_of(&id) {
+            toggle(id, fold);
+        }
+        true
+    };
+    let group = move |id: &str| model.with_value(|m| m.node(id).is_some_and(|n| n.group));
+
+    let hover =move |target: Option<web_sys::EventTarget>| {
         if pin.with_untracked(Option::is_some) {
             return;
         }
@@ -251,18 +308,22 @@ fn panel(
         let Some(k) = node_key(ev.target()) else {
             return;
         };
-        if drag_done.get_value() {
+        if drag_done.get_value() || press_fold(ev.target()) {
             return;
         }
         pin.set(pin.with_untracked(|p| pin_next(p.as_deref(), &PinAction::Press(k))));
     };
-    // 2 回押すとその節点の頁へ（見本の dblclick）。
+    // 2 回押すとその節点の頁へ（見本の dblclick・開き閉じの印と組の箱には頁が無い）。
     let open = move |ev: ev::MouseEvent| {
-        if let Some(k) = node_key(ev.target()) {
+        if fold_target(ev.target()).is_some() {
+            return;
+        }
+        if let Some(k) = node_key(ev.target()).filter(|k| !group(k)) {
             let _ = window().location().set_href(&frame::node_href(&k, mode()));
         }
     };
     // focus の在る節点で Enter と Space を押すとその節点の頁へ（Space の scroll を止める）。
+    // 開き閉じの印の上では箱を開き閉じし、組の箱では頁へ移らない。
     let key = move |ev: ev::KeyboardEvent| {
         if !opens_node(&ev.key()) {
             return;
@@ -271,6 +332,9 @@ fn panel(
             return;
         };
         ev.prevent_default();
+        if press_fold(ev.target()) || group(&k) {
+            return;
+        }
         let _ = window().location().set_href(&frame::node_href(&k, mode()));
     };
     let wheel = move |ev: ev::WheelEvent| {
@@ -364,8 +428,9 @@ fn panel(
                     on:keydown=key></div>
             </div>
             <div class="pinbar" aria-live="polite">{bar}</div>
-            {chain_view(bands, &cards, mode)}
+            {chain_view(bands, &cards, mode, toggle)}
             <div class="cutline num" tabindex="0" data-term="cut">{count}</div>
+            {refused}
             {expert_row}
         </div>
     }
@@ -406,6 +471,7 @@ fn legend_view(lg: Legend) -> AnyView {
     });
     view! {
         <div class="legend lkey">
+            <span data-term="gf_group" tabindex="0"><span inner_html=LEGEND_GROUP></span>{label("gf_group")}</span>
             <span data-term="lg_shape" tabindex="0"><span inner_html=LEGEND_SHAPES></span>{label("lg_shape")}</span>
             <span data-term="lg_color" tabindex="0"><span class="sw7">{swatches}</span>{label("lg_color")}</span>
             <span data-term="lg_border" tabindex="0"><span inner_html=LEGEND_BORDERS></span>{label("lg_border")}</span>
@@ -418,10 +484,12 @@ fn legend_view(lg: Legend) -> AnyView {
 }
 
 /// 狭い幅の一覧（帯の chip の小見出しと行の一覧・行の id と題は節点の頁への link で節点の card を持つ）。
+/// 組の箱の行は題だけ（頁が無いので link にしない）で、開き閉じできる行は図と同じ開き閉じの button を持つ。
 fn chain_view(
     bands: Vec<ChainBand>,
     cards: &BTreeMap<String, Card>,
     mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    toggle: impl Fn(String, BoxFold) + Copy + Send + Sync + 'static,
 ) -> AnyView {
     let parts = bands
         .into_iter()
@@ -437,11 +505,26 @@ fn chain_view(
                     let card = cards.get(&r.id).cloned().unwrap_or_default();
                     let id = r.id.clone();
                     let href = move || frame::node_href(&id, mode());
+                    let (fid, fold) = (r.id.clone(), r.fold);
+                    let button = fold_key(fold).map(|k| {
+                        view! {
+                            <button type="button" class="btn sm" on:click=move |_| toggle(fid.clone(), fold)>{label(k)}</button>
+                        }
+                    });
+                    let head = if r.group {
+                        view! { <b class="ttl" use:attach=card><span data-t="">{r.title}</span></b> }.into_any()
+                    } else {
+                        view! {
+                            <a class="ttl" href=href use:attach=card><span class="nid">{r.id}</span>" "<span data-t="">{r.title}</span></a>
+                        }
+                        .into_any()
+                    };
                     view! {
                         <li>
                             <span class=r.shape style=style aria-hidden="true"></span>
-                            <a class="ttl" href=href use:attach=card><span class="nid">{r.id}</span>" "<span data-t="">{r.title}</span></a>
+                            {head}
                             {kids}
+                            {button}
                         </li>
                     }
                 })
