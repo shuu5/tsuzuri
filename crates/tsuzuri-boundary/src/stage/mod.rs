@@ -3,8 +3,10 @@
 //! 行 i-3 で CDP の口（websocket の client の側 `ws`・小さな JSON の読み書き `json`・命令の列と session の `cdp`）を置く。
 //! 行 i-2 で起動の引数 `launch` と、tunnel と窓を 1 回だけ起こすこと `tunnel` を置く。
 //! 行 i-4 で席の目の Chrome の pipe の運び手 `pipe`・端末に届かない時の落ちる先 `relay`・board の URL `url` を置く。
+//! 行 i-5 で tz の口 `cli`（命令の旗の読み・board の頁の断り・席の中の open の断り・窓を開く錠）を置く。
 
 pub mod cdp;
+pub mod cli;
 pub mod json;
 pub mod launch;
 pub mod pipe;

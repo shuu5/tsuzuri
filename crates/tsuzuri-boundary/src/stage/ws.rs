@@ -1,7 +1,8 @@
 //! websocket の client の側（行 i-3・RFC 6455）。
 //! 行 i-2 が ssh の -L で張る unix socket に繋ぎ、字の message だけを運ぶ（binary と拡張と subprotocol は持たない）。
 //! 外の部品を足さず、SHA-1 と base64 と乱れた値（std の RandomState）を std だけで書く。
-//! 字を運ぶ `Socket::send` を使うのは cdp の Session だけ（撃てる命令の語彙は cdp の steps が決める）。
+//! 字を運ぶ `Socket::send` を使うのは cdp の Session（撃てる命令の語彙は cdp の steps が決める）と、
+//! 持ち主の tz stage open が頁の窓の無い Chrome に頁を 1 つ作る 1 回（cli の NEW_PAGE）だけ。
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

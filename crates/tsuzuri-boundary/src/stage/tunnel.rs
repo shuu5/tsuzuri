@@ -7,8 +7,8 @@
 
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, DirBuilder, Permissions};
-use std::io::{Read, Write};
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::io::{ErrorKind, Read, Write};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -57,6 +57,49 @@ pub fn socket_dir(base: &Path) -> Result<PathBuf, String> {
         let _ = fs::remove_dir(&dir);
         return Err(format!("tunnel の dir {} を 0700 にできない: {e}", dir.display()));
     }
+    Ok(dir)
+}
+
+/// base の下の口座ごとの 0700 の dir（名は tzst-u と /proc/self の持ち主の uid・在れば使う・行 i-5）。
+/// tunnel の dir・席の目の profile の dir・錠の file をこの下に置き、ほかの口座が先に作れる共有の名に置かない。
+/// symlink か dir でない path・持ち主の違う dir・コロンか空白を含む path は Err（どれも path の字を含む）。
+/// 使う前に権限を 0700 に置き直す（socket_dir と同じ・umask によらない）。
+pub fn user_dir(base: &Path) -> Result<PathBuf, String> {
+    let uid = fs::metadata("/proc/self")
+        .map_err(|e| format!("/proc/self の持ち主を読めない（口座の dir を作らない）: {e}"))?
+        .uid();
+    let dir = base.join(format!("tzst-u{uid}"));
+    let shaped = dir
+        .to_str()
+        .is_some_and(|s| !s.contains(':') && !s.contains(char::is_whitespace));
+    if !shaped {
+        return Err(format!(
+            "口座の dir の path {} はコロンか空白を含む（短い dir を渡す）",
+            dir.display()
+        ));
+    }
+    match DirBuilder::new().mode(0o700).create(&dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(format!("口座の dir {} を作れない: {e}", dir.display())),
+    }
+    let meta = fs::symlink_metadata(&dir)
+        .map_err(|e| format!("口座の dir {} を見られない: {e}", dir.display()))?;
+    if !meta.file_type().is_dir() {
+        return Err(format!(
+            "口座の dir {} は symlink か dir でない（使わない）",
+            dir.display()
+        ));
+    }
+    if meta.uid() != uid {
+        return Err(format!(
+            "口座の dir {} はほかの口座（uid {}）が先に作った（使わない）",
+            dir.display(),
+            meta.uid()
+        ));
+    }
+    fs::set_permissions(&dir, Permissions::from_mode(0o700))
+        .map_err(|e| format!("口座の dir {} を 0700 にできない: {e}", dir.display()))?;
     Ok(dir)
 }
 
@@ -181,6 +224,11 @@ impl Tunnel {
             }
             thread::sleep(POLL);
         }
+    }
+
+    /// /json/version の本文（行 i-5 の tz stage open が browser の target の path を読む・答えなければ None）。
+    pub fn version(&self) -> Option<String> {
+        self.get("/json/version")
     }
 
     /// socket の先の Chrome の HTTP の口へ GET を撃ち、状態 200 で長さの在る本文を返す（ほかは None）。
