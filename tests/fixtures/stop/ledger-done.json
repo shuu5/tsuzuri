@@ -1,0 +1,24 @@
+[
+  {
+    "id": "fx-s",
+    "title": "根",
+    "status": "open",
+    "issue_type": "epic"
+  },
+  {
+    "id": "fx-s.1",
+    "title": "届いた問い",
+    "status": "closed",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "裁定 id = fx-s.1:20260928T0100Z-1・問い = fx-s.1・逐語 = はい\n配達 = fx-s.1:20260928T0100Z-1・経路 = 配達の口・時刻 = 20260928T0100Z"
+  },
+  {
+    "id": "fx-s.6",
+    "title": "消した問い",
+    "status": "tombstone",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "裁定 id = fx-s.6:20260928T0107Z-1・問い = fx-s.6・逐語 = 消えた"
+  }
+]

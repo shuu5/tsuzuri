@@ -1,0 +1,64 @@
+[
+  {
+    "id": "fx-s",
+    "title": "根",
+    "status": "open",
+    "issue_type": "epic"
+  },
+  {
+    "id": "fx-s.1",
+    "title": "届いた問い",
+    "status": "closed",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "裁定 id = fx-s.1:20260928T0100Z-1・問い = fx-s.1・逐語 = はい\n配達 = fx-s.1:20260928T0100Z-1・経路 = 配達の口・時刻 = 20260928T0100Z"
+  },
+  {
+    "id": "fx-s.2",
+    "title": "考え中に答えた問い",
+    "status": "closed",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "前置きの 1 行\n裁定 id = fx-s.2:20260928T0101Z-1・問い = fx-s.2・逐語 = よい"
+  },
+  {
+    "id": "fx-s.3",
+    "title": "閉じ損ねた問い",
+    "status": "open",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "裁定 id = fx-s.3:20260928T0102Z-1・問い = fx-s.3・逐語 = 推奨で"
+  },
+  {
+    "id": "fx-s.4",
+    "title": "2 度答えた問い",
+    "status": "closed",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "裁定 id = fx-s.4:20260928T0103Z-1・問い = fx-s.4・逐語 = 前\n配達 = fx-s.4:20260928T0103Z-1・経路 = 停止・時刻 = 20260928T0104Z\n裁定 id = fx-s.4:20260928T0105Z-1・問い = fx-s.4・束 = batch:20260928T0105Z-1・逐語 = 後"
+  },
+  {
+    "id": "fx-s.5",
+    "title": "方針",
+    "status": "open",
+    "issue_type": "task",
+    "labels": ["intake:memo"],
+    "notes": "裁定 id = fx-s.5:20260928T0106Z-1・問い = fx-s.5・逐語 = 問いでない"
+  },
+  {
+    "id": "fx-s.6",
+    "title": "消した問い",
+    "status": "tombstone",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "裁定 id = fx-s.6:20260928T0107Z-1・問い = fx-s.6・逐語 = 消えた"
+  },
+  {
+    "id": "fx-s.7",
+    "title": "手で写した問い",
+    "status": "closed",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "notes": "裁定 id = user 2026-09-28T01:08Z・逐語 = 手で写した\n配達 = fx-s.2:20260928T0101Z-1・経路 = 停止・時刻 = 20260928T0109Z"
+  }
+]
