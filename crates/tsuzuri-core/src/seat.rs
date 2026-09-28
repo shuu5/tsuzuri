@@ -8,7 +8,7 @@
 use serde::Deserialize;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{GroupRow, QuotaLeft, Reading};
-use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState};
+use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
 
 use crate::ledger::{DAY, epoch_secs};
 
@@ -318,6 +318,23 @@ fn state_rows(text: &str) -> Vec<(EpochSecs, SeatState)> {
         .collect()
 }
 
+/// doctor の席の行の tick の語（4 つの語のどれにも当たらなければ「まだ分からない」）。
+fn tick_health(value: Option<&str>) -> Reading<TickHealth> {
+    value
+        .and_then(|v| TickHealth::ALL.into_iter().find(|t| t.as_str() == v))
+        .map_or(Reading::Unknown, Reading::Known)
+}
+
+/// 合図の最後の判定の字の空でない最後の行。
+fn last_tick(tick_last: Option<&str>) -> Option<&str> {
+    tick_last?.lines().map(str::trim).rfind(|l| !l.is_empty())
+}
+
+/// 合図の最後の判定の行の時刻（ts の数・読めなければ None）。
+fn tick_ts(line: &str) -> Option<EpochSecs> {
+    field(line, "ts").and_then(|t| t.parse().ok())
+}
+
 /// 状態と、今の状態になった時刻。合図の最後の判定の理由が account-pressed なら limit・
 /// state-stale なら silent（どちらも時刻は判定の ts）。それ以外は状態の記録の最後の行の状態で、
 /// 時刻は末尾から同じ状態が続く行のうち最も古い ts。記録が無いか読めた行が無ければ unknown。
@@ -325,8 +342,8 @@ fn state_of(
     tick_last: Option<&str>,
     rows: Option<&[(EpochSecs, SeatState)]>,
 ) -> (SeatState, Option<EpochSecs>) {
-    if let Some(line) = tick_last.and_then(|t| t.lines().map(str::trim).rfind(|l| !l.is_empty())) {
-        let ts = field(line, "ts").and_then(|t| t.parse().ok());
+    if let Some(line) = last_tick(tick_last) {
+        let ts = tick_ts(line);
         match field(line, "reason") {
             Some(PRESSED) => return (SeatState::Limit, ts),
             Some(STALE) => return (SeatState::Silent, ts),
@@ -433,6 +450,8 @@ pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSec
         heartbeat: tick.map_or(Reading::Unknown, |l| {
             flag(field(l, "heartbeat"), "on", "off")
         }),
+        tick: tick_health(seat.and_then(|l| field(l, "tick"))),
+        tick_at: last_tick(texts.tick_last.as_deref()).and_then(tick_ts),
         group: group(texts, name.as_deref()),
         usage: quota_used(texts.usage.as_deref(), account.as_deref(), model.as_deref()),
         spans: rows.map_or(Reading::Unknown, |r| Reading::Known(spans(&r, now))),

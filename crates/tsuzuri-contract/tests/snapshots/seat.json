@@ -56,6 +56,10 @@
       "heartbeat": {
         "known": false
       },
+      "tick": {
+        "known": "healthy"
+      },
+      "tick_at": 1790494600,
       "account": "acct-4",
       "model": "opus",
       "group": {
@@ -128,6 +132,8 @@
       "since": null,
       "tick_healthy": "unknown",
       "heartbeat": "unknown",
+      "tick": "unknown",
+      "tick_at": null,
       "account": null,
       "model": null,
       "group": "unknown",

@@ -3,8 +3,9 @@ use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
 
 use super::{
-    BLOCK, Band, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OK, OROW, PATH, Seat, Sign, Span,
-    Strip, Top, WindowRow, content, sample_svg, span_of, strip_svg, with_span,
+    BLOCK, Band, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OROW, PATH, Seat, Sign, Span, Strip,
+    Top, WindowRow, content, sample_svg, span_of, strip_svg, tick_age, tick_class, tick_mark,
+    with_span,
 };
 use crate::account::heartbeat::{self, Dest, States};
 use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
@@ -125,11 +126,16 @@ fn top_view(top: Top, states: States) -> AnyView {
     let since = top.since.clone().map(|s| {
         view! { <span class="since num"><span class="small muted">{hs("since")}</span><b>{s}</b></span> }
     });
-    let tick_class = match top.tick {
-        Reading::Known(s) if s == OK => "tk tk-healthy",
-        Reading::Known(_) => "tk tk-stale",
-        Reading::Unknown => "tk",
+    // tick の欄（印・語・最後の tick からの経過・見本の tkhbHTML の順・経過は 1 秒の時計で書き直す）。
+    let tk_class = tick_class(&top);
+    let mark = tick_mark(&top);
+    let word = match top.tick_word {
+        Reading::Known(w) => Some(view! { <b>{w.as_str()}</b> }),
+        Reading::Unknown => None,
     };
+    let clock = crate::net::ticker();
+    let age_top = top.clone();
+    let age = move || tick_age(&age_top, clock.get()).map(|a| view! { <span class="num">{a}</span> });
     let hb_class = match top.heartbeat {
         Reading::Known("off") => "hb hb-off",
         _ => "hb",
@@ -147,7 +153,7 @@ fn top_view(top: Top, states: States) -> AnyView {
             </div>
             <div class="tkrow">
                 <span class="tkhb">
-                    <span class=tick_class>{sign_view(top.tick)}{hs("tick_health")}</span>
+                    <span class=tk_class>{sign_view(mark)}{hs("tick_health")}{word}{age}</span>
                     <span class=hb_class>{hs("heartbeat")}{hb}</span>
                     {hb_button}
                 </span>

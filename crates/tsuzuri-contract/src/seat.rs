@@ -27,6 +27,39 @@ impl SeatState {
     ];
 }
 
+/// 器の管理 tick の健康（器の doctor の席の行の tick の語・閉じた 4: 健全・古い・打刻が無い・読めない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TickHealth {
+    Healthy,
+    Stale,
+    Absent,
+    Unreadable,
+}
+
+impl TickHealth {
+    pub const ALL: [TickHealth; 4] = [
+        TickHealth::Healthy,
+        TickHealth::Stale,
+        TickHealth::Absent,
+        TickHealth::Unreadable,
+    ];
+
+    /// 器の語（電文の字と同じ）。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TickHealth::Healthy => "healthy",
+            TickHealth::Stale => "stale",
+            TickHealth::Absent => "absent",
+            TickHealth::Unreadable => "unreadable",
+        }
+    }
+}
+
+fn unknown() -> Reading<TickHealth> {
+    Reading::Unknown
+}
+
 /// 口座の窓の使った割合（窓の名・使った百分率・戻る時刻・限度の判定で数える窓か）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuotaUsed {
@@ -66,6 +99,12 @@ pub struct SeatCard {
     pub tick_healthy: Reading<bool>,
     /// 停止の切り替えが on か。
     pub heartbeat: Reading<bool>,
+    /// 器の doctor の席の行の tick の語（4 つの語のほかと、行か語が無いときは Unknown）。
+    #[serde(default = "unknown")]
+    pub tick: Reading<TickHealth>,
+    /// 合図の最後の判定の時刻。
+    #[serde(default)]
+    pub tick_at: Option<EpochSecs>,
     /// 登録の口座。
     pub account: Option<String>,
     pub model: Option<String>,

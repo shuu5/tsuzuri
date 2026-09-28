@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::Value;
 use tsuzuri_contract::board::{GroupRow, NextMove, QuotaLeft, Reading};
-use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState};
+use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 use tsuzuri_core::next_step::{next_step, next_step_seat};
 use tsuzuri_core::seat::{SeatTexts, anchor, card, group_name};
@@ -82,6 +82,31 @@ fn seatcard_fixture_six_cases() {
     assert_eq!(
         (&wait.tick_healthy, &wait.heartbeat),
         (&Reading::Known(false), &Reading::Known(false))
+    );
+    // tick の語は doctor の席の行の tick から（4 つの語のほかと行か語が無ければ Unknown）・
+    // tick_at は合図の最後の判定の空でない最後の行の ts。
+    let ticks: Vec<(&str, Reading<TickHealth>, Option<u64>)> = all
+        .iter()
+        .map(|(n, c)| (n.as_str(), c.card.tick.clone(), c.card.tick_at))
+        .collect();
+    assert_eq!(
+        ticks,
+        [
+            ("limit", Reading::Unknown, Some(1_790_503_200)),
+            ("no-state", Reading::Unknown, Some(1_790_510_390)),
+            (
+                "run",
+                Reading::Known(TickHealth::Healthy),
+                Some(1_790_510_390)
+            ),
+            ("silent", Reading::Unknown, Some(1_790_509_000)),
+            ("unread", Reading::Unknown, Some(1_790_510_390)),
+            (
+                "wait",
+                Reading::Known(TickHealth::Stale),
+                Some(1_790_510_000)
+            ),
+        ]
     );
 }
 
@@ -389,6 +414,7 @@ fn seatcard_unread_text_touches_only_its_fields() {
             "doctor" => {
                 want.account = None;
                 want.model = None;
+                want.tick = Reading::Unknown;
                 want.group = Reading::Unknown;
                 want.usage = Reading::Unknown;
                 want.moves = Reading::Unknown;
@@ -404,8 +430,9 @@ fn seatcard_unread_text_touches_only_its_fields() {
                 want.since = None;
                 want.spans = Reading::Unknown;
             }
-            // 判定が限度でも応答なしでもない組なので、合図の最後の判定が無くても変わらない。
-            "tick_last" => {}
+            // 判定が限度でも応答なしでもない組なので、合図の最後の判定が無くても状態は変わらず、
+            // 判定の時刻だけが無くなる。
+            "tick_last" => want.tick_at = None,
             "host_toml" => {
                 want.group = Reading::Unknown;
                 want.moves = Reading::Unknown;

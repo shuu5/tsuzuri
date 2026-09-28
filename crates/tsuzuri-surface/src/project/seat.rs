@@ -6,7 +6,7 @@
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState};
+use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
 use tsuzuri_contract::wire;
 
 use super::{Body, NO_CONTENT, NOT_READ, state_class, state_key};
@@ -239,9 +239,67 @@ pub const NG: Sign = Sign {
     class: "gi ng",
 };
 
+/// 打刻の無い（absent）tick の印（字は空・見本の `.gi.unknown`）。
+pub const BLANK: Sign = Sign {
+    glyph: "",
+    class: "gi unknown",
+};
+
 /// 真偽を印にする。
 pub fn sign(good: bool) -> Sign {
     if good { OK } else { NG }
+}
+
+/// tick の語の印（healthy は良い・stale と unreadable は悪い・absent は空）。
+pub fn tick_sign(word: TickHealth) -> Sign {
+    match word {
+        TickHealth::Healthy => OK,
+        TickHealth::Stale | TickHealth::Unreadable => NG,
+        TickHealth::Absent => BLANK,
+    }
+}
+
+/// 上段の tick の欄の印（語が読めれば語の印・読めなければ健康の真偽の印）。
+pub fn tick_mark(top: &Top) -> Reading<Sign> {
+    match top.tick_word {
+        Reading::Known(w) => Reading::Known(tick_sign(w)),
+        Reading::Unknown => top.tick.clone(),
+    }
+}
+
+/// 上段の tick の欄の class（語が読めれば `tk tk-<語>`・読めなければ健康の真偽から・どちらも無ければ `tk`）。
+pub fn tick_class(top: &Top) -> &'static str {
+    match (&top.tick_word, &top.tick) {
+        (Reading::Known(TickHealth::Healthy), _) => "tk tk-healthy",
+        (Reading::Known(TickHealth::Stale), _) => "tk tk-stale",
+        (Reading::Known(TickHealth::Absent), _) => "tk tk-absent",
+        (Reading::Known(TickHealth::Unreadable), _) => "tk tk-unreadable",
+        (Reading::Unknown, Reading::Known(s)) if *s == OK => "tk tk-healthy",
+        (Reading::Unknown, Reading::Known(_)) => "tk tk-stale",
+        (Reading::Unknown, Reading::Unknown) => "tk",
+    }
+}
+
+/// 経過の字（60 秒未満は s・60 分未満は m・48 時間未満は h と 2 桁の分・それ以上は d・端数は切り捨て）。
+pub fn age_text(secs: u64) -> String {
+    if secs < 60 {
+        format!("{secs}s")
+    } else {
+        super::ask::age(secs, 0)
+    }
+}
+
+/// 最後の tick からの今の経過（今と電文の at の大きい方から tick_at を引く・語が absent か unreadable の時と
+/// 時刻が無い時は None）。端末の時計が電文の at より遅れても、電文を読んだ時点の字より小さくしない。
+pub fn tick_age(top: &Top, now: EpochSecs) -> Option<String> {
+    if matches!(
+        top.tick_word,
+        Reading::Known(TickHealth::Absent | TickHealth::Unreadable)
+    ) {
+        return None;
+    }
+    top.tick_at
+        .map(|t| age_text(now.max(top.at).saturating_sub(t)))
 }
 
 /// 上段の左（状態の記号と語・から・合図の行）。
@@ -257,8 +315,14 @@ pub struct Top {
     pub label_class: String,
     /// 「から」の時刻（時と分と Z・電文に無ければ None）。
     pub since: Option<String>,
-    /// tick の健康の印。
+    /// tick の健康の印（器の seat tick status の真偽から・account board の印もこれを読む）。
     pub tick: Reading<Sign>,
+    /// 器の doctor の席の行の tick の語。
+    pub tick_word: Reading<TickHealth>,
+    /// 合図の最後の判定の時刻。
+    pub tick_at: Option<EpochSecs>,
+    /// 電文の at（tick の経過の字の下限）。
+    pub at: EpochSecs,
     /// heartbeat（on か off）。
     pub heartbeat: Reading<&'static str>,
     /// 停止の切り替え（席の名が在り heartbeat が読めるときだけ・行 g-seat-hb）。
@@ -409,6 +473,9 @@ pub fn top(card: &SeatCard) -> Top {
         label_class: format!("state stlabel st-{v}"),
         since: card.since.map(hm),
         tick: map(&card.tick_healthy, |h| sign(*h)),
+        tick_word: card.tick.clone(),
+        tick_at: card.tick_at,
+        at: card.at,
         heartbeat: map(&card.heartbeat, |on| if *on { "on" } else { "off" }),
         toggle: seat_toggle(card),
     }
@@ -641,10 +708,11 @@ pub fn seat_line(card: &SeatCard) -> String {
         Reading::Known(false) => "off",
         Reading::Unknown => "?",
     };
-    let tick = match card.tick_healthy {
-        Reading::Known(true) => "healthy",
-        Reading::Known(false) => "stale",
-        Reading::Unknown => "?",
+    let tick = match (&card.tick, &card.tick_healthy) {
+        (Reading::Known(w), _) => w.as_str(),
+        (Reading::Unknown, Reading::Known(true)) => "healthy",
+        (Reading::Unknown, Reading::Known(false)) => "stale",
+        (Reading::Unknown, Reading::Unknown) => "?",
     };
     format!(
         "seat: target={} account={} model={} heartbeat={heartbeat} tick={tick}",

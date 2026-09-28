@@ -1,7 +1,7 @@
 {
   "run": {
     "tick_status": "seat tick status: target=proj-1:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395\nseat tick status: target=proj-2:0.1 last=- age=- healthy=no heartbeat=off step=5 next=0\n",
-    "doctor": "host: name=host-1 state-dir=/srv/host-1/state\nseat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1\nseat: role=orchestrator anchor=/srv/host-1/proj-2 target=proj-2:0.1 account=acct-3 model=sonnet pane=%2\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\ngroup=g-b accounts=acct-3 anchors=1 seat-accounts=acct-3 current=acct-3 next=none refused=-\n",
+    "doctor": "host: name=host-1 state-dir=/srv/host-1/state\nseat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1 heartbeat=on tick=healthy\nseat: role=orchestrator anchor=/srv/host-1/proj-2 target=proj-2:0.1 account=acct-3 model=sonnet pane=%2\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\ngroup=g-b accounts=acct-3 anchors=1 seat-accounts=acct-3 current=acct-3 next=none refused=-\n",
     "usage": "usage: account=acct-1 five_hour=83% resets=2026-09-27T12:00:00Z seven_day=120% resets=none model=Opus:300% resets=2026-09-28T00:00:00Z\nusage: account=acct-3 unmeasured reason=no-token\n",
     "state_log": "{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790420000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790430000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790440000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"idle\",\"event\":\"notify\",\"ts\":1790450000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790500000,\"sid\":\"s-1\"}\n{\"schema\":1,\"state\":\"busy\",\"event\":\"tool\",\"ts\":1790505000,\"sid\":\"s-1\"}\n",
     "tick_last": "ts=1790510390 decision=noop reason=seat-busy\n",
@@ -13,6 +13,7 @@
     "card": {
       "at": 1790510400, "target": "proj-1:0.1", "state": "run", "since": 1790500000,
       "tick_healthy": {"known": true}, "heartbeat": {"known": true},
+      "tick": {"known": "healthy"}, "tick_at": 1790510390,
       "account": "acct-1", "model": "opus",
       "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": [
         {"window": "five_hour", "left_pct": 17}, {"window": "seven_day", "left_pct": 0}, {"window": "seven_day_model", "left_pct": 0}
@@ -35,7 +36,7 @@
   },
   "wait": {
     "tick_status": "seat tick status: target=proj-1:0.1 last=1790510000 age=400 healthy=no heartbeat=off step=5 next=1790510405\n",
-    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-2 model=sonnet pane=%1\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-2 current=acct-1 next=none refused=-\n",
+    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-2 model=sonnet pane=%1 heartbeat=off tick=stale\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-2 current=acct-1 next=none refused=-\n",
     "usage": "usage: account=acct-2 five_hour=100% resets=none seven_day=40% resets=2026-09-30T00:00:00Z model=opus:10% resets=none\nusage: account=acct-1 unmeasured reason=no-token\n",
     "state_log": "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790505000,\"sid\":\"s-2\"}\nnot json\n{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790508000,\"sid\":\"s-2\"}\n{\"schema\":1,\"state\":\"idle\",\"event\":\"notify\",\"ts\":1790509000,\"sid\":\"s-2\"}\n",
     "tick_last": "ts=1790510000 decision=noop reason=seat-idle\n",
@@ -44,6 +45,7 @@
     "card": {
       "at": 1790510400, "target": "proj-1:0.1", "state": "wait", "since": 1790508000,
       "tick_healthy": {"known": false}, "heartbeat": {"known": false},
+      "tick": {"known": "stale"}, "tick_at": 1790510000,
       "account": "acct-2", "model": "sonnet",
       "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": null, "remaining": []}},
       "usage": {"known": [
@@ -71,6 +73,7 @@
     "card": {
       "at": 1790510400, "target": "proj-1:0.1", "state": "limit", "since": 1790503200,
       "tick_healthy": {"known": true}, "heartbeat": {"known": true},
+      "tick": "unknown", "tick_at": 1790503200,
       "account": "acct-1", "model": "opus",
       "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": [
         {"window": "five_hour", "left_pct": 0}, {"window": "seven_day", "left_pct": 19}, {"window": "seven_day_model", "left_pct": 20}
@@ -90,7 +93,7 @@
   },
   "silent": {
     "tick_status": "seat tick status: target=proj-2:0.1 last=- age=- healthy=no heartbeat=off step=5 next=0\n",
-    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\n",
+    "doctor": "seat: role=orchestrator anchor=/srv/host-1/proj-1 target=proj-1:0.1 account=acct-1 model=opus pane=%1 heartbeat=on tick=no-rule:missing\ngroup=g-a accounts=acct-1,acct-2 anchors=1 seat-accounts=acct-1 current=acct-1 next=acct-2 refused=-\n",
     "usage": "usage: account=acct-1 unmeasured reason=no-token\n",
     "state_log": "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790400000,\"sid\":\"s-4\"}\n",
     "tick_last": "ts=1790509000 decision=nudge reason=state-stale\n",
@@ -101,6 +104,7 @@
     "card": {
       "at": 1790510400, "target": "proj-1:0.1", "state": "silent", "since": 1790509000,
       "tick_healthy": "unknown", "heartbeat": "unknown",
+      "tick": "unknown", "tick_at": 1790509000,
       "account": "acct-1", "model": "opus",
       "group": "unknown",
       "usage": "unknown",
@@ -122,6 +126,7 @@
     "card": {
       "at": 1790510400, "target": "proj-1:0.1", "state": "unknown", "since": null,
       "tick_healthy": {"known": true}, "heartbeat": {"known": true},
+      "tick": "unknown", "tick_at": 1790510390,
       "account": "acct-1", "model": "opus",
       "group": {"known": {"group": "g-a", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": [
         {"window": "five_hour", "left_pct": 17}, {"window": "seven_day", "left_pct": 0}, {"window": "seven_day_model", "left_pct": 0}
@@ -151,6 +156,7 @@
     "card": {
       "at": 1790510400, "target": "proj-1:0.1", "state": "wait", "since": 1790509000,
       "tick_healthy": "unknown", "heartbeat": "unknown",
+      "tick": "unknown", "tick_at": 1790510390,
       "account": null, "model": null,
       "group": "unknown",
       "usage": "unknown",
