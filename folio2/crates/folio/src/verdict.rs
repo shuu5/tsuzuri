@@ -59,6 +59,12 @@ impl Report {
         self.links.extend(mark..self.violations.len());
     }
 
+    /// つながりの違反を 1 つ積む（網の外の関数の中の突き合わせの字・便 199・ADR-33 決定 (2)）。
+    pub fn link(&mut self, kind: &str, msg: impl Into<String>) {
+        self.links.push(self.violations.len());
+        self.violation(kind, msg);
+    }
+
     pub fn unknown(&mut self, msg: impl Into<String>) {
         self.unknowns.push(msg.into());
     }

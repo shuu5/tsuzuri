@@ -596,7 +596,7 @@ fn check_between(records: &[(String, Node)], report: &mut Report) {
             if let Some(x) = present(d, k)
                 && x.as_str().and_then(|x| find(records, x)).is_none()
             {
-                report.violation(
+                report.link(
                     "adr",
                     format!("{id}: {k} {} の判断の記録が実在しない", show(Some(x))),
                 );
@@ -620,26 +620,16 @@ fn check_between(records: &[(String, Node)], report: &mut Report) {
             if let Some(nx) = n.as_str().and_then(|n| find(records, n))
                 && scalar(nx.get("supersedes")) != Some(id.as_str())
             {
-                report.violation(
-                    "adr",
-                    format!(
-                        "{id}: 後継 {} の supersedes に {id} が無い（双方向）",
-                        show(Some(n))
-                    ),
-                );
+                let msg = format!("{id}: 後継 {} の supersedes に {id} が無い（双方向）", show(Some(n)));
+                one_or_link(report, n.as_str() == Some(id.as_str()), msg);
             }
         }
         if let Some(p) = present(d, "supersedes")
             && let Some(pv) = p.as_str().and_then(|p| find(records, p))
             && scalar(pv.get("superseded_by")) != Some(id.as_str())
         {
-            report.violation(
-                "adr",
-                format!(
-                    "{id}: 置き換えた {} の superseded_by が {id} でない（双方向）",
-                    show(Some(p))
-                ),
-            );
+            let msg = format!("{id}: 置き換えた {} の superseded_by が {id} でない（双方向）", show(Some(p)));
+            one_or_link(report, p.as_str() == Some(id.as_str()), msg);
         }
     }
 
@@ -655,13 +645,11 @@ fn check_between(records: &[(String, Node)], report: &mut Report) {
                 break; // 実在しない後継は上で数えてある
             };
             if seen.contains(&nid) {
-                report.violation(
-                    "adr",
-                    format!(
-                        "{id}: retired の後継の列が輪になっている（{}→{nid}）＝発効している後継が無い（P-7.2）",
-                        seen.join("→")
-                    ),
+                let msg = format!(
+                    "{id}: retired の後継の列が輪になっている（{}→{nid}）＝発効している後継が無い（P-7.2）",
+                    seen.join("→")
                 );
+                one_or_link(report, seen.len() == 1, msg);
                 break;
             }
             seen.push(nid);
@@ -698,7 +686,7 @@ fn check_decided_by(schema: &Node, records: &[(String, Node)], report: &mut Repo
     }
     for x in items {
         if x.as_str().and_then(|x| find(records, x)).is_none() {
-            report.violation(
+            report.link(
                 "adr",
                 format!(
                     "{SCHEMA_FILE} meta.decided_by の {} が実在しない（欄の決まりの出所の判断が消えている）",
@@ -706,6 +694,15 @@ fn check_decided_by(schema: &Node, records: &[(String, Node)], report: &mut Repo
                 ),
             );
         }
+    }
+}
+
+/// 判断の記録どうしの突き合わせの字を積む。自分自身を指す字（`own`）は 1 つの file の形で止め、ほかはつながり（便 199）。
+fn one_or_link(report: &mut Report, own: bool, msg: String) {
+    if own {
+        report.violation("adr", msg);
+    } else {
+        report.link("adr", msg);
     }
 }
 

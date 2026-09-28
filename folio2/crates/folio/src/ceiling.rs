@@ -243,7 +243,7 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
     // 既知の集合が読めない件は便 4 の検査が「まだ分からない」に数えてある
     let known = vocab::known_words(vocabulary, &mut Report::default());
     for (lw, at) in vocab::unknown_words(&body, &known) {
-        report.violation(
+        report.link(
             "ceiling",
             format!("{FILE} {at}: 語彙に無い英字の語「{lw}」"),
         );

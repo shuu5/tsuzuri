@@ -6,7 +6,8 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::io::Write;
+use std::process::{Command, Output, Stdio};
 
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const BEGIN: &str = "# folio:rows:begin — 生成区間・手で直さない・正本は置き場の契約表（folio derive --write が書く）";
@@ -135,6 +136,23 @@ impl Work {
             pick(&out.stdout, &["[note] ", "[裁定 id] ", "[schema] "]),
             pick(&out.stderr, &["# まだ分からない: "]),
         )
+    }
+
+    /// 編集時の口（便 199）: `rel` に `text` を書こうとしているときの終了と、止める行と つながりの行（接頭辞を外した字）。
+    fn propose(&self, rel: &str, text: &str) -> (i32, Vec<String>, Vec<String>) {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+            .args(["check", "--proposed", rel, "--dir"])
+            .arg(self.0.join("design-intent"))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("folio を起動できない");
+        child.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
+        let out = child.wait_with_output().unwrap();
+        let lines: Vec<String> = String::from_utf8_lossy(&out.stdout).lines().map(str::to_string).collect();
+        let stops = lines.iter().filter(|l| l.starts_with('[')).cloned().collect();
+        let links = lines.iter().filter_map(|l| l.strip_prefix("# つながり（編集は止めない・事後の床が数える）: ")).map(str::to_string).collect();
+        (out.status.code().unwrap(), stops, links)
     }
 
     fn derive(&self, flag: &str) -> Output {
@@ -337,4 +355,35 @@ fn f183_markers_outside_the_section_fail_the_floor_and_derive_check_alike() {
     let out = w.derive("--check");
     assert_eq!(out.status.code(), Some(1), "{}", text(&out));
     assert!(text(&out).contains(&format!("DRIFT: {file}（{why}）")), "{}", text(&out));
+}
+
+/// 便 199 (c) 4（ADR-33 決定 (2)）: 計画の床の突き合わせの字（契約表からの導出との違い・索引に在る計画だけの行・宙に浮いた依存）は
+/// 口が止めず（0）つながりに名指し、素の床は同じ字で数える。計画だけの行の id の重なりと生成区間の印の崩れ（1 つの file の形）は止める（1）。
+#[test]
+fn f199_plan_cross_checks_are_links_but_shapes_stop() {
+    let file = "design-note/plan.yaml";
+    let w = Work::new("mouth", true);
+    let example = w.read("design-note/example.yaml");
+    let row = example.lines().find(|l| l.starts_with(ROW_A)).unwrap().to_string();
+    let added = example.replacen(&format!("{row}\n"), &format!("{row}\n{}\n", row.replacen("{id: a,", "{id: a2,", 1)), 1);
+    let plan = w.read(file);
+    let cases = [
+        ("design-note/example.yaml", added, 0, "行の索引の生成区間が契約表からの導出と違う（folio derive --write で書き直す）"),
+        (file, plan.replacen("{id: c, what: その次の行,", "{id: a, what: その次の行,", 1), 0, "計画だけの行「a」が行の索引に在る（契約の行が在る＝計画だけの行の節から外す）"),
+        (file, plan.replacen("depends: [b], ruling", "depends: [zz], ruling", 1), 0, "計画だけの行「c」の depends「zz」が行の索引にも計画だけの行にも無い（宙に浮いた依存）"),
+        (file, plan.replacen("{id: c, what: その次の行,", "{id: b, what: その次の行,", 1), 1, "計画だけの行 id「b」が 2 度在る"),
+        (file, plan.replacen("      # folio:rows:end\n", "", 1), 1, "行の索引の生成区間の印が 1 対でない（begin 1・end 0）"),
+    ];
+    for (rel, text, code, want) in cases {
+        let line = format!("[note] {file}: {want}");
+        let (got, stops, links) = w.propose(rel, &text);
+        assert_eq!(got, code, "{want}: {stops:?} {links:?}");
+        let (hit, miss) = if code == 0 { (&links, &stops) } else { (&stops, &links) };
+        assert_eq!(hit, std::slice::from_ref(&line), "{want}");
+        assert!(miss.is_empty(), "{want}: {miss:?}");
+        let keep = w.read(rel);
+        fs::write(w.path(rel), &text).unwrap();
+        assert!(w.check().0.contains(&line), "素の床に無い: {line}");
+        fs::write(w.path(rel), keep).unwrap();
+    }
 }

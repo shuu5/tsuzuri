@@ -147,7 +147,7 @@ pub fn check_intake(intake: &Node, index: &Node, vocabulary: &Node, report: &mut
     // 既知の集合が読めない件は便 4 の検査が「まだ分からない」に数えてある
     let known = vocab::known_words(vocabulary, &mut Report::default());
     for (lw, at) in vocab::unknown_words(&body, &known) {
-        report.violation("intake", format!("{FILE} {at}: 語彙に無い英字の語「{lw}」"));
+        report.link("intake", format!("{FILE} {at}: 語彙に無い英字の語「{lw}」"));
     }
 }
 

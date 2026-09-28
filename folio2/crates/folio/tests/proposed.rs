@@ -550,3 +550,158 @@ fn f198_face_stage_is_left_to_the_floor() {
     assert_eq!(f.code, 1, "{:?} {:?}", f.out, f.err);
     assert!(f.out.iter().any(|l| l == FACE), "{:?}", f.out);
 }
+
+/// 便 199 の場合の 1 つ（置き場からの相対の file・書こうとしている中身を作る関数・つながりの行か止める行の期待）。
+type Case = (&'static str, fn(&Work) -> String, &'static [&'static str]);
+
+/// 便 199: 口が止めず（0）つながりの行だけを出し、同じ中身を書いた置き場の素の床はその字で落とす（1）ことを見る。
+fn only_links(w: &Work, rel: &str, text: &str, want: &[&str]) {
+    let r = w.propose(rel, text);
+    assert_eq!(r.code, 0, "{rel}: {:?} {:?}", r.out, r.err);
+    assert!(r.out.iter().all(|l| !l.starts_with('[')), "{rel}: 止める行が在る: {:?}", r.out);
+    let links: Vec<&str> = r.out.iter().filter_map(|l| l.strip_prefix(LINK_HEAD)).collect();
+    assert_eq!(links, want, "{rel}");
+    w.write(rel, text);
+    let f = w.floor();
+    assert_eq!(f.code, 1, "{rel}: {:?}", f.out);
+    for l in want {
+        assert!(f.out.iter().any(|x| x == l), "{rel}: 素の床に無い: {l}");
+    }
+}
+
+/// 判断の記録 ADR-10 の字の id を `id` にし、status の行を `status` の字に替えた中身（新しい判断の記録）。
+fn adr_like(w: &Work, id: &str, status: &str) -> String {
+    w.read("adr/ADR-10.yaml").replacen("id: ADR-10", &format!("id: {id}"), 1).replacen("status: accepted", status, 1)
+}
+
+/// 便 199 (c) 1（ADR-33 決定 (2)）: 網の外の関数の中の突き合わせの字（設計ノートの参照 id の解決と別のノートの実在・判断の記録どうしの
+/// 後継と前任と欄の決まりの出所・発効した判断の記録の封の欠け・入口と相談窓口と天井の英字の語）はつながりで、口は止めない。
+#[test]
+fn f199_cross_checks_outside_the_net_are_links() {
+    const NOTE: &str = "design-note/example.yaml";
+    let cases: [Case; 10] = [
+        (NOTE, |w| w.edited(NOTE, "req: [FR15]", "req: [FR15, FR999]"), &["[note] design-note/example.yaml: §6 の行 a の req[1]: id「FR999」が実在しない"]),
+        (NOTE, |w| w.edited(NOTE, "  status: example\n", "  status: example\n  supersedes: nosuch\n"), &["[note] design-note/example.yaml: meta.supersedes「nosuch」の設計ノートが実在しない"]),
+        (NOTE, |w| w.edited(NOTE, "書き出してはならない（FR15）。", "書き出してはならない（FR15・P-99）。"), &["[note] design-note/example.yaml: §1: 散文の参照 id「P-99」が実在しない"]),
+        ("adr/schema.yaml", |w| w.edited("adr/schema.yaml", "decided_by: [ADR-1, ADR-2]", "decided_by: [ADR-1, ADR-2, ADR-99]"), &["[adr] adr/schema.yaml meta.decided_by の ADR-99 が実在しない（欄の決まりの出所の判断が消えている）"]),
+        ("adr/ADR-11.yaml", |w| adr_like(w, "ADR-11", "status: proposed\nsupersedes: ADR-99"), &["[adr] ADR-11: supersedes ADR-99 の判断の記録が実在しない", "[adr] ADR-11.supersedes: 判断の記録 ADR-99 が実在しない"]),
+        ("adr/ADR-11.yaml", |w| adr_like(w, "ADR-11", "status: retired\nsuperseded_by: ADR-10"), &["[adr] ADR-11: 後継 ADR-10 の supersedes に ADR-11 が無い（双方向）", "[adr] ADR-11: 発効しているのに封の行が無い（folio check --freeze-adrs で封を足し、commit する）"]),
+        ("adr/ADR-11.yaml", |w| adr_like(w, "ADR-11", "status: accepted"), &["[adr] ADR-11: 発効しているのに封の行が無い（folio check --freeze-adrs で封を足し、commit する）"]),
+        ("index.yaml", |w| w.edited("index.yaml", "  short: 持ち主（非エンジニア）と AI\n", "  short: 持ち主（非エンジニア）と AI と zqword\n"), &["[index] index.yaml audience の short: 語彙に無い英字の語「zqword」"]),
+        ("intake.yaml", |w| w.edited("intake.yaml", "  title: 相談窓口（intake）\n", "  title: 相談窓口（intake）zqword\n"), &["[intake] intake.yaml meta の title: 語彙に無い英字の語「zqword」"]),
+        ("ceiling.yaml", |w| w.edited("ceiling.yaml", "（観点・所見の欄の決まり・起動の記録）\n", "（観点・所見の欄の決まり・起動の記録）zqword\n"), &["[ceiling] ceiling.yaml meta の title: 語彙に無い英字の語「zqword」"]),
+    ];
+    for (i, (rel, text, want)) in cases.into_iter().enumerate() {
+        let w = Work::new(&format!("x{i}"));
+        only_links(&w, rel, &text(&w), want);
+    }
+}
+
+/// 便 199 (c) 2: retired の後継の列が輪になる中身（相手の ADR-12 は置き場に先に在る）も、口は止めずつながりに名指す。
+#[test]
+fn f199_retired_cycle_is_a_link() {
+    let w = Work::new("cycle");
+    w.write("adr/ADR-12.yaml", &adr_like(&w, "ADR-12", "status: retired\nsupersedes: ADR-11\nsuperseded_by: ADR-11"));
+    let text = adr_like(&w, "ADR-11", "status: retired\nsupersedes: ADR-12\nsuperseded_by: ADR-12");
+    only_links(
+        &w,
+        "adr/ADR-11.yaml",
+        &text,
+        &[
+            "[adr] ADR-11: retired の後継の列が輪になっている（ADR-11→ADR-12→ADR-11）＝発効している後継が無い（P-7.2）",
+            "[adr] ADR-12: retired の後継の列が輪になっている（ADR-12→ADR-11→ADR-12）＝発効している後継が無い（P-7.2）",
+            "[adr] ADR-11: 発効しているのに封の行が無い（folio check --freeze-adrs で封を足し、commit する）",
+        ],
+    );
+}
+
+/// 便 199 (c) 3: 同じ関数の中でも 1 つの file の形の字は止める族のまま（設計ノートと判断の記録の retired に後継が無い・節の型の欄が無い）。
+/// 計画のノートの外に置いた節の型 row-plan の置き場の字だけがつながり。
+#[test]
+fn f199_single_file_shapes_stay_stops() {
+    const NOTE: &str = "design-note/example.yaml";
+    let cases: [(Case, &[&str]); 3] = [
+        (
+            (NOTE, |w| w.edited(NOTE, "  status: example\n", "  status: retired\n"), &[
+                "[note] design-note/example.yaml: meta: status retired なのに approval（承認欄）が無い",
+                "[note] design-note/example.yaml: meta: retired なのに superseded_by（後継）が無い（P-7.2）",
+            ]),
+            &[],
+        ),
+        (
+            ("adr/ADR-11.yaml", |w| adr_like(w, "ADR-11", "status: retired"), &["[adr] ADR-11: retired なのに superseded_by（後継）が無い（P-7.2）"]),
+            &["[adr] ADR-11: 発効しているのに封の行が無い（folio check --freeze-adrs で封を足し、commit する）"],
+        ),
+        (
+            (NOTE, |w| w.edited(NOTE, "  - n: 1\n    type: prose\n", "  - n: 1\n    type: row-plan\n"), &[
+                "[note] design-note/example.yaml: §1: 節の型 row-plan の欄「rows」が無い",
+                "[note] design-note/example.yaml: §6 の行 a: section「1」が同じ文書の prose の節の n でない",
+            ]),
+            &["[note] design-note/example.yaml: §1: 節の型 row-plan は計画の名札の行（欄 key が plan-note の閾値の行）が名指す計画のノートにだけ置ける（名札の行が無い）"],
+        ),
+    ];
+    for (i, ((rel, text, stops), links)) in cases.into_iter().enumerate() {
+        let w = Work::new(&format!("s{i}"));
+        let r = w.propose(rel, &text(&w));
+        assert_eq!(r.code, 1, "{rel}: {:?} {:?}", r.out, r.err);
+        let got: Vec<&str> = r.out.iter().filter(|l| l.starts_with('[')).map(String::as_str).collect();
+        assert_eq!(got, stops, "{rel}");
+        let got: Vec<&str> = r.out.iter().filter_map(|l| l.strip_prefix(LINK_HEAD)).collect();
+        assert_eq!(got, links, "{rel}");
+    }
+}
+
+/// 便 199: 口が止め（1）、止める行とつながりの行が期待の字の列とちょうど同じで、同じ中身を書いた置き場の素の床にその止める行が在ることを見る。
+fn stops_with(w: &Work, rel: &str, text: &str, stops: &[&str], links: &[&str]) {
+    let r = w.propose(rel, text);
+    assert_eq!(r.code, 1, "{rel}: {:?} {:?}", r.out, r.err);
+    let got: Vec<&str> = r.out.iter().filter(|l| l.starts_with('[')).map(String::as_str).collect();
+    assert_eq!(got, stops, "{rel}");
+    let got: Vec<&str> = r.out.iter().filter_map(|l| l.strip_prefix(LINK_HEAD)).collect();
+    assert_eq!(got, links, "{rel}");
+    w.write(rel, text);
+    let f = w.floor();
+    for l in stops {
+        assert!(f.out.iter().any(|x| x == l), "{rel}: 素の床に無い: {l}");
+    }
+}
+
+/// 便 199 (c) 5（検証役の Bb199-1）: 判断の記録が自分自身を後継に指す字（後継の列の輪の長さ 1・後継の supersedes の双方向）は
+/// 1 つの file の形で、口は止める。
+#[test]
+fn f199_adr_pointing_at_itself_stays_a_stop() {
+    let w = Work::new("self-adr");
+    let text = w.edited("adr/ADR-10.yaml", "status: accepted", "status: retired\nsuperseded_by: ADR-10");
+    stops_with(
+        &w,
+        "adr/ADR-10.yaml",
+        &text,
+        &[
+            "[adr] ADR-10: 後継 ADR-10 の supersedes に ADR-10 が無い（双方向）",
+            "[adr] ADR-10: retired の後継の列が輪になっている（ADR-10→ADR-10）＝発効している後継が無い（P-7.2）",
+        ],
+        &[],
+    );
+    // supersedes が自分自身（置き換えた記録の superseded_by の双方向）も 1 つの file の形
+    let w = Work::new("self-adr-2");
+    let text = adr_like(&w, "ADR-11", "status: proposed\nsupersedes: ADR-11");
+    stops_with(&w, "adr/ADR-11.yaml", &text, &["[adr] ADR-11: 置き換えた ADR-11 の superseded_by が ADR-11 でない（双方向）"], &[]);
+}
+
+/// 便 199 (c) 6（検証役の Bb199-1）: 設計ノートの meta.supersedes が自分自身を指す字は 1 つの file の形で、口は止める。
+#[test]
+fn f199_note_pointing_at_itself_stays_a_stop() {
+    const NOTE: &str = "design-note/example.yaml";
+    let w = Work::new("self-note");
+    let text = w.edited(NOTE, "  status: example\n", "  status: example\n  supersedes: example\n");
+    stops_with(&w, NOTE, &text, &["[note] design-note/example.yaml: meta.supersedes「example」の設計ノートが実在しない"], &[]);
+}
+
+/// 便 199 (c) 7（検証役の Bb199-2）: 新しい判断の記録を先に書き（supersedes: ADR-10）、置き換えた ADR-10 の superseded_by を後で書く順は、
+/// 途中で双方向の決まりが食い違うだけなので、口は止めずつながりに名指す。
+#[test]
+fn f199_superseding_before_the_old_record_is_a_link() {
+    let w = Work::new("supersedes-first");
+    let text = adr_like(&w, "ADR-11", "status: proposed\nsupersedes: ADR-10");
+    only_links(&w, "adr/ADR-11.yaml", &text, &["[adr] ADR-11: 置き換えた ADR-10 の superseded_by が ADR-11 でない（双方向）"]);
+}

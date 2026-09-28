@@ -88,6 +88,9 @@ fn region(text: &str) -> Result<Region, String> {
     }
 }
 
+/// 印の間の字だけが導出と違う理由（契約表との突き合わせ・床はつながりに数える・ほかの理由は計画のノートの形で止める・便 199）。
+const CONTENT_DRIFT: &str = "行の索引の生成区間が契約表からの導出と違う（folio derive --write で書き直す）";
+
 /// 計画のノート（木と file の字）の行の索引が導出 `rows` と食い違う理由（無ければ None）。床と folio derive --check が使う。
 /// 行の索引の節がちょうど 1 つ・印が 1 対・印の間が導出と byte で同じ・節の行が導出と同じ（印が節の外なら割れる）。
 pub(crate) fn drift(root: &Node, text: &str, rows: &[IndexRow]) -> Option<String> {
@@ -101,7 +104,7 @@ pub(crate) fn drift(root: &Node, text: &str, rows: &[IndexRow]) -> Option<String
         Err(e) => return Some(e),
     };
     if text[r.start..r.end] != render(rows, &r.indent) {
-        return Some(format!("行の索引の生成区間が契約表からの導出と違う（{REDO}）"));
+        return Some(CONTENT_DRIFT.to_string());
     }
     let have: Vec<IndexRow> = seq(section.get("rows"))
         .map(|row| (text_of(row, "id"), text_of(row, "doc")))
@@ -131,7 +134,7 @@ pub(crate) fn check_plan(nd: &Path, notes: &[NoteDoc], rules: &Node, report: &mu
             if (ty == ROW_INDEX || ty == ROW_PLAN) && plan != Some(note.id.as_str()) {
                 let n = section.get("n").and_then(Node::as_str).unwrap_or("?");
                 let named = plan.map_or("名札の行が無い".to_string(), |p| format!("名指すのは {p}"));
-                report.violation(
+                report.link(
                     KIND,
                     format!(
                         "design-note/{}: §{n}: 節の型 {ty} は計画の名札の行（欄 key が {} の閾値の行）が名指す計画のノートにだけ置ける（{named}）",
@@ -165,8 +168,10 @@ pub(crate) fn check_plan(nd: &Path, notes: &[NoteDoc], rules: &Node, report: &mu
     };
     match fs::read_to_string(nd.join(&note.file)) {
         Ok(text) => {
-            if let Some(why) = drift(&note.root, &text, &index) {
-                report.violation(KIND, format!("{file}: {why}"));
+            match drift(&note.root, &text, &index) {
+                Some(why) if why == CONTENT_DRIFT => report.link(KIND, format!("{file}: {why}")),
+                Some(why) => report.violation(KIND, format!("{file}: {why}")),
+                None => {}
             }
         }
         Err(e) => report.unknown(format!("{file}: 読めない: {e}")),
@@ -184,7 +189,7 @@ pub(crate) fn check_plan(nd: &Path, notes: &[NoteDoc], rules: &Node, report: &mu
             report.violation(KIND, format!("{file}: 計画だけの行 id「{rid}」が 2 度在る"));
         }
         if indexed.contains(rid) {
-            report.violation(
+            report.link(
                 KIND,
                 format!("{file}: 計画だけの行「{rid}」が行の索引に在る（契約の行が在る＝計画だけの行の節から外す）"),
             );
@@ -194,7 +199,7 @@ pub(crate) fn check_plan(nd: &Path, notes: &[NoteDoc], rules: &Node, report: &mu
         let rid = row.get("id").and_then(Node::as_str).unwrap_or("?");
         for dep in seq(row.get("depends")).filter_map(Node::as_str) {
             if !indexed.contains(dep) && !planned.contains(dep) {
-                report.violation(
+                report.link(
                     KIND,
                     format!("{file}: 計画だけの行「{rid}」の depends「{dep}」が行の索引にも計画だけの行にも無い（宙に浮いた依存）"),
                 );

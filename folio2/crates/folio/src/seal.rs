@@ -173,7 +173,7 @@ pub(crate) fn check_seals(
             }
             Some(_) => {}
             None if freezing(flag) => {}
-            None => report.violation(
+            None => report.link(
                 "adr",
                 format!(
                     "{id}: 発効しているのに封の行が無い（folio check --freeze-adrs で封を足し、commit する）"
