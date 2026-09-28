@@ -2,9 +2,11 @@
 //! 欄の集合の型 `Keys`・欄の決まりの定数・床の木 `FLOOR` を字を変えずに降ろした。検査の本体と床の読み口（`floor_strs`・
 //! `floor_val`・`floor_num`）は `adr.rs` に残る。見え方は `adr.rs` の検査が読む定数と欄の集合の 2 欄だけを道具の中へ広げた。
 //! 読み手は `adr.rs` の検査・`link.rs`（改訂の来歴の欄の集合）・`schema.rs`（欄の決まりの生成区間の導出）・`seal.rs`（封の定数・便 170）。
+//! 裁定 id の文法の字面・形の種類・決定の欄の一覧（ruling_*）は便 181 から `ruling.rs` の定数を写す（ADR-31 決定 (1)(3)）。
 
 use crate::constitution_enums::RetreatKind;
 use crate::floor::{Floor, keys_floor};
+use crate::ruling::{self, Form};
 
 /// 欄の集合（required / optional）。
 pub(crate) struct Keys {
@@ -14,7 +16,6 @@ pub(crate) struct Keys {
 
 pub(crate) const ID_PATTERN: &str = "^ADR-[1-9][0-9]*$";
 const DATE_FORMAT: &str = r"^\d{4}-\d{2}-\d{2}$";
-pub(crate) const RULING_PATTERN: &str = r"[a-z]\d-[0-9a-z]+(\.\d+)?";
 pub(crate) const OWNER: &str = "持ち主";
 /// 帰結の欄（便 92・ADR-13 決定 (3-b)（ウ））。その判断が発効で生んだものの id の一覧で、根拠の欄 basis とは別に持つ。
 pub(crate) const PRODUCED: &str = "produced";
@@ -131,11 +132,21 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
         "date_format_note",
         Floor::Val("date・approval.date・grill.when・amended_by.date は年-月-日"),
     ),
-    ("ruling_pattern", Floor::Val(RULING_PATTERN)),
+    ("ruling_pattern", Floor::Val(ruling::PATTERN)),
     (
         "ruling_pattern_note",
         Floor::Val(
-            "裁定 id は台帳の id（f2-648.2 / s2-07l.149 の形）を 1 つ以上含む。実在と本物かは人が台帳と突き合わせる（P-12.2）",
+            "裁定 id の文法（判断の記録 ADR-31 決定 (3)・床と書き出しが同じ関数で使う）。語頭（頭か、前の字が英数字・「_」・「-」・「.」でない位置）の台帳の id（英小字 1・数字 1・「-」・英小字か数字の並びに「.数字」の段を何段でも）を 1 つの裁定 id とし、直後に器の問いの印（「:」年月日 T 時分 Z「-」連番）が続けばそれを含めて問いの形（question）、台帳の notes の日付か時刻（分の 1 桁が x の概数を含む）と任意の日本時刻の印（JST）が続けばそれを含めて日時の形（notes-time）、どちらも無ければ台帳の id だけの形（bead）とする（例 f2-648 notes 2026-09-28 07:18 JST・t3-hub.56:20260927T2259Z-1・s2-07l.149）。欄の中の裁定 id は全部切り出す。実在と本物か・どの形の種類で足りるかは床で決めず、器と人が台帳と突き合わせる（P-12.2）",
+        ),
+    ),
+    ("ruling_forms", Floor::Strs(&Form::NAMES)),
+    ("ruling_fields", Floor::Strs(&ruling::FIELDS)),
+    ("ruling_skeleton", Floor::Strs(&ruling::SKELETON)),
+    ("ruling_skip_roles", Floor::Strs(&ruling::SKIP_ROLES)),
+    (
+        "ruling_fields_note",
+        Floor::Val(
+            "決定の欄の閉じた一覧（判断の記録 ADR-31 決定 (1)・実装の定数の写し）と、形の種類の閉じた一覧（ruling_forms）。床（folio check）は ruling_fields の各欄の値から ruling_pattern の文法で裁定 id を 1 つも切り出せなければ違反とし、欄が無い・空・字でない（一覧・表）ときも違反とする。ruling_skeleton の欄（骨格が書く欄）の値が骨格の印（未記入）なら裁定の前（P-17.3）＝まだ分からない とし、ほかの欄の未記入は違反のまま。承認欄の行（meta.approval[]）のうち役（role）が ruling_skip_roles の行は決定を持たないので数えない（役の無い行は数える）。全ての置き場に掛け、選ぶ行を持たない。憲法の各条の前の版との対応（supersedes_v1）・支度表の承認欄・憲法の rationale は一覧の外。凍結 anchor の承認一覧（判断の記録の承認欄の写し）も一覧の外で、anchor の床が同じ文法で見る。判断の表（判断の記録 ADR-31 決定 (2)）の行は、その節の型が入る便が一覧に足す",
         ),
     ),
     ("owner", Floor::Val(OWNER)),

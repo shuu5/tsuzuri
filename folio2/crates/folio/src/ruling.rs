@@ -4,11 +4,20 @@
 //! 床の判定（違反・まだ分からない）は `check.rs` の `check_rulings` が持ち、書き出し（ADR-31 決定 (4)・便 C）は
 //! 同じ歩き手と同じ関数を使う。凍結 anchor の承認一覧と、欄の決まりの外の置き場の印（`floor.rs`）も同じ関数で
 //! 裁定 id の在否を見る（`has_ruling`）。正規表現は使わない（字の走査・文法の字は ASCII だけ）。
-//! 文法の字面と決定の欄の閉じた一覧は、便 182 で判断の記録の欄の決まり（adr/schema.yaml）の生成区間に写る。
+//! 文法の字面 `PATTERN`・形の種類・決定の欄の閉じた一覧 `FIELDS`・骨格の欄・数えない役は、判断の記録の欄の決まり
+//! （adr/schema.yaml）の生成区間に写る（便 182・`floor_adr.rs` の FLOOR）。
 
 use crate::yaml::Node;
 
-/// 決定の欄の名（file と欄の道・ADR-31 決定 (1)・この 6 つと `STAMPS` の 5 つ）。判断の表の行（決定 (2)）は、その節の型が入る便が足す。
+/// 裁定 id の文法の写し（人が読む字面・床は字の走査で判定する）。語頭の台帳の id と、続く器の問いの印か notes の日時。
+pub(crate) const PATTERN: &str = r"(?<![0-9A-Za-z_.-])[a-z][0-9]-[0-9a-z]+(\.[0-9]+)*(:[0-9]{8}T[0-9]{4}Z-[0-9]+| notes( [0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9][0-9x])?| [0-9]{2}:[0-9][0-9x])( JST)?)?";
+
+/// 決定の欄の閉じた一覧（file と欄の道・ADR-31 決定 (1)）。判断の表の行（決定 (2)）は、その節の型が入る便が足す。
+pub(crate) const FIELDS: [&str; 11] = [
+    ENACTMENT, AMENDMENT, THRESHOLD, DISCIPLINE, RECORD, NOTE, STAMPS[0], STAMPS[1], STAMPS[2], STAMPS[3],
+    STAMPS[4],
+];
+
 const ENACTMENT: &str = "constitution.yaml meta.approval.ruling";
 const AMENDMENT: &str = "constitution.yaml articles[].amended_by[].ruling";
 const THRESHOLD: &str = "rules.yaml thresholds[].ruling";
@@ -330,5 +339,15 @@ mod tests {
         assert_eq!(SKELETON, [ENACTMENT, THRESHOLD, DISCIPLINE]);
         assert_eq!(SKIP_ROLES, ["作成", "レビュー"]);
         assert_eq!([Form::Question, Form::NotesTime, Form::Bead].map(Form::name), Form::NAMES);
+    }
+
+    /// 歯（便 182）: 決定の欄の一覧は 11 種類で重ならず、骨格の欄と 5 正本の stamp の欄を含む。
+    #[test]
+    fn f182_the_fields_are_closed_and_hold_the_skeleton() {
+        let mut seen = FIELDS.to_vec();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), 11);
+        assert!(SKELETON.iter().chain(&STAMPS).all(|f| FIELDS.contains(f)));
     }
 }

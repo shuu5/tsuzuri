@@ -2,6 +2,7 @@
 //! 土台は凍結した写し（tests/fixtures/floor_base/design-intent/）の写し全部を一時 dir に作り、字を 1 か所ずつ変えて素の
 //! folio check を撃つ。版管理は作らない（土台の写しの床は器の導出 file と版管理の 2 つが まだ分からない）＝歯は種別 裁定 id の
 //! 違反の行と、未記入 の まだ分からない の行を数える。数の 55 と内訳は独立の実装（起草の記録の fields.py）の数。
+//! 便 182（docs/design/delivery-182.md §1 (c)）の歯 f182_ は、判断の記録の欄の決まりの生成区間の文法と一覧の写しを見る。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -193,4 +194,55 @@ fn f181_every_decision_field_of_the_base_is_counted() {
     let n = |p: &str| v.iter().filter(|l| l.starts_with(&format!("[裁定 id] {p}"))).count();
     let got = ["constitution", "rules", "adr/", "srs", "index", "ceiling", "intake"].map(n);
     assert_eq!((v.len(), got), (55, [1, 27, 10, 9, 4, 3, 1]), "{v:?}");
+}
+
+/// 便 182 の歯の手書きの字: 判断の記録の欄の決まりの生成区間の、形の種類・決定の欄・骨格の欄・数えない役の 4 欄（写しの字）。
+const LISTS: &str = "  ruling_forms: [question, notes-time, bead]
+  ruling_fields:
+    - constitution.yaml meta.approval.ruling
+    - constitution.yaml articles[].amended_by[].ruling
+    - rules.yaml thresholds[].ruling
+    - rules.yaml discipline[].ruling
+    - adr/ADR-*.yaml approval.ruling
+    - design-note/*.yaml meta.approval[].ruling
+    - srs.yaml meta.approval[].stamp
+    - index.yaml meta.approval[].stamp
+    - ceiling.yaml meta.approval[].stamp
+    - intake.yaml meta.approval[].stamp
+    - graph.yaml meta.approval[].stamp
+  ruling_skeleton:
+    - constitution.yaml meta.approval.ruling
+    - rules.yaml thresholds[].ruling
+    - rules.yaml discipline[].ruling
+  ruling_skip_roles: [作成, レビュー]
+";
+const GRAMMAR: &str = r"(?<![0-9A-Za-z_.-])[a-z][0-9]-[0-9a-z]+(\.[0-9]+)*(:[0-9]{8}T[0-9]{4}Z-[0-9]+| notes( [0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9][0-9x])?| [0-9]{2}:[0-9][0-9x])( JST)?)?";
+
+/// 歯 6（便 182）: folio2 の正本と床の土台の欄の決まりが、文法の字面と 4 欄を手書きの字のとおりに持つ。
+#[test]
+fn f182_the_region_holds_the_grammar_and_the_lists() {
+    let real = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent/adr/schema.yaml")).unwrap();
+    let copy = Work::new("region").read("adr/schema.yaml");
+    for (text, pattern) in [(&real, format!("  ruling_pattern: {GRAMMAR}\n")), (&copy, format!("  ruling_pattern: '{GRAMMAR}'\n"))] {
+        assert!(text.contains(&pattern) && text.contains(LISTS), "{pattern}");
+    }
+}
+
+/// 歯 7（便 182）: 土台の写しの欄の決まりから 4 欄の 1 つを消すか、文法の字面を前の字（便 181 まで）に戻すと、写しの床が
+/// その欄の食い違いを違反にする（欄の決まりは床の定数の写し）。
+#[test]
+fn f182_a_copy_that_drops_a_list_drifts() {
+    for (from, to, key) in [
+        ("  ruling_skip_roles: [作成, レビュー]\n", "", "schema.ruling_skip_roles（欠落）"),
+        (GRAMMAR, r"[a-z]\d-[0-9a-z]+(\.\d+)?", "schema.ruling_pattern"),
+    ] {
+        let w = Work::new("drift");
+        let t = w.read("adr/schema.yaml");
+        assert_eq!(t.matches(from).count(), 1, "{from}");
+        fs::write(w.0.join("adr/schema.yaml"), t.replacen(from, to, 1)).unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_folio")).args(["check", "--dir"]).arg(&w.0).output().unwrap();
+        let text = String::from_utf8(out.stdout).unwrap();
+        let v: Vec<&str> = text.lines().filter(|l| l.starts_with('[')).collect();
+        assert_eq!(v, [format!("[adr] adr/schema.yaml {key} が床の定数と違う（欄の決まりの閾値・値域・置き場は床の定数の写し＝data 側で動かせない・N-3.1）")], "{key}");
+    }
 }

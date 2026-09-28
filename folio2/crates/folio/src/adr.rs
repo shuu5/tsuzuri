@@ -880,7 +880,7 @@ mod tests {
             unreachable!()
         };
         let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
-        assert_eq!(notes, 24);
+        assert_eq!(notes, 25);
         let mut out = Vec::new();
         crate::floor::floor_diff(&strip_notes(&Node::Map(Vec::new())), &FLOOR, "", &mut out);
         // 空の写し = 値の欄が全部（欠落）・注は 1 本も立たない

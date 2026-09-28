@@ -13,8 +13,26 @@ schema:
   id_pattern_note: folio2 の他の id（P-1・R-7・FR1）と同じくゼロ詰めしない。4 桁（ADR-0047）は前の版（v1）か scribe2 の記録＝外部の参照で、床は内部 id として数えない。file 名は id と同じ
   date_format: ^\d{4}-\d{2}-\d{2}$
   date_format_note: date・approval.date・grill.when・amended_by.date は年-月-日
-  ruling_pattern: '[a-z]\d-[0-9a-z]+(\.\d+)?'
+  ruling_pattern: '(?<![0-9A-Za-z_.-])[a-z][0-9]-[0-9a-z]+(\.[0-9]+)*(:[0-9]{8}T[0-9]{4}Z-[0-9]+| notes( [0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9][0-9x])?| [0-9]{2}:[0-9][0-9x])( JST)?)?'
   ruling_pattern_note: 裁定 id は台帳の id（f2-648.2 / s2-07l.149 の形）を 1 つ以上含む。実在と本物かは人が台帳と突き合わせる（P-12.2）
+  ruling_forms: [question, notes-time, bead]
+  ruling_fields:
+    - constitution.yaml meta.approval.ruling
+    - constitution.yaml articles[].amended_by[].ruling
+    - rules.yaml thresholds[].ruling
+    - rules.yaml discipline[].ruling
+    - adr/ADR-*.yaml approval.ruling
+    - design-note/*.yaml meta.approval[].ruling
+    - srs.yaml meta.approval[].stamp
+    - index.yaml meta.approval[].stamp
+    - ceiling.yaml meta.approval[].stamp
+    - intake.yaml meta.approval[].stamp
+    - graph.yaml meta.approval[].stamp
+  ruling_skeleton:
+    - constitution.yaml meta.approval.ruling
+    - rules.yaml thresholds[].ruling
+    - rules.yaml discipline[].ruling
+  ruling_skip_roles: [作成, レビュー]
   owner: 持ち主
   owner_note: 条文を改訂する発効した判断の承認者はこの値（N-4）。planner 席は条文を改訂しない判断だけを承認できる
   required: [id, title, status, date, context, decision, options, basis, retreat, plain]

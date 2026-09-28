@@ -485,7 +485,8 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
 /// 便 175: 土台の天井の正本の生成区間から trigger と trigger_note の 17 行が外れ、残差の 2 行だけが動いた値。
 /// 便 179: 土台の規則の表に章の上限の行 R-19（欄 key）が入り、節点 R-19 の 1 行と節点の数の行だけが動いた値。
 /// 便 181: 土台の規則の表の 14 行の ruling に台帳の id を足し（行の数と位置は不変）、その 14 節点の行と要約の行だけが動いた値。
-const F99_ANCHOR_SHA256: &str = "377d88be7e0084e4c2b4b10c04520d1f110e45efbc7999084b3df1940ff70bf6";
+/// 便 182: 土台の判断の記録の欄の決まりの写しに裁定 id の文法と 4 欄が入り、残差の 2 行だけが動いた値。
+const F99_ANCHOR_SHA256: &str = "9fd95282cbb949e2a058b8d74461b7b108356a10d0b334e94a685027bf222d72";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。
