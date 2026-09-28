@@ -55,7 +55,6 @@ use crate::acct::Acct;
 use self::board::Sources;
 use self::design::Design;
 use self::events::Hub;
-use self::files::Served;
 use self::http::{Request, Response};
 use self::ledger::Source;
 use self::ruling::{Delivery, Writer};
@@ -273,11 +272,7 @@ fn handle(stream: TcpStream, shared: &Shared) {
         Ok(req) => match route::dispatch(&req, shared) {
             Some(response) => response,
             None if req.method != "GET" => Response::text(405, "method").header("Allow", "GET"),
-            None => match files::serve(&shared.files, req.path()) {
-                Served::File { content_type, body } => Response::new(200, content_type, body),
-                Served::Outside => Response::text(403, "outside"),
-                Served::Missing => Response::text(404, "no-file"),
-            },
+            None => files::respond(&req, &shared.files),
         },
     };
     let _ = response.write_to(&stream);

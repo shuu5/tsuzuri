@@ -1,7 +1,17 @@
 //! 面の file の配布（API の口でない GET）。置き場の外の path は断る。
 //! `..` と `.` の区切りを断り、実体の path（symlink を解いた先）が置き場の中に在ることを確かめる。
+//! 名に中身の hash を持つ file（trunk が付ける）は頭 Cache-Control で 1 年持たせ（`IMMUTABLE`）、
+//! index.html とほかの file は毎回確かめさせる（`NO_CACHE`・行 e-cache）。
 
 use std::path::{Path, PathBuf};
+
+use super::http::{Request, Response};
+
+/// 名に hash を持つ file の Cache-Control。
+pub const IMMUTABLE: &str = "public, max-age=31536000, immutable";
+
+/// ほかの file の Cache-Control。
+pub const NO_CACHE: &str = "no-cache";
 
 /// 配布の結果。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,6 +64,35 @@ pub fn serve(root: &Path, url_path: &str) -> Served {
             body,
         },
         Err(_) => Served::Missing,
+    }
+}
+
+/// file の名が trunk の付ける中身の hash を持つか（最初の `.` より前の字から末の `_bg` を除き、
+/// 最後の `-` の後が 8〜16 字の小文字の 16 進で、`-` の前が 1 字以上）。
+pub fn hashed(name: &str) -> bool {
+    let Some((stem, _)) = name.split_once('.') else {
+        return false;
+    };
+    let stem = stem.strip_suffix("_bg").unwrap_or(stem);
+    let Some((base, hash)) = stem.rsplit_once('-') else {
+        return false;
+    };
+    !base.is_empty()
+        && (8..=16).contains(&hash.len())
+        && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// 面の file の GET の応答（file なら頭 Cache-Control を 1 つ足す・断りは頭を足さない）。
+pub fn respond(req: &Request, root: &Path) -> Response {
+    let path = req.path();
+    match serve(root, path) {
+        Served::File { content_type, body } => {
+            let name = path.rsplit('/').next().unwrap_or("");
+            let cache = if hashed(name) { IMMUTABLE } else { NO_CACHE };
+            Response::new(200, content_type, body).header("Cache-Control", cache)
+        }
+        Served::Outside => Response::text(403, "outside"),
+        Served::Missing => Response::text(404, "no-file"),
     }
 }
 
