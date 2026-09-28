@@ -9,6 +9,7 @@
 //! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
 //! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
 //! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
+//! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -32,6 +33,7 @@ fn main() -> ExitCode {
         ["surface", "serve", rest @ ..] => serve(rest),
         ["graph", rest @ ..] => tsuzuri_boundary::cli::graph::run(rest),
         ["hook", "stop", rest @ ..] => tsuzuri_boundary::hook::stop::run(rest),
+        ["hook", "question-gate", rest @ ..] => tsuzuri_boundary::hook::question_gate::run(rest),
         _ => usage("subcommand"),
     };
     ExitCode::from(rc)

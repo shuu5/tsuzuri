@@ -1,0 +1,61 @@
+{
+  "note": "問いの起票の門の 4 通り（行 f-gate・受入 AC6）。index.tsv と ledger.json と空の event log で組んだグラフに、組ごとの metadata（touches・not-relevant・digest）で置く問いの起票を渡す。digest の字 current は歯が bundle_digest の値に替える。want は allow・deny・unknown、why は理由の語か null、ids は名指す id の natural_cmp の順。",
+  "cases": [
+    {
+      "name": "one-undisposed",
+      "touches": ["FR4"],
+      "not-relevant": {
+        "P-14": "問いは判断の代行に触れない",
+        "R-1": "規則の行の値は変えない",
+        "FR3": "数え方は変えない"
+      },
+      "digest": "current",
+      "want": "deny",
+      "why": "undisposed",
+      "ids": ["ADR-2"]
+    },
+    {
+      "name": "all-disposed",
+      "touches": ["FR4"],
+      "not-relevant": {
+        "P-14": "問いは判断の代行に触れない",
+        "R-1": "規則の行の値は変えない",
+        "FR3": "数え方は変えない",
+        "ADR-2": "面の技術の決めは先送りのまま"
+      },
+      "digest": "current",
+      "want": "allow",
+      "why": null,
+      "ids": []
+    },
+    {
+      "name": "stale",
+      "touches": ["FR4"],
+      "not-relevant": {
+        "P-14": "問いは判断の代行に触れない",
+        "R-1": "規則の行の値は変えない",
+        "FR3": "数え方は変えない",
+        "ADR-2": "面の技術の決めは先送りのまま"
+      },
+      "digest": "0000000000000000",
+      "want": "deny",
+      "why": "stale",
+      "ids": []
+    },
+    {
+      "name": "too-many",
+      "touches": ["ADR-7"],
+      "not-relevant": {
+        "FR4": "門の要件は変えない"
+      },
+      "digest": "current",
+      "want": "unknown",
+      "why": "too-many",
+      "ids": [
+        "R-1", "R-2", "R-3", "R-4", "R-5", "R-6", "R-7", "R-8", "R-9", "R-10",
+        "R-11", "R-12", "R-13", "R-14", "R-15", "R-16", "R-17", "R-18", "R-19", "R-20",
+        "R-21", "R-22", "R-23", "R-24", "R-25", "R-26", "R-27", "R-28", "R-29", "R-30"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+[
+  {
+    "id": "fx-q",
+    "title": "問いの門の fixture の根",
+    "status": "open",
+    "issue_type": "epic"
+  },
+  {
+    "id": "fx-q.1",
+    "title": "先の問い",
+    "status": "open",
+    "issue_type": "task",
+    "labels": ["intake:question"],
+    "metadata": {"touches": ["FR4"]},
+    "dependencies": [
+      {"issue_id": "fx-q.1", "depends_on_id": "fx-q", "type": "parent-child"}
+    ]
+  }
+]

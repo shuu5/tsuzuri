@@ -1,0 +1,79 @@
+# 問いの起票の門の fixture（行 f-gate・受入 AC6）: 設計の索引の形（節点は id・種類・file・要約値・題、辺は端・端・型のタブ区切り）。
+# FR4 の隣は P-14・GOAL2・ADR-2・ADR-7・AC6・R-1・FR3・NFR2（と台帳の fx-q.1）、ADR-7 の隣は FR4 と R-1 から R-30 の 31 で hub。
+FR4	要件	srs.yaml	aaaa0004	問いの起票の門
+FR3	要件	srs.yaml	aaaa0003	不変条件の数え方
+NFR2	非機能要件	srs.yaml	aaaa0102	読みの速さ
+AC6	受入基準	srs.yaml	aaaa0006	問いの起票 4 通り
+GOAL2	目的	srs.yaml	aaaa0002	全体像を見落とさない
+P-14	条	constitution.yaml	aaaa0014	判断を代行しない
+ADR-2	判断の記録	adr/ADR-2.yaml	aaaa0202	面の技術を今決めない
+ADR-7	判断の記録	adr/ADR-7.yaml	aaaa0207	面の模型
+R-1	規則行	rules.yaml	bbbb0001	規則の行 1
+R-2	規則行	rules.yaml	bbbb0002	規則の行 2
+R-3	規則行	rules.yaml	bbbb0003	規則の行 3
+R-4	規則行	rules.yaml	bbbb0004	規則の行 4
+R-5	規則行	rules.yaml	bbbb0005	規則の行 5
+R-6	規則行	rules.yaml	bbbb0006	規則の行 6
+R-7	規則行	rules.yaml	bbbb0007	規則の行 7
+R-8	規則行	rules.yaml	bbbb0008	規則の行 8
+R-9	規則行	rules.yaml	bbbb0009	規則の行 9
+R-10	規則行	rules.yaml	bbbb0010	規則の行 10
+R-11	規則行	rules.yaml	bbbb0011	規則の行 11
+R-12	規則行	rules.yaml	bbbb0012	規則の行 12
+R-13	規則行	rules.yaml	bbbb0013	規則の行 13
+R-14	規則行	rules.yaml	bbbb0014	規則の行 14
+R-15	規則行	rules.yaml	bbbb0015	規則の行 15
+R-16	規則行	rules.yaml	bbbb0016	規則の行 16
+R-17	規則行	rules.yaml	bbbb0017	規則の行 17
+R-18	規則行	rules.yaml	bbbb0018	規則の行 18
+R-19	規則行	rules.yaml	bbbb0019	規則の行 19
+R-20	規則行	rules.yaml	bbbb0020	規則の行 20
+R-21	規則行	rules.yaml	bbbb0021	規則の行 21
+R-22	規則行	rules.yaml	bbbb0022	規則の行 22
+R-23	規則行	rules.yaml	bbbb0023	規則の行 23
+R-24	規則行	rules.yaml	bbbb0024	規則の行 24
+R-25	規則行	rules.yaml	bbbb0025	規則の行 25
+R-26	規則行	rules.yaml	bbbb0026	規則の行 26
+R-27	規則行	rules.yaml	bbbb0027	規則の行 27
+R-28	規則行	rules.yaml	bbbb0028	規則の行 28
+R-29	規則行	rules.yaml	bbbb0029	規則の行 29
+R-30	規則行	rules.yaml	bbbb0030	規則の行 30
+FR4	P-14	basis
+FR4	GOAL2	goals
+FR4	ADR-2	adrs
+FR4	ADR-7	adrs
+FR4	AC6	verify.ac
+AC6	FR4	verifies
+FR4	R-1	rules
+FR4	FR3	refs
+FR4	NFR2	refs
+ADR-7	R-1	rules
+ADR-7	R-2	rules
+ADR-7	R-3	rules
+ADR-7	R-4	rules
+ADR-7	R-5	rules
+ADR-7	R-6	rules
+ADR-7	R-7	rules
+ADR-7	R-8	rules
+ADR-7	R-9	rules
+ADR-7	R-10	rules
+ADR-7	R-11	rules
+ADR-7	R-12	rules
+ADR-7	R-13	rules
+ADR-7	R-14	rules
+ADR-7	R-15	rules
+ADR-7	R-16	rules
+ADR-7	R-17	rules
+ADR-7	R-18	rules
+ADR-7	R-19	rules
+ADR-7	R-20	rules
+ADR-7	R-21	rules
+ADR-7	R-22	rules
+ADR-7	R-23	rules
+ADR-7	R-24	rules
+ADR-7	R-25	rules
+ADR-7	R-26	rules
+ADR-7	R-27	rules
+ADR-7	R-28	rules
+ADR-7	R-29	rules
+ADR-7	R-30	rules
