@@ -77,7 +77,7 @@ fn hspage_header_lines_same() {
         "header の値が snapshot と違う。今の値:\n{got}"
     );
     assert!(got.ends_with("\n  ]\n}\n"), "{got}");
-    assert_eq!(got.lines().count(), 9);
+    assert_eq!(got.lines().count(), 10);
 }
 
 /// (4) nav の列は頁の定義の nav が在る頁を数の順に並べたもので、数は重ならず、home・ask・map・gaps をこの順に含み、

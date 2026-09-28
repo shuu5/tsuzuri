@@ -16,6 +16,8 @@ pub mod kit;
 pub mod mapview;
 pub mod pages;
 pub mod project;
+/// header の席の pill（pill と card の値は host でも組む・DOM は wasm の target だけ・行 g-seatpill）。
+pub mod seatpill;
 /// browser の保存（mode などの便利の写し・決め方は host でも組む・行 g-mode-store）。
 pub mod store;
 pub mod view;

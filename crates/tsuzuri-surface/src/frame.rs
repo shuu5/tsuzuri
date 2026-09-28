@@ -157,6 +157,20 @@ pub const BACK: HeaderPart = HeaderPart {
     items: &[],
 };
 
+/// header の席の pill の部品（HEADER の外・mode の切り替えの前に描く・行 g-seatpill・見本の ui.js の topHTML の `.seatpill`）。
+/// 中身は seatpill の module が描く。
+pub const SEAT: HeaderPart = HeaderPart {
+    part: "seat",
+    key: "seat",
+    class: "seatpill",
+    items: &[],
+};
+
+/// 席の pill を出す頁か（home は block「orchestrator と口座」が同じ状態を出すので出さない・見本の init の pill.remove）。
+pub fn seat_shown(page: PageId) -> bool {
+    page != PageId::Home
+}
+
 /// 「戻る」の部品を包む span の class（見本の `.backwrap`）。
 pub const BACK_WRAP: &str = "backwrap";
 
@@ -310,10 +324,13 @@ pub fn with_param(search: &str, key: &str, value: &str) -> String {
 pub fn header_snapshot() -> String {
     let mut out = String::from("{\n  \"header\": [\n");
     let keys = nav_keys();
-    // 「戻る」の部品は HEADER の前。
+    // 「戻る」の部品は HEADER の前、席の pill は mode の切り替えの前。
     let header: Vec<String> = [&BACK]
         .into_iter()
-        .chain(HEADER.iter())
+        .chain(HEADER.iter().flat_map(|h| {
+            let seat = (h.part == "mode").then_some(&SEAT);
+            seat.into_iter().chain([h])
+        }))
         .map(|h| {
             let items = if h.part == "nav" {
                 keys.as_slice()

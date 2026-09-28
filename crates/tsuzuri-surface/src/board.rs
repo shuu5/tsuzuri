@@ -17,6 +17,7 @@ use crate::frame::{self, BACK, BACK_WRAP, BackStep, Block, HEADER, Mode, PageId}
 use crate::fresh::{self, Fresh};
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
+use crate::seatpill;
 use crate::store;
 use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
 use crate::vocab::label;
@@ -153,7 +154,7 @@ fn project_name(page: PageId) -> RwSignal<Option<String>> {
     name
 }
 
-/// 上端の帯: 戻る・題・頁の link・最終更新と読みの脈と読み込み不良の印・mode の切り替え（frame の BACK と HEADER の順）。
+/// 上端の帯: 戻る・題・頁の link・最終更新と読みの脈と読み込み不良の印と席の pill・mode の切り替え（frame の BACK と HEADER の順）。
 fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
     let name = project_name(page);
     let back = view! {
@@ -214,7 +215,9 @@ fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
                     Some(t) => term(part.key, clock_short(t, net::now())),
                     None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
                 };
-                view! { <span class=part.class title=title>{at}</span>{fresh::pulse()}{fresh::mark()} }.into_any()
+                // 席の pill は mode の切り替えの前（home の頁は席の block が同じ状態を出すので出さない・行 g-seatpill）。
+                let pill = frame::seat_shown(page).then(seatpill::view);
+                view! { <span class=part.class title=title>{at}</span>{fresh::pulse()}{fresh::mark()}{pill} }.into_any()
             }
             _ => {
                 let choices = Mode::ALL
