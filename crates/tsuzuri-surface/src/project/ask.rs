@@ -5,6 +5,9 @@
 //! 純粋な関数にして host で試し、DOM と通信は wasm の target のときだけ組み立てる。
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
 //! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる（便 g-ask-focus）。
+//! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない・行 g-card-adopt-b）。
+
+use std::collections::BTreeMap;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
@@ -16,7 +19,8 @@ use tsuzuri_contract::wire;
 use super::{Body, NOT_READ};
 use crate::frame::Block;
 use crate::view::{Fetched, clock};
-use crate::widgets::hover::clip;
+use crate::widgets::hover::{self, clip};
+use crate::widgets::nodecard::card_of;
 
 pub const BLOCK: Block = Block {
     id: "ask",
@@ -220,6 +224,17 @@ pub fn listed(fetched: &Fetched) -> Vec<Card> {
         Body::Filled(cards) => cards,
         _ => Vec::new(),
     }
+}
+
+/// 問いの id ごとの節点の hover の card（グラフの口が読めなければ空・電文に無い問いは持たない）。
+pub fn node_cards(graph: &Fetched, cards: &[Card]) -> BTreeMap<String, hover::Card> {
+    let Ok(doc) = super::map::doc(graph) else {
+        return BTreeMap::new();
+    };
+    cards
+        .iter()
+        .filter_map(|c| card_of(&doc, c.id.as_str()).map(|n| (c.id.to_string(), n)))
+        .collect()
 }
 
 /// 電文の 1 本を card の中身にする。
@@ -427,14 +442,16 @@ mod dom {
 
     use super::{
         BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, anchor,
-        can_send, card_class, card_key, count, focus, key_action, listed, outcome, outline,
-        request_body, target_number,
+        can_send, card_class, card_key, count, focus, key_action, listed, node_cards, outcome,
+        outline, request_body, target_number,
     };
     use crate::frame::{Mode, node_href};
+    use crate::project::map;
     use crate::project::nodearound::{Embeds, embeds};
     use crate::project::{Body, body_view, fold, section, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::HelpCtx;
+    use crate::widgets::hover::{self, attach_some};
 
     /// 見本の IC.warn・IC.clock・IC.person・IC.code・IC.check・IC.link・IC.stop。
     const WARN: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5"/><circle cx="12" cy="18" r=".8" fill="currentColor"/></svg>"#;
@@ -454,6 +471,13 @@ mod dom {
     }
 
     type Drafts = StoredValue<Vec<(BeadId, Draft)>>;
+
+    /// 1 本の card の、一覧を読み直すと動く値（今の番号と題の節点の card）。
+    #[derive(Clone, Copy)]
+    struct Live {
+        nb: Memo<usize>,
+        node: Memo<Option<hover::Card>>,
+    }
 
     /// 問いの id の答えの状態（初めての id は空で作る）。
     fn draft(drafts: Drafts, id: &BeadId) -> Draft {
@@ -492,6 +516,9 @@ mod dom {
         // 形と card の列は値が前と同じなら知らせない（本文が替わっても形が同じなら外枠を組み直さない）。
         let shape = Memo::new(move |_| fetched.with(outline));
         let cards = Memo::new(move |_| fetched.with(listed));
+        // 題の節点の card はグラフの口から引く（問いの一覧より後に読めても、後から card が付く）。
+        let graph = crate::net::read(map::PATH);
+        let nodes = Memo::new(move |_| cards.with(|v| graph.with(|g| node_cards(g, v))));
         // 経過は一覧の読みのたびに書き直し、link は mode を替えれば替わる。
         let tick = move || {
             fetched.track();
@@ -524,8 +551,10 @@ mod dom {
                         let d = draft(drafts, &c.id);
                         let on = target.as_deref() == Some(c.id.as_str());
                         let id = c.id.to_string();
-                        let number = Memo::new(move |_| cards.with(|v| target_number(v, &id)).unwrap_or(0));
-                        card_view(c, d, number, on, tick, current, places)
+                        let key = id.clone();
+                        let nb = Memo::new(move |_| cards.with(|v| target_number(v, &id)).unwrap_or(0));
+                        let node = Memo::new(move |_| nodes.with(|m| m.get(&key).cloned()));
+                        card_view(c, d, Live { nb, node }, on, tick, current, places)
                     }/>
                 }
                 .into_any()
@@ -537,7 +566,7 @@ mod dom {
     fn card_view(
         card: Card,
         d: Draft,
-        number: Memo<usize>,
+        live: Live,
         target: bool,
         tick: impl Fn() -> u64 + Copy + Send + Sync + 'static,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
@@ -545,10 +574,10 @@ mod dom {
     ) -> AnyView {
         let parts = LAYOUT
             .iter()
-            .map(|slot| part_view(*slot, &card, &d, number, tick, mode, places))
+            .map(|slot| part_view(*slot, &card, &d, live, tick, mode, places))
             .collect_view();
         view! {
-            <article class=card_class(target) id=move || anchor(number.get()) data-q=card.id.to_string()>{parts}</article>
+            <article class=card_class(target) id=move || anchor(live.nb.get()) data-q=card.id.to_string()>{parts}</article>
         }
         .into_any()
     }
@@ -557,7 +586,7 @@ mod dom {
         slot: Slot,
         card: &Card,
         d: &Draft,
-        number: Memo<usize>,
+        live: Live,
         tick: impl Fn() -> u64 + Copy + Send + Sync + 'static,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
         places: Embeds,
@@ -567,11 +596,18 @@ mod dom {
                 let a1 = card.a1.then(|| {
                     view! { <span class="warn" data-term="a1" tabindex="0" aria-label=label("a1") inner_html=WARN></span> }
                 });
-                let (id, posted) = (card.id.to_string(), card.posted_at);
+                let (id, posted, title) = (card.id.to_string(), card.posted_at, card.title.clone());
+                // 題の a は節点の card が替わったときだけ組み直す（番号とほかの部分は組み直さない）。
+                let link = move || {
+                    let (id, title) = (id.clone(), title.clone());
+                    view! {
+                        <a class="t" href=move || node_href(&id, mode()) use:attach_some=live.node.get()><span data-t="">{title}</span></a>
+                    }
+                };
                 view! {
                     <div class=slot.class>
-                        <span class="nb">{move || number.get()}</span>
-                        <a class="t" href=move || node_href(&id, mode())><span data-t="">{card.title.clone()}</span></a>
+                        <span class="nb">{move || live.nb.get()}</span>
+                        {link}
                         {a1}
                         <span class="chip num"><span inner_html=CLOCK></span><span>{move || age(tick(), posted)}</span></span>
                     </div>

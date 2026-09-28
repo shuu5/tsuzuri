@@ -4,6 +4,7 @@
 //! 出さず数えない。段は最初は閉じていて、見出しに件数を出す。
 //! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる（便 g-ask-focus）。
 //! 選んで並べる関数と件数は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! 行の題と答えた決定の link には、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-b）。
 
 use std::collections::BTreeMap;
 
@@ -15,6 +16,8 @@ use tsuzuri_contract::wire;
 use super::{Body, Item, LEDGER_UNREAD, NOT_READ, item};
 use crate::frame::Block;
 use crate::view::{Fetched, JST, hhmm, id_order};
+use crate::widgets::hover::Card;
+use crate::widgets::nodecard::card_of;
 
 pub const BLOCK: Block = Block {
     id: "hist",
@@ -148,6 +151,18 @@ pub fn hist_rows(items: &[Item], graph: &Fetched) -> Vec<HistEntry> {
         .collect()
 }
 
+/// 行の問いの id と答えた決定の id ごとの節点の hover の card（グラフの口が読めなければ空・電文に無い id は持たない）。
+pub fn hist_cards(entries: &[HistEntry], graph: &Fetched) -> BTreeMap<String, Card> {
+    let Ok(doc) = super::map::doc(graph) else {
+        return BTreeMap::new();
+    };
+    entries
+        .iter()
+        .flat_map(|e| std::iter::once(e.item.id.as_str()).chain(e.ruling.as_deref()))
+        .filter_map(|id| card_of(&doc, id).map(|c| (id.to_string(), c)))
+        .collect()
+}
+
 /// 決定の link の字: server の形の id（問いの id・字 :・UTC の分・字 -・数）なら、その UTC の時分を
 /// 日本時間の時分と空白と JST にした字（例 T1300Z は 22:00 JST・日を越えても時分だけで T1500Z は 00:00 JST）、
 /// ほかの形（手書きの古い id）は id のまま。年月日と時分の値の範囲は見ない。id の字は記録の鍵なので変えない。
@@ -216,11 +231,14 @@ pub fn view() -> leptos::prelude::AnyView {
                     }
                 });
             }
-            let rows = graph
-                .with(|g| hist_rows(&items, g))
-                .into_iter()
-                .map(|entry| hist_li(entry, mode))
-                .collect_view();
+            let rows = graph.with(|g| {
+                let entries = hist_rows(&items, g);
+                let cards = hist_cards(&entries, g);
+                entries
+                    .into_iter()
+                    .map(|entry| hist_li(entry, &cards, mode))
+                    .collect_view()
+            });
             view! { <ul class="items">{rows}</ul> }.into_any()
         }
     };
@@ -238,23 +256,26 @@ pub fn view() -> leptos::prelude::AnyView {
 #[cfg(target_arch = "wasm32")]
 fn hist_li(
     entry: HistEntry,
+    cards: &BTreeMap<String, Card>,
     mode: impl Fn() -> crate::frame::Mode + Copy + Send + Sync + 'static,
 ) -> leptos::prelude::AnyView {
     use leptos::prelude::*;
 
     use crate::frame::node_href;
+    use crate::widgets::hover::attach_some;
 
     let HistEntry { item, ruling } = entry;
     let style = if item.alert { super::ALERT_STYLE } else { "" };
     let id = item.id.clone();
+    let card = cards.get(&id).cloned();
     let href = move || node_href(&id, mode());
     view! {
         <li>
             <span class=item.shape.clone() style=style aria-hidden="true"></span>
-            <a class="ttl" href=href><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
+            <a class="ttl" href=href use:attach_some=card><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
             <span class="aside">{match ruling {
                 Some(rid) => view! {
-                    <a href={let rid = rid.clone(); move || node_href(&rid, mode())}>{ruling_text(&rid)}</a>
+                    <a href={let rid = rid.clone(); move || node_href(&rid, mode())} use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>
                 }
                 .into_any(),
                 None => item.aside.clone().into_any(),

@@ -127,11 +127,19 @@ pub fn leaves(from: Option<&str>, to: Option<&str>) -> bool {
     from.is_some() && from != to
 }
 
+/// 外した要素の後始末で card を閉じるか（要素の出した card の番号 `shown` が層の今の番号 `now` と同じときだけ・
+/// 番号 0 はまだ出していない要素・後から別の要素が出した card と猶予の後に消えた card には触らない）。
+pub fn unmount_hides(shown: u64, now: u64) -> bool {
+    shown != 0 && shown == now
+}
+
 #[cfg(target_arch = "wasm32")]
-pub use dom::{CardLayer, Delegate, HoverCtx, attach, delegate};
+pub use dom::{CardLayer, Delegate, HoverCtx, attach, attach_some, delegate};
 
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
 
     use leptos::ev;
@@ -141,7 +149,9 @@ mod dom {
     use web_sys::wasm_bindgen::JsCast;
     use web_sys::wasm_bindgen::closure::Closure;
 
-    use super::{Card, GRACE_MS, Point, Rect, Size, card_class, keeps, over_shows, place};
+    use super::{
+        Card, GRACE_MS, Point, Rect, Size, card_class, keeps, over_shows, place, unmount_hides,
+    };
     use crate::vocab::label;
 
     /// 要素を出た点と時刻（ミリ秒）。
@@ -267,6 +277,17 @@ mod dom {
             self.leaving.set_value(None);
         }
 
+        /// 外した要素の後始末: その要素の出した card がまだ出ていれば閉じる（頁を閉じて層が先に捨てられていれば何もしない）。
+        fn release(self, shown: u64) {
+            if self
+                .seq
+                .try_get_value()
+                .is_some_and(|now| unmount_hides(shown, now))
+            {
+                self.hide();
+            }
+        }
+
         fn hide(self) {
             self.seq.update_value(|n| *n += 1);
             self.leaving.set_value(None);
@@ -277,13 +298,18 @@ mod dom {
 
     /// 要素に card を付ける（指を置くと出し、出たら猶予の判定で残すか消す）。
     /// block は要素を描いた後にこれを呼ぶだけ（`use:attach=card` の directive の形でも使える）。
+    /// DOM を組み直して要素を外すと出の事件が来ないので、要素の反応の範囲が捨てられるときに、その要素の出した card を閉じる。
     pub fn attach(el: web_sys::Element, card: Card) {
         let Some(ctx) = use_context::<HoverCtx>() else {
             return;
         };
+        // 要素が最後に出した card の番号（0 はまだ出していない・後始末の閉包と listener が分け合う）。
+        let shown = Arc::new(AtomicU64::new(0));
+        let mine = Arc::clone(&shown);
         let enter =
             Closure::<dyn FnMut(web_sys::PointerEvent)>::new(move |ev: web_sys::PointerEvent| {
                 ctx.show(card.clone(), point(&ev));
+                mine.store(ctx.seq.get_value(), Ordering::Relaxed);
             });
         let leave =
             Closure::<dyn FnMut(web_sys::PointerEvent)>::new(move |ev: web_sys::PointerEvent| {
@@ -294,6 +320,14 @@ mod dom {
         // 要素の一生の間ずっと持つ（要素を外すと listener も届かなくなる）。
         enter.forget();
         leave.forget();
+        on_cleanup(move || ctx.release(shown.load(Ordering::Relaxed)));
+    }
+
+    /// card が在れば要素に付ける（`use:attach_some=card` の directive の形で使う・節点が引けなければ card を出さない）。
+    pub fn attach_some(el: web_sys::Element, card: Option<Card>) {
+        if let Some(card) = card {
+            attach(el, card);
+        }
     }
 
     /// 委ねの口（字の SVG のように要素に `attach` を付けられない面が、事件の点で card を出し消す）。
