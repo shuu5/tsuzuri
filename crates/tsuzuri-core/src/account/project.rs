@@ -293,6 +293,17 @@ fn bead_of<'a>(run: &Run<'a>) -> Option<&'a str> {
     text(run.events[0], "bead").or_else(|| run_bead(run.id))
 }
 
+/// 台帳で今閉じている bead の id（台帳の字が無いか読めなければ空・台帳に無い bead は入らない）。
+fn closed_beads(ledger: Option<&str>, now: EpochSecs) -> BTreeSet<String> {
+    ledger
+        .and_then(read)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|b| !b.is_open(now))
+        .map(|b| b.id)
+        .collect()
+}
+
 /// run の 4 列の数（bead ごとに RunCreated がいちばん新しい run の、今までの最後の段で分ける）。
 /// 段が Landed なら今日（UTC）の着地だけ land、verdict が落ちか段が Questioned・Failed・Stopped なら stop、
 /// 段が Spawned・Implemented・Gated なら run、ほかは wait。event log の字が無いか読めなければ「まだ分からない」。
@@ -310,13 +321,7 @@ pub fn run_counts_of(
     let Some(events) = events.and_then(read_events) else {
         return Reading::Unknown;
     };
-    let closed: BTreeSet<String> = ledger
-        .and_then(read)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|b| !b.is_open(now))
-        .map(|b| b.id)
-        .collect();
+    let closed = closed_beads(ledger, now);
     let all = runs(&events, now);
     let mut latest: BTreeMap<&str, &Run> = BTreeMap::new();
     for run in &all {
@@ -445,6 +450,7 @@ pub fn project_rows(
 /// pipeline の run の行を RunCreated の順に）。席の card が「まだ分からない」の project は席なしの行にする。
 /// pipeline の行の状態は、段を決める最後の event が器の上限の印（RunStage の段 `RATE_LIMITED`）なら limit、
 /// 段が Questioned・Failed・Stopped なら wait、席が立っていれば run、ほかは wait。
+/// 台帳で今閉じている bead の run の行は出さない（台帳の字が無いか読めなければ外さない・行 e-sess-closed）。
 pub fn session_lines(
     host: &HostTexts,
     projects: &BTreeMap<String, ProjectTexts>,
@@ -483,8 +489,12 @@ pub fn session_lines(
         let Some(events) = texts.events.as_deref().and_then(read_events) else {
             continue;
         };
+        let closed = closed_beads(texts.ledger.as_deref(), now);
         for run in runs(&events, now) {
-            if run.ended() || !run.alive(now) {
+            if run.ended()
+                || !run.alive(now)
+                || bead_of(&run).is_some_and(|b| closed.contains(b))
+            {
                 continue;
             }
             let last = run.last_stage();
