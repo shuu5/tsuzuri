@@ -121,7 +121,8 @@ fn cards(b: &Board) -> &[PipelineCard] {
     }
 }
 
-/// (1) stage_of の表は RunStage の段 Questioned を detail を見ずに段 Questioned・理由無しにし、ほかの止まりの段は表に無い。
+/// (1) stage_of の表は RunStage の段 Questioned を detail を見ずに段 Questioned・理由無しにし、
+/// RunStopped と小文字の段と段の名の無い event は表に無い。
 #[test]
 fn pquest_table_arm() {
     assert_eq!(QUESTION_STOPPED, "質問の後に止めた");
@@ -138,8 +139,6 @@ fn pquest_table_arm() {
     );
     for (kind, s, detail) in [
         ("RunStopped", Some("Stopped"), ""),
-        ("RunStage", Some("Stopped"), "retired"),
-        ("RunStage", Some("Failed"), "oom-kill"),
         ("RunStage", Some("questioned"), "about:write-set"),
         ("RunStage", None, "about:write-set"),
     ] {
@@ -147,7 +146,7 @@ fn pquest_table_arm() {
     }
 }
 
-/// (2) 節の組の板は節の表の 7 枚と unmapped 1 で、台帳の字が空の板は qa.6 だけが段 Questioned。
+/// (2) 節の組の板は節の表の 8 枚と unmapped 0 で、台帳の字が空の板は qa.6 だけが段 Questioned。
 #[test]
 fn pquest_board_cards() {
     let events = events();
@@ -162,6 +161,7 @@ fn pquest_board_cards() {
             card(5, Stage::Running, None, Some("acct-1"), 4020),
             qa6,
             card(7, Stage::Running, None, None, 2940),
+            card(8, Stage::Questioned, Some("質問の後に止めた（write-set）"), None, 2340),
         ]
     };
     let b = board(&ledger(), &events, NOW);
@@ -169,7 +169,7 @@ fn pquest_board_cards() {
         cards(&b),
         head(card(6, Stage::Landed, Some("closed:withdrawn"), None, 3540)).as_slice()
     );
-    assert_eq!(b.unmapped, 1);
+    assert_eq!(b.unmapped, 0);
 
     let b = board("", &events, NOW);
     assert_eq!(
@@ -183,7 +183,7 @@ fn pquest_board_cards() {
         ))
         .as_slice()
     );
-    assert_eq!(b.unmapped, 1);
+    assert_eq!(b.unmapped, 0);
 }
 
 /// (3) 問いの走行の札は止まっている走行に数えない。

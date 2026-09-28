@@ -3,7 +3,9 @@
 //! 札は bead ごとに 1 枚で、その bead の走行のうち RunCreated がいちばん新しい 1 つの、最後の event で段を決める
 //! （event log は追記の順なので、後の行ほど新しい）。段を決める event は `STAGE_EVENTS` の 4 種で、
 //! ほかの event（RunCost・SeatSpawned など）は段を変えない。器の event から段への対応は `stage_of` の閉じた表。
-//! 走行を 1 つも持たない open の契約は Blocked か Queued の札にする。Stopped はこの便の入力に材料が無いので作らない。
+//! 走行を 1 つも持たない open の契約は Blocked か Queued の札にする。
+//! 器の RunStage の段 Failed と Stopped は段 Failed と Stopped の札にし、段の理由は detail の字にする（行 c-pipe-unmapped）。
+//! detail が `RETIRED` の RunStage（器が worktree を畳んだ記帳）は段を決めない。
 //! 台帳で閉じた bead の走行は、段が Landed でなければ（表に無い段も）段 Landed・段の理由 `CLOSED_TAG` と閉じた理由の頭の字の札にする
 //! （閉じた（着地せず）・行 c-pipe-closed）。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
 //! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする（行 c-pipe-questioned）。
@@ -42,6 +44,9 @@ pub const CLOSED_CHARS: usize = 60;
 /// 問いの後に器が止めた走行の札の段の理由の頭の字（見本の reasonShort の写し）。
 pub const QUESTION_STOPPED: &str = "質問の後に止めた";
 
+/// 器が worktree を畳んだことを残す RunStage の detail の字。器は段を動かさずに書くので、板の段を決めない。
+pub const RETIRED: &str = "retired";
+
 /// 板と、表に無い段の走行の数（札を作らずに数える）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Board {
@@ -63,6 +68,14 @@ pub fn stage_of(kind: &str, stage: Option<&str>, detail: &str) -> Option<(Stage,
         ("RunStage", Some("Gated")) => Stage::Gated,
         ("RunStage", Some("Reviewed")) if detail.starts_with(PASSED_VERDICT) => Stage::Running,
         ("RunStage", Some("Spawned" | "Implemented")) => Stage::Running,
+        ("RunStage", Some(s @ ("Failed" | "Stopped"))) => {
+            let to = if s == "Failed" {
+                Stage::Failed
+            } else {
+                Stage::Stopped
+            };
+            return Some((to, (!detail.is_empty()).then(|| detail.to_string())));
+        }
         _ => return None,
     };
     Some((to, None))
@@ -168,7 +181,8 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
         if let Some(account) = detail_account(event) {
             state.account = Some(account);
         }
-        if STAGE_EVENTS.contains(&kind) {
+        let retired = kind == "RunStage" && text(event, "detail") == Some(RETIRED);
+        if STAGE_EVENTS.contains(&kind) && !retired {
             state.last = Some(event);
             state.stopped = false;
         } else if kind == "RunStopped" {
