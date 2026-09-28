@@ -28,6 +28,8 @@ pub(crate) struct Bead {
     pub(crate) created: Option<EpochSecs>,
     pub(crate) updated: Option<EpochSecs>,
     pub(crate) closed: Option<EpochSecs>,
+    /// 閉じた理由（bd の欄 close_reason の字のまま・無ければ None）。
+    pub(crate) close_reason: Option<String>,
     /// 親（欄 parent か、parent-child の依存の先）。
     pub(crate) parent: Option<String>,
     /// blocks の先の bead。
@@ -80,6 +82,7 @@ pub(crate) fn read(ledger: &str) -> Option<Vec<Bead>> {
                     created,
                     updated: b.updated_at.as_deref().and_then(epoch_secs).or(created),
                     closed: b.closed_at.as_deref().and_then(epoch_secs),
+                    close_reason: b.close_reason,
                     parent: b
                         .parent
                         .or_else(|| dep_ids("parent-child").into_iter().next()),

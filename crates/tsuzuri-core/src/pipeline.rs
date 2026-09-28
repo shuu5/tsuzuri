@@ -4,6 +4,8 @@
 //! （event log は追記の順なので、後の行ほど新しい）。段を決める event は `STAGE_EVENTS` の 4 種で、
 //! ほかの event（RunCost・SeatSpawned など）は段を変えない。器の event から段への対応は `stage_of` の閉じた表。
 //! 走行を 1 つも持たない open の契約は Blocked か Queued の札にする。Stopped はこの便の入力に材料が無いので作らない。
+//! 台帳で閉じた bead の走行は、段が Landed でなければ（表に無い段も）段 Landed・段の理由 `CLOSED_TAG` と閉じた理由の頭の字の札にする
+//! （閉じた（着地せず）・行 c-pipe-closed）。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
 //! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む（行 e-runs）。
 
 use std::collections::BTreeMap;
@@ -29,6 +31,12 @@ pub const PASSED_VERDICT: &str = "verdict:PASS";
 
 /// 口座の札の頭（detail の中）。
 pub const ACCOUNT_TAG: &str = "account:";
+
+/// 台帳で閉じた bead の札の段の理由の頭の字。
+pub const CLOSED_TAG: &str = "closed:";
+
+/// 段の理由に載せる閉じた理由の字数（char で数える）。
+pub const CLOSED_CHARS: usize = 60;
 
 /// 板と、表に無い段の走行の数（札を作らずに数える）。
 #[derive(Debug, Clone, PartialEq)]
@@ -82,6 +90,19 @@ struct RunState<'a> {
 struct BeadRuns {
     runs: u32,
     latest: String,
+}
+
+/// 閉じた bead の札の段の理由（`CLOSED_TAG` の後に、閉じた理由の空白の続きを 1 つに畳み前後を除いた字の頭の `CLOSED_CHARS` 字）。
+fn closed_reason(bead: &Bead) -> String {
+    let words = bead
+        .close_reason
+        .as_deref()
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let head: String = words.chars().take(CLOSED_CHARS).collect();
+    format!("{CLOSED_TAG}{head}")
 }
 
 /// 台帳の一覧と event log の字と今の時刻から板を組む。
@@ -146,11 +167,21 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
         let Some(last) = state.last else {
             continue;
         };
-        let Some((stage, reason)) = stage_of(
+        let mapped = stage_of(
             text(last, "kind").unwrap_or_default(),
             text(last, "stage"),
             text(last, "detail").unwrap_or_default(),
-        ) else {
+        );
+        let closed = beads
+            .unwrap_or_default()
+            .iter()
+            .find(|b| &b.id == bead)
+            .filter(|b| !b.is_open(now));
+        let Some((stage, reason)) = (match (mapped, closed) {
+            (Some((Stage::Landed, reason)), _) => Some((Stage::Landed, reason)),
+            (_, Some(b)) => Some((Stage::Landed, Some(closed_reason(b)))),
+            (mapped, None) => mapped,
+        }) else {
             unmapped += 1;
             continue;
         };

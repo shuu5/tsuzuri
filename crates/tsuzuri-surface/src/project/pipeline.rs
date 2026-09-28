@@ -59,6 +59,12 @@ pub const NO_AGE: &str = "―";
 /// 口座の値が無い札の字。
 pub const NO_ACCOUNT: &str = "―";
 
+/// 台帳で閉じた bead の札の段の理由の頭の字（中核の crate の pipeline の `CLOSED_TAG` の写し・面の crate は中核の crate に依存しない）。
+pub const CLOSED_TAG: &str = "closed:";
+
+/// 台帳で閉じた bead の着地しなかった札の段の字（行 c-pipe-closed）。
+pub const CLOSED_STAGE: &str = "閉じた（着地せず）";
+
 /// 1 つの列の見せ方（列・URL と class の名・見出しの語の鍵・札の状態の記号）。
 /// 状態の記号が None の列（Landed）は取り込みの印を出す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,16 +301,36 @@ pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Ve
         .collect()
 }
 
+/// 台帳で閉じた bead の着地しなかった札か（段の列が Landed で、段の理由が `CLOSED_TAG` で始まる）。
+pub fn closed_card(card: &PipelineCard) -> bool {
+    card.stage.column() == PipelineColumn::Landed
+        && card
+            .reason
+            .as_deref()
+            .is_some_and(|r| r.starts_with(CLOSED_TAG))
+}
+
 /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
+/// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にし、hover の詳しくに閉じた理由を折って出す。
 pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
     let lane = lane(card.stage.column());
     let id = card.contract.to_string();
     let title = title_of(rows, &id);
-    let stage = format!("{:?}", card.stage);
+    let closed = closed_card(card);
+    let stage = if closed {
+        CLOSED_STAGE.to_string()
+    } else {
+        format!("{:?}", card.stage)
+    };
     let age = card.elapsed_s.map_or_else(|| NO_AGE.to_string(), age);
     let why = card.reason.clone().unwrap_or_else(|| stage.clone());
     let run_line = format!("↻{} · {stage} · {}", card.runs, cut(&why, WHY_CHARS));
     let run_more = if why.chars().count() > WHY_CHARS {
+        chunk(&why, MORE_CHARS)
+    } else {
+        Vec::new()
+    };
+    let more = if closed {
         chunk(&why, MORE_CHARS)
     } else {
         Vec::new()
@@ -323,7 +349,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
             card.account.as_deref().unwrap_or(NO_ACCOUNT)
         ),
         src: SOURCE.to_string(),
-        more: Vec::new(),
+        more,
     };
     Kcard {
         id,

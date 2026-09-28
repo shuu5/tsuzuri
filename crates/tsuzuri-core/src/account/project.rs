@@ -6,7 +6,7 @@
 //! 読めない字の決まり（要件 NFR2）: state dir が引けない project は席と run と台帳と次の一手が「まだ分からない」、
 //! event log の字が無いか読めなければ run の 4 列が、台帳の字が無ければ台帳と次の一手が「まだ分からない」。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -22,7 +22,7 @@ use super::host::{self, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
 use super::{field, project_name, same_path, value};
 use crate::graph::build::{read_events, run_bead};
 use crate::ledger::stats::stats;
-use crate::ledger::{DAY, epoch_secs};
+use crate::ledger::{DAY, epoch_secs, read};
 use crate::next_step::next_step_seat;
 use crate::pipeline::{ACCOUNT_TAG, FAILED_VERDICTS, stage_of};
 use crate::seat::{SeatTexts, card};
@@ -297,9 +297,26 @@ fn bead_of<'a>(run: &Run<'a>) -> Option<&'a str> {
 /// 段が Landed なら今日（UTC）の着地だけ land、verdict が落ちか段が Questioned・Failed・Stopped なら stop、
 /// 段が Spawned・Implemented・Gated なら run、ほかは wait。event log の字が無いか読めなければ「まだ分からない」。
 pub fn run_counts(events: Option<&str>, now: EpochSecs) -> Reading<RunCounts> {
+    run_counts_of(events, None, now)
+}
+
+/// run の 4 列の数（`run_counts` の決まりに、台帳で今閉じている bead の最新の run の段を Landed と読み替える決まりを足す・
+/// 行 c-pipe-closed）。台帳の字が無いか読めなければ読み替えない。
+pub fn run_counts_of(
+    events: Option<&str>,
+    ledger: Option<&str>,
+    now: EpochSecs,
+) -> Reading<RunCounts> {
     let Some(events) = events.and_then(read_events) else {
         return Reading::Unknown;
     };
+    let closed: BTreeSet<String> = ledger
+        .and_then(read)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|b| !b.is_open(now))
+        .map(|b| b.id)
+        .collect();
     let all = runs(&events, now);
     let mut latest: BTreeMap<&str, &Run> = BTreeMap::new();
     for run in &all {
@@ -313,11 +330,13 @@ pub fn run_counts(events: Option<&str>, now: EpochSecs) -> Reading<RunCounts> {
         stop: 0,
         land: 0,
     };
-    for run in latest.values() {
+    for (bead, run) in &latest {
         let Some(last) = run.last_stage() else {
             continue;
         };
         let stage = match text(last, "kind") {
+            // 台帳で閉じた bead の run は着地の段と読み替える（verdict の落ちも見ない）。
+            _ if closed.contains(*bead) => LANDED,
             Some("QuestionRaised") => "Questioned",
             _ => text(last, "stage").unwrap_or_default(),
         };
@@ -413,7 +432,7 @@ pub fn project_rows(
                 group: Some(d.group),
                 state_dir_known: true,
                 seat: seat.card,
-                runs: run_counts(texts.events.as_deref(), now),
+                runs: run_counts_of(texts.events.as_deref(), texts.ledger.as_deref(), now),
                 ledger,
                 next,
                 board: None,

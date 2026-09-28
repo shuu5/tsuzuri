@@ -173,7 +173,7 @@ fn read_design(text: &str) -> Option<Design> {
     Some(design)
 }
 
-/// bd の読み取りの口が返す配列の 1 本のうち、グラフと台帳の指標が読む欄（知らない欄は読み捨てる）。
+/// bd の読み取りの口が返す配列の 1 本のうち、グラフと台帳の指標と pipeline の板が読む欄（知らない欄は読み捨てる）。
 /// bd は空の欄を省くので、省ける欄は Option で読む。時刻は RFC 3339 の字のまま。
 #[derive(Debug, Deserialize)]
 pub(crate) struct BdBead {
@@ -192,6 +192,8 @@ pub(crate) struct BdBead {
     pub(crate) created_at: Option<String>,
     pub(crate) updated_at: Option<String>,
     pub(crate) closed_at: Option<String>,
+    /// 閉じた理由（bd は閉じた bead にだけ出す）。
+    pub(crate) close_reason: Option<String>,
     pub(crate) dependencies: Option<Vec<BdDependency>>,
 }
 
