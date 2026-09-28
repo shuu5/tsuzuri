@@ -26,14 +26,14 @@ goal = "面の crate に account board を置く。HOME（群と口座・各 pro
 
 [[contract]]
 id = "i"
-title = "表示面（端末の一覧から ssh で Chrome を専用の profile の app mode で起こし CDP を tunnel で操作する・届かない端末は配信に落とす）"
+title = "表示面（端末の一覧から ssh で Chrome を専用の profile の app mode で起こし CDP を tunnel で操作する・届かない端末へは board の URL を渡す）"
 req = ["FR16"]
 section = "4"
 write-set = ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/stage/mod.rs", "+crates/tsuzuri-boundary/src/stage/terminal.rs", "+crates/tsuzuri-boundary/src/stage/cdp.rs", "+crates/tsuzuri-boundary/src/stage/relay.rs", "+crates/tsuzuri-boundary/tests/stage.rs", "+tests/fixtures/stage/terminals.toml"]
 verify = ["cargo nextest run -p tsuzuri-boundary --no-tests=fail stage_"]
 size = "L"
-done = "(1) 起動の引数（専用の profile・app mode・入力の環境）が snapshot と一致 (2) CDP の命令の列が snapshot と一致 (3) ssh で届かない端末の行は配信に落ちる (4) 端末の値は code に無く器の宣言の行から読む"
-goal = "席が端末の一覧（器の宣言の行）から端末の名で命令し、ssh 経由で Chrome を専用の profile の app mode で起こし、CDP を tunnel で引いて操作する駆動を境界の crate に置く。 入力の環境は端末の行から起動の環境へ渡す。ssh で届かない端末は server 側の headless Chrome の配信に落とす。 この便は土台の便の契約の型（便 b）が着地した後に起こす（依存は台帳の blocks で張る）。"
+done = "(1) 起動の引数（専用の profile・app mode・入力の環境）が snapshot と一致 (2) CDP の命令の列が snapshot と一致 (3) ssh で届かない端末には board の URL を返し、席の目は server 側の headless Chrome (4) 端末の値は code に無く器の宣言の行から読む"
+goal = "席が端末の一覧（器の宣言の行）から端末の名で命令し、ssh 経由で Chrome を専用の profile の app mode で起こし、CDP を tunnel で引いて操作する駆動を境界の crate に置く。 入力の環境は端末の行から起動の環境へ渡す。ssh で届かない端末へは board の URL を渡すだけにし、server 側の headless Chrome を席の目にする（判断の記録 ADR-15 の決定 (5)・ADR-5 の決定 (3) の置き換え）。 窓は表示先の端末に初めて見せる時と持ち主が頼んだ時だけ起こし、前に出さず動かさず、持ち主が閉じた窓は開き直さない（ADR-15 の決定 (6)）。 この便は土台の便の契約の型（便 b）が着地した後に起こす（依存は台帳の blocks で張る）。"
 
 [[contract]]
 id = "j"

@@ -1,15 +1,15 @@
-# 設計ノート surface-board — （発効 2026-09-27・持ち主の裁定 user 2026-09-27T03:19Z・記帳先 = t3-hub.1 notes）面の便の画面と端末と口（便 g〜k）。判断の記録 ADR-5・ADR-7・ADR-8 の実装の便。要件は srs.yaml。
+# 設計ノート surface-board — （発効 2026-09-27・持ち主の裁定 user 2026-09-27T03:19Z・記帳先 = t3-hub.1 notes）面の便の画面と端末と口（便 g〜k）。判断の記録 ADR-5・ADR-7・ADR-8・ADR-15 の実装の便。要件は srs.yaml。
 # 契約表の行は器（scribe2）が読む導出物 contracts/surface-board.toml に写る。便の契約 bead の pointer は design = contracts/surface-board.toml#<行 id>。
 meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
-  version: v0.20
+  version: v0.21
   status: effective
-  generated: 2026-09-27
+  generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。第 0.17 版（同日）は中くらいの幅（761px から 900px）で header の中身が縦に潰れる不具合を直す行 g-top-fix を足した。同版で行 g-batch の write-set に tests/nodepage.rs を足し、行 g-top-fix の verify から frame_ の行を外した（受付の断り = 便 g-node の着地で frame_ の字を持つ歯の file が 1 つ増えた）。第 0.18 版（同日）は行 h（account board）を 8 行（h-frame・h-home・h-sess・h-led・h-proj・h-win・h-hb・h-wire）に切り直して足した（server 側は surface-base の b-acct〜e-acct-hb・見本の頁の写しは docs/design/mock3/account）。第 0.19 版（同日）は pipeline の Landed の列が今日でない着地も並べる不具合を直す行 g-pipe-today を足した。
+  note: 設計ノート surface（v0.2・持ち主の承認 2026-09-26T14:37Z）の便の散文と契約表を、字を変えずに移した文書（章の上限 12 に収めるため・folio2 の ADR-21 決定 (3)）。持ち主の承認（2026-09-27T03:19Z）で effective。第 0.2 版（2026-09-27）は作る順の計画（docs/handoff/2026-09-27-t3-build-plan.md・持ち主の承認 user 2026-09-27T07:39Z）を受け、行 g から最小の画面を行 g-min として先に分けた。第 0.3 版（同日）は見本の見た目と頁の枠を先に揃える行 g-frame を足した（見本の頁の写しは docs/design/mock3）。第 0.6 版（同日）は block に共通の部品（block ごとの読みの口と hover の card）を先に置く行 g-parts を足した（後の block の便を並べて走らせるため）。第 0.7 版（同日）は block の中身の行を 3 つ足した（g-pipe・g-next・g-ledger）。第 0.8 版（同日）は地図の頁の行 g-map を足した。第 0.9 版（同日）は block「orchestrator と口座」の行 g-seat と、問いの頁の行 g-ask を足した。第 0.10 版（同日）は抜けの検査の頁の行 g-gaps を足した。第 0.11 版（2026-09-27）は便 g-ledger の着地の後の実物の画面の不具合（指標の段が口の本文の包みを読めない）を直す行 g-ledger-fix を足した。第 0.12 版（同日）は地図のグラフの面の行 g-graph を足した。第 0.13 版（同日）は節点の頁の行 g-node を足した。第 0.14 版（同日）は読み直しで画面が崩れない形にする行 g-steady を足した（持ち主の指摘 = 更新のたびに全部一回消える）。第 0.15 版（同日）は問いの頁の右の列（まとめて承認と全体への指示）の行 g-batch を足した。同版で行 g-graph の光る線の決まりを見本の litE の通りの向きつきに直した（門の指摘 = 散文の「片方が中心の線」が見本と実装より緩い）。第 0.16 版（同日）は block「orchestrator と口座」の窓の名が割合の字に重なる不具合を直す行 g-seat-fix を足した。同版で行 g-node と行 g-batch の verify に口の path の歯（parts_paths_distinct_in_block_modules）を足した（審査の指摘 = done の口の path の数を測る歯が verify に無い）。第 0.17 版（同日）は中くらいの幅（761px から 900px）で header の中身が縦に潰れる不具合を直す行 g-top-fix を足した。同版で行 g-batch の write-set に tests/nodepage.rs を足し、行 g-top-fix の verify から frame_ の行を外した（受付の断り = 便 g-node の着地で frame_ の字を持つ歯の file が 1 つ増えた）。第 0.18 版（同日）は行 h（account board）を 8 行（h-frame・h-home・h-sess・h-led・h-proj・h-win・h-hb・h-wire）に切り直して足した（server 側は surface-base の b-acct〜e-acct-hb・見本の頁の写しは docs/design/mock3/account）。第 0.19 版（同日）は pipeline の Landed の列が今日でない着地も並べる不具合を直す行 g-pipe-today を足した。第 0.21 版（2026-09-28）は傘の行 i の届かない端末の字を、判断の記録 ADR-15 の決定 (5)（ADR-5 決定 (3) の置き換え・持ち主の裁定 t3-hub.59.4・承認 t3-hub.59.6）に合わせて、配信に落とす形から board の URL を渡す形に直し、窓の起こし方（ADR-15 の決定 (6)・持ち主の裁定 t3-hub.59.5 と t3-hub.59.7）を便 i の散文に足した（子の行は計画 surface-plan の 4 節の i-1〜i-11）。
 
 sections:
   - n: 1
@@ -38,7 +38,8 @@ sections:
     title: 便 i — 表示面（端末の Chrome）
     body: |
       席が端末の一覧（器の宣言の行）から端末の名で命令し、ssh 経由で Chrome を専用の profile の app mode で起こし、CDP を tunnel で引いて操作する駆動を境界の crate に置く。
-      入力の環境は端末の行から起動の環境へ渡す。ssh で届かない端末は server 側の headless Chrome の配信に落とす。
+      入力の環境は端末の行から起動の環境へ渡す。ssh で届かない端末へは board の URL を渡すだけにし、server 側の headless Chrome を席の目にする（判断の記録 ADR-15 の決定 (5)・ADR-5 の決定 (3) の置き換え）。
+      窓は表示先の端末に初めて見せる時と持ち主が頼んだ時だけ起こし、前に出さず動かさず、持ち主が閉じた窓は開き直さない（ADR-15 の決定 (6)）。
       この便は土台の便の契約の型（便 b）が着地した後に起こす（依存は台帳の blocks で張る）。
   - n: 5
     type: prose
@@ -75,13 +76,13 @@ sections:
         done: (1) 3 つの tab と並べ方と 3 つの幅が URL に残る (2) 新しい窓の名と「戻る」の 3 段 (3) tick が stale なら応答なし・heartbeat-off なら停止・切り替えは器の CLI の argv だけで state dir の byte 不変 (4) 残り秒が「記録の時刻 + 猶予 − 今」で起こし直した席には出ない
         depends: [g]
       - id: i
-        title: 表示面（端末の一覧から ssh で Chrome を専用の profile の app mode で起こし CDP を tunnel で操作する・届かない端末は配信に落とす）
+        title: 表示面（端末の一覧から ssh で Chrome を専用の profile の app mode で起こし CDP を tunnel で操作する・届かない端末へは board の URL を渡す）
         req: [FR16]
         section: "4"
         write-set: ["crates/tsuzuri-boundary/src/lib.rs", "+crates/tsuzuri-boundary/src/stage/mod.rs", "+crates/tsuzuri-boundary/src/stage/terminal.rs", "+crates/tsuzuri-boundary/src/stage/cdp.rs", "+crates/tsuzuri-boundary/src/stage/relay.rs", "+crates/tsuzuri-boundary/tests/stage.rs", "+tests/fixtures/stage/terminals.toml"]
         verify: ["cargo nextest run -p tsuzuri-boundary --no-tests=fail stage_"]
         size: L
-        done: (1) 起動の引数（専用の profile・app mode・入力の環境）が snapshot と一致 (2) CDP の命令の列が snapshot と一致 (3) ssh で届かない端末の行は配信に落ちる (4) 端末の値は code に無く器の宣言の行から読む
+        done: (1) 起動の引数（専用の profile・app mode・入力の環境）が snapshot と一致 (2) CDP の命令の列が snapshot と一致 (3) ssh で届かない端末には board の URL を返し、席の目は server 側の headless Chrome (4) 端末の値は code に無く器の宣言の行から読む
         depends: []
       - id: j
         title: 受入 12 条の測定（browser の runner・全画面 × 2 幅 × 2 mode・1 件でも落ちる）
