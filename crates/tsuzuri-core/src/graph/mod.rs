@@ -116,13 +116,15 @@ pub struct PolicyAttr {
     pub scope: String,
 }
 
-/// 組まずに数えた辺の行（型が閉じた一覧に無い）。
+/// 組まずに数えた行（種類か型が閉じた一覧に無い・設計の索引の辺は端が組まなかった節点の行の id の辺も）。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct Skipped {
-    /// 設計の索引の辺のうち 17 型の外。
+    /// 設計の索引の辺のうち 17 型の外と、端が組まなかった節点の行の id の辺。
     pub design_edges: usize,
     /// 台帳の dependencies のうち 4 型の外。
     pub ledger_edges: usize,
+    /// 設計の索引の節点の行のうち種類の語が設計の 12 種の外。
+    pub design_nodes: usize,
 }
 
 /// 導出グラフ（repo に書かない・毎回組み直す）。

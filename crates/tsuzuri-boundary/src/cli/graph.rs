@@ -138,6 +138,7 @@ pub fn design_view(doc: &GraphDoc) -> GraphDoc {
         skipped: SkippedEdges {
             design: doc.skipped.design,
             ledger: 0,
+            design_nodes: doc.skipped.design_nodes,
         },
     }
 }

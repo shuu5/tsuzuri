@@ -151,16 +151,23 @@ fn dnrow_kind_words() {
         "ny#c\tnote-row\t",
     );
     assert_ne!(serde_word, IDX);
-    let empty = String::new();
-    for (name, idx) in [("note-row の語", &serde_word), ("空の索引", &empty)] {
-        let g = graph_of(idx, &led(), EV);
-        assert_eq!(g.unread, vec![Source::Design], "{name}");
-        assert!(g.unknown_kinds().contains(&NodeKind::NoteRow), "{name}");
-        assert_eq!(g.count_nodes(NodeKind::NoteRow), 0, "{name}");
-        assert_eq!(g.count_nodes(NodeKind::Req), 0, "{name}");
-        assert_eq!(g.count_edges(EdgeType::Design), 0, "{name}");
-        assert_eq!(g.count_nodes(NodeKind::Task), 3, "{name}");
-    }
+    let g = graph_of(&serde_word, &led(), EV);
+    assert!(g.unread.is_empty(), "読めない出所: {:?}", g.unread);
+    assert_eq!(g.skipped.design_nodes, 1);
+    assert_eq!(g.count_nodes(NodeKind::NoteRow), 2);
+    assert_eq!(g.count_nodes(NodeKind::Req), 1);
+    assert_eq!(
+        design_edges(&g),
+        vec![pair("dn.1", "nx#a"), pair("dn.2", "nx#b")]
+    );
+
+    let g = graph_of("", &led(), EV);
+    assert_eq!(g.unread, vec![Source::Design], "空の索引");
+    assert!(g.unknown_kinds().contains(&NodeKind::NoteRow), "空の索引");
+    assert_eq!(g.count_nodes(NodeKind::NoteRow), 0, "空の索引");
+    assert_eq!(g.count_nodes(NodeKind::Req), 0, "空の索引");
+    assert_eq!(g.count_edges(EdgeType::Design), 0, "空の索引");
+    assert_eq!(g.count_nodes(NodeKind::Task), 3, "空の索引");
 }
 
 #[test]

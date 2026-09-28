@@ -1,5 +1,6 @@
 //! 3 つの字からグラフを組む。読めない字はその出所を `Graph::unread` に挙げ、ほかの出所は組む。
-//! 設計の索引の節点と辺は表の行を写す。bead の種類は epic・memo・問い・契約の順に決める。
+//! 設計の索引の節点と辺は表の行を写す。種類の読めない節点の行と型の読めない辺の行は、その行だけを組まずに数える
+//! （飛ばした節点の行の id を端に持つ辺の行も組まずに数える）。bead の種類は epic・memo・問い・契約の順に決める。
 //! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
 //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
 //! ruled_by の辺は組まない（索引に裁定の欄が無い）。
@@ -66,7 +67,8 @@ pub fn build(inputs: &Inputs) -> Graph {
         Some(design) => {
             g.nodes.extend(design.nodes);
             g.edges.extend(design.edges);
-            g.skipped.design_edges = design.skipped;
+            g.skipped.design_nodes = design.skipped_nodes;
+            g.skipped.design_edges = design.skipped_edges;
         }
         None => g.unread.push(Source::Design),
     }
@@ -138,11 +140,12 @@ fn edge(from: &str, to: &str, edge_type: EdgeType) -> GraphEdge {
     }
 }
 
-/// 設計の索引から組んだ節点と辺と、組まずに数えた辺の行の数。
+/// 設計の索引から組んだ節点と辺と、組まずに数えた節点の行と辺の行の数。
 struct Design {
     nodes: Vec<GraphNode>,
     edges: Vec<GraphEdge>,
-    skipped: usize,
+    skipped_nodes: usize,
+    skipped_edges: usize,
 }
 
 /// 索引の種類の語を読む。語が `NOTE_ROW_KIND` なら設計ノートの行、ほかは契約の型の serde の名で読んだ
@@ -167,7 +170,9 @@ fn pointer_row(line: &str) -> Option<String> {
 }
 
 /// 設計の索引を読む。節点の行は 5 列（id・種類・file・要約値・題）、辺の行は 3 列（端・端・型）。
-/// `#` で始まる行と空の行は読み捨てる。字が空か、列の数か種類が合わない行が在れば読めない（None）。
+/// `#` で始まる行と空の行は読み捨てる。字が空か、列の数が合わない行が在れば読めない（None）。
+/// 種類の読めない節点の行と型の読めない辺の行は組まずに数え、組んだ辺のうち端が飛ばした節点の行の id の
+/// 辺も除いて辺の行に数える。
 fn read_design(text: &str) -> Option<Design> {
     if text.trim().is_empty() {
         return None;
@@ -175,15 +180,21 @@ fn read_design(text: &str) -> Option<Design> {
     let mut design = Design {
         nodes: Vec::new(),
         edges: Vec::new(),
-        skipped: 0,
+        skipped_nodes: 0,
+        skipped_edges: 0,
     };
+    let mut dropped: BTreeSet<&str> = BTreeSet::new();
     for line in text.lines().map(|l| l.trim_end_matches('\r')) {
         if line.trim().is_empty() || line.starts_with('#') {
             continue;
         }
         match line.split('\t').collect::<Vec<_>>()[..] {
             [id, kind, file, digest, title] => {
-                let kind = design_kind(kind)?;
+                let Some(kind) = design_kind(kind) else {
+                    design.skipped_nodes += 1;
+                    dropped.insert(id);
+                    continue;
+                };
                 design.nodes.push(GraphNode {
                     id: id.to_string(),
                     kind,
@@ -200,12 +211,17 @@ fn read_design(text: &str) -> Option<Design> {
                     .filter(|t| EdgeType::ALL[..DESIGN_EDGE_TYPES].contains(t))
                 {
                     Some(t) => design.edges.push(edge(from, to, t)),
-                    None => design.skipped += 1,
+                    None => design.skipped_edges += 1,
                 }
             }
             _ => return None,
         }
     }
+    let built = design.edges.len();
+    design
+        .edges
+        .retain(|e| !dropped.contains(e.from.as_str()) && !dropped.contains(e.to.as_str()));
+    design.skipped_edges += built - design.edges.len();
     Some(design)
 }
 

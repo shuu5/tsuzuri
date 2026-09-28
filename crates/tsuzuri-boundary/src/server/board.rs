@@ -196,6 +196,7 @@ pub fn doc(g: &Graph, invariants: &[Invariant]) -> GraphDoc {
         skipped: SkippedEdges {
             design: count(g.skipped.design_edges),
             ledger: count(g.skipped.ledger_edges),
+            design_nodes: count(g.skipped.design_nodes),
         },
     }
 }

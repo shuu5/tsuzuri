@@ -656,6 +656,7 @@ fn forms() -> Vec<Box<dyn Form>> {
             vec![SkippedEdges {
                 design: 3,
                 ledger: 0,
+                design_nodes: 2,
             }],
         ),
         form(
@@ -696,6 +697,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     skipped: SkippedEdges {
                         design: 0,
                         ledger: 1,
+                        design_nodes: 0,
                     },
                 },
                 // どの出所も読めない。
@@ -714,6 +716,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     skipped: SkippedEdges {
                         design: 0,
                         ledger: 0,
+                        design_nodes: 0,
                     },
                 },
             ],

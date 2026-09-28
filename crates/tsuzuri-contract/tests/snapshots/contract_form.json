@@ -441,7 +441,8 @@
   "graph::SkippedEdges": [
     {
       "design": 3,
-      "ledger": 0
+      "ledger": 0,
+      "design_nodes": 2
     }
   ],
   "graph::GraphDoc": [
@@ -522,7 +523,8 @@
       ],
       "skipped": {
         "design": 0,
-        "ledger": 1
+        "ledger": 1,
+        "design_nodes": 0
       }
     },
     {
@@ -545,7 +547,8 @@
       ],
       "skipped": {
         "design": 0,
-        "ledger": 0
+        "ledger": 0,
+        "design_nodes": 0
       }
     }
   ],

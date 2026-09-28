@@ -382,6 +382,7 @@ fn graph_unreadable_inputs_leave_other_kinds() {
         ledger: "[]",
         events: "{\"kind\":\"RunCreated\",\"run\":\"x.1-20260927T000000Z\"}",
     });
-    assert_eq!(bad_kind.unread, vec![Source::Design]);
+    assert!(bad_kind.unread.is_empty(), "読めない出所: {:?}", bad_kind.unread);
+    assert_eq!(bad_kind.skipped.design_nodes, 1);
     assert!(bad_kind.nodes.iter().all(|n| n.kind == NodeKind::Run));
 }
