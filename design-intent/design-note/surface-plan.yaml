@@ -3,7 +3,7 @@
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v0.5
+  version: v0.6
   status: effective
   generated: 2026-09-28
   profile: design-note
@@ -25,21 +25,21 @@ sections:
       状態: 下書き。持ち主が board の質問の頁で承認したら発効にする。波のノートの承認は、この計画の承認の裁定 id を継ぐ。
   - n: 2
     type: prose
-    title: 現在地（2026-09-28・main 9a892c4・台帳の closed と着地の commit で確かめた）
+    title: 現在地（2026-09-28・main b525a13・台帳の closed と着地の commit で確かめた）
     body: |
-      傘の行 g（project board）。着地した子の行: g-min（t3-hub.5）・g-frame（.7）・g-parts（.9）・g-pipe（.11）・g-next（.12）・g-ledger（.13）・g-map（.15）・g-seat（.18）・g-ask（.19）・g-gaps（.21）・g-ledger-fix（.23）・g-graph（.24）・g-node（.26）・g-steady（.28）・g-batch（.32）・g-seat-fix（.33）・g-top-fix（.34）・g-pipe-today（.49）、登録の生成の hs-blocks・hs-pages・hs-derived（.54.5〜.54.7）、第 3 波の g-brand（.52.2）・g-link-map（.52.3）・g-link-graph（.52.4）・g-map-keys（.52.5）・g-link-kcard（.52.6）・g-link-items（.52.7）・g-ask-focus（.52.8）・g-next-act（.52.9）・g-unref-panel（.52.10）・g-seat-axis（.52.11）・g-tick（.52.12）・g-help-fig（.52.13）と中核の c-next-batch（.52.15）。
+      傘の行 g（project board）。着地した子の行: g-min（t3-hub.5）・g-frame（.7）・g-parts（.9）・g-pipe（.11）・g-next（.12）・g-ledger（.13）・g-map（.15）・g-seat（.18）・g-ask（.19）・g-gaps（.21）・g-ledger-fix（.23）・g-graph（.24）・g-node（.26）・g-steady（.28）・g-batch（.32）・g-seat-fix（.33）・g-top-fix（.34）・g-pipe-today（.49）、登録の生成の hs-blocks・hs-pages・hs-derived（.54.5〜.54.7）、第 3 波の g-brand（.52.2）・g-link-map（.52.3）・g-link-graph（.52.4）・g-map-keys（.52.5）・g-link-kcard（.52.6）・g-link-items（.52.7）・g-ask-focus（.52.8）・g-next-act（.52.9）・g-unref-panel（.52.10）・g-seat-axis（.52.11）・g-tick（.52.12）・g-help-fig（.52.13）と中核の c-next-batch（.52.15）、第 5 波の g-node-timeline（.52.17）・g-title（.52.18）・g-card-node（.52.19）・g-help-sym（.52.20）・g-seat-more（.52.21）・g-ledger-card（.52.22）・g-ask-around（.52.23）・g-hist-ruling（.52.24）。
       g の done の (1)(2)(3)(5) は子の行で満ちた。(4) の hover の置き場と猶予を browser の runner で通すのは傘の行 j の runner 待ち。
-      g の残り（見本との差）: 節点の hover の card が pipeline の札にしか無い（地図・問い・台帳・抜けの検査・次の一手に無い）。節点の頁に run の時間軸が無い。「?」の注釈の記号の見本と経験者だけの注釈が無い。1 秒の時計は account の session の表だけで、問い・pipeline・席・次の一手の経過は動かない。block「orchestrator と口座」に詳しくの出所と doctor の行・tick の経過・退避の猶予と待ちと断りと逼迫の帯・群の card・窓の閾値の印・停止の切り替えが無い。問いの card に近傍の図と止めている便の数が無く、これまでの決定の行に決定の link が無い。burndown の card と epic の link が無い。header の席の pill・頁ごとの題・窓を閉じられないときの注記・mode の保存・最初の案内が無い。節点の概要（要件 FR15）が電文に無く、設計ノートの行の節点と更新の時刻も無い。未反映の一覧の裁定と要望の 2 種と、次の一手の発効待ちは、材料（処分の宣言）が無いので まだ分からない。
-      傘の行 h（account board）。着地した子の行: b-acct（.36）・e-acct-host（.37）・e-acct-proj（.38）・e-acct（.39）・e-acct-hb（.40）・h-frame（.41）・h-home（.42）・h-sess（.43）・h-led（.44）・h-proj（.45）・h-win（.46）・h-hb（.47）・h-wire（.48）・h-look（.53.3）、第 3 波の h-proj-more（.53.4）・h-led-spark（.53.5）・h-popstate（.53.6）、第 4 波の h-cards-home（.53.7）。
+      g の残り（見本との差）: 節点の hover の card が pipeline の札・次の一手・問いの題・これまでの決定・台帳の epic・抜けの検査の名指しに無い（地図の札と一覧の題は g-card-node で付いた）。経験者だけの注釈が無い。1 秒の時計は account の session の表だけで、問い・pipeline・席・次の一手の経過は動かない。block「orchestrator と口座」に tick の経過・退避の猶予と待ちと断りと逼迫の帯・群の card・窓の閾値の印・停止の切り替えが無い（詳しくの出所の行と doctor の席の行は g-seat-more で付いた）。問いの card に止めている便の数が無い。header の席の pill・窓を閉じられないときの注記・mode の保存・最初の案内が無い。節点の概要（要件 FR15）が電文に無く、設計ノートの行の節点と更新の時刻も無い。未反映の一覧の裁定と要望の 2 種と、次の一手の発効待ちは、材料（処分の宣言）が無いので まだ分からない。
+      傘の行 h（account board）。着地した子の行: b-acct（.36）・e-acct-host（.37）・e-acct-proj（.38）・e-acct（.39）・e-acct-hb（.40）・h-frame（.41）・h-home（.42）・h-sess（.43）・h-led（.44）・h-proj（.45）・h-win（.46）・h-hb（.47）・h-wire（.48）・h-look（.53.3）、第 3 波の h-proj-more（.53.4）・h-led-spark（.53.5）・h-popstate（.53.6）、第 4 波の h-cards-home（.53.7）、第 5 波の h-sess-axis（.53.11）・h-board-url（.53.12）と中核の c-limit-pipe（.53.13）。開く button は各 anchor の追跡されない git config の tsuzuri.boardport で開く（席が 4 つの anchor に置いた・2026-09-28）。
       h の done の (1)〜(4) は単体の歯で満ちた（browser の runner は j 待ち）。
-      h の残り: 開く button が押せない（board の URL の出所・t3-hub.53.1 で案 A に決まり行 h-board-url）。session の表の見出しに目盛が無い。session と run と各 project の表に card が無い。並べ方の押しが履歴に積まれない。決定待ちと未反映の欄が「―」。使用量の閾値と逼迫の印と候補が門で落ちた理由が無い。休止中の印と口座ごとの 7 日の小さな図と測った時刻の列が無い。開いた窓の一覧と mode が頁を開き直すと消える。限度の KPI が pipeline の session を数えない（中核の欠け・行 c-limit-pipe）。
+      h の残り: session と run と各 project の表に card が無い。並べ方の押しが履歴に積まれない。決定待ちと未反映の欄が「―」。使用量の閾値と逼迫の印と候補が門で落ちた理由が無い。休止中の印と口座ごとの 7 日の小さな図と測った時刻の列が無い。開いた窓の一覧と mode が頁を開き直すと消える。
       h で作らないと決めた物: 時点のつまみと関係の頁（t3-hub.53.10）。見張り: t3-hub.53.2（負荷の高い時に台帳が測れていないに落ちる・直しは保留）。
       傘の行 i（表示面）: 着地した子の行は無い。done の (1)〜(4) が全部残る。端末の宣言・ssh・Chrome の専用の profile の決めが持ち主待ち。
       傘の行 j（受入 12 条の測定）: 着地した子の行は無い。done の (1)〜(4)（12 条ごとに 1 件仕込んだ fixture・現物の全画面で 0・report・面の crate の依存の予算）が全部残る。runner の外の依存（headless の browser か CDP か、行 i の道具の使い回しか）が持ち主待ち。
       傘の行 k（tz の口）: 着地した子の行は k-graph（.55.1）。done の (2)（tz graph --design が設計の索引だけを出す）は満ちた。tz graph --check は今の中核が g-3・g-7・g-9 を測らないので、違反が無くても まだ分からない（rc 2）を返す。残り: (1) folio の 11 の口の終了 code と出力の一致（folio の code の持ち込み〔判断の記録 ADR-4〕の後）と、(3) tz inject が無いこと・(4) folio という名の binary が workspace に無いこと（どちらも今は真で、見る歯が無いだけ）と、g-3・g-7・g-9 を数える行。
       傘の行 e（面の server）: 着地した子の行: e-min（.4）・e-src（.6）・e-read（.14）・e-ask（.17）・e-seat（.20）・e-view（.25）・e-coalesce（.27）・e-batch（.30）・e-reap（.31）・e-runs（.52.14）と、登録の生成の hb-proc・hb-config・hb-route・hb-post（.54.1〜.54.4）。
-      e の done の (2)・(3) の前半（古い版の要求を 409 で断る）・(4) は満ちた。残り: (1) 裁定ごとの逐語つきの承認の event を器の event log に書く（今は器の seat deliver を撃つだけ）。(3) の後半の取り消し（新しい裁定が前の id を名指して問いを open に戻す）。(5) 問いの合図から SSE まで 200 ミリ秒（今は 500 ミリ秒の周期の読みだけ）。考え中の席が断った配達（busy）を届ける手（器の答え待ち）。
-      傘の行 f（席の hook と問いの起票の門）: 着地した子の行は無い（境界の crate に hook の dir が無い）。done の (1)〜(3) が全部残る。門の行 f-gate は起草済みで、t3-hub.55.2 の絞りで書き直す。
+      e の done の (2)・(3) の前半（古い版の要求を 409 で断る）・(4) は満ちた。残り: (1) 裁定ごとの逐語つきの承認の event を器の event log に書く（今は器の seat deliver を撃つだけ）。(3) の後半の取り消し（新しい裁定が前の id を名指して問いを open に戻す）。(5) 問いの合図から SSE まで 200 ミリ秒（今は 500 ミリ秒の周期の読みだけ）。考え中の席が断った配達（busy）を届ける手（第 6 波の行 f-mark・f-stop・f-mark-serve）。
+      傘の行 f（席の hook と問いの起票の門）: 着地した子の行は無い（境界の crate に hook の dir が無い）。done の (1)〜(3) が全部残る。配達の 3 行（f-mark・f-stop・f-mark-serve）は第 6 波。門の行 f-gate は t3-hub.55.2 の絞りで、f-stop の着地の後に書き直す（hook の dir と hooks.json を f-stop が置くため）。
   - n: 3
     type: prose
     title: 決定（持ち主の裁定と席の決め・出所つき）
@@ -79,22 +79,15 @@ sections:
     title: 残りの行（id・大きさ・何を・書く file・依存・拠る）
     body: |
       略記: surface/ = crates/tsuzuri-surface/src、core/ = crates/tsuzuri-core/src、contract/ = crates/tsuzuri-contract/src、boundary/ = crates/tsuzuri-boundary/src。どの行も自分の歯の file（tests の下の新しい file）を足すので、書く file からは省く。拠るの「見本」は判断の記録 ADR-7 の承認（user 2026-09-26T07:51Z）を指す。file に（見込み）と付けた行は、起草のときに main の code で確かめて決める。依存に書くのは中身の依存（先の行が作る物を使う）だけで、同じ file を書くだけの順は 5 節が持つ（依存に書かなくても 5 節の順で流す）。
-      第 5 波（起草済み・作業場で点検中・11 行なので 2 つのノートに分けて置く）。
-      g-node-timeline（M）: 節点の頁に run の時間軸の block（口 GET /api/runs?bead= の走行ごとの段の chip・審査の結びの色・経験者の口座と費用の行）。file = surface/project/timeline.rs（新）・surface/pages/node.rs と頁の snapshot と着地済みの歯 3 つ。依存 = e-runs（着地）。拠る = 見本・要件 FR10・FR14。
-      g-title（S）: 頁の題を project の名と頁の見出しの語にする（節点の頁は節点の題）。file = surface/view.rs・surface/board.rs・surface/project/node.rs と着地済みの歯 brand。依存 = g-brand（着地）。拠る = 見本・要件 FR1。
-      g-card-node（M）: 地図の圧縮の面の札と一覧の面の題に節点の card（共有の組み手を widgets の nodecard に置く）。file = surface/widgets/nodecard.rs（新）・surface/widgets/mod.rs・surface/mapview/compact.rs・surface/mapview/list.rs。依存 = なし。拠る = 見本・要件 FR14。
-      g-help-sym（S）: 「?」の注釈の記号の見本（gi・nxm・thr・tk・帯の形）と置き換えの字 SPAN・TICK。file = surface/widgets/help.rs。依存 = なし。拠る = 見本・要件 FR14。
-      g-seat-more（S）: 席の block の詳しくに出所の 1 行と経験者の doctor の席の行、経験者の mode で初めから開く。file = surface/project/seat.rs。依存 = なし。拠る = 見本・要件 FR12・FR14。
-      g-ledger-card（S）: burndown の card と epic の進みの行の節点への link。file = surface/project/ledger.rs。依存 = なし。拠る = 見本・要件 FR13・FR14。
-      g-ask-around（M）: 問いの card のつながりの段に近傍の図を埋め込む（段を初めて開いたときだけ読む）。file = surface/project/ask.rs・surface/project/nodearound.rs・surface/net.rs（置き場だけ）。依存 = なし。拠る = 見本・要件 FR5・FR6。
-      g-hist-ruling（S）: これまでの決定の行に、その問いに答えた決定の節点への link。file = surface/project/askpage.rs。依存 = なし。拠る = 見本・要件 FR2・FR6。
-      h-sess-axis（S）: session の表の見出しに幅ごとの目盛の時刻、狭い幅では見出しの後に同じ目盛の段。file = surface/account/session.rs。依存 = なし。拠る = 見本・要件 FR12・NFR1。
-      c-limit-pipe（S）: 中核の session の行で、器が走行に書く段 RateLimited（runner が上限で止まったとき器が書く RunStage の event）を写して pipeline の session を Limit と印す（tsuzuri は数の閾値を持たない・orchestrator の席の限度も器の判定の写しなので数え方がそろう）。file = core/account/project.rs・歯 plimit（新）・置き場だけの歯 acctpcore。依存 = なし。拠る = 席の決め（限度の KPI）・持ち主の裁定 t3-hub.53.8 の筋（器の値を写し判じない）・要件 FR12。後の面の小さな行: 語の辞書の limited の internal の字と、history の注釈の時点のつまみの字（FR12 v0.8 で作らない）を直す。
-      h-board-url（M）: 開く button で各 project の board を開く（git config の tsuzuri.boardport の port だけを電文に載せ、面が URL を組む）。file = contract/account.rs・tests/fixtures/account/acct-doc.json・boundary/acct.rs・surface/account/windows.rs と着地済みの歯 3 つ（server_acct・acctwin・acctproj）と新しい歯 bport（境界と面）。中核は書かない（port の読みと置きは境界だけ）。依存 = なし。拠る = t3-hub.53.1・要件 FR1。
-      保留の 2 行（第 4 波の起草から）。
-      c-summary-design（M）: 電文の節点に行の位置と 2 つの概要（plain と eng）の欄を足し、folio graph --print --summary の欄を写す。file = contract/graph.rs と契約の snapshot・core/graph/build.rs（読みの形・見込み）と、節点を struct の字で組む着地済みの歯。依存 = folio2 の --summary の着地。拠る = 席の決め（走査を置かない）・要件 FR15。
-      f-gate（M）: 問いの起票の門 tz hook question-gate（1 段・4 種・hub を除く・30 越えは まだ分からない・止めるときは処分の無い id を全部名指す・要約値が古ければ止める）。file = core/gate.rs（新）・core/lib.rs・boundary/hook/mod.rs（新）・boundary/hook/question_gate.rs（新）・boundary/lib.rs・boundary/main.rs・tests/fixtures/guard の fixture（新）。依存 = srs の直し（FR4 と AC6）が main に在ること。拠る = t3-hub.55.2・要件 FR4・受入 AC6。
-      project board（傘 g）の続き。
+      第 6 波（起草と事前の点検の済み・1 つのノート surface-wave6 に置く・depends は同じノートの中の行しか引けないため）。
+      f-mark（M・最優先）: 配達済みの印の形（台帳の問いの notes の末尾の 1 行「配達 = <裁定の id>・経路 = <配達の口|停止>・時刻 = <分>」・同じ bead の印だけを数える）と、印の無い裁定の読み（undelivered）・印の判じ（marked）・印の 1 行（mark_line）・停止の hook の入力の旗（stop_active）と答えの JSON（block）を中核の純粋な関数に置き、歯が共に読む台帳の見本を置く。file = core/delivery.rs（新）・core/lib.rs・tests/fixtures/stop の 2 つ（新）。依存 = なし。拠る = 要件 FR9・器の答え（ADR-0077 CTX2 と CSQ-N3・器の FR79）。
+      f-stop（M）: 席の停止の hook tz hook stop（Stop・考え中から待ちに移る境）が印の無い裁定を読み、在れば裁定の id を返して席を続けさせ、返した後にだけ経路が停止の印を置く（stop_hook_active が true なら黙る・rc 2 を返さない・--repo の下の .git が file＝git の worktree なら、標準入力も台帳も読まずに黙る〔器の便の runner も plugin を読むため〕）。repo の根の plugin/ の hooks.json に Stop を登録する（command は $CLAUDE_PROJECT_DIR の下の target/debug/tz・timeout 30・--repo は $CLAUDE_PROJECT_DIR＝席の起動の dir の anchor なので、worktree で編集する席も裁定を受け続ける）。file = boundary/hook/mod.rs（新）・boundary/hook/stop.rs（新）・boundary/lib.rs・boundary/main.rs・plugin/.claude-plugin/plugin.json（新）・plugin/hooks/hooks.json（新）。依存 = f-mark。拠る = 要件 FR9・器の答え（ADR-0077 CTX2 と CSQ-N3・hook の入れ先 23:3xZ・器 24aaa5a の runner への plugin の写し）。
+      f-mark-serve（M）: server は受付ごとに seat deliver を 1 度だけ撃つ（1 問は裁定の id・束は束の id・器は 1 回に 1 つの id だけを受け、打ち込みの間の 2 回目を断るため）。撃つ前に台帳を読み直し、受付の全部の裁定に印が在れば撃たない。rc 0 のとき受付の全部の裁定の問いに経路が配達の口の印を置き、受けないときは失敗とせず、log に 1 行だけ書いて印を置かない（「配達が落ちた」を消す）。file = boundary/server/ruling.rs・boundary/server/batch.rs（着地済みの歯 server_ask と server_batch の数の直しと、1 本の名の替えを含む）。依存 = f-mark（f-stop と並べて流せる）。拠る = 要件 FR9・器の答え（busy はふつうの断り・器の id の決まり）。
+      c-summary-design（M）: 電文の節点に行の位置と 2 つの概要（plain と eng）の欄を足し、folio graph --print --summary の字を id と file の同じ節点に写す中核の関数 add_summary を置く。file = contract/graph.rs と契約の snapshot・core/graph/build.rs と、節点を struct の字で組む着地済みの歯 5 つ（contract_form・gview・nodepage・mapgraph・itemlink）。依存 = なし（folio2 の --summary は着地済み・席の folio は 0fb780e）。拠る = 席の決め（走査を置かない）・要件 FR15。
+      c-summary-wire（S）: server と tz graph が設計の索引を --print に加えて --summary でも読み、その字を中核の add_summary に渡して、口 /api/graph・/api/graph/view・/api/around と tz graph の節点に行の位置と 2 つの概要を載せる（--summary を読めない folio では 3 つの欄は null のまま・グラフは落とさない）。file = boundary/server/design.rs・boundary/server/board.rs・boundary/cli/graph.rs と着地済みの歯 4 つ（server_read・server_view・server_coalesce・kcli）と置き場だけの歯 hbconf。依存 = c-summary-design（同じ波のノート）。拠る = 要件 FR15。
+      保留の 1 行。
+      f-gate（M）: 問いの起票の門 tz hook question-gate（1 段・4 種・hub を除く・30 越えは まだ分からない・止めるときは処分の無い id を全部名指す・要約値が古ければ止める）。file = core/gate.rs（新）・core/lib.rs・boundary/hook/mod.rs・boundary/hook/question_gate.rs（新）・boundary/lib.rs・boundary/main.rs・tests/fixtures/guard の fixture（新）。依存 = srs の直し（FR4 と AC6・main に在る）と f-stop の着地（hook の dir）。門は器の runner に写った plugin でも効く（runner の見張りとして望ましい）。拠る = t3-hub.55.2・要件 FR4・受入 AC6。
+      project board（傘 g）の続き。第 7 波（起草中・1 つか 2 つのノート）は g-card-adopt-a・g-tip-expert・g-seat-split・g-mode-store と h-cards-sess・h-cards-proj と c-acct-thr・c-q-blocking の 8 行。
       g-card-adopt-a（S）: pipeline の札と次の一手の大きい箱の題に節点の card。file = surface/project/pipeline.rs・surface/project/next.rs。依存 = g-card-node。拠る = 見本・要件 FR14。
       g-card-adopt-b（S）: 問いの card の題とこれまでの決定の行に節点の card。file = surface/project/ask.rs・surface/project/askpage.rs。依存 = g-card-node。拠る = 見本・要件 FR14。
       g-card-adopt-c（S）: 台帳の epic の行と抜けの検査の名指しに節点の card。file = surface/project/ledger.rs・surface/project/gaps.rs。依存 = g-card-node・g-ledger-card（epic の行の link）。拠る = 見本・要件 FR14。
@@ -108,7 +101,6 @@ sections:
       g-seat-thr（S）: 席の block の窓の棒に閾値（cap）の印。file = surface/project/seat.rs。依存 = c-seat-grace（席の card の窓の閾値）。拠る = t3-hub.53.8・規則の行 R-22。
       g-seat-hb（M）: project board の席の block に停止の切り替えと確かめの段（account の heartbeat の純粋な関数を使い回す）。file = surface/project/seat.rs（と server の口の守り・見込み）。依存 = g-seat-split。拠る = 見本・要件 FR12・受入 AC10。持ち主待ち: どの project board からも停止の POST を受けてよいか（問いはまだ置いていない）。
       c-q-blocking（S）: 問いの card の電文に止めている便の id の列、card に止めている数の chip。file = contract/question.rs・core/question.rs・surface/project/ask.rs。依存 = g-ask-around。拠る = 見本・要件 FR6。
-      c-summary-wire（S）: server と tz graph が設計の索引を --summary つきで読む配線。file = boundary/server/design.rs・boundary/server/board.rs（見込み）。依存 = c-summary-design。拠る = 要件 FR15。
       g-summary（S）: 一覧の面の要旨・節点の頁の 2 つの概要と出所の file と行・card の概要。file = surface/mapview/list.rs・surface/project/node.rs・surface/widgets/nodecard.rs。依存 = c-summary-wire・g-card-node。拠る = 見本・要件 FR15・規則の行 R-19。
       c-dn-rows（M）: 設計ノートの行を節点に、design と ruled_by の辺を組む。file = core/graph/build.rs。依存 = folio の索引に設計ノートの行と ruled_by の材料が載ること（6 節・tsuzuri は設計文書の YAML を走査しない）。拠る = 要件 FR2・判断の記録 ADR-7 決定 (2)。
       c-summary-ledger（M）: bead の要約を節点の概要に写し、概要の無い節点を床が数える。file = core/graph/build.rs・core/ledger（見込み）。依存 = c-summary-design。拠る = 要件 FR15・受入 AC12。持ち主待ち: 台帳のどの欄を要約とするか（問いはまだ置いていない）。
@@ -139,15 +131,14 @@ sections:
       c-acct-spark（M）: 口座の行に 7 日の使用量の列と最後に測った時刻（器の event log の AllowanceMeasured の写し）。file = contract/account.rs・core/account/host.rs・boundary/acct.rs と fixture。依存 = なし。拠る = t3-hub.53.10・要件 FR12。
       h-acct-spark（S）: HOME の口座 × 窓の表に spark の列と測った時刻の列。file = surface/account/home.rs。依存 = c-acct-spark。拠る = t3-hub.53.10・見本・要件 FR12。
       面の server（傘 e）の続き。
-      e-deliver-busy は決着して行 f-stop に入れた（2026-09-27T23:0xZ の器の答え・下の 6 節）。
+      e-deliver-busy は決着して第 6 波の行 f-mark・f-stop・f-mark-serve に入れた（器の答え・下の 6 節）。
       e-signal（S）: 問いの合図から SSE まで 200 ミリ秒の速い道。file = boundary/server/events.rs。依存 = f-gate（合図を誰が書くか）。拠る = 要件 NFR2・規則の行 R-21。
       e-revoke（M）: POST の取り消しの口（新しい裁定が前の id を名指して問いを open に戻す）。file = boundary/server/routes の新しい file・contract/ledger.rs（台帳への書きの enum）・boundary/server/ruling.rs。依存 = なし。拠る = 要件 FR7・受入 AC3。持ち主待ち: 見本に置き場の無い取り消しの button をどこに置くか（問いはまだ置いていない）。
       e-approval-event（M）: 裁定ごとの逐語つきの承認の event を器の event log に書く。file = boundary/server/ruling.rs。依存 = なし。拠る = 要件 FR9・受入 AC1。器待ち: どの器の口が event を書くか。
       席の hook（傘 f）の続き。
-      f-gate-install（S）: 門を席の設定の PreToolUse（matcher Bash）に入れる。file = 未定（席の設定は器の側の物なので、器の宣言か tsuzuri の設定かを器に確かめる）。依存 = f-gate。拠る = t3-hub.55.3。
+      f-gate-install（S）: 門を plugin/hooks/hooks.json の PreToolUse（matcher Bash）に足す（f-stop の Stop の隣）。file = plugin/hooks/hooks.json。依存 = f-gate・f-stop。拠る = t3-hub.55.3・器の答え（hook の入れ先 23:3xZ）。
       f-deliver（M）: 配達の hook が裁定の逐語を注入する（f-stop と同じ印を使い、次の tool の呼びでも拾う）。file = boundary/hook/deliver.rs（新）・boundary/hook/mod.rs・boundary/main.rs。依存 = f-stop・f-gate。拠る = 要件 FR9。
-      f-stop（M・最優先）: 席の停止の hook（Stop・考え中から待ちに移る境）が、台帳の問いの notes の裁定の行のうち配達済みの印の無いものを読み、在れば裁定の id を返して席を続けさせ、返した後にだけ配達済みの印を置く。server は seat deliver が rc 0 のとき同じ印を置く（busy の断りは失敗でなく、印を置かないだけ）。file = boundary/hook/mod.rs（新）・boundary/hook/stop.rs（新）・boundary/lib.rs・boundary/main.rs・boundary/server/ruling.rs。依存 = なし（hook の dir をこの行が作り、f-gate と f-deliver は後に続く）。拠る = 要件 FR9・器の答え（ADR-0077 CTX2 と CSQ-N3・器の FR79）。器待ち: 停止の hook を席の設定に入れる先。
-      f-undelivered（M）: 裁定から 2 分で席の受けが無ければ面に「席に届いていない」。file = server の読み（見込み）と surface/project/ask.rs・surface/project/next.rs。依存 = f-stop（席の受けの材料は f-stop の配達済みの印・器の seat deliver の rc は使わない）。拠る = 要件 FR9・規則の行 R-21。
+      f-undelivered（M）: 裁定から 2 分で席の受けが無ければ面に「席に届いていない」。file = server の読み（見込み）と surface/project/ask.rs・surface/project/next.rs。依存 = f-mark（席の受けの材料は f-stop と f-mark-serve が置く配達済みの印・器の seat deliver の rc は使わない）。拠る = 要件 FR9・規則の行 R-21。
       tz の口（傘 k）の続き。
       k-parity（M）: folio の 11 の口を同じ名の tz の subcommand にし、終了 code と出力を合わせ、tz inject と folio という名の binary が無いことを歯で見る。file = boundary/cli の新しい file・boundary/main.rs（見込み）。依存 = folio の code の持ち込み（判断の記録 ADR-4）。拠る = 要件 FR17・受入 AC14・判断の記録 ADR-8。
       持ち主の決め待ちの傘（行の割りは決めの後）。
@@ -172,10 +163,10 @@ sections:
       surface/board.rs: g-title → g-mode-store → g-seatpill → g-back-note → g-coach。surface/account/board.rs: g-mode-store → h-dormant。
       surface/account/session.rs: h-sess-axis → h-cards-sess → h-sort-hist。surface/account/projects.rs: h-cards-proj → h-sort-hist → h-acct-cols。surface/account/ledger.rs: h-cards-led → h-sort-hist → h-acct-cols。
       surface/account/windows.rs と歯 acctwin: h-board-url → h-win-store。surface/account/home.rs と歯 accthome: h-thr-home → h-cards-nx → h-acct-spark。
-      boundary/main.rs と boundary/lib.rs と boundary/hook/mod.rs: f-stop → f-gate → f-deliver → k-parity。boundary/server/ruling.rs: f-stop → e-revoke → e-approval-event。
-      着地済みの歯の file も、期待を直す行が 2 つ在れば同じく直列にする（例: 歯 hsderive・frame・nodepage は g-node-timeline、歯 brand は g-title が直す）。
+      boundary/main.rs と boundary/lib.rs と boundary/hook/mod.rs: f-stop → f-gate → f-deliver → k-parity。boundary/server/ruling.rs: f-mark-serve → e-revoke → e-approval-event。core/lib.rs: f-mark → f-gate。plugin/hooks/hooks.json: f-stop → f-gate-install。
+      着地済みの歯の file も、期待を直す行が 2 つ在れば同じく直列にする（例: 歯 server_ask と server_batch は f-mark-serve、歯 contract_form と snapshot は c-summary-design → c-q-blocking の順に直す）。
       上限に近い file（受付の上限は 1 file 1500 行・流す前に行数と大きさの余白の和を確かめ、越えるなら先に割る行を置く）: surface/project/ledger.rs・surface/mapview/graph.rs・surface/account/projects.rs・surface/account/home.rs・surface/project/seat.rs。project/seat.rs は後に M の行が 3 つ続くので g-seat-split を先に置いた。account/projects.rs と account/home.rs は h-cards-proj と h-thr-home を流す前に確かめる。surface/project の下は block の dir で、file を足すと build.rs が block に数えるので、割った中身の置き場は block の dir の外にする。
-      次の波（第 6 波）の案: 第 5 波の着地の後、書く file が重ならない次の 10 行。f-gate（srs の直しの着地の後）・c-summary-design（folio2 の --summary の着地の後）・g-card-adopt-a・g-tip-expert・g-seat-split・h-cards-sess・h-cards-proj・c-acct-thr・g-mode-store・c-q-blocking。10 行は目的と契約表と行ごとの節で 12 節に収まる（1 つのノートの節の上限）。待ちが解けない行は次の波へ送る。g-seat-split と g-mode-store がどちらも新しい module の行を surface/lib.rs に足す形になったら、2 つを同じ波に置かない（起草で置き場を決めたときに確かめる）。
+      第 6 波 = f-mark・f-stop・f-mark-serve・c-summary-design・c-summary-wire（ノート surface-wave6・f-stop と f-mark-serve は f-mark の後に並べて走る）。第 7 波（起草中）= g-card-adopt-a・g-tip-expert・g-seat-split・g-mode-store・h-cards-sess・h-cards-proj・c-acct-thr・c-q-blocking（c-q-blocking は c-summary-design の後）。f-gate の書き直しは f-stop の着地の後に起草する。1 つのノートは 10 行まで（7 節）。
   - n: 6
     type: prose
     title: 他の席を待つもの
@@ -183,9 +174,10 @@ sections:
       folio2: folio graph --print --summary（JSON Lines・欄 id・kind・file・line・title・plain・eng・無ければ null・eng は shall・text・what・decision の最初、条は最初の規範文、受入基準は題の全文）。folio2 の要件 FR14 の字の変更に持ち主の承認が 1 回要り、folio2 が自分の問いとまとめて問う。着地の知らせの後に c-summary-design を書き直し、その後に c-summary-wire・g-summary・c-summary-ledger・c-updated の列が動く。
       器（scribe2）の要件 FR50（着地の終端）: 列車の先端でない便が ci の測れない終わりで止まり bead が閉じない欠陥の直しが効くまで、先端の CI が success で自分の sha が祖先なら席が手で閉じる（道具 close-unmeasurable の見張り）。直しが効いたら見張りを外す。
       器（scribe2）の答え（2026-09-27T23:0xZ・決着）: 器は裁定を queue しない。seat deliver は待ちで入力欄が空の席にだけ 1 回送り、考え中なら型付きの理由で断る（器の FR79・ADR-0077）。考え中の席へは消費側（tsuzuri）の停止の hook が拾う（ADR-0077 CTX2・CSQ-N3）。再送は要らない。board の「届いていない」は hook の配達済みの印で決める。→ 行 f-stop。f-stop の着地までは席が台帳から裁定を読む。
-      器（scribe2）の答え（2026-09-27T23:3xZ・決着）: 停止の hook と門の hook の入れ先は、tsuzuri の repo の根に追跡される plugin/（.claude-plugin/plugin.json と hooks/hooks.json）。scribe2 seat が起こす席だけが --plugin-dir で読み、runner と lens には載らない。f-stop が Stop を、f-gate が PreToolUse を同じ hooks.json に足す。器の Idle の打刻が hook の続けの間に古くなる件と、同じ anchor に席が 2 つ在る件は器の memo s2-07l.723 に在る。
-      器（scribe2）にまだ問うこと: f-undelivered の席の受けとする event・e-approval-event の event を書く口・束の裁定を 1 度の配達で送れるか（束の 2 つ目の配達は席が考え中になって断られた・2026-09-27T23:57Z の実物）。
-      文書の運用の強制の 5 段（判断の記録 ADR-14）: 段 1（床の形は folio2・実在は器）・段 2（folio2 の鍵の行と計画の索引の生成・tsuzuri は鍵の行で加わる）・段 3（器）・段 4（器と folio2）・段 5（器）。各席の判断の記録の id と着地の順を受けたらここに書き、着地した段から加わる。folio2 の分は bead f2-648.267・判断の記録 folio2 ADR-31（folio2 の要件 v1.53 と合わせ folio2 の持ち主の承認を先に取る・条 P-12.1）。順は 渡し A（段 1 の床の形）→ 渡し B（段 2・規則の行の欄 key の新しい値・仮の名 plan-note）→ 渡し C（段 4 の folio の分・design-intent が引く裁定 id の書き出し）。器の分の id はまだ受けていない。
+      器（scribe2）の答え（2026-09-27T23:3xZ・決着）: 停止の hook と門の hook の入れ先は、tsuzuri の repo の根に追跡される plugin/（.claude-plugin/plugin.json と hooks/hooks.json）。scribe2 seat が起こす席は --plugin-dir で読む。答えの「runner には載らない」は誤りで、器は便ごとに worktree の plugin を runner の plugin の dir に写す（scribe2 24aaa5a の pipe/spawn.rs の copy_plugin・席が確かめ器に伝えた・lens には載らない）。そこで停止の hook は repo が git の worktree なら黙り、門の hook は runner でも効く前提で書く。f-stop が Stop を、f-gate が PreToolUse を同じ hooks.json に足す。器の Idle の打刻が hook の続けの間に古くなる件と、同じ anchor に席が 2 つ在る件は器の memo s2-07l.723 に在る。
+      器（scribe2）の答え（2026-09-28T00:0xZ・決着）: seat deliver の --ruling は 1 回に id 1 つ（64 byte まで・英数と . - _ :）。束の id（batch:…）も形を通るので、束は束の id で 1 度だけ送る（行 f-mark-serve）。束の 2 つ目の配達は、1 つ目の注入で席が考え中になり断られた（2026-09-27T23:57Z の実物）。
+      器（scribe2）にまだ問うこと: f-undelivered の席の受けとする event・e-approval-event の event を書く口。
+      文書の運用の強制の 5 段（判断の記録 ADR-14）: 段 1（床の形は folio2・実在は器）・段 2（folio2 の鍵の行と計画の索引の生成・tsuzuri は鍵の行で加わる）・段 3（器）・段 4（器と folio2）・段 5（器）。各席の判断の記録の id と着地の順を受けたらここに書き、着地した段から加わる。folio2 の分は bead f2-648.267・判断の記録 folio2 ADR-31（folio2 の要件 v1.53 と合わせ folio2 の持ち主の承認を先に取る・条 P-12.1）。順は 渡し A（段 1 の床の形）→ 渡し B（段 2・規則の行の欄 key の新しい値・仮の名 plan-note）→ 渡し C（段 4 の folio の分・design-intent が引く裁定 id の書き出し）。器の分は memo s2-07l.722（器の判断の記録の番号は着地で付く）。順は publish-guard（器の FR80）の着地の後に、器の判断の記録 1 本 → 器の要件の改訂 → 段 5 → 段 1 → 段 4（doctor の行と tick の警報 → dispatch の断り → 着地の比べ）→ 段 3（folio2 が床の終了の約束を決めた後）。
       持ち主にまだ問うこと（台帳の問いはまだ置いていない・行を起草する前に 1 問ずつ置く）: g-seat-hb（どの project board からも停止の POST を受けてよいか）・c-summary-ledger（台帳のどの欄を要約とするか）・e-revoke（取り消しの button の置き場）・j-runner（外の依存）・i（端末の宣言・ssh・Chrome の profile）。
       folio2 にまだ問うこと: 索引に設計ノートの契約表の行と、承認欄と規則の行の裁定の欄から導く ruled_by の材料を載せるか（行 c-dn-rows・c-g3g7・c-g9 の材料・tsuzuri は設計文書の YAML を走査しない）。
       folio の code の持ち込み（判断の記録 ADR-4・制約 CON2 の出口）: k-parity の前提。
