@@ -199,7 +199,7 @@ fn accthome_next_row_line_and_marks() {
             (NextMove::Nothing, CheckResult::Hit),
         ],
     );
-    let row = home::nx_row(&p);
+    let row = home::nx_row(&p, fixture().at);
     assert_eq!(row.group, NONE);
     assert_eq!(row.key, "nx_c");
     assert_eq!(row.line, "2 件");
@@ -216,7 +216,7 @@ fn accthome_next_row_line_and_marks() {
     );
 
     p.next = step(NextMove::Nothing, &[]);
-    let row = home::nx_row(&p);
+    let row = home::nx_row(&p, fixture().at);
     assert_eq!(row.key, "nx_g");
     assert_eq!(row.line, NONE_LINE);
     assert_eq!(row.class, "nxrow dim");
@@ -224,7 +224,7 @@ fn accthome_next_row_line_and_marks() {
 
     for (i, kind) in MARK_KINDS.into_iter().enumerate() {
         p.next = step(kind, &[(kind, CheckResult::Hit)]);
-        let row = home::nx_row(&p);
+        let row = home::nx_row(&p, fixture().at);
         assert_eq!(row.class, "nxrow");
         for (j, m) in row.marks.iter().enumerate() {
             let want = if i == j { "nxm on" } else { "nxm na" };

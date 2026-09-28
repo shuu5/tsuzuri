@@ -12,6 +12,7 @@ use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::{QuotaUsed, SeatState};
 use tsuzuri_contract::stats::{CheckResult, NextStep};
 
+use super::projects::{gproj_card, nx_card};
 use crate::frame::Block;
 use crate::project::Body;
 use crate::project::next::{big, key};
@@ -98,6 +99,8 @@ pub struct NxRow {
     pub marks: Vec<NxMark>,
     /// 行の class（なしと読めない行は淡く）。
     pub class: &'static str,
+    /// 行の hover の card（見本の `__tz_card` の nx の枝・`nx_card`）。
+    pub card: Card,
 }
 
 /// 並べの順位（lead の `NextMove::ALL` の位置・読めない行は後ろ）。
@@ -138,8 +141,8 @@ pub fn marks(next: &Reading<NextStep>) -> Vec<NxMark> {
         .collect()
 }
 
-/// project の行を並びの 1 行にする。
-pub fn nx_row(row: &ProjectRow) -> NxRow {
+/// project の行を並びの 1 行にする（card の時刻は電文の at）。
+pub fn nx_row(row: &ProjectRow, at: EpochSecs) -> NxRow {
     let (lead, k, line) = match &row.next {
         Reading::Known(s) => {
             let check = s.checks.iter().find(|c| c.kind == s.lead);
@@ -158,6 +161,7 @@ pub fn nx_row(row: &ProjectRow) -> NxRow {
             Some(NextMove::Nothing) | None => "nxrow dim",
             Some(_) => "nxrow",
         },
+        card: nx_card(row, at),
     }
 }
 
@@ -165,7 +169,7 @@ pub fn nx_row(row: &ProjectRow) -> NxRow {
 pub fn next_all(doc: &AccountDoc) -> Vec<NxRow> {
     let mut rows: Vec<&ProjectRow> = doc.projects.iter().collect();
     rows.sort_by_key(|p| rank(&p.next));
-    rows.into_iter().map(nx_row).collect()
+    rows.into_iter().map(|p| nx_row(p, doc.at)).collect()
 }
 
 /// 群の枠の窓の 1 つ（見本の `.pw`・逼迫の印は持たない）。
@@ -184,6 +188,8 @@ pub struct Pw {
 pub struct Member {
     pub project: String,
     pub sign: Sign,
+    /// chip の hover の card（見本の `__tz_card` の gproj の枝・電文に同じ名の行が無ければ None）。
+    pub card: Option<Card>,
 }
 
 /// 席の口座が分からない project の印（字は無い）。
@@ -317,14 +323,9 @@ fn usage_of<'a>(row: Option<&'a AccountRow>, window: &str) -> Option<&'a QuotaUs
     }
 }
 
-/// 群の枠を 1 つ組む（`accounts` は電文の口座の列・読めなければ None・`sessions` と `moves` は電文の列）。
-pub fn group_view(
-    card: &GroupCard,
-    accounts: Option<&[AccountRow]>,
-    sessions: &[SessionLine],
-    moves: &Reading<Vec<MoveRow>>,
-    at: EpochSecs,
-) -> GroupView {
+/// 群の枠を 1 つ組む（`accounts` は電文の口座の列・読めなければ None・session と移動の列と時刻は電文の欄）。
+pub fn group_view(card: &GroupCard, accounts: Option<&[AccountRow]>, doc: &AccountDoc) -> GroupView {
+    let at = doc.at;
     let row = &card.row;
     let acct = accounts.and_then(|a| a.iter().find(|r| r.label == row.account));
     let since = if card.recorded {
@@ -356,6 +357,11 @@ pub fn group_view(
                     Reading::Known(false) => NG,
                     Reading::Unknown => UNKNOWN_SIGN,
                 },
+                card: doc
+                    .projects
+                    .iter()
+                    .find(|p| p.name == m.project)
+                    .map(|p| gproj_card(doc, p)),
             })
             .collect(),
         candidates: row.candidates.clone(),
@@ -364,8 +370,8 @@ pub fn group_view(
             .next_account
             .clone()
             .unwrap_or_else(|| label(NO_TARGET_KEY)),
-        limited: limited(card, sessions),
-        more: group_more(card, moves),
+        limited: limited(card, &doc.sessions),
+        more: group_more(card, &doc.moves),
     }
 }
 
@@ -626,7 +632,7 @@ pub fn home(doc: &AccountDoc) -> Home {
         groups: match &doc.groups {
             Reading::Known(g) => list(
                 g.iter()
-                    .map(|c| group_view(c, accounts, &doc.sessions, &doc.moves, doc.at))
+                    .map(|c| group_view(c, accounts, doc))
                     .collect(),
                 NO_GROUPS,
             ),
@@ -688,7 +694,14 @@ mod dom {
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, h2, hs, shows_internal};
-    use crate::widgets::hover::attach;
+    use crate::widgets::hover::{Card, attach};
+
+    /// card が在れば要素に付ける（電文に同じ名の行の無い群の project の chip は card を持たない）。
+    fn attach_some(el: web_sys::Element, card: Option<Card>) {
+        if let Some(card) = card {
+            attach(el, card);
+        }
+    }
 
     /// 測れていない・0 件の段（中身ありは `filled` が組む）。
     fn body_or<T>(body: Body<T>, filled: impl FnOnce(T) -> AnyView) -> AnyView {
@@ -761,8 +774,9 @@ mod dom {
             }
             None => view! { <span class="btn static dis">{label(NOT_YET_KEY)}</span> }.into_any(),
         };
+        let card = r.card;
         view! {
-            <div class=r.class>
+            <div class=r.class tabindex="0" use:attach=card>
                 <span class="nxp"><span data-t="">{r.project}</span><span class="small muted" data-t="">{r.group}</span></span>
                 <span class="nxtop">{lead}<span class="nxl">{r.line}</span></span>
                 <span class="nxms">{marks}</span>
@@ -814,7 +828,7 @@ mod dom {
             .members
             .into_iter()
             .map(|m| {
-                view! { <span class="pchip"><span class=m.sign.class aria-hidden="true">{m.sign.glyph}</span><span data-t="">{m.project}</span></span> }
+                view! { <span class="pchip" tabindex="0" use:attach_some=m.card><span class=m.sign.class aria-hidden="true">{m.sign.glyph}</span><span data-t="">{m.project}</span></span> }
             })
             .collect_view();
         let next = g.next_account.clone();
