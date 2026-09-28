@@ -3,13 +3,13 @@
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v0.19
+  version: v0.20
   status: effective
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: 設計ノート surface-board（傘の行 g・h・i・j・k）と surface-base（傘の行 e・f）の子の行を、どの波で、どの順で流すかを 1 か所で持つ計画。これまで見本と本番の差の調べ・行の割り・順・席の決めは追跡されない作業場の file にしか無く、全体の統制がとれないという持ち主の指摘（2026-09-27）を受けて置く。持ち主が board で承認したら status を effective にし、承認欄に裁定 id を書く。第 0.11 版（2026-09-28）は、持ち主の裁定 t3-hub.52.38〜.52.40 の後の性能の行 14 本を 3 節（席の決め）と 4 節と 5 節に足し、第 9 波（ノート surface-wave9 = e-hold・g-keyed・g-strip・g-reads・g-policy-all の 5 行）の組みと、表示面の行 i-5 の tz stage open の守り（席の決め）を書き、第 8 波と表示面の i-1 の着地を 2 節に写して着地した行を 4 節から外した。第 0.12 版（2026-09-28）は、第 9 波の 6 行目 c-pipe-closed と、ノート surface-wavef の行 f-gate の書き直しを足し、持ち主の裁定 t3-hub.52.53・.52.60・.52.61 と器の答え（RulingReceived・行 ad・memo の判定・display-env）を写し、後の行（e-sess-closed・g-closed-mark・g-pipe-memo・c-graph-fold・g-graph-fold・e-batch-partial・i-1b）を 4 節に足し、i-3 の着地と disk の満ちを 2 節に書いた。第 0.13 版（2026-09-28）は、4 節の起草中の 2 行 c-graph-fold と g-graph-fold を、ノート surface-wave10a に置いた行の字（大きさ・書く file・接頭辞・便の bead の依存）に替えて 5 節に順の鎖を足し、後の行 t-fstop-tidy を足し、着地した第 9 波の 4 行（e-hold・g-keyed・g-strip・g-reads）を 4 節から外し、第 9 波の g-policy-all と e-hold の着地と surface-wavef の v0.2 と退役した target/ の掃除を 2 節に書いた。第 0.14 版（2026-09-28）は、folio2 の渡し B（folio f300177）の着地を受けて、3 節の持ち主の裁定の行を判断の表（33 行）へ、4 節の行を計画だけの行（67 行）へ移し、行の索引（130 行・folio derive が契約表から書く）を置き、契約表に在る 4 行（f-gate・c-graph-fold・g-graph-fold・c-pipe-closed）を計画だけの行から外し、規則の表に名札の行 R-27 を足した（拠りは裁定 t3-hub.57.1:20260927T2357Z-1 の案 A の 2 段目）。第 0.15 版（2026-09-28）は、器の binary の 8dd964f への入れ替え（display-env を読む）を受けて行 i-1b をノート surface-wavei2 に置いて計画だけの行から外し、i-2 の依存に i-1b を足し、第 9 波の c-pipe-closed と第 10 波 a の 2 行と f-gate の着地を 2 節と 5 節に書いた。第 0.16 版（2026-09-28）は、席が 2026-09-28 に実物の画面で見つけた欠陥 2 つ（1 byte も送らない接続にも境界の server が 400 bad-request を書き、Chrome が後の頁の移りでその接続を使い回して board に素の bad-request の頁が出る件・地図のグラフの組の箱と塊の箱が内部の id を題に出す件）の行 e-idle-close（S）と g-graph-label（S）を、計画だけの行を経ずにノート surface-wave10b に置き（3 節の席の決め）、5 節の鎖に 2 行を入れた（行の索引は folio derive が書く）。第 0.17 版（2026-09-28）は、folio の pin を渡し C の 1e6ab0f に上げ、第 11 波の account board の card の 2 行（h-cards-nx・h-cards-led）をノート surface-wave11d に置いて計画だけの行から外した。第 0.18 版（2026-09-28）は、第 11 波の g-fresh（面の古さの印と 60 秒の諦め）と g-closed-mark（閉じた札の印）をノート surface-wave11a に置いて計画だけの行から外し、g-fresh が view.rs・frame.rs・vocab.json を書かないことに合わせて 5 節の鎖を直した。第 0.19 版（2026-09-28）は、第 11 波の server と中核の 3 行（e-cache・c-pipe-questioned・e-sess-closed）をノート surface-wave11b に置いて計画だけの行から外し、core/account/project.rs と中核の歯 pclosed の鎖に 2 行を入れた。
+  note: 設計ノート surface-board（傘の行 g・h・i・j・k）と surface-base（傘の行 e・f）の子の行を、どの波で、どの順で流すかを 1 か所で持つ計画。これまで見本と本番の差の調べ・行の割り・順・席の決めは追跡されない作業場の file にしか無く、全体の統制がとれないという持ち主の指摘（2026-09-27）を受けて置く。持ち主が board で承認したら status を effective にし、承認欄に裁定 id を書く。第 0.11 版（2026-09-28）は、持ち主の裁定 t3-hub.52.38〜.52.40 の後の性能の行 14 本を 3 節（席の決め）と 4 節と 5 節に足し、第 9 波（ノート surface-wave9 = e-hold・g-keyed・g-strip・g-reads・g-policy-all の 5 行）の組みと、表示面の行 i-5 の tz stage open の守り（席の決め）を書き、第 8 波と表示面の i-1 の着地を 2 節に写して着地した行を 4 節から外した。第 0.12 版（2026-09-28）は、第 9 波の 6 行目 c-pipe-closed と、ノート surface-wavef の行 f-gate の書き直しを足し、持ち主の裁定 t3-hub.52.53・.52.60・.52.61 と器の答え（RulingReceived・行 ad・memo の判定・display-env）を写し、後の行（e-sess-closed・g-closed-mark・g-pipe-memo・c-graph-fold・g-graph-fold・e-batch-partial・i-1b）を 4 節に足し、i-3 の着地と disk の満ちを 2 節に書いた。第 0.13 版（2026-09-28）は、4 節の起草中の 2 行 c-graph-fold と g-graph-fold を、ノート surface-wave10a に置いた行の字（大きさ・書く file・接頭辞・便の bead の依存）に替えて 5 節に順の鎖を足し、後の行 t-fstop-tidy を足し、着地した第 9 波の 4 行（e-hold・g-keyed・g-strip・g-reads）を 4 節から外し、第 9 波の g-policy-all と e-hold の着地と surface-wavef の v0.2 と退役した target/ の掃除を 2 節に書いた。第 0.14 版（2026-09-28）は、folio2 の渡し B（folio f300177）の着地を受けて、3 節の持ち主の裁定の行を判断の表（33 行）へ、4 節の行を計画だけの行（67 行）へ移し、行の索引（130 行・folio derive が契約表から書く）を置き、契約表に在る 4 行（f-gate・c-graph-fold・g-graph-fold・c-pipe-closed）を計画だけの行から外し、規則の表に名札の行 R-27 を足した（拠りは裁定 t3-hub.57.1:20260927T2357Z-1 の案 A の 2 段目）。第 0.15 版（2026-09-28）は、器の binary の 8dd964f への入れ替え（display-env を読む）を受けて行 i-1b をノート surface-wavei2 に置いて計画だけの行から外し、i-2 の依存に i-1b を足し、第 9 波の c-pipe-closed と第 10 波 a の 2 行と f-gate の着地を 2 節と 5 節に書いた。第 0.16 版（2026-09-28）は、席が 2026-09-28 に実物の画面で見つけた欠陥 2 つ（1 byte も送らない接続にも境界の server が 400 bad-request を書き、Chrome が後の頁の移りでその接続を使い回して board に素の bad-request の頁が出る件・地図のグラフの組の箱と塊の箱が内部の id を題に出す件）の行 e-idle-close（S）と g-graph-label（S）を、計画だけの行を経ずにノート surface-wave10b に置き（3 節の席の決め）、5 節の鎖に 2 行を入れた（行の索引は folio derive が書く）。第 0.17 版（2026-09-28）は、folio の pin を渡し C の 1e6ab0f に上げ、第 11 波の account board の card の 2 行（h-cards-nx・h-cards-led）をノート surface-wave11d に置いて計画だけの行から外した。第 0.18 版（2026-09-28）は、第 11 波の g-fresh（面の古さの印と 60 秒の諦め）と g-closed-mark（閉じた札の印）をノート surface-wave11a に置いて計画だけの行から外し、g-fresh が view.rs・frame.rs・vocab.json を書かないことに合わせて 5 節の鎖を直した。第 0.19 版（2026-09-28）は、第 11 波の server と中核の 3 行（e-cache・c-pipe-questioned・e-sess-closed）をノート surface-wave11b に置いて計画だけの行から外し、core/account/project.rs と中核の歯 pclosed の鎖に 2 行を入れた。第 0.20 版（2026-09-28）は、account board の行 h-next-unknown（bead t3-hub.53.19・判じなかった次の一手を測れていないの字で出す）をノート surface-wave11f に置いて計画だけの行から外した。
 
 sections:
   - n: 1
@@ -228,6 +228,7 @@ sections:
       - {id: e-sess-closed, doc: surface-wave11b}
       - {id: h-cards-nx, doc: surface-wave11d}
       - {id: h-cards-led, doc: surface-wave11d}
+      - {id: h-next-unknown, doc: surface-wave11f}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
@@ -476,13 +477,6 @@ sections:
         files: ["surface/view.rs・surface/project/seat.rs（割った後の host の部分）・surface/project/pipeline.rs・surface/project/askpage.rs・surface/project/ask.rs・surface/project/ledger.rs と、UTC の字を pin する着地済みの歯 9 本（hruling・lcard・topbar・hcard・accthome・seatblock・board_min・sxaxis・seataxis）"]
         ruling: "t3-hub.52.28・要件 NFR2。あわせて語の辞書の col_land の注を、今日本線に取り込まれたか着地せずに閉じた走行、の字に直す（c-pipe-closed の後・crates/tsuzuri-surface/vocab.json も書く・見本の字のまま今は残る）"
         note: "依存 = なし（書く file が多いのでg-keyed〔ask.rs〕の着地の後、g-fresh〔view.rs〕の前に流す・5 節）"
-      - id: h-next-unknown
-        what: "account board で、判じなかった次の一手なし（c-next-stall の後の電文）を測れていないに出す（HOME の次の一手の行 nx_row と並べの rank、各 project の表の要対応 need と need_rank を、読めない project と同じ測れていないの字と後ろの順にする・見本の nextAt の unknown）。"
-        size: "S"
-        files: ["surface/account/home.rs・surface/account/projects.rs（期待が変われば着地済みの歯 accthome と acctproj・見込み）"]
-        depends: [c-next-stall]
-        ruling: "見本・要件 NFR2・FR11・FR12"
-        note: "依存の字 = c-next-stall（着地済み・判じなかった なしの電文と面の読み）"
       - id: h-sort-hist
         what: "並べ方の押しを履歴の 1 歩にする（見本の pushState）。あわせて session.rs の doc の字（中核の next_step の STALLED_STAGES の写しと言う）を、c-next-stall の後の中核の値と合う字（見本の runStopped の写し）に直す（値は変えない・c-next-stall の後）。"
         size: "S"
