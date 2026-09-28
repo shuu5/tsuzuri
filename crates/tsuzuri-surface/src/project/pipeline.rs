@@ -141,6 +141,8 @@ pub struct Kcard {
     pub run_line: String,
     /// 節点の card の詳しく（理由が 20 字を越えれば 34 字以下の行に折った列・越えなければ空）。
     pub run_more: Vec<String>,
+    /// 台帳で閉じた（着地せず）の札か（札の表の記号と meta の段の字を替える・行 g-closed-mark）。
+    pub closed: bool,
 }
 
 /// 値の行に出す理由の字数（見本の cut の 20）。
@@ -365,6 +367,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
         hover,
         run_line,
         run_more,
+        closed,
     }
 }
 
@@ -460,7 +463,7 @@ mod dom {
     use tsuzuri_contract::board::PipelineColumn;
 
     use super::{
-        BLOCK, CLOSE, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns,
+        BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns,
         with_closed, with_nodes, with_open,
     };
     use crate::frame::Mode;
@@ -477,6 +480,9 @@ mod dom {
 
     /// 取り込みの印（見本の IC.check）。
     const CHECK: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>"#;
+
+    /// 閉じた（着地せず）の印（見本の IC.cross・行 g-closed-mark）。
+    const CROSS: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>"#;
 
     /// 止まった理由の印（見本の IC.stop）。
     const STOP: &str = r#"<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>"#;
@@ -599,11 +605,21 @@ mod dom {
 
     /// 1 枚の札（押すと契約 bead と同じ id の節点の頁へ・指を置くと hover の card）。
     fn kcard_view(card: &Kcard, mode: Mode) -> AnyView {
-        let sym = match card.state {
-            Some(v) => state_icon(v),
-            None => view! { <span class="st" style="color:var(--s-land)" inner_html=CHECK></span> }
-                .into_any(),
+        let sym = if card.closed {
+            view! {
+                <span class="st" style="color:var(--ink-3)" aria-label=CLOSED_STAGE inner_html=CROSS></span>
+            }
+            .into_any()
+        } else {
+            match card.state {
+                Some(v) => state_icon(v),
+                None => {
+                    view! { <span class="st" style="color:var(--s-land)" inner_html=CHECK></span> }
+                        .into_any()
+                }
+            }
         };
+        let closed = card.closed.then(|| view! { <span>{CLOSED_STAGE}</span> });
         let title = card
             .title
             .clone()
@@ -621,6 +637,7 @@ mod dom {
                 <div class="m">
                     <span class="kid">{card.id.clone()}</span>
                     {lead}
+                    {closed}
                     <span><span inner_html=CLOCK></span><span class="num">{card.age.clone()}</span></span>
                 </div>
             </a>
