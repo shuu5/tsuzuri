@@ -9,13 +9,13 @@ use tsuzuri_surface::account::session::{C_HH, COLUMNS, SAXIS, SAXIS_M, Sort, axi
 use tsuzuri_surface::project::seat::{Span, span_ticks};
 use tsuzuri_surface::vocab::vocab;
 
-/// fixture の電文の at（2026-09-27 12:00Z・正時）。
+/// fixture の電文の at（2026-09-27 12:00Z・日本時間の 21:00・正時）。
 const AT: u64 = 1_790_510_400;
 
-/// 正時でない時点（2026-09-27 12:40Z）。
+/// 正時でない時点（2026-09-27 12:40Z・日本時間の 21:40）。
 const AT_OFF: u64 = 1_790_512_800;
 
-/// 日の変わり目の時点（2026-09-27 00:00Z）。
+/// UTC の日の変わり目の時点（2026-09-27 00:00Z・日本時間の 09:00）。
 const AT_DAY: u64 = 1_790_467_200;
 
 fn crate_dir() -> PathBuf {
@@ -77,26 +77,26 @@ fn sxaxis_labels_follow_seat_ticks() {
     assert_eq!(
         axis_labels(AT, Span::H24),
         want(&[
-            ("left:0.00%", "12:00"),
-            ("left:25.00%", "18:00"),
-            ("left:50.00%", "00:00"),
-            ("left:75.00%", "06:00"),
+            ("left:12.50%", "00:00"),
+            ("left:37.50%", "06:00"),
+            ("left:62.50%", "12:00"),
+            ("left:87.50%", "18:00"),
         ])
     );
     assert_eq!(
         axis_labels(AT, Span::H6),
         want(&[
-            ("left:0.00%", "06:00"),
-            ("left:33.33%", "08:00"),
-            ("left:66.67%", "10:00"),
+            ("left:0.00%", "15:00"),
+            ("left:33.33%", "17:00"),
+            ("left:66.67%", "19:00"),
         ])
     );
     assert_eq!(
         axis_labels(AT, Span::H3),
         want(&[
-            ("left:0.00%", "09:00"),
-            ("left:33.33%", "10:00"),
-            ("left:66.67%", "11:00"),
+            ("left:0.00%", "18:00"),
+            ("left:33.33%", "19:00"),
+            ("left:66.67%", "20:00"),
         ])
     );
     for at in [AT_OFF, AT_DAY] {

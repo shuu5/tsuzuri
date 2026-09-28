@@ -87,7 +87,7 @@ fn filled_card() -> Card {
         "burndown",
         "↓−2 24h · ↓−4 7d · closed/日 1.7",
         "open 10 → 5（14 日）",
-        "bd list --all の task · 時点 00:00Z",
+        "bd list --all の task · 時点 09:00 JST",
         &FILLED_MORE,
     )
 }
@@ -109,7 +109,7 @@ fn lcard_burn_on_fixture() {
             title: "burndown".to_string(),
             kind: "→0 24h · →0 7d · closed/日 0.0".to_string(),
             value: "open 0 → 0（14 日）".to_string(),
-            src: "bd list --all の task · 時点 00:00Z".to_string(),
+            src: "bd list --all の task · 時点 09:00 JST".to_string(),
             more: empty_more,
         }
     );
@@ -122,7 +122,7 @@ fn lcard_burn_on_fixture() {
             "burndown",
             "↑+2 24h · ↑+2 7d · closed/日 2.7",
             "open 0 → 2（14 日）",
-            "bd list --all の task · 時点 11:37Z",
+            "bd list --all の task · 時点 20:37 JST",
             &[
                 "09-15 open 0 · +0 / −0",
                 "09-17 open 0 · +0 / −0",
@@ -142,7 +142,7 @@ fn lcard_burn_on_fixture() {
             assert_eq!(row, text, "Card の rows が切らない");
         }
     }
-    assert_eq!(filled.src.chars().count(), 32);
+    assert_eq!(filled.src.chars().count(), 35);
     assert_eq!(filled.kind.chars().count(), 31);
 }
 

@@ -12,7 +12,7 @@ use tsuzuri_contract::wire;
 use super::{Body, NO_CONTENT, NOT_READ, map};
 use crate::frame::{self, Block};
 use crate::mapview::graph::cut;
-use crate::view::{Fetched, id_order, read_rows};
+use crate::view::{Fetched, id_order, jst, read_rows};
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::card_of;
 
@@ -241,17 +241,14 @@ pub fn body(fetched: &Fetched) -> Body<()> {
     }
 }
 
-/// 1 日の秒。
-const DAY: EpochSecs = 86_400;
-
-/// 今日（UTC）の着地か（段が Landed で経過が在り、今の時刻から経過を引いた時刻が今の時刻を含む UTC の日の始まり以上）。
+/// 今日（日本の日）の着地か（段が Landed で経過が在り、今の時刻から経過を引いた時刻の日本の日が今の日本の日と同じ）。
 /// 経過は server が読んだ時の今からの秒なので、読んだ時と描く時の差の数秒は許す。
 pub fn landed_today(card: &PipelineCard, now: EpochSecs) -> bool {
     card.stage.column() == PipelineColumn::Landed
         && card
             .elapsed_s
             .and_then(|e| now.checked_sub(e))
-            .is_some_and(|at| at >= now / DAY * DAY)
+            .is_some_and(|at| jst(at).0 == jst(now).0)
 }
 
 /// 板の中身（4 列・Landed の列は今日の着地だけ）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
@@ -277,7 +274,7 @@ pub fn title_of(rows: &[LedgerRow], id: &str) -> Option<String> {
 }
 
 /// 札を 4 列に組む（列は板の順・列の中は経過の短い順・経過の無い札は後・同じなら bead の id の順）。
-/// Landed の列は今日（UTC）の着地だけ（`landed_today`）。
+/// Landed の列は今日（日本の日）の着地だけ（`landed_today`）。
 pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Vec<Column> {
     LANES
         .into_iter()

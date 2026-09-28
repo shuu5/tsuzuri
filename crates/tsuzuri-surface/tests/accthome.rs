@@ -243,7 +243,7 @@ fn accthome_groups_on_fixture() {
     let t1 = &groups[0];
     assert_eq!(t1.account, "acct-1");
     assert!(t1.recorded);
-    assert_eq!(t1.since, "10:00Z");
+    assert_eq!(t1.since, "19:00 JST");
     assert_eq!(t1.previous, "acct-2");
     let pw: Vec<(&str, &str, &str)> = t1
         .pressure
@@ -349,7 +349,7 @@ fn accthome_groups_rules() {
     // いつからは電文の at から見た hmd（違う日は月日を前に付ける）。
     let mut d = base.clone();
     d.at += 86_400;
-    assert_eq!(filled(home::home(&d).groups)[0].since, "09-27 10:00Z");
+    assert_eq!(filled(home::home(&d).groups)[0].since, "09-27 19:00 JST");
 
     let mut d = base.clone();
     d.groups = Reading::Known(vec![]);
@@ -465,13 +465,13 @@ fn accthome_moves_fold() {
         m.shown,
         vec![
             MvRow {
-                at: "10:00Z".to_string(),
+                at: "19:00 JST".to_string(),
                 group: "Tier1".to_string(),
                 from: "acct-2".to_string(),
                 to: "acct-1".to_string()
             },
             MvRow {
-                at: "09-26 22:05Z".to_string(),
+                at: "07:05 JST".to_string(),
                 group: "Tier2".to_string(),
                 from: NONE.to_string(),
                 to: "acct-2".to_string()

@@ -229,7 +229,7 @@ fn hcard_acct_rules() {
 
     let mut r = rows[0].clone();
     r.model = None;
-    assert!(acct_card(&r, &ss, at).more.contains(&"model ↻ 09-29 12:00Z".to_string()));
+    assert!(acct_card(&r, &ss, at).more.contains(&"model ↻ 09-29 21:00 JST".to_string()));
 
     let mut r = rows[0].clone();
     if let Reading::Known(u) = &mut r.usage {
@@ -257,7 +257,7 @@ fn hcard_acct_on_fixture() {
     let ss = doc.sessions.clone();
     let rows = accounts(&mut doc).clone();
     assert_eq!(ACCT_SRC, "fleet usage --show・doctor の口座の行");
-    assert_eq!(hmd(1790512200, at), "12:30Z");
+    assert_eq!(hmd(1790512200, at), "21:30 JST");
     let want = [
         Card {
             title: "acct-1".into(),
@@ -265,9 +265,9 @@ fn hcard_acct_on_fixture() {
             value: "5h 42% · 7d 61% · model 30%".into(),
             src: ACCT_SRC.into(),
             more: s(&[
-                "5h ↻ 12:30Z",
-                "7d ↻ 09-29 12:00Z",
-                "model ↻ 09-29 12:00Z · opus",
+                "5h ↻ 21:30 JST",
+                "7d ↻ 09-29 21:00 JST",
+                "model ↻ 09-29 21:00 JST · opus",
                 "session 3 · proj-a-orch / proj-a.3-20260927T113000Z",
             ]),
         },
@@ -276,7 +276,7 @@ fn hcard_acct_on_fixture() {
             kind: "口座 · 占有 Tier2".into(),
             value: "5h 100% · 7d 81% · model 12%".into(),
             src: ACCT_SRC.into(),
-            more: s(&["5h ↻ 12:45Z", "model ↻ 09-28 12:00Z · sonnet", "session 0"]),
+            more: s(&["5h ↻ 21:45 JST", "model ↻ 09-28 21:00 JST · sonnet", "session 0"]),
         },
         Card {
             title: "acct-3".into(),
@@ -312,21 +312,21 @@ fn hcard_move_on_fixture() {
             Card {
                 title: "acct-2 → acct-1".into(),
                 kind: "口座の移動 · Tier1".into(),
-                value: "◷ 記録 10:00Z".into(),
+                value: "◷ 記録 19:00 JST".into(),
                 src: "groups/history/Tier1 ほか".into(),
                 more: vec![],
             },
             Card {
                 title: "― → acct-2".into(),
                 kind: "口座の移動 · Tier2".into(),
-                value: "◷ 記録 09-26 22:05Z".into(),
+                value: "◷ 記録 07:05 JST".into(),
                 src: "groups/history/Tier2 ほか".into(),
                 more: vec![],
             },
         ]
     );
     let m = MvRow {
-        at: "12:00Z".into(),
+        at: "21:00 JST".into(),
         group: "G".into(),
         from: "a".into(),
         to: "b".into(),

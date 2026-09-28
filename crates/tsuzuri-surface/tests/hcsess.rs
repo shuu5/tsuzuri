@@ -51,7 +51,7 @@ fn hcsess_run_card_rules() {
         "pipeline · proj-a",
         "Running · 動いている",
         "fleet/events.jsonl · RunStage",
-        &["口座 acct-1", "◷ 11:30Z から"],
+        &["口座 acct-1", "◷ 20:30 JST から"],
     );
 
     let with = |g: &dyn Fn(&mut SessionLine)| {
@@ -61,7 +61,7 @@ fn hcsess_run_card_rules() {
     };
     assert_eq!(
         with(&|l| l.account = None).more,
-        ["口座 測れていない", "◷ 11:30Z から"]
+        ["口座 測れていない", "◷ 20:30 JST から"]
     );
     assert_eq!(with(&|l| l.since = None).more, ["口座 acct-1"]);
     assert_eq!(with(&|l| l.stage = None).value, "― · 動いている");
@@ -70,8 +70,8 @@ fn hcsess_run_card_rules() {
         "Running · 限度で止まっている"
     );
     assert_eq!(
-        with(&|l| l.since = Some(1790460300)).more[1],
-        "◷ 09-26 22:05Z から"
+        with(&|l| l.since = Some(1790427900)).more[1],
+        "◷ 09-26 22:05 JST から"
     );
 }
 

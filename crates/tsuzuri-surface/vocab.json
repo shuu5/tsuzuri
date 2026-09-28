@@ -52,7 +52,7 @@
   },
   "col_land": {
    "label": "Landed（今日）",
-   "note": "今日、本線に取り込まれた run",
+   "note": "今日（日本時間）、本線に取り込まれたか、着地せずに閉じた run",
    "internal": "Landed・今日"
   },
   "stage:Intake": {

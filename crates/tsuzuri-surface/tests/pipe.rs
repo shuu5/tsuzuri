@@ -12,7 +12,7 @@ use tsuzuri_surface::project::pipeline::{
     content, kcard, landed_today, open_columns, title_of, with_open,
 };
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
-use tsuzuri_surface::view::Fetched;
+use tsuzuri_surface::view::{Fetched, JST_OFFSET};
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::hover::ROW_CHARS;
 
@@ -71,7 +71,7 @@ fn ledger_body() -> Fetched {
     )
 }
 
-/// 描く時の今（UTC の日の正午・fixture の経過の在る着地の札は全部が今日に入る）。
+/// 描く時の今（UTC の日の正午・日本時間の 21:00・fixture の経過の在る着地の札は全部が今日に入る）。
 const NOW: EpochSecs = 1_790_510_400;
 
 /// px.11 の札（経過の無い着地・今日の着地に入らないので板の列には出ない）。
@@ -438,14 +438,15 @@ fn board_body(cards: Vec<PipelineCard>) -> Fetched {
     )
 }
 
-/// 便 g-pipe-today (1)(2): 今日（UTC）の着地は、段が Landed で経過が在り、今から経過を引いた時刻が今日の始まり以上。
+/// 便 g-pipe-today (1)(2): 今日（日本の日）の着地は、段が Landed で経過が在り、今から経過を引いた時刻が今日の始まり以上。
 #[test]
 fn pipe_landed_today_boundaries() {
     assert_eq!(NOW % 86_400, 43_200, "NOW は UTC の日の正午");
+    assert_eq!((NOW + JST_OFFSET) % 86_400, 75_600, "NOW は日本時間の 21:00");
     let cases = [
         (Stage::Landed, Some(3_600), true),
-        (Stage::Landed, Some(43_200), true),
-        (Stage::Landed, Some(43_201), false),
+        (Stage::Landed, Some(75_600), true),
+        (Stage::Landed, Some(75_601), false),
         (Stage::Landed, None, false),
         (Stage::Running, Some(60), false),
         (Stage::Landed, Some(0), true),
@@ -463,7 +464,7 @@ fn pipe_landed_today_boundaries() {
         assert!(!landed_today(&card("px.1", stage, Some(60)), NOW), "{stage:?}");
     }
     // 日の始まりちょうどの今は、経過 0 だけが今日。
-    let midnight = NOW - 43_200;
+    let midnight = NOW - 75_600;
     assert!(landed_today(&card("px.1", Stage::Landed, Some(0)), midnight));
     assert!(!landed_today(&card("px.1", Stage::Landed, Some(1)), midnight));
     // 今の関数の型（札と今の時刻を受けて真偽）。
@@ -475,9 +476,9 @@ fn pipe_landed_today_boundaries() {
 #[test]
 fn pipe_landed_column_only_today() {
     let mut cs = fixture_cards();
-    cs.push(card("px.20", Stage::Landed, Some(43_201)));
+    cs.push(card("px.20", Stage::Landed, Some(75_601)));
     cs.push(card("px.21", Stage::Landed, Some(17 * 86_400)));
-    cs.push(card("px.22", Stage::Landed, Some(43_200)));
+    cs.push(card("px.22", Stage::Landed, Some(75_600)));
     let rows = ledger_rows();
     let cols = columns(&cs, &rows, NOW);
     assert_eq!(
@@ -499,7 +500,7 @@ fn pipe_landed_column_only_today() {
 
     // ほかの 3 列の札の入り方と並びは今の時刻に依らない（fixture の並びのまま）。
     // 日の始まりの 10 秒後に描くと、経過の最も短い 30 秒の着地も昨日。
-    let later = columns(&cs, &rows, NOW - 43_200 + 10);
+    let later = columns(&cs, &rows, NOW - 75_600 + 10);
     assert_eq!(cols[..3], later[..3]);
     let others: Vec<Vec<&str>> = cols[..3].iter().map(|c| ids(c, true)).collect();
     assert_eq!(

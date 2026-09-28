@@ -121,14 +121,14 @@ fn hruling_rows_carry_ruling() {
     }
 }
 
-/// server の形の id は時分と Z・ほかの形は id のまま。
+/// server の形の id は UTC の時分を日本時間にした時分と JST・ほかの形は id のまま（行 g-jst）。
 #[test]
 fn hruling_link_text_forms() {
     for (id, want) in [
-        ("lq.9:20260927T1300Z-1", "13:00Z"),
-        ("t3-hub.52.16:20260927T2233Z-1", "22:33Z"),
-        ("fx.1:20260927T1034Z-12", "10:34Z"),
-        ("a.b:c:20260927T0905Z-2", "09:05Z"),
+        ("lq.9:20260927T1300Z-1", "22:00 JST"),
+        ("t3-hub.52.16:20260927T2233Z-1", "07:33 JST"),
+        ("fx.1:20260927T1034Z-12", "19:34 JST"),
+        ("a.b:c:20260927T0905Z-2", "18:05 JST"),
     ] {
         assert_eq!(askpage::ruling_text(id), want, "{id}");
     }

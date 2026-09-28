@@ -14,7 +14,7 @@ use tsuzuri_contract::wire;
 
 use super::{Body, Item, LEDGER_UNREAD, NOT_READ, item};
 use crate::frame::Block;
-use crate::view::{Fetched, id_order};
+use crate::view::{Fetched, JST, hhmm, id_order};
 
 pub const BLOCK: Block = Block {
     id: "hist",
@@ -148,8 +148,9 @@ pub fn hist_rows(items: &[Item], graph: &Fetched) -> Vec<HistEntry> {
         .collect()
 }
 
-/// 決定の link の字: server の形の id（問いの id・字 :・UTC の分・字 -・数）なら時分と Z（例 13:00Z）、
-/// ほかの形（手書きの古い id）は id のまま。年月日の値の範囲は見ない。
+/// 決定の link の字: server の形の id（問いの id・字 :・UTC の分・字 -・数）なら、その UTC の時分を
+/// 日本時間の時分と空白と JST にした字（例 T1300Z は 22:00 JST・日を越えても時分だけで T1500Z は 00:00 JST）、
+/// ほかの形（手書きの古い id）は id のまま。年月日と時分の値の範囲は見ない。id の字は記録の鍵なので変えない。
 pub fn ruling_text(id: &str) -> String {
     let Some((head, tail)) = id.rsplit_once(':') else {
         return id.to_string();
@@ -165,7 +166,9 @@ pub fn ruling_text(id: &str) -> String {
         && b[14] == b'-'
         && digits(15..b.len());
     if server {
-        format!("{}:{}Z", &tail[9..11], &tail[11..13])
+        let num = |s: &str| s.parse::<u64>().unwrap_or(0);
+        let secs = num(&tail[9..11]) * 3600 + num(&tail[11..13]) * 60;
+        format!("{} {JST}", hhmm(secs))
     } else {
         id.to_string()
     }

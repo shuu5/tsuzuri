@@ -13,7 +13,7 @@ use super::{Body, NO_CONTENT, NOT_READ, state_class, state_key};
 use crate::account::heartbeat::{Toggle, seat_toggle};
 use crate::account::home::{EXPERT_CHARS, wrap_words};
 use crate::frame::{self, Block};
-use crate::view::{Fetched, clock};
+use crate::view::{Fetched, JST, clock, hhmm, jst};
 
 pub const BLOCK: Block = Block {
     id: "orch",
@@ -137,12 +137,14 @@ const TICK_MAX: f64 = 92.0;
 /// 目盛の数の上限（越えれば 1 つおきに残す・見本の spanTicks）。
 const TICK_MANY: usize = 6;
 
-/// 窓の目盛（窓の右端は `at`・tick の倍数の時刻・見本の spanTicks と spanAxis）。
+/// 窓の目盛（窓の右端は `at`・日本時間で tick の倍数の時刻・字は日本時間の時と分・見本の spanTicks と spanAxis）。
+/// tick はどれも 1 日の秒を割り切るので、日本の日の中の秒を切り上げれば日本時間の倍数の時刻になる。
 pub fn span_ticks(at: EpochSecs, span: Span) -> Vec<Tick> {
     let start = at.saturating_sub(span.secs());
     let tick = span.tick();
     let mut times = Vec::new();
-    let mut t = start.div_ceil(tick) * tick;
+    let (_, secs) = jst(start);
+    let mut t = start + (secs.div_ceil(tick) * tick - secs);
     while t <= at {
         times.push(t);
         t += tick;
@@ -156,7 +158,7 @@ pub fn span_ticks(at: EpochSecs, span: Span) -> Vec<Tick> {
             let pct = (t - start) as f64 / span.secs() as f64 * 100.0;
             (pct <= TICK_MAX).then(|| Tick {
                 left: format!("{pct:.2}"),
-                label: hm(t).trim_end_matches('Z').to_string(),
+                label: hhmm(t),
             })
         })
         .collect()
@@ -185,14 +187,14 @@ pub fn state_value(state: SeatState) -> &'static str {
     }
 }
 
-/// 時と分と Z（`09:50Z`）。
+/// 日本時間の時と分と空白と JST（`18:50 JST`）。
 pub fn hm(at: EpochSecs) -> String {
-    format!("{}Z", &clock(at)[11..16])
+    format!("{} {JST}", hhmm(at))
 }
 
-/// 履歴の時刻（`now` と同じ日なら時と分と Z・違う日は月日を前に付ける）。
+/// 履歴の時刻（`now` と日本の日が同じなら日本時間の時と分と JST・違う日は月日を前に付ける）。
 pub fn hmd(at: EpochSecs, now: EpochSecs) -> String {
-    if at / 86_400 == now / 86_400 {
+    if jst(at).0 == jst(now).0 {
         hm(at)
     } else {
         format!("{} {}", &clock(at)[5..10], hm(at))

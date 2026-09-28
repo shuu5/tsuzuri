@@ -1,4 +1,4 @@
-//! 画面の中身を決める純粋な関数（便 g-min）: 並べ方・状態の印・測れていないの判定・時刻の字。
+//! 画面の中身を決める純粋な関数（便 g-min）: 並べ方・状態の印・測れていないの判定・時刻の字（日本時間・行 g-jst）。
 //! DOM と通信に触らないので host の cargo test で試す（描くのは project の下の block・読むのは net）。
 //! 件数と見出しは block の module が持つ（便 g-frame・見出しの語は vocab から引く）。
 //! 読みの結果の 3 値と読み直しの合図の event の名は block に共通の部品（便 g-parts）。
@@ -304,29 +304,48 @@ pub fn mark(status: &str) -> Mark {
     Mark { glyph, word, class }
 }
 
-/// epoch 秒を UTC の字にする（`2026-09-27 07:39:00 UTC`）。
+/// 日本時間の UTC からの差（秒・UTC に 9 時間を足す固定・行 g-jst）。browser の時間帯は読まない。
+/// 面が人に見せる時刻の字だけに使い、記録の id の中の UTC の字と電文の epoch 秒は変えない。
+pub const JST_OFFSET: EpochSecs = 32_400;
+
+/// 日本時間の印（時刻の字の末に空白 1 つを挟んで付ける）。
+pub const JST: &str = "JST";
+
+/// 1 日の秒。
+const DAY: EpochSecs = 86_400;
+
+/// epoch 秒を日本時間の日の番号（1970-01-01 からの日数）とその日の 0 時からの秒の組にする。
+/// 面の時刻の字と日の境の決めは全部この関数を通る。
+pub fn jst(at: EpochSecs) -> (EpochSecs, EpochSecs) {
+    let t = at + JST_OFFSET;
+    (t / DAY, t % DAY)
+}
+
+/// epoch 秒を日本時間の字にする（`2026-09-27 16:39:00 JST`）。
 pub fn clock(at: EpochSecs) -> String {
-    let days = at / 86_400;
-    let secs = at % 86_400;
+    let (days, secs) = jst(at);
     let (y, m, d) = civil_from_days(days);
     format!(
-        "{y:04}-{m:02}-{d:02} {:02}:{:02}:{:02} UTC",
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}:{:02} {JST}",
         secs / 3600,
         secs % 3600 / 60,
         secs % 60
     )
 }
 
-/// epoch 秒を短い UTC の字にする（見本の hmd と同じ決め方）: 今の時刻との差が 20 時間以内なら
-/// `12:53Z`、超えれば月と日を前に足す（`09-26 12:53Z`）。差は向きを問わない。
+/// 日本時間の時と分（`16:39`・印なし）。
+pub fn hhmm(at: EpochSecs) -> String {
+    clock(at)[11..16].to_string()
+}
+
+/// epoch 秒を短い日本時間の字にする（見本の hmd と同じ決め方）: 今の時刻との差が 20 時間以内なら
+/// `21:53 JST`、超えれば月と日を前に足す（`09-26 21:53 JST`）。差は向きを問わない。
 pub fn clock_short(at: EpochSecs, now: EpochSecs) -> String {
-    let secs = at % 86_400;
-    let hm = format!("{:02}:{:02}Z", secs / 3600, secs % 3600 / 60);
+    let hm = format!("{} {JST}", hhmm(at));
     if at.abs_diff(now) <= 20 * 3600 {
         return hm;
     }
-    let (_, m, d) = civil_from_days(at / 86_400);
-    format!("{m:02}-{d:02} {hm}")
+    format!("{} {hm}", &clock(at)[5..10])
 }
 
 /// 1970-01-01 からの日数を (年, 月, 日) にする（先発グレゴリオ暦）。

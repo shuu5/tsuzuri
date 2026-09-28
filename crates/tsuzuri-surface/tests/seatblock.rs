@@ -15,7 +15,7 @@ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 
-/// fixture の組の時点（2026-09-27 12:00Z）。
+/// fixture の組の時点（2026-09-27 12:00Z・日本時間の 21:00）。
 const AT: u64 = 1_790_510_400;
 
 fn crate_dir() -> PathBuf {
@@ -58,21 +58,21 @@ fn seatblock_state_icon_key_and_since_per_set() {
             "st st-run lg",
             "st_run",
             "state stlabel st-run",
-            Some("09:50Z"),
+            Some("18:50 JST"),
         ),
         (
             "wait",
             "st st-wait lg",
             "st_wait",
             "state stlabel st-wait",
-            Some("11:35Z"),
+            Some("20:35 JST"),
         ),
         (
             "limit",
             "st st-limit lg",
             "st_limit",
             "state stlabel st-limit",
-            Some("10:00Z"),
+            Some("19:00 JST"),
         ),
         (
             "silent",
@@ -86,7 +86,7 @@ fn seatblock_state_icon_key_and_since_per_set() {
             "st st-unknown lg",
             "st_unknown",
             "state stlabel st-unknown",
-            Some("11:59Z"),
+            Some("20:59 JST"),
         ),
     ];
     for (name, icon, key, label_class, since) in cases {
@@ -100,7 +100,7 @@ fn seatblock_state_icon_key_and_since_per_set() {
     // 状態は電文の値を写すだけ（5 値が 5 つの値に 1 対 1）。
     let values: Vec<&str> = SeatState::ALL.into_iter().map(seat::state_value).collect();
     assert_eq!(values, vec!["run", "wait", "limit", "silent", "unknown"]);
-    assert_eq!(seat::hm(AT), "12:00Z");
+    assert_eq!(seat::hm(AT), "21:00 JST");
     // 合図の行: 健康なら ✓・健康でなければ !・heartbeat は on か off。
     let run = filled("run").top;
     assert_eq!(run.tick, Reading::Known(OK));
@@ -419,7 +419,7 @@ fn seatblock_band_only_on_limit_or_move_wait() {
     assert!(MORE.starts_with("詳しく"));
 }
 
-/// (5) 口座の履歴は新しい順で、件数を持つ（別の日の移動は月日を前に付ける）。
+/// (5) 口座の履歴は新しい順で、件数を持つ（日本の日が別の日の移動は月日を前に付ける）。
 #[test]
 fn seatblock_history_newest_first_with_count() {
     let Reading::Known(rows) = filled("run").hist else {
@@ -429,12 +429,12 @@ fn seatblock_history_newest_first_with_count() {
         rows,
         vec![
             HistRow {
-                at: "10:00Z".to_string(),
+                at: "19:00 JST".to_string(),
                 from: Some("acct-3".to_string()),
                 to: "acct-4".to_string(),
             },
             HistRow {
-                at: "09-26 22:05Z".to_string(),
+                at: "07:05 JST".to_string(),
                 from: None,
                 to: "acct-3".to_string(),
             },
@@ -445,7 +445,7 @@ fn seatblock_history_newest_first_with_count() {
         panic!()
     };
     assert_eq!(limit.len(), 1);
-    assert_eq!(limit[0].at, "09-26 08:13Z");
+    assert_eq!(limit[0].at, "09-26 17:13 JST");
     // 電文の順が古い順でも新しい順でも、出すのは新しい順。
     let mut rev = card("run");
     if let Reading::Known(m) = &mut rev.moves {

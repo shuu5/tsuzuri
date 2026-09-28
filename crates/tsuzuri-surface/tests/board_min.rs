@@ -148,10 +148,10 @@ fn board_min_status_marks() {
 }
 
 #[test]
-fn board_min_clock_is_utc() {
-    assert_eq!(clock(0), "1970-01-01 00:00:00 UTC");
-    assert_eq!(clock(1_790_494_740), "2026-09-27 07:39:00 UTC");
-    assert_eq!(clock(1_709_208_000), "2024-02-29 12:00:00 UTC");
+fn board_min_clock_is_jst() {
+    assert_eq!(clock(0), "1970-01-01 09:00:00 JST");
+    assert_eq!(clock(1_790_494_740), "2026-09-27 16:39:00 JST");
+    assert_eq!(clock(1_709_208_000), "2024-02-29 21:00:00 JST");
 }
 
 #[test]

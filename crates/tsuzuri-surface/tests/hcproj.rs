@@ -68,7 +68,7 @@ fn hcproj_nx_card() {
         "proj-a · (e) 質問",
         "各 project の次の一手 · e",
         "proj-a.7 · 1 件",
-        "中核の next_step_seat · ◷ 12:00Z",
+        "中核の next_step_seat · ◷ 21:00 JST",
         &[
             "(a) 限度 / 移動 なし",
             "(b) 応答なし なし",
@@ -92,7 +92,7 @@ fn hcproj_nx_card() {
             &format!("{name} · 測れていない"),
             "各 project の次の一手 · ―",
             "―",
-            "中核の next_step_seat · ◷ 12:00Z",
+            "中核の next_step_seat · ◷ 21:00 JST",
             &unknown_more,
         );
     }
@@ -114,7 +114,7 @@ fn hcproj_nx_card() {
         "proj-a · (g) 次の一手なし",
         "各 project の次の一手 · g",
         "orchestrator が動いている / 待っている",
-        "中核の next_step_seat · ◷ 12:00Z",
+        "中核の next_step_seat · ◷ 21:00 JST",
         &[
             "(a) 限度 / 移動 なし",
             "(b) 応答なし なし",
@@ -136,7 +136,7 @@ fn hcproj_nx_card() {
     // 時刻は at から。
     assert_eq!(
         nx_card(&doc.projects[0], 1790485620).src,
-        "中核の next_step_seat · ◷ 05:07Z"
+        "中核の next_step_seat · ◷ 14:07 JST"
     );
 }
 
@@ -151,7 +151,7 @@ fn hcproj_led_card() {
         "proj-a · 台帳の処理状況",
         "↑+2 24h · ↑+4 7d · closed/日 0.9",
         "task 9（ready 5 / blocked 3）",
-        "bd list --all の bead · 時点 12:00Z",
+        "bd list --all の bead · 時点 21:00 JST",
         &["memo 3 · stale 1", "question 2 · epic 2", "lead p50 4.0d / p90 12d"],
     );
     for (i, name) in [(1, "proj-b"), (2, "proj-c")] {
@@ -189,7 +189,7 @@ fn hcproj_pcnt_card() {
         "run の数 · proj-a",
         "wait 1 · run 2 · stop 0 · land 3",
         "あなたの決定待ち 2",
-        "fleet/events.jsonl · ◷ 12:00Z",
+        "fleet/events.jsonl · ◷ 21:00 JST",
         &[
             "Queued / Blocked 1",
             "Running / Gated 2",
@@ -207,12 +207,12 @@ fn hcproj_pcnt_card() {
         "run の数 · proj-c",
         "測れていない",
         "あなたの決定待ち ―",
-        "fleet/events.jsonl · ◷ 12:00Z",
+        "fleet/events.jsonl · ◷ 21:00 JST",
         &["state dir か event log が読めない", "― = 質問の台帳を読んでいない"],
     );
     assert_eq!(
         pcnt_card(&doc.projects[0], 1790485620).src,
-        "fleet/events.jsonl · ◷ 05:07Z"
+        "fleet/events.jsonl · ◷ 14:07 JST"
     );
 }
 
@@ -224,7 +224,7 @@ fn hcproj_orch_card() {
     check(
         &f(&doc, &doc.projects[0]).expect("proj-a は席を持つ"),
         "proj-a-orch",
-        "動いている · ◷ 10:31Z から",
+        "動いている · ◷ 19:31 JST から",
         "口座 acct-1 · tick healthy · hb on",
         "seat/proj-a-orch/state.jsonl ほか",
         &["model opus"],
@@ -232,7 +232,7 @@ fn hcproj_orch_card() {
     check(
         &orch_card(&doc, &doc.projects[1]).expect("proj-b は席を持つ"),
         "proj-b-orch",
-        "待っている · ◷ 11:35Z から",
+        "待っている · ◷ 20:35 JST から",
         "口座 acct-1 · tick stale · hb off",
         "seat/proj-b-orch/state.jsonl ほか",
         &["model sonnet", "移動待ち acct-1 → acct-2", "退避までの残り 1101 秒"],
@@ -246,12 +246,12 @@ fn hcproj_orch_card() {
     };
     assert_eq!(kind_with(&|c| c.since = None), "動いている");
     assert_eq!(
-        kind_with(&|c| c.since = Some(1790460300)),
-        "動いている · ◷ 09-26 22:05Z から"
+        kind_with(&|c| c.since = Some(1790427900)),
+        "動いている · ◷ 09-26 22:05 JST から"
     );
     assert_eq!(
         kind_with(&|c| c.state = SeatState::Limit),
-        "限度で止まっている · ◷ 10:31Z から"
+        "限度で止まっている · ◷ 19:31 JST から"
     );
 
     let mut blank = doc.projects[0].clone();
@@ -340,7 +340,7 @@ fn hcproj_grp_card() {
         &f(&doc, "Tier1").expect("Tier1 は在る"),
         "Tier1 · 今の口座 acct-1",
         "project の群 · 記録 1 件",
-        "◷ 10:00Z から · ← 前 acct-2",
+        "◷ 19:00 JST から · ← 前 acct-2",
         "groups/Tier1.account ほか",
         &[
             "候補 2 口座 → 候補と次の移り先",
@@ -389,8 +389,8 @@ fn hcproj_grp_card() {
         grp_card(&d, "Tier1").expect("Tier1 は在る").value
     };
     assert_eq!(
-        tier1(&|g| g.since = Some(1790460300)),
-        "◷ 09-26 22:05Z から · ← 前 acct-2"
+        tier1(&|g| g.since = Some(1790427900)),
+        "◷ 09-26 22:05 JST から · ← 前 acct-2"
     );
     assert_eq!(tier1(&|g| g.recorded = false), "記録なし · ← 前 acct-2");
 }
