@@ -4,11 +4,17 @@
 //! 群の宣言は TOML の読み手を使わず、`[[account]]` の label と `[[account-group]]` の name・anchors・accounts だけを読む。
 //! 読めない字の決まり（要件 NFR2）: host の doctor の字が無ければ口座の列と群の列が、群の宣言の字が無ければ
 //! 3 つの列とも「まだ分からない」。残量の字が無いか口座の行が測れていなければ、その口座の usage だけが「まだ分からない」。
+//! 窓ごとの逼迫の閾値は器の rules 行の出力の字を、群の逼迫の知らせと移動の断りは器の event log の行を写すだけで、
+//! 閾値の数を持たず判じない（便 c-acct-thr・規則の行 R-22）。
 
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use tsuzuri_contract::account::{AccountRow, GroupCard, GroupMember, MoveRow};
+use serde_json::Value;
+use tsuzuri_contract::account::{
+    AccountRow, GroupCard, GroupMember, GroupNotice, MoveRow, WindowCap,
+};
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{GroupRow, Reading};
 use tsuzuri_contract::seat::QuotaUsed;
 
@@ -24,6 +30,26 @@ pub const RECORD_KIND: &str = "account";
 
 /// 群の枠の席に数える役。
 pub const ORCHESTRATOR: &str = "orchestrator";
+
+/// 窓ごとの逼迫の閾値の器の rules 行（窓の名・行の id・`WINDOWS` の順・値は器の行から読み code に書かない）。
+pub const CAP_ROWS: [(&str, &str); 3] = [
+    (WINDOWS[0], "fleet.group_pressure_5h_pct"),
+    (WINDOWS[1], "fleet.group_pressure_7d_pct"),
+    (WINDOWS[2], "fleet.group_pressure_model_pct"),
+];
+
+/// 器の逼迫の知らせの event の種類。
+pub const PRESSURE_EVENT: &str = "GroupPressureNotified";
+
+/// 器の移動の断りの event の種類。
+pub const REFUSED_EVENT: &str = "GroupMoveRefused";
+
+/// 器の知らせの窓の語と窓の名。
+pub const WINDOW_WORDS: [(&str, &str); 3] = [
+    ("5h", WINDOWS[0]),
+    ("7d", WINDOWS[1]),
+    ("model", WINDOWS[2]),
+];
 
 /// 残量の出力の行の頭。
 const USAGE_PREFIX: &str = "usage:";
@@ -49,6 +75,9 @@ pub struct HostTexts {
     /// groups/history の下の file の名 → 字（`<群>.account.<時刻>.<番号>` ほか）。
     #[serde(default)]
     pub history: BTreeMap<String, String>,
+    /// 器の rules 行の id → `rules get <id>` の出力（撃てない行と rc 0 でない行は無い）。
+    #[serde(default)]
+    pub caps: BTreeMap<String, String>,
 }
 
 /// 群の宣言の 1 つの群（配列の欄が無ければ空の列・読めなければ None）。
@@ -408,4 +437,99 @@ pub fn moves(texts: &HostTexts) -> Reading<Vec<MoveRow>> {
         .collect();
     rows.sort_by(|(ga, a), (gb, b)| b.at.cmp(&a.at).then(ga.cmp(gb)));
     Reading::Known(rows.into_iter().map(|(_, m)| m).collect())
+}
+
+/// 窓ごとの逼迫の閾値（`CAP_ROWS` の順）。行の字の前後の空白を除いた字が数として読めればその値、
+/// 字が無いか読めなければ「まだ分からない」。数の範囲は見ない（器の値のまま）。
+pub fn caps(texts: &HostTexts) -> Vec<WindowCap> {
+    CAP_ROWS
+        .iter()
+        .map(|&(window, rule)| WindowCap {
+            window: window.to_string(),
+            rule: rule.to_string(),
+            cap: texts
+                .caps
+                .get(rule)
+                .and_then(|t| t.trim().parse::<u64>().ok())
+                .map_or(Reading::Unknown, Reading::Known),
+        })
+        .collect()
+}
+
+/// event の欄の字。
+fn event_text<'a>(event: &'a Value, key: &str) -> Option<&'a str> {
+    event.get(key).and_then(Value::as_str)
+}
+
+/// event の 1 行を知らせか断りの行にする（宣言の群の順の位置と行・読めない行は None）。
+fn notice(names: &[String], event: &Value) -> Option<(usize, GroupNotice)> {
+    let kind = event_text(event, "kind")?;
+    if kind != PRESSURE_EVENT && kind != REFUSED_EVENT {
+        return None;
+    }
+    let at = epoch_secs(event_text(event, "ts")?)?;
+    let account = event_text(event, "account").filter(|a| !a.is_empty())?;
+    let detail = event_text(event, "detail")?;
+    let group = value(detail, "group")?;
+    let order = names.iter().position(|n| n == group)?;
+    let (group, account) = (group.to_string(), account.to_string());
+    let row = if kind == PRESSURE_EVENT {
+        let word = value(detail, "window")?;
+        let (_, window) = WINDOW_WORDS.iter().find(|(w, _)| *w == word)?;
+        let number = |key: &str| value(detail, key)?.parse::<u64>().ok();
+        GroupNotice::Pressure {
+            at,
+            group,
+            account,
+            window: window.to_string(),
+            used: number("used")?,
+            cap: number("cap")?,
+            sent: number("sent")?,
+        }
+    } else {
+        GroupNotice::Refused {
+            at,
+            group,
+            account,
+            reason: value(detail, "reason")?.to_string(),
+        }
+    };
+    Some((order, row))
+}
+
+fn notice_at(n: &GroupNotice) -> EpochSecs {
+    match n {
+        GroupNotice::Pressure { at, .. } | GroupNotice::Refused { at, .. } => *at,
+    }
+}
+
+/// 群の逼迫の知らせと移動の断りの列（渡した event log の順に、log の中は行の順に読み、at の新しい順・
+/// 同じ at は群の宣言の順・それも同じなら読んだ順）。宣言に無い群の行・欄の欠けた行・ほかの種類の行・
+/// JSON でない行は読まず、全部の欄が同じ行は 1 度だけ。群の宣言の字が無いか log の字が無ければ「まだ分からない」。
+pub fn notices(texts: &HostTexts, logs: &[&str]) -> Reading<Vec<GroupNotice>> {
+    let Some(host) = texts.host_toml.as_deref() else {
+        return Reading::Unknown;
+    };
+    if logs.is_empty() {
+        return Reading::Unknown;
+    }
+    let names: Vec<String> = declaration(host)
+        .groups
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+    let mut rows: Vec<(usize, GroupNotice)> = Vec::new();
+    for line in logs.iter().flat_map(|log| log.lines()) {
+        let Ok(event) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let Some(row) = notice(&names, &event) else {
+            continue;
+        };
+        if !rows.iter().any(|(_, r)| *r == row.1) {
+            rows.push(row);
+        }
+    }
+    rows.sort_by(|(ga, a), (gb, b)| notice_at(b).cmp(&notice_at(a)).then(ga.cmp(gb)));
+    Reading::Known(rows.into_iter().map(|(_, n)| n).collect())
 }

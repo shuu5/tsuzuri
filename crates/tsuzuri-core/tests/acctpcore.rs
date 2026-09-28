@@ -13,7 +13,7 @@ use tsuzuri_contract::account::{
 use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
 use tsuzuri_contract::surface::SeatRole;
-use tsuzuri_core::account::host::HostTexts;
+use tsuzuri_core::account::host::{CAP_ROWS, HostTexts};
 use tsuzuri_core::account::project::{
     ProjectTexts, assemble, doc, project_rows, run_counts, session_lines,
 };
@@ -481,7 +481,21 @@ fn acctpcore_assemble_equals_doc_fixture() {
         want.projects.clone(),
         want.sessions.clone(),
     );
-    assert_eq!(got, want);
+    // assemble は閾値と知らせを読まない（CAP_ROWS の順の 3 つで cap は Unknown・知らせは Unknown）。
+    let rows: Vec<(&str, &str)> = got
+        .caps
+        .iter()
+        .map(|c| (c.window.as_str(), c.rule.as_str()))
+        .collect();
+    assert_eq!(rows, CAP_ROWS);
+    assert!(got.caps.iter().all(|c| c.cap == Reading::Unknown));
+    assert_eq!(got.notices, Reading::Unknown);
+    let filled = AccountDoc {
+        caps: want.caps.clone(),
+        notices: want.notices.clone(),
+        ..got.clone()
+    };
+    assert_eq!(filled, want);
     assert!(got.dormant.is_empty());
 }
 

@@ -504,7 +504,7 @@ pub fn session_lines(
     out
 }
 
-/// 電文を組む（休止中の席は空の列）。
+/// 電文を組む（休止中の席は空の列・閾値は読んでいない 3 つの窓・知らせは「まだ分からない」）。
 pub fn assemble(
     at: EpochSecs,
     accounts: Reading<Vec<AccountRow>>,
@@ -516,8 +516,10 @@ pub fn assemble(
     AccountDoc {
         at,
         accounts,
+        caps: host::caps(&HostTexts::default()),
         groups,
         moves,
+        notices: Reading::Unknown,
         projects,
         sessions,
         dormant: Vec::new(),
@@ -525,18 +527,30 @@ pub fn assemble(
 }
 
 /// 入口: host の側の字と anchor → project の字の表と猶予の秒の字と今の時刻から電文を組む。
+/// 知らせは宣言の project のうち state dir の引けた project の event log の字を宣言の順に読む。
 pub fn doc(
     host: &HostTexts,
     projects: &BTreeMap<String, ProjectTexts>,
     grace: Option<&str>,
     now: EpochSecs,
 ) -> AccountDoc {
-    assemble(
+    let mut doc = assemble(
         now,
         host::accounts(host),
         host::groups(host),
         host::moves(host),
         project_rows(host, projects, grace, now),
         session_lines(host, projects, now),
-    )
+    );
+    let logs: Vec<&str> = with_texts(host, projects)
+        .into_iter()
+        .filter_map(|(_, texts)| {
+            texts
+                .filter(|t| t.state_dir_known)
+                .and_then(|t| t.events.as_deref())
+        })
+        .collect();
+    doc.caps = host::caps(host);
+    doc.notices = host::notices(host, &logs);
+    doc
 }

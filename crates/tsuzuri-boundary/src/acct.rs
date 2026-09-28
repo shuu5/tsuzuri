@@ -2,7 +2,8 @@
 //! `-C <anchor> config --get scribe2.statedir` で state dir を、`-C <anchor> config --get tsuzuri.boardport` で
 //! project board の port を引き（電文の行には port だけを置く・便 h-board-url）、state dir ごとに器の
 //! `seat tick status --state-dir <dir>` と `doctor --state-dir <dir>` を 1 回だけ撃ち、口座は引数の state dir で
-//! `fleet usage --show --state-dir <dir>` を 1 回、猶予は `rules get seat.move_grace_s` を 1 回撃つ。
+//! `fleet usage --show --state-dir <dir>` を 1 回、猶予は `rules get seat.move_grace_s` を 1 回、窓ごとの逼迫の閾値は
+//! `rules get <id>`（`CAP_ROWS` の 3 行・`--state-dir` を付けない）を行ごとに 1 回撃つ（便 c-acct-thr）。
 //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
 //! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last・move-signal と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）。file は書かない。
@@ -18,7 +19,7 @@ use std::time::Instant;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
-use tsuzuri_core::account::host::{HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
+use tsuzuri_core::account::host::{CAP_ROWS, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
 use tsuzuri_core::account::project::{self, ProjectTexts};
 use tsuzuri_core::account::project_name;
 
@@ -40,6 +41,9 @@ pub const BOARD_ARGS: [&str; 3] = ["config", "--get", "tsuzuri.boardport"];
 
 /// 猶予の秒の出力の引数の列。
 pub const GRACE_ARGS: [&str; 3] = ["rules", "get", "seat.move_grace_s"];
+
+/// 窓ごとの逼迫の閾値の出力の引数の列の頭（後ろに `CAP_ROWS` の行の id が付く）。
+pub const CAP_ARGS: [&str; 2] = ["rules", "get"];
 
 /// 席の移動の合図の file（席の dir の下）。
 pub const MOVE_SIGNAL: &str = "move-signal";
@@ -190,13 +194,13 @@ impl Acct {
     }
 
     /// 子 process を 2 段に並べて撃ち（待ちは 1 段ごとに 1 本分の上限まで）、file を読む。
-    /// 1 段目は anchor ごとの git（state dir と board の port）と、口座と猶予と引数の state dir の doctor。
+    /// 1 段目は anchor ごとの git（state dir と board の port）と、口座と猶予と閾値の行と引数の state dir の doctor。
     /// 2 段目は state dir ごとの tick status と doctor（引数の state dir の doctor は撃ち直さない）と、
     /// state dir の引けた anchor の台帳。
     fn gather(&self) -> Texts {
         let host_toml = read(&self.state_dir.join(HOST_TOML));
         let anchors = anchors(host_toml.as_deref());
-        let (dirs, boards, usage, grace, doctor) = thread::scope(|s| {
+        let (dirs, boards, usage, grace, caps, doctor) = thread::scope(|s| {
             let dirs: Vec<_> = anchors
                 .iter()
                 .map(|a| s.spawn(|| self.state_dir(Path::new(a))))
@@ -207,6 +211,15 @@ impl Acct {
                 .collect();
             let usage = s.spawn(|| self.shoot_in(&USAGE_ARGS, &self.state_dir));
             let grace = s.spawn(|| self.shoot(GRACE_ARGS));
+            let caps: Vec<_> = CAP_ROWS
+                .iter()
+                .map(|&(_, rule)| {
+                    (
+                        rule,
+                        s.spawn(move || self.shoot(CAP_ARGS.into_iter().chain([rule]))),
+                    )
+                })
+                .collect();
             let doctor = self.shoot_in(&DOCTOR_ARGS, &self.state_dir);
             (
                 dirs.into_iter()
@@ -218,6 +231,9 @@ impl Acct {
                     .collect::<Vec<_>>(),
                 usage.join().ok().flatten(),
                 grace.join().ok().flatten(),
+                caps.into_iter()
+                    .filter_map(|(rule, h)| Some((rule.to_string(), h.join().ok().flatten()?)))
+                    .collect::<BTreeMap<_, _>>(),
                 doctor,
             )
         });
@@ -333,6 +349,7 @@ impl Acct {
         texts.host.host_toml = host_toml;
         texts.host.usage = usage;
         texts.host.doctor = doctor;
+        texts.host.caps = caps;
         texts.grace = grace;
         texts
     }

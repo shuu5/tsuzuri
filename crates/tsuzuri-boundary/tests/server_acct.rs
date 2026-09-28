@@ -12,12 +12,12 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, GIT_ARGS, GRACE_ARGS};
+use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GRACE_ARGS};
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
 use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatState;
-use tsuzuri_core::account::host::HostTexts;
+use tsuzuri_core::account::host::{CAP_ROWS, HostTexts};
 use tsuzuri_core::account::project::{self, ProjectTexts};
 
 /// 読みの今の時刻（2026-09-27T12:00:00Z）。
@@ -343,6 +343,12 @@ impl Place {
                 .collect(),
             ..HostTexts::default()
         };
+        // 偽の器は rules の頭に行の id に依らず grace の字を出す。
+        for (_, rule) in CAP_ROWS {
+            if let Some(text) = out("grace") {
+                host.caps.insert(rule.to_string(), text);
+            }
+        }
         let mut projects = BTreeMap::new();
         for (p, tail, state, seat) in PROJECTS {
             let anchor = format!("{}{tail}", self.anchor(p));
@@ -487,7 +493,7 @@ fn server_acct_argv_exact() {
         assert_eq!(place.calls("git"), want, "{separate}");
         assert_eq!(GIT_ARGS, ["config", "--get", "scribe2.statedir"]);
         assert_eq!(BOARD_ARGS, ["config", "--get", "tsuzuri.boardport"]);
-        // 器は state dir ごとに tick と doctor を 1 回、口座と猶予は 1 回。
+        // 器は state dir ごとに tick と doctor を 1 回、口座と猶予と閾値の行ごとは 1 回。
         let (sa, sb, sh) = (
             place.state("state-a").display().to_string(),
             place.state("state-b").display().to_string(),
@@ -501,6 +507,7 @@ fn server_acct_argv_exact() {
             format!("fleet usage --show --state-dir {sh}"),
             "rules get seat.move_grace_s".to_string(),
         ];
+        want.extend(CAP_ROWS.map(|(_, rule)| format!("rules get {rule}")));
         if separate {
             want.push(format!("doctor --state-dir {sh}"));
         }
@@ -515,6 +522,7 @@ fn server_acct_argv_exact() {
         );
         assert_eq!(USAGE_ARGS, ["fleet", "usage", "--show"]);
         assert_eq!(GRACE_ARGS, ["rules", "get", "seat.move_grace_s"]);
+        assert_eq!(CAP_ARGS, ["rules", "get"]);
         // bd は state dir の引けた anchor ごとに 1 回（cwd が anchor）。
         assert_eq!(
             place.calls("bd"),
@@ -630,7 +638,7 @@ fn server_acct_holds_five_seconds() {
         place.calls("git"),
         place.calls("bd"),
     );
-    assert_eq!(once.0.len(), 6, "5 秒の中の読み: {:?}", once.0);
+    assert_eq!(once.0.len(), 9, "5 秒の中の読み: {:?}", once.0);
     assert_eq!(once.1.len(), 10, "{:?}", once.1);
     assert_eq!(once.2.len(), 3, "{:?}", once.2);
     for calls in [&once.0, &once.1, &once.2] {

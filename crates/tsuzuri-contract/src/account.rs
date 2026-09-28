@@ -16,14 +16,18 @@ pub const PATH: &str = "/api/account";
 /// 停止の切り替えの口の path（面と server はこの定数を使う）。
 pub const HEARTBEAT_PATH: &str = "/api/account/heartbeat";
 
-/// account board の data（時点・口座・群・移動・project・session・休止中の席）。
+/// account board の data（時点・口座・閾値・群・移動・知らせ・project・session・休止中の席）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccountDoc {
     /// 組んだ時刻。
     pub at: EpochSecs,
     pub accounts: Reading<Vec<AccountRow>>,
+    /// 窓ごとの逼迫の閾値（器の rules 行の写し）。
+    pub caps: Vec<WindowCap>,
     pub groups: Reading<Vec<GroupCard>>,
     pub moves: Reading<Vec<MoveRow>>,
+    /// 群の逼迫の知らせと移動の断り（器の event の写し・新しい順）。
+    pub notices: Reading<Vec<GroupNotice>>,
     pub projects: Vec<ProjectRow>,
     pub sessions: Vec<SessionLine>,
     /// 休止中の席の名（最初の便は空の列）。
@@ -39,6 +43,37 @@ pub struct AccountRow {
     pub occupant: Option<String>,
     pub model: Option<String>,
     pub usage: Reading<Vec<QuotaUsed>>,
+}
+
+/// 窓の逼迫の閾値の 1 行（窓の名・器の rules 行の id・行の値・読めなければ cap は Unknown）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WindowCap {
+    pub window: String,
+    pub rule: String,
+    pub cap: Reading<u64>,
+}
+
+/// 群の逼迫の知らせと移動の断りの行（器の event の欄の写し・tsuzuri は判じない）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum GroupNotice {
+    /// 逼迫の知らせ（account は逼迫の口座・window は窓の名・sent は知らせを送った席の数）。
+    Pressure {
+        at: EpochSecs,
+        group: String,
+        account: String,
+        window: String,
+        used: u64,
+        cap: u64,
+        sent: u64,
+    },
+    /// 移動の断り（account は断った周の群の今の口座・reason は器の理由の語）。
+    Refused {
+        at: EpochSecs,
+        group: String,
+        account: String,
+        reason: String,
+    },
 }
 
 /// 群の枠（群と口座の行・今の記録・project の列・doctor の断り）。

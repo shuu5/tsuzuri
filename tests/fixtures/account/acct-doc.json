@@ -13,6 +13,11 @@
     ]}},
     {"label": "acct-3", "retired": true, "occupant": null, "model": null, "usage": "unknown"}
   ]},
+  "caps": [
+    {"window": "five_hour", "rule": "fleet.group_pressure_5h_pct", "cap": {"known": 85}},
+    {"window": "seven_day", "rule": "fleet.group_pressure_7d_pct", "cap": {"known": 95}},
+    {"window": "seven_day_model", "rule": "fleet.group_pressure_model_pct", "cap": {"known": 95}}
+  ],
   "groups": {"known": [
     {
       "row": {"group": "Tier1", "account": "acct-1", "candidates": ["acct-1", "acct-2"], "next_account": "acct-2", "remaining": []},
@@ -39,6 +44,10 @@
   "moves": {"known": [
     {"at": 1790503200, "group": "Tier1", "from": "acct-2", "to": "acct-1"},
     {"at": 1790460300, "group": "Tier2", "from": null, "to": "acct-2"}
+  ]},
+  "notices": {"known": [
+    {"kind": "refused", "at": 1790509800, "group": "Tier2", "account": "acct-2", "reason": "no-candidate"},
+    {"kind": "pressure", "at": 1790508600, "group": "Tier1", "account": "acct-2", "window": "five_hour", "used": 100, "cap": 85, "sent": 1}
   ]},
   "projects": [
     {
