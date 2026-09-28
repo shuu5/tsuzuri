@@ -38,6 +38,9 @@ pub const FOLDS: &[&str] = &[];
 /// 書いた行の数の前の字。
 pub const WRITTEN: &str = "書いた行";
 
+/// 重なりの chip の経験者だけの注釈（見本の id bo の chip の `data-tip-expert` の字）。
+pub const OVERLAP_TIP: &str = "選んだ質問の touches の重なり（衝突の兆し）";
+
 /// 1 行（一覧の順の 1 から始まる番号・36 字に切った題・A-1 の印・関わる所・見た版の要約値）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
@@ -226,11 +229,13 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        BLOCK, Outcome, PATH, Row, body, can_send, counts, outcome, request_body, selected,
+        BLOCK, OVERLAP_TIP, Outcome, PATH, Row, body, can_send, counts, outcome, request_body,
+        selected,
     };
     use crate::project::ask::{self, KeyAction, key_action};
     use crate::project::{Body, body_view, section, unmeasured};
     use crate::vocab::label;
+    use crate::widgets::help::expert_tip;
 
     /// 見本の IC.warn・IC.link。
     const WARN: &str = r#"<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5"/><circle cx="12" cy="18" r=".8" fill="currentColor"/></svg>"#;
@@ -284,7 +289,7 @@ mod dom {
             <ul class="items">{items}</ul>
             <div class="metas row">
                 <span class="chip num" data-term="touches"><span inner_html=LINK></span>{label("touches")}" "{move || chosen().touches}</span>
-                <span class="chip num"><span inner_html=WARN></span>" "{move || chosen().overlap}</span>
+                <span class="chip num" use:expert_tip=OVERLAP_TIP.to_string()><span inner_html=WARN></span>" "{move || chosen().overlap}</span>
             </div>
             <textarea rows="2" aria-label=own.clone() placeholder=own prop:value=move || s.text.get() on:input=move |ev: ev::Event| s.text.set(event_target_value(&ev)) on:keydown=keydown></textarea>
             <button type="button" class="btn primary" disabled=disabled on:click=move |_| submit(rows, s)>{label("batch")}" ›"</button>

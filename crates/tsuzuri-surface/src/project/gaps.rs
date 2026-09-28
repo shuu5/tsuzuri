@@ -140,6 +140,20 @@ pub struct Row {
     pub more: Option<usize>,
 }
 
+/// 判定の名（見本の gaps.html が経験者の字に使う名・電文の serde の名とは違反だけ違う）。
+pub fn verdict_name(verdict: Verdict) -> &'static str {
+    match verdict {
+        Verdict::Pass => "pass",
+        Verdict::Violation => "fail",
+        Verdict::Unknown => "unknown",
+    }
+}
+
+/// 各行の見出しの経験者だけの注釈（見本の `data-tip-expert` の字・id と判定の名）。
+pub fn summary_tip(row: &Row) -> String {
+    format!("{} · {}", row.id, verdict_name(row.verdict))
+}
+
 /// 一覧の行（違反・まだ分からない・合格の順・同じ判定の中は id の数の順）。
 pub fn rows(checks: &[InvariantCheck]) -> Vec<Row> {
     let mut sorted: Vec<&InvariantCheck> = checks.iter().collect();
@@ -222,10 +236,10 @@ mod dom {
 
     use leptos::prelude::*;
 
-    use super::{BLOCK, Body, Gaps, Item, Row, Tile, body, mark_class};
+    use super::{BLOCK, Body, Gaps, Item, Row, Tile, body, mark_class, summary_tip};
     use crate::project::{body_view, fold, item_view, map, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::{h1, hs};
+    use crate::widgets::help::{expert_tip, h1, hs};
 
     fn tile_view(t: Tile) -> AnyView {
         view! {
@@ -239,6 +253,7 @@ mod dom {
     }
 
     fn row_view(r: Row, found: &BTreeMap<String, Item>) -> AnyView {
+        let tip = summary_tip(&r);
         // 名指しか残りの数が在るときだけ一覧を出す。
         let has_list = !r.named.is_empty() || r.more.is_some();
         // 電文の節点に在る id は節点の頁への link・無い id は頁が無いので字だけ。
@@ -259,7 +274,7 @@ mod dom {
         let (open, toggle) = fold(format!("gaps:{}", r.id), move || initial);
         view! {
             <details class="gitem" prop:open=open on:toggle=toggle data-id=r.id>
-                <summary>
+                <summary use:expert_tip=tip>
                     <span class=mark_class(r.mark) aria-label=label(r.mark.key)>{r.mark.glyph}</span>
                     <span class="ttl">{r.name}</span>
                     <span class="aside">{r.count.map(|n| n.to_string()).unwrap_or_default()}</span>

@@ -157,6 +157,20 @@ pub fn shows_internal(mode: Mode) -> bool {
     mode == Mode::Expert
 }
 
+/// 経験者だけの注釈（見本の `data-tip-expert` の字・語の鍵を持たない要素）: 経験者の mode のときだけ、
+/// 字を改行で分けた空でない行を行ごとに片に分ける（見本の tipContent の intHTML と同じ・行が無ければ None）。
+pub fn expert_note(text: &str, mode: Mode) -> Option<Vec<Vec<Inline>>> {
+    if !shows_internal(mode) {
+        return None;
+    }
+    let lines: Vec<Vec<Inline>> = text
+        .split('\n')
+        .filter(|l| !l.is_empty())
+        .map(inline)
+        .collect();
+    (!lines.is_empty()).then_some(lines)
+}
+
 /// 幅の字（`24h` → `24 時間`・見本の spanKey の replace と同じ）。
 pub fn span_words(span: Span) -> String {
     span.key().replace('h', " 時間")
@@ -244,26 +258,32 @@ pub fn sym_html(sym: &str) -> Option<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{HelpCtx, TipLayer, h1, h2, hs, qmark, term};
+pub use dom::{HelpCtx, TipLayer, expert_tip, h1, h2, hs, qmark, term};
 
 #[cfg(target_arch = "wasm32")]
 mod dom {
     use leptos::ev;
     use leptos::prelude::*;
+    use web_sys::wasm_bindgen::JsCast;
+    use web_sys::wasm_bindgen::closure::Closure;
 
-    use super::{Inline, Line, fig_of, note_in, place, shows_internal, sym_html, tip_class};
+    use super::{
+        Inline, Line, expert_note, fig_of, note_in, place, shows_internal, sym_html, tip_class,
+    };
     use crate::frame::Mode;
     use crate::project::{STATES, state_icon};
     use crate::vocab::label;
     use crate::widgets::fig;
 
-    /// 開いている注釈（語の鍵・置き場・留めたか）。
+    /// 開いている注釈（語の鍵・置き場・留めたか・経験者だけの注釈の字）。
     #[derive(Debug, Clone, PartialEq)]
     pub struct Open {
         pub key: &'static str,
         pub x: f64,
         pub y: f64,
         pub pinned: bool,
+        /// 経験者だけの注釈の字（語の鍵の注釈では None）。
+        pub expert: Option<String>,
     }
 
     /// 注釈と mode の状態（App が context に置く）。
@@ -284,7 +304,13 @@ mod dom {
             .and_then(|w| w.as_f64())
             .unwrap_or(1280.0);
         let (x, y) = place(f64::from(ev.client_x()), f64::from(ev.client_y()), width);
-        Open { key, x, y, pinned }
+        Open {
+            key,
+            x,
+            y,
+            pinned,
+            expert: None,
+        }
     }
 
     /// 押すと留める・同じ語をもう一度押すと外す。
@@ -321,6 +347,39 @@ mod dom {
         {
             c.open.set(None);
         }
+    }
+
+    /// 経験者だけの注釈を要素に付ける（見本の `data-tip-expert`・`use:expert_tip=text` の directive の形で使う）。
+    /// 指を置くと、経験者の mode で留めた注釈が無いときだけ出し、指が離れると閉じる（押して留めない）。
+    pub fn expert_tip(el: web_sys::Element, text: String) {
+        let Some(c) = ctx() else {
+            return;
+        };
+        let enter =
+            Closure::<dyn FnMut(web_sys::MouseEvent)>::new(move |ev: web_sys::MouseEvent| {
+                let pinned = c
+                    .open
+                    .with_untracked(|o| o.as_ref().is_some_and(|o| o.pinned));
+                if !pinned && expert_note(&text, c.mode.get_untracked()).is_some() {
+                    c.open.set(Some(Open {
+                        expert: Some(text.clone()),
+                        ..at(&ev, "", false)
+                    }));
+                }
+            });
+        let leave =
+            Closure::<dyn FnMut(web_sys::MouseEvent)>::new(move |_: web_sys::MouseEvent| {
+                if c.open
+                    .with_untracked(|o| o.as_ref().is_some_and(|o| !o.pinned))
+                {
+                    c.open.set(None);
+                }
+            });
+        let _ = el.add_event_listener_with_callback("mouseenter", enter.as_ref().unchecked_ref());
+        let _ = el.add_event_listener_with_callback("mouseleave", leave.as_ref().unchecked_ref());
+        // 要素の一生の間ずっと持つ（要素を外すと listener も届かなくなる）。
+        enter.forget();
+        leave.forget();
     }
 
     /// 「?」の印（初心者の mode だけ見える・押すと留める・指を置くと出す）。
@@ -451,6 +510,14 @@ mod dom {
         };
         let content = move || {
             let open = c.open.get()?;
+            // 経験者だけの注釈は内部の段だけ（見出しと「詳しく」を持たない・見本の intHTML だけの箱）。
+            if let Some(text) = open.expert.as_deref() {
+                let rows = expert_note(text, c.mode.get())?
+                    .iter()
+                    .map(|l| view! { <div>{inline_view(l)}</div> })
+                    .collect_view();
+                return Some(view! { <div class="int">{rows}</div> }.into_any());
+            }
             // 出すときの幅で置き換える（出た後に幅を替えても出ている注釈は替えない・見本と同じ）。
             let n = note_in(open.key, &window().location().search().unwrap_or_default())?;
             let expert = shows_internal(c.mode.get());
@@ -479,7 +546,8 @@ mod dom {
                 {items}
                 {more}
                 {internal}
-            })
+            }
+            .into_any())
         };
         view! {
             <div class=class role="tooltip" id="tip" style=style on:click=|ev: ev::MouseEvent| ev.stop_propagation()>
