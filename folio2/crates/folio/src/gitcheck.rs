@@ -185,6 +185,35 @@ fn format_same(doc: &Value) -> bool {
     )
 }
 
+/// `rev-list --parents --exclude=refs/stash --all --not HEAD` の行（commit と親）から、取り込んでいない枝の commit
+/// （HEAD から辿れず、祖先に HEAD の祖先を持つもの）を返す。祖先に HEAD の祖先を持たない根の無い枝の commit は入れない（ADR-34）。
+fn aside(text: &str) -> BTreeSet<String> {
+    let rows: Vec<Vec<&str>> = text
+        .lines()
+        .map(|l| l.split_whitespace().collect::<Vec<_>>())
+        .filter(|r| !r.is_empty())
+        .collect();
+    let outside: BTreeSet<&str> = rows.iter().map(|r| r[0]).collect();
+    let mut children: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut todo: Vec<&str> = Vec::new();
+    for r in &rows {
+        for p in &r[1..] {
+            if outside.contains(p) {
+                children.entry(*p).or_default().push(r[0]);
+            } else {
+                todo.push(r[0]);
+            }
+        }
+    }
+    let mut found = BTreeSet::new();
+    while let Some(c) = todo.pop() {
+        if found.insert(c.to_string()) {
+            todo.extend(children.get(c).into_iter().flatten());
+        }
+    }
+    found
+}
+
 /// 本文を床の読み手と同じく型付きで読む（重複キー・読めない本文は None）。
 fn read_blob(bytes: &[u8]) -> Option<Value> {
     let text = std::str::from_utf8(bytes).ok()?;
@@ -284,25 +313,47 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
             );
         }
     }
-    let (Some(ls), Some(lg)) = (
+    let (Some(ls), Some(lg), Some(side)) = (
         git(&top, &["ls-tree", "-r", "--name-only", "HEAD", "--", &rel]),
+        // 作業の一時置き場（refs/stash）は数えない・取り込みの commit で本流の側の親を落とさない（--full-history・ADR-34）
         git(
             &top,
-            &["log", "--all", "--format=%H", "--name-status", "--", &rel],
+            &[
+                "log",
+                "--exclude=refs/stash",
+                "--all",
+                "--full-history",
+                "--format=%H",
+                "--name-status",
+                "--",
+                &rel,
+            ],
+        ),
+        git(
+            &top,
+            &[
+                "rev-list",
+                "--parents",
+                "--exclude=refs/stash",
+                "--all",
+                "--not",
+                "HEAD",
+            ],
         ),
     ) else {
         report.pending(NO_GIT);
         return None;
     };
-    if !ls.ok() || !lg.ok() {
+    if !ls.ok() || !lg.ok() || !side.ok() {
         report.pending(
-            "版管理を読めない（ls-tree / log が失敗）＝anchor を版管理と照合できない（まだ分からない）",
+            "版管理を読めない（ls-tree / log / rev-list が失敗）＝anchor を版管理と照合できない（まだ分からない）",
         );
         return None;
     }
     let tracked: BTreeSet<String> = ls.text().split_whitespace().map(base_name).collect();
+    let aside = aside(&side.text());
     let mut ever: BTreeSet<String> = BTreeSet::new();
-    // anchor 名 → [(commit の頭 7 字, 本文)]（全 ref の履歴で追加・変更された anchor）
+    // anchor 名 → [(commit の頭 7 字, 本文)]（HEAD の祖先と根の無い枝の履歴で追加・変更された anchor）
     let mut hist: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
     let mut commit: Option<String> = None;
     for line in lg.text().lines() {
@@ -311,7 +362,8 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
             continue;
         }
         if is_commit_line(line) {
-            commit = Some(line.to_string());
+            // 取り込んでいない枝の commit の行は数えない（ADR-34）
+            commit = (!aside.contains(line)).then(|| line.to_string());
             continue;
         }
         let (Some(cm), Some((st, path))) = (&commit, status_line(line)) else {
@@ -399,5 +451,15 @@ mod tests {
         assert_eq!(status_line("M"), None);
         assert!(is_commit_line(&"0123456789abcdef".repeat(3)[..40]));
         assert!(!is_commit_line("0123"));
+    }
+
+    #[test]
+    fn f190_aside_takes_only_branches_joined_to_head() {
+        // h0・h1 は HEAD の祖先（rev-list の行に出ない）・s は取り込んでいない枝（s1 は子 s2 と s4 の 2 本に分かれる）
+        // o は根の無い枝・m1 は根の無い枝 o2 を先の親に、HEAD の祖先 h1 を後の親に持つ取り込み・x1 はその子
+        let text = "x1 m1\ns3 s2 h1\ns4 s1\ns2 s1\nm1 o2 h1\ns1 h0\no2 o1\no1\n";
+        let got: Vec<String> = aside(text).into_iter().collect();
+        assert_eq!(got, ["m1", "s1", "s2", "s3", "s4", "x1"]);
+        assert!(aside("").is_empty());
     }
 }
