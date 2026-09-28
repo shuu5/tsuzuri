@@ -1052,13 +1052,14 @@ fn f89_schema_teeth_are_split_and_under_the_cap() {
 /// 便 95 (c) 凍結 anchor の置き場と自己検査の値（設計判断の席が独立の実装で組んだ）。
 const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
 /// 便 99 で node の digest と edge_fields・edge_fields_note・digest_note を足した値（docs/design/delivery-99.md §1 (f)）。
-const F95_GRAPH_LINES: usize = 35;
-const F95_GRAPH_BYTES: usize = 3537;
-const F95_GRAPH_SHA256: &str = "ffd8414f8addc86575f90979c5968b692e8a57ae81e6a952842a7210415f29a1";
+/// 便 185 で node_note・node_kinds・edge_types・edge_fields・edge_fields_note・digest_note に設計ノートの行を足した値（anchor は字面の置き換えで作った）。
+const F95_GRAPH_LINES: usize = 38;
+const F95_GRAPH_BYTES: usize = 3909;
+const F95_GRAPH_SHA256: &str = "4180685ff024c8c3d0ea5d3294a7e5c00e4e58db826a588036611c28f9e8ea80";
 
-/// 生成区間の変異（node_kinds の行の 判断の記録 の末尾の 1 字）。
-const F95_DRIFT_FROM: &str = ", 判断の記録]\n";
-const F95_DRIFT_TO: &str = ", 判断の記禄]\n";
+/// 生成区間の変異（node_kinds の行の最後の種類の末尾の 1 字・便 185 で最後の種類が 設計ノートの行 に）。
+const F95_DRIFT_FROM: &str = ", 設計ノートの行]\n";
+const F95_DRIFT_TO: &str = ", 設計ノートの列]\n";
 
 // ── f95_ 1. 生成区間が凍結 anchor と byte 一致・anchor の自己検査 ──
 
@@ -1120,7 +1121,7 @@ fn f95_the_closed_lists_are_the_same_as_the_index() {
     let reg = YamlLoader::load_from_str(region(&text)).unwrap().remove(0);
     let kinds = strs(&reg["schema"]["node_kinds"], "node_kinds");
     let types = strs(&reg["schema"]["edge_types"], "edge_types");
-    assert_eq!((kinds.len(), types.len()), (11, 17), "{reg:?}");
+    assert_eq!((kinds.len(), types.len()), (12, 19), "{reg:?}");
 
     let out = folio(&["graph", "--print", "--dir"], &w.dir(), &[]);
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));

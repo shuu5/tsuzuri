@@ -4,18 +4,23 @@
 //! 節点の種類と辺の型の閉じた一覧の正本はこの file の定数（P-5.1・ADR-13 決定 (1)(2)）。欄の値を読み、散文は走査しない。
 //! 便 180（docs/design/delivery-180.md §1・要件 FR14 第 1.52 版）: `--print --summary` は表の代わりに、節点ごとに
 //! 所属 file の中の id の行の番号・平易文の欄の字・技術の要約の字（受入基準は題の全文）を添えた 1 行の JSON（JSON Lines）を出す。
+//! 便 185（docs/design/delivery-185.md §1・判断の記録 ADR-32・要件 FR14 第 1.54 版）: 設計ノートの契約表の節の行も節点にする
+//! （種類 設計ノートの行・id は meta の id と行 id を「#」でつないだ字・辺は req と depends）。読み手は床と導出と同じ note.rs の load_notes。
+//! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
 use crate::floor::Floor;
+use crate::floor_note::CONTRACT_TABLE;
+use crate::note;
 use crate::sha256;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Node, json_str};
 
-/// 節点の種類（11・順も固定）。
-pub const NODE_KINDS: [&str; 11] = [
+/// 節点の種類（12・順も固定）。
+pub const NODE_KINDS: [&str; 12] = [
     "条",
     "規範文",
     "規則行",
@@ -27,10 +32,11 @@ pub const NODE_KINDS: [&str; 11] = [
     "登場人物",
     "出力",
     "判断の記録",
+    "設計ノートの行",
 ];
 
-/// 辺の型（17・順も固定）。
-pub const EDGE_TYPES: [&str; 17] = [
+/// 辺の型（19・順も固定）。
+pub const EDGE_TYPES: [&str; 19] = [
     "in-article",
     "relations.articles",
     "relations.reqs",
@@ -48,16 +54,20 @@ pub const EDGE_TYPES: [&str; 17] = [
     "figures",
     "produced",
     "amends",
+    "req",
+    "depends",
 ];
 
-/// 辺の欄の閉じた一覧（正本の file ごと・欄の名・判断の記録は adr・便 99・ADR-13 決定 (8)）。節点の要約値はこの欄を
+/// 辺の欄の閉じた一覧（正本の file ごと・欄の名・判断の記録は adr・設計ノートの契約表の節の行は design-note・便 99・便 185・
+/// ADR-13 決定 (8)）。節点の要約値はこの欄を
 /// 落とした本文だけを数える。一覧は落とす側で持つ＝正本に増えた欄は本文に入って周を呼ぶ（黙って通さない・P-4.1）。
 /// `verify.ac` は欄 verify の値の中の対 ac を指す。
-pub const EDGE_FIELDS: [(&str, &[&str]); 4] = [
+pub const EDGE_FIELDS: [(&str, &[&str]); 5] = [
     ("constitution.yaml", &["relations"]),
     ("rules.yaml", &["article", "refs"]),
     ("srs.yaml", &["basis", "goals", "rules", "adrs", "verifies", "verify.ac"]),
     ("adr", &["basis", "produced"]),
+    ("design-note", &["req", "depends"]),
 ];
 
 /// 索引の欄の決まりの正本 `graph.yaml` の最上位の節の閉じた一覧（便 95）。
@@ -80,7 +90,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "node_note",
         Floor::Val(
-            "索引の節点 1 つの欄。id は設計文書の全体で 1 つに定まる id、kind は node_kinds の値、file は正本の置き場からの相対の path、digest は節点の本文の要約値（式は digest_note）、title は空白を 1 つに畳んで Unicode の字で 36 に切った 1 行の題",
+            "索引の節点 1 つの欄。id は設計文書の全体で 1 つに定まる id（設計ノートの行は文書 id と行 id を「#」でつないだ字）、kind は node_kinds の値、file は正本の置き場からの相対の path、digest は節点の本文の要約値（式は digest_note）、title は空白を 1 つに畳んで Unicode の字で 36 に切った 1 行の題（設計ノートの行は行の section が指す節の題）",
         ),
     ),
     ("node_kinds", Floor::Strs(&NODE_KINDS)),
@@ -114,18 +124,19 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             (EDGE_FIELDS[1].0, Floor::Strs(EDGE_FIELDS[1].1)),
             (EDGE_FIELDS[2].0, Floor::Strs(EDGE_FIELDS[2].1)),
             (EDGE_FIELDS[3].0, Floor::Strs(EDGE_FIELDS[3].1)),
+            (EDGE_FIELDS[4].0, Floor::Strs(EDGE_FIELDS[4].1)),
         ]),
     ),
     (
         "edge_fields_note",
         Floor::Val(
-            "辺の欄の閉じた一覧（正本の file ごと・欄の名）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は節点の要約値を動かさない。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す",
+            "辺の欄の閉じた一覧（正本の file ごと・欄の名・design-note は設計ノートの契約表の節の行の欄）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は節点の要約値を動かさない。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す",
         ),
     ),
     (
         "digest_note",
         Floor::Val(
-            "節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値",
+            "節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行・設計ノートの行は契約表の rows の中の字下げ 6 の「- 」の行から）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値",
         ),
     ),
 ]);
@@ -145,8 +156,11 @@ const FILES_HEAD: &str = "# file ごとの節点（1 行 = file / 数・タブ�
 const NEXT_LINE: &str = "# 索引そのもの（節点と辺の全行）は folio graph --print";
 
 /// 技術の要約の欄（規範文・本文・what・決定）。節点の行にこの順で最初に在る字を採る（条はその最初の規範文の字・
-/// 受入基準は題の全文・便 180）。
+/// 受入基準は題の全文・便 180・設計ノートの行は行の題の全文・便 185）。
 const ENG_FIELDS: [&str; 4] = ["shall", "text", "what", "decision"];
+
+/// 設計ノートの置き場（正本の dir の直下・便 185）。
+const NOTE_DIR: &str = "design-note";
 
 /// 規則の表の 2 節。
 const RULE_SECTIONS: [&str; 2] = ["thresholds", "discipline"];
@@ -179,7 +193,7 @@ const RELATIONS: [(&str, usize); 4] = [("articles", 1), ("reqs", 2), ("rules", 3
 type Ref = (String, String, &'static str);
 
 /// 索引: 節点（id → 種類・file・題）と、欄が指した参照と、行の逐語から組んだ節点の要約値と id の行の番号（--print
-/// だけが組む）と、節点の平易文と技術の要約の字（無ければ None・便 180）。
+/// だけが組む）と、節点の平易文と技術の要約の字（無ければ None・便 180）と、2 度組もうとした節点の id（便 185）。
 #[derive(Default)]
 struct Index {
     nodes: BTreeMap<String, (&'static str, String, String)>,
@@ -187,14 +201,18 @@ struct Index {
     digests: BTreeMap<String, String>,
     lines: BTreeMap<String, usize>,
     texts: BTreeMap<String, (Option<String>, Option<String>)>,
+    notes: Vec<String>,
+    twice: BTreeSet<String>,
 }
 
 impl Index {
     fn node(&mut self, id: &str, kind: usize, file: &str, title: Option<&Node>) {
         let title = fold(title.and_then(Node::as_str).unwrap_or_default());
-        self.nodes
-            .entry(id.to_string())
-            .or_insert((NODE_KINDS[kind], file.to_string(), title));
+        if let Entry::Vacant(e) = self.nodes.entry(id.to_string()) {
+            e.insert((NODE_KINDS[kind], file.to_string(), title));
+        } else {
+            self.twice.insert(id.to_string());
+        }
     }
 
     /// 節点の平易文（行の欄 plain）と技術の要約 `eng` の字を覚える。
@@ -438,6 +456,52 @@ fn adr(index: &mut Index, dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// 設計ノート（便 185・判断の記録 ADR-32）: 契約表の節の行・req・depends。id は meta の id と行 id を「#」でつないだ字、
+/// 題は行の section が指す節の題、技術の要約は行の題の全文。読み手は床と導出と同じ `note::load_notes`（置き場が無ければ
+/// 0 本・dir でない・読めない file が在れば Err＝索引を組まない・P-4.1）。
+fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
+    let nd = dir.join(NOTE_DIR);
+    if !nd.exists() {
+        return Ok(());
+    }
+    if nd.is_symlink() || !nd.is_dir() {
+        return Err(format!("{NOTE_DIR}/ が dir でない"));
+    }
+    let mut report = Report::default();
+    let docs = note::load_notes(&nd, &mut report);
+    if let Some(why) = report.unknowns.first() {
+        return Err(why.clone());
+    }
+    for doc in docs {
+        let file = format!("{NOTE_DIR}/{}", doc.file);
+        index.notes.push(file.clone());
+        let Some(meta) = doc.root.get("meta").and_then(id_of) else {
+            continue;
+        };
+        let sections = section(&doc.root, "sections");
+        let tables = sections
+            .iter()
+            .filter(|s| s.get("type").and_then(Node::as_str) == Some(CONTRACT_TABLE));
+        for row in tables.flat_map(|s| section(s, "rows")) {
+            let Some(rid) = id_of(row) else {
+                continue;
+            };
+            let id = format!("{meta}#{rid}");
+            let head = row
+                .get("section")
+                .and_then(Node::as_str)
+                .and_then(|n| sections.iter().find(|s| s.get("n").and_then(Node::as_str) == Some(n)));
+            index.node(&id, 11, &file, head.and_then(|s| s.get("title")));
+            index.texts(&id, row, row.get("title").and_then(Node::as_str));
+            index.field(&id, row.get("req"), 17);
+            for to in row.get("depends").map(ids).unwrap_or_default() {
+                index.edge(&id, &format!("{meta}#{to}"), 18);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// 判断の記録の file の名（`ADR-` で始まり `.yaml` で終わる・名の byte 順）。欄の決まりの file は節点でない。
 fn adr_names(dir: &Path) -> Result<Vec<String>, String> {
     let ad = dir.join("adr");
@@ -458,20 +522,31 @@ fn build(dir: &Path) -> Result<Index, String> {
     rules(&mut index, &load(&dir.join("rules.yaml"))?);
     srs(&mut index, &load(&dir.join("srs.yaml"))?);
     adr(&mut index, dir)?;
+    notes(&mut index, dir)?;
     if index.nodes.is_empty() {
         return Err("節点が 1 つも無い".to_string());
     }
     Ok(index)
 }
 
+/// 口が使う索引: 同じ id の節点を 2 度組んだら黙って 1 つに数えず Err（床は行の逐語の側で違反に数える・便 185）。
+fn whole(dir: &Path) -> Result<Index, String> {
+    let index = build(dir)?;
+    match index.twice.first() {
+        Some(id) => Err(format!("索引に節点 {id} が 2 度ある")),
+        None => Ok(index),
+    }
+}
+
 // ── 節点の要約値（便 99・docs/design/delivery-99.md §1 (b)）──
 // 正本を YAML として読まず、行の逐語の byte だけで切り分ける。凍結 anchor は folio に依らない独立の実装
 // tests/fixtures/schema/node-digest.py の出力（P-10.2）。
 
-/// 索引の正本の file（置き場からの相対）。
-fn source_files(dir: &Path) -> Result<Vec<String>, String> {
+/// 索引の正本の file（置き場からの相対・設計ノートは索引が読めたもの）。
+fn source_files(dir: &Path, index: &Index) -> Result<Vec<String>, String> {
     let mut files: Vec<String> = ["constitution.yaml", "rules.yaml", "srs.yaml"].map(str::to_string).to_vec();
     files.extend(adr_names(dir)?.into_iter().map(|n| format!("adr/{n}")));
+    files.extend(index.notes.iter().cloned());
     Ok(files)
 }
 
@@ -607,6 +682,8 @@ impl Scan {
             let all: Vec<usize> = (0..lines.len()).collect();
             self.cut(&lines, &mut owned, all, 0, EDGE_FIELDS[3].1, id)?;
             self.lines.insert(id.to_string(), at + 1);
+        } else if name.starts_with(NOTE_DIR) {
+            self.note(&lines, &mut owned)?;
         } else {
             let fields = EDGE_FIELDS.iter().find(|(f, _)| *f == name).map_or(&[][..], |(_, f)| *f);
             let sections = node_sections(name);
@@ -643,6 +720,55 @@ impl Scan {
             }
         }
         Ok(lines.iter().zip(&owned).filter(|(_, o)| !**o).map(|(l, _)| *l).collect())
+    }
+
+    /// 設計ノート 1 本（便 185）: meta の中の字下げ 2 の `id: ` の字と、sections の字下げ 2 の頭の行の block のうち字下げ 4 に
+    /// `type: contract-table` を持つ節の、字下げ 4 の `rows:` の block の中の字下げ 6 の `- ` の行ごとに節点を 1 つ作る。行 id は
+    /// 流れの形なら表の一番上の段の欄 id、塊の形なら頭の行か字下げ 8 の `id: ` の行の字（欄の順を問わない・辺の欄は字下げ 8）。
+    fn note(&mut self, lines: &[&str], owned: &mut [bool]) -> Result<(), String> {
+        let Some(meta) = meta_id(lines) else {
+            return Ok(());
+        };
+        let (mut part, mut i) = (None, 0);
+        while i < lines.len() {
+            if !is_blank(lines[i]) && indent_of(lines[i]) == 0 {
+                part = field_key(lines[i]);
+            }
+            if part != Some("sections") || !lines[i].starts_with("  - ") {
+                i += 1;
+                continue;
+            }
+            let end = block_end(lines, i, 2, false);
+            let at4 = |k: usize| if k == i { Some(&lines[k][4..]) } else { lines[k].strip_prefix("    ") };
+            let field = |k: usize, key: &str| at4(k).filter(|s| !s.starts_with(' ')).and_then(field_key) == Some(key);
+            let table = (i..end).any(|k| at4(k).is_some_and(|s| s.trim_end() == format!("type: {CONTRACT_TABLE}")));
+            if let Some(r) = (i..end).find(|k| table && field(*k, "rows")) {
+                let (mut k, rows_end) = (r + 1, block_end(lines, r, 4, false).min(end));
+                while k < rows_end {
+                    let Some(rest) = lines[k].strip_prefix("      - ") else {
+                        k += 1;
+                        continue;
+                    };
+                    let flow = rest.starts_with('{');
+                    let row_end = block_end(lines, k, 6, flow).min(rows_end);
+                    let found = match flow {
+                        true => flow_value(rest, "id").map(|id| (id, k)),
+                        false => (k..row_end).find_map(|j| {
+                            let pad = if j == k { "      - id: " } else { "        id: " };
+                            lines[j].strip_prefix(pad).map(|id| (id.trim(), j))
+                        }),
+                    };
+                    if let Some((rid, at)) = found {
+                        let id = format!("{meta}#{rid}");
+                        self.cut(lines, owned, (k..row_end).collect(), 8, EDGE_FIELDS[4].1, &id)?;
+                        self.lines.insert(id, at + 1);
+                    }
+                    k = row_end;
+                }
+            }
+            i = end;
+        }
+        Ok(())
     }
 
     /// 節点 1 つ: 行の番号の列 `idx`（入れ子を除いた block）から辺の欄（字下げ `depth` の行・より深い続きの行・
@@ -711,6 +837,40 @@ impl Scan {
     }
 }
 
+/// 流れの形の行の表の一番上の段の欄 `name` の値（頭は `{` か `, ` の直後・二重引用符の中は跳ばす・便 185）。
+fn flow_value<'a>(line: &'a str, name: &str) -> Option<&'a str> {
+    let (b, key) = (line.as_bytes(), format!("{name}: "));
+    let (mut i, mut depth) = (0, 0usize);
+    while i < b.len() {
+        match b[i] {
+            b'"' => {
+                i = skip_quoted(b, i);
+                continue;
+            }
+            b'[' | b'{' => depth += 1,
+            b']' | b'}' => depth = depth.saturating_sub(1),
+            _ if depth == 1 && (b[i - 1] == b'{' || b[..i].ends_with(b", ")) && b[i..].starts_with(key.as_bytes()) => {
+                let rest = &line[i + key.len()..];
+                return Some(rest[..rest.find([',', '}']).unwrap_or(rest.len())].trim());
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// 設計ノートの meta の id（最上位の `meta:` の block の中の字下げ 2 の `id: ` の行の字・無ければ None・便 185）。
+fn meta_id<'a>(lines: &[&'a str]) -> Option<&'a str> {
+    let at = lines.iter().position(|l| field_key(l) == Some("meta") && indent_of(l) == 0)?;
+    let end = block_end(lines, at, 0, false);
+    lines[at + 1..end]
+        .iter()
+        .find_map(|l| l.strip_prefix("  id: "))
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+}
+
 /// 床の違反の種類（便 136）。入口の正本の違反の種類 index と読み違えない字。
 pub const INDEX_KIND: &str = "索引の節点";
 
@@ -728,7 +888,10 @@ fn bare_id(id: &str) -> &str {
 /// 床がほかに何も数えていなければ「まだ分からない」を 1 件足す（読めない正本は床が先に数えている＝同じ原因を 2 度数えない）。
 pub fn check_index(dir: &Path, report: &mut Report) {
     let silent = report.violations.is_empty() && report.unknowns.is_empty() && report.pendings.is_empty();
-    let files = build(dir).and_then(|index| Ok((index, source_files(dir)?)));
+    let files = build(dir).and_then(|index| {
+        let files = source_files(dir, &index)?;
+        Ok((index, files))
+    });
     let (index, files) = match files {
         Ok(built) => built,
         Err(e) => {
@@ -772,7 +935,12 @@ pub fn check_index(dir: &Path, report: &mut Report) {
         }
     }
     for (id, file) in &scanned {
-        if !index.nodes.contains_key(id) && !index_only.contains(bare_id(id)) {
+        // 設計ノートの行（便 185）は「#」の前後を別に外す（引用符つきの行 id を 2 度数えない）
+        let bare = match id.split_once('#').filter(|_| file.starts_with(NOTE_DIR)) {
+            Some((doc, row)) => format!("{}#{}", bare_id(doc), bare_id(row)),
+            None => bare_id(id).to_string(),
+        };
+        if !index.nodes.contains_key(id) && !index_only.contains(bare.as_str()) {
             report.violation(
                 INDEX_KIND,
                 format!("{file}: 行の逐語の節点 {id} が索引の節点に無い（id が引用符つきか裸の形でない）"),
@@ -783,7 +951,7 @@ pub fn check_index(dir: &Path, report: &mut Report) {
 
 /// 節点の数と表に出た辺の数だけを返す口（`folio hello` の 1 行が使う・組み方を 2 面に増やさない・便 96）。
 pub fn counts(dir: &Path) -> Result<(usize, usize), String> {
-    let index = build(dir)?;
+    let index = whole(dir)?;
     let edges = index.split().0.len();
     Ok((index.nodes.len(), edges))
 }
@@ -799,10 +967,10 @@ pub struct Outcome {
 /// 表を出さずに「まだ分からない」。索引は節点の要約値の欄を持つ（便 99）: 索引の節点と行の逐語から切り出した節点が
 /// 食い違えば表を出さない（P-4.1）。節点ごとの 1 行の id の行の番号も同じ行の逐語から取る（便 180）。
 pub fn run(dir: &Path, digest: bool, summary: bool) -> Outcome {
-    let built = build(dir).and_then(|mut index| {
+    let built = whole(dir).and_then(|mut index| {
         if !digest {
             let mut scan = Scan::default();
-            for name in source_files(dir)? {
+            for name in source_files(dir, &index)? {
                 scan.file(&name, &read_text(dir, &name)?)?;
             }
             index.lines = std::mem::take(&mut scan.lines);

@@ -105,7 +105,7 @@ schema:
     row_id: {pattern: '^[a-z][a-z0-9-]*$', owner: folio2, scope: own-id-space}
     row_id_note: 行の id は文書内で一意・append-only。この形は folio2 が所有する文書の id 空間の解決（R-4）の範囲で folio2 が自前に持つもので、器の値域（器は「文書内で一意」だけを言う）を写したものではない。文書 id と同じ形（ハイフン可）
     semantic_check_owner: scribe2
-    semantic_check_note: 行の id の一意・要件の欄が要件書に実在・節の欄が同じ文書に実在し本文が非空・依存の解決と輪の無さ・検証の欄の形・触る型の閉包が書き込み範囲に収まること、は器（scribe2）の 1 つの関数（編集時・黙って飛ばさない）が持つ。folio2 は持たない（ADR-3 決定 (3)・要件書 scope_m1.not_build）
+    semantic_check_note: 行の id の一意・要件の欄が要件書に実在・節の欄が同じ文書に実在し本文が非空・依存の解決と輪の無さ・検証の欄の形・触る型の閉包が書き込み範囲に収まること、は器（scribe2）の 1 つの関数（編集時・黙って飛ばさない）が持つ。folio2 は持たない（ADR-3 決定 (3)・要件書 scope_m1.not_build）。ただし 1 本のノートの中の契約表の行 id の重なりは、索引の id の一意として床が種類 索引の節点 の違反に数える（ADR-3 決定 (3) の folio2 が所有する文書の id 空間の解決・判断の記録 ADR-32）
     folio_check: [yaml-form, derived-diff-zero, own-id-space]
     folio_check_note: 契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）。このうち導出物の差分 0（derived-diff-zero）は、配信の組み立て（folio build）から切り離した独立の命令 folio derive --check が数える（便 119・判断の記録 ADR-16 決定 (5)）。folio check と folio build はこの検査を回さない
   derived:
@@ -140,7 +140,7 @@ schema:
     node_kinds_ref: design-intent/graph.yaml node_kinds
     edge_fields_ref: design-intent/graph.yaml edge
     edge_types_ref: design-intent/graph.yaml edge_types
-    index_note: 要件書 FR14。機械が読む id の索引は、設計文書の正本から毎回組み直す導出物として口 folio graph --print が出す（2026-09-22 着地・実装 crates/folio/src/graph.rs・台帳 f2-648.132）。索引は節点（設計文書の中で id を持つ行）と辺（両端の節点の id と型）を持ち、節点と辺の欄と、節点の種類と辺の型の閉じた一覧の正本は実装の型付きの定数（crates/folio/src/graph.rs）で、その写しは索引の欄の決まり design-intent/graph.yaml の生成区間に在る＝この節はその置き場を指すだけで写しを持たない（P-6.3）。判断の記録 ADR-14 決定 (1) のとおり節点は id を持つ行に閉じるので、設計ノートの節と契約表の行は節点にならない。索引の中身そのものは版管理に置かず、中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）
+    index_note: 要件書 FR14。機械が読む id の索引は、設計文書の正本から毎回組み直す導出物として口 folio graph --print が出す（2026-09-22 着地・実装 crates/folio/src/graph.rs・台帳 f2-648.132）。索引は節点（設計文書の中で id を持つ行）と辺（両端の節点の id と型）を持ち、節点と辺の欄と、節点の種類と辺の型の閉じた一覧の正本は実装の型付きの定数（crates/folio/src/graph.rs）で、その写しは索引の欄の決まり design-intent/graph.yaml の生成区間に在る＝この節はその置き場を指すだけで写しを持たない（P-6.3）。判断の記録 ADR-14 決定 (1) のとおり節点は id を持つ行に閉じるので、設計ノートの節は節点にならず、契約表の節の行は文書 id と行 id を「#」でつないだ id の節点になる（判断の記録 ADR-32）。索引の中身そのものは版管理に置かず、中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）
   figures:
     spec: 図の道具（archify）の型付き記述（JSON の 5 型の欄の決まりそのまま・ADR-4 決定 (1)）
     entry: {required: [id, type, caption, spec], optional: [refs, note]}

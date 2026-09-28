@@ -150,7 +150,8 @@ fn f180_each_node_of_the_print_has_one_line() {
         assert!(line.contains(",\"eng\":") && line.ends_with('}'), "{line}");
         let source = fs::read_to_string(dir.join(file)).unwrap();
         let at = source.lines().nth(n.checked_sub(1).expect("line が 0")).expect("line が file の外");
-        let key = format!("id: {id}");
+        // 設計ノートの行（便 185）の id は「文書 id#行 id」で、書かれているのは行 id
+        let key = format!("id: {}", id.rsplit('#').next().unwrap_or(id));
         let written = at.match_indices(&key).any(|(i, _)| {
             matches!(at[i + key.len()..].chars().next(), None | Some(',' | '}' | ' '))
         });

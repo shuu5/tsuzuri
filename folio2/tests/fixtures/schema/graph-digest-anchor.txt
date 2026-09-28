@@ -10,6 +10,7 @@
 登場人物	5
 出力	3
 判断の記録	10
+設計ノートの行	1
 # 型ごとの辺（1 行 = 型 / 表に出た数 / 端が節点でない数・タブ区切り・閉じた一覧の順）
 in-article	132	0
 relations.articles	33	0
@@ -28,6 +29,8 @@ verifies	19	0
 figures	0	21
 produced	0	0
 amends	0	0
+req	1	0
+depends	0	0
 # file ごとの節点（1 行 = file / 数・タブ区切り・file の名の byte 順）
 adr/ADR-1.yaml	1
 adr/ADR-10.yaml	1
@@ -40,7 +43,8 @@ adr/ADR-7.yaml	1
 adr/ADR-8.yaml	1
 adr/ADR-9.yaml	1
 constitution.yaml	93
+design-note/example.yaml	1
 rules.yaml	27
 srs.yaml	60
-# 節点 190・辺 578・型 10・端が節点でない参照 26
+# 節点 191・辺 579・型 11・端が節点でない参照 26
 # 索引そのもの（節点と辺の全行）は folio graph --print

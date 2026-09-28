@@ -6,10 +6,14 @@ byte だけで切り分け、節点の要約値（id の byte 順）と残差の
 標準出力へ書く。
 
 - 節点の頭の行: 正本の節の中の、字下げ 2（憲法の規範文は条の中の字下げ 6）の `- id: <id>` の行か `- {id: <id>,` で始まる行
+- 設計ノート（便 185）: 最上位の meta の中の字下げ 2 の `id: <文書 id>` と、sections の字下げ 2 の頭の行の block のうち字下げ 4 に
+  `type: contract-table` を持つ節の、字下げ 4 の `rows:` の block の中の字下げ 6 の `- ` の行（block はその行から）。行 id は流れの形なら
+  表の一番上の段の欄 id、塊の形なら頭の行か字下げ 8 の `id: ` の行の字（欄の順を問わない）。節点の id は `<文書 id>#<行 id>`
 - block: 頭の行から、空行でなく字下げが頭の行以下である最初の行の直前まで（流れの形の頭は 1 行だけ・判断の記録は file の全行）
-- 落とす: 入れ子の節点の block・辺の欄の行（字下げは頭 + 2・判断の記録は 0。より深い続きの行も）・流れの形の行の辺の欄の対
+- 落とす: 入れ子の節点の block・辺の欄の行（字下げは頭 + 2・判断の記録は 0・設計ノートの行は 8。より深い続きの行も）・流れの形の行の辺の欄の対
 - 畳む: 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字
-- 残差: 母集団（索引の正本と、天井の正本の観点の reads が指す文書の file）の全 byte から本文と辺の欄を除いた残り
+- 残差: 母集団（索引の正本〔設計ノートの置き場の schema.yaml でない .yaml を含む〕と、天井の正本の観点の reads が指す文書の file）の
+  全 byte から本文と辺の欄を除いた残り
 """
 
 import hashlib
@@ -30,7 +34,10 @@ EDGE_FIELDS = {
     "rules.yaml": ["article", "refs"],
     "srs.yaml": ["basis", "goals", "rules", "adrs", "verifies", "verify.ac"],
     "adr": ["basis", "produced"],
+    "design-note": ["req", "depends"],
 }
+
+NOTE_DIR = "design-note"
 
 ADR_NAME = re.compile(r"^ADR-[0-9]+\.yaml$")
 
@@ -190,11 +197,89 @@ def cut(lines, idx, field_depth, fields, nodes, ident, state):
     nodes[ident] = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
 
 
+def flow_value(line, name):
+    """流れの形の行の表の一番上の段の欄 name の値（頭は { か , の直後・二重引用符の中は跳ばす）。無ければ None。"""
+    key, i, depth = name + ": ", 0, 0
+    while i < len(line):
+        c = line[i]
+        if c == '"':
+            i = skip_quoted(line, i)
+            continue
+        if c in "[{":
+            depth += 1
+        elif c in "]}":
+            depth = max(depth - 1, 0)
+        elif depth == 1 and (line[i - 1] == "{" or line[:i].endswith(", ")) and line.startswith(key, i):
+            rest = line[i + len(key):]
+            ends = [e for e in (rest.find(","), rest.find("}")) if e >= 0]
+            return rest[:min(ends) if ends else len(rest)].strip()
+        i += 1
+    return None
+
+
+def note_rows(lines, nodes, state):
+    """設計ノート 1 本（便 185）: 契約表の節の行を節点にする。"""
+    meta = None
+    for i, line in enumerate(lines):
+        if indent(line) == 0 and not blank(line) and field_key(line) == "meta":
+            j = i + 1
+            while j < len(lines) and (blank(lines[j]) or indent(lines[j]) > 0):
+                if lines[j].startswith("  id: "):
+                    meta = lines[j][len("  id: "):].strip() or None
+                    break
+                j += 1
+            break
+    if meta is None:
+        return
+    part, i = None, 0
+    while i < len(lines):
+        line = lines[i]
+        if not blank(line) and indent(line) == 0:
+            part = field_key(line)
+        if part != "sections" or not line.startswith("  - "):
+            i += 1
+            continue
+        end = block_end(lines, i, 2, False)
+
+        def col4(k):
+            s = lines[k][4:] if k == i else (lines[k][4:] if lines[k].startswith("    ") else None)
+            return s
+
+        table = any(col4(k) is not None and col4(k).rstrip() == "type: contract-table" for k in range(i, end))
+        rows = next((k for k in range(i, end) if table and col4(k) is not None and not col4(k).startswith(" ")
+                     and field_key(col4(k)) == "rows"), None)
+        if rows is not None:
+            rows_end = min(block_end(lines, rows, 4, False), end)
+            k = rows + 1
+            while k < rows_end:
+                if not lines[k].startswith("      - "):
+                    k += 1
+                    continue
+                rest = lines[k][len("      - "):]
+                flow = rest.startswith("{")
+                row_end = min(block_end(lines, k, 6, flow), rows_end)
+                rid = None
+                if flow:
+                    rid = flow_value(rest, "id")
+                else:
+                    for j in range(k, row_end):
+                        pad = "      - id: " if j == k else "        id: "
+                        if lines[j].startswith(pad):
+                            rid = lines[j][len(pad):].strip()
+                            break
+                if rid is not None:
+                    cut(lines, range(k, row_end), 8, EDGE_FIELDS["design-note"], nodes, meta + "#" + rid, state)
+                k = row_end
+        i = end
+
+
 def scan(name, text, nodes, state):
     """正本 1 file を切り分けて節点を nodes へ足す。戻り値 = 残差の文。"""
     lines = lines_of(text)
     state["owned"] = [False] * len(lines)
-    if name.startswith("adr/"):
+    if name.startswith(NOTE_DIR + "/"):
+        note_rows(lines, nodes, state)
+    elif name.startswith("adr/"):
         ident = next((l[len("id: "):].strip() for l in lines if l.startswith("id: ")), None)
         if not ident:
             raise SystemExit("まだ分からない（" + name + " に id が無い）")
@@ -237,10 +322,19 @@ def by_bytes(names):
     return sorted(names, key=lambda n: n.encode("utf-8"))
 
 
+def note_names(root):
+    """設計ノートの置き場の schema.yaml でない .yaml（便 185・置き場が無ければ無し）。"""
+    d = os.path.join(root, NOTE_DIR)
+    if not os.path.isdir(d):
+        return set()
+    return {NOTE_DIR + "/" + n for n in os.listdir(d) if n.endswith(".yaml") and n != "schema.yaml"}
+
+
 def population(root):
     """母集団: 索引の正本と、天井の正本の観点の reads が指す文書の file（dir 形は直下の .yaml）。"""
     files = {"constitution.yaml", "rules.yaml", "srs.yaml"}
     files.update("adr/" + n for n in os.listdir(os.path.join(root, "adr")) if ADR_NAME.match(n))
+    files.update(note_names(root))
     lines = read(root, "ceiling.yaml").split("\n")
     documents, docs, part = {}, set(), None
     for line in lines:
@@ -267,10 +361,11 @@ def main():
     root = sys.argv[1]
     nodes, state = {}, {"body": 0, "edge": 0}
     rest, total = [], 0
+    notes = note_names(root)
     for rel in population(root):
         text = read(root, rel)
         total += size(text)
-        is_node = rel in SECTIONS or (rel.startswith("adr/") and ADR_NAME.match(rel[len("adr/"):]))
+        is_node = rel in SECTIONS or (rel.startswith("adr/") and ADR_NAME.match(rel[len("adr/"):])) or rel in notes
         if is_node:
             rest.append(scan(rel, text, nodes, state))
         else:
