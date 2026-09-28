@@ -4,7 +4,9 @@
 //! 送る button の判定・要求の本文・応答の出し方は純粋な関数にして host で試し、
 //! DOM と通信は wasm の target のときだけ組み立てる。
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
+//! server の書きの断り（根が無い・作れない・途中で落ちた・閉じる書きだけ落ちた）は、何が起きたかと送り直してよいかを持ち主の語の 1 行にする（行 g-policy-face）。
 
+use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::{PolicyRequest, PolicyResponse, RulingId};
 use tsuzuri_contract::wire;
 
@@ -30,11 +32,20 @@ pub const FOLDS: &[&str] = &[];
 /// 全体の範囲の scope の字（この block が送る範囲はつねにこれ）。
 pub const ALL_SCOPE: &str = "all";
 
-/// 503 の no-policy-memo のときの字。
-pub const NO_MEMO: &str = "方針の memo が台帳に無い";
-
 /// 400 の scope のときの字。
 pub const NOT_CURRENT: &str = "範囲が今の問いでない";
+
+/// 503 の no-root のときの字。
+pub const NO_ROOT: &str = "指示を残す台帳の根が無い（何も書いていない）";
+
+/// 502 の ledger-create のときの字。
+pub const NOT_CREATED: &str = "指示を台帳に書けたかが分からない（書きが落ちた）";
+
+/// 502 の ledger-append と 500 の policy-id-shape のときの字（後に残った質問の id を付ける）。
+pub const HALF_WRITTEN: &str = "指示は記録できていない（送り直してよい）・途中で残った質問";
+
+/// 502 の ledger-close のときの字（前に記録した指示の id を付ける）。
+pub const NOT_CLOSED: &str = "質問を閉じる書きだけ落ちた（送り直さない）";
 
 /// 送る button を押せるか（逐語が空白だけのときと送っている間は押せない）。
 pub fn can_send(text: &str, sending: bool) -> bool {
@@ -59,8 +70,14 @@ pub enum Outcome {
     Stale,
     /// 400 の scope: 範囲が今の問いでない（一覧を読み直す）。
     NotCurrent,
-    /// 503 の no-policy-memo: 方針の memo が台帳に無い。
-    NoMemo,
+    /// 503 の no-root: 根が無く何も書いていない。
+    NoRoot,
+    /// 502 の ledger-create: 方針の問いを作れたかが分からない。
+    NotCreated,
+    /// 502 の ledger-append・500 の policy-id-shape: 方針は記録できておらず、作った問いが open で残る。
+    HalfWritten { question: BeadId },
+    /// 502 の ledger-close: 方針は記録し、問いを閉じる書きだけ落ちた。
+    NotClosed { policy: RulingId },
     /// ほかの 4xx・5xx・届かない: 理由の字。
     Refused(String),
 }
@@ -72,14 +89,17 @@ impl Outcome {
             Outcome::Recorded { policy } => format!("{RECORDED} {policy}"),
             Outcome::Stale => STALE.to_string(),
             Outcome::NotCurrent => NOT_CURRENT.to_string(),
-            Outcome::NoMemo => NO_MEMO.to_string(),
+            Outcome::NoRoot => NO_ROOT.to_string(),
+            Outcome::NotCreated => NOT_CREATED.to_string(),
+            Outcome::HalfWritten { question } => format!("{HALF_WRITTEN} {question}"),
+            Outcome::NotClosed { policy } => format!("{RECORDED} {policy}・{NOT_CLOSED}"),
             Outcome::Refused(reason) => format!("{REFUSED}: {reason}"),
         }
     }
 
-    /// 欄の字を残すか（200 の外は残す）。
+    /// 欄の字を残すか（方針を記録した 200 と ledger-close の外は残す・記録した方針は送り直させない）。
     pub fn keeps_text(&self) -> bool {
-        !matches!(self, Outcome::Recorded { .. })
+        !matches!(self, Outcome::Recorded { .. } | Outcome::NotClosed { .. })
     }
 
     /// 口を全部読み直すか（409 と 400 の scope・200 は問いを閉じないので読み直さない）。
@@ -98,8 +118,25 @@ pub fn outcome(reply: Option<(u16, &str)>) -> Outcome {
         },
         Some((409, _)) => Outcome::Stale,
         Some((400, text)) if text.trim() == "scope" => Outcome::NotCurrent,
-        Some((503, text)) if text.trim() == "no-policy-memo" => Outcome::NoMemo,
-        Some((status, text)) => Outcome::Refused(refused_text(status, text)),
+        Some((status, text)) => written_part(status, text)
+            .unwrap_or_else(|| Outcome::Refused(refused_text(status, text))),
+    }
+}
+
+/// server の書きの断りの本文（語と、語によって id）を読む。読めない本文は None（読んだ振りをしない）。
+fn written_part(status: u16, text: &str) -> Option<Outcome> {
+    let text = text.trim();
+    let (word, id) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
+    match (status, word) {
+        (503, "no-root") if id.is_empty() => Some(Outcome::NoRoot),
+        (502, "ledger-create") if id.is_empty() => Some(Outcome::NotCreated),
+        (502, "ledger-append") | (500, "policy-id-shape") => BeadId::new(id)
+            .ok()
+            .map(|question| Outcome::HalfWritten { question }),
+        (502, "ledger-close") => RulingId::new(id)
+            .ok()
+            .map(|policy| Outcome::NotClosed { policy }),
+        _ => None,
     }
 }
 

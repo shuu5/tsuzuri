@@ -9,7 +9,9 @@ use crate::ledger::{BeadId, LedgerItem};
 use crate::{EpochSecs, IdError, id_shape};
 
 /// 記帳 id（ASCII の英数字と `. - _ :` だけの 1 語・先頭は英数字・64 byte 以下）。
-/// 1 問の裁定は `<問い bead id>:<UTC の年月日 T 時分 Z>-<n>`・束は `batch:<同じ時刻>-<n>`・方針は `policy:<同じ時刻>-<n>`。
+/// 1 問の裁定は `<問い bead id>:<UTC の年月日 T 時分 Z>-<n>`・束は `batch:<同じ時刻>-<n>`。
+/// 方針は、方針 1 つごとに作る閉じた問いの id を使う問いの形（`<方針の問い bead id>:<同じ時刻>-1`・`for_question` で作る・行 e-policy-q）。
+/// 今までの memo「方針」の notes の行の `policy:<同じ時刻>-<n>` は読むだけで、もう発行しない。
 /// server だけが発行する。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -30,11 +32,6 @@ impl RulingId {
     /// 束の id。
     pub fn for_batch(minute: &str, n: u32) -> Result<Self, IdError> {
         Self::new(format!("batch:{minute}-{n}"))
-    }
-
-    /// 方針の id。
-    pub fn for_policy(minute: &str, n: u32) -> Result<Self, IdError> {
-        Self::new(format!("policy:{minute}-{n}"))
     }
 
     pub fn as_str(&self) -> &str {

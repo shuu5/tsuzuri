@@ -1,8 +1,7 @@
 {
   "surface::RulingId": [
     "t3-hub.5:20260926T1437Z-1",
-    "batch:20260926T1437Z-1",
-    "policy:20260926T1437Z-2"
+    "batch:20260926T1437Z-1"
   ],
   "surface::SeatRole": [
     "orchestrator",
@@ -155,7 +154,7 @@
   ],
   "surface::PolicyResponse": [
     {
-      "policy": "policy:20260926T1437Z-1",
+      "policy": "fx-p.1:20260926T1437Z-1",
       "recorded_at": 1790494620
     }
   ],

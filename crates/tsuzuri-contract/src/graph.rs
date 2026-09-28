@@ -52,7 +52,8 @@ pub enum NodeKind {
     /// orchestrator の受け（問いの notes の「受け」の定型行から導く）。
     #[serde(rename = "receipt")]
     Receipt,
-    /// 全体への指示（根の直下の memo「方針」の notes の定型行から導く）。
+    /// 全体への指示（方針 1 つごとに根の直下に作る閉じた問い〔label policy-scope:〕の notes の定型行「方針 id = 」から導く・
+    /// 今までの memo「方針」の notes の同じ頭の行も読む・行 e-policy-q）。
     #[serde(rename = "policy")]
     Policy,
     /// 走行（器の event RunCreated から導く）。

@@ -434,13 +434,6 @@ fn batchpanel_policy_send_and_outcome() {
     assert!(scope.keeps_text());
     assert!(scope.reloads());
 
-    let memo = policy::outcome(Some((503, "no-policy-memo")));
-    assert_eq!(memo, policy::Outcome::NoMemo);
-    assert_eq!(memo.line(), policy::NO_MEMO);
-    assert_eq!(policy::NO_MEMO, "方針の memo が台帳に無い");
-    assert!(memo.keeps_text());
-    assert!(!memo.reloads());
-
     // ほかは束と同じ。
     let stale = policy::outcome(Some((409, "")));
     assert_eq!(stale, policy::Outcome::Stale);

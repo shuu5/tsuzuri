@@ -420,7 +420,6 @@ fn forms() -> Vec<Box<dyn Form>> {
             vec![
                 RulingId::for_question(&bead("t3-hub.5"), "20260926T1437Z", 1).unwrap(),
                 RulingId::for_batch("20260926T1437Z", 1).unwrap(),
-                RulingId::for_policy("20260926T1437Z", 2).unwrap(),
             ],
         ),
         form(
@@ -567,7 +566,7 @@ fn forms() -> Vec<Box<dyn Form>> {
         form(
             "surface::PolicyResponse",
             vec![PolicyResponse {
-                policy: ruling("policy:20260926T1437Z-1"),
+                policy: RulingId::for_question(&bead("fx-p.1"), "20260926T1437Z", 1).unwrap(),
                 recorded_at: AT,
             }],
         ),
