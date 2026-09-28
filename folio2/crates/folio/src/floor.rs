@@ -14,6 +14,9 @@
 //!    行が無ければ {}、在れば flow の 1 行が W 以内なら flow、超えれば block（欄名の行と「<字下げ + 2><名>: <値>」の行）。
 //! 7. 外の置き場（名が folio2 の置き場の名 `HOME` でない・便 174・ADR-16 決定 (2)(オ)）: 文字列の値は `text_for` を通し
 //!    （folio2 の番号の印を持つ全角の括弧の項と文を落とす・注の欄で何も残らなければ欄ごと書かない）、`Floor::Home` の欄は書かない。
+//!    落とした跡の字の壊れは残さない（便 194）: 括弧ごと落として英数字と和字が接したら空白を 1 つ置き、落とした文の直後の文が
+//!    前の文を指す語で始まれば、語が文の主なら（`POINTERS`）文も続けて落とし、抜いても文が立つ語なら（`POINTER_ADVERBS`）語だけを
+//!    落とし、同じ括弧の中で台帳の id の項を落としたら「持ち主の裁定」の項も落とす。
 //!    folio2 の置き場と名の無い口は定数の字のまま（folio2 の生成区間は変わらない）。突き合わせ（`floor_diff_for`）も同じ規則で比べる。
 
 use std::borrow::Cow;
@@ -118,6 +121,30 @@ fn marked(t: &str) -> bool {
         || has_ruling(t)
 }
 
+/// 落とした文の直後で、続けて落とす文の頭の語（前の文を指す語が文の主で、語だけは抜けない・便 194）。
+const POINTERS: [&str; 2] = ["これ", "その"];
+
+/// 落とした文の直後の文の頭で、語だけを落とす指す語（抜いても文が立つ＝文の中身は残す・便 194）。
+const POINTER_ADVERBS: [&str; 1] = ["どちらも"];
+
+/// 出所の台帳の id を落とした括弧で、一緒に落とす項の字（出所の無い裁定の名指しを残さない・便 194）。
+const OWNER_RULING: &str = "持ち主の裁定";
+
+/// 和字（平仮名・片仮名の字と長音・漢字）か。英数字と接したら間に空白を置く相手（便 194）。
+fn wa(ch: char) -> bool {
+    matches!(ch, '\u{3041}'..='\u{3096}' | '\u{30a1}'..='\u{30fa}' | 'ー' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}')
+}
+
+/// 括弧ごと落とした跡の前後の字が、英数字と和字（か英数字どうし）で空白なしに接するか。
+fn joins(before: Option<char>, after: Option<char>) -> bool {
+    match (before, after) {
+        (Some(a), Some(b)) => {
+            (a.is_ascii_alphanumeric() && (wa(b) || b.is_ascii_alphanumeric())) || (wa(a) && b.is_ascii_alphanumeric())
+        }
+        _ => false,
+    }
+}
+
 /// 括弧の深さ（全角の丸括弧・亀甲括弧・鉤括弧）の増減。
 fn depth_step(ch: char) -> i32 {
     match ch {
@@ -145,7 +172,8 @@ fn split_after(c: &[char], sep: char) -> Vec<String> {
 }
 
 /// 全角の丸括弧ごとに、中の片のうち印を持つ片を落とす（入れ子は内から）。片は、中に深さ 0 の「。」が在れば文（「。」まで）、
-/// 無ければ「・」で切った項。片が 1 つも残らなければ括弧ごと落とす。閉じない括弧から後ろはそのまま。
+/// 無ければ「・」で切った項（台帳の id の項が在れば `OWNER_RULING` を含む項も落とす）。片が 1 つも残らなければ括弧ごと落とし、
+/// 前後の字が `joins` なら空白を 1 つ置く。閉じない括弧から後ろはそのまま。
 fn drop_marked_items(c: &[char]) -> String {
     let mut out = String::new();
     let mut i = 0;
@@ -162,15 +190,22 @@ fn drop_marked_items(c: &[char]) -> String {
                 let kept: String = if sentences.len() > 1 {
                     sentences.into_iter().filter(|s| !marked(s)).collect()
                 } else {
-                    split_after(&inner, '・')
+                    let items: Vec<String> = split_after(&inner, '・')
                         .into_iter()
                         .map(|item| item.strip_suffix('・').unwrap_or(&item).to_string())
-                        .filter(|item| !item.is_empty() && !marked(item))
+                        .filter(|item| !item.is_empty())
+                        .collect();
+                    let sourced = items.iter().any(|item| has_ruling(item));
+                    items
+                        .into_iter()
+                        .filter(|item| !marked(item) && !(sourced && item.contains(OWNER_RULING)))
                         .collect::<Vec<_>>()
                         .join("・")
                 };
                 if !kept.is_empty() {
                     out.push_str(&format!("（{kept}）"));
+                } else if joins(out.chars().last(), c.get(j + 1).copied()) {
+                    out.push(' ');
                 }
                 i = j + 1;
                 continue;
@@ -182,13 +217,23 @@ fn drop_marked_items(c: &[char]) -> String {
     out
 }
 
-/// 外の置き場へ写す字（便 174）: 括弧の項を落とした後、なお印を持つ文（深さ 0 の「。」まで）を落とす。何も残らなければ None。
+/// 外の置き場へ写す字（便 174）: 括弧の項を落とした後、なお印を持つ文（深さ 0 の「。」まで）を落とす。落とした文の直後の文が
+/// `POINTERS` で始まれば、それも続けて落とし、`POINTER_ADVERBS` で始まれば、その語だけを落とす（便 194）。何も残らなければ None。
 pub(crate) fn text_for(v: &str) -> Option<String> {
     let c: Vec<char> = v.chars().collect();
     let kept: Vec<char> = drop_marked_items(&c).chars().collect();
+    let mut dropped = false;
     let out: String = split_after(&kept, '。')
         .into_iter()
-        .filter(|s| !marked(s))
+        .filter_map(|s| {
+            let (after, head) = (dropped, s.trim_start());
+            dropped = marked(&s) || (after && POINTERS.iter().any(|p| head.starts_with(p)));
+            match POINTER_ADVERBS.iter().find_map(|p| head.strip_prefix(p)) {
+                _ if dropped => None,
+                Some(rest) if after => Some(rest.to_string()),
+                _ => Some(s),
+            }
+        })
         .collect();
     let out = out.trim();
     (!out.is_empty()).then(|| out.to_string())
@@ -692,6 +737,36 @@ mod tests {
         ] {
             assert_eq!(diff(text, name), ["roots"], "{text} {name:?}");
         }
+    }
+
+    /// 便 194（delivery-194.md §1 (c)・台帳 f2-648.261）: 落とした跡に字の壊れ（英数字と和字の詰まり・宙に浮く指す語・
+    /// 出所の無い持ち主の裁定）を残さない。folio2 の置き場の名だけが定数のまま（名の包含で判定しない）。
+    #[test]
+    fn f194_text_for_leaves_no_broken_joins() {
+        for (from, to) in [
+            ("folio2 の他の id（P-1・R-7・FR1）と同じく", Some("folio2 の他の id と同じく")),
+            ("読む（ADR-1）file", Some("読む file")),
+            ("file（ADR-1）2 本", Some("file 2 本")),
+            ("4 桁（ADR-0047）は前の版", Some("4 桁は前の版")),
+            ("id（ADR-1）、次", Some("id、次")),
+            ("id（ADR-1）・次", Some("id・次")),
+            ("口は便 119 で入った。どちらも面を呼ばない。値は字。", Some("面を呼ばない。値は字。")),
+            ("口は便 119 で入った。 どちらも面を呼ばない。 これも同じ。", Some("面を呼ばない。 これも同じ。")),
+            ("口は便 119 で入った。これも同じ。どちらも面を呼ばない。", Some("面を呼ばない。")),
+            ("口は便 119 で入った。そのため足す。これも同じ。値は字。", Some("値は字。")),
+            ("口は便 119 で入った。 その値は字。値は字。", Some("値は字。")),
+            ("値は字。どちらも面を呼ばない。", Some("値は字。どちらも面を呼ばない。")),
+            ("口は便 119 で入った。値は字。どちらも同じ。", Some("値は字。どちらも同じ。")),
+            ("図の対（持ち主の裁定 2026-09-19・f2-648 notes）＝図", Some("図の対＝図")),
+            ("対（持ち主の裁定 2026-09-19・版 v1）", Some("対（持ち主の裁定 2026-09-19・版 v1）")),
+            ("対（持ち主の裁定・f2-648 notes・字）", Some("対（字）")),
+        ] {
+            assert_eq!(text_for(from).as_deref(), to, "{from}");
+        }
+        assert_eq!(POINTERS, ["これ", "その"]);
+        assert_eq!(POINTER_ADVERBS, ["どちらも"]);
+        assert_eq!(OWNER_RULING, "持ち主の裁定");
+        assert!(abroad(Some("folio2x-constitution")) && abroad(Some("folio2")) && !abroad(Some(HOME)));
     }
 
     /// 便 174 の歯 1: 外の置き場の字。括弧の項・括弧の中の文・括弧の外の文の 3 段で印を落とし、予約の行と正規表現の字面は残す。

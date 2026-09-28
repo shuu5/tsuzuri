@@ -277,7 +277,23 @@ fn intake_over_the_question_limit_fails() {
         "yes: [inject], no: []}\n",
         "yes: [inject], no: []}\n  - {id: q6, ask: 余った質問ですか, recommend: はい, why: 上限を超える。, yes: [], no: []}\n",
     );
-    assert_single_violation(&w.check(), "intake", &["questions が FR1 の上限を超える"]);
+    assert_single_violation(&w.check(), "intake", &["questions が上限 5 問を超える（6 問）"]);
+}
+
+/// 便 194（delivery-194.md §1 (c)・台帳 f2-648.75 の付け足し）: 上限の違反の字は数で言い、folio2 の要件の id（FR1）を名指さない
+/// （外の置き場では FR1 が別の意味）。5 問ちょうどは違反にしない。
+#[test]
+fn f194_intake_limit_names_the_number_not_fr1() {
+    let w = Work::new("f194-limit");
+    assert_passes(&w.check());
+    w.mutate(
+        "yes: [inject], no: []}\n",
+        "yes: [inject], no: []}\n  - {id: q6, ask: 六つめですか, recommend: はい, why: 数える。, yes: [], no: []}\n  - {id: q7, ask: 七つめですか, recommend: はい, why: 数える。, yes: [], no: []}\n",
+    );
+    let out = w.check();
+    let v = violations(&out);
+    assert_eq!(v, ["[intake] intake.yaml: questions が上限 5 問を超える（7 問）"], "{}", stdout(&out));
+    assert!(!stdout(&out).contains("FR1"), "{}", stdout(&out));
 }
 
 /// 行 id の重複。6 本目の行なので上限にも触れる＝この歯だけ違反 2 件。

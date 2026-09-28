@@ -87,7 +87,11 @@ pub fn check_intake(intake: &Node, index: &Node, vocabulary: &Node, report: &mut
 
     let questions = rows(FILE, intake, "questions", report);
     if questions.len() > MAX_QUESTIONS {
-        report.violation("intake", format!("{FILE}: questions が FR1 の上限を超える"));
+        // 字は数で言い、folio2 の要件の id を名指さない（外の置き場では同じ id が別の意味・便 194）
+        report.violation(
+            "intake",
+            format!("{FILE}: questions が上限 {MAX_QUESTIONS} 問を超える（{} 問）", questions.len()),
+        );
     }
     for row in &questions {
         let at = format!("questions の行 {}", row_id(row));

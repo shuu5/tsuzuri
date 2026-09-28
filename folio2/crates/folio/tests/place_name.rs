@@ -495,3 +495,58 @@ fn f177_no_region_claims_the_stamp_node_table() {
     assert_eq!(out.status.code(), Some(0), "schema --write: {}", both(&out));
     f175_no_false_claims(&w.place(), "tsuzuri", &F177_FALSE);
 }
+
+// ── 便 194（docs/design/delivery-194.md §1 (c)・台帳 f2-648.261）: 外の生成区間に番号を落とした跡の字の壊れを残さない ──
+
+/// 和字（平仮名・片仮名の字と長音・漢字・歯の中の手書き）。
+fn f194_wa(ch: char) -> bool {
+    matches!(ch, '\u{3041}'..='\u{3096}' | '\u{30a1}'..='\u{30fa}' | 'ー' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}')
+}
+
+/// 英数字と和字が空白なしで接する 2 字の並び（順不同）の集合。
+fn f194_joins(text: &str) -> Vec<String> {
+    let c: Vec<char> = text.chars().collect();
+    let mut out: Vec<String> = c
+        .windows(2)
+        .filter(|w| (w[0].is_ascii_alphanumeric() && f194_wa(w[1])) || (f194_wa(w[0]) && w[1].is_ascii_alphanumeric()))
+        .map(|w| w.iter().collect())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+#[test]
+fn f194_abroad_regions_leave_no_broken_joins() {
+    // 外の置き場（tsuzuri の名）の 9 本の生成区間: 英数字と和字の詰まりは folio2 の同じ file の生成区間に在る並びだけ
+    let w = Work::outer("f194-tsuzuri", Some("tsuzuri"));
+    let out = folio(&["schema", "--write"], &w.place());
+    assert_eq!(out.status.code(), Some(0), "{}", both(&out));
+    let home = repo_root().join("design-intent");
+    for file in F174_FILES {
+        let there = f174_region(&fs::read_to_string(w.place().join(file)).unwrap());
+        let here = f174_joins_in(&home.join(file));
+        let extra: Vec<String> = f194_joins(&there).into_iter().filter(|j| !here.contains(j)).collect();
+        assert!(extra.is_empty(), "{file}: 外にだけ在る詰まり {extra:?}");
+    }
+    let adr = f174_region(&fs::read_to_string(w.place().join("adr/schema.yaml")).unwrap());
+    assert!(adr.contains("folio2 の他の id と同じくゼロ詰めしない。"), "{adr}");
+    // 注で何も残らない欄は欄ごと書かない（便 174 の検証の V7）
+    assert!(!adr.contains("grill_note:"), "{adr}");
+    let note = f174_region(&fs::read_to_string(w.place().join("design-note/schema.yaml")).unwrap());
+    // 落とした文を指す「どちらも」は語だけが落ちて文の中身は残り、出所の台帳の id を落とした括弧は「持ち主の裁定」ごと落ちる
+    // （ほかの注の括弧の中の「どちらも」は指す語でないので、見るのは derived_note の行だけ）
+    let derived = note.lines().find(|l| l.trim_start().starts_with("derived_note:")).unwrap_or_default();
+    assert!(derived.contains("導出物の置き場") && !derived.contains("どちらも"), "{derived}");
+    assert!(
+        note.contains("のはそのため。面の生成器も様式の file も呼ばず、導出物の置き場（--out）は消費側が宣言する（既定なし）。値に二重引用符"),
+        "{note}"
+    );
+    assert!(note.contains("図の対＝設計ノートの図は"), "{note}");
+    assert!(!note.contains("（持ち主の裁定 2026-09-19）"), "{note}");
+}
+
+/// folio2 の置き場の file の生成区間の詰まりの並び。
+fn f174_joins_in(path: &Path) -> Vec<String> {
+    f194_joins(&f174_region(&fs::read_to_string(path).unwrap()))
+}
