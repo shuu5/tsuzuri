@@ -420,6 +420,30 @@ pub struct ViewNode {
     pub kids: u32,
     /// 辺でつながる隣の節点の数。
     pub degree: u32,
+    /// 組の箱なら真（行 c-graph-fold）。
+    #[serde(default)]
+    pub group: bool,
+    /// 箱の開き閉じ（Leaf は開けない・Folded は押すと開く・Open は押すと畳む）。
+    #[serde(default)]
+    pub fold: BoxFold,
+}
+
+/// 眺めの箱の開き閉じ（閉じた 3・行 c-graph-fold）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoxFold {
+    /// 子の無い箱（開けない）。
+    #[default]
+    Leaf,
+    /// 畳んだ箱（押すと開く）。
+    Folded,
+    /// 開いた箱（押すと畳む）。
+    Open,
+}
+
+impl BoxFold {
+    /// 閉じた一覧（順も固定）。
+    pub const ALL: [BoxFold; 3] = [BoxFold::Leaf, BoxFold::Folded, BoxFold::Open];
 }
 
 /// 眺めのまとめた辺（from は影響の側・to は根拠の側の畳み先）。
@@ -433,21 +457,27 @@ pub struct ViewEdge {
     pub count: u32,
 }
 
-/// グラフの眺めの電文（畳んで上限で切ったグラフの面）。
+/// グラフの眺めの電文（節点を組の箱へ畳んだグラフの面・行 c-graph-fold）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphView {
-    /// 出す節点（節点の種類の順・同じなら id の自然な順）。
+    /// 出す箱（節点の種類の順・同じなら id の自然な順）。
     pub nodes: Vec<ViewNode>,
     /// まとめた辺（from の id の自然な順・to の id の自然な順・辺の型の順）。
     pub edges: Vec<ViewEdge>,
     pub shown: u32,
-    /// 畳まれた節点のうち、畳み先が出す節点に入っているものの数。
+    /// 箱へ畳まれて自分の箱を持たない節点の数（箱の子の数の和）。
     pub folded: u32,
-    /// 上限で切った候補の数と、畳まれずに辺の無い節点の数の和。
+    /// どの箱にも入らない節点の数（同じ id の 2 つ目の節点だけ・通常 0）。
     pub cut: u32,
     /// グラフの節点の数。
     pub total: u32,
     pub unread: Vec<GraphSource>,
+    /// 開いたままの箱の id（開いた順・初めから開いている帯は入らない）。
+    #[serde(default)]
+    pub open: Vec<String>,
+    /// 開くと上限を越え、畳み直しても収まらないので開かなかった id（求めの順）。
+    #[serde(default)]
+    pub refused: Vec<String>,
 }
 
 /// 近傍の畳み（閉じた 4・up は根拠の側を畳む・down は影響の側を畳む）。

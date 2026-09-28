@@ -1,73 +1,54 @@
-//! グラフの眺め: 規範文を条へ・question を親へ・ruling を答えた question の畳み先へ畳み、
-//! 辺を根拠の側へ向けてまとめ、上限で切り、根拠の側からの段を決める（見本 map.html の graphModel）。
+//! グラフの眺め: 節点を組の木（`fold`）の見えている箱へ畳み、辺を根拠の側へ向けて箱へまとめ、
+//! 根拠の側からの段を決める（見本 map.html の graphModel を裁定 t3-hub.52.53 が改めた形・行 c-graph-fold）。
 //! 画面は値を写して座標を決めるだけにする。
 
-use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
 use tsuzuri_contract::graph::{
-    EdgeEnd, EdgeType, GraphView, NodeKind, ViewEdge, ViewNode, basis_end, natural_cmp,
+    BoxFold, EdgeEnd, EdgeType, GraphNode, GraphView, ViewEdge, ViewNode, basis_end, natural_cmp,
 };
 
 use super::Graph;
+use super::fold::Tree;
 
-/// 出す節点の上限（見本の値・規則の行にはまだ無い）。
+/// 見える箱の数の上限（見本の値・規則の行にはまだ無い）。
 pub const VIEW_CAP: usize = 40;
 
 /// まとめた辺の鍵（D・U・型）。
 type EdgeKey<'g> = (&'g str, &'g str, EdgeType);
 
-/// グラフの眺め。
+/// グラフの眺め（開く列が空・初めから開いている帯だけ）。
 pub fn view(g: &Graph) -> GraphView {
+    view_open(g, &[])
+}
+
+/// 開く列を受けたグラフの眺め（列の決まりは `fold` の `Tree::open`）。
+pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
+    let tree = Tree::new(g);
+    let st = tree.open(open);
     let index = g.index();
     let degree = g.degrees();
+    let id_of = |b: usize| tree.boxes[b].id.as_str();
 
-    // 畳み先（規範文 → 条・question → parent-child の先・ruling → answers の先の畳み先）。
-    let mut rep: BTreeMap<&str, &str> = index.keys().map(|id| (*id, *id)).collect();
-    let target = |from: &str, t: EdgeType| {
-        g.edges
-            .iter()
-            .find(|e| e.from == from && e.edge_type == t && index.contains_key(e.to.as_str()))
-            .map(|e| e.to.as_str())
-    };
-    for (id, n) in &index {
-        if n.kind != NodeKind::Norm {
-            continue;
-        }
-        let article = id
-            .rsplit_once('.')
-            .filter(|(_, tail)| !tail.is_empty() && tail.bytes().all(|c| c.is_ascii_digit()))
-            .map(|(head, _)| head)
-            .filter(|head| index.get(head).is_some_and(|a| a.kind == NodeKind::Article));
-        if let Some(article) = article {
-            rep.insert(id, article);
-        }
-    }
-    for (id, n) in &index {
-        if n.kind == NodeKind::Question
-            && let Some(parent) = target(id, EdgeType::ParentChild)
-        {
-            rep.insert(id, parent);
-        }
-    }
-    for (id, n) in &index {
-        if n.kind == NodeKind::Ruling
-            && let Some(question) = target(id, EdgeType::Answers)
-        {
-            let r = rep[question];
-            rep.insert(id, r);
-        }
-    }
-    let mut kids: BTreeMap<&str, usize> = BTreeMap::new();
-    for (id, r) in &rep {
-        if id != r {
-            *kids.entry(r).or_default() += 1;
+    // 節点ごとの見える箱と、箱ごとの子の数（自分の箱を持たない節点の数）。
+    let vis: BTreeMap<&str, usize> = tree
+        .home
+        .iter()
+        .map(|(id, b)| (*id, tree.visible_of(*b, &st)))
+        .collect();
+    let mut kids: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut boxed = 0;
+    for (id, b) in &vis {
+        if tree.boxes[*b].node.is_some_and(|n| n.id == *id) {
+            boxed += 1;
+        } else {
+            *kids.entry(*b).or_default() += 1;
         }
     }
 
-    // 辺のまとめ（D → U・同じ畳み先の辺は捨てる）。
+    // 辺のまとめ（D → U・同じ箱の辺は捨てる）。
     let mut merged: BTreeMap<EdgeKey, usize> = BTreeMap::new();
-    let mut view_degree: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut next: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for e in &g.edges {
         let (Some(a), Some(b)) = (index.get(e.from.as_str()), index.get(e.to.as_str())) else {
             continue;
@@ -76,31 +57,16 @@ pub fn view(g: &Graph) -> GraphView {
             EdgeEnd::From => (a.id.as_str(), b.id.as_str()),
             EdgeEnd::To => (b.id.as_str(), a.id.as_str()),
         };
-        let (u, d) = (rep[up], rep[down]);
+        let (u, d) = (vis[up], vis[down]);
         if u == d {
             continue;
         }
+        let (u, d) = (id_of(u), id_of(d));
         *merged.entry((d, u, e.edge_type)).or_default() += 1;
-        *view_degree.entry(u).or_default() += 1;
-        *view_degree.entry(d).or_default() += 1;
+        next.entry(u).or_default().insert(d);
+        next.entry(d).or_default().insert(u);
     }
-
-    // 出す節点（候補が上限を超えたら、子を持つ節点・眺めの次数の大きい順・id の自然な順で先頭から）。
-    let mut candidates: Vec<&str> = view_degree.keys().copied().collect();
-    let mut cut = 0;
-    if candidates.len() > VIEW_CAP {
-        candidates.sort_by(|a, b| {
-            let key = |id: &str| (Reverse(kids.contains_key(id)), Reverse(view_degree[id]));
-            key(a).cmp(&key(b)).then_with(|| natural_cmp(a, b))
-        });
-        cut = candidates.len() - VIEW_CAP;
-        candidates.truncate(VIEW_CAP);
-    }
-    let keep: BTreeSet<&str> = candidates.iter().copied().collect();
-    let mut edges: Vec<(EdgeKey, usize)> = merged
-        .into_iter()
-        .filter(|((d, u, _), _)| keep.contains(d) && keep.contains(u))
-        .collect();
+    let mut edges: Vec<(EdgeKey, usize)> = merged.into_iter().collect();
     edges.sort_by(|((d1, u1, t1), _), ((d2, u2, t2), _)| {
         natural_cmp(d1, d2)
             .then_with(|| natural_cmp(u1, u2))
@@ -108,11 +74,12 @@ pub fn view(g: &Graph) -> GraphView {
     });
 
     // 段（D から U へたどる最も長い道の辺の数・たどっている途中へ戻れば 0 と数える）。
+    let mut shown = tree.shown(&st);
     let mut outs: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for ((d, u, _), _) in &edges {
         outs.entry(d).or_default().push(u);
     }
-    let mut order = candidates.clone();
+    let mut order: Vec<&str> = shown.iter().map(|b| id_of(*b)).collect();
     order.sort_by(|a, b| natural_cmp(a, b));
     let mut rank: BTreeMap<&str, usize> = BTreeMap::new();
     let mut visiting: BTreeSet<&str> = BTreeSet::new();
@@ -120,35 +87,52 @@ pub fn view(g: &Graph) -> GraphView {
         rank_of(id, &outs, &mut rank, &mut visiting);
     }
 
-    let folded = rep
-        .iter()
-        .filter(|(id, r)| id != r && keep.contains(*r))
-        .count();
-    let isolated = rep
-        .iter()
-        .filter(|(id, r)| id == r && !view_degree.contains_key(*id))
-        .count();
-
-    let mut shown: Vec<&str> = candidates;
     shown.sort_by(|a, b| {
-        index[a]
-            .kind
-            .cmp(&index[b].kind)
-            .then_with(|| natural_cmp(a, b))
+        let (x, y) = (&tree.boxes[*a], &tree.boxes[*b]);
+        x.kind.cmp(&y.kind).then_with(|| natural_cmp(&x.id, &y.id))
     });
     let nodes: Vec<ViewNode> = shown
         .iter()
-        .map(|id| {
-            let n = index[id];
+        .map(|b| {
+            let bx = &tree.boxes[*b];
+            let id = bx.id.as_str();
+            let fold = if bx.children.is_empty() {
+                BoxFold::Leaf
+            } else if st.is_open(*b) {
+                BoxFold::Open
+            } else {
+                BoxFold::Folded
+            };
+            let (node, status, deg) = match bx.node {
+                Some(n) => (n.clone(), g.status(n), degree.get(id).copied().unwrap_or(0)),
+                None => (
+                    GraphNode {
+                        id: bx.id.clone(),
+                        kind: bx.kind,
+                        file: None,
+                        digest: None,
+                        title: bx.title.clone(),
+                        line: None,
+                        plain: None,
+                        eng: None,
+                    },
+                    None,
+                    next.get(id).map_or(0, BTreeSet::len),
+                ),
+            };
             ViewNode {
-                node: n.clone(),
-                status: g.status(n),
-                rank: count(rank[id]),
-                kids: count(kids.get(id).copied().unwrap_or(0)),
-                degree: count(degree.get(id).copied().unwrap_or(0)),
+                node,
+                status,
+                rank: count(rank.get(id).copied().unwrap_or(0)),
+                kids: count(kids.get(b).copied().unwrap_or(0)),
+                degree: count(deg),
+                group: bx.node.is_none(),
+                fold,
             }
         })
         .collect();
+    let folded: usize = kids.values().sum();
+    let total = g.nodes.len();
     GraphView {
         shown: count(nodes.len()),
         nodes,
@@ -162,13 +146,15 @@ pub fn view(g: &Graph) -> GraphView {
             })
             .collect(),
         folded: count(folded),
-        cut: count(cut + isolated),
-        total: count(g.nodes.len()),
+        cut: count(total.saturating_sub(boxed + folded)),
+        total: count(total),
         unread: g.unread_wire(),
+        open: st.asked.iter().map(|b| id_of(*b).to_string()).collect(),
+        refused: st.refused,
     }
 }
 
-/// 節点の段（一度決めた段は決め直さない）。
+/// 箱の段（一度決めた段は決め直さない）。
 fn rank_of<'g>(
     id: &'g str,
     outs: &BTreeMap<&'g str, Vec<&'g str>>,

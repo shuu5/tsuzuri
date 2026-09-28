@@ -1,11 +1,13 @@
 //! 導出グラフ（設計ノート surface-base 便 c・判断の記録 ADR-7 決定 (2)）。
 //! 設計の索引・台帳の一覧・器の event log の 3 つの字から、1 つのグラフを毎回組み直す（`build`）。
 //! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返し（`around`）、グラフの面の眺めを返す（`view`・便 c-view）。
+//! 眺めは節点を組の箱へ畳み、開く列で 1 段ずつ開く（`fold`・`view_open`・行 c-graph-fold）。
 //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
 
 pub mod around;
 pub mod build;
 pub mod check;
+pub mod fold;
 pub mod view;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,7 +18,7 @@ use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, GraphSource, NodeK
 pub use around::around;
 pub use build::build;
 pub use check::{Invariant, Verdict, check};
-pub use view::view;
+pub use view::{view, view_open};
 
 /// 組む材料の 3 つの字。
 #[derive(Debug, Clone, Copy)]

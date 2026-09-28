@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_TIMEOUT};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::graph::{Fold, GraphSource, GraphView};
+use tsuzuri_contract::graph::{BoxFold, Fold, GraphSource, GraphView};
 use tsuzuri_contract::stats::{UnreflectedList, UnreflectedRow};
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::{self, Graph, Inputs};
@@ -344,6 +344,36 @@ fn server_view_bd_fails_unknown() {
     let body = get(addr, "/api/around?id=R-25").0;
     let want = graph::around(&built(""), CENTER, 2, Fold::None).expect("中心の節点");
     assert_eq!(body, encoded!(want));
+}
+
+/// id の字 : と # と空白を %XX にする（query に置く字）。
+fn pct(id: &str) -> String {
+    id.replace(':', "%3A")
+        .replace('#', "%23")
+        .replace(' ', "%20")
+}
+
+/// 口の query の open は字 , で分けて眺めに渡す（行 c-graph-fold）。
+#[test]
+fn gtuck_route_open_query() {
+    let place = Place::new("tuck", Bd::Ok);
+    let addr = place.serve();
+    let g = built(&read_fixture(LEDGER));
+    let base = graph::view(&g);
+    let id = base
+        .nodes
+        .iter()
+        .find(|n| n.fold == BoxFold::Folded)
+        .map(|n| n.node.id.clone())
+        .expect("畳んだ箱");
+    let body = get(addr, &format!("/api/graph/view?open={}", pct(&id))).0;
+    let asks = vec![id.clone()];
+    assert_eq!(body, encoded!(graph::view_open(&g, &asks)), "{id}");
+    let view: GraphView = decode!(body);
+    assert_eq!(view.open, asks);
+    for path in ["/api/graph/view?open=no-such", "/api/graph/view"] {
+        assert_eq!(get(addr, path).0, encoded!(base), "{path}");
+    }
 }
 
 /// dir の中の file の path と byte の一覧（書かれていないことを比べる）。

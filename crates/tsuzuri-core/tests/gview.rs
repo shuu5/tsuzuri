@@ -7,12 +7,12 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tsuzuri_contract::graph::{
-    AroundDoc, EdgeEnd, EdgeType, Fold, GraphEdge, GraphNode, GraphView, NodeKind, basis_end,
-    natural_cmp,
+    AroundDoc, BoxFold, EdgeEnd, EdgeType, Fold, GraphEdge, GraphNode, GraphView, NodeKind,
+    basis_end, natural_cmp,
 };
 use tsuzuri_core::graph::around::{AROUND_STEPS, HUB_DEGREE};
 use tsuzuri_core::graph::view::VIEW_CAP;
-use tsuzuri_core::graph::{BeadAttr, Graph, Inputs, RunAttr, around, build, view};
+use tsuzuri_core::graph::{BeadAttr, Graph, Inputs, RunAttr, around, build, view, view_open};
 
 const RULING: &str = "e.2:20260927T0000Z-1";
 const RUN: &str = "e.1-20260927T000000Z";
@@ -253,62 +253,77 @@ fn gview_example_view() {
     assert_eq!(
         view_nodes(&v),
         vec![
-            ("P-1", 0, 2, 5),
-            ("R-1", 1, 0, 1),
-            ("FR1", 2, 0, 4),
-            ("AC1", 3, 0, 1),
-            ("ADR-1", 1, 0, 2),
-            ("e", 3, 2, 2),
-            ("e.1", 4, 0, 2),
-            (RUN, 5, 0, 1),
+            ("~art:P", 0, 3, 3),
+            ("~rule", 1, 1, 1),
+            ("~srs:req", 2, 2, 3),
+            ("~srs:actor", 0, 1, 0),
+            ("~adr", 1, 1, 2),
+            ("e", 3, 4, 2),
         ]
     );
+    let groups: Vec<bool> = v.nodes.iter().map(|n| n.group).collect();
+    assert_eq!(groups, vec![true, true, true, true, true, false]);
+    assert!(v.nodes.iter().all(|n| n.fold == BoxFold::Folded));
     use EdgeType::*;
     assert_eq!(
         view_edges(&v),
         vec![
-            ("AC1", "FR1", VerifyAc, 1),
-            ("AC1", "FR1", Verifies, 1),
-            ("ADR-1", "P-1", Basis, 1),
-            ("FR1", "ADR-1", Adrs, 1),
-            ("FR1", "P-1", Basis, 1),
-            ("R-1", "P-1", RelationsRules, 1),
-            ("R-1", "P-1", ArticleRef, 1),
-            ("e", "FR1", Touches, 1),
-            ("e.1", "e", ParentChild, 1),
-            (RUN, "e.1", RunOf, 1),
+            ("e", "~srs:req", Touches, 1),
+            ("~adr", "~art:P", Basis, 1),
+            ("~rule", "~art:P", RelationsRules, 1),
+            ("~rule", "~art:P", ArticleRef, 1),
+            ("~srs:req", "~adr", Adrs, 1),
+            ("~srs:req", "~art:P", Basis, 1),
         ]
     );
-    assert_eq!((v.shown, v.folded, v.cut, v.total), (8, 4, 1, 13));
+    assert_eq!((v.shown, v.folded, v.cut, v.total), (6, 12, 0, 13));
     let status: Vec<Option<&str>> = v.nodes.iter().map(|n| n.status.as_deref()).collect();
-    assert_eq!(
-        status,
-        vec![
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some("open"),
-            Some("in_progress"),
-            Some("Landed")
-        ]
-    );
+    assert_eq!(status, vec![None, None, None, None, None, Some("open")]);
+    assert!(v.open.is_empty() && v.refused.is_empty());
     assert!(v.unread.is_empty());
 }
 
 #[test]
 fn gview_hub_619_view_is_capped() {
-    let v = view(&hub_619());
-    assert_eq!((v.shown, v.folded, v.cut, v.total), (40, 0, 582, 622));
-    assert_eq!(v.nodes.len(), VIEW_CAP);
-    let top = v.nodes.iter().max_by_key(|n| n.degree).expect("出す節点");
-    assert_eq!((top.node.id.as_str(), top.degree), ("h", 619));
-    // 出す節点の先頭（種類の順）も h。
-    assert_eq!(v.nodes[0].node.id, "h");
-    assert_eq!(v.edges.len(), 39);
+    let g = hub_619();
+    let v = view(&g);
+    assert_eq!(view_nodes(&v), vec![("~art:A", 0, 1, 0), ("h", 0, 620, 619)]);
+    assert!(v.nodes[0].group && !v.nodes[1].group);
+    assert!(v.edges.is_empty());
+    assert_eq!((v.shown, v.folded, v.cut, v.total), (2, 621, 0, 622));
+
+    let v = view_open(&g, &["h".to_string()]);
+    let boxes: Vec<(&str, BoxFold)> = v
+        .nodes
+        .iter()
+        .map(|n| (n.node.id.as_str(), n.fold))
+        .collect();
+    assert_eq!(
+        boxes,
+        vec![
+            ("~art:A", BoxFold::Folded),
+            ("h", BoxFold::Open),
+            ("h~1-144", BoxFold::Folded),
+            ("h~145-288", BoxFold::Folded),
+            ("h~289-432", BoxFold::Folded),
+            ("h~433-576", BoxFold::Folded),
+            ("h~577-619", BoxFold::Folded),
+        ]
+    );
+    use EdgeType::ParentChild;
+    assert_eq!(
+        view_edges(&v),
+        vec![
+            ("h~1-144", "h", ParentChild, 144),
+            ("h~145-288", "h", ParentChild, 144),
+            ("h~289-432", "h", ParentChild, 144),
+            ("h~433-576", "h", ParentChild, 144),
+            ("h~577-619", "h", ParentChild, 43),
+        ]
+    );
+    assert_eq!((v.shown, v.folded, v.cut, v.total), (7, 621, 0, 622));
+    assert!(v.shown as usize <= VIEW_CAP);
     let shown: BTreeSet<&str> = v.nodes.iter().map(|n| n.node.id.as_str()).collect();
-    assert!(shown.contains("h.1") && shown.contains("h.1-20260927T000000Z"));
     assert!(
         v.edges
             .iter()
@@ -329,14 +344,14 @@ fn gview_cycle_view_returns() {
         ],
         ..Graph::default()
     };
-    let v = view(&g);
+    let v = view_open(&g, &["~art:A".to_string()]);
     assert_eq!(v.edges.len(), 2);
     let ranks: Vec<(&str, u32)> = v
         .nodes
         .iter()
         .map(|n| (n.node.id.as_str(), n.rank))
         .collect();
-    assert_eq!(ranks, vec![("A-1", 2), ("A-2", 1)]);
+    assert_eq!(ranks, vec![("A-1", 2), ("A-2", 1), ("~art:A", 0)]);
 }
 
 #[test]

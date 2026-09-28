@@ -124,6 +124,11 @@ pub fn view(texts: &Texts) -> GraphView {
     graph::view(&built(texts))
 }
 
+/// 開く列を受けた地図のグラフの眺め（行 c-graph-fold）。
+pub fn view_open(texts: &Texts, open: &[String]) -> GraphView {
+    graph::view_open(&built(texts), open)
+}
+
 /// 節点の近傍（中心の節点が無いか、段数が幅の外なら None・便 e-view）。
 pub fn around(texts: &Texts, center: &str, steps: u8, fold: Fold) -> Option<AroundDoc> {
     graph::around(&built(texts), center, steps, fold)

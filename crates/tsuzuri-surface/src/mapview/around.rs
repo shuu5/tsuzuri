@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use tsuzuri_contract::graph::{
-    AroundDoc, AroundRow, EdgeType, GraphView, NodeKind, ViewEdge, ViewNode, title36,
+    AroundDoc, AroundRow, BoxFold, EdgeType, GraphView, NodeKind, ViewEdge, ViewNode, title36,
 };
 
 use super::band::{BEADS_LANES, Band, band_of, kind_key};
@@ -246,6 +246,8 @@ pub fn view_node(row: &AroundRow) -> ViewNode {
         rank: 0,
         kids: 0,
         degree: row.degree,
+        group: false,
+        fold: BoxFold::Leaf,
     }
 }
 
@@ -259,6 +261,8 @@ pub fn as_view(doc: &AroundDoc) -> GraphView {
         cut: doc.cut_hub + doc.cut_cap,
         total: doc.total,
         unread: doc.unread.clone(),
+        open: vec![],
+        refused: vec![],
     }
 }
 

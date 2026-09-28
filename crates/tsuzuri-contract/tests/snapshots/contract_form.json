@@ -551,7 +551,9 @@
       "status": "open",
       "rank": 0,
       "kids": 2,
-      "degree": 5
+      "degree": 5,
+      "group": false,
+      "fold": "folded"
     },
     {
       "node": {
@@ -567,7 +569,9 @@
       "status": null,
       "rank": 1,
       "kids": 0,
-      "degree": 1
+      "degree": 1,
+      "group": false,
+      "fold": "leaf"
     }
   ],
   "graph::ViewEdge": [
@@ -595,7 +599,9 @@
           "status": "open",
           "rank": 0,
           "kids": 2,
-          "degree": 5
+          "degree": 5,
+          "group": false,
+          "fold": "folded"
         },
         {
           "node": {
@@ -611,7 +617,9 @@
           "status": null,
           "rank": 1,
           "kids": 0,
-          "degree": 1
+          "degree": 1,
+          "group": false,
+          "fold": "leaf"
         }
       ],
       "edges": [
@@ -628,7 +636,11 @@
       "total": 5,
       "unread": [
         "design"
-      ]
+      ],
+      "open": [
+        "t3-hub.3"
+      ],
+      "refused": []
     },
     {
       "nodes": [],
@@ -641,8 +653,15 @@
         "design",
         "ledger",
         "runs"
-      ]
+      ],
+      "open": [],
+      "refused": []
     }
+  ],
+  "graph::BoxFold": [
+    "leaf",
+    "folded",
+    "open"
   ],
   "graph::Fold": [
     "none",

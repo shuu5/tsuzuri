@@ -13,7 +13,7 @@ use tsuzuri_contract::board::{
     ProjectMetrics, QuotaLeft, Reading, SessionRow, Stage,
 };
 use tsuzuri_contract::graph::{
-    AroundDoc, AroundRow, BeadAttr, EdgeEnd, EdgeType, Fold, GraphDoc, GraphEdge, GraphNode,
+    AroundDoc, AroundRow, BeadAttr, BoxFold, EdgeEnd, EdgeType, Fold, GraphDoc, GraphEdge, GraphNode,
     GraphSource, GraphView, HubCut, InvariantCheck, NodeKind, RunAttr, SkippedEdges, Verdict,
     ViewEdge, ViewNode, title36,
 };
@@ -241,6 +241,8 @@ fn view_nodes() -> Vec<ViewNode> {
             rank: 0,
             kids: 2,
             degree: 5,
+            group: false,
+            fold: BoxFold::Folded,
         },
         ViewNode {
             node: run_node(),
@@ -248,6 +250,8 @@ fn view_nodes() -> Vec<ViewNode> {
             rank: 1,
             kids: 0,
             degree: 1,
+            group: false,
+            fold: BoxFold::Leaf,
         },
     ]
 }
@@ -720,6 +724,8 @@ fn forms() -> Vec<Box<dyn Form>> {
                     cut: 1,
                     total: 5,
                     unread: vec![GraphSource::Design],
+                    open: vec!["t3-hub.3".into()],
+                    refused: vec![],
                 },
                 // 節点の無いグラフ。
                 GraphView {
@@ -730,9 +736,12 @@ fn forms() -> Vec<Box<dyn Form>> {
                     cut: 0,
                     total: 0,
                     unread: GraphSource::ALL.to_vec(),
+                    open: vec![],
+                    refused: vec![],
                 },
             ],
         ),
+        form("graph::BoxFold", BoxFold::ALL.to_vec()),
         form("graph::Fold", Fold::ALL.to_vec()),
         form("graph::AroundRow", around_rows()),
         form("graph::HubCut", vec![hub_cut()]),
@@ -1357,6 +1366,15 @@ fn contract_form_closed_lists() {
         "畳みの ALL の順と字"
     );
     assert!(wire::decode::<Fold>("\"all\"").is_err());
+    let box_words: Vec<String> = BoxFold::ALL
+        .iter()
+        .map(|f| wire::encode(f).expect("語"))
+        .collect();
+    assert_eq!(
+        box_words,
+        ["\"leaf\"", "\"folded\"", "\"open\""],
+        "箱の開き閉じの ALL の順と字"
+    );
     assert_eq!(distinct(&Verdict::ALL), 3);
     assert_eq!(distinct(&NextMove::ALL), 7);
     assert_eq!(distinct(&LedgerJudge::ALL), 5);

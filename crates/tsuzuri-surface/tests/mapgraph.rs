@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use tsuzuri_contract::graph::{
-    EdgeType, GraphNode, GraphSource, GraphView, NodeKind, ViewEdge, ViewNode,
+    BoxFold, EdgeType, GraphNode, GraphSource, GraphView, NodeKind, ViewEdge, ViewNode,
 };
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::band::{BEADS_LANES, Band, unread_reason};
@@ -55,6 +55,8 @@ fn node(id: &str, kind: NodeKind, rank: u32, degree: u32) -> ViewNode {
         rank,
         kids: 0,
         degree,
+        group: false,
+        fold: BoxFold::Leaf,
     }
 }
 
@@ -77,6 +79,8 @@ fn view_of(nodes: Vec<ViewNode>, edges: Vec<ViewEdge>) -> GraphView {
         cut: 0,
         total: n,
         unread: vec![],
+        open: vec![],
+        refused: vec![],
     }
 }
 
