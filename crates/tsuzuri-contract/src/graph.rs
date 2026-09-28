@@ -209,8 +209,9 @@ pub fn title36(s: &str) -> String {
         .collect()
 }
 
-/// グラフの節点（id・種類・所属 file・要約値・題 36 字）。
+/// グラフの節点（id・種類・所属 file・要約値・題 36 字・行・2 つの概要）。
 /// 所属 file と要約値は file に書かれた行だけが持つ（台帳と走行の節点は持たない）。
+/// 行と概要は folio の要約の字から写す（要件 FR15・写すまでは無し）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphNode {
     pub id: String,
@@ -218,6 +219,15 @@ pub struct GraphNode {
     pub file: Option<String>,
     pub digest: Option<String>,
     pub title: String,
+    /// 所属 file の中で id が書かれた行の番号（1 から数える）。
+    #[serde(default)]
+    pub line: Option<u32>,
+    /// 非エンジニア向けの概要。
+    #[serde(default)]
+    pub plain: Option<String>,
+    /// エンジニア向けの概要。
+    #[serde(default)]
+    pub eng: Option<String>,
 }
 
 /// グラフの辺（from・to・型）。

@@ -32,6 +32,9 @@ fn node(id: &str, kind: NodeKind, title: &str) -> GraphNode {
         file: None,
         digest: None,
         title: title.to_string(),
+        line: None,
+        plain: None,
+        eng: None,
     }
 }
 

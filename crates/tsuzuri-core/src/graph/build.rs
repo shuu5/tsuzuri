@@ -2,6 +2,7 @@
 //! 設計の索引の節点と辺は表の行を写す。bead の種類は epic・memo・問い・契約の順に決める。
 //! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
 //! 設計ノートの行・design の辺・ruled_by の辺はこの便では組まない（先の節点が入力に無い）。
+//! 節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -62,6 +63,50 @@ pub fn build(inputs: &Inputs) -> Graph {
     g
 }
 
+/// folio の要約の 1 行のうち写す欄（鍵 kind と title とほかの鍵は読み捨てる・鍵が無ければ無し）。
+#[derive(Debug, Deserialize)]
+struct SummaryRow {
+    id: String,
+    file: Option<String>,
+    line: Option<u32>,
+    plain: Option<String>,
+    eng: Option<String>,
+}
+
+/// folio の要約の字（1 行 1 つの JSON の object）から、節点の行と 2 つの概要を写す（要件 FR15）。
+/// 字が空か、形の合わない行が 1 つでも在れば読めず、g を変えずに偽を返す。
+/// 読めたら、file を持つ節点のうち id と file が同じ行の在る節点の line・plain・eng をその行の値にして真を返す。
+/// 行の無い節点と file の無い節点（台帳と走行）と、節点のほかの欄と辺と属性は触らない。
+pub fn add_summary(g: &mut Graph, summary: &str) -> bool {
+    if summary.trim().is_empty() {
+        return false;
+    }
+    let mut rows: BTreeMap<(String, String), SummaryRow> = BTreeMap::new();
+    for line in summary.lines().filter(|l| !l.trim().is_empty()) {
+        let Some(row) = serde_json::from_str::<Value>(line)
+            .ok()
+            .filter(Value::is_object)
+            .and_then(|v| serde_json::from_value::<SummaryRow>(v).ok())
+        else {
+            return false;
+        };
+        if let Some(file) = row.file.clone() {
+            rows.entry((row.id.clone(), file)).or_insert(row);
+        }
+    }
+    for node in &mut g.nodes {
+        let Some(file) = &node.file else {
+            continue;
+        };
+        if let Some(row) = rows.get(&(node.id.clone(), file.clone())) {
+            node.line = row.line;
+            node.plain = row.plain.clone();
+            node.eng = row.eng.clone();
+        }
+    }
+    true
+}
+
 /// 語から閉じた enum の値を読む（契約の型の crate の serde の名が正本）。
 fn named<T: DeserializeOwned>(name: &str) -> Option<T> {
     serde_json::from_value(Value::String(name.to_string())).ok()
@@ -107,6 +152,9 @@ fn read_design(text: &str) -> Option<Design> {
                     file: Some(file.to_string()),
                     digest: Some(digest.to_string()),
                     title: title.to_string(),
+                    line: None,
+                    plain: None,
+                    eng: None,
                 });
             }
             [from, to, edge_type] => {
@@ -223,6 +271,9 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
             file: None,
             digest: None,
             title: title36(bead.title.as_deref().unwrap_or_default()),
+            line: None,
+            plain: None,
+            eng: None,
         });
         for dep in bead.dependencies.unwrap_or_default() {
             match named::<EdgeType>(&dep.dep_type).filter(|t| LEDGER_EDGE_TYPES.contains(t)) {
@@ -238,6 +289,9 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
                     file: None,
                     digest: None,
                     title: title36(line),
+                    line: None,
+                    plain: None,
+                    eng: None,
                 });
             }
             if line_kind == NodeKind::Ruling && kind == NodeKind::Question {
@@ -365,6 +419,9 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
             file: None,
             digest: None,
             title: title36(&run),
+            line: None,
+            plain: None,
+            eng: None,
         });
         if let Some(bead) = run_bead(&run) {
             g.edges.push(edge(&run, bead, EdgeType::RunOf));

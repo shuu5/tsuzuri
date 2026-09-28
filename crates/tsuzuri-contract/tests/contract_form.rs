@@ -213,6 +213,9 @@ fn task_node() -> GraphNode {
         file: None,
         digest: None,
         title: "契約の型".into(),
+        line: None,
+        plain: None,
+        eng: None,
     }
 }
 
@@ -223,6 +226,9 @@ fn run_node() -> GraphNode {
         file: None,
         digest: None,
         title: "t3-hub.3-20260927T073916Z".into(),
+        line: None,
+        plain: None,
+        eng: None,
     }
 }
 
@@ -594,6 +600,9 @@ fn forms() -> Vec<Box<dyn Form>> {
                     title: title36(
                         "裁定面は project board と account board の 2 面とし、台帳と設計文書と走行を 1 つの導出グラフに結ぶ",
                     ),
+                    line: Some(3),
+                    plain: Some("決定の画面の形を決めます。".into()),
+                    eng: Some("面は 2 つとする。".into()),
                 },
                 GraphNode {
                     id: "t3-hub.3".into(),
@@ -601,6 +610,9 @@ fn forms() -> Vec<Box<dyn Form>> {
                     file: None,
                     digest: None,
                     title: "契約の型".into(),
+                    line: None,
+                    plain: None,
+                    eng: None,
                 },
             ],
         ),
@@ -644,6 +656,9 @@ fn forms() -> Vec<Box<dyn Form>> {
                             file: None,
                             digest: None,
                             title: "契約の型".into(),
+                            line: None,
+                            plain: None,
+                            eng: None,
                         },
                         GraphNode {
                             id: "t3-hub.3-20260927T073916Z".into(),
@@ -651,6 +666,9 @@ fn forms() -> Vec<Box<dyn Form>> {
                             file: None,
                             digest: None,
                             title: "t3-hub.3-20260927T073916Z".into(),
+                            line: None,
+                            plain: None,
+                            eng: None,
                         },
                     ],
                     edges: vec![GraphEdge {

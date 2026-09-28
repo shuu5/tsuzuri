@@ -342,14 +342,20 @@
       "kind": "判断の記録",
       "file": "adr/ADR-7.yaml",
       "digest": "9c1e0a4b",
-      "title": "裁定面は project board と account board の"
+      "title": "裁定面は project board と account board の",
+      "line": 3,
+      "plain": "決定の画面の形を決めます。",
+      "eng": "面は 2 つとする。"
     },
     {
       "id": "t3-hub.3",
       "kind": "task",
       "file": null,
       "digest": null,
-      "title": "契約の型"
+      "title": "契約の型",
+      "line": null,
+      "plain": null,
+      "eng": null
     }
   ],
   "graph::GraphEdge": [
@@ -429,14 +435,20 @@
           "kind": "task",
           "file": null,
           "digest": null,
-          "title": "契約の型"
+          "title": "契約の型",
+          "line": null,
+          "plain": null,
+          "eng": null
         },
         {
           "id": "t3-hub.3-20260927T073916Z",
           "kind": "run",
           "file": null,
           "digest": null,
-          "title": "t3-hub.3-20260927T073916Z"
+          "title": "t3-hub.3-20260927T073916Z",
+          "line": null,
+          "plain": null,
+          "eng": null
         }
       ],
       "edges": [
@@ -531,7 +543,10 @@
         "kind": "task",
         "file": null,
         "digest": null,
-        "title": "契約の型"
+        "title": "契約の型",
+        "line": null,
+        "plain": null,
+        "eng": null
       },
       "status": "open",
       "rank": 0,
@@ -544,7 +559,10 @@
         "kind": "run",
         "file": null,
         "digest": null,
-        "title": "t3-hub.3-20260927T073916Z"
+        "title": "t3-hub.3-20260927T073916Z",
+        "line": null,
+        "plain": null,
+        "eng": null
       },
       "status": null,
       "rank": 1,
@@ -569,7 +587,10 @@
             "kind": "task",
             "file": null,
             "digest": null,
-            "title": "契約の型"
+            "title": "契約の型",
+            "line": null,
+            "plain": null,
+            "eng": null
           },
           "status": "open",
           "rank": 0,
@@ -582,7 +603,10 @@
             "kind": "run",
             "file": null,
             "digest": null,
-            "title": "t3-hub.3-20260927T073916Z"
+            "title": "t3-hub.3-20260927T073916Z",
+            "line": null,
+            "plain": null,
+            "eng": null
           },
           "status": null,
           "rank": 1,
@@ -633,7 +657,10 @@
         "kind": "task",
         "file": null,
         "digest": null,
-        "title": "契約の型"
+        "title": "契約の型",
+        "line": null,
+        "plain": null,
+        "eng": null
       },
       "status": "open",
       "col": 0,
@@ -647,7 +674,10 @@
         "kind": "run",
         "file": null,
         "digest": null,
-        "title": "t3-hub.3-20260927T073916Z"
+        "title": "t3-hub.3-20260927T073916Z",
+        "line": null,
+        "plain": null,
+        "eng": null
       },
       "status": "Landed",
       "col": 1,
@@ -674,7 +704,10 @@
             "kind": "task",
             "file": null,
             "digest": null,
-            "title": "契約の型"
+            "title": "契約の型",
+            "line": null,
+            "plain": null,
+            "eng": null
           },
           "status": "open",
           "col": 0,
@@ -688,7 +721,10 @@
             "kind": "run",
             "file": null,
             "digest": null,
-            "title": "t3-hub.3-20260927T073916Z"
+            "title": "t3-hub.3-20260927T073916Z",
+            "line": null,
+            "plain": null,
+            "eng": null
           },
           "status": "Landed",
           "col": 1,
@@ -722,7 +758,10 @@
             "kind": "task",
             "file": null,
             "digest": null,
-            "title": "契約の型"
+            "title": "契約の型",
+            "line": null,
+            "plain": null,
+            "eng": null
           },
           "status": "open",
           "col": 0,

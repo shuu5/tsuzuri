@@ -66,6 +66,9 @@ fn node(id: &str, kind: NodeKind) -> GraphNode {
         file: None,
         digest: None,
         title: id.into(),
+        line: None,
+        plain: None,
+        eng: None,
     }
 }
 
