@@ -63,6 +63,7 @@ sections:
       t3-hub.52.32（裁定 id = t3-hub.52.32:20260928T0107Z-1・束 batch:20260928T0107Z-1）: 案 A。地図に設計と台帳の 2 つの全体図を木の形（入れ子の一覧）で足す。閉じた項目は既定で畳み、各項目は項目の頁へ飛び、hover の card を持つ。今の畳んだグラフは要約として残す。効果: 行 g-map-tree（第 8 波）。
       t3-hub.53.14（裁定 id = t3-hub.53.14:20260928T0107Z-1・束 batch:20260928T0107Z-1）: 案 A。account board の全部の表で、口座を名の自然な順（名の中の数を数として比べる）に並べ、退役の口座は出さない（移動の履歴のように過去を示す所だけは出す）。並べと絞りは面の純粋な関数で行い、電文と中核は変えない。見本 mock v3 の退役の印の出し方を変える決め。効果: 行 h-acct-order（第 8 波）。
       t3-hub.1（裁定 id = user 2026-09-28T00:4xZ・チャットの指摘の記帳）: project board の指摘のうち、見本 mock v3 の穴か付け忘れの直しで済むもの（pipeline の開いた列を畳めない・未反映の注釈の字が project board で意味を成さない・グラフと近傍図とつながりの一覧で節点の hover の card が出ない・次の一手が質問を上げただけの run を止まっている走行に数えて質問を隠す）。効果: 行 g-pipe-fold・g-unref-word・g-card-around・g-card-graph・c-next-stall（第 8 波）はこの記帳に拠り、問いを置かない。見本を変える決めの要る指摘は問い t3-hub.52.28〜.52.32 と t3-hub.53.14 に出した。
+      t3-hub.1（裁定 id = user 2026-09-28T01:2xZ・チャットの指摘の記帳）: 問いの頁の block「全体への指示」から範囲の切り替え（この論点）を外し、範囲はつねに全体にする（個々の問いへの答えは各問いの頁で足りる）。見本 mock v3 を変える決めだが、持ち主の直の指示で選び肢が無いので問いを置かない。効果: 行 g-policy-all。
       この計画の枠の裁定: 判断の記録 ADR-7 の承認（user 2026-09-26T07:51Z・見本で確定）、surface-board と波のノートの承認（user 2026-09-27T03:19Z）、判断の記録 ADR-13 の承認（user 2026-09-27T17:36Z・登録の生成）。
       席の決め（理由つき・持ち主の異議があれば戻す）。
       tz graph --check は g-3・g-7・g-9 を測る機構が来るまで rc 2（まだ分からない）のままにする。3 本を判定の外に出す案は取らない。理由: 要件 FR3 の「読めなければ合格にしない」と条 P-7（黙って飛ばさない）。行 c-g3g7 と c-g9 で rc 0 に届く。
@@ -135,6 +136,7 @@ sections:
       g-back-note（S）: 窓を閉じられないときの戻るの注記と、開いた窓の一覧の閉じの印。file = surface/board.rs。依存 = なし。拠る = 見本・要件 FR1。
       g-coach（M）: 初心者の最初の案内（home の 3 段・済み印を browser に残す・?coach=1 で出し直す）。file = surface/widgets/coach.rs（新）・surface/widgets/mod.rs・surface/board.rs。依存 = g-mode-store（保存の module surface/store.rs の get と set）。拠る = t3-hub.52.16・見本・要件 FR1。
       g-jst（M）: 面が人に見せる時刻を全部日本時間（UTC に 9 時間を足す固定）にし、字の印を Z から JST の印に替え、pipeline の Landed（今日）の今日を日本の日にする（記録の id の中の UTC は変えず、問いの頁の決定の link は id を読んで 9 時間を足して出す・時差は view の定数 1 つに置き、browser の時間帯を読まない純粋な関数のまま）。file = surface/view.rs・surface/project/seat.rs（割った後の host の部分）・surface/project/pipeline.rs・surface/project/askpage.rs・surface/project/ask.rs・surface/project/ledger.rs と、UTC の字を pin する着地済みの歯 9 本（hruling・lcard・topbar・hcard・accthome・seatblock・board_min・sxaxis・seataxis）。依存 = なし（書く file が多いので第 7 波と第 8 波の着地の後に流す・5 節）。拠る = t3-hub.52.28・要件 NFR2。
+      g-policy-all（S）: 問いの頁の block「全体への指示」の範囲の切り替え（この論点と全体の 2 つの button）を外し、方針の逐語はつねに範囲 全体 で口 /api/policy へ送る（server の口が問いの id の範囲を受けるのを残すかは起草で決める・画面からは送らない）。file = surface/project/policy.rs と、policy.rs を pin する着地済みの歯。依存 = なし（第 8 波と重ならなければ第 8 波に足してよい）。拠る = t3-hub.1（裁定 id = user 2026-09-28T01:2xZ）・要件 FR6。
       account board（傘 h）の続き。
       h-cards-nx（S）: HOME の次の一手の並びの行と群の枠の project の chip に card（見本の nx と gproj・組み手は h-cards-proj のものを使う）。file = surface/account/home.rs。依存 = h-cards-proj。拠る = 見本・要件 FR14。
       h-cards-led（S）: 台帳の表の project の欄に card（見本の led・組み手は h-cards-proj のものを使う）。file = surface/account/ledger.rs。依存 = h-cards-proj。拠る = 見本・要件 FR14。
