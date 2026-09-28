@@ -2,7 +2,8 @@
 //! 最後に読めた中身を 60 秒まで出し続け、15 秒を越えれば上端の帯に読み込み不良の印を 1 つ出す（60 秒を越えた中身は
 //! server が 測れていない の電文にし、つながりの切れは net が全部の口を「読めない」にする）。
 //! 古さは server が読みの落ちた応答に載せる頭（最後に読めた時からの秒）と、面の時計の経過で数える。
-//! 決め方は host でも組んで試し、印の DOM（`mark`）は wasm の target のときだけ組む。
+//! 1 つでも口が読みの途中なら最終の記録の横に短い脈を出し、読み終えてから PULSE_MS まで残す（行 g-pulse）。
+//! 決め方は host でも組んで試し、印と脈の DOM（`mark`・`pulse`）は wasm の target のときだけ組む。
 
 use std::collections::BTreeMap;
 
@@ -134,15 +135,50 @@ impl Fresh {
     }
 }
 
+/// 読みの脈を読みの後に残す間（ミリ秒・見本の beat の 800 ミリ秒・行 g-pulse）。
+pub const PULSE_MS: u64 = 800;
+
+/// 読みの脈の class（出す間は動いているの記号と短い輪・出さない間も同じ幅の枠）。
+pub fn pulse_class(on: bool) -> &'static str {
+    if on { "st st-run beat" } else { "st" }
+}
+
+/// 読みの脈の状態（読みの途中の口の数と、最後に 0 になった時刻〔ミリ秒〕）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Pulse {
+    /// 読みの途中の口の数。
+    busy: usize,
+    /// 読みの途中の口が最後に 0 になった時刻。
+    ended: Option<u64>,
+}
+
+impl Pulse {
+    /// 読みの途中の口の数 `busy` を時刻 `at` に受けた（1 以上から 0 になった時だけ終わりの時刻を置く）。
+    pub fn set(&mut self, busy: usize, at: u64) {
+        if self.busy > 0 && busy == 0 {
+            self.ended = Some(at);
+        }
+        self.busy = busy;
+    }
+
+    /// 脈を出すか（読みの途中か、最後に 0 になってから PULSE_MS より前）。
+    pub fn on(&self, now: u64) -> bool {
+        self.busy > 0 || self.ended.is_some_and(|e| now.saturating_sub(e) < PULSE_MS)
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
-pub use dom::mark;
+pub use dom::{mark, pulse};
 
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use std::time::Duration;
+
     use leptos::ev;
     use leptos::prelude::*;
+    use web_sys::js_sys::Date;
 
-    use super::WARN_WORD;
+    use super::{PULSE_MS, Pulse, WARN_WORD, pulse_class};
     use crate::widgets::hover::delegate;
 
     /// 印（見本の IC.warn）。
@@ -171,5 +207,29 @@ mod dom {
             })
         };
         shown.into_any()
+    }
+
+    /// 読みの脈（1 つでも口が読みの途中なら最終の記録の横に短い輪を出し、読み終えてから PULSE_MS まで残す・
+    /// 飾りなので読み上げない・出さない間も同じ幅を持つ）。
+    pub fn pulse() -> AnyView {
+        let busy = crate::net::busy();
+        let state = RwSignal::new(Pulse::default());
+        let clock = RwSignal::new(Date::now() as u64);
+        Effect::new(move |_| {
+            let n = busy.get();
+            let now = Date::now() as u64;
+            state.update(|p| p.set(n, now));
+            clock.set(now);
+            if n == 0 {
+                // 脈を消す組み直し（時計が戻っても 0 になった時刻から PULSE_MS より前に置かない）。
+                let end = now + PULSE_MS;
+                set_timeout(
+                    move || clock.set((Date::now() as u64).max(end)),
+                    Duration::from_millis(PULSE_MS),
+                );
+            }
+        });
+        let class = move || pulse_class(state.with(|p| p.on(clock.get())));
+        view! { <span class=class aria-hidden="true"><i></i></span> }.into_any()
     }
 }

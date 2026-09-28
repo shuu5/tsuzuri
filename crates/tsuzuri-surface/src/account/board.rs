@@ -98,7 +98,7 @@ fn App() -> impl IntoView {
     }
 }
 
-/// 上端の帯: 題・tab の link・最終の記録と読み込み不良の印・mode の切り替え（account の HEADER の順）。
+/// 上端の帯: 題・tab の link・最終の記録と読みの脈と読み込み不良の印・mode の切り替え（account の HEADER の順）。
 fn top(
     query: RwSignal<String>,
     mode: RwSignal<Mode>,
@@ -164,6 +164,7 @@ fn top(
                     <nav class=part.class aria-label=label(part.key)>{links}</nav>
                     <span class="grow"></span>
                     {updated_chip()}
+                    {fresh::pulse()}
                     {fresh::mark()}
                 }
                 .into_any()

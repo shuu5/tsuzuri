@@ -8,6 +8,7 @@
 //! 知らせが切れても最後に読めた中身を READ_HOLD_S 秒まで出し続け、越えたら登録された口を全部「読めない」にする
 //! （要件 NFR2・決め方を通さない・行 g-fresh）。読みの応答の頭（最後に読めた時からの秒）と切れた時刻は fresh の
 //! Fresh に置き、上端の帯の最終の記録と読み込み不良の印が読む。台帳の読みが落ちている間は HELD_POLL_MS ごとに読み直す。
+//! 読みの印を変えるたびに読みの途中の口を数え直し、上端の帯の読みの脈が読む（行 g-pulse）。
 //! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
 //! path が query で変わる口（節点の近傍・便 g-node）は `read_path` に path の字の signal を渡し、
 //! 読みの結果と応答の状態の数の組を受ける。path が変わったときと知らせの合図で読み直し、接続は同じ 1 本を使う。
@@ -53,6 +54,8 @@ thread_local! {
     static FRESH: RefCell<Option<ArcRwSignal<Fresh>>> = const { RefCell::new(None) };
     /// 台帳の読みが落ちている間の読み直しを待っているか。
     static POLLING: Cell<bool> = const { Cell::new(false) };
+    /// 読みの途中の口の数の signal（初めての呼びで作る・頁に 1 本だけ）。
+    static BUSY: RefCell<Option<ArcRwSignal<usize>>> = const { RefCell::new(None) };
 }
 
 /// 時計の signal を書き直す間（ミリ秒）。
@@ -201,14 +204,40 @@ pub async fn post(path: &str, body: String) -> Option<(u16, String)> {
     Some((response.status(), text))
 }
 
-/// 登録された口の `slot` 番目の読みの印に `f` を撃つ（枠が無ければ None）。
-fn read_flight<R>(slot: usize, f: impl FnOnce(&mut Flight) -> R) -> Option<R> {
-    READS.with_borrow_mut(|reads| reads.get_mut(slot).map(|(_, _, flight)| f(flight)))
+/// 読みの途中の口の数の signal（初めての呼びで作る）。
+fn busy_signal() -> ArcRwSignal<usize> {
+    BUSY.with_borrow_mut(|busy| busy.get_or_insert_with(|| ArcRwSignal::new(0)).clone())
 }
 
-/// path が変わる口の `slot` 番目の読みの印に `f` を撃つ（枠が無ければ None）。
+/// 読みの途中の口の数（上端の帯の読みの脈が読む・行 g-pulse）。
+pub fn busy() -> ReadSignal<usize> {
+    ReadSignal::from(busy_signal().read_only())
+}
+
+/// 読みの途中の口を数え直し、数が変わった時だけ signal に置く
+/// （READS と WATCHES を借りている間は撃たない・二重の借りになる）。
+fn count_busy() {
+    let reads = READS.with_borrow(|reads| reads.iter().filter(|(_, _, f)| f.busy()).count());
+    let watches = WATCHES.with_borrow(|w| w.iter().filter(|(_, _, f)| f.busy()).count());
+    let n = reads + watches;
+    let signal = busy_signal();
+    if signal.get_untracked() != n {
+        signal.set(n);
+    }
+}
+
+/// 登録された口の `slot` 番目の読みの印に `f` を撃つ（枠が無ければ None・撃った後に読みの途中の口を数え直す）。
+fn read_flight<R>(slot: usize, f: impl FnOnce(&mut Flight) -> R) -> Option<R> {
+    let out = READS.with_borrow_mut(|reads| reads.get_mut(slot).map(|(_, _, flight)| f(flight)));
+    count_busy();
+    out
+}
+
+/// path が変わる口の `slot` 番目の読みの印に `f` を撃つ（枠が無ければ None・撃った後に読みの途中の口を数え直す）。
 fn watch_flight<R>(slot: usize, f: impl FnOnce(&mut Flight) -> R) -> Option<R> {
-    WATCHES.with_borrow_mut(|w| w.get_mut(slot).map(|(_, _, flight)| f(flight)))
+    let out = WATCHES.with_borrow_mut(|w| w.get_mut(slot).map(|(_, _, flight)| f(flight)));
+    count_busy();
+    out
 }
 
 /// 登録された口の `slot` 番目を `attempt` 回目に読む（同じ本文は置かない・一度の読めないは 1 秒後に読み直す・
@@ -296,6 +325,7 @@ pub fn reload_all() {
             load_watch(slot, round, 1);
         }
     }
+    count_busy();
 }
 
 /// 最初の読みを許し、登録された口を全部読む（接続が開いた・開くのを待つ上限を越えた・接続を張れない）。
@@ -338,6 +368,7 @@ pub fn read_path(path: Signal<String>) -> ReadSignal<(Fetched, Option<u16>)> {
                 let round = flight.renew();
                 (LIVE.get() && !now.is_empty() && flight.start()).then_some(round)
             });
+            count_busy();
             out.set((Fetched::NotRead, None));
             if let Some(round) = go {
                 load_watch(slot, round, 1);
@@ -377,6 +408,7 @@ pub fn read(path: &'static str) -> ReadSignal<Fetched> {
         reads.push((path, signal.clone(), flight));
         (reads.len() - 1, signal, go)
     });
+    count_busy();
     if go {
         load_at(slot, 1);
     }

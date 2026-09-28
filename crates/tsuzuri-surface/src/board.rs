@@ -153,7 +153,7 @@ fn project_name(page: PageId) -> RwSignal<Option<String>> {
     name
 }
 
-/// 上端の帯: 戻る・題・頁の link・最終更新と読み込み不良の印・mode の切り替え（frame の BACK と HEADER の順）。
+/// 上端の帯: 戻る・題・頁の link・最終更新と読みの脈と読み込み不良の印・mode の切り替え（frame の BACK と HEADER の順）。
 fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
     let name = project_name(page);
     let back = view! {
@@ -214,7 +214,7 @@ fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
                     Some(t) => term(part.key, clock_short(t, net::now())),
                     None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
                 };
-                view! { <span class=part.class title=title>{at}</span>{fresh::mark()} }.into_any()
+                view! { <span class=part.class title=title>{at}</span>{fresh::pulse()}{fresh::mark()} }.into_any()
             }
             _ => {
                 let choices = Mode::ALL
