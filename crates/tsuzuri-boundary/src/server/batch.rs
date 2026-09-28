@@ -9,7 +9,9 @@
 //!    （open の問いでなければ UnknownQuestion・A-1 の印は A1InBatch・版が違えば StaleVersion）。
 //! 6. 束の id を発行する（`batch:<分>-<数>`・台帳の字に「束 = <id>・」が在れば数を増やす）。
 //! 7. 行ごとの裁定の id を裁定の受付と同じ決め方で発行する。
-//! 8. 要求の順に、行ごとに notes の末尾へ 1 行を足し、問いを閉じる（落ちたらそこで止めて 502）。
+//! 8. 要求の順に、行ごとに notes の末尾へ 1 行を足し、問いを閉じる。落ちたらそこで止めて 502 で、
+//!    本文は要求の全部の行の結果を要求の順に持つ（2 回とも書き終えた行は Written・追記が落ちた行は Unwritten・
+//!    閉じる書きが落ちた行は Unclosed・落ちた行より後の行は撃たずに Unwritten・何も消さず配達も撃たない）。
 //! 9. 席の target と state dir の両方が在るときだけ、裁定の受付の `deliver` に束の id と行の順の裁定を
 //!    1 度だけ渡す（台帳を読み直し、印の無い裁定が在れば器の配達の口を束の id で 1 度撃ち、
 //!    rc 0 なら行の順に印を置く・結果で応答は変えない）。
@@ -50,7 +52,8 @@ pub enum Outcome {
     LedgerUnknown,
     /// 発行した id が記帳 id の形に収まらない（500・書きの前）。
     IdShape,
-    /// どこかの書きが落ちた（502・行は 2 回とも書き終えた行だけ）。
+    /// どこかの書きが落ちた（502・行は要求の全部の行を要求の順に・2 回とも書き終えた行は Written・
+    /// 追記が落ちた行は Unwritten・閉じる書きが落ちた行は Unclosed・落ちた行より後の撃っていない行は Unwritten）。
     WriteFailed(BatchResponse),
 }
 
@@ -116,22 +119,36 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
         return Outcome::IdShape;
     };
     let mut items = Vec::with_capacity(rows.len());
+    let mut failed = false;
     for (row, id) in rows.iter().zip(&ids) {
-        let append = LedgerWrite::AppendNotes {
-            id: row.question.clone(),
-            line: line(id, row.question, &batch, row.verbatim),
+        let outcome = if failed {
+            ItemOutcome::Unwritten
+        } else {
+            let append = LedgerWrite::AppendNotes {
+                id: row.question.clone(),
+                line: line(id, row.question, &batch, row.verbatim),
+            };
+            let close = LedgerWrite::CloseItem {
+                id: row.question.clone(),
+                reason: format!("裁定 {id}{ID_END}束 {batch}"),
+            };
+            if !write(writer, &append) {
+                failed = true;
+                ItemOutcome::Unwritten
+            } else if !write(writer, &close) {
+                failed = true;
+                ItemOutcome::Unclosed { ruling: id.clone() }
+            } else {
+                ItemOutcome::Written { ruling: id.clone() }
+            }
         };
-        let close = LedgerWrite::CloseItem {
-            id: row.question.clone(),
-            reason: format!("裁定 {id}{ID_END}束 {batch}"),
-        };
-        if !write(writer, &append) || !write(writer, &close) {
-            return Outcome::WriteFailed(BatchResponse { batch, items });
-        }
         items.push(BatchItemResult {
             question: row.question.clone(),
-            outcome: ItemOutcome::Written { ruling: id.clone() },
+            outcome,
         });
+    }
+    if failed {
+        return Outcome::WriteFailed(BatchResponse { batch, items });
     }
     if let Some(d) = &writer.delivery {
         let pending: Vec<Pending> = rows

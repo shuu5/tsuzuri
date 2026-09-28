@@ -201,13 +201,18 @@ impl Refusal {
     }
 }
 
-/// 行ごとの結果（書いた・飛ばした・断った）。飛ばしたは notes に同じ id が既に在るとき。
+/// 行ごとの結果（書いた・飛ばした・断った・閉じていない・書いていない）。飛ばしたは notes に同じ id が既に在るとき。
+/// 閉じていないと書いていないは、束の書きが途中で落ちた 502 の応答だけが持つ。
+/// 閉じていないは notes への追記は済み閉じる書きが落ちた（問いは open のまま・notes にこの id の裁定の行が残る）。
+/// 書いていないはこの束が何も書いていない（追記が落ちた行と、落ちた行より後の撃っていない行）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 pub enum ItemOutcome {
     Written { ruling: RulingId },
     Skipped { ruling: RulingId },
     Refused { reason: Refusal },
+    Unclosed { ruling: RulingId },
+    Unwritten,
 }
 
 /// 束の行の結果。

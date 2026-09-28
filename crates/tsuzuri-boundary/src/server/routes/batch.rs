@@ -16,7 +16,8 @@ pub(in crate::server) const ROUTE: Entry = Entry {
 };
 
 /// 束の受付（守りは `guarded`）。断りと 4xx と 5xx は何も書いていない。
-/// 502 の本文は、2 回とも書き終えた行だけを書いたとして持つ BatchResponse。
+/// 502 の本文は、要求の全部の行の結果を要求の順に持つ BatchResponse
+/// （書いた・閉じていない・書いていない）。
 fn post_batch(req: &Request, shared: &Shared) -> Response {
     let body = match guarded(req, |t| wire::decode::<BatchRequest>(t).ok()) {
         Ok(body) => body,

@@ -320,7 +320,7 @@ fn batch_reply(written: usize, refused: usize) -> BatchResponse {
 #[test]
 fn batchpanel_batch_outcome() {
     let ok = wire::encode(&batch_reply(2, 0)).expect("電文");
-    let recorded = batch::outcome(Some((200, &ok)));
+    let recorded = batch::outcome(Some((200, &ok)), &[]);
     assert_eq!(
         recorded,
         batch::Outcome::Recorded {
@@ -339,15 +339,21 @@ fn batchpanel_batch_outcome() {
     assert!(!recorded.keeps_text());
     assert!(recorded.reloads());
 
-    let stale = batch::outcome(Some((409, "{\"reason\":\"stale-version\"}")));
+    let stale = batch::outcome(Some((409, "{\"reason\":\"stale-version\"}")), &[]);
     assert_eq!(stale, batch::Outcome::Stale);
     assert_eq!(stale.line(), ask::STALE);
     assert!(stale.keeps_text());
     assert!(stale.reloads());
 
     let partial_body = wire::encode(&batch_reply(1, 2)).expect("電文");
-    let partial = batch::outcome(Some((502, &partial_body)));
-    assert_eq!(partial, batch::Outcome::Partial { written: 1 });
+    let partial = batch::outcome(Some((502, &partial_body)), &[]);
+    assert_eq!(
+        partial,
+        batch::Outcome::Partial {
+            written: 1,
+            left: vec![]
+        }
+    );
     assert!(partial.line().starts_with(ask::REFUSED));
     assert!(partial.line().ends_with(&format!("{} 1", batch::WRITTEN)));
     assert!(partial.keeps_text());
@@ -357,22 +363,22 @@ fn batchpanel_batch_outcome() {
         reason: Refusal::A1InBatch,
     })
     .expect("電文");
-    let refused = batch::outcome(Some((400, &a1)));
+    let refused = batch::outcome(Some((400, &a1)), &[]);
     assert_eq!(
         refused,
         batch::Outcome::Refused(format!("{}（400）", ask::refusal_text(Refusal::A1InBatch)))
     );
-    let text = batch::outcome(Some((500, "boom")));
+    let text = batch::outcome(Some((500, "boom")), &[]);
     assert_eq!(text, batch::Outcome::Refused("状態 500: boom".to_string()));
     // 502 でも束の応答として読めなければ、ほかの 5xx と同じ。
-    let gateway = batch::outcome(Some((502, "bad gateway")));
+    let gateway = batch::outcome(Some((502, "bad gateway")), &[]);
     assert_eq!(
         gateway,
         batch::Outcome::Refused("状態 502: bad gateway".to_string())
     );
-    let lost = batch::outcome(None);
+    let lost = batch::outcome(None, &[]);
     assert_eq!(lost, batch::Outcome::Refused(ask::NOT_REACHED.to_string()));
-    let bad = batch::outcome(Some((200, "not json")));
+    let bad = batch::outcome(Some((200, "not json")), &[]);
     assert!(matches!(bad, batch::Outcome::Refused(_)));
     for o in [&refused, &text, &gateway, &lost, &bad] {
         assert!(o.keeps_text(), "{o:?}");

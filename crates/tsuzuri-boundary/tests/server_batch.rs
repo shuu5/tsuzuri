@@ -658,7 +658,19 @@ fn server_batch_write_failure_is_502_with_done_rows() {
     assert_eq!(reply.status, 502, "{}", reply.body);
     json_body(&reply);
     let got: BatchResponse = wire::decode(&reply.body).expect("束の応答の形");
-    let rulings = written(&got, &[Q2]);
+    let rulings = written(
+        &BatchResponse {
+            batch: got.batch.clone(),
+            items: got.items[..1].to_vec(),
+        },
+        &[Q2],
+    );
+    assert_eq!(got.items.len(), 2, "要求の全部の行: {:?}", got.items);
+    assert_eq!(
+        (got.items[1].question.as_str(), &got.items[1].outcome),
+        (Q3, &ItemOutcome::Unwritten),
+        "追記が落ちた行は書いていない"
+    );
     let argvs = place.argvs("bdw");
     assert_eq!(
         argvs.len(),
@@ -675,14 +687,22 @@ fn server_batch_write_failure_is_502_with_done_rows() {
         place.calls("scribe2").is_empty(),
         "落ちた書きの後に配達する"
     );
-    // 1 回目が落ちれば行は 0。
+    // 1 回目が落ちれば 2 行とも書いていない。
     let place = Place::new("fail-1");
     place.fail_at("bdw", 1);
     let addr = place.serve();
     let reply = post_batch(addr, vec![item(Q2, &d2, None), item(Q3, &d3, None)], "はい");
     assert_eq!(reply.status, 502, "{}", reply.body);
     let got: BatchResponse = wire::decode(&reply.body).expect("束の応答の形");
-    assert!(got.items.is_empty(), "{:?}", got.items);
+    let rows: Vec<(&str, &ItemOutcome)> = got
+        .items
+        .iter()
+        .map(|r| (r.question.as_str(), &r.outcome))
+        .collect();
+    assert_eq!(
+        rows,
+        [(Q2, &ItemOutcome::Unwritten), (Q3, &ItemOutcome::Unwritten)]
+    );
     assert_eq!(place.calls("bdw").len(), 1);
 }
 

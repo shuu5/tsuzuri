@@ -38,6 +38,12 @@ pub const FOLDS: &[&str] = &[];
 /// 書いた行の数の前の字。
 pub const WRITTEN: &str = "書いた行";
 
+/// 502 で残った行の数の前の字。
+pub const LEFT: &str = "残り";
+
+/// 追記は済み閉じる書きが落ちた行の題の後に括弧で包む字。
+pub const UNCLOSED: &str = "記録したが閉じていない";
+
 /// 重なりの chip の経験者だけの注釈（見本の id bo の chip の `data-tip-expert` の字）。
 pub const OVERLAP_TIP: &str = "選んだ質問の touches の重なり（衝突の兆し）";
 
@@ -167,6 +173,25 @@ pub fn request_body(chosen: &[&Row], verbatim: &str) -> String {
     .expect("字の欄だけの要求は電文の字にできる")
 }
 
+/// 502 で残った 1 行（問いの id・送った行の題〔無ければ問いの id の字〕・閉じていない行の裁定の id）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Left {
+    pub question: BeadId,
+    pub title: String,
+    /// 閉じていない行は notes に残った裁定の id・書いていない行は None。
+    pub ruling: Option<RulingId>,
+}
+
+impl Left {
+    /// 残りの名（閉じていない行は題の後に括弧で包んだ字）。
+    fn name(&self) -> String {
+        match self.ruling {
+            Some(_) => format!("{}（{UNCLOSED}）", self.title),
+            None => self.title.clone(),
+        }
+    }
+}
+
 /// 送った後の block の状態。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
@@ -174,8 +199,8 @@ pub enum Outcome {
     Recorded { batch: RulingId, written: usize },
     /// 409: 質問が更新された（一覧を読み直す）。
     Stale,
-    /// 502 で本文が束の応答として読めた: 送れなかったと書いた行の数（一覧を読み直す）。
-    Partial { written: usize },
+    /// 502 で本文が束の応答として読めた: 送れなかったと書いた行の数と残った行（一覧を読み直す）。
+    Partial { written: usize, left: Vec<Left> },
     /// ほかの 4xx・5xx・届かない: 理由の字。
     Refused(String),
 }
@@ -188,7 +213,17 @@ impl Outcome {
                 format!("{RECORDED} {batch} · {WRITTEN} {written}")
             }
             Outcome::Stale => STALE.to_string(),
-            Outcome::Partial { written } => format!("{REFUSED}（502） · {WRITTEN} {written}"),
+            Outcome::Partial { written, left } if left.is_empty() => {
+                format!("{REFUSED}（502） · {WRITTEN} {written}")
+            }
+            Outcome::Partial { written, left } => {
+                let names: Vec<String> = left.iter().map(Left::name).collect();
+                format!(
+                    "{REFUSED}（502） · {WRITTEN} {written} · {LEFT} {} · {}",
+                    left.len(),
+                    names.join("、")
+                )
+            }
             Outcome::Refused(reason) => format!("{REFUSED}: {reason}"),
         }
     }
@@ -221,8 +256,32 @@ pub fn refused_text(status: u16, text: &str) -> String {
     }
 }
 
-/// 応答から block の状態を決める（`reply` は状態の数と本文の字・届かなければ None）。
-pub fn outcome(reply: Option<(u16, &str)>) -> Outcome {
+/// 502 の束の応答の残った行（閉じていないと書いていないの行を応答の順に・題は `sent` の同じ id の行の題）。
+fn left(reply: &BatchResponse, sent: &[Row]) -> Vec<Left> {
+    reply
+        .items
+        .iter()
+        .filter_map(|i| {
+            let ruling = match &i.outcome {
+                ItemOutcome::Unclosed { ruling } => Some(ruling.clone()),
+                ItemOutcome::Unwritten => None,
+                _ => return None,
+            };
+            let title = sent
+                .iter()
+                .find(|r| r.id == i.question)
+                .map_or_else(|| i.question.to_string(), |r| r.title.clone());
+            Some(Left {
+                question: i.question.clone(),
+                title,
+                ruling,
+            })
+        })
+        .collect()
+}
+
+/// 応答から block の状態を決める（`reply` は状態の数と本文の字・届かなければ None・`sent` は送った行）。
+pub fn outcome(reply: Option<(u16, &str)>, sent: &[Row]) -> Outcome {
     match reply {
         None => Outcome::Refused(NOT_REACHED.to_string()),
         Some((200, text)) => match wire::decode::<BatchResponse>(text) {
@@ -236,6 +295,7 @@ pub fn outcome(reply: Option<(u16, &str)>) -> Outcome {
         Some((502, text)) => match wire::decode::<BatchResponse>(text) {
             Ok(r) => Outcome::Partial {
                 written: written(&r),
+                left: left(&r, sent),
             },
             Err(_) => Outcome::Refused(refused_text(502, text)),
         },
@@ -371,23 +431,26 @@ mod dom {
         .into_any()
     }
 
-    /// 束を送る（押せないときは何もしない）。応答で block の状態を決め、読み直す応答は口を全部読み直す。
+    /// 束を送る（押せないときは何もしない）。送る前に選んだ行を写し、応答をその写しと一緒に読んで block の状態を決め、
+    /// 読み直す応答は口を全部読み直す。
     fn submit(rows: Memo<Vec<Row>>, s: State) {
         let text = s.text.get_untracked();
         let body = rows.with_untracked(|rows| {
             s.off.with_untracked(|off| {
                 let chosen = selected(rows, off);
-                can_send(&text, chosen.len(), s.sending.get_untracked())
-                    .then(|| request_body(&chosen, &text))
+                can_send(&text, chosen.len(), s.sending.get_untracked()).then(|| {
+                    let sent: Vec<Row> = chosen.iter().map(|r| (*r).clone()).collect();
+                    (request_body(&chosen, &text), sent)
+                })
             })
         });
-        let Some(body) = body else {
+        let Some((body, sent)) = body else {
             return;
         };
         s.sending.set(true);
         spawn_local(async move {
             let reply = crate::net::post(PATH, body).await;
-            let out = outcome(reply.as_ref().map(|(st, t)| (*st, t.as_str())));
+            let out = outcome(reply.as_ref().map(|(st, t)| (*st, t.as_str())), &sent);
             if !out.keeps_text() {
                 s.text.set(String::new());
             }
