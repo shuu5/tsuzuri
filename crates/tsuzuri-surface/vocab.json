@@ -325,6 +325,16 @@
    "note": "{edge:design} task が指す design-note の行",
    "internal": "edge type=design"
   },
+  "e:req": {
+   "label": "req",
+   "note": "{edge:req} design-note の行が満たす要件",
+   "internal": "edge type=req"
+  },
+  "e:depends": {
+   "label": "depends",
+   "note": "{edge:depends} 先に要る design-note の行",
+   "internal": "edge type=depends"
+  },
   "e:answers": {
    "label": "answers",
    "note": "{edge:answers} あなたの決定が答えた question",

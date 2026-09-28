@@ -27,8 +27,8 @@ pub const NOTE_ROW_KIND: &str = "設計ノートの行";
 /// pointer の先の file の名の終わり（folio derive が書く導出物）。
 const DERIVED_EXT: &str = ".toml";
 
-/// 設計文書の辺の型の数（`EdgeType::ALL` の先頭の 17）。
-pub const DESIGN_EDGE_TYPES: usize = 17;
+/// 設計の索引の辺の型の数（`EdgeType::ALL` の先頭の 19 = 設計文書の 17 型と設計ノートの行の 2 型）。
+pub const DESIGN_EDGE_TYPES: usize = 19;
 
 /// 台帳の辺の型（bd の依存の種類のうち使う 4 つ）。
 pub const LEDGER_EDGE_TYPES: [EdgeType; 4] = [

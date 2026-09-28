@@ -352,7 +352,7 @@ fn contract_form_roundtrip_all_types() {
 #[test]
 fn contract_form_closed_lists() {
     assert_eq!(distinct(&NodeKind::ALL), 20);
-    assert_eq!(distinct(&EdgeType::ALL), 30);
+    assert_eq!(distinct(&EdgeType::ALL), 32);
     assert_eq!(distinct(&GraphSource::ALL), 3);
     assert_eq!(distinct(&EdgeEnd::ALL), 2);
     let fold_words: Vec<String> = Fold::ALL

@@ -300,6 +300,8 @@ pub fn line_style(t: EdgeType) -> LineStyle {
         | E::Verifies
         | E::Figures
         | E::Produced
+        | E::Req
+        | E::Depends
         | E::RelatesTo
         | E::DiscoveredFrom
         | E::Design

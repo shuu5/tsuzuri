@@ -1,5 +1,5 @@
-//! 導出グラフの型: 節点の種類（閉じた 20）・辺の型（閉じた 30）・節点と辺（判断の記録 ADR-7 決定 (2)・設計ノート surface §17・§18）。
-//! 設計文書の 11 種と 17 型は folio の語（graph.yaml の node_kinds と edge_types の写し）をそのまま電文の語にする。
+//! 導出グラフの型: 節点の種類（閉じた 20）・辺の型（閉じた 32）・節点と辺（判断の記録 ADR-7 決定 (2)・設計ノート surface §17・§18）。
+//! 設計文書の 11 種と 17 型と設計ノートの行の 2 型は folio の語（graph.yaml の node_kinds と edge_types の写し）をそのまま電文の語にする。
 //! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は便 c で決めるのでここには置かない。
 //! 導出グラフの電文（GraphDoc）は便 e-read で足す（中核の crate の Graph と check の値の写し）。
 //! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）は便 c-view で足す。
@@ -87,7 +87,7 @@ impl NodeKind {
     ];
 }
 
-/// 辺の型（閉じた 30・順は設計文書の 17 型・台帳の 4 型・結びの 6 型・走行の 3 型）。
+/// 辺の型（閉じた 32・順は設計文書の 17 型・設計ノートの行の 2 型・台帳の 4 型・結びの 6 型・走行の 3 型）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum EdgeType {
     #[serde(rename = "in-article")]
@@ -124,6 +124,12 @@ pub enum EdgeType {
     Produced,
     #[serde(rename = "amends")]
     Amends,
+    /// 設計ノートの行 → 要件。
+    #[serde(rename = "req")]
+    Req,
+    /// 設計ノートの行 → 先に要る行。
+    #[serde(rename = "depends")]
+    Depends,
     #[serde(rename = "parent-child")]
     ParentChild,
     #[serde(rename = "blocks")]
@@ -163,7 +169,7 @@ pub enum EdgeType {
 
 impl EdgeType {
     /// 閉じた一覧（順も固定）。
-    pub const ALL: [EdgeType; 30] = [
+    pub const ALL: [EdgeType; 32] = [
         EdgeType::InArticle,
         EdgeType::RelationsArticles,
         EdgeType::RelationsReqs,
@@ -181,6 +187,8 @@ impl EdgeType {
         EdgeType::Figures,
         EdgeType::Produced,
         EdgeType::Amends,
+        EdgeType::Req,
+        EdgeType::Depends,
         EdgeType::ParentChild,
         EdgeType::Blocks,
         EdgeType::RelatesTo,
@@ -304,7 +312,7 @@ pub struct InvariantCheck {
 /// 組まずに数えた行の数（種類か型が閉じた一覧に無い・設計の索引の辺は端が組まなかった節点の行の id の辺も）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkippedEdges {
-    /// 設計の索引の辺のうち 17 型の外と、端が組まなかった節点の行の id の辺。
+    /// 設計の索引の辺のうち 19 型の外と、端が組まなかった節点の行の id の辺。
     pub design: u32,
     /// 台帳の dependencies のうち 4 型の外。
     pub ledger: u32,

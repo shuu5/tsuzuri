@@ -39,6 +39,8 @@
     "figures",
     "produced",
     "amends",
+    "req",
+    "depends",
     "parent-child",
     "blocks",
     "relates-to",

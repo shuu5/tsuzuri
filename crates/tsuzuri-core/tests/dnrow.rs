@@ -131,7 +131,7 @@ fn dnrow_index_reads_rows() {
         .map(|e| (e.from.clone(), e.to.clone()))
         .collect();
     assert_eq!(basis, vec![pair("FR1", "A-1")]);
-    assert_eq!(g.skipped.design_edges, 4, "req の 2 行と depends の 2 行");
+    assert_eq!(g.skipped.design_edges, 0, "req の 2 行と depends の 2 行も組む");
     assert_eq!(g.skipped.ledger_edges, 0);
 }
 
@@ -190,6 +190,8 @@ fn dnrow_design_edges() {
         counts,
         vec![
             (EdgeType::Basis, 1),
+            (EdgeType::Req, 2),
+            (EdgeType::Depends, 2),
             (EdgeType::ParentChild, 3),
             (EdgeType::Design, 3),
             (EdgeType::RunOf, 1),

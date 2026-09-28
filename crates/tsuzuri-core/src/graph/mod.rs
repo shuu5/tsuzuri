@@ -119,7 +119,7 @@ pub struct PolicyAttr {
 /// 組まずに数えた行（種類か型が閉じた一覧に無い・設計の索引の辺は端が組まなかった節点の行の id の辺も）。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct Skipped {
-    /// 設計の索引の辺のうち 17 型の外と、端が組まなかった節点の行の id の辺。
+    /// 設計の索引の辺のうち 19 型の外と、端が組まなかった節点の行の id の辺。
     pub design_edges: usize,
     /// 台帳の dependencies のうち 4 型の外。
     pub ledger_edges: usize,
