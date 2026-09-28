@@ -2,7 +2,8 @@
 //! 撃つ形は `bd --readonly list --all --limit 0 --json`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
 //! 起動できない・rc が 0 でない・JSON として読めない・5 秒を超えて返さない、のどれでも
 //! 一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
-//! 変化の印は台帳の store の manifest の中身と journal の長さで、store が無ければ issues.jsonl と interactions.jsonl の更新時刻と長さ（jsonl の中身は読まない・行 e-marks）。
+//! 変化の印は store（.beads の metadata.json が名指す db の .dolt/noms）の manifest の字と manifest が名指す file の長さで、
+//! store が無ければ issues.jsonl と interactions.jsonl の更新時刻と長さ（jsonl の中身は読まない・行 e-marks・行 e-mark-meta）。
 //! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 //! 読めた字（`parse_bd` か中核の台帳の読みが Known の字）は最後に読めた字として持ち、次の読みが落ちたときだけ
 //! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
@@ -44,18 +45,28 @@ pub const STORE_DIR: &str = "embeddeddolt";
 /// db の dir の下の store の file の置き場。
 pub const NOMS: &str = ".dolt/noms";
 
-/// store の manifest（中身を印にする）。
+/// store の manifest（字を印にする）。
 pub const MANIFEST: &str = "manifest";
 
-/// dolt の chunk journal の定まった名（長さを印にする）。
+/// dolt の chunk journal の定まった名（manifest が名指す file の 1 つ）。
 pub const JOURNAL: &str = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv";
 
-/// 台帳の変化の印（行 e-marks）。
+/// repo の .beads の下の store の置き方の JSON（欄 dolt_mode と dolt_database を読む・行 e-mark-meta）。
+pub const METADATA: &str = "metadata.json";
+
+/// table の file の名に足す字（manifest が名指す名の file が無ければ、この字を足した名の file を見る）。
+pub const TABLE_SUFFIX: &str = ".darc";
+
+/// 台帳の変化の印（行 e-marks・行 e-mark-meta）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mark {
-    /// db ごとの NOMS の path と manifest の中身と journal の長さ。
-    /// bd の読みは store の file の更新時刻を動かすので、更新時刻は見ない。
-    Store(Vec<(PathBuf, Option<Vec<u8>>, Option<u64>)>),
+    /// manifest の字と manifest が名指す file の名と長さ。
+    /// bd の読みは manifest を同じ字で置き替え journal と journal.idx の更新時刻を動かすので、
+    /// 更新時刻と journal.idx は見ない。
+    Store {
+        manifest: Vec<u8>,
+        sizes: Vec<(String, Option<u64>)>,
+    },
     /// store の無いときの `Source::marks` の 2 file の更新時刻と長さ。
     Files(Vec<Option<(SystemTime, u64)>>),
 }
@@ -119,36 +130,41 @@ impl Source {
         vec![beads.join("issues.jsonl"), beads.join("interactions.jsonl")]
     }
 
-    /// 台帳の store の db ごとの NOMS の path（MANIFEST が file のものを path の順に・dir が読めなければ空）。
-    /// db の dir の名は呼ぶたびに dir を読んで決める。
-    pub fn stores(&self) -> Vec<PathBuf> {
-        let Ok(dir) = std::fs::read_dir(self.repo.join(".beads").join(STORE_DIR)) else {
-            return Vec::new();
-        };
-        let mut stores: Vec<PathBuf> = dir
-            .filter_map(|e| Some(e.ok()?.path().join(NOMS)))
-            .filter(|noms| noms.join(MANIFEST).is_file())
-            .collect();
-        stores.sort();
-        stores
+    /// 台帳の store の NOMS の path（.beads の METADATA の欄 dolt_mode が embedded で、欄 dolt_database が
+    /// 英数字と _ と - だけの名で、その db の NOMS に MANIFEST の file が在るときだけ）。
+    /// db の名は呼ぶたびに METADATA を読んで決める（METADATA が名指さない db の dir は見ない）。
+    pub fn store(&self) -> Option<PathBuf> {
+        let beads = self.repo.join(".beads");
+        let meta = std::fs::read_to_string(beads.join(METADATA)).ok()?;
+        if json_str(&meta, "dolt_mode")? != "embedded" {
+            return None;
+        }
+        let db = json_str(&meta, "dolt_database").filter(|db| plain_name(db))?;
+        let noms = beads.join(STORE_DIR).join(db).join(NOMS);
+        noms.join(MANIFEST).is_file().then_some(noms)
     }
 
-    /// 変化の印（store が在れば manifest の中身と journal の長さ、無ければ `marks` の 2 file の更新時刻と長さ）。
+    /// 変化の印（store の MANIFEST が読めれば manifest の字と manifest が名指す file の長さ、
+    /// 無ければ `marks` の 2 file の更新時刻と長さ）。METADATA と manifest を読み、名指す file を stat するだけで、
+    /// 錠の file（LOCK）は開かない。
     pub fn mark(&self) -> Mark {
-        let stores = self.stores();
-        if stores.is_empty() {
+        let read = self
+            .store()
+            .and_then(|noms| Some((std::fs::read(noms.join(MANIFEST)).ok()?, noms)));
+        let Some((manifest, noms)) = read else {
             return Mark::Files(self.marks().iter().map(|m| stamp(m)).collect());
-        }
-        Mark::Store(
-            stores
-                .into_iter()
-                .map(|noms| {
-                    let manifest = std::fs::read(noms.join(MANIFEST)).ok();
-                    let journal = std::fs::metadata(noms.join(JOURNAL)).ok().map(|m| m.len());
-                    (noms, manifest, journal)
-                })
-                .collect(),
-        )
+        };
+        let sizes = named(&String::from_utf8_lossy(&manifest))
+            .into_iter()
+            .map(|name| {
+                let len = std::fs::metadata(noms.join(name))
+                    .or_else(|_| std::fs::metadata(noms.join(format!("{name}{TABLE_SUFFIX}"))))
+                    .ok()
+                    .map(|m| m.len());
+                (name.to_string(), len)
+            })
+            .collect();
+        Mark::Store { manifest, sizes }
     }
 
     /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。
@@ -203,6 +219,43 @@ impl Source {
 fn readable(text: &str) -> bool {
     matches!(parse_bd(text), Reading::Known(_))
         || matches!(tsuzuri_core::ledger::stats(text, 0), Reading::Known(_))
+}
+
+/// 英数字と _ と - だけの空でない字か（db の名と manifest が名指す file の名）。
+fn plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// manifest の字が名指す file の名（先頭の 5 つの欄の後の、名と chunk の数の組の名を順に・`plain_name` のものだけ）。
+fn named(manifest: &str) -> Vec<&str> {
+    manifest
+        .trim()
+        .split(':')
+        .skip(5)
+        .step_by(2)
+        .filter(|name| plain_name(name))
+        .collect()
+}
+
+/// JSON の object の字から鍵の字の値を読む（引用符で包んだ鍵の後の空白の次がコロンの所・
+/// 値が逆斜線を含むか字でなければ None）。境界の crate は serde に直接依存しないので、
+/// METADATA の 2 つの欄だけをこの形で読む。
+fn json_str<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let quoted = format!("\"{key}\"");
+    let mut rest = text;
+    while let Some(at) = rest.find(&quoted) {
+        rest = &rest[at + quoted.len()..];
+        let Some(after) = rest.trim_start().strip_prefix(':') else {
+            continue;
+        };
+        let value = after.trim_start().strip_prefix('"')?;
+        let value = &value[..value.find('"')?];
+        return (!value.contains('\\')).then_some(value);
+    }
+    None
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

@@ -1,5 +1,6 @@
 //! 台帳の store の印の歯（接頭辞 lstore_・設計ノート surface-wave12f 行 e-marks の完了の条件）。
-//! 印は store の manifest の中身と journal の長さで、bd の読みで動く更新時刻は見ない。
+//! 印は metadata.json が名指す store の manifest の字と manifest が名指す file の長さで、
+//! bd の読みで動く更新時刻と journal.idx は見ない（行 e-mark-meta）。
 //! 作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
 
 use std::fs::{self, OpenOptions};
@@ -13,7 +14,9 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use tsuzuri_boundary::server::events::{Hub, POLL, REREAD, STORE_REREAD, TIMING, Timing, stamp};
-use tsuzuri_boundary::server::ledger::{JOURNAL, MANIFEST, Mark, NOMS, STORE_DIR, Source};
+use tsuzuri_boundary::server::ledger::{
+    JOURNAL, MANIFEST, METADATA, Mark, NOMS, STORE_DIR, Source, TABLE_SUFFIX,
+};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::Reading;
 
@@ -153,8 +156,9 @@ const FILTERS: [&str; 132] = [
     "lidle_",
 ];
 
-/// manifest の見本の字。
-const MANIFEST_TEXT: &str = "5:__DOLT__:aaaa:bbbb:0000:vvvv:10";
+/// manifest の見本の字（table の file 2 つと journal の本体を名指す）。
+const MANIFEST_TEXT: &str =
+    "5:__DOLT__:aaaa:bbbb:0000:tbl1:3:tbl2:4:vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv:10";
 
 /// 歯ごとの作業場（中の repo の置き場）。
 fn place(name: &str) -> PathBuf {
@@ -166,13 +170,26 @@ fn place(name: &str) -> PathBuf {
     root
 }
 
-/// repo の db の dir の NOMS に manifest と journal と journal.idx を置き、NOMS の path を返す。
+/// 組み込みの store の db を名指す metadata.json の字。
+fn metadata(db: &str) -> String {
+    format!(
+        r#"{{"database": "dolt", "backend": "dolt", "dolt_mode": "embedded", "dolt_database": "{db}"}}"#
+    )
+}
+
+/// repo の .beads に db を名指す METADATA を置き、db の dir の NOMS に manifest と 2 つの table の file と
+/// journal と journal.idx と空の LOCK を置き、NOMS の path を返す。
 fn store(repo: &Path, db: &str) -> PathBuf {
-    let noms = repo.join(".beads").join(STORE_DIR).join(db).join(NOMS);
+    let beads = repo.join(".beads");
+    fs::write(beads.join(METADATA), metadata(db)).expect("metadata.json");
+    let noms = beads.join(STORE_DIR).join(db).join(NOMS);
     fs::create_dir_all(&noms).expect("NOMS の dir");
     fs::write(noms.join(MANIFEST), MANIFEST_TEXT).expect("manifest");
+    fs::write(noms.join(format!("tbl1{TABLE_SUFFIX}")), "12345").expect("table の file");
+    fs::write(noms.join("tbl2"), "abc").expect("table の file");
     fs::write(noms.join(JOURNAL), "0123456789").expect("journal");
     fs::write(noms.join("journal.idx"), "idx").expect("journal.idx");
+    fs::write(noms.join("LOCK"), "").expect("LOCK");
     noms
 }
 
@@ -189,7 +206,8 @@ fn append(path: &Path, text: &str) {
 /// bd の読みの見立て（更新時刻だけを動かし、manifest を同じ字で置き替え、journal.idx の長さを替える）。
 fn read_like(noms: &Path) {
     let later = SystemTime::now() + Duration::from_secs(5);
-    for name in [JOURNAL, "journal.idx"] {
+    let table = format!("tbl1{TABLE_SUFFIX}");
+    for name in [JOURNAL, "journal.idx", &table, "tbl2"] {
         OpenOptions::new()
             .append(true)
             .open(noms.join(name))
@@ -221,16 +239,45 @@ fn lstore_values_and_dirs() {
     assert_eq!(NOMS, ".dolt/noms");
     assert_eq!(MANIFEST, "manifest");
     assert_eq!(JOURNAL, "v".repeat(32));
+    assert_eq!(METADATA, "metadata.json");
+    assert_eq!(TABLE_SUFFIX, ".darc");
     let root = place("dirs");
     let repo = root.join("repo");
+    let meta = repo.join(".beads").join(METADATA);
     let source = Source::new(&repo, "bd");
-    assert!(source.stores().is_empty(), "store の dir が無いのに在る");
-    let b = store(&repo, "b");
-    let a = store(&repo, "a");
-    let dir = repo.join(".beads").join(STORE_DIR);
-    fs::create_dir_all(dir.join("c").join(NOMS)).expect("manifest の無い dir");
-    fs::write(dir.join("d"), "x").expect("dir でない file");
-    assert_eq!(source.stores(), vec![a, b]);
+    assert_eq!(source.store(), None, "metadata.json が無いのに在る");
+    let noms = store(&repo, "t3");
+    assert_eq!(source.store(), Some(noms.clone()));
+    // 組み込みでない置き方と、名の無い・名でない・store の無い db は store の無い置き方。
+    for text in [
+        r#"{"database": "dolt", "backend": "dolt", "dolt_mode": "server", "dolt_database": "t3"}"#,
+        r#"{"database": "dolt", "backend": "dolt", "dolt_mode": "embedded"}"#,
+        r#"{"database": "dolt", "backend": "dolt", "dolt_mode": "embedded", "dolt_database": "../t3"}"#,
+        r#"{"database": "dolt", "backend": "dolt", "dolt_mode": "embedded", "dolt_database": "x9"}"#,
+    ] {
+        fs::write(&meta, text).expect("metadata.json");
+        assert_eq!(source.store(), None, "{text}");
+    }
+    // 欄の順と数の値の欄と値が dolt_mode の字の欄とコロンの前後の空白は読みを変えない。
+    for text in [
+        r#"{"dolt_database": "t3", "dolt_mode": "embedded", "backend": "dolt", "database": "dolt"}"#,
+        r#"{"note": "dolt_mode", "schema": 2, "dolt_mode":"embedded", "dolt_database":"t3"}"#,
+        r#"{
+  "dolt_mode" :  "embedded",
+  "version": 1,
+  "dolt_database"   :"t3"
+}
+"#,
+    ] {
+        fs::write(&meta, text).expect("metadata.json");
+        assert_eq!(source.store(), Some(noms.clone()), "{text}");
+    }
+    fs::remove_file(noms.join(MANIFEST)).expect("manifest を消す");
+    assert_eq!(source.store(), None, "manifest が無いのに在る");
+    assert!(
+        matches!(source.mark(), Mark::Files(_)),
+        "manifest が無いのに store の印"
+    );
 }
 
 #[test]
@@ -249,11 +296,14 @@ fn lstore_mark_ignores_mtime() {
     let first = source.mark();
     assert_eq!(
         first,
-        Mark::Store(vec![(
-            noms.clone(),
-            Some(MANIFEST_TEXT.as_bytes().to_vec()),
-            Some(10)
-        )])
+        Mark::Store {
+            manifest: MANIFEST_TEXT.as_bytes().to_vec(),
+            sizes: vec![
+                ("tbl1".to_string(), Some(5)),
+                ("tbl2".to_string(), Some(3)),
+                (JOURNAL.to_string(), Some(10)),
+            ],
+        }
     );
     // 更新時刻と manifest の置き替えと journal.idx と jsonl の動きは印を動かさない。
     read_like(&noms);
@@ -263,16 +313,24 @@ fn lstore_mark_ignores_mtime() {
     append(&noms.join(JOURNAL), "x");
     let grown = source.mark();
     assert_ne!(grown, first, "journal の長さで印が動かない");
-    // manifest の字が替われば、長さが同じでも印が動く。
-    fs::write(noms.join(MANIFEST), MANIFEST_TEXT.replace("aaaa", "cccc")).expect("manifest");
+    // manifest の根の hash の字が替われば、長さが同じでも印が動く。
+    fs::write(noms.join(MANIFEST), MANIFEST_TEXT.replace("bbbb", "cccc")).expect("manifest");
     let swapped = source.mark();
     assert_ne!(swapped, grown, "manifest の字で印が動かない");
+    // table の file の長さが動けば印も動く。
+    append(&noms.join("tbl2"), "x");
+    let folded = source.mark();
+    assert_ne!(folded, swapped, "table の file の長さで印が動かない");
     fs::remove_file(noms.join(JOURNAL)).expect("journal を消す");
-    let Mark::Store(parts) = source.mark() else {
+    let Mark::Store { sizes, .. } = source.mark() else {
         panic!("store の印でない");
     };
-    assert_eq!(parts.len(), 1);
-    assert_eq!(parts[0].2, None, "journal が無いのに長さが在る");
+    assert_eq!(sizes.len(), 3);
+    assert_eq!(
+        sizes[2],
+        (JOURNAL.to_string(), None),
+        "journal が無いのに長さが在る"
+    );
 }
 
 /// 同じ印の値を返し続ける見張りに、受け手を 1 人足してから 1000 ミリ秒の後の読みの回。
@@ -302,7 +360,10 @@ fn reads_in_a_second(mark: Mark, reading: Reading<u32>) -> usize {
 
 #[test]
 fn lstore_watch_intervals() {
-    let store = Mark::Store(vec![(PathBuf::from("/s"), Some(b"m".to_vec()), Some(1))]);
+    let store = Mark::Store {
+        manifest: b"m".to_vec(),
+        sizes: Vec::new(),
+    };
     let files = Mark::Files(vec![None, None]);
     let n = reads_in_a_second(store.clone(), Reading::Known(1));
     assert!(n <= 2, "store の印で読めた後も読み直す: {n}");

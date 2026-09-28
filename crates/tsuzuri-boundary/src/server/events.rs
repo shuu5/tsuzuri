@@ -1,5 +1,5 @@
 //! 変化の知らせ（口 GET /api/surface/events・SSE・便 e-src）。
-//! 変化の印（ledger の `Mark`: store の manifest の中身と journal の長さ・store が無ければ jsonl の 2 file の
+//! 変化の印（ledger の `Mark`: store の manifest の字と manifest が名指す file の長さ・store が無ければ jsonl の 2 file の
 //! 更新時刻と長さ）を 500 ミリ秒ごとに見て、動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
 //! 印の取りこぼしを拾うために、印が動かなくても、store の印で前の読みが読めていれば 60 秒ごと、ほかは 5 秒ごとに
 //! 読み直す（jsonl の印は器の素の bd close で動かないことがある・行 e-marks）。
@@ -133,7 +133,7 @@ impl Hub {
     {
         watch_with(mark, read, timing.poll, move |mark, last| {
             match (mark, last) {
-                (Mark::Store(_), Reading::Known(_)) => timing.store_reread,
+                (Mark::Store { .. }, Reading::Known(_)) => timing.store_reread,
                 _ => timing.reread,
             }
         })
