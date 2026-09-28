@@ -47,6 +47,9 @@ pub const SHOW: usize = 3;
 /// 開いた列の名を残す URL の query の鍵。
 pub const QUERY_KEY: &str = "col";
 
+/// 開いた列を畳む button の字（見出しでなく、「+n」と同じく file の定数の字・行 g-pipe-fold）。
+pub const CLOSE: &str = "畳む";
+
 /// hover の card の出所の行。
 pub const SOURCE: &str = "fleet/events.jsonl";
 
@@ -185,6 +188,11 @@ impl Column {
     /// 「+n」の n（開いた列と、3 枚以下の列は None）。
     pub fn more(&self, open: bool) -> Option<usize> {
         (!open && self.cards.len() > SHOW).then(|| self.cards.len() - SHOW)
+    }
+
+    /// 畳む button を出すか（開いた列で札が 3 枚を越えるときだけ・「+n」と同じ列に同時には出ない）。
+    pub fn closable(&self, open: bool) -> bool {
+        open && self.cards.len() > SHOW
     }
 }
 
@@ -393,6 +401,27 @@ pub fn with_open(search: &str, column: PipelineColumn) -> String {
     frame::with_param(search, QUERY_KEY, &names.join(","))
 }
 
+/// 列を畳んだ後の URL の query（残りの開いた列の名を板の順で `col=` に残す・残りが無ければ `col` の片を全部外す）。
+/// 空の字は返さない（history に空の字を渡すと今の URL が残るので、片が無ければ `?` だけ）。
+pub fn with_closed(search: &str, column: PipelineColumn) -> String {
+    let open = open_columns(search);
+    let names: Vec<&str> = LANES
+        .into_iter()
+        .filter(|l| l.column != column && open.contains(&l.column))
+        .map(|l| l.name)
+        .collect();
+    if !names.is_empty() {
+        return frame::with_param(search, QUERY_KEY, &names.join(","));
+    }
+    let rest: Vec<&str> = search
+        .strip_prefix('?')
+        .unwrap_or(search)
+        .split('&')
+        .filter(|p| p.split('=').next() != Some(QUERY_KEY))
+        .collect();
+    format!("?{}", rest.join("&"))
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     dom::view()
@@ -405,8 +434,8 @@ mod dom {
     use tsuzuri_contract::board::PipelineColumn;
 
     use super::{
-        BLOCK, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns, with_nodes,
-        with_open,
+        BLOCK, CLOSE, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns,
+        with_closed, with_nodes, with_open,
     };
     use crate::frame::Mode;
     use crate::project::{Body, ledger, map, section, state_icon, unmeasured};
@@ -434,6 +463,19 @@ mod dom {
     /// 列を開き、開いた列の名を URL の query に残す（頁は読み直さない）。
     fn open_column(open: RwSignal<Vec<PipelineColumn>>, column: PipelineColumn) {
         let url = with_open(&search(), column);
+        if let Ok(history) = window().history() {
+            let _ = history.replace_state_with_url(
+                &web_sys::wasm_bindgen::JsValue::NULL,
+                "",
+                Some(&url),
+            );
+        }
+        open.set(open_columns(&url));
+    }
+
+    /// 列を畳み、その列の名を URL の query から外す（頁は読み直さない・履歴に積まない）。
+    fn close_column(open: RwSignal<Vec<PipelineColumn>>, column: PipelineColumn) {
+        let url = with_closed(&search(), column);
         if let Ok(history) = window().history() {
             let _ = history.replace_state_with_url(
                 &web_sys::wasm_bindgen::JsValue::NULL,
@@ -492,6 +534,7 @@ mod dom {
         let class = col.class.clone();
         let key = col.lane.key;
         let shown = col.clone();
+        let closing = col.clone();
         let cards = move || {
             shown
                 .shown(is_open())
@@ -508,11 +551,21 @@ mod dom {
                 }
             })
         };
+        let close = move || {
+            closing.closable(is_open()).then(|| {
+                view! {
+                    <button type="button" class="more" on:click=move |_| close_column(open, column)>
+                        {CLOSE}
+                    </button>
+                }
+            })
+        };
         view! {
             <div class=class>
                 <header><span class="dot" aria-hidden="true"></span>{hs(key)}<span class="cnt num">{count}</span></header>
                 <div class="cards">{cards}</div>
                 {more}
+                {close}
             </div>
         }
         .into_any()
