@@ -244,11 +244,25 @@ fn script(path: &Path, body: &str) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
+/// drop で path を消す守り（dir なら中身ごと・file なら file を・誤りは捨てる）。
+struct Tidy(PathBuf);
+
+impl Drop for Tidy {
+    fn drop(&mut self) {
+        let _ = match fs::symlink_metadata(&self.0) {
+            Ok(meta) if meta.is_dir() => fs::remove_dir_all(&self.0),
+            _ => fs::remove_file(&self.0),
+        };
+    }
+}
+
 /// 歯ごとの作業場（.git が file の repo・記録の置き場・偽の bd と偽の設計の道具と、それらが出す字の写し）。
+/// 作業場が drop されると、守りが repo の .git を消す（target/tmp に .git を残さない）。
 struct Place {
     root: PathBuf,
     repo: PathBuf,
     log: PathBuf,
+    _git: Tidy,
 }
 
 impl Place {
@@ -260,7 +274,9 @@ impl Place {
         let (repo, log) = (root.join("repo"), root.join("log"));
         fs::create_dir_all(&repo).expect("repo の置き場");
         fs::create_dir_all(&log).expect("記録の置き場");
-        fs::write(repo.join(".git"), "gitdir: /nonexistent/qgate\n").expect(".git の file");
+        let git = repo.join(".git");
+        let tidy = Tidy(git.clone());
+        fs::write(&git, "gitdir: /nonexistent/qgate\n").expect(".git の file");
         fs::write(root.join("ledger.json"), read_fixture(LEDGER)).expect("台帳の写し");
         fs::write(root.join("index.tsv"), read_fixture(INDEX)).expect("索引の写し");
         for (program, out) in [("bd", "ledger.json"), ("folio", "index.tsv")] {
@@ -273,7 +289,7 @@ impl Place {
                 ),
             );
         }
-        Place { root, repo, log }
+        Place { root, repo, log, _git: tidy }
     }
 
     /// 偽の program を落とす（出す file が無いので rc 1）。
@@ -408,6 +424,24 @@ fn qgate_bin_names_undisposed() {
         )]
     );
     assert!(before == tree(&place.repo), "repo の byte が変わる");
+    // 作業場の drop で守りが .git を消す。
+    let git = place.repo.join(".git");
+    drop(place);
+    assert!(fs::symlink_metadata(&git).is_err(), "drop の後に .git が残る");
+    // 作業場を持ったままの panic でも、巻き戻しで .git が消える。
+    let unwound = std::panic::catch_unwind(|| {
+        let place = Place::new("undisposed");
+        assert!(place.repo.join(".git").is_file(), ".git の file");
+        panic!("作業場を持ったまま巻き戻す");
+    });
+    assert!(unwound.is_err());
+    assert!(fs::symlink_metadata(&git).is_err(), "巻き戻しの後に .git が残る");
+    // 守りは .git を書く前に束ねる（組みの途中の panic でも消す）。
+    let own = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/qgate.rs"))
+        .expect("歯の file");
+    let body = own.split("impl Place {").nth(1).expect("Place の impl");
+    let (bind, write) = (body.find("Tidy(git.clone())"), body.find("fs::write(&git"));
+    assert!(bind.is_some() && write.is_some() && bind < write, "Tidy を .git の書きより前に束ねる");
 }
 
 #[test]
