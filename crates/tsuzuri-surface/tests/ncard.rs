@@ -95,7 +95,7 @@ fn ncard_node_card_on_fixture() {
             kind: "条 · constitution · 状態なし".to_string(),
             value: "P-1 要約なし".to_string(),
             src: "design-intent/constitution.yaml".to_string(),
-            more: Vec::new(),
+            more: vec!["design-intent/constitution.yaml（行は測れていない）".to_string()],
         }
     );
     assert_eq!(card(&doc, "P-1.2").kind, "条の文 · constitution · 状態なし");
@@ -106,7 +106,7 @@ fn ncard_node_card_on_fixture() {
             kind: "ADR · ADR · 状態なし".to_string(),
             value: "ADR-10 要約なし".to_string(),
             src: "…/adr/ADR-10.yaml".to_string(),
-            more: vec!["design-intent/adr/ADR-10.yaml".to_string()],
+            more: vec!["design-intent/adr/ADR-10.yaml（行は測れていない）".to_string()],
         }
     );
     assert_eq!(card(&doc, "FR14").kind, "requirement · SRS · 状態なし");
@@ -132,7 +132,11 @@ fn ncard_node_card_on_fixture() {
         let c = card(&doc, id);
         assert_eq!(c.kind, "design-note の行 · design-note · 状態なし", "{id}");
         assert_eq!(c.src, "contracts/surface-board.toml", "{id}");
-        assert!(c.more.is_empty(), "{id}");
+        assert_eq!(
+            c.more,
+            vec!["contracts/surface-board.toml（行は測れていない）".to_string()],
+            "{id}"
+        );
     }
 }
 

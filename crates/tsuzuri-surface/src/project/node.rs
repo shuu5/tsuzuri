@@ -8,6 +8,7 @@ use crate::frame::{Block, Mode};
 use crate::mapview::band::{Band, band_of, kind_key};
 use crate::mapview::{encode, is_open};
 use crate::project::nodearound::PageState;
+use crate::widgets::nodecard::full_src;
 
 pub const BLOCK: Block = Block {
     id: "node",
@@ -21,7 +22,7 @@ pub const PATHS: &[&str] = &[];
 /// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
 pub const FOLDS: &[&str] = &[];
 
-/// 電文に要約の欄がまだ無いときの概要の字。
+/// 電文の節点に概要の字が無いときの概要の字。
 pub const NO_SUMMARY: &str = "要約なし";
 
 /// 出所の file を持たない節点（台帳と走行）の出所の字。
@@ -48,7 +49,7 @@ pub struct Head {
     pub id: String,
     /// 題（36 字で切る）。
     pub title: String,
-    /// 出所の file（無ければ「出所なし」）。
+    /// 出所の file とコロンと行（行が無ければ file と「（行は測れていない）」・file が無ければ「出所なし」）。
     pub src: String,
     /// 中心が open の問いなら質問の頁への link を出す。
     pub answer: bool,
@@ -80,26 +81,44 @@ pub fn head(doc: &AroundDoc) -> Option<Head> {
         state,
         id: row.node.id.clone(),
         title: title36(&row.node.title),
-        src: row.node.file.clone().unwrap_or_else(|| NO_SRC.to_string()),
+        src: match row.node.file {
+            Some(_) => full_src(&row.node),
+            None => NO_SRC.to_string(),
+        },
         answer: alert,
     })
 }
 
 /// 概要の 1 つの箱（見出しの語の鍵・class・字）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SumBox {
     pub key: &'static str,
     pub class: &'static str,
-    pub text: &'static str,
+    pub text: String,
 }
 
-/// 概要の 2 つの箱（電文に要約の欄がまだ無いので、どちらも要約なし）。
-pub fn summary(_center: &AroundRow) -> [SumBox; 2] {
-    SUMMARY_KEYS.map(|key| SumBox {
-        key,
-        class: SUMMARY_NONE,
-        text: NO_SUMMARY,
-    })
+/// 概要の 2 つの箱（中心の節点の plain と eng を切らずに写す・字が無いか空なら要約なし）。
+pub fn summary(center: &AroundRow) -> [SumBox; 2] {
+    let [plain, eng] = SUMMARY_KEYS;
+    [
+        sum_box(plain, &center.node.plain),
+        sum_box(eng, &center.node.eng),
+    ]
+}
+
+fn sum_box(key: &'static str, text: &Option<String>) -> SumBox {
+    match text.as_deref().filter(|s| !s.is_empty()) {
+        Some(t) => SumBox {
+            key,
+            class: "sumbox",
+            text: t.to_string(),
+        },
+        None => SumBox {
+            key,
+            class: SUMMARY_NONE,
+            text: NO_SUMMARY.to_string(),
+        },
+    }
 }
 
 /// 質問の頁への link（問いの id を `%XX` にして残す・mode を URL に残す）。
@@ -127,7 +146,9 @@ pub use dom::view;
 mod dom {
     use leptos::prelude::*;
 
-    use super::{BLOCK, Head, PageState, answer_href, center, head, kept_subject, summary};
+    use super::{
+        BLOCK, Head, PageState, SUMMARY_NONE, answer_href, center, head, kept_subject, summary,
+    };
     use crate::mapview::band_chip;
     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
     use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, state_icon, unmeasured};
@@ -137,6 +158,10 @@ mod dom {
 
     /// 出所の印（見本の IC.file）。
     const FILE_ICON: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>"#;
+    /// 非エンジニア向けの概要の印（見本の IC.person）。
+    const PERSON: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>"#;
+    /// エンジニア向けの概要の印（見本の IC.code）。
+    const CODE: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>"#;
 
     /// 節点の block（見つからないときは見出しと id・読めないときは測れていないと理由の 1 行）。
     pub fn view() -> AnyView {
@@ -166,12 +191,14 @@ mod dom {
                 PageState::Doc(doc) => match (head(&doc), center(&doc)) {
                     (Some(h), Some(c)) => {
                         let boxes = summary(c)
-                            .map(|b| {
+                            .into_iter()
+                            .zip([PERSON, CODE])
+                            .map(|(b, icon)| {
+                                let t = (b.class != SUMMARY_NONE).then_some("");
                                 view! {
-                                    <section class=b.class><header>{h2(b.key)}</header><p>{b.text}</p></section>
+                                    <section class=b.class><header><span inner_html=icon></span>{h2(b.key)}</header><p data-t=t>{b.text}</p></section>
                                 }
                             })
-                            .into_iter()
                             .collect_view();
                         view! { {head_view(h, mode)}<div class="two">{boxes}</div> }.into_any()
                     }

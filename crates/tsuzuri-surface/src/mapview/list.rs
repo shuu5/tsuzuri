@@ -1,5 +1,5 @@
 //! 一覧の面（見本の map.html の list）: 絞り（帯・種類・種類の組）と並べ替え（id・状態）の選択と、行の一覧。
-//! 行は印・id・題 36 字・帯の chip・種類の語・状態の語と、要約の欄（電文にまだ無いので「要約なし」）。
+//! 行は印・id・題 36 字・帯の chip・種類の語・状態の語と、要約の欄（節点の概要を 80 字で切った字・無ければ「要約なし」）。
 //! 更新の時刻は電文に無いので出さず、並べ替えにも入れない。絞りと並べ替えは URL の query（band・kind・sort・pair）に残す。
 
 use std::collections::BTreeSet;
@@ -7,12 +7,13 @@ use std::collections::BTreeSet;
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
 
 use super::band::{Band, band_of, kind_from_name, kind_name};
+use super::graph::cut;
 use super::{
     VIEW_PARAM, View, kinds_by_id, natural, open_question, param, set_param, shape_class, state,
     unread_reasons,
 };
 use crate::widgets::hover::Card;
-use crate::widgets::nodecard::node_card;
+use crate::widgets::nodecard::{gist, node_card};
 
 /// 帯の絞りを残す URL の query の鍵。
 pub const BAND_PARAM: &str = "band";
@@ -26,8 +27,11 @@ pub const PAIR_PARAM: &str = "pair";
 /// 状態の無い節点の状態の語。
 pub const NO_STATE: &str = "状態なし";
 
-/// 要約の欄の字（要約は電文にまだ無い）。
+/// 要約の無い節点の要約の欄の字。
 pub const NO_GIST: &str = "要約なし";
+
+/// 一覧の行の要約の欄の字数（見本の cut(g, 80)）。
+const GIST_CHARS: usize = 80;
 
 /// 並べ替え（閉じた 2・選択の順）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -123,6 +127,8 @@ pub struct Row {
     pub state: Option<String>,
     /// 行の題の hover の card（節点の card）。
     pub card: Card,
+    /// 要約の欄の字（節点の概要を 80 字で切った字・無ければ None）。
+    pub gist: Option<String>,
 }
 
 impl Row {
@@ -230,6 +236,7 @@ fn row(doc: &GraphDoc, node: &GraphNode) -> Row {
         kind: node.kind,
         state: state(doc, node).map(str::to_string),
         card: node_card(doc, node),
+        gist: gist(node).map(|g| cut(g, GIST_CHARS)),
     }
 }
 
@@ -342,6 +349,10 @@ mod dom {
         let meta = format!("{} · {}", label(kind_key(r.kind)), r.state_word());
         let id = r.id.clone();
         let href = move || frame::node_href(&id, mode());
+        let gist = match r.gist.clone() {
+            Some(g) => view! { <span class="gist" data-t="">{g}</span> }.into_any(),
+            None => view! { <span class="gist none">{NO_GIST}</span> }.into_any(),
+        };
         view! {
             <li>
                 <span class=r.shape.clone() style=style aria-hidden="true"></span>
@@ -349,7 +360,7 @@ mod dom {
                     <span class="nid">{r.id.clone()}</span>
                     <a class="ttl" href=href use:attach=r.card.clone()><span data-t="">{r.title.clone()}</span></a>
                     <span class="meta">{band_chip(r.band)}<span>{meta}</span></span>
-                    <span class="gist none">{NO_GIST}</span>
+                    {gist}
                 </div>
             </li>
         }

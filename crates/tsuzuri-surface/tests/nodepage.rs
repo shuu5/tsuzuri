@@ -439,7 +439,7 @@ fn nodepage_head() {
     assert_eq!(h.id, "FR1");
     assert_eq!(h.title, "project board を 1 枚の頁で見る");
     assert_eq!(h.state, None);
-    assert_eq!(h.src, "srs.yaml");
+    assert_eq!(h.src, "srs.yaml（行は測れていない）");
     assert!(!h.answer);
     assert!(!h.alert);
     assert_eq!(h.shape, "shape band-srs big fill");
