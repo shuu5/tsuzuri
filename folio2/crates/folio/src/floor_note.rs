@@ -119,7 +119,8 @@ pub(crate) const EXTERNAL_PATH: &str = "contracts/schema.toml";
 pub(crate) const EXTERNAL_HEAD: &str = "schema = 1";
 pub(crate) const EXTERNAL_ROWS_KEY: &str = "field";
 pub(crate) const EXTERNAL_ROW_FIELDS: &[&str] = &["name", "need", "shape"];
-/// 導出 file の need / shape の値域（読めない値は「まだ分からない」）。conditional は器の条件付きの欄（約束の行を持つ親の行だけ
+/// 導出 file の need / shape のうち folio2 が意味を知る値（値域の正本は器の file・この外の値は「まだ分からない」・器が値域を広げたら
+/// folio2 の便でここに足す・欄の決まりの known_values はこの写し・便 196・P-5.6）。conditional は器の条件付きの欄（約束の行を持つ親の行だけ
 /// 省ける・省いてよいかの判定は器の受付が持つ）で、床は値域に在ることだけを見て欄の有無を数えない（便 120・判断の記録 ADR-16 決定 (2)）。
 pub(crate) const EXTERNAL_NEED: &[&str] = &["required", "optional", "conditional"];
 pub(crate) const EXTERNAL_SHAPE: &[&str] = &["text", "list"];
@@ -319,10 +320,17 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                         ]),
                     ),
                     ("value_domains", Floor::Val("from-file")),
+                    (
+                        "known_values",
+                        Floor::Map(&[
+                            ("need", Floor::Strs(EXTERNAL_NEED)),
+                            ("shape", Floor::Strs(EXTERNAL_SHAPE)),
+                        ]),
+                    ),
                     ("unknown_value", Floor::Val("まだ分からない")),
                 ]),
             ),
-            ("external_schema_note", Floor::Val("器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧も値域も自分の型にも散文にも持たない（P-5.1・P-6.3・P-6.4・N-2）＝reader_expects は読み手の期待する形であって正本ではなく、need / shape の値域は file の値をそのまま受ける（value_domains = from-file）。欄の追加・値域の変更は器の版上げで足り、folio2 の判断の記録は要らない。file が読めない・期待する形でない・知らない値が在るときは「まだ分からない」（unknown_value・要件書 FR10・AC8）")),
+            ("external_schema_note", Floor::Val("器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物で、欄の一覧と need / shape の値域の正本（value_domains = from-file）。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧を自分の型にも散文にも持たない（P-5.1・P-6.3・P-6.4・N-2）＝reader_expects は読み手の期待する形であって正本ではない。need / shape で folio2 が判定に使えるのは意味を知る値の写し known_values（正本は crates/folio/src/floor_note.rs の EXTERNAL_NEED と EXTERNAL_SHAPE）だけ。欄の追加は器の版上げで足り、器が値域を広げたら folio2 の便で known_values に足す（どちらも判断の記録は要らない・便 120 の先例）。file が読めない・期待する形でない・known_values の外の値が在るときは「まだ分からない」（unknown_value・要件書 FR10・AC8）")),
             (
                 "reads",
                 Floor::Strs(&["design-doc-contract-table", "external-schema-file"]),
@@ -525,5 +533,35 @@ mod tests {
             ["    placement: 消費側の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）"]
         );
         assert!(!derived.contains("（器 scribe2）"));
+    }
+
+    /// 便 196: 実の欄の決まりの生成区間は、器の file の need / shape のうち folio2 が意味を知る値の写し known_values を
+    /// value_domains の次に持ち、値は定数の字と順のまま。注は値域を file のまま受けるとは言わない（P-5.6・行 D-11）。
+    #[test]
+    fn f196_the_note_region_copies_the_known_values() {
+        use crate::yaml::Node;
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../design-intent/design-note/schema.yaml"
+        ))
+        .unwrap();
+        let root = crate::yaml::parse(&text).unwrap().root;
+        let table = root.get("schema").and_then(|s| s.get("contract_table")).unwrap();
+        let ext = table.get("external_schema").unwrap();
+        let keys: Vec<&str> = ext.as_map().unwrap().iter().map(|(k, _)| k.as_str()).collect();
+        let at = keys.iter().position(|k| *k == "value_domains").unwrap();
+        assert_eq!(keys.get(at + 1), Some(&"known_values"), "{keys:?}");
+        let known = ext.get("known_values").unwrap();
+        let keys: Vec<&str> = known.as_map().unwrap().iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["need", "shape"]);
+        let strs = |key: &str| -> Vec<&str> {
+            let items = known.get(key).and_then(Node::as_seq).unwrap();
+            items.iter().filter_map(Node::as_str).collect()
+        };
+        assert_eq!(strs("need"), EXTERNAL_NEED);
+        assert_eq!(strs("shape"), EXTERNAL_SHAPE);
+        let note = table.get("external_schema_note").and_then(Node::as_str).unwrap();
+        assert!(!note.contains("値域の変更は器の版上げで足り"), "{note}");
+        assert!(note.contains("known_values"), "{note}");
     }
 }

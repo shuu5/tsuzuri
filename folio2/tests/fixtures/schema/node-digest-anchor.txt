@@ -190,5 +190,5 @@ prep-sheet	de2c6e1c
 scribe2	98133617
 three-faces	111536ed
 verdict	f2d63709
-# 残差 sha256 1c09e5de0dac10b18423c0075c18bfa35904b6ef6e05aa46b38dfcad04218a2a
-# 節点 191・本文の byte 245205・辺の欄の byte 4858・残差の byte 144780・合計 394843
+# 残差 sha256 bb32c00c828670d86e0c72eef5dce64010a065bf4de4342f0d4f73bf5e47f989
+# 節点 191・本文の byte 245205・辺の欄の byte 4858・残差の byte 144863・合計 394926

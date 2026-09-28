@@ -117,8 +117,9 @@ schema:
       format: toml
       reader_expects: {head: schema = 1, rows_key: field, row_fields: [name, need, shape]}
       value_domains: from-file
+      known_values: {need: [required, optional, conditional], shape: [text, list]}
       unknown_value: まだ分からない
-    external_schema_note: 器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧も値域も自分の型にも散文にも持たない（P-5.1・P-6.3・P-6.4・N-2）＝reader_expects は読み手の期待する形であって正本ではなく、need / shape の値域は file の値をそのまま受ける（value_domains = from-file）。欄の追加・値域の変更は器の版上げで足り、folio2 の判断の記録は要らない。file が読めない・期待する形でない・知らない値が在るときは「まだ分からない」（unknown_value・要件書 FR10・AC8）
+    external_schema_note: 器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物で、欄の一覧と need / shape の値域の正本（value_domains = from-file）。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧を自分の型にも散文にも持たない（P-5.1・P-6.3・P-6.4・N-2）＝reader_expects は読み手の期待する形であって正本ではない。need / shape で folio2 が判定に使えるのは意味を知る値の写し known_values（正本は crates/folio/src/floor_note.rs の EXTERNAL_NEED と EXTERNAL_SHAPE）だけ。欄の追加は器の版上げで足り、器が値域を広げたら folio2 の便で known_values に足す（どちらも判断の記録は要らない・便 120 の先例）。file が読めない・期待する形でない・known_values の外の値が在るときは「まだ分からない」（unknown_value・要件書 FR10・AC8）
     reads: [design-doc-contract-table, external-schema-file]
     never_reads: [per-run-contract-file]
     reads_note: folio2 が読むのは設計文書の中の契約表（scribe2 では docs/design の [[contract]] の区間）と外部の欄の決まりの file だけ。便ごとの契約 file（run dir の contract.toml）は読まない（scribe2 planner の助言 2026-09-16・形が変わる途中）

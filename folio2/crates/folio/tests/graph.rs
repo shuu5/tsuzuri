@@ -496,7 +496,8 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
 /// 便 182: 土台の判断の記録の欄の決まりの写しに裁定 id の文法と 4 欄が入り、残差の 2 行だけが動いた値。
 /// 便 183: 土台の判断の記録の欄の決まりの写しの ruling_fields に判断の表の行の欄が、土台の設計ノートの欄の決まりに節の型 3 つが入り、残差の行だけが動いた値。
 /// 便 185: 土台の設計ノートの契約表の行 example#a が節点になり（独立の実装に設計ノートの行を足した）、その行と要約の 2 行が動いた値。
-const F99_ANCHOR_SHA256: &str = "14259b60af91be4482b7f5c766c884e993471347bbac4c487d93e0d2c9b15196";
+/// 便 196: 土台の設計ノートの欄の決まりの写しに known_values の 1 行が入り（83 byte 増）、残差の 2 行だけが動いた値。
+const F99_ANCHOR_SHA256: &str = "55a87cbc8838bc8716d803f54a4a352bb2821f6fb05cc6d18ef2de95e30928b4";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。

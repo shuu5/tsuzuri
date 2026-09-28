@@ -15,13 +15,14 @@ use crate::sha256;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Node, Value};
 
-/// file 名の頭と尻（`ids-<要件書の版>.yaml`）と kind の値。
+/// file 名の頭と尻（`ids-<要件書の版>.yaml`）と kind の値。kind の値と下の SECTIONS は要件書の生成区間の ids_anchor へ写す
+/// （`check.rs` の SRS_FLOOR が引く・便 196・P-5.6）。
 const IDS_PREFIX: &str = "ids-";
 const IDS_SUFFIX: &str = ".yaml";
-const IDS_KIND: &str = "ids-anchor";
+pub(crate) const IDS_KIND: &str = "ids-anchor";
 
 /// 節と、要約する欄（先に在る方）。adr は判断の記録（`adr/ADR-n.yaml`）。
-const SECTIONS: [(&str, &[&str]); 4] = [
+pub(crate) const SECTIONS: [(&str, &[&str]); 4] = [
     ("requirements", &["shall", "title"]),
     ("nonfunctional", &["shall", "title"]),
     ("acceptance", &["title"]),
@@ -364,5 +365,66 @@ mod tests {
         assert!(named.starts_with("# kumo 要件・判断・受入基準の id の一覧"), "{named}");
         let plain = build(&cur(None)).unwrap();
         assert!(plain.starts_with("# 要件・判断・受入基準の id の一覧"), "{plain}");
+    }
+
+    /// 便 196: 実の要件書の生成区間は、id の一覧の anchor の種別の値と節ごとに要約する欄の写し ids_anchor を持ち、
+    /// 値は定数の字と順のまま（P-5.6・行 D-11）。
+    #[test]
+    fn f196_the_srs_region_copies_the_ids_anchor() {
+        let text = fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../design-intent/srs.yaml"
+        ))
+        .unwrap();
+        let root = yaml::parse(&text).unwrap().root;
+        let schema = root.get("schema").unwrap();
+        let copy = schema.get("ids_anchor").unwrap();
+        let keys: Vec<&str> = copy.as_map().unwrap().iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["kind", "sections"]);
+        assert_eq!(copy.get("kind").and_then(Node::as_str), Some(IDS_KIND));
+        let sections: Vec<(&str, Vec<&str>)> = copy
+            .get("sections")
+            .and_then(Node::as_map)
+            .unwrap()
+            .iter()
+            .map(|(k, v)| {
+                let fields = v.as_seq().unwrap().iter().filter_map(Node::as_str).collect();
+                (k.as_str(), fields)
+            })
+            .collect();
+        let want: Vec<(&str, Vec<&str>)> = SECTIONS.iter().map(|(s, f)| (*s, f.to_vec())).collect();
+        assert_eq!(sections, want);
+        let note = schema.get("ids_anchor_note").and_then(Node::as_str).unwrap();
+        assert!(note.contains("crates/folio/src/ids.rs") && note.contains("P-5.6"), "{note}");
+    }
+
+    /// 便 196: 写しの正本の定数の字（引用符付き）は、src の各 file の最初の `#[cfg(test)]` より前では持ち主の file の
+    /// 定数の中の回数だけ在る（床の木は定数を引き、同じ一覧を 2 回書かない）。
+    #[test]
+    fn f196_only_the_owner_spells_the_copied_constants() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut bodies = Vec::new();
+        for entry in fs::read_dir(&src).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|e| e == "rs") {
+                let text = fs::read_to_string(&path).unwrap();
+                let body = text.split("#[cfg(test)]").next().unwrap_or_default().to_string();
+                bodies.push((path.file_name().unwrap().to_string_lossy().into_owned(), body));
+            }
+        }
+        assert!(bodies.len() > 50, "src の file が読めない");
+        for (needle, owner, times) in [
+            ("\"ids-anchor\"", "ids.rs", 1),
+            ("&[\"shall\", \"title\"]", "ids.rs", 2),
+            ("&[\"required\", \"optional\", \"conditional\"]", "floor_note.rs", 1),
+            ("&[\"text\", \"list\"]", "floor_note.rs", 1),
+        ] {
+            let found: Vec<(&str, usize)> = bodies
+                .iter()
+                .map(|(name, body)| (name.as_str(), body.matches(needle).count()))
+                .filter(|(_, n)| *n > 0)
+                .collect();
+            assert_eq!(found, [(owner, times)], "{needle}");
+        }
     }
 }

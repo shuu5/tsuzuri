@@ -53,10 +53,10 @@ const REGION_SHA256: &str = "daf05362b909ca04b81ff8f480fd23054425e86f845c8c83ba3
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改め、便 119 で導出物の検査の命令の名と
 /// 注 3 つを直した後の値）。便 130 (b)(e): 注 index_note の正本の指し先を graph.rs の定数に直した後の値（行数は不変）。
-/// 便 140 (b): placement の字から（器 scribe2）を外した後の値（17 byte 減）。便 185 (b): index_note の契約表の行の字を直した値（行数は不変）。
-const NOTE_REGION_LINES: usize = 164;
-const NOTE_REGION_BYTES: usize = 19979;
-const NOTE_REGION_SHA256: &str = "13695afedf115385238db43306761658d99cdcc0ebcbf87dacbfebe3b52aeca1";
+/// 便 140 (b): placement の字から（器 scribe2）を外した後の値（17 byte 減）。便 185 (b): index_note の契約表の行の字を直した値。便 196: known_values の行と注。
+const NOTE_REGION_LINES: usize = 165;
+const NOTE_REGION_BYTES: usize = 20312;
+const NOTE_REGION_SHA256: &str = "789ff97435a683ecd789e7f1a3b6535782f2be79173dd4a5917507ceccdd45e1";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
 /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。

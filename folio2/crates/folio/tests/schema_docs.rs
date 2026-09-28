@@ -65,6 +65,7 @@
 //! 便 195（行 gp）: 索引の欄の決まりの生成区間の末尾に ids・mentions と 2 つの注を足した（F95_GRAPH_* を測り直した値に・写しの字の歯は tests/graph.rs）。
 //! 便 197（delivery-197.md §1 (b)(d)）: 相談窓口の生成区間に回答の値の読み方と行き先の固定の値の写し 4 行（F77_REGIONS の intake.yaml を、
 //! 前の anchor に 4 行を手で足した写しを sha256sum で測り直した 7 行・1644 byte と要約値に）。規則の表の除外の 2 行の字（RULES_REGION_* を 3512 byte と要約値に）。
+//! 便 196: 要件書の生成区間の末尾に id の一覧の anchor の定数の写し ids_anchor の 7 行と注 1 行（F77_REGIONS の srs.yaml を測り直した値に）。
 
 use std::fs;
 use std::io::Write;
@@ -96,9 +97,9 @@ const F77_REGIONS: [(&str, &str, usize, usize, &str); 3] = [
     (
         "srs.yaml",
         "tests/fixtures/schema/srs-region.txt",
-        30,
-        1183,
-        "e9a27f7e8b401a2acec57c63360b8f1e8d107a7fd9c00a53a1fe32da3c6c9664",
+        38,
+        1771,
+        "5dc9e967e073edf2c95962ad20eb5455afd8e7d8913904cc3ef20dc9751742cc",
     ),
     (
         "vocabulary.yaml",

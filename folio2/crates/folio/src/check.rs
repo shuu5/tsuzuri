@@ -77,6 +77,7 @@ const SRS_FIGURE_OPTIONAL: [&str; 2] = ["refs", "note"];
 
 /// 要件書の schema 節（生成区間）の床の木（便 77 §1 (a)）。欄の順と字面は凍結 anchor
 /// tests/fixtures/schema/srs-region.txt のとおり。床（`check_srs`）は生成区間の中身をこの木と突き合わせない。
+/// 末尾の ids_anchor は id の一覧の anchor の定数（`ids.rs`）の写し（便 196・P-5.6・graph.rs の EDGE_FIELDS と同じ書き方）。
 pub(crate) const SRS_FLOOR: Floor = Floor::Map(&[
     ("top_level", Floor::Strs(&SRS_TOP_LEVEL)),
     (
@@ -121,6 +122,27 @@ pub(crate) const SRS_FLOOR: Floor = Floor::Map(&[
         "requirement_row_note",
         Floor::Val(
             "要件の行（requirements と nonfunctional）の欄の閉じた一覧。required_text は非空の字・required_list は在ること（空の一覧でよい）・optional は任意・verify は表",
+        ),
+    ),
+    (
+        "ids_anchor",
+        Floor::Map(&[
+            ("kind", Floor::Val(ids::IDS_KIND)),
+            (
+                "sections",
+                Floor::Map(&[
+                    (ids::SECTIONS[0].0, Floor::Strs(ids::SECTIONS[0].1)),
+                    (ids::SECTIONS[1].0, Floor::Strs(ids::SECTIONS[1].1)),
+                    (ids::SECTIONS[2].0, Floor::Strs(ids::SECTIONS[2].1)),
+                    (ids::SECTIONS[3].0, Floor::Strs(ids::SECTIONS[3].1)),
+                ]),
+            ),
+        ]),
+    ),
+    (
+        "ids_anchor_note",
+        Floor::Val(
+            "id の一覧の凍結 anchor（anchors/ の下の ids-<要件書の版>.yaml・条 P-7.1 の再利用と改番の比較元）の種別の値（kind）と、節ごとに要約値を取る欄（sections・先に在る方・adr は判断の記録の題）。正本は実装の型付きの定数 crates/folio/src/ids.rs の IDS_KIND と SECTIONS で、この節はその写しである（P-5.6・行 D-11）",
         ),
     ),
 ]);

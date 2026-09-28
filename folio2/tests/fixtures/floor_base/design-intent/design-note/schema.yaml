@@ -117,6 +117,7 @@ schema:
       format: toml
       reader_expects: {head: schema = 1, rows_key: field, row_fields: [name, need, shape]}
       value_domains: from-file
+      known_values: {need: [required, optional, conditional], shape: [text, list]}
       unknown_value: まだ分からない
     external_schema_note: 器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧も値域も自分の型にも散文にも持たない（P-5.1・P-6.3・P-6.4・N-2）＝reader_expects は読み手の期待する形であって正本ではなく、need / shape の値域は file の値をそのまま受ける（value_domains = from-file）。欄の追加・値域の変更は器の版上げで足り、folio2 の判断の記録は要らない。file が読めない・期待する形でない・知らない値が在るときは「まだ分からない」（unknown_value・要件書 FR10・AC8）
     reads: [design-doc-contract-table, external-schema-file]
