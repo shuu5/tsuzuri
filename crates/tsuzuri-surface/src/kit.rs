@@ -172,6 +172,7 @@ mod dom {
     use crate::frame::{Block, Mode, node_href};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, h2};
+    use crate::widgets::hover::{Card, attach_some};
 
     thread_local! {
         /// 畳める段の開き閉じの記録（頁の一生の間だけ）。
@@ -255,8 +256,8 @@ mod dom {
         move || ctx.map_or(url, |c| c.mode.get())
     }
 
-    /// 一覧の 1 項（`lead` は印の代わりに置く番号など・None なら印）。題は節点の頁への link。
-    pub fn item_view(item: &Item, number: Option<usize>) -> AnyView {
+    /// 一覧の 1 項（`lead` は印の代わりに置く番号など・None なら印）。題は節点の頁への link で、節点の card が在れば付ける。
+    pub fn item_view(item: &Item, number: Option<usize>, card: Option<Card>) -> AnyView {
         let lead = match number {
             Some(n) => view! { <span class="nb">{n}</span> }.into_any(),
             None => {
@@ -271,7 +272,7 @@ mod dom {
         view! {
             <li>
                 {lead}
-                <a class="ttl" href=href><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
+                <a class="ttl" href=href use:attach_some=card><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
                 <span class="aside">{item.aside.clone()}</span>
             </li>
         }

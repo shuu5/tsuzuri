@@ -143,7 +143,8 @@ const DOM: &str = "#[cfg(target_arch = \"wasm32\")]\nmod dom {";
 fn ilink_shared_row_links() {
     let text = read("src/kit.rs");
     let dom = &text[text.find(DOM).expect("kit の mod dom")..];
-    let decl = "\n    pub fn item_view(item: &Item, number: Option<usize>) -> AnyView {\n";
+    let decl =
+        "\n    pub fn item_view(item: &Item, number: Option<usize>, card: Option<Card>) -> AnyView {\n";
     assert!(dom.contains(decl), "item_view の宣言の行");
     let body = fn_body(dom, decl);
     assert!(body.contains("<a class=\"ttl\""), "{body}");

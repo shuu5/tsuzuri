@@ -177,8 +177,11 @@ fn lhome_list_draws_body() {
     let end = rest.find("\n    }\n").expect("list_view の終わり");
     let list_view = &rest[..end];
     assert!(list_view.contains("screen.with(body)"), "{list_view}");
-    assert!(list_view.contains("map(group_view)"), "{list_view}");
-    assert!(dom.contains("Tier::List => list_view(screen)"));
+    assert!(
+        list_view.contains("map(|g| group_view(g, &cards))"),
+        "{list_view}"
+    );
+    assert!(dom.contains("Tier::List => list_view(screen, graph)"));
     assert!(dom.contains("screen.with(count)"));
 }
 

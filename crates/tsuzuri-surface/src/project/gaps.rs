@@ -2,6 +2,7 @@
 //! 判定は中核の crate が数え済みで、口（/api/graph・定数は map の module に 1 本）の電文 GraphDoc の invariants を写すだけにする。
 //! 札の数・一覧の並び・段が最初に開いているか・名の表・20 件の切り方は純粋な関数にして host で試し、
 //! DOM は wasm の target のときだけ、この値を順にたどって組み立てる。
+//! 名指しの項のうち電文の節点に在るものは、節点の頁への link に節点の hover の card を付ける（行 g-card-adopt-c）。
 
 use std::collections::BTreeMap;
 
@@ -11,6 +12,8 @@ use tsuzuri_contract::wire;
 use super::{Body, Item, NOT_READ, node_item};
 use crate::frame::Block;
 use crate::view::Fetched;
+use crate::widgets::hover::Card;
+use crate::widgets::nodecard::card_of;
 
 pub const BLOCK: Block = Block {
     id: "gaps",
@@ -186,6 +189,8 @@ pub struct Gaps {
     pub tiles: Vec<Tile>,
     pub rows: Vec<Row>,
     pub found: BTreeMap<String, Item>,
+    /// 名指しの id のうち電文の節点に在るものの card_of の値（鍵は found と同じ）。
+    pub cards: BTreeMap<String, Card>,
 }
 
 /// 口の本文を電文に読む（まだ読んでいない・読めない・電文の型として読めないは理由）。
@@ -214,10 +219,16 @@ pub fn body(fetched: &Fetched) -> Body<Gaps> {
                 .flat_map(|r| &r.named)
                 .filter_map(|id| node_item(&d, id).map(|item| (id.clone(), item)))
                 .collect();
+            let cards = rows
+                .iter()
+                .flat_map(|r| &r.named)
+                .filter_map(|id| card_of(&d, id).map(|card| (id.clone(), card)))
+                .collect();
             Body::Filled(Gaps {
                 tiles: tiles(&d.invariants),
                 rows,
                 found,
+                cards,
             })
         }
     }
@@ -236,7 +247,7 @@ mod dom {
 
     use leptos::prelude::*;
 
-    use super::{BLOCK, Body, Gaps, Item, Row, Tile, body, mark_class, summary_tip};
+    use super::{BLOCK, Body, Card, Gaps, Item, Row, Tile, body, mark_class, summary_tip};
     use crate::project::{body_view, fold, item_view, map, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{expert_tip, h1, hs};
@@ -252,16 +263,20 @@ mod dom {
         .into_any()
     }
 
-    fn row_view(r: Row, found: &BTreeMap<String, Item>) -> AnyView {
+    fn row_view(
+        r: Row,
+        found: &BTreeMap<String, Item>,
+        cards: &BTreeMap<String, Card>,
+    ) -> AnyView {
         let tip = summary_tip(&r);
         // 名指しか残りの数が在るときだけ一覧を出す。
         let has_list = !r.named.is_empty() || r.more.is_some();
-        // 電文の節点に在る id は節点の頁への link・無い id は頁が無いので字だけ。
+        // 電文の節点に在る id は節点の頁への link に節点の card を付ける・無い id は頁が無いので字だけ。
         let named = r
             .named
             .into_iter()
             .map(|id| match found.get(&id) {
-                Some(item) => item_view(item, None),
+                Some(item) => item_view(item, None, cards.get(&id).cloned()),
                 None => view! { <li><span class="ttl"><span class="nid">{id}</span></span></li> }
                     .into_any(),
             })
@@ -290,11 +305,16 @@ mod dom {
     }
 
     fn filled(g: Gaps) -> AnyView {
-        let Gaps { tiles, rows, found } = g;
+        let Gaps {
+            tiles,
+            rows,
+            found,
+            cards,
+        } = g;
         let tiles = tiles.into_iter().map(tile_view).collect_view();
         let rows = rows
             .into_iter()
-            .map(|r| row_view(r, &found))
+            .map(|r| row_view(r, &found, &cards))
             .collect_view()
             .into_any();
         view! {

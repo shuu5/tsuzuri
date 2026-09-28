@@ -4,7 +4,10 @@
 //! （数え直しと判定の分岐を持たない）。段の並びと段ごとの項は配置の表（`LAYOUT`）の値で持ち、DOM は表を上から順にたどる。
 //! 未反映の一覧は口 /api/unreflected（本文は契約の型の UnreflectedList）から読み、電文の行の順と数をそのまま写す（行 g-unref-panel）。
 //! 一覧は epic の下に task・memo の順で、閉じた bead は出さない（全件は地図の方・行 g-ledger-home）。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
+//! epic の進みの行の題と一覧の項の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+
+use std::collections::BTreeMap;
 
 use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::ledger::LedgerRow;
@@ -19,6 +22,7 @@ use crate::frame::Block;
 use crate::view::{Fetched, Screen, clock};
 use crate::vocab::label;
 use crate::widgets::hover::Card;
+use crate::widgets::nodecard::card_of;
 
 pub const BLOCK: Block = Block {
     id: "ledger",
@@ -467,6 +471,30 @@ pub struct EpicBar {
     pub pct: u32,
 }
 
+/// epic の進みの行の節点の card（電文に在る epic の id だけ・グラフの口が読めなければ空・行 g-card-adopt-c）。
+pub fn epic_cards(epics: &[EpicBar], graph: &Fetched) -> BTreeMap<String, Card> {
+    cards_of(epics.iter().map(|e| e.id.as_str()), graph)
+}
+
+/// 一覧の組の項の節点の card（組ごとに epic の項と下の項・電文に在る id だけ・行 g-card-adopt-c）。
+pub fn group_cards(groups: &[Group], graph: &Fetched) -> BTreeMap<String, Card> {
+    cards_of(
+        groups
+            .iter()
+            .flat_map(|g| g.head.iter().chain(&g.children).map(|i| i.id.as_str())),
+        graph,
+    )
+}
+
+/// id の列のうち電文の節点に在るものの card（id の字の鍵）。
+fn cards_of<'a>(ids: impl Iterator<Item = &'a str>, graph: &Fetched) -> BTreeMap<String, Card> {
+    let Ok(doc) = super::map::doc(graph) else {
+        return BTreeMap::new();
+    };
+    ids.filter_map(|id| card_of(&doc, id).map(|c| (id.to_string(), c)))
+        .collect()
+}
+
 /// memo の段の 4 数。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoRow {
@@ -837,25 +865,29 @@ pub fn view() -> leptos::prelude::AnyView {
 /// 台帳の block の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use std::collections::BTreeMap;
+
     use leptos::prelude::*;
 
     use tsuzuri_contract::board::Reading;
 
     use super::{
-        BLOCK, BURN_CAPTION, EpicBar, Group, Judge, LAYOUT, METRICS_PATH, Metrics, NONE, Net,
-        OUTSIDE, Part, Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, body, burn_svg,
-        content, count, more_line, spark_svg, unref_chip, unref_list,
+        BLOCK, BURN_CAPTION, Card, EpicBar, Group, Judge, LAYOUT, METRICS_PATH, Metrics, NONE,
+        Net, OUTSIDE, Part, Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, body, burn_svg,
+        content, count, epic_cards, group_cards, more_line, spark_svg, unref_chip, unref_list,
     };
     use crate::frame::{self, Mode};
-    use crate::project::{Body, UNKNOWN, fold, item_view, section, state_icon, unmeasured};
+    use crate::project::{Body, UNKNOWN, fold, item_view, map, section, state_icon, unmeasured};
     use crate::view::{Fetched, Screen};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal};
     use crate::widgets::hover::attach;
+    use crate::widgets::hover::attach_some;
 
     pub fn view(screen: RwSignal<Screen>) -> AnyView {
         let fetched = crate::net::read(METRICS_PATH);
         let unref = crate::net::read(UNREF_PATH);
+        let graph = crate::net::read(map::PATH);
         let got = move || fetched.with(|f| screen.with(|s| content(f, s)));
         let extra = move || {
             let judge = match got() {
@@ -871,7 +903,7 @@ mod dom {
         let body = move || match got() {
             Body::Filled(m) => LAYOUT
                 .iter()
-                .map(|(tier, parts)| tier_view(*tier, parts, &m, screen, unref))
+                .map(|(tier, parts)| tier_view(*tier, parts, &m, screen, unref, graph))
                 .collect_view()
                 .into_any(),
             Body::Unmeasured(reason) | Body::Empty(reason) => LAYOUT
@@ -891,7 +923,7 @@ mod dom {
                             .collect_view();
                         view! { <div class="l4">{boxes}</div>{unmeasured(reason)} }.into_any()
                     }
-                    Tier::List => list_view(screen),
+                    Tier::List => list_view(screen, graph),
                     Tier::Main | Tier::Burn | Tier::Memo | Tier::More | Tier::Unref => {
                         ().into_any()
                     }
@@ -909,6 +941,7 @@ mod dom {
         m: &Metrics,
         screen: RwSignal<Screen>,
         unref: ReadSignal<Fetched>,
+        graph: ReadSignal<Fetched>,
     ) -> AnyView {
         match tier {
             Tier::Top => {
@@ -916,11 +949,11 @@ mod dom {
                 view! { <div class="l4">{boxes}</div> }.into_any()
             }
             Tier::Main => {
-                let items = parts.iter().map(|p| line_view(*p, m)).collect_view();
+                let items = parts.iter().map(|p| line_view(*p, m, graph)).collect_view();
                 view! { <div class="lcap num">{items}</div> }.into_any()
             }
             Tier::Burn => {
-                let items = parts.iter().map(|p| line_view(*p, m)).collect_view();
+                let items = parts.iter().map(|p| line_view(*p, m, graph)).collect_view();
                 view! { <div class="lmid" tabindex="0" use:attach=m.burn_card.clone()>{items}</div> }
                     .into_any()
             }
@@ -931,7 +964,7 @@ mod dom {
             Tier::More => {
                 let rows = parts
                     .iter()
-                    .map(|p| view! { <div class="gm1 num">{line_view(*p, m)}</div> })
+                    .map(|p| view! { <div class="gm1 num">{line_view(*p, m, graph)}</div> })
                     .collect_view();
                 // 記録に値が無いときだけ mode から初めの値を取る（持ち主が開き閉じを変えた後は記録の値）。
                 let ctx = use_context::<HelpCtx>();
@@ -949,13 +982,13 @@ mod dom {
                 .iter()
                 .map(|p| match p {
                     Part::UnrefCount => unref_view(*p, m, unref),
-                    _ => line_view(*p, m),
+                    _ => line_view(*p, m, graph),
                 })
                 .collect_view()
                 .into_any(),
             Tier::List => parts
                 .iter()
-                .map(|_| list_view(screen))
+                .map(|_| list_view(screen, graph))
                 .collect_view()
                 .into_any(),
         }
@@ -988,7 +1021,7 @@ mod dom {
     }
 
     /// 札と字の 1 項（主な指標の行・「詳しく」・burndown）。
-    fn line_view(part: Part, m: &Metrics) -> AnyView {
+    fn line_view(part: Part, m: &Metrics, graph: ReadSignal<Fetched>) -> AnyView {
         match part {
             Part::Net7 => view! { <span>{hs(part.key())}" "{net_view(&m.net7)}</span> }.into_any(),
             Part::Burn => view! {
@@ -1002,7 +1035,17 @@ mod dom {
             }
             .into_any(),
             Part::Epics => {
-                let rows = m.epics.iter().map(epic_view).collect_view();
+                // グラフの読みが替わっても epic の card が同じなら行を組み直さない。
+                let epics = m.epics.clone();
+                let cards = Memo::new(move |_| graph.with(|g| epic_cards(&epics, g)));
+                let bars = m.epics.clone();
+                let rows = move || {
+                    cards.with(|c| {
+                        bars.iter()
+                            .map(|e| epic_view(e, c.get(&e.id).cloned()))
+                            .collect_view()
+                    })
+                };
                 view! { <span>{hs(part.key())}</span><div class="lep">{rows}</div> }.into_any()
             }
             _ => {
@@ -1113,8 +1156,8 @@ mod dom {
         .into_any()
     }
 
-    /// epic の進みの 1 行（題が引けなければ id だけ・題は節点の頁への link）。
-    fn epic_view(e: &EpicBar) -> AnyView {
+    /// epic の進みの 1 行（題が引けなければ id だけ・題は節点の頁への link・節点の card が在れば付ける）。
+    fn epic_view(e: &EpicBar, card: Option<Card>) -> AnyView {
         let name = e.title.clone().unwrap_or_else(|| e.id.clone());
         let ratio = format!("{} / {}", e.closed, e.total);
         let ctx = use_context::<HelpCtx>();
@@ -1128,7 +1171,7 @@ mod dom {
         };
         view! {
             <div class="ep">
-                <a href=href><span class="nid">{e.id.clone()}</span>" "<span data-t="">{name}</span></a>
+                <a href=href use:attach_some=card><span class="nid">{e.id.clone()}</span>" "<span data-t="">{name}</span></a>
                 <span class="bar" role="img" aria-label=ratio.clone()><i style=format!("width:{}%", e.pct)></i></span>
                 <span class="meta num">{ratio}</span>
             </div>
@@ -1136,13 +1179,14 @@ mod dom {
         .into_any()
     }
 
-    /// 台帳の一覧（便 g-frame の中身）。
-    fn list_view(screen: RwSignal<Screen>) -> AnyView {
+    /// 台帳の一覧（便 g-frame の中身・項の節点の card はグラフの読みから引く）。
+    fn list_view(screen: RwSignal<Screen>, graph: ReadSignal<Fetched>) -> AnyView {
         let list = move || match screen.with(body) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => view! { <div class="empty"><span>{line}</span></div> }.into_any(),
             Body::Filled(groups) => {
-                let rows = groups.iter().map(group_view).collect_view();
+                let cards = graph.with(|g| group_cards(&groups, g));
+                let rows = groups.iter().map(|g| group_view(g, &cards)).collect_view();
                 view! { <ul class="items">{rows}</ul> }.into_any()
             }
         };
@@ -1150,9 +1194,9 @@ mod dom {
     }
 
     /// 1 組（epic の項と、その下の項を入れ子の一覧に）。
-    fn group_view(group: &Group) -> AnyView {
+    fn group_view(group: &Group, cards: &BTreeMap<String, Card>) -> AnyView {
         let head = match &group.head {
-            Some(epic) => item_view(epic, None),
+            Some(epic) => item_view(epic, None, cards.get(&epic.id).cloned()),
             None => view! {
                 <li>
                     <span class="shape band-beads" aria-hidden="true"></span>
@@ -1164,7 +1208,7 @@ mod dom {
         let children = group
             .children
             .iter()
-            .map(|c| item_view(c, None))
+            .map(|c| item_view(c, None, cards.get(&c.id).cloned()))
             .collect_view();
         view! {
             {head}
