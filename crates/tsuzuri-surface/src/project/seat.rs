@@ -10,6 +10,7 @@ use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatSta
 use tsuzuri_contract::wire;
 
 use super::{Body, NO_CONTENT, NOT_READ, state_class, state_key};
+use crate::account::heartbeat::{Toggle, seat_toggle};
 use crate::account::home::{EXPERT_CHARS, wrap_words};
 use crate::frame::{self, Block};
 use crate::view::{Fetched, clock};
@@ -258,6 +259,8 @@ pub struct Top {
     pub tick: Reading<Sign>,
     /// heartbeat（on か off）。
     pub heartbeat: Reading<&'static str>,
+    /// 停止の切り替え（席の名が在り heartbeat が読めるときだけ・行 g-seat-hb）。
+    pub toggle: Option<Toggle>,
 }
 
 /// 稼働の記録の 1 つの矩形。
@@ -405,6 +408,7 @@ pub fn top(card: &SeatCard) -> Top {
         since: card.since.map(hm),
         tick: map(&card.tick_healthy, |h| sign(*h)),
         heartbeat: map(&card.heartbeat, |on| if *on { "on" } else { "off" }),
+        toggle: seat_toggle(card),
     }
 }
 

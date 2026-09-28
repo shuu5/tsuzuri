@@ -6,6 +6,7 @@ use super::{
     BLOCK, Band, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OK, OROW, PATH, Seat, Sign, Span,
     Strip, Top, WindowRow, content, sample_svg, span_of, strip_svg, with_span,
 };
+use crate::account::heartbeat::{self, Dest, States};
 use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, hs, shows_internal, term};
@@ -34,10 +35,12 @@ fn pick(span: RwSignal<Span>, to: Span) {
 pub fn view() -> AnyView {
     let fetched = crate::net::read(PATH);
     let span = RwSignal::new(span_of(&search()));
+    // 停止の切り替えの状態（読みの閉包の外・読み直しで組み直しても応答の字が残る）。
+    let states: States = RwSignal::new(Default::default());
     let body = move || match fetched.with(content) {
         Body::Unmeasured(reason) => unmeasured(reason),
         Body::Empty(line) => body_view(Body::Empty(line)),
-        Body::Filled(seat) => seat_view(seat, span),
+        Body::Filled(seat) => seat_view(seat, span, states),
     };
     section(BLOCK, ().into_any(), body.into_any())
 }
@@ -63,7 +66,7 @@ fn sign_view(r: Reading<Sign>) -> AnyView {
     }
 }
 
-fn seat_view(seat: Seat, span: RwSignal<Span>) -> AnyView {
+fn seat_view(seat: Seat, span: RwSignal<Span>, states: States) -> AnyView {
     let Seat {
         top,
         strips,
@@ -75,7 +78,7 @@ fn seat_view(seat: Seat, span: RwSignal<Span>) -> AnyView {
     view! {
         {band.map(band_view)}
         <div class=OROW>
-            {top_view(top)}
+            {top_view(top, states)}
             {strip_view(strips, span)}
         </div>
         {low_view(low)}
@@ -111,8 +114,14 @@ fn big_icon(top: &Top) -> AnyView {
     }
 }
 
-fn top_view(top: Top) -> AnyView {
+fn top_view(top: Top, states: States) -> AnyView {
     let icon = big_icon(&top);
+    // 停止の切り替え（切り替えが無ければ button も段も出さない・送り先は席の口）。
+    let hb_button = top.toggle.clone().map(|t| heartbeat::button(t, states));
+    let hb_below = top
+        .toggle
+        .clone()
+        .map(|t| heartbeat::below_to(Dest::Seat, t, states));
     let since = top.since.clone().map(|s| {
         view! { <span class="since num"><span class="small muted">{hs("since")}</span><b>{s}</b></span> }
     });
@@ -140,8 +149,10 @@ fn top_view(top: Top) -> AnyView {
                 <span class="tkhb">
                     <span class=tick_class>{sign_view(top.tick)}{hs("tick_health")}</span>
                     <span class=hb_class>{hs("heartbeat")}{hb}</span>
+                    {hb_button}
                 </span>
             </div>
+            {hb_below}
         </div>
     }
     .into_any()

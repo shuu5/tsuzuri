@@ -4,14 +4,23 @@
 //! heartbeat は電文の projects の同じ名の行の席の card から引き、読めない行・席の無い行・pipeline の行は button を持たない（要件 NFR2）。
 //! button の字・段の字・要求の本文・応答の出し方・送る間の状態の移り方は純粋な関数にして host で試し、
 //! DOM と送りは wasm の target のときだけ組み立てる。
+//! project board の席の block（行 g-seat-hb・裁定 t3-hub.52.29 の案 A）も同じ button と確かめの段を使う:
+//! 切り替えは席の card から `seat_toggle` で引き（席の名が在り heartbeat が読めるときだけ）、段は `below_to` に
+//! 送り先 `Dest::Seat` を渡して組む。送りの本文は向きだけの SeatHeartbeatRequest で、SEAT_HEARTBEAT_PATH へ送る
+//! （server が自分の --repo の project の席を引く）。account board の行は `below`（送り先 `Dest::Account`）のまま。
 
 use tsuzuri_contract::account::{AccountDoc, Heartbeat, HeartbeatRequest, SessionLine};
 use tsuzuri_contract::board::Reading;
+use tsuzuri_contract::seat::SeatCard;
+use tsuzuri_contract::seathb::SeatHeartbeatRequest;
 use tsuzuri_contract::surface::SeatRole;
 use tsuzuri_contract::wire;
 
 /// 停止の切り替えの口の path（契約の型の crate の定数・面の code に字を直に書かない）。
 pub use tsuzuri_contract::account::HEARTBEAT_PATH;
+
+/// project board の停止の切り替えの口の path（契約の型の crate の定数・行 g-seat-hb）。
+pub use tsuzuri_contract::seathb::PATH as SEAT_HEARTBEAT_PATH;
 
 /// button の class（見本の `.btn.hbbtn`）。
 pub const BUTTON: &str = "btn hbbtn";
@@ -132,6 +141,43 @@ pub fn toggle(doc: &AccountDoc, line: &SessionLine) -> Option<Toggle> {
         now,
         to: opposite(now),
     })
+}
+
+/// 席の card の切り替え（席の名が在り heartbeat が読めるときだけ・行 g-seat-hb）。
+/// project は空の字（席の card は project の名を持たず、口は server が自分の project を引く・States の鍵にだけ使う）。
+pub fn seat_toggle(card: &SeatCard) -> Option<Toggle> {
+    if card.target.is_empty() {
+        return None;
+    }
+    let now = match card.heartbeat {
+        Reading::Known(true) => Heartbeat::On,
+        Reading::Known(false) => Heartbeat::Off,
+        Reading::Unknown => return None,
+    };
+    Some(Toggle {
+        project: String::new(),
+        target: card.target.clone(),
+        now,
+        to: opposite(now),
+    })
+}
+
+/// 送り先の口（account board の口か、project board の席の口か）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dest {
+    Account,
+    Seat,
+}
+
+impl Dest {
+    /// 送りの本文（Account は project と向き・Seat は向きだけ）。
+    pub fn body(self, t: &Toggle) -> String {
+        match self {
+            Dest::Account => t.request_body(),
+            Dest::Seat => wire::encode(&SeatHeartbeatRequest { to: t.to })
+                .expect("閉じた値だけの要求は電文の字にできる"),
+        }
+    }
 }
 
 /// 確かめの段の中身（語の鍵 2 つ・撃つ字・2 つの button の字）。
@@ -274,7 +320,7 @@ pub fn starts(before: &RowState, after: &RowState) -> bool {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{States, below, button};
+pub use dom::{States, below, below_to, button};
 
 /// 切り替えの DOM と送り（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
@@ -285,7 +331,8 @@ mod dom {
     use leptos::task::spawn_local;
 
     use super::{
-        BUTTON, CMD, Event, HEARTBEAT_PATH, RowState, Toggle, outcome, panel, starts, step,
+        BUTTON, CMD, Dest, Event, HEARTBEAT_PATH, RowState, SEAT_HEARTBEAT_PATH, Toggle, outcome,
+        panel, starts, step,
     };
     use crate::vocab::label;
 
@@ -326,10 +373,15 @@ mod dom {
 
     /// 行の下の段（開いていれば確かめの段・応答の後は応答の 1 行）。
     pub fn below(t: Toggle, states: States) -> AnyView {
+        below_to(Dest::Account, t, states)
+    }
+
+    /// 送り先を選んだ行の下の段（project board の席の block は `Dest::Seat`）。
+    pub fn below_to(dest: Dest, t: Toggle, states: States) -> AnyView {
         let project = t.project.clone();
         let content = move || {
             let s = state(states, &project);
-            let dlg = s.open.then(|| confirm(t.clone(), states));
+            let dlg = s.open.then(|| confirm(dest, t.clone(), states));
             let reply = s
                 .reply_line()
                 .map(|l| view! { <div class="small" role="status">{l}</div> });
@@ -338,7 +390,7 @@ mod dom {
         content.into_any()
     }
 
-    fn confirm(t: Toggle, states: States) -> AnyView {
+    fn confirm(dest: Dest, t: Toggle, states: States) -> AnyView {
         let p = panel(&t);
         let project = t.project.clone();
         let disabled = {
@@ -351,7 +403,7 @@ mod dom {
                 apply(states, &project, Event::Cancel);
             }
         };
-        let fire = move |_| submit(t.clone(), states);
+        let fire = move |_| submit(dest, t.clone(), states);
         view! {
             <div class="stack" role="group">
                 <p class="small">{label(p.lead_key)}</p>
@@ -367,14 +419,17 @@ mod dom {
     }
 
     /// 撃つ（送っている間と段が閉じているときは何もしない）。応答を出し、200 なら口を全部読み直す。
-    fn submit(t: Toggle, states: States) {
+    fn submit(dest: Dest, t: Toggle, states: States) {
         let (before, after) = apply(states, &t.project, Event::Fire);
         if !starts(&before, &after) {
             return;
         }
-        let body = t.request_body();
+        let body = dest.body(&t);
         spawn_local(async move {
-            let reply = crate::net::post(HEARTBEAT_PATH, body).await;
+            let reply = match dest {
+                Dest::Account => crate::net::post(HEARTBEAT_PATH, body).await,
+                Dest::Seat => crate::net::post(SEAT_HEARTBEAT_PATH, body).await,
+            };
             let out = outcome(t.to, reply.as_ref().map(|(st, s)| (*st, s.as_str())));
             let reload = out.reloads();
             apply(states, &t.project, Event::Reply(out));
