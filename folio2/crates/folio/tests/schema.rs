@@ -46,17 +46,17 @@ use std::process::{Command, Output, Stdio};
 /// 便 170 (b)1: 改訂の欄 revises の 9 行（optional の項・revise_kind・revises_entry・revises_note の 6 行）を削り、封の欄 seal と
 /// 注 seal_note の 2 行を limits_note の前に足した後の値（anchor は字面の削除と挿入で作った）。
 /// 便 182 (b): ruling_pattern とその注を直し、4 欄と注の 19 行を足した後の値（anchor は字面の置き換えと挿入で作った）。
-const REGION_LINES: usize = 150;
-const REGION_BYTES: usize = 28119;
-const REGION_SHA256: &str = "73c397e2515e06351104480b557f802681cb2b95a05b9a0c3d4d6c8eaf46e83d";
+const REGION_LINES: usize = 151;
+const REGION_BYTES: usize = 28247;
+const REGION_SHA256: &str = "1d8dcdf77e670be86ec1f1d3340cfc608d91418ee942361d27e2d94d5fcd3b30";
 
 /// 便 46 (c) → 便 57 (b) 凍結 anchor: design-note/schema.yaml の生成区間（設計判断の席が独立の実装で組んだ・
 /// tests/fixtures/schema/note-region.txt と同じ byte・便 103 で索引の節を指す欄 4 つに改め、便 119 で導出物の検査の命令の名と
 /// 注 3 つを直した後の値）。便 130 (b)(e): 注 index_note の正本の指し先を graph.rs の定数に直した後の値（行数は不変）。
 /// 便 140 (b): placement の字から（器 scribe2）を外した後の値（17 byte 減・行数は不変）。
-const NOTE_REGION_LINES: usize = 137;
-const NOTE_REGION_BYTES: usize = 16789;
-const NOTE_REGION_SHA256: &str = "558fc1742fe371f71868912369d716cbc693210a576175ffb3b83cad1b7f151e";
+const NOTE_REGION_LINES: usize = 164;
+const NOTE_REGION_BYTES: usize = 19619;
+const NOTE_REGION_SHA256: &str = "01defdfecd842c5f3e32399ac6a66d807379c9bedc30c557948ef073ce79cfa6";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
 /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。

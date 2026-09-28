@@ -546,8 +546,8 @@ fn note_schema_copy_drift_fails() {
     let w = Work::new("schema-drift");
     w.mutate_file(
         &w.note("schema.yaml"),
-        "teeth-table, contract-table]",
-        "teeth-table, contract-table, extra-type]",
+        "      - decision-table\n",
+        "      - decision-table\n      - extra-type\n",
     );
     assert_single_violation(
         &w.check(),

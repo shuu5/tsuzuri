@@ -11,6 +11,8 @@
 //! `folio schema --write` が `FLOOR` から導出する＝説明の注（`_note` で終わる欄）も FLOOR が file の順と字面のまま持つ。
 //! 床の定数（欄の集合の型とその method・欄の決まりの定数・`FLOOR`）は便 114 で `floor_note.rs`（層 1）へ降ろした。検査の本体はここに残す。
 //! 承認欄の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数え、`check_note` は読めた設計ノートを返す。
+//! 計画の設計ノートの節の型 3 つ（行の索引・計画だけの行・判断の表）の行の形は便 183 からここが数え、置き場の決まりと計画の床は
+//! `plan.rs` の `check_plan` が数える（判断の記録 ADR-31 決定 (2)・要件書 FR27）。
 
 use std::collections::HashSet;
 use std::fs;
@@ -22,14 +24,16 @@ use crate::check::{duplicate_ids, non_empty, row_id, unknown_sections};
 use crate::floor::{floor_diff_for, strip_notes};
 use crate::floor_adr::APPROVER;
 use crate::floor_note::{
-    APPROVAL_REQUIRED, CONTRACT_TABLE, DOC, DOC_META, EFFECTIVE_STATUS, EXTERNAL_HEAD,
-    EXTERNAL_NEED, EXTERNAL_PATH, EXTERNAL_ROW_FIELDS, EXTERNAL_ROWS_KEY, EXTERNAL_SHAPE,
-    FIELDS_ROW, FIGURE_ENTRY, FLOOR, FORBIDS_ROWS, ID_PATTERN, Keys, NEED_ENUM, NEEDS_BODY,
-    NEEDS_ROWS, PARTS_ROW, PORTS_ROW, PROSE, ROW_ID_PATTERN, SECTION, SHAPE_ENUM, STATUS_ENUM,
-    STATUS_EXAMPLE, STATUS_RETIRED, SURFACE_ENUM, TEETH_ROW, TYPE_ENUM, VERSION_PATTERN,
+    APPROVAL_REQUIRED, CONTRACT_TABLE, DECISION_ROW, DECISION_TABLE, DOC, DOC_META, EFFECTIVE_STATUS,
+    EXTERNAL_HEAD, EXTERNAL_NEED, EXTERNAL_PATH, EXTERNAL_ROW_FIELDS, EXTERNAL_ROWS_KEY,
+    EXTERNAL_SHAPE, FIELDS_ROW, FIGURE_ENTRY, FLOOR, FORBIDS_ROWS, ID_PATTERN, INDEX_ROW, Keys,
+    NEED_ENUM, NEEDS_BODY, NEEDS_ROWS, PARTS_ROW, PLAN_LISTS, PLAN_ROW, PORTS_ROW, PROSE,
+    ROW_ID_PATTERN, ROW_INDEX, ROW_PLAN, SECTION, SHAPE_ENUM, STATUS_ENUM, STATUS_EXAMPLE,
+    STATUS_RETIRED, SURFACE_ENUM, TEETH_ROW, TYPE_ENUM, VERSION_PATTERN,
 };
 use crate::gitcheck;
 use crate::link;
+use crate::plan;
 use crate::prose;
 use crate::refs;
 use crate::rules;
@@ -73,6 +77,8 @@ pub fn check_note(
 ) -> Vec<NoteDoc> {
     let nd = dir.join(DIR);
     if !nd.exists() {
+        // 名札の行が在れば計画のノートが無い＝まだ分からない（設計ノートの置き場が無くても黙らない・便 183）
+        plan::check_plan(&nd, &[], rules, report);
         return Vec::new();
     }
     if nd.is_symlink() || !nd.is_dir() {
@@ -85,6 +91,7 @@ pub fn check_note(
     check_schema_copy(&nd, report);
     let notes = load_notes(&nd, report);
     if notes.is_empty() {
+        plan::check_plan(&nd, &notes, rules, report);
         return notes;
     }
     // 器の導出 file は契約表の節を持つ設計ノートが 1 本以上あるときだけ読む
@@ -120,6 +127,8 @@ pub fn check_note(
             report.violation(KIND, m);
         }
     }
+    // 計画の設計ノート（便 183）: 置き場の決まりと、名札の行が在るときの計画の床
+    plan::check_plan(&nd, &notes, rules, report);
     notes
 }
 
@@ -691,7 +700,10 @@ fn check_section(
     } else {
         check_table_rows(file, &at, ty, &rows, known, report);
     }
-    duplicate_ids(file, rows, report);
+    // 行の索引は文書をまたいで id が重なりうる・計画だけの行の一意は計画の床が数える（便 183）
+    if ty != ROW_INDEX && ty != ROW_PLAN {
+        duplicate_ids(file, rows, report);
+    }
 }
 
 /// 部品・口・欄・歯の表の行（行の欄の集合と値域・参照 id）。
@@ -707,6 +719,9 @@ fn check_table_rows(
         "parts-table" => &PARTS_ROW,
         "ports-table" => &PORTS_ROW,
         "fields-table" => &FIELDS_ROW,
+        ROW_INDEX => &INDEX_ROW,
+        ROW_PLAN => &PLAN_ROW,
+        DECISION_TABLE => &DECISION_ROW,
         _ => &TEETH_ROW,
     };
     for row in rows {
@@ -732,7 +747,31 @@ fn check_table_rows(
                 report.violation(KIND, format!("{file}: {rat}: shape「{v}」が一覧に無い"));
             }
         }
+        if matches!(ty, ROW_INDEX | ROW_PLAN | DECISION_TABLE) {
+            plan_shapes(file, &rat, ty, row, report);
+        }
         resolve_ids(file, &rat, row, "ref", known, report);
+    }
+}
+
+/// 計画の設計ノートの 3 つの型の行の欄の形（便 183）: 計画だけの行の depends と files は字の一覧、ほかは字。判断の表の
+/// ruling は決定の欄の床が数える（重ねない）。値そのもの（size の語・files の path）は器の語と照らさない。
+fn plan_shapes(file: &str, rat: &str, ty: &str, row: &Node, report: &mut Report) {
+    for (key, value) in row.as_map().unwrap_or_default() {
+        if ty == DECISION_TABLE && key == "ruling" {
+            continue;
+        }
+        let list = ty == ROW_PLAN && PLAN_LISTS.contains(&key.as_str());
+        let ok = match value {
+            Node::Null => true,
+            Node::Scalar(_) => !list,
+            Node::Seq(items) => list && items.iter().all(|x| x.as_str().is_some()),
+            Node::Map(_) => false,
+        };
+        if !ok {
+            let shape = if list { "字の一覧" } else { "字" };
+            report.violation(KIND, format!("{file}: {rat}: 欄「{key}」が{shape}の形でない"));
+        }
     }
 }
 

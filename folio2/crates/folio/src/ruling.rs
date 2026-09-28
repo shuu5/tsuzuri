@@ -12,10 +12,10 @@ use crate::yaml::Node;
 /// 裁定 id の文法の写し（人が読む字面・床は字の走査で判定する）。語頭の台帳の id と、続く器の問いの印か notes の日時。
 pub(crate) const PATTERN: &str = r"(?<![0-9A-Za-z_.-])[a-z][0-9]-[0-9a-z]+(\.[0-9]+)*(:[0-9]{8}T[0-9]{4}Z-[0-9]+| notes( [0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9][0-9x])?| [0-9]{2}:[0-9][0-9x])( JST)?)?";
 
-/// 決定の欄の閉じた一覧（file と欄の道・ADR-31 決定 (1)）。判断の表の行（決定 (2)）は、その節の型が入る便が足す。
-pub(crate) const FIELDS: [&str; 11] = [
+/// 決定の欄の閉じた一覧（file と欄の道・ADR-31 決定 (1)）。判断の表の行（決定 (2)・`TABLE`）は便 183 で足した。
+pub(crate) const FIELDS: [&str; 12] = [
     ENACTMENT, AMENDMENT, THRESHOLD, DISCIPLINE, RECORD, NOTE, STAMPS[0], STAMPS[1], STAMPS[2], STAMPS[3],
-    STAMPS[4],
+    STAMPS[4], TABLE,
 ];
 
 const ENACTMENT: &str = "constitution.yaml meta.approval.ruling";
@@ -24,6 +24,8 @@ const THRESHOLD: &str = "rules.yaml thresholds[].ruling";
 const DISCIPLINE: &str = "rules.yaml discipline[].ruling";
 const RECORD: &str = "adr/ADR-*.yaml approval.ruling";
 const NOTE: &str = "design-note/*.yaml meta.approval[].ruling";
+/// 判断の表（節の型 decision-table・どの設計ノートにも置ける）の各行の裁定の欄（便 183・ADR-31 決定 (2)(イ)(エ)）。
+const TABLE: &str = "design-note/*.yaml sections[decision-table].rows[].ruling";
 
 /// 承認欄の行の stamp を数える 5 正本（要件書・入口・天井の正本・相談窓口・索引の欄の決まり）。
 const STAMPS: [&str; 5] = [
@@ -246,6 +248,17 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
             push(NOTE, file, format!("meta.approval[{n}].ruling"), row.get("ruling"));
         }
     }
+    for (file, root) in &tree.notes {
+        let tables = maps(root.get("sections"))
+            .filter(|s| s.get("type").and_then(Node::as_str) == Some(crate::floor_note::DECISION_TABLE));
+        for section in tables {
+            let n = section.get("n").and_then(Node::as_str).unwrap_or("?");
+            for row in maps(section.get("rows")) {
+                let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
+                push(TABLE, file, format!("§{n} の行 {id} の ruling"), row.get("ruling"));
+            }
+        }
+    }
     let stamped = [Some(tree.srs), Some(tree.index), Some(tree.ceiling), Some(tree.intake), tree.graph];
     for (field, root) in STAMPS.into_iter().zip(stamped) {
         for (n, row) in root.into_iter().flat_map(approval_rows) {
@@ -341,13 +354,13 @@ mod tests {
         assert_eq!([Form::Question, Form::NotesTime, Form::Bead].map(Form::name), Form::NAMES);
     }
 
-    /// 歯（便 182）: 決定の欄の一覧は 11 種類で重ならず、骨格の欄と 5 正本の stamp の欄を含む。
+    /// 歯（便 182）: 決定の欄の一覧は 12 種類で重ならず、骨格の欄と 5 正本の stamp の欄を含む（便 183 で判断の表の行を足した）。
     #[test]
     fn f182_the_fields_are_closed_and_hold_the_skeleton() {
         let mut seen = FIELDS.to_vec();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 11);
+        assert_eq!(seen.len(), 12);
         assert!(SKELETON.iter().chain(&STAMPS).all(|f| FIELDS.contains(f)));
     }
 }

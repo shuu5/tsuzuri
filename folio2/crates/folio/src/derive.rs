@@ -7,17 +7,22 @@
 //! 宣言の順・値の無い欄と空の一覧は欄名ごと省く・行の末尾に section が指す散文の節の body を単一行にした goal。
 //! 全部か無しか: 1 行でも導出できなければ（読めない・欄が合わない・escape の要る字）どの file も書かずに 2（P-4.1）。
 //! 置き場の導出元の無い .toml は差分に数えず、消さず、名を 1 行ずつ出す（N-1.1・P-4.1）。
+//! 便 183（判断の記録 ADR-31 決定 (2)(ウ)・要件書 FR27）から、規則の表に計画の名札の行が在れば、計画のノートの行の索引の
+//! 生成区間も同じ回に書き（--write・全部か無しか）、床と同じ関数 `plan::drift` で比べる（--check）。名札の行が無い・規則の表が
+//! 無い置き場は今のまま（契約表の導出物だけ）。
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::floor_note::{
     CONTRACT_TABLE, DERIVED_ARRAY, DERIVED_EXTENSION, DERIVED_SUBCOMMAND, EXTERNAL_HEAD, PROSE,
 };
 use crate::note::{self, Field, NoteDoc};
+use crate::plan::{self, IndexRow};
+use crate::rules;
 use crate::verdict::{Report, Verdict};
-use crate::yaml::Node;
+use crate::yaml::{self, Node};
 
 /// 設計ノートの置き場（正本の dir の直下）。
 const NOTE_DIR: &str = "design-note";
@@ -56,23 +61,52 @@ struct Derived {
     text: String,
 }
 
+/// 計画のノートの行の索引（便 183）: 計画のノートの path と置き場からの名・今の字・導出した行。
+struct PlanIndex {
+    path: PathBuf,
+    name: String,
+    text: String,
+    rows: Vec<IndexRow>,
+}
+
 // ── 命令の口 ──
 
 pub fn run(dir: &Path, out: &Path, mode: Mode) -> Outcome {
     // --out が相対なら --dir からの相対・絶対ならそのまま（folio build と同じ）
     let out_dir = dir.join(out);
-    let derived = match derive_all(dir) {
+    let (derived, index) = match derive_all(dir).and_then(|(d, notes)| Ok((d, plan_index(dir, &notes)?))) {
         Ok(d) => d,
         Err(e) => return Outcome::unknown(e),
     };
     match mode {
-        Mode::Write => write_all(&out_dir, &derived),
-        Mode::Check => check_all(&out_dir, &derived),
+        Mode::Write => write_all(&out_dir, &derived, index.as_ref()),
+        Mode::Check => check_all(&out_dir, &derived, index.as_ref()),
     }
 }
 
-/// 契約表を持つ設計ノートを全部導出する（1 本でも導出できなければ Err）。
-fn derive_all(dir: &Path) -> Result<Vec<Derived>, String> {
+/// 計画の名札の行が在れば、計画のノートの行の索引を導く（無ければ None・規則の表の無い置き場も None）。
+/// 名札の行が読めない・計画のノートが無い・行が id の形でない・読めないは Err（まだ分からない）。
+fn plan_index(dir: &Path, notes: &[NoteDoc]) -> Result<Option<PlanIndex>, String> {
+    let Some(rules) = plan::load_rules(dir)? else {
+        return Ok(None);
+    };
+    let Some(id) = rules::plan_note(&rules)
+        .map_err(|e| format!("rules.yaml: 計画のノートの名札の行が読めない: {e}"))?
+    else {
+        return Ok(None);
+    };
+    let note = notes.iter().find(|n| n.id == id).ok_or_else(|| {
+        format!("rules.yaml: 計画の名札の行が名指す計画のノート {NOTE_DIR}/{id}.yaml が無い")
+    })?;
+    let rows = plan::index_rows(notes)?;
+    let name = format!("{NOTE_DIR}/{}", note.file);
+    let path = dir.join(&name);
+    let text = fs::read_to_string(&path).map_err(|e| format!("{name}: 読めない: {e}"))?;
+    Ok(Some(PlanIndex { path, name, text, rows }))
+}
+
+/// 契約表を持つ設計ノートを全部導出する（1 本でも導出できなければ Err）。読めた設計ノートも返す（行の索引の母集団・便 183）。
+fn derive_all(dir: &Path) -> Result<(Vec<Derived>, Vec<NoteDoc>), String> {
     let nd = dir.join(NOTE_DIR);
     if nd.is_symlink() || !nd.is_dir() {
         return Err(format!(
@@ -88,13 +122,13 @@ fn derive_all(dir: &Path) -> Result<Vec<Derived>, String> {
         .filter(|n| note::has_contract_table(&n.root))
         .collect();
     if with_table.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), notes));
     }
     let Some(fields) = note::load_external(dir, &mut report) else {
         first_reason(&report)?;
         return Err("器の導出 file が読めない".to_string());
     };
-    with_table
+    let derived = with_table
         .into_iter()
         .map(|n| {
             derive_doc(n, &fields)
@@ -104,7 +138,8 @@ fn derive_all(dir: &Path) -> Result<Vec<Derived>, String> {
                 })
                 .map_err(|e| format!("{NOTE_DIR}/{}: {e}", n.file))
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((derived, notes))
 }
 
 /// 読み手の違反か「まだ分からない」の最初の 1 つ（無ければ Ok）。
@@ -254,7 +289,8 @@ fn out_is_dir(out_dir: &Path) -> bool {
 }
 
 /// --write: 違う file だけを書く。置き場が無ければ作る（親 dir は作らない）。ほかの file は消さない（N-1.1）。
-fn write_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
+/// 計画の行の索引は、書き直した字が床と同じ関数で導出と一致するときだけ、導出物の後に書く（全部か無しか・便 183）。
+fn write_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) -> Outcome {
     if !out_is_dir(out_dir) {
         if out_dir.exists() || out_dir.is_symlink() {
             return Outcome::unknown(format!(
@@ -270,6 +306,10 @@ fn write_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
         }
     }
     // 書く前に書く先を全部確かめる（全部か無しか）
+    let plan_text = match index.map(rewritten).transpose() {
+        Ok(t) => t,
+        Err(e) => return Outcome::unknown(e),
+    };
     let mut pending = Vec::new();
     for d in derived {
         let path = out_dir.join(&d.name);
@@ -285,11 +325,19 @@ fn write_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
     {
         return Outcome::unknown(format!("{}: 置き場を作れない: {e}", out_dir.display()));
     }
-    let written = pending.len();
+    let mut written = pending.len();
     for (path, d) in pending {
         if let Err(e) = fs::write(&path, &d.text) {
             return Outcome::unknown(format!("{}: 書けない: {e}", path.display()));
         }
+    }
+    if let (Some(p), Some(text)) = (index, plan_text)
+        && text != p.text
+    {
+        if let Err(e) = fs::write(&p.path, text) {
+            return Outcome::unknown(format!("{}: 書けない: {e}", p.path.display()));
+        }
+        written += 1;
     }
     let mut stdout = match orphans(out_dir, derived) {
         Ok(lines) => lines,
@@ -297,7 +345,7 @@ fn write_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
     };
     stdout.push(format!(
         "folio {DERIVED_SUBCOMMAND}: 書いた {written} file・変わらない {} file（{}）",
-        derived.len() - written,
+        derived.len() + usize::from(index.is_some()) - written,
         out_dir.display()
     ));
     Outcome {
@@ -307,8 +355,19 @@ fn write_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
     }
 }
 
+/// 計画のノートの生成区間を書き直した字（印が 1 対でない・書き直しても床の関数で導出と合わないは Err）。
+fn rewritten(p: &PlanIndex) -> Result<String, String> {
+    let text = plan::rewrite(&p.text, &p.rows).map_err(|e| format!("{}: {e}", p.name))?;
+    let root = yaml::parse(&text).map_err(|e| format!("{}: 書き直すと parse できない: {e}", p.name))?.root;
+    match plan::drift(&root, &text, &p.rows) {
+        None => Ok(text),
+        Some(why) => Err(format!("{}: 書き直しても行の索引が合わない: {why}", p.name)),
+    }
+}
+
 /// --check: 導出元を持つ導出物だけを置き場の file と byte 比較する（違う・置き場に無い = 1）。
-fn check_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
+/// 計画の行の索引は床と同じ関数で比べ、食い違えば差分 1 に数える（便 183）。
+fn check_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) -> Outcome {
     if !out_is_dir(out_dir) {
         return Outcome::unknown(format!(
             "置き場が無い（dir として無い・symlink を含む）: {}",
@@ -334,6 +393,15 @@ fn check_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
             Err(e) => return Outcome::unknown(format!("{}: 読めない: {e}", path.display())),
         }
     }
+    if let Some(p) = index {
+        let why = match yaml::parse(&p.text) {
+            Ok(doc) => plan::drift(&doc.root, &p.text, &p.rows),
+            Err(e) => return Outcome::unknown(format!("{}: parse できない: {e}", p.name)),
+        };
+        if let Some(why) = why {
+            stdout.push(format!("folio {DERIVED_SUBCOMMAND}: DRIFT: {}（{why}）", p.name));
+        }
+    }
     let drift = stdout.len();
     match orphans(out_dir, derived) {
         Ok(lines) => stdout.extend(lines),
@@ -347,7 +415,7 @@ fn check_all(out_dir: &Path, derived: &[Derived]) -> Outcome {
     stdout.push(format!(
         "folio {DERIVED_SUBCOMMAND}: {}（一致 {}・差分 {drift}・{}）",
         if drift == 0 { "一致" } else { "差分あり" },
-        derived.len() - drift,
+        derived.len() + usize::from(index.is_some()) - drift,
         out_dir.display()
     ));
     Outcome {

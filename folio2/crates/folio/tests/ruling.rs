@@ -210,6 +210,7 @@ const LISTS: &str = "  ruling_forms: [question, notes-time, bead]
     - ceiling.yaml meta.approval[].stamp
     - intake.yaml meta.approval[].stamp
     - graph.yaml meta.approval[].stamp
+    - design-note/*.yaml sections[decision-table].rows[].ruling
   ruling_skeleton:
     - constitution.yaml meta.approval.ruling
     - rules.yaml thresholds[].ruling

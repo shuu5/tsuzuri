@@ -65,26 +65,51 @@ pub const THRESHOLD_OPTIONAL: [&str; 7] = [
 /// 設計ノートの面の章の上限の行の印（欄 key の値・面の生成器 `face_note.rs` と床 `note.rs` が `chapter_cap` で読む）。
 pub const NOTE_CHAPTERS: &str = "note-chapters";
 
-/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179）。
-pub const KEYS: [&str; 1] = [NOTE_CHAPTERS];
+/// 計画の名札の行の印（欄 key の値・値は計画のノートの文書 id・床 `plan.rs` と導出の命令 `derive.rs` が `plan_note` で読む・便 183）。
+pub const PLAN_NOTE: &str = crate::floor_note::PLAN_KEY;
+
+/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note を足した）。
+pub const KEYS: [&str; 2] = [NOTE_CHAPTERS, PLAN_NOTE];
 
 /// 章の上限の値の形「<正の整数> 章 以下」の数の後ろの字。
 const CHAPTER_TAIL: &str = " 章 以下";
 
 /// 置き場の規則の表の閾値の行のうち、欄 key が `key` の 1 本（便 179）。無い・2 本以上は Err（呼び手は まだ分からない にする）。
 pub fn keyed<'a>(rules: &'a Node, key: &str) -> Result<&'a Node, String> {
-    let rows: Vec<&Node> = rules
-        .get(RULES_TOP_LEVEL[1])
-        .and_then(Node::as_seq)
-        .unwrap_or_default()
-        .iter()
-        .filter(|r| r.get(ROW_KEY).and_then(Node::as_str) == Some(key))
-        .collect();
+    let rows = keyed_rows(rules, key);
     match rows[..] {
         [row] => Ok(row),
         [] => Err(format!("欄 {ROW_KEY} が {key} の閾値の行が無い")),
         _ => Err(format!("欄 {ROW_KEY} が {key} の閾値の行が {} 本ある", rows.len())),
     }
+}
+
+/// 置き場の規則の表の閾値の行のうち、欄 key が `key` の行の全部（書かれた順）。
+fn keyed_rows<'a>(rules: &'a Node, key: &str) -> Vec<&'a Node> {
+    rules
+        .get(RULES_TOP_LEVEL[1])
+        .and_then(Node::as_seq)
+        .unwrap_or_default()
+        .iter()
+        .filter(|r| r.get(ROW_KEY).and_then(Node::as_str) == Some(key))
+        .collect()
+}
+
+/// 計画のノートの文書 id（欄 key が plan-note の閾値の行の value・判断の記録 ADR-31 決定 (2)(ア)・便 183）。行が無ければ None
+/// （計画のノートの床を掛けない）。2 本以上か値が文書 id の形でなければ Err（呼び手は まだ分からない にする・行 R-19 の欄と同じ）。
+pub fn plan_note(rules: &Node) -> Result<Option<&str>, String> {
+    let rows = keyed_rows(rules, PLAN_NOTE);
+    let row = match rows[..] {
+        [] => return Ok(None),
+        [row] => row,
+        _ => return Err(format!("欄 {ROW_KEY} が {PLAN_NOTE} の閾値の行が {} 本ある", rows.len())),
+    };
+    let value = row.get("value").and_then(Node::as_str).unwrap_or_default();
+    if crate::shelf::is_doc_id(value) {
+        return Ok(Some(value));
+    }
+    let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
+    Err(format!("行 {id} の value「{value}」が文書 id の形でない"))
 }
 
 /// 設計ノートの章の上限（欄 key が note-chapters の閾値の行の value「<正の整数> 章 以下」の数・便 179）。
@@ -275,7 +300,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "key_note",
         Floor::Val(
-            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。口の読む行が無いか 2 本以上在るか、値の形が違えば、その口の判定は まだ分からない",
+            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない",
         ),
     ),
     (
@@ -406,7 +431,25 @@ mod tests {
         assert_eq!(listed.len(), 1, "{listed:?}");
         let two = v("  - {id: R-19, key: note-chapters}\n  - {id: R-26, key: note-chapters}\n");
         assert_eq!(two, ["行 R-26 の key「note-chapters」を持つ閾値の行が 2 本以上ある"]);
-        assert_eq!(KEYS, ["note-chapters"]);
+        assert_eq!(KEYS, ["note-chapters", "plan-note"]);
+    }
+
+    /// 便 183 (c): 計画のノートの文書 id は欄 key が plan-note の閾値の行の value だけを読む。行が無ければ None（掛けない）、
+    /// 2 本・値が文書 id の形でない・開発規律の行に在る（閾値の行でない＝無いと同じ）を分ける。
+    #[test]
+    fn f183_plan_note_reads_the_keyed_row_and_none_means_off() {
+        let doc = |rows: &str| crate::yaml::parse(&format!("thresholds:\n{rows}discipline: []\n")).unwrap().root;
+        let row = |id: &str, v: &str| format!("  - {{id: {id}, value: \"{v}\", key: plan-note}}\n");
+        assert_eq!(plan_note(&doc(&row("R-27", "surface-plan"))), Ok(Some("surface-plan")));
+        assert_eq!(plan_note(&doc("  - {id: R-19, value: \"12 章 以下\", key: note-chapters}\n")), Ok(None));
+        for bad in ["Surface-plan", "surface_plan", "", "1plan", "surface-plan.yaml", "計画"] {
+            let e = plan_note(&doc(&row("R-27", bad))).unwrap_err();
+            assert!(e.contains("R-27") && e.contains("文書 id の形でない"), "{bad}: {e}");
+        }
+        let two = doc(&format!("{}{}", row("R-27", "a"), row("R-28", "b")));
+        assert!(plan_note(&two).unwrap_err().contains("2 本ある"));
+        let discipline = "thresholds: []\ndiscipline:\n  - {id: D-1, value: surface-plan, key: plan-note}\n";
+        assert_eq!(plan_note(&crate::yaml::parse(discipline).unwrap().root), Ok(None));
     }
 
     /// 種別と憲法の機構の対応の右辺は憲法の値域 mechanism_kind の名（1 か所から出る）。

@@ -146,7 +146,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "ruling_fields_note",
         Floor::Val(
-            "決定の欄の閉じた一覧（判断の記録 ADR-31 決定 (1)・実装の定数の写し）と、形の種類の閉じた一覧（ruling_forms）。床（folio check）は ruling_fields の各欄の値から ruling_pattern の文法で裁定 id を 1 つも切り出せなければ違反とし、欄が無い・空・字でない（一覧・表）ときも違反とする。ruling_skeleton の欄（骨格が書く欄）の値が骨格の印（未記入）なら裁定の前（P-17.3）＝まだ分からない とし、ほかの欄の未記入は違反のまま。承認欄の行（meta.approval[]）のうち役（role）が ruling_skip_roles の行は決定を持たないので数えない（役の無い行は数える）。全ての置き場に掛け、選ぶ行を持たない。憲法の各条の前の版との対応（supersedes_v1）・支度表の承認欄・憲法の rationale は一覧の外。凍結 anchor の承認一覧（判断の記録の承認欄の写し）も一覧の外で、anchor の床が同じ文法で見る。判断の表（判断の記録 ADR-31 決定 (2)）の行は、その節の型が入る便が一覧に足す",
+            "決定の欄の閉じた一覧（判断の記録 ADR-31 決定 (1)・実装の定数の写し）と、形の種類の閉じた一覧（ruling_forms）。床（folio check）は ruling_fields の各欄の値から ruling_pattern の文法で裁定 id を 1 つも切り出せなければ違反とし、欄が無い・空・字でない（一覧・表）ときも違反とする。ruling_skeleton の欄（骨格が書く欄）の値が骨格の印（未記入）なら裁定の前（P-17.3）＝まだ分からない とし、ほかの欄の未記入は違反のまま。承認欄の行（meta.approval[]）のうち役（role）が ruling_skip_roles の行は決定を持たないので数えない（役の無い行は数える）。全ての置き場に掛け、選ぶ行を持たない。憲法の各条の前の版との対応（supersedes_v1）・支度表の承認欄・憲法の rationale は一覧の外。凍結 anchor の承認一覧（判断の記録の承認欄の写し）も一覧の外で、anchor の床が同じ文法で見る。判断の表（設計ノートの節の型 decision-table・判断の記録 ADR-31 決定 (2)(イ)）の各行の ruling は、どの設計ノートに在っても数える",
         ),
     ),
     ("owner", Floor::Val(OWNER)),

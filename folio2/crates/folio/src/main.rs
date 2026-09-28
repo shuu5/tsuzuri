@@ -42,6 +42,7 @@ mod mentions;
 mod note;
 mod parts;
 mod phase;
+mod plan;
 mod prose;
 mod refs;
 mod rules;

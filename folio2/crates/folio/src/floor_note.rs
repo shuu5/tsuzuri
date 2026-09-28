@@ -58,9 +58,17 @@ pub(crate) const TYPE_ENUM: &[&str] = &[
     "fields-table",
     "teeth-table",
     "contract-table",
+    "row-index",
+    "row-plan",
+    "decision-table",
 ];
 pub(crate) const PROSE: &str = "prose";
 pub(crate) const CONTRACT_TABLE: &str = "contract-table";
+/// 計画の設計ノートの節の型 3 つ（便 183・判断の記録 ADR-31 決定 (2)(イ)）。行の索引と計画だけの行は、計画の名札の行が
+/// 名指すノートにだけ置ける（`plan.rs`）。判断の表はどの設計ノートにも置け、行の ruling は決定の欄（`ruling.rs`）。
+pub(crate) const ROW_INDEX: &str = "row-index";
+pub(crate) const ROW_PLAN: &str = "row-plan";
+pub(crate) const DECISION_TABLE: &str = "decision-table";
 /// 節の型ごとの required / forbid（by_type）。
 pub(crate) const NEEDS_BODY: &[&str] = &["body"];
 pub(crate) const NEEDS_ROWS: &[&str] = &["rows"];
@@ -84,6 +92,28 @@ pub(crate) const TEETH_ROW: Keys = Keys {
     required: &["id", "name", "red_when", "fixture"],
     optional: &["ref", "note"],
 };
+/// 行の索引の行（生成区間・契約表の行の id と所属の文書 id だけ・器の欄は写さない・ADR-3 決定 (2)）。
+pub(crate) const INDEX_ROW: Keys = Keys {
+    required: &["id", "doc"],
+    optional: &[],
+};
+/// 計画だけの行（人が書く・節の中の並びが順）。size と files は契約の行ができるまで運ぶ手書きの写しで、床は形だけを見る。
+pub(crate) const PLAN_ROW: Keys = Keys {
+    required: &["id", "what"],
+    optional: &["depends", "ruling", "note", "size", "files"],
+};
+/// 計画だけの行のうち字の一覧の欄（ほかの欄は字）。
+pub(crate) const PLAN_LISTS: &[&str] = &["depends", "files"];
+/// 判断の表の行（人が書く・ruling は決定の欄）。
+pub(crate) const DECISION_ROW: Keys = Keys {
+    required: &["id", "text", "ruling"],
+    optional: &[],
+};
+/// 行の索引の生成区間の印（行の頭の空白を除いた全部がこの字面・`folio derive --write` が間を書く）。
+pub(crate) const ROWS_BEGIN: &str = "# folio:rows:begin — 生成区間・手で直さない・正本は置き場の契約表（folio derive --write が書く）";
+pub(crate) const ROWS_END: &str = "# folio:rows:end";
+/// 計画の名札の行の欄 key の値（規則の表の閉じた一覧 `rules::KEYS` の 1 つ・字はここが持ち `rules::PLAN_NOTE` が引く）。
+pub(crate) const PLAN_KEY: &str = "plan-note";
 /// 器（scribe2）の導出 file の置き場（repo の根からの相対）と読み手の期待する形。
 pub(crate) const EXTERNAL_PATH: &str = "contracts/schema.toml";
 pub(crate) const EXTERNAL_HEAD: &str = "schema = 1";
@@ -182,7 +212,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             ),
             ("n_note", Floor::Val("節番号（§N の N）。folio2 の自前の決まり（P-7.1 の番号の扱いを節に当てたもの・判断の記録と要件書には無い）。契約表の行の section 欄はこの n を指す（見出しの字面ではない）。器（scribe2）の設計文書の「## N.」と同じ意味")),
             ("type_enum", Floor::Strs(TYPE_ENUM)),
-            ("type_note", Floor::Val("節の型の閉じた一覧（P-2.4・裁定は meta.type_enum_ruling）。判断の記録 ADR-3 決定 (1) が名指す 部品の表・口の表・欄の表・歯の表・契約表 に、散文の節（要件書 FR12 の母集団）を足した 6 つ。要件書 FR9 = 一覧に無い型の節を持つ正本は生成せずに落とす")),
+            ("type_note", Floor::Val("節の型の閉じた一覧（P-2.4・裁定は meta.type_enum_ruling）。判断の記録 ADR-3 決定 (1) が名指す 部品の表・口の表・欄の表・歯の表・契約表 に、散文の節（要件書 FR12 の母集団）と、判断の記録 ADR-31 決定 (2)(イ) の計画の設計ノートの 3 つ（行の索引・計画だけの行・判断の表・要件書 FR27）を足した 9 つ。要件書 FR9 = 一覧に無い型の節を持つ正本は生成せずに落とす")),
             (
                 "by_type",
                 Floor::Map(&[
@@ -237,6 +267,34 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                             ("section_ref_type", Floor::Val(PROSE)),
                             ("section_ref_note", Floor::Val("行の section 欄は同じ文書の節番号 n を指し、その節は prose の型であること（folio2 側の導出の成立条件 = 節の body の逐語を goal へ写すため。器 scribe2 は「節が在り本文が非空」だけを見る＝folio2 が導出のために足す条件で、器の受付を狭めない）")),
                             ("rows_note", Floor::Val("契約表。行の欄の集合と値域は本 file に書かない＝schema.contract_table.external_schema が指す器（scribe2）の導出 file をそのまま読む（ADR-3 決定 (2)・要件書 FR10）")),
+                        ]),
+                    ),
+                    (
+                        ROW_INDEX,
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(INDEX_ROW)),
+                            ("place", Floor::Val(PLAN_KEY)),
+                            ("region", Floor::Map(&[("begin", Floor::Val(ROWS_BEGIN)), ("end", Floor::Val(ROWS_END))])),
+                            ("row_note", Floor::Val("行の索引（生成区間・判断の記録 ADR-31 決定 (2)(ウ)・要件書 FR27）。行は置き場の設計ノートの契約表の行の id（id）と所属の文書 id（doc）だけで、file 名の順・表の中の順に並ぶ。器の欄（題・大きさ・依存）は写さない（ADR-3 決定 (2)）。行は rows の下の印 region.begin と region.end の間に folio derive --write が書き（契約表の導出物と同じ回・全部か無しか）、folio check と folio derive --check が同じ関数で導き直して比べ、食い違えば違反とする。置けるのは規則の表の欄 key が place の閾値の行（計画の名札の行）が名指す計画のノートだけで、ほかのノートに在れば名札の行の有無に関わらず違反")),
+                        ]),
+                    ),
+                    (
+                        ROW_PLAN,
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(PLAN_ROW)),
+                            ("lists", Floor::Strs(PLAN_LISTS)),
+                            ("place", Floor::Val(PLAN_KEY)),
+                            ("row_note", Floor::Val("計画だけの行（人が書く・まだ契約の行の無い計画の行・判断の記録 ADR-31 決定 (2)(イ)(エ)）。節の中の並びが計画の順で、depends は中身の依存だけを書く（同じ file を書く行の直列は器が持つ）。lists の欄は字の一覧、ほかの欄は字。size と files は契約の行ができるまで運ぶ手書きの写しで、床は形だけを見て値を器の語と照らさない。id は計画のノートの中で一意で、行の索引に在れば違反（契約の行を書いたら人の節から外す）。depends の id は行の索引か計画だけの行に在ること。置き場の決まりは行の索引と同じ")),
+                        ]),
+                    ),
+                    (
+                        DECISION_TABLE,
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(DECISION_ROW)),
+                            ("row_note", Floor::Val("判断の表（人が書く・どの設計ノートにも置ける・判断の記録 ADR-31 決定 (2)(イ)）。置くのは台帳に記録の在る判断（持ち主の裁定か、台帳に記帳した席の裁定）で、行の ruling は決定の欄（判断の記録の欄の決まり adr/schema.yaml の ruling_fields）として床が裁定 id の形を数える。台帳に記録の無い判断は散文に残り、床の外")),
                         ]),
                     ),
                 ]),

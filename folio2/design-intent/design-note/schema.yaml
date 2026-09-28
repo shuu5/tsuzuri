@@ -51,8 +51,17 @@ schema:
     optional: [body, rows, note]
     n_rule: {start: 1, order: ascending, append_only: true, gaps_allowed: true}
     n_note: 節番号（§N の N）。folio2 の自前の決まり（P-7.1 の番号の扱いを節に当てたもの・判断の記録と要件書には無い）。契約表の行の section 欄はこの n を指す（見出しの字面ではない）。器（scribe2）の設計文書の「## N.」と同じ意味
-    type_enum: [prose, parts-table, ports-table, fields-table, teeth-table, contract-table]
-    type_note: 節の型の閉じた一覧（P-2.4・裁定は meta.type_enum_ruling）。判断の記録 ADR-3 決定 (1) が名指す 部品の表・口の表・欄の表・歯の表・契約表 に、散文の節（要件書 FR12 の母集団）を足した 6 つ。要件書 FR9 = 一覧に無い型の節を持つ正本は生成せずに落とす
+    type_enum:
+      - prose
+      - parts-table
+      - ports-table
+      - fields-table
+      - teeth-table
+      - contract-table
+      - row-index
+      - row-plan
+      - decision-table
+    type_note: 節の型の閉じた一覧（P-2.4・裁定は meta.type_enum_ruling）。判断の記録 ADR-3 決定 (1) が名指す 部品の表・口の表・欄の表・歯の表・契約表 に、散文の節（要件書 FR12 の母集団）と、判断の記録 ADR-31 決定 (2)(イ) の計画の設計ノートの 3 つ（行の索引・計画だけの行・判断の表・要件書 FR27）を足した 9 つ。要件書 FR9 = 一覧に無い型の節を持つ正本は生成せずに落とす
     by_type:
       prose:
         required: [body]
@@ -83,6 +92,24 @@ schema:
         section_ref_type: prose
         section_ref_note: 行の section 欄は同じ文書の節番号 n を指し、その節は prose の型であること（folio2 側の導出の成立条件 = 節の body の逐語を goal へ写すため。器 scribe2 は「節が在り本文が非空」だけを見る＝folio2 が導出のために足す条件で、器の受付を狭めない）
         rows_note: 契約表。行の欄の集合と値域は本 file に書かない＝schema.contract_table.external_schema が指す器（scribe2）の導出 file をそのまま読む（ADR-3 決定 (2)・要件書 FR10）
+      row-index:
+        required: [rows]
+        row: {required: [id, doc], optional: []}
+        place: plan-note
+        region:
+          begin: '# folio:rows:begin — 生成区間・手で直さない・正本は置き場の契約表（folio derive --write が書く）'
+          end: '# folio:rows:end'
+        row_note: 行の索引（生成区間・判断の記録 ADR-31 決定 (2)(ウ)・要件書 FR27）。行は置き場の設計ノートの契約表の行の id（id）と所属の文書 id（doc）だけで、file 名の順・表の中の順に並ぶ。器の欄（題・大きさ・依存）は写さない（ADR-3 決定 (2)）。行は rows の下の印 region.begin と region.end の間に folio derive --write が書き（契約表の導出物と同じ回・全部か無しか）、folio check と folio derive --check が同じ関数で導き直して比べ、食い違えば違反とする。置けるのは規則の表の欄 key が place の閾値の行（計画の名札の行）が名指す計画のノートだけで、ほかのノートに在れば名札の行の有無に関わらず違反
+      row-plan:
+        required: [rows]
+        row: {required: [id, what], optional: [depends, ruling, note, size, files]}
+        lists: [depends, files]
+        place: plan-note
+        row_note: 計画だけの行（人が書く・まだ契約の行の無い計画の行・判断の記録 ADR-31 決定 (2)(イ)(エ)）。節の中の並びが計画の順で、depends は中身の依存だけを書く（同じ file を書く行の直列は器が持つ）。lists の欄は字の一覧、ほかの欄は字。size と files は契約の行ができるまで運ぶ手書きの写しで、床は形だけを見て値を器の語と照らさない。id は計画のノートの中で一意で、行の索引に在れば違反（契約の行を書いたら人の節から外す）。depends の id は行の索引か計画だけの行に在ること。置き場の決まりは行の索引と同じ
+      decision-table:
+        required: [rows]
+        row: {required: [id, text, ruling], optional: []}
+        row_note: 判断の表（人が書く・どの設計ノートにも置ける・判断の記録 ADR-31 決定 (2)(イ)）。置くのは台帳に記録の在る判断（持ち主の裁定か、台帳に記帳した席の裁定）で、行の ruling は決定の欄（判断の記録の欄の決まり adr/schema.yaml の ruling_fields）として床が裁定 id の形を数える。台帳に記録の無い判断は散文に残り、床の外
   contract_table:
     external_schema:
       owner: scribe2
