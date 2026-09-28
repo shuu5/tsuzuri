@@ -3,13 +3,13 @@
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v0.24
+  version: v0.25
   status: effective
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: 設計ノート surface-board（傘の行 g・h・i・j・k）と surface-base（傘の行 e・f）の子の行を、どの波で、どの順で流すかを 1 か所で持つ計画。これまで見本と本番の差の調べ・行の割り・順・席の決めは追跡されない作業場の file にしか無く、全体の統制がとれないという持ち主の指摘（2026-09-27）を受けて置く。持ち主が board で承認したら status を effective にし、承認欄に裁定 id を書く。第 0.11 版（2026-09-28）は、持ち主の裁定 t3-hub.52.38〜.52.40 の後の性能の行 14 本を 3 節（席の決め）と 4 節と 5 節に足し、第 9 波（ノート surface-wave9 = e-hold・g-keyed・g-strip・g-reads・g-policy-all の 5 行）の組みと、表示面の行 i-5 の tz stage open の守り（席の決め）を書き、第 8 波と表示面の i-1 の着地を 2 節に写して着地した行を 4 節から外した。第 0.12 版（2026-09-28）は、第 9 波の 6 行目 c-pipe-closed と、ノート surface-wavef の行 f-gate の書き直しを足し、持ち主の裁定 t3-hub.52.53・.52.60・.52.61 と器の答え（RulingReceived・行 ad・memo の判定・display-env）を写し、後の行（e-sess-closed・g-closed-mark・g-pipe-memo・c-graph-fold・g-graph-fold・e-batch-partial・i-1b）を 4 節に足し、i-3 の着地と disk の満ちを 2 節に書いた。第 0.13 版（2026-09-28）は、4 節の起草中の 2 行 c-graph-fold と g-graph-fold を、ノート surface-wave10a に置いた行の字（大きさ・書く file・接頭辞・便の bead の依存）に替えて 5 節に順の鎖を足し、後の行 t-fstop-tidy を足し、着地した第 9 波の 4 行（e-hold・g-keyed・g-strip・g-reads）を 4 節から外し、第 9 波の g-policy-all と e-hold の着地と surface-wavef の v0.2 と退役した target/ の掃除を 2 節に書いた。第 0.14 版（2026-09-28）は、folio2 の渡し B（folio f300177）の着地を受けて、3 節の持ち主の裁定の行を判断の表（33 行）へ、4 節の行を計画だけの行（67 行）へ移し、行の索引（130 行・folio derive が契約表から書く）を置き、契約表に在る 4 行（f-gate・c-graph-fold・g-graph-fold・c-pipe-closed）を計画だけの行から外し、規則の表に名札の行 R-27 を足した（拠りは裁定 t3-hub.57.1:20260927T2357Z-1 の案 A の 2 段目）。第 0.15 版（2026-09-28）は、器の binary の 8dd964f への入れ替え（display-env を読む）を受けて行 i-1b をノート surface-wavei2 に置いて計画だけの行から外し、i-2 の依存に i-1b を足し、第 9 波の c-pipe-closed と第 10 波 a の 2 行と f-gate の着地を 2 節と 5 節に書いた。第 0.16 版（2026-09-28）は、席が 2026-09-28 に実物の画面で見つけた欠陥 2 つ（1 byte も送らない接続にも境界の server が 400 bad-request を書き、Chrome が後の頁の移りでその接続を使い回して board に素の bad-request の頁が出る件・地図のグラフの組の箱と塊の箱が内部の id を題に出す件）の行 e-idle-close（S）と g-graph-label（S）を、計画だけの行を経ずにノート surface-wave10b に置き（3 節の席の決め）、5 節の鎖に 2 行を入れた（行の索引は folio derive が書く）。第 0.17 版（2026-09-28）は、folio の pin を渡し C の 1e6ab0f に上げ、第 11 波の account board の card の 2 行（h-cards-nx・h-cards-led）をノート surface-wave11d に置いて計画だけの行から外した。第 0.18 版（2026-09-28）は、第 11 波の g-fresh（面の古さの印と 60 秒の諦め）と g-closed-mark（閉じた札の印）をノート surface-wave11a に置いて計画だけの行から外し、g-fresh が view.rs・frame.rs・vocab.json を書かないことに合わせて 5 節の鎖を直した。第 0.19 版（2026-09-28）は、第 11 波の server と中核の 3 行（e-cache・c-pipe-questioned・e-sess-closed）をノート surface-wave11b に置いて計画だけの行から外し、core/account/project.rs と中核の歯 pclosed の鎖に 2 行を入れた。第 0.20 版（2026-09-28）は、account board の行 h-next-unknown（bead t3-hub.53.19・判じなかった次の一手を測れていないの字で出す）をノート surface-wave11f に置いて計画だけの行から外した。第 0.21 版（2026-09-28）は、folio の pin を folio2 の判断の記録 ADR-32（索引に設計ノートの契約表の行を節点として足す）の 6467915 に上げ、folio schema --write で様式の design-note/schema.yaml と graph.yaml を書き直した。第 0.22 版（2026-09-28）は、表示面の行 i-2（起動の引数と tunnel と、窓を 1 回だけ起こすこと）をノート surface-wavei3 に置いて計画だけの行から外し、起草で出た問いの席の決め（頁の窓の無い Chrome と同時の撃ちの錠は行 i-5・Windows は範囲の外）を 3 節と i-5 の字に書いた。第 0.23 版（2026-09-28）は、席が実物の event log で見つけた pipeline の板の欠陥の行 c-pipe-unmapped（器の段 Failed と Stopped の走行を札にし、器が worktree を畳んだ記帳 retired では段を決めない）をノート surface-wave11e に置き（3 節の席の決め・欠陥の直し）、5 節の鎖に入れた。走行の無い札の決まりの行 c-pipe-queue は、bead の種類を問う持ち主の問い t3-hub.60 と t3-hub.52.71 の答えまで起草を止める。第 0.24 版（2026-09-28）は、第 12 波 e の 2 行（t-fstop-tidy = 歯 fstop_worktree_stays_quiet が作る .git を drop の守りで消す・e-batch-partial = まとめて承認の束が途中で落ちた時に、書いた行・閉じていない行・書いていない行を名指して残りだけを送り直せる）をノート surface-wave12e に置いて計画だけの行から外し、起草で見つけた同じ形の後始末の漏れ（tests/qgate.rs）の行 t-qgate-tidy を 9 節に足した。
+  note: 設計ノート surface-board（傘の行 g・h・i・j・k）と surface-base（傘の行 e・f）の子の行を、どの波で、どの順で流すかを 1 か所で持つ計画。これまで見本と本番の差の調べ・行の割り・順・席の決めは追跡されない作業場の file にしか無く、全体の統制がとれないという持ち主の指摘（2026-09-27）を受けて置く。持ち主が board で承認したら status を effective にし、承認欄に裁定 id を書く。第 0.11 版（2026-09-28）は、持ち主の裁定 t3-hub.52.38〜.52.40 の後の性能の行 14 本を 3 節（席の決め）と 4 節と 5 節に足し、第 9 波（ノート surface-wave9 = e-hold・g-keyed・g-strip・g-reads・g-policy-all の 5 行）の組みと、表示面の行 i-5 の tz stage open の守り（席の決め）を書き、第 8 波と表示面の i-1 の着地を 2 節に写して着地した行を 4 節から外した。第 0.12 版（2026-09-28）は、第 9 波の 6 行目 c-pipe-closed と、ノート surface-wavef の行 f-gate の書き直しを足し、持ち主の裁定 t3-hub.52.53・.52.60・.52.61 と器の答え（RulingReceived・行 ad・memo の判定・display-env）を写し、後の行（e-sess-closed・g-closed-mark・g-pipe-memo・c-graph-fold・g-graph-fold・e-batch-partial・i-1b）を 4 節に足し、i-3 の着地と disk の満ちを 2 節に書いた。第 0.13 版（2026-09-28）は、4 節の起草中の 2 行 c-graph-fold と g-graph-fold を、ノート surface-wave10a に置いた行の字（大きさ・書く file・接頭辞・便の bead の依存）に替えて 5 節に順の鎖を足し、後の行 t-fstop-tidy を足し、着地した第 9 波の 4 行（e-hold・g-keyed・g-strip・g-reads）を 4 節から外し、第 9 波の g-policy-all と e-hold の着地と surface-wavef の v0.2 と退役した target/ の掃除を 2 節に書いた。第 0.14 版（2026-09-28）は、folio2 の渡し B（folio f300177）の着地を受けて、3 節の持ち主の裁定の行を判断の表（33 行）へ、4 節の行を計画だけの行（67 行）へ移し、行の索引（130 行・folio derive が契約表から書く）を置き、契約表に在る 4 行（f-gate・c-graph-fold・g-graph-fold・c-pipe-closed）を計画だけの行から外し、規則の表に名札の行 R-27 を足した（拠りは裁定 t3-hub.57.1:20260927T2357Z-1 の案 A の 2 段目）。第 0.15 版（2026-09-28）は、器の binary の 8dd964f への入れ替え（display-env を読む）を受けて行 i-1b をノート surface-wavei2 に置いて計画だけの行から外し、i-2 の依存に i-1b を足し、第 9 波の c-pipe-closed と第 10 波 a の 2 行と f-gate の着地を 2 節と 5 節に書いた。第 0.16 版（2026-09-28）は、席が 2026-09-28 に実物の画面で見つけた欠陥 2 つ（1 byte も送らない接続にも境界の server が 400 bad-request を書き、Chrome が後の頁の移りでその接続を使い回して board に素の bad-request の頁が出る件・地図のグラフの組の箱と塊の箱が内部の id を題に出す件）の行 e-idle-close（S）と g-graph-label（S）を、計画だけの行を経ずにノート surface-wave10b に置き（3 節の席の決め）、5 節の鎖に 2 行を入れた（行の索引は folio derive が書く）。第 0.17 版（2026-09-28）は、folio の pin を渡し C の 1e6ab0f に上げ、第 11 波の account board の card の 2 行（h-cards-nx・h-cards-led）をノート surface-wave11d に置いて計画だけの行から外した。第 0.18 版（2026-09-28）は、第 11 波の g-fresh（面の古さの印と 60 秒の諦め）と g-closed-mark（閉じた札の印）をノート surface-wave11a に置いて計画だけの行から外し、g-fresh が view.rs・frame.rs・vocab.json を書かないことに合わせて 5 節の鎖を直した。第 0.19 版（2026-09-28）は、第 11 波の server と中核の 3 行（e-cache・c-pipe-questioned・e-sess-closed）をノート surface-wave11b に置いて計画だけの行から外し、core/account/project.rs と中核の歯 pclosed の鎖に 2 行を入れた。第 0.20 版（2026-09-28）は、account board の行 h-next-unknown（bead t3-hub.53.19・判じなかった次の一手を測れていないの字で出す）をノート surface-wave11f に置いて計画だけの行から外した。第 0.21 版（2026-09-28）は、folio の pin を folio2 の判断の記録 ADR-32（索引に設計ノートの契約表の行を節点として足す）の 6467915 に上げ、folio schema --write で様式の design-note/schema.yaml と graph.yaml を書き直した。第 0.22 版（2026-09-28）は、表示面の行 i-2（起動の引数と tunnel と、窓を 1 回だけ起こすこと）をノート surface-wavei3 に置いて計画だけの行から外し、起草で出た問いの席の決め（頁の窓の無い Chrome と同時の撃ちの錠は行 i-5・Windows は範囲の外）を 3 節と i-5 の字に書いた。第 0.23 版（2026-09-28）は、席が実物の event log で見つけた pipeline の板の欠陥の行 c-pipe-unmapped（器の段 Failed と Stopped の走行を札にし、器が worktree を畳んだ記帳 retired では段を決めない）をノート surface-wave11e に置き（3 節の席の決め・欠陥の直し）、5 節の鎖に入れた。走行の無い札の決まりの行 c-pipe-queue は、bead の種類を問う持ち主の問い t3-hub.60 と t3-hub.52.71 の答えまで起草を止める。第 0.24 版（2026-09-28）は、第 12 波 e の 2 行（t-fstop-tidy = 歯 fstop_worktree_stays_quiet が作る .git を drop の守りで消す・e-batch-partial = まとめて承認の束が途中で落ちた時に、書いた行・閉じていない行・書いていない行を名指して残りだけを送り直せる）をノート surface-wave12e に置いて計画だけの行から外し、起草で見つけた同じ形の後始末の漏れ（tests/qgate.rs）の行 t-qgate-tidy を 9 節に足した。第 0.25 版（2026-09-28）は、持ち主の裁定 t3-hub.60 と t3-hub.52.71（判断の記録 ADR-16・bead の種類を器と揃え、方針は閉じた問いに記帳し、板は控えの列と 4 列と要修正の行）を判断の表に写し、行 c-pipe-queue・c-pipe-misfit・g-pipe-misfit・e-policy-q を 9 節に足し、g-pipe-memo の字と 6 節の常設の控えの字を直した。
 
 sections:
   - n: 1
@@ -135,7 +135,7 @@ sections:
       文書の運用の強制の 5 段（判断の記録 ADR-14）: 段 1（床の形は folio2・実在は器）・段 2（folio2 の鍵の行と計画の索引の生成・tsuzuri は鍵の行で加わる）・段 3（器）・段 4（器と folio2）・段 5（器）。各席の判断の記録の id と着地の順を受けたらここに書き、着地した段から加わる。folio2 の分は bead f2-648.267・判断の記録 folio2 ADR-31（改訂 c・folio2 の要件 v1.53 と合わせ folio2 の持ち主の承認待ち・条 P-12.1）。順は 渡し A（段 1 の床の形・全部の repo に効く）→ 渡し B（段 2・計画のノートの規則の行〔仮の名 plan-note〕と、行の索引 row-index・大きさと書く file を持つ行の計画 row-plan・決定の表 decision-table）→ 渡し C（段 4 の folio の分・folio check --emit-rulings で design-intent が引く裁定 id を書き出す）。tsuzuri は渡し B の着地（2026-09-28・folio f300177）の後に、この計画を 1 つの commit で新しい形へ移した（第 0.14 版）。器の分は memo s2-07l.722（器の判断の記録の番号は着地で付く）。順は publish-guard（器の FR80）の着地の後に、器の判断の記録 1 本 → 器の要件の改訂 → 段 5 → 段 1 → 段 4（doctor の行と tick の警報 → dispatch の断り → 着地の比べ）→ 段 3（folio2 が床の終了の約束を決めた後）。
       持ち主にまだ問うこと: 今は無い（e-revoke と j-runner は t3-hub.52.60 と .52.61 で裁定が付いた・3 節）。表示面 i の問い t3-hub.59.1〜.59.7 は全部裁定が付いた（3 節）。g-seat-hb と c-summary-ledger は裁定が付いた（3 節の t3-hub.52.29 と t3-hub.52.27）。
       表示面の問い t3-hub.59.6 と .59.7 は裁定が付いた（3 節・束 batch:20260928T0249Z-1）。判断の記録 ADR-15 は発効し、要件 FR16 と受入 AC13 の字と scope の not_build は srs v0.10、傘の行 i の字は設計ノート surface-board の第 0.21 版で直した（行 i-4 との食い違いは解けた）。
-      器（scribe2）の memo の判定（器の memo s2-07l.734・§ は docs/design/ledger-form.md の新しい §・器の持ち主の裁定から）: memo は label intake:memo の bead で、repo ごとの dispatch の周が判じ、判定が変わった時だけ event MemoJudged を出す（昇格条件は description の節の閉じた 5 形の引き金・常設の memo は bd の状態 pinned で state=standing の 1 行）。閾値の案（memo.triage_interval_h・memo.triage_per_round）は器の裁定待ち。§ が着地して field の名が決まるまで行 g-pipe-memo は起草しない（器の頼み）。着地の時に t3-hub.1 と t3-hub.29 を pinned へ移す。
+      器（scribe2）の memo の判定（器の memo s2-07l.734・§ は docs/design/ledger-form.md の新しい §・器の持ち主の裁定から）: memo は label intake:memo の bead で、repo ごとの dispatch の周が判じ、判定が変わった時だけ event MemoJudged を出す（昇格条件は description の節の閉じた 5 形の引き金・常設の memo は器の持ち主の裁定で置かなくなった）。閾値の案（memo.triage_interval_h・memo.triage_per_round）は器の裁定待ち。§ が着地して field の名が決まるまで行 g-pipe-memo は起草しない（器の頼み）。t3-hub.1 と t3-hub.29 は pinned へ移さない（判断の記録 ADR-16 の決定 (3)(4)）。器の束 A（持ち主の発言を hook が event に残し、seat ruling bind で問いに結ぶ）の着地を待って、t3-hub.1 のうち版管理に載る file が裁定 id で引く指示を閉じた問いへ移し、t3-hub.1 を閉じる。器が形の判定（2 つの印の崩れ）を機械が読める形で出すかは器に問い中（ADR-16 の決定 (6)・行 c-pipe-misfit）。
       folio2 の答え（2026-09-28・folio2 の bead f2-648.270）: 渡し B も C も設計ノートの行を folio graph に載せない。folio2 が判断の記録を書いてから載せる（tsuzuri は形〔種類の名・id = meta.id#行 id・行 → 要件の辺・裁定 id は節点の値〕を送った）。行 c-dn-rows・c-g3g7・c-g9 はその着地を待つ（tsuzuri は設計文書の YAML を走査しない）。
       folio の code の持ち込み（判断の記録 ADR-4・制約 CON2 の出口）: k-parity の前提。
       器（scribe2）の答え（2026-09-28・決着・表示面）: tsuzuri は host の面の表 [[device]] を自前の読み手で直に読む（S2-1・key の集合は閉じる〔必須 name・ssh・chrome・os、任意 display・ime-env・profile-dir〕・器は知らない key の面を丸ごと断るので tsuzuri は key を足さない・読む前に scribe2 validate --state-dir の rc 0 を確かめるのは i-5）。display は X の DISPLAY としてだけ読み、Wayland の端末は器が display-env を足すまで範囲の外（S2-2・器の memo s2-07l.726・2026-09-28 に着地した・閉じた key に足すのは行 i-1b）。読むのは自分の anchor の state dir の host.toml だけで、tsuzuri の席は host.toml を書かない（S2-3）。profile-dir は器では任意のまま、表示面では無い行を断る（S2-4）。スマホは [[device]] の外（S2-5）。層 A の書きの口（持ち主が PC を足す口）は器に置く方向で器の memo s2-07l.727（P3・形は未定・器の推奨は [[device]] を host 全体の 1 つの面へ移し口はその 1 file だけを書く形・器の ADR-0076 の部分の置き換えなので器の持ち主の裁定から・時期は board の設定の画面の行 i-8 に合わせる）。それまで層 A は器の席が運ぶ。→ 行 i-1・i-5・i-8。
@@ -451,12 +451,33 @@ sections:
         files: ["core/next_step.rs"]
         depends: [c-unref-kinds]
         ruling: "要件 FR11・規則の行 R-24"
+      - id: c-pipe-queue
+        what: "走行の無い札（Queued / Blocked）を、acceptance に器が読める設計の参照（design = contracts/<名>.toml#<行>・md の形も受ける）を持つ open の task にだけ作る。読み方は器の dispatch の pointer の読みと同じ。中核の ledger の Bead に acceptance を写す（bd の読みの型はもう持つ）。起草の材料は第 11 波 e の保留の節（今の決まり・走行の無い札を pin する着地済みの歯 3 本と fixture）。"
+        size: "S"
+        files: ["core/ledger/mod.rs・core/pipeline.rs・tests/fixtures/pipeline/pipeline.json・tests/pclosed.rs と、走行の無い札を pin する着地済みの歯"]
+        depends: [c-pipe-unmapped]
+        ruling: "t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1）・t3-hub.52.71（裁定 id = t3-hub.52.71:20260928T0904Z-1）・判断の記録 ADR-16 の決定 (5)・要件 FR10"
+        note: "依存の字 = c-pipe-unmapped（pipeline.rs・着地済み）"
+      - id: c-pipe-misfit
+        what: "中核の板に、形の崩れた open の bead（控えの印と設計の参照のどちらも無いか両方在る・epic と問いと裁定は除く）の一覧を足す（id・題・どちらの崩れか）。電文の板の型に欄を足す。器が形の判定を機械が読める形で出すならそれを写し、出さないなら器の決まり（2 つの印）と同じ式で判じる（判断の記録 ADR-16 の決定 (6)）。"
+        size: "S"
+        files: ["core/pipeline.rs・contract/board.rs と、板の電文を pin する着地済みの歯"]
+        depends: [c-pipe-queue]
+        ruling: "t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1）・t3-hub.52.71（裁定 id = t3-hub.52.71:20260928T0904Z-1）・判断の記録 ADR-16 の決定 (1)(5)(6)・要件 FR10"
+        note: "依存の字 = c-pipe-queue（pipeline.rs と ledger の acceptance の写し）・器に判定の形を問い中（6 節）"
+      - id: g-pipe-misfit
+        what: "pipeline の板の 4 列の下に横長の要修正の行を置き、形の崩れた bead を題とどちらの崩れかで出す。0 本なら行を出さない。語彙に要修正の 1 語を足す（見本 v3 に無い部品・3 案を並べた見本の画面は持ち主の問い t3-hub.52.71 に添えた）。"
+        size: "S"
+        files: ["surface/project/pipeline.rs・vocab.json・style.css"]
+        depends: [c-pipe-misfit]
+        ruling: "t3-hub.52.71（裁定 id = t3-hub.52.71:20260928T0904Z-1）・判断の記録 ADR-16 の決定 (5)・要件 FR10"
+        note: "依存の字 = c-pipe-misfit（電文の欄）"
       - id: g-pipe-memo
-        what: "pipeline の板の一番左に memo の列を足し、memo の bead ごとに起票からの時間と昇格の条件を出す。材料は器の event MemoJudged（判定が変わった時だけ・bead・filed_at・条件の行〔n・form・target・state〕・lens の判定・state・next・promoted_to）で、tsuzuri は読んで写すだけで判じない（状態の語は waiting・unjudged・due・done・常設の memo は state=standing の 1 行で常設と出す）。"
+        what: "pipeline の板の一番左に memo の列を足し、memo の bead ごとに起票からの時間と昇格の条件を出す。材料は器の event MemoJudged（判定が変わった時だけ・bead・filed_at・条件の行〔n・form・target・state〕・lens の判定・state・next・promoted_to）で、tsuzuri は読んで写すだけで判じない（状態の語は waiting・unjudged・due・done）。常設の行は置かない（判断の記録 ADR-16 の決定 (5)）。"
         size: "M・器の § の着地の後に起草・bead t3-hub.52.59"
         files: ["surface/project/pipeline.rs と、event を読む中核と電文（起草で決める）"]
         depends: [c-pipe-closed]
-        ruling: "t3-hub.1（裁定 id = user 2026-09-28T04:3xZ）・要件 FR10。§ が着地した時に、常設の memo t3-hub.1 と t3-hub.29 を bd の状態 pinned へ移す（tsuzuri の中核は状態の字で closed と tombstone だけを閉じと見るので、pinned は読みを壊さない・確かめた）"
+        ruling: "t3-hub.1（裁定 id = user 2026-09-28T04:3xZ）・t3-hub.52.71（裁定 id = t3-hub.52.71:20260928T0904Z-1）・判断の記録 ADR-16 の決定 (5)・要件 FR10"
         note: "依存の字 = 器の memo s2-07l.734 の §（docs/design/ledger-form.md の新しい §・field の名が決まるまで起草しない・器の頼み）・c-pipe-closed（pipeline.rs）"
       - id: g-seatpill
         what: "header の席の pill と席の card（home の頁のほか）。"
@@ -564,6 +585,13 @@ sections:
         files: ["boundary/server/routes の新しい file・contract/ledger.rs（台帳への書きの enum に ReopenItem）・contract/surface.rs・boundary/server/ruling.rs・surface/project/node.rs"]
         ruling: "t3-hub.52.60（裁定 id = t3-hub.52.60:20260928T0441Z-1・束 batch:20260928T0441Z-1）・要件 FR7・受入 AC3"
         note: "依存 = なし"
+      - id: e-policy-q
+        what: "方針の欄の受け（境界の server の方針の口）の記帳先を、根の直下の控え「方針」（t3-hub.29）の notes から、方針 1 つにつき根の直下の閉じた問いの bead に替える（label intake:question・範囲の札・方針の id は問いの裁定 id と同じ形・作って方針の行を足して閉じる）。要件 FR8 の、問いの premises に範囲内の方針の id を求める検査は、今までの t3-hub.29 の方針の行と新しい方針の問いの両方を読む（消さない）。着地の後に t3-hub.29 を閉じる。"
+        size: "M"
+        files: ["boundary/server の方針の口と台帳の書き・core の方針の読み・contract の書きの enum（作る・足す・閉じるで足りるかを起草で見る）"]
+        depends: []
+        ruling: "t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1）・判断の記録 ADR-16 の決定 (4)・要件 FR8"
+        note: "依存 = なし（方針は面の server が逐語を受けて書くので、器の束 A の発言の event を待たない）"
       - id: e-approval-event
         what: "裁定ごとの逐語つきの承認の event を器の event log に書く。"
         size: "M"
@@ -763,3 +791,9 @@ sections:
       - id: d33
         text: "案 A。受入 12 条の runner は行 i の CDP の口を使い回し、外の依存を足さない（0 本・i-4 の後）。束の閉じが disk の満ち（ENOSPC）で落ちたので、この問いは同じ答えを 2 度受けた。効果: 行 j-runner と傘の行 j の持ち主待ちが解けた（runner だけが使う測りの step を boundary/stage/cdp.rs に足す）。束の途中の落ちの実例から、後の行 e-batch-partial を足した（4 節）。"
         ruling: "t3-hub.52.61（裁定 id = t3-hub.52.61:20260928T0441Z-1・束 batch:20260928T0441Z-1・同じ答えを t3-hub.52.61:20260928T0443Z-1 でもう一度受けた）"
+      - id: d34
+        text: "案 A。bead の種類を器と同じ 2 つの印（控えの印と設計の参照）で決め、「作業」と常設の控えを置かない。計画の予定の行は bead を先に作らない。裁定の控え t3-hub.1 は器の束 A の着地の後に、文書が裁定 id で引く指示を閉じた問いへ移して閉じる。方針の欄の記帳先を方針 1 つにつき根の直下の閉じた問いに替え、今までの方針の行は消さずに読む（判断の記録 ADR-16 の決定 (1)〜(4)・要件 FR8）。効果: 行 e-policy-q（9 節）と srs v0.14 の FR8。"
+        ruling: "t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1・束 batch:20260928T0904Z-1）"
+      - id: d35
+        text: "案 A。pipeline の板は左端の控えの列と 4 列と、4 列の下の要修正の行（形の崩れた open の bead・0 本なら出さない）で見せ、Queued / Blocked の札は設計の参照を持つ契約の bead だけにし、epic は板に出さない（判断の記録 ADR-16 の決定 (5)(6)・要件 FR10）。効果: 行 c-pipe-queue・c-pipe-misfit・g-pipe-misfit（9 節）と g-pipe-memo の字と srs v0.14 の FR10。"
+        ruling: "t3-hub.52.71（裁定 id = t3-hub.52.71:20260928T0904Z-1・束 batch:20260928T0904Z-1）"
