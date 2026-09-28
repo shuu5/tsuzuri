@@ -6,6 +6,7 @@
 //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
 //! 未反映は電文の台帳の未反映の数で、読めない種類が在れば project board の指標の段と同じ Unref の形で
 //! 測れていないの印を添える（部分の和）。台帳が Unknown の行は「―」。
+//! 列の最大と最小の印は open の task・closed/日・未反映の 3 列に付ける（見本の ledTable の eT・eR・eU・行 h-acct-rest）。
 //! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の cards の led_card で組む。
 //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
 //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -204,6 +205,16 @@ pub fn cell_class(column: &str, mark: Option<&str>) -> String {
     }
 }
 
+/// 未反映の cell の class（`c-n c-un` と印・数が 1 以上なら on を足す）。
+pub fn un_class(mark: Option<&str>, count: u32) -> String {
+    let class = cell_class("c-un", mark);
+    if count > 0 {
+        format!("{class} on")
+    } else {
+        class
+    }
+}
+
 /// closed/日の棒の幅の百分率（見本の rateBar・列の最大を 100・値が在れば 2 以上）。
 pub fn bar_pct(value: f64, max: f64) -> u32 {
     if max > 0.0 {
@@ -237,7 +248,7 @@ pub struct Cells {
     pub spark: String,
     /// 未反映の数と読めない種類（各 project の表と同じ unref_count で組む）。
     pub unref: Unref,
-    /// 未反映の cell の class（1 以上は on）。
+    /// 未反映の cell の class（列の最大と最小の印・1 以上は on）。
     pub un_class: String,
 }
 
@@ -293,16 +304,16 @@ impl LedRow {
         MORE.map(|k| (k, texts.next().unwrap_or_default()))
     }
 
-    /// 印の付いた列の class（open の task・closed/日の順）。
-    pub fn marks(&self) -> [Option<&'static str>; 2] {
+    /// 印の付いた列の class（open の task・closed/日・未反映の順）。
+    pub fn marks(&self) -> [Option<&'static str>; 3] {
         let of = |class: &str| {
             [HI, LO]
                 .into_iter()
                 .find(|m| class.split_whitespace().any(|w| w == *m))
         };
         match &self.cells {
-            Reading::Known(c) => [of(&c.task_class), of(&c.rate_class)],
-            Reading::Unknown => [None, None],
+            Reading::Known(c) => [of(&c.task_class), of(&c.rate_class), of(&c.un_class)],
+            Reading::Unknown => [None, None, None],
         }
     }
 }
@@ -347,7 +358,8 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
         .collect();
     let tasks: Vec<f64> = known.iter().map(|s| f64::from(s.open.task)).collect();
     let rates: Vec<f64> = known.iter().map(|s| s.closed_per_day).collect();
-    let (ext_task, ext_rate) = (extremes(&tasks), extremes(&rates));
+    let unrefs: Vec<f64> = known.iter().map(|s| f64::from(s.unreflected)).collect();
+    let (ext_task, ext_rate, ext_un) = (extremes(&tasks), extremes(&rates), extremes(&unrefs));
     let rate_max = rates.iter().copied().fold(0.0, f64::max);
     let rows = order(&doc.projects, sort)
         .into_iter()
@@ -369,11 +381,7 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
                     lead: age(s.lead.map(|l| l.p50)),
                     spark: spark_svg(&spark(&s.days, SPARK_W, SPARK_H)),
                     unref: unref_count(s),
-                    un_class: if s.unreflected > 0 {
-                        "c-n c-un on".to_string()
-                    } else {
-                        "c-n c-un".to_string()
-                    },
+                    un_class: un_class(mark(ext_un, f64::from(s.unreflected)), s.unreflected),
                 }),
                 Reading::Unknown => Reading::Unknown,
             };

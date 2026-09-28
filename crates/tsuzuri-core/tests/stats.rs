@@ -156,6 +156,7 @@ fn stats_wire_has_no_in_progress_or_oldest() {
         "epics",
         "memo",
         "unreflected",
+        "unreflected_kinds",
         "unreflected_unknown",
     ]
     .into();

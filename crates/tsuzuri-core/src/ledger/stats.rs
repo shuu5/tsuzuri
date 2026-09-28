@@ -7,7 +7,8 @@ use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::stats::{
-    DayCount, EpicProgress, LeadDays, LedgerStats, MemoStats, OpenCounts, UnreflectedKind,
+    DayCount, EpicProgress, LeadDays, LedgerStats, MemoStats, OpenCounts, UnreflectedCount,
+    UnreflectedKind,
 };
 
 use super::{Bead, DAY, read, unreflected};
@@ -219,14 +220,19 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
         age_p50_days: percentile(&memo_ages, 0.5),
     };
 
+    // 未反映は種類ごとの件数を 1 度だけ数え、数はその和。
     let list = unreflected::of_beads(Some(&beads), now);
-    let unreflected = UnreflectedKind::ALL
+    let unreflected_kinds: Vec<UnreflectedCount> = UnreflectedKind::ALL
         .iter()
-        .map(|&k| match list.get(k) {
-            Reading::Known(items) => count(items.iter()),
-            Reading::Unknown => 0,
+        .filter_map(|&kind| match list.get(kind) {
+            Reading::Known(items) => Some(UnreflectedCount {
+                kind,
+                count: count(items.iter()),
+            }),
+            Reading::Unknown => None,
         })
-        .sum();
+        .collect();
+    let unreflected = unreflected_kinds.iter().map(|k| k.count).sum();
 
     LedgerStats {
         at: now,
@@ -254,6 +260,7 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
         epics,
         memo,
         unreflected,
+        unreflected_kinds,
         unreflected_unknown: list.unknown(),
     }
 }

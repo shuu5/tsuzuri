@@ -207,7 +207,7 @@ fn hacols_dom_words() {
         "class=wait_class(row.wait)",
         "count_text(row.wait)",
         "class=unref_class(row.unref.as_ref())",
-        "unref_view(row.unref.as_ref())",
+        "unref_view(row.unref.as_ref(), &row.kinds)",
         "fn unref_view(",
         "state_icon(UNKNOWN)",
         "class=\"l2 small muted\"",

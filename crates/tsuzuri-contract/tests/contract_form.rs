@@ -25,7 +25,7 @@ use tsuzuri_contract::question::{QuestionCard, QuestionList};
 use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState};
 use tsuzuri_contract::stats::{
     CheckResult, DayCount, EpicProgress, LeadDays, LedgerStats, MemoStats, NextCheck, NextStep,
-    OpenCounts, UnreflectedKind, UnreflectedList, UnreflectedRow,
+    OpenCounts, UnreflectedCount, UnreflectedKind, UnreflectedList, UnreflectedRow,
 };
 use tsuzuri_contract::surface::{
     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
@@ -923,6 +923,10 @@ fn forms() -> Vec<Box<dyn Form>> {
                         age_p50_days: Some(9.5),
                     },
                     unreflected: 3,
+                    unreflected_kinds: vec![UnreflectedCount {
+                        kind: UnreflectedKind::Memo,
+                        count: 3,
+                    }],
                     unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Request],
                 },
                 // 閉じた task も memo も無い台帳。
@@ -952,6 +956,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                         age_p50_days: None,
                     },
                     unreflected: 0,
+                    unreflected_kinds: vec![],
                     unreflected_unknown: UnreflectedKind::ALL.to_vec(),
                 },
             ],

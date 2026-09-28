@@ -255,6 +255,11 @@
    "note": "覚え書きの bead",
    "internal": "memo（原文の名）"
   },
+  "unref:memo": {
+   "label": "memo",
+   "note": "design-intent に未反映の memo の数\n・ 昇格先の無い memo",
+   "internal": "未反映の種類 memo"
+  },
   "k:問い": {
    "label": "question",
    "note": "あなたに決めてほしいこと\n・ label=問い の bead",
@@ -1479,6 +1484,16 @@
    "label": "未反映",
    "plain": "design-intent にまだ写っていないものの数\n・ memo = 昇格先の無い memo\n・ 決定 = 処分の宣言が無い決定\n・ 要望 = 反映されていない要望\n▸\n{st:unknown} 付きは まだ数えていない種類がある",
    "internal": "unreflected(G).length\n他の project は open memo ∧ ¬promoted_to"
+  },
+  "unref:ruling": {
+   "label": "裁定",
+   "plain": "design-intent に未反映の決定の数\n・ 処分の宣言が無い決定",
+   "internal": "未反映の種類 ruling"
+  },
+  "unref:request": {
+   "label": "要望",
+   "plain": "design-intent に未反映の要望の数\n・ 反映されていない要望",
+   "internal": "未反映の種類 request"
   },
   "nx_promote": {
    "label": "昇格",

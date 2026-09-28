@@ -72,6 +72,7 @@
     ],
     "memo": {"open": 3, "awaiting_promotion": 2, "closed_7d": 1, "age_p50_days": 9.5},
     "unreflected": 3,
+    "unreflected_kinds": [{"kind": "memo", "count": 3}],
     "unreflected_unknown": ["ruling", "request"]
   },
   "unreflected_memos": [

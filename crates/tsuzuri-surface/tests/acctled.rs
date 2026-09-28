@@ -247,7 +247,7 @@ fn acctled_rows_on_fixture() {
     );
     assert_eq!(c.net7.class, "net net-up");
     // Known の値が 1 つなので印は付かない。
-    assert_eq!(a.marks(), [None, None]);
+    assert_eq!(a.marks(), [None, None, None]);
     assert_eq!(c.task_class, "c-n c-task");
     assert_eq!(c.rate_class, "c-n c-rate");
 
@@ -259,7 +259,7 @@ fn acctled_rows_on_fixture() {
         assert_eq!(row.class, "jrow j-none");
         assert!(row.numbers().iter().all(|n| n == NONE), "{name}");
         assert!(row.more().iter().all(|(_, v)| v == NONE), "{name}");
-        assert_eq!(row.marks(), [None, None]);
+        assert_eq!(row.marks(), [None, None, None]);
     }
 
     // lead が無ければ「―」。
@@ -321,15 +321,15 @@ fn acctled_extremes_marks() {
         ("c", Reading::Known(stats(LedgerJudge::PilingUp, 5, 0, 0, 1.4))),
     ]);
     let t = table(&doc, Sort::Project);
-    let marks: Vec<(&str, [Option<&str>; 2])> =
+    let marks: Vec<(&str, [Option<&str>; 3])> =
         t.rows.iter().map(|r| (r.name.as_str(), r.marks())).collect();
     assert_eq!(
         marks,
         vec![
-            ("a", [Some(HI), None]),
-            ("u", [None, None]),
-            ("b", [Some(LO), Some(LO)]),
-            ("c", [None, Some(HI)])
+            ("a", [Some(HI), None, None]),
+            ("u", [None, None, None]),
+            ("b", [Some(LO), Some(LO), None]),
+            ("c", [None, Some(HI), None])
         ]
     );
     let Reading::Known(c) = &t.rows[0].cells else {
@@ -339,7 +339,7 @@ fn acctled_extremes_marks() {
     // 並べを変えても印は同じ行に付く。
     let t2 = table(&doc, Sort::Backlog);
     assert_eq!(t2.names(), vec!["a", "c", "b", "u"]);
-    assert_eq!(t2.rows[0].marks(), [Some(HI), None]);
+    assert_eq!(t2.rows[0].marks(), [Some(HI), None, None]);
 
     // 同じ値だけの列は印を付けない（Unknown の行は数えない）。
     let flat = doc_of(vec![
@@ -349,7 +349,7 @@ fn acctled_extremes_marks() {
         ("c", Reading::Known(stats(LedgerJudge::OnTrack, 4, 0, 0, 0.5))),
     ]);
     for r in table(&flat, Sort::Judge).rows {
-        assert_eq!(r.marks(), [None, None], "{}", r.name);
+        assert_eq!(r.marks(), [None, None, None], "{}", r.name);
     }
 
     // 凡例は xm hi と xm lo。

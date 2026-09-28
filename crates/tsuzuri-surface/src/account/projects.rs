@@ -4,6 +4,8 @@
 //! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
 //! 決定待ちは電文の台帳の open の問いの数、未反映は電文の台帳の未反映の数で、読めない種類が在れば
 //! project board の指標の段と同じ Unref の形で測れていないの印を添える（部分の和）。台帳が Unknown の行はどちらも「―」。
+//! 決定待ちの 2 段目は電文の次の一手の束の承認の件数、未反映の 2 段目は電文の台帳の読めた種類ごとの件数（見本の unrefBreak）。
+//! 未反映の列の見出しは電文の projects の未反映の和（見本の Σ・行 h-acct-rest）。
 //! 並べ・行の値・class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 5 つの欄と群の見出しの chip の hover の card は account の cards の module が組む（行 h-acct-split で割った）。
 
@@ -11,7 +13,7 @@ use std::cmp::Reverse;
 
 use tsuzuri_contract::account::{AccountDoc, ProjectRow, RunCounts};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
-use tsuzuri_contract::stats::LedgerStats;
+use tsuzuri_contract::stats::{CheckResult, LedgerStats, UnreflectedKind};
 
 use super::cards::{RowCards, grp_card, row_cards};
 use super::windows::{NOT_YET_KEY, OPEN_NEW_KEY, open_url};
@@ -24,6 +26,7 @@ use crate::project::next::{UNJUDGED_LINE, big, key as next_key, unjudged};
 use crate::project::seat::{NG, OK, Sign, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
+use crate::vocab::label;
 use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
@@ -314,6 +317,103 @@ pub fn unref_rank(project: &ProjectRow) -> Reverse<i64> {
     Reverse(unref_of(project).map_or(-1, |u| i64::from(u.count)))
 }
 
+/// 決定待ちの 2 段目の束の承認の件数（次の一手が Known で束の承認を判じたならその件数・判じなかったか Unknown は None）。
+/// 件数は中核の束の承認の判じのまま（当たらないは 0・面で数え直さない）。
+pub fn batch_of(project: &ProjectRow) -> Option<u32> {
+    match &project.next {
+        Reading::Known(step) => step
+            .checks
+            .iter()
+            .find(|c| c.kind == NextMove::BatchApproval)
+            .filter(|c| c.result != CheckResult::NotJudged)
+            .map(|c| c.count),
+        Reading::Unknown => None,
+    }
+}
+
+/// 束の承認の件数の字（見本の `束 <件数>`・None は空の字）。
+pub fn batch_text(batch: Option<u32>) -> String {
+    batch.map_or_else(String::new, |n| format!("束 {n}"))
+}
+
+/// 未反映の種類の見出しの語の鍵の接頭（鍵は接頭と kind_name の字）。
+pub const UNREF_KIND_KEY: &str = "unref:";
+
+/// 未反映の種類の見出し（語の辞書の label・見本の unrefBreak の字）。
+pub fn kind_label(kind: UnreflectedKind) -> String {
+    label(&format!("{UNREF_KIND_KEY}{}", kind_name(kind)))
+}
+
+/// 未反映の 2 段目（読めた種類の見出しと件数・読めない種類の見出し・どちらも電文の順）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnrefKinds {
+    pub known: Vec<(String, u32)>,
+    pub unknown: Vec<String>,
+}
+
+/// 未反映の種類ごとの件数（読めた種類は 1 以上だけ・見本の unrefBreak）。
+pub fn unref_break(s: &LedgerStats) -> UnrefKinds {
+    UnrefKinds {
+        known: s
+            .unreflected_kinds
+            .iter()
+            .filter(|k| k.count > 0)
+            .map(|k| (kind_label(k.kind), k.count))
+            .collect(),
+        unknown: s
+            .unreflected_unknown
+            .iter()
+            .map(|k| kind_label(*k))
+            .collect(),
+    }
+}
+
+/// 未反映の 2 段目（台帳が Known なら unref_break・Unknown は空）。
+pub fn kinds_of(project: &ProjectRow) -> UnrefKinds {
+    match &project.ledger {
+        Reading::Known(s) => unref_break(s),
+        Reading::Unknown => UnrefKinds::default(),
+    }
+}
+
+/// 未反映の列の見出しの和（見本の Σ・台帳が Known の行の和と、部分の和かと、電文の projects の行の数）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnrefSum {
+    pub total: u32,
+    /// 台帳が Unknown の行か読めない種類の在る行が在れば真（測れていないの印を添える）。
+    pub partial: bool,
+    pub projects: usize,
+}
+
+impl UnrefSum {
+    pub fn text(&self) -> String {
+        format!("Σ {}", self.total)
+    }
+
+    pub fn title(&self) -> String {
+        format!("{} project の合計", self.projects)
+    }
+}
+
+/// 電文の projects の未反映の和。
+pub fn unref_sum(doc: &AccountDoc) -> UnrefSum {
+    let mut sum = UnrefSum {
+        total: 0,
+        partial: false,
+        projects: doc.projects.len(),
+    };
+    for p in &doc.projects {
+        match &p.ledger {
+            Reading::Known(s) => {
+                sum.total = sum.total.saturating_add(s.unreflected);
+                sum.partial |= !s.unreflected_unknown.is_empty();
+            }
+            Reading::Unknown => sum.partial = true,
+        }
+    }
+    sum
+}
+
 /// run の 4 列の 1 つ（class と字）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Run {
@@ -445,8 +545,12 @@ pub struct ProjLine {
     pub need: Need,
     /// 決定待ち（台帳の open の問いの数・台帳が Unknown は None）。
     pub wait: Option<u32>,
+    /// 決定待ちの 2 段目の束の承認の件数（判じなかったか次の一手が Unknown は None）。
+    pub batch: Option<u32>,
     /// 未反映（数と読めない種類・台帳が Unknown は None）。
     pub unref: Option<Unref>,
+    /// 未反映の 2 段目の読めた種類ごとの件数と読めない種類の見出し。
+    pub kinds: UnrefKinds,
     pub led: Led,
     pub runs: [Run; 4],
     pub orch: Orch,
@@ -559,6 +663,8 @@ pub struct Group {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Table {
     pub sort: PSort,
+    /// 未反映の列の見出しの和。
+    pub sum: UnrefSum,
     pub groups: Vec<Group>,
 }
 
@@ -652,7 +758,11 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
             rows: idx.into_iter().map(|i| row(doc, i, mode)).collect(),
         })
         .collect();
-    Table { sort, groups }
+    Table {
+        sort,
+        sum: unref_sum(doc),
+        groups,
+    }
 }
 
 /// 電文の projects の i 行目を表の行にする。
@@ -666,7 +776,9 @@ pub fn row(doc: &AccountDoc, index: usize, mode: Mode) -> ProjLine {
         group: p.group.clone(),
         need,
         wait: wait_of(p),
+        batch: batch_of(p),
         unref: unref_of(p),
+        kinds: kinds_of(p),
         led: led(p),
         runs: runs(&p.runs),
         orch: orch(p),
@@ -697,8 +809,8 @@ mod dom {
     use super::{
         Acc, BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_WAIT, COLUMNS, Group,
         GroupHead, HROW, Led, NO_TOGGLE, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort, PTAB,
-        ProjLine, RC4, Run, TKM, Table, content, count_text, fit_cut, hbm_class, psort_of,
-        unref_class, wait_class, with_psort,
+        ProjLine, RC4, Run, TKM, Table, UnrefKinds, UnrefSum, batch_text, content, count_text,
+        fit_cut, hbm_class, psort_of, unref_class, wait_class, with_psort,
     };
     use crate::account::PATH;
     use crate::account::windows;
@@ -777,9 +889,13 @@ mod dom {
     }
 
     fn table_view(table: Table, opened: Opened, expert: Signal<bool>) -> AnyView {
+        let sum = table.sum;
         let head = COLUMNS
             .into_iter()
-            .map(|k| view! { <div class=format!("h-{k}")>{hs(k)}</div> })
+            .map(|k| {
+                let total = (k == "l_unref").then(|| sum_view(sum));
+                view! { <div class=format!("h-{k}")>{hs(k)}{total}</div> }
+            })
             .collect_view();
         let groups = table
             .groups
@@ -922,8 +1038,11 @@ mod dom {
                     <span class="l1">{need_icon}<b>{need_word}</b></span>
                     <span class="l2" node_ref=l2>{row.need.line.clone().unwrap_or_default()}</span>
                 </div>
-                <div class=C_WAIT><span class="l1"><b class=wait_class(row.wait)>{count_text(row.wait)}</b></span></div>
-                <div class=unref_class(row.unref.as_ref()) data-term="l_unref">{unref_view(row.unref.as_ref())}</div>
+                <div class=C_WAIT>
+                    <span class="l1"><b class=wait_class(row.wait)>{count_text(row.wait)}</b></span>
+                    <span class="l2 small muted">{batch_text(row.batch)}</span>
+                </div>
+                <div class=unref_class(row.unref.as_ref()) data-term="l_unref">{unref_view(row.unref.as_ref(), &row.kinds)}</div>
                 <div class=C_LED tabindex="0" use:attach=row.cards.led.clone()>{led_view(row.led)}</div>
                 <div class=C_RUN tabindex="0" use:attach=row.cards.runs.clone()>{runs_view(&row.runs)}</div>
                 <div class=C_ORCH use:attach_some=row.cards.orch.clone()>{orch_view(row.orch)}</div>
@@ -987,22 +1106,35 @@ mod dom {
         .into_any()
     }
 
-    /// 未反映の欄（数と、読めない種類が在れば測れていないの印・2 段目に種類ごとの名と印・台帳が Unknown は「―」）。
-    fn unref_view(unref: Option<&Unref>) -> AnyView {
+    /// 未反映の欄（数と、読めない種類が在れば測れていないの印・台帳が Unknown は「―」）。
+    /// 2 段目は読めた種類の見出しと件数の後に読めない種類の見出しと印（見出しは語の辞書・span ごとに後へ空白）。
+    fn unref_view(unref: Option<&Unref>, kinds: &UnrefKinds) -> AnyView {
         let Some(u) = unref else {
             return view! { <span class="l1"><b class="num">{NONE_MARK}</b></span> }.into_any();
         };
         let mark = (!u.unknown.is_empty()).then(|| state_icon(UNKNOWN));
-        let kinds = u
+        let counts = kinds
+            .known
+            .iter()
+            .map(|(k, n)| view! { <span>{k.clone()}" "{*n}</span>" " })
+            .collect_view();
+        let unknown = kinds
             .unknown
             .iter()
-            .map(|k| view! { <span>{*k}" "{state_icon(UNKNOWN)}</span> })
+            .map(|k| view! { <span>{k.clone()}" "{state_icon(UNKNOWN)}</span>" " })
             .collect_view();
         view! {
             <span class="l1"><b class="num">{u.count}{mark}</b></span>
-            <span class="l2 small muted">{kinds}</span>
+            <span class="l2 small muted">{counts}{unknown}</span>
         }
         .into_any()
+    }
+
+    /// 未反映の列の見出しの和（見本の Σ・部分の和なら測れていないの印）。
+    fn sum_view(sum: UnrefSum) -> AnyView {
+        let mark = sum.partial.then(|| state_icon(UNKNOWN));
+        view! { <span class="small muted num" title=sum.title()>{sum.text()}{mark}</span> }
+            .into_any()
     }
 
     /// run の 4 列（wait・run・stop・land の順）。

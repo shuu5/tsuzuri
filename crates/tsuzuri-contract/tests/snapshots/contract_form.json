@@ -999,6 +999,12 @@
         "age_p50_days": 9.5
       },
       "unreflected": 3,
+      "unreflected_kinds": [
+        {
+          "kind": "memo",
+          "count": 3
+        }
+      ],
       "unreflected_unknown": [
         "ruling",
         "request"
@@ -1030,6 +1036,7 @@
         "age_p50_days": null
       },
       "unreflected": 0,
+      "unreflected_kinds": [],
       "unreflected_unknown": [
         "memo",
         "ruling",

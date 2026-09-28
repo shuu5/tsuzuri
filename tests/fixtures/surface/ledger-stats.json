@@ -33,6 +33,7 @@
     ],
     "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "age_p50_days": 3.4},
     "unreflected": 3,
+    "unreflected_kinds": [{"kind": "memo", "count": 3}],
     "unreflected_unknown": ["ruling", "request"]
   },
   "empty": {
@@ -66,6 +67,7 @@
     "epics": [],
     "memo": {"open": 0, "awaiting_promotion": 0, "closed_7d": 0, "age_p50_days": null},
     "unreflected": 0,
+    "unreflected_kinds": [],
     "unreflected_unknown": ["memo", "ruling", "request"]
   }
 }

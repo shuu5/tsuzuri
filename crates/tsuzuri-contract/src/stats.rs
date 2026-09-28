@@ -70,6 +70,13 @@ impl UnreflectedKind {
     ];
 }
 
+/// 未反映の読めた種類の件数（種類と、その種類の一覧の行の数）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnreflectedCount {
+    pub kind: UnreflectedKind,
+    pub count: u32,
+}
+
 /// 未反映の 1 件（bead の id の字・題・年齢の秒・作った時刻が読めなければ年齢は None）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnreflectedRow {
@@ -107,6 +114,8 @@ pub struct LedgerStats {
     pub memo: MemoStats,
     /// 未反映の数（読めた種類の数の和・今は memo の数）。
     pub unreflected: u32,
+    /// 未反映の読めた種類ごとの件数（`UnreflectedKind::ALL` の順・読めない種類は持たない・件数の和が `unreflected`）。
+    pub unreflected_kinds: Vec<UnreflectedCount>,
     /// 未反映のうち「まだ分からない」種類。
     pub unreflected_unknown: Vec<UnreflectedKind>,
 }

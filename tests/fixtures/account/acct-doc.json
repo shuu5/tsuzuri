@@ -111,6 +111,7 @@
         "epics": [{"epic": "proj-a", "closed": 6, "total": 15}],
         "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "age_p50_days": 5.5},
         "unreflected": 3,
+        "unreflected_kinds": [{"kind": "memo", "count": 3}],
         "unreflected_unknown": ["ruling", "request"]
       }},
       "next": {"known": {
