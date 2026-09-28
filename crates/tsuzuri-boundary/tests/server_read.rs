@@ -4,7 +4,7 @@
 //! server は同じ process の thread で 127.0.0.1 の空き port に立てる。
 
 use std::fmt::Debug;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
@@ -557,6 +557,13 @@ fn board_events(b: &str) -> usize {
     b.matches("event: board-changed\n").count()
 }
 
+/// 板の印の file の中身を丸ごと替える（作業場の直下に書いてから移すので、見張りから書きかけは見えない）。
+fn put(root: &Path, path: &Path, text: &str) {
+    let tmp = root.join("put.tmp");
+    fs::write(&tmp, text).expect("移す前の印");
+    fs::rename(&tmp, path).expect("印を移す");
+}
+
 #[test]
 fn server_read_board_changed_within_5s() {
     let place = Place::new("sse", Folio::Ok, Log::Fixture);
@@ -576,14 +583,11 @@ fn server_read_board_changed_within_5s() {
     {
         let changed = Instant::now();
         if n == 0 {
-            OpenOptions::new()
-                .append(true)
-                .open(place.events_log())
-                .expect("event log を開く")
-                .write_all(b"{\"kind\":\"RunCost\",\"run\":\"x\"}\n")
-                .expect("event log に足す");
+            let log = fs::read_to_string(place.events_log()).expect("event log");
+            let text = format!("{log}{{\"kind\":\"RunCost\",\"run\":\"x\"}}\n");
+            put(&place.root, &place.events_log(), &text);
         } else {
-            fs::write(&design_file, "id: ADR-7\ntitle: 書き換え\n").expect("設計文書");
+            put(&place.root, &design_file, "id: ADR-7\ntitle: 書き換え\n");
         }
         read_until(&mut s, &mut buf, changed + Duration::from_secs(5), |b| {
             board_events(b) > n && b.ends_with("\n\n")

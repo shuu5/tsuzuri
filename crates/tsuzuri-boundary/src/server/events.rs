@@ -72,19 +72,21 @@ impl Hub {
 
     /// 板の印の file の一覧を `poll` ごとに取り直し、印（path と更新時刻と長さ）が動いたら
     /// board-changed を送る。最初の印は戻る前に取る（戻った後の変化は取りこぼさない）。
+    /// 周の途中（一覧を取った後で印を取る前）に消えた file は、同じ周で取り直した一覧にも
+    /// 無ければその周の印から落とす（消し 1 回を 2 周続けての変化に数えない）。
     pub fn watch_board<B>(hub: &Arc<Hub>, mut board: B, poll: Duration)
     where
         B: FnMut() -> Vec<PathBuf> + Send + 'static,
     {
         let weak = Arc::downgrade(hub);
-        let mut seen = board_stamps(&board());
+        let mut seen = board_stamps(&mut board);
         thread::spawn(move || {
             loop {
                 thread::sleep(poll);
                 if weak.strong_count() == 0 {
                     return;
                 }
-                let current = board_stamps(&board());
+                let current = board_stamps(&mut board);
                 if current == seen {
                     continue;
                 }
@@ -167,8 +169,21 @@ fn stamps(marks: &[PathBuf]) -> Vec<Option<(SystemTime, u64)>> {
 /// 板の印（file の path と、その更新時刻と長さ）。
 type BoardStamps = Vec<(PathBuf, Option<(SystemTime, u64)>)>;
 
-fn board_stamps(files: &[PathBuf]) -> BoardStamps {
-    files.iter().map(|f| (f.clone(), stamp(f))).collect()
+/// 1 つの周の板の印。無い file の印は、印を取った後に撃ち直した一覧にも在るときだけ残す
+/// （一覧に載ったまま無い file は印に数え、周の途中で一覧から消えた file は落とす）。
+fn board_stamps(board: &mut impl FnMut() -> Vec<PathBuf>) -> BoardStamps {
+    let mut stamps: BoardStamps = board()
+        .into_iter()
+        .map(|f| {
+            let s = stamp(&f);
+            (f, s)
+        })
+        .collect();
+    if stamps.iter().any(|(_, s)| s.is_none()) {
+        let again = board();
+        stamps.retain(|(f, s)| s.is_some() || again.contains(f));
+    }
+    stamps
 }
 
 /// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果）。
@@ -230,11 +245,11 @@ pub fn stream(mut w: impl Write, hub: &Hub) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{Hub, Timing};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     /// 印の 2 つの file の置き場（2 つめは初めは無い）。
     fn marks(name: &str) -> Vec<PathBuf> {
@@ -243,6 +258,22 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("置き場");
         std::fs::write(dir.join("a"), "1").expect("印 a");
         vec![dir.join("a"), dir.join("b")]
+    }
+
+    /// 印の dir の外の隣の dir（印の dir の名に -put を足す）。
+    fn put_dir(mark: &Path) -> PathBuf {
+        let dir = mark.parent().expect("印の dir");
+        let name = dir.file_name().expect("印の dir の名").to_string_lossy();
+        dir.with_file_name(format!("{name}-put"))
+    }
+
+    /// 印の file の中身を丸ごと替える（隣の dir に書いてから移すので、見張りから書きかけは見えない）。
+    fn put(mark: &Path, text: &str) {
+        let dir = put_dir(mark);
+        std::fs::create_dir_all(&dir).expect("移しの dir");
+        let tmp = dir.join(mark.file_name().expect("印の名"));
+        std::fs::write(&tmp, text).expect("移す前の印");
+        std::fs::rename(&tmp, mark).expect("印を移す");
     }
 
     /// 中身を替えられる読み（読んだ回数を数える）。
@@ -278,17 +309,25 @@ mod tests {
         assert!(rx.try_recv().is_err());
         assert_eq!(reads.load(Ordering::SeqCst), 1);
         // 後の印（初めは無い file）ができると読み直して 1 件。
-        std::fs::write(&marks[1], "x").expect("印 b");
-        let frame = rx.recv_timeout(Duration::from_secs(1)).expect("1 件");
+        put(&marks[1], "x");
+        let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
         assert!(frame.contains("event: ledger-changed\n"), "{frame}");
         thread::sleep(Duration::from_millis(200));
         assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
         assert_eq!(reads.load(Ordering::SeqCst), 2);
         // 前の印の長さが動いても、読みの結果が同じなら知らせない。
-        std::fs::write(&marks[0], "22").expect("印 a");
+        put(&marks[0], "22");
+        let until = Instant::now() + Duration::from_secs(5);
+        while reads.load(Ordering::SeqCst) < 3 {
+            assert!(Instant::now() < until, "印 a の変化で 5 秒以内に読み直さない");
+            thread::sleep(Duration::from_millis(10));
+        }
         thread::sleep(Duration::from_millis(200));
         assert_eq!(reads.load(Ordering::SeqCst), 3);
         assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
+        let dir = marks[0].parent().expect("置き場").to_path_buf();
+        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -338,17 +377,18 @@ mod tests {
         assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
         // 在る file の長さが動く・file が増える・file が消える、のどれも 1 件。
         for change in [
-            Box::new(|| std::fs::write(&marks[0], "22").expect("印 a")) as Box<dyn Fn()>,
-            Box::new(|| std::fs::write(&marks[1], "x").expect("印 b")),
+            Box::new(|| put(&marks[0], "22")) as Box<dyn Fn()>,
+            Box::new(|| put(&marks[1], "x")),
             Box::new(|| std::fs::remove_file(&marks[1]).expect("印 b を消す")),
         ] {
             change();
-            let frame = rx.recv_timeout(Duration::from_secs(1)).expect("1 件");
+            let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
             assert!(frame.contains("event: board-changed\n"), "{frame}");
             assert!(frame.contains("data: {\"at\":"), "{frame}");
             thread::sleep(Duration::from_millis(100));
             assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
         }
+        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
