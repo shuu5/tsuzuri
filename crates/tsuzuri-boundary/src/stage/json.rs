@@ -66,6 +66,36 @@ pub fn member<'a>(object: &'a str, key: &str) -> Option<&'a str> {
     found
 }
 
+/// JSON の配列の字の一番上の段の要素の字の列（並びの順・前後の空白を除く・字の値は引用符ごと・object と配列は括弧ごと）。
+/// 配列でない字・閉じの括弧の無い字・閉じの括弧の後に字の残る字・コンマの前後の要素の欠けた字は None。
+pub fn items(array: &str) -> Option<Vec<&str>> {
+    let b = array.as_bytes();
+    let mut i = skip_ws(b, 0);
+    if b.get(i) != Some(&b'[') {
+        return None;
+    }
+    i = skip_ws(b, i + 1);
+    let mut out = Vec::new();
+    if b.get(i) == Some(&b']') {
+        i += 1;
+    } else {
+        loop {
+            let end = skip_value(b, i)?;
+            out.push(&array[i..end]);
+            i = skip_ws(b, end);
+            match b.get(i) {
+                Some(b',') => i = skip_ws(b, i + 1),
+                Some(b']') => {
+                    i += 1;
+                    break;
+                }
+                _ => return None,
+            }
+        }
+    }
+    (skip_ws(b, i) == b.len()).then_some(out)
+}
+
 /// JSON の字の値を字に戻す。字の値でない字・知らない逃がし・対の欠けた代理の値は None。
 pub fn unquote(text: &str) -> Option<String> {
     let inner = text.strip_prefix('"')?.strip_suffix('"')?;
