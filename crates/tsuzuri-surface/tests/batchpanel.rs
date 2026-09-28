@@ -1,5 +1,5 @@
 //! 便 g-batch の歯: 問いの頁の右の列（まとめて承認と全体への指示）の枠・行の一覧（fixture の 2 本）・
-//! 関わる所の数と重なりの数・束を送る button の判定・束の要求の本文・束の応答の出し方・範囲の初めの値と問いの選びと scope の字・
+//! 関わる所の数と重なりの数・束を送る button の判定・束の要求の本文・束の応答の出し方・指示の本文の範囲はつねに all・
 //! 指示を送る button の判定と応答の出し方・鍵の判定・口の path・測れていない・画面の外の保存の口の名が code に無い・
 //! 足す外の依存は 0 本。
 
@@ -17,7 +17,6 @@ use tsuzuri_contract::surface::{
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, PageId};
 use tsuzuri_surface::project::ask::{self, KeyAction};
-use tsuzuri_surface::project::policy::Scope;
 use tsuzuri_surface::project::{Body, NOT_READ, batch, policy};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
@@ -383,78 +382,7 @@ fn batchpanel_batch_outcome() {
     assert_eq!(batch::written(&batch_reply(3, 1)), 3);
 }
 
-/// (7) 範囲: この論点と全体の切り替え・問いが在れば初めはこの論点で選びの初めの項は 1 本目・
-/// 0 本ならこの論点は押せず全体・scope の字は全体なら all でこの論点なら選んだ問いの id。
-#[test]
-fn batchpanel_policy_scope() {
-    assert_eq!(Scope::ALL, [Scope::Topic, Scope::All]);
-    assert_eq!(Scope::Topic.text(), policy::TOPIC);
-    assert_eq!(Scope::All.text(), policy::ALL);
-    assert_eq!(policy::TOPIC, "この論点");
-    assert_eq!(policy::ALL, "全体");
-    assert_eq!(policy::SCOPE, "範囲");
-    assert_eq!(policy::TOPIC_PICK, "論点");
-
-    let Ok(topics) = policy::body(&question_list()) else {
-        panic!("fixture の問いが読めない");
-    };
-    let got: Vec<(&str, &str)> = topics
-        .iter()
-        .map(|t| (t.id.as_str(), t.text.as_str()))
-        .collect();
-    assert_eq!(
-        got,
-        vec![
-            ("qa.2", "1 質問の頁の答えの欄は 1 問に 1 つでよいか"),
-            (
-                "qa.10",
-                "2 これまでの決定の段を開いたままにするか閉じておくかをどちらにするか決めて"
-            ),
-        ]
-    );
-    assert!(policy::topic_enabled(topics.len()));
-    assert_eq!(policy::scope(topics.len(), None), Scope::Topic);
-    assert_eq!(policy::scope(topics.len(), Some(Scope::All)), Scope::All);
-    assert_eq!(
-        policy::scope(topics.len(), Some(Scope::Topic)),
-        Scope::Topic
-    );
-    let first = policy::pick(&topics, None).expect("1 本目");
-    assert_eq!(first.id, bead("qa.2"));
-    let second = policy::pick(&topics, Some(&bead("qa.10"))).expect("選んだ問い");
-    assert_eq!(second.id, bead("qa.10"));
-    // 一覧に無い id は 1 本目に戻る。
-    assert_eq!(
-        policy::pick(&topics, Some(&bead("qa.99"))).map(|t| t.id.as_str()),
-        Some("qa.2")
-    );
-    assert_eq!(
-        policy::scope_text(Scope::Topic, Some(second)),
-        Some("qa.10".to_string())
-    );
-    assert_eq!(
-        policy::scope_text(Scope::All, Some(second)),
-        Some("all".to_string())
-    );
-    assert_eq!(policy::ALL_SCOPE, "all");
-
-    // 問いが 0 本: この論点は押せず、押しても全体。
-    let Ok(none) = policy::body(&list_of(vec![])) else {
-        panic!("0 本の一覧が読めない");
-    };
-    assert!(none.is_empty());
-    assert!(!policy::topic_enabled(0));
-    assert_eq!(policy::scope(0, None), Scope::All);
-    assert_eq!(policy::scope(0, Some(Scope::Topic)), Scope::All);
-    assert_eq!(policy::pick(&none, None), None);
-    assert_eq!(policy::scope_text(Scope::Topic, None), None);
-    assert_eq!(
-        policy::scope_text(Scope::All, None),
-        Some("all".to_string())
-    );
-}
-
-/// (8) 指示を送る button と要求の本文と応答の出し方。
+/// (8) 指示を送る button と要求の本文（範囲はつねに all）と応答の出し方。
 #[test]
 fn batchpanel_policy_send_and_outcome() {
     assert!(policy::can_send("方針", false));
@@ -463,16 +391,15 @@ fn batchpanel_policy_send_and_outcome() {
 
     let words = "  全体に: 小さく刻む  ";
     let req: PolicyRequest =
-        wire::decode(&policy::request_body("qa.2", words)).expect("要求の電文");
+        wire::decode(&policy::request_body(words)).expect("要求の電文");
     assert_eq!(
         req,
         PolicyRequest {
-            scope: "qa.2".to_string(),
+            scope: "all".to_string(),
             verbatim: words.to_string(),
         }
     );
-    let req: PolicyRequest =
-        wire::decode(&policy::request_body(policy::ALL_SCOPE, "x")).expect("要求の電文");
+    let req: PolicyRequest = wire::decode(&policy::request_body("x")).expect("要求の電文");
     assert_eq!(req.scope, "all");
 
     let ok = wire::encode(&PolicyResponse {
@@ -547,11 +474,15 @@ fn batchpanel_key_action() {
     assert_eq!(ask::key_action(true, false, "Enter"), KeyAction::Nothing);
     assert_eq!(ask::key_action(false, true, "Enter"), KeyAction::Send);
     assert_eq!(ask::key_action(false, false, "Enter"), KeyAction::Hold);
+    assert!(
+        read("src/project/batch.rs")
+            .contains("use crate::project::ask::{self, KeyAction, key_action};"),
+        "batch.rs が鍵の判定の関数を use しない"
+    );
     for module in ["src/project/batch.rs", "src/project/policy.rs"] {
         let text = read(module);
         assert!(
-            text.contains("use crate::project::ask::{self, KeyAction, key_action};")
-                && text.contains("key_action(composing,"),
+            text.contains("key_action(composing,"),
             "{module} が鍵の判定の関数を使わない"
         );
         assert!(
@@ -565,11 +496,16 @@ fn batchpanel_key_action() {
     }
 }
 
-/// (10) 口の path の定数は batch と policy の module に 1 本ずつ・2 つとも問いの一覧を ask の module の口から読む。
+/// (10) 口の path の定数は batch と policy の module に 1 本ずつ・batch は問いの一覧を ask の module の口から読む
+/// （policy は問いの一覧を読まない）。
 #[test]
 fn batchpanel_paths() {
     assert_eq!(batch::PATH, "/api/batch");
     assert_eq!(policy::PATH, "/api/policy");
+    assert!(
+        read("src/project/batch.rs").contains("crate::net::read(ask::PATH)"),
+        "batch.rs が問いの一覧の口を読まない"
+    );
     for (module, path) in [
         ("src/project/batch.rs", batch::PATH),
         ("src/project/policy.rs", policy::PATH),
@@ -577,17 +513,14 @@ fn batchpanel_paths() {
         let text = read(module);
         assert_eq!(text.matches(&format!("\"{path}\"")).count(), 1, "{module}");
         assert!(
-            text.contains("crate::net::read(ask::PATH)"),
-            "{module} が問いの一覧の口を読まない"
-        );
-        assert!(
             text.contains("crate::net::post(PATH, body)"),
             "{module} が自分の口へ送らない"
         );
     }
 }
 
-/// (11) 問いの一覧の口が読めない・まだ読んでいない・本文が電文として読めないときは、2 つとも測れていないと理由の 1 行。
+/// (11) 問いの一覧の口が読めない・まだ読んでいない・本文が電文として読めないときは、まとめて承認は測れていないと理由の 1 行
+/// （全体への指示は問いの一覧を読まない）。
 #[test]
 fn batchpanel_unmeasured() {
     let unknown = Fetched::Body(
@@ -607,17 +540,11 @@ fn batchpanel_unmeasured() {
             panic!("まとめて承認が {fetched:?} で測れていないでない");
         };
         assert!(!reason.trim().is_empty() && !reason.contains('\n'));
-        let Err(reason2) = policy::body(&fetched) else {
-            panic!("全体への指示が {fetched:?} で測れていないでない");
-        };
-        assert_eq!(reason, reason2);
     }
     assert_eq!(batch::body(&Fetched::NotRead), Body::Unmeasured(NOT_READ));
     assert_eq!(batch::body(&Fetched::Failed), Body::Unmeasured(ask::REASON));
-    assert_eq!(policy::body(&Fetched::Failed), Err(ask::REASON));
     // 読めて 0 本は測れていないでない。
     assert_eq!(batch::body(&list_of(vec![])), Body::Empty(ask::EMPTY));
-    assert_eq!(policy::body(&list_of(vec![])), Ok(vec![]));
     let text = read("src/project/batch.rs") + &read("src/project/policy.rs");
     assert!(text.contains("unmeasured(reason)"));
 }
