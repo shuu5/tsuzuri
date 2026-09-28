@@ -476,7 +476,8 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("bm"));
     let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
-    assert_eq!(kids, vec!["bm.1", "bm.3", "bm.10", "bm.2"]);
+    // 閉じた bm.3 は一覧に出さない（行 g-ledger-home）。
+    assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
     let lost = screen.after_lost();
     assert_eq!(ledger::count(&lost), Reading::Unknown);
     assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));

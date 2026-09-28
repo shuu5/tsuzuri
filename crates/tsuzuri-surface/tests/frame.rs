@@ -372,7 +372,8 @@ fn frame_blocks_without_data_are_unmeasured() {
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("bm"));
     let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
-    assert_eq!(kids, vec!["bm.1", "bm.3", "bm.10", "bm.2"]);
+    // 閉じた bm.3 は一覧に出さない（行 g-ledger-home）。
+    assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
     assert_eq!(legend::states().len(), 5);
     assert_eq!(legend::marks().len(), 5);
 

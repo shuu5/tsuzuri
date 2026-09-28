@@ -3,10 +3,11 @@
 //! 指標は口 /api/metrics（本文は契約の型の Reading で包んだ LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、ここは写すだけ
 //! （数え直しと判定の分岐を持たない）。段の並びと段ごとの項は配置の表（`LAYOUT`）の値で持ち、DOM は表を上から順にたどる。
 //! 未反映の一覧は口 /api/unreflected（本文は契約の型の UnreflectedList）から読み、電文の行の順と数をそのまま写す（行 g-unref-panel）。
-//! 一覧は epic の下に task・memo の順。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
+//! 一覧は epic の下に task・memo の順で、閉じた bead は出さない（全件は地図の方・行 g-ledger-home）。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::board::{LedgerJudge, Reading};
+use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::stats::{
     DayCount, LedgerStats, OpenCounts, UnreflectedKind, UnreflectedList, UnreflectedRow,
 };
@@ -52,6 +53,17 @@ pub const METRICS_UNKNOWN: &str = "server が台帳を読めないので、指�
 
 /// 測れて 0 件のときの 1 行。
 pub const EMPTY: &str = "台帳に bead は無い";
+
+/// 一覧に出さない状態の字（bd の語・行 g-ledger-home）。
+pub const CLOSED: &str = "closed";
+
+/// 台帳に行は在るが、閉じていない行が 1 つも無いときの 1 行（EMPTY と分ける）。
+pub const NO_OPEN: &str = "閉じていない bead は無い";
+
+/// 一覧に出す行か（状態が CLOSED の行は出さない・全件は地図の方で見る）。
+pub fn listed(row: &LedgerRow) -> bool {
+    row.status != CLOSED
+}
 
 /// epic の外の組の見出しの字（epic の項の代わり）。
 pub const OUTSIDE: &str = "epic の外";
@@ -669,20 +681,34 @@ pub fn count(screen: &Screen) -> Reading<usize> {
     }
 }
 
-/// 一覧の中身。
+/// 一覧の中身（閉じた行は出さない・閉じた epic の頭は、閉じていない下の項が在るときだけ残す・行 g-ledger-home）。
 pub fn body(screen: &Screen) -> Body<Vec<Group>> {
     match &screen.board {
         Reading::Unknown => Body::Unmeasured(LEDGER_UNREAD),
         Reading::Known(b) if b.groups.is_empty() => Body::Empty(EMPTY),
-        Reading::Known(b) => Body::Filled(
-            b.groups
+        Reading::Known(b) => {
+            let groups: Vec<Group> = b
+                .groups
                 .iter()
-                .map(|g| Group {
-                    head: g.epic.as_ref().map(item),
-                    children: g.children.iter().map(item).collect(),
+                .filter_map(|g| {
+                    let children: Vec<Item> =
+                        g.children.iter().filter(|r| listed(r)).map(item).collect();
+                    let keep = match &g.epic {
+                        Some(epic) => listed(epic) || !children.is_empty(),
+                        None => !children.is_empty(),
+                    };
+                    keep.then(|| Group {
+                        head: g.epic.as_ref().map(item),
+                        children,
+                    })
                 })
-                .collect(),
-        ),
+                .collect();
+            if groups.is_empty() {
+                Body::Empty(NO_OPEN)
+            } else {
+                Body::Filled(groups)
+            }
+        }
     }
 }
 
