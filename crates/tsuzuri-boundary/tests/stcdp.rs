@@ -1009,7 +1009,10 @@ fn stage_cdp_no_script_port() {
         })
         .collect();
     names.sort_unstable();
-    assert_eq!(names, ["close", "events", "message", "open", "run", "steps"]);
+    assert_eq!(
+        names,
+        ["attach", "close", "events", "message", "open", "run", "steps", "url"]
+    );
 }
 
 #[test]

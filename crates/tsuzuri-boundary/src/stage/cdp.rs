@@ -4,12 +4,15 @@
 //! Dom の決まった式だけで、Session は method と params を直に受ける口を持たない（撃てるのは steps の列だけ）。
 //! 窓の置き場は持ち主に任せ（持ち主の裁定 t3-hub.59.5・判断の記録 ADR-15 の決定 (6)）、語彙は同じ窓の中の操作だけを持つ。
 //! session は tz の 1 回の撃ちごとに繋いで閉じ、常駐しない（繋ぐ先は行 i-2 が張る 0700 の dir の中の unix socket）。
+//! 行 i-4 で 2 つ目の運び手（席の目の headless の Chrome の pipe に付く `attach`・ws の上の振る舞いは変えない）を足す。
+//! 行 i-4 で頁の今の URL の読み `url` と、それが撃つ script でない決まった 1 つの method `HISTORY` を足す。
 
 use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use super::json;
+use super::pipe::Pipe;
 use super::ws::Socket;
 
 /// DOM の命令で評価する唯一の式。
@@ -17,6 +20,9 @@ pub const DOM_EXPRESSION: &str = "document.documentElement.outerHTML";
 
 /// 頁の読み込みの終わりの event。
 pub const LOAD_EVENT: &str = "Page.loadEventFired";
+
+/// 頁の今の URL を読む method（script を撃たない）。
+pub const HISTORY: &str = "Page.getNavigationHistory";
 
 /// 席の命令の語彙（要件 FR16 の navigate・viewport・reload・click・入力・key・scroll・待ち・screenshot・DOM・console）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,9 +196,42 @@ pub fn message(id: u64, method: &str, params: &str) -> String {
     )
 }
 
+/// session の運び手（行 i-3 の websocket か、行 i-4 の席の目の Chrome の pipe）。
+enum Link {
+    Ws(Socket),
+    Pipe(Pipe),
+}
+
+impl Link {
+    fn send(&mut self, text: &str) -> Result<(), String> {
+        match self {
+            Link::Ws(socket) => socket.send(text),
+            Link::Pipe(pipe) => pipe.send(text),
+        }
+    }
+
+    /// 残りの時間 left を上限にして次の字を読む（相手が閉じれば None）。
+    fn recv(&mut self, left: Duration) -> Result<Option<String>, String> {
+        match self {
+            Link::Ws(socket) => {
+                socket.wait(left)?;
+                socket.recv()
+            }
+            Link::Pipe(pipe) => pipe.recv(left),
+        }
+    }
+
+    fn close(self) -> Result<(), String> {
+        match self {
+            Link::Ws(socket) => socket.close(),
+            Link::Pipe(pipe) => pipe.close(),
+        }
+    }
+}
+
 /// 頁の target への 1 回の接続（id は 1 から増え、応答でない字は event として受けた順に貯める）。
 pub struct Session {
-    socket: Socket,
+    link: Link,
     next: u64,
     events: Vec<String>,
     timeout: Duration,
@@ -202,11 +241,39 @@ impl Session {
     /// 頁の target の websocket に繋ぐ。
     pub fn open(path: &Path, resource: &str, timeout: Duration) -> Result<Session, String> {
         Ok(Session {
-            socket: Socket::connect(path, resource, timeout)?,
+            link: Link::Ws(Socket::connect(path, resource, timeout)?),
             next: 1,
             events: Vec::new(),
             timeout,
         })
+    }
+
+    /// 頁の session に付いた pipe の上の session（付くのは relay の Eyes の open）。
+    pub fn attach(pipe: Pipe, timeout: Duration) -> Session {
+        Session {
+            link: Link::Pipe(pipe),
+            next: 1,
+            events: Vec::new(),
+            timeout,
+        }
+    }
+
+    /// 頁の今の URL（HISTORY の応答の currentIndex の番の entries の url）。
+    pub fn url(&mut self) -> Result<String, String> {
+        let reply = self.call(HISTORY, "{}")?;
+        let result = json::member(&reply, "result");
+        let index = result
+            .and_then(|r| json::member(r, "currentIndex"))
+            .and_then(|n| n.parse::<usize>().ok());
+        let entries = result
+            .and_then(|r| json::member(r, "entries"))
+            .and_then(json::items);
+        index
+            .zip(entries)
+            .and_then(|(i, entries)| entries.get(i).copied())
+            .and_then(|entry| json::member(entry, "url"))
+            .and_then(json::unquote)
+            .ok_or_else(|| format!("{HISTORY}: 応答の currentIndex の番の entries の url が読めない"))
     }
 
     /// 命令の歩を順に行い、Call の歩の応答の字を順に返す（どの歩の Err でもその後の歩は撃たない）。
@@ -228,15 +295,15 @@ impl Session {
         &self.events
     }
 
-    /// websocket を閉じる。
+    /// websocket か pipe を閉じる。
     pub fn close(self) -> Result<(), String> {
-        self.socket.close()
+        self.link.close()
     }
 
     fn call(&mut self, method: &'static str, params: &str) -> Result<String, String> {
         let id = self.next;
         self.next += 1;
-        self.socket
+        self.link
             .send(&message(id, method, params))
             .map_err(|e| format!("{method}: {e}"))?;
         let want = id.to_string();
@@ -283,9 +350,8 @@ impl Session {
         if left.is_zero() {
             return Err("時間切れ".to_string());
         }
-        self.socket.wait(left)?;
-        self.socket
-            .recv()?
+        self.link
+            .recv(left)?
             .ok_or_else(|| "相手が閉じた".to_string())
     }
 }
