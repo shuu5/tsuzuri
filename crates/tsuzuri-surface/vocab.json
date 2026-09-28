@@ -1442,7 +1442,7 @@
   },
   "l_unref": {
    "label": "未反映",
-   "plain": "design-intent にまだ写っていない数\n= 未反映の一覧と同じ数\n! tsuzuri 以外は memo だけ",
+   "plain": "design-intent にまだ写っていないものの数\n・ memo = 昇格先の無い memo\n・ 決定 = 処分の宣言が無い決定\n・ 要望 = 反映されていない要望\n▸\n{st:unknown} 付きは まだ数えていない種類がある",
    "internal": "unreflected(G).length\n他の project は open memo ∧ ¬promoted_to"
   },
   "nx_promote": {
