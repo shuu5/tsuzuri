@@ -5,20 +5,23 @@
 //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでもその出力は読めない（None）。
 //! 読む file は `<state dir>/seat/<席の dir>/state.jsonl`・同じ dir の `tick-last`・`<state dir>/host.toml`・
 //! 群の記録（`<state dir の親>/scribe2-host/groups/<群の名>.account` と `history/<群の名>.account.*`）。
-//! 3 つの出力と file の読みは 5 秒のあいだ持ち回す（要求のたびに器を撃たない）。
+//! 3 つの出力と file の読みは 5 秒のあいだ持ち回す（要求のたびに器を撃たない）。ただし変化の印の file
+//! （state.jsonl・tick-last・heartbeat-off）の更新時刻と長さが集めた時と違えば、5 秒の中でも集め直す。
 //! 席の target か state dir が無ければ器を撃たず、読む欄が全部「まだ分からない」の card を返す。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_core::seat::{self as core, SeatTexts};
 
+use super::events::stamp;
 use super::ledger::capture;
+use crate::acct::HEARTBEAT_OFF;
 
 /// 口の path。
 pub const PATH: &str = "/api/seat";
@@ -77,10 +80,10 @@ impl Seat {
         plain(&name).then(|| self.state_dir.join("seat").join(name))
     }
 
-    /// 変化の印の file（状態の記録と合図の最後の判定）。
+    /// 変化の印の file（状態の記録と合図の最後の判定と停止の記録）。
     pub fn marks(&self) -> Vec<PathBuf> {
         self.seat_dir()
-            .map(|d| vec![d.join(STATE_LOG), d.join(TICK_LAST)])
+            .map(|d| vec![d.join(STATE_LOG), d.join(TICK_LAST), d.join(HEARTBEAT_OFF)])
             .unwrap_or_default()
     }
 
@@ -170,13 +173,17 @@ pub fn card(target: &str, texts: &SeatTexts, now: EpochSecs) -> SeatCard {
     core::card(target, anchor.as_deref(), texts, now)
 }
 
+/// 変化の印の file ごとの更新時刻と長さ（無ければ None）。
+type Stamps = Vec<Option<(SystemTime, u64)>>;
+
 /// 席の読み（出所が無ければ器を撃たない）と、持ち回しの字。
 #[derive(Debug)]
 pub struct Seats {
     /// 席の target（引数 --seat・省けば空の字）。
     target: String,
     seat: Option<Seat>,
-    held: Mutex<Option<(Instant, SeatTexts)>>,
+    /// 集めた時刻・集める前に取った印・集めた字。
+    held: Mutex<Option<(Instant, Stamps, SeatTexts)>>,
 }
 
 impl Seats {
@@ -217,16 +224,19 @@ impl Seats {
         Some(card(&seat.target, &self.texts(seat), now))
     }
 
-    /// 持ち回しの字（`HOLD` を過ぎていれば集め直す・集めるあいだは次の要求を待たせる）。
+    /// 持ち回しの字（`HOLD` を過ぎたか印が動いていれば集め直す・集めるあいだは次の要求を待たせる）。
+    /// 印は集める前に取るので、集める途中の変化は次の読みで集め直す。
     fn texts(&self, seat: &Seat) -> SeatTexts {
         let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((at, texts)) = held.as_ref()
+        let stamps: Stamps = seat.marks().iter().map(|p| stamp(p)).collect();
+        if let Some((at, was, texts)) = held.as_ref()
             && at.elapsed() < HOLD
+            && *was == stamps
         {
             return texts.clone();
         }
         let texts = seat.gather();
-        *held = Some((Instant::now(), texts.clone()));
+        *held = Some((Instant::now(), stamps, texts.clone()));
         texts
     }
 }

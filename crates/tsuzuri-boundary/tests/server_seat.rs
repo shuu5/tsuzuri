@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use tsuzuri_boundary::server::seat::{self, HOLD};
+use tsuzuri_boundary::acct::HEARTBEAT_OFF;
+use tsuzuri_boundary::server::seat::{self, HOLD, Seat};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
@@ -545,4 +546,117 @@ fn server_seat_no_new_dependencies() {
         deps("tsuzuri-core"),
         ["serde", "serde_json", "tsuzuri-contract"]
     );
+}
+
+/// 停止の記録を置くか消し、偽の器の seat tick status の席の行の heartbeat の語を合わせる（器と同じ決まり）。
+fn hbmark_switch(place: &Place, off: bool) {
+    let path = place.seat_dir().join(HEARTBEAT_OFF);
+    if off {
+        fs::write(&path, "").expect("停止の記録を置く");
+    } else {
+        fs::remove_file(&path).expect("停止の記録を消す");
+    }
+    let out = place.root.join("out-tick");
+    let (from, to) = if off {
+        ("heartbeat=on", "heartbeat=off")
+    } else {
+        ("heartbeat=off", "heartbeat=on")
+    };
+    let row = format!("target={TARGET} ");
+    let text: String = fs::read_to_string(&out)
+        .expect("tick の出力の字")
+        .lines()
+        .map(|l| {
+            let l = if l.contains(&row) {
+                l.replace(from, to)
+            } else {
+                l.to_string()
+            };
+            format!("{l}\n")
+        })
+        .collect();
+    fs::write(&out, text).expect("tick の出力の字を替える");
+}
+
+#[test]
+fn hbmark_marks_name_three_files() {
+    let one = Seat {
+        program: "scribe2".into(),
+        state_dir: "/s".into(),
+        target: TARGET.to_string(),
+        cwd: "/r".into(),
+    };
+    let dir = Path::new("/s/seat/proj-1_0.1");
+    assert_eq!(
+        one.marks(),
+        [
+            dir.join("state.jsonl"),
+            dir.join("tick-last"),
+            dir.join("heartbeat-off")
+        ]
+    );
+    assert_eq!(HEARTBEAT_OFF, "heartbeat-off");
+    let odd = Seat {
+        target: "../x".to_string(),
+        ..one
+    };
+    assert!(odd.marks().is_empty(), "{:?}", odd.marks());
+}
+
+#[test]
+fn hbmark_off_file_sends_board_changed() {
+    let place = Place::new("hbmark-sse", "run");
+    let addr = place.serve();
+    let mut s = TcpStream::connect(addr).expect("接続");
+    s.write_all(format!("GET /api/surface/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+        .expect("要求を書く");
+    let mut seen = String::new();
+    assert!(
+        !wait_event(
+            &mut s,
+            &mut seen,
+            "board-changed",
+            Duration::from_millis(1500)
+        ),
+        "file が動かないのに知らせる"
+    );
+    let off = place.seat_dir().join(HEARTBEAT_OFF);
+    fs::write(&off, "").expect("停止の記録を置く");
+    assert!(
+        wait_event(&mut s, &mut seen, "board-changed", Duration::from_secs(5)),
+        "停止の記録を置いても 5 秒以内に届かない"
+    );
+    fs::remove_file(&off).expect("停止の記録を消す");
+    assert!(
+        wait_event(&mut s, &mut seen, "board-changed", Duration::from_secs(5)),
+        "停止の記録を消しても 5 秒以内に届かない"
+    );
+}
+
+#[test]
+fn hbmark_card_follows_off_file() {
+    let place = Place::new("hbmark-card", "run");
+    let addr = place.serve();
+    let count = |head: &str| place.calls().iter().filter(|c| c.starts_with(head)).count();
+    assert_eq!(seat_card(addr).heartbeat, Reading::Known(true));
+    assert_eq!(place.calls().len(), 3, "{:?}", place.calls());
+    hbmark_switch(&place, true);
+    assert_eq!(
+        seat_card(addr).heartbeat,
+        Reading::Known(false),
+        "停止の記録の後の読み"
+    );
+    assert_eq!(place.calls().len(), 6, "{:?}", place.calls());
+    assert_eq!(seat_card(addr).heartbeat, Reading::Known(false));
+    assert_eq!(place.calls().len(), 6, "印が動かなければ持ち回す");
+    hbmark_switch(&place, false);
+    assert_eq!(
+        seat_card(addr).heartbeat,
+        Reading::Known(true),
+        "停止の記録を消した後の読み"
+    );
+    assert_eq!(place.calls().len(), 9, "{:?}", place.calls());
+    for head in ["seat tick status ", "doctor ", "fleet usage --show "] {
+        assert_eq!(count(head), 3, "{head}");
+    }
 }
