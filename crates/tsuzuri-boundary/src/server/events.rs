@@ -3,6 +3,8 @@
 //! 更新時刻と長さ）を 500 ミリ秒ごとに見て、動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
 //! 印の取りこぼしを拾うために、印が動かなくても、store の印で前の読みが読めていれば 60 秒ごと、ほかは 5 秒ごとに
 //! 読み直す（jsonl の印は器の素の bd close で動かないことがある・行 e-marks）。
+//! 受け手（`Subscription`）が 0 人の間は印の動かない読み直しをせず（印は見続け、動けば読む）、
+//! 0 人から 1 人以上になった周で 1 回読む（行 e-idle）。
 //! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
 //! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
 //! 動いたら board-changed を 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
@@ -10,6 +12,7 @@
 //! board-changed の data は ledger-changed と同じ形（`{"at":<epoch 秒>}`）。
 
 use std::io::{self, Write};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, Weak};
@@ -64,6 +67,21 @@ pub fn stamp(path: &Path) -> Option<(SystemTime, u64)> {
 pub struct Hub {
     subscribers: Mutex<Vec<Sender<String>>>,
     seq: Mutex<u64>,
+    live: Arc<()>,
+}
+
+/// 受け手の 1 人（Receiver として読み、落ちれば受け手の数から外れる）。
+pub struct Subscription {
+    rx: Receiver<String>,
+    _live: Arc<()>,
+}
+
+impl Deref for Subscription {
+    type Target = Receiver<String>;
+
+    fn deref(&self) -> &Receiver<String> {
+        &self.rx
+    }
 }
 
 impl Hub {
@@ -124,7 +142,7 @@ impl Hub {
     }
 
     /// 台帳の印の値（`Mark`）と読みの関数で周期の読みを始める（行 e-marks）。最初の印と読みは戻る前に取る。
-    /// 印が動かなくても、印が Store で前の読みが Known なら `store_reread`、ほかは `reread` ごとに読み直す。
+    /// 受け手が居る間は、印が動かなくても、印が Store で前の読みが Known なら `store_reread`、ほかは `reread` ごとに読み直す。
     pub fn watch_ledger<T, M, F>(mark: M, read: F, timing: Timing) -> Arc<Hub>
     where
         T: PartialEq + Send + 'static,
@@ -140,10 +158,18 @@ impl Hub {
     }
 
     /// 受け手を 1 人足す。
-    pub fn subscribe(&self) -> Receiver<String> {
+    pub fn subscribe(&self) -> Subscription {
         let (tx, rx) = mpsc::channel();
         lock(&self.subscribers).push(tx);
-        rx
+        Subscription {
+            rx,
+            _live: Arc::clone(&self.live),
+        }
+    }
+
+    /// 受け手の数（落ちていない `Subscription` の数）。
+    pub fn listeners(&self) -> usize {
+        Arc::strong_count(&self.live) - 1
     }
 
     /// 台帳の変化を全員に送る（切れた受け手は外す）。
@@ -204,11 +230,12 @@ fn board_stamps(board: &mut impl FnMut() -> Vec<PathBuf>) -> BoardStamps {
     stamps
 }
 
-/// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果）。
+/// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果・前の周に受け手が居たか）。
 struct Watch<K, R> {
     seen: K,
     read_at: Instant,
     last: R,
+    listening: bool,
 }
 
 /// 印の値の関数と読みの関数で周期の読みを始める（`reread` は見た印と最後の読みから読み直しの間隔を決める）。
@@ -233,6 +260,7 @@ where
         seen,
         read_at,
         last,
+        listening: false,
     };
     thread::spawn(move || watch(&weak, state, mark, read, poll, reread));
     hub
@@ -248,12 +276,16 @@ fn watch<K: PartialEq, R: PartialEq>(
 ) {
     loop {
         thread::sleep(poll);
-        if hub.strong_count() == 0 {
+        let Some(listening) = hub.upgrade().map(|h| h.listeners() > 0) else {
             return;
-        }
+        };
         // 印は読みの前に取る（読みの途中の変化は次の周で拾う）。
         let current = mark();
-        if current == state.seen && state.read_at.elapsed() < reread(&current, &state.last) {
+        // 受け手が 0 人から 1 人以上になった周は 1 回読む。0 人の間は印が動いたときだけ読む。
+        let attached = listening && !state.listening;
+        state.listening = listening;
+        let due = listening && state.read_at.elapsed() >= reread(&current, &state.last);
+        if current == state.seen && !attached && !due {
             continue;
         }
         state.seen = current;
@@ -348,24 +380,27 @@ mod tests {
             store_reread: Duration::from_secs(60),
         };
         let hub = Hub::watch(marks.clone(), read, timing);
-        let rx = hub.subscribe();
         assert_eq!(reads.load(Ordering::SeqCst), 1, "最初の読みは戻る前");
+        // 受け手が付いた周で 1 回読む。
+        let rx = hub.subscribe();
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(reads.load(Ordering::SeqCst), 2, "受け手が付いた周の読み");
         // 印が動かなければ読み直さない（中身が変わっても知らせない）。
         *content.lock().expect("lock") = 1;
         thread::sleep(Duration::from_millis(200));
         assert!(rx.try_recv().is_err());
-        assert_eq!(reads.load(Ordering::SeqCst), 1);
+        assert_eq!(reads.load(Ordering::SeqCst), 2);
         // 後の印（初めは無い file）ができると読み直して 1 件。
         put(&marks[1], "x");
         let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
         assert!(frame.contains("event: ledger-changed\n"), "{frame}");
         thread::sleep(Duration::from_millis(200));
         assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
-        assert_eq!(reads.load(Ordering::SeqCst), 2);
+        assert_eq!(reads.load(Ordering::SeqCst), 3);
         // 前の印の長さが動いても、読みの結果が同じなら知らせない。
         put(&marks[0], "22");
         let until = Instant::now() + Duration::from_secs(5);
-        while reads.load(Ordering::SeqCst) < 3 {
+        while reads.load(Ordering::SeqCst) < 4 {
             assert!(
                 Instant::now() < until,
                 "印 a の変化で 5 秒以内に読み直さない"
@@ -373,7 +408,7 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         thread::sleep(Duration::from_millis(200));
-        assert_eq!(reads.load(Ordering::SeqCst), 3);
+        assert_eq!(reads.load(Ordering::SeqCst), 4);
         assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
         let dir = marks[0].parent().expect("置き場").to_path_buf();
         let _ = std::fs::remove_dir_all(put_dir(&marks[0]));

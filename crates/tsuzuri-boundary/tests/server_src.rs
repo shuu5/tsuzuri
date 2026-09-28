@@ -411,7 +411,8 @@ fn server_src_rereads_every_5s_without_marks() {
     let addr = place.serve();
     let bound = Instant::now();
     let (mut s, mut buf) = subscribe(addr);
-    // 印を動かさずに中身だけを替える（印の取りこぼしの見立て）。
+    // 受け手が付いた周の読みを待ってから、印を動かさずに中身だけを替える（印の取りこぼしの見立て）。
+    thread::sleep(Duration::from_secs(1));
     place.bd_returns(&closed_fixture("fx-hub.3"));
     read_until(&mut s, &mut buf, bound + Duration::from_secs(4), |b| {
         events(b) >= 1
@@ -421,7 +422,7 @@ fn server_src_rereads_every_5s_without_marks() {
         0,
         "印が動かないのに 5 秒より前に知らせる: {buf}"
     );
-    read_until(&mut s, &mut buf, bound + Duration::from_millis(6500), |b| {
+    read_until(&mut s, &mut buf, bound + Duration::from_secs(7), |b| {
         events(b) >= 1 && b.ends_with("\n\n")
     });
     assert_eq!(
