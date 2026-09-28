@@ -1,0 +1,5 @@
+{
+  "name": "tsuzuri",
+  "version": "0.1.0",
+  "description": "tsuzuri の席の停止の hook（台帳の未配達の持ち主の裁定を拾い、その指し示しを返して席を続けさせる）"
+}
