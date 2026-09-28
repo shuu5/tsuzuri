@@ -24,6 +24,7 @@ fn card(id: &str, stage: Stage, reason: Option<String>) -> PipelineCard {
         reason,
         account: None,
         elapsed_s: Some(60),
+        ci: None,
     }
 }
 

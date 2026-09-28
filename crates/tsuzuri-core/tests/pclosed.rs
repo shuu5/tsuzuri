@@ -154,6 +154,7 @@ fn card(
         reason: reason.map(str::to_string),
         account: account.map(str::to_string),
         elapsed_s: elapsed,
+        ci: None,
     }
 }
 

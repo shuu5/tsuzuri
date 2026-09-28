@@ -111,6 +111,7 @@ fn want_cards() -> Vec<PipelineCard> {
             reason: None,
             account: None,
             elapsed_s: Some(3540),
+            ci: None,
         },
         PipelineCard {
             contract: id("mf.2"),
@@ -119,6 +120,7 @@ fn want_cards() -> Vec<PipelineCard> {
             reason: None,
             account: None,
             elapsed_s: None,
+            ci: None,
         },
     ]
 }

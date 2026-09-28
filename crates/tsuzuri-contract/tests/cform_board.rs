@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 
 use common::{AT, Form, bead, distinct, form};
 use tsuzuri_contract::board::{
-    AccountBoard, GroupRow, LedgerJudge, NextMove, PipelineBoard, PipelineCard, PipelineColumn,
+    AccountBoard, Ci, GroupRow, LedgerJudge, NextMove, PipelineBoard, PipelineCard, PipelineColumn,
     ProjectMetrics, QuotaLeft, Reading, SessionRow, Stage,
 };
 use tsuzuri_contract::surface::{SeatHealth, SeatRole};
@@ -22,6 +22,7 @@ fn pipeline_card() -> PipelineCard {
         reason: Some("verify".into()),
         account: Some("acct-4".into()),
         elapsed_s: Some(185),
+        ci: None,
     }
 }
 
@@ -39,6 +40,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                 PipelineColumn::Landed,
             ],
         ),
+        form("board::Ci", Ci::ALL.to_vec()),
         form(
             "board::PipelineCard",
             vec![
@@ -50,6 +52,16 @@ fn forms() -> Vec<Box<dyn Form>> {
                     reason: None,
                     account: None,
                     elapsed_s: None,
+                    ci: None,
+                },
+                PipelineCard {
+                    contract: bead("px.7"),
+                    runs: 1,
+                    stage: Stage::Failed,
+                    reason: Some("terminal:ci:failure".into()),
+                    account: Some("acct-4".into()),
+                    elapsed_s: Some(420),
+                    ci: Some(Ci::Failure),
                 },
             ],
         ),
@@ -146,4 +158,20 @@ fn contract_form_closed_lists() {
         .map(|s| serde_json::to_string(&s.column()).expect("列"))
         .collect();
     assert_eq!(columns.len(), 4);
+    let ci: Vec<String> = Ci::ALL
+        .iter()
+        .map(|c| serde_json::to_string(c).expect("CI の読み"))
+        .collect();
+    assert_eq!(
+        ci,
+        [
+            "\"waiting\"",
+            "\"success\"",
+            "\"failure\"",
+            "\"unmeasurable\"",
+            "\"push-failed\"",
+            "\"close-failed\"",
+            "\"unreadable\"",
+        ]
+    );
 }

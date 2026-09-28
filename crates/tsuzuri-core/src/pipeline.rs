@@ -14,12 +14,19 @@
 //! 板は札のほかに形の崩れた open の bead の一覧を持ち、器の doctor の台帳の形の行を `form_ids` で写して題を台帳から引く
 //! （`board_with_doctor`・tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)・行 c-pipe-misfit）。
 //! doctor の字を受けない `board` の一覧は Unknown。
+//! 着地の後の CI の読み（行 c-pipe-ci）: `stage_of` の段が Landed の札だけ、走行の event の行を判定の関数 `ci_reading` に渡す
+//! （器の終端の RunDone の detail の語を `ci_after` で順に重ねる・判定は `ci_reading` の 1 つに閉じる）。
+//! 段と理由の決め（閉じた bead の札を含む）の後に `with_ci` で重ねる: 読みが無いか、台帳で閉じた bead の読みが Waiting なら
+//! 段と理由のままで ci は None。閉じていない bead（台帳が読めないときと台帳に無い bead も）の読みが `CI_STALLS` に在れば
+//! その段にし、段の理由は器の終端の detail の字のまま。ほかは段と理由のままで ci はその読み。Blocked と Queued の札の ci は None。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::board::{Misfit, MisfitBead, PipelineBoard, PipelineCard, Reading, Stage};
+use tsuzuri_contract::board::{
+    Ci, Misfit, MisfitBead, PipelineBoard, PipelineCard, Reading, Stage,
+};
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::runs::{RunCost, RunLine, RunStep, RunsDoc};
@@ -56,6 +63,35 @@ pub const FORM_PREFIX: &str = "ledger-form:";
 
 /// 台帳の形の行から写す欄の語と崩れ（器の Report の欄 both と neither・この順）。
 pub const FORM_FIELDS: [(&str, Misfit); 2] = [("both", Misfit::Both), ("neither", Misfit::Neither)];
+
+/// 器の終端の RunDone の detail の頭（器の pipe/land/finish.rs の fn note の字）。
+pub const TERMINAL_TAG: &str = "terminal:";
+
+/// 終端の頭の後の push の語の頭（落ちの語でなければ CI を待つ）。
+pub const PUSH_WORD: &str = "push:";
+
+/// 終端の頭の後の CI の照合の語（字ちょうど）と読み。
+pub const CI_WORDS: [(&str, Ci); 3] = [
+    ("ci:success", Ci::Success),
+    ("ci:failure", Ci::Failure),
+    ("ci:unmeasurable", Ci::Unmeasurable),
+];
+
+/// 終端の頭の後の落ちの語の頭と読み（push の語より先に照らす）。
+pub const FAULT_WORDS: [(&str, Ci); 3] = [
+    ("push:failed:", Ci::PushFailed),
+    ("close:failed:", Ci::CloseFailed),
+    ("unreadable", Ci::Unreadable),
+];
+
+/// 閉じていない bead の札を止まった段へ移す読みと段（落ちたは Failed・分からないは Stopped）。
+pub const CI_STALLS: [(Ci, Stage); 5] = [
+    (Ci::Failure, Stage::Failed),
+    (Ci::PushFailed, Stage::Failed),
+    (Ci::CloseFailed, Stage::Failed),
+    (Ci::Unmeasurable, Stage::Stopped),
+    (Ci::Unreadable, Stage::Stopped),
+];
 
 /// 板と、表に無い段の走行の数（札を作らずに数える）。
 #[derive(Debug, Clone, PartialEq)]
@@ -106,12 +142,66 @@ fn text<'a>(event: &'a Value, key: &str) -> Option<&'a str> {
     event.get(key).and_then(Value::as_str)
 }
 
-/// 1 つの走行の読み（段を決めた最後の event と、口座の札の最後のものと、その event の後に RunStopped が来たか）。
+/// 1 つの detail の後の CI の読み（`ci_reading` だけが呼ぶ）。
+/// detail が `TERMINAL_TAG` で始まらなければ前の読み。頭の後の語が `FAULT_WORDS` の語で始まればその読み、
+/// ほかの `PUSH_WORD` で始まれば Waiting、`CI_WORDS` の語ちょうどならその読み、ほかは前の読み。
+pub fn ci_after(prev: Option<Ci>, detail: &str) -> Option<Ci> {
+    let Some(word) = detail.strip_prefix(TERMINAL_TAG) else {
+        return prev;
+    };
+    if let Some((_, ci)) = FAULT_WORDS.iter().find(|(w, _)| word.starts_with(w)) {
+        return Some(*ci);
+    }
+    if word.starts_with(PUSH_WORD) {
+        return Some(Ci::Waiting);
+    }
+    CI_WORDS
+        .iter()
+        .find(|(w, _)| word == *w)
+        .map_or(prev, |(_, ci)| Some(*ci))
+}
+
+/// 走行の event の行（ログの順）から着地の後の CI の読みと器の語（判定はこの関数 1 つに閉じる）。
+/// 種類 RunDone の行の detail を順に重ね、器の語は最後の `TERMINAL_TAG` で始まる RunDone の detail の字。
+/// 終端の行が無ければ None。
+pub fn ci_reading(rows: &[&Value]) -> Option<(Ci, String)> {
+    let mut ci = None;
+    let mut word = None;
+    for row in rows.iter().filter(|r| text(r, "kind") == Some("RunDone")) {
+        let detail = text(row, "detail").unwrap_or_default();
+        ci = ci_after(ci, detail);
+        if detail.starts_with(TERMINAL_TAG) {
+            word = Some(detail);
+        }
+    }
+    Some((ci?, word?.to_string()))
+}
+
+/// 段と理由に CI の読みを重ねる（module の頭の決まり・`closed` は台帳で閉じた bead か）。
+fn with_ci(
+    stage: Stage,
+    reason: Option<String>,
+    reading: Option<(Ci, String)>,
+    closed: bool,
+) -> (Stage, Option<String>, Option<Ci>) {
+    match reading {
+        None => (stage, reason, None),
+        Some((Ci::Waiting, _)) if closed => (stage, reason, None),
+        Some((ci, word)) if !closed => match CI_STALLS.iter().find(|(c, _)| *c == ci) {
+            Some((_, to)) => (*to, Some(word), Some(ci)),
+            None => (stage, reason, Some(ci)),
+        },
+        Some((ci, _)) => (stage, reason, Some(ci)),
+    }
+}
+
+/// 1 つの走行の読み（段を決めた最後の event と、口座の札の最後のものと、その event の後に RunStopped が来たか・走行の event の行の列）。
 #[derive(Default)]
 struct RunState<'a> {
     last: Option<&'a Value>,
     account: Option<String>,
     stopped: bool,
+    rows: Vec<&'a Value>,
 }
 
 /// 問いの後に止めた走行の段の理由（段 Questioned の event の detail の about: の後の字を全角の括弧で添える）。
@@ -287,6 +377,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
         let Some(state) = runs.get_mut(run) else {
             continue;
         };
+        state.rows.push(event);
         if let Some(account) = detail_account(event) {
             state.account = Some(account);
         }
@@ -320,6 +411,10 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
             }
             mapped => mapped,
         };
+        let reading = match mapped {
+            Some((Stage::Landed, _)) => ci_reading(&state.rows),
+            _ => None,
+        };
         let closed = beads
             .unwrap_or_default()
             .iter()
@@ -333,6 +428,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
             unmapped += 1;
             continue;
         };
+        let (stage, reason, ci) = with_ci(stage, reason, reading, closed.is_some());
         cards.push(PipelineCard {
             contract,
             runs: entry.runs,
@@ -342,6 +438,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
             elapsed_s: text(last, "ts")
                 .and_then(epoch_secs)
                 .map(|at| now.saturating_sub(at)),
+            ci,
         });
     }
 
@@ -368,6 +465,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
             reason: None,
             account: None,
             elapsed_s: None,
+            ci: None,
         });
     }
 

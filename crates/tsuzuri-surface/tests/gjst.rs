@@ -71,6 +71,7 @@ fn landed(elapsed_s: Option<u64>) -> PipelineCard {
         reason: None,
         account: None,
         elapsed_s,
+        ci: None,
     }
 }
 
@@ -205,7 +206,7 @@ fn gjst_vocab_land_note() {
     assert_eq!(term.label, "Landed（今日）");
     assert_eq!(
         term.note,
-        "今日（日本時間）、本線に取り込まれたか、着地せずに閉じた run"
+        "今日（日本時間）、本線に取り込まれたか、着地せずに閉じた run と、日を問わず CI を待つ run"
     );
 }
 

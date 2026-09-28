@@ -66,7 +66,38 @@ pub enum PipelineColumn {
     Landed,
 }
 
-/// pipeline の札（契約 bead・走行の回数・段・段の理由・口座・経過）。
+/// 着地の後の CI の読み（閉じた 7・器の RunDone の終端の detail の語から読む・行 c-pipe-ci）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Ci {
+    /// push の後で CI の結果が無い。
+    Waiting,
+    Success,
+    /// 器は bead を閉じない。
+    Failure,
+    /// 器は bead を閉じない。
+    Unmeasurable,
+    /// push が落ちた。
+    PushFailed,
+    /// CI は通ったが close が落ちた。
+    CloseFailed,
+    /// 終端の宣言が読めない。
+    Unreadable,
+}
+
+impl Ci {
+    pub const ALL: [Ci; 7] = [
+        Ci::Waiting,
+        Ci::Success,
+        Ci::Failure,
+        Ci::Unmeasurable,
+        Ci::PushFailed,
+        Ci::CloseFailed,
+        Ci::Unreadable,
+    ];
+}
+
+/// pipeline の札（契約 bead・走行の回数・段・段の理由・口座・経過・着地の後の CI）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PipelineCard {
     pub contract: BeadId,
@@ -75,6 +106,8 @@ pub struct PipelineCard {
     pub reason: Option<String>,
     pub account: Option<String>,
     pub elapsed_s: Option<u64>,
+    /// 着地の後の CI の読み（器が着地を push した走行だけ Some）。
+    pub ci: Option<Ci>,
 }
 
 /// 形の崩れ（語は器の ledger/form.rs の欄の名・判断の記録 ADR-16 の決定 (1)）。

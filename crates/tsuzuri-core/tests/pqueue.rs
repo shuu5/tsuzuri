@@ -69,6 +69,7 @@ fn card(id: &str, runs: u32, stage: Stage, elapsed: Option<u64>) -> PipelineCard
         reason: None,
         account: None,
         elapsed_s: elapsed,
+        ci: None,
     }
 }
 

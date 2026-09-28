@@ -36,6 +36,7 @@ fn card(
         reason,
         account: account.map(str::to_string),
         elapsed_s: elapsed,
+        ci: None,
     }
 }
 

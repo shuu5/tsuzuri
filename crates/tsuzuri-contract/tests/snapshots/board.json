@@ -15,6 +15,15 @@
     "Questioned/Failed/Stopped",
     "Landed"
   ],
+  "board::Ci": [
+    "waiting",
+    "success",
+    "failure",
+    "unmeasurable",
+    "push-failed",
+    "close-failed",
+    "unreadable"
+  ],
   "board::PipelineCard": [
     {
       "contract": "t3-hub.3",
@@ -22,7 +31,8 @@
       "stage": "Running",
       "reason": "verify",
       "account": "acct-4",
-      "elapsed_s": 185
+      "elapsed_s": 185,
+      "ci": null
     },
     {
       "contract": "t3-hub.4",
@@ -30,7 +40,17 @@
       "stage": "Queued",
       "reason": null,
       "account": null,
-      "elapsed_s": null
+      "elapsed_s": null,
+      "ci": null
+    },
+    {
+      "contract": "px.7",
+      "runs": 1,
+      "stage": "Failed",
+      "reason": "terminal:ci:failure",
+      "account": "acct-4",
+      "elapsed_s": 420,
+      "ci": "failure"
     }
   ],
   "board::PipelineBoard": [
@@ -43,7 +63,8 @@
             "stage": "Running",
             "reason": "verify",
             "account": "acct-4",
-            "elapsed_s": 185
+            "elapsed_s": 185,
+            "ci": null
           }
         ]
       },

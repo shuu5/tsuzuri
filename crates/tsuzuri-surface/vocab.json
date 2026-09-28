@@ -52,8 +52,43 @@
   },
   "col_land": {
    "label": "Landed（今日）",
-   "note": "今日（日本時間）、本線に取り込まれたか、着地せずに閉じた run",
-   "internal": "Landed・今日"
+   "note": "今日（日本時間）、本線に取り込まれたか、着地せずに閉じた run と、日を問わず CI を待つ run",
+   "internal": "Landed・今日\nCI を待つ run は日を問わない"
+  },
+  "ci_wait": {
+   "label": "CI 中",
+   "note": "本線に取り込んだ後で、CI の結果を待っている run\n・ 器が CI を見ている\n・ 結果が出るまで Landed の列に出る",
+   "internal": "RunDone terminal:push:<remote> の後に ci の行が無い\n段 Landed"
+  },
+  "ci_success": {
+   "label": "CI 成功",
+   "note": "本線に取り込んだ後の CI が通った\n・ 器が bead を閉じる\n・ 10 分の間だけ札に出る",
+   "internal": "RunDone terminal:ci:success\n段 Landed"
+  },
+  "ci_failure": {
+   "label": "CI 失敗",
+   "note": "本線に取り込んだ後の CI が落ちた\n・ 本線が赤い\n・ 器は bead を閉じない\n・ bead が open の間は止まった列に出る",
+   "internal": "RunDone terminal:ci:failure\n段 Failed"
+  },
+  "ci_unmeasurable": {
+   "label": "CI 測れず",
+   "note": "本線に取り込んだ後の CI の結果を器が測れなかった\n・ 器は bead を閉じない\n・ bead が open の間は止まった列に出る",
+   "internal": "RunDone terminal:ci:unmeasurable\n段 Stopped"
+  },
+  "ci_push_failed": {
+   "label": "push 失敗",
+   "note": "本線に取り込んだ後の push が落ちた\n・ CI に届かない\n・ 器は bead を閉じない\n・ bead が open の間は止まった列に出る",
+   "internal": "RunDone terminal:push:failed:git\n段 Failed"
+  },
+  "ci_close_failed": {
+   "label": "close 失敗",
+   "note": "CI は通ったが台帳の close が落ちた\n・ 器は bead を閉じられない\n・ bead が open の間は止まった列に出る",
+   "internal": "RunDone terminal:close:failed:unlaunchable か close:failed:rc=\n段 Failed"
+  },
+  "ci_unreadable": {
+   "label": "終端が読めない",
+   "note": "着地の後の終端の宣言を器が読めなかった\n・ push の前に止まる\n・ 器は bead を閉じない\n・ bead が open の間は止まった列に出る",
+   "internal": "RunDone terminal:unreadable\n段 Stopped"
   },
   "stage:Intake": {
    "label": "Intake",

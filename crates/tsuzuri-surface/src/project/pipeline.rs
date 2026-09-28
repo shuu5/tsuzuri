@@ -3,9 +3,12 @@
 //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
 //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
 //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は日を問わず Landed の列に出し、
+//! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
+//! 語は語の辞書の `CI_KEYS` の鍵から引く。
 
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::board::{Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
+use tsuzuri_contract::board::{Ci, Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
 use tsuzuri_contract::graph::{GraphDoc, title36};
 use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::wire;
@@ -14,6 +17,7 @@ use super::{Body, NO_CONTENT, NOT_READ, map};
 use crate::frame::{self, Block};
 use crate::mapview::graph::cut;
 use crate::view::{Fetched, id_order, jst, read_rows};
+use crate::vocab::label;
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::card_of;
 
@@ -77,6 +81,23 @@ pub const NEITHER_TEXT: &str = "印が無い — 設計の参照も控えの印�
 
 /// 控えの印と設計の参照の両方が在る bead の札の崩れの字（NEITHER_TEXT の対の字）。
 pub const BOTH_TEXT: &str = "印が両方 — 設計の参照と控えの印の両方が在る";
+
+/// 着地の後の CI の読みと語の辞書の鍵（読みの宣言の順・行 c-pipe-ci）。
+pub const CI_KEYS: [(Ci, &str); 7] = [
+    (Ci::Waiting, "ci_wait"),
+    (Ci::Success, "ci_success"),
+    (Ci::Failure, "ci_failure"),
+    (Ci::Unmeasurable, "ci_unmeasurable"),
+    (Ci::PushFailed, "ci_push_failed"),
+    (Ci::CloseFailed, "ci_close_failed"),
+    (Ci::Unreadable, "ci_unreadable"),
+];
+
+/// 結果の語を Landed の列ほかの札に出す経過の上限の秒（止まった列と CI を待つ札は上限なし）。
+pub const CI_MARK_S: u64 = 600;
+
+/// CI を待つ札の状態の記号の値（動いている）。
+pub const CI_WAIT_STATE: &str = "run";
 
 /// 1 つの列の見せ方（列・URL と class の名・見出しの語の鍵・札の状態の記号）。
 /// 状態の記号が None の列（Landed）は取り込みの印を出す。
@@ -156,6 +177,8 @@ pub struct Kcard {
     pub run_more: Vec<String>,
     /// 台帳で閉じた（着地せず）の札か（札の表の記号と meta の段の字を替える・行 g-closed-mark）。
     pub closed: bool,
+    /// Landed の列ほかの札の meta に足す着地の後の CI の読み（`ci_shown` の値・止まった列の札は None で、語は lead に出る）。
+    pub ci: Option<Ci>,
 }
 
 /// 値の行に出す理由の字数（見本の cut の 20）。
@@ -266,7 +289,36 @@ pub fn landed_today(card: &PipelineCard, now: EpochSecs) -> bool {
             .is_some_and(|at| jst(at).0 == jst(now).0)
 }
 
-/// 板の中身（4 列・Landed の列は今日の着地だけ）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
+/// 着地の後の CI の読みの語の辞書の鍵。
+pub fn ci_key(ci: Ci) -> &'static str {
+    CI_KEYS
+        .into_iter()
+        .find(|(c, _)| *c == ci)
+        .map(|(_, key)| key)
+        .expect("鍵の表は読みの全部を持つ")
+}
+
+/// 札に出す CI の読み（CI を待つ札と止まった列の札はいつも・ほかは経過が `CI_MARK_S` 以下のときだけ・読みが無ければ None）。
+pub fn ci_shown(card: &PipelineCard) -> Option<Ci> {
+    let ci = card.ci?;
+    (ci == Ci::Waiting
+        || lane(card.stage.column()).stops()
+        || card.elapsed_s.is_some_and(|e| e <= CI_MARK_S))
+    .then_some(ci)
+}
+
+/// CI の読みの語の style（待つは動いている色・成功は取り込みの色・ほかは止まった色の太字）。
+pub fn ci_style(ci: Ci) -> &'static str {
+    match ci {
+        Ci::Waiting => "color:var(--s-run)",
+        Ci::Success => "color:var(--s-land)",
+        Ci::Failure | Ci::Unmeasurable | Ci::PushFailed | Ci::CloseFailed | Ci::Unreadable => {
+            "color:var(--s-stop);font-weight:600"
+        }
+    }
+}
+
+/// 板の中身（4 列・Landed の列は今日の着地と CI を待つ札）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
 pub fn content(pipe: &Fetched, ledger: &Fetched, now: EpochSecs) -> Body<Vec<Column>> {
     match cards(pipe) {
         Err(reason) => Body::Unmeasured(reason),
@@ -289,7 +341,7 @@ pub fn title_of(rows: &[LedgerRow], id: &str) -> Option<String> {
 }
 
 /// 札を 4 列に組む（列は板の順・列の中は経過の短い順・経過の無い札は後・同じなら bead の id の順）。
-/// Landed の列は今日（日本の日）の着地だけ（`landed_today`）。
+/// Landed の列は今日（日本の日）の着地（`landed_today`）と、日を問わず CI を待つ札（欄 ci が Waiting）。
 pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Vec<Column> {
     LANES
         .into_iter()
@@ -297,7 +349,11 @@ pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Ve
             let mut mine: Vec<&PipelineCard> = cards
                 .iter()
                 .filter(|c| c.stage.column() == lane.column)
-                .filter(|c| lane.column != PipelineColumn::Landed || landed_today(c, now))
+                .filter(|c| {
+                    lane.column != PipelineColumn::Landed
+                        || landed_today(c, now)
+                        || c.ci == Some(Ci::Waiting)
+                })
                 .collect();
             mine.sort_by(|a, b| {
                 let key = |c: &PipelineCard| (c.elapsed_s.is_none(), c.elapsed_s);
@@ -326,6 +382,8 @@ pub fn closed_card(card: &PipelineCard) -> bool {
 
 /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
 /// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にし、hover の詳しくに閉じた理由を折って出す。
+/// CI の読みを出す札（`ci_shown`）は理由の代わりに読みの語を出し、CI を待つ札の状態の記号は `CI_WAIT_STATE`。
+/// 欄 ci は止まった列でなければ出す読み（止まった列の札は lead が読みの語なので None）。
 pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
     let lane = lane(card.stage.column());
     let id = card.contract.to_string();
@@ -337,7 +395,11 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
         format!("{:?}", card.stage)
     };
     let age = card.elapsed_s.map_or_else(|| NO_AGE.to_string(), age);
-    let why = card.reason.clone().unwrap_or_else(|| stage.clone());
+    let shown = ci_shown(card);
+    let why = match shown {
+        Some(ci) => label(ci_key(ci)),
+        None => card.reason.clone().unwrap_or_else(|| stage.clone()),
+    };
     let run_line = format!("↻{} · {stage} · {}", card.runs, cut(&why, WHY_CHARS));
     let run_more = if why.chars().count() > WHY_CHARS {
         chunk(&why, MORE_CHARS)
@@ -368,7 +430,11 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
     Kcard {
         id,
         title,
-        state: lane.state,
+        state: if shown == Some(Ci::Waiting) {
+            Some(CI_WAIT_STATE)
+        } else {
+            lane.state
+        },
         lead,
         age,
         class: if lane.stops() {
@@ -380,6 +446,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
         run_line,
         run_more,
         closed,
+        ci: if lane.stops() { None } else { shown },
     }
 }
 
@@ -519,8 +586,8 @@ mod dom {
 
     use super::{
         BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard, PATH,
-        card_href, columns, content, misfit_cards, misfit_href, open_columns, with_closed, with_nodes,
-        with_open,
+        card_href, ci_key, ci_style, columns, content, misfit_cards, misfit_href, open_columns,
+        with_closed, with_nodes, with_open,
     };
     use crate::frame::Mode;
     use crate::project::{Body, ledger, map, section, state_icon, unmeasured};
@@ -706,6 +773,9 @@ mod dom {
             }
         };
         let closed = card.closed.then(|| view! { <span>{CLOSED_STAGE}</span> });
+        let ci = card
+            .ci
+            .map(|c| view! { <span style=ci_style(c)>{label(ci_key(c))}</span> });
         let title = card
             .title
             .clone()
@@ -724,6 +794,7 @@ mod dom {
                     <span class="kid">{card.id.clone()}</span>
                     {lead}
                     {closed}
+                    {ci}
                     <span><span inner_html=CLOCK></span><span class="num">{card.age.clone()}</span></span>
                 </div>
             </a>

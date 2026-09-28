@@ -44,6 +44,7 @@ fn known_card() -> PipelineCard {
         reason: None,
         account: None,
         elapsed_s: None,
+        ci: None,
     }
 }
 
