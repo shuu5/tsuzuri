@@ -4,6 +4,9 @@
 //! - `--print` の 3 形（支度表なし・差分・全部答え済み）と、file を書かないこと
 //! - 導出できない 6 つ（どれも 2・支度表は出来ない／変わらない）・出力先の親 dir が無い・旗の使い方の誤り
 //! - 便 160（docs/design/delivery-160.md §1 (c)）: 別の process の同じ歯が、この process の写しを消さない
+//! - 便 197（docs/design/delivery-197.md §1 (c)）: 回答の値は intake.yaml の answers の values から読む（1 つ目 = yes・2 つ目 = no・
+//!   2 つでなければ支度表を書かない）・実の生成区間はその写しを持つ・src は回答の値の字を持たない。
+//!   同乗（台帳 f2-648.227）: 実の rules.yaml の生成区間の除外は人の作業の時間と AI の費用だけ（歯を置く file を増やさないためここに置く）
 //!
 //! 入力は版管理の `design-intent/` を丸ごと一時 dir へ写したもの（支度表は写しの中にだけ生まれる）。
 
@@ -11,6 +14,8 @@ use std::fs;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+
+use yaml_rust2::YamlLoader;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -350,4 +355,189 @@ fn f160_another_process_leaves_this_copy_alone() {
     assert_ne!(child, &*dir, "子の写しが親と同じ path");
     assert!(mark.exists(), "子が親の写しを消した");
     assert!(!child.exists(), "子の写しが子の終わりに残った: {}", child.display());
+}
+
+// ── 便 197（回答の値は file から読む）──
+
+/// 写しの正本の字を全部書き換える（当たる数が `count` でなければ歯の側の誤り）。
+fn f197_replace_all(dir: &Path, name: &str, from: &str, to: &str, count: usize) {
+    let path = dir.join(name);
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(text.matches(from).count(), count, "{name}: 変異「{from}」の数");
+    fs::write(&path, text.replace(from, to)).unwrap();
+}
+
+/// 歯 1: values を ["yes", "no"] にした写しでも、1 つ目の値の回答は yes の行き先を・2 つ目の値の回答は no の行き先を選ぶ。
+#[test]
+fn f197_answer_words_come_from_the_values_in_the_file() {
+    let dir = work("f197-words");
+    mutate(&dir, "intake.yaml", "values: [はい, いいえ]", "values: [\"yes\", \"no\"]");
+    f197_replace_all(&dir, "intake.yaml", "recommend: はい,", "recommend: \"yes\",", 5);
+    // q1 だけ 2 つ目の値で答える（q1 の no の行き先は空＝憲法を持たない）・残り 4 つは推奨（1 つ目の値）で進む
+    let answers = put_answers(&dir, "a.yaml", "answers:\n  q1: \"no\"\n");
+    let out = write_sheet(&dir, Some(&answers));
+    let line = &lines(&out)[0];
+    assert!(line.contains("持つ文書 4・推奨で進めた項目 4"), "{line}");
+    let sheet = fs::read_to_string(dir.join(SHEET)).unwrap();
+    for id in ["srs", "adr", "design-note", "inject"] {
+        assert!(sheet.contains(&format!("\"id\": \"{id}\"")), "{id}: {sheet}");
+    }
+    assert!(!sheet.contains("\"id\": \"constitution\""), "{sheet}");
+    assert!(sheet.contains("\"value\": \"no\""), "{sheet}");
+    assert!(!sheet.contains("はい") && !sheet.contains("いいえ"), "{sheet}");
+}
+
+/// 歯 2: values が 2 つでない写し（3 つ・1 つ）で `folio intake --write` は 2 に倒れ、支度表を 1 byte も書かない
+/// （無ければ出来ない・在れば変わらない）。
+#[test]
+fn f197_values_other_than_two_make_no_sheet() {
+    for (case, values, n, prior) in [
+        ("f197-three", "values: [はい, いいえ, たぶん]", 3, false),
+        ("f197-three-prior", "values: [はい, いいえ, たぶん]", 3, true),
+        ("f197-one", "values: [はい]", 1, false),
+        ("f197-one-prior", "values: [はい]", 1, true),
+    ] {
+        let dir = work(case);
+        if prior {
+            write_sheet(&dir, None);
+        }
+        let before = fs::read(dir.join(SHEET)).ok();
+        mutate(&dir, "intake.yaml", "values: [はい, いいえ]", values);
+        let out = folio_intake(&dir, None, "--write");
+        assert_eq!(out.status.code(), Some(2), "{case}: {}", show(&out));
+        let err = stderr(&out);
+        assert!(err.starts_with("folio intake: まだ分からない: "), "{case}: {err}");
+        assert!(err.contains(&format!("answers の values が {n} つ")), "{case}: {err}");
+        assert!(out.stdout.is_empty(), "{case}: {}", show(&out));
+        assert_eq!(fs::read(dir.join(SHEET)).ok(), before, "{case}: 支度表が出来た／変わった");
+    }
+}
+
+/// 生成区間の印の間の字（実の正本の file から）。
+fn f197_region(file: &str) -> String {
+    let text = fs::read_to_string(repo_root().join("design-intent").join(file)).unwrap();
+    text.lines()
+        .skip_while(|l| !l.starts_with("# folio:schema:begin"))
+        .skip(1)
+        .take_while(|l| !l.starts_with("# folio:schema:end"))
+        .map(|l| format!("{l}\n"))
+        .collect()
+}
+
+/// 字の一覧（一覧でない・字でない項は落とす）。
+fn f197_strs(y: &yaml_rust2::Yaml) -> Vec<String> {
+    y.as_vec()
+        .map(|v| v.iter().filter_map(|x| x.as_str()).map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+/// 歯 3: 実の intake.yaml の生成区間は、回答の値の読み方（値の数・行き先の欄の順・default の固定の値）と行き先の固定の値の
+/// 写しを持ち、人が書く欄（values の数・default・各質問の行の欄）と食い違わない。期待の値は歯の中の手書き。
+#[test]
+fn f197_real_region_copies_the_answer_rule() {
+    let text = fs::read_to_string(repo_root().join("design-intent/intake.yaml")).unwrap();
+    let region = f197_region("intake.yaml");
+    let docs = YamlLoader::load_from_str(&region).unwrap();
+    let schema = &docs[0]["schema"];
+    let strs = f197_strs;
+    let answers = &schema["answers"];
+    assert_eq!(answers["values_count"].as_i64(), Some(2), "{region}");
+    assert_eq!(strs(&answers["branches"]), ["yes", "no"], "{region}");
+    assert_eq!(answers["default_fixed"].as_str(), Some("recommend"), "{region}");
+    assert_eq!(strs(&schema["targets"]["fixed"]), ["inject"], "{region}");
+    for note in ["answers_note", "targets_note"] {
+        let s = schema[note].as_str().unwrap_or_default();
+        assert!(s.contains("この節はその写しである"), "{note}: {region}");
+    }
+
+    let whole = &YamlLoader::load_from_str(&text).unwrap()[0];
+    assert_eq!(strs(&whole["answers"]["values"]).len(), 2);
+    assert_eq!(whole["answers"]["default"].as_str(), Some("recommend"));
+    let rows = whole["questions"].as_vec().unwrap();
+    assert!(!rows.is_empty());
+    for row in rows {
+        for branch in ["yes", "no"] {
+            assert!(row[branch].as_vec().is_some(), "質問の行に欄 {branch} が無い: {row:?}");
+        }
+    }
+}
+
+/// 歯 4: crates/folio/src/ の各 file の `#[cfg(test)]` より前に、引用符付きの回答の値の字（"はい"・"いいえ"）が無い
+/// （値の言葉の正本は intake.yaml の answers の values・実装は持たない）。
+#[test]
+fn f197_no_source_file_spells_the_answer_words() {
+    let src = repo_root().join("crates/folio/src");
+    let mut scanned = Vec::new();
+    let mut hits = Vec::new();
+    for entry in fs::read_dir(&src).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = fs::read_to_string(&path).unwrap();
+        let head = text.split("#[cfg(test)]").next().unwrap_or_default();
+        for word in ["\"はい\"", "\"いいえ\""] {
+            if head.contains(word) {
+                hits.push(format!("{name}: {word}"));
+            }
+        }
+        scanned.push(name);
+    }
+    assert!(scanned.iter().any(|n| n == "sheet.rs"), "{scanned:?}");
+    assert!(hits.is_empty(), "回答の値の字を持つ: {hits:?}");
+}
+
+/// 歯 6（検証役の非 blocking N1・変異 V3）: 相談窓口の生成区間の写しの 4 欄は実装の定数を引く。crates/folio/src/ の各 file の
+/// `#[cfg(test)]` より前で、行き先の固定の値の字 "inject" と回答の欄の一覧の字 ["yes", "no"] は intake.rs に 1 回ずつだけ在り
+/// （空白を除いて数える＝定数の宣言だけ）、床の木 INTAKE_FLOOR の 4 欄は定数の名を引く（"recommend" は質問の行の欄の名と同じ字
+/// なので数えず、名を引くことを見る）。
+#[test]
+fn f197_only_intake_spells_the_copied_values() {
+    let src = repo_root().join("crates/folio/src");
+    let mut at = Vec::new();
+    let mut intake = String::new();
+    for entry in fs::read_dir(&src).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = fs::read_to_string(&path).unwrap();
+        let head = text.split("#[cfg(test)]").next().unwrap_or_default();
+        let flat: String = head.chars().filter(|c| !c.is_whitespace()).collect();
+        for word in ["\"inject\"", "[\"yes\",\"no\"]"] {
+            at.extend(std::iter::repeat_n(format!("{name}: {word}"), flat.matches(word).count()));
+        }
+        if name == "intake.rs" {
+            intake = flat;
+        }
+    }
+    at.sort();
+    assert_eq!(at, ["intake.rs: \"inject\"", "intake.rs: [\"yes\",\"no\"]"], "写しの値の字を持つ file");
+    for want in [
+        "(\"values_count\",Floor::Num(ANSWER_BRANCHES.len()))",
+        "(\"branches\",Floor::Strs(&ANSWER_BRANCHES))",
+        "(\"default_fixed\",Floor::Val(DEFAULT_RECOMMEND))",
+        "(\"fixed\",Floor::Strs(&[INJECT_TARGET]))",
+    ] {
+        assert!(intake.contains(want), "INTAKE_FLOOR が定数を引かない: {want}");
+    }
+}
+
+/// 歯 5（便 197 に同乗・台帳 f2-648.227）: 実の rules.yaml の生成区間の除外（excluded）は、what が人の作業の時間と AI の費用の
+/// 2 語で、why が道具の測れる機械の待ち時間を除外に入れない字を持つ。期待は歯の中の手書き。
+#[test]
+fn f197_rules_excluded_names_only_human_time_and_ai_cost() {
+    let region = f197_region("rules.yaml");
+    let docs = YamlLoader::load_from_str(&region).unwrap();
+    let excluded = &docs[0]["schema"]["excluded"];
+    assert_eq!(
+        f197_strs(&excluded["what"]),
+        ["人の作業の時間（「60 分以内」）", "AI の費用（「300k token 以下」）"],
+        "{region}"
+    );
+    let why = excluded["why"].as_str().unwrap_or_default();
+    assert!(why.starts_with("人の作業の時間と AI の費用は測る仕組みが別"), "{why}");
+    assert!(why.contains("機械の待ち時間は除外に当たらず"), "{why}");
 }

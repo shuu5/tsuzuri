@@ -250,8 +250,9 @@ const KIND_BUILD_CHECK_MAPS_TO: [&str; 1] = [MechanismKind::BuildCheck.name()];
 /// 種別 detect に対応する憲法の機構。
 const KIND_DETECT_MAPS_TO: [&str; 1] = [MechanismKind::None.name()];
 
-/// 凍結から外したもの（測る仕組みが別）。
-const EXCLUDED_WHAT: [&str; 2] = ["時間（「60 分以内」）", "費用（「300k token 以下」）"];
+/// 凍結から外したもの（測る仕組みが別）。外すのは人の作業の時間と AI の費用だけで、道具が決定的に測れる機械の待ち時間は
+/// 外さない（規則の表の行に載せてよい・便 197 に同乗・台帳 f2-648.227）。
+const EXCLUDED_WHAT: [&str; 2] = ["人の作業の時間（「60 分以内」）", "AI の費用（「300k token 以下」）"];
 
 /// 床の定数の木（値は実の rules.yaml の schema 節の字面と 1 字も違わない・足したのは `_note` で終わる欄だけ）。
 /// `_note` で終わる欄は人が読む説明の注で、`folio schema` の導出だけが使う。
@@ -348,7 +349,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
             (
                 "why",
                 Floor::Val(
-                    "測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。",
+                    "人の作業の時間と AI の費用は測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。道具が決定的に測れる機械の待ち時間は除外に当たらず、規則の表の行に載せてよい。",
                 ),
             ),
         ]),

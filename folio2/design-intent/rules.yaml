@@ -34,8 +34,8 @@ schema:
     detect: [none]
   kind_map_to_constitution_note: R 行にだけ適用する（D 行は作法＝条の機構とは別）。右辺は憲法の値域 mechanism_kind の値
   excluded:
-    what: [時間（「60 分以内」）, 費用（「300k token 以下」）]
-    why: 測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。
+    what: [人の作業の時間（「60 分以内」）, AI の費用（「300k token 以下」）]
+    why: 人の作業の時間と AI の費用は測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。道具が決定的に測れる機械の待ち時間は除外に当たらず、規則の表の行に載せてよい。
   reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。
 # folio:schema:end
 

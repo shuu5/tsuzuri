@@ -12,6 +12,7 @@ use std::path::Path;
 
 use crate::adr;
 use crate::cursor::{self, R, X};
+use crate::intake::ANSWER_BRANCHES;
 use crate::verdict::Verdict;
 use crate::yaml::{self, Value};
 
@@ -26,9 +27,8 @@ const HEADER: &str = "支度表（folio intake の生成物・手で直さない
 const SHEET_ID: &str = "intake-sheet";
 const DRAFT: &str = "draft";
 
-/// 回答の値（intake.yaml の answers の values・yes / no の行き先の選び分け）。
-const YES: &str = "はい";
-const NO: &str = "いいえ";
+// 回答の値の言葉は持たない（便 197・ADR-11 決定 (3)(ア)(4)⑥）。intake.yaml の answers の values を読み、i 番目の値の回答で
+// 質問の行の `ANSWER_BRANCHES` の i 番目の欄（yes・no）の行き先を選ぶ。values の数が欄の数と違えば支度表を書かずに断る。
 
 /// 回答の出所。
 const ANSWERED: &str = "answered";
@@ -107,7 +107,8 @@ fn build(dir: &Path, answers_path: Option<&Path>, mode: Mode) -> R<Outcome> {
             })
         }
         Mode::Write => {
-            let documents = map_documents(&intake.questions, &answers, &intake.targets)?;
+            let documents =
+                map_documents(&intake.questions, &answers, &intake.values, &intake.targets)?;
             // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
             let name = adr::name_of(dir);
             let header = format!("# {}", adr::named(name.as_deref(), " ", HEADER));
@@ -153,8 +154,8 @@ struct Question {
     ask: String,
     recommend: String,
     why: String,
-    yes: Vec<String>,
-    no: Vec<String>,
+    /// 行き先の一覧（`ANSWER_BRANCHES` の順の欄 yes・no の値）
+    branches: Vec<Vec<String>>,
 }
 
 struct Intake {
@@ -193,8 +194,10 @@ fn load_intake(dir: &Path) -> R<Intake> {
             ask: row.f("ask")?.text()?,
             recommend: row.f("recommend")?.text()?,
             why: row.f("why")?.text()?,
-            yes: texts(&branch(&row, true)?)?,
-            no: texts(&branch(&row, false)?)?,
+            branches: ANSWER_BRANCHES
+                .iter()
+                .map(|name| texts(&branch(&row, name)?))
+                .collect::<R<Vec<_>>>()?,
         });
     }
 
@@ -211,7 +214,7 @@ fn load_intake(dir: &Path) -> R<Intake> {
                 q.id, q.recommend
             ));
         }
-        for id in q.yes.iter().chain(&q.no) {
+        for id in q.branches.iter().flatten() {
             if !targets.iter().any(|t| t.id == *id) {
                 return Err(format!(
                     "{INTAKE}: questions の行 {} の行き先「{id}」が targets に無い",
@@ -235,17 +238,17 @@ fn texts(x: &X<'_>) -> R<Vec<String>> {
     x.seq()?.iter().map(|v| v.text()).collect()
 }
 
-/// 質問の行の行き先の欄（`yes` / `no`）。型付きの木では引用符の無い `yes` と `no` のキーは真偽に倒れる
-/// （YAML 1.1 の解決）ので、真偽のキーと文字列のキーのどちらでも引く。
-fn branch<'a>(row: &X<'a>, yes: bool) -> R<X<'a>> {
-    let name = if yes { "yes" } else { "no" };
+/// 質問の行の行き先の欄（`ANSWER_BRANCHES` の名）。型付きの木では引用符の無い `yes` と `no` のキーは真偽に倒れる
+/// （YAML 1.1 の解決）ので、名を同じ解決に通したキーと文字列のキーのどちらでも引く。
+fn branch<'a>(row: &X<'a>, name: &str) -> R<X<'a>> {
+    let typed = yaml::parse_typed(name).ok();
     let entries = row
         .v
         .as_map()
         .ok_or_else(|| format!("{}: 表でない", row.at))?;
     entries
         .iter()
-        .find(|(k, _)| *k == Value::Bool(yes) || k.as_str() == Some(name))
+        .find(|(k, _)| k.as_str() == Some(name) || typed.as_ref() == Some(k))
         .map(|(_, v)| X {
             v,
             at: format!("{}.{name}", row.at),
@@ -386,20 +389,34 @@ struct Doc {
     from: String,
 }
 
-/// はい なら yes の一覧・いいえ なら no の一覧 の行き先を questions の順・一覧の順に集める。
-/// 同じ id は最初の 1 回だけ持つ（from = その質問の id）。
-fn map_documents(questions: &[Question], answers: &[Answer], targets: &[Target]) -> R<Vec<Doc>> {
+/// answers の values の i 番目の値の回答なら `ANSWER_BRANCHES` の i 番目の欄（1 つ目 = yes・2 つ目 = no）の行き先を
+/// questions の順・一覧の順に集める。同じ id は最初の 1 回だけ持つ（from = その質問の id）。
+/// values の数が欄の数と違えば、どの回答の行き先も選べないので Err（まだ分からない・便 197）。
+fn map_documents(
+    questions: &[Question],
+    answers: &[Answer],
+    values: &[String],
+    targets: &[Target],
+) -> R<Vec<Doc>> {
+    if values.len() != ANSWER_BRANCHES.len() {
+        return Err(format!(
+            "{INTAKE}: answers の values が {} つ（質問の行き先の欄 {} と順に対にするので {} つでなければ選べない）",
+            values.len(),
+            ANSWER_BRANCHES.join("・"),
+            ANSWER_BRANCHES.len()
+        ));
+    }
     let mut out: Vec<Doc> = Vec::new();
     for (q, a) in questions.iter().zip(answers) {
-        let ids = match a.value.as_str() {
-            YES => &q.yes,
-            NO => &q.no,
-            other => {
-                return Err(format!(
-                    "{INTAKE}: 質問 {} の回答「{other}」は {YES} でも {NO} でもない",
-                    q.id
-                ));
-            }
+        let Some(ids) = values
+            .iter()
+            .position(|v| *v == a.value)
+            .and_then(|i| q.branches.get(i))
+        else {
+            return Err(format!(
+                "{INTAKE}: 質問 {} の回答「{}」が answers の values に無い",
+                q.id, a.value
+            ));
         };
         for id in ids {
             if out.iter().any(|d| d.id == *id) {
@@ -496,14 +513,17 @@ fn sheet_value(intake: &Intake, id: &str, documents: &[Doc], answers: &[Answer])
 mod tests {
     use super::*;
 
+    /// 歯の中の回答の値（folio2 の intake.yaml の answers の values と同じ字・実装はこの字を持たない）。
+    const YES: &str = "はい";
+    const NO: &str = "いいえ";
+
     fn q(id: &str, yes: &[&str]) -> Question {
         Question {
             id: id.to_string(),
             ask: format!("{id} を持ちますか"),
             recommend: YES.to_string(),
             why: format!("{id} の理由"),
-            yes: yes.iter().map(|y| y.to_string()).collect(),
-            no: Vec::new(),
+            branches: vec![yes.iter().map(|y| y.to_string()).collect(), Vec::new()],
         }
     }
 
@@ -566,7 +586,8 @@ mod tests {
                 with: Vec::new(),
             },
         ];
-        let docs = map_documents(&questions, &answers, &targets).unwrap();
+        let values = vec![YES.to_string(), NO.to_string()];
+        let docs = map_documents(&questions, &answers, &values, &targets).unwrap();
         let ids: Vec<(&str, &str)> = docs
             .iter()
             .map(|d| (d.id.as_str(), d.from.as_str()))

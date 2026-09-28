@@ -20,12 +20,36 @@ pub const INTAKE_TOP_LEVEL: [&str; 6] = ["meta", "answers", "targets", "question
 
 /// 相談窓口の正本の schema 節（生成区間）の床の木（便 77 §1 (a)）。欄の順と字面は凍結 anchor
 /// tests/fixtures/schema/intake-region.txt のとおり。床（`check_intake`）は生成区間の中身をこの木と突き合わせない。
+/// answers と targets の 2 欄は便 197（ADR-11 決定 (3)(ア)・(4)⑥・P-5.6・行 D-11）で足した写しで、値は下の定数から引く
+/// （回答の値の数と行き先の欄は `sheet.rs` が読む `ANSWER_BRANCHES`・固定の値 2 つは床の検査が使う `INJECT_TARGET` と
+/// `DEFAULT_RECOMMEND`＝同じ値を 2 か所に書かない）。
 pub(crate) const INTAKE_FLOOR: Floor = Floor::Map(&[
     ("top_level", Floor::Strs(&INTAKE_TOP_LEVEL)),
     (
         "top_level_note",
         Floor::Val(
             "最上位の節の閉じた一覧（ほかの節は床が落とす）。meta と answers と targets と questions と sheet は人が書き、schema は生成区間",
+        ),
+    ),
+    (
+        "answers",
+        Floor::Map(&[
+            ("values_count", Floor::Num(ANSWER_BRANCHES.len())),
+            ("branches", Floor::Strs(&ANSWER_BRANCHES)),
+            ("default_fixed", Floor::Val(DEFAULT_RECOMMEND)),
+        ]),
+    ),
+    (
+        "answers_note",
+        Floor::Val(
+            "回答の値の読み方。値の言葉そのものは人が書く answers.values が正本で、命令 folio intake は実行のたびにそれを読む。values の 1 つ目の値の回答は質問の行の branches の 1 つ目の欄（yes）の行き先を、2 つ目の値の回答は 2 つ目の欄（no）の行き先を選ぶ。values の数が values_count と違えば、支度表を書く口（folio intake --write）は 1 byte も書かずに「まだ分からない」で断る（床の folio check は values の数を数えない）。answers.default は values の値か、固定の値 default_fixed（答えの無い質問を各質問の推奨回答で進める）。values_count・branches・default_fixed の正本は実装の型付きの定数（crates/folio/src/intake.rs）で、この節はその写しである（P-5.6・行 D-11・判断の記録 ADR-11 決定 (3)(ア) と (4)⑥）",
+        ),
+    ),
+    ("targets", Floor::Map(&[("fixed", Floor::Strs(&[INJECT_TARGET]))])),
+    (
+        "targets_note",
+        Floor::Val(
+            "行き先の id の値域に足す固定の値。targets の行の id は入口の棚の文書の id か、この一覧の値（inject = 憲法を AI の手元の CLAUDE.md へ写す注入・棚には無い）。正本は実装の型付きの定数（crates/folio/src/intake.rs）で、この節はその写しである（P-5.6・行 D-11）",
         ),
     ),
 ]);
@@ -35,6 +59,11 @@ pub const INJECT_TARGET: &str = "inject";
 
 /// `answers.default` が取れる固定の値（答えの無い項目を各質問の推奨回答で進める）。
 pub const DEFAULT_RECOMMEND: &str = "recommend";
+
+/// 回答の値の順に選ぶ質問の行の行き先の欄（便 197・ADR-11 決定 (4)⑥）。`answers.values` の i 番目の値の回答は i 番目の欄の
+/// 行き先を選び、values の数はこの一覧の長さでなければならない（命令 `folio intake --write` が断る・床は数えない）。
+/// 値の言葉そのものは持たない（正本は `intake.yaml` の answers.values・ADR-11 決定 (3)(ア)）。
+pub const ANSWER_BRANCHES: [&str; 2] = ["yes", "no"];
 
 /// 質問の数の上限（要件書 FR1 の規範文の数）。
 pub const MAX_QUESTIONS: usize = 5;
