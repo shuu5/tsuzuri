@@ -14,9 +14,10 @@ use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GRACE_ARGS};
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
-use tsuzuri_contract::account::{AccountDoc, ProjectRow};
+use tsuzuri_contract::account::{AccountDoc, DormantSeat, ProjectRow};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatState;
+use tsuzuri_contract::surface::SeatRole;
 use tsuzuri_core::account::host::{CAP_ROWS, HostTexts};
 use tsuzuri_core::account::project::{self, ProjectTexts};
 
@@ -52,7 +53,7 @@ const STATE_E: &str =
     "{\"schema\":1,\"state\":\"idle\",\"event\":\"stop\",\"ts\":1790508000,\"sid\":\"s-2\"}\n";
 const STATE_B: &str =
     "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790505000,\"sid\":\"s-3\"}\n";
-/// pipeline の席の記録（読まない）。
+/// 休止中の席の記録（登録の行の proj-a:1.1 と proj-z:0.1・最後の行は今より 110400 秒前・行 c-dormant）。
 const STATE_PIPE: &str =
     "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790400000,\"sid\":\"s-9\"}\n";
 
@@ -347,6 +348,40 @@ impl Place {
         for (_, rule) in CAP_ROWS {
             if let Some(text) = out("grace") {
                 host.caps.insert(rule.to_string(), text);
+            }
+        }
+        // 重ならない state dir ごとに、doctor の登録の行の全部の席の状態の記録（同じ席は最初の state dir の字）。
+        let mut dirs: Vec<&str> = Vec::new();
+        for (p, _, state, _) in PROJECTS {
+            if let Some(state) = state.filter(|_| !drop.contains(&format!("git-{p}").as_str()))
+                && !dirs.contains(&state)
+            {
+                dirs.push(state);
+            }
+        }
+        for state in dirs {
+            let Some(doctor) = out(&format!("doctor-{state}")) else {
+                continue;
+            };
+            for line in doctor.lines().filter_map(|l| l.strip_prefix("seat: ")) {
+                let Some(target) = line
+                    .split_whitespace()
+                    .find_map(|t| t.strip_prefix("target="))
+                else {
+                    continue;
+                };
+                let log = self.file(
+                    &self
+                        .state(state)
+                        .join("seat")
+                        .join(target.replace(':', "_"))
+                        .join("state.jsonl"),
+                );
+                if let Some(log) = log
+                    && !host.seat_logs.contains_key(target)
+                {
+                    host.seat_logs.insert(target.to_string(), log);
+                }
             }
         }
         let mut projects = BTreeMap::new();
@@ -696,6 +731,45 @@ fn server_acct_marks_list() {
     assert!(
         got.iter().all(|p| !p.ends_with("move-signal")),
         "move-signal は印にしない"
+    );
+}
+
+#[test]
+fn cdorm_acct_reads_all_seat_logs() {
+    let place = Place::new("cdorm", true);
+    let acct = place.acct();
+    let got = acct.doc(NOW);
+    let resting = |target: &str, account: &str| DormantSeat {
+        project: "proj-a".to_string(),
+        target: target.to_string(),
+        account: Some(account.to_string()),
+        last: 1_790_400_000,
+        tick_healthy: Reading::Unknown,
+        heartbeat: Reading::Unknown,
+    };
+    assert_eq!(
+        got.dormant,
+        [resting("proj-a:1.1", "acct-2"), resting("proj-z:0.1", "acct-1")]
+    );
+    let orchestrators: Vec<&str> = got
+        .sessions
+        .iter()
+        .filter(|s| s.role == SeatRole::Orchestrator)
+        .map(|s| s.name.as_str())
+        .collect();
+    // state dir の引けない proj-c と proj-d は名の空の行のまま。
+    assert_eq!(
+        orchestrators,
+        ["proj-a:0.1", "proj-e:0.1", "proj-b:0.1", "", ""]
+    );
+    assert_eq!(got, place.core_doc(&[]));
+    let (sa, sb) = (place.state("state-a"), place.state("state-b"));
+    let resting_dirs = [sa.join("seat/proj-a_1.1"), sb.join("seat/proj-z_0.1")];
+    assert!(
+        acct.marks()
+            .iter()
+            .all(|p| resting_dirs.iter().all(|d| !p.starts_with(d))),
+        "休止中の席の記録は印にしない"
     );
 }
 

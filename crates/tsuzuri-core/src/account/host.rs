@@ -78,6 +78,9 @@ pub struct HostTexts {
     /// 器の rules 行の id → `rules get <id>` の出力（撃てない行と rc 0 でない行は無い）。
     #[serde(default)]
     pub caps: BTreeMap<String, String>,
+    /// 席の名 → その席の状態の記録（`state.jsonl`）の字（読めない file の席は無い・行 c-dormant）。
+    #[serde(default)]
+    pub seat_logs: BTreeMap<String, String>,
 }
 
 /// 群の宣言の 1 つの群（配列の欄が無ければ空の列・読めなければ None）。

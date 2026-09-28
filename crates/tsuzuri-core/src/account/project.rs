@@ -5,6 +5,7 @@
 //! 生きている run の境（`ALIVE_S`）は見本の acct.js の runColsAt と runAlive の決め方（設計席の承認で置く値）。
 //! 読めない字の決まり（要件 NFR2）: state dir が引けない project は席と run と台帳と次の一手が「まだ分からない」、
 //! event log の字が無いか読めなければ run の 4 列が、台帳の字が無ければ台帳と次の一手が「まだ分からない」。
+//! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認・行 c-dormant）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,7 +13,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{
-    AccountDoc, AccountRow, GroupCard, MoveRow, ProjectRow, RunCounts, SessionLine,
+    AccountDoc, AccountRow, DormantSeat, GroupCard, MoveRow, ProjectRow, RunCounts, SessionLine,
 };
 use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
@@ -29,6 +30,9 @@ use crate::seat::{SeatTexts, card};
 
 /// 生きている run の境（最後の event からの秒・見本の acct.js の runAlive）。
 pub const ALIVE_S: u64 = 60 * 60;
+
+/// 休止中の席の境（席の状態の記録の最後の読めた行からの秒・規則の行 R-28 の 12 時間）。
+pub const DORMANT_S: u64 = 12 * 60 * 60;
 
 /// run の段を決める event の種類（見本の acct.js の runColsAt）。
 pub const RUN_STAGE_EVENTS: [&str; 5] = [
@@ -446,8 +450,85 @@ pub fn project_rows(
         .collect()
 }
 
+/// 状態の記録の 1 行（読む欄だけ）。
+#[derive(Deserialize)]
+struct StateLine {
+    state: String,
+    ts: serde_json::Number,
+}
+
+/// 状態の記録の最後の読めた行の ts（末尾から見て、JSON でない行・state が busy でも idle でもない行・
+/// ts が整数でも 0 以上の有限の小数でもない行は飛ばす・小数は切り捨て・読めた行が無ければ None）。
+fn last_state_ts(text: &str) -> Option<EpochSecs> {
+    text.lines().rev().find_map(|l| {
+        let r = serde_json::from_str::<StateLine>(l.trim()).ok()?;
+        if !matches!(r.state.as_str(), "busy" | "idle") {
+            return None;
+        }
+        r.ts.as_u64().or_else(|| {
+            r.ts.as_f64()
+                .filter(|f| f.is_finite() && *f >= 0.0)
+                .map(|f| f as u64)
+        })
+    })
+}
+
+/// 休止中の席の列。宣言の順に state dir の引けた project の doctor の登録の行（頭が `seat:` の行・役を問わない）を
+/// 行の順に見て、同じ席の名は最初の 1 つだけ判じ、状態の記録の最後の読めた行の ts から今までの秒が `DORMANT_S` を
+/// 越える席を入れる（ts が今より後なら経過 0・状態の記録が無いか読めた行が無い席は入れない）。
+/// 合図の健康の印はその project の合図の健康の出力の席の行から読む。
+pub fn dormant(
+    host: &HostTexts,
+    projects: &BTreeMap<String, ProjectTexts>,
+    now: EpochSecs,
+) -> Vec<DormantSeat> {
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut out = Vec::new();
+    for (d, texts) in with_texts(host, projects) {
+        let Some(texts) = texts.filter(|t| t.state_dir_known) else {
+            continue;
+        };
+        let Some(doctor) = by_anchor(&host.seat_doctors, &d.anchor) else {
+            continue;
+        };
+        for line in doctor
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix(SEAT_PREFIX))
+        {
+            let Some(target) = value(line, "target") else {
+                continue;
+            };
+            if !seen.insert(target) {
+                continue;
+            }
+            let Some(last) = host.seat_logs.get(target).and_then(|t| last_state_ts(t)) else {
+                continue;
+            };
+            if now.saturating_sub(last) <= DORMANT_S {
+                continue;
+            }
+            let anchor = value(line, "anchor");
+            let seat_texts = SeatTexts {
+                tick_status: texts.tick_status.clone(),
+                ..SeatTexts::default()
+            };
+            let c = card(target, anchor, &seat_texts, now);
+            out.push(DormantSeat {
+                project: anchor.map(project_name).unwrap_or_default(),
+                target: target.to_string(),
+                account: value(line, "account").map(str::to_string),
+                last,
+                tick_healthy: c.tick_healthy,
+                heartbeat: c.heartbeat,
+            });
+        }
+    }
+    out
+}
+
 /// session の行の列（project の宣言の順に、その project の orchestrator の行と、生きていて終わっていない
 /// pipeline の run の行を RunCreated の順に）。席の card が「まだ分からない」の project は席なしの行にする。
+/// 席の card が読めて、その席が休止中（`dormant`）の project は orchestrator の行を出さない（run の行は出す・行 c-dormant）。
 /// pipeline の行の状態は、段を決める最後の event が器の上限の印（RunStage の段 `RATE_LIMITED`）なら limit、
 /// 段が Questioned・Failed・Stopped なら wait、席が立っていれば run、ほかは wait。
 /// 台帳で今閉じている bead の run の行は出さない（台帳の字が無いか読めなければ外さない・行 e-sess-closed）。
@@ -457,12 +538,17 @@ pub fn session_lines(
     now: EpochSecs,
 ) -> Vec<SessionLine> {
     let unknown = ProjectTexts::default();
+    let resting: BTreeSet<String> = dormant(host, projects, now)
+        .into_iter()
+        .map(|s| s.target)
+        .collect();
     let mut out = Vec::new();
     for (d, texts) in with_texts(host, projects) {
         let texts = texts.unwrap_or(&unknown);
         let name = project_name(&d.anchor);
-        out.push(match seat(host, &d, texts, now).card {
-            Reading::Known(c) => SessionLine {
+        match seat(host, &d, texts, now).card {
+            Reading::Known(c) if resting.contains(&c.target) => {}
+            Reading::Known(c) => out.push(SessionLine {
                 project: name.clone(),
                 role: SeatRole::Orchestrator,
                 name: c.target,
@@ -471,8 +557,8 @@ pub fn session_lines(
                 stage: None,
                 since: c.since,
                 spans: c.spans,
-            },
-            Reading::Unknown => SessionLine {
+            }),
+            Reading::Unknown => out.push(SessionLine {
                 project: name.clone(),
                 role: SeatRole::Orchestrator,
                 name: String::new(),
@@ -481,8 +567,8 @@ pub fn session_lines(
                 stage: None,
                 since: None,
                 spans: Reading::Unknown,
-            },
-        });
+            }),
+        }
         if !texts.state_dir_known {
             continue;
         }
@@ -557,6 +643,7 @@ pub fn assemble(
 
 /// 入口: host の側の字と anchor → project の字の表と猶予の秒の字と今の時刻から電文を組む。
 /// 知らせは宣言の project のうち state dir の引けた project の event log の字を宣言の順に読む。
+/// 休止中の席は `dormant` の値（行 c-dormant）。
 pub fn doc(
     host: &HostTexts,
     projects: &BTreeMap<String, ProjectTexts>,
@@ -581,5 +668,6 @@ pub fn doc(
         .collect();
     doc.caps = host::caps(host);
     doc.notices = host::notices(host, &logs);
+    doc.dormant = dormant(host, projects, now);
     doc
 }

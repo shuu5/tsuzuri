@@ -30,8 +30,23 @@ pub struct AccountDoc {
     pub notices: Reading<Vec<GroupNotice>>,
     pub projects: Vec<ProjectRow>,
     pub sessions: Vec<SessionLine>,
-    /// 休止中の席の名（最初の便は空の列）。
-    pub dormant: Vec<String>,
+    /// 休止中の席（器の登録の行の席のうち、状態の記録の最後の読めた行から規則の行 R-28 の境を越えた席・行 c-dormant）。
+    pub dormant: Vec<DormantSeat>,
+}
+
+/// 休止中の席（経過の秒は電文の at から last を引く・欄に置かない）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DormantSeat {
+    /// 登録の行の anchor の project の名（anchor が無ければ空の字）。
+    pub project: String,
+    pub target: String,
+    /// 登録の口座（空なら None）。
+    pub account: Option<String>,
+    /// 状態の記録の最後の読めた行の ts。
+    pub last: EpochSecs,
+    /// 合図の健康の出力の席の行の healthy と heartbeat（行が無ければ Unknown）。
+    pub tick_healthy: Reading<bool>,
+    pub heartbeat: Reading<bool>,
 }
 
 /// 口座の行（名・退役・占有の群・model の窓の model の名・窓ごとの使った割合）。

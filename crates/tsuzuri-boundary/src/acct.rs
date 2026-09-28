@@ -7,6 +7,7 @@
 //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
 //! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す（行 e-hold）。
 //! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last・move-signal と、
+//! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない・行 c-dormant）と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）。file は書かない。
 //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。集めた字は 5 秒のあいだ持ち回す。
 //! ただし変化の印の file（`marks`）の更新時刻と長さが集める前に取った値と違えば、5 秒の中でも集め直す（行 e-acct-hbmark）。
@@ -331,8 +332,25 @@ impl Acct {
                 texts.boards.insert(anchor.clone(), board);
             }
         }
-        for dir in &unique {
+        for (dir, (_, seat_doctor)) in unique.iter().zip(&outputs) {
             texts.marks.push(events_log(dir));
+            // 休止中の席の材料（登録の行の全部の席の状態の記録・同じ席は最初の state dir の字・印にしない・行 c-dormant）。
+            for target in seat_doctor.as_deref().map(seat_targets).unwrap_or_default() {
+                if texts.host.seat_logs.contains_key(target) {
+                    continue;
+                }
+                let log = Seat {
+                    program: self.scribe2.clone(),
+                    state_dir: (*dir).clone(),
+                    target: target.to_string(),
+                    cwd: self.cwd.clone(),
+                }
+                .seat_dir()
+                .and_then(|d| read(&d.join(STATE_LOG)));
+                if let Some(log) = log {
+                    texts.host.seat_logs.insert(target.to_string(), log);
+                }
+            }
         }
         for ((anchor, dir), got) in anchors.iter().zip(&dirs).zip(ledgers) {
             let ledger = got.and_then(|got| {
@@ -459,6 +477,16 @@ fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
         .filter_map(|t| t.split_once('='))
         .find(|(k, _)| *k == key)
         .map(|(_, v)| v)
+}
+
+/// doctor の登録の行（頭が `seat:` の行・役を問わない）の席の名（行の順・空の名は飛ばす）。
+fn seat_targets(doctor: &str) -> Vec<&str> {
+    doctor
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix(SEAT_PREFIX))
+        .filter_map(|l| field(l, "target"))
+        .filter(|t| !t.is_empty())
+        .collect()
 }
 
 /// doctor の席の行のうち、役が orchestrator で anchor が同じ path の最初の行の席の名（空なら None）。
