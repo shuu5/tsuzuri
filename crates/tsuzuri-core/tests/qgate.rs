@@ -607,6 +607,8 @@ fn qgate_output_shape() {
             "no-touches",
             "unread",
             "unknown-id",
+            "not-policy",
+            "premises",
             "too-many",
             "undisposed",
             "stale"

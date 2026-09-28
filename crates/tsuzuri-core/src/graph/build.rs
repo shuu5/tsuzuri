@@ -14,7 +14,7 @@ use serde_json::Value;
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
 use tsuzuri_contract::ledger::{MEMO_LABEL, QUESTION_LABEL};
 
-use super::{BeadAttr, Graph, Inputs, RunAttr, Source};
+use super::{BeadAttr, Graph, Inputs, PolicyAttr, RunAttr, Source};
 use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
 
 /// 設計の索引の節点の種類の数（`NodeKind::ALL` の先頭の 12 = 設計文書の 11 種と設計ノートの行）。
@@ -49,6 +49,15 @@ pub const TYPED_LINES: [(&str, NodeKind); 3] = [
 
 /// 定型行の id の終わりの字。
 const ID_END: char = '・';
+
+/// 方針の定型行の 2 つ目の欄の頭（範囲の欄）。
+pub const SCOPE_FIELD: &str = "範囲 = ";
+
+/// 方針の範囲が全体のときの字（範囲の欄が無いか空のときも）。
+pub const SCOPE_ALL: &str = "all";
+
+/// 問いの metadata の前提の鍵（型 premises の辺の先の id）。
+pub const PREMISES_KEY: &str = "premises";
 
 /// 3 つの字から導出グラフを組む。
 pub fn build(inputs: &Inputs) -> Graph {
@@ -254,7 +263,7 @@ pub(crate) fn bead_kind(issue_type: &str, labels: &[String]) -> NodeKind {
 }
 
 /// metadata の欄の id（欄は字 1 つか字の配列・metadata は object か、object を JSON にした字）。
-fn metadata_ids(metadata: &Value, key: &str) -> Vec<String> {
+pub(crate) fn metadata_ids(metadata: &Value, key: &str) -> Vec<String> {
     let parsed;
     let object = match metadata {
         Value::String(s) => {
@@ -290,7 +299,20 @@ fn typed_lines(notes: &str) -> Vec<(NodeKind, String, &str)> {
         .collect()
 }
 
+/// 方針の定型行の範囲（「・」で割った 2 つ目の欄が `SCOPE_FIELD` で始まれば、その後の前後の空白を除いた字・
+/// 欄が無いか空なら `SCOPE_ALL`）。
+fn policy_scope(line: &str) -> String {
+    line.split(ID_END)
+        .nth(1)
+        .and_then(|field| field.strip_prefix(SCOPE_FIELD))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(SCOPE_ALL)
+        .to_string()
+}
+
 /// 台帳の bead から節点と辺を組む。design の辺は pointer の行が指す設計ノートの行の節点が在るときだけ組む。
+/// 方針の属性（範囲）は同じ方針の id の最初の行から読む。
 fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
     let rows: BTreeSet<String> = g
         .nodes
@@ -331,6 +353,14 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
                     plain: None,
                     eng: None,
                 });
+                if line_kind == NodeKind::Policy {
+                    g.policies.insert(
+                        id.clone(),
+                        PolicyAttr {
+                            scope: policy_scope(line),
+                        },
+                    );
+                }
             }
             if line_kind == NodeKind::Ruling && kind == NodeKind::Question {
                 g.edges.push(edge(&id, &bead.id, EdgeType::Answers));
@@ -341,7 +371,7 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
             for to in &touches {
                 g.edges.push(edge(&bead.id, to, EdgeType::Touches));
             }
-            for to in metadata_ids(&bead.metadata, "premises") {
+            for to in metadata_ids(&bead.metadata, PREMISES_KEY) {
                 g.edges.push(edge(&bead.id, &to, EdgeType::Premises));
             }
         }

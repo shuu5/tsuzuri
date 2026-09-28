@@ -5,14 +5,17 @@
 //! 門は問いの起票の下書き（`drafts`）ごとに、touches の各節点の 1 段の近傍のうち 4 種（条・規則行・判断の記録・要件）で
 //! hub でない節点（`needs`）の全部に処分（touches か not-relevant）が在り、metadata の digest が
 //! 今の束の要約値（`bundle_digest`）と同じときだけ通す（`judge`）。止める答えは PreToolUse の deny の JSON（`output`）。
+//! 処分より先に方針を読ませる（設計ノート surface-wave13b 行 f-premises・要件 FR8）。metadata の premises は方針の id だけで、
+//! 範囲がその問いに及び、まだどの問いの premises にも無い方針（`due_policies`）の全部を premises に持つときだけ先へ進む。
 //! 門は allow を出さない（通すことは止めないことで、ほかの許可の仕組みはそのまま効く）。
 
 use std::collections::BTreeSet;
 
 use serde_json::{Map, Value};
-use tsuzuri_contract::graph::{NodeKind, natural_cmp};
+use tsuzuri_contract::graph::{EdgeType, NodeKind, natural_cmp};
 use tsuzuri_contract::ledger::{QUESTION_LABEL, fnv1a64};
 
+use crate::graph::build::{PREMISES_KEY, SCOPE_ALL, metadata_ids};
 use crate::graph::{Graph, Source};
 use crate::question::touches;
 
@@ -44,7 +47,7 @@ pub struct Draft {
     pub metadata: Option<String>,
 }
 
-/// 通さない理由（閉じた 8）。
+/// 通さない理由（閉じた 10）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Why {
     /// 門の引数の誤り（境界が組む）。
@@ -57,6 +60,10 @@ pub enum Why {
     Unread,
     /// touches の id がグラフに無い。
     UnknownId,
+    /// premises に方針の id でない字が在る。
+    NotPolicy,
+    /// 範囲がこの問いに及び、まだどの問いの premises にも無い方針を premises に持たない。
+    Premises,
     /// 処分の要る節点が `NEEDS_CAP` を越える。
     TooMany,
     /// 処分の無い節点が在る。
@@ -66,12 +73,14 @@ pub enum Why {
 }
 
 impl Why {
-    pub const ALL: [Why; 8] = [
+    pub const ALL: [Why; 10] = [
         Why::Args,
         Why::Metadata,
         Why::NoTouches,
         Why::Unread,
         Why::UnknownId,
+        Why::NotPolicy,
+        Why::Premises,
         Why::TooMany,
         Why::Undisposed,
         Why::Stale,
@@ -85,6 +94,8 @@ impl Why {
             Why::NoTouches => "no-touches",
             Why::Unread => "unread",
             Why::UnknownId => "unknown-id",
+            Why::NotPolicy => "not-policy",
+            Why::Premises => "premises",
             Why::TooMany => "too-many",
             Why::Undisposed => "undisposed",
             Why::Stale => "stale",
@@ -99,6 +110,8 @@ impl Why {
             Why::NoTouches => "metadata の touches に名指す節点を 1 つ以上書いて置き直す。",
             Why::Unread => "設計の索引と台帳が読めるようになってから置き直す。",
             Why::UnknownId => "touches から索引と台帳に無い節点を除くか直して置き直す。",
+            Why::NotPolicy => "metadata の premises から方針の id でない字を除いて置き直す。",
+            Why::Premises => "名指した方針を読み、その id を metadata の premises に足して置き直す。",
             Why::TooMany => "touches を絞った問いに分けて置き直す。",
             Why::Undisposed => {
                 "名指した節点を touches か not-relevant に足し、答えの要約値を metadata の digest に写して置き直す。"
@@ -321,6 +334,34 @@ pub fn bundle_digest(graph: &Graph, touches: &[String]) -> String {
     format!("{:016x}", fnv1a64(text.as_bytes()))
 }
 
+/// 方針の範囲がこの問いに及ぶか（範囲が `SCOPE_ALL` か、範囲の問いの id を touches が名指すか、
+/// その問いの touches のどれかを touches が名指す）。
+fn reaches(graph: &Graph, touches: &[String], scope: &str) -> bool {
+    scope == SCOPE_ALL
+        || touches.iter().any(|t| t == scope)
+        || graph
+            .beads
+            .get(scope)
+            .is_some_and(|b| b.touches.iter().any(|t| touches.contains(t)))
+}
+
+/// 挙げさせる方針（範囲が touches の問いに及び、グラフの型 premises の辺の先に無い方針・natural_cmp の順）。
+pub fn due_policies(graph: &Graph, touches: &[String]) -> Vec<String> {
+    let premised: BTreeSet<&str> = graph
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::Premises)
+        .map(|e| e.to.as_str())
+        .collect();
+    sorted(
+        graph
+            .policies
+            .iter()
+            .filter(|(id, p)| !premised.contains(id.as_str()) && reaches(graph, touches, &p.scope))
+            .map(|(id, _)| id.clone()),
+    )
+}
+
 fn deny(why: Why, ids: Vec<String>, digest: Option<String>) -> Gate {
     Gate::Deny { why, ids, digest }
 }
@@ -362,6 +403,23 @@ fn judge_one(draft: &Draft, graph: &Graph) -> Gate {
         .collect();
     if !missing.is_empty() {
         return deny(Why::UnknownId, sorted(missing), None);
+    }
+    // 方針は問いの中身を変えうるので、処分と要約値より先に読ませる。
+    let premises = metadata_ids(&Value::Object(object.clone()), PREMISES_KEY);
+    let not_policy: Vec<String> = premises
+        .iter()
+        .filter(|id| !graph.policies.contains_key(*id))
+        .cloned()
+        .collect();
+    if !not_policy.is_empty() {
+        return deny(Why::NotPolicy, sorted(not_policy), None);
+    }
+    let unnamed: Vec<String> = due_policies(graph, &touches)
+        .into_iter()
+        .filter(|id| !premises.contains(id))
+        .collect();
+    if !unnamed.is_empty() {
+        return deny(Why::Premises, unnamed, None);
     }
     let required = needs(graph, &touches);
     let mut disposed: BTreeSet<String> = touches.iter().cloned().collect();

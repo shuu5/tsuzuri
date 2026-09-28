@@ -109,6 +109,13 @@ pub struct RunAttr {
     pub unanswered: usize,
 }
 
+/// 方針の属性（範囲）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PolicyAttr {
+    /// 方針の定型行の範囲の欄（字 `all` か問いの id）。
+    pub scope: String,
+}
+
 /// 組まずに数えた辺の行（型が閉じた一覧に無い）。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct Skipped {
@@ -130,6 +137,8 @@ pub struct Graph {
     pub beads: BTreeMap<String, BeadAttr>,
     /// 走行の id ごとの属性。
     pub runs: BTreeMap<String, RunAttr>,
+    /// 方針の id ごとの属性。
+    pub policies: BTreeMap<String, PolicyAttr>,
 }
 
 impl Graph {
