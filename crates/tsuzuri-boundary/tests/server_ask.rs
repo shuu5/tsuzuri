@@ -19,6 +19,7 @@ use tsuzuri_contract::ledger::{BDW, BeadId, LedgerWrite};
 use tsuzuri_contract::question::{QuestionCard, QuestionList};
 use tsuzuri_contract::surface::{Refusal, RefusalResponse, RulingRequest, RulingResponse};
 use tsuzuri_contract::wire;
+use tsuzuri_core::delivery::{Route, mark_line};
 
 const FIXTURE: &str = "surface/question-2.json";
 
@@ -359,7 +360,7 @@ fn server_ask_ruling_writes_twice() {
     );
 
     let calls = place.calls("bdw");
-    assert_eq!(calls.len(), 2, "偽の bdw は 2 回だけ: {calls:?}");
+    assert_eq!(calls.len(), 3, "偽の bdw は 3 回だけ（追記・閉じる・印）: {calls:?}");
     let q = BeadId::new(WITH_LINES).expect("bead id");
     let append = LedgerWrite::AppendNotes {
         id: q.clone(),
@@ -507,7 +508,7 @@ fn server_ask_verbatim_is_one_line() {
         "一行目\n二行目 \\ 逆斜線\n",
     ));
     let calls = place.calls("bdw");
-    assert_eq!(calls.len(), 2);
+    assert_eq!(calls.len(), 3);
     assert_eq!(
         calls[0].0.len(),
         3,
@@ -571,7 +572,7 @@ fn server_ask_guards_write_nothing() {
         &body,
     );
     recorded(&reply);
-    assert_eq!(place.calls("bdw").len(), 2);
+    assert_eq!(place.calls("bdw").len(), 3);
 }
 
 #[test]
@@ -579,7 +580,9 @@ fn server_ask_delivers_only_with_seat_and_state_dir() {
     let digest = card(&read_fixture(), WITH_LINES).digest;
     let place = Place::new("deliver");
     let addr = place.serve();
+    let from = now();
     let got = recorded(&post(addr, WITH_LINES, &digest, "はい"));
+    let to = now();
     let calls = place.calls("scribe2");
     assert_eq!(calls.len(), 1, "偽の器は 1 回: {calls:?}");
     let state = place.state.display().to_string();
@@ -596,7 +599,23 @@ fn server_ask_delivers_only_with_seat_and_state_dir() {
             got.ruling.as_str()
         ]
     );
-    assert_eq!(place.calls("bdw").len(), 2, "配達は書きの後");
+    let bdw = place.calls("bdw");
+    assert_eq!(bdw.len(), 3, "配達は書きの後・印は配達の後: {bdw:?}");
+    let marks: Vec<Vec<String>> = [ruling::minute(from), ruling::minute(to)]
+        .iter()
+        .map(|m| {
+            LedgerWrite::AppendNotes {
+                id: BeadId::new(WITH_LINES).expect("bead id"),
+                line: mark_line(&got.ruling, Route::Deliver, m),
+            }
+            .argv()
+        })
+        .collect();
+    assert!(
+        marks.contains(&bdw[2].0),
+        "3 回目は配達の口の印: {:?}",
+        bdw[2].0
+    );
     // 片方でも無ければ撃たない。
     for (name, seat, state_dir) in [
         ("no-seat", None, true),
@@ -672,7 +691,10 @@ fn server_ask_failed_delivery_stays_200_with_stderr_line() {
         .lines()
         .filter(|l| l.contains(got.ruling.as_str()))
         .collect();
-    assert_eq!(lines.len(), 1, "落ちた配達の行が 1 行でない: {rest}");
+    assert_eq!(lines.len(), 1, "受けない配達の行が 1 行でない: {rest}");
+    assert!(lines[0].contains(ruling::NOT_TAKEN), "{rest}");
+    assert!(!rest.contains("配達が落ちた"), "{rest}");
+    assert_eq!(place.calls("bdw").len(), 2, "受けなければ印を置かない");
 
     // 空の値は使い方の誤りで rc 1。
     for bad in ["--bdw=", "--seat=", "--scribe2="] {
@@ -701,7 +723,7 @@ fn server_ask_repo_and_state_bytes_unchanged() {
     );
     assert_eq!(post(addr, CLOSED, &digest, "はい").status, 404);
     recorded(&post(addr, WITH_LINES, &digest, "はい"));
-    assert_eq!(place.calls("bdw").len(), 2);
+    assert_eq!(place.calls("bdw").len(), 3);
     assert_eq!(place.calls("scribe2").len(), 1);
     assert!(
         before == (tree(&place.repo), tree(&place.state)),

@@ -7,7 +7,8 @@
 //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
 //! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
 //! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない）。
-//! 6. 席の target と state dir の両方が在るときだけ器の配達の口を撃つ（落ちても応答は変えない）。
+//! 6. 席の target と state dir の両方が在るときだけ `deliver` で配達する（台帳を読み直し、
+//!    印の無い裁定が在れば器の配達の口を 1 度撃ち、rc 0 なら印を置く・結果で応答は変えない）。
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -17,8 +18,10 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
 use tsuzuri_contract::surface::{Refusal, RulingId, RulingRequest, RulingResponse};
+use tsuzuri_core::delivery::{Pending, Route, mark_line, marked};
 use tsuzuri_core::question::open_questions;
 
+use super::events;
 use super::ledger::{Source, capture};
 
 /// 口の path。
@@ -38,6 +41,9 @@ pub const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// 器の配達の口が返すまでの上限。越えれば止めて落ちた扱い。
 pub const DELIVER_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 器の配達の口が受けなかったときの log の字（失敗でなくふつうの断り）。
+pub const NOT_TAKEN: &str = "配達の口が今は受けない（印を置かず、席の停止の hook が拾う）";
 
 /// 配達の先（器の CLI・state dir・席の target）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,13 +111,12 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
     if !write(writer, &close) {
         return Outcome::CloseFailed(id);
     }
-    if let Some(d) = &writer.delivery
-        && !deliver(d, &writer.repo, &id)
-    {
-        eprintln!(
-            "tz surface serve: 配達が落ちた: 裁定 {id} を席 {} へ届けられない",
-            d.target
-        );
+    if let Some(d) = &writer.delivery {
+        let pending = Pending {
+            question: req.question.clone(),
+            ruling: id.clone(),
+        };
+        deliver(d, writer, ledger, &id, &[pending]);
     }
     Outcome::Recorded(RulingResponse {
         ruling: id,
@@ -138,8 +143,36 @@ pub fn deliver_argv(d: &Delivery, id: &RulingId) -> Vec<OsString> {
     ]
 }
 
-fn deliver(d: &Delivery, repo: &std::path::Path, id: &RulingId) -> bool {
-    capture(&d.program, deliver_argv(d, id), repo, DELIVER_TIMEOUT).is_some()
+/// 受付の裁定を席へ配達する（`id` は器に渡す id・1 問は裁定の id・束は束の id）。
+/// 1. 台帳を読み直し、読めて `pending` のどれにも印が在れば撃たない（停止の hook が既に返した）。
+///    読めなければ撃つ側に倒す。
+/// 2. 器の配達の口を 1 度だけ撃ち、受けなければ印を置かず標準エラーに 1 行を書く。
+/// 3. rc 0 なら `pending` の順に、問いの notes に経路が配達の口の印を足す（落ちたものごとに 1 行）。
+pub fn deliver(d: &Delivery, writer: &Writer, ledger: &Source, id: &RulingId, pending: &[Pending]) {
+    if let Some(text) = ledger.text_alone()
+        && pending
+            .iter()
+            .all(|p| marked(&text, &p.question, &p.ruling))
+    {
+        return;
+    }
+    if capture(&d.program, deliver_argv(d, id), &writer.repo, DELIVER_TIMEOUT).is_none() {
+        eprintln!("tz surface serve: {NOT_TAKEN}: {id}・席 {}", d.target);
+        return;
+    }
+    let minute = minute(events::now());
+    for p in pending {
+        let mark = LedgerWrite::AppendNotes {
+            id: p.question.clone(),
+            line: mark_line(&p.ruling, Route::Deliver, &minute),
+        };
+        if !write(writer, &mark) {
+            eprintln!(
+                "tz surface serve: 印を置けない: 裁定 {}（問い {}）は停止の hook が返す",
+                p.ruling, p.question
+            );
+        }
+    }
 }
 
 /// 次の id（数は 1 から始め、notes に同じ id の定型行が在れば 1 つずつ増やす）。

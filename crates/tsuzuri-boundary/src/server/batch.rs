@@ -10,7 +10,9 @@
 //! 6. 束の id を発行する（`batch:<分>-<数>`・台帳の字に「束 = <id>・」が在れば数を増やす）。
 //! 7. 行ごとの裁定の id を裁定の受付と同じ決め方で発行する。
 //! 8. 要求の順に、行ごとに notes の末尾へ 1 行を足し、問いを閉じる（落ちたらそこで止めて 502）。
-//! 9. 席の target と state dir の両方が在るときだけ、行ごとに器の配達の口を撃つ（落ちても応答は変えない）。
+//! 9. 席の target と state dir の両方が在るときだけ、裁定の受付の `deliver` に束の id と行の順の裁定を
+//!    1 度だけ渡す（台帳を読み直し、印の無い裁定が在れば器の配達の口を束の id で 1 度撃ち、
+//!    rc 0 なら行の順に印を置く・結果で応答は変えない）。
 
 use std::collections::HashSet;
 
@@ -20,12 +22,11 @@ use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
 use tsuzuri_contract::surface::{
     BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, Refusal, RulingId,
 };
+use tsuzuri_core::delivery::Pending;
 use tsuzuri_core::question::open_questions;
 
 use super::ledger::{Source, capture};
-use super::ruling::{
-    DELIVER_TIMEOUT, LINE_PREFIX, WRITE_TIMEOUT, Writer, deliver_argv, escape, minute, next_id,
-};
+use super::ruling::{LINE_PREFIX, WRITE_TIMEOUT, Writer, deliver, escape, minute, next_id};
 
 /// 口の path。
 pub const PATH: &str = "/api/batch";
@@ -133,21 +134,15 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
         });
     }
     if let Some(d) = &writer.delivery {
-        for id in &ids {
-            if capture(
-                &d.program,
-                deliver_argv(d, id),
-                &writer.repo,
-                DELIVER_TIMEOUT,
-            )
-            .is_none()
-            {
-                eprintln!(
-                    "tz surface serve: 配達が落ちた: 裁定 {id}（束 {batch}）を席 {} へ届けられない",
-                    d.target
-                );
-            }
-        }
+        let pending: Vec<Pending> = rows
+            .iter()
+            .zip(ids)
+            .map(|(row, ruling)| Pending {
+                question: row.question.clone(),
+                ruling,
+            })
+            .collect();
+        deliver(d, writer, ledger, &batch, &pending);
     }
     Outcome::Recorded(BatchResponse { batch, items })
 }

@@ -23,6 +23,7 @@ use tsuzuri_contract::surface::{
     RefusalResponse, RulingId,
 };
 use tsuzuri_contract::wire;
+use tsuzuri_core::delivery::{Route, mark_line};
 use tsuzuri_core::graph::build::TYPED_LINES;
 
 const FIXTURE: &str = "surface/question-batch.json";
@@ -392,6 +393,15 @@ fn row_argvs(
     ]
 }
 
+/// 問いの notes に配達の口の印を足す書きの argv。
+fn mark_argv(question: &str, ruling: &RulingId, minute: &str) -> Vec<String> {
+    LedgerWrite::AppendNotes {
+        id: bead(question),
+        line: mark_line(ruling, Route::Deliver, minute),
+    }
+    .argv()
+}
+
 /// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
 fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     let mut out = Vec::new();
@@ -447,7 +457,20 @@ fn server_batch_writes_rows_in_order() {
     );
     let [a3, c3] = row_argvs(Q3, &rulings[1], &got.batch, "束の答え");
     let argvs: Vec<Vec<String>> = calls.iter().map(|(a, _)| a.clone()).collect();
-    assert_eq!(argvs, [a2, c2, a3, c3], "追記・閉じる・追記・閉じるの順");
+    assert_eq!(argvs.len(), 6, "{argvs:?}");
+    assert_eq!(argvs[..4], [a2, c2, a3, c3], "追記・閉じる・追記・閉じるの順");
+    for (at, (q, ruling)) in [(4, (Q2, &rulings[0])), (5, (Q3, &rulings[1]))] {
+        let marks: Vec<Vec<String>> = [ruling::minute(from), ruling::minute(to)]
+            .iter()
+            .map(|m| mark_argv(q, ruling, m))
+            .collect();
+        assert!(
+            marks.contains(&argvs[at]),
+            "{} 回目は {q} の配達の口の印: {:?}",
+            at + 1,
+            argvs[at]
+        );
+    }
     for (_, cwd) in &calls {
         assert_eq!(cwd, &place.repo_real(), "cwd は repo の置き場");
     }
@@ -471,7 +494,7 @@ fn server_batch_own_verbatim_or_batch_verbatim() {
     let [a2, _] = row_argvs(Q2, &rulings[0], &got.batch, "束の字");
     let [a3, _] = row_argvs(Q3, &rulings[1], &got.batch, "個別の字");
     let argvs = place.argvs("bdw");
-    assert_eq!(argvs.len(), 4);
+    assert_eq!(argvs.len(), 6);
     assert_eq!((&argvs[0], &argvs[2]), (&a2, &a3));
     // 個別の逐語が在れば束の逐語は空白だけでよい。
     let place = Place::new("verbatim-own");
@@ -664,7 +687,7 @@ fn server_batch_write_failure_is_502_with_done_rows() {
 }
 
 #[test]
-fn server_batch_delivers_each_row() {
+fn server_batch_delivers_once_per_batch() {
     let place = Place::new("deliver");
     let addr = place.serve();
     let (d2, d3) = (digest(addr, Q2), digest(addr, Q3));
@@ -673,26 +696,23 @@ fn server_batch_delivers_each_row() {
         vec![item(Q2, &d2, None), item(Q3, &d3, None)],
         "はい",
     ));
-    let rulings = written(&got, &[Q2, Q3]);
+    written(&got, &[Q2, Q3]);
     let state = place.state.display().to_string();
-    let want: Vec<Vec<String>> = rulings
-        .iter()
-        .map(|r| {
-            [
-                "seat",
-                "deliver",
-                "--state-dir",
-                state.as_str(),
-                "--target",
-                "tsuzuri:0.1",
-                "--ruling",
-                r.as_str(),
-            ]
-            .map(str::to_string)
-            .to_vec()
-        })
-        .collect();
-    assert_eq!(place.argvs("scribe2"), want, "行ごとに 1 回ずつ");
+    let want: Vec<Vec<String>> = vec![
+        [
+            "seat",
+            "deliver",
+            "--state-dir",
+            state.as_str(),
+            "--target",
+            "tsuzuri:0.1",
+            "--ruling",
+            got.batch.as_str(),
+        ]
+        .map(str::to_string)
+        .to_vec(),
+    ];
+    assert_eq!(place.argvs("scribe2"), want, "束の id で 1 度だけ");
     // 片方でも無ければ撃たない。
     for (name, seat, state_dir) in [
         ("no-seat", None, true),
@@ -717,7 +737,8 @@ fn server_batch_delivers_each_row() {
         vec![item(Q2, &d2, None), item(Q3, &d3, None)],
         "はい",
     ));
-    assert_eq!(place.calls("scribe2").len(), 2);
+    assert_eq!(place.calls("scribe2").len(), 1);
+    assert_eq!(place.calls("bdw").len(), 4, "受けなければ印を置かない");
 }
 
 #[test]
@@ -904,7 +925,7 @@ fn server_batch_guards_write_nothing() {
         );
         assert_eq!(reply.status, 200, "{path}: {}", reply.body);
     }
-    assert_eq!(place.calls("bdw").len(), 3);
+    assert_eq!(place.calls("bdw").len(), 4);
     // GET でない要求を受ける口は 3 つだけ（ほかの POST は 405）。
     for path in ["/api/batch/x", "/api/policy/x", "/api/batches"] {
         assert_eq!(send(addr, "POST", path, "", "{}").status, 405, "{path}");
@@ -932,8 +953,8 @@ fn server_batch_repo_and_state_bytes_unchanged() {
         "はい",
     ));
     policied(&post_policy(addr, "all", "はい"));
-    assert_eq!(place.calls("bdw").len(), 5);
-    assert_eq!(place.calls("scribe2").len(), 2);
+    assert_eq!(place.calls("bdw").len(), 7);
+    assert_eq!(place.calls("scribe2").len(), 1);
     assert!(
         before == (tree(&place.repo), tree(&place.state)),
         "受付の後に repo か state dir の byte が変わる"
