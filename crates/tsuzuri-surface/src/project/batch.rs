@@ -42,7 +42,7 @@ pub const WRITTEN: &str = "書いた行";
 pub const OVERLAP_TIP: &str = "選んだ質問の touches の重なり（衝突の兆し）";
 
 /// 1 行（一覧の順の 1 から始まる番号・36 字に切った題・A-1 の印・関わる所・見た版の要約値）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Row {
     pub number: usize,
     pub id: BeadId,
@@ -82,6 +82,36 @@ pub fn body(fetched: &Fetched) -> Body<Vec<Row>> {
         Ok(cards) if cards.is_empty() => Body::Empty(ask::EMPTY),
         Ok(cards) => Body::Filled(rows(&cards)),
     }
+}
+
+/// 鍵つきの一覧の鍵（番号を 0 にした行・前の行が答えられて番号が詰まっても変わらない）。
+pub fn row_key(row: &Row) -> Row {
+    Row {
+        number: 0,
+        ..row.clone()
+    }
+}
+
+/// block の形（Filled の中身を捨てた値・形が同じなら外枠を組み直さない）。
+pub fn outline(fetched: &Fetched) -> Body<()> {
+    match body(fetched) {
+        Body::Unmeasured(reason) => Body::Unmeasured(reason),
+        Body::Empty(line) => Body::Empty(line),
+        Body::Filled(_) => Body::Filled(()),
+    }
+}
+
+/// 行の列（Filled でなければ空の列）。
+pub fn listed(fetched: &Fetched) -> Vec<Row> {
+    match body(fetched) {
+        Body::Filled(rows) => rows,
+        _ => Vec::new(),
+    }
+}
+
+/// id の同じ行の番号（無ければ None）。
+pub fn number_of(rows: &[Row], id: &BeadId) -> Option<usize> {
+    rows.iter().find(|r| r.id == *id).map(|r| r.number)
 }
 
 /// 選んだ行（一覧の順・A-1 の印を持つ行と、選ぶ box を外した行 `off` は入らない）。
@@ -229,8 +259,8 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        BLOCK, OVERLAP_TIP, Outcome, PATH, Row, body, can_send, counts, outcome, request_body,
-        selected,
+        BLOCK, OVERLAP_TIP, Outcome, PATH, Row, can_send, counts, listed, number_of, outcome,
+        outline, request_body, row_key, selected,
     };
     use crate::project::ask::{self, KeyAction, key_action};
     use crate::project::{Body, body_view, section, unmeasured};
@@ -258,10 +288,13 @@ mod dom {
             sending: RwSignal::new(false),
             outcome: RwSignal::new(None),
         };
-        let content = move || match fetched.with(body) {
+        // 形と行の列は値が前と同じなら知らせない（形が Filled のまま替わらなければ欄と button を作り直さない）。
+        let shape = Memo::new(move |_| fetched.with(outline));
+        let rows = Memo::new(move |_| fetched.with(listed));
+        let content = move || match shape.get() {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
-            Body::Filled(rows) => filled(rows, s),
+            Body::Filled(()) => filled(rows, s),
         };
         let note = move || {
             s.outcome
@@ -271,11 +304,9 @@ mod dom {
         section(BLOCK, ().into_any(), view! { {content}{note} }.into_any())
     }
 
-    fn filled(rows: Vec<Row>, s: State) -> AnyView {
-        let items = rows.iter().map(|r| row_view(r, s)).collect_view();
-        let rows = StoredValue::new(rows);
-        let chosen = move || rows.with_value(|rows| s.off.with(|off| counts(&selected(rows, off))));
-        let n = move || rows.with_value(|rows| s.off.with(|off| selected(rows, off).len()));
+    fn filled(rows: Memo<Vec<Row>>, s: State) -> AnyView {
+        let chosen = move || rows.with(|rows| s.off.with(|off| counts(&selected(rows, off))));
+        let n = move || rows.with(|rows| s.off.with(|off| selected(rows, off).len()));
         let disabled = move || !can_send(&s.text.get(), n(), s.sending.get());
         let keydown = move |ev: ev::KeyboardEvent| {
             let composing = ev.is_composing() || ev.key_code() == 229;
@@ -286,7 +317,9 @@ mod dom {
         };
         let own = label("own_words");
         view! {
-            <ul class="items">{items}</ul>
+            <ul class="items">
+                <For each=move || rows.get() key=row_key children=move |r: Row| row_view(&r, rows, s)/>
+            </ul>
             <div class="metas row">
                 <span class="chip num" data-term="touches"><span inner_html=LINK></span>{label("touches")}" "{move || chosen().touches}</span>
                 <span class="chip num" use:expert_tip=OVERLAP_TIP.to_string()><span inner_html=WARN></span>" "{move || chosen().overlap}</span>
@@ -297,8 +330,12 @@ mod dom {
         .into_any()
     }
 
-    /// 1 行（A-1 の印を持つ行は印と注の記号・ほかは選ぶ box）。
-    fn row_view(r: &Row, s: State) -> AnyView {
+    /// 1 行（A-1 の印を持つ行は印と注の記号・ほかは選ぶ box）。番号は行の列から読み直す。
+    fn row_view(r: &Row, rows: Memo<Vec<Row>>, s: State) -> AnyView {
+        let number = {
+            let id = r.id.clone();
+            Memo::new(move |_| rows.with(|v| number_of(v, &id)).unwrap_or(0))
+        };
         let lead = if r.selectable() {
             let id = r.id.clone();
             let checked = {
@@ -315,7 +352,7 @@ mod dom {
                     }
                 });
             };
-            view! { <input type="checkbox" aria-label=r.number.to_string() prop:checked=checked on:change=change/> }
+            view! { <input type="checkbox" aria-label=move || number.get().to_string()prop:checked=checked on:change=change/> }
                 .into_any()
         } else {
             view! { <span class="gi ng" aria-hidden="true">"!"</span> }.into_any()
@@ -326,7 +363,7 @@ mod dom {
         view! {
             <li>
                 {lead}
-                <span class="nb">{r.number}</span>
+                <span class="nb">{move || number.get()}</span>
                 <span class="ttl" data-t="">{r.title.clone()}</span>
                 {a1}
             </li>
@@ -335,9 +372,9 @@ mod dom {
     }
 
     /// 束を送る（押せないときは何もしない）。応答で block の状態を決め、読み直す応答は口を全部読み直す。
-    fn submit(rows: StoredValue<Vec<Row>>, s: State) {
+    fn submit(rows: Memo<Vec<Row>>, s: State) {
         let text = s.text.get_untracked();
-        let body = rows.with_value(|rows| {
+        let body = rows.with_untracked(|rows| {
             s.off.with_untracked(|off| {
                 let chosen = selected(rows, off);
                 can_send(&text, chosen.len(), s.sending.get_untracked())

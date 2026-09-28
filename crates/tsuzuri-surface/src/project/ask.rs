@@ -132,7 +132,7 @@ pub const LAYOUT: [Slot; 6] = [
 ];
 
 /// 概要の 1 行（class・語の鍵・字・エンジニア向けか）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SumLine {
     pub class: &'static str,
     pub key: Option<&'static str>,
@@ -141,7 +141,7 @@ pub struct SumLine {
 }
 
 /// 1 本の card の中身（番号は 1 から・題は 36 字で切る）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Card {
     pub number: usize,
     pub id: BeadId,
@@ -194,6 +194,31 @@ pub fn body(fetched: &Fetched) -> Body<Vec<Card>> {
                 .map(|(i, q)| card(i + 1, q))
                 .collect(),
         ),
+    }
+}
+
+/// 鍵つきの一覧の鍵（番号を 0 にした中身・前の card が答えられて番号が詰まっても変わらない）。
+pub fn card_key(card: &Card) -> Card {
+    Card {
+        number: 0,
+        ..card.clone()
+    }
+}
+
+/// block の形（Filled の中身を捨てた値・形が同じなら外枠を組み直さない）。
+pub fn outline(fetched: &Fetched) -> Body<()> {
+    match body(fetched) {
+        Body::Unmeasured(reason) => Body::Unmeasured(reason),
+        Body::Empty(line) => Body::Empty(line),
+        Body::Filled(_) => Body::Filled(()),
+    }
+}
+
+/// card の列（Filled でなければ空の列）。
+pub fn listed(fetched: &Fetched) -> Vec<Card> {
+    match body(fetched) {
+        Body::Filled(cards) => cards,
+        _ => Vec::new(),
     }
 }
 
@@ -401,8 +426,9 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, anchor, body,
-        can_send, card_class, count, focus, key_action, outcome, request_body, target_number,
+        BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, anchor,
+        can_send, card_class, card_key, count, focus, key_action, listed, outcome, outline,
+        request_body, target_number,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::nodearound::{Embeds, embeds};
@@ -463,33 +489,46 @@ mod dom {
         let drafts: Drafts = StoredValue::new(Vec::new());
         // つながりの段の図の読みはこの block が持つ（一覧の読み直しで card を組み直しても作り直さない）。
         let places = embeds();
+        // 形と card の列は値が前と同じなら知らせない（本文が替わっても形が同じなら外枠を組み直さない）。
+        let shape = Memo::new(move |_| fetched.with(outline));
+        let cards = Memo::new(move |_| fetched.with(listed));
+        // 経過は一覧の読みのたびに書き直し、link は mode を替えれば替わる。
+        let tick = move || {
+            fetched.track();
+            crate::net::now()
+        };
+        let current = move || mode.map_or(fallback, |m| m.get());
         let extra = move || match fetched.with(count) {
             Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
             Reading::Unknown => ().into_any(),
         };
-        let list = move || match fetched.with(body) {
+        // 名指しの card を 1 度だけ画面の上端へ寄せる。
+        let focused = target.clone();
+        Effect::new(move |_| {
+            if let Some(id) = focused.as_deref()
+                && !scrolled.get_value()
+                && let Some(n) = cards.with(|v| target_number(v, id))
+            {
+                scrolled.set_value(true);
+                scroll_to(n);
+            }
+        });
+        let list = move || match shape.get() {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
-            Body::Filled(cards) => {
-                let focused = target.as_deref();
-                if let Some(id) = focused
-                    && !scrolled.get_value()
-                    && let Some(n) = target_number(&cards, id)
-                {
-                    scrolled.set_value(true);
-                    scroll_to(n);
-                }
-                let now = crate::net::now();
-                let m = mode.map_or(fallback, |m| m.get());
-                cards
-                    .into_iter()
-                    .map(|c| {
+            Body::Filled(()) => {
+                let target = target.clone();
+                // 鍵は番号を除いた中身（変わらない card の DOM は残り、欄の focus と変換の途中の字も残る）。
+                view! {
+                    <For each=move || cards.get() key=card_key children=move |c: Card| {
                         let d = draft(drafts, &c.id);
-                        let on = focused == Some(c.id.as_str());
-                        card_view(c, d, now, on, m, places)
-                    })
-                    .collect_view()
-                    .into_any()
+                        let on = target.as_deref() == Some(c.id.as_str());
+                        let id = c.id.to_string();
+                        let number = Memo::new(move |_| cards.with(|v| target_number(v, &id)).unwrap_or(0));
+                        card_view(c, d, number, on, tick, current, places)
+                    }/>
+                }
+                .into_any()
             }
         };
         section(BLOCK, extra.into_any(), list.into_any())
@@ -498,17 +537,18 @@ mod dom {
     fn card_view(
         card: Card,
         d: Draft,
-        now: u64,
+        number: Memo<usize>,
         target: bool,
-        mode: Mode,
+        tick: impl Fn() -> u64 + Copy + Send + Sync + 'static,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
         places: Embeds,
     ) -> AnyView {
         let parts = LAYOUT
             .iter()
-            .map(|slot| part_view(*slot, &card, &d, now, mode, places))
+            .map(|slot| part_view(*slot, &card, &d, number, tick, mode, places))
             .collect_view();
         view! {
-            <article class=card_class(target) id=anchor(card.number) data-q=card.id.to_string()>{parts}</article>
+            <article class=card_class(target) id=move || anchor(number.get()) data-q=card.id.to_string()>{parts}</article>
         }
         .into_any()
     }
@@ -517,8 +557,9 @@ mod dom {
         slot: Slot,
         card: &Card,
         d: &Draft,
-        now: u64,
-        mode: Mode,
+        number: Memo<usize>,
+        tick: impl Fn() -> u64 + Copy + Send + Sync + 'static,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
         places: Embeds,
     ) -> AnyView {
         match slot.part {
@@ -526,12 +567,13 @@ mod dom {
                 let a1 = card.a1.then(|| {
                     view! { <span class="warn" data-term="a1" tabindex="0" aria-label=label("a1") inner_html=WARN></span> }
                 });
+                let (id, posted) = (card.id.to_string(), card.posted_at);
                 view! {
                     <div class=slot.class>
-                        <span class="nb">{card.number}</span>
-                        <a class="t" href=node_href(card.id.as_str(), mode)><span data-t="">{card.title.clone()}</span></a>
+                        <span class="nb">{move || number.get()}</span>
+                        <a class="t" href=move || node_href(&id, mode())><span data-t="">{card.title.clone()}</span></a>
                         {a1}
-                        <span class="chip num"><span inner_html=CLOCK></span><span>{age(now, card.posted_at)}</span></span>
+                        <span class="chip num"><span inner_html=CLOCK></span><span>{move || age(tick(), posted)}</span></span>
                     </div>
                 }
                 .into_any()
