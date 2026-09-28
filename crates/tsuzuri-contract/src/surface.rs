@@ -1,10 +1,11 @@
 //! 面の電文の型: 面の event・面の状態・問いの合図・裁定と束と方針の要求と応答・記帳 id の形
 //! （設計ノート surface §3・§20・判断の記録 ADR-7 決定 (4)）。
+//! 決定の取り消しの要求と応答と、取り消せるかを notes から判じる関数（行 e-revoke・server の受付と面の button が同じ関数で判じる）。
 
 use serde::{Deserialize, Serialize};
 
 use crate::board::{NextMove, Stage};
-use crate::ledger::BeadId;
+use crate::ledger::{BeadId, LedgerItem};
 use crate::{EpochSecs, IdError, id_shape};
 
 /// 記帳 id（ASCII の英数字と `. - _ :` だけの 1 語・先頭は英数字・64 byte 以下）。
@@ -152,6 +153,105 @@ pub struct RulingRequest {
 pub struct RulingResponse {
     pub ruling: RulingId,
     pub recorded_at: EpochSecs,
+}
+
+/// 取り消しの口の path（POST・契約の型の RevokeRequest）。
+pub const REVOKE_PATH: &str = "/api/revoke";
+
+/// notes の裁定の定型行の頭（server の受付・中核の配達と導出グラフが読む頭と同じ字）。
+pub const RULING_LINE: &str = "裁定 id = ";
+
+/// 裁定の行の問いの欄の頭。
+pub const QUESTION_FIELD: &str = "問い = ";
+
+/// 裁定の行の取り消す欄の頭（取り消しの行だけが持つ・値は取り消す前の裁定の id）。
+pub const REVOKES: &str = "取り消す = ";
+
+/// 裁定の行の逐語の欄の頭（この欄より後の字は欄として読まない）。
+pub const VERBATIM: &str = "逐語 = ";
+
+/// 閉じた bead の状態の字。
+pub const CLOSED_STATUS: &str = "closed";
+
+/// 裁定の行の欄の終わりの字。
+const FIELD_END: char = '・';
+
+/// 取り消しの要求（問いの id・取り消す裁定の id・理由の逐語）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RevokeRequest {
+    pub question: BeadId,
+    pub ruling: RulingId,
+    pub verbatim: String,
+}
+
+/// 取り消しの応答（取り消しの行の id・記帳時刻・開き直しだけを撃ち直したか）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RevokeResponse {
+    pub ruling: RulingId,
+    pub recorded_at: EpochSecs,
+    pub reopened_only: bool,
+}
+
+/// notes の裁定の行 1 つ（id と、逐語の欄より前の問いの欄と取り消す欄の字）。
+struct Line<'a> {
+    id: &'a str,
+    question: Option<&'a str>,
+    revokes: Option<&'a str>,
+}
+
+/// notes の裁定の行を notes の順に読む（行の末の復帰を除いてから頭を見る・id が空の行は数えない）。
+fn ruling_lines(notes: &str) -> Vec<Line<'_>> {
+    notes
+        .lines()
+        .filter_map(|l| l.trim_end_matches('\r').strip_prefix(RULING_LINE))
+        .filter_map(|rest| {
+            let mut fields = rest.split(FIELD_END);
+            let id = fields.next().unwrap_or_default().trim();
+            if id.is_empty() {
+                return None;
+            }
+            let mut line = Line {
+                id,
+                question: None,
+                revokes: None,
+            };
+            for field in fields.take_while(|f| !f.starts_with(VERBATIM)) {
+                if let Some(q) = field.strip_prefix(QUESTION_FIELD) {
+                    line.question = Some(q.trim());
+                } else if let Some(r) = field.strip_prefix(REVOKES) {
+                    line.revokes = Some(r.trim());
+                }
+            }
+            Some(line)
+        })
+        .collect()
+}
+
+/// 効いている最後の裁定の id（取り消しの行でも取り消された行でもない裁定の行のうち notes の順で最後）。
+pub fn latest_ruling(notes: &str) -> Option<&str> {
+    let lines = ruling_lines(notes);
+    let revoked: Vec<&str> = lines.iter().filter_map(|l| l.revokes).collect();
+    lines
+        .iter()
+        .rev()
+        .find(|l| l.revokes.is_none() && !revoked.contains(&l.id))
+        .map(|l| l.id)
+}
+
+/// 開き直しだけが残った取り消しの行の id（notes の最後の裁定の行が、その問いの欄でその裁定を取り消す行のときだけ）。
+pub fn pending_reopen<'a>(notes: &'a str, question: &BeadId, ruling: &RulingId) -> Option<&'a str> {
+    let lines = ruling_lines(notes);
+    let last = lines.last()?;
+    (last.question == Some(question.as_str()) && last.revokes == Some(ruling.as_str()))
+        .then_some(last.id)
+}
+
+/// 取り消せるか（閉じた問いで、その裁定が効いている最後か、その裁定の開き直しだけが残っている）。
+pub fn revocable(item: &LedgerItem, ruling: &RulingId) -> bool {
+    item.row.is_question()
+        && item.row.status == CLOSED_STATUS
+        && (latest_ruling(&item.notes) == Some(ruling.as_str())
+            || pending_reopen(&item.notes, &item.row.id, ruling).is_some())
 }
 
 /// 束の 1 行（問いの id・見た版の要約値・個別の逐語。個別が無ければ束の逐語を使う）。

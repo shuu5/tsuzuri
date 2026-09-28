@@ -1,13 +1,21 @@
 //! block「節点」（見本の bead.html の頭と 2 面の概要・便 g-node）: 節点の頁の 1 つ目の block。
 //! 近傍の口の電文（block「つながり」と同じ 1 つの読み・nodearound の module が持つ）の中心の行（列 0）から頭と概要を組む。
 //! 頭・概要・質問の頁への link は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! 決定の頁（中心が あなたの決定）の頭には、理由の欄と 取り消す の button を置く（行 e-revoke）。
+//! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
+//! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
+//! 撃ち直しは同じ button をもう一度押す（server は行を足さず開き直しだけを撃つ）。
 
 use tsuzuri_contract::graph::{AroundDoc, AroundRow, NodeKind, title36};
+use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
+use tsuzuri_contract::surface::{RevokeRequest, RulingId, revocable};
+use tsuzuri_contract::wire;
 
 use crate::frame::{Block, Mode};
 use crate::mapview::band::{Band, band_of, kind_key};
 use crate::mapview::{encode, is_open};
 use crate::project::nodearound::PageState;
+use crate::view::Fetched;
 use crate::widgets::nodecard::full_src;
 
 pub const BLOCK: Block = Block {
@@ -138,21 +146,73 @@ pub fn kept_subject(before: Option<String>, state: &PageState) -> Option<String>
     }
 }
 
+/// 取り消しの的（問いの id と取り消す決定の id）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Revoke {
+    pub question: BeadId,
+    pub ruling: RulingId,
+}
+
+/// 決定の頁の取り消しの的（中心の行が決定でなければ None・問いの id は決定の id の最初のコロンの前から読む・
+/// 近傍の行の問いの行には頼らない）。
+pub fn revoke_target(doc: &AroundDoc) -> Option<Revoke> {
+    let row = center(doc)?;
+    if row.node.kind != NodeKind::Ruling {
+        return None;
+    }
+    let ruling = RulingId::new(row.node.id.clone()).ok()?;
+    let (question, _) = row.node.id.split_once(':')?;
+    Some(Revoke {
+        question: BeadId::new(question).ok()?,
+        ruling,
+    })
+}
+
+/// 問いの 1 本の引きの口の path。
+pub fn item_path(question: &BeadId) -> String {
+    format!("{ITEM_PATH}{question}")
+}
+
+/// 取り消しの要求の本文（逐語は理由の欄の字のまま）。
+pub fn revoke_body(t: &Revoke, verbatim: &str) -> String {
+    wire::encode(&RevokeRequest {
+        question: t.question.clone(),
+        ruling: t.ruling.clone(),
+        verbatim: verbatim.to_string(),
+    })
+    .expect("字の欄だけの要求は電文の字にできる")
+}
+
+/// 取り消しの欄を出すか（問いの 1 本の引きの電文で、その決定を取り消せるときだけ）。
+pub fn shows_revoke(item: &Fetched, ruling: &RulingId) -> bool {
+    match item {
+        Fetched::Body(text) => {
+            wire::decode::<LedgerItem>(text).is_ok_and(|item| revocable(&item, ruling))
+        }
+        Fetched::NotRead | Fetched::Failed => false,
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;
 
 /// 節点の block の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use leptos::ev;
     use leptos::prelude::*;
+    use leptos::task::spawn_local;
+    use tsuzuri_contract::surface::{REVOKE_PATH, RulingId};
 
     use super::{
-        BLOCK, Head, PageState, SUMMARY_NONE, answer_href, center, head, kept_subject, summary,
+        BLOCK, Head, PageState, Revoke, SUMMARY_NONE, answer_href, center, head, item_path,
+        kept_subject, revoke_body, revoke_target, shows_revoke, summary,
     };
     use crate::mapview::band_chip;
+    use crate::project::ask::{Outcome, can_send, outcome};
     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
     use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, state_icon, unmeasured};
-    use crate::view::PageSubject;
+    use crate::view::{Fetched, PageSubject};
     use crate::vocab::label;
     use crate::widgets::help::{h1, h2};
 
@@ -162,6 +222,30 @@ mod dom {
     const PERSON: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>"#;
     /// エンジニア向けの概要の印（見本の IC.code）。
     const CODE: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>"#;
+
+    /// 1 つの決定の取り消しの状態（頁を読み直しても残すので、決定の id ごとに block が持つ）。
+    #[derive(Clone)]
+    struct Draft {
+        text: ArcRwSignal<String>,
+        sending: ArcRwSignal<bool>,
+        outcome: ArcRwSignal<Option<Outcome>>,
+    }
+
+    type Drafts = StoredValue<Vec<(RulingId, Draft)>>;
+
+    /// 決定の id の取り消しの状態（初めての id は空で作る）。
+    fn draft(drafts: Drafts, id: &RulingId) -> Draft {
+        let found = drafts.with_value(|v| v.iter().find(|(k, _)| k == id).map(|(_, d)| d.clone()));
+        found.unwrap_or_else(|| {
+            let d = Draft {
+                text: ArcRwSignal::new(String::new()),
+                sending: ArcRwSignal::new(false),
+                outcome: ArcRwSignal::new(None),
+            };
+            drafts.update_value(|v| v.push((id.clone(), d.clone())));
+            d
+        })
+    }
 
     /// 節点の block（見つからないときは見出しと id・読めないときは測れていないと理由の 1 行）。
     pub fn view() -> AnyView {
@@ -182,6 +266,19 @@ mod dom {
             });
         }
         let mode = mode_of(search);
+        // 決定の頁の取り消しの的と、その問いの 1 本の引き（的が無ければ空の path で読まない）。
+        let target = Memo::new(move |_| match read.with(|(f, s)| state(f, *s)) {
+            PageState::Doc(doc) => revoke_target(&doc),
+            _ => None,
+        });
+        let item = crate::net::read_path(Signal::derive(move || {
+            target.with(|t| {
+                t.as_ref()
+                    .map(|t| item_path(&t.question))
+                    .unwrap_or_default()
+            })
+        }));
+        let drafts: Drafts = StoredValue::new(Vec::new());
         let content = move || {
             let st = read.with(|(f, s)| state(f, *s));
             if let Some(reason) = unmeasured_reason(&st) {
@@ -200,7 +297,11 @@ mod dom {
                                 }
                             })
                             .collect_view();
-                        view! { {head_view(h, mode)}<div class="two">{boxes}</div> }.into_any()
+                        let revoke = target.get().map(|t| {
+                            let d = draft(drafts, &t.ruling);
+                            revoke_view(t, item, d)
+                        });
+                        view! { {head_view(h, mode, revoke)}<div class="two">{boxes}</div> }.into_any()
                     }
                     _ => unmeasured(NO_CONTENT),
                 },
@@ -218,10 +319,11 @@ mod dom {
         view! { {h1("not_found")}{line} }.into_any()
     }
 
-    /// 頭（印・種類の見出し・帯の chip・状態・id・題・出所・質問の頁への link）。
+    /// 頭（印・種類の見出し・帯の chip・状態・id・題・出所・質問の頁への link・決定の頁の取り消しの欄）。
     fn head_view(
         h: Head,
         mode: impl Fn() -> crate::frame::Mode + Send + Sync + 'static,
+        revoke: Option<AnyView>,
     ) -> AnyView {
         let style = if h.alert { ALERT_STYLE } else { "" };
         let state = h.state.map(|s| view! { <span>{s}</span> });
@@ -240,9 +342,78 @@ mod dom {
                     <div class="t" data-t="">{h.title}</div>
                     <div class="srcline" data-term="src" tabindex="0"><span inner_html=FILE_ICON></span><span>{h.src}</span></div>
                     {answer}
+                    {revoke}
                 </div>
             </div>
         }
         .into_any()
+    }
+
+    /// 取り消しの欄（理由の欄と 取り消す の button）と、送った後の 1 行。
+    /// 欄は取り消せる決定のときだけ出し、200 の後は閉じる（開き直しだけが落ちた 502 は欄の字を残す）。
+    fn revoke_view(t: Revoke, item: ReadSignal<(Fetched, Option<u16>)>, d: Draft) -> AnyView {
+        let form = {
+            let d = d.clone();
+            move || {
+                let shown = item.with(|(f, _)| shows_revoke(f, &t.ruling))
+                    && d.outcome
+                        .with(|o| o.as_ref().is_none_or(Outcome::answer_open));
+                shown.then(|| {
+                    let (text, sending) = (d.text.clone(), d.sending.clone());
+                    let disabled = move || !can_send(&text.get(), sending.get());
+                    let value = {
+                        let text = d.text.clone();
+                        move || text.get()
+                    };
+                    let input = {
+                        let text = d.text.clone();
+                        move |ev: ev::Event| text.set(event_target_value(&ev))
+                    };
+                    let click = {
+                        let (t, d) = (t.clone(), d.clone());
+                        move |_: ev::MouseEvent| submit(&t, &d)
+                    };
+                    view! {
+                        <div class="answer">
+                            <textarea rows="2" aria-label=label("own_words") placeholder=label("own_words") prop:value=value on:input=input></textarea>
+                            <button type="button" class="btn" data-term="revoke" disabled=disabled on:click=click>{label("revoke")}</button>
+                        </div>
+                    }
+                })
+            }
+        };
+        let note = {
+            let outcome = d.outcome.clone();
+            move || {
+                outcome
+                    .get()
+                    .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
+            }
+        };
+        view! { {form}{note} }.into_any()
+    }
+
+    /// 取り消しを送る（押せないときは何もしない）。応答で欄の状態を決め、200 と 409 は頁を読み直す。
+    fn submit(t: &Revoke, d: &Draft) {
+        let text = d.text.get_untracked();
+        if !can_send(&text, d.sending.get_untracked()) {
+            return;
+        }
+        d.sending.set(true);
+        let body = revoke_body(t, &text);
+        let d = d.clone();
+        spawn_local(async move {
+            let reply = crate::net::post(REVOKE_PATH, body).await;
+            let out = outcome(reply.as_ref().map(|(s, t)| (*s, t.as_str())));
+            if !out.keeps_text() {
+                d.text.set(String::new());
+            }
+            let reload = out.reloads();
+            d.outcome.set(Some(out));
+            d.sending.set(false);
+            if reload {
+                crate::net::reload_all();
+            }
+        });
     }
 }

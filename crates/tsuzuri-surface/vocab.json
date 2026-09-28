@@ -849,6 +849,11 @@
    "plain": "→ この question に答える card へ",
    "internal": "ask.html?id="
   },
+  "revoke": {
+   "label": "取り消す",
+   "plain": "この決定を取り消す\n・ 理由をあなたの言葉で書いてから押す\n・ 記録は消えず、取り消しの行が足される\n→ question は未回答に戻り、答え直せる",
+   "internal": "裁定の行（取り消す = 前の id）を notes に足し、bd reopen"
+  },
   "proj_acct": {
    "label": "この project の口座",
    "plain": "tsuzuri の orchestrator の口座を掘る\n→ 全部の口座は account board",

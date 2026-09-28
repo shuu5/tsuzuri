@@ -9,6 +9,10 @@
 //! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない）。
 //! 6. 席の target と state dir の両方が在るときだけ `deliver` で配達する（台帳を読み直し、
 //!    印の無い裁定が在れば器の配達の口を 1 度撃ち、rc 0 なら印を置く・結果で応答は変えない）。
+//!
+//! 取り消し（口 POST /api/revoke・`revoke`・行 e-revoke）も同じ順で受け、問いを閉じる代わりに開き直す。
+//! 取り消せるのは閉じた問いの効いている最後の裁定だけで、notes の末尾に取り消しの行を足してから開き直し、何も消さない。
+//! 開き直しだけが落ちた後に同じ要求を撃ち直すと、行を足さず開き直しだけを撃ち直す。
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -17,12 +21,15 @@ use std::time::Duration;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
-use tsuzuri_contract::surface::{Refusal, RulingId, RulingRequest, RulingResponse};
+use tsuzuri_contract::surface::{
+    QUESTION_FIELD, REVOKES, Refusal, RevokeRequest, RevokeResponse, RulingId, RulingRequest,
+    RulingResponse, VERBATIM, pending_reopen, revocable,
+};
 use tsuzuri_core::delivery::{Pending, Route, mark_line, marked};
 use tsuzuri_core::question::open_questions;
 
 use super::events;
-use super::ledger::{Source, capture};
+use super::ledger::{Source, capture, parse_bd};
 
 /// 口の path。
 pub const PATH: &str = "/api/ruling";
@@ -124,6 +131,91 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
     })
 }
 
+/// 取り消しの受付の結果。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Revoked {
+    /// 書いた（200・開き直しだけの撃ち直しも）。
+    Recorded(RevokeResponse),
+    /// 断った（書きの前・取り消せない裁定は StaleVersion の 409）。
+    Refused(Refusal),
+    /// 台帳が読めない（503・書きの前）。
+    LedgerUnknown,
+    /// 発行した id が記帳 id の形に収まらない（500・書きの前）。
+    IdShape,
+    /// notes への追記が落ちた（502・開き直しは撃っていない）。
+    AppendFailed,
+    /// 開き直しが落ちた（502・notes には取り消しの行が在り、問いは閉じたまま）。
+    ReopenFailed(RulingId),
+}
+
+/// 1 問の裁定を取り消す（`now` は受付の時刻）。
+pub fn revoke(req: &RevokeRequest, ledger: &Source, writer: &Writer, now: EpochSecs) -> Revoked {
+    if req.verbatim.trim().is_empty() {
+        return Revoked::Refused(Refusal::EmptyVerbatim);
+    }
+    // 走っている読みを分け合わず、新しい子 process で読み直す（閉じた問いも読む）。
+    let Some(Reading::Known(items)) = ledger.text_alone().map(|t| parse_bd(&t)) else {
+        return Revoked::LedgerUnknown;
+    };
+    let Some(item) = items
+        .into_iter()
+        .find(|i| i.row.id == req.question && i.row.is_question())
+    else {
+        return Revoked::Refused(Refusal::UnknownQuestion);
+    };
+    if !revocable(&item, &req.ruling) {
+        return Revoked::Refused(Refusal::StaleVersion);
+    }
+    // 開き直しだけが落ちた後の撃ち直し（行を足さず、要求の逐語は書かない）。
+    if let Some(pending) = pending_reopen(&item.notes, &req.question, &req.ruling) {
+        let Ok(id) = RulingId::new(pending) else {
+            return Revoked::IdShape;
+        };
+        return reopen(req, ledger, writer, id, now, true);
+    }
+    let Ok(id) = next_id(&req.question, &item.notes, &minute(now)) else {
+        return Revoked::IdShape;
+    };
+    let append = LedgerWrite::AppendNotes {
+        id: req.question.clone(),
+        line: revoke_line(&id, &req.question, &req.ruling, &req.verbatim),
+    };
+    if !write(writer, &append) {
+        return Revoked::AppendFailed;
+    }
+    reopen(req, ledger, writer, id, now, false)
+}
+
+/// 問いを開き直し、配達の先が在れば取り消しの行を配達する（`id` は取り消しの行の id）。
+fn reopen(
+    req: &RevokeRequest,
+    ledger: &Source,
+    writer: &Writer,
+    id: RulingId,
+    now: EpochSecs,
+    reopened_only: bool,
+) -> Revoked {
+    let w = LedgerWrite::ReopenItem {
+        id: req.question.clone(),
+        reason: format!("裁定 {id}{ID_END}{REVOKES}{}", req.ruling),
+    };
+    if !write(writer, &w) {
+        return Revoked::ReopenFailed(id);
+    }
+    if let Some(d) = &writer.delivery {
+        let pending = Pending {
+            question: req.question.clone(),
+            ruling: id.clone(),
+        };
+        deliver(d, writer, ledger, &id, &[pending]);
+    }
+    Revoked::Recorded(RevokeResponse {
+        ruling: id,
+        recorded_at: now,
+        reopened_only,
+    })
+}
+
 /// bdw を 1 回撃つ（rc 0 で上限の内に返せば true）。
 fn write(writer: &Writer, w: &LedgerWrite) -> bool {
     capture(&writer.bdw, w.argv(), &writer.repo, WRITE_TIMEOUT).is_some()
@@ -200,6 +292,14 @@ pub fn next_id(
 pub fn line(id: &RulingId, question: &BeadId, verbatim: &str) -> String {
     format!(
         "{LINE_PREFIX}{id}{ID_END}問い = {question}{ID_END}逐語 = {}",
+        escape(verbatim)
+    )
+}
+
+/// notes に足す取り消しの行（`裁定 id = <id>・問い = <問いの id>・取り消す = <前の id>・逐語 = <字>`）。
+pub fn revoke_line(id: &RulingId, question: &BeadId, revokes: &RulingId, verbatim: &str) -> String {
+    format!(
+        "{LINE_PREFIX}{id}{ID_END}{QUESTION_FIELD}{question}{ID_END}{REVOKES}{revokes}{ID_END}{VERBATIM}{}",
         escape(verbatim)
     )
 }

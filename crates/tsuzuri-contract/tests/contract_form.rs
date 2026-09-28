@@ -162,6 +162,10 @@ fn ledger_writes() -> Vec<LedgerWrite> {
             child_type: ChildType::Epic,
             description: "--parent=".into(),
         },
+        LedgerWrite::ReopenItem {
+            id: bead("t3-hub.5"),
+            reason: "裁定 t3-hub.5:20260926T1440Z-1・取り消す = t3-hub.5:20260926T1437Z-1".into(),
+        },
     ]
 }
 
@@ -1136,6 +1140,7 @@ fn contract_form_ledger_write_argv() {
             LedgerWrite::AppendNotes { .. } => "append-notes",
             LedgerWrite::CloseItem { .. } => "close-item",
             LedgerWrite::CreateChild { .. } => "create-child",
+            LedgerWrite::ReopenItem { .. } => "reopen-item",
         });
         let argv = w.argv();
         assert!(!argv.is_empty(), "{w:?}: argv が空");
@@ -1176,7 +1181,7 @@ fn contract_form_ledger_write_argv() {
             );
         }
     }
-    assert_eq!(variants.len(), 3, "全 variant の見本が要る: {variants:?}");
+    assert_eq!(variants.len(), 4,"全 variant の見本が要る: {variants:?}");
 }
 
 #[test]

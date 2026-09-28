@@ -280,6 +280,11 @@
       "title": "--notes=x",
       "child_type": "epic",
       "description": "--parent="
+    },
+    {
+      "op": "reopen-item",
+      "id": "t3-hub.5",
+      "reason": "裁定 t3-hub.5:20260926T1440Z-1・取り消す = t3-hub.5:20260926T1437Z-1"
     }
   ],
   "graph::NodeKind": [

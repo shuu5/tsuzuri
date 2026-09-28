@@ -195,7 +195,7 @@ impl ChildType {
     }
 }
 
-/// 台帳への書き（閉じた enum・server の書きはこの 3 つだけで、どれも bdw を経る）。
+/// 台帳への書き（閉じた enum・server の書きはこの 4 つだけで、どれも bdw を経て、どれも消さない）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "kebab-case")]
 pub enum LedgerWrite {
@@ -210,7 +210,12 @@ pub enum LedgerWrite {
         child_type: ChildType,
         description: String,
     },
+    /// 閉じた bead を open に戻す（取り消しの行 e-revoke）。
+    ReopenItem { id: BeadId, reason: String },
 }
+
+/// GET の 1 本の引きの口の path の頭（後に bead の id を付ける・routes/item.rs と同じ字）。
+pub const ITEM_PATH: &str = "/api/ledger/";
 
 /// 書きを撃つ program。
 pub const BDW: &str = "bdw";
@@ -247,6 +252,9 @@ impl LedgerWrite {
                 "--".into(),
                 title.clone(),
             ],
+            LedgerWrite::ReopenItem { id, reason } => {
+                vec!["reopen".into(), id.to_string(), format!("--reason={reason}")]
+            }
         }
     }
 
