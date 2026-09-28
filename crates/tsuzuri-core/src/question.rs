@@ -6,6 +6,7 @@
 //! 問いの本文の形: 席は問いを置くとき、本文の行頭に定型の字を書く（1 つの定型は 1 行・同じ定型が 2 行在れば
 //! 最初の行を取る・定型の無い欄は None）。A-1 の印は label のどれかが「A-1」で始まること。
 //! 名指した節点は bead の metadata の touches の欄（字 1 つか字の配列・metadata は object か、object を JSON にした字）。
+//! 止めている task は、台帳の bead のうち種類 blocks の依存の先がその問いの bead（状態で選ばない・便 c-q-blocking）。
 
 use serde_json::Value;
 use tsuzuri_contract::board::Reading;
@@ -30,6 +31,9 @@ pub const RECOMMEND_PREFIX: &str = "推奨 = ";
 /// A-1 の印の label の頭。
 pub const A1_PREFIX: &str = "A-1";
 
+/// 問いの答えを待って止まった task を数える台帳の依存の種類（見本の material の辺 blocks）。
+pub const BLOCKS_TYPE: &str = "blocks";
+
 /// open の問いの 1 本（card と、裁定の id の数を決める notes）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenQuestion {
@@ -53,9 +57,21 @@ pub fn open_questions(ledger: &str) -> Reading<Vec<OpenQuestion>> {
     let Some(beads) = read_ledger(ledger) else {
         return Reading::Unknown;
     };
+    // 種類 blocks の依存の（依存の先・依存する bead）の組（台帳の順・状態を問わない）。
+    let blocks: Vec<(String, String)> = beads
+        .iter()
+        .flat_map(|b| {
+            b.dependencies
+                .iter()
+                .flatten()
+                .filter(|d| d.dep_type == BLOCKS_TYPE)
+                .map(|d| (d.depends_on_id.clone(), b.id.clone()))
+        })
+        .collect();
     let mut out = Vec::new();
     for bead in beads.into_iter().filter(is_open_question) {
-        let Some(q) = open_question(bead) else {
+        let blocking = waiting(&blocks, &bead.id);
+        let Some(q) = open_question(bead, blocking) else {
             return Reading::Unknown;
         };
         out.push(q);
@@ -70,9 +86,20 @@ fn is_open_question(bead: &BdBead) -> bool {
     labels.iter().any(|l| l == QUESTION_LABEL) && status != "closed" && status != "tombstone"
 }
 
+/// 問いの答えを待つ bead の id（`blocks` の組のうち依存の先が `id` の組の bead・台帳の順に 1 度ずつ）。
+fn waiting(blocks: &[(String, String)], id: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (to, from) in blocks {
+        if to == id && !out.contains(from) {
+            out.push(from.clone());
+        }
+    }
+    out
+}
+
 /// bead を card にする（id が bead の id の形でなければ None）。
 /// 作られた時刻が読めなければ更新時刻、それも無ければ 0。
-fn open_question(bead: BdBead) -> Option<OpenQuestion> {
+fn open_question(bead: BdBead, blocking: Vec<String>) -> Option<OpenQuestion> {
     let id = BeadId::new(bead.id).ok()?;
     let labels = bead.labels.unwrap_or_default();
     let description = bead.description.unwrap_or_default();
@@ -103,6 +130,7 @@ fn open_question(bead: BdBead) -> Option<OpenQuestion> {
         recommend: field(RECOMMEND_PREFIX),
         a1: item.row.labels.iter().any(|l| l.starts_with(A1_PREFIX)),
         touches: touches(&bead.metadata),
+        blocking,
         digest,
         posted_at,
         title: item.row.title,

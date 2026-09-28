@@ -152,6 +152,8 @@ pub struct Card {
     pub reason: String,
     pub recommend: String,
     pub touches: Vec<String>,
+    /// 答えを待って止まった task の id（chip は数だけを出す）。
+    pub blocking: Vec<String>,
     pub digest: String,
 }
 
@@ -207,6 +209,7 @@ pub fn card(number: usize, q: &QuestionCard) -> Card {
         reason: q.reason.clone().unwrap_or_default(),
         recommend: q.recommend.clone().unwrap_or_default(),
         touches: q.touches.clone(),
+        blocking: q.blocking.clone(),
         digest: q.digest.clone(),
     }
 }
@@ -407,13 +410,14 @@ mod dom {
     use crate::vocab::label;
     use crate::widgets::help::HelpCtx;
 
-    /// 見本の IC.warn・IC.clock・IC.person・IC.code・IC.check・IC.link。
+    /// 見本の IC.warn・IC.clock・IC.person・IC.code・IC.check・IC.link・IC.stop。
     const WARN: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5"/><circle cx="12" cy="18" r=".8" fill="currentColor"/></svg>"#;
     const CLOCK: &str = r#"<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>"#;
     const PERSON: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>"#;
     const CODE: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>"#;
     const CHECK: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>"#;
     const LINK: &str = r#"<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>"#;
+    const STOP: &str = r#"<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor"/></svg>"#;
 
     /// 1 本の card の答えの状態（一覧を読み直しても残すので、問いの id ごとに block が持つ）。
     #[derive(Clone)]
@@ -586,6 +590,7 @@ mod dom {
                         <summary>
                             <span data-term=key>{label(key)}</span>
                             <span class="chip num" data-term="touches"><span inner_html=LINK></span>{label("touches")}" "{card.touches.len()}</span>
+                            <span class="chip num" data-term="blocking"><span inner_html=STOP></span>{label("blocking")}" "{card.blocking.len()}</span>
                         </summary>
                         <div class="nb-body">{places.view(card.id.to_string())}</div>
                     </details>

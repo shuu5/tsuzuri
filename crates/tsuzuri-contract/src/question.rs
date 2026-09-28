@@ -24,6 +24,9 @@ pub struct QuestionCard {
     pub a1: bool,
     /// 名指した節点の id の列。
     pub touches: Vec<String>,
+    /// この問いの答えを待って止まった task の id の列（台帳の順・鍵の無い電文は空の列に読む）。
+    #[serde(default)]
+    pub blocking: Vec<String>,
     /// 見た版の要約値（`LedgerItem::digest` の字）。
     pub digest: String,
 }

@@ -326,6 +326,7 @@ fn question_card() -> QuestionCard {
         recommend: Some("暗い色を既定にする".into()),
         a1: true,
         touches: vec!["surface-base#b-cards".into(), "ADR-7".into()],
+        blocking: vec!["t3-hub.30".into(), "t3-hub.31".into()],
         digest: ledger_item().digest(),
     }
 }
@@ -1008,6 +1009,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     recommend: None,
                     a1: false,
                     touches: vec![],
+                    blocking: vec![],
                     digest: "cbf29ce484222325".into(),
                 },
             ],

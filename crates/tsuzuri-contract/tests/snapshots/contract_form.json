@@ -1105,6 +1105,10 @@
         "surface-base#b-cards",
         "ADR-7"
       ],
+      "blocking": [
+        "t3-hub.30",
+        "t3-hub.31"
+      ],
       "digest": "0874e9bb3b87f545"
     },
     {
@@ -1117,6 +1121,7 @@
       "recommend": null,
       "a1": false,
       "touches": [],
+      "blocking": [],
       "digest": "cbf29ce484222325"
     }
   ],
@@ -1136,6 +1141,10 @@
             "touches": [
               "surface-base#b-cards",
               "ADR-7"
+            ],
+            "blocking": [
+              "t3-hub.30",
+              "t3-hub.31"
             ],
             "digest": "0874e9bb3b87f545"
           }

@@ -65,6 +65,7 @@ fn card(id: &str, touches: &[&str]) -> QuestionCard {
         recommend: None,
         a1: false,
         touches: touches.iter().map(|s| s.to_string()).collect(),
+        blocking: vec![],
         digest: format!("{id}-digest"),
     }
 }
