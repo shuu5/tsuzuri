@@ -3,12 +3,13 @@
 //! （大きく出す 1 つは電文の lead・各種の結果は電文の checks）。7 種の順は契約の型の宣言の順（`NextMove::ALL`）を引く。
 //! 字と並びは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::NextMove;
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 use tsuzuri_contract::wire;
 
 use super::node::answer_href;
-use super::{Body, NO_CONTENT, NOT_READ, batch, map, pipeline};
+use super::{Body, NO_CONTENT, NOT_READ, ask, batch, map, pipeline};
 use crate::account::windows::ACCOUNT_WIN;
 use crate::account::{Tab, tab_href};
 use crate::frame::{Block, Mode, PageId, href};
@@ -100,6 +101,8 @@ pub struct Row {
     /// 当たった種類は on・ほかは off。
     pub class: &'static str,
     pub mark: Mark,
+    /// 電文の対象の id の字（無ければ None・行 g-next-rows）。
+    pub target: Option<String>,
 }
 
 /// 頁の中の link。
@@ -208,6 +211,9 @@ pub fn row(kind: NextMove, check: Option<&NextCheck>) -> Row {
             "off"
         },
         mark,
+        target: check
+            .and_then(|c| c.target.as_ref())
+            .map(ToString::to_string),
     }
 }
 
@@ -295,6 +301,33 @@ pub fn window_of(kind: NextMove) -> Option<&'static str> {
     }
 }
 
+/// 一覧の当たった行の次の手の link（裁定 t3-hub.52.30 の案 A・止まっている走行は大きい箱と同じ block「pipeline」への link・
+/// ほかは `action`）。当たらない行と測れていない行は None。
+pub fn row_link(row: &Row, mode: Mode) -> Option<Link> {
+    if !matches!(row.mark, Mark::Count(_)) {
+        return None;
+    }
+    match row.kind {
+        NextMove::StalledRun => Some(Link {
+            href: format!("#{}", pipeline::BLOCK.id),
+            text: PIPE_LINK,
+        }),
+        kind => action(kind, row.target.as_deref(), mode),
+    }
+}
+
+/// 一覧の当たった質問の行の経過の字（見本の nx_e の小さい値・電文の対象の問いを問いの一覧から引くだけで選び直さない）。
+/// 質問のほかの種類・当たらない・対象が無い・問いの一覧が読めない・一覧に対象の card が無いときは None。
+pub fn waited(row: &Row, questions: &Fetched, now: EpochSecs) -> Option<String> {
+    if row.kind != NextMove::Question || !matches!(row.mark, Mark::Count(_)) {
+        return None;
+    }
+    let target = row.target.as_deref()?;
+    let cards = ask::cards(questions).ok()?;
+    let card = cards.iter().find(|c| c.id.as_str() == target)?;
+    Some(format!("◷ {}", ask::age(now, card.posted_at)))
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     dom::view()
@@ -306,16 +339,19 @@ mod dom {
     use leptos::prelude::*;
 
     use super::{
-        BLOCK, Big, BigTitle, MISS, Mark, Next, PATH, Row, action, big_title, content, window_of,
+        BLOCK, Big, BigTitle, MISS, Mark, Next, PATH, Row, action, big_title, content, row_link,
+        waited, window_of,
     };
     use crate::frame::{Mode, node_href};
-    use crate::project::{Body, UNKNOWN, body_view, map, section, state_icon, unmeasured};
+    use crate::project::{Body, UNKNOWN, ask, body_view, map, section, state_icon, unmeasured};
+    use crate::view::Fetched;
     use crate::widgets::help::{HelpCtx, hs};
     use crate::widgets::hover::attach;
 
     pub fn view() -> AnyView {
         let fetched = crate::net::read(PATH);
         let graph = crate::net::read(map::PATH);
+        let questions = crate::net::read(ask::PATH);
         // 今の mode（context が無ければ今の URL の query から・link に mode を残す）。
         let ctx = use_context::<HelpCtx>();
         let url = Mode::from_query(&crate::mapview::current());
@@ -325,7 +361,7 @@ mod dom {
             Body::Empty(line) => body_view(Body::Empty(line)),
             Body::Filled(next) => {
                 let title = graph.with(|g| big_title(&next.big, g));
-                next_view(next, title, mode)
+                next_view(next, title, questions, mode)
             }
         };
         section(BLOCK, ().into_any(), body.into_any())
@@ -334,9 +370,14 @@ mod dom {
     fn next_view(
         next: Next,
         title: Option<BigTitle>,
+        questions: ReadSignal<Fetched>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
     ) -> AnyView {
-        let rows = next.rest.into_iter().map(row_view).collect_view();
+        let rows = next
+            .rest
+            .into_iter()
+            .map(|row| row_view(row, questions, mode))
+            .collect_view();
         view! {
             {big_view(next.big, title, mode)}
             <ul class="nxlist">{rows}</ul>
@@ -378,16 +419,34 @@ mod dom {
         .into_any()
     }
 
-    fn row_view(row: Row) -> AnyView {
+    /// 一覧の 1 行（右の字の後に、当たった質問の行は経過を、当たった行は次の手の link を足す・行 g-next-rows）。
+    fn row_view(
+        row: Row,
+        questions: ReadSignal<Fetched>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
         let mark = match row.mark {
             Mark::Count(n) => view! { <span class="num">{n}</span> }.into_any(),
             Mark::Miss => MISS.into_any(),
             Mark::Unmeasured => state_icon(UNKNOWN),
         };
+        let win = window_of(row.kind);
+        // 経過は問いの一覧の読みが替わった時に今の時刻で組む（毎秒の書き直しはしない）。
+        let for_wait = row.clone();
+        let wait = move || {
+            questions
+                .with(|q| waited(&for_wait, q, crate::net::now()))
+                .map(|w| view! { " " <span class="num">{w}</span> })
+        };
+        // link は mode で href が変わる。
+        let for_link = row.clone();
+        let link = move || {
+            row_link(&for_link, mode()).map(|l| view! { " " <a href=l.href target=win>{l.text}</a> })
+        };
         view! {
             <li class=row.class data-nx=row.key>
                 {hs(row.key)}
-                <span class="v small">{mark}</span>
+                <span class="v small">{mark}{wait}{link}</span>
             </li>
         }
         .into_any()
