@@ -16,6 +16,7 @@ use crate::account::windows::ACCOUNT_WIN;
 use crate::frame::{self, BACK, BACK_WRAP, BackStep, Block, HEADER, Mode, PageId};
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
+use crate::store;
 use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, qmark, term};
@@ -32,6 +33,8 @@ const BLANK: &str = "about:blank";
 
 /// body に画面を載せる。
 pub fn mount() {
+    // 保存の mode を URL に揃えてから App が URL を読む（行 g-mode-store）。
+    store::settle_mode();
     leptos::mount::mount_to_body(App);
 }
 
@@ -40,8 +43,9 @@ fn search() -> String {
     window().location().search().unwrap_or_default()
 }
 
-/// mode を URL の query に残す（頁は読み直さない）。
+/// mode を URL の query に残し、保存にも写す（頁は読み直さない）。
 fn keep_mode_in_url(mode: Mode) {
+    store::keep_mode(mode);
     let url = frame::with_param(&search(), "mode", mode.key());
     if let Ok(history) = window().history() {
         let _ =

@@ -13,6 +13,7 @@ use super::{
 use crate::frame::{self, Block, Mode};
 use crate::net;
 use crate::project;
+use crate::store;
 use crate::view::{clock, clock_short};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, TipLayer, term};
@@ -42,6 +43,8 @@ pub fn mount() {
     let _ = window().set_name(windows::ACCOUNT_WIN);
     // 頁の題（index.html は project board と同じ file なので、ここで account board の題に替える）。
     document().set_title(&page_title());
+    // 保存の mode を URL に揃えてから App が URL を読む（行 g-mode-store）。
+    store::settle_mode();
     leptos::mount::mount_to_body(App);
 }
 
@@ -50,8 +53,9 @@ fn search() -> String {
     window().location().search().unwrap_or_default()
 }
 
-/// mode を URL の query に残す（頁は読み直さない）。
+/// mode を URL の query に残し、保存にも写す（頁は読み直さない）。
 fn keep_mode_in_url(mode: Mode) {
+    store::keep_mode(mode);
     let url = frame::with_param(&search(), "mode", mode.key());
     if let Ok(history) = window().history() {
         let _ =

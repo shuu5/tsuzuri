@@ -12,6 +12,8 @@ pub mod kit;
 pub mod mapview;
 pub mod pages;
 pub mod project;
+/// browser の保存（mode などの便利の写し・決め方は host でも組む・行 g-mode-store）。
+pub mod store;
 pub mod view;
 pub mod vocab;
 pub mod widgets;
