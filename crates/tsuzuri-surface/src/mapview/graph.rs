@@ -769,7 +769,7 @@ pub fn chain(view: &GraphView) -> Vec<ChainBand> {
                     let open = alert || is_open(n.status.as_deref());
                     ChainRow {
                         id: n.node.id.clone(),
-                        title: title36(&n.node.title),
+                        title: title36(&fold::plain_title(n)),
                         shape: format!(
                             "shape {}{}",
                             band.class_name(),

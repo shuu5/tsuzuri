@@ -11,7 +11,7 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, ViewNode};
 
 use crate::mapview::band::{band_of, kind_key};
 use crate::mapview::graph::cut;
-use crate::mapview::graph::fold::fold_key;
+use crate::mapview::graph::fold::{fold_key, plain_title};
 use crate::mapview::list::{NO_GIST, NO_STATE};
 use crate::mapview::state;
 use crate::vocab::label;
@@ -148,7 +148,7 @@ pub fn card_for(node: &GraphNode, status: Option<&str>) -> Card {
 pub fn group_card(n: &ViewNode) -> Card {
     let kind = n.node.kind;
     Card {
-        title: n.node.title.clone(),
+        title: plain_title(n),
         kind: format!(
             "{}・{}・{}",
             label(kind_key(kind)),
