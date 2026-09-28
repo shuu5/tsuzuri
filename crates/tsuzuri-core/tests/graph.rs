@@ -182,7 +182,7 @@ fn graph_real_runs_hold_stage_and_account() {
         g.nodes
             .iter()
             .all(|n| n.kind != NodeKind::NoteRow && n.id != "acct-1"),
-        "設計ノートの行と口座は節点にしない"
+        "見本の索引は設計ノートの行を持たず、口座は節点にしない"
     );
 }
 

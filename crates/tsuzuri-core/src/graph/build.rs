@@ -1,7 +1,8 @@
 //! 3 つの字からグラフを組む。読めない字はその出所を `Graph::unread` に挙げ、ほかの出所は組む。
 //! 設計の索引の節点と辺は表の行を写す。bead の種類は epic・memo・問い・契約の順に決める。
 //! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
-//! 設計ノートの行・design の辺・ruled_by の辺はこの便では組まない（先の節点が入力に無い）。
+//! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
+//! ruled_by の辺は組まない（索引に裁定の欄が無い）。
 //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）から写す（行は無し）。
 //! 設計の節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
 
@@ -16,8 +17,14 @@ use tsuzuri_contract::ledger::{MEMO_LABEL, QUESTION_LABEL};
 use super::{BeadAttr, Graph, Inputs, RunAttr, Source};
 use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
 
-/// 設計文書の種類の数（`NodeKind::ALL` の先頭の 11）。
-pub const DESIGN_KINDS: usize = 11;
+/// 設計の索引の節点の種類の数（`NodeKind::ALL` の先頭の 12 = 設計文書の 11 種と設計ノートの行）。
+pub const DESIGN_KINDS: usize = 12;
+
+/// 索引の設計ノートの行の種類の語（契約の型の serde の名とは違う）。
+pub const NOTE_ROW_KIND: &str = "設計ノートの行";
+
+/// pointer の先の file の名の終わり（folio derive が書く導出物）。
+const DERIVED_EXT: &str = ".toml";
 
 /// 設計文書の辺の型の数（`EdgeType::ALL` の先頭の 17）。
 pub const DESIGN_EDGE_TYPES: usize = 17;
@@ -129,6 +136,27 @@ struct Design {
     skipped: usize,
 }
 
+/// 索引の種類の語を読む。語が `NOTE_ROW_KIND` なら設計ノートの行、ほかは契約の型の serde の名で読んだ
+/// 種類が設計ノートの行でなく `NodeKind::ALL` の先頭の `DESIGN_KINDS` に在るときだけ（ほかは None）。
+fn design_kind(word: &str) -> Option<NodeKind> {
+    if word == NOTE_ROW_KIND {
+        return Some(NodeKind::NoteRow);
+    }
+    named::<NodeKind>(word)
+        .filter(|k| *k != NodeKind::NoteRow && NodeKind::ALL[..DESIGN_KINDS].contains(k))
+}
+
+/// pointer の行が指す設計ノートの行の id の候補。`POINTER_PREFIX` を除いた残りの前後の空白を除き、
+/// 最初の `#` で path と行 id に分け、path の最後の `/` の後の字が `.toml` で終わるとき、
+/// その前の字（文書 id）と `#` と行 id をつないだ字（`#` が無いか `.toml` で終わらなければ None）。
+fn pointer_row(line: &str) -> Option<String> {
+    let rest = line.strip_prefix(POINTER_PREFIX)?.trim();
+    let (path, row) = rest.split_once('#')?;
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let doc = name.strip_suffix(DERIVED_EXT)?;
+    Some(format!("{doc}#{row}"))
+}
+
 /// 設計の索引を読む。節点の行は 5 列（id・種類・file・要約値・題）、辺の行は 3 列（端・端・型）。
 /// `#` で始まる行と空の行は読み捨てる。字が空か、列の数か種類が合わない行が在れば読めない（None）。
 fn read_design(text: &str) -> Option<Design> {
@@ -146,8 +174,7 @@ fn read_design(text: &str) -> Option<Design> {
         }
         match line.split('\t').collect::<Vec<_>>()[..] {
             [id, kind, file, digest, title] => {
-                let kind = named::<NodeKind>(kind)
-                    .filter(|k| NodeKind::ALL[..DESIGN_KINDS].contains(k))?;
+                let kind = design_kind(kind)?;
                 design.nodes.push(GraphNode {
                     id: id.to_string(),
                     kind,
@@ -263,8 +290,14 @@ fn typed_lines(notes: &str) -> Vec<(NodeKind, String, &str)> {
         .collect()
 }
 
-/// 台帳の bead から節点と辺を組む。
+/// 台帳の bead から節点と辺を組む。design の辺は pointer の行が指す設計ノートの行の節点が在るときだけ組む。
 fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
+    let rows: BTreeSet<String> = g
+        .nodes
+        .iter()
+        .filter(|n| n.kind == NodeKind::NoteRow)
+        .map(|n| n.id.clone())
+        .collect();
     let mut derived: BTreeSet<(NodeKind, String)> = BTreeSet::new();
     for bead in beads {
         let labels = bead.labels.unwrap_or_default();
@@ -325,7 +358,13 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
             .map(|l| l.trim_end_matches('\r'))
             .filter(|l| l.starts_with(POINTER_PREFIX))
             .map(str::to_string)
-            .collect();
+            .collect::<Vec<_>>();
+        let mut pointed: BTreeSet<String> = BTreeSet::new();
+        for row in pointers.iter().filter_map(|p| pointer_row(p)) {
+            if rows.contains(&row) && pointed.insert(row.clone()) {
+                g.edges.push(edge(&bead.id, &row, EdgeType::Design));
+            }
+        }
         g.beads.insert(
             bead.id,
             BeadAttr {

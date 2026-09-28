@@ -35,7 +35,7 @@ pub struct Inputs<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Source {
-    /// 設計の索引（設計文書の 11 種）。
+    /// 設計の索引（設計文書の 11 種と設計ノートの行）。
     Design,
     /// 台帳（bead の 4 種と notes から導く 3 種）。
     Ledger,
@@ -63,7 +63,7 @@ impl Source {
         }
     }
 
-    /// 節点の種類の出所（設計ノートの行はこの便では組まないので None）。
+    /// 節点の種類の出所（閉じた 20 の種類はどれも 1 つの出所に当たる）。
     pub fn of(kind: NodeKind) -> Option<Source> {
         Source::ALL.into_iter().find(|s| s.kinds().contains(&kind))
     }
