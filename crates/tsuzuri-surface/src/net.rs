@@ -5,7 +5,9 @@
 //! 口ごとの読みの印（flight の Flight）で、読みの途中の呼びは読みの後の 1 回にまとめ、
 //! 見ている部品が無い（片付いた）口の呼びは部品が戻ったときの 1 回にまとめる。
 //! 読みの後は view の決め方で置くかを決める（同じ本文は置かない・一度の読めないは 1 秒後に読み直す・便 g-steady）。
-//! 知らせが切れている間は、今の中身が正しいと言えないので登録された口を全部「読めない」にする（要件 NFR2・決め方を通さない）。
+//! 知らせが切れても最後に読めた中身を READ_HOLD_S 秒まで出し続け、越えたら登録された口を全部「読めない」にする
+//! （要件 NFR2・決め方を通さない・行 g-fresh）。読みの応答の頭（最後に読めた時からの秒）と切れた時刻は fresh の
+//! Fresh に置き、上端の帯の最終の記録と読み込み不良の印が読む。台帳の読みが落ちている間は HELD_POLL_MS ごとに読み直す。
 //! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
 //! path が query で変わる口（節点の近傍・便 g-node）は `read_path` に path の字の signal を渡し、
 //! 読みの結果と応答の状態の数の組を受ける。path が変わったときと知らせの合図で読み直し、接続は同じ 1 本を使う。
@@ -16,6 +18,7 @@ use std::time::Duration;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use tsuzuri_contract::EpochSecs;
+use tsuzuri_contract::ledger::{READ_AGE_HEADER, READ_HOLD_S};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys::Date;
 use web_sys::wasm_bindgen::closure::Closure;
@@ -23,6 +26,7 @@ use web_sys::wasm_bindgen::{JsCast, JsValue};
 use web_sys::{EventSource, Headers, Request, RequestInit, Response};
 
 use crate::flight::{Flight, OPEN_WAIT_MS};
+use crate::fresh::{Fresh, HELD_POLL_MS, read_age};
 use crate::view::{Fetched, RELOAD_EVENTS, RETRY_MS, Settle, settle};
 
 /// 変化の知らせの口（SSE・server の便 e-min）。
@@ -45,6 +49,10 @@ thread_local! {
     static LIVE: Cell<bool> = const { Cell::new(false) };
     /// 1 秒の時計の signal（初めて `ticker` を呼んだときに作る・頁に 1 本だけ）。
     static TICK: RefCell<Option<ArcRwSignal<EpochSecs>>> = const { RefCell::new(None) };
+    /// 中身の古さの signal（初めての呼びで作る・頁に 1 本だけ）。
+    static FRESH: RefCell<Option<ArcRwSignal<Fresh>>> = const { RefCell::new(None) };
+    /// 台帳の読みが落ちている間の読み直しを待っているか。
+    static POLLING: Cell<bool> = const { Cell::new(false) };
 }
 
 /// 時計の signal を書き直す間（ミリ秒）。
@@ -72,12 +80,77 @@ pub fn ticker() -> ReadSignal<EpochSecs> {
     ReadSignal::from(signal.read_only())
 }
 
+/// 中身の古さの signal（初めての呼びで作る）。
+fn fresh_signal() -> ArcRwSignal<Fresh> {
+    FRESH.with_borrow_mut(|fresh| {
+        fresh
+            .get_or_insert_with(|| ArcRwSignal::new(Fresh::default()))
+            .clone()
+    })
+}
+
+/// 中身の古さ（上端の帯の最終の記録と読み込み不良の印が読む）。
+pub fn fresh() -> ReadSignal<Fresh> {
+    ReadSignal::from(fresh_signal().read_only())
+}
+
+/// 中身の古さに `f` を撃ち、値が変わった時だけ signal に置く。
+fn change<R>(f: impl FnOnce(&mut Fresh) -> R) -> R {
+    let signal = fresh_signal();
+    let mut next = signal.get_untracked();
+    let out = f(&mut next);
+    if signal.with_untracked(|now| *now != next) {
+        signal.set(next);
+    }
+    out
+}
+
+/// 口 `path` の読めた応答の頭の秒（頭が無ければ None）を古さに置き、読みが落ちている間は後で読み直す
+/// （待ちは 1 つだけ・読み直しの応答でまだ落ちていれば次の待ちを置く・見張りが戻りを知らせない場合の拾い）。
+fn note(path: &str, age: Option<u64>) {
+    change(|f| f.got(path, now(), age));
+    if fresh_signal().with_untracked(Fresh::held) && !POLLING.replace(true) {
+        set_timeout(
+            || {
+                POLLING.set(false);
+                if fresh_signal().with_untracked(Fresh::held) {
+                    reload_all();
+                }
+            },
+            Duration::from_millis(HELD_POLL_MS),
+        );
+    }
+}
+
+/// 知らせのつながりが切れた（切れた最初の誤りから READ_HOLD_S 秒の後もまだ切れていれば全部「読めない」にする・
+/// 繋ぎ直しのたびの誤りは待ちを増やさない）。
+fn link_lost() {
+    let at = now();
+    if !change(|f| f.lose(at)) {
+        return;
+    }
+    set_timeout(
+        move || {
+            if fresh_signal().with_untracked(Fresh::lost_since) == Some(at) {
+                lose_all();
+            }
+        },
+        Duration::from_secs(READ_HOLD_S),
+    );
+}
+
+/// 知らせのつながりが開いた（切れた時刻を消す）。
+fn link_back() {
+    change(Fresh::back);
+}
+
 /// 口を読む（届かない・200 でない・本文が字でなければ Failed）。
 async fn fetch(path: &str) -> Fetched {
     fetch_status(path).await.0
 }
 
 /// 口を読み、応答の状態の数も返す（応答が無ければ状態の数は None）。
+/// 読めた応答の頭（最後に読めた時からの秒）は古さに置く（200 でない・届かない応答は置かない）。
 async fn fetch_status(path: &str) -> Status {
     let Some(window) = web_sys::window() else {
         return (Fetched::Failed, None);
@@ -96,7 +169,12 @@ async fn fetch_status(path: &str) -> Status {
         return (Fetched::Failed, status);
     };
     match JsFuture::from(text).await.ok().and_then(|t| t.as_string()) {
-        Some(body) => (Fetched::Body(body), status),
+        Some(body) => {
+            let header = response.headers().get(READ_AGE_HEADER).ok().flatten();
+            let age = read_age(header.as_deref());
+            note(path, age);
+            (Fetched::Body(body), status)
+        }
         None => (Fetched::Failed, status),
     }
 }
@@ -250,6 +328,10 @@ pub fn read_path(path: Signal<String>) -> ReadSignal<(Fetched, Option<u16>)> {
     Effect::new(move |before: Option<String>| {
         let now = path.get();
         if before.as_ref() != Some(&now) {
+            // 前の path の古さは数えない。
+            if let Some(old) = &before {
+                change(|f| f.forget(old));
+            }
             let go = WATCHES.with_borrow_mut(|w| {
                 let (p, _, flight) = w.get_mut(slot)?;
                 p.clone_from(&now);
@@ -264,7 +346,17 @@ pub fn read_path(path: Signal<String>) -> ReadSignal<(Fetched, Option<u16>)> {
         now
     });
     on_cleanup(move || {
-        watch_flight(slot, |flight| flight.detach());
+        let users = watch_flight(slot, |flight| {
+            flight.detach();
+            flight.users()
+        });
+        // 見ている部品が無くなった口の古さは数えない。
+        if users == Some(0) {
+            let now = WATCHES.with_borrow(|w| w.get(slot).map(|(p, _, _)| p.clone()));
+            if let Some(p) = now {
+                change(|f| f.forget(&p));
+            }
+        }
     });
     connect();
     ReadSignal::from(signal.read_only())
@@ -289,15 +381,24 @@ pub fn read(path: &'static str) -> ReadSignal<Fetched> {
         load_at(slot, 1);
     }
     on_cleanup(move || {
-        read_flight(slot, |flight| flight.detach());
+        let users = read_flight(slot, |flight| {
+            flight.detach();
+            flight.users()
+        });
+        // 見ている部品が無くなった口の古さは数えない。
+        if users == Some(0) {
+            change(|f| f.forget(path));
+        }
     });
     connect();
     ReadSignal::from(signal.read_only())
 }
 
-/// 知らせの接続を張る（頁に 1 本だけ・開いたで最初の読みを許して読み直し・合図で読み直し・切れたら全部「読めない」）。
+/// 知らせの接続を張る（頁に 1 本だけ・開いたで最初の読みを許して読み直し・合図で読み直し・
+/// 切れたら切れた時刻を置き READ_HOLD_S 秒の後もまだ切れていれば全部「読めない」・開いたの event で切れた時刻を消す）。
 /// 接続は頁の一生の間ずっと持つ（切れても EventSource が繋ぎ直し、開いたで読み直す）。
 /// 開くのを待つのは上限まで（越えたら開くのを待たずに 1 巡読み、後で開いたときにもう 1 巡読む）。
+/// 上限の timer は切れた時刻を消さない（開く前に切れた接続の時刻を残す）。
 fn connect() {
     if CONNECTED.replace(true) {
         return;
@@ -309,9 +410,16 @@ fn connect() {
     };
     let on_open = Closure::<dyn FnMut()>::new(go_live);
     let on_change = Closure::<dyn FnMut()>::new(reload_all);
-    let on_error = Closure::<dyn FnMut()>::new(lose_all);
+    let on_error = Closure::<dyn FnMut()>::new(link_lost);
+    let on_back = Closure::<dyn FnMut()>::new(link_back);
     source.set_onopen(Some(on_open.as_ref().unchecked_ref()));
     source.set_onerror(Some(on_error.as_ref().unchecked_ref()));
+    if source
+        .add_event_listener_with_callback("open", on_back.as_ref().unchecked_ref())
+        .is_err()
+    {
+        lose_all();
+    }
     for name in RELOAD_EVENTS {
         if source
             .add_event_listener_with_callback(name, on_change.as_ref().unchecked_ref())
@@ -323,6 +431,7 @@ fn connect() {
     on_open.forget();
     on_change.forget();
     on_error.forget();
+    on_back.forget();
     std::mem::forget(source);
     set_timeout(
         || {

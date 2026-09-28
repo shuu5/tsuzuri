@@ -10,6 +10,8 @@ pub mod account;
 /// 口ごとの読みの印の決め方（net が使い host でも組む・行 g-reads）。
 pub mod flight;
 pub mod frame;
+/// 中身の古さと読み込み不良の印（決め方は host でも組む・印の DOM は wasm の target だけ・行 g-fresh）。
+pub mod fresh;
 pub mod kit;
 pub mod mapview;
 pub mod pages;

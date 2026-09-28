@@ -14,6 +14,7 @@ use tsuzuri_contract::project::PATH as PROJECT_PATH;
 
 use crate::account::windows::ACCOUNT_WIN;
 use crate::frame::{self, BACK, BACK_WRAP, BackStep, Block, HEADER, Mode, PageId};
+use crate::fresh::{self, Fresh};
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
 use crate::store;
@@ -70,7 +71,7 @@ fn App() -> impl IntoView {
         }
     });
     provide_context(HoverCtx::default());
-    // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は読めた時刻）。
+    // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は net の古さの最後に読めた時刻）。
     let fetched = net::read(ledger::PATH);
     let screen = RwSignal::new(Screen::initial());
     Effect::new(move |_| {
@@ -82,7 +83,7 @@ fn App() -> impl IntoView {
     // 頁の題の語に替える字（節点の頁の block が節点の題を置く・行 g-title）。
     provide_context(RwSignal::new(PageSubject::default()));
     view! {
-        {top(page, mode, screen)}
+        {top(page, mode)}
         <main class="page">{page_view(page)}</main>
         <TipLayer/>
         <CardLayer/>
@@ -152,8 +153,8 @@ fn project_name(page: PageId) -> RwSignal<Option<String>> {
     name
 }
 
-/// 上端の帯: 戻る・題・頁の link・最終更新・mode の切り替え（frame の BACK と HEADER の順）。
-fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl IntoView {
+/// 上端の帯: 戻る・題・頁の link・最終更新と読み込み不良の印・mode の切り替え（frame の BACK と HEADER の順）。
+fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
     let name = project_name(page);
     let back = view! {
         <span class=BACK_WRAP>
@@ -205,13 +206,15 @@ fn top(page: PageId, mode: RwSignal<Mode>, screen: RwSignal<Screen>) -> impl Int
             }
             "updated" => {
                 // 字は短い時刻で、pointer を乗せると語の説明を出す（長い時刻は title に残す）。
-                let updated = move || screen.with(|s| s.updated_at);
+                // 時刻は最後に読めた時刻（読みの落ちた口が在ればその最も古い値・行 g-fresh）。
+                let fresh = net::fresh();
+                let updated = move || fresh.with(Fresh::record);
                 let title = move || updated().map(clock);
                 let at = move || match updated() {
                     Some(t) => term(part.key, clock_short(t, net::now())),
                     None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
                 };
-                view! { <span class=part.class title=title>{at}</span> }.into_any()
+                view! { <span class=part.class title=title>{at}</span>{fresh::mark()} }.into_any()
             }
             _ => {
                 let choices = Mode::ALL

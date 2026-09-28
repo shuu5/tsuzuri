@@ -4,13 +4,13 @@
 
 use leptos::ev;
 use leptos::prelude::*;
-use tsuzuri_contract::EpochSecs;
 
 use super::{
     BRAND, HEADER, PATH, TOP, Tab, UPDATED_CLASS, UPDATED_KEY, badge, doc, home, ledger, page,
     page_title, projects, session, tab_href, tab_links, tab_url, windows,
 };
 use crate::frame::{self, Block, Mode};
+use crate::fresh::{self, Fresh};
 use crate::net;
 use crate::project;
 use crate::store;
@@ -89,15 +89,8 @@ fn App() -> impl IntoView {
     // 口は頁に 1 本（block も同じ path を read に渡し、同じ signal を分け合う）。
     let fetched = net::read(PATH);
     let read = Memo::new(move |_| fetched.with(doc).ok());
-    // 最終の記録は電文が読めた時刻（読めない読みでは進めない）。
-    let updated = RwSignal::new(None::<EpochSecs>);
-    Effect::new(move |_| {
-        if read.with(Option::is_some) {
-            updated.set(Some(net::now()));
-        }
-    });
     view! {
-        {top(query, mode, read, updated)}
+        {top(query, mode, read)}
         // query が替わるたびに今の tab の block を組み直す（block は組むときに URL の並べ方と幅を読む）。
         <main class="page">{move || page_view(query.with(|q| Tab::from_query(q)))}</main>
         <TipLayer/>
@@ -105,12 +98,11 @@ fn App() -> impl IntoView {
     }
 }
 
-/// 上端の帯: 題・tab の link・最終の記録・mode の切り替え（account の HEADER の順）。
+/// 上端の帯: 題・tab の link・最終の記録と読み込み不良の印・mode の切り替え（account の HEADER の順）。
 fn top(
     query: RwSignal<String>,
     mode: RwSignal<Mode>,
     read: Memo<Option<tsuzuri_contract::account::AccountDoc>>,
-    updated: RwSignal<Option<EpochSecs>>,
 ) -> impl IntoView {
     let tab = Memo::new(move |_| query.with(|q| Tab::from_query(q)));
     let parts = HEADER
@@ -171,7 +163,8 @@ fn top(
                 view! {
                     <nav class=part.class aria-label=label(part.key)>{links}</nav>
                     <span class="grow"></span>
-                    {updated_chip(updated)}
+                    {updated_chip()}
+                    {fresh::mark()}
                 }
                 .into_any()
             }
@@ -195,10 +188,13 @@ fn top(
     view! { <header class=TOP>{parts}</header> }
 }
 
-/// 最終の記録の chip（短い時刻・長い時刻は title・まだ読めていなければ測れていないの印と語）。
-fn updated_chip(updated: RwSignal<Option<EpochSecs>>) -> impl IntoView {
-    let title = move || updated.get().map(clock);
-    let at = move || match updated.get() {
+/// 最終の記録の chip（最後に読めた時刻・読みの落ちた口が在ればその最も古い値・行 g-fresh・
+/// 短い時刻・長い時刻は title・まだ読めていなければ測れていないの印と語）。
+fn updated_chip() -> impl IntoView {
+    let fresh = net::fresh();
+    let updated = move || fresh.with(Fresh::record);
+    let title = move || updated().map(clock);
+    let at = move || match updated() {
         Some(t) => term(UPDATED_KEY, clock_short(t, net::now())),
         None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
     };
