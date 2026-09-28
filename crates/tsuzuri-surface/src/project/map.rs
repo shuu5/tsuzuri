@@ -1,4 +1,4 @@
-//! 地図の頁（見本の map.html・便 g-map）: 見出しと節点の数・面の切り替えの tab（4 つ）・今の面の中身。
+//! 地図の頁（見本の map.html・便 g-map）: 見出しと節点の数・面の切り替えの tab（6 つ）・今の面の中身。
 //! 口（/api/graph）の本文を契約の型の GraphDoc に読み、面の中身は mapview の下の module が組む。
 //! グラフの面だけは自分の口（/api/graph/view）を graph の module の中で読む（便 g-graph）。
 //! 今の面は URL の query の view に残す（無い・知らない値は圧縮の面）。
@@ -74,6 +74,7 @@ mod dom {
     use web_sys::wasm_bindgen::JsCast;
 
     use super::{BLOCK, PATH, doc, tab_step};
+    use crate::mapview::tree::{self, Tree};
     use crate::mapview::{View, compact, current, graph, list, navigate, table, with_view};
     use crate::project::unmeasured;
     use crate::vocab::label;
@@ -128,6 +129,8 @@ mod dom {
                     View::List => list::view(d, search),
                     View::Graph => graph::view(search),
                     View::Table => table::view(d, search),
+                    View::Design => tree::view(d, Tree::Design, search),
+                    View::Ledger => tree::view(d, Tree::Ledger, search),
                 },
             })
         };

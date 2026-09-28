@@ -649,10 +649,20 @@
    "plain": "種類 × 種類の線の数\n→ 押すと一覧に絞る",
    "internal": "view=table"
   },
+  "view_design": {
+   "label": "設計の木",
+   "plain": "設計の文書を入れ子の一覧で見る\n・ 帯 → 条 → 規範文\n・ 要件 → 受入基準\n・ 設計ノート → 行\n→ 押すと項目の頁",
+   "internal": "view=design\n親子 = in-article、verify.ac、verifies"
+  },
+  "view_ledger": {
+   "label": "台帳の木",
+   "plain": "台帳の項目を入れ子の一覧で見る\n・ epic → task → run\n・ question → あなたの決定\n・ 閉じた項目は畳んでおく\n→ 押すと項目の頁",
+   "internal": "view=ledger\n親子 = parent-child、run_of、answers"
+  },
   "views": {
    "label": "眺め",
-   "plain": "同じ中身を 4 つの形で見る\n・ 切り替えは URL に残る",
-   "internal": "?view=compact|list|graph|table"
+   "plain": "同じ中身を 6 つの形で見る\n・ 切り替えは URL に残る",
+   "internal": "?view=compact|list|graph|table|design|ledger"
   },
   "col_id": {
    "label": "番号",

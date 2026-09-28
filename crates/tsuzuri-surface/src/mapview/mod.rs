@@ -1,6 +1,7 @@
-//! 地図の頁の面の部品（便 g-map・見本の map.html）: 4 面の切り替え（圧縮・一覧・グラフ・表）と、面に共通の小道具。
-//! 電文（契約の型の GraphDoc）の読みは地図の module（project の下の map）が持ち、ここの関数は読めた電文だけを受ける。
-//! 帯と種類の対応は band・圧縮の面は compact・一覧の面は list・表の面は table・グラフの面と近傍は graph と around（後の便）。
+//! 地図の頁の面の部品（便 g-map・見本の map.html）: 6 面の切り替え（圧縮・一覧・グラフ・表・設計の木・台帳の木）と、
+//! 面に共通の小道具。電文（契約の型の GraphDoc）の読みは地図の module（project の下の map）が持ち、ここの関数は読めた電文だけを受ける。
+//! 帯と種類の対応は band・圧縮の面は compact・一覧の面は list・表の面は table・グラフの面と近傍は graph と around・
+//! 2 つの木の面は tree（行 g-map-tree）。
 //! 並べ方と絞りと数え方と URL の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 pub mod around;
@@ -9,6 +10,7 @@ pub mod compact;
 pub mod graph;
 pub mod list;
 pub mod table;
+pub mod tree;
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -18,18 +20,27 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind};
 
 use band::{Band, band_of, unread_reason};
 
-/// 地図の面（閉じた 4・tab の順）。
+/// 地図の面（閉じた 6・tab の順）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum View {
     Compact,
     List,
     Graph,
     Table,
+    Design,
+    Ledger,
 }
 
 impl View {
     /// 閉じた一覧（順も固定）。
-    pub const ALL: [View; 4] = [View::Compact, View::List, View::Graph, View::Table];
+    pub const ALL: [View; 6] = [
+        View::Compact,
+        View::List,
+        View::Graph,
+        View::Table,
+        View::Design,
+        View::Ledger,
+    ];
 
     /// URL の query の view の値。
     pub fn name(self) -> &'static str {
@@ -38,6 +49,8 @@ impl View {
             View::List => "list",
             View::Graph => "graph",
             View::Table => "table",
+            View::Design => "design",
+            View::Ledger => "ledger",
         }
     }
 
@@ -48,6 +61,8 @@ impl View {
             View::List => "view_list",
             View::Graph => "view_graph",
             View::Table => "view_table",
+            View::Design => "view_design",
+            View::Ledger => "view_ledger",
         }
     }
 

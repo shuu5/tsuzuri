@@ -13,21 +13,25 @@ fn read(rel: &str) -> String {
 
 #[test]
 fn mkeys_arrows_wrap_around() {
-    use View::{Compact, Graph, List, Table};
+    use View::{Compact, Design, Graph, Ledger, List, Table};
     let right = [
         (Compact, List),
         (List, Graph),
         (Graph, Table),
-        (Table, Compact),
+        (Table, Design),
+        (Design, Ledger),
+        (Ledger, Compact),
     ];
     for (now, next) in right {
         assert_eq!(tab_step(now, "ArrowRight"), Some(next), "{now:?} の右");
     }
     let left = [
-        (Compact, Table),
+        (Compact, Ledger),
         (List, Compact),
         (Graph, List),
         (Table, Graph),
+        (Design, Table),
+        (Ledger, Design),
     ];
     for (now, prev) in left {
         assert_eq!(tab_step(now, "ArrowLeft"), Some(prev), "{now:?} の左");
