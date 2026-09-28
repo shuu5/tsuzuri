@@ -1439,3 +1439,57 @@ fn f149_adr24_decision_1_is_strong_not_raw() {
     );
     assert!(!html.contains("**"), "ADR-24 の面に生の印が在る");
 }
+
+// ── 便 193（docs/design/delivery-193.md §1 (c)・台帳 f2-648.231）: 前の項が「。**」「。」」で終わっても次の項を分ける ──
+
+#[test]
+fn f193_items_split_after_a_bold_or_quote_closer() {
+    // 前の項の末尾が太字の閉じ・かぎ括弧の閉じ・両方の重なりでも、句点の後の印は項の頭
+    let html = with_context(
+        "f193-closers",
+        "前置き。(1) **あ。** (2) 「い。」 (3) **「う。」** (4) え。",
+    );
+    assert!(
+        html.contains(
+            "<ol class=\"items\">\n<li><strong>あ。</strong></li>\n<li>「い。」</li>\n<li><strong>「う。」</strong></li>\n<li>え。</li>\n</ol>"
+        ),
+        "閉じの字の後の項が分かれていない: {html}"
+    );
+    // 句点の無い閉じの字の後は項の頭でない（文の中の参照のまま）
+    let html = with_context("f193-no-stop", "前置き。(1) **あ** (2) い。");
+    assert!(
+        html.contains("<p>前置き。(1) <strong>あ</strong> (2) い。</p>"),
+        "句点の無い閉じの字の後を分けた: {html}"
+    );
+    let html = with_context("f193-quote-no-stop", "前置き。(1) 「あ」 (2) い。");
+    assert!(
+        html.contains("<p>前置き。(1) 「あ」 (2) い。</p>"),
+        "句点の無いかぎ括弧の閉じの後を分けた: {html}"
+    );
+}
+
+#[test]
+fn f193_real_records_split_every_numbered_item() {
+    // 実の正本（発効した記録は封で本文が変わらない）で、台帳の実例の欄の項の数が本文の番号の数と等しい（手書き・(0) は前置き）
+    let td = temp_dir("f193-real");
+    for (id, ch, want) in [
+        ("ADR-13", 1, 9),
+        ("ADR-13", 2, 16),
+        ("ADR-17", 2, 6),
+        ("ADR-18", 1, 5),
+        ("ADR-19", 1, 6),
+        ("ADR-26", 2, 7),
+        ("ADR-27", 2, 4),
+    ] {
+        let (_, html) = real_face(&td, id);
+        let body = chapter(&html, ch);
+        let list = body
+            .split("<ol class=\"items\">")
+            .nth(1)
+            .unwrap_or_else(|| panic!("{id} の章 {ch} に一覧が無い"));
+        let list = &list[..list.find("</ol>").unwrap()];
+        assert_eq!(list.matches("<li>").count(), want, "{id} の章 {ch}: {list}");
+        assert_eq!(body.matches("<ol class=\"items\">").count(), 1, "{id} の章 {ch}");
+    }
+    let _ = fs::remove_dir_all(&td);
+}

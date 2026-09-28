@@ -1315,3 +1315,72 @@ fn f146_constitution_figure_caption_and_foot_follow_the_current_approval() {
     once(&effective, &foot_of("v0.9", "承認 2026-09-02"));
     assert!(!effective.contains(&caption_of("v0.9", "2026-09-01")), "発効の図 1 の札が生成日を出す");
 }
+
+// ── 便 193（docs/design/delivery-193.md §1 (c)・台帳 f2-648.244・一括 30 の検証の N6）: 裁定の枡の閉じ括弧と過去の裁定の順 ──
+
+/// 裁定の枡の字から正本の裁定の欄を組み直す（歯の側の手書きの式）: 見える字から「（ruled_at） 」を外した最新の字に、
+/// 小窓の本体の「<p>前の裁定 = …</p>」の中身を面の順に区切り「・前の裁定 = 」で繋ぐ。
+fn rebuilt(cell: &str, at: &str) -> String {
+    let seen = visible(cell);
+    let tail = format!("（{}） ", esc(at));
+    let latest = seen
+        .strip_suffix(tail.as_str())
+        .unwrap_or_else(|| panic!("見える字が「{tail}」で終わらない: {seen}"));
+    let (_, body) = fold(cell).expect("小窓が無い");
+    let mut out = latest.to_string();
+    for p in body.split("<p>前の裁定 = ").skip(1) {
+        out.push_str("・前の裁定 = ");
+        out.push_str(
+            p.strip_suffix("</p>")
+                .unwrap_or_else(|| panic!("小窓の段落が閉じない: {body}")),
+        );
+    }
+    out
+}
+
+#[test]
+fn f193_rules_ruling_chain_rebuilds_the_source() {
+    // 前の裁定を持つ行の全部で、枡の字から組み直した字が正本の裁定の欄と字で等しい（閉じ括弧の有無と過去の裁定の順）
+    let html = unlink_adr(&real_html("f193-rebuild"));
+    let (folded, _) = source_rows_by_previous();
+    for id in &folded {
+        let (ruling, at) = source_ruling(id);
+        assert_eq!(rebuilt(&cell(&html, id, "裁定"), &at), esc(&ruling), "{id}");
+    }
+}
+
+/// 写しの行 R-6 の裁定の欄を、前の裁定 3 件の鎖にする（最新 甲・過去は新しい順に 乙・丙・丁）。
+fn chain_r6(t: &str) -> String {
+    let mut out: String = t
+        .lines()
+        .map(|l| {
+            if l.starts_with("  - {id: R-6,") {
+                l.replacen(
+                    "ruling: 発効承認 2026-09-12（f2-648.1 notes・P-17.3）,",
+                    "ruling: \"甲（1）・前の裁定 = 乙（2）・前の裁定 = 丙（3）・前の裁定 = 丁（4）\",",
+                    1,
+                )
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    out.push('\n');
+    out
+}
+
+#[test]
+fn f193_rules_ruling_chain_of_three_is_exact() {
+    // 手書きの期待: 最新の字に閉じ括弧を戻し、過去の裁定は正本の順に、最後の 1 件だけ閉じ括弧を足さない
+    let (run, html) = face_with("f193-chain3", Some(chain_r6));
+    assert_eq!(code(&run, "folio face"), 0, "{}", stderr(&run));
+    let c = cell(&html, "R-6", "裁定");
+    assert_eq!(visible(&c), "甲（1）（2026-09-12） ", "{c}");
+    let (label, body) = fold(&c).expect("R-6 に小窓が無い");
+    assert_eq!(label, "前の裁定 3 件");
+    assert_eq!(
+        body,
+        "<p>前の裁定 = 乙（2）</p><p>前の裁定 = 丙（3）</p><p>前の裁定 = 丁（4）</p>"
+    );
+}

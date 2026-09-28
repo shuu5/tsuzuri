@@ -300,9 +300,12 @@ impl Standing {
 }
 
 // ── 表紙の日付（便 145・delivery-145.md §1 (b) の 1）──
-// 要件書の承認の日付は承認欄の最後の 承認 の行（表紙の状態・入口のカード・鮮度の札・版の札が同じ口から取る）。
+// 要件書の承認の日付は承認欄の最後の 承認 か 席の裁定 の行（表紙の状態・入口のカード・鮮度の札・版の札が同じ口から取る）。
 
-/// 欄 meta の承認欄の最後の 承認 の行の日付（escape 済み）。draft か承認欄か 承認 の行が無ければ None
+/// 表紙の日付に読む承認欄の役（便 193）: 持ち主の承認と、規則の表の行 D-17 の席の裁定（席の裁定で発効した版の日付）。
+pub const DATED_ROLES: [&str; 2] = ["承認", "席の裁定"];
+
+/// 欄 meta の承認欄の最後の 承認 か 席の裁定 の行（`DATED_ROLES`）の日付（escape 済み）。draft か承認欄かその行が無ければ None
 /// （入口の承認欄は床が数えないので、無ければ生成日に落とす・便 146）。
 pub fn last_approval(m: &X<'_>) -> R<Option<String>> {
     if standing(m)? == Standing::Draft {
@@ -313,7 +316,7 @@ pub fn last_approval(m: &X<'_>) -> R<Option<String>> {
     };
     let mut when = None;
     for row in rows.seq()? {
-        if row.f("role")?.v.as_str() == Some("承認") {
+        if row.f("role")?.v.as_str().is_some_and(|r| DATED_ROLES.contains(&r)) {
             when = Some(row.ef("when")?);
         }
     }
@@ -393,8 +396,8 @@ pub fn note_dated(meta: &X<'_>) -> R<(&'static str, String)> {
 }
 
 /// 入口の棚のカードの 更新 の日付。定め = **その型の文書の面が鮮度の札に出す日付（効いた日）のうち最も新しいもの**。
-/// 型ごとに、憲法 = 今の版の承認の日付（draft は生成日・便 144）／要件書 = 承認欄の最後の 承認 の行（無ければ
-/// 生成日・便 145）／判断の記録 = 各記録の `adr_dated` の最大／設計ノート = 各設計ノートの `note_dated` の最大。
+/// 型ごとに、憲法 = 今の版の承認の日付（draft は生成日・便 144）／要件書 = 承認欄の最後の 承認 か 席の裁定 の行（無ければ
+/// 生成日・便 145・193）／判断の記録 = 各記録の `adr_dated` の最大／設計ノート = 各設計ノートの `note_dated` の最大。
 /// 日付の列（escape 済み）の最大を返し、1 つも無ければ空の字。日付は正本の字のまま比べる（便 147）。
 pub fn shelf_updated<'a>(dates: impl IntoIterator<Item = &'a str>) -> String {
     dates.into_iter().max().unwrap_or_default().to_string()
@@ -564,6 +567,27 @@ mod face_labels_tests {
         // 表の外の状態は導出できない
         let e = read("version: v0.3, status: retired, effective_version: v0.3", rows).0;
         assert_eq!(e, Err("meta.status: 文書の状態 の表に無い値「retired」".to_string()));
+    }
+
+    /// 便 193（delivery-193.md §1 (c)・台帳 f2-648.229・行 D-17）: 承認欄の最後の 承認 か 席の裁定 の行を読む（行の順・日付の大小でない）。
+    #[test]
+    fn f193_last_approval_reads_the_seat_ruling_rows() {
+        assert_eq!(DATED_ROLES, ["承認", "席の裁定"]);
+        let read = |rows: &str| {
+            let v = yaml::parse_typed(&format!(
+                "{{version: v0.3, status: effective, generated: 2026-09-01, approval: [{rows}]}}"
+            ))
+            .unwrap();
+            last_approval(&X::root(&v, "meta"))
+        };
+        let got = |d: &str| Ok(Some(d.to_string()));
+        assert_eq!(read("{role: 承認, when: 2026-09-03}, {role: 席の裁定, when: \"2026-09-<05>\"}"), got("2026-09-&lt;05&gt;"));
+        assert_eq!(read("{role: 席の裁定, when: 2026-09-05}, {role: 承認, when: 2026-09-04}"), got("2026-09-04"));
+        assert_eq!(read("{role: 席の裁定, when: 2026-09-05}, {role: 作成, when: 2026-09-07}, {role: レビュー, when: 2026-09-08}"), got("2026-09-05"));
+        assert_eq!(read("{role: 作成, when: 2026-09-07}, {role: 席の裁定の案, when: 2026-09-08}"), Ok(None));
+        // draft は席の裁定の行も読まない
+        let v = yaml::parse_typed("{version: v0.3, status: draft, generated: 2026-09-01, approval: [{role: 席の裁定, when: 2026-09-05}]}").unwrap();
+        assert_eq!(last_approval(&X::root(&v, "meta")), Ok(None));
     }
 
     #[test]

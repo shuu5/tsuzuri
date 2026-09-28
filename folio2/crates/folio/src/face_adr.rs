@@ -618,9 +618,13 @@ fn band(o: &mut Vec<String>, f: &Frame, n: usize) {
 
 // ── 章 ──
 
+/// 印の直前の句点の後ろに来てよい閉じの字（便 193）: 前の項の末尾の太字の閉じ「**」とかぎ括弧の閉じ「」」。
+const ITEM_CLOSERS: [&str; 2] = ["**", "」"];
+
 /// 文の頭の列挙の印「(k) 」の位置（開きの括弧の byte・印の直後の byte）。印と数えるのは、印の直前
-/// （末尾の空白を除く）が本文の先頭か句点で、かつ番号が 1 から 1 ずつ増えて続くときだけ（便 27 §1 (b)）。
-fn item_marks(body: &str) -> Vec<(usize, usize)> {
+/// （末尾の空白と閉じの字 `ITEM_CLOSERS` を除く）が本文の先頭か句点で、かつ番号が 1 から 1 ずつ増えて続くときだけ
+/// （便 27 §1 (b)・閉じの字は便 193）。判断の記録の面と設計ノートの面の散文が共有する。
+pub(crate) fn item_marks(body: &str) -> Vec<(usize, usize)> {
     let b = body.as_bytes();
     let mut marks = Vec::new();
     let mut want = 1u32;
@@ -633,7 +637,10 @@ fn item_marks(body: &str) -> Vec<(usize, usize)> {
                 j += 1;
             }
             if j > i + 1 && b.get(j) == Some(&b')') && b.get(j + 1) == Some(&b' ') {
-                let head = body[..i].trim_end();
+                let mut head = body[..i].trim_end();
+                while let Some(rest) = ITEM_CLOSERS.iter().find_map(|c| head.strip_suffix(c)) {
+                    head = rest;
+                }
                 let at_head = head.is_empty() || head.ends_with('。');
                 if at_head && body[i + 1..j].parse::<u32>() == Ok(want) {
                     marks.push((i, j + 2));
@@ -891,6 +898,30 @@ fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts, chip: &
 mod face_adr_tests {
     use super::*;
     use crate::yaml::Value;
+
+    /// 便 193（delivery-193.md §1 (c)・台帳 f2-648.231）: 印の直前の句点の後ろの閉じの字「**」「」」を飛ばして項の頭と数える。
+    #[test]
+    fn f193_item_marks_step_over_the_closers() {
+        let starts = |body: &str| item_marks(body).iter().map(|(s, _)| *s).collect::<Vec<_>>();
+        let at = |body: &str| vec![body.find("(1) ").unwrap(), body.find("(2) ").unwrap()];
+        // 句点の後ろの太字の閉じ・かぎ括弧の閉じ・その重なり・空白を挟む形
+        for body in [
+            "(1) **あ。** (2) い。",
+            "(1) 「あ。」 (2) い。",
+            "(1) **「あ。」** (2) い。",
+            "(1) 「**あ。**」(2) い。",
+            "前置き。**(1) あ。**\n\n(2) い。",
+        ] {
+            assert_eq!(starts(body), at(body), "{body}");
+        }
+        // 句点の無い閉じの字の後・読点の後は印でない
+        for body in ["(1) **あ** (2) い。", "(1) 「あ」 (2) い。", "(1) あ、」(2) い。", "(1) あ**、** (2) い。"] {
+            assert_eq!(starts(body).len(), 1, "{body}");
+        }
+        // 閉じの字は 2 つだけ（全角の丸括弧の閉じは項の頭にしない）
+        assert_eq!(ITEM_CLOSERS, ["**", "」"]);
+        assert_eq!(starts("(1) （あ。） (2) い。").len(), 1);
+    }
 
     /// 凍結の針（P-10.1・便 50 §1 (e) 1）: 判断の記録の面の撤退条件の種類の名札を便 50 の前の表の字面と順で固定する。
     #[test]

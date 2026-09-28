@@ -945,7 +945,7 @@ fn f144_real_cards_follow_the_approvals() {
     let sm = &s["meta"];
     let last = seq(&sm["approval"], "srs.yaml meta.approval")
         .iter()
-        .filter(|r| r["role"].as_str() == Some("承認"))
+        .filter(|r| matches!(r["role"].as_str(), Some("承認" | "席の裁定")))
         .map(|r| text(r, "when"))
         .next_back()
         .expect("要件書の承認欄に承認の行が無い");
@@ -1139,10 +1139,10 @@ fn f146_real_index_stamp_shelf_and_foot_follow_the_last_approval() {
     let meta = &i["meta"];
     let version = esc(text(meta, "version"));
     let generated = esc(text(meta, "generated"));
-    // 歯の側の手書きの読み: 承認欄の最後の 承認 の行の when
+    // 歯の側の手書きの読み: 承認欄の最後の 承認 か 席の裁定 の行の when（便 193）
     let date = seq(&meta["approval"], "meta.approval")
         .iter()
-        .filter(|row| row["role"].as_str() == Some("承認"))
+        .filter(|row| matches!(row["role"].as_str(), Some("承認" | "席の裁定")))
         .filter_map(|row| row["when"].as_str())
         .next_back()
         .map(esc)
@@ -1340,4 +1340,30 @@ fn f147_note_card_updated_is_the_latest_note_face_date() {
         );
         assert_eq!(card.matches(&row).count(), 1, "{case}:「{row}」が無い: {card}");
     }
+}
+
+// ── 便 193（docs/design/delivery-193.md §1 (c)・台帳 f2-648.229）: 入口の要件書のカードと入口の札も席の裁定の行を読む ──
+
+#[test]
+fn f193_index_reads_the_seat_ruling_rows() {
+    // 要件書のカードの 更新: 承認の行の後ろの席の裁定の行の日付
+    let html = index_with_srs("f193-srs-card-seat", |s| {
+        s.replacen(
+            "stamp: 発効, verbatim: 承認する, version: v0.3}\n",
+            "stamp: 発効, verbatim: 承認する, version: v0.3}\n    - {role: 席の裁定, who: orchestrator 席, when: 2026-09-10, stamp: f2-648 notes 2026-09-10 10:00 JST, version: v0.3}\n",
+            1,
+        )
+    });
+    up_once(&html, "更新 2026-09-10・v0.3");
+    // 入口そのものの鮮度の札・棚の札・足の行: 最後の行が席の裁定
+    let generated = "  generated: 2026-09-03\n";
+    let rows = "  approval:\n    - {role: 作成, who: 起草の席, when: 2026-09-03}\n    - {role: 承認, who: 持ち主, when: 2026-09-05}\n    - {role: 席の裁定, who: orchestrator 席, when: 2026-09-08}\n    - {role: 作成, who: 起草の席, when: 2026-09-09}\n";
+    let (td, work) = index_fixture_copy("f193-index-seat");
+    edit(&work.join("index.yaml"), |t| {
+        t.replacen("  status: draft\n", "  status: effective\n", 1)
+            .replacen(generated, &format!("{generated}{rows}"), 1)
+    });
+    let (_, html) = index_from("f193-index-seat", &work, &td);
+    let _ = fs::remove_dir_all(&td);
+    assert_index_dates(&html, "承認", "2026-09-08", "v0.1", "f193-index-seat");
 }

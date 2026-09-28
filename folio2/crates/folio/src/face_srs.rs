@@ -490,7 +490,7 @@ fn head(
     let status = m.f("status")?.lookup(DOC_STATUS, "文書の状態")?;
     // 鮮度の札は効いている版を出す（便 138）
     let (shown, label) = face::standing(m)?.stamp(&version, status);
-    // 日付は承認欄の最後の承認の行（無ければ生成日・便 145）
+    // 日付は承認欄の最後の承認か席の裁定の行（無ければ生成日・便 145・193）
     let (dated, date) = face::dated(m, face::last_approval(m)?)?;
     ctx.frame.head_dated(
         o,

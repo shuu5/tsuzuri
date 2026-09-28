@@ -997,12 +997,12 @@ fn f145_real_srs_cover_dates_follow_the_last_approval() {
     let meta = &s["meta"];
     let version = esc(meta["version"].as_str().expect("meta.version が無い"));
     let generated = esc(meta["generated"].as_str().expect("meta.generated が無い"));
-    // 歯の側の手書きの読み: 承認欄の最後の 承認 の行の when
+    // 歯の側の手書きの読み: 承認欄の最後の 承認 か 席の裁定 の行の when（便 193）
     let date = meta["approval"]
         .as_vec()
         .expect("meta.approval が一覧でない")
         .iter()
-        .filter(|row| row["role"].as_str() == Some("承認"))
+        .filter(|row| matches!(row["role"].as_str(), Some("承認" | "席の裁定")))
         .filter_map(|row| row["when"].as_str())
         .next_back()
         .map(esc)
@@ -1088,12 +1088,12 @@ fn f146_real_srs_figure_captions_and_foot_follow_the_last_approval() {
     let meta = &s["meta"];
     let version = esc(meta["version"].as_str().expect("meta.version が無い"));
     let generated = esc(meta["generated"].as_str().expect("meta.generated が無い"));
-    // 歯の側の手書きの読み: 承認欄の最後の 承認 の行の when
+    // 歯の側の手書きの読み: 承認欄の最後の 承認 か 席の裁定 の行の when（便 193）
     let date = meta["approval"]
         .as_vec()
         .expect("meta.approval が一覧でない")
         .iter()
-        .filter(|row| row["role"].as_str() == Some("承認"))
+        .filter(|row| matches!(row["role"].as_str(), Some("承認" | "席の裁定")))
         .filter_map(|row| row["when"].as_str())
         .next_back()
         .map(esc)
@@ -1112,4 +1112,43 @@ fn f146_real_srs_figure_captions_and_foot_follow_the_last_approval() {
         !html.contains(&format!("要件書 {version}（{generated}）")),
         "実の要件書の足の行が名の無い生成日を出す"
     );
+}
+
+// ── 便 193（docs/design/delivery-193.md §1 (c)・台帳 f2-648.229・規則の表の行 D-17）: 席の裁定の行も表紙の日付に読む ──
+
+#[test]
+fn f193_srs_cover_dates_read_the_seat_ruling_rows() {
+    let seat = |when: &str| {
+        format!("    - {{role: 席の裁定, who: orchestrator 席, when: {when}, stamp: f2-648 notes {when} 10:00 JST, version: v0.3}}\n")
+    };
+    let owner = |when: &str| {
+        format!("    - {{role: 承認, who: 持ち主, when: {when}, stamp: 発効, verbatim: 承認する, version: v0.3}}\n")
+    };
+    let effective = "発効・拘束力あり";
+    // (写しの名, 承認の行の後ろに足す行, 期待の日付)
+    for (case, rows, date) in [
+        ("seat-last", seat("2026-09-11"), "2026-09-11"),
+        ("owner-after-seat", format!("{}{}", seat("2026-09-11"), owner("2026-09-12")), "2026-09-12"),
+        ("seat-after-owner", format!("{}{}", owner("2026-09-12"), seat("2026-09-13")), "2026-09-13"),
+    ] {
+        let (run, html, _) = fixture_srs(&format!("f193-{case}"), |s| {
+            let e = s.replacen(APPROVED_ROW, &format!("{APPROVED_ROW}{rows}"), 1);
+            assert_ne!(e, s, "写しに承認の行が無い");
+            e
+        });
+        ok(&run);
+        once(&html, &stamp_dated(&format!("承認 {date}"), "v0.3", effective), &format!("{case} の鮮度の札"));
+        once(&html, &version_tag(&format!("v0.3 / {date}")), &format!("{case} の版の札"));
+        once(&html, &cover_status(&format!("{effective}（承認 {date}）")), &format!("{case} の表紙の状態"));
+    }
+    // 役が レビュー の行は今までどおり読まない（日付は動かない）
+    let (run, html, _) = fixture_srs("f193-review", |s| {
+        s.replacen(
+            APPROVED_ROW,
+            &format!("{APPROVED_ROW}    - {{role: レビュー, who: 敵対レビュー, when: 2026-09-14, stamp: r}}\n"),
+            1,
+        )
+    });
+    ok(&run);
+    once(&html, &version_tag("v0.3 / 2026-09-05"), "レビューの行の版の札");
 }

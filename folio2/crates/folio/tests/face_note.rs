@@ -1244,3 +1244,17 @@ fn f184_the_three_plan_types_are_drawn_with_their_fields() {
     assert!(!fs::read_to_string(&out).unwrap().contains("note-full.html\">full</a>"));
     let _ = fs::remove_dir_all(&td);
 }
+
+// ── 便 193（docs/design/delivery-193.md §1 (c)・台帳 f2-648.231）: 設計ノートの散文も判断の記録の面と同じ印の数え ──
+
+#[test]
+fn f193_note_prose_splits_after_a_bold_or_quote_closer() {
+    let (run, html) = mutated("f193-closers", |t| {
+        t.replacen("前置き。(1) あ。(2) い。", "前置き。(1) **あ。** (2) 「い。」 (3) う。", 1)
+    });
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert!(
+        html.contains("<ol class=\"items\">\n<li>**あ。**</li>\n<li>「い。」</li>\n<li>う。</li>\n</ol>"),
+        "閉じの字の後の項が分かれていない: {html}"
+    );
+}
