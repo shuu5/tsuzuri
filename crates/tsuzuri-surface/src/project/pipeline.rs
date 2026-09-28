@@ -5,14 +5,16 @@
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Reading};
-use tsuzuri_contract::graph::title36;
+use tsuzuri_contract::graph::{GraphDoc, title36};
 use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::wire;
 
-use super::{Body, NO_CONTENT, NOT_READ};
+use super::{Body, NO_CONTENT, NOT_READ, map};
 use crate::frame::{self, Block};
+use crate::mapview::graph::cut;
 use crate::view::{Fetched, id_order, read_rows};
 use crate::widgets::hover::Card;
+use crate::widgets::nodecard::card_of;
 
 pub const BLOCK: Block = Block {
     id: "pipe",
@@ -126,6 +128,40 @@ pub struct Kcard {
     pub age: String,
     pub class: &'static str,
     pub hover: Card,
+    /// 節点の card の値の行（見本の cardContent の data-run の枝・回数と段の名と 20 字に切った理由）。
+    pub run_line: String,
+    /// 節点の card の詳しく（理由が 20 字を越えれば 34 字以下の行に折った列・越えなければ空）。
+    pub run_more: Vec<String>,
+}
+
+/// 値の行に出す理由の字数（見本の cut の 20）。
+const WHY_CHARS: usize = 20;
+
+/// 詳しくの 1 行の字数の上限（見本の chunk の 34）。
+const MORE_CHARS: usize = 34;
+
+/// 字を句切りの字（、。・，）の直後で片に分け、前から n 字以下の行に詰める（n 字を越える片は n 字ずつに切る・見本の chunk）。
+fn chunk(s: &str, n: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur: Vec<char> = Vec::new();
+    for piece in s.split_inclusive(['、', '。', '・', '，', '）']) {
+        let mut p: Vec<char> = piece.chars().collect();
+        if cur.len() + p.len() <= n {
+            cur.extend(p);
+            continue;
+        }
+        if !cur.is_empty() {
+            out.push(cur.drain(..).collect());
+        }
+        while p.len() > n {
+            out.push(p.drain(..n).collect());
+        }
+        cur = p;
+    }
+    if !cur.is_empty() {
+        out.push(cur.into_iter().collect());
+    }
+    out
 }
 
 /// 1 つの列（見出しの語の鍵・class・経過の短い順の札の全部）。
@@ -258,8 +294,15 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
     let title = title_of(rows, &id);
     let stage = format!("{:?}", card.stage);
     let age = card.elapsed_s.map_or_else(|| NO_AGE.to_string(), age);
+    let why = card.reason.clone().unwrap_or_else(|| stage.clone());
+    let run_line = format!("↻{} · {stage} · {}", card.runs, cut(&why, WHY_CHARS));
+    let run_more = if why.chars().count() > WHY_CHARS {
+        chunk(&why, MORE_CHARS)
+    } else {
+        Vec::new()
+    };
     let lead = if lane.stops() {
-        Lead::Why(card.reason.clone().unwrap_or_else(|| stage.clone()))
+        Lead::Why(why)
     } else {
         Lead::Runs(card.runs)
     };
@@ -286,7 +329,37 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
             "kcard"
         },
         hover,
+        run_line,
+        run_more,
     }
+}
+
+/// 節点の card を札に付ける値（見本の cardContent の data-run の枝: 題と種類と帯と状態は節点から、
+/// 値と出所と詳しくは走行から）。札の id の節点が電文に無ければ札の hover のまま。
+pub fn node_hover(doc: &GraphDoc, card: &Kcard) -> Card {
+    match card_of(doc, &card.id) {
+        Some(node) => Card {
+            title: node.title,
+            kind: node.kind,
+            value: card.run_line.clone(),
+            src: card.hover.src.clone(),
+            more: card.run_more.clone(),
+        },
+        None => card.hover.clone(),
+    }
+}
+
+/// 板の全部の札の hover を節点の card に替える（グラフの口が読めない・まだ読んでいない間は受けた値のまま）。
+pub fn with_nodes(body: Body<Vec<Column>>, graph: &Fetched) -> Body<Vec<Column>> {
+    let Body::Filled(mut cols) = body else {
+        return body;
+    };
+    if let Ok(doc) = map::doc(graph) {
+        for card in cols.iter_mut().flat_map(|c| c.cards.iter_mut()) {
+            card.hover = node_hover(&doc, card);
+        }
+    }
+    Body::Filled(cols)
 }
 
 /// 札を押した先（契約 bead と同じ id の節点の頁・近傍と問いの card と同じ頁へ行く）。
@@ -332,10 +405,11 @@ mod dom {
     use tsuzuri_contract::board::PipelineColumn;
 
     use super::{
-        BLOCK, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns, with_open,
+        BLOCK, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns, with_nodes,
+        with_open,
     };
     use crate::frame::Mode;
-    use crate::project::{Body, ledger, section, state_icon, unmeasured};
+    use crate::project::{Body, ledger, map, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs};
     use crate::widgets::hover::attach;
@@ -373,6 +447,7 @@ mod dom {
     pub fn view() -> AnyView {
         let pipe = crate::net::read(PATH);
         let rows = crate::net::read(ledger::PATH);
+        let graph = crate::net::read(map::PATH);
         let open = RwSignal::new(open_columns(&search()));
         let ctx = use_context::<HelpCtx>();
         let mode = move || match ctx {
@@ -381,7 +456,7 @@ mod dom {
         };
         let body = move || {
             let now = crate::net::now();
-            match pipe.with(|p| rows.with(|l| content(p, l, now))) {
+            match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(key) => view! {
                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>

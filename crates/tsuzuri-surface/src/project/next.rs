@@ -8,11 +8,13 @@ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 use tsuzuri_contract::wire;
 
 use super::node::answer_href;
-use super::{Body, NO_CONTENT, NOT_READ, batch, pipeline};
+use super::{Body, NO_CONTENT, NOT_READ, batch, map, pipeline};
 use crate::account::windows::ACCOUNT_WIN;
 use crate::account::{Tab, tab_href};
 use crate::frame::{Block, Mode, PageId, href};
 use crate::view::Fetched;
+use crate::widgets::hover::{Card, clip};
+use crate::widgets::nodecard::card_of;
 
 pub const BLOCK: Block = Block {
     id: "next",
@@ -217,6 +219,30 @@ pub fn big(kind: NextMove, check: Option<&NextCheck>) -> Big {
     }
 }
 
+/// 質問の大きい箱の中身（問いの節点の id・節点の題を 36 字に切った字・節点の card）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BigTitle {
+    pub id: String,
+    pub text: String,
+    pub card: Card,
+}
+
+/// 質問の大きい箱の題（見本の nx_e の箱: 問いの題の字を節点の頁への link にして節点の card を付ける）。
+/// 質問のほかの種類・対象が無い・グラフの口が読めない・問いの節点が電文に無いときは None（中身は Big の what の字のまま）。
+pub fn big_title(big: &Big, graph: &Fetched) -> Option<BigTitle> {
+    if big.kind != NextMove::Question {
+        return None;
+    }
+    let id = big.target.as_deref()?;
+    let doc = map::doc(graph).ok()?;
+    let card = card_of(&doc, id)?;
+    Some(BigTitle {
+        id: id.to_string(),
+        text: clip(&card.title),
+        card,
+    })
+}
+
 /// 種類ごとの次の手の頁への link（見本の nextItems の button・止まっている走行は Big の link・なしは無い）。
 /// 質問は対象の id が在ればその card へ、無ければ問いの頁へ。どれも mode を URL に残す。
 pub fn action(kind: NextMove, target: Option<&str>, mode: Mode) -> Option<Link> {
@@ -255,13 +281,17 @@ pub fn view() -> leptos::prelude::AnyView {
 mod dom {
     use leptos::prelude::*;
 
-    use super::{BLOCK, Big, MISS, Mark, Next, PATH, Row, action, content, window_of};
-    use crate::frame::Mode;
-    use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
+    use super::{
+        BLOCK, Big, BigTitle, MISS, Mark, Next, PATH, Row, action, big_title, content, window_of,
+    };
+    use crate::frame::{Mode, node_href};
+    use crate::project::{Body, UNKNOWN, body_view, map, section, state_icon, unmeasured};
     use crate::widgets::help::{HelpCtx, hs};
+    use crate::widgets::hover::attach;
 
     pub fn view() -> AnyView {
         let fetched = crate::net::read(PATH);
+        let graph = crate::net::read(map::PATH);
         // 今の mode（context が無ければ今の URL の query から・link に mode を残す）。
         let ctx = use_context::<HelpCtx>();
         let url = Mode::from_query(&crate::mapview::current());
@@ -269,21 +299,41 @@ mod dom {
         let body = move || match fetched.with(content) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
-            Body::Filled(next) => next_view(next, mode),
+            Body::Filled(next) => {
+                let title = graph.with(|g| big_title(&next.big, g));
+                next_view(next, title, mode)
+            }
         };
         section(BLOCK, ().into_any(), body.into_any())
     }
 
-    fn next_view(next: Next, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
+    fn next_view(
+        next: Next,
+        title: Option<BigTitle>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
         let rows = next.rest.into_iter().map(row_view).collect_view();
         view! {
-            {big_view(next.big, mode)}
+            {big_view(next.big, title, mode)}
             <ul class="nxlist">{rows}</ul>
         }
         .into_any()
     }
 
-    fn big_view(big: Big, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
+    /// 大きい箱（質問の箱で問いの節点が引ければ、中身は問いの題の字の節点の頁への link と節点の card・ほかは Big の what の字）。
+    fn big_view(
+        big: Big,
+        title: Option<BigTitle>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
+        let what = match title {
+            Some(t) => {
+                let id = t.id.clone();
+                let href = move || node_href(&id, mode());
+                view! { <a href=href use:attach=t.card>{t.text}</a> }.into_any()
+            }
+            None => big.what.into_any(),
+        };
         let (kind, link, target) = (big.kind, big.link, big.target);
         let win = window_of(kind);
         // Big の link（止まっている走行）が在ればそれを、無ければ種類の次の手の頁への link（mode で href が変わる）。
@@ -297,7 +347,7 @@ mod dom {
         view! {
             <div class=big.class data-nx=big.key>
                 {hs(big.key)}
-                <div class=big.what_class>{big.what}</div>
+                <div class=big.what_class>{what}</div>
                 {act}
             </div>
         }
