@@ -56,7 +56,8 @@ pub(crate) enum Floor {
 }
 
 /// 外の置き場か（名が在って `HOME` でない）。名の無い口（床の単体の歯と名なしの突き合わせ）は定数の字のまま。
-fn abroad(name: Option<&str>) -> bool {
+/// 床の知らせと違反の字（`polarity.rs`・便 202）も同じ関数で決める。
+pub(crate) fn abroad(name: Option<&str>) -> bool {
     name.is_some_and(|n| n != HOME)
 }
 
@@ -240,8 +241,9 @@ pub(crate) fn text_for(v: &str) -> Option<String> {
 }
 
 /// 置き場へ写す値の字。folio2 の置き場と名の無い口は定数のまま。外の置き場は `text_for` で、何も残らないとき注の中（`note`）は
-/// None（書かない）、注の外は空の字（床の単体の歯が型付きの欄で起きないことを見る）。
-fn val_for(v: &'static str, name: Option<&str>, note: bool) -> Option<Cow<'static, str>> {
+/// None（書かない）、注の外は空の字（床の単体の歯が型付きの欄で起きないことを見る）。床の知らせと違反の字（`polarity.rs`・便 202）
+/// は注の外として通す。
+pub(crate) fn val_for(v: &'static str, name: Option<&str>, note: bool) -> Option<Cow<'static, str>> {
     if !abroad(name) {
         return Some(Cow::Borrowed(v));
     }

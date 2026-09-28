@@ -246,8 +246,9 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
             let range = place_range(&src.constitution, &mut report);
             check_constitution(&src.constitution, &src.rules, &range, &mut report);
             check_rules(&src.rules, &mut report);
-            // 極性一覧の編集時（in-loop）の本数の下限（便 200・ADR-33 決定 (5)・条 P-18.4）
-            in_loop_min_off = polarity::check_floor(&src.constitution, &src.rules, &mut report);
+            // 極性一覧の編集時（in-loop）の本数の下限（便 200・ADR-33 決定 (5)・条 P-18.4）。外の置き場の字は置き場の名で決まる（便 202）
+            let name = adr::place_name(dir).ok();
+            in_loop_min_off = polarity::check_floor(&src.constitution, &src.rules, name.as_deref(), &mut report);
             check_vocabulary(&src.vocabulary, &mut report);
             check_srs(&src.srs, &mut report);
             entrance::check_entrance(&src.index, &src.vocabulary, &mut report);

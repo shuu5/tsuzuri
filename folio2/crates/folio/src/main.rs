@@ -104,7 +104,7 @@ enum Command {
         /// 置き場の中の 1 file（置き場からの相対）に標準入力の中身を書いた後の床を、書く前の床と比べ、後にだけ在る違反を返す（編集時の口・通す 0 / 止める 1 / まだ分からない 2・つながりの違反は止めない・file は書かない）
         #[arg(long, value_name = "PATH", conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs", "emit_rulings"])]
         proposed: Option<PathBuf>,
-        /// 止める仕掛けの一覧（極性一覧）を 1 仕掛け 1 行（名 · 段 · 極性 · 出所）と集計の 1 行で標準出力へ書く（便 200・正本が読めなければ まだ分からない 2）
+        /// 止める仕掛けの一覧（極性一覧）を 1 仕掛け 1 行（名 · 段 · 極性 · 出所）と集計の 1 行で標準出力へ書く（正本が読めなければ まだ分からない 2）
         #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs", "emit_rulings", "proposed"])]
         polarity: bool,
     },
@@ -464,7 +464,7 @@ fn run(cli: Cli) -> ExitCode {
                 eprintln!("{}", mentions::OFF);
             }
             if materials.in_loop_min_off {
-                eprintln!("{}", polarity::OFF);
+                eprintln!("{}", polarity::off(&dir));
             }
             // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
             if !materials.not_yet_live.is_empty() {

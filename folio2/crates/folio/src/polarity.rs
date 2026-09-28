@@ -4,19 +4,29 @@
 //! guards・段は in_loop か post・極性は fail-closed）から 1 仕掛け 1 行で組む。床（`check.rs` の `check_dir`）は、欄 key が
 //! in-loop-min の閾値の行が 1 本在るとき、段が in-loop の本数がその値を割れば違反にする。その行が無ければ数えず知らせ、
 //! 2 本以上在るか値の形が違えば まだ分からない とする。in_loop の名と行 R-13 の欄 key は器の行の着地の後（決定 (7)・本便は運ばない）。
+//! 外の置き場（名が folio2 の置き場の名でない）へ出す知らせと違反の字は、folio2 の条の番号を落とす（便 202・生成区間と同じ
+//! `floor::val_for` と `floor::abroad`）。folio2 の置き場と名の無い口は定数の字のまま。
 
+use std::borrow::Cow;
 use std::path::Path;
 
+use crate::adr;
 use crate::check;
 use crate::constitution_enums::{MechanismKind, Stage};
-use crate::floor::Floor;
+use crate::floor::{self, Floor};
 use crate::floor_note;
 use crate::rules;
 use crate::verdict::Report;
 use crate::yaml::Node;
 
-/// 下限の行が無くて数えなかった知らせ（素の床の標準エラー・判定の外）。
-pub const OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外・条 P-18.4）";
+/// 下限の行が無くて数えなかった知らせ（素の床の標準エラー・判定の外）。置き場へは `off` が出す。
+const OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外・条 P-18.4）";
+
+/// 下限を割った違反の名札と字の末尾の条（folio2 の憲法の条 P-18 と P-18.4）。外の置き場では名札を `KIND_ABROAD` にし、
+/// 末尾の条は落とす（便 202）。
+const KIND: &str = "P-18";
+const KIND_ABROAD: &str = "polarity";
+const CLAUSE: &str = "（P-18.4）";
 
 /// 値が分からない欄の字（欄が無いか字でない）。
 const NONE: &str = "無い";
@@ -33,6 +43,16 @@ impl Guard {
     pub fn line(&self) -> String {
         format!("{} · {} · {} · {}", self.name, self.stage, self.polarity, self.from)
     }
+}
+
+/// 置き場へ出す字（folio2 の置き場と名の無い口は定数のまま・外の置き場は folio2 の番号の印を落とす・何も残らなければ空の字）。
+fn said(v: &'static str, name: Option<&str>) -> Cow<'static, str> {
+    floor::val_for(v, name, false).unwrap_or_default()
+}
+
+/// 置き場 `dir` の素の床の標準エラーへ出す、下限を数えなかった知らせ（置き場の名は `folio schema` と同じ `adr::place_name`）。
+pub fn off(dir: &Path) -> Cow<'static, str> {
+    said(OFF, adr::place_name(dir).ok().as_deref())
 }
 
 fn text(node: &Node, key: &str) -> String {
@@ -83,8 +103,8 @@ fn in_loop(guards: &[Guard]) -> usize {
     guards.iter().filter(|g| g.stage == Stage::InLoop.name()).count()
 }
 
-/// 床の下限の数え。下限の行が無くて数えなかったら真（呼び手が `OFF` を出す）。
-pub fn check_floor(constitution: &Node, rules: &Node, report: &mut Report) -> bool {
+/// 床の下限の数え（`name` は置き場の名）。下限の行が無くて数えなかったら真（呼び手が `off` を出す）。
+pub fn check_floor(constitution: &Node, rules: &Node, name: Option<&str>, report: &mut Report) -> bool {
     match rules::in_loop_min(rules) {
         Err(e) => report.unknown(format!("rules.yaml: {e}")),
         Ok(None) => return true,
@@ -92,8 +112,8 @@ pub fn check_floor(constitution: &Node, rules: &Node, report: &mut Report) -> bo
             let n = in_loop(&list(constitution, rules));
             if n < min {
                 report.violation(
-                    "P-18",
-                    format!("極性一覧の編集時（in-loop）の仕掛けが {n} 本で、行 {id} の下限 {min} 本以上を割る（P-18.4）"),
+                    if floor::abroad(name) { KIND_ABROAD } else { KIND },
+                    format!("極性一覧の編集時（in-loop）の仕掛けが {n} 本で、行 {id} の下限 {min} 本以上を割る{}", said(CLAUSE, name)),
                 );
             }
         }
@@ -115,4 +135,43 @@ pub fn render(dir: &Path) -> Result<Vec<String>, Vec<String>> {
     let mut out: Vec<String> = guards.iter().map(Guard::line).collect();
     out.push(format!("folio check --polarity: 仕掛け {}（in-loop {n}・post {post}）・{floor}", guards.len()));
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::yaml;
+
+    /// 外の置き場の知らせ（手で書く・folio2 の条の番号の項だけが落ちる）。
+    const OFF_ABROAD: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外）";
+
+    /// 知らせと違反の字は置き場の名で決まる（便 202）: 名の無い口と folio2 の置き場は定数の字のまま、名の等しくない置き場は
+    /// folio2 の条の番号（名札 P-18・末尾の P-18.4）を落とす。
+    #[test]
+    fn f202_notice_and_violation_follow_the_place_name() {
+        let constitution = yaml::parse("articles: []\n").unwrap().root;
+        let bound = yaml::parse("thresholds:\n  - {id: R-9, key: in-loop-min, value: \"1 本以上\"}\n").unwrap().root;
+        let none = yaml::parse("thresholds: []\n").unwrap().root;
+        let short = "極性一覧の編集時（in-loop）の仕掛けが 0 本で、行 R-9 の下限 1 本以上を割る";
+        for (name, home) in [
+            (None, true),
+            (Some("folio2-constitution"), true),
+            (Some("tsuzuri-constitution"), false),
+            (Some("folio2"), false),
+            (Some("未記入"), false),
+        ] {
+            let mut report = Report::default();
+            assert!(!check_floor(&constitution, &bound, name, &mut report), "{name:?}");
+            let want = if home {
+                ("P-18".to_string(), format!("{short}（P-18.4）"))
+            } else {
+                ("polarity".to_string(), short.to_string())
+            };
+            assert_eq!(report.violations, [want], "{name:?}");
+            let mut report = Report::default();
+            assert!(check_floor(&constitution, &none, name, &mut report), "{name:?}");
+            assert!(report.violations.is_empty(), "{name:?}");
+            assert_eq!(said(OFF, name), if home { OFF } else { OFF_ABROAD }, "{name:?}");
+        }
+    }
 }

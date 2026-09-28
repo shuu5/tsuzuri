@@ -9,6 +9,7 @@
 //! 名指すこと（f156_ の 2 本）。土台は行 R-17 を持たないので、f131_ の 2 本の標準エラーにも知らせが機構の行の前に出る。
 //! 便 200（docs/design/delivery-200.md §1 (d)）: 土台と骨格は欄 key が in-loop-min の行も持たないので、下限を数えなかった知らせが
 //! 行 R-17 の知らせの次に出る（歯は tests/polarity.rs）。
+//! 便 202（docs/design/delivery-202.md §1 (e)）: 骨格（外の置き場）の知らせは folio2 の条の番号の項が落ちた字（IN_LOOP_OFF_ABROAD）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,6 +26,8 @@ const FOLIO2_LIST: &str = "# 機構がまだ無い条（床の判定の外・憲
 const OFF: &str = "# 行 R-17 が規則の表に無い＝散文の言及の歯は数えていない（床の判定の外・値 0 件 の行 R-17 を足して撃ち直すと数える）";
 /// 欄 key が in-loop-min の行が無くて編集時の止めの下限を数えなかった知らせ（delivery-200.md §1 (b)・手で書く）。
 const IN_LOOP_OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外・条 P-18.4）";
+/// 骨格（外の置き場）の同じ知らせ（delivery-202.md §1 (b)・手で書く・folio2 の条の番号の項だけが落ちる）。
+const IN_LOOP_OFF_ABROAD: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外）";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -298,7 +301,7 @@ fn f156_a_place_without_r17_says_the_mentions_are_not_counted() {
     assert_eq!(out.status.code(), Some(2), "{}", show(&out));
     assert_eq!(lines(&out.stdout), [SKELETON_SUMMARY], "{}", show(&out));
     let err = lines(&out.stderr);
-    assert_eq!(err[err.len().saturating_sub(2)..], [OFF, IN_LOOP_OFF], "{}", show(&out));
+    assert_eq!(err[err.len().saturating_sub(2)..], [OFF, IN_LOOP_OFF_ABROAD], "{}", show(&out));
     assert_eq!(off_count(&out), 1, "{}", show(&out));
 
     // 値 0 件 の行 R-17 を足すと言及を数える
