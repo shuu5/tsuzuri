@@ -10,16 +10,17 @@
 //! 便 46 から床の機械（床の木の型・突き合わせ）は `schema.rs` のものを使い、schema 節は生成区間で
 //! `folio schema --write` が `FLOOR` から導出する＝説明の注（`_note` で終わる欄）も FLOOR が file の順と字面のまま持つ。
 //! 床の定数（欄の集合の型とその method・欄の決まりの定数・`FLOOR`）は便 114 で `floor_note.rs`（層 1）へ降ろした。検査の本体はここに残す。
+//! 承認欄の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数え、`check_note` は読めた設計ノートを返す。
 
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::adr::{Adr, UNFILLED, has_ledger_id, in_enum, unfilled};
+use crate::adr::{Adr, UNFILLED, in_enum, unfilled};
 use crate::catalog::FigureType;
 use crate::check::{duplicate_ids, non_empty, row_id, unknown_sections};
 use crate::floor::{floor_diff_for, strip_notes};
-use crate::floor_adr::{APPROVER, RULING_PATTERN};
+use crate::floor_adr::APPROVER;
 use crate::floor_note::{
     APPROVAL_REQUIRED, CONTRACT_TABLE, DOC, DOC_META, EFFECTIVE_STATUS, EXTERNAL_HEAD,
     EXTERNAL_NEED, EXTERNAL_PATH, EXTERNAL_ROW_FIELDS, EXTERNAL_ROWS_KEY, EXTERNAL_SHAPE,
@@ -60,7 +61,7 @@ pub(crate) struct Field {
     pub(crate) shape: String,
 }
 
-/// (a) `<dir>/design-note/` の欄の決まりの写しと設計ノートを検査する。
+/// (a) `<dir>/design-note/` の欄の決まりの写しと設計ノートを検査し、読めた設計ノートを返す（決定の欄の床が承認欄を読む・便 181）。
 /// dir が無い = 設計ノート 0 本（違反でも「まだ分からない」でもない）。
 pub fn check_note(
     dir: &Path,
@@ -69,22 +70,22 @@ pub fn check_note(
     srs: &Node,
     adr: Option<&Adr>,
     report: &mut Report,
-) {
+) -> Vec<NoteDoc> {
     let nd = dir.join(DIR);
     if !nd.exists() {
-        return;
+        return Vec::new();
     }
     if nd.is_symlink() || !nd.is_dir() {
         report.unknown(format!(
             "{DIR}/ が dir でない（symlink・file）: {}",
             nd.display()
         ));
-        return;
+        return Vec::new();
     }
     check_schema_copy(&nd, report);
     let notes = load_notes(&nd, report);
     if notes.is_empty() {
-        return;
+        return notes;
     }
     // 器の導出 file は契約表の節を持つ設計ノートが 1 本以上あるときだけ読む
     let external = if notes.iter().any(|n| has_contract_table(&n.root)) {
@@ -119,6 +120,7 @@ pub fn check_note(
             report.violation(KIND, m);
         }
     }
+    notes
 }
 
 /// 設計ノートの章の数（節の数に、図が 1 枚でも在れば図の章 1 を足す・承認欄は数えない）。面の生成器と床が同じ関数で数える（便 179）。
@@ -564,14 +566,6 @@ fn check_meta(file: &str, note: &NoteDoc, note_ids: &HashSet<&str>, report: &mut
             && !is_date(v)
         {
             report.violation(KIND, format!("{file}: {at}: date「{v}」が年-月-日でない"));
-        }
-        if let Some(v) = field(row, "ruling")
-            && !has_ledger_id(v)
-        {
-            report.violation(
-                KIND,
-                format!("{file}: {at}: ruling「{v}」に台帳 id（{RULING_PATTERN}）が無い"),
-            );
         }
         if field(row, "verbatim").is_some_and(unfilled) {
             report.violation(

@@ -212,7 +212,7 @@ fn f131_no_line_when_no_article_waits_for_its_mechanism() {
     assert_eq!(out.status.code(), Some(2), "{}", show(&out));
     assert_eq!(
         lines(&out.stdout),
-        ["folio check: まだ分からない（違反 0・まだ分からない 2）"],
+        [SKELETON_SUMMARY],
         "{}",
         show(&out)
     );
@@ -237,8 +237,8 @@ fn f131_folio2_constitution_lists_the_six_articles() {
 
 // ── 便 156（delivery-156.md §1 (c)）──
 
-/// 骨格の要約（違反 0・まだ分からない 2）。
-const SKELETON_SUMMARY: &str = "folio check: まだ分からない（違反 0・まだ分からない 2）";
+/// 骨格の要約（違反 0・まだ分からない 6 = 凍結の基準の不在 2 と骨格が書く決定の欄の骨格の印 4・便 181）。
+const SKELETON_SUMMARY: &str = "folio check: まだ分からない（違反 0・まだ分からない 6）";
 
 /// 閾値の行 1 つ（条 P-1 に結ぶ・骨格の行と同じ欄）。
 fn threshold(id: &str, what: &str, value: &str) -> String {

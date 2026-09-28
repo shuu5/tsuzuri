@@ -45,6 +45,7 @@ mod phase;
 mod prose;
 mod refs;
 mod rules;
+mod ruling;
 mod schema;
 mod seal;
 mod serve;

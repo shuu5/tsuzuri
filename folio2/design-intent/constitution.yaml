@@ -277,7 +277,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "C7 / C7.2（対話面は 1 つ・逐語で記帳）"}
       - {kind: folio2-ruling, ref: "G8=A（C7 を足す）・運用実績（G1〜G16・P1〜P5 の裁定はすべて bd notes の逐語）・受入 (c)"}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。数えるのは、判断の記録と設計ノートの承認欄（欄 who・date・ruling・verbatim・surface の欄充足）と、憲法の meta.approval（凍結 anchor の写しとの一致）である。要件書・入口・天井の正本・相談窓口・索引の欄の決まりの正本の meta.approval の行（欄 role・who・when・stamp・verbatim・version）は裁定 id と対話面の欄を持たず、床はその欄充足をまだ数えない（後続・台帳の控え）。支度表は設計文書の正本に数えない（語彙の設計文書の項）。その行の逐語と、stamp の字に書く裁定 id と対話面は人が確かめる。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 承認欄（approval）の逐語・日付・裁定 id・対話面の欄充足を schema で検査する。数えるのは、判断の記録と設計ノートの承認欄（欄 who・date・ruling・verbatim・surface の欄充足）と、憲法の meta.approval（凍結 anchor の写しとの一致）と、決定の欄の裁定 id の形である。決定の欄（判断の記録 ADR-31 決定 (1) の閉じた一覧）は、憲法の発効の承認と改訂来歴・規則の表の各行・判断の記録と設計ノートの承認欄の ruling と、要件書・入口・天井の正本・相談窓口・索引の欄の決まりの正本の meta.approval の行のうち役が 作成 と レビュー でない行の stamp で、床は各欄から台帳の裁定 id を 1 つ以上切り出せるかを数える（同 決定 (3) の文法・台帳に在るかと、どの形の種類で足りるかは数えない）。5 正本の meta.approval の行（欄 role・who・when・stamp・verbatim・version）は対話面の欄を持たず、床は stamp の字の裁定 id の形のほかの欄充足をまだ数えない（後続・台帳の控え）。支度表は設計文書の正本に数えない（語彙の設計文書の項）。裁定 id が台帳に在るかと、その行の逐語と対話面は人が確かめる（便の差分で書かれた決定の欄の裁定 id の実在は器が確かめる・同 帰結）。「どの面を通ったか」の同定は人が見る。day-1 は bd notes の逐語を人が確かめる。}
     relations: {rules: [R-8, D-10, D-14, D-17], sections: [§6]}
 
   - id: P-13
@@ -358,7 +358,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: "C5（規則変更 = manifest diff + 裁定 id）・A2（C4 / C13 の閾値変更にも grill 検証を前置）"}
       - {kind: folio2-ruling, ref: "G5=A（A-2 を条文改訂と rules 数値に分割）"}
-    mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: rules 行の差分に裁定 id と時刻が無ければ落とす。この差分を数える口は未実装である（2026-09-20 時点・便 0 は 2026-09-17 に着地したが、その検査は置かれなかった）。それまでは取り込みの要求の差分を人が見るにとどまり、P-17.1 / P-17.2 / P-17.4 の充足は「まだ分からない」として扱う（P-4.2）。}
+    mechanism: {kind: reject, live: M1, stage: post, polarity: fail-closed, note: rules 行の差分に裁定 id と時刻が無ければ落とす。この差分を数える口は未実装である（2026-09-20 時点・便 0 は 2026-09-17 に着地したが、その検査は置かれなかった）。それまでは取り込みの要求の差分を人が見るにとどまり、P-17.1 / P-17.2 / P-17.4 の充足は「まだ分からない」として扱う（P-4.2）。床が数えるのは、今在る各行の裁定の欄（ruling）に台帳の裁定 id が 1 つ以上在る形までである（判断の記録 ADR-31 決定 (1)・便 181 から・骨格の印〔未記入〕は裁定の前として「まだ分からない」）。行を消す変更と、裁定 id を前の裁定のまま行の値を変える変更は、この形の床には見えない。}
     relations: {rules: [R-1, R-2, R-3, R-4, R-5, R-6, R-7, R-8, R-9, R-10, R-11, R-12, R-13, R-14, R-15, R-16, D-3, D-5, D-8], articles: [A-2]}
 
   - id: P-18

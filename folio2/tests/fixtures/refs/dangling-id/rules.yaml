@@ -2,8 +2,8 @@
 schema:
   top_level: [schema, thresholds, discipline]
 thresholds:
-  - {id: R-1, article: P-1, what: 説明文の合計, value: "2,000 字 以下"}
-  - {id: R-3, article: P-2, what: 1 枚の説明文, value: "400 字 以下"}
-  - {id: R-8, article: P-2, what: 持ち主との対話面, value: 対話面}
+  - {id: R-1, article: P-1, what: 説明文の合計, value: "2,000 字 以下", ruling: f2-648.2 notes 2026-09-12}
+  - {id: R-3, article: P-2, what: 1 枚の説明文, value: "400 字 以下", ruling: f2-648.2 notes 2026-09-12}
+  - {id: R-8, article: P-2, what: 持ち主との対話面, value: 対話面, ruling: f2-648.2 notes 2026-09-12}
 discipline:
-  - {id: D-1, article: P-1, what: 並列の内側は opus まで}
+  - {id: D-1, article: P-1, what: 並列の内側は opus まで, ruling: f2-648.2 notes 2026-09-12}

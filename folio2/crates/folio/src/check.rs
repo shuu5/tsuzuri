@@ -6,7 +6,8 @@
 //! 憲法の条の値域を持つ欄の値（便 55・在る欄だけ）と、置き場の憲法の値域が組み立てた値域と集合で等しいか（便 122・便 157・FR25・
 //! 条の値は置き場の値域で引く・広げた鍵と狭めた鍵と引けない鍵は「まだ分からない」）と、憲法の meta・前文・条・規範文・mechanism と
 //! 規則の表の行の未知の欄・mechanism の形の崩れ（便 128・一覧は組み立てた憲法の正本と規則の表の床の定数から）と、
-//! 発効した判断の記録の本文の封（便 170・seal）。
+//! 発効した判断の記録の本文の封（便 170・seal）と、決定の欄の裁定 id の形（便 181・ruling・ADR-31 決定 (1)・索引の欄の決まり graph.yaml の
+//! 承認欄も在れば読む）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
 
@@ -29,6 +30,7 @@ use crate::note;
 use crate::phase::{Flag, State};
 use crate::refs;
 use crate::rules;
+use crate::ruling;
 use crate::seal;
 use crate::verdict::Report;
 use crate::vocab;
@@ -258,7 +260,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                 seals = Some(seal::check_seals(dir, &records.records, flag, &mut report));
                 adr_records = Some(records);
             }
-            note::check_note(
+            let notes = note::check_note(
                 dir,
                 &src.constitution,
                 &src.rules,
@@ -266,6 +268,20 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                 adr_records.as_ref(),
                 &mut report,
             );
+            // 決定の欄の裁定 id の形（便 181・ADR-31 決定 (1)）。索引の欄の決まりは 7 本の外なので、在れば読む
+            let graph = load_graph(dir, &mut report);
+            let tree = ruling::Tree {
+                constitution: &src.constitution,
+                rules: &src.rules,
+                srs: &src.srs,
+                index: &src.index,
+                ceiling: &src.ceiling,
+                intake: &src.intake,
+                graph: graph.as_ref(),
+                records: adr_records.as_ref().map_or(&[], |a| &a.records),
+                notes: notes.iter().map(|n| (format!("design-note/{}", n.file), &n.root)).collect(),
+            };
+            check_rulings(&ruling::sites(&tree), &mut report);
             // 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ数える。行 R-17 が無くて数えなかったら知らせる（便 156）
             if let Some(records) = adr_records.as_ref() {
                 mentions_off = !mentions::check_mentions(
@@ -372,6 +388,39 @@ fn load(dir: &Path, name: &str, report: &mut Report) -> Option<Node> {
         return None;
     }
     Some(doc.root)
+}
+
+/// 索引の欄の決まり（graph.yaml・床の 7 本の外）を決定の欄のために読む（便 181）。無ければ None（数える承認欄が無い）、
+/// 在って読めなければ 7 本と同じ読み手が「まだ分からない」を立てる。
+fn load_graph(dir: &Path, report: &mut Report) -> Option<Node> {
+    dir.join("graph.yaml").symlink_metadata().ok()?;
+    load(dir, "graph", report)
+}
+
+/// 決定の欄の裁定 id の形（便 181・判断の記録 ADR-31 決定 (1)(3)）。歩き手が拾った欄ごとに、裁定 id を 1 つも切り出せなければ
+/// 違反（欄が無い・空・字でない〔一覧・表〕も同じ）、骨格が書く欄の値が骨格の印（未記入）なら まだ分からない（裁定の前）。
+/// どの形の種類で足りるかと台帳に在るかは見ない（器と人の持ち分）。
+fn check_rulings(sites: &[ruling::Site], report: &mut Report) {
+    const KIND: &str = "裁定 id";
+    for site in sites {
+        let at = format!("{}: {}", site.file, site.at);
+        match site.value {
+            Some(Node::Scalar(s)) if site.skeleton() && adr::unfilled(s) => report.pending(format!(
+                "{at} が {}（骨格の印・裁定の前＝条 P-17.3）",
+                adr::UNFILLED
+            )),
+            Some(Node::Scalar(s)) if ruling::has_ruling(s) => {}
+            Some(Node::Scalar(s)) => report.violation(
+                KIND,
+                format!("{at}「{s}」に台帳 id が無い（決定の欄・形は adr/schema.yaml の ruling_pattern）"),
+            ),
+            Some(Node::Seq(_) | Node::Map(_)) => report.violation(
+                KIND,
+                format!("{at} が字でない（一覧か表）＝台帳 id を切り出せない"),
+            ),
+            None | Some(Node::Null) => report.violation(KIND, format!("{at} が無い＝台帳 id が無い")),
+        }
+    }
 }
 
 /// 最上位の節が閉じた一覧に在るか。

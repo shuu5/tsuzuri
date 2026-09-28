@@ -2,7 +2,7 @@
 //! 床は合格なのに面だけが止まっていた 4 か所（要件書の meta.counts・meta.promise・範囲の節 scope / scope_m1・憲法の
 //! amendment が字）を、面の側で寛容にしたことを測る。在るのに形が違う欄は今どおり まだ分からない（保つ歯）。
 //! fixture の dir を足さない: 口 `Place` が一時 dir の根で git の init をし、`folio init --dir <根>/design-intent` の骨格を
-//! 書き、字を当てて commit し、素の check（骨格と同じ床 = 違反 0・まだ分からない 2）と build --write を撃つ。
+//! 書き、字を当てて commit し、素の check（骨格と同じ床 = 違反 0・まだ分からない 6〔便 181 で骨格の決定の欄 4 つ〕）と build --write を撃つ。
 //! 字の amendment の改訂の例と版ごとの変更点は面の凍結 fixture（tests/fixtures/face/）の写しで測る。
 //! 版管理の下の正本と面は書き換えない（写しと配信先は必ず一時 dir の中）。
 
@@ -177,14 +177,14 @@ impl Place {
         fs::write(self.dir().join(file), after).unwrap();
     }
 
-    /// commit して素の check が骨格と同じ床（違反 0・まだ分からない 2）で答えることを確かめる。
+    /// commit して素の check が骨格と同じ床（違反 0・まだ分からない 6）で答えることを確かめる。
     fn commit(&self, what: &str) {
         git(&self.root, &["add", "-A"]);
         git(&self.root, &["commit", "-q", "--allow-empty", "-m", what]);
         let check = folio(&["check"], &self.dir());
         assert_eq!(check.status.code(), Some(2), "{what}: {}", both(&check));
         assert!(
-            both(&check).contains("違反 0・まだ分からない 2"),
+            both(&check).contains("違反 0・まだ分からない 6"),
             "{what}: 床が骨格と違う: {}",
             both(&check)
         );

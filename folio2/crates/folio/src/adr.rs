@@ -10,6 +10,7 @@
 //! 任意の図の節（figures・便 33）は設計ノートの図の節と同じ形（欄の集合・型は部品目録の一覧・spec は表・refs は
 //! basis と同じ id の形・図の id は 1 本の記録の中で一意）を見る。行き先の解決は床では数えない（面が「まだ分からない」で表す）。
 //! 床の定数（欄の集合の型・欄の決まりの定数・`FLOOR`）は便 113 で `floor_adr.rs`（層 1）へ降ろした。床の読み口はここに残す。
+//! 承認欄の裁定 id の形は便 181 から決定の欄の床（`ruling.rs` の歩き手と文法・`check.rs` の `check_rulings`）が数える。
 
 use std::fs;
 use std::path::Path;
@@ -19,7 +20,7 @@ use crate::floor::{Floor, floor_diff_for, strip_notes};
 use crate::floor_adr::{
     AMENDS_ENTRY, APPROVAL, APPROVER, EFFECTIVE_STATUS, FIGURE_ENTRY, FIGURE_TYPE_ENUM_REF, FLOOR,
     GRILL, ID_PATTERN, Keys, NON_EMPTY, OPTION, OPTIONS_ADOPTED, OPTIONS_MIN, OWNER, PRODUCED,
-    RECORD, RETREAT, RETREAT_KIND, ROOT_DIGESTS, RULING_PATTERN, STATUS, SURFACE, VERDICT,
+    RECORD, RETREAT, RETREAT_KIND, ROOT_DIGESTS, STATUS, SURFACE, VERDICT,
 };
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
@@ -556,15 +557,6 @@ fn check_approval(at: &str, ap: &Node, report: &mut Report) {
     if !in_enum(ap.get("who"), APPROVER) {
         report.violation(KIND, format!("{at}.who が値域外: {}", show(ap.get("who"))));
     }
-    if !scalar(ap.get("ruling")).is_some_and(has_ledger_id) {
-        report.violation(
-            KIND,
-            format!(
-                "{at}.ruling「{}」に台帳 id（{RULING_PATTERN}）が無い",
-                show(ap.get("ruling"))
-            ),
-        );
-    }
     if !in_enum(ap.get("surface"), SURFACE) {
         report.violation(
             KIND,
@@ -845,17 +837,6 @@ fn is_article_id(s: &str) -> bool {
     })
 }
 
-/// 小文字の英字 1 字 + 数字 1 字 + 「-」+ 小文字の英字か数字 1 字 の並びを含む（ruling_pattern の search）。
-pub(crate) fn has_ledger_id(s: &str) -> bool {
-    let chars: Vec<char> = s.chars().collect();
-    chars.windows(4).any(|w| {
-        w[0].is_ascii_lowercase()
-            && w[1].is_ascii_digit()
-            && w[2] == '-'
-            && (w[3].is_ascii_lowercase() || w[3].is_ascii_digit())
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -870,8 +851,6 @@ mod tests {
         for ng in ["P-", "P-1.", "ADR-0047", "FR", "R-1.2", "X-1", "p-1"] {
             assert!(!is_basis_id(ng), "{ng}");
         }
-        assert!(has_ledger_id("f2-648.2 notes"));
-        assert!(!has_ledger_id("F2-648"));
         assert!(is_date("2026-09-17"));
         assert!(!is_date("2026-9-17"));
     }

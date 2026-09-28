@@ -414,7 +414,8 @@ fn dates_around_now() -> Vec<String> {
 
 // ── 歯 ──
 
-/// 歯 1（AC19 の前半）: 空の置き場に書くと 11 本がちょうど書かれ、床は凍結の基準の不在だけを「まだ分からない」にする。
+/// 歯 1（AC19 の前半）: 空の置き場に書くと 11 本がちょうど書かれ、床は凍結の基準の不在と、骨格が書く決定の欄の骨格の印
+/// （便 181）だけを「まだ分からない」にする。
 #[test]
 fn f125_init_writes_the_skeleton_and_the_floor_passes() {
     let w = Work::new("writes");
@@ -453,12 +454,21 @@ fn f125_init_writes_the_skeleton_and_the_floor_passes() {
         .filter(|l| l.starts_with("# まだ分からない: "))
         .map(str::to_string)
         .collect();
-    assert_eq!(unknowns.len(), 2, "{unknowns:?}");
+    assert_eq!(unknowns.len(), 6, "{unknowns:?}");
     assert!(unknowns.iter().any(|l| l.contains("凍結 anchor が 0 本")), "{unknowns:?}");
     assert!(
         unknowns.iter().any(|l| l.contains("anchors/ids-*.yaml）が無い")),
         "{unknowns:?}"
     );
+    // 便 181: 骨格が書く決定の欄 4 つ（憲法の発効の承認と規則の表の 3 行）の骨格の印は裁定の前＝まだ分からない
+    for field in [
+        "constitution.yaml: meta.approval.ruling が 未記入",
+        "rules.yaml: 行 R-2 の ruling が 未記入",
+        "rules.yaml: 行 R-8 の ruling が 未記入",
+        "rules.yaml: 行 R-16 の ruling が 未記入",
+    ] {
+        assert!(unknowns.iter().any(|l| l.contains(field)), "{field}: {unknowns:?}");
+    }
 
     let schema = folio(&["schema", "--check"], &w.place());
     assert_eq!(schema.status.code(), Some(0), "{}", both(&schema));
@@ -781,6 +791,7 @@ fn f125_no_folio2_ids_in_the_skeleton() {
 /// 歯 8（便 152・群 A の通し）: 根の直下の design-intent に init して commit した後、手直しなしで床・注入・欄の決まり・
 /// 組み立て・4 面が答える。便 153（delivery-153.md §1 (c) の 1）: 組み立ては置き場に様式が無いので焼いた様式を出し、
 /// 6 file を書いて床の まだ分からない だけで 2・--check は 0・配信先の 4 面の部品の検査は 0（置き場に preview/ を作らない）。
+/// 便 181: 床の まだ分からない は 6（凍結の基準の不在 2 と骨格が書く決定の欄の骨格の印 4）。
 #[test]
 fn f152_the_skeleton_runs_every_command_without_hand_edits() {
     let w = Work::new("run-all");
@@ -793,7 +804,7 @@ fn f152_the_skeleton_runs_every_command_without_hand_edits() {
     let check = folio(&["check"], &place);
     assert_eq!(check.status.code(), Some(2), "{}", both(&check));
     assert!(
-        stdout(&check).contains("違反 0・まだ分からない 2"),
+        stdout(&check).contains("違反 0・まだ分からない 6"),
         "{}",
         both(&check)
     );
@@ -826,7 +837,7 @@ fn f152_the_skeleton_runs_every_command_without_hand_edits() {
     );
     assert_eq!(build.status.code(), Some(2), "{}", both(&build));
     assert!(
-        stdout(&build).contains("床 = まだ分からない（違反 0・まだ分からない 2）"),
+        stdout(&build).contains("床 = まだ分からない（違反 0・まだ分からない 6）"),
         "{}",
         both(&build)
     );

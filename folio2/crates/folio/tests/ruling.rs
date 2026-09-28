@@ -1,0 +1,196 @@
+//! 決定の欄の裁定 id の形の床の歯（便 181・docs/design/delivery-181.md §1 (c)・判断の記録 ADR-31 決定 (1)(3)・AC28 の前半）。
+//! 土台は凍結した写し（tests/fixtures/floor_base/design-intent/）の写し全部を一時 dir に作り、字を 1 か所ずつ変えて素の
+//! folio check を撃つ。版管理は作らない（土台の写しの床は器の導出 file と版管理の 2 つが まだ分からない）＝歯は種別 裁定 id の
+//! 違反の行と、未記入 の まだ分からない の行を数える。数の 55 と内訳は独立の実装（起草の記録の fields.py）の数。
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+const NO_ID: &str = "に台帳 id が無い（決定の欄・形は adr/schema.yaml の ruling_pattern）";
+const MARK: &str = "が 未記入（骨格の印・裁定の前＝条 P-17.3）";
+
+fn copy_tree(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let to = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &to);
+        } else {
+            fs::copy(entry.path(), &to).unwrap();
+        }
+    }
+}
+
+/// 土台の写しの一時 dir（歯の終わりに消す）。
+struct Work(PathBuf);
+
+impl Work {
+    fn new(case: &str) -> Work {
+        let root = std::env::temp_dir().join(format!("folio-ruling-{case}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(FLOOR_BASE), &root);
+        Work(root)
+    }
+
+    /// 素の check の、種別 裁定 id の違反の行（標準出力）と、まだ分からない の行（標準エラー）。
+    fn check(&self) -> (Vec<String>, Vec<String>) {
+        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+            .args(["check", "--dir"])
+            .arg(&self.0)
+            .output()
+            .expect("folio を起動できない");
+        let pick = |b: Vec<u8>, p: &str| {
+            let t = String::from_utf8(b).unwrap();
+            t.lines().filter(|l| l.starts_with(p)).map(str::to_string).collect()
+        };
+        (pick(out.stdout, "[裁定 id] "), pick(out.stderr, "# まだ分からない: "))
+    }
+
+    fn read(&self, rel: &str) -> String {
+        fs::read_to_string(self.0.join(rel)).unwrap()
+    }
+
+    /// `marker` を含むちょうど 1 行の、流れの形の欄 `key` の値を `value` に替える（None なら欄ごと外す）。
+    fn set(&self, rel: &str, marker: &str, key: &str, value: Option<&str>) {
+        let text = self.read(rel);
+        let hits: Vec<&str> = text.lines().filter(|l| l.contains(marker)).collect();
+        assert_eq!(hits.len(), 1, "{rel}: 「{marker}」の行が 1 つでない");
+        let line = hits[0];
+        let start = line.find(&format!("{key}: ")).unwrap();
+        let v = start + key.len() + 2;
+        let end = if line[v..].starts_with('"') {
+            v + 2 + line[v + 1..].find('"').unwrap()
+        } else {
+            v + line[v..].find([',', '}']).unwrap()
+        };
+        let new = match value {
+            Some(s) => format!("{}{key}: {s}{}", &line[..start], &line[end..]),
+            None => format!("{}{}", &line[..start], line[end..].trim_start_matches(", ")),
+        };
+        fs::write(self.0.join(rel), text.replacen(line, &new, 1)).unwrap();
+    }
+}
+
+impl Drop for Work {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+const R10: (&str, &str, &str) = ("rules.yaml", "{id: R-10,", "ruling");
+
+/// 歯 1（AC28 の前半）: 規則の表の 1 行の裁定の欄から台帳の id を消すと違反がちょうど 1 つ増え、骨格の印にすると違反は
+/// 増えず まだ分からない がちょうど 1 つ増える。語頭でない台帳の id の形（folio2-648）は数えない。
+#[test]
+fn f181_a_rules_row_without_a_ledger_id_is_one_violation() {
+    let base = Work::new("base").check();
+    assert!(base.0.is_empty(), "{base:?}");
+    let (file, marker, key) = R10;
+    for (value, want) in [("G16=A（受入 (f)）", "G16=A（受入 (f)）"), ("G16=A・folio2-648", "G16=A・folio2-648")] {
+        let w = Work::new("r10");
+        w.set(file, marker, key, Some(value));
+        let (v, p) = w.check();
+        assert_eq!(v, [format!("[裁定 id] rules.yaml: 行 R-10 の ruling「{want}」{NO_ID}")]);
+        assert_eq!(p, base.1);
+    }
+    let w = Work::new("r10-mark");
+    w.set(file, marker, key, Some("未記入"));
+    let (v, p) = w.check();
+    assert!(v.is_empty(), "{v:?}");
+    assert_eq!(p.len(), base.1.len() + 1, "{p:?}");
+    assert!(p.contains(&format!("# まだ分からない: rules.yaml: 行 R-10 の ruling {MARK}")), "{p:?}");
+}
+
+/// 歯 2: 決定の欄の閉じた一覧の各種類（憲法の発効の承認と改訂来歴・閾値と開発規律の行・判断の記録の承認欄・5 正本の
+/// 承認欄の行の stamp）の 1 つから台帳の id を消すと、その欄の違反がちょうど 1 つ出る。設計ノートは tests/note.rs の f161_。
+#[test]
+fn f181_each_kind_of_decision_field_is_read() {
+    let cases = [
+        ("constitution.yaml", "20:2x（発効承認）", "ruling", "constitution.yaml: meta.approval.ruling「発効承認」"),
+        ("rules.yaml", "{id: D-8,", "ruling", "rules.yaml: 行 D-8 の ruling「発効承認」"),
+        ("adr/ADR-2.yaml", "09-13 09:35,", "ruling", "adr/ADR-2.yaml: approval.ruling「発効承認」"),
+        ("srs.yaml", "（f2-648.1 notes 20:2x）", "stamp", "srs.yaml: meta.approval[2].stamp「発効承認」"),
+        ("index.yaml", "2026-09-18 00:2x JST", "stamp", "index.yaml: meta.approval[2].stamp「発効承認」"),
+        ("ceiling.yaml", "2026-09-19 13:1x JST", "stamp", "ceiling.yaml: meta.approval[1].stamp「発効承認」"),
+        ("intake.yaml", "2026-09-18 11:4x JST", "stamp", "intake.yaml: meta.approval[1].stamp「発効承認」"),
+    ];
+    for (file, marker, key, at) in cases {
+        let w = Work::new("kind");
+        w.set(file, marker, key, Some("発効承認"));
+        assert_eq!(w.check().0, [format!("[裁定 id] {at}{NO_ID}")], "{file}");
+    }
+    // 改訂来歴と、床の 7 本の外の索引の欄の決まり（在れば読む）
+    let w = Work::new("amended");
+    let c = w.read("constitution.yaml");
+    let at = "    relations: {reqs: [FR1, FR2, AC1]}\n";
+    let add = "    amended_by: [{adr: ADR-2, date: 2026-09-13, ruling: 持ち主の裁定}]\n";
+    fs::write(w.0.join("constitution.yaml"), c.replacen(at, &format!("{at}{add}"), 1)).unwrap();
+    let head = "meta:\n  approval:\n    - {role: 作成, stamp: 起草}\n";
+    fs::write(w.0.join("graph.yaml"), format!("{head}    - {{role: 承認, stamp: 発効}}\n")).unwrap();
+    assert_eq!(
+        w.check().0,
+        [
+            format!("[裁定 id] constitution.yaml: 条 P-1 の amended_by[0].ruling「持ち主の裁定」{NO_ID}"),
+            format!("[裁定 id] graph.yaml: meta.approval[1].stamp「発効」{NO_ID}"),
+        ]
+    );
+}
+
+/// 歯 3: 役が 作成 と レビュー の行（土台の srs.yaml の「起草」と review/summary.md）と、憲法の条 P-2 の前の版との対応
+/// （supersedes_v1 の「裁定 #4」）は数えない。役を 作成 から替えた行は数える。
+#[test]
+fn f181_rows_without_a_decision_are_not_read() {
+    let w = Work::new("skip");
+    assert!(w.read("constitution.yaml").contains("ruling: \"裁定 #4\""));
+    w.set("srs.yaml", "stamp: review/summary.md", "stamp", Some("未記入"));
+    assert!(w.check().0.is_empty());
+    w.set("srs.yaml", "when: 2026-09-12, stamp: 起草}", "role", Some("確認"));
+    assert_eq!(w.check().0, [format!("[裁定 id] srs.yaml: meta.approval[0].stamp「起草」{NO_ID}")]);
+}
+
+/// 歯 4: 骨格の印（未記入）が まだ分からない になるのは骨格が書く欄（憲法の発効の承認・規則の表の行）だけで、判断の記録と
+/// 5 正本の承認欄の未記入は違反のまま。欄が無い・値が一覧は違反。
+#[test]
+fn f181_the_mark_waits_only_in_the_skeleton_fields() {
+    let w = Work::new("mark");
+    w.set("constitution.yaml", "20:2x（発効承認）", "ruling", Some("未記入"));
+    w.set("rules.yaml", "{id: D-8,", "ruling", Some("未記入"));
+    w.set("adr/ADR-2.yaml", "09-13 09:35,", "ruling", Some("未記入"));
+    w.set("srs.yaml", "（f2-648.1 notes 20:2x）", "stamp", Some("未記入"));
+    let (v, p) = w.check();
+    assert_eq!(
+        v,
+        [
+            format!("[裁定 id] adr/ADR-2.yaml: approval.ruling「未記入」{NO_ID}"),
+            format!("[裁定 id] srs.yaml: meta.approval[2].stamp「未記入」{NO_ID}"),
+        ]
+    );
+    for at in ["constitution.yaml: meta.approval.ruling", "rules.yaml: 行 D-8 の ruling"] {
+        assert!(p.contains(&format!("# まだ分からない: {at} {MARK}")), "{at}: {p:?}");
+    }
+    let (file, marker, key) = R10;
+    for (value, want) in [(Some("[f2-648.1]"), "が字でない（一覧か表）＝台帳 id を切り出せない"), (None, "が無い＝台帳 id が無い")] {
+        let w = Work::new("shape");
+        w.set(file, marker, key, value);
+        assert_eq!(w.check().0, [format!("[裁定 id] rules.yaml: 行 R-10 の ruling {want}")]);
+    }
+}
+
+/// 歯 5: 決定の欄を持つ 7 本の台帳の id（f2- と s2-）を全部大字にすると、種別 裁定 id の違反は独立の実装の数と同じ 55
+/// （憲法 1・規則の表 27・判断の記録 10・要件書 9・入口 4・天井の正本 3・相談窓口 1）。
+#[test]
+fn f181_every_decision_field_of_the_base_is_counted() {
+    let w = Work::new("upper");
+    let files = ["constitution", "rules", "srs", "index", "ceiling", "intake"].map(|f| format!("{f}.yaml"));
+    for f in files.into_iter().chain((1..=10).map(|n| format!("adr/ADR-{n}.yaml"))) {
+        let t = w.read(&f).replace("f2-", "F2-").replace("s2-", "S2-");
+        fs::write(w.0.join(&f), t).unwrap();
+    }
+    let v = w.check().0;
+    let n = |p: &str| v.iter().filter(|l| l.starts_with(&format!("[裁定 id] {p}"))).count();
+    let got = ["constitution", "rules", "adr/", "srs", "index", "ceiling", "intake"].map(n);
+    assert_eq!((v.len(), got), (55, [1, 27, 10, 9, 4, 3, 1]), "{v:?}");
+}

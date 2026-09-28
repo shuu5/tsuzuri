@@ -7,6 +7,7 @@
 //! 便 120（docs/design/delivery-120.md §1 (d)）の歯 f120_ は、同じ dir の手書きの凍結の対 need-conditional.yaml と
 //! need-conditional-schema.toml（器の導出 file の verify と done が要否 conditional）を使う。
 //! 便 161（docs/design/delivery-161.md §1 (c)）の歯 f161_ は fixture を足さず、見本の承認欄を口 approve と row_with で置く。
+//! 便 181（docs/design/delivery-181.md §1 (c)）から承認欄の裁定の欄は決定の欄の床（種別 裁定 id）が数える＝f161_ の 2 本の字を合わせた。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -762,22 +763,23 @@ fn approve(w: &Work, status: &str, rows: &[String]) {
 const VERBATIM_MARK: &str =
     "meta の approval[0] の verbatim が 未記入（init の雛形の印・空と同じ）";
 
-/// 不合格 1・違反はちょうど 5 行で、5 欄とも印の項 n の行が承認者・日付・裁定 id・逐語・対話面の順に並ぶ。
+/// 不合格 1・違反はちょうど 5 行で、5 欄とも印の項 n の行が承認者・日付・逐語・対話面の順に並び、裁定 id の行
+/// （便 181 から決定の欄の床・種別 裁定 id）が後に続く。
 fn assert_five_lines(out: &Output, n: usize) {
     assert_eq!(out.status.code(), Some(1), "{}{}", stdout(out), stderr(out));
     let at = format!("meta の approval[{n}]");
     let want = [
-        format!("{at}: who「未記入」が一覧に無い（判断の記録の承認者の値域）"),
-        format!("{at}: date「未記入」が年-月-日でない"),
-        format!("{at}: ruling「未記入」に台帳 id（"),
-        format!("{at} の verbatim が 未記入（init の雛形の印・空と同じ）"),
-        format!("{at}: surface「未記入」が一覧に無い"),
+        ("note", format!("{at}: who「未記入」が一覧に無い（判断の記録の承認者の値域）")),
+        ("note", format!("{at}: date「未記入」が年-月-日でない")),
+        ("note", format!("{at} の verbatim が 未記入（init の雛形の印・空と同じ）")),
+        ("note", format!("{at}: surface「未記入」が一覧に無い")),
+        ("裁定 id", format!("meta.approval[{n}].ruling「未記入」に台帳 id が無い")),
     ];
     let v = violations(out);
     assert_eq!(v.len(), want.len(), "違反の行数: {v:?}");
-    for (line, w) in v.iter().zip(&want) {
+    for (line, (kind, w)) in v.iter().zip(&want) {
         assert!(
-            line.starts_with("[note] design-note/example.yaml: "),
+            line.starts_with(&format!("[{kind}] design-note/example.yaml: ")),
             "{v:?}"
         );
         assert!(line.contains(w.as_str()), "「{w}」が無い: {v:?}");
@@ -822,15 +824,13 @@ fn f161_who_and_ruling_take_the_adr_shape() {
         &["meta の approval[0]: who「未記入」が一覧に無い（判断の記録の承認者の値域）"],
     );
 
+    // 裁定の欄は便 181 から決定の欄の床（種別 裁定 id・判断の記録の承認欄と同じ関数と同じ字）が数える
     let w = Work::new("f161-ruling-mark");
     approve(&w, "effective", &[row_with(&[("ruling", "未記入")])]);
     assert_single_violation(
         &w.check(),
-        "note",
-        &[
-            "meta の approval[0]: ruling「未記入」に台帳 id（",
-            "）が無い",
-        ],
+        "裁定 id",
+        &["meta.approval[0].ruling「未記入」に台帳 id が無い"],
     );
 
     let w = Work::new("f161-who-blank");
@@ -907,9 +907,9 @@ fn f161_who_and_ruling_agree_with_the_adr_approval() {
         let has =
             |prefix: &str, word: &str| v.iter().any(|l| l.starts_with(prefix) && l.contains(word));
         let adr_who = has("[N-4]", "ADR-2.approval.who");
-        let adr_ruling = has("[N-4]", "ADR-2.approval.ruling");
+        let adr_ruling = has("[裁定 id] adr/ADR-2.yaml", "approval.ruling「");
         let note_who = has("[note] design-note/example.yaml", "who「");
-        let note_ruling = has("[note] design-note/example.yaml", "ruling「");
+        let note_ruling = has("[裁定 id] design-note/example.yaml", "ruling「");
         assert_eq!(adr_who, note_who, "who「{who}」: {v:?}");
         assert_eq!(adr_ruling, note_ruling, "ruling「{ruling}」: {v:?}");
         assert_eq!(note_who, !good, "who「{who}」: {v:?}");

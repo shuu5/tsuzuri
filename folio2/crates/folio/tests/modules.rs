@@ -24,6 +24,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("floor_adr", 1),
     ("floor_note", 1),
     ("phase", 1),
+    ("ruling", 1),
     ("shelf", 1),
     ("yaml", 1),
     ("adr", 2),

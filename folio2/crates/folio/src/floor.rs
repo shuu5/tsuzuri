@@ -18,6 +18,7 @@
 
 use std::borrow::Cow;
 
+use crate::ruling::has_ruling;
 use crate::yaml::Node;
 
 /// 1 行の幅の上限（Unicode の字の数）。
@@ -109,24 +110,12 @@ pub(crate) fn ids_in(text: &str) -> Vec<String> {
     out
 }
 
-/// 台帳の id の形の語（英小字 1 字・数字 1 字・「-」・英数字。前は頭か空白か全角の字＝正規表現の字面の中は数えない）を持つか。
-pub(crate) fn has_ledger_id(t: &str) -> bool {
-    let c: Vec<char> = t.chars().collect();
-    (0..c.len()).any(|i| {
-        (i == 0 || c[i - 1].is_ascii_whitespace() || !c[i - 1].is_ascii())
-            && c[i].is_ascii_lowercase()
-            && c.get(i + 1).is_some_and(char::is_ascii_digit)
-            && c.get(i + 2) == Some(&'-')
-            && c.get(i + 3).is_some_and(char::is_ascii_alphanumeric)
-    })
-}
-
 /// folio2 の番号の印を持つか。印 = 骨格と同じ id の形（`ids_in`・条・要件・規則の表の行・判断の記録・便）のうち
-/// `RESERVED` でないもの・判断の記録の決定の番号（「決定 (」）・台帳の id の形。
+/// `RESERVED` でないもの・判断の記録の決定の番号（「決定 (」）・台帳の id の形（決定の欄の床と同じ文法・便 181）。
 fn marked(t: &str) -> bool {
     ids_in(t).iter().any(|id| !RESERVED.contains(&id.as_str()))
         || t.contains("決定 (")
-        || has_ledger_id(t)
+        || has_ruling(t)
 }
 
 /// 括弧の深さ（全角の丸括弧・亀甲括弧・鉤括弧）の増減。

@@ -162,7 +162,8 @@ pub fn run(dir: &Path, mode: Mode) -> Outcome {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::floor::{HOME, floor_diff_for, has_ledger_id, ids_in, strip_notes, text_for};
+    use crate::floor::{HOME, floor_diff_for, ids_in, strip_notes, text_for};
+    use crate::ruling::has_ruling;
     use crate::yaml;
 
     #[test]
@@ -218,7 +219,7 @@ mod tests {
                 .filter(|i| !RESERVED.contains(&i.as_str()))
                 .collect();
             assert!(left.is_empty(), "{id}: {left:?}");
-            assert!(!text.contains("決定 (") && !has_ledger_id(&text), "{id}");
+            assert!(!text.contains("決定 (") && !has_ruling(&text), "{id}");
             typed(floor, id, &mut changed);
             let doc = yaml::parse(&text).unwrap();
             let schema = doc.root.get("schema").unwrap();
