@@ -19,3 +19,8 @@ publish = false
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# 行 g-strip: release の profile の strip で面の wasm の関数の名の表（name の節）を抜く。
+# opt-level と lto は組みの時間を測ってから別に決める。
+[profile.release]
+strip = "symbols"
