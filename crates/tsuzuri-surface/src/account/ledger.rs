@@ -4,6 +4,7 @@
 //! 判定の写し・純減の矢印・小数 1 桁・日数の字は着地済みの project の ledger の module の値と関数を使う（その block の DOM は呼ばない）。
 //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
 //! 未反映の数は読めない種類を 0 と数えた和で確かな値と言えないので、この便は「―」を出す（未決）。
+//! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の projects の led_card で組む。
 //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
 //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
@@ -13,12 +14,14 @@ use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::stats::LedgerStats;
 
+use super::projects::led_card;
 use crate::frame::{self, Block};
 use crate::project::Body;
 use crate::project::ledger::{
     JUDGES, Judge, NONE, Net, SPARK_H, SPARK_W, age, fixed1, judge, net, spark, spark_svg,
 };
 use crate::view::Fetched;
+use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
     id: "ledger",
@@ -240,6 +243,8 @@ pub struct LedRow {
     /// 行の class（`jrow j-<判定>`・台帳が Unknown は j-none）。
     pub class: String,
     pub cells: Reading<Cells>,
+    /// project の欄の hover の card（見本の ledCard・各 project の表の台帳の欄と同じ関数）。
+    pub card: Card,
 }
 
 impl LedRow {
@@ -364,6 +369,7 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
                 name: p.name.clone(),
                 class: row_class(&cells),
                 cells,
+                card: led_card(p),
             }
         })
         .collect();
@@ -403,6 +409,7 @@ mod dom {
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal};
+    use crate::widgets::hover::attach;
 
     /// 行ごとの「詳しく」の開き閉じ（project の名ごと・頁の一生の間だけ）。
     type Opened = RwSignal<BTreeMap<String, bool>>;
@@ -492,7 +499,8 @@ mod dom {
 
     fn row_view(row: LedRow, opened: Opened, expert: Signal<bool>) -> AnyView {
         let name = row.name.clone();
-        let project = view! { <div class="c-p"><span data-t="">{name.clone()}</span></div> };
+        let card = row.card;
+        let project = view! { <div class="c-p" tabindex="0" use:attach=card><span data-t="">{name.clone()}</span></div> };
         let cells = match row.cells {
             Reading::Known(c) => c,
             Reading::Unknown => {
