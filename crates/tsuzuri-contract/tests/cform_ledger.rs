@@ -47,11 +47,11 @@ fn ledger_writes() -> Vec<LedgerWrite> {
     vec![
         LedgerWrite::AppendNotes {
             id: bead("t3-hub.5"),
-            line: "裁定 t3-hub.5:20260926T1437Z-1・逐語 = よい".into(),
+            line: "裁定 fx-c.5:20260926T1437Z-1・逐語 = よい".into(),
         },
         LedgerWrite::CloseItem {
             id: bead("t3-hub.5"),
-            reason: "裁定 t3-hub.5:20260926T1437Z-1".into(),
+            reason: "裁定 fx-c.5:20260926T1437Z-1".into(),
         },
         LedgerWrite::CreateChild {
             parent: bead("t3-hub"),
@@ -76,7 +76,7 @@ fn ledger_writes() -> Vec<LedgerWrite> {
         },
         LedgerWrite::ReopenItem {
             id: bead("t3-hub.5"),
-            reason: "裁定 t3-hub.5:20260926T1440Z-1・取り消す = t3-hub.5:20260926T1437Z-1".into(),
+            reason: "裁定 fx-c.5:20260926T1440Z-1・取り消す = fx-c.5:20260926T1437Z-1".into(),
         },
     ]
 }
@@ -85,7 +85,7 @@ fn ledger_item() -> LedgerItem {
     LedgerItem {
         row: ledger_row(),
         description: "本文".into(),
-        notes: "裁定 t3-hub.5:20260926T1437Z-1".into(),
+        notes: "裁定 fx-c.5:20260926T1437Z-1".into(),
     }
 }
 
@@ -327,12 +327,12 @@ fn contract_form_ledger_item_digest() {
     assert_eq!(fnv1a64(b"foobar"), 0x8594_4171_f739_67e8);
     let item = ledger_item();
     let digest = item.digest();
-    assert_eq!(digest, "0874e9bb3b87f545");
+    assert_eq!(digest, "2f890a3dc04a8b5a");
     assert_eq!(
         digest,
         format!(
             "{:016x}",
-            fnv1a64("t3-hub.5\n契約の型\nopen\n本文\n裁定 t3-hub.5:20260926T1437Z-1".as_bytes())
+            fnv1a64("t3-hub.5\n契約の型\nopen\n本文\n裁定 fx-c.5:20260926T1437Z-1".as_bytes())
         )
     );
     // 同じ中身なら同じ値（数えない欄は値を動かさない）。
@@ -376,12 +376,12 @@ fn contract_form_ledger_item_digest() {
             ..ledger_item()
         },
         LedgerItem {
-            notes: "裁定 t3-hub.5:20260926T1437Z-2".into(),
+            notes: "裁定 fx-c.5:20260926T1437Z-2".into(),
             ..ledger_item()
         },
         LedgerItem {
             description: "本文\n裁定".into(),
-            notes: " t3-hub.5:20260926T1437Z-1".into(),
+            notes: " fx-c.5:20260926T1437Z-1".into(),
             ..ledger_item()
         },
     ];

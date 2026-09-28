@@ -1,6 +1,6 @@
 {
   "surface::RulingId": [
-    "t3-hub.5:20260926T1437Z-1",
+    "fx-c.5:20260926T1437Z-1",
     "batch:20260926T1437Z-1"
   ],
   "surface::SeatRole": [
@@ -44,7 +44,7 @@
       "next_move": "question",
       "updated_at": 1790494620,
       "undelivered": [
-        "t3-hub.5:20260926T1437Z-1"
+        "fx-c.5:20260926T1437Z-1"
       ]
     }
   ],
@@ -67,7 +67,7 @@
     },
     {
       "event": "RulingRead",
-      "ruling": "t3-hub.7:20260926T1437Z-1",
+      "ruling": "fx-c.7:20260926T1437Z-1",
       "seat": "t3:orchestrator",
       "at": 1790494620
     },
@@ -94,7 +94,7 @@
   ],
   "surface::RulingResponse": [
     {
-      "ruling": "t3-hub.7:20260926T1437Z-1",
+      "ruling": "fx-c.7:20260926T1437Z-1",
       "recorded_at": 1790494620
     }
   ],
@@ -118,11 +118,11 @@
   "surface::ItemOutcome": [
     {
       "outcome": "written",
-      "ruling": "t3-hub.7:20260926T1437Z-1"
+      "ruling": "fx-c.7:20260926T1437Z-1"
     },
     {
       "outcome": "skipped",
-      "ruling": "t3-hub.8:20260926T1437Z-1"
+      "ruling": "fx-c.8:20260926T1437Z-1"
     },
     {
       "outcome": "refused",
@@ -136,7 +136,7 @@
         {
           "question": "t3-hub.7",
           "outcome": "written",
-          "ruling": "t3-hub.7:20260926T1437Z-1"
+          "ruling": "fx-c.7:20260926T1437Z-1"
         },
         {
           "question": "t3-hub.9",

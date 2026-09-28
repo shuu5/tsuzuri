@@ -38,7 +38,7 @@ fn forms() -> Vec<Box<dyn Form>> {
         form(
             "surface::RulingId",
             vec![
-                RulingId::for_question(&bead("t3-hub.5"), "20260926T1437Z", 1).unwrap(),
+                RulingId::for_question(&bead("fx-c.5"),"20260926T1437Z", 1).unwrap(),
                 RulingId::for_batch("20260926T1437Z", 1).unwrap(),
             ],
         ),
@@ -75,7 +75,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                 seats: vec![seat_view()],
                 next_move: NextMove::Question,
                 updated_at: AT,
-                undelivered: vec![ruling("t3-hub.5:20260926T1437Z-1")],
+                undelivered: vec![ruling("fx-c.5:20260926T1437Z-1")],
             }],
         ),
         form(
@@ -90,7 +90,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     at: AT,
                 },
                 SurfaceEvent::RulingRead {
-                    ruling: ruling("t3-hub.7:20260926T1437Z-1"),
+                    ruling: ruling("fx-c.7:20260926T1437Z-1"),
                     seat: "t3:orchestrator".into(),
                     at: AT,
                 },
@@ -120,7 +120,7 @@ fn forms() -> Vec<Box<dyn Form>> {
         form(
             "surface::RulingResponse",
             vec![RulingResponse {
-                ruling: ruling("t3-hub.7:20260926T1437Z-1"),
+                ruling: ruling("fx-c.7:20260926T1437Z-1"),
                 recorded_at: AT,
             }],
         ),
@@ -146,10 +146,10 @@ fn forms() -> Vec<Box<dyn Form>> {
             "surface::ItemOutcome",
             vec![
                 ItemOutcome::Written {
-                    ruling: ruling("t3-hub.7:20260926T1437Z-1"),
+                    ruling: ruling("fx-c.7:20260926T1437Z-1"),
                 },
                 ItemOutcome::Skipped {
-                    ruling: ruling("t3-hub.8:20260926T1437Z-1"),
+                    ruling: ruling("fx-c.8:20260926T1437Z-1"),
                 },
                 ItemOutcome::Refused {
                     reason: Refusal::StaleVersion,
@@ -164,7 +164,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     BatchItemResult {
                         question: bead("t3-hub.7"),
                         outcome: ItemOutcome::Written {
-                            ruling: ruling("t3-hub.7:20260926T1437Z-1"),
+                            ruling: ruling("fx-c.7:20260926T1437Z-1"),
                         },
                     },
                     BatchItemResult {

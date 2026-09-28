@@ -47,7 +47,7 @@
         ]
       },
       "description": "本文",
-      "notes": "裁定 t3-hub.5:20260926T1437Z-1"
+      "notes": "裁定 fx-c.5:20260926T1437Z-1"
     }
   ],
   "ledger::LedgerList": [
@@ -86,12 +86,12 @@
     {
       "op": "append-notes",
       "id": "t3-hub.5",
-      "line": "裁定 t3-hub.5:20260926T1437Z-1・逐語 = よい"
+      "line": "裁定 fx-c.5:20260926T1437Z-1・逐語 = よい"
     },
     {
       "op": "close-item",
       "id": "t3-hub.5",
-      "reason": "裁定 t3-hub.5:20260926T1437Z-1"
+      "reason": "裁定 fx-c.5:20260926T1437Z-1"
     },
     {
       "op": "create-child",
@@ -124,7 +124,7 @@
     {
       "op": "reopen-item",
       "id": "t3-hub.5",
-      "reason": "裁定 t3-hub.5:20260926T1440Z-1・取り消す = t3-hub.5:20260926T1437Z-1"
+      "reason": "裁定 fx-c.5:20260926T1440Z-1・取り消す = fx-c.5:20260926T1437Z-1"
     }
   ],
   "question::QuestionCard": [
@@ -145,7 +145,7 @@
         "t3-hub.30",
         "t3-hub.31"
       ],
-      "digest": "0874e9bb3b87f545"
+      "digest": "2f890a3dc04a8b5a"
     },
     {
       "id": "t3-hub.8",
@@ -182,7 +182,7 @@
               "t3-hub.30",
               "t3-hub.31"
             ],
-            "digest": "0874e9bb3b87f545"
+            "digest": "2f890a3dc04a8b5a"
           }
         ]
       }
