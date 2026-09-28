@@ -234,6 +234,12 @@ impl Place {
     fn source(&self) -> Source {
         Source::new(self.repo.clone(), self.bd())
     }
+
+    /// 印の file（issues.jsonl）に 1 行を足す（変化の見張りに読ませる）。
+    fn touch(&self) {
+        let path = self.repo.join(".beads/issues.jsonl");
+        fs::write(&path, format!("{}{{}}\n", read(&path))).expect("印の file");
+    }
 }
 
 /// `from` から `wait` の後まで眠る。
@@ -432,7 +438,14 @@ fn rhold_routes_hold_and_mark() {
         assert_eq!(reply.age(), None, "{route}: {}", reply.head);
         before.push(reply.body);
     }
+    // 口は見張りの読みの字を返すので、印を動かして見張りの落ちた読みを待つ（行 e-snap）。
     place.down();
+    place.touch();
+    let until = Instant::now() + Duration::from_millis(2500);
+    while get(addr, "/api/ledger").age().is_none() {
+        assert!(Instant::now() < until, "落として 2.5 秒の後も頭が無い");
+        thread::sleep(Duration::from_millis(50));
+    }
     for (route, was) in ROUTES.iter().zip(&before) {
         let reply = get(addr, route);
         assert_eq!(reply.status, 200, "{route}: {}", reply.body);
@@ -455,8 +468,9 @@ fn rhold_routes_hold_and_mark() {
     let project = get(addr, "/api/project");
     assert_eq!(project.status, 200, "{}", project.body);
     assert_eq!(project.age(), None, "{}", project.head);
-    // 戻せば 5 秒以内に頭の無い 200。
+    // 戻して印を動かせば 5 秒以内に頭の無い 200。
     place.up();
+    place.touch();
     let until = Instant::now() + Duration::from_secs(5);
     loop {
         let reply = get(addr, "/api/ledger");

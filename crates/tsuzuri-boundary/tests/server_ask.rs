@@ -10,7 +10,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::server::ledger::epoch_secs;
 use tsuzuri_boundary::server::{Config, Server, ledger, ruling};
@@ -329,16 +329,26 @@ fn server_ask_questions_route_matches_core() {
     assert_eq!(ids, [WITHOUT_LINES, WITH_LINES]);
 
     // 読めた後に偽の bd が落ちれば、最後に読めた一覧と、最後に読めた時からの秒の頭（行 e-hold）。
+    // 口は見張りの読みの字を返すので、印を動かして見張りの読みを待つ（行 e-snap）。
     place.bd_fails();
-    let reply = send(addr, "GET", "/api/questions", "", "");
-    assert_eq!(reply.status, 200, "{}", reply.body);
-    let got: QuestionList = wire::decode(&reply.body).expect("問いの一覧の形");
-    assert_eq!(got, tsuzuri_core::question::list(&read_fixture()));
+    fs::write(place.repo.join(".beads/issues.jsonl"), "{}\n{}\n").expect("印の file");
+    let until = Instant::now() + Duration::from_millis(2500);
+    let reply = loop {
+        let reply = send(addr, "GET", "/api/questions", "", "");
+        let aged = reply.head.to_ascii_lowercase().contains("x-tz-read-age");
+        if aged || Instant::now() >= until {
+            break reply;
+        }
+        thread::sleep(Duration::from_millis(50));
+    };
     assert!(
         reply.head.to_ascii_lowercase().contains("x-tz-read-age"),
         "{}",
         reply.head
     );
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    let got: QuestionList = wire::decode(&reply.body).expect("問いの一覧の形");
+    assert_eq!(got, tsuzuri_core::question::list(&read_fixture()));
 
     // 一度も読めていない server は 200 で「まだ分からない」。
     let place = Place::new("list-down");

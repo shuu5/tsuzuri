@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::server::ledger::{BD, BD_ARGS, BD_TIMEOUT};
+use tsuzuri_boundary::server::ledger::{BD, BD_ARGS, BD_TIMEOUT, BD_WAIT};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LedgerItem, LedgerList, LedgerRow};
@@ -252,8 +252,8 @@ fn server_src_bd_args_and_cwd() {
     let addr = place.serve();
     assert!(matches!(list(addr), Reading::Known(r) if r.len() == 8));
     let calls = place.calls();
-    // 起動の最初の読みと一覧の口の読みの 2 回以上。
-    assert!(calls.len() >= 2, "{calls:?}");
+    // 起動の最初の読みの 1 回以上（一覧の口は bd を撃たず見張りの読みの字を返す・行 e-snap）。
+    assert!(!calls.is_empty(), "{calls:?}");
     let repo = format!(
         "{}\n",
         place.repo.canonicalize().expect("repo の実体").display()
@@ -292,12 +292,17 @@ fn server_src_bd_failures_are_unknown() {
 #[test]
 fn server_src_bd_timeout_is_unknown() {
     let place = Place::new("hang", Fake::Hang);
-    let addr = place.serve();
+    // 起動の読みが上限で止まる（Server::bind は最初の読みを取ってから戻る）。
     let started = Instant::now();
-    assert_eq!(list(addr), Reading::Unknown);
+    let addr = place.serve();
     let took = started.elapsed();
     assert!(took >= BD_TIMEOUT - Duration::from_millis(100), "{took:?}");
     assert!(took < BD_TIMEOUT + Duration::from_secs(2), "{took:?}");
+    // 一覧の口は見張りの読みの結果を返す（読みの途中なら、その終わりを BD_WAIT まで待つ）。
+    let started = Instant::now();
+    assert_eq!(list(addr), Reading::Unknown);
+    let took = started.elapsed();
+    assert!(took < BD_WAIT + Duration::from_secs(1), "{took:?}");
 }
 
 /// SSE の口を開き、頭の後まで読む。

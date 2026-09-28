@@ -3,6 +3,7 @@
 //! 走っている読みが無ければ新しい読みを始める。読みが終われば結果は持ち回さない
 //! （次の呼び出しは新しい読みを始める）。待つのは呼ぶ側が渡す上限までで、越えたら読めない。
 //! 分け合うのは同じ `Coalesce` とその clone だけ（`new` で作った別の値とは分け合わない）。
+//! `join` は新しい読みを始めず、走っている読みが在るときだけその終わりを待って同じ結果を受ける（行 e-snap）。
 
 use std::fmt;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -78,15 +79,27 @@ impl<T: Clone> Coalesce<T> {
                 lead.out = read();
                 lead.out.clone()
             }
-            Err(flight) => {
-                let result = lock(&flight.result);
-                let (result, _) = flight
-                    .done
-                    .wait_timeout_while(result, wait, |r| r.is_none())
-                    .unwrap_or_else(|e| e.into_inner());
-                result.clone().flatten()
-            }
+            Err(flight) => flight.wait(wait),
         }
+    }
+
+    /// 走っている読みが在ればその終わりを `wait` まで待って同じ結果を Some で返し（越えたら Some(None)）、
+    /// 無ければ新しい読みを始めずに None を返す（行 e-snap）。
+    pub fn join(&self, wait: Duration) -> Option<Option<T>> {
+        let flight = lock(&self.running).as_ref().map(Arc::clone)?;
+        Some(flight.wait(wait))
+    }
+}
+
+impl<T: Clone> Flight<T> {
+    /// 結果が置かれるまで `wait` まで待って結果を返す（越えたら None）。
+    fn wait(&self, wait: Duration) -> Option<T> {
+        let result = lock(&self.result);
+        let (result, _) = self
+            .done
+            .wait_timeout_while(result, wait, |r| r.is_none())
+            .unwrap_or_else(|e| e.into_inner());
+        result.clone().flatten()
     }
 }
 

@@ -7,10 +7,11 @@
 //! POST を受ける口は /api/ruling・/api/batch・/api/policy・/api/account/heartbeat・/api/seat/heartbeat だけで、
 //! ほかの GET でない要求は 405 で何も書かない。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
-//! 同じ時に届いた要求は、台帳の読みと設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
-//! 分け合うのは起動で作る 1 つの `Source` と 1 つの `Design` とその clone（変化の見張りの読みも含む）で、
-//! 台帳の読めた字は、次の読みが落ちたときだけ `ledger::READ_HOLD`（60 秒）まで返し、その応答の頭
-//! （`READ_AGE_HEADER`）に最後に読めた時からの秒を付ける（行 e-hold）。裁定の受付は合流せず、新しい子 process で読み直す。
+//! 同じ時に届いた要求は、設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
+//! 台帳の GET の口は bd を撃たず、起動で作る 1 つの `Source`（`Source::watched`）とその clone が変化の見張りの
+//! 最後の読みの字を返し、見張りが読みの途中ならその終わりを待って同じ字を返す（行 e-snap）。見張りの読みが落ちたときは
+//! 最後に読めた字を `ledger::READ_HOLD`（60 秒）まで返し、その応答の頭（`READ_AGE_HEADER`）に最後に読めた時からの秒を
+//! 付ける（行 e-hold）。裁定の受付は合流せず、新しい子 process で読み直す。
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
 //! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
@@ -180,7 +181,7 @@ impl Server {
             })?;
         let listener = TcpListener::bind(config.bind).map_err(StartError::Io)?;
         let sources = Sources {
-            ledger: Source::new(&config.repo, &config.bd),
+            ledger: Source::new(&config.repo, &config.bd).watched(),
             design: Design::new(&config.repo, &config.folio),
             runs: Runs::new(config.state_dir.as_deref()),
         };

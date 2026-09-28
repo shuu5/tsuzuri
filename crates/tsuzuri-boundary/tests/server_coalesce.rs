@@ -141,6 +141,15 @@ impl Place {
         self.calls("summary")
     }
 
+    /// 印を動かす（issues.jsonl に 1 行を足した字を隣の file に書いてから置き替える）。
+    fn touch(&self) {
+        let beads = self.repo.join(".beads");
+        let text = fs::read_to_string(beads.join("issues.jsonl")).expect("印の file");
+        fs::write(beads.join("issues.jsonl.tmp"), format!("{text}{{}}\n")).expect("印の file");
+        fs::rename(beads.join("issues.jsonl.tmp"), beads.join("issues.jsonl"))
+            .expect("印の file を置き替える");
+    }
+
     /// 偽の bd を落とす（true）か戻す（false）。
     fn fail(&self, on: bool) {
         let flag = self.root.join("fail");
@@ -275,10 +284,8 @@ fn server_coalesce_seven_routes_share_one_bd() {
     for (path, r) in paths.iter().zip(&replies) {
         assert_eq!(r.status, 200, "{path}: {}", r.body);
     }
-    assert!(
-        (1..=2).contains(&shot),
-        "7 つの口の同時の要求に偽の bd が {shot} 回"
-    );
+    // 口は bd を撃たず、変化の見張りの最後の読みの字を返す（行 e-snap）。
+    assert_eq!(shot, 0, "7 つの口の同時の要求に偽の bd が {shot} 回");
 
     assert_eq!(ledger_rows(&replies[0]), Some(8), "{}", replies[0].body);
     let board: PipelineBoard = decode!(replies[1].body);
@@ -365,9 +372,29 @@ fn server_coalesce_no_carry_over() {
     fs::write(place.root.join("ledger.json"), format!("{first}\n]\n")).expect("出力を替える");
     let before = place.bd_calls();
     let r = get(addr, "/api/ledger");
+    // 口は見張りの最後の読みの字を返す（印が動かなければ替える前の字・行 e-snap）。
+    assert_eq!(ledger_rows(&r), Some(8), "印の動かない後の出力: {}", r.body);
+    assert_eq!(place.bd_calls() - before, 0, "口は bd を撃たない");
+    // 印を動かせば見張りが読み、口は替えた後の字を返す。
+    let before = place.bd_calls();
+    place.touch();
+    let rows = until_rows(addr, Some(1));
+    let shot = place.bd_calls() - before;
     before_reread(started);
-    assert_eq!(ledger_rows(&r), Some(1), "替えた後の出力: {}", r.body);
-    assert_eq!(place.bd_calls() - before, 1, "新しい読みを始める");
+    assert_eq!(rows, Some(1), "替えた後の出力");
+    assert_eq!(shot, 1, "見張りの読み");
+}
+
+/// /api/ledger の行の数が `want` になるまで（2.5 秒まで）50 ミリ秒ごとに撃ち、最後の行の数を返す。
+fn until_rows(addr: SocketAddr, want: Option<usize>) -> Option<usize> {
+    let until = Instant::now() + Duration::from_millis(2500);
+    loop {
+        let rows = ledger_rows(&get(addr, "/api/ledger"));
+        if rows == want || Instant::now() >= until {
+            return rows;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 #[test]
@@ -386,7 +413,7 @@ fn server_coalesce_shared_failure_then_new_read() {
     .to_vec();
     let replies = get_all(addr, &paths);
     let shot = place.bd_calls() - before;
-    assert!((1..=2).contains(&shot), "{shot} 回");
+    assert_eq!(shot, 0, "{shot} 回");
     for r in &replies[..2] {
         assert_eq!(ledger_rows(r), None, "{}", r.body);
     }
@@ -397,13 +424,20 @@ fn server_coalesce_shared_failure_then_new_read() {
         (replies[3].status, replies[3].body.as_str()),
         (503, "ledger-unknown")
     );
-    // 落ちた読みは持ち回さない（次の要求は新しい読みを始め、戻った bd の出力を読む）。
+    // 口は bd を撃たない（戻しても、見張りが読むまでは落ちた読みの結果・行 e-snap）。
     place.fail(false);
     let before = place.bd_calls();
     let r = get(addr, "/api/ledger");
+    assert_eq!(place.bd_calls() - before, 0, "口は bd を撃たない");
+    assert_eq!(ledger_rows(&r), None, "{}", r.body);
+    // 印を動かせば見張りが読み、戻った bd の出力を返す。
+    let before = place.bd_calls();
+    place.touch();
+    let rows = until_rows(addr, Some(8));
+    let shot = place.bd_calls() - before;
     before_reread(started);
-    assert_eq!(place.bd_calls() - before, 1, "新しい読みを始める");
-    assert_eq!(ledger_rows(&r), Some(8), "{}", r.body);
+    assert_eq!(rows, Some(8), "戻った後の出力");
+    assert_eq!(shot, 1, "見張りの読み");
 }
 
 #[test]
@@ -417,13 +451,15 @@ fn server_coalesce_ruling_reads_alone() {
         verbatim: "はい".to_string(),
     })
     .expect("要求の電文");
+    // 印を動かし、見張りの読みが走り始める（偽の bd が記録の行を足す）まで待つ。
+    place.touch();
+    let until = Instant::now() + Duration::from_secs(2);
+    while place.bd_calls() == before && Instant::now() < until {
+        thread::sleep(Duration::from_millis(5));
+    }
     let (listed, ruled, during) = thread::scope(|s| {
+        // 口は走っている見張りの読みの終わりを待つ（bd を撃たない）。
         let listed = s.spawn(|| get(addr, "/api/ledger"));
-        // 読みが走り始める（偽の bd が記録の行を足す）まで待つ。
-        let until = Instant::now() + Duration::from_secs(2);
-        while place.bd_calls() == before && Instant::now() < until {
-            thread::sleep(Duration::from_millis(5));
-        }
         let during = place.bd_calls() - before;
         let ruled = request(
             addr,

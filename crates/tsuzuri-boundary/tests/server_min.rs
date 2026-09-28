@@ -254,8 +254,9 @@ fn server_min_ledger_unreadable_is_unknown() {
     assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Unknown);
     assert_eq!(get(addr, "/api/ledger/fx-min").status, 503);
     // 壊れた台帳（切れた配列・更新時刻の形の悪い bead・id の形の悪い bead・配列でない字）。
+    // 口は見張りの最後の読みの字を返すので、字ごとにその字を出す偽の bd で server を起こす（起動の読みが最後の読み）。
     let good = fixture();
-    for broken in [
+    for (i, broken) in [
         bd_array(&good).replace("\n]\n", ",{\"id\":"),
         bd_array(&good.replace("2026-09-27T07:40:00Z", "昨日")),
         bd_array(&format!(
@@ -263,21 +264,25 @@ fn server_min_ledger_unreadable_is_unknown() {
         )),
         good.clone(),
         String::new(),
-    ] {
-        place.bd_returns(&broken);
-        assert_eq!(
-            rows(&get(addr, "/api/ledger")),
-            Reading::Unknown,
-            "{broken}"
-        );
-        assert_eq!(get(addr, "/api/ledger/fx-min").status, 503);
+    ]
+    .iter()
+    .enumerate()
+    {
+        let other = Place::new(&format!("unknown-{i}"));
+        other.bd_returns(broken);
+        let at = other.serve();
+        assert_eq!(rows(&get(at, "/api/ledger")), Reading::Unknown, "{broken}");
+        assert_eq!(get(at, "/api/ledger/fx-min").status, 503);
     }
     // 印の file の中身は読まない（印だけが在っても台帳は Unknown のまま）。
     fs::write(place.ledger(), good).expect("印の file");
+    thread::sleep(Duration::from_millis(1500));
     assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Unknown);
     // 空の台帳は 0 件で、読めない台帳と区別する。
-    place.bd_returns("[]\n");
-    assert_eq!(rows(&get(addr, "/api/ledger")), Reading::Known(vec![]));
+    let empty = Place::new("unknown-empty");
+    empty.bd_returns("[]\n");
+    let at = empty.serve();
+    assert_eq!(rows(&get(at, "/api/ledger")), Reading::Known(vec![]));
 }
 
 #[test]

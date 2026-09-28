@@ -7,6 +7,8 @@
 //! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 //! 読めた字（`parse_bd` か中核の台帳の読みが Known の字）は最後に読めた字として持ち、次の読みが落ちたときだけ
 //! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
+//! `watched` の Source の `got` と `text` は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、
+//! 読みが走っていればその終わりを待って同じ結果を返す（行 e-snap）。
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -72,7 +74,7 @@ pub enum Mark {
 }
 
 /// 台帳の読みの出所（repo の置き場と bd の program）。
-/// clone は読みの合流の場と最後に読めた字を分け合う（比べるのは repo と bd だけ）。
+/// clone は読みの合流の場と最後に読めた字と最後に終えた読みの結果を分け合う（比べるのは repo と bd だけ）。
 /// `got` と `text` は読みが落ちたとき、最後に読めた時から上限（`hold`）より短い間だけ最後に読めた字を返す。
 /// `read`（変化の見張りの読み）は持ち回さず、落ちれば Unknown。`text_alone` は合流も持ち回しもしない。
 #[derive(Debug, Clone)]
@@ -84,6 +86,10 @@ pub struct Source {
     last: Arc<Mutex<(Option<String>, Instant)>>,
     /// 持ち回しの上限。
     hold: Duration,
+    /// 最後に終えた合流の読みの結果（読めた字か None・一度も終えていなければ外の None・行 e-snap）。
+    latest: Arc<Mutex<Option<Option<String>>>>,
+    /// 真なら `got` と `text` は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返す。
+    watched: bool,
 }
 
 /// 持ち回しを含む読みの結果（行 e-hold）。
@@ -111,7 +117,22 @@ impl Source {
             shared: Coalesce::new(),
             last: Arc::new(Mutex::new((None, Instant::now()))),
             hold: READ_HOLD,
+            latest: Arc::new(Mutex::new(None)),
+            watched: false,
         }
+    }
+
+    /// 変化の見張りが読む Source（`got` と `text` は bd を撃たず、見張りの最後の読みの結果を返す・行 e-snap）。
+    pub fn watched(self) -> Source {
+        Source {
+            watched: true,
+            ..self
+        }
+    }
+
+    /// `watched` の Source か。
+    pub fn is_watched(&self) -> bool {
+        self.watched
     }
 
     /// 持ち回しの上限を替えた Source（歯が短い上限で試す）。
@@ -181,8 +202,18 @@ impl Source {
 
     /// 合流の読みを撃ち、読めれば読めた字と stale の None、落ちれば最後に読めた時刻と、
     /// その時刻から上限より短い間だけ最後に読めた字を返す（行 e-hold）。
+    /// `watched` の Source は bd を撃たず、走っている読みが在ればその終わりを `BD_WAIT` まで待った結果、
+    /// 無ければ最後に終えた読みの結果を使う（一度も終えていなければ読む・行 e-snap）。
     pub fn got(&self) -> Got {
-        if let Some(text) = self.fresh() {
+        let text = if self.watched {
+            self.shared
+                .join(BD_WAIT)
+                .or_else(|| lock(&self.latest).clone())
+                .unwrap_or_else(|| self.fresh())
+        } else {
+            self.fresh()
+        };
+        if let Some(text) = text {
             return Got {
                 text: Some(text),
                 stale: None,
@@ -198,12 +229,16 @@ impl Source {
 
     /// 合流の読み（走っている読みが在れば新しく撃たず、その終わりを `BD_WAIT` まで待って同じ結果・便 e-coalesce）。
     /// 起動できない・rc が 0 でない・UTF-8 でない・`BD_TIMEOUT` を越える・`parse_bd` も中核の台帳の読みも
-    /// Unknown の字、のどれでも None。読みを始めた呼びが、読めた字と時刻を最後に読めた字に置く。
+    /// Unknown の字、のどれでも None。読みを始めた呼びが、読めた字と時刻を最後に読めた字に置き、
+    /// 結果を最後に終えた読みの結果（`latest`）に置く。
     fn fresh(&self) -> Option<String> {
         self.shared.share(BD_WAIT, || {
-            let text = self.text_alone().filter(|t| readable(t))?;
-            *lock(&self.last) = (Some(text.clone()), Instant::now());
-            Some(text)
+            let text = self.text_alone().filter(|t| readable(t));
+            if let Some(text) = &text {
+                *lock(&self.last) = (Some(text.clone()), Instant::now());
+            }
+            *lock(&self.latest) = Some(text.clone());
+            text
         })
     }
 
