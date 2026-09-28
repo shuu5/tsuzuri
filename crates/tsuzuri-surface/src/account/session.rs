@@ -1,6 +1,7 @@
 //! account board の session の表の block（便 h-frame の枠・便 h-sess の中身）: 見本の session の tab の 1 つ目の panel
 //! （account/index.html の sessRow・sessTable・stageCell と ui.js の tkhbHTML）。
-//! 行は電文の sessions の 1 行ずつ。並べ方は 4 つ（project・account・stage・elapsed）で URL の query の `sort=` に残す。
+//! 行は電文の sessions の 1 行ずつ。並べ方は 4 つ（project・account・stage・elapsed）で URL の query の `sort=` に残し、
+//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist・幅の押しは見本の setSpan と同じく置き換える）。
 //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
 //! orchestrator の行の合図（tick の健康・heartbeat・退避までの残り秒・移動待ち）は電文の projects の同じ名の行から引く。
 //! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
@@ -75,7 +76,9 @@ pub const NONE_MARK: &str = "―";
 /// 電文の sessions が 0 行のときの 1 行（測れて 0 件・測れていないと分ける）。
 pub const NO_ROWS: &str = "session の行が 0 件（電文の sessions が空）";
 
-/// 止まった run の段（着地済みの中核の crate の next_step の STALLED_STAGES の写し・面の crate は中核の crate に依存しない）。
+/// 止まった run の段（見本の acct.js の runStopped の段の写し・Questioned と Failed と Stopped）。
+/// 中核の next_step の STALLED_STAGES（Failed と Stopped・行 c-next-stall）は次の一手の止まっている走行の段で、
+/// Questioned を質問の側で数えるので値が違う（面の crate は中核の crate に依存しない）。
 pub const STALLED_STAGES: [Stage; 3] = [Stage::Questioned, Stage::Failed, Stage::Stopped];
 
 /// session の表の並べ方（見本の SORTS の順）。
@@ -652,9 +655,22 @@ mod dom {
     }
 
     /// URL の query を置き換える（頁は読み直さない）。
+    /// 幅の押しは見本の setSpan と同じく履歴に積まない。
     fn replace(url: &str) {
         if let Ok(history) = window().history() {
             let _ = history.replace_state_with_url(
+                &web_sys::wasm_bindgen::JsValue::NULL,
+                "",
+                Some(url),
+            );
+        }
+    }
+
+    /// URL の query を履歴に積む（頁は読み直さない・見本の pushState）。
+    /// 戻ると進むは board が popstate で block を組み直し、block は組むときに URL の並べ方を読む。
+    fn push(url: &str) {
+        if let Ok(history) = window().history() {
+            let _ = history.push_state_with_url(
                 &web_sys::wasm_bindgen::JsValue::NULL,
                 "",
                 Some(url),
@@ -683,8 +699,12 @@ mod dom {
             .into_iter()
             .map(|s| {
                 let pressed = move || (sort.get() == s).to_string();
+                // 今の並べの押しは履歴に積まない。
                 let pick = move |_| {
-                    replace(&with_sort(&search(), s));
+                    if sort.get_untracked() == s {
+                        return;
+                    }
+                    push(&with_sort(&search(), s));
                     sort.set(s);
                 };
                 view! {

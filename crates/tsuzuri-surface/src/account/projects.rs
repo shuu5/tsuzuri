@@ -1,6 +1,7 @@
 //! account board の各 project の表の block（便 h-frame の枠・便 h-proj の中身）: 見本の projects の tab の `#ptab`
 //! （account/index.html の projTable・PSORTS）。
-//! 行は電文の projects の 1 行ずつで 9 列。並べ方は 4 つ（need・group・judge・unref）で URL の query の `psort=` に残す。
+//! 行は電文の projects の 1 行ずつで 9 列。並べ方は 4 つ（need・group・judge・unref）で URL の query の `psort=` に残し、
+//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
 //! 決定待ちは電文の台帳の open の問いの数、未反映は電文の台帳の未反映の数で、読めない種類が在れば
 //! project board の指標の段と同じ Unref の形で測れていないの印を添える（部分の和）。台帳が Unknown の行はどちらも「―」。
 //! 並べ・行の値・class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -716,10 +717,11 @@ mod dom {
         window().location().search().unwrap_or_default()
     }
 
-    /// URL の query を置き換える（頁は読み直さない）。
-    fn replace(url: &str) {
+    /// URL の query を履歴に積む（頁は読み直さない・見本の pushState）。
+    /// 戻ると進むは board が popstate で block を組み直し、block は組むときに URL の並べ方を読む。
+    fn push(url: &str) {
         if let Ok(history) = window().history() {
-            let _ = history.replace_state_with_url(
+            let _ = history.push_state_with_url(
                 &web_sys::wasm_bindgen::JsValue::NULL,
                 "",
                 Some(url),
@@ -750,8 +752,12 @@ mod dom {
             .into_iter()
             .map(|s| {
                 let pressed = move || (sort.get() == s).to_string();
+                // 今の並べの押しは履歴に積まない。
                 let pick = move |_| {
-                    replace(&with_psort(&search(), s));
+                    if sort.get_untracked() == s {
+                        return;
+                    }
+                    push(&with_psort(&search(), s));
                     sort.set(s);
                 };
                 view! {

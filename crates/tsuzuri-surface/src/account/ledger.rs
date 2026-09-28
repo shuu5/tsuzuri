@@ -1,6 +1,7 @@
 //! account board の台帳の処理状況の block（便 h-frame の枠・便 h-led の中身）: 見本の session の tab の `#ledger`
 //! （account/index.html の ledTable・ledOrder・ledMore・extremes と ledger.js の judge）。
-//! 行は電文の projects の 1 行ずつ（台帳は ProjectRow の ledger）。並べ方は 4 つ（judge・project・net・backlog）で URL の query の `lsort=` に残す。
+//! 行は電文の projects の 1 行ずつ（台帳は ProjectRow の ledger）。並べ方は 4 つ（judge・project・net・backlog）で URL の query の `lsort=` に残し、
+//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
 //! 判定の写し・純減の矢印・小数 1 桁・日数の字は着地済みの project の ledger の module の値と関数を使う（その block の DOM は呼ばない）。
 //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
 //! 未反映は電文の台帳の未反映の数で、読めない種類が在れば project board の指標の段と同じ Unref の形で
@@ -431,10 +432,11 @@ mod dom {
         window().location().search().unwrap_or_default()
     }
 
-    /// URL の query を置き換える（頁は読み直さない）。
-    fn replace(url: &str) {
+    /// URL の query を履歴に積む（頁は読み直さない・見本の pushState）。
+    /// 戻ると進むは board が popstate で block を組み直し、block は組むときに URL の並べ方を読む。
+    fn push(url: &str) {
         if let Ok(history) = window().history() {
-            let _ = history.replace_state_with_url(
+            let _ = history.push_state_with_url(
                 &web_sys::wasm_bindgen::JsValue::NULL,
                 "",
                 Some(url),
@@ -462,8 +464,12 @@ mod dom {
             .into_iter()
             .map(|s| {
                 let pressed = move || (sort.get() == s).to_string();
+                // 今の並べの押しは履歴に積まない。
                 let pick = move |_| {
-                    replace(&with_sort(&search(), s));
+                    if sort.get_untracked() == s {
+                        return;
+                    }
+                    push(&with_sort(&search(), s));
                     sort.set(s);
                 };
                 view! {
