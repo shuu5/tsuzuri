@@ -34,6 +34,8 @@ pub(crate) struct Bead {
     pub(crate) parent: Option<String>,
     /// blocks の先の bead。
     pub(crate) blockers: Vec<String>,
+    /// acceptance の字（bd の欄 acceptance_criteria か別名 acceptance の字のまま・無ければ空・行 c-pipe-queue）。
+    pub(crate) acceptance: String,
 }
 
 impl Bead {
@@ -87,6 +89,7 @@ pub(crate) fn read(ledger: &str) -> Option<Vec<Bead>> {
                         .parent
                         .or_else(|| dep_ids("parent-child").into_iter().next()),
                     blockers: dep_ids("blocks"),
+                    acceptance: b.acceptance_criteria.unwrap_or_default(),
                     id: b.id,
                 }
             })

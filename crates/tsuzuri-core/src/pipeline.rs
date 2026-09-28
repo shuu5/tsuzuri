@@ -3,7 +3,8 @@
 //! 札は bead ごとに 1 枚で、その bead の走行のうち RunCreated がいちばん新しい 1 つの、最後の event で段を決める
 //! （event log は追記の順なので、後の行ほど新しい）。段を決める event は `STAGE_EVENTS` の 4 種で、
 //! ほかの event（RunCost・SeatSpawned など）は段を変えない。器の event から段への対応は `stage_of` の閉じた表。
-//! 走行を 1 つも持たない open の契約は Blocked か Queued の札にする。
+//! 走行を 1 つも持たない open の契約は、acceptance に器の読める設計 pointer の行を持つ task の bead だけを Blocked か Queued の札にする
+//! （読みは器の列の受付と同じ `dispatchable`・pointer の無い task は器が流さないので札にしない・行 c-pipe-queue）。
 //! 器の RunStage の段 Failed と Stopped は段 Failed と Stopped の札にし、段の理由は detail の字にする（行 c-pipe-unmapped）。
 //! detail が `RETIRED` の RunStage（器が worktree を畳んだ記帳）は段を決めない。
 //! 台帳で閉じた bead の走行は、段が Landed でなければ（表に無い段も）段 Landed・段の理由 `CLOSED_TAG` と閉じた理由の頭の字の札にする
@@ -20,7 +21,7 @@ use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::runs::{RunCost, RunLine, RunStep, RunsDoc};
 
-use crate::graph::build::{read_events, run_bead};
+use crate::graph::build::{POINTER_PREFIX, read_events, run_bead};
 use crate::ledger::{Bead, epoch_secs, read};
 
 /// 段を決める event の種類。
@@ -135,6 +136,26 @@ fn closed_reason(bead: &Bead) -> String {
     format!("{CLOSED_TAG}{head}")
 }
 
+/// 器の列の受付が便にできる設計 pointer を acceptance に持つか（器の受付と同じ読み）。
+/// 前後の空白を除いた行のうち `POINTER_PREFIX` で始まる最初の行の残りが、井桁でちょうど 2 つに分かれ、
+/// path の拡張子が toml か md で、行 id が空でなく空白を含まないときだけ真（最初の行が形に合わなければ後の行は見ない）。
+fn dispatchable(acceptance: &str) -> bool {
+    let Some(pointer) = acceptance
+        .lines()
+        .find_map(|l| l.trim().strip_prefix(POINTER_PREFIX))
+    else {
+        return false;
+    };
+    let parts: Vec<&str> = pointer.trim().split('#').collect();
+    let [path, row] = parts.as_slice() else {
+        return false;
+    };
+    let ext = std::path::Path::new(path).extension();
+    matches!(ext.and_then(|e| e.to_str()), Some("toml" | "md"))
+        && !row.is_empty()
+        && !row.chars().any(char::is_whitespace)
+}
+
 /// 台帳の一覧と event log の字と今の時刻から板を組む。
 /// event log が読めなければ札は「まだ分からない」。台帳が読めなければ走行の無い契約の札を作らない。
 pub fn board(ledger: &str, events: &str, now: EpochSecs) -> Board {
@@ -237,7 +258,11 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
     }
 
     for b in beads.unwrap_or_default() {
-        if b.kind != NodeKind::Task || !b.is_open(now) || per_bead.contains_key(&b.id) {
+        if b.kind != NodeKind::Task
+            || !b.is_open(now)
+            || per_bead.contains_key(&b.id)
+            || !dispatchable(&b.acceptance)
+        {
             continue;
         }
         let Ok(contract) = BeadId::new(b.id.as_str()) else {

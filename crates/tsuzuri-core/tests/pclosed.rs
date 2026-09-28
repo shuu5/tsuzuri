@@ -46,7 +46,12 @@ fn ledger() -> String {
         bead("cs.7", 7, "in_progress", None, None),
         bead("cs.9", 9, "closed", Some("2026-09-27T06:00:00Z"), Some("x")),
         bead("cs.11", 11, "closed", Some("2026-09-27T06:00:00Z"), Some("no runs")),
-        bead("cs.12", 12, "open", None, None),
+        {
+            // 走行の無い open の task は、器の読める設計 pointer を持つときだけ札になる（行 c-pipe-queue）。
+            let mut b = bead("cs.12", 12, "open", None, None);
+            b["acceptance_criteria"] = json!("design = contracts/pc.toml#cs-12");
+            b
+        },
     ])
     .to_string()
 }
