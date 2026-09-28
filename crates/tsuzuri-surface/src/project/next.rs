@@ -2,6 +2,8 @@
 //! 中身は口 /api/next（契約の型の NextStep）から読む。判定は中核の crate が済ませていて、ここは写すだけ
 //! （大きく出す 1 つは電文の lead・各種の結果は電文の checks）。7 種の順は契約の型の宣言の順（`NextMove::ALL`）を引く。
 //! 字と並びは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! account board の窓へ飛ぶ link は押した時に窓を探し、href の読めない在る窓だけ既定の遷移を止めて窓を前に出す
+//! （行 g-next-acct-origin・窓の探し方と判定は frame の `back_how`）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::NextMove;
@@ -12,7 +14,7 @@ use super::node::answer_href;
 use super::{Body, NO_CONTENT, NOT_READ, ask, batch, map, pipeline};
 use crate::account::windows::ACCOUNT_WIN;
 use crate::account::{Tab, tab_href};
-use crate::frame::{Block, Mode, PageId, href};
+use crate::frame::{BackHow, Block, Mode, PageId, back_how, href};
 use crate::view::Fetched;
 use crate::widgets::hover::{Card, clip};
 use crate::widgets::nodecard::card_of;
@@ -301,6 +303,24 @@ pub fn window_of(kind: NextMove) -> Option<&'static str> {
     }
 }
 
+/// 名前つきの窓へ飛ぶ link の押しの手（行 g-next-acct-origin）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Jump {
+    /// 既定の遷移のまま（窓が返らない・空の窓・href の読める窓）。
+    Follow,
+    /// 既定の遷移を止めて在る窓を前に出すだけ（href の読めない別の origin の窓・tab は替えない）。
+    Front,
+}
+
+/// 窓が返ったかと窓の URL（読めなければ None）から押しの手を決める: frame の `back_how` が Front で、
+/// URL が読めない窓だけ Front・ほかは Follow。
+pub fn jump(returned: bool, href: Option<&str>) -> Jump {
+    match (back_how(returned, href), href) {
+        (BackHow::Front, None) => Jump::Front,
+        _ => Jump::Follow,
+    }
+}
+
 /// 一覧の当たった行の次の手の link（裁定 t3-hub.52.30 の案 A・止まっている走行は大きい箱と同じ block「pipeline」への link・
 /// ほかは `action`）。当たらない行と測れていない行は None。
 pub fn row_link(row: &Row, mode: Mode) -> Option<Link> {
@@ -336,11 +356,12 @@ pub fn view() -> leptos::prelude::AnyView {
 /// 次の一手の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use leptos::ev;
     use leptos::prelude::*;
 
     use super::{
-        BLOCK, Big, BigTitle, MISS, Mark, Next, PATH, Row, action, big_title, content, row_link,
-        waited, window_of,
+        BLOCK, Big, BigTitle, Jump, MISS, Mark, Next, PATH, Row, action, big_title, content, jump,
+        row_link, waited, window_of,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::{Body, UNKNOWN, ask, body_view, map, section, state_icon, unmeasured};
@@ -406,7 +427,11 @@ mod dom {
             link.clone()
                 .or_else(|| action(kind, target.as_deref(), mode()))
                 .map(|l| {
-                    view! { <div class="act"><a class="btn primary" href=l.href target=win>{l.text}</a></div> }
+                    view! {
+                        <div class="act">
+                            <a class="btn primary" href=l.href target=win on:click=move |e| press(e, win)>{l.text}</a>
+                        </div>
+                    }
                 })
         };
         view! {
@@ -441,7 +466,9 @@ mod dom {
         // link は mode で href が変わる。
         let for_link = row.clone();
         let link = move || {
-            row_link(&for_link, mode()).map(|l| view! { " " <a href=l.href target=win>{l.text}</a> })
+            row_link(&for_link, mode()).map(|l| {
+                view! { " " <a href=l.href target=win on:click=move |e| press(e, win)>{l.text}</a> }
+            })
         };
         view! {
             <li class=row.class data-nx=row.key>
@@ -450,5 +477,25 @@ mod dom {
             </li>
         }
         .into_any()
+    }
+
+    /// 次の手の link の押し（行 g-next-acct-origin）。窓の名の無い link と修飾 key の押しは既定のまま。
+    /// 窓は空の URL で開いて探すので在る窓は動かない。href の読めない在る窓（別の origin）だけ既定の遷移を止めて
+    /// 前に出し、tab は替えない。
+    fn press(e: ev::MouseEvent, win: Option<&'static str>) {
+        let Some(name) = win else {
+            return;
+        };
+        if e.ctrl_key() || e.meta_key() || e.shift_key() {
+            return;
+        }
+        let found = window().open_with_url_and_target("", name).ok().flatten();
+        let href = found.as_ref().and_then(|w| w.location().href().ok());
+        if jump(found.is_some(), href.as_deref()) == Jump::Front {
+            e.prevent_default();
+            if let Some(w) = &found {
+                let _ = w.focus();
+            }
+        }
     }
 }
