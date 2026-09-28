@@ -5,11 +5,15 @@
 //! host.toml）の anchor と git config（`Acct::state_dir`）と doctor の席の行（role=orchestrator）から引く。
 //! Origin の検査と本文の大きさの上限と口の登録は、つなぐ行 h-wire が server の `guarded` と一緒に通す。
 //! 子 process は `capture` で撃ち、落ちる・rc が 0 でない・5 秒で返らないは、どれも器が撃てない扱い（502）。
+//! 2 つ目の受付 `accept_own` は project board の口（行 e-seat-hb・裁定 t3-hub.52.29 の案 A）で、本文は向きだけを持ち、
+//! anchor を名でなく server の --repo と同じ dir で引く（最後の名が同じ anchor が 2 つ在っても、この board の席だけを止める）。
+//! anchor を引いた後の順と断りと 200 の電文は `accept` と同じ。
 
 use std::ffi::OsStr;
 use std::path::Path;
 
 use tsuzuri_contract::account::{Heartbeat, HeartbeatRequest, HeartbeatResponse};
+use tsuzuri_contract::seathb::SeatHeartbeatRequest;
 use tsuzuri_contract::wire;
 use tsuzuri_core::account::host::declaration;
 use tsuzuri_core::account::project_name;
@@ -50,7 +54,24 @@ pub fn accept(acct: &Acct, body: &str) -> (u16, String) {
     let Some(anchor) = anchor(acct.host_state_dir(), &request.project) else {
         return refuse(404, NO_PROJECT);
     };
-    let Some(dir) = acct.state_dir(Path::new(&anchor)) else {
+    shoot_anchor(acct, &anchor, request.to)
+}
+
+/// project board の停止の切り替えの受付（本文は向きだけ・anchor は `repo` と同じ dir を指す群の宣言の最初の anchor）。
+/// 状態の数と本文の字と、anchor を引いた後の順は `accept` と同じ。bad-body と no-project は git も器も撃たない。
+pub fn accept_own(acct: &Acct, repo: &Path, body: &str) -> (u16, String) {
+    let Ok(request) = wire::decode::<SeatHeartbeatRequest>(body) else {
+        return refuse(400, BAD_BODY);
+    };
+    let Some(anchor) = own_anchor(acct.host_state_dir(), repo) else {
+        return refuse(404, NO_PROJECT);
+    };
+    shoot_anchor(acct, &anchor, request.to)
+}
+
+/// 引いた anchor（宣言に書かれた字のまま）から state dir・doctor・席・seat heartbeat を 1 回撃つ。
+fn shoot_anchor(acct: &Acct, anchor: &str, to: Heartbeat) -> (u16, String) {
+    let Some(dir) = acct.state_dir(Path::new(anchor)) else {
         return refuse(404, NO_SEAT);
     };
     let mut doctor: Vec<&OsStr> = DOCTOR_ARGS.iter().map(OsStr::new).collect();
@@ -58,12 +79,12 @@ pub fn accept(acct: &Acct, body: &str) -> (u16, String) {
     let Some(out) = shoot(acct, doctor) else {
         return refuse(502, VESSEL_FAILED);
     };
-    let Some(target) = orchestrator_target(&out, &anchor) else {
+    let Some(target) = orchestrator_target(&out, anchor) else {
         return refuse(404, NO_SEAT);
     };
     let mut args: Vec<&OsStr> = HEARTBEAT_ARGS.iter().map(OsStr::new).collect();
     args.extend([
-        OsStr::new(word(request.to)),
+        OsStr::new(word(to)),
         OsStr::new("--state-dir"),
         dir.as_os_str(),
         OsStr::new("--target"),
@@ -74,7 +95,7 @@ pub fn accept(acct: &Acct, body: &str) -> (u16, String) {
     }
     let response = HeartbeatResponse {
         target: target.to_string(),
-        to: request.to,
+        to,
     };
     match wire::encode(&response) {
         Ok(json) => (200, json),
@@ -97,10 +118,29 @@ fn anchor(host_state_dir: &Path, project: &str) -> Option<String> {
     if project.is_empty() {
         return None;
     }
+    anchors(host_state_dir)?.find(|a| project_name(a) == project)
+}
+
+/// 群の宣言の anchor のうち、`repo` と同じ dir を指す最初の anchor（書かれた字のまま）。
+/// 両方を canonicalize できればその path で、どちらかができなければ字の Path で比べる（末尾の斜線を問わない）。
+fn own_anchor(host_state_dir: &Path, repo: &Path) -> Option<String> {
+    let own = repo.canonicalize().ok();
+    anchors(host_state_dir)?.find(|a| {
+        let path = Path::new(a);
+        match (path.canonicalize().ok(), &own) {
+            (Some(p), Some(own)) => p == *own,
+            _ => path == repo,
+        }
+    })
+}
+
+/// 群の宣言の anchor の列（群の順・配列の順・宣言が読めなければ None）。
+fn anchors(host_state_dir: &Path) -> Option<impl Iterator<Item = String>> {
     let toml = std::fs::read_to_string(host_state_dir.join(HOST_TOML)).ok()?;
-    declaration(&toml)
-        .groups
-        .into_iter()
-        .flat_map(|g| g.anchors.unwrap_or_default())
-        .find(|a| project_name(a) == project)
+    Some(
+        declaration(&toml)
+            .groups
+            .into_iter()
+            .flat_map(|g| g.anchors.unwrap_or_default()),
+    )
 }

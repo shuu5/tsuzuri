@@ -10,6 +10,7 @@ pub mod project;
 pub mod question;
 pub mod runs;
 pub mod seat;
+pub mod seathb;
 pub mod stats;
 pub mod surface;
 
