@@ -20,12 +20,16 @@ use crate::mapview::table::edge_name;
 use crate::project::{ALERT_STYLE, unmeasured};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, h2, shows_internal};
+use crate::widgets::hover::{Card, attach, delegate, leaves};
+use crate::widgets::nodecard::view_cards;
 
 /// 1 つの眺めの値（事件の受け取りが引く）。
 struct Model {
     view: GraphView,
     layout: Layout,
     degree: BTreeMap<String, u32>,
+    /// 節点の id ごとの card（図の委ねが引く）。
+    cards: BTreeMap<String, Card>,
 }
 
 impl Model {
@@ -162,11 +166,14 @@ fn panel(
     let count = count_line(&v);
     let line = expert_line(&v);
     let degree = degrees(&v);
+    let cards = view_cards(&v.nodes);
     let model = StoredValue::new(Model {
         view: v,
         layout: lay,
         degree,
+        cards: cards.clone(),
     });
+    let hc = delegate();
     // 読み直しで固定した節点が図から消えたら固定を外す。
     if pin.with_untracked(|p| {
         p.as_ref()
@@ -218,7 +225,21 @@ fn panel(
             paint(gz, model, Some(&k), None);
         }
     };
+    // 図の節点の card（固定の間も出す・同じ節点の中の移りでは出し直さない）。
+    let over = move |ev: ev::MouseEvent| {
+        let card = node_key(ev.target()).and_then(|k| model.with_value(|m| m.cards.get(&k).cloned()));
+        if let Some(card) = card {
+            hc.show(&ev, card);
+        }
+        hover(ev.target());
+    };
     let out = move |ev: ev::MouseEvent| {
+        if leaves(
+            node_key(ev.target()).as_deref(),
+            node_key(ev.related_target()).as_deref(),
+        ) {
+            hc.leave(&ev);
+        }
         if pin.with_untracked(Option::is_some) || node_key(ev.target()).is_none() {
             return;
         }
@@ -338,12 +359,12 @@ fn panel(
             <div class="gwrap">
                 <div class="gzoom" node_ref=gz inner_html=picture
                     on:wheel=wheel on:pointerdown=down on:pointermove=moved on:pointerup=up on:pointercancel=up
-                    on:mouseover=move |ev| hover(ev.target()) on:mouseout=out
+                    on:mouseover=over on:mouseout=out
                     on:focusin=move |ev| hover(ev.target()) on:click=click on:dblclick=open
                     on:keydown=key></div>
             </div>
             <div class="pinbar" aria-live="polite">{bar}</div>
-            {chain_view(bands, mode)}
+            {chain_view(bands, &cards, mode)}
             <div class="cutline num" tabindex="0" data-term="cut">{count}</div>
             {expert_row}
         </div>
@@ -396,9 +417,10 @@ fn legend_view(lg: Legend) -> AnyView {
     .into_any()
 }
 
-/// 狭い幅の一覧（帯の chip の小見出しと行の一覧・行の id と題は節点の頁への link）。
+/// 狭い幅の一覧（帯の chip の小見出しと行の一覧・行の id と題は節点の頁への link で節点の card を持つ）。
 fn chain_view(
     bands: Vec<ChainBand>,
+    cards: &BTreeMap<String, Card>,
     mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
 ) -> AnyView {
     let parts = bands
@@ -412,12 +434,13 @@ fn chain_view(
                     let kids = r.kids.map(|k| {
                         view! { <span class="aside">{format!("{} {k}", label("children"))}</span> }
                     });
+                    let card = cards.get(&r.id).cloned().unwrap_or_default();
                     let id = r.id.clone();
                     let href = move || frame::node_href(&id, mode());
                     view! {
                         <li>
                             <span class=r.shape style=style aria-hidden="true"></span>
-                            <a class="ttl" href=href><span class="nid">{r.id}</span>" "<span data-t="">{r.title}</span></a>
+                            <a class="ttl" href=href use:attach=card><span class="nid">{r.id}</span>" "<span data-t="">{r.title}</span></a>
                             {kids}
                         </li>
                     }
