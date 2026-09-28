@@ -528,7 +528,10 @@ fn accthome_unmeasured_per_block() {
         assert_eq!(h.accounts, Body::Unmeasured(want), "{fetched:?}");
         assert_eq!(h.moves, Body::Unmeasured(want), "{fetched:?}");
     }
-    assert_eq!(content(&Fetched::Body(fixture_text())), fixture_home());
+    assert_eq!(
+        content(&Fetched::Body(fixture_text())),
+        home::home(&account::arrange(fixture()))
+    );
     let h = fixture_home();
     assert!(matches!(h.next, Body::Filled(_)));
     assert!(matches!(h.groups, Body::Filled(_)));

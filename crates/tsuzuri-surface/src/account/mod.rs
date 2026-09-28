@@ -12,6 +12,7 @@ use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::wire;
 
 use crate::frame::{Block, Mode, STACK, param, with_param};
+use crate::mapview::natural;
 use crate::project::{Body, NO_CONTENT, NOT_READ};
 use crate::view::Fetched;
 
@@ -220,13 +221,43 @@ pub const UNREAD: &str = "account board の口が読めない（server にまだ
 /// 本文が電文として読めないときの理由。
 pub const BAD_BODY: &str = "account board の口の本文が電文（AccountDoc）として読めない";
 
-/// 口の本文を電文に読む（まだ読んでいない・読めない・電文が読めないは理由）。
+/// 口の本文を電文に読む（まだ読んでいない・読めない・電文が読めないは理由・読めた電文は arrange で並べ直す）。
 pub fn doc(fetched: &Fetched) -> Result<AccountDoc, &'static str> {
     match fetched {
         Fetched::NotRead => Err(NOT_READ),
         Fetched::Failed => Err(UNREAD),
-        Fetched::Body(text) => wire::decode::<AccountDoc>(text).map_err(|_| BAD_BODY),
+        Fetched::Body(text) => wire::decode::<AccountDoc>(text)
+            .map(arrange)
+            .map_err(|_| BAD_BODY),
     }
+}
+
+/// 口座の並べ（裁定 t3-hub.53.14）: 口座の行と群の候補を名の自然な順にし、退役の口座（電文の retired）を除く。
+/// accounts が読めなければ退役か分からないので候補は除かずに並べるだけ。ほかの欄（移動・知らせ・口座を値に持つ欄）は受けた値のまま。
+pub fn arrange(mut doc: AccountDoc) -> AccountDoc {
+    let retired: Option<Vec<String>> = match &mut doc.accounts {
+        Reading::Known(rows) => {
+            let gone = rows
+                .iter()
+                .filter(|r| r.retired)
+                .map(|r| r.label.clone())
+                .collect();
+            rows.retain(|r| !r.retired);
+            rows.sort_by(|a, b| natural(&a.label, &b.label));
+            Some(gone)
+        }
+        Reading::Unknown => None,
+    };
+    if let Reading::Known(groups) = &mut doc.groups {
+        for g in groups {
+            let names = &mut g.row.candidates;
+            if let Some(gone) = &retired {
+                names.retain(|n| !gone.contains(n));
+            }
+            names.sort_by(|a, b| natural(a, b));
+        }
+    }
+    doc
 }
 
 /// 中身の関数がまだ無い block の中身: 読めないときは理由、読めたら中身はまだ無い（どちらも測れていない）。
