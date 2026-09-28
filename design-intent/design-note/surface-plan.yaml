@@ -3,7 +3,7 @@
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v0.4
+  version: v0.5
   status: effective
   generated: 2026-09-28
   profile: design-note
@@ -52,6 +52,8 @@ sections:
       t3-hub.53.8（裁定 id = t3-hub.53.8:20260927T2233Z-1）: 使用量の閾値（窓ごとの cap）と逼迫の印と、移り先の候補が門で落ちた理由を出す。値は器の rules 行と event を写すだけで tsuzuri は判じない。効果: rules 行 R-22 に写し方を足す（同じ束の直し）。行 c-acct-thr・h-thr-home・g-seat-thr と、行 c-seat-grace の逼迫の行（前は持ち主待ち）。着地済みの歯 accthome_no_pressure_marks（HOME に逼迫の印が無いことを見る）の期待を変える。
       t3-hub.53.9（裁定 id = t3-hub.53.9:20260927T2233Z-1）: account board でほかの project の台帳と design-intent を読み（書かない）、決定待ちと未反映の数を出す。効果: srs の要件 FR13 の字。行 e-acct-qopen・e-acct-unref・h-acct-cols。
       t3-hub.53.10（裁定 id = t3-hub.53.10:20260927T2233Z-1）: 休止中の project の印と、口座ごとの 7 日の小さな図（spark）と測った時刻の列だけを作る。時点のつまみと関係の頁は作らない（推奨の A = 休止中の印だけ、とは違う）。効果: srs の要件 FR12 の字と scope の not_build。行 c-dormant・h-dormant・c-acct-spark・h-acct-spark。
+      t3-hub.58（裁定 id = t3-hub.58:20260927T2357Z-1・束 batch:20260927T2357Z-1）: 案 A。設計ノートの章の上限を 40 章 以下にする。効果: 規則の行 R-26（key note-chapters）と、席の folio を 0fb780e に替えること（同じ commit 58b16c2）。波のノートは今の運びどおり小さく保つ（7 節）。
+      t3-hub.57.1（裁定 id = t3-hub.57.1:20260927T2357Z-1・束 batch:20260927T2357Z-1）: 案 A。文書の運用の強制を、無いと先へ進めない形の 5 段（裁定 id の実在・計画のノートの必須と行の索引の生成・dispatch の時の床の合格・問いの反映先の型と未反映の差・席の役の AskUserQuestion の guard）でこの順に入れる。効果: 判断の記録 ADR-14（tsuzuri は各段が器と folio に着地した順に加わる）。各段は s2 と folio2 の判断の記録と行で入る（6 節）。
       この計画の枠の裁定: 判断の記録 ADR-7 の承認（user 2026-09-26T07:51Z・見本で確定）、surface-board と波のノートの承認（user 2026-09-27T03:19Z）、判断の記録 ADR-13 の承認（user 2026-09-27T17:36Z・登録の生成）。
       席の決め（理由つき・持ち主の異議があれば戻す）。
       tz graph --check は g-3・g-7・g-9 を測る機構が来るまで rc 2（まだ分からない）のままにする。3 本を判定の外に出す案は取らない。理由: 要件 FR3 の「読めなければ合格にしない」と条 P-7（黙って飛ばさない）。行 c-g3g7 と c-g9 で rc 0 に届く。
@@ -181,7 +183,9 @@ sections:
       folio2: folio graph --print --summary（JSON Lines・欄 id・kind・file・line・title・plain・eng・無ければ null・eng は shall・text・what・decision の最初、条は最初の規範文、受入基準は題の全文）。folio2 の要件 FR14 の字の変更に持ち主の承認が 1 回要り、folio2 が自分の問いとまとめて問う。着地の知らせの後に c-summary-design を書き直し、その後に c-summary-wire・g-summary・c-summary-ledger・c-updated の列が動く。
       器（scribe2）の要件 FR50（着地の終端）: 列車の先端でない便が ci の測れない終わりで止まり bead が閉じない欠陥の直しが効くまで、先端の CI が success で自分の sha が祖先なら席が手で閉じる（道具 close-unmeasurable の見張り）。直しが効いたら見張りを外す。
       器（scribe2）の答え（2026-09-27T23:0xZ・決着）: 器は裁定を queue しない。seat deliver は待ちで入力欄が空の席にだけ 1 回送り、考え中なら型付きの理由で断る（器の FR79・ADR-0077）。考え中の席へは消費側（tsuzuri）の停止の hook が拾う（ADR-0077 CTX2・CSQ-N3）。再送は要らない。board の「届いていない」は hook の配達済みの印で決める。→ 行 f-stop。f-stop の着地までは席が台帳から裁定を読む。
-      器（scribe2）にまだ問うこと: f-stop と f-gate-install の hook の入れ先（席の設定の宣言は器の側か）・f-undelivered の席の受けとする event・e-approval-event の event を書く口。
+      器（scribe2）の答え（2026-09-27T23:3xZ・決着）: 停止の hook と門の hook の入れ先は、tsuzuri の repo の根に追跡される plugin/（.claude-plugin/plugin.json と hooks/hooks.json）。scribe2 seat が起こす席だけが --plugin-dir で読み、runner と lens には載らない。f-stop が Stop を、f-gate が PreToolUse を同じ hooks.json に足す。器の Idle の打刻が hook の続けの間に古くなる件と、同じ anchor に席が 2 つ在る件は器の memo s2-07l.723 に在る。
+      器（scribe2）にまだ問うこと: f-undelivered の席の受けとする event・e-approval-event の event を書く口・束の裁定を 1 度の配達で送れるか（束の 2 つ目の配達は席が考え中になって断られた・2026-09-27T23:57Z の実物）。
+      文書の運用の強制の 5 段（判断の記録 ADR-14）: 段 1（床の形は folio2・実在は器）・段 2（folio2 の鍵の行と計画の索引の生成・tsuzuri は鍵の行で加わる）・段 3（器）・段 4（器と folio2）・段 5（器）。各席の判断の記録の id と着地の順を受けたらここに書き、着地した段から加わる。folio2 の分は bead f2-648.267・判断の記録 folio2 ADR-31（folio2 の要件 v1.53 と合わせ folio2 の持ち主の承認を先に取る・条 P-12.1）。順は 渡し A（段 1 の床の形）→ 渡し B（段 2・規則の行の欄 key の新しい値・仮の名 plan-note）→ 渡し C（段 4 の folio の分・design-intent が引く裁定 id の書き出し）。器の分の id はまだ受けていない。
       持ち主にまだ問うこと（台帳の問いはまだ置いていない・行を起草する前に 1 問ずつ置く）: g-seat-hb（どの project board からも停止の POST を受けてよいか）・c-summary-ledger（台帳のどの欄を要約とするか）・e-revoke（取り消しの button の置き場）・j-runner（外の依存）・i（端末の宣言・ssh・Chrome の profile）。
       folio2 にまだ問うこと: 索引に設計ノートの契約表の行と、承認欄と規則の行の裁定の欄から導く ruled_by の材料を載せるか（行 c-dn-rows・c-g3g7・c-g9 の材料・tsuzuri は設計文書の YAML を走査しない）。
       folio の code の持ち込み（判断の記録 ADR-4・制約 CON2 の出口）: k-parity の前提。
@@ -191,7 +195,7 @@ sections:
     body: |
       段 1（計画）: 行はまずこの文書の 4 節に 1 行で足す（id・大きさ・何を・書く file・依存・拠る裁定）。持ち主の決めが要る行は、台帳に問いを置き（board の質問の頁）、裁定が付くまで起草しない。
       段 2（起草）: 席の作業場で行の契約の字と節を起草する（作法は 3 節）。行ごとに事前の点検の agent を撃ち、design-intent の写しで folio check と folio derive の --write と --check を回して合格と差分 0 を見る。
-      段 3（波のノート）: 並べてよい行（5 節）をまとめて波のノート surface-wave<N> に置く。1 つのノートは目的と契約表と行ごとの節で 12 節までなので、1 つのノートは 10 行まで。置くのは設計の worktree と commit の道具（folio の schema と check と derive を回す）で行い、main の checkout では file を編集しない。
+      段 3（波のノート）: 並べてよい行（5 節）をまとめて波のノート surface-wave<N> に置く。章の上限は規則の行 R-26（40 章 以下）。波のノートは小さく保ち、1 つのノートは 10 行までにする（審査と点検の単位を小さくするため）。置くのは設計の worktree と commit の道具（folio の schema と check と derive を回す）で行い、main の checkout では file を編集しない。
       段 4（器）: 行ごとに契約 bead を置き（pointer は design = contracts/<ノート>.toml#<行 id>）、受付の前の点検の後に流す。審査で差し戻されたら審査の材料を読み、足りない材料を節に足して流し直す。
       段 5（着地の後）: 器の着地の event を確かめてから xtask の check・push・bead を閉じる・台帳の push。server を組み直して実物の画面を見る。
       この文書を直す時: 持ち主の裁定が付いた時（3 節と、効く行の 4 節）・着地の束の後（2 節の現在地と、着地した行を 4 節から外す）・新しい行を足す時（4 節が先・5 節の順も）・他の席の答えが来た時（6 節と効く行）。直すたびに meta の version を上げ、generated をその日にする。
