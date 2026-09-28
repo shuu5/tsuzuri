@@ -7,8 +7,27 @@ schema:
   id_pattern_note: folio2 の他の idと同じくゼロ詰めしない。4 桁は前の版（v1）か scribe2 の記録＝外部の参照で、床は内部 id として数えない。file 名は id と同じ
   date_format: ^\d{4}-\d{2}-\d{2}$
   date_format_note: date・approval.date・grill.when・amended_by.date は年-月-日
-  ruling_pattern: '[a-z]\d-[0-9a-z]+(\.\d+)?'
-  ruling_pattern_note: 裁定 id は台帳の idを 1 つ以上含む。実在と本物かは人が台帳と突き合わせる
+  ruling_pattern: (?<![0-9A-Za-z_.-])[a-z][0-9]-[0-9a-z]+(\.[0-9]+)*(:[0-9]{8}T[0-9]{4}Z-[0-9]+| notes( [0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9][0-9x])?| [0-9]{2}:[0-9][0-9x])( JST)?)?
+  ruling_pattern_note: 裁定 id の文法（床と書き出しが同じ関数で使う）。語頭（頭か、前の字が英数字・「_」・「-」・「.」でない位置）の台帳の id（英小字 1・数字 1・「-」・英小字か数字の並びに「.数字」の段を何段でも）を 1 つの裁定 id とし、直後に器の問いの印（「:」年月日 T 時分 Z「-」連番）が続けばそれを含めて問いの形（question）、台帳の notes の日付か時刻（分の 1 桁が x の概数を含む）と任意の日本時刻の印（JST）が続けばそれを含めて日時の形（notes-time）、どちらも無ければ台帳の id だけの形（bead）とする。欄の中の裁定 id は全部切り出す。実在と本物か・どの形の種類で足りるかは床で決めず、器と人が台帳と突き合わせる
+  ruling_forms: [question, notes-time, bead]
+  ruling_fields:
+    - constitution.yaml meta.approval.ruling
+    - constitution.yaml articles[].amended_by[].ruling
+    - rules.yaml thresholds[].ruling
+    - rules.yaml discipline[].ruling
+    - adr/ADR-*.yaml approval.ruling
+    - design-note/*.yaml meta.approval[].ruling
+    - srs.yaml meta.approval[].stamp
+    - index.yaml meta.approval[].stamp
+    - ceiling.yaml meta.approval[].stamp
+    - intake.yaml meta.approval[].stamp
+    - graph.yaml meta.approval[].stamp
+  ruling_skeleton:
+    - constitution.yaml meta.approval.ruling
+    - rules.yaml thresholds[].ruling
+    - rules.yaml discipline[].ruling
+  ruling_skip_roles: [作成, レビュー]
+  ruling_fields_note: 決定の欄の閉じた一覧（実装の定数の写し）と、形の種類の閉じた一覧（ruling_forms）。床（folio check）は ruling_fields の各欄の値から ruling_pattern の文法で裁定 id を 1 つも切り出せなければ違反とし、欄が無い・空・字でない（一覧・表）ときも違反とする。ruling_skeleton の欄（骨格が書く欄）の値が骨格の印（未記入）なら裁定の前＝まだ分からない とし、ほかの欄の未記入は違反のまま。承認欄の行（meta.approval[]）のうち役（role）が ruling_skip_roles の行は決定を持たないので数えない（役の無い行は数える）。全ての置き場に掛け、選ぶ行を持たない。憲法の各条の前の版との対応（supersedes_v1）・支度表の承認欄・憲法の rationale は一覧の外。凍結 anchor の承認一覧（判断の記録の承認欄の写し）も一覧の外で、anchor の床が同じ文法で見る。判断の表の行は、その節の型が入る便が一覧に足す
   owner: 持ち主
   owner_note: 条文を改訂する発効した判断の承認者はこの値。orchestrator 席（2026-09-19 までの名は planner 席）は条文を改訂しない判断だけを承認できる
   required: [id, title, status, date, context, decision, options, basis, retreat, plain]
