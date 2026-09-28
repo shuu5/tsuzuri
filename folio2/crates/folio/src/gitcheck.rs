@@ -9,6 +9,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -21,7 +22,7 @@ use crate::yaml::{self, Value};
 /// 各命令の待ち上限。
 const TIMEOUT: Duration = Duration::from_secs(20);
 
-const NO_GIT: &str = "版管理（git）が無いか読めない＝anchor の削除を版管理と照合できない（まだ分からない）。写しで回すときも git init + commit の中で回す";
+pub(crate) const NO_GIT: &str = "版管理（git）が無いか読めない＝anchor の削除を版管理と照合できない（まだ分からない）。写しで回すときも git init + commit の中で回す";
 
 fn floor(path: &[&str]) -> &'static str {
     adr::floor_val(path).unwrap_or_default()
@@ -43,6 +44,14 @@ impl Out {
     }
 }
 
+/// 子の git が版管理を探す天井（編集時の口が一時の作業場所の親を置く・便 198 改訂 b・ADR-33 決定 (1)）。置かなければ渡さない。
+static CEILING: OnceLock<PathBuf> = OnceLock::new();
+
+/// この process の子の git に、`dir` より上の版管理を見させない（GIT_CEILING_DIRECTORIES・最初の 1 回だけ効く）。
+pub(crate) fn ceil_at(dir: &Path) {
+    let _ = CEILING.set(fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf()));
+}
+
 /// `git -C <cwd> <args>` を撃つ。起動できない・待ち上限を超えたは None。
 fn git<S: AsRef<OsStr>>(cwd: &Path, args: &[S]) -> Option<Out> {
     let mut cmd = Command::new("git");
@@ -50,6 +59,9 @@ fn git<S: AsRef<OsStr>>(cwd: &Path, args: &[S]) -> Option<Out> {
         if key.to_string_lossy().starts_with("GIT_") {
             cmd.env_remove(key);
         }
+    }
+    if let Some(ceiling) = CEILING.get() {
+        cmd.env("GIT_CEILING_DIRECTORIES", ceiling);
     }
     let mut child = cmd
         .arg("-C")

@@ -225,6 +225,9 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
             entrance::check_entrance(&src.index, &src.vocabulary, &mut report);
             intake::check_intake(&src.intake, &src.index, &src.vocabulary, &mut report);
             ceiling::check_ceiling(&src.ceiling, &src.vocabulary, &mut report);
+            // つながりを数える網（参照 id・語彙・判断の記録との突き合わせ・凍結 anchor の列・散文の言及）の違反は、
+            // 編集時の口が止めない族に数える（便 198・ADR-33 決定 (2)・事後の床の判定は変えない）
+            let mark = report.mark();
             refs::check_refs(
                 &src.constitution,
                 &src.rules,
@@ -240,7 +243,9 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                 &src.srs,
                 &mut report,
             );
+            report.links_from(mark);
             if let Some(records) = adr::check_adr(dir, &mut report) {
+                let mark = report.mark();
                 link::check_link(
                     dir,
                     &src.constitution,
@@ -251,6 +256,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                     &mut report,
                 );
                 state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
+                report.links_from(mark);
                 // 要件・判断・受入基準の id の消失と改番（便 88）
                 ids_cur = Some(ids::check_ids(
                     dir,
@@ -291,6 +297,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
             }
             // 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ数える。行 R-17 が無くて数えなかったら知らせる（便 156）
             if let Some(records) = adr_records.as_ref() {
+                let mark = report.mark();
                 mentions_off = !mentions::check_mentions(
                     dir,
                     &[
@@ -305,6 +312,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                     records,
                     &mut report,
                 );
+                report.links_from(mark);
             }
         }
         None => debug_assert!(!report.unknowns.is_empty()),

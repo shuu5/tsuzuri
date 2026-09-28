@@ -39,11 +39,24 @@ pub struct Report {
     pub violations: Vec<(String, String)>,
     pub unknowns: Vec<String>,
     pub pendings: Vec<String>,
+    /// つながりの違反（2 か所以上を突き合わせる検査の違反）の violations の添字（便 198・判断の記録 ADR-33 決定 (2)）。
+    /// 事後の床はほかの違反と同じに数え、編集時の口（folio check --proposed）はこれで編集を止めない。
+    pub links: Vec<usize>,
 }
 
 impl Report {
     pub fn violation(&mut self, kind: &str, msg: impl Into<String>) {
         self.violations.push((kind.to_string(), msg.into()));
+    }
+
+    /// 違反の数を印にする（`links_from` に渡す）。
+    pub fn mark(&self) -> usize {
+        self.violations.len()
+    }
+
+    /// 印の後に積んだ違反を、つながりの違反として数える（つながりを数える網の関数を丸ごと包む・便 198）。
+    pub fn links_from(&mut self, mark: usize) {
+        self.links.extend(mark..self.violations.len());
     }
 
     pub fn unknown(&mut self, msg: impl Into<String>) {
