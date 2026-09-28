@@ -116,27 +116,6 @@ fn verdicts(line: &RunLine) -> Vec<(Option<&str>, Option<&str>)> {
         .collect()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cost(
-    events: u32,
-    turns: u64,
-    wall_ms: u64,
-    tokens_in: u64,
-    tokens_out: u64,
-    cache_read: u64,
-    cache_create: u64,
-) -> RunCost {
-    RunCost {
-        events,
-        turns,
-        wall_ms,
-        tokens_in,
-        tokens_out,
-        cache_read,
-        cache_create,
-    }
-}
-
 #[test]
 fn runsdoc_hub2_three_runs() {
     let doc = runs_of(&real_log(), &bead("t3-hub.2"));
@@ -174,7 +153,18 @@ fn runsdoc_hub2_three_runs() {
             },
         ]
     );
-    assert_eq!(first.cost, cost(1, 1, 17235, 2, 1541, 10896, 8407));
+    assert_eq!(
+        first.cost,
+        RunCost {
+            events: 1,
+            turns: 1,
+            wall_ms: 17235,
+            tokens_in: 2,
+            tokens_out: 1541,
+            cache_read: 10896,
+            cache_create: 8407,
+        }
+    );
 
     let second = &lines[1];
     assert_eq!(second.started_at, Some(1790493470));
@@ -194,7 +184,18 @@ fn runsdoc_hub2_three_runs() {
         ]
     );
     assert_eq!(second.steps[3].detail, None);
-    assert_eq!(second.cost, cost(2, 33, 155603, 32, 15638, 503756, 43725));
+    assert_eq!(
+        second.cost,
+        RunCost {
+            events: 2,
+            turns: 33,
+            wall_ms: 155603,
+            tokens_in: 32,
+            tokens_out: 15638,
+            cache_read: 503756,
+            cache_create: 43725,
+        }
+    );
 
     let third = &lines[2];
     assert_eq!(third.started_at, Some(1790493699));
@@ -224,7 +225,18 @@ fn runsdoc_hub2_three_runs() {
         ]
     );
     assert_eq!(third.steps[5].detail.as_deref(), Some("turn:taken"));
-    assert_eq!(third.cost, cost(3, 40, 212986, 38, 23140, 706443, 69522));
+    assert_eq!(
+        third.cost,
+        RunCost {
+            events: 3,
+            turns: 40,
+            wall_ms: 212986,
+            tokens_in: 38,
+            tokens_out: 23140,
+            cache_read: 706443,
+            cache_create: 69522,
+        }
+    );
 }
 
 #[test]
@@ -341,6 +353,43 @@ fn runsdoc_wire_keys() {
     assert_eq!(keys(&v), set(&["bead", "runs"]));
     assert_eq!(v["runs"], "unknown");
     assert_eq!(wire::decode::<RunsDoc>(&text).expect("読む"), unknown);
+}
+
+/// lint を黙らせる属性の行が無く、行頭の fn の宣言の引数がどれも 5 以下（規則の行 R-4）。
+#[test]
+fn runsdoc_no_lint_allow() {
+    let text = read(&manifest("tests/runsdoc.rs"));
+    for line in text.lines() {
+        let head = line.trim_start();
+        for attr in ["#[allow(", "#![allow(", "#[expect(", "#![expect("] {
+            assert!(!head.starts_with(attr), "lint を黙らせる属性の行: {line}");
+        }
+    }
+    let mut decls = 0;
+    for (at, _) in text.match_indices("\nfn ") {
+        let rest = &text[at + 1..];
+        let open = rest.find('(').expect("fn の宣言の開き括弧");
+        let mut depth = 0;
+        let mut args = 0;
+        let mut body = rest[open..].chars().peekable();
+        while let Some(c) = body.next() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                ':' if depth == 1 && body.peek() == Some(&' ') => args += 1,
+                _ => {}
+            }
+        }
+        let decl = rest.lines().next().unwrap_or_default();
+        assert!(args <= 5, "引数が {args} の fn: {decl}");
+        decls += 1;
+    }
+    assert!(decls >= 10, "fn の宣言が {decls}");
 }
 
 #[test]
