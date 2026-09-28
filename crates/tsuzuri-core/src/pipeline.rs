@@ -6,6 +6,7 @@
 //! 走行を 1 つも持たない open の契約は Blocked か Queued の札にする。Stopped はこの便の入力に材料が無いので作らない。
 //! 台帳で閉じた bead の走行は、段が Landed でなければ（表に無い段も）段 Landed・段の理由 `CLOSED_TAG` と閉じた理由の頭の字の札にする
 //! （閉じた（着地せず）・行 c-pipe-closed）。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
+//! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする（行 c-pipe-questioned）。
 //! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む（行 e-runs）。
 
 use std::collections::BTreeMap;
@@ -38,6 +39,9 @@ pub const CLOSED_TAG: &str = "closed:";
 /// 段の理由に載せる閉じた理由の字数（char で数える）。
 pub const CLOSED_CHARS: usize = 60;
 
+/// 問いの後に器が止めた走行の札の段の理由の頭の字（見本の reasonShort の写し）。
+pub const QUESTION_STOPPED: &str = "質問の後に止めた";
+
 /// 板と、表に無い段の走行の数（札を作らずに数える）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Board {
@@ -51,7 +55,7 @@ pub fn stage_of(kind: &str, stage: Option<&str>, detail: &str) -> Option<(Stage,
     let failed = FAILED_VERDICTS.iter().any(|v| detail.starts_with(v));
     let to = match (kind, stage) {
         ("RunDone", _) => Stage::Landed,
-        ("QuestionRaised", _) => Stage::Questioned,
+        ("QuestionRaised", _) | ("RunStage", Some("Questioned")) => Stage::Questioned,
         ("RunCreated", _) => Stage::Running,
         ("RunStage", Some("Reviewed" | "Gated")) if failed => {
             return Some((Stage::Failed, Some(detail.to_string())));
@@ -79,11 +83,24 @@ fn text<'a>(event: &'a Value, key: &str) -> Option<&'a str> {
     event.get(key).and_then(Value::as_str)
 }
 
-/// 1 つの走行の読み（段を決めた最後の event と、口座の札の最後のもの）。
+/// 1 つの走行の読み（段を決めた最後の event と、口座の札の最後のものと、その event の後に RunStopped が来たか）。
 #[derive(Default)]
 struct RunState<'a> {
     last: Option<&'a Value>,
     account: Option<String>,
+    stopped: bool,
+}
+
+/// 問いの後に止めた走行の段の理由（段 Questioned の event の detail の about: の後の字を全角の括弧で添える）。
+fn question_stopped(last: &Value) -> String {
+    match text(last, "detail")
+        .and_then(|d| d.strip_prefix("about:"))
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+    {
+        Some(about) => format!("{QUESTION_STOPPED}（{about}）"),
+        None => QUESTION_STOPPED.to_string(),
+    }
 }
 
 /// bead ごとの走行（RunCreated の数と、いちばん新しい走行）。
@@ -153,6 +170,9 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
         }
         if STAGE_EVENTS.contains(&kind) {
             state.last = Some(event);
+            state.stopped = false;
+        } else if kind == "RunStopped" {
+            state.stopped = true;
         }
     }
 
@@ -167,11 +187,16 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
         let Some(last) = state.last else {
             continue;
         };
-        let mapped = stage_of(
+        let mapped = match stage_of(
             text(last, "kind").unwrap_or_default(),
             text(last, "stage"),
             text(last, "detail").unwrap_or_default(),
-        );
+        ) {
+            Some((Stage::Questioned, _)) if state.stopped => {
+                Some((Stage::Questioned, Some(question_stopped(last))))
+            }
+            mapped => mapped,
+        };
         let closed = beads
             .unwrap_or_default()
             .iter()
