@@ -180,6 +180,10 @@
     "task",
     "epic"
   ],
+  "ledger::Effect": [
+    "document",
+    "operation"
+  ],
   "ledger::LedgerRow": [
     {
       "id": "t3-hub.5",
@@ -267,7 +271,12 @@
       "parent": "t3-hub",
       "title": "方針",
       "child_type": "task",
-      "description": "全体への指示の控え"
+      "description": "全体への指示の控え",
+      "labels": [
+        "intake:question",
+        "policy-scope:all"
+      ],
+      "effect": "operation"
     },
     {
       "op": "append-notes",
@@ -279,7 +288,11 @@
       "parent": "t3-hub",
       "title": "--notes=x",
       "child_type": "epic",
-      "description": "--parent="
+      "description": "--parent=",
+      "labels": [
+        "--notes"
+      ],
+      "effect": null
     },
     {
       "op": "reopen-item",

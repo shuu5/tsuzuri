@@ -18,7 +18,7 @@ use tsuzuri_contract::graph::{
     ViewEdge, ViewNode, title36,
 };
 use tsuzuri_contract::ledger::{
-    BDW, BdLine, BeadId, ChildType, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
+    BDW, BdLine, BeadId, ChildType, Effect, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
     MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL, fnv1a64,
 };
 use tsuzuri_contract::question::{QuestionCard, QuestionList};
@@ -150,6 +150,8 @@ fn ledger_writes() -> Vec<LedgerWrite> {
             title: "方針".into(),
             child_type: ChildType::Task,
             description: "全体への指示の控え".into(),
+            labels: vec![QUESTION_LABEL.into(), "policy-scope:all".into()],
+            effect: Some(Effect::Operation),
         },
         // 人の字が旗の形でも旗に化けない見本。
         LedgerWrite::AppendNotes {
@@ -161,6 +163,8 @@ fn ledger_writes() -> Vec<LedgerWrite> {
             title: "--notes=x".into(),
             child_type: ChildType::Epic,
             description: "--parent=".into(),
+            labels: vec![NOTES_REPLACE_FLAG.into()],
+            effect: None,
         },
         LedgerWrite::ReopenItem {
             id: bead("t3-hub.5"),
@@ -577,6 +581,7 @@ fn forms() -> Vec<Box<dyn Form>> {
         // ledger
         form("ledger::BeadId", vec![bead("t3-hub"), bead("t3-hub.5")]),
         form("ledger::ChildType", vec![ChildType::Task, ChildType::Epic]),
+        form("ledger::Effect", vec![Effect::Document, Effect::Operation]),
         form("ledger::LedgerRow", vec![ledger_row(), root_row()]),
         form("ledger::LedgerItem", vec![ledger_item()]),
         form(

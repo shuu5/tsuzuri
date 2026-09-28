@@ -64,6 +64,9 @@ pub const QUESTION_LABEL: &str = "intake:question";
 /// memo の label。
 pub const MEMO_LABEL: &str = "intake:memo";
 
+/// 方針の問いの範囲の札の頭（後に範囲 `all` か問いの id を付ける・行 e-policy-q）。
+pub const POLICY_SCOPE_LABEL: &str = "policy-scope:";
+
 impl LedgerRow {
     /// 問いの bead か（label `intake:question` を持つ）。
     pub fn is_question(&self) -> bool {
@@ -73,6 +76,11 @@ impl LedgerRow {
     /// memo の bead か（label `intake:memo` を持つ）。
     pub fn is_memo(&self) -> bool {
         self.labels.iter().any(|l| l == MEMO_LABEL)
+    }
+
+    /// 方針の問いか（label のどれかが範囲の札の頭 `policy-scope:` で始まる）。
+    pub fn is_policy(&self) -> bool {
+        self.labels.iter().any(|l| l.starts_with(POLICY_SCOPE_LABEL))
     }
 }
 
@@ -195,6 +203,25 @@ impl ChildType {
     }
 }
 
+/// 問いの答えの効き先（器の問いの形の metadata の鍵 `effect` の閉じた 2 値）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Effect {
+    /// 答えを文書へ写す問い。
+    Document,
+    /// 答えが操作で済む問い。
+    Operation,
+}
+
+impl Effect {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Effect::Document => "document",
+            Effect::Operation => "operation",
+        }
+    }
+}
+
 /// 台帳への書き（閉じた enum・server の書きはこの 4 つだけで、どれも bdw を経て、どれも消さない）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "kebab-case")]
@@ -204,11 +231,15 @@ pub enum LedgerWrite {
     /// bead を閉じる。
     CloseItem { id: BeadId, reason: String },
     /// 親の下に子を作る（親は必須）。
+    /// label は字 `,` を含まない語で、親の label は継がない。metadata は効き先が在れば鍵 `effect` の 1 対だけ。
+    /// 標準出力は作った子の id だけ。
     CreateChild {
         parent: BeadId,
         title: String,
         child_type: ChildType,
         description: String,
+        labels: Vec<String>,
+        effect: Option<Effect>,
     },
     /// 閉じた bead を open に戻す（取り消しの行 e-revoke）。
     ReopenItem { id: BeadId, reason: String },
@@ -244,14 +275,29 @@ impl LedgerWrite {
                 title,
                 child_type,
                 description,
-            } => vec![
-                "create".into(),
-                format!("{PARENT_FLAG}={parent}"),
-                format!("--type={}", child_type.as_str()),
-                format!("--description={description}"),
-                "--".into(),
-                title.clone(),
-            ],
+                labels,
+                effect,
+            } => {
+                let mut argv = vec![
+                    "create".into(),
+                    format!("{PARENT_FLAG}={parent}"),
+                    format!("--type={}", child_type.as_str()),
+                ];
+                if !labels.is_empty() {
+                    argv.push(format!("--labels={}", labels.join(",")));
+                }
+                if let Some(effect) = effect {
+                    argv.push(format!(r#"--metadata={{"effect":"{}"}}"#, effect.as_str()));
+                }
+                argv.extend([
+                    "--no-inherit-labels=true".into(),
+                    "--silent=true".into(),
+                    format!("--description={description}"),
+                    "--".into(),
+                    title.clone(),
+                ]);
+                argv
+            }
             LedgerWrite::ReopenItem { id, reason } => {
                 vec!["reopen".into(), id.to_string(), format!("--reason={reason}")]
             }

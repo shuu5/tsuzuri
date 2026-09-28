@@ -1,6 +1,7 @@
 //! block「これまでの決定」（問いの頁・便 g-ask）: 答え済みの問いを畳める段に並べる（見本の ask.html の `#hist`）。
 //! 中は台帳の一覧（口 /api/ledger・定数は ledger の module に 1 本）から、label intake:question を持つ closed の bead を
-//! id の自然な順（数は数として比べる）に出す。段は最初は閉じていて、見出しに件数を出す。
+//! id の自然な順（数は数として比べる）に出す。方針の問い（範囲の札の label を持つ）は承認でない（要件 FR8）ので
+//! 出さず数えない。段は最初は閉じていて、見出しに件数を出す。
 //! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる（便 g-ask-focus）。
 //! 選んで並べる関数と件数は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
@@ -57,10 +58,11 @@ pub fn rows(fetched: &Fetched) -> Result<Vec<LedgerRow>, &'static str> {
 }
 
 /// これまでの決定: label intake:question を持つ closed の bead を id の自然な順に。
+/// 方針の問い（範囲の札の label を持つ）は承認でない（要件 FR8）ので出さず数えない。
 pub fn rulings(rows: &[LedgerRow]) -> Vec<LedgerRow> {
     let mut out: Vec<LedgerRow> = rows
         .iter()
-        .filter(|r| r.is_question() && r.status == "closed")
+        .filter(|r| r.is_question() && r.status == "closed" && !r.is_policy())
         .cloned()
         .collect();
     out.sort_by(|a, b| id_order(a.id.as_str(), b.id.as_str()));

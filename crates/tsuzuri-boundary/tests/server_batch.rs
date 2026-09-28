@@ -15,7 +15,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tsuzuri_boundary::server::ledger::epoch_secs;
 use tsuzuri_boundary::server::{Config, Server, batch, policy, ruling};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::{
@@ -24,17 +23,18 @@ use tsuzuri_contract::surface::{
 };
 use tsuzuri_contract::wire;
 use tsuzuri_core::delivery::{Route, mark_line};
-use tsuzuri_core::graph::build::TYPED_LINES;
 
 const FIXTURE: &str = "surface/question-batch.json";
 
-/// 方針の memo・定型行を持つ open の問い 2 本・A-1 の印を持つ open の問い・closed の問い・台帳に無い id。
-const MEMO: &str = "fx-b.1";
+/// 定型行を持つ open の問い 2 本・A-1 の印を持つ open の問い・closed の問い・台帳に無い id。
 const Q2: &str = "fx-b.2";
 const Q3: &str = "fx-b.3";
 const A1: &str = "fx-b.4";
 const CLOSED: &str = "fx-b.5";
 const MISSING: &str = "fx-b.9";
+
+/// 偽の bdw が子を作る書きの回に出す、作った方針の問いの id。
+const CREATED: &str = "fx-b.6";
 
 fn read_fixture() -> String {
     fs::read_to_string(
@@ -45,27 +45,13 @@ fn read_fixture() -> String {
     .expect("fixture")
 }
 
-/// 方針の memo（fx-b.1 の 1 行）を除いた台帳。
-fn without_memo() -> String {
-    let fixture = read_fixture();
-    let kept: Vec<&str> = fixture
-        .lines()
-        .filter(|l| !l.contains(&format!("\"id\":\"{MEMO}\"")))
-        .collect();
-    assert_eq!(
-        kept.len() + 1,
-        fixture.lines().count(),
-        "fx-b.1 の行が 1 つ"
-    );
-    kept.join("\n")
-}
-
 fn script(path: &Path, body: &str) {
     fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
+/// 落とさない回で最初の引数が `create` なら作った子の id（`CREATED`）を標準出力へ出す。
 fn recorder(path: &Path, log: &Path, name: &str) {
     let log = log.display();
     script(
@@ -76,6 +62,7 @@ fn recorder(path: &Path, log: &Path, name: &str) {
              for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'\n\
              pwd -P > '{log}/{name}.'\"$n\"'.cwd'\n\
              if [ \"$n\" = \"$(cat '{log}/{name}.fail' 2>/dev/null)\" ]; then echo 落ちた >&2; exit 1; fi\n\
+             if [ \"$1\" = create ]; then echo {CREATED}; fi\n\
              exit 0"
         ),
     );
@@ -762,133 +749,6 @@ fn server_batch_delivers_once_per_batch() {
 }
 
 #[test]
-fn server_batch_policy_all_appends_to_memo() {
-    let place = Place::new("policy");
-    let addr = place.serve();
-    let from = now();
-    let got = policied(&post_policy(addr, "all", "全体に: 急がない\n2 行目"));
-    let to = now();
-    assert!(
-        (from..=to).contains(&got.recorded_at),
-        "記帳時刻は受付の時刻: {} not in {from}..={to}",
-        got.recorded_at
-    );
-    let (head, minute, n) = split_id(got.policy.as_str());
-    assert_eq!((head, n), ("policy", 1), "{}", got.policy);
-    minute_within(minute, from, to);
-    let calls = place.calls("bdw");
-    assert_eq!(calls.len(), 1, "問いは閉じない: {calls:?}");
-    let append = LedgerWrite::AppendNotes {
-        id: bead(MEMO),
-        line: format!(
-            "方針 id = {}・範囲 = all・逐語 = 全体に: 急がない\\n2 行目",
-            got.policy
-        ),
-    };
-    assert_eq!(calls[0].0, append.argv(), "方針の memo の notes への追記");
-    assert_eq!(calls[0].1, place.repo_real(), "cwd は repo の置き場");
-    assert!(place.calls("scribe2").is_empty(), "方針は配達しない");
-    // 方針の定型行の頭は導出グラフが方針の節点を導く頭。
-    assert!(TYPED_LINES.contains(&(policy::LINE_PREFIX, NodeKind::Policy)));
-    assert_eq!(ruling::LINE_PREFIX, TYPED_LINES[0].0);
-}
-
-#[test]
-fn server_batch_policy_scope_and_refusals() {
-    let place = Place::new("policy-scope");
-    let addr = place.serve();
-    let got = policied(&post_policy(addr, Q2, "この問いには急がない"));
-    let calls = place.argvs("bdw");
-    assert_eq!(
-        calls,
-        [LedgerWrite::AppendNotes {
-            id: bead(MEMO),
-            line: format!(
-                "方針 id = {}・範囲 = {Q2}・逐語 = この問いには急がない",
-                got.policy
-            ),
-        }
-        .argv()]
-    );
-
-    let place = Place::new("policy-refuse");
-    let addr = place.serve();
-    for scope in [CLOSED, MISSING, MEMO, "", "ALL", " all"] {
-        let reply = post_policy(addr, scope, "はい");
-        assert_eq!(
-            (reply.status, reply.body.as_str()),
-            (400, "scope"),
-            "{scope:?}"
-        );
-    }
-    for verbatim in ["", " \n\t　"] {
-        let reply = post_policy(addr, "all", verbatim);
-        assert_eq!(reply.status, 400, "{verbatim:?}: {}", reply.body);
-        assert_eq!(refused(&reply), Refusal::EmptyVerbatim);
-    }
-    place.bd_returns(&without_memo());
-    let reply = post_policy(addr, "all", "はい");
-    assert_eq!((reply.status, reply.body.as_str()), (503, "no-policy-memo"));
-    // 題が違う・closed・親が根の epic でない memo は方針の memo でない。
-    for (from, to) in [
-        ("\"title\":\"方針\"", "\"title\":\"方針 \""),
-        (
-            "\"status\":\"open\",\"priority\":2",
-            "\"status\":\"closed\",\"priority\":2",
-        ),
-        (
-            "\"intake:memo\"],\"parent\":\"fx-b\"",
-            "\"intake:memo\"],\"parent\":\"fx-b.2\"",
-        ),
-        ("\"issue_type\":\"epic\"", "\"issue_type\":\"task\""),
-    ] {
-        let fixture = read_fixture();
-        assert!(fixture.contains(from), "{from}");
-        place.bd_returns(&fixture.replacen(from, to, 1));
-        let reply = post_policy(addr, "all", "はい");
-        assert_eq!(
-            (reply.status, reply.body.as_str()),
-            (503, "no-policy-memo"),
-            "{to}"
-        );
-    }
-    place.bd_fails();
-    assert_eq!(post_policy(addr, "all", "はい").status, 503);
-    assert!(place.calls("bdw").is_empty(), "断りで偽の bdw を撃つ");
-}
-
-#[test]
-fn server_batch_policy_id_counts_up_and_picks_first_memo() {
-    for _ in 0..3 {
-        let place = Place::new("policy-count");
-        let minute = ruling::minute(now());
-        let taken = format!(
-            "方針の memo の notes の 1 行\\n方針 id = policy:{minute}-1・範囲 = all・逐語 = 前"
-        );
-        // 同じ題の memo が 2 つ在れば id の自然な順で先（fx-b.1 は fx-b.10 より先）。
-        let twin = read_fixture()
-            .lines()
-            .find(|l| l.contains("\"id\":\"fx-b.1\""))
-            .expect("fx-b.1 の行")
-            .replace("\"id\":\"fx-b.1\"", "\"id\":\"fx-b.10\"");
-        let ledger = read_fixture()
-            .replace("方針の memo の notes の 1 行", &taken)
-            .replacen("[\n", &format!("[\n{twin}\n"), 1);
-        place.bd_returns(&ledger);
-        let addr = place.serve();
-        let got = policied(&post_policy(addr, "all", "はい"));
-        let (_, got_minute, n) = split_id(got.policy.as_str());
-        if got_minute != minute {
-            continue; // 分を跨いだ（撃ち直す）。
-        }
-        assert_eq!(n, 2, "同じ分の方針 id の定型行が在れば 2: {}", got.policy);
-        assert_eq!(place.argvs("bdw")[0][1], MEMO);
-        return;
-    }
-    panic!("3 回とも分を跨いだ");
-}
-
-#[test]
 fn server_batch_guards_write_nothing() {
     let place = Place::new("guard");
     let addr = place.serve();
@@ -945,7 +805,8 @@ fn server_batch_guards_write_nothing() {
         );
         assert_eq!(reply.status, 200, "{path}: {}", reply.body);
     }
-    assert_eq!(place.calls("bdw").len(), 4);
+    // 束は追記と閉じるの 2 回と印の 1 回・方針は作る・足す・閉じるの 3 回。
+    assert_eq!(place.calls("bdw").len(), 6);
     // GET でない要求を受ける口は 3 つだけ（ほかの POST は 405）。
     for path in ["/api/batch/x", "/api/policy/x", "/api/batches"] {
         assert_eq!(send(addr, "POST", path, "", "{}").status, 405, "{path}");
@@ -973,7 +834,8 @@ fn server_batch_repo_and_state_bytes_unchanged() {
         "はい",
     ));
     policied(&post_policy(addr, "all", "はい"));
-    assert_eq!(place.calls("bdw").len(), 7);
+    // 束 6 回（2 行の追記と閉じるの 4 回と印の 2 回）・方針 3 回（作る・足す・閉じる）。
+    assert_eq!(place.calls("bdw").len(), 9);
     assert_eq!(place.calls("scribe2").len(), 1);
     assert!(
         before == (tree(&place.repo), tree(&place.state)),
