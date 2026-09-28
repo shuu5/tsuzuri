@@ -1,0 +1,21 @@
+# 偽の端末の fixture（名も宛先も path も偽物で、どの host の値でもない・行 D-4）
+schema = 1
+
+[[account-group]]
+name = "grp-a"
+
+[[device]]
+name = "term-a"
+ssh = "me@term-a"
+chrome = "/fake/bin/chrome"
+os = "linux"
+display = ":0"
+ime-env = ["GTK_IM_MODULE=fcitx", "XMODIFIERS=@im=fcitx"]
+profile-dir = "/fake/profile-a"
+
+[[device]]
+name = "term-b"
+ssh = "me@term-b"
+chrome = "/fake/bin/chrome"
+os = "linux"
+profile-dir = "/fake/profile-b"
