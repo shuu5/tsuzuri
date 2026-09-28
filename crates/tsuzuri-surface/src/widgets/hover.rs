@@ -117,8 +117,18 @@ pub fn card_class(open: bool) -> &'static str {
     if open { "hcard c4 on" } else { "hcard c4" }
 }
 
+/// 委ねで指が入ったときに card を出し直すか（出している card と同じ値なら出し直さず残す）。
+pub fn over_shows(shown: Option<&Card>, card: &Card) -> bool {
+    shown != Some(card)
+}
+
+/// 委ねで指が出たときに猶予に入るか（出た節点の鍵が在り、移った先が同じ節点でないときだけ・同じ節点の子の間の移りは数えない）。
+pub fn leaves(from: Option<&str>, to: Option<&str>) -> bool {
+    from.is_some() && from != to
+}
+
 #[cfg(target_arch = "wasm32")]
-pub use dom::{CardLayer, HoverCtx, attach};
+pub use dom::{CardLayer, Delegate, HoverCtx, attach, delegate};
 
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -131,7 +141,7 @@ mod dom {
     use web_sys::wasm_bindgen::JsCast;
     use web_sys::wasm_bindgen::closure::Closure;
 
-    use super::{Card, GRACE_MS, Point, Rect, Size, card_class, keeps, place};
+    use super::{Card, GRACE_MS, Point, Rect, Size, card_class, keeps, over_shows, place};
     use crate::vocab::label;
 
     /// 要素を出た点と時刻（ミリ秒）。
@@ -284,6 +294,41 @@ mod dom {
         // 要素の一生の間ずっと持つ（要素を外すと listener も届かなくなる）。
         enter.forget();
         leave.forget();
+    }
+
+    /// 委ねの口（字の SVG のように要素に `attach` を付けられない面が、事件の点で card を出し消す）。
+    /// 置き場と猶予は `attach` と同じ層の show と leave を通る（規則の行 R-20）。
+    #[derive(Clone, Copy)]
+    pub struct Delegate {
+        ctx: Option<HoverCtx>,
+    }
+
+    /// 頁の card の層を引いた委ねの口（描くときに呼ぶ・層が無ければ何もしない口）。
+    pub fn delegate() -> Delegate {
+        Delegate {
+            ctx: use_context::<HoverCtx>(),
+        }
+    }
+
+    impl Delegate {
+        /// 指が入った: 出している card と同じなら出し直さず猶予を止め、違えば card を出す。
+        pub fn show(self, ev: &web_sys::MouseEvent, card: Card) {
+            let Some(ctx) = self.ctx else {
+                return;
+            };
+            if ctx.card.with_untracked(|c| over_shows(c.as_ref(), &card)) {
+                ctx.show(card, point(ev));
+            } else {
+                ctx.hold();
+            }
+        }
+
+        /// 指が出た: 猶予に入る。
+        pub fn leave(self, ev: &web_sys::MouseEvent) {
+            if let Some(ctx) = self.ctx {
+                ctx.leave(point(ev));
+            }
+        }
     }
 
     /// card の 4 行と「詳しく」。

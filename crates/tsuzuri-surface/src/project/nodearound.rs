@@ -277,6 +277,8 @@ mod dom {
     use crate::view::Fetched;
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal};
+    use crate::widgets::hover::{Card, attach, delegate, leaves};
+    use crate::widgets::nodecard::view_cards;
 
     /// 頁に 1 つの読み（URL の query の signal と口の読みの結果・id が無ければ読まない）。
     #[derive(Debug, Clone, Copy)]
@@ -321,6 +323,8 @@ mod dom {
         degree: BTreeMap<String, u32>,
         open_q: BTreeSet<String>,
         ids: BTreeSet<String>,
+        /// 近傍の節点の id ごとの card（図の委ねが引く）。
+        cards: BTreeMap<String, Card>,
     }
 
     impl Model {
@@ -512,6 +516,8 @@ mod dom {
         let lay = layout(&doc);
         let picture = svg(&doc, &lay);
         let gv = as_view(&doc);
+        let cards = view_cards(&gv.nodes);
+        let hc = delegate();
         let lg = legend(&gv);
         let sides = chain(&doc);
         let count = count_line(&doc);
@@ -527,6 +533,7 @@ mod dom {
                 .map(|n| n.node.id.clone())
                 .collect(),
             ids: gv.nodes.iter().map(|n| n.node.id.clone()).collect(),
+            cards: cards.clone(),
             edges: gv.edges,
         });
         // 読み直しで固定した節点が図から消えたら固定を外す。
@@ -558,7 +565,22 @@ mod dom {
                 paint(gz, model, Some(&k), None);
             }
         };
+        // 指の下の節点の card を出す（固定の有無によらない・光らせは hover が固定を見る）。
+        let over = move |ev: ev::MouseEvent| {
+            let card = node_key(ev.target())
+                .and_then(|k| model.with_value(|m| m.cards.get(&k).cloned()));
+            if let Some(card) = card {
+                hc.show(&ev, card);
+            }
+            hover(ev.target());
+        };
         let out = move |ev: ev::MouseEvent| {
+            if leaves(
+                node_key(ev.target()).as_deref(),
+                node_key(ev.related_target()).as_deref(),
+            ) {
+                hc.leave(&ev);
+            }
             if pin.with_untracked(Option::is_some) || node_key(ev.target()).is_none() {
                 return;
             }
@@ -637,10 +659,10 @@ mod dom {
                 </div>
                 {legend_view(lg)}
                 <div class="nb-graph" node_ref=gz inner_html=picture
-                    on:mouseover=move |ev| hover(ev.target()) on:mouseout=out
+                    on:mouseover=over on:mouseout=out
                     on:focusin=move |ev| hover(ev.target()) on:click=click on:dblclick=open></div>
                 <div class="pinbar" aria-live="polite">{bar}</div>
-                {chain_view(sides, mode)}
+                {chain_view(sides, &cards, mode)}
                 <div class="cutline num" tabindex="0" data-term="cut">{count}</div>
                 {expert_row}
             </div>
@@ -695,9 +717,10 @@ mod dom {
         .into_any()
     }
 
-    /// 一覧の 1 行（印・id と題の節点の頁への link・右に辺の型）。
+    /// 一覧の 1 行（印・id と題の節点の頁への link と hover の card・右に辺の型）。
     fn item_view(
         item: &ChainItem,
+        card: Card,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let style = if item.alert { ALERT_STYLE } else { "" };
@@ -710,7 +733,7 @@ mod dom {
         view! {
             <li>
                 <span class=item.shape.clone() style=style aria-hidden="true"></span>
-                <a class="ttl" href=href><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
+                <a class="ttl" href=href use:attach=card><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
                 {edge}
             </li>
         }
@@ -720,8 +743,13 @@ mod dom {
     /// 狭い幅の一覧（根拠の側と影響の側の 2 段・1 段目の行の下にその先の行を入れ子で並べる）。
     fn chain_view(
         sides: Vec<ChainSide>,
+        cards: &BTreeMap<String, Card>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
     ) -> AnyView {
+        let row = |item: &ChainItem| {
+            let card = cards.get(&item.id).cloned().unwrap_or_default();
+            item_view(item, card, mode)
+        };
         let parts = sides
             .into_iter()
             .map(|side| {
@@ -730,10 +758,10 @@ mod dom {
                     .iter()
                     .map(|item| {
                         let nest = (!item.nest.is_empty()).then(|| {
-                            let inner = item.nest.iter().map(|n| item_view(n, mode)).collect_view();
+                            let inner = item.nest.iter().map(row).collect_view();
                             view! { <li class="nest"><ul class="items">{inner}</ul></li> }
                         });
-                        view! { {item_view(item, mode)}{nest} }
+                        view! { {row(item)}{nest} }
                     })
                     .collect_view();
                 view! { <div class="subh">{label(side.key)}</div><ul class="items">{rows}</ul> }
