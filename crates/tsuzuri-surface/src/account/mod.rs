@@ -16,6 +16,7 @@ use crate::mapview::natural;
 use crate::project::{Body, NO_CONTENT, NOT_READ};
 use crate::view::Fetched;
 
+pub mod cards;
 pub mod heartbeat;
 pub mod home;
 pub mod ledger;

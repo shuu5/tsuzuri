@@ -8,9 +8,9 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::ledger::{self, Sort};
+use tsuzuri_surface::account::cards::{WAIT_NOTE, grp_card, pcnt_card, thr_line};
 use tsuzuri_surface::account::projects::{
-    NONE_MARK, PSort, WAIT_NOTE, count_text, grp_card, pcnt_card, table, thr_line, unref_class,
-    unref_count, unref_of, wait_class, wait_of,
+    NONE_MARK, PSort, count_text, table, unref_class, unref_count, unref_of, wait_class, wait_of,
 };
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::ledger::{Unref, panel};

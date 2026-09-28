@@ -244,6 +244,7 @@ fn acctframe_blocks_per_tab_and_module() {
         files,
         vec![
             "board.rs",
+            "cards.rs",
             "heartbeat.rs",
             "home.rs",
             "ledger.rs",

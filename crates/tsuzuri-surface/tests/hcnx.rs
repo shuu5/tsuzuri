@@ -7,7 +7,7 @@ use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::home::{self, GroupView, Home, NxRow, UNKNOWN_SIGN};
-use tsuzuri_surface::account::projects::{GPROJ_SRC, gproj_card, nx_card, row_cards};
+use tsuzuri_surface::account::cards::{GPROJ_SRC, gproj_card, nx_card, row_cards};
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::seat::{NG, OK};
 use tsuzuri_surface::widgets::hover::Card;

@@ -9,7 +9,8 @@ use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::stats::CheckResult;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::home::{self, UNKNOWN_KEY};
-use tsuzuri_surface::account::projects::{PSort, need, need_rank, nx_card, table};
+use tsuzuri_surface::account::cards::nx_card;
+use tsuzuri_surface::account::projects::{PSort, need, need_rank, table};
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::next::{NONE_LINE, UNJUDGED_LINE};
 

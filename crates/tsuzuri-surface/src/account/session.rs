@@ -12,8 +12,8 @@ use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::{SeatSpan, SeatState};
 use tsuzuri_contract::surface::SeatRole;
 
+use super::cards::orch_card;
 use super::heartbeat::{Toggle, toggle};
-use super::projects::orch_card;
 use crate::frame::{self, Block};
 use crate::project::pipeline::age;
 use crate::project::seat::{OK, Sign, Span, hmd, rects, span_ticks, state_value, strip_svg, top};

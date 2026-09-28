@@ -5,7 +5,7 @@
 //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
 //! 未反映は電文の台帳の未反映の数で、読めない種類が在れば project board の指標の段と同じ Unref の形で
 //! 測れていないの印を添える（部分の和）。台帳が Unknown の行は「―」。
-//! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の projects の led_card で組む。
+//! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の cards の led_card で組む。
 //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
 //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
@@ -15,7 +15,8 @@ use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::stats::LedgerStats;
 
-use super::projects::{led_card, unref_count};
+use super::cards::led_card;
+use super::projects::unref_count;
 use crate::frame::{self, Block};
 use crate::project::Body;
 use crate::project::ledger::{

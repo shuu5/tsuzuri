@@ -8,7 +8,7 @@ use tsuzuri_contract::account::{AccountDoc, SessionLine};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::account::projects::orch_card;
+use tsuzuri_surface::account::cards::orch_card;
 use tsuzuri_surface::account::session::{
     PROJ_SHOWN, RUN_SRC, SessRow, Sort, proj_card, row, run_card, sess_card, table,
 };

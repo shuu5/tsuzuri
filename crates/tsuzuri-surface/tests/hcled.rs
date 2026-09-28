@@ -7,7 +7,7 @@ use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::ledger::{Sort, order, table};
-use tsuzuri_surface::account::projects::led_card;
+use tsuzuri_surface::account::cards::led_card;
 use tsuzuri_surface::widgets::hover::Card;
 
 fn crate_dir() -> PathBuf {

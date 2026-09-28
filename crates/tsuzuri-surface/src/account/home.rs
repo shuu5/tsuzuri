@@ -12,7 +12,7 @@ use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::{QuotaUsed, SeatState};
 use tsuzuri_contract::stats::{CheckResult, NextStep};
 
-use super::projects::{gproj_card, nx_card};
+use super::cards::{gproj_card, nx_card};
 use crate::frame::Block;
 use crate::project::Body;
 use crate::project::next::{UNJUDGED_LINE, big, key, unjudged};

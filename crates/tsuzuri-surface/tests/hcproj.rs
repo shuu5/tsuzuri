@@ -9,10 +9,11 @@ use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::stats::CheckResult;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::account::projects::{
-    GPROJ_SRC, LED_SRC, NX_MISS, NX_SRC, PSort, ProjLine, RUNS_UNKNOWN, RowCards, WAIT_NOTE,
-    gproj_card, grp_card, led_card, nx_card, orch_card, pcnt_card, row_cards, table,
+use tsuzuri_surface::account::cards::{
+    GPROJ_SRC, LED_SRC, NX_MISS, NX_SRC, RUNS_UNKNOWN, RowCards, WAIT_NOTE, gproj_card, grp_card,
+    led_card, nx_card, orch_card, pcnt_card, row_cards,
 };
+use tsuzuri_surface::account::projects::{PSort, ProjLine, table};
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::hover::Card;
