@@ -61,4 +61,6 @@
     "sum": "2b7fecfe2aa2db6ba4ce0a8909069bad41b154101f32ddf4951e93a51914597a"
   - "id": "ADR-30"
     "sum": "615d5f0833d501e2b832c3ed4ce8ef713d4bc2c6b11dffbd5ea69e688b625c34"
-"digest": "d860d6897ae8749916bae2b26bccde382f31666acadad0b60867c049ed2d927d"
+  - "id": "ADR-31"
+    "sum": "901cf0d20e4aaa1372838d34947b7e0baaab8b1c9c339346db4c3a1d672a4874"
+"digest": "b46b778a17cc0ac59246b98fed3fd3bb289ff0ebc5e59c61b9d88508e32680ff"

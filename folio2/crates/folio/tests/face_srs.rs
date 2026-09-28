@@ -689,22 +689,26 @@ fn f135_scope_m3_numbers_link_to_their_pages() {
     let b = callouts(&html);
     assert_eq!(b.len(), 3, "章 02 の段の範囲の塊が 3 つでない");
     let build = span(b[2], "<div class=\"cid\">M3 で作る</div>", "</p>");
-    for link in [
-        "<a class=\"xref\" href=\"adr-16.html\">ADR-16</a>",
-        "<a class=\"xref\" href=\"adr-21.html\">ADR-21</a>",
-        "<a class=\"xref\" href=\"constitution.html#p-6\">P-6.3</a>",
-        "<a class=\"xref\" href=\"#ac23\">AC23</a>",
-        "<a class=\"xref\" href=\"#ac24\">AC24</a>",
-        "<a class=\"xref\" href=\"#ac25\">AC25</a>",
-        "<a class=\"xref\" href=\"#fr22\">FR22</a>",
-        "<a class=\"xref\" href=\"#fr23\">FR23</a>",
-        "<a class=\"xref\" href=\"#fr24\">FR24</a>",
-        "<a class=\"xref\" href=\"#fr25\">FR25</a>",
-        "<a class=\"xref\" href=\"#fr11\">FR11</a>",
+    // ADR-16 と ADR-31 は範囲の正本（1 つ目の項）と口の割り振り・便の順（3 つ目の項）に 1 つずつ出る（要件書 第 1.53 版）
+    for (link, n) in [
+        ("<a class=\"xref\" href=\"adr-16.html\">ADR-16</a>", 2),
+        ("<a class=\"xref\" href=\"adr-21.html\">ADR-21</a>", 1),
+        ("<a class=\"xref\" href=\"adr-31.html\">ADR-31</a>", 2),
+        ("<a class=\"xref\" href=\"constitution.html#p-6\">P-6.3</a>", 1),
+        ("<a class=\"xref\" href=\"#ac23\">AC23</a>", 1),
+        ("<a class=\"xref\" href=\"#ac24\">AC24</a>", 1),
+        ("<a class=\"xref\" href=\"#ac25\">AC25</a>", 1),
+        ("<a class=\"xref\" href=\"#fr22\">FR22</a>", 1),
+        ("<a class=\"xref\" href=\"#fr23\">FR23</a>", 1),
+        ("<a class=\"xref\" href=\"#fr24\">FR24</a>", 1),
+        ("<a class=\"xref\" href=\"#fr25\">FR25</a>", 1),
+        ("<a class=\"xref\" href=\"#fr11\">FR11</a>", 1),
+        ("<a class=\"xref\" href=\"#fr26\">FR26</a>", 1),
+        ("<a class=\"xref\" href=\"#fr27\">FR27</a>", 1),
     ] {
-        assert_eq!(build.matches(link).count(), 1, "M3 で作るの枠に「{link}」が 1 つでない: {build}");
+        assert_eq!(build.matches(link).count(), n, "M3 で作るの枠に「{link}」が {n} つでない: {build}");
     }
-    assert_eq!(build.matches("<a ").count(), 11, "M3 で作るの枠のリンクが 11 本でない: {build}");
+    assert_eq!(build.matches("<a ").count(), 16, "M3 で作るの枠のリンクが 16 本でない: {build}");
 }
 
 #[test]
