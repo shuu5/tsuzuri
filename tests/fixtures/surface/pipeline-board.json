@@ -14,5 +14,8 @@
       {"contract": "px.9", "runs": 2, "stage": "Landed", "reason": null, "account": "acct-1", "elapsed_s": 120},
       {"contract": "px.12", "runs": 1, "stage": "Landed", "reason": null, "account": "acct-4", "elapsed_s": 30}
     ]
+  },
+  "misfits": {
+    "known": []
   }
 }

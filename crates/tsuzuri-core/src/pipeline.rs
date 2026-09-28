@@ -11,12 +11,15 @@
 //! （閉じた（着地せず）・行 c-pipe-closed）。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
 //! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする（行 c-pipe-questioned）。
 //! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む（行 e-runs）。
+//! 板は札のほかに形の崩れた open の bead の一覧を持ち、器の doctor の台帳の形の行を `form_ids` で写して題を台帳から引く
+//! （`board_with_doctor`・tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)・行 c-pipe-misfit）。
+//! doctor の字を受けない `board` の一覧は Unknown。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::board::{PipelineBoard, PipelineCard, Reading, Stage};
+use tsuzuri_contract::board::{Misfit, MisfitBead, PipelineBoard, PipelineCard, Reading, Stage};
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::runs::{RunCost, RunLine, RunStep, RunsDoc};
@@ -47,6 +50,12 @@ pub const QUESTION_STOPPED: &str = "質問の後に止めた";
 
 /// 器が worktree を畳んだことを残す RunStage の detail の字。器は段を動かさずに書くので、板の段を決めない。
 pub const RETIRED: &str = "retired";
+
+/// 器の doctor の台帳の形の行の頭（器の ledger/form.rs の PREFIX と同じ字）。
+pub const FORM_PREFIX: &str = "ledger-form:";
+
+/// 台帳の形の行から写す欄の語と崩れ（器の Report の欄 both と neither・この順）。
+pub const FORM_FIELDS: [(&str, Misfit); 2] = [("both", Misfit::Both), ("neither", Misfit::Neither)];
 
 /// 板と、表に無い段の走行の数（札を作らずに数える）。
 #[derive(Debug, Clone, PartialEq)]
@@ -156,10 +165,88 @@ fn dispatchable(acceptance: &str) -> bool {
         && !row.chars().any(char::is_whitespace)
 }
 
+/// 器の doctor の出力から台帳の形の行の崩れた bead の id と崩れ（`FORM_FIELDS` の欄の順・欄の中は行の順）。
+/// 頭が `FORM_PREFIX` の行（前の空白は除かない）がちょうど 1 本で、その頭の後を空白で区切った欄のうち
+/// `FORM_FIELDS` の語ごとに語と等号で始まる欄がちょうど 1 つ在り、等号の後の字が件数だけか件数とコロンと
+/// コンマで区切った id の列で、件数が id の数と同じで、どの id も空でなく、同じ id が 2 度出ないときだけ Some。
+/// ほかの欄は読まない（測れていない行は欄 both と neither を持たないので None）。
+pub fn form_ids(doctor: &str) -> Option<Vec<(String, Misfit)>> {
+    let mut lines = doctor.lines().filter_map(|l| l.strip_prefix(FORM_PREFIX));
+    let (Some(line), None) = (lines.next(), lines.next()) else {
+        return None;
+    };
+    let fields: Vec<&str> = line.split_whitespace().collect();
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for (word, misfit) in FORM_FIELDS {
+        let key = format!("{word}=");
+        let mut values = fields.iter().filter_map(|f| f.strip_prefix(key.as_str()));
+        let (Some(value), None) = (values.next(), values.next()) else {
+            return None;
+        };
+        let (count, ids) = match value.split_once(':') {
+            Some((count, ids)) => (count, ids.split(',').collect()),
+            None => (value, Vec::new()),
+        };
+        if count.parse::<usize>().ok()? != ids.len() {
+            return None;
+        }
+        for id in ids {
+            if id.is_empty() || !seen.insert(id) {
+                return None;
+            }
+            out.push((id.to_string(), misfit));
+        }
+    }
+    Some(out)
+}
+
+/// 形の崩れた open の bead の一覧（台帳の順・台帳に無い id と閉じた bead は出さない）。
+/// 台帳か doctor の字が無いか、doctor の字の台帳の形の行が読めなければ Unknown。
+fn misfits_of(
+    beads: Option<&[Bead]>,
+    doctor: Option<&str>,
+    now: EpochSecs,
+) -> Reading<Vec<MisfitBead>> {
+    let (Some(beads), Some(ids)) = (beads, doctor.and_then(form_ids)) else {
+        return Reading::Unknown;
+    };
+    let ids: BTreeMap<&str, Misfit> = ids.iter().map(|(id, m)| (id.as_str(), *m)).collect();
+    Reading::Known(
+        beads
+            .iter()
+            .filter(|b| b.is_open(now))
+            .filter_map(|b| {
+                let misfit = *ids.get(b.id.as_str())?;
+                Some(MisfitBead {
+                    bead: BeadId::new(b.id.as_str()).ok()?,
+                    title: b.title.clone(),
+                    misfit,
+                })
+            })
+            .collect(),
+    )
+}
+
 /// 台帳の一覧と event log の字と今の時刻から板を組む。
 /// event log が読めなければ札は「まだ分からない」。台帳が読めなければ走行の無い契約の札を作らない。
+/// 形の崩れの一覧は「まだ分からない」（doctor の字を受けるのは `board_with_doctor`）。
 pub fn board(ledger: &str, events: &str, now: EpochSecs) -> Board {
     of_inputs(read(ledger).as_deref(), events, now)
+}
+
+/// `board` と同じ板に、器の doctor の字の台帳の形の行から写した形の崩れの一覧を置く（行 c-pipe-misfit）。
+/// doctor の字が無いか台帳の形の行が読めないか台帳が読めなければ一覧は「まだ分からない」。
+pub fn board_with_doctor(
+    ledger: &str,
+    events: &str,
+    doctor: Option<&str>,
+    now: EpochSecs,
+) -> Board {
+    let beads = read(ledger);
+    let mut b = of_inputs(beads.as_deref(), events, now);
+    b.board.misfits = misfits_of(beads.as_deref(), doctor, now);
+    b
 }
 
 /// 読めた bead（None は台帳が読めない）と event log の字から板を組む。
@@ -168,6 +255,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
         return Board {
             board: PipelineBoard {
                 cards: Reading::Unknown,
+                misfits: Reading::Unknown,
             },
             unmapped: 0,
         };
@@ -286,6 +374,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
     Board {
         board: PipelineBoard {
             cards: Reading::Known(cards),
+            misfits: Reading::Unknown,
         },
         unmapped,
     }

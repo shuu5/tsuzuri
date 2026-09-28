@@ -15,6 +15,7 @@
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
 //! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
+//! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの後に器の doctor の台帳の形の行を撃つ（`form`・行 c-pipe-misfit）。
 
 pub mod batch;
 pub mod board;
@@ -24,6 +25,7 @@ mod config;
 pub mod design;
 pub mod events;
 pub mod files;
+pub mod form;
 pub mod http;
 pub mod ledger;
 pub mod policy;
@@ -56,6 +58,7 @@ use crate::acct::Acct;
 use self::board::Sources;
 use self::design::Design;
 use self::events::Hub;
+use self::form::Form;
 use self::http::{Request, Response};
 use self::ledger::Source;
 use self::ruling::{Delivery, Writer};
@@ -180,8 +183,14 @@ impl Server {
                 path: config.files.clone(),
             })?;
         let listener = TcpListener::bind(config.bind).map_err(StartError::Io)?;
+        let form = match (&config.seat, &config.state_dir) {
+            (Some(_), Some(state_dir)) => Some(Form::new(&config.scribe2, state_dir, &config.repo)),
+            _ => None,
+        };
         let sources = Sources {
-            ledger: Source::new(&config.repo, &config.bd).watched(),
+            ledger: Source::new(&config.repo, &config.bd)
+                .watched()
+                .with_form(form.clone()),
             design: Design::new(&config.repo, &config.folio),
             runs: Runs::new(config.state_dir.as_deref()),
         };
@@ -211,6 +220,9 @@ impl Server {
             marks.extend(lock(&held_marks).iter().cloned());
             marks
         });
+        if let Some(form) = &form {
+            form.notify(&hub);
+        }
         let delivery = match (&config.seat, &config.state_dir) {
             (Some(target), Some(state_dir)) => Some(Delivery {
                 program: config.scribe2.clone(),

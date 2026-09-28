@@ -9,6 +9,7 @@
 //! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
 //! `watched` の Source の `got` と `text` は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、
 //! 読みが走っていればその終わりを待って同じ結果を返す（行 e-snap）。
+//! `with_form` の Source の `read` は、読みの後に器の doctor の台帳の形の行の撃ち（`Form::kick`）を起こす（待たない・行 c-pipe-misfit）。
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -21,6 +22,7 @@ use tsuzuri_contract::wire;
 
 use super::coalesce::{Coalesce, GRACE};
 use super::events::stamp;
+use super::form::Form;
 
 /// 子 process を撃つ部品と時刻の読みは `proc` と `clock` に在り、今までの名のまま再公開する（行 hb-proc）。
 pub use super::clock::epoch_secs;
@@ -90,6 +92,8 @@ pub struct Source {
     latest: Arc<Mutex<Option<Option<String>>>>,
     /// 真なら `got` と `text` は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返す。
     watched: bool,
+    /// 見張りの読みの後に撃つ器の doctor の台帳の形の行（行 c-pipe-misfit）。
+    form: Option<Form>,
 }
 
 /// 持ち回しを含む読みの結果（行 e-hold）。
@@ -119,7 +123,18 @@ impl Source {
             hold: READ_HOLD,
             latest: Arc::new(Mutex::new(None)),
             watched: false,
+            form: None,
         }
+    }
+
+    /// 見張りの読み（`read`）の後に器の doctor の台帳の形の行を撃つ Source（行 c-pipe-misfit）。
+    pub fn with_form(self, form: Option<Form>) -> Source {
+        Source { form, ..self }
+    }
+
+    /// 見張りの読みの後に撃つ器の doctor の台帳の形の行。
+    pub fn form(&self) -> Option<&Form> {
+        self.form.as_ref()
     }
 
     /// 変化の見張りが読む Source（`got` と `text` は bd を撃たず、見張りの最後の読みの結果を返す・行 e-snap）。
@@ -189,10 +204,15 @@ impl Source {
     }
 
     /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。
-    /// 読めた字は最後に読めた字に置く。
+    /// 読めた字は最後に読めた字に置く。`form` が在れば読みの後に撃ちを起こす（待たない）。
     pub fn read(&self) -> Reading<Vec<LedgerItem>> {
-        self.fresh()
-            .map_or(Reading::Unknown, |text| parse_bd(&text))
+        let reading = self
+            .fresh()
+            .map_or(Reading::Unknown, |text| parse_bd(&text));
+        if let Some(form) = &self.form {
+            form.kick();
+        }
+        reading
     }
 
     /// bd を撃ち、読めた字を返す（導出グラフと指標の入力・便 e-read）。落ちれば上限の内の最後に読めた字（`got`）。

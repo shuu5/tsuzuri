@@ -866,15 +866,22 @@
             "elapsed_s": 185
           }
         ]
+      },
+      "misfits": {
+        "known": []
       }
     },
     {
       "cards": {
         "known": []
+      },
+      "misfits": {
+        "known": []
       }
     },
     {
-      "cards": "unknown"
+      "cards": "unknown",
+      "misfits": "unknown"
     }
   ],
   "board::NextMove": [

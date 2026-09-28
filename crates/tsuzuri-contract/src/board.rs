@@ -77,10 +77,35 @@ pub struct PipelineCard {
     pub elapsed_s: Option<u64>,
 }
 
+/// 形の崩れ（語は器の ledger/form.rs の欄の名・判断の記録 ADR-16 の決定 (1)）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Misfit {
+    /// 控えの印も設計の参照も無い。
+    Neither,
+    /// 控えの印と設計の参照の両方が在る。
+    Both,
+}
+
+impl Misfit {
+    pub const ALL: [Misfit; 2] = [Misfit::Neither, Misfit::Both];
+}
+
+/// 形の崩れた open の bead（題は台帳の字のまま）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MisfitBead {
+    pub bead: BeadId,
+    pub title: String,
+    pub misfit: Misfit,
+}
+
 /// pipeline の板（state dir が読めなければ札は「まだ分からない」）。
+/// 形の崩れは器の doctor の判定を写し、その字か台帳が読めなければ「まだ分からない」。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PipelineBoard {
     pub cards: Reading<Vec<PipelineCard>>,
+    /// 形の崩れた open の bead（器の doctor の台帳の形の行を写し、題は台帳から引く・台帳の順・行 c-pipe-misfit）。
+    pub misfits: Reading<Vec<MisfitBead>>,
 }
 
 /// 次の一手（閉じた 7・宣言の順が優先の順）。

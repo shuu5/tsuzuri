@@ -226,10 +226,12 @@ fn pipe_titles_from_ledger_cut_to_36() {
 fn pipe_empty_band_and_unmeasured() {
     let empty = wire::encode(&PipelineBoard {
         cards: Reading::Known(vec![]),
+        misfits: Reading::Known(vec![]),
     })
     .expect("電文");
     let unknown = wire::encode(&PipelineBoard {
         cards: Reading::Unknown,
+        misfits: Reading::Unknown,
     })
     .expect("電文");
     let ledger = ledger_body();
@@ -433,6 +435,7 @@ fn board_body(cards: Vec<PipelineCard>) -> Fetched {
     Fetched::Body(
         wire::encode(&PipelineBoard {
             cards: Reading::Known(cards),
+            misfits: Reading::Known(vec![]),
         })
         .expect("電文"),
     )

@@ -223,9 +223,11 @@ pub fn cards(fetched: &Fetched) -> Result<Vec<PipelineCard>, &'static str> {
         Fetched::Body(text) => match wire::decode::<PipelineBoard>(text) {
             Ok(PipelineBoard {
                 cards: Reading::Known(cards),
+                ..
             }) => Ok(cards),
             Ok(PipelineBoard {
                 cards: Reading::Unknown,
+                ..
             }) => Err(UNKNOWN_REASON),
             Err(_) => Err(NO_CONTENT),
         },

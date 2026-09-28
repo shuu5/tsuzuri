@@ -818,12 +818,15 @@ fn forms() -> Vec<Box<dyn Form>> {
             vec![
                 PipelineBoard {
                     cards: Reading::Known(vec![pipeline_card()]),
+                    misfits: Reading::Known(vec![]),
                 },
                 PipelineBoard {
                     cards: Reading::Known(vec![]),
+                    misfits: Reading::Known(vec![]),
                 },
                 PipelineBoard {
                     cards: Reading::Unknown,
+                    misfits: Reading::Unknown,
                 },
             ],
         ),
