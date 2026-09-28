@@ -3,7 +3,9 @@
 //! 名札の表（β・この file の表）・正本から数えた数（γ）のどれかで、案内の文は出さない。
 //! 面に依らない口（head と site-bar・章の帯・card・toc・承認欄の帯・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ。
 //! 判断の記録の面（`face_adr.rs`）と違うのは 章が正本ごとに増える点で、章の数は節の数（+ 図の章）から数えて
-//! `Frame` を関数の中で組む。節の型は閉じた一覧 6 つで、一覧に無い型が 1 つでもあれば面を導出しない（要件書 FR9）。
+//! `Frame` を関数の中で組む。節の型は閉じた一覧 9 つで、一覧に無い型が 1 つでもあれば面を導出しない（要件書 FR9）。
+//! 計画の設計ノートの 3 つの型（行の索引・計画だけの行・判断の表・判断の記録 ADR-31 決定 (2)(イ)(7)・要件書 FR27）は便 184 で
+//! 描けるようにした（索引の行は所属の設計ノートの面へ・計画だけの行は大きさ・依存・書く file・拠る裁定・判断の表は裁定の字）。
 //! 契約表の節の欄は器（scribe2）の導出 file `contracts/schema.toml` の field の順に出し、欄の一覧を自前に持たない（FR10・P-6.4）。
 //! 図の章（便 31）は図ごとに図の枠（figure-panel・便 34 からは `face.rs` の共有の口）を置き、図の本体（SVG）は
 //! `figure.rs` の `render` が図の道具で描いたものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない
@@ -65,14 +67,17 @@ const FAVICON: &str = "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns
 
 // ── 名札の表（β・表に無い値は導出できない）──
 
-/// 節の型（閉じた一覧 6 つ）→ 章の名札。並びは欄の決まりの type_enum と同じ。
-const TYPES: [(&str, &str); 6] = [
+/// 節の型（閉じた一覧 9 つ）→ 章の名札。並びは欄の決まりの type_enum と同じ。
+const TYPES: [(&str, &str); 9] = [
     ("prose", "説明"),
     ("parts-table", "部品"),
     ("ports-table", "口"),
     ("fields-table", "欄"),
     ("teeth-table", "検査"),
     ("contract-table", "契約表"),
+    ("row-index", "行の索引"),
+    ("row-plan", "計画だけの行"),
+    ("decision-table", "判断の表"),
 ];
 
 const CONTRACT_TABLE: &str = "contract-table";
@@ -165,7 +170,7 @@ struct Counts {
     /// 契約表の節の行の合計
     rows: usize,
     /// 型ごとの節の数（TYPES の順）
-    by_type: [usize; 6],
+    by_type: [usize; 9],
 }
 
 impl Counts {
@@ -380,7 +385,7 @@ fn contract_links(secs: &[Sec<'_>], doc_id: &str) -> R<Links> {
 }
 
 fn counts(secs: &[Sec<'_>], figures: usize) -> R<Counts> {
-    let mut by_type = [0usize; 6];
+    let mut by_type = [0usize; 9];
     let mut rows = 0;
     for s in secs {
         let i = TYPES
@@ -791,7 +796,8 @@ fn push_note_chip(chips: &mut Vec<String>, row: &X<'_>) -> R<()> {
     Ok(())
 }
 
-/// 表の節（部品・口・欄・検査・契約表）。行ごとに item-row を 1 つ。
+/// 表の節（部品・口・欄・検査・契約表・行の索引・計画だけの行・判断の表）。行ごとに item-row を 1 つ。
+/// 行の索引は行が 0 本でもよい（生成区間の印だけの rows は null・便 184）。
 fn table_chapter(
     o: &mut Vec<String>,
     f: &Frame,
@@ -799,7 +805,12 @@ fn table_chapter(
     secs: &[Sec<'_>],
     env: &Env<'_>,
 ) -> R<()> {
-    for row in s.x.f("rows")?.seq()? {
+    let rows = match s.x.g("rows")? {
+        Some(x) => x.seq()?,
+        None if s.key == "row-index" => Vec::new(),
+        None => s.x.f("rows")?.seq()?,
+    };
+    for row in rows {
         let rid = row.f("id")?.id()?;
         let mut r = Row {
             anchor: format!("s{}-{rid}", s.idx),
@@ -853,6 +864,35 @@ fn table_chapter(
                 r.plain = Some(("固定の材料", format!("<code>{}</code>", row.ef("fixture")?)));
                 push_ref_chip(&mut r.chips, &row, env)?;
                 push_note_chip(&mut r.chips, &row)?;
+            }
+            "row-index" => {
+                let doc = row.f("doc")?.id()?;
+                r.rt = format!("<a class=\"xref\" href=\"note-{0}.html\">{0}</a>", esc(doc));
+            }
+            "row-plan" => {
+                r.rt = row.ef("what")?;
+                if let Some(size) = row.g("size")? {
+                    r.badges.push(pill(&size.e()?));
+                }
+                for (key, label, code) in [("depends", "依存", false), ("files", "書く file", true)] {
+                    let Some(list) = row.g(key)? else { continue };
+                    let items = list
+                        .seq()?
+                        .iter()
+                        .map(|q| Ok(if code { format!("<code>{}</code>", q.e()?) } else { q.e()? }))
+                        .collect::<R<Vec<_>>>()?;
+                    if !items.is_empty() {
+                        r.chips.push(hint(label, &items.join(if code { "<br>" } else { "・" })));
+                    }
+                }
+                if let Some(ruling) = row.g("ruling")? {
+                    r.chips.push(hint("拠る", &ruling.e()?));
+                }
+                push_note_chip(&mut r.chips, &row)?;
+            }
+            "decision-table" => {
+                r.rt = row.ef("text")?;
+                r.plain = Some(("裁定", row.ef("ruling")?));
             }
             _ => contract_row(&mut r, &row, secs, env)?,
         }

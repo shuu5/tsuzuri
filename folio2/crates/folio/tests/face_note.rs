@@ -1192,3 +1192,55 @@ fn f146_note_stamp_cover_and_foot_follow_the_approval() {
         }
     }
 }
+
+// ── 計画の設計ノートの 3 つの型（便 184・docs/design/delivery-184.md §1 (c)・判断の記録 ADR-31 決定 (2)(イ)(7)・要件書 FR9 / FR27） ──
+
+const PLAN_BEGIN: &str = "# folio:rows:begin — 生成区間・手で直さない・正本は置き場の契約表（folio derive --write が書く）";
+
+/// 行の索引（行 1 本と、印だけの 0 本）・計画だけの行・判断の表を持つ計画のノート（歯の中の最小の手書き）。
+fn plan_note(index_rows: &str) -> String {
+    format!(
+        "meta:\n  id: plan\n  title: 計画のノート\n  version: v0.1\n  status: example\n  generated: 2026-09-28\n  profile: design-note\nsections:\n  - n: 1\n    type: prose\n    title: 目的\n    body: 計画の見本。\n  - n: 2\n    type: row-index\n    title: 行の索引\n    rows:\n      {PLAN_BEGIN}\n{index_rows}      # folio:rows:end\n  - n: 3\n    type: row-plan\n    title: 計画だけの行\n    rows:\n      - {{id: b, what: 次の <行>, size: S, files: [crates/x.rs, crates/y.rs], depends: [a], ruling: t3-hub.1, note: 注の字}}\n      - {{id: c, what: その次の行}}\n  - n: 4\n    type: decision-table\n    title: 判断\n    rows:\n      - {{id: d1, text: 行を足す, ruling: f2-648 notes 2026-09-28 10:29 JST}}\n"
+    )
+}
+
+/// 歯 f184_ 1: 3 つの型の章を名札つきで描き、索引の行は所属の設計ノートの面へ、計画だけの行は大きさ・依存・書く file・
+/// 拠る裁定・注を、判断の表は裁定の字を出す（値は escape して逐語）。面は部品目録の外の class を持たない（parts --check 0）。
+#[test]
+fn f184_the_three_plan_types_are_drawn_with_their_fields() {
+    let (td, work) = fixture_copy("plan-types");
+    fs::write(work.join("design-note/plan.yaml"), plan_note("      - {id: a, doc: full}\n")).unwrap();
+    let out = td.join("note-plan.html");
+    let run = folio_face("note", Some("plan"), &work, &out, "--write");
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    let html = fs::read_to_string(&out).unwrap();
+    for want in [
+        "行の索引",
+        "計画だけの行",
+        "判断の表",
+        "<a class=\"xref\" href=\"note-full.html\">full</a>",
+        &esc("次の <行>"),
+        "<span class=\"pill\">S</span>",
+        "<code>crates/x.rs</code><br><code>crates/y.rs</code>",
+        "t3-hub.1",
+        "注の字",
+        "行を足す",
+        "f2-648 notes 2026-09-28 10:29 JST",
+    ] {
+        assert!(html.contains(want), "「{want}」が無い");
+    }
+    let check = Command::new(env!("CARGO_BIN_EXE_folio"))
+        .args(["parts", "--check", "--dir"])
+        .arg(design_intent())
+        .arg("--page")
+        .arg(format!("note={}", out.display()))
+        .output()
+        .unwrap();
+    assert_eq!(code(&check, "folio parts --check"), 0, "{}{}", stdout(&check), stderr(&check));
+    // 行の索引の生成区間が空（rows は印だけ＝null）でも面を描く
+    fs::write(work.join("design-note/plan.yaml"), plan_note("")).unwrap();
+    let run = folio_face("note", Some("plan"), &work, &out, "--write");
+    assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
+    assert!(!fs::read_to_string(&out).unwrap().contains("note-full.html\">full</a>"));
+    let _ = fs::remove_dir_all(&td);
+}
