@@ -114,10 +114,37 @@ fn authority(s: &str, default_port: u16) -> Option<(String, u16)> {
     Some((host.to_ascii_lowercase(), port))
 }
 
+/// 要求の最初の 1 byte が届く前に相手が閉じたか読みが終わった（時間切れ・切断ほか）印。
+#[derive(Debug)]
+struct NoBytes;
+
+impl std::fmt::Display for NoBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("要求の 1 byte も届かない")
+    }
+}
+
+impl std::error::Error for NoBytes {}
+
+/// `read_request` が最初の 1 byte を読む前に返した誤り（接続には何も書かずに閉じる）。
+/// byte の届いた後の誤りと、`read_request` の外で作った誤りでは偽。
+pub fn no_bytes(e: &io::Error) -> bool {
+    e.get_ref().is_some_and(|inner| inner.is::<NoBytes>())
+}
+
 /// 要求の頭を読み、Content-Length の本文を `BODY_MAX` まで持ち、越える本文は上限まで読み捨てる
 /// （読み残しの在る接続を閉じると応答が相手に届かないことがある）。本文が切れていれば誤り。
+/// 最初の 1 byte が届く前に閉じたか読みが終わった接続は `no_bytes` が真の誤り。
 pub fn read_request(stream: impl Read) -> io::Result<Request> {
     let mut reader = BufReader::new(stream);
+    loop {
+        match reader.fill_buf() {
+            Ok([]) => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, NoBytes)),
+            Ok(_) => break,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(io::Error::new(e.kind(), NoBytes)),
+        }
+    }
     let mut head = 0usize;
     let mut line = String::new();
     let mut next_line = |reader: &mut BufReader<_>, line: &mut String| -> io::Result<()> {

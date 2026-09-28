@@ -261,6 +261,9 @@ fn handle(stream: TcpStream, shared: &Shared) {
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
     let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
     let response = match http::read_request(&stream) {
+        // 1 byte も届かずに閉じたか時間切れの接続（browser が先に張る接続）には何も書かない
+        // （400 を書くと、使い回した接続で後の要求の応答として読まれる）。
+        Err(e) if http::no_bytes(&e) => return,
         Err(_) => Response::text(400, "bad-request"),
         Ok(req) if req.method == "GET" && req.path() == "/api/surface/events" => {
             let _ = events::stream(&stream, &shared.hub);
