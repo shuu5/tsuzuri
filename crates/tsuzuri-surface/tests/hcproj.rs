@@ -188,19 +188,20 @@ fn hcproj_pcnt_card() {
         &f(&doc.projects[0], doc.at),
         "run の数 · proj-a",
         "wait 1 · run 2 · stop 0 · land 3",
-        "あなたの決定待ち ―",
+        "あなたの決定待ち 2",
         "fleet/events.jsonl · ◷ 12:00Z",
         &[
             "Queued / Blocked 1",
             "Running / Gated 2",
             "Questioned / Failed / Stopped 0",
             "Landed（今日） 3",
-            "― = 質問の台帳を読んでいない",
         ],
     );
     let b = pcnt_card(&doc.projects[1], doc.at);
     assert_eq!(b.title, "run の数 · proj-b");
     assert_eq!(b.kind, "wait 0 · run 0 · stop 1 · land 0");
+    assert_eq!(b.value, "あなたの決定待ち ―");
+    assert_eq!(b.more.last().map(String::as_str), Some(WAIT_NOTE));
     check(
         &pcnt_card(&doc.projects[2], doc.at),
         "run の数 · proj-c",
@@ -341,7 +342,13 @@ fn hcproj_grp_card() {
         "project の群 · 記録 1 件",
         "◷ 10:00Z から · ← 前 acct-2",
         "groups/Tier1.account ほか",
-        &["候補 2 口座 → 候補と次の移り先", "anchor 2 件", "・ proj-a", "・ proj-c"],
+        &[
+            "候補 2 口座 → 候補と次の移り先",
+            "閾値 5h 85% · 7d 95% · model 95%",
+            "anchor 2 件",
+            "・ proj-a",
+            "・ proj-c",
+        ],
     );
     check(
         &grp_card(&doc, "Tier2").expect("Tier2 は在る"),
@@ -349,7 +356,12 @@ fn hcproj_grp_card() {
         "project の群 · 記録 1 件",
         "記録なし · ← 前 ―",
         "groups/Tier2.account ほか",
-        &["候補 1 口座 → 候補と次の移り先", "anchor 1 件", "・ proj-b"],
+        &[
+            "候補 1 口座 → 候補と次の移り先",
+            "閾値 5h 85% · 7d 95% · model 95%",
+            "anchor 1 件",
+            "・ proj-b",
+        ],
     );
     assert_eq!(grp_card(&doc, "Tier9"), None);
 

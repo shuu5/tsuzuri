@@ -3,7 +3,8 @@
 //! 行は電文の projects の 1 行ずつ（台帳は ProjectRow の ledger）。並べ方は 4 つ（judge・project・net・backlog）で URL の query の `lsort=` に残す。
 //! 判定の写し・純減の矢印・小数 1 桁・日数の字は着地済みの project の ledger の module の値と関数を使う（その block の DOM は呼ばない）。
 //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
-//! 未反映の数は読めない種類を 0 と数えた和で確かな値と言えないので、この便は「―」を出す（未決）。
+//! 未反映は電文の台帳の未反映の数で、読めない種類が在れば project board の指標の段と同じ Unref の形で
+//! 測れていないの印を添える（部分の和）。台帳が Unknown の行は「―」。
 //! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の projects の led_card で組む。
 //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
 //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -14,11 +15,11 @@ use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::stats::LedgerStats;
 
-use super::projects::led_card;
+use super::projects::{led_card, unref_count};
 use crate::frame::{self, Block};
 use crate::project::Body;
 use crate::project::ledger::{
-    JUDGES, Judge, NONE, Net, SPARK_H, SPARK_W, age, fixed1, judge, net, spark, spark_svg,
+    JUDGES, Judge, NONE, Net, SPARK_H, SPARK_W, Unref, age, fixed1, judge, net, spark, spark_svg,
 };
 use crate::view::Fetched;
 use crate::widgets::hover::Card;
@@ -232,6 +233,10 @@ pub struct Cells {
     pub lead: String,
     /// 14 日の created と closed の sparkline の svg の字（project board の台帳の block と同じ関数で組む）。
     pub spark: String,
+    /// 未反映の数と読めない種類（各 project の表と同じ unref_count で組む）。
+    pub unref: Unref,
+    /// 未反映の cell の class（1 以上は on）。
+    pub un_class: String,
 }
 
 /// 表の 1 行。
@@ -257,14 +262,14 @@ impl LedRow {
     }
 
     /// 行の数の欄の字（open の task・24 時間の純減・closed/日・未反映の順・台帳が Unknown は全部「―」）。
-    /// 未反映はこの便では「―」（未決）。
+    /// 未反映は読めない種類が在っても数（部分の和）の字で、測れていないの印は DOM が添える。
     pub fn numbers(&self) -> [String; 4] {
         match &self.cells {
             Reading::Known(c) => [
                 c.task.to_string(),
                 c.net24.text.clone(),
                 c.rate.clone(),
-                NONE.to_string(),
+                c.unref.count.to_string(),
             ],
             Reading::Unknown => std::array::from_fn(|_| NONE.to_string()),
         }
@@ -361,6 +366,12 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
                     net7: net(s.net_drop_7d),
                     lead: age(s.lead.map(|l| l.p50)),
                     spark: spark_svg(&spark(&s.days, SPARK_W, SPARK_H)),
+                    unref: unref_count(s),
+                    un_class: if s.unreflected > 0 {
+                        "c-n c-un on".to_string()
+                    } else {
+                        "c-n c-un".to_string()
+                    },
                 }),
                 Reading::Unknown => Reading::Unknown,
             };
@@ -561,7 +572,10 @@ mod dom {
                     <span class="rbar" aria-hidden="true"><i style=format!("width:{}%", cells.rate_pct)></i></span>
                     <span class="num">{cells.rate.clone()}</span>
                 </div>
-                <div class="c-n c-un muted"><b class="num">{NONE}</b></div>
+                <div class=cells.un_class.clone()>
+                    <b class="num">{cells.unref.count}</b>
+                    {(!cells.unref.unknown.is_empty()).then(|| state_icon(UNKNOWN))}
+                </div>
                 <button type="button" class="rowmore" aria-expanded=expanded aria-label=label("p_more") on:click=toggle>
                     <span class="rm-t">{label("p_more")}</span>" "<span class="rm-a">{arrow}</span>
                 </button>

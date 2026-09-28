@@ -207,7 +207,7 @@ fn acctled_order_rules() {
     }
 }
 
-/// (3)(5) fixture の行の字: proj-a は ✓・task 9・24h の +2・closed/日 0.9・詳しくの段・proj-b と proj-c は st_unknown と「―」。
+/// (3)(5) fixture の行の字: proj-a は ✓・task 9・24h の +2・closed/日 0.9・未反映 3・詳しくの段・proj-b と proj-c は st_unknown と「―」。
 #[test]
 fn acctled_rows_on_fixture() {
     let doc = fixture();
@@ -231,7 +231,7 @@ fn acctled_rows_on_fixture() {
             "9".to_string(),
             "+2".to_string(),
             "0.9".to_string(),
-            NONE.to_string()
+            "3".to_string()
         ]
     );
     let more: Vec<(&str, String)> = a.more().to_vec();

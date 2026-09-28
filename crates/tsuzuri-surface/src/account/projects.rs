@@ -1,23 +1,27 @@
 //! account board の各 project の表の block（便 h-frame の枠・便 h-proj の中身）: 見本の projects の tab の `#ptab`
 //! （account/index.html の projTable・PSORTS）。
 //! 行は電文の projects の 1 行ずつで 9 列。並べ方は 4 つ（need・group・judge・unref）で URL の query の `psort=` に残す。
-//! 決定待ちは電文に値が無く、未反映は読めない種類を 0 と数えた和で確かな値と言えないので、どちらも「―」を出す（未決）。
+//! 決定待ちは電文の台帳の open の問いの数、未反映は電文の台帳の未反映の数で、読めない種類が在れば
+//! project board の指標の段と同じ Unref の形で測れていないの印を添える（部分の和）。台帳が Unknown の行はどちらも「―」。
 //! 並べ・行の値・class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
+use std::cmp::Reverse;
+
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::account::{AccountDoc, ProjectRow, RunCounts};
+use tsuzuri_contract::account::{AccountDoc, ProjectRow, RunCounts, WindowCap};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
-use tsuzuri_contract::stats::CheckResult;
+use tsuzuri_contract::stats::{CheckResult, LedgerStats};
 
 use super::home::group_more;
 use super::windows::{NOT_YET_KEY, OPEN_NEW_KEY, open_url};
 use crate::frame::{self, Block, Mode};
 use crate::project::Body;
 use crate::project::ledger::{
-    JUDGES, Judge, Net, SPARK_H, SPARK_W, age, fixed1, judge, net, spark, spark_svg,
+    JUDGES, Judge, Net, SPARK_H, SPARK_W, Unref, age, fixed1, judge, kind_name, net, spark,
+    spark_svg,
 };
 use crate::project::next::{UNJUDGED_LINE, big, key as next_key, unjudged};
-use crate::project::seat::{NG, OK, Sign, hm, hmd, state_value, top};
+use crate::project::seat::{NG, OK, Sign, hm, hmd, short, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
 use crate::vocab::label;
@@ -257,6 +261,60 @@ pub fn led(project: &ProjectRow) -> Led {
     }
 }
 
+/// 決定待ち（台帳が Known なら open の問いの数・Unknown は None）。
+pub fn wait_of(project: &ProjectRow) -> Option<u32> {
+    match &project.ledger {
+        Reading::Known(s) => Some(s.open.question),
+        Reading::Unknown => None,
+    }
+}
+
+/// 未反映（数は電文の数そのまま・読めない種類の名は電文の順・project board の指標の段の panel の欄 unref と同じ組み方）。
+pub fn unref_count(s: &LedgerStats) -> Unref {
+    Unref {
+        count: s.unreflected,
+        unknown: s
+            .unreflected_unknown
+            .iter()
+            .map(|k| kind_name(*k))
+            .collect(),
+    }
+}
+
+/// 未反映（台帳が Known なら unref_count・Unknown は None）。
+pub fn unref_of(project: &ProjectRow) -> Option<Unref> {
+    match &project.ledger {
+        Reading::Known(s) => Some(unref_count(s)),
+        Reading::Unknown => None,
+    }
+}
+
+/// 数の欄の字（None は「―」）。
+pub fn count_text(n: Option<u32>) -> String {
+    n.map_or_else(|| NONE_MARK.to_string(), |v| v.to_string())
+}
+
+/// 決定待ちの数の class（1 以上は on）。
+pub fn wait_class(n: Option<u32>) -> &'static str {
+    match n {
+        Some(v) if v > 0 => "num on",
+        _ => "num",
+    }
+}
+
+/// 未反映の列の class（count が 1 以上は on）。
+pub fn unref_class(unref: Option<&Unref>) -> &'static str {
+    match unref {
+        Some(u) if u.count > 0 => "c-un2 on",
+        _ => C_UN2,
+    }
+}
+
+/// unref の並べの位（count の多い順・台帳が Unknown はその後ろ）。
+pub fn unref_rank(project: &ProjectRow) -> Reverse<i64> {
+    Reverse(unref_of(project).map_or(-1, |u| i64::from(u.count)))
+}
+
 /// run の 4 列の 1 つ（class と字）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Run {
@@ -386,10 +444,10 @@ pub struct ProjLine {
     pub name: String,
     pub group: Option<String>,
     pub need: Need,
-    /// 決定待ち（この便は「―」）。
-    pub wait: &'static str,
-    /// 未反映（この便は「―」）。
-    pub unref: &'static str,
+    /// 決定待ち（台帳の open の問いの数・台帳が Unknown は None）。
+    pub wait: Option<u32>,
+    /// 未反映（数と読めない種類・台帳が Unknown は None）。
+    pub unref: Option<Unref>,
     pub led: Led,
     pub runs: [Run; 4],
     pub orch: Orch,
@@ -553,7 +611,11 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
             idx.sort_by_key(|&i| judge_rank(&ps[i]));
             vec![(None, idx)]
         }
-        PSort::Unref => vec![(None, all().collect())],
+        PSort::Unref => {
+            let mut idx: Vec<usize> = all().collect();
+            idx.sort_by_key(|&i| unref_rank(&ps[i]));
+            vec![(None, idx)]
+        }
         PSort::Group => {
             let mut out: Vec<(Option<GroupHead>, Vec<usize>)> = group_order(doc)
                 .into_iter()
@@ -604,8 +666,8 @@ pub fn row(doc: &AccountDoc, index: usize, mode: Mode) -> ProjLine {
         name: p.name.clone(),
         group: p.group.clone(),
         need,
-        wait: NONE_MARK,
-        unref: NONE_MARK,
+        wait: wait_of(p),
+        unref: unref_of(p),
         led: led(p),
         runs: runs(&p.runs),
         orch: orch(p),
@@ -749,11 +811,14 @@ pub fn pcnt_card(project: &ProjectRow, at: EpochSecs) -> Card {
             vec![RUNS_UNKNOWN.to_string()],
         ),
     };
-    more.push(WAIT_NOTE.to_string());
+    let wait = wait_of(project);
+    if wait.is_none() {
+        more.push(WAIT_NOTE.to_string());
+    }
     Card {
         title: format!("{} · {}", label("runs4"), project.name),
         kind,
-        value: format!("{} {NONE_MARK}", label("waiting_you")),
+        value: format!("{} {}", label("waiting_you"), count_text(wait)),
         src: format!("fleet/events.jsonl · ◷ {}", hm(at)),
         more,
     }
@@ -841,7 +906,24 @@ pub fn gproj_card(doc: &AccountDoc, project: &ProjectRow) -> Card {
     }
 }
 
-/// 群の見出しの chip の card（見本の group の枝: 今の口座・記録の数・いつからと前の口座・候補と anchor）。
+/// 閾値の行（見本の group の枝の閾値の行・窓ごとに短い字と値と %・読めない値は「?」・空の列は「―」）。
+pub fn thr_line(caps: &[WindowCap]) -> String {
+    let parts: Vec<String> = caps
+        .iter()
+        .map(|c| match c.cap {
+            Reading::Known(v) => format!("{} {v}%", short(&c.window)),
+            Reading::Unknown => format!("{} {ASK}", short(&c.window)),
+        })
+        .collect();
+    let text = if parts.is_empty() {
+        NONE_MARK.to_string()
+    } else {
+        parts.join(" · ")
+    };
+    format!("{} {text}", label("threshold"))
+}
+
+/// 群の見出しの chip の card（見本の group の枝: 今の口座・記録の数・いつからと前の口座・候補と閾値と anchor）。
 /// 電文の groups が読めないか群が無ければ None。
 pub fn grp_card(doc: &AccountDoc, name: &str) -> Option<Card> {
     let Reading::Known(cards) = &doc.groups else {
@@ -859,6 +941,7 @@ pub fn grp_card(doc: &AccountDoc, name: &str) -> Option<Card> {
             g.row.candidates.len(),
             label("candidates")
         ),
+        thr_line(&doc.caps),
         format!("anchor {} 件", g.members.len()),
     ];
     more.extend(g.members.iter().map(|m| format!("・ {}", m.project)));
@@ -916,14 +999,15 @@ mod dom {
     use web_sys::wasm_bindgen::JsCast;
 
     use super::{
-        Acc, BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_UN2, C_WAIT, COLUMNS,
-        Group, GroupHead, HROW, Led, NO_TOGGLE, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort,
-        PTAB, ProjLine, RC4, Run, TKM, Table, content, fit_cut, hbm_class, psort_of, with_psort,
+        Acc, BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_WAIT, COLUMNS, Group,
+        GroupHead, HROW, Led, NO_TOGGLE, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort, PTAB,
+        ProjLine, RC4, Run, TKM, Table, content, count_text, fit_cut, hbm_class, psort_of,
+        unref_class, wait_class, with_psort,
     };
     use crate::account::PATH;
     use crate::account::windows;
     use crate::frame::Mode;
-    use crate::project::ledger::Net;
+    use crate::project::ledger::{Net, Unref};
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal, term};
@@ -1137,8 +1221,8 @@ mod dom {
                     <span class="l1">{need_icon}<b>{need_word}</b></span>
                     <span class="l2" node_ref=l2>{row.need.line.clone().unwrap_or_default()}</span>
                 </div>
-                <div class=C_WAIT><span class="l1"><b class="num">{row.wait}</b></span></div>
-                <div class=C_UN2 data-term="l_unref"><span class="l1"><b class="num">{row.unref}</b></span></div>
+                <div class=C_WAIT><span class="l1"><b class=wait_class(row.wait)>{count_text(row.wait)}</b></span></div>
+                <div class=unref_class(row.unref.as_ref()) data-term="l_unref">{unref_view(row.unref.as_ref())}</div>
                 <div class=C_LED tabindex="0" use:attach=row.cards.led.clone()>{led_view(row.led)}</div>
                 <div class=C_RUN tabindex="0" use:attach=row.cards.runs.clone()>{runs_view(&row.runs)}</div>
                 <div class=C_ORCH use:attach_some=row.cards.orch.clone()>{orch_view(row.orch)}</div>
@@ -1198,6 +1282,24 @@ mod dom {
                 <span class="mi m-acc" use:attach_some=row.cards.acc.clone()>{acc_view(&row.acc)}</span>
                 <span class="mi m-led" use:attach=row.cards.led.clone()>{led_view(row.led.clone())}</span>
             </div>
+        }
+        .into_any()
+    }
+
+    /// 未反映の欄（数と、読めない種類が在れば測れていないの印・2 段目に種類ごとの名と印・台帳が Unknown は「―」）。
+    fn unref_view(unref: Option<&Unref>) -> AnyView {
+        let Some(u) = unref else {
+            return view! { <span class="l1"><b class="num">{NONE_MARK}</b></span> }.into_any();
+        };
+        let mark = (!u.unknown.is_empty()).then(|| state_icon(UNKNOWN));
+        let kinds = u
+            .unknown
+            .iter()
+            .map(|k| view! { <span>{*k}" "{state_icon(UNKNOWN)}</span> })
+            .collect_view();
+        view! {
+            <span class="l1"><b class="num">{u.count}{mark}</b></span>
+            <span class="l2 small muted">{kinds}</span>
         }
         .into_any()
     }

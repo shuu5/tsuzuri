@@ -1,5 +1,6 @@
 //! 便 h-proj の歯: 各 project の表の 9 列の見出し・並べ方（query の psort）・need と group と judge と unref の並び・
-//! 群の見出し・run の 4 列・accounts の印・開くの欄・決定待ちと未反映の「―」・読めないときは測れていない。
+//! 群の見出し・run の 4 列・accounts の印・開くの欄・決定待ちと未反映の数（台帳が Unknown は None）・
+//! 読めないときは測れていない。
 
 use std::path::PathBuf;
 
@@ -222,7 +223,8 @@ fn acctproj_group_order_and_heads() {
     assert_eq!(t.order(), vec![0, 2, 1]);
 }
 
-/// (3) judge の並べは JUDGES の表の順（台帳が Unknown は台帳なし）・unref の並べは宣言の順。
+/// (3) judge の並べは JUDGES の表の順（台帳が Unknown は台帳なし）・unref の並べは未反映の多い順
+/// （台帳が Unknown は後ろ・同じは宣言の順）。
 #[test]
 fn acctproj_judge_and_unref_order() {
     let doc = fixture();
@@ -242,7 +244,8 @@ fn acctproj_judge_and_unref_order() {
     assert_eq!(table(&doc2, PSort::Judge, Mode::Beginner).order(), vec![2, 0, 1]);
 
     assert_eq!(names(&doc, PSort::Unref), vec!["proj-a", "proj-b", "proj-c"]);
-    assert_eq!(names(&doc2, PSort::Unref), vec!["proj-b", "proj-c", "proj-a"]);
+    assert_eq!(names(&doc2, PSort::Unref), vec!["proj-a", "proj-b", "proj-c"]);
+    assert_eq!(table(&doc2, PSort::Unref, Mode::Beginner).order(), vec![2, 0, 1]);
 
     // 台帳の欄は判定と、読めれば task の数。
     let t = table(&doc, PSort::Need, Mode::Beginner);
@@ -379,14 +382,21 @@ fn acctproj_open_cell() {
     );
 }
 
-/// (7) 決定待ちと未反映はこの便では「―」・orchestrator の欄は席の card の状態と合図。
+/// (7) 決定待ちは台帳の open の問いの数・未反映は台帳の数と読めない種類（台帳が Unknown はどちらも None）・
+/// orchestrator の欄は席の card の状態と合図。
 #[test]
 fn acctproj_wait_unref_dash_and_orch() {
     let doc = fixture();
     let t = table(&doc, PSort::Need, Mode::Beginner);
-    for r in &t.groups[0].rows {
-        assert_eq!(r.wait, "―");
-        assert_eq!(r.unref, "―");
+    let rows = &t.groups[0].rows;
+    assert_eq!(rows[0].name, "proj-a");
+    assert_eq!(rows[0].wait, Some(2));
+    let u = rows[0].unref.as_ref().expect("proj-a の台帳は読める");
+    assert_eq!(u.count, 3);
+    assert_eq!(u.unknown, vec!["ruling", "request"]);
+    for r in &rows[1..] {
+        assert_eq!(r.wait, None, "{}", r.name);
+        assert_eq!(r.unref, None, "{}", r.name);
     }
     let a = orch(&doc.projects[0]);
     assert_eq!(a.state, "run");
