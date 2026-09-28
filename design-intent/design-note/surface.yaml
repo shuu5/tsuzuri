@@ -3,13 +3,13 @@
 meta:
   id: surface
   title: 面の便 — 契約の型・導出グラフ・面の server・2 つの board・席の hook・表示面を便の列で運ぶ
-  version: v0.4
+  version: v0.5
   status: effective
   generated: 2026-09-26
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-26, ruling: t3-hub.1（裁定 id = user 2026-09-26T14:37Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 持ち主の承認（2026-09-26T14:37Z）で effective（v0.1）。v0.2（2026-09-27）= 器の seat deliver の着地に合わせた直しだけ（§3 の裁定と束の出力・§20 に記帳 id の形・§21 の器の口 3 行）で、決定と契約表の行は変えない。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。 v0.3（2026-09-27）= 章の上限 12（folio2 の ADR-21 決定 (3)・面の生成器の MAX_CHAPTERS）に収めるため、便の散文（旧 §5〜§15）と契約表（旧 §16）を字を変えずに設計ノート surface-base（便 a〜f）と surface-board（便 g〜k）へ移した。§ の番号は再利用しない（旧 §5〜§16 は欠番）。決定は変えない。 v0.4（2026-09-27）= 不変条件 g-12 の役を器の event の形に合わせた直しだけ（器の QuestionRaised は問いの id を持たず、作業役の問いは台帳の bead にしない＝scribe2 の席の回答・行は surface-base の c-g12）。
+  note: 持ち主の承認（2026-09-26T14:37Z）で effective（v0.1）。v0.2（2026-09-27）= 器の seat deliver の着地に合わせた直しだけ（§3 の裁定と束の出力・§20 に記帳 id の形・§21 の器の口 3 行）で、決定と契約表の行は変えない。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。 v0.3（2026-09-27）= 章の上限 12（folio2 の ADR-21 決定 (3)・面の生成器の MAX_CHAPTERS）に収めるため、便の散文（旧 §5〜§15）と契約表（旧 §16）を字を変えずに設計ノート surface-base（便 a〜f）と surface-board（便 g〜k）へ移した。§ の番号は再利用しない（旧 §5〜§16 は欠番）。決定は変えない。 v0.4（2026-09-27）= 不変条件 g-12 の役を器の event の形に合わせた直しだけ（器の QuestionRaised は問いの id を持たず、作業役の問いは台帳の bead にしない＝scribe2 の席の回答・行は surface-base の c-g12）。 v0.5（2026-09-28）= 方針の記帳先の替え（判断の記録 ADR-16 の決定 (4)・行 e-policy-q の着地）に合わせ、節点 n-policy の役と記帳 id の形の方針の字を直しただけ。決定と契約表の行は変えない。
 
 sections:
   - n: 1
@@ -79,7 +79,7 @@ sections:
       - {id: n-question, name: question（問い）, role: label intake:question を持つ bead（席が置く問い）。touches と premises を metadata に持つ, ref: [FR2, FR4, FR6]}
       - {id: n-ruling, name: あなたの決定（裁定）, role: 問いの bead の notes の定型行から導く。裁定 id は server が発行, ref: [FR2, FR6]}
       - {id: n-receipt, name: orchestrator の受け, role: 問いの bead の notes の「受け」の定型行から導く, ref: [FR2, FR9]}
-      - {id: n-policy, name: 全体への指示（方針）, role: 根の直下の memo「方針」の notes の定型行から導く, ref: [FR2, FR8]}
+      - {id: n-policy, name: 全体への指示（方針）, role: "方針 1 つにつき根の直下の閉じた問い（label intake:question と policy-scope:<範囲>）の notes の方針 id の行と、今までの memo「方針」の notes の定型行（読むだけ）から導く（判断の記録 ADR-16 の決定 (4)・行 e-policy-q）", ref: [FR2, FR8]}
       - {id: n-run, name: run（走行）, role: 器の event log の RunCreated から導く。属性（段・理由・verdict・審査・費用・時刻）は辺にしない, ref: [FR2, FR10]}
   - n: 18
     type: parts-table
@@ -122,7 +122,7 @@ sections:
       - {id: question-nudge, name: 問いの合図（問いの bead の id）, need: required, shape: text}
       - {id: ruling-request, name: 裁定の要求（問いの id・見た版の要約値・逐語）, need: required, shape: table}
       - {id: ruling-response, name: 裁定の応答（裁定 id・記帳時刻）, need: required, shape: table}
-      - {id: ruling-id, name: "記帳 id の形（ASCII の英数字と . - _ : だけの 1 語・64 byte 以下）", need: required, shape: text, note: "1 問の裁定は <問い bead id>:<UTC の年月日 T 時分 Z>-<n>（例 t3-hub.5:20260926T1437Z-1）・束は batch:<同じ時刻>-<n>・方針は policy:<同じ時刻>-<n>。器の seat deliver の id-shape（ASCII の英数字と . - _ : の 64 byte 以下）を通る形で、server だけが発行する。討論 B §8.1 の @ と # を使う形は id-shape で断られるので採らない。面の外で席が記帳する裁定（今の「user <UTC の分>Z」）は面ができるまでの形として残す"}
+      - {id: ruling-id, name: "記帳 id の形（ASCII の英数字と . - _ : だけの 1 語・64 byte 以下）", need: required, shape: text, note: "1 問の裁定は <問い bead id>:<UTC の年月日 T 時分 Z>-<n>（例 t3-hub.5:20260926T1437Z-1）・束は batch:<同じ時刻>-<n>・方針は、方針 1 つごとに作る閉じた問いの id を使う問い id の形（<方針の問い bead id>:<同じ時刻>-1・行 e-policy-q の後・今までの memo の方針の行は policy:<同じ時刻>-<n>）。器の seat deliver の id-shape（ASCII の英数字と . - _ : の 64 byte 以下）を通る形で、server だけが発行する。討論 B §8.1 の @ と # を使う形は id-shape で断られるので採らない。面の外で席が記帳する裁定（今の「user <UTC の分>Z」）は面ができるまでの形として残す"}
       - {id: batch-request, name: 束の要求（問いの id の列・束の逐語・個別の逐語）, need: required, shape: table}
       - {id: batch-response, name: 束の応答（束の id・行ごとの結果）, need: required, shape: table}
       - {id: item-outcome, name: 行ごとの結果（書いた・飛ばした・断った）, need: required, shape: text}
