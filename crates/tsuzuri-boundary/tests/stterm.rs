@@ -128,7 +128,7 @@ const FILTER_WORDS: [&str; 111] = [
 
 /// 節の表（done (8) の 14 通り・直す前の字・直した字・Err が角括弧で囲んで名指す字）。
 const FORMS: [(&str, &str, &str); 14] = [
-    ("display = \":0\"", "display-env = [\"A=1\"]", "display-env"),
+    ("display = \":0\"", "display_env = [\"A=1\"]", "display_env"),
     ("os = \"linux\"", "os = \"linux\"\nos = \"linux\"", "os"),
     ("os = \"linux\"\n", "", "os"),
     ("os = \"linux\"", "os = \"Linux\"", "os"),
@@ -178,6 +178,7 @@ fn term_a() -> Terminal {
             ("XMODIFIERS".to_string(), "@im=fcitx".to_string()),
         ],
         profile_dir: "/fake/profile-a".to_string(),
+        display_env: Vec::new(),
     }
 }
 
@@ -190,6 +191,10 @@ fn term_b() -> Terminal {
         display: None,
         ime_env: Vec::new(),
         profile_dir: "/fake/profile-b".to_string(),
+        display_env: vec![
+            ("WAYLAND_DISPLAY".to_string(), "wayland-1".to_string()),
+            ("XDG_RUNTIME_DIR".to_string(), "/fake/run-b".to_string()),
+        ],
     }
 }
 
@@ -216,7 +221,7 @@ fn stage_term_shape_and_words() {
     assert_eq!(FACE, "host.toml");
     assert_eq!(
         KEYS,
-        ["name", "ssh", "chrome", "os", "display", "ime-env", "profile-dir"]
+        ["name", "ssh", "chrome", "os", "display", "ime-env", "profile-dir", "display-env"]
     );
     assert_eq!(Os::ALL, [Os::Linux, Os::Macos, Os::Windows]);
     assert_eq!(

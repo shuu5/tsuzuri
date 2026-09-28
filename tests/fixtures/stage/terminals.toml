@@ -18,4 +18,5 @@ name = "term-b"
 ssh = "me@term-b"
 chrome = "/fake/bin/chrome"
 os = "linux"
+display-env = ["WAYLAND_DISPLAY=wayland-1", "XDG_RUNTIME_DIR=/fake/run-b"]
 profile-dir = "/fake/profile-b"

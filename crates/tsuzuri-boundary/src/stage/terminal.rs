@@ -1,4 +1,4 @@
-//! 端末の一覧の読み（行 i-1・要件 FR16・判断の記録 ADR-5 の決定 (2)）。
+//! 端末の一覧の読み（行 i-1・要件 FR16・判断の記録 ADR-5 の決定 (2)・行 i-1b で画面を開く env の欄 display-env を足した）。
 //! 器の host の面（state dir の追跡されない `host.toml`）の表 `[[device]]` の行を読み、端末の名で 1 行を引く。
 //! 端末の値は code に焼かず（条 N-7）、TOML の部品を使わず中核の host.rs の読み手と同じ自前の読み方で読む。
 //! 本文を受ける `lookup` と `names` は file も子の process も環境変数も触らず、file を読むのは `read_face` だけ
@@ -14,7 +14,7 @@ pub const HEADER: &str = "[[device]]";
 pub const FACE: &str = "host.toml";
 
 /// 端末の 1 行の key（器の閉じた集合と同じ・必須は name・ssh・chrome・os、表示面では profile-dir も要る）。
-pub const KEYS: [&str; 7] = [
+pub const KEYS: [&str; 8] = [
     "name",
     "ssh",
     "chrome",
@@ -22,7 +22,11 @@ pub const KEYS: [&str; 7] = [
     "display",
     "ime-env",
     "profile-dir",
+    "display-env",
 ];
+
+/// 値が 1 行で閉じた KEY=VALUE の字の配列の key。
+const ENV_KEYS: [&str; 2] = ["ime-env", "display-env"];
 
 /// 端末の OS（起動の argv の組み分けはこの値でだけ行う・条 N-7）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,7 +49,8 @@ impl Os {
     }
 }
 
-/// 引いた端末の 1 行（display は X の DISPLAY・ime-env は宣言の順の KEY と VALUE の組）。
+/// 引いた端末の 1 行（display は X の DISPLAY・ime-env と display-env は宣言の順の KEY と VALUE の組）。
+/// display と display-env は同じ行に無い（画面は 1 つの欄で書く）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Terminal {
     pub name: String,
@@ -55,6 +60,7 @@ pub struct Terminal {
     pub display: Option<String>,
     pub ime_env: Vec<(String, String)>,
     pub profile_dir: String,
+    pub display_env: Vec<(String, String)>,
 }
 
 /// 本文の `[[device]]` の行の列（宣言の順・行ごとに前後の空白を除き、空の行と # で始まる行を除いた字）。
@@ -149,9 +155,9 @@ fn x_display(v: &str) -> bool {
         })
 }
 
-/// ime-env の値（1 行で閉じた角括弧の中のコンマで分けた引用符 1 組の字の列・各要素は KEY=VALUE）。
+/// ime-env と display-env の値（1 行で閉じた角括弧の中のコンマで分けた引用符 1 組の字の列・各要素は KEY=VALUE）。
 /// KEY は英大文字と数字と下線だけで先頭が数字でなく、VALUE は空でなく、同じ KEY は 1 度だけ。外れれば None。
-fn ime_pairs(v: &str) -> Option<Vec<(String, String)>> {
+fn env_pairs(v: &str) -> Option<Vec<(String, String)>> {
     let inner = v.strip_prefix('[')?.strip_suffix(']')?.trim();
     let mut out: Vec<(String, String)> = Vec::new();
     if inner.is_empty() {
@@ -184,7 +190,7 @@ fn check(name: &str, row: &[&str]) -> Result<Terminal, String> {
         if seen.iter().any(|(k, _)| *k == key) {
             return Err(refuse(name, key, "が 2 度在る"));
         }
-        if key != "ime-env" && !matches!(quoted(value), Some(s) if !s.is_empty()) {
+        if !ENV_KEYS.contains(&key) && !matches!(quoted(value), Some(s) if !s.is_empty()) {
             return Err(refuse(
                 name,
                 key,
@@ -217,12 +223,19 @@ fn check(name: &str, row: &[&str]) -> Result<Terminal, String> {
                 &format!("の値 {os_word} は {} のどれでもない", words.join("・")),
             )
         })?;
+    if get("display").is_some() && get("display-env").is_some() {
+        return Err(refuse(
+            name,
+            "display-env",
+            "は display と同じ行に書けない（画面は 1 つの欄で書く・X の画面も display-env に DISPLAY=:0 の形で書ける・器と同じ断り）",
+        ));
+    }
     let display = text("display");
     if let Some(d) = display.as_deref().filter(|d| !x_display(d)) {
         return Err(refuse(
             name,
             "display",
-            &format!("の値 {d} は X の DISPLAY の形でない（Wayland の画面の環境は器の欄 display-env を待つ）"),
+            &format!("の値 {d} は X の DISPLAY の形でない（Wayland の画面は display の行を除き、欄 display-env に KEY=VALUE の組で書く）"),
         ));
     }
     let profile_dir = text("profile-dir").ok_or_else(|| {
@@ -232,16 +245,18 @@ fn check(name: &str, row: &[&str]) -> Result<Terminal, String> {
             "が無い（表示面は既定の profile を補わない・remote debugging の口は専用の profile-dir で開く）",
         )
     })?;
-    let ime_env = match get("ime-env") {
-        None => Vec::new(),
-        Some(v) => ime_pairs(v).ok_or_else(|| {
+    let pairs = |key: &str| match get(key) {
+        None => Ok(Vec::new()),
+        Some(v) => env_pairs(v).ok_or_else(|| {
             refuse(
                 name,
-                "ime-env",
+                key,
                 &format!("の値 {v} は 1 行で閉じた KEY=VALUE の字の配列でない（KEY は英大文字と数字と下線で先頭が数字でない・VALUE は空でない・KEY は 1 度だけ）"),
             )
-        })?,
+        }),
     };
+    let ime_env = pairs("ime-env")?;
+    let display_env = pairs("display-env")?;
     Ok(Terminal {
         name: name.to_string(),
         ssh,
@@ -250,6 +265,7 @@ fn check(name: &str, row: &[&str]) -> Result<Terminal, String> {
         display,
         ime_env,
         profile_dir,
+        display_env,
     })
 }
 
