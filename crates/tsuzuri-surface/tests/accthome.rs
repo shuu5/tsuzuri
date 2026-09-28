@@ -370,7 +370,9 @@ fn accthome_accounts_on_fixture() {
             "occupant",
             "five_hour",
             "seven_day",
-            "seven_day_model"
+            "seven_day_model",
+            "spark",
+            "measured_at"
         ]
     );
 
@@ -638,8 +640,6 @@ fn accthome_no_pressure_marks() {
         "hot",
         "\"cap\"",
         "class=\"cap",
-        "spark",
-        "measured_at",
         "c-occ",
         "remaining",
         "refused",

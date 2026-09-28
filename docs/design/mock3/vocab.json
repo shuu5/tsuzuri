@@ -965,9 +965,9 @@
    "internal": "AllowanceMeasured の ts"
   },
   "spark": {
-   "label": "直近 24 時間",
-   "plain": "使った割合の 24 時間の動き\n・ 実線 = 5h か 7d\n・ 点線 = model\n▸\n・ account board の実線 = five_hour\n・ home の実線 = seven_day",
-   "internal": "sparkline（24 h・SVG）"
+   "label": "直近 7 日",
+   "plain": "使った割合の 7 日の動き\n・ 実線 = 5h か 7d\n・ 点線 = model\n▸\n・ account board の実線 = five_hour\n・ home の実線 = seven_day",
+   "internal": "sparkline（7 日・1 時間に 1 点・SVG）"
   },
   "stage": {
    "label": "段",

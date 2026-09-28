@@ -2,11 +2,12 @@
 //! 見本は account/index.html の render の home の枝（`#nxall` の nxrows・`.gtop` の over・口座 × 窓の arows・`details#moves` の mvli）と
 //! acct.js の nextAll・meter。並べと字と class は純粋な関数（`content`）で組み、DOM は wasm の target のときだけ組む。
 //! 群の列・口座の列・移動の列は電文で別々に Unknown になりうるので、その段だけ測れていないにし、ほかの段は出す（要件 NFR2）。
-//! 逼迫の印（見本の上限の字と強調の class）・候補ごとの門で落ちた理由・24 時間の線・測った時刻の列は出さない（未決・R-22）。
+//! 口座 × 窓は見本の 7 列（名・占有・3 つの窓・7 日の線・測った時刻）を出す（便 h-acct-spark・線の字は面が組み、電文は点だけ）。
+//! 逼迫の印（見本の上限の字と強調の class）・候補ごとの門で落ちた理由は出さない（未決・R-22）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{
-    AccountDoc, AccountRow, GroupCard, MoveRow, ProjectRow, SessionLine,
+    AccountDoc, AccountRow, GroupCard, MoveRow, ProjectRow, SPARK_SPAN_S, SessionLine, Spark,
 };
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::{QuotaUsed, SeatState};
@@ -14,7 +15,9 @@ use tsuzuri_contract::stats::{CheckResult, NextStep};
 
 use super::cards::{gproj_card, nx_card};
 use crate::frame::Block;
+use crate::mapview::graph::esc;
 use crate::project::Body;
+use crate::project::ledger::fixed1;
 use crate::project::next::{UNJUDGED_LINE, big, key, unjudged};
 use crate::project::seat::{NG, OK, Sign, WINDOWS, WindowRow, hmd, short, window_row};
 use crate::view::Fetched;
@@ -430,6 +433,10 @@ pub struct AcctRow {
     pub cells: Cells,
     /// 名の欄の hover の card（`acct_card`）。
     pub card: Card,
+    /// 7 日の線の svg の字（`spark_svg`・線が読めなければ None で「―」）。
+    pub spark: Option<String>,
+    /// 測った時刻の欄（`measured`）。
+    pub measured: Measured,
 }
 
 /// 口座の行を組む器の出力の名（口座の card の出所）。
@@ -498,25 +505,121 @@ pub fn acct_card(row: &AccountRow, sessions: &[SessionLine], at: EpochSecs) -> C
     }
 }
 
-/// 口座 × 窓の見出しの語の鍵（名・占有・3 つの窓）。
-pub const ACCT_HEADS: [&str; 5] = ["accounts", "occupant", "five_hour", "seven_day", "seven_day_model"];
+/// 口座 × 窓の見出しの語の鍵（名・占有・3 つの窓・7 日の線・測った時刻・列は stylesheet の 7 列）。
+pub const ACCT_HEADS: [&str; 7] = [
+    "accounts",
+    "occupant",
+    "five_hour",
+    "seven_day",
+    "seven_day_model",
+    "spark",
+    "measured_at",
+];
 
-/// 口座 × 窓の列の幅（stylesheet の 7 列から出さない 2 列を除いた 5 列）。
-pub const ACCT_COLS: &str = "grid-template-columns: 80px 156px repeat(3, minmax(0, 1fr))";
+/// 7 日の線の図の幅（見本の fn spark の W）。
+pub const SPARK_W: f64 = 150.0;
 
-/// 口座の行を 1 行にする（窓の時刻は電文の at・card の session は電文の列）。
+/// 7 日の線の図の高さ（見本の fn spark の H）。
+pub const SPARK_H: f64 = 32.0;
+
+/// 7 日の線の窓と線の stroke の字（描く順・見本の account board の既定の窓）。
+pub const SPARK_LINES: [(&str, &str); 2] = [
+    (
+        "seven_day_model",
+        r#"stroke="var(--st-limit)" stroke-width="1.4" stroke-dasharray="3 2""#,
+    ),
+    (
+        "five_hour",
+        r#"stroke="var(--band-beads)" stroke-width="1.6""#,
+    ),
+];
+
+/// 7 日の線の svg の字（見本の fn spark と同じ字の並び・横軸は at − 7 日から at まで・始めより前の点は始めに寄せる・
+/// at より後の点と点の無い窓の線は置かない・y は使った割合で 100 を越える点も止めない）。
+pub fn spark_svg(name: &str, spark: &Spark, at: EpochSecs) -> String {
+    let from = at.saturating_sub(SPARK_SPAN_S);
+    let x = |ts: EpochSecs| fixed1((ts.max(from) - from) as f64 / SPARK_SPAN_S as f64 * SPARK_W);
+    let y = |used: f64| fixed1(SPARK_H - 2.0 - used / 100.0 * (SPARK_H - 4.0));
+    let top = y(100.0);
+    let mut svg = format!(
+        r#"<svg viewBox="0 0 {SPARK_W} {SPARK_H}" role="img" aria-label="{}"><line x1="0" x2="{SPARK_W}" y1="{top}" y2="{top}" stroke="var(--line-2)" stroke-dasharray="1 2"/>"#,
+        esc(&format!("{name} {}", label("spark")))
+    );
+    for (window, stroke) in SPARK_LINES {
+        let points: Vec<String> = spark
+            .lines
+            .iter()
+            .filter(|l| l.window == window)
+            .flat_map(|l| &l.points)
+            .filter(|p| p.at <= at)
+            .map(|p| format!("{},{}", x(p.at), y(f64::from(p.used_pct))))
+            .collect();
+        if !points.is_empty() {
+            svg.push_str(&format!(
+                r#"<polyline fill="none" {stroke} points="{}"/>"#,
+                points.join(" ")
+            ));
+        }
+    }
+    let now = x(at);
+    svg.push_str(&format!(
+        r#"<line x1="{now}" x2="{now}" y1="0" y2="{SPARK_H}" stroke="var(--ink-3)"/></svg>"#
+    ));
+    svg
+}
+
+/// 口座 × 窓の測った時刻の欄。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Measured {
+    /// 退役の口座（「―」）。
+    Retired,
+    /// 窓が読めた口座の測った時刻の字（hmd）。
+    Known(String),
+    /// 窓が読めない口座（測った時刻の字・時刻が無ければ「―」・unknown の印を前に置く）。
+    Unknown(String),
+}
+
+/// 口座の測った時刻の欄（時刻は電文の at から見た hmd・古さの閾値は持たない）。
+pub fn measured(row: &AccountRow, at: EpochSecs) -> Measured {
+    if row.retired {
+        return Measured::Retired;
+    }
+    let time = match &row.spark {
+        Reading::Known(Spark {
+            measured_at: Some(t),
+            ..
+        }) => Some(hmd(*t, at)),
+        _ => None,
+    };
+    match (time, &row.usage) {
+        (Some(t), Reading::Known(_)) => Measured::Known(t),
+        (Some(t), Reading::Unknown) => Measured::Unknown(t),
+        (None, _) => Measured::Unknown(NONE.to_string()),
+    }
+}
+
+/// 口座の行を 1 行にする（窓の時刻は電文の at・card の session は電文の列・退役の行も線と時刻の欄を持つ）。
 pub fn acct_row(row: &AccountRow, sessions: &[SessionLine], at: EpochSecs) -> AcctRow {
     let card = acct_card(row, sessions, at);
+    let spark = match &row.spark {
+        Reading::Known(s) => Some(spark_svg(&row.label, s, at)),
+        Reading::Unknown => None,
+    };
+    let measured = measured(row, at);
     if row.retired {
         return AcctRow {
             label: row.label.clone(),
             occupant: Occupant::Retired,
             cells: Cells::Retired,
             card,
+            spark,
+            measured,
         };
     }
     AcctRow {
         card,
+        spark,
+        measured,
         label: row.label.clone(),
         occupant: row
             .occupant
@@ -686,8 +789,8 @@ mod dom {
     use tsuzuri_contract::account::ProjectRow;
 
     use super::{
-        ACCT_COLS, ACCT_HEADS, AcctRow, Cells, GroupView, Home, Moves, MvRow, NxRow, RETIRED_KEY,
-        UNKNOWN_KEY, content,
+        ACCT_HEADS, AcctRow, Cells, GroupView, Home, Measured, Moves, MvRow, NONE, NxRow,
+        RETIRED_KEY, UNKNOWN_KEY, content,
     };
     use crate::account::windows::{NOT_YET_KEY, button_text, open, open_url};
     use crate::account::{PATH, doc};
@@ -885,7 +988,7 @@ mod dom {
                     .map(|k| view! { <div class="hrow">{hs(k)}</div> })
                     .collect_view();
                 let rows = rows.into_iter().map(acct_row_view).collect_view();
-                view! { <div class="acct-grid" style=ACCT_COLS>{heads}{rows}</div> }.into_any()
+                view! { <div class="acct-grid">{heads}{rows}</div> }.into_any()
             })
         };
         section(block, ().into_any(), body.into_any())
@@ -908,11 +1011,24 @@ mod dom {
                 .collect_view()
                 .into_any(),
         };
+        let spark = match a.spark {
+            Some(svg) => view! { <div class="c-sp spark" inner_html=svg></div> }.into_any(),
+            None => view! { <div class="c-sp spark"><span class="sub">{NONE}</span></div> }.into_any(),
+        };
+        let at = match a.measured {
+            Measured::Retired => view! { <div class="muted small">{NONE}</div> }.into_any(),
+            Measured::Known(t) => view! { <div class="small num">{t}</div> }.into_any(),
+            Measured::Unknown(t) => {
+                view! { <div class="small num">{state_icon(UNKNOWN)}<span>{t}</span></div> }.into_any()
+            }
+        };
         let card = a.card;
         view! {
             <div class="c-name" tabindex="0" use:attach=card><span class="aname">{a.label}</span></div>
             <div>{occ}</div>
             {cells}
+            {spark}
+            {at}
         }
         .into_any()
     }
