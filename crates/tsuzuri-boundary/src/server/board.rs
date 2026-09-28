@@ -36,12 +36,14 @@ pub struct Sources {
     pub runs: Runs,
 }
 
-/// 集めた 3 つの字（読めない出所と集めなかった出所は空の字）。
+/// 集めた 3 つの字と設計の索引の要約（読めない出所と集めなかった出所は空の字）。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Texts {
     pub design: String,
     pub ledger: String,
     pub events: String,
+    /// 設計の索引の要約（節点ごとの行と概要・行 c-summary-wire）。
+    pub summary: String,
 }
 
 impl Texts {
@@ -56,18 +58,21 @@ impl Texts {
 }
 
 impl Sources {
-    /// 台帳の字と、要るときだけ設計の索引と event log の字を集める
-    /// （2 つの子 process は並べて撃つので、待ちは 1 本分の上限まで）。
+    /// 台帳の字と、要るときだけ設計の索引とその要約と event log の字を集める
+    /// （子 process は並べて撃つので、待ちは 1 本分の上限まで）。
     pub fn gather(&self, design: bool, events: bool) -> Texts {
         thread::scope(|s| {
             let index = design.then(|| s.spawn(|| self.design.text()));
+            let summary = design.then(|| s.spawn(|| self.design.summary()));
             let ledger = self.ledger.text();
             let events = if events { self.runs.text() } else { None };
             let index = index.and_then(|h| h.join().ok().flatten());
+            let summary = summary.and_then(|h| h.join().ok().flatten());
             Texts {
                 design: index.unwrap_or_default(),
                 ledger: ledger.unwrap_or_default(),
                 events: events.unwrap_or_default(),
+                summary: summary.unwrap_or_default(),
             }
         })
     }
@@ -93,21 +98,28 @@ pub fn next_seat(texts: &Texts, card: &SeatCard, now: EpochSecs) -> NextStep {
     tsuzuri_core::next_step::next_step_seat(&texts.ledger, &texts.events, now, Some(card))
 }
 
+/// 導出グラフを組み、要約を節点に写す（要約が読めなければ節点の行と概要は無しのまま・行 c-summary-wire）。
+fn built(texts: &Texts) -> Graph {
+    let mut g = graph::build(&texts.inputs());
+    graph::build::add_summary(&mut g, &texts.summary);
+    g
+}
+
 /// 導出グラフを組み、不変条件を数えて電文にする。
 pub fn graph(texts: &Texts) -> GraphDoc {
-    let g = graph::build(&texts.inputs());
+    let g = built(texts);
     let invariants = graph::check(&g);
     doc(&g, &invariants)
 }
 
 /// 地図のグラフの眺め（導出グラフを組んで眺めの関数に渡す・便 e-view）。
 pub fn view(texts: &Texts) -> GraphView {
-    graph::view(&graph::build(&texts.inputs()))
+    graph::view(&built(texts))
 }
 
 /// 節点の近傍（中心の節点が無いか、段数が幅の外なら None・便 e-view）。
 pub fn around(texts: &Texts, center: &str, steps: u8, fold: Fold) -> Option<AroundDoc> {
-    graph::around(&graph::build(&texts.inputs()), center, steps, fold)
+    graph::around(&built(texts), center, steps, fold)
 }
 
 /// 未反映の一覧（台帳が読めなければ 3 つとも「まだ分からない」・便 e-view）。

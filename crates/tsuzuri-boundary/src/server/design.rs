@@ -3,6 +3,8 @@
 //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでも設計の出所は読めない（None）。
 //! 設計文書の dir の下の全 file は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
 //! 同じ `Design` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
+//! 要約の読み（行 c-summary-wire）は `<program> graph --print --summary --dir <repo>/design-intent` を同じ形で撃ち、
+//! 索引の読みとは別の場で合流する。--summary を知らない folio では要約だけが読めない（索引は読める）。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -20,6 +22,9 @@ pub const DESIGN_DIR: &str = "design-intent";
 /// 設計の道具に渡す引数の頭（この後に設計文書の dir の path が続く）。
 pub const FOLIO_ARGS: [&str; 3] = ["graph", "--print", "--dir"];
 
+/// 要約の読みに渡す引数の頭（この後に設計文書の dir の path が続く・行 c-summary-wire）。
+pub const SUMMARY_ARGS: [&str; 4] = ["graph", "--print", "--summary", "--dir"];
+
 /// 設計の道具が返すまでの上限（要件 NFR2 の上限・台帳の読みと同じ）。越えれば止めて読めない。
 pub const FOLIO_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -33,6 +38,7 @@ pub struct Design {
     pub repo: PathBuf,
     pub folio: OsString,
     shared: Coalesce<String>,
+    summary_shared: Coalesce<String>,
 }
 
 impl PartialEq for Design {
@@ -49,6 +55,7 @@ impl Design {
             repo: repo.into(),
             folio: folio.into(),
             shared: Coalesce::new(),
+            summary_shared: Coalesce::new(),
         }
     }
 
@@ -69,6 +76,22 @@ impl Design {
     pub fn text(&self) -> Option<String> {
         self.shared.share(FOLIO_WAIT, || {
             let out = capture(&self.folio, self.args(), &self.repo, FOLIO_TIMEOUT)?;
+            String::from_utf8(out).ok()
+        })
+    }
+
+    /// 要約の読みに渡す引数の列。
+    pub fn summary_args(&self) -> Vec<OsString> {
+        let mut args: Vec<OsString> = SUMMARY_ARGS.iter().map(OsString::from).collect();
+        args.push(self.dir().into_os_string());
+        args
+    }
+
+    /// 設計の道具を要約の引数で撃ち、標準出力の字を返す（読めなければ None・行 c-summary-wire）。
+    /// 索引の読みとは別の場で合流し、合流した呼び出しは `FOLIO_WAIT` まで待つ。
+    pub fn summary(&self) -> Option<String> {
+        self.summary_shared.share(FOLIO_WAIT, || {
+            let out = capture(&self.folio, self.summary_args(), &self.repo, FOLIO_TIMEOUT)?;
             String::from_utf8(out).ok()
         })
     }

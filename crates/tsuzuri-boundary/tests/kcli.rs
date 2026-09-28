@@ -210,6 +210,7 @@ fn texts(ledger: &str) -> Texts {
         design: INDEX.to_string(),
         ledger: ledger.to_string(),
         events: EVENTS.to_string(),
+        summary: String::new(),
     }
 }
 

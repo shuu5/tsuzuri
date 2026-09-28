@@ -413,30 +413,38 @@ fn server_read_folio_argv_and_cwd() {
     let calls = place.folio_calls();
     assert_eq!(
         calls.len(),
-        1,
-        "グラフの口 1 回に設計の道具 1 回: {calls:?}"
+        2,
+        "グラフの口 1 回に設計の道具 2 回（索引と要約）: {calls:?}"
     );
     let dir = place.repo.join(DESIGN_DIR).display().to_string();
     let repo = format!(
         "{}\n",
         place.repo.canonicalize().expect("repo の実体").display()
     );
-    for (args, cwd) in &calls {
-        assert_eq!(
-            args,
-            &["graph", "--print", "--dir", dir.as_str()],
-            "引数の列"
-        );
+    // pid の順は撃った順と限らないので、引数の列を並べ替えて比べる。
+    let mut argv: Vec<&Vec<String>> = calls.iter().map(|(args, _)| args).collect();
+    argv.sort();
+    assert_eq!(
+        argv,
+        [
+            &["graph", "--print", "--dir", dir.as_str()].map(str::to_string).to_vec(),
+            &["graph", "--print", "--summary", "--dir", dir.as_str()]
+                .map(str::to_string)
+                .to_vec(),
+        ],
+        "引数の列"
+    );
+    for (_, cwd) in &calls {
         assert_eq!(cwd, &repo, "cwd は repo の置き場");
     }
     // 口は要求のたびに組み直す（設計の道具を撃ち直す）。
     graph_doc(addr);
-    assert_eq!(place.folio_calls().len(), 2);
-    // 板と指標と次の一手は設計の索引を使わない。
+    assert_eq!(place.folio_calls().len(), 4);
+    // 板と指標と次の一手は設計の索引も要約も使わない。
     pipeline(addr);
     metrics(addr);
     next(addr);
-    assert_eq!(place.folio_calls().len(), 2);
+    assert_eq!(place.folio_calls().len(), 4);
     assert_eq!(FOLIO, "folio", "program の名の既定");
 }
 

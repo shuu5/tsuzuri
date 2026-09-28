@@ -84,10 +84,12 @@ impl Place {
                  exec cat '{r}/ledger.json'"
             ),
         );
+        // 要約の読み（引数に --summary が在る回）は別の記録の file に書く。
         script(
             &root.join("folio"),
             &format!(
-                "echo folio >> '{r}/folio.calls'\nsleep 0.5\nexec cat '{}'",
+                "log=folio\nfor a in \"$@\"; do [ \"$a\" = --summary ] && log=summary; done\n\
+                 echo folio >> '{r}'/$log.calls\nsleep 0.5\nexec cat '{}'",
                 index.display()
             ),
         );
@@ -129,8 +131,14 @@ impl Place {
         self.calls("bd")
     }
 
+    /// 偽の設計の道具の索引の読みの回数（引数に --summary が無い回）。
     fn folio_calls(&self) -> usize {
         self.calls("folio")
+    }
+
+    /// 偽の設計の道具の要約の読みの回数（引数に --summary が在る回）。
+    fn summary_calls(&self) -> usize {
+        self.calls("summary")
     }
 
     /// 偽の bd を落とす（true）か戻す（false）。
@@ -307,10 +315,11 @@ fn server_coalesce_seven_routes_share_one_bd() {
 fn server_coalesce_graph_routes_share_one_folio() {
     let place = Place::new("folio");
     let (addr, started) = fresh(&place);
-    let before = place.folio_calls();
+    let (before, before_summary) = (place.folio_calls(), place.summary_calls());
     let paths = ["/api/graph", "/api/graph", "/api/graph/view"].map(str::to_string);
     let replies = get_all(addr, &paths);
     let shot = place.folio_calls() - before;
+    let summary_shot = place.summary_calls() - before_summary;
     before_reread(started);
     let unread: Vec<Vec<GraphSource>> = replies
         .iter()
@@ -331,7 +340,11 @@ fn server_coalesce_graph_routes_share_one_folio() {
     }
     assert!(
         (1..=2).contains(&shot),
-        "3 つの口の同時の要求に偽の設計の道具が {shot} 回"
+        "3 つの口の同時の要求に偽の設計の道具の索引の読みが {shot} 回"
+    );
+    assert!(
+        (1..=2).contains(&summary_shot),
+        "3 つの口の同時の要求に偽の設計の道具の要約の読みが {summary_shot} 回"
     );
 }
 

@@ -164,10 +164,10 @@ pub fn run(rest: &[&str]) -> u8 {
             board::graph(&sources.gather(true, true))
         }
         Mode::Design => {
+            let design = Design::new(&args.repo, &args.folio);
             let texts = Texts {
-                design: Design::new(&args.repo, &args.folio)
-                    .text()
-                    .unwrap_or_default(),
+                design: design.text().unwrap_or_default(),
+                summary: design.summary().unwrap_or_default(),
                 ..Texts::default()
             };
             design_view(&board::graph(&texts))
