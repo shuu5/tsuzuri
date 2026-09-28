@@ -1629,6 +1629,11 @@
    "label": "詳しく",
    "plain": "行を押すと縦に開く\n・ sparkline と lead\n・ stale\n・ session と口座の履歴",
    "internal": "details row"
+  },
+  "misfit": {
+   "label": "要修正",
+   "plain": "控えの印と設計の参照の形が崩れた open の bead\n・ 印が無い = どちらも無い\n・ 印が両方 = 両方が在る\n・ epic と裁定は外す\n・ 0 本なら行を出さない\n▸\n→ 直す手は席が持つ",
+   "internal": "PipelineBoard.misfits ・ 判断の記録 ADR-16 の決定 (1)(5)(6)\n器の ledger/form.rs の neither と both"
   }
  }
 }

@@ -185,6 +185,12 @@ a.tile:hover { box-shadow: var(--shadow); }
 .kcard .m .why { flex-wrap: wrap; }
 .kcard .m svg { width: 12px; height: 12px; }
 .kcard.why-stop .m .why { color: var(--s-stop); font-weight: 600; }
+.fixrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2); margin-top: var(--s2); padding: var(--s2); border: 1px dashed var(--s-stop); border-radius: var(--r2); background: color-mix(in srgb, var(--s-stop) 10%, var(--panel)); }
+.fixrow > header { flex: 0 0 150px; display: flex; align-items: center; min-height: 32px; font-weight: 700; color: var(--ink-2); }
+.fixcards { flex: 1 1 260px; display: flex; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+.fixcard { display: block; flex: 0 1 260px; min-width: 0; overflow-wrap: anywhere; padding: 6px var(--s2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r2); font-size: var(--fs-1); }
+.fixcard .tt { display: block; font-weight: 650; color: var(--ink); }
+.fixcard .why { color: var(--s-stop); }
 .more { width: 100%; min-height: 32px; border: 1px dashed var(--line-2); border-radius: var(--r2); background: transparent; color: var(--ink-2); cursor: pointer; font-size: var(--fs-1); }
 
 /* ---------- orchestrator の card ---------- */

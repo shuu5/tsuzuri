@@ -1,10 +1,11 @@
 //! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 4 列の板・札・「+n」・0 件の帯・hover の card。
+//! 4 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
 //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
 //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
 //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Reading};
+use tsuzuri_contract::board::{Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
 use tsuzuri_contract::graph::{GraphDoc, title36};
 use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::wire;
@@ -64,6 +65,18 @@ pub const CLOSED_TAG: &str = "closed:";
 
 /// 台帳で閉じた bead の着地しなかった札の段の字（行 c-pipe-closed）。
 pub const CLOSED_STAGE: &str = "閉じた（着地せず）";
+
+/// 要修正の行の見出しの語の鍵（行 g-pipe-misfit）。
+pub const MISFIT_KEY: &str = "misfit";
+
+/// 見本の案 A の横長の行の class。
+pub const MISFIT_CLASS: &str = "fixrow";
+
+/// 控えの印も設計の参照も無い bead の札の崩れの字（見本の案 A の字）。
+pub const NEITHER_TEXT: &str = "印が無い — 設計の参照も控えの印も無い";
+
+/// 控えの印と設計の参照の両方が在る bead の札の崩れの字（NEITHER_TEXT の対の字）。
+pub const BOTH_TEXT: &str = "印が両方 — 設計の参照と控えの印の両方が在る";
 
 /// 1 つの列の見せ方（列・URL と class の名・見出しの語の鍵・札の状態の記号）。
 /// 状態の記号が None の列（Landed）は取り込みの印を出す。
@@ -450,6 +463,49 @@ pub fn with_closed(search: &str, column: PipelineColumn) -> String {
     format!("?{}", rest.join("&"))
 }
 
+/// 要修正の行の 1 枚の札（id・36 字に切った題・崩れの字）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MisfitCard {
+    pub id: String,
+    pub title: String,
+    pub why: &'static str,
+}
+
+/// 崩れの字（電文の語を写すだけで面は判じない）。
+pub fn misfit_text(misfit: Misfit) -> &'static str {
+    match misfit {
+        Misfit::Neither => NEITHER_TEXT,
+        Misfit::Both => BOTH_TEXT,
+    }
+}
+
+/// 口の本文の欄 misfits を要修正の札に読む（器の判定の順のまま）。
+/// 読んでいない・読めない・電文が読めない・欄が「まだ分からない」ときは空（行を出さない）。
+pub fn misfit_cards(fetched: &Fetched) -> Vec<MisfitCard> {
+    let Fetched::Body(text) = fetched else {
+        return Vec::new();
+    };
+    match wire::decode::<PipelineBoard>(text) {
+        Ok(PipelineBoard {
+            misfits: Reading::Known(beads),
+            ..
+        }) => beads
+            .iter()
+            .map(|b| MisfitCard {
+                id: b.bead.to_string(),
+                title: title36(&b.title),
+                why: misfit_text(b.misfit),
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// 要修正の札を押した先（bead と同じ id の節点の頁・pipeline の札の `card_href` と同じ先）。
+pub fn misfit_href(card: &MisfitCard, mode: frame::Mode) -> String {
+    frame::node_href(&card.id, mode)
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     dom::view()
@@ -462,8 +518,9 @@ mod dom {
     use tsuzuri_contract::board::PipelineColumn;
 
     use super::{
-        BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, PATH, card_href, columns, content, open_columns,
-        with_closed, with_nodes, with_open,
+        BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard, PATH,
+        card_href, columns, content, misfit_cards, misfit_href, open_columns, with_closed, with_nodes,
+        with_open,
     };
     use crate::frame::Mode;
     use crate::project::{Body, ledger, map, section, state_icon, unmeasured};
@@ -529,7 +586,7 @@ mod dom {
         };
         let body = move || {
             let now = crate::net::now();
-            match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {
+            let board = match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(key) => view! {
                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
@@ -537,9 +594,39 @@ mod dom {
                 }
                 .into_any(),
                 Body::Filled(cols) => board_view(cols, open, mode),
-            }
+            };
+            let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));
+            view! { {board}{fix} }.into_any()
         };
         section(BLOCK, ().into_any(), body.into_any())
+    }
+
+    /// 4 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
+    fn misfit_view(cards: Vec<MisfitCard>, mode: Mode) -> Option<AnyView> {
+        if cards.is_empty() {
+            return None;
+        }
+        let cards = cards
+            .into_iter()
+            .map(|c| {
+                view! {
+                    <a class="fixcard" href=misfit_href(&c, mode)>
+                        <span class="kid">{c.id.clone()}</span>
+                        <span class="tt">{c.title.clone()}</span>
+                        <span class="why">{c.why}</span>
+                    </a>
+                }
+            })
+            .collect_view();
+        Some(
+            view! {
+                <div class=MISFIT_CLASS>
+                    <header>{hs(MISFIT_KEY)}</header>
+                    <div class="fixcards">{cards}</div>
+                </div>
+            }
+            .into_any(),
+        )
     }
 
     fn board_view(
