@@ -12,9 +12,9 @@
 //! 8. 要求の順に、行ごとに notes の末尾へ 1 行を足し、問いを閉じる。落ちたらそこで止めて 502 で、
 //!    本文は要求の全部の行の結果を要求の順に持つ（2 回とも書き終えた行は Written・追記が落ちた行は Unwritten・
 //!    閉じる書きが落ちた行は Unclosed・落ちた行より後の行は撃たずに Unwritten・何も消さず配達も撃たない）。
-//! 9. 席の target と state dir の両方が在るときだけ、別の thread で裁定の受付の `deliver` に束の id と
-//!    行の順の裁定を 1 度だけ渡し、待たずに応答する（台帳を読み直し、印の無い裁定が在れば器の配達の口を
-//!    束の id で 1 度撃ち、rc 0 なら行の順に印を置く・結果で応答は変えない）。
+//! 9. 席の target と state dir の両方が在るときだけ、別の thread で裁定の受付の `redeliver` に束の id と
+//!    行の順の裁定を `PACE` で渡し、待たずに応答する（周ごとに台帳を読み直し、印の無い裁定が在れば器の配達の口を
+//!    束の id で撃ち、rc 0 なら行の順に印を置く。受けなければ間を空けて上限まで撃ち直す・結果で応答は変えない）。
 
 use std::collections::HashSet;
 
@@ -29,7 +29,7 @@ use tsuzuri_core::question::open_questions;
 
 use super::ledger::{Source, capture};
 use super::ruling::{
-    LINE_PREFIX, WRITE_TIMEOUT, Writer, deliver, escape, minute, next_id, reread,
+    LINE_PREFIX, PACE, WRITE_TIMEOUT, Writer, escape, minute, next_id, redeliver, reread,
 };
 
 /// 口の path。
@@ -162,7 +162,7 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
             })
             .collect();
         let (writer, ledger, batch) = (writer.clone(), ledger.clone(), batch.clone());
-        std::thread::spawn(move || deliver(&d, &writer, &ledger, &batch, &pending));
+        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &batch, &pending, PACE));
     }
     Outcome::Recorded(BatchResponse { batch, items })
 }

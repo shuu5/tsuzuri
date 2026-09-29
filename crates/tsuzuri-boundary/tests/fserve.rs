@@ -30,7 +30,7 @@ const TARGET: &str = "tsuzuri:0.1";
 const BATCH: &str = "batch:20260928T0110Z-1";
 
 /// 裁定の受付の `deliver` の型（歯が型を書いて束ねる）。
-type DeliverFn = fn(&Delivery, &Writer, &Source, &RulingId, &[Pending]);
+type DeliverFn = fn(&Delivery, &Writer, &Source, &RulingId, &[Pending]) -> ruling::Round;
 
 const DELIVER: DeliverFn = ruling::deliver;
 

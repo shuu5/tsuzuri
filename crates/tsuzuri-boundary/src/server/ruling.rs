@@ -8,8 +8,9 @@
 //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
 //! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
 //! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない・書きは撃ち直さない）。
-//! 6. 席の target と state dir の両方が在るときだけ、別の thread で `deliver` を呼び、待たずに応答する
-//!    （台帳を読み直し、印の無い裁定が在れば器の配達の口を 1 度撃ち、rc 0 なら印を置く・結果で応答は変えない）。
+//! 6. 席の target と state dir の両方が在るときだけ、別の thread で `redeliver` を `PACE` で呼び、待たずに応答する
+//!    （周ごとに台帳を読み直し、印の無い裁定が在れば器の配達の口を撃ち、rc 0 なら印を置く。
+//!    受けなければ `DELIVER_STEP` を空けて `DELIVER_SPAN` まで撃ち直す・結果で応答は変えない）。
 //!
 //! 口は 200 でない応答を返す前に `refusal_line` の 1 行を標準エラーに書く（逐語は書かない）。
 //! 読むだけの server（引数 --read-only）は、答えと方針の口を受付の前に 403 の `READ_ONLY` で断り、
@@ -21,7 +22,7 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
@@ -35,6 +36,7 @@ use tsuzuri_core::question::open_questions;
 
 use super::events;
 use super::ledger::{Source, capture, parse_bd};
+use super::proc::run;
 
 /// 口の path。
 pub const PATH: &str = "/api/ruling";
@@ -70,6 +72,28 @@ pub const DELIVER_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// 器の配達の口が受けなかったときの log の字（失敗でなくふつうの断り）。
 pub const NOT_TAKEN: &str = "配達の口が今は受けない（印を置かず、席の停止の hook が拾う）";
+
+/// 配達の撃ち直しの前に空ける時間（行 e-deliver-retry）。
+pub const DELIVER_STEP: Duration = Duration::from_secs(15);
+
+/// 最初の周から撃ち直しを続ける上限（30 分）。
+pub const DELIVER_SPAN: Duration = Duration::from_secs(1800);
+
+/// 配達の撃ち直しの間と上限の組。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pace {
+    pub step: Duration,
+    pub span: Duration,
+}
+
+/// server の配達の撃ち直しの組。
+pub const PACE: Pace = Pace {
+    step: DELIVER_STEP,
+    span: DELIVER_SPAN,
+};
+
+/// 配達の撃ち直しを上限で止めたときの log の字。
+pub const GAVE_UP: &str = "配達の撃ち直しを上限で止めた（印を置かず、席の停止の hook が拾う）";
 
 /// 配達の先（器の CLI・state dir・席の target）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,7 +167,7 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
             question: req.question.clone(),
             ruling: id.clone(),
         }];
-        std::thread::spawn(move || deliver(&d, &writer, &ledger, &ruling, &pending));
+        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &ruling, &pending, PACE));
     }
     Outcome::Recorded(RulingResponse {
         ruling: id,
@@ -206,7 +230,7 @@ pub fn revoke(req: &RevokeRequest, ledger: &Source, writer: &Writer, now: EpochS
     reopen(req, ledger, writer, id, now, false)
 }
 
-/// 問いを開き直し、配達の先が在れば別の thread で取り消しの行を配達する（`id` は取り消しの行の id・待たない）。
+/// 問いを開き直し、配達の先が在れば別の thread で取り消しの行を撃ち直しつきで配達する（`id` は取り消しの行の id・待たない）。
 fn reopen(
     req: &RevokeRequest,
     ledger: &Source,
@@ -228,7 +252,7 @@ fn reopen(
             question: req.question.clone(),
             ruling: id.clone(),
         }];
-        std::thread::spawn(move || deliver(&d, &writer, &ledger, &ruling, &pending));
+        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &ruling, &pending, PACE));
     }
     Revoked::Recorded(RevokeResponse {
         ruling: id,
@@ -281,22 +305,38 @@ pub fn deliver_argv(d: &Delivery, id: &RulingId) -> Vec<OsString> {
     ]
 }
 
-/// 受付の裁定を席へ配達する（`id` は器に渡す id・1 問は裁定の id・束は束の id）。
+/// 配達の 1 周の結果。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Round {
+    /// どれにも印が在った（撃たない）。
+    Marked,
+    /// 器が受けた（rc 0・印の書きは撃った）。
+    Taken,
+    /// 器が受けなかった（`Failed::word` の字・印を置かない）。
+    NotTaken(String),
+}
+
+/// 受付の裁定を席へ配達する 1 周（`id` は器に渡す id・1 問は裁定の id・束は束の id）。
 /// 1. 台帳を読み直し、読めて `pending` のどれにも印が在れば撃たない（停止の hook が既に返した）。
 ///    読めなければ撃つ側に倒す。
-/// 2. 器の配達の口を 1 度だけ撃ち、受けなければ印を置かず標準エラーに 1 行を書く。
+/// 2. 器の配達の口を 1 度だけ撃ち、受けなければ印を置かず NotTaken を返す（log は書かない）。
 /// 3. rc 0 なら `pending` の順に、問いの notes に経路が配達の口の印を足す（落ちたものごとに 1 行）。
-pub fn deliver(d: &Delivery, writer: &Writer, ledger: &Source, id: &RulingId, pending: &[Pending]) {
+pub fn deliver(
+    d: &Delivery,
+    writer: &Writer,
+    ledger: &Source,
+    id: &RulingId,
+    pending: &[Pending],
+) -> Round {
     if let Some(text) = ledger.text_alone()
         && pending
             .iter()
             .all(|p| marked(&text, &p.question, &p.ruling))
     {
-        return;
+        return Round::Marked;
     }
-    if capture(&d.program, deliver_argv(d, id), &writer.repo, DELIVER_TIMEOUT).is_none() {
-        eprintln!("tz surface serve: {NOT_TAKEN}: {id}・席 {}", d.target);
-        return;
+    if let Err(failed) = run(&d.program, deliver_argv(d, id), &writer.repo, DELIVER_TIMEOUT) {
+        return Round::NotTaken(failed.word());
     }
     let minute = minute(events::now());
     for p in pending {
@@ -310,6 +350,44 @@ pub fn deliver(d: &Delivery, writer: &Writer, ledger: &Source, id: &RulingId, pe
                 p.ruling, p.question
             );
         }
+    }
+    Round::Taken
+}
+
+/// `deliver` を Marked か Taken まで撃ち直す（周ごとに台帳を読み直す）。
+/// NotTaken なら、最初の周と字が前の周と違う周だけ標準エラーに 1 行を書き、最初の周から `pace.span` を越えない間は
+/// `pace.step` を空けて次の周を撃つ。次の周が上限を越えるなら `GAVE_UP` の 1 行を書いて終える。
+pub fn redeliver(
+    d: &Delivery,
+    writer: &Writer,
+    ledger: &Source,
+    id: &RulingId,
+    pending: &[Pending],
+    pace: Pace,
+) {
+    let start = Instant::now();
+    let mut last: Option<String> = None;
+    let mut rounds: u32 = 0;
+    loop {
+        rounds += 1;
+        let Round::NotTaken(word) = deliver(d, writer, ledger, id, pending) else {
+            return;
+        };
+        if last.as_deref() != Some(word.as_str()) {
+            eprintln!(
+                "tz surface serve: {NOT_TAKEN}: {id}・席 {}・器 {word}",
+                d.target
+            );
+            last = Some(word);
+        }
+        if start.elapsed() + pace.step > pace.span {
+            eprintln!(
+                "tz surface serve: {GAVE_UP}: {id}・席 {}・{rounds} 回",
+                d.target
+            );
+            return;
+        }
+        std::thread::sleep(pace.step);
     }
 }
 
