@@ -340,8 +340,9 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
 .gitem > summary .aside { color: var(--ink-3); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
 .gitem .body { padding: var(--s2) var(--s2) var(--s3) 36px; }
 
-/* ---------- 狭い幅（390） ---------- */
-@media (max-width: 760px) {
+/* ---------- 上端の帯の狭い形（幅 1000 以下・行 g-top-fit） ---------- */
+/* 帯の 1 行の形は、子の最も狭い幅の和が収まる幅（1001 以上）でだけ使う */
+@media (max-width: 1000px) {
   .top { gap: var(--s2); padding: 0 var(--s3); height: auto; min-height: 56px; flex-wrap: wrap; padding-top: var(--s1); padding-bottom: var(--s1); }
   .nav { order: 5; width: 100%; margin: 0; justify-content: space-between; }
   .nav a { padding: 0 var(--s2); flex: 1; justify-content: center; }
@@ -349,6 +350,10 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
   .brand .name { display: none; }
   .seatpill .who { display: none; }
   .seatpill { padding: 0 var(--s2); }
+}
+
+/* ---------- 狭い幅（390） ---------- */
+@media (max-width: 760px) {
   .page { padding: var(--s3) var(--s3) var(--s6); }
   .tiles { grid-template-columns: 1fr 1fr; gap: var(--s2); }
   .tile { min-height: 80px; padding: var(--s2) var(--s3); }
