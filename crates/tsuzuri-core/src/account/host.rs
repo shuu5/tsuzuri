@@ -1,6 +1,7 @@
 //! host の側の部分（口座の列・群の枠・移動の列・設計ノート surface-base 便 e-acct-host）。
 //! 入力は群の宣言の字（host.toml）・残量の出力の字・host の doctor の字（群の行と口座の行を読む）・
 //! anchor ごとの doctor の字の表（席の行を読む）・群の記録の字（今の記録と history の記録）。
+//! doctor の区画の行（欄 kind が `PARK_KIND` の行・行 c-acct-park）は口座を占有せず、群の行に数えない。
 //! 群の宣言は TOML の読み手を使わず、`[[account]]` の label と `[[account-group]]` の name・anchors・accounts だけを読む。
 //! 読めない字の決まり（要件 NFR2）: host の doctor の字が無ければ口座の列と群の列が、群の宣言の字が無ければ
 //! 3 つの列とも「まだ分からない」。残量の字が無いか口座の行が測れていなければ、その口座の usage だけが「まだ分からない」。
@@ -49,6 +50,9 @@ pub const REFUSED_EVENT: &str = "GroupMoveRefused";
 
 /// 器の口座の測りの event の種類（口座の線の材料・行 c-acct-spark）。
 pub const MEASURED_EVENT: &str = "AllowanceMeasured";
+
+/// doctor の区画の行の欄 kind の字（口座を占有しない区画・群の行は kind を持たない）。
+pub const PARK_KIND: &str = "park";
 
 /// 器の知らせの窓の語と窓の名。
 pub const WINDOW_WORDS: [(&str, &str); 3] = [
@@ -271,12 +275,27 @@ fn windows(line: &str) -> Option<Vec<QuotaUsed>> {
     (!out.is_empty()).then_some(out)
 }
 
-/// doctor の群の行（頭が `group=` の行）。
-fn group_lines(doctor: &str) -> impl Iterator<Item = &str> {
+/// doctor の頭が `group=` の行（群の行と区画の行）。
+fn headed_lines(doctor: &str) -> impl Iterator<Item = &str> {
     doctor
         .lines()
         .map(str::trim)
         .filter(|l| l.starts_with("group="))
+}
+
+/// 区画の行か（欄 kind の字が `PARK_KIND` ちょうど・kind の無い行とほかの字は群の行）。
+fn parked(line: &str) -> bool {
+    field(line, "kind") == Some(PARK_KIND)
+}
+
+/// doctor の群の行（頭が `group=` の行のうち区画の行を除く）。
+fn group_lines(doctor: &str) -> impl Iterator<Item = &str> {
+    headed_lines(doctor).filter(|l| !parked(l))
+}
+
+/// 群の宣言が区画か（doctor に同じ名の区画の行が在る）。
+fn in_park(doctor: &str, group: &DeclaredGroup) -> bool {
+    headed_lines(doctor).any(|l| parked(l) && field(l, "group") == Some(group.name.as_str()))
 }
 
 /// doctor の口座の行のうち、account が口座と同じ最初の行。
@@ -493,8 +512,9 @@ fn card(texts: &HostTexts, doctor: &str, group: &DeclaredGroup) -> Option<GroupC
     })
 }
 
-/// 群の枠の列（群の宣言の順）。群の宣言か host の doctor の字が無いか、宣言の群のどれかの枠が組めなければ
-/// （doctor に群の行か今の口座が無い・anchors が読めない）「まだ分からない」。
+/// 群の枠の列（群の宣言の順・doctor に同じ名の区画の行が在る宣言は列に入れない）。群の宣言か host の doctor の
+/// 字が無いか、残りの宣言の群のどれかの枠が組めなければ（doctor に群の行か今の口座が無い・anchors が読めない）
+/// 「まだ分からない」。
 pub fn groups(texts: &HostTexts) -> Reading<Vec<GroupCard>> {
     let (Some(host), Some(doctor)) = (texts.host_toml.as_deref(), texts.doctor.as_deref()) else {
         return Reading::Unknown;
@@ -502,6 +522,7 @@ pub fn groups(texts: &HostTexts) -> Reading<Vec<GroupCard>> {
     declaration(host)
         .groups
         .iter()
+        .filter(|g| !in_park(doctor, g))
         .map(|g| card(texts, doctor, g))
         .collect::<Option<Vec<_>>>()
         .map_or(Reading::Unknown, Reading::Known)
