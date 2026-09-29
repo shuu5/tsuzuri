@@ -5,7 +5,8 @@
 //! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。束と方針の受付の口は便 e-batch が足す（`batch`・`policy`）。
 //! account board の読みの口と停止の切り替えの口は行 h-wire が足す（`crate::acct`・`crate::accthb`）。
 //! POST を受ける口は /api/ruling・/api/batch・/api/policy・/api/account/heartbeat・/api/seat/heartbeat だけで、
-//! ほかの GET でない要求は 405 で何も書かない。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
+//! ほかの GET でない要求は 405 で何も書かない（問いの合図の口 /api/surface/questions も POST を受けるが、何も書かず
+//! 台帳の見張りの周期の待ちを終わらせるだけで、読むだけの server も受ける・行 e-signal）。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 読むだけの server（`Config::read_only`）は答えと方針の口を受付の前に 403 で断り（`read_only`）、
 //! 問いの一覧の電文に答えを受けないと書く（心拍の口は受ける・行 e-ask-own-only）。
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。

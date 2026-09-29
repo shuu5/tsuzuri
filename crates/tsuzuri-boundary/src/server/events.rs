@@ -14,6 +14,10 @@
 //! board-changed の data は契約の `BoardChanged`（`{"at":<epoch 秒>,"kinds":[…]}`・印の動いた種類）で、
 //! ledger-changed の data は `{"at":<epoch 秒>}`。板の印は種類（`ChangeKind`）と file の組で、種類をまたいで
 //! 一覧の並びだけが変わった周は送らない（行 c-ev-kind）。
+//! 問いの合図（口 POST /api/surface/questions・`NUDGE_PATH`・行 e-signal）は `Hub::nudge` で台帳の見張りの周期の待ちを
+//! 終わらせ、次の周を待たずに印を見る（規則の行 R-21: 問いの合図ありで 200 ms 以内・要件 NFR2）。
+//! 合図は読みを強いず、印が動いていない周では読まない（bd の読みは台帳の store の錠を取るので、合図の数で読みを増やさない）。
+//! 待ちの間に溜まった合図は 1 周にまとめる。
 
 use std::io::{self, Write};
 use std::ops::Deref;
@@ -60,6 +64,12 @@ pub const TIMING: Timing = Timing {
 /// 変化の無いときに送る注釈の行の間隔（切れた接続を見つけて片付ける）。
 pub const KEEPALIVE: Duration = Duration::from_secs(15);
 
+/// 問いの合図の口の path（設計の討論 B の契約の草案の合図の口）。
+pub const NUDGE_PATH: &str = "/api/surface/questions";
+
+/// 問いの合図を受けた応答の本文。
+pub const NUDGED: &str = "nudged";
+
 /// file の更新時刻と長さ（無ければ None）。
 pub fn stamp(path: &Path) -> Option<(SystemTime, u64)> {
     let meta = std::fs::metadata(path).ok()?;
@@ -72,6 +82,8 @@ pub struct Hub {
     subscribers: Mutex<Vec<Sender<String>>>,
     seq: Mutex<u64>,
     live: Arc<()>,
+    /// 台帳の見張りの周期の待ちを終わらせる送り手（見張りの無い Hub は None）。
+    wake: Mutex<Option<Sender<()>>>,
 }
 
 /// 受け手の 1 人（Receiver として読み、落ちれば受け手の数から外れる）。
@@ -181,6 +193,14 @@ impl Hub {
         Arc::strong_count(&self.live) - 1
     }
 
+    /// 台帳の見張りの周期の待ちを終わらせる（問いの合図・行 e-signal）。見張りが在り合図を送れれば真。
+    /// 見張りは次の周を待たずに印を見て、印が動いていなければ読まない。
+    pub fn nudge(&self) -> bool {
+        lock(&self.wake)
+            .as_ref()
+            .is_some_and(|tx| tx.send(()).is_ok())
+    }
+
     /// 台帳の変化を全員に送る（切れた受け手は外す）。
     pub fn ledger_changed(&self, at: u64) {
         let data = wire::encode(&LedgerChanged { at }).expect("LedgerChanged は JSON になる");
@@ -282,7 +302,11 @@ where
     M: FnMut() -> K + Send + 'static,
     F: FnMut() -> R + Send + 'static,
 {
-    let hub = Arc::new(Hub::default());
+    let (tx, wake) = mpsc::channel();
+    let hub = Arc::new(Hub {
+        wake: Mutex::new(Some(tx)),
+        ..Hub::default()
+    });
     let weak = Arc::downgrade(&hub);
     let seen = mark();
     let read_at = Instant::now();
@@ -293,12 +317,13 @@ where
         last,
         listening: false,
     };
-    thread::spawn(move || watch(&weak, state, mark, read, poll, reread));
+    thread::spawn(move || watch(&weak, &wake, state, mark, read, poll, reread));
     hub
 }
 
 fn watch<K: PartialEq, R: PartialEq>(
     hub: &Weak<Hub>,
+    wake: &Receiver<()>,
     mut state: Watch<K, R>,
     mut mark: impl FnMut() -> K,
     mut read: impl FnMut() -> R,
@@ -306,7 +331,12 @@ fn watch<K: PartialEq, R: PartialEq>(
     reread: impl Fn(&K, &R) -> Duration,
 ) {
     loop {
-        thread::sleep(poll);
+        // 合図は待ちを終わらせるだけ（溜まった合図は 1 周にまとめる）。送り手が落ちれば Hub も落ちた。
+        match wake.recv_timeout(poll) {
+            Ok(()) => while wake.try_recv().is_ok() {},
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return,
+        }
         let Some(listening) = hub.upgrade().map(|h| h.listeners() > 0) else {
             return;
         };
