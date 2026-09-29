@@ -3,13 +3,13 @@
 meta:
   id: surface-wave23a
   title: 第 23 波 a — 答えの配達の撃ち直しと、答えの口の書きの前の読みの上限
-  version: v0.1
+  version: v0.2
   status: effective
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: 設計ノート surface-base の傘の行 e（面の server）の子の、境界の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは memo t3-hub.72（持ち主の問い 2026-09-29・候補 (a) と (b)）の昇格条件の席の決め（tsuzuri の server の欠陥の直しなので計画に行を足してすぐ起草する）と要件 FR9 で、持ち主の問いを置かない。計画の 9 節には置かず、このノートへ直に置く。起草は main 538c00e（計画 v0.88）の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。
+  note: 設計ノート surface-base の傘の行 e（面の server）の子の、境界の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは memo t3-hub.72（持ち主の問い 2026-09-29・候補 (a) と (b)）の昇格条件の席の決め（tsuzuri の server の欠陥の直しなので計画に行を足してすぐ起草する）と要件 FR9 で、持ち主の問いを置かない。計画の 9 節には置かず、このノートへ直に置く。起草は main 538c00e（計画 v0.88）の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。第 0.2 版（2026-09-29）は、器の審査の FAIL（節の歯の名 dretry_accept_paths_use_pace が done (6) の名 dretry_spawns_use_pace と食い違う・起草の終わりの名替えの残り）に答え、節の名を done の名に揃えた（契約表の行は同じ）。
 
 sections:
   - n: 1
@@ -90,7 +90,7 @@ sections:
       偽の器は回ごとに argv を記録し、作業場の scribe2.fails の数の回までは作業場の on-fail を sh で撃ってから標準エラーに 3 行（前の行、断りの 1 行 seat deliver: refused reason=input-busy target=tsuzuri:0.1、空の行）を書いて rc 1 で終わる script。
       裁定は fixture の fx-s.2 の fx-s.2:20260928T0101Z-1（印が無い）。歯の間と上限は 50 ms と 2000 ms（dretry_gives_up_at_span だけ 50 ms と 400 ms）。
       dretry_stops_when_marked は、fixture の字 逐語 = よい の後に同じ裁定の経路が停止の印の行を足した台帳を作業場の marked.json に置き、on-fail でそれを out.json へ写す。
-      dretry_accept_paths_use_pace は ruling.rs と batch.rs の src の字を読む。
+      dretry_spawns_use_pace は ruling.rs と batch.rs の src の字を読む。
       どの歯も fixture の id に台帳の接頭辞を使わない（fx-s と tsuzuri:0.1 と batch の形は着地済みの歯 fserve と同じ）。
 
       着地済みの歯。読み手の grep は境界の crate の tests と src と xtask と、契約・中核・面の crate の tests で、字 ruling::deliver・deliver_argv・NOT_TAKEN・DELIVER_TIMEOUT・--scribe2・Delivery・fail_at と proc の fn を探した。
