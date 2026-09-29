@@ -158,6 +158,7 @@ fn verdicts(node: bool) -> Fetched {
             line: None,
             plain: None,
             eng: None,
+            updated: None,
         });
         doc.beads.insert(
             "fx-g.9".to_string(),

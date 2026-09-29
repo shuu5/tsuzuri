@@ -52,6 +52,7 @@ fn row(id: &str, kind: NodeKind, status: Option<&str>, col: i8, via: Option<&str
             line: None,
             plain: None,
             eng: None,
+            updated: None,
         },
         status: status.map(str::to_string),
         col,

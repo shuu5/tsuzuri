@@ -64,7 +64,8 @@
       "title": "裁定面は project board と account board の",
       "line": 3,
       "plain": "決定の画面の形を決めます。",
-      "eng": "面は 2 つとする。"
+      "eng": "面は 2 つとする。",
+      "updated": null
     },
     {
       "id": "t3-hub.3",
@@ -74,7 +75,8 @@
       "title": "契約の型",
       "line": null,
       "plain": null,
-      "eng": null
+      "eng": null,
+      "updated": 1790494756
     }
   ],
   "graph::GraphEdge": [
@@ -158,7 +160,8 @@
           "title": "契約の型",
           "line": null,
           "plain": null,
-          "eng": null
+          "eng": null,
+          "updated": null
         },
         {
           "id": "t3-hub.3-20260927T073916Z",
@@ -168,7 +171,8 @@
           "title": "t3-hub.3-20260927T073916Z",
           "line": null,
           "plain": null,
-          "eng": null
+          "eng": null,
+          "updated": null
         }
       ],
       "edges": [
@@ -268,7 +272,8 @@
         "title": "契約の型",
         "line": null,
         "plain": null,
-        "eng": null
+        "eng": null,
+        "updated": null
       },
       "status": "open",
       "rank": 0,
@@ -286,7 +291,8 @@
         "title": "t3-hub.3-20260927T073916Z",
         "line": null,
         "plain": null,
-        "eng": null
+        "eng": null,
+        "updated": null
       },
       "status": null,
       "rank": 1,
@@ -316,7 +322,8 @@
             "title": "契約の型",
             "line": null,
             "plain": null,
-            "eng": null
+            "eng": null,
+            "updated": null
           },
           "status": "open",
           "rank": 0,
@@ -334,7 +341,8 @@
             "title": "t3-hub.3-20260927T073916Z",
             "line": null,
             "plain": null,
-            "eng": null
+            "eng": null,
+            "updated": null
           },
           "status": null,
           "rank": 1,
@@ -401,7 +409,8 @@
         "title": "契約の型",
         "line": null,
         "plain": null,
-        "eng": null
+        "eng": null,
+        "updated": null
       },
       "status": "open",
       "col": 0,
@@ -418,7 +427,8 @@
         "title": "t3-hub.3-20260927T073916Z",
         "line": null,
         "plain": null,
-        "eng": null
+        "eng": null,
+        "updated": null
       },
       "status": "Landed",
       "col": 1,
@@ -448,7 +458,8 @@
             "title": "契約の型",
             "line": null,
             "plain": null,
-            "eng": null
+            "eng": null,
+            "updated": null
           },
           "status": "open",
           "col": 0,
@@ -465,7 +476,8 @@
             "title": "t3-hub.3-20260927T073916Z",
             "line": null,
             "plain": null,
-            "eng": null
+            "eng": null,
+            "updated": null
           },
           "status": "Landed",
           "col": 1,
@@ -502,7 +514,8 @@
             "title": "契約の型",
             "line": null,
             "plain": null,
-            "eng": null
+            "eng": null,
+            "updated": null
           },
           "status": "open",
           "col": 0,

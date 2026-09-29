@@ -45,6 +45,7 @@ fn boxed(
             line: None,
             plain: None,
             eng: None,
+            updated: None,
         },
         status: (kind == NodeKind::Epic).then(|| "open".to_string()),
         rank: 0,

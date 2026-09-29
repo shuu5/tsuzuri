@@ -84,6 +84,7 @@ fn row(id: &str, file: &str, digest: &str, title: &str) -> GraphNode {
         line: None,
         plain: None,
         eng: None,
+        updated: None,
     }
 }
 

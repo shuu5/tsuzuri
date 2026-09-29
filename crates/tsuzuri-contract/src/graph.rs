@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::EpochSecs;
+
 /// 節点の種類（閉じた 20・順は設計文書の 11 種・設計ノートの行・台帳の 7 種・走行）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum NodeKind {
@@ -218,7 +220,7 @@ pub fn title36(s: &str) -> String {
         .collect()
 }
 
-/// グラフの節点（id・種類・所属 file・要約値・題 36 字・行・2 つの概要）。
+/// グラフの節点（id・種類・所属 file・要約値・題 36 字・行・2 つの概要・更新の時刻）。
 /// 所属 file と要約値は file に書かれた行だけが持つ（台帳と走行の節点は持たない）。
 /// 行と概要は folio の要約の字から写す（要件 FR15・写すまでは無し）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -237,6 +239,10 @@ pub struct GraphNode {
     /// エンジニア向けの概要。
     #[serde(default)]
     pub eng: Option<String>,
+    /// 更新の時刻（UTC の epoch 秒）。bead は台帳の updated_at、走行は event log の最後の読める ts から読み、
+    /// ほかの節点と読めない字は無し。
+    #[serde(default)]
+    pub updated: Option<EpochSecs>,
 }
 
 /// グラフの辺（from・to・型）。

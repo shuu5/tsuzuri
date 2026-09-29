@@ -35,6 +35,7 @@ fn node(id: &str, kind: NodeKind, title: &str) -> GraphNode {
         line: None,
         plain: None,
         eng: None,
+        updated: None,
     }
 }
 

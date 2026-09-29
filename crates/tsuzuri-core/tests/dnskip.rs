@@ -63,6 +63,7 @@ fn node(id: &str, kind: NodeKind, file: &str, title: &str) -> GraphNode {
         line: None,
         plain: None,
         eng: None,
+        updated: None,
     }
 }
 

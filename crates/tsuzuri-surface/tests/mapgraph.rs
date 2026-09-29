@@ -50,6 +50,7 @@ fn node(id: &str, kind: NodeKind, rank: u32, degree: u32) -> ViewNode {
             line: None,
             plain: None,
             eng: None,
+            updated: None,
         },
         status: None,
         rank,

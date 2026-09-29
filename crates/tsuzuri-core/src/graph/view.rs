@@ -115,6 +115,7 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
                         line: None,
                         plain: None,
                         eng: None,
+                        updated: None,
                     },
                     None,
                     next.get(id).map_or(0, BTreeSet::len),

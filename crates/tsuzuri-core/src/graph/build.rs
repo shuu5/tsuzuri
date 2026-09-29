@@ -6,16 +6,21 @@
 //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
 //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）から写す（行は無し）。
 //! 設計の節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
+//! 更新の時刻は、bead は台帳の updated_at、走行は event log の読める ts の最後の値を epoch 秒で読む（読めなければ無し）。
+//! 設計の索引の節点と notes の定型行から導く節点は時刻を持たない（無し）。
+//! 索引の表と notes の定型行は時刻の欄を持たず、tsuzuri は設計文書も git も読まないため。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
 use tsuzuri_contract::ledger::{MEMO_LABEL, QUESTION_LABEL};
 
 use super::{BeadAttr, Graph, Inputs, PolicyAttr, RulingRow, RunAttr, Source};
+use crate::ledger::epoch_secs;
 use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
 
 /// 設計の索引の節点の種類の数（`NodeKind::ALL` の先頭の 12 = 設計文書の 11 種と設計ノートの行）。
@@ -275,6 +280,7 @@ fn read_design(text: &str) -> Option<Design> {
                     line: None,
                     plain: None,
                     eng: None,
+                    updated: None,
                 });
             }
             [from, to, edge_type] => {
@@ -421,6 +427,7 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
             line: None,
             plain: typed(description, PLAIN_PREFIX),
             eng: typed(description, ENG_PREFIX),
+            updated: bead.updated_at.as_deref().and_then(epoch_secs),
         });
         for dep in bead.dependencies.unwrap_or_default() {
             match named::<EdgeType>(&dep.dep_type).filter(|t| LEDGER_EDGE_TYPES.contains(t)) {
@@ -439,6 +446,7 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
                     line: None,
                     plain: None,
                     eng: None,
+                    updated: None,
                 });
                 if line_kind == NodeKind::Policy {
                     g.policies.insert(
@@ -544,6 +552,8 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
     let mut raised: Vec<GraphEdge> = Vec::new();
     // 走行ごとの、最後の問いがまだ答えを持たないか。
     let mut open: BTreeMap<String, bool> = BTreeMap::new();
+    // 走行ごとの、読める ts を持つ最後の event の時刻。
+    let mut times: BTreeMap<String, EpochSecs> = BTreeMap::new();
     for event in events {
         let kind = event
             .get("kind")
@@ -554,6 +564,9 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
         };
         if kind == "RunCreated" && !attrs.contains_key(run) {
             order.push(run.to_string());
+        }
+        if let Some(at) = event.get("ts").and_then(Value::as_str).and_then(epoch_secs) {
+            times.insert(run.to_string(), at);
         }
         let attr = attrs.entry(run.to_string()).or_default();
         if let Some(stage) = event.get("stage").and_then(Value::as_str) {
@@ -583,6 +596,7 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
             line: None,
             plain: None,
             eng: None,
+            updated: times.get(&run).copied(),
         });
         if let Some(bead) = run_bead(&run) {
             g.edges.push(edge(&run, bead, EdgeType::RunOf));

@@ -64,6 +64,7 @@ fn task_node() -> GraphNode {
         line: None,
         plain: None,
         eng: None,
+        updated: None,
     }
 }
 
@@ -77,6 +78,7 @@ fn run_node() -> GraphNode {
         line: None,
         plain: None,
         eng: None,
+        updated: None,
     }
 }
 
@@ -162,6 +164,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     line: Some(3),
                     plain: Some("決定の画面の形を決めます。".into()),
                     eng: Some("面は 2 つとする。".into()),
+                    updated: None,
                 },
                 GraphNode {
                     id: "t3-hub.3".into(),
@@ -172,6 +175,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     line: None,
                     plain: None,
                     eng: None,
+                    updated: Some(1790494756),
                 },
             ],
         ),
@@ -219,6 +223,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                             line: None,
                             plain: None,
                             eng: None,
+                            updated: None,
                         },
                         GraphNode {
                             id: "t3-hub.3-20260927T073916Z".into(),
@@ -229,6 +234,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                             line: None,
                             plain: None,
                             eng: None,
+                            updated: None,
                         },
                     ],
                     edges: vec![GraphEdge {

@@ -33,6 +33,7 @@ fn n1() -> GraphNode {
         line: Some(2),
         plain: Some("画面は 2 つです。".into()),
         eng: Some("面は 2 つとする。".into()),
+        updated: None,
     }
 }
 
@@ -153,7 +154,7 @@ fn cleared(g: &Graph) -> Graph {
 fn nsum_wire_keys_in_order() {
     let text = wire::encode(&n1()).expect("encode");
     let keys = [
-        "id", "kind", "file", "digest", "title", "line", "plain", "eng",
+        "id", "kind", "file", "digest", "title", "line", "plain", "eng", "updated",
     ];
     let mut last = None;
     for key in keys {

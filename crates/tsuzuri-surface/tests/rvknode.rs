@@ -43,6 +43,7 @@ fn row(id: &str, kind: NodeKind, col: i8, via: Option<&str>) -> AroundRow {
             line: None,
             plain: None,
             eng: None,
+            updated: None,
         },
         status: None,
         col,

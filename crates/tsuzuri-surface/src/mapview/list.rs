@@ -1,9 +1,10 @@
-//! 一覧の面（見本の map.html の list）: 絞り（帯・種類・種類の組）と並べ替え（id・状態）の選択と、行の一覧。
-//! 行は印・id・題 36 字・帯の chip・種類の語・状態の語と、要約の欄（節点の概要を 80 字で切った字・無ければ「要約なし」）。
-//! 更新の時刻は電文に無いので出さず、並べ替えにも入れない。絞りと並べ替えは URL の query（band・kind・sort・pair）に残す。
+//! 一覧の面（見本の map.html の list）: 絞り（帯・種類・種類の組）と並べ替え（id・更新・状態）の選択と、行の一覧。
+//! 行は印・id・題 36 字・帯の chip・種類の語・状態の語・更新の時刻（日本時間の月日と時分・無ければ ―）と、
+//! 要約の欄（節点の概要を 80 字で切った字・無ければ「要約なし」）。絞りと並べ替えは URL の query（band・kind・sort・pair）に残す。
 
 use std::collections::BTreeSet;
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
 
 use super::band::{Band, band_of, kind_from_name, kind_name};
@@ -12,6 +13,7 @@ use super::{
     VIEW_PARAM, View, kinds_by_id, natural, open_question, param, set_param, shape_class, state,
     unread_reasons,
 };
+use crate::view::{JST, clock};
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::{gist, node_card};
 
@@ -27,26 +29,31 @@ pub const PAIR_PARAM: &str = "pair";
 /// 状態の無い節点の状態の語。
 pub const NO_STATE: &str = "状態なし";
 
+/// 更新の時刻の無い節点の更新の欄の字。
+pub const NO_UPDATED: &str = "―";
+
 /// 要約の無い節点の要約の欄の字。
 pub const NO_GIST: &str = "要約なし";
 
 /// 一覧の行の要約の欄の字数（見本の cut(g, 80)）。
 const GIST_CHARS: usize = 80;
 
-/// 並べ替え（閉じた 2・選択の順）。
+/// 並べ替え（閉じた 3・選択の順は見本と同じ）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Sort {
     Id,
+    Updated,
     State,
 }
 
 impl Sort {
-    pub const ALL: [Sort; 2] = [Sort::Id, Sort::State];
+    pub const ALL: [Sort; 3] = [Sort::Id, Sort::Updated, Sort::State];
 
     /// URL の query の sort の値。
     pub fn name(self) -> &'static str {
         match self {
             Sort::Id => "id",
+            Sort::Updated => "updated",
             Sort::State => "state",
         }
     }
@@ -55,6 +62,7 @@ impl Sort {
     pub fn key(self) -> &'static str {
         match self {
             Sort::Id => "col_id",
+            Sort::Updated => "col_updated",
             Sort::State => "col_state",
         }
     }
@@ -129,12 +137,22 @@ pub struct Row {
     pub card: Card,
     /// 要約の欄の字（節点の概要を 80 字で切った字・無ければ None）。
     pub gist: Option<String>,
+    /// 更新の時刻（節点の updated の写し・無ければ None）。
+    pub updated: Option<EpochSecs>,
 }
 
 impl Row {
     /// 状態の語（無ければ「状態なし」）。
     pub fn state_word(&self) -> &str {
         self.state.as_deref().unwrap_or(NO_STATE)
+    }
+
+    /// 更新の時刻の語（日本時間の月日と時分・`09-27 16:39 JST` の形・無ければ ―）。
+    pub fn updated_word(&self) -> String {
+        match self.updated {
+            Some(at) => format!("{} {JST}", &clock(at)[5..16]),
+            None => NO_UPDATED.to_string(),
+        }
     }
 }
 
@@ -209,6 +227,12 @@ pub fn listing(doc: &GraphDoc, q: &Query) -> Listing {
                 .cmp(&band_of(b.kind))
                 .then_with(|| natural(&a.id, &b.id))
         }),
+        // 新しい順、時刻の無い節点は後ろ、同じなら id の自然な順（見本の並べと同じ）。
+        Sort::Updated => nodes.sort_by(|a, b| {
+            b.updated
+                .cmp(&a.updated)
+                .then_with(|| natural(&a.id, &b.id))
+        }),
         Sort::State => nodes.sort_by(|a, b| {
             state_rank(doc, a)
                 .cmp(&state_rank(doc, b))
@@ -237,6 +261,7 @@ fn row(doc: &GraphDoc, node: &GraphNode) -> Row {
         state: state(doc, node).map(str::to_string),
         card: node_card(doc, node),
         gist: gist(node).map(|g| cut(g, GIST_CHARS)),
+        updated: node.updated,
     }
 }
 
@@ -359,7 +384,7 @@ mod dom {
                 <div class="rowb">
                     <span class="nid">{r.id.clone()}</span>
                     <a class="ttl" href=href use:attach=r.card.clone()><span data-t="">{r.title.clone()}</span></a>
-                    <span class="meta">{band_chip(r.band)}<span>{meta}</span></span>
+                    <span class="meta">{band_chip(r.band)}<span>{meta}</span><span class="num">{r.updated_word()}</span></span>
                     {gist}
                 </div>
             </li>
