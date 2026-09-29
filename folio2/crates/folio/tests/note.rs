@@ -10,6 +10,9 @@
 //! 便 181（docs/design/delivery-181.md §1 (c)）から承認欄の裁定の欄は決定の欄の床（種別 裁定 id）が数える＝f161_ の 2 本の字を合わせた。
 //! 便 207（docs/design/delivery-207.md §1 (c)）の歯 f207_ は、写しの土台を床の土台（tests/fixtures/floor_base/design-intent/・数の上限の
 //! 値の行 3 本は 99）にして数の上限の値を 1 に下げ、生きたノートを歯の中の最小の手書きで足す（folio2 の本流の値に依らない）。
+//! 便 209（docs/design/delivery-209.md §1 (c)）の歯 f209_ は、同じ床の土台の写し（要件 FR1〜FR19・非機能要件 NFR1〜NFR3・
+//! 判断の記録 ADR-1〜ADR-10）に廃止のノートを手書きで足し、後継の先を要件・非機能要件・判断の記録の id にする。無い先には folio2 の本流に
+//! 在って土台に無い id（FR32・ADR-35）を使い、土台の置き場を読むことを確かめる。
 
 use std::fs;
 use std::io::Write;
@@ -1196,4 +1199,111 @@ fn f207_chapter_cap_does_not_stop_reducing_over_the_cap_but_stops_crossing() {
     let r = w.propose("design-note/gb.yaml", &growth_note("gb", "draft", 1, 1));
     assert_eq!(r.status.code(), Some(1), "{}", stdout(&r));
     assert_eq!(stdout(&r).lines().next(), Some(over("gb").as_str()), "{}", stdout(&r));
+}
+
+// ── 便 209: 後継の欄の先（要件・非機能要件・判断の記録・ADR-35 決定 (3)・FR32・AC35） ──
+
+/// 廃止のノート `id`（承認欄つき・契約表 1 行）の後継を `to` にした手書き。
+fn retired_to(id: &str, to: &str) -> String {
+    growth_note(id, "retired", 1, 0).replacen("  superseded_by: example\n", &format!("  superseded_by: {to}\n"), 1)
+}
+
+/// 便 209 (c)2（AC35）: 床の土台の写しで、廃止のノートの後継を実在する要件・非機能要件・判断の記録の id にすると違反 0（設計ノートの先も
+/// 今のまま・先が廃止のノートでも先の状態は数えない）。
+#[test]
+fn f209_successor_naming_an_existing_requirement_nonfunctional_or_adr_passes() {
+    let w = growth_base("f209-exists");
+    for to in ["FR19", "NFR3", "ADR-10", "ADR-1", "example"] {
+        w.put_note("gone", &retired_to("gone", to));
+        assert_passes(&w.check());
+    }
+    w.put_note("gone", &retired_to("gone", "example"));
+    w.put_note("older", &retired_to("older", "gone"));
+    assert_passes(&w.check());
+}
+
+/// 便 209 (c)3（AC35・ADR-35 決定 (3)(ウ)）: 無い要件の id・無い非機能要件の id・無い判断の記録の id（本流に在って土台に無い）は、先の種類を
+/// 名指すつながりの違反ちょうど 1。受入基準の id は後継の先の種類でない（設計ノートの id として読む）。編集時の口は止めない（ADR-33 決定 (2)）。
+#[test]
+fn f209_missing_requirement_or_adr_successor_is_one_link_violation() {
+    for (to, what) in [("FR32", "要件"), ("NFR4", "要件"), ("ADR-35", "判断の記録"), ("AC1", "設計ノート")] {
+        let w = growth_base(&format!("f209-missing-{to}"));
+        let text = retired_to("gone", to);
+        let want = format!("[note] design-note/gone.yaml: meta.superseded_by「{to}」の{what}が実在しない");
+        let r = w.propose("design-note/gone.yaml", &text);
+        assert_eq!(r.status.code(), Some(0), "{to}: {}", stdout(&r));
+        assert!(stdout(&r).lines().all(|l| !l.starts_with('[')), "{to}: 口が止めた: {}", stdout(&r));
+        let link = format!("# つながり（編集は止めない・事後の床が数える）: {want}");
+        assert!(stdout(&r).lines().any(|l| l == link), "{to}: つながりの行が無い: {}", stdout(&r));
+        w.put_note("gone", &text);
+        let out = w.check();
+        assert_single_violation(&out, "note", &[]);
+        assert_eq!(violations(&out), [want], "{to}");
+    }
+}
+
+/// 便 209 (c)3 の続き（ADR-35 決定 (3)(ウ)）: 要件の先は要件書の要件と非機能要件の節の id だけで、目的の節に要件の形の id（FR99）の行を
+/// 足した写しでも、その id を後継にすると要件の不在のつながりの違反ちょうど 1。
+#[test]
+fn f209_requirement_successor_reads_only_the_requirement_sections() {
+    let w = growth_base("f209-goal");
+    let srs = w.dir().join("srs.yaml");
+    let text = fs::read_to_string(&srs).unwrap();
+    let at = text.find("  - {id: GOAL4,").unwrap();
+    let end = at + text[at..].find('\n').unwrap() + 1;
+    let row = "  - {id: FR99, title: 要件の形の目的, text: 要件の形の id を目的の節に置いた写し。}\n";
+    fs::write(&srs, format!("{}{row}{}", &text[..end], &text[end..])).unwrap();
+    w.put_note("gone", &retired_to("gone", "FR99"));
+    let out = w.check();
+    assert_single_violation(&out, "note", &[]);
+    assert_eq!(violations(&out), ["[note] design-note/gone.yaml: meta.superseded_by「FR99」の要件が実在しない"]);
+}
+
+/// 便 209 (c)4（AC35）: 後継が自分自身の id は今と同じ 1 つの file の形の違反ちょうど 1 で、編集時の口も止める。
+#[test]
+fn f209_successor_pointing_at_itself_stays_a_shape_violation() {
+    let w = growth_base("f209-self");
+    let text = retired_to("gone", "gone");
+    let want = "[note] design-note/gone.yaml: meta.superseded_by「gone」の設計ノートが実在しない";
+    let r = w.propose("design-note/gone.yaml", &text);
+    assert_eq!(r.status.code(), Some(1), "{}", stdout(&r));
+    assert_eq!(stdout(&r).lines().next(), Some(want), "{}", stdout(&r));
+    w.put_note("gone", &text);
+    let out = w.check();
+    assert_single_violation(&out, "note", &[]);
+    assert_eq!(violations(&out), [want]);
+}
+
+/// 便 209 (c)5（AC35・ADR-35 決定 (3)(ア)）: 前（supersedes）は今のまま設計ノートの id だけで、在る要件と判断の記録の id を書いても
+/// 設計ノートの不在のつながりの違反ちょうど 1（編集時の口は通し、つながりの行に同じ字）。
+#[test]
+fn f209_supersedes_still_names_design_notes_only() {
+    for to in ["FR19", "ADR-10"] {
+        let w = growth_base(&format!("f209-supersedes-{to}"));
+        let text = growth_note("ga", "draft", 1, 0).replacen("  profile: design-note\n", &format!("  profile: design-note\n  supersedes: {to}\n"), 1);
+        let r = w.propose("design-note/ga.yaml", &text);
+        assert_eq!(r.status.code(), Some(0), "{to}: {}", stdout(&r));
+        assert!(stdout(&r).lines().any(|l| l == format!("# つながり（編集は止めない・事後の床が数える）: [note] design-note/ga.yaml: meta.supersedes「{to}」の設計ノートが実在しない")), "{to}: {}", stdout(&r));
+        w.put_note("ga", &text);
+        let out = w.check();
+        assert_single_violation(&out, "note", &[]);
+        assert_eq!(violations(&out), [format!("[note] design-note/ga.yaml: meta.supersedes「{to}」の設計ノートが実在しない")], "{to}");
+    }
+}
+
+/// 便 209 (c)6（ADR-35 決定 (3)(ウ)・P-4.2）: 判断の記録の置き場が読めない写しでは、判断の記録を指す後継の先を数えられない＝まだ分からない の
+/// 行が在り、後継の違反は出さない（要件の先は数える）。
+#[test]
+fn f209_adr_successor_without_the_adr_place_is_unknown() {
+    let w = growth_base("f209-noadr");
+    fs::remove_dir_all(w.dir().join("adr")).unwrap();
+    w.put_note("gone", &retired_to("gone", "ADR-10"));
+    let out = w.check();
+    assert_ne!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert!(
+        stderr(&out).lines().any(|l| l == "# まだ分からない: design-note/gone.yaml: meta.superseded_by「ADR-10」の判断の記録を数えられない（adr/ が読めない）"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(violations(&out).iter().all(|l| !l.contains("superseded_by")), "{:?}", violations(&out));
 }

@@ -45,6 +45,11 @@ pub(crate) const STATUS_ENUM: &[&str] = &["draft", "effective", "retired", "exam
 pub(crate) const EFFECTIVE_STATUS: &[&str] = &["effective", "retired"];
 pub(crate) const STATUS_EXAMPLE: &str = "example";
 pub(crate) const STATUS_RETIRED: &str = "retired";
+/// 後継（superseded_by）の先の形（便 209・判断の記録 ADR-35 決定 (3)(イ)）: 頭の字の後ろが半角の数字なら要件か判断の記録の id、
+/// ほかは設計ノートの id。要件の先は要件書の 2 つの節の id（前 supersedes は設計ノートの id だけ）。
+pub(crate) const SUCCESSOR_REQUIREMENT: &[&str] = &["FR", "NFR"];
+pub(crate) const SUCCESSOR_ADR: &[&str] = &["ADR-"];
+pub(crate) const SUCCESSOR_SECTIONS: &[&str] = &["requirements", "nonfunctional"];
 pub(crate) const APPROVAL_REQUIRED: &[&str] = &["who", "date", "ruling", "verbatim", "surface"];
 pub(crate) const SURFACE_ENUM: &[&str] = &["R-8"];
 pub(crate) const SECTION: Keys = Keys {
@@ -185,6 +190,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
                     ("example", Floor::Val("見本（拘束力なし・承認欄を持たない・凍結 anchor の材料）")),
                 ]),
             ),
+            ("supersede_note", Floor::Val("後継（superseded_by）の先は、同じ置き場の設計ノートの id のほか、要件の id と判断の記録の id を指せる（判断の記録 ADR-35 決定 (3)）。先の種類は字の形で読み分け、頭が FR か NFR で後ろが半角の数字なら要件書の要件の節（requirements）か非機能要件の節（nonfunctional）の id、頭が ADR- で後ろが半角の数字なら判断の記録（adr/）の id、ほかは設計ノートの id とする（設計ノートの id は英小字で始まるので重ならない）。床は先の実在を数え、無ければつながりの違反、自分自身を指せば形の違反とし、先の状態は数えない。前（supersedes）は設計ノートの id だけを指す。設計ノートでない file の path は入れない。面は廃止の行の後継のリンクを先の種類の面（要件書の面の要件の場所・判断の記録の面・設計ノートの面）へ張り、要件と判断の記録の先が解けなければリンクを張らず「まだ分からない」を添える")),
             ("profile_enum", Floor::Strs(crate::catalog::PROFILES)),
             ("profile_note", Floor::Val("密度 profile は 1 行（見せ方だけを持つ・拘束の旗を置かない・ADR-3 決定 (1)・N-3）。文書の種類による違いは節の型で表す（P-5.3）")),
             (

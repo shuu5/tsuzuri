@@ -253,7 +253,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         links: contract_links(&secs, id)?,
         fields,
     };
-    let st = status(&meta)?;
+    let st = status(&meta, &env)?;
     let counts = counts(&secs, figs.len())?;
     let stamp = face::ceiling_stamp(dir)?;
     // prevnext は入口の棚と同じ順（id の字の順）で隣の設計ノート・両端は入口（便 65）
@@ -408,8 +408,9 @@ fn counts(secs: &[Sec<'_>], figures: usize) -> R<Counts> {
 }
 
 /// 状態の名札と状態の行。effective に承認欄が無い・retired に後継が無い、は導出できない。
-/// 後継のリンクは実在を確かめない（後継の実在は床が数える）。
-fn status(meta: &X<'_>) -> R<Status> {
+/// 後継の先は床と同じ関数で読み分ける（便 209・ADR-35 決定 (3)(オ)）。設計ノートの先へのリンクは実在を確かめない（実在は床が数える）。
+/// 要件と判断の記録の先は参照 id の解き方で要件書の面と判断の記録の面へ解き、解けなければリンクを張らず「まだ分からない」を添える。
+fn status(meta: &X<'_>, env: &Env<'_>) -> R<Status> {
     let sx = meta.f("status")?;
     let label = sx.lookup(STATUS, "状態")?;
     let key = sx.v.as_str().unwrap_or_default();
@@ -426,10 +427,11 @@ fn status(meta: &X<'_>) -> R<Status> {
                 .g("superseded_by")?
                 .ok_or_else(|| format!("{}: retired に superseded_by が無い", meta.at))?;
             let sid = sb.id()?;
-            format!(
-                "廃止 → 後継 <a class=\"xref\" href=\"note-{sid}.html\">{}</a>",
-                esc(sid)
-            )
+            let to = match note::successor(sid) {
+                note::Successor::Note => format!("<a class=\"xref\" href=\"note-{sid}.html\">{}</a>", esc(sid)),
+                _ => id_link(env, &sb)?,
+            };
+            format!("廃止 → 後継 {to}")
         }
     };
     Ok(Status {

@@ -1263,3 +1263,55 @@ fn f193_note_prose_splits_after_a_bold_or_quote_closer() {
         "閉じの字の後の項が分かれていない: {html}"
     );
 }
+
+// ── 便 209（docs/design/delivery-209.md §1 (c)・判断の記録 ADR-35 決定 (3)(オ)・要件書 FR32・AC35）: 廃止の行の後継のリンクは先の種類の面へ ──
+
+/// 写しの見本を廃止にして後継を `to` にし、`adr` が真なら fixture の判断の記録 ADR-2 を写しの adr/ へ置いて面を組む（本文を返す）。
+fn retired_face(case: &str, to: &str, adr: bool) -> String {
+    let (td, work) = fixture_copy(case);
+    if adr {
+        fs::create_dir_all(work.join("adr")).unwrap();
+        fs::copy(fixture().join("adr/ADR-2.yaml"), work.join("adr/ADR-2.yaml")).unwrap();
+    }
+    edit(&work.join("design-note/full.yaml"), |t| {
+        t.replacen("status: draft", "status: retired", 1).replacen(
+            "  note: 手書きの見本。面の骨格だけを測る。",
+            &format!("  note: 手書きの見本。面の骨格だけを測る。\n  superseded_by: {to}"),
+            1,
+        )
+    });
+    let out = td.join("note-full.html");
+    let run = folio_face("note", Some("full"), &work, &out, "--write");
+    assert_eq!(code(&run, "folio face --write"), 0, "{to}: {}", stderr(&run));
+    let html = fs::read_to_string(&out).unwrap();
+    let _ = fs::remove_dir_all(&td);
+    html
+}
+
+/// 便 209 (c)7（AC35）: 後継が要件・非機能要件なら要件書の面の要件の場所へ、判断の記録なら判断の記録の面へリンクを張る
+/// （fixture の要件書に在る FR2・NFR1、写しの adr/ に置いた ADR-2）。設計ノートの先は今のまま設計ノートの面へ。
+#[test]
+fn f209_retired_successor_links_to_the_srs_and_adr_faces() {
+    for (to, adr, href) in [
+        ("FR2", false, "srs.html#fr2"),
+        ("NFR1", false, "srs.html#nfr1"),
+        ("ADR-2", true, "adr-2.html"),
+        ("full2", false, "note-full2.html"),
+    ] {
+        let html = retired_face(&format!("f209-link-{to}"), to, adr);
+        let want = format!("廃止 → 後継 <a class=\"xref\" href=\"{href}\">{to}</a>");
+        assert!(html.contains(&want), "{to}: 「{want}」が無い");
+    }
+}
+
+/// 便 209 (c)8（AC35・ADR-35 決定 (3)(オ)）: 要件と判断の記録の先が解けなければリンクを張らず「まだ分からない」を添える
+/// （要件書に無い FR9・写しの adr/ に無い ADR-9・adr/ の無い写しの ADR-2）。面は導出できる（0）。
+#[test]
+fn f209_unresolved_successor_has_no_link_and_is_marked_unknown() {
+    for (to, adr, dead) in [("FR9", false, "srs.html#fr9"), ("ADR-9", true, "adr-9.html"), ("ADR-2", false, "adr-2.html")] {
+        let html = retired_face(&format!("f209-dead-{to}"), to, adr);
+        let want = format!("廃止 → 後継 {to}（まだ分からない）");
+        assert!(html.contains(&want), "{to}: 「{want}」が無い");
+        assert!(!html.contains(dead) && !html.contains(&format!("note-{to}.html")), "{to}: 解けない先にリンクを張った");
+    }
+}

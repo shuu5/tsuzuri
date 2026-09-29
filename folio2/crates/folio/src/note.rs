@@ -29,7 +29,8 @@ use crate::floor_note::{
     EXTERNAL_SHAPE, FIELDS_ROW, FIGURE_ENTRY, FLOOR, FORBIDS_ROWS, ID_PATTERN, INDEX_ROW, Keys,
     NEED_ENUM, NEEDS_BODY, NEEDS_ROWS, PARTS_ROW, PLAN_LISTS, PLAN_ROW, PORTS_ROW, PROSE,
     ROW_ID_PATTERN, ROW_INDEX, ROW_PLAN, SECTION, SHAPE_ENUM, STATUS_ENUM, STATUS_EXAMPLE,
-    STATUS_RETIRED, SURFACE_ENUM, TEETH_ROW, TYPE_ENUM, VERSION_PATTERN,
+    STATUS_RETIRED, SUCCESSOR_ADR, SUCCESSOR_REQUIREMENT, SUCCESSOR_SECTIONS, SURFACE_ENUM, TEETH_ROW,
+    TYPE_ENUM, VERSION_PATTERN,
 };
 use crate::gitcheck;
 use crate::link;
@@ -109,12 +110,16 @@ pub fn check_note(
         .inspect_err(|e| report.unknown(format!("rules.yaml: 設計ノートの章の上限が読めない: {e}")))
         .ok();
     let known = base_known_ids(constitution, rules, srs, adr);
-    let requirements = requirement_ids(srs);
-    let note_ids: HashSet<&str> = notes.iter().map(|n| n.id.as_str()).collect();
+    let requirements = requirement_ids(srs, &refs::SRS_ID_SECTIONS);
+    let targets = Targets {
+        notes: notes.iter().map(|n| n.id.as_str()).collect(),
+        requirements: requirement_ids(srs, SUCCESSOR_SECTIONS),
+        adrs: adr.map(link::adr_ids),
+    };
     for note in &notes {
         check_one(
             note,
-            &note_ids,
+            &targets,
             &known,
             &requirements,
             external.as_deref(),
@@ -457,10 +462,10 @@ fn base_known_ids(
     known
 }
 
-/// 要件書の id（契約表の行の req の解決先）。
-fn requirement_ids(srs: &Node) -> HashSet<String> {
+/// 要件書の節 `sections` の id（契約表の行の req の解決先は id を持つ節の全部・後継の先は要件と非機能要件の節・便 209）。
+fn requirement_ids(srs: &Node, sections: &[&str]) -> HashSet<String> {
     let mut ids = HashSet::new();
-    for section in refs::SRS_ID_SECTIONS {
+    for section in sections {
         for row in maps(srs, section) {
             if let Some(id) = row.get("id").and_then(Node::as_str) {
                 ids.insert(id.to_string());
@@ -470,12 +475,40 @@ fn requirement_ids(srs: &Node) -> HashSet<String> {
     ids
 }
 
+/// 後継（superseded_by）の先の種類（便 209・判断の記録 ADR-35 決定 (3)(イ)）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Successor {
+    Requirement,
+    Adr,
+    Note,
+}
+
+/// 後継の値を字の形で読み分ける唯一の関数（床と面が同じ関数で読む・P-6.3）: 頭が FR か NFR で後ろが数字なら要件、
+/// 頭が ADR- で後ろが数字なら判断の記録、ほかは設計ノートの id（英小字で始まる形なので重ならない）。
+pub(crate) fn successor(v: &str) -> Successor {
+    let numbered = |heads: &[&str]| heads.iter().any(|h| v.strip_prefix(h).is_some_and(digits));
+    if numbered(SUCCESSOR_REQUIREMENT) {
+        Successor::Requirement
+    } else if numbered(SUCCESSOR_ADR) {
+        Successor::Adr
+    } else {
+        Successor::Note
+    }
+}
+
+/// 前と後継の先の母集団: 置き場の設計ノートの id・要件書の要件と非機能要件の id・判断の記録の id（adr/ が読めなければ None）。
+struct Targets<'a> {
+    notes: HashSet<&'a str>,
+    requirements: HashSet<String>,
+    adrs: Option<HashSet<&'a str>>,
+}
+
 // ── (c) 設計ノート 1 本 ──
 
 #[allow(clippy::too_many_arguments)]
 fn check_one(
     note: &NoteDoc,
-    note_ids: &HashSet<&str>,
+    targets: &Targets<'_>,
     base: &HashSet<String>,
     requirements: &HashSet<String>,
     external: Option<&[Field]>,
@@ -492,7 +525,7 @@ fn check_one(
     }
     unknown_sections(&file, root, &DOC.all(), report);
 
-    check_meta(&file, note, note_ids, report);
+    check_meta(&file, note, targets, report);
 
     // 参照 id の母集団に、この文書の契約表の行 id（裸の形と「<doc id>#<row id>」の形）を足す
     let sections = row_list(&file, "sections", root, "sections", report);
@@ -540,7 +573,7 @@ fn check_one(
 }
 
 /// meta の欄。
-fn check_meta(file: &str, note: &NoteDoc, note_ids: &HashSet<&str>, report: &mut Report) {
+fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Report) {
     let blank = Node::Null;
     let meta = note.root.get("meta").unwrap_or(&blank);
     non_empty(file, "meta", meta, DOC_META.required, report);
@@ -643,12 +676,22 @@ fn check_meta(file: &str, note: &NoteDoc, note_ids: &HashSet<&str>, report: &mut
         }
     }
 
-    // 別のノートの不在はつながり・自分自身を指す字は 1 つの file の形で止める（便 199）
+    // 別のノートの不在はつながり・自分自身を指す字は 1 つの file の形で止める（便 199）。後継は要件と判断の記録も指せ、
+    // 先の実在だけを数える（先の状態は数えない・便 209・ADR-35 決定 (3)）
     for key in ["supersedes", "superseded_by"] {
-        if let Some(v) = field(meta, key)
-            && !(note_ids.contains(v) && v != note.id)
-        {
-            let msg = format!("{file}: meta.{key}「{v}」の設計ノートが実在しない");
+        let Some(v) = field(meta, key) else { continue };
+        let kind = if key == "superseded_by" { successor(v) } else { Successor::Note };
+        let (found, what) = match (kind, &targets.adrs) {
+            (Successor::Note, _) => (targets.notes.contains(v) && v != note.id, "設計ノート"),
+            (Successor::Requirement, _) => (targets.requirements.contains(v), "要件"),
+            (Successor::Adr, Some(ids)) => (ids.contains(v), "判断の記録"),
+            (Successor::Adr, None) => {
+                report.unknown(format!("{file}: meta.{key}「{v}」の判断の記録を数えられない（adr/ が読めない）"));
+                continue;
+            }
+        };
+        if !found {
+            let msg = format!("{file}: meta.{key}「{v}」の{what}が実在しない");
             if v == note.id {
                 report.violation(KIND, msg);
             } else {
@@ -1076,5 +1119,20 @@ mod tests {
         assert_eq!(g.live, 2);
         assert_eq!(g.rows, [("a.yaml", 3), ("b.yaml", 0)]);
         assert_eq!(g.plan, 3);
+    }
+
+    /// 便 209 (c)1（ADR-35 決定 (3)(イ)）: 後継の値は字の形で読み分ける。頭が FR か NFR で後ろが半角の数字だけなら要件、頭が ADR- で
+    /// 後ろが半角の数字だけなら判断の記録、ほか（受入基準・条・規則の行・数字の無い頭・小字・全角の数字）は設計ノートの id。
+    #[test]
+    fn f209_successor_reads_the_kind_from_the_shape() {
+        for v in ["FR1", "FR32", "NFR3", "NFR10"] {
+            assert_eq!(successor(v), Successor::Requirement, "{v}");
+        }
+        for v in ["ADR-1", "ADR-35"] {
+            assert_eq!(successor(v), Successor::Adr, "{v}");
+        }
+        for v in ["example", "fr1", "FR", "NFR", "ADR-", "ADR35", "AC35", "CON1", "P-7", "R-23", "FR3a", "FR３", "adr-35", "xFR1"] {
+            assert_eq!(successor(v), Successor::Note, "{v}");
+        }
     }
 }
