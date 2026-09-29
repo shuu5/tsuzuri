@@ -5,6 +5,8 @@
 //!   要約の行の前に要約の無い節点の数と id の行（読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 k-sum-count）
 //!   その次に本文だけで名指した id の対の数と対の行（g-9 の detect の数・読めなければまだ分からないの行を標準エラー・
 //!   終了 code は変えない・行 k-g9-count）
+//!   その次に全部の契約表の行が着地した設計ノートの数と文書 id の行（設計の索引か台帳が読めなければまだ分からないの行を
+//!   標準エラー・終了 code は変えない・行 c-note-stale）
 //! - --design — 設計の索引だけを読み、設計の節点と辺に絞った GraphDoc の電文（folio の graph の吸収・ADR-8 決定 (3)）
 //!
 //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
@@ -103,6 +105,21 @@ pub fn unfielded_line(pairs: &[(String, String)]) -> String {
             .map(|(from, to)| format!("{from}→{to}"))
             .collect();
         format!("{UNFIELDED_HEAD} {}（{}）", pairs.len(), named.join("・"))
+    }
+}
+
+/// 全部の契約表の行が着地した設計ノートの行の頭の字（行 c-note-stale）。
+pub const LANDED_HEAD: &str = "全部の行が着地した設計ノート";
+
+/// 全部の行が着地した設計ノートがまだ分からないときの字（標準エラーのまだ分からないの行に続ける）。
+pub const LANDED_UNKNOWN: &str = "全部の行が着地した設計ノート（設計の索引か台帳が読めない）";
+
+/// 全部の行が着地した設計ノートの行（空なら数 0 だけ、在れば数と中黒つなぎの文書 id・違反の行と同じ形）。
+pub fn landed_line(docs: &[String]) -> String {
+    if docs.is_empty() {
+        format!("{LANDED_HEAD} 0")
+    } else {
+        format!("{LANDED_HEAD} {}（{}）", docs.len(), docs.join("・"))
     }
 }
 
@@ -219,6 +236,7 @@ pub fn run(rest: &[&str]) -> u8 {
             let floors = Floors {
                 bare: Reading::Unknown,
                 unfielded: Reading::Unknown,
+                landed: Reading::Unknown,
             };
             (design_view(&board::graph(&texts)), None, floors)
         }
@@ -244,8 +262,8 @@ pub fn run(rest: &[&str]) -> u8 {
 
 /// 違反の行と要約の行を標準出力、まだ分からないの行を標準エラーに出し、3 値の終了 code を返す。
 /// `outside` は g-7 が文法の外の id の裁定だけのためにまだ分からないときのその数（`check::outside_rulings`）。
-/// `floors` は要約の無い節点の列と本文だけで名指した id の対（`board::built_floors`・要約の行の前にこの順に出し、
-/// 終了 code は変えない）。
+/// `floors` は要約の無い節点の列と本文だけで名指した id の対と全部の行が着地した設計ノート（`board::built_floors`・
+/// 要約の行の前にこの順に出し、終了 code は変えない）。
 fn check(invariants: &[InvariantCheck], outside: Option<usize>, floors: &Floors) -> u8 {
     let (mut violations, mut unknowns) = (0, 0);
     for inv in invariants {
@@ -284,6 +302,10 @@ fn check(invariants: &[InvariantCheck], outside: Option<usize>, floors: &Floors)
     match &floors.unfielded {
         Reading::Known(pairs) => println!("{}", unfielded_line(pairs)),
         Reading::Unknown => eprintln!("# まだ分からない: {UNFIELDED_UNKNOWN}"),
+    }
+    match &floors.landed {
+        Reading::Known(docs) => println!("{}", landed_line(docs)),
+        Reading::Unknown => eprintln!("# まだ分からない: {LANDED_UNKNOWN}"),
     }
     let verdict = overall(invariants);
     let word = match verdict {

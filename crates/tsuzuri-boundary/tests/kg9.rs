@@ -363,6 +363,9 @@ const BARE: &str = "要約の無い節点 2（A-1.1・R-2）\n";
 /// 節の索引で本文だけで名指した id の対の行。
 const UNFIELDED: &str = "本文だけで名指した id の対 3（A-1→R-2・nt#r1→FR1・nt#r1→R-2）\n";
 
+/// 全部の行が着地した設計ノートの行（nt#r1 を指す bead は無い・行 c-note-stale）。
+const LANDED: &str = "全部の行が着地した設計ノート 0\n";
+
 #[test]
 fn kg9_line_and_built_floors() {
     let head: &str = UNFIELDED_HEAD;
@@ -402,7 +405,10 @@ fn kg9_check_names_pairs() {
     let place = Place::new("names", INDEX, Some(SUMMARY));
     let out = place.check(true);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
-    assert_eq!(stdout(&out), format!("{BARE}{UNFIELDED}{}", summary(3)));
+    assert_eq!(
+        stdout(&out),
+        format!("{BARE}{UNFIELDED}{LANDED}{}", summary(3))
+    );
     let err = stderr(&out);
     assert!(!err.contains(UNFIELDED_HEAD), "{err}");
 
@@ -411,7 +417,7 @@ fn kg9_check_names_pairs() {
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(
         stdout(&out),
-        format!("{BARE}本文だけで名指した id の対 0\n{}", summary(3))
+        format!("{BARE}本文だけで名指した id の対 0\n{LANDED}{}", summary(3))
     );
 }
 
@@ -422,7 +428,7 @@ fn kg9_unread_goes_to_stderr() {
     let place = Place::new("unread", INDEX, None);
     let out = place.check(true);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
-    assert_eq!(stdout(&out), summary(3));
+    assert_eq!(stdout(&out), format!("{LANDED}{}", summary(3)));
     let err = stderr(&out);
     assert_eq!(err.lines().filter(|l| *l == unfielded).count(), 1, "{err}");
 

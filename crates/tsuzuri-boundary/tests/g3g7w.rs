@@ -154,8 +154,11 @@ fn next(id: &str) -> &'static str {
         .expect("次の 1 手")
 }
 
+/// 要約の行と、その直前の全部の行が着地した設計ノートの行（索引は設計ノートの行を持たない・行 c-note-stale）。
 fn summary(word: &str, violations: usize, unknowns: usize) -> String {
-    format!("tz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）\n")
+    format!(
+        "全部の行が着地した設計ノート 0\ntz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）\n"
+    )
 }
 
 fn unknown(id: &str, why: &str) -> String {

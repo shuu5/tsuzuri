@@ -345,7 +345,7 @@ fn kcli_check_all_read_is_unknown() {
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(
         stdout(&out),
-        "tz graph --check: まだ分からない（違反 0・まだ分からない 3）\n"
+        "全部の行が着地した設計ノート 0\ntz graph --check: まだ分からない（違反 0・まだ分からない 3）\n"
     );
     let err = stderr(&out);
     for id in UNMEASURED {
@@ -368,7 +368,7 @@ fn kcli_check_cut_line_names_k1() {
     assert_eq!(
         stdout(&out),
         format!(
-            "[g-2] 違反 1（k.1） next={next}\ntz graph --check: 不合格（違反 1・まだ分からない 3）\n"
+            "[g-2] 違反 1（k.1） next={next}\n全部の行が着地した設計ノート 0\ntz graph --check: 不合格（違反 1・まだ分からない 3）\n"
         )
     );
 }
@@ -404,7 +404,7 @@ fn kcli_check_no_state_is_two() {
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(
         stdout(&out),
-        "tz graph --check: まだ分からない（違反 0・まだ分からない 6）\n"
+        "全部の行が着地した設計ノート 0\ntz graph --check: まだ分からない（違反 0・まだ分からない 6）\n"
     );
     let err = stderr(&out);
     let unread: Vec<&str> = err

@@ -137,15 +137,18 @@ pub struct Floors {
     pub bare: Reading<Vec<String>>,
     /// 本文だけで名指した id の対（中核の `check::unfielded_mentions`・g-9 の detect の数・行 c-g9）。
     pub unfielded: Reading<Vec<(String, String)>>,
+    /// 全部の契約表の行が着地した設計ノートの文書 id（中核の `check::landed_notes`・行 c-note-stale）。
+    pub landed: Reading<Vec<String>>,
 }
 
-/// `built` と同じ導出グラフと床の値（要約を写せたかを 2 つの床の関数に渡す・行 k-g9-count）。
-/// tz graph --check が使う。
+/// `built` と同じ導出グラフと床の値（要約を写せたかを 2 つの床の関数に渡し、着地した設計ノートには台帳の字を
+/// 渡す・行 k-g9-count・行 c-note-stale）。tz graph --check が使う。
 pub fn built_floors(texts: &Texts) -> (Graph, Floors) {
     let (g, summary) = summed(texts);
     let floors = Floors {
         bare: graph::check::unsummarized(&g, summary),
         unfielded: graph::check::unfielded_mentions(&g, summary),
+        landed: graph::check::landed_notes(&g, &texts.ledger),
     };
     (g, floors)
 }

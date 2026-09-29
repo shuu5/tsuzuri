@@ -5,6 +5,7 @@
 //! 要る出所が読めなければ「まだ分からない」で、合格にしない。違反は名指す id を持つ。
 //! g-7 は宙に浮いた裁定のうち id が folio の裁定 id の文法の外の裁定を数えず、それだけが在れば「まだ分からない」。
 //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
+//! 全部の契約表の行が着地した設計ノートは床の値で `landed_notes` が名指す（行 c-note-stale）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,6 +14,7 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
 use tsuzuri_contract::ledger::MEMO_LABEL;
 
+use super::build::{BdBead, read_ledger};
 use super::{Graph, Source};
 
 /// 不変条件の判定（3 値）。
@@ -587,6 +589,64 @@ pub fn unfielded_mentions(g: &Graph, summary: bool) -> Reading<Vec<(String, Stri
         }
     }
     Reading::Known(pairs.into_iter().collect())
+}
+
+/// 着地した bead の閉じた理由の頭の字（器が着地の後に書く landed と、器の着地の前に席が手で閉じた古い便の 着地）。
+pub const LANDED: [&str; 2] = ["landed", "着地"];
+
+/// 着地した bead か（状態が closed で、閉じた理由の前の空白を除いた字が `LANDED` のどちらかで始まり、その後が
+/// 字の終わりか空白か全角の丸括弧の開き・大文字と小文字は区別する）。器の局面の出力の着地までのつなぎで、
+/// 着地の述語はこの 1 か所だけに置く。
+fn landed(bead: &BdBead) -> bool {
+    if bead.status.as_deref() != Some("closed") {
+        return false;
+    }
+    let reason = bead.close_reason.as_deref().unwrap_or_default().trim_start();
+    LANDED.iter().any(|head| {
+        reason
+            .strip_prefix(head)
+            .is_some_and(|rest| rest.chars().next().is_none_or(|c| c.is_whitespace() || c == '（'))
+    })
+}
+
+/// 全部の契約表の行が着地した設計ノートの文書 id（字の順・重複なし・行 c-note-stale）。
+/// 設計ノートの行の節点の id を最初の井桁で文書 id と行 id に分け（井桁の無い id は数えない）、文書 id ごとに
+/// 全部の行が、着地した bead から design の辺を受け、開いた bead から design の辺を受けないかを見る。
+/// 設計ノートの状態は読まない（退役したノートも名指しうる）。設計の索引か台帳が読めないか、台帳の字 `ledger` が
+/// 読めなければ「まだ分からない」。
+pub fn landed_notes(g: &Graph, ledger: &str) -> Reading<Vec<String>> {
+    if !g.is_read(Source::Design) || !g.is_read(Source::Ledger) {
+        return Reading::Unknown;
+    }
+    let Some(beads) = read_ledger(ledger) else {
+        return Reading::Unknown;
+    };
+    let done: BTreeSet<&str> = beads
+        .iter()
+        .filter(|b| landed(b))
+        .map(|b| b.id.as_str())
+        .collect();
+    let design = pairs(g, EdgeType::Design);
+    let row_landed = |row: &str| {
+        let from = || design.iter().filter(|(_, to)| *to == row).map(|(from, _)| *from);
+        from().any(|b| done.contains(b))
+            && !from().any(|b| g.beads.get(b).is_some_and(|attr| attr.is_open()))
+    };
+    let mut notes: BTreeMap<&str, bool> = BTreeMap::new();
+    for n in g.nodes.iter().filter(|n| n.kind == NodeKind::NoteRow) {
+        let Some((doc, _)) = n.id.split_once('#') else {
+            continue;
+        };
+        let all = notes.entry(doc).or_insert(true);
+        *all = *all && row_landed(&n.id);
+    }
+    Reading::Known(
+        notes
+            .into_iter()
+            .filter(|(_, all)| *all)
+            .map(|(doc, _)| doc.to_string())
+            .collect(),
+    )
 }
 
 #[cfg(test)]
