@@ -188,7 +188,8 @@ fn adr_two_adopted_fails() {
 
 #[test]
 fn adr_effective_without_approval_fails() {
-    assert_single_violation("effective-no-approval", "N-4", "ADR-1", "approval");
+    // 写しの憲法の名（fixture-constitution）は folio2 の置き場の名でなく、条 N-4 を持たないので名札は検査の名（便 203）
+    assert_single_violation("effective-no-approval", "改訂の承認", "ADR-1", "approval");
 }
 
 // ── 図の節（便 33） ──

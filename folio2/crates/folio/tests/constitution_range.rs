@@ -6,6 +6,7 @@
 //! 凍結 anchor（P-10.1）は手書きの tests/fixtures/check/enum-range-anchor.yaml（組み立てた値域 10 鍵）。
 //! 便 157（docs/design/delivery-157.md §1 (c)）: 床は部分集合でなく集合で等しいかを数え、狭めた鍵も「まだ分からない」1 件
 //! （外した値を組み立てた版の順に名指す・広げた字の直後）。外の置き場の段は `folio init` の骨格を git の 1 commit にした写し。
+//! 便 203（docs/design/delivery-203.md §1 (c)）: 外の置き場の値域の「まだ分からない」の字は、要件の id（FR25）の片を落とす。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -575,13 +576,59 @@ fn f157_narrowed_range_is_pending_and_never_pass() {
     let r = w.check();
     assert!(r.n4.is_empty() && r.others.is_empty(), "{}", r.all);
     assert_eq!(r.pendings.len(), base.pendings.len() + 1, "{}", r.all);
+    // 骨格の名は folio2 の置き場の名でないので、字の中の要件の id（FR25）を落とす（便 203）
     assert_eq!(
         range_pendings(&r),
-        [&built_missing("strength", "「should」")],
+        [&built_missing("strength", "「should」").replace("・FR25）", "）")],
         "{}",
         r.all
     );
     assert_eq!(r.code, Some(2), "{}", r.all);
+}
+
+/// 便 203: 外の置き場（骨格・名は 未記入）の値域の「まだ分からない」の 5 通り（組み立てた版に無い鍵・一覧でない鍵・広げた値・
+/// 無い鍵・表でない節）は、どれも要件の id（FR25）の片を持たない（字は歯の側の手書き・folio2 の置き場の字は f122_ の歯が見る）。
+#[test]
+fn f203_abroad_range_pendings_drop_the_requirement_id() {
+    let w = Work::skeleton("f203-range");
+    // 骨格の値域は引用符付きの block の形
+    w.mutate("  \"enums\":\n", "  \"enums\":\n    \"colour\":\n      - \"red\"\n");
+    w.mutate("      - \"should\"\n", "      - \"should\"\n      - \"zz\"\n");
+    w.mutate(
+        "\"tier\":\n      - \"always\"\n      - \"ask-first\"\n      - \"never\"\n",
+        "\"tier\": \"always\"\n",
+    );
+    w.mutate("    \"binds\":\n      - \"tool\"\n      - \"practice\"\n      - \"both\"\n", "");
+    w.commit("abroad range");
+    let r = w.check();
+    assert_eq!(
+        range_pendings(&r),
+        [
+            "constitution.yaml: schema.enums.colour: 組み立て時の値域に無い値がある（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い）",
+            "constitution.yaml: schema.enums.tier が文字列の一覧でない＝条の値を置き場の値域で引けない",
+            "constitution.yaml: schema.enums.strength: 組み立て時の値域に無い値がある（「zz」・値域を置き場ごとに広げる口は無い）",
+            "constitution.yaml: schema.enums に鍵 binds が無い＝条の binds の値を置き場の値域で引けない",
+        ],
+        "{}",
+        r.all
+    );
+    assert!(!r.all.contains("FR25"), "{}", r.all);
+    assert_eq!(r.code, Some(2), "{}", r.all);
+
+    let s = Work::skeleton("f203-no-section");
+    s.mutate("  \"enums\":\n", "  \"enums\": \"none\"\n  \"enums_rest\":\n");
+    s.commit("no section");
+    let r = s.check();
+    assert_eq!(
+        range_pendings(&r),
+        [
+            "constitution.yaml: schema.enums.retreat_kind（撤退条件の種類の値域）が読めない",
+            "constitution.yaml: schema.enums（置き場の憲法の値域の節）が表でない＝条の値を置き場の値域で引けない",
+        ],
+        "{}",
+        r.all
+    );
+    assert!(!r.all.contains("FR25"), "{}", r.all);
 }
 
 /// 歯 7（便 157）: 凍結 anchor の各鍵から末尾の値を 1 つずつ外すと、鍵ごとに「まだ分からない」1 件が anchor の鍵の順に並ぶ。

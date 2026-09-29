@@ -24,10 +24,9 @@ pub fn check_vocab(
 ) {
     let known = known_words(vocabulary, report);
     let body = population(constitution, rules, vocabulary, srs, report);
-    // 名札は置き場の規則の表に行 R-9 が在れば行 id、無ければ検査の名（便 156）
-    let label = crate::rules::label(rules, "R-9");
     for (lw, at) in unknown_words(&body, &known) {
-        report.violation(label, format!("{at}: 語彙に無い英字の語「{lw}」"));
+        // 種別 R-9（外の置き場の名札は出力の口で 語彙・便 203）
+        report.violation("R-9", format!("{at}: 語彙に無い英字の語「{lw}」"));
     }
 }
 

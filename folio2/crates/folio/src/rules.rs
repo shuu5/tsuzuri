@@ -10,31 +10,58 @@
 
 #![allow(dead_code)]
 
+use std::path::Path;
+
+use crate::adr;
 use crate::constitution_enums::{MechanismKind, Stage};
-use crate::floor::Floor;
+use crate::floor::{self, Floor};
 use crate::yaml::Node;
 
 /// 規則の表の最上位の節の閉じた一覧（`FLOOR` の top_level・thresholds と discipline は人が書き、schema は生成区間・ほかの名は未知の節）。
 pub const RULES_TOP_LEVEL: [&str; 3] = ["schema", "thresholds", "discipline"];
 
-/// 違反の名札の閉じた一覧（便 156）: 行 id と、置き場の規則の表にその行が無いときの検査の名。名札は文言の字面（行 D-11 の写しの外）。
-pub const LABELS: [(&str, &str); 3] = [("R-9", "語彙"), ("R-10", "平易文"), ("R-11", "強度と文末")];
+/// 違反の名札の閉じた一覧（便 156・便 203・台帳 f2-648.236）: folio2 の id の名札と、外の置き場で出す検査の名。外の置き場に
+/// folio2 の id を出してよいのは、床が置き場の規則の表の行をその id の字で引いて値か対象を読むときだけ（行 R-8・R-16・R-17・
+/// 名札に出るのは R-17）。この一覧の検査は
+/// folio2 の条と規範文の意味から来るか（A-2・N-4・P-7・P-7.1・P-8）、行の値も対象も読まない（R-3・R-9・R-10・R-11）ので、外では
+/// 置き場の表に同じ id が在っても検査の名（同じ id が置き場で別の意味を持ちうる・外の利用者は tsuzuri・持ち主の裁定 2026-09-27）。
+/// folio2 の置き場は id のまま（便 156 の「表に行が無ければ検査の名」は外の置き場の規則に寄せた）。名札は文言の字面（行 D-11 の写しの外）。
+pub const ABROAD_LABELS: [(&str, &str); 9] = [
+    ("A-2", "改訂と判断の記録"),
+    ("N-4", "改訂の承認"),
+    ("P-7", "id の再利用と改番"),
+    ("P-7.1", "id の再利用と改番"),
+    ("P-8", "撤退条件"),
+    ("R-3", "部品目録"),
+    ("R-9", "語彙"),
+    ("R-10", "平易文"),
+    ("R-11", "強度と文末"),
+];
 
-/// 違反の名札（便 156）。置き場の規則の表（thresholds か discipline）に行 `row` が在れば行 id、無ければ検査の名。
-pub fn label(rules: &Node, row: &'static str) -> &'static str {
-    let has = RULES_TOP_LEVEL[1..]
-        .iter()
-        .filter_map(|s| rules.get(s))
-        .filter_map(Node::as_seq)
-        .flatten()
-        .any(|r| r.get("id").and_then(Node::as_str) == Some(row));
-    if has {
-        return row;
+/// 置き場の違反の名札の読み（便 203）。folio2 の置き場と名の無い口（`floor::abroad` が偽）は名札の字のまま、外の置き場は
+/// `ABROAD_LABELS` の id を検査の名にする（出力の口で 1 度だけ引く・書く前と後の突き合わせは元の字で数える）。
+pub struct Labels {
+    abroad: bool,
+}
+
+impl Labels {
+    /// 置き場 `dir` の読み（名は `adr::place_name`・外の判定は便 202 と同じ `floor::abroad`）。
+    pub fn of(dir: &Path) -> Labels {
+        Labels {
+            abroad: floor::abroad(adr::place_name(dir).ok().as_deref()),
+        }
     }
-    LABELS
-        .iter()
-        .find(|(id, _)| *id == row)
-        .map_or(row, |(_, name)| name)
+
+    /// 出力に出す名札。
+    pub fn shown<'a>(&self, kind: &'a str) -> &'a str {
+        if !self.abroad {
+            return kind;
+        }
+        ABROAD_LABELS
+            .iter()
+            .find(|(id, _)| *id == kind)
+            .map_or(kind, |(_, name)| name)
+    }
 }
 
 /// 閾値の行（R-n）が必ず持つ欄。
@@ -487,5 +514,29 @@ mod tests {
         }
         assert_eq!(KIND_DENY_MAPS_TO, ["reject", "build-check"]);
         assert_eq!(KIND_DETECT_MAPS_TO, ["none"]);
+    }
+
+    /// 違反の名札（便 203）: folio2 の置き場（外でない）は名札のまま、外の置き場は一覧の 9 つの id を検査の名にする（置き場の表を
+    /// 見ない＝同じ id を持つ置き場でも検査の名・期待の字は手書き）。一覧に無い名札（行を引く R-17 と検査の名）は変えない。
+    #[test]
+    fn f203_labels_name_the_check_abroad_even_where_the_place_has_the_id() {
+        let home = Labels { abroad: false };
+        let abroad = Labels { abroad: true };
+        for (id, name) in [
+            ("A-2", "改訂と判断の記録"),
+            ("N-4", "改訂の承認"),
+            ("P-7", "id の再利用と改番"),
+            ("P-7.1", "id の再利用と改番"),
+            ("P-8", "撤退条件"),
+            ("R-3", "部品目録"),
+            ("R-9", "語彙"),
+            ("R-10", "平易文"),
+            ("R-11", "強度と文末"),
+        ] {
+            assert_eq!((home.shown(id), abroad.shown(id)), (id, name));
+        }
+        for kind in ["adr", "schema", "R-8", "R-16", "R-17", "P-18", "polarity"] {
+            assert_eq!((home.shown(kind), abroad.shown(kind)), (kind, kind));
+        }
     }
 }

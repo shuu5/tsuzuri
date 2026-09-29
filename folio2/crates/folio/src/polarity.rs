@@ -5,7 +5,7 @@
 //! in-loop-min の閾値の行が 1 本在るとき、段が in-loop の本数がその値を割れば違反にする。その行が無ければ数えず知らせ、
 //! 2 本以上在るか値の形が違えば まだ分からない とする。in_loop の名と行 R-13 の欄 key は器の行の着地の後（決定 (7)・本便は運ばない）。
 //! 外の置き場（名が folio2 の置き場の名でない）へ出す知らせと違反の字は、folio2 の条の番号を落とす（便 202・生成区間と同じ
-//! `floor::val_for` と `floor::abroad`）。folio2 の置き場と名の無い口は定数の字のまま。
+//! `floor::said` と `floor::abroad`）。folio2 の置き場と名の無い口は定数の字のまま。
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -45,14 +45,9 @@ impl Guard {
     }
 }
 
-/// 置き場へ出す字（folio2 の置き場と名の無い口は定数のまま・外の置き場は folio2 の番号の印を落とす・何も残らなければ空の字）。
-fn said(v: &'static str, name: Option<&str>) -> Cow<'static, str> {
-    floor::val_for(v, name, false).unwrap_or_default()
-}
-
 /// 置き場 `dir` の素の床の標準エラーへ出す、下限を数えなかった知らせ（置き場の名は `folio schema` と同じ `adr::place_name`）。
 pub fn off(dir: &Path) -> Cow<'static, str> {
-    said(OFF, adr::place_name(dir).ok().as_deref())
+    floor::said(OFF, adr::place_name(dir).ok().as_deref())
 }
 
 fn text(node: &Node, key: &str) -> String {
@@ -113,7 +108,7 @@ pub fn check_floor(constitution: &Node, rules: &Node, name: Option<&str>, report
             if n < min {
                 report.violation(
                     if floor::abroad(name) { KIND_ABROAD } else { KIND },
-                    format!("極性一覧の編集時（in-loop）の仕掛けが {n} 本で、行 {id} の下限 {min} 本以上を割る{}", said(CLAUSE, name)),
+                    format!("極性一覧の編集時（in-loop）の仕掛けが {n} 本で、行 {id} の下限 {min} 本以上を割る{}", floor::said(CLAUSE, name)),
                 );
             }
         }
@@ -171,7 +166,7 @@ mod tests {
             let mut report = Report::default();
             assert!(check_floor(&constitution, &none, name, &mut report), "{name:?}");
             assert!(report.violations.is_empty(), "{name:?}");
-            assert_eq!(said(OFF, name), if home { OFF } else { OFF_ABROAD }, "{name:?}");
+            assert_eq!(floor::said(OFF, name), if home { OFF } else { OFF_ABROAD }, "{name:?}");
         }
     }
 }

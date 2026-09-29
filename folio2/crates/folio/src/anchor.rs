@@ -391,6 +391,9 @@ pub fn check_anchor(
     report: &mut Report,
 ) -> Option<State> {
     let c = read_typed(&dir.join("constitution.yaml"), "constitution.yaml", report)?;
+    // まだ分からない の行の folio2 の番号の片は外の置き場で落とす（便 203）
+    let name = crate::adr::place_name(dir).ok();
+    let said = |v: &'static str| crate::floor::said(v, name.as_deref());
     let scope = amendment_scope(&c);
     let cur_proj = match project(&c, &scope) {
         Ok(p) => p,
@@ -495,7 +498,8 @@ pub fn check_anchor(
             .unwrap_or_default();
         if entries.is_empty() {
             report.pending(format!(
-                "{index_file}: 索引はあるが entries が空＝比較元が立たない（まだ分からない・P-10.3）。索引と anchor は消さない・空にしない"
+                "{index_file}: 索引はあるが entries が空＝比較元が立たない{}。索引と anchor は消さない・空にしない",
+                said("（まだ分からない・P-10.3）")
             ));
         }
         for (n, e) in entries.iter().enumerate() {
@@ -534,7 +538,8 @@ pub fn check_anchor(
             }
             let Some(a) = find(&vs) else {
                 report.pending(format!(
-                    "anchor の列が切れている: 索引にある版 {vs} の anchor file が無いか読めない＝差分検査は「まだ分からない」（P-10.3）。anchors/ は消さない"
+                    "anchor の列が切れている: 索引にある版 {vs} の anchor file が無いか読めない＝差分検査は「まだ分からない」{}。anchors/ は消さない",
+                    said("（P-10.3）")
                 ));
                 continue;
             };
@@ -680,8 +685,10 @@ pub fn check_anchor(
         }
     } else if index.is_none() && anchors.is_empty() && !records_exist {
         report.pending(format!(
-            "凍結 anchor が 0 本（{}）＝A-2 / N-4 の差分検査は「まだ分からない」（P-10.3）。発効版で --freeze-anchor を実行する",
-            anch.display()
+            "凍結 anchor が 0 本（{}）＝{}差分検査は「まだ分からない」{}。発効版で --freeze-anchor を実行する",
+            anch.display(),
+            said("A-2 / N-4 の"),
+            said("（P-10.3）")
         ));
     } else if let (Some(v), Some(na)) = (&newest, newest_anchor) {
         if *v != cur_ver {

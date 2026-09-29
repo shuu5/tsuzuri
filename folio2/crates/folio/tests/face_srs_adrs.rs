@@ -207,9 +207,10 @@ fn f166_adrs_without_a_record_are_not_yet_known() {
     let w = Work::skeleton("unknown", &[row("FR1", "[]", None, "[ADR-9, ADR-1]")], &[]);
     let check = w.check();
     assert_eq!(code(&check, "folio check"), 1, "{}", both(&check));
+    // 骨格は条 A-2 を持たないので、名札は検査の名（便 203）
     assert!(
         both(&check)
-            .contains("[A-2] srs.yaml: requirements[0].adrs[0]: 判断の記録 ADR-9 が実在しない"),
+            .contains("[改訂と判断の記録] srs.yaml: requirements[0].adrs[0]: 判断の記録 ADR-9 が実在しない"),
         "{}",
         both(&check)
     );

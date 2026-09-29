@@ -21,7 +21,7 @@ use crate::catalog::FigureType;
 use crate::ceiling;
 use crate::constitution_enums as ce;
 use crate::entrance;
-use crate::floor::Floor;
+use crate::floor::{self, Floor};
 use crate::ids;
 use crate::intake;
 use crate::link;
@@ -243,11 +243,12 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
         Some(src) => {
             not_yet_live = not_yet_live_articles(&src.constitution);
             let history = anchor::history_ids(dir);
-            let range = place_range(&src.constitution, &mut report);
-            check_constitution(&src.constitution, &src.rules, &range, &mut report);
-            check_rules(&src.rules, &mut report);
-            // 極性一覧の編集時（in-loop）の本数の下限（便 200・ADR-33 決定 (5)・条 P-18.4）。外の置き場の字は置き場の名で決まる（便 202）
+            // 外の置き場の字は置き場の名で決まる（便 202・便 203）
             let name = adr::place_name(dir).ok();
+            let range = place_range(&src.constitution, name.as_deref(), &mut report);
+            check_constitution(&src.constitution, &range, &mut report);
+            check_rules(&src.rules, &mut report);
+            // 極性一覧の編集時（in-loop）の本数の下限（便 200・ADR-33 決定 (5)・条 P-18.4）
             in_loop_min_off = polarity::check_floor(&src.constitution, &src.rules, name.as_deref(), &mut report);
             check_vocabulary(&src.vocabulary, &mut report);
             check_srs(&src.srs, &mut report);
@@ -320,7 +321,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                 notes: notes.iter().map(|n| (format!("design-note/{}", n.file), &n.root)).collect(),
             };
             let sites = ruling::sites(&tree);
-            check_rulings(&sites, &mut report);
+            check_rulings(&sites, name.as_deref(), &mut report);
             if flag == Flag::EmitRulings {
                 rulings = ruling::emit(dir, &sites);
             }
@@ -466,14 +467,15 @@ fn load_graph(dir: &Path, report: &mut Report) -> Option<Node> {
 /// 決定の欄の裁定 id の形（便 181・判断の記録 ADR-31 決定 (1)(3)）。歩き手が拾った欄ごとに、裁定 id を 1 つも切り出せなければ
 /// 違反（欄が無い・空・字でない〔一覧・表〕も同じ）、骨格が書く欄の値が骨格の印（未記入）なら まだ分からない（裁定の前）。
 /// どの形の種類で足りるかと台帳に在るかは見ない（器と人の持ち分）。
-fn check_rulings(sites: &[ruling::Site], report: &mut Report) {
+fn check_rulings(sites: &[ruling::Site], name: Option<&str>, report: &mut Report) {
     const KIND: &str = "裁定 id";
     for site in sites {
         let at = format!("{}: {}", site.file, site.at);
         match site.value {
             Some(Node::Scalar(s)) if site.skeleton() && adr::unfilled(s) => report.pending(format!(
-                "{at} が {}（骨格の印・裁定の前＝条 P-17.3）",
-                adr::UNFILLED
+                "{at} が {}{}",
+                adr::UNFILLED,
+                floor::said("（骨格の印・裁定の前＝条 P-17.3）", name)
             )),
             Some(Node::Scalar(s)) if ruling::has_ruling(s) => {}
             Some(Node::Scalar(s)) => report.violation(
@@ -606,8 +608,9 @@ type PlaceRange = HashMap<String, Vec<String>>;
 /// 狭めた鍵（組み立てた版の値が無い・外した値を組み立てた版の順に名指し、広げた字の直後に出す）と、
 /// 引けない鍵（組み立てた版の鍵が節に無い・値が文字列の一覧でない・節が表でない）は鍵ごとに「まだ分からない」（測れない）1 件。
 /// 違反は出さない。返す表は文字列の一覧の鍵だけを持つ（広げた鍵も狭めた鍵も入れる＝置き場の値域にも無い値は違反のまま）。
-/// 値域を置き場ごとに広げる口も狭める口も持たない（N-3.1）。
-fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
+/// 値域を置き場ごとに広げる口も狭める口も持たない（N-3.1）。字の中の要件の id（FR25）は外の置き場（`name`）で落とす（便 203）。
+fn place_range(root: &Node, name: Option<&str>, report: &mut Report) -> PlaceRange {
+    let fr25 = |v: &'static str| floor::said(v, name);
     const FILE: &str = "constitution.yaml";
     let mut range = PlaceRange::new();
     let Some(section) = root
@@ -616,7 +619,8 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
         .and_then(Node::as_map)
     else {
         report.pending(format!(
-            "{FILE}: schema.enums（置き場の憲法の値域の節）が表でない＝条の値を置き場の値域で引けない（FR25）"
+            "{FILE}: schema.enums（置き場の憲法の値域の節）が表でない＝条の値を置き場の値域で引けない{}",
+            fr25("（FR25）")
         ));
         return range;
     };
@@ -626,7 +630,8 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
             .and_then(|l| l.iter().map(Node::as_str).collect());
         let Some(values) = values else {
             report.pending(format!(
-                "{FILE}: schema.enums.{key} が文字列の一覧でない＝条の値を置き場の値域で引けない（FR25）"
+                "{FILE}: schema.enums.{key} が文字列の一覧でない＝条の値を置き場の値域で引けない{}",
+                fr25("（FR25）")
             ));
             continue;
         };
@@ -638,7 +643,8 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
         }
         match ce::ENUMS.iter().find(|(k, _)| *k == key.as_str()) {
             None => report.pending(format!(
-                "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い・FR25）"
+                "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある{}",
+                fr25("（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い・FR25）")
             )),
             Some((_, built)) => {
                 let outside: Vec<String> = list
@@ -648,8 +654,9 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
                     .collect();
                 if !outside.is_empty() {
                     report.pending(format!(
-                        "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い・FR25）",
-                        outside.join("・")
+                        "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い{}）",
+                        outside.join("・"),
+                        fr25("・FR25")
                     ));
                 }
                 let missing: Vec<String> = built
@@ -659,8 +666,9 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
                     .collect();
                 if !missing.is_empty() {
                     report.pending(format!(
-                        "{FILE}: schema.enums.{key}: 組み立て時の値域に在る値が無い（{}・値域を置き場ごとに狭める口は無い・FR25）",
-                        missing.join("・")
+                        "{FILE}: schema.enums.{key}: 組み立て時の値域に在る値が無い（{}・値域を置き場ごとに狭める口は無い{}）",
+                        missing.join("・"),
+                        fr25("・FR25")
                     ));
                 }
             }
@@ -670,7 +678,8 @@ fn place_range(root: &Node, report: &mut Report) -> PlaceRange {
     for (key, _) in ce::ENUMS {
         if !section.iter().any(|(k, _)| k.as_str() == key) {
             report.pending(format!(
-                "{FILE}: schema.enums に鍵 {key} が無い＝条の {key} の値を置き場の値域で引けない（FR25）"
+                "{FILE}: schema.enums に鍵 {key} が無い＝条の {key} の値を置き場の値域で引けない{}",
+                fr25("（FR25）")
             ));
         }
     }
@@ -711,8 +720,7 @@ fn check_mechanism(file: &str, at: &str, holder: Option<&Node>, report: &mut Rep
     closed_fields(file, at, m, &ce::MECHANISM_FIELDS, report);
 }
 
-/// `rules_root` は置き場の規則の表（違反の名札を引くだけ・便 156）。
-fn check_constitution(root: &Node, rules_root: &Node, range: &PlaceRange, report: &mut Report) {
+fn check_constitution(root: &Node, range: &PlaceRange, report: &mut Report) {
     const FILE: &str = "constitution.yaml";
     if let Some(top) = schema_top_level(FILE, root, report) {
         unknown_sections(FILE, root, &top, report);
@@ -755,9 +763,9 @@ fn check_constitution(root: &Node, rules_root: &Node, range: &PlaceRange, report
             &["id", "title", "statements"],
             report,
         );
-        // 条の plain だけは床の字面（名札 R-10・置き場の規則の表に行が無ければ 平易文・便 156）で出す
+        // 条の plain だけは床の字面（種別 R-10・外の置き場の名札は出力の口で 平易文・便 203）で出す
         if article.get("plain").is_none_or(Node::is_blank) {
-            report.violation(rules::label(rules_root, "R-10"), format!("{id}: plain が無い"));
+            report.violation("R-10", format!("{id}: plain が無い"));
         }
         closed_fields(FILE, &format!("条 {id}"), article, &ce::ARTICLE_FIELDS, report);
         check_mechanism(
@@ -773,7 +781,7 @@ fn check_constitution(root: &Node, rules_root: &Node, range: &PlaceRange, report
             closed_fields(FILE, &at, st, &ce::STATEMENT_FIELDS, report);
         }
         check_article_enums(&id, article, &statements, range, report);
-        check_statement_polarity(&id, &statements, rules::label(rules_root, "R-11"), report);
+        check_statement_polarity(&id, &statements, report);
         duplicate_statement_ids(statements, report);
     }
     duplicate_ids(FILE, articles, report);
@@ -852,10 +860,10 @@ fn check_article_enums(
 
 /// 規則の表 R-11（便 59・day-1 の Python の床から戻した式）: 規範文の strength と文末の一致 = must-not ⇔ 文末が「ない。」／
 /// must・should ⇔ それ以外。式は床の定数（憲法の schema.one_polarity は宣言で、床はその値を読まない・規則の表 R-11 の what が正本・
-/// ADR-11 決定 (3)(エ)）。合わない 1 本につき名札 R-11（置き場の規則の表に行が無ければ 強度と文末・便 156）の違反 1 件。名札は `label` で受ける。
+/// ADR-11 決定 (3)(エ)）。合わない 1 本につき種別 R-11 の違反 1 件（外の置き場の名札は出力の口で 強度と文末・便 203）。
 /// strength が組み立てた値域の外（`check_article_enums` が種別 schema で
 /// 数えるか、置き場の値域に在れば `place_range` が「まだ分からない」を出す）・text が字でない（非空の検査が数える）ときは黙る＝二重に出さない。
-fn check_statement_polarity(id: &str, statements: &[&Node], label: &str, report: &mut Report) {
+fn check_statement_polarity(id: &str, statements: &[&Node], report: &mut Report) {
     for st in statements {
         let Some(strength) = st
             .get("strength")
@@ -870,7 +878,7 @@ fn check_statement_polarity(id: &str, statements: &[&Node], label: &str, report:
         let negative = text.trim_end().ends_with("ない。");
         if (strength == ce::Strength::MustNot) != negative {
             report.violation(
-                label,
+                "R-11",
                 format!(
                     "{id}: {}: strength {} と文末が合わない（must-not ⇔ 〜ない。）",
                     row_id(st),

@@ -56,7 +56,7 @@ pub(crate) enum Floor {
 }
 
 /// 外の置き場か（名が在って `HOME` でない）。名の無い口（床の単体の歯と名なしの突き合わせ）は定数の字のまま。
-/// 床の知らせと違反の字（`polarity.rs`・便 202）も同じ関数で決める。
+/// 床の知らせ・違反の字と名札・まだ分からない の行（`said` と `rules::Labels`・便 202・便 203）も同じ関数で決める。
 pub(crate) fn abroad(name: Option<&str>) -> bool {
     name.is_some_and(|n| n != HOME)
 }
@@ -241,9 +241,8 @@ pub(crate) fn text_for(v: &str) -> Option<String> {
 }
 
 /// 置き場へ写す値の字。folio2 の置き場と名の無い口は定数のまま。外の置き場は `text_for` で、何も残らないとき注の中（`note`）は
-/// None（書かない）、注の外は空の字（床の単体の歯が型付きの欄で起きないことを見る）。床の知らせと違反の字（`polarity.rs`・便 202）
-/// は注の外として通す。
-pub(crate) fn val_for(v: &'static str, name: Option<&str>, note: bool) -> Option<Cow<'static, str>> {
+/// None（書かない）、注の外は空の字（床の単体の歯が型付きの欄で起きないことを見る）。
+fn val_for(v: &'static str, name: Option<&str>, note: bool) -> Option<Cow<'static, str>> {
     if !abroad(name) {
         return Some(Cow::Borrowed(v));
     }
@@ -252,6 +251,13 @@ pub(crate) fn val_for(v: &'static str, name: Option<&str>, note: bool) -> Option
         None if note => None,
         None => Some(Cow::Borrowed("")),
     }
+}
+
+/// 置き場へ出す床の字の番号の片（便 202・便 203）: 注の外の `val_for`（folio2 の置き場と名の無い口は定数のまま・外の置き場は
+/// folio2 の番号の印を持つ括弧の項と文を落とし、何も残らなければ空の字）。知らせ・違反の字・まだ分からない の行が、字の中の
+/// folio2 の番号の片だけをこれに通す（置き場の自分の id を持つ片は通さない＝印に数えて文ごと落とさない）。
+pub(crate) fn said(v: &'static str, name: Option<&str>) -> Cow<'static, str> {
+    val_for(v, name, false).unwrap_or_default()
 }
 
 /// 一覧の各項を置き場へ写した字（注の中で何も残らない項は落とす）。
@@ -788,5 +794,27 @@ mod tests {
             assert_eq!(text_for(from).as_deref(), to, "{from}");
         }
         assert!(!abroad(None) && !abroad(Some(HOME)) && abroad(Some("x-constitution")));
+    }
+
+    /// 置き場へ出す床の字の番号の片（便 203）: 名の無い口と folio2 の置き場は片のまま、外の置き場は folio2 の番号の項と文を
+    /// 落とし、印の無い項は残す（期待の字は手書き）。
+    #[test]
+    fn f203_said_drops_only_the_folio2_number_pieces_abroad() {
+        let pieces: [(&str, &str); 6] = [
+            ("（骨格の印・裁定の前＝条 P-17.3）", "（骨格の印）"),
+            ("（まだ分からない・P-10.3）", "（まだ分からない）"),
+            ("（folio check --freeze-adrs で封を書き、commit する・P-10.3）", "（folio check --freeze-adrs で封を書き、commit する）"),
+            ("A-2 / N-4 の", ""),
+            ("（FR25）", ""),
+            ("・FR25", ""),
+        ];
+        for (piece, abroad_text) in pieces {
+            for name in [None, Some(HOME)] {
+                assert_eq!(said(piece, name), piece, "{name:?}");
+            }
+            for name in ["tsuzuri-constitution", "未記入", "folio2"] {
+                assert_eq!(said(piece, Some(name)), abroad_text, "{name}");
+            }
+        }
     }
 }

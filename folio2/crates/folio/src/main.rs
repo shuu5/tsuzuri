@@ -363,8 +363,10 @@ fn proposed_check(dir: &std::path::Path, rel: &std::path::Path) -> ExitCode {
         Ok(j) => j,
         Err(why) => return proposed_refused(&why),
     };
+    // 名札は置き場の今の憲法と規則の表で引く（便 203・書く前と後の突き合わせは名札の元の字で数える）
+    let labels = rules::Labels::of(dir);
     for (kind, msg) in &judged.stop {
-        println!("[{kind}] {msg}");
+        println!("[{}] {msg}", labels.shown(kind));
     }
     for msg in &judged.unknowns {
         println!("{UNKNOWN_HEAD}{msg}");
@@ -378,7 +380,7 @@ fn proposed_check(dir: &std::path::Path, rel: &std::path::Path) -> ExitCode {
         judged.before_unknowns
     );
     for (kind, msg) in &judged.links {
-        println!("# つながり（編集は止めない・事後の床が数える）: [{kind}] {msg}");
+        println!("# つながり（編集は止めない・事後の床が数える）: [{}] {msg}", labels.shown(kind));
     }
     ExitCode::from(judged.verdict().exit_code() as u8)
 }
@@ -453,8 +455,9 @@ fn run(cli: Cli) -> ExitCode {
                     println!("{line}");
                 }
             };
+            let labels = rules::Labels::of(&dir);
             for (kind, msg) in &report.violations {
-                out(format!("[{kind}] {msg}"));
+                out(format!("[{}] {msg}", labels.shown(kind)));
             }
             for msg in report.unknowns.iter().chain(&report.pendings) {
                 eprintln!("# まだ分からない: {msg}");
@@ -528,8 +531,9 @@ fn run(cli: Cli) -> ExitCode {
                 return ExitCode::from(0);
             }
             let report = parts::check(&dir, css.as_deref(), &pages);
+            let labels = rules::Labels::of(&dir);
             for (kind, msg) in &report.violations {
-                println!("[{kind}] {msg}");
+                println!("[{}] {msg}", labels.shown(kind));
             }
             for msg in report.unknowns.iter().chain(&report.pendings) {
                 eprintln!("# まだ分からない: {msg}");

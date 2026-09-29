@@ -37,7 +37,7 @@ pub fn check_link(
         .collect();
     let scope = amendment_scope(constitution);
 
-    retreat_kind(constitution, report);
+    retreat_kind(constitution, adr::place_name(dir).ok().as_deref(), report);
     surface(rules, report);
     amendment_range(&article_ids, &scope, report);
 
@@ -86,8 +86,9 @@ fn amendment_scope(constitution: &Node) -> Vec<String> {
 }
 
 /// (a) 撤退条件の種類。憲法の値域の一覧が床の定数の部分集合か（便 122・FR25・順と重複は問わない）。
-/// 床の定数に無い値（文字列でない値も同じ）が在れば「まだ分からない」（測れない）1 件で、違反は出さない。
-fn retreat_kind(constitution: &Node, report: &mut Report) {
+/// 床の定数に無い値（文字列でない値も同じ）が在れば「まだ分からない」（測れない）1 件で、違反は出さない。字の中の要件の id は
+/// 外の置き場（`name`）で落とす（便 203）。
+fn retreat_kind(constitution: &Node, name: Option<&str>, report: &mut Report) {
     let floor = adr::floor_strs(&["enums", "retreat_kind"]);
     let Some(items) = constitution
         .get("schema")
@@ -112,9 +113,10 @@ fn retreat_kind(constitution: &Node, report: &mut Report) {
     }
     if !outside.is_empty() {
         report.pending(format!(
-            "constitution.yaml: schema.enums.retreat_kind の{}が判断の記録の床の撤退条件の種類 [{}] に無い＝判断の記録の撤退条件を置き場の値域で数えられない（FR25）",
+            "constitution.yaml: schema.enums.retreat_kind の{}が判断の記録の床の撤退条件の種類 [{}] に無い＝判断の記録の撤退条件を置き場の値域で数えられない{}",
             outside.join("・"),
-            floor.join(", ")
+            floor.join(", "),
+            crate::floor::said("（FR25）", name)
         ));
     }
 }

@@ -123,8 +123,13 @@ pub(crate) fn check_seals(
     if !seals.path.exists() {
         if !seals.current.is_empty() && !freezing(flag) {
             report.pending(format!(
-                "{file}（判断の記録の封の一覧）が無い＝発効した判断の記録 {} 本の本文の凍結を測れない（folio check --freeze-adrs で封を書き、commit する・P-10.3）",
-                seals.current.len()
+                "{file}（判断の記録の封の一覧）が無い＝発効した判断の記録 {} 本の本文の凍結を測れない{}",
+                seals.current.len(),
+                // 外の置き場では folio2 の条の番号の項を落とす（便 203）
+                crate::floor::said(
+                    "（folio check --freeze-adrs で封を書き、commit する・P-10.3）",
+                    adr::place_name(dir).ok().as_deref()
+                )
             ));
         }
         return seals;
