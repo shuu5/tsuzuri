@@ -11,6 +11,7 @@
 //! 設定に値が無ければ席の目に落ちて URL の行を出し（open は断る）、表示先は board の問いで持ち主に問う。
 //! 設定の端末の名が層 A（器の host の面の [[device]]）に無ければ名指して断り、既定へ落とさない。
 //! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
+//! show --json は show と同じ読みを電文の 1 行で出す（board の server が行を割らずに読む・行 e-stage-target）。
 //! click・入力・key の断りは url の ports のほかの board（群の宣言の anchor ごとの project board）にも広げ、
 //! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない・行 i-board-ports）。
 //! tz stage notify は窓を起こさず表示先の端末へ知らせだけを出し、project の最新の知らせの記録を書く（行 i-10）。
@@ -26,6 +27,8 @@ use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use tsuzuri_contract::stage as msg;
+use tsuzuri_contract::wire;
 use tsuzuri_core::account::host::declaration;
 use tsuzuri_core::account::project_name;
 
@@ -43,7 +46,7 @@ use crate::server::proc;
 
 /// 使い方の行（命令の撃ちと、表示先の設定の口と、知らせの口）。
 pub const USAGE: &str = "usage: tz stage <navigate|viewport|reload|click|type|key|scroll|wait|screenshot|dom|console|run|open> [--to <端末の名>] [--url <URL> | --width <n> --height <n> --scale <n> --mobile <true|false> | --x <n> --y <n> [--dy <n>] | --text <字> | --key <鍵> | --ms <n> | --out <path>] [--repo <dir>] [--ssh <program>] [--scribe2 <program>] [--git <program>] [--tailnet <program>] [--chrome <program>] [--config <path>]
-       tz stage target <show | set --project <project の名> <端末の名> | set --all <端末の名> | clear --project <project の名>> [--repo <dir>] [--scribe2 <program>] [--git <program>] [--config <path>]
+       tz stage target <show [--json] | set --project <project の名> <端末の名> | set --all <端末の名> | clear --project <project の名>> [--repo <dir>] [--scribe2 <program>] [--git <program>] [--config <path>]
        tz stage notify [--to <端末の名>] <題> [--repo <dir>] [--ssh <program>] [--scribe2 <program>] [--git <program>] [--tailnet <program>] [--config <path>]";
 
 /// 席の中の撃ちの印の環境変数（Claude Code の Bash の道具が子の process に 1 を渡す）。
@@ -332,6 +335,8 @@ pub fn config_path(config: Option<&Path>) -> Result<PathBuf, String> {
 pub enum Setting {
     /// 設定と層 A の名を並べる。
     Show,
+    /// show と同じ読みを電文の 1 行で出す（show --json・行 e-stage-target）。
+    Json,
     /// project の上書きを置く（project の名・端末の名）。
     Project(String, String),
     /// 全体の既定を置き、project ごとの上書きを全部外す。
@@ -350,8 +355,8 @@ pub struct TargetCall {
     pub config: Option<PathBuf>,
 }
 
-/// tz stage target の後の引数を読む（--all は値の無い旗・受ける旗は --project・--repo・--scribe2・--git・--config で
-/// 1 度ずつ・旗でない字は端末の名）。
+/// tz stage target の後の引数を読む（--all と --json は値の無い旗で --json は show だけが受ける・受ける旗は
+/// --project・--repo・--scribe2・--git・--config で 1 度ずつ・旗でない字は端末の名）。
 pub fn parse_target(args: &[&str]) -> Result<TargetCall, String> {
     const FLAGS: [&str; 5] = ["--project", "--repo", "--scribe2", "--git", "--config"];
     let Some((&verb, rest)) = args.split_first() else {
@@ -360,7 +365,7 @@ pub fn parse_target(args: &[&str]) -> Result<TargetCall, String> {
     if !matches!(verb, "show" | "set" | "clear") {
         return Err(format!("知らない target の命令 {verb}（show・set・clear）"));
     }
-    let mut all = false;
+    let (mut all, mut json) = (false, false);
     let mut flags: [Option<&str>; 5] = [None; 5];
     let mut words = Vec::new();
     let mut it = rest.iter();
@@ -370,6 +375,16 @@ pub fn parse_target(args: &[&str]) -> Result<TargetCall, String> {
                 return Err("--all が 2 度ある".to_string());
             }
             all = true;
+            continue;
+        }
+        if arg == "--json" {
+            if json {
+                return Err("--json が 2 度ある".to_string());
+            }
+            if verb != "show" {
+                return Err("--json は target show だけが受ける".to_string());
+            }
+            json = true;
             continue;
         }
         if !arg.starts_with("--") {
@@ -395,6 +410,7 @@ pub fn parse_target(args: &[&str]) -> Result<TargetCall, String> {
     }
     let [project, repo, scribe2, git, config] = flags;
     let setting = match (verb, project, all, words.as_slice()) {
+        ("show", None, false, []) if json => Setting::Json,
         ("show", None, false, []) => Setting::Show,
         ("show", ..) => return Err("target show の形でない（旗 --project と --all と端末の名を受けない）".to_string()),
         ("set", Some(p), false, [name]) => Setting::Project(p.to_string(), name.to_string()),
@@ -406,7 +422,7 @@ pub fn parse_target(args: &[&str]) -> Result<TargetCall, String> {
         _ => return Err("target clear の形でない（clear --project <project の名>）".to_string()),
     };
     let named: Vec<&str> = match &setting {
-        Setting::Show => Vec::new(),
+        Setting::Show | Setting::Json => Vec::new(),
         Setting::Project(p, n) => vec![p, n],
         Setting::All(n) | Setting::Clear(n) => vec![n],
     };
@@ -454,6 +470,45 @@ pub fn show(targets: &Targets, projects: &[String], names: &[String]) -> Vec<Str
     out
 }
 
+/// tz stage target show --json の電文（`show` の行と同じ材料・`own` は --repo の project の名・出所 `Project` は `Override`）。
+pub fn doc(
+    targets: &Targets,
+    own: &str,
+    projects: &[String],
+    names: &[String],
+) -> msg::StageTargets {
+    let origin = |origin: target::Origin| match origin {
+        target::Origin::Default => msg::Origin::Default,
+        target::Origin::Project => msg::Origin::Override,
+    };
+    msg::StageTargets {
+        project: own.to_string(),
+        default: targets.default.clone(),
+        overrides: targets
+            .projects
+            .iter()
+            .map(|(project, name)| msg::Override {
+                project: project.clone(),
+                name: name.clone(),
+            })
+            .collect(),
+        projects: projects
+            .iter()
+            .map(|project| msg::ProjectTarget {
+                project: project.clone(),
+                effective: targets
+                    .effective(project)
+                    .map(|(name, from)| msg::Effective {
+                        name: name.to_string(),
+                        origin: origin(from),
+                        listed: names.iter().any(|n| n == name),
+                    }),
+            })
+            .collect(),
+        names: names.to_vec(),
+    }
+}
+
 /// tz stage target を撃つ（設定を読み、器の検めの後に層 A の名を読んで、並べるか書く）。
 fn setting(call: &TargetCall) -> Result<(), String> {
     let path = config_path(call.config.as_deref())?;
@@ -461,19 +516,23 @@ fn setting(call: &TargetCall) -> Result<(), String> {
     let text = face_text(&call.repo, &call.scribe2, &call.git)?;
     let names = terminal::names(&text);
     let line = match &call.setting {
-        Setting::Show => {
+        Setting::Show | Setting::Json => {
+            let own = project(&call.repo)?;
             let mut projects: Vec<String> = Vec::new();
             let anchors = declaration(&text)
                 .groups
                 .into_iter()
                 .flat_map(|g| g.anchors.unwrap_or_default());
-            for name in anchors
-                .map(|a| project_name(&a))
-                .chain([project(&call.repo)?])
-            {
+            for name in anchors.map(|a| project_name(&a)).chain([own.clone()]) {
                 if !projects.contains(&name) {
                     projects.push(name);
                 }
+            }
+            if call.setting == Setting::Json {
+                let message = doc(&targets, &own, &projects, &names);
+                let line = wire::encode(&message).map_err(|e| format!("電文を組めない: {e}"))?;
+                println!("{line}");
+                return Ok(());
             }
             for line in show(&targets, &projects, &names) {
                 println!("{line}");

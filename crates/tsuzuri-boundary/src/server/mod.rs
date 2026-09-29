@@ -4,7 +4,9 @@
 //! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
 //! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。束と方針の受付の口は便 e-batch が足す（`batch`・`policy`）。
 //! account board の読みの口と停止の切り替えの口は行 h-wire が足す（`crate::acct`・`crate::accthb`）。
-//! POST を受ける口は /api/ruling・/api/batch・/api/policy・/api/account/heartbeat・/api/seat/heartbeat だけで、
+//! POST を受ける口は /api/ruling・/api/batch・/api/policy・/api/account/heartbeat・/api/seat/heartbeat と、
+//! 表示先の設定と窓を開く 3 つ（/api/stage/target・/api/stage/targets・/api/stage/open・頭 Origin の無い要求は断り、
+//! 読むだけの server も受ける・tz の口を撃つだけ・行 e-stage-target）だけで、
 //! ほかの GET でない要求は 405 で何も書かない（問いの合図の口 /api/surface/questions も POST を受けるが、何も書かず
 //! 台帳の見張りの周期の待ちを終わらせるだけで、読むだけの server も受ける・行 e-signal）。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 読むだけの server（`Config::read_only`）は答えと方針の口を受付の前に 403 で断り（`read_only`）、
@@ -65,6 +67,7 @@ use tsuzuri_contract::wire;
 
 use crate::acct::Acct;
 use crate::stage::notify;
+use crate::stagecall::Caller;
 
 use self::board::Sources;
 use self::design::Design;
@@ -157,6 +160,8 @@ struct Shared {
     others: Others,
     /// 席の「見て」の知らせの記録の dir（`Config::notify`・行 i-11）。
     notify: Option<PathBuf>,
+    /// 表示先の設定と窓を開く頼みの撃ち先（tz と器の program と --repo・行 e-stage-target）。
+    stage: Caller,
 }
 
 /// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
@@ -281,6 +286,11 @@ impl Server {
                 read_only: config.read_only,
                 others,
                 notify: config.notify.clone(),
+                stage: Caller {
+                    tz: config.tz.clone(),
+                    scribe2: config.scribe2.clone(),
+                    repo: config.repo.clone(),
+                },
             }),
         })
     }
@@ -343,6 +353,19 @@ fn guarded<T>(req: &Request, decode: impl FnOnce(&str) -> Option<T>) -> Result<T
         .ok()
         .and_then(decode)
         .ok_or_else(|| Response::text(400, "bad-body"))
+}
+
+/// 頭 Origin の無い要求も断る POST の口の守り（表示先の設定と窓を開く口・行 e-stage-target）。
+/// browser の POST は必ず頭 Origin を付けるので持ち主の button は通り、席が curl で撃つ要求は 403 origin で断る。
+/// 頭 Origin が在れば `guarded` と同じ。
+fn guarded_strict<T>(
+    req: &Request,
+    decode: impl FnOnce(&str) -> Option<T>,
+) -> Result<T, Response> {
+    if req.origin.is_none() {
+        return Err(Response::text(403, "origin"));
+    }
+    guarded(req, decode)
 }
 
 /// 断りの応答（状態の code は `Refusal::http_status`・本文は RefusalResponse）。

@@ -11,6 +11,7 @@
 //! board を読むだけで起こす・行 e-ask-own-only）。
 //! --project はほかの project の repo の置き場で、何度でも受け、その台帳の open の問いを dir の名の札つきで問いの一覧に
 //! 混ぜる（答えは受けない・行 e-multi-ask）。
+//! --tz は表示先の設定と窓を開く頼みに撃つ tz の program（省けば server 自身の binary・行 e-stage-target）。
 //! 席の「見て」の知らせの記録の dir は引数でなく環境の XDG_STATE_HOME と HOME から tz stage notify と同じ決めで引く（行 i-11）。
 //! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
 //! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
@@ -27,7 +28,7 @@ use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_boundary::stage::notify;
 use tsuzuri_core::account::project_name;
 
-const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>] [--read-only] [--project <dir>]...";
+const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>] [--tz <program>] [--read-only] [--project <dir>]...";
 
 /// 読むだけの server を名指す値を取らない引数（行 e-ask-own-only）。
 const READ_ONLY: &str = "--read-only";
@@ -65,13 +66,13 @@ fn usage(what: &str) -> u8 {
     FAIL
 }
 
-/// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd・--state-dir・--folio・--bdw・--seat・--scribe2 と、
+/// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd・--state-dir・--folio・--bdw・--seat・--scribe2・--tz と、
 /// 値を取らない --read-only と、何度でも受ける --project を読む（省ける引数の空の値と 2 度の引数は断る・
 /// --project は dir の名の無い値と前と同じ dir の名を断る）。
 fn parse(rest: &[&str]) -> Result<Config, String> {
     let (mut repo, mut bind, mut files, mut bd) = (None, None, None, None);
     let (mut state_dir, mut folio) = (None, None);
-    let (mut bdw, mut seat, mut scribe2) = (None, None, None);
+    let (mut bdw, mut seat, mut scribe2, mut tz) = (None, None, None, None);
     let mut read_only = false;
     let (mut projects, mut labels) = (Vec::new(), Vec::new());
     let mut it = rest.iter();
@@ -108,6 +109,7 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             "--bdw" => &mut bdw,
             "--seat" => &mut seat,
             "--scribe2" => &mut scribe2,
+            "--tz" => &mut tz,
             _ => return Err(format!("知らない引数 {name}")),
         };
         if slot.replace(value).is_some() {
@@ -124,6 +126,7 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
         ("--bdw", bdw),
         ("--seat", seat),
         ("--scribe2", scribe2),
+        ("--tz", tz),
     ] {
         if value == Some("") {
             return Err(format!("{name} の値が空"));
@@ -149,6 +152,12 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
         if let Some(value) = value {
             *slot = value.into();
         }
+    }
+    // --tz を省けば server 自身の binary（起きている server の PATH に tz は無いことが在る・行 e-stage-target）。
+    match (tz, std::env::current_exe()) {
+        (Some(value), _) => config.tz = value.into(),
+        (None, Ok(exe)) => config.tz = exe.into(),
+        (None, Err(_)) => {}
     }
     Ok(config)
 }

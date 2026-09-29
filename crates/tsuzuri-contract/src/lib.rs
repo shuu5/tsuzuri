@@ -12,6 +12,7 @@ pub mod question;
 pub mod runs;
 pub mod seat;
 pub mod seathb;
+pub mod stage;
 pub mod stats;
 pub mod surface;
 

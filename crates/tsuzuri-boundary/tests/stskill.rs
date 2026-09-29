@@ -115,7 +115,7 @@ fn stskill_commands() {
         }
         let call = parse_target(&words[3..]).unwrap_or_else(|e| panic!("{line:?}: {e}"));
         let named: Vec<&String> = match &call.setting {
-            Setting::Show => {
+            Setting::Show | Setting::Json => {
                 show += 1;
                 Vec::new()
             }

@@ -114,7 +114,8 @@ fn shoot(acct: &Acct, args: Vec<&OsStr>) -> Option<String> {
 }
 
 /// 群の宣言の anchor のうち、最後の区切りが project の名と同じ最初の anchor（書かれた字のまま・空の名は無し）。
-fn anchor(host_state_dir: &Path, project: &str) -> Option<String> {
+/// 表示先の設定の受付（`stagecall`）も project の名の引きに使う。
+pub(crate) fn anchor(host_state_dir: &Path, project: &str) -> Option<String> {
     if project.is_empty() {
         return None;
     }

@@ -16,7 +16,7 @@ const WAIT_STEP: Duration = Duration::from_millis(5);
 /// 子の process group の全体へ KILL の signal を送る道具の名（便 e-reap）。
 pub const KILL: &str = "kill";
 
-/// 子 process を 1 本撃ち、rc 0 で `timeout` の内に返した標準出力を返す（それ以外は None）。
+/// 子 process を 1 本撃ち、rc 0 で `timeout` の内に返した標準出力を返す（それ以外は None）。環境は親のまま渡す。
 /// cwd は `cwd`・標準入力は空・標準エラーは捨てる。
 /// 子は新しい process group に入れ（group の id は子の pid）、止めるときは孫まで group ごと止める（便 e-reap）。
 pub fn capture<I, S>(program: &OsStr, args: I, cwd: &Path, timeout: Duration) -> Option<Vec<u8>>
@@ -24,10 +24,28 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    capture_unset(program, args, cwd, timeout, &[])
+}
+
+/// `capture` と同じ撃ちで、子の環境から `unset` の名の環境変数を除く（親の環境は変えない・行 e-stage-target）。
+pub fn capture_unset<I, S>(
+    program: &OsStr,
+    args: I,
+    cwd: &Path,
+    timeout: Duration,
+    unset: &[&str],
+) -> Option<Vec<u8>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let deadline = Instant::now() + timeout;
-    let mut child = Command::new(program)
-        .args(args)
-        .current_dir(cwd)
+    let mut command = Command::new(program);
+    command.args(args).current_dir(cwd);
+    for name in unset {
+        command.env_remove(name);
+    }
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

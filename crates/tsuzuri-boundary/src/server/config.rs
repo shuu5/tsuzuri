@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use tsuzuri_contract::ledger::BDW;
 
 use super::{design, ledger, ruling};
+use crate::stagecall;
 
 /// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program・
 /// bdw の program・席の target・器の CLI の program・読むだけか・ほかの project の置き場・知らせの記録の dir）。席の target と state dir の両方が在るときだけ、
@@ -35,6 +36,8 @@ pub struct Config {
     pub projects: Vec<PathBuf>,
     /// 席の「見て」の知らせの記録の dir（None なら口 /api/notices は 503・main.rs は tz stage notify と同じ環境の字で引く・行 i-11）。
     pub notify: Option<PathBuf>,
+    /// 表示先の設定と窓を開く頼みに撃つ tz の program（既定は `stagecall::TZ`・main.rs は自分の binary にする・行 e-stage-target）。
+    pub tz: OsString,
 }
 
 impl Config {
@@ -53,6 +56,7 @@ impl Config {
             read_only: false,
             projects: Vec::new(),
             notify: None,
+            tz: stagecall::TZ.into(),
         }
     }
 }
