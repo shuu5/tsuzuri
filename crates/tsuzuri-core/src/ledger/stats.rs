@@ -221,7 +221,7 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
     };
 
     // 未反映は種類ごとの件数を 1 度だけ数え、数はその和。
-    let list = unreflected::of_beads(Some(&beads), now);
+    let list = unreflected::not_yet();
     let unreflected_kinds: Vec<UnreflectedCount> = UnreflectedKind::ALL
         .iter()
         .filter_map(|&kind| match list.get(kind) {

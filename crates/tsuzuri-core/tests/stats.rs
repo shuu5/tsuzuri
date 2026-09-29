@@ -236,24 +236,6 @@ fn stats_rule_r24_order_matches_rules() {
 }
 
 #[test]
-fn stats_unreflected_memos_oldest_first() {
-    let v = fixture("tests/fixtures/ledger/stats-30.json");
-    let u = unreflected(&input_text(&v, "ledger"), now_of(&v));
-    let Reading::Known(memos) = &u.memos else {
-        panic!("memo が読めない");
-    };
-    let got = serde_json::to_value(memos).expect("一覧");
-    assert_eq!(got, v["unreflected_memos"], "年齢の古い順");
-    // 裁定と要望は 0 件でなく「まだ分からない」。
-    assert_eq!(u.rulings, Reading::Unknown);
-    assert_eq!(u.requests, Reading::Unknown);
-    assert_eq!(
-        u.unknown(),
-        vec![UnreflectedKind::Ruling, UnreflectedKind::Request]
-    );
-}
-
-#[test]
 fn stats_next_step_matches_fixture() {
     let v = fixture("tests/fixtures/pipeline/next.json");
     let cases = v["cases"].as_array().expect("cases");

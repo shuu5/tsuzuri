@@ -47,50 +47,33 @@ fn memo_bead(id: &str, status: &str) -> Value {
     b
 }
 
-/// (1) 未反映の数は種類ごとの件数の和で、件数は読めた種類だけ（件数 0 も持つ）。
+/// (1) 未反映は器の局面の出力を読む行 c-unref-lc まで 3 種とも「まだ分からない」で、台帳が読めても
+/// 件数は持たず（和は 0）、読めない種類は 3 種の全部（open の memo を数える代用は外した）。
 #[test]
 fn harest_kinds_from_one_list() {
     let v = fixture("tests/fixtures/ledger/stats-30.json");
     let ledger = v["ledger"].to_string();
     let now = v["now"].as_u64().expect("now");
-    let Reading::Known(s) = stats(&ledger, now) else {
-        panic!("台帳が読めない");
-    };
-    assert_eq!(
-        s.unreflected_kinds,
-        vec![count_of(UnreflectedKind::Memo, 3)]
-    );
-    assert_eq!(s.unreflected, 3);
-    assert_eq!(
-        s.unreflected_unknown,
-        vec![UnreflectedKind::Ruling, UnreflectedKind::Request]
-    );
-    let Reading::Known(memos) = unreflected(&ledger, now).memos else {
-        panic!("memo の一覧が読めない");
-    };
-    assert_eq!(memos.len(), 3);
-
-    let now = 1_790_553_600;
     let two = json!([memo_bead("fx-m.1", "open"), memo_bead("fx-m.2", "closed")]).to_string();
-    let Reading::Known(s) = stats(&two, now) else {
-        panic!("2 つの memo の台帳が読めない");
-    };
-    assert_eq!(
-        s.unreflected_kinds,
-        vec![count_of(UnreflectedKind::Memo, 1)]
-    );
-    assert_eq!(s.unreflected, 1);
+    for (name, text, now) in [
+        ("stats-30", ledger.as_str(), now),
+        ("2 つの memo", two.as_str(), 1_790_553_600),
+        ("空", "[]", 1_790_553_600),
+    ] {
+        let Reading::Known(s) = stats(text, now) else {
+            panic!("{name} の台帳が読めない");
+        };
+        assert_eq!(s.unreflected_kinds, Vec::<UnreflectedCount>::new(), "{name}");
+        assert_eq!(s.unreflected, 0, "{name}");
+        assert_eq!(
+            s.unreflected_unknown,
+            UnreflectedKind::ALL.to_vec(),
+            "{name}"
+        );
+        assert_eq!(unreflected(text, now).memos, Reading::Unknown, "{name}");
+    }
 
-    let Reading::Known(s) = stats("[]", now) else {
-        panic!("空の台帳が読めない");
-    };
-    assert_eq!(
-        s.unreflected_kinds,
-        vec![count_of(UnreflectedKind::Memo, 0)]
-    );
-    assert_eq!(s.unreflected, 0);
-
-    assert_eq!(stats("{", now), Reading::Unknown);
+    assert_eq!(stats("{", 1_790_553_600), Reading::Unknown);
 }
 
 /// (2) LedgerStats を持つ fixture の 5 つの値は同じ定義に揃う。
@@ -124,11 +107,7 @@ fn harest_fixtures_agree() {
             known,
             vec![count_of(UnreflectedKind::Memo, 1)],
         ),
-        (
-            "stats-30",
-            expected,
-            vec![count_of(UnreflectedKind::Memo, 3)],
-        ),
+        ("stats-30", expected, vec![]),
     ];
     for (name, s, want) in cases {
         assert_eq!(s.unreflected_kinds, want, "{name}");

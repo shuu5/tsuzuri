@@ -3,7 +3,8 @@
 //! 行は電文の projects の 1 行ずつで 9 列。並べ方は 4 つ（need・group・judge・unref）で URL の query の `psort=` に残し、
 //! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
 //! 決定待ちは電文の台帳の open の問いの数、未反映は電文の台帳の未反映の数で、読めない種類が在れば
-//! project board の指標の段と同じ Unref の形で測れていないの印を添える（部分の和）。台帳が Unknown の行はどちらも「―」。
+//! project board の指標の段と同じ Unref の形で測れていないの印を添える（部分の和）。台帳が Unknown の行はどちらも「―」、
+//! 未反映の 3 種とも「まだ分からない」の行の未反映も「―」。
 //! 決定待ちの 2 段目は電文の次の一手の束の承認の件数、未反映の 2 段目は電文の台帳の読めた種類ごとの件数（見本の unrefBreak）。
 //! 未反映の列の見出しは電文の projects の未反映の和（見本の Σ・行 h-acct-rest）。
 //! 並べ・行の値・class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -13,7 +14,7 @@ use std::cmp::Reverse;
 
 use tsuzuri_contract::account::{AccountDoc, ProjectRow, RunCounts};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
-use tsuzuri_contract::stats::{CheckResult, LedgerStats};
+use tsuzuri_contract::stats::{CheckResult, LedgerStats, UnreflectedKind};
 
 use super::cards::{RowCards, grp_card, row_cards};
 use super::windows::{NOT_YET_KEY, OPEN_NEW_KEY, open_url};
@@ -283,11 +284,14 @@ pub fn unref_count(s: &LedgerStats) -> Unref {
     }
 }
 
-/// 未反映（台帳が Known なら unref_count・Unknown は None）。
+/// 未反映（台帳が Known で 1 種でも読めれば unref_count・台帳が Unknown か 3 種とも「まだ分からない」なら
+/// None で、数えない字「―」）。
 pub fn unref_of(project: &ProjectRow) -> Option<Unref> {
     match &project.ledger {
-        Reading::Known(s) => Some(unref_count(s)),
-        Reading::Unknown => None,
+        Reading::Known(s) if s.unreflected_unknown.len() < UnreflectedKind::ALL.len() => {
+            Some(unref_count(s))
+        }
+        _ => None,
     }
 }
 

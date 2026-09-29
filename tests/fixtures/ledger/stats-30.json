@@ -71,13 +71,8 @@
       {"epic": "s30.a", "closed": 6, "total": 9}
     ],
     "memo": {"open": 3, "awaiting_promotion": 2, "closed_7d": 1, "age_p50_days": 9.5},
-    "unreflected": 3,
-    "unreflected_kinds": [{"kind": "memo", "count": 3}],
-    "unreflected_unknown": ["ruling", "request"]
-  },
-  "unreflected_memos": [
-    {"id": "s30.m1", "title": "[memo] 昇格条件を持つ古い memo", "age_s": 1684800},
-    {"id": "s30.m3", "title": "[memo] 昇格条件を持つ中ほどの memo", "age_s": 820800},
-    {"id": "s30.m2", "title": "[memo] 見出しの無い新しい memo", "age_s": 216000}
-  ]
+    "unreflected": 0,
+    "unreflected_kinds": [],
+    "unreflected_unknown": ["memo", "ruling", "request"]
+  }
 }

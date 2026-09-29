@@ -304,19 +304,12 @@ fn server_view_unreflected_matches_core() {
     let ledger = read_fixture(LEDGER);
     let (body, from, to) = get(addr, "/api/unreflected");
     let list: UnreflectedList = decode!(body);
-    let Reading::Known(memos) = &list.memos else {
-        panic!("memo が読めない: {body}");
-    };
-    assert!(!memos.is_empty(), "{body}");
-    assert_eq!(list.rulings, Reading::Unknown);
-    assert_eq!(list.requests, Reading::Unknown);
-    let core = tsuzuri_core::ledger::unreflected(&ledger, from);
-    let Reading::Known(items) = &core.memos else {
-        panic!("中核の memo が読めない");
-    };
-    let got: Vec<(&str, &str)> = memos.iter().map(|r| (&*r.id, &*r.title)).collect();
-    let want: Vec<(&str, &str)> = items.iter().map(|i| (&*i.id, &*i.title)).collect();
-    assert_eq!(got, want, "memo の id と題の並び");
+    // 局面の出力を読む行 c-unref-lc までは、台帳が読めても 3 種とも「まだ分からない」。
+    assert_eq!(
+        (list.memos, list.rulings, list.requests),
+        (Reading::Unknown, Reading::Unknown, Reading::Unknown),
+        "{body}"
+    );
     assert!(
         (from..=to)
             .any(|t| encoded!(wire_list(&tsuzuri_core::ledger::unreflected(&ledger, t))) == body),

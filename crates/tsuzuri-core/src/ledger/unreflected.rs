@@ -1,15 +1,12 @@
 //! 未反映の一覧（memo・裁定・要望の 3 種・種類ごとに「読めた一覧」か「まだ分からない」）。
-//! memo は open の memo の全部（昇格先を指す辺がまだ無いので、open なら未反映）で、年齢の古い順。
-//! 裁定（処分の宣言の無い裁定）と要望（反映されていない要望）は材料（処分の宣言・要望の印）が
-//! 入力にまだ無いので「まだ分からない」を返す（0 件と区別する）。
+//! どれが席の手番かは器（scribe2）の局面の出力が決め、tsuzuri は判じない（要件 FR13）。
+//! 局面の出力を読む行 c-unref-lc までは 3 種とも「まだ分からない」を返す（open の memo を全部
+//! 未反映と数える代用は外した）。
 
 use serde::Serialize;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::stats::UnreflectedKind;
-
-use super::{Bead, read};
 
 /// 未反映の 1 件（id・題・年齢の秒・作った時刻が読めなければ年齢は None）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,30 +43,15 @@ impl Unreflected {
     }
 }
 
-/// 台帳の一覧の字と今の時刻から未反映の一覧を組む（台帳が読めなければ memo も「まだ分からない」）。
-pub fn unreflected(ledger: &str, now: EpochSecs) -> Unreflected {
-    of_beads(read(ledger).as_deref(), now)
+/// 未反映の一覧（局面の出力がまだ無いので、台帳の字と時刻を読まず 3 種とも「まだ分からない」）。
+pub fn unreflected(_ledger: &str, _now: EpochSecs) -> Unreflected {
+    not_yet()
 }
 
-/// 読めた bead から組む（None は台帳が読めない）。
-pub(crate) fn of_beads(beads: Option<&[Bead]>, now: EpochSecs) -> Unreflected {
-    let memos = beads.map(|beads| {
-        let mut open: Vec<&Bead> = beads
-            .iter()
-            .filter(|b| b.kind == NodeKind::Memo && b.is_open(now))
-            .collect();
-        // 年齢の古い順（作った時刻の早い順・時刻の読めない memo は後ろ・同じなら台帳の順）。
-        open.sort_by_key(|b| (b.created.is_none(), b.created));
-        open.into_iter()
-            .map(|b| UnreflectedItem {
-                id: b.id.clone(),
-                title: b.title.clone(),
-                age_s: b.created.map(|c| now.saturating_sub(c)),
-            })
-            .collect()
-    });
+/// 3 種とも「まだ分からない」の一覧。
+pub(crate) fn not_yet() -> Unreflected {
     Unreflected {
-        memos: memos.map_or(Reading::Unknown, Reading::Known),
+        memos: Reading::Unknown,
         rulings: Reading::Unknown,
         requests: Reading::Unknown,
     }

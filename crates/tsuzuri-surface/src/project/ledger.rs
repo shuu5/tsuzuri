@@ -776,7 +776,8 @@ pub const UNREF_REASON: &str =
     "未反映の一覧の口が読めない（server にまだ無い・届かない・知らせが切れた）";
 
 /// 口は読めたが、3 種の全部が「まだ分からない」ときの理由。
-pub const UNREF_UNKNOWN: &str = "server が台帳を読めないので、未反映の一覧はまだ分からない";
+pub const UNREF_UNKNOWN: &str =
+    "未反映は器（scribe2）の局面の出力から読むが、その出力がまだ無いので、未反映の一覧はまだ分からない";
 
 /// 測れて 0 件のときの 1 行。
 pub const UNREF_EMPTY: &str = "未反映のものは無い";
