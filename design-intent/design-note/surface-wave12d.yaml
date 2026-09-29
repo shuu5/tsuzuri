@@ -3,12 +3,14 @@
 meta:
   id: surface-wave12d
   title: 第 12 波 d — 答えた裁定の取り消しの口と、決定の頁の理由の欄と取り消すの button
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e の子の行 1 つ（面の決定の頁の欄も足す）。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行は計画 surface-plan の 9 節の計画だけの行 e-revoke をここへ移したもので、拠りは持ち主の裁定 t3-hub.52.60（裁定 id = t3-hub.52.60:20260928T0441Z-1・束 batch:20260928T0441Z-1・推奨の案 A）と計画の 3 節の判断の表の行 d32 と要件 FR7。要件 FR7 は取り消しを新しい裁定が前の id を名指して問いを open に戻す形（消さない）と求めるが、境界の server に取り消しの口が無く、持ち主は答えた決定を画面から取り消せない件。承認の event を器の event log に書く分は器の答え待ちの行 e-approval-event の役で、このノートに置かない。起草は main 2ac2bdd で行い、行 e-batch-partial（便 t3-hub.52.73）の着地の後の 59a0c02 で検証し、試作（main の写しにこの行だけを入れた木）で歯を撃ち、事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。 第 0.2 版（2026-09-28）は、器の受付の点検（teeth-outside-write-set）が verify の filter server_ask_ の当たる src/server/http.rs を write-set に求めたので、置き場だけの = で足した。
 
 sections:

@@ -3,12 +3,14 @@
 meta:
   id: surface-wave11a
   title: 第 11 波 a — 出している中身の古さの注意の印とつながりの切れの持ち回し、pipeline の閉じた（着地せず）の札の見分け
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g（project board）の子の行 2 つ（g-fresh は account board の一番上の帯も直す）。計画 surface-plan の第 0.16 版の 9 節の計画だけの行 g-fresh と g-closed-mark をここへ移した。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。g-fresh の拠りは持ち主の裁定 t3-hub.52.38 と t3-hub.52.39 と、それを写した規則の行 R-21 と要件 NFR2 で、server の半分は行 e-hold（着地済み・076666a）。g-closed-mark の拠りは持ち主の指摘 t3-hub.1（裁定 id = user 2026-09-28T04:1xZ）と計画の 3 節の席の決めで、行 c-pipe-closed（着地済み）の後の札の表を直す。起草の後に席の作業場の写しで試作と事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。2 行は書く file も置き場だけの = も重ならないので並べて流し、どちらも依存の行は着地済み。
 
 sections:

@@ -3,12 +3,14 @@
 meta:
   id: surface-wave12f
   title: 第 12 波 f — 台帳の変化の印を読みで動かない store の値にし、GET の口は bd を撃たず、受け手の居ない間は読み直さない
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e の子の、境界の server の行 4 つ（この順に流す）。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行 e-marks と e-mark-meta の拠りは席の決め（2026-09-28 に器の席が測った欠陥・計画 surface-plan の 3 節・欠陥の直しなので持ち主の問いを置かない）で、行 e-snap と e-idle は計画 surface-plan の 9 節の計画だけの行を起草して置く（拠りは 3 節の席の決めと持ち主の重いという指摘 t3-hub.1 の user 2026-09-28T00:4xZ・00:59Z・01:06Z）。欠陥は、bd が --readonly の読みでも台帳の store の錠を排他で取り、面の server が見張りの 5 秒ごとの読み直しと印の読みと GET の口ごとに bd を撃つので、器の台帳の錠が 15 秒の見本の 209 回の 209 回で取られ、器の台帳の門の読みが時間切れになった件（要件 NFR2・規則の行 R-21）。v0.1 は main 43e8ba4 で起草し、行 e-marks は main 857d2b2 で着地した（印は .beads/embeddeddolt の下の dir を全部読み、manifest の中身と journal の本体の長さを見る）。v0.2（2026-09-28・main 67b74e3）で、器の席の測り（bd 1.1.0 の組み込みの store・使い捨ての台帳と実物・印は読みでは動かず書きごとに動く）に合わせて着地した印を直す行 e-mark-meta を e-marks の後に足し（印を .beads の metadata.json が名指す store の manifest の字と、manifest が名指す file の長さにする）、行 e-snap の depends を e-mark-meta にし、行 e-snap の歯の store に metadata.json を足した（着地済みの行 e-marks の字は変えない）。事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。
 
 sections:

@@ -3,7 +3,7 @@
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v0.96
+  version: v0.97
   status: effective
   generated: 2026-09-28
   profile: design-note
@@ -146,7 +146,7 @@ sections:
       器（scribe2）の memo の判定（器の ADR-0085 と ADR-0089〔どちらも着地〕・器の席の答え 2026-09-28T23:1xZ と 2026-09-29T00:1xZ）: memo は label intake:memo の bead で、昇格条件の節に閉じた 5 形（再発・同梱・依存・期日・着地）の引き金の行を持ち、器の dispatch の周が判じる（行の字面の文法は器の設計 doc・器の判じ手はまだ無い）。開いた memo の局面は memo-promoting（昇格の途中）・memo-asking（問いの返事待ち）・memo-actionable（処置の待ち）・memo-waiting（引き金待ち）の 4 つで、どれにも当たらない memo は misfit（形の崩れ）。席の宿題は memo-actionable と misfit だけ。閉じの理由の頭は「昇格済み <契約 id の列>」「まとめた <memo id>」「見送り <裁定 id>」の 3 つで、昇格は昇格の行（「昇格: 全部 <契約 id の列>」か「昇格: 一部 <契約 id の列>」・最後の行で判じる）と契約からの discovered-from の辺で辿る（判断の記録や別の repo の台帳への移しは昇格に数えない）。席が手で書く「昇格済み」の閉じは、閉じた時点で自動の close の条件を満たさないか、並べた契約 id が最後の昇格の行と違えば misfit になる。処置の待ちの知らせ直しは memo-actionable を出るまで続く。常設の memo は置かない。t3-hub.1（常設の裁定の控え）は、持ち主の裁定 t3-hub.1.1（判断の表 d37）で「見送り」として閉じた。以後、要望は発端を持つ memo の notes、問いへの答えは問いの notes の裁定の行、問いの無い裁定の逐語は器の口 scribe2 seat ruling add に残す。閾値の案（memo.triage_interval_h・memo.triage_per_round）は器の裁定待ち。行 g-pipe-memo は器の局面の出力の memo の局面を描く形で起草する（器の頼み・欄の名が決まるまで起草しない）。器の形の判定（2 つの印の崩れ）は、器の doctor が引数 --repo の周に出す台帳の形の行（器の crates/scribe2/src/ledger/form.rs の render・欄 both と neither）を写す（撃つのは境界の server の台帳の見張りの読みの周だけ・席の決め 2026-09-28・ADR-16 の決定 (6)・行 c-pipe-misfit・ノート surface-wave12g）。
       folio2 の答え（2026-09-28・folio2 の bead f2-648.270 と判断の記録 ADR-32）: 設計ノートの行は ADR-32 で folio graph の節点（種類 note-row）になり（folio 6467915）、行 c-dn-rows はそれを読んで着地した（便 t3-hub.52.86）。c-g9 の本文の出所も同じ索引を読む（tsuzuri は設計文書の YAML を走査しない）。
       folio の code の持ち込み（判断の記録 ADR-4・制約 CON2 の出口）: k-parity の前提。CON2 の 3 点は記帳した（2026-09-29・memo t3-hub.68・folio2 の台帳が名指した）。合流の 3 段目は持ち主が決めた（判断の表 d40〜d43・控え t3-hub.67）: 器と folio は 1 つずつにし元の repo は凍結（tsuzuri は持ち主の承認 t3-hub.67.5 で 2026-09-29 に公開にした・秘密の鍵と token が履歴の全部に無いことを席が確かめた・台帳は別の非公開の repo のまま）・folio2 が先で scribe2 が後（folio2 = tsuzuri の求めの便 203・204 と増殖の案の folio の側の着地の後、持ち込む commit で folio2 への便を止め、木を丸ごと 1 つの sub-dir へ・scribe2 = 器の束 E の実装の核の着地の後で全部の便の列が空の時）・持ち込みの段で器の名は変えない・持ち込む code は t3 の規則（R-4・R-10・R-2）と条 N-3（器の宣言 file の効いているかの旗・判断の記録 ADR-19 の決定 (2)）の除外の表で持ち段ごとに外し（N-3 の除外は持ち込みの着地から 30 日で外れていなければ持ち主に問い直す）、依存は持ち込みの時に一覧で 1 回承認を取る。判断の記録 ADR-18（ADR-4 の 3 段目の具体化・発効 2026-09-29）に決定 (1)〜(9) を書いた。LICENSE は持ち主の裁定 t3-hub.67.6（判断の表 d45）で scribe2・folio2 と同じ MIT OR Apache-2.0 にし、行 t-license（ノート surface-wave19g）が置く。
-      地図と設計ノートの増殖（持ち主の裁定 t3-hub.66.1 と .66.2・判断の表 d38 と d39・控え t3-hub.66）: 地図の案件の側は器の局面の出力、文書の側は folio の索引から描き、閉じた部品は器の窓の外で落とす（行 c-map-lc）。設計ノートは中身を要件・判断の記録・題ごとの文書へ吸収して退役し、状態 retired で置き場に残す。folio2 が今 folio2 で足すもの（folio2 の対話面で字の承認をもう 1 回取る）: 生きたノートの本数・1 本のノートの行数・計画だけの行数を数える口（値は tsuzuri の規則の表・key は note-chapters と同じ形・最初の値は入れる時の最大以上で退役に合わせて片方向に下げる）・索引の --summary の状態の欄（--digest も変わる）・後継の欄の先を要件・判断の記録・folio が読める題ごとの文書へ。folio の pin を上げる commit で、規則の表の値の行 3 本と地図の読み手と k-parity の値を同時に直す（席の手）。全行が着地したノートの退役の忘れは行 c-note-stale が名指す（後継の欄の先の着地までは数えるだけ）。憲法の「増殖の防止」に機構を付ける条の字は、起草して持ち主の承認に出す（条 A2・裁定 id は t3-hub.66.1）。着地済みのノート 36 本の退役は、後継の欄の先の着地の後に席が設計の commit で行う。
+      地図と設計ノートの増殖（持ち主の裁定 t3-hub.66.1 と .66.2・判断の表 d38 と d39・控え t3-hub.66）: 地図の案件の側は器の局面の出力、文書の側は folio の索引から描き、閉じた部品は器の窓の外で落とす（行 c-map-lc）。設計ノートは中身を要件・判断の記録・題ごとの文書へ吸収して退役し、状態 retired で置き場に残す。folio2 が今 folio2 で足すもの（folio2 の対話面で字の承認をもう 1 回取る）: 生きたノートの本数・1 本のノートの行数・計画だけの行数を数える口（値は tsuzuri の規則の表・key は note-chapters と同じ形・最初の値は入れる時の最大以上で退役に合わせて片方向に下げる）・索引の --summary の状態の欄（--digest も変わる）・後継の欄の先を要件・判断の記録・folio が読める題ごとの文書へ。folio の pin を上げる commit で、規則の表の値の行 3 本と地図の読み手と k-parity の値を同時に直す（席の手）。全部の行が着地したノートは行 c-note-stale が名指し、廃止したノートを名指しから外すのは行 c-note-retired。憲法の「増殖の防止」の機構は条 P-28（判断の記録 ADR-20）が持つ。全部の行が着地したノートは folio の pin を上げる commit で束にして廃止し（後継は計画のノート surface-plan）、規則の表の行 R-31〜R-33 の最初の値を束の後の実測にした。
       器（scribe2）の答え（2026-09-28・決着・表示面）: tsuzuri は host の面の表 [[device]] を自前の読み手で直に読む（S2-1・key の集合は閉じる〔必須 name・ssh・chrome・os、任意 display・ime-env・profile-dir〕・器は知らない key の面を丸ごと断るので tsuzuri は key を足さない・読む前に scribe2 validate --state-dir の rc 0 を確かめるのは i-5）。display は X の DISPLAY としてだけ読み、Wayland の端末は器が display-env を足すまで範囲の外（S2-2・器の memo s2-07l.726・2026-09-28 に着地した・閉じた key に足すのは行 i-1b）。読むのは自分の anchor の state dir の host.toml だけで、tsuzuri の席は host.toml を書かない（S2-3）。profile-dir は器では任意のまま、表示面では無い行を断る（S2-4）。スマホは [[device]] の外（S2-5）。層 A の書きの口（持ち主が PC を足す口）は器に置く方向で器の memo s2-07l.727（P3・形は未定・器の推奨は [[device]] を host 全体の 1 つの面へ移し口はその 1 file だけを書く形・器の ADR-0076 の部分の置き換えなので器の持ち主の裁定から・時期は board の設定の画面の行 i-8 に合わせる）。それまで層 A は器の席が運ぶ。→ 行 i-1・i-5・i-8。
       v2 の候補（この計画の外）: ssh の届かない端末へ画面を配信し入力を返す窓（元の行 i-6・持ち主の裁定 t3-hub.59.4・専用のスマホの app の案と同じ所・判断の記録 ADR-15 決定 (5)・srs の scope の not_build）。ADR-11 の画面の配信の経路（CDP を話さない対象・要件 FR20）は、この計画の範囲の外のまま。
       project board と account board の重さ: 調べは済んだ（2026-09-28・席の作業場の pb-perf/report.md）。持ち主の問い 3 つ（t3-hub.52.38・.52.39・.52.40）は裁定済みで、行は 4 節の性能の 14 行（閉じた見張り t3-hub.53.2 の負荷の時の台帳の読みは e-hold と a-lean が扱う）。要件 NFR2 の直しは srs v0.11、値は規則の行 R-21。配る tz を release で組む（restart.sh の --release）は席の管理の道具の直しで、行にしない（g-strip の後は release の tz の backtrace から関数名が消える）。着地の後に席が確かめること: g-strip の後の dist の wasm の byte と name の節・g-reads の後の頁を開いた時の読みの本数と接続の順・g-keyed の後の問いの頁の欄の focus と書きかけの字（どれも実物で）。
@@ -519,6 +519,13 @@ sections:
         depends: []
         ruling: "t3-hub.66.1（裁定 id = t3-hub.66.1:20260929T0058Z-1・判断の表 d38）・t3-hub.66.2（判断の表 d39）"
         note: "依存の字 = folio2 の索引の状態の欄の着地と、folio の pin を上げる席の commit（地図の読み手と k-parity の値と規則の表の値の行 3 本を同じ commit で直す）"
+      - id: c-note-retired
+        what: "tz graph --check の全部の行が着地した設計ノートの行（中核の landed_notes・行 c-note-stale）から、folio の索引の --summary の状態の欄が retired のノートを外す。状態の欄が読めなければ、その行の名指しは まだ分からない。"
+        size: "S"
+        files: ["core/graph/check.rs（landed_notes）と、要約の状態の欄を渡す境界の server/board.rs（起草で決める）"]
+        depends: []
+        ruling: "t3-hub.66.1（裁定 id = t3-hub.66.1:20260929T0058Z-1・判断の表 d38）・t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）"
+        note: "依存の字 = g-map-retired と同じ（folio2 の索引の状態の欄の着地と、folio の pin を上げる席の commit）。core/graph/check.rs は c-g9-deny と c-map-lc と同じ file なので、順は便の bead の依存で持つ"
       - id: c-g3-extern
         what: "不変条件 g-3 の外の台帳の行（器の台帳の憲法の承認 s2-07l.214 を引く節点 22 など）を、登録した project の組（行 e-multi-ask の起動の引数 --project の置き場・問いの id の頭〔最初の「.」の前の字〕は置き場ごとの台帳の族から引く）の台帳を読んで確かめる。組に無い頭の行と、台帳が読めない行はまだ分からないのまま。"
         size: "S"

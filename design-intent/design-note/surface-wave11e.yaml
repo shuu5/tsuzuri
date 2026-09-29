@@ -3,12 +3,14 @@
 meta:
   id: surface-wave11e
   title: 第 11 波 e — pipeline の板が器の段 Failed と Stopped の走行を札にし、器が worktree を畳んだ記帳では段を決めない
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g の子の中核の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは席の決め（2026-09-28 に席が実物の event log で見つけた欠陥・計画 surface-plan の 3 節）で、欠陥の直しなので持ち主の問いを置かない。器の RunStage の段 Failed と Stopped が板の段の表に無く、open の bead の落ちた走行が板から消え次の一手の止まっている走行にも数えられず、器が worktree を畳んだ記帳（detail が retired）が最後の走行は FAIL の後でも Gated の札か表に無い段になる件（行 c-pipe-unmapped・要件 FR10 と FR11 と FR12）。起草は行 c-pipe-questioned（便 t3-hub.52.70）と行 e-sess-closed（便 t3-hub.53.22）の着地の後の main d20f0d4 で行い 5095441 で検証し、事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。同じ席の決めで見つけた走行の無い札の欠陥（設計 pointer の無い task が Queued に残る件）は、bead の種類の意味を持ち主と器で決めるまで保留し、このノートに置かない。
 
 sections:

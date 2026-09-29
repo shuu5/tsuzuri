@@ -3,12 +3,14 @@
 meta:
   id: surface-wave6
   title: 第 6 波 — 裁定の配達の印と席の停止の hook と server の配達・設計の索引の要約の写しと配線
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 f と e の子の行（配達の 3 行）と、中核と境界の要約の 2 行。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行は計画の 4 節の行で、起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。f-stop と f-mark-serve は f-mark の後に並べて走り、c-summary-wire は c-summary-design の後に走る（depends は同じノートの中の行しか引けないので 5 行を 1 つのノートに置く）。
 
 sections:

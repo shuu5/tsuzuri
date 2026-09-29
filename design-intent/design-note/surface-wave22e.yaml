@@ -3,12 +3,14 @@
 meta:
   id: surface-wave22e
   title: 第 22 波 e — project board の席の block の群の chip に群の枠の card を出すと、席の card に器の移動の欄の写しを足す
-  version: v0.8
-  status: effective
+  version: v0.9
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g（面）の子の、面の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは席の決め（計画 surface-plan の 9 節の計画だけの行 c-seat-group と、起草の問いへの席の答え 2026-09-29〔値の出どころは同じ server の口 /api/account の群の枠〕）と要件 FR12 で、持ち主の問いを置かない。project board の席の block の群の chip に、口 /api/account の電文の群の枠（account board の群の枠と同じ値）を写した card を出す。一致の判定は着地済みの中核の account の host の読みのままで、器の seat tick status の欄 move= は後の行 c-seat-grace が写す。起草は main 0b643453（計画 v0.85）に行 c-limit-resume（便 t3-hub.52.92・未着地）の起草の差分を当てた木で行い、試作で歯を撃った。大きさは計画の M のまま（書く src は面の 2 つの file）。第 0.2 版（2026-09-29）は、2 行目 c-seat-grace（計画 9 節の計画だけの行を割った前半・契約と中核と面の crate）と 4 節を足した。席の card に器の seat tick status の欄 move= と grace_left= と doctor の群の行の欄 refused= と pressure= の写しを足し、状態の帯と詳しくに出す（器の席の答え 2026-09-28・規則の行 R-22・写すだけ）。account board の残り秒の差し替えは計画だけの行 c-grace-acct に残した。起草は main bacdaa36（計画 v0.86）に行 c-limit-resume と c-seat-group の起草の差分を当てた木で行い、試作で歯を撃った。第 0.3 版（2026-09-29）は、3 行目 c-grace-acct（計画 9 節の計画だけの行・中核と境界と面の語の辞書）と 5 節を足した。account board の退避までの残り秒を 2 行目が写した席の card の欄 grace_left に替え、群の記録の時刻からの計算と猶予の rules 行と合図の file の読みを消し、語 move_grace の説明の起点を器の合図の at に直す（席の決め 2026-09-29・規則の行 R-22）。depends は c-seat-grace。起草は main e28315b（計画 v0.87）に行 c-seat-group と c-seat-grace の起草の差分を当てた木で行い、試作で歯を撃った。第 0.4 版（2026-09-29）は、4 行目 g-seat-thr（計画 9 節の計画だけの行・面の crate だけ・S）と 6 節を足した。席の block の窓の棒に、口 /api/account の電文の窓ごとの閾値 caps（器の rules 行の写し・規則の行 R-22 と R-30）の線と印を出す。depends は c-seat-group と c-seat-grace。起草は main cc4b288（計画 v0.89）に行 c-seat-group と c-seat-grace の起草の差分を当てた木で行い、試作で歯を撃った（c-grace-acct とは書く file が重ならない）。第 0.5 版（2026-09-29）は、行 c-grace-acct の器の審査の FAIL（要件 FR12 が残り秒を群の記録の時刻から数える字のまま・節が FR12 の直しを名指さない）に答え、要件書 第 0.17 版とノート surface 第 0.8 版の直しを節に書いた（契約表の行は同じ）。第 0.6 版（2026-09-29）は、行 c-grace-acct の器の審査の INCONCLUSIVE（見本の語彙の move_grace と歯 gwv の塊の比べが材料に無い）に答え、見本の語彙を読む 2 本の歯が比べる塊を節に書いた（契約表の行は同じ）。第 0.7 版（2026-09-29）は、行 c-grace-acct の器の審査の FAIL（done (1) が組を 8 つと書くのに並べ方からは 7 つしか定まらない）に答え、done (1) に歯 gacct_left_copies_card の 8 つの組を 1 つずつ並べた（done の字だけを直し、歯が測る組は同じ）。第 0.8 版（2026-09-29）は、行 c-grace-acct の器の審査の FAIL（done (1) の「席の card の grace_left と同じ」が move=- grace_left=120 の組で goal と食い違う）に答え、比べを数の 3 つの組に限り、あわせて done (5) の語の数の出所を起草の時の main に名指した（done の字だけを直し、歯が測る中身は同じ）。
 
 sections:

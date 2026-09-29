@@ -3,12 +3,14 @@
 meta:
   id: surface-wave21d
   title: 第 21 波 d — 問いの起票の門を席の PreToolUse に入れ、問いの合図で台帳の見張りを起こす
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 f（席の hook と問いの起票の門）と傘の行 e（面の server）の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。計画 9 節の計画だけの行 f-gate-install と e-signal を契約の行にする。f-gate-install の拠りは持ち主の裁定 t3-hub.55.3（計画の判断の表 d3）と要件 FR4、e-signal の拠りは要件 NFR2 と規則の行 R-21。起草と試作は main b5c24c8（計画 v0.78・行 g-nav の着地の後）で撃った。2 行は書く file が重ならず、ノートの depends は空。第 0.2 版（2026-09-29）は、行 f-gate-install の節の測り方に、sh が標準入力を読まずに終わる場の payload の書きの Broken pipe を歯の失敗にしない字を足した（便 t3-hub.55.19 の 1 本目の門で歯 gins_command_under_sh が書きの panic で落ちた・契約表の行は同じ）。
 
 sections:

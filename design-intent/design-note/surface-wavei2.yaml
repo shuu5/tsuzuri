@@ -3,12 +3,14 @@
 meta:
   id: surface-wavei2
   title: 表示面の第 2 波 — 端末の一覧の読みに画面を開く env の欄 display-env を足す
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 i（表示面）の子の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ（ノート surface-wavei と同じ）。行は計画 surface-plan（v0.14）の 9 節の計画だけの行 i-1b（要件 FR16・判断の記録 ADR-15 の決定 (1) の層 A・器の答え S2-2）で、形は器の欄 display-env の着地（器の memo s2-07l.726・器の判断の記録 ADR-0080）に拠る。計画の行の依存の字（器の binary の次の入れ替え）は、2026-09-28 に PATH の器の binary が 8dd964f（display-env を知る validate）に入れ替わって解けた。起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。起動の env に display-env の組を使う行 i-2 は後の行で、このノートには置かない。
 
 sections:

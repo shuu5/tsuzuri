@@ -3,12 +3,14 @@
 meta:
   id: surface-wave14d
   title: 第 14 波 d — 導出グラフが索引の知らない行を飛ばして数え、設計ノートの行の辺 req と depends を組む
-  version: v0.5
-  status: effective
+  version: v0.6
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c（導出グラフ）の後の、中核と契約と境界と面の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR2 と条 P-7 と判断の記録 ADR-7 の決定 (2) で、計画 surface-plan の 9 節の計画だけの行 c-dn-unknown と c-dn-edges を起草して置く。c-dn-unknown は、folio の索引の知らない種類の語の節点の行で設計の出所の全部を読めないとする今の決まり（席の folio の pin を 6467915 に上げた時に地図の設計の節点を 0 にした欠陥の元）を、その行と端がその行の辺の行だけを組まずに数える形に替え、節点の行の数を電文に出す（計画 3 節の席の決め）。c-dn-edges は、索引の辺の型 req（設計ノートの行 → 要件）と depends（行 → 行）を契約の辺の型に足して組む。2 行は同じ中核と契約の file を書くので、ノートの depends と便の bead の依存で c-dn-unknown → c-dn-edges の順に流す。起草は main 4fb5ee1（計画 v0.40）で行い、試作（main の写しに当てた）で歯を撃った。第 0.2 版（2026-09-28）は、便 t3-hub.52.93 の審査が材料の無さ（節点の種類の閉じた一覧が節に無く、見本の種類の語 図 が一覧の外かを確かめられない）で判定できなかったので、行 c-dn-unknown の節に enum NodeKind の先頭 12 種の serde の名と fn design_kind の読みを写した（契約表の行は同じ）。第 0.3 版（2026-09-28）は、行 c-dn-edges の write-set・verify・done の契約の歯 contract_form.rs と snapshot の contract_form.json の字を、行 t-cform-split（ノート surface-wave16a）が割った群 graph の歯の file と snapshot の字に付け替えた（歯の名と filter は変わらない）。第 0.4 版（2026-09-28）は、便 t3-hub.52.94 の事前の点検が、前の行 c-dn-unknown が足す歯 dnskip と dnskipw の期待がこの行で動かないかを材料から確かめられないとしたので、行 c-dn-edges の節にその歯の見本の辺の型を写した（契約表の行は同じ）。第 0.5 版（2026-09-29）は、行 t-cform-split が diff の上限のために t-cform-json（snapshot を割る）と t-cform-split（歯の rs を割る）の 2 行に割れたので、付け替えの段落の割る行の字をその 2 行に直した（契約表の行は同じ）。
 
 sections:

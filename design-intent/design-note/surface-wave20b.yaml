@@ -3,12 +3,14 @@
 meta:
   id: surface-wave20b
   title: 第 20 波 b — tz graph --check の本文だけで名指した id の対の行と、全部の行が着地した設計ノートの行（どちらも detect）
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 k（CLI）と surface-base の傘の行 c（導出グラフ）の子の小さな行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR3 と席の決め（2026-09-29・g-9 は detect の間は数えるだけで落とさない）と持ち主の裁定 t3-hub.66.1（判断の表 d38・設計ノートの一生・退役の忘れを名指す）と条 N-1 で、計画 surface-plan の 9 節の計画だけの行 k-g9-count と c-note-stale を起草して置く。k-g9-count は tz graph --check に本文だけで名指した id の対の数と対の行を足し、c-note-stale は全部の契約表の行が着地した設計ノートの数と文書 id の行を足す。どちらも読めなければ標準エラーに出し、終了 code を変えない。2 行は同じ file を書くので depends で k-g9-count、c-note-stale の順にする。起草と試作は main bc5d92a（計画 v0.70）で撃ち、置くのは main f925e4e（計画 v0.72）。
 
 sections:

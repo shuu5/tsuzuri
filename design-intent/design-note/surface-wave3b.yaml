@@ -3,12 +3,14 @@
 meta:
   id: surface-wave3b
   title: 見本 mock v3 に揃える第 3 波（後半）— 時計・注釈の図・account board の小さな欠け・題の字・走行の記録・束の承認の判定
-  version: v0.6
-  status: effective
+  version: v0.7
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g と h と、surface-base の傘の行 e と d の子の行（見本 mock v3 の頁と block の振る舞いを本番に揃える第 3 波）。承認は 2 つの文書と同じ持ち主の裁定（2026-09-27T03:19Z）を継ぐ。2 つの文書は章の上限 12 を越えているので、子の行を新しい文書に置いた。行の割りは見本と本番の差の調べ（2026-09-28・設計席）から取り、どの行も書く file が互いに重ならない（e-runs だけが g-brand の後）。
 
 sections:

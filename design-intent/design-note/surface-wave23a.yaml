@@ -3,12 +3,14 @@
 meta:
   id: surface-wave23a
   title: 第 23 波 a — 答えの配達の撃ち直しと、答えの口の書きの前の読みの上限
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e（面の server）の子の、境界の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは memo t3-hub.72（持ち主の問い 2026-09-29・候補 (a) と (b)）の昇格条件の席の決め（tsuzuri の server の欠陥の直しなので計画に行を足してすぐ起草する）と要件 FR9 で、持ち主の問いを置かない。計画の 9 節には置かず、このノートへ直に置く。起草は main 538c00e（計画 v0.88）の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。第 0.2 版（2026-09-29）は、器の審査の FAIL（節の歯の名 dretry_accept_paths_use_pace が done (6) の名 dretry_spawns_use_pace と食い違う・起草の終わりの名替えの残り）に答え、節の名を done の名に揃えた（契約表の行は同じ）。
 
 sections:

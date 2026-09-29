@@ -3,12 +3,14 @@
 meta:
   id: surface-wave14c
   title: 第 14 波 c — 問いの頁と台帳の block と抜けの検査の名指しに節点の hover の card を付ける
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g の子の、面の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR14 と見本 mock v3（docs/design/mock3 の ask.html・index.html・gaps.html と ui.js の cardContent と itemNode）で、計画 surface-plan の 9 節の計画だけの行 g-card-adopt-b と g-card-adopt-c を起草して置く。どちらも着地済みの行 g-card-node が widgets の nodecard に置いた card_of を使い、g-card-adopt-a（pipeline の札と次の一手の質問の題・着地済み）と同じく、グラフの口の電文から節点の card を引いて付け、電文に無い id には付けない。g-card-adopt-b は問いの card の題と、これまでの決定の段の行の題と答えた決定の link に付け、widgets の hover に card を付ける共有の関数 attach_some と、付けた要素が外れたときにその要素の出した card の層を閉じる後始末を置く。g-card-adopt-c は台帳の block の epic の進みの行の題と一覧の項の題と、抜けの検査の頁の名指しの項の題に付け、kit の一覧の 1 項 item_view に card を受ける引数を足す。c は b の attach_some を使うので、ノートの depends は c から b。2 行の書く file は置き場だけの = を含めて互いに素。起草は main 49ebfc2 で始め、第 1 版を 14b5a61 で、席の直しを入れた第 2 版を 7ea0462（計画 v0.45・この 2 行の file と使う物と歯の file の字は 14b5a61 と同じ）で確かめ、事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通し、試作（main の写しに当てた）で歯を撃った。
 
 sections:

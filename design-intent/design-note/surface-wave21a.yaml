@@ -3,12 +3,14 @@
 meta:
   id: surface-wave21a
   title: 第 21 波 a — 時刻から作る値を絶対の時刻で送る（pipeline と未反映と指標）
-  version: v0.6
-  status: effective
+  version: v0.7
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 計画 9 節の行 c-abs-time を計画の字のとおり 2 つに割り、pipeline と未反映と指標の組を契約の行 1 つにする（席と account の組は計画だけの行 c-abs-seat）。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは見本（docs/design/mock3 の 1 秒ごとの data-since）と要件 NFR2。起草は main 93389e3（計画 v0.78）で始め、試作は 8f8eeb8（計画 v0.81）に行 g-ledger-group-kind の差分を当てた木で組み直した。第 0.2 版（2026-09-29）は、器の dispatch の事前の点検の cap-headroom（src/project/ledger.rs の上限 1500 行の余地 243 行が大きさ M の見込み 300 行に足りない）を受け、行に growth（ledger.rs を 40 行まで・試作の実測は +22 −15）を足した（節の字は変えない）。第 0.3 版（2026-09-29）は、起草者が試作を main 8f8eeb8 に行 g-ledger-group-kind（便 t3-hub.52.119）の差分を当てた木の上に組み直した字（節の在りかと依存と順の段落・meta の note）に置き直した（契約表の行は同じ・growth は残す）。第 0.4 版（2026-09-29）は、器の審査の INCONCLUSIVE（section-material-missing・write-set の外の fixture acct-doc.json が memo の欄 age_p50_days を持ったまま残り、その読み手の歯と型が知らない欄を断るかどうかが材料と verify に無い）を受け、acct-doc.json を読む着地済みの歯 26 と fixture を置き場だけの = に、その歯を verify と done の (10) に足し、節 3 に読み手の歯と型の扱いの段落を足した（試作の字は変えない・growth は残す）。第 0.5 版（2026-09-29）は、器の審査の FAIL（goal-done-contradiction・節は account board の LedgerStats も新しい数え方になると書くのに fixture acct-doc.json を書かず、歯 acctpcore_assemble_equals_doc_fixture が組んだ doc と一致しないと読んだ）に答え、その歯は fixture を読んだ projects をそのまま fn assemble に渡し LedgerStats を組み直さないので一致することを節に書いた（契約表の行は同じ）。第 0.6 版（2026-09-29）は、器の審査の INCONCLUSIVE（歯 acctdoc_fixture_roundtrip と harest_fixtures_agree の本体が材料に無い）に答え、2 つの歯が何を比べるかと、acct-doc.json を読む 29 の歯が fixture の字そのものと比べないことを節に書いた（契約表の行は同じ）。
 
 sections:

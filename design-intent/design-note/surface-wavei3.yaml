@@ -3,12 +3,14 @@
 meta:
   id: surface-wavei3
   title: 表示面の第 2 波 — 起動の引数と tunnel と、窓を 1 回だけ起こすこと
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 i（表示面）の子の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ（ノート surface-wavei と surface-wavei2 と同じ）。行は計画 surface-plan（v0.19）の 9 節の計画だけの行 i-2（要件 FR16・判断の記録 ADR-5 の決定 (1)(2) と ADR-15 の決定 (4)(6)・持ち主の裁定 t3-hub.59.2 と t3-hub.59.5 と t3-hub.59.7・見積りの T1 と T3〜T5）で、依存の行 i-1 と i-3（ノート surface-wavei）と i-1b（ノート surface-wavei2・22661d6）は着地した。計画の見込みの file（stage の launch.rs と mod.rs）に、撃つ側の新しい file の tunnel.rs（launch.rs 1 つでは大きさ M の見積りの 300 を越えるため）と、配列の要素の切り出しを足す json.rs を足した。起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。
 
 sections:

@@ -3,12 +3,14 @@
 meta:
   id: surface-wave12c
   title: 第 12 波 c — header の読みの脈と席の pill と、窓を閉じられないときの戻るの注記
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g（project board）の子の行 3 つ（g-pulse は account board の一番上の帯も直す）。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ（ノート surface-wave10b と同じ）。行は計画 surface-plan（v0.28）の 9 節の計画だけの行 g-pulse（拠り = 持ち主の裁定 t3-hub.52.39 と要件 NFR2・依存の行 g-fresh はノート surface-wave11a で着地済み）と g-seatpill（拠り = 見本 mock v3 と要件 FR12・FR14）と g-back-note（拠り = 見本 mock v3 と要件 FR1）。3 行は面の board.rs を書くので g-pulse → g-seatpill → g-back-note の順に流す（ノートの depends と便の bead の依存）。計画の見込みの file に、g-pulse は面の fresh.rs（脈の決め方と DOM）を、g-seatpill は新しい module の seatpill.rs と lib.rs と、header の行の数を見る着地済みの歯 tests/hspage.rs を、g-back-note は frame.rs（戻るの結果と注記の字）を足した。起草の後に席の作業場の写しで試作（3 行を重ねた木で xtask の check が通った）と事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。
 
 sections:

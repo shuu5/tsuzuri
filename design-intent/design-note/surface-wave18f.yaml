@@ -3,12 +3,14 @@
 meta:
   id: surface-wave18f
   title: 第 18 波 f — 台帳の一覧の項の種類と状態の語、未反映の代用を外すつなぎ
-  version: v0.3
-  status: effective
+  version: v0.4
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g（面）と c（中核）の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の指摘（記帳 t3-hub.1・user 2026-09-28T22:5xZ）と席の点検（2026-09-29）と持ち主の裁定 t3-hub.63.1（判断の表 d36・要件 FR13 と受入 AC12 の srs 第 0.16 版）で、計画 surface-plan の 9 節の計画だけの行 g-ledger-kind と c-unref-now を起草して置く。g-ledger-kind は台帳の一覧の項の種類の語と open の問いの赤を地図の節点と同じ読みにし、open の問いを答え待ち、open の memo をまだ分からないと出す（中核の bead_kind を契約の crate へ移して 1 つの読みにする）。c-unref-now は open の memo を全部未反映と数える代用を外し、器の局面の出力を読む後の行 c-unref-lc まで未反映の 3 種を全部まだ分からないにし、account board の projects の表はその project の未反映の数を数えない。面の歯 tests/lstg.rs を g-ledger-kind が書き c-unref-now が置き場だけの = で持つので、ノートの depends で g-ledger-kind の後に c-unref-now を流す。起草と試作は main bc5d92a（計画 v0.70）で撃った。第 0.2 版で、行 g-ledger-kind の write-set と verify に、kit の item か Item の欄を使う write-set の外の着地済みの歯 11 file を置き場だけの = で足し、節に名を書いた（便 t3-hub.52.116 の審査の INCONCLUSIVE・section-material-missing）。第 0.3 版で、fixture の board-8.jsonl の読み手を全部の crate と xtask で確かめた結果（面の 5 file だけ）を節に書いた（2 度目の審査の INCONCLUSIVE・境界の crate の読み手の有無）。
 
 sections:

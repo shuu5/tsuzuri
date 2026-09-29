@@ -3,12 +3,14 @@
 meta:
   id: surface-wave18a
   title: 第 18 波 a — 台帳の一覧の項に pipeline の板と同じ段を出す
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g の子の、面の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の指摘（記帳 t3-hub.1・user 2026-09-28T22:5xZ）と器の席の答え（2026-09-28T23:1xZ・つなぎとして可・c-pipe-ci と同じ扱い）と要件 FR10・FR13 で、計画 surface-plan の 9 節の計画だけの行 c-ledger-stage を起草して置く。今の台帳の一覧の項は bd の状態だけから語を出すので、pipeline で走っている契約も未着手と出る。この行は block pipeline の札の読み（kcard）1 つから bead の id ごとの段（札と同じ記号と段の字と札の CI の語）を組む関数 stages を置き、台帳の一覧の下の項は板に札が在る bead ならその記号と字を出す。新しい段の計算は足さず、境界の server と中核と契約の電文は書かない（候補の比べは節 3）。器の局面の出力が着地したら後の行 c-ledger-lc がこのつなぎを 1 か所で外す。c-pipe-ci（ノート surface-wave13i）が置く札の CI の読みを使い同じ pipeline.rs を書くので、その着地の後に流す。起草と試作は main bfc0c8c に c-pipe-ci の起草の試作を当てた土台で撃ち、0590728（計画 v0.54・面の crate の書く file の字は同じ）で確かめた。第 0.2 版（2026-09-29）は、器の dispatch の事前の点検の cap-headroom（src/project/ledger.rs の上限 1500 行の余地 258 行が大きさ M の見込み 300 行に足りない）を受け、行に growth（ledger.rs を 40 行まで・試作の実測は +15）を足した。c-pipe-ci の着地（main f21df41）に試作を当て直し、verify の歯 20 本と wasm の clippy が通ることを席が確かめた（節の字は変えない）。
 
 sections:

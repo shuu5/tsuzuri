@@ -3,12 +3,14 @@
 meta:
   id: surface-wave17b
   title: 第 17 波 b — 中核の歯 runsdoc の属性 allow を外す行と、要修正の一覧を同じ周の組から写す行
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e の子の、中核の歯の行 1 つと境界の server の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは、t-allow-runsdoc が憲法の条 P-22.2（粒度の lint を allow の属性で黙らせない）と席の決め（2026-09-28・第 14 波 c の起草の直しで見つけた既存の違反）、c-misfit-pair が席の決め（2026-09-28・第 12 波 g の起草の後の試作）で、計画 surface-plan の 9 節の計画だけの行 t-allow-runsdoc と c-misfit-pair を起草して置く。t-allow-runsdoc は中核の歯 tests/runsdoc.rs の属性 allow を外し、引数 7 つの見本の fn を消して費用の期待を契約の型 RunCost の式に束ね、属性と引数の数を見張りの歯で測る。c-misfit-pair は、行 c-pipe-misfit（着地済み）の読みを直し、境界の server が台帳の見張りの読みの周の台帳の字と器の doctor の台帳の形の行を組として持って要修正の一覧をその組から写し、撃ちの許しを知らせの接続にも置く。2 行の書く file は重ならないので depends は空で、ほかのノートの行との順は便の bead の依存で持つ。起草は main b5fa1f6（計画 v0.52・この 2 行の書く file は f71082f と同じ）で行い、試作（f71082f の写し）で歯を撃った。
 
 sections:

@@ -1,4 +1,4 @@
-# tsuzuri 憲法 — 正本（改名前の仮の名は scribe3・ADR-6）（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）。第 1.1 版（2026-09-27）は条 P-16 の改訂（判断の記録 ADR-12・反対側からの検証 docs/grill/2026-09-27-J-p16-amend-grill.md）。第 1.2 版（2026-09-29）は写しの表の答えによる規範文の追加（判断の記録 ADR-19・反対側からの検証 docs/grill/2026-09-29-L-copy-tables-amend-grill.md）
+# tsuzuri 憲法 — 正本（改名前の仮の名は scribe3・ADR-6）（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）。第 1.1 版（2026-09-27）は条 P-16 の改訂（判断の記録 ADR-12・反対側からの検証 docs/grill/2026-09-27-J-p16-amend-grill.md）。第 1.2 版（2026-09-29）は写しの表の答えによる規範文の追加（判断の記録 ADR-19・反対側からの検証 docs/grill/2026-09-29-L-copy-tables-amend-grill.md）。第 1.3 版（2026-09-29）は条 P-28 の新設（判断の記録 ADR-20・設計ノートの増え方を folio の床の上限で縛る）
 "schema":
   "version": 1
   "top_level":
@@ -154,14 +154,14 @@
 
 meta:
   id: tsuzuri-constitution
-  version: v1.2
+  version: v1.3
   status: effective
   binding: true
   baseline: 未記入
   generated: 2026-09-25
   owner: 持ち主
   author: s3:design 席（Claude Fable 5.1・起草）
-  counts: {always: 27, ask-first: 4, never: 7}
+  counts: {always: 28, ask-first: 4, never: 7}
   approval: {who: 持ち主, date: 2026-09-25, ruling: s2-07l.214（裁定 id = user 2026-09-24T22:39Z・notes に逐語）, verbatim: これでよい, surface: R-8}
 
 north_star:
@@ -179,7 +179,7 @@ precedence:
     - {kind: folio2-ruling, ref: folio2 憲法の前文（precedence）}
 
 articles:
-  # ---------- いつも守る（P-1〜P-27） ----------
+  # ---------- いつも守る（P-1〜P-28） ----------
   - id: P-1
     title: 規則は型付きデータに置き、番号で呼ぶ
     amended_by:
@@ -560,6 +560,25 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: scribe2 C17（ADR-0044・研究 RESEARCH-ponytail §2）}
     mechanism: {kind: human-review, live: now, note: 段の宣言と名指しは lens と契約の審査の散文判断で、CI は拒まない（scribe2 C12.4）。機械の面は既に在る過剰設計の観点群と便の規模の記録。}
+  - id: P-28
+    title: 設計ノートは中間の文書とし、増え方を上限で縛り、済んだものは廃止にする
+    amended_by:
+      - {adr: ADR-20, date: 2026-09-29, approved_by: 持ち主, ruling: "t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）", previous_text: （新設）, rationale: 前文の順位の「増殖の防止」は判断の規則だけで機構を持たなかった。設計ノートが 1 日で数十本増え、全部の行が着地したまま残るものが多いので、folio の床の数える口（上限の行 R-31〜R-33）と tz graph --check の名指しを機構に持つ条を新設した（判断の記録 ADR-20）。}
+    tier: always
+    binds: both
+    statements:
+      - {id: P-28.1, pattern: event, strength: must, text: 設計ノートの中身を要件か判断の記録かほかの設計ノートへ移したとき、または全部の契約表の行が着地したとき、後継を名指してそのノートを廃止の状態にし、設計ノートの置き場の直下に残す。}
+      - {id: P-28.2, pattern: ubiquitous, strength: must, text: 下書きか発効の状態の設計ノートの本数と、ノートごとの契約表の行の数と、それらの計画だけの行の数の合計に、規則の表の行で上限を置き、床が数えて越えたら落とす。}
+      - {id: P-28.3, pattern: event, strength: must, text: 上限の値を緩めるとき、退役か統合で数を減らせない理由を、前置する検証（P-17.4）の記録に書く。}
+      - {id: P-28.4, pattern: ubiquitous, strength: must-not, text: 契約表の行を持つ設計ノートを、見本の状態に置いて、または設計ノートの置き場の直下から動かして、上限の数えから外さず、開いた契約表の行を持つ設計ノートを廃止の状態にしない。}
+      - {id: P-28.5, pattern: ubiquitous, strength: must, text: 全部の契約表の行が着地した設計ノートは、廃止にするまで検査が名指し、規則の表の行が猶予を置くときは猶予を越えたものを落とす。}
+    plain: 設計ノート（便の約束を書く文書）は、要件や判断の記録へ中身を移すまでの途中の文書です。中身を移したとき、または約束の行が全部済んだときは、後を継ぐ文書を書いて「廃止」の印を付け、同じ置き場に消さずに残します。生きているノート（下書きか発効のもの）の本数・1 本の中の約束の行の数・まだ約束になっていない予定の行の数には上限があり、越えたら機械の検査が記録を止めます。上限を上げるときは、廃止やまとめで減らせない理由を先に書きます。「見本」の印で置く・置き場の外へ動かす、のどちらでも数えから逃がしません。まだ済んでいない約束の行を持つノートは廃止にしません。全部済んだノートは、廃止するまで検査が名指しします。前文の「増殖の防止」に、機械の仕組みを付ける条です。
+    rationale:
+      - {kind: folio2-ruling, ref: folio2 の判断の記録 35 番（生きたノートと行の数える口・索引の状態の欄・後継の欄の先）}
+      - {kind: scribe2-article, ref: scribe2 憲法 §1 の順位（場当たりの修正の禁止 → 増殖の防止 → compile 速度）}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: P-28.2 は folio の床が規則の表の行を欄 key（live-notes・note-rows・plan-rows）で引いて数え、行が無いか 2 本以上か値の形が違えば まだ分からない を出す。P-28.1 の後継の実在は folio の床のつながりの検査が数える。P-28.5 の名指しは tz graph --check の detect の行（落とさない）で、廃止したノートを名指しから外すのは行 c-note-retired の着地から。猶予の行は、落とす実装の行と同じ commit で足す。P-28.3 と P-28.4 は設計の commit の審査で人が見る。}
+    relations: {rules: [R-31, R-32, R-33]}
+    retreat: {kind: measure, condition: 判断の記録 ADR-20 の撤退条件に当たったら、当たった条件が名指す事を持ち主に問う。}
   # ---------- 確認してから（A-1〜A-4） ----------
   - id: A-1
     title: 消す・外へ出す・使う は確認してから

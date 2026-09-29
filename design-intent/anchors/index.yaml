@@ -10,3 +10,6 @@
   - "version": "v1.2"
     "previous": "v1.1"
     "digest": "6fb899cee7312a825b5a73ad25723518ebacd083b16e0eaf9e9acd1f6e8d2bbb"
+  - "version": "v1.3"
+    "previous": "v1.2"
+    "digest": "c34a97d926b3eb5e0aecfb128d7cf3884be86e6e6268b3b2f55da65094dadb32"

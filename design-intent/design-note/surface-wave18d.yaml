@@ -3,12 +3,14 @@
 meta:
   id: surface-wave18d
   title: 第 18 波 d — 表示先の設定（層 B）と tz stage target の口、ほかの project の board の頁の守り
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 i（表示面）の子の、境界の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR16 と判断の記録 ADR-15 の決定 (1)(2)(6)(7) と持ち主の裁定 t3-hub.59.1 と t3-hub.59.7 と器の答え S2-1・S2-3 と席の決め（行 i-5 の起草の問い Q1）で、計画 surface-plan の 9 節の計画だけの行 i-7 と i-board-ports を起草して置く。i-7 は表示先の設定（層 B）を tsuzuri 自前の追跡されない 1 つの file に持ち、tz stage target の 4 つの口で読み書きし、--to を省いた tz stage は今の project の名で設定を引いて、表示先に初めて見せる時だけ窓を起こして印を書く。i-board-ports は board の頁の上の click・入力・key の断りを、群の宣言の anchor ごとのほかの project の board の port にも広げる。2 行とも boundary/stage/cli.rs を書くので、ノートの depends で i-7 の後に i-board-ports を流す。起草と試作は main f21df41（計画 v0.55）で撃った。
 
 sections:

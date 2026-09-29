@@ -3,12 +3,14 @@
 meta:
   id: surface-wave22b
   title: 第 22 波 b — 席の「見て」の知らせを project board と account board に出す
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 i（表示面）の子の、契約と境界と面の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR16 と判断の記録 ADR-15 の決定 (6) と持ち主の裁定 t3-hub.59.5 で、計画 surface-plan の 9 節の計画だけの行 i-11 を起草して置く。行 i-10 の tz stage notify が書く project ごとの最新の知らせの記録を境界の server の読みの口で読むだけで渡し、変化の知らせの新しい種類で送り、project board の home の頭に自分の project の 1 つを、account board の home の頭の段に project ごとの 1 つを出す。起草と試作は main 45cc258（計画 v0.83）に i-open-mark と i-10 と e-signal と g-ledger-group-kind の試作の差分を当てた木で撃ち、2bfee06（計画 v0.84・crates の差は無い）で確かめた。第 0.2 版（2026-09-29）は、器の審査の FAIL（節の電文の歯の名 ntc_project_block・ntc_account_block が done (5)(6) の名 ntc_own_block・ntc_all_block と食い違う）に答え、節の 2 つの名を done の名に揃えた（契約表の行は同じ）。
 
 sections:

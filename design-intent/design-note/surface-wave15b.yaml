@@ -3,12 +3,14 @@
 meta:
   id: surface-wave15b
   title: 第 15 波 b — account board の口座ごとの 7 日の線と測った時刻の列
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c と surface-board の傘の行 h の子の、契約と中核と境界と面の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の裁定 t3-hub.53.10（計画の判断の表 d7・拠る要件 FR12）と席の決め（計画 surface-plan の 9 節の計画だけの行 c-acct-spark と h-acct-spark・2026-09-28 の席の決めで線の幅を 7 日・読む log を引数の state dir の 1 つ・点を今から 1 時間の刻みに 1 つとした）で、持ち主の問いを置かない。1 つ目は、電文の口座の行に 7 日の使った割合の線と最後に測った時刻を、引数の state dir の器の event log の AllowanceMeasured の行から写して置く（行 c-acct-spark）。2 つ目は、HOME の口座 × 窓の表の後ろに線の svg と測った時刻の 2 列を置き、見本と面の語の辞書の鍵 spark の字を 7 日に直す（行 h-acct-spark）。起草は main 68e4a9b（計画 v0.43）の字で行い、試作（main e055edd の写しに行 h-sort-hist と h-acct-rest の差分とこの 2 行を当てた）で歯と xtask の check を撃った。2 行は c-acct-spark → h-acct-spark の順に流す。第 0.2 版（2026-09-29）は、便 t3-hub.53.31 の審査の literal-mismatch（行 h-acct-spark の done の項 2 の線の点が、前の行 c-acct-spark が着地した fixture の点を節の式に通した値と合わない）を受け、項 2 の 5 つの点を着地した fixture（main 14665fe）の字から取り直し、節に fixture の在りか（電文の at と acct-1 の線の点）を足した。
 
 sections:

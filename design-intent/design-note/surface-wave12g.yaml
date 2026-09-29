@@ -3,12 +3,14 @@
 meta:
   id: surface-wave12g
   title: 第 12 波 g — pipeline の板の走行の無い札を器の読める設計 pointer を持つ task だけにし、器の doctor が名指す形の崩れた bead を 4 列の下の要修正の行に出す
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g の子の、中核の行 1 つと、契約と中核と境界の行 1 つと、面の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは、持ち主の裁定 t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1）と t3-hub.52.71（裁定 id = t3-hub.52.71:20260928T0904Z-1）の案 A で発効した判断の記録 ADR-16 の決定 (1)(5)(6) と要件 FR10（要件書 第 0.14 版）と、計画 surface-plan の 9 節の計画だけの行 c-pipe-queue・c-pipe-misfit・g-pipe-misfit と、席の決め（2026-09-28・形の判定は器の doctor の台帳の形の行を写し、撃つのは台帳の見張りの読みの周だけ）。第 0.1 版（2026-09-28・main 2dda25f で起草）は c-pipe-queue の 1 行で、走行を持たない札を器の読める設計 pointer を持つ task だけにする（読みは器の列の受付と同じ）。第 0.2 版（2026-09-28・main db212b1 で起草・c-pipe-queue は着地済み）で、c-pipe-misfit と g-pipe-misfit を足した。c-pipe-misfit は、器の doctor の台帳の形の行（引数 --repo の周だけ出る）の欄 both と neither が名指す形の崩れた open の bead を写し、題を台帳から引いた一覧を電文の板の新しい欄 misfits に持ち（tsuzuri は形を判じない）、境界の server は台帳の見張りの読みの周だけ doctor に引数 --repo を付けて別の thread で撃ってその行を持ち（席の card の読みには足さない・席の決め）、口 /api/pipeline は持った字だけを読む（器を撃たない）。g-pipe-misfit は板の 4 列の下に横長の要修正の行を見本の案 A の形で出し、0 本なら出さない。c-pipe-queue の行と節は第 0.1 版のまま。3 行は同じ file を順に書くので、ノートの depends と便の bead の依存で c-pipe-queue → c-pipe-misfit → g-pipe-misfit の順に流し、c-pipe-misfit はノート surface-wave12f の行 e-idle の後に流す（撃ちの周が e-idle の受け手 0 人の決まりに従う・同じノートの e-snap は着地済み）。左端の控えの列は後の行 g-pipe-memo（器の § 待ち）で、このノートに置かない。起草は事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通し、試作（main の写しに当てた）で歯を撃った。
 
 sections:

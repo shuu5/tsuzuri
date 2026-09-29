@@ -3,12 +3,14 @@
 meta:
   id: surface-wave10a
   title: 第 10 波 a — 地図のグラフを組の箱で畳み、どの節点も切らずに押して 1 段ずつ開く
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c・g の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の裁定 t3-hub.52.53（裁定 id = t3-hub.52.53:20260928T0412Z-1・逐語は問いの bead の notes・グラフは全体像を知るものなので上限で溢れた節点を出さないのでなく組を作って畳む）と、同じ bead の notes の席の読み（黙って切る節点を無くす・組の段・最初の図・1 段ずつの開き閉じと 40 の箱の上限と古く開いた組からの畳み直し・辺の代表へのまとめ）。見本 mock v3 の map.html の graphModel（判断の記録 ADR-7 が承認した見本）を、この裁定がグラフの眺めについてだけ改める。起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。c-graph-fold は第 9 波の e-hold（routes/graphview.rs と board.rs を書く）の着地の後に流し、g-graph-fold は c-graph-fold の後に流す（便の bead の依存で持つ）。第 0.2 版（2026-09-28）は、器の事前の点検が材料に無いと返した 2 つ（ChainRow を組むのは graph.rs だけで着地済みの歯 mapgraph は構造体の式を書かないこと・mapview の encode が ~ を残しコロンを %3A にすること）を行 g-graph-fold の節の在りかに値で足した。
 
 sections:

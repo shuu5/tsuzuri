@@ -3,12 +3,14 @@
 meta:
   id: surface-wave11d
   title: 第 11 波 d — account board の HOME の次の一手の行と群の枠の project の chip と、台帳の表の project の欄に hover の card を付ける
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 h（account board）の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行は計画 surface-plan の第 0.16 版の 4 節の計画だけの行 h-cards-nx と h-cards-led（どちらも依存は行 h-cards-proj・着地済み t3-hub.53.15）で、拠りは見本 mock v3（判断の記録 ADR-7 で確定）と要件 FR14。組み手は行 h-cards-proj が各 project の表に足した nx_card と gproj_card と led_card で、HOME と台帳の表は同じ card を出す。起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。2 行は書く file も置き場だけの = も重ならないので並べて流す。第 0.2 版（2026-09-28）は、審査が材料に無いと返した行 h-cards-nx の組み手の値（行 h-cards-proj の done に預けていた字）を、その行の節に main の projects.rs の nx_card・gproj_card の形と、fixture の file と値と、その fixture で返す字の値として直に書いた（done と write-set は変えない・走行中の行 h-cards-led は変えない）。
 
 sections:

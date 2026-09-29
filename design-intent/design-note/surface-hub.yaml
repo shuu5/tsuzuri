@@ -3,12 +3,14 @@
 meta:
   id: surface-hub
   title: 登録の生成（server の口・project board の block・頁）— 新しい機能を新しい file だけで足せる形へ移す
-  version: v0.9
-  status: effective
+  version: v0.10
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T17:36Z・notes に逐語）, verbatim: 推奨で進めて, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 判断の記録 ADR-13（組み立ての script が登録を生成する・案 M2）の実装の行。surface-base と surface-board は章の上限 12 を越えているので、新しい文書に置いた。境界の 4 行（hb-proc → hb-config → hb-route → hb-post）と面の 3 行（hs-blocks → hs-pages → hs-derived）はそれぞれの中で直列、2 つの列は互いに並べて走る。
 
 sections:

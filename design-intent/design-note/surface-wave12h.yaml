@@ -3,12 +3,14 @@
 meta:
   id: surface-wave12h
   title: 第 12 波 h — 方針を 1 つずつ根の直下の閉じた問いに記帳する
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e の子の、境界と契約の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の裁定 t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1・推奨の案 A）を記した判断の記録 ADR-16 の決定 (4) と、要件書 v0.14 で書き換えた要件 FR8 で、計画 surface-plan の 9 節の計画だけの行 e-policy-q を起草して置く。方針の欄の受けは、今は根の直下の控え「方針」（t3-hub.29）の notes に方針の行を足すだけで、決定 (4) は方針 1 つにつき根の直下の閉じた問いの bead に記帳し、今までの方針の行は消さずに読み続けると決めた。作る問いの本文と metadata は器（scribe2）の要件 FR81 の (a) の形（概要・技術・理由・推奨の 4 行と effect operation）に従い server が埋める（席の決め）。起草は main e280b8c（行 e-batch-partial と e-revoke の着地の後・計画 v0.30）で行い、試作（main の写しに当てた）で歯を撃った。書く契約の file は行 e-revoke（便 t3-hub.52.74・着地して閉じた）と重なったので、この行の便の bead は t3-hub.52.74 に依る。第 0.2 版（2026-09-28）は、起草の問いへの席の決めを受けて、作る問いの本文の技術と理由の行を席の字（範囲 = 全体・持ち主の方針〔方針の欄〕）にし、面の block これまでの決定とその件数から方針の問いを外すこと（計画の行 g-policy-face の askpage の分）を行に入れて、write-set に面の askpage.rs と歯の file epolqhist.rs を足した（main 67b74e3 で撃ち直した）。
 
 sections:

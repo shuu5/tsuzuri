@@ -3,12 +3,14 @@
 meta:
   id: surface-wave9
   title: 第 9 波 — 台帳の読みの持ち回しと落ちた応答の頭の秒・問いの頁の card と束の行を鍵つきの一覧に・面の wasm の名の表を抜く・面の読みを重ねない・全体への指示の範囲をつねに全体に・閉じた bead の走行の札を済んだ側へ
-  version: v0.8
-  status: effective
+  version: v0.9
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e・g の子の行 6 つ（性能の行の最初の 4 行と行 g-policy-all と行 c-pipe-closed）。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行は計画の 4 節の性能の行（g-policy-all は同じ節の project board の続きの行・c-pipe-closed は同じ節に足す中核と面の行）で、起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。行の拠りは持ち主の裁定 t3-hub.52.38（t3-hub.52.38:20260928T0154Z-1・問いの題が行 e-hold を、問いの技術が行 g-keyed〔これは問わずに入れる〕を名指した）と t3-hub.52.39（t3-hub.52.39:20260928T0155Z-1・つながりの切れを同じ決まりに揃える）と、持ち主の指摘（t3-hub.1 の user 2026-09-28T00:4xZ・00:59Z・01:06Z）。e-hold は server の mod.rs の doc を書くので、第 8 波の e-seat-hb（着地済み・56331b8）の後に流す（便の bead の依存で持つ・今は何も待たない）。行 g-strip は問い t3-hub.52.40 の概要に問わずに入れると書いて裁定（t3-hub.52.40:20260928T0156Z-1）を受け、行 g-reads は持ち主の指摘（t3-hub.1 の user 2026-09-28T00:4xZ・00:59Z・01:06Z）の読みの数の直しで問いを置かない。行 g-policy-all は持ち主の指摘（t3-hub.1（裁定 id = user 2026-09-28T01:2xZ））の直しで、見本を変える決めだが選び肢が無いので問いを置かない。e-hold・g-keyed・g-strip・g-reads の 4 行の write-set は置き場だけの = を含めて互いに素で、g-policy-all は、g-keyed が置き場だけの = で持つ tests/batchpanel.rs を書くことだけで重なる。g-policy-all は g-keyed の着地の後に流す（便の bead の依存で持つ）。行 c-pipe-closed は持ち主の指摘（t3-hub.1（裁定 id = user 2026-09-28T04:1xZ））の直しで、閉じた bead の札を板の済んだ側に出す席の決めの欠陥の直しで選び肢が無いので問いを置かない。c-pipe-closed の write-set は置き場だけの = を含めてほかの 5 行のどれとも重ならず、並べて走れる。
 
 sections:

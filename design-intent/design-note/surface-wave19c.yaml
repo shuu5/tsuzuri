@@ -3,12 +3,14 @@
 meta:
   id: surface-wave19c
   title: 第 19 波 c — 導出グラフの節点の更新の時刻と一覧の面の更新の欄、不変条件 g-9 の数（detect）
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c（導出グラフ）の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR5 と見本（c-updated）と、要件 FR3 と設計ノート surface の不変条件 g-9 と規則の行 R-17 と席の決め（c-g9・2026-09-29）で、計画 surface-plan の 9 節の計画だけの行 c-updated と c-g9 を起草して置く。c-updated は節点に更新の時刻を持たせ、一覧の面に更新の欄と新しい順の並べ替えを足す。c-g9 は本文で名指した設計文書の id のうち欄にも辺にも無い対を中核の床の関数で数え、g-9 の判定は detect の間は変えない。2 行の書く file は互いに素なので、ノートの depends は空。起草と試作は main 3742684（計画 v0.63）で撃った。
 
 sections:

@@ -3,12 +3,14 @@
 meta:
   id: surface-wave13h
   title: 第 13 波 h — 席の限度の再開の時刻を電文に足し、header の席の pill と席の card に出す
-  version: v0.4
-  status: effective
+  version: v0.5
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c と e（契約・中核・境界）と surface-board の傘の行 g（面）にまたがる行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは席の決め（計画 surface-plan の 9 節の計画だけの行 c-limit-resume・第 12 波 c の起草の問い 4 への見本どおりの決め）と要件 FR12 で、持ち主の問いを置かない。着地済みの行 g-seatpill（ノート surface-wave12c）は電文に再開の時刻が無いので header の席の pill の限度の eta と席の card の再開の印を出さなかった。計画は値を器（scribe2）の event log か rules 行の写しとし、出所を起草で器に問うとした。起草で器の code を読み、器は再開の時刻そのものを出さず、限度の判定（tick-last の理由 account-pressed）の窓も戻る時刻も tick-last と event log の逼迫の知らせに無いことを確かめたので、規則の行 R-22 の器の値の写し（窓ごとの閾値の rules 行と、使った割合が閾値以上の逼迫の印の式・持ち主の裁定 t3-hub.53.8 の筋）で中核が当たる窓を選び、その窓の戻る時刻の最も遅いものを電文の欄 resume にする（閾値の数は持たない）。境界は tick-last が限度の周だけ閾値の 3 行を撃つ。計画の同じ起草の頼みの行 g-back-origin は、その直し（href を読めない別の origin の account board の窓を前に出すだけにして頁を移さない）が行 g-back-note の着地（6915104）に入っていたので、このノートに置かない（計画から外すかは席の決め）。起草は main 83036e2（計画 v0.38）で行い、試作（main の写しに当てた）で歯を撃った。大きさは計画の S から M に上げた（4 つの crate を書く）。第 0.2 版（2026-09-28）は、行 c-limit-resume の write-set・verify・done の契約の歯 contract_form.rs と snapshot の contract_form.json の字を、行 t-cform-split（ノート surface-wave16a）が割った群 seat の歯の file と snapshot の字に付け替えた（歯の名と filter は変わらない）。第 0.3 版（2026-09-29）は、行 t-cform-split が diff の上限のために t-cform-json（snapshot を割る）と t-cform-split（歯の rs を割る）の 2 行に割れたので、付け替えの段落の割る行の字をその 2 行に直した（契約表の行は同じ）。第 0.4 版（2026-09-29）は、器が設計 doc seat-heartbeat.md の §20（器の main 7cfb6394・器の契約表の行 x）で、器の選定の判定（上限 100% と席の model の窓）を 1 回呼んだ答えを seat tick status の席の行の欄 reopens= に出すと決め、判定を器だけが持ち消費する側は代わりに計算しないと約束したので、行 c-limit-resume をその欄を写す形に書き直した。中核の閾値の写しと窓の選び・境界の rules 行の撃ち・電文の欄 resume を消し、契約の閉じた 4 つの値の型 Reopens と SeatCard の欄 reopens にして、中核は合図の健康の出力の席の行から写すだけにし（口 /api/seat と account board の project の席の card が同じ値を持つ・境界と中核の account は書かない）、面は pill に時刻を、card の限度の行の直後に時刻か測れていないか時刻が分からないの行を出す。欄の無い古い器の行は測れていないに読む。大きさは M から S に下げた。器の行 x は器の main 44b3f3da に着地し、PATH の scribe2 の binary も器の main 57c02e87 の世代に入れ替わった（便 t3-hub.52.92 の留めを解くのは席）。起草は main 45cc258（計画 v0.83）で行い、試作（main の写しに当てた）で歯を撃った。
 
 sections:

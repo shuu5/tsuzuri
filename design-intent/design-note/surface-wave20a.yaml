@@ -3,12 +3,14 @@
 meta:
   id: surface-wave20a
   title: 第 20 波 a — 公開の repo へ出る前の走査
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 合流の 3 段目の支度の行 1 つ（公開した repo の守り）。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは判断の記録 ADR-18 の決定 (9) と、持ち主の裁定 t3-hub.67.5:20260929T0109Z-1（tsuzuri の repo を秘密を含まない条件で今の履歴のまま公開にする・計画の判断の表 d44）と、条 N-3（走査を止める旗を持たない）。計画 9 節の行 t-pub-scan をノートに置く。起草と試作は main bc5d92a（計画 v0.70）で撃ち、caad1f2（計画 v0.71・この行の書く file の字は同じ）で確かめた。
 
 sections:

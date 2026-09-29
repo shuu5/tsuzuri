@@ -3,12 +3,14 @@
 meta:
   id: surface-wave13d
   title: 第 13 波 d — 導出グラフに folio の索引の設計ノートの行の節点と design の辺を組む
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c（導出グラフ）の後の、中核の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR2 と判断の記録 ADR-7 の決定 (2) で、計画 surface-plan の 9 節の計画だけの行 c-dn-rows を起草して置く。計画はこの行を folio の索引に設計ノートの行が載るまで待たせていたが、席の folio の pin が folio2 の判断の記録 ADR-32 の 6467915 に上がり、索引が設計ノートの契約表の行を種類の語 設計ノートの行 の節点にしたので待ちが解けた。同じ pin の上げで、中核の索引の読みはその種類の語を知らずに設計の出所の全部を読めないとし、面の地図と tz graph と問いの起票の門から設計文書の節点が消えていた（2026-09-28 の実測）。この行はその読みを直し、設計ノートの行の節点と、台帳の bead の pointer の行が指す行への design の辺を組む。ruled_by の辺と不変条件 g-3・g-7 の数え（行 c-g3g7）は、索引に裁定 id の欄が無いのでこのノートに入れない。起草は main db212b1（行 c-pipe-queue の着地の後・計画 v0.33）で行い、試作（main の写しに当てた）で歯を撃った。
 
 sections:

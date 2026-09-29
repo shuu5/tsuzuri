@@ -3,12 +3,14 @@
 meta:
   id: surface-wave13a
   title: 第 13 波 a — board が人に見せる時刻を日本時間にする
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g と h の子の、面の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の裁定 t3-hub.52.28（裁定 id = t3-hub.52.28:20260928T0107Z-1・案 A・計画 surface-plan の 10 節の d13）と、同じ指摘の 2 度目の持ち主の方針の欄の指示（2026-09-28）で、計画 surface-plan の 9 節の計画だけの行 g-jst を起草して置く。面が人に見せる時刻を全部日本時間（UTC に 9 時間を足す固定）にし、字の印を JST にし、今日を日本の日にし、記録の id の中の UTC の字は変えない。project board と account board の時刻の字は同じ view と seat の関数から出るので、account board も同じ行で揃え、行を割らない（席の決めのとおり・大きさ M の内）。起草は main 54b8fad（計画は第 0.35 版・面の crate の字は 71a0780 と同じ）で行い、試作（main の写しに当てた）で歯を撃った。
 
 sections:

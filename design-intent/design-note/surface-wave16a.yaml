@@ -3,12 +3,14 @@
 meta:
   id: surface-wave16a
   title: 第 16 波 a — 契約の歯と snapshot を契約の型の群ごとに割る
-  version: v0.5
-  status: effective
+  version: v0.6
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e の子の、契約の crate の歯の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の指示（2026-09-28・契約の歯の鎖を群ごとに分けて並べて流す）と席の決め（2026-09-28・契約の歯と snapshot を書く行の write-set の交わりの調べ）で、計画 surface-plan の 9 節の計画だけの行 t-cform-split を起草して置く。契約の歯 contract_form.rs と snapshot の contract_form.json は契約の型を足す行が全部書くので、地図のグラフ・席の card・pipeline の板・台帳の指標の行が 1 本の鎖でしか流れない。2 つを契約の型の群ごとの歯の file と snapshot に割り、共通の手を 1 つの module に置き、群の持ち分と共通の手と行数の上限を新しい歯で見張る。起草は main 14665fe（計画 v0.48・同じ歯を最後に書いた h-acct-rest の着地の commit の後・この行の書く file は 46113c7 と同じ）で行い、試作（main の写しと、c-dn-unknown の試作の差分を先に当てた写し）で歯を撃った。この行の便は置いた時点で走っている契約の歯の鎖の行の着地の後に流し、後の契約の型の行は席がノートの write-set と verify と done を群の file に付け替えてから起こす。第 0.2 版（2026-09-28）は、便 t3-hub.52.98 の審査の差し戻し（done (2) の歯の名と done (4) の snapshot の鍵を測る歯が無く、歯を 1 つ消すか見本を群の file と json の両方から落としても verify が全部通る）を受けて、見張りの歯 cfsplit_test_names_floor と cfsplit_snapshot_keys_floor を足し（割る前の歯の名 8 つと snapshot の鍵 62 を閉じた一覧に持ち、等しさでなく床で見る・型や歯を足す行は一覧を直さない）、done (1)・(2)・(4)・(8) と節の字を直し、在りかを c-dn-unknown の着地の後の main ddc1627（計画 v0.49）にした。第 0.3 版（2026-09-28）は、同じ便の審査の差し戻し（done (7) の、古い path の字が repo の code に残らないとする字が、割る前の file が無いことを見るために見張りの歯の file がその字を持つことと食い違い、名指した qblock・nsum・gpface の歯が lib.rs の doc も path の残りも測らない）を受けて、done (7) を群の json を読む 3 つの歯の項と古い path の字の残りの項に分け、残りを測る見張りの歯 cfsplit_no_old_paths（crates と xtask の .rs と .toml を辿り、見張りの歯の file 自身は数えない）を足し、done の全部を名指す歯が測る字に合わせて直した（割る前の歯の名 8 つの持つ群を字で持ち、doc の字と移す字を変えないことは節の形と差分に置く）。在りかは main 9527533（code は ddc1627 と同じ）。第 0.4 版（2026-09-29）は、第 0.3 版の走行の gate が、審査の lens に渡す差分の byte の上限（器の規則の行 gate.token_cap の 150000）を超えてまだ分からないで止まったのを受けて、割る仕事を 2 行に分けた（席の決め）。前の行 t-cform-json（新しい行）が snapshot を群ごとの json に割り、snapshot を読む中核と面の歯の path を群の json に替え、json の持ち分と割る前の鍵の床の見張りを置く。後の行 t-cform-split（depends は t-cform-json）が歯の file を群ごとに割り、共通の手を 1 つの module に置き、残りの見張りを足す。2 行を順に当てた木は第 0.3 版の試作の木と同じ字で、試作の git diff は 68333 byte と 120363 byte。在りかは main f71082f（計画 v0.50）。第 0.5 版（2026-09-29）は、行 t-cform-json（便 t3-hub.52.98）の着地の後の行 t-cform-split の便 t3-hub.52.101 の審査の差し戻し（節と goal が、着地した見張りの歯の file の行の数を試作の字で書き、着地した字と照らせない断言を持っていた）を受けて、t-cform-split の節と goal の在りか・行の番号・行の数・歯の数を着地した後の main a5f602f（計画 v0.53）の字から取り直し、試作をその写しで撃ち直した（試作の git diff は 119397 byte）。t-cform-json の行の字は着地したまま変えない。
 
 sections:

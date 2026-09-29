@@ -3,12 +3,14 @@
 meta:
   id: surface-wave21b
   title: 第 21 波 b — 台帳の一覧の組と並べと問いの一覧を地図と同じ種類の読みにする
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g（面）の子の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。計画 9 節の計画だけの行 g-ledger-group-kind をノートへ移す。行の拠りは持ち主の指摘（記帳 t3-hub.1・user 2026-09-28T22:5xZ）と席の決め（2026-09-29・起草 w18f の点検で見つけた・行 g-ledger-kind の範囲の外に置いた）。起草と試作は行 g-ledger-kind と c-ev-kind の着地の後の main 93389e3（計画 v0.78）で撃ち、行 g-nav の着地の後の b5c24c8 に当て直して verify と xtask の check を撃ち直した。
 
 sections:

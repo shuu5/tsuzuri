@@ -3,12 +3,14 @@
 meta:
   id: surface-wave18e
   title: 第 18 波 e — 受入 12 条の数えと runner
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 j の子の、境界の crate と xtask の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の裁定 t3-hub.52.61（計画の 3 節の d33・runner は行 i の CDP の口を使い回し外の依存を足さない）と要件 NFR1・受入 AC9・規則の行 R-23 で、計画 surface-plan の 9 節の計画だけの行 j-runner を起草で 2 行に割って置く。j-count は 1 つの画面の測りの事実から 12 条ごとの違反の数と report の行を返す純粋な数えと、12 条ごとに 1 件だけ仕込んだ fixture を置く。j-runner は CDP の口に runner だけが撃つ決まった測りの式を足し、全画面 × 2 幅 × 2 mode を行 i-4 の席の目の headless の Chrome で測る xtask の accept を置く。j-runner の depends に j-count を置く（同じ audit.rs を書く）。起草は main f3556d3（計画 v0.58）で行い、試作（main の写しに 2 行の差分を順に当てた写し）で歯を撃った（本物の Chrome は起こさない）。
 
 sections:

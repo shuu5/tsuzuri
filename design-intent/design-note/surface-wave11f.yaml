@@ -3,12 +3,14 @@
 meta:
   id: surface-wave11f
   title: 第 11 波 f — account board で、なしを判じなかった次の一手を読めない project と同じ測れていないの字と後ろの順で出す
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 h（account board）の子の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行は計画 surface-plan の 4 節の計画だけの行 h-next-unknown（便の bead t3-hub.53.19・依存は行 c-next-stall で着地済み）で、拠りは見本 mock v3（判断の記録 ADR-7 で確定）の nextAt の unknown と要件 FR11 と NFR2。行 c-next-stall が中核の なし の判じを直し project board が測れていないの箱を出した後も、account board は同じ電文を次の一手なしと出すので、HOME の次の一手の行と並べと、各 project の表の要対応の欄と並べを揃える。起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。走行中の行と書く file も置き場だけの = も重ならない。 第 0.2 版（2026-09-28）は、審査が done (3) の札の title の字の食い違いを返したので（row_cards は表の行を渡すので名は u1）、札を組む行と title の字を u1 に直した。
 
 sections:

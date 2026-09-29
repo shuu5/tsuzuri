@@ -3,12 +3,14 @@
 meta:
   id: surface-wave10b
   title: 第 10 波 b — 何も送らない接続に 400 を書かずに閉じ、グラフの組の箱に内部の id でなく平易な題を出す
-  version: v0.4
-  status: effective
+  version: v0.5
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e・g の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは席の決め（2026-09-28 に席が実物の画面で見つけた欠陥 2 つ・計画 surface-plan の第 0.16 版の 3 節）で、欠陥の直しなので持ち主の問いを置かない。1 つ目は、境界の server が 1 byte も送らない接続（browser が先に張っておく接続・読みの時間切れの接続）にも 400 bad-request を書き、Chrome が後の頁の移りでその接続を使い回して、持ち主の board に素の bad-request の頁が出た件（行 e-idle-close）。2 つ目は、行 g-graph-fold（着地済み）の後の地図のグラフで、組の箱と塊の箱と狭い幅の一覧の組の行が内部の id（~art:A・~rule・~led:ruling ほかと切れた塊の id）を題に出す件（行 g-graph-label）。起草の後に事前の点検（審査の目の材料だけで問いを出し main の code で答える）を通した。2 行は書く file も置き場だけの = も重ならないので並べて流し、どちらも依存の行は着地済み。第 0.2 版（2026-09-28）は、審査が材料に無いと返した行 e-idle-close の可視性（server の mod.rs の pub mod http と、結合試験から use で引けること）を節の在りかに値で足し、行 e-idle-close の節の拠りの字を計画の第 0.16 版に直した（走行中の行 g-graph-label の節の同じ字の直しはその着地の後）。第 0.3 版（2026-09-28）は、審査の 2 度目の返しを受けて、行 e-idle-close の節に Request の欄と fn path の可視性と、mod.rs の handle・guarded・refusal・json の今の字（bad-request は 1 か所だけ）を値で足した。第 0.4 版（2026-09-28）は、行 g-graph-label の着地（b38db27）の後に、その節の拠りの字を計画の第 0.16 版に直した（字だけ・契約の中身は変えない）。
 
 sections:

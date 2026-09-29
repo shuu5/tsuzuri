@@ -3,12 +3,14 @@
 meta:
   id: surface-wave8b
   title: 第 8 波 b — 次の一手の止まった走行と判じなかったなし・次の一手の小さい行・台帳の要約・ホームの台帳の閉じた項目・口座の並べと退役・自分の席の heartbeat
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c・g・h・e の子の行 7 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行は計画の 4 節の行で、起草の後に事前の点検を通した。v0.2 で、審査が材料に無い字を固めたと返した c-summary-ledger と e-seat-hb を直した（既存の関数の振る舞いを散文に値で書き、write-set の外の file の振る舞いを固める done を外した）。g-next-rows は c-next-stall の後に、g-seat-hb は e-seat-hb の後に走る（depends は同じノートの中の行しか引けないので 7 行を 1 つのノートに置く）。g-seat-hb は第 7 波の g-seat-split の着地の後に流す（便の bead の依存で並べる）。
 
 sections:

@@ -3,12 +3,14 @@
 meta:
   id: surface-wave5b
   title: 第 5 波（後半）— account board の session の目盛・開く button の URL・中核の限度の写し
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = user 2026-09-27T03:19Z・notes に逐語）, verbatim: よい, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 h の子の行と中核の 1 行（第 5 波の 3 行）。承認は surface-board と同じ持ち主の裁定（2026-09-27T03:19Z）を継ぎ、h-board-url は持ち主の裁定 user 2026-09-27T22:18Z（t3-hub.53.1 の案 A）に、c-limit-pipe は持ち主の裁定 t3-hub.53.8 の筋（器の値を写し判じない）に拠る。行は発効した計画 surface-plan（持ち主の裁定 t3-hub.56:20260927T2259Z-1）の 4 節の行で、起草の後に事前の点検を通した。
 
 sections:

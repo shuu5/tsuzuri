@@ -3,12 +3,14 @@
 meta:
   id: surface-wave13b
   title: 第 13 波 b — 問いの起票の門が範囲内の新しい方針を premises に求めることと、全体への指示の断りを持ち主の語にすること
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 f と surface-board の傘の行 g の子の、中核と面と契約の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR8（要件書 v0.15）と、持ち主の裁定 t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1・推奨の案 A）を記した判断の記録 ADR-16 の決定 (4) と、持ち主の裁定 t3-hub.64（裁定 id = t3-hub.64:20260928T1204Z-1・推奨の案 B）で、計画 surface-plan の 9 節の計画だけの行 f-premises と g-policy-face を起草して置く。1 つ目は、要件 FR8 の後半（席は次の問いを置く前に範囲内の方針を読み、範囲内でまだどの問いの premises にも挙げられていない方針の id を次の問いの premises に持たなければ、問いの起票の門が断る）が、方針の記帳先を方針の問いに替えた行 e-policy-q の着地の後もどこにも無い件で、問いの起票の門（行 f-gate の判じ）に足す（行 f-premises）。挙げさせるのをまだ挙げられていない方針だけ（1 度の確認）とする読みは、持ち主の裁定 t3-hub.64 の案 B で決めた。2 つ目は、全体への指示の block が行 e-policy-q の後の server の書きの断りを内部の語で出し、届かない断り no-policy-memo の字を持ち、契約の記帳 id と方針の節点の doc が今までの memo の行の形を書く件で、断りを持ち主の語にし、doc を方針の問いの形に直す（行 g-policy-face）。起草は main 6aae2f5 で行い、第 0.1 版の字は main a2351c7（計画 v0.39・要件書 v0.15）に当て直した。試作（main の写しに当てた）で歯を撃った。2 行は書く file も置き場だけの = の file も重ならないので並べて流す。
 
 sections:

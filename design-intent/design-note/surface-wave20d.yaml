@@ -3,12 +3,14 @@
 meta:
   id: surface-wave20d
   title: 第 20 波 d — 変化の知らせを種類に分け、口ごとに読み直す種類を持つ
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c の子の、契約と境界と面の crate にまたがる行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。計画 9 節の計画だけの行 c-ev-kind をノートへ移す。行の拠りは持ち主の重いという指摘（t3-hub.1 の user 2026-09-28T00:4xZ・00:59Z・01:06Z）と要件 NFR2 と規則の行 R-21。起草と試作は main bc5d92a（計画 v0.70）で撃ち、行 g-ledger-kind の着地の後の fb9c5c6（計画 v0.73）に当て直して確かめた。
 
 sections:

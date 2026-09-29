@@ -3,12 +3,14 @@
 meta:
   id: surface-wave12b
   title: 第 12 波 b — account board の決定待ちと未反映の欄を電文の台帳の数にし、群の card に閾値の行を足す
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 h（account board）の子の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行は計画 surface-plan（v0.25）の 9 節の計画だけの行 h-acct-cols で、拠りは持ち主の裁定 t3-hub.53.9（裁定 id = t3-hub.53.9:20260927T2233Z-1・計画の判断の表の行 d6）と t3-hub.53.8（裁定 id = t3-hub.53.8:20260927T2233Z-1・行 d5）と要件 FR12・FR13・NFR2。計画がこの行の前に置いた行 e-acct-qopen と e-acct-unref（電文に決定待ちと未反映の数を足す）は、電文の project の行の台帳（LedgerStats）がもう open の問いの数と未反映の数と読めない種類を運ぶので、計画の 3 節の席の決め（憲法の条 P-27 の決定はしご・出所は scribe2 の C17）で退け、この行の計画の依存は着地済みの c-acct-thr だけにした（契約の行の depends は空）。未反映の読めない種類は、project board の指標の段と同じ型 Unref と関数 kind_name と測れていないの印で部分の和として出す。書くのは面の crate の 2 つの src の file と 3 つの着地済みの歯の file と新しい歯 1 つで、電文と中核と境界の crate は書かない。起草は main 3e2e875 で行い（この行の file は bac6854 と同じ）、試作の木で歯と xtask の check を通した。
 
 sections:

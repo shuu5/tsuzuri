@@ -3,12 +3,14 @@
 meta:
   id: surface-wave15d
   title: 第 15 波 d — 導出グラフが folio の裁定の書き出しを節点に結び、ruled_by の辺と不変条件 g-3・g-7 を数える
-  version: v0.1
-  status: effective
+  version: v0.2
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 c（導出グラフ）の後の、中核と境界の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR2 と FR3 と条 P-7 と、folio2 の判断の記録 ADR-32 の決定 (5) と folio2 の席が送った結び方の手順（2026-09-28）で、計画 surface-plan の 9 節の計画だけの行 c-g3g7 を起草して置く。面の server と tz graph が folio check --emit-rulings の書き出しを索引と並べて読み、中核が書き出しの行を索引の節点に結んで ruled_by の辺を組み、不変条件 g-3（結んだ裁定が台帳に在る）と g-7（裁定の節点が answers か ruled_by に結ばれる）を数える（受入 AC5 の前半・今は 2 本ともつねにまだ分からない）。同じ中核と境界の file と歯を書く行 c-dn-unknown と c-dn-edges（ノート surface-wave14d）の後に、便の bead の依存で流す。起草は main 46113c7（計画 v0.47）で行い、試作（main の写しに当てた）で歯を撃った。
 
 sections:

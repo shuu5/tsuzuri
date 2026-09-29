@@ -3,12 +3,14 @@
 meta:
   id: surface-wave13i
   title: 第 13 波 i — 着地して CI を待つ走行を板に CI 中として出す
-  version: v0.3
-  status: effective
+  version: v0.4
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-board の傘の行 g の子の、契約と中核と面の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは持ち主の指示（チャット 2026-09-28T11:4xZ・逐語は t3-hub.1 の notes）と要件 FR10 と、計画 surface-plan の 6 節の控え t3-hub.63（issue の一生の道筋の整理）の候補 (d) で、計画 surface-plan の 9 節の計画だけの行 c-pipe-ci を起草して置く。器（scribe2）は着地の後の終端（push・CI の照合・台帳の close）を段ごとに 1 件の RunDone の detail で記すが、今の板はどの RunDone も同じ段 Landed の札にするので、CI を待つ走行と CI の終わった走行の見分けがつかない。この行は札に着地の後の CI の読みを置き、CI を待つ札を Landed の列に日を問わず出し、台帳で閉じていない bead の CI の failure と push・close の落ちと測れずと読めない終端を止まった列に出す（席の決め 2026-09-28）。起草は main 81ab10c（計画 v0.41）で始め、行 c-pipe-misfit と g-pipe-misfit（ノート surface-wave12g の第 0.2 版）の着地の後の main e24fab6 に当て直し、試作で歯を撃った。書く file が g-pipe-misfit と重なり、g-pipe-misfit が足す歯の file も書くので、この行の便の bead は g-pipe-misfit の便に依る（ノートの depends はほかのノートの行を引けないので空・同じ file を書いた c-pipe-misfit は着地済み）。第 0.2 版（2026-09-28）は、行 c-pipe-ci の write-set・verify・done の契約の歯 contract_form.rs と snapshot の contract_form.json の字を、行 t-cform-split（ノート surface-wave16a）が割った群 board の歯の file と snapshot の字に付け替えた（歯の名と filter は変わらない）。第 0.3 版（2026-09-29）は、行 t-cform-split が diff の上限のために t-cform-json（snapshot を割る）と t-cform-split（歯の rs を割る）の 2 行に割れたので、付け替えの段落の割る行の字をその 2 行に直した（契約表の行は同じ）。
 
 sections:

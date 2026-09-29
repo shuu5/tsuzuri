@@ -3,12 +3,14 @@
 meta:
   id: surface-wave15c
   title: 第 15 波 c — 契約の歯の見本の裁定 id を台帳の外の接頭辞にする
-  version: v0.5
-  status: effective
+  version: v0.6
+  status: retired
   generated: 2026-09-28
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+    - {who: 持ち主, date: 2026-09-29, ruling: t3-hub.66.3（裁定 id = t3-hub.66.3:20260929T0656Z-1・notes に逐語）, verbatim: 推奨で良い。, surface: R-8}
+  superseded_by: surface-plan
   note: 設計ノート surface-base の傘の行 e の子の、契約の crate の歯の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは器（scribe2）の答え（計画 6 節・器の要件 FR83 の決まり A）と席の決め（2026-09-28 の点検）で、計画 surface-plan の 9 節の計画だけの行 t-fx-prefix を起草して置く。器の FR83 は、追跡される file の中の問い id の形の字のうち、問いの部分が台帳の接頭辞で始まるものを本物の引きとして数え、閉じた問いの裁定の行に解けなければ受付と着地で断る。契約の歯 contract_form と snapshot の見本の 5 つはその形で台帳に無いので、台帳の外の接頭辞の字に替え、契約の crate の歯の file に同じ形が戻らないよう新しい歯で見張る。tsuzuri が vessel 宣言に ruling-check を書くのはこの行の着地の後。起草は main e055edd（計画 v0.41・同じ歯を書いた c-pipe-misfit と g-policy-face の着地の commit の後）で行い、試作（main の写しに当てた）で歯を撃った。同じ歯と snapshot を書く行の順は計画の 5 節の鎖で、この行の便は c-dn-edges の便の後に流す。第 0.2 版（2026-09-28）は、行 t-fx-prefix の write-set・verify・done の契約の歯 contract_form.rs と snapshot の contract_form.json の字を、行 t-cform-split（ノート surface-wave16a）が割った群 surface・ledger の歯の file と snapshot の字に付け替えた（歯の名と filter は変わらない）。第 0.3 版（2026-09-29）は、行 t-cform-split が diff の上限のために t-cform-json（snapshot を割る）と t-cform-split（歯の rs を割る）の 2 行に割れたので、付け替えの段落の割る行の字をその 2 行に直した（契約表の行は同じ）。第 0.4 版（2026-09-29）は、便 t3-hub.52.95 の審査の vacuous-assert（done の項 1 の「行を足さず消さない」と項 6 の「見本の bead id と batch の字は変えない」を、名指した歯が測らない）を受け、2 つの字を done から外して節の形 (a) に「歯で測らず、この行の差分で持つ」と書いた。項 6 は「ほかの 5 本の歯が通る」だけを言う（直さないことも節の形へ移した）。第 0.5 版（2026-09-29）は、同じ便の 2 度目の審査の vacuous-assert（done の項 1 の替え先の字は歯 fxpre_contract_tests_hold_none が測らず、項 2 の「項 1 の新しい字に替わる」と「ほかの行と行の数は変わらない」は歯 contract_form_snapshot_matches が測らない）を受け、項 1 を「台帳の接頭辞の形の字が無い」に、項 2 を「snapshot と見本の字が 1 字も違わない」に絞り、替え先の字の一覧と snapshot の替わる行の一覧を節の形 (a)(c) へ移した。
 
 sections:
