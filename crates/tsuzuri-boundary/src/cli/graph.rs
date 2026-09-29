@@ -3,11 +3,13 @@
 //! - --check — 不変条件の 12 本を 3 値で数え、違反の行と要約の行を標準出力、まだ分からないの行を標準エラー
 //!   （g-7 が folio の裁定 id の文法の外の id の裁定だけのためにまだ分からないなら、理由にその数を書く・行 c-g3g7）
 //!   要約の行の前に要約の無い節点の数と id の行（読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 k-sum-count）
+//!   その次に本文だけで名指した id の対の数と対の行（g-9 の detect の数・読めなければまだ分からないの行を標準エラー・
+//!   終了 code は変えない・行 k-g9-count）
 //! - --design — 設計の索引だけを読み、設計の節点と辺に絞った GraphDoc の電文（folio の graph の吸収・ADR-8 決定 (3)）
 //!
 //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
 //! 読めない出所が無ければ 0、在れば 2。使い方の誤りは 1。組みは口 /api/graph と同じ `Sources::gather` と
-//! `board::built_bare`（`board::built` と同じ組み）と `board::doc` の呼び。
+//! `board::built_floors`（`board::built` と同じ組み）と `board::doc` の呼び。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -19,7 +21,7 @@ use tsuzuri_contract::graph::{
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::{self, build::DESIGN_EDGE_TYPES, check::UNMEASURED};
 
-use crate::server::board::{self, Sources, Texts};
+use crate::server::board::{self, Floors, Sources, Texts};
 use crate::server::design::{Design, FOLIO};
 use crate::server::ledger::{BD, Source};
 use crate::server::runs::Runs;
@@ -81,6 +83,26 @@ pub fn bare_line(ids: &[String]) -> String {
         format!("{BARE_HEAD} 0")
     } else {
         format!("{BARE_HEAD} {}（{}）", ids.len(), ids.join("・"))
+    }
+}
+
+/// 本文だけで名指した id の対の行の頭の字（行 k-g9-count）。
+pub const UNFIELDED_HEAD: &str = "本文だけで名指した id の対";
+
+/// 本文だけで名指した id の対がまだ分からないときの字（標準エラーのまだ分からないの行に続ける）。
+pub const UNFIELDED_UNKNOWN: &str = "本文だけで名指した id の対（要約か設計の索引が読めない）";
+
+/// 本文だけで名指した id の対の行（空なら数 0 だけ、在れば数と、本文を持つ節点の id と矢印と名指した id の
+/// 中黒つなぎ・列の順のまま）。
+pub fn unfielded_line(pairs: &[(String, String)]) -> String {
+    if pairs.is_empty() {
+        format!("{UNFIELDED_HEAD} 0")
+    } else {
+        let named: Vec<String> = pairs
+            .iter()
+            .map(|(from, to)| format!("{from}→{to}"))
+            .collect();
+        format!("{UNFIELDED_HEAD} {}（{}）", pairs.len(), named.join("・"))
     }
 }
 
@@ -173,18 +195,18 @@ pub fn run(rest: &[&str]) -> u8 {
             args.repo.display()
         ));
     }
-    let (doc, outside, bare) = match args.mode {
+    let (doc, outside, floors) = match args.mode {
         Mode::Doc | Mode::Check => {
             let sources = Sources {
                 ledger: Source::new(&args.repo, &args.bd),
                 design: Design::new(&args.repo, &args.folio),
                 runs: Runs::new(args.state_dir.as_deref()),
             };
-            let (g, bare) = board::built_bare(&sources.gather(true, true));
+            let (g, floors) = board::built_floors(&sources.gather(true, true));
             (
                 board::doc(&g, &graph::check(&g)),
                 graph::check::outside_rulings(&g),
-                bare,
+                floors,
             )
         }
         Mode::Design => {
@@ -194,7 +216,11 @@ pub fn run(rest: &[&str]) -> u8 {
                 summary: design.summary().unwrap_or_default(),
                 ..Texts::default()
             };
-            (design_view(&board::graph(&texts)), None, Reading::Unknown)
+            let floors = Floors {
+                bare: Reading::Unknown,
+                unfielded: Reading::Unknown,
+            };
+            (design_view(&board::graph(&texts)), None, floors)
         }
     };
     if !doc.unread.is_empty() {
@@ -202,7 +228,7 @@ pub fn run(rest: &[&str]) -> u8 {
         eprintln!("# 読めない出所: {}", names.join("・"));
     }
     match args.mode {
-        Mode::Check => check(&doc.invariants, outside, &bare),
+        Mode::Check => check(&doc.invariants, outside, &floors),
         Mode::Doc | Mode::Design => match wire::encode(&doc) {
             Ok(text) => {
                 println!("{text}");
@@ -218,12 +244,9 @@ pub fn run(rest: &[&str]) -> u8 {
 
 /// 違反の行と要約の行を標準出力、まだ分からないの行を標準エラーに出し、3 値の終了 code を返す。
 /// `outside` は g-7 が文法の外の id の裁定だけのためにまだ分からないときのその数（`check::outside_rulings`）。
-/// `bare` は要約の無い節点の列（`board::built_bare`・要約の行の前に出し、終了 code は変えない）。
-fn check(
-    invariants: &[InvariantCheck],
-    outside: Option<usize>,
-    bare: &Reading<Vec<String>>,
-) -> u8 {
+/// `floors` は要約の無い節点の列と本文だけで名指した id の対（`board::built_floors`・要約の行の前にこの順に出し、
+/// 終了 code は変えない）。
+fn check(invariants: &[InvariantCheck], outside: Option<usize>, floors: &Floors) -> u8 {
     let (mut violations, mut unknowns) = (0, 0);
     for inv in invariants {
         match inv.verdict {
@@ -254,9 +277,13 @@ fn check(
             Verdict::Pass => {}
         }
     }
-    match bare {
+    match &floors.bare {
         Reading::Known(ids) => println!("{}", bare_line(ids)),
         Reading::Unknown => eprintln!("# まだ分からない: {BARE_UNKNOWN}"),
+    }
+    match &floors.unfielded {
+        Reading::Known(pairs) => println!("{}", unfielded_line(pairs)),
+        Reading::Unknown => eprintln!("# まだ分からない: {UNFIELDED_UNKNOWN}"),
     }
     let verdict = overall(invariants);
     let word = match verdict {

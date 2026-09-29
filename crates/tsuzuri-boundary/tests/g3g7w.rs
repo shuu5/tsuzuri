@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, NEXT};
+use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, NEXT, UNFIELDED_UNKNOWN};
 use tsuzuri_boundary::server::board::{self, Texts};
 use tsuzuri_boundary::server::design::{Design, RULINGS_ARGS};
 use tsuzuri_contract::graph::{EdgeType, Verdict};
@@ -162,9 +162,10 @@ fn unknown(id: &str, why: &str) -> String {
     format!("# まだ分からない: [{id}] {why}")
 }
 
-/// 要約の無い節点がまだ分からないの行（偽の設計の道具は要約を返さない・行 k-sum-count）。
+/// 要約の無い節点と本文だけで名指した id の対がまだ分からないの 2 行（偽の設計の道具は要約を返さない・
+/// 行 k-sum-count・行 k-g9-count）。
 fn bare_unknown() -> String {
-    format!("# まだ分からない: {BARE_UNKNOWN}")
+    format!("# まだ分からない: {BARE_UNKNOWN}\n# まだ分からない: {UNFIELDED_UNKNOWN}")
 }
 
 const UNREAD: &str = "読めない出所が在る";

@@ -1,4 +1,4 @@
-//! 要約の無い節点の数の歯（接頭辞 ksum_・設計ノート surface-wave19a 行 k-sum-count・要件 FR15）。
+//! 本文だけで名指した id の対の数の歯（接頭辞 kg9_・設計ノート surface-wave20b 行 k-g9-count・要件 FR3）。
 //! 偽の bd（台帳の字の file を返す script）と偽の設計の道具（3 つ目の引数が --summary なら要約の字の file、
 //! ほかは索引の字の file を返す script）を歯ごとの作業場に置き、event log の字を作業場の state dir に置いて、
 //! tz graph --check を撃つ。
@@ -9,35 +9,40 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use tsuzuri_boundary::cli::graph::{BARE_HEAD, BARE_UNKNOWN, bare_line};
-use tsuzuri_boundary::server::board::{Texts, built, built_bare};
+use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, UNFIELDED_HEAD, UNFIELDED_UNKNOWN, unfielded_line};
+use tsuzuri_boundary::server::board::{Texts, built, built_floors};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_core::graph::check::unsummarized;
+use tsuzuri_core::graph::check::{unfielded_mentions, unsummarized};
 
-/// 設計の索引（節点 3・辺 3・歯 kcli と同じ字）。
+/// 設計の索引（節点 5・辺 3）。
 const INDEX: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）\n\
 A-1\t条\tconstitution.yaml\t00000000\t見本の条\n\
 A-1.1\t規範文\tconstitution.yaml\t00000001\t見本の規範文\n\
 FR1\t要件\tsrs.yaml\t00000002\t見本の要件\n\
+R-2\t規則行\trules.yaml\t00000003\t見本の規則行\n\
+nt#r1\t設計ノートの行\tdesign-note/nt.yaml\t00000004\t見本の設計ノートの行\n\
 # 辺（1 行 = 端 / 端 / 型・タブ区切り）\n\
 A-1\tA-1.1\tin-article\n\
 A-1.1\tA-1\tin-article\n\
 FR1\tA-1\trefs\n";
 
-/// 台帳（bead 3 本・epic の k と問いの k.2 は description の定型行を持ち、k.1 は description が無い）。
-const LEDGER: &str = r#"[
-{"id": "k", "title": "根", "status": "open", "issue_type": "epic", "description": "概要 = 根の概要"},
-{"id": "k.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
- "dependencies": [{"issue_id": "k.1", "depends_on_id": "k", "type": "parent-child"}]},
-{"id": "k.2", "title": "問い", "status": "open", "issue_type": "task", "labels": ["intake:question"],
- "description": "技術 = 問いの技術",
- "metadata": {"touches": ["FR1"]},
- "dependencies": [{"issue_id": "k.2", "depends_on_id": "k", "type": "parent-child"}]}
-]
-"#;
+/// 索引に、本文で名指した 3 つの対の辺を足した字。
+const INDEX_LINKED: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）\n\
+A-1\t条\tconstitution.yaml\t00000000\t見本の条\n\
+A-1.1\t規範文\tconstitution.yaml\t00000001\t見本の規範文\n\
+FR1\t要件\tsrs.yaml\t00000002\t見本の要件\n\
+R-2\t規則行\trules.yaml\t00000003\t見本の規則行\n\
+nt#r1\t設計ノートの行\tdesign-note/nt.yaml\t00000004\t見本の設計ノートの行\n\
+# 辺（1 行 = 端 / 端 / 型・タブ区切り）\n\
+A-1\tA-1.1\tin-article\n\
+A-1.1\tA-1\tin-article\n\
+FR1\tA-1\trefs\n\
+A-1\tR-2\trules\n\
+nt#r1\tFR1\treq\n\
+nt#r1\tR-2\trules\n";
 
-/// 台帳の k.1 に概要の行を足した字。
-const LEDGER_FULL: &str = r#"[
+/// 台帳（bead 3 本・どれも description の定型行を持つ）。
+const LEDGER: &str = r#"[
 {"id": "k", "title": "根", "status": "open", "issue_type": "epic", "description": "概要 = 根の概要"},
 {"id": "k.1", "title": "契約", "status": "open", "issue_type": "task", "acceptance_criteria": "design = contracts/x.toml#a",
  "description": "概要 = 契約の概要",
@@ -49,20 +54,16 @@ const LEDGER_FULL: &str = r#"[
 ]
 "#;
 
-/// 要約（A-1 と FR1 の 2 行・A-1.1 の行は無い）。
-const SUMMARY: &str = "{\"id\":\"A-1\",\"file\":\"constitution.yaml\",\"line\":3,\"plain\":\"条の概要\"}\n\
-{\"id\":\"FR1\",\"file\":\"srs.yaml\",\"line\":7,\"eng\":\"要件の技術\"}\n";
-
-/// 要約に A-1.1 の行を足した 3 行。
-const SUMMARY_FULL: &str = "{\"id\":\"A-1\",\"file\":\"constitution.yaml\",\"line\":3,\"plain\":\"条の概要\"}\n\
-{\"id\":\"A-1.1\",\"file\":\"constitution.yaml\",\"line\":5,\"plain\":\"規範文の概要\"}\n\
-{\"id\":\"FR1\",\"file\":\"srs.yaml\",\"line\":7,\"eng\":\"要件の技術\"}\n";
+/// 要約（A-1 と FR1 と nt#r1 の 3 行・A-1.1 と R-2 の行は無い）。
+const SUMMARY: &str = "{\"id\":\"A-1\",\"file\":\"constitution.yaml\",\"line\":3,\"plain\":\"FR1 と R-2 を見る\"}\n\
+{\"id\":\"FR1\",\"file\":\"srs.yaml\",\"line\":7,\"eng\":\"A-1.1 に従う\"}\n\
+{\"id\":\"nt#r1\",\"file\":\"design-note/nt.yaml\",\"line\":9,\"eng\":\"FR1 を満たす・R-2 を写す\"}\n";
 
 /// event log（走行 1 本）。
 const EVENTS: &str = "{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"k.1-20260927T000000Z\",\"bead\":\"k.1\",\"stage\":\"Intake\"}\n";
 
-/// 計画の verify の filter の語と同じノートのほかの 2 行の接頭辞（歯の名が含んではならない部分の字）。
-const FILTERS: [&str; 179] = [
+/// 計画の verify の filter の語と同じノートのもう 1 行の接頭辞（歯の名が含んではならない部分の字）。
+const FILTERS: [&str; 191] = [
     "aaround_",
     "accept_",
     "acchold_",
@@ -78,8 +79,11 @@ const FILTERS: [&str; 179] = [
     "acctsess_",
     "acctwin_",
     "acctwire_",
+    "aface_",
     "afocus_",
+    "alean_",
     "aord_",
+    "aown_",
     "apop_",
     "askcard_",
     "athr_",
@@ -94,6 +98,7 @@ const FILTERS: [&str; 179] = [
     "cadq_",
     "cdorm_",
     "cfsplit_",
+    "cg9_",
     "cgdom_",
     "cmark_",
     "contract_form_",
@@ -101,6 +106,8 @@ const FILTERS: [&str; 179] = [
     "csled_",
     "cspk_",
     "ctick_",
+    "cupd_",
+    "cupdlist_",
     "denv_",
     "dnedge_",
     "dngrp_",
@@ -108,6 +115,7 @@ const FILTERS: [&str; 179] = [
     "dnskip_",
     "ecache_",
     "epolq_",
+    "eretry_",
     "flight_",
     "fmark_",
     "fprem_",
@@ -133,6 +141,7 @@ const FILTERS: [&str; 179] = [
     "gsum_",
     "gtuck_",
     "gview_",
+    "gwv_",
     "hacols_",
     "harest_",
     "hasplit_",
@@ -167,6 +176,7 @@ const FILTERS: [&str; 179] = [
     "kcli_",
     "kindlab_",
     "klink_",
+    "ksum_",
     "launch_",
     "lcard_",
     "ledgerblock_",
@@ -213,6 +223,7 @@ const FILTERS: [&str; 179] = [
     "qgate_",
     "qkey_",
     "question_",
+    "rbusy_",
     "relay_",
     "rhold_",
     "runsdoc_",
@@ -235,13 +246,15 @@ const FILTERS: [&str; 179] = [
     "sxaxis_",
     "ticker_",
     "tipx_",
+    "tkad_",
+    "tlic_",
     "topbar_",
+    "topfit_",
     "tz_",
     "urpanel_",
     "uword_",
     "wstrip_",
-    "gwv_",
-    "tkad_",
+    "cnote_",
 ];
 
 fn script(path: &Path, body: &str) {
@@ -258,9 +271,9 @@ struct Place {
 
 impl Place {
     /// `summary` が None なら偽の設計の道具はどの引数にも索引の字を返す（要約が読めない）。
-    fn new(name: &str, ledger: &str, summary: Option<&str>) -> Place {
+    fn new(name: &str, index: &str, summary: Option<&str>) -> Place {
         let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
-            .join("ksum")
+            .join("kg9")
             .join(name);
         let _ = fs::remove_dir_all(&root);
         let repo = root.join("repo");
@@ -269,8 +282,8 @@ impl Place {
         fs::write(repo.join(".beads/issues.jsonl"), "{}\n").expect("印の file");
         fs::create_dir_all(state.join("fleet")).expect("state dir");
         fs::write(state.join("fleet/events.jsonl"), EVENTS).expect("event log");
-        fs::write(root.join("ledger.json"), ledger).expect("台帳の字");
-        fs::write(root.join("index.tsv"), INDEX).expect("索引の字");
+        fs::write(root.join("ledger.json"), LEDGER).expect("台帳の字");
+        fs::write(root.join("index.tsv"), index).expect("索引の字");
         script(
             &root.join("bd"),
             &format!("exec cat '{}'", root.join("ledger.json").display()),
@@ -338,80 +351,93 @@ fn summary(unknowns: usize) -> String {
     format!("tz graph --check: まだ分からない（違反 0・まだ分からない {unknowns}）\n")
 }
 
-fn owned(ids: &[&str]) -> Vec<String> {
-    ids.iter().map(|s| s.to_string()).collect()
+fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
+    list.iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect()
 }
 
+/// 要約の無い節点の行（A-1.1 は要約の行が無く、R-2 は本文が無い）。
+const BARE: &str = "要約の無い節点 2（A-1.1・R-2）\n";
+
+/// 節の索引で本文だけで名指した id の対の行。
+const UNFIELDED: &str = "本文だけで名指した id の対 3（A-1→R-2・nt#r1→FR1・nt#r1→R-2）\n";
+
 #[test]
-fn ksum_line_and_built_bare() {
-    let head: &str = BARE_HEAD;
-    let unknown: &str = BARE_UNKNOWN;
-    assert_eq!(head, "要約の無い節点");
-    assert_eq!(unknown, "要約の無い節点（要約か設計の索引か台帳が読めない）");
-    let line: fn(&[String]) -> String = bare_line;
-    assert_eq!(line(&[]), "要約の無い節点 0");
-    assert_eq!(line(&owned(&["x", "y.1"])), "要約の無い節点 2（x・y.1）");
+fn kg9_line_and_built_floors() {
+    let head: &str = UNFIELDED_HEAD;
+    let unknown: &str = UNFIELDED_UNKNOWN;
+    assert_eq!(head, "本文だけで名指した id の対");
+    assert_eq!(unknown, "本文だけで名指した id の対（要約か設計の索引が読めない）");
+    let line: fn(&[(String, String)]) -> String = unfielded_line;
+    assert_eq!(line(&[]), "本文だけで名指した id の対 0");
+    assert_eq!(
+        line(&pairs(&[("nt#r1", "FR1"), ("A-1", "R-2")])),
+        "本文だけで名指した id の対 2（nt#r1→FR1・A-1→R-2）"
+    );
 
     let read = texts(SUMMARY);
-    let (g, bare) = built_bare(&read);
+    let (g, floors) = built_floors(&read);
     assert_eq!(g, built(&read));
-    assert_eq!(bare, unsummarized(&g, true));
-    assert_eq!(bare, Reading::Known(owned(&["A-1.1", "k.1"])));
+    assert_eq!(floors.bare, unsummarized(&g, true));
+    assert_eq!(floors.unfielded, unfielded_mentions(&g, true));
+    assert_eq!(
+        floors.unfielded,
+        Reading::Known(pairs(&[
+            ("A-1", "R-2"),
+            ("nt#r1", "FR1"),
+            ("nt#r1", "R-2")
+        ]))
+    );
 
     let unread = texts("");
-    let (g, bare) = built_bare(&unread);
+    let (g, floors) = built_floors(&unread);
     assert_eq!(g, built(&unread));
-    assert_eq!(bare, Reading::Unknown);
+    assert_eq!(floors.bare, Reading::Unknown);
+    assert_eq!(floors.unfielded, Reading::Unknown);
 }
 
 #[test]
-fn ksum_check_names_bare() {
-    let place = Place::new("names", LEDGER, Some(SUMMARY));
+fn kg9_check_names_pairs() {
+    let place = Place::new("names", INDEX, Some(SUMMARY));
     let out = place.check(true);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
-    assert_eq!(
-        stdout(&out),
-        format!(
-            "要約の無い節点 2（A-1.1・k.1）\n本文だけで名指した id の対 0\n{}",
-            summary(3)
-        )
-    );
+    assert_eq!(stdout(&out), format!("{BARE}{UNFIELDED}{}", summary(3)));
     let err = stderr(&out);
-    assert!(!err.contains(BARE_HEAD), "{err}");
+    assert!(!err.contains(UNFIELDED_HEAD), "{err}");
 
-    let place = Place::new("full", LEDGER_FULL, Some(SUMMARY_FULL));
+    let place = Place::new("linked", INDEX_LINKED, Some(SUMMARY));
     let out = place.check(true);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(
         stdout(&out),
-        format!("要約の無い節点 0\n本文だけで名指した id の対 0\n{}", summary(3))
+        format!("{BARE}本文だけで名指した id の対 0\n{}", summary(3))
     );
 }
 
 #[test]
-fn ksum_unread_goes_to_stderr() {
-    let line = format!("# まだ分からない: {BARE_UNKNOWN}");
-    let place = Place::new("unread", LEDGER, None);
+fn kg9_unread_goes_to_stderr() {
+    let unfielded = format!("# まだ分からない: {UNFIELDED_UNKNOWN}");
+    let bare = format!("# まだ分からない: {BARE_UNKNOWN}");
+    let place = Place::new("unread", INDEX, None);
     let out = place.check(true);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(stdout(&out), summary(3));
     let err = stderr(&out);
-    assert_eq!(err.lines().filter(|l| *l == line).count(), 1, "{err}");
+    assert_eq!(err.lines().filter(|l| *l == unfielded).count(), 1, "{err}");
 
-    let place = Place::new("no-bd", LEDGER, Some(SUMMARY));
+    let place = Place::new("no-bd", INDEX, Some(SUMMARY));
     let out = place.check(false);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
-    assert_eq!(
-        stdout(&out),
-        format!("本文だけで名指した id の対 0\n{}", summary(11))
-    );
+    assert_eq!(stdout(&out), format!("{UNFIELDED}{}", summary(11)));
     let err = stderr(&out);
-    assert_eq!(err.lines().filter(|l| *l == line).count(), 1, "{err}");
+    assert_eq!(err.lines().filter(|l| *l == unfielded).count(), 0, "{err}");
+    assert_eq!(err.lines().filter(|l| *l == bare).count(), 1, "{err}");
 }
 
 #[test]
-fn ksum_names_clean() {
-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ksum.rs"))
+fn kg9_names_clean() {
+    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/kg9.rs"))
         .expect("この file");
     let lines: Vec<&str> = text.lines().collect();
     let names: Vec<&str> = lines
@@ -425,8 +451,8 @@ fn ksum_names_clean() {
     assert_eq!(names.len(), 4, "{names:?}");
     for name in names {
         let rest = name
-            .strip_prefix("ksum_")
-            .unwrap_or_else(|| panic!("{name} は ksum_ で始まらない"));
+            .strip_prefix("kg9_")
+            .unwrap_or_else(|| panic!("{name} は kg9_ で始まらない"));
         for word in FILTERS {
             assert!(!rest.contains(word), "{name} は {word} を含む");
         }

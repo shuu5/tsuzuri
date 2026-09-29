@@ -123,11 +123,31 @@ pub fn built(texts: &Texts) -> Graph {
 }
 
 /// `built` と同じ導出グラフと、要約の無い節点の列（要約か設計の索引か台帳が読めなければまだ分からない・
-/// 中核の `check::unsummarized`・行 k-sum-count）。tz graph --check が使う。
+/// 中核の `check::unsummarized`・行 k-sum-count）。
 pub fn built_bare(texts: &Texts) -> (Graph, Reading<Vec<String>>) {
     let (g, summary) = summed(texts);
     let bare = graph::check::unsummarized(&g, summary);
     (g, bare)
+}
+
+/// tz graph --check が出す床の値（数えるだけで終了 code は変えない・行 k-g9-count）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct Floors {
+    /// 要約の無い節点の列（中核の `check::unsummarized`・行 k-sum-count）。
+    pub bare: Reading<Vec<String>>,
+    /// 本文だけで名指した id の対（中核の `check::unfielded_mentions`・g-9 の detect の数・行 c-g9）。
+    pub unfielded: Reading<Vec<(String, String)>>,
+}
+
+/// `built` と同じ導出グラフと床の値（要約を写せたかを 2 つの床の関数に渡す・行 k-g9-count）。
+/// tz graph --check が使う。
+pub fn built_floors(texts: &Texts) -> (Graph, Floors) {
+    let (g, summary) = summed(texts);
+    let floors = Floors {
+        bare: graph::check::unsummarized(&g, summary),
+        unfielded: graph::check::unfielded_mentions(&g, summary),
+    };
+    (g, floors)
 }
 
 /// 導出グラフを組み、要約を写せたかを添えて返す。
