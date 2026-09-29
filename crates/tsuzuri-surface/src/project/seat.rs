@@ -6,16 +6,17 @@
 //! 群の chip の card（見本の pa:group）は、同じ server の口 /api/account の群の枠（GroupCard）から写す。
 //! 状態の帯の猶予の内・移り先の無い断り・逼迫の行と、詳しくの写しの行は、電文の器の移動の 4 つの欄
 //! （move_to・grace_left・refused・pressure）を写すだけで、残り秒を計算しない。
+//! 窓の行の閾値の線と印は、同じ口 /api/account の電文の caps（器の rules 行の写し）を窓の名で写すだけで判じない。
 
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::account::GroupMember;
+use tsuzuri_contract::account::{GroupMember, WindowCap};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
 use tsuzuri_contract::wire;
 
 use super::{Body, NO_CONTENT, NOT_READ, UNKNOWN, state_class, state_key};
 use crate::account::heartbeat::{Toggle, seat_toggle};
-use crate::account::home::{EXPERT_CHARS, wrap_words};
+use crate::account::home::{EXPERT_CHARS, cap_of, wrap_words};
 use crate::frame::{self, Block};
 use crate::view::{Fetched, JST, clock, hhmm, jst};
 use crate::vocab::label;
@@ -664,7 +665,38 @@ pub fn window_row(q: &QuotaUsed, at: EpochSecs) -> WindowRow {
     }
 }
 
-/// 状態の帯（見本の bandHTML の順: 限度・猶予の内か移動待ち・移り先の無い断り・逼迫・平時は None）。
+/// 閾値の印の字（見本の lowHTML の th・後に値か `?` が続く）。
+pub const THR_MARK: &str = "┆";
+
+/// 窓の閾値の印（棒の中の線と行の右の字と読み上げの字・見本の lowHTML の wrow の th）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Thr {
+    /// 線の left の百分率（100 で止める・値が読めなければ None で線を引かない）。
+    pub line: Option<u64>,
+    /// 行の右の字（`┆85`・値が読めなければ `┆?`）。
+    pub text: String,
+    /// 読み上げの字（語の辞書の鍵 threshold の語と空白と値）。
+    pub aria: String,
+}
+
+/// 口 /api/account の電文の窓ごとの閾値（器の rules 行の写し・電文が読めなければ None）。
+pub fn seat_caps(account: &Fetched) -> Option<Vec<WindowCap>> {
+    crate::account::doc(account).ok().map(|d| d.caps)
+}
+
+/// 窓の閾値の印（account board の cap_of と同じ読み・電文か窓の行か値が読めなければ線なしの `?`・
+/// 値が 100 を越えれば線は 100 で止め、字は値のまま）。
+pub fn thr(caps: Option<&[WindowCap]>, window: &str) -> Thr {
+    let cap = caps.and_then(|c| cap_of(c, window));
+    let value = cap.map_or_else(|| "?".to_string(), |c| c.to_string());
+    Thr {
+        line: cap.map(|c| c.min(100)),
+        text: format!("{THR_MARK}{value}"),
+        aria: format!("{} {value}", label("threshold")),
+    }
+}
+
+/// 状態の帯（見本の bandHTML の順:限度・猶予の内か移動待ち・移り先の無い断り・逼迫・平時は None）。
 /// 猶予の内と断りと逼迫は器の字の写しが読めた（Known(Some)）ときだけ出し、測れていない欄は行を出さない。
 pub fn band(card: &SeatCard) -> Option<Band> {
     let limit = card.state == SeatState::Limit;

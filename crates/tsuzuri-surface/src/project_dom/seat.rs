@@ -1,12 +1,13 @@
 //! 席の block の DOM（wasm の target のときだけ）。src/project/seat.rs が path の属性で module dom として読む。
 use leptos::ev;
 use leptos::prelude::*;
+use tsuzuri_contract::account::WindowCap;
 use tsuzuri_contract::board::Reading;
 
 use super::{
     BLOCK, Band, GROUP_CARD, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OROW, PATH, Seat, Sign,
-    Span, Strip, Top, WindowRow, content, group_card, sample_svg, span_of, strip_svg, tick_age,
-    tick_class, tick_mark, with_span,
+    Span, Strip, Top, WindowRow, content, group_card, sample_svg, seat_caps, span_of, strip_svg,
+    thr, tick_age, tick_class, tick_mark, with_span,
 };
 use crate::view::Fetched;
 use crate::widgets::hover::delegate;
@@ -244,19 +245,35 @@ fn strip_view(strips: Vec<Strip>, span: RwSignal<Span>) -> AnyView {
     .into_any()
 }
 
-fn window_view(row: WindowRow) -> AnyView {
+/// 窓の行（見本の lowHTML の wrow・棒の中に閾値の線・右に閾値の印・閾値は電文の caps の写し）。
+fn window_view(row: WindowRow, caps: Memo<Option<Vec<WindowCap>>>) -> AnyView {
     let name = match row.key {
         Some(k) => term(k, row.short.clone()),
         None => row.short.clone().into_any(),
     };
     let style = format!("width:{}%", row.width);
+    let window = row.window.clone();
+    let th = move || caps.with(|c| thr(c.as_deref(), &window));
+    let line = {
+        let th = th.clone();
+        move || {
+            th().line
+                .map(|c| view! { <span class="cap" style=format!("left:{c}%")></span> })
+        }
+    };
+    let aria = {
+        let th = th.clone();
+        move || th().aria
+    };
+    let mark = move || term("threshold", th().text);
     view! {
         <div class=row.class>
             <span class="wl">{name}</span>
             <div class="meter">
-                <div class="bar"><i class=row.bar_class style=style></i></div>
+                <div class="bar"><i class=row.bar_class style=style></i>{line}</div>
                 <div class="v"><b class="num">{row.used}</b><span class="num">{format!("↻ {}", row.reset)}</span></div>
             </div>
+            <span class="th num" aria-label=aria>{mark}</span>
         </div>
     }
     .into_any()
@@ -286,8 +303,14 @@ fn low_view(low: Low, group_doc: ReadSignal<Fetched>) -> AnyView {
         Some(a) => a.into_any(),
         None => unknown(),
     };
+    // 窓ごとの閾値（群の chip と同じ口の電文から 1 回だけ組み、窓の行へ渡す）。
+    let caps = Memo::new(move |_| group_doc.with(seat_caps));
     let usage = match low.usage {
-        Reading::Known(rows) => rows.into_iter().map(window_view).collect_view().into_any(),
+        Reading::Known(rows) => rows
+            .into_iter()
+            .map(|r| window_view(r, caps))
+            .collect_view()
+            .into_any(),
         Reading::Unknown => unknown(),
     };
     view! {
