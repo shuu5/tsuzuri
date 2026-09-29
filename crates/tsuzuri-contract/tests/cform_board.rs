@@ -103,6 +103,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                             left_pct: 40,
                         },
                     ],
+                    park: false,
                 }],
                 sessions: vec![SessionRow {
                     project: "tsuzuri".into(),

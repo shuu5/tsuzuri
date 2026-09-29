@@ -22,6 +22,7 @@ fn group_row() -> GroupRow {
             window: "5h".into(),
             left_pct: 62,
         }],
+        park: false,
     }
 }
 

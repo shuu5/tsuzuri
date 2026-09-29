@@ -715,6 +715,7 @@ pub fn thr(caps: Option<&[WindowCap]>, window: &str) -> Thr {
 
 /// 状態の帯（見本の bandHTML の順:限度・猶予の内か移動待ち・移り先の無い断り・逼迫・平時は None）。
 /// 猶予の内と断りと逼迫は器の字の写しが読めた（Known(Some)）ときだけ出し、測れていない欄は行を出さない。
+/// 群の行が区画の行の写しなら移動待ちの行と次の移り先の行は出さない（行 c-park-acct）。
 pub fn band(card: &SeatCard) -> Option<Band> {
     let limit = card.state == SeatState::Limit;
     let mut l1 = Vec::new();
@@ -734,6 +735,7 @@ pub fn band(card: &SeatCard) -> Option<Band> {
     if let Some((_, left)) = grace {
         l1.push(format!("{MOVING} {left} 秒"));
     } else if let (Some(reg), Some(g)) = (&card.account, group)
+        && !g.park
         && *reg != g.account
     {
         l1.push(format!("{MOVE_WAIT} {reg} → {}", g.account));
@@ -756,6 +758,7 @@ pub fn band(card: &SeatCard) -> Option<Band> {
         (Some((to, _)), _) => Some(format!("{GRACE_NEXT} {to}")),
         (None, Some(_)) => Some(REFUSED_NEXT.to_string()),
         (None, None) => group
+            .filter(|g| !g.park)
             .and_then(|g| g.next_account.as_ref())
             .map(|n| format!("{NEXT_TARGET} {n}")),
     };

@@ -211,6 +211,9 @@ pub struct GroupRow {
     pub candidates: Vec<String>,
     pub next_account: Option<String>,
     pub remaining: Vec<QuotaLeft>,
+    /// 器の区画の行の写しか（器の doctor の群の行の欄 kind が park・false は電文に字を置かない・行 c-park-acct）。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub park: bool,
 }
 
 /// session の行（project → role → session → 口座 → 段 → 経過 → 稼働）。

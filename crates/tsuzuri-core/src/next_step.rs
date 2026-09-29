@@ -113,13 +113,14 @@ fn check(kind: NextMove, found: Option<Found>) -> NextCheck {
 
 /// 席の card から判じる 2 種（限度と移動・応答なし）。card が無いか状態が unknown なら判じない。
 /// 限度と移動は、状態が limit か、登録の口座が群の今の口座と違うときに当たる（対象は無し・件数は 1）。
+/// 群の行が区画の行の写しなら今の口座は無いので比べない（状態が limit なら当たる・行 c-park-acct）。
 /// 応答なしは、状態が silent のときに当たる（対象は無し・件数は 1）。
 fn seat_found(kind: NextMove, seat: Option<&SeatCard>) -> Option<Found> {
     let card = seat.filter(|c| c.state != SeatState::Unknown)?;
     let hit = match kind {
         NextMove::LimitOrMove => {
             let moved = match (&card.account, &card.group) {
-                (Some(account), Reading::Known(group)) => *account != group.account,
+                (Some(account), Reading::Known(group)) => !group.park && *account != group.account,
                 _ => false,
             };
             card.state == SeatState::Limit || moved

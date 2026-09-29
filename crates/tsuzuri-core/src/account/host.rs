@@ -497,6 +497,7 @@ fn card(texts: &HostTexts, doctor: &str, group: &DeclaredGroup) -> Option<GroupC
                 .filter(|v| *v != "none")
                 .map(str::to_string),
             remaining: Vec::new(),
+            park: false,
         },
         since: record
             .and_then(|r| record_value(r, "ts"))
@@ -526,6 +527,20 @@ pub fn groups(texts: &HostTexts) -> Reading<Vec<GroupCard>> {
         .map(|g| card(texts, doctor, g))
         .collect::<Option<Vec<_>>>()
         .map_or(Reading::Unknown, Reading::Known)
+}
+
+/// 区画の名の列（群の宣言の順・doctor に同じ名で欄 kind が park の行が在る宣言の名・行 c-park-acct）。
+/// 群の宣言か host の doctor の字が無ければ空。
+pub fn parks(texts: &HostTexts) -> Vec<String> {
+    let (Some(host), Some(doctor)) = (texts.host_toml.as_deref(), texts.doctor.as_deref()) else {
+        return Vec::new();
+    };
+    declaration(host)
+        .groups
+        .into_iter()
+        .filter(|g| in_park(doctor, g))
+        .map(|g| g.name)
+        .collect()
 }
 
 /// file の名が account の記録なら群の名（`<群>.account` か `<群>.account.<…>`）。

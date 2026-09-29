@@ -26,6 +26,9 @@ pub struct AccountDoc {
     /// 窓ごとの逼迫の閾値（器の rules 行の写し）。
     pub caps: Vec<WindowCap>,
     pub groups: Reading<Vec<GroupCard>>,
+    /// 区画の名（器の host.toml の宣言の順・区画が無ければ空で電文に字を置かない・読めない時も空・行 c-park-acct）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parks: Vec<String>,
     pub moves: Reading<Vec<MoveRow>>,
     /// 群の逼迫の知らせと移動の断り（器の event の写し・新しい順）。
     pub notices: Reading<Vec<GroupNotice>>,

@@ -17,6 +17,7 @@ use tsuzuri_contract::seat::{
     AccountMove, Pressure, QuotaUsed, Reopens, SeatCard, SeatSpan, SeatState, TickHealth,
 };
 
+use crate::account::host::PARK_KIND;
 use crate::ledger::{DAY, epoch_secs};
 
 /// 窓の名（5 時間窓・7 日窓・model の 7 日窓の順）。
@@ -299,6 +300,7 @@ fn group(texts: &SeatTexts, name: Option<&str>) -> Reading<GroupRow> {
             .filter(|v| !v.is_empty() && *v != "none")
             .map(str::to_string),
         remaining: quota_left(texts.usage.as_deref(), current),
+        park: field(line, "kind") == Some(PARK_KIND),
     })
 }
 

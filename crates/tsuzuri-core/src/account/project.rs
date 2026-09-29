@@ -635,6 +635,7 @@ pub fn assemble(
         accounts,
         caps: host::caps(&HostTexts::default()),
         groups,
+        parks: Vec::new(),
         moves,
         notices: Reading::Unknown,
         projects,
@@ -667,6 +668,7 @@ pub fn doc(
         })
         .collect();
     doc.caps = host::caps(host);
+    doc.parks = host::parks(host);
     doc.notices = host::notices(host, &logs);
     doc.dormant = dormant(host, projects, now);
     doc.at = latest(&doc.accounts, &doc.moves, &doc.projects, &doc.dormant);

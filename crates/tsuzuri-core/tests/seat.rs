@@ -255,6 +255,7 @@ fn seatcard_group_from_declaration_and_doctor() {
                 left("seven_day", 0),
                 left("seven_day_model", 0)
             ],
+            park: false,
         })
     );
     assert_eq!(built(&c), c.card);

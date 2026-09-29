@@ -222,6 +222,7 @@ fn apark_seat_card_copies_lot() {
                 candidates: vec!["acct-3".into(), "acct-4".into()],
                 next_account: Some("-".into()),
                 remaining: Vec::new(),
+                park: true,
             }),
             "{word}"
         );
