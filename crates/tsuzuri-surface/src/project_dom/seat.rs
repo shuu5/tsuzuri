@@ -1,12 +1,15 @@
 //! 席の block の DOM（wasm の target のときだけ）。src/project/seat.rs が path の属性で module dom として読む。
+use leptos::ev;
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
 
 use super::{
-    BLOCK, Band, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OROW, PATH, Seat, Sign, Span, Strip,
-    Top, WindowRow, content, sample_svg, span_of, strip_svg, tick_age, tick_class, tick_mark,
-    with_span,
+    BLOCK, Band, GROUP_CARD, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OROW, PATH, Seat, Sign,
+    Span, Strip, Top, WindowRow, content, group_card, sample_svg, span_of, strip_svg, tick_age,
+    tick_class, tick_mark, with_span,
 };
+use crate::view::Fetched;
+use crate::widgets::hover::delegate;
 use crate::account::heartbeat::{self, Dest, States};
 use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
 use crate::vocab::label;
@@ -35,13 +38,15 @@ fn pick(span: RwSignal<Span>, to: Span) {
 
 pub fn view() -> AnyView {
     let fetched = crate::net::read(PATH);
+    // 群の chip の card の電文（account board と同じ口・読み直しは変化の種類の表のまま）。
+    let group_doc = crate::net::read(crate::account::PATH);
     let span = RwSignal::new(span_of(&search()));
     // 停止の切り替えの状態（読みの閉包の外・読み直しで組み直しても応答の字が残る）。
     let states: States = RwSignal::new(Default::default());
     let body = move || match fetched.with(content) {
         Body::Unmeasured(reason) => unmeasured(reason),
         Body::Empty(line) => body_view(Body::Empty(line)),
-        Body::Filled(seat) => seat_view(seat, span, states),
+        Body::Filled(seat) => seat_view(seat, span, states, group_doc),
     };
     section(BLOCK, ().into_any(), body.into_any())
 }
@@ -67,7 +72,12 @@ fn sign_view(r: Reading<Sign>) -> AnyView {
     }
 }
 
-fn seat_view(seat: Seat, span: RwSignal<Span>, states: States) -> AnyView {
+fn seat_view(
+    seat: Seat,
+    span: RwSignal<Span>,
+    states: States,
+    group_doc: ReadSignal<Fetched>,
+) -> AnyView {
     let Seat {
         top,
         strips,
@@ -82,7 +92,7 @@ fn seat_view(seat: Seat, span: RwSignal<Span>, states: States) -> AnyView {
             {top_view(top, states)}
             {strip_view(strips, span)}
         </div>
-        {low_view(low)}
+        {low_view(low, group_doc)}
         {hist_view(hist)}
         {more_view(more)}
     }
@@ -252,7 +262,26 @@ fn window_view(row: WindowRow) -> AnyView {
     .into_any()
 }
 
-fn low_view(low: Low) -> AnyView {
+/// 群の chip（名が在れば指を置くと口 /api/account の群の枠の card を出す・名が分からなければ測れていないの記号だけ）。
+fn group_chip(group: Reading<String>, account: ReadSignal<Fetched>) -> AnyView {
+    let Reading::Known(name) = group else {
+        return view! { <span class="pchip grp" data-t="">{unknown()}</span> }.into_any();
+    };
+    let hc = delegate();
+    let key = name.clone();
+    let over = move |ev: ev::MouseEvent| {
+        hc.show(&ev, account.with_untracked(|a| group_card(a, &key)));
+    };
+    let out = move |ev: ev::MouseEvent| hc.leave(&ev);
+    view! {
+        <span class="pchip grp" data-t="" data-card=GROUP_CARD tabindex="0" on:mouseenter=over on:mouseleave=out>
+            {name}
+        </span>
+    }
+    .into_any()
+}
+
+fn low_view(low: Low, group_doc: ReadSignal<Fetched>) -> AnyView {
     let account = match low.account {
         Some(a) => a.into_any(),
         None => unknown(),
@@ -270,7 +299,7 @@ fn low_view(low: Low) -> AnyView {
                 </div>
                 <div class="gname">
                     <div class="small muted">{hs("group")}</div>
-                    <span class="pchip grp" data-t="">{text_or_unknown(low.group)}</span>
+                    {group_chip(low.group, group_doc)}
                 </div>
             </div>
             <div class="usage" aria-label=label("allowance")>

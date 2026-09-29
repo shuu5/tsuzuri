@@ -3,17 +3,21 @@
 //! 中身は口 /api/seat（契約の型の SeatCard）から読む。状態の判定は server が済ませていて、ここは写すだけ。
 //! 電文の中の「まだ分からない」の欄はその欄だけ測れていないの記号にし、読めた欄は出す（要件 NFR2）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! 群の chip の card（見本の pa:group）は、同じ server の口 /api/account の群の枠（GroupCard）から写す。
 
 use tsuzuri_contract::EpochSecs;
+use tsuzuri_contract::account::GroupMember;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
 use tsuzuri_contract::wire;
 
-use super::{Body, NO_CONTENT, NOT_READ, state_class, state_key};
+use super::{Body, NO_CONTENT, NOT_READ, UNKNOWN, state_class, state_key};
 use crate::account::heartbeat::{Toggle, seat_toggle};
 use crate::account::home::{EXPERT_CHARS, wrap_words};
 use crate::frame::{self, Block};
 use crate::view::{Fetched, JST, clock, hhmm, jst};
+use crate::vocab::label;
+use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
     id: "orch",
@@ -694,6 +698,85 @@ pub fn more(card: &SeatCard) -> More {
         current: map(&card.group, |g| g.account.clone()),
         same,
         doctor: wrap_words(&seat_line(card), EXPERT_CHARS),
+    }
+}
+
+/// 群の chip の card の鍵（見本の data-card の pa:group）。
+pub const GROUP_CARD: &str = "pa:group";
+
+/// 群の card の値の行の終わりの字（一致した席の数と群の席の数の後）。
+pub const MATCHED: &str = "席が一致";
+
+/// 席の行が無い project の印（hover の card は字だけなので見本の gi unknown の丸の代わり）。
+pub const MEMBER_UNKNOWN: &str = "?";
+
+/// account board の電文に群の枠が無いときの理由。
+pub const GROUP_MISSING: &str =
+    "account board の口の電文に、この名の群の枠が無い（群の枠の列が読めないか、名が合わない）";
+
+/// 群の project の印（一致は ✓・移動待ちは !・席の行が無ければ ?）。
+fn member_mark(m: &GroupMember) -> &'static str {
+    match m.matches {
+        Reading::Known(true) => OK.glyph,
+        Reading::Known(false) => NG.glyph,
+        Reading::Unknown => MEMBER_UNKNOWN,
+    }
+}
+
+/// 群の測れていないの card（題は群の名・値は理由の字）。
+fn group_unknown(name: &str, reason: &str) -> Card {
+    Card {
+        title: format!("{} {name}", label("group")),
+        kind: label(state_key(UNKNOWN)),
+        value: reason.to_string(),
+        src: crate::account::PATH.to_string(),
+        more: Vec::new(),
+    }
+}
+
+/// 群の chip の card（見本の __tz_card の pa:group・口 /api/account の群の枠を写す・一致は電文の matches のまま）。
+pub fn group_card(account: &Fetched, name: &str) -> Card {
+    let doc = match crate::account::doc(account) {
+        Ok(d) => d,
+        Err(reason) => return group_unknown(name, reason),
+    };
+    let found = match &doc.groups {
+        Reading::Known(gs) => gs.iter().find(|g| g.row.group == name),
+        Reading::Unknown => None,
+    };
+    let Some(g) = found else {
+        return group_unknown(name, GROUP_MISSING);
+    };
+    let mut kind = format!("{} {}", label("current_account"), g.row.account);
+    if g.recorded
+        && let Some(s) = g.since
+    {
+        kind.push_str(&format!(" ◷ {}", hmd(s, doc.at)));
+    }
+    let marks: String = g.members.iter().map(member_mark).collect();
+    let matched = g
+        .members
+        .iter()
+        .filter(|m| m.matches == Reading::Known(true))
+        .count();
+    let more = g
+        .members
+        .iter()
+        .map(|m| {
+            let seat = m.seat_account.clone().unwrap_or_else(|| label("seat_none"));
+            let mut line = format!("{} {} {seat}", member_mark(m), m.project);
+            if m.matches == Reading::Known(false) {
+                line.push_str(&format!(" {}", label("seat_mismatch")));
+            }
+            line
+        })
+        .collect();
+    Card {
+        title: format!("{} {name}", label("group")),
+        kind,
+        value: format!("{marks} {matched} / {} {MATCHED}", g.members.len()),
+        src: format!("groups/{name}.account ほか"),
+        more,
     }
 }
 
