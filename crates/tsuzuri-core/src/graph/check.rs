@@ -1,6 +1,7 @@
 //! 不変条件の 12 本を 3 値（合格・違反・まだ分からない）で数える。
 //! 数えるのは 11 本。g-3・g-7 は裁定の書き出しを結んだ表（`Graph::rulings`・行 c-g3g7）から数え、表が無ければ
-//! 「まだ分からない」。g-9 は材料が 3 つの入力に無いので、つねに「まだ分からない」。
+//! 「まだ分からない」。g-9 は detect の間（2 周の実測の前）は判定をつねに「まだ分からない」とし、
+//! 本文で名指した id のうち欄にも辺にも無い対は床の値 `unfielded_mentions` が数えて名指す（行 c-g9）。
 //! 要る出所が読めなければ「まだ分からない」で、合格にしない。違反は名指す id を持つ。
 //! g-7 は宙に浮いた裁定のうち id が folio の裁定 id の文法の外の裁定を数えず、それだけが在れば「まだ分からない」。
 //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
@@ -54,7 +55,7 @@ pub const INVARIANTS: [&str; 12] = [
     "g-1", "g-2", "g-3", "g-4", "g-5", "g-6", "g-7", "g-8", "g-9", "g-10", "g-11", "g-12",
 ];
 
-/// つねに「まだ分からない」を返す 1 本（材料が 3 つの入力に無い）。
+/// つねに「まだ分からない」を返す 1 本（g-9 は detect の間は判定に出さず、数は `unfielded_mentions` が名指す）。
 pub const UNMEASURED: [&str; 1] = ["g-9"];
 
 /// 裁定の書き出しを結んだ表から数える 2 本（表が無ければ「まだ分からない」・行 c-g3g7）。
@@ -486,6 +487,106 @@ pub fn unsummarized(g: &Graph, summary: bool) -> Reading<Vec<String>> {
         .map(|n| n.id.clone())
         .collect();
     Reading::Known(ids.into_iter().collect())
+}
+
+/// 要件書の id の頭（頭と数字の並び）。
+const SRS_PREFIXES: [&str; 5] = ["FR", "NFR", "AC", "CON", "GOAL"];
+
+/// 字の列 b の start から始まる id の終わりの位置（folio の refs.rs の scan_ids と link.rs の scan_adr_ids の写し）。
+/// 前の字が ASCII の英数字か「-」なら始まらず、後ろの字が ASCII の英数字なら終わらない。
+/// 判断の記録（「ADR-」と 1 から 9 の数字 1 つと数字の並び）・条（P・A・N の 1 字と「-」と数字の並び・その後の
+/// 「.」と数字の並びは後ろが空けば枝番まで、空かなければ枝番を外した形）・要件書の id（`SRS_PREFIXES` の頭と
+/// 数字の並び）・規則行（R か D の 1 字と「-」と数字の並び）。
+fn id_end(b: &[u8], start: usize) -> Option<usize> {
+    if start > 0 && (b[start - 1].is_ascii_alphanumeric() || b[start - 1] == b'-') {
+        return None;
+    }
+    let open = |i: usize| b.get(i).is_none_or(|c| !c.is_ascii_alphanumeric());
+    let at = || Scan { b, i: start };
+    let mut s = at();
+    if s.lit("ADR-") && s.take(1, |c| (b'1'..=b'9').contains(&c)) {
+        s.many(digit);
+        return open(s.i).then_some(s.i);
+    }
+    let mut s = at();
+    if s.take(1, |c| matches!(c, b'P' | b'A' | b'N')) && s.lit("-") && s.many(digit) > 0 {
+        let head = s.i;
+        if s.attempt(|s| s.lit(".") && s.many(digit) > 0) && open(s.i) {
+            return Some(s.i);
+        }
+        return open(head).then_some(head);
+    }
+    for prefix in SRS_PREFIXES {
+        let mut s = at();
+        if s.lit(prefix) && s.many(digit) > 0 {
+            return open(s.i).then_some(s.i);
+        }
+    }
+    let mut s = at();
+    let rule = s.take(1, |c| matches!(c, b'R' | b'D')) && s.lit("-") && s.many(digit) > 0;
+    (rule && open(s.i)).then_some(s.i)
+}
+
+/// 字の中で名指した id（`id_end` の文法・拾った id の後ろから続けて探す・現れた順・同じ id も現れた数だけ）。
+pub fn mentioned_ids(text: &str) -> Vec<&str> {
+    let b = text.as_bytes();
+    let mut ids = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        match id_end(b, i) {
+            Some(end) => {
+                ids.push(&text[i..end]);
+                i = end;
+            }
+            None => i += 1,
+        }
+    }
+    ids
+}
+
+/// 規範文の id は親の条の id（最初の「.」の前の字）へ丸める（ほかの種類はそのまま）。
+fn rounded(id: &str, kind: NodeKind) -> &str {
+    if kind == NodeKind::Norm {
+        id.split('.').next().unwrap_or(id)
+    } else {
+        id
+    }
+}
+
+/// 本文で名指した id のうち欄にも辺にも無い対（g-9 の detect の数・規則行 R-17 と同じ見方・行 c-g9）。
+/// `summary` は設計の索引の要約の字を読めたか（`add_summary` の返り）。偽か、設計の索引が読めなければ「まだ分からない」。
+/// 設計の節点ごとに plain と eng の字（在る方）で名指した id のうち、設計の節点に引ける id を見る。規範文の id は
+/// 親の条の id へ丸め（本文を持つ節点も辺の両端も）、丸めた 2 つが同じか、どれかの辺（型も向きも問わない）の
+/// 丸めた両端なら数えない。対は本文を持つ節点の id と拾った字のままの id（字の順・重複なし）。
+pub fn unfielded_mentions(g: &Graph, summary: bool) -> Reading<Vec<(String, String)>> {
+    if !summary || !g.is_read(Source::Design) {
+        return Reading::Unknown;
+    }
+    let kinds = Source::Design.kinds();
+    let index = g.index();
+    let mut linked: BTreeSet<(&str, &str)> = BTreeSet::new();
+    for e in &g.edges {
+        let [from, to] = [e.from.as_str(), e.to.as_str()]
+            .map(|id| index.get(id).map_or(id, |n| rounded(id, n.kind)));
+        linked.insert((from, to));
+        linked.insert((to, from));
+    }
+    let mut pairs: BTreeSet<(String, String)> = BTreeSet::new();
+    for n in g.nodes.iter().filter(|n| kinds.contains(&n.kind)) {
+        let own = rounded(&n.id, n.kind);
+        for text in [&n.plain, &n.eng].into_iter().flatten() {
+            for id in mentioned_ids(text) {
+                let Some(m) = index.get(id).filter(|m| kinds.contains(&m.kind)) else {
+                    continue;
+                };
+                let other = rounded(id, m.kind);
+                if own != other && !linked.contains(&(own, other)) {
+                    pairs.insert((n.id.clone(), id.to_string()));
+                }
+            }
+        }
+    }
+    Reading::Known(pairs.into_iter().collect())
 }
 
 #[cfg(test)]
