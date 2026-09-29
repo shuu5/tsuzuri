@@ -3,8 +3,10 @@
 //! 受付の順:
 //! 1. 逐語が空白だけなら断る（EmptyVerbatim）。
 //! 2. 台帳を bd の読み取りの口で読み直し（持ち回しの値を使わない）、open の問いでなければ断る
-//!    （UnknownQuestion）。走っている読みには合流しない（便 e-coalesce）。読みが落ちれば `RETRY_STEP` を空けて
-//!    `READ_TRIES` 回まで撃ち直し（`reread`・行 e-ruling-retry）、どれも読めなければ 503。
+//!    （UnknownQuestion）。走っている読みには合流しない（便 e-coalesce）。1 回の読みの上限は `READ_TIMEOUT`
+//!    （表示の読みの `BD_TIMEOUT` でなく書きの前の読みの上限・行 e-answer-reread）。読みが落ちれば `RETRY_STEP` を空けて
+//!    `READ_TRIES` 回まで撃ち直し（`reread`・行 e-ruling-retry）、どれも読めなければ回ごとの落ちた訳を並べた
+//!    `unread_line` の 1 行を標準エラーに書いて 503。
 //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
 //! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
 //! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない・書きは撃ち直さない）。
@@ -55,11 +57,18 @@ const ID_END: char = '・';
 /// （bdw は錠を待ちきれなければ書かずに落ちるので、書きの途中で止めない・行 e-ruling-retry）。
 pub const WRITE_TIMEOUT: Duration = Duration::from_secs(120);
 
-/// 書きの前の台帳の読みを撃つ回の上限（1 回の読みの上限は `BD_TIMEOUT`・行 e-ruling-retry）。
+/// 書きの前の台帳の読みを撃つ回の上限（1 回の読みの上限は `READ_TIMEOUT`・行 e-ruling-retry）。
 pub const READ_TRIES: u32 = 3;
 
 /// 読みの撃ち直しの前に空ける時間。
 pub const RETRY_STEP: Duration = Duration::from_secs(1);
+
+/// 書きの前の台帳の 1 回の読みが返すまでの上限（書きそのものの前に 1 度だけ撃つ読みなので、表示の読みの
+/// `BD_TIMEOUT` に揃えない・行 e-answer-reread）。
+pub const READ_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// 書きの前の読みがどれも落ちたときの log の字（`unread_line`）。
+pub const UNREAD: &str = "書きの前の台帳の読みが落ちた";
 
 /// 口が断った応答の log の行の頭（`refusal_line`）。
 pub const REFUSED_LOG: &str = "tz surface serve: 断った";
@@ -266,18 +275,26 @@ fn write(writer: &Writer, w: &LedgerWrite) -> bool {
     capture(&writer.bdw, w.argv(), &writer.repo, WRITE_TIMEOUT).is_some()
 }
 
-/// 書きの前の台帳の読み（合流しない読みを撃ち、落ちれば `RETRY_STEP` を空けて `READ_TRIES` 回まで撃ち直し、
-/// 最初に読めた字を返す・どれも落ちれば None）。
+/// 書きの前の台帳の読み（合流しない読みを上限 `READ_TIMEOUT` で撃ち、落ちれば `RETRY_STEP` を空けて
+/// `READ_TRIES` 回まで撃ち直し、最初に読めた字を返す・どれも落ちれば `unread_line` の 1 行を標準エラーに書いて None）。
 pub fn reread(ledger: &Source) -> Option<String> {
+    let mut words = Vec::new();
     for n in 1..=READ_TRIES {
-        if let Some(text) = ledger.text_alone() {
-            return Some(text);
+        match ledger.text_within(READ_TIMEOUT) {
+            Ok(text) => return Some(text),
+            Err(word) => words.push(word),
         }
         if n < READ_TRIES {
             std::thread::sleep(RETRY_STEP);
         }
     }
+    eprintln!("{}", unread_line(&words));
     None
+}
+
+/// 書きの前の読みがどれも落ちたときの log の 1 行（`tz surface serve: <UNREAD>: <回ごとの訳を ・ で並べた字>`）。
+pub fn unread_line(words: &[String]) -> String {
+    format!("tz surface serve: {UNREAD}: {}", words.join("・"))
 }
 
 /// 口が断った応答の log の 1 行（`<REFUSED_LOG>: <path> <状態の code> <本文の字>・問い <問いの id を , で並べた字>`）。

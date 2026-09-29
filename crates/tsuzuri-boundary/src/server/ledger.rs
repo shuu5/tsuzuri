@@ -24,6 +24,7 @@ use tsuzuri_contract::wire;
 use super::coalesce::{Coalesce, GRACE};
 use super::events::stamp;
 use super::form::Form;
+use super::proc::run;
 
 /// 子 process を撃つ部品と時刻の読みは `proc` と `clock` に在り、今までの名のまま再公開する（行 hb-proc）。
 pub use super::clock::epoch_secs;
@@ -79,7 +80,7 @@ pub enum Mark {
 /// 台帳の読みの出所（repo の置き場と bd の program）。
 /// clone は読みの合流の場と最後に読めた字と最後に終えた読みの結果を分け合う（比べるのは repo と bd だけ）。
 /// `got` と `text` は読みが落ちたとき、最後に読めた時から上限（`hold`）より短い間だけ最後に読めた字を返す。
-/// `read`（変化の見張りの読み）は持ち回さず、落ちれば Unknown。`text_alone` は合流も持ち回しもしない。
+/// `read`（変化の見張りの読み）は持ち回さず、落ちれば Unknown。`text_alone` と `text_within` は合流も持ち回しもしない。
 #[derive(Debug, Clone)]
 pub struct Source {
     pub repo: PathBuf,
@@ -261,11 +262,17 @@ impl Source {
         })
     }
 
-    /// 走っている読みを分け合わず、新しい子 process で bd を撃つ（裁定の受付の読み直し・便 e-ask）。
-    /// 持ち回さず、最後に読めた字も置かない。
+    /// 走っている読みを分け合わず、新しい子 process で bd を撃つ（停止の hook・問いの門・見張りの読み・便 e-ask）。
+    /// 持ち回さず、最後に読めた字も置かない（`text_within` を `BD_TIMEOUT` で撃ち、字だけを返す）。
     pub fn text_alone(&self) -> Option<String> {
-        let out = capture(&self.bd, BD_ARGS, &self.repo, BD_TIMEOUT)?;
-        String::from_utf8(out).ok()
+        self.text_within(BD_TIMEOUT).ok()
+    }
+
+    /// `text_alone` と同じ bd の撃ちを上限 `timeout` の `run` で撃ち、読めれば字、落ちれば `Failed::word` の字
+    /// （UTF-8 でなければ字 `UTF-8 でない`）を返す（裁定の受付の書きの前の読み・行 e-answer-reread）。
+    pub fn text_within(&self, timeout: Duration) -> Result<String, String> {
+        let out = run(&self.bd, BD_ARGS, &self.repo, timeout).map_err(|f| f.word())?;
+        String::from_utf8(out).map_err(|_| "UTF-8 でない".to_string())
     }
 }
 
