@@ -8,7 +8,7 @@ mod common;
 use common::{AT, Form, distinct, form};
 use tsuzuri_contract::board::{GroupRow, QuotaLeft, Reading};
 use tsuzuri_contract::seat::{
-    AccountMove, QuotaUsed, Reopens, SeatCard, SeatSpan, SeatState, TickHealth,
+    AccountMove, Pressure, QuotaUsed, Reopens, SeatCard, SeatSpan, SeatState, TickHealth,
 };
 use tsuzuri_contract::wire;
 
@@ -72,6 +72,14 @@ fn account_moves() -> Vec<AccountMove> {
     ]
 }
 
+fn pressure() -> Pressure {
+    Pressure {
+        window: "5h".into(),
+        used: 92,
+        cap: 85,
+    }
+}
+
 /// seat の群の型の見本（この順が snapshot の file の key の順）。
 fn forms() -> Vec<Box<dyn Form>> {
     vec![
@@ -89,6 +97,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                 Reopens::Unknown,
             ],
         ),
+        form("seat::Pressure", vec![pressure()]),
         form(
             "seat::SeatCard",
             vec![
@@ -108,6 +117,32 @@ fn forms() -> Vec<Box<dyn Form>> {
                     usage: Reading::Known(quota_used()),
                     spans: Reading::Known(seat_spans()),
                     moves: Reading::Known(account_moves()),
+                    move_to: Reading::Known(Some("acct-5".into())),
+                    grace_left: Reading::Known(Some(120)),
+                    refused: Reading::Known(Some(AT - 600)),
+                    pressure: Reading::Known(Some(pressure())),
+                },
+                // 器が移さない・断りも逼迫も無い席。
+                SeatCard {
+                    at: AT,
+                    target: "t3:orchestrator".into(),
+                    state: SeatState::Run,
+                    since: Some(AT - 60),
+                    tick_healthy: Reading::Known(true),
+                    heartbeat: Reading::Known(true),
+                    tick: Reading::Known(TickHealth::Healthy),
+                    tick_at: Some(AT - 20),
+                    reopens: Reopens::Clear,
+                    account: Some("acct-4".into()),
+                    model: Some("opus".into()),
+                    group: Reading::Known(group_row()),
+                    usage: Reading::Known(quota_used()),
+                    spans: Reading::Known(seat_spans()),
+                    moves: Reading::Known(account_moves()),
+                    move_to: Reading::Known(None),
+                    grace_left: Reading::Known(None),
+                    refused: Reading::Known(None),
+                    pressure: Reading::Known(None),
                 },
                 // 器も口座も読めない席。
                 SeatCard {
@@ -126,6 +161,10 @@ fn forms() -> Vec<Box<dyn Form>> {
                     usage: Reading::Unknown,
                     spans: Reading::Unknown,
                     moves: Reading::Unknown,
+                    move_to: Reading::Unknown,
+                    grace_left: Reading::Unknown,
+                    refused: Reading::Unknown,
+                    pressure: Reading::Unknown,
                 },
             ],
         ),

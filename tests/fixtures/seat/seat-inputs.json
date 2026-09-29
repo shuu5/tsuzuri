@@ -31,7 +31,8 @@
       "moves": {"known": [
         {"at": 1790416800, "from": null, "to": "acct-2"},
         {"at": 1790496000, "from": "acct-2", "to": "acct-1"}
-      ]}
+      ]},
+      "refused": {"known": null}
     }
   },
   "wait": {
@@ -57,7 +58,8 @@
         {"from": 1790505000, "to": 1790508000, "state": "run"},
         {"from": 1790508000, "to": 1790510400, "state": "wait"}
       ]},
-      "moves": {"known": []}
+      "moves": {"known": []},
+      "refused": {"known": null}
     }
   },
   "limit": {
@@ -88,7 +90,8 @@
       ]},
       "moves": {"known": [
         {"at": 1790499600, "from": null, "to": "acct-1"}
-      ]}
+      ]},
+      "refused": {"known": null}
     }
   },
   "silent": {
@@ -140,7 +143,8 @@
       "moves": {"known": [
         {"at": 1790416800, "from": null, "to": "acct-2"},
         {"at": 1790496000, "from": "acct-2", "to": "acct-1"}
-      ]}
+      ]},
+      "refused": {"known": null}
     }
   },
   "unread": {

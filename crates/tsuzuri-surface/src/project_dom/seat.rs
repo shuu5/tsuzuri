@@ -347,9 +347,11 @@ fn more_view(more: More) -> AnyView {
     let ctx = use_context::<HelpCtx>();
     let expert = move || ctx.is_some_and(|c| shows_internal(c.mode.get()));
     let (open, toggle) = fold("seat:more".to_string(), expert);
+    // doctor の席の行の後に、器の移動の 4 つの欄の写しの行を同じ code の字で並べる。
     let doctor = more
         .doctor
         .into_iter()
+        .chain(more.copied)
         .map(|l| view! { <div><code>{l}</code></div> })
         .collect_view();
     view! {

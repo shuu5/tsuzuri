@@ -418,6 +418,7 @@ fn seatcard_unread_text_touches_only_its_fields() {
                 want.group = Reading::Unknown;
                 want.usage = Reading::Unknown;
                 want.moves = Reading::Unknown;
+                want.refused = Reading::Unknown;
             }
             "usage" => {
                 want.usage = Reading::Unknown;
@@ -436,6 +437,7 @@ fn seatcard_unread_text_touches_only_its_fields() {
             "host_toml" => {
                 want.group = Reading::Unknown;
                 want.moves = Reading::Unknown;
+                want.refused = Reading::Unknown;
             }
             _ => unreachable!(),
         }

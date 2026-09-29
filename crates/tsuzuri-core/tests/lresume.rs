@@ -79,12 +79,18 @@ fn tail(value: &str) -> String {
     format!("reopens={value} move=- grace_left=-")
 }
 
-/// 組 `name` の席 proj-1:0.1 の行の末に `tail` を足して組んだ card。
+/// 組 `name` の席 proj-1:0.1 の行の末に `tail` を足して組んだ card と、期待の card
+/// （器の行の move=- grace_left=- の写しは Known(None)）。
 fn built_with(name: &str, tail: &str) -> (SeatCard, SeatCard) {
     let mut c = case(name);
     let tick = c.texts.tick_status.as_deref().expect("合図の健康の出力");
     c.texts.tick_status = Some(with_tail(tick, "proj-1:0.1", tail));
-    (built(&c), c.card)
+    let mut expect = c.card.clone();
+    if tail.contains("move=- grace_left=-") {
+        expect.move_to = Reading::Known(None);
+        expect.grace_left = Reading::Known(None);
+    }
+    (built(&c), expect)
 }
 
 /// (3) 4 つの形の写しと、ほかの欄が変わらないこと。
@@ -101,6 +107,11 @@ fn lresume_copies_four_forms() {
         for (value, want) in forms {
             let (got, mut expect) = built_with(name, &tail(value));
             assert_eq!(got.reopens, want, "組 {name} の {value}");
+            assert_eq!(
+                (&got.move_to, &got.grace_left),
+                (&Reading::Known(None), &Reading::Known(None)),
+                "組 {name} の {value} の move=- grace_left=-"
+            );
             expect.reopens = want;
             assert_eq!(got, expect, "組 {name} の {value} のほかの欄");
         }

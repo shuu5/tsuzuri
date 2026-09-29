@@ -5,12 +5,14 @@
 //! 「まだ分からない」か無しにする。群の宣言（host.toml）は TOML の読み手を使わず行の字を読み、
 //! 1 行に収まらない配列は読めない扱いにする。
 //! 限度の再開の時刻は合図の健康の出力の席の行の欄 `reopens=` を写すだけで、窓の実測や rules 行から計算しない。
+//! 器の移動の先と猶予の残り秒（同じ行の欄 `move=` と `grace_left=`）と、群の移り先の無い断りと逼迫
+//! （doctor の同じ名の群の行の欄 `refused=` と `pressure=`）も字を写すだけで、群の記録の時刻から残りを計算しない。
 
 use serde::Deserialize;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{GroupRow, QuotaLeft, Reading};
 use tsuzuri_contract::seat::{
-    AccountMove, QuotaUsed, Reopens, SeatCard, SeatSpan, SeatState, TickHealth,
+    AccountMove, Pressure, QuotaUsed, Reopens, SeatCard, SeatSpan, SeatState, TickHealth,
 };
 
 use crate::ledger::{DAY, epoch_secs};
@@ -264,13 +266,18 @@ fn quota_left(usage: Option<&str>, account: &str) -> Vec<QuotaLeft> {
         .collect()
 }
 
-/// 群の行（群の名と doctor の同じ名の群の行から組む・どちらかが無ければ「まだ分からない」）。
-fn group(texts: &SeatTexts, name: Option<&str>) -> Reading<GroupRow> {
-    let line = name.zip(texts.doctor.as_deref()).and_then(|(n, d)| {
+/// doctor の出力のうち、群の名と同じ名の群の行（名か doctor の字が無ければ None）。
+fn group_line<'a>(doctor: Option<&'a str>, name: Option<&str>) -> Option<&'a str> {
+    name.zip(doctor).and_then(|(n, d)| {
         d.lines()
             .map(str::trim)
             .find(|l| l.starts_with("group=") && field(l, "group") == Some(n))
-    });
+    })
+}
+
+/// 群の行（群の名と doctor の同じ名の群の行から組む・どちらかが無ければ「まだ分からない」）。
+fn group(texts: &SeatTexts, name: Option<&str>) -> Reading<GroupRow> {
+    let line = group_line(texts.doctor.as_deref(), name);
     let (Some(name), Some(line)) = (name, line) else {
         return Reading::Unknown;
     };
@@ -328,17 +335,57 @@ fn tick_health(value: Option<&str>) -> Reading<TickHealth> {
         .map_or(Reading::Unknown, Reading::Known)
 }
 
+/// 器の時刻の字 `YYYY-MM-DDTHH:MM:SSZ`（ほかの形は None）。
+fn stamp(t: &str) -> Option<EpochSecs> {
+    (t.len() == 20 && t.ends_with('Z')).then(|| epoch_secs(t)).flatten()
+}
+
 /// 席の行の欄 reopens の値（`-` は当たっていない・`unknown` は時刻が無い・
 /// `YYYY-MM-DDTHH:MM:SSZ` は時刻・ほかと欄が無いのは測れていない）。
 fn reopens(value: Option<&str>) -> Reopens {
     match value {
         Some("-") => Reopens::Clear,
         Some("unknown") => Reopens::Unknown,
-        Some(t) if t.len() == 20 && t.ends_with('Z') => {
-            epoch_secs(t).map_or(Reopens::Unmeasured, Reopens::At)
-        }
-        _ => Reopens::Unmeasured,
+        Some(t) => stamp(t).map_or(Reopens::Unmeasured, Reopens::At),
+        None => Reopens::Unmeasured,
     }
+}
+
+/// 器の欄の写し（`-` は無し・`read` が読めた字は在り・器の unreadable・unmeasured・no-rule と
+/// 形の崩れた字と欄の無い行は「まだ分からない」）。値の判定は器だけが持ち、ここは字を読むだけ。
+fn copied<T>(value: Option<&str>, read: impl FnOnce(&str) -> Option<T>) -> Reading<Option<T>> {
+    match value {
+        Some("-") => Reading::Known(None),
+        Some(v) => read(v).map_or(Reading::Unknown, |x| Reading::Known(Some(x))),
+        None => Reading::Unknown,
+    }
+}
+
+/// 口座の名の字（空と器の読めないの語は None）。
+fn account_name(v: &str) -> Option<String> {
+    let unread = matches!(v, "unreadable" | "unmeasured") || v.starts_with("no-rule");
+    (!v.is_empty() && !unread).then(|| v.to_string())
+}
+
+/// 0 以上の整数の字（猶予の残り秒・百分率・符号と小数点と空の字は None）。
+fn digits<T: std::str::FromStr>(v: &str) -> Option<T> {
+    (!v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| v.parse().ok())
+        .flatten()
+}
+
+/// 逼迫の字 `<窓>:<使用率>/<閾値>`（窓は英数の字・使用率と閾値は整数）。
+fn pressure(v: &str) -> Option<Pressure> {
+    let (window, rest) = v.split_once(':')?;
+    let (used, cap) = rest.split_once('/')?;
+    if window.is_empty() || !window.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some(Pressure {
+        window: window.to_string(),
+        used: digits(used)?,
+        cap: digits(cap)?,
+    })
 }
 
 /// 合図の最後の判定の字の空でない最後の行。
@@ -457,6 +504,10 @@ pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSec
         .as_deref()
         .zip(anchor)
         .and_then(|(h, a)| group_name(h, a));
+    let tick_value = |key: &str| tick.and_then(|l| field(l, key));
+    let group_value = |key: &str| {
+        group_line(texts.doctor.as_deref(), name.as_deref()).and_then(|l| field(l, key))
+    };
     SeatCard {
         at: now,
         target: target.to_string(),
@@ -468,7 +519,11 @@ pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSec
         }),
         tick: tick_health(seat.and_then(|l| field(l, "tick"))),
         tick_at: last_tick(texts.tick_last.as_deref()).and_then(tick_ts),
-        reopens: reopens(tick.and_then(|l| field(l, "reopens"))),
+        reopens: reopens(tick_value("reopens")),
+        move_to: copied(tick_value("move"), account_name),
+        grace_left: copied(tick_value("grace_left"), digits),
+        refused: copied(group_value("refused"), stamp),
+        pressure: copied(group_value("pressure"), pressure),
         group: group(texts, name.as_deref()),
         usage: quota_used(texts.usage.as_deref(), account.as_deref(), model.as_deref()),
         spans: rows.map_or(Reading::Unknown, |r| Reading::Known(spans(&r, now))),

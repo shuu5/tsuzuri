@@ -4,6 +4,8 @@
 //! 電文の中の「まだ分からない」の欄はその欄だけ測れていないの記号にし、読めた欄は出す（要件 NFR2）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 群の chip の card（見本の pa:group）は、同じ server の口 /api/account の群の枠（GroupCard）から写す。
+//! 状態の帯の猶予の内・移り先の無い断り・逼迫の行と、詳しくの写しの行は、電文の器の移動の 4 つの欄
+//! （move_to・grace_left・refused・pressure）を写すだけで、残り秒を計算しない。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::GroupMember;
@@ -47,6 +49,18 @@ pub const MOVE_WAIT: &str = "移動待ち:";
 
 /// 状態の帯の字: 群の次の移り先（後に口座の名が続く）。
 pub const NEXT_TARGET: &str = "次の移り先:";
+
+/// 状態の帯の字: 器の退避の合図の後の猶予の内（後に器の残り秒と字 秒 が続く・見本の bandHTML の移動中）。
+pub const MOVING: &str = "移動中: 退避まで";
+
+/// 状態の帯の 2 行目の字: 猶予の内（後に器が移す先の口座の名が続く）。
+pub const GRACE_NEXT: &str = "猶予の後に器が /exit を送る →";
+
+/// 状態の帯の 2 行目の字: 群の移り先の無い断り（猶予の外）。
+pub const REFUSED_NEXT: &str = "器は移らない（移り先が出るまで今の口座のまま）";
+
+/// 状態の帯の字: 群の今の口座の逼迫（後に口座と窓と使った割合と閾値が続く）。
+pub const PRESSED: &str = "逼迫:";
 
 /// 「詳しく」の段の字。
 pub const MORE: &str = "詳しく ▸";
@@ -404,6 +418,8 @@ pub struct More {
     pub same: Reading<Sign>,
     /// doctor の席の行を経験者向けの 1 行の字数に畳んだ行（見本の gm1 int xo）。
     pub doctor: Vec<String>,
+    /// 器の移動の 4 つの欄の写しの行を同じ字数に畳んだ行（doctor の行の後に並べる）。
+    pub copied: Vec<String>,
 }
 
 /// block の中身。
@@ -648,27 +664,51 @@ pub fn window_row(q: &QuotaUsed, at: EpochSecs) -> WindowRow {
     }
 }
 
-/// 状態の帯（限度のときと、登録の口座が群の今の口座と違うときだけ・平時は None）。
+/// 状態の帯（見本の bandHTML の順: 限度・猶予の内か移動待ち・移り先の無い断り・逼迫・平時は None）。
+/// 猶予の内と断りと逼迫は器の字の写しが読めた（Known(Some)）ときだけ出し、測れていない欄は行を出さない。
 pub fn band(card: &SeatCard) -> Option<Band> {
+    let limit = card.state == SeatState::Limit;
     let mut l1 = Vec::new();
-    if card.state == SeatState::Limit {
+    if limit {
         l1.push(LIMIT_LINE.to_string());
     }
     let group = match &card.group {
         Reading::Known(g) => Some(g),
         Reading::Unknown => None,
     };
-    if let (Some(reg), Some(g)) = (&card.account, group)
+    let grace = match (&card.move_to, &card.grace_left) {
+        (Reading::Known(Some(to)), Reading::Known(Some(left))) => Some((to, *left)),
+        _ => None,
+    };
+    if let Some((_, left)) = grace {
+        l1.push(format!("{MOVING} {left} 秒"));
+    } else if let (Some(reg), Some(g)) = (&card.account, group)
         && *reg != g.account
     {
         l1.push(format!("{MOVE_WAIT} {reg} → {}", g.account));
     }
-    (!l1.is_empty()).then(|| Band {
-        l1,
-        l2: group
+    let refused = match card.refused {
+        Reading::Known(Some(t)) => Some(t),
+        _ => None,
+    };
+    if let Some(t) = refused {
+        l1.push(format!("{} ◷ {}", label("no_target"), hmd(t, card.at)));
+    }
+    if !limit && let Reading::Known(Some(p)) = &card.pressure {
+        let current = group.map_or(MEMBER_UNKNOWN, |g| g.account.as_str());
+        l1.push(format!(
+            "{PRESSED} {current} {} {}% ≥ {}",
+            p.window, p.used, p.cap
+        ));
+    }
+    let l2 = match (grace, refused) {
+        (Some((to, _)), _) => Some(format!("{GRACE_NEXT} {to}")),
+        (None, Some(_)) => Some(REFUSED_NEXT.to_string()),
+        (None, None) => group
             .and_then(|g| g.next_account.as_ref())
             .map(|n| format!("{NEXT_TARGET} {n}")),
-    })
+    };
+    (!l1.is_empty()).then_some(Band { l1, l2 })
 }
 
 /// 口座の履歴（新しい順・同じ時刻は電文の順）。
@@ -698,7 +738,32 @@ pub fn more(card: &SeatCard) -> More {
         current: map(&card.group, |g| g.account.clone()),
         same,
         doctor: wrap_words(&seat_line(card), EXPERT_CHARS),
+        copied: wrap_words(&copied_line(card), EXPERT_CHARS),
     }
+}
+
+/// 器の字の写しの 1 つの値の字（在れば `f` の字・器の `-` は `-`・測れていなければ `?`）。
+fn copied_value<T>(r: &Reading<Option<T>>, f: impl FnOnce(&T) -> String) -> String {
+    match r {
+        Reading::Known(Some(v)) => f(v),
+        Reading::Known(None) => "-".to_string(),
+        Reading::Unknown => "?".to_string(),
+    }
+}
+
+/// 器の移動の 4 つの欄の写しの行（器の鍵の名 move・grace_left・refused・pressure の順・断りの時刻は
+/// hmd の字・逼迫は窓:割合/閾値の字）。
+pub fn copied_line(card: &SeatCard) -> String {
+    format!(
+        "move={} grace_left={} refused={} pressure={}",
+        copied_value(&card.move_to, String::clone),
+        copied_value(&card.grace_left, u64::to_string),
+        copied_value(&card.refused, |t| hmd(*t, card.at)),
+        copied_value(&card.pressure, |p| format!(
+            "{}:{}/{}",
+            p.window, p.used, p.cap
+        )),
+    )
 }
 
 /// 群の chip の card の鍵（見本の data-card の pa:group）。

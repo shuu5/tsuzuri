@@ -56,8 +56,19 @@ impl TickHealth {
     }
 }
 
-fn unknown() -> Reading<TickHealth> {
+fn unknown<T>() -> Reading<T> {
     Reading::Unknown
+}
+
+/// 群の今の口座の逼迫（器の doctor の群の行の欄 `pressure=<窓>:<使用率>/<閾値>` の写し・判定は器だけが持つ）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pressure {
+    /// 窓の字（器の字のまま・5h・7d・model）。
+    pub window: String,
+    /// 使った割合（百分率）。
+    pub used: u32,
+    /// 閾値（百分率・器の rules 行の値）。
+    pub cap: u32,
 }
 
 /// 口座の窓の使った割合（窓の名・使った百分率・戻る時刻・限度の判定で数える窓か）。
@@ -135,4 +146,16 @@ pub struct SeatCard {
     pub spans: Reading<Vec<SeatSpan>>,
     /// 口座の移動の履歴。
     pub moves: Reading<Vec<AccountMove>>,
+    /// 器が席を移す先の口座（器の seat tick status の席の行の欄 `move=` の写し・`-` は None・鍵が無ければ測れていない）。
+    #[serde(default = "unknown")]
+    pub move_to: Reading<Option<String>>,
+    /// 退避の合図の後の猶予の残り秒（欄 `grace_left=` の写し・0 は器の次の周で /exit・`-` は None）。
+    #[serde(default = "unknown")]
+    pub grace_left: Reading<Option<u64>>,
+    /// 群の移り先の無い断りの時刻（器の doctor の群の行の欄 `refused=` の写し・`-` は None）。
+    #[serde(default = "unknown")]
+    pub refused: Reading<Option<EpochSecs>>,
+    /// 群の今の口座の逼迫（器の doctor の群の行の欄 `pressure=` の写し・`-` は None）。
+    #[serde(default = "unknown")]
+    pub pressure: Reading<Option<Pressure>>,
 }
