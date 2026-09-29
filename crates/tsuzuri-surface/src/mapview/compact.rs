@@ -2,13 +2,15 @@
 //! constitution は条の札（id の自然な順）の下に規範文の id・ほかの帯は id の自然な順・beads は種類の 7 行。
 //! 電文の順は字の順（P-1 の次が P-10）なので、条も規則行も電文の順に頼らない（便 g-graph）。
 //! 読めなかった出所の帯は測れていない（理由の 1 行）・読めて 0 件の帯は 0 件の帯（要件 NFR2）。
+//! 0 件の SRS と pipeline の帯は、読めて 0 件と測れたことを言う card を持つ（見本の srs0 と run0・行 g-map-tips）。
 
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
 
 use super::band::{BEADS_LANES, Band, band_of, kind_key, unread_reason};
 use super::{natural, open_question, shape_class};
+use crate::vocab::label;
 use crate::widgets::hover::Card;
-use crate::widgets::nodecard::node_card;
+use crate::widgets::nodecard::{node_card, short_path};
 
 /// 札の題の字数の上限。
 pub const TAG_TITLE_MAX: usize = 30;
@@ -116,6 +118,39 @@ pub fn tag(doc: &GraphDoc, node: &GraphNode) -> Tag {
         alert,
         card: node_card(doc, node),
     }
+}
+
+/// 0 件の箱の数の横の語の鍵（SRS は何が 0 本か・pipeline は何が 0 件か・ほかは帯の鍵）。
+pub fn zero_key(band: Band) -> &'static str {
+    match band {
+        Band::Srs => kind_key(NodeKind::Req),
+        Band::Pipeline => "run",
+        _ => band.key(),
+    }
+}
+
+/// 読めて 0 件の箱の card（SRS と pipeline だけ・見本の srs0 と run0・ほかの帯は None）。
+/// 出所は帯の path を短くし、短くした字が path と違えば詳しくに path の全部を置く（節点の card と同じ決め）。
+pub fn zero_card(band: Band) -> Option<Card> {
+    let (unit, none) = match band {
+        Band::Srs => ("本", "要件の行が無い"),
+        Band::Pipeline => ("件", "RunCreated が無い"),
+        _ => return None,
+    };
+    let word = label(zero_key(band));
+    let src = short_path(band.path());
+    let more = if src == band.path() {
+        Vec::new()
+    } else {
+        vec![band.path().to_string()]
+    };
+    Some(Card {
+        title: format!("{word} 0 {unit}"),
+        kind: format!("{word} · {}", band.name()),
+        value: format!("✓ 0 と測れた = {none}"),
+        src,
+        more,
+    })
 }
 
 /// 圧縮の面の中身（7 つの帯の箱・帯の順）。
@@ -227,7 +262,7 @@ mod dom {
     use leptos::prelude::*;
     use tsuzuri_contract::graph::GraphDoc;
 
-    use super::{BandBox, Cards, Tag, compact};
+    use super::{BandBox, Cards, Tag, compact, zero_card, zero_key};
     use crate::frame::{self, Mode};
     use crate::mapview::band::Band;
     use crate::mapview::current;
@@ -279,10 +314,16 @@ mod dom {
     ) -> AnyView {
         match cards {
             Cards::Unmeasured(reason) => unmeasured(reason),
-            Cards::Empty => view! {
-                <div class="empty"><span>{label(band.key())}</span><b class="num">"0"</b></div>
-            }
-            .into_any(),
+            Cards::Empty => match zero_card(band) {
+                Some(card) => view! {
+                    <div class="empty" tabindex="0" use:attach=card><span>{label(zero_key(band))}</span><b class="num">"0"</b></div>
+                }
+                .into_any(),
+                None => view! {
+                    <div class="empty"><span>{label(zero_key(band))}</span><b class="num">"0"</b></div>
+                }
+                .into_any(),
+            },
             Cards::Tags(tags) => {
                 let tags = tags.iter().map(|t| tag_view(t, mode)).collect_view();
                 view! { <div class="cards7">{tags}</div> }.into_any()

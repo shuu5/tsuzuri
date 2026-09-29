@@ -22,7 +22,7 @@ use crate::mapview::band_chip;
 use crate::mapview::table::edge_name;
 use crate::project::{ALERT_STYLE, unmeasured};
 use crate::vocab::label;
-use crate::widgets::help::{HelpCtx, h2, shows_internal};
+use crate::widgets::help::{HelpCtx, expert_tip, h2};
 use crate::widgets::hover::{Card, attach, delegate, leaves};
 use crate::widgets::nodecard::view_cards;
 
@@ -409,9 +409,6 @@ fn panel(
             }
         })
     };
-    let expert_row = move || {
-        shows_internal(mode()).then(|| view! { <div class="small muted mono">{line.clone()}</div> })
-    };
     view! {
         <div class="gpanel">
             <header>{h2("lines")}</header>
@@ -429,9 +426,8 @@ fn panel(
             </div>
             <div class="pinbar" aria-live="polite">{bar}</div>
             {chain_view(bands, &cards, mode, toggle)}
-            <div class="cutline num" tabindex="0" data-term="cut">{count}</div>
+            <div class="cutline num" tabindex="0" data-term="cut" use:expert_tip=line>{count}</div>
             {refused}
-            {expert_row}
         </div>
     }
     .into_any()

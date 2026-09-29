@@ -801,7 +801,7 @@ pub fn count_line(view: &GraphView) -> String {
     )
 }
 
-/// 経験者向けの 1 行（数の行の下）。
+/// 数の行の経験者だけの注釈の 1 行（見本の data-tip-expert）。
 pub fn expert_line(view: &GraphView) -> String {
     format!(
         "shown={} folded={} cut={} total={}",

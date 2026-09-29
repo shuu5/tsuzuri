@@ -1,6 +1,7 @@
 //! 表の面（見本の map.html の table）: 種類と種類の辺の数の行列（行 = 辺の from の種類・列 = to の種類）。
 //! 辺が 1 本も無い種類は行にも列にも出さない。数の cell を押すと一覧の面へ移り、その種類の組で絞る。
 //! 幅の狭い画面のための一覧（`.mxlist`）も同じ数を出す。両端のどちらかが節点に無い辺は数えない。
+//! 行列の数の cell は辺の型の名を経験者だけの注釈に持つ（見本の data-tip-expert・行 g-map-tips）。
 
 use tsuzuri_contract::graph::{EdgeType, GraphDoc, NodeKind};
 use tsuzuri_contract::wire;
@@ -111,7 +112,7 @@ mod dom {
     use crate::mapview::{navigate, unread_reasons};
     use crate::project::unmeasured;
     use crate::vocab::label;
-    use crate::widgets::help::h2;
+    use crate::widgets::help::{expert_tip, h2};
 
     pub fn view(doc: &GraphDoc, search: RwSignal<String>) -> AnyView {
         let m = matrix(doc);
@@ -140,7 +141,10 @@ mod dom {
                     .kinds
                     .iter()
                     .map(|b| match m.cell(*a, *b) {
-                        Some(c) => view! { <td>{pair_button(c, search, "")}</td> }.into_any(),
+                        Some(c) => view! {
+                            <td use:expert_tip=c.types_text()>{pair_button(c, search, "")}</td>
+                        }
+                        .into_any(),
                         None => view! { <td></td> }.into_any(),
                     })
                     .collect_view();
@@ -192,7 +196,7 @@ mod dom {
         let (from, to) = (c.from, c.to);
         let click = move |_| navigate(search, |s| with_pair(s, Some((from, to))), true);
         view! {
-            <button type="button" class=class data-pair=pair_value(from, to) title=c.types_text() on:click=click>
+            <button type="button" class=class data-pair=pair_value(from, to) on:click=click>
                 {c.count}
             </button>
         }
