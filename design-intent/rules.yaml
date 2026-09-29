@@ -11,6 +11,8 @@ schema:
     required: [id, article, what, kind, status, ruling, ruled_at]
     optional: [note, refs]
   refs_note: その行の散文が依っている、article の条以外の id の一覧（ほかの行・要件書の id・判断の記録・別の条と規範文）。各項は id の形で、その行自身の id と article の値は書かない。
+  ruled_at_format: ^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}Z)?$
+  ruled_at_note: 行の裁定の時刻の欄 ruled_at の形（ruled_at_format）。年-月-日か、UTC の分（年-月-日T時:分Z）。床（folio check）は全行で、裁定の欄 ruling と同じ歩き手で数え、欄が無い・空・字でない（一覧・表）・形の違う は違反とする。裁定の欄が骨格の印（未記入）の行は裁定の前として時刻を数えず、裁定の欄が埋まった行の時刻が骨格の印なら違反とする。暦に在る日かと、裁定の欄の日時との一致は見ない
   enums:
     kind: [deny, build-check, detect, human-review]
     status: [仮, 凍結, 未定]
@@ -27,7 +29,7 @@ schema:
     deny: [reject, build-check]
     build-check: [build-check]
     detect: [none]
-  kind_map_to_constitution_note: R 行にだけ適用する（D 行は作法＝条の機構とは別）。右辺は憲法の値域 mechanism_kind の値
+  kind_map_to_constitution_note: R 行にだけ適用する（D 行は作法＝条の機構とは別）。右辺は憲法の値域 mechanism_kind の値。閾値の行（R 行）の kind は左辺のどれかで、左辺に無い human-review（D 行の作法）を閾値の行に置けば床（folio check）が落とす
   excluded:
     what: [人の作業の時間（「60 分以内」）, AI の費用（「300k token 以下」）]
     why: 人の作業の時間と AI の費用は測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。道具が決定的に測れる機械の待ち時間は除外に当たらず、規則の表の行に載せてよい。
