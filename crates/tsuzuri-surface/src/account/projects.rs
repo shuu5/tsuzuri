@@ -811,7 +811,7 @@ mod dom {
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal, term};
-    use crate::widgets::hover::{Card, attach};
+    use crate::widgets::hover::{Card, attach, attach_some};
 
     /// 行ごとの詳しくの開き閉じ（project の名ごと・頁の一生の間だけ）。
     type Opened = RwSignal<BTreeMap<String, bool>>;
@@ -911,13 +911,6 @@ mod dom {
             .map(|r| row_view(r, opened, expert))
             .collect_view();
         view! { {head}{rows} }.into_any()
-    }
-
-    /// card が在れば要素に付ける（席の無い行の欄と群の無い見出しは card を持たない・Option の card の directive の口）。
-    fn attach_some(el: web_sys::Element, card: Option<Card>) {
-        if let Some(card) = card {
-            attach(el, card);
-        }
     }
 
     fn head_view(head: GroupHead, card: Option<Card>) -> AnyView {

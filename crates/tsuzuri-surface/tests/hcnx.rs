@@ -207,18 +207,10 @@ fn hcnx_dom_wiring() {
     let dom = dom_part();
     let flat = squeeze(&dom);
     assert!(
-        flat.contains("usecrate::widgets::hover::{Card,attach};")
-            || flat.contains("usecrate::widgets::hover::{attach,Card};"),
-        "mod dom の use に crate::widgets::hover の attach と Card が無い"
+        flat.contains("usecrate::widgets::hover::{attach,attach_some};"),
+        "mod dom の use に crate::widgets::hover の attach と attach_some が無い"
     );
-    assert!(
-        flat.contains("fnattach_some(el:web_sys::Element,card:Option<Card>){"),
-        "fn attach_some の宣言の形が違う"
-    );
-    assert!(
-        squeeze(&fn_body(&dom, "attach_some")).contains("attach(el,card)"),
-        "fn attach_some が attach に el と card を渡さない"
-    );
+    assert!(!flat.contains("fnattach_some("), "mod dom に自前の fn attach_some が在る");
 
     let tab = "tabindex=\"0\"";
     let row = tag(&fn_body(&dom, "nx_row_view"), "<div class=r.class");

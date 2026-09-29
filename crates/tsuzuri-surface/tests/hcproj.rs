@@ -518,13 +518,10 @@ fn hcproj_dom_wiring() {
     let dom = dom_part();
     assert!(dom.contains("widgets::hover"), "DOM の部分に字 widgets::hover が無い");
     assert!(!text.contains("fn attach("), "projects.rs に自前の fn attach が在る");
+    assert!(!text.contains("fn attach_some"), "projects.rs に自前の fn attach_some が在る");
     assert!(
-        squeeze(&dom).contains("fnattach_some(el:web_sys::Element,card:Option<Card>)"),
-        "fn attach_some の宣言の形が違う"
-    );
-    assert!(
-        squeeze(&fn_body(&dom, "attach_some")).contains("attach(el,card)"),
-        "fn attach_some が attach に el と card を渡さない"
+        squeeze(&dom).contains("usecrate::widgets::hover::{Card,attach,attach_some};"),
+        "DOM の部分の use に crate::widgets::hover の Card と attach と attach_some が無い"
     );
 
     let tab = "tabindex=\"0\"";

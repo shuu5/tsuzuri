@@ -917,14 +917,7 @@ mod dom {
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, h2, hs, shows_internal};
-    use crate::widgets::hover::{Card, attach};
-
-    /// card が在れば要素に付ける（電文に同じ名の行の無い群の project の chip は card を持たない）。
-    fn attach_some(el: web_sys::Element, card: Option<Card>) {
-        if let Some(card) = card {
-            attach(el, card);
-        }
-    }
+    use crate::widgets::hover::{attach, attach_some};
 
     /// 測れていない・0 件の段（中身ありは `filled` が組む）。
     fn body_or<T>(body: Body<T>, filled: impl FnOnce(T) -> AnyView) -> AnyView {
