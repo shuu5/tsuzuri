@@ -3,13 +3,13 @@
 meta:
   id: surface
   title: 面の便 — 契約の型・導出グラフ・面の server・2 つの board・席の hook・表示面を便の列で運ぶ
-  version: v0.7
+  version: v0.8
   status: effective
   generated: 2026-09-26
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-26, ruling: t3-hub.1（裁定 id = user 2026-09-26T14:37Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 持ち主の承認（2026-09-26T14:37Z）で effective（v0.1）。v0.7（2026-09-29）= 口の表の行 question-nudge の断り（台帳に無い id）を外しただけ（合図は台帳の見張りを起こすだけで書かず、台帳に無い id の合図は印の動かない周なら何もしない・台帳を読んで断ると席の 2 手目が bd の読みの上限まで待つ・行 e-signal〔ノート surface-wave21d〕の起草の席の決め）。決定と契約表の行は変えない。 v0.6（2026-09-28）= 18 節の辺の型に設計ノートの行の 2 型（req・depends）の行を足した（判断の記録 ADR-17・持ち主の裁定 t3-hub.65:20260928T1228Z-1）。v0.2（2026-09-27）= 器の seat deliver の着地に合わせた直しだけ（§3 の裁定と束の出力・§20 に記帳 id の形・§21 の器の口 3 行）で、決定と契約表の行は変えない。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。 v0.3（2026-09-27）= 章の上限 12（folio2 の ADR-21 決定 (3)・面の生成器の MAX_CHAPTERS）に収めるため、便の散文（旧 §5〜§15）と契約表（旧 §16）を字を変えずに設計ノート surface-base（便 a〜f）と surface-board（便 g〜k）へ移した。§ の番号は再利用しない（旧 §5〜§16 は欠番）。決定は変えない。 v0.4（2026-09-27）= 不変条件 g-12 の役を器の event の形に合わせた直しだけ（器の QuestionRaised は問いの id を持たず、作業役の問いは台帳の bead にしない＝scribe2 の席の回答・行は surface-base の c-g12）。 v0.5（2026-09-28）= 方針の記帳先の替え（判断の記録 ADR-16 の決定 (4)・行 e-policy-q の着地）に合わせ、節点 n-policy の役と記帳 id の形の方針の字を直しただけ。決定と契約表の行は変えない。
+  note: 持ち主の承認（2026-09-26T14:37Z）で effective（v0.1）。v0.7（2026-09-29）= 口の表の行 question-nudge の断り（台帳に無い id）を外しただけ（合図は台帳の見張りを起こすだけで書かず、台帳に無い id の合図は印の動かない周なら何もしない・台帳を読んで断ると席の 2 手目が bd の読みの上限まで待つ・行 e-signal〔ノート surface-wave21d〕の起草の席の決め）。決定と契約表の行は変えない。 v0.6（2026-09-28）= 18 節の辺の型に設計ノートの行の 2 型（req・depends）の行を足した（判断の記録 ADR-17・持ち主の裁定 t3-hub.65:20260928T1228Z-1）。v0.2（2026-09-27）= 器の seat deliver の着地に合わせた直しだけ（§3 の裁定と束の出力・§20 に記帳 id の形・§21 の器の口 3 行）で、決定と契約表の行は変えない。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。 v0.3（2026-09-27）= 章の上限 12（folio2 の ADR-21 決定 (3)・面の生成器の MAX_CHAPTERS）に収めるため、便の散文（旧 §5〜§15）と契約表（旧 §16）を字を変えずに設計ノート surface-base（便 a〜f）と surface-board（便 g〜k）へ移した。§ の番号は再利用しない（旧 §5〜§16 は欠番）。決定は変えない。 v0.4（2026-09-27）= 不変条件 g-12 の役を器の event の形に合わせた直しだけ（器の QuestionRaised は問いの id を持たず、作業役の問いは台帳の bead にしない＝scribe2 の席の回答・行は surface-base の c-g12）。 v0.5（2026-09-28）= 方針の記帳先の替え（判断の記録 ADR-16 の決定 (4)・行 e-policy-q の着地）に合わせ、節点 n-policy の役と記帳 id の形の方針の字を直しただけ。決定と契約表の行は変えない。第 0.8 版（2026-09-29）は、不変条件 move-grace の赤の条件を、群の記録の時刻から数える式から器の欄 grace_left= の写しに直した（要件 FR12 と受入 AC11 の直しに合わせた）。
 
 sections:
   - n: 1
@@ -63,7 +63,7 @@ sections:
       - {id: no-state, name: state dir が読めない, red_when: 走行以外の種類まで「まだ分からない」になるか、走行が 0 件と出る, fixture: tests/fixtures/graph/no-state.json, ref: [AC8]}
       - {id: accept-12, name: 面の受入 12 条, red_when: はみ出し・重なり・横 scroll・hover の欠け・語彙外の見出し・散文 300 字超・page error・文の予算・id 無し・URL に残らない切り替え・逐語の混入・外部の library のどれかが 1 でも出る, fixture: tests/fixtures/surface/accept-12.json, ref: [AC9, NFR1]}
       - {id: seat-health, name: 席の健康, red_when: stale な tick で応答なしが出ない・heartbeat-off で停止が出ない・切り替えで state dir の byte が変わる, fixture: tests/fixtures/account/seat-health.json, ref: [AC10]}
-      - {id: move-grace, name: 退避までの残り秒, red_when: 残り秒が「記録の時刻 + 猶予 − 今」でない・起こし直した席に出る, fixture: tests/fixtures/account/move-grace.json, ref: [AC11]}
+      - {id: move-grace, name: 退避までの残り秒, red_when: 残り秒が器の seat tick status の欄 grace_left= の写しでない（面か server が数える）・起こし直した席に出る, fixture: tests/fixtures/account/move-grace.json, ref: [AC11]}
       - {id: ledger-judge, name: 台帳の判定と未反映, red_when: 判定の 5 値か未反映の 3 種の数が期待と違う・要約の無い節点が名指されない, fixture: tests/fixtures/ledger/judge.json, ref: [AC12]}
       - {id: stage-argv, name: 端末の起動, red_when: 起動の引数か CDP の命令の列が snapshot と違う・届かない端末が配信に落ちない, fixture: tests/fixtures/stage/terminals.toml, ref: [AC13]}
       - {id: tz-parity, name: tz と folio の一致, red_when: 口のどれかで終了 code か出力が folio2 と違う, fixture: tests/fixtures/tz/parity.json, ref: [AC14]}
