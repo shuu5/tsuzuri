@@ -464,7 +464,7 @@ fn seatblock_unknown_parts_only_unmeasured() {
     assert_eq!(s.low.group, Reading::Unknown);
     assert_eq!(s.hist, Reading::Unknown);
     assert_eq!(s.more.current, Reading::Unknown);
-    assert_eq!(s.more.same, Reading::Unknown);
+    assert_eq!(s.more.same, Some(Reading::Unknown));
     // 読めた欄は出す（状態・割合・0 本の区間は 0 本の矩形）。
     assert_eq!(s.top.key, "st_silent");
     assert!(matches!(&s.low.usage, Reading::Known(r) if r.len() == 1));
@@ -487,8 +487,8 @@ fn seatblock_unknown_parts_only_unmeasured() {
     assert_eq!(w.strip(Span::H24).marks, Reading::Known(vec![]));
     assert_eq!(w.low.group, Reading::Known("tsuzuri-g".to_string()));
     assert_eq!(w.more.current, Reading::Known("acct-5".to_string()));
-    assert_eq!(w.more.same, Reading::Known(NG));
-    assert_eq!(filled("run").more.same, Reading::Known(OK));
+    assert_eq!(w.more.same, Some(Reading::Known(NG)));
+    assert_eq!(filled("run").more.same, Some(Reading::Known(OK)));
 }
 
 /// (7)(8) 口が読めない・まだ読んでいない・電文として読めない本文は、block の全体が測れていないと理由の 1 行。

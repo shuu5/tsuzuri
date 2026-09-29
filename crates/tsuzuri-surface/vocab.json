@@ -1226,6 +1226,12 @@
    "plain": "縁の色と太さが状態\n! 赤 = open の question\n・ 太い = 起点\n・ 灰 = closed\n▸\n✗ 角の丸さに意味は無い",
    "internal": "囲みは rx 4 の 1 種・縁で状態"
   },
+  "park": {
+   "label": "区画",
+   "plain": "群と違って今の口座を持たない\n・ 口座は席ごと\n・ 閾値に届いた席だけ器が移す",
+   "internal": "doctor の群の行 kind=park\nhost.toml の区画の行",
+   "orig": "park"
+  },
   "current_account": {
    "label": "今の口座",
    "plain": "この群が今占有している口座\n・ 記録が指す値\n・ 群の席は全部ここで起きる\n✗ 新しい pipeline は使えない\n▸\n・ 記録なし = 種が既定\n・ 種 = 前の群の種を避けた最初",

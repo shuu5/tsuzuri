@@ -10,10 +10,12 @@ use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::stats::CheckResult;
 
 use super::home::group_more;
-use super::projects::{NONE_MARK, RUNS, acc, count_text, current, need, wait_of};
+use super::projects::{
+    NONE_MARK, RUNS, acc, count_text, current, group_word, is_park, need, wait_of,
+};
 use crate::project::ledger::{age, fixed1, net};
 use crate::project::next::{big, key as next_key};
-use crate::project::seat::{NG, hm, hmd, short, state_value};
+use crate::project::seat::{NG, PARK_KIND, hm, hmd, park_card, short, state_value};
 use crate::project::{UNKNOWN, state_key};
 use crate::vocab::label;
 use crate::widgets::hover::Card;
@@ -213,6 +215,20 @@ pub const GPROJ_SRC: &str = "doctor の席の行と群の今の記録";
 pub fn gproj_card(doc: &AccountDoc, project: &ProjectRow) -> Card {
     let now = project.group.as_deref().and_then(|g| current(doc, g));
     match &project.seat {
+        Reading::Known(c) if project.group.as_deref().is_some_and(|g| is_park(doc, g)) => {
+            // 区画の席は群の今の口座と比べない（行 g-park-view）。
+            let a = acc(doc, project);
+            Card {
+                title: c.target.clone(),
+                kind: group_word(project.group.as_deref(), true),
+                value: format!(
+                    "登録 {} · {PARK_KIND}",
+                    a.account.as_deref().unwrap_or(ASK)
+                ),
+                src: GPROJ_SRC.to_string(),
+                more: vec![label(state_key(state_value(c.state)))],
+            }
+        }
         Reading::Known(c) => {
             let a = acc(doc, project);
             let (kind, rel) = match a.mark {
@@ -265,7 +281,11 @@ pub fn thr_line(caps: &[WindowCap]) -> String {
 
 /// 群の見出しの chip の card（見本の group の枝: 今の口座・記録の数・いつからと前の口座・候補と閾値と anchor）。
 /// 電文の groups が読めないか群が無ければ None。
+/// 名が電文の parks に在れば、群の枠でなく区画の短い card（行 g-park-view）。
 pub fn grp_card(doc: &AccountDoc, name: &str) -> Option<Card> {
+    if is_park(doc, name) {
+        return Some(park_card(name));
+    }
     let Reading::Known(cards) = &doc.groups else {
         return None;
     };

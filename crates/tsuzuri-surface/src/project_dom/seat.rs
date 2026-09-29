@@ -6,8 +6,8 @@ use tsuzuri_contract::board::Reading;
 
 use super::{
     BLOCK, Band, GROUP_CARD, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OROW, PATH, Seat, Sign,
-    Span, Strip, Top, WindowRow, content, group_card, sample_svg, seat_caps, span_of, strip_svg,
-    thr, tick_age, tick_class, tick_mark, with_span,
+    Span, Strip, Top, WindowRow, content, group_card, group_head, park_card, sample_svg, seat_caps, span_of,
+    strip_svg, thr, tick_age, tick_class, tick_mark, with_span,
 };
 use crate::view::Fetched;
 use crate::widgets::hover::delegate;
@@ -280,19 +280,25 @@ fn window_view(row: WindowRow, caps: Memo<Option<Vec<WindowCap>>>) -> AnyView {
 }
 
 /// 群の chip（名が在れば指を置くと口 /api/account の群の枠の card を出す・名が分からなければ測れていないの記号だけ）。
-fn group_chip(group: Reading<String>, account: ReadSignal<Fetched>) -> AnyView {
+fn group_chip(group: Reading<String>, park: bool, account: ReadSignal<Fetched>) -> AnyView {
     let Reading::Known(name) = group else {
         return view! { <span class="pchip grp" data-t="">{unknown()}</span> }.into_any();
     };
     let hc = delegate();
     let key = name.clone();
+    // 区画の chip は電文に依らない短い card（点線の chip・行 g-park-view）。
     let over = move |ev: ev::MouseEvent| {
         let now = crate::net::now();
-        hc.show(&ev, account.with_untracked(|a| group_card(a, &key, now)));
+        let card = if park {
+            park_card(&key)
+        } else {
+            account.with_untracked(|a| group_card(a, &key, now))
+        };
+        hc.show(&ev, card);
     };
     let out = move |ev: ev::MouseEvent| hc.leave(&ev);
     view! {
-        <span class="pchip grp" data-t="" data-card=GROUP_CARD tabindex="0" on:mouseenter=over on:mouseleave=out>
+        <span class="pchip grp" class:park=park data-t="" data-card=GROUP_CARD tabindex="0" on:mouseenter=over on:mouseleave=out>
             {name}
         </span>
     }
@@ -322,8 +328,8 @@ fn low_view(low: Low, group_doc: ReadSignal<Fetched>) -> AnyView {
                     <div class="acc mono">{account}</div>
                 </div>
                 <div class="gname">
-                    <div class="small muted">{hs("group")}</div>
-                    {group_chip(low.group, group_doc)}
+                    <div class="small muted">{hs(group_head(low.park))}</div>
+                    {group_chip(low.group, low.park, group_doc)}
                 </div>
             </div>
             <div class="usage" aria-label=label("allowance")>
@@ -387,7 +393,7 @@ fn more_view(more: More) -> AnyView {
                     <span>
                         {label("current_account")}" "
                         <span class="mono">{text_or_unknown(more.current)}</span>" "
-                        {sign_view(more.same)}
+                        {more.same.map(sign_view)}
                     </span>
                 </div>
                 <div class="gm1 src">{MORE_SRC}</div>

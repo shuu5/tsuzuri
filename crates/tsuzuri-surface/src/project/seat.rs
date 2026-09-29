@@ -394,6 +394,8 @@ pub struct WindowRow {
 pub struct Low {
     pub account: Option<String>,
     pub group: Reading<String>,
+    /// 群の行が区画の行の写しか（行 g-park-view・区画は今の口座を 1 つに決めない）。
+    pub park: bool,
     pub usage: Reading<Vec<WindowRow>>,
 }
 
@@ -417,7 +419,8 @@ pub struct HistRow {
 pub struct More {
     pub target: String,
     pub current: Reading<String>,
-    pub same: Reading<Sign>,
+    /// 登録の口座と群の今の口座が同じかの印（区画の席は比べないので None）。
+    pub same: Option<Reading<Sign>>,
     /// doctor の席の行を経験者向けの 1 行の字数に畳んだ行（見本の gm1 int xo）。
     pub doctor: Vec<String>,
     /// 器の移動の 4 つの欄の写しの行を同じ字数に畳んだ行（doctor の行の後に並べる）。
@@ -657,11 +660,22 @@ pub fn sample_svg(name: &str) -> String {
     )
 }
 
+/// 群の行が区画の行の写しか（群の行が読めて欄 park が真・読めなければ偽）。
+pub fn park_of(card: &SeatCard) -> bool {
+    matches!(&card.group, Reading::Known(g) if g.park)
+}
+
+/// 下段の群の見出しの語の鍵（区画なら park・ほかは group）。
+pub fn group_head(park: bool) -> &'static str {
+    if park { "park" } else { "group" }
+}
+
 /// 下段。
 pub fn low(card: &SeatCard) -> Low {
     Low {
         account: card.account.clone(),
         group: map(&card.group, |g| g.group.clone()),
+        park: park_of(card),
         usage: map(&card.usage, |u| {
             u.iter().map(|q| window_row(q, card.at)).collect()
         }),
@@ -787,10 +801,15 @@ pub fn more(card: &SeatCard) -> More {
         (Some(reg), Reading::Known(g)) => Reading::Known(sign(*reg == g.account)),
         _ => Reading::Unknown,
     };
+    let park = park_of(card);
     More {
         target: card.target.clone(),
-        current: map(&card.group, |g| g.account.clone()),
-        same,
+        current: if park {
+            Reading::Known(NO_CURRENT.to_string())
+        } else {
+            map(&card.group, |g| g.account.clone())
+        },
+        same: (!park).then_some(same),
         doctor: wrap_words(&seat_line(card), EXPERT_CHARS),
         copied: wrap_words(&copied_line(card), EXPERT_CHARS),
     }
@@ -818,6 +837,29 @@ pub fn copied_line(card: &SeatCard) -> String {
             p.window, p.used, p.cap
         )),
     )
+}
+
+/// 区画の席の詳しくの今の口座の字（区画は今の口座を持たない）。
+pub const NO_CURRENT: &str = "―";
+
+/// 区画の card の種の字。
+pub const PARK_KIND: &str = "今の口座を持たない";
+
+/// 区画の card の値の字。
+pub const PARK_VALUE: &str = "口座は席ごと · 閾値に届いた席だけ器が移す";
+
+/// 区画の card の出所の字。
+pub const PARK_SRC: &str = "host.toml の区画の行・doctor";
+
+/// 区画の chip の card（電文に依らない説明だけ・席ごとの口座は行の口座の列で見る）。
+pub fn park_card(name: &str) -> Card {
+    Card {
+        title: format!("{} {name}", label("park")),
+        kind: PARK_KIND.to_string(),
+        value: PARK_VALUE.to_string(),
+        src: PARK_SRC.to_string(),
+        more: Vec::new(),
+    }
 }
 
 /// 群の chip の card の鍵（見本の data-card の pa:group）。

@@ -29,6 +29,7 @@ use crate::project::next::{UNJUDGED_LINE, big, key as next_key, unjudged};
 use crate::project::seat::{NG, OK, Sign, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
+use crate::vocab::label;
 use crate::widgets::hover::Card;
 
 pub const BLOCK: Block = Block {
@@ -487,6 +488,20 @@ pub fn current<'a>(doc: &'a AccountDoc, group: &str) -> Option<&'a str> {
     }
 }
 
+/// 名が電文の parks に在るか（区画かの判じは電文の parks だけ・行 g-park-view）。
+pub fn is_park(doc: &AccountDoc, name: &str) -> bool {
+    doc.parks.iter().any(|p| p == name)
+}
+
+/// 行の群の小字（区画なら語 区画 と名・群は名・群が無ければ空の字）。
+pub fn group_word(group: Option<&str>, park: bool) -> String {
+    match group {
+        Some(g) if park => format!("{} {g}", label("park")),
+        Some(g) => g.to_string(),
+        None => String::new(),
+    }
+}
+
 /// accounts の欄（席の口座と、群の今の口座と同じかの印）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Acc {
@@ -539,6 +554,8 @@ pub struct ProjLine {
     pub class: String,
     pub name: String,
     pub group: Option<String>,
+    /// 群が区画か（電文の parks に在る・小字を語 区画 と名にする）。
+    pub park: bool,
     pub need: Need,
     /// 決定待ち（台帳の open の問いの数・台帳が Unknown は None）。
     pub wait: Option<u32>,
@@ -645,6 +662,8 @@ pub fn fit_cut(text: &str, count: usize) -> String {
 pub struct GroupHead {
     pub group: Option<String>,
     pub current: Option<String>,
+    /// 区画の見出しか（今の口座は字 ―・chip は点線）。
+    pub park: bool,
 }
 
 /// 見出しと行（group のほかの並べは見出しが無い 1 つ）。
@@ -725,9 +744,15 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
                     let idx = all()
                         .filter(|&i| ps[i].group.as_ref() == Some(&name))
                         .collect();
+                    let park = is_park(doc, &name);
                     let head = GroupHead {
-                        current: current(doc, &name).map(str::to_string),
+                        current: if park {
+                            Some(NONE_MARK.to_string())
+                        } else {
+                            current(doc, &name).map(str::to_string)
+                        },
                         group: Some(name),
+                        park,
                     };
                     (Some(head), idx)
                 })
@@ -737,6 +762,7 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
                 Some(GroupHead {
                     group: None,
                     current: None,
+                    park: false,
                 }),
                 none,
             ));
@@ -771,6 +797,7 @@ pub fn row(doc: &AccountDoc, index: usize, mode: Mode) -> ProjLine {
         class: format!("{PROW} sev-{}", need.sev),
         name: p.name.clone(),
         group: p.group.clone(),
+        park: p.group.as_deref().is_some_and(|g| is_park(doc, g)),
         need,
         wait: wait_of(p),
         batch: batch_of(p),
@@ -807,7 +834,7 @@ mod dom {
         Acc, BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_WAIT, COLUMNS, Group,
         GroupHead, HROW, Led, NO_TOGGLE, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort, PTAB,
         ProjLine, RC4, Run, TKM, Table, UnrefKinds, UnrefSum, batch_text, content, count_text,
-        fit_cut, hbm_class, psort_of, unref_class, wait_class, with_psort,
+        fit_cut, group_word, hbm_class, psort_of, unref_class, wait_class, with_psort,
     };
     use crate::account::PATH;
     use crate::account::windows;
@@ -919,9 +946,12 @@ mod dom {
     }
 
     fn head_view(head: GroupHead, card: Option<Card>) -> AnyView {
+        let pk = head
+            .park
+            .then(|| view! { <span class="pk">{label("park")}" "</span> });
         let name = match head.group {
             Some(g) => view! {
-                <span class="pchip grp" tabindex="0" use:attach_some=card><span data-t="">{g}</span></span>
+                <span class="pchip grp" class:park=head.park tabindex="0" use:attach_some=card>{pk}<span data-t="">{g}</span></span>
             }
             .into_any(),
             None => view! { <span class="pchip grp">{NONE_MARK}</span> }.into_any(),
@@ -1022,7 +1052,7 @@ mod dom {
             <div class=class aria-expanded=expanded on:click=toggle>
                 <div class=C_PN>
                     <b data-t="">{row.name.clone()}</b>
-                    <span class="small muted" data-t="">{row.group.clone().unwrap_or_default()}</span>
+                    <span class="small muted" data-t="">{group_word(row.group.as_deref(), row.park)}</span>
                 </div>
                 <div class=C_NEED tabindex="0" use:attach=row.cards.need.clone()>
                     <span class="l1">{need_icon}<b>{need_word}</b></span>

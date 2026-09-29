@@ -181,10 +181,12 @@ fn acctproj_group_order_and_heads() {
             Some(GroupHead {
                 group: Some("Tier1".into()),
                 current: Some("acct-1".into()),
+                park: false,
             }),
             Some(GroupHead {
                 group: Some("Tier2".into()),
                 current: Some("acct-2".into()),
+                park: false,
             }),
         ]
     );

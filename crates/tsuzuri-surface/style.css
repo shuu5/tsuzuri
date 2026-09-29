@@ -498,6 +498,8 @@ table.mx th .bchip { margin-right: 4px; }
 .cands .sep { color: var(--line-2); }
 .pchip { max-width: 100%; }
 .pchip .gi { width: 16px; height: 16px; font-size: 10px; }
+.pchip.grp.park { border-style: dashed; border-color: var(--line-2); }
+.pchip.grp.park .pk { font-weight: 500; color: var(--ink-2); }
 /* session の表（行ごとに同じ列の型・見出し行で group 化） */
 .sortbar { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-left: auto; }
 .seg.wrap { flex-wrap: wrap; height: auto; border-radius: var(--r3); }

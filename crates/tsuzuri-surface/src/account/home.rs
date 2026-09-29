@@ -16,6 +16,7 @@ use tsuzuri_contract::seat::{QuotaUsed, SeatState};
 use tsuzuri_contract::stats::{CheckResult, NextStep};
 
 use super::cards::{gproj_card, nx_card};
+use super::projects::{group_word, is_park};
 use crate::frame::Block;
 use crate::mapview::graph::esc;
 use crate::project::Body;
@@ -176,7 +177,18 @@ pub fn nx_row(row: &ProjectRow, at: EpochSecs) -> NxRow {
 pub fn next_all(doc: &AccountDoc) -> Vec<NxRow> {
     let mut rows: Vec<&ProjectRow> = doc.projects.iter().collect();
     rows.sort_by_key(|p| rank(&p.next));
-    rows.into_iter().map(|p| nx_row(p, doc.at)).collect()
+    rows.into_iter()
+        .map(|p| {
+            let mut line = nx_row(p, doc.at);
+            // 区画の行の小字は語 区画 と名（行 g-park-view・nx_row は変えない）。
+            if let Some(g) = p.group.as_deref()
+                && is_park(doc, g)
+            {
+                line.group = group_word(Some(g), true);
+            }
+            line
+        })
+        .collect()
 }
 
 /// 群の枠の窓の 1 つ（見本の `.pw`）。

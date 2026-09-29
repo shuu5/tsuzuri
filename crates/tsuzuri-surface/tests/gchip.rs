@@ -176,7 +176,7 @@ fn gchip_dom_text() {
         "account.with_untracked(|a| group_card(a, &key, now))",
         "data-card=GROUP_CARD",
         "on:mouseenter=over on:mouseleave=out",
-        "{group_chip(low.group, group_doc)}",
+        "{group_chip(low.group, low.park, group_doc)}",
         "crate::net::ticker()",
     ] {
         assert_eq!(dom.matches(text).count(), 1, "{text}");
