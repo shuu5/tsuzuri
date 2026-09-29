@@ -15,7 +15,7 @@ use std::process::{self, Command as Process, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::stage::cdp::Command;
 use tsuzuri_boundary::stage::cli::{
@@ -23,6 +23,7 @@ use tsuzuri_boundary::stage::cli::{
 };
 use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::launch;
+use tsuzuri_boundary::stage::target::{self, Targets};
 use tsuzuri_boundary::stage::terminal::{self, Terminal};
 use tsuzuri_boundary::stage::tunnel::{self, Tunnel};
 use tsuzuri_boundary::stage::url::{self, Board};
@@ -51,6 +52,10 @@ const BOARD_URL: &str = "http://srv-a.tailnet.invalid:4801/";
 
 /// 節の URL の行。
 const LINE: &str = "board の URL http://srv-a.tailnet.invalid:4801/";
+
+/// 節の term-a の印の行。
+const MARKED_A: &str =
+    "表示先の設定に端末 term-a の印を書いた（持ち主が閉じた後は --to を省いた撃ちで起こし直さない）";
 
 /// 節の開発中の app の URL。
 const NEXT: &str = "http://127.0.0.1:4173/next";
@@ -241,7 +246,7 @@ enum Ssh {
     Fail,
 }
 
-/// 偽の場（作業場・repo・state dir・記録の置き場・2 つの FIFO・偽の program・場の一時の dir・印の file）。
+/// 偽の場（作業場・repo・state dir・記録の置き場・2 つの FIFO・偽の program・場の一時の dir・印の file・表示先の設定）。
 struct Field {
     root: PathBuf,
     repo: PathBuf,
@@ -258,6 +263,7 @@ struct Field {
     socket: PathBuf,
     on: PathBuf,
     broken: PathBuf,
+    config: PathBuf,
 }
 
 impl Field {
@@ -290,6 +296,7 @@ impl Field {
         let socket = tmp.join("far.sock");
         let on = root.join("on");
         let broken = root.join("broken");
+        let config = root.join("cfg").join(target::FILE);
         let tunnel = match ssh {
             Ssh::Sleep => format!(
                 "for a in \"$@\"; do\n    if [ \"$prev\" = -L ]; then ln -s '{}' \"${{a%%:*}}\"; fi\n    prev=$a\n  done\n  exec sleep 30",
@@ -344,6 +351,7 @@ impl Field {
             socket,
             on,
             broken,
+            config,
         }
     }
 
@@ -374,7 +382,7 @@ impl Field {
         path.to_str().expect("path の字").to_string()
     }
 
-    /// tz stage を偽の program で撃つ（標準入力に input・seat なら環境変数 CLAUDECODE を 1 に置く）。
+    /// tz stage を偽の program と場の表示先の設定で撃つ（標準入力に input・seat なら環境変数 CLAUDECODE を 1 に置く）。
     /// rc と標準出力の行を返す。
     fn tz(&self, args: &[&str], input: &str, seat: bool) -> (i32, Vec<String>) {
         let mut shot = Process::new(env!("CARGO_BIN_EXE_tz"));
@@ -392,6 +400,8 @@ impl Field {
             .arg(&self.tailnet)
             .arg("--chrome")
             .arg(&self.chrome)
+            .arg("--config")
+            .arg(&self.config)
             .env_remove(SEAT_ENV)
             .env("TMPDIR", &self.tmp)
             .stdin(Stdio::piped())
@@ -411,6 +421,23 @@ impl Field {
             text.lines().map(str::to_string).collect(),
         )
     }
+
+    /// 場の表示先の設定の印の表（名と epoch 秒の組）。
+    fn shown(&self) -> Vec<(String, u64)> {
+        target::load(&self.config)
+            .expect("場の表示先の設定")
+            .shown
+            .into_iter()
+            .collect()
+    }
+}
+
+/// 今の epoch 秒。
+fn epoch() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("epoch の後")
+        .as_secs()
 }
 
 impl Drop for Field {
@@ -1181,7 +1208,7 @@ fn stcli_open_raises_once() {
     let far = Far::start(&field, LIST);
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out, ["端末 term-a に表示面の窓を起こした", LINE]);
+    assert_eq!(out, ["端末 term-a に表示面の窓を起こした", MARKED_A, LINE]);
     let ssh = field.records("ssh");
     assert_eq!(ssh.len(), 2, "{ssh:?}");
     assert_eq!(
@@ -1201,11 +1228,90 @@ fn stcli_open_makes_one_page() {
     let far = Far::start(&field, NO_PAGE);
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out, ["端末 term-a の表示面の Chrome に頁の窓を 1 つ開いた", LINE]);
+    assert_eq!(
+        out,
+        ["端末 term-a の表示面の Chrome に頁の窓を 1 つ開いた", MARKED_A, LINE]
+    );
     let got = far.stop();
     assert_eq!(got, MADE);
     assert_eq!(got.iter().filter(|l| l.contains(NEW_PAGE)).count(), 1);
     assert_eq!(field.records("ssh").len(), 1);
+}
+
+#[test]
+fn stcli_open_marks_shown() {
+    let field = Field::new("marks", Ssh::Sleep);
+    let far = Far::start(&field, LIST);
+    let before = epoch();
+    let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
+    let after = epoch();
+    assert_eq!(rc, 0, "{out:?}");
+    assert_eq!(out, ["端末 term-a に表示面の窓を起こした", MARKED_A, LINE]);
+    let shown = field.shown();
+    assert_eq!(shown.len(), 1, "{shown:?}");
+    assert_eq!(shown[0].0, "term-a");
+    assert!(
+        (before..=after).contains(&shown[0].1),
+        "{before} {after} {shown:?}"
+    );
+    assert_eq!(mode(&field.config), 0o600);
+
+    let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
+    assert_eq!(rc, 0, "{out:?}");
+    assert_eq!(out, ["端末 term-a の表示面の窓は在る（起こさない）", LINE]);
+    assert_eq!(field.shown(), shown);
+    far.stop();
+
+    let mut targets = target::load(&field.config).expect("場の表示先の設定");
+    targets.default = Some("term-a".to_string());
+    target::save(&field.config, &targets).expect("既定を置く");
+    fs::remove_file(&field.on).expect("窓を閉じる");
+    fs::remove_file(&field.socket).expect("場の socket の file を消す");
+    let far = Far::start(&field, LIST);
+    let ssh = field.records("ssh").len();
+    let (rc, out) = field.tz(&["reload"], "", false);
+    assert_eq!(rc, 1, "{out:?}");
+    assert_eq!(out.len(), 2, "{out:?}");
+    for word in ["端末 term-a に表示面の Chrome の窓が無い", "tz stage open"] {
+        assert!(out[0].contains(word), "{word}: {}", out[0]);
+    }
+    assert_eq!(out[1], LINE);
+    assert_eq!(far.stop(), ["GET /json/version"]);
+    assert_eq!(field.records("ssh").len(), ssh + 1);
+    assert!(!field.on.exists(), "窓を起こす回の印の file が在る");
+    assert_eq!(field.shown(), shown);
+}
+
+#[test]
+fn stcli_open_keeps_old_mark() {
+    let field = Field::new("oldmark", Ssh::Sleep);
+    let mut targets = Targets::default();
+    targets.shown.insert("term-a".to_string(), 7);
+    target::save(&field.config, &targets).expect("印を置く");
+    let far = Far::start(&field, LIST);
+    let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
+    assert_eq!(rc, 0, "{out:?}");
+    assert_eq!(out, ["端末 term-a に表示面の窓を起こした", LINE]);
+    far.stop();
+    assert_eq!(field.shown(), [("term-a".to_string(), 7)]);
+}
+
+#[test]
+fn stcli_open_bad_config_first() {
+    let field = Field::new("badcfg", Ssh::Sleep);
+    let text = format!("{}\n[screen]\n", target::HEAD);
+    fs::create_dir_all(field.config.parent().expect("設定の dir")).expect("設定の dir を作る");
+    fs::write(&field.config, &text).expect("形の外れた設定");
+    let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
+    assert_eq!(rc, 1, "{out:?}");
+    assert_eq!(out.len(), 2, "{out:?}");
+    let path = Field::text(&field.config);
+    for word in ["表示先の設定", path.as_str(), "知らない表 [screen]"] {
+        assert!(out[0].contains(word), "{word}: {}", out[0]);
+    }
+    assert_eq!(out[1], LINE);
+    assert!(field.records("ssh").is_empty(), "偽の ssh が撃たれた");
+    assert_eq!(fs::read_to_string(&field.config).expect("設定の字"), text);
 }
 
 #[test]
@@ -1364,7 +1470,7 @@ fn stcli_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 17, "歯の数");
+    assert_eq!(names.len(), 20, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("stcli_")

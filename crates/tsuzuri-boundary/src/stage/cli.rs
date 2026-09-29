@@ -7,6 +7,7 @@
 //! host の面は器の validate が rc 0 で返った後にだけ読み、自分の anchor の state dir の host.toml だけを読む。
 //! 標準出力の最後の行は、board の URL を組めた後のどの終わり方でも url の line（持ち主へ渡す URL）。
 //! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く（行 i-7）。
+//! tz stage open も窓を起こすか頁を 1 つ作った時は、錠の中で同じ印を書く（--to の在る無しによらない・行 i-open-mark）。
 //! 設定に値が無ければ席の目に落ちて URL の行を出し（open は断る）、表示先は board の問いで持ち主に問う。
 //! 設定の端末の名が層 A（器の host の面の [[device]]）に無ければ名指して断り、既定へ落とさない。
 //! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
@@ -824,25 +825,37 @@ fn face_text(repo: &Path, scribe2: &OsStr, git: &OsStr) -> Result<String, String
 }
 
 /// 持ち主が窓を開く（端末ごとの錠を持ったまま、窓を 1 回だけ起こすか、頁の無い Chrome に頁を 1 つ作る）。
+/// 窓を起こすか頁を作った時は錠の中で表示先の設定に端末の印を書く（印が在れば書かない）。
+/// 設定の path が決まらないか設定が読めなければ ssh を撃つ前に断る。
 fn open(call: &Call, terminal: &Terminal, base: &Path, board: &Board) -> Result<(), String> {
     let name = &terminal.name;
     let _held = lock(base, name, LOCK_WAIT)?;
+    let config = config_path(call.config.as_deref())?;
+    target::load(&config)?;
     let dir = tunnel::socket_dir(base)?;
     let tunnel = Tunnel::open(&call.ssh, terminal, &dir, TIMEOUT)?;
-    let line = match tunnel.window(&board.url, true)? {
-        Window::Page { launched: true, .. } => format!("端末 {name} に表示面の窓を起こした"),
-        Window::Page { .. } => format!("端末 {name} の表示面の窓は在る（起こさない）"),
+    let (line, shown) = match tunnel.window(&board.url, true)? {
+        Window::Page { launched: true, .. } => {
+            (format!("端末 {name} に表示面の窓を起こした"), true)
+        }
+        Window::Page { .. } => (format!("端末 {name} の表示面の窓は在る（起こさない）"), false),
         Window::Absent(_) => {
             new_page(&tunnel, &board.url)?;
             match tunnel.window(&board.url, false)? {
-                Window::Page { .. } => {
-                    format!("端末 {name} の表示面の Chrome に頁の窓を 1 つ開いた")
-                }
+                Window::Page { .. } => (
+                    format!("端末 {name} の表示面の Chrome に頁の窓を 1 つ開いた"),
+                    true,
+                ),
                 Window::Absent(line) => return Err(line),
             }
         }
     };
     println!("{line}");
+    if shown && target::mark(&config, name, now())? {
+        println!(
+            "表示先の設定に端末 {name} の印を書いた（持ち主が閉じた後は --to を省いた撃ちで起こし直さない）"
+        );
+    }
     Ok(())
 }
 
