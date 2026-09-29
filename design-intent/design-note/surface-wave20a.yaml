@@ -1,0 +1,58 @@
+# 設計ノート surface-wave20a — （発効 2026-09-29・持ち主の裁定 t3-hub.56:20260927T2259Z-1〔計画 surface-plan の承認〕・記帳先 = 問いの bead t3-hub.56 の notes・行の拠り = 判断の記録 ADR-18 の決定 (9) と持ち主の裁定 t3-hub.67.5:20260929T0109Z-1〔判断の表 d44〕）第 20 波 a — 公開の repo へ出る前の走査。要件は srs.yaml。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave20a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave20a.toml#<行 id>。
+meta:
+  id: surface-wave20a
+  title: 第 20 波 a — 公開の repo へ出る前の走査
+  version: v0.1
+  status: effective
+  generated: 2026-09-29
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+  note: 合流の 3 段目の支度の行 1 つ（公開した repo の守り）。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは判断の記録 ADR-18 の決定 (9) と、持ち主の裁定 t3-hub.67.5:20260929T0109Z-1（tsuzuri の repo を秘密を含まない条件で今の履歴のまま公開にする・計画の判断の表 d44）と、条 N-3（走査を止める旗を持たない）。計画 9 節の行 t-pub-scan をノートに置く。起草と試作は main bc5d92a（計画 v0.70）で撃ち、caad1f2（計画 v0.71・この行の書く file の字は同じ）で確かめた。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      公開した tsuzuri の repo（2026-09-29）へ、host の名・tailnet の住所と名・口座の名札をまた出さないための走査を、xtask に足す行 1 つ。
+      見るのは、追跡される file の今の字と、公開を記した commit より後の commit の作者の欄と本文。公開の前の履歴はこれらの字を持つが、commit の id を保つので消さず、見ない。
+      形の走査（tailnet の IPv4 の範囲と *.ts.net の名）は一覧なしで効き、口座の名札と host の名の一覧は追跡しない file から読む（CI には一覧が無いので形だけを見る）。
+      走査は xtask の check の最初の段で撃たれるので、器の land の前の check と CI の両方で効く。当たりは場所と種類だけを出し、当たった字は出さない。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - id: t-pub-scan
+        title: 公開の repo へ出る前の走査を xtask に足し（task pub-scan と check の最初の段）、追跡される file の今の字と、基準の commit より後の commit の作者の欄と本文に、tailnet の住所（IPv4 と IPv6）と名の形と一覧の語が無いことを見る
+        req: [NFR3]
+        section: "3"
+        write-set: ["+xtask/src/pubscan.rs", "xtask/src/main.rs", ".github/workflows/ci.yml", "crates/tsuzuri-boundary/tests/server_min.rs", "=crates/tsuzuri-boundary/tests/hbconf.rs"]
+        verify: ["cargo nextest run -p xtask --bin xtask --no-tests=fail pubscan_", "cargo nextest run -p xtask --no-tests=fail skeleton_", "cargo nextest run -p tsuzuri-boundary --test server_min --no-tests=fail server_min_bind_judge", "cargo nextest run -p tsuzuri-boundary --test hbconf --no-tests=fail hbconf_", "cargo run -q -p xtask -- pub-scan", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) fn find は、1〜3 桁の数 4 つを字 . でつないだ字のうち、第 1 の数が 100・第 2 の数が 64〜127・4 つとも 255 以下の字を tailnet の住所の形として当て、行の番号を 1 から数えて返す。数の並び 100・64・0・1 と 100・100・100・100 と 100・127・255・254 と範囲の頭の 100・64・0・0 から組んだ字と、範囲の頭に字 /100 が続く字は当てる。範囲の頭に字 /10 が続く字（範囲そのものを書いた字）と、範囲の外（100・63・255・255 と 100・128・0・1 と 10・64・0・1 と 101・64・0・1）と、前に数字か字 . が在る字・後に字 . と数字が続く字・4 桁の数を含む字・256 を含む字は当てない（歯 pubscan_address_range） (2) fn find は、頭の 3 つの組が fd7a・115c・a1e0 の IPv6 の字（英字の大小を問わない）を tailnet の IPv6 の住所の形として当てる。16 bit の数の並び 8 つから組んだ 3 つの見本（残りが 0・0・0・0・1 と ab12・4843・cd96・6258・b240 と全部 0）の字と、範囲そのものを書いた字に数字が続く字は当てる。範囲そのものを書いた字（全部 0 の見本の字に字 /48 が続く字）と、3 つ目の組が a1e1 の字と 1 つ目の組が fd7b の字と、前に 16 進の数字か字（:）が在る字と、頭の 3 つの組と字（:）の後に 16 進の数字も字（:）も無い字は当てない（歯 pubscan_address6_range） (3) fn find は、字 .ts.net（英字の大小を問わない）の前の字が英数字か字 - で、後の字が英数字でも字 - でもない所を tailnet の名の形として当てる。前が字 * の字・前に名の無い字・後に英数字か字 - が続く字は当てない（歯 pubscan_name_shape） (4) fn find は、一覧の語を英字の大小を問わず探し、前と後の字が英数字でない所だけを一覧の何語目かで当てる。前か後に英数字が続く字は当てず、一覧が空なら当てない（歯 pubscan_listed_words） (5) fn list_path は、XDG_CONFIG_HOME が絶対の path ならその下の tsuzuri/pub-scan.txt、相対の path なら HOME の下の .config/tsuzuri/pub-scan.txt を返す。fn read_list は、file が無ければ一覧なし（None）を返し、在れば空の行と字（#）で始まる行を除き、前後の空白を除いて小文字にした語の列を返す（歯 pubscan_list_file） (6) fn scan は、見本の git の repo で、追跡される file の当たりを file の path と行の番号で返し、基準の commit より後の commit の当たりを commit の id と行の番号（1 行目は作者・2 行目は記録者・3 行目から本文）で返す。基準の commit 自身の本文と追跡しない file の字は当てない。repo に無い基準の commit では断る（歯 pubscan_repo_range） (7) 今の repo の追跡される file の字と、基準の commit 244d0e2c0f208f18b31f25731b68ca429600894e より後の commit の作者と記録者の欄と本文に、形の当たりが無い（一覧は読まない）（歯 pubscan_repo_tree_clean） (8) xtask の main.rs の fn check の字で、走査を撃つ字 pubscan::run(root) が cargo の段の繰り返しの字 for step in CHECK_STEPS より前に在り、main.rs に task pub-scan の腕の字が在る。.github/workflows/ci.yml の checkout の step が、鍵 fetch-depth に値 0 を与える行を持つ（歯 pubscan_wiring） (9) 境界の crate の server の bind の判定は、数の並び 100・64・0・1 と 100・100・100・100 と 100・127・255・254 から組んだ IPv4 と、16 bit の数の並び fd7a・115c・a1e0・0・0・0・0・1 と fd7a・115c・a1e0・ab12・4843・cd96・6258・b240 から組んだ IPv6 を通す（歯 server_min_bind_judge）
+        depends: []
+  - n: 3
+    type: prose
+    title: 行 t-pub-scan — 公開の repo へ出る前の走査
+    body: |
+      在りかの main は caad1f2（計画 surface-plan 第 0.71 版・試作は bc5d92a で撃ち、この行の書く file の字は同じ）。書く file は xtask の新しい module の file（xtask/src/pubscan.rs）と xtask/src/main.rs と CI の .github/workflows/ci.yml と、境界の crate の着地済みの歯 tests/server_min.rs。
+      なぜ。持ち主は 2026-09-29 に tsuzuri の repo を公開にした（判断の記録 ADR-18 の決定 (1)・判断の表 d44）。公開の前の履歴には host の名・tailnet の住所・口座の名札が残っていて、commit の id を保つので消せない（ADR-18 の退けた案 d）。判断の記録 ADR-18 の決定 (9) は、main へ送る前にこれらを探す走査を CI に入れると決めた。器の席の助言（器の公開の門と同じ型の事故を止める）もこの行を求める。新しい字だけを見て、公開の後にまた漏らすことを止める。
+      走査の範囲（起草の決め）。(1) 追跡される file（git ls-files -z が並べる file）の作業の木の今の字。作業の木から消した file は飛ばし、追跡しない file は見ない（席の作業の木には試しの追跡しない file が在り、送られない）。(2) 固定の基準の commit 244d0e2c0f208f18b31f25731b68ca429600894e（判断の記録 ADR-18 と計画の判断の表 d44 を足した commit・公開を記した commit）より後の commit（git log の範囲 基準..HEAD）の、作者の名と mail・記録者の名と mail・本文。作者と記録者の欄も見るのは、git の設定の無い端末では git が端末の名から mail を組むため。基準は xtask の pubscan の module の const BASE に 40 字の id で持つ。固定の基準にした理由は、器の land の前の check（.vessel.toml の common-verify）・席の手元・CI の 3 か所で同じ範囲を見られること。退けた候補: CI の push の範囲（前の commit から今の commit）は器の land の前の check で使えず push の後にしか見ない。xtask の引数は撃つ人ごとに範囲が変わる。起草の測り: 一覧つきでも、2026-09-27T18:53Z の commit 6ed50c95 より後の commit に当たりは無く、それより前の履歴には一覧の語の当たりが在る。
+      基準を動かす時。当たりの在る commit が main に入ったら（履歴は消せないので check と CI が落ち続ける）、席が xtask/src/pubscan.rs の const BASE をその commit へ進める小さな行を起こす。走査を止める旗・環境変数・除外の一覧は持たない（条 N-3）。
+      形（xtask/src/pubscan.rs・新しい file）。module の doc は行と決定 (9) を名指す。const BASE と const LIST_FILE（字 pub-scan.txt）。当たりの種類の enum Kind（Address・Address6・Name・Listed の 4 つ・Listed は一覧の何語目かを 1 から持つ）と、当たり 1 つの struct Hit（欄 place・line・kind）は pub(crate) で、module の外の crate からは使わない。fn find(text, words) は字を英字の小文字にしてから 4 種を探し、字の中の順に（行の番号・種類）を返す。住所の形は、前の字が数字でも字 . でもない所から 1〜3 桁の数 4 つを字 . でつないで読み、後に数字か字 . と数字が続かず、第 1 の数が 100・第 2 の数が 64〜127・4 つとも 255 以下の字。IPv6 の住所の形は、前の字が 16 進の数字でも字 : でもない所の字 fd7a:115c:a1e0: で、その後の字が 16 進の数字か字 : の字（頭の 48 bit が tailnet の範囲）。計画の字は IPv4 だけだったが、目的（tailnet の住所を出さない）が同じなので、起草で IPv6 を足した（席の決め 2026-09-29）。除外の規則は、範囲そのものを書いた字（const V4_RANGE の 100.64.0.0/10 と const V6_RANGE の fd7a:115c:a1e0::/48・後に数字が続かないもの）の 2 つだけ。裸の範囲の頭の住所は数える（席の決め）。境界の server の server/mod.rs の const TAILNET_V4 と TAILNET_V6 の doc は範囲そのものを書いた字で、この除外で通る（今の main の追跡される file の中で、範囲の字を持つのはこの 2 行と、この行の module の doc とこのノート）。名の形は字 .ts.net の前の字が英数字か字 - で、後の字が英数字でも字 - でもない所。一覧の語は前と後の字が英数字でない所（字 - や字 / や日本語の字は境）。
+      形（一覧）。一覧（口座の名札と host の名）は追跡しない file から読み、一覧そのものを版管理に書かない。file の path は表示先の設定の file と同じ dir で、fn list_path が境界の crate の pub fn stage::target::path（XDG_CONFIG_HOME が絶対の path ならその下、ほかは HOME の下の .config の下・その下の tsuzuri/stage.toml）の file の名を pub-scan.txt に替えて返す。fn read_list は 1 行 1 語で読み、空の行と字 # で始まる行を除き、前後の空白を除いて小文字にする。file が無ければ一覧なしで形だけを見る（CI の周）。読めない file は断る。
+      形（出力）。fn run(root) は、一覧の語の数か、一覧の file が無いので形だけを見る旨を 1 行出し、fn scan の当たりを 1 つ 1 行で場所（file の path か commit の id）と行の番号と種類の名だけで出して rc 1 を返す。当たった字そのものは出さない（公開の repo の CI の log は誰でも読める）。当たりが無ければ当たり 0 の 1 行で rc 0。fn scan(root, base, words) は git を root で撃ち（外から渡る GIT_DIR・GIT_WORK_TREE・GIT_INDEX_FILE を外す）、ls-files -z と log -z の書式（id・作者・記録者・本文を改行でつなぐ）を読み、file の字は UTF-8 でない byte を置き換えて読む。git が落ちれば（浅い clone で基準の commit が無い時など）断る。
+      形（xtask/src/main.rs）。mod pubscan の 1 行と module の doc の 1 行。fn main の match に task pub-scan の腕（引数が 1 つの時・pubscan::run を workspace の root で撃つ）を足し、usage の字の task の並びに pub-scan を足す。fn check の頭（cargo の段の繰り返しの前）で、xtask check: pub-scan の 1 行を出して pubscan::run(root) を撃ち、0 でなければ落ちた段 pub-scan の 1 行を出してその rc を返す（後の build と歯と clippy と面の組み立てを撃たない）。check の doc の字もそれに合わせる。
+      形（.github/workflows/ci.yml）。checkout の step（actions/checkout の pin はそのまま）に with と fetch-depth: 0 を足し、理由の注（走査が基準の commit より後の commit を読む）を 1 行置く。CI の撃ちは今の 1 行（xtask の check）のままで、走査は check の最初の段として撃たれる。一覧の file は CI に無いので形だけを見る。
+      形（crates/tsuzuri-boundary/tests/server_min.rs）。fn server_min_bind_judge の通す見本の字の配列から tailnet の住所の 5 つ（IPv4 の 3 つと IPv6 の 2 つ）の字を外し、残りの 4 つの字（loopback の IPv4 の 2 つと IPv6 の 2 つ）はそのままの繰り返しに残す。外した 5 つは、同じ値を IpAddr::from で u8 の 4 つの数の配列と u16 の 8 つの数の配列から組み、bind_allowed に渡す繰り返しを配列の繰り返しの後に置く（理由の注 1 行つき）。値は変えない。今の main でこの 5 つの字が走査に当たり（IPv4 の 3 つは起草の測り・IPv6 の 2 つは IPv6 を足した後）、直さないと check の最初の段で落ちて着地できない（席の決め 2026-09-29・この行で直す）。
+      grep で調べた読み手。書く file と fn（xtask の main.rs の fn main と fn check・.github/workflows/ci.yml・tests/server_min.rs）の字を読む着地済みの歯を、契約・中核・境界・面の 4 つの crate の tests と src と、xtask の src と tests で、字 workflows・ci.yml・xtask/src・CHECK_STEPS・server_min.rs・pub-scan を grep で探した。見つかったのは境界の歯 tests/hbconf.rs だけ（9 つの歯の file の fn config の本文を読む・server_min.rs の fn config はこの行が書かない）で、置き場だけの = で write-set に入れ、verify で接頭辞 hbconf_ を撃つ。xtask の歯 tests/tlic.rs は Cargo.toml と LICENSE の file だけを読む。
+      歯（xtask/src/pubscan.rs の mod tests・接頭辞 pubscan_）。xtask は bin の crate なので歯は module の中の単体の歯で、verify は --bin xtask で名指す。見本の住所は u8 の 4 つの数の配列から std::net::Ipv4Addr で、u16 の 8 つの数の配列から std::net::Ipv6Addr で組み、見本の名は字 fx-node・example・ts・net を字 . でつないで組む（この file の字が走査に当たらない）。見本の一覧の語は偽の語 fxhost7 と fx-acct。歯 pubscan_repo_range は一時の dir に git の repo を作り（利用者の git の設定を読まない・GIT_CONFIG_GLOBAL は /dev/null）、基準の commit の本文に住所・後の commit の本文に名・追跡する file の 3 行目に一覧の語・追跡しない file に住所を置く。歯 pubscan_repo_tree_clean は workspace の root（xtask の manifest の dir の 1 つ上）の repo を一覧なしで走査する。歯 pubscan_wiring は main.rs を include_str で、ci.yml を root からの path で読む。
+      歯で測らず、この行の差分で持つ。fn check が走査の rc が 0 でない時に後の段を撃たずに返すこと・fn run の出力の字（当たった字を出さないこと）・git の環境変数を外すこと・消した file を飛ばすこと・usage の字・理由の注の字。
+      試作（main bc5d92a の clone に当てた）。8 本の歯と着地済みの skeleton_ の 9 本と server_min_bind_judge と hbconf_ の 4 本が通り、task pub-scan は一覧なしと一覧つき（起草者の手元の 11 語）でどちらも当たり 0。今の main の server_min.rs に戻すと当たり 5 件（IPv4 の 3 つと IPv6 の 2 つ）で rc 1。噛みを見た: 範囲の字の除外を消す・範囲を 128 まで広げる・IPv6 の頭の前の字を見ない・IPv6 の範囲の字の除外を消す・後の字 . と数字を見ない・名の前の字を見ない・一覧の語の後の境を見ない・一覧を小文字にしない・commit を走査しない・check から走査を外す・fetch-depth を消す・server_min.rs を main の字に戻す、でそれぞれ名指した歯が落ちる。
+      filter の語。main caad1f2 の contracts の verify の filter の語のどれも、接頭辞 pubscan_ と 8 本の歯の名に部分の字として含まれず、接頭辞と名もどの語にも含まれない（確かめた）。xtask の bin の中のほかの単体の歯（gz の pgz_・main.rs の skeleton_）は接頭辞 pubscan_ を含まない。
+      依存と順。depends は空（ノートの行は 1 つ）。xtask/src/main.rs の鎖は g-strip → j-runner → g-gz → t-license（どれも着地済み）→ この行（計画の 5 節）。.github/workflows/ci.yml と tests/server_min.rs を書く走行中と待ちの便は無い。境界の server の src（server/mod.rs の TAILNET_V4 の doc）は書かない。
+      範囲の外。秘密の鍵と token の走査（公開の前に席が履歴の全部で確かめた）。公開の前の履歴の書き換え（判断の記録 ADR-18 の退けた案 d）。台帳の repo（非公開のまま）。器が land の時に書く commit の本文は、器の check の後に書かれるなら push の後の CI で見つかる（器の本文は設計ノートの字から組まれ、その字は走査が見る）。一覧の file を置くのは席の手（この行は置かない）。席の design の commit の前の走査は席の道具に足す（この行は書かない）。
+
+figures: []
