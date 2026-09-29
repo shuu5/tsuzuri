@@ -6,7 +6,8 @@
 //! 読む file は `<state dir>/seat/<席の dir>/state.jsonl`・同じ dir の `tick-last`・`<state dir>/host.toml`・
 //! 群の記録（`<state dir の親>/scribe2-host/groups/<群の名>.account` と `history/<群の名>.account.*`）。
 //! 3 つの出力と file の読みは 5 秒のあいだ持ち回す（要求のたびに器を撃たない）。ただし変化の印の file
-//! （state.jsonl・tick-last・heartbeat-off）の更新時刻と長さが集めた時と違えば、5 秒の中でも集め直す。
+//! （state.jsonl・tick-last・heartbeat-off・heartbeat-on）の更新時刻と長さが集めた時と違えば、5 秒の中でも集め直す。
+//! heartbeat-off と heartbeat-on は読まず印にだけ使う（合図の値は tick status の席の行の欄 heartbeat= の字で読む）。
 //! 席の target か state dir が無ければ器を撃たず、読む欄が全部「まだ分からない」の card を返す。
 
 use std::ffi::OsString;
@@ -21,7 +22,7 @@ use tsuzuri_core::seat::{self as core, SeatTexts};
 
 use super::events::stamp;
 use super::ledger::capture;
-use crate::acct::HEARTBEAT_OFF;
+use crate::acct::{HEARTBEAT_OFF, HEARTBEAT_ON};
 
 /// 口の path。
 pub const PATH: &str = "/api/seat";
@@ -80,10 +81,17 @@ impl Seat {
         plain(&name).then(|| self.state_dir.join("seat").join(name))
     }
 
-    /// 変化の印の file（状態の記録と合図の最後の判定と停止の記録）。
+    /// 変化の印の file（状態の記録と合図の最後の判定と停止の記録と明示の on の記録）。
     pub fn marks(&self) -> Vec<PathBuf> {
         self.seat_dir()
-            .map(|d| vec![d.join(STATE_LOG), d.join(TICK_LAST), d.join(HEARTBEAT_OFF)])
+            .map(|d| {
+                vec![
+                    d.join(STATE_LOG),
+                    d.join(TICK_LAST),
+                    d.join(HEARTBEAT_OFF),
+                    d.join(HEARTBEAT_ON),
+                ]
+            })
             .unwrap_or_default()
     }
 

@@ -7,7 +7,8 @@
 //! 退避までの残り秒は tick status の席の行の器の欄の写し（中核の席の card）で、rules 行も合図の file も読まない。
 //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
 //! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す（行 e-hold）。
-//! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last と、
+//! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last と
+//! （同じ dir の heartbeat-off・heartbeat-on は読まず、有無と更新時刻を印にだけ使う）、
 //! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない・行 c-dormant）と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）と、口座の線の材料の
 //! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
@@ -56,6 +57,9 @@ pub const CAP_ARGS: [&str; 2] = ["rules", "get"];
 
 /// 合図の休みの印の file（席の dir の下・変化の印にだけ使う）。
 pub const HEARTBEAT_OFF: &str = "heartbeat-off";
+
+/// 合図の明示の on の印の file（席の dir の下・区画の既定が off の席を on にした記録・変化の印にだけ使う・行 e-hb-on-mark）。
+pub const HEARTBEAT_ON: &str = "heartbeat-on";
 
 /// 群の記録の履歴の dir（群の記録の dir の下）。
 pub const HISTORY_DIR: &str = "history";
@@ -253,8 +257,8 @@ impl Acct {
         (at.elapsed() < self.git_hold && was == anchors).then(|| texts.clone())
     }
 
-    /// 変化の印の file（state dir ごとの event log・orchestrator の席の state.jsonl と tick-last と heartbeat-off・
-    /// 群の今の記録）。
+    /// 変化の印の file（state dir ごとの event log・orchestrator の席の state.jsonl と tick-last と heartbeat-off と
+    /// heartbeat-on・群の今の記録）。
     pub fn marks(&self) -> Vec<PathBuf> {
         self.texts().marks
     }
@@ -460,9 +464,12 @@ impl Acct {
                     .seat_dir()
                 });
             if let Some(d) = &seat_dir {
-                texts
-                    .marks
-                    .extend([d.join(STATE_LOG), d.join(TICK_LAST), d.join(HEARTBEAT_OFF)]);
+                texts.marks.extend([
+                    d.join(STATE_LOG),
+                    d.join(TICK_LAST),
+                    d.join(HEARTBEAT_OFF),
+                    d.join(HEARTBEAT_ON),
+                ]);
             }
             let in_seat = |name: &str| seat_dir.as_ref().and_then(|d| read(&d.join(name)));
             texts.projects.insert(

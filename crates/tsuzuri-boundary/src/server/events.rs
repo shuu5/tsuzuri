@@ -10,7 +10,8 @@
 //! 動いたら board-changed を周に 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
 //! 便 e-seat は席の状態の file（`<state dir>/seat/<席の dir>/` の state.jsonl と tick-last）の印を板の印に足す。
 //! 席の card の印（行 e-seat-hbmark）と account board の印（`crate::acct` の `Acct::marks`）は同じ dir の停止の記録
-//! heartbeat-off の印も持つ（停止の切り替えで board-changed が出る）。
+//! heartbeat-off と明示の on の記録 heartbeat-on の印も持つ（停止と明示の on の切り替えで board-changed が出る・
+//! 行 e-hb-on-mark）。
 //! board-changed の data は契約の `BoardChanged`（`{"at":<epoch 秒>,"kinds":[…]}`・印の動いた種類）で、
 //! ledger-changed の data は `{"at":<epoch 秒>}`。板の印は種類（`ChangeKind`）と file の組で、種類をまたいで
 //! 一覧の並びだけが変わった周は送らない（行 c-ev-kind）。

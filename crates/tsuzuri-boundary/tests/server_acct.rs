@@ -753,7 +753,7 @@ fn server_acct_marks_list() {
         sa.join("seat/proj-e_0.1"),
         sb.join("seat/proj-b_0.1"),
     ] {
-        for name in ["state.jsonl", "tick-last", "heartbeat-off"] {
+        for name in ["state.jsonl", "tick-last", "heartbeat-off", "heartbeat-on"] {
             want.insert(seat.join(name));
         }
     }
@@ -1229,4 +1229,62 @@ fn acchold_events_doc_names_off() {
     for word in ["heartbeat-off", "Acct::marks", "e-seat-hbmark"] {
         assert!(doc.contains(word), "module の doc に {word} が無い");
     }
+}
+
+/// 偽の器の tick-state-a の字の proj-a:0.1 の行の欄 heartbeat= を `words`（heartbeat= と heartbeat_by= の字）に替える。
+fn hbon_acct_row(place: &Place, words: &str) {
+    let out = place.root.join("out/tick-state-a");
+    let text: String = fs::read_to_string(&out)
+        .expect("tick の出力の字")
+        .lines()
+        .map(|l| {
+            let l = if l.contains("target=proj-a:0.1 ") {
+                l.split(' ')
+                    .filter(|t| !t.starts_with("heartbeat_by="))
+                    .map(|t| {
+                        if t.starts_with("heartbeat=") {
+                            words.to_string()
+                        } else {
+                            t.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            } else {
+                l.to_string()
+            };
+            format!("{l}\n")
+        })
+        .collect();
+    fs::write(&out, text).expect("tick の出力の字を替える");
+}
+
+#[test]
+fn hbon_acct_reads_tick_word() {
+    let place = Place::new("hbon-acct", false);
+    hbon_acct_row(&place, "heartbeat=off heartbeat_by=group");
+    let acct = place.acct();
+    let count = || place.calls("scribe2").len();
+    let on = place.state("state-a").join("seat/proj-a_0.1/heartbeat-on");
+    assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(false));
+    let first = count();
+    assert!(first > 0, "器を撃たない");
+    fs::write(&on, "").expect("明示の on の記録を置く");
+    hbon_acct_row(&place, "heartbeat=on heartbeat_by=explicit");
+    assert_eq!(
+        acchold_heartbeat(&acct.doc(NOW)),
+        Reading::Known(true),
+        "明示の on の記録の後の読み"
+    );
+    assert_eq!(count(), first * 2, "{:?}", place.calls("scribe2"));
+    assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(true));
+    acct.marks();
+    assert_eq!(count(), first * 2, "印が動かなければ持ち回す");
+    fs::remove_file(&on).expect("明示の on の記録を消す");
+    assert_eq!(
+        acchold_heartbeat(&acct.doc(NOW)),
+        Reading::Known(true),
+        "file の有無でなく行の字で読む"
+    );
+    assert_eq!(count(), first * 3, "{:?}", place.calls("scribe2"));
 }
