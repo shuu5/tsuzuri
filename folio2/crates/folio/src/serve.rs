@@ -339,17 +339,22 @@ mod serve_tests {
 
     #[test]
     fn serve_binds_only_inside_the_tailnet_or_loopback() {
-        for inside_ip in ["127.0.0.1", "100.64.0.0", "100.127.255.255"] {
-            assert!(
-                inside(inside_ip.parse().unwrap()),
-                "{inside_ip} は内側のはず"
-            );
+        // 住所は部品の数から組む（tailnet の範囲の住所の字を版管理に置かない・便 211）
+        for a in [[127, 0, 0, 1], [100, 64, 0, 0], [100, 127, 255, 255]] {
+            let ip = Ipv4Addr::from(a);
+            assert!(inside(ip), "{ip} は内側のはず");
         }
-        for outside in ["100.128.0.0", "0.0.0.0", "10.0.0.1", "192.168.0.1"] {
-            assert!(!inside(outside.parse().unwrap()), "{outside} は外のはず");
+        for a in [
+            [100, 128, 0, 0],
+            [0, 0, 0, 0],
+            [10, 0, 0, 1],
+            [192, 168, 0, 1],
+        ] {
+            let ip = Ipv4Addr::from(a);
+            assert!(!inside(ip), "{ip} は外のはず");
         }
-        assert!(in_tailnet("100.64.0.1".parse().unwrap()));
-        assert!(!in_tailnet("127.0.0.1".parse().unwrap()));
+        assert!(in_tailnet(Ipv4Addr::new(100, 64, 0, 1)));
+        assert!(!in_tailnet(Ipv4Addr::new(127, 0, 0, 1)));
     }
 
     #[test]

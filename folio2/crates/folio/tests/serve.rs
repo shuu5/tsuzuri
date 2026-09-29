@@ -5,6 +5,9 @@
 //!
 //! 版管理へは この host の tailnet の住所・機器名・口座名 を書かない（D-8）。
 //! ここに書く住所は loopback・範囲の境界の値・公開の例の住所だけ。
+//!
+//! 便 211（docs/design/delivery-211.md §1 (c)）: 版管理の追跡される file に tailnet の範囲の IPv4 の住所の字が 1 つも無い。
+//! 判定は外の利用者の公開の走査と同じ形をこの file の中で独立に書き、住所の字はこの file でも部品の数から組む。
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -379,4 +382,135 @@ fn serve_shows_the_pages_over_loopback() {
         String::from_utf8_lossy(&post.2)
     );
     assert_eq!(bare.0, 400, "{}", bare.1);
+}
+
+// ── 版管理の字（便 211） ──
+
+/// 字の頭の 4 つの数（どれも 1〜3 桁で 255 以下・`.` で繋ぐ）と、読んだ byte 数。
+fn dotted_quad(s: &[u8]) -> Option<([u32; 4], usize)> {
+    let mut parts = [0u32; 4];
+    let mut at = 0;
+    for (n, part) in parts.iter_mut().enumerate() {
+        if n > 0 {
+            if s.get(at) != Some(&b'.') {
+                return None;
+            }
+            at += 1;
+        }
+        let run = s[at..].iter().take_while(|b| b.is_ascii_digit()).count();
+        if !(1..=3).contains(&run) {
+            return None;
+        }
+        *part = std::str::from_utf8(&s[at..at + run]).ok()?.parse().ok()?;
+        if *part > 255 {
+            return None;
+        }
+        at += run;
+    }
+    Some((parts, at))
+}
+
+/// 字の中の tailnet の範囲（頭が 100・2 つ目が 64〜127）の IPv4 の住所の字の行の番号（1 から）。
+/// 前が数字か `.` の所からは始めない・後ろに `.` と数字が続くものは数えない・範囲そのものの字（範囲の先頭の後に `/10`・
+/// その後に数字が続かない）は数えない。
+fn tailnet_v4_lines(text: &[u8]) -> Vec<usize> {
+    let range = format!("{}/10", Ipv4Addr::new(100, 64, 0, 0));
+    let mut lines = Vec::new();
+    for (at, b) in text.iter().enumerate() {
+        if !b.is_ascii_digit()
+            || at
+                .checked_sub(1)
+                .is_some_and(|j| text[j].is_ascii_digit() || text[j] == b'.')
+        {
+            continue;
+        }
+        let Some((parts, len)) = dotted_quad(&text[at..]) else {
+            continue;
+        };
+        let rest = &text[at + len..];
+        let longer = rest.first() == Some(&b'.') && rest.get(1).is_some_and(u8::is_ascii_digit);
+        let is_range = text[at..].starts_with(range.as_bytes())
+            && !text.get(at + range.len()).is_some_and(u8::is_ascii_digit);
+        if parts[0] == 100 && (64..128).contains(&parts[1]) && !longer && !is_range {
+            lines.push(1 + text[..at].iter().filter(|&&b| b == b'\n').count());
+        }
+    }
+    lines
+}
+
+#[test]
+fn f211_tracked_files_hold_no_tailnet_ipv4_address() {
+    let v4 = |a: [u8; 4]| Ipv4Addr::from(a).to_string();
+    let head = v4([100, 64, 0, 0]);
+    // 判定そのものの見本（当たる字・当たらない字）
+    for a in [
+        [100, 64, 0, 1],
+        [100, 100, 100, 100],
+        [100, 127, 255, 255],
+        [100, 64, 0, 0],
+    ] {
+        let s = v4(a);
+        for hit in [
+            s.clone(),
+            format!("x{s}"),
+            format!("({s}:53)"),
+            format!("住所 {s}。"),
+        ] {
+            assert_eq!(tailnet_v4_lines(hit.as_bytes()), vec![1], "{hit}");
+        }
+        assert_eq!(tailnet_v4_lines(format!("a\nb\n{s}").as_bytes()), vec![3]);
+        for miss in [format!("1{s}"), format!(".{s}"), format!("{s}.5")] {
+            assert!(tailnet_v4_lines(miss.as_bytes()).is_empty(), "{miss}");
+        }
+    }
+    assert_eq!(tailnet_v4_lines(format!("{head}/100").as_bytes()), vec![1]);
+    for miss in [
+        format!("{head}/10"),
+        format!("範囲は {head}/10。"),
+        v4([100, 63, 255, 255]),
+        v4([100, 128, 0, 1]),
+        v4([10, 64, 0, 1]),
+        v4([101, 64, 0, 1]),
+        format!("{}.{}.{}.{}", 100, "0064", 0, 1),
+        format!("{}.{}.{}.{}", 100, 64, 256, 1),
+        format!("{}.{}.{}.{}", 100, 64, 0, 1000),
+    ] {
+        assert!(tailnet_v4_lines(miss.as_bytes()).is_empty(), "{miss}");
+    }
+    // 版管理の追跡される file の全部（作業の木から消した file は飛ばす）
+    let root = repo_root();
+    let out = Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(&root)
+        .output()
+        .expect("git を起動できない");
+    assert!(out.status.success(), "git ls-files: {}", stderr(&out));
+    let names: Vec<String> = out
+        .stdout
+        .split(|&b| b == 0)
+        .filter(|n| !n.is_empty())
+        .map(|n| String::from_utf8_lossy(n).into_owned())
+        .collect();
+    assert!(
+        names.iter().any(|n| n == "crates/folio/tests/serve.rs"),
+        "追跡される file の一覧にこの歯の file が無い（{} 本）",
+        names.len()
+    );
+    let mut found = Vec::new();
+    for name in &names {
+        let bytes = match fs::read(root.join(name)) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => panic!("{name} を読めない: {e}"),
+        };
+        for line in tailnet_v4_lines(&bytes) {
+            found.push(format!("{name}:{line}"));
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "tailnet の範囲の IPv4 の住所の字が {} 件（場所だけを出す）: {}",
+        found.len(),
+        found.join("・")
+    );
 }
