@@ -6,6 +6,10 @@
 //! 持ち主の頼みとして頁の target を 1 つ作る（NEW_PAGE・この口の 1 回だけ）。窓を前に出す・動かす語は持たない。
 //! host の面は器の validate が rc 0 で返った後にだけ読み、自分の anchor の state dir の host.toml だけを読む。
 //! 標準出力の最後の行は、board の URL を組めた後のどの終わり方でも url の line（持ち主へ渡す URL）。
+//! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く（行 i-7）。
+//! 設定に値が無ければ席の目に落ちて URL の行を出し（open は断る）、表示先は board の問いで持ち主に問う。
+//! 設定の端末の名が層 A（器の host の面の [[device]]）に無ければ名指して断り、既定へ落とさない。
+//! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -15,11 +19,15 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use tsuzuri_core::account::host::declaration;
+use tsuzuri_core::account::project_name;
 
 use super::cdp::{self, Command, Session};
 use super::json;
-use super::relay::{self, Reach};
+use super::relay::{self, Eyes, Reach};
+use super::target::{self, Targets};
 use super::terminal::{self, Terminal};
 use super::tunnel::{self, Tunnel, Window};
 use super::url::{self, Board};
@@ -27,8 +35,9 @@ use super::ws::Socket;
 use crate::acct;
 use crate::server::proc;
 
-/// 使い方の 1 行。
-pub const USAGE: &str = "usage: tz stage <navigate|viewport|reload|click|type|key|scroll|wait|screenshot|dom|console|run|open> --to <端末の名> [--url <URL> | --width <n> --height <n> --scale <n> --mobile <true|false> | --x <n> --y <n> [--dy <n>] | --text <字> | --key <鍵> | --ms <n> | --out <path>] [--repo <dir>] [--ssh <program>] [--scribe2 <program>] [--git <program>] [--tailnet <program>] [--chrome <program>]";
+/// 使い方の行（命令の撃ちと、表示先の設定の口）。
+pub const USAGE: &str = "usage: tz stage <navigate|viewport|reload|click|type|key|scroll|wait|screenshot|dom|console|run|open> [--to <端末の名>] [--url <URL> | --width <n> --height <n> --scale <n> --mobile <true|false> | --x <n> --y <n> [--dy <n>] | --text <字> | --key <鍵> | --ms <n> | --out <path>] [--repo <dir>] [--ssh <program>] [--scribe2 <program>] [--git <program>] [--tailnet <program>] [--chrome <program>] [--config <path>]
+       tz stage target <show | set --project <project の名> <端末の名> | set --all <端末の名> | clear --project <project の名>> [--repo <dir>] [--scribe2 <program>] [--git <program>] [--config <path>]";
 
 /// 席の中の撃ちの印の環境変数（Claude Code の Bash の道具が子の process に 1 を渡す）。
 pub const SEAT_ENV: &str = "CLAUDECODE";
@@ -51,8 +60,8 @@ const FAIL: u8 = 1;
 /// 錠の見直しの間隔。
 const POLL: Duration = Duration::from_millis(50);
 
-/// どの命令でも受ける旗（端末の名と、repo と、撃つ program の差し替え）。
-const COMMON: [&str; 7] = [
+/// どの命令でも受ける旗（端末の名と、repo と、撃つ program の差し替えと、表示先の設定の path）。
+const COMMON: [&str; 8] = [
     "--to",
     "--repo",
     "--ssh",
@@ -60,6 +69,7 @@ const COMMON: [&str; 7] = [
     "--git",
     "--tailnet",
     "--chrome",
+    "--config",
 ];
 
 /// tz stage の命令の語。
@@ -77,13 +87,14 @@ pub enum Verb {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     pub verb: Verb,
-    pub to: String,
+    pub to: Option<String>,
     pub repo: PathBuf,
     pub ssh: OsString,
     pub scribe2: OsString,
     pub git: OsString,
     pub tailnet: OsString,
     pub chrome: OsString,
+    pub config: Option<PathBuf>,
 }
 
 /// 旗の列を `--名 値` か `--名=値` の組にする（-- で始まらない字・値の無い旗・空の値は Err）。
@@ -197,12 +208,12 @@ pub fn one(verb: &str, flags: &[(&str, &str)]) -> Result<(Command, Option<PathBu
     Ok((command, None))
 }
 
-/// tz stage の後の引数を読む（最初の字が命令の語・共通の旗は 1 度ずつ・--to は要る）。
+/// tz stage の後の引数を読む（最初の字が命令の語・共通の旗は 1 度ずつ・--to を省けば表示先の設定で引く）。
 pub fn parse(args: &[&str]) -> Result<Call, String> {
     let Some((&verb, rest)) = args.split_first() else {
         return Err("命令が無い".to_string());
     };
-    let mut common: [Option<&str>; 7] = [None; 7];
+    let mut common: [Option<&str>; 8] = [None; 8];
     let mut own = Vec::new();
     for (name, value) in pairs(rest)? {
         match COMMON.iter().position(|c| *c == name) {
@@ -214,8 +225,7 @@ pub fn parse(args: &[&str]) -> Result<Call, String> {
             None => own.push((name, value)),
         }
     }
-    let [to, repo, ssh, scribe2, git, tailnet, chrome] = common;
-    let to = to.ok_or_else(|| format!("{verb} に --to が無い（表示先の端末の名を渡す）"))?;
+    let [to, repo, ssh, scribe2, git, tailnet, chrome, config] = common;
     let verb = match verb {
         "run" | "open" => {
             if let Some((name, _)) = own.first() {
@@ -231,14 +241,269 @@ pub fn parse(args: &[&str]) -> Result<Call, String> {
     let program = |value: Option<&str>, default: &str| OsString::from(value.unwrap_or(default));
     Ok(Call {
         verb,
-        to: to.to_string(),
+        to: to.map(str::to_string),
         repo: PathBuf::from(repo.unwrap_or(".")),
         ssh: program(ssh, "ssh"),
         scribe2: program(scribe2, "scribe2"),
         git: program(git, acct::GIT),
         tailnet: program(tailnet, url::TAILNET),
         chrome: program(chrome, relay::CHROME),
+        config: config.map(PathBuf::from),
     })
+}
+
+/// 表示先の決め。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Aim {
+    /// --to で渡した名（設定を読まず、窓を起こさない）。
+    Named(String),
+    /// 設定で引いた名と、その端末に初めて見せるか（印がまだ無い）。
+    Chosen { name: String, first: bool },
+    /// 設定に project の値も既定も無い（席の目に落ちる）。
+    Unset,
+}
+
+/// 表示先を決める（--to が在ればその名・無ければ project に効く設定の値・その名が層 A に無ければ既定へ落とさずに断る）。
+pub fn aim(
+    to: Option<&str>,
+    project: &str,
+    targets: &Targets,
+    names: &[String],
+) -> Result<Aim, String> {
+    if let Some(to) = to {
+        return Ok(Aim::Named(to.to_string()));
+    }
+    let Some((name, origin)) = targets.effective(project) else {
+        return Ok(Aim::Unset);
+    };
+    if !names.iter().any(|n| n == name) {
+        return Err(format!(
+            "表示先の設定の project {project} に効く{}の端末 {name} は層 A（host の面の [[device]]）に無い（既定へ落とさない・在る名は {}）",
+            origin.word(),
+            target::listed(names)
+        ));
+    }
+    Ok(Aim::Chosen {
+        name: name.to_string(),
+        first: !targets.shown.contains_key(name),
+    })
+}
+
+/// repo の project の名（canonicalize した path の最後の段・account の電文の project の名と同じ出所）。
+pub fn project(repo: &Path) -> Result<String, String> {
+    let path = fs::canonicalize(repo)
+        .map_err(|e| format!("repo {} の path を引けない: {e}", repo.display()))?;
+    let text = path
+        .to_str()
+        .ok_or_else(|| format!("repo {} の path は UTF-8 の字でない", path.display()))?;
+    let name = project_name(text);
+    if !target::shaped(&name) {
+        return Err(format!(
+            "project の名 {name:?} は表示先の設定に書けない（空でなく引用符・逆斜線・=・制御の字を含まない名）"
+        ));
+    }
+    Ok(name)
+}
+
+/// 表示先の設定の path（--config が在ればその path・無ければ環境の XDG_CONFIG_HOME と HOME で決める）。
+pub fn config_path(config: Option<&Path>) -> Result<PathBuf, String> {
+    if let Some(path) = config {
+        return Ok(path.to_path_buf());
+    }
+    target::path(
+        env::var_os("XDG_CONFIG_HOME").as_deref(),
+        env::var_os("HOME").as_deref(),
+    )
+    .ok_or_else(|| {
+        "表示先の設定の path を決められない（XDG_CONFIG_HOME も HOME も絶対の path でない・--config で渡す）"
+            .to_string()
+    })
+}
+
+/// tz stage target の命令。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Setting {
+    /// 設定と層 A の名を並べる。
+    Show,
+    /// project の上書きを置く（project の名・端末の名）。
+    Project(String, String),
+    /// 全体の既定を置き、project ごとの上書きを全部外す。
+    All(String),
+    /// project の上書きを外す。
+    Clear(String),
+}
+
+/// 読んだ tz stage target の引数。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetCall {
+    pub setting: Setting,
+    pub repo: PathBuf,
+    pub scribe2: OsString,
+    pub git: OsString,
+    pub config: Option<PathBuf>,
+}
+
+/// tz stage target の後の引数を読む（--all は値の無い旗・受ける旗は --project・--repo・--scribe2・--git・--config で
+/// 1 度ずつ・旗でない字は端末の名）。
+pub fn parse_target(args: &[&str]) -> Result<TargetCall, String> {
+    const FLAGS: [&str; 5] = ["--project", "--repo", "--scribe2", "--git", "--config"];
+    let Some((&verb, rest)) = args.split_first() else {
+        return Err("target の命令が無い（show・set・clear）".to_string());
+    };
+    if !matches!(verb, "show" | "set" | "clear") {
+        return Err(format!("知らない target の命令 {verb}（show・set・clear）"));
+    }
+    let mut all = false;
+    let mut flags: [Option<&str>; 5] = [None; 5];
+    let mut words = Vec::new();
+    let mut it = rest.iter();
+    while let Some(&arg) = it.next() {
+        if arg == "--all" {
+            if all {
+                return Err("--all が 2 度ある".to_string());
+            }
+            all = true;
+            continue;
+        }
+        if !arg.starts_with("--") {
+            words.push(arg);
+            continue;
+        }
+        let (name, value) = match arg.split_once('=') {
+            Some(pair) => pair,
+            None => (
+                arg,
+                *it.next().ok_or_else(|| format!("{arg} の値が無い"))?,
+            ),
+        };
+        let Some(i) = FLAGS.iter().position(|f| *f == name) else {
+            return Err(format!("target は旗 {name} を受けない"));
+        };
+        if value.is_empty() {
+            return Err(format!("{name} の値が空"));
+        }
+        if flags[i].replace(value).is_some() {
+            return Err(format!("{name} が 2 度ある"));
+        }
+    }
+    let [project, repo, scribe2, git, config] = flags;
+    let setting = match (verb, project, all, words.as_slice()) {
+        ("show", None, false, []) => Setting::Show,
+        ("show", ..) => return Err("target show の形でない（旗 --project と --all と端末の名を受けない）".to_string()),
+        ("set", Some(p), false, [name]) => Setting::Project(p.to_string(), name.to_string()),
+        ("set", None, true, [name]) => Setting::All(name.to_string()),
+        ("set", ..) => {
+            return Err("target set の形でない（set --project <project の名> <端末の名> か set --all <端末の名>）".to_string());
+        }
+        ("clear", Some(p), false, []) => Setting::Clear(p.to_string()),
+        _ => return Err("target clear の形でない（clear --project <project の名>）".to_string()),
+    };
+    let named: Vec<&str> = match &setting {
+        Setting::Show => Vec::new(),
+        Setting::Project(p, n) => vec![p, n],
+        Setting::All(n) | Setting::Clear(n) => vec![n],
+    };
+    if let Some(bad) = named.into_iter().find(|n| !target::shaped(n)) {
+        return Err(format!(
+            "名 {bad:?} は表示先の設定に書けない（空でなく引用符・逆斜線・=・制御の字を含まない名）"
+        ));
+    }
+    let program = |value: Option<&str>, default: &str| OsString::from(value.unwrap_or(default));
+    Ok(TargetCall {
+        setting,
+        repo: PathBuf::from(repo.unwrap_or(".")),
+        scribe2: program(scribe2, "scribe2"),
+        git: program(git, acct::GIT),
+        config: config.map(PathBuf::from),
+    })
+}
+
+/// tz stage target show の行（既定・上書き・project ごとの効く値と出所・層 A の名）。
+pub fn show(targets: &Targets, projects: &[String], names: &[String]) -> Vec<String> {
+    let mut out = vec![format!(
+        "既定 {}",
+        targets.default.as_deref().unwrap_or("無し")
+    )];
+    out.extend(
+        targets
+            .projects
+            .iter()
+            .map(|(project, name)| format!("上書き {project} {name}")),
+    );
+    for project in projects {
+        out.push(match targets.effective(project) {
+            None => format!("project {project} 無し（席の目と URL に落ちる）"),
+            Some((name, origin)) => {
+                let absent = if names.iter().any(|n| n == name) {
+                    ""
+                } else {
+                    "・層 A に無い"
+                };
+                format!("project {project} {name}（{}{absent}）", origin.word())
+            }
+        });
+    }
+    out.push(format!("層 A の名 {}", target::listed(names)));
+    out
+}
+
+/// tz stage target を撃つ（設定を読み、器の検めの後に層 A の名を読んで、並べるか書く）。
+fn setting(call: &TargetCall) -> Result<(), String> {
+    let path = config_path(call.config.as_deref())?;
+    let mut targets = target::load(&path)?;
+    let text = face_text(&call.repo, &call.scribe2, &call.git)?;
+    let names = terminal::names(&text);
+    let line = match &call.setting {
+        Setting::Show => {
+            let mut projects: Vec<String> = Vec::new();
+            let anchors = declaration(&text)
+                .groups
+                .into_iter()
+                .flat_map(|g| g.anchors.unwrap_or_default());
+            for name in anchors
+                .map(|a| project_name(&a))
+                .chain([project(&call.repo)?])
+            {
+                if !projects.contains(&name) {
+                    projects.push(name);
+                }
+            }
+            for line in show(&targets, &projects, &names) {
+                println!("{line}");
+            }
+            return Ok(());
+        }
+        Setting::Project(project, name) => {
+            target::known(name, &names)?;
+            targets.set_project(project, name);
+            format!("project {project} の表示先を {name} にした（上書き）")
+        }
+        Setting::All(name) => {
+            target::known(name, &names)?;
+            let dropped = targets.set_all(name);
+            format!("全体の既定を {name} にし、project ごとの上書きを {dropped} 個外した")
+        }
+        Setting::Clear(project) => {
+            if !targets.clear_project(project) {
+                return Err(format!("project {project} に上書きは無い"));
+            }
+            let now = match &targets.default {
+                Some(name) => format!("既定 {name}"),
+                None => "無し（席の目と URL に落ちる）".to_string(),
+            };
+            format!("project {project} の上書きを外した（効く値は{now}）")
+        }
+    };
+    target::save(&path, &targets)?;
+    println!("{line}");
+    Ok(())
+}
+
+/// 今の epoch 秒（初めて見せた印の値）。
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
 }
 
 /// 標準入力の字を命令の列にする（行ごとに JSON の字の配列・空の行は飛ばす・誤りは行の番号を名指す）。
@@ -389,8 +654,21 @@ fn usage(what: &str) -> u8 {
     FAIL
 }
 
-/// tz stage の後の引数を撃つ（rc は 0 か 1）。
+/// tz stage の後の引数を撃つ（rc は 0 か 1・最初の字が target なら表示先の設定の口）。
 pub fn run(args: &[&str]) -> u8 {
+    if let Some((&"target", rest)) = args.split_first() {
+        let call = match parse_target(rest) {
+            Ok(call) => call,
+            Err(e) => return usage(&e),
+        };
+        return match setting(&call) {
+            Ok(()) => 0,
+            Err(e) => {
+                println!("{e}");
+                FAIL
+            }
+        };
+    }
     let call = match parse(args) {
         Ok(call) => call,
         Err(e) => return usage(&e),
@@ -427,21 +705,62 @@ pub fn run(args: &[&str]) -> u8 {
     rc
 }
 
-/// 席の中の open を断り、器の検めの後に端末の行を引き、open か命令の列を撃つ。
+/// 席の中の open を断り、器の検めの後に表示先を決めて端末の行を引き、open か命令の列を撃つ。
+/// --to を省いた撃ちは表示先の設定で引き、初めて見せる端末の時だけ錠の中で印を読み直して窓を起こしてよいと渡す。
 fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> Result<(), String> {
     if call.verb == Verb::Open
         && let Some(line) = seat_refusal(env::var_os(SEAT_ENV).as_deref())
     {
         return Err(line);
     }
-    let terminal = face(call)?;
+    let text = face_text(&call.repo, &call.scribe2, &call.git)?;
     let base = tunnel::user_dir(&env::temp_dir())?;
+    let (name, first, config) = match &call.to {
+        Some(to) => (to.clone(), false, None),
+        None => {
+            let path = config_path(call.config.as_deref())?;
+            let own = project(&call.repo)?;
+            let names = terminal::names(&text);
+            match aim(None, &own, &target::load(&path)?, &names)? {
+                Aim::Named(name) => (name, false, None),
+                Aim::Chosen { name, first } => (name, first, Some(path)),
+                Aim::Unset if call.verb == Verb::Open => {
+                    return Err(format!(
+                        "tz stage open に --to が無く、表示先の設定に project {own} の値も既定も無い（窓を開く端末は --to で渡すか tz stage target set で決める）"
+                    ));
+                }
+                Aim::Unset => {
+                    let (_eyes, session) = Eyes::open(&call.chrome, &base, &board.url, TIMEOUT)?;
+                    println!(
+                        "表示先の設定に project {own} の値も既定も無いので席の目（この server の headless の Chrome）に落ちた・持ち主へは board の URL を渡し、表示先は board の問いで持ち主に問う"
+                    );
+                    return drive(session, script, board);
+                }
+            }
+        }
+    };
+    let terminal = terminal::lookup(&text, &name)?;
     if call.verb == Verb::Open {
         return open(call, &terminal, &base, board);
     }
+    let held = match (first, config.as_deref()) {
+        (true, Some(_)) => Some(lock(&base, &name, LOCK_WAIT)?),
+        _ => None,
+    };
+    let first = match config.as_deref() {
+        Some(path) if first => !target::load(path)?.shown.contains_key(&name),
+        _ => false,
+    };
     match relay::reach(&call.ssh, &call.chrome, &terminal, &base, &board.url, TIMEOUT)? {
-        Reach::Terminal(tunnel) => match tunnel.window(&board.url, false)? {
-            Window::Page { resource, .. } => {
+        Reach::Terminal(tunnel) => match tunnel.window(&board.url, first)? {
+            Window::Page { resource, launched } => {
+                if launched && let Some(path) = config.as_deref() {
+                    target::mark(path, &name, now())?;
+                    println!(
+                        "端末 {name} に初めて表示面の窓を起こし、表示先の設定に印を書いた（持ち主が閉じた後は起こし直さない）"
+                    );
+                }
+                drop(held);
                 let session = Session::open(tunnel.socket(), &resource, TIMEOUT)?;
                 drive(session, script, board)
             }
@@ -452,36 +771,36 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
             session,
             line,
         } => {
+            drop(held);
             println!("{line}");
             drive(session, script, board)
         }
     }
 }
 
-/// 自分の anchor の state dir を引き、器の validate が rc 0 で返った後にだけ host の面を読んで --to の行を引く。
-fn face(call: &Call) -> Result<Terminal, String> {
-    let mut args = vec![OsString::from("-C"), call.repo.as_os_str().to_os_string()];
+/// 自分の anchor の state dir を引き、器の validate が rc 0 で返った後にだけ host の面の字を読む。
+fn face_text(repo: &Path, scribe2: &OsStr, git: &OsStr) -> Result<String, String> {
+    let mut args = vec![OsString::from("-C"), repo.as_os_str().to_os_string()];
     args.extend(acct::GIT_ARGS.iter().map(OsString::from));
-    let state = proc::capture(&call.git, &args, &call.repo, TIMEOUT)
+    let state = proc::capture(git, &args, repo, TIMEOUT)
         .map(|out| String::from_utf8_lossy(&out).trim().to_string())
         .filter(|s| !s.is_empty())
         .ok_or_else(|| {
             format!(
                 "{} の git config の scribe2.statedir が読めない（自分の anchor の state dir が無い）",
-                call.repo.display()
+                repo.display()
             )
         })?;
     let mut validate: Vec<OsString> = VALIDATE_ARGS.iter().map(OsString::from).collect();
     validate.push(OsString::from(&state));
-    if proc::capture(&call.scribe2, &validate, &call.repo, TIMEOUT).is_none() {
+    if proc::capture(scribe2, &validate, repo, TIMEOUT).is_none() {
         return Err(format!(
             "器 {} の validate --state-dir {state} が {} 秒の内に rc 0 で返らない（host の面を読まない）",
-            call.scribe2.to_string_lossy(),
+            scribe2.to_string_lossy(),
             TIMEOUT.as_secs_f32()
         ));
     }
-    let text = terminal::read_face(&call.repo.join(&state))?;
-    terminal::lookup(&text, &call.to)
+    terminal::read_face(&repo.join(&state))
 }
 
 /// 持ち主が窓を開く（端末ごとの錠を持ったまま、窓を 1 回だけ起こすか、頁の無い Chrome に頁を 1 つ作る）。

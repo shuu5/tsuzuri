@@ -196,13 +196,14 @@ fn own() -> Board {
 fn plain(verb: Verb, to: &str) -> Call {
     Call {
         verb,
-        to: to.to_string(),
+        to: Some(to.to_string()),
         repo: PathBuf::from("."),
         ssh: OsString::from("ssh"),
         scribe2: OsString::from("scribe2"),
         git: OsString::from("git"),
         tailnet: OsString::from("tailscale"),
         chrome: OsString::from("google-chrome"),
+        config: None,
     }
 }
 
@@ -712,9 +713,11 @@ fn stcli_shape_and_consts() {
         git,
         tailnet,
         chrome,
+        config,
     } = call;
-    let _: (Verb, String, PathBuf) = (verb, to, repo);
+    let _: (Verb, Option<String>, PathBuf) = (verb, to, repo);
     let _: [OsString; 5] = [ssh, scribe2, git, tailnet, chrome];
+    let _: Option<PathBuf> = config;
 }
 
 #[test]
@@ -726,13 +729,14 @@ fn stcli_parse_table() {
             scale: 2,
             mobile: true,
         }),
-        to: "term-b".to_string(),
+        to: Some("term-b".to_string()),
         repo: PathBuf::from("/r"),
         ssh: OsString::from("/f/ssh"),
         scribe2: OsString::from("/f/s2"),
         git: OsString::from("/f/git"),
         tailnet: OsString::from("/f/tn"),
         chrome: OsString::from("/f/c"),
+        config: None,
     };
     let table: Vec<(Vec<&str>, Call)> = vec![
         (
@@ -845,14 +849,25 @@ fn stcli_parse_table() {
         ),
         (vec!["run", "--to", "term-a"], plain(Verb::Run, "term-a")),
         (vec!["open", "--to", "term-a"], plain(Verb::Open, "term-a")),
+        (
+            vec!["navigate", "--url", NEXT],
+            Call {
+                to: None,
+                ..plain(
+                    one(Command::Navigate {
+                        url: NEXT.to_string(),
+                    }),
+                    "term-a",
+                )
+            },
+        ),
     ];
     for (args, want) in table {
         assert_eq!(cli::parse(&args), Ok(want), "{args:?}");
     }
 
-    let refusals: [(&[&str], &str); 20] = [
+    let refusals: [(&[&str], &str); 19] = [
         (&[], "命令が無い"),
-        (&["navigate", "--url", NEXT], "--to"),
         (&["jump", "--to", "term-a"], "知らない命令 jump"),
         (&["click", "--to", "term-a", "--x", "10"], "--y"),
         (

@@ -1,0 +1,8 @@
+# tsuzuri の表示先の設定（tz stage target が書く・追跡されない file）
+default = "term-a"
+
+[project]
+"proj-b" = "term-b"
+
+[shown]
+"term-a" = 1790000000
