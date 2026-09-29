@@ -2,11 +2,12 @@
 //! `-C <anchor> config --get scribe2.statedir` で state dir を、`-C <anchor> config --get tsuzuri.boardport` で
 //! project board の port を引き（電文の行には port だけを置く・便 h-board-url）、state dir ごとに器の
 //! `seat tick status --state-dir <dir>` と `doctor --state-dir <dir>` を 1 回だけ撃ち、口座は引数の state dir で
-//! `fleet usage --show --state-dir <dir>` を 1 回、猶予は `rules get seat.move_grace_s` を 1 回、窓ごとの逼迫の閾値は
+//! `fleet usage --show --state-dir <dir>` を 1 回、窓ごとの逼迫の閾値は
 //! `rules get <id>`（`CAP_ROWS` の 3 行・`--state-dir` を付けない）を行ごとに 1 回撃つ（便 c-acct-thr）。
+//! 退避までの残り秒は tick status の席の行の器の欄の写し（中核の席の card）で、rules 行も合図の file も読まない。
 //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
 //! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す（行 e-hold）。
-//! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last・move-signal と、
+//! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last と、
 //! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない・行 c-dormant）と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）と、口座の線の材料の
 //! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
@@ -50,14 +51,8 @@ pub const BOARD_ARGS: [&str; 3] = ["config", "--get", "tsuzuri.boardport"];
 /// git の読み（anchor ごとの state dir と board の port）を集め直しのあいだ持ち回す時間（行 a-lean）。
 pub const GIT_HOLD: Duration = Duration::from_secs(60);
 
-/// 猶予の秒の出力の引数の列。
-pub const GRACE_ARGS: [&str; 3] = ["rules", "get", "seat.move_grace_s"];
-
 /// 窓ごとの逼迫の閾値の出力の引数の列の頭（後ろに `CAP_ROWS` の行の id が付く）。
 pub const CAP_ARGS: [&str; 2] = ["rules", "get"];
-
-/// 席の移動の合図の file（席の dir の下）。
-pub const MOVE_SIGNAL: &str = "move-signal";
 
 /// 合図の休みの印の file（席の dir の下・変化の印にだけ使う）。
 pub const HEARTBEAT_OFF: &str = "heartbeat-off";
@@ -73,7 +68,6 @@ const SEAT_PREFIX: &str = "seat:";
 struct Texts {
     host: HostTexts,
     projects: BTreeMap<String, ProjectTexts>,
-    grace: Option<String>,
     /// 宣言の anchor → git の返した project board の port の字（字の無い anchor は入れない）。
     boards: BTreeMap<String, String>,
     marks: Vec<PathBuf>,
@@ -199,7 +193,7 @@ impl Acct {
     /// （どれも読めれば None・行 e-hold）。
     pub fn doc_read(&self, now: EpochSecs) -> (AccountDoc, Option<Instant>) {
         let texts = self.texts();
-        let mut doc = project::doc(&texts.host, &texts.projects, texts.grace.as_deref(), now);
+        let mut doc = project::doc(&texts.host, &texts.projects, now);
         let declared = anchors(texts.host.host_toml.as_deref());
         for (row, anchor) in doc.projects.iter_mut().zip(&declared) {
             if row.name == project_name(anchor) {
@@ -315,14 +309,14 @@ impl Acct {
 
     /// 子 process を 2 段に並べて撃ち（待ちは 1 段ごとに 1 本分の上限まで）、file を読む。
     /// 1 段目は anchor ごとの git（state dir と board の port・持ち回しの読みが在れば撃たない）と、
-    /// 口座と猶予と閾値の行と引数の state dir の doctor。
+    /// 口座と閾値の行と引数の state dir の doctor。
     /// 2 段目は state dir ごとの tick status と doctor（引数の state dir の doctor は撃ち直さない）と、
     /// state dir の引けた anchor の台帳（`ledger_got`）。
     fn gather(&self) -> Texts {
         let host_toml = read(&self.state_dir.join(HOST_TOML));
         let anchors = anchors(host_toml.as_deref());
         let held = self.held_gits(&anchors);
-        let (dirs, boards, usage, grace, caps, doctor) = thread::scope(|s| {
+        let (dirs, boards, usage, caps, doctor) = thread::scope(|s| {
             let git = held.is_none().then(|| {
                 let dirs: Vec<_> = anchors
                     .iter()
@@ -335,7 +329,6 @@ impl Acct {
                 (dirs, boards)
             });
             let usage = s.spawn(|| self.shoot_in(&USAGE_ARGS, &self.state_dir));
-            let grace = s.spawn(|| self.shoot(GRACE_ARGS));
             let caps: Vec<_> = CAP_ROWS
                 .iter()
                 .map(|&(_, rule)| {
@@ -365,7 +358,6 @@ impl Acct {
                 dirs,
                 boards,
                 usage.join().ok().flatten(),
-                grace.join().ok().flatten(),
                 caps.into_iter()
                     .filter_map(|(rule, h)| Some((rule.to_string(), h.join().ok().flatten()?)))
                     .collect::<BTreeMap<_, _>>(),
@@ -480,7 +472,6 @@ impl Acct {
                     tick_status: tick.clone(),
                     state_log: in_seat(STATE_LOG),
                     tick_last: in_seat(TICK_LAST),
-                    move_signal: in_seat(MOVE_SIGNAL),
                     events: read(&events_log(dir)),
                     ledger,
                 },
@@ -506,7 +497,6 @@ impl Acct {
         texts.host.doctor = doctor;
         texts.host.caps = caps;
         texts.host.events = read(&events_log(&self.state_dir));
-        texts.grace = grace;
         texts
     }
 }

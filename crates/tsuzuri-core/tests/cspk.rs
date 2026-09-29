@@ -236,7 +236,7 @@ fn cspk_accounts_at_fills_only_spark() {
     );
     assert_eq!(filled[1].spark, bare(None));
     assert_eq!(
-        doc(&host, &BTreeMap::new(), None, NOW).accounts,
+        doc(&host, &BTreeMap::new(), NOW).accounts,
         Reading::Known(filled)
     );
     let no_log = HostTexts {

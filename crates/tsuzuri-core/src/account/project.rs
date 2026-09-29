@@ -1,5 +1,6 @@
 //! project の側の部分（project の行・session の行・電文の組み立て・設計ノート surface-base 便 e-acct-proj）。
-//! 入力は host の側の字（`HostTexts`）と、anchor ごとの project の字（`ProjectTexts`）と、猶予の秒の字と今の時刻。
+//! 入力は host の側の字（`HostTexts`）と、anchor ごとの project の字（`ProjectTexts`）と今の時刻。
+//! 退避までの残り秒は席の card の器の欄 grace_left の写しで、tsuzuri は計算しない（規則の行 R-22・行 c-grace-acct）。
 //! project の宣言の順は群の宣言の順で、群の中は anchors の配列の順（同じ anchor は最初の群だけ）。
 //! 席の card・台帳の指標・次の一手は着地済みの関数の値をそのまま写す。run の 4 列の分け方と
 //! 生きている run の境（`ALIVE_S`）は見本の acct.js の runColsAt と runAlive の決め方（設計席の承認で置く値）。
@@ -70,8 +71,6 @@ pub struct ProjectTexts {
     pub state_log: Option<String>,
     /// 席の合図の最後の判定（`tick-last`）。
     pub tick_last: Option<String>,
-    /// 席の移動の合図（`move-signal`）。
-    pub move_signal: Option<String>,
     /// 器の event log。
     pub events: Option<String>,
     /// 台帳の一覧。
@@ -121,15 +120,6 @@ fn orchestrator_line<'a>(doctor: &'a str, anchor: &str) -> Option<&'a str> {
         })
 }
 
-/// 群の記録の `鍵=値` の行の値（空なら None）。
-fn record_value<'a>(record: &'a str, key: &str) -> Option<&'a str> {
-    record
-        .lines()
-        .find_map(|l| l.trim().strip_prefix(key)?.strip_prefix('='))
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-}
-
 /// 群の今の記録の file の名。
 fn current_record(group: &str) -> String {
     format!("{group}.{RECORD_KIND}")
@@ -152,19 +142,12 @@ fn group_records(host: &HostTexts, group: &str) -> Vec<String> {
         .collect()
 }
 
-/// 1 つの project の読みの材料（席の行と席の card）。
-struct Seat<'a> {
-    /// 席の行（無ければ None）。
-    line: Option<&'a str>,
-    card: Reading<SeatCard>,
-}
-
-/// その project の席（state dir が引けないか席の行が無ければ card は「まだ分からない」）。
-fn seat<'a>(host: &'a HostTexts, d: &Declared, texts: &ProjectTexts, now: EpochSecs) -> Seat<'a> {
+/// その project の席の card（state dir が引けないか席の行が無ければ「まだ分からない」）。
+fn seat(host: &HostTexts, d: &Declared, texts: &ProjectTexts, now: EpochSecs) -> Reading<SeatCard> {
     let doctor = by_anchor(&host.seat_doctors, &d.anchor);
     let line = doctor.and_then(|doc| orchestrator_line(doc, &d.anchor));
     let target = line.and_then(|l| value(l, "target"));
-    let card = match target {
+    match target {
         Some(target) if texts.state_dir_known => {
             let seat_texts = SeatTexts {
                 tick_status: texts.tick_status.clone(),
@@ -178,29 +161,20 @@ fn seat<'a>(host: &'a HostTexts, d: &Declared, texts: &ProjectTexts, now: EpochS
             Reading::Known(card(target, Some(&d.anchor), &seat_texts, now))
         }
         _ => Reading::Unknown,
-    };
-    Seat { line, card }
+    }
 }
 
-/// 退避までの残り秒。群の今の記録が在り、移動の合図の ts がその記録の ts と同じ字で、席の口座が記録の口座と違い、
-/// 記録の ts に猶予を足した時刻が今より後のときだけ、その差の秒（ほかは None）。
-fn move_left(
-    host: &HostTexts,
-    group: &str,
-    seat_account: Option<&str>,
-    move_signal: Option<&str>,
-    grace: Option<u64>,
-    now: EpochSecs,
-) -> Option<u64> {
-    let grace = grace?;
-    let record = host.records.get(&current_record(group))?;
-    let ts = record_value(record, "ts")?;
-    let signal = move_signal?.lines().find_map(|l| value(l.trim(), "ts"))?;
-    if signal != ts || seat_account? == record_value(record, "account")? {
-        return None;
+/// 退避までの残り秒。席の card の欄 move_to が口座で grace_left が秒のときだけその秒（器の字のまま・0 も写す・
+/// ほかは None・起点は器の合図の at で tsuzuri は計算しない）。
+fn move_left(card: &Reading<SeatCard>) -> Option<u64> {
+    match card {
+        Reading::Known(SeatCard {
+            move_to: Reading::Known(Some(_)),
+            grace_left: Reading::Known(Some(left)),
+            ..
+        }) => Some(*left),
+        _ => None,
     }
-    let until = epoch_secs(ts)?.checked_add(grace)?;
-    (until > now).then(|| until - now)
 }
 
 fn text<'a>(event: &'a Value, key: &str) -> Option<&'a str> {
@@ -367,11 +341,6 @@ pub fn run_counts_of(
     Reading::Known(counts)
 }
 
-/// 猶予の秒の字（1 行の秒の数・読めなければ None）。
-fn grace_secs(grace: Option<&str>) -> Option<u64> {
-    grace?.trim().parse().ok()
-}
-
 /// 宣言の project と、その project の字（表に無い anchor は state dir が引けない扱い）。
 fn with_texts<'a>(
     host: &HostTexts,
@@ -390,10 +359,8 @@ fn with_texts<'a>(
 pub fn project_rows(
     host: &HostTexts,
     projects: &BTreeMap<String, ProjectTexts>,
-    grace: Option<&str>,
     now: EpochSecs,
 ) -> Vec<ProjectRow> {
-    let grace = grace_secs(grace);
     let unknown = ProjectTexts::default();
     with_texts(host, projects)
         .into_iter()
@@ -416,7 +383,7 @@ pub fn project_rows(
             let seat = seat(host, &d, texts, now);
             let (ledger, next) = match texts.ledger.as_deref() {
                 Some(ledger) => {
-                    let card = match &seat.card {
+                    let card = match &seat {
                         Reading::Known(c) => Some(c),
                         Reading::Unknown => None,
                     };
@@ -430,17 +397,10 @@ pub fn project_rows(
             };
             ProjectRow {
                 name,
-                move_left_s: move_left(
-                    host,
-                    &d.group,
-                    seat.line.and_then(|l| value(l, "account")),
-                    texts.move_signal.as_deref(),
-                    grace,
-                    now,
-                ),
+                move_left_s: move_left(&seat),
                 group: Some(d.group),
                 state_dir_known: true,
-                seat: seat.card,
+                seat,
                 runs: run_counts_of(texts.events.as_deref(), texts.ledger.as_deref(), now),
                 ledger,
                 next,
@@ -546,7 +506,7 @@ pub fn session_lines(
     for (d, texts) in with_texts(host, projects) {
         let texts = texts.unwrap_or(&unknown);
         let name = project_name(&d.anchor);
-        match seat(host, &d, texts, now).card {
+        match seat(host, &d, texts, now) {
             Reading::Known(c) if resting.contains(&c.target) => {}
             Reading::Known(c) => out.push(SessionLine {
                 project: name.clone(),
@@ -641,13 +601,12 @@ pub fn assemble(
     }
 }
 
-/// 入口: host の側の字と anchor → project の字の表と猶予の秒の字と今の時刻から電文を組む。
+/// 入口: host の側の字と anchor → project の字の表と今の時刻から電文を組む。
 /// 知らせは宣言の project のうち state dir の引けた project の event log の字を宣言の順に読む。
 /// 休止中の席は `dormant` の値（行 c-dormant）。口座の線は host の側の字の event log を読む（行 c-acct-spark）。
 pub fn doc(
     host: &HostTexts,
     projects: &BTreeMap<String, ProjectTexts>,
-    grace: Option<&str>,
     now: EpochSecs,
 ) -> AccountDoc {
     let mut doc = assemble(
@@ -655,7 +614,7 @@ pub fn doc(
         host::accounts_at(host, now),
         host::groups(host),
         host::moves(host),
-        project_rows(host, projects, grace, now),
+        project_rows(host, projects, now),
         session_lines(host, projects, now),
     );
     let logs: Vec<&str> = with_texts(host, projects)

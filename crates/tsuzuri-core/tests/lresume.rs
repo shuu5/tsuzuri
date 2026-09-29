@@ -200,7 +200,7 @@ fn lresume_board_rows_carry() {
             ..ProjectTexts::default()
         };
         let projects = BTreeMap::from([("/work/proj-a".to_string(), p)]);
-        project_rows(&host, &projects, None, NOW)
+        project_rows(&host, &projects, NOW)
             .into_iter()
             .find_map(|r| match r.seat {
                 Reading::Known(c) if c.target == "proj-a:0.1" => Some(c.reopens),

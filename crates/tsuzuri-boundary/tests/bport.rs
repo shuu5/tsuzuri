@@ -137,7 +137,7 @@ impl Place {
                 ..ProjectTexts::default()
             },
         );
-        project::doc(&host, &projects, None, NOW)
+        project::doc(&host, &projects, NOW)
     }
 }
 

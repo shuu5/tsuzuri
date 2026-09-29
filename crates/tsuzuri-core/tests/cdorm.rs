@@ -197,8 +197,8 @@ fn cdorm_session_table_drops_resting_orchestrator() {
     assert_eq!(names(&host(true)), [RUN, "p-b:0.1"]);
     assert_eq!(names(&host(false)), ["p-a:0.1", RUN, "p-b:0.1"]);
     let (h, p) = (host(true), projects(true));
-    let got = doc(&h, &p, None, NOW);
+    let got = doc(&h, &p, NOW);
     assert_eq!(got.dormant, dormant(&h, &p, NOW));
     assert_eq!(got.sessions, session_lines(&h, &p, NOW));
-    assert_eq!(got.projects, project_rows(&host(false), &p, None, NOW));
+    assert_eq!(got.projects, project_rows(&host(false), &p, NOW));
 }

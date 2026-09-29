@@ -319,7 +319,7 @@ fn athr_doc_carries_both() {
         ..host_texts()
     };
     let ps = project_map();
-    let d = project::doc(&h, &ps, None, NOW);
+    let d = project::doc(&h, &ps, NOW);
     assert_eq!(
         cap_values(&d.caps),
         [Reading::Known(70), Reading::Unknown, Reading::Unknown]
@@ -334,7 +334,7 @@ fn athr_doc_carries_both() {
         host::accounts(&h),
         host::groups(&h),
         host::moves(&h),
-        project_rows(&h, &ps, None, NOW),
+        project_rows(&h, &ps, NOW),
         session_lines(&h, &ps, NOW),
     );
     let back = AccountDoc {

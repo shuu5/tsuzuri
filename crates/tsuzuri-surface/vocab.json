@@ -1638,8 +1638,8 @@
   },
   "move_grace": {
    "label": "退避までの残り",
-   "plain": "群が移った席が /exit まで残す秒\n⇥ 合図を受けた席\n・ 猶予 = 1800 秒\n✗ 新しい subagent は起こさない\n▸\n・ 起点 = 群の記録の ts\n・ 合図の記録 = move-signal\n・ 猶予の後に /exit を送る\n・ 契約 s2-07l.652",
-   "internal": "`<state_dir>/seat/<target>/move-signal`（ts=<群の記録の ts>）\n残り = 記録の ts + seat.move_grace_s − 今\n`acct.js moveGraceAt`（ADR-0071）"
+   "plain": "群が移った席が /exit まで残す秒\n⇥ 合図を受けた席\n・ 猶予 = 器の rules 行の秒\n✗ 新しい subagent は起こさない\n▸\n・ 起点 = 合図の at（器が送った時刻）\n・ 値 = 器の grace_left の写し\n・ 猶予の後に /exit を送る\n・ 契約 s2-07l.652",
+   "internal": "`seat tick status` の席の行の欄 `grace_left=`\n器の式: 残り = 合図の at + seat.move_grace_s − 今\n`acct.js moveGraceAt`（ADR-0071）"
   },
   "l_judge": {
    "label": "判定",

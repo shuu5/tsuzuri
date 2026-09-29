@@ -1,8 +1,8 @@
 //! account board の読みの歯（接頭辞 server_acct_・設計ノート surface-base 便 e-acct の完了の条件）。
 //! 偽の器・偽の git・偽の bd は、受けた argv（bd は cwd の最後の区切り）を記録の置き場（repo と state dir の外）に
 //! 1 行ずつ足し、作業場の out・git・bd の下の決めた字を標準出力へ出す script（file が無ければ rc 1・
-//! slow の下に同じ名の印が在れば 8 秒眠る）。器は argv の頭と最後の引数（state dir の最後の区切り）で、
-//! git は -C の次の path の最後の区切りで、bd は cwd の最後の区切りで字を選ぶ。
+//! slow の下に同じ名の印が在れば 8 秒眠る）。器は argv の頭と最後の引数（state dir の最後の区切り・rules は
+//! 3 つ目の argv の行の id）で、git は -C の次の path の最後の区切りで、bd は cwd の最後の区切りで字を選ぶ。
 //! anchor は作業場の work の下の dir（proj-a ほか）で、字の中の path は実行の時に組む（行 D-4）。
 //! 接頭辞 alean_ の歯は、集め直しの git の読みの持ち回しと、台帳の印を見て bd を撃たない読みを見る（行 a-lean）。
 
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GIT_HOLD, GRACE_ARGS};
+use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GIT_HOLD};
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
 use tsuzuri_contract::account::{
@@ -38,7 +38,8 @@ const PROJECTS: [(&str, &str, Option<&str>, Option<&str>); 5] = [
     ("proj-d", "", None, None),
 ];
 
-const TICK_A: &str = "seat tick status: target=proj-a:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395\n\
+/// proj-a の席の行は器の §20 の欄（reopens= と move= と grace_left=）を持つ。
+const TICK_A: &str = "seat tick status: target=proj-a:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395 reopens=- move=acct-2 grace_left=1200\n\
 seat tick status: target=proj-e:0.1 last=1790510000 age=400 healthy=no heartbeat=off step=5 next=1790510405\n";
 const TICK_B: &str = "seat tick status: target=proj-b:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395\n";
 
@@ -46,7 +47,11 @@ const USAGE: &str = "usage: account=acct-1 five_hour=83% resets=2026-09-27T15:00
 usage: account=acct-2 five_hour=5% resets=none seven_day=30% resets=none model=sonnet:0% resets=none\n\
 usage: account=acct-3 unmeasured reason=no-token\n";
 
-const GRACE: &str = "1800\n";
+/// 窓ごとの閾値の rules 行の出力（CAP_ROWS の順）。
+const CAPS: [&str; 3] = ["85\n", "95\n", "95\n"];
+
+/// 猶予の rules 行（読みは撃たない）と、偽の器がそれに返すはずの字。
+const GRACE_RULE: (&str, &str) = ("seat.move_grace_s", "1800\n");
 
 const GROUP_LINES: &str = "group=g-a accounts=acct-1,acct-2 anchors=2 seat-accounts=acct-2 current=acct-1 next=acct-2 refused=-\n\
 group=g-b accounts=acct-2,acct-3 anchors=3 seat-accounts=acct-3 current=acct-3 next=none refused=-\n";
@@ -161,7 +166,7 @@ impl Place {
             &"printf '%s\\n' \"$*\" >> 'ROOT/log/scribe2'\n\
               for a in \"$@\"; do last=\"$a\"; done\n\
               case \"$1\" in seat) f=\"tick-${last##*/}\" ;; doctor) f=\"doctor-${last##*/}\" ;; \
-              fleet) f=\"usage-${last##*/}\" ;; rules) f=grace ;; *) exit 2 ;; esac\n\
+              fleet) f=\"usage-${last##*/}\" ;; rules) f=\"rules-$3\" ;; *) exit 2 ;; esac\n\
               if [ -e 'ROOT/slow/'\"$f\" ]; then exec sleep 8; fi\n\
               exec cat 'ROOT/out/'\"$f\""
                 .replace("ROOT", &root),
@@ -251,7 +256,10 @@ impl Place {
         self.out("tick-state-a", TICK_A);
         self.out("tick-state-b", TICK_B);
         self.out(&format!("usage-{}", self.host), USAGE);
-        self.out("grace", GRACE);
+        for ((_, rule), text) in CAP_ROWS.iter().zip(CAPS) {
+            self.out(&format!("rules-{rule}"), text);
+        }
+        self.out(&format!("rules-{}", GRACE_RULE.0), GRACE_RULE.1);
         // git は state dir の path の前後に空白を付けて返す（除いて使う）。
         let (sa, sb) = (self.state("state-a"), self.state("state-b"));
         self.put(
@@ -332,10 +340,7 @@ impl Place {
     }
 
     /// 読みが集めたはずの字（`drop` の出力と git を読めない扱いにする）。
-    fn expected(
-        &self,
-        drop: &[&str],
-    ) -> (HostTexts, BTreeMap<String, ProjectTexts>, Option<String>) {
+    fn expected(&self, drop: &[&str]) -> (HostTexts, BTreeMap<String, ProjectTexts>) {
         let out = |name: &str| {
             if drop.contains(&name) {
                 None
@@ -359,9 +364,9 @@ impl Place {
             events: self.file(&self.host_state().join("fleet/events.jsonl")),
             ..HostTexts::default()
         };
-        // 偽の器は rules の頭に行の id に依らず grace の字を出す。
+        // 偽の器は rules の頭に行の id の出力の字を出す。
         for (_, rule) in CAP_ROWS {
-            if let Some(text) = out("grace") {
+            if let Some(text) = out(&format!("rules-{rule}")) {
                 host.caps.insert(rule.to_string(), text);
             }
         }
@@ -420,7 +425,6 @@ impl Place {
                     tick_status: out(&format!("tick-{state}")),
                     state_log: in_seat("state.jsonl"),
                     tick_last: in_seat("tick-last"),
-                    move_signal: in_seat("move-signal"),
                     events: self.file(&dir.join("fleet/events.jsonl")),
                     ledger: self.file(&self.root.join("bd").join(p)),
                 },
@@ -429,13 +433,13 @@ impl Place {
                 host.seat_doctors.insert(anchor, doctor);
             }
         }
-        (host, projects, out("grace"))
+        (host, projects)
     }
 
     /// 中核の組み立ての入口を、読みが集めたはずの字で直に呼んだ電文。
     fn core_doc(&self, drop: &[&str]) -> AccountDoc {
-        let (host, projects, grace) = self.expected(drop);
-        project::doc(&host, &projects, grace.as_deref(), NOW)
+        let (host, projects) = self.expected(drop);
+        project::doc(&host, &projects, NOW)
     }
 }
 
@@ -489,7 +493,9 @@ fn server_acct_doc_matches_core() {
             unreachable!()
         };
         assert_eq!(seat.state, SeatState::Run, "orchestrator の席の記録を読む");
+        // 残り秒は器の合図の健康の行の grace_left=1200 の写し（欄の無い席の行は無し）。
         assert_eq!(row(&got, "proj-a").move_left_s, Some(1200));
+        assert_eq!(row(&got, "proj-e").move_left_s, None);
         // git が落ちるか空を返す project は state dir なしの行。
         for p in ["proj-c", "proj-d"] {
             let r = row(&got, p);
@@ -543,7 +549,7 @@ fn server_acct_argv_exact() {
         assert_eq!(place.calls("git"), want, "{separate}");
         assert_eq!(GIT_ARGS, ["config", "--get", "scribe2.statedir"]);
         assert_eq!(BOARD_ARGS, ["config", "--get", "tsuzuri.boardport"]);
-        // 器は state dir ごとに tick と doctor を 1 回、口座と猶予と閾値の行ごとは 1 回。
+        // 器は state dir ごとに tick と doctor を 1 回、口座と閾値の行ごとは 1 回（猶予の rules 行は撃たない）。
         let (sa, sb, sh) = (
             place.state("state-a").display().to_string(),
             place.state("state-b").display().to_string(),
@@ -555,7 +561,6 @@ fn server_acct_argv_exact() {
             format!("doctor --state-dir {sa}"),
             format!("doctor --state-dir {sb}"),
             format!("fleet usage --show --state-dir {sh}"),
-            "rules get seat.move_grace_s".to_string(),
         ];
         want.extend(CAP_ROWS.map(|(_, rule)| format!("rules get {rule}")));
         if separate {
@@ -571,7 +576,7 @@ fn server_acct_argv_exact() {
                 .all(|c| c.starts_with("fleet usage --show "))
         );
         assert_eq!(USAGE_ARGS, ["fleet", "usage", "--show"]);
-        assert_eq!(GRACE_ARGS, ["rules", "get", "seat.move_grace_s"]);
+        assert!(calls.iter().all(|c| !c.contains(GRACE_RULE.0)));
         assert_eq!(CAP_ARGS, ["rules", "get"]);
         // bd は state dir の引けた anchor ごとに 1 回（cwd が anchor）。
         assert_eq!(
@@ -611,18 +616,27 @@ fn server_acct_state_dir_from_git() {
 
 #[test]
 fn server_acct_grace_unreadable_no_left() {
-    let place = Place::new("grace-fail", false);
-    place.fail("grace");
+    // 猶予の rules 行の出力を落としても、撃たないので残り秒は器の grace_left= の写しのまま。
+    let place = Place::new("grace-rule-fail", false);
+    place.fail(&format!("rules-{}", GRACE_RULE.0));
     let got = place.acct().doc(NOW);
-    assert_eq!(got, place.core_doc(&["grace"]));
-    assert!(got.projects.iter().all(|r| r.move_left_s.is_none()));
-    let place = Place::new("grace-bad", false);
-    fs::write(place.root.join("out/grace"), "soon\n").expect("数でない猶予");
+    assert_eq!(got, place.core_doc(&[]));
+    assert_eq!(row(&got, "proj-a").move_left_s, Some(1200));
+    // 器の字が unreadable なら全部の project で無し（席の card はほかの欄を読む）。
+    let mut place = Place::new("grace-unreadable", false);
+    place.out(
+        "tick-state-a",
+        &TICK_A.replace("grace_left=1200", "grace_left=unreadable"),
+    );
     let got = place.acct().doc(NOW);
+    assert_eq!(got, place.core_doc(&[]));
     assert!(got.projects.iter().all(|r| r.move_left_s.is_none()));
+    let Reading::Known(seat) = &row(&got, "proj-a").seat else {
+        panic!("proj-a の席の card が読めない");
+    };
     assert_eq!(
-        row(&got, "proj-a").seat,
-        row(&place.core_doc(&[]), "proj-a").seat
+        (&seat.move_to, &seat.grace_left),
+        (&Reading::Known(Some("acct-2".to_string())), &Reading::Unknown)
     );
 }
 
@@ -688,7 +702,7 @@ fn server_acct_holds_five_seconds() {
         place.calls("git"),
         place.calls("bd"),
     );
-    assert_eq!(once.0.len(), 9, "5 秒の中の読み: {:?}", once.0);
+    assert_eq!(once.0.len(), 8, "5 秒の中の読み: {:?}", once.0);
     assert_eq!(once.1.len(), 10, "{:?}", once.1);
     assert_eq!(once.2.len(), 3, "{:?}", once.2);
     for calls in [&once.0, &once.1, &once.2] {
@@ -1026,24 +1040,24 @@ fn acchold_card_follows_off_file() {
     let acct = place.acct();
     let count = || place.calls("scribe2").len();
     assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(true));
-    assert_eq!(count(), 9, "{:?}", place.calls("scribe2"));
+    assert_eq!(count(), 8, "{:?}", place.calls("scribe2"));
     acchold_switch(&place, true);
     assert_eq!(
         acchold_heartbeat(&acct.doc(NOW)),
         Reading::Known(false),
         "停止の記録の後の読み"
     );
-    assert_eq!(count(), 18, "{:?}", place.calls("scribe2"));
+    assert_eq!(count(), 16, "{:?}", place.calls("scribe2"));
     assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(false));
     acct.marks();
-    assert_eq!(count(), 18, "印が動かなければ持ち回す");
+    assert_eq!(count(), 16, "印が動かなければ持ち回す");
     acchold_switch(&place, false);
     assert_eq!(
         acchold_heartbeat(&acct.doc(NOW)),
         Reading::Known(true),
         "停止の記録を消した後の読み"
     );
-    assert_eq!(count(), 27, "{:?}", place.calls("scribe2"));
+    assert_eq!(count(), 24, "{:?}", place.calls("scribe2"));
     let calls = place.calls("scribe2");
     let distinct: BTreeSet<&String> = calls.iter().collect();
     for argv in distinct {
@@ -1074,7 +1088,7 @@ fn acchold_state_log_regathers() {
     };
     let first = acct.doc(NOW);
     assert_eq!(session(&first), (SeatState::Run, Some(1_790_500_000)));
-    assert_eq!(place.calls("scribe2").len(), 9);
+    assert_eq!(place.calls("scribe2").len(), 8);
     let log = place.state("state-a").join("seat/proj-a_0.1/state.jsonl");
     fs::write(
         &log,
@@ -1085,9 +1099,9 @@ fn acchold_state_log_regathers() {
     .expect("state.jsonl に idle の行を足す");
     let second = acct.doc(NOW);
     assert_eq!(session(&second), (SeatState::Wait, Some(1_790_510_300)));
-    assert_eq!(place.calls("scribe2").len(), 18, "印が動けば集め直す");
+    assert_eq!(place.calls("scribe2").len(), 16, "印が動けば集め直す");
     assert_eq!(acct.doc(NOW), second, "印が動かなければ同じ電文");
-    assert_eq!(place.calls("scribe2").len(), 18, "印が動かなければ持ち回す");
+    assert_eq!(place.calls("scribe2").len(), 16, "印が動かなければ持ち回す");
 }
 
 /// state dir の event log の更新時刻だけを 1 秒進める（字と長さは替えない・引数の state dir なら集め直しを起こす）。
@@ -1120,7 +1134,7 @@ fn alean_ledger_follows_mark() {
     assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first, "印の同じ台帳は前の読み");
-    assert_eq!(place.calls("scribe2").len(), 18, "印が動けば集め直す");
+    assert_eq!(place.calls("scribe2").len(), 16, "印が動けば集め直す");
     assert_eq!(
         place.calls("bd"),
         ["proj-a", "proj-b", "proj-b", "proj-e"],
@@ -1129,7 +1143,7 @@ fn alean_ledger_follows_mark() {
     alean_mark(&place, "proj-a");
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first, "台帳の印が動いた後の読み");
-    assert_eq!(place.calls("scribe2").len(), 27);
+    assert_eq!(place.calls("scribe2").len(), 24);
     assert_eq!(
         place.calls("bd"),
         ["proj-a", "proj-a", "proj-b", "proj-b", "proj-b", "proj-e"],
@@ -1147,7 +1161,7 @@ fn alean_git_held() {
     assert_eq!(once.len(), 10, "{once:?}");
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first);
-    assert_eq!(place.calls("scribe2").len(), 18, "印が動けば集め直す");
+    assert_eq!(place.calls("scribe2").len(), 16, "印が動けば集め直す");
     assert_eq!(place.calls("git"), once, "持ち回しの内は git を撃たない");
     thread::sleep(Duration::from_millis(500));
     alean_bump(&place.host_state());

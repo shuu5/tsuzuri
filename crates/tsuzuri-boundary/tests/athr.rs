@@ -74,7 +74,6 @@ impl Place {
         place.put("states/state-c/fleet/events.jsonl", EVENTS_C);
         place.put("out/rules-fleet.group_pressure_5h_pct", "80\n");
         place.put("out/rules-fleet.group_pressure_7d_pct", "  90  \n");
-        place.put("out/rules-seat.move_grace_s", "1800\n");
         if slow {
             place.put("out/rules-fleet.group_pressure_model_pct", "95\n");
             for mark in ["usage", "rules-fleet.group_pressure_5h_pct", "rules-fleet.group_pressure_7d_pct"] {
@@ -134,11 +133,11 @@ fn athr_reads_rows_once_first_round() {
         .into_iter()
         .filter(|c| c.starts_with("rules"))
         .collect();
+    // 猶予の rules 行は撃たない（残り秒は席の card の器の欄の写し・行 c-grace-acct）。
     let mut want: Vec<String> = CAP_ROWS
         .iter()
         .map(|(_, rule)| format!("{} {rule}", CAP_ARGS.join(" ")))
         .collect();
-    want.push("rules get seat.move_grace_s".to_string());
     want.sort();
     assert_eq!(rules, want, "行ごとに 1 回・--state-dir を付けない・5 秒の内に増えない");
 }

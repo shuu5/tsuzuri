@@ -1,6 +1,6 @@
 //! account board の project の側の部分と組み立ての歯（便 e-acct-proj・接頭辞 acctpcore_）。
 //! fixture: tests/fixtures/account/acct-inputs.json（host の側の字）・acct-doc.json（組み立ての部分）。どちらも読むだけ。
-//! project の側の字（event log・状態の記録・台帳・移動の合図）は歯の中で組む。今は 2026-09-27T12:00:00Z。
+//! project の側の字（event log・状態の記録・台帳・合図の健康の行の器の欄）は歯の中で組む。今は 2026-09-27T12:00:00Z。
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -181,7 +181,6 @@ fn proj_a() -> ProjectTexts {
                 .into(),
         ),
         tick_last: None,
-        move_signal: None,
         events: Some(events()),
         ledger: Some(ledger()),
     }
@@ -193,7 +192,6 @@ fn proj_b() -> ProjectTexts {
         tick_status: Some("seat tick status: target=proj-b:0.1 healthy=no heartbeat=off\n".into()),
         state_log: Some("{\"state\":\"idle\",\"ts\":1790508900}\n".into()),
         tick_last: None,
-        move_signal: None,
         events: None,
         ledger: None,
     }
@@ -291,7 +289,7 @@ fn acctpcore_run_counts_four_columns() {
 #[test]
 fn acctpcore_project_rows_seat_runs_and_order() {
     let host = inputs().texts;
-    let rows = project_rows(&host, &projects(), None, NOW);
+    let rows = project_rows(&host, &projects(), NOW);
     let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
     assert_eq!(names, ["proj-a", "proj-c", "proj-b"]);
     let groups: Vec<Option<&str>> = rows.iter().map(|r| r.group.as_deref()).collect();
@@ -326,22 +324,22 @@ fn acctpcore_project_rows_seat_runs_and_order() {
     // 席の行が無ければ席は Unknown（ほかの部分は組む）。
     let mut no_seat = host.clone();
     no_seat.seat_doctors.remove("/work/proj-a");
-    let a = &project_rows(&no_seat, &projects(), None, NOW)[0];
+    let a = &project_rows(&no_seat, &projects(), NOW)[0];
     assert_eq!(a.seat, Reading::Unknown);
     assert_eq!(a.runs, Reading::Known(counts(2, 3, 3, 1)));
     // 表に無い anchor は state dir が引けない扱い・群の宣言が無ければ project は無い。
     let mut only_a = projects();
     only_a.remove("/work/proj-b");
-    assert!(!project_rows(&host, &only_a, None, NOW)[2].state_dir_known);
+    assert!(!project_rows(&host, &only_a, NOW)[2].state_dir_known);
     let mut no_host = host.clone();
     no_host.host_toml = None;
-    assert!(project_rows(&no_host, &projects(), None, NOW).is_empty());
+    assert!(project_rows(&no_host, &projects(), NOW).is_empty());
 }
 
 #[test]
 fn acctpcore_ledger_and_next_step_as_landed() {
     let host = inputs().texts;
-    let rows = project_rows(&host, &projects(), None, NOW);
+    let rows = project_rows(&host, &projects(), NOW);
     let a = &rows[0];
     let want = stats(&ledger(), NOW);
     assert!(matches!(want, Reading::Known(_)));
@@ -359,7 +357,7 @@ fn acctpcore_ledger_and_next_step_as_landed() {
     no_events.get_mut("/work/proj-a").expect("proj-a").events = None;
     let mut no_seat = host.clone();
     no_seat.seat_doctors.remove("/work/proj-a");
-    let a = &project_rows(&no_seat, &no_events, None, NOW)[0];
+    let a = &project_rows(&no_seat, &no_events, NOW)[0];
     assert_eq!(
         a.next,
         Reading::Known(next_step_seat(&ledger(), "", NOW, None))
@@ -368,41 +366,43 @@ fn acctpcore_ledger_and_next_step_as_landed() {
 
 #[test]
 fn acctpcore_move_left_seconds() {
-    let mut host = inputs().texts;
-    // 記録の ts 1790480301（2026-09-27T03:38:21Z）・今の口座 acct-2・席の口座は acct-1。
-    host.records.insert(
-        "main.account".into(),
-        "account=acct-2\nts=2026-09-27T03:38:21Z\nreason=account-pressed\nprevious=acct-1\n".into(),
-    );
-    let mut ps = projects();
-    ps.get_mut("/work/proj-a").expect("proj-a").move_signal =
-        Some("to=acct-2 ts=2026-09-27T03:38:21Z at=1790480302\n".into());
-    let left = |host: &HostTexts, ps: &BTreeMap<String, ProjectTexts>, grace, now| {
-        project_rows(host, ps, grace, now)[0].move_left_s
+    let host = inputs().texts;
+    // proj-a の合図の健康の行の末に器の欄を足した project の字。
+    let with = |tail: &str| {
+        let mut ps = projects();
+        let a = ps.get_mut("/work/proj-a").expect("proj-a");
+        let tick = a.tick_status.take().expect("合図の健康の出力");
+        a.tick_status = Some(format!("{} {tail}\n", tick.trim_end()));
+        ps
     };
-    assert_eq!(left(&host, &ps, Some("1800\n"), 1_790_481_000), Some(1101));
-    assert_eq!(left(&host, &ps, Some("1800\n"), 1_790_482_200), None);
-    // 猶予の字が無いか読めなければ無し。
-    assert_eq!(left(&host, &ps, None, 1_790_481_000), None);
-    assert_eq!(left(&host, &ps, Some("soon"), 1_790_481_000), None);
-    // 席の口座が今の口座と同じなら無し（移り先で起こし直した席）。
-    let mut same = host.clone();
-    same.seat_doctors.insert(
-        "/work/proj-a".into(),
-        "seat: role=orchestrator anchor=/work/proj-a target=proj-a:0.1 account=acct-2 model=opus\n"
-            .into(),
-    );
-    assert_eq!(left(&same, &ps, Some("1800"), 1_790_481_000), None);
-    // 移動の合図の ts が記録の ts と違えば無し・合図が無ければ無し。
-    let mut other = ps.clone();
-    other.get_mut("/work/proj-a").expect("proj-a").move_signal =
-        Some("to=acct-2 ts=2026-09-27T03:00:00Z at=1790478000\n".into());
-    assert_eq!(left(&host, &other, Some("1800"), 1_790_481_000), None);
-    assert_eq!(left(&host, &projects(), Some("1800"), 1_790_481_000), None);
-    // 群の今の記録が無ければ無し。
+    let left = |host: &HostTexts, ps: &BTreeMap<String, ProjectTexts>, now| {
+        project_rows(host, ps, now)[0].move_left_s
+    };
+    // 器の grace_left= の字のまま写す（今の時刻が動いても同じ・0 も写す）。
+    let ps = with("reopens=- move=acct-2 grace_left=1101");
+    for now in [NOW, NOW + 60, NOW + 5_000] {
+        assert_eq!(left(&host, &ps, now), Some(1101));
+    }
+    assert_eq!(left(&host, &with("move=acct-2 grace_left=0"), NOW), Some(0));
+    // 群の今の記録が無くても同じ値（起点は器の合図の at）。
     let mut no_record = host.clone();
     no_record.records.remove("main.account");
-    assert_eq!(left(&no_record, &ps, Some("1800"), 1_790_481_000), None);
+    assert_eq!(left(&no_record, &ps, NOW), Some(1101));
+    // move= が口座でないか grace_left= が秒でなければ無し・欄が無ければ無し。
+    for tail in [
+        "move=- grace_left=-",
+        "move=- grace_left=120",
+        "move=acct-2 grace_left=-",
+        "move=unreadable grace_left=unreadable",
+        "move=acct-2 grace_left=soon",
+    ] {
+        assert_eq!(left(&host, &with(tail), NOW), None, "{tail}");
+    }
+    assert_eq!(left(&host, &projects(), NOW), None);
+    // 席の行が無ければ（card が Unknown）無し。
+    let mut no_seat = host.clone();
+    no_seat.seat_doctors.remove("/work/proj-a");
+    assert_eq!(left(&no_seat, &ps, NOW), None);
 }
 
 #[test]
@@ -503,18 +503,18 @@ fn acctpcore_assemble_equals_doc_fixture() {
 fn acctpcore_doc_host_parts_from_inputs() {
     let i = inputs();
     let ps = projects();
-    let d = doc(&i.texts, &ps, Some("1800"), NOW);
+    let d = doc(&i.texts, &ps, NOW);
     assert_eq!(d.at, NOW);
     assert_eq!(d.accounts, i.accounts);
     assert_eq!(d.groups, i.groups);
     assert_eq!(d.moves, i.moves);
-    assert_eq!(d.projects, project_rows(&i.texts, &ps, Some("1800"), NOW));
+    assert_eq!(d.projects, project_rows(&i.texts, &ps, NOW));
     assert_eq!(d.sessions, session_lines(&i.texts, &ps, NOW));
     assert!(d.dormant.is_empty());
     // 群の宣言の字が無ければ 3 つの列が Unknown で、project と session は無い。
     let mut no_host = i.texts.clone();
     no_host.host_toml = None;
-    let d = doc(&no_host, &ps, None, NOW);
+    let d = doc(&no_host, &ps, NOW);
     assert_eq!(
         (&d.accounts, &d.groups, &d.moves),
         (&Reading::Unknown, &Reading::Unknown, &Reading::Unknown)

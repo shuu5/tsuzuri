@@ -413,7 +413,7 @@ fn pclosed_rows_pass_ledger() {
         (Some(ledger()), counts(0, 1, 2, 5)),
         (None, counts(1, 3, 4, 1)),
     ] {
-        let rows = project_rows(&host(), &texts(ledger), None, NOW);
+        let rows = project_rows(&host(), &texts(ledger), NOW);
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert_eq!(rows[0].runs, want);
     }

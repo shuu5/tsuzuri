@@ -365,7 +365,7 @@ fn plimit_seat_and_usage_apart() {
 #[test]
 fn plimit_doc_carries_mark() {
     let host = host_with(Some(USAGE_B));
-    let d = doc(&host, &projects(), None, AT_1200);
+    let d = doc(&host, &projects(), AT_1200);
     assert_eq!(d.sessions, session_lines(&host, &projects(), AT_1200));
     let limited: Vec<&SessionLine> = d
         .sessions
