@@ -251,6 +251,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                         ledger: 1,
                         design_nodes: 0,
                     },
+                    retired: None,
                 },
                 // どの出所も読めない。
                 GraphDoc {
@@ -270,6 +271,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                         ledger: 0,
                         design_nodes: 0,
                     },
+                    retired: None,
                 },
             ],
         ),

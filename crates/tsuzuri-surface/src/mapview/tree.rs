@@ -11,7 +11,7 @@ use tsuzuri_contract::graph::{
 };
 
 use super::band::{Band, band_of, unread_reason};
-use super::{View, natural, open_question, shape_class, state};
+use super::{View, natural, open_question, retired_notes, shape_class, state};
 use crate::kit::Item;
 
 /// 木の面（閉じた 2・tab の順）。
@@ -127,6 +127,8 @@ pub enum Head {
     Band { band: Band, count: usize },
     /// design-note の帯の下の設計ノート（note は行の id の最初の「#」より前の字・count は束ねた項の数）。
     Note { note: String, count: usize },
+    /// design-note の帯の末尾の、廃止した設計ノートを束ねた段（count は束ねたノートの数・行 g-map-retired）。
+    Retired(usize),
     Node(Item),
 }
 
@@ -150,6 +152,7 @@ pub fn fold_key(head: &Head) -> String {
     match head {
         Head::Band { band, .. } => format!("tree:band:{}", band.name()),
         Head::Note { note, .. } => format!("tree:note:{note}"),
+        Head::Retired(_) => "tree:retired".to_string(),
         Head::Node(item) => format!("tree:node:{}", item.id),
     }
 }
@@ -266,7 +269,7 @@ pub fn forest(doc: &GraphDoc, tree: Tree) -> Forest {
                     .map(|(_, b)| b.clone())
                     .collect();
                 let kids = if band == Band::DesignNote {
-                    notes(mine)
+                    notes(mine, &retired_notes(doc))
                 } else {
                     mine
                 };
@@ -282,7 +285,8 @@ pub fn forest(doc: &GraphDoc, tree: Tree) -> Forest {
 }
 
 /// design-note の帯の項: 「#」を持つ項を最初の「#」より前の字ごとに束ね（note の自然な順）、「#」を持たない項を後に置く。
-fn notes(items: Vec<Branch>) -> Vec<Branch> {
+/// `retired` が名指したノートは束ねた項を畳み、末尾の 1 つの段にまとめる（名指したノートが無ければ段も無い）。
+fn notes(items: Vec<Branch>, retired: &BTreeSet<&str>) -> Vec<Branch> {
     let mut groups: Vec<(String, Vec<Branch>)> = Vec::new();
     let mut loose = Vec::new();
     for b in items {
@@ -299,17 +303,28 @@ fn notes(items: Vec<Branch>) -> Vec<Branch> {
         }
     }
     groups.sort_by(|a, b| natural(&a.0, &b.0));
-    groups
+    let (gone, kept): (Vec<_>, Vec<_>) = groups
         .into_iter()
-        .map(|(note, kids)| Branch {
+        .partition(|(note, _)| retired.contains(note.as_str()));
+    let note_branch = |open: bool| {
+        move |(note, kids): (String, Vec<Branch>)| Branch {
             head: Head::Note {
                 note,
                 count: kids.len(),
             },
-            open: true,
+            open,
             kids,
-        })
+        }
+    };
+    let shelf = (!gone.is_empty()).then(|| Branch {
+        head: Head::Retired(gone.len()),
+        open: false,
+        kids: gone.into_iter().map(note_branch(false)).collect(),
+    });
+    kept.into_iter()
+        .map(note_branch(true))
         .chain(loose)
+        .chain(shelf)
         .collect()
 }
 
@@ -326,7 +341,7 @@ mod dom {
 
     use super::{Branch, Head, Tree, fold_key, forest};
     use crate::frame::{Mode, node_href};
-    use crate::mapview::band_chip;
+    use crate::mapview::{RETIRED, band_chip, retired_unread};
     use crate::project::nodearound::mode_of;
     use crate::project::{ALERT_STYLE, fold, unmeasured};
     use crate::vocab::label;
@@ -367,6 +382,10 @@ mod dom {
             .iter()
             .map(|&reason| unmeasured(reason))
             .collect_view();
+        let retired = (tree == Tree::Design)
+            .then(|| retired_unread(doc))
+            .flatten()
+            .map(unmeasured);
         let empty = (f.unread.is_empty() && f.items.is_empty()).then(|| {
             view! { <div class="empty"><span>{label(tree.view().key())}</span><b class="num">"0"</b></div> }
         });
@@ -377,6 +396,7 @@ mod dom {
             .collect_view();
         view! {
             {unread}
+            {retired}
             {empty}
             <ul class="items" on:mouseover=over on:mouseout=out>{items}</ul>
         }
@@ -394,6 +414,10 @@ mod dom {
             }
             Head::Note { note, count } => view! {
                 <span class="nid">{note.clone()}</span><span class="chip num">{*count}</span>
+            }
+            .into_any(),
+            Head::Retired(count) => view! {
+                <span class="mono">{RETIRED}</span><span class="chip num">{*count}</span>
             }
             .into_any(),
             Head::Node(item) => {

@@ -166,7 +166,7 @@ fn summed(texts: &Texts) -> (Graph, bool) {
 pub fn graph(texts: &Texts) -> GraphDoc {
     let g = built(texts);
     let invariants = graph::check(&g);
-    doc(&g, &invariants)
+    doc(&g, &invariants, &texts.summary)
 }
 
 /// 地図のグラフの眺め（導出グラフを組んで眺めの関数に渡す・便 e-view）。
@@ -211,8 +211,9 @@ pub fn list(u: &Unreflected) -> UnreflectedList {
     }
 }
 
-/// 中核の crate の Graph と check の値を電文に写す。
-pub fn doc(g: &Graph, invariants: &[Invariant]) -> GraphDoc {
+/// 中核の crate の Graph と check の値を電文に写す。`summary` は設計の索引の要約の字で、廃止した設計ノートの
+/// 文書 id（`check::retired_notes`）を欄 retired に写す（読めなければ無し・行 g-map-retired）。
+pub fn doc(g: &Graph, invariants: &[Invariant], summary: &str) -> GraphDoc {
     GraphDoc {
         nodes: g.nodes.clone(),
         edges: g.edges.clone(),
@@ -247,6 +248,10 @@ pub fn doc(g: &Graph, invariants: &[Invariant]) -> GraphDoc {
             design: count(g.skipped.design_edges),
             ledger: count(g.skipped.ledger_edges),
             design_nodes: count(g.skipped.design_nodes),
+        },
+        retired: match graph::check::retired_notes(g, summary) {
+            Reading::Known(docs) => Some(docs),
+            Reading::Unknown => None,
         },
     }
 }
@@ -302,6 +307,7 @@ mod tests {
                     verdict: tsuzuri_core::graph::Verdict::Unknown,
                 },
             ],
+            "",
         );
         assert_eq!(got.unread, GraphSource::ALL.to_vec());
         let brief: Vec<(&str, Verdict, u32, Vec<String>)> = got

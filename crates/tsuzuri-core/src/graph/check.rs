@@ -683,20 +683,57 @@ pub fn landed_notes(g: &Graph, ledger: &str, summary: &str) -> Reading<Vec<Strin
     };
     let mut named = Vec::new();
     for (doc, rows) in landed_docs {
-        let Some(found) = rows
-            .iter()
-            .map(|row| states.get(*row).map(String::as_str))
-            .collect::<Option<BTreeSet<&str>>>()
-        else {
-            return Reading::Unknown;
-        };
-        match found.into_iter().collect::<Vec<_>>()[..] {
-            [RETIRED] => {}
-            [_] => named.push(doc.to_string()),
-            _ => return Reading::Unknown,
+        match doc_state(&states, &rows) {
+            Some(RETIRED) => {}
+            Some(_) => named.push(doc.to_string()),
+            None => return Reading::Unknown,
         }
     }
     Reading::Known(named)
+}
+
+/// 文書の行の状態の字の集まりを 1 つに揃える（どれかの行の状態の字が無いか、揃わなければ None）。
+fn doc_state<'a>(states: &'a BTreeMap<String, String>, rows: &[&str]) -> Option<&'a str> {
+    let found = rows
+        .iter()
+        .map(|row| states.get(*row).map(String::as_str))
+        .collect::<Option<BTreeSet<&str>>>()?;
+    match found.into_iter().collect::<Vec<_>>()[..] {
+        [state] => Some(state),
+        _ => None,
+    }
+}
+
+/// 状態が `RETIRED` の設計ノートの文書 id（字の順・重複なし・行 g-map-retired）。設計ノートの行の節点の id を
+/// 最初の井桁で文書 id と行 id に分け（井桁の無い id は数えない）、文書 id ごとの行の状態の字（要約の字 `summary` の
+/// `note_states`）がちょうど `RETIRED` の 1 つなら挙げる。設計の索引が読めないか、要約の字が読めないか、
+/// どれかの設計ノートの行の状態の字が無いか、揃わなければ「まだ分からない」。設計ノートの行が無ければ、
+/// 要約の字が読めなくても空の列。
+pub fn retired_notes(g: &Graph, summary: &str) -> Reading<Vec<String>> {
+    if !g.is_read(Source::Design) {
+        return Reading::Unknown;
+    }
+    let mut notes: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for n in g.nodes.iter().filter(|n| n.kind == NodeKind::NoteRow) {
+        if let Some((doc, _)) = n.id.split_once('#') {
+            notes.entry(doc).or_default().push(&n.id);
+        }
+    }
+    if notes.is_empty() {
+        return Reading::Known(Vec::new());
+    }
+    let Some(states) = note_states(summary) else {
+        return Reading::Unknown;
+    };
+    let mut retired = Vec::new();
+    for (doc, rows) in notes {
+        match doc_state(&states, &rows) {
+            Some(RETIRED) => retired.push(doc.to_string()),
+            Some(_) => {}
+            None => return Reading::Unknown,
+        }
+    }
+    Reading::Known(retired)
 }
 
 #[cfg(test)]

@@ -57,6 +57,7 @@ fn name(head: &Head) -> String {
     match head {
         Head::Band { band, count } => format!("band:{}:{count}", band.name()),
         Head::Note { note, count } => format!("note:{note}:{count}"),
+        Head::Retired(count) => format!("retired:{count}"),
         Head::Node(item) => item.id.clone(),
     }
 }

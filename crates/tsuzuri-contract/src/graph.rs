@@ -341,6 +341,9 @@ pub struct GraphDoc {
     /// 不変条件の 12 本の判定（id の順）。
     pub invariants: Vec<InvariantCheck>,
     pub skipped: SkippedEdges,
+    /// 状態が retired の設計ノートの文書 id（読めなければ無し＝まだ分からない・欄の無い電文も無し・行 g-map-retired）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retired: Option<Vec<String>>,
 }
 
 /// 辺の端（閉じた 2）。

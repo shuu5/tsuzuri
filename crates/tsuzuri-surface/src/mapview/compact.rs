@@ -8,7 +8,7 @@
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
 
 use super::band::{BEADS_LANES, Band, band_of, kind_key, unread_reason};
-use super::{natural, open_question, shape_class};
+use super::{natural, open_question, retired_notes, shape_class};
 use crate::vocab::label;
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::{node_card, short_path};
@@ -85,6 +85,9 @@ pub struct BandBox {
     /// 節点の数（測れていなければ None）。
     pub count: Option<usize>,
     pub cards: Cards,
+    /// design-note の帯の廃止したノートの組（電文の欄 retired が名指したノート・ほかの帯と欄の無い電文は空・
+    /// `ids` には入れない・行 g-map-retired）。
+    pub retired: Vec<NoteGroup>,
 }
 
 impl BandBox {
@@ -178,6 +181,7 @@ fn band_box(doc: &GraphDoc, band: Band) -> BandBox {
             band,
             count: None,
             cards: Cards::Unmeasured(unread_reason(band.source())),
+            retired: Vec::new(),
         };
     }
     let mine: Vec<&GraphNode> = doc
@@ -186,14 +190,27 @@ fn band_box(doc: &GraphDoc, band: Band) -> BandBox {
         .filter(|n| band_of(n.kind) == band)
         .collect();
     let count = Some(mine.len());
+    let mut retired = Vec::new();
     let cards = match band {
         _ if mine.is_empty() => Cards::Empty,
         Band::Constitution => articles(doc, &mine),
         Band::Beads => Cards::Lanes(lanes(doc, &mine)),
-        Band::DesignNote => Cards::Notes(notes(doc, &mine)),
+        Band::DesignNote => {
+            let names = retired_notes(doc);
+            let (gone, kept): (Vec<NoteGroup>, Vec<NoteGroup>) = notes(doc, &mine)
+                .into_iter()
+                .partition(|g| names.contains(g.note.as_str()));
+            retired = gone;
+            Cards::Notes(kept)
+        }
         _ =>Cards::Tags(natural_tags(doc, mine)),
     };
-    BandBox { band, count, cards }
+    BandBox {
+        band,
+        count,
+        cards,
+        retired,
+    }
 }
 
 /// 節点を id の自然な順の札にする。
@@ -305,12 +322,12 @@ mod dom {
     use leptos::prelude::*;
     use tsuzuri_contract::graph::GraphDoc;
 
-    use super::{BandBox, Cards, Tag, compact, zero_card, zero_key};
+    use super::{BandBox, Cards, NoteGroup, Tag, compact, zero_card, zero_key};
     use crate::frame::{self, Mode};
     use crate::mapview::band::Band;
-    use crate::mapview::current;
+    use crate::mapview::{RETIRED, current, retired_unread};
     use crate::project::nodearound::mode_of;
-    use crate::project::{ALERT_STYLE, unmeasured};
+    use crate::project::{ALERT_STYLE, fold, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{h2, hs};
     use crate::widgets::hover::attach;
@@ -318,11 +335,15 @@ mod dom {
     /// 測れていない帯の数の字。
     const NO_COUNT: &str = "―";
 
+    /// 廃止したノートの段の開き閉じの記録の鍵（頁の一生の間だけ・URL に残さない）。
+    const RETIRED_FOLD: &str = "map:retired";
+
     pub fn view(doc: &GraphDoc) -> AnyView {
         let mode = mode_of(RwSignal::new(current()));
+        let reason = retired_unread(doc);
         let boxes = compact(doc)
             .into_iter()
-            .map(|b| box_view(b, mode))
+            .map(|b| box_view(b, mode, reason))
             .collect_view();
         view! {
             <header>{h2("bands")}</header>
@@ -331,12 +352,17 @@ mod dom {
         .into_any()
     }
 
-    fn box_view(b: BandBox, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
+    fn box_view(
+        b: BandBox,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+        reason: Option<&'static str>,
+    ) -> AnyView {
         let count = b
             .count
             .map_or_else(|| NO_COUNT.to_string(), |n| n.to_string());
         let class = b.class();
         let band = b.band;
+        let shelf = (band == Band::DesignNote).then(|| shelf_view(b.retired, reason, band, mode));
         view! {
             <section class=class>
                 <header>
@@ -345,7 +371,37 @@ mod dom {
                     <span class="n num">{count}</span>
                 </header>
                 {cards_view(b.cards, band, mode)}
+                {shelf}
             </section>
+        }
+        .into_any()
+    }
+
+    /// design-note の帯の箱の段: 状態の欄が読めない理由の行と、廃止したノートを束ねた閉じた段（見出しに状態の字と
+    /// 組の数・開けば今と同じノートの組）。
+    fn shelf_view(
+        retired: Vec<NoteGroup>,
+        reason: Option<&'static str>,
+        band: Band,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
+        let reason = reason.map(unmeasured);
+        let shelf = (!retired.is_empty()).then(|| {
+            let n = retired.len();
+            let (open, toggle) = fold(RETIRED_FOLD.to_string(), || false);
+            view! {
+                <details class="fold" prop:open=open on:toggle=toggle>
+                    <summary>
+                        <span class="mono">{RETIRED}</span>
+                        <span class="num muted">{n}</span>
+                    </summary>
+                    {cards_view(Cards::Notes(retired), band, mode)}
+                </details>
+            }
+        });
+        view! {
+            {reason}
+            {shelf}
         }
         .into_any()
     }

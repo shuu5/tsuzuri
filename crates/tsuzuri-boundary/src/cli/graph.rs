@@ -197,6 +197,7 @@ pub fn design_view(doc: &GraphDoc) -> GraphDoc {
             ledger: 0,
             design_nodes: doc.skipped.design_nodes,
         },
+        retired: None,
     }
 }
 
@@ -219,9 +220,10 @@ pub fn run(rest: &[&str]) -> u8 {
                 design: Design::new(&args.repo, &args.folio),
                 runs: Runs::new(args.state_dir.as_deref()),
             };
-            let (g, floors) = board::built_floors(&sources.gather(true, true));
+            let texts = sources.gather(true, true);
+            let (g, floors) = board::built_floors(&texts);
             (
-                board::doc(&g, &graph::check(&g)),
+                board::doc(&g, &graph::check(&g), &texts.summary),
                 graph::check::outside_rulings(&g),
                 floors,
             )

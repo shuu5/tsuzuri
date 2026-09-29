@@ -13,10 +13,10 @@ pub mod table;
 pub mod tree;
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind};
+use tsuzuri_contract::graph::{GraphDoc, GraphNode, GraphSource, NodeKind};
 
 use band::{Band, band_of, unread_reason};
 
@@ -90,6 +90,29 @@ pub fn unread_reasons(doc: &GraphDoc) -> Vec<&'static str> {
     sources.sort();
     sources.dedup();
     sources.into_iter().map(unread_reason).collect()
+}
+
+/// 設計ノートの状態の字のうち廃止を表す字（段の見出しに出す・行 g-map-retired）。
+pub const RETIRED: &str = "retired";
+
+/// 設計ノートの状態の欄が読めないときの理由（廃止したノートも畳まずに出す・行 g-map-retired）。
+pub const RETIRED_UNREAD: &str = "設計ノートの状態の欄が読めない（廃止したノートも畳まずに出す）";
+
+/// 状態が廃止の設計ノートの文書 id（電文の欄 retired・欄が無ければ空）。
+pub fn retired_notes(doc: &GraphDoc) -> BTreeSet<&str> {
+    doc.retired
+        .iter()
+        .flatten()
+        .map(String::as_str)
+        .collect()
+}
+
+/// 設計ノートの状態の欄が読めないときの理由（設計の索引が読めて設計ノートの行が在り、欄 retired が無いときだけ）。
+pub fn retired_unread(doc: &GraphDoc) -> Option<&'static str> {
+    (doc.retired.is_none()
+        && !doc.unread.contains(&GraphSource::Design)
+        && doc.nodes.iter().any(|n| n.kind == NodeKind::NoteRow))
+    .then_some(RETIRED_UNREAD)
 }
 
 /// 節点の id から種類（辺の両端の種類を引く）。
