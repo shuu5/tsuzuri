@@ -3,13 +3,13 @@
 meta:
   id: surface-wave22b
   title: 第 22 波 b — 席の「見て」の知らせを project board と account board に出す
-  version: v0.1
+  version: v0.2
   status: effective
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: 設計ノート surface-board の傘の行 i（表示面）の子の、契約と境界と面の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR16 と判断の記録 ADR-15 の決定 (6) と持ち主の裁定 t3-hub.59.5 で、計画 surface-plan の 9 節の計画だけの行 i-11 を起草して置く。行 i-10 の tz stage notify が書く project ごとの最新の知らせの記録を境界の server の読みの口で読むだけで渡し、変化の知らせの新しい種類で送り、project board の home の頭に自分の project の 1 つを、account board の home の頭の段に project ごとの 1 つを出す。起草と試作は main 45cc258（計画 v0.83）に i-open-mark と i-10 と e-signal と g-ledger-group-kind の試作の差分を当てた木で撃ち、2bfee06（計画 v0.84・crates の差は無い）で確かめた。
+  note: 設計ノート surface-board の傘の行 i（表示面）の子の、契約と境界と面の crate の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR16 と判断の記録 ADR-15 の決定 (6) と持ち主の裁定 t3-hub.59.5 で、計画 surface-plan の 9 節の計画だけの行 i-11 を起草して置く。行 i-10 の tz stage notify が書く project ごとの最新の知らせの記録を境界の server の読みの口で読むだけで渡し、変化の知らせの新しい種類で送り、project board の home の頭に自分の project の 1 つを、account board の home の頭の段に project ごとの 1 つを出す。起草と試作は main 45cc258（計画 v0.83）に i-open-mark と i-10 と e-signal と g-ledger-group-kind の試作の差分を当てた木で撃ち、2bfee06（計画 v0.84・crates の差は無い）で確かめた。第 0.2 版（2026-09-29）は、器の審査の FAIL（節の電文の歯の名 ntc_project_block・ntc_account_block が done (5)(6) の名 ntc_own_block・ntc_all_block と食い違う）に答え、節の 2 つの名を done の名に揃えた（契約表の行は同じ）。
 
 sections:
   - n: 1
@@ -60,10 +60,10 @@ sections:
       - 歯 ntc_route_reads_records の置き場: repo の dir の名 proj-kiri。dir を置く前は 200 と空の 2 つの列。記録 proj-kiri（at 1790000400・題 設計の頁を見て）と proj-b（at 1790000300・題 地図を見て）を fn save で書き、proj-z.json に字 not json を書いた後は、latest が proj-kiri・proj-b の順・unread が proj-z だけ。URL はどれも http://srv-a.tailnet.invalid:8120/?board=<project の名>。
 
       形 — 面の project board（project/notice.rs・新）: pub const BLOCK は id notice・見出しの鍵 notice・class panel。pub const PATH は字 /api/notices（契約の PATH と同じ字）、PATHS は [PATH]、FOLDS は空。pub fn doc は読みの結果を Notices に読み（まだ読まない は NOT_READ・読めない は pub const REASON・電文として読めない は pub const BAD_BODY の理由）、pub fn href(url) は http:// か https:// で始まる URL だけを Some で返し、pub fn line(notice, now) は pub struct Line { project, title, href, when }（when は view の clock_short(at, now)・20 時間の内は HH:MM JST・越えたら MM-DD HH:MM JST）を返す。pub fn content は、電文の unread に自分の project の名が在れば pub const OWN_UNREAD の測れていない、latest に自分の名の知らせが在ればその Line、無ければ pub const NONE_LINE（字 席からの知らせはまだ無い）の空を返す。DOM は wasm の target のときだけ: section の中に ul class items の li 1 つで、題は href が在れば a（target は付けない＝同じ tab）で無ければ字だけ、後に span class small muted num の時刻。
-      - 歯 ntc_project_block の電文: board の project は proj-kiri。知らせ proj-b（at 1790000400・題 地図を見て・URL http://srv-a.tailnet.invalid:8121/?page=map）と proj-kiri（at 1790000300・題 問いを見て・URL https://srv-a.tailnet.invalid:8120/?page=ask）。組んだ時刻 1790000460 の電文で Line の when は 23:18 JST、組んだ時刻が 2 日後なら 09-21 23:18 JST。href の 6 つの URL は上の 2 つと javascript:alert(1)・file:///etc/passwd・//srv-a.tailnet.invalid/・空の字で、Some は上の 2 つだけ。
+      - 歯 ntc_own_block の電文: board の project は proj-kiri。知らせ proj-b（at 1790000400・題 地図を見て・URL http://srv-a.tailnet.invalid:8121/?page=map）と proj-kiri（at 1790000300・題 問いを見て・URL https://srv-a.tailnet.invalid:8120/?page=ask）。組んだ時刻 1790000460 の電文で Line の when は 23:18 JST、組んだ時刻が 2 日後なら 09-21 23:18 JST。href の 6 つの URL は上の 2 つと javascript:alert(1)・file:///etc/passwd・//srv-a.tailnet.invalid/・空の字で、Some は上の 2 つだけ。
 
       形 — 面の account board（account/notices.rs・新）: pub const BLOCK は id notices・見出しの鍵 notices・class panel。pub use で project の notice の PATH を写す（account の下の file は /api/ の字を持たない決まりのまま）。pub fn content は project の notice の doc と line を使い、読めなければ測れていない、latest と unread が両方空なら pub const NONE_LINE（字 どの project の席からも知らせはまだ無い）の空、ほかは pub struct Rows { lines: 電文の順の Line の列, unread: 電文の unread }。pub fn unread_line は空の列に None、名の列に字 知らせの記録が読めない project と、コロンと空白と、名を・で継いだ字を返す（例 proj-y と proj-z）。DOM は ul class items に 1 行ずつ li（b の project の名・題の link・時刻）で、link の target は windows の win_name(project の名)（その project の窓で開く・前に出す命令は撃たない）、unread が在れば最後に li class small muted の 1 行。account/board.rs の block_view は id notices を notices::view に振る。
-      - 歯 ntc_account_block の電文: proj-b（at 1790000400・題 地図を見て・http の URL）と proj-kiri（at 1790000300・題 問いを見て・URL ftp://x）と unread proj-z。Line は proj-b（23:20 JST）と proj-kiri（href 無し・23:18 JST）の順。
+      - 歯 ntc_all_block の電文: proj-b（at 1790000400・題 地図を見て・http の URL）と proj-kiri（at 1790000300・題 問いを見て・URL ftp://x）と unread proj-z。Line は proj-b（23:20 JST）と proj-kiri（href 無し・23:18 JST）の順。
 
       形 — 置き場と種類: pages/home.rs の home の頁の左の列は notice・next・pipe・ledger・legend の順（右の列は orch のまま）。account/mod.rs の page(Tab::Home) の段は、STACK の段（notices）・HGRID の段（nxall・winsp）・STACK の段（groups・allowance・moves）の順で、account の module の file は board.rs・cards.rs・heartbeat.rs・home.rs・ledger.rs・mod.rs・notices.rs・projects.rs・session.rs・windows.rs。view.rs の RELOAD_KINDS は 13 行で、最後に (notice::PATH, [ChangeKind::Notice]) を足す（知らせの口は記録の file だけを読む）。vocab.json の rephrase に鍵 notice（label 席からの知らせ）と notices（label 各 project の席からの知らせ）を鍵 next_all の後に足す（plain と internal は記録の置き場と口を書く）。見本 mock v3 にこの 2 つの block は無い（見本の頁を直さない）。
 
