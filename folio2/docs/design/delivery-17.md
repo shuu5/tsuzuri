@@ -24,7 +24,7 @@ planner の実測（2026-09-18・main 38601e5）: 3 面の生成器は `crates/f
 1. `--dir` が無い・dir でない = 2「folio serve: まだ分からない: 配信先が無い」。
 2. `--dir` の直下に `index.html` が無い = 2「folio serve: まだ分からない: 入口 index.html が無い」（入口の無い dir は見せない・手書きのページを入口に置かない P-2.2）。
 3. `--dir` の直下に `.git` か `.beads` という名の項目が在る = 1「folio serve: 拒否 — 配信先に版管理か台帳が在る」（台帳の中身を晒さない N-6.2・repo の root や作業ツリーを配信先にしない）。
-4. bind 先の決定。`--host` が在れば IPv4 として読み（読めなければ 2「bind 先が IPv4 でない」）、loopback（127.0.0.0/8）か tailnet の範囲（100.64.0.0/10）のどちらかでなければ 1「folio serve: 拒否 — bind 先 <住所> は tailnet の外」（N-6.1・loopback は同じ端末の中だけなので内側と扱う・歯と手元の確かめ用）。`--host` が無ければ tailnet の住所を自分で解く: UDP の socket を 0.0.0.0:0 に bind し 100.100.100.100:53（tailscale の名前引きの決まった住所・packet は送らない・connect で経路の出口の住所を OS に問うだけ）へ connect して local_addr を取り、それが 100.64.0.0/10 の中ならその住所、取れないか範囲の外なら 1「folio serve: 拒否 — tailnet の住所が無い」（FR7 の確かめ方・fail-closed）。
+4. bind 先の決定。`--host` が在れば IPv4 として読み（読めなければ 2「bind 先が IPv4 でない」）、loopback（127.0.0.0/8）か tailnet の範囲（100.64.0.0/10）のどちらかでなければ 1「folio serve: 拒否 — bind 先 <住所> は tailnet の外」（N-6.1・loopback は同じ端末の中だけなので内側と扱う・歯と手元の確かめ用）。`--host` が無ければ tailnet の住所を自分で解く: UDP の socket を 0.0.0.0:0 に bind し tailscale の名前引きの決まった住所（tailnet の範囲の中の固定の 1 つ）の 53 番（packet は送らない・connect で経路の出口の住所を OS に問うだけ）へ connect して local_addr を取り、それが 100.64.0.0/10 の中ならその住所、取れないか範囲の外なら 1「folio serve: 拒否 — tailnet の住所が無い」（FR7 の確かめ方・fail-closed）。
 5. TcpListener を <住所>:<port> に bind する。できなければ 2「folio serve: まだ分からない: bind できない: <理由>」。
 6. 標準出力に 1 行「folio serve: http://<住所>:<実際の port>/index.html（配信先 <dir の絶対 path>・止めるには Ctrl-C）」を書いて flush し、以後は接続を 1 つずつ順に処理する（並列にしない・止めるのは持ち主の Ctrl-C だけ・自分では終わらない）。
 - 1 接続 = 1 要求（Connection: close）。読みの timeout 5 秒。要求の頭（空行まで）は 8 KiB まで（超えたら 400）。
@@ -42,7 +42,7 @@ planner の実測（2026-09-18・main 38601e5）: 3 面の生成器は `crates/f
 - 消さない: `--out` に `extra.txt` を置いてから write → 0 ∧ `extra.txt` が残る。
 - serve の 拒む: `--host 0.0.0.0`・`--host 192.168.0.1`・`--host 8.8.8.8` はどれも 1 ∧ 標準エラーに「tailnet の外」。`--dir` が無い → 2。`index.html` の無い dir → 2 ∧「入口」。`.git` という空の dir を持つ dir → 1 ∧「版管理か台帳」。`--host` 無し（FR7 の確かめ方）: 子 process を起動し、5 秒以内に 終了したら 1 ∧ 標準エラーに「tailnet の住所が無い」／標準出力に 1 行が出たら その住所が 100.64.0.0/10 の中であることを見て kill する（どちらの枝も断定・環境に tailnet が在るか無いかで分岐する）。
 - serve の見せる（loopback）: fixture の写しで build した dir に `.hidden.txt`・下位 dir `sub/`・docroot の外の file への symlink `out.txt` を足し、`--host 127.0.0.1 --port 0` で起動 → 標準出力の 1 行から port を読む → TcpStream で `GET /index.html` = 200 ∧ Content-Type が text/html ∧ 本文が file と byte 一致／`GET /` = 同じ本文／`GET /folio.css` = 200 ∧ text/css／`HEAD /srs.html` = 200 ∧ Content-Length が file の大きさ ∧ 本文なし／`GET /nothing.html` = 404／`GET /.hidden.txt` = 404／`GET /sub` = 404／`GET /out.txt` = 404／`GET /../Cargo.toml` = 404／`POST /index.html` = 405／`GET index.html`（`/` で始まらない）= 400 → kill。
-- unit（`src/serve.rs` の中・名に serve を含む）: 範囲の判定（127.0.0.1・100.64.0.0・100.127.255.255 は内側／100.128.0.0・0.0.0.0・10.0.0.1・192.168.0.1 は外）・path の各節の判定・拡張子の表・要求行の読み。unit（`src/site.rs` の中・名に site を含む）: 出す file の一覧が 5 本でこの順。
+- unit（`src/serve.rs` の中・名に serve を含む）: 範囲の判定（127.0.0.1・tailnet の範囲の先頭と末尾は内側／100.128.0.0・0.0.0.0・10.0.0.1・192.168.0.1 は外）・path の各節の判定・拡張子の表・要求行の読み。unit（`src/site.rs` の中・名に site を含む）: 出す file の一覧が 5 本でこの順。
 - 凍結 fixture に足すもの（最小の手書き・正本の写しは置かない）: `tests/fixtures/face/folio.css`（1 行の注釈と 1 つの規則だけ）と `tests/fixtures/face/folio-ui.js`（1 行の注釈だけ）。期待の面 3 本は変えない。
 - 版管理へ書かないもの（D-8）: この host の tailnet の住所・機器名・口座名。歯に書く住所は loopback・範囲の境界の値・公開の例の住所（8.8.8.8・192.168.0.1）だけ。
 
