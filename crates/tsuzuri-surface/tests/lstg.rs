@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use tsuzuri_contract::board::{Ci, PipelineBoard, PipelineCard, Reading, Stage};
-use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow};
+use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ledger::{Group, body, staged_body};
 use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, kcard, stage_word, stages};
@@ -90,7 +90,7 @@ fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
     }
 }
 
-/// 節の台帳 LR（6 行）。
+/// 節の台帳 LR（6 行・zz.3 は issue_type task と label intake:memo の open の行）。
 fn lr() -> Vec<LedgerRow> {
     vec![
         row("fx-l", "epic", "open"),
@@ -98,7 +98,10 @@ fn lr() -> Vec<LedgerRow> {
         row("fx-l.4", "task", "in_progress"),
         row("fx-l.7", "task", "closed"),
         row("fx-l.9", "task", "open"),
-        row("zz.3", "memo", "open"),
+        LedgerRow {
+            labels: vec![MEMO_LABEL.to_string()],
+            ..row("zz.3", "task", "open")
+        },
     ]
 }
 
@@ -231,7 +234,7 @@ fn lstg_list_items() {
             "Running · task",
             "Landed · CI 中 · task",
             "○ 未着手 · task",
-            "○ 未着手 · memo",
+            "? まだ分からない · memo",
         ]
     );
     assert_eq!(body(&screen), staged_body(&screen, &BTreeMap::new()));

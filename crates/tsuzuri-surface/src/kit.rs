@@ -4,11 +4,12 @@
 
 use std::collections::BTreeMap;
 
-use tsuzuri_contract::graph::GraphDoc;
+use tsuzuri_contract::graph::{GraphDoc, NodeKind};
 use tsuzuri_contract::ledger::LedgerRow;
 
 use crate::mapview;
-use crate::view::{self, Fetched, QUESTION_KIND};
+use crate::view::{self, Fetched};
+use crate::vocab::label;
 
 /// block の中身（測れていない・0 件・中身あり）。0 件と測れていないを分ける（要件 NFR2）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,7 +55,7 @@ pub struct Item {
     pub alert: bool,
     pub id: String,
     pub title: String,
-    /// 状態の印と語と種類（`○ 未着手 · task`）か、板の段の字と種類（`Running · task`）。
+    /// 状態の印と語と種類（`○ 未着手 · task`・`◷ 答え待ち · question`）か、板の段の字と種類（`Running · task`）。
     pub aside: String,
     /// 板の段（在れば右の字の前に段の記号を出す）。
     pub stage: Option<Staged>,
@@ -74,17 +75,22 @@ pub struct Staged {
 /// 印の色の上書き（open の問い）。
 pub const ALERT_STYLE: &str = "color:var(--s-stop)";
 
-/// 台帳の行を一覧の 1 項にする。
+/// 台帳の行の種類の語（地図の節点の種類の語の鍵から引く・行 g-ledger-kind）。
+pub fn kind_word(row: &LedgerRow) -> String {
+    label(mapview::band::kind_key(row.node_kind()))
+}
+
+/// 台帳の行を一覧の 1 項にする（種類は地図の節点と同じ読み・印と語は `view::row_mark`）。
 pub fn item(row: &LedgerRow) -> Item {
     let open = matches!(row.status.as_str(), "open" | "in_progress");
-    let alert = row.kind == QUESTION_KIND && row.status == "open";
-    let mark = view::mark(&row.status);
+    let alert = row.node_kind() == NodeKind::Question && row.status == "open";
+    let mark = view::row_mark(row);
     Item {
         shape: format!("shape band-beads{}", if open { "" } else { " fill" }),
         alert,
         id: row.id.to_string(),
         title: row.title.clone(),
-        aside: format!("{} {} · {}", mark.glyph, mark.word, row.kind),
+        aside: format!("{} {} · {}", mark.glyph, mark.word, kind_word(row)),
         stage: None,
     }
 }
@@ -94,7 +100,7 @@ pub fn staged_item(row: &LedgerRow, stage: Option<&Staged>) -> Item {
     let base = item(row);
     match stage {
         Some(s) => Item {
-            aside: format!("{} · {}", s.word, row.kind),
+            aside: format!("{} · {}", s.word, kind_word(row)),
             stage: Some(s.clone()),
             ..base
         },

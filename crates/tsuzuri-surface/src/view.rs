@@ -8,13 +8,14 @@ use std::cmp::Ordering;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
+use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList, LedgerRow};
 use tsuzuri_contract::project::ProjectName;
 use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 
 use crate::frame::BRAND;
-use crate::vocab::label;
+use crate::vocab::{label, vocab};
 
 /// 問いの bead の種類。
 pub const QUESTION_KIND: &str = "question";
@@ -302,6 +303,32 @@ pub fn mark(status: &str) -> Mark {
         _ => ("?", "知らない状態", "st-other"),
     };
     Mark { glyph, word, class }
+}
+
+/// open の memo の状態の語の鍵（語の辞書の rephrase）。
+pub const MEMO_OPEN_KEY: &str = "memo_unknown";
+
+/// 台帳の行の状態の印（種類は地図の節点と同じ読み `LedgerRow::node_kind`）。
+/// open の問いは持ち主の答えを待つので「◷ 答え待ち」、open の memo は語の辞書の `MEMO_OPEN_KEY` の語
+/// （鍵が無ければ鍵の字）、ほかは bd の状態の `mark`。
+/// memo の局面（処置の待ち・問いの待ち・形の崩れ）は器の局面の出力が決め、tsuzuri は判じない（要件 FR13）。
+/// 後の行 c-ledger-lc がこの fn だけを局面の読みに替える。
+pub fn row_mark(row: &LedgerRow) -> Mark {
+    match (row.node_kind(), row.status.as_str()) {
+        (NodeKind::Question, "open") => Mark {
+            glyph: "◷",
+            word: "答え待ち",
+            class: "st-open",
+        },
+        (NodeKind::Memo, "open") => Mark {
+            glyph: "?",
+            word: vocab()
+                .term(MEMO_OPEN_KEY)
+                .map_or(MEMO_OPEN_KEY, |t| t.label.as_str()),
+            class: "st-open",
+        },
+        _ => mark(&row.status),
+    }
 }
 
 /// 日本時間の UTC からの差（秒・UTC に 9 時間を足す固定・行 g-jst）。browser の時間帯は読まない。

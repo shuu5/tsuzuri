@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::board::Reading;
+use crate::graph::NodeKind;
 use crate::{EpochSecs, IdError, id_shape};
 
 /// bead の id（例 `t3-hub.5`）。ASCII の英数字と `. - _` だけの 1 語・先頭は英数字・64 byte 以下。
@@ -67,7 +68,27 @@ pub const MEMO_LABEL: &str = "intake:memo";
 /// 方針の問いの範囲の札の頭（後に範囲 `all` か問いの id を付ける・行 e-policy-q）。
 pub const POLICY_SCOPE_LABEL: &str = "policy-scope:";
 
+/// bead の種類（epic・memo・問い・契約の順に決める・どの bead も 1 つに当たる）。
+/// 中核の地図の節点と面の台帳の一覧の項が、同じこの 1 つの読みを引く（行 g-ledger-kind）。
+pub fn bead_kind(issue_type: &str, labels: &[String]) -> NodeKind {
+    let has = |label: &str| labels.iter().any(|l| l == label);
+    if issue_type == "epic" {
+        NodeKind::Epic
+    } else if has(MEMO_LABEL) {
+        NodeKind::Memo
+    } else if has(QUESTION_LABEL) {
+        NodeKind::Question
+    } else {
+        NodeKind::Task
+    }
+}
+
 impl LedgerRow {
+    /// 地図の節点と同じ種類（欄 kind と labels を `bead_kind` に渡す）。
+    pub fn node_kind(&self) -> NodeKind {
+        bead_kind(&self.kind, &self.labels)
+    }
+
     /// 問いの bead か（label `intake:question` を持つ）。
     pub fn is_question(&self) -> bool {
         self.labels.iter().any(|l| l == QUESTION_LABEL)

@@ -17,7 +17,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
-use tsuzuri_contract::ledger::{MEMO_LABEL, QUESTION_LABEL};
+pub(crate) use tsuzuri_contract::ledger::bead_kind;
 
 use super::{BeadAttr, Graph, Inputs, PolicyAttr, RulingRow, RunAttr, Source};
 use crate::ledger::epoch_secs;
@@ -339,20 +339,6 @@ pub(crate) fn read_ledger(text: &str) -> Option<Vec<BdBead>> {
         return None;
     }
     serde_json::from_str(text).ok()
-}
-
-/// bead の種類（epic・memo・問い・契約の順に決める・どの bead も 1 つに当たる）。
-pub(crate) fn bead_kind(issue_type: &str, labels: &[String]) -> NodeKind {
-    let has = |label: &str| labels.iter().any(|l| l == label);
-    if issue_type == "epic" {
-        NodeKind::Epic
-    } else if has(MEMO_LABEL) {
-        NodeKind::Memo
-    } else if has(QUESTION_LABEL) {
-        NodeKind::Question
-    } else {
-        NodeKind::Task
-    }
 }
 
 /// metadata の欄の id（欄は字 1 つか字の配列・metadata は object か、object を JSON にした字）。

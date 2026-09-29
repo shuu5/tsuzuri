@@ -805,6 +805,11 @@
    "plain": "{gi:unknown} 材料が足りず判定できない\n✗ 合格とは数えない",
    "internal": "unknown（3 値の 3 つ目）"
   },
+  "memo_unknown": {
+   "label": "まだ分からない",
+   "plain": "memo の局面は器の出力が決める\n・ tsuzuri は判じない\n✗ 未着手とは違う",
+   "internal": "open の memo の状態の語（c-ledger-lc までのつなぎ）"
+  },
   "mode": {
    "label": "表示の型",
    "plain": "初心者と経験者の切り替え\n・ 初心者 = 説明と手引き\n・ 経験者 = 型の名だけ",
