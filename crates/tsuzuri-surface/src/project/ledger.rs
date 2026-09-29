@@ -8,6 +8,7 @@
 //! epic の進みの行の題と一覧の項の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
 //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
 //! memo と未反映の年齢は、電文の作った時刻から block を組む時の今までの日数（`days_since`・行 c-abs-time）。
+//! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
@@ -364,6 +365,22 @@ pub struct Unref {
     pub unknown: Vec<&'static str>,
 }
 
+impl Unref {
+    /// 数の字（3 種とも分からなければ数えない字 NONE・ほかは数・行 g-unref-dash）。
+    pub fn text(&self) -> String {
+        if self.unknown.len() < UnreflectedKind::ALL.len() {
+            self.count.to_string()
+        } else {
+            NONE.to_string()
+        }
+    }
+
+    /// 数に測れていないの印を添えるか（分からない種類が 1 つ以上で、3 種の全部ではない時だけ）。
+    pub fn partial(&self) -> bool {
+        !self.unknown.is_empty() && self.unknown.len() < UnreflectedKind::ALL.len()
+    }
+}
+
 /// burndown の棒の 1 本。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Bar {
@@ -556,7 +573,7 @@ impl Metrics {
         match part {
             Part::Task => n(self.open.task),
             Part::Memo => n(self.open.memo),
-            Part::Unref | Part::UnrefCount => n(self.unref.count),
+            Part::Unref | Part::UnrefCount => Some(self.unref.text()),
             Part::Net24 => Some(self.net24.text.clone()),
             Part::Net7 => Some(self.net7.text.clone()),
             Part::Rate => Some(self.rate.clone()),
@@ -1038,8 +1055,7 @@ mod dom {
                 view! { <span class="num">{text}</span> }.into_any()
             }
         };
-        let unknown =
-            (part == Part::Unref && !m.unref.unknown.is_empty()).then(|| state_icon(UNKNOWN));
+        let unknown = (part == Part::Unref && m.unref.partial()).then(|| state_icon(UNKNOWN));
         let class = match part {
             Part::Unref if m.unref.count > 0 => "l4un on",
             Part::Unref => "l4un",
@@ -1115,7 +1131,7 @@ mod dom {
             <details class="fold lep" id="unref" prop:open=open on:toggle=toggle>
                 <summary>
                     {hs(part.key())}
-                    <span class=unref_chip(m.unref.count)>{m.unref.count}</span>
+                    <span class=unref_chip(m.unref.count)>{m.unref.text()}</span>
                     <span class="lchips">{kinds}</span>
                 </summary>
                 {list}
