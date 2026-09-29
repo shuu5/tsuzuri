@@ -5,11 +5,13 @@
 //! 行 i-4 で席の目の Chrome の pipe の運び手 `pipe`・端末に届かない時の落ちる先 `relay`・board の URL `url` を置く。
 //! 行 i-5 で tz の口 `cli`（命令の旗の読み・board の頁の断り・席の中の open の断り・窓を開く錠）を置く。
 //! 行 i-7 で表示先の設定 `target`（全体の既定と project ごとの上書きと初めて見せた印・追跡されない 1 つの file）を置く。
+//! 行 i-10 で知らせ `notify`（表示先の端末へ notify-send の知らせだけを出す・project の最新の知らせの記録）を置く。
 
 pub mod cdp;
 pub mod cli;
 pub mod json;
 pub mod launch;
+pub mod notify;
 pub mod pipe;
 pub mod relay;
 pub mod target;

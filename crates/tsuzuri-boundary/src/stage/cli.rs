@@ -13,6 +13,8 @@
 //! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
 //! click・入力・key の断りは url の ports のほかの board（群の宣言の anchor ごとの project board）にも広げ、
 //! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない・行 i-board-ports）。
+//! tz stage notify は窓を起こさず表示先の端末へ知らせだけを出し、project の最新の知らせの記録を書く（行 i-10）。
+//! notify の rc は記録を書けて端末に知らせが届いた時だけ 0 で、URL を組めた後のどの終わり方でも最後の行は url の line。
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -29,6 +31,7 @@ use tsuzuri_core::account::project_name;
 
 use super::cdp::{self, Command, Session};
 use super::json;
+use super::notify::{self, NotifyCall, Outcome, Record};
 use super::relay::{self, Eyes, Reach};
 use super::target::{self, Targets};
 use super::terminal::{self, Terminal};
@@ -38,9 +41,10 @@ use super::ws::Socket;
 use crate::acct;
 use crate::server::proc;
 
-/// 使い方の行（命令の撃ちと、表示先の設定の口）。
+/// 使い方の行（命令の撃ちと、表示先の設定の口と、知らせの口）。
 pub const USAGE: &str = "usage: tz stage <navigate|viewport|reload|click|type|key|scroll|wait|screenshot|dom|console|run|open> [--to <端末の名>] [--url <URL> | --width <n> --height <n> --scale <n> --mobile <true|false> | --x <n> --y <n> [--dy <n>] | --text <字> | --key <鍵> | --ms <n> | --out <path>] [--repo <dir>] [--ssh <program>] [--scribe2 <program>] [--git <program>] [--tailnet <program>] [--chrome <program>] [--config <path>]
-       tz stage target <show | set --project <project の名> <端末の名> | set --all <端末の名> | clear --project <project の名>> [--repo <dir>] [--scribe2 <program>] [--git <program>] [--config <path>]";
+       tz stage target <show | set --project <project の名> <端末の名> | set --all <端末の名> | clear --project <project の名>> [--repo <dir>] [--scribe2 <program>] [--git <program>] [--config <path>]
+       tz stage notify [--to <端末の名>] <題> [--repo <dir>] [--ssh <program>] [--scribe2 <program>] [--git <program>] [--tailnet <program>] [--config <path>]";
 
 /// 席の中の撃ちの印の環境変数（Claude Code の Bash の道具が子の process に 1 を渡す）。
 pub const SEAT_ENV: &str = "CLAUDECODE";
@@ -667,8 +671,14 @@ fn usage(what: &str) -> u8 {
     FAIL
 }
 
-/// tz stage の後の引数を撃つ（rc は 0 か 1・最初の字が target なら表示先の設定の口）。
+/// tz stage の後の引数を撃つ（rc は 0 か 1・最初の字が target なら表示先の設定の口・notify なら知らせの口）。
 pub fn run(args: &[&str]) -> u8 {
+    if let Some((&"notify", rest)) = args.split_first() {
+        return match notify::parse(rest) {
+            Ok(call) => tell(&call),
+            Err(e) => usage(&e),
+        };
+    }
     if let Some((&"target", rest)) = args.split_first() {
         let call = match parse_target(rest) {
             Ok(call) => call,
@@ -797,6 +807,82 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
             drive(session, script, board, &ports)
         }
     }
+}
+
+/// tz stage notify を撃つ（board の URL を組み、端末へ撃つ前に記録を書き、端末へ撃ち、最後に URL の行を出す）。
+/// URL を組めなければ 1 行を出して URL の行を出さない。rc は記録を書けて端末に知らせが届いた時だけ 0。
+fn tell(call: &NotifyCall) -> u8 {
+    let board = match url::board(&call.tailnet, &call.git, &call.repo, TIMEOUT) {
+        Ok(board) => board,
+        Err(e) => {
+            println!("{e}");
+            return FAIL;
+        }
+    };
+    let recorded = match record(call, &board) {
+        Ok(()) => true,
+        Err(e) => {
+            println!("{e}");
+            false
+        }
+    };
+    let sent = match reach_out(call, &board) {
+        Ok(sent) => sent,
+        Err(e) => {
+            println!("{e}");
+            false
+        }
+    };
+    println!("{}", url::line(&board.url));
+    if recorded && sent { 0 } else { FAIL }
+}
+
+/// project の最新の知らせの記録を書く（置き場は環境の XDG_STATE_HOME と HOME で決める・前の記録は消える）。
+fn record(call: &NotifyCall, board: &Board) -> Result<(), String> {
+    let own = project(&call.repo)?;
+    let path = notify::path(
+        env::var_os("XDG_STATE_HOME").as_deref(),
+        env::var_os("HOME").as_deref(),
+        &own,
+    )
+    .ok_or_else(|| {
+        "知らせの記録の path を決められない（XDG_STATE_HOME も HOME も絶対の path でない）".to_string()
+    })?;
+    notify::save(
+        &path,
+        &Record {
+            at: now(),
+            project: own,
+            title: call.title.clone(),
+            url: board.url.clone(),
+        },
+    )
+}
+
+/// 器の検めの後に表示先の端末を決め（--to を省けば表示先の設定の効く値・印は読まず書かない）、知らせを撃って終わりの 1 行を出す。
+/// 知らせが届いた時だけ真。設定に値が無ければ撃たずにその 1 行を出す。
+fn reach_out(call: &NotifyCall, board: &Board) -> Result<bool, String> {
+    let text = face_text(&call.repo, &call.scribe2, &call.git)?;
+    let name = match &call.to {
+        Some(to) => to.clone(),
+        None => {
+            let own = project(&call.repo)?;
+            let path = config_path(call.config.as_deref())?;
+            match aim(None, &own, &target::load(&path)?, &terminal::names(&text))? {
+                Aim::Named(name) | Aim::Chosen { name, .. } => name,
+                Aim::Unset => {
+                    println!(
+                        "表示先の設定に project {own} の値も既定も無いので端末に知らせを出さない（持ち主へは board の URL を渡し、表示先は tz stage target set で決める）"
+                    );
+                    return Ok(false);
+                }
+            }
+        }
+    };
+    let terminal = terminal::lookup(&text, &name)?;
+    let outcome = notify::send(&call.ssh, &terminal, &call.title, &board.url, TIMEOUT)?;
+    println!("{}", notify::line(&name, &outcome));
+    Ok(outcome == Outcome::Sent)
 }
 
 /// 自分の anchor の state dir を引き、器の validate が rc 0 で返った後にだけ host の面の字を読む。
