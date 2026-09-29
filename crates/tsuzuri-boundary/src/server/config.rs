@@ -10,7 +10,7 @@ use tsuzuri_contract::ledger::BDW;
 use super::{design, ledger, ruling};
 
 /// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program・
-/// bdw の program・席の target・器の CLI の program・読むだけか・ほかの project の置き場）。席の target と state dir の両方が在るときだけ、
+/// bdw の program・席の target・器の CLI の program・読むだけか・ほかの project の置き場・知らせの記録の dir）。席の target と state dir の両方が在るときだけ、
 /// 裁定を席へ配達し、席の card を組む（便 e-seat）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
@@ -33,6 +33,8 @@ pub struct Config {
     pub read_only: bool,
     /// 問いの一覧に混ぜるほかの project の repo の置き場（引数の順・既定は空・行 e-multi-ask）。
     pub projects: Vec<PathBuf>,
+    /// 席の「見て」の知らせの記録の dir（None なら口 /api/notices は 503・main.rs は tz stage notify と同じ環境の字で引く・行 i-11）。
+    pub notify: Option<PathBuf>,
 }
 
 impl Config {
@@ -50,6 +52,7 @@ impl Config {
             scribe2: ruling::SCRIBE2.into(),
             read_only: false,
             projects: Vec::new(),
+            notify: None,
         }
     }
 }

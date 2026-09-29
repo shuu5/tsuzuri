@@ -147,16 +147,19 @@ pub enum ChangeKind {
     Ledger,
     /// account board の印。
     Account,
+    /// 席の「見て」の知らせの記録の file（行 i-11）。
+    Notice,
 }
 
 impl ChangeKind {
     /// 全部の種類（この順）。
-    pub const ALL: [ChangeKind; 5] = [
+    pub const ALL: [ChangeKind; 6] = [
         ChangeKind::Seat,
         ChangeKind::Runs,
         ChangeKind::Design,
         ChangeKind::Ledger,
         ChangeKind::Account,
+        ChangeKind::Notice,
     ];
 }
 

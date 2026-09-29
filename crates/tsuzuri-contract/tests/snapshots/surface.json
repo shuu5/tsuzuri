@@ -176,7 +176,8 @@
     "runs",
     "design",
     "ledger",
-    "account"
+    "account",
+    "notice"
   ],
   "surface::BoardChanged": [
     {

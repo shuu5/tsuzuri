@@ -3,11 +3,12 @@
 //! Chrome の口を撃たない。1 回の ssh で notify-send の在る無しと撃ちを済ませ（無ければ遠くの shell が `ABSENT` で終わる）、
 //! ssh の届かない `UNREACHED` と notify-send の rc を分ける。知らせは linux の端末だけで、本文は board の URL。
 //! 記録は project ごとの最新の 1 つを tsuzuri 自前の追跡されない file（XDG の state の dir の下の `DIR` の下）に書く
-//! （後の行 i-11 がこの module の `read` で読む）。書きは同じ dir の一時の file に mode 0600 で書いて rename で置き換える。
+//! （行 i-11 の server がこの module の `dir`・`files`・`gather` で読む）。書きは同じ dir の一時の file に mode 0600 で書いて
+//! rename で置き換える。
 
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{self, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -36,6 +37,9 @@ pub const TITLE_MAX: usize = 200;
 
 /// state の dir の下の知らせの記録の dir。
 pub const DIR: &str = "tsuzuri/notify";
+
+/// 記録の file の名の末の字（名の前の字は project の名）。
+pub const EXT: &str = ".json";
 
 /// 鍵だけで入り、接続の待ちを 10 秒で切り、席の口座の接続の共有を使わない（起こしの ssh と同じ 6 語）。
 const SSH_OPTIONS: [&str; 6] = [
@@ -268,13 +272,9 @@ pub fn line(name: &str, outcome: &Outcome) -> String {
     }
 }
 
-/// 記録の file の path（XDG_STATE_HOME が絶対の path ならその下、ほかは絶対の HOME の下の .local/state の下・
-/// XDG の決まりどおり相対の値と空の値は捨てる・どちらも使えなければ None）。
-pub fn path(
-    xdg_state_home: Option<&OsStr>,
-    home: Option<&OsStr>,
-    project: &str,
-) -> Option<PathBuf> {
+/// 記録の dir（XDG_STATE_HOME が絶対の path ならその下、ほかは絶対の HOME の下の .local/state の下の `DIR`・
+/// XDG の決まりどおり相対の値と空の値は捨てる・どちらも使えなければ None）。記録の名の形を決めるのはこの file だけ。
+pub fn dir(xdg_state_home: Option<&OsStr>, home: Option<&OsStr>) -> Option<PathBuf> {
     let xdg = xdg_state_home.map(Path::new).filter(|p| p.is_absolute());
     let base = match xdg {
         Some(dir) => dir.to_path_buf(),
@@ -283,7 +283,69 @@ pub fn path(
             .filter(|p| p.is_absolute())?
             .join(".local/state"),
     };
-    Some(base.join(DIR).join(format!("{project}.json")))
+    Some(base.join(DIR))
+}
+
+/// 記録の file の path（`dir` の下の project の名と `EXT`・dir が決まらなければ None）。
+pub fn path(
+    xdg_state_home: Option<&OsStr>,
+    home: Option<&OsStr>,
+    project: &str,
+) -> Option<PathBuf> {
+    Some(dir(xdg_state_home, home)?.join(format!("{project}{EXT}")))
+}
+
+/// dir の下の記録の file（名が . で始まらず、`EXT` より長く `EXT` で終わる file・dir は数えない・名の順）。
+/// 一時の file は名が . で始まるので数えない。dir が無ければ空、ほかの読めない dir は Err。
+pub fn files(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
+    let mut out = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with('.') || name.len() <= EXT.len() || !name.ends_with(EXT) {
+            continue;
+        }
+        if entry.file_type()?.is_file() {
+            out.push(entry.path());
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// dir の下の記録を集める（`files` の各 file を `read` で読み、読めて中の project が file の名から `EXT` を除いた字と
+/// 同じ記録を集め、ほかはその名を unread に名の順で足す）。記録は at の新しい順・同じ at は project の名の順。
+/// dir が無ければ 2 つとも空、読めない dir は Err。
+pub fn gather(dir: &Path) -> io::Result<(Vec<Record>, Vec<String>)> {
+    let mut records = Vec::new();
+    let mut unread = Vec::new();
+    for file in files(dir)? {
+        let Some(name) = file
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(EXT))
+        else {
+            continue;
+        };
+        let record = fs::read_to_string(&file)
+            .ok()
+            .and_then(|text| read(&text))
+            .filter(|r| r.project == name);
+        match record {
+            Some(r) => records.push(r),
+            None => unread.push(name.to_string()),
+        }
+    }
+    records.sort_by(|a, b| b.at.cmp(&a.at).then_with(|| a.project.cmp(&b.project)));
+    Ok((records, unread))
 }
 
 /// 記録の字（鍵 at・project・title・url の順の 1 行の JSON の object と改行）。

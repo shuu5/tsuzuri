@@ -8,8 +8,8 @@ use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::{
-    self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, ledger, need_count, projects, session,
-    stuck_count, tab_href, tab_links, windows,
+    self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, ledger, need_count, notices, projects,
+    session, stuck_count, tab_href, tab_links, windows,
 };
 use tsuzuri_surface::frame::{Mode, PageId, STACK};
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
@@ -193,6 +193,7 @@ fn acctframe_blocks_per_tab_and_module() {
     assert_eq!(
         rows,
         vec![
+            (STACK, vec!["notices"]),
             (HGRID, vec!["nxall", "winsp"]),
             (STACK, vec!["groups", "allowance", "moves"])
         ]
@@ -209,6 +210,7 @@ fn acctframe_blocks_per_tab_and_module() {
 
     // block（id・見出しの語の鍵・class・描く module）。
     let table = [
+        (notices::BLOCK, "notices", "notices", "panel", "notices"),
         (home::NXALL, "nxall", "next_all", "panel", "home"),
         (windows::BLOCK, "winsp", "open_windows", "panel", "windows"),
         (home::GROUPS, "groups", "group", "gtop", "home"),
@@ -249,6 +251,7 @@ fn acctframe_blocks_per_tab_and_module() {
             "home.rs",
             "ledger.rs",
             "mod.rs",
+            "notices.rs",
             "projects.rs",
             "session.rs",
             "windows.rs"

@@ -1191,6 +1191,16 @@
    "plain": "project ごとに今いちばん先にすること\n{fig:next}\n{nxm:on:c} あり\n{nxm:off:d} なし\n{nxm:na:e} ― 測れていない\n▸\n・ g だけの project は薄く出す\n= home の次の一手と同じ関数\n! tsuzuri 以外の d〜f は ―",
    "internal": "`acct.js nextAll(t)`\n= nextAt(project, t, Q) の順位\nQ = TZ.nextQ(G) か null\nrank → 宣言順"
   },
+  "notice": {
+   "label": "席からの知らせ",
+   "plain": "この project の席が「見て」と言った最新の 1 つ\n・ 題を押すと席が示した頁を開く\n・ 端末の知らせを見逃しても、ここで分かる\n▸\n= 窓は前に出さない\n! 記録が読めなければ 測れていない",
+   "internal": "記録 = $XDG_STATE_HOME/tsuzuri/notify/<project>.json\n（無ければ ~/.local/state の下）\n書き手は tz stage notify だけ\n口 GET /api/notices の latest から自分の名の 1 つ"
+  },
+  "notices": {
+   "label": "各 project の席からの知らせ",
+   "plain": "project ごとの席の「見て」の最新の 1 つ\n・ 新しい順\n・ 題を押すとその project の窓で開く\n▸\n= 窓は前に出さない\n! 記録の読めない project は最後の 1 行に名を出す",
+   "internal": "記録 = $XDG_STATE_HOME/tsuzuri/notify/*.json\n（無ければ ~/.local/state の下）\n口 GET /api/notices の latest と unread\nlink の target = tz-<project>"
+  },
   "nx_na": {
    "label": "―（測れていない）",
    "plain": "{nxm:na:e} この項を判じる data を読んでいない",

@@ -6,6 +6,7 @@
         {
           "class": "stack",
           "blocks": [
+            {"id": "notice", "heading": "notice", "class": "panel"},
             {"id": "next", "heading": "next", "class": "panel"},
             {"id": "pipe", "heading": "pipeline", "class": "panel"},
             {"id": "ledger", "heading": "ledger_block", "class": "panel"},

@@ -1,7 +1,7 @@
 //! account board の頁の枠（便 h-frame）: 入口の振り分け・3 つの tab と URL・header の部品・tab ごとの block の並び・
 //! 数の印・読みの結果から block の中身の有無を決める関数。純粋な値と関数だけを持ち、DOM は board（wasm の target のときだけ）。
 //! 見本は docs/design/mock3/account/index.html と ui.js の topHTML（PAGE_KIND が account の枝）と acctTabHref。
-//! block ごとに 1 つの module（home・windows・session・ledger・projects）が描く。この便は中身を描かず、
+//! block ごとに 1 つの module（home・windows・session・ledger・projects・notices）が描く。この便は中身を描かず、
 //! 読めたら中身はまだ無いの字を、読めない・まだ読んでいない・本文が電文として読めないときは測れていないと理由の 1 行を出す。
 //! 口は 1 つ（契約の型の crate の account の module の PATH）で、全部の block が net の同じ signal を分け合う。
 //! tab の押しは頁を読み直さず、tab_url の URL を履歴に積む（見本の setTab・戻ると進むは board が popstate で受ける）。
@@ -26,6 +26,7 @@ pub mod cards;
 pub mod heartbeat;
 pub mod home;
 pub mod ledger;
+pub mod notices;
 pub mod projects;
 pub mod session;
 pub mod windows;
@@ -247,10 +248,15 @@ impl TabPage {
 /// 1 段目の class（見本の `.hgrid`・次の一手と開いている窓を横に並べる）。
 pub const HGRID: &str = "hgrid";
 
-/// tab の枠（home: 次の一手と開いている窓 ｜ 群の枠・口座 × 窓・移動、session: session と台帳、projects: 各 project）。
+/// tab の枠（home: 各 project の席からの知らせ ｜ 次の一手と開いている窓 ｜ 群の枠・口座 × 窓・移動、
+/// session: session と台帳、projects: 各 project）。席からの知らせは見本に無い block で、home の頭の段に置く（行 i-11）。
 pub fn page(tab: Tab) -> TabPage {
     let rows = match tab {
         Tab::Home => vec![
+            Row {
+                class: STACK,
+                blocks: vec![notices::BLOCK],
+            },
             Row {
                 class: HGRID,
                 blocks: vec![home::NXALL, windows::BLOCK],

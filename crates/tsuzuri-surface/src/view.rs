@@ -16,7 +16,7 @@ use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
 use tsuzuri_contract::{account, project, runs, wire};
 
 use crate::frame::BRAND;
-use crate::project::{ask, ledger, map, next, nodearound, pipeline, seat};
+use crate::project::{ask, ledger, map, next, nodearound, notice, pipeline, seat};
 use crate::vocab::{label, vocab};
 
 /// 読み直しの合図の event の名（台帳の変化と、器の event の記録か設計文書か席か account の変化・便 g-parts）。
@@ -27,7 +27,8 @@ pub const RELOAD_EVENTS: [&str; 2] = [LEDGER_CHANGED_EVENT, BOARD_CHANGED_EVENT]
 /// 席の card は席の状態の file だけ、次の一手は台帳と event log と席の card、pipeline は台帳と event log と
 /// 台帳の形の行（台帳の種類）、グラフと近傍は設計の索引と台帳と event log、account は account board の印と
 /// 自分の repo の台帳を読む。project の名の口は起動の repo から決まるので種類を持たない（合図では読み直さない）。
-pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 12] = [
+/// 席からの知らせの口は知らせの記録の file だけを読む（行 i-11）。
+pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 13] = [
     (seat::PATH, &[ChangeKind::Seat]),
     (
         next::PATH,
@@ -49,6 +50,7 @@ pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 12] = [
     (runs::PATH, &[ChangeKind::Runs]),
     (account::PATH, &[ChangeKind::Account, ChangeKind::Ledger]),
     (project::PATH, &[]),
+    (notice::PATH, &[ChangeKind::Notice]),
 ];
 
 /// 口の path の読みが読む変化の種類: 最初の `?` より前の字が、表の path と同じか表の path に `/` を続けた字で

@@ -11,6 +11,7 @@
 //! board を読むだけで起こす・行 e-ask-own-only）。
 //! --project はほかの project の repo の置き場で、何度でも受け、その台帳の open の問いを dir の名の札つきで問いの一覧に
 //! 混ぜる（答えは受けない・行 e-multi-ask）。
+//! 席の「見て」の知らせの記録の dir は引数でなく環境の XDG_STATE_HOME と HOME から tz stage notify と同じ決めで引く（行 i-11）。
 //! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
 //! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
 //! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
@@ -22,6 +23,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use tsuzuri_boundary::server::{Config, Server};
+use tsuzuri_boundary::stage::notify;
 use tsuzuri_core::account::project_name;
 
 const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>] [--read-only] [--project <dir>]...";
@@ -150,10 +152,15 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
 }
 
 fn serve(rest: &[&str]) -> u8 {
-    let config = match parse(rest) {
+    let mut config = match parse(rest) {
         Ok(config) => config,
         Err(e) => return usage(&e),
     };
+    // 席の「見て」の知らせの記録の dir は tz stage notify と同じ環境の字で引く（起動の引数は足さない・行 i-11）。
+    config.notify = notify::dir(
+        std::env::var_os("XDG_STATE_HOME").as_deref(),
+        std::env::var_os("HOME").as_deref(),
+    );
     let server = match Server::bind(&config) {
         Ok(server) => server,
         Err(e) => {

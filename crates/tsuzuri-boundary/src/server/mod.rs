@@ -20,7 +20,8 @@
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
 //! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
-//! 板の印は走行・設計・席・account の種類（`ChangeKind`）を付けて見張りに渡す（知らせが動いた種類を載せる・行 c-ev-kind）。
+//! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
+//! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
 //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
 //! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
 //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
@@ -63,6 +64,7 @@ use tsuzuri_contract::surface::{ChangeKind, Refusal, RefusalResponse};
 use tsuzuri_contract::wire;
 
 use crate::acct::Acct;
+use crate::stage::notify;
 
 use self::board::Sources;
 use self::design::Design;
@@ -153,6 +155,8 @@ struct Shared {
     read_only: bool,
     /// ほかの project の問いの読み（`Config::projects`・行 e-multi-ask）。
     others: Others,
+    /// 席の「見て」の知らせの記録の dir（`Config::notify`・行 i-11）。
+    notify: Option<PathBuf>,
 }
 
 /// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
@@ -231,6 +235,7 @@ impl Server {
         });
         let acct_marks = Arc::new(Mutex::new(Vec::new()));
         let held_marks = Arc::clone(&acct_marks);
+        let notify_dir = config.notify.clone();
         let kinded = |kind: ChangeKind, files: Vec<PathBuf>| -> Vec<(ChangeKind, PathBuf)> {
             files.into_iter().map(|f| (kind, f)).collect()
         };
@@ -239,6 +244,9 @@ impl Server {
             marks.extend(kinded(ChangeKind::Design, design.marks()));
             marks.extend(kinded(ChangeKind::Seat, seat_marks.clone()));
             marks.extend(kinded(ChangeKind::Account, lock(&held_marks).clone()));
+            // 知らせの記録の file（dir が無いか読めなければ足さない・行 i-11）。
+            let notices = notify_dir.as_deref().map(notify::files).and_then(Result::ok);
+            marks.extend(kinded(ChangeKind::Notice, notices.unwrap_or_default()));
             marks
         });
         if let Some(form) = &form {
@@ -272,6 +280,7 @@ impl Server {
                 acct_watch: Once::new(),
                 read_only: config.read_only,
                 others,
+                notify: config.notify.clone(),
             }),
         })
     }

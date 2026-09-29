@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use tsuzuri_surface::project::{
     self, Module, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
-    pipeline, policy, seat, timeline,
+    notice, pipeline, policy, seat, timeline,
 };
 
 fn crate_dir() -> PathBuf {
@@ -32,6 +32,7 @@ const CONSTS: &[Consts] = &[
     ("next", next::PATHS, next::FOLDS),
     ("node", node::PATHS, node::FOLDS),
     ("nodearound", nodearound::PATHS, nodearound::FOLDS),
+    ("notice", notice::PATHS, notice::FOLDS),
     ("pipeline", pipeline::PATHS, pipeline::FOLDS),
     ("policy", policy::PATHS, policy::FOLDS),
     ("seat", seat::PATHS, seat::FOLDS),
@@ -56,6 +57,7 @@ fn hsderive_consts_match_note() {
         ("next", &["/api/next"], &[]),
         ("node", &[], &[]),
         ("nodearound", &["/api/around"], &[]),
+        ("notice", &["/api/notices"], &[]),
         ("pipeline", &["/api/pipeline"], &[]),
         ("policy", &["/api/policy"], &[]),
         ("seat", &["/api/seat"], &["seat:hist", "seat:more"]),
@@ -72,6 +74,7 @@ fn hsderive_consts_match_note() {
         (map::PATHS, map::PATH),
         (next::PATHS, next::PATH),
         (nodearound::PATHS, nodearound::PATH),
+        (notice::PATHS, notice::PATH),
         (pipeline::PATHS, pipeline::PATH),
         (policy::PATHS, policy::PATH),
         (seat::PATHS, seat::PATH),

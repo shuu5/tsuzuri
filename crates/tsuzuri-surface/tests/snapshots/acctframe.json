@@ -12,6 +12,12 @@
       "key": "tab_home",
       "rows": [
         {
+          "class": "stack",
+          "blocks": [
+            {"id": "notices", "heading": "notices", "class": "panel"}
+          ]
+        },
+        {
           "class": "hgrid",
           "blocks": [
             {"id": "nxall", "heading": "next_all", "class": "panel"},
