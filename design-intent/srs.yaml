@@ -1,9 +1,10 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.16 版（2026-09-29）: 要件 FR13 と受入 AC12 の未反映を、器（scribe2）の局面の出力が席の手番とする 3 つ（処置の待ちか形の崩れの memo・未仕分けの発話・裁定の反映待ち）に替えた（持ち主の裁定 t3-hub.63.1〔裁定 id = t3-hub.63.1:20260929T0031Z-1〕の案 A・器の要件 v0.29 と ADR-0087〜0089 の整理に揃える・要望は独立の種類にしない・tsuzuri は自分で判じない）。
 # 第 0.15 版（2026-09-28）: 要件 FR8 の後半を、持ち主の裁定 t3-hub.64（裁定 id = t3-hub.64:20260928T1204Z-1）の案 B で読むように写した（問いの premises に挙げるのは範囲内でまだどの問いにも挙げられていない方針だけで、1 度挙げた方針は以後の問いに要らない。断るのは server でなく問いの起票の門）。第 0.14 版（2026-09-28）: 判断の記録 ADR-16（持ち主の裁定 t3-hub.60（裁定 id = t3-hub.60:20260928T0904Z-1）と t3-hub.52.71（裁定 id = t3-hub.52.71:20260928T0904Z-1））を写した（要件 FR8 の方針の記帳先を、根の直下の控え「方針」の notes から、方針 1 つにつき根の直下の閉じた問いの bead に替え、今までの方針の行は消さずに読み続ける。要件 FR10 に、板の左端の控えの列と、4 列の下の要修正の行と、Queued / Blocked の札は設計の参照を持つ契約の bead だけで epic は板に出さないことを足した）。第 0.13 版（2026-09-28）: 要件 FR5 に、グラフは各帯の組の箱と epic を最初に出し、どの節点も見えている箱のどれかに畳み、押すと 1 段ずつ開き閉じし、見える箱は 40 までとする 1 文を足した（持ち主の裁定 t3-hub.52.53（裁定 id = t3-hub.52.53:20260928T0412Z-1）・行 c-graph-fold と g-graph-fold・ノート surface-wave10a）。第 0.12 版（2026-09-28）: 要件 FR4 の note に、設計の索引が判断の記録の状態を持つまで門は判断の記録を状態によらず数える（処分を多めに求める閉じる側）ことを足した（席の直し・行 f-gate の起草で分かった・索引の状態の欄は folio2 に問う）。第 0.11 版（2026-09-28）: 持ち主の裁定 t3-hub.52.38（裁定 id = t3-hub.52.38:20260928T0154Z-1）と t3-hub.52.39（裁定 id = t3-hub.52.39:20260928T0155Z-1）を写した（非機能要件 NFR2 の「読めないときは測れていないと出す」を、台帳の読みが落ちたときと変化の知らせのつながりが切れたときに最後に読めた中身を 60 秒まで出し、15 秒を越えたら一番上の帯に読み込み不良の注意の印を出し、60 秒を越えたら測れていないと出す決まりに改め、値を規則の行 R-21 に足した）。あわせて要件 FR8 に、画面の方針の欄は範囲をつねに全体で送る注を足した（持ち主の指示 t3-hub.1・裁定 id = user 2026-09-28T01:2xZ・行 g-policy-all）。第 0.10 版（2026-09-28）: 表示面の持ち主の裁定 t3-hub.59.1〜.59.5 と .59.7 をまとめた判断の記録 ADR-15（持ち主の承認 t3-hub.59.6:20260928T0249Z-1）を写した（要件 FR16 に表示先の設定・窓は初めて見せる時と持ち主が頼んだ時だけ起こし前に出さず知らせだけを出すこと・board の頁の上の入力の断り・ssh の届かない端末へは URL を渡すことを書き、受入 AC13 の落ちる先を URL に替え、画面を配信する窓を scope の not_build に足した）。第 0.9 版（2026-09-28）: 持ち主の裁定 t3-hub.52.32（裁定 id = t3-hub.52.32:20260928T0107Z-1）を写した（要件 FR5 の地図の面に設計の木と台帳の木を足し、4 面から 6 面にした）。第 0.8 版（2026-09-28）: 持ち主の裁定を写した（t3-hub.55.2 で要件 FR4 と受入 AC6 の門の近傍を討論の記録 B §11.3 の絞りに改め、t3-hub.55.3 の門を席の設定に入れる時機を FR4 の note に書き、t3-hub.52.16 で FR1 に画面の設定を browser に残すことを、t3-hub.53.8 と t3-hub.53.10 で FR12 に閾値と逼迫の印と account board の部品を、t3-hub.53.9 で FR13 にほかの project の台帳と design-intent を読むことを足し、作らない部品を scope の not_build に足した）。第 0.7 版（2026-09-27）: 非機能要件 NFR3 の字に面の crate の予算の行 R-25 を名指した（器の契約の審査の指摘）。第 0.6 版（2026-09-27）: 非機能要件 NFR3 に面の crate の依存の予算の行 R-25 を結んだ。第 0.5 版（2026-09-27）: 条 P-16 の改訂（判断の記録 ADR-12）の発効に合わせ、制約 CON6 に相談の窓の念入りさと「席の model を下げる変更は判断の記録を要する」を足し、要件 FR19 の根拠に条 P-16 を足した。第 0.4 版（2026-09-27）: 指し示し（FR18）・相談の窓（FR19）・対象を広げる（FR20）・受入 AC15〜17・制約 CON6（席のモデル）を足した。第 0.3 版（2026-09-27）: 面の生成器の決まりに合わせた（道具の登場人物を 1 つ・入れる側と出る側の帯を 4 以下・要件の basis は憲法の条だけで判断の記録は adrs の欄）。第 0.2 版（2026-09-26）: 面の便の要件を判断の記録 ADR-3・ADR-5・ADR-7・ADR-8 から写した。討論の記録は docs/grill/2026-09-25-B-ruling-surface.md と 2026-09-25-C-stage-surface.md。見本は tsuzuri-site/mock3。
 meta:
   id: srs
   title: 要件書
-  version: v0.15
+  version: v0.16
   status: draft
   generated: 2026-09-28
   approval: []
@@ -219,10 +220,10 @@ requirements:
     pattern: ubiquitous
     strength: must
     when: つねに
-    shall: 台帳の指標は open task・純減（24h と 7d）・closed/日・未反映・burndown・判定（順調・停滞・滞り・積み増し・台帳なし）・memo で、ready / blocked・lead p50・stale・sparkline・epic の進みは「詳しく」に置き、作業中の数と最古は出さない。判定の閾値は rules 行が持つ。design-intent に未反映のもの（昇格先の無い memo・処分の宣言の無い裁定・反映されていない要望）は一覧で出す。account board は各 project の anchor の台帳と design-intent を読むだけで（書かない）、project ごとに決定待ち（open の問いの数）と未反映の数を出す。
-    plain: 積んである仕事の数と片付く速さと、判定を 1 語で見せます。まだ設計に反映されていない memo や答えは一覧に出します。閾値は規則の表にあり、後から変えられます。複数の project をまとめた画面でも、各 project の決定待ちと未反映の数を読んで出します（読むだけで書きません）。
+    shall: 台帳の指標は open task・純減（24h と 7d）・closed/日・未反映・burndown・判定（順調・停滞・滞り・積み増し・台帳なし）・memo で、ready / blocked・lead p50・stale・sparkline・epic の進みは「詳しく」に置き、作業中の数と最古は出さない。判定の閾値は rules 行が持つ。未反映の一覧は、器（scribe2）の局面の出力が席の手番とする 3 つ（局面が処置の待ち〔memo-actionable〕か形の崩れ〔misfit〕の memo・未仕分けの発話・裁定の反映待ち）を出し、tsuzuri は自分で判じない（要望は発端を持つ memo で、独立の種類にしない）。局面の出力がまだ無い間と、知らない局面の語と欄は「まだ分からない」、読めない版の出力の周は「読めない」、古さの印の在る出力は古いと示す。account board は各 project の anchor の台帳と design-intent と局面の出力を読むだけで（書かない）、project ごとに決定待ち（open の問いの数）と未反映の数を出す。
+    plain: 積んである仕事の数と片付く速さと、判定を 1 語で見せます。席がまだ手を付けていないもの（処置を待つ memo・仕分けていない発言・反映を待つ裁定）は、器（scribe2）の判定をそのまま読んで一覧に出します。閾値は規則の表にあり、後から変えられます。複数の project をまとめた画面でも、各 project の決定待ちと未反映の数を読んで出します（読むだけで書きません）。
     basis: [P-19, N-2]
-    verify: {method: test, how: 一時の台帳の fixture で判定の 5 値と未反映の 3 種の数を見る, ac: [AC12]}
+    verify: {method: test, how: 一時の台帳の fixture で判定の 5 値を見て、局面の出力の fixture で未反映の 3 つの数と id と、出力が無い・知らない語・読めない版・古さの印の 4 つの周の示しを見る, ac: [AC12]}
     goals: [GOAL2, GOAL3]
     figures: []
     rules: [R-18]
@@ -368,7 +369,7 @@ acceptance:
   - {id: AC9, title: 面の受入 12 条が全画面 × 2 幅 × 2 mode で違反 0, plain: 画面の崩れや長すぎる説明が 1 つも無いことを機械が数えて見せる。, verifies: [FR1, FR5, FR11, FR14, NFR1, NFR3], red_test: {sentence: 1 画面に 1 字のはみ出しを仕込んだ fixture で違反 1 が出て、現物で 0 になる, fixture: tests/fixtures/surface/accept-12/}}
   - {id: AC10, title: tick が stale なら「応答なし」・heartbeat-off が在れば「停止」と出て、停止の切り替えは器の CLI の argv だけを記録し state dir の byte は不変, plain: 席が元気かは器の 2 つの file から判じ、画面から器の file を書くことはない。, verifies: [FR12], red_test: {sentence: 3 つの fixture で状態の語と argv と state dir の byte を見る, fixture: tests/fixtures/account/seat-health/}}
   - {id: AC11, title: move-signal と群の記録から残り秒が「記録の時刻 + 猶予 − 今」で出て、移り先で起こし直した席には出ない, plain: 移動中の席には「あと何秒」が出て、移った後の席には出ない。, verifies: [FR12], red_test: {sentence: 移動中と起こし直し後の 2 つの fixture で残り秒の有無と値を見る, fixture: tests/fixtures/account/move-grace/}}
-  - {id: AC12, title: 一時の台帳の fixture で判定の 5 値と未反映の 3 種の数が期待と一致し、要約の無い節点が名指される, plain: 台帳の判定と、まだ反映されていないものの数が正しく出る。, verifies: [FR13, FR15], red_test: {sentence: 判定ごとの fixture と未反映 3 種を 1・2・3 件持つ fixture で数と id を見る, fixture: tests/fixtures/ledger/judge/}}
+  - {id: AC12, title: 一時の台帳の fixture で判定の 5 値が期待と一致し、局面の出力の fixture で未反映の 3 つの数と id が期待と一致し、要約の無い節点が名指される, plain: 台帳の判定と、まだ反映されていないものの数が正しく出る。, verifies: [FR13, FR15], red_test: {sentence: 判定ごとの fixture と、未反映の 3 つを 1・2・3 件持つ局面の出力の fixture で数と id を見る, fixture: tests/fixtures/ledger/judge/}}
   - {id: AC13, title: 偽の ssh と偽の Chrome で起動の引数（専用の profile・app mode・入力の環境）と CDP の命令の列が snapshot と一致し、窓を前に出す命令を撃たず、届かない端末には board の URL を返す, plain: 席があなたの PC の browser を正しい設定で開き、窓を勝手に前に出さず、届かない端末には見る URL を渡す。, verifies: [FR16], red_test: {sentence: 端末の行 2 つ（ssh 可・不可）の fixture で argv と命令の列と、届かない端末で返る URL の行と席の目の落ちる先を見る, fixture: tests/fixtures/stage/terminals.toml}}
   - {id: AC14, title: folio の口ごとに tz の subcommand の終了 code と出力が folio2 の口と一致する, plain: 設計の道具の命令が tz の下で同じ結果を返す。, verifies: [FR17], red_test: {sentence: 同じ fixture を folio と tz に渡して終了 code と出力を比べる, fixture: tests/fixtures/tz/parity/}}
   - {id: AC15, title: 固定の DOM の写しと矩形から要素の列が期待と一致し、上限を超える囲みは切って総数を出し、画像と写しは state dir だけに書かれる, plain: 囲んだ場所に在る部品が正しく選ばれ、画像は席の機械の中だけに置かれる。, verifies: [FR18], red_test: {sentence: 写しの fixture と矩形 3 つで要素の id の列を比べ、repo の中に file が増えないことを見る, fixture: tests/fixtures/point/snapshot-3/}}
