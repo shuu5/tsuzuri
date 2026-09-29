@@ -9,15 +9,17 @@
 //! nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）は頁の定義の icon の字（行 hs-pages）。
 //! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題（行 g-title）。
 //! 最初の案内（coach mark）の層は home の頁だけに置く（行 g-coach）。
+//! 頁の link の押しは文書を読み直さずに URL を履歴に積んで頁の枠だけを組み直し、戻ると進むは URL から頁と mode を戻す（行 g-nav）。
 
 use std::time::Duration;
 
+use leptos::ev;
 use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::project::PATH as PROJECT_PATH;
 
 use crate::account::windows::{ACCOUNT_WIN, closed_message};
-use crate::frame::{self, BACK, BACK_WRAP, BackHow, BackStep, Block, HEADER, Mode, PageId};
+use crate::frame::{self, BACK, BACK_WRAP, BackHow, BackStep, Block, HEADER, Mode, PageId, Press};
 use crate::fresh::{self, Fresh};
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
@@ -57,10 +59,52 @@ fn keep_mode_in_url(mode: Mode) {
     }
 }
 
+/// 頁の link の押し（mouse の button と修飾の鍵）。
+fn press(e: &ev::MouseEvent) -> Press {
+    Press {
+        button: e.button(),
+        ctrl: e.ctrl_key(),
+        meta: e.meta_key(),
+        shift: e.shift_key(),
+        alt: e.alt_key(),
+    }
+}
+
+/// 頁を替える（同じ頁なら何もしない）。前の枠の signal は片付くので、節点の頁の読みと頁の題の語を捨ててから替える。
+fn go(page: RwSignal<PageId>, subject: RwSignal<PageSubject>, next: PageId) {
+    if page.get_untracked() == next {
+        return;
+    }
+    project::nodearound::forget();
+    subject.set(PageSubject::default());
+    page.set(next);
+}
+
+/// 頁の link の押し: 文書を読み直さずに URL を履歴に積んで頁を替える（新しい窓や tab で開く押しと
+/// 今と同じ頁への押しは browser の既定のまま・見本の account board の tab の押しと同じ形）。
+fn switch(
+    e: ev::MouseEvent,
+    to: PageId,
+    page: RwSignal<PageId>,
+    subject: RwSignal<PageSubject>,
+    mode: RwSignal<Mode>,
+) {
+    let Some(url) = frame::switch_url(page.get_untracked(), to, mode.get_untracked(), press(&e))
+    else {
+        return;
+    };
+    e.prevent_default();
+    if let Ok(history) = window().history() {
+        let _ = history.push_state_with_url(&web_sys::wasm_bindgen::JsValue::NULL, "", Some(&url));
+    }
+    go(page, subject, to);
+    window().scroll_to_with_x_and_y(0.0, 0.0);
+}
+
 #[component]
 fn App() -> impl IntoView {
     let query = search();
-    let page = PageId::from_query(&query);
+    let page = RwSignal::new(PageId::from_query(&query));
     let mode = RwSignal::new(Mode::from_query(&query));
     let help = HelpCtx {
         open: RwSignal::new(None),
@@ -84,13 +128,25 @@ fn App() -> impl IntoView {
     // 台帳の block は画面の状態を context から受ける（行 hs-blocks）。
     provide_context(screen);
     // 頁の題の語に替える字（節点の頁の block が節点の題を置く・行 g-title）。
-    provide_context(RwSignal::new(PageSubject::default()));
+    let subject = RwSignal::new(PageSubject::default());
+    provide_context(subject);
+    // 戻ると進むは履歴の URL から頁と mode を戻す（URL が状態の正・行 g-nav）。
+    let back = window_event_listener(ev::popstate, move |_| {
+        let now = search();
+        let next = Mode::from_query(&now);
+        if mode.get_untracked() != next {
+            mode.set(next);
+        }
+        go(page, subject, PageId::from_query(&now));
+    });
+    on_cleanup(move || back.remove());
     view! {
-        {top(page, mode)}
-        <main class="page">{page_view(page)}</main>
+        {top(page, subject, mode)}
+        // 頁が替わるたびに頁の枠を組み直す（上端の帯と知らせの接続は組み直さない）。
+        <main class="page">{move || page_view(page.get())}</main>
         <TipLayer/>
         <CardLayer/>
-        {(page == PageId::Home).then(|| view! { <CoachLayer/> })}
+        {move || (page.get() == PageId::Home).then(|| view! { <CoachLayer/> })}
     }
 }
 
@@ -147,11 +203,8 @@ fn back_to_board(note: RwSignal<Option<BackHow>>) {
 
 /// project の名の口を読み、読みの結果が変わるたびに名を進め、名が変わるたびに頁の題を置く（行 g-brand）。
 /// 一度読めた名は読めない間も持ち続け、読めるまでは None（題の字は frame の BRAND）。
-/// 題の語は頁の見出しの語で、context の PageSubject が在ればその字（行 g-title）。
-fn project_name(page: PageId) -> RwSignal<Option<String>> {
-    let subject = use_context::<RwSignal<PageSubject>>()
-        .unwrap_or_else(|| RwSignal::new(PageSubject::default()));
-    let heading = page.def().heading;
+/// 題の語は今の頁の見出しの語で、PageSubject が在ればその字（行 g-title・頁が替われば置き直す・行 g-nav）。
+fn project_name(page: RwSignal<PageId>, subject: RwSignal<PageSubject>) -> RwSignal<Option<String>> {
     let fetched = net::read(PROJECT_PATH);
     let name = RwSignal::new(None);
     Effect::new(move |_| {
@@ -162,6 +215,7 @@ fn project_name(page: PageId) -> RwSignal<Option<String>> {
         }
     });
     Effect::new(move |_| {
+        let heading = page.get().def().heading;
         let title = name.with(|n| {
             subject.with(|PageSubject(s)| doc_title(n.as_deref(), heading, s.as_deref()))
         });
@@ -171,8 +225,13 @@ fn project_name(page: PageId) -> RwSignal<Option<String>> {
 }
 
 /// 上端の帯: 戻る・題・頁の link・最終更新と読みの脈と読み込み不良の印と席の pill・mode の切り替え（frame の BACK と HEADER の順）。
-fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
-    let name = project_name(page);
+/// 頁の一生に 1 度だけ組み、頁の link の押しは頁を切り替える（行 g-nav）。
+fn top(
+    page: RwSignal<PageId>,
+    subject: RwSignal<PageSubject>,
+    mode: RwSignal<Mode>,
+) -> impl IntoView {
+    let name = project_name(page, subject);
     let note = RwSignal::new(None);
     let back = view! {
         <span class=BACK_WRAP>
@@ -187,7 +246,7 @@ fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
         .iter()
         .map(|part| match part.part {
             "brand" => view! {
-                <a class=part.class href=move || frame::href(PageId::Home, mode.get()) aria-label=label(part.key)>
+                <a class=part.class href=move || frame::href(PageId::Home, mode.get()) on:click=move |e| switch(e, PageId::Home, page, subject, mode) aria-label=label(part.key)>
                     <span inner_html=LOGO></span>
                     <span class="name">{move || name.with(|n| brand(n.as_deref()).to_string())}</span>
                 </a>
@@ -199,7 +258,7 @@ fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
                     Reading::Known(n) => Some(n),
                     Reading::Unknown => None,
                 };
-                let links = frame::nav_links(page)
+                let links = frame::nav_links(page.get_untracked())
                     .into_iter()
                     .map(|l| {
                         let badge = move || {
@@ -207,8 +266,15 @@ fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
                             frame::badge(n)
                                 .map(|n| view! { <span class=l.badge>{n}</span> })
                         };
+                        // 今の頁だけ on（nav_links の class）。
+                        let class = move || {
+                            frame::nav_links(page.get())
+                                .into_iter()
+                                .find(|c| c.page == l.page)
+                                .map_or("", |c| c.class)
+                        };
                         view! {
-                            <a href=move || frame::href(l.page, mode.get()) class=l.class data-v=l.key data-term=l.key>
+                            <a href=move || frame::href(l.page, mode.get()) class=class on:click=move |e| switch(e, l.page, page, subject, mode) data-v=l.key data-term=l.key>
                                 <span inner_html=l.page.def().icon></span>
                                 <span class="lbl hd-t">{label(l.key)}</span>
                                 {badge}
@@ -233,7 +299,8 @@ fn top(page: PageId, mode: RwSignal<Mode>) -> impl IntoView {
                     None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
                 };
                 // 席の pill は mode の切り替えの前（home の頁は席の block が同じ状態を出すので出さない・行 g-seatpill）。
-                let pill = frame::seat_shown(page).then(seatpill::view);
+                let shown = Memo::new(move |_| frame::seat_shown(page.get()));
+                let pill = move || shown.get().then(seatpill::view);
                 view! { <span class=part.class title=title>{at}</span>{fresh::pulse()}{fresh::mark()}{pill} }.into_any()
             }
             _ => {

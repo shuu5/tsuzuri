@@ -9,6 +9,7 @@
 //! 閉じられない窓の注記（行 g-back-note）: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
 //! 頁は src/pages の下に 1 頁 1 file（行 hs-pages・判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
 //! ここは頁の定義（`PageDef`）から頁の枠・nav・link・snapshot を導く（頁の変種の名を持たない）。
+//! 頁の切り替え（行 g-nav）: 頁の link の押し（`Press`）が文書を読み直さずに URL を積むかを `switch_url` が決める。
 
 use crate::mapview::encode;
 pub use crate::pages::PageId;
@@ -323,6 +324,23 @@ pub fn href(page: PageId, mode: Mode) -> String {
     } else {
         format!("?page={}&mode={}", page.id(), mode.key())
     }
+}
+
+/// 頁の link の押し（mouse の button の番号と修飾の鍵・行 g-nav）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Press {
+    pub button: i16,
+    pub ctrl: bool,
+    pub meta: bool,
+    pub shift: bool,
+    pub alt: bool,
+}
+
+/// 頁の link の押しで文書を読み直さずに積む URL（左の button を修飾の鍵なしで押し、今の頁と違う頁へ
+/// 行くときだけ `href` の字・ほかは None で browser の既定のまま＝新しい窓や tab・保存・同じ頁の読み直し）。
+pub fn switch_url(now: PageId, to: PageId, mode: Mode, press: Press) -> Option<String> {
+    let plain = press.button == 0 && !(press.ctrl || press.meta || press.shift || press.alt);
+    (plain && now != to).then(|| href(to, mode))
 }
 
 /// 節点の頁への link（節点の id は `%XX` にする・mode を URL に残す）。

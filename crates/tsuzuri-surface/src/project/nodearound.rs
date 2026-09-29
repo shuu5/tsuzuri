@@ -244,7 +244,7 @@ pub fn embed_reason(state: &PageState) -> Option<&'static str> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{Embeds, Source, embeds, mode_of, source, view};
+pub use dom::{Embeds, Source, embeds, forget, mode_of, source, view};
 
 /// つながりの block の DOM と事件の受け取り（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
@@ -288,8 +288,13 @@ mod dom {
     }
 
     thread_local! {
-        /// 節点の頁の 2 つの block が分ける読み（頁の一生の間だけ）。
+        /// 節点の頁の block が分ける読み（頁の枠を組んでから、頁を切り替えて次に組み直すまで・行 g-nav）。
         static SOURCE: Cell<Option<Source>> = const { Cell::new(None) };
+    }
+
+    /// 頁を切り替える前に読みを捨てる（前の枠の signal は片付くので、次に組む block が読みを作り直す）。
+    pub fn forget() {
+        SOURCE.set(None);
     }
 
     /// 頁に 1 つの読み（初めて呼んだ block が作り、次の block は同じ読みを使う）。
