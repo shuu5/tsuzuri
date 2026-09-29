@@ -1,0 +1,153 @@
+# 設計ノート surface-wave23a — （発効 2026-09-29・持ち主の裁定 t3-hub.56:20260927T2259Z-1〔計画 surface-plan の承認〕・記帳先 = 問いの bead t3-hub.56 の notes・行の拠り = memo t3-hub.72 の席の決めと要件 FR9）第 23 波 a — 答えの配達の撃ち直しと、答えの口の書きの前の読みの上限。要件は srs.yaml。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave23a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave23a.toml#<行 id>。
+meta:
+  id: surface-wave23a
+  title: 第 23 波 a — 答えの配達の撃ち直しと、答えの口の書きの前の読みの上限
+  version: v0.1
+  status: effective
+  generated: 2026-09-29
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+  note: 設計ノート surface-base の傘の行 e（面の server）の子の、境界の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは memo t3-hub.72（持ち主の問い 2026-09-29・候補 (a) と (b)）の昇格条件の席の決め（tsuzuri の server の欠陥の直しなので計画に行を足してすぐ起草する）と要件 FR9 で、持ち主の問いを置かない。計画の 9 節には置かず、このノートへ直に置く。起草は main 538c00e（計画 v0.88）の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      持ち主が board で答えた裁定が、席が待っている間に届かないことがある（memo t3-hub.72・2026-09-29）。
+      その日の 07:20Z の答えは、答えの口が台帳の読みの落ちで 3 回 503 を返して 4 回目に書け、書けた後の器の配達の口の 1 回の撃ちを器が受けず、
+      席が待っていた 07:16:11Z から 07:25:59Z まで答えが席に届かなかった（server の log と席の状態の打刻で確かめた）。
+      この 2 つを tsuzuri の server の欠陥として直す。行 e-deliver-retry は配達の撃ち直しと器の断りの字の log、
+      行 e-answer-reread は答えの口の書きの前の読みの上限と落ちた訳の log。どちらも器の code と台帳の形は変えない。
+      在りかは main 538c00e（計画 surface-plan 第 0.88 版）。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - id: e-deliver-retry
+        title: 答えの配達を器の配達の口が受けない時に、間を空けて上限まで撃ち直し、器の断りの字を server の log に残す
+        req: [FR9]
+        section: "3"
+        write-set: ["crates/tsuzuri-boundary/src/server/proc.rs", "crates/tsuzuri-boundary/src/server/ruling.rs", "crates/tsuzuri-boundary/src/server/batch.rs", "crates/tsuzuri-boundary/tests/fserve.rs", "+crates/tsuzuri-boundary/tests/dretry.rs", "=crates/tsuzuri-boundary/tests/server_ask.rs", "=crates/tsuzuri-boundary/tests/eretry.rs", "=crates/tsuzuri-boundary/tests/rvk.rs", "=crates/tsuzuri-boundary/tests/server_batch.rs", "=crates/tsuzuri-boundary/tests/bhalf.rs", "=crates/tsuzuri-boundary/tests/hbproc.rs"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --test dretry --no-tests=fail dretry_", "cargo nextest run -p tsuzuri-boundary --test fserve --no-tests=fail fserve_", "cargo nextest run -p tsuzuri-boundary --test server_ask --no-tests=fail server_ask_", "cargo nextest run -p tsuzuri-boundary --test eretry --no-tests=fail eretry_", "cargo nextest run -p tsuzuri-boundary --test rvk --no-tests=fail rvk_", "cargo nextest run -p tsuzuri-boundary --test server_batch --no-tests=fail server_batch_", "cargo nextest run -p tsuzuri-boundary --test bhalf --no-tests=fail bhalf_", "cargo nextest run -p tsuzuri-boundary --test hbproc --no-tests=fail hbproc_"]
+        size: M
+        done: (1) 歯 dretry_pace_and_words が、間 DELIVER_STEP が 15 秒・上限 DELIVER_SPAN が 1800 秒・PACE がその 2 つの組・log の字 NOT_TAKEN と GAVE_UP が節の字と一致することを確かめる (2) 歯 dretry_round_keeps_vessel_line が、偽の器が標準エラーに 3 行（前の行・節の断りの 1 行・空の行）を書いて rc 1 で終わる周の deliver の結果が NotTaken（字 rc が 0 でない と節の断りの 1 行）で偽の bdw を撃たず、rc 0 の周は Taken で偽の器と偽の bdw を 1 回ずつ撃つことを確かめる (3) 歯 dretry_retries_until_taken が、2 回断り 3 回目に受ける偽の器で redeliver が偽の器を 3 回・偽の bdw を 1 回撃つことを確かめる (4) 歯 dretry_stops_when_marked が、1 回目の断りの後に台帳の裁定に印が在る形になると redeliver が偽の器を 1 回だけ撃ち偽の bdw を撃たないことを確かめる (5) 歯 dretry_gives_up_at_span が、断り続ける偽の器で間 50 ms と上限 400 ms の redeliver が偽の器を 2 回以上 9 回以下撃って 10 秒の内に返り、偽の bdw を撃たないことを確かめる (6) 歯 dretry_spawns_use_pace が、src/server/ruling.rs に字 std::thread::spawn(move || redeliver( が 2 つ・src/server/batch.rs に 1 つ在り、どちらの file も字 PACE)); の数がその数と同じで、字 thread::spawn(move || deliver( が無いことを確かめる (7) 着地済みの歯 fserve・server_ask・eretry・rvk・server_batch・bhalf・hbproc は通る
+        depends: []
+      - id: e-answer-reread
+        title: 答えの口の書きの前の台帳の読みの 1 回の上限を 20 秒にし、どれも落ちたら落ちた訳を server の log に 1 行書く
+        req: [FR9]
+        section: "4"
+        write-set: ["crates/tsuzuri-boundary/src/server/ruling.rs", "crates/tsuzuri-boundary/src/server/ledger.rs", "+crates/tsuzuri-boundary/tests/areread.rs", "=crates/tsuzuri-boundary/tests/eretry.rs", "=crates/tsuzuri-boundary/tests/server_ask.rs", "=crates/tsuzuri-boundary/tests/server_batch.rs", "=crates/tsuzuri-boundary/tests/rvk.rs", "=crates/tsuzuri-boundary/tests/bhalf.rs", "=crates/tsuzuri-boundary/tests/server_src.rs", "=crates/tsuzuri-boundary/tests/server_coalesce.rs", "=crates/tsuzuri-boundary/tests/fstop.rs", "=crates/tsuzuri-boundary/tests/qgate.rs"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --test areread --no-tests=fail areread_", "cargo nextest run -p tsuzuri-boundary --test eretry --no-tests=fail eretry_", "cargo nextest run -p tsuzuri-boundary --test server_ask --no-tests=fail server_ask_", "cargo nextest run -p tsuzuri-boundary --test server_batch --no-tests=fail server_batch_", "cargo nextest run -p tsuzuri-boundary --test rvk --no-tests=fail rvk_", "cargo nextest run -p tsuzuri-boundary --test bhalf --no-tests=fail bhalf_", "cargo nextest run -p tsuzuri-boundary --test server_src --no-tests=fail server_src_", "cargo nextest run -p tsuzuri-boundary --test server_coalesce --no-tests=fail server_coalesce_", "cargo nextest run -p tsuzuri-boundary --test fstop --no-tests=fail fstop_", "cargo nextest run -p tsuzuri-boundary --test qgate --no-tests=fail qgate_", "cargo nextest run -p tsuzuri-boundary --lib --no-tests=fail server_src_unstartable_bd_is_unknown"]
+        size: S
+        done: (1) 歯 areread_limits_and_words が、READ_TIMEOUT が 20 秒・BD_TIMEOUT が 5 秒・READ_TRIES と RETRY_STEP が 3 と 1 秒・字 UNREAD と、2 つの訳の字（時間切れ と rc が 0 でない と節の偽の bd の行）を渡した unread_line の 1 行が節の字と一致することを確かめる (2) 歯 areread_slow_read_is_taken が、6 秒寝てから fixture を出す偽の bd で、Source の text_alone が None を返し、reread が fixture の字を返し、偽の bd の回が合わせて 2 回であることを確かめる (3) 歯 areread_down_words が、標準エラーに節の 1 行を書いて rc 1 で終わる偽の bd で text_within が字 rc が 0 でない と節の行を返し、reread が None で偽の bd を 3 回撃ち、3 秒寝る偽の bd に上限 500 ms の text_within が字 時間切れ を返すことを確かめる (4) 着地済みの歯 eretry・server_ask・server_batch・rvk・bhalf・server_src・server_coalesce・fstop・qgate と境界の単体の歯 server_src_unstartable_bd_is_unknown は通る
+        depends: [e-deliver-retry]
+  - n: 3
+    type: prose
+    title: 行 e-deliver-retry — 配達の撃ち直しと器の断りの字
+    body: |
+      在りかの main は 538c00e（計画 surface-plan 第 0.88 版）で、節の字はこの main の境界の crate の字から取った。
+
+      今の形（main の字）。src/server/ruling.rs の fn accept と fn reopen と src/server/batch.rs の fn accept は、席の target と state dir の両方が在る時だけ、
+      別の thread で fn deliver を 1 度呼んで待たずに応答する。deliver は台帳を読み直し（Source の text_alone）、読めて pending のどれにも印が在れば撃たず、
+      器の配達の口（scribe2 seat deliver --state-dir S --target T --ruling ID）を proc.rs の fn capture で 1 度だけ撃ち（上限 DELIVER_TIMEOUT 10 秒）、
+      rc 0 なら pending の順に経路が配達の口の印を notes に足し、受けなければ標準エラーに 1 行（tz surface serve と NOT_TAKEN の字と id と席）を書いて終える。
+      capture は子の標準エラーを捨て、rc が 0 でなければ None を返すので、器の断りの字は残らない。撃ち直す者は居ない。
+
+      なぜ。器の seat deliver は、受けない周に標準エラーへ 1 行（seat deliver、refused か unconfirmed、reason= の後に語、target= の後に target）を書いて rc 1（store の断りだけ rc 2）で終わり、
+      器の event log には書かない（器の repo の crates/scribe2/src/seat/deliver.rs の fn run と fn refused_line・器の main 66d73b43）。
+      語は閉じた 13 語（id-empty・id-shape・id-long・state-dir・store・no-row・busy・state-missing・state-unreadable・no-rule・pane-missing・input-busy・input-unknown）と、
+      送達の本体（seat/inject.rs の fn deliver_within）が返す語（入力欄の門の語と tmux-failed ほか）。
+      門の順は id・置き場・event log・登録 row・席の状態の打刻の最終行が idle・送達の窓の rules 行・pane・入力欄（seat/inject.rs の fn guard_input と seat/mod.rs の fn input_tail）。
+      input_tail は pane の最後の字 ❯ を含む行の右を trim した字で、空なら通し、字が在れば input-busy、行が無ければ input-unknown で断る。
+      07:20Z の断りの語は server が捨てたので分からない（未確かめ）。席の状態の打刻は 07:16:11Z の Stop から 07:25:59Z の UserPromptSubmit まで idle で、
+      この間に送達の記録（器の tick の記録の seat-inject の行）は無い。席が idle になった後に席の pane を 3 回撮った写し（07:32Z から 07:33Z）では、
+      最後の ❯ の行の右は 3 回とも空で、入力欄の門は通る形だった（入力欄に提案の薄い字が残って門が断り続ける形は、この写しでは見えない）。
+      席の停止の hook は席の turn の終わりにしか撃たれないので、席が idle の間に器が断ると、次に誰かが席を起こすまで答えは届かない。
+
+      形。
+      - proc.rs に pub enum Failed（Unstartable・TimedOut・Exit の 3 枝・Exit は子の標準エラーの最後の空でない行の字を持つ）と pub fn run を足す。
+        run は capture と同じ撃ち（cwd・標準入力は空・新しい process group・時間切れは group ごと止める）で、標準エラーも別の thread で読み、
+        rc 0 なら標準出力、起動できなければ Unstartable、上限の内に終わらなければ TimedOut、rc が 0 でなければ Exit（子が終わった後に上限の残りまで標準エラーの読みを待ち、読みきれなければ空の字）を返す。
+        Failed の fn word は log の字（起動できない・時間切れ・rc が 0 でない と : と空白と行）を返す。capture の字と振る舞いは変えない。
+      - ruling.rs に pub enum Round（Marked・Taken・NotTaken の 3 枝・NotTaken は Failed の word の字）を足し、fn deliver はその 1 周の結果を返す。
+        deliver は器を run で撃ち、受けなければ印を置かず NotTaken を返す（log は書かない）。印の在る周の Marked と、rc 0 の周の印の書き（落ちた印ごとの 1 行）は今のまま。
+      - ruling.rs に pub fn redeliver（deliver の引数と pace）を足す。redeliver は deliver を撃ち、Marked か Taken なら終える。NotTaken なら、最初の周と字が前の周と違う周だけ
+        標準エラーに 1 行（tz surface serve と NOT_TAKEN の字と id と 席 と target と 器 と NotTaken の字）を書き、最初の周から pace.span を越えない間は pace.step を空けて次の周を撃つ。
+        次の周が上限を越えるなら 1 行（tz surface serve と GAVE_UP の字と id と 席 と target と撃った回の数）を書いて終える。周ごとに台帳を読み直すので、撃ち直しの間に停止の hook が印を置けば次の周の Marked で止まる。
+      - 定数（ruling.rs）: DELIVER_STEP は 15 秒、DELIVER_SPAN は 1800 秒（30 分）、pub struct Pace（step と span）と pub const PACE（DELIVER_STEP と DELIVER_SPAN の組）、
+        GAVE_UP の字は 配達の撃ち直しを上限で止めた（印を置かず、席の停止の hook が拾う）。NOT_TAKEN の字（配達の口が今は受けない（印を置かず、席の停止の hook が拾う））は変えない。
+      - ruling.rs の accept と reopen と batch.rs の accept の別の thread は deliver の代わりに redeliver を PACE で呼ぶ（std::thread::spawn(move || redeliver(…, PACE)) の形・ruling.rs に 2 つ・batch.rs に 1 つ）。
+        batch.rs の use の deliver を redeliver と PACE に替え、両 file の頭の doc の配達の字を撃ち直しの形に直す。
+      - 着地済みの歯 tests/fserve.rs の型の別名 DeliverFn の返りの型を ruling::Round にする（1 行・歯の期待は変えない）。
+
+      値の置き場。間と上限は code の型付きの定数に置く（憲法 P-1.1 の実装の型付きの定数）。前例は行 e-ruling-retry の READ_TRIES と RETRY_STEP と、DELIVER_TIMEOUT・WRITE_TIMEOUT で、規則の表の行は持たない。
+      規則の表の行（R-22 のような器の値の写しの行）にするには行の追加に裁定 id が要る（憲法 P-17.1）ので、この行では足さない。
+
+      新しい歯 tests/dretry.rs（接頭辞 dretry_）。偽の bd は作業場の out.json（fixture tests/fixtures/stop/ledger.json の写し）を出す script、偽の bdw は回ごとに argv を記録する script、
+      偽の器は回ごとに argv を記録し、作業場の scribe2.fails の数の回までは作業場の on-fail を sh で撃ってから標準エラーに 3 行（前の行、断りの 1 行 seat deliver: refused reason=input-busy target=tsuzuri:0.1、空の行）を書いて rc 1 で終わる script。
+      裁定は fixture の fx-s.2 の fx-s.2:20260928T0101Z-1（印が無い）。歯の間と上限は 50 ms と 2000 ms（dretry_gives_up_at_span だけ 50 ms と 400 ms）。
+      dretry_stops_when_marked は、fixture の字 逐語 = よい の後に同じ裁定の経路が停止の印の行を足した台帳を作業場の marked.json に置き、on-fail でそれを out.json へ写す。
+      dretry_accept_paths_use_pace は ruling.rs と batch.rs の src の字を読む。
+      どの歯も fixture の id に台帳の接頭辞を使わない（fx-s と tsuzuri:0.1 と batch の形は着地済みの歯 fserve と同じ）。
+
+      着地済みの歯。読み手の grep は境界の crate の tests と src と xtask と、契約・中核・面の crate の tests で、字 ruling::deliver・deliver_argv・NOT_TAKEN・DELIVER_TIMEOUT・--scribe2・Delivery・fail_at と proc の fn を探した。
+      fserve（DELIVER の型・deliver の 1 周の期待）は書く。server_ask（server_ask_failed_delivery_stays_200_with_stderr_line は NOT_TAKEN の行が来たら tz を止め、偽の器の回が 1 で、裁定の id を含む行が 1 行）・
+      eretry（配達を応答の後の thread で待つ）・rvk（取り消しの配達の argv が 1 つ・ruling.rs の字 deliver_argv( が 2 つ）・server_batch（偽の器が断る周の回が 1）・bhalf・hbproc（proc.rs の capture）は置き場だけの = で持つ。
+      server_ask と server_batch と fserve の断りの歯は、最初の断りの後 15 秒の間に tz を止めるか数えるので、撃ち直しの周は数えに入らない。
+
+      歯で測らず、この行の差分で持つ字。log の 2 行の形（NOT_TAKEN の行の 器 の後の字と、GAVE_UP の行の回の数）と、字の同じ断りを 2 度書かないこと（歯は標準エラーを読まない）。
+      run の標準エラーの読みを子の終わりの後に上限の残りまで待つこと。batch.rs と ruling.rs の頭の doc の字。
+      器が送ったが送達を確かめられない周（unconfirmed）も撃ち直すので、席に同じ指し示しの 1 行が 2 度届くことがある。受けた周の入力欄に字が残れば次の周は入力欄の門で断られ、
+      席が turn に入れば busy で断られて停止の hook が拾う。撃ち直しの周の台帳の読みと停止の hook の印の書きが前後すると、同じ裁定を 2 経路で返すことがある（席は台帳の裁定を読むので害は無い）。
+
+      依存と順。書く src は境界の crate の proc.rs・ruling.rs・batch.rs。同じノートの行 e-answer-reread が ruling.rs を書き proc.rs の run を使うので、この行を先に流す（ノートの depends）。
+      計画だけの行 e-approval-event と e-multi-answer も ruling.rs を書くので、この 2 行の後に置く（計画の 5 節）。
+      便 i-11（ノート surface-wave22b・未着地）は歯 fserve・server_ask・eretry・rvk を置き場だけの = で持つ。この行は fserve を書くので、順は便の bead の依存で席が付ける。
+
+      範囲の外。器の側の見張り（席が idle の間に起きた事を席へ届ける道を 1 つにする・memo t3-hub.72 の候補 (c) と memo t3-hub.70）は持ち主が時期を決める。
+      器の断りの語を器の event log に書くこと、入力欄の門が提案の薄い字で断る形の直しは器の code なので、この行では書かない（写しで断る形が見えた時に器の席へ頼む）。
+      撃ち直しを上限で止めた後の知らせ（board の届いていないの印・規則の行 R-21 の 2 分）は計画だけの行 f-undelivered が持つ。
+  - n: 4
+    type: prose
+    title: 行 e-answer-reread — 答えの口の書きの前の読みの上限と落ちた訳
+    body: |
+      在りかの main は 538c00e（計画 surface-plan 第 0.88 版）で、節の字は行 e-deliver-retry（同じノート）の差分を当てた木で試作した。
+
+      今の形（main の字）。答えの口（src/server/routes/ruling.rs の fn post_ruling）は ruling.rs の fn accept を撃ち、accept は書きの前に fn reread で台帳を読み直す。
+      reread は変化の見張りの読み（src/server/events.rs の fn watch_ledger・周期 500 ms・読み直し 5 秒）の結果を使わず、Source の text_alone で新しい子 process の bd を撃ち、
+      落ちれば RETRY_STEP（1 秒）を空けて READ_TRIES（3 回）まで撃ち直す（行 e-ruling-retry）。1 回の読みの上限は src/server/ledger.rs の BD_TIMEOUT（5 秒・表示の読みの上限・規則の行 R-21）。
+      どれも落ちれば accept は LedgerUnknown を返し、口は 503 と本文 ledger-unknown を返して断りの 1 行を標準エラーに書く。取り消し（fn revoke）と束の受付（batch.rs の fn accept）も同じ reread を通る。
+      text_alone は proc.rs の capture を撃つので、落ちた訳（時間切れか rc か）は残らない。
+
+      なぜ。memo t3-hub.72 の答えの口の 3 回の 503 は、見張りの読みの Unknown ではなく、答えのたびの 3 回の直の読みがどれも落ちたもの（答えの口は見張りの読みを見ない）。
+      bd の読み（bd --readonly list --all --limit 0 --json・出力は約 790 KB）の時間を 2026-09-29T07:31Z に同じ host で測ると、1 本では 1.3 秒から 3.6 秒、4 本を同時に撃つと 2.4 秒・3.6 秒・5.4 秒・5.8 秒で、
+      4 本とも rc 0（読み手どうしの錠の取り合いで落ちる形は見えない）、2 本が 5 秒を越えた。規則の行 R-21 の note も、高い負荷の時に台帳の読みの 9.4% が 5 秒の上限で落ちたと書く。
+      07:20Z の落ちの訳（時間切れか rc か）は server が捨てたので分からない（未確かめ）。書きの前の読みは表示の読みでなく、書きそのもの（WRITE_TIMEOUT 120 秒）の前に 1 度だけ撃つ読みなので、上限を表示の 5 秒に揃える要は無い。
+
+      形。
+      - ledger.rs の Source に pub fn text_within（上限 timeout）を足す。text_alone と同じ bd の撃ちを proc.rs の run（行 e-deliver-retry）で撃ち、読めれば字、落ちれば Failed の word の字（UTF-8 でなければ字 UTF-8 でない）を返す。
+        text_alone は text_within を BD_TIMEOUT で撃って字だけを返す形にし、振る舞いは変えない（停止の hook と問いの門と見張りの読みの上限は 5 秒のまま）。
+      - ruling.rs に READ_TIMEOUT（20 秒）と UNREAD の字（書きの前の台帳の読みが落ちた）と pub fn unread_line を足す。reread は 1 回の読みを text_within の READ_TIMEOUT で撃ち、
+        READ_TRIES と RETRY_STEP は今のまま。どれも落ちれば unread_line の 1 行（tz surface serve と : と空白と UNREAD と : と空白と、回ごとの訳の字を ・ で並べた字）を標準エラーに書いて None を返す。
+        503 と本文 ledger-unknown と断りの 1 行は今のまま。READ_TRIES の doc の 1 回の読みの上限の字を READ_TIMEOUT に直し、頭の doc の受付の順の 2 の字を直す。
+      - 一番遅い周は 3 回とも 20 秒で落ちて 62 秒で 503 を返す（今は 17 秒）。答えの口の応答はその間待つ（書きは今も 120 秒まで待つ）。
+
+      新しい歯 tests/areread.rs（接頭辞 areread_）。偽の bd は撃たれた回を数え、場ごとに script に書いた秒だけ寝てから out.json（fixture tests/fixtures/stop/ledger.json の写し）を出す script で、
+      落ちる場の偽の bd は標準エラーに 1 行 database is locked を書いて rc 1 で終わる。areread_slow_read_is_taken は 6 秒寝る偽の bd、areread_down_words の時間切れは 3 秒寝る偽の bd と上限 500 ms。
+      unread_line の見本の字は 2 つの訳（時間切れ と rc が 0 でない: database is locked）を ・ で並べた 1 行。
+
+      着地済みの歯。読み手の grep は境界の crate の tests と src で、字 reread・text_alone・ruling::accept・ruling::revoke・batch::accept と Source の fn を探した。
+      eretry（偽の bd が rc 1 で 2 回落ちて 3 回目に読める・3 回とも落ちれば LedgerUnknown・READ_TRIES と RETRY_STEP の値）・server_ask・server_batch・rvk・bhalf は reread を通り、
+      server_src と server_coalesce と単体の歯 server_src_unstartable_bd_is_unknown は Source の読み、fstop（停止の hook）と qgate（問いの門）は text_alone を通る。どれも置き場だけの = で持つ。
+
+      歯で測らず、この行の差分で持つ字。reread が落ちた周に unread_line の行を標準エラーに書くこと（歯は標準エラーを読まない）と、ruling.rs の頭の doc の字。
+
+      依存と順。書く src は境界の crate の ruling.rs と ledger.rs。同じノートの行 e-deliver-retry の後（proc.rs の run を使い、同じ ruling.rs を書く・ノートの depends）。
+      ledger.rs は計画の 5 節の鎖（e-hold から c-misfit-pair）の着地済みの行の後で、走る行は無い。
+
+      範囲の外。台帳の読みを速くすること（bd の出力の大きさ・読み手の数）と、見張りの読みの上限（BD_TIMEOUT）は変えない。答えの口が見張りの最後に読めた字を使う形は採らない（書きの前は持ち回しの値を使わない・行 e-coalesce）。
+
+figures: []
