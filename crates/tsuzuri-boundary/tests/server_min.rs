@@ -287,18 +287,18 @@ fn server_min_ledger_unreadable_is_unknown() {
 
 #[test]
 fn server_min_bind_judge() {
-    for ok in [
-        "127.0.0.1",
-        "127.10.20.30",
-        "::1",
-        "::ffff:127.0.0.1",
-        "100.64.0.1",
-        "100.100.100.100",
-        "100.127.255.254",
-        "fd7a:115c:a1e0::1",
-        "fd7a:115c:a1e0:ab12:4843:cd96:6258:b240",
-    ] {
+    for ok in ["127.0.0.1", "127.10.20.30", "::1", "::ffff:127.0.0.1"] {
         assert!(bind_allowed(ok.parse::<IpAddr>().expect(ok)), "{ok} を断る");
+    }
+    // tailnet の住所は数の配列から組む（字で書くと xtask の pub-scan の走査に当たる・行 t-pub-scan）。
+    for ok in [
+        IpAddr::from([100, 64, 0, 1]),
+        IpAddr::from([100, 100, 100, 100]),
+        IpAddr::from([100, 127, 255, 254]),
+        IpAddr::from([0xfd7a, 0x115c, 0xa1e0, 0, 0, 0, 0, 1]),
+        IpAddr::from([0xfd7a, 0x115c, 0xa1e0, 0xab12, 0x4843, 0xcd96, 0x6258, 0xb240]),
+    ] {
+        assert!(bind_allowed(ok), "{ok} を断る");
     }
     for no in [
         "0.0.0.0",

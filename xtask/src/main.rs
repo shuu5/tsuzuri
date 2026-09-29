@@ -1,11 +1,13 @@
 //! xtask: `cargo run -q -p xtask -- <task>` の形で起動する（alias の file は置かない）。
-//! check は workspace の build・歯の全部・clippy（host と面の wasm）・面の組み立てを順に撃ち、最初に落ちた段の rc を返す。
+//! check は公開の走査（pub-scan）・workspace の build・歯の全部・clippy（host と面の wasm）・面の組み立てを順に撃ち、最初に落ちた段の rc を返す。
 //! surface-build は面の crate の dir で trunk を呼び、dist に index.html と wasm の file を出す（便 g-min）。
 //! accept は受入 12 条を全画面 × 2 幅 × 2 mode で測り report を書く（行 j-runner・入口は accept の module）。
 //! surface-build は dist が揃えば wasm・js・css の file ごとに隣へ gzip の写し（名に .gz）を書く（行 g-gz・gz の module）。
+//! pub-scan は追跡される file の字と基準の commit より後の commit に tailnet の住所・名と一覧の語を探す（行 t-pub-scan・pubscan の module）。
 
 mod accept;
 mod gz;
+mod pubscan;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -46,10 +48,11 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("check") if args.len() == 1 => exit_code(check(&workspace_root())),
         Some("surface-build") if args.len() == 1 => exit_code(surface_build(&workspace_root())),
+        Some("pub-scan") if args.len() == 1 => exit_code(pubscan::run(&workspace_root())),
         Some("accept") => exit_code(accept::run(&args[1..], &workspace_root())),
         _ => {
             eprintln!(
-                "usage: cargo run -q -p xtask -- <check|surface-build>\n{}",
+                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}",
                 accept::USAGE
             );
             ExitCode::from(2)
@@ -68,8 +71,15 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// 段を順に撃ち、最初に落ちた段の rc を返す（全部通れば 0）。
+/// 公開の走査を撃ち、段を順に撃ち、最初に落ちた段の rc を返す（全部通れば 0）。
+/// 走査が落ちれば後の build・歯・clippy・面の組み立てを撃たない。
 fn check(root: &Path) -> i32 {
+    eprintln!("xtask check: pub-scan");
+    let rc = pubscan::run(root);
+    if rc != 0 {
+        eprintln!("xtask check: 落ちた段 pub-scan (rc {rc})");
+        return rc;
+    }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     for step in CHECK_STEPS {
         eprintln!("xtask check: cargo {}", step.join(" "));
