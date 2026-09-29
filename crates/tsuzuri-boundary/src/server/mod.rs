@@ -220,12 +220,13 @@ impl Server {
             design: Design::new(&config.repo, &config.folio),
             runs: Runs::new(config.state_dir.as_deref()),
         };
+        let held = Held::new();
         let seats = Seats::new(
             &config.scribe2,
             config.state_dir.as_deref(),
             config.seat.as_deref(),
             &config.repo,
-            Held::new(),
+            held.clone(),
         );
         let (design, runs) = (sources.design.clone(), sources.runs.clone());
         let seat_marks = seats.marks();
@@ -238,7 +239,8 @@ impl Server {
                     state_dir.clone(),
                     config.repo.clone(),
                 )
-                .with_own(sources.ledger.clone()),
+                .with_own(sources.ledger.clone())
+                .with_held(held.clone()),
             )
         });
         let acct_marks = Arc::new(Mutex::new(Vec::new()));

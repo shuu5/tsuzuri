@@ -14,6 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GIT_HOLD};
+use tsuzuri_boundary::server::held::FAILED_HOLD;
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
 use tsuzuri_contract::account::{
@@ -711,12 +712,11 @@ fn server_acct_holds_five_seconds() {
     }
     thread::sleep(HOLD + Duration::from_millis(300));
     acct.doc(NOW);
-    let twice = |calls: &[String]| {
-        let mut doubled: Vec<String> = calls.iter().flat_map(|c| [c.clone(), c.clone()]).collect();
-        doubled.sort();
-        doubled
-    };
-    assert_eq!(place.calls("scribe2"), twice(&once.0), "5 秒の後の読み");
+    // 5 秒の後は tick status だけを撃ち直す（doctor と usage と rules get は SLOW_HOLD の間持つ・行 e-held-acct）。
+    let mut want = once.0.clone();
+    want.extend(once.0.iter().filter(|c| c.starts_with("seat tick status")).cloned());
+    want.sort();
+    assert_eq!(place.calls("scribe2"), want, "5 秒の後の読み");
     // git は GIT_HOLD のあいだ持ち回し、台帳は印が同じで読めていた proj-a と proj-e の bd を撃たない（行 a-lean）。
     assert_eq!(place.calls("git"), once.1);
     assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-b", "proj-e"]);
@@ -1047,31 +1047,26 @@ fn acchold_card_follows_off_file() {
         Reading::Known(false),
         "停止の記録の後の読み"
     );
-    assert_eq!(count(), 16, "{:?}", place.calls("scribe2"));
+    assert_eq!(count(), 10, "{:?}", place.calls("scribe2"));
     assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(false));
     acct.marks();
-    assert_eq!(count(), 16, "印が動かなければ持ち回す");
+    assert_eq!(count(), 10, "印が動かなければ持ち回す");
     acchold_switch(&place, false);
     assert_eq!(
         acchold_heartbeat(&acct.doc(NOW)),
         Reading::Known(true),
         "停止の記録を消した後の読み"
     );
-    assert_eq!(count(), 24, "{:?}", place.calls("scribe2"));
+    assert_eq!(count(), 12, "{:?}", place.calls("scribe2"));
+    // state-a の tick status と doctor だけが 3 回、ほかは 1 回。
     let calls = place.calls("scribe2");
     let distinct: BTreeSet<&String> = calls.iter().collect();
     for argv in distinct {
-        assert_eq!(
-            calls.iter().filter(|c| *c == argv).count(),
-            3,
-            "argv ごとに 3 回: {argv}"
-        );
+        let want = if argv.ends_with("state-a") && (argv.starts_with("seat tick") || argv.starts_with("doctor")) { 3 } else { 1 };
+        assert_eq!(calls.iter().filter(|c| *c == argv).count(), want, "{argv}");
     }
     assert_eq!(place.calls("git").len(), 10, "{:?}", place.calls("git"));
-    assert_eq!(
-        place.calls("bd"),
-        ["proj-a", "proj-b", "proj-b", "proj-b", "proj-e"]
-    );
+    assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
 }
 
 #[test]
@@ -1099,9 +1094,9 @@ fn acchold_state_log_regathers() {
     .expect("state.jsonl に idle の行を足す");
     let second = acct.doc(NOW);
     assert_eq!(session(&second), (SeatState::Wait, Some(1_790_510_300)));
-    assert_eq!(place.calls("scribe2").len(), 16, "印が動けば集め直す");
+    assert_eq!(place.calls("scribe2").len(), 8, "状態の記録は印にしない");
     assert_eq!(acct.doc(NOW), second, "印が動かなければ同じ電文");
-    assert_eq!(place.calls("scribe2").len(), 16, "印が動かなければ持ち回す");
+    assert_eq!(place.calls("scribe2").len(), 8, "印が動かなければ持ち回す");
 }
 
 /// state dir の event log の更新時刻だけを 1 秒進める（字と長さは替えない・引数の state dir なら集め直しを起こす）。
@@ -1134,20 +1129,24 @@ fn alean_ledger_follows_mark() {
     assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first, "印の同じ台帳は前の読み");
-    assert_eq!(place.calls("scribe2").len(), 16, "印が動けば集め直す");
-    assert_eq!(
-        place.calls("bd"),
-        ["proj-a", "proj-b", "proj-b", "proj-e"],
-        "読めなかった proj-b だけを撃ち直す"
-    );
+    assert_eq!(place.calls("scribe2").len(), 11, "usage と state-a の tick status と doctor");
+    let unread = ["proj-a", "proj-b", "proj-e"];
+    assert_eq!(place.calls("bd"), unread, "読めなかった proj-b は FAILED_HOLD の内は撃たない");
     alean_mark(&place, "proj-a");
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first, "台帳の印が動いた後の読み");
-    assert_eq!(place.calls("scribe2").len(), 24);
+    assert_eq!(place.calls("scribe2").len(), 14);
     assert_eq!(
         place.calls("bd"),
-        ["proj-a", "proj-a", "proj-b", "proj-b", "proj-b", "proj-e"],
+        ["proj-a", "proj-a", "proj-b", "proj-e"],
         "印の動いた proj-a を読み直す"
+    );
+    thread::sleep(FAILED_HOLD + Duration::from_millis(300));
+    assert_eq!(acct.doc(NOW), first);
+    assert_eq!(
+        place.calls("bd"),
+        ["proj-a", "proj-a", "proj-b", "proj-b", "proj-e"],
+        "FAILED_HOLD を過ぎれば proj-b を撃ち直す"
     );
 }
 
@@ -1161,7 +1160,7 @@ fn alean_git_held() {
     assert_eq!(once.len(), 10, "{once:?}");
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first);
-    assert_eq!(place.calls("scribe2").len(), 16, "印が動けば集め直す");
+    assert_eq!(place.calls("scribe2").len(), 11, "印が動けば usage と tick status と doctor");
     assert_eq!(place.calls("git"), once, "持ち回しの内は git を撃たない");
     thread::sleep(Duration::from_millis(500));
     alean_bump(&place.host_state());
@@ -1191,7 +1190,7 @@ fn alean_own_ledger_shared() {
     alean_mark(&place, "proj-a");
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first);
-    assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-b", "proj-e"]);
+    assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
     assert_eq!(first, place.acct().doc(NOW), "with_own の無い読みと同じ電文");
 }
 
@@ -1276,15 +1275,31 @@ fn hbon_acct_reads_tick_word() {
         Reading::Known(true),
         "明示の on の記録の後の読み"
     );
-    assert_eq!(count(), first * 2, "{:?}", place.calls("scribe2"));
+    assert_eq!(count(), first + 2, "{:?}", place.calls("scribe2"));
     assert_eq!(acchold_heartbeat(&acct.doc(NOW)), Reading::Known(true));
     acct.marks();
-    assert_eq!(count(), first * 2, "印が動かなければ持ち回す");
+    assert_eq!(count(), first + 2, "印が動かなければ持ち回す");
     fs::remove_file(&on).expect("明示の on の記録を消す");
     assert_eq!(
         acchold_heartbeat(&acct.doc(NOW)),
         Reading::Known(true),
         "file の有無でなく行の字で読む"
     );
-    assert_eq!(count(), first * 3, "{:?}", place.calls("scribe2"));
+    assert_eq!(count(), first + 4, "{:?}", place.calls("scribe2"));
+}
+
+#[test]
+fn acchold_marks_keep_last_gather() {
+    let place = Place::new("acchold-marks", false);
+    let acct = place.acct();
+    acct.doc(NOW);
+    let first = acct.marks();
+    assert!(!first.is_empty());
+    let shots = || (place.calls("scribe2"), place.calls("bd"));
+    let after_doc = shots();
+    thread::sleep(HOLD + Duration::from_millis(300));
+    for _ in 0..2 {
+        assert_eq!(acct.marks(), first, "最後の集めの印の一覧");
+    }
+    assert_eq!(shots(), after_doc, "marks は器と bd を撃たない");
 }

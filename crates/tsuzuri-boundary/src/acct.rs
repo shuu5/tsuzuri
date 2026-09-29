@@ -12,10 +12,15 @@
 //! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない・行 c-dormant）と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）と、口座の線の材料の
 //! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
-//! state dir が引けない anchor の project は器の出力と file と台帳を読まない。集めた字は 5 秒のあいだ持ち回す。
-//! ただし変化の印の file（`marks`）の更新時刻と長さが集める前に取った値と違えば、5 秒の中でも集め直す（行 e-acct-hbmark）。
-//! 集め直しでも git の読み（state dir と board の port）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
+//! state dir が引けない anchor の project は器の出力と file と台帳を読まない。
+//! 器の出力は持ち回しの表（`Held`・行 e-held-acct・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。usage は席の card の読みと
+//! 同じ `read_held` で読み（鍵も印も同じ）、tick status と doctor は席の card の読みの鍵の末に字 `ACCT_KEY` を足した鍵と、
+//! state dir の全部の席の dir の入力の印に event log を足した印（`vessel_marks`）で持ち、rules get は印の無い鍵で `SLOW_HOLD` 持つ。
+//! file の読みは要求ごと。`marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める（行 e-acct-hbmark）。
+//! 集めのあいだは錠（`gate`）で次の要求を待たせる。
+//! git の読み（state dir と board の port）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
 //! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
+//! 読めなかった読みは印が同じでも `FAILED_HOLD` の間は撃ち直さない。
 //! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を分け合い、bd を撃たない。
 //! 口の登録と変化の知らせへの印の足しは、つなぐ行 h-wire が行う。
 
@@ -24,7 +29,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
@@ -32,12 +37,12 @@ use tsuzuri_core::account::host::{CAP_ROWS, HostTexts, ORCHESTRATOR, RECORD_KIND
 use tsuzuri_core::account::project::{self, ProjectTexts};
 use tsuzuri_core::account::project_name;
 
-use crate::server::events::stamp;
+use crate::server::held::{FAILED_HOLD, Held};
 use crate::server::ledger::{Got, Mark, Source, capture};
 use crate::server::runs::EVENTS_LOG;
 use crate::server::seat::{
-    DOCTOR_ARGS, GROUPS_DIR, HOLD, HOST_TOML, SCRIBE2_TIMEOUT, STATE_LOG, Seat, TICK_ARGS,
-    TICK_LAST, USAGE_ARGS,
+    DOCTOR_ARGS, GROUPS_DIR, HOST_TOML, SCRIBE2_TIMEOUT, SLOW_HOLD, STATE_LOG, Seat, TICK_ARGS,
+    TICK_LAST, USAGE_ARGS, ceiling, input_marks, read_held,
 };
 
 /// 既定の git の program の名。
@@ -79,13 +84,8 @@ struct Texts {
     stale: Option<Instant>,
 }
 
-/// 印の file ごとの更新時刻と長さ（無ければ None）。
-type Stamps = Vec<Option<(SystemTime, u64)>>;
-
-/// 印の一覧の順に、file の更新時刻と長さを並べる。
-fn stamps(marks: &[PathBuf]) -> Stamps {
-    marks.iter().map(|p| stamp(p)).collect()
-}
+/// tick status と doctor の持ち回しの鍵の末に足す字（席の card の読みと鍵と印を分ける）。
+pub const ACCT_KEY: &str = "acct";
 
 /// git の読みの字（宣言の anchor の順に、state dir と board の port の字）。
 type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>);
@@ -101,12 +101,16 @@ pub struct Acct {
     bd: OsString,
     state_dir: PathBuf,
     cwd: PathBuf,
-    /// 集めた時刻・集める前に取った印の file の更新時刻と長さ・集めた字。
-    held: Mutex<Option<(Instant, Stamps, Texts)>>,
+    /// 器の出力の持ち回しの表（server が席の card の読みと分け合う・行 e-held-acct）。
+    held: Held,
+    /// 集めるあいだ次の要求を待たせる錠（同じ出力を二重に撃たない）。
+    gate: Mutex<()>,
+    /// 最後の集めの印の一覧（一度も集めていなければ None）。
+    last_marks: Mutex<Option<Vec<PathBuf>>>,
     /// anchor の字 → 台帳の読みの出所（持ち続けて最後に読めた字を次の gather に残す・行 e-hold）。
     ledgers: Mutex<BTreeMap<String, Source>>,
-    /// anchor の字 → 読む前に取った台帳の印と、その読みの結果（行 a-lean）。
-    seen: Mutex<BTreeMap<String, (Mark, Got)>>,
+    /// anchor の字 → 読む前に取った台帳の印と、その読みの結果と、撃つ前の時刻（行 a-lean）。
+    seen: Mutex<BTreeMap<String, (Mark, Got, Instant)>>,
     /// 持ち回しの git の読み。
     gits: Mutex<Gits>,
     /// git の読みの持ち回しの時間。
@@ -129,7 +133,9 @@ impl Acct {
             bd: bd.into(),
             state_dir: state_dir.into(),
             cwd: cwd.into(),
-            held: Mutex::new(None),
+            held: Held::new(),
+            gate: Mutex::new(()),
+            last_marks: Mutex::new(None),
             ledgers: Mutex::new(BTreeMap::new()),
             seen: Mutex::new(BTreeMap::new()),
             gits: Mutex::new(None),
@@ -144,6 +150,11 @@ impl Acct {
             own: Some(own),
             ..self
         }
+    }
+
+    /// 器の出力の持ち回しの表を、席の card の読みと分け合う表に替えた Acct。
+    pub fn with_held(self, held: Held) -> Acct {
+        Acct { held, ..self }
     }
 
     /// git の読みの持ち回しの時間を替えた Acct（歯が短い時間で試す）。
@@ -225,7 +236,8 @@ impl Acct {
     }
 
     /// anchor の台帳の読み（見張りの Source は `got` のまま・でなければ bd を撃つ前に印を取り、前の読みの印と
-    /// 同じで前の読みが読めていれば前の読みを返し、違えば撃って印と読みを置く・行 a-lean）。
+    /// 同じで前の読みが読めていれば前の読みを返し、読めなかった読み（stale が在る）は `FAILED_HOLD` の内だけ返し、
+    /// ほかは撃って印と読みを置く・行 a-lean）。
     fn ledger_got(&self, anchor: &str) -> Got {
         let source = self.ledger(anchor);
         if source.is_watched() {
@@ -237,16 +249,19 @@ impl Acct {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .get(anchor)
-            .filter(|(was, got)| *was == mark && got.stale.is_none())
-            .map(|(_, got)| got.clone());
+            .filter(|(was, got, at)| {
+                *was == mark && (got.stale.is_none() || at.elapsed() < FAILED_HOLD)
+            })
+            .map(|(_, got, _)| got.clone());
         if let Some(got) = held {
             return got;
         }
+        let at = Instant::now();
         let got = source.got();
         self.seen
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(anchor.to_string(), (mark, got.clone()));
+            .insert(anchor.to_string(), (mark, got.clone(), at));
         got
     }
 
@@ -258,30 +273,57 @@ impl Acct {
     }
 
     /// 変化の印の file（state dir ごとの event log・orchestrator の席の state.jsonl と tick-last と heartbeat-off と
-    /// heartbeat-on・群の今の記録）。
+    /// heartbeat-on・群の今の記録）。最後の集めの一覧を返し、一度も集めていない時だけ集める。
     pub fn marks(&self) -> Vec<PathBuf> {
-        self.texts().marks
+        let last = self
+            .last_marks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        last.unwrap_or_else(|| self.texts().marks)
     }
 
-    /// 持ち回しの字（`HOLD` を過ぎたか、持ち回しの字の印の file の更新時刻と長さが集める前に取った値と違えば
-    /// 集め直す・集めるあいだは次の要求を待たせる・行 e-acct-hbmark）。印は集める前に取るので、集める途中の変化は
-    /// 次の読みで集め直す。集めた字の印の一覧が前と違う周（初めての集めを含む）だけは集めた後に印を取る。
+    /// 集めた字（器の出力は表を通し、file は要求ごとに読む・集めるあいだは次の要求を待たせる・行 e-acct-hbmark）。
+    /// 印は撃つ前に取るので、撃つ途中の変化は次の読みで撃ち直す。
     fn texts(&self) -> Texts {
-        let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
-        let before = held.as_ref().map(|(_, _, texts)| stamps(&texts.marks));
-        if let (Some((at, was, texts)), Some(before)) = (held.as_ref(), before.as_ref())
-            && at.elapsed() < HOLD
-            && was == before
-        {
-            return texts.clone();
-        }
+        let _gate = self.gate.lock().unwrap_or_else(|e| e.into_inner());
         let texts = self.gather();
-        let taken = match (held.as_ref(), before) {
-            (Some((_, _, old)), Some(before)) if old.marks == texts.marks => before,
-            _ => stamps(&texts.marks),
-        };
-        *held = Some((Instant::now(), taken, texts.clone()));
+        *self.last_marks.lock().unwrap_or_else(|e| e.into_inner()) = Some(texts.marks.clone());
         texts
+    }
+
+    /// 器の出所（program・引数の dir を state dir にした席の読み・cwd）。target は空（席の dir は使わない）。
+    fn vessel(&self, dir: &Path) -> Seat {
+        Seat {
+            program: self.scribe2.clone(),
+            state_dir: dir.to_path_buf(),
+            target: String::new(),
+            cwd: self.cwd.clone(),
+        }
+    }
+
+    /// 器の tick status か doctor の出力を表を通して読む（鍵は席の card の読みの鍵の末に `ACCT_KEY` を足した列・
+    /// 印は `vessel_marks`）。
+    fn held_out(&self, head: &[&str], dir: &Path) -> Option<String> {
+        let seat = self.vessel(dir);
+        let mut key = vec![seat.program.clone()];
+        key.extend(seat.argv(head));
+        key.push(seat.cwd.clone().into_os_string());
+        key.push(ACCT_KEY.into());
+        self.held
+            .get(&key, &vessel_marks(&seat, head), ceiling(head), || {
+                self.shoot_in(head, dir)
+            })
+    }
+
+    /// 窓ごとの逼迫の閾値の出力を表を通して読む（印の無い鍵で `SLOW_HOLD` の間持つ）。
+    fn held_rule(&self, rule: &str) -> Option<String> {
+        let mut key = vec![self.scribe2.clone()];
+        key.extend(CAP_ARGS.into_iter().chain([rule]).map(OsString::from));
+        key.push(self.cwd.clone().into_os_string());
+        self.held.get(&key, &[], SLOW_HOLD, || {
+            self.shoot(CAP_ARGS.into_iter().chain([rule]))
+        })
     }
 
     /// 器に `head` の後に `--state-dir <dir>` を付けて撃つ。
@@ -332,17 +374,13 @@ impl Acct {
                     .collect();
                 (dirs, boards)
             });
-            let usage = s.spawn(|| self.shoot_in(&USAGE_ARGS, &self.state_dir));
+            let usage =
+                s.spawn(|| read_held(&self.held, &self.vessel(&self.state_dir), &USAGE_ARGS));
             let caps: Vec<_> = CAP_ROWS
                 .iter()
-                .map(|&(_, rule)| {
-                    (
-                        rule,
-                        s.spawn(move || self.shoot(CAP_ARGS.into_iter().chain([rule]))),
-                    )
-                })
+                .map(|&(_, rule)| (rule, s.spawn(move || self.held_rule(rule))))
                 .collect();
-            let doctor = self.shoot_in(&DOCTOR_ARGS, &self.state_dir);
+            let doctor = self.held_out(&DOCTOR_ARGS, &self.state_dir);
             let (dirs, boards) = match git {
                 Some((dirs, boards)) => {
                     let texts: GitTexts = (
@@ -378,9 +416,9 @@ impl Acct {
             let outputs: Vec<_> = unique
                 .iter()
                 .map(|dir| {
-                    let tick = s.spawn(|| self.shoot_in(&TICK_ARGS, dir));
+                    let tick = s.spawn(|| self.held_out(&TICK_ARGS, dir));
                     let doctor = (**dir != self.state_dir)
-                        .then(|| s.spawn(|| self.shoot_in(&DOCTOR_ARGS, dir)));
+                        .then(|| s.spawn(|| self.held_out(&DOCTOR_ARGS, dir)));
                     (tick, doctor)
                 })
                 .collect();
@@ -506,6 +544,30 @@ impl Acct {
         texts.host.events = read(&events_log(&self.state_dir));
         texts
     }
+}
+
+/// state dir の tick status か doctor の入力の印（state dir の seat の下の全部の席の dir ごとの `input_marks` の和
+/// （群の記録の .account と .refused を含む）に、その state dir の event log を足す・path の順・重ねない）。
+fn vessel_marks(seat: &Seat, head: &[&str]) -> Vec<PathBuf> {
+    let as_target = |target: &str| Seat {
+        target: target.to_string(),
+        ..seat.clone()
+    };
+    let mut out = input_marks(&as_target(""), head);
+    let dirs = std::fs::read_dir(seat.state_dir.join("seat"))
+        .map(|entries| entries.flatten().collect::<Vec<_>>())
+        .unwrap_or_default();
+    for entry in dirs {
+        if let (Ok(t), Some(name)) = (entry.file_type(), entry.file_name().to_str())
+            && t.is_dir()
+        {
+            out.extend(input_marks(&as_target(name), head));
+        }
+    }
+    out.push(events_log(&seat.state_dir));
+    out.sort();
+    out.dedup();
+    out
 }
 
 fn read(path: &Path) -> Option<String> {

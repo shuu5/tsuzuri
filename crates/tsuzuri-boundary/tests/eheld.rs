@@ -9,10 +9,12 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
+use tsuzuri_boundary::acct::Acct;
 use tsuzuri_boundary::server::design::{DESIGN_HOLD, Design};
 use tsuzuri_boundary::server::held::{FAILED_HOLD, Held};
 use tsuzuri_boundary::server::seat::{
-    DOCTOR_ARGS, HOLD, Seat, SLOW_HOLD, TICK_ARGS, USAGE_ARGS, ceiling, input_marks, read_held,
+    DOCTOR_ARGS, HOLD, Seat, Seats, SLOW_HOLD, TICK_ARGS, USAGE_ARGS, ceiling, input_marks,
+    read_held,
 };
 
 /// 書いてから名を移す（撃たれている script を書きかけで見せない）。
@@ -324,4 +326,53 @@ fn eheld_vessel_marks_by_head() {
     assert!(!doctor.contains(&dir.join("tick-last")), "{doctor:?}");
     assert!(tick.contains(&dir.join("tick-last")), "{tick:?}");
     assert!(input_marks(&seat, &["other"]).is_empty());
+}
+
+#[test]
+fn eheld_acct_wiring_text() {
+    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/server/mod.rs"))
+        .expect("src/server/mod.rs");
+    let code: Vec<&str> = text
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect();
+    let code = code.join("\n");
+    // 席の card の読みと account board の読みが 1 つの表を分け合う。
+    assert_eq!(code.matches("Held::new()").count(), 1);
+    assert_eq!(code.matches("held.clone()").count(), 2);
+}
+
+#[test]
+fn eheld_acct_shares_usage() {
+    let place = Place::new("acct-shares");
+    let seat = seat_in(&place, "s");
+    let seats = |held: &Held| {
+        Seats::new(
+            &place.folio().into(),
+            Some(&seat.state_dir),
+            Some(TARGET),
+            &place.root,
+            held.clone(),
+        )
+    };
+    let acct = |held: &Held| {
+        let folio = place.folio();
+        Acct::new(&folio, &folio, &folio, &seat.state_dir, &place.root).with_held(held.clone())
+    };
+    let held = Held::new();
+    let seats_h = seats(&held);
+    seats_h.card(1);
+    assert_eq!(place.calls().len(), 3, "{:?}", place.calls());
+    // 同じ表を受けた Acct は usage を撃たない（rules get の 3 本と state dir の doctor が増える）。
+    acct(&held).doc(1);
+    let calls = place.calls();
+    assert_eq!(calls.len(), 7, "{calls:?}");
+    assert!(calls[3..].iter().all(|c| !c.starts_with("fleet usage")), "{calls:?}");
+    seats_h.card(1);
+    assert_eq!(place.calls().len(), 7, "{:?}", place.calls());
+    // 新しい表を受けた Acct は usage も撃つ。
+    acct(&Held::new()).doc(1);
+    let calls = place.calls();
+    assert_eq!(calls.len(), 12, "{calls:?}");
+    assert_eq!(calls[7..].iter().filter(|c| c.starts_with("fleet usage")).count(), 1, "{calls:?}");
 }
