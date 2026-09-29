@@ -6,15 +6,17 @@
 //! g-7 は宙に浮いた裁定のうち id が folio の裁定 id の文法の外の裁定を数えず、それだけが在れば「まだ分からない」。
 //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
 //! 全部の契約表の行が着地した設計ノートは床の値で `landed_notes` が名指す（行 c-note-stale）。
+//! 廃止した（状態 retired）ノートは名指さず、要約の状態の字が読めなければ「まだ分からない」（行 c-note-retired）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
+use serde_json::Value;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
 use tsuzuri_contract::ledger::MEMO_LABEL;
 
-use super::build::{BdBead, read_ledger};
+use super::build::{BdBead, NOTE_ROW_KIND, read_ledger};
 use super::{Graph, Source};
 
 /// 不変条件の判定（3 値）。
@@ -609,12 +611,39 @@ fn landed(bead: &BdBead) -> bool {
     })
 }
 
-/// 全部の契約表の行が着地した設計ノートの文書 id（字の順・重複なし・行 c-note-stale）。
+/// 設計ノートの状態の字のうち廃止を表す字（folio の索引の要約の欄 status・行 c-note-retired）。
+pub const RETIRED: &str = "retired";
+
+/// 要約の字（1 行 1 つの JSON の object）から、設計ノートの行の id と状態の字の表を読む（行 c-note-retired）。
+/// 種類が `NOTE_ROW_KIND` の行のうち、欄 id と欄 status が字の行だけを写す（欄 status が null か無い行と、
+/// ほかの種類の行は写さない）。字が空か、JSON の object でない行が 1 つでも在れば None。空の行は読み捨てる。
+pub fn note_states(summary: &str) -> Option<BTreeMap<String, String>> {
+    if summary.trim().is_empty() {
+        return None;
+    }
+    let mut states = BTreeMap::new();
+    for line in summary.lines().filter(|l| !l.trim().is_empty()) {
+        let row = serde_json::from_str::<Value>(line)
+            .ok()
+            .filter(Value::is_object)?;
+        let field = |name: &str| row.get(name).and_then(Value::as_str);
+        if let (Some(NOTE_ROW_KIND), Some(id), Some(status)) =
+            (field("kind"), field("id"), field("status"))
+        {
+            states.entry(id.to_string()).or_insert(status.to_string());
+        }
+    }
+    Some(states)
+}
+
+/// 全部の契約表の行が着地した設計ノートの文書 id（字の順・重複なし・行 c-note-stale・行 c-note-retired）。
 /// 設計ノートの行の節点の id を最初の井桁で文書 id と行 id に分け（井桁の無い id は数えない）、文書 id ごとに
 /// 全部の行が、着地した bead から design の辺を受け、開いた bead から design の辺を受けないかを見る。
-/// 設計ノートの状態は読まない（退役したノートも名指しうる）。設計の索引か台帳が読めないか、台帳の字 `ledger` が
-/// 読めなければ「まだ分からない」。
-pub fn landed_notes(g: &Graph, ledger: &str) -> Reading<Vec<String>> {
+/// 全部の行が着地した文書 id ごとに、行の状態の字（要約の字 `summary` の `note_states`）の集まりを見て、
+/// ちょうど `RETIRED` の 1 つなら外し、ほかの 1 つなら名指し、それ以外（どれかの行の状態の字が無い・揃わない）は
+/// 「まだ分からない」。全部の行が着地した設計ノートが無ければ、要約の字が読めなくても空の列。
+/// 設計の索引か台帳が読めないか、台帳の字 `ledger` が読めなければ「まだ分からない」。
+pub fn landed_notes(g: &Graph, ledger: &str, summary: &str) -> Reading<Vec<String>> {
     if !g.is_read(Source::Design) || !g.is_read(Source::Ledger) {
         return Reading::Unknown;
     }
@@ -632,21 +661,42 @@ pub fn landed_notes(g: &Graph, ledger: &str) -> Reading<Vec<String>> {
         from().any(|b| done.contains(b))
             && !from().any(|b| g.beads.get(b).is_some_and(|attr| attr.is_open()))
     };
-    let mut notes: BTreeMap<&str, bool> = BTreeMap::new();
+    let mut notes: BTreeMap<&str, (bool, Vec<&str>)> = BTreeMap::new();
     for n in g.nodes.iter().filter(|n| n.kind == NodeKind::NoteRow) {
         let Some((doc, _)) = n.id.split_once('#') else {
             continue;
         };
-        let all = notes.entry(doc).or_insert(true);
+        let (all, rows) = notes.entry(doc).or_insert((true, Vec::new()));
         *all = *all && row_landed(&n.id);
+        rows.push(&n.id);
     }
-    Reading::Known(
-        notes
-            .into_iter()
-            .filter(|(_, all)| *all)
-            .map(|(doc, _)| doc.to_string())
-            .collect(),
-    )
+    let landed_docs: Vec<(&str, Vec<&str>)> = notes
+        .into_iter()
+        .filter(|(_, (all, _))| *all)
+        .map(|(doc, (_, rows))| (doc, rows))
+        .collect();
+    if landed_docs.is_empty() {
+        return Reading::Known(Vec::new());
+    }
+    let Some(states) = note_states(summary) else {
+        return Reading::Unknown;
+    };
+    let mut named = Vec::new();
+    for (doc, rows) in landed_docs {
+        let Some(found) = rows
+            .iter()
+            .map(|row| states.get(*row).map(String::as_str))
+            .collect::<Option<BTreeSet<&str>>>()
+        else {
+            return Reading::Unknown;
+        };
+        match found.into_iter().collect::<Vec<_>>()[..] {
+            [RETIRED] => {}
+            [_] => named.push(doc.to_string()),
+            _ => return Reading::Unknown,
+        }
+    }
+    Reading::Known(named)
 }
 
 #[cfg(test)]

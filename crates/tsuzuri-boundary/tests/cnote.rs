@@ -29,6 +29,20 @@ ni#r1\t設計ノートの行\tdesign-note/ni.yaml\t00000011\t見本の行\n\
 nj#r1\t設計ノートの行\tdesign-note/nj.yaml\t00000012\t見本の行\n\
 # 辺（1 行 = 端 / 端 / 型・タブ区切り）\n";
 
+/// 節の要約の字（12 の節点の行・状態はどれも effective・行 c-note-retired）。
+const SUM: &str = "{\"id\":\"na#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/na.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"na#r2\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/na.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"nb#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/nb.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"nc#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/nc.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"nd#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/nd.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"ne#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/ne.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"ne#r2\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/ne.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"nf#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/nf.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"ng#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/ng.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"nh-1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/nh.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"ni#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/ni.yaml\",\"status\":\"effective\"}\n\
+{\"id\":\"nj#r1\",\"kind\":\"設計ノートの行\",\"file\":\"design-note/nj.yaml\",\"status\":\"effective\"}\n";
+
 /// 台帳の task の 1 本（id・状態・閉じた理由・pointer の行の指す先）。
 #[derive(Clone, Copy)]
 struct Bead {
@@ -334,9 +348,14 @@ impl Place {
             &root.join("bd"),
             &format!("exec cat '{}'", root.join("ledger.json").display()),
         );
+        fs::write(root.join("summary.jsonl"), SUM).expect("要約の字");
         script(
             &root.join("folio"),
-            &format!("exec cat '{}'", root.join("index.tsv").display()),
+            &format!(
+                "[ \"$3\" = --summary ] && exec cat '{}'\nexec cat '{}'",
+                root.join("summary.jsonl").display(),
+                root.join("index.tsv").display()
+            ),
         );
         Place { root, repo, state }
     }
@@ -374,7 +393,7 @@ fn texts(design: &str, ledger: &str) -> Texts {
         design: design.to_string(),
         ledger: ledger.to_string(),
         events: EVENTS.to_string(),
-        summary: String::new(),
+        summary: SUM.to_string(),
         rulings: String::new(),
     }
 }
@@ -394,7 +413,7 @@ fn owned(ids: &[&str]) -> Vec<String> {
 /// 台帳の字を節の索引と組んだグラフに渡した名指し。
 fn named(ledger: &str) -> Reading<Vec<String>> {
     let g = built(&texts(INDEX, ledger));
-    landed_notes(&g, ledger)
+    landed_notes(&g, ledger, SUM)
 }
 
 /// 要約の行（違反 0・まだ分からない 3 は g-3・g-7・g-9）。
@@ -409,7 +428,7 @@ fn cnote_line_and_built_floors() {
     assert_eq!(head, "全部の行が着地した設計ノート");
     assert_eq!(
         unknown,
-        "全部の行が着地した設計ノート（設計の索引か台帳が読めない）"
+        "全部の行が着地した設計ノート（設計の索引か台帳か状態の欄が読めない）"
     );
     let line: fn(&[String]) -> String = landed_line;
     assert_eq!(line(&[]), "全部の行が着地した設計ノート 0");
@@ -422,13 +441,13 @@ fn cnote_line_and_built_floors() {
     let read = texts(INDEX, &text);
     let (g, floors) = built_floors(&read);
     assert_eq!(g, built(&read));
-    assert_eq!(floors.landed, landed_notes(&g, &text));
+    assert_eq!(floors.landed, landed_notes(&g, &text, SUM));
     assert_eq!(floors.landed, Reading::Known(owned(&["na", "nc", "ni"])));
 
     for unread in [texts(INDEX, ""), texts("", &text)] {
         let (g, floors) = built_floors(&unread);
         assert_eq!(floors.landed, Reading::Unknown);
-        assert_eq!(landed_notes(&g, &unread.ledger), Reading::Unknown);
+        assert_eq!(landed_notes(&g, &unread.ledger, SUM), Reading::Unknown);
     }
 }
 
@@ -470,10 +489,15 @@ fn cnote_check_names_notes() {
     let place = Place::new("names");
     let out = place.check(true, true);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
     assert_eq!(
-        stdout(&out),
-        format!("全部の行が着地した設計ノート 3（na・nc・ni）\n{SUMMARY}")
+        lines[lines.len() - 2..].join("\n"),
+        format!("全部の行が着地した設計ノート 3（na・nc・ni）\n{}", SUMMARY.trim_end()),
+        "{text}"
     );
+    let heads = lines.iter().filter(|l| l.starts_with(LANDED_HEAD)).count();
+    assert_eq!(heads, 1, "{text}");
     let err = stderr(&out);
     assert!(!err.contains(LANDED_HEAD), "{err}");
 }
@@ -486,8 +510,8 @@ fn cnote_unread_goes_to_stderr() {
         let out = place.check(bd, folio);
         assert_eq!(out.status.code(), Some(2), "{name}: {out:?}");
         let text = stdout(&out);
-        assert_eq!(text.lines().count(), 1, "{name}: {text}");
-        assert!(text.starts_with("tz graph --check"), "{name}: {text}");
+        let last = text.lines().last().unwrap_or_default();
+        assert!(last.starts_with("tz graph --check"), "{name}: {text}");
         assert!(!text.contains(LANDED_HEAD), "{name}: {text}");
         let err = stderr(&out);
         assert_eq!(
