@@ -1,6 +1,10 @@
 //! account board の開いている窓の block（見本の `#winsp`・HOME の 1 段目の右）と、project board を名前つきの窓で開く手順（便 h-win・案 2）。
 //! 見本は account/index.html の openWin・drawWins。窓の名・開く URL・一覧の移り方・button の字は純粋な関数で決め、
-//! window の open と一覧の DOM は wasm の target のときだけ組む。一覧は頁の一生の間だけ持ち、どこにも残さない（未決）。
+//! window の open と一覧の DOM は wasm の target のときだけ組む。
+//! 一覧は browser の保存（鍵 tz-wins・1 項 1 行の tab 区切り）に残す（行 h-win-store・持ち主の裁定 t3-hub.52.16）。
+//! 保存は store の get・set・on_change で撃ち、頁で初めて一覧を撃つときに 1 度だけ読んで生きている handle を重ねる。
+//! 読み直した後の窓は handle を失い、開いたはず（NoHandle）になる。ほかの tab の書き替えは storage の event で置き直し、
+//! project board の戻るが送る閉じの知らせ（message の event・送り手の hostname が同じときだけ）でその窓を閉じたにする。
 
 use tsuzuri_contract::account::ProjectRow;
 
@@ -39,11 +43,12 @@ pub fn board_href(protocol: &str, hostname: &str, tail: &str) -> String {
     format!("{protocol}//{hostname}{tail}")
 }
 
-/// 窓の状態（開いている・閉じた）。
+/// 窓の状態（開いている・閉じた・開いたはず〔保存から戻したが、この頁が handle を持たない〕）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WinState {
     Open,
     Closed,
+    NoHandle,
 }
 
 /// 窓の一覧の 1 項（project の名・窓の名・状態）。
@@ -62,7 +67,7 @@ pub enum Opened {
 }
 
 /// 開いたときの一覧の移り方: 一覧に無い project は末尾に開いているで足し（新しい）、
-/// 在る project は位置を変えずに開いているにする（開いていたなら前面へ・閉じていたなら新しい）。
+/// 在る project は位置を変えずに開いているにする（開いていた・開いたはずなら前面へ・閉じていたなら新しい）。
 pub fn after_open(wins: &[Win], project: &str) -> (Vec<Win>, Opened) {
     let mut next = wins.to_vec();
     let how = match next.iter_mut().find(|w| w.project == project) {
@@ -70,7 +75,7 @@ pub fn after_open(wins: &[Win], project: &str) -> (Vec<Win>, Opened) {
             let was = w.state;
             w.state = WinState::Open;
             match was {
-                WinState::Open => Opened::Front,
+                WinState::Open | WinState::NoHandle => Opened::Front,
                 WinState::Closed => Opened::New,
             }
         }
@@ -113,10 +118,10 @@ pub const OPEN_NEW_KEY: &str = "open_new";
 /// board を持たない project の button の語の鍵（開けない）。
 pub const NOT_YET_KEY: &str = "not_yet";
 
-/// 一覧の行と開く button の字（開いている窓は前面へ・ほかは語の鍵 open_new）。
+/// 一覧の行と開く button の字（開いている・開いたはずの窓は前面へ・ほかは語の鍵 open_new）。
 pub fn button_text(state: Option<WinState>) -> String {
     match state {
-        Some(WinState::Open) => FRONT.to_string(),
+        Some(WinState::Open | WinState::NoHandle) => FRONT.to_string(),
         _ => label(OPEN_NEW_KEY),
     }
 }
@@ -126,23 +131,119 @@ pub fn state_word(state: WinState) -> &'static str {
     match state {
         WinState::Open => "開いている",
         WinState::Closed => "閉じた",
+        WinState::NoHandle => "開いたはず（この窓の reload で handle なし）",
     }
 }
 
-/// 一覧の行の状態の記号の値（開いているは走行・閉じたは待ち）。
+/// 一覧の行の状態の記号の値（開いているは走行・閉じたは待ち・開いたはずは不明）。
 pub fn state_mark(state: WinState) -> &'static str {
     match state {
         WinState::Open => "run",
         WinState::Closed => "wait",
+        WinState::NoHandle => "unknown",
     }
 }
 
-/// 一覧の行の class（閉じた窓は字を薄くする）。
+/// 一覧の行の class（閉じた・開いたはずの窓は字を薄くする）。
 pub fn row_class(state: WinState) -> &'static str {
     match state {
         WinState::Open => "",
         WinState::Closed => "w-closed",
+        WinState::NoHandle => "w-nohandle",
     }
+}
+
+/// 窓の一覧の保存の鍵（見本の鍵と同じ・account board の origin の保存）。
+pub const WINS_KEY: &str = "tz-wins";
+
+/// 保存の字の状態の語（開いたはずは開いているで書く）。
+fn saved_word(state: WinState) -> &'static str {
+    match state {
+        WinState::Open | WinState::NoHandle => "open",
+        WinState::Closed => "closed",
+    }
+}
+
+/// 保存に書く字: 項の順に project の名・tab・状態の語（open か closed）・改行。
+pub fn wins_text(wins: &[Win]) -> String {
+    wins.iter()
+        .map(|w| format!("{}\t{}\n", w.project, saved_word(w.state)))
+        .collect()
+}
+
+/// 保存の字から一覧を戻す: open の項は開いたはず（この頁は handle を持たない）・closed の項は閉じた。
+/// tab がちょうど 1 つでない行・名の空の行・状態の語の違う行・前の行と同じ project の行は読み捨てる。
+pub fn wins_from(text: &str) -> Vec<Win> {
+    let mut out: Vec<Win> = Vec::new();
+    for line in text.lines() {
+        let mut parts = line.split('\t');
+        let (Some(project), Some(word), None) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        let state = match word {
+            "open" => WinState::NoHandle,
+            "closed" => WinState::Closed,
+            _ => continue,
+        };
+        if project.is_empty() || out.iter().any(|w| w.project == project) {
+            continue;
+        }
+        out.push(Win {
+            project: project.to_string(),
+            name: win_name(project),
+            state,
+        });
+    }
+    out
+}
+
+/// 生きている handle の project の名の列に在る項を開いているにする（ほかの項はそのまま・列だけの名は足さない）。
+pub fn with_live(wins: &[Win], live: &[String]) -> Vec<Win> {
+    wins.iter()
+        .map(|w| {
+            let mut w = w.clone();
+            if live.contains(&w.project) {
+                w.state = WinState::Open;
+            }
+            w
+        })
+        .collect()
+}
+
+/// 閉じの知らせの字の頭（project board の戻るが account board の窓へ送る・後ろは自分の窓の名）。
+pub const CLOSED_MSG: &str = "tz-closed:";
+
+/// 閉じの知らせの字（CLOSED_MSG に窓の名をつなぐ）。
+pub fn closed_message(win: &str) -> String {
+    format!("{CLOSED_MSG}{win}")
+}
+
+/// origin の字の hostname（http か https・port は有っても無くても・IPv6 は角括弧のまま・ほかの形は None）。
+fn origin_hostname(origin: &str) -> Option<&str> {
+    let rest = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"))?;
+    let end = if rest.starts_with('[') {
+        rest.find(']')? + 1
+    } else {
+        rest.find(':').unwrap_or(rest.len())
+    };
+    let (host, tail) = rest.split_at(end);
+    let port_ok = tail.is_empty()
+        || tail
+            .strip_prefix(':')
+            .is_some_and(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    (!host.is_empty() && port_ok).then_some(host)
+}
+
+/// 閉じの知らせの project の名: 送り手の origin の hostname がこの頁の hostname と同じで（port は見ない）、
+/// 字が CLOSED_MSG と頭 tz- と空でない project の名のときだけ。
+pub fn closed_project(data: &str, origin: &str, hostname: &str) -> Option<String> {
+    if origin_hostname(origin)? != hostname {
+        return None;
+    }
+    let project = data.strip_prefix(CLOSED_MSG)?.strip_prefix("tz-")?;
+    (!project.is_empty()).then(|| project.to_string())
 }
 
 /// 一覧が空のときの 1 行。
@@ -167,12 +268,14 @@ mod dom {
     use tsuzuri_contract::account::AccountDoc;
 
     use super::{
-        BLOCK, EMPTY, NOT_YET_KEY, Win, after_close, after_open, board_href, button_text, open_url,
-        row_class, state_mark, state_word, win_name,
+        BLOCK, EMPTY, NOT_YET_KEY, WINS_KEY, Win, after_close, after_open, board_href, button_text,
+        closed_project, open_url, row_class, state_mark, state_word, win_name, wins_from, wins_text,
+        with_live,
     };
     use crate::account::{PATH, doc};
     use crate::frame::Mode;
     use crate::project::{section, state_icon};
+    use crate::store;
     use crate::vocab::label;
     use crate::widgets::help::HelpCtx;
 
@@ -183,16 +286,54 @@ mod dom {
     const SWEEP: Duration = Duration::from_secs(1);
 
     thread_local! {
-        /// 窓の一覧（頁の一生の間だけ）。
+        /// 窓の一覧（保存の写しを読んで置き、移すたびに保存に書く）。
         static WINS: ArcRwSignal<Vec<Win>> = ArcRwSignal::new(Vec::new());
         /// この頁が開いた窓の handle（project の名ごと・reload で消える）。
         static HANDLES: RefCell<BTreeMap<String, web_sys::Window>> = const { RefCell::new(BTreeMap::new()) };
         /// closed の確かめを始めたか。
         static SWEEPING: Cell<bool> = const { Cell::new(false) };
+        /// 保存の一覧を読み、event の受け手を付けたか（頁で 1 度）。
+        static LOADED: Cell<bool> = const { Cell::new(false) };
     }
 
+    /// 窓の一覧（初めて撃たれたときに保存の一覧を置き、保存の書き替えと閉じの知らせの受け手を付ける）。
     fn wins() -> ArcRwSignal<Vec<Win>> {
-        WINS.with(Clone::clone)
+        let list = WINS.with(Clone::clone);
+        if !LOADED.replace(true) {
+            reload(&list);
+            store::on_change(WINS_KEY, || reload(&wins()));
+            let _ = window_event_listener(leptos::ev::message, closed_by_message);
+        }
+        list
+    }
+
+    /// 保存の一覧に生きている handle を重ねて置く（保存が無い・使えないときは空の一覧）。
+    fn reload(list: &ArcRwSignal<Vec<Win>>) {
+        let saved = wins_from(&store::get(WINS_KEY).unwrap_or_default());
+        let live: Vec<String> = HANDLES.with_borrow(|h| h.keys().cloned().collect());
+        list.set(with_live(&saved, &live));
+    }
+
+    /// 一覧を移して保存に書く。
+    fn change(f: impl FnOnce(&mut Vec<Win>)) {
+        let list = wins();
+        list.update(f);
+        store::set(WINS_KEY, &list.with_untracked(|l| wins_text(l)));
+    }
+
+    /// project board の戻るの閉じの知らせ: 送り手の hostname が頁と同じなら handle を捨てて一覧で閉じたにする。
+    fn closed_by_message(e: web_sys::MessageEvent) {
+        let Some(data) = e.data().as_string() else {
+            return;
+        };
+        let Ok(hostname) = window().location().hostname() else {
+            return;
+        };
+        let Some(project) = closed_project(&data, &e.origin(), &hostname) else {
+            return;
+        };
+        HANDLES.with_borrow_mut(|h| h.remove(&project));
+        change(|l| *l = after_close(l, &project));
     }
 
     /// handle の closed が真になった窓を一覧で閉じたにし、handle を捨てる。
@@ -211,7 +352,7 @@ mod dom {
                 h.remove(p);
             }
         });
-        wins().update(|l| {
+        change(|l| {
             for p in &dead {
                 *l = after_close(l, p);
             }
@@ -243,7 +384,7 @@ mod dom {
             }
         };
         let _ = win.focus();
-        wins().update(|l| *l = after_open(l, project).0);
+        change(|l| *l = after_open(l, project).0);
         if !SWEEPING.replace(true) {
             set_interval(sweep, SWEEP);
         }

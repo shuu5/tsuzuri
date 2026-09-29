@@ -5,6 +5,7 @@
 //! 節点の頁（便 g-node）は query の page=node で開き、block は node と around の 2 つ（nav には出さない）。
 //! 問いの頁の右の列（便 g-batch）は batch と policy の 2 つの block。
 //! header の先頭の「戻る」（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
+//! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
 //! nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）は頁の定義の icon の字（行 hs-pages）。
 //! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題（行 g-title）。
 
@@ -14,7 +15,7 @@ use leptos::prelude::*;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::project::PATH as PROJECT_PATH;
 
-use crate::account::windows::ACCOUNT_WIN;
+use crate::account::windows::{ACCOUNT_WIN, closed_message};
 use crate::frame::{self, BACK, BACK_WRAP, BackHow, BackStep, Block, HEADER, Mode, PageId};
 use crate::fresh::{self, Fresh};
 use crate::net;
@@ -106,6 +107,9 @@ fn back_to_board(note: RwSignal<Option<BackHow>>) {
         match step {
             BackStep::Front => {
                 if let Some(w) = &win {
+                    // 在った窓へ自分の窓の名を知らせる（読み直した account board の一覧が閉じたにする・送り先の origin は限らない）。
+                    let msg = closed_message(&me.name().unwrap_or_default());
+                    let _ = w.post_message(&msg.into(), "*");
                     let _ = w.focus();
                 }
             }

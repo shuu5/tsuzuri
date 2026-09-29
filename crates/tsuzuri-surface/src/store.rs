@@ -3,6 +3,7 @@
 //! その browser に残す。これは便利のための写しで正本ではなく、保存が消えても面は URL と server の読みから同じ画面を組む。
 //! 決め方（mode_start）は host でも組み立てて試し、保存と URL を撃つ所は wasm の target のときだけ組み立てる。
 //! 保存は origin ごとなので、port の違う account board と各 project board はそれぞれ自分の写しを持つ。
+//! on_change は同じ origin のほかの tab が鍵の値を書き替えたときに撃つ（窓の一覧の置き直し・行 h-win-store）。
 
 use crate::frame::{self, Mode};
 
@@ -66,6 +67,16 @@ pub fn set(key: &str, value: &str) {
     if let Some(s) = storage() {
         let _ = s.set_item(key, value);
     }
+}
+
+/// 保存の鍵 `key` の値がほかの tab で書き替わるたびに `f` を撃つ（storage の event は同じ origin のほかの tab の書きだけが届く）。
+#[cfg(target_arch = "wasm32")]
+pub fn on_change(key: &'static str, f: impl Fn() + 'static) {
+    let _ = leptos::prelude::window_event_listener(leptos::ev::storage, move |e| {
+        if e.key().as_deref() == Some(key) {
+            f();
+        }
+    });
 }
 
 /// 頁を開くときに mode を決める: URL の mode を保存に写すか、保存の経験者を URL に揃える（頁は読み直さない）。
