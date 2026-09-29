@@ -336,11 +336,13 @@ fn f92_the_real_records_carry_the_produced_field() {
             "ADR-32.yaml",
             // ADR-33（2026-09-28 起草）は要件 FR28・FR29 と受入基準 AC31・AC32 を産む
             "ADR-33.yaml",
+            // ADR-35（2026-09-29 起草）は要件 FR30〜FR32・受入基準 AC33〜AC35・規則の行 R-23〜R-25 を産む
+            "ADR-35.yaml",
             "ADR-4.yaml",
             "ADR-8.yaml"
         ]
     );
-    assert_eq!(ids.len(), 31, "{ids:?}");
+    assert_eq!(ids.len(), 40, "{ids:?}");
     assert!(
         ids.iter()
             .all(|id| !["P-", "A-", "N-"].iter().any(|p| id.starts_with(p))),
