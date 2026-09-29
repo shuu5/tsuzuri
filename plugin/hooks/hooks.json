@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook question-gate --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
