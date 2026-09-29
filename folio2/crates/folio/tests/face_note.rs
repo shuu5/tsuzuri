@@ -939,7 +939,12 @@ fn f179_face_reads_the_cap_from_the_keyed_row_whatever_its_id() {
     // 章 14（節 13 + 図の章）: 行の値 12 では 2 で、行の id を R-26 に・値を 14 章 以下にすると導出でき、7 章目から帯の組を繰り返す
     let (run, html) = with_rules("f179-cap-12", |t| t.to_string() + "\n", more_sections(13));
     assert_eq!(code(&run, "folio face"), 2, "{}", stderr(&run));
-    assert!(stderr(&run).contains("design-note/full.yaml: 章が 14 本ある＝章が多すぎる（上限 12）"), "{}", stderr(&run));
+    // 便 207（ADR-35 決定 (1)(ク)）: 断りの字は床の違反と同じ字で今の数を持たず、今の数は次の # の行
+    let err = stderr(&run);
+    let refusal = err.lines().find(|l| l.contains("章が多すぎる")).unwrap_or_else(|| panic!("{err}"));
+    assert!(refusal.ends_with("design-note/full.yaml: 章が多すぎる（note-chapters の上限 12 章 以下）"), "{err}");
+    assert!(!refusal.contains("14"), "{refusal}");
+    assert!(err.lines().any(|l| l == "# 今の数: design-note/full.yaml: 章の今の数 14（note-chapters の上限 12 章 以下）"), "{err}");
     assert!(html.is_empty(), "上限を超えたのに面を書いた");
     let (run, html) = with_rules(
         "f179-cap-14",

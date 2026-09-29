@@ -42,6 +42,8 @@ pub struct Report {
     /// つながりの違反（2 か所以上を突き合わせる検査の違反）の violations の添字（便 198・判断の記録 ADR-33 決定 (2)）。
     /// 事後の床はほかの違反と同じに数え、編集時の口（folio check --proposed）はこれで編集を止めない。
     pub links: Vec<usize>,
+    /// 今の数の行（数の上限の違反の字の外に出す数・判定に数えない・編集時の口は比べない・便 207・ADR-35 決定 (1)(オ)）。
+    pub counts: Vec<String>,
 }
 
 impl Report {
@@ -63,6 +65,11 @@ impl Report {
     pub fn link(&mut self, kind: &str, msg: impl Into<String>) {
         self.links.push(self.violations.len());
         self.violation(kind, msg);
+    }
+
+    /// 今の数の行を 1 つ積む（`folio check` が標準エラーに `# 今の数: ` で出す・便 207）。
+    pub fn count(&mut self, msg: impl Into<String>) {
+        self.counts.push(msg.into());
     }
 
     pub fn unknown(&mut self, msg: impl Into<String>) {

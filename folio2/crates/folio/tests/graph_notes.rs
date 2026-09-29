@@ -213,7 +213,7 @@ fn f185_block_rows_keep_the_meta_id_the_section_title_and_depends() {
         ["example#a\tFR15\treq", "wave#p\tFR1\treq", "wave#q\tFR2\treq", "wave#q\twave#p\tdepends", "wave#r\tFR3\treq"]
     );
     // 行の無い depends（wave#zz）は辺の表に出さず、端が節点でない参照に数える（土台の 26 に 1 を足す）
-    assert_eq!(summary, "# 節点 194・辺 583・型 12・端が節点でない参照 27");
+    assert_eq!(summary, "# 節点 197・辺 589・型 12・端が節点でない参照 27");
     let lines = passed(folio(&["graph", "--print", "--summary"], &work.dir()));
     let wave: Vec<&str> = lines.lines().filter(|l| l.starts_with("{\"id\":\"wave#")).collect();
     assert_eq!(
@@ -262,7 +262,7 @@ fn f185_the_lines_outside_the_notes_do_not_move() {
     };
     assert_eq!(outside(&an), bn, "設計ノートの外の節点の行");
     assert_eq!(outside(&ae), be, "設計ノートの外の辺の行");
-    assert_eq!(bs, "# 節点 190・辺 578・型 10・端が節点でない参照 26", "設計ノートの無い写しの要約の 1 行");
+    assert_eq!(bs, "# 節点 193・辺 584・型 10・端が節点でない参照 26", "設計ノートの無い写しの要約の 1 行");
     let summary = |dir: &Path| passed(folio(&["graph", "--print", "--summary"], dir));
     let (sa, sb) = (summary(&with.dir()), summary(&without.dir()));
     let kept: Vec<&str> = sa.lines().filter(|l| !l.starts_with("{\"id\":\"") || !l.split('"').nth(3).unwrap().contains('#')).collect();
@@ -280,13 +280,13 @@ fn f185_the_lines_outside_the_notes_do_not_move() {
             "depends\t1\t1",
             "design-note/example.yaml\t1",
             "design-note/wave-file.yaml\t3",
-            "# 節点 194・辺 583・型 12・端が節点でない参照 27",
+            "# 節点 197・辺 589・型 12・端が節点でない参照 27",
         ],
         "--digest で設計ノートの在る写しだけに在る行"
     );
     assert_eq!(
         only(&db, &da),
-        ["設計ノートの行\t0", "req\t0\t0", "depends\t0\t0", "# 節点 190・辺 578・型 10・端が節点でない参照 26"],
+        ["設計ノートの行\t0", "req\t0\t0", "depends\t0\t0", "# 節点 193・辺 584・型 10・端が節点でない参照 26"],
         "--digest で設計ノートの無い写しだけに在る行"
     );
     assert_eq!(da.lines().count(), db.lines().count() + 2, "--digest の行の数（file の行 2 つ）");

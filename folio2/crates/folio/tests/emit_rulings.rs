@@ -203,7 +203,7 @@ fn follow<'a>(doc: &'a Yaml, path: &str) -> &'a Yaml {
 #[test]
 fn f186_one_field_with_three_forms_gives_three_lines() {
     let base = Work::new("three-base", FLOOR_BASE).emit();
-    assert_eq!(base.out.len(), 67);
+    assert_eq!(base.out.len(), 70);
     let w = Work::new("three", FLOOR_BASE);
     w.set("rules.yaml", "{id: R-10,", "ruling", &format!("\"{THREE}\""));
     let got = w.emit();
@@ -220,7 +220,7 @@ fn f186_one_field_with_three_forms_gives_three_lines() {
     let was = at("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1");
     let rest: Vec<&String> = got.out.iter().filter(|l| !l.contains("\"node\":\"R-10\"")).collect();
     let before: Vec<&String> = base.out.iter().filter(|l| **l != was).collect();
-    assert_eq!((got.out.len(), rest), (69, before));
+    assert_eq!((got.out.len(), rest), (72, before));
 }
 
 /// 歯 2: どの行も 7 つの欄をこの順で持つ。node は条・規則の表の行・判断の記録の欄では その id、承認欄の行（憲法の発効の
@@ -241,7 +241,7 @@ fn f186_every_line_has_the_seven_fields_and_the_null_node() {
     for want in [
         line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", None, "constitution.yaml", 80, "meta.approval.ruling"),
         line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("P-1"), "constitution.yaml", 130, "articles[0].amended_by[0].ruling"),
-        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", Some("D-8"), "rules.yaml", 55, "discipline[7].ruling"),
+        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", Some("D-8"), "rules.yaml", 58, "discipline[7].ruling"),
         line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("ADR-2"), "adr/ADR-2.yaml", 16, "approval.ruling"),
         line("f2-648 notes 2026-09-28 10:29 JST", "notes-time", "f2-648", None, "design-note/decide.yaml", 9, "meta.approval[0].ruling"),
         line("t3-hub.57.1:20260927T2357Z-1", "question", "t3-hub.57.1", None, "design-note/decide.yaml", 19, "sections[1].rows[0].ruling"),
@@ -251,7 +251,7 @@ fn f186_every_line_has_the_seven_fields_and_the_null_node() {
     ] {
         assert!(got.out.contains(&want), "{want}\n{:#?}", got.out);
     }
-    assert_eq!(got.out.len(), 67 + 5);
+    assert_eq!(got.out.len(), 70 + 5);
     assert!(!got.out.iter().any(|l| l.contains("supersedes_v1") || l.contains("08:55")));
     for l in &got.out {
         let f = fields(l);
@@ -312,7 +312,7 @@ fn f186_the_exit_code_is_the_plain_floor_and_stdout_is_json_only() {
     let (plain, emit) = (base.run(&[]), base.emit());
     assert_eq!((plain.code, emit.code), (0, 0));
     assert_eq!(base.snapshot(), before);
-    assert!(json(&emit) && emit.out.len() == 67, "{:?}", emit.out);
+    assert!(json(&emit) && emit.out.len() == 70, "{:?}", emit.out);
     let summary = plain.out.last().unwrap();
     assert_eq!(summary, "folio check: 合格（違反 0・まだ分からない 0）");
     assert!(emit.err.lines().any(|l| l == summary) && emit.err.lines().any(|l| l.starts_with("# ")), "{}", emit.err);
@@ -325,12 +325,12 @@ fn f186_the_exit_code_is_the_plain_floor_and_stdout_is_json_only() {
     let violation = "[裁定 id] rules.yaml: 行 R-10 の ruling「G16=A（受入 (f)）」に台帳 id が無い（決定の欄・形は adr/schema.yaml の ruling_pattern）";
     assert!(plain.out.iter().any(|l| l == violation), "{:?}", plain.out);
     assert!(emit.err.lines().any(|l| l == violation) && emit.err.lines().any(|l| l == plain.out.last().unwrap()));
-    assert!(json(&emit) && emit.out.len() == 66 && !emit.out.iter().any(|l| l.contains("\"node\":\"R-10\"")));
+    assert!(json(&emit) && emit.out.len() == 69 && !emit.out.iter().any(|l| l.contains("\"node\":\"R-10\"")));
 
     let w = Work::new("rc-mark", FLOOR_BASE);
     w.set("rules.yaml", "{id: R-10,", "ruling", "未記入");
     let (plain, emit) = (w.run(&[]), w.emit());
-    assert_eq!((plain.code, emit.code, emit.out.len()), (2, 2, 66));
+    assert_eq!((plain.code, emit.code, emit.out.len()), (2, 2, 69));
 
     // 索引の床だけが落ちる写し（要件 FR1 の id を単引用符にすると、索引が行の逐語で切れない）
     let w = Work::new("rc-index", FLOOR_BASE);
@@ -339,7 +339,7 @@ fn f186_the_exit_code_is_the_plain_floor_and_stdout_is_json_only() {
     assert_eq!(srs.matches(from).count(), 1);
     w.write("srs.yaml", &srs.replacen(from, to, 1));
     let (plain, emit) = (w.run(&[]), w.emit());
-    assert_eq!((plain.code, emit.code, emit.out.len()), (1, 1, 67));
+    assert_eq!((plain.code, emit.code, emit.out.len()), (1, 1, 70));
     let index: Vec<&String> = plain.out.iter().filter(|l| l.starts_with('[')).collect();
     assert!(index.len() == 1 && index[0].starts_with("[索引の節点] srs.yaml: 索引の節点 FR1 の行を"), "{index:?}");
     assert!(json(&emit) && emit.err.lines().any(|l| l == index[0]), "{}", emit.err);
@@ -388,7 +388,7 @@ fn f186_every_decision_field_is_written_out() {
             let count = |p: &str| got.out.iter().filter(|l| l.contains(p)).count();
             assert_eq!(
                 (seen.len(), got.out.len(), count("\"form\":\"notes-time\""), count("\"form\":\"bead\""), count("\"node\":null")),
-                (55, 67, 46, 21, 18)
+                (58, 70, 49, 21, 18)
             );
         }
         let mut files: Vec<String> = ["constitution", "rules", "srs", "index", "ceiling", "intake", "graph"].map(|f| format!("{f}.yaml")).to_vec();

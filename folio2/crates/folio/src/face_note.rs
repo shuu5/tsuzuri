@@ -231,15 +231,16 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         Some(x) => x.seq()?,
         None => Vec::new(),
     };
-    // 章の上限は規則の表の欄 key が note-chapters の閾値の行から、床と同じ関数で読んで数える（便 179）
+    // 章の上限は規則の表の欄 key が note-chapters の閾値の行から、床と同じ関数で読んで数える（便 179）。断りの字は床の違反と同じ字で、
+    // 今の数は次の # の行（便 207・ADR-35 決定 (1)(ク)）
     let r_node = fs::read_to_string(dir.join("rules.yaml"))
         .map_err(|e| format!("rules.yaml: 読めない: {e}"))
         .and_then(|t| yaml::parse(&t))?;
-    let cap = rules::chapter_cap(&r_node.root)
+    let cap = rules::cap(&r_node.root, rules::NOTE_CHAPTERS)
         .map_err(|e| format!("rules.yaml: 設計ノートの章の上限が読めない: {e}"))?;
     let chapters = note::chapters(secs.len(), figs.len());
-    if let Some(m) = note::over_cap(&name, chapters, cap) {
-        return Err(m);
+    if let Some((m, now)) = rules::over_cap(&name, rules::NOTE_CHAPTERS, chapters, cap) {
+        return Err(format!("{m}\n# 今の数: {now}"));
     }
     let fields = if secs.iter().any(|s| s.key == CONTRACT_TABLE) {
         load_external(dir)?

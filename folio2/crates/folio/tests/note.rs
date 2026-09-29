@@ -8,10 +8,13 @@
 //! need-conditional-schema.toml（器の導出 file の verify と done が要否 conditional）を使う。
 //! 便 161（docs/design/delivery-161.md §1 (c)）の歯 f161_ は fixture を足さず、見本の承認欄を口 approve と row_with で置く。
 //! 便 181（docs/design/delivery-181.md §1 (c)）から承認欄の裁定の欄は決定の欄の床（種別 裁定 id）が数える＝f161_ の 2 本の字を合わせた。
+//! 便 207（docs/design/delivery-207.md §1 (c)）の歯 f207_ は、写しの土台を床の土台（tests/fixtures/floor_base/design-intent/・数の上限の
+//! 値の行 3 本は 99）にして数の上限の値を 1 に下げ、生きたノートを歯の中の最小の手書きで足す（folio2 の本流の値に依らない）。
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -955,7 +958,7 @@ fn cap_value(w: &Work, value: &str) {
 fn f179_floor_counts_chapters_with_the_same_cap_and_words_as_the_face() {
     let w = Work::new("f179-floor");
     thirteen_chapters(&w);
-    let words = "design-note/example.yaml: 章が 13 本ある＝章が多すぎる（上限 12）";
+    let words = "design-note/example.yaml: 章が多すぎる（note-chapters の上限 12 章 以下）";
     assert_single_violation(&w.check(), "note", &[words]);
     // 面の生成器も同じ写しで同じ字を出して止まる（同じ関数・書かない）
     let out = w.root.join("note-example.html");
@@ -983,4 +986,214 @@ fn f179_floor_is_unknown_without_the_keyed_row() {
     assert!(!text.contains("key: note-chapters"), "欄 key の行が残った");
     fs::write(&rules, text).unwrap();
     assert_unknown(&w.check(), "設計ノートの章の上限が読めない");
+}
+
+// ── 便 207: 数の上限（生きたノートの本数・1 本の契約表の行の数・計画だけの行の合計・ADR-35 決定 (1)・FR30・AC33） ──
+
+/// 床の土台の写し（値の行 3 本は 99）を作り、数の上限の 3 行の値を 1 に下げて git の 1 commit にする。
+fn growth_base(case: &str) -> Work {
+    let root = std::env::temp_dir().join(format!("folio-note-{case}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    copy_tree(
+        &repo_root().join("tests/fixtures/floor_base/design-intent"),
+        &root.join("design-intent"),
+    );
+    fs::create_dir_all(root.join("contracts")).unwrap();
+    fs::copy(
+        repo_root().join("contracts/schema.toml"),
+        root.join("contracts/schema.toml"),
+    )
+    .unwrap();
+    let w = Work { root };
+    let rules = w.dir().join("rules.yaml");
+    w.mutate_file(&rules, "value: \"99 本 以下\"", "value: \"1 本 以下\"");
+    let text = fs::read_to_string(&rules).unwrap();
+    assert_eq!(text.matches("value: \"99 行 以下\"").count(), 2, "土台の行の値が 99 でない");
+    fs::write(&rules, text.replace("value: \"99 行 以下\"", "value: \"1 行 以下\"")).unwrap();
+    w.commit();
+    w
+}
+
+/// 生きたノートの手書き（節 = 目的の散文・契約表〔行 `rows` 本・行 id は id の後ろに番号〕・散文の節 `extra` 個）。
+/// 発効と廃止は承認欄を、廃止は後継（土台の見本 example）を持つ。
+fn growth_note(id: &str, status: &str, rows: usize, extra: usize) -> String {
+    let mut meta = format!(
+        "meta:\n  id: {id}\n  title: 数えの見本 {id}\n  version: v0.1\n  status: {status}\n  generated: 2026-09-29\n  profile: design-note\n"
+    );
+    if status == "retired" {
+        meta.push_str("  superseded_by: example\n");
+    }
+    if status == "effective" || status == "retired" {
+        meta.push_str("  approval:\n    - {who: 持ち主, date: 2026-09-29, ruling: f2-648 notes 2026-09-29 13:19 JST, verbatim: 承認する, surface: R-8}\n");
+    }
+    let rows: String = (1..=rows)
+        .map(|i| format!("      - {{id: {id}{i}, title: 行 {i}, req: [FR15], section: \"1\", verify: [cargo nextest run -p folio x], size: S, done: 緑, depends: []}}\n"))
+        .collect();
+    let extra: String = (3..3 + extra)
+        .map(|n| format!("  - {{n: {n}, type: prose, title: 追加 {n}, body: 追加の節。}}\n"))
+        .collect();
+    format!(
+        "{meta}sections:\n  - n: 1\n    type: prose\n    title: 目的\n    body: 数えの見本。\n  - n: 2\n    type: contract-table\n    title: 契約表\n    rows:\n{rows}{extra}"
+    )
+}
+
+impl Work {
+    fn put_note(&self, id: &str, text: &str) {
+        fs::write(self.note(&format!("{id}.yaml")), text).unwrap();
+    }
+
+    fn commit(&self) {
+        git(&self.root, &["init", "-q"]);
+        git(&self.root, &["add", "-A"]);
+        git(&self.root, &["commit", "-q", "-m", "fixture"]);
+    }
+
+    /// 編集時の口（`rel` に `text` を書こうとしている・置き場は書かない）。
+    fn propose(&self, rel: &str, text: &str) -> Output {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+            .args(["check", "--dir"])
+            .arg(self.dir())
+            .args(["--proposed", rel])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("folio を起動できない");
+        child.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
+        child.wait_with_output().unwrap()
+    }
+}
+
+/// 標準エラーの今の数の行（`# 今の数: ` の後ろ）。
+fn counts(out: &Output) -> Vec<String> {
+    stderr(out).lines().filter_map(|l| l.strip_prefix("# 今の数: ")).map(str::to_string).collect()
+}
+
+const LIVE_OVER: &str = "[note] design-note/: 生きたノートが多すぎる（live-notes の上限 1 本 以下）";
+
+/// 便 207 (c)4（AC33）: 値 1 の写しで、見本 2 本だけなら合格（見本は数えない）、生きたノート 1 本（ちょうど上限）も合格、下書きと発効の
+/// 2 本で違反ちょうど 1。字は置き場と欄 key と上限の値だけで今の数を持たず、今の数は標準エラーの # の行。
+#[test]
+fn f207_live_notes_over_the_cap_is_one_violation_without_the_count() {
+    let w = growth_base("f207-live");
+    assert_passes(&w.check());
+    w.put_note("ga", &growth_note("ga", "draft", 1, 0));
+    assert_passes(&w.check());
+    w.put_note("gb", &growth_note("gb", "effective", 1, 0));
+    let out = w.check();
+    assert_single_violation(&out, "note", &[]);
+    assert_eq!(violations(&out), [LIVE_OVER]);
+    assert_eq!(counts(&out), ["design-note/: 生きたノートの今の数 2（live-notes の上限 1 本 以下）"]);
+}
+
+/// 便 207 (c)5（AC33）: 足したノートを廃止（承認欄と後継つき）か見本にすると数えず、違反 0 に戻る。
+#[test]
+fn f207_retired_and_example_notes_are_not_counted() {
+    let w = growth_base("f207-retire");
+    w.put_note("ga", &growth_note("ga", "draft", 1, 0));
+    w.put_note("gb", &growth_note("gb", "draft", 1, 0));
+    assert_eq!(violations(&w.check()), [LIVE_OVER]);
+    w.put_note("gb", &growth_note("gb", "retired", 1, 0));
+    assert_passes(&w.check());
+    w.put_note("gb", &growth_note("gb", "example", 1, 0));
+    assert_passes(&w.check());
+}
+
+/// 便 207 (c)6（AC33）: 契約表の行は生きたノート 1 本ごとに値と比べ（1 行ずつの 2 本は合格）、1 本が 2 行なら違反 1 でそのノートを名指す。
+/// 廃止にしたノートの行は数えない。
+#[test]
+fn f207_note_rows_are_counted_per_live_note() {
+    let w = growth_base("f207-rows");
+    w.mutate_file(&w.dir().join("rules.yaml"), "value: \"1 本 以下\"", "value: \"9 本 以下\"");
+    w.put_note("ga", &growth_note("ga", "draft", 1, 0));
+    w.put_note("gb", &growth_note("gb", "draft", 1, 0));
+    assert_passes(&w.check());
+    w.put_note("ga", &growth_note("ga", "draft", 2, 0));
+    let out = w.check();
+    assert_single_violation(&out, "note", &[]);
+    assert_eq!(violations(&out), ["[note] design-note/ga.yaml: 契約表の行が多すぎる（note-rows の上限 1 行 以下）"]);
+    assert_eq!(counts(&out), ["design-note/ga.yaml: 契約表の行の今の数 2（note-rows の上限 1 行 以下）"]);
+    w.put_note("ga", &growth_note("ga", "retired", 2, 0));
+    assert_passes(&w.check());
+}
+
+/// 便 207 (c)7（AC33・ADR-35 決定 (1)(エ)）: 設計ノートが見本だけでも 3 つの行を読み、欄 key の行が無い・2 本・値の形が違う（「1 行以上」・
+/// 単位の取り違え）は、その数えが まだ分からない（合格にしない）。読めた設計ノートが 0 本なら読まない。
+#[test]
+fn f207_missing_twice_or_misshaped_cap_rows_are_unknown() {
+    for (key, bad) in [("live-notes", "1 行 以下"), ("note-rows", "1 行以上"), ("plan-rows", "1 本 以下")] {
+        let unreadable = format!("設計ノートの数の上限 {key} が読めない");
+        let rules = |w: &Work| w.dir().join("rules.yaml");
+        let w = growth_base(&format!("f207-none-{key}"));
+        w.mutate_file(&rules(&w), &format!(", key: {key}}}"), "}");
+        assert_unknown(&w.check(), &unreadable);
+        fs::remove_file(w.note("example.yaml")).unwrap();
+        fs::remove_file(w.note("figures.yaml")).unwrap();
+        let none = w.check();
+        assert!(!stderr(&none).contains(&unreadable), "0 本なのに行を読んだ: {}", stderr(&none));
+        let w = growth_base(&format!("f207-two-{key}"));
+        w.mutate_file(&rules(&w), "{id: R-2, article: P-14, ", &format!("{{id: R-2, article: P-14, key: {key}, "));
+        let two = w.check();
+        assert_eq!(two.status.code(), Some(2), "{}", stdout(&two));
+        assert!(stderr(&two).lines().any(|l| l.starts_with("# まだ分からない: ") && l.contains(&unreadable) && l.contains("2 本ある")), "{}", stderr(&two));
+        let w = growth_base(&format!("f207-shape-{key}"));
+        let text = fs::read_to_string(rules(&w)).unwrap();
+        let line = text.lines().find(|l| l.ends_with(&format!("key: {key}}}"))).unwrap();
+        let from = line.split("value: ").nth(1).unwrap().split(',').next().unwrap();
+        w.mutate_file(&rules(&w), line, &line.replacen(from, &format!("\"{bad}\""), 1));
+        assert_unknown(&w.check(), &unreadable);
+    }
+}
+
+/// 便 207 (c)8（AC33・ADR-35 決定 (1)(オ)・ADR-33 決定 (2)）: 上限を 2 超えた写し（生きたノート 3 本・上限 1）で、1 本を廃止にする中身も、
+/// 超えたまま 1 本足す中身も、編集時の口は止めない（違反の字が書く前と同じ）。超えていない別のノートが契約表の行の上限を跨ぐ中身は、
+/// そのノートを名指す新しい違反で止め（1・口の標準出力に今の数の行は出さない）、同じ中身を書いた置き場の素の床にも同じ行が在る（P-15.2）。
+#[test]
+fn f207_proposed_does_not_stop_retiring_or_adding_over_the_cap_but_stops_a_note_crossing_it() {
+    let w = growth_base("f207-proposed");
+    for id in ["ga", "gb", "gc"] {
+        w.put_note(id, &growth_note(id, "draft", 1, 0));
+    }
+    git(&w.root, &["add", "-A"]);
+    git(&w.root, &["commit", "-q", "-m", "three"]);
+    assert_eq!(violations(&w.check()), [LIVE_OVER]);
+    for (rel, text) in [
+        ("design-note/gc.yaml", growth_note("gc", "retired", 1, 0)),
+        ("design-note/gd.yaml", growth_note("gd", "draft", 1, 0)),
+    ] {
+        let r = w.propose(rel, &text);
+        assert_eq!(r.status.code(), Some(0), "{rel}: {}", stdout(&r));
+        assert!(stdout(&r).contains("folio check --proposed: 通す（新しい違反 0・"), "{}", stdout(&r));
+    }
+    let cross = growth_note("gb", "draft", 2, 0);
+    let r = w.propose("design-note/gb.yaml", &cross);
+    let stop = "[note] design-note/gb.yaml: 契約表の行が多すぎる（note-rows の上限 1 行 以下）";
+    assert_eq!(r.status.code(), Some(1), "{}", stdout(&r));
+    assert_eq!(stdout(&r).lines().next(), Some(stop), "{}", stdout(&r));
+    // 口の標準出力は要件 FR28 の 4 種の行だけ（今の数の行は素の床の標準エラーに出す・席の裁定 2026-09-29）
+    assert!(!stdout(&r).contains("今の数"), "{}", stdout(&r));
+    w.put_note("gb", &cross);
+    assert!(violations(&w.check()).iter().any(|l| l == stop));
+}
+
+/// 便 207 (c)9（ADR-35 決定 (1)(ク)）: 章の上限も同じ形。章が上限を 2 超えたノートの章を 1 つ減らす中身は止めず（字に章の今の数が無い）、
+/// 上限の内のノートが上限を跨ぐ中身は、そのノートを名指す新しい違反で止める。
+#[test]
+fn f207_chapter_cap_does_not_stop_reducing_over_the_cap_but_stops_crossing() {
+    let w = growth_base("f207-chapters");
+    w.mutate_file(&w.dir().join("rules.yaml"), "value: \"12 章 以下\"", "value: \"2 章 以下\"");
+    w.put_note("ga", &growth_note("ga", "draft", 1, 2));
+    w.put_note("gb", &growth_note("gb", "draft", 1, 0));
+    w.mutate_file(&w.dir().join("rules.yaml"), "value: \"1 本 以下\"", "value: \"9 本 以下\"");
+    git(&w.root, &["add", "-A"]);
+    git(&w.root, &["commit", "-q", "-m", "chapters"]);
+    let over = |id: &str| format!("[note] design-note/{id}.yaml: 章が多すぎる（note-chapters の上限 2 章 以下）");
+    let out = w.check();
+    assert!(violations(&out).contains(&over("ga")), "{:?}", violations(&out));
+    assert!(counts(&out).contains(&"design-note/ga.yaml: 章の今の数 4（note-chapters の上限 2 章 以下）".to_string()), "{:?}", counts(&out));
+    let r = w.propose("design-note/ga.yaml", &growth_note("ga", "draft", 1, 1));
+    assert_eq!(r.status.code(), Some(0), "{}", stdout(&r));
+    let r = w.propose("design-note/gb.yaml", &growth_note("gb", "draft", 1, 1));
+    assert_eq!(r.status.code(), Some(1), "{}", stdout(&r));
+    assert_eq!(stdout(&r).lines().next(), Some(over("gb").as_str()), "{}", stdout(&r));
 }

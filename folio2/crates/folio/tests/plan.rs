@@ -3,6 +3,8 @@
 //! 写しの根の `contracts/` に作り、歯の中の最小の手書き（計画のノート plan.yaml と、規則の表の名札の行 R-27〔欄 key plan-note〕と
 //! 条 P-2 の関係の行）を足して素の folio check と folio derive を撃つ。もう 1 本の設計ノートは土台の見本 example.yaml（契約表の行 a）。
 //! 版管理は作らない（土台の写しの床は版管理が まだ分からない）＝歯は種別 note と 裁定 id の違反の行と、まだ分からない の行の増減を数える。
+//! 便 207（docs/design/delivery-207.md §1 (c)）の歯 f207_ は、土台の数の上限の行（値 99）の計画だけの行の上限（欄 key plan-rows）を下げ、
+//! 計画だけの行を置き場の合計で数えることを見る。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -386,4 +388,38 @@ fn f199_plan_cross_checks_are_links_but_shapes_stop() {
         assert!(w.check().0.contains(&line), "素の床に無い: {line}");
         fs::write(w.path(rel), keep).unwrap();
     }
+}
+
+/// 便 207 (c)10（AC33・ADR-35 決定 (1)(イ)）: 土台の欄 key が `key` の行（値 99）の値を置き換える。
+fn set_cap(w: &Work, key: &str, value: &str) {
+    let t = w.read("rules.yaml");
+    let line = t.lines().find(|l| l.ends_with(&format!("key: {key}}}"))).expect("欄 key の行が無い");
+    w.edit("rules.yaml", line, &line.replacen("\"99 行 以下\"", &format!("\"{value}\""), 1));
+}
+
+/// 便 207 (c)10（AC33・ADR-35 決定 (1)(イ)）: 計画だけの行は置き場の生きたノートの合計で数える。計画のノートの 2 行は上限 1 で違反 1
+/// （置き場を名指し、今の数は # の行）、上限 2 で合格。もう 1 本の下書きに計画だけの行を 1 つ足すと（名札の外の違反も出る）合計 3 で
+/// 上限 2 を超える。見本に足した計画だけの行は数えない。
+#[test]
+fn f207_plan_rows_are_summed_over_the_place() {
+    let over = |cap: usize| format!("[note] design-note/: 計画だけの行が多すぎる（plan-rows の上限 {cap} 行 以下）");
+    let w = Work::new("f207-plan-rows", true);
+    set_cap(&w, "plan-rows", "1 行 以下");
+    let (v, u) = w.check();
+    assert_eq!(v, [over(1)], "{u:?}");
+    assert!(text(&w.run(&["check"])).contains("# 今の数: design-note/: 計画だけの行の今の数 2（plan-rows の上限 1 行 以下）"));
+    let w = Work::new("f207-plan-rows-2", true);
+    set_cap(&w, "plan-rows", "2 行 以下");
+    assert_eq!(w.check().0, Vec::<String>::new());
+    let plan = "  - n: 7\n    type: row-plan\n    title: 計画だけの行\n    rows:\n      - {id: x1, what: 見本の計画}\n";
+    w.edit("design-note/example.yaml", "\nfigures:\n", &format!("\n{plan}figures:\n"));
+    assert!(!w.check().0.contains(&over(2)), "見本の計画だけの行を数えた");
+    fs::write(
+        w.path("design-note/extra.yaml"),
+        format!("meta:\n  id: extra\n  title: もう 1 本\n  version: v0.1\n  status: draft\n  generated: 2026-09-29\n  profile: design-note\nsections:\n{}", plan.replace("n: 7", "n: 1").replace("x1", "y1")),
+    )
+    .unwrap();
+    let out = w.run(&["check"]);
+    assert!(w.check().0.contains(&over(2)), "{}", text(&out));
+    assert!(text(&out).contains("# 今の数: design-note/: 計画だけの行の今の数 3（plan-rows の上限 2 行 以下）"), "{}", text(&out));
 }

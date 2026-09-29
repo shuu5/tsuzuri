@@ -195,7 +195,7 @@ fn f181_every_decision_field_of_the_base_is_counted() {
     let v = w.check().0;
     let n = |p: &str| v.iter().filter(|l| l.starts_with(&format!("[裁定 id] {p}"))).count();
     let got = ["constitution", "rules", "adr/", "srs", "index", "ceiling", "intake"].map(n);
-    assert_eq!((v.len(), got), (55, [1, 27, 10, 9, 4, 3, 1]), "{v:?}");
+    assert_eq!((v.len(), got), (58, [1, 30, 10, 9, 4, 3, 1]), "{v:?}");
 }
 
 /// 便 182 の歯の手書きの字: 判断の記録の欄の決まりの生成区間の、形の種類・決定の欄・骨格の欄・数えない役の 4 欄（写しの字）。

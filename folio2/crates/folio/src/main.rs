@@ -462,6 +462,10 @@ fn run(cli: Cli) -> ExitCode {
             for msg in report.unknowns.iter().chain(&report.pendings) {
                 eprintln!("# まだ分からない: {msg}");
             }
+            // 便 207（ADR-35 決定 (1)(オ)）: 数の上限の違反の字は今の数を持たないので、今の数を違反ごとに 1 行
+            for msg in &report.counts {
+                eprintln!("# 今の数: {msg}");
+            }
             // 便 156（FR5）: 行 R-17 が無くて散文の言及の歯が数えなかったら、判定を変えずに 1 行（機構の行より前）
             if materials.mentions_off {
                 eprintln!("{}", mentions::OFF);

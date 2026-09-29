@@ -84,10 +84,12 @@ const CEILING_REGION_SHA256: &str =
 /// 便 200（delivery-200.md §1 (c)）: 欄 key の値域に in-loop-min と key_note の 1 文を前の anchor に手で足した写しを sha256sum で測り直した値。
 /// 便 204（delivery-204.md §1 (c)）: 裁定の時刻の形の 2 行（ruled_at_format・ruled_at_note）と kind_map_to_constitution_note の末尾の
 /// 1 文を前の anchor に手で足した写しを sha256sum で測り直した値。
+/// 便 207（delivery-207.md §1 (c)）: 欄 key の値域に数の上限 3 つ（live-notes・note-rows・plan-rows）と key_note の末尾の 2 文を
+/// 前の anchor に手で足した写しを sha256sum で測り直した値。
 const RULES_REGION_LINES: usize = 34;
-const RULES_REGION_BYTES: usize = 4652;
+const RULES_REGION_BYTES: usize = 5558;
 const RULES_REGION_SHA256: &str =
-    "679af1271d12f53575b1ef3606505b344561cda0a51475083ab278653aebe978";
+    "c16b7721c1897f1f8ed0af1c8b7cb5803a206626048613b6bf53e0e67c6e9af1";
 
 /// 便 76 (b) 凍結 anchor: index.yaml の生成区間（設計判断の席が独立に組んだ・tests/fixtures/schema/index-region.txt と同じ byte）。
 const INDEX_REGION_LINES: usize = 9;

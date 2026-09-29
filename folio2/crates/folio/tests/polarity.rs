@@ -15,12 +15,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
-/// 土台の手で数えた本数: 憲法の条の機構の種別が reject か build-check の条 24・規則の表の閾値の行 17・床の定数の仕掛け 5（post）。
+/// 土台の手で数えた本数: 憲法の条の機構の種別が reject か build-check の条 24・規則の表の閾値の行 20（便 207 で数の上限の 3 行を足した）・
+/// 床の定数の仕掛け 5（post）。
 const ARTICLES: usize = 24;
-const ROWS: usize = 17;
+const ROWS: usize = 20;
 const FLOOR_GUARDS: usize = 5;
 /// 土台の集計の 1 行（手で書く）。
-const SUMMARY: &str = "folio check --polarity: 仕掛け 46（in-loop 0・post 46）・下限の行が無い＝数えない";
+const SUMMARY: &str = "folio check --polarity: 仕掛け 49（in-loop 0・post 49）・下限の行が無い＝数えない";
 /// 下限の行が無くて数えなかった知らせ（delivery-200.md §1 (b)・手で書く）。
 const OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外・条 P-18.4）";
 const UNKNOWN: &str = "# まだ分からない: ";
@@ -240,7 +241,7 @@ fn f200_floor_fails_when_in_loop_guards_are_below_the_bound() {
     assert_eq!(listed.status.code(), Some(0), "{}", show(&listed));
     assert_eq!(
         lines(&listed.stdout).last().map(String::as_str),
-        Some("folio check --polarity: 仕掛け 46（in-loop 0・post 46）・下限 99 本以上（行 R-13）に足りない"),
+        Some("folio check --polarity: 仕掛け 49（in-loop 0・post 49）・下限 99 本以上（行 R-13）に足りない"),
         "{}",
         show(&listed)
     );
@@ -258,7 +259,7 @@ fn f200_floor_fails_when_in_loop_guards_are_below_the_bound() {
     assert!(got.iter().any(|l| l == "R-7 · in-loop · fail-closed · 規則の表の閾値の行"), "{}", show(&listed));
     assert_eq!(
         got.last().map(String::as_str),
-        Some("folio check --polarity: 仕掛け 46（in-loop 1・post 45）・下限 1 本以上（行 R-13）に足りる"),
+        Some("folio check --polarity: 仕掛け 49（in-loop 1・post 48）・下限 1 本以上（行 R-13）に足りる"),
         "{}",
         show(&listed)
     );

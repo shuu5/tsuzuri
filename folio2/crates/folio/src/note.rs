@@ -105,7 +105,7 @@ pub fn check_note(
         .inspect_err(|e| report.unknown(format!("rules.yaml: R-16 の value が読めない: {e}")))
         .ok();
     // 章の上限は検査のたびに規則の表の欄 key が note-chapters の閾値の行から読む（面の生成器と同じ関数・便 179）
-    let cap = rules::chapter_cap(rules)
+    let cap = rules::cap(rules, rules::NOTE_CHAPTERS)
         .inspect_err(|e| report.unknown(format!("rules.yaml: 設計ノートの章の上限が読めない: {e}")))
         .ok();
     let known = base_known_ids(constitution, rules, srs, adr);
@@ -123,10 +123,13 @@ pub fn check_note(
         );
         let len = |k| note.root.get(k).and_then(Node::as_seq).map_or(0, <[Node]>::len);
         let file = format!("{DIR}/{}", note.file);
-        if let Some(m) = cap.and_then(|c| over_cap(&file, chapters(len("sections"), len("figures")), c)) {
+        let count = chapters(len("sections"), len("figures"));
+        if let Some((m, now)) = cap.and_then(|c| rules::over_cap(&file, rules::NOTE_CHAPTERS, count, c)) {
             report.violation(KIND, m);
+            report.count(now);
         }
     }
+    check_growth(&notes, rules, report);
     // 計画の設計ノート（便 183）: 置き場の決まりと、名札の行が在るときの計画の床
     plan::check_plan(&nd, &notes, rules, report);
     notes
@@ -137,9 +140,63 @@ pub(crate) fn chapters(sections: usize, figures: usize) -> usize {
     sections + usize::from(figures > 0)
 }
 
-/// 章の数が上限を超えるときの字（面の生成器と床が同じ字を出す・便 179）。
-pub(crate) fn over_cap(file: &str, chapters: usize, cap: usize) -> Option<String> {
-    (chapters > cap).then(|| format!("{file}: 章が {chapters} 本ある＝章が多すぎる（上限 {cap}）"))
+/// 生きたノートの状態（ADR-35 決定 (1)(イ)・廃止と見本とほかの値は数えない）。
+const LIVE: [&str; 2] = ["draft", "effective"];
+
+/// 置き場の設計ノートの数え（ADR-35 決定 (1)(イ)）: 生きたノートの本数・生きたノート 1 本ごとの契約表の節の行の数・
+/// 生きたノートの計画だけの行の節の行の数の合計。
+pub(crate) struct Growth<'a> {
+    pub(crate) live: usize,
+    pub(crate) rows: Vec<(&'a str, usize)>,
+    pub(crate) plan: usize,
+}
+
+/// 置き場の設計ノートを数える唯一の関数（床が上限と比べ、面が後で数を出すときも同じ関数を呼ぶ・ADR-35 決定 (1)(カ)・便 207）。
+/// 読めたノート（`load_notes`）のうち状態がちょうど draft か effective のものだけを数え、行の一覧が一覧でない節は 0 行とする。
+pub(crate) fn growth(notes: &[NoteDoc]) -> Growth<'_> {
+    let rows = |root: &Node, ty: &str| -> usize {
+        let secs = root.get("sections").and_then(Node::as_seq).unwrap_or_default();
+        secs.iter()
+            .filter(|s| s.get("type").and_then(Node::as_str) == Some(ty))
+            .map(|s| s.get("rows").and_then(Node::as_seq).map_or(0, <[Node]>::len))
+            .sum()
+    };
+    let mut g = Growth { live: 0, rows: Vec::new(), plan: 0 };
+    for note in notes {
+        let status = note.root.get("meta").and_then(|m| m.get("status")).and_then(Node::as_str);
+        if status.is_some_and(|s| LIVE.contains(&s)) {
+            g.live += 1;
+            g.rows.push((note.file.as_str(), rows(&note.root, CONTRACT_TABLE)));
+            g.plan += rows(&note.root, ROW_PLAN);
+        }
+    }
+    g
+}
+
+/// 生きたノートの本数・1 本の契約表の行の数・計画だけの行の合計を、規則の表の欄 key が live-notes・note-rows・plan-rows の
+/// 閾値の行の上限と比べる（便 207・ADR-35 決定 (1)）。行が読めない数えは まだ分からない（道具は既定の値を持たない・P-4.2）。
+/// 超えたら種別 note の違反（字は名指す先・欄 key・上限の値だけ）と、今の数の行。
+fn check_growth(notes: &[NoteDoc], rules: &Node, report: &mut Report) {
+    let g = growth(notes);
+    let dir = format!("{DIR}/");
+    let mut counted = vec![(rules::LIVE_NOTES, dir.clone(), g.live)];
+    counted.extend(g.rows.iter().map(|(file, n)| (rules::NOTE_ROWS, format!("{DIR}/{file}"), *n)));
+    counted.push((rules::PLAN_ROWS, dir, g.plan));
+    for key in [rules::LIVE_NOTES, rules::NOTE_ROWS, rules::PLAN_ROWS] {
+        let cap = match rules::cap(rules, key) {
+            Ok(c) => c,
+            Err(e) => {
+                report.unknown(format!("rules.yaml: 設計ノートの数の上限 {key} が読めない: {e}"));
+                continue;
+            }
+        };
+        for (_, at, n) in counted.iter().filter(|c| c.0 == key) {
+            if let Some((m, now)) = rules::over_cap(at, key, *n, cap) {
+                report.violation(KIND, m);
+                report.count(now);
+            }
+        }
+    }
 }
 
 // ── (b) 欄の決まりの写し ──
@@ -987,18 +1044,37 @@ mod tests {
         assert_eq!(crate::floor::derive(&FLOOR), anchor);
     }
 
-    /// 便 179 (c)6: 章の数は節の数に図の章 1 を足し（図の枚数に依らない・承認欄は数えない）、上限を超えたときだけ面と床が同じ字を返す。
+    /// 便 179 (c)6: 章の数は節の数に図の章 1 を足す（図の枚数に依らない・承認欄は数えない）。上限との比べの字は便 207 から
+    /// `rules::over_cap`（rules.rs の f207_ の歯）。
     #[test]
-    fn f179_chapters_add_one_figure_chapter_and_over_cap_names_the_counts() {
+    fn f179_chapters_add_one_figure_chapter() {
         assert_eq!(chapters(24, 0), 24);
         assert_eq!(chapters(5, 3), 6);
         assert_eq!(chapters(0, 1), 1);
         assert_eq!(chapters(0, 0), 0);
-        assert_eq!(over_cap("design-note/x.yaml", 12, 12), None);
-        assert_eq!(over_cap("design-note/x.yaml", 34, 40), None);
-        assert_eq!(
-            over_cap("design-note/x.yaml", 13, 12).as_deref(),
-            Some("design-note/x.yaml: 章が 13 本ある＝章が多すぎる（上限 12）")
-        );
+    }
+
+    /// 便 207 (c)3（ADR-35 決定 (1)(イ)）: 数えるのは状態がちょうど draft か effective のノートだけで、1 本の行の数は契約表の節の
+    /// 行の和・計画だけの行は置き場の合計。行の一覧が一覧でない節は 0 行。
+    #[test]
+    fn f207_growth_counts_only_live_notes() {
+        let note = |file: &str, text: &str| NoteDoc {
+            file: file.to_string(),
+            id: file.trim_end_matches(".yaml").to_string(),
+            root: yaml::parse(text).unwrap().root,
+        };
+        let secs = "sections:\n  - {type: contract-table, rows: [a, b]}\n  - {type: contract-table, rows: [c]}\n  - {type: row-plan, rows: [p, q]}\n  - {type: contract-table, rows: x}\n";
+        let notes = [
+            note("a.yaml", &format!("meta: {{status: draft}}\n{secs}")),
+            note("b.yaml", "meta: {status: effective}\nsections:\n  - {type: row-plan, rows: [r]}\n"),
+            note("c.yaml", &format!("meta: {{status: retired}}\n{secs}")),
+            note("d.yaml", &format!("meta: {{status: example}}\n{secs}")),
+            note("e.yaml", &format!("meta: {{status: Draft}}\n{secs}")),
+            note("f.yaml", &format!("meta: {{status: [draft]}}\n{secs}")),
+        ];
+        let g = growth(&notes);
+        assert_eq!(g.live, 2);
+        assert_eq!(g.rows, [("a.yaml", 3), ("b.yaml", 0)]);
+        assert_eq!(g.plan, 3);
     }
 }

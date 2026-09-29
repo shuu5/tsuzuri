@@ -109,7 +109,7 @@ pub const THRESHOLD_OPTIONAL: [&str; 7] = [
     ROW_KEY,
 ];
 
-/// 設計ノートの面の章の上限の行の印（欄 key の値・面の生成器 `face_note.rs` と床 `note.rs` が `chapter_cap` で読む）。
+/// 設計ノートの面の章の上限の行の印（欄 key の値・面の生成器 `face_note.rs` と床 `note.rs` が `cap` で読む）。
 pub const NOTE_CHAPTERS: &str = "note-chapters";
 
 /// 計画の名札の行の印（欄 key の値・値は計画のノートの文書 id・床 `plan.rs` と導出の命令 `derive.rs` が `plan_note` で読む・便 183）。
@@ -118,11 +118,26 @@ pub const PLAN_NOTE: &str = crate::floor_note::PLAN_KEY;
 /// 編集時の止めの本数の下限の行の印（欄 key の値・値は「<正の整数> 本以上」・床 `polarity.rs` が `in_loop_min` で読む・便 200）。
 pub const IN_LOOP_MIN: &str = "in-loop-min";
 
-/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note・便 200 で in-loop-min を足した）。
-pub const KEYS: [&str; 3] = [NOTE_CHAPTERS, PLAN_NOTE, IN_LOOP_MIN];
+/// 生きた設計ノートの本数の上限の行の印（欄 key の値・値は「<正の整数> 本 以下」・床 `note.rs` が `cap` で読む・便 207・ADR-35 決定 (1)）。
+pub const LIVE_NOTES: &str = "live-notes";
 
-/// 章の上限の値の形「<正の整数> 章 以下」の数の後ろの字。
-const CHAPTER_TAIL: &str = " 章 以下";
+/// 生きた設計ノート 1 本の契約表の行の数の上限の行の印（欄 key の値・値は「<正の整数> 行 以下」・便 207）。
+pub const NOTE_ROWS: &str = "note-rows";
+
+/// 生きた設計ノートの計画だけの行の数の置き場の合計の上限の行の印（欄 key の値・値は「<正の整数> 行 以下」・便 207）。
+pub const PLAN_ROWS: &str = "plan-rows";
+
+/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note・便 200 で in-loop-min・便 207 で数の上限 3 つを足した）。
+pub const KEYS: [&str; 6] = [NOTE_CHAPTERS, PLAN_NOTE, IN_LOOP_MIN, LIVE_NOTES, NOTE_ROWS, PLAN_ROWS];
+
+/// 数の上限の欄 key と、値の形「<正の整数> <単位> 以下」の単位と、数えるものの名（違反の字・便 179 の章の上限に便 207 で 3 つを足した・
+/// ADR-35 決定 (1)(ア)(ウ)）。
+const CAPS: [(&str, &str, &str); 4] = [
+    (NOTE_CHAPTERS, "章", "章"),
+    (LIVE_NOTES, "本", "生きたノート"),
+    (NOTE_ROWS, "行", "契約表の行"),
+    (PLAN_ROWS, "行", "計画だけの行"),
+];
 
 /// 置き場の規則の表の閾値の行のうち、欄 key が `key` の 1 本（便 179）。無い・2 本以上は Err（呼び手は まだ分からない にする）。
 pub fn keyed<'a>(rules: &'a Node, key: &str) -> Result<&'a Node, String> {
@@ -162,19 +177,30 @@ pub fn plan_note(rules: &Node) -> Result<Option<&str>, String> {
     Err(format!("行 {id} の value「{value}」が文書 id の形でない"))
 }
 
-/// 設計ノートの章の上限（欄 key が note-chapters の閾値の行の value「<正の整数> 章 以下」の数・便 179）。
-/// 面の生成器と床が同じ関数で読む。行が無い・2 本以上・値の形が違うは Err（道具は既定の値を持たない・P-4.2）。
-pub fn chapter_cap(rules: &Node) -> Result<usize, String> {
-    let row = keyed(rules, NOTE_CHAPTERS)?;
+/// 数の上限（欄 key が `key` の閾値の行の value「<正の整数> <単位> 以下」の数・便 179 の章の上限を便 207 で 4 つの key に広げた・
+/// ADR-35 決定 (1)(カ)）。面の生成器と床が同じ関数で読む。行が無い・2 本以上・値の形が違うは Err（道具は既定の値を持たない・P-4.2）。
+pub fn cap(rules: &Node, key: &str) -> Result<usize, String> {
+    let (_, unit, _) = CAPS.iter().find(|c| c.0 == key).ok_or_else(|| format!("欄 {ROW_KEY} の {key} は数の上限でない"))?;
+    let tail = format!(" {unit} 以下");
+    let row = keyed(rules, key)?;
     let value = row.get("value").and_then(Node::as_str).unwrap_or_default();
     value
-        .strip_suffix(CHAPTER_TAIL)
+        .strip_suffix(tail.as_str())
         .filter(|n| !n.starts_with('0') && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
         .and_then(|n| n.parse().ok())
         .ok_or_else(|| {
             let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
-            format!("行 {id} の value「{value}」が「<正の整数>{CHAPTER_TAIL}」の形でない")
+            format!("行 {id} の value「{value}」が「<正の整数>{tail}」の形でない")
         })
+}
+
+/// 数が上限を超えるときの違反の字と今の数の行（面の生成器と床が同じ字を出す・便 179・便 207）。違反の字は名指す先・欄 key・上限の値
+/// だけを持ち、今の数を持たない（編集時の口は違反の字を書く前と後の完全一致で比べるので、数を入れると上限を 2 以上超えた置き場で数を
+/// 減らす編集も止まる・ADR-35 決定 (1)(オ)(ク)・ADR-33 決定 (2)）。今の数は 2 つ目の字（呼び手が `#` の行に出す・判定に数えない）。
+pub fn over_cap(at: &str, key: &str, count: usize, cap: usize) -> Option<(String, String)> {
+    let (_, unit, what) = CAPS.iter().find(|c| c.0 == key)?;
+    let limit = format!("{key} の上限 {cap} {unit} 以下");
+    (count > cap).then(|| (format!("{at}: {what}が多すぎる（{limit}）"), format!("{at}: {what}の今の数 {count}（{limit}）")))
 }
 
 /// 編集時の止めの本数の下限（欄 key が in-loop-min の閾値の行の id と value「<正の整数> 本以上」の数・便 200・ADR-33 決定 (5)）。
@@ -403,7 +429,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "key_note",
         Floor::Val(
-            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない",
+            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）",
         ),
     ),
     (
@@ -507,6 +533,7 @@ mod tests {
     fn f179_chapter_cap_reads_the_keyed_row_and_only_the_positive_integer_form() {
         let doc = |rows: &str| crate::yaml::parse(&format!("thresholds:\n{rows}discipline: []\n")).unwrap().root;
         let row = |id: &str, v: &str| format!("  - {{id: {id}, value: \"{v}\", key: note-chapters}}\n");
+        let chapter_cap = |rules: &Node| cap(rules, NOTE_CHAPTERS);
         assert_eq!(chapter_cap(&doc(&row("R-19", "12 章 以下"))), Ok(12));
         assert_eq!(chapter_cap(&doc(&row("R-26", "40 章 以下"))), Ok(40));
         for bad in ["12章以下", "12 章", "12 章 以上", "0 章 以下", "012 章 以下", "１２ 章 以下", "-1 章 以下", " 章 以下", "99999999999999999999999 章 以下"] {
@@ -534,7 +561,54 @@ mod tests {
         assert_eq!(listed.len(), 1, "{listed:?}");
         let two = v("  - {id: R-19, key: note-chapters}\n  - {id: R-26, key: note-chapters}\n");
         assert_eq!(two, ["行 R-26 の key「note-chapters」を持つ閾値の行が 2 本以上ある"]);
-        assert_eq!(KEYS, ["note-chapters", "plan-note", "in-loop-min"]);
+        assert_eq!(KEYS, ["note-chapters", "plan-note", "in-loop-min", "live-notes", "note-rows", "plan-rows"]);
+    }
+
+    /// 便 207 (c)1: 数の上限 3 つは章の上限と同じ読み手で、単位だけが key ごとに違う（本数は「本」・行の数は「行」）。行の id に依らず、
+    /// 行が無い・2 本・形が違う（単位の取り違えを含む）は Err。数の上限でない key は読まない。
+    #[test]
+    fn f207_cap_reads_the_three_growth_keys_with_their_units() {
+        let doc = |rows: &str| crate::yaml::parse(&format!("thresholds:\n{rows}discipline: []\n")).unwrap().root;
+        let row = |id: &str, key: &str, v: &str| format!("  - {{id: {id}, value: \"{v}\", key: {key}}}\n");
+        assert_eq!(cap(&doc(&row("R-23", LIVE_NOTES, "52 本 以下")), LIVE_NOTES), Ok(52));
+        assert_eq!(cap(&doc(&row("R-7", NOTE_ROWS, "40 行 以下")), NOTE_ROWS), Ok(40));
+        assert_eq!(cap(&doc(&row("R-99", PLAN_ROWS, "1 行 以下")), PLAN_ROWS), Ok(1));
+        for (key, bad) in [(LIVE_NOTES, "52 行 以下"), (NOTE_ROWS, "40 本 以下"), (PLAN_ROWS, "1 行以上"), (LIVE_NOTES, "0 本 以下"), (NOTE_ROWS, "１ 行 以下"), (PLAN_ROWS, "1,000 行 以下")] {
+            let e = cap(&doc(&row("R-23", key, bad)), key).unwrap_err();
+            assert!(e.contains("行 R-23 の value") && e.contains("の形でない"), "{key} {bad}: {e}");
+        }
+        for key in [LIVE_NOTES, NOTE_ROWS, PLAN_ROWS] {
+            let none = cap(&doc(&row("R-19", NOTE_CHAPTERS, "12 章 以下")), key).unwrap_err();
+            assert!(none.contains(&format!("{key} の閾値の行が無い")), "{none}");
+            let two = cap(&doc(&format!("{}{}", row("R-23", key, "1 行 以下"), row("R-24", key, "1 本 以下"))), key);
+            assert!(two.unwrap_err().contains("2 本ある"));
+        }
+        assert!(cap(&doc(&row("R-8", IN_LOOP_MIN, "1 本以上")), IN_LOOP_MIN).unwrap_err().contains("数の上限でない"));
+    }
+
+    /// 便 207 (c)2（ADR-35 決定 (1)(オ)(ク)）: 数の上限の違反の字は名指す先と欄 key と上限の値だけを持ち、今の数を持たない
+    /// （上限を超えたまま数が変わっても字は同じ）。今の数は 2 つ目の字だけが持つ。ちょうど上限なら字は無い。
+    #[test]
+    fn f207_over_cap_words_carry_the_key_and_the_cap_but_not_the_count() {
+        assert_eq!(over_cap("design-note/x.yaml", NOTE_CHAPTERS, 12, 12), None);
+        assert_eq!(over_cap("design-note/", LIVE_NOTES, 1, 1), None);
+        let (m, n) = over_cap("design-note/x.yaml", NOTE_CHAPTERS, 13, 12).unwrap();
+        assert_eq!(m, "design-note/x.yaml: 章が多すぎる（note-chapters の上限 12 章 以下）");
+        assert_eq!(n, "design-note/x.yaml: 章の今の数 13（note-chapters の上限 12 章 以下）");
+        assert_eq!(over_cap("design-note/x.yaml", NOTE_CHAPTERS, 14, 12).unwrap().0, m);
+        let words = [
+            (LIVE_NOTES, "design-note/", "design-note/: 生きたノートが多すぎる（live-notes の上限 1 本 以下）"),
+            (NOTE_ROWS, "design-note/a.yaml", "design-note/a.yaml: 契約表の行が多すぎる（note-rows の上限 1 行 以下）"),
+            (PLAN_ROWS, "design-note/", "design-note/: 計画だけの行が多すぎる（plan-rows の上限 1 行 以下）"),
+        ];
+        for (key, at, want) in words {
+            for count in [2, 3, 99] {
+                let (m, n) = over_cap(at, key, count, 1).unwrap();
+                assert_eq!(m, want);
+                assert!(n.contains(&format!("の今の数 {count}（")), "{n}");
+            }
+        }
+        assert_eq!(over_cap("design-note/", IN_LOOP_MIN, 9, 1), None);
     }
 
     /// 便 183 (c): 計画のノートの文書 id は欄 key が plan-note の閾値の行の value だけを読む。行が無ければ None（掛けない）、
