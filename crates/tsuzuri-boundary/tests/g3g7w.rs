@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use tsuzuri_boundary::cli::graph::NEXT;
+use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, NEXT};
 use tsuzuri_boundary::server::board::{self, Texts};
 use tsuzuri_boundary::server::design::{Design, RULINGS_ARGS};
 use tsuzuri_contract::graph::{EdgeType, Verdict};
@@ -162,6 +162,11 @@ fn unknown(id: &str, why: &str) -> String {
     format!("# まだ分からない: [{id}] {why}")
 }
 
+/// 要約の無い節点がまだ分からないの行（偽の設計の道具は要約を返さない・行 k-sum-count）。
+fn bare_unknown() -> String {
+    format!("# まだ分からない: {BARE_UNKNOWN}")
+}
+
 const UNREAD: &str = "読めない出所が在る";
 const NO_TOOL: &str = "測る機構がまだ無い";
 
@@ -186,7 +191,10 @@ fn g3g7_check_names_the_record() {
     let out = place.check(true);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(stdout(&out), summary("まだ分からない", 0, 1));
-    assert_eq!(stderr(&out), format!("{}\n", unknown("g-9", NO_TOOL)));
+    assert_eq!(
+        stderr(&out),
+        format!("{}\n{}\n", unknown("g-9", NO_TOOL), bare_unknown())
+    );
 
     let place = Place::new("names-cut", &cut(), &read("rulings.jsonl"), 0);
     let out = place.check(true);
@@ -301,7 +309,11 @@ fn g3g7_check_counts_outside_ids() {
     assert_eq!(stdout(&out), summary("まだ分からない", 0, 2));
     assert_eq!(
         stderr(&out),
-        format!("{outside}\n{}\n", unknown("g-9", NO_TOOL))
+        format!(
+            "{outside}\n{}\n{}\n",
+            unknown("g-9", NO_TOOL),
+            bare_unknown()
+        )
     );
 
     let far = plus_adr8(&read("rulings.jsonl"), "s9-far.2");
@@ -312,9 +324,10 @@ fn g3g7_check_counts_outside_ids() {
     assert_eq!(
         stderr(&out),
         format!(
-            "{}\n{outside}\n{}\n",
+            "{}\n{outside}\n{}\n{}\n",
             unknown("g-3", UNREAD),
-            unknown("g-9", NO_TOOL)
+            unknown("g-9", NO_TOOL),
+            bare_unknown()
         )
     );
 
@@ -329,7 +342,10 @@ fn g3g7_check_counts_outside_ids() {
             summary("不合格", 1, 1)
         )
     );
-    assert_eq!(stderr(&out), format!("{}\n", unknown("g-9", NO_TOOL)));
+    assert_eq!(
+        stderr(&out),
+        format!("{}\n{}\n", unknown("g-9", NO_TOOL), bare_unknown())
+    );
 }
 
 /// 計画の verify の filter の語（歯の名が含んではならない部分の字）。

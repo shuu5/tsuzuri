@@ -2,15 +2,17 @@
 //! - 旗なし — GraphDoc の電文を標準出力に 1 行
 //! - --check — 不変条件の 12 本を 3 値で数え、違反の行と要約の行を標準出力、まだ分からないの行を標準エラー
 //!   （g-7 が folio の裁定 id の文法の外の id の裁定だけのためにまだ分からないなら、理由にその数を書く・行 c-g3g7）
+//!   要約の行の前に要約の無い節点の数と id の行（読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 k-sum-count）
 //! - --design — 設計の索引だけを読み、設計の節点と辺に絞った GraphDoc の電文（folio の graph の吸収・ADR-8 決定 (3)）
 //!
 //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
 //! 読めない出所が無ければ 0、在れば 2。使い方の誤りは 1。組みは口 /api/graph と同じ `Sources::gather` と
-//! `board::built` と `board::doc` の呼び。
+//! `board::built_bare`（`board::built` と同じ組み）と `board::doc` の呼び。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{
     EdgeType, GraphDoc, GraphSource, InvariantCheck, SkippedEdges, Verdict,
 };
@@ -66,6 +68,21 @@ pub const NEXT: [(&str, &str); 12] = [
         "Questioned の走行に問いを起こすか、走行の段を進める",
     ),
 ];
+
+/// 要約の無い節点の行の頭の字（行 k-sum-count）。
+pub const BARE_HEAD: &str = "要約の無い節点";
+
+/// 要約の無い節点がまだ分からないときの字（標準エラーのまだ分からないの行に続ける）。
+pub const BARE_UNKNOWN: &str = "要約の無い節点（要約か設計の索引か台帳が読めない）";
+
+/// 要約の無い節点の行（空なら数 0 だけ、在れば数と中黒つなぎの id・違反の行と同じ形）。
+pub fn bare_line(ids: &[String]) -> String {
+    if ids.is_empty() {
+        format!("{BARE_HEAD} 0")
+    } else {
+        format!("{BARE_HEAD} {}（{}）", ids.len(), ids.join("・"))
+    }
+}
 
 /// 使い方の誤り。
 const FAIL: u8 = 1;
@@ -156,17 +173,18 @@ pub fn run(rest: &[&str]) -> u8 {
             args.repo.display()
         ));
     }
-    let (doc, outside) = match args.mode {
+    let (doc, outside, bare) = match args.mode {
         Mode::Doc | Mode::Check => {
             let sources = Sources {
                 ledger: Source::new(&args.repo, &args.bd),
                 design: Design::new(&args.repo, &args.folio),
                 runs: Runs::new(args.state_dir.as_deref()),
             };
-            let g = board::built(&sources.gather(true, true));
+            let (g, bare) = board::built_bare(&sources.gather(true, true));
             (
                 board::doc(&g, &graph::check(&g)),
                 graph::check::outside_rulings(&g),
+                bare,
             )
         }
         Mode::Design => {
@@ -176,7 +194,7 @@ pub fn run(rest: &[&str]) -> u8 {
                 summary: design.summary().unwrap_or_default(),
                 ..Texts::default()
             };
-            (design_view(&board::graph(&texts)), None)
+            (design_view(&board::graph(&texts)), None, Reading::Unknown)
         }
     };
     if !doc.unread.is_empty() {
@@ -184,7 +202,7 @@ pub fn run(rest: &[&str]) -> u8 {
         eprintln!("# 読めない出所: {}", names.join("・"));
     }
     match args.mode {
-        Mode::Check => check(&doc.invariants, outside),
+        Mode::Check => check(&doc.invariants, outside, &bare),
         Mode::Doc | Mode::Design => match wire::encode(&doc) {
             Ok(text) => {
                 println!("{text}");
@@ -200,7 +218,12 @@ pub fn run(rest: &[&str]) -> u8 {
 
 /// 違反の行と要約の行を標準出力、まだ分からないの行を標準エラーに出し、3 値の終了 code を返す。
 /// `outside` は g-7 が文法の外の id の裁定だけのためにまだ分からないときのその数（`check::outside_rulings`）。
-fn check(invariants: &[InvariantCheck], outside: Option<usize>) -> u8 {
+/// `bare` は要約の無い節点の列（`board::built_bare`・要約の行の前に出し、終了 code は変えない）。
+fn check(
+    invariants: &[InvariantCheck],
+    outside: Option<usize>,
+    bare: &Reading<Vec<String>>,
+) -> u8 {
     let (mut violations, mut unknowns) = (0, 0);
     for inv in invariants {
         match inv.verdict {
@@ -230,6 +253,10 @@ fn check(invariants: &[InvariantCheck], outside: Option<usize>) -> u8 {
             }
             Verdict::Pass => {}
         }
+    }
+    match bare {
+        Reading::Known(ids) => println!("{}", bare_line(ids)),
+        Reading::Unknown => eprintln!("# まだ分からない: {BARE_UNKNOWN}"),
     }
     let verdict = overall(invariants);
     let word = match verdict {

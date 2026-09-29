@@ -119,10 +119,23 @@ pub fn next_seat(texts: &Texts, card: &SeatCard, now: EpochSecs) -> NextStep {
 /// 裁定の書き出しを節点へ結んで ruled_by の辺を組む（読めなければ結んだ表は無しのまま・行 c-g3g7）。
 /// tz graph --check も同じ組みを使う。
 pub fn built(texts: &Texts) -> Graph {
+    summed(texts).0
+}
+
+/// `built` と同じ導出グラフと、要約の無い節点の列（要約か設計の索引か台帳が読めなければまだ分からない・
+/// 中核の `check::unsummarized`・行 k-sum-count）。tz graph --check が使う。
+pub fn built_bare(texts: &Texts) -> (Graph, Reading<Vec<String>>) {
+    let (g, summary) = summed(texts);
+    let bare = graph::check::unsummarized(&g, summary);
+    (g, bare)
+}
+
+/// 導出グラフを組み、要約を写せたかを添えて返す。
+fn summed(texts: &Texts) -> (Graph, bool) {
     let mut g = graph::build(&texts.inputs());
-    graph::build::add_summary(&mut g, &texts.summary);
+    let summary = graph::build::add_summary(&mut g, &texts.summary);
     graph::build::add_rulings(&mut g, &texts.rulings);
-    g
+    (g, summary)
 }
 
 /// 導出グラフを組み、不変条件を数えて電文にする。
