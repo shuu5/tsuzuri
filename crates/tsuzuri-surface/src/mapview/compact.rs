@@ -1,5 +1,6 @@
 //! 圧縮の面（見本の map.html の compact）: 帯ごとに 1 つの箱を帯の順に置き、箱の中に札（印・id・題 30 字）を並べる。
 //! constitution は条の札（id の自然な順）の下に規範文の id・ほかの帯は id の自然な順・beads は種類の 7 行。
+//! design-note はノートごとの見出し（ノートの名の自然な順）の下にノートの行の札を file の中の行の順に並べる（行 g-dn-group）。
 //! 電文の順は字の順（P-1 の次が P-10）なので、条も規則行も電文の順に頼らない（便 g-graph）。
 //! 読めなかった出所の帯は測れていない（理由の 1 行）・読めて 0 件の帯は 0 件の帯（要件 NFR2）。
 //! 0 件の SRS と pipeline の帯は、読めて 0 件と測れたことを言う card を持つ（見本の srs0 と run0・行 g-map-tips）。
@@ -52,6 +53,13 @@ pub struct Lane {
     pub tags: Vec<Tag>,
 }
 
+/// design-note の帯のノートの 1 組（見出しのノートの名と行の札）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteGroup {
+    pub note: String,
+    pub tags: Vec<Tag>,
+}
+
 /// 帯の箱の中身。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Cards {
@@ -66,6 +74,8 @@ pub enum Cards {
         loose: Vec<Tag>,
     },
     Lanes(Vec<Lane>),
+    /// ノートの組（ノートの名の自然な順）。
+    Notes(Vec<NoteGroup>),
 }
 
 /// 1 つの帯の箱（見本の `section.band`）。
@@ -99,6 +109,7 @@ impl BandBox {
                 .chain(tag_ids(loose))
                 .collect(),
             Cards::Lanes(lanes) => lanes.iter().flat_map(|l| tag_ids(&l.tags)).collect(),
+            Cards::Notes(notes) => notes.iter().flat_map(|g| tag_ids(&g.tags)).collect(),
         }
     }
 }
@@ -179,7 +190,8 @@ fn band_box(doc: &GraphDoc, band: Band) -> BandBox {
         _ if mine.is_empty() => Cards::Empty,
         Band::Constitution => articles(doc, &mine),
         Band::Beads => Cards::Lanes(lanes(doc, &mine)),
-        _ => Cards::Tags(natural_tags(doc, mine)),
+        Band::DesignNote => Cards::Notes(notes(doc, &mine)),
+        _ =>Cards::Tags(natural_tags(doc, mine)),
     };
     BandBox { band, count, cards }
 }
@@ -249,6 +261,37 @@ fn lanes(doc: &GraphDoc, nodes: &[&GraphNode]) -> Vec<Lane> {
                 doc,
                 nodes.iter().copied().filter(|n| n.kind == kind).collect(),
             ),
+        })
+        .collect()
+}
+
+/// 設計ノートの行の id のノートの名（最初の「#」の前の字・「#」が無ければ字の全部）。
+pub fn note_of(id: &str) -> &str {
+    id.split_once('#').map_or(id, |(note, _)| note)
+}
+
+/// design-note の帯: ノートの組（ノートの名の自然な順）・組の中は行の番号の順で、番号の無い行は後に id の自然な順。
+fn notes(doc: &GraphDoc, nodes: &[&GraphNode]) -> Vec<NoteGroup> {
+    let mut names: Vec<&str> = nodes.iter().map(|n| note_of(&n.id)).collect();
+    names.sort_by(|a, b| natural(a, b));
+    names.dedup();
+    names
+        .into_iter()
+        .map(|note| {
+            let mut mine: Vec<&GraphNode> = nodes
+                .iter()
+                .copied()
+                .filter(|n| note_of(&n.id) == note)
+                .collect();
+            mine.sort_by(|a, b| {
+                (a.line.is_none(), a.line)
+                    .cmp(&(b.line.is_none(), b.line))
+                    .then_with(|| natural(&a.id, &b.id))
+            });
+            NoteGroup {
+                note: note.to_string(),
+                tags: mine.into_iter().map(|n| tag(doc, n)).collect(),
+            }
         })
         .collect()
 }
@@ -375,6 +418,24 @@ mod dom {
                     })
                     .collect_view();
                 view! { <div class="cards7">{lanes}</div> }.into_any()
+            }
+            Cards::Notes(notes) => {
+                let shape = format!("shape {} fill", band.class_name());
+                let notes = notes
+                    .into_iter()
+                    .map(|g| {
+                        let tags = g.tags.iter().map(|t| tag_view(t, mode)).collect_view();
+                        view! {
+                            <div class="subh">
+                                <span class=shape.clone() aria-hidden="true"></span>
+                                <span class="mono">{g.note}</span>
+                                <span class="num muted">{g.tags.len()}</span>
+                            </div>
+                            {tags}
+                        }
+                    })
+                    .collect_view();
+                view! { <div class="cards7">{notes}</div> }.into_any()
             }
         }
     }

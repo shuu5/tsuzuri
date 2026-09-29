@@ -758,6 +758,10 @@ fn mapview_classes_and_keys_exist() {
                 add(&t.class);
                 add(&t.shape);
             }),
+            Cards::Notes(notes) => notes.iter().flat_map(|g| &g.tags).for_each(|t| {
+                add(&t.class);
+                add(&t.shape);
+            }),
             Cards::Unmeasured(_) | Cards::Empty => {}
         }
     }

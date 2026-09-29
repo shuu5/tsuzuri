@@ -242,6 +242,10 @@ fn ncard_tags_and_rows_carry_cards() {
                     .iter()
                     .flat_map(|l| &l.tags)
                     .for_each(|t| check_tag(doc, t)),
+                Cards::Notes(notes) => notes
+                    .iter()
+                    .flat_map(|g| &g.tags)
+                    .for_each(|t| check_tag(doc, t)),
             }
             seen += b.ids().len();
         }
