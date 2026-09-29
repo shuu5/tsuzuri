@@ -7,6 +7,7 @@
 //! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる（便 g-ask-focus）。
 //! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない・行 g-card-adopt-b）。
 //! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける（行 g-tick-adopt）。
+//! 送っている間は送る button の字を替え、server の台帳の断りは理由と次の手の字にして目立つ 1 行で出す（行 g-ruling-busy）。
 
 use std::collections::BTreeMap;
 
@@ -74,6 +75,20 @@ pub const BAD_REPLY: &str = "応答が電文として読めない";
 
 /// 断られたときの字（理由の前）。
 pub const REFUSED: &str = "送れなかった";
+
+/// 送っている間の送る button の字（行 g-ruling-busy）。
+pub const SENDING: &str = "送っています…";
+
+/// 503 の ledger-unknown のときの理由と次の手の字。
+pub const LEDGER_BUSY: &str =
+    "台帳が混んでいて読めなかった（503）・何も書いていない・少し待ってもう一度押す";
+
+/// 502 の ledger-append のときの理由と次の手の字。
+pub const APPEND_FAILED: &str = "台帳に書けなかった（502）・何も書いていない・もう一度押す";
+
+/// 502 の ledger-close のときの理由と次の手の字（後に裁定の id を付ける）。
+pub const CLOSE_FAILED: &str =
+    "記録したが問いを閉じられなかった（502）・もう一度押さず席に知らせる";
 
 /// card の部分（見本の qcard の順: 題・概要・理由・推奨・答えの欄・つながり）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -307,6 +322,15 @@ pub fn can_send(text: &str, sending: bool) -> bool {
     !sending && !text.trim().is_empty()
 }
 
+/// 送る button の字（送っている間は SENDING・ほかは決定の語に空白と › を足した字）。
+pub fn send_text(sending: bool, ruling: &str) -> String {
+    if sending {
+        SENDING.to_string()
+    } else {
+        format!("{ruling} ›")
+    }
+}
+
 /// 答えの欄の鍵の判定の結果。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyAction {
@@ -374,6 +398,26 @@ impl Outcome {
     pub fn reloads(&self) -> bool {
         matches!(self, Outcome::Recorded { .. } | Outcome::Stale)
     }
+
+    /// 1 行の class と role（断りは warn と alert・ほかは small と status）。
+    pub fn note(&self) -> (&'static str, &'static str) {
+        match self {
+            Outcome::Refused(_) => ("warn", "alert"),
+            _ => ("small", "status"),
+        }
+    }
+}
+
+/// server の台帳の断りの理由と次の手の字（本文の前後の空白を除いて読む・ほかは None）。
+pub fn server_reason(status: u16, text: &str) -> Option<String> {
+    match (status, text.trim()) {
+        (503, "ledger-unknown") => Some(LEDGER_BUSY.to_string()),
+        (502, "ledger-append") => Some(APPEND_FAILED.to_string()),
+        (502, body) => body
+            .strip_prefix("ledger-close ")
+            .map(|id| format!("{CLOSE_FAILED}（{id}）")),
+        _ => None,
+    }
 }
 
 /// 断りの理由の字（閉じた 6 値）。
@@ -402,7 +446,7 @@ pub fn outcome(reply: Option<(u16, &str)>) -> Outcome {
         Some((409, _)) => Outcome::Stale,
         Some((status, text)) => Outcome::Refused(match wire::decode::<RefusalResponse>(text) {
             Ok(r) => format!("{}（{status}）", refusal_text(r.reason)),
-            Err(_) => format!("状態 {status}"),
+            Err(_) => server_reason(status, text).unwrap_or_else(|| format!("状態 {status}")),
         }),
     }
 }
@@ -449,7 +493,7 @@ mod dom {
     use super::{
         BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, anchor,
         can_send, card_class, card_key, count, focus, key_action, listed, node_cards, outcome,
-        outline, posted_tip, request_body, target_number,
+        outline, posted_tip, request_body, send_text, target_number,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::map;
@@ -694,6 +738,8 @@ mod dom {
             move || {
                 open().then(|| {
                     let (text, sending) = (d.text.clone(), d.sending.clone());
+                    let busy = sending.clone();
+                    let send = move || send_text(busy.get(), &label("ruling"));
                     let disabled = move || !can_send(&text.get(), sending.get());
                     let value = {
                         let text = d.text.clone();
@@ -721,7 +767,7 @@ mod dom {
                     view! {
                         <div class=slot.class>
                             <textarea rows="2" aria-label=label(key) placeholder=label(key) prop:value=value on:input=input on:keydown=keydown></textarea>
-                            <button type="button" class="btn primary send" disabled=disabled on:click=click>{label("ruling")}" ›"</button>
+                            <button type="button" class="btn primary send" disabled=disabled on:click=click>{send}</button>
                         </div>
                     }
                 })
@@ -730,9 +776,10 @@ mod dom {
         let note = {
             let outcome = d.outcome.clone();
             move || {
-                outcome
-                    .get()
-                    .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
+                outcome.get().map(|o| {
+                    let (class, role) = o.note();
+                    view! { <div class=class role=role>{o.line()}</div> }
+                })
             }
         };
         view! { {form}{note} }.into_any()
