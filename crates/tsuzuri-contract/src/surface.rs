@@ -1,6 +1,7 @@
 //! 面の電文の型: 面の event・面の状態・問いの合図・裁定と束と方針の要求と応答・記帳 id の形
 //! （設計ノート surface §3・§20・判断の記録 ADR-7 決定 (4)）。
 //! 決定の取り消しの要求と応答と、取り消せるかを notes から判じる関数（行 e-revoke・server の受付と面の button が同じ関数で判じる）。
+//! board-changed の data の型 `BoardChanged` と変化の種類 `ChangeKind`（面は種類を読む口だけを読み直す・行 c-ev-kind）。
 
 use serde::{Deserialize, Serialize};
 
@@ -128,8 +129,44 @@ pub enum SurfaceEvent {
     },
 }
 
-/// SSE の event の名（器の event の記録か設計文書の変化・便 g-parts）。面は受けたら登録された口を全部読み直す。
+/// SSE の event の名（器の event の記録か設計文書か席か account の変化・便 g-parts）。
+/// data は `BoardChanged`（どの種類の印が動いたか）で、面は受けたら種類を読む口だけを読み直す（行 c-ev-kind）。
 pub const BOARD_CHANGED_EVENT: &str = "board-changed";
+
+/// 変化の種類（板の印の種類と台帳・行 c-ev-kind）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ChangeKind {
+    /// 席の状態の file。
+    Seat,
+    /// 器の event log。
+    Runs,
+    /// 設計文書の dir の下の file。
+    Design,
+    /// 台帳（と台帳の形の行）。
+    Ledger,
+    /// account board の印。
+    Account,
+}
+
+impl ChangeKind {
+    /// 全部の種類（この順）。
+    pub const ALL: [ChangeKind; 5] = [
+        ChangeKind::Seat,
+        ChangeKind::Runs,
+        ChangeKind::Design,
+        ChangeKind::Ledger,
+        ChangeKind::Account,
+    ];
+}
+
+/// board-changed の data（時刻と動いた種類・kinds が空なら全部の種類と読む）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoardChanged {
+    pub at: EpochSecs,
+    #[serde(default)]
+    pub kinds: Vec<ChangeKind>,
+}
 
 /// 問いの合図（席が問いを bdw で置いた後に server へ送る）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

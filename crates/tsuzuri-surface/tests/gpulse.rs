@@ -114,7 +114,7 @@ fn gpulse_net_text() {
         "watch_flight",
         "read",
         "read_path",
-        "reload_all",
+        "reload_if",
     ] {
         let body = function(&net, name);
         assert!(body.contains("count_busy()"), "{name} に count_busy() が無い: {body}");
@@ -130,8 +130,8 @@ fn gpulse_net_text() {
     assert!(at(path, "flight.renew()") < c, "{path}");
     assert!(c < at(path, "load_watch(slot, round, 1)"), "{path}");
 
-    let reload = function(&net, "reload_all");
-    let last = reload.rfind("count_busy()").expect("reload_all に count_busy()");
+    let reload = function(&net, "reload_if");
+    let last = reload.rfind("count_busy()").expect("reload_if に count_busy()");
     assert!(at(reload, "WATCHES.with_borrow_mut(") < last, "{reload}");
 }
 

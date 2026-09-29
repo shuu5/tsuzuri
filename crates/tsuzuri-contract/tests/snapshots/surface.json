@@ -170,5 +170,25 @@
     {
       "reason": "stale-version"
     }
+  ],
+  "surface::ChangeKind": [
+    "seat",
+    "runs",
+    "design",
+    "ledger",
+    "account"
+  ],
+  "surface::BoardChanged": [
+    {
+      "at": 1790494620,
+      "kinds": [
+        "seat",
+        "account"
+      ]
+    },
+    {
+      "at": 1790494620,
+      "kinds": []
+    }
   ]
 }

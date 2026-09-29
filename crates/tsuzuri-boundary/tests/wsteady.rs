@@ -11,6 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::server::events::Hub;
+use tsuzuri_contract::surface::ChangeKind::Design;
 
 /// 着地済みの行と第 3 波から第 8 波の行の verify の filter の語（この行の接頭辞は並べない）。
 const FILTERS: [&str; 106] = [
@@ -238,9 +239,9 @@ fn wsteady_vanished_path_one_event() {
             fs::remove_file(&fb).expect("b を消す");
         }
         if n <= 6 {
-            vec![fa.clone(), fb.clone()]
+            vec![(Design, fa.clone()), (Design, fb.clone())]
         } else {
-            vec![fa.clone()]
+            vec![(Design, fa.clone())]
         }
     };
     Hub::watch_board(&hub, board, POLL);
@@ -261,7 +262,8 @@ fn wsteady_absent_listed_path_changes() {
     let (c, l) = (Arc::clone(&calls), Arc::clone(&list));
     let board = move || {
         c.fetch_add(1, Ordering::SeqCst);
-        l.lock().expect("lock").clone()
+        let files = l.lock().expect("lock").clone();
+        files.into_iter().map(|f| (Design, f)).collect::<Vec<_>>()
     };
     Hub::watch_board(&hub, board, POLL);
     let from = calls.load(Ordering::SeqCst);

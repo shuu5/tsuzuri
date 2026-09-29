@@ -1,6 +1,7 @@
 //! 通信（wasm の target のときだけ組み立てる・便 g-parts）: block ごとの読みの口を読み、変化の知らせ（SSE）で読み直す。
 //! block は自分の口の path を `read` に渡し、読みの結果（3 値）の signal を受ける。
-//! 知らせの接続は頁に 1 本だけ持ち、開いた・読み直しの合図の event を受けたで登録された口を全部読み直す。
+//! 知らせの接続は頁に 1 本だけ持ち、開いたで登録された口を全部読み直し、読み直しの合図の event を受けたで
+//! 合図の種類（view の `changed_kinds`）を読む口（view の `reloads`）だけを読み直す（行 c-ev-kind）。
 //! 初めての口は接続が開くまで読まず、開いた時の 1 巡を最初の読みにする（開かなければ 1 秒で読む・行 g-reads）。
 //! 口ごとの読みの印（flight の Flight）で、読みの途中の呼びは読みの後の 1 回にまとめ、
 //! 見ている部品が無い（片付いた）口の呼びは部品が戻ったときの 1 回にまとめる。
@@ -24,11 +25,11 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys::Date;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::wasm_bindgen::{JsCast, JsValue};
-use web_sys::{EventSource, Headers, Request, RequestInit, Response};
+use web_sys::{EventSource, Headers, MessageEvent, Request, RequestInit, Response};
 
 use crate::flight::{Flight, OPEN_WAIT_MS};
 use crate::fresh::{Fresh, HELD_POLL_MS, read_age};
-use crate::view::{Fetched, RELOAD_EVENTS, RETRY_MS, Settle, settle};
+use crate::view::{Fetched, RELOAD_EVENTS, RETRY_MS, Settle, changed_kinds, reloads, settle};
 
 /// 変化の知らせの口（SSE・server の便 e-min）。
 pub const EVENTS_PATH: &str = "/api/surface/events";
@@ -311,21 +312,33 @@ fn load_watch(slot: usize, round: u32, attempt: u32) {
 
 /// 登録された口を全部読み直す（書きの口へ送った後に block も呼ぶ・読みの途中の口と見ていない口は後の 1 回にまとめる）。
 pub fn reload_all() {
+    reload_if(|_| true);
+}
+
+/// 登録された口のうち path が `pick` に当たる口を読み直す（まとめ方は `reload_all` と同じ）。
+fn reload_if(pick: impl Fn(&str) -> bool) {
     for slot in 0..READS.with_borrow(Vec::len) {
-        if read_flight(slot, |flight| flight.call()) == Some(true) {
+        let hit = READS.with_borrow(|reads| reads.get(slot).is_some_and(|(p, _, _)| pick(p)));
+        if hit && read_flight(slot, |flight| flight.call()) == Some(true) {
             load_at(slot, 1);
         }
     }
     for slot in 0..WATCHES.with_borrow(Vec::len) {
         let go = WATCHES.with_borrow_mut(|w| {
             let (path, _, flight) = w.get_mut(slot)?;
-            (!path.is_empty() && flight.call()).then(|| flight.round())
+            (!path.is_empty() && pick(path) && flight.call()).then(|| flight.round())
         });
         if let Some(round) = go {
             load_watch(slot, round, 1);
         }
     }
     count_busy();
+}
+
+/// 読み直しの合図を受けた（合図の種類を読む口だけを読み直す・行 c-ev-kind）。
+fn reload_changed(event: MessageEvent) {
+    let kinds = changed_kinds(&event.type_(), event.data().as_string().as_deref());
+    reload_if(|path| reloads(path, &kinds));
 }
 
 /// 最初の読みを許し、登録された口を全部読む（接続が開いた・開くのを待つ上限を越えた・接続を張れない）。
@@ -426,7 +439,7 @@ pub fn read(path: &'static str) -> ReadSignal<Fetched> {
     ReadSignal::from(signal.read_only())
 }
 
-/// 知らせの接続を張る（頁に 1 本だけ・開いたで最初の読みを許して読み直し・合図で読み直し・
+/// 知らせの接続を張る（頁に 1 本だけ・開いたで最初の読みを許して全部を読み直し・合図で種類を読む口を読み直し・
 /// 切れたら切れた時刻を置き READ_HOLD_S 秒の後もまだ切れていれば全部「読めない」・開いたの event で切れた時刻を消す）。
 /// 接続は頁の一生の間ずっと持つ（切れても EventSource が繋ぎ直し、開いたで読み直す）。
 /// 開くのを待つのは上限まで（越えたら開くのを待たずに 1 巡読み、後で開いたときにもう 1 巡読む）。
@@ -441,7 +454,7 @@ fn connect() {
         return;
     };
     let on_open = Closure::<dyn FnMut()>::new(go_live);
-    let on_change = Closure::<dyn FnMut()>::new(reload_all);
+    let on_change = Closure::<dyn FnMut(MessageEvent)>::new(reload_changed);
     let on_error = Closure::<dyn FnMut()>::new(link_lost);
     let on_back = Closure::<dyn FnMut()>::new(link_back);
     source.set_onopen(Some(on_open.as_ref().unchecked_ref()));

@@ -2,6 +2,7 @@
 //! DOM と通信に触らないので host の cargo test で試す（描くのは project の下の block・読むのは net）。
 //! 件数と見出しは block の module が持つ（便 g-frame・見出しの語は vocab から引く）。
 //! 読みの結果の 3 値と読み直しの合図の event の名は block に共通の部品（便 g-parts）。
+//! 合図の種類と口の path の表で、合図ごとに読み直す口を決める（行 c-ev-kind）。
 //! 読みの後に signal へ新しい値を置くかの決め方（便 g-steady）もここに置き、net が口の読みごとに呼ぶ。
 
 use std::cmp::Ordering;
@@ -11,10 +12,11 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList, LedgerRow};
 use tsuzuri_contract::project::ProjectName;
-use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
-use tsuzuri_contract::wire;
+use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
+use tsuzuri_contract::{account, project, runs, wire};
 
 use crate::frame::BRAND;
+use crate::project::{ask, ledger, map, next, nodearound, pipeline, seat};
 use crate::vocab::{label, vocab};
 
 /// 問いの bead の種類。
@@ -23,9 +25,71 @@ pub const QUESTION_KIND: &str = "question";
 /// epic の bead の種類。
 pub const EPIC_KIND: &str = "epic";
 
-/// 読み直しの合図の event の名（台帳の変化と、器の event の記録か設計文書の変化・便 g-parts）。
-/// 字は契約の型の crate の定数から引き、面の code に直に書かない。
+/// 読み直しの合図の event の名（台帳の変化と、器の event の記録か設計文書か席か account の変化・便 g-parts）。
+/// 字は契約の型の crate の定数から引き、面の code に直に書かない。合図は種類（`changed_kinds`）を読む口だけを読み直す。
 pub const RELOAD_EVENTS: [&str; 2] = [LEDGER_CHANGED_EVENT, BOARD_CHANGED_EVENT];
+
+/// 口の path と、その口の読みが読む変化の種類（行 c-ev-kind・種類は server の口の読みから決めた）。
+/// 席の card は席の状態の file だけ、次の一手は台帳と event log と席の card、pipeline は台帳と event log と
+/// 台帳の形の行（台帳の種類）、グラフと近傍は設計の索引と台帳と event log、account は account board の印と
+/// 自分の repo の台帳を読む。project の名の口は起動の repo から決まるので種類を持たない（合図では読み直さない）。
+pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 12] = [
+    (seat::PATH, &[ChangeKind::Seat]),
+    (
+        next::PATH,
+        &[ChangeKind::Ledger, ChangeKind::Runs, ChangeKind::Seat],
+    ),
+    (ledger::PATH, &[ChangeKind::Ledger]),
+    (ledger::METRICS_PATH, &[ChangeKind::Ledger]),
+    (ledger::UNREF_PATH, &[ChangeKind::Ledger]),
+    (ask::PATH, &[ChangeKind::Ledger]),
+    (pipeline::PATH, &[ChangeKind::Ledger, ChangeKind::Runs]),
+    (
+        map::PATH,
+        &[ChangeKind::Ledger, ChangeKind::Runs, ChangeKind::Design],
+    ),
+    (
+        nodearound::PATH,
+        &[ChangeKind::Ledger, ChangeKind::Runs, ChangeKind::Design],
+    ),
+    (runs::PATH, &[ChangeKind::Runs]),
+    (account::PATH, &[ChangeKind::Account, ChangeKind::Ledger]),
+    (project::PATH, &[]),
+];
+
+/// 口の path の読みが読む変化の種類: 最初の `?` より前の字が、表の path と同じか表の path に `/` を続けた字で
+/// 始まる最初の行の種類（グラフの行がグラフの眺めを、台帳の行が台帳の 1 本を持つ）。当たる行が無ければ全部の種類
+/// （表に無い口は今までどおり全部の合図で読み直す）。
+pub fn path_kinds(path: &str) -> &'static [ChangeKind] {
+    let bare = path.split('?').next().unwrap_or_default();
+    RELOAD_KINDS
+        .iter()
+        .find(|(p, _)| {
+            bare.strip_prefix(p)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+        })
+        .map_or(&ChangeKind::ALL, |(_, kinds)| *kinds)
+}
+
+/// 口 `path` を種類 `kinds` の合図で読み直すか（`path_kinds` のどれかが `kinds` に在れば真）。
+pub fn reloads(path: &str, kinds: &[ChangeKind]) -> bool {
+    path_kinds(path).iter().any(|k| kinds.contains(k))
+}
+
+/// 合図の event の名と data の字から、動いた種類: 台帳の変化の名は台帳、板の変化の名は data の
+/// `BoardChanged` の kinds（読めない・data が無い・kinds が空なら全部の種類）、ほかの名は空。
+pub fn changed_kinds(event: &str, data: Option<&str>) -> Vec<ChangeKind> {
+    if event == LEDGER_CHANGED_EVENT {
+        return vec![ChangeKind::Ledger];
+    }
+    if event != BOARD_CHANGED_EVENT {
+        return Vec::new();
+    }
+    match data.map(wire::decode::<BoardChanged>) {
+        Some(Ok(b)) if !b.kinds.is_empty() => b.kinds,
+        _ => ChangeKind::ALL.to_vec(),
+    }
+}
 
 /// block の口から読んだ結果の 3 値（net が作る・便 g-parts）。
 #[derive(Debug, Clone, PartialEq, Eq)]

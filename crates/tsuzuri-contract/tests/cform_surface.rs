@@ -8,8 +8,8 @@ mod common;
 use common::{AT, Form, bead, form, ruling};
 use tsuzuri_contract::board::{NextMove, Stage};
 use tsuzuri_contract::surface::{
-    BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
-    PolicyResponse, QuestionNudge, Refusal, RefusalResponse, RulingId, RulingRequest,
+    BatchItem, BatchItemResult, BatchRequest, BatchResponse, BoardChanged, ChangeKind,
+    ItemOutcome, PolicyRequest, PolicyResponse, QuestionNudge, Refusal, RefusalResponse, RulingId, RulingRequest,
     RulingResponse, SeatHealth, SeatRole, SeatView, SurfaceEvent, SurfaceState,
 };
 
@@ -196,6 +196,20 @@ fn forms() -> Vec<Box<dyn Form>> {
             vec![RefusalResponse {
                 reason: Refusal::StaleVersion,
             }],
+        ),
+        form("surface::ChangeKind", ChangeKind::ALL.to_vec()),
+        form(
+            "surface::BoardChanged",
+            vec![
+                BoardChanged {
+                    at: AT,
+                    kinds: vec![ChangeKind::Seat, ChangeKind::Account],
+                },
+                BoardChanged {
+                    at: AT,
+                    kinds: vec![],
+                },
+            ],
         ),
     ]
 }

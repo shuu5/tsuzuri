@@ -17,6 +17,7 @@
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
 //! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
+//! 板の印は走行・設計・席・account の種類（`ChangeKind`）を付けて見張りに渡す（知らせが動いた種類を載せる・行 c-ev-kind）。
 //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
 //! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
 //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
@@ -54,7 +55,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_contract::ledger::{BeadId, READ_AGE_HEADER};
-use tsuzuri_contract::surface::{Refusal, RefusalResponse};
+use tsuzuri_contract::surface::{ChangeKind, Refusal, RefusalResponse};
 use tsuzuri_contract::wire;
 
 use crate::acct::Acct;
@@ -223,11 +224,14 @@ impl Server {
         });
         let acct_marks = Arc::new(Mutex::new(Vec::new()));
         let held_marks = Arc::clone(&acct_marks);
+        let kinded = |kind: ChangeKind, files: Vec<PathBuf>| -> Vec<(ChangeKind, PathBuf)> {
+            files.into_iter().map(|f| (kind, f)).collect()
+        };
         let hub = Hub::start(sources.ledger.clone(), move || {
-            let mut marks = runs.marks();
-            marks.extend(design.marks());
-            marks.extend(seat_marks.iter().cloned());
-            marks.extend(lock(&held_marks).iter().cloned());
+            let mut marks = kinded(ChangeKind::Runs, runs.marks());
+            marks.extend(kinded(ChangeKind::Design, design.marks()));
+            marks.extend(kinded(ChangeKind::Seat, seat_marks.clone()));
+            marks.extend(kinded(ChangeKind::Account, lock(&held_marks).clone()));
             marks
         });
         if let Some(form) = &form {

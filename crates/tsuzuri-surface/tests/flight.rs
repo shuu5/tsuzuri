@@ -136,11 +136,11 @@ fn flight_net_wiring_text() {
     has("go_live", &["LIVE.set(true)", "reload_all()"]);
     has("connect", &["set_timeout(", "OPEN_WAIT_MS"]);
 
-    let reload = function(&net, "reload_all");
+    let reload = function(&net, "reload_if");
     assert!(reload.matches(".call()").count() >= 2, "{reload}");
     let connect = function(&net, "connect");
     assert_eq!(connect.matches("new(go_live)").count(), 1, "{connect}");
-    assert_eq!(connect.matches("new(reload_all)").count(), 1, "{connect}");
+    assert_eq!(connect.matches("new(reload_changed)").count(), 1, "{connect}");
 
     let watch = &net[net.find("fn load_watch(").expect("fn load_watch")..];
     let spawn = watch.find("spawn_local(").expect("load_watch の spawn_local");

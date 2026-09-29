@@ -7,7 +7,8 @@
 //! 撃ちは別の thread で同時に 1 本だけで、走っている間の読みは終わった後に最後の周の台帳の字でもう 1 回だけ撃つ。
 //! 持つ組（`Kept`）は最後に終えた撃ちの周の台帳の字と台帳の形の行で、台帳の読みが落ちた周は器を撃たずに None、
 //! 器が落ちるか上限を越えるか台帳の形の行が無い周も None（持ち回さない）。組から写した一覧（`misfits`）が変われば
-//! board-changed を送る（台帳の字だけが変わった周は見張りの ledger-changed が面に読み直させる）。
+//! 台帳の種類（`ChangeKind::Ledger`・台帳の見張りの読みの周の字から撃つ）の board-changed を送る
+//! （台帳の字だけが変わった周は見張りの ledger-changed が面に読み直させる・行 c-ev-kind）。
 
 use std::ffi::OsString;
 use std::fmt;
@@ -19,6 +20,7 @@ use std::time::Duration;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{MisfitBead, Reading};
+use tsuzuri_contract::surface::ChangeKind;
 use tsuzuri_core::pipeline::{FORM_PREFIX, board_with_doctor};
 
 use super::events::{Hub, now};
@@ -198,7 +200,7 @@ impl Inner {
     }
 
     /// 台帳の字の周を撃ち、組を置く（台帳の字が None なら器を撃たずに None・台帳の形の行が無ければ None）。
-    /// 前の組と新しい組から写した一覧が違えば board-changed を送る。
+    /// 前の組と新しい組から写した一覧が違えば台帳の種類の board-changed を送る。
     fn shoot(&self, ledger: Option<String>) {
         let got = ledger.and_then(|ledger| {
             let form = capture(&self.program, self.argv(), &self.cwd, self.timeout)
@@ -217,7 +219,7 @@ impl Inner {
             }
         }
         if let Some(hub) = self.hub.get().and_then(Weak::upgrade) {
-            hub.board_changed(now());
+            hub.board_changed(&[ChangeKind::Ledger], now());
         }
     }
 }

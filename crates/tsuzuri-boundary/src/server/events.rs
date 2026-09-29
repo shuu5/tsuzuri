@@ -7,11 +7,13 @@
 //! 0 人から 1 人以上になった周で 1 回読む（行 e-idle）。
 //! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
 //! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
-//! 動いたら board-changed を 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
+//! 動いたら board-changed を周に 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
 //! 便 e-seat は席の状態の file（`<state dir>/seat/<席の dir>/` の state.jsonl と tick-last）の印を板の印に足す。
 //! 席の card の印（行 e-seat-hbmark）と account board の印（`crate::acct` の `Acct::marks`）は同じ dir の停止の記録
 //! heartbeat-off の印も持つ（停止の切り替えで board-changed が出る）。
-//! board-changed の data は ledger-changed と同じ形（`{"at":<epoch 秒>}`）。
+//! board-changed の data は契約の `BoardChanged`（`{"at":<epoch 秒>,"kinds":[…]}`・印の動いた種類）で、
+//! ledger-changed の data は `{"at":<epoch 秒>}`。板の印は種類（`ChangeKind`）と file の組で、種類をまたいで
+//! 一覧の並びだけが変わった周は送らない（行 c-ev-kind）。
 
 use std::io::{self, Write};
 use std::ops::Deref;
@@ -23,7 +25,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerChanged};
-use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
+use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
 use tsuzuri_contract::wire;
 
 use super::ledger::{Mark, Source};
@@ -88,10 +90,10 @@ impl Deref for Subscription {
 
 impl Hub {
     /// 台帳の周期の読みと、板の印の周期の見張りを始める（Hub が落ちればどちらも止まる）。
-    /// `board` は板の印の file の一覧を返す関数で、周ごとに撃ち直す（増えた file と消えた file も印の変化）。
+    /// `board` は板の印の種類と file の組の一覧を返す関数で、周ごとに撃ち直す（増えた file と消えた file も印の変化）。
     pub fn start<B>(source: Source, board: B) -> Arc<Hub>
     where
-        B: FnMut() -> Vec<PathBuf> + Send + 'static,
+        B: FnMut() -> Vec<(ChangeKind, PathBuf)> + Send + 'static,
     {
         let marks = source.clone();
         let hub = Hub::watch_ledger(move || marks.mark(), move || source.read(), TIMING);
@@ -99,13 +101,14 @@ impl Hub {
         hub
     }
 
-    /// 板の印の file の一覧を `poll` ごとに取り直し、印（path と更新時刻と長さ）が動いたら
-    /// board-changed を送る。最初の印は戻る前に取る（戻った後の変化は取りこぼさない）。
-    /// 周の途中（一覧を取った後で印を取る前）に消えた file は、同じ周で取り直した一覧にも
+    /// 板の印の種類と file の組の一覧を `poll` ごとに取り直し、印（種類と path と更新時刻と長さ）が動いたら
+    /// 印の動いた種類を載せた board-changed を周に 1 件送る。最初の印は戻る前に取る（戻った後の変化は取りこぼさない）。
+    /// 周の途中（一覧を取った後で印を取る前）に消えた file は、同じ周で取り直した一覧にも同じ種類と path の組が
     /// 無ければその周の印から落とす（消し 1 回を 2 周続けての変化に数えない）。
+    /// 印の列が動いても、どの種類の印の列も前と同じ周（種類をまたいで並びだけが変わった周）は送らない。
     pub fn watch_board<B>(hub: &Arc<Hub>, mut board: B, poll: Duration)
     where
-        B: FnMut() -> Vec<PathBuf> + Send + 'static,
+        B: FnMut() -> Vec<(ChangeKind, PathBuf)> + Send + 'static,
     {
         let weak = Arc::downgrade(hub);
         let mut seen = board_stamps(&mut board);
@@ -119,11 +122,15 @@ impl Hub {
                 if current == seen {
                     continue;
                 }
+                let kinds = moved(&seen, &current);
                 seen = current;
+                if kinds.is_empty() {
+                    continue;
+                }
                 let Some(hub) = weak.upgrade() else {
                     return;
                 };
-                hub.board_changed(now());
+                hub.board_changed(&kinds, now());
             }
         });
     }
@@ -176,16 +183,23 @@ impl Hub {
 
     /// 台帳の変化を全員に送る（切れた受け手は外す）。
     pub fn ledger_changed(&self, at: u64) {
-        self.send(LEDGER_CHANGED_EVENT, at);
-    }
-
-    /// 板の変化（器の event log か設計文書）を全員に送る（切れた受け手は外す）。
-    pub fn board_changed(&self, at: u64) {
-        self.send(BOARD_CHANGED_EVENT, at);
-    }
-
-    fn send(&self, event: &str, at: u64) {
         let data = wire::encode(&LedgerChanged { at }).expect("LedgerChanged は JSON になる");
+        self.send(LEDGER_CHANGED_EVENT, &data);
+    }
+
+    /// 板の変化（器の event log か設計文書か席か account か台帳の形の行）を、動いた種類を載せて全員に送る
+    /// （切れた受け手は外す）。
+    pub fn board_changed(&self, kinds: &[ChangeKind], at: u64) {
+        let data = wire::encode(&BoardChanged {
+            at,
+            kinds: kinds.to_vec(),
+        })
+        .expect("BoardChanged は JSON になる");
+        self.send(BOARD_CHANGED_EVENT, &data);
+    }
+
+    /// event の名と data の字で frame を組んで全員に送る。
+    fn send(&self, event: &str, data: &str) {
         let id = {
             let mut seq = lock(&self.seq);
             *seq += 1;
@@ -212,24 +226,39 @@ fn stamps(marks: &[PathBuf]) -> Vec<Option<(SystemTime, u64)>> {
     marks.iter().map(|m| stamp(m)).collect()
 }
 
-/// 板の印（file の path と、その更新時刻と長さ）。
-type BoardStamps = Vec<(PathBuf, Option<(SystemTime, u64)>)>;
+/// 板の印（種類と file の path と、その更新時刻と長さ）。
+type BoardStamps = Vec<(ChangeKind, PathBuf, Option<(SystemTime, u64)>)>;
 
-/// 1 つの周の板の印。無い file の印は、印を取った後に撃ち直した一覧にも在るときだけ残す
+/// 1 つの周の板の印。無い file の印は、印を取った後に撃ち直した一覧にも同じ種類と path の組が在るときだけ残す
 /// （一覧に載ったまま無い file は印に数え、周の途中で一覧から消えた file は落とす）。
-fn board_stamps(board: &mut impl FnMut() -> Vec<PathBuf>) -> BoardStamps {
+fn board_stamps(board: &mut impl FnMut() -> Vec<(ChangeKind, PathBuf)>) -> BoardStamps {
     let mut stamps: BoardStamps = board()
         .into_iter()
-        .map(|f| {
+        .map(|(k, f)| {
             let s = stamp(&f);
-            (f, s)
+            (k, f, s)
         })
         .collect();
-    if stamps.iter().any(|(_, s)| s.is_none()) {
+    if stamps.iter().any(|(_, _, s)| s.is_none()) {
         let again = board();
-        stamps.retain(|(f, s)| s.is_some() || again.contains(f));
+        stamps.retain(|(k, f, s)| s.is_some() || again.iter().any(|(ak, af)| ak == k && af == f));
     }
     stamps
+}
+
+/// 種類ごとの印の列（その種類の path と印を一覧の順に並べた列）が前の周と違う種類（`ChangeKind::ALL` の順）。
+fn moved(seen: &BoardStamps, current: &BoardStamps) -> Vec<ChangeKind> {
+    let of = |stamps: &BoardStamps, kind: ChangeKind| -> Vec<(PathBuf, Option<(SystemTime, u64)>)> {
+        stamps
+            .iter()
+            .filter(|(k, _, _)| *k == kind)
+            .map(|(_, f, s)| (f.clone(), *s))
+            .collect()
+    };
+    ChangeKind::ALL
+        .into_iter()
+        .filter(|&kind| of(seen, kind) != of(current, kind))
+        .collect()
 }
 
 /// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果・前の周に受け手が居たか）。
@@ -457,7 +486,7 @@ mod tests {
                 .map(|e| e.expect("entry").path())
                 .collect();
             f.sort();
-            f
+            f.into_iter().map(|p| (super::ChangeKind::Design, p)).collect::<Vec<_>>()
         };
         Hub::watch_board(&hub, files, Duration::from_millis(20));
         let rx = hub.subscribe();
