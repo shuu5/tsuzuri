@@ -539,14 +539,14 @@ fn accthome_unmeasured_per_block() {
         (Fetched::Body("not json".to_string()), account::BAD_BODY),
         (Fetched::Body(String::new()), account::BAD_BODY),
     ] {
-        let h = content(&fetched);
+        let h = content(&fetched, 1_790_510_400);
         assert_eq!(h.next, Body::Unmeasured(want), "{fetched:?}");
         assert_eq!(h.groups, Body::Unmeasured(want), "{fetched:?}");
         assert_eq!(h.accounts, Body::Unmeasured(want), "{fetched:?}");
         assert_eq!(h.moves, Body::Unmeasured(want), "{fetched:?}");
     }
     assert_eq!(
-        content(&Fetched::Body(fixture_text())),
+        content(&Fetched::Body(fixture_text()), fixture().at),
         home::home(&account::arrange(fixture()))
     );
     let h = fixture_home();

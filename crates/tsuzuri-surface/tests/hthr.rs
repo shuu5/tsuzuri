@@ -135,7 +135,7 @@ fn hthr_caps_copy_rows() {
     let gs = groups(&k);
     assert_eq!(cap_texts(group(&gs, "Tier2")), vec!["/ ?", "/ ?", "/ 300"]);
 
-    assert!(content(&Fetched::Failed).caps.is_empty());
+    assert!(content(&Fetched::Failed, d.at).caps.is_empty());
 }
 
 /// (2) 強調と断りの理由は群の最も新しい知らせの組だけから出す（比べの式を持たない）。

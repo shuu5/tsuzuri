@@ -84,7 +84,7 @@ fn gpill_part_and_pages() {
     assert_eq!(ETA_STYLE, "color:var(--st-silent)");
 
     let pill_fn: fn(&Fetched, EpochSecs) -> Pill = seatpill::pill;
-    let card_fn: fn(&Fetched) -> Card = seatpill::card;
+    let card_fn: fn(&Fetched, EpochSecs) -> Card = seatpill::card;
     let p = pill_fn(&Fetched::NotRead, 0);
     let made = Pill {
         state: p.state,
@@ -92,7 +92,7 @@ fn gpill_part_and_pages() {
     };
     traits(&made);
     assert_eq!(made.clone(), p);
-    let _ = card_fn(&Fetched::NotRead);
+    let _ = card_fn(&Fetched::NotRead, 0);
 
     assert!(!frame::seat_shown(PageId::Home));
     let mut shown: Vec<&str> = PageId::ALL
@@ -211,7 +211,7 @@ fn gpill_card_rows() {
         ),
     ];
     for (name, kind, value, more) in want {
-        let c = seatpill::card(&body(&card_of(name)));
+        let c = seatpill::card(&body(&card_of(name)), at);
         assert_eq!(
             c,
             Card {
@@ -231,12 +231,12 @@ fn gpill_card_rows() {
         }
     }
     assert_eq!(
-        seatpill::card(&body(&card_of("run"))).kind,
+        seatpill::card(&body(&card_of("run")), at).kind,
         format!("{} · ◷ {} から", label("st_run"), hmd(1_790_502_600, at))
     );
     for (f, reason) in unread() {
         assert_eq!(
-            seatpill::card(&f),
+            seatpill::card(&f, at),
             Card {
                 title: "orchestrator".to_string(),
                 kind: label("st_unknown"),

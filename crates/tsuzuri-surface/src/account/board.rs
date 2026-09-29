@@ -7,8 +7,8 @@ use leptos::prelude::*;
 
 use super::{
     BRAND, DORMANT_CARD, DORMANT_CLASS, DORMANT_STATE, HEADER, PATH, TOP, Tab, UPDATED_CLASS,
-    UPDATED_KEY, badge, doc, dormant_card, dormant_chip, home, ledger, notices, page, page_title,
-    projects, session, tab_href, tab_links, tab_url, windows,
+    UPDATED_KEY, badge, doc, dormant_card, dormant_chip, drawn, home, ledger, notices, page,
+    page_title, projects, session, tab_href, tab_links, tab_url, windows,
 };
 use crate::frame::{self, Block, Mode};
 use crate::fresh::{self, Fresh};
@@ -89,7 +89,7 @@ fn App() -> impl IntoView {
     provide_context(HoverCtx::default());
     // 口は頁に 1 本（block も同じ path を read に渡し、同じ signal を分け合う）。
     let fetched = net::read(PATH);
-    let read = Memo::new(move |_| fetched.with(doc).ok());
+    let read = Memo::new(move |_| fetched.with(doc).ok().map(|d| drawn(d, net::now())));
     view! {
         {top(query, mode, read)}
         // query が替わるたびに今の tab の block を組み直す（block は組むときに URL の並べ方と幅を読む）。

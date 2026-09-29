@@ -479,7 +479,7 @@ fn server_acct_doc_matches_core() {
             place.core_doc(&[]),
             "引数の state dir が別: {separate}"
         );
-        assert_eq!(got.at, NOW);
+        assert!((1..=NOW).contains(&got.at), "時点は今より前の材料の時刻");
         let names: Vec<&str> = got.projects.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, ["proj-a", "proj-e", "proj-b", "proj-c", "proj-d"]);
         // git の引けた project は席と run が読める。
@@ -493,9 +493,9 @@ fn server_acct_doc_matches_core() {
             unreachable!()
         };
         assert_eq!(seat.state, SeatState::Run, "orchestrator の席の記録を読む");
-        // 残り秒は器の合図の健康の行の grace_left=1200 の写し（欄の無い席の行は無し）。
-        assert_eq!(row(&got, "proj-a").move_left_s, Some(1200));
-        assert_eq!(row(&got, "proj-e").move_left_s, None);
+        // 終わる時刻は器の合図の健康の行の grace_left=1200 に今を足した時刻（欄の無い席の行は無し）。
+        assert_eq!(row(&got, "proj-a").move_until, Some(NOW + 1200));
+        assert_eq!(row(&got, "proj-e").move_until, None);
         // git が落ちるか空を返す project は state dir なしの行。
         for p in ["proj-c", "proj-d"] {
             let r = row(&got, p);
@@ -616,12 +616,12 @@ fn server_acct_state_dir_from_git() {
 
 #[test]
 fn server_acct_grace_unreadable_no_left() {
-    // 猶予の rules 行の出力を落としても、撃たないので残り秒は器の grace_left= の写しのまま。
+    // 猶予の rules 行の出力を落としても、撃たないので終わる時刻は器の grace_left= に今を足したままの写し。
     let place = Place::new("grace-rule-fail", false);
     place.fail(&format!("rules-{}", GRACE_RULE.0));
     let got = place.acct().doc(NOW);
     assert_eq!(got, place.core_doc(&[]));
-    assert_eq!(row(&got, "proj-a").move_left_s, Some(1200));
+    assert_eq!(row(&got, "proj-a").move_until, Some(NOW + 1200));
     // 器の字が unreadable なら全部の project で無し（席の card はほかの欄を読む）。
     let mut place = Place::new("grace-unreadable", false);
     place.out(
@@ -630,12 +630,12 @@ fn server_acct_grace_unreadable_no_left() {
     );
     let got = place.acct().doc(NOW);
     assert_eq!(got, place.core_doc(&[]));
-    assert!(got.projects.iter().all(|r| r.move_left_s.is_none()));
+    assert!(got.projects.iter().all(|r| r.move_until.is_none()));
     let Reading::Known(seat) = &row(&got, "proj-a").seat else {
         panic!("proj-a の席の card が読めない");
     };
     assert_eq!(
-        (&seat.move_to, &seat.grace_left),
+        (&seat.move_to, &seat.grace_until),
         (&Reading::Known(Some("acct-2".to_string())), &Reading::Unknown)
     );
 }

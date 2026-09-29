@@ -12,6 +12,7 @@
 
 use std::cmp::Reverse;
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{AccountDoc, ProjectRow, RunCounts};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
 use tsuzuri_contract::stats::{CheckResult, LedgerStats, UnreflectedKind};
@@ -675,8 +676,8 @@ impl Table {
 }
 
 /// block の中身（口が読めない・まだ読んでいない・本文が電文として読めないときは測れていないと理由の 1 行）。
-pub fn content(fetched: &Fetched, sort: PSort, mode: Mode) -> Body<Table> {
-    match super::doc(fetched) {
+pub fn content(fetched: &Fetched, sort: PSort, mode: Mode, now: EpochSecs) -> Body<Table> {
+    match super::doc(fetched).map(|d| super::drawn(d, now)) {
         Err(reason) => Body::Unmeasured(reason),
         Ok(doc) if doc.projects.is_empty() => Body::Empty(NO_ROWS),
         Ok(doc) => Body::Filled(table(&doc, sort, mode)),
@@ -846,7 +847,7 @@ mod dom {
         let expert = Signal::derive(move || mode.is_some_and(|m| shows_internal(m.get())));
         let body = move || {
             let m = mode.map_or(Mode::Beginner, |m| m.get());
-            match fetched.with(|f| content(f, sort.get(), m)) {
+            match fetched.with(|f| content(f, sort.get(), m, crate::net::now())) {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(line) => body_view(Body::Empty(line)),
                 Body::Filled(table) => table_view(table, opened, expert),

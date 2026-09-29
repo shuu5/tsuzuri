@@ -122,7 +122,7 @@ fn smore_lines_on_fixture() {
         assert_eq!(m.target, c.target);
         assert_eq!(seat(c).more, m);
         let text = wire::encode(c).expect("電文");
-        match content(&Fetched::Body(text)) {
+        match content(&Fetched::Body(text), c.at) {
             Body::Filled(v) => assert_eq!(v.more, m),
             other => panic!("組 {name} が中身を出さない: {other:?}"),
         }

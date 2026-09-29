@@ -330,7 +330,6 @@ fn athr_doc_carries_both() {
     assert_eq!(d.notices, Reading::Known(table()));
     // ほかの欄は assemble に同じ入力を渡した電文のまま。
     let base = assemble(
-        NOW,
         host::accounts(&h),
         host::groups(&h),
         host::moves(&h),
@@ -348,7 +347,6 @@ fn athr_doc_carries_both() {
 #[test]
 fn athr_assemble_leaves_unknown() {
     let d = assemble(
-        NOW,
         Reading::Unknown,
         Reading::Unknown,
         Reading::Unknown,

@@ -102,7 +102,7 @@ fn ghb_card_toggle_on_fixture() {
 fn ghb_top_carries_toggle() {
     for (name, c) in fixture() {
         let text = wire::encode(&c).expect("電文");
-        let seat = match content(&Fetched::Body(text)) {
+        let seat = match content(&Fetched::Body(text), c.at) {
             Body::Filled(s) => s,
             other => panic!("組 {name} が中身を出さない: {other:?}"),
         };
@@ -110,7 +110,10 @@ fn ghb_top_carries_toggle() {
     }
     assert!(
         matches!(
-            content(&Fetched::Body(wire::encode(&card("run")).expect("電文"))),
+            content(
+                &Fetched::Body(wire::encode(&card("run")).expect("電文")),
+                card("run").at
+            ),
             Body::Filled(s) if s.top.toggle.is_some()
         ),
         "run の Top は切り替えを持つ"

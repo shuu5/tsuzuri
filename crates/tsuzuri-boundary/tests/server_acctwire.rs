@@ -286,10 +286,9 @@ fn hb_body(project: &str, to: &str) -> String {
 fn acctwire_get_matches_acct() {
     let place = Place::new("get");
     let addr = place.serve(true);
-    let from = now();
     let got = account(addr);
-    assert!((from..=now()).contains(&got.at), "組んだ時刻は今: {}", got.at);
-    let want = place.acct().doc(got.at);
+    assert!(got.at <= now(), "時点は今より前の材料の時刻: {}", got.at);
+    let want = place.acct().doc(now());
     assert_eq!(got, want);
     // 電文の字も wire の encode の字と同じ。
     let body = get(addr, PATH).body;
@@ -310,9 +309,8 @@ fn acctwire_get_matches_acct() {
 fn acctwire_get_without_state_dir() {
     let place = Place::new("no-state");
     let addr = place.serve(false);
-    let from = now();
     let got = account(addr);
-    assert!((from..=now()).contains(&got.at), "組んだ時刻は今: {}", got.at);
+    assert_eq!(got.at, 0, "材料が無いので時点は 0");
     assert_eq!(got.accounts, Reading::Unknown);
     assert_eq!(got.groups, Reading::Unknown);
     assert_eq!(got.moves, Reading::Unknown);

@@ -453,7 +453,7 @@ fn acctsess_signals_on_fixture() {
     assert_eq!(tick_class(&sb.tick), "tk tk-stale");
     assert_eq!(hb_class(&sb.heartbeat), "hb hb-off");
     // proj-b は席の口座 acct-1 が群の今の口座 acct-2 と違うが、残り秒が在るので mvwait は出さない。
-    assert_eq!(b.moving, Some(Move::Grace(1101)));
+    assert_eq!(b.moving, Some(Move::Grace(1_790_511_501)));
     let m = b.moving.expect("残り秒");
     assert_eq!((m.class(), m.key()), ("mvgrace", "move_grace"));
     assert_eq!(grace_text(1101), "1101 秒");
@@ -497,7 +497,7 @@ fn acctsess_move_wait_rules() {
 
     // 残り秒を消すと、acct-1 ≠ acct-2 で移動待ち。
     let mut d = base.clone();
-    d.projects[1].move_left_s = None;
+    d.projects[1].move_until = None;
     assert_eq!(b(&d), Some(Move::Wait));
     assert_eq!(
         (Move::Wait.class(), Move::Wait.key()),
@@ -531,7 +531,7 @@ fn acctsess_move_wait_rules() {
     // 残り秒は mvwait より先（一致しても残り秒を出す）。
     let mut g = base.clone();
     g.sessions[2].account = Some("acct-2".to_string());
-    assert_eq!(b(&g), Some(Move::Grace(1101)));
+    assert_eq!(b(&g), Some(Move::Grace(1_790_511_501)));
     // pipeline の行は移動の印を出さない。
     let mut p = d.clone();
     p.sessions[2].role = SeatRole::Pipeline;
@@ -568,14 +568,14 @@ fn acctsess_unmeasured_until_read() {
     for (fetched, want) in cases {
         for sort in Sort::ALL {
             assert_eq!(
-                content(&fetched, sort),
+                content(&fetched, sort, 1_790_510_400),
                 Body::Unmeasured(want),
                 "{fetched:?}"
             );
         }
     }
     let doc = fixture();
-    let Body::Filled(t) = content(&Fetched::Body(fixture_text()), Sort::Account) else {
+    let Body::Filled(t) = content(&Fetched::Body(fixture_text()), Sort::Account, doc.at) else {
         panic!("fixture は中身あり");
     };
     assert_eq!(t, table(&doc, Sort::Account));
@@ -584,7 +584,7 @@ fn acctsess_unmeasured_until_read() {
     empty.sessions.clear();
     let text = wire::encode(&empty).expect("電文");
     assert_eq!(
-        content(&Fetched::Body(text), Sort::Project),
+        content(&Fetched::Body(text), Sort::Project, doc.at),
         Body::Empty(NO_ROWS)
     );
     assert!(!NO_ROWS.contains('\n'));

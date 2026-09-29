@@ -11,7 +11,7 @@
       "account=acct-2\nts=2026-09-26T10:00:00Z\nreason=initial\n"
     ],
     "card": {
-      "at": 1790510400, "target": "proj-1:0.1", "state": "run", "since": 1790500000,
+      "at": 1790510390, "target": "proj-1:0.1", "state": "run", "since": 1790500000,
       "tick_healthy": {"known": true}, "heartbeat": {"known": true},
       "tick": {"known": "healthy"}, "tick_at": 1790510390,
       "account": "acct-1", "model": "opus",
@@ -26,7 +26,7 @@
       "spans": {"known": [
         {"from": 1790430000, "to": 1790440000, "state": "run"},
         {"from": 1790440000, "to": 1790500000, "state": "wait"},
-        {"from": 1790500000, "to": 1790510400, "state": "run"}
+        {"from": 1790500000, "to": 1790510390, "state": "run"}
       ]},
       "moves": {"known": [
         {"at": 1790416800, "from": null, "to": "acct-2"},
@@ -44,7 +44,7 @@
     "host_toml": "[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-1\"]\n",
     "records": [],
     "card": {
-      "at": 1790510400, "target": "proj-1:0.1", "state": "wait", "since": 1790508000,
+      "at": 1790510000, "target": "proj-1:0.1", "state": "wait", "since": 1790508000,
       "tick_healthy": {"known": false}, "heartbeat": {"known": false},
       "tick": {"known": "stale"}, "tick_at": 1790510000,
       "account": "acct-2", "model": "sonnet",
@@ -56,7 +56,7 @@
       ]},
       "spans": {"known": [
         {"from": 1790505000, "to": 1790508000, "state": "run"},
-        {"from": 1790508000, "to": 1790510400, "state": "wait"}
+        {"from": 1790508000, "to": 1790510000, "state": "wait"}
       ]},
       "moves": {"known": []},
       "refused": {"known": null}
@@ -73,7 +73,7 @@
       "account=acct-1\nts=2026-09-27T09:00:00Z\nreason=account-pressed\nprevious=\n"
     ],
     "card": {
-      "at": 1790510400, "target": "proj-1:0.1", "state": "limit", "since": 1790503200,
+      "at": 1790503200, "target": "proj-1:0.1", "state": "limit", "since": 1790503200,
       "tick_healthy": {"known": true}, "heartbeat": {"known": true},
       "tick": "unknown", "tick_at": 1790503200,
       "account": "acct-1", "model": "opus",
@@ -86,7 +86,7 @@
         {"window": "seven_day_model", "used_pct": 80, "resets_at": null, "counted": true}
       ]},
       "spans": {"known": [
-        {"from": 1790500000, "to": 1790510400, "state": "run"}
+        {"from": 1790500000, "to": 1790503200, "state": "run"}
       ]},
       "moves": {"known": [
         {"at": 1790499600, "from": null, "to": "acct-1"}
@@ -105,7 +105,7 @@
       "account=acct-1\nts=2026-09-27T09:00:00Z\nreason=initial\n"
     ],
     "card": {
-      "at": 1790510400, "target": "proj-1:0.1", "state": "silent", "since": 1790509000,
+      "at": 1790509000, "target": "proj-1:0.1", "state": "silent", "since": 1790509000,
       "tick_healthy": "unknown", "heartbeat": "unknown",
       "tick": "unknown", "tick_at": 1790509000,
       "account": "acct-1", "model": "opus",
@@ -127,7 +127,7 @@
       "account=acct-2\nts=2026-09-26T10:00:00Z\nreason=initial\n"
     ],
     "card": {
-      "at": 1790510400, "target": "proj-1:0.1", "state": "unknown", "since": null,
+      "at": 1790510390, "target": "proj-1:0.1", "state": "unknown", "since": null,
       "tick_healthy": {"known": true}, "heartbeat": {"known": true},
       "tick": "unknown", "tick_at": 1790510390,
       "account": "acct-1", "model": "opus",
@@ -158,14 +158,14 @@
       "account=acct-1\nts=2026-09-27T09:00:00Z\nreason=initial\n"
     ],
     "card": {
-      "at": 1790510400, "target": "proj-1:0.1", "state": "wait", "since": 1790509000,
+      "at": 1790510390, "target": "proj-1:0.1", "state": "wait", "since": 1790509000,
       "tick_healthy": "unknown", "heartbeat": "unknown",
       "tick": "unknown", "tick_at": 1790510390,
       "account": null, "model": null,
       "group": "unknown",
       "usage": "unknown",
       "spans": {"known": [
-        {"from": 1790509000, "to": 1790510400, "state": "wait"}
+        {"from": 1790509000, "to": 1790510390, "state": "wait"}
       ]},
       "moves": "unknown"
     }

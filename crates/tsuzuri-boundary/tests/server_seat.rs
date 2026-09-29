@@ -272,13 +272,8 @@ fn server_seat_card_matches_core() {
     for case in ["run", "wait", "limit", "silent"] {
         let place = Place::new(&format!("match-{case}"), case);
         let addr = place.serve();
-        let from = now();
         let got = seat_card(addr);
-        assert!(
-            (from..=now()).contains(&got.at),
-            "組んだ時刻は今: {}",
-            got.at
-        );
+        assert!(got.at <= now(), "時点は今より前の材料の時刻: {}", got.at);
         assert_eq!(
             got,
             core_card(&place.expected_texts(&[]), got.at),

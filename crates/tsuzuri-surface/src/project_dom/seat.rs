@@ -44,7 +44,7 @@ pub fn view() -> AnyView {
     let span = RwSignal::new(span_of(&search()));
     // 停止の切り替えの状態（読みの閉包の外・読み直しで組み直しても応答の字が残る）。
     let states: States = RwSignal::new(Default::default());
-    let body = move || match fetched.with(content) {
+    let body = move || match fetched.with(|f| content(f, crate::net::now())) {
         Body::Unmeasured(reason) => unmeasured(reason),
         Body::Empty(line) => body_view(Body::Empty(line)),
         Body::Filled(seat) => seat_view(seat, span, states, group_doc),
@@ -287,7 +287,8 @@ fn group_chip(group: Reading<String>, account: ReadSignal<Fetched>) -> AnyView {
     let hc = delegate();
     let key = name.clone();
     let over = move |ev: ev::MouseEvent| {
-        hc.show(&ev, account.with_untracked(|a| group_card(a, &key)));
+        let now = crate::net::now();
+        hc.show(&ev, account.with_untracked(|a| group_card(a, &key, now)));
     };
     let out = move |ev: ev::MouseEvent| hc.leave(&ev);
     view! {

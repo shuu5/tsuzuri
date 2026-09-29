@@ -1,5 +1,5 @@
-//! 行 c-grace-acct の歯（中核）: account board の project の行の残り秒 move_left_s は、席の card の欄 move_to が
-//! 口座で grace_left が秒のときだけその秒の写し（器の字のまま・0 も写す・起点は器の合図の at で tsuzuri は計算しない）。
+//! 行 c-grace-acct の歯（中核）: account board の project の行の退避の終わる時刻 move_until は、席の card の欄 move_to が
+//! 口座で grace_until が時刻のときだけその時刻の写し（器の残り秒に組んだ今を足した値・0 は今そのもの・行 c-abs-seat）。
 //! 中核と境界の account の読みは猶予の rules 行と合図の file を読まず、語の辞書の鍵 move_grace の説明は器の字に直す。
 //! fixture: tests/fixtures/account/acct-inputs.json（読むだけ）。器の §20 の形の欄は歯の中で組む。
 
@@ -82,12 +82,13 @@ fn gacct_left_copies_card() {
                     .iter()
                     .find(|r| r.name == "proj-a")
                     .expect("proj-a の行");
-                assert_eq!(a.move_left_s, want, "{tail} と今 {now}");
+                let until = want.map(|s| now + s);
+                assert_eq!(a.move_until, until, "{tail} と今 {now}");
                 let Reading::Known(card) = &a.seat else {
                     panic!("{tail}: proj-a の席の card が読めない");
                 };
                 if want.is_some() {
-                    assert_eq!(card.grace_left, Reading::Known(want), "{tail}");
+                    assert_eq!(card.grace_until, Reading::Known(until), "{tail}");
                 }
                 // doc の projects は同じ入力の project_rows と同じ。
                 assert_eq!(doc(h, &ps, now).projects, rows, "{tail} と今 {now}");
@@ -98,7 +99,7 @@ fn gacct_left_copies_card() {
     let mut no_seat = base.clone();
     no_seat.seat_doctors.remove("/work/proj-a");
     let rows = project_rows(&no_seat, &projects(PAIRS[0].0), NOW);
-    assert!(rows.iter().all(|r| r.move_left_s.is_none()), "{rows:?}");
+    assert!(rows.iter().all(|r| r.move_until.is_none()), "{rows:?}");
 }
 
 #[test]
@@ -113,7 +114,7 @@ fn gacct_no_own_reads() {
     ] {
         assert!(!core.contains(word), "中核の project.rs に {word} が在る");
     }
-    for word in ["fn move_left(card", "&Reading<SeatCard>) -> Option<u64>"] {
+    for word in ["fn move_until(card", "&Reading<SeatCard>) -> Option<EpochSecs>"] {
         assert!(core.contains(word), "中核の project.rs に {word} が無い");
     }
     let acct = read("crates/tsuzuri-boundary/src/acct.rs");

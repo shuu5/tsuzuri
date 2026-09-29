@@ -21,7 +21,7 @@ pub(in crate::server) const ROUTE: Entry = Entry {
     handle: |_, shared| account(shared),
 };
 
-/// account board の読み。state dir が無ければ器も git も撃たず、口座と群と移動が Unknown で列が空の電文。
+/// account board の読み。state dir が無ければ器も git も撃たず、口座と群と移動が Unknown で列が空の電文（at は 0）。
 /// 最初の要求で acct の印の取り直しを始める（要求は取り直しを待たない）。
 /// 台帳の読みが落ちた project が在れば、頭に最も古い最後に読めた時からの秒を付ける（行 e-hold）。
 fn account(shared: &Shared) -> Response {
@@ -34,7 +34,6 @@ fn account(shared: &Shared) -> Response {
         }
         None => (
             tsuzuri_core::account::project::assemble(
-                events::now(),
                 Reading::Unknown,
                 Reading::Unknown,
                 Reading::Unknown,

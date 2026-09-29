@@ -432,8 +432,18 @@ fn seatcard_unread_text_touches_only_its_fields() {
                 want.spans = Reading::Unknown;
             }
             // 判定が限度でも応答なしでもない組なので、合図の最後の判定が無くても状態は変わらず、
-            // 判定の時刻だけが無くなる。
-            "tick_last" => want.tick_at = None,
+            // 判定の時刻が無くなり、時点は状態の記録の最後の行（1790505000）になって窓もそこから 1 日前になる。
+            "tick_last" => {
+                let span = |from, to, state| SeatSpan { from, to, state };
+                want.tick_at = None;
+                want.at = 1_790_505_000;
+                want.spans = Reading::Known(vec![
+                    span(1_790_420_000, 1_790_430_000, SeatState::Wait),
+                    span(1_790_430_000, 1_790_440_000, SeatState::Run),
+                    span(1_790_440_000, 1_790_500_000, SeatState::Wait),
+                    span(1_790_500_000, 1_790_505_000, SeatState::Run),
+                ]);
+            }
             "host_toml" => {
                 want.group = Reading::Unknown;
                 want.moves = Reading::Unknown;

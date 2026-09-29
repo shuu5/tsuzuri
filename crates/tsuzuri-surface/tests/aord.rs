@@ -132,7 +132,7 @@ fn aord_doc_reads_arranged() {
 #[test]
 fn aord_blocks_follow() {
     let d = doc_d();
-    let h = home::content(&body(&d));
+    let h = home::content(&body(&d), d.at);
     let accounts = filled(h.accounts);
     let names: Vec<&str> = accounts.iter().map(|r| r.label.as_str()).collect();
     assert_eq!(names, vec!["acct-1", "acct-2", "acct-10"]);
@@ -151,7 +151,7 @@ fn aord_blocks_follow() {
     for (i, name) in ["acct-10", "acct-2", "acct-1"].into_iter().enumerate() {
         s.sessions[i].account = Some(name.to_string());
     }
-    let table = filled(session::content(&body(&s), Sort::Account));
+    let table = filled(session::content(&body(&s), Sort::Account, s.at));
     let heads: Vec<&str> = table
         .groups
         .iter()

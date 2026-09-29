@@ -190,7 +190,8 @@ pub fn orch_card(doc: &AccountDoc, project: &ProjectRow) -> Option<Card> {
     if let (Some(NG), Some(seat), Some(now)) = (a.mark, a.account.as_deref(), now) {
         more.push(format!("{} {seat} → {now}", label("seat_mismatch")));
     }
-    if let Some(s) = project.move_left_s {
+    if let Some(until) = project.move_until {
+        let s = until.saturating_sub(doc.at);
         more.push(format!("{} {s} 秒", label("move_grace")));
     }
     Some(Card {

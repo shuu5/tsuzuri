@@ -1,6 +1,6 @@
-//! 行 c-seat-grace の歯（面）: 席の card の器の移動の 4 つの欄（move_to・grace_left・refused・pressure）の
+//! 行 c-seat-grace の歯（面）: 席の card の器の移動の 4 つの欄（move_to・grace_until・refused・pressure）の
 //! 電文の鍵と、project board の席の block の状態の帯の猶予の内・移り先の無い断り・逼迫の行と、
-//! 詳しくの写しの行（器の鍵の名・`-` と `?`）。残り秒は器の字のままで、面は計算しない。
+//! 詳しくの写しの行（器の鍵の名・`-` と `?`）。残り秒は終わる時刻から card の at を引いた値（行 c-abs-seat）。
 //! fixture: tests/fixtures/surface/seat-card.json（読むだけ・4 つの鍵を持たない）。器の欄は歯の中で組む。
 
 use std::collections::BTreeMap;
@@ -26,7 +26,7 @@ const REFUSED_AT: u64 = 1_790_503_200;
 const REFUSED_OLD: u64 = 1_790_410_400;
 
 /// 4 つの欄の電文の鍵。
-const KEYS: [&str; 4] = ["move_to", "grace_left", "refused", "pressure"];
+const KEYS: [&str; 4] = ["move_to", "grace_until", "refused", "pressure"];
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -63,7 +63,7 @@ fn pressure(window: &str, used: u32, cap: u32) -> Pressure {
 fn grace(name: &str, to: &str, left: u64) -> SeatCard {
     let mut c = card(name);
     c.move_to = Reading::Known(Some(to.to_string()));
-    c.grace_left = Reading::Known(Some(left));
+    c.grace_until = Reading::Known(Some(c.at + left));
     c
 }
 
@@ -81,7 +81,7 @@ fn sgrace_wire_keys() {
     assert_eq!(fx.len(), 5);
     for (name, c) in &fx {
         assert_eq!(c.move_to, Reading::Unknown, "組 {name}");
-        assert_eq!(c.grace_left, Reading::Unknown, "組 {name}");
+        assert_eq!(c.grace_until, Reading::Unknown, "組 {name}");
         assert_eq!(c.refused, Reading::Unknown, "組 {name}");
         assert_eq!(c.pressure, Reading::Unknown, "組 {name}");
         let t = wire::encode(c).expect("電文");
@@ -96,7 +96,7 @@ fn sgrace_wire_keys() {
     let t = wire::encode(&full).expect("電文");
     for want in [
         r#""move_to":{"known":"acct-5"}"#,
-        r#""grace_left":{"known":120}"#,
+        r#""grace_until":{"known":1790510520}"#,
         r#""refused":{"known":1790503200}"#,
         r#""pressure":{"known":{"window":"5h","used":92,"cap":85}}"#,
     ] {
@@ -106,7 +106,7 @@ fn sgrace_wire_keys() {
 
     let mut none = card("run");
     none.move_to = Reading::Known(None);
-    none.grace_left = Reading::Known(None);
+    none.grace_until = Reading::Known(None);
     none.refused = Reading::Known(None);
     none.pressure = Reading::Known(None);
     let t = wire::encode(&none).expect("電文");
@@ -165,7 +165,7 @@ fn sgrace_band_grace() {
         for (move_to, left) in &halves {
             let mut c = card(name);
             c.move_to = move_to.clone();
-            c.grace_left = left.clone();
+            c.grace_until = left.clone();
             assert_eq!(seat::band(&c), landed(name), "組 {name} の {move_to:?} {left:?}");
         }
     }
@@ -258,7 +258,7 @@ fn sgrace_more_copied() {
     }
     let mut none = card("run");
     none.move_to = Reading::Known(None);
-    none.grace_left = Reading::Known(None);
+    none.grace_until = Reading::Known(None);
     none.refused = Reading::Known(None);
     none.pressure = Reading::Known(None);
     assert_eq!(copied_line(&none), "move=- grace_left=- refused=- pressure=-");

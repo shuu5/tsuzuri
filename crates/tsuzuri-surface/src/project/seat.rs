@@ -5,7 +5,8 @@
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 群の chip の card（見本の pa:group）は、同じ server の口 /api/account の群の枠（GroupCard）から写す。
 //! 状態の帯の猶予の内・移り先の無い断り・逼迫の行と、詳しくの写しの行は、電文の器の移動の 4 つの欄
-//! （move_to・grace_left・refused・pressure）を写すだけで、残り秒を計算しない。
+//! （move_to・grace_until・refused・pressure）を写すだけで判じない。猶予の残り秒だけは終わる時刻から
+//! 描く card の at を引く。card は描く今で描き直す（`drawn`・at は今と電文の at の大きい方・行 c-abs-seat）。
 //! 窓の行の閾値の線と印は、同じ口 /api/account の電文の caps（器の rules 行の写し）を窓の名で写すだけで判じない。
 
 use tsuzuri_contract::EpochSecs;
@@ -464,11 +465,27 @@ pub fn body(fetched: &Fetched) -> Body<()> {
     }
 }
 
-/// block の中身（口が読めなければ測れていない）。
-pub fn content(fetched: &Fetched) -> Body<Seat> {
+/// 最後の区間の to を at まで伸ばす（区間が at より後まで在れば変えない・「まだ分からない」と空の列はそのまま）。
+pub fn reach(spans: &mut Reading<Vec<SeatSpan>>, at: EpochSecs) {
+    if let Reading::Known(v) = spans
+        && let Some(last) = v.last_mut()
+    {
+        last.to = last.to.max(at);
+    }
+}
+
+/// 描く今の card（at は今と電文の at の大きい方・端末の時計が server より遅れても縮めない・最後の区間は at まで伸ばす）。
+pub fn drawn(mut card: SeatCard, now: EpochSecs) -> SeatCard {
+    card.at = card.at.max(now);
+    reach(&mut card.spans, card.at);
+    card
+}
+
+/// block の中身（口が読めなければ測れていない・描く今の card で組む）。
+pub fn content(fetched: &Fetched, now: EpochSecs) -> Body<Seat> {
     match card(fetched) {
         Err(reason) => Body::Unmeasured(reason),
-        Ok(c) => Body::Filled(seat(&c)),
+        Ok(c) => Body::Filled(seat(&drawn(c, now))),
     }
 }
 
@@ -708,8 +725,10 @@ pub fn band(card: &SeatCard) -> Option<Band> {
         Reading::Known(g) => Some(g),
         Reading::Unknown => None,
     };
-    let grace = match (&card.move_to, &card.grace_left) {
-        (Reading::Known(Some(to)), Reading::Known(Some(left))) => Some((to, *left)),
+    let grace = match (&card.move_to, &card.grace_until) {
+        (Reading::Known(Some(to)), Reading::Known(Some(until))) => {
+            Some((to, until.saturating_sub(card.at)))
+        }
         _ => None,
     };
     if let Some((_, left)) = grace {
@@ -789,7 +808,7 @@ pub fn copied_line(card: &SeatCard) -> String {
     format!(
         "move={} grace_left={} refused={} pressure={}",
         copied_value(&card.move_to, String::clone),
-        copied_value(&card.grace_left, u64::to_string),
+        copied_value(&card.grace_until, |u| u.saturating_sub(card.at).to_string()),
         copied_value(&card.refused, |t| hmd(*t, card.at)),
         copied_value(&card.pressure, |p| format!(
             "{}:{}/{}",
@@ -831,10 +850,11 @@ fn group_unknown(name: &str, reason: &str) -> Card {
     }
 }
 
-/// 群の chip の card（見本の __tz_card の pa:group・口 /api/account の群の枠を写す・一致は電文の matches のまま）。
-pub fn group_card(account: &Fetched, name: &str) -> Card {
+/// 群の chip の card（見本の __tz_card の pa:group・口 /api/account の群の枠を写す・一致は電文の matches のまま・
+/// 描く今の電文で組む）。
+pub fn group_card(account: &Fetched, name: &str, now: EpochSecs) -> Card {
     let doc = match crate::account::doc(account) {
-        Ok(d) => d,
+        Ok(d) => crate::account::drawn(d, now),
         Err(reason) => return group_unknown(name, reason),
     };
     let found = match &doc.groups {

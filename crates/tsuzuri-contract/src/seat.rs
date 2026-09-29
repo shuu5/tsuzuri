@@ -80,7 +80,7 @@ pub struct QuotaUsed {
     pub counted: bool,
 }
 
-/// 状態の区間（from から to まで state だった）。
+/// 状態の区間（from から to まで state だった・最後の区間の to は card の at）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SeatSpan {
     pub from: EpochSecs,
@@ -115,7 +115,8 @@ pub enum Reopens {
 /// 席の card（口 seat の出力）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SeatCard {
-    /// 組んだ時刻。
+    /// 時点（材料の時刻＝状態の記録の最後の読めた行の ts と合図の最後の判定の ts のうち大きい方・どちらも無ければ 0・
+    /// 今ではない）。区間は at の 1 日前以後で、最後の区間の to は at。
     pub at: EpochSecs,
     /// 席の名。
     pub target: String,
@@ -149,9 +150,10 @@ pub struct SeatCard {
     /// 器が席を移す先の口座（器の seat tick status の席の行の欄 `move=` の写し・`-` は None・鍵が無ければ測れていない）。
     #[serde(default = "unknown")]
     pub move_to: Reading<Option<String>>,
-    /// 退避の合図の後の猶予の残り秒（欄 `grace_left=` の写し・0 は器の次の周で /exit・`-` は None）。
+    /// 退避の合図の後の猶予の終わる時刻（器の欄 `grace_left=` の残り秒に card を組んだ今を足した時刻・
+    /// 残り 0 は組んだ今で器の次の周で /exit・`-` は None）。
     #[serde(default = "unknown")]
-    pub grace_left: Reading<Option<u64>>,
+    pub grace_until: Reading<Option<EpochSecs>>,
     /// 群の移り先の無い断りの時刻（器の doctor の群の行の欄 `refused=` の写し・`-` は None）。
     #[serde(default = "unknown")]
     pub refused: Reading<Option<EpochSecs>>,

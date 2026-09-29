@@ -67,8 +67,8 @@ fn resume_line(reopens: Reopens, at: EpochSecs) -> Option<String> {
     Some(format!("{RESUME} {text}"))
 }
 
-/// 席の card（見本の seatCard・account board の orch_card と同じ字の並び・読めなければ理由の字）。
-pub fn card(fetched: &Fetched) -> Card {
+/// 席の card（見本の seatCard・account board の orch_card と同じ字の並び・読めなければ理由の字・描く今の card で組む）。
+pub fn card(fetched: &Fetched, now: EpochSecs) -> Card {
     let c = match seat::card(fetched) {
         Err(reason) => {
             return Card {
@@ -79,7 +79,7 @@ pub fn card(fetched: &Fetched) -> Card {
                 more: Vec::new(),
             };
         }
-        Ok(c) => c,
+        Ok(c) => seat::drawn(c, now),
     };
     let state = label(state_key(state_value(c.state)));
     let kind = match c.since {
@@ -143,7 +143,7 @@ mod dom {
         let shown = Memo::new(move |_| fetched.with(|f| pill(f, tick.get())));
         let state = Memo::new(move |_| shown.with(|p| p.state));
         let hc = delegate();
-        let over = move |ev: ev::MouseEvent| hc.show(&ev, fetched.with_untracked(card));
+        let over = move |ev: ev::MouseEvent| hc.show(&ev, fetched.with_untracked(|f| card(f, crate::net::now())));
         let out = move |ev: ev::MouseEvent| hc.leave(&ev);
         let icon = move || state_icon(state.get());
         // 応答なしの経過だけに応答なしの色を付け、限度の時刻は stylesheet の色のまま。

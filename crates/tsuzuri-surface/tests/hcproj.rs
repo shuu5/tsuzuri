@@ -276,7 +276,7 @@ fn hcproj_orch_card() {
     );
 
     let mut stay = doc.projects[1].clone();
-    stay.move_left_s = None;
+    stay.move_until = None;
     assert_eq!(
         orch_card(&doc, &stay).expect("席は Known").more,
         ["model sonnet", "移動待ち acct-1 → acct-2"]

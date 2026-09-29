@@ -875,10 +875,10 @@ pub fn home(doc: &AccountDoc) -> Home {
     }
 }
 
-/// 口の読みの結果から 4 つの block の中身（本文が電文として読めなければ 4 つとも測れていないと理由）。
-pub fn content(fetched: &Fetched) -> Home {
+/// 口の読みの結果から 4 つの block の中身（本文が電文として読めなければ 4 つとも測れていないと理由・描く今の電文で組む）。
+pub fn content(fetched: &Fetched, now: EpochSecs) -> Home {
     match super::doc(fetched) {
-        Ok(d) => home(&d),
+        Ok(d) => home(&super::drawn(d, now)),
         Err(reason) => Home {
             next: Body::Unmeasured(reason),
             groups: Body::Unmeasured(reason),
@@ -930,7 +930,7 @@ mod dom {
 
     fn read() -> Memo<Home> {
         let fetched = crate::net::read(PATH);
-        Memo::new(move |_| fetched.with(content))
+        Memo::new(move |_| fetched.with(|f| content(f, crate::net::now())))
     }
 
     pub fn next_view(block: Block) -> AnyView {

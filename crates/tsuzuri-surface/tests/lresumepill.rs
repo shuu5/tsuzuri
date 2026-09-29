@@ -86,7 +86,7 @@ fn lresume_card_line() {
         v.push(next.clone());
         v
     };
-    let clear = seatpill::card(&body("limit", Reopens::Clear));
+    let clear = seatpill::card(&body("limit", Reopens::Clear), AT);
     for (r, third) in [
         (Reopens::At(T13), Some(format!("{RESUME} {}", hmd(T13, AT)))),
         (Reopens::At(T24), Some(format!("{RESUME} {}", hmd(T24, AT)))),
@@ -97,7 +97,7 @@ fn lresume_card_line() {
         ),
         (Reopens::Unknown, Some(format!("{RESUME} {RESUME_UNKNOWN}"))),
     ] {
-        let c = seatpill::card(&body("limit", r));
+        let c = seatpill::card(&body("limit", r), AT);
         assert_eq!(c.more, with(third), "{r:?}");
         for row in &c.more {
             assert!(row.chars().count() <= ROW_CHARS, "{r:?}: {row}");
@@ -108,12 +108,16 @@ fn lresume_card_line() {
             "{r:?}"
         );
     }
-    let far = seatpill::card(&body("limit", Reopens::At(T24)));
+    let far = seatpill::card(&body("limit", Reopens::At(T24)), AT);
     assert_ne!(far.more[2], format!("{RESUME} {}", hmd(T24, T24)));
     for name in ["run", "wait", "silent", "unknown"] {
-        let clear = seatpill::card(&body(name, Reopens::Clear));
+        let clear = seatpill::card(&body(name, Reopens::Clear), AT);
         for r in [Reopens::At(T13), Reopens::Unmeasured, Reopens::Unknown] {
-            assert_eq!(seatpill::card(&body(name, r)), clear, "組 {name} の {r:?}");
+            assert_eq!(
+                seatpill::card(&body(name, r), AT),
+                clear,
+                "組 {name} の {r:?}"
+            );
         }
     }
 }

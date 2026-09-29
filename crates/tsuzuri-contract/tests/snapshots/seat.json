@@ -145,8 +145,8 @@
       "move_to": {
         "known": "acct-5"
       },
-      "grace_left": {
-        "known": 120
+      "grace_until": {
+        "known": 1790494740
       },
       "refused": {
         "known": 1790494020
@@ -242,7 +242,7 @@
       "move_to": {
         "known": null
       },
-      "grace_left": {
+      "grace_until": {
         "known": null
       },
       "refused": {
@@ -269,7 +269,7 @@
       "spans": "unknown",
       "moves": "unknown",
       "move_to": "unknown",
-      "grace_left": "unknown",
+      "grace_until": "unknown",
       "refused": "unknown",
       "pressure": "unknown"
     }

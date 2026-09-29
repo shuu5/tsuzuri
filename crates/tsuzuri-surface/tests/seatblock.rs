@@ -41,7 +41,7 @@ fn card(name: &str) -> SeatCard {
 /// 組の電文の字を口の本文として読んだ中身。
 fn filled(name: &str) -> Seat {
     let text = wire::encode(&card(name)).expect("電文");
-    match content(&Fetched::Body(text)) {
+    match content(&Fetched::Body(text), card(name).at) {
         Body::Filled(s) => s,
         other => panic!("組 {name} が中身を出さない: {other:?}"),
     }
@@ -501,7 +501,7 @@ fn seatblock_unreadable_is_unmeasured() {
         (Fetched::Body("not json".to_string()), NO_CONTENT),
     ] {
         assert_eq!(seat::body(&fetched), Body::Unmeasured(want), "{fetched:?}");
-        assert_eq!(content(&fetched), Body::Unmeasured(want), "{fetched:?}");
+        assert_eq!(content(&fetched, 0), Body::Unmeasured(want), "{fetched:?}");
         assert_eq!(seat::card(&fetched), Err(want));
         assert!(!want.trim().is_empty() && !want.contains('\n'));
     }

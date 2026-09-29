@@ -1,6 +1,7 @@
 //! project の側の部分（project の行・session の行・電文の組み立て・設計ノート surface-base 便 e-acct-proj）。
 //! 入力は host の側の字（`HostTexts`）と、anchor ごとの project の字（`ProjectTexts`）と今の時刻。
-//! 退避までの残り秒は席の card の器の欄 grace_left の写しで、tsuzuri は計算しない（規則の行 R-22・行 c-grace-acct）。
+//! 退避の終わる時刻は席の card の grace_until の写しで、tsuzuri は計算しない（規則の行 R-22・行 c-grace-acct）。
+//! 電文の時点 at は今ではなく材料の時刻の最大（`latest`・行 c-abs-seat）。
 //! project の宣言の順は群の宣言の順で、群の中は anchors の配列の順（同じ anchor は最初の群だけ）。
 //! 席の card・台帳の指標・次の一手は着地済みの関数の値をそのまま写す。run の 4 列の分け方と
 //! 生きている run の境（`ALIVE_S`）は見本の acct.js の runColsAt と runAlive の決め方（設計席の承認で置く値）。
@@ -164,17 +165,58 @@ fn seat(host: &HostTexts, d: &Declared, texts: &ProjectTexts, now: EpochSecs) ->
     }
 }
 
-/// 退避までの残り秒。席の card の欄 move_to が口座で grace_left が秒のときだけその秒（器の字のまま・0 も写す・
-/// ほかは None・起点は器の合図の at で tsuzuri は計算しない）。
-fn move_left(card: &Reading<SeatCard>) -> Option<u64> {
+/// 退避の終わる時刻。席の card の欄 move_to が口座で grace_until が時刻のときだけその時刻（写すだけ・ほかは None）。
+fn move_until(card: &Reading<SeatCard>) -> Option<EpochSecs> {
     match card {
         Reading::Known(SeatCard {
             move_to: Reading::Known(Some(_)),
-            grace_left: Reading::Known(Some(left)),
+            grace_until: Reading::Known(Some(until)),
             ..
-        }) => Some(*left),
+        }) => Some(*until),
         _ => None,
     }
+}
+
+/// 電文の時点（project の席の card の at・台帳の指標の at・群の移動の時刻・口座の最後に測った時刻・
+/// 休止中の席の last のうち最大・材料が無ければ 0）。
+fn latest(
+    accounts: &Reading<Vec<AccountRow>>,
+    moves: &Reading<Vec<MoveRow>>,
+    projects: &[ProjectRow],
+    dormant: &[DormantSeat],
+) -> EpochSecs {
+    let measured = match accounts {
+        Reading::Known(rows) => rows.as_slice(),
+        Reading::Unknown => &[],
+    }
+    .iter()
+    .filter_map(|a| match &a.spark {
+        Reading::Known(s) => s.measured_at,
+        Reading::Unknown => None,
+    });
+    let moved = match moves {
+        Reading::Known(rows) => rows.as_slice(),
+        Reading::Unknown => &[],
+    }
+    .iter()
+    .map(|m| m.at);
+    let projected = projects.iter().flat_map(|p| {
+        let seat = match &p.seat {
+            Reading::Known(c) => Some(c.at),
+            Reading::Unknown => None,
+        };
+        let ledger = match &p.ledger {
+            Reading::Known(s) => Some(s.at),
+            Reading::Unknown => None,
+        };
+        seat.into_iter().chain(ledger)
+    });
+    measured
+        .chain(moved)
+        .chain(projected)
+        .chain(dormant.iter().map(|d| d.last))
+        .max()
+        .unwrap_or(0)
 }
 
 fn text<'a>(event: &'a Value, key: &str) -> Option<&'a str> {
@@ -373,7 +415,7 @@ pub fn project_rows(
                     group: Some(d.group),
                     state_dir_known: false,
                     seat: Reading::Unknown,
-                    move_left_s: None,
+                    move_until: None,
                     runs: Reading::Unknown,
                     ledger: Reading::Unknown,
                     next: Reading::Unknown,
@@ -397,7 +439,7 @@ pub fn project_rows(
             };
             ProjectRow {
                 name,
-                move_left_s: move_left(&seat),
+                move_until: move_until(&seat),
                 group: Some(d.group),
                 state_dir_known: true,
                 seat,
@@ -579,9 +621,9 @@ pub fn session_lines(
     out
 }
 
-/// 電文を組む（休止中の席は空の列・閾値は読んでいない 3 つの窓・知らせは「まだ分からない」）。
+/// 電文を組む（休止中の席は空の列・閾値は読んでいない 3 つの窓・知らせは「まだ分からない」・
+/// 時点は渡した字から `latest` で組む）。
 pub fn assemble(
-    at: EpochSecs,
     accounts: Reading<Vec<AccountRow>>,
     groups: Reading<Vec<GroupCard>>,
     moves: Reading<Vec<MoveRow>>,
@@ -589,7 +631,7 @@ pub fn assemble(
     sessions: Vec<SessionLine>,
 ) -> AccountDoc {
     AccountDoc {
-        at,
+        at: latest(&accounts, &moves, &projects, &[]),
         accounts,
         caps: host::caps(&HostTexts::default()),
         groups,
@@ -610,7 +652,6 @@ pub fn doc(
     now: EpochSecs,
 ) -> AccountDoc {
     let mut doc = assemble(
-        now,
         host::accounts_at(host, now),
         host::groups(host),
         host::moves(host),
@@ -628,5 +669,6 @@ pub fn doc(
     doc.caps = host::caps(host);
     doc.notices = host::notices(host, &logs);
     doc.dormant = dormant(host, projects, now);
+    doc.at = latest(&doc.accounts, &doc.moves, &doc.projects, &doc.dormant);
     doc
 }

@@ -308,11 +308,11 @@ fn acctpcore_project_rows_seat_runs_and_order() {
     let b = &rows[2];
     assert_eq!(b.seat, Reading::Known(card_b(&host, NOW)));
     assert_eq!(b.runs, Reading::Unknown);
-    // state dir の引けない project は席・run・台帳・次の一手が Unknown で、残り秒は無し。
+    // state dir の引けない project は席・run・台帳・次の一手が Unknown で、退避の終わる時刻は無し。
     let c = &rows[1];
     assert!(!c.state_dir_known);
     assert_eq!(
-        (&c.seat, &c.runs, &c.ledger, &c.next, c.move_left_s),
+        (&c.seat, &c.runs, &c.ledger, &c.next, c.move_until),
         (
             &Reading::Unknown,
             &Reading::Unknown,
@@ -376,18 +376,21 @@ fn acctpcore_move_left_seconds() {
         ps
     };
     let left = |host: &HostTexts, ps: &BTreeMap<String, ProjectTexts>, now| {
-        project_rows(host, ps, now)[0].move_left_s
+        project_rows(host, ps, now)[0].move_until
     };
-    // 器の grace_left= の字のまま写す（今の時刻が動いても同じ・0 も写す）。
+    // 器の grace_left= の秒に組んだ今を足した終わる時刻を写す（0 は今そのもの）。
     let ps = with("reopens=- move=acct-2 grace_left=1101");
     for now in [NOW, NOW + 60, NOW + 5_000] {
-        assert_eq!(left(&host, &ps, now), Some(1101));
+        assert_eq!(left(&host, &ps, now), Some(now + 1101));
     }
-    assert_eq!(left(&host, &with("move=acct-2 grace_left=0"), NOW), Some(0));
-    // 群の今の記録が無くても同じ値（起点は器の合図の at）。
+    assert_eq!(
+        left(&host, &with("move=acct-2 grace_left=0"), NOW),
+        Some(NOW)
+    );
+    // 群の今の記録が無くても同じ値（群の記録から計算しない）。
     let mut no_record = host.clone();
     no_record.records.remove("main.account");
-    assert_eq!(left(&no_record, &ps, NOW), Some(1101));
+    assert_eq!(left(&no_record, &ps, NOW), Some(NOW + 1101));
     // move= が口座でないか grace_left= が秒でなければ無し・欄が無ければ無し。
     for tail in [
         "move=- grace_left=-",
@@ -474,7 +477,6 @@ fn acctpcore_session_lines_match_expected() {
 fn acctpcore_assemble_equals_doc_fixture() {
     let want: AccountDoc = serde_json::from_str(&read(DOC)).expect("fixture の形");
     let got = assemble(
-        want.at,
         want.accounts.clone(),
         want.groups.clone(),
         want.moves.clone(),
@@ -504,7 +506,9 @@ fn acctpcore_doc_host_parts_from_inputs() {
     let i = inputs();
     let ps = projects();
     let d = doc(&i.texts, &ps, NOW);
-    assert_eq!(d.at, NOW);
+    // 時点は今ではなく材料の時刻（今が動いても変わらない）。
+    assert!(d.at <= NOW);
+    assert_eq!(d.at, doc(&i.texts, &ps, NOW + 3600).at);
     assert_eq!(d.accounts, i.accounts);
     assert_eq!(d.groups, i.groups);
     assert_eq!(d.moves, i.moves);

@@ -3,7 +3,7 @@
 //! 行は電文の sessions の 1 行ずつ。並べ方は 4 つ（project・account・stage・elapsed）で URL の query の `sort=` に残し、
 //! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist・幅の押しは見本の setSpan と同じく置き換える）。
 //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
-//! orchestrator の行の合図（tick の健康・heartbeat・退避までの残り秒・移動待ち）は電文の projects の同じ名の行から引く。
+//! orchestrator の行の合図（tick の健康・heartbeat・退避の終わる時刻・移動待ち）は電文の projects の同じ名の行から引く。
 //! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
 //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
@@ -223,11 +223,11 @@ pub fn hb_class(heartbeat: &Reading<&'static str>) -> &'static str {
     }
 }
 
-/// orchestrator の行の移動の印（退避までの残り秒か、席の口座が群の今の口座と違う）。
+/// orchestrator の行の移動の印（退避の終わる時刻か、席の口座が群の今の口座と違う）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Move {
-    /// 退避までの残り秒。
-    Grace(u64),
+    /// 退避の終わる時刻。
+    Grace(EpochSecs),
     /// 席の口座が群の今の口座と違う。
     Wait,
 }
@@ -263,9 +263,9 @@ pub fn elapsed_at(since: Option<EpochSecs>, at: EpochSecs, now: EpochSecs) -> St
     )
 }
 
-/// 今の退避までの残り秒（電文の at の時点の残り秒から今 − at を引く・今が at より前なら引かない・0 で止める）。
-pub fn grace_left(left: u64, at: EpochSecs, now: EpochSecs) -> u64 {
-    left.saturating_sub(now.saturating_sub(at))
+/// 今の退避までの残り秒（終わる時刻から今と電文の at の大きい方を引く・0 で止める）。
+pub fn grace_left(until: EpochSecs, at: EpochSecs, now: EpochSecs) -> u64 {
+    until.saturating_sub(now.max(at))
 }
 
 /// 表の 1 行。
@@ -341,8 +341,8 @@ impl Table {
 }
 
 /// block の中身（口が読めない・まだ読んでいない・本文が電文として読めないときは測れていないと理由の 1 行）。
-pub fn content(fetched: &Fetched, sort: Sort) -> Body<Table> {
-    match super::doc(fetched) {
+pub fn content(fetched: &Fetched, sort: Sort, now: EpochSecs) -> Body<Table> {
+    match super::doc(fetched).map(|d| super::drawn(d, now)) {
         Err(reason) => Body::Unmeasured(reason),
         Ok(doc) if doc.sessions.is_empty() => Body::Empty(NO_ROWS),
         Ok(doc) => Body::Filled(table(&doc, sort)),
@@ -522,8 +522,8 @@ pub fn current_account<'a>(doc: &'a AccountDoc, project: &ProjectRow) -> Option<
 /// 行の口座か群の今の口座が分からない行は出さない（読めない一致を不一致と出さない・要件 NFR2）。
 pub fn moving(doc: &AccountDoc, line: &SessionLine) -> Option<Move> {
     let project = project_of(doc, &line.project)?;
-    if let Some(secs) = project.move_left_s {
-        return Some(Move::Grace(secs));
+    if let Some(until) = project.move_until {
+        return Some(Move::Grace(until));
     }
     let account = line.account.as_deref()?;
     let current = current_account(doc, project)?;
@@ -685,7 +685,7 @@ mod dom {
         let span = RwSignal::new(span_of(&query));
         let hb: States = RwSignal::new(Default::default());
         let tick = crate::net::ticker();
-        let body = move || match fetched.with(|f| content(f, sort.get())) {
+        let body = move || match fetched.with(|f| content(f, sort.get(), crate::net::now())) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
             Body::Filled(table) => table_view(table, span, tick, hb),
@@ -882,7 +882,7 @@ mod dom {
         .into_any()
     }
 
-    /// 段の欄（退避までの残り秒は 1 秒の時計で電文の at からの差を引き直す）。
+    /// 段の欄（退避までの残り秒は 1 秒の時計で終わる時刻から今を引き直す）。
     fn stage_view(
         row: &SessRow,
         at: EpochSecs,
@@ -894,8 +894,8 @@ mod dom {
             None => label(state_key(row.state)),
         };
         let moving = row.moving.map(|m| match m {
-            Move::Grace(secs) => {
-                let left = move || term(m.key(), grace_text(grace_left(secs, at, tick.get())));
+            Move::Grace(until) => {
+                let left = move || term(m.key(), grace_text(grace_left(until, at, tick.get())));
                 view! {
                     <span class=m.class()>
                         <span aria-hidden="true">"⇥"</span>

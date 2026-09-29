@@ -1,5 +1,6 @@
-//! 行 c-seat-grace の歯（中核）: 席の card の欄 move_to と grace_left は合図の健康の出力の席の行の欄
-//! `move=` と `grace_left=` の写し、欄 refused と pressure は doctor の同じ名の群の行の欄 `refused=` と
+//! 行 c-seat-grace の歯（中核）: 席の card の欄 move_to と grace_until は合図の健康の出力の席の行の欄
+//! `move=` と `grace_left=` の写し（grace_until は器の残り秒に組んだ今を足した終わる時刻・行 c-abs-seat）、
+//! 欄 refused と pressure は doctor の同じ名の群の行の欄 `refused=` と
 //! `pressure=` の写し（器の `-` は Known(None)・読めない字と欄の無い行は Unknown・残りを計算しない）。
 //! fixture: tests/fixtures/seat/seat-inputs.json（読むだけ）。器の §20 の形の欄は歯の中で組む。
 
@@ -88,11 +89,19 @@ fn group_tail(doctor: &str, group: &str, tail: &str) -> String {
     out
 }
 
-/// 器の欄の写し（move_to・grace_left・refused・pressure の型）。
+/// 器の欄の写し（move_to・grace_left の残り秒・refused・pressure の型）。
 type Move = Reading<Option<String>>;
 type Left = Reading<Option<u64>>;
 type Refused = Reading<Option<u64>>;
 type Pressed = Reading<Option<Pressure>>;
+
+/// 器の残り秒に今を足した終わる時刻（`-` と読めない字はそのまま）。
+fn until(left: &Left, now: u64) -> Left {
+    match left {
+        Reading::Known(Some(s)) => Reading::Known(Some(now + s)),
+        other => other.clone(),
+    }
+}
 
 fn some(name: &str) -> Move {
     Reading::Known(Some(name.to_string()))
@@ -146,15 +155,16 @@ fn sgrace_copies_move_and_left() {
             let tail = format!("reopens=- {pair}");
             c.texts.tick_status = Some(tick_tail(&tick, OWN, tail.trim_end()));
             let got = build(OWN, &c.texts, c.card.at);
+            let want_until = until(grace_left, c.card.at);
             assert_eq!(
-                (&got.move_to, &got.grace_left),
-                (move_to, grace_left),
+                (&got.move_to, &got.grace_until),
+                (move_to, &want_until),
                 "組 {name} の {pair:?}"
             );
             let mut want = c.card.clone();
             want.reopens = Reopens::Clear;
             want.move_to = move_to.clone();
-            want.grace_left = grace_left.clone();
+            want.grace_until = want_until;
             assert_eq!(got, want, "組 {name} の {pair:?} のほかの欄");
         }
     }
@@ -173,7 +183,7 @@ fn sgrace_left_is_not_computed() {
     ));
     let got = build(OWN, &run.texts, run.card.at);
     assert_eq!(
-        (&got.move_to, &got.grace_left),
+        (&got.move_to, &got.grace_until),
         (&Reading::Unknown, &Reading::Unknown)
     );
     let both = tick_tail(
@@ -184,11 +194,11 @@ fn sgrace_left_is_not_computed() {
     run.texts.tick_status = Some(both);
     let got = build(OWN, &run.texts, run.card.at);
     assert_eq!(
-        (&got.move_to, &got.grace_left),
-        (&some("acct-2"), &Reading::Known(Some(1700)))
+        (&got.move_to, &got.grace_until),
+        (&some("acct-2"), &Reading::Known(Some(run.card.at + 1700)))
     );
 
-    // 群の記録の字が在っても無くても、今の時刻が動いても、残りは器の字の 1700 のまま。
+    // 群の記録の字が在っても無くても、終わる時刻は今に器の字の 1700 を足した値（群の記録から計算しない）。
     for name in SETS {
         let c = case(name);
         let tick = c.texts.tick_status.clone().expect("合図の健康の出力");
@@ -209,8 +219,8 @@ fn sgrace_left_is_not_computed() {
                 texts.records = recs.clone();
                 let got = build(OWN, &texts, now);
                 assert_eq!(
-                    got.grace_left,
-                    Reading::Known(Some(1700)),
+                    got.grace_until,
+                    Reading::Known(Some(now + 1700)),
                     "組 {name} の記録 {recs:?} と今 {now}"
                 );
                 assert_eq!(got.move_to, some("acct-2"), "組 {name}");

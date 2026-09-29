@@ -63,7 +63,7 @@ fn sample() -> SeatCard {
         spans: Reading::Unknown,
         moves: Reading::Unknown,
         move_to: Reading::Unknown,
-        grace_left: Reading::Unknown,
+        grace_until: Reading::Unknown,
         refused: Reading::Unknown,
         pressure: Reading::Unknown,
     }

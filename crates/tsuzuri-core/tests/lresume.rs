@@ -88,7 +88,7 @@ fn built_with(name: &str, tail: &str) -> (SeatCard, SeatCard) {
     let mut expect = c.card.clone();
     if tail.contains("move=- grace_left=-") {
         expect.move_to = Reading::Known(None);
-        expect.grace_left = Reading::Known(None);
+        expect.grace_until = Reading::Known(None);
     }
     (built(&c), expect)
 }
@@ -108,7 +108,7 @@ fn lresume_copies_four_forms() {
             let (got, mut expect) = built_with(name, &tail(value));
             assert_eq!(got.reopens, want, "組 {name} の {value}");
             assert_eq!(
-                (&got.move_to, &got.grace_left),
+                (&got.move_to, &got.grace_until),
                 (&Reading::Known(None), &Reading::Known(None)),
                 "組 {name} の {value} の move=- grace_left=-"
             );

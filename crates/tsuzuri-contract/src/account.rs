@@ -19,7 +19,8 @@ pub const HEARTBEAT_PATH: &str = "/api/account/heartbeat";
 /// account board の data（時点・口座・閾値・群・移動・知らせ・project・session・休止中の席）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccountDoc {
-    /// 組んだ時刻。
+    /// 時点（材料の時刻の最大＝project の席の card の at・台帳の指標の at・群の移動の時刻・口座の最後に測った時刻・
+    /// 休止中の席の last・材料が無ければ 0・今ではない）。
     pub at: EpochSecs,
     pub accounts: Reading<Vec<AccountRow>>,
     /// 窓ごとの逼迫の閾値（器の rules 行の写し）。
@@ -34,7 +35,7 @@ pub struct AccountDoc {
     pub dormant: Vec<DormantSeat>,
 }
 
-/// 休止中の席（経過の秒は電文の at から last を引く・欄に置かない）。
+/// 休止中の席（経過の秒は面が描く今から last を引く・欄に置かない）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DormantSeat {
     /// 登録の行の anchor の project の名（anchor が無ければ空の字）。
@@ -170,8 +171,8 @@ pub struct ProjectRow {
     pub group: Option<String>,
     pub state_dir_known: bool,
     pub seat: Reading<SeatCard>,
-    /// 退避までの残り秒（移動中でなければ None）。
-    pub move_left_s: Option<u64>,
+    /// 退避の終わる時刻（席の card の grace_until の写し・移動中でなければ None・面は電文の at からの経過を引く）。
+    pub move_until: Option<EpochSecs>,
     pub runs: Reading<RunCounts>,
     pub ledger: Reading<LedgerStats>,
     pub next: Reading<NextStep>,

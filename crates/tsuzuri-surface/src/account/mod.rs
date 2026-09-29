@@ -8,6 +8,7 @@
 //! 休止中の chip と card（行 h-dormant）: 休止中の席が 1 つ以上のときだけ最終の記録の chip の後に語と数を出し、
 //! card は席の名と口座と最後の時刻と tick と hb を席ごとに 1 行で出す（見本の dormant:all の枝）。
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::SeatState;
@@ -16,7 +17,7 @@ use tsuzuri_contract::wire;
 use crate::frame::{Block, Mode, STACK, param, with_param};
 use crate::mapview::graph::cut;
 use crate::mapview::natural;
-use crate::project::seat::hmd;
+use crate::project::seat::{hmd, reach};
 use crate::project::{Body, NO_CONTENT, NOT_READ};
 use crate::view::Fetched;
 use crate::vocab::label;
@@ -298,6 +299,23 @@ pub fn doc(fetched: &Fetched) -> Result<AccountDoc, &'static str> {
             .map(arrange)
             .map_err(|_| BAD_BODY),
     }
+}
+
+/// 描く今の電文（at は今と電文の at の大きい方・project の席の card の at はその at・席と session の最後の区間は
+/// その at まで伸ばす・行 c-abs-seat）。休止中の席の経過と猶予の残り秒はこの at から数える。
+pub fn drawn(mut doc: AccountDoc, now: EpochSecs) -> AccountDoc {
+    doc.at = doc.at.max(now);
+    let at = doc.at;
+    for project in &mut doc.projects {
+        if let Reading::Known(card) = &mut project.seat {
+            card.at = at;
+            reach(&mut card.spans, at);
+        }
+    }
+    for session in &mut doc.sessions {
+        reach(&mut session.spans, at);
+    }
+    doc
 }
 
 /// 口座の並べ（裁定 t3-hub.53.14）: 口座の行と群の候補を名の自然な順にし、退役の口座（電文の retired）を除く。

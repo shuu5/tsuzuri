@@ -6,7 +6,9 @@
 //! 1 行に収まらない配列は読めない扱いにする。
 //! 限度の再開の時刻は合図の健康の出力の席の行の欄 `reopens=` を写すだけで、窓の実測や rules 行から計算しない。
 //! 器の移動の先と猶予の残り秒（同じ行の欄 `move=` と `grace_left=`）と、群の移り先の無い断りと逼迫
-//! （doctor の同じ名の群の行の欄 `refused=` と `pressure=`）も字を写すだけで、群の記録の時刻から残りを計算しない。
+//! （doctor の同じ名の群の行の欄 `refused=` と `pressure=`）も字を写すだけで、群の記録の時刻から残りを計算しない
+//! （残り秒は今を足した終わる時刻にして持つ）。card の時点 at は今ではなく材料の時刻で、読み直しの間に
+//! 材料が変わらなければ同じ字になる（行 c-abs-seat）。
 
 use serde::Deserialize;
 use tsuzuri_contract::EpochSecs;
@@ -428,8 +430,8 @@ fn state_of(
     (last, since)
 }
 
-/// 今の時刻の 24 時間前以後の行を ts の順に並べ、同じ状態が続く行を 1 つの区間にまとめる
-/// （区間の終わりは次の区間の始まり・最後の区間は今の時刻）。
+/// 時点の 24 時間前以後の行を ts の順に並べ、同じ状態が続く行を 1 つの区間にまとめる
+/// （区間の終わりは次の区間の始まり・最後の区間は時点）。
 fn spans(rows: &[(EpochSecs, SeatState)], now: EpochSecs) -> Vec<SeatSpan> {
     let from = now.saturating_sub(DAY);
     let mut rows: Vec<_> = rows.iter().copied().filter(|(t, _)| *t >= from).collect();
@@ -484,7 +486,13 @@ fn moves(records: &[String]) -> Vec<AccountMove> {
     out
 }
 
-/// 席の card を組む（`anchor` は席の anchor の path・`now` は今の時刻）。
+/// 猶予の終わる時刻（器の残り秒に今を足す・`-` は無し・読めない字は「まだ分からない」）。
+fn grace_until(value: Option<&str>, now: EpochSecs) -> Reading<Option<EpochSecs>> {
+    copied(value, |v| digits::<u64>(v).map(|s| now.saturating_add(s)))
+}
+
+/// 席の card を組む（`anchor` は席の anchor の path・`now` は今の時刻で猶予の終わる時刻にだけ使う）。
+/// 時点 `at` は状態の記録の最後の読めた行の ts と合図の最後の判定の ts のうち大きい方（どちらも無ければ 0）。
 pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSecs) -> SeatCard {
     let seat = texts.doctor.as_deref().and_then(|d| seat_line(d, target));
     let seat_value = |key: &str| {
@@ -508,8 +516,17 @@ pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSec
     let group_value = |key: &str| {
         group_line(texts.doctor.as_deref(), name.as_deref()).and_then(|l| field(l, key))
     };
+    let tick_at = last_tick(texts.tick_last.as_deref()).and_then(tick_ts);
+    let at = rows
+        .as_deref()
+        .and_then(|r| r.last())
+        .map(|&(t, _)| t)
+        .into_iter()
+        .chain(tick_at)
+        .max()
+        .unwrap_or(0);
     SeatCard {
-        at: now,
+        at,
         target: target.to_string(),
         state,
         since,
@@ -518,15 +535,15 @@ pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSec
             flag(field(l, "heartbeat"), "on", "off")
         }),
         tick: tick_health(seat.and_then(|l| field(l, "tick"))),
-        tick_at: last_tick(texts.tick_last.as_deref()).and_then(tick_ts),
+        tick_at,
         reopens: reopens(tick_value("reopens")),
         move_to: copied(tick_value("move"), account_name),
-        grace_left: copied(tick_value("grace_left"), digits),
+        grace_until: grace_until(tick_value("grace_left"), now),
         refused: copied(group_value("refused"), stamp),
         pressure: copied(group_value("pressure"), pressure),
         group: group(texts, name.as_deref()),
         usage: quota_used(texts.usage.as_deref(), account.as_deref(), model.as_deref()),
-        spans: rows.map_or(Reading::Unknown, |r| Reading::Known(spans(&r, now))),
+        spans: rows.map_or(Reading::Unknown, |r| Reading::Known(spans(&r, at))),
         moves: if name.is_some() {
             Reading::Known(moves(&texts.records))
         } else {

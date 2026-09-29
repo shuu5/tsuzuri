@@ -21,6 +21,9 @@ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 
+/// 描く今（fixture の電文の at）。
+const NOW: u64 = 1_790_510_400;
+
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -419,7 +422,7 @@ fn acctproj_wait_unref_dash_and_orch() {
 #[test]
 fn acctproj_content_reads_the_doc() {
     let body = Fetched::Body(fixture_text());
-    match content(&body, PSort::Group, Mode::Beginner) {
+    match content(&body, PSort::Group, Mode::Beginner, NOW) {
         Body::Filled(t) => {
             assert_eq!(t.sort, PSort::Group);
             assert_eq!(t.order(), vec![0, 2, 1]);
@@ -427,22 +430,22 @@ fn acctproj_content_reads_the_doc() {
         other => panic!("中身が在るはず: {other:?}"),
     }
     assert_eq!(
-        content(&Fetched::NotRead, PSort::Need, Mode::Beginner),
+        content(&Fetched::NotRead, PSort::Need, Mode::Beginner, NOW),
         Body::Unmeasured(NOT_READ)
     );
     assert_eq!(
-        content(&Fetched::Failed, PSort::Need, Mode::Beginner),
+        content(&Fetched::Failed, PSort::Need, Mode::Beginner, NOW),
         Body::Unmeasured(UNREAD)
     );
     assert_eq!(
-        content(&Fetched::Body("{".into()), PSort::Need, Mode::Beginner),
+        content(&Fetched::Body("{".into()), PSort::Need, Mode::Beginner, NOW),
         Body::Unmeasured(BAD_BODY)
     );
     let mut empty = fixture();
     empty.projects.clear();
     let text = wire::encode(&empty).expect("電文にできる");
     assert_eq!(
-        content(&Fetched::Body(text), PSort::Need, Mode::Beginner),
+        content(&Fetched::Body(text), PSort::Need, Mode::Beginner, NOW),
         Body::Empty(NO_ROWS)
     );
     assert_eq!(projects::body(&body), Body::Unmeasured(NO_CONTENT));

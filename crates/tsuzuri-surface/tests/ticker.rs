@@ -44,14 +44,15 @@ fn ticker_elapsed_uses_later_of_now_and_at() {
     assert_eq!(elapsed_at(None, AT, AT + 3600), "―");
 }
 
-/// (2) 残り秒は電文の at の時点の残り秒から今 − at を引き、0 で止める（今が at より前なら引かない）。
+/// (2) 残り秒は終わる時刻から今と電文の at の大きい方を引き、0 で止める（今が at より前なら at から引く）。
 #[test]
 fn ticker_grace_counts_down_to_zero() {
-    assert_eq!(grace_left(1101, AT, AT), 1101);
-    assert_eq!(grace_left(1101, AT, AT + 60), 1041);
-    assert_eq!(grace_left(1101, AT, AT + 1101), 0);
-    assert_eq!(grace_left(1101, AT, AT + 5000), 0);
-    assert_eq!(grace_left(1101, AT, AT - 100), 1101);
+    let until = AT + 1101;
+    assert_eq!(grace_left(until, AT, AT), 1101);
+    assert_eq!(grace_left(until, AT, AT + 60), 1041);
+    assert_eq!(grace_left(until, AT, AT + 1101), 0);
+    assert_eq!(grace_left(until, AT, AT + 5000), 0);
+    assert_eq!(grace_left(until, AT, AT - 100), 1101);
 }
 
 /// (3) 表の行は電文の同じ行の since を持ち、経過の字は電文の at を今とした字と同じ。

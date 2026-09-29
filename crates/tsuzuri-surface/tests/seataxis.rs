@@ -108,7 +108,7 @@ fn saxis_strip_carries_ticks() {
     assert_eq!(cards.len(), 5);
     for (name, card) in cards {
         let text = wire::encode(&card).expect("電文");
-        let Body::Filled(seat) = content(&Fetched::Body(text)) else {
+        let Body::Filled(seat) = content(&Fetched::Body(text), card.at) else {
             panic!("組 {name} が中身を出さない");
         };
         for span in Span::ALL {

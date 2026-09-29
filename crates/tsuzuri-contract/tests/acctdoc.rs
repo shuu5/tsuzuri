@@ -163,7 +163,7 @@ fn acctdoc_unknown_only_where_marked() {
     assert!(
         matches!(doc.projects[0].runs, Reading::Known(r) if (r.wait, r.run, r.stop, r.land) == (1, 2, 0, 3))
     );
-    assert_eq!(doc.projects[1].move_left_s, Some(1101));
+    assert_eq!(doc.projects[1].move_until, Some(doc.at + 1101));
 
     // 部分を 1 つずつ Unknown にすると、その部分だけが変わる。
     type Part = (&'static str, Option<usize>, fn(&mut AccountDoc));

@@ -10,11 +10,19 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::account::{BAD_BODY, PATH, UNREAD};
 use tsuzuri_surface::project::NOT_READ;
 use tsuzuri_surface::project::seat::{
-    GROUP_CARD, GROUP_MISSING, MATCHED, MEMBER_UNKNOWN, NG, OK, group_card, hmd,
+    GROUP_CARD, GROUP_MISSING, MATCHED, MEMBER_UNKNOWN, NG, OK, hmd,
 };
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::label;
 use tsuzuri_surface::widgets::hover::Card;
+
+/// 描く今（電文の at と同じ・fixture の時点）。
+const NOW: u64 = 1790510400;
+
+/// 群の chip の card（描く今は電文の at）。
+fn group_card(account: &Fetched, name: &str) -> Card {
+    tsuzuri_surface::project::seat::group_card(account, name, NOW)
+}
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -165,7 +173,7 @@ fn gchip_dom_text() {
     let dom = read("src/project_dom/seat.rs");
     for text in [
         "crate::net::read(crate::account::PATH)",
-        "account.with_untracked(|a| group_card(a, &key))",
+        "account.with_untracked(|a| group_card(a, &key, now))",
         "data-card=GROUP_CARD",
         "on:mouseenter=over on:mouseleave=out",
         "{group_chip(low.group, group_doc)}",
