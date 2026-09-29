@@ -4,9 +4,10 @@
 //! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
 //! 判定の写し・純減の矢印・小数 1 桁・日数の字は着地済みの project の ledger の module の値と関数を使う（その block の DOM は呼ばない）。
 //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
-//! 未反映は電文の台帳の未反映の数で、読めない種類が在れば project board の指標の段と同じ Unref の形で
-//! 測れていないの印を添える（部分の和）。台帳が Unknown の行は「―」。
+//! 未反映は電文の台帳の未反映の数で、project board の指標の段と同じ Unref の形にする。1 種か 2 種が読めなければ数（部分の和）に
+//! 測れていないの印を添え、3 種とも分からなければ数えない字「―」で印は添えない（行 g-unref-dash-acct）。台帳が Unknown の行も「―」。
 //! 列の最大と最小の印は open の task・closed/日・未反映の 3 列に付ける（見本の ledTable の eT・eR・eU・行 h-acct-rest）。
+//! 未反映の列は unref_of が数を返す行（3 種とも分からない行と台帳が Unknown の行を除く）だけで数え、印もその行だけに付ける。
 //! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の cards の led_card で組む。
 //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
 //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -18,7 +19,7 @@ use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::stats::LedgerStats;
 
 use super::cards::led_card;
-use super::projects::unref_count;
+use super::projects::{unref_count, unref_of};
 use crate::frame::{self, Block};
 use crate::project::Body;
 use crate::project::ledger::{
@@ -275,14 +276,14 @@ impl LedRow {
     }
 
     /// 行の数の欄の字（open の task・24 時間の純減・closed/日・未反映の順・台帳が Unknown は全部「―」）。
-    /// 未反映は読めない種類が在っても数（部分の和）の字で、測れていないの印は DOM が添える。
+    /// 未反映は Unref の text（3 種とも分からなければ「―」・ほかは数で、部分の和の測れていないの印は DOM が添える）。
     pub fn numbers(&self) -> [String; 4] {
         match &self.cells {
             Reading::Known(c) => [
                 c.task.to_string(),
                 c.net24.text.clone(),
                 c.rate.clone(),
-                c.unref.count.to_string(),
+                c.unref.text(),
             ],
             Reading::Unknown => std::array::from_fn(|_| NONE.to_string()),
         }
@@ -346,7 +347,7 @@ pub fn content(fetched: &Fetched, sort: Sort) -> Body<LedTable> {
     }
 }
 
-/// 電文を表に組む（列の最大と最小は台帳が Known の行だけで数える）。
+/// 電文を表に組む（列の最大と最小は台帳が Known の行だけで数え、未反映の列は unref_of が数を返す行だけで数える）。
 pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
     let known: Vec<&LedgerStats> = doc
         .projects
@@ -358,7 +359,12 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
         .collect();
     let tasks: Vec<f64> = known.iter().map(|s| f64::from(s.open.task)).collect();
     let rates: Vec<f64> = known.iter().map(|s| s.closed_per_day).collect();
-    let unrefs: Vec<f64> = known.iter().map(|s| f64::from(s.unreflected)).collect();
+    let unrefs: Vec<f64> = doc
+        .projects
+        .iter()
+        .filter_map(unref_of)
+        .map(|u| f64::from(u.count))
+        .collect();
     let (ext_task, ext_rate, ext_un) = (extremes(&tasks), extremes(&rates), extremes(&unrefs));
     let rate_max = rates.iter().copied().fold(0.0, f64::max);
     let rows = order(&doc.projects, sort)
@@ -381,7 +387,10 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
                     lead: age(s.lead.map(|l| l.p50)),
                     spark: spark_svg(&spark(&s.days, SPARK_W, SPARK_H)),
                     unref: unref_count(s),
-                    un_class: un_class(mark(ext_un, f64::from(s.unreflected)), s.unreflected),
+                    un_class: un_class(
+                        unref_of(p).and_then(|u| mark(ext_un, f64::from(u.count))),
+                        s.unreflected,
+                    ),
                 }),
                 Reading::Unknown => Reading::Unknown,
             };
@@ -588,8 +597,8 @@ mod dom {
                     <span class="num">{cells.rate.clone()}</span>
                 </div>
                 <div class=cells.un_class.clone()>
-                    <b class="num">{cells.unref.count}</b>
-                    {(!cells.unref.unknown.is_empty()).then(|| state_icon(UNKNOWN))}
+                    <b class="num">{cells.unref.text()}</b>
+                    {cells.unref.partial().then(|| state_icon(UNKNOWN))}
                 </div>
                 <button type="button" class="rowmore" aria-expanded=expanded aria-label=label("p_more") on:click=toggle>
                     <span class="rm-t">{label("p_more")}</span>" "<span class="rm-a">{arrow}</span>

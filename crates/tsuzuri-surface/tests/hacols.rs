@@ -217,8 +217,8 @@ fn hacols_dom_words() {
     let led = dom_of("src/account/ledger.rs");
     for w in [
         "class=cells.un_class.clone()",
-        "cells.unref.count",
-        "cells.unref.unknown.is_empty()",
+        "cells.unref.text()",
+        "cells.unref.partial()",
     ] {
         assert!(led.contains(w), "ledger.rs の DOM の部分に字 {w} が無い");
     }

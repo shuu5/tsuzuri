@@ -354,7 +354,7 @@ fn harest_dom_words() {
     let led = read("src/account/ledger.rs");
     for w in [
         "extremes(&unrefs)",
-        "un_class(mark(ext_un, f64::from(s.unreflected)), s.unreflected)",
+        "unref_of(p).and_then(|u| mark(ext_un, f64::from(u.count))),",
         "[of(&c.task_class), of(&c.rate_class), of(&c.un_class)]",
     ] {
         assert!(led.contains(w), "ledger.rs に字 {w} が無い");
