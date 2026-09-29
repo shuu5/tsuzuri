@@ -57,6 +57,7 @@ fn qblock_card_copies_ids() {
     assert!(ask::card(2, &cards[1]).blocking.is_empty());
     let text = wire::encode(&QuestionList {
         cards: Reading::Known(cards),
+        answerable: true,
     })
     .expect("encode");
     match ask::body(&Fetched::Body(text)) {

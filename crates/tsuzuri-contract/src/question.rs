@@ -35,4 +35,12 @@ pub struct QuestionCard {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QuestionList {
     pub cards: Reading<Vec<QuestionCard>>,
+    /// server が答えを受けるか（読むだけの server は偽・鍵の無い電文は真に読む・行 e-ask-own-only）。
+    #[serde(default = "answers")]
+    pub answerable: bool,
+}
+
+/// 鍵 answerable の無い電文の値（答えを受ける・前の server と組の面が今のまま動く）。
+fn answers() -> bool {
+    true
 }

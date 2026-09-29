@@ -614,6 +614,12 @@
    "internal": "逐語（notes の裁定行）",
    "orig": "逐語"
   },
+  "answer_in_chat": {
+   "label": "チャットで答える",
+   "plain": "この画面は読むだけ\n・ 答えはその project の席のチャットで送る",
+   "internal": "読むだけの server（--read-only）",
+   "orig": "answerable = false"
+  },
   "ruling": {
    "label": "あなたの決定",
    "plain": "質問へのあなたの答え\n・ 番号と時刻が自動で付く",

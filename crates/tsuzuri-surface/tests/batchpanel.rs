@@ -73,6 +73,7 @@ fn list_of(cards: Vec<QuestionCard>) -> Fetched {
     Fetched::Body(
         wire::encode(&QuestionList {
             cards: Reading::Known(cards),
+            answerable: true,
         })
         .expect("電文"),
     )
@@ -525,6 +526,7 @@ fn batchpanel_unmeasured() {
     let unknown = Fetched::Body(
         wire::encode(&QuestionList {
             cards: Reading::Unknown,
+            answerable: true,
         })
         .expect("電文"),
     );

@@ -10,7 +10,7 @@ use tsuzuri_contract::ledger::BDW;
 use super::{design, ledger, ruling};
 
 /// 起動の引数（repo の置き場・bind 先・面の file の置き場・bd の program・器の state dir・設計の道具の program・
-/// bdw の program・席の target・器の CLI の program）。席の target と state dir の両方が在るときだけ、
+/// bdw の program・席の target・器の CLI の program・読むだけか）。席の target と state dir の両方が在るときだけ、
 /// 裁定を席へ配達し、席の card を組む（便 e-seat）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
@@ -29,6 +29,8 @@ pub struct Config {
     pub seat: Option<String>,
     /// 配達と席の読みに撃つ器の CLI の program（既定は `ruling::SCRIBE2`）。
     pub scribe2: OsString,
+    /// 答えと方針の口を 403 で断り、問いの一覧に答えを受けないと書くか（既定は偽・行 e-ask-own-only）。
+    pub read_only: bool,
 }
 
 impl Config {
@@ -44,6 +46,7 @@ impl Config {
             bdw: BDW.into(),
             seat: None,
             scribe2: ruling::SCRIBE2.into(),
+            read_only: false,
         }
     }
 }

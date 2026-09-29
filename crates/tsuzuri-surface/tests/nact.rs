@@ -202,6 +202,7 @@ fn nact_waited_rules() {
     }
     let unknown = wire::encode(&QuestionList {
         cards: Reading::Unknown,
+        answerable: true,
     })
     .expect("電文");
     for fetched in [

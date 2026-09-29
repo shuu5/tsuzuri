@@ -7,6 +7,8 @@
 //! --bdw は台帳の書きに撃つ program（既定 bdw）・--seat は裁定を配達する席の target（--state-dir と両方が
 //! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）（便 e-ask）。
 //! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
+//! --read-only は値を取らず、答えと方針の口を 403 で断り、問いの一覧に答えを受けないと書く（ほかの project の
+//! board を読むだけで起こす・行 e-ask-own-only）。
 //! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
 //! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
 //! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
@@ -18,7 +20,10 @@ use std::process::ExitCode;
 
 use tsuzuri_boundary::server::{Config, Server};
 
-const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>]";
+const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>] [--read-only]";
+
+/// 読むだけの server を名指す値を取らない引数（行 e-ask-own-only）。
+const READ_ONLY: &str = "--read-only";
 
 /// 不合格（断り・使い方の誤り）。
 const FAIL: u8 = 1;
@@ -46,14 +51,21 @@ fn usage(what: &str) -> u8 {
     FAIL
 }
 
-/// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd・--state-dir・--folio・--bdw・--seat・--scribe2 を読む
-/// （省ける引数の空の値は断る）。
+/// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd・--state-dir・--folio・--bdw・--seat・--scribe2 と、
+/// 値を取らない --read-only を読む（省ける引数の空の値と 2 度の引数は断る）。
 fn parse(rest: &[&str]) -> Result<Config, String> {
     let (mut repo, mut bind, mut files, mut bd) = (None, None, None, None);
     let (mut state_dir, mut folio) = (None, None);
     let (mut bdw, mut seat, mut scribe2) = (None, None, None);
+    let mut read_only = false;
     let mut it = rest.iter();
     while let Some(arg) = it.next() {
+        if *arg == READ_ONLY {
+            if std::mem::replace(&mut read_only, true) {
+                return Err(format!("{READ_ONLY} が 2 度ある"));
+            }
+            continue;
+        }
         let (name, value) = match arg.split_once('=') {
             Some((n, v)) => (n, v),
             None => (*arg, *it.next().ok_or_else(|| format!("{arg} の値が無い"))?),
@@ -95,6 +107,7 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
     let mut config = Config {
         state_dir: state_dir.map(PathBuf::from),
         seat: seat.map(str::to_string),
+        read_only,
         ..Config::new(PathBuf::from(repo), bind, PathBuf::from(files))
     };
     // 省いた program は Config::new の既定の値のまま。

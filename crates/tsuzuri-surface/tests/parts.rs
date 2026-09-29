@@ -108,6 +108,7 @@ fn parts_ledger_lists_read_three_values() {
     .expect("電文");
     let no_cards = wire::encode(&QuestionList {
         cards: Reading::Known(vec![]),
+        answerable: true,
     })
     .expect("電文");
     assert!(matches!(

@@ -5,7 +5,7 @@ use tsuzuri_contract::wire;
 
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
-use crate::server::{Shared, events, guarded, json, policy, refusal};
+use crate::server::{Shared, events, guarded, json, policy, read_only, refusal};
 
 pub(in crate::server) const ROUTE: Entry = Entry {
     key: Key {
@@ -15,13 +15,16 @@ pub(in crate::server) const ROUTE: Entry = Entry {
     handle: post_policy,
 };
 
-/// 方針の受付（守りは `guarded`）。断りと 4xx と 503 は何も書いていない。
+/// 方針の受付（守りは `guarded`・読むだけの server は受付の前に `read_only` で断る）。断りと 4xx と 503 は何も書いていない。
 /// 502 と 500 の本文は作った問いの id か方針の id を名指す（ledger-create は作れたかが分からない）。
 fn post_policy(req: &Request, shared: &Shared) -> Response {
     let body = match guarded(req, |t| wire::decode::<PolicyRequest>(t).ok()) {
         Ok(body) => body,
         Err(response) => return response,
     };
+    if shared.read_only {
+        return read_only(policy::PATH, &[]);
+    }
     match policy::accept(&body, &shared.sources.ledger, &shared.writer, events::now()) {
         policy::Outcome::Recorded(response) => json(200, wire::encode(&response)),
         policy::Outcome::Refused(reason) => refusal(reason),

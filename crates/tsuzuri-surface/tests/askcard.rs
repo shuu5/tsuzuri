@@ -254,6 +254,7 @@ fn askcard_numbers_and_touches() {
     // 電文の順が逆なら番号も逆（面は並べ替えない）。
     let reversed = QuestionList {
         cards: Reading::Known(wire_cards.iter().rev().cloned().collect()),
+        answerable: true,
     };
     let body = Fetched::Body(wire::encode(&reversed).expect("電文"));
     let Body::Filled(cards) = ask::body(&body) else {
@@ -423,6 +424,7 @@ fn askcard_empty_is_not_unmeasured() {
     let empty_cards = Fetched::Body(
         wire::encode(&QuestionList {
             cards: Reading::Known(vec![]),
+            answerable: true,
         })
         .expect("電文"),
     );
@@ -440,6 +442,7 @@ fn askcard_empty_is_not_unmeasured() {
     let unknown_cards = Fetched::Body(
         wire::encode(&QuestionList {
             cards: Reading::Unknown,
+            answerable: true,
         })
         .expect("電文"),
     );

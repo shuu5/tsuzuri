@@ -185,15 +185,18 @@
             "digest": "2f890a3dc04a8b5a"
           }
         ]
-      }
+      },
+      "answerable": true
     },
     {
       "cards": {
         "known": []
-      }
+      },
+      "answerable": true
     },
     {
-      "cards": "unknown"
+      "cards": "unknown",
+      "answerable": true
     }
   ]
 }

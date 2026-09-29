@@ -12,6 +12,8 @@
 //!    （台帳を読み直し、印の無い裁定が在れば器の配達の口を 1 度撃ち、rc 0 なら印を置く・結果で応答は変えない）。
 //!
 //! 口は 200 でない応答を返す前に `refusal_line` の 1 行を標準エラーに書く（逐語は書かない）。
+//! 読むだけの server（引数 --read-only）は、答えと方針の口を受付の前に 403 の `READ_ONLY` で断り、
+//! 台帳の読みも書きも配達も撃たない（行 e-ask-own-only）。
 //!
 //! 取り消し（口 POST /api/revoke・`revoke`・行 e-revoke）も同じ順で受け、問いを閉じる代わりに開き直す。
 //! 取り消せるのは閉じた問いの効いている最後の裁定だけで、notes の末尾に取り消しの行を足してから開き直し、何も消さない。
@@ -59,6 +61,9 @@ pub const RETRY_STEP: Duration = Duration::from_secs(1);
 
 /// 口が断った応答の log の行の頭（`refusal_line`）。
 pub const REFUSED_LOG: &str = "tz surface serve: 断った";
+
+/// 読むだけの server が答えと方針の口を断る 403 の本文（行 e-ask-own-only）。
+pub const READ_ONLY: &str = "read-only";
 
 /// 器の配達の口が返すまでの上限。越えれば止めて落ちた扱い。
 pub const DELIVER_TIMEOUT: Duration = Duration::from_secs(10);

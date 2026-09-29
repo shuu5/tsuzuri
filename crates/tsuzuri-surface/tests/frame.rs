@@ -388,6 +388,7 @@ fn frame_blocks_without_data_are_unmeasured() {
     let empty = Screen::initial().after_read(&Fetched::Body(empty_body), 1);
     let no_cards = wire::encode(&QuestionList {
         cards: Reading::Known(vec![]),
+        answerable: true,
     })
     .expect("電文");
     assert!(matches!(

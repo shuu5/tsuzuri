@@ -4,6 +4,8 @@
 //! 行の一覧・関わる所の数と重なりの数・送る button の判定・要求の本文・応答の出し方は純粋な関数にして host で試し、
 //! DOM と通信は wasm の target のときだけ組み立てる。
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
+//! 問いの一覧の電文の answerable が偽（読むだけの server）なら、欄と button の代わりにチャットで答える 1 行を出す
+//! （行 e-ask-own-only）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -351,9 +353,15 @@ mod dom {
         // 形と行の列は値が前と同じなら知らせない（形が Filled のまま替わらなければ欄と button を作り直さない）。
         let shape = Memo::new(move |_| fetched.with(outline));
         let rows = Memo::new(move |_| fetched.with(listed));
+        // 読むだけの server なら欄と button の代わりにチャットで答える 1 行を出す（行 e-ask-own-only）。
+        let can_answer = Memo::new(move |_| fetched.with(ask::answerable));
         let content = move || match shape.get() {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
+            Body::Filled(()) if !can_answer.get() => {
+                view! { <div class="small muted" data-term=ask::CHAT_KEY>{label(ask::CHAT_KEY)}</div> }
+                    .into_any()
+            }
             Body::Filled(()) => filled(rows, s),
         };
         let note = move || {

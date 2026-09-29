@@ -157,12 +157,15 @@ fn forms() -> Vec<Box<dyn Form>> {
             vec![
                 QuestionList {
                     cards: Reading::Known(vec![question_card()]),
+                    answerable: true,
                 },
                 QuestionList {
                     cards: Reading::Known(vec![]),
+                    answerable: true,
                 },
                 QuestionList {
                     cards: Reading::Unknown,
+                    answerable: true,
                 },
             ],
         ),

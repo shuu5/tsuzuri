@@ -8,6 +8,7 @@
 //! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない・行 g-card-adopt-b）。
 //! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける（行 g-tick-adopt）。
 //! 送っている間は送る button の字を替え、server の台帳の断りは理由と次の手の字にして目立つ 1 行で出す（行 g-ruling-busy）。
+//! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す（行 e-ask-own-only）。
 
 use std::collections::BTreeMap;
 
@@ -89,6 +90,9 @@ pub const APPEND_FAILED: &str = "台帳に書けなかった（502）・何も�
 /// 502 の ledger-close のときの理由と次の手の字（後に裁定の id を付ける）。
 pub const CLOSE_FAILED: &str =
     "記録したが問いを閉じられなかった（502）・もう一度押さず席に知らせる";
+
+/// 読むだけの server の問いの card と束の block に、送る欄の代わりに出す 1 行の語の鍵（行 e-ask-own-only）。
+pub const CHAT_KEY: &str = "answer_in_chat";
 
 /// card の部分（見本の qcard の順: 題・概要・理由・推奨・答えの欄・つながり）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -185,12 +189,23 @@ pub fn cards(fetched: &Fetched) -> Result<Vec<QuestionCard>, &'static str> {
         Fetched::Body(text) => match wire::decode::<QuestionList>(text) {
             Ok(QuestionList {
                 cards: Reading::Known(cards),
+                ..
             }) => Ok(cards),
             Ok(QuestionList {
                 cards: Reading::Unknown,
+                ..
             }) => Err(CARDS_UNKNOWN),
             Err(_) => Err(UNREADABLE),
         },
+    }
+}
+
+/// server が答えを受けるか（本文を電文に読めればその欄 answerable・読めない本文とまだ読んでいないと読めないは真・
+/// 行 e-ask-own-only）。
+pub fn answerable(fetched: &Fetched) -> bool {
+    match fetched {
+        Fetched::Body(text) => wire::decode::<QuestionList>(text).map_or(true, |l| l.answerable),
+        Fetched::NotRead | Fetched::Failed => true,
     }
 }
 
@@ -491,9 +506,9 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, anchor,
-        can_send, card_class, card_key, count, focus, key_action, listed, node_cards, outcome,
-        outline, posted_tip, request_body, send_text, target_number,
+        BLOCK, CHAT_KEY, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age,
+        anchor, answerable, can_send, card_class, card_key, count, focus, key_action, listed,
+        node_cards, outcome, outline, posted_tip, request_body, send_text, target_number,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::map;
@@ -521,6 +536,10 @@ mod dom {
     }
 
     type Drafts = StoredValue<Vec<(BeadId, Draft)>>;
+
+    /// server が答えを受けるか（block が context で置き、答えの欄が読む・card_view の引数は替えない）。
+    #[derive(Clone, Copy)]
+    struct CanAnswer(Memo<bool>);
 
     /// 1 本の card の、一覧を読み直すと動く値（今の番号と題の節点の card）。
     #[derive(Clone, Copy)]
@@ -561,6 +580,8 @@ mod dom {
         let scrolled = StoredValue::new(false);
         let fetched = crate::net::read(PATH);
         let drafts: Drafts = StoredValue::new(Vec::new());
+        // 読むだけの server なら答えの欄は送る欄の代わりにチャットで答える 1 行を出す。
+        provide_context(CanAnswer(Memo::new(move |_| fetched.with(answerable))));
         // つながりの段の図の読みはこの block が持つ（一覧の読み直しで card を組み直しても作り直さない）。
         let places = embeds();
         // 形と card の列は値が前と同じなら知らせない（本文が替わっても形が同じなら外枠を組み直さない）。
@@ -727,11 +748,17 @@ mod dom {
     }
 
     /// 答えの欄（字の欄と送る button）と、送った後の 1 行。200 の後は欄を閉じる。
+    /// 読むだけの server なら送る欄の代わりにチャットで答える 1 行を出す（context が無ければ答えを受ける）。
     fn answer_view(slot: Slot, card: Card, d: Draft) -> AnyView {
         let key = slot.key.unwrap_or_default();
+        let can_answer = use_context::<CanAnswer>().map(|c| c.0);
+        let answerable = move || can_answer.is_none_or(|m| m.get());
         let open = {
             let outcome = d.outcome.clone();
-            move || outcome.with(|o| o.as_ref().is_none_or(Outcome::answer_open))
+            move || answerable() && outcome.with(|o| o.as_ref().is_none_or(Outcome::answer_open))
+        };
+        let chat = move || {
+            (!answerable()).then(|| view! { <div class="small muted" data-term=CHAT_KEY>{label(CHAT_KEY)}</div> })
         };
         let form = {
             let d = d.clone();
@@ -782,7 +809,7 @@ mod dom {
                 })
             }
         };
-        view! { {form}{note} }.into_any()
+        view! { {form}{chat}{note} }.into_any()
     }
 
     /// 答えを送る（押せないときは何もしない）。応答で card の状態を決め、200 と 409 は一覧を読み直す。

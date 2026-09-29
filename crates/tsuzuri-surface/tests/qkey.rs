@@ -84,12 +84,14 @@ fn six() -> Vec<Fetched> {
         Fetched::Body(
             wire::encode(&QuestionList {
                 cards: Reading::Unknown,
+                answerable: true,
             })
             .expect("電文"),
         ),
         Fetched::Body(
             wire::encode(&QuestionList {
                 cards: Reading::Known(Vec::new()),
+                answerable: true,
             })
             .expect("電文"),
         ),

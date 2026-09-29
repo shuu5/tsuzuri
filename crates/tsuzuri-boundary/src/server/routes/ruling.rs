@@ -6,7 +6,7 @@ use tsuzuri_contract::wire;
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
 use crate::server::ruling::{self, Outcome};
-use crate::server::{Shared, events, guarded, json, refusal};
+use crate::server::{Shared, events, guarded, json, read_only, refusal};
 
 pub(in crate::server) const ROUTE: Entry = Entry {
     key: Key {
@@ -16,13 +16,17 @@ pub(in crate::server) const ROUTE: Entry = Entry {
     handle: post_ruling,
 };
 
-/// 裁定の受付（守りは `guarded`）。断りと 4xx と 5xx は、notes への追記の前なら何も書いていない。
+/// 裁定の受付（守りは `guarded`・読むだけの server は受付の前に `read_only` で断る）。
+/// 断りと 4xx と 5xx は、notes への追記の前なら何も書いていない。
 /// 200 でなければ `refusal_line` の 1 行を標準エラーに書いてから返す。
 fn post_ruling(req: &Request, shared: &Shared) -> Response {
     let body = match guarded(req, |t| wire::decode::<RulingRequest>(t).ok()) {
         Ok(body) => body,
         Err(response) => return response,
     };
+    if shared.read_only {
+        return read_only(ruling::PATH, &[&body.question]);
+    }
     let outcome = ruling::accept(&body, &shared.sources.ledger, &shared.writer, events::now());
     let response = match outcome {
         Outcome::Recorded(response) => json(200, wire::encode(&response)),

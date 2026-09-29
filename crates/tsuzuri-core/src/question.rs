@@ -41,13 +41,14 @@ pub struct OpenQuestion {
     pub notes: String,
 }
 
-/// 問いの一覧（口 GET /api/questions の出力）。
+/// 問いの一覧（口 GET /api/questions の出力・答えを受けるかは server が決めるので answerable は真）。
 pub fn list(ledger: &str) -> QuestionList {
     QuestionList {
         cards: match open_questions(ledger) {
             Reading::Known(qs) => Reading::Known(qs.into_iter().map(|q| q.card).collect()),
             Reading::Unknown => Reading::Unknown,
         },
+        answerable: true,
     }
 }
 
