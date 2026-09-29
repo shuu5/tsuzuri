@@ -1,6 +1,9 @@
 //! xtask: `cargo run -q -p xtask -- <task>` の形で起動する（alias の file は置かない）。
 //! check は workspace の build・歯の全部・clippy（host と面の wasm）・面の組み立てを順に撃ち、最初に落ちた段の rc を返す。
 //! surface-build は面の crate の dir で trunk を呼び、dist に index.html と wasm の file を出す（便 g-min）。
+//! accept は受入 12 条を全画面 × 2 幅 × 2 mode で測り report を書く（行 j-runner・入口は accept の module）。
+
+mod accept;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -41,8 +44,12 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("check") if args.len() == 1 => exit_code(check(&workspace_root())),
         Some("surface-build") if args.len() == 1 => exit_code(surface_build(&workspace_root())),
+        Some("accept") => exit_code(accept::run(&args[1..], &workspace_root())),
         _ => {
-            eprintln!("usage: cargo run -q -p xtask -- <check|surface-build>");
+            eprintln!(
+                "usage: cargo run -q -p xtask -- <check|surface-build>\n{}",
+                accept::USAGE
+            );
             ExitCode::from(2)
         }
     }
@@ -308,7 +315,7 @@ mod tests {
                 "web-sys",
             ],
         ),
-        ("xtask", &[]),
+        ("xtask", &["tsuzuri-boundary"]),
     ];
 
     /// 面の crate の直接依存の上限（規則の行 R-25 の値・要件 NFR3）。rules の file の行 R-25 の字と照らす。

@@ -2,7 +2,12 @@
 //! 1 つの画面を 1 つの幅と mode で測った事実の JSON の字を読み、12 条ごとの違反の数と report の行を返す。
 //! host の純粋な関数だけを持ち、file も browser も触らない（事実を測る式と runner は後の行 j-runner）。
 //! 判定の字数と閾値と origin の比べと語彙表の引きはこの側で持つ（歯が browser 無しで撃てる）。
+//! 行 j-runner で runner（全画面 × 2 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
+//! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
 
+use std::fmt::Write;
+
+use crate::stage::cdp::{Command, Session};
 use crate::stage::json::{items, member, unquote};
 
 /// 受入の 12 条（鍵と名）。規則の行 R-23 の順。
@@ -288,4 +293,183 @@ pub fn line(width: u32, mode: &str, url: &str, counts: &[usize; 12]) -> String {
     words.push("計".to_string());
     words.push(counts.iter().sum::<usize>().to_string());
     words.join(" ")
+}
+
+/// 測る幅（px）。
+pub const WIDTHS: [u32; 2] = [1280, 390];
+
+/// 測る mode（URL の mode= の値）。
+pub const MODES: [&str; 2] = ["beginner", "expert"];
+
+/// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
+/// project board の頁と地図の 6 つの面と account board の 3 つの tab（節点の頁は sweep が組ごとに足す）。
+pub const SCREENS: [&str; 12] = [
+    "?",
+    "?page=ask&",
+    "?page=gaps&",
+    "?page=map&view=compact&",
+    "?page=map&view=list&",
+    "?page=map&view=graph&",
+    "?page=map&view=table&",
+    "?page=map&view=design&",
+    "?page=map&view=ledger&",
+    "?board=account&tab=home&",
+    "?board=account&tab=session&",
+    "?board=account&tab=projects&",
+];
+
+/// 節点の頁に開く最初の節点を採る画面（地図の圧縮の面）。
+const COMPACT: &str = "?page=map&view=compact&";
+
+/// 狭い幅（この幅までは高さ 844 の mobile で撃つ・広い幅は高さ 800）。
+const NARROW: u32 = 390;
+
+/// 頁へ移った後に待つ間（面の wasm の起動と読みの応答を待つ）。
+const SETTLE_MS: u64 = 1000;
+
+/// runner の頁の口（CDP の Session が実装する・歯は偽の頁で撃つ）。
+pub trait Page {
+    /// 命令を撃ち、Call の歩の応答の字を返す。
+    fn run(&mut self, command: &Command) -> Result<Vec<String>, String>;
+    /// 測りの式を撃ち、事実の JSON の字を返す。
+    fn measure(&mut self) -> Result<String, String>;
+    /// 頁の今の URL。
+    fn url(&mut self) -> Result<String, String>;
+    /// 受けた event の字（受けた順）。
+    fn events(&self) -> &[String];
+}
+
+impl Page for Session {
+    fn run(&mut self, command: &Command) -> Result<Vec<String>, String> {
+        Session::run(self, command)
+    }
+
+    fn measure(&mut self) -> Result<String, String> {
+        Session::measure(self)
+    }
+
+    fn url(&mut self) -> Result<String, String> {
+        Session::url(self)
+    }
+
+    fn events(&self) -> &[String] {
+        Session::events(self)
+    }
+}
+
+/// event の字のうち page error の字（Runtime.exceptionThrown の exceptionDetails の text と、
+/// Log.entryAdded の entry の level が error の text）を受けた順に返す。
+pub fn errors(events: &[String]) -> Vec<String> {
+    events
+        .iter()
+        .filter_map(|event| {
+            let params = member(event, "params")?;
+            match unquote(member(event, "method")?)?.as_str() {
+                "Runtime.exceptionThrown" => {
+                    unquote(member(member(params, "exceptionDetails")?, "text")?)
+                }
+                "Log.entryAdded" => {
+                    let entry = member(params, "entry")?;
+                    if unquote(member(entry, "level")?)? != "error" {
+                        return None;
+                    }
+                    unquote(member(entry, "text")?)
+                }
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// 1 つの画面を 1 つの幅で測る。viewport と console を撃って頁へ移り、測りの式の事実に URL と、
+/// 移ってから測るまでの page error と、測りの返す switch_at の在りかごとに押した切り替え（押すたびに頁へ戻る）を埋める。
+pub fn case(page: &mut impl Page, url: &str, width: u32) -> Result<Facts, String> {
+    let narrow = width <= NARROW;
+    page.run(&Command::Viewport {
+        width,
+        height: if narrow { 844 } else { 800 },
+        scale: 1,
+        mobile: narrow,
+    })?;
+    page.run(&Command::Console)?;
+    let from = page.events().len();
+    open(page, url)?;
+    let text = page.measure()?;
+    let mut facts = facts(&text).map_err(|e| format!("{url}: {e}"))?;
+    facts.url = url.to_string();
+    facts.errors = errors(page.events().get(from..).unwrap_or_default());
+    let at = objects(&text, "switch_at", |o| {
+        let spot = |key| member(o, key)?.parse::<u32>().ok();
+        Some((unquote(member(o, "label")?)?, spot("x")?, spot("y")?))
+    })
+    .map_err(|e| format!("{url}: {e}"))?;
+    facts.switches.clear();
+    for (label, x, y) in at {
+        let before = page.url()?;
+        page.run(&Command::Click { x, y })?;
+        let after = page.url()?;
+        open(page, url)?;
+        facts.switches.push(Switch {
+            label,
+            before,
+            after,
+        });
+    }
+    Ok(facts)
+}
+
+/// 頁へ移り、面が描き終わるまで待つ。
+fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
+    page.run(&Command::Navigate {
+        url: url.to_string(),
+    })?;
+    page.run(&Command::Wait { ms: SETTLE_MS })?;
+    Ok(())
+}
+
+/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 12 の画面と、
+/// その組の地図の圧縮の面の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
+pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
+    let mut report = head();
+    report.push('\n');
+    let mut total = 0;
+    let mut measure = |page: &mut _, url: &str, width, mode| -> Result<Facts, String> {
+        let facts = case(page, url, width)?;
+        let counts = count(&facts, vocab);
+        total += counts.iter().sum::<usize>();
+        report.push_str(&line(width, mode, url, &counts));
+        report.push('\n');
+        Ok(facts)
+    };
+    for width in WIDTHS {
+        for mode in MODES {
+            let mut first = None;
+            for screen in SCREENS {
+                let facts = measure(page, &format!("{board}{screen}mode={mode}"), width, mode)?;
+                if screen == COMPACT {
+                    first = facts.nodes.into_iter().next().map(|n| n.id);
+                }
+            }
+            let id = first.ok_or_else(|| {
+                format!("{width} {mode}: 地図の圧縮の面に節点が無い（節点の頁を開けない）")
+            })?;
+            let url = format!("{board}?page=node&id={}&mode={mode}", encode(&id));
+            measure(page, &url, width, mode)?;
+        }
+    }
+    let _ = writeln!(report, "違反 計 {total}");
+    Ok((report, total))
+}
+
+/// query の値の字（英数と - . _ ~ のほかの byte を %XX にする・面の節点の頁への link と同じ）。
+fn encode(text: &str) -> String {
+    let mut out = String::new();
+    for b in text.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(char::from(b));
+        } else {
+            let _ = write!(out, "%{b:02X}");
+        }
+    }
+    out
 }

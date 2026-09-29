@@ -11,7 +11,9 @@ use std::process;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::stage::cdp::{self, Command, DOM_EXPRESSION, LOAD_EVENT, Session, Step};
+use tsuzuri_boundary::stage::cdp::{
+    self, Command, DOM_EXPRESSION, LOAD_EVENT, MEASURE_EXPRESSION, Session, Step,
+};
 use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::ws::{self, GUID, MAX_MESSAGE, Socket};
 
@@ -434,6 +436,7 @@ enum Mode {
     Refuse,
     Mute,
     NoLoad,
+    NoValue,
 }
 
 fn ok(id: &str) -> String {
@@ -479,6 +482,9 @@ fn chrome(listener: UnixListener, mode: Mode) -> JoinHandle<Vec<String>> {
                     peer.write(&frame(false, 0, b.as_bytes()));
                     peer.write(&frame(true, 0, c.as_bytes()));
                 }
+                "Runtime.evaluate" if mode == Mode::NoValue => peer.text(&format!(
+                    r#"{{"id":{id},"result":{{"result":{{"type":"undefined"}}}}}}"#
+                )),
                 "Runtime.evaluate" => peer.text(&format!(
                     r#"{{"id":{id},"result":{{"result":{{"type":"string","value":"{DOM}"}}}}}}"#
                 )),
@@ -982,7 +988,7 @@ fn stage_cdp_no_script_port() {
     assert_eq!(evaluates, [(Command::Dom, DOM_PARAMS.to_string())]);
     let print = ["print", "!"].concat();
     let println = ["println", "!"].concat();
-    for file in ["ws.rs", "json.rs", "cdp.rs"] {
+    for file in ["ws.rs", "json.rs", "cdp.rs", "measure.js"] {
         let text = src(file);
         for word in [
             "unsafe",
@@ -1011,8 +1017,42 @@ fn stage_cdp_no_script_port() {
     names.sort_unstable();
     assert_eq!(
         names,
-        ["attach", "close", "events", "message", "open", "run", "steps", "url"]
+        [
+            "attach", "close", "events", "measure", "message", "open", "run", "steps", "url"
+        ]
     );
+}
+
+#[test]
+fn stage_cdp_measure_one_fixed_expression() {
+    assert_eq!(MEASURE_EXPRESSION, src("measure.js"));
+    assert!(
+        MEASURE_EXPRESSION.starts_with("// 受入 12 条の測りの式"),
+        "測りの式の頭"
+    );
+    let params = format!(
+        r#"{{"expression":{},"returnByValue":true,"includeCommandLineAPI":true}}"#,
+        json::escape(MEASURE_EXPRESSION)
+    );
+    for (n, mode) in [(14, Mode::Plain), (15, Mode::NoValue)] {
+        let spot = Spot::new(n);
+        let fake = chrome(spot.listen(), mode);
+        let mut session =
+            Session::open(&spot.0, "/devtools/page/P1", Duration::from_secs(5)).expect("open");
+        let got = session.measure();
+        if mode == Mode::Plain {
+            assert_eq!(got.as_deref(), Ok(DOM));
+        } else {
+            let err = got.expect_err("字の値の無い応答は Err");
+            assert!(err.contains("Runtime.evaluate"), "{err}");
+        }
+        assert!(session.events().is_empty(), "{:?}", session.events());
+        assert_eq!(session.close(), Ok(()));
+        assert_eq!(
+            fake.join().expect("偽の Chrome"),
+            [cdp::message(1, "Runtime.evaluate", &params)]
+        );
+    }
 }
 
 #[test]
@@ -1046,7 +1086,7 @@ fn stage_cdp_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 16, "歯の数");
+    assert_eq!(names.len(), 17, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("stage_cdp_")
