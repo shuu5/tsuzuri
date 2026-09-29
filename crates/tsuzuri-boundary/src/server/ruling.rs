@@ -3,12 +3,15 @@
 //! 受付の順:
 //! 1. 逐語が空白だけなら断る（EmptyVerbatim）。
 //! 2. 台帳を bd の読み取りの口で読み直し（持ち回しの値を使わない）、open の問いでなければ断る
-//!    （UnknownQuestion）。走っている読みには合流しない（便 e-coalesce）。台帳が読めなければ 503。
+//!    （UnknownQuestion）。走っている読みには合流しない（便 e-coalesce）。読みが落ちれば `RETRY_STEP` を空けて
+//!    `READ_TRIES` 回まで撃ち直し（`reread`・行 e-ruling-retry）、どれも読めなければ 503。
 //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
 //! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
-//! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない）。
-//! 6. 席の target と state dir の両方が在るときだけ `deliver` で配達する（台帳を読み直し、
-//!    印の無い裁定が在れば器の配達の口を 1 度撃ち、rc 0 なら印を置く・結果で応答は変えない）。
+//! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない・書きは撃ち直さない）。
+//! 6. 席の target と state dir の両方が在るときだけ、別の thread で `deliver` を呼び、待たずに応答する
+//!    （台帳を読み直し、印の無い裁定が在れば器の配達の口を 1 度撃ち、rc 0 なら印を置く・結果で応答は変えない）。
+//!
+//! 口は 200 でない応答を返す前に `refusal_line` の 1 行を標準エラーに書く（逐語は書かない）。
 //!
 //! 取り消し（口 POST /api/revoke・`revoke`・行 e-revoke）も同じ順で受け、問いを閉じる代わりに開き直す。
 //! 取り消せるのは閉じた問いの効いている最後の裁定だけで、notes の末尾に取り消しの行を足してから開き直し、何も消さない。
@@ -44,7 +47,18 @@ pub const LINE_PREFIX: &str = "裁定 id = ";
 const ID_END: char = '・';
 
 /// bdw の 1 回の書きが返すまでの上限。越えれば止めて落ちた扱い。
-pub const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
+/// bdw が機械で共通の錠を待つ上限の既定 60 秒に書きそのものの 60 秒を足した長さ
+/// （bdw は錠を待ちきれなければ書かずに落ちるので、書きの途中で止めない・行 e-ruling-retry）。
+pub const WRITE_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// 書きの前の台帳の読みを撃つ回の上限（1 回の読みの上限は `BD_TIMEOUT`・行 e-ruling-retry）。
+pub const READ_TRIES: u32 = 3;
+
+/// 読みの撃ち直しの前に空ける時間。
+pub const RETRY_STEP: Duration = Duration::from_secs(1);
+
+/// 口が断った応答の log の行の頭（`refusal_line`）。
+pub const REFUSED_LOG: &str = "tz surface serve: 断った";
 
 /// 器の配達の口が返すまでの上限。越えれば止めて落ちた扱い。
 pub const DELIVER_TIMEOUT: Duration = Duration::from_secs(10);
@@ -92,7 +106,7 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
         return Outcome::Refused(Refusal::EmptyVerbatim);
     }
     // 走っている読みを分け合わず、新しい子 process で読み直す（便 e-coalesce）。
-    let Some(Reading::Known(questions)) = ledger.text_alone().map(|t| open_questions(&t)) else {
+    let Some(Reading::Known(questions)) = reread(ledger).map(|t| open_questions(&t)) else {
         return Outcome::LedgerUnknown;
     };
     let Some(question) = questions.into_iter().find(|q| q.card.id == req.question) else {
@@ -118,12 +132,13 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
     if !write(writer, &close) {
         return Outcome::CloseFailed(id);
     }
-    if let Some(d) = &writer.delivery {
-        let pending = Pending {
+    if let Some(d) = writer.delivery.clone() {
+        let (writer, ledger, ruling) = (writer.clone(), ledger.clone(), id.clone());
+        let pending = vec![Pending {
             question: req.question.clone(),
             ruling: id.clone(),
-        };
-        deliver(d, writer, ledger, &id, &[pending]);
+        }];
+        std::thread::spawn(move || deliver(&d, &writer, &ledger, &ruling, &pending));
     }
     Outcome::Recorded(RulingResponse {
         ruling: id,
@@ -154,7 +169,7 @@ pub fn revoke(req: &RevokeRequest, ledger: &Source, writer: &Writer, now: EpochS
         return Revoked::Refused(Refusal::EmptyVerbatim);
     }
     // 走っている読みを分け合わず、新しい子 process で読み直す（閉じた問いも読む）。
-    let Some(Reading::Known(items)) = ledger.text_alone().map(|t| parse_bd(&t)) else {
+    let Some(Reading::Known(items)) = reread(ledger).map(|t| parse_bd(&t)) else {
         return Revoked::LedgerUnknown;
     };
     let Some(item) = items
@@ -186,7 +201,7 @@ pub fn revoke(req: &RevokeRequest, ledger: &Source, writer: &Writer, now: EpochS
     reopen(req, ledger, writer, id, now, false)
 }
 
-/// 問いを開き直し、配達の先が在れば取り消しの行を配達する（`id` は取り消しの行の id）。
+/// 問いを開き直し、配達の先が在れば別の thread で取り消しの行を配達する（`id` は取り消しの行の id・待たない）。
 fn reopen(
     req: &RevokeRequest,
     ledger: &Source,
@@ -202,12 +217,13 @@ fn reopen(
     if !write(writer, &w) {
         return Revoked::ReopenFailed(id);
     }
-    if let Some(d) = &writer.delivery {
-        let pending = Pending {
+    if let Some(d) = writer.delivery.clone() {
+        let (writer, ledger, ruling) = (writer.clone(), ledger.clone(), id.clone());
+        let pending = vec![Pending {
             question: req.question.clone(),
             ruling: id.clone(),
-        };
-        deliver(d, writer, ledger, &id, &[pending]);
+        }];
+        std::thread::spawn(move || deliver(&d, &writer, &ledger, &ruling, &pending));
     }
     Revoked::Recorded(RevokeResponse {
         ruling: id,
@@ -219,6 +235,31 @@ fn reopen(
 /// bdw を 1 回撃つ（rc 0 で上限の内に返せば true）。
 fn write(writer: &Writer, w: &LedgerWrite) -> bool {
     capture(&writer.bdw, w.argv(), &writer.repo, WRITE_TIMEOUT).is_some()
+}
+
+/// 書きの前の台帳の読み（合流しない読みを撃ち、落ちれば `RETRY_STEP` を空けて `READ_TRIES` 回まで撃ち直し、
+/// 最初に読めた字を返す・どれも落ちれば None）。
+pub fn reread(ledger: &Source) -> Option<String> {
+    for n in 1..=READ_TRIES {
+        if let Some(text) = ledger.text_alone() {
+            return Some(text);
+        }
+        if n < READ_TRIES {
+            std::thread::sleep(RETRY_STEP);
+        }
+    }
+    None
+}
+
+/// 口が断った応答の log の 1 行（`<REFUSED_LOG>: <path> <状態の code> <本文の字>・問い <問いの id を , で並べた字>`）。
+/// 本文の字は前後の空白を除く。逐語は応答の本文に無いので、この行にも無い。
+pub fn refusal_line(path: &str, status: u16, body: &[u8], questions: &[&BeadId]) -> String {
+    let ids: Vec<&str> = questions.iter().map(|q| q.as_str()).collect();
+    format!(
+        "{REFUSED_LOG}: {path} {status} {}・問い {}",
+        String::from_utf8_lossy(body).trim(),
+        ids.join(",")
+    )
 }
 
 /// 器の配達の口の引数の列（program の名は含めない）。

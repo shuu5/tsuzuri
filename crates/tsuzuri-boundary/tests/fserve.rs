@@ -8,8 +8,10 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::process::{ChildStderr, Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::ruling::{self, Delivery, Writer};
@@ -376,6 +378,34 @@ fn digest(addr: SocketAddr, id: &str) -> String {
         .digest
 }
 
+/// 標準 error を行ごとに送る thread を立てる（tz が止まれば送り終える）。
+fn stderr_lines(mut err: BufReader<ChildStderr>) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut line = String::new();
+        while err.read_line(&mut line).is_ok_and(|n| n > 0) {
+            if tx.send(std::mem::take(&mut line)).is_err() {
+                break;
+            }
+        }
+    });
+    rx
+}
+
+/// `word` を含む行が来るまで 20 秒まで受け、受けた行を `out` に足す。
+fn wait_line(rx: &mpsc::Receiver<String>, word: &str, out: &mut String) {
+    let until = Instant::now() + Duration::from_secs(20);
+    while let Some(left) = until.checked_duration_since(Instant::now()) {
+        let Ok(line) = rx.recv_timeout(left) else {
+            return;
+        };
+        out.push_str(&line);
+        if line.contains(word) {
+            return;
+        }
+    }
+}
+
 #[test]
 fn fserve_batch_refusal_logs_once() {
     let place = Place::new(
@@ -408,6 +438,7 @@ fn fserve_batch_refusal_logs_once() {
         .and_then(|a| a.strip_suffix('/'))
         .and_then(|a| a.parse().ok())
         .unwrap_or_else(|| panic!("口の住所の行でない: {line}"));
+    let rx = stderr_lines(err);
     let reply = std::panic::catch_unwind(|| {
         let items = ["fx-b.2", "fx-b.3"]
             .map(|q| BatchItem {
@@ -423,13 +454,17 @@ fn fserve_batch_refusal_logs_once() {
         .expect("要求の電文");
         send(addr, "POST", batch::PATH, &body)
     });
+    let mut rest = String::new();
+    // 配達は応答の後の thread なので、受けない行が出るまで読んでから止める。
+    if reply.is_ok() {
+        wait_line(&rx, ruling::NOT_TAKEN, &mut rest);
+    }
     let _ = child.kill();
     let _ = child.wait();
+    rest.extend(rx.iter());
     let (status, body) = reply.expect("応答を読めない");
     assert_eq!(status, 200, "{body}");
     let got: BatchResponse = wire::decode(&body).expect("束の応答の形");
-    let mut rest = String::new();
-    err.read_to_string(&mut rest).expect("標準 error");
 
     assert_eq!(
         place.argvs("scribe2"),

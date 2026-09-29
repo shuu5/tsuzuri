@@ -10,7 +10,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::server::ledger::epoch_secs;
 use tsuzuri_boundary::server::{Config, Server, batch, policy, ruling};
@@ -149,6 +149,15 @@ impl Place {
 
     fn argvs(&self, name: &str) -> Vec<Vec<String>> {
         self.calls(name).into_iter().map(|(argv, _)| argv).collect()
+    }
+
+    /// 偽の program の `n` 回目の cwd の記録が空でなくなるまで 10 秒まで待つ（配達は応答の後の thread）。
+    fn wait(&self, name: &str, n: u32) {
+        let path = self.log.join(format!("{name}.{n}.cwd"));
+        let until = Instant::now() + Duration::from_secs(10);
+        while !fs::read(&path).is_ok_and(|b| !b.is_empty()) && Instant::now() < until {
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     fn config(&self, seat: Option<&str>, state_dir: bool) -> Config {
@@ -435,6 +444,7 @@ fn server_batch_writes_rows_in_order() {
         );
     }
 
+    place.wait("bdw", 6);
     let calls = place.calls("bdw");
     let [a2, c2] = row_argvs(
         Q2,
@@ -480,6 +490,7 @@ fn server_batch_own_verbatim_or_batch_verbatim() {
     let rulings = written(&got, &[Q2, Q3]);
     let [a2, _] = row_argvs(Q2, &rulings[0], &got.batch, "束の字");
     let [a3, _] = row_argvs(Q3, &rulings[1], &got.batch, "個別の字");
+    place.wait("bdw", 6);
     let argvs = place.argvs("bdw");
     assert_eq!(argvs.len(), 6);
     assert_eq!((&argvs[0], &argvs[2]), (&a2, &a3));
@@ -492,6 +503,7 @@ fn server_batch_own_verbatim_or_batch_verbatim() {
         "  ",
     ));
     let rulings = written(&got, &[Q2, Q3]);
+    place.wait("bdw", 6);
     let argvs = place.argvs("bdw");
     assert_eq!(
         argvs[0],
@@ -610,6 +622,7 @@ fn server_batch_id_counts_up_in_same_minute() {
         let addr = place.serve();
         let d2 = digest(addr, Q2);
         let first = batched(&post_batch(addr, vec![item(Q2, &d2, None)], "はい"));
+        place.wait("bdw", 3);
         // 1 つ目の束の追記を台帳に映す（偽の bd は書きを映さないので字を置き直す）。
         let appended = place.argvs("bdw")[0][2]
             .strip_prefix("--append-notes=")
@@ -704,6 +717,7 @@ fn server_batch_delivers_once_per_batch() {
         "はい",
     ));
     written(&got, &[Q2, Q3]);
+    place.wait("bdw", 6);
     let state = place.state.display().to_string();
     let want: Vec<Vec<String>> = vec![
         [
@@ -744,6 +758,7 @@ fn server_batch_delivers_once_per_batch() {
         vec![item(Q2, &d2, None), item(Q3, &d3, None)],
         "はい",
     ));
+    place.wait("scribe2", 1);
     assert_eq!(place.calls("scribe2").len(), 1);
     assert_eq!(place.calls("bdw").len(), 4, "受けなければ印を置かない");
 }
@@ -794,7 +809,7 @@ fn server_batch_guards_write_nothing() {
     }
     assert!(place.calls("bdw").is_empty(), "守りで偽の bdw を撃つ");
     assert!(place.calls("scribe2").is_empty(), "守りで偽の器を撃つ");
-    // 同じ Origin は通る。
+    // 同じ Origin は通る（束の配達の印を待ってから方針を送る）。
     for (path, body) in &bodies {
         let reply = send(
             addr,
@@ -804,6 +819,9 @@ fn server_batch_guards_write_nothing() {
             body,
         );
         assert_eq!(reply.status, 200, "{path}: {}", reply.body);
+        if *path == batch::PATH {
+            place.wait("bdw", 3);
+        }
     }
     // 束は追記と閉じるの 2 回と印の 1 回・方針は作る・足す・閉じるの 3 回。
     assert_eq!(place.calls("bdw").len(), 6);
@@ -833,6 +851,7 @@ fn server_batch_repo_and_state_bytes_unchanged() {
         vec![item(Q2, &d2, None), item(Q3, &d3, None)],
         "はい",
     ));
+    place.wait("bdw", 6);
     policied(&post_policy(addr, "all", "はい"));
     // 束 6 回（2 行の追記と閉じるの 4 回と印の 2 回）・方針 3 回（作る・足す・閉じる）。
     assert_eq!(place.calls("bdw").len(), 9);

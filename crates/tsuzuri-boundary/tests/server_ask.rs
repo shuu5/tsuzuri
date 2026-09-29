@@ -9,6 +9,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -135,6 +136,15 @@ impl Place {
                 )
             })
             .collect()
+    }
+
+    /// 偽の program の `n` 回目の cwd の記録が空でなくなるまで 10 秒まで待つ（配達は応答の後の thread）。
+    fn wait(&self, name: &str, n: u32) {
+        let path = self.log.join(format!("{name}.{n}.cwd"));
+        let until = Instant::now() + Duration::from_secs(10);
+        while !fs::read(&path).is_ok_and(|b| !b.is_empty()) && Instant::now() < until {
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     fn config(&self, seat: Option<&str>, state_dir: bool) -> Config {
@@ -383,6 +393,7 @@ fn server_ask_ruling_writes_twice() {
         got.recorded_at
     );
 
+    place.wait("bdw", 3);
     let calls = place.calls("bdw");
     assert_eq!(calls.len(), 3, "偽の bdw は 3 回だけ（追記・閉じる・印）: {calls:?}");
     let q = BeadId::new(WITH_LINES).expect("bead id");
@@ -531,6 +542,7 @@ fn server_ask_verbatim_is_one_line() {
         &digest,
         "一行目\n二行目 \\ 逆斜線\n",
     ));
+    place.wait("bdw", 3);
     let calls = place.calls("bdw");
     assert_eq!(calls.len(), 3);
     assert_eq!(
@@ -596,6 +608,7 @@ fn server_ask_guards_write_nothing() {
         &body,
     );
     recorded(&reply);
+    place.wait("bdw", 3);
     assert_eq!(place.calls("bdw").len(), 3);
 }
 
@@ -607,6 +620,7 @@ fn server_ask_delivers_only_with_seat_and_state_dir() {
     let from = now();
     let got = recorded(&post(addr, WITH_LINES, &digest, "はい"));
     let to = now();
+    place.wait("bdw", 3);
     let calls = place.calls("scribe2");
     assert_eq!(calls.len(), 1, "偽の器は 1 回: {calls:?}");
     let state = place.state.display().to_string();
@@ -688,12 +702,40 @@ fn spawn_tz(
     (child, addr, err)
 }
 
+/// 標準 error を行ごとに送る thread を立てる（tz が止まれば送り終える）。
+fn stderr_lines(mut err: BufReader<std::process::ChildStderr>) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut line = String::new();
+        while err.read_line(&mut line).is_ok_and(|n| n > 0) {
+            if tx.send(std::mem::take(&mut line)).is_err() {
+                break;
+            }
+        }
+    });
+    rx
+}
+
+/// `word` を含む行が来るまで 20 秒まで受け、受けた行を `out` に足す（配達は応答の後の thread）。
+fn wait_line(rx: &mpsc::Receiver<String>, word: &str, out: &mut String) {
+    let until = Instant::now() + Duration::from_secs(20);
+    while let Some(left) = until.checked_duration_since(Instant::now()) {
+        let Ok(line) = rx.recv_timeout(left) else {
+            return;
+        };
+        out.push_str(&line);
+        if line.contains(word) {
+            return;
+        }
+    }
+}
+
 #[test]
 fn server_ask_failed_delivery_stays_200_with_stderr_line() {
     let place = Place::new("deliver-fail");
     place.fail_at("scribe2", 1);
     let digest = card(&read_fixture(), WITH_LINES).digest;
-    let (mut child, addr, mut err) = spawn_tz(
+    let (mut child, addr, err) = spawn_tz(
         &place,
         &[
             format!("--bdw={}", place.root.join("bdw").display()),
@@ -703,14 +745,19 @@ fn server_ask_failed_delivery_stays_200_with_stderr_line() {
             format!("--scribe2={}", place.root.join("scribe2").display()),
         ],
     );
+    let rx = stderr_lines(err);
     let reply = std::panic::catch_unwind(|| post(addr, WITH_LINES, &digest, "はい"));
+    let mut rest = String::new();
+    // 配達は応答の後の thread なので、受けない行が出るまで読んでから止める。
+    if reply.is_ok() {
+        wait_line(&rx, ruling::NOT_TAKEN, &mut rest);
+    }
     let _ = child.kill();
     let _ = child.wait();
+    rest.extend(rx.iter());
     let reply = reply.expect("応答を読めない");
     let got = recorded(&reply);
     assert_eq!(place.calls("scribe2").len(), 1);
-    let mut rest = String::new();
-    err.read_to_string(&mut rest).expect("標準 error");
     let lines: Vec<&str> = rest
         .lines()
         .filter(|l| l.contains(got.ruling.as_str()))
@@ -747,6 +794,7 @@ fn server_ask_repo_and_state_bytes_unchanged() {
     );
     assert_eq!(post(addr, CLOSED, &digest, "はい").status, 404);
     recorded(&post(addr, WITH_LINES, &digest, "はい"));
+    place.wait("bdw", 3);
     assert_eq!(place.calls("bdw").len(), 3);
     assert_eq!(place.calls("scribe2").len(), 1);
     assert!(

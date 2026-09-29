@@ -9,7 +9,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::route::{Key, Match};
@@ -181,6 +181,15 @@ impl Place {
 
     fn argvs(&self, name: &str) -> Vec<Vec<String>> {
         self.calls(name).into_iter().map(|(argv, _)| argv).collect()
+    }
+
+    /// 偽の program の `n` 回目の cwd の記録が空でなくなるまで 10 秒まで待つ（配達は応答の後の thread）。
+    fn wait(&self, name: &str, n: u32) {
+        let path = self.log.join(format!("{name}.{n}.cwd"));
+        let until = Instant::now() + Duration::from_secs(10);
+        while !fs::read(&path).is_ok_and(|b| !b.is_empty()) && Instant::now() < until {
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     fn delivery(&self) -> Delivery {
@@ -587,6 +596,7 @@ fn rvk_writes_line_then_reopens() {
                 reopened_only: false,
             })
         );
+        place.wait("bdw", 3);
         let bdw = place.argvs("bdw");
         assert_eq!(bdw.len(), 3, "{bdw:?}");
         assert_eq!(
@@ -774,6 +784,7 @@ fn rvk_retry_reopens_only() {
     // 行を足さず開き直しだけを撃ち、配達して印を置く。
     let place = Place::new(tooth, "deliver", Some(&ledger));
     assert_eq!(place.revoke(&req, true, AT_RETRY), want);
+    place.wait("bdw", 2);
     let bdw = place.argvs("bdw");
     assert_eq!(bdw.len(), 2, "{bdw:?}");
     assert_eq!(bdw[0], reopen_argv("rv.1", id, old));
@@ -994,7 +1005,7 @@ fn rvk_ruling_rs_text() {
     assert_eq!(ruling_rs.matches("deliver_argv(").count(), 2);
     let revoke_body = body_of(&ruling_rs, "pub fn revoke(");
     for word in [
-        "text_alone()",
+        "reread(",
         "parse_bd(",
         "revocable(",
         "pending_reopen(",

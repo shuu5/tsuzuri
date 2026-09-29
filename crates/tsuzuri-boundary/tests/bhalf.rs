@@ -6,7 +6,8 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::server::batch;
 use tsuzuri_boundary::server::ledger::Source;
@@ -239,6 +240,17 @@ impl Place {
                     .collect()
             })
             .collect()
+    }
+
+    /// 偽の program の `n` 回目の argv の記録が 3 行になるまで 10 秒まで待つ（配達は受付の後の thread）。
+    fn wait(&self, name: &str, n: usize) {
+        let path = self.log.join(format!("{name}.{n}.args"));
+        let until = Instant::now() + Duration::from_secs(10);
+        while !fs::read_to_string(&path).is_ok_and(|t| t.lines().count() == 3)
+            && Instant::now() < until
+        {
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     fn source(&self) -> Source {
@@ -514,6 +526,7 @@ fn bhalf_resend_rest() {
             ],
         })
     );
+    place.wait("bdw", 10);
     let argvs = place.argvs("bdw");
     assert_eq!(argvs.len(), 10, "{argvs:?}");
     let [a2, c2] = row_argvs("fx-h.2", &r2, &b2);

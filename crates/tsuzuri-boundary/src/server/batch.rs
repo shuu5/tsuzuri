@@ -4,7 +4,7 @@
 //! 1. 行が無ければ断る（EmptyBatch）。
 //! 2. 同じ問いの id が 2 度在れば断る（400 duplicate）。
 //! 3. 行ごとの逐語を決める（行の逐語が空白だけでなければその字・なければ束の逐語）。空白だけの行が在れば断る（EmptyVerbatim）。
-//! 4. 台帳を合流しない読みで読み直す（読めなければ 503）。
+//! 4. 台帳を合流しない読みで読み直す（裁定の受付の `reread` で撃ち直し、どれも読めなければ 503）。
 //! 5. 行を要求の順に確かめ、最初に当たった行の理由で、何も書かずに断る
 //!    （open の問いでなければ UnknownQuestion・A-1 の印は A1InBatch・版が違えば StaleVersion）。
 //! 6. 束の id を発行する（`batch:<分>-<数>`・台帳の字に「束 = <id>・」が在れば数を増やす）。
@@ -12,9 +12,9 @@
 //! 8. 要求の順に、行ごとに notes の末尾へ 1 行を足し、問いを閉じる。落ちたらそこで止めて 502 で、
 //!    本文は要求の全部の行の結果を要求の順に持つ（2 回とも書き終えた行は Written・追記が落ちた行は Unwritten・
 //!    閉じる書きが落ちた行は Unclosed・落ちた行より後の行は撃たずに Unwritten・何も消さず配達も撃たない）。
-//! 9. 席の target と state dir の両方が在るときだけ、裁定の受付の `deliver` に束の id と行の順の裁定を
-//!    1 度だけ渡す（台帳を読み直し、印の無い裁定が在れば器の配達の口を束の id で 1 度撃ち、
-//!    rc 0 なら行の順に印を置く・結果で応答は変えない）。
+//! 9. 席の target と state dir の両方が在るときだけ、別の thread で裁定の受付の `deliver` に束の id と
+//!    行の順の裁定を 1 度だけ渡し、待たずに応答する（台帳を読み直し、印の無い裁定が在れば器の配達の口を
+//!    束の id で 1 度撃ち、rc 0 なら行の順に印を置く・結果で応答は変えない）。
 
 use std::collections::HashSet;
 
@@ -28,7 +28,9 @@ use tsuzuri_core::delivery::Pending;
 use tsuzuri_core::question::open_questions;
 
 use super::ledger::{Source, capture};
-use super::ruling::{LINE_PREFIX, WRITE_TIMEOUT, Writer, deliver, escape, minute, next_id};
+use super::ruling::{
+    LINE_PREFIX, WRITE_TIMEOUT, Writer, deliver, escape, minute, next_id, reread,
+};
 
 /// 口の path。
 pub const PATH: &str = "/api/batch";
@@ -83,7 +85,7 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
         verbatims.push(verbatim);
     }
     // 走っている読みを分け合わず、新しい子 process で読み直す（便 e-coalesce）。
-    let Some(text) = ledger.text_alone() else {
+    let Some(text) = reread(ledger) else {
         return Outcome::LedgerUnknown;
     };
     let Reading::Known(mut questions) = open_questions(&text) else {
@@ -150,7 +152,7 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
     if failed {
         return Outcome::WriteFailed(BatchResponse { batch, items });
     }
-    if let Some(d) = &writer.delivery {
+    if let Some(d) = writer.delivery.clone() {
         let pending: Vec<Pending> = rows
             .iter()
             .zip(ids)
@@ -159,7 +161,8 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
                 ruling,
             })
             .collect();
-        deliver(d, writer, ledger, &batch, &pending);
+        let (writer, ledger, batch) = (writer.clone(), ledger.clone(), batch.clone());
+        std::thread::spawn(move || deliver(&d, &writer, &ledger, &batch, &pending));
     }
     Outcome::Recorded(BatchResponse { batch, items })
 }
