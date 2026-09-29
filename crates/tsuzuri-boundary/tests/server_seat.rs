@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::acct::{HEARTBEAT_OFF, HEARTBEAT_ON};
-use tsuzuri_boundary::server::seat::{self, HOLD, Seat};
+use tsuzuri_boundary::server::seat::{self, HOLD, SLOW_HOLD, Seat};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
@@ -500,9 +500,10 @@ fn server_seat_holds_outputs_five_seconds() {
     thread::sleep(HOLD + Duration::from_millis(300));
     seat_card(addr);
     let calls = place.calls();
-    assert_eq!(calls.len(), 6, "5 秒の後の読み: {calls:?}");
-    for head in heads {
-        assert_eq!(count(&calls, head), 2, "{head}");
+    assert_eq!(calls.len(), 4, "5 秒の後の読みは tick status だけ撃ち直す: {calls:?}");
+    assert_eq!(count(&calls, heads[0]), 2, "{}", heads[0]);
+    for head in &heads[1..] {
+        assert_eq!(count(&calls, head), 1, "doctor と usage は {SLOW_HOLD:?} 持つ: {head}");
     }
 }
 
@@ -641,18 +642,18 @@ fn hbmark_card_follows_off_file() {
         Reading::Known(false),
         "停止の記録の後の読み"
     );
-    assert_eq!(place.calls().len(), 6, "{:?}", place.calls());
+    assert_eq!(place.calls().len(), 5, "tick status と doctor だけ: {:?}", place.calls());
     assert_eq!(seat_card(addr).heartbeat, Reading::Known(false));
-    assert_eq!(place.calls().len(), 6, "印が動かなければ持ち回す");
+    assert_eq!(place.calls().len(), 5, "印が動かなければ持ち回す");
     hbmark_switch(&place, false);
     assert_eq!(
         seat_card(addr).heartbeat,
         Reading::Known(true),
         "停止の記録を消した後の読み"
     );
-    assert_eq!(place.calls().len(), 9, "{:?}", place.calls());
-    for head in ["seat tick status ", "doctor ", "fleet usage --show "] {
-        assert_eq!(count(head), 3, "{head}");
+    assert_eq!(place.calls().len(), 7, "{:?}", place.calls());
+    for (head, n) in [("seat tick status ", 3), ("doctor ", 3), ("fleet usage --show ", 1)] {
+        assert_eq!(count(head), n, "{head}");
     }
 }
 
@@ -751,18 +752,18 @@ fn hbon_card_reads_tick_word() {
         Reading::Known(true),
         "明示の on の記録の後の読み"
     );
-    assert_eq!(place.calls().len(), 6, "{:?}", place.calls());
+    assert_eq!(place.calls().len(), 5, "tick status と doctor だけ: {:?}", place.calls());
     assert_eq!(seat_card(addr).heartbeat, Reading::Known(true));
-    assert_eq!(place.calls().len(), 6, "印が動かなければ持ち回す");
+    assert_eq!(place.calls().len(), 5, "印が動かなければ持ち回す");
     fs::remove_file(&on).expect("明示の on の記録を消す");
     assert_eq!(
         seat_card(addr).heartbeat,
         Reading::Known(true),
         "file の有無でなく行の字で読む"
     );
-    assert_eq!(place.calls().len(), 9, "{:?}", place.calls());
+    assert_eq!(place.calls().len(), 7, "{:?}", place.calls());
     fs::write(&on, "").expect("明示の on の記録を置き直す");
     hbon_tick_row(&place, "heartbeat=unreadable heartbeat_by=unreadable");
     assert_eq!(seat_card(addr).heartbeat, Reading::Unknown, "読めない字");
-    assert_eq!(place.calls().len(), 12, "{:?}", place.calls());
+    assert_eq!(place.calls().len(), 9, "{:?}", place.calls());
 }

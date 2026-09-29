@@ -74,6 +74,7 @@ use self::board::Sources;
 use self::design::Design;
 use self::events::Hub;
 use self::form::Form;
+use self::held::Held;
 use self::http::{Request, Response};
 use self::ledger::Source;
 use self::others::Others;
@@ -224,6 +225,7 @@ impl Server {
             config.state_dir.as_deref(),
             config.seat.as_deref(),
             &config.repo,
+            Held::new(),
         );
         let (design, runs) = (sources.design.clone(), sources.runs.clone());
         let seat_marks = seats.marks();

@@ -5,8 +5,9 @@
 //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでもその出力は読めない（None）。
 //! 読む file は `<state dir>/seat/<席の dir>/state.jsonl`・同じ dir の `tick-last`・`<state dir>/host.toml`・
 //! 群の記録（`<state dir の親>/scribe2-host/groups/<群の名>.account` と `history/<群の名>.account.*`）。
-//! 3 つの出力と file の読みは 5 秒のあいだ持ち回す（要求のたびに器を撃たない）。ただし変化の印の file
-//! （state.jsonl・tick-last・heartbeat-off・heartbeat-on）の更新時刻と長さが集めた時と違えば、5 秒の中でも集め直す。
+//! 3 つの出力は持ち回しの表（`Held`・行 e-held-seat・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
+//! 入力の印（`input_marks`）が撃つ前と同じで上限（`ceiling`）の内なら撃たない。tick status は `HOLD`（5 秒）、
+//! doctor と usage は `SLOW_HOLD`（30 秒）。file の読みは持ち回さず要求のたびに読む。
 //! heartbeat-off と heartbeat-on は読まず印にだけ使う（合図の値は tick status の席の行の欄 heartbeat= の字で読む）。
 //! 席の target か state dir が無ければ器を撃たず、読む欄が全部「まだ分からない」の card を返す。
 
@@ -14,14 +15,15 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::Duration;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_core::seat::{self as core, SeatTexts};
 
-use super::events::stamp;
+use super::held::Held;
 use super::ledger::capture;
+use super::runs::EVENTS_LOG;
 use crate::acct::{HEARTBEAT_OFF, HEARTBEAT_ON};
 
 /// 口の path。
@@ -39,12 +41,19 @@ pub const USAGE_ARGS: [&str; 3] = ["fleet", "usage", "--show"];
 /// 器の出力が返すまでの上限（要件 NFR2 の上限）。越えれば止めて読めない。
 pub const SCRIBE2_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// 出力と file の読みを持ち回す長さ。
+/// 合図の健康の出力を持ち回す長さ。
 pub const HOLD: Duration = Duration::from_secs(5);
 
-/// 席の dir の file（状態の記録と合図の最後の判定）。
+/// doctor と残量の出力を持ち回す長さ（入力の印が動けば、この中でも撃ち直す）。
+pub const SLOW_HOLD: Duration = Duration::from_secs(30);
+
+/// 席の dir の file（状態の記録と合図の最後の判定と器の account の記録）。
 pub const STATE_LOG: &str = "state.jsonl";
 pub const TICK_LAST: &str = "tick-last";
+pub const ACCOUNT: &str = "account";
+
+/// 群の記録の dir の下で器が読む file の名の終わり（lock と .judged は器が書くが読まない）。
+pub const GROUP_READ_SUFFIXES: [&str; 2] = [".account", ".refused"];
 
 /// 群の宣言の file（state dir の下）。
 pub const HOST_TOML: &str = "host.toml";
@@ -133,16 +142,26 @@ impl Seat {
         history.sort();
         std::iter::once(dir.join(current))
             .chain(history)
-            .filter_map(|p| read(&p))
+            .filter_map(|p| read_file(&p))
             .collect()
     }
 
     /// 3 つの出力を並べて撃ち（待ちは 1 本分の上限まで）、file を読む。
     pub fn gather(&self) -> SeatTexts {
+        self.gather_with(|head| self.shoot(head))
+    }
+
+    /// `gather` と同じ組みで、3 つの出力を持ち回しの表を通して読む（印が動くか上限を過ぎた出力だけ撃ち直す）。
+    pub fn gather_held(&self, held: &Held) -> SeatTexts {
+        self.gather_with(|head| read_held(held, self, head))
+    }
+
+    /// 3 つの出力を `read`（器の頭 → 出力の字）で並べて読み、file を読む。
+    fn gather_with(&self, read: impl Fn(&[&str]) -> Option<String> + Sync) -> SeatTexts {
         let (tick_status, doctor, usage) = thread::scope(|s| {
-            let tick = s.spawn(|| self.shoot(&TICK_ARGS));
-            let doctor = s.spawn(|| self.shoot(&DOCTOR_ARGS));
-            let usage = self.shoot(&USAGE_ARGS);
+            let tick = s.spawn(|| read(&TICK_ARGS));
+            let doctor = s.spawn(|| read(&DOCTOR_ARGS));
+            let usage = read(&USAGE_ARGS);
             (
                 tick.join().ok().flatten(),
                 doctor.join().ok().flatten(),
@@ -150,7 +169,7 @@ impl Seat {
             )
         });
         let dir = self.seat_dir();
-        let host_toml = read(&self.state_dir.join(HOST_TOML));
+        let host_toml = read_file(&self.state_dir.join(HOST_TOML));
         let group = anchor(&self.target, doctor.as_deref())
             .zip(host_toml.as_deref())
             .and_then(|(a, h)| core::group_name(h, &a));
@@ -158,16 +177,77 @@ impl Seat {
             tick_status,
             doctor,
             usage,
-            state_log: dir.as_ref().and_then(|d| read(&d.join(STATE_LOG))),
-            tick_last: dir.as_ref().and_then(|d| read(&d.join(TICK_LAST))),
+            state_log: dir.as_ref().and_then(|d| read_file(&d.join(STATE_LOG))),
+            tick_last: dir.as_ref().and_then(|d| read_file(&d.join(TICK_LAST))),
             host_toml,
             records: group.map(|g| self.records(&g)).unwrap_or_default(),
         }
     }
 }
 
-fn read(path: &Path) -> Option<String> {
+fn read_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
+}
+
+/// 器の頭ごとの持ち回しの上限（tick status は `HOLD`・doctor と残量は `SLOW_HOLD`・知らない頭は `HOLD`）。
+pub fn ceiling(head: &[&str]) -> Duration {
+    if head == DOCTOR_ARGS || head == USAGE_ARGS {
+        SLOW_HOLD
+    } else {
+        HOLD
+    }
+}
+
+/// 器の頭ごとの入力の印の file（器の CLI が読む file だけ・知らない頭は空）。
+/// 残量は host.toml と fleet/events.jsonl。doctor は席の dir の heartbeat-off・heartbeat-on・account と、群の記録の dir の
+/// .account と .refused。tick status は doctor の印に tick-last を足す（tick-last は合図の時計が 15 秒ごとに書き替えるので
+/// doctor には入れない）。
+pub fn input_marks(seat: &Seat, head: &[&str]) -> Vec<PathBuf> {
+    if head == USAGE_ARGS {
+        let events = EVENTS_LOG
+            .iter()
+            .fold(seat.state_dir.clone(), |p, s| p.join(s));
+        return vec![seat.state_dir.join(HOST_TOML), events];
+    }
+    let tick = head == TICK_ARGS;
+    if !tick && head != DOCTOR_ARGS {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    if let Some(dir) = seat.seat_dir() {
+        if tick {
+            out.push(dir.join(TICK_LAST));
+        }
+        out.extend([HEARTBEAT_OFF, HEARTBEAT_ON, ACCOUNT].map(|n| dir.join(n)));
+    }
+    if let Some(groups) = seat.groups_dir() {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(groups)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .filter(|e| {
+                        e.file_name()
+                            .to_str()
+                            .is_some_and(|n| GROUP_READ_SUFFIXES.iter().any(|s| n.ends_with(s)))
+                    })
+                    .map(|e| e.path())
+                    .collect()
+            })
+            .unwrap_or_default();
+        files.sort();
+        out.extend(files);
+    }
+    out
+}
+
+/// 器の頭の出力を持ち回しの表を通して読む（鍵は program と引数の列と cwd・同じ表を分け合う席は state dir が鍵に入る）。
+pub fn read_held(held: &Held, seat: &Seat, head: &[&str]) -> Option<String> {
+    let mut key = vec![seat.program.clone()];
+    key.extend(seat.argv(head));
+    key.push(seat.cwd.clone().into_os_string());
+    held.get(&key, &input_marks(seat, head), ceiling(head), || {
+        seat.shoot(head)
+    })
 }
 
 /// 席の anchor（doctor の席の行から）。
@@ -181,17 +261,16 @@ pub fn card(target: &str, texts: &SeatTexts, now: EpochSecs) -> SeatCard {
     core::card(target, anchor.as_deref(), texts, now)
 }
 
-/// 変化の印の file ごとの更新時刻と長さ（無ければ None）。
-type Stamps = Vec<Option<(SystemTime, u64)>>;
-
-/// 席の読み（出所が無ければ器を撃たない）と、持ち回しの字。
+/// 席の読み（出所が無ければ器を撃たない）と、持ち回しの表。
 #[derive(Debug)]
 pub struct Seats {
     /// 席の target（引数 --seat・省けば空の字）。
     target: String,
     seat: Option<Seat>,
-    /// 集めた時刻・集める前に取った印・集めた字。
-    held: Mutex<Option<(Instant, Stamps, SeatTexts)>>,
+    /// 出力の持ち回しの表（server が 1 つ作って渡す）。
+    held: Held,
+    /// 集めるあいだ次の要求を待たせる錠（同じ出力を要求ごとに二重に撃たない）。
+    gate: Mutex<()>,
 }
 
 impl Seats {
@@ -201,6 +280,7 @@ impl Seats {
         state_dir: Option<&Path>,
         target: Option<&str>,
         cwd: &Path,
+        held: Held,
     ) -> Seats {
         let seat = target.zip(state_dir).map(|(target, state_dir)| Seat {
             program: program.clone(),
@@ -211,7 +291,8 @@ impl Seats {
         Seats {
             target: target.unwrap_or_default().to_string(),
             seat,
-            held: Mutex::new(None),
+            held,
+            gate: Mutex::new(()),
         }
     }
 
@@ -232,19 +313,10 @@ impl Seats {
         Some(card(&seat.target, &self.texts(seat), now))
     }
 
-    /// 持ち回しの字（`HOLD` を過ぎたか印が動いていれば集め直す・集めるあいだは次の要求を待たせる）。
-    /// 印は集める前に取るので、集める途中の変化は次の読みで集め直す。
+    /// 集めた字（3 つの出力は表を通す・集めるあいだは次の要求を待たせる）。
+    /// 印は撃つ前に取るので、撃つ途中の変化は次の読みで撃ち直す。
     fn texts(&self, seat: &Seat) -> SeatTexts {
-        let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
-        let stamps: Stamps = seat.marks().iter().map(|p| stamp(p)).collect();
-        if let Some((at, was, texts)) = held.as_ref()
-            && at.elapsed() < HOLD
-            && *was == stamps
-        {
-            return texts.clone();
-        }
-        let texts = seat.gather();
-        *held = Some((Instant::now(), stamps, texts.clone()));
-        texts
+        let _gate = self.gate.lock().unwrap_or_else(|e| e.into_inner());
+        seat.gather_held(&self.held)
     }
 }

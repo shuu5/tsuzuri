@@ -11,6 +11,9 @@ use std::time::Duration;
 
 use tsuzuri_boundary::server::design::{DESIGN_HOLD, Design};
 use tsuzuri_boundary::server::held::{FAILED_HOLD, Held};
+use tsuzuri_boundary::server::seat::{
+    DOCTOR_ARGS, HOLD, Seat, SLOW_HOLD, TICK_ARGS, USAGE_ARGS, ceiling, input_marks, read_held,
+};
 
 /// 書いてから名を移す（撃たれている script を書きかけで見せない）。
 fn put(path: &Path, text: &str, mode: u32) {
@@ -234,4 +237,91 @@ fn eheld_design_rulings_marks_follow_worktree_git() {
         place.read_all(&design);
         assert_eq!(place.calls().len(), before + 1, "{}", path.display());
     }
+}
+
+const TARGET: &str = "proj-1:0.1";
+
+/// 席の読みの出所（偽の器・state dir `name`・席の dir を作る）。
+fn seat_in(place: &Place, name: &str) -> Seat {
+    let state_dir = place.root.join(name).join("state");
+    let seat = Seat {
+        program: place.folio().into(),
+        state_dir,
+        target: TARGET.to_string(),
+        cwd: place.root.clone(),
+    };
+    fs::create_dir_all(seat.seat_dir().expect("席の dir")).expect("席の dir を作る");
+    seat
+}
+
+#[test]
+fn eheld_vessel_reads_per_state_dir() {
+    let place = Place::new("vessel-per-dir");
+    let (a, b) = (seat_in(&place, "a"), seat_in(&place, "b"));
+    let held = Held::new();
+    let read_four = || {
+        for seat in [&a, &b] {
+            for head in [&TICK_ARGS[..], &DOCTOR_ARGS[..]] {
+                assert_eq!(read_held(&held, seat, head).as_deref(), Some("ok\n"));
+            }
+        }
+    };
+    read_four();
+    assert_eq!(place.calls().len(), 4, "{:?}", place.calls());
+    read_four();
+    assert_eq!(place.calls().len(), 4, "{:?}", place.calls());
+    // A の席の dir に停止の記録を置くと、A の 2 つだけ撃ち直す。
+    fs::write(a.seat_dir().expect("席の dir").join("heartbeat-off"), "").expect("停止の記録");
+    read_four();
+    let calls = place.calls();
+    assert_eq!(calls.len(), 6, "{calls:?}");
+    let a_dir = a.state_dir.display().to_string();
+    for call in &calls[4..] {
+        assert!(call.ends_with(&format!("--state-dir {a_dir}")), "{call}");
+    }
+}
+
+#[test]
+fn eheld_vessel_marks_by_head() {
+    assert_eq!(HOLD, Duration::from_secs(5));
+    assert_eq!(SLOW_HOLD, Duration::from_secs(30));
+    assert_eq!(ceiling(&TICK_ARGS), HOLD);
+    assert_eq!(ceiling(&DOCTOR_ARGS), SLOW_HOLD);
+    assert_eq!(ceiling(&USAGE_ARGS), SLOW_HOLD);
+
+    let place = Place::new("vessel-marks");
+    let seat = seat_in(&place, "m");
+    let groups = seat.groups_dir().expect("群の記録の dir");
+    fs::create_dir_all(&groups).expect("群の記録の dir を作る");
+    for name in ["g-1.account", "g-1.refused", "g-1.judged", "g-1.lock", "lock"] {
+        fs::write(groups.join(name), "x").expect("群の記録");
+    }
+    let dir = seat.seat_dir().expect("席の dir");
+
+    assert_eq!(
+        input_marks(&seat, &USAGE_ARGS),
+        [
+            seat.state_dir.join("host.toml"),
+            seat.state_dir.join("fleet/events.jsonl")
+        ]
+    );
+    let doctor = input_marks(&seat, &DOCTOR_ARGS);
+    let tick = input_marks(&seat, &TICK_ARGS);
+    for (name, marks) in [("doctor", &doctor), ("tick", &tick)] {
+        for want in [
+            dir.join("heartbeat-off"),
+            dir.join("heartbeat-on"),
+            dir.join("account"),
+            groups.join("g-1.account"),
+            groups.join("g-1.refused"),
+        ] {
+            assert!(marks.contains(&want), "{name}: {want:?} {marks:?}");
+        }
+        for not in [groups.join("g-1.judged"), groups.join("g-1.lock"), groups.join("lock")] {
+            assert!(!marks.contains(&not), "{name}: {not:?} {marks:?}");
+        }
+    }
+    assert!(!doctor.contains(&dir.join("tick-last")), "{doctor:?}");
+    assert!(tick.contains(&dir.join("tick-last")), "{tick:?}");
+    assert!(input_marks(&seat, &["other"]).is_empty());
 }
