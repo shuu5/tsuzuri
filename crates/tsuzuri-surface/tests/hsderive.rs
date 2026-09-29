@@ -43,7 +43,11 @@ const CONSTS: &[Consts] = &[
 #[test]
 fn hsderive_consts_match_note() {
     let want: &[Consts] = &[
-        ("ask", &["/api/questions", "/api/ruling"], &["ask:around:{}"]),
+        (
+            "ask",
+            &["/api/questions", "/api/ruling", "/api/unreceived"],
+            &["ask:around:{}"],
+        ),
         ("askpage", &[], &["ask:hist"]),
         ("batch", &["/api/batch"], &[]),
         ("gaps", &[], &["gaps:{}"]),
@@ -64,7 +68,10 @@ fn hsderive_consts_match_note() {
         ("timeline", &[], &[]),
     ];
     assert_eq!(CONSTS, want);
-    assert_eq!(ask::PATHS, [ask::PATH, ask::RULING_PATH]);
+    assert_eq!(
+        ask::PATHS,
+        [ask::PATH, ask::RULING_PATH, ask::UNRECEIVED_PATH]
+    );
     assert_eq!(
         ledger::PATHS,
         [ledger::PATH, ledger::METRICS_PATH, ledger::UNREF_PATH]

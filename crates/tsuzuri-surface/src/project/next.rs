@@ -385,7 +385,8 @@ mod dom {
                 next_view(next, title, questions, mode)
             }
         };
-        section(BLOCK, ().into_any(), body.into_any())
+        let content = view! { {ask::late_view()}{body} }.into_any();
+        section(BLOCK, ().into_any(), content)
     }
 
     fn next_view(

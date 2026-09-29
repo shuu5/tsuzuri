@@ -40,8 +40,20 @@ pub const PATH: &str = "/api/questions";
 /// 答えを送る口（POST・契約の型の RulingRequest・server の便 e-ask）。
 pub const RULING_PATH: &str = "/api/ruling";
 
+/// 席に届いていない裁定の口（契約の型の board の Reading と surface の RulingId・server の行 f-undelivered）。
+pub const UNRECEIVED_PATH: &str = "/api/unreceived";
+
 /// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
-pub const PATHS: &[&str] = &[PATH, RULING_PATH];
+pub const PATHS: &[&str] = &[PATH, RULING_PATH, UNRECEIVED_PATH];
+
+/// 裁定の id の分の終わりから、席の受けを待つ秒（これより早く届いていないと出さない・要件 FR9）。
+pub const RECEIPT_WAIT_S: EpochSecs = 120;
+
+/// 届いていない裁定の 1 行の頭。
+pub const UNRECEIVED_HEAD: &str = "席に届いていない";
+
+/// 届いていない裁定の口が読めないときの 1 行（前の版の server は口を持たない）。
+pub const UNRECEIVED_UNKNOWN: &str = "席に届いたかが読めない（届いていない裁定の口が読めない）";
 
 /// この file の畳める段の開き閉じの鍵の形（`{}` は問いの id・行 hs-derived）。
 pub const FOLDS: &[&str] = &["ask:around:{}"];
@@ -562,9 +574,80 @@ pub fn target_number(cards: &[Card], id: &str) -> Option<usize> {
     cards.iter().find(|c| c.id.as_str() == id).map(|c| c.number)
 }
 
+/// 裁定の id の分の終わりの epoch 秒（最後のコロンの後の `YYYYMMDDTHHMMZ-<数>` の分の始まりに 60 秒を足す・
+/// 読めない id と 1970 年より前の分は None）。
+pub fn minute_end(id: &str) -> Option<EpochSecs> {
+    let (_, tail) = id.rsplit_once(':')?;
+    let bytes = tail.as_bytes();
+    let (stamp, count) = (bytes.get(..14)?, bytes.get(14..)?.strip_prefix(b"-")?);
+    if count.is_empty() || !count.iter().all(u8::is_ascii_digit) || stamp[8] != b'T' || stamp[13] != b'Z' {
+        return None;
+    }
+    let digits = |s: &[u8]| -> Option<u64> {
+        s.iter()
+            .all(u8::is_ascii_digit)
+            .then(|| s.iter().fold(0, |n, d| n * 10 + u64::from(d - b'0')))
+    };
+    let (year, month, day) = (digits(&stamp[..4])?, digits(&stamp[4..6])?, digits(&stamp[6..8])?);
+    let (hour, minute) = (digits(&stamp[9..11])?, digits(&stamp[11..13])?);
+    if year < 1970 || !(1..=12).contains(&month) || hour > 23 || minute > 59 {
+        return None;
+    }
+    let days_in = |y: u64, m: u64| match m {
+        2 if y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400)) => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    if !(1..=days_in(year, month)).contains(&day) {
+        return None;
+    }
+    // 1970-01-01 からの日数（年と月の頭までの日数に日を足す）。
+    let years: u64 = (1970..year).map(|y| (1..=12).map(|m| days_in(y, m)).sum::<u64>()).sum();
+    let months: u64 = (1..month).map(|m| days_in(year, m)).sum();
+    Some((years + months + day - 1) * 86_400 + hour * 3_600 + minute * 60 + 60)
+}
+
+/// 分の終わりから `RECEIPT_WAIT_S` 秒経った裁定の id と、分の読めない id（待たずに出す・条 P-7）を元の順に返す。
+pub fn late(ids: &[RulingId], now: EpochSecs) -> Vec<RulingId> {
+    ids.iter()
+        .filter(|id| minute_end(id.as_str()).is_none_or(|end| now >= end + RECEIPT_WAIT_S))
+        .cloned()
+        .collect()
+}
+
+/// 口の本文を電文に読む（まだ読んでいなければ None・口が読めない・電文が読めないは Unknown）。
+pub fn unreceived(fetched: &Fetched) -> Option<Reading<Vec<RulingId>>> {
+    match fetched {
+        Fetched::NotRead => None,
+        Fetched::Failed => Some(Reading::Unknown),
+        Fetched::Body(text) => Some(wire::decode(text).unwrap_or(Reading::Unknown)),
+    }
+}
+
+/// 届いていない裁定の 1 行（まだ読んでいない・届いていないものが無い・どの裁定もまだ待つ間なら None・
+/// 読めなければ `UNRECEIVED_UNKNOWN`・逐語は出さず id だけを並べる）。
+pub fn unreceived_line(fetched: &Fetched, now: EpochSecs) -> Option<String> {
+    let ids = match unreceived(fetched)? {
+        Reading::Unknown => return Some(UNRECEIVED_UNKNOWN.to_string()),
+        Reading::Known(ids) => late(&ids, now),
+    };
+    if ids.is_empty() {
+        return None;
+    }
+    let listed: Vec<&str> = ids.iter().map(RulingId::as_str).collect();
+    Some(format!("{UNRECEIVED_HEAD} {} 件: {}", ids.len(), listed.join("・")))
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     dom::view()
+}
+
+/// 届いていない裁定の 1 行（一覧の上と次の一手の箱の上に出す・wasm の target のときだけ）。
+#[cfg(target_arch = "wasm32")]
+pub fn late_view() -> leptos::prelude::AnyView {
+    dom::late_view()
 }
 
 /// 問いの card の DOM（wasm の target のときだけ）。
@@ -578,7 +661,7 @@ mod dom {
 
     use super::{
         BLOCK, CHAT_KEY, Card, KeyAction, LAYOUT, OTHER_UNKNOWN, Outcome, PATH, Part, RULING_PATH,
-        Slot, age, anchor, answerable, can_send, card_class, card_key, focus, key_action, listed,
+        Slot, UNRECEIVED_PATH, age, anchor, answerable, can_send, card_class, card_key, focus, key_action, listed,
         node_cards, outcome, outline, posted_tip, request_body, send_text, target_number, total,
         unknown_projects,
     };
@@ -709,7 +792,20 @@ mod dom {
                 .into_any()
             }
         };
-        section(BLOCK, extra.into_any(), view! { {list}{unknown} }.into_any())
+        let content = view! { {late_view()}{list}{unknown} }.into_any();
+        section(BLOCK, extra.into_any(), content)
+    }
+
+    /// 席に届いていない裁定の 1 行（口を読み、1 秒の時計で書き直す・無いときは何も出さない・行 f-undelivered）。
+    pub fn late_view() -> AnyView {
+        let fetched = crate::net::read(UNRECEIVED_PATH);
+        let clock = crate::net::ticker();
+        let line = move || {
+            fetched
+                .with(|f| super::unreceived_line(f, clock.get()))
+                .map(|text| view! { <div class="small" role="status">{text}</div> })
+        };
+        view! { {line} }.into_any()
     }
 
     fn card_view(
