@@ -443,14 +443,14 @@ fn server_read_folio_argv_and_cwd() {
     for (_, cwd) in &calls {
         assert_eq!(cwd, &repo, "cwd は repo の置き場");
     }
-    // 口は要求のたびに組み直す（設計の道具を撃ち直す）。
+    // 設計文書の dir の印が同じなら、2 回目の要求は設計の道具を撃ち直さず前の字を返す（行 e-held-design）。
     graph_doc(addr);
-    assert_eq!(place.folio_calls().len(), 6);
+    assert_eq!(place.folio_calls().len(), 3);
     // 板と指標と次の一手は設計の索引も要約も使わない。
     pipeline(addr);
     metrics(addr);
     next(addr);
-    assert_eq!(place.folio_calls().len(), 6);
+    assert_eq!(place.folio_calls().len(), 3);
     assert_eq!(FOLIO, "folio", "program の名の既定");
 }
 
