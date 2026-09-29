@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::account::home::Cells;
+use tsuzuri_surface::account::home::{Cells, MvKind};
 use tsuzuri_surface::account::session::{Head, Sort};
 use tsuzuri_surface::account::{self, home, session};
 use tsuzuri_surface::project::{Body, NOT_READ};
@@ -140,7 +140,12 @@ fn aord_blocks_follow() {
     let groups = filled(h.groups);
     assert_eq!(groups[0].candidates, vec!["acct-2", "acct-9", "acct-10"]);
     let moves = filled(h.moves);
-    assert_eq!(moves.shown[0].from, "acct-3");
+    let moved = moves
+        .shown
+        .iter()
+        .find(|m| m.kind == MvKind::Moved)
+        .expect("移動の記録の行");
+    assert_eq!(moved.from, "acct-3");
 
     let mut s = d.clone();
     for (i, name) in ["acct-10", "acct-2", "acct-1"].into_iter().enumerate() {

@@ -3,11 +3,13 @@
 //! acct.js の nextAll・meter。並べと字と class は純粋な関数（`content`）で組み、DOM は wasm の target のときだけ組む。
 //! 群の列・口座の列・移動の列は電文で別々に Unknown になりうるので、その段だけ測れていないにし、ほかの段は出す（要件 NFR2）。
 //! 口座 × 窓は見本の 7 列（名・占有・3 つの窓・7 日の線・測った時刻）を出す（便 h-acct-spark・線の字は面が組み、電文は点だけ）。
-//! 逼迫の印（見本の上限の字と強調の class）・候補ごとの門で落ちた理由は出さない（未決・R-22）。
+//! 閾値の印と逼迫の強調と断りの理由と移動の段の知らせの行は電文の caps と notices から描き、面は使った割合と閾値を比べない（便 h-thr-home・R-22）。
+//! 候補ごとの門で落ちた理由は器が出さないので、群の断りの理由の語だけを出す。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{
-    AccountDoc, AccountRow, GroupCard, MoveRow, ProjectRow, SPARK_SPAN_S, SessionLine, Spark,
+    AccountDoc, AccountRow, GroupCard, GroupNotice, MoveRow, ProjectRow, SPARK_SPAN_S,
+    SessionLine, Spark, WindowCap,
 };
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::{QuotaUsed, SeatState};
@@ -177,7 +179,7 @@ pub fn next_all(doc: &AccountDoc) -> Vec<NxRow> {
     rows.into_iter().map(|p| nx_row(p, doc.at)).collect()
 }
 
-/// 群の枠の窓の 1 つ（見本の `.pw`・逼迫の印は持たない）。
+/// 群の枠の窓の 1 つ（見本の `.pw`）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pw {
     /// 窓の名（語の鍵）。
@@ -186,6 +188,49 @@ pub struct Pw {
     pub short: String,
     /// 使った割合の字（`42%`・読めなければ「―」）。
     pub used: String,
+    /// 閾値の字（`/ 85`・閾値が無いか読めなければ `/ ?`）。
+    pub cap: String,
+    /// 群の最も新しい知らせの組にこの窓の逼迫の知らせが在るか（強調の class）。
+    pub hot: bool,
+}
+
+/// 窓の閾値（caps の中で窓の名が等しい最初の行の値・行が無いか読めなければ None）。
+pub fn cap_of(caps: &[WindowCap], window: &str) -> Option<u64> {
+    let row = caps.iter().find(|c| c.window == window)?;
+    match &row.cap {
+        Reading::Known(v) => Some(*v),
+        Reading::Unknown => None,
+    }
+}
+
+/// 電文の窓ごとの閾値（`WINDOWS` の順）。
+pub fn caps(doc: &AccountDoc) -> Vec<Option<u64>> {
+    WINDOWS.into_iter().map(|w| cap_of(&doc.caps, w)).collect()
+}
+
+/// 知らせの行の時刻。
+pub fn notice_at(n: &GroupNotice) -> EpochSecs {
+    match n {
+        GroupNotice::Pressure { at, .. } | GroupNotice::Refused { at, .. } => *at,
+    }
+}
+
+fn notice_group(n: &GroupNotice) -> &str {
+    match n {
+        GroupNotice::Pressure { group, .. } | GroupNotice::Refused { group, .. } => group,
+    }
+}
+
+/// 群の最も新しい知らせの組（群の名が同じ行のうち at がその最大に等しい行・電文の順・読めないか行が無ければ空）。
+pub fn latest_notices<'a>(notices: &'a Reading<Vec<GroupNotice>>, group: &str) -> Vec<&'a GroupNotice> {
+    let Reading::Known(all) = notices else {
+        return Vec::new();
+    };
+    let mine: Vec<&GroupNotice> = all.iter().filter(|n| notice_group(n) == group).collect();
+    let Some(last) = mine.iter().map(|n| notice_at(n)).max() else {
+        return Vec::new();
+    };
+    mine.into_iter().filter(|n| notice_at(n) == last).collect()
 }
 
 /// 群の project の 1 つ（名と一致の印）。
@@ -229,6 +274,8 @@ pub struct GroupView {
     pub next_account: Option<String>,
     /// 次の移り先の字（無しは語の鍵 no_target の字）。
     pub next: String,
+    /// 群の最も新しい知らせの組の最初の移動の断りの理由の語（無しは None）。
+    pub refused: Option<String>,
     /// 群の project の限度で止まった session の数（見出しの横の `.kpi-s`）。
     pub limited: usize,
     /// 枠の末尾の詳しくの段（見本の `.gmore`）。
@@ -338,6 +385,11 @@ pub fn group_view(card: &GroupCard, accounts: Option<&[AccountRow]>, doc: &Accou
     } else {
         label(NO_RECORD_KEY)
     };
+    let latest = latest_notices(&doc.notices, &row.group);
+    let refused = latest.iter().find_map(|n| match n {
+        GroupNotice::Refused { reason, .. } => Some(reason.clone()),
+        GroupNotice::Pressure { .. } => None,
+    });
     GroupView {
         name: row.group.clone(),
         account: row.account.clone(),
@@ -350,6 +402,10 @@ pub fn group_view(card: &GroupCard, accounts: Option<&[AccountRow]>, doc: &Accou
                 window: w,
                 short: short(w),
                 used: usage_of(acct, w).map_or_else(|| NONE.to_string(), |q| format!("{}%", q.used_pct)),
+                cap: format!("/ {}", cap_of(&doc.caps, w).map_or_else(|| "?".to_string(), |c| c.to_string())),
+                hot: latest
+                    .iter()
+                    .any(|n| matches!(n, GroupNotice::Pressure { window, .. } if window == w)),
             })
             .collect(),
         members: card
@@ -375,7 +431,8 @@ pub fn group_view(card: &GroupCard, accounts: Option<&[AccountRow]>, doc: &Accou
             .next_account
             .clone()
             .unwrap_or_else(|| label(NO_TARGET_KEY)),
-        limited: limited(card, &doc.sessions),
+        refused,
+        limited:limited(card, &doc.sessions),
         more: group_more(card, &doc.moves),
     }
 }
@@ -634,13 +691,24 @@ pub fn acct_row(row: &AccountRow, sessions: &[SessionLine], at: EpochSecs) -> Ac
     }
 }
 
-/// 移動の 1 行（時刻・群・前 → 後）。
+/// 移動の段の行の種（移動の記録・逼迫の知らせ・移動の断り）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MvKind {
+    Moved,
+    /// 窓の短い字と使った割合と閾値の字（`5h 100% ≥ 85`）。
+    Pressure(String),
+    /// 器の断りの理由の語。
+    Refused(String),
+}
+
+/// 移動の 1 行（時刻・群・前 → 後・知らせの行は from が知らせの口座で to は空）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MvRow {
     pub at: String,
     pub group: String,
     pub from: String,
     pub to: String,
+    pub kind: MvKind,
 }
 
 /// 移動の行の hover の card（見本の `__tz_card` の mv の枝・記録の種類と出所）。
@@ -673,12 +741,39 @@ pub fn mv_row(m: &MoveRow, at: EpochSecs) -> MvRow {
         group: m.group.clone(),
         from: m.from.clone().unwrap_or_else(|| NONE.to_string()),
         to: m.to.clone(),
+        kind: MvKind::Moved,
     }
 }
 
-/// 移動の段（電文の順・初めの 8 行と残り）。
-pub fn moves(rows: &[MoveRow], at: EpochSecs) -> Moves {
-    let mut shown: Vec<MvRow> = rows.iter().map(|m| mv_row(m, at)).collect();
+/// 知らせの行を移動の段の 1 行にする（時刻は電文の at から見た hmd・from は知らせの口座・to は空）。
+pub fn notice_row(n: &GroupNotice, at: EpochSecs) -> MvRow {
+    let (group, account, kind) = match n {
+        GroupNotice::Pressure {
+            group,
+            account,
+            window,
+            used,
+            cap,
+            ..
+        } => (group, account, MvKind::Pressure(format!("{} {used}% ≥ {cap}", short(window)))),
+        GroupNotice::Refused {
+            group,
+            account,
+            reason,
+            ..
+        } => (group, account, MvKind::Refused(reason.clone())),
+    };
+    MvRow {
+        at: hmd(notice_at(n), at),
+        group: group.clone(),
+        from: account.clone(),
+        to: String::new(),
+        kind,
+    }
+}
+
+/// 行の列を初めの 8 行と畳める残りにする。
+fn fold(mut shown: Vec<MvRow>) -> Moves {
     let folded = shown.split_off(shown.len().min(SHOW_MV));
     let more = (!folded.is_empty()).then(|| format!("+{}", folded.len()));
     Moves {
@@ -686,6 +781,22 @@ pub fn moves(rows: &[MoveRow], at: EpochSecs) -> Moves {
         folded,
         more,
     }
+}
+
+/// 移動の段（電文の順・初めの 8 行と残り）。
+pub fn moves(rows: &[MoveRow], at: EpochSecs) -> Moves {
+    fold(rows.iter().map(|m| mv_row(m, at)).collect())
+}
+
+/// 移動の記録と知らせの行を 1 つの列にした移動の段（at の新しい順・同じ at は移動の記録が先・それぞれ電文の順）。
+pub fn history(rows: &[MoveRow], notices: &[GroupNotice], at: EpochSecs) -> Moves {
+    let mut all: Vec<(EpochSecs, MvRow)> = rows
+        .iter()
+        .map(|m| (m.at, mv_row(m, at)))
+        .chain(notices.iter().map(|n| (notice_at(n), notice_row(n, at))))
+        .collect();
+    all.sort_by_key(|(t, _)| std::cmp::Reverse(*t));
+    fold(all.into_iter().map(|(_, r)| r).collect())
 }
 
 /// 群の列が読めないときの理由。
@@ -715,6 +826,8 @@ pub struct Home {
     pub next: Body<Vec<NxRow>>,
     pub groups: Body<Vec<GroupView>>,
     pub accounts: Body<Vec<AcctRow>>,
+    /// 窓ごとの閾値（`caps` の値・口座 × 窓の棒の線）。
+    pub caps: Vec<Option<u64>>,
     pub moves: Body<Moves>,
 }
 
@@ -750,10 +863,14 @@ pub fn home(doc: &AccountDoc) -> Home {
             ),
             None => Body::Unmeasured(ACCOUNTS_UNREAD),
         },
-        moves: match &doc.moves {
-            Reading::Known(m) if m.is_empty() => Body::Empty(NO_MOVES),
-            Reading::Known(m) => Body::Filled(moves(m, doc.at)),
-            Reading::Unknown => Body::Unmeasured(MOVES_UNREAD),
+        caps: caps(doc),
+        moves: match (&doc.moves, &doc.notices) {
+            (Reading::Unknown, _) => Body::Unmeasured(MOVES_UNREAD),
+            (Reading::Known(m), Reading::Known(n)) if !n.is_empty() => {
+                Body::Filled(history(m, n, doc.at))
+            }
+            (Reading::Known(m), _) if m.is_empty() => Body::Empty(NO_MOVES),
+            (Reading::Known(m), _) => Body::Filled(moves(m, doc.at)),
         },
     }
 }
@@ -766,6 +883,7 @@ pub fn content(fetched: &Fetched) -> Home {
             next: Body::Unmeasured(reason),
             groups: Body::Unmeasured(reason),
             accounts: Body::Unmeasured(reason),
+            caps: Vec::new(),
             moves: Body::Unmeasured(reason),
         },
     }
@@ -789,7 +907,7 @@ mod dom {
     use tsuzuri_contract::account::ProjectRow;
 
     use super::{
-        ACCT_HEADS, AcctRow, Cells, GroupView, Home, Measured, Moves, MvRow, NONE, NxRow,
+        ACCT_HEADS, AcctRow, Cells, GroupView, Home, Measured, Moves, MvKind, MvRow, NONE, NxRow,
         RETIRED_KEY, UNKNOWN_KEY, content,
     };
     use crate::account::windows::{NOT_YET_KEY, button_text, open, open_url};
@@ -926,9 +1044,13 @@ mod dom {
             .pressure
             .into_iter()
             .map(|p| {
-                view! { <span class="pw" data-term=p.window tabindex="0"><span class="wl">{p.short}</span><b class="num">{p.used}</b></span> }
+                let class = if p.hot { "pw hot" } else { "pw" };
+                view! { <span class=class data-term=p.window tabindex="0"><span class="wl">{p.short}</span><b class="num">{p.used}</b><span class="cap num">{p.cap}</span></span> }
             })
             .collect_view();
+        let refused = g.refused.map(|r| {
+            view! { <span class="why">{format!("GroupMoveRefused {r}")}</span> }
+        });
         let members = g
             .members
             .into_iter()
@@ -965,7 +1087,7 @@ mod dom {
                 <div class="projs">{members}</div>
                 <div class="glab">{hs("candidates")}</div>
                 <ul class="cands2 smpl">{cands}</ul>
-                <div class="glab">{hs("next_target")}<span class="mono">{g.next}</span></div>
+                <div class="glab">{hs("next_target")}<span class="mono">{g.next}</span>{refused}</div>
                 <details class="gmore" open=expert>
                     <summary><span class="rm-t">{label("p_more")}</span><span class="rm-a" aria-hidden="true">"▸"</span></summary>
                     <div class="gm">
@@ -982,19 +1104,21 @@ mod dom {
     pub fn allowance_view(block: Block) -> AnyView {
         let home = read();
         let body = move || {
-            body_or(home.get().accounts, |rows| {
+            let h = home.get();
+            let caps = h.caps;
+            body_or(h.accounts, |rows| {
                 let heads = ACCT_HEADS
                     .into_iter()
                     .map(|k| view! { <div class="hrow">{hs(k)}</div> })
                     .collect_view();
-                let rows = rows.into_iter().map(acct_row_view).collect_view();
+                let rows = rows.into_iter().map(|a| acct_row_view(a, &caps)).collect_view();
                 view! { <div class="acct-grid">{heads}{rows}</div> }.into_any()
             })
         };
         section(block, ().into_any(), body.into_any())
     }
 
-    fn acct_row_view(a: AcctRow) -> AnyView {
+    fn acct_row_view(a: AcctRow, caps: &[Option<u64>]) -> AnyView {
         let occ = match a.occupant.class() {
             "" => view! { <span class="sub">{a.occupant.text()}</span> }.into_any(),
             class => view! { <span class=class><span data-t="">{a.occupant.text()}</span></span> }
@@ -1007,7 +1131,8 @@ mod dom {
             .into_any(),
             Cells::Windows(ws) => ws
                 .into_iter()
-                .map(|w| view! { <div class="c-w">{meter(w)}</div> })
+                .enumerate()
+                .map(|(i, w)| view! { <div class="c-w">{meter(w, caps.get(i).copied().flatten())}</div> })
                 .collect_view()
                 .into_any(),
         };
@@ -1033,14 +1158,15 @@ mod dom {
         .into_any()
     }
 
-    /// 窓の棒（見本の acct.js の meter・上限の線は置かない・無い窓は「―」）。
-    fn meter(w: Option<WindowRow>) -> AnyView {
+    /// 窓の棒（見本の acct.js の meter・閾値が在れば棒に閾値の線を置く・無い窓は「―」）。
+    fn meter(w: Option<WindowRow>, cap: Option<u64>) -> AnyView {
         match w {
             Some(w) => {
                 let style = format!("width:{}%", w.width);
+                let line = cap.map(|c| view! { <span class="cap" style=format!("left:{c}%")></span> });
                 view! {
                     <div class="meter">
-                        <div class="bar"><i class=w.bar_class style=style></i></div>
+                        <div class="bar"><i class=w.bar_class style=style></i>{line}</div>
                         <div class="v"><b class="num">{w.used}</b><span class="num">{format!("↻ {}", w.reset)}</span></div>
                     </div>
                 }
@@ -1088,7 +1214,30 @@ mod dom {
         .into_any()
     }
 
+    /// 移動の段の 1 行（知らせの行は hover の card を持たない・見本と同じ）。
     fn mv_li(m: MvRow) -> AnyView {
+        match m.kind.clone() {
+            MvKind::Moved => moved_li(m),
+            MvKind::Pressure(what) => view! {
+                <li>
+                    <span class="ic pressure" aria-hidden="true">"!"</span>
+                    <span class="num">{m.at}</span>
+                    <span class="what"><b data-t="">{m.group}</b>" "<span class="mono">{m.from}</span>" "{what}<span class="sub">"GroupPressureNotified"</span></span>
+                </li>
+            }
+            .into_any(),
+            MvKind::Refused(reason) => view! {
+                <li>
+                    <span class="ic refused" aria-hidden="true">"×"</span>
+                    <span class="num">{m.at}</span>
+                    <span class="what"><b data-t="">{m.group}</b>" "<span class="mono">{m.from}</span><span class="sub">{format!("GroupMoveRefused {reason}")}</span></span>
+                </li>
+            }
+            .into_any(),
+        }
+    }
+
+    fn moved_li(m: MvRow) -> AnyView {
         let card = super::mv_card(&m);
         view! {
             <li tabindex="0" use:attach=card>

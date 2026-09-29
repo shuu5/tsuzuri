@@ -10,7 +10,7 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::account::{self, home};
 use tsuzuri_surface::account::home::{
     ACCOUNTS_UNREAD, ACCT_HEADS, AcctRow, Cells, GROUPS_UNREAD, GroupView, Home, MARK_KINDS,
-    MOVES_UNREAD, Moves, MvRow, NONE, NO_ACCOUNTS, NO_GROUPS, NO_MOVES, NO_PROJECTS, NxRow,
+    MOVES_UNREAD, Moves, MvKind, MvRow, NONE, NO_ACCOUNTS, NO_GROUPS, NO_MOVES, NO_PROJECTS, NxRow,
     Occupant, SHOW_MV, UNKNOWN_SIGN, content,
 };
 use tsuzuri_surface::project::next::NONE_LINE;
@@ -459,25 +459,39 @@ fn mv(at: u64, group: &str, from: Option<&str>, to: &str) -> MoveRow {
     }
 }
 
-/// (5) 移動は電文の順・初めの 8 行・残りは畳める段で見出しは + と残りの数。
+fn row(at: &str, group: &str, from: &str, to: &str, kind: MvKind) -> MvRow {
+    MvRow {
+        at: at.to_string(),
+        group: group.to_string(),
+        from: from.to_string(),
+        to: to.to_string(),
+        kind,
+    }
+}
+
+/// (5) 移動は電文の順・初めの 8 行・残りは畳める段で見出しは + と残りの数（fixture は知らせの行と 1 つの列）。
 #[test]
 fn accthome_moves_fold() {
     let m: Moves = filled(fixture_home().moves);
     assert_eq!(
         m.shown,
         vec![
-            MvRow {
-                at: "19:00 JST".to_string(),
-                group: "Tier1".to_string(),
-                from: "acct-2".to_string(),
-                to: "acct-1".to_string()
-            },
-            MvRow {
-                at: "07:05 JST".to_string(),
-                group: "Tier2".to_string(),
-                from: NONE.to_string(),
-                to: "acct-2".to_string()
-            },
+            row(
+                "20:50 JST",
+                "Tier2",
+                "acct-2",
+                "",
+                MvKind::Refused("no-candidate".to_string())
+            ),
+            row(
+                "20:30 JST",
+                "Tier1",
+                "acct-2",
+                "",
+                MvKind::Pressure("5h 100% ≥ 85".to_string())
+            ),
+            row("19:00 JST", "Tier1", "acct-2", "acct-1", MvKind::Moved),
+            row("07:05 JST", "Tier2", NONE, "acct-2", MvKind::Moved),
         ]
     );
     assert!(m.folded.is_empty());
@@ -511,6 +525,7 @@ fn accthome_moves_fold() {
 
     let mut d = fixture();
     d.moves = Reading::Known(vec![]);
+    d.notices = Reading::Known(vec![]);
     assert_eq!(home::home(&d).moves, Body::Empty(NO_MOVES));
 }
 
@@ -597,52 +612,21 @@ fn accthome_unmeasured_per_block() {
     }
 }
 
-/// (7) 組んだ値の class と字に逼迫の印（hot・cap）が無い・出さない列の字が source に無い。
+/// (7) 面は使った割合と閾値を比べない（比べの字と出さない列の字が source に無い・R-22）。
 #[test]
-fn accthome_no_pressure_marks() {
-    let mut texts: Vec<String> = Vec::new();
-    let mut d = fixture();
-    if let Reading::Known(a) = &mut d.accounts {
-        a[0].occupant = None;
-    }
-    for h in [fixture_home(), home::home(&d)] {
-        for r in filled(h.next) {
-            texts.push(r.class.to_string());
-            texts.push(r.line);
-            texts.extend(r.marks.iter().map(|m| m.class.to_string()));
-        }
-        for g in filled(h.groups) {
-            texts.push(g.since);
-            texts.push(g.next);
-            for p in g.pressure {
-                texts.push(p.used);
-                texts.push(p.short);
-            }
-            texts.extend(g.members.iter().map(|m| m.sign.class.to_string()));
-        }
-        for a in filled(h.accounts) {
-            texts.push(a.occupant.class().to_string());
-            texts.push(a.occupant.text());
-            if let Cells::Windows(ws) = a.cells {
-                for w in ws.into_iter().flatten() {
-                    texts.extend([w.class.to_string(), w.bar_class.to_string(), w.used, w.reset]);
-                }
-            }
-        }
-    }
-    for t in &texts {
-        for word in ["hot", "cap", "/ 85"] {
-            assert!(!t.contains(word), "{t:?} に {word}");
-        }
-    }
+fn accthome_no_pressure_formula() {
     let src = read("src/account/home.rs");
     for word in [
-        "hot",
-        "\"cap\"",
-        "class=\"cap",
+        ">= cap",
+        "> cap",
+        "<= used",
+        "< used",
+        "used_pct >",
+        "used_pct <",
+        "used >",
+        "used <",
         "c-occ",
         "remaining",
-        "refused",
     ] {
         assert!(!src.contains(word), "home.rs に {word}");
     }

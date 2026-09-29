@@ -8,7 +8,7 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::home::{
-    ACCT_SRC, EXPERT_CHARS, GroupMore, MvRow, NONE, acct_card, doctor_line, group_more, home,
+    ACCT_SRC, EXPERT_CHARS, GroupMore, MvKind, MvRow, NONE, acct_card, doctor_line, group_more, home,
     limited, moves, mv_card, wrap_words,
 };
 use tsuzuri_surface::project::Body;
@@ -330,6 +330,7 @@ fn hcard_move_on_fixture() {
         group: "G".into(),
         from: "a".into(),
         to: "b".into(),
+        kind: MvKind::Moved,
     };
     assert_eq!(mv_card(&m).kind, format!("{} · G", label("moves")));
 }
