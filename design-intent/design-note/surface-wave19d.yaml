@@ -1,25 +1,27 @@
-# 設計ノート surface-wave19d — （発効 2026-09-29・持ち主の裁定 t3-hub.56:20260927T2259Z-1〔計画 surface-plan の承認〕・記帳先 = 問いの bead t3-hub.56 の notes・行の拠り = 要件 NFR2 と持ち主の裁定 t3-hub.52.40〔条 A-3・計画 surface-plan の 9 節〕）第 19 波 d — 配布の file の gzip の写しと Accept-Encoding の選び。要件は srs.yaml。
+# 設計ノート surface-wave19d — （発効 2026-09-29・持ち主の裁定 t3-hub.56:20260927T2259Z-1〔計画 surface-plan の承認〕・記帳先 = 問いの bead t3-hub.56 の notes・行の拠り = 要件 NFR2 と持ち主の裁定 t3-hub.52.40〔条 A-3・計画 surface-plan の 9 節〕）第 19 波 d — 配布の file の gzip の写しと、account board の台帳と git の読みの間引き。要件は srs.yaml。
 # 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave19d.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave19d.toml#<行 id>。
 meta:
   id: surface-wave19d
-  title: 第 19 波 d — 配布の file の gzip の写しと Accept-Encoding の選び
-  version: v0.1
+  title: 第 19 波 d — 配布の file の gzip の写しと、account board の台帳と git の読みの間引き
+  version: v0.2
   status: effective
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: 設計ノート surface-board の傘の行 g の子の、性能の行 1 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 NFR2 と持ち主の裁定 t3-hub.52.40:20260928T0156Z-1（条 A-3・計画の判断の表 d29）と計画の 3 節の席の決めで、計画 surface-plan の 9 節の計画だけの行 g-gz を起草して置く。xtask の直接依存に miniz_oxide を 1 本足し、surface-build が dist の wasm・js・css ごとに gzip の写しを置き、server は標準 library のまま要求が gzip を受けるときだけ写しを返す。起草と試作は main b8beec2（計画 v0.62）に行 j-runner の xtask の依存の字を当てた土台で撃った。
+  note: 設計ノート surface-board の傘の行 g の子の、性能の行 2 つ（4 節の性能の 14 行のうち）。第 0.2 版で行 a-lean を足した。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 NFR2 と持ち主の裁定 t3-hub.52.40:20260928T0156Z-1（条 A-3・計画の判断の表 d29）と計画の 3 節の席の決めで、計画 surface-plan の 9 節の計画だけの行 g-gz と a-lean を起草して置く（a-lean の拠りは要件 FR12・NFR2 と計画の判断の表 d30）。xtask の直接依存に miniz_oxide を 1 本足し、surface-build が dist の wasm・js・css ごとに gzip の写しを置き、server は標準 library のまま要求が gzip を受けるときだけ写しを返す。起草と試作は main b8beec2（計画 v0.62）に行 j-runner の xtask の依存の字を当てた土台で撃った。a-lean は account board の project ごとの台帳を anchor の変化の印が動いたか前の読みが読めなかったときだけ読み直し、自分の repo の台帳は server の見張りの Source を分け合い、git の state dir と port の読みを 60 秒持ち回す。a-lean の起草と試作は main 3742684（計画 v0.63）で撃った。
 
 sections:
   - n: 1
     type: prose
     title: 目的
     body: |
-      性能の行 1 つ（xtask と境界の crate の server の配布）。
+      性能の行 2 つ（xtask と境界の crate の server の配布、境界の crate の account board の読み）。
       g-gz は xtask の surface-build が trunk の後に dist の wasm・js・css ごとに名に .gz を足した gzip の写しを置き（圧縮は miniz_oxide・枠と CRC-32 は xtask に書く）、
       server の配布は要求の頭 Accept-Encoding が gzip を受けて写しが在るときだけ写しの中身を Content-Encoding gzip で返し、写しの在る file に Vary を付ける。
       境界の crate と面の crate の依存は増やさない。index.html は写さない。
+      a-lean は account board の読みの集め直しで、台帳の bd を anchor の変化の印が動いたか前の読みが読めなかった project だけに撃ち、
+      自分の repo の台帳は server の見張りの Source を分け合い、git の state dir と board の port の読みを 60 秒持ち回す。器の seat tick と doctor は今のまま 5 秒で撃つ。
   - n: 2
     type: contract-table
     title: 契約表
@@ -32,6 +34,15 @@ sections:
         verify: ["cargo nextest run -p tsuzuri-boundary --test pgz --no-tests=fail pgz_", "cargo nextest run -p xtask --no-tests=fail pgz_", "cargo nextest run -p xtask --no-tests=fail skeleton_", "cargo nextest run -p tsuzuri-boundary --test ecache --no-tests=fail ecache_", "cargo nextest run -p tsuzuri-boundary --lib --no-tests=fail http_", "cargo run -q -p xtask -- check"]
         size: M
         done: (1) 境界の crate の server の pub mod files の pub fn accepts_gzip（頭 Accept-Encoding の字の Option<&str> を受け bool を返す）は、節の表の 18 の字にそれぞれ表の値を返す（歯 pgz_accepts_gzip_table） (2) server の pub mod http の pub fn read_request は、頭の名が大小の字を問わず Accept-Encoding の行の値の前後の空白を除いた字を pub struct Request の pub な欄 accept_encoding（Option<String>）に置き、その頭の無い要求では None を置く（節の 3 つの要求の値）（歯 pgz_request_reads_encoding） (3) files の pub fn respond は、節の置き場への節の表の 10 の要求に表の status・Content-Type・本文・頭（Content-Length を除く名と値の列）を返し、無い file の要求に 404、置き場の外の要求に 403 を頭を足さずに返し、pub fn gz_copy は写しの在る style.css に隣の style.css.gz を、写しの無い file と置き場の外を指す写しの file に None を返し、pub const GZ_SUFFIX は .gz（歯 pgz_respond_picks_copy） (4) xtask の module gz の fn crc32 は、字 123456789 の byte に 0xCBF43926、空の byte に 0、字 a の byte に 0xE8B7BE43 を返す（歯 pgz_crc32_check_values） (5) gz の fn gzip は、空と字 tsuzuri と節の 70000 byte の入力に、頭の 10 byte が const HEADER、末の 8 byte が入力の CRC-32 と長さの下位 32 bit の little endian、間の byte を miniz_oxide の inflate で戻すと入力と同じ byte の出力を返し、70000 byte の入力の出力の長さは入力の 10 分の 1 より短く、同じ入力の 2 度の出力は同じ byte で、HEADER は 1f 8b 08 00 00 00 00 00 02 03、const LEVEL は 9（歯 pgz_gzip_round_trip） (6) gz の fn write_copies は、節の dist の 7 つの file（子の dir の下を含む）のうち拡張子が wasm・js・css の 4 つの file の隣に、名に .gz を足した名で fn gzip の出力と同じ byte の写しを書いて写しの path を名の順に返し、index.html と favicon.ico と名が .gz で終わる file の写しは書かず、無い dir を渡すとその dir の名を含む誤りを返し、const EXTENSIONS は wasm・js・css（歯 pgz_write_copies_only_assets） (7) xtask の歯の表 DIRECT_DEPS の xtask の行は miniz_oxide と tsuzuri-boundary の 2 つで、xtask/Cargo.toml の依存の節の名の列と一致する（歯 skeleton_direct_deps_match_list） (8) files.rs は fn respond の宣言の行（req の &Request と root の &Path を受け Response を返す 1 行）を持ち、字 outside・no-file・Cache-Control を引用符で囲んだ字をそれぞれ 1 度だけ持つ（歯 ecache_handle_wiring_text）
+        depends: []
+      - id: a-lean
+        title: account board の project ごとの台帳を anchor の変化の印が動いたか前の読みが読めなかったときだけ読み直し、自分の repo の台帳は server の見張りの Source を分け合い、git の state dir と port の読みを 60 秒持ち回す
+        req: [FR12, NFR2]
+        section: "4"
+        write-set: ["crates/tsuzuri-boundary/src/acct.rs", "crates/tsuzuri-boundary/src/server/mod.rs", "crates/tsuzuri-boundary/tests/server_acct.rs", "crates/tsuzuri-boundary/tests/rhold.rs", "=crates/tsuzuri-boundary/tests/hbconf.rs", "=crates/tsuzuri-boundary/tests/ecache.rs", "=crates/tsuzuri-boundary/tests/hbpost.rs", "=crates/tsuzuri-boundary/tests/hbroute.rs", "=crates/tsuzuri-boundary/tests/iclose.rs"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --test server_acct --no-tests=fail alean_", "cargo nextest run -p tsuzuri-boundary --test server_acct --no-tests=fail server_acct_", "cargo nextest run -p tsuzuri-boundary --test server_acct --no-tests=fail acchold_", "cargo nextest run -p tsuzuri-boundary --test rhold --no-tests=fail rhold_", "cargo nextest run -p tsuzuri-boundary --test hbconf --no-tests=fail hbconf_", "cargo nextest run -p tsuzuri-boundary --test ecache --no-tests=fail ecache_", "cargo nextest run -p tsuzuri-boundary --test hbpost --no-tests=fail hbpost_", "cargo nextest run -p tsuzuri-boundary --test hbroute --no-tests=fail hbroute_", "cargo nextest run -p tsuzuri-boundary --test iclose --no-tests=fail iclose_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 境界の crate の pub mod acct の pub struct Acct の pub fn doc は、節の作業場の最初の読みで bd を proj-a・proj-b・proj-e の anchor で 1 度ずつ撃ち、引数の state dir の event log の更新時刻だけを替えた後の読みでは最初と同じ電文を返して器の argv を 18 にし、bd は proj-b だけに撃ち、proj-a の anchor の .beads の issues.jsonl を置いて更新時刻を替えた後の読みでは最初と同じ電文を返して器の argv を 27 にし、bd を proj-a と proj-b に撃つ（歯 alean_ledger_follows_mark） (2) Acct の pub fn with_git_hold（Duration を受け Acct を返す）で 400 ミリ秒にした Acct は、最初の読みで git を 10 回撃ち、event log の更新時刻を替えた持ち回しの内の読みでは器の argv を 18 にして git を撃たず、500 ミリ秒の後に更新時刻を替えた読みでは最初の 10 の argv をもう 1 度ずつ撃ち、どの読みも最初と同じ電文を返し、pub const GIT_HOLD は 60 秒（歯 alean_git_held） (3) Acct の pub fn with_own（server の ledger の pub struct Source を受け Acct を返す）に、proj-a の anchor の字の末に /. を足した repo の watched の Source（先に read を 1 度撃つ）を渡した Acct の doc は、with_own の無い Acct の doc と同じ電文を返して bd を proj-b と proj-e だけに撃ち、proj-a の .beads の issues.jsonl を置いて更新時刻を替えた後の読みでは同じ電文を返して bd を proj-b だけに撃つ（歯 alean_own_ledger_shared） (4) server の mod.rs に字 .with_own(sources.ledger.clone()) が 1 度在り、acct.rs に字 .map(|_| s.spawn(move || self.ledger_got(a))) が 1 度在り、字 s.spawn(move || source.got()) は無い（歯 alean_wiring_text） (5) Acct の 5 秒の中の 2 度の読みと marks は器 9・git 10・bd 3 の argv を 1 度ずつ撃ち、HOLD と 300 ミリ秒の後の読みの後は器の argv が 2 度ずつ、git の argv は 1 度ずつのまま、bd は proj-a・proj-b・proj-b・proj-e（歯 server_acct_holds_five_seconds） (6) 停止の記録を置いてから消す 3 度の集め直しの後、器の argv は 3 度ずつ（計 27）、git は 10、bd は proj-a・proj-b・proj-b・proj-b・proj-e（歯 acchold_card_follows_off_file） (7) bd を落として anchor の .beads の issues.jsonl を置き HOLD と 2 秒を待った後の Acct の doc_read は、最初と同じ電文と、経過が 5 秒以上 60 秒未満の落ちた読みの時刻を返す（歯 rhold_acct_ledger_held）
         depends: []
   - n: 3
     type: prose
@@ -55,5 +66,23 @@ sections:
       新しい歯の名。どれも接頭辞 pgz_ で始まり、pgz_ の後の字は着地済みの verify の filter の語を部分の字として含まない（試作の lint で確かめた）。xtask の --no-tests=fail skeleton_ と tsuzuri-boundary の --lib の filter は pgz_ の名に当たらない。
       依存と順。depends は空（同じノートにほかの行を置かない）。計画の 5 節の鎖は xtask/src/main.rs と xtask/Cargo.toml と Cargo.lock が g-strip（着地済み）→ j-runner（ノート surface-wave18e・便は待ち・DIRECT_DEPS の xtask の行に tsuzuri-boundary・Cargo.toml に path の依存）→ g-gz、server/files.rs が e-cache（着地済み）→ g-gz、server/http.rs が e-idle-close（着地済み）→ g-gz。j-runner との順は便の bead の依存で持つ（席が付ける）。この行の DIRECT_DEPS と Cargo.toml と Cargo.lock の字は j-runner の着地の後の字に足す形で書き、j-runner の着地の前に流すなら xtask の行は miniz_oxide だけになる。
       範囲の外。brotli・zstd の写し。index.html の写し。server の実行時の圧縮。境界の crate と面の crate の依存。Range の要求。
+  - n: 4
+    type: prose
+    title: 行 a-lean — account board の台帳と git の読みの間引き
+    body: |
+      在りかの main は fb2cc24（計画 surface-plan v0.66）。境界の crate tsuzuri-boundary の lib.rs の pub mod acct と pub mod server（crate の外からは tsuzuri_boundary::acct と tsuzuri_boundary::server）。この行はノートの 2 行の後の行で、同じノートの g-gz とは書く file が重ならない（歯 ecache はどちらも置き場だけの =）。
+      なぜ。account board の読みは 5 秒（server の seat の pub const HOLD）ごとに全部を集め直し、そのたびに宣言の anchor ごとの台帳の bd（今の群で 8 本）と git の 2 本ずつ（16 本）を撃つ。持ち主が 2 つの board が重いと指摘した（計画の判断の表 d30・要件 NFR2）。台帳の字は変化の印が動かなければ同じで、git の config の字（state dir と board の port）はほとんど動かない。器の seat tick と doctor は席の状態を映すので今のまま 5 秒で撃つ。
+      在りか・acct.rs（write-set・今の main で 505 行）。module の doc（1〜15 行・集めた字は 5 秒のあいだ持ち回す）・use（std の time の Instant と SystemTime・server の ledger の Source と capture）・pub const GIT と GIT_ARGS と BOARD_ARGS ほか・私的な struct Texts・pub struct Acct（私的な欄 scribe2・git・bd・state_dir・cwd・held・ledgers〔anchor の字 → Source・行 e-hold〕）・pub fn new（5 つの引数）・pub fn state_dir と board（git_get で git を 1 本撃つ）・pub fn doc と doc_read・私的な fn ledger（表に在ればその clone・無ければ Source::new で作る）・pub fn marks・私的な fn texts（HOLD の内で印の file の更新時刻と長さが同じなら持ち回す）・私的な fn gather（1 段目で anchor ごとの state_dir と board と口座・猶予・閾値・doctor を並べて撃ち、2 段目で state dir ごとの tick と doctor と、state dir の引けた anchor ごとに ledger(a) の Source の got を並べて撃つ）・私的な fn same_path（末尾の「/」を除いて同じ字）と anchors。
+      在りか・server/mod.rs（write-set・今の main で 343 行）。pub fn bind_with が sources（ledger は Source::new(&config.repo, &config.bd).watched().with_form(…)）を組んだ後に、state dir が在れば Arc::new(Acct::new(器・git・bd・state dir・config.repo)) を作る。server の ledger の pub struct Source の pub fn mark（変化の印・pub enum Mark は Debug・Clone・PartialEq・Eq）・pub fn got（pub struct Got は Clone・pub な欄 text と stale）・pub fn is_watched・pub な欄 repo。watched の Source の got は bd を撃たず、見張りの読みの結果を返す（行 e-snap）。
+      在りか・tests/server_acct.rs（write-set・今の main で 1101 行）。作業場 Place（偽の器・git・bd が argv を log に足す・bd の出力は proj-a と proj-e だけに置き proj-b は読めない）と、呼びの回数を見る歯 server_acct_holds_five_seconds（5 秒の後の読みで器・git・bd の argv が 2 度ずつ）と acchold_card_follows_off_file（3 度の集め直しで git 30・bd 9）。server_acct_argv_exact と server_acct_marks_list は最初の読みの argv と印の一覧を見る（この行で変わらず、直さずに通る）。tests/rhold.rs（write-set・今の main で 588 行）の rhold_acct_ledger_held は bd を落として HOLD の後の読みが最後に読めた字と落ちた時刻を返すことを見る。
+      形（acct.rs）。module の doc に 3 行（集め直しでも git の読みは GIT_HOLD のあいだ持ち回す・台帳は印が同じで前の読みが読めていれば bd を撃たない・自分の repo は with_own の Source を分け合う）を足す。pub const GIT_HOLD（60 秒）と私的な type GitTexts と Gits を足す。Acct に私的な欄 seen（anchor の字 → 読む前に取った Mark と Got）・gits（取った時刻と anchor の列と GitTexts）・git_hold・own（Option の Source）を足し、new はそれぞれ空・None・GIT_HOLD・None で作る。pub fn with_own と pub fn with_git_hold（どちらも self を受けて欄 1 つを替えた Acct を返す）を足す。ledger は own が在り anchor が own の repo と同じ dir（私的な fn same_dir・same_path か、どちらも canonicalize できて同じ path）ならその clone を返す。私的な fn ledger_got は、Source が watched なら got をそのまま返し、でなければ mark を取り、seen の同じ anchor の印が同じで Got の stale が None ならその Got を返し、違えば got を撃って（seen の錠は持たずに）印と Got を seen に置く。私的な fn held_gits は gits が git_hold の内で anchor の列が同じならその GitTexts を返す。gather は held_gits が None のときだけ anchor ごとの state_dir と board を撃ち、撃ったら gits に置く。2 段目の台帳は ledger_got を撃つ。
+      形（server/mod.rs）。bind_with の Acct::new の後に .with_own(sources.ledger.clone()) を足し、bind_with の doc に 1 行を足す。routes/account.rs は書かない。
+      形（歯）。server_acct_holds_five_seconds の最後の 2 つの比べを、git は 1 度ずつのまま、bd は proj-a・proj-b・proj-b・proj-e にする。acchold_card_follows_off_file の最後の 2 つの比べを git 10 と bd の 5 つの字にする。rhold_acct_ledger_held は bd を落とした後に anchor の .beads の issues.jsonl を置く 2 行と注を足す（印を動かさないと読み直さず、落ちた読みの持ち回しが撃たれない）。tests/server_acct.rs に私的な fn alean_bump（引数の state dir の event log の更新時刻だけを File::set_modified で替える）と alean_mark と新しい歯 4 本を足す。
+      変わらない行と読む順と落ちる時（歯で測らず、この行の差分で持つ）。変わらない: 最初の読みの argv と印の一覧・電文の字・器の撃ちの周（5 秒と印）・e-hold の持ち回しの上限・Acct::new の引数・marks に台帳の印を足さないこと（変化の知らせは増やさない）。読む順: 台帳の印は bd を撃つ前に取るので、読む途中の変化は次の集め直しで読み直す。落ちる時: 前の読みが落ちた（stale が在る）anchor は印が同じでも周ごとに撃ち直す。git の読みが落ちた anchor も GIT_HOLD のあいだはその落ちた字（None）を持ち回す。群の宣言の anchor の列が変われば GIT_HOLD の内でも git を撃ち直す。
+      決めた幅（起草の決め）。(a) 読めなかった読みは印が同じでも撃ち直す（e-hold の持ち回しの時計を進め、落ちたままで止めない）。(b) 自分の repo の見分けは same_path か実体の path の一致（anchor の字と server の repo の字の書き方が違っても分け合う）。(c) 持ち回しの時間は GIT_HOLD を既定にし、歯のために with_git_hold で替えられる。(d) 口座・猶予・閾値の器の撃ちは今のまま 5 秒（計画の字は git と台帳だけを言う）。(e) routes/account.rs は書かない（見張りの Source は bind_with で渡す）。
+      着地済みの歯（grep で確かめ、試作で撃った）。server_acct の server_acct_ の 11 本と acchold_ の 3 本（2 本を直す）・rhold の 8 本（1 本を直す）。mod.rs の字を読む hbconf・ecache・hbpost・hbroute・iclose は置き場だけの = で持ち、直さずに通る。Acct を使うほかの歯 bport・athr・server_acctwire・server_hb・shb は直さずに通る（書く file に無く、期待が動かないので verify に入れない）。
+      測り方・歯（tests/server_acct.rs に足す）。使う item は tsuzuri_boundary::acct の Acct と GIT_HOLD と、server::ledger の Source（new・watched・read）。作業場は着地済みの Place。試作で新しい 4 本と着地済みの歯が通り、噛みを見た（印を見ずに前の読みを使う・読めなかった読みも使い回す・git を持ち回さない・git を持ち回しの時間の後も使う・自分の repo の Source を使わない・実体の path を比べない・server が見張りの Source を渡さない・印が動いても読み直さない、でそれぞれ名指した歯が落ちる）。新しい歯の名は接頭辞 alean_ で始まり、alean_ と、その後の字は着地済みの verify の filter の語を部分の字として含まない。
+      依存と順。depends は空（g-gz と書く file が重ならない）。計画の 5 節の鎖は boundary/acct.rs と歯 tests/server_acct.rs が c-acct-spark（着地済み）→ a-lean、boundary/server/mod.rs が c-misfit-pair（着地済み）→ a-lean → c-ev-kind。歯 tests/rhold.rs は c-misfit-pair（置き場だけの =・着地済み）→ a-lean。いま走る・待つ便はこの行の書く file を書かない（lint で確かめた・歯 ecache は g-gz の便と両方が置き場だけの =）。
+      範囲の外。器の seat tick と doctor と口座・猶予・閾値の撃ちの周。project board の台帳の読み（行 e-snap の見張り）。変化の知らせの印の一覧。routes/account.rs。
 
 figures: []
