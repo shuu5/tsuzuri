@@ -12,6 +12,9 @@
 //! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
 //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。集めた字は 5 秒のあいだ持ち回す。
 //! ただし変化の印の file（`marks`）の更新時刻と長さが集める前に取った値と違えば、5 秒の中でも集め直す（行 e-acct-hbmark）。
+//! 集め直しでも git の読み（state dir と board の port）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
+//! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
+//! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を分け合い、bd を撃たない。
 //! 口の登録と変化の知らせへの印の足しは、つなぐ行 h-wire が行う。
 
 use std::collections::BTreeMap;
@@ -19,7 +22,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
@@ -28,7 +31,7 @@ use tsuzuri_core::account::project::{self, ProjectTexts};
 use tsuzuri_core::account::project_name;
 
 use crate::server::events::stamp;
-use crate::server::ledger::{Source, capture};
+use crate::server::ledger::{Got, Mark, Source, capture};
 use crate::server::runs::EVENTS_LOG;
 use crate::server::seat::{
     DOCTOR_ARGS, GROUPS_DIR, HOLD, HOST_TOML, SCRIBE2_TIMEOUT, STATE_LOG, Seat, TICK_ARGS,
@@ -43,6 +46,9 @@ pub const GIT_ARGS: [&str; 3] = ["config", "--get", "scribe2.statedir"];
 
 /// project board の port を引く git の引数の列の後ろ（前に `-C <anchor>` が付く・anchor の .git/config の鍵）。
 pub const BOARD_ARGS: [&str; 3] = ["config", "--get", "tsuzuri.boardport"];
+
+/// git の読み（anchor ごとの state dir と board の port）を集め直しのあいだ持ち回す時間（行 a-lean）。
+pub const GIT_HOLD: Duration = Duration::from_secs(60);
 
 /// 猶予の秒の出力の引数の列。
 pub const GRACE_ARGS: [&str; 3] = ["rules", "get", "seat.move_grace_s"];
@@ -83,6 +89,12 @@ fn stamps(marks: &[PathBuf]) -> Stamps {
     marks.iter().map(|p| stamp(p)).collect()
 }
 
+/// git の読みの字（宣言の anchor の順に、state dir と board の port の字）。
+type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>);
+
+/// git の読みを取った時刻と、読んだ宣言の anchor の列と、git の読みの字（一度も読んでいなければ None）。
+type Gits = Option<(Instant, Vec<String>, GitTexts)>;
+
 /// account board の読みの出所（器・git・bd の program と、引数の state dir と cwd）と、持ち回しの字。
 #[derive(Debug)]
 pub struct Acct {
@@ -95,6 +107,14 @@ pub struct Acct {
     held: Mutex<Option<(Instant, Stamps, Texts)>>,
     /// anchor の字 → 台帳の読みの出所（持ち続けて最後に読めた字を次の gather に残す・行 e-hold）。
     ledgers: Mutex<BTreeMap<String, Source>>,
+    /// anchor の字 → 読む前に取った台帳の印と、その読みの結果（行 a-lean）。
+    seen: Mutex<BTreeMap<String, (Mark, Got)>>,
+    /// 持ち回しの git の読み。
+    gits: Mutex<Gits>,
+    /// git の読みの持ち回しの時間。
+    git_hold: Duration,
+    /// 自分の repo の台帳の読みの出所（server の見張りの Source・無ければ None）。
+    own: Option<Source>,
 }
 
 impl Acct {
@@ -113,7 +133,24 @@ impl Acct {
             cwd: cwd.into(),
             held: Mutex::new(None),
             ledgers: Mutex::new(BTreeMap::new()),
+            seen: Mutex::new(BTreeMap::new()),
+            gits: Mutex::new(None),
+            git_hold: GIT_HOLD,
+            own: None,
         }
+    }
+
+    /// 自分の repo（`Source::repo` と同じ dir の anchor）の台帳を `own` で読む Acct（bd を撃たずに分け合う）。
+    pub fn with_own(self, own: Source) -> Acct {
+        Acct {
+            own: Some(own),
+            ..self
+        }
+    }
+
+    /// git の読みの持ち回しの時間を替えた Acct（歯が短い時間で試す）。
+    pub fn with_git_hold(self, git_hold: Duration) -> Acct {
+        Acct { git_hold, ..self }
     }
 
     /// 器の program。
@@ -172,13 +209,54 @@ impl Acct {
         (doc, texts.stale)
     }
 
-    /// anchor の台帳の読みの出所（表に在ればその clone・無ければ作って表に置く）。
+    /// anchor の台帳の読みの出所（`own` の repo と同じ dir ならその clone・表に在ればその clone・
+    /// 無ければ作って表に置く）。
     fn ledger(&self, anchor: &str) -> Source {
+        if let Some(own) = self
+            .own
+            .as_ref()
+            .filter(|own| same_dir(&own.repo.to_string_lossy(), anchor))
+        {
+            return own.clone();
+        }
         let mut ledgers = self.ledgers.lock().unwrap_or_else(|e| e.into_inner());
         ledgers
             .entry(anchor.to_string())
             .or_insert_with(|| Source::new(anchor, self.bd.clone()))
             .clone()
+    }
+
+    /// anchor の台帳の読み（見張りの Source は `got` のまま・でなければ bd を撃つ前に印を取り、前の読みの印と
+    /// 同じで前の読みが読めていれば前の読みを返し、違えば撃って印と読みを置く・行 a-lean）。
+    fn ledger_got(&self, anchor: &str) -> Got {
+        let source = self.ledger(anchor);
+        if source.is_watched() {
+            return source.got();
+        }
+        let mark = source.mark();
+        let held = self
+            .seen
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(anchor)
+            .filter(|(was, got)| *was == mark && got.stale.is_none())
+            .map(|(_, got)| got.clone());
+        if let Some(got) = held {
+            return got;
+        }
+        let got = source.got();
+        self.seen
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(anchor.to_string(), (mark, got.clone()));
+        got
+    }
+
+    /// 持ち回しの git の読み（取ってから `git_hold` より短く、読んだ anchor の列が同じときだけ）。
+    fn held_gits(&self, anchors: &[String]) -> Option<GitTexts> {
+        let gits = self.gits.lock().unwrap_or_else(|e| e.into_inner());
+        let (at, was, texts) = gits.as_ref()?;
+        (at.elapsed() < self.git_hold && was == anchors).then(|| texts.clone())
     }
 
     /// 変化の印の file（state dir ごとの event log・orchestrator の席の state.jsonl と tick-last と heartbeat-off・
@@ -236,21 +314,26 @@ impl Acct {
     }
 
     /// 子 process を 2 段に並べて撃ち（待ちは 1 段ごとに 1 本分の上限まで）、file を読む。
-    /// 1 段目は anchor ごとの git（state dir と board の port）と、口座と猶予と閾値の行と引数の state dir の doctor。
+    /// 1 段目は anchor ごとの git（state dir と board の port・持ち回しの読みが在れば撃たない）と、
+    /// 口座と猶予と閾値の行と引数の state dir の doctor。
     /// 2 段目は state dir ごとの tick status と doctor（引数の state dir の doctor は撃ち直さない）と、
-    /// state dir の引けた anchor の台帳。
+    /// state dir の引けた anchor の台帳（`ledger_got`）。
     fn gather(&self) -> Texts {
         let host_toml = read(&self.state_dir.join(HOST_TOML));
         let anchors = anchors(host_toml.as_deref());
+        let held = self.held_gits(&anchors);
         let (dirs, boards, usage, grace, caps, doctor) = thread::scope(|s| {
-            let dirs: Vec<_> = anchors
-                .iter()
-                .map(|a| s.spawn(|| self.state_dir(Path::new(a))))
-                .collect();
-            let boards: Vec<_> = anchors
-                .iter()
-                .map(|a| s.spawn(|| self.board(Path::new(a))))
-                .collect();
+            let git = held.is_none().then(|| {
+                let dirs: Vec<_> = anchors
+                    .iter()
+                    .map(|a| s.spawn(|| self.state_dir(Path::new(a))))
+                    .collect();
+                let boards: Vec<_> = anchors
+                    .iter()
+                    .map(|a| s.spawn(|| self.board(Path::new(a))))
+                    .collect();
+                (dirs, boards)
+            });
             let usage = s.spawn(|| self.shoot_in(&USAGE_ARGS, &self.state_dir));
             let grace = s.spawn(|| self.shoot(GRACE_ARGS));
             let caps: Vec<_> = CAP_ROWS
@@ -263,14 +346,24 @@ impl Acct {
                 })
                 .collect();
             let doctor = self.shoot_in(&DOCTOR_ARGS, &self.state_dir);
+            let (dirs, boards) = match git {
+                Some((dirs, boards)) => {
+                    let texts: GitTexts = (
+                        dirs.into_iter().map(|h| h.join().ok().flatten()).collect(),
+                        boards
+                            .into_iter()
+                            .map(|h| h.join().ok().flatten())
+                            .collect(),
+                    );
+                    *self.gits.lock().unwrap_or_else(|e| e.into_inner()) =
+                        Some((Instant::now(), anchors.clone(), texts.clone()));
+                    texts
+                }
+                None => held.unwrap_or_default(),
+            };
             (
-                dirs.into_iter()
-                    .map(|h| h.join().ok().flatten())
-                    .collect::<Vec<_>>(),
-                boards
-                    .into_iter()
-                    .map(|h| h.join().ok().flatten())
-                    .collect::<Vec<_>>(),
+                dirs,
+                boards,
                 usage.join().ok().flatten(),
                 grace.join().ok().flatten(),
                 caps.into_iter()
@@ -298,12 +391,7 @@ impl Acct {
             let ledgers: Vec<_> = anchors
                 .iter()
                 .zip(&dirs)
-                .map(|(a, dir)| {
-                    dir.as_ref().map(|_| {
-                        let source = self.ledger(a);
-                        s.spawn(move || source.got())
-                    })
-                })
+                .map(|(a, dir)| dir.as_ref().map(|_| s.spawn(move || self.ledger_got(a))))
                 .collect();
             (
                 outputs
@@ -458,6 +546,15 @@ pub fn board_port(text: &str) -> Option<u16> {
 /// 末尾の「/」を除いて同じ path か。
 fn same_path(a: &str, b: &str) -> bool {
     a.trim_end_matches('/') == b.trim_end_matches('/')
+}
+
+/// 同じ dir か（`same_path` か、どちらも実体の path が引けて同じ path）。
+fn same_dir(a: &str, b: &str) -> bool {
+    same_path(a, b)
+        || matches!(
+            (Path::new(a).canonicalize(), Path::new(b).canonicalize()),
+            (Ok(a), Ok(b)) if a == b
+        )
 }
 
 /// 群の宣言の anchor（群の宣言の順・群の中は anchors の配列の順・同じ path は最初の 1 つ）。

@@ -165,6 +165,7 @@ impl Server {
 
     /// `bind` と同じで、account board の読みが撃つ git の program を受ける。
     /// state dir が在るときだけ account board の読みを作る（器は口 /api/account の要求まで撃たない）。
+    /// account board の読みは自分の repo の anchor の台帳を見張りの Source で読み、bd を撃たない（行 a-lean）。
     pub fn bind_with(config: &Config, git: &OsStr) -> Result<Server, StartError> {
         if !bind_allowed(config.bind.ip()) {
             return Err(StartError::BindRefused(config.bind));
@@ -205,13 +206,16 @@ impl Server {
         let (design, runs) = (sources.design.clone(), sources.runs.clone());
         let seat_marks = seats.marks();
         let acct = config.state_dir.as_ref().map(|state_dir| {
-            Arc::new(Acct::new(
-                config.scribe2.clone(),
-                git,
-                config.bd.clone(),
-                state_dir.clone(),
-                config.repo.clone(),
-            ))
+            Arc::new(
+                Acct::new(
+                    config.scribe2.clone(),
+                    git,
+                    config.bd.clone(),
+                    state_dir.clone(),
+                    config.repo.clone(),
+                )
+                .with_own(sources.ledger.clone()),
+            )
         });
         let acct_marks = Arc::new(Mutex::new(Vec::new()));
         let held_marks = Arc::clone(&acct_marks);

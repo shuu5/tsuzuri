@@ -4,15 +4,17 @@
 //! slow の下に同じ名の印が在れば 8 秒眠る）。器は argv の頭と最後の引数（state dir の最後の区切り）で、
 //! git は -C の次の path の最後の区切りで、bd は cwd の最後の区切りで字を選ぶ。
 //! anchor は作業場の work の下の dir（proj-a ほか）で、字の中の path は実行の時に組む（行 D-4）。
+//! 接頭辞 alean_ の歯は、集め直しの git の読みの持ち回しと、台帳の印を見て bd を撃たない読みを見る（行 a-lean）。
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
+use std::fs::{self, File};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GRACE_ARGS};
+use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GIT_HOLD, GRACE_ARGS};
+use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
 use tsuzuri_contract::account::{
     AccountDoc, DormantSeat, ProjectRow, Spark, SparkLine, SparkPoint,
@@ -701,8 +703,9 @@ fn server_acct_holds_five_seconds() {
         doubled
     };
     assert_eq!(place.calls("scribe2"), twice(&once.0), "5 秒の後の読み");
-    assert_eq!(place.calls("git"), twice(&once.1));
-    assert_eq!(place.calls("bd"), twice(&once.2));
+    // git は GIT_HOLD のあいだ持ち回し、台帳は印が同じで読めていた proj-a と proj-e の bd を撃たない（行 a-lean）。
+    assert_eq!(place.calls("git"), once.1);
+    assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-b", "proj-e"]);
 }
 
 #[test]
@@ -1050,8 +1053,11 @@ fn acchold_card_follows_off_file() {
             "argv ごとに 3 回: {argv}"
         );
     }
-    assert_eq!(place.calls("git").len(), 30, "{:?}", place.calls("git"));
-    assert_eq!(place.calls("bd").len(), 9, "{:?}", place.calls("bd"));
+    assert_eq!(place.calls("git").len(), 10, "{:?}", place.calls("git"));
+    assert_eq!(
+        place.calls("bd"),
+        ["proj-a", "proj-b", "proj-b", "proj-b", "proj-e"]
+    );
 }
 
 #[test]
@@ -1082,6 +1088,117 @@ fn acchold_state_log_regathers() {
     assert_eq!(place.calls("scribe2").len(), 18, "印が動けば集め直す");
     assert_eq!(acct.doc(NOW), second, "印が動かなければ同じ電文");
     assert_eq!(place.calls("scribe2").len(), 18, "印が動かなければ持ち回す");
+}
+
+/// state dir の event log の更新時刻だけを 1 秒進める（字と長さは替えない・引数の state dir なら集め直しを起こす）。
+fn alean_bump(state: &Path) {
+    let log = File::options()
+        .write(true)
+        .open(state.join("fleet/events.jsonl"))
+        .expect("event log を開く");
+    let was = log
+        .metadata()
+        .and_then(|m| m.modified())
+        .expect("event log の更新時刻");
+    log.set_modified(was + Duration::from_secs(1))
+        .expect("event log の更新時刻を替える");
+}
+
+/// project の anchor の .beads の issues.jsonl を置く（台帳の印を動かす）。
+fn alean_mark(place: &Place, project: &str) {
+    let beads = place.work.join(project).join(".beads");
+    fs::create_dir_all(&beads).expect("anchor の .beads");
+    fs::write(beads.join("issues.jsonl"), "").expect("anchor の issues.jsonl");
+}
+
+#[test]
+fn alean_ledger_follows_mark() {
+    let place = Place::new("alean-mark", false);
+    let acct = place.acct();
+    let first = acct.doc(NOW);
+    assert_eq!(first, place.core_doc(&[]));
+    assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
+    alean_bump(&place.host_state());
+    assert_eq!(acct.doc(NOW), first, "印の同じ台帳は前の読み");
+    assert_eq!(place.calls("scribe2").len(), 18, "印が動けば集め直す");
+    assert_eq!(
+        place.calls("bd"),
+        ["proj-a", "proj-b", "proj-b", "proj-e"],
+        "読めなかった proj-b だけを撃ち直す"
+    );
+    alean_mark(&place, "proj-a");
+    alean_bump(&place.host_state());
+    assert_eq!(acct.doc(NOW), first, "台帳の印が動いた後の読み");
+    assert_eq!(place.calls("scribe2").len(), 27);
+    assert_eq!(
+        place.calls("bd"),
+        ["proj-a", "proj-a", "proj-b", "proj-b", "proj-b", "proj-e"],
+        "印の動いた proj-a を読み直す"
+    );
+}
+
+#[test]
+fn alean_git_held() {
+    assert_eq!(GIT_HOLD, Duration::from_secs(60));
+    let place = Place::new("alean-git", false);
+    let acct = place.acct().with_git_hold(Duration::from_millis(400));
+    let first = acct.doc(NOW);
+    let once = place.calls("git");
+    assert_eq!(once.len(), 10, "{once:?}");
+    alean_bump(&place.host_state());
+    assert_eq!(acct.doc(NOW), first);
+    assert_eq!(place.calls("scribe2").len(), 18, "印が動けば集め直す");
+    assert_eq!(place.calls("git"), once, "持ち回しの内は git を撃たない");
+    thread::sleep(Duration::from_millis(500));
+    alean_bump(&place.host_state());
+    assert_eq!(acct.doc(NOW), first);
+    let mut twice: Vec<String> = once.iter().flat_map(|c| [c.clone(), c.clone()]).collect();
+    twice.sort();
+    assert_eq!(place.calls("git"), twice, "持ち回しの後は撃ち直す");
+}
+
+#[test]
+fn alean_own_ledger_shared() {
+    let place = Place::new("alean-own", false);
+    let own = Source::new(
+        format!("{}/.", place.anchor("proj-a")),
+        place.program("bd"),
+    )
+    .watched();
+    own.read();
+    assert_eq!(place.calls("bd"), ["proj-a"], "見張りの読み");
+    let acct = place.acct().with_own(own);
+    let first = acct.doc(NOW);
+    assert_eq!(
+        place.calls("bd"),
+        ["proj-a", "proj-b", "proj-e"],
+        "proj-a は見張りの読みを分け合う"
+    );
+    alean_mark(&place, "proj-a");
+    alean_bump(&place.host_state());
+    assert_eq!(acct.doc(NOW), first);
+    assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-b", "proj-e"]);
+    assert_eq!(first, place.acct().doc(NOW), "with_own の無い読みと同じ電文");
+}
+
+#[test]
+fn alean_wiring_text() {
+    let read = |path: &str| {
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).expect(path)
+    };
+    let (module, acct) = (read("src/server/mod.rs"), read("src/acct.rs"));
+    assert_eq!(
+        module.matches(".with_own(sources.ledger.clone())").count(),
+        1,
+        "server が見張りの Source を渡す"
+    );
+    assert_eq!(
+        acct.matches(".map(|_| s.spawn(move || self.ledger_got(a)))")
+            .count(),
+        1,
+        "台帳は印を見る読みで読む"
+    );
+    assert!(!acct.contains("s.spawn(move || source.got())"));
 }
 
 #[test]

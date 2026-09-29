@@ -518,6 +518,9 @@ fn rhold_acct_ledger_held() {
         "{doc:?}"
     );
     place.down();
+    // 台帳の印が動かなければ前の読みを使い bd を撃たないので、anchor の印の file を置いて読み直させる（行 a-lean）。
+    fs::create_dir_all(anchor.join(".beads")).expect("anchor の .beads");
+    fs::write(anchor.join(".beads/issues.jsonl"), "").expect("anchor の印の file");
     thread::sleep(HOLD + Duration::from_secs(2));
     let (again, stale) = acct.doc_read(NOW);
     assert_eq!(again, doc);
