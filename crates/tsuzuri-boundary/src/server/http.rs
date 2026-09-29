@@ -11,13 +11,15 @@ pub const BODY_MAX: u64 = 65_536;
 /// 読み捨てる本文の上限（byte）。越える本文は読まずに接続を閉じる。
 const BODY_DRAIN_MAX: u64 = 1024 * 1024;
 
-/// 要求（頭の Host と Origin・Content-Length・`BODY_MAX` 以下の本文）。
+/// 要求（頭の Host と Origin と Accept-Encoding・Content-Length・`BODY_MAX` 以下の本文）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Request {
     pub method: String,
     pub target: String,
     pub host: Option<String>,
     pub origin: Option<String>,
+    /// 頭 Accept-Encoding の値（2 行在れば後の行・面の file の gzip の写しを選ぶ・行 g-gz）。
+    pub accept_encoding: Option<String>,
     /// 頭の Content-Length（無ければ 0）。
     pub content_length: u64,
     /// 本文（Content-Length が `BODY_MAX` を越えれば空）。
@@ -171,6 +173,7 @@ pub fn read_request(stream: impl Read) -> io::Result<Request> {
         target: target.to_string(),
         host: None,
         origin: None,
+        accept_encoding: None,
         content_length: 0,
         body: Vec::new(),
     };
@@ -190,6 +193,8 @@ pub fn read_request(stream: impl Read) -> io::Result<Request> {
             request.host = Some(v.to_string());
         } else if k.eq_ignore_ascii_case("origin") {
             request.origin = Some(v.to_string());
+        } else if k.eq_ignore_ascii_case("accept-encoding") {
+            request.accept_encoding = Some(v.to_string());
         }
     }
     let length = request.content_length;
@@ -327,6 +332,7 @@ mod tests {
             target: "/".into(),
             host: host.map(str::to_string),
             origin: origin.map(str::to_string),
+            accept_encoding: None,
             content_length: 0,
             body: Vec::new(),
         };
@@ -359,6 +365,7 @@ mod tests {
             target: target.into(),
             host: None,
             origin: None,
+            accept_encoding: None,
             content_length: 0,
             body: Vec::new(),
         };

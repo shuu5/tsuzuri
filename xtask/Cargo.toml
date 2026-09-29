@@ -5,4 +5,6 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+# 行 g-gz（裁定 t3-hub.52.40:20260928T0156Z-1）: 配布の file の gzip の写しの deflate（枠と CRC-32 は gz の module で書く）。
+miniz_oxide = "0.8"
 tsuzuri-boundary = { path = "../crates/tsuzuri-boundary" }

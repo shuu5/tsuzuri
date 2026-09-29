@@ -2,8 +2,10 @@
 //! check は workspace の build・歯の全部・clippy（host と面の wasm）・面の組み立てを順に撃ち、最初に落ちた段の rc を返す。
 //! surface-build は面の crate の dir で trunk を呼び、dist に index.html と wasm の file を出す（便 g-min）。
 //! accept は受入 12 条を全画面 × 2 幅 × 2 mode で測り report を書く（行 j-runner・入口は accept の module）。
+//! surface-build は dist が揃えば wasm・js・css の file ごとに隣へ gzip の写し（名に .gz）を書く（行 g-gz・gz の module）。
 
 mod accept;
+mod gz;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -91,7 +93,8 @@ fn check(root: &Path) -> i32 {
     rc
 }
 
-/// 面の crate の dir で `trunk build` を撃ち（設定は Trunk.toml）、dist に index.html と wasm の file が在るかを見る。
+/// 面の crate の dir で `trunk build` を撃ち（設定は Trunk.toml）、dist に index.html と wasm の file が在るかを見て、
+/// 揃っていれば gzip の写しを書く（書けなければ 1）。
 fn surface_build(root: &Path) -> i32 {
     let dir = root.join(SURFACE_DIR);
     eprintln!("xtask surface-build: trunk build ({SURFACE_DIR})");
@@ -112,7 +115,19 @@ fn surface_build(root: &Path) -> i32 {
     }
     let dist = dir.join("dist");
     match dist_missing(&dist) {
-        None => 0,
+        None => match gz::write_copies(&dist) {
+            Ok(copies) => {
+                eprintln!(
+                    "xtask surface-build: gzip の写しを {} 個書いた",
+                    copies.len()
+                );
+                0
+            }
+            Err(e) => {
+                eprintln!("xtask surface-build: gzip の写し: {e}");
+                1
+            }
+        },
         Some(what) => {
             eprintln!("xtask surface-build: {} に {what} が無い", dist.display());
             1
@@ -293,7 +308,8 @@ mod tests {
     ];
 
     /// crate ごとの直接依存の名の一覧（member の dir と、依存の全部の節（target ごとの節も）の名・名の順）。
-    /// 外の部品は便ごとに足した名だけ: serde（便 a）・serde_json（便 b・中核は便 c）・Leptos の一式（便 g-min・規則の行 R-25）。
+    /// 外の部品は便ごとに足した名だけ: serde（便 a）・serde_json（便 b・中核は便 c）・Leptos の一式（便 g-min・規則の行 R-25）・
+    /// miniz_oxide（行 g-gz・xtask だけ・裁定 t3-hub.52.40:20260928T0156Z-1）。
     /// 名を足す便はこの一覧を直す。一覧に無い名が manifest に在れば落ちる。
     const DIRECT_DEPS: [(&str, &[&str]); 5] = [
         ("crates/tsuzuri-contract", &["serde", "serde_json"]),
@@ -315,7 +331,7 @@ mod tests {
                 "web-sys",
             ],
         ),
-        ("xtask", &["tsuzuri-boundary"]),
+        ("xtask", &["miniz_oxide", "tsuzuri-boundary"]),
     ];
 
     /// 面の crate の直接依存の上限（規則の行 R-25 の値・要件 NFR3）。rules の file の行 R-25 の字と照らす。
