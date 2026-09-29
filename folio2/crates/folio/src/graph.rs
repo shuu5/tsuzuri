@@ -7,6 +7,8 @@
 //! 便 185（docs/design/delivery-185.md §1・判断の記録 ADR-32・要件 FR14 第 1.54 版）: 設計ノートの契約表の節の行も節点にする
 //! （種類 設計ノートの行・id は meta の id と行 id を「#」でつないだ字・辺は req と depends）。読み手は床と導出と同じ note.rs の load_notes。
 //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
+//! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
+//! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
 
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use std::fs;
@@ -259,7 +261,8 @@ const RELATIONS: [(&str, usize); 4] = [("articles", 1), ("reqs", 2), ("rules", 3
 type Ref = (String, String, &'static str);
 
 /// 索引: 節点（id → 種類・file・題）と、欄が指した参照と、行の逐語から組んだ節点の要約値と id の行の番号（--print
-/// だけが組む）と、節点の平易文と技術の要約の字（無ければ None・便 180）と、2 度組もうとした節点の id（便 185）。
+/// だけが組む）と、節点の平易文と技術の要約の字（無ければ None・便 180）と、所属 file の文書の状態の字（便 208）と、
+/// 2 度組もうとした節点の id（便 185）。
 #[derive(Default)]
 struct Index {
     nodes: BTreeMap<String, (&'static str, String, String)>,
@@ -267,6 +270,7 @@ struct Index {
     digests: BTreeMap<String, String>,
     lines: BTreeMap<String, usize>,
     texts: BTreeMap<String, (Option<String>, Option<String>)>,
+    states: BTreeMap<String, String>,
     notes: Vec<String>,
     twice: BTreeSet<String>,
 }
@@ -287,6 +291,13 @@ impl Index {
         self.texts
             .entry(id.to_string())
             .or_insert((plain, eng.map(str::to_string)));
+    }
+
+    /// 節点の所属 file の文書の状態の欄の字を覚える（字でなければ覚えない＝--summary で null・便 208）。
+    fn state(&mut self, id: &str, status: Option<&Node>) {
+        if let Some(text) = status.and_then(Node::as_str) {
+            self.states.entry(id.to_string()).or_insert_with(|| text.to_string());
+        }
     }
 
     fn edge(&mut self, from: &str, to: &str, ty: usize) {
@@ -335,8 +346,9 @@ impl Index {
         out
     }
 
-    /// 節点ごとの 1 行の JSON（--print --summary・便 180）。欄は id・kind・file・line・title・plain・eng の順で空白を
-    /// 挟まない。題は表と同じ字・line は所属 file の中でその id が書かれた行（1 始まり）・plain と eng は無ければ null。
+    /// 節点ごとの 1 行の JSON（--print --summary・便 180）。欄は id・kind・file・line・title・plain・eng・status の順で空白を
+    /// 挟まない。題は表と同じ字・line は所属 file の中でその id が書かれた行（1 始まり）・plain と eng は無ければ null・
+    /// status は判断の記録と設計ノートの行の所属 file の状態の字で、ほかの節点と字でない状態は null（便 208）。
     fn jsonl(&self) -> String {
         let mut out = String::new();
         for (id, (kind, file, title)) in &self.nodes {
@@ -348,7 +360,8 @@ impl Index {
             }
             out.push_str(&format!(",\"line\":{line},\"title\":"));
             json_str(title, &mut out);
-            for (key, value) in [(",\"plain\":", plain), (",\"eng\":", eng)] {
+            let state = self.states.get(id).cloned();
+            for (key, value) in [(",\"plain\":", plain), (",\"eng\":", eng), (",\"status\":", state)] {
                 out.push_str(key);
                 match value {
                     Some(text) => json_str(&text, &mut out),
@@ -506,6 +519,7 @@ fn adr(index: &mut Index, dir: &Path) -> Result<(), String> {
         let file = format!("adr/{name}");
         index.node(id, 10, &file, root.get("title"));
         index.texts(id, &root, eng(&root));
+        index.state(id, root.get("status"));
         index.field(id, root.get("basis"), 8);
         index.field(id, root.get("produced"), 15);
         index.field(id, root.get("figures"), 14);
@@ -523,7 +537,7 @@ fn adr(index: &mut Index, dir: &Path) -> Result<(), String> {
 }
 
 /// 設計ノート（便 185・判断の記録 ADR-32）: 契約表の節の行・req・depends。id は meta の id と行 id を「#」でつないだ字、
-/// 題は行の section が指す節の題、技術の要約は行の題の全文。読み手は床と導出と同じ `note::load_notes`（置き場が無ければ
+/// 題は行の section が指す節の題、技術の要約は行の題の全文、状態はノートの meta.status（便 208）。読み手は床と導出と同じ `note::load_notes`（置き場が無ければ
 /// 0 本・dir でない・読めない file が在れば Err＝索引を組まない・P-4.1）。
 fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
     let nd = dir.join(NOTE_DIR);
@@ -544,6 +558,7 @@ fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
         let Some(meta) = doc.root.get("meta").and_then(id_of) else {
             continue;
         };
+        let status = doc.root.get("meta").and_then(|m| m.get("status"));
         let sections = section(&doc.root, "sections");
         let tables = sections
             .iter()
@@ -559,6 +574,7 @@ fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
                 .and_then(|n| sections.iter().find(|s| s.get("n").and_then(Node::as_str) == Some(n)));
             index.node(&id, 11, &file, head.and_then(|s| s.get("title")));
             index.texts(&id, row, row.get("title").and_then(Node::as_str));
+            index.state(&id, status);
             index.field(&id, row.get("req"), 17);
             for to in row.get("depends").map(ids).unwrap_or_default() {
                 index.edge(&id, &format!("{meta}#{to}"), 18);

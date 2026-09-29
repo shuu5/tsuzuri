@@ -12,6 +12,9 @@
 //! 6. 1 本のノートの 2 つの契約表に同じ行 id が在れば、索引のどの口（--print・--summary・--digest・folio hello）も
 //!    組めず（2）、床は 索引の節点 の違反に数える。
 //! 7. 退役の設計ノートの行も節点になる（状態で絞らない・判断の記録 ADR-32 決定 (1)）。
+//! 8. 便 208（docs/design/delivery-208.md §1 (c)・判断の記録 ADR-35 決定 (2)・要件 FR31）: --summary の設計ノートの行の
+//!    status はノートの meta.status の字そのまま（draft・effective・retired・example）で、状態の欄が無いか字でなければ null。
+//! 9. 外の置き場（骨格 folio init に外の利用者の形のノートを足した写し）でも同じ形: 判断の記録と設計ノートの行だけが字を持つ。
 
 use std::fs;
 use std::io::Write;
@@ -131,7 +134,7 @@ fn f185_the_frozen_base_row_is_a_node_with_its_req_edge() {
     let lines: Vec<&str> = summary.lines().filter(|l| l.contains("#a\"")).collect();
     assert_eq!(
         lines,
-        [r#"{"id":"example#a","kind":"設計ノートの行","file":"design-note/example.yaml","line":55,"title":"目的","plain":null,"eng":"図の生成の口 3 つを 1 便で置く"}"#]
+        [r#"{"id":"example#a","kind":"設計ノートの行","file":"design-note/example.yaml","line":55,"title":"目的","plain":null,"eng":"図の生成の口 3 つを 1 便で置く","status":"example"}"#]
     );
     let digest = passed(folio(&["graph", "--digest"], &dir));
     for want in ["\n設計ノートの行\t1\n", "\nreq\t1\t0\n", "\ndepends\t0\t0\n", "\ndesign-note/example.yaml\t1\n"] {
@@ -219,9 +222,9 @@ fn f185_block_rows_keep_the_meta_id_the_section_title_and_depends() {
     assert_eq!(
         wave,
         [
-            r#"{"id":"wave#p","kind":"設計ノートの行","file":"design-note/wave-file.yaml","line":23,"title":"行 p — 一つ目の行の見出し","plain":null,"eng":"一つ目の行の題"}"#,
-            r#"{"id":"wave#q","kind":"設計ノートの行","file":"design-note/wave-file.yaml","line":30,"title":"行 q — 二つ目の行の見出しは三十六字を越えるので、索引の表の題では後","plain":null,"eng":"二つ目の行の題は技術の要約として全文が出て、表の題の三十六字では切られないことを見る"}"#,
-            r#"{"id":"wave#r","kind":"設計ノートの行","file":"design-note/wave-file.yaml","line":36,"title":"行 p — 一つ目の行の見出し","plain":null,"eng":"三つ目の行は流れの形で id が先頭でない"}"#,
+            r#"{"id":"wave#p","kind":"設計ノートの行","file":"design-note/wave-file.yaml","line":23,"title":"行 p — 一つ目の行の見出し","plain":null,"eng":"一つ目の行の題","status":"draft"}"#,
+            r#"{"id":"wave#q","kind":"設計ノートの行","file":"design-note/wave-file.yaml","line":30,"title":"行 q — 二つ目の行の見出しは三十六字を越えるので、索引の表の題では後","plain":null,"eng":"二つ目の行の題は技術の要約として全文が出て、表の題の三十六字では切られないことを見る","status":"draft"}"#,
+            r#"{"id":"wave#r","kind":"設計ノートの行","file":"design-note/wave-file.yaml","line":36,"title":"行 p — 一つ目の行の見出し","plain":null,"eng":"三つ目の行は流れの形で id が先頭でない","status":"draft"}"#,
         ]
     );
 }
@@ -384,4 +387,68 @@ fn f185_a_retired_note_row_is_still_a_node() {
         ]
     );
     assert_eq!(note_rows(&edges), ["example#a\tFR15\treq", "old#z\tFR1\treq"]);
+}
+
+/// --summary の行の id と最後の欄 status の字（status の欄がちょうど最後に 1 つ在ること）。
+fn states(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .map(|line| {
+            let at = line.rfind(",\"status\":").unwrap_or_else(|| panic!("status の欄が無い: {line}"));
+            assert_eq!(line.matches(",\"status\":").count(), 1, "{line}");
+            let tail = line[at + 10..].strip_suffix('}').unwrap_or_else(|| panic!("{line}"));
+            (line.split('"').nth(3).unwrap().to_string(), tail.to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn f208_a_note_line_carries_the_note_state_word() {
+    let work = Work::base("state");
+    work.write("design-note/wave-file.yaml", WAVE);
+    work.write("design-note/old.yaml", OLD);
+    let eff = OLD.replace("id: old", "id: eff").replace("status: retired", "status: effective");
+    work.write("design-note/eff.yaml", &eff);
+    work.write("design-note/bare.yaml", &OLD.replace("id: old", "id: bare").replace("  status: retired\n", ""));
+    work.write("design-note/list.yaml", &OLD.replace("id: old", "id: list").replace("status: retired", "status: [retired]"));
+    let text = passed(folio(&["graph", "--print", "--summary"], &work.dir()));
+    let notes: Vec<(String, String)> = states(&text).into_iter().filter(|(id, _)| id.contains('#')).collect();
+    let want = [
+        ("bare#z", "null"),
+        ("eff#z", "\"effective\""),
+        ("example#a", "\"example\""),
+        ("list#z", "null"),
+        ("old#z", "\"retired\""),
+        ("wave#p", "\"draft\""),
+        ("wave#q", "\"draft\""),
+        ("wave#r", "\"draft\""),
+    ];
+    assert_eq!(notes, want.map(|(a, b)| (a.to_string(), b.to_string())));
+}
+
+#[test]
+fn f208_an_outside_place_has_the_same_shape() {
+    let root = std::env::temp_dir().join(format!("folio-graph-notes-outside-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    let dir = root.join("design-intent");
+    let init = Command::new(env!("CARGO_BIN_EXE_folio")).args(["init", "--dir"]).arg(&dir).output().unwrap();
+    assert_eq!(init.status.code(), Some(0), "{}", String::from_utf8_lossy(&init.stderr));
+    fs::write(dir.join("design-note/wave-file.yaml"), WAVE).unwrap();
+    let text = passed(folio(&["graph", "--print", "--summary"], &dir));
+    let _ = fs::remove_dir_all(&root);
+    let keys = ["{\"id\":", ",\"kind\":", ",\"file\":", ",\"line\":", ",\"title\":", ",\"plain\":", ",\"eng\":", ",\"status\":"];
+    for line in text.lines() {
+        let mut at = 0;
+        for key in keys {
+            at += line[at..].find(key).unwrap_or_else(|| panic!("{key} が順に無い: {line}")) + key.len();
+        }
+    }
+    let got = states(&text);
+    let named: Vec<(&str, &str)> =
+        got.iter().filter(|(_, st)| st != "null").map(|(id, st)| (id.as_str(), st.as_str())).collect();
+    assert_eq!(
+        named,
+        [("ADR-1", "\"proposed\""), ("wave#p", "\"draft\""), ("wave#q", "\"draft\""), ("wave#r", "\"draft\"")]
+    );
+    assert_eq!(got.len(), 10, "骨格の 7 節点と外の利用者の形のノートの 3 行");
 }
