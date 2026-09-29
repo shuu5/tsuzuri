@@ -45,4 +45,6 @@
     "sum": "070c74ac3f213c99d4725cf59554b69636b19c75edff3f4ce23417ca11722a92"
   - "id": "ADR-21"
     "sum": "11f8461ef4b3b726e0fa6e3f437a9d08ba6afd0e5ff77fd955e7f979fd5d2a44"
-"digest": "93b8bab2d3a2a5b8cceef9faf4a3a12d1d7c1524ff781c24a0321b993cb05f9d"
+  - "id": "ADR-22"
+    "sum": "295074ffd1bbe6dd628c55b974e46dc77b7dd7ae120e300194aa93a27282a4b1"
+"digest": "354bf0f7c0a1ed1309a6e92bb42e29d48b2d0cb20e71b98dc2710c42c0d710cf"
