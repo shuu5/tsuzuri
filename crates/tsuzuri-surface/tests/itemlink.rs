@@ -76,6 +76,7 @@ fn want(shape: &str, alert: bool, id: &str, title: &str) -> Item {
         id: id.to_string(),
         title: title.to_string(),
         aside: String::new(),
+        stage: None,
     }
 }
 

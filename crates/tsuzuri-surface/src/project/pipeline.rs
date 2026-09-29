@@ -6,6 +6,9 @@
 //! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は日を問わず Landed の列に出し、
 //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
 //! 語は語の辞書の `CI_KEYS` の鍵から引く。
+//! 台帳の一覧の項に出す段は札と同じ読みから `stages` 1 つで組む（行 c-ledger-stage のつなぎ）。
+
+use std::collections::BTreeMap;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{Ci, Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
@@ -13,7 +16,7 @@ use tsuzuri_contract::graph::{GraphDoc, title36};
 use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::wire;
 
-use super::{Body, NO_CONTENT, NOT_READ, map};
+use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
 use crate::frame::{self, Block};
 use crate::mapview::graph::cut;
 use crate::view::{Fetched, id_order, jst, read_rows};
@@ -380,6 +383,15 @@ pub fn closed_card(card: &PipelineCard) -> bool {
             .is_some_and(|r| r.starts_with(CLOSED_TAG))
 }
 
+/// 札の段の字（閉じた（着地せず）の札は `CLOSED_STAGE`・ほかは段の名）。
+pub fn stage_word(card: &PipelineCard) -> String {
+    if closed_card(card) {
+        CLOSED_STAGE.to_string()
+    } else {
+        format!("{:?}", card.stage)
+    }
+}
+
 /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
 /// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にし、hover の詳しくに閉じた理由を折って出す。
 /// CI の読みを出す札（`ci_shown`）は理由の代わりに読みの語を出し、CI を待つ札の状態の記号は `CI_WAIT_STATE`。
@@ -389,11 +401,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
     let id = card.contract.to_string();
     let title = title_of(rows, &id);
     let closed = closed_card(card);
-    let stage = if closed {
-        CLOSED_STAGE.to_string()
-    } else {
-        format!("{:?}", card.stage)
-    };
+    let stage = stage_word(card);
     let age = card.elapsed_s.map_or_else(|| NO_AGE.to_string(), age);
     let shown = ci_shown(card);
     let why = match shown {
@@ -448,6 +456,31 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
         closed,
         ci: if lane.stops() { None } else { shown },
     }
+}
+
+/// 台帳の一覧の項に出す板の段（札の bead の id の字の鍵・記号と閉じたかは札の読みの `kcard` の値・字は `stage_word` に
+/// 札の meta の CI の語を ` · ` で足した字）。口が読めない・札がまだ分からない・電文が読めない間は空。
+/// 器の局面の出力を読む後の行 c-ledger-lc はこの 1 つを替える。
+pub fn stages(fetched: &Fetched) -> BTreeMap<String, Staged> {
+    let Ok(cards) = cards(fetched) else {
+        return BTreeMap::new();
+    };
+    cards
+        .iter()
+        .map(|c| {
+            let k = kcard(c, &[]);
+            let word = match k.ci {
+                Some(ci) => format!("{} · {}", stage_word(c), label(ci_key(ci))),
+                None => stage_word(c),
+            };
+            let staged = Staged {
+                state: k.state,
+                closed: k.closed,
+                word,
+            };
+            (k.id, staged)
+        })
+        .collect()
 }
 
 /// 節点の card を札に付ける値（見本の cardContent の data-run の枝: 題と種類と帯と状態は節点から、
@@ -577,6 +610,9 @@ pub fn misfit_href(card: &MisfitCard, mode: frame::Mode) -> String {
 pub fn view() -> leptos::prelude::AnyView {
     dom::view()
 }
+
+#[cfg(target_arch = "wasm32")]
+pub use dom::stage_sym;
 
 /// 板の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
@@ -758,20 +794,7 @@ mod dom {
 
     /// 1 枚の札（押すと契約 bead と同じ id の節点の頁へ・指を置くと hover の card）。
     fn kcard_view(card: &Kcard, mode: Mode) -> AnyView {
-        let sym = if card.closed {
-            view! {
-                <span class="st" style="color:var(--ink-3)" aria-label=CLOSED_STAGE inner_html=CROSS></span>
-            }
-            .into_any()
-        } else {
-            match card.state {
-                Some(v) => state_icon(v),
-                None => {
-                    view! { <span class="st" style="color:var(--s-land)" inner_html=CHECK></span> }
-                        .into_any()
-                }
-            }
-        };
+        let sym = stage_sym(card.closed, card.state);
         let closed = card.closed.then(|| view! { <span>{CLOSED_STAGE}</span> });
         let ci = card
             .ci
@@ -800,5 +823,23 @@ mod dom {
             </a>
         }
         .into_any()
+    }
+
+    /// 札と台帳の一覧の項の段の記号（閉じた（着地せず）は ✕・状態の記号の値が在ればその記号・無ければ取り込みの印）。
+    pub fn stage_sym(closed: bool, state: Option<&'static str>) -> AnyView {
+        if closed {
+            view! {
+                <span class="st" style="color:var(--ink-3)" aria-label=CLOSED_STAGE inner_html=CROSS></span>
+            }
+            .into_any()
+        } else {
+            match state {
+                Some(v) => state_icon(v),
+                None => {
+                    view! { <span class="st" style="color:var(--s-land)" inner_html=CHECK></span> }
+                        .into_any()
+                }
+            }
+        }
     }
 }

@@ -106,6 +106,7 @@ fn cadl_group_cards_rules() {
         id: "zz.9".to_string(),
         title: "電文に無い項".to_string(),
         aside: String::new(),
+        stage: None,
     };
     let groups = vec![
         Group {

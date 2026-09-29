@@ -235,6 +235,7 @@ impl<'a> Graph<'a> {
                 id: node.id.clone(),
                 title: title36(&node.title),
                 aside: String::new(),
+                stage: None,
             }),
             open: !kids.is_empty() && !is_closed(state(doc, node)),
             kids,

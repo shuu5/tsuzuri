@@ -4,6 +4,7 @@
 //! （数え直しと判定の分岐を持たない）。段の並びと段ごとの項は配置の表（`LAYOUT`）の値で持ち、DOM は表を上から順にたどる。
 //! 未反映の一覧は口 /api/unreflected（本文は契約の型の UnreflectedList）から読み、電文の行の順と数をそのまま写す（行 g-unref-panel）。
 //! 一覧は epic の下に task・memo の順で、閉じた bead は出さない（全件は地図の方・行 g-ledger-home）。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
+//! 一覧の下の項は、板に札が在る bead なら板と同じ読み（block pipeline の `stages`）の段の記号と字を出す（行 c-ledger-stage）。
 //! epic の進みの行の題と一覧の項の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
 //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -18,7 +19,7 @@ use tsuzuri_contract::stats::{
 use tsuzuri_contract::wire;
 
 use super::seat::hm;
-use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, item};
+use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, Staged, item, staged_item};
 use crate::frame::Block;
 use crate::view::{Fetched, Screen, clock};
 use crate::vocab::label;
@@ -724,7 +725,13 @@ pub fn count(screen: &Screen) -> Reading<usize> {
 }
 
 /// 一覧の中身（閉じた行は出さない・閉じた epic の頭は、閉じていない下の項が在るときだけ残す・行 g-ledger-home）。
+/// 板の段は持たない（`staged_body` に空の段を渡した値）。
 pub fn body(screen: &Screen) -> Body<Vec<Group>> {
+    staged_body(screen, &BTreeMap::new())
+}
+
+/// 板の段つきの一覧の中身（`body` と同じ組で、下の項は bead の id の段が在れば段の字と記号を出す・epic の頭は段を出さない）。
+pub fn staged_body(screen: &Screen, stages: &BTreeMap<String, Staged>) -> Body<Vec<Group>> {
     match &screen.board {
         Reading::Unknown => Body::Unmeasured(LEDGER_UNREAD),
         Reading::Known(b) if b.groups.is_empty() => Body::Empty(EMPTY),
@@ -733,8 +740,12 @@ pub fn body(screen: &Screen) -> Body<Vec<Group>> {
                 .groups
                 .iter()
                 .filter_map(|g| {
-                    let children: Vec<Item> =
-                        g.children.iter().filter(|r| listed(r)).map(item).collect();
+                    let children: Vec<Item> = g
+                        .children
+                        .iter()
+                        .filter(|r| listed(r))
+                        .map(|r| staged_item(r, stages.get(r.id.as_str())))
+                        .collect();
                     let keep = match &g.epic {
                         Some(epic) => listed(epic) || !children.is_empty(),
                         None => !children.is_empty(),
@@ -887,11 +898,12 @@ mod dom {
 
     use super::{
         BLOCK, BURN_CAPTION, Card, EpicBar, Group, Judge, LAYOUT, METRICS_PATH, Metrics, NONE,
-        Net, OUTSIDE, Part, Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, body, burn_svg,
-        content, count, epic_cards, group_cards, more_line, name_label, spark_svg, unref_chip,
+        Net, OUTSIDE, Part, Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, burn_svg, content,
+        count, epic_cards, group_cards, more_line, name_label, spark_svg, staged_body, unref_chip,
         unref_list,
     };
     use crate::frame::{self, Mode};
+    use crate::project::pipeline::{self, stages};
     use crate::project::{Body, UNKNOWN, fold, item_view, map, section, state_icon, unmeasured};
     use crate::view::{Fetched, Screen};
     use crate::vocab::label;
@@ -1197,8 +1209,10 @@ mod dom {
     }
 
     /// 台帳の一覧（便 g-frame の中身・項の節点の card はグラフの読みから引く）。
+    /// 項の段は block pipeline と同じ口の読みから組む（板の口を先に読み、その中で台帳の画面を読む）。
     fn list_view(screen: RwSignal<Screen>, graph: ReadSignal<Fetched>) -> AnyView {
-        let list = move || match screen.with(body) {
+        let pipe = crate::net::read(pipeline::PATH);
+        let list = move || match pipe.with(|p| screen.with(|s| staged_body(s, &stages(p)))) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => view! { <div class="empty"><span>{line}</span></div> }.into_any(),
             Body::Filled(groups) => {

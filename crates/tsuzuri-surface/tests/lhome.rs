@@ -176,7 +176,10 @@ fn lhome_list_draws_body() {
     let rest = &dom[start..];
     let end = rest.find("\n    }\n").expect("list_view の終わり");
     let list_view = &rest[..end];
-    assert!(list_view.contains("screen.with(body)"), "{list_view}");
+    assert!(
+        list_view.contains("screen.with(|s| staged_body(s, &stages(p)))"),
+        "{list_view}"
+    );
     assert!(
         list_view.contains("map(|g| group_view(g, &cards))"),
         "{list_view}"
