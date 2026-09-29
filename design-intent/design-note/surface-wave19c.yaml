@@ -1,0 +1,84 @@
+# 設計ノート surface-wave19c — （発効 2026-09-29・持ち主の裁定 t3-hub.56:20260927T2259Z-1〔計画 surface-plan の承認〕・記帳先 = 問いの bead t3-hub.56 の notes・行の拠り = 要件 FR5 と見本・要件 FR3 と不変条件 g-9 と規則の行 R-17 と席の決め〔計画 surface-plan の 9 節〕）第 19 波 c — 導出グラフの節点の更新の時刻と一覧の面の更新の欄、不変条件 g-9 の数（detect）。要件は srs.yaml。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave19c.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave19c.toml#<行 id>。
+meta:
+  id: surface-wave19c
+  title: 第 19 波 c — 導出グラフの節点の更新の時刻と一覧の面の更新の欄、不変条件 g-9 の数（detect）
+  version: v0.1
+  status: effective
+  generated: 2026-09-29
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+  note: 設計ノート surface-base の傘の行 c（導出グラフ）の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは要件 FR5 と見本（c-updated）と、要件 FR3 と設計ノート surface の不変条件 g-9 と規則の行 R-17 と席の決め（c-g9・2026-09-29）で、計画 surface-plan の 9 節の計画だけの行 c-updated と c-g9 を起草して置く。c-updated は節点に更新の時刻を持たせ、一覧の面に更新の欄と新しい順の並べ替えを足す。c-g9 は本文で名指した設計文書の id のうち欄にも辺にも無い対を中核の床の関数で数え、g-9 の判定は detect の間は変えない。2 行の書く file は互いに素なので、ノートの depends は空。起草と試作は main 3742684（計画 v0.63）で撃った。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      導出グラフの行 2 つ（契約と中核と面の crate）。
+      c-updated は契約の GraphNode に欄 updated（UTC の epoch 秒）を足し、中核の build が bead は台帳の updated_at から、走行は読める ts を持つ最後の event から写す（設計の索引の節点は持たない）。
+      一覧の面は並べ替えを id・更新・状態の 3 つにし、行に更新の時刻（日本時間の月日と時分・無ければ ―）を出す。GraphNode を struct の字で組む着地済みの歯には欄の 1 行を足す。
+      c-g9 は中核の check に、folio の床の id の文法で本文の id を拾う fn と、設計の索引の節点の本文（folio の要約の plain と eng）で名指した id のうち欄にも辺にも無い対を名指す床の関数を置く。
+      g-9 の判定は detect の間は まだ分からない のままで、数を出す手と落とす側へ替える手は後の行。境界の server と cli は変えない。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - id: c-updated
+        title: 導出グラフの節点に更新の時刻（bead は台帳の updated_at・走行は最後の event の ts・設計の索引の節点は無し）を持たせ、一覧の面に更新の欄と新しい順の並べ替えを足す
+        req: [FR5]
+        section: "3"
+        write-set: ["crates/tsuzuri-contract/src/graph.rs", "crates/tsuzuri-core/src/graph/build.rs", "crates/tsuzuri-core/src/graph/view.rs", "crates/tsuzuri-surface/src/mapview/list.rs", "crates/tsuzuri-contract/tests/cform_graph.rs", "crates/tsuzuri-contract/tests/snapshots/graph.json", "crates/tsuzuri-core/tests/nsum.rs", "crates/tsuzuri-core/tests/csled.rs", "crates/tsuzuri-core/tests/dnrow.rs", "crates/tsuzuri-core/tests/dnskip.rs", "crates/tsuzuri-core/tests/gview.rs", "crates/tsuzuri-core/tests/gtuck.rs", "crates/tsuzuri-surface/tests/btuck.rs", "crates/tsuzuri-surface/tests/cadl.rs", "crates/tsuzuri-surface/tests/glabel.rs", "crates/tsuzuri-surface/tests/itemlink.rs", "crates/tsuzuri-surface/tests/mapgraph.rs", "crates/tsuzuri-surface/tests/nodepage.rs", "crates/tsuzuri-surface/tests/rvknode.rs", "+crates/tsuzuri-core/tests/cupd.rs", "+crates/tsuzuri-surface/tests/cupdlist.rs", "=crates/tsuzuri-surface/tests/mapview.rs"]
+        verify: ["cargo nextest run -p tsuzuri-core --test cupd --no-tests=fail cupd_", "cargo nextest run -p tsuzuri-surface --test cupdlist --no-tests=fail cupdlist_", "cargo nextest run -p tsuzuri-contract --test cform_graph --no-tests=fail contract_form_", "cargo nextest run -p tsuzuri-core --test nsum --no-tests=fail nsum_", "cargo nextest run -p tsuzuri-surface --test mapview --no-tests=fail mapview_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) 中核の graph::build は、節の fixture（設計の索引の節点の行 1 つ・台帳の bead 4 本・器の event 4 件）から組んだ節点の id・種類・更新の時刻の組を、id の字の順に FR1 と NodeKind::Req と無し・fx-1 と Task と 1790494756・fx-1-20260927T073916Z と Run と 1790494800・fx-2 と Task と 1790494756・fx-2-20260927T080000Z と Run と無し・fx-3 と Task と無し・fx-4 と Task と無し・fx-r1 と Receipt と無し と持つ（歯 cupd_build_times） (2) 契約の GraphNode は、鍵 updated の無い節点の JSON の字を欄 updated 無しに読み、欄 updated が 1790494756 の節点を鍵 updated と値 1790494756 の組を含む字に書いて、同じ節点に読み戻す（歯 cupd_wire_default） (3) 面の mapview::list の listing は、節の 6 つの節点の電文と query ?view=list&sort=updated で行の id を fx-b・fx-a・fx-c・FR2・fx-9・fx-10 の順に返し、その query の Query::from_search の sort は Sort::Updated（歯 cupdlist_sorts_by_updated） (4) Sort::ALL の name の列は id・updated・state、key の列は col_id・col_updated・col_state（歯 cupdlist_sort_choices） (5) 同じ電文と query ?sort=updated の行の Row::updated_word は、行の順に 09-27 16:40 JST・09-27 16:39 JST・09-27 16:39 JST・―・―・― で、pub const NO_UPDATED は ―（歯 cupdlist_updated_word） (6) list.rs に、DOM の行の meta の span の中で状態の語の span の直後に class が num の span で r.updated_word() を出す字（字は節）がちょうど 1 度在る（歯 cupdlist_wiring） (7) 契約の歯の graph の群の snapshot tests/snapshots/graph.json は歯の今の字と一致する（歯 contract_form_snapshot_matches） (8) 着地済みの歯 nsum の見本の節点の電文に、鍵 id・kind・file・digest・title・line・plain・eng・updated がこの順に 1 度ずつ在り、ほかの鍵は無い（歯 nsum_wire_keys_in_order） (9) Sort::ALL の 3 つの鍵はどれも面の語の辞書に在り（歯 mapview_query_keeps_view_and_filters）、list.rs の class の字はどれも stylesheet に在る（歯 mapview_classes_and_keys_exist） (10) cargo run -q -p xtask -- check が 0 で終わる
+        depends: []
+      - id: c-g9
+        title: 不変条件 g-9 の数（設計の索引の節点の本文で名指した設計文書の id のうち欄にも辺にも無い対）を中核の床の関数で名指し、g-9 の判定は detect の間は まだ分からない のままにする
+        req: [FR3]
+        section: "4"
+        write-set: ["crates/tsuzuri-core/src/graph/check.rs", "+crates/tsuzuri-core/tests/cg9.rs"]
+        verify: ["cargo nextest run -p tsuzuri-core --test cg9 --no-tests=fail cg9_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 中核の graph::check の pub fn mentioned_ids は、節の見本の字から id を P-7.2・FR3・NFR2・ADR-7・R-17・D-11・A-1・N-2・FR30・P-7・ADR-12・GOAL2・AC5・CON1・P-4.1 の順に返し、空の字と、偽の見本の字 fr3 と ADR-07 と R- と FR と R-2b をつないだ字からは何も返さない（歯 cg9_scan_grammar） (2) pub fn unfielded_mentions は、節の索引と要約の字と台帳から組んだグラフで Known の対 A-1 と FR3・A-1.1 と ADR-7・ADR-7 と A-1.1・nt#r1 と R-2 をこの順に返し、節の辺 3 本を足した索引から組んだグラフでは空の Known を返す（歯 cg9_pairs） (3) 要約の字を読めたかが偽なら Unknown、設計の索引が空の字なら Unknown、台帳が空の字なら (2) と同じ 4 つの対を返す（歯 cg9_unknown） (4) (2) のグラフで check の g-9 の判定は Unknown で、pub const UNMEASURED は g-9 の 1 つ（歯 cg9_g9_stays_unknown） (5) cargo run -q -p xtask -- check が 0 で終わる
+        depends: []
+  - n: 3
+    type: prose
+    title: 行 c-updated — 節点の更新の時刻と、一覧の面の更新の欄と並べ替え
+    body: |
+      在りかの main は 3742684（計画 surface-plan 第 0.63 版）。契約の crate tsuzuri-contract の src/graph.rs（pub mod graph）、中核の crate tsuzuri-core の src/graph/build.rs と src/graph/view.rs、面の crate tsuzuri-surface の src/mapview/list.rs を書く。前の行 c-dn-edges（便 t3-hub.52.94）は着地済みで、契約の歯 cform_graph と snapshot graph.json は今の main の字に書く。
+      なぜ。見本の地図の一覧（docs/design/mock3/map.html の list）は行ごとに更新の時刻を出し、並べ替えに id・更新・状態の 3 つを持つ（面の語の辞書 vocab.json の鍵 sort の internal は sort=id|updated|state・鍵 col_updated の label は 更新）。今の電文 GraphNode は時刻を持たず、list.rs の module の doc（3 行目）は「更新の時刻は電文に無いので出さず、並べ替えにも入れない」と書く。要件 FR5 の地図の 6 面の 1 つの一覧を見本の形に揃える（計画の行の ruling は 見本・要件 FR5）。
+      在りか・契約（write-set・今の main で 567 行）。pub struct GraphNode（224 行・derive は Debug・Clone・PartialEq・Eq・Serialize・Deserialize・Default は無い）の pub な欄は id・kind・file・digest・title・line（serde default・Option の u32）・plain・eng（どちらも serde default・Option の String）の 8 つ。時刻の型は lib.rs の pub type EpochSecs（u64・UTC の epoch 秒）。
+      在りか・中核（write-set）。build.rs（今の main で 645 行）は節点を 4 か所で struct の字で組む（設計の索引の行 269 行・bead 415 行・notes の定型行から導く裁定と受けと方針 433 行・走行 577 行）。台帳の 1 本の pub(crate) struct BdBead は欄 updated_at（Option の String・RFC 3339 の字のまま）を既に読む。fn add_runs（541 行）は event log の行を上から読み、欄 run と kind と stage を見る（event の時刻は欄 ts の RFC 3339）。中核の pub fn ledger::epoch_secs は RFC 3339（Z か ±HH:MM・小数の秒も可）を epoch 秒にし、形が違えば None。view.rs は 109 行で畳んだ箱の節点を struct の字で組む。
+      在りか・面（write-set・今の main で 369 行）。pub enum Sort（Id と State・pub const ALL は [Id, State]・name は id と state・key は col_id と col_state）・pub struct Row（pub な欄 id・title・shape・alert・band・kind・state・card・gist）・pub fn listing（並べは Sort::Id が帯の順と id の自然な順・Sort::State が状態の順位と id の自然な順）・私的な fn row・wasm だけの mod dom の fn row_view（行の meta の span の中に帯の chip と、種類と状態の語の span）。面の view.rs の pub fn clock は epoch 秒を日本時間の字（2026-09-27 16:39:00 JST の形）にし、pub const JST は字 JST（行 g-jst）。
+      形（契約）。GraphNode の欄 eng の後に pub な欄 updated（Option の EpochSecs・serde default）を足し、doc に出所を書く。struct の doc の欄の並びに 更新の時刻 を足す。
+      形（中核）。build.rs は use に crate::ledger::epoch_secs を足し、bead の節点の updated を BdBead の updated_at を epoch_secs で読んだ値（無いか読めなければ無し）にする。add_runs は run ごとに、欄 ts が epoch_secs で読める event を読むたびにその時刻を置き直し（読める ts を持つ最後の event の時刻）、走行の節点の updated にする（読める ts が無ければ無し）。設計の索引の節点と notes の定型行から導く節点の updated は無し。module の doc に 3 行（出所と、持たない節点と、その理由）を足す。view.rs の箱の節点の updated は無し。
+      形（面）。list.rs の module の doc を、並べ替えは id・更新・状態、行は更新の時刻（日本時間の月日と時分・無ければ ―）を持つ字に直す。Sort に Updated を足し、ALL を [Id, Updated, State]（見本の選択の順）、name を updated、key を col_updated にする。pub const NO_UPDATED（字 ―）を足す。Row に pub な欄 updated（Option の EpochSecs）と pub fn updated_word（時刻が在れば clock の字の 6 字目から 16 字目まで〔月日と時分〕に空白と JST を足した字・09-27 16:39 JST の形・無ければ NO_UPDATED）を足し、row は節点の updated を写す。listing の Sort::Updated は updated の新しい順で、時刻の無い節点は後ろ、同じなら id の自然な順（見本の並べと同じ）。row_view は meta の span の中の状態の語の span の直後に、class が num の span で r.updated_word() を出す（1 行の字は span の meta の閉じの前の 1 か所・class の num は既に stylesheet に在る）。
+      形（歯）。GraphNode に欄が増えるので、GraphNode を struct の字で組む着地済みの歯の file（中核の csled・dnrow・dnskip・gview・gtuck・nsum、面の btuck・cadl・glabel・itemlink・mapgraph・nodepage・rvknode、契約の cform_graph）の字ごとに updated の 1 行（無し）を足す（..base の更新の字と fn の頭は直さない）。nsum の歯 nsum_wire_keys_in_order の鍵の列の末に updated を足す。cform_graph の見本の GraphNode の 2 つ目（t3-hub.3 の契約）の updated を 1790494756 にし、snapshot graph.json を歯の今の字に写す（ほかの見本の節点は鍵 updated が null）。
+      節の fixture（中核の歯 cupd_build_times）。設計の索引の節点の行 FR1（要件・srs.yaml）。台帳の bead 4 本はどれも issue_type task で、fx-1 は updated_at 2026-09-27T07:39:16Z と notes の受けの定型行（受け id = fx-r1）、fx-2 は 2026-09-27T16:39:16+09:00、fx-3 は欄なし、fx-4 は字 昨日。event は 4 件で、run fx-1-20260927T073916Z の RunCreated（ts 2026-09-27T07:39:16Z）・StageChanged（ts 2026-09-27T07:40:00Z）・StageChanged（ts の字 x）と、run fx-2-20260927T080000Z の ts の無い RunCreated。2026-09-27T07:39:16Z は epoch 秒 1790494756、07:40:00Z は 1790494800。
+      節の電文（面の歯 cupdlist_）。節点 6 つ（電文の並び fx-10・fx-a・FR2・fx-c・fx-9・fx-b）。fx-a と fx-c は updated 1790494756（日本時間 09-27 16:39）、fx-b は 1790494800（16:40）、fx-10 は null、FR2 と fx-9 は鍵なし。辺と台帳と走行の属性は空。
+      決めた幅。時刻の出所は台帳と event log だけで、設計の索引の節点は時刻を持たない（folio の索引の表と要約の字は時刻の欄を持たず、tsuzuri は設計文書の YAML も git も読まない＝見本の語の辞書の注の file は最後の commit は、この行の範囲の外）。時刻の字は面が日本時間で出し、電文は UTC の epoch 秒のまま（行 g-jst と同じ決め）。
+      依存と順。ノートの depends は空（同じノートの c-g9 と書く file は互いに素）。計画 5 節の鎖で contract/graph.rs と core/graph/build.rs は c-dn-edges と c-g3g7（どちらも着地済み）の後、surface/mapview/list.rs は g-summary（着地済み）の後。契約の歯 cform_graph と snapshot graph.json は graph の群の鎖（c-dn-edges の後）。後に build.rs を書く行 c-map-lc と、索引を読む中核と地図の面を書く見込みの g-map-retired は、この行の後に流す（順は便の bead の依存で持つ・席が付ける）。
+      範囲の外。境界の server と cli の字は変えない（電文の節点の欄は serde で運ばれる）。地図のほかの面（圧縮・グラフ・表・木）と節点の頁と card に更新の時刻を出すこと。設計の索引の節点の時刻。
+  - n: 4
+    type: prose
+    title: 行 c-g9 — 名指した id が欄にも辺にも無い対を数える（detect）
+    body: |
+      在りかの main は 3742684（計画 surface-plan 第 0.63 版）。中核の crate tsuzuri-core の src/graph/check.rs（pub mod graph の pub mod check）だけを書く。
+      なぜ。不変条件 g-9（設計ノート surface の 19 節・名指した id は欄にも在る・本文で名指した id が欄か辺に無ければ数える・規則行 R-17 と同じ・detect から 2 周の実測の後に deny・要件 FR3）は、今の check.rs で測る機構が無く、判定はつねに まだ分からない。規則の表の行 R-17（kind detect・値 0 件）は、設計文書の中で id を持つ行の散文の欄に現れたその行以外の id のうち、どちらの行の型付きの欄にも無いものを数える（対は向きを問わない）。この行は同じ見方で数える機構を置き、判定は落とさない（席の決め・2026-09-29）。
+      在りか（write-set・今の main で 510 行）。module の doc（1〜6 行・g-9 は材料が 3 つの入力に無いので、つねに まだ分からない）。const RULES（37 行・12 本・g-9 は私的な fn unmeasured で、つねに Verdict::Unknown）。pub const INVARIANTS。pub const UNMEASURED（58 行・[g-9]・doc はつねに まだ分からない を返す 1 本〔材料が 3 つの入力に無い〕）。pub const RULED（[g-3, g-7]）。pub fn check・私的な fn judge・fn unmeasured・g-1 から g-12 の私的な fn・pub fn in_ruling_grammar（folio の裁定 id の文法の写し）・pub fn outside_rulings・pub const QUESTIONED・pub const SUMMARY_KINDS・pub fn unsummarized（474 行・要約の無い節点を tsuzuri_contract::board::Reading の Known の id の列か Unknown で返す床の値・不変条件でない）・単体の歯の mod tests（graph_rules_follow_the_id_list と graph_on_loop_finds_only_loops）。use は std の BTreeMap と BTreeSet・serde の Serialize・契約の board::Reading と graph の EdgeType と NodeKind・契約の ledger の MEMO_LABEL・super の Graph と Source。
+      使う物（この行は書かない・確かめた）。中核の mod.rs の pub struct Graph（pub な欄 nodes・edges・unread ほか）と pub fn is_read・pub fn index（id から節点への表・同じ id は先の節点）、pub enum Source の Source::Design の kinds（NodeKind::ALL の先頭の 12 = 設計文書の 11 種と設計ノートの行）。build.rs の pub fn add_summary（folio graph --print --summary の JSON Lines を読み、file を持つ節点のうち id と file が同じ行の在る節点の plain と eng を写す・読めなければ偽）。GraphNode の欄 plain と eng（Option の String）。
+      本文の出所。folio の索引の要約の字（folio graph --print --summary・欄は id・kind・file・line・title・plain・eng）を add_summary が写した設計の節点の plain と eng だけを本文にする（tsuzuri は設計文書の YAML を走査しない・計画 3 節の席の決め・行 c-dn-rows と同じ出所）。台帳の節点の plain と eng（bead の description の定型行）と走行の節点は数えない。
+      形。module の doc の g-9 の字を、detect の間（2 周の実測の前）は判定をつねに まだ分からない とし、本文で名指した id のうち欄にも辺にも無い対は床の値 unfielded_mentions が数えて名指す（行 c-g9）に直す。UNMEASURED の doc を、g-9 は detect の間は判定に出さず数は unfielded_mentions が名指す、に直す（値の [g-9] と RULES の g-9 の fn unmeasured は変えない）。mod tests の前に、私的な const SRS_PREFIXES（FR・NFR・AC・CON・GOAL）と私的な fn id_end（byte の列と始まりの位置を受け、id の終わりの位置か None）と pub fn mentioned_ids（&str を受け、&str の Vec を返す）と pub fn unfielded_mentions（&Graph と bool を受け、Reading の Known の String の組の Vec か Unknown を返す）を置く。
+      id の文法（folio の床の写し・folio の refs.rs の scan_ids と link.rs の scan_adr_ids と同じ）。前の字が ASCII の英数字か - なら始まらない。後ろの字が ASCII の英数字なら終わらない。判断の記録は ADR- に 1 から 9 の数字 1 つと数字の並び。条は P・A・N の 1 字と - と数字の並びで、その後に . と数字の並びが続いて後ろが空けば枝番まで、空かなければ枝番を外した形を試す。要件書の id は SRS_PREFIXES の頭と数字の並び。規則行は R か D の 1 字と - と数字の並び。拾った id の後ろの位置から続けて探し、現れた順に同じ id も現れた数だけ返す。
+      数え方（unfielded_mentions）。要約の字を読めたか（引数の bool・add_summary の返り）が偽か、設計の出所が読めなければ Unknown。読めたら、種類が Source::Design の kinds に在る節点ごとに、plain と eng の字（在る方）を mentioned_ids で読み、拾った id のうち index で引ける節点で種類が同じ kinds に在るものだけを見る。規範文（NodeKind::Norm）の id は最初の . の前の字（親の条の id）へ丸める（本文を持つ節点の id も、辺の両端も）。丸めた 2 つが同じなら数えない。グラフの全部の辺（型を問わない）の両端を丸めた組を両向きに持ち、丸めた 2 つの組がそこに無ければ、本文を持つ節点の id と拾った字のままの id の対を足す。対は字の順・重複なしの列にして Known で返す。
+      節の見本の字（歯 cg9_scan_grammar）。条 P-7.2 と FR3・NFR2（ADR-7）と R-17、D-11 と A-1 と N-2。FR30 と P-7.2x と XFR3 と R-1a と ADR-0 と ADR-12 と GOAL2 と AC5 と CON1 と -P-3 と P-4.1.2 と FR3FR4 と fx-hub.5。偽の見本の字は fr3 と ADR-07 と R- と FR と R-2b を字 と でつないだ 1 つの字。
+      節の索引と要約の字と台帳（歯 cg9_pairs・cg9_unknown・cg9_g9_stays_unknown）。節点 7 つ: A-1（条）・A-1.1（規範文）・R-2（規則行）・FR3（要件）・ADR-7（判断の記録）・GOAL1（目的）・nt#r1（設計ノートの行）。辺 5 本: A-1.1 から A-1 へ in-article・FR3 から GOAL1 へ goals・FR3 から ADR-7 へ adrs・R-2 から A-1.1 へ article・nt#r1 から FR3 へ req。要約の本文: A-1 の plain は R-2 と FR3 を見る、A-1.1 の eng は A-1 の枝。ADR-7 に従う、R-2 の eng は FR3FR4 と P-9 を数える、FR3 の eng は FR3 は GOAL1 と ADR-7 と FR9 を満たす、ADR-7 の plain は FR3 と A-1.1 を決める、GOAL1 は本文なし、nt#r1 の eng は R-2 を写す・FR3 を満たす。台帳は bead fx-1（issue_type task・description の概要の定型行 概要 = R-2 と FR3 を見る）。足す辺 3 本: A-1 から FR3 へ relations.reqs・ADR-7 から A-1.1 へ article・nt#r1 から R-2 へ rules。
+      今の main の見込みの数（歯で測らない・起草の測り）。main 3742684 の design-intent で folio graph --print と --print --summary を撃ち、この行と同じ見方で数えた対は 16（本文を持つ節点の種類で規範文 6・設計ノートの行 6・制約 2・条 1・受入基準 1）。folio の床の歯 R-17 は同じ木で 0 件。
+      R-17 との差（決めた幅）。folio の床の歯 R-17（folio の mentions.rs）は、この行の見方に加えて、受け皿の表（出所の行の種類ごとに型付きの欄が受けられる指す先の種類・値に無い組は数えない）と数えない言及の語形（10 語・言及を含む 1 文〔区切りは 。〕にどれかが在れば数えない）で閉じ、本文は散文の欄の全部を読む。この 2 つの表を同じ見方で写すと、今の main の数は 1（条 P-26 の本文の A-3）になる。この行は 2 つの表を code に写さず、規則の表からも読まない。規則の表の行 R-17 の字は 2 つの表を持たず、表の写しは設計文書の欄の決まりの file の folio の生成区間に在るので、読むと設計文書の YAML を tsuzuri が走査することになる（計画 3 節の席の決め・中核は file を読まない）。そのため g-9 の数は R-17 より多く出うる（detect の間は判定に使わない）。落とす側へ替える前に、表を folio の索引の出力から受けるか、差を認めるかを決める（席の決め・後の行）。
+      決めた幅。detect の間は判定を変えない: RULES の g-9 は fn unmeasured のまま、UNMEASURED は [g-9] のまま（境界の cli/graph.rs の 測る機構がまだ無い の字と、この値を見る着地済みの歯 server_read・kcli・graph・g3g7 は変えない）。数を tz graph --check に出す手と、2 周の実測の後に落とす側へ替える手は後の行（計画の 9 節・席が置く）。本文の無い節点（plain と eng のどちらも無い）は数えない（要約の無い節点は unsummarized が名指す）。
+      依存と順。ノートの depends は空（同じノートの c-updated と書く file は互いに素）。計画 5 節の鎖の core/graph/check.rs は c-summary-ledger と c-g3g7（どちらも着地済み）の後で、後に check.rs を書く行 c-note-stale はこの行の後に流す（順は便の bead の依存で持つ・席が付ける）。
+      範囲の外。境界の server と cli（数の表示）。台帳の本文（bead の description と notes）の言及。受け皿の表と数えない語形の写し。g-9 の判定の変更。
+
+figures: []
