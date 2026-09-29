@@ -4,6 +4,7 @@
 //! 眺めは節点を組の箱へ畳み、開く列で 1 段ずつ開く（`fold`・`view_open`・行 c-graph-fold）。
 //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
 //! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ（行 c-g3g7）。
+//! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる（行 c-g3-extern）。
 
 pub mod around;
 pub mod build;
@@ -145,6 +146,27 @@ impl RulingRow {
     }
 }
 
+/// ほかの project の台帳の読み（外の台帳・欄はどれも字の集まり・`build::outside` が組む・行 c-g3-extern）。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Outside {
+    /// bead の id の族（最初の「.」の前の字）。
+    pub families: BTreeSet<String>,
+    /// bead の id。
+    pub beads: BTreeSet<String>,
+    /// notes の裁定の定型行の id。
+    pub rulings: BTreeSet<String>,
+}
+
+impl Outside {
+    /// 裁定の書き出しの行の先が在るか（問いの形は notes の裁定の定型行の id・ほかは bead の id・`Graph::holds` と同じ分け）。
+    pub fn holds(&self, row: &RulingRow) -> bool {
+        match row.form {
+            RulingForm::Question => self.rulings.contains(&row.ruling),
+            RulingForm::NotesTime | RulingForm::Bead => self.beads.contains(&row.bead),
+        }
+    }
+}
+
 /// 方針の属性（範囲）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PolicyAttr {
@@ -179,6 +201,8 @@ pub struct Graph {
     pub policies: BTreeMap<String, PolicyAttr>,
     /// 節点の id ごとの結んだ裁定の書き出しの行（`build::add_rulings` が置く・読めなければ無し）。
     pub rulings: Option<BTreeMap<String, Vec<RulingRow>>>,
+    /// ほかの project の台帳の読み（置き場の順・読めない置き場は無し・既定は空の列・g-3 だけが見る・行 c-g3-extern）。
+    pub outside: Vec<Option<Outside>>,
 }
 
 impl Graph {

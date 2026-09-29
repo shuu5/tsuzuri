@@ -9,6 +9,7 @@
 //! 更新の時刻は、bead は台帳の updated_at、走行は event log の読める ts の最後の値を epoch 秒で読む（読めなければ無し）。
 //! 設計の索引の節点と notes の定型行から導く節点は時刻を持たない（無し）。
 //! 索引の表と notes の定型行は時刻の欄を持たず、tsuzuri は設計文書も git も読まないため。
+//! ほかの project の台帳の一覧は節点にせず、`outside` が bead の id と族と notes の裁定の定型行の id だけを読む（行 c-g3-extern）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -19,7 +20,7 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
 pub(crate) use tsuzuri_contract::ledger::bead_kind;
 
-use super::{BeadAttr, Graph, Inputs, PolicyAttr, RulingRow, RunAttr, Source};
+use super::{BeadAttr, Graph, Inputs, Outside, PolicyAttr, RulingRow, RunAttr, Source};
 use crate::ledger::epoch_secs;
 use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
 
@@ -201,6 +202,40 @@ pub fn add_rulings(g: &mut Graph, text: &str) -> bool {
     g.edges.extend(ruled);
     g.rulings = Some(joined);
     true
+}
+
+/// bead の id の族（最初の「.」の前の字）。
+pub(crate) fn family(bead: &str) -> &str {
+    bead.split('.').next().unwrap_or(bead)
+}
+
+/// 外の台帳の bead の 1 本のうち読む 2 欄（ほかの欄は読み捨てる）。
+#[derive(Debug, Deserialize)]
+struct OutsideBead {
+    id: String,
+    notes: Option<String>,
+}
+
+/// ほかの project の台帳の一覧（bd の読み取りの口が返す JSON の配列）を読む（行 c-g3-extern）。
+/// 字が空か JSON の配列として読めない（欄 id の無い行が在る）なら None。読めたら bead の id と族と、notes の
+/// 裁定の定型行（`TYPED_LINES` の裁定の種類）の id の集まり（配列が空なら既定の `Outside`）。
+pub fn outside(ledger: &str) -> Option<Outside> {
+    if ledger.trim().is_empty() {
+        return None;
+    }
+    let beads: Vec<OutsideBead> = serde_json::from_str(ledger).ok()?;
+    let mut out = Outside::default();
+    for bead in beads {
+        let notes = bead.notes.as_deref().unwrap_or_default();
+        for (kind, id, _) in typed_lines(notes) {
+            if kind == NodeKind::Ruling {
+                out.rulings.insert(id);
+            }
+        }
+        out.families.insert(family(&bead.id).to_string());
+        out.beads.insert(bead.id);
+    }
+    Some(out)
 }
 
 /// 語から閉じた enum の値を読む（契約の型の crate の serde の名が正本）。

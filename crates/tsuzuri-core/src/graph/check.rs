@@ -3,6 +3,8 @@
 //! 「まだ分からない」。g-9 は detect の間（2 周の実測の前）は判定をつねに「まだ分からない」とし、
 //! 本文で名指した id のうち欄にも辺にも無い対は床の値 `unfielded_mentions` が数えて名指す（行 c-g9）。
 //! 要る出所が読めなければ「まだ分からない」で、合格にしない。違反は名指す id を持つ。
+//! g-3 は族が自分の台帳に無い行（外の台帳の行）を、その族を持つ読めたほかの project の台帳（`Graph::outside`）で確かめ、
+//! 確かめられない行だけのためにまだ分からないとき `outside_heads` がその節点の数と族を名指す（行 c-g3-extern）。
 //! g-7 は宙に浮いた裁定のうち id が folio の裁定 id の文法の外の裁定を数えず、それだけが在れば「まだ分からない」。
 //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
 //! 全部の契約表の行が着地した設計ノートは床の値で `landed_notes` が名指す（行 c-note-stale）。
@@ -16,8 +18,8 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
 use tsuzuri_contract::ledger::MEMO_LABEL;
 
-use super::build::{BdBead, NOTE_ROW_KIND, read_ledger};
-use super::{Graph, Source};
+use super::build::{BdBead, NOTE_ROW_KIND, family, read_ledger};
+use super::{Graph, RulingRow, Source};
 
 /// 不変条件の判定（3 値）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -91,40 +93,85 @@ fn unmeasured(_: &Graph) -> Verdict {
     Verdict::Unknown
 }
 
-/// bead の id の族（最初の「.」の前の字）。
-fn family(bead: &str) -> &str {
-    bead.split('.').next().unwrap_or(bead)
+/// g-3 が数えた行（名指す節点と、確かめられない行の節点ごとの族・行 c-g3-extern）。
+struct G3Rows {
+    /// 先の無い行の節点（名指す）。
+    bad: BTreeSet<String>,
+    /// 族が自分の台帳のどの bead とも違い、外の台帳でも確かめられなかった行の節点ごとの族。
+    unverified: BTreeMap<String, BTreeSet<String>>,
 }
 
-/// g-3 発効した記録（判断の記録・規則行ほか結んだ節点）の裁定の字の先が台帳に在る。
-/// 先の無い行のうち族が台帳に在る行の節点を名指す。名指す節点が無く、族が台帳のどの bead とも違う行
-/// （外の台帳）が在れば「まだ分からない」。
-fn g3_ruled(g: &Graph) -> Verdict {
-    let Some(rulings) = &g.rulings else {
-        return Verdict::Unknown;
-    };
+/// 外の台帳の行（族が自分の台帳に無い行）を確かめる。族を持つ読めた外の台帳が無ければ確かめられない（None）。
+/// 在れば、そのどれかに先が在れば真、どれにも無ければ偽（1 つの族の bead は 1 つの台帳に在る）。
+fn outside_holds(g: &Graph, row: &RulingRow) -> Option<bool> {
+    let mut owners = g
+        .outside
+        .iter()
+        .flatten()
+        .filter(|o| o.families.contains(family(&row.bead)))
+        .peekable();
+    owners.peek()?;
+    Some(owners.any(|o| o.holds(row)))
+}
+
+/// g-3 の行を数える（裁定の書き出しを結んでいないか、設計の索引か台帳が読めなければ None）。
+/// 先の無い行のうち、族が自分の台帳に在る行は名指し、無い行（外の台帳）は `outside_holds` で確かめる。
+fn g3_rows(g: &Graph) -> Option<G3Rows> {
+    let rulings = g.rulings.as_ref()?;
     if !g.is_read(Source::Design) || !g.is_read(Source::Ledger) {
-        return Verdict::Unknown;
+        return None;
     }
     let families: BTreeSet<&str> = g.beads.keys().map(|id| family(id)).collect();
-    let mut bad: BTreeSet<String> = BTreeSet::new();
-    let mut foreign = false;
-    for (id, rows) in rulings {
-        for row in rows.iter().filter(|r| !g.holds(r)) {
-            if families.contains(family(&row.bead)) {
-                bad.insert(id.clone());
-            } else {
-                foreign = true;
+    let mut rows = G3Rows {
+        bad: BTreeSet::new(),
+        unverified: BTreeMap::new(),
+    };
+    for (id, held) in rulings {
+        for row in held.iter().filter(|r| !g.holds(r)) {
+            let kin = family(&row.bead);
+            if families.contains(kin) {
+                rows.bad.insert(id.clone());
+                continue;
+            }
+            match outside_holds(g, row) {
+                Some(true) => {}
+                Some(false) => {
+                    rows.bad.insert(id.clone());
+                }
+                None => {
+                    rows.unverified
+                        .entry(id.clone())
+                        .or_default()
+                        .insert(kin.to_string());
+                }
             }
         }
     }
-    if !bad.is_empty() {
-        Verdict::Violation(bad.into_iter().collect())
-    } else if foreign {
-        Verdict::Unknown
-    } else {
-        Verdict::Pass
+    Some(rows)
+}
+
+/// g-3 発効した記録（判断の記録・規則行ほか結んだ節点）の裁定の字の先が台帳に在る。
+/// 先の無い行のうち族が台帳に在る行の節点を名指す。族が台帳のどの bead とも違う行（外の台帳の行）は、
+/// その族を持つ読めたほかの project の台帳（`Graph::outside`）で確かめ、先が無ければ節点を名指す。
+/// 名指す節点が無く、確かめられない行が在れば「まだ分からない」。
+fn g3_ruled(g: &Graph) -> Verdict {
+    match g3_rows(g) {
+        None => Verdict::Unknown,
+        Some(rows) if !rows.bad.is_empty() => Verdict::Violation(rows.bad.into_iter().collect()),
+        Some(rows) if !rows.unverified.is_empty() => Verdict::Unknown,
+        Some(_) => Verdict::Pass,
     }
+}
+
+/// g-3 が確かめられない外の台帳の行だけのために「まだ分からない」のとき、その節点の数と族（字の順・重複なし）。
+/// ほかは None（名指す節点が在るか、確かめられない行が無いか、読めない出所が在る）。
+pub fn outside_heads(g: &Graph) -> Option<(usize, Vec<String>)> {
+    let rows = g3_rows(g).filter(|r| r.bad.is_empty() && !r.unverified.is_empty())?;
+    let families: BTreeSet<&String> = rows.unverified.values().flatten().collect();
+    Some((
+        rows.unverified.len(),
+        families.into_iter().cloned().collect(),
+    ))
 }
 
 /// 宙に浮いた裁定（answers の辺の元でも ruled_by の辺の先でもない裁定の節点）の id を、

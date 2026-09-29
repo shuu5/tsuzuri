@@ -17,5 +17,6 @@ pub(in crate::server) const ROUTE: Entry = Entry {
 fn graph(_: &Request, shared: &Shared) -> Response {
     let sources = &shared.sources;
     let (texts, stale) = sources.gather_held(true, true);
-    aged(json(200, wire::encode(&board::graph(&texts))), stale)
+    let doc = board::graph_outside(&texts, shared.others.outside());
+    aged(json(200, wire::encode(&doc)), stale)
 }

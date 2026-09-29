@@ -23,7 +23,7 @@ use tsuzuri_contract::graph::{
 };
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::stats::{LedgerStats, NextStep, UnreflectedList, UnreflectedRow};
-use tsuzuri_core::graph::{self, Graph, Inputs, Invariant};
+use tsuzuri_core::graph::{self, Graph, Inputs, Invariant, Outside};
 use tsuzuri_core::ledger::{Unreflected, UnreflectedItem};
 
 use super::design::Design;
@@ -162,9 +162,16 @@ fn summed(texts: &Texts) -> (Graph, bool) {
     (g, summary)
 }
 
-/// 導出グラフを組み、不変条件を数えて電文にする。
+/// 導出グラフを組み、不変条件を数えて電文にする（外の台帳の読みは無し）。
 pub fn graph(texts: &Texts) -> GraphDoc {
-    let g = built(texts);
+    graph_outside(texts, Vec::new())
+}
+
+/// `graph` と同じ組みで、ほかの project の台帳の読み（置き場の順・行 c-g3-extern）を欄 outside に置いて
+/// 不変条件を数え、電文にする。
+pub fn graph_outside(texts: &Texts, outside: Vec<Option<Outside>>) -> GraphDoc {
+    let mut g = built(texts);
+    g.outside = outside;
     let invariants = graph::check(&g);
     doc(&g, &invariants, &texts.summary)
 }

@@ -2,6 +2,8 @@
 //! - 旗なし — GraphDoc の電文を標準出力に 1 行
 //! - --check — 不変条件の 12 本を 3 値で数え、違反の行と要約の行を標準出力、まだ分からないの行を標準エラー
 //!   （g-7 が folio の裁定 id の文法の外の id の裁定だけのためにまだ分からないなら、理由にその数を書く・行 c-g3g7）
+//!   （g-3 が --project の組の台帳で確かめられない外の台帳の行だけのためにまだ分からないなら、理由に `OUTSIDE_HEAD` と
+//!   その節点の数と族を書く・行 c-g3-extern）
 //!   要約の行の前に要約の無い節点の数と id の行（読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 k-sum-count）
 //!   その次に本文だけで名指した id の対の数と対の行（g-9 の detect の数・読めなければまだ分からないの行を標準エラー・
 //!   終了 code は変えない・行 k-g9-count）
@@ -12,23 +14,30 @@
 //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
 //! 読めない出所が無ければ 0、在れば 2。使い方の誤りは 1。組みは口 /api/graph と同じ `Sources::gather` と
 //! `board::built_floors`（`board::built` と同じ組み）と `board::doc` の呼び。
+//! --project（何度でも）は旗なしと --check が置き場ごとに読み取りの bd を 1 本ずつ、3 つの字の集めと並べて撃ち、
+//! 外の台帳の読みを g-3 に渡す（--design は読まない・行 c-g3-extern）。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::thread;
 
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{
     EdgeType, GraphDoc, GraphSource, InvariantCheck, SkippedEdges, Verdict,
 };
 use tsuzuri_contract::wire;
-use tsuzuri_core::graph::{self, build::DESIGN_EDGE_TYPES, check::UNMEASURED};
+use tsuzuri_core::graph::{self, Outside, build, build::DESIGN_EDGE_TYPES, check::UNMEASURED};
 
 use crate::server::board::{self, Floors, Sources, Texts};
 use crate::server::design::{Design, FOLIO};
 use crate::server::ledger::{BD, Source};
 use crate::server::runs::Runs;
 
-pub const USAGE: &str = "usage: tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]";
+pub const USAGE: &str = "usage: tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>] [--project <dir>]...";
+
+/// g-3 が --project の組の台帳で確かめられない外の台帳の行だけのためにまだ分からないときの理由の頭の字
+/// （空白と節点の数と（族 と中黒つなぎの族と）が続く）。
+pub const OUTSIDE_HEAD: &str = "--project の組の台帳で確かめられない外の台帳の行を持つ節点";
 
 /// 不変条件の id と次の 1 手（中核の INVARIANTS の順）。
 pub const NEXT: [(&str, &str); 12] = [
@@ -144,6 +153,8 @@ struct Args {
     bd: String,
     folio: String,
     state_dir: Option<PathBuf>,
+    /// ほかの project の置き場（引数の順・何度でも）。
+    projects: Vec<PathBuf>,
 }
 
 /// 12 本の判定を 1 つの 3 値にまとめる（違反を先に立てる・空の列はまだ分からない）。
@@ -213,18 +224,24 @@ pub fn run(rest: &[&str]) -> u8 {
             args.repo.display()
         ));
     }
-    let (doc, outside, floors) = match args.mode {
+    let (doc, outside, heads, floors) = match args.mode {
         Mode::Doc | Mode::Check => {
             let sources = Sources {
                 ledger: Source::new(&args.repo, &args.bd),
                 design: Design::new(&args.repo, &args.folio),
                 runs: Runs::new(args.state_dir.as_deref()),
             };
-            let texts = sources.gather(true, true);
-            let (g, floors) = board::built_floors(&texts);
+            let (texts, others) = thread::scope(|s| {
+                let others = s.spawn(|| outside_of(&args.projects, &args.bd));
+                let texts = sources.gather(true, true);
+                (texts, others.join().unwrap_or_default())
+            });
+            let (mut g, floors) = board::built_floors(&texts);
+            g.outside = others;
             (
                 board::doc(&g, &graph::check(&g), &texts.summary),
                 graph::check::outside_rulings(&g),
+                graph::check::outside_heads(&g),
                 floors,
             )
         }
@@ -240,7 +257,7 @@ pub fn run(rest: &[&str]) -> u8 {
                 unfielded: Reading::Unknown,
                 landed: Reading::Unknown,
             };
-            (design_view(&board::graph(&texts)), None, floors)
+            (design_view(&board::graph(&texts)), None, None, floors)
         }
     };
     if !doc.unread.is_empty() {
@@ -248,7 +265,7 @@ pub fn run(rest: &[&str]) -> u8 {
         eprintln!("# 読めない出所: {}", names.join("・"));
     }
     match args.mode {
-        Mode::Check => check(&doc.invariants, outside, &floors),
+        Mode::Check => check(&doc.invariants, outside, heads, &floors),
         Mode::Doc | Mode::Design => match wire::encode(&doc) {
             Ok(text) => {
                 println!("{text}");
@@ -262,11 +279,32 @@ pub fn run(rest: &[&str]) -> u8 {
     }
 }
 
+/// --project の置き場ごとに読み取りの bd を 1 本ずつ並べて撃ち、外の台帳の読みを置き場の順に返す
+/// （読めない置き場は None・1 度だけ撃つ口なので持ち回さない）。
+fn outside_of(projects: &[PathBuf], bd: &str) -> Vec<Option<Outside>> {
+    thread::scope(|s| {
+        let reads: Vec<_> = projects
+            .iter()
+            .map(|dir| s.spawn(move || Source::new(dir, bd).text()))
+            .collect();
+        reads
+            .into_iter()
+            .map(|h| h.join().ok().flatten().as_deref().and_then(build::outside))
+            .collect()
+    })
+}
+
 /// 違反の行と要約の行を標準出力、まだ分からないの行を標準エラーに出し、3 値の終了 code を返す。
 /// `outside` は g-7 が文法の外の id の裁定だけのためにまだ分からないときのその数（`check::outside_rulings`）。
+/// `heads` は g-3 が確かめられない外の台帳の行だけのためにまだ分からないときの節点の数と族（`check::outside_heads`）。
 /// `floors` は要約の無い節点の列と本文だけで名指した id の対と全部の行が着地した設計ノート（`board::built_floors`・
 /// 要約の行の前にこの順に出し、終了 code は変えない）。
-fn check(invariants: &[InvariantCheck], outside: Option<usize>, floors: &Floors) -> u8 {
+fn check(
+    invariants: &[InvariantCheck],
+    outside: Option<usize>,
+    heads: Option<(usize, Vec<String>)>,
+    floors: &Floors,
+) -> u8 {
     let (mut violations, mut unknowns) = (0, 0);
     for inv in invariants {
         match inv.verdict {
@@ -285,9 +323,12 @@ fn check(invariants: &[InvariantCheck], outside: Option<usize>, floors: &Floors)
             }
             Verdict::Unknown => {
                 unknowns += 1;
-                let why = match outside {
+                let why = match (&heads, outside) {
                     _ if UNMEASURED.contains(&inv.id.as_str()) => "測る機構がまだ無い".to_string(),
-                    Some(n) if inv.id == "g-7" => {
+                    (Some((n, families)), _) if inv.id == "g-3" => {
+                        format!("{OUTSIDE_HEAD} {n}（族 {}）", families.join("・"))
+                    }
+                    (_, Some(n)) if inv.id == "g-7" => {
                         format!("folio の裁定 id の文法の外の id の裁定 {n}")
                     }
                     _ => "読めない出所が在る".to_string(),
@@ -332,10 +373,12 @@ fn usage(what: &str) -> u8 {
     FAIL
 }
 
-/// 値を取らない --check・--design と、`--名 値` か `--名=値` の --repo・--bd・--folio・--state-dir を読む。
+/// 値を取らない --check・--design と、`--名 値` か `--名=値` の --repo・--bd・--folio・--state-dir・
+/// --project（--project だけは何度でも）を読む。
 fn parse(rest: &[&str]) -> Result<Args, String> {
     let (mut check, mut design) = (false, false);
     let (mut repo, mut bd, mut folio, mut state_dir) = (None, None, None, None);
+    let mut projects: Vec<PathBuf> = Vec::new();
     let mut it = rest.iter();
     while let Some(arg) = it.next() {
         let flag = match *arg {
@@ -354,10 +397,11 @@ fn parse(rest: &[&str]) -> Result<Args, String> {
             None => (*arg, None),
         };
         let slot = match name {
-            "--repo" => &mut repo,
-            "--bd" => &mut bd,
-            "--folio" => &mut folio,
-            "--state-dir" => &mut state_dir,
+            "--repo" => Some(&mut repo),
+            "--bd" => Some(&mut bd),
+            "--folio" => Some(&mut folio),
+            "--state-dir" => Some(&mut state_dir),
+            "--project" => None,
             _ => return Err(format!("知らない引数 {arg}")),
         };
         let value = match value {
@@ -367,8 +411,13 @@ fn parse(rest: &[&str]) -> Result<Args, String> {
         if value.is_empty() {
             return Err(format!("{name} の値が空"));
         }
-        if slot.replace(value).is_some() {
-            return Err(format!("{name} が 2 度ある"));
+        match slot {
+            Some(slot) => {
+                if slot.replace(value).is_some() {
+                    return Err(format!("{name} が 2 度ある"));
+                }
+            }
+            None => projects.push(PathBuf::from(value)),
         }
     }
     let mode = match (check, design) {
@@ -383,5 +432,6 @@ fn parse(rest: &[&str]) -> Result<Args, String> {
         bd: bd.unwrap_or(BD).to_string(),
         folio: folio.unwrap_or(FOLIO).to_string(),
         state_dir: state_dir.map(|d| Path::new(d).to_path_buf()),
+        projects,
     })
 }

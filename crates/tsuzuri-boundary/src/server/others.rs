@@ -4,6 +4,7 @@
 //! （`Hub::watch_ledger_into`）、印が動いた周と知らせの接続が居る間の読み直しの周だけ読み、open の問いの card が
 //! 前と変わった周だけ ledger-changed を送る。口の読みは bd を撃たず、見張りの最後の読みの字を返す（`Source::watched`）。
 //! 答えは受けない（札の組の answerable は偽・ほかの repo の台帳へ書かない）。
+//! 導出グラフの口 /api/graph も同じ最後の読みの字を、要求のたびに `outside` で読んで g-3 に渡す（行 c-g3-extern）。
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -12,6 +13,7 @@ use std::sync::Arc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::question::{ProjectQuestions, QuestionCard};
 use tsuzuri_core::account::project_name;
+use tsuzuri_core::graph::{Outside, build};
 
 use super::events::{Hub, TIMING};
 use super::ledger::{Got, Source};
@@ -60,6 +62,15 @@ impl Others {
                 answerable: false,
                 cards: cards(&source.got()),
             })
+            .collect()
+    }
+
+    /// 組ごとの台帳の読み（引数の順・見張りの最後の読みの字を `build::outside` で読む・
+    /// 字が無いか読めなければ None・bd は撃たない・行 c-g3-extern）。
+    pub(super) fn outside(&self) -> Vec<Option<Outside>> {
+        self.projects
+            .iter()
+            .map(|(_, source)| source.got().text.as_deref().and_then(build::outside))
             .collect()
     }
 }

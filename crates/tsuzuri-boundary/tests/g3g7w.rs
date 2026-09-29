@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, NEXT, UNFIELDED_UNKNOWN};
+use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, NEXT, OUTSIDE_HEAD, UNFIELDED_UNKNOWN};
 use tsuzuri_boundary::server::board::{self, Texts};
 use tsuzuri_boundary::server::design::{Design, RULINGS_ARGS};
 use tsuzuri_contract::graph::{EdgeType, Verdict};
@@ -329,7 +329,7 @@ fn g3g7_check_counts_outside_ids() {
         stderr(&out),
         format!(
             "{}\n{outside}\n{}\n{}\n",
-            unknown("g-3", UNREAD),
+            unknown("g-3", &format!("{OUTSIDE_HEAD} 1（族 s9-far）")),
             unknown("g-9", NO_TOOL),
             bare_unknown()
         )
