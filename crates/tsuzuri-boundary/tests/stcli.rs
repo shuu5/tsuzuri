@@ -28,6 +28,8 @@ use tsuzuri_boundary::stage::terminal::{self, Terminal};
 use tsuzuri_boundary::stage::tunnel::{self, Tunnel};
 use tsuzuri_boundary::stage::url::{self, Board};
 use tsuzuri_boundary::stage::ws;
+use tsuzuri_contract::stage::StageTargets;
+use tsuzuri_contract::wire;
 
 /// contracts の verify の filter の語のうち、ほかの語を部分の字として含まない最小の語と行 i-4 の接頭辞 relay_
 /// （この行の接頭辞 stcli_ は並べない）。
@@ -699,8 +701,8 @@ fn stcli_shape_and_consts() {
     assert!(usage.starts_with("usage: tz stage"), "{usage}");
     let seat: &str = SEAT_ENV;
     assert_eq!(seat, "CLAUDECODE");
-    let validate: [&str; 2] = VALIDATE_ARGS;
-    assert_eq!(validate, ["validate", "--state-dir"]);
+    let validate: [&str; 3] = VALIDATE_ARGS;
+    assert_eq!(validate, ["rules", "validate", "--state-dir"]);
     let timeout: Duration = TIMEOUT;
     assert_eq!(timeout, Duration::from_secs(10));
     let wait: Duration = LOCK_WAIT;
@@ -1078,13 +1080,13 @@ fn stcli_validate_gate() {
     let (rc, out) = field.tz(&["dom", "--to", "term-b"], "", false);
     assert_eq!(rc, 1, "{out:?}");
     assert_eq!(out.len(), 2, "{out:?}");
-    for word in ["validate --state-dir", state.as_str(), "rc 0"] {
+    for word in ["rules validate --state-dir", state.as_str(), "rc 0"] {
         assert!(out[0].contains(word), "{word}: {}", out[0]);
     }
     assert_eq!(out[1], LINE);
     assert_eq!(
         field.records("scribe2"),
-        [strings(&["validate", "--state-dir", &state])]
+        [strings(&["rules", "validate", "--state-dir", &state])]
     );
     assert!(field.records("ssh").is_empty(), "偽の ssh が撃たれた");
     assert!(field.records("chrome").is_empty(), "偽の席の目の Chrome が撃たれた");
@@ -1097,6 +1099,64 @@ fn stcli_validate_gate() {
         assert!(out[0].contains(word), "{word}: {}", out[0]);
     }
     assert_eq!(out[1], LINE);
+    assert!(field.records("ssh").is_empty(), "偽の ssh が撃たれた");
+}
+
+/// 本物の器の形を写した偽の器の本文（rules validate --state-dir S だけ rc 0・ほかは使い方の 1 行と rc 1）。
+const REAL_VESSEL: &str = "if [ \"$#\" -eq 4 ] && [ \"$1\" = rules ] && [ \"$2\" = validate ] && [ \"$3\" = --state-dir ]; then\n  if [ -e \"$4/host.toml\" ]; then host=present; else host=absent; fi\n  printf 'rules: ok rows=82 kinds=80 accounts=7 plugins=1 launch-args=1 host=%s\\n' \"$host\"\n  exit 0\nfi\nprintf 'usage: scribe2 <name|--version|doctor|account|rules|fleet|vessel|hook|host-guard|pipe|runner|lens|seat|polarity|contracts>\\n'\nexit 1\n";
+
+#[test]
+fn stcli_vessel_real_form() {
+    let mut field = Field::new("vessel", Ssh::Fail);
+    field.scribe2 = fake(&field.root, "scribe2", REAL_VESSEL);
+    let state = Field::text(&field.state);
+
+    let upper = Process::new(&field.scribe2)
+        .args(["validate", "--state-dir", &state])
+        .output()
+        .expect("偽の器を撃つ");
+    assert_eq!(upper.status.code(), Some(1), "上の階の validate は rc 1");
+    let upper_out = String::from_utf8(upper.stdout).expect("標準出力の字");
+    assert_eq!(upper_out.lines().count(), 1, "{upper_out}");
+    assert!(upper_out.starts_with("usage: scribe2 <name|"), "{upper_out}");
+
+    let shown = Process::new(env!("CARGO_BIN_EXE_tz"))
+        .args(["stage", "target", "show", "--json"])
+        .arg("--repo")
+        .arg(&field.repo)
+        .arg("--scribe2")
+        .arg(&field.scribe2)
+        .arg("--git")
+        .arg(&field.git)
+        .arg("--config")
+        .arg(&field.config)
+        .env_remove(SEAT_ENV)
+        .output()
+        .expect("tz を撃つ");
+    let stderr = String::from_utf8_lossy(&shown.stderr).to_string();
+    assert_eq!(shown.status.code(), Some(0), "{stderr}");
+    let text = String::from_utf8(shown.stdout).expect("標準出力の字");
+    assert_eq!(text.lines().count(), 1, "{text}");
+    let got: StageTargets = wire::decode(text.trim_end()).expect("電文");
+    assert_eq!(got.project, "repo");
+    assert_eq!(got.names, ["term-a", "term-b"]);
+
+    let (rc, out) = field.tz(&["dom", "--to", "term-z"], "", false);
+    assert_eq!(rc, 1, "{out:?}");
+    assert_eq!(out.len(), 2, "{out:?}");
+    for word in ["端末 term-z", "term-a・term-b"] {
+        assert!(out[0].contains(word), "{word}: {}", out[0]);
+    }
+    assert_eq!(out[1], LINE);
+
+    assert_eq!(
+        field.records("scribe2"),
+        [
+            strings(&["validate", "--state-dir", &state]),
+            strings(&["rules", "validate", "--state-dir", &state]),
+            strings(&["rules", "validate", "--state-dir", &state]),
+        ]
+    );
     assert!(field.records("ssh").is_empty(), "偽の ssh が撃たれた");
 }
 
@@ -1470,7 +1530,7 @@ fn stcli_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 20, "歯の数");
+    assert_eq!(names.len(), 21, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("stcli_")

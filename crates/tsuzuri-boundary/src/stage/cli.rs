@@ -4,7 +4,7 @@
 //! 窓を起こすのは持ち主の tz stage open だけで、席の中（環境変数 CLAUDECODE が 1）の open は断る（計画の 3 節の席の決め）。
 //! open は端末ごとの錠を持って撃ち、同時の撃ちで窓を 2 つにしない。動いている Chrome に頁が無い時だけ、
 //! 持ち主の頼みとして頁の target を 1 つ作る（NEW_PAGE・この口の 1 回だけ）。窓を前に出す・動かす語は持たない。
-//! host の面は器の validate が rc 0 で返った後にだけ読み、自分の anchor の state dir の host.toml だけを読む。
+//! host の面は器の rules validate --state-dir が rc 0 で返った後にだけ読み、自分の anchor の state dir の host.toml だけを読む。
 //! 標準出力の最後の行は、board の URL を組めた後のどの終わり方でも url の line（持ち主へ渡す URL）。
 //! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く（行 i-7）。
 //! tz stage open も窓を起こすか頁を 1 つ作った時は、錠の中で同じ印を書く（--to の在る無しによらない・行 i-open-mark）。
@@ -52,8 +52,9 @@ pub const USAGE: &str = "usage: tz stage <navigate|viewport|reload|click|type|ke
 /// 席の中の撃ちの印の環境変数（Claude Code の Bash の道具が子の process に 1 を渡す）。
 pub const SEAT_ENV: &str = "CLAUDECODE";
 
-/// 器の検めの引数（この後に state dir）。
-pub const VALIDATE_ARGS: [&str; 2] = ["validate", "--state-dir"];
+/// 器の検めの引数（この後に state dir）。器に上の階の validate は無く、host の面の検めは
+/// rules validate の旗 --state-dir（器の scribe2 help rules の FORM・行 i-rules-validate）。
+pub const VALIDATE_ARGS: [&str; 3] = ["rules", "validate", "--state-dir"];
 
 /// 子の process と接続の待ち。
 pub const TIMEOUT: Duration = Duration::from_secs(10);
@@ -944,7 +945,7 @@ fn reach_out(call: &NotifyCall, board: &Board) -> Result<bool, String> {
     Ok(outcome == Outcome::Sent)
 }
 
-/// 自分の anchor の state dir を引き、器の validate が rc 0 で返った後にだけ host の面の字を読む。
+/// 自分の anchor の state dir を引き、器の rules validate --state-dir が rc 0 で返った後にだけ host の面の字を読む。
 fn face_text(repo: &Path, scribe2: &OsStr, git: &OsStr) -> Result<String, String> {
     let mut args = vec![OsString::from("-C"), repo.as_os_str().to_os_string()];
     args.extend(acct::GIT_ARGS.iter().map(OsString::from));
@@ -961,8 +962,9 @@ fn face_text(repo: &Path, scribe2: &OsStr, git: &OsStr) -> Result<String, String
     validate.push(OsString::from(&state));
     if proc::capture(scribe2, &validate, repo, TIMEOUT).is_none() {
         return Err(format!(
-            "器 {} の validate --state-dir {state} が {} 秒の内に rc 0 で返らない（host の面を読まない）",
+            "器 {} の {} {state} が {} 秒の内に rc 0 で返らない（host の面を読まない）",
             scribe2.to_string_lossy(),
+            VALIDATE_ARGS.join(" "),
             TIMEOUT.as_secs_f32()
         ));
     }
