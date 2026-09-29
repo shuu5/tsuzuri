@@ -6,9 +6,11 @@
 //! 行 f-stop で席の停止の hook（`hook::stop`・tz hook stop）を置く。
 //! 行 i-1 で表示面の module（`stage`・端末の一覧の読み `stage::terminal`）を置く。
 //! 行 f-gate で問いの起票の門（`hook::question_gate`・tz hook question-gate）を置く。
+//! 行 j-count で受入 12 条の数え（`audit`・測りの事実から条ごとの違反の数と report の行）を置く。
 
 pub mod acct;
 pub mod accthb;
+pub mod audit;
 pub mod cli;
 pub mod hook;
 pub mod server;

@@ -1,0 +1,19 @@
+{
+ "_about": "受入 12 条の歯の小さな語彙表（面の語彙表と同じ欄・同じ鍵 pipeline を english と rephrase に持つ）",
+ "english": {
+  "pipeline": {
+   "label": "pipeline dashboard",
+   "note": "run の今の段を 4 列で並べた表示"
+  }
+ },
+ "rephrase": {
+  "pipeline": {
+   "label": "流れの板",
+   "plain": "run の今の段"
+  },
+  "gaps": {
+   "label": "すき間",
+   "plain": "まだ埋まらない所"
+  }
+ }
+}
