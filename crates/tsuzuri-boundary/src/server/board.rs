@@ -1,5 +1,6 @@
 //! 読む側の口（便 e-read）: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
-//! - GET /api/pipeline — pipeline の板（PipelineBoard・形の崩れは見張りの読みの後の器の doctor の台帳の形の行から写す・行 c-pipe-misfit）
+//! - GET /api/pipeline — pipeline の板（PipelineBoard・札は集めた今の台帳の字から組み、形の崩れは見張りの読みの周の
+//!   台帳の字と器の doctor の台帳の形の行の組から写す・行 c-pipe-misfit・行 c-misfit-pair）
 //! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats）
 //! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
 //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
@@ -26,6 +27,7 @@ use tsuzuri_core::graph::{self, Graph, Inputs, Invariant};
 use tsuzuri_core::ledger::{Unreflected, UnreflectedItem};
 
 use super::design::Design;
+use super::form::{self, Kept};
 use super::ledger::Source;
 use super::runs::Runs;
 
@@ -90,9 +92,12 @@ impl Sources {
     }
 }
 
-/// pipeline の板（event log が読めなければ札は「まだ分からない」・doctor の字が無ければ形の崩れの一覧は「まだ分からない」）。
-pub fn pipeline(texts: &Texts, doctor: Option<&str>, now: EpochSecs) -> PipelineBoard {
-    tsuzuri_core::pipeline::board_with_doctor(&texts.ledger, &texts.events, doctor, now).board
+/// pipeline の板（札は集めた台帳の字と event log の字から組み、event log が読めなければ「まだ分からない」・
+/// 形の崩れの一覧は持った組から写し、組が無ければ「まだ分からない」）。
+pub fn pipeline(texts: &Texts, kept: Option<&Kept>, now: EpochSecs) -> PipelineBoard {
+    let mut board = tsuzuri_core::pipeline::board(&texts.ledger, &texts.events, now).board;
+    board.misfits = form::misfits(kept, now);
+    board
 }
 
 /// 台帳の指標（台帳が読めなければ「まだ分からない」）。

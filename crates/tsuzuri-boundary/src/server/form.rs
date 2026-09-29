@@ -1,10 +1,13 @@
 //! 器の doctor の台帳の形の行（行 c-pipe-misfit・判断の記録 ADR-16 の決定 (6)）。
 //! 器の doctor は引数 --repo を受けた周だけ台帳の形の行（頭 `tsuzuri_core::pipeline::FORM_PREFIX`）を出す。
 //! 撃つ形は `<program> doctor --state-dir <dir> --repo .`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
-//! 撃つのは台帳の見張りの読みの周だけ（`Source::read` の後）で、口 /api/pipeline の最初の要求の後から撃つ（`Form::arm`）。
-//! 口は持った字を読むだけで器を撃たず、席の card には触らない。
-//! 撃ちは別の thread で同時に 1 本だけで、走っている間の読みは終わった後にもう 1 回だけ撃つ。
-//! 持つ字は最後に終えた撃ちの台帳の形の行で、落ちるか上限を越えた周は None（持ち回さない）。字が変われば board-changed を送る。
+//! 撃つのは台帳の見張りの読みの周だけ（`Source::read` がその周の台帳の字を渡す）で、口 /api/pipeline の最初の要求か
+//! 知らせの接続（GET /api/surface/events）が撃ちを許した後から撃つ（`Form::arm`・行 c-misfit-pair）。
+//! 口は持った組を読むだけで器を撃たず、席の card には触らない。
+//! 撃ちは別の thread で同時に 1 本だけで、走っている間の読みは終わった後に最後の周の台帳の字でもう 1 回だけ撃つ。
+//! 持つ組（`Kept`）は最後に終えた撃ちの周の台帳の字と台帳の形の行で、台帳の読みが落ちた周は器を撃たずに None、
+//! 器が落ちるか上限を越えるか台帳の形の行が無い周も None（持ち回さない）。組から写した一覧（`misfits`）が変われば
+//! board-changed を送る（台帳の字だけが変わった周は見張りの ledger-changed が面に読み直させる）。
 
 use std::ffi::OsString;
 use std::fmt;
@@ -14,7 +17,9 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::thread;
 use std::time::Duration;
 
-use tsuzuri_core::pipeline::FORM_PREFIX;
+use tsuzuri_contract::EpochSecs;
+use tsuzuri_contract::board::{MisfitBead, Reading};
+use tsuzuri_core::pipeline::{FORM_PREFIX, board_with_doctor};
 
 use super::events::{Hub, now};
 use super::proc::capture;
@@ -38,11 +43,30 @@ pub fn form_lines(out: &str) -> String {
         .join("\n")
 }
 
-/// 撃ちの状態（走っているか・走っている間の読みが在ったか）。
+/// 撃った周の組（見張りの読みの台帳の字と、その周の器の出力の台帳の形の行・空でない）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Kept {
+    pub ledger: String,
+    pub form: String,
+}
+
+/// 組から写した形の崩れの一覧（組が無ければ Unknown・一覧は event log の字を読まないので空の字を渡す）。
+pub fn misfits(kept: Option<&Kept>, now: EpochSecs) -> Reading<Vec<MisfitBead>> {
+    match kept {
+        Some(kept) => {
+            board_with_doctor(&kept.ledger, "", Some(&kept.form), now)
+                .board
+                .misfits
+        }
+        None => Reading::Unknown,
+    }
+}
+
+/// 撃ちの状態（走っているか・走っている間の最後の周の台帳の字〔読めなかった周は内の None〕）。
 #[derive(Default)]
 struct Run {
     running: bool,
-    again: bool,
+    again: Option<Option<String>>,
 }
 
 struct Inner {
@@ -50,11 +74,11 @@ struct Inner {
     state_dir: PathBuf,
     cwd: PathBuf,
     timeout: Duration,
-    /// 真なら見張りの読みの周に撃つ（口 /api/pipeline の最初の要求が置く）。
+    /// 真なら見張りの読みの周に撃つ（口 /api/pipeline の最初の要求と知らせの接続が置く）。
     armed: AtomicBool,
     run: Mutex<Run>,
-    /// 最後に終えた撃ちの台帳の形の行（落ちたか上限を越えた周は None）。
-    text: Mutex<Option<String>>,
+    /// 最後に終えた撃ちの組（台帳の読みか器が落ちたか、上限を越えたか、台帳の形の行が無い周は None）。
+    kept: Mutex<Option<Kept>>,
     /// 板の変化の送り先。
     hub: OnceLock<Weak<Hub>>,
 }
@@ -101,7 +125,7 @@ impl Form {
                 timeout,
                 armed: AtomicBool::new(false),
                 run: Mutex::new(Run::default()),
-                text: Mutex::new(None),
+                kept: Mutex::new(None),
                 hub: OnceLock::new(),
             }),
         }
@@ -127,35 +151,38 @@ impl Form {
         let _ = self.inner.hub.set(Arc::downgrade(hub));
     }
 
-    /// 持つ字の複製（撃たない）。
-    pub fn text(&self) -> Option<String> {
-        lock(&self.inner.text).clone()
+    /// 持つ組の複製（撃たない）。
+    pub fn kept(&self) -> Option<Kept> {
+        lock(&self.inner.kept).clone()
     }
 
-    /// 許されていれば別の thread で器を撃つ（待たない）。走っていれば、終わった後にもう 1 回だけ撃つ。
-    pub fn kick(&self) {
+    /// 許されていれば別の thread で見張りの読みの台帳の字（読めなかった周は None）の周を撃つ（待たない）。
+    /// 走っていればその字を置いて戻り（前に置いた字は捨てる）、終わった後に最後に置いた字でもう 1 回だけ撃つ。
+    pub fn kick(&self, ledger: Option<String>) {
         if !self.armed() {
             return;
         }
         {
             let mut run = lock(&self.inner.run);
             if run.running {
-                run.again = true;
+                run.again = Some(ledger);
                 return;
             }
             run.running = true;
         }
         let inner = Arc::clone(&self.inner);
         thread::spawn(move || {
+            let mut ledger = ledger;
             loop {
-                inner.shoot();
+                inner.shoot(ledger);
                 let mut run = lock(&inner.run);
-                if run.again {
-                    run.again = false;
-                    continue;
+                match run.again.take() {
+                    Some(next) => ledger = next,
+                    None => {
+                        run.running = false;
+                        return;
+                    }
                 }
-                run.running = false;
-                return;
             }
         });
     }
@@ -170,17 +197,24 @@ impl Inner {
         argv
     }
 
-    /// 器を 1 度撃ち、台帳の形の行を持つ字に置く（変われば board-changed を送る）。
-    fn shoot(&self) {
-        let got = capture(&self.program, self.argv(), &self.cwd, self.timeout)
-            .and_then(|out| String::from_utf8(out).ok())
-            .map(|out| form_lines(&out));
+    /// 台帳の字の周を撃ち、組を置く（台帳の字が None なら器を撃たずに None・台帳の形の行が無ければ None）。
+    /// 前の組と新しい組から写した一覧が違えば board-changed を送る。
+    fn shoot(&self, ledger: Option<String>) {
+        let got = ledger.and_then(|ledger| {
+            let form = capture(&self.program, self.argv(), &self.cwd, self.timeout)
+                .and_then(|out| String::from_utf8(out).ok())
+                .map(|out| form_lines(&out))
+                .filter(|form| !form.is_empty())?;
+            Some(Kept { ledger, form })
+        });
         {
-            let mut text = lock(&self.text);
-            if *text == got {
+            let mut kept = lock(&self.kept);
+            let at = now();
+            let changed = misfits(kept.as_ref(), at) != misfits(got.as_ref(), at);
+            *kept = got;
+            if !changed {
                 return;
             }
-            *text = got;
         }
         if let Some(hub) = self.hub.get().and_then(Weak::upgrade) {
             hub.board_changed(now());

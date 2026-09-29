@@ -15,7 +15,9 @@
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
 //! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
-//! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの後に器の doctor の台帳の形の行を撃つ（`form`・行 c-pipe-misfit）。
+//! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
+//! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
+//! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
 
 pub mod batch;
 pub mod board;
@@ -278,6 +280,10 @@ fn handle(stream: TcpStream, shared: &Shared) {
         Err(e) if http::no_bytes(&e) => return,
         Err(_) => Response::text(400, "bad-request"),
         Ok(req) if req.method == "GET" && req.path() == "/api/surface/events" => {
+            // 受け手を足す前に撃ちを許す（受け手の付いた周の見張りの読みが撃つ・行 c-misfit-pair）。
+            if let Some(form) = shared.sources.ledger.form() {
+                form.arm();
+            }
             let _ = events::stream(&stream, &shared.hub);
             return;
         }

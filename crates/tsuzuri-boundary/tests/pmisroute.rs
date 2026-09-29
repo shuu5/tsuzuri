@@ -1,5 +1,6 @@
-//! 行 c-pipe-misfit の歯（境界）: 台帳の見張りの読みの後に器の doctor の台帳の形の行を撃ち（`form::Form`）、
-//! 口 /api/pipeline は持った字から形の崩れの一覧を写す（歯の名は中核の tests/pmisfit.rs と同じ接頭辞 pmisfit_）。
+//! 行 c-pipe-misfit と行 c-misfit-pair の歯（境界）: 台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち
+//! （`form::Form`）、その字と台帳の形の行を組（`form::Kept`）で持ち、口 /api/pipeline は札を今の台帳の字から、
+//! 形の崩れの一覧を持った組から写す。知らせの接続も撃ちを許す（歯の名は中核の tests/pmisfit.rs と同じ接頭辞 pmisfit_）。
 //! 偽の bd は撃たれるたびに記録の file bd に 1 行を足して作業場の ledger.json の字を出し、偽の器は受けた argv を
 //! 記録の file argv に 1 行ずつ足し、argv の頭が doctor なら作業場の sleep の字の秒だけ待ってから out-doctor の字を出す
 //! （ほかと file の無い出力は rc 1）。作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
@@ -14,12 +15,14 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::server::events::Hub;
-use tsuzuri_boundary::server::form::{FORM_ARGS, FORM_TIMEOUT, Form, REPO_ARGS, form_lines};
+use tsuzuri_boundary::server::form::{
+    FORM_ARGS, FORM_TIMEOUT, Form, Kept, REPO_ARGS, form_lines, misfits,
+};
 use tsuzuri_boundary::server::{Config, Server};
-use tsuzuri_contract::board::{Misfit, MisfitBead, PipelineBoard, Reading};
+use tsuzuri_contract::board::{Misfit, MisfitBead, PipelineBoard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::wire;
-use tsuzuri_core::pipeline::board_with_doctor;
+use tsuzuri_core::pipeline::{board, board_with_doctor};
 
 /// 節の席の target。
 const TARGET: &str = "proj-1:0.1";
@@ -38,11 +41,47 @@ const SEAT_LINE: &str = "seat: role=orchestrator anchor=/srv/proj-1 target=proj-
 /// 節の台帳の形の行。
 const FORM_LINE: &str = "ledger-form: open=3 memos=1 no-source=1:b.2 no-observation=1:b.2 no-candidate=1:b.2 no-promotion=1:b.2 shaped=3 both=1:b.2 neither=1:b.1 contracts=1 undiscovered=0 unlanded=0 drift=0 settled=0";
 
+/// 走行を持たない event log の 1 行（札の列を Known にする）。
+const EVENT: &str = r#"{"schema":1,"ts":"2026-09-27T11:10:00Z","kind":"SeatSpawned","host":"host-1","actor":"machine","detail":""}
+"#;
+
 /// 待つ上限。
 const WAIT: Duration = Duration::from_secs(5);
 
 fn doctor() -> String {
     format!("{SEAT_LINE}\n{FORM_LINE}\n")
+}
+
+/// 節の台帳に b.4（設計の参照を持つ task）を足した字。
+fn grown() -> String {
+    LEDGER.replace(
+        "\n]\n",
+        ",\n{\"id\":\"b.4\",\"title\":\"t b.4\",\"status\":\"open\",\"issue_type\":\"task\",\"acceptance_criteria\":\"design = contracts/x.toml#c\",\"created_at\":\"2026-09-27T07:39:00Z\",\"updated_at\":\"2026-09-27T07:39:00Z\"}\n]\n",
+    )
+}
+
+/// `grown` の b.1 の題を t b.1 new に替えた字。
+fn renamed() -> String {
+    grown().replace("\"t b.1\"", "\"t b.1 new\"")
+}
+
+/// 札の列の id と段（札が Unknown なら空）。
+fn stages(b: &PipelineBoard) -> Vec<(String, Stage)> {
+    match &b.cards {
+        Reading::Known(cards) => cards
+            .iter()
+            .map(|c| (c.contract.as_str().to_string(), c.stage))
+            .collect(),
+        Reading::Unknown => Vec::new(),
+    }
+}
+
+/// 節の組（節の台帳の字と節の台帳の形の行）。
+fn pair() -> Kept {
+    Kept {
+        ledger: LEDGER.to_string(),
+        form: FORM_LINE.to_string(),
+    }
 }
 
 fn script(path: &Path, body: &str) {
@@ -113,6 +152,11 @@ impl Place {
     /// 偽の器の doctor の出力の字を置く。
     fn doctor_returns(&self, text: &str) {
         fs::write(self.root.join("out-doctor"), text).expect("doctor の字");
+    }
+
+    /// 偽の bd の出す台帳の字を置く。
+    fn ledger_returns(&self, text: &str) {
+        fs::write(self.root.join("ledger.json"), text).expect("台帳の字");
     }
 
     /// 偽の器の doctor の出力を落とす（file が無いので rc 1）。
@@ -217,7 +261,11 @@ fn pipeline(addr: SocketAddr) -> PipelineBoard {
 }
 
 /// 口の欄 misfits が `ok` になるまで口を撃ち直す。
-fn board_until(addr: SocketAddr, what: &str, ok: impl Fn(&Reading<Vec<MisfitBead>>) -> bool) -> PipelineBoard {
+fn board_until(
+    addr: SocketAddr,
+    what: &str,
+    ok: impl Fn(&Reading<Vec<MisfitBead>>) -> bool,
+) -> PipelineBoard {
     let deadline = Instant::now() + WAIT;
     loop {
         let b = pipeline(addr);
@@ -255,7 +303,8 @@ fn frames(rx: &std::sync::mpsc::Receiver<String>, wait: Duration) -> usize {
     n
 }
 
-/// (6) 許しの後の kick だけが器を撃ち、字が変われば知らせ、落ちた周は None、上限を越えれば止める。
+/// (6) 許しの後の kick だけが器を撃ち、台帳の字と台帳の形の行を組で持ち、組から写した一覧が変われば知らせ、
+/// 台帳の読みか器が落ちた周と台帳の形の行の無い周は None、上限を越えれば止める。
 #[test]
 fn pmisfit_form_kick_rules() {
     let place = Place::new("kick");
@@ -281,47 +330,106 @@ fn pmisfit_form_kick_rules() {
 
     // 許しの前は撃たない。
     assert!(!form.armed());
-    form.kick();
+    form.kick(Some(LEDGER.to_string()));
     thread::sleep(Duration::from_millis(300));
     assert!(place.argv().is_empty(), "許しの前に撃つ");
-    assert_eq!(form.text(), None);
+    assert_eq!(form.kept(), None);
+    assert_eq!(misfits(None, 0), Reading::Unknown);
 
-    // 許しの後は 1 度撃ち、台帳の形の行を持ち、知らせを 1 件。
+    // 許しの後は 1 度撃ち、組を持ち、知らせを 1 件。
     form.arm();
     assert!(form.armed());
-    form.kick();
-    until("最初の撃ち", || form.text().is_some());
+    form.kick(Some(LEDGER.to_string()));
+    until("最初の撃ち", || form.kept().is_some());
     let line = format!("doctor --state-dir {state} --repo .");
     assert_eq!(place.argv(), [line.as_str()]);
-    assert_eq!(form.text().as_deref(), Some(FORM_LINE));
+    assert_eq!(form.kept(), Some(pair()));
+    assert_eq!(misfits(Some(&pair()), 0), want());
     let frame = rx.recv_timeout(WAIT).expect("知らせ");
     assert!(frame.contains("event: board-changed\n"), "{frame}");
-    assert_eq!(frames(&rx, Duration::from_millis(200)), 0, "撃ち 1 回に 2 件");
+    assert_eq!(
+        frames(&rx, Duration::from_millis(200)),
+        0,
+        "撃ち 1 回に 2 件"
+    );
 
-    // 同じ出力は知らせない。
-    form.kick();
+    // 同じ組は知らせない。
+    form.kick(Some(LEDGER.to_string()));
     until("2 度目の撃ち", || place.argv().len() == 2);
-    assert_eq!(frames(&rx, Duration::from_millis(300)), 0, "同じ字で知らせる");
-    assert_eq!(form.text().as_deref(), Some(FORM_LINE));
+    assert_eq!(
+        frames(&rx, Duration::from_millis(300)),
+        0,
+        "同じ組で知らせる"
+    );
+    assert_eq!(form.kept(), Some(pair()));
 
-    // 落ちた周は None（持ち回さない）で知らせる。
+    // 台帳の字だけが変わって一覧が同じ周は、組の台帳の字を替えて知らせない。
+    form.kick(Some(grown()));
+    until("足した台帳の撃ち", || {
+        form.kept().map(|k| k.ledger) == Some(grown())
+    });
+    let kept = form.kept().expect("足した台帳の組");
+    assert_eq!(kept.form, FORM_LINE);
+    assert_eq!(misfits(Some(&kept), 0), want());
+    assert_eq!(
+        frames(&rx, Duration::from_millis(300)),
+        0,
+        "同じ一覧で知らせる"
+    );
+
+    // 一覧の題が変わる周は知らせる。
+    form.kick(Some(renamed()));
+    until("題を替えた台帳の撃ち", || {
+        form.kept().map(|k| k.ledger) == Some(renamed())
+    });
+    rx.recv_timeout(WAIT).expect("題を替えた周の知らせ");
+
+    // 台帳の読みが落ちた周は器を撃たず None で知らせる。
+    let shots = place.argv().len();
+    form.kick(None);
+    until("台帳の落ちた周", || form.kept().is_none());
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(place.argv().len(), shots, "台帳の落ちた周に撃つ");
+    rx.recv_timeout(WAIT).expect("台帳の落ちた周の知らせ");
+
+    // 節の台帳の字に戻すと組に戻る。
+    form.kick(Some(LEDGER.to_string()));
+    until("戻った台帳の撃ち", || form.kept().is_some());
+    assert_eq!(form.kept(), Some(pair()));
+    rx.recv_timeout(WAIT).expect("戻った台帳の周の知らせ");
+
+    // 器の落ちた周は None（持ち回さない）で知らせる。
     place.doctor_fails();
-    form.kick();
-    until("落ちた撃ち", || form.text().is_none());
+    form.kick(Some(LEDGER.to_string()));
+    until("落ちた撃ち", || form.kept().is_none());
     rx.recv_timeout(WAIT).expect("落ちた周の知らせ");
 
-    // 置き直した周は字に戻る。
+    // 台帳の形の行の無い周は撃っても None のままで知らせない。
+    place.doctor_returns(&format!("{SEAT_LINE}\n"));
+    let shots = place.argv().len();
+    form.kick(Some(LEDGER.to_string()));
+    until("形の行の無い撃ち", || {
+        place.argv().len() == shots + 1
+    });
+    assert_eq!(
+        frames(&rx, Duration::from_millis(300)),
+        0,
+        "形の行の無い周で知らせる"
+    );
+    assert_eq!(form.kept(), None);
+
+    // 置き直した周は組に戻る。
     place.doctor_returns(&doctor());
-    form.kick();
-    until("戻った撃ち", || form.text().is_some());
-    assert_eq!(form.text().as_deref(), Some(FORM_LINE));
+    form.kick(Some(LEDGER.to_string()));
+    until("戻った撃ち", || form.kept().is_some());
+    assert_eq!(form.kept(), Some(pair()));
     rx.recv_timeout(WAIT).expect("戻った周の知らせ");
 
     // 上限（1 秒）を越えた周は None。
     place.sleep(Some("3"));
     let started = Instant::now();
-    form.kick();
-    until("上限を越えた撃ち", || form.text().is_none());
+    form.kick(Some(LEDGER.to_string()));
+    until("上限を越えた撃ち", || form.kept().is_none());
     assert!(
         started.elapsed() < Duration::from_millis(2500),
         "{:?}",
@@ -330,7 +438,7 @@ fn pmisfit_form_kick_rules() {
     place.sleep(None);
 }
 
-/// (6) 撃ちは同時に 1 本で、走っている間の kick は終わった後に 1 回だけ撃つ。
+/// (6) 撃ちは同時に 1 本で、走っている間の kick は終わった後に最後の周の台帳の字で 1 回だけ撃つ。
 #[test]
 fn pmisfit_form_one_at_a_time() {
     let place = Place::new("once");
@@ -338,25 +446,34 @@ fn pmisfit_form_one_at_a_time() {
     let form = Form::new(place.scribe2(), &place.state, &place.repo);
     form.arm();
     let started = Instant::now();
-    form.kick();
-    form.kick();
-    form.kick();
+    form.kick(Some("a".to_string()));
+    form.kick(Some("b".to_string()));
+    form.kick(Some("c".to_string()));
     assert!(
         started.elapsed() < Duration::from_millis(200),
         "{:?}",
         started.elapsed()
     );
     until("2 度目の撃ち", || place.argv().len() == 2);
-    until("2 度目の撃ちの字", || form.text().is_some());
+    until("2 度目の撃ちの組", || {
+        form.kept().map(|k| k.ledger).as_deref() == Some("c")
+    });
     thread::sleep(Duration::from_millis(1000));
     assert_eq!(place.argv().len(), 2, "{:?}", place.argv());
-    assert_eq!(form.text().as_deref(), Some(FORM_LINE));
+    assert_eq!(
+        form.kept(),
+        Some(Kept {
+            ledger: "c".to_string(),
+            form: FORM_LINE.to_string(),
+        })
+    );
 }
 
-/// (7) 口の最初の要求の後の見張りの読みの周だけ器を撃ち、口は持った字から一覧を写す。
+/// (7) 口の最初の要求の後の見張りの読みの周だけ器を撃ち、口は札を今の台帳の字から、一覧を持った組から写す。
 #[test]
 fn pmisfit_route_reads_kept_form() {
     let place = Place::new("route");
+    fs::write(place.state.join("fleet/events.jsonl"), EVENT).expect("event log");
     let addr = place.serve(true, true);
     assert_eq!(place.bd_calls(), 1, "起動の読み");
 
@@ -380,10 +497,11 @@ fn pmisfit_route_reads_kept_form() {
     );
     let got = board_until(addr, "Known の一覧", |m| matches!(m, Reading::Known(_)));
     assert_eq!(got.misfits, want());
+    assert_eq!(stages(&got), [("b.3".to_string(), Stage::Queued)]);
     let doctor = doctor();
     assert_eq!(
         got,
-        board_with_doctor(LEDGER, "", Some(&doctor), 0).board
+        board_with_doctor(LEDGER, EVENT, Some(&doctor), 0).board
     );
 
     // 口の要求は器を撃たない。
@@ -392,14 +510,72 @@ fn pmisfit_route_reads_kept_form() {
     }
     assert_eq!(place.argv().len(), 1, "口の要求で撃つ");
 
+    // 器を撃っている間の口は、札を今の台帳の字から組み、一覧は前の組のまま。
+    place.sleep(Some("2"));
+    let now = renamed();
+    place.ledger_returns(&now);
+    place.move_mark();
+    until("今の台帳の字", || {
+        get(addr, "/api/ledger").1.contains("t b.1 new")
+    });
+    let during = pipeline(addr);
+    assert_eq!(
+        stages(&during),
+        [
+            ("b.3".to_string(), Stage::Queued),
+            ("b.4".to_string(), Stage::Queued)
+        ]
+    );
+    assert_eq!(during.cards, board(&now, EVENT, 0).board.cards);
+    assert_eq!(during.misfits, want());
+
+    // 撃ちを終えた後の口は、その周の台帳の字と台帳の形の行の組から写す。
+    let after = board_with_doctor(&now, EVENT, Some(&doctor), 0).board;
+    let done = board_until(addr, "撃ちを終えた一覧", |m| *m == after.misfits);
+    assert_eq!(done, after);
+    place.sleep(None);
+
     // 落ちた周は Unknown、置き直した周は戻る。
     place.doctor_fails();
     place.move_mark();
     board_until(addr, "落ちた周の Unknown", |m| *m == Reading::Unknown);
     place.doctor_returns(&doctor);
     place.move_mark();
-    let back = board_until(addr, "戻った一覧", |m| *m == want());
-    assert_eq!(back.misfits, want());
+    let back = board_until(addr, "戻った一覧", |m| *m == after.misfits);
+    assert_eq!(back.misfits, after.misfits);
+}
+
+/// (9) 知らせの接続は撃ちを許し、受け手の付いた周の見張りの読みが器を撃ち、一覧が変われば接続に知らせる。
+#[test]
+fn pmisfit_sse_arms_and_tells() {
+    let place = Place::new("sse");
+    let addr = place.serve(true, true);
+    let mut s = TcpStream::connect(addr).expect("接続");
+    s.set_read_timeout(Some(WAIT)).expect("timeout");
+    s.write_all(b"GET /api/surface/events HTTP/1.1\r\nHost: x\r\n\r\n")
+        .expect("要求を書く");
+    let mut seen = String::new();
+    let mut read_until = |what: &str, want: &str| {
+        let deadline = Instant::now() + WAIT;
+        let mut buf = [0u8; 4096];
+        while !seen.contains(want) {
+            assert!(Instant::now() < deadline, "{what} を待ちきれない: {seen}");
+            let n = s.read(&mut buf).expect("接続を読む");
+            assert!(n > 0, "接続が閉じた: {seen}");
+            seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+    };
+    read_until("頭の retry の行", "retry: 1000\n\n");
+
+    // 口を撃たず印も動かさずに、受け手の付いた周の読みが器を撃つ。
+    read_until("board-changed の知らせ", "event: board-changed\n");
+    let state = place.state.display();
+    assert_eq!(
+        place.argv(),
+        [format!("doctor --state-dir {state} --repo .")]
+    );
+    assert!(place.bd_calls() >= 2, "受け手の付いた周の読み");
+    assert_eq!(pipeline(addr).misfits, want());
 }
 
 /// (8) 席の target か state dir が無い server は器を撃たず、台帳の形の行の無い字は Unknown。

@@ -9,7 +9,8 @@
 //! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
 //! `watched` の Source の `got` と `text` は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、
 //! 読みが走っていればその終わりを待って同じ結果を返す（行 e-snap）。
-//! `with_form` の Source の `read` は、読みの後に器の doctor の台帳の形の行の撃ち（`Form::kick`）を起こす（待たない・行 c-pipe-misfit）。
+//! `with_form` の Source の `read` は、読んだ台帳の字（読めなければ None）で器の doctor の台帳の形の行の撃ち
+//! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ・行 c-pipe-misfit・行 c-misfit-pair）。
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -204,15 +205,13 @@ impl Source {
     }
 
     /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。
-    /// 読めた字は最後に読めた字に置く。`form` が在れば読みの後に撃ちを起こす（待たない）。
+    /// 読めた字は最後に読めた字に置く。`form` が在れば読んだ字の複製で撃ちを起こす（待たない）。
     pub fn read(&self) -> Reading<Vec<LedgerItem>> {
-        let reading = self
-            .fresh()
-            .map_or(Reading::Unknown, |text| parse_bd(&text));
+        let text = self.fresh();
         if let Some(form) = &self.form {
-            form.kick();
+            form.kick(text.clone());
         }
-        reading
+        text.map_or(Reading::Unknown, |text| parse_bd(&text))
     }
 
     /// bd を撃ち、読めた字を返す（導出グラフと指標の入力・便 e-read）。落ちれば上限の内の最後に読めた字（`got`）。
