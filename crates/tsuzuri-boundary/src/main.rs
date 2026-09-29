@@ -16,6 +16,7 @@
 //! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
 //! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
 //! tz hook question-signal --repo <dir>（行 e-signal-send・問いの合図の送り手・rc は 0 か 1）。
+//! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
 //! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
 
 use std::net::SocketAddr;
@@ -48,6 +49,7 @@ fn main() -> ExitCode {
         ["surface", "serve", rest @ ..] => serve(rest),
         ["graph", rest @ ..] => tsuzuri_boundary::cli::graph::run(rest),
         ["hook", "stop", rest @ ..] => tsuzuri_boundary::hook::stop::run(rest),
+        ["hook", "deliver", rest @ ..] => tsuzuri_boundary::hook::deliver::run(rest),
         ["hook", "question-gate", rest @ ..] => tsuzuri_boundary::hook::question_gate::run(rest),
         ["hook", "question-signal", rest @ ..] => {
             tsuzuri_boundary::hook::question_signal::run(rest)

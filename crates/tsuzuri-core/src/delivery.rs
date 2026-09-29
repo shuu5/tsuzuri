@@ -115,6 +115,158 @@ pub fn marked(ledger: &str, question: &BeadId, ruling: &RulingId) -> bool {
     })
 }
 
+/// 器の配達の口が待ちの席へ送る指し示しの行の頭（頭の前の器の名の字は見ない）。
+pub const POINTER_HEAD: &str = "seat: 裁定 ";
+
+/// 指し示しの行の尾（頭と尾の間が記帳 id）。
+pub const POINTER_TAIL: &str = " が届いた（在りかは裁定面の記帳）";
+
+/// 裁定の行の束の欄の頭（境界の server の束の受付が書く字と同じ）。
+pub const BATCH_FIELD: &str = "束 = ";
+
+/// 席の文脈に写す逐語の字数の合計の上限（Claude Code は hook の文脈が 10000 字を越えると file に落とす）。
+pub const CONTEXT_CAP: usize = 8000;
+
+/// 裁定の行の逐語の欄の前の区切り（server の書きが欄の間に置く字と欄の頭）。
+const VERBATIM_FIELD: &str = "・逐語 = ";
+
+/// 名指された裁定の 1 つ（問い・裁定の id・戻した逐語）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Said {
+    pub question: BeadId,
+    pub ruling: RulingId,
+    pub verbatim: String,
+}
+
+/// UserPromptSubmit の hook の入力の鍵 `prompt` の字の行から、指し示しの記帳 id を行の順に重なりを除いて拾う
+/// （記帳 id の形でない字・尾の無い行・JSON の object でない入力・鍵 prompt が字でない入力は拾わない）。
+pub fn pointed(payload: &str) -> Vec<RulingId> {
+    let Ok(Value::Object(input)) = serde_json::from_str::<Value>(payload) else {
+        return Vec::new();
+    };
+    let Some(Value::String(prompt)) = input.get("prompt") else {
+        return Vec::new();
+    };
+    let mut out: Vec<RulingId> = Vec::new();
+    for line in prompt.lines() {
+        let Some((_, rest)) = line.split_once(POINTER_HEAD) else {
+            continue;
+        };
+        let Some((id, _)) = rest.split_once(POINTER_TAIL) else {
+            continue;
+        };
+        if let Ok(id) = RulingId::new(id)
+            && !out.contains(&id)
+        {
+            out.push(id);
+        }
+    }
+    out
+}
+
+/// server の escape の逆（逆斜線 2 つは逆斜線・逆斜線と n は改行・逆斜線と r は復帰・ほかの逆斜線はそのまま）。
+fn unescape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.clone().next() {
+            Some('\\') => out.push('\\'),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            _ => {
+                out.push('\\');
+                continue;
+            }
+        }
+        chars.next();
+    }
+    out
+}
+
+/// 名指された裁定の逐語を台帳の順に返す。問い（label `intake:question`・状態が tombstone でない）の notes の
+/// 裁定の行のうち、行の id か束の欄の id が `ids` に在り、逐語の欄の在る行を出す（印は見ない）。字が読めなければ Unknown。
+pub fn said(ledger: &str, ids: &[RulingId]) -> Reading<Vec<Said>> {
+    let Some(beads) = read_ledger(ledger) else {
+        return Reading::Unknown;
+    };
+    let named = |id: &str| ids.iter().any(|n| n.as_str() == id);
+    let mut out = Vec::new();
+    for bead in beads.iter().filter(|b| is_question(b)) {
+        let Ok(question) = BeadId::new(bead.id.clone()) else {
+            continue;
+        };
+        for line in bead.notes.as_deref().unwrap_or_default().lines() {
+            let Some(rest) = line.trim_end_matches('\r').strip_prefix(RULING_PREFIX) else {
+                continue;
+            };
+            let Some((head, verbatim)) = rest.split_once(VERBATIM_FIELD) else {
+                continue;
+            };
+            let mut fields = head.split(ID_END);
+            let Ok(ruling) = RulingId::new(fields.next().unwrap_or_default().trim()) else {
+                continue;
+            };
+            let batch = fields.find_map(|f| f.strip_prefix(BATCH_FIELD)).map(str::trim);
+            if named(ruling.as_str()) || batch.is_some_and(named) {
+                out.push(Said {
+                    question: question.clone(),
+                    ruling,
+                    verbatim: unescape(verbatim),
+                });
+            }
+        }
+    }
+    Reading::Known(out)
+}
+
+/// UserPromptSubmit の hook の答え（鍵 hookSpecificOutput の下の hookEventName と additionalContext・空なら None）。
+/// 文脈は見出しの行と、裁定ごとの行「裁定 <id>（問い <問いの id>）の逐語:」と逐語を改行でつなぐ（事実の形の字）。
+/// 写した逐語の字数の合計が `CONTEXT_CAP` を越える裁定からは逐語を写さず、在りかの 1 行で終える。
+pub fn context(said: &[Said]) -> Option<String> {
+    if said.is_empty() {
+        return None;
+    }
+    let mut lines = vec![format!(
+        "席に届いた持ち主の裁定の逐語（{} 件・台帳の問いの notes の裁定の行の写し）:",
+        said.len()
+    )];
+    let mut total = 0;
+    let mut copied = 0;
+    for s in said {
+        total += s.verbatim.chars().count();
+        if total > CONTEXT_CAP {
+            break;
+        }
+        lines.push(format!("裁定 {}（問い {}）の逐語:", s.ruling, s.question));
+        lines.push(s.verbatim.clone());
+        copied += 1;
+    }
+    if let Some(first) = said.get(copied) {
+        lines.push(format!(
+            "裁定 {}（問い {}）を含む {} 件の逐語は上限 {CONTEXT_CAP} 字を越えるので写さない（在りかは台帳の問いの notes の裁定の行）",
+            first.ruling,
+            first.question,
+            said.len() - copied
+        ));
+    }
+    let mut inner = Map::new();
+    inner.insert(
+        "hookEventName".to_string(),
+        Value::String("UserPromptSubmit".to_string()),
+    );
+    inner.insert(
+        "additionalContext".to_string(),
+        Value::String(lines.join("\n")),
+    );
+    let mut answer = Map::new();
+    answer.insert("hookSpecificOutput".to_string(), Value::Object(inner));
+    Some(Value::Object(answer).to_string())
+}
+
 /// 停止の hook の入力の鍵 `stop_hook_active` が JSON の true か（JSON の object でなければ None）。
 pub fn stop_active(payload: &str) -> Option<bool> {
     match serde_json::from_str::<Value>(payload).ok()? {

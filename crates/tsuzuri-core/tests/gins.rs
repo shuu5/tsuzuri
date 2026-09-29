@@ -87,7 +87,10 @@ fn gate_command(hooks: &Value) -> String {
 fn gins_pretool_bash_entry() {
     let hooks = read_hooks();
     assert_eq!(keys(&hooks), ["hooks"]);
-    assert_eq!(keys(&hooks["hooks"]), ["PostToolUse", "PreToolUse", "Stop"]);
+    assert_eq!(
+        keys(&hooks["hooks"]),
+        ["PostToolUse", "PreToolUse", "Stop", "UserPromptSubmit"]
+    );
     let entry = only(&hooks["hooks"]["PreToolUse"]);
     assert_eq!(keys(entry), ["hooks", "matcher"]);
     assert_eq!(entry["matcher"], "Bash");
