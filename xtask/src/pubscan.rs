@@ -1,7 +1,8 @@
 //! 公開の repo へ漏らす字の走査（行 t-pub-scan・判断の記録 ADR-18 の決定 (9)）。
-//! 追跡される file の作業の木の今の字と、基準の commit `BASE` より後の commit の作者・記録者の欄と本文に、
+//! 追跡される file の作業の木の今の字と、基準の commit `BASE` より後の本流の commit（HEAD から 1 本目の親だけを辿る列）の作者・記録者の欄と本文に、
 //! tailnet の住所の形（100.64.0.0/10 と fd7a:115c:a1e0::/48 の中）・tailnet の名の形（字 .ts.net で終わる名）・
 //! 一覧の語（口座の名札と host の名・追跡しない file から読む）を探す。当たりは場所と行の番号と種類だけを出し、当たった字は出さない。
+//! merge で持ち込んだ別の根の commit は読まない（持ち込む repo の全履歴は、持ち込む前に席が同じ規則で走査する）。持ち込んだ木の file は全部見る。
 //! 当たりの在る commit が main に入ったら、`BASE` をその commit へ進める（走査を止める旗・環境変数・除外の一覧は持たない・条 N-3）。
 
 use std::ffi::OsStr;
@@ -209,7 +210,10 @@ fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
-/// 追跡される file の作業の木の字と、base より後の commit の作者・記録者・本文を探す。
+/// 追跡される file の作業の木の字と、base より後の本流の commit の作者・記録者・本文を探す。
+/// 本流は HEAD から 1 本目の親だけを辿る列（`--first-parent`）で、merge の commit は本流に在るので見る。
+/// merge で持ち込んだ側の根の commit は読まない（持ち込む repo の全履歴は持ち込む前に席が走査する）。
+/// 作業の木の file は持ち込んだ木のも全部見る。
 /// commit の行の番号は 1 行目が作者・2 行目が記録者・3 行目から本文。作業の木から消した file は飛ばす。
 pub(crate) fn scan(root: &Path, base: &str, words: &[String]) -> Result<Vec<Hit>, String> {
     let mut hits = Vec::new();
@@ -232,7 +236,13 @@ pub(crate) fn scan(root: &Path, base: &str, words: &[String]) -> Result<Vec<Hit>
     let range = format!("{base}..HEAD");
     let log = git(
         root,
-        &["log", "-z", "--format=%H%n%an <%ae>%n%cn <%ce>%n%B", &range],
+        &[
+            "log",
+            "-z",
+            "--first-parent",
+            "--format=%H%n%an <%ae>%n%cn <%ce>%n%B",
+            &range,
+        ],
     )?;
     for record in log.split(|&b| b == 0).filter(|r| !r.is_empty()) {
         let record = String::from_utf8_lossy(record);
@@ -556,6 +566,59 @@ mod tests {
         assert_eq!(BASE.len(), 40);
         let hits = scan(&root(), BASE, NONE).expect("走査");
         assert_eq!(hits, vec![]);
+    }
+
+    #[test]
+    fn pubfp_side_root_commits_skipped() {
+        let dir = std::env::temp_dir().join(format!("tsuzuri-pubfp-repo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("一時の dir");
+        let n = name();
+        git_in(&dir, &["init", "-q", "-b", "main"], &[]);
+        std::fs::write(dir.join("a.txt"), "one\n").expect("a.txt");
+        git_in(&dir, &["add", "a.txt"], &[]);
+        git_in(&dir, &["commit", "-q", "-m", "base"], &[]);
+        let base = git_in(&dir, &["rev-parse", "HEAD"], &[]);
+        git_in(
+            &dir,
+            &["commit", "-q", "--allow-empty", "-m", &format!("trunk {n}")],
+            &[],
+        );
+        let trunk = git_in(&dir, &["rev-parse", "HEAD"], &[]);
+        git_in(&dir, &["checkout", "-q", "--orphan", "side"], &[]);
+        git_in(&dir, &["rm", "-q", "-rf", "."], &[]);
+        std::fs::write(dir.join("b.txt"), format!("one\nsee {n}\n")).expect("b.txt");
+        git_in(&dir, &["add", "b.txt"], &[]);
+        git_in(&dir, &["commit", "-q", "-m", &format!("side {n}")], &[]);
+        let side = git_in(&dir, &["rev-parse", "HEAD"], &[]);
+        git_in(&dir, &["checkout", "-q", "main"], &[]);
+        git_in(
+            &dir,
+            &[
+                "merge",
+                "-q",
+                "--allow-unrelated-histories",
+                "-m",
+                &format!("merge {n}"),
+                "side",
+            ],
+            &[],
+        );
+        let merge = git_in(&dir, &["rev-parse", "HEAD"], &[]);
+        let parents = git_in(&dir, &["rev-list", "--parents", "-n", "1", "HEAD"], &[]);
+        assert_eq!(parents, format!("{merge} {trunk} {side}"));
+
+        let hits = scan(&dir, &base, &words()).expect("走査");
+        let hit = |place: &str, line| Hit {
+            place: place.to_string(),
+            line,
+            kind: Kind::Name,
+        };
+        assert_eq!(
+            hits,
+            vec![hit("b.txt", 2), hit(&merge, 3), hit(&trunk, 3)]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
