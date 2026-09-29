@@ -8,6 +8,7 @@
 //! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
 //! nav の印（見本の IC.home・IC.ask・IC.map・IC.gaps）は頁の定義の icon の字（行 hs-pages）。
 //! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題（行 g-title）。
+//! 最初の案内（coach mark）の層は home の頁だけに置く（行 g-coach）。
 
 use std::time::Duration;
 
@@ -24,6 +25,7 @@ use crate::seatpill;
 use crate::store;
 use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
 use crate::vocab::label;
+use crate::widgets::coach::CoachLayer;
 use crate::widgets::help::{HelpCtx, TipLayer, qmark, term};
 use crate::widgets::hover::{CardLayer, HoverCtx};
 
@@ -88,6 +90,7 @@ fn App() -> impl IntoView {
         <main class="page">{page_view(page)}</main>
         <TipLayer/>
         <CardLayer/>
+        {(page == PageId::Home).then(|| view! { <CoachLayer/> })}
     }
 }
 
