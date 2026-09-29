@@ -44,6 +44,14 @@
       "to": "acct-4"
     }
   ],
+  "seat::Reopens": [
+    {
+      "at": 1790498220
+    },
+    "clear",
+    "unmeasured",
+    "unknown"
+  ],
   "seat::SeatCard": [
     {
       "at": 1790494620,
@@ -60,6 +68,9 @@
         "known": "healthy"
       },
       "tick_at": 1790494600,
+      "reopens": {
+        "at": 1790498220
+      },
       "account": "acct-4",
       "model": "opus",
       "group": {
@@ -134,6 +145,7 @@
       "heartbeat": "unknown",
       "tick": "unknown",
       "tick_at": null,
+      "reopens": "unmeasured",
       "account": null,
       "model": null,
       "group": "unknown",

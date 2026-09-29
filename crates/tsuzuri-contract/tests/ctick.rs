@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::seat::{SeatCard, SeatState, TickHealth};
+use tsuzuri_contract::seat::{Reopens, SeatCard, SeatState, TickHealth};
 use tsuzuri_contract::wire;
 
 /// (1) 閉じた 4 語の順と字と、4 語のほかの語は読めないこと。
@@ -55,6 +55,7 @@ fn sample() -> SeatCard {
         heartbeat: Reading::Known(true),
         tick: Reading::Known(TickHealth::Stale),
         tick_at: Some(40),
+        reopens: Reopens::Unmeasured,
         account: None,
         model: None,
         group: Reading::Unknown,

@@ -7,7 +7,9 @@ mod common;
 
 use common::{AT, Form, distinct, form};
 use tsuzuri_contract::board::{GroupRow, QuotaLeft, Reading};
-use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
+use tsuzuri_contract::seat::{
+    AccountMove, QuotaUsed, Reopens, SeatCard, SeatSpan, SeatState, TickHealth,
+};
 use tsuzuri_contract::wire;
 
 fn group_row() -> GroupRow {
@@ -79,6 +81,15 @@ fn forms() -> Vec<Box<dyn Form>> {
         form("seat::SeatSpan", seat_spans()),
         form("seat::AccountMove", account_moves()),
         form(
+            "seat::Reopens",
+            vec![
+                Reopens::At(AT + 3_600),
+                Reopens::Clear,
+                Reopens::Unmeasured,
+                Reopens::Unknown,
+            ],
+        ),
+        form(
             "seat::SeatCard",
             vec![
                 SeatCard {
@@ -90,6 +101,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     heartbeat: Reading::Known(false),
                     tick: Reading::Known(TickHealth::Healthy),
                     tick_at: Some(AT - 20),
+                    reopens: Reopens::At(AT + 3_600),
                     account: Some("acct-4".into()),
                     model: Some("opus".into()),
                     group: Reading::Known(group_row()),
@@ -107,6 +119,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     heartbeat: Reading::Unknown,
                     tick: Reading::Unknown,
                     tick_at: None,
+                    reopens: Reopens::Unmeasured,
                     account: None,
                     model: None,
                     group: Reading::Unknown,

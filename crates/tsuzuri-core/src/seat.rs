@@ -4,11 +4,14 @@
 //! 時計も触らない。状態の判定は器の値を写すだけで、閾値を持たない。読めない字はその字から組む欄だけを
 //! 「まだ分からない」か無しにする。群の宣言（host.toml）は TOML の読み手を使わず行の字を読み、
 //! 1 行に収まらない配列は読めない扱いにする。
+//! 限度の再開の時刻は合図の健康の出力の席の行の欄 `reopens=` を写すだけで、窓の実測や rules 行から計算しない。
 
 use serde::Deserialize;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{GroupRow, QuotaLeft, Reading};
-use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
+use tsuzuri_contract::seat::{
+    AccountMove, QuotaUsed, Reopens, SeatCard, SeatSpan, SeatState, TickHealth,
+};
 
 use crate::ledger::{DAY, epoch_secs};
 
@@ -325,6 +328,19 @@ fn tick_health(value: Option<&str>) -> Reading<TickHealth> {
         .map_or(Reading::Unknown, Reading::Known)
 }
 
+/// 席の行の欄 reopens の値（`-` は当たっていない・`unknown` は時刻が無い・
+/// `YYYY-MM-DDTHH:MM:SSZ` は時刻・ほかと欄が無いのは測れていない）。
+fn reopens(value: Option<&str>) -> Reopens {
+    match value {
+        Some("-") => Reopens::Clear,
+        Some("unknown") => Reopens::Unknown,
+        Some(t) if t.len() == 20 && t.ends_with('Z') => {
+            epoch_secs(t).map_or(Reopens::Unmeasured, Reopens::At)
+        }
+        _ => Reopens::Unmeasured,
+    }
+}
+
 /// 合図の最後の判定の字の空でない最後の行。
 fn last_tick(tick_last: Option<&str>) -> Option<&str> {
     tick_last?.lines().map(str::trim).rfind(|l| !l.is_empty())
@@ -452,6 +468,7 @@ pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSec
         }),
         tick: tick_health(seat.and_then(|l| field(l, "tick"))),
         tick_at: last_tick(texts.tick_last.as_deref()).and_then(tick_ts),
+        reopens: reopens(tick.and_then(|l| field(l, "reopens"))),
         group: group(texts, name.as_deref()),
         usage: quota_used(texts.usage.as_deref(), account.as_deref(), model.as_deref()),
         spans: rows.map_or(Reading::Unknown, |r| Reading::Known(spans(&r, now))),

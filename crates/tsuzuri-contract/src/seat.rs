@@ -85,6 +85,22 @@ pub struct AccountMove {
     pub to: String,
 }
 
+/// 限度の再開の時刻（器の seat tick status の席の行の欄 `reopens=` の写し・判定は器だけが持つ）。
+/// 電文は At が鍵 at と epoch 秒の object、ほかは字 clear・unmeasured・unknown。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reopens {
+    /// 数える窓が当たっていて、この時刻に開き直る。
+    At(EpochSecs),
+    /// 当たっていない（器の `-`）。
+    Clear,
+    /// 古くない実測が無いか、器の値を読めない。
+    #[default]
+    Unmeasured,
+    /// 当たっているが戻る時刻が無い。
+    Unknown,
+}
+
 /// 席の card（口 seat の出力）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SeatCard {
@@ -105,6 +121,9 @@ pub struct SeatCard {
     /// 合図の最後の判定の時刻。
     #[serde(default)]
     pub tick_at: Option<EpochSecs>,
+    /// 限度の再開の時刻（鍵が無ければ測れていない）。
+    #[serde(default)]
+    pub reopens: Reopens,
     /// 登録の口座。
     pub account: Option<String>,
     pub model: Option<String>,

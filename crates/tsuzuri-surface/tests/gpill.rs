@@ -11,7 +11,7 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, HEADER, HeaderPart, PageId, SEAT};
 use tsuzuri_surface::project::seat::{self, LIMIT_LINE, MOVE_WAIT, NEXT_TARGET, REASON, hmd};
 use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
-use tsuzuri_surface::seatpill::{self, ETA_STYLE, Pill};
+use tsuzuri_surface::seatpill::{self, ETA_STYLE, Pill, RESUME};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::{label, vocab};
 use tsuzuri_surface::widgets::hover::{Card, ROW_CHARS};
@@ -186,6 +186,8 @@ fn gpill_card_rows() {
             vec![
                 model("opus"),
                 LIMIT_LINE.to_string(),
+                // fixture の電文は鍵 reopens を持たず、測れていない。
+                format!("{RESUME} {}", label("st_unknown")),
                 format!("{NEXT_TARGET} acct-6"),
             ],
         ),
