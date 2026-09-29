@@ -2,14 +2,14 @@
 # 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave23b.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave23b.toml#<行 id>。
 meta:
   id: surface-wave23b
-  title: 第 23 波 b — account board の群の枠の列から器の park の区画を外すと、明示の on の記録を変化の印に足すと、席と account の組の時刻を絶対の時刻で送る
-  version: v0.2
+  title: 第 23 波 b — account board の群の枠の列から器の park の区画を外すと、明示の on の記録を変化の印に足すと、席と account の組の時刻を絶対の時刻で送ると、公開の走査を本流の commit に限り、持ち込んだ木への規則の除外の表を置く
+  version: v0.3
   status: effective
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: 設計ノート surface-base の傘の行 e（面の server）の子の、中核と境界の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは席の決め（計画 surface-plan の 9 節の計画だけの行 c-acct-park と、器の席の知らせ 2026-09-29〔器の草稿の字 branch docs/park-lot-rows の doctor の区画の行と seat tick status の heartbeat_by= と記録の file heartbeat-on〕を受けて計画に足してすぐこのノートへ移す行 e-hb-on-mark）と要件 FR12 で、持ち主の問いを置かない。どちらも器の字を写すだけで（規則の行 R-22）、器の区画の宣言より前に着地してよい。起草は main 84be3ea2 の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。第 0.2 版（2026-09-29）は、3 行目 c-abs-seat（計画 9 節の計画だけの行・契約と中核と境界と面の crate・M）と 5 節を足した。席の card と account board の電文の時点・最後の区間の終わり・24 時間の窓の始まり・退避の猶予を、今の時刻に依らない材料の時刻と猶予の終わる時刻で送り、面は組む時の今で描く（行 c-abs-time の後の組）。depends は空（1 行目と 2 行目の出力に頼らない）。起草は main 87f7fe9（計画 v0.95・行 c-grace-acct と e-hb-on-mark と c-acct-park の着地の後）の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。
+  note: 設計ノート surface-base の傘の行 e（面の server）の子の、中核と境界の crate の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。行の拠りは席の決め（計画 surface-plan の 9 節の計画だけの行 c-acct-park と、器の席の知らせ 2026-09-29〔器の草稿の字 branch docs/park-lot-rows の doctor の区画の行と seat tick status の heartbeat_by= と記録の file heartbeat-on〕を受けて計画に足してすぐこのノートへ移す行 e-hb-on-mark）と要件 FR12 で、持ち主の問いを置かない。どちらも器の字を写すだけで（規則の行 R-22）、器の区画の宣言より前に着地してよい。起草は main 84be3ea2 の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。第 0.2 版（2026-09-29）は、3 行目 c-abs-seat（計画 9 節の計画だけの行・契約と中核と境界と面の crate・M）と 5 節を足した。席の card と account board の電文の時点・最後の区間の終わり・24 時間の窓の始まり・退避の猶予を、今の時刻に依らない材料の時刻と猶予の終わる時刻で送り、面は組む時の今で描く（行 c-abs-time の後の組）。depends は空（1 行目と 2 行目の出力に頼らない）。起草は main 87f7fe9（計画 v0.95・行 c-grace-acct と e-hb-on-mark と c-acct-park の着地の後）の写しで行い、試作で歯を撃ち、直しを戻して歯が落ちることを見た。第 0.3 版（2026-09-29）は、4 行目 t-pub-fp（xtask の pubscan だけ・S）と 5 行目 t-carry-ex（repo の根の file と xtask の歯だけ・S）と 6 節と 7 節を足した。folio2 の持ち込み（判断の記録 ADR-18）の前と後の tsuzuri の側の行で、段取りは計画 surface-plan の 6 節の folio の持ち込みの段落が持つ。t-pub-fp は持ち込みの merge より前、t-carry-ex は t-pub-fp の後（depends）で持ち込みの merge の着地の後に流す。起草は main 821ed79（計画 v0.97）の写しで行い、t-carry-ex は写しに folio2 0c910db を folio2/ へ別の根として merge した木で試作した。試作で歯を撃ち、直しを戻して歯が落ちることを見た。
 
 sections:
   - n: 1
@@ -25,6 +25,10 @@ sections:
       2 行とも、器の区画の宣言と器の binary の入れ替えより前に着地してよい（器の字が無い今の字では振る舞いが変わらない）。
 
       3 行目 c-abs-seat（契約・中核・境界・面の crate）は、席の card と account board の電文から、server が組む時の今の時刻から作る値（時点・最後の区間の終わり・24 時間の窓の始まり・退避の残り秒）を除き、今の時刻に依らない材料の時刻と猶予の終わる時刻で送る。経過と残り秒は面が組む時の今から引く（行 c-abs-time の後の組）。
+
+      4 行目 t-pub-fp（xtask だけ）は、公開の走査 xtask pub-scan の commit の走査を本流（HEAD から 1 本目の親だけを辿る列）に限る。folio2 を別の根として merge で持ち込む時（判断の記録 ADR-18 の決定 (2)(3)）に、既に公開の folio2 の履歴の commit の本文を走査から外す。作業の木の file の走査は変えない。持ち込みの merge より前に着地させる。
+
+      5 行目 t-carry-ex（repo の根の file と xtask の歯だけ）は、持ち込んだ木への tsuzuri の規則の除外の表 carry-exclusions.toml を置き、欄と値の形と行の並びを歯で見る（ADR-18 の決定 (5)・ADR-19 の決定 (2)）。表の path は持ち込んだ木 folio2/ の中なので、流すのは持ち込みの merge の着地の後。
   - n: 2
     type: contract-table
     title: 契約表
@@ -57,6 +61,24 @@ sections:
         size: M
         done: (1) 中核の seat の pub fn card は、fixture tests/fixtures/seat/seat-inputs.json の 6 組（limit・no-state・run・silent・unread・wait）の字から、今を 1 秒・60 秒・3600 秒・86400 秒ずらしても同じ電文の字の card を組み、card の at は組の期待の card の at と同じで、組ごとの at と tick_at は limit が 1790503200 と 1790503200・no-state が 1790510390 と 1790510390・run が 1790510390 と 1790510390・silent が 1790509000 と 1790509000・unread が 1790510390 と 1790510390・wait が 1790510000 と 1790510000 で、区間が読めて 1 つ以上ある組では最後の区間の to は at で、どの区間の from も at から 86400 を引いた時刻以後（歯 abss_card_same_across_now） (2) 組 run の card の at は 1790510390 で、合図の最後の判定の字を除くと at は 1790505000・区間の最後の to は 1790505000・最初の from は 1790420000 でその電文の字は今を 1 秒・60 秒・3600 秒・86400 秒ずらしても同じで、状態の記録に ts 1790510395 の行を足すと at は 1790510395、合図の最後の判定と状態の記録の両方を除くと at は 0 で区間は Unknown（歯 abss_card_at_from_materials） (3) 組 run の席 proj-1:0.1 の合図の健康の行の末尾に reopens=- move=acct-2 grace_left=600 を足した字では、今 1790510400 の card の grace_until は Known(Some(1790511000)) で、今を d 秒（1・60・600）進めて grace_left を 600 − d にした字の電文は今 1790510400 の電文と同じ字で、末尾が reopens=- move=- grace_left=- なら grace_until は Known(None)、reopens=- move=unreadable grace_left=unreadable なら Unknown で、この 2 つの電文の字は今を 1 秒・60 秒・3600 秒・86400 秒ずらしても同じ（歯 abss_grace_until_from_left） (4) 中核の account の pub fn doc は、fixture tests/fixtures/account/acct-inputs.json の host の字と、proj-a の合図の健康の行と状態の記録と合図の最後の判定（ts 1790508000）の字から、今 1790511000 と、その今を 1 秒・60 秒・3600 秒・86400 秒ずらした今で同じ電文の字を組み、proj-a の席の card の at は 1790508000・電文の at は 1790510400 で、pub fn assemble に Unknown の 3 つと空の 2 つの列を渡した電文の at は 0（歯 abss_doc_same_across_now） (5) fixture tests/fixtures/account/acct-doc.json の字は引用符で囲んだ鍵の字 move_left_s と age_p50_days を持たず、電文として読んだ proj-b の move_until は電文の at に 1101 を足した時刻、proj-a の台帳の memo の created_p50 は電文の at から 475200 を引いた時刻で、JSON の at は 1790510400（歯 abss_doc_fixture_keys） (6) 面の project の seat の pub fn drawn は、fixture tests/fixtures/surface/seat-card.json の組 run の card を今 1790511000 で at と最後の区間の to が 1790511000 の card にし、ほかの区間は変えず、今 1790510300 では card を変えず、pub fn content はその card の電文の本文と今 1790511000 から Body::Filled(seat(&drawn(card, 1790511000))) と同じ値を返し、描いた card の 3h の窓の最後の矩形の x と width の和は WIDTH で、move_to が acct-5 で grace_until が 1790511501 の card を今 1790510460 で描いた帯の l1 に const MOVING の字と空白と字 1041 秒 をつないだ行が在り、seatpill の pub fn card の kind は今 1790510400 で字 09-27 を持たず今 1790596800 で持つ（歯 abss_seat_drawn_at_now） (7) 面の account の pub fn drawn は、fixture tests/fixtures/account/acct-doc.json の電文を今 1790511000 で、電文の at と、席の card が Known の project の card の at と最後の区間の to と、区間が Known の session の最後の区間の to を 1790511000 にし、今 1790510300 では電文を変えず、描いた電文の proj-b の move_until は 1790511501 で、pub fn orch_card の proj-b の card の詳しくに語の辞書の鍵 move_grace の label と空白と字 501 秒 をつないだ行が在り、session の pub fn row の index 2 の moving は Move::Grace(1790511501)、pub fn grace_left に 1790511501 と描いた電文の at と 1790511060 を渡すと 441 で、休止中の席の列を last 1790506800 の 1 つにした電文を描いた pub fn dormant_card の詳しくの最初の行は今 1790510400 で字 09-27 を持たず今 1790596800 で持つ（歯 abss_acct_drawn_at_now） (8) 面の src の project_dom/seat.rs は字 fetched.with(|f| content(f, crate::net::now())) と字 let now = crate::net::now(); を、seatpill.rs は字 card(f, crate::net::now()) と字 Ok(c) => seat::drawn(c, now), を、account/board.rs は字 fetched.with(doc).ok().map(|d| drawn(d, net::now())) を、account/home.rs は字 fetched.with(|f| content(f, crate::net::now())) を、account/projects.rs は字 content(f, sort.get(), m, crate::net::now()) を、account/session.rs は字 content(f, sort.get(), crate::net::now()) と字 grace_left(until, at, tick.get()) を 1 度ずつ持ち、project_dom/seat.rs・seatpill.rs・account/home.rs・account/projects.rs・account/session.rs・account/cards.rs・project/seat.rs の 7 つの file は字 move_left_s・grace_left:・.grace_left を持たない（歯 abss_face_wiring） (9) 中核の tests/abss.rs と面の tests/abssface.rs の test の属性の次の行の fn の名は 9 つで、どれも abss_ で始まり、名から abss_ を除いた字は歯の WORDS の 217 語（起草の時の main f467057 の契約表の verify の最後の字の filter の語）のどれも含まない（歯 abss_own_names_clean） (10) 契約の snapshot の seat の群は今の型の字と一致する（歯 contract_form_snapshot_matches・file crates/tsuzuri-contract/tests/snapshots/seat.json） (11) 書き換えた着地済みの歯と置き場だけの = の歯は通る（verify の行） (12) cargo run -q -p xtask -- surface-build と check が通る（verify の行）
         depends: []
+      - id: t-pub-fp
+        title: 公開の走査 xtask pub-scan の commit の走査を本流（HEAD から 1 本目の親だけを辿る列）に限り、別の根を merge で持ち込んだ側の commit の本文を見ない（作業の木の file の走査は変えない・xtask の pubscan だけ）
+        req: ["NFR3"]
+        section: "6"
+        write-set: ["xtask/src/pubscan.rs"]
+        verify: ["cargo nextest run -p xtask --bin xtask --no-tests=fail pubfp_", "cargo nextest run -p xtask --bin xtask --no-tests=fail pubscan_", "cargo run -q -p xtask -- pub-scan", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) xtask の pubscan の fn scan は、見本の repo（base の commit・本流の commit・根の違う branch の commit・その branch を --allow-unrelated-histories で merge した commit で、merge の commit の 2 本目の親は根の違う branch の commit）を base から走査すると、tailnet の名の形の当たりを、根の違う branch の木の file b.txt の 2 行目・merge の commit の本文（行の番号 3）・本流の commit の本文（行の番号 3）のこの順の 3 つだけ返し、根の違う branch の commit の本文の当たりを返さない（歯 pubfp_side_root_commits_skipped） (2) この repo の作業の木の file と BASE より後の本流の commit に、tailnet の住所と名の形の当たりが無い（一覧の語は渡さない）（歯 pubscan_repo_tree_clean）
+        depends: []
+      - id: t-carry-ex
+        title: 持ち込んだ木への tsuzuri の規則の除外の表 carry-exclusions.toml を repo の根に置き、欄と値の形と行の並びを xtask の歯で見る（R-4・R-10・R-2 の 3 行・path は folio2/crates/folio/・持ち込みの merge の着地の後に流す）
+        req: ["NFR3"]
+        section: "7"
+        write-set: ["+carry-exclusions.toml", "+xtask/tests/carry.rs"]
+        verify: ["cargo nextest run -p xtask --test carry --no-tests=fail cexcl_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) repo の根の file carry-exclusions.toml を読んだ行の列は、欄 rule・path・scope・ruling・removed_by の 3 行で、規則と外す行の id は R-4 と k-size-folio・R-10 と k-lint-folio・R-2 と k-join-folio のこの順、3 行とも path は folio2/crates/folio/ で ruling は 判断の記録 ADR-18 の承認の t3-hub.67.4 の裁定 id、scope は R-4 が 大きさの上限（1 module の行数・関数の粒度・歯と source の行数比）・R-10 が lint で deny にする書き方（unwrap・expect・panic・直接の print ほか）・R-2 が 持ち込みの 1 回で足す依存（folio2/Cargo.lock の 35 本）の、1 PR 1 本と増分 check の実測だけ の字で、この行の列は repo の木の確かめ（規則が R-4・R-10・R-2・N-3 のどれか・path が字 / で終わり 節 .. と . を持たない dir で、根の直下の dir の Cargo.toml が行 [workspace] を持つ・裁定 id が ADR-18 か ADR-19 の file に 字 裁定 id = に続けて在る・外す行の id が英小文字で始まり英小文字と数字と字 - だけ・scope が空でない・同じ規則と path の 2 度目が無い）を通る（歯 cexcl_table_rows） (2) 表の読みと確かめは、R-10 の良い 1 行の字を通し、それを崩した 12 の字（知らない鍵 enabled の行・鍵 removed_by の無い行・規則 R-5・path crates/tsuzuri-core/・path xtask/・path folio2/../crates/・字 / で終わらない path folio2/crates/folio・木に無い dir の path folio2/no-such-dir/・判断の記録 ADR-18 と ADR-19 に無い裁定 id・空の removed_by・同じ規則と path の 2 行・見出しの前の鍵）を全部断る（歯 cexcl_refuses_bad_rows） (3) 歯の file xtask/tests/carry.rs の名が cexcl_ で始まる fn は 3 つで、どれも起草の時の main 821ed79 の契約表の verify の最後の字 294 語のどれも含まない（歯 cexcl_own_names_clean）
+        depends: ["t-pub-fp"]
   - n: 3
     type: prose
     title: 行 c-acct-park — 群の枠の列から park の区画を外す
@@ -139,5 +161,48 @@ sections:
 
       歯と verify。接頭辞 abss_ の 9 本（中核の tests/abss.rs に 6・面の tests/abssface.rs に 3）。fixture の acct-inputs.json と seat-card.json は読むだけ。
       filter の語（起草の時の main f467057 の契約表の verify の最後の字の 217 語・歯の名の見張りの WORDS と同じ）: aaround_・abst_・accept_・acchold_・account_・acctcore_・acctdoc_・accthb_・accthome_・acctled_・acctlook_・acctpcore_・acctproj_・acctsess_・acctwin_・acctwire_・aface_・afocus_・alean_・aord_・aown_・apark_・apop_・areread_・askcard_・athr_・batchpanel_・bhalf_・board_min_・bport_・brand_・btuck_・cadl_・cadopt_・cadq_・cdorm_・cfsplit_・cg9_・cgdom_・cmark_・cnote_・contract_form_・cround_・csled_・cspk_・ctick_・cupd_・cupdlist_・denv_・dnedge_・dngrp_・dnrow_・dnskip_・dretry_・ecache_・epolq_・eretry_・esig_・evkind_・flight_・fmark_・fprem_・frame_・fserve_・fstop_・fxpre_・g3g7_・gacct_・gapspage_・gatt_・gbnote_・gchip_・gcoach_・gfix_・gfresh_・ghb_・gins_・gjst_・glabel_・gnav_・gpface_・gpill_・gpulse_・graph_・gsum_・gtuck_・gview_・gwv_・hacols_・harest_・hasplit_・hbconf_・hbmark_・hbon_・hbpost_・hbproc_・hbroute_・hcard_・hcled_・hcnx_・hcproj_・hcsess_・hdchip_・hfig_・hnunk_・hook_・hruling_・hsblock_・hsderive_・hshist_・hspage_・hspk_・hsym_・hthr_・http_・hwstore_・iclose_・ilink_・jcount_・jrun_・kcli_・kg9_・kindlab_・klink_・ksum_・launch_・lcard_・ledgerblock_・lgrp_・lhome_・lidle_・lkind_・lresume_・lsnap_・lspark_・lstg_・lstore_・mapview_・mkeys_・mlink_・mqask_・mqface_・mstore_・mtips_・mtree_・nact_・nbatch_・ncard_・nextstep_・nodepage_・nstall_・nsum_・nsumw_・ntc_・ntime_・nxact_・nxorg_・parts_・pci_・pclosed_・pfold_・pgsw_・pgz_・pipe_・plimit_・pmisfit_・pmore_・pquest_・pqueue_・project_・ptitle_・pubscan_・punmap_・pwhole_・qblock_・qgate_・qkey_・qsig_・question_・rbusy_・relay_・rhold_・runsdoc_・rvk_・saxis_・sclosed_・seatblock_・seatcard_・server::events::・server_・sesplit_・sgrace_・shb_・skeleton_・smore_・stage_・stats_・stbp_・stcli_・steady_・sthr_・stnfy_・stskill_・sttgt_・sxaxis_・ticker_・tipx_・tkad_・tlic_・topbar_・topfit_・tz_・udash_・unow_・urpanel_・uword_・wstrip_
+
+  - n: 6
+    type: prose
+    title: 行 t-pub-fp — 公開の走査の commit を本流に限る
+    body: |
+      在りかの main は 821ed79（計画 surface-plan 第 0.97 版）。書く file は xtask/src/pubscan.rs だけ。
+
+      なぜ。folio2 を tsuzuri へ別の根として merge で持ち込む（判断の記録 ADR-18 の決定 (2)(3)・commit id を保つ）と、pub-scan の commit の走査（base より後の commit）は folio2 の 595 本の commit を全部読む。起草の予行（写しの main 821ed79 に folio2 0c910db を folio2/ へ merge）で、folio2 の commit 1 本の本文に tailnet の住所の形が 3 件当たり、xtask の check が落ちた。当たりは範囲を判じる歯の設計の文の、範囲の端の値で、機械の住所ではない。folio2 は既に公開の repo で、席は持ち込む前に folio2 の全履歴（commit の作者・記録者・本文と、全部の blob）を同じ規則と一覧の語で走査した（一覧の語の当たりは 0）。履歴は書き換えない（ADR-18 の案 d を退けた）。
+
+      形。fn scan の git log に --first-parent を足し、本流（HEAD から 1 本目の親だけを辿る列）の base より後の commit だけを見る。merge の commit は本流に在るので、その作者・記録者・本文は見る。作業の木の file の走査（git ls-files）は変えず、持ち込んだ木の file も全部見る。module の doc と fn scan の doc に、本流だけを見ることと、持ち込む repo の全履歴は持ち込む前に席が走査することを書く。
+
+      今と変わらないこと。tsuzuri の main の履歴に merge の commit は 0 本（全履歴・写しで数えた）。器の着地は親 1 つの commit で、設計席の commit は ff なので、今の走査の結果は変わらない。BASE・一覧の file・当たりの出し方も変えない。走査を止める旗・環境変数・除外の一覧は持たない（条 N-3）。
+
+      歯。pubscan.rs の mod tests に歯 pubfp_side_root_commits_skipped を 1 つ足す。見本の repo（着地済みの歯 pubscan_repo_range と同じ git の撃ち方の fn git_in）に、base・本流の commit・根の違う branch の commit・その branch を --allow-unrelated-histories で merge した commit を作る。当たりの列が、根の違う branch の木の file b.txt・merge の commit の本文・本流の commit の本文の 3 つだけで、根の違う branch の commit の本文を含まないことを見る。filter の語 pubfp_ は、起草の時の main 821ed79 の契約表の verify の最後の字 294 語のどれも含まず、どの語にも含まれない。
+
+      変えない歯。着地済みの歯 pubscan_ の 8 本（ノート surface-wave20a の行 t-pub-scan）は同じ file に在り、字を変えずに通る（verify に入れる）。
+
+      流す時と順。持ち込みの merge より前に着地させる（merge の commit で xtask の check と CI が緑であるため）。depends は空。同じノートの 3 行目 c-abs-seat（走行中）と書く file は重ならない。
+
+      範囲の外。folio2 の木の file に在る当たり（歯と設計の文の 6 件）は、folio2 の側の直しで消す（持ち込む commit はその直しの後の folio2 の最新）。
+
+  - n: 7
+    type: prose
+    title: 行 t-carry-ex — 持ち込んだ木への規則の除外の表
+    body: |
+      在りかの main は 821ed79（計画 surface-plan 第 0.97 版）。書く file は、repo の根の新しい file carry-exclusions.toml と、xtask の新しい歯の file xtask/tests/carry.rs。流すのは持ち込みの merge（folio2 を folio2/ へ）の着地の後で、同じノートの 4 行目 t-pub-fp の後（depends）。試作は、写しの main 821ed79 に folio2 0c910db を folio2/ へ別の根として merge し、t-pub-fp と、folio2 の側の直しの代わり（範囲の端の値の字）を当てた木で撃った。
+
+      なぜ。判断の記録 ADR-18 の決定 (5) は、持ち込む code への tsuzuri の規則 R-4・R-10・R-2 を、最初は除外の表で持ち、段ごとの便で外すと決めた（計画の判断の表 d43）。ADR-19 の決定 (2) は、同じ表に器の宣言 file の効いているかの旗を条 N-3 の除外として足し、除外の表を作る便は両方を読むと決めた。この行はその表を置く。表の行は ADR-18 の決定 (5) を行にしただけで、新しい緩めは足さない（席の決め 2026-09-29）。
+
+      形（表）。欄は rule・path・scope・ruling・removed_by の 5 つだけで、旗・環境変数・今回だけの口は持たない（条 N-3）。行は 3 本で、どれも path は folio2/crates/folio/、ruling は ADR-18 の承認の t3-hub.67.4 の裁定 id。
+      - R-4 — 大きさの上限（1 module の行数・関数の粒度・歯と source の行数比） — 外す行 k-size-folio
+      - R-10 — lint で deny にする書き方（unwrap・expect・panic・直接の print ほか） — 外す行 k-lint-folio
+      - R-2 — 持ち込みの 1 回で足す依存（folio2/Cargo.lock の 35 本）の、1 PR 1 本と増分 check の実測だけ — 外す行 k-join-folio（folio の crate を根の workspace に入れる行）
+      R-2 のほかの字（許しの一覧・直接依存の本数）は、この表で外さない。依存の一覧と、許しの一覧の外の 2 本（BSD-3-Clause と Zlib）は、持ち主の問い t3-hub.67.29 の答えの後に別の設計の commit で扱う。
+      N-3 の行は置かない。ADR-19 の決定 (2) の N-3 の除外は器の宣言 file の旗が対象で、scribe2 の持ち込みの段で行を足す（席の決め）。欄 rule の閉じた一覧は N-3 を含む 4 つ。
+      外す行の id（k-join-folio・k-size-folio・k-lint-folio）は、まだ契約の行でも計画だけの行でもなく、計画 6 節の folio の持ち込みの段落が名指す。起草する時に波のノートの契約の行にし、その行が表の行を消す。
+
+      形（歯）。xtask/tests/carry.rs は、外の依存を使わず、repo の根からの相対の path で字を読む（前例 tests/tlic.rs）。表の読み（見出し [[exclusion]] と、鍵 = 引用符で囲んだ字 の行だけ）と、repo の木での確かめを持つ。確かめは次のとおり。規則が閉じた 4 つのどれか。path が字 / で終わり、節 .. と . を持たない dir で、根の直下の dir の Cargo.toml が行 [workspace] を持つ。裁定 id が ADR-18 か ADR-19 の file に、字 裁定 id = に続けて在る。外す行の id が英小文字で始まり、英小文字と数字と字 - だけ。scope が空でない。同じ規則と path の 2 度目が無い。根の workspace の member の dir は自分の [workspace] を持てないので、この確かめで tsuzuri の crate の dir は名指せない。
+      歯は 3 つ（cexcl_table_rows・cexcl_refuses_bad_rows・cexcl_own_names_clean）。filter の語は、起草の時の main 821ed79 の契約表の verify の最後の字 294 語で、歯の file に const WORDS として持つ。
+
+      読み手。今は歯だけ。folio2/ は根の workspace の外（自分の [workspace] を持つ入れ子）なので、R-4・R-10・R-2 の検査はもともと folio2/ に当たらず、この表で切る仕組みは無い。k-join-folio が folio の crate を根の workspace に入れる時に、表を読んで lint と数えを外す実装を持つ。
+
+      範囲の外。folio2/ の木の中の、tsuzuri で働かない file（CLAUDE.md・.beads・.vessel など）の扱いは、持ち込みの後の最初の便で持ち主に問う。
 
 figures: []
