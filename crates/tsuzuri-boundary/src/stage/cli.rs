@@ -10,6 +10,8 @@
 //! 設定に値が無ければ席の目に落ちて URL の行を出し（open は断る）、表示先は board の問いで持ち主に問う。
 //! 設定の端末の名が層 A（器の host の面の [[device]]）に無ければ名指して断り、既定へ落とさない。
 //! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
+//! click・入力・key の断りは url の ports のほかの board（群の宣言の anchor ごとの project board）にも広げ、
+//! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない・行 i-board-ports）。
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -546,10 +548,20 @@ pub fn seat_refusal(value: Option<&OsStr>) -> Option<String> {
 
 /// 命令が board の頁の上で断る click・入力・key か（判断の記録 ADR-15 の決定 (7)・board は見せるだけ）。
 pub fn on_board(command: &Command, page: &str, board: &Board) -> bool {
+    on_boards(command, page, board, &[])
+}
+
+/// 命令が自分の board か ports のほかの board の頁の上で断る click・入力・key か。
+pub fn on_boards(command: &Command, page: &str, board: &Board, ports: &[u16]) -> bool {
+    guarded(command) && board.holds_any(page, ports)
+}
+
+/// board の頁の上で断る命令（click・入力・key）か。
+fn guarded(command: &Command) -> bool {
     matches!(
         command,
         Command::Click { .. } | Command::Type { .. } | Command::Key { .. }
-    ) && board.holds(page)
+    )
 }
 
 /// 端末ごとの錠（base の下の tzst-<名>.lock を mode 0600 で開き、wait まで取りに行く・File の drop で放れる）。
@@ -714,6 +726,14 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
         return Err(line);
     }
     let text = face_text(&call.repo, &call.scribe2, &call.git)?;
+    let mut ports = Vec::new();
+    if script.iter().any(|(command, _)| guarded(command)) {
+        let read = url::ports(&text, &call.git, &call.repo, TIMEOUT);
+        for name in &read.unread {
+            println!("project {name} の board の port が読めない（その board の頁の上の断りは広げない）");
+        }
+        ports = read.ports;
+    }
     let base = tunnel::user_dir(&env::temp_dir())?;
     let (name, first, config) = match &call.to {
         Some(to) => (to.clone(), false, None),
@@ -734,7 +754,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
                     println!(
                         "表示先の設定に project {own} の値も既定も無いので席の目（この server の headless の Chrome）に落ちた・持ち主へは board の URL を渡し、表示先は board の問いで持ち主に問う"
                     );
-                    return drive(session, script, board);
+                    return drive(session, script, board, &ports);
                 }
             }
         }
@@ -762,7 +782,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
                 }
                 drop(held);
                 let session = Session::open(tunnel.socket(), &resource, TIMEOUT)?;
-                drive(session, script, board)
+                drive(session, script, board, &ports)
             }
             Window::Absent(line) => Err(line),
         },
@@ -773,7 +793,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
         } => {
             drop(held);
             println!("{line}");
-            drive(session, script, board)
+            drive(session, script, board, &ports)
         }
     }
 }
@@ -865,29 +885,28 @@ fn drive(
     mut session: Session,
     script: &[(Command, Option<PathBuf>)],
     board: &Board,
+    ports: &[u16],
 ) -> Result<(), String> {
     let done = script.iter().try_for_each(|(command, out)| {
-        shoot(&mut session, command, out.as_deref(), board)
+        shoot(&mut session, command, out.as_deref(), board, ports)
             .map_err(|e| format!("{}: {e}", word(command)))
     });
     let closed = session.close();
     done.and(closed)
 }
 
-/// 1 つの命令を撃って出力の行を書く（board の頁の上の click・入力・key は撃たずに断る）。
+/// 1 つの命令を撃って出力の行を書く（自分の board と ports の board の頁の上の click・入力・key は撃たずに断る）。
 fn shoot(
     session: &mut Session,
     command: &Command,
     out: Option<&Path>,
     board: &Board,
+    ports: &[u16],
 ) -> Result<(), String> {
     let verb = word(command);
-    if matches!(
-        command,
-        Command::Click { .. } | Command::Type { .. } | Command::Key { .. }
-    ) {
+    if guarded(command) {
         let page = session.url()?;
-        if on_board(command, &page, board) {
+        if on_boards(command, &page, board, ports) {
             return Err(format!(
                 "board の頁 {page} の上では {verb} を断る（判断の記録 ADR-15 の決定 (7)・board は見せるだけ）"
             ));

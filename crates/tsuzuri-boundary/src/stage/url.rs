@@ -4,10 +4,15 @@
 //! どちらも code と版管理に載る file に書かない（行 D-4）。
 //! 自分の board とみなすのは、port が自分の boardport で、host がこの host のどの形（tailnet の名・その短い名・
 //! Self の TailscaleIPs の住所・127.0.0.1・localhost）でもよい頁（席の決め・i-4 と i-5 の起草の問い Q1）。
+//! 守りは群の宣言の anchor ごとの project board の port のほかの board にも広げ（行 i-board-ports）、
+//! その host の形は自分の board と同じ列（同じ host の board だけ・ほかの host の同じ port は断らない）。
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::time::Duration;
+
+use tsuzuri_core::account::host::declaration;
+use tsuzuri_core::account::project_name;
 
 use super::json;
 use crate::acct;
@@ -82,6 +87,51 @@ impl Board {
     pub fn holds(&self, page: &str) -> bool {
         parts(page).is_some_and(|(_, host, port)| port == self.port && self.hosts.contains(&host))
     }
+
+    /// 頁の URL が自分の board かほかの board か（port が自分の port か ports のどれかで、host がこの host のどれかの形）。
+    pub fn holds_any(&self, page: &str, ports: &[u16]) -> bool {
+        parts(page).is_some_and(|(_, host, port)| {
+            (port == self.port || ports.contains(&port)) && self.hosts.contains(&host)
+        })
+    }
+}
+
+/// 群の宣言の anchor ごとの project board の port（読めた port と、読めない project の名）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Ports {
+    pub ports: Vec<u16>,
+    pub unread: Vec<String>,
+}
+
+/// host の面の群の宣言の anchor ごとに git config の tsuzuri.boardport を引く（anchor は宣言の順に同じ字を 1 度・
+/// 同じ port は 1 度・読めない anchor は project の名を unread に足す・cwd は repo）。
+pub fn ports(text: &str, git: &OsStr, repo: &Path, timeout: Duration) -> Ports {
+    let mut anchors: Vec<String> = Vec::new();
+    for anchor in declaration(text)
+        .groups
+        .into_iter()
+        .flat_map(|g| g.anchors.unwrap_or_default())
+    {
+        if !anchors.contains(&anchor) {
+            anchors.push(anchor);
+        }
+    }
+    let mut out = Ports::default();
+    for anchor in anchors {
+        let mut args = vec![OsString::from("-C"), OsString::from(&anchor)];
+        args.extend(acct::BOARD_ARGS.iter().map(OsString::from));
+        let port = proc::capture(git, &args, repo, timeout)
+            .and_then(|out| acct::board_port(&String::from_utf8_lossy(&out)));
+        match port {
+            Some(port) => {
+                if !out.ports.contains(&port) {
+                    out.ports.push(port);
+                }
+            }
+            None => out.unread.push(project_name(&anchor)),
+        }
+    }
+    out
 }
 
 /// tailnet の道具の status と anchor の git config から自分の board を組む（どちらも cwd は repo）。
