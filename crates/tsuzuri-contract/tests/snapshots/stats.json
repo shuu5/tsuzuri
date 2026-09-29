@@ -45,7 +45,7 @@
         "open": 3,
         "awaiting_promotion": 2,
         "closed_7d": 1,
-        "age_p50_days": 9.5
+        "created_p50": 1789673820
       },
       "unreflected": 3,
       "unreflected_kinds": [
@@ -82,7 +82,7 @@
         "open": 0,
         "awaiting_promotion": 0,
         "closed_7d": 0,
-        "age_p50_days": null
+        "created_p50": null
       },
       "unreflected": 0,
       "unreflected_kinds": [],
@@ -146,12 +146,12 @@
     {
       "id": "t3-hub.9",
       "title": "[memo] 控え",
-      "age_s": 604800
+      "created": 1789889820
     },
     {
       "id": "t3-hub.10",
       "title": "[memo] 時刻の無い控え",
-      "age_s": null
+      "created": null
     }
   ],
   "stats::UnreflectedList": [
@@ -161,12 +161,12 @@
           {
             "id": "t3-hub.9",
             "title": "[memo] 控え",
-            "age_s": 604800
+            "created": 1789889820
           },
           {
             "id": "t3-hub.10",
             "title": "[memo] 時刻の無い控え",
-            "age_s": null
+            "created": null
           }
         ]
       },

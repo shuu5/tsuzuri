@@ -137,7 +137,7 @@ fn card(
         stage,
         reason: reason.map(str::to_string),
         account: Some(account.to_string()),
-        elapsed_s: Some(elapsed),
+        since: Some(NOW - elapsed),
         ci,
     }
 }
@@ -303,8 +303,8 @@ fn pci_cards_without_ledger() {
     assert_eq!(cards(&b), want.as_slice());
     for (got, with) in cards(&b).iter().zip(want_with_ledger()) {
         assert_eq!(
-            (got.runs, &got.account, got.elapsed_s),
-            (with.runs, &with.account, with.elapsed_s),
+            (got.runs, &got.account, got.since),
+            (with.runs, &with.account, with.since),
             "{}",
             got.contract
         );
@@ -339,7 +339,7 @@ fn pci_wire_default() {
         "stage": "Landed",
         "reason": null,
         "account": null,
-        "elapsed_s": 60,
+        "since": NOW - 60,
     });
     let read = |ci: Option<Value>| {
         let mut v = base.clone();

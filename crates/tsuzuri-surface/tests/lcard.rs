@@ -206,12 +206,12 @@ fn lcard_metrics_carry_card() {
     ];
     for screen in [Screen::initial(), known_screen()] {
         for (fetched, s) in &cases {
-            let m: Metrics = match content(fetched, &screen) {
+            let m: Metrics = match content(fetched, &screen, s.at) {
                 Body::Filled(m) => m,
                 other => panic!("中身を出さない: {other:?}"),
             };
             assert_eq!(m.burn_card, burn_card(s));
-            assert_eq!(panel(s, &screen).burn_card, burn_card(s));
+            assert_eq!(panel(s, &screen, s.at).burn_card, burn_card(s));
         }
     }
 }

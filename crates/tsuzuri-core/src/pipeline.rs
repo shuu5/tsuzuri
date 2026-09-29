@@ -19,6 +19,7 @@
 //! 段と理由の決め（閉じた bead の札を含む）の後に `with_ci` で重ねる: 読みが無いか、台帳で閉じた bead の読みが Waiting なら
 //! 段と理由のままで ci は None。閉じていない bead（台帳が読めないときと台帳に無い bead も）の読みが `CI_STALLS` に在れば
 //! その段にし、段の理由は器の終端の detail の字のまま。ほかは段と理由のままで ci はその読み。Blocked と Queued の札の ci は None。
+//! 札の since は段を決めた最後の event の ts の時刻で、今を引かない（板の電文は今の時刻に依らない・経過は面が今から引く）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -435,9 +436,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
             stage,
             reason,
             account: state.account.clone(),
-            elapsed_s: text(last, "ts")
-                .and_then(epoch_secs)
-                .map(|at| now.saturating_sub(at)),
+            since: text(last, "ts").and_then(epoch_secs),
             ci,
         });
     }
@@ -464,7 +463,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
             },
             reason: None,
             account: None,
-            elapsed_s: None,
+            since: None,
             ci: None,
         });
     }

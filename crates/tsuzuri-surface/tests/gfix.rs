@@ -43,7 +43,7 @@ fn known_card() -> PipelineCard {
         stage: Stage::Queued,
         reason: None,
         account: None,
-        elapsed_s: None,
+        since: None,
         ci: None,
     }
 }

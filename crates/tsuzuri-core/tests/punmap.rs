@@ -111,7 +111,7 @@ fn card(n: u32, stage: Stage, reason: Option<&str>, account: Option<&str>, elaps
         stage,
         reason: reason.map(str::to_string),
         account: account.map(str::to_string),
-        elapsed_s: Some(elapsed),
+        since: Some(NOW - elapsed),
         ci: None,
     }
 }

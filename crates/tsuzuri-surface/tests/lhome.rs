@@ -191,7 +191,7 @@ fn lhome_list_draws_body() {
     let end = rest.find("\n    }\n").expect("list_view の終わり");
     let list_view = &rest[..end];
     assert!(
-        list_view.contains("screen.with(|s| staged_body(s, &stages(p)))"),
+        list_view.contains("screen.with(|s| staged_body(s, &stages(p, crate::net::now())))"),
         "{list_view}"
     );
     assert!(

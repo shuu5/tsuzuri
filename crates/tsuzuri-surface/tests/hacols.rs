@@ -93,12 +93,12 @@ fn hacols_unref_partial() {
         }
     );
     let screen = Screen::initial();
-    assert_eq!(u, panel(&s, &screen).unref);
+    assert_eq!(u, panel(&s, &screen, doc.at).unref);
 
     let mut full = s.clone();
     full.unreflected = 5;
     full.unreflected_unknown = Vec::new();
-    assert_eq!(unref_count(&full), panel(&full, &screen).unref);
+    assert_eq!(unref_count(&full), panel(&full, &screen, doc.at).unref);
     assert_eq!(unref_count(&full).count, 5);
     assert!(unref_count(&full).unknown.is_empty());
 
@@ -109,7 +109,7 @@ fn hacols_unref_partial() {
         UnreflectedKind::Ruling,
         UnreflectedKind::Request,
     ];
-    assert_eq!(unref_count(&none), panel(&none, &screen).unref);
+    assert_eq!(unref_count(&none), panel(&none, &screen, doc.at).unref);
     assert_eq!(unref_count(&none).unknown, vec!["memo", "ruling", "request"]);
 
     assert_eq!(unref_of(&doc.projects[0]), Some(u.clone()));

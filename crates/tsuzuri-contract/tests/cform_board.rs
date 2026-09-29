@@ -21,7 +21,7 @@ fn pipeline_card() -> PipelineCard {
         stage: Stage::Running,
         reason: Some("verify".into()),
         account: Some("acct-4".into()),
-        elapsed_s: Some(185),
+        since: Some(AT - 185),
         ci: None,
     }
 }
@@ -51,7 +51,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     stage: Stage::Queued,
                     reason: None,
                     account: None,
-                    elapsed_s: None,
+                    since: None,
                     ci: None,
                 },
                 PipelineCard {
@@ -60,7 +60,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                     stage: Stage::Failed,
                     reason: Some("terminal:ci:failure".into()),
                     account: Some("acct-4".into()),
-                    elapsed_s: Some(420),
+                    since: Some(AT - 420),
                     ci: Some(Ci::Failure),
                 },
             ],

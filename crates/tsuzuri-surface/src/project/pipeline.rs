@@ -4,10 +4,11 @@
 //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
 //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は日を問わず Landed の列に出し、
-//! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
+//! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
 //! 語は語の辞書の `CI_KEYS` の鍵から引く。
 //! 台帳の一覧の項に出す段は札と同じ読みから `stages` 1 つで組む（行 c-ledger-stage のつなぎ）。
-//! 札の meta の経過は 1 秒の時計（net の ticker）で `age_at` から書き直す（hover の card の値の行は読んだ時の字・行 g-tick-adopt）。
+//! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
+//! `age_at` から書き直し、CI の語と今日の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
 
 use std::collections::BTreeMap;
 
@@ -173,8 +174,8 @@ pub struct Kcard {
     pub state: Option<&'static str>,
     pub lead: Lead,
     pub age: String,
-    /// 電文の経過の秒（server が読んだ時の今から・描く時の経過は `age_at` が組む・行 g-tick-adopt）。
-    pub elapsed_s: Option<u64>,
+    /// 段を決めた時刻（電文の値のまま・描く時の経過は `age_at` が今から引く・行 g-tick-adopt）。
+    pub since: Option<EpochSecs>,
     pub class: &'static str,
     pub hover: Card,
     /// 節点の card の値の行（見本の cardContent の data-run の枝・回数と段の名と 20 字に切った理由）。
@@ -246,12 +247,9 @@ impl Column {
     }
 }
 
-/// 描く時の経過の字（電文の経過に、板の電文を読んだ時から今までの秒を足して `age` に渡す・経過が無ければ `NO_AGE`・行 g-tick-adopt）。
-pub fn age_at(elapsed: Option<u64>, read: EpochSecs, now: EpochSecs) -> String {
-    elapsed.map_or_else(
-        || NO_AGE.to_string(),
-        |e| age(e + now.saturating_sub(read)),
-    )
+/// 描く時の経過の字（今から段を決めた時刻を引いて `age` に渡す・今より後の時刻は 0・時刻が無ければ `NO_AGE`・行 g-tick-adopt）。
+pub fn age_at(since: Option<EpochSecs>, now: EpochSecs) -> String {
+    since.map_or_else(|| NO_AGE.to_string(), |s| age(now.saturating_sub(s)))
 }
 
 /// 経過の字（60 秒未満は s・60 分未満は m・24 時間未満は h・それ以上は d・端数は切り捨て）。
@@ -293,14 +291,10 @@ pub fn body(fetched: &Fetched) -> Body<()> {
     }
 }
 
-/// 今日（日本の日）の着地か（段が Landed で経過が在り、今の時刻から経過を引いた時刻の日本の日が今の日本の日と同じ）。
-/// 経過は server が読んだ時の今からの秒なので、読んだ時と描く時の差の数秒は許す。
+/// 今日（日本の日）の着地か（段が Landed で段を決めた時刻が在り、その日本の日が今の日本の日と同じ）。
 pub fn landed_today(card: &PipelineCard, now: EpochSecs) -> bool {
     card.stage.column() == PipelineColumn::Landed
-        && card
-            .elapsed_s
-            .and_then(|e| now.checked_sub(e))
-            .is_some_and(|at| jst(at).0 == jst(now).0)
+        && card.since.is_some_and(|at| jst(at).0 == jst(now).0)
 }
 
 /// 着地の後の CI の読みの語の辞書の鍵。
@@ -312,12 +306,12 @@ pub fn ci_key(ci: Ci) -> &'static str {
         .expect("鍵の表は読みの全部を持つ")
 }
 
-/// 札に出す CI の読み（CI を待つ札と止まった列の札はいつも・ほかは経過が `CI_MARK_S` 以下のときだけ・読みが無ければ None）。
-pub fn ci_shown(card: &PipelineCard) -> Option<Ci> {
+/// 札に出す CI の読み（CI を待つ札と止まった列の札はいつも・ほかは今までの経過が `CI_MARK_S` 以下のときだけ・読みが無ければ None）。
+pub fn ci_shown(card: &PipelineCard, now: EpochSecs) -> Option<Ci> {
     let ci = card.ci?;
     (ci == Ci::Waiting
         || lane(card.stage.column()).stops()
-        || card.elapsed_s.is_some_and(|e| e <= CI_MARK_S))
+        || card.since.is_some_and(|s| now.saturating_sub(s) <= CI_MARK_S))
     .then_some(ci)
 }
 
@@ -354,7 +348,7 @@ pub fn title_of(rows: &[LedgerRow], id: &str) -> Option<String> {
         .map(|r| title36(&r.title))
 }
 
-/// 札を 4 列に組む（列は板の順・列の中は経過の短い順・経過の無い札は後・同じなら bead の id の順）。
+/// 札を 4 列に組む（列は板の順・列の中は段を決めた時刻の新しい順・時刻の無い札は後・同じなら bead の id の順）。
 /// Landed の列は今日（日本の日）の着地（`landed_today`）と、日を問わず CI を待つ札（欄 ci が Waiting）。
 pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Vec<Column> {
     LANES
@@ -370,7 +364,7 @@ pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Ve
                 })
                 .collect();
             mine.sort_by(|a, b| {
-                let key = |c: &PipelineCard| (c.elapsed_s.is_none(), c.elapsed_s);
+                let key = |c: &PipelineCard| (c.since.is_none(), std::cmp::Reverse(c.since));
                 key(a)
                     .cmp(&key(b))
                     .then_with(|| id_order(a.contract.as_str(), b.contract.as_str()))
@@ -379,7 +373,7 @@ pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Ve
             Column {
                 lane,
                 class: format!("col c-{}{empty}", lane.name),
-                cards: mine.into_iter().map(|c| kcard(c, rows)).collect(),
+                cards: mine.into_iter().map(|c| kcard(c, rows, now)).collect(),
             }
         })
         .collect()
@@ -406,15 +400,15 @@ pub fn stage_word(card: &PipelineCard) -> String {
 /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
 /// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にし、hover の詳しくに閉じた理由を折って出す。
 /// CI の読みを出す札（`ci_shown`）は理由の代わりに読みの語を出し、CI を待つ札の状態の記号は `CI_WAIT_STATE`。
-/// 欄 ci は止まった列でなければ出す読み（止まった列の札は lead が読みの語なので None）。
-pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
+/// 欄 ci は止まった列でなければ出す読み（止まった列の札は lead が読みの語なので None）。経過の字と CI の語は今 now で決める。
+pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
     let lane = lane(card.stage.column());
     let id = card.contract.to_string();
     let title = title_of(rows, &id);
     let closed = closed_card(card);
     let stage = stage_word(card);
-    let age = card.elapsed_s.map_or_else(|| NO_AGE.to_string(), age);
-    let shown = ci_shown(card);
+    let age = age_at(card.since, now);
+    let shown = ci_shown(card, now);
     let why = match shown {
         Some(ci) => label(ci_key(ci)),
         None => card.reason.clone().unwrap_or_else(|| stage.clone()),
@@ -456,7 +450,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
         },
         lead,
         age,
-        elapsed_s: card.elapsed_s,
+        since: card.since,
         class: if lane.stops() {
             "kcard why-stop"
         } else {
@@ -472,15 +466,15 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
 
 /// 台帳の一覧の項に出す板の段（札の bead の id の字の鍵・記号と閉じたかは札の読みの `kcard` の値・字は `stage_word` に
 /// 札の meta の CI の語を ` · ` で足した字）。口が読めない・札がまだ分からない・電文が読めない間は空。
-/// 器の局面の出力を読む後の行 c-ledger-lc はこの 1 つを替える。
-pub fn stages(fetched: &Fetched) -> BTreeMap<String, Staged> {
+/// 器の局面の出力を読む後の行 c-ledger-lc はこの 1 つを替える。CI の語は今 now で決める。
+pub fn stages(fetched: &Fetched, now: EpochSecs) -> BTreeMap<String, Staged> {
     let Ok(cards) = cards(fetched) else {
         return BTreeMap::new();
     };
     cards
         .iter()
         .map(|c| {
-            let k = kcard(c, &[]);
+            let k = kcard(c, &[], now);
             let word = match k.ci {
                 Some(ci) => format!("{} · {}", stage_word(c), label(ci_key(ci))),
                 None => stage_word(c),
@@ -700,13 +694,9 @@ mod dom {
             Some(c) => c.mode.get(),
             None => Mode::from_query(&search()),
         };
-        // 札の経過は 1 秒の時計で書き直す（電文の経過に、板の電文を読んだ時からの秒を足す）。
+        // 札の経過は 1 秒の時計で書き直す（時計の今から段を決めた時刻を引く）。
         let tick = crate::net::ticker();
-        let read = Memo::new(move |_| {
-            pipe.track();
-            crate::net::now()
-        });
-        let clock = move || (read.get(), tick.get());
+        let clock = move || tick.get();
         let body = move || {
             let now = crate::net::now();
             let board = match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {
@@ -756,7 +746,7 @@ mod dom {
         cols: Vec<Column>,
         open: RwSignal<Vec<PipelineColumn>>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
-        clock: impl Fn() -> (EpochSecs, EpochSecs) + Copy + Send + Sync + 'static,
+        clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let cols = cols
             .into_iter()
@@ -769,7 +759,7 @@ mod dom {
         col: Column,
         open: RwSignal<Vec<PipelineColumn>>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
-        clock: impl Fn() -> (EpochSecs, EpochSecs) + Copy + Send + Sync + 'static,
+        clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let column = col.lane.column;
         let is_open = move || open.with(|o| o.contains(&column));
@@ -818,14 +808,11 @@ mod dom {
     fn kcard_view(
         card: &Kcard,
         mode: Mode,
-        clock: impl Fn() -> (EpochSecs, EpochSecs) + Copy + Send + Sync + 'static,
+        clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let sym = stage_sym(card.closed, card.state);
-        let elapsed = card.elapsed_s;
-        let age = move || {
-            let (read, now) = clock();
-            age_at(elapsed, read, now)
-        };
+        let since = card.since;
+        let age = move || age_at(since, clock());
         let closed = card.closed.then(|| view! { <span>{CLOSED_STAGE}</span> });
         let ci = card
             .ci

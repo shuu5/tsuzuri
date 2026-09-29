@@ -59,7 +59,7 @@ fn unow_list_reason() {
         requests: Reading::Unknown,
     };
     let fetched = Fetched::Body(wire::encode(&all_unknown).expect("電文"));
-    assert_eq!(unref_list(&fetched), Body::Unmeasured(UNREF_UNKNOWN));
+    assert_eq!(unref_list(&fetched, fixture().at), Body::Unmeasured(UNREF_UNKNOWN));
     assert!(UNREF_UNKNOWN.contains("局面の出力"), "{UNREF_UNKNOWN}");
     assert!(!UNREF_UNKNOWN.contains("台帳を読めない"), "{UNREF_UNKNOWN}");
 }

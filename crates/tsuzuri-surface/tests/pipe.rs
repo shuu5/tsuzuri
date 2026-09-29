@@ -218,7 +218,7 @@ fn pipe_titles_from_ledger_cut_to_36() {
     assert_eq!(find("px.9").lead, Lead::Runs(2));
     assert_eq!(find("px.5").class, "kcard why-stop");
     assert_eq!(find("px.1").class, "kcard");
-    assert_eq!(kcard(&px11(), &rows).age, NO_AGE);
+    assert_eq!(kcard(&px11(), &rows, NOW).age, NO_AGE);
 }
 
 /// (4) 読めて 0 枚なら 0 件の帯（run の語と 0）と空の 4 列・まだ分からない・読めない・まだ読んでいないは測れていない。
@@ -329,7 +329,7 @@ fn pipe_hover_card_rows() {
         ["px.3", "run · Running", "↻1 · acct-4 · 2h", SOURCE].map(str::to_string)
     );
     assert_eq!(
-        kcard(&px11(), &ledger_rows()).hover.rows().map(|(_, t)| t),
+        kcard(&px11(), &ledger_rows(), NOW).hover.rows().map(|(_, t)| t),
         ["題 11", "run · Landed", "↻1 · ― · ―", SOURCE].map(str::to_string)
     );
     assert_eq!(
@@ -420,14 +420,20 @@ fn pipe_keys_in_vocab_and_classes_in_stylesheet() {
     }
 }
 
-fn card(id: &str, stage: Stage, elapsed_s: Option<u64>) -> PipelineCard {
+/// 今 NOW から経過を引いた時刻に段を決めた札。
+fn card(id: &str, stage: Stage, elapsed: Option<u64>) -> PipelineCard {
+    card_at(id, stage, elapsed, NOW)
+}
+
+/// 今 now から経過を引いた時刻（今より前に届かなければ 0）に段を決めた札。
+fn card_at(id: &str, stage: Stage, elapsed: Option<u64>, now: EpochSecs) -> PipelineCard {
     PipelineCard {
         contract: BeadId::new(id).expect("id"),
         runs: 1,
         stage,
         reason: None,
         account: None,
-        elapsed_s,
+        since: elapsed.map(|e| now.saturating_sub(e)),
         ci: None,
     }
 }
@@ -469,8 +475,8 @@ fn pipe_landed_today_boundaries() {
     }
     // 日の始まりちょうどの今は、経過 0 だけが今日。
     let midnight = NOW - 75_600;
-    assert!(landed_today(&card("px.1", Stage::Landed, Some(0)), midnight));
-    assert!(!landed_today(&card("px.1", Stage::Landed, Some(1)), midnight));
+    assert!(landed_today(&card_at("px.1", Stage::Landed, Some(0), midnight), midnight));
+    assert!(!landed_today(&card_at("px.1", Stage::Landed, Some(1), midnight), midnight));
     // 今の関数の型（札と今の時刻を受けて真偽）。
     let f: fn(&PipelineCard, EpochSecs) -> bool = landed_today;
     assert!(f(&card("px.1", Stage::Landed, Some(1)), NOW));
@@ -503,10 +509,11 @@ fn pipe_landed_column_only_today() {
     assert_eq!(via, cols);
 
     // ほかの 3 列の札の入り方と並びは今の時刻に依らない（fixture の並びのまま）。
-    // 日の始まりの 10 秒後に描くと、経過の最も短い 30 秒の着地も昨日。
-    let later = columns(&cs, &rows, NOW - 75_600 + 10);
-    assert_eq!(cols[..3], later[..3]);
+    // 翌日の始まりの 10 秒後に描くと、いちばん新しい 30 秒前の着地も昨日。
+    let later = columns(&cs, &rows, NOW + 86_400 - 75_600 + 10);
+    let later_ids: Vec<Vec<&str>> = later[..3].iter().map(|c| ids(c, true)).collect();
     let others: Vec<Vec<&str>> = cols[..3].iter().map(|c| ids(c, true)).collect();
+    assert_eq!(others, later_ids);
     assert_eq!(
         others,
         vec![

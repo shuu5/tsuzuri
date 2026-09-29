@@ -31,7 +31,7 @@
       {"epic": "bm", "closed": 1, "total": 4},
       {"epic": "zz.9", "closed": 2, "total": 3}
     ],
-    "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "age_p50_days": 3.4},
+    "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "created_p50": 1791383040},
     "unreflected": 3,
     "unreflected_kinds": [{"kind": "memo", "count": 3}],
     "unreflected_unknown": ["ruling", "request"]
@@ -65,7 +65,7 @@
       {"end": 1791676800, "created": 0, "closed": 0, "open": 0}
     ],
     "epics": [],
-    "memo": {"open": 0, "awaiting_promotion": 0, "closed_7d": 0, "age_p50_days": null},
+    "memo": {"open": 0, "awaiting_promotion": 0, "closed_7d": 0, "created_p50": null},
     "unreflected": 0,
     "unreflected_kinds": [],
     "unreflected_unknown": ["memo", "ruling", "request"]

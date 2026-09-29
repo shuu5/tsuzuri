@@ -153,7 +153,7 @@ fn card(
         stage,
         reason: reason.map(str::to_string),
         account: account.map(str::to_string),
-        elapsed_s: elapsed,
+        since: elapsed.map(|e| NOW - e),
         ci: None,
     }
 }

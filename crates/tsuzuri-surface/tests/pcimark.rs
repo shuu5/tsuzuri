@@ -31,7 +31,7 @@ fn card(
         stage,
         reason: reason.map(str::to_string),
         account: None,
-        elapsed_s: elapsed,
+        since: elapsed.map(|e| NOW - e),
         ci,
     }
 }
@@ -101,14 +101,14 @@ fn pci_shown_rule() {
     ];
     for (stage, elapsed, ci, want) in cases {
         let c = card("fx-cm.1", stage, None, elapsed, ci);
-        assert_eq!(ci_shown(&c), want, "{stage:?} {elapsed:?} {ci:?}");
+        assert_eq!(ci_shown(&c, NOW), want, "{stage:?} {elapsed:?} {ci:?}");
     }
 }
 
 /// (10) 札の状態の記号・欄 ci・lead・値の行。
 #[test]
 fn pci_kcard_marks() {
-    let k = |stage, reason, elapsed, ci| kcard(&card("fx-cm.1", stage, reason, elapsed, ci), &[]);
+    let k = |stage, reason, elapsed, ci| kcard(&card("fx-cm.1", stage, reason, elapsed, ci), &[], NOW);
 
     let wait = k(Stage::Landed, None, Some(120), Some(Ci::Waiting));
     assert_eq!(wait.state, Some("run"));

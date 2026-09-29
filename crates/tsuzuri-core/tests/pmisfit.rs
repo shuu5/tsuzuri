@@ -110,7 +110,7 @@ fn want_cards() -> Vec<PipelineCard> {
             stage: Stage::Running,
             reason: None,
             account: None,
-            elapsed_s: Some(3540),
+            since: Some(NOW - 3540),
             ci: None,
         },
         PipelineCard {
@@ -119,7 +119,7 @@ fn want_cards() -> Vec<PipelineCard> {
             stage: Stage::Queued,
             reason: None,
             account: None,
-            elapsed_s: None,
+            since: None,
             ci: None,
         },
     ]

@@ -63,8 +63,11 @@ fn known_screen() -> Screen {
     Screen::initial().after_read(&Fetched::Body(body), 100)
 }
 
+/// 指標の段を組む今（fixture の組の時点）。
+const NOW: u64 = 1_791_676_800;
+
 fn filled(name: &str, screen: &Screen) -> Metrics {
-    match content(&body_of(name), screen) {
+    match content(&body_of(name), screen, NOW) {
         Body::Filled(m) => m,
         other => panic!("組 {name} が中身を出さない: {other:?}"),
     }
@@ -141,7 +144,7 @@ fn ledgerblock_judge_table_five_values() {
         let mut s = set("filled");
         s.judge = v;
         let f = wrap(&s);
-        let Body::Filled(m) = content(&f, &Screen::initial()) else {
+        let Body::Filled(m) = content(&f, &Screen::initial(), NOW) else {
             panic!("中身が無い");
         };
         assert_eq!(m.judge, judge(v));
@@ -234,7 +237,7 @@ fn ledgerblock_unreflected_copies_wire() {
     s.unreflected = 41;
     s.unreflected_unknown = vec![];
     let f = wrap(&s);
-    let Body::Filled(m2) = content(&f, &screen) else {
+    let Body::Filled(m2) = content(&f, &screen, NOW) else {
         panic!("中身が無い");
     };
     assert_eq!(m2.unref.count, 41);
@@ -456,7 +459,7 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
             ledger::METRICS_UNKNOWN,
         ),
     ] {
-        match content(&fetched, &screen) {
+        match content(&fetched, &screen, NOW) {
             Body::Unmeasured(reason) => {
                 assert_eq!(reason, want, "{fetched:?}");
                 assert!(!reason.trim().is_empty() && !reason.contains('\n'));
@@ -494,7 +497,7 @@ fn ledgerblock_real_metrics_body() {
     let inner = raw.remove("known").expect("鍵 known");
     assert_eq!(inner.open.task, 2);
     let fetched = Fetched::Body(text);
-    let m = match content(&fetched, &known_screen()) {
+    let m = match content(&fetched, &known_screen(), NOW) {
         Body::Filled(m) => m,
         other => panic!("実物の本文が中身を出さない: {other:?}"),
     };
@@ -515,7 +518,7 @@ fn ledgerblock_unknown_body_reason() {
     );
     let reason = ledger::METRICS_UNKNOWN;
     assert_eq!(
-        content(&unknown, &Screen::initial()),
+        content(&unknown, &Screen::initial(), NOW),
         Body::Unmeasured(reason)
     );
     assert_eq!(ledger::metrics(&unknown), Body::Unmeasured(reason));

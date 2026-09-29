@@ -24,11 +24,15 @@ fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
 }
 
-fn row(id: &str, title: &str, age_s: Option<u64>) -> UnreflectedRow {
+/// 一覧を組む今（2026-09-27T12:00:00Z）。
+const NOW: u64 = 1_790_510_400;
+
+/// 今 NOW から年齢の秒を引いた時刻に作った 1 件。
+fn row(id: &str, title: &str, age: Option<u64>) -> UnreflectedRow {
     UnreflectedRow {
         id: id.to_string(),
         title: title.to_string(),
-        age_s,
+        created: age.map(|a| NOW - a),
     }
 }
 
@@ -37,7 +41,7 @@ fn body(list: &UnreflectedList) -> Fetched {
 }
 
 fn filled(fetched: &Fetched) -> UnrefList {
-    match unref_list(fetched) {
+    match unref_list(fetched, NOW) {
         Body::Filled(l) => l,
         other => panic!("中身が無い: {other:?}"),
     }
@@ -64,8 +68,8 @@ fn set_a() -> UnreflectedList {
 const SET_A_TEXT: &str = r#"{
   "memos": {
     "known": [
-      { "id": "t3-hub.9", "title": "[memo] 控え", "age_s": 604800 },
-      { "id": "t3-hub.10", "title": "[memo] 時刻の無い控え", "age_s": null }
+      { "id": "t3-hub.9", "title": "[memo] 控え", "created": 1789905600 },
+      { "id": "t3-hub.10", "title": "[memo] 時刻の無い控え", "created": null }
     ]
   },
   "rulings": "unknown",
@@ -148,7 +152,7 @@ fn urpanel_unknown_kinds_and_reasons() {
         requests: Reading::Unknown,
     };
     assert_eq!(
-        unref_list(&body(&all_unknown)),
+        unref_list(&body(&all_unknown), NOW),
         Body::Unmeasured(UNREF_UNKNOWN)
     );
     let empty = UnreflectedList {
@@ -156,14 +160,14 @@ fn urpanel_unknown_kinds_and_reasons() {
         rulings: Reading::Known(vec![]),
         requests: Reading::Known(vec![]),
     };
-    assert_eq!(unref_list(&body(&empty)), Body::Empty(UNREF_EMPTY));
+    assert_eq!(unref_list(&body(&empty), NOW), Body::Empty(UNREF_EMPTY));
     for (fetched, reason) in [
         (Fetched::NotRead, NOT_READ),
         (Fetched::Failed, UNREF_REASON),
         (Fetched::Body("not json".to_string()), NO_CONTENT),
         (Fetched::Body("{}".to_string()), NO_CONTENT),
     ] {
-        assert_eq!(unref_list(&fetched), Body::Unmeasured(reason), "{fetched:?}");
+        assert_eq!(unref_list(&fetched, NOW), Body::Unmeasured(reason), "{fetched:?}");
     }
     for reason in [UNREF_UNKNOWN, UNREF_EMPTY, UNREF_REASON, NOT_READ, NO_CONTENT] {
         assert!(!reason.trim().is_empty());

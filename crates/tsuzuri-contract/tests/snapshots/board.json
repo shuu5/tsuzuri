@@ -31,7 +31,7 @@
       "stage": "Running",
       "reason": "verify",
       "account": "acct-4",
-      "elapsed_s": 185,
+      "since": 1790494435,
       "ci": null
     },
     {
@@ -40,7 +40,7 @@
       "stage": "Queued",
       "reason": null,
       "account": null,
-      "elapsed_s": null,
+      "since": null,
       "ci": null
     },
     {
@@ -49,7 +49,7 @@
       "stage": "Failed",
       "reason": "terminal:ci:failure",
       "account": "acct-4",
-      "elapsed_s": 420,
+      "since": 1790494200,
       "ci": "failure"
     }
   ],
@@ -63,7 +63,7 @@
             "stage": "Running",
             "reason": "verify",
             "account": "acct-4",
-            "elapsed_s": 185,
+            "since": 1790494435,
             "ci": null
           }
         ]

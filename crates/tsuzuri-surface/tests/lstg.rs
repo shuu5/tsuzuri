@@ -20,6 +20,9 @@ fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
 }
 
+/// 札を描く今（札の since はこの今から経過を引いた時刻）。
+const NOW: u64 = 1_790_510_400;
+
 /// 口座 None の札。
 fn card(
     id: &str,
@@ -35,7 +38,7 @@ fn card(
         stage,
         reason: reason.map(str::to_string),
         account: None,
-        elapsed_s: elapsed,
+        since: elapsed.map(|e| NOW - e),
         ci,
     }
 }
@@ -132,7 +135,7 @@ fn lstg_word_rules() {
     for (c, w) in cards.iter().zip(want) {
         let word = stage_word(c);
         assert_eq!(word, w, "{}", c.contract);
-        assert_eq!(kcard(c, &[]).hover.kind, format!("run · {w}"), "{}", c.contract);
+        assert_eq!(kcard(c, &[], NOW).hover.kind, format!("run · {w}"), "{}", c.contract);
     }
 }
 
@@ -140,7 +143,7 @@ fn lstg_word_rules() {
 #[test]
 fn lstg_stages_from_board() {
     let cards = ls();
-    let got = stages(&Fetched::Body(board_text(Reading::Known(cards.clone()))));
+    let got = stages(&Fetched::Body(board_text(Reading::Known(cards.clone()))), NOW);
     let want: BTreeMap<String, Staged> = [
         ("fx-l.1", staged(Some("run"), false, "Running")),
         ("fx-l.2", staged(Some("wait"), false, "Queued")),
@@ -156,7 +159,7 @@ fn lstg_stages_from_board() {
     .collect();
     assert_eq!(got, want);
     for c in &cards {
-        let k = kcard(c, &[]);
+        let k = kcard(c, &[], NOW);
         let s = &got[c.contract.as_str()];
         assert_eq!(s.state, k.state, "{}", c.contract);
         assert_eq!(s.closed, k.closed, "{}", c.contract);
@@ -169,7 +172,7 @@ fn lstg_stages_from_board() {
         Fetched::Body(board_text(Reading::Unknown)),
         Fetched::Body(board_text(Reading::Known(vec![]))),
     ] {
-        assert!(stages(&fetched).is_empty(), "{fetched:?}");
+        assert!(stages(&fetched, NOW).is_empty(), "{fetched:?}");
     }
 }
 
@@ -197,7 +200,7 @@ fn lstg_list_items() {
     assert_eq!(nine.aside, "○ 未着手 · task");
     assert_eq!(nine.stage, None);
 
-    let board = stages(&Fetched::Body(board_text(Reading::Known(ls()))));
+    let board = stages(&Fetched::Body(board_text(Reading::Known(ls()))), NOW);
     let mut with_epic = board.clone();
     with_epic.insert("fx-l".to_string(), run.clone());
     let screen = screen_of(rows.clone());
@@ -299,7 +302,7 @@ fn lstg_dom_wiring() {
         "{list_view}"
     );
     assert!(
-        list_view.contains("pipe.with(|p| screen.with(|s| staged_body(s, &stages(p))))"),
+        list_view.contains("staged_body(s, &stages(p, crate::net::now()))"),
         "{list_view}"
     );
 
@@ -332,7 +335,7 @@ fn lstg_dom_wiring() {
             "project/pipeline.rs",
         ),
         ("pub fn stages(", "project/pipeline.rs"),
-        ("&stages(p)", "project/ledger.rs"),
+        ("&stages(p, crate::net::now())", "project/ledger.rs"),
         (
             "staged_item(r, stages.get(r.id.as_str()))",
             "project/ledger.rs",

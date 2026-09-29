@@ -38,7 +38,7 @@ struct Found {
 }
 
 /// 止まっている走行: 段が Failed か Stopped の札で、その bead が open のもの
-/// （対象はいちばん古い札 = 経過のいちばん長い札の bead）。event log か台帳が読めなければ判じない。
+/// （対象はいちばん古い札 = 段を決めた時刻のいちばん早い札の bead・時刻の無い札は後）。event log か台帳が読めなければ判じない。
 fn stalled_run(beads: Option<&[Bead]>, events: &str, now: EpochSecs) -> Option<Found> {
     let beads = beads?;
     let Reading::Known(cards) = pipeline::of_inputs(Some(beads), events, now).board.cards else {
@@ -57,7 +57,7 @@ fn stalled_run(beads: Option<&[Bead]>, events: &str, now: EpochSecs) -> Option<F
         count: stalled.len(),
         target: stalled
             .iter()
-            .min_by_key(|c| std::cmp::Reverse(c.elapsed_s))
+            .min_by_key(|c| (c.since.is_none(), c.since))
             .map(|c| c.contract.clone()),
     })
 }

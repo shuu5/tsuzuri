@@ -27,7 +27,7 @@ pub struct LeadDays {
 /// 1 日の数（その日に作られた task・閉じた task・その日の終わりの open の task）。burndown と sparkline の材料。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DayCount {
-    /// その日の終わりの時刻。
+    /// その日（日本の日）の終わりの時刻（23 時 59 分 59 秒・今の時刻に依らない）。
     pub end: EpochSecs,
     pub created: u32,
     pub closed: u32,
@@ -42,13 +42,14 @@ pub struct EpicProgress {
     pub total: u32,
 }
 
-/// memo の数（open・昇格待ち・直近 7 日に閉じた数・open の memo の年齢の中央値（日））。
+/// memo の数（open・昇格待ち・直近 7 日に閉じた数・open の memo の作った時刻の中央値）。
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MemoStats {
     pub open: u32,
     pub awaiting_promotion: u32,
     pub closed_7d: u32,
-    pub age_p50_days: Option<f64>,
+    /// open の memo の作った時刻の中央値（open の memo が無ければ None・年齢は面が今から引く）。
+    pub created_p50: Option<EpochSecs>,
 }
 
 /// 未反映の種類（閉じた 3）。
@@ -77,12 +78,12 @@ pub struct UnreflectedCount {
     pub count: u32,
 }
 
-/// 未反映の 1 件（bead の id の字・題・年齢の秒・作った時刻が読めなければ年齢は None）。
+/// 未反映の 1 件（bead の id の字・題・作った時刻・作った時刻が読めなければ None）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnreflectedRow {
     pub id: String,
     pub title: String,
-    pub age_s: Option<u64>,
+    pub created: Option<EpochSecs>,
 }
 
 /// 未反映の一覧（種類ごとに、読めた一覧か「まだ分からない」・便 e-view）。
@@ -96,6 +97,7 @@ pub struct UnreflectedList {
 /// 台帳の指標（時点・判定・主指標・日ごとの 14 本・epic の進み・memo・未反映）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LedgerStats {
+    /// 時点（台帳の最後の記録の時刻・今以下・記録が無ければ 0）。
     pub at: EpochSecs,
     pub judge: LedgerJudge,
     pub open: OpenCounts,

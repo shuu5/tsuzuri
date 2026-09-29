@@ -41,15 +41,18 @@ fn range<'a>(text: &'a str, from: &str, to: &str) -> &'a str {
     &rest[..end]
 }
 
-/// 段 Running と経過の札（contract は fx-t.1）。
-fn running(elapsed_s: Option<u64>) -> PipelineCard {
+/// 札を描く今。
+const NOW: u64 = 1_790_510_400;
+
+/// 段 Running と段を決めた時刻の札（contract は fx-t.1）。
+fn running(since: Option<u64>) -> PipelineCard {
     PipelineCard {
         contract: BeadId::new("fx-t.1").expect("id"),
         runs: 1,
         stage: Stage::Running,
         reason: None,
         account: None,
-        elapsed_s,
+        since,
         ci: None,
     }
 }
@@ -67,23 +70,23 @@ fn tkad_posted_tip_rules() {
     assert_eq!(ask_age(1_790_488_861, 1_790_488_800), "1m");
 }
 
-/// (2) 描く時の経過は電文の経過に読んでからの秒を足した字で、札は電文の経過の秒を持つ。
+/// (2) 描く時の経過は今から段を決めた時刻を引いた字（今より後は 0s）で、札は電文の時刻を持つ。
 #[test]
 fn tkad_age_at_rules() {
-    assert_eq!(age_at(Some(90), 1000, 1000), "1m");
-    assert_eq!(age_at(Some(90), 1000, 1030), "2m");
-    assert_eq!(age_at(Some(90), 1000, 900), "1m");
-    assert_eq!(age_at(Some(59), 1000, 1000), "59s");
-    assert_eq!(age_at(Some(3590), 0, 10), "1h");
-    assert_eq!(age_at(None, 0, 50), NO_AGE);
+    assert_eq!(age_at(Some(910), 1000), "1m");
+    assert_eq!(age_at(Some(910), 1030), "2m");
+    assert_eq!(age_at(Some(910), 900), "0s");
+    assert_eq!(age_at(Some(941), 1000), "59s");
+    assert_eq!(age_at(Some(10), 3610), "1h");
+    assert_eq!(age_at(None, 50), NO_AGE);
     for elapsed in [None, Some(0), Some(3700)] {
-        let card = running(elapsed);
-        let k: Kcard = kcard(&card, &[]);
-        assert_eq!(k.elapsed_s, card.elapsed_s, "{elapsed:?}");
-        assert_eq!(k.age, age_at(card.elapsed_s, 7, 7), "{elapsed:?}");
+        let card = running(elapsed.map(|e: u64| NOW - e));
+        let k: Kcard = kcard(&card, &[], NOW);
+        assert_eq!(k.since, card.since, "{elapsed:?}");
+        assert_eq!(k.age, age_at(card.since, NOW), "{elapsed:?}");
         assert_eq!(
             k.age,
-            card.elapsed_s.map_or_else(|| NO_AGE.to_string(), age),
+            elapsed.map_or_else(|| NO_AGE.to_string(), age),
             "{elapsed:?}"
         );
     }
@@ -105,9 +108,10 @@ fn tkad_dom_wiring() {
 
     let pipe = dom("src/project/pipeline.rs");
     assert!(pipe.contains("let tick = crate::net::ticker();"));
-    assert!(range(&pipe, "let read = Memo::new(", "let body").contains("pipe.track();"));
+    assert!(range(&pipe, "let tick = ", "let body").contains("let clock = move || tick.get();"));
+    assert!(!pipe.contains("Memo::new("));
     let card = range(&pipe, "fn kcard_view(", "pub fn stage_sym(");
-    assert!(card.contains("age_at(elapsed, read, now)"));
+    assert!(card.contains("age_at(since, clock())"));
     assert!(!card.contains("card.age"));
 
     let next = dom("src/project/next.rs");

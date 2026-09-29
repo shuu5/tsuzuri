@@ -63,19 +63,19 @@ fn gjst_short_forms_mark() {
     assert_eq!(hmd(1_790_521_200, 1_790_607_599), "00:00 JST");
 }
 
-fn landed(elapsed_s: Option<u64>) -> PipelineCard {
+fn landed(since: Option<EpochSecs>) -> PipelineCard {
     PipelineCard {
         contract: BeadId::new("fx-j.1").expect("id"),
         runs: 1,
         stage: Stage::Landed,
         reason: None,
         account: None,
-        elapsed_s,
+        since,
         ci: None,
     }
 }
 
-/// (4) 今日の着地は、今から経過を引いた時刻の日本の日が今の日本の日と同じ札。
+/// (4) 今日の着地は、段を決めた時刻（今から経過を引いた時刻）の日本の日が今の日本の日と同じ札。
 #[test]
 fn gjst_landed_on_japan_day() {
     for (now, elapsed, want) in [
@@ -90,7 +90,8 @@ fn gjst_landed_on_japan_day() {
         (1_790_467_200, Some(32_401), false),
         (1_790_510_400, None, false),
     ] {
-        assert_eq!(landed_today(&landed(elapsed), now), want, "{now} {elapsed:?}");
+        let since = elapsed.map(|e: u64| now - e);
+        assert_eq!(landed_today(&landed(since), now), want, "{now} {elapsed:?}");
     }
 }
 

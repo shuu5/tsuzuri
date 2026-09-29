@@ -68,7 +68,7 @@ fn card(id: &str, runs: u32, stage: Stage, elapsed: Option<u64>) -> PipelineCard
         stage,
         reason: None,
         account: None,
-        elapsed_s: elapsed,
+        since: elapsed.map(|e| NOW - e),
         ci: None,
     }
 }

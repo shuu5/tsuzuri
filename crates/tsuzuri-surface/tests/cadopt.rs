@@ -63,9 +63,9 @@ fn bead(id: &str) -> BeadId {
     BeadId::new(id).expect("id")
 }
 
-/// 空の台帳の行で組んだ札。
+/// 空の台帳の行で組んだ札（描く今は fixture の板の今）。
 fn kc(card: &PipelineCard) -> Kcard {
-    kcard(card, &[])
+    kcard(card, &[], NOW)
 }
 
 /// x の 30 字と「、」と y の 10 字（41 字）。
@@ -194,7 +194,8 @@ fn cadopt_node_hover_rules() {
     }
 }
 
-const NOW: u64 = 1_700_000_000;
+/// fixture の板の今（2026-09-27T12:00:00Z・札の since はこの今から経過を引いた時刻）。
+const NOW: u64 = 1_790_510_400;
 
 /// fixture の板の px.3 を t3-hub.9 に・px.5 を t3-hub.15 に替えた札の列。
 fn swapped_columns() -> Vec<Column> {

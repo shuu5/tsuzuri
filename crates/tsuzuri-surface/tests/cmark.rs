@@ -16,6 +16,9 @@ fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
 }
 
+/// 札を描く今（2026-09-27T12:00:00Z）。
+const NOW: u64 = 1_790_510_400;
+
 fn card(id: &str, stage: Stage, reason: Option<String>) -> PipelineCard {
     PipelineCard {
         contract: BeadId::new(id).expect("bead の id"),
@@ -23,7 +26,7 @@ fn card(id: &str, stage: Stage, reason: Option<String>) -> PipelineCard {
         stage,
         reason,
         account: None,
-        elapsed_s: Some(60),
+        since: Some(NOW - 60),
         ci: None,
     }
 }
@@ -36,7 +39,7 @@ fn cmark_kcard_closed_follows_rule() {
         card("px.41", Stage::Landed, Some(CLOSED_TAG.to_string())),
     ];
     for c in &yes {
-        let k = kcard(c, &[]);
+        let k = kcard(c, &[], NOW);
         assert!(closed_card(c));
         assert!(k.closed, "{} は閉じた札", k.id);
         assert_eq!(k.state, None);
@@ -49,7 +52,7 @@ fn cmark_kcard_closed_follows_rule() {
         card("px.45", Stage::Landed, Some("Closed:x".to_string())),
     ];
     for c in &no {
-        let k = kcard(c, &[]);
+        let k = kcard(c, &[], NOW);
         assert!(!closed_card(c));
         assert!(!k.closed, "{} は閉じた札でない", k.id);
     }
@@ -76,7 +79,7 @@ fn cmark_fixture_cards_not_closed() {
             "{} の理由が CLOSED_TAG で始まる",
             c.contract
         );
-        assert!(!kcard(c, &[]).closed, "{} は閉じた札でない", c.contract);
+        assert!(!kcard(c, &[], NOW).closed, "{} は閉じた札でない", c.contract);
     }
 }
 

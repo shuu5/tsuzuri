@@ -95,7 +95,7 @@ fn klink_card_opens_same_id() {
     };
     assert!(!cards.is_empty(), "fixture の札が空");
     for c in &cards {
-        let k = kcard(c, &[]);
+        let k = kcard(c, &[], 1_790_510_400);
         let id = c.contract.to_string();
         for mode in Mode::ALL {
             let href = card_href(&k, mode);

@@ -12,18 +12,18 @@ use tsuzuri_contract::stats::{
     OpenCounts, UnreflectedCount, UnreflectedKind, UnreflectedList, UnreflectedRow,
 };
 
-/// 年齢の在る memo と、作った時刻の読めない memo。
+/// 作った時刻の在る memo と、作った時刻の読めない memo。
 fn unreflected_rows() -> Vec<UnreflectedRow> {
     vec![
         UnreflectedRow {
             id: "t3-hub.9".into(),
             title: "[memo] 控え".into(),
-            age_s: Some(604_800),
+            created: Some(AT - 604_800),
         },
         UnreflectedRow {
             id: "t3-hub.10".into(),
             title: "[memo] 時刻の無い控え".into(),
-            age_s: None,
+            created: None,
         },
     ]
 }
@@ -78,7 +78,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                         open: 3,
                         awaiting_promotion: 2,
                         closed_7d: 1,
-                        age_p50_days: Some(9.5),
+                        created_p50: Some(AT - 820_800),
                     },
                     unreflected: 3,
                     unreflected_kinds: vec![UnreflectedCount {
@@ -111,7 +111,7 @@ fn forms() -> Vec<Box<dyn Form>> {
                         open: 0,
                         awaiting_promotion: 0,
                         closed_7d: 0,
-                        age_p50_days: None,
+                        created_p50: None,
                     },
                     unreflected: 0,
                     unreflected_kinds: vec![],

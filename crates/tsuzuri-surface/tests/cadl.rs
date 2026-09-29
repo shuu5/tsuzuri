@@ -54,6 +54,9 @@ fn stats(swap: &[(&str, &str)]) -> LedgerStats {
     s
 }
 
+/// 指標の段を組む今（fixture の組の時点）。
+const NOW: u64 = 1_791_676_800;
+
 /// 指標を口の本文の形（Reading の Known で包んだ字）にする。
 fn wrap(s: &LedgerStats) -> Fetched {
     Fetched::Body(wire::encode(&Reading::Known(s.clone())).expect("電文"))
@@ -67,12 +70,12 @@ fn cadl_epic_cards_rules() {
     let screen = Screen::initial();
 
     let s = stats(&[("bm", "t3")]);
-    let Body::Filled(m) = ledger::content(&wrap(&s), &screen) else {
+    let Body::Filled(m) = ledger::content(&wrap(&s), &screen, NOW) else {
         panic!("替えた指標の中身が Filled でない");
     };
     let ids: Vec<&str> = m.epics.iter().map(|e| e.id.as_str()).collect();
     assert_eq!(ids, vec!["t3", "zz.9"]);
-    assert_eq!(m, ledger::panel(&s, &screen), "Metrics と EpicBar は変えない");
+    assert_eq!(m, ledger::panel(&s, &screen, NOW), "Metrics と EpicBar は変えない");
 
     let got = ledger::epic_cards(&m.epics, &graph);
     let keys: Vec<&str> = got.keys().map(String::as_str).collect();
@@ -83,7 +86,7 @@ fn cadl_epic_cards_rules() {
     assert_eq!(node.kind, "epic · beads · open");
     assert_eq!(node.value, "t3 要約なし");
 
-    let Body::Filled(plain) = ledger::content(&wrap(&stats(&[])), &screen) else {
+    let Body::Filled(plain) = ledger::content(&wrap(&stats(&[])), &screen, NOW) else {
         panic!("fixture の指標の中身が Filled でない");
     };
     assert_eq!(plain.epics.len(), 2);

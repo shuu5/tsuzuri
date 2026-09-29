@@ -1,5 +1,5 @@
 {
-  "note": "bead 30 本の台帳の一覧（bd の読み取りの口の形）と今の時刻（2026-09-27T00:00:00Z）と、期待の指標（LedgerStats の電文の形・小数は 1e-9 まで）。期待の値は見本の集計（docs/design/mock3/ledger.js の stats）の数え方で手で数えた。s30.17 は tombstone で数えない。s30.14 の blocks の先 gone-1 は台帳に無いので数えない。",
+  "note": "bead 30 本の台帳の一覧（bd の読み取りの口の形）と今の時刻（2026-09-27T00:00:00Z）と、期待の指標（LedgerStats の電文の形・小数は 1e-9 まで）。期待の値は見本の集計（docs/design/mock3/ledger.js の stats）の数え方で手で数えた。s30.17 は tombstone で数えない。s30.14 の blocks の先 gone-1 は台帳に無いので数えない。時点・日の 14 本・memo は行 c-abs-time の中核の数え方で数え直した（時点は台帳の最後の記録の時刻・14 本は日本の日の 23 時 59 分 59 秒を end とし今日の本は今まで・memo は open の memo の作った時刻の中央値）。",
   "now": 1790467200,
   "ledger": [
     {"id": "s30", "title": "(EPIC) 見本の根", "status": "open", "issue_type": "epic", "created_at": "2026-07-01T00:00:00Z", "updated_at": "2026-07-01T00:00:00Z"},
@@ -39,7 +39,7 @@
     {"id": "s30.q3", "title": "問い — 答えの済んだ問い", "status": "closed", "issue_type": "task", "labels": ["intake:question"], "created_at": "2026-09-19T00:00:00Z", "updated_at": "2026-09-20T12:00:00Z", "closed_at": "2026-09-20T12:00:00Z", "parent": "s30"}
   ],
   "expected": {
-    "at": 1790467200,
+    "at": 1790424000,
     "judge": "piling-up",
     "open": {"task": 9, "memo": 3, "question": 2, "epic": 2},
     "blocked": 3,
@@ -51,26 +51,26 @@
     "closed_per_day": 0.7142857142857143,
     "lead": {"p50": 4.0, "p90": 11.95},
     "days": [
-      {"end": 1789344000, "created": 1, "closed": 0, "open": 6},
-      {"end": 1789430400, "created": 0, "closed": 1, "open": 5},
-      {"end": 1789516800, "created": 1, "closed": 0, "open": 6},
-      {"end": 1789603200, "created": 0, "closed": 0, "open": 6},
-      {"end": 1789689600, "created": 2, "closed": 1, "open": 7},
-      {"end": 1789776000, "created": 0, "closed": 0, "open": 7},
-      {"end": 1789862400, "created": 1, "closed": 1, "open": 7},
-      {"end": 1789948800, "created": 1, "closed": 0, "open": 8},
-      {"end": 1790035200, "created": 1, "closed": 1, "open": 8},
-      {"end": 1790121600, "created": 2, "closed": 0, "open": 10},
-      {"end": 1790208000, "created": 0, "closed": 1, "open": 9},
-      {"end": 1790294400, "created": 1, "closed": 2, "open": 8},
-      {"end": 1790380800, "created": 1, "closed": 0, "open": 9},
-      {"end": 1790467200, "created": 1, "closed": 1, "open": 9}
+      {"end": 1789397999, "created": 0, "closed": 1, "open": 5},
+      {"end": 1789484399, "created": 1, "closed": 0, "open": 6},
+      {"end": 1789570799, "created": 0, "closed": 0, "open": 6},
+      {"end": 1789657199, "created": 1, "closed": 1, "open": 6},
+      {"end": 1789743599, "created": 1, "closed": 0, "open": 7},
+      {"end": 1789829999, "created": 1, "closed": 0, "open": 8},
+      {"end": 1789916399, "created": 1, "closed": 1, "open": 8},
+      {"end": 1790002799, "created": 1, "closed": 1, "open": 8},
+      {"end": 1790089199, "created": 1, "closed": 0, "open": 9},
+      {"end": 1790175599, "created": 1, "closed": 1, "open": 9},
+      {"end": 1790261999, "created": 1, "closed": 1, "open": 9},
+      {"end": 1790348399, "created": 1, "closed": 1, "open": 9},
+      {"end": 1790434799, "created": 1, "closed": 1, "open": 9},
+      {"end": 1790521199, "created": 0, "closed": 0, "open": 9}
     ],
     "epics": [
       {"epic": "s30", "closed": 4, "total": 10},
       {"epic": "s30.a", "closed": 6, "total": 9}
     ],
-    "memo": {"open": 3, "awaiting_promotion": 2, "closed_7d": 1, "age_p50_days": 9.5},
+    "memo": {"open": 3, "awaiting_promotion": 2, "closed_7d": 1, "created_p50": 1789646400},
     "unreflected": 0,
     "unreflected_kinds": [],
     "unreflected_unknown": ["memo", "ruling", "request"]

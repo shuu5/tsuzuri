@@ -8,12 +8,12 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::UnreflectedKind;
 
-/// 未反映の 1 件（id・題・年齢の秒・作った時刻が読めなければ年齢は None）。
+/// 未反映の 1 件（id・題・作った時刻・作った時刻が読めなければ None）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UnreflectedItem {
     pub id: String,
     pub title: String,
-    pub age_s: Option<u64>,
+    pub created: Option<EpochSecs>,
 }
 
 /// 未反映の一覧（種類ごと）。

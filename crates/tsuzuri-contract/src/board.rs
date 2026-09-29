@@ -97,7 +97,7 @@ impl Ci {
     ];
 }
 
-/// pipeline の札（契約 bead・走行の回数・段・段の理由・口座・経過・着地の後の CI）。
+/// pipeline の札（契約 bead・走行の回数・段・段の理由・口座・段を決めた時刻・着地の後の CI）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PipelineCard {
     pub contract: BeadId,
@@ -105,7 +105,8 @@ pub struct PipelineCard {
     pub stage: Stage,
     pub reason: Option<String>,
     pub account: Option<String>,
-    pub elapsed_s: Option<u64>,
+    /// 段を決めた最後の event の時刻（走行の無い札は None・経過は面が今から引く）。
+    pub since: Option<EpochSecs>,
     /// 着地の後の CI の読み（器が着地を push した走行だけ Some）。
     pub ci: Option<Ci>,
 }

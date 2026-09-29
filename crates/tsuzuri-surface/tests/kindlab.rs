@@ -86,13 +86,16 @@ fn row(id: &str) -> UnreflectedRow {
     UnreflectedRow {
         id: id.to_string(),
         title: format!("{id} の題"),
-        age_s: None,
+        created: None,
     }
 }
 
+/// 指標の段と一覧を組む今（fixture の組の時点）。
+const NOW: u64 = 1_791_676_800;
+
 fn filled(list: &UnreflectedList) -> tsuzuri_surface::project::ledger::UnrefList {
     let fetched = Fetched::Body(wire::encode(list).expect("電文"));
-    match unref_list(&fetched) {
+    match unref_list(&fetched, NOW) {
         Body::Filled(l) => l,
         other => panic!("中身が無い: {other:?}"),
     }
@@ -107,7 +110,7 @@ fn kindlab_boards_same_words() {
     let acct = unref_break(&s);
     assert_eq!(acct.known, vec![("memo".to_string(), 3)]);
     assert_eq!(acct.unknown, vec!["裁定", "要望"]);
-    let proj: Vec<String> = panel(&s, &screen)
+    let proj: Vec<String> = panel(&s, &screen, NOW)
         .unref
         .unknown
         .iter()
@@ -118,7 +121,7 @@ fn kindlab_boards_same_words() {
     let e = stats("empty");
     let acct = unref_break(&e);
     assert_eq!(acct.unknown, vec!["memo", "裁定", "要望"]);
-    let proj: Vec<String> = panel(&e, &screen)
+    let proj: Vec<String> = panel(&e, &screen, NOW)
         .unref
         .unknown
         .iter()

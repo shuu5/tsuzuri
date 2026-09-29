@@ -56,6 +56,14 @@ pub const SPARK_DAYS: u64 = 14;
 /// 昇格待ちの memo が description に持つ見出し。
 pub const PROMOTION_HEADING: &str = "昇格条件";
 
+/// 日の境の時差（日本時間・面の view.rs の JST_OFFSET と同じ）。
+pub const DAY_OFFSET_S: u64 = 9 * 60 * 60;
+
+/// t を含む日本の日の 23 時 59 分 59 秒（日ごとの本の end・今の時刻に依らない）。
+pub fn day_end(t: EpochSecs) -> EpochSecs {
+    ((t + DAY_OFFSET_S) / DAY + 1) * DAY - DAY_OFFSET_S - 1
+}
+
 /// 判定の材料（open の task の数・stale の数・純減 7d・closed/日）。
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 pub struct JudgeInput {
@@ -129,6 +137,7 @@ fn has_promotion_heading(description: &str) -> bool {
 }
 
 /// 読めた bead から指標を数える。今の時刻より後に作られた bead は数えない（見本と同じ）。
+/// 時点・日ごとの end・memo の作った時刻の中央値は今の時刻をそのまま持たない（年齢と経過は面が今から引く）。
 pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
     let beads: Vec<Bead> = all
         .iter()
@@ -168,12 +177,15 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
         .zip(percentile(&leads, 0.9))
         .map(|(p50, p90)| LeadDays { p50, p90 });
 
+    // 14 本は日本の日ごとで、窓は end の 1 日前の秒より後から end まで（今日の本は今の時刻まで）。
+    let last = day_end(now);
     let days = (0..SPARK_DAYS)
         .rev()
         .map(|i| {
-            let (from, to) = (ago(i + 1), ago(i));
+            let end = last.saturating_sub(i * DAY);
+            let (from, to) = (end.saturating_sub(DAY), end.min(now));
             DayCount {
-                end: to,
+                end,
                 created: count(
                     tasks
                         .iter()
@@ -205,9 +217,9 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
 
     let memos: Vec<&Bead> = beads.iter().filter(|b| b.kind == NodeKind::Memo).collect();
     let open_memos: Vec<&&Bead> = memos.iter().filter(|b| b.is_open(now)).collect();
-    let memo_ages: Vec<f64> = open_memos
+    let memo_created: Vec<f64> = open_memos
         .iter()
-        .filter_map(|b| Some(days_between(b.created?, now)))
+        .filter_map(|b| Some(b.created? as f64))
         .collect();
     let memo = MemoStats {
         open: count(open_memos.iter()),
@@ -217,8 +229,17 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
                 .filter(|b| has_promotion_heading(&b.description)),
         ),
         closed_7d: count(memos.iter().filter(|b| closed_in(ago(WEEK_DAYS), now, b))),
-        age_p50_days: percentile(&memo_ages, 0.5),
+        created_p50: percentile(&memo_created, 0.5).map(|t| t.floor() as EpochSecs),
     };
+
+    // 時点は台帳の最後の記録の時刻（今より後の記録は見ない・今の時刻に依らない）。
+    let at = all
+        .iter()
+        .flat_map(|b| [b.created, b.updated, b.closed])
+        .flatten()
+        .filter(|&t| t <= now)
+        .max()
+        .unwrap_or(0);
 
     // 未反映は種類ごとの件数を 1 度だけ数え、数はその和。
     let list = unreflected::not_yet();
@@ -235,7 +256,7 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
     let unreflected = unreflected_kinds.iter().map(|k| k.count).sum();
 
     LedgerStats {
-        at: now,
+        at,
         judge: judge(Some(&JudgeInput {
             open_tasks,
             stale,

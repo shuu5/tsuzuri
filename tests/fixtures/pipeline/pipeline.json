@@ -80,19 +80,19 @@
   ],
   "unmapped": 1,
   "cards": [
-    {"contract": "fx-pl.1", "runs": 1, "stage": "Landed", "reason": null, "account": "acct-1", "elapsed_s": 6600},
-    {"contract": "fx-pl.2", "runs": 2, "stage": "Failed", "reason": "verdict:FAIL kind:literal-mismatch", "account": null, "elapsed_s": 6960},
-    {"contract": "fx-pl.3", "runs": 1, "stage": "Failed", "reason": "verdict:INCONCLUSIVE kind:section-material-missing", "account": null, "elapsed_s": 6840},
-    {"contract": "fx-pl.4", "runs": 1, "stage": "Failed", "reason": "verdict:FAIL", "account": "acct-2", "elapsed_s": 5940},
-    {"contract": "fx-pl.5", "runs": 1, "stage": "Failed", "reason": "verdict:INCONCLUSIVE", "account": null, "elapsed_s": 5820},
-    {"contract": "fx-pl.6", "runs": 1, "stage": "Gated", "reason": null, "account": "acct-3", "elapsed_s": 5400},
-    {"contract": "fx-pl.7", "runs": 1, "stage": "Running", "reason": null, "account": null, "elapsed_s": 4800},
-    {"contract": "fx-pl.8", "runs": 1, "stage": "Running", "reason": null, "account": null, "elapsed_s": 4680},
-    {"contract": "fx-pl.9", "runs": 1, "stage": "Running", "reason": null, "account": "acct-2", "elapsed_s": 4500},
-    {"contract": "fx-pl.10", "runs": 1, "stage": "Running", "reason": null, "account": null, "elapsed_s": 4200},
-    {"contract": "fx-pl.11", "runs": 1, "stage": "Questioned", "reason": null, "account": null, "elapsed_s": 3900},
-    {"contract": "fx-pl.16", "runs": 1, "stage": "Questioned", "reason": "質問の後に止めた（write-set）", "account": null, "elapsed_s": 2700},
-    {"contract": "fx-pl.13", "runs": 0, "stage": "Blocked", "reason": null, "account": null, "elapsed_s": null},
-    {"contract": "fx-pl.14", "runs": 0, "stage": "Queued", "reason": null, "account": null, "elapsed_s": null}
+    {"contract": "fx-pl.1", "runs": 1, "stage": "Landed", "reason": null, "account": "acct-1", "since": 1790467800},
+    {"contract": "fx-pl.2", "runs": 2, "stage": "Failed", "reason": "verdict:FAIL kind:literal-mismatch", "account": null, "since": 1790467440},
+    {"contract": "fx-pl.3", "runs": 1, "stage": "Failed", "reason": "verdict:INCONCLUSIVE kind:section-material-missing", "account": null, "since": 1790467560},
+    {"contract": "fx-pl.4", "runs": 1, "stage": "Failed", "reason": "verdict:FAIL", "account": "acct-2", "since": 1790468460},
+    {"contract": "fx-pl.5", "runs": 1, "stage": "Failed", "reason": "verdict:INCONCLUSIVE", "account": null, "since": 1790468580},
+    {"contract": "fx-pl.6", "runs": 1, "stage": "Gated", "reason": null, "account": "acct-3", "since": 1790469000},
+    {"contract": "fx-pl.7", "runs": 1, "stage": "Running", "reason": null, "account": null, "since": 1790469600},
+    {"contract": "fx-pl.8", "runs": 1, "stage": "Running", "reason": null, "account": null, "since": 1790469720},
+    {"contract": "fx-pl.9", "runs": 1, "stage": "Running", "reason": null, "account": "acct-2", "since": 1790469900},
+    {"contract": "fx-pl.10", "runs": 1, "stage": "Running", "reason": null, "account": null, "since": 1790470200},
+    {"contract": "fx-pl.11", "runs": 1, "stage": "Questioned", "reason": null, "account": null, "since": 1790470500},
+    {"contract": "fx-pl.16", "runs": 1, "stage": "Questioned", "reason": "質問の後に止めた（write-set）", "account": null, "since": 1790471700},
+    {"contract": "fx-pl.13", "runs": 0, "stage": "Blocked", "reason": null, "account": null, "since": null},
+    {"contract": "fx-pl.14", "runs": 0, "stage": "Queued", "reason": null, "account": null, "since": null}
   ]
 }

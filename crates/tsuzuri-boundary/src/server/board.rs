@@ -197,7 +197,7 @@ pub fn list(u: &Unreflected) -> UnreflectedList {
                 .map(|i| UnreflectedRow {
                     id: i.id.clone(),
                     title: i.title.clone(),
-                    age_s: i.age_s,
+                    created: i.created,
                 })
                 .collect(),
         ),

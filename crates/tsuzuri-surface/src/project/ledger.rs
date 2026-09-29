@@ -7,10 +7,12 @@
 //! 一覧の下の項は、板に札が在る bead なら板と同じ読み（block pipeline の `stages`）の段の記号と字を出す（行 c-ledger-stage）。
 //! epic の進みの行の題と一覧の項の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
 //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
+//! memo と未反映の年齢は、電文の作った時刻から block を組む時の今までの日数（`days_since`・行 c-abs-time）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::stats::{
@@ -321,6 +323,11 @@ pub fn age(days: Option<f64>) -> String {
     }
 }
 
+/// 時刻 at から今 now までの日数（今より後の時刻は 0・memo と未反映の年齢は面の今から引く・行 c-abs-time）。
+pub fn days_since(at: EpochSecs, now: EpochSecs) -> f64 {
+    now.saturating_sub(at) as f64 / 86_400.0
+}
+
 /// 未反映の種類の名（1 か所の表）。
 pub const UNREF_KINDS: [(UnreflectedKind, &str); 3] = [
     (UnreflectedKind::Memo, "memo"),
@@ -590,11 +597,11 @@ pub fn metrics(fetched: &Fetched) -> Body<()> {
     }
 }
 
-/// 指標の段の中身（口が読めなければ測れていない・epic の題は画面の台帳の一覧から引く）。
-pub fn content(fetched: &Fetched, screen: &Screen) -> Body<Metrics> {
+/// 指標の段の中身（口が読めなければ測れていない・epic の題は画面の台帳の一覧から引く・memo の年齢は今 now から数える）。
+pub fn content(fetched: &Fetched, screen: &Screen, now: EpochSecs) -> Body<Metrics> {
     match stats(fetched) {
         Err(reason) => Body::Unmeasured(reason),
-        Ok(s) => Body::Filled(panel(&s, screen)),
+        Ok(s) => Body::Filled(panel(&s, screen, now)),
     }
 }
 
@@ -611,8 +618,8 @@ fn epic_title(screen: &Screen, id: &str) -> Option<String> {
     }
 }
 
-/// 電文を中身に写す。
-pub fn panel(s: &LedgerStats, screen: &Screen) -> Metrics {
+/// 電文を中身に写す（memo の年齢は作った時刻の中央値から今 now までの日数）。
+pub fn panel(s: &LedgerStats, screen: &Screen, now: EpochSecs) -> Metrics {
     let epics = s
         .epics
         .iter()
@@ -651,7 +658,7 @@ pub fn panel(s: &LedgerStats, screen: &Screen) -> Metrics {
             open: s.memo.open,
             wait: s.memo.awaiting_promotion,
             promo7: s.memo.closed_7d,
-            age: age(s.memo.age_p50_days),
+            age: age(s.memo.created_p50.map(|c| days_since(c, now))),
         },
         ready: s.ready,
         blocked: s.blocked,
@@ -816,20 +823,20 @@ fn next_key(kind: UnreflectedKind) -> &'static str {
         .expect("次の 1 手の表は 3 つの全部を持つ")
 }
 
-/// 電文の 1 行を一覧の 1 行にする（年齢の秒を日数の字に）。
-fn unref_row(kind: UnreflectedKind, row: &UnreflectedRow) -> UnrefRow {
+/// 電文の 1 行を一覧の 1 行にする（作った時刻から今 now までの日数の字に）。
+fn unref_row(kind: UnreflectedKind, row: &UnreflectedRow, now: EpochSecs) -> UnrefRow {
     UnrefRow {
         id: row.id.clone(),
         title: row.title.clone(),
         kind: kind_name(kind),
-        age: age(row.age_s.map(|s| s as f64 / 86400.0)),
+        age: age(row.created.map(|c| days_since(c, now))),
         next: next_key(kind),
     }
 }
 
 /// 未反映の一覧の口の本文を一覧にする（種類は UnreflectedKind の ALL の順・行は電文の順のまま・
-/// 並べ直しと数え直しをしない）。
-pub fn unref_list(fetched: &Fetched) -> Body<UnrefList> {
+/// 並べ直しと数え直しをしない・年齢は今 now から数える）。
+pub fn unref_list(fetched: &Fetched, now: EpochSecs) -> Body<UnrefList> {
     let list = match fetched {
         Fetched::NotRead => return Body::Unmeasured(NOT_READ),
         Fetched::Failed => return Body::Unmeasured(UNREF_REASON),
@@ -847,7 +854,7 @@ pub fn unref_list(fetched: &Fetched) -> Body<UnrefList> {
             UnreflectedKind::Request => &list.requests,
         };
         match reading {
-            Reading::Known(items) => rows.extend(items.iter().map(|r| unref_row(kind, r))),
+            Reading::Known(items) => rows.extend(items.iter().map(|r| unref_row(kind, r, now))),
             Reading::Unknown => unknown.push(kind_name(kind)),
         }
     }
@@ -916,7 +923,7 @@ mod dom {
         let fetched = crate::net::read(METRICS_PATH);
         let unref = crate::net::read(UNREF_PATH);
         let graph = crate::net::read(map::PATH);
-        let got = move || fetched.with(|f| screen.with(|s| content(f, s)));
+        let got = move || fetched.with(|f| screen.with(|s| content(f, s, crate::net::now())));
         let extra = move || {
             let judge = match got() {
                 Body::Filled(m) => judge_view(m.judge),
@@ -1098,7 +1105,7 @@ mod dom {
             Some(c) => c.mode.get(),
             None => Mode::from_query(&window().location().search().unwrap_or_default()),
         };
-        let list = move || match unref_list(&unref.get()) {
+        let list = move || match unref_list(&unref.get(), crate::net::now()) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => view! { <div class="small muted">{line}</div> }.into_any(),
             Body::Filled(l) => unref_rows(&l, mode()),
@@ -1213,7 +1220,7 @@ mod dom {
     /// 項の段は block pipeline と同じ口の読みから組む（板の口を先に読み、その中で台帳の画面を読む）。
     fn list_view(screen: RwSignal<Screen>, graph: ReadSignal<Fetched>) -> AnyView {
         let pipe = crate::net::read(pipeline::PATH);
-        let list = move || match pipe.with(|p| screen.with(|s| staged_body(s, &stages(p)))) {
+        let list = move || match pipe.with(|p| screen.with(|s| staged_body(s, &stages(p, crate::net::now())))) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => view! { <div class="empty"><span>{line}</span></div> }.into_any(),
             Body::Filled(groups) => {
