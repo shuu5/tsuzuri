@@ -1042,7 +1042,7 @@
   "open_windows": {
    "label": "開いている窓",
    "plain": "account board が持つ project の窓の一覧\n↑ 前面へ = 前に出す\n✓ 戻ると閉じた印",
-   "internal": "window.open の handle\nmock は画面の状態と localStorage tz-wins\n本番は器の window registry"
+   "internal": "window.open の handle\nmock は画面の状態と localStorage tz-wins\n本番もその browser の保存 tz-wins に残す\n便利の写しで正本ではない"
   },
   "pros": {
    "label": "利点",
