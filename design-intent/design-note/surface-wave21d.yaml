@@ -3,13 +3,13 @@
 meta:
   id: surface-wave21d
   title: 第 21 波 d — 問いの起票の門を席の PreToolUse に入れ、問いの合図で台帳の見張りを起こす
-  version: v0.1
+  version: v0.2
   status: effective
   generated: 2026-09-29
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: 設計ノート surface-base の傘の行 f（席の hook と問いの起票の門）と傘の行 e（面の server）の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。計画 9 節の計画だけの行 f-gate-install と e-signal を契約の行にする。f-gate-install の拠りは持ち主の裁定 t3-hub.55.3（計画の判断の表 d3）と要件 FR4、e-signal の拠りは要件 NFR2 と規則の行 R-21。起草と試作は main b5c24c8（計画 v0.78・行 g-nav の着地の後）で撃った。2 行は書く file が重ならず、ノートの depends は空。
+  note: 設計ノート surface-base の傘の行 f（席の hook と問いの起票の門）と傘の行 e（面の server）の子の行 2 つ。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。計画 9 節の計画だけの行 f-gate-install と e-signal を契約の行にする。f-gate-install の拠りは持ち主の裁定 t3-hub.55.3（計画の判断の表 d3）と要件 FR4、e-signal の拠りは要件 NFR2 と規則の行 R-21。起草と試作は main b5c24c8（計画 v0.78・行 g-nav の着地の後）で撃った。2 行は書く file が重ならず、ノートの depends は空。第 0.2 版（2026-09-29）は、行 f-gate-install の節の測り方に、sh が標準入力を読まずに終わる場の payload の書きの Broken pipe を歯の失敗にしない字を足した（便 t3-hub.55.19 の 1 本目の門で歯 gins_command_under_sh が書きの panic で落ちた・契約表の行は同じ）。
 
 sections:
   - n: 1
@@ -55,7 +55,7 @@ sections:
       runner で撃たない理由（決めた幅）。runner の CLAUDE_PROJECT_DIR は便の worktree で、その target/debug/tz は便が組みかけの binary か無い。組みかけの門の欠陥が便自身の Bash の呼びを止めうる。裁定 t3-hub.55.3 は門を席の設定に入れると言い、器の起票の門も席の道具の呼びだけを見る（計画 3 節）ので、印の在る session では hooks.json の command が tz を撃たない。tz hook question-gate の振る舞い（worktree でも黙らない）は変えない。計画 6 節の、門の hook は runner でも効く前提で書く、の字はこの印の前の字で、席が計画の次の版で直す（notes の席の問い）。
       着地の後に効く時（歯で測らず、席の作業で持つ）。着地の後に席が restart.sh で anchor の target/debug/tz を組み直し、席の次の起こし直しから門が効く。
       在りか・読み手（全部の crate の tests と src と xtask で plugin・hooks.json・plugin.json・scribe2-runner・CLAUDE_PLUGIN_ROOT の字を grep した）。hooks.json と plugin.json を読む着地済みの歯は中核の fstop_plugin_stop_entry（tests/fstop.rs）だけで、Stop の要素と plugin.json の鍵と、2 つの file の全部の字の語が斜線とチルダで始まらないことを見る（足す command の語はどれも斜線とチルダで始まらない）。これを置き場だけの = で持ち、verify で撃つ（試作で通った）。境界の src/hook/stop.rs は doc で hooks.json を名指すだけ。xtask の pub-scan は追跡される file の全部の字を読むので verify の xtask check で撃つ（この行は住所も名も書かない）。
-      測り方・歯（中核の crate の tests/gins.rs・新しい file・接頭辞 gins_）。境界の crate は serde_json に直に依存しないので、歯は着地済みの tests/fstop.rs と同じく中核の crate に置き、CARGO_MANIFEST_DIR から 2 つ上の workspace の根の plugin/hooks/hooks.json を読む。gins_command_under_sh は CARGO_TARGET_TMPDIR の下の作業場に、project の dir（下に target/debug/tz の偽の script・引数を 1 行ずつと標準入力を記録の file に書き、字 deny-line の 1 行を出して rc 0）と、印の無い plugin の dir と、空の file scribe2-runner を置いた plugin の dir と、tz の無い project の dir を作り、hooks.json から読んだ command の字を sh -c で、環境変数 CLAUDE_PROJECT_DIR と CLAUDE_PLUGIN_ROOT と標準入力の payload（tool_name が字 Bash で command が ls の JSON）を渡して撃つ。歯の名は gins_pretool_bash_entry・gins_repo_plugin_has_no_runner_mark・gins_command_under_sh。
+      測り方・歯（中核の crate の tests/gins.rs・新しい file・接頭辞 gins_）。境界の crate は serde_json に直に依存しないので、歯は着地済みの tests/fstop.rs と同じく中核の crate に置き、CARGO_MANIFEST_DIR から 2 つ上の workspace の根の plugin/hooks/hooks.json を読む。gins_command_under_sh は CARGO_TARGET_TMPDIR の下の作業場に、project の dir（下に target/debug/tz の偽の script・引数を 1 行ずつと標準入力を記録の file に書き、字 deny-line の 1 行を出して rc 0）と、印の無い plugin の dir と、空の file scribe2-runner を置いた plugin の dir と、tz の無い project の dir を作り、hooks.json から読んだ command の字を sh -c で、環境変数 CLAUDE_PROJECT_DIR と CLAUDE_PLUGIN_ROOT と標準入力の payload（tool_name が字 Bash で command が ls の JSON）を渡して撃つ。歯の名は gins_pretool_bash_entry・gins_repo_plugin_has_no_runner_mark・gins_command_under_sh。印の在る plugin の dir の場と tz の無い project の dir の場では sh が標準入力を読まずに終わるので、payload の書きは子の終わりの後になると Broken pipe（io::ErrorKind::BrokenPipe）を返しうる。歯は書きの BrokenPipe を失敗にせず（ほかの書きの誤りは失敗）、子の終わりを待って rc と記録の file を見る（器の verify は歯を並べて撃つので子の終わりが書きより先に来うる・便 t3-hub.55.19 の 1 本目の門で、この歯が書きの Broken pipe の panic で落ちた）。
       filter の語。main b5c24c8 の contracts の verify の filter の語 272 のどれも、接頭辞 gins_ と 3 つの歯の名に部分の字として含まれず、接頭辞と名もどの語にも含まれない（確かめた）。
       依存と順。depends は空（同じノートの行 e-signal と書く file が重ならない）。計画 5 節の鎖 plugin/hooks/hooks.json の f-stop（着地済み）→ f-gate-install で、依存の f-gate も着地済み。後の行 f-deliver（配達の hook）が同じ hooks.json に hook を足すなら、この行の着地の後に流す（席が便の bead の依存で持つ）。
       範囲の外。停止の hook の command に印の検査を足すこと（tz hook stop は worktree で黙る・行 f-stop）。門の判じ方と tz の口の字（行 f-gate）。配達の hook（行 f-deliver）。席の許可の設定と、ほかの設定の hook。
