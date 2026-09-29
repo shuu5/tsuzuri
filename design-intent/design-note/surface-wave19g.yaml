@@ -3,7 +3,7 @@
 meta:
   id: surface-wave19g
   title: 第 19 波 g — 公開した repo の LICENSE の 2 file と workspace の license の欄
-  version: v0.1
+  version: v0.2
   status: effective
   generated: 2026-09-29
   profile: design-note
@@ -25,7 +25,7 @@ sections:
     rows:
       - id: t-license
         title: repo の根に LICENSE-MIT と LICENSE-APACHE を置き、workspace の manifest の license を MIT OR Apache-2.0 にして 5 つの member が継ぐ
-        req: [CON1]
+        req: [NFR3]
         section: "3"
         write-set: ["+LICENSE-MIT", "+LICENSE-APACHE", "Cargo.toml", "crates/tsuzuri-contract/Cargo.toml", "crates/tsuzuri-core/Cargo.toml", "crates/tsuzuri-boundary/Cargo.toml", "crates/tsuzuri-surface/Cargo.toml", "xtask/Cargo.toml", "+xtask/tests/tlic.rs"]
         verify: ["cargo nextest run -p xtask --test tlic --no-tests=fail tlic_", "cargo nextest run -p xtask --no-tests=fail skeleton_"]
@@ -37,7 +37,7 @@ sections:
     title: 行 t-license — LICENSE の 2 file と workspace の license の欄
     body: |
       在りかの main は 7630bcd（計画 surface-plan 第 0.67 版）。書く file は repo の根の 2 file（新しい file）と、workspace の根の Cargo.toml と、5 つの member の Cargo.toml と、xtask の新しい歯の file。
-      なぜ。持ち主は 2026-09-29 に tsuzuri の repo を公開にした（判断の記録 ADR-18 の決定 (1)）。いまの repo には許しを書いた file が無く、他の人は使ってよいかが分からない。持ち主は、scribe2・folio2 と同じ許しにすると決めた（裁定 t3-hub.67.6:20260929T0117Z-1）。合流で持ち込む folio の根には許しの file が無く宣言だけなので、持ち込んだ後はこの 2 file が folio の部分も覆う。持ち込む folio の中の第三者の code（vendor の archify・MIT）は、その LICENSE の file をそのまま残す（この行では触らない）。
+      なぜ。持ち主は 2026-09-29 に tsuzuri の repo を公開にした（判断の記録 ADR-18 の決定 (1)）。いまの repo には許しを書いた file が無く、他の人は使ってよいかが分からない。持ち主は、scribe2・folio2 と同じ許しにすると決めた（裁定 t3-hub.67.6:20260929T0117Z-1）。要件 NFR3（依存の予算）は cargo deny で依存の許しを数えるので、workspace の crate も許しの欄を持つ。合流で持ち込む folio の根には許しの file が無く宣言だけなので、持ち込んだ後はこの 2 file が folio の部分も覆う。持ち込む folio の中の第三者の code（vendor の archify・MIT）は、その LICENSE の file をそのまま残す（この行では触らない）。
       形（LICENSE-MIT・新しい file）。21 行・1072 byte の次の字（最後の行の後に改行 1 つ）。1 行目 MIT License、2 行目は空、3 行目 Copyright (c) 2026 tsuzuri authors、4 行目は空、5 行目から 21 行目は MIT License の本文（scribe2 の公開の repo の LICENSE-MIT の 5 行目から 21 行目と同じ字・Permission is hereby granted, free of charge, to any person obtaining a copy で始まり、SOFTWARE. で終わる）。scribe2 の LICENSE-MIT とは 3 行目の名の字（scribe2 authors → tsuzuri authors）だけが違う。
       形（LICENSE-APACHE・新しい file）。scribe2 の公開の repo の LICENSE-APACHE と 1 byte も違わない字（Apache License Version 2.0 の本文・201 行・11357 byte・sha256 c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4）。
       形（Cargo.toml）。根の manifest の表 [workspace.package] の行 publish = false の後に、鍵 license に字 MIT OR Apache-2.0 を二重引用符で囲んで与える 1 行を足す。5 つの member（crates/tsuzuri-contract・crates/tsuzuri-core・crates/tsuzuri-boundary・crates/tsuzuri-surface・xtask）の manifest の表 [package] の行 publish.workspace = true の後に、行 license.workspace = true を 1 行ずつ足す。ほかの行と Cargo.lock は変えない（許しの欄は lock の字を変えない）。
