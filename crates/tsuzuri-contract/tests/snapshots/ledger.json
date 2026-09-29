@@ -198,5 +198,47 @@
       "cards": "unknown",
       "answerable": true
     }
+  ],
+  "question::ProjectQuestions": [
+    {
+      "project": "proj-x",
+      "answerable": false,
+      "cards": {
+        "known": []
+      }
+    },
+    {
+      "project": "proj-y",
+      "answerable": false,
+      "cards": "unknown"
+    }
+  ],
+  "question::AllQuestions": [
+    {
+      "cards": {
+        "known": []
+      },
+      "answerable": true
+    },
+    {
+      "cards": {
+        "known": []
+      },
+      "answerable": true,
+      "others": [
+        {
+          "project": "proj-x",
+          "answerable": false,
+          "cards": {
+            "known": []
+          }
+        },
+        {
+          "project": "proj-y",
+          "answerable": false,
+          "cards": "unknown"
+        }
+      ]
+    }
   ]
 }

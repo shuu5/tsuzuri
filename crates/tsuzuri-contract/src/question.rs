@@ -44,3 +44,24 @@ pub struct QuestionList {
 fn answers() -> bool {
     true
 }
+
+/// ほかの project の問いの一覧（札は置き場の dir の名・台帳が読めなければ card は `Unknown`・行 e-multi-ask）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectQuestions {
+    pub project: String,
+    /// その project の問いに答えを受けるか（鍵の無い電文は偽に読む）。
+    #[serde(default)]
+    pub answerable: bool,
+    pub cards: Reading<Vec<QuestionCard>>,
+}
+
+/// 自分の問いの一覧とほかの project の問いの一覧（口 questions の出力・行 e-multi-ask）。
+/// others が空なら字は own の `QuestionList` の字と同じで、鍵 others の在る字を `QuestionList` で読むと
+/// 鍵 others は捨てられ自分の問いの一覧になる。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AllQuestions {
+    #[serde(flatten)]
+    pub own: QuestionList,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub others: Vec<ProjectQuestions>,
+}

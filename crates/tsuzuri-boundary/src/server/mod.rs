@@ -9,6 +9,8 @@
 //! 台帳の見張りの周期の待ちを終わらせるだけで、読むだけの server も受ける・行 e-signal）。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 読むだけの server（`Config::read_only`）は答えと方針の口を受付の前に 403 で断り（`read_only`）、
 //! 問いの一覧の電文に答えを受けないと書く（心拍の口は受ける・行 e-ask-own-only）。
+//! 起動の引数 --project の置き場ごとに、その台帳を読み取りの bd で見張り、問いの一覧の電文の鍵 others に札つきで
+//! 載せる（答えは受けず、答えの口はその問いを自分の台帳に無い問いとして断る・`others`・行 e-multi-ask）。
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
 //! 同じ時に届いた要求は、設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
 //! 台帳の GET の口は bd を撃たず、起動で作る 1 つの `Source`（`Source::watched`）とその clone が変化の見張りの
@@ -34,6 +36,7 @@ pub mod files;
 pub mod form;
 pub mod http;
 pub mod ledger;
+mod others;
 pub mod policy;
 pub mod proc;
 pub mod route;
@@ -67,6 +70,7 @@ use self::events::Hub;
 use self::form::Form;
 use self::http::{Request, Response};
 use self::ledger::Source;
+use self::others::Others;
 use self::ruling::{Delivery, Writer};
 use self::runs::Runs;
 use self::seat::Seats;
@@ -147,6 +151,8 @@ struct Shared {
     acct_watch: Once,
     /// 答えと方針の口を断る読むだけの server か（`Config::read_only`・行 e-ask-own-only）。
     read_only: bool,
+    /// ほかの project の問いの読み（`Config::projects`・行 e-multi-ask）。
+    others: Others,
 }
 
 /// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
@@ -238,6 +244,8 @@ impl Server {
         if let Some(form) = &form {
             form.notify(&hub);
         }
+        let others = Others::new(&config.projects, &config.bd);
+        others.watch(&hub);
         let delivery = match (&config.seat, &config.state_dir) {
             (Some(target), Some(state_dir)) => Some(Delivery {
                 program: config.scribe2.clone(),
@@ -263,6 +271,7 @@ impl Server {
                 acct_marks,
                 acct_watch: Once::new(),
                 read_only: config.read_only,
+                others,
             }),
         })
     }

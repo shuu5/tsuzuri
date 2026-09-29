@@ -9,6 +9,8 @@
 //! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
 //! --read-only は値を取らず、答えと方針の口を 403 で断り、問いの一覧に答えを受けないと書く（ほかの project の
 //! board を読むだけで起こす・行 e-ask-own-only）。
+//! --project はほかの project の repo の置き場で、何度でも受け、その台帳の open の問いを dir の名の札つきで問いの一覧に
+//! 混ぜる（答えは受けない・行 e-multi-ask）。
 //! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
 //! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
 //! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
@@ -19,11 +21,15 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use tsuzuri_boundary::server::{Config, Server};
+use tsuzuri_core::account::project_name;
 
-const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>] [--read-only]";
+const USAGE: &str = "usage: tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>] [--bdw <program>] [--seat <target>] [--scribe2 <program>] [--read-only] [--project <dir>]...";
 
 /// 読むだけの server を名指す値を取らない引数（行 e-ask-own-only）。
 const READ_ONLY: &str = "--read-only";
+
+/// 問いの一覧に混ぜるほかの project の置き場を名指す何度でも受ける引数（行 e-multi-ask）。
+const PROJECT: &str = "--project";
 
 /// 不合格（断り・使い方の誤り）。
 const FAIL: u8 = 1;
@@ -52,12 +58,14 @@ fn usage(what: &str) -> u8 {
 }
 
 /// `--名 値` か `--名=値` の 3 つの引数と、省ける --bd・--state-dir・--folio・--bdw・--seat・--scribe2 と、
-/// 値を取らない --read-only を読む（省ける引数の空の値と 2 度の引数は断る）。
+/// 値を取らない --read-only と、何度でも受ける --project を読む（省ける引数の空の値と 2 度の引数は断る・
+/// --project は dir の名の無い値と前と同じ dir の名を断る）。
 fn parse(rest: &[&str]) -> Result<Config, String> {
     let (mut repo, mut bind, mut files, mut bd) = (None, None, None, None);
     let (mut state_dir, mut folio) = (None, None);
     let (mut bdw, mut seat, mut scribe2) = (None, None, None);
     let mut read_only = false;
+    let (mut projects, mut labels) = (Vec::new(), Vec::new());
     let mut it = rest.iter();
     while let Some(arg) = it.next() {
         if *arg == READ_ONLY {
@@ -70,6 +78,18 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             Some((n, v)) => (n, v),
             None => (*arg, *it.next().ok_or_else(|| format!("{arg} の値が無い"))?),
         };
+        if name == PROJECT {
+            let label = project_name(value);
+            if label.is_empty() {
+                return Err(format!("{PROJECT} の値 {value} に dir の名が無い"));
+            }
+            if labels.contains(&label) {
+                return Err(format!("{PROJECT} の名 {label} が 2 度ある"));
+            }
+            labels.push(label);
+            projects.push(PathBuf::from(value));
+            continue;
+        }
         let slot = match name {
             "--repo" => &mut repo,
             "--bind" => &mut bind,
@@ -108,6 +128,7 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
         state_dir: state_dir.map(PathBuf::from),
         seat: seat.map(str::to_string),
         read_only,
+        projects,
         ..Config::new(PathBuf::from(repo), bind, PathBuf::from(files))
     };
     // 省いた program は Config::new の既定の値のまま。

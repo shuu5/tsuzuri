@@ -14,7 +14,7 @@ use tsuzuri_contract::ledger::{
     BDW, BdLine, BeadId, ChildType, Effect, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
     MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL, fnv1a64,
 };
-use tsuzuri_contract::question::{QuestionCard, QuestionList};
+use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionCard, QuestionList};
 use tsuzuri_contract::surface::RulingId;
 use tsuzuri_contract::wire;
 
@@ -169,7 +169,45 @@ fn forms() -> Vec<Box<dyn Form>> {
                 },
             ],
         ),
+        form("question::ProjectQuestions", project_questions()),
+        form(
+            "question::AllQuestions",
+            vec![
+                AllQuestions {
+                    own: own_questions(),
+                    others: vec![],
+                },
+                AllQuestions {
+                    own: own_questions(),
+                    others: project_questions(),
+                },
+            ],
+        ),
     ]
+}
+
+/// ほかの project の問いの一覧の見本（card の列は空・card の形は question::QuestionCard の見本が持つ）。
+fn project_questions() -> Vec<ProjectQuestions> {
+    vec![
+        ProjectQuestions {
+            project: "proj-x".into(),
+            answerable: false,
+            cards: Reading::Known(vec![]),
+        },
+        ProjectQuestions {
+            project: "proj-y".into(),
+            answerable: false,
+            cards: Reading::Unknown,
+        },
+    ]
+}
+
+/// 全部の問いの一覧の見本の自分の問いの一覧。
+fn own_questions() -> QuestionList {
+    QuestionList {
+        cards: Reading::Known(vec![]),
+        answerable: true,
+    }
 }
 
 #[test]

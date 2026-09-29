@@ -18,6 +18,8 @@
 //! 終わらせ、次の周を待たずに印を見る（規則の行 R-21: 問いの合図ありで 200 ms 以内・要件 NFR2）。
 //! 合図は読みを強いず、印が動いていない周では読まない（bd の読みは台帳の store の錠を取るので、合図の数で読みを増やさない）。
 //! 待ちの間に溜まった合図は 1 周にまとめる。
+//! ほかの project の台帳の見張り（`Hub::watch_ledger_into`・行 e-multi-ask）は server の Hub に足し、同じ受け手の数えと
+//! 読み直しの間隔で読んで、その Hub の受け手に ledger-changed を送る（問いの合図では起きない）。
 
 use std::io::{self, Write};
 use std::ops::Deref;
@@ -170,12 +172,34 @@ impl Hub {
         M: FnMut() -> Mark + Send + 'static,
         F: FnMut() -> Reading<T> + Send + 'static,
     {
-        watch_with(mark, read, timing.poll, move |mark, last| {
-            match (mark, last) {
-                (Mark::Store { .. }, Reading::Known(_)) => timing.store_reread,
-                _ => timing.reread,
-            }
-        })
+        watch_with(mark, read, timing.poll, ledger_reread(timing))
+    }
+
+    /// `watch_ledger` と同じ周期の読みを、在る Hub に足す（ほかの project の台帳の見張り・行 e-multi-ask）。
+    /// 最初の印と読みは戻る前に取る。受け手の数えと送る先はその Hub のもので、問いの合図（`nudge`）では起きない。
+    /// Hub が落ちれば止まる。
+    pub fn watch_ledger_into<T, M, F>(hub: &Arc<Hub>, mut mark: M, mut read: F, timing: Timing)
+    where
+        T: PartialEq + Send + 'static,
+        M: FnMut() -> Mark + Send + 'static,
+        F: FnMut() -> Reading<T> + Send + 'static,
+    {
+        let weak = Arc::downgrade(hub);
+        // 送り手は thread が持ち続けるので、待ちは合図で終わらず poll ごとに時間切れになる。
+        let (tx, wake) = mpsc::channel();
+        let seen = mark();
+        let read_at = Instant::now();
+        let last = read();
+        let state = Watch {
+            seen,
+            read_at,
+            last,
+            listening: false,
+        };
+        thread::spawn(move || {
+            let _held: Sender<()> = tx;
+            watch(&weak, &wake, state, mark, read, timing.poll, ledger_reread(timing));
+        });
     }
 
     /// 受け手を 1 人足す。
@@ -279,6 +303,14 @@ fn moved(seen: &BoardStamps, current: &BoardStamps) -> Vec<ChangeKind> {
         .into_iter()
         .filter(|&kind| of(seen, kind) != of(current, kind))
         .collect()
+}
+
+/// 台帳の読み直しの間隔（印が Store で前の読みが Known なら `store_reread`、ほかは `reread`）。
+fn ledger_reread<T>(timing: Timing) -> impl Fn(&Mark, &Reading<T>) -> Duration + Send + 'static {
+    move |mark, last| match (mark, last) {
+        (Mark::Store { .. }, Reading::Known(_)) => timing.store_reread,
+        _ => timing.reread,
+    }
 }
 
 /// 周期の読みの状態（見た印・最後に読んだ時刻・最後の読みの結果・前の周に受け手が居たか）。

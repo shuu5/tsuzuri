@@ -9,13 +9,16 @@
 //! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける（行 g-tick-adopt）。
 //! 送っている間は送る button の字を替え、server の台帳の断りは理由と次の手の字にして目立つ 1 行で出す（行 g-ruling-busy）。
 //! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す（行 e-ask-own-only）。
+//! 電文の鍵 others のほかの project の問いは札つきで投稿の時刻の順に 1 つの一覧へ混ぜ、題は link にせず、つながりの段を
+//! 出さず、送る欄の代わりにチャットで答える 1 行を出す。台帳が読めない組は札と 1 行を一覧の下に出す（行 e-multi-ask）。
+//! 束の block と次の一手と問いの件数（`cards`・`count`・`answerable`）は自分の問いだけを読む。
 
 use std::collections::BTreeMap;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_contract::question::{QuestionCard, QuestionList};
+use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionCard, QuestionList};
 use tsuzuri_contract::surface::{Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse};
 use tsuzuri_contract::wire;
 
@@ -52,6 +55,9 @@ pub const UNREADABLE: &str = "問いの一覧の本文が電文として読め�
 
 /// server が台帳を読めず card が「まだ分からない」ときの理由。
 pub const CARDS_UNKNOWN: &str = "server が台帳を読めず、答えを待つ質問が分からない";
+
+/// ほかの project の台帳が読めないときに札の後に出す 1 行（行 e-multi-ask）。
+pub const OTHER_UNKNOWN: &str = "台帳が読めず、答えを待つ質問が分からない";
 
 /// 測れて 0 件のときの 1 行。
 pub const EMPTY: &str = "答えを待つ question は無い";
@@ -179,6 +185,10 @@ pub struct Card {
     /// 答えを待って止まった task の id（chip は数だけを出す）。
     pub blocking: Vec<String>,
     pub digest: String,
+    /// ほかの project の札（自分の問いは None・行 e-multi-ask）。
+    pub project: Option<String>,
+    /// この card に答えを送れるか（自分の問いは真・ほかの project の問いは電文のその組の answerable）。
+    pub answerable: bool,
 }
 
 /// 口の本文を card の列に読む（まだ読んでいない・読めない・電文が読めない・まだ分からないは理由）。
@@ -217,18 +227,77 @@ pub fn count(fetched: &Fetched) -> Reading<usize> {
     }
 }
 
-/// block の中身（電文の順のまま番号を 1 から付ける）。
+/// 本文を全部の問いの一覧に読んだ欄 others（読めない本文・まだ読んでいない・読めないは空の列・行 e-multi-ask）。
+pub fn others(fetched: &Fetched) -> Vec<ProjectQuestions> {
+    match fetched {
+        Fetched::Body(text) => wire::decode::<AllQuestions>(text).map_or_else(|_| Vec::new(), |a| a.others),
+        Fetched::NotRead | Fetched::Failed => Vec::new(),
+    }
+}
+
+/// card が Unknown のほかの project の札（電文の順）。
+pub fn unknown_projects(fetched: &Fetched) -> Vec<String> {
+    others(fetched)
+        .into_iter()
+        .filter(|p| p.cards == Reading::Unknown)
+        .map(|p| p.project)
+        .collect()
+}
+
+/// block の中身の card の数（ほかの project の問いを含む・測れていなければ Unknown・0 件は Known の 0）。
+pub fn total(fetched: &Fetched) -> Reading<usize> {
+    match body(fetched) {
+        Body::Unmeasured(_) => Reading::Unknown,
+        Body::Empty(_) => Reading::Known(0),
+        Body::Filled(cards) => Reading::Known(cards.len()),
+    }
+}
+
+/// block の中身（自分の問いの列に、ほかの project の読めた組の列を電文の順に 1 つずつ投稿の時刻で混ぜ、番号を 1 から付ける）。
 pub fn body(fetched: &Fetched) -> Body<Vec<Card>> {
-    match cards(fetched) {
-        Err(reason) => Body::Unmeasured(reason),
-        Ok(cards) if cards.is_empty() => Body::Empty(EMPTY),
-        Ok(cards) => Body::Filled(
-            cards
-                .iter()
-                .enumerate()
-                .map(|(i, q)| card(i + 1, q))
-                .collect(),
-        ),
+    let own = match cards(fetched) {
+        Err(reason) => return Body::Unmeasured(reason),
+        Ok(cards) => cards.iter().map(|q| card(0, q)).collect(),
+    };
+    let all = others(fetched)
+        .into_iter()
+        .fold(own, |all, p| match p.cards {
+            Reading::Known(cards) => {
+                let tagged = cards
+                    .iter()
+                    .map(|q| Card {
+                        project: Some(p.project.clone()),
+                        answerable: p.answerable,
+                        ..card(0, q)
+                    })
+                    .collect();
+                merged(all, tagged)
+            }
+            Reading::Unknown => all,
+        });
+    if all.is_empty() {
+        return Body::Empty(EMPTY);
+    }
+    Body::Filled(
+        all.into_iter()
+            .enumerate()
+            .map(|(i, c)| Card { number: i + 1, ..c })
+            .collect(),
+    )
+}
+
+/// 2 つの列をどちらも順を変えずに 1 つにする（先頭どうしの投稿の時刻を比べ、後の列の先頭が古いときだけ後の列から取る）。
+fn merged(front: Vec<Card>, back: Vec<Card>) -> Vec<Card> {
+    let mut out = Vec::with_capacity(front.len() + back.len());
+    let (mut front, mut back) = (front.into_iter().peekable(), back.into_iter().peekable());
+    loop {
+        let from_back = match (front.peek(), back.peek()) {
+            (Some(f), Some(b)) => b.posted_at < f.posted_at,
+            (None, Some(_)) => true,
+            (Some(_), None) => false,
+            (None, None) => return out,
+        };
+        out.extend(if from_back { back.next() } else { front.next() });
     }
 }
 
@@ -268,7 +337,7 @@ pub fn node_cards(graph: &Fetched, cards: &[Card]) -> BTreeMap<String, hover::Ca
         .collect()
 }
 
-/// 電文の 1 本を card の中身にする。
+/// 電文の 1 本を自分の問いの card の中身にする（札なし・答えを送れる）。
 pub fn card(number: usize, q: &QuestionCard) -> Card {
     Card {
         number,
@@ -282,6 +351,8 @@ pub fn card(number: usize, q: &QuestionCard) -> Card {
         touches: q.touches.clone(),
         blocking: q.blocking.clone(),
         digest: q.digest.clone(),
+        project: None,
+        answerable: true,
     }
 }
 
@@ -506,9 +577,10 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        BLOCK, CHAT_KEY, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age,
-        anchor, answerable, can_send, card_class, card_key, count, focus, key_action, listed,
-        node_cards, outcome, outline, posted_tip, request_body, send_text, target_number,
+        BLOCK, CHAT_KEY, Card, KeyAction, LAYOUT, OTHER_UNKNOWN, Outcome, PATH, Part, RULING_PATH,
+        Slot, age, anchor, answerable, can_send, card_class, card_key, focus, key_action, listed,
+        node_cards, outcome, outline, posted_tip, request_body, send_text, target_number, total,
+        unknown_projects,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::map;
@@ -594,7 +666,7 @@ mod dom {
         let clock = crate::net::ticker();
         let tick = move || clock.get();
         let current = move || mode.map_or(fallback, |m| m.get());
-        let extra = move || match fetched.with(count) {
+        let extra = move || match fetched.with(total) {
             Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
             Reading::Unknown => ().into_any(),
         };
@@ -609,6 +681,14 @@ mod dom {
                 scroll_to(n);
             }
         });
+        // 台帳が読めないほかの project は、札と 1 行を一覧の下に出す。
+        let unknown = move || {
+            fetched
+                .with(unknown_projects)
+                .into_iter()
+                .map(|p| view! { <div class="small muted"><span class="chip">{p}</span>" "{OTHER_UNKNOWN}</div> })
+                .collect_view()
+        };
         let list = move || match shape.get() {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
@@ -629,7 +709,7 @@ mod dom {
                 .into_any()
             }
         };
-        section(BLOCK, extra.into_any(), list.into_any())
+        section(BLOCK, extra.into_any(), view! { {list}{unknown} }.into_any())
     }
 
     fn card_view(
@@ -665,17 +745,25 @@ mod dom {
                 let a1 = card.a1.then(|| {
                     view! { <span class="warn" data-term="a1" tabindex="0" aria-label=label("a1") inner_html=WARN></span> }
                 });
+                // ほかの project の card は札を番号の後に置き、題をその project の地図を読まない字だけで出す。
+                let tag = card.project.clone().map(|p| view! { <span class="chip">{p}</span> });
+                let other = card.project.is_some();
                 let (id, posted, title) = (card.id.to_string(), card.posted_at, card.title.clone());
                 // 題の a は節点の card が替わったときだけ組み直す（番号とほかの部分は組み直さない）。
                 let link = move || {
                     let (id, title) = (id.clone(), title.clone());
+                    if other {
+                        return view! { <span data-t="">{title}</span> }.into_any();
+                    }
                     view! {
                         <a class="t" href=move || node_href(&id, mode()) use:attach_some=live.node.get()><span data-t="">{title}</span></a>
                     }
+                    .into_any()
                 };
                 view! {
                     <div class=slot.class>
                         <span class="nb">{move || live.nb.get()}</span>
+                        {tag}
                         {link}
                         {a1}
                         <span class="chip num" use:expert_tip=posted_tip(posted)><span inner_html=CLOCK></span><span>{move || age(tick(), posted)}</span></span>
@@ -720,6 +808,8 @@ mod dom {
                 .into_any()
             }
             Part::Answer => answer_view(slot, card.clone(), d.clone()),
+            // ほかの project の card はつながりの段を出さない（その project の地図を読まない）。
+            Part::Around if card.project.is_some() => ().into_any(),
             Part::Around => {
                 let key = slot.key.unwrap_or_default();
                 let initial = slot.open.unwrap_or(false);
@@ -748,11 +838,13 @@ mod dom {
     }
 
     /// 答えの欄（字の欄と送る button）と、送った後の 1 行。200 の後は欄を閉じる。
-    /// 読むだけの server なら送る欄の代わりにチャットで答える 1 行を出す（context が無ければ答えを受ける）。
+    /// 読むだけの server の card とほかの project の card は、送る欄の代わりにチャットで答える 1 行を出す
+    /// （context が無ければ server は答えを受ける）。
     fn answer_view(slot: Slot, card: Card, d: Draft) -> AnyView {
         let key = slot.key.unwrap_or_default();
+        let own_ok = card.answerable;
         let can_answer = use_context::<CanAnswer>().map(|c| c.0);
-        let answerable = move || can_answer.is_none_or(|m| m.get());
+        let answerable = move || own_ok && can_answer.is_none_or(|m| m.get());
         let open = {
             let outcome = d.outcome.clone();
             move || answerable() && outcome.with(|o| o.as_ref().is_none_or(Outcome::answer_open))
