@@ -3,6 +3,7 @@ name = "tsuzuri-core"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 # 直接依存は serde と serde_json と契約の型の crate だけ（便 c・xtask の歯 skeleton_ が直接依存の名を測る）。
 [dependencies]

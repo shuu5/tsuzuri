@@ -3,6 +3,7 @@ name = "tsuzuri-boundary"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 # tz の入口（便 e-min・tz surface serve）。
 [[bin]]
