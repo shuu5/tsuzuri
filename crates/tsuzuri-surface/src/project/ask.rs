@@ -6,6 +6,7 @@
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
 //! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる（便 g-ask-focus）。
 //! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない・行 g-card-adopt-b）。
+//! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける（行 g-tick-adopt）。
 
 use std::collections::BTreeMap;
 
@@ -296,6 +297,11 @@ pub fn age(now: EpochSecs, posted_at: EpochSecs) -> String {
     format!("{}d", hours / 24)
 }
 
+/// 経過の chip の経験者だけの注釈の字（`posted_at` と日本時間の投稿の時刻・見本の chip の `data-tip-expert`・行 g-tick-adopt）。
+pub fn posted_tip(posted_at: EpochSecs) -> String {
+    format!("posted_at {}", clock(posted_at))
+}
+
 /// 送る button を押せるか（答えの欄が空白だけのときと送っている間は押せない）。
 pub fn can_send(text: &str, sending: bool) -> bool {
     !sending && !text.trim().is_empty()
@@ -443,14 +449,14 @@ mod dom {
     use super::{
         BLOCK, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, age, anchor,
         can_send, card_class, card_key, count, focus, key_action, listed, node_cards, outcome,
-        outline, request_body, target_number,
+        outline, posted_tip, request_body, target_number,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::map;
     use crate::project::nodearound::{Embeds, embeds};
     use crate::project::{Body, body_view, fold, section, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::HelpCtx;
+    use crate::widgets::help::{HelpCtx, expert_tip};
     use crate::widgets::hover::{self, attach_some};
 
     /// 見本の IC.warn・IC.clock・IC.person・IC.code・IC.check・IC.link・IC.stop。
@@ -519,11 +525,9 @@ mod dom {
         // 題の節点の card はグラフの口から引く（問いの一覧より後に読めても、後から card が付く）。
         let graph = crate::net::read(map::PATH);
         let nodes = Memo::new(move |_| cards.with(|v| graph.with(|g| node_cards(g, v))));
-        // 経過は一覧の読みのたびに書き直し、link は mode を替えれば替わる。
-        let tick = move || {
-            fetched.track();
-            crate::net::now()
-        };
+        // 経過は 1 秒の時計で書き直し、link は mode を替えれば替わる。
+        let clock = crate::net::ticker();
+        let tick = move || clock.get();
         let current = move || mode.map_or(fallback, |m| m.get());
         let extra = move || match fetched.with(count) {
             Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
@@ -609,7 +613,7 @@ mod dom {
                         <span class="nb">{move || live.nb.get()}</span>
                         {link}
                         {a1}
-                        <span class="chip num"><span inner_html=CLOCK></span><span>{move || age(tick(), posted)}</span></span>
+                        <span class="chip num" use:expert_tip=posted_tip(posted)><span inner_html=CLOCK></span><span>{move || age(tick(), posted)}</span></span>
                     </div>
                 }
                 .into_any()

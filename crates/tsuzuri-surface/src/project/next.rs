@@ -456,11 +456,12 @@ mod dom {
             Mark::Unmeasured => state_icon(UNKNOWN),
         };
         let win = window_of(row.kind);
-        // 経過は問いの一覧の読みが替わった時に今の時刻で組む（毎秒の書き直しはしない）。
+        // 経過は 1 秒の時計で書き直す。
+        let clock = crate::net::ticker();
         let for_wait = row.clone();
         let wait = move || {
             questions
-                .with(|q| waited(&for_wait, q, crate::net::now()))
+                .with(|q| waited(&for_wait, q, clock.get()))
                 .map(|w| view! { " " <span class="num">{w}</span> })
         };
         // link は mode で href が変わる。

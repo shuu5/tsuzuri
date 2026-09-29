@@ -7,6 +7,7 @@
 //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
 //! 語は語の辞書の `CI_KEYS` の鍵から引く。
 //! 台帳の一覧の項に出す段は札と同じ読みから `stages` 1 つで組む（行 c-ledger-stage のつなぎ）。
+//! 札の meta の経過は 1 秒の時計（net の ticker）で `age_at` から書き直す（hover の card の値の行は読んだ時の字・行 g-tick-adopt）。
 
 use std::collections::BTreeMap;
 
@@ -172,6 +173,8 @@ pub struct Kcard {
     pub state: Option<&'static str>,
     pub lead: Lead,
     pub age: String,
+    /// 電文の経過の秒（server が読んだ時の今から・描く時の経過は `age_at` が組む・行 g-tick-adopt）。
+    pub elapsed_s: Option<u64>,
     pub class: &'static str,
     pub hover: Card,
     /// 節点の card の値の行（見本の cardContent の data-run の枝・回数と段の名と 20 字に切った理由）。
@@ -241,6 +244,14 @@ impl Column {
     pub fn closable(&self, open: bool) -> bool {
         open && self.cards.len() > SHOW
     }
+}
+
+/// 描く時の経過の字（電文の経過に、板の電文を読んだ時から今までの秒を足して `age` に渡す・経過が無ければ `NO_AGE`・行 g-tick-adopt）。
+pub fn age_at(elapsed: Option<u64>, read: EpochSecs, now: EpochSecs) -> String {
+    elapsed.map_or_else(
+        || NO_AGE.to_string(),
+        |e| age(e + now.saturating_sub(read)),
+    )
 }
 
 /// 経過の字（60 秒未満は s・60 分未満は m・24 時間未満は h・それ以上は d・端数は切り捨て）。
@@ -445,6 +456,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow]) -> Kcard {
         },
         lead,
         age,
+        elapsed_s: card.elapsed_s,
         class: if lane.stops() {
             "kcard why-stop"
         } else {
@@ -618,12 +630,13 @@ pub use dom::stage_sym;
 #[cfg(target_arch = "wasm32")]
 mod dom {
     use leptos::prelude::*;
+    use tsuzuri_contract::EpochSecs;
     use tsuzuri_contract::board::PipelineColumn;
 
     use super::{
         BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard, PATH,
-        card_href, ci_key, ci_style, columns, content, misfit_cards, misfit_href, open_columns,
-        with_closed, with_nodes, with_open,
+        age_at, card_href, ci_key, ci_style, columns, content, misfit_cards, misfit_href,
+        open_columns, with_closed, with_nodes, with_open,
     };
     use crate::frame::Mode;
     use crate::project::{Body, ledger, map, section, state_icon, unmeasured};
@@ -687,16 +700,23 @@ mod dom {
             Some(c) => c.mode.get(),
             None => Mode::from_query(&search()),
         };
+        // 札の経過は 1 秒の時計で書き直す（電文の経過に、板の電文を読んだ時からの秒を足す）。
+        let tick = crate::net::ticker();
+        let read = Memo::new(move |_| {
+            pipe.track();
+            crate::net::now()
+        });
+        let clock = move || (read.get(), tick.get());
         let body = move || {
             let now = crate::net::now();
             let board = match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(key) => view! {
                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
-                    {board_view(columns(&[], &[], now), open, mode)}
+                    {board_view(columns(&[], &[], now), open, mode, clock)}
                 }
                 .into_any(),
-                Body::Filled(cols) => board_view(cols, open, mode),
+                Body::Filled(cols) => board_view(cols, open, mode, clock),
             };
             let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));
             view! { {board}{fix} }.into_any()
@@ -736,10 +756,11 @@ mod dom {
         cols: Vec<Column>,
         open: RwSignal<Vec<PipelineColumn>>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+        clock: impl Fn() -> (EpochSecs, EpochSecs) + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let cols = cols
             .into_iter()
-            .map(|c| column_view(c, open, mode))
+            .map(|c| column_view(c, open, mode, clock))
             .collect_view();
         view! { <div class="board">{cols}</div> }.into_any()
     }
@@ -748,6 +769,7 @@ mod dom {
         col: Column,
         open: RwSignal<Vec<PipelineColumn>>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+        clock: impl Fn() -> (EpochSecs, EpochSecs) + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let column = col.lane.column;
         let is_open = move || open.with(|o| o.contains(&column));
@@ -760,7 +782,7 @@ mod dom {
             shown
                 .shown(is_open())
                 .iter()
-                .map(|c| kcard_view(c, mode()))
+                .map(|c| kcard_view(c, mode(), clock))
                 .collect_view()
         };
         let more = move || {
@@ -793,8 +815,17 @@ mod dom {
     }
 
     /// 1 枚の札（押すと契約 bead と同じ id の節点の頁へ・指を置くと hover の card）。
-    fn kcard_view(card: &Kcard, mode: Mode) -> AnyView {
+    fn kcard_view(
+        card: &Kcard,
+        mode: Mode,
+        clock: impl Fn() -> (EpochSecs, EpochSecs) + Copy + Send + Sync + 'static,
+    ) -> AnyView {
         let sym = stage_sym(card.closed, card.state);
+        let elapsed = card.elapsed_s;
+        let age = move || {
+            let (read, now) = clock();
+            age_at(elapsed, read, now)
+        };
         let closed = card.closed.then(|| view! { <span>{CLOSED_STAGE}</span> });
         let ci = card
             .ci
@@ -818,7 +849,7 @@ mod dom {
                     {lead}
                     {closed}
                     {ci}
-                    <span><span inner_html=CLOCK></span><span class="num">{card.age.clone()}</span></span>
+                    <span><span inner_html=CLOCK></span><span class="num">{age}</span></span>
                 </div>
             </a>
         }
