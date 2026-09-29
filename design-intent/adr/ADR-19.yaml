@@ -1,0 +1,99 @@
+# 判断の記録 ADR-19 — 写しの表の問いへの答え（憲法 第 1.2 版・規則の行 R-3・R-4・R-6・R-7 の改め・行 R-29・R-30・器の旗の N-3 の除外）（発効 2026-09-29・持ち主の裁定 t3-hub.67.7〜.67.26 と改訂の字の問い t3-hub.67.27・記帳先 = tsuzuri の台帳の問いの notes）
+# 反対側からの検証（A-2.3）の記録は docs/grill/2026-09-29-L-copy-tables-amend-grill.md。判断の記録 ADR-18 の決定 (6) の「写らない条を足す案は 1 つずつ持ち主に聞く」の答えをまとめ、版を 1 回だけ上げる。
+id: ADR-19
+title: 写しの表の答えを受け、憲法に規範文を足し、規則の行を改めて足し、器の効いているかの旗を条 N-3 の除外にする
+status: accepted
+date: 2026-09-29
+context: |
+  判断の記録 ADR-18 の決定 (6) は、持ち込みの後に code を縛る憲法を tsuzuri の憲法だけにし、器と folio の code が名指す条ごとに写し先の対応表を作り、写らない条を足す案は 1 つずつ持ち主に聞くと決めた。席は器の条と規則の行を tsuzuri の条と行に当てる写しの表を作り、器の席の点検を受けて、持ち主に問いを 20 出した（t3-hub.67.7〜.67.26）。
+  問いは 2 組ある。先の組は、持ち込んだその日に tsuzuri の条か行と食い違う 4 つ（core の行数の上限・器の効いているかの旗・1 便の token の上限・同じ失敗の止め方）。後の組は足す案（条 12・規則の行 4）で、器が今守っている柵が持ち込みの後に縛る条を失わないようにする。
+  持ち主は先の組を推奨で裁き（t3-hub.67.7〜.67.10）、後の組の 14 問を推奨で承認した（t3-hub.67.11〜.67.24）。口座の選び方の値の問い（t3-hub.67.25）には、値は窓ごとの 3 つで、使わないモデルの窓は外し、値は規則の data に置く、という前提の直しが返った。器にはその値の行が窓ごとに 3 本在ることを席が確かめ、形を問い直した（t3-hub.67.26）。
+  問いの本文は、足す規範文の字を持っていたが、型と強さは持っていなかった。字のうち 3 本（t3-hub.67.15・.67.16・.67.17）は、1 文に「しなければならない」と「してはならない」の 2 つの向きが混ざり、憲法の欄の決まり（1 文 1 向き）に合わない。読み手の無い設定の行の置き場（条 P-1 か N-3）も問いの本文では決まっていなかった。
+decision: |
+  (1) 規則の行 R-4 の core の上限を書き分ける。tsuzuri の core は 20,000 行のまま、器の core は器の行（R-C4-1）の値とし、数を写さない（値の正本は器の行・行 R-22 と同じ形）。器の行（R-C4-1）の値か効いているかの旗を変えるのも R-4 の上限の変更として A-2 を通す（P-22.3）。名指した器の行が器の側で効いていないになっても、R-4 が A-2 を通さずに外れたとは読まず、席が改訂を起こす。照らす基準として器の行の今の裁定（user 2026-09-29T00:59Z）を R-4 の注に書く。R-4 の数える対象の欄（population）に行の幅の数え方（幅 120 字を超える行は、字数を 120 で割って切り上げた行数に数える）を足し、tsuzuri と器の両方に掛ける（t3-hub.67.7・t3-hub.67.19）。
+  (2) 器の宣言 file の効いているかの旗（enabled）は、判断の記録 ADR-18 の決定 (5) の除外の表に、条 N-3 の除外として足す。持ち込みの後の便で、見張り（host-guard）の行の旗で見張りを切る使い方を消し、まだ効かせない行の印は規則の表の状態「未定」に置き換えてから、除外を外す（t3-hub.67.8）。ADR-18 の本文は変えず、条 N-3 の機構の注にこの除外を書く。除外の表を作る便は ADR-18 の決定 (5) とこの決定 (2) の両方を読む。計画の判断の表の行（d43）と合流の段落にも N-3 の除外を書く。
+  (3) 規則の行 R-6 を 25,000,000 token・種類 detect・段 post・状態 仮にする。人手を待たずに止める門へ上げるのは、止める実装ができた時に裁定 id つきで決める。条 P-23 には規範文を足さない（t3-hub.67.9）。
+  (4) 規則の行 R-3 に同じ種類の欄（same_failure）を足し、道具ごとに書き分ける。folio の側は今の 3 つ組のまま、器の審査は「同じ型の不合格で、契約と設計の節の字が前と同じもの」とし、器の読みの正本は器の行（review.same_kind_stop）と名指す。条 P-10.1 と R-3 の値は変えない（t3-hub.67.10）。
+  (5) 憲法に規範文を足し、第 1.2 版にする。P-26.5 依存の監査を CI で（t3-hub.67.11）。P-25.5 落ちる歯から始める確かめ（t3-hub.67.12）。P-25.6 歯の差分の無い変更を落とす（t3-hub.67.13）。P-1.7 読み手の無い設定の行の記録（t3-hub.67.14・検出線の字）。N-7.3 と N-7.4 環境変数を読まない・名を定数から導く（t3-hub.67.15・core に限る）。P-24.4 と P-24.5 時間切れを型で返す・型の無い error を置かない（t3-hub.67.16）。P-21.3 と P-21.4 待つ実装を 1 つに（t3-hub.67.17）。P-20.4 口座を割り当ての窓の終わりまで使う（t3-hub.67.18）。字は問いの字の案のまま置き、2 つの向きが混ざる 3 本は句の切れ目で向きごとに 2 本へ分けた。型と強さと分け方は改訂の欄のとおりで、改訂の字の問い（t3-hub.67.27）で持ち主が承認した。読み手の無い設定の行は、落とす門でなく記録の字なので、段が「絶対にやらない」の N-3 でなく P-1 に置く。
+  (6) 条の見出しと、足した規範文を持たない規範文は変えない。平易文・機構の注・出所の欄を足した規範文に合わせ、P-25 の出所の字の誤り（器に無い番号 C12.1）を直す。
+  (7) 規則の表に行を 2 本足す。R-29 は器の境界の crate の本体の総行数の上限で、数える対象は器の境界の crate だけ、値の正本は器の行（R-C4-5）とする（t3-hub.67.20）。R-30 は口座を移る線で、値の正本は器の窓ごとの 3 行とし、数を写さず、使うモデルの窓だけを数える（t3-hub.67.25・t3-hub.67.26）。種類と段は、R-29 が deny・post、R-30 が deny・in-loop（器が走る最中に口座を候補から外す）。R-29 と R-30 でも、名指した器の行の値か旗を変えるのは、その行の変更として扱う。行 R-7 の出所の字を直す。停止の検知は器の席の行（seat.*）から写し、口座の線は行 R-30 を読み、器の古い 1 値の行（R-C9-1）は写さない（改訂の字の問い t3-hub.67.27）。
+  (8) 足さない: compile の時間の形（器の C13.4・t3-hub.67.21）・境界ごとの失敗の列挙（器の C11.2 の半分・t3-hub.67.22）・doctor の口（器の C3.2・t3-hub.67.23）・性質の検査（器の C12.7・t3-hub.67.24）。compile の形の行の問いは出さない。
+  (9) 後に起こす便（計画の行）: 器の効いているかの旗を消す code の便（見張りを切る使い方を消す・まだ効かせない行の印を「未定」に置き換える）は器の席が持ち、tsuzuri の側は計画の判断の表の行（d43）が挙げる除外の表で N-3 の除外を持って、外れたことを確かめる。合流の後、名指した器の行の値と旗と裁定 id を読み、tsuzuri の判断の記録に在る裁定 id と照らす検査を置く。tsuzuri の CI に依存の監査（cargo deny）を足す。器の落ちる歯の確かめ（flip-check）と歯の差分なしの門を tsuzuri の CI へ移し、文書だけの面の値を tsuzuri の木で決める。器の配線の検査（rules-wired）と環境変数と名の字の門（env-reads・name-literal）を tsuzuri の検査として持つ。どれも持ち込みの予行（ADR-18 の決定 (2)）で、どの門が CI から落ちるかを確かめてから置く。器の古い 1 値の行（R-C9-1）と窓ごとの 3 行の食い違いの直しは、器の席が持つ。
+options:
+  - id: a
+    name: 答えを 1 本の記録にまとめ、版を 1 回だけ上げる
+    text: 決定 (1) から (9)。2 つの向きが混ざる 3 本は分ける。
+    verdict: adopted
+    reason: 同じ日の 2 つの束の答えで、互いに参照し合う（R-4 と R-29・P-20.4 と R-30）。版と凍結の基準を 1 回にすれば、改訂の欄の消し込みも 1 回で済む。分けると憲法の欄の決まり（1 文 1 向き）に合い、強さの欄が 1 つの値を持てる。
+  - id: b
+    name: 問いごとに判断の記録を分け、版を問いの数だけ上げる
+    text: 規範文を足す 8 問と規則の行の 6 問を、それぞれ 1 本の記録と 1 回の版上げにする。
+    verdict: rejected
+    reason: 版と凍結の基準が 8 つ増え、同じ束の答えを分ける利が無い。問いは 1 条 1 問で出した（ADR-18 の決定 (6)）ので、答えの粒は各問いの裁定 id が保つ。
+  - id: c
+    name: 2 つの向きが混ざる 3 本を分けずに問いの字のまま置く
+    text: 3 つの問い（t3-hub.67.15・.67.16・.67.17）の字を 1 本ずつ置き、強さは文の終わりの句に合わせる（前例は P-26.4）。
+    verdict: rejected
+    reason: 憲法の欄の決まり（1 文 1 向き）に合わず、強さの欄がどちらかの句を表せない。前例の P-26.4 も同じ形の混ざりで、前例に合わせると混ざりが増える。同じ条件の 1 文を向きごとに 2 本に分けた前例（N-2.1 と N-2.2）が在り、字は同じ言葉のまま句の切れ目で分けられる。
+  - id: d
+    name: 器の値を数で写す
+    text: R-4 の器の core・R-29・R-30 に、器の行の今の数（66,000・316・85 と 95 と 95）を写す。
+    verdict: rejected
+    reason: 同じ値を 2 か所に人が書く形（P-2.4）で、器の値は上がり続けている（core は 20,000 から 66,000 へ 2 度）。持ち込みの後は器の宣言 file が同じ repo に入るので、名指しで 1 か所の data のままにできる。R-6 だけは問いの答えのとおり数を写した。
+basis: [ADR-18, ADR-6, A-2, N-2, P-2, P-10, P-11, P-17, P-20, P-22, P-23, N-3, R-3, R-4, R-6, R-7, R-22]
+produced: [R-29, R-30]
+grill:
+  when: 2026-09-29
+  who: 検証役 g2（AI・Opus・起草者と別の独立の文脈・読み取りだけ）
+  where: docs/grill/2026-09-29-L-copy-tables-amend-grill.md
+  summary: 独立の検証役 g2 が起草者の案を 8 つの観点で攻め、写しで床を撃ち直した。総合は条件付きの支持で、規範文の字を変えないと通らない穴は無い。重く崩れたのは 3 つで、器の行を名指す 3 行が器の側の効いているかの旗で A-2 を通らずに外れる道、撤退条件 (c) が器の側の裁定 id つきの変更を数えないこと、N-3 の除外を外す仕事の置き場が tsuzuri に無いこと。席は全部を直すと決め、行 R-4・R-29・R-30 の注、撤退条件 (c) と (d)（30 日）、決定 (2) と (9)、計画の行 d43 に反映した。中の崩れのうち行 R-7 の古い出所の字は同じ改訂で直し、改訂の字の問いで裁定 id を取る。論点ごとの処分の表は検証の記録に在る。
+retreat:
+  kind: measure
+  condition: 次のどれかが起きたら、当たった所を持ち主に問い直す。(a) 持ち込みの予行か持ち込みの後の最初の 30 日に、この記録で足した規範文を器か tsuzuri の今の code が破る所が 1 つでも見つかる（問い直すのはその規範文の字か、検出線から始める形か）。(b) 器の core の行数が器の行（R-C4-1）の値を越え、値を上げる A-2 の問いが持ち込みの後に 2 回に達する（問い直すのは、器の core を器の行の名指しで持つ形か、縮める便を先にする形か）。(c) 器の行を名指した行（R-4 の器の core・R-29・R-30）の値か効いているかの旗が、tsuzuri の判断の記録を持たないまま器の側で変わったのが 1 回でも見つかる（問い直すのは、数を写す形へ戻すか）。(d) 持ち込みの着地から 30 日（起草の値）で条 N-3 の除外（器の効いているかの旗）が外れていなければ、除外の形を持ち主に問い直す。数えるのは tsuzuri の設計の席で、器の行の値と旗と裁定 id は器の宣言 file の欄から誰でも数え直せる。
+plain: |
+  器（scribe2）を tsuzuri に持ち込む前に、器の決まりと tsuzuri の決まりを 1 つずつ突き合わせた問いへの、あなたの答えをまとめた記録です。
+  憲法には、あなたが「足す」と決めた 8 つの約束を足します。部品の監査・落ちる歯から始める確かめ・歯の無い変更を落とす・読まれない設定の記録・環境変数を読まない・時間切れを型で返す・待つ仕組みを 1 つに・口座を窓の終わりまで使う、です。「する」と「しない」が 1 文に混ざる 3 つは、同じ言葉のまま 2 本ずつに分けました。
+  規則の表では、中心の部品の行数の上限を tsuzuri と器で書き分け、器の側は器の行の値を読みます。長い行の数え方・器の境界の部品の上限・口座を移る線・1 便の token の記録の線・同じ失敗の数え方も、足すか直します。行 R-7 の古い出所の字も直します。
+  足さないと決めた 4 つ（組み立ての形・失敗の列挙・点検の口・性質の検査）は足しません。
+  この記録はあなたの承認で発効しています。承認の記帳先は tsuzuri の台帳の問いです。
+amends:
+  - {"target": "N-7", "field": "statements.N-7.3.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "N-7", "field": "statements.N-7.3.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must-not"}
+  - {"target": "N-7", "field": "statements.N-7.3.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "core は環境変数を直に読まない。"}
+  - {"target": "N-7", "field": "statements.N-7.4.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "N-7", "field": "statements.N-7.4.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "N-7", "field": "statements.N-7.4.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "core は設定を宣言 file からだけ読み、名から導く字（plugin・crate・state dir・環境変数の頭・端末の多重化の server の名）を名の定数から導く。"}
+  - {"target": "P-1", "field": "statements.P-1.7.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-1", "field": "statements.P-1.7.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-1", "field": "statements.P-1.7.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "読み手の無い設定の行を検査が記録し、落とす門へ上げるのは裁定 id つきのときだけにする。"}
+  - {"target": "P-20", "field": "statements.P-20.4.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-20", "field": "statements.P-20.4.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-20", "field": "statements.P-20.4.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "器は口座を割り当ての窓の終わりまで使い、選び方は規則の表の行で持つ。"}
+  - {"target": "P-21", "field": "statements.P-21.3.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-21", "field": "statements.P-21.3.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-21", "field": "statements.P-21.3.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "完了の条件は 1 つの列挙の値だけで表し、待つ実装を 1 つにする。"}
+  - {"target": "P-21", "field": "statements.P-21.4.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-21", "field": "statements.P-21.4.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must-not"}
+  - {"target": "P-21", "field": "statements.P-21.4.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "任意の条件の関数を受ける待ちの口を持たない。"}
+  - {"target": "P-24", "field": "statements.P-24.4.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-24", "field": "statements.P-24.4.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-24", "field": "statements.P-24.4.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "時間切れは呼び手に分岐を強いる型で返す。"}
+  - {"target": "P-24", "field": "statements.P-24.5.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-24", "field": "statements.P-24.5.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must-not"}
+  - {"target": "P-24", "field": "statements.P-24.5.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "core に型の無い error を置かない。"}
+  - {"target": "P-25", "field": "statements.P-25.5.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-25", "field": "statements.P-25.5.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-25", "field": "statements.P-25.5.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "変更は落ちる歯から始め、歯の差分だけを base に当てると落ち、HEAD で通ることを検査が確かめる。"}
+  - {"target": "P-25", "field": "statements.P-25.6.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "unwanted"}
+  - {"target": "P-25", "field": "statements.P-25.6.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-25", "field": "statements.P-25.6.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "歯の差分を持たない変更は、文書だけの面の変更でなければ、検査が落とす。"}
+  - {"target": "P-26", "field": "statements.P-26.5.pattern", "version": "v1.2", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-26", "field": "statements.P-26.5.strength", "version": "v1.2", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-26", "field": "statements.P-26.5.text", "version": "v1.2", "previous_text": "（新設）", "new_text": "依存の重複した版・脆弱性・使ってよい条件（ライセンス）を CI で監査する。"}
+approval:
+  who: 持ち主
+  date: 2026-09-29
+  ruling: t3-hub.67.7〜.67.10（裁定 id = t3-hub.67.7:20260929T0609Z-1 ほか・束 batch:20260929T0609Z-1）・t3-hub.67.11〜.67.24（裁定 id = t3-hub.67.11:20260929T0616Z-1 ほか・束 batch:20260929T0616Z-1）・t3-hub.67.25（裁定 id = t3-hub.67.25:20260929T0634Z-1）・t3-hub.67.26（裁定 id = t3-hub.67.26:20260929T0641Z-1）・t3-hub.67.27（裁定 id = t3-hub.67.27:20260929T0720Z-1・改訂の字と型と強さ）・board の質問の頁・notes に逐語
+  verbatim: 推奨で進めて／すべて推奨で承認する。／推奨で／推奨でよい
+  surface: R-8
+note: 逐語は束 batch:20260929T0609Z-1・batch:20260929T0616Z-1・t3-hub.67.26・t3-hub.67.27 の字の順。t3-hub.67.25 の逐語は前提の直しで、その問いの notes に在る。各問いの裁定 id は台帳の各問いの notes に在る。
