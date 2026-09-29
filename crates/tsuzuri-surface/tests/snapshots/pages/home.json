@@ -16,7 +16,8 @@
         {
           "class": "stack",
           "blocks": [
-            {"id": "orch", "heading": "orch_acct", "class": "panel seatcard"}
+            {"id": "orch", "heading": "orch_acct", "class": "panel seatcard"},
+            {"id": "stage", "heading": "stage_target", "class": "panel fold mvp"}
           ]
         }
       ]

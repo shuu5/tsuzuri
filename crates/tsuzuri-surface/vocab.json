@@ -1721,6 +1721,11 @@
    "label": "要修正",
    "plain": "控えの印と設計の参照の形が崩れた open の bead\n・ 印が無い = どちらも無い\n・ 印が両方 = 両方が在る\n・ epic と裁定は外す\n・ 0 本なら行を出さない\n▸\n→ 直す手は席が持つ",
    "internal": "PipelineBoard.misfits ・ 判断の記録 ADR-16 の決定 (1)(5)(6)\n器の ledger/form.rs の neither と both"
+  },
+  "stage_target": {
+   "label": "表示先",
+   "plain": "この project の窓を出す端末\n・ 上書きなら project 専用の名\n・ 上書きなしなら全体の既定\n・ 窓は押した時だけ開く\n→ 席は開き直さない",
+   "internal": "GET /api/stage/target ・ tz stage target show --json\nPOST = tz stage target set / clear --project\nPOST /api/stage/open = tz stage open"
   }
  }
 }

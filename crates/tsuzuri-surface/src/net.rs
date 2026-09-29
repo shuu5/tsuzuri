@@ -11,6 +11,7 @@
 //! Fresh に置き、上端の帯の最終の記録と読み込み不良の印が読む。台帳の読みが落ちている間は HELD_POLL_MS ごとに読み直す。
 //! 読みの印を変えるたびに読みの途中の口を数え直し、上端の帯の読みの脈が読む（行 g-pulse）。
 //! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
+//! 読みの重い口（表示先・行 i-stage-own）は `get` で 1 回だけ読む（登録せず知らせでも読み直さない）。
 //! path が query で変わる口（節点の近傍・便 g-node）は `read_path` に path の字の signal を渡し、
 //! 読みの結果と応答の状態の数の組を受ける。path が変わったときと知らせの合図で読み直し、接続は同じ 1 本を使う。
 
@@ -197,6 +198,19 @@ pub async fn post(path: &str, body: String) -> Option<(u16, String)> {
     let value = JsFuture::from(window.fetch_with_request(&request))
         .await
         .ok()?;
+    let response = value.dyn_into::<Response>().ok()?;
+    let text = JsFuture::from(response.text().ok()?)
+        .await
+        .ok()?
+        .as_string()?;
+    Some((response.status(), text))
+}
+
+/// 口を 1 回だけ読み、状態の数と本文の字を返す（届かない・応答が読めなければ None）。
+/// 登録も知らせの接続もせず、古さにも置かない（読みの重い口を block が開いた時と書きの後だけ読むために使う）。
+pub async fn get(path: &str) -> Option<(u16, String)> {
+    let window = web_sys::window()?;
+    let value = JsFuture::from(window.fetch_with_str(path)).await.ok()?;
     let response = value.dyn_into::<Response>().ok()?;
     let text = JsFuture::from(response.text().ok()?)
         .await

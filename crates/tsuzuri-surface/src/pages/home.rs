@@ -1,8 +1,9 @@
 //! home の頁: 席からの知らせ・次の一手・pipeline・台帳・凡例 ｜ orchestrator と口座（2 列の grid・見本の `.home`）。
 //! 席からの知らせは見本に無い block で、持ち主が最初に見る左の列の頭に置く（行 i-11）。
+//! 表示先の block も見本に無く、右の列の orchestrator の下に置く（行 i-stage-own）。
 
 use crate::frame::{Column, PageDef, STACK};
-use crate::project::{ledger, legend, next, notice, pipeline, seat};
+use crate::project::{ledger, legend, next, notice, pipeline, seat, stage};
 
 pub const PAGE: PageDef = PageDef {
     heading: "home",
@@ -27,7 +28,7 @@ fn columns() -> Vec<Column> {
         },
         Column {
             class: STACK,
-            blocks: vec![seat::BLOCK],
+            blocks: vec![seat::BLOCK, stage::BLOCK],
         },
     ]
 }

@@ -94,7 +94,7 @@ fn in_order(all: &[&str], want: &[&str]) -> bool {
 
 #[test]
 fn frame_home_blocks_in_order_and_map_page() {
-    // home は見本の列の頭に席からの知らせを足した形: 左の列が notice・next・pipe・ledger・legend、右の列が orch（行 i-11）。
+    // home は見本の列の頭に席からの知らせを足した形: 左の列が notice・next・pipe・ledger・legend、右の列が orch と stage（行 i-11・行 i-stage-own）。
     let columns: Vec<Vec<&str>> = frame::page(PageId::Home)
         .columns
         .iter()
@@ -104,7 +104,7 @@ fn frame_home_blocks_in_order_and_map_page() {
         columns,
         vec![
             vec!["notice", "next", "pipe", "ledger", "legend"],
-            vec!["orch"]
+            vec!["orch", "stage"]
         ]
     );
     // 問いの頁は 2 列: 左の列が ask・hist、右の列（side stack）が batch・policy。
