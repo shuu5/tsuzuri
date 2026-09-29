@@ -1,0 +1,13 @@
+# folio check の歯の fixture（adr/・crates/folio/tests/link.rs）。変異 = basis に実在しない判断の記録の id ADR-9 を足す → 1（adr）。
+id: ADR-1
+title: 判断の記録は 1 判断を 1 ファイルに置く
+status: proposed
+date: 2026-09-17
+context: 判断の置き場を決める。
+decision: 1 判断を 1 ファイルに置く。
+options:
+  - {id: a, name: 1 ファイルに 1 判断, text: 判断ごとに ファイル を分ける。, verdict: adopted, reason: 書き手が衝突しない。}
+  - {id: b, name: 1 ファイルに全部, text: 全部の判断を 1 ファイルに並べる。, verdict: rejected, reason: 書き手が衝突する。}
+basis: [P-1, ADR-9]
+retreat: {kind: ruling, condition: 衝突が続いたら持ち主に問う。}
+plain: 決めたことを 1 枚ずつ残します。

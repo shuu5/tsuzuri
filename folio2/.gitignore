@@ -1,0 +1,32 @@
+# 開発 session の作業記憶（/ready-compaction が退避・/rebrief が消費）
+/.claude-session/
+
+# git worktree は ephemeral・commit しない
+/.worktrees/
+
+# folio の caller-marker（session-local）・review の playwright 生成物
+.folio/
+.playwright-mcp/
+
+# Claude Code の project 設定は settings.json だけを tracked にする
+.claude/*
+!.claude/settings.json
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+
+# bd 台帳（Dolt が SSOT）の生成物と machine-local な telemetry
+# （scribe2 / folio v1 とも tracked にしない＝作業ツリーを汚さない）
+/.beads/issues.jsonl
+/.beads/interactions.jsonl
+/.beads/events.jsonl
+/.beads/bdw-timing.log*
+
+# Python の生成物
+__pycache__/
+
+# Rust の生成物（cargo の build 出力）
+/target/

@@ -1,0 +1,36 @@
+# 便 119 の凍結 anchor の片方（要件書 FR11・AC9・手書き・生成器から独立）。対は同じ dir の derive-anchor.toml（期待する導出物・手書き）。
+# 歯（crates/folio/tests/derive.rs）は、この file を一時 dir の design-intent/design-note/ へ、repo の contracts/schema.toml をその親へ写して folio derive を撃つ。
+# 見るもの: 欄は器の導出 file の宣言の順に並ぶ（行の中の書き順ではない）・値の無い欄と空の一覧は欄名ごと省く・goal は section が指す散文の節の body を
+# 各行 trim・空行を落とし・空白 1 つで繋いだ単一行・契約表でない節は写さない・2 行目の行も 1 行目と同じ形。
+meta:
+  id: derive-anchor
+  title: 導出物の凍結 anchor — 契約表を 2 行持つ設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-24
+  profile: design-note
+
+sections:
+  - n: 1
+    type: prose
+    title: 1 行目の便の目的
+    body: |
+      契約表から器の形の導出物を組む。
+        字下げした行も trim して繋ぐ（#・& は字のまま）。
+
+      空行は落とす。
+  - n: 2
+    type: prose
+    title: 2 行目の便の目的
+    body: 差分を数える。
+  - n: 3
+    type: parts-table
+    title: 部品（導出物には写らない）
+    rows:
+      - {id: derive, name: 導出の命令, role: 契約表から導出物を組む, ref: [FR11]}
+  - n: 4
+    type: contract-table
+    title: 契約表
+    rows:
+      - {id: a, title: 導出物を組む口, req: [FR11], section: "1", write-set: [+src/new.rs, src/old.rs], verify: [cargo nextest run -p folio --test derive f119_], size: M, done: 凍結 anchor と byte 一致する, depends: []}
+      - {done: 1 字の差で非 0 になる, size: S, verify: [cargo nextest run -p folio --test derive f119_, cargo clippy --workspace --all-targets -- -D warnings], id: b, depends: [a], title: 差分を数える口, section: "2", req: [FR11, AC9]}

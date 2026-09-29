@@ -1,0 +1,573 @@
+//! 設計ノートの床の定数（便 114・docs/design/delivery-114.md §1・ADR-15 決定 (2)(3)・責務の層 1 読む）。`note.rs` から
+//! 欄の集合の型 `Keys` とその 2 つの method・欄の決まりの定数・床の木 `FLOOR` を字を変えずに降ろした。検査の本体と
+//! 置き場と違反の種別は `note.rs` に残る。見え方は `note.rs` の検査が読む定数と欄の集合の型・必須の欄・2 つの method だけを広げた。
+//! 読み手は `note.rs` の検査・`schema.rs`（欄の決まりの生成区間の導出）・`derive.rs`（導出物の命令・便 119）。
+//! 型付きの欄のうち folio2 の規則の表の行を名指す 5 欄（figures の 4 欄と guards の p18_4_judged_by）は `Floor::Home`＝folio2 の
+//! 置き場にだけ写し、外の置き場には書かない（便 174・ADR-16 決定 (2)(オ)＝外の置き場で床が id で名指すのは行 R-8 と R-16 だけ）。
+
+use crate::floor::{Floor, keys_floor};
+
+// ── 床の定数（design-note/schema.yaml の schema 節の正本） ──
+
+/// 欄の集合（required / optional）。
+pub(crate) struct Keys {
+    pub(crate) required: &'static [&'static str],
+    optional: &'static [&'static str],
+}
+
+impl Keys {
+    pub(crate) fn has(&self, key: &str) -> bool {
+        self.required.contains(&key) || self.optional.contains(&key)
+    }
+
+    pub(crate) fn all(&self) -> Vec<&'static str> {
+        self.required
+            .iter()
+            .chain(self.optional.iter())
+            .copied()
+            .collect()
+    }
+}
+
+const PATH_BASE: &str = "repo-root";
+const DATE_FORMAT: &str = r"^\d{4}-\d{2}-\d{2}$";
+pub(crate) const DOC: Keys = Keys {
+    required: &["meta", "sections"],
+    optional: &["figures", "sources"],
+};
+pub(crate) const DOC_META: Keys = Keys {
+    required: &["id", "title", "version", "status", "generated", "profile"],
+    optional: &["approval", "supersedes", "superseded_by", "note"],
+};
+pub(crate) const ID_PATTERN: &str = "^[a-z][a-z0-9-]*$";
+pub(crate) const VERSION_PATTERN: &str = r"^v[0-9]+\.[0-9]+$";
+pub(crate) const STATUS_ENUM: &[&str] = &["draft", "effective", "retired", "example"];
+pub(crate) const EFFECTIVE_STATUS: &[&str] = &["effective", "retired"];
+pub(crate) const STATUS_EXAMPLE: &str = "example";
+pub(crate) const STATUS_RETIRED: &str = "retired";
+/// 後継（superseded_by）の先の形（便 209・判断の記録 ADR-35 決定 (3)(イ)）: 頭の字の後ろが半角の数字なら要件か判断の記録の id、
+/// ほかは設計ノートの id。要件の先は要件書の 2 つの節の id（前 supersedes は設計ノートの id だけ）。
+pub(crate) const SUCCESSOR_REQUIREMENT: &[&str] = &["FR", "NFR"];
+pub(crate) const SUCCESSOR_ADR: &[&str] = &["ADR-"];
+pub(crate) const SUCCESSOR_SECTIONS: &[&str] = &["requirements", "nonfunctional"];
+pub(crate) const APPROVAL_REQUIRED: &[&str] = &["who", "date", "ruling", "verbatim", "surface"];
+pub(crate) const SURFACE_ENUM: &[&str] = &["R-8"];
+pub(crate) const SECTION: Keys = Keys {
+    required: &["n", "type", "title"],
+    optional: &["body", "rows", "note"],
+};
+pub(crate) const TYPE_ENUM: &[&str] = &[
+    "prose",
+    "parts-table",
+    "ports-table",
+    "fields-table",
+    "teeth-table",
+    "contract-table",
+    "row-index",
+    "row-plan",
+    "decision-table",
+];
+pub(crate) const PROSE: &str = "prose";
+pub(crate) const CONTRACT_TABLE: &str = "contract-table";
+/// 計画の設計ノートの節の型 3 つ（便 183・判断の記録 ADR-31 決定 (2)(イ)）。行の索引と計画だけの行は、計画の名札の行が
+/// 名指すノートにだけ置ける（`plan.rs`）。判断の表はどの設計ノートにも置け、行の ruling は決定の欄（`ruling.rs`）。
+pub(crate) const ROW_INDEX: &str = "row-index";
+pub(crate) const ROW_PLAN: &str = "row-plan";
+pub(crate) const DECISION_TABLE: &str = "decision-table";
+/// 節の型ごとの required / forbid（by_type）。
+pub(crate) const NEEDS_BODY: &[&str] = &["body"];
+pub(crate) const NEEDS_ROWS: &[&str] = &["rows"];
+pub(crate) const FORBIDS_ROWS: &[&str] = &["rows"];
+pub(crate) const PARTS_ROW: Keys = Keys {
+    required: &["id", "name", "role"],
+    optional: &["ref", "note"],
+};
+pub(crate) const PORTS_ROW: Keys = Keys {
+    required: &["id", "name", "input", "output", "refuses"],
+    optional: &["ref", "note"],
+};
+const REFUSES_NONE_MARKER: &str = "なし";
+pub(crate) const FIELDS_ROW: Keys = Keys {
+    required: &["id", "name", "need", "shape"],
+    optional: &["enum", "note"],
+};
+pub(crate) const NEED_ENUM: &[&str] = &["required", "optional"];
+pub(crate) const SHAPE_ENUM: &[&str] = &["text", "list", "number", "bool", "table"];
+pub(crate) const TEETH_ROW: Keys = Keys {
+    required: &["id", "name", "red_when", "fixture"],
+    optional: &["ref", "note"],
+};
+/// 行の索引の行（生成区間・契約表の行の id と所属の文書 id だけ・器の欄は写さない・ADR-3 決定 (2)）。
+pub(crate) const INDEX_ROW: Keys = Keys {
+    required: &["id", "doc"],
+    optional: &[],
+};
+/// 計画だけの行（人が書く・節の中の並びが順）。size と files は契約の行ができるまで運ぶ手書きの写しで、床は形だけを見る。
+pub(crate) const PLAN_ROW: Keys = Keys {
+    required: &["id", "what"],
+    optional: &["depends", "ruling", "note", "size", "files"],
+};
+/// 計画だけの行のうち字の一覧の欄（ほかの欄は字）。
+pub(crate) const PLAN_LISTS: &[&str] = &["depends", "files"];
+/// 判断の表の行（人が書く・ruling は決定の欄）。
+pub(crate) const DECISION_ROW: Keys = Keys {
+    required: &["id", "text", "ruling"],
+    optional: &[],
+};
+/// 行の索引の生成区間の印（行の頭の空白を除いた全部がこの字面・`folio derive --write` が間を書く）。
+pub(crate) const ROWS_BEGIN: &str = "# folio:rows:begin — 生成区間・手で直さない・正本は置き場の契約表（folio derive --write が書く）";
+pub(crate) const ROWS_END: &str = "# folio:rows:end";
+/// 計画の名札の行の欄 key の値（規則の表の閉じた一覧 `rules::KEYS` の 1 つ・字はここが持ち `rules::PLAN_NOTE` が引く）。
+pub(crate) const PLAN_KEY: &str = "plan-note";
+/// 器（scribe2）の導出 file の置き場（repo の根からの相対）と読み手の期待する形。
+pub(crate) const EXTERNAL_PATH: &str = "contracts/schema.toml";
+pub(crate) const EXTERNAL_HEAD: &str = "schema = 1";
+pub(crate) const EXTERNAL_ROWS_KEY: &str = "field";
+pub(crate) const EXTERNAL_ROW_FIELDS: &[&str] = &["name", "need", "shape"];
+/// 導出 file の need / shape のうち folio2 が意味を知る値（値域の正本は器の file・この外の値は「まだ分からない」・器が値域を広げたら
+/// folio2 の便でここに足す・欄の決まりの known_values はこの写し・便 196・P-5.6）。conditional は器の条件付きの欄（約束の行を持つ親の行だけ
+/// 省ける・省いてよいかの判定は器の受付が持つ）で、床は値域に在ることだけを見て欄の有無を数えない（便 120・判断の記録 ADR-16 決定 (2)）。
+pub(crate) const EXTERNAL_NEED: &[&str] = &["required", "optional", "conditional"];
+pub(crate) const EXTERNAL_SHAPE: &[&str] = &["text", "list"];
+pub(crate) const ROW_ID_PATTERN: &str = "^[a-z][a-z0-9-]*$";
+pub(crate) const FIGURE_ENTRY: Keys = Keys {
+    required: &["id", "type", "caption", "spec"],
+    optional: &["refs", "note"],
+};
+/// 導出物の拡張子と配列の名（derived の節・導出の命令 `derive.rs` と写しが同じ定数を引く・便 119）。
+pub(crate) const DERIVED_EXTENSION: &str = ".toml";
+pub(crate) const DERIVED_ARRAY: &str = "contract";
+
+/// 導出物の命令の名の字（命令の口 `main.rs` の clap の name と写しの command が同じ字を引く・便 119）。
+macro_rules! derived_subcommand {
+    () => {
+        "derive"
+    };
+}
+pub(crate) const DERIVED_SUBCOMMAND: &str = derived_subcommand!();
+/// 導出物の差分を数える命令（derived の節の check の command）。
+pub(crate) const DERIVED_CHECK_COMMAND: &str = concat!("folio ", derived_subcommand!(), " --check");
+
+/// 床の定数（値は欄の決まり design-note/schema.yaml の schema 節の字面と 1 字も違わない）。`_note` で終わる欄は
+/// 人が読む説明の注（便 46・ADR-9）で、生成区間に在る順と字面のまま持つ＝床の突き合わせ（`floor_diff`）は読まず、
+/// `folio schema` の導出だけが使う。真偽は Val の字面（true / false）で持つ（導出は裸の true / false を出す）。
+/// 注は 1 欄 1 行で持つ（file の 1 行と対にして読めるように・rustfmt は掛けない）。
+#[rustfmt::skip]
+pub(crate) const FLOOR: Floor = Floor::Map(&[
+    ("floor_note", Floor::Val("以下の欄は床の実装の定数からの導出物である（生成区間・判断の記録 ADR-9）。型も値も床の定数と違わないことを folio check が数える（判断の記録の欄の決まりと同じ）。変えるときは床の実装の定数を直し、folio schema --write で書き直す。")),
+    ("path_base", Floor::Val(PATH_BASE)),
+    ("path_base_note", Floor::Val("本 file と設計ノートの中の path（fixture・parts.json・導出物）は repo の根からの相対で書く。")),
+    ("date_format", Floor::Val(DATE_FORMAT)),
+    (
+        "doc",
+        Floor::Map(&[
+            ("required", Floor::Strs(DOC.required)),
+            ("optional", Floor::Strs(DOC.optional)),
+            (
+                "sources",
+                Floor::Map(&[("in_ref_population", Floor::Val("false"))]),
+            ),
+            ("doc_note", Floor::Val("1 設計ノート = YAML 1 file。節（sections）の並びが本文。図（figures）は判断の記録 ADR-4 の型付き記述で持つ。外部への参照（報告 HTML 等）は sources に置き、参照 id の母集団に入れない（in_ref_population = false・要件書 NFR3 と同じ）")),
+        ]),
+    ),
+    (
+        "doc_meta",
+        Floor::Map(&[
+            ("required", Floor::Strs(DOC_META.required)),
+            ("optional", Floor::Strs(DOC_META.optional)),
+            ("id_pattern", Floor::Val(ID_PATTERN)),
+            ("id_note", Floor::Val("文書 id（doc id）= file 名の stem。append-only＝改名は「新しい id + 旧 id の廃止（status retired・superseded_by）」で表し、番号や名を再利用しない（P-7）。契約 id は「<doc id>#<row id>」の形で、前半がこの id（器 scribe2 の契約表と同じ形）")),
+            ("version_pattern", Floor::Val(VERSION_PATTERN)),
+            ("status_enum", Floor::Strs(STATUS_ENUM)),
+            ("effective_status", Floor::Strs(EFFECTIVE_STATUS)),
+            ("approval_required_when", Floor::Val("effective_status")),
+            (
+                "status_note",
+                Floor::Map(&[
+                    ("draft", Floor::Val("未承認・拘束力なし（承認欄は空でよい）")),
+                    ("effective", Floor::Val("発効（承認欄に持ち主の逐語・日付・裁定 id・対話面が必須）")),
+                    ("retired", Floor::Val("廃止（superseded_by 必須・P-7.2・承認欄を持つ）")),
+                    ("example", Floor::Val("見本（拘束力なし・承認欄を持たない・凍結 anchor の材料）")),
+                ]),
+            ),
+            ("supersede_note", Floor::Val("後継（superseded_by）の先は、同じ置き場の設計ノートの id のほか、要件の id と判断の記録の id を指せる（判断の記録 ADR-35 決定 (3)）。先の種類は字の形で読み分け、頭が FR か NFR で後ろが半角の数字なら要件書の要件の節（requirements）か非機能要件の節（nonfunctional）の id、頭が ADR- で後ろが半角の数字なら判断の記録（adr/）の id、ほかは設計ノートの id とする（設計ノートの id は英小字で始まるので重ならない）。床は先の実在を数え、無ければつながりの違反、自分自身を指せば形の違反とし、先の状態は数えない。前（supersedes）は設計ノートの id だけを指す。設計ノートでない file の path は入れない。面は廃止の行の後継のリンクを先の種類の面（要件書の面の要件の場所・判断の記録の面・設計ノートの面）へ張り、要件と判断の記録の先が解けなければリンクを張らず「まだ分からない」を添える")),
+            ("profile_enum", Floor::Strs(crate::catalog::PROFILES)),
+            ("profile_note", Floor::Val("密度 profile は 1 行（見せ方だけを持つ・拘束の旗を置かない・ADR-3 決定 (1)・N-3）。文書の種類による違いは節の型で表す（P-5.3）")),
+            (
+                "approval",
+                Floor::Map(&[
+                    ("required", Floor::Strs(APPROVAL_REQUIRED)),
+                    ("surface_enum", Floor::Strs(SURFACE_ENUM)),
+                ]),
+            ),
+            ("approval_note", Floor::Val("P-12.2。effective_status の文書にだけ必須（approval_required_when）。承認者の値域・裁定 id の形は判断の記録の欄の決まり（adr/schema.yaml）と同じ定数を床が持つ。持ち主との対話面（R-8）を通っていない記録に承認欄を置かない（P-12.3）")),
+        ]),
+    ),
+    (
+        "section",
+        Floor::Map(&[
+            ("required", Floor::Strs(SECTION.required)),
+            ("optional", Floor::Strs(SECTION.optional)),
+            (
+                "n_rule",
+                Floor::Map(&[
+                    ("start", Floor::Num(1)),
+                    ("order", Floor::Val("ascending")),
+                    ("append_only", Floor::Val("true")),
+                    ("gaps_allowed", Floor::Val("true")),
+                ]),
+            ),
+            ("n_note", Floor::Val("節番号（§N の N）。folio2 の自前の決まり（P-7.1 の番号の扱いを節に当てたもの・判断の記録と要件書には無い）。契約表の行の section 欄はこの n を指す（見出しの字面ではない）。器（scribe2）の設計文書の「## N.」と同じ意味")),
+            ("type_enum", Floor::Strs(TYPE_ENUM)),
+            ("type_note", Floor::Val("節の型の閉じた一覧（P-2.4・裁定は meta.type_enum_ruling）。判断の記録 ADR-3 決定 (1) が名指す 部品の表・口の表・欄の表・歯の表・契約表 に、散文の節（要件書 FR12 の母集団）と、判断の記録 ADR-31 決定 (2)(イ) の計画の設計ノートの 3 つ（行の索引・計画だけの行・判断の表・要件書 FR27）を足した 9 つ。要件書 FR9 = 一覧に無い型の節を持つ正本は生成せずに落とす")),
+            (
+                "by_type",
+                Floor::Map(&[
+                    (
+                        "prose",
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_BODY)),
+                            ("forbid", Floor::Strs(FORBIDS_ROWS)),
+                            ("prose_gate_rules_row", Floor::Val("R-16")),
+                            ("body_note", Floor::Val("散文。規範の印を持つ文の門（同じ文に参照 id・数と単位を持たない）は rules 行 R-16 の値（印・「禁止」の直後の文字・単位）と population（母集団の除外・文の区切り）が持ち、ここには写さない（要件書 FR12）")),
+                        ]),
+                    ),
+                    (
+                        "parts-table",
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(PARTS_ROW)),
+                            ("row_note", Floor::Val("部品の表。role = その部品が何をするか（1 行）。ref = 参照 id（条・要件・rules 行・判断の記録）の一覧")),
+                        ]),
+                    ),
+                    (
+                        "ports-table",
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(PORTS_ROW)),
+                            ("refuses_none_marker", Floor::Val(REFUSES_NONE_MARKER)),
+                            ("row_note", Floor::Val("口の表（命令・関数・接点）。refuses = 何を断るか（黙って飛ばさない・P-4）。断らない口は refuses_none_marker の値を書く（空にしない）")),
+                        ]),
+                    ),
+                    (
+                        "fields-table",
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(FIELDS_ROW)),
+                            ("need_enum", Floor::Strs(NEED_ENUM)),
+                            ("shape_enum", Floor::Strs(SHAPE_ENUM)),
+                            ("row_note", Floor::Val("欄の表（folio2 自身の型付きデータの欄を記述する節）。need / shape の値域は folio2 の自前（契約表の外部の欄の決まりとは別物＝器の値域を写したものではない）")),
+                        ]),
+                    ),
+                    (
+                        "teeth-table",
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(TEETH_ROW)),
+                            ("row_note", Floor::Val("歯の表（検査・test）。red_when = 何を壊せば落ちるか（1 文）。fixture = 固定の材料の path（凍結 anchor・P-10.1・repo の根からの相対）。要件書の受入基準の red_test と同じ形")),
+                        ]),
+                    ),
+                    (
+                        "contract-table",
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("section_ref_type", Floor::Val(PROSE)),
+                            ("section_ref_note", Floor::Val("行の section 欄は同じ文書の節番号 n を指し、その節は prose の型であること（folio2 側の導出の成立条件 = 節の body の逐語を goal へ写すため。器 scribe2 は「節が在り本文が非空」だけを見る＝folio2 が導出のために足す条件で、器の受付を狭めない）")),
+                            ("rows_note", Floor::Val("契約表。行の欄の集合と値域は本 file に書かない＝schema.contract_table.external_schema が指す器（scribe2）の導出 file をそのまま読む（ADR-3 決定 (2)・要件書 FR10）")),
+                        ]),
+                    ),
+                    (
+                        ROW_INDEX,
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(INDEX_ROW)),
+                            ("place", Floor::Val(PLAN_KEY)),
+                            ("region", Floor::Map(&[("begin", Floor::Val(ROWS_BEGIN)), ("end", Floor::Val(ROWS_END))])),
+                            ("row_note", Floor::Val("行の索引（生成区間・判断の記録 ADR-31 決定 (2)(ウ)・要件書 FR27）。行は置き場の設計ノートの契約表の行の id（id）と所属の文書 id（doc）だけで、file 名の順・表の中の順に並ぶ。器の欄（題・大きさ・依存）は写さない（ADR-3 決定 (2)）。行は rows の下の印 region.begin と region.end の間に folio derive --write が書き（契約表の導出物と同じ回・全部か無しか）、folio check と folio derive --check が同じ関数で導き直して比べ、食い違えば違反とする。置けるのは規則の表の欄 key が place の閾値の行（計画の名札の行）が名指す計画のノートだけで、ほかのノートに在れば名札の行の有無に関わらず違反")),
+                        ]),
+                    ),
+                    (
+                        ROW_PLAN,
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(PLAN_ROW)),
+                            ("lists", Floor::Strs(PLAN_LISTS)),
+                            ("place", Floor::Val(PLAN_KEY)),
+                            ("row_note", Floor::Val("計画だけの行（人が書く・まだ契約の行の無い計画の行・判断の記録 ADR-31 決定 (2)(イ)(エ)）。節の中の並びが計画の順で、depends は中身の依存だけを書く（同じ file を書く行の直列は器が持つ）。lists の欄は字の一覧、ほかの欄は字。size と files は契約の行ができるまで運ぶ手書きの写しで、床は形だけを見て値を器の語と照らさない。id は計画のノートの中で一意で、行の索引に在れば違反（契約の行を書いたら人の節から外す）。depends の id は行の索引か計画だけの行に在ること。置き場の決まりは行の索引と同じ")),
+                        ]),
+                    ),
+                    (
+                        DECISION_TABLE,
+                        Floor::Map(&[
+                            ("required", Floor::Strs(NEEDS_ROWS)),
+                            ("row", keys_floor!(DECISION_ROW)),
+                            ("row_note", Floor::Val("判断の表（人が書く・どの設計ノートにも置ける・判断の記録 ADR-31 決定 (2)(イ)）。置くのは台帳に記録の在る判断（持ち主の裁定か、台帳に記帳した席の裁定）で、行の ruling は決定の欄（判断の記録の欄の決まり adr/schema.yaml の ruling_fields）として床が裁定 id の形を数える。台帳に記録の無い判断は散文に残り、床の外")),
+                        ]),
+                    ),
+                ]),
+            ),
+        ]),
+    ),
+    (
+        "contract_table",
+        Floor::Map(&[
+            (
+                "external_schema",
+                Floor::Map(&[
+                    ("owner", Floor::Val("scribe2")),
+                    ("path", Floor::Val(EXTERNAL_PATH)),
+                    ("format", Floor::Val("toml")),
+                    (
+                        "reader_expects",
+                        Floor::Map(&[
+                            ("head", Floor::Val(EXTERNAL_HEAD)),
+                            ("rows_key", Floor::Val(EXTERNAL_ROWS_KEY)),
+                            ("row_fields", Floor::Strs(EXTERNAL_ROW_FIELDS)),
+                        ]),
+                    ),
+                    ("value_domains", Floor::Val("from-file")),
+                    (
+                        "known_values",
+                        Floor::Map(&[
+                            ("need", Floor::Strs(EXTERNAL_NEED)),
+                            ("shape", Floor::Strs(EXTERNAL_SHAPE)),
+                        ]),
+                    ),
+                    ("unknown_value", Floor::Val("まだ分からない")),
+                ]),
+            ),
+            ("external_schema_note", Floor::Val("器（scribe2）が自分の型（pipe/table.rs の定数）から導出した生成物で、欄の一覧と need / shape の値域の正本（value_domains = from-file）。folio2 はこれを読んで契約表の節の欄を登録し、欄の一覧を自分の型にも散文にも持たない（P-5.1・P-6.3・P-6.4・N-2）＝reader_expects は読み手の期待する形であって正本ではない。need / shape で folio2 が判定に使えるのは意味を知る値の写し known_values（正本は crates/folio/src/floor_note.rs の EXTERNAL_NEED と EXTERNAL_SHAPE）だけ。欄の追加は器の版上げで足り、器が値域を広げたら folio2 の便で known_values に足す（どちらも判断の記録は要らない・便 120 の先例）。file が読めない・期待する形でない・known_values の外の値が在るときは「まだ分からない」（unknown_value・要件書 FR10・AC8）")),
+            (
+                "reads",
+                Floor::Strs(&["design-doc-contract-table", "external-schema-file"]),
+            ),
+            ("never_reads", Floor::Strs(&["per-run-contract-file"])),
+            ("reads_note", Floor::Val("folio2 が読むのは設計文書の中の契約表（scribe2 では docs/design の [[contract]] の区間）と外部の欄の決まりの file だけ。便ごとの契約 file（run dir の contract.toml）は読まない（scribe2 planner の助言 2026-09-16・形が変わる途中）")),
+            (
+                "row_id",
+                Floor::Map(&[
+                    ("pattern", Floor::Val(ROW_ID_PATTERN)),
+                    ("owner", Floor::Val("folio2")),
+                    ("scope", Floor::Val("own-id-space")),
+                ]),
+            ),
+            ("row_id_note", Floor::Val("行の id は文書内で一意・append-only。この形は folio2 が所有する文書の id 空間の解決（R-4）の範囲で folio2 が自前に持つもので、器の値域（器は「文書内で一意」だけを言う）を写したものではない。文書 id と同じ形（ハイフン可）")),
+            ("semantic_check_owner", Floor::Val("scribe2")),
+            ("semantic_check_note", Floor::Val("行の id の一意・要件の欄が要件書に実在・節の欄が同じ文書に実在し本文が非空・依存の解決と輪の無さ・検証の欄の形・触る型の閉包が書き込み範囲に収まること、は器（scribe2）の 1 つの関数（編集時・黙って飛ばさない）が持つ。folio2 は持たない（ADR-3 決定 (3)・要件書 scope_m1.not_build）。ただし 1 本のノートの中の契約表の行 id の重なりは、索引の id の一意として床が種類 索引の節点 の違反に数える（ADR-3 決定 (3) の folio2 が所有する文書の id 空間の解決・判断の記録 ADR-32）")),
+            (
+                "folio_check",
+                Floor::Strs(&["yaml-form", "derived-diff-zero", "own-id-space"]),
+            ),
+            ("folio_check_note", Floor::Val("契約表について folio2 が持つ検査は 3 つだけ = 正本の形（重複キー・未知の欄・欄の非空・要件書 FR5 の構造の床）/ 導出物の差分 0（FR11・事後の検出・P-18.2）/ folio2 が所有する文書の id 空間の解決（R-4・母集団は広げない）。このうち導出物の差分 0（derived-diff-zero）は、配信の組み立て（folio build）から切り離した独立の命令 folio derive --check が数える（便 119・判断の記録 ADR-16 決定 (5)）。folio check と folio build はこの検査を回さない")),
+        ]),
+    ),
+    (
+        "derived",
+        Floor::Map(&[
+            ("format", Floor::Val("toml-subset")),
+            ("extension", Floor::Val(DERIVED_EXTENSION)),
+            ("granularity", Floor::Val("one-file-per-doc")),
+            ("head", Floor::Val(EXTERNAL_HEAD)),
+            ("array", Floor::Val(DERIVED_ARRAY)),
+            (
+                "row_fields",
+                Floor::Val("external_schema の field の name をそのまま + goal"),
+            ),
+            (
+                "goal",
+                Floor::Val(
+                    "行の section が指す節の body の逐語を単一行に写す（各行を trim し空行を落とし空白 1 つで繋ぐ・引用符と逆斜線は escape しない）",
+                ),
+            ),
+            ("section_value_shape", Floor::Val("text")),
+            ("empty_list", Floor::Val("omit-key")),
+            ("empty_list_note", Floor::Val("器の読み手は空の配列を拒む（緩めない）ので、空の一覧は key ごと省いて表す。YAML 正本の側では空の一覧（depends が空 等）を書いてよく、導出器が省く")),
+            (
+                "value_grammar",
+                Floor::Strs(&["text", "list-of-text", "number", "bool"]),
+            ),
+            (
+                "placement",
+                Floor::Val(
+                    "消費側の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）",
+                ),
+            ),
+            (
+                "check",
+                Floor::Map(&[
+                    ("command", Floor::Val(DERIVED_CHECK_COMMAND)),
+                    ("verdict_on_diff", Floor::Val("nonzero")),
+                    ("stage", Floor::Val("post")),
+                ]),
+            ),
+            ("derived_note", Floor::Val("判断の記録 ADR-3 決定 (4)・要件書 FR11。器は統合先（main）へ着地した後の受付からしか新しい表を読まない（正本の改訂 → 取り込みの要求 → 着地 → 再受付）。契約 file の読み手は共有の scalar の読み手で escape を解かず複数行の値も扱わない（scribe2 contract-source.md §2・実測 2026-09-16）＝goal の単一行化と section を文字列で出す（section_value_shape）のはそのため。導出物を組む口（folio derive --write）と差分を数える口（folio derive --check）は便 119 で入った。どちらも面の生成器も様式の file も呼ばず、導出物の置き場（--out）は消費側が宣言する（既定なし・判断の記録 ADR-16 決定 (5)）。値に二重引用符・逆斜線・改行が在る行は、escape しない形では書けないので導出せず「まだ分からない」とする")),
+        ]),
+    ),
+    (
+        "landing",
+        Floor::Map(&[
+            ("source_of_truth", Floor::Val("scribe2 の記録（record）")),
+            (
+                "read_port",
+                Floor::Val(
+                    "統合先の commit（squash）の本文の末尾の印（trailer・契約 id と要件 id・器が書く）",
+                ),
+            ),
+            (
+                "trailer_name_source",
+                Floor::Map(&[
+                    ("owner", Floor::Val("scribe2")),
+                    ("derived_from", Floor::Val("器の名前の定数")),
+                    ("unreadable", Floor::Val("まだ分からない")),
+                ]),
+            ),
+            (
+                "verdict_values",
+                Floor::Map(&[
+                    ("used", Floor::Strs(&["着地", "まだ分からない"])),
+                    ("never", Floor::Strs(&["未着地"])),
+                ]),
+            ),
+            (
+                "verdict_cases",
+                Floor::Seq(&[
+                    Floor::Map(&[
+                        ("when", Floor::Val("印が在る")),
+                        (
+                            "verdict",
+                            Floor::Val("着地（印の commit の要約値（sha）を添える）"),
+                        ),
+                    ]),
+                    Floor::Map(&[
+                        ("when", Floor::Val("印が無い")),
+                        ("verdict", Floor::Val("まだ分からない")),
+                    ]),
+                    Floor::Map(&[
+                        (
+                            "when",
+                            Floor::Val(
+                                "自分の repo への取り込みの要求で終わる形（印も記録も持たない）",
+                            ),
+                        ),
+                        ("verdict", Floor::Val("まだ分からない（恒久）")),
+                    ]),
+                    Floor::Map(&[
+                        ("when", Floor::Val("印の名か commit が読めない")),
+                        ("verdict", Floor::Val("まだ分からない")),
+                    ]),
+                ]),
+            ),
+            ("forbidden_wording", Floor::Val("未着地")),
+            ("landing_note", Floor::Val("要件書 FR13・ADR-3 決定 (5)(6)。着地の判定の語は要件書 FR13 のとおり「着地」と「まだ分からない」の 2 つで、床の検査結果の語（合格・不合格）は使わない（P-3.3・床の合格と紛れさせない）。「未着地」は出さない（印の不在は未着地と弁別できないため・P-4.2）。印の名は器の名前の定数から導出され、folio2 は名を手で持たない（trailer_name_source）。他の repo の要件 id・契約 id・便の id は参照 id の床（R-4）の母集団に入れず、出所付きの測定値として扱う")),
+        ]),
+    ),
+    (
+        "index",
+        Floor::Map(&[
+            ("node_fields_ref", Floor::Val("design-intent/graph.yaml node")),
+            ("node_kinds_ref", Floor::Val("design-intent/graph.yaml node_kinds")),
+            ("edge_fields_ref", Floor::Val("design-intent/graph.yaml edge")),
+            ("edge_types_ref", Floor::Val("design-intent/graph.yaml edge_types")),
+            ("index_note", Floor::Val("要件書 FR14。機械が読む id の索引は、設計文書の正本から毎回組み直す導出物として口 folio graph --print が出す（2026-09-22 着地・実装 crates/folio/src/graph.rs・台帳 f2-648.132）。索引は節点（設計文書の中で id を持つ行）と辺（両端の節点の id と型）を持ち、節点と辺の欄と、節点の種類と辺の型の閉じた一覧の正本は実装の型付きの定数（crates/folio/src/graph.rs）で、その写しは索引の欄の決まり design-intent/graph.yaml の生成区間に在る＝この節はその置き場を指すだけで写しを持たない（P-6.3）。判断の記録 ADR-14 決定 (1) のとおり節点は id を持つ行に閉じるので、設計ノートの節は節点にならず、契約表の節の行は文書 id と行 id を「#」でつないだ id の節点になる（判断の記録 ADR-32）。索引の中身そのものは版管理に置かず、中身を席へ届ける経路は器の役割の注入が持つ（要件書 CON9）")),
+        ]),
+    ),
+    (
+        "figures",
+        Floor::Map(&[
+            (
+                "spec",
+                Floor::Val(
+                    "図の道具（archify）の型付き記述（JSON の 5 型の欄の決まりそのまま・ADR-4 決定 (1)）",
+                ),
+            ),
+            ("entry", keys_floor!(FIGURE_ENTRY)),
+            (
+                "type_enum_ref",
+                Floor::Val("design-intent/preview/parts.json figure_type_enum"),
+            ),
+            (
+                "body_classes_ref",
+                Floor::Val("design-intent/preview/parts.json figure_body_classes"),
+            ),
+            ("body_classes_rules_row", Floor::Home(&Floor::Val("R-3"))),
+            ("semantic_attrs", Floor::Val("keep")),
+            ("viewer_chrome", Floor::Val("discard")),
+            ("quality_rules_row", Floor::Home(&Floor::Val("R-14"))),
+            ("tool_version_rules_row", Floor::Home(&Floor::Val("R-15"))),
+            ("network_commands", Floor::Val("forbid")),
+            ("skill_listing", Floor::Val("forbid")),
+            ("retry_rules_row", Floor::Home(&Floor::Val("R-7"))),
+            ("retry_record", Floor::Val("ledger")),
+            ("figures_note", Floor::Val("図の正本は設計ノートの figures 節に型付き記述で置き、別 file にも散文にも持たない（ADR-4 決定 (1)）。生成は要件書 FR15（検査を通らない図は生成しない・前の生成物を上書きしない・凍結 anchor が落ちたら「まだ分からない」・決定 (2)(6)）。図の本体の意味の属性は捨てず（semantic_attrs = keep・決定 (3)）、閲覧の仕掛けは捨て（viewer_chrome = discard・決定 (3)）、意味を表す class は部品目録に載り色・字の大きさ・線の太さは design token で塗る（body_classes・R-3・決定 (3)）。道具の通信する命令は使わず（network_commands = forbid）、AI 向けの説明（skill）として載せない（skill_listing = forbid・R-1 の母集団外・決定 (5)）。修正の往復は R-7 が上限で、往復の記録は台帳に残し撤退条件の測定に使う（retry_record = ledger・決定 (7)）。図の対（持ち主の裁定 2026-09-19・f2-648 notes）＝設計ノートの図は、非エンジニア向けの手順図（専門の言葉を使わず「誰が・どの順で・何をして・だめならどうなるか」）と、エンジニア向けの順序図（命令の名・旗・終了コード・file 名をそのまま）を対で置く。見本は design-note/figures.yaml。これは書き方の指針であり床は数えない")),
+        ]),
+    ),
+    (
+        "guards",
+        Floor::Map(&[
+            ("in_loop", Floor::Strs(&[])),
+            (
+                "post",
+                Floor::Strs(&[
+                    "yaml-form",
+                    "derived-diff-zero",
+                    "own-id-space",
+                    "prose-gate",
+                    "prose-mentions",
+                ]),
+            ),
+            ("polarity_list_feed", Floor::Val("true")),
+            ("p18_4_judged_by", Floor::Home(&Floor::Val("R-13"))),
+            ("guards_note", Floor::Val("設計ノートの編集を編集の時点で止める仕掛け（in-loop）は folio2 側に 1 本も無い（器 scribe2 の受付は別 repo の guard で、folio2 の設計ノートの編集を止めない）。この節は極性一覧（P-18.3）へ寄せる材料であり、P-18.4 の判定は folio2 全体を数える rules 行 R-13 の 1 面に委ねる（判定面を 2 つにしない・P-6.3）。post の検査は編集時に止めることの代わりにしない（P-18.2）。post のうち derived-diff-zero は folio derive --check が数える（便 119・事後の検出で、編集の時点で止める仕掛けの代わりにしない）。prose-mentions は規則の表の行 R-17 の床の歯（2026-09-22 着地・実装 crates/folio/src/mentions.rs・台帳 f2-648.131）で、対象の file の閉じた一覧に design-note/ が在る＝設計ノートの散文の欄に現れた id が、その行の型付きの欄にも相手の行の型付きの欄にも無ければ事後に数える")),
+        ]),
+    ),
+]);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 便 140: 導出物の置き場の字は消費側の repo を指し、器の名を焼かない（ADR-21 決定 (1)・CON8）。
+    #[test]
+    fn f140_derived_placement_names_no_vessel() {
+        let derived = crate::floor::derive(&FLOOR);
+        let lines: Vec<&str> = derived
+            .lines()
+            .filter(|l| l.starts_with("    placement: "))
+            .collect();
+        assert_eq!(
+            lines,
+            ["    placement: 消費側の repo に版管理で置く。path は消費側が宣言する（拡張子 .toml・全文を同じ parser に渡す）"]
+        );
+        assert!(!derived.contains("（器 scribe2）"));
+    }
+
+    /// 便 196: 実の欄の決まりの生成区間は、器の file の need / shape のうち folio2 が意味を知る値の写し known_values を
+    /// value_domains の次に持ち、値は定数の字と順のまま。注は値域を file のまま受けるとは言わない（P-5.6・行 D-11）。
+    #[test]
+    fn f196_the_note_region_copies_the_known_values() {
+        use crate::yaml::Node;
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../design-intent/design-note/schema.yaml"
+        ))
+        .unwrap();
+        let root = crate::yaml::parse(&text).unwrap().root;
+        let table = root.get("schema").and_then(|s| s.get("contract_table")).unwrap();
+        let ext = table.get("external_schema").unwrap();
+        let keys: Vec<&str> = ext.as_map().unwrap().iter().map(|(k, _)| k.as_str()).collect();
+        let at = keys.iter().position(|k| *k == "value_domains").unwrap();
+        assert_eq!(keys.get(at + 1), Some(&"known_values"), "{keys:?}");
+        let known = ext.get("known_values").unwrap();
+        let keys: Vec<&str> = known.as_map().unwrap().iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["need", "shape"]);
+        let strs = |key: &str| -> Vec<&str> {
+            let items = known.get(key).and_then(Node::as_seq).unwrap();
+            items.iter().filter_map(Node::as_str).collect()
+        };
+        assert_eq!(strs("need"), EXTERNAL_NEED);
+        assert_eq!(strs("shape"), EXTERNAL_SHAPE);
+        let note = table.get("external_schema_note").and_then(Node::as_str).unwrap();
+        assert!(!note.contains("値域の変更は器の版上げで足り"), "{note}");
+        assert!(note.contains("known_values"), "{note}");
+    }
+}

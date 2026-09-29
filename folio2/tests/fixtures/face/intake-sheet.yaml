@@ -1,0 +1,20 @@
+# folio face の凍結 fixture（便 20・P-10.1）— 支度表の最小形。手書き（folio intake の生成物の写しではない）。
+# 入口の面が読むのは documents（型と付録）・recommended（文と推奨回答）・approval（最初の 1 行）だけ。
+# 歯が変異を当てる場所: documents の with（空にする）・approval（1 行足す）。
+
+meta:
+  id: fixture-intake-sheet
+  version: v0.1
+  status: draft
+
+documents:
+  - {id: constitution, type: 憲法, with: [vocabulary], from: q1}
+
+recommended:
+  - {q: q2, ask: 憲法を AI の手元へ写しますか, recommend: はい}
+
+answers:
+  - {q: q1, value: はい, source: answered}
+  - {q: q2, value: はい, source: recommended}
+
+approval: []

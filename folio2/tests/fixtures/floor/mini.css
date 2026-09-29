@@ -1,0 +1,4 @@
+/* 独立した凍結 anchor（便 13・P-10.1）: 様式の定義の最小の手書き。class の定義は 3 つ。注釈の中の .ghost-comment は class ではない。 */
+.mini-page{margin:0}
+.mini-cover::before{content:".ghost-string"}
+.mini-body{padding:.5rem}

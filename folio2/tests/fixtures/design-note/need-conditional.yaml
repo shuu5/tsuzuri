@@ -1,0 +1,26 @@
+# 便 120 の凍結の対（手書き・最小）。対の相手は同じ dir の need-conditional-schema.toml（verify と done が要否 conditional）。
+# 床は要否が値域に在ることだけを見て、verify も done も持たない行 b を数えない（非空に数えるのは required の欄だけ）。
+# 行 b を省いてよいか（約束の行を持つ親の行か）は器の受付が判定する（folio の床と導出器は判定しない）。
+meta:
+  id: need-conditional
+  title: 要否 conditional の欄を省いた行を持つ設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-24
+  profile: design-note
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: 条件付きの欄 verify と done を持つ行を見せる。
+  - n: 2
+    type: prose
+    title: 省いた行
+    body: 条件付きの欄 verify と done を省いた行を見せる。
+  - n: 3
+    type: contract-table
+    title: 契約表
+    rows:
+      - {id: a, title: verify と done を持つ行, req: [FR10], section: "1", verify: [cargo nextest run -p folio --test note f120_], size: S, done: 行 a が通る}
+      - {id: b, title: verify と done を持たない行, req: [FR10], section: "2", size: S}

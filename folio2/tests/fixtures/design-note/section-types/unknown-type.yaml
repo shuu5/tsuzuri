@@ -1,0 +1,15 @@
+# AC7 の落ちる側（凍結 fixture・要件書 AC7 の red_test）。設計ノートの置き場へ `unknown-type.yaml` として置く。
+# 節の型 `mystery` は閉じた一覧に無い＝違反 1 件（それ以外の欄はすべて欄の決まりどおり）。
+meta:
+  id: unknown-type
+  title: 一覧に無い節の型を 1 つ持つ設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-18
+  profile: design-note
+
+sections:
+  - n: 1
+    type: mystery
+    title: 知らない型の節
+    body: 節の型が閉じた一覧に無いので生成せずに落とす。

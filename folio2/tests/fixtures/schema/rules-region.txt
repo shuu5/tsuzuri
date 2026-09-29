@@ -1,0 +1,34 @@
+schema:
+  version: 1
+  top_level: [schema, thresholds, discipline]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。thresholds と discipline は人が書き、schema は生成区間
+  threshold_row:
+    required: [id, article, what, value, kind, status, ruling, ruled_at, stage]
+    optional: [basis, projection, same_failure, population, note, refs, key]
+  discipline_row:
+    required: [id, article, what, kind, status, ruling, ruled_at]
+    optional: [note, refs]
+  refs_note: その行の散文が依っている、article の条以外の id の一覧（ほかの行・要件書の id・判断の記録・別の条と規範文）。各項は id の形（P-5.2）で、その行自身の id と article の値は書かない。未解決は行 R-4 の 1 つ目の数えが拾い、判断の記録の未実在は A-2 の網が拾う（R-4 の what と値と母集団は変えない）
+  ruled_at_format: ^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}Z)?$
+  ruled_at_note: 行の裁定の時刻の欄 ruled_at の形（ruled_at_format）。年-月-日か、UTC の分（年-月-日T時:分Z）。床（folio check）は全行で、裁定の欄 ruling と同じ歩き手で数え（条 P-17.1）、欄が無い・空・字でない（一覧・表）・形の違う は違反とする。裁定の欄が骨格の印（未記入）の行は裁定の前として時刻を数えず（条 P-17.3）、裁定の欄が埋まった行の時刻が骨格の印なら違反とする。暦に在る日かと、裁定の欄の日時との一致は見ない
+  enums:
+    kind: [deny, build-check, detect, human-review]
+    status: [仮, 凍結, 未定]
+    stage: [in-loop, post]
+    key: [note-chapters, plan-note, in-loop-min, live-notes, note-rows, plan-rows]
+  enums_note: stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）
+  key_note: 閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）
+  kind_meaning:
+    deny: 機械が測って、値域の外なら落とす（上限の超過・下限の不足・固定の値との違い。憲法の reject / build-check に対応）
+    build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）
+    detect: 記録・起票のみ・止めない（憲法の none に対応）
+    human-review: 人が守る作法（憲法の human-review に対応・D 行）
+  kind_map_to_constitution:
+    deny: [reject, build-check]
+    build-check: [build-check]
+    detect: [none]
+  kind_map_to_constitution_note: R 行にだけ適用する（D 行は作法＝条の機構とは別）。右辺は憲法の値域 mechanism_kind の値。閾値の行（R 行）の kind は左辺のどれかで、左辺に無い human-review（D 行の作法）を閾値の行に置けば床（folio check）が落とす
+  excluded:
+    what: [人の作業の時間（「60 分以内」）, AI の費用（「300k token 以下」）]
+    why: 人の作業の時間と AI の費用は測る仕組みが別で凍結できない。M1 の実地試験（非エンジニア 1 回）で初めて数値を決める（要件書 not_frozen）。道具が決定的に測れる機械の待ち時間は除外に当たらず、規則の表の行に載せてよい。
+  reverse_reference: 各行は article 欄で条を指し、その条の relations.rules に行 id が載る（R-4 の双方向）。

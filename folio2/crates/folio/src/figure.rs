@@ -1,0 +1,818 @@
+//! `folio figure`（便 30・docs/design/delivery-30.md §1 (b)(c)）。設計ノートの正本（`design-note/<文書 id>.yaml`）の
+//! 図の節（figures）の 1 枚を、型付き記述（spec）から図の道具（`vendor/archify`・rules 行 R-15）で検査と描画に掛け、
+//! 図の本体（SVG）だけを 1 file に書く（--write）・検査する（--check）。
+//!
+//! 仕上がりの段は showcase 固定で、緩める旗を持たない（R-14）。検査を通らない図は生成せず、前の生成物も
+//! 上書きしない（P-4.1・AC12）。往復（座標を直して撃ち直す）は folio の外＝planner が台帳に記帳する
+//! （ADR-4 決定 (7)）。道具の他の命令（preview・brands capture・--open）は呼ばない。
+//! 図の行 1 つから本体を描く口（`render`）は設計ノートの面（便 31）と共有する。
+//!
+//! 凍結 anchor（型付き記述 1 本と図の本体の写し・P-10.1）は compile 時に取り込み、命令と面の経路の導出の前に
+//! 照合する。落ちたら判定を「まだ分からない」に落とし、出力も前の生成物も書かない（便 60・ADR-4 決定 (6)・P-10.3）。
+//!
+//! 置き場の親に道具の写し（vendor/archify）が無いときだけ、組み立て時に焼いた写しを 1 回の命令で 1 度だけ一時の置き場へ
+//! 書き出して撃ち、命令の終わりに `sweep` で消す（便 168・ADR-27 決定 (1)）。焼いた道具にも凍結 anchor が掛かる。
+
+use std::cell::Cell;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::cursor::{self, R, X};
+use crate::face;
+use crate::parts;
+use crate::shelf;
+use crate::verdict::Verdict;
+use crate::yaml::{self, Value};
+
+/// 図の型の写像（β・正本の値 → 図の道具の型）。表に無い型は導出できない。
+const FIGURE_TYPES: &[(&str, &str)] = &[
+    ("archify-architecture", "architecture"),
+    ("archify-workflow", "workflow"),
+    ("archify-sequence", "sequence"),
+    ("archify-dataflow", "dataflow"),
+    ("archify-lifecycle", "lifecycle"),
+];
+
+/// 図の道具の置き場（正本の置き場の親 dir からの相対・便 28 の導出 file と同じ「親 dir」の規則）。
+const TOOL: &str = "vendor/archify/bin/archify.mjs";
+
+/// 図の道具の写しの dir（正本の置き場の親 dir からの相対・無いの判定はここで行う・便 168）。
+const TOOL_DIR: &str = "vendor/archify";
+
+// 組み立て時に build.rs が焼いた図の道具の写し TOOL_FILES（便 168・path の byte 順・LICENSE を含む）
+include!(concat!(env!("OUT_DIR"), "/archify_files.rs"));
+
+/// 焼いた道具を書き出した一時の置き場（1 回の命令で 1 度・書き出せなかった Err も覚える）。
+static BAKED: OnceLock<R<PathBuf>> = OnceLock::new();
+
+/// 仕上がりの段（R-14・旗を持たない）。
+const QUALITY: &str = "showcase";
+
+/// 道具の診断の欄が無いときに出す stdout の頭の字数。
+const HEAD_CHARS: usize = 200;
+
+/// 凍結 anchor の型付き記述（tests/fixtures/figure/anchor/spec.json の写し・compile 時に取り込む）。
+const ANCHOR_SPEC: &str = include_str!("../../../tests/fixtures/figure/anchor/spec.json");
+
+/// 凍結 anchor の図の本体（tests/fixtures/figure/anchor/body.svg の写し・compile 時に取り込む）。
+const ANCHOR_BODY: &str = include_str!("../../../tests/fixtures/figure/anchor/body.svg");
+
+/// 凍結 anchor の図の型（型付き記述の diagram_type と同じ）。
+const ANCHOR_KIND: &str = "architecture";
+
+/// 照合の結果（process の中で 1 回だけ計算する・道具の呼び出しを図ごとに増やさない）。
+static ANCHOR: OnceLock<R<()>> = OnceLock::new();
+
+thread_local! {
+    /// 床の空撃ち（図の道具を撃たない・便 187）のあいだだけ真。
+    static DRY: Cell<bool> = const { Cell::new(false) };
+}
+
+/// `f` のあいだ、`render` は型と型付き記述の形までを確かめて道具を撃たずに空の本体を返す（床が面と同じ関数で
+/// 面を組むための口・便 187）。道具・Node・凍結 anchor は床の外（道具の答えは build が まだ分からない で知らせる）。
+pub fn dry<T>(f: impl FnOnce() -> T) -> T {
+    DRY.with(|d| d.set(true));
+    let out = f();
+    DRY.with(|d| d.set(false));
+    out
+}
+
+pub enum Mode {
+    Write,
+    Check,
+}
+
+/// 1 回の実行の結果。`stdout` / `stderr` は 1 行ずつ。
+pub struct Outcome {
+    pub verdict: Verdict,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+}
+
+impl Outcome {
+    fn unknown(reason: impl Into<String>) -> Self {
+        Outcome {
+            verdict: Verdict::Unknown,
+            stdout: None,
+            stderr: Some(format!("folio figure: まだ分からない: {}", reason.into())),
+        }
+    }
+}
+
+// ── 命令の口（face.rs の run と同じ 3 値）──
+
+pub fn run(doc: &str, id: &str, dir: &Path, out: &Path, mode: Mode) -> Outcome {
+    // --out が相対なら --dir からの相対・絶対ならそのまま
+    let out_path = dir.join(out);
+    if !out_path.parent().is_some_and(Path::is_dir) {
+        return Outcome::unknown(format!("{}: 出力先の親 dir が無い", out_path.display()));
+    }
+    // 凍結 anchor が落ちていれば --write / --check とも導出せず「まだ分からない」（P-10.3）
+    if let Err(e) = anchor_holds(dir) {
+        return Outcome::unknown(e);
+    }
+    let body = match derive(dir, doc, id) {
+        Ok(b) => b,
+        Err(e) => return Outcome::unknown(e),
+    };
+    let size = body.len();
+    match mode {
+        Mode::Check => {
+            if !out_path.exists() {
+                return Outcome {
+                    verdict: Verdict::Unknown,
+                    stdout: None,
+                    stderr: Some("folio figure: 図が無い（未生成）".to_string()),
+                };
+            }
+            let cur = match fs::read(&out_path) {
+                Ok(b) => b,
+                Err(e) => {
+                    return Outcome::unknown(format!("{}: 読めない: {e}", out_path.display()));
+                }
+            };
+            if cur != body.as_bytes() {
+                return Outcome {
+                    verdict: Verdict::Fail,
+                    stdout: None,
+                    stderr: Some(format!(
+                        "folio figure: DRIFT — 図 {} byte ≠ 導出 {size} byte（手で直したか正本が変わった）",
+                        cur.len()
+                    )),
+                };
+            }
+            Outcome {
+                verdict: Verdict::Pass,
+                stdout: Some(format!("folio figure: OK — 図は正本と一致（{size} byte）")),
+                stderr: None,
+            }
+        }
+        Mode::Write => {
+            if let Err(e) = fs::write(&out_path, &body) {
+                return Outcome::unknown(format!("{}: 書けない: {e}", out_path.display()));
+            }
+            Outcome {
+                verdict: Verdict::Pass,
+                stdout: Some(format!("folio figure: 書いた（{size} byte）")),
+                stderr: None,
+            }
+        }
+    }
+}
+
+// ── 生成器 ──
+
+/// 設計ノートの図 1 枚の本体（SVG）を導出する。読めない・型が表に無い・道具が通らないは Err（まだ分からない）。
+pub fn derive(dir: &Path, doc: &str, id: &str) -> R<String> {
+    if !shelf::is_doc_id(doc) {
+        return Err(format!(
+            "--doc「{doc}」は id の形でない（英小文字で始まり 英小文字・数字・ハイフン）"
+        ));
+    }
+    let name = format!("design-note/{doc}.yaml");
+    let value = cursor::load(dir, &name)?;
+    let d = X::root(&value, &name);
+    let file_id = d.f("meta")?.f("id")?.id()?;
+    if file_id != doc {
+        return Err(format!(
+            "{name}: 欄 meta.id「{file_id}」が --doc「{doc}」と違う"
+        ));
+    }
+    let figs = match d.g("figures")? {
+        Some(x) => x.seq()?,
+        None => Vec::new(),
+    };
+    let mut hit = Vec::new();
+    for fig in &figs {
+        if fig.f("id")?.id()? == id {
+            hit.push(fig);
+        }
+    }
+    let fig = match hit.as_slice() {
+        [one] => *one,
+        [] => return Err(format!("{name}: 図「{id}」が figures に無い")),
+        many => {
+            return Err(format!(
+                "{name}: 図「{id}」が figures に {} 本ある（図 id は 1 本）",
+                many.len()
+            ));
+        }
+    };
+    let tx = fig.f("type")?;
+    let kind =
+        tx.v.as_str()
+            .ok_or_else(|| format!("{}: 図の型が文字列でない", tx.at))?;
+    render(dir, id, kind, &fig.f("spec")?)
+}
+
+/// 図の行 1 つ（型の字面と型付き記述）→ 図の本体（SVG）。型が表に無い・spec が表でない・道具が無い・道具が
+/// 通らないは Err（まだ分からない）。設計ノートの面（`face_note.rs`・便 31）も図ごとにここを呼ぶ。
+pub fn render(dir: &Path, id: &str, kind: &str, spec: &X<'_>) -> R<String> {
+    let kind = tool_type(kind)?;
+    if spec.v.as_map().is_none() {
+        return Err(format!("{}: 型付き記述（spec）が表でない", spec.at));
+    }
+    let json = to_json(spec.v)?;
+    if DRY.with(Cell::get) {
+        return Ok(String::new());
+    }
+    let tool = tool_path(dir)?;
+    anchor_holds(dir)?;
+    let body = deliver(&tool, kind, &json, id)?;
+    ja(&body, kind)
+}
+
+/// 図の道具の型ごとの固定の英文（道具の型・説明〔desc 要素の中身〕・読み上げの種別〔aria-label と title の末尾〕）。
+/// 出所は vendor/archify/renderers/shared/i18n.mjs の MESSAGE_PAIRS（便 82・docs/design/delivery-82.md §1 (b)）。
+/// 行の順と型の字面は FIGURE_TYPES の値と同じ。
+const EN_BY_TYPE: &[(&str, &str, &str)] = &[
+    (
+        "architecture",
+        "An architecture diagram generated by Archify.",
+        "Architecture component",
+    ),
+    (
+        "workflow",
+        "A workflow diagram generated by Archify.",
+        "Workflow node",
+    ),
+    (
+        "sequence",
+        "A sequence diagram generated by Archify.",
+        "Sequence participant",
+    ),
+    (
+        "dataflow",
+        "A data-flow diagram generated by Archify.",
+        "Data-flow node",
+    ),
+    (
+        "lifecycle",
+        "A lifecycle diagram generated by Archify.",
+        "Lifecycle state",
+    ),
+];
+
+/// 図の道具の型 → 型の和名（部品目録から導いた名札の、最初の「（」より前・無ければ名札の全部）。
+/// 手書きの日本語の写しは持たない（P-6.3）。名札が表に無ければ Err（P-4.1）。
+fn ja_name(kind: &str) -> R<&'static str> {
+    let key = FIGURE_TYPES
+        .iter()
+        .find(|(_, t)| *t == kind)
+        .map(|(k, _)| *k)
+        .ok_or_else(|| format!("図の道具の型「{kind}」が図の型の表に無い"))?;
+    let label = face::FIGURE_LABELS
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, l)| *l)
+        .ok_or_else(|| format!("図の型「{key}」の名札が部品目録に無い"))?;
+    Ok(label.split_once('（').map_or(label, |(head, _)| head))
+}
+
+/// 図の本体の英語の字を日本語に決定的に置き換える（便 67・docs/design/delivery-67.md §1 (a)・便 82 §1 (b)）。
+/// ① 根の要素（1 つ目の `<svg` の開始タグ）の言語の宣言 `lang="en"` → `lang="ja"`
+/// ② 凡例の見出しの要素の中身 `>Legend<` → `>凡例<`（道具の翻訳表は英語と中国語しか持たず、型付き記述からは
+///    替えられない。属性や注釈（`<!-- Legend -->`）の中の Legend は触らない）
+/// ③ 説明: その型の説明の英文 → 「図の道具（Archify）が描いた{和名}。」
+/// ④ 読み上げの種別: その型の種別の英文 → 「{和名}の要素」
+/// ⑤ 読み上げの頭: `aria-label="Focus ` → `aria-label="注目 `（二重引用符に続く形だけ）
+///
+/// 置き換えは図の本体の意味の属性（箱の id・種別・名札・線）を変えない字の置き換えで、ADR-4 決定 (3) の
+/// 範囲の内。凍結 anchor の照合（`check_anchor`）は `deliver` を直に呼ぶので、置き換えの前の値で写しと比べる
+/// （`tests/fixtures/figure/anchor/body.svg` は道具の生の出力のまま・§1 (a) の順序）。
+/// 型が EN_BY_TYPE に無ければ Err（図は描かない・P-4.1）。
+fn ja(body: &str, kind: &str) -> R<String> {
+    const EN: &str = "lang=\"en\"";
+    let (_, desc, role) = EN_BY_TYPE
+        .iter()
+        .find(|(t, _, _)| *t == kind)
+        .ok_or_else(|| format!("図の道具の型「{kind}」の英文の表が無い"))?;
+    let name = ja_name(kind)?;
+    let mut out = body.to_string();
+    // 言語の宣言は 1 つ目の開始タグの中（閉じの `>` まで）だけを見る
+    let head = out.find('>').map_or(0, |i| i + 1);
+    if let Some(at) = out[..head].find(EN) {
+        out.replace_range(at..at + EN.len(), "lang=\"ja\"");
+    }
+    Ok(out
+        .replace(">Legend<", ">凡例<")
+        .replace(desc, &format!("図の道具（Archify）が描いた{name}。"))
+        .replace(role, &format!("{name}の要素"))
+        .replace("aria-label=\"Focus ", "aria-label=\"注目 "))
+}
+
+// ── 凍結 anchor の照合（P-10.1・P-10.3）──
+
+/// 凍結 anchor が保たれているか。型付き記述の写しを既存の導出の経路（to_json → 道具へ deliver）に掛け、
+/// 図の本体の写しと byte で比べる。違えば Err（道具の版か写しが変わった）。道具が起動できない・検査を
+/// 通らないは既存の Err がそのまま上がる。結果は process の中で 1 回だけ計算し、以後は再利用する。
+pub fn anchor_holds(dir: &Path) -> R<()> {
+    ANCHOR.get_or_init(|| check_anchor(dir)).clone()
+}
+
+fn check_anchor(dir: &Path) -> R<()> {
+    let spec = yaml::parse_typed(ANCHOR_SPEC)
+        .map_err(|e| format!("凍結 anchor の型付き記述を読めない: {e}"))?;
+    let json = to_json(&spec)?;
+    let tool = tool_path(dir)?;
+    let body = deliver(&tool, ANCHOR_KIND, &json, "anchor")?;
+    if body.as_bytes() != ANCHOR_BODY.as_bytes() {
+        return Err(
+            "凍結 anchor が落ちた（図の道具の出力が固定の写しと違う・道具の版か写しが変わった。P-10.3）"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+/// 図の型（閉じた表 β）→ 図の道具の型。既存 3 型（pipeline-rail・context-band・state-strip）も道具の型でない。
+fn tool_type(name: &str) -> R<&'static str> {
+    FIGURE_TYPES
+        .iter()
+        .find(|(k, _)| *k == name)
+        .map(|(_, t)| *t)
+        .ok_or_else(|| format!("図の型「{name}」は図の道具の型でない"))
+}
+
+/// 図の道具の path（正本の置き場の親 dir の下・symlink は認めない）。親 dir の写しの dir が無い（`parts::absent`）
+/// ときだけ焼いた道具を使う（便 168 (b) 2）。写しが在るのに入口が使えなければ焼いたものへ替えない（P-4.1）。
+fn tool_path(dir: &Path) -> R<PathBuf> {
+    let parent = dir
+        .parent()
+        .ok_or_else(|| "正本の置き場の親 dir が無い".to_string())?;
+    if parts::absent(&parent.join(TOOL_DIR)) {
+        return baked_tool();
+    }
+    let path = parent.join(TOOL);
+    if path.is_symlink() {
+        return Err(format!(
+            "{}: 図の道具が symlink（認めない）",
+            path.display()
+        ));
+    }
+    if !path.is_file() {
+        return Err(format!("{}: 図の道具が無い", path.display()));
+    }
+    Ok(path)
+}
+
+// ── 焼いた道具（便 168 (b) 3・4）──
+
+/// 焼いた道具の入口。最初の 1 回だけ（1 回の命令で 1 度）一時の置き場へ書き出し、以後は同じ path を返す。
+fn baked_tool() -> R<PathBuf> {
+    BAKED
+        .get_or_init(|| unpack(&scratch("folio-archify")))
+        .clone()
+        .map(|root| root.join(TOOL))
+}
+
+/// 焼いた写しを `root/vendor/archify/` へ書く。`root` は新しく作り（在れば Err）、途中で書けなければ消して Err。
+fn unpack(root: &Path) -> R<PathBuf> {
+    fs::create_dir(root).map_err(|e| format!("{}: 一時の置き場を作れない: {e}", root.display()))?;
+    let written = TOOL_FILES.iter().try_for_each(|(rel, bytes)| {
+        let path = root.join(TOOL_DIR).join(rel);
+        if let Some(up) = path.parent() {
+            fs::create_dir_all(up)
+                .map_err(|e| format!("{}: 一時の置き場を作れない: {e}", up.display()))?;
+        }
+        fs::write(&path, bytes)
+            .map_err(|e| format!("{}: 焼いた道具を書き出せない: {e}", path.display()))
+    });
+    match written {
+        Ok(()) => Ok(root.to_path_buf()),
+        Err(e) => {
+            let _ = fs::remove_dir_all(root);
+            Err(e)
+        }
+    }
+}
+
+/// 一時の置き場の名（`$TMPDIR/<頭>-<process の番号>-<ns>`・deliver と共有する）。
+fn scratch(head: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    std::env::temp_dir().join(format!("{head}-{}-{nanos}", std::process::id()))
+}
+
+/// 命令の終わりに、焼いた道具を書き出した一時の置き場だけを消す（書き出していなければ何もしない・N-1.1）。
+pub fn sweep() {
+    if let Some(Ok(root)) = BAKED.get() {
+        let _ = fs::remove_dir_all(root);
+    }
+}
+
+// ── 型付き記述の書き出し（Value → JSON の 1 行・決定的）──
+
+/// 正本の値を JSON の字面にする（空白と改行を入れない・順は正本に書かれた順）。
+fn to_json(v: &Value) -> R<String> {
+    match v {
+        Value::Null => Ok("null".to_string()),
+        Value::Bool(b) => Ok(b.to_string()),
+        Value::Int(s) => Ok(s.clone()),
+        Value::Float(f) => Ok(f.to_string()),
+        Value::Date(s) => Ok(format!("\"{s}\"")),
+        Value::Str(s) => Ok(quote(s)),
+        Value::Seq(items) => {
+            let parts = items.iter().map(to_json).collect::<R<Vec<_>>>()?;
+            Ok(format!("[{}]", parts.join(",")))
+        }
+        Value::Map(entries) => {
+            let mut parts = Vec::with_capacity(entries.len());
+            for (k, val) in entries {
+                let key = k
+                    .as_str()
+                    .ok_or_else(|| "型付き記述の鍵が文字列でない".to_string())?;
+                parts.push(format!("{}:{}", quote(key), to_json(val)?));
+            }
+            Ok(format!("{{{}}}", parts.join(",")))
+        }
+    }
+}
+
+/// JSON の文字列（二重引用符と逆斜線と U+0000〜U+001F だけ escape・他は逐語・非 ASCII はそのまま）。
+fn quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{8}' => out.push_str("\\b"),
+            '\u{c}' => out.push_str("\\f"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+// ── 道具の呼び出し ──
+
+/// 一時 dir を作って道具を 1 回撃ち、図の本体を返す。一時 dir は結果に関わらず消す。
+fn deliver(tool: &Path, kind: &str, json: &str, id: &str) -> R<String> {
+    let td = scratch("folio-figure");
+    fs::create_dir_all(&td).map_err(|e| format!("{}: 一時 dir を作れない: {e}", td.display()))?;
+    let result = deliver_in(&td, tool, kind, json, id);
+    let _ = fs::remove_dir_all(&td);
+    result
+}
+
+fn deliver_in(td: &Path, tool: &Path, kind: &str, json: &str, id: &str) -> R<String> {
+    let spec = td.join("spec.json");
+    let out = td.join("figure.html");
+    fs::write(&spec, json).map_err(|e| format!("型付き記述を書けない: {e}"))?;
+    let run = Command::new("node")
+        .arg(tool)
+        .arg("deliver")
+        .arg(kind)
+        .arg(&spec)
+        .arg(&out)
+        .arg("--quality")
+        .arg(QUALITY)
+        .arg("--json")
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("図の道具を起動できない（node）: {e}"))?;
+    if !run.status.success() {
+        let stdout = String::from_utf8_lossy(&run.stdout);
+        return Err(format!(
+            "図「{id}」は図の道具の検査を通らない: {}",
+            error_head(&stdout)
+        ));
+    }
+    let html = fs::read(&out).map_err(|e| format!("図の出力を読めない: {e}"))?;
+    let html = String::from_utf8(html).map_err(|_| "図の出力が UTF-8 でない".to_string())?;
+    body(&html)
+}
+
+/// 出力 html から図の本体（`<svg` から最初の `</svg>` の直後まで）を抜く。1 つでなければ Err。
+fn body(html: &str) -> R<String> {
+    let n = html.matches("<svg").count();
+    if n != 1 {
+        return Err(format!("図の本体が 1 つでない（{n}）"));
+    }
+    let start = html
+        .find("<svg")
+        .ok_or_else(|| "図の本体が 1 つでない（0）".to_string())?;
+    let tail = &html[start..];
+    let end = tail
+        .find("</svg>")
+        .ok_or_else(|| "図の本体に閉じ（</svg>）が無い".to_string())?;
+    Ok(tail[..end + "</svg>".len()].to_string())
+}
+
+/// 道具の診断の頭（JSON の鍵 error の値の先頭 2 行を空白 1 つで繋ぐ・欄が無ければ stdout の先頭 200 字）。
+fn error_head(stdout: &str) -> String {
+    let Some(raw) = error_field(stdout) else {
+        return stdout.chars().take(HEAD_CHARS).collect();
+    };
+    let lines = unescape_lines(raw);
+    let head: Vec<&str> = lines.iter().take(2).map(|l| l.trim()).collect();
+    head.join(" ")
+}
+
+/// JSON の鍵 error の値（escape されたまま）。鍵の後に「:」と二重引用符が続く箇所だけを見る。
+fn error_field(stdout: &str) -> Option<&str> {
+    let key = "\"error\"";
+    let mut rest = stdout;
+    loop {
+        let i = rest.find(key)?;
+        let after = &rest[i + key.len()..];
+        if let Some(tail) = after.trim_start().strip_prefix(':')
+            && let Some(value) = tail.trim_start().strip_prefix('"')
+            && let Some(end) = string_end(value)
+        {
+            return value.get(..end);
+        }
+        rest = after;
+    }
+}
+
+/// escape を跨いで閉じの二重引用符までの byte 数。
+fn string_end(value: &str) -> Option<usize> {
+    let bytes = value.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i += 2,
+            b'"' => return Some(i),
+            _ => i += 1,
+        }
+    }
+    None
+}
+
+/// escape された文字列を `\n` で行に分け、行ごとに escape を解く。
+fn unescape_lines(raw: &str) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut cs = raw.chars();
+    while let Some(c) = cs.next() {
+        if c != '\\' {
+            cur.push(c);
+            continue;
+        }
+        match cs.next() {
+            Some('n') => {
+                lines.push(std::mem::take(&mut cur));
+            }
+            Some('t') => cur.push('\t'),
+            Some('r') => cur.push('\r'),
+            Some('b') => cur.push('\u{8}'),
+            Some('f') => cur.push('\u{c}'),
+            Some('u') => {
+                let hex: String = cs.by_ref().take(4).collect();
+                if let Ok(n) = u32::from_str_radix(&hex, 16)
+                    && let Some(c) = char::from_u32(n)
+                {
+                    cur.push(c);
+                }
+            }
+            // 二重引用符・逆斜線・斜線はその字
+            Some(other) => cur.push(other),
+            None => {}
+        }
+    }
+    lines.push(cur);
+    lines
+}
+
+#[cfg(test)]
+mod figure_tests {
+    use super::*;
+
+    #[test]
+    fn figure_to_json_writes_every_type_in_the_written_order() {
+        assert_eq!(to_json(&Value::Null).unwrap(), "null");
+        assert_eq!(to_json(&Value::Bool(true)).unwrap(), "true");
+        assert_eq!(to_json(&Value::Bool(false)).unwrap(), "false");
+        assert_eq!(to_json(&Value::Int("-70".to_string())).unwrap(), "-70");
+        assert_eq!(to_json(&Value::Float(1.5)).unwrap(), "1.5");
+        assert_eq!(
+            to_json(&Value::Date("2026-09-19".to_string())).unwrap(),
+            "\"2026-09-19\""
+        );
+        let v = yaml::parse_typed("a: [1, x]\nb: {c: 0}\n").unwrap();
+        assert_eq!(to_json(&v).unwrap(), "{\"a\":[1,\"x\"],\"b\":{\"c\":0}}");
+        // 順は正本に書かれた順（辞書順に直さない）
+        let v = yaml::parse_typed("b: 1\na: 2\n").unwrap();
+        assert_eq!(to_json(&v).unwrap(), "{\"b\":1,\"a\":2}");
+    }
+
+    #[test]
+    fn figure_to_json_escapes_only_the_quote_the_backslash_and_the_controls() {
+        assert_eq!(to_json(&Value::Str("持ち主".into())).unwrap(), "\"持ち主\"");
+        assert_eq!(to_json(&Value::Str("a\"b".into())).unwrap(), "\"a\\\"b\"");
+        assert_eq!(to_json(&Value::Str("a\\b".into())).unwrap(), "\"a\\\\b\"");
+        assert_eq!(to_json(&Value::Str("a\nb".into())).unwrap(), "\"a\\nb\"");
+        assert_eq!(
+            to_json(&Value::Str("a\u{1}b\tc".into())).unwrap(),
+            "\"a\\u0001b\\tc\""
+        );
+        assert_eq!(to_json(&Value::Str("<&>'".into())).unwrap(), "\"<&>'\"");
+    }
+
+    #[test]
+    fn figure_to_json_refuses_a_map_key_that_is_not_a_string() {
+        let v = yaml::parse_typed("1: x\n").unwrap();
+        assert_eq!(
+            to_json(&v).unwrap_err(),
+            "型付き記述の鍵が文字列でない".to_string()
+        );
+    }
+
+    #[test]
+    fn figure_body_takes_exactly_one_svg_verbatim() {
+        assert_eq!(
+            body("<html><svg class=\"x\">あ</svg>\n</html>").unwrap(),
+            "<svg class=\"x\">あ</svg>"
+        );
+        assert_eq!(
+            body("<html></html>").unwrap_err(),
+            "図の本体が 1 つでない（0）"
+        );
+        assert_eq!(
+            body("<svg></svg><svg></svg>").unwrap_err(),
+            "図の本体が 1 つでない（2）"
+        );
+        assert_eq!(
+            body("<svg>閉じが無い").unwrap_err(),
+            "図の本体に閉じ（</svg>）が無い"
+        );
+    }
+
+    #[test]
+    fn figure_error_head_joins_the_first_two_lines() {
+        let out = "{\n \"ok\": false,\n \"error\": \"Architecture layout validation failed:\\n  label \\\"あ\\\" overlaps; adjust labelDx/labelDy or set labelAt\\n  3 more\",\n \"diagnostics\": []\n}";
+        assert_eq!(
+            error_head(out),
+            "Architecture layout validation failed: label \"あ\" overlaps; adjust labelDx/labelDy or set labelAt"
+        );
+        // 1 行しか無ければその 1 行
+        assert_eq!(error_head("{\"error\": \"1 行だけ\"}"), "1 行だけ");
+        // 欄が無ければ stdout の先頭 200 字（severity の値の error は鍵でない）
+        let no_field = "x".repeat(300) + "\"error\"";
+        assert_eq!(error_head(&no_field), "x".repeat(HEAD_CHARS));
+        assert_eq!(
+            error_head("{\"severity\": \"error\"}"),
+            "{\"severity\": \"error\"}"
+        );
+    }
+
+    #[test]
+    fn figure_ja_swaps_only_the_heading_and_the_root_language() {
+        let a = "architecture";
+        assert_eq!(
+            ja("<svg lang=\"en\" x=\"1\"><!-- Legend --><text>Legend</text></svg>", a).unwrap(),
+            "<svg lang=\"ja\" x=\"1\"><!-- Legend --><text>凡例</text></svg>"
+        );
+        // 属性の中の Legend と 2 つ目より後の lang=en は触らない
+        assert_eq!(
+            ja("<svg lang=\"en\"><g id=\"Legend\" lang=\"en\"></g></svg>", a).unwrap(),
+            "<svg lang=\"ja\"><g id=\"Legend\" lang=\"en\"></g></svg>"
+        );
+        // 置き換える字が無ければそのまま
+        assert_eq!(
+            ja("<svg><text>凡例</text></svg>", a).unwrap(),
+            "<svg><text>凡例</text></svg>"
+        );
+    }
+
+    #[test]
+    fn figure_ja_swaps_the_fixed_english_of_the_type() {
+        let raw = "<svg><desc>A workflow diagram generated by Archify.</desc>\
+                   <g aria-label=\"Focus 箱, 説明, Workflow node\"><title>箱 · 説明 · Workflow node</title>\
+                   <text>Focus</text></g></svg>";
+        assert_eq!(
+            ja(raw, "workflow").unwrap(),
+            "<svg><desc>図の道具（Archify）が描いた手順図。</desc>\
+             <g aria-label=\"注目 箱, 説明, 手順図の要素\"><title>箱 · 説明 · 手順図の要素</title>\
+             <text>Focus</text></g></svg>"
+        );
+        // 他の型の英文は触らない
+        assert_eq!(
+            ja("<desc>Workflow node</desc>", "sequence").unwrap(),
+            "<desc>Workflow node</desc>"
+        );
+        assert_eq!(
+            ja("<svg/>", "context-band").unwrap_err(),
+            "図の道具の型「context-band」の英文の表が無い"
+        );
+    }
+
+    #[test]
+    fn figure_ja_name_is_the_head_of_the_catalog_label() {
+        let names: Vec<&str> = EN_BY_TYPE
+            .iter()
+            .map(|(t, _, _)| ja_name(t).unwrap())
+            .collect();
+        assert_eq!(names, ["構成図", "手順図", "順序図", "流れ図", "状態図"]);
+        // 行の順と型の字面は FIGURE_TYPES の値と同じ
+        let kinds: Vec<&str> = EN_BY_TYPE.iter().map(|(t, _, _)| *t).collect();
+        let tools: Vec<&str> = FIGURE_TYPES.iter().map(|(_, t)| *t).collect();
+        assert_eq!(kinds, tools);
+        assert!(ja_name("pipeline-rail").is_err());
+    }
+
+    #[test]
+    fn figure_anchor_constants_are_the_frozen_pair() {
+        // 型付き記述は既存の読み手で表として読め、型は道具の型 architecture
+        let spec = yaml::parse_typed(ANCHOR_SPEC).unwrap();
+        let x = X::root(&spec, "anchor");
+        assert_eq!(x.f("diagram_type").unwrap().v.as_str(), Some(ANCHOR_KIND));
+        assert!(
+            to_json(&spec)
+                .unwrap()
+                .starts_with("{\"schema_version\":1,")
+        );
+        // 図の本体の写しは svg 1 つ
+        assert_eq!(body(ANCHOR_BODY).unwrap(), ANCHOR_BODY);
+    }
+
+    #[test]
+    fn figure_type_table_has_the_five_tool_types() {
+        assert_eq!(tool_type("archify-architecture").unwrap(), "architecture");
+        assert_eq!(tool_type("archify-lifecycle").unwrap(), "lifecycle");
+        assert_eq!(FIGURE_TYPES.len(), 5);
+        assert_eq!(
+            tool_type("pipeline-rail").unwrap_err(),
+            "図の型「pipeline-rail」は図の道具の型でない"
+        );
+    }
+
+    #[test]
+    fn figure_render_refuses_a_spec_that_is_not_a_map_before_touching_the_tool() {
+        // 型の表 → spec の形 の順に見る（道具の不在より前に断る）
+        let v = yaml::parse_typed("spec: 表でない\n").unwrap();
+        let spec = X::root(&v, "fig").f("spec").unwrap();
+        assert_eq!(
+            render(
+                Path::new("/nonexistent/src"),
+                "fig-1",
+                "archify-architecture",
+                &spec
+            )
+            .unwrap_err(),
+            "fig.spec: 型付き記述（spec）が表でない"
+        );
+        assert_eq!(
+            render(
+                Path::new("/nonexistent/src"),
+                "fig-1",
+                "context-band",
+                &spec
+            )
+            .unwrap_err(),
+            "図の型「context-band」は図の道具の型でない"
+        );
+    }
+
+    #[test]
+    fn f168_the_baked_tool_is_the_copy_frozen_in_r15() {
+        // 焼いた file は path の byte 順で、許諾の写し LICENSE を含む
+        let paths: Vec<&str> = TOOL_FILES.iter().map(|(p, _)| *p).collect();
+        let mut sorted = paths.clone();
+        sorted.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        assert_eq!(paths, sorted, "焼いた順が path の byte 順でない");
+        assert!(
+            paths.contains(&"LICENSE"),
+            "許諾の写し LICENSE を焼いていない"
+        );
+        // 連結の要約値と file の数が正本 rules.yaml の R-15 の value に在る（既存の読み手で読む）
+        let bytes: Vec<u8> = TOOL_FILES
+            .iter()
+            .flat_map(|(_, b)| b.iter().copied())
+            .collect();
+        let hex = crate::sha256::hex(&bytes);
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent");
+        let rules = cursor::load(&dir, "rules.yaml").unwrap();
+        let rows = X::root(&rules, "rules.yaml")
+            .f("thresholds")
+            .unwrap()
+            .seq()
+            .unwrap();
+        let row = rows
+            .iter()
+            .find(|r| r.f("id").and_then(|x| x.text()).as_deref() == Ok("R-15"))
+            .expect("R-15 が無い");
+        let value = row.f("value").unwrap().text().unwrap();
+        assert!(
+            value.contains(&hex),
+            "焼いた要約値 {hex}（{} file）が R-15 に無い: {value}",
+            TOOL_FILES.len()
+        );
+        assert!(
+            value.contains(&format!("写し {} file", TOOL_FILES.len())),
+            "焼いた file の数 {} が R-15 に無い: {value}",
+            TOOL_FILES.len()
+        );
+    }
+}

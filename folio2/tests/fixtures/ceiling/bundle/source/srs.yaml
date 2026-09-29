@@ -1,0 +1,123 @@
+# folio face の凍結 fixture（便 14・便 15・P-10.1）— 要件書の正本の最小形。手書き・design-intent/ の写しではない。
+# 憲法の面が読むのは 5 節の id と title だけ（条の関係の欄が指す要件の見出し・FR1 の title は変えない）。
+# 要件書の面（便 15）は全節を読む: rail 3 段（段 2 は持ち主で reqs が空・basis に P-1）・verdicts 3 行・要件 2・非機能要件 1・
+# 受入 1・制約 1。promise に escape の要る字「<b>」「&」「二重引用符」を含む。
+# 図の節（便 34・FR15）: 最上位の figures に 1 枚（design-note/full.yaml の fig-1 と同じ形の 2 箱の構成図・refs は FR1）。
+# 面の歯は写しの親 dir に図の道具（vendor/archify）を置いて撃つ。
+
+meta:
+  id: fixture-srs
+  title: 見本の要件書
+  version: v0.3
+  status: effective
+  status_note: v0.3 = 2026-09-05 発効
+  generated: 2026-09-01
+  promise: "約束の 1 文（<b>太字</b> と A & B と \"引用\" をそのまま書いた）"
+  counts: {fr: 2, nfr: 1, ac: 1, con: 1}
+  approval:
+    - {role: 作成, who: 起草の席（AI）, when: 2026-09-01, stamp: 起草}
+    - {role: レビュー, who: 別の席（AI）, when: 2026-09-02, stamp: 所見 0}
+    - {role: 承認, who: 持ち主, when: 2026-09-05, stamp: 発効, verbatim: 承認する, version: v0.3}
+
+goals:
+  - {id: GOAL1, title: 相談できる, text: 最初と途中に窓口がある。}
+  - {id: GOAL2, title: 揃う, text: どの面も同じ見た目。}
+
+scope:
+  build:
+    - 相談窓口
+    - 3 面の生成
+  not_build:
+    - 図の自動配置
+
+scope_m1:
+  build:
+    - 設計ノートの生成
+  not_build:
+    - 他の repo の id の解決
+  note: M1 の着手は CON1 の順序に従う。
+
+actors:
+  - {id: owner, name: 持ち主, role: 答える・決める}
+  - {id: ai-session, name: AI セッション, role: 起動する}
+  - {id: folio, name: folio, role: 道具}
+outputs:
+  - {id: prep-sheet, name: 支度表, from: FR1}
+  - {id: verdict, name: 検査の結果, from: FR2}
+
+rail:
+  - {n: 1, who: folio, what: 相談を受ける, reqs: [FR1], note: 質問は 5 つまで。}
+  - {n: 2, who: 持ち主, what: あなたが決める, reqs: [], basis: [P-1]}
+  - {n: 3, who: folio, what: 面を出す, reqs: [FR2, NFR1]}
+
+verdicts:
+  - {id: pass, name: 合格, tone: ok, cond: 検査が最後まで動いて違反が無いとき}
+  - {id: fail, name: 不合格, tone: bad, cond: 検査が最後まで動いて違反が在るとき}
+  - {id: pending, name: まだ分からない, tone: neutral, cond: 検査そのものが動かせなかったとき}
+
+requirements:
+  - id: FR1
+    title: 相談して決められる
+    pattern: event
+    strength: must
+    when: 持ち主が窓口を開いたとき
+    shall: folio は易しい質問を推奨回答つきで出す。
+    plain: 質問が出て、どれにもおすすめが付きます。
+    basis: [P-1]
+    verify: {method: test, how: 決まった回答を入れて比べる, ac: [AC1]}
+    goals: [GOAL1]
+    figures: [図2-1, 図1]
+    rules: [R-1]
+    note: 要件の注の文。
+  - id: FR2
+    title: 結果を必ず返す
+    pattern: ubiquitous
+    strength: should
+    when: つねに
+    shall: folio は 3 値のどれかを返す。
+    plain: 合格か不合格のどちらかを出します。
+    basis: []
+    verify: {method: test+inspection, how: 床を壊して見る, ac: []}
+    goals: [GOAL2]
+    figures: [全段, 図3]
+    milestone: M1
+
+nonfunctional:
+  - id: NFR1
+    title: 説明文の上限
+    pattern: ubiquitous
+    strength: must
+    when: つねに
+    shall: 常時渡す説明文の合計は rules 行 R-1 の値以下にする。
+    plain: 説明文の量に上限を置きます。
+    basis: [A-1]
+    rules: [R-1]
+    verify: {method: inspection, how: 数えて比べる, ac: []}
+    goals: [GOAL1, GOAL2]
+    figures: [図2-3]
+
+acceptance:
+  - {id: AC1, title: 決まった回答で支度表ができる, plain: 答えを入れると表が出る。, verifies: [FR1], red_test: {sentence: 固定回答の fixture で期待の表と一致する, fixture: tests/fixtures/intake/answers.yaml}, note: 受入の注の文。, milestone: M1}
+
+not_frozen: 時間と token の数値はここに書かない。
+
+constraints:
+  - {id: CON1, title: 順序, text: 実装は持ち主の裁定で着手する。, basis: [P-1], rules: [D-1], source: 持ち主の裁定 2026-09-01}
+
+glossary_pointer: vocabulary.yaml（定義はここに写さない）
+
+figures:
+  - id: fig-1
+    type: archify-architecture
+    caption: 見本の図
+    refs: [FR1]
+    spec:
+      schema_version: 1
+      diagram_type: architecture
+      meta: {title: 面の組み立て, quality_profile: showcase}
+      components:
+        - {id: src, type: external, label: 正本, row: 0, col: 0}
+        - {id: face, type: frontend, label: 面, row: 0, col: 1}
+      connections:
+        - {from: src, to: face, label: 導出}
+      layout: {mode: grid, cols: 2, gapX: 70, gapY: 110, cellW: 160, cellH: 70}

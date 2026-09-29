@@ -1,0 +1,38 @@
+# folio2 支度表（folio intake の生成物・手で直さない・承認は対話面と台帳で）
+"meta":
+  "id": "folio2-intake-sheet"
+  "version": "v0.1"
+  "status": "draft"
+"documents":
+  - "id": "constitution"
+    "type": "憲法"
+    "with":
+      - "vocabulary"
+      - "rules"
+    "from": "q1"
+  - "id": "adr"
+    "type": "判断の記録"
+    "with": []
+    "from": "q3"
+  - "id": "design-note"
+    "type": "設計ノート"
+    "with": []
+    "from": "q4"
+"recommended": []
+"answers":
+  - "q": "q1"
+    "value": "はい"
+    "source": "answered"
+  - "q": "q2"
+    "value": "いいえ"
+    "source": "answered"
+  - "q": "q3"
+    "value": "はい"
+    "source": "answered"
+  - "q": "q4"
+    "value": "はい"
+    "source": "answered"
+  - "q": "q5"
+    "value": "いいえ"
+    "source": "answered"
+"approval": []

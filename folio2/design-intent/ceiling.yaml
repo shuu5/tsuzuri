@@ -1,0 +1,151 @@
+# folio2 天井の正本（v0.18・orchestrator 席）
+# 状態: v0.18 は発効（2026-09-27 12:50 JST 持ち主「承認する」・f2-648 notes・対話面 R-8・構造の直し A → C → B = 判断の記録 ADR-30 と要件書 第 1.49 版と同じ承認）= 判断の記録 ADR-30 決定 (4)(7)。4 観点の読む欄の判断の記録（adr）を題と状態（title・status）だけにし、規則の表（rules）を閾値の行（thresholds）だけにし、入口（index）の読む順番（lanes）を外した。問いの文は読む欄と両立しない字と、面に残る開発規律の行と判断の記録の本文を挙げない断りだけを直した。重さ・文書の一覧・観点の数と読み手は変えない
+# 位置: 判断の記録 ADR-8 決定 (1)(3)(4)・ADR-10（v0.2 = 1 周目の結果を受けた問いの文と読む欄の改訂）。観点 4 つ（文書の型に依らない）・観点ごとの問いの文と読む欄・文書の一覧・所見の欄の決まり・起動の記録の欄・重さと 3 値の値域・材料の束の要約値の規則を持つ。v0.3（判断の記録 ADR-11 決定 (4)①）= 観点ごとの 3 値・所見と記録の欄の決まり・束の中身と要約値の規則・反証の規則は、人が書く節をやめて末尾の生成区間（schema の節・正本は実装の定数・folio が導出する）に移した。人が書くのは meta・重さ（weights）・読む文書の行（documents）・観点の行（viewpoints）。
+# 前の版: v0.17 は発効（2026-09-27 00:40 JST 持ち主「承認する」・f2-648 notes・対話面 R-8・一括 27 の問 1 = 判断の記録 ADR-26 と要件書 第 1.48 版と同じ承認）= 判断の記録 ADR-26 決定 (3)(4)。人が書く節（重さ・文書の一覧・観点の行）は 1 字も変えない。判断の記録の状態の欄を周の引き金から外した一覧の写しは、引き金の便（判断の記録 ADR-26 決定 (3) の実装の便）が末尾の生成区間へ導出する。v0.17 から版の発効は規則の表の行 D-17 に従う（承認欄に「席の裁定」の行を記帳した時点・持ち主はいつでも覆せる）
+# 読み方: folio は AI を起動しない。観点ごとに材料の束（bundle）を組み、席か器が AI を回して所見（finding）と起動の記録（record）を同じ置き場へ書く。床は所見の形と記録の有無と束の要約値の一致だけを数え、所見の意味の当否は判定しない（P-1）。
+
+meta:
+  id: folio2-ceiling
+  title: 天井の正本（観点・所見の欄の決まり・起動の記録）
+  version: v0.18
+  status: effective
+  generated: 2026-09-19
+  approval:
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: 起草（判断の記録 ADR-8 決定 (1)(3)(4)・敵対検証の記録 docs/design/adr-8-grill.md を反映）}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648.52 notes 2026-09-19 13:1x JST・対話面 R-8・判断の記録 ADR-8 の発効と同時）", verbatim: 承認する, version: v0.1}
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-19, stamp: v0.2 の起草（判断の記録 ADR-10・1 周目の結果 = 重さの基準と領分を問いの文に・読む欄を揃える・束に語彙と規則の表）}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-19, stamp: "発効（f2-648 notes 2026-09-19 20:1x JST・対話面 R-8・判断の記録 ADR-10 の発効と同じ承認）", verbatim: どちらも承認する, version: v0.2}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-20, stamp: v0.3 の起草（判断の記録 ADR-11 決定 (4)①・決まりの部分を生成区間へ・人が書いた一覧 4 節を外す・整合の観点に語彙・生成区間を持つ file への所見の直す先）}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-20, stamp: "発効（f2-648 notes 2026-09-20 08:14 JST・対話面 R-8・天井の正本 第 3 版と要件書 v1.9 を 1 つの承認で発効する承認要求への回答・判断の記録 ADR-11 決定 (4)①）", verbatim: 承認する, version: v0.3}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-20, stamp: "v0.4 の起草（天井の 7 周目の整合 F-1・F-2 = 整合の観点の読み手の想定を 8 種に・問いの文に語彙を足す。読む欄・重さ・生成区間は不変）"}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-20, stamp: "発効（f2-648 notes 2026-09-20 16:36 JST・対話面 R-8・天井の 7 周目の報告の問 1 への回答・要件書 v1.14 と同じ承認）", verbatim: 承認する, version: v0.4}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-20, stamp: "v0.5 の起草（天井の 8 周目の整合 F-3 = 文書の一覧の規則の表の行に生成区間の注。観点・問いの文・読む欄・重さは不変）"}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-20, stamp: "発効（f2-648 notes 2026-09-20 17:21 JST・対話面 R-8・天井の 8 周目と総点検の報告の問 1 への回答・要件書 v1.15 と同じ承認）", verbatim: 承認する, version: v0.5}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-21, stamp: "v0.6 の起草（f2-648.66・天井の 10 周目の整合 F-2 = 忠実さの問いの文に判断の記録 ADR-8 決定 (1)① の 4 つ目〔弁別できない改番〕を足した。観点・読む欄・重さ・生成区間は不変）"}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-21, stamp: "発効（f2-648 notes 2026-09-21 07:26 JST・対話面 R-8・10 周目の報告の問 1 への回答・要件書 v1.17 と同じ承認）", verbatim: 承認する, version: v0.6}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-21, stamp: "v0.7 の起草（f2-648.66・天井の 11 周目の整合 F-5 = 実態との整合の読む文書に憲法と規則の表を足し、その 2 file の実装の状態の宣言を突き合わせる 1 点を問いの文に足した。観点・重さ・生成区間は不変）"}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-21, stamp: "発効（f2-648 notes 2026-09-21 08:59 JST・対話面 R-8・11 周目の報告の問 1 への回答・要件書 v1.18 と同じ承認）", verbatim: 問い１−４は推奨で進めて, version: v0.7}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-21, stamp: "v0.8 の起草（f2-648.66・天井の 12 周目の整合 F-7 = 整合の観点の読む文書に入口〔棚と読む順番〕を足し、読み手の想定を 9 種に・問いの文の文書の列に入口。観点・重さ・生成区間・ほかの 3 観点は不変）"}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-21, stamp: "発効（f2-648 notes 2026-09-21 10:17 JST・対話面 R-8・12 周目の報告の問 1 への回答・要件書 v1.19 と同じ承認）", verbatim: 承認する, version: v0.8}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-21, stamp: "v0.9 の起草（一括 10・天井 18 周目 整合 F-1 と 20 周目 整合 F-3 = 文書の一覧の入口とこの正本の行に生成区間の直す先の断り・観点と重さと読む欄は不変）", version: v0.9}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-21, stamp: "発効（f2-648 notes 2026-09-21 22:50 JST・対話面 R-8・天井 19・20 周目と一括 10 の承認要求への回答・要件書 v1.24 と同じ承認）", verbatim: 承認する。, version: v0.9}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-22, stamp: "v0.10 の起草（一括 11・天井 22 周目 整合 F-1 と 23 周目 整合 F-1 = 文書の一覧の 語彙・要件書・相談窓口 の 3 行に生成区間の直す先の断り／23 周目 整合 F-4 = 整合の読む文書の入口の行に相談窓口の節。観点と重さと生成区間は不変）", version: v0.10}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-22, stamp: "発効（f2-648 notes 2026-09-22 11:42 JST・対話面 R-8・一括 11 の承認要求〔🔴 8〕への回答）", verbatim: 全部承認する, version: v0.10}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-22, stamp: "v0.11 の起草（一括 12・便 97 の 🔴 1 = 観点の読む文書の欄に 8 対を足して実測に合わせる。直近 10 周の所見の根拠 183 件のうち 17 件が、面には出ているのに読む欄の宣言に無い節に在った。観点の数と重さと文書の一覧と生成区間は不変）", version: v0.11}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-22, stamp: "発効（f2-648 notes 2026-09-22 20:52 JST・対話面 R-8・一括 12 の承認要求〔問い 5 つ〕への回答・問 4）", verbatim: 全部承認する, version: v0.11}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-22, stamp: v0.12 起草（便 102・読む文書の一覧に索引の欄の決まりの正本 graph.yaml・束の骨格 6 語を生成区間へ導出）, version: v0.12}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-22, stamp: 発効（f2-648 notes 2026-09-22 20:52 JST・対話面 R-8・一括 12 の問 4 (2)(3)〔便 1 本で運ぶ〕への回答）, verbatim: 全部承認する, version: v0.12}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-23, stamp: "v0.13 の起草（一括 14・便 102 の 🔴 1 と天井 26 周目 整合 F-2 = 文書どうしの整合の観点の読む文書に索引の欄の決まり graph の閉じた一覧 3 つ・読み手の想定と問いの文の文書の列を 10 種に。観点の数と重さと文書の一覧とほかの 3 観点と生成区間は不変）", version: v0.13}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-23, stamp: "発効（f2-648 notes 2026-09-23 23:49 JST・対話面 R-8・一括 14 の問 3〔整合の観点だけに足す〕への回答・推奨どおり）", verbatim: 全部推奨で良い, version: v0.13}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-24, stamp: "v0.14 の起草（要件書 第 1.34 版〔版 B〕が最上位に足す M3 の範囲の節 scope_m3 を、要件書の scope か scope_m1 を読む 3 観点〔忠実さ・読みやすさ・文書どうしの整合〕の読む欄に同じ形で足す。便 117 の設計ノートの §1 (h) の 3〔天井の観点が scope_m3 を読まず束の落とした節の行に記録される〕を塞ぐ。観点の数と重さと問いの文と文書の一覧と実態の観点と生成区間は不変）", version: v0.14}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-24, stamp: "発効（f2-648 notes 2026-09-24 09:46 JST・対話面 R-8・要件書 第 1.34 版〔版 B〕の問 1 への回答・同じ承認）", verbatim: 裁定はすべて承認する, version: v0.14}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-24, stamp: "v0.15 の起草（判断の記録 ADR-18 決定 (1)(7)・周の引き金を規範の欄の要約値の変化に絞る。規範の欄の一覧の写しは便アが末尾の生成区間へ導出する。人が書く節〔重さ・文書の一覧・観点の行〕と観点の数は不変）", version: v0.15}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-24, stamp: "発効（f2-648 notes 2026-09-24 11:51 JST・対話面 R-8・報告 8102 の 8 問への回答・判断の記録 ADR-18 の問 1 = 案 a・要件書 第 1.36 版と同じ承認）", verbatim: 全部推奨で, version: v0.15}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-26, stamp: "v0.16 の起草（一括 25・台帳 f2-648.225 = 文書どうしの整合と実態との整合の観点の読む欄の判断の記録の行に改訂の欄 revises を足す。束の正本の写しに判断の記録 8 本の改訂の欄が入る。忠実さと読みやすさの読む欄と観点の数と重さと文書の一覧と読み手と問いの文と生成区間は不変）", version: v0.16}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-26, stamp: "発効（f2-648 notes 2026-09-26 15:22 JST（逐語「また３問についてもすべて承認する」）と 2026-09-26 15:28 JST（逐語「一括２５は承認する」・再確認）・対話面 R-8・一括 25〔問 1〜問 3〕の承認要求への回答・要件書 第 1.47 版と判断の記録 ADR-25 と同じ承認）", verbatim: 一括２５は承認する, version: v0.16}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-26, stamp: "v0.17 の起草（一括 27・判断の記録 ADR-26 決定 (3)(4)・起草役 opus 5.5。周の引き金の判断の記録の行から状態の欄と発効の絞りを外す〔写しは引き金の便が生成区間へ〕・版の発効を規則の表の行 D-17 の形に。人が書く節と観点の数は不変）", version: v0.17}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-27, stamp: "発効（f2-648 notes 2026-09-27 00:40 JST・対話面 R-8・一括 27〔問 1〕の承認要求への回答・判断の記録 ADR-26 と要件書 第 1.48 版と同じ承認）", verbatim: 承認する, version: v0.17}
+    - {role: 作成, who: orchestrator 席（AI・fable 5.1）, when: 2026-09-27, stamp: "v0.18 の起草（構造の直し A → C → B・判断の記録 ADR-30 決定 (4)(7)・起草役 opus 5.5。4 観点の読む欄の判断の記録を題と状態に・規則の表を閾値の行に・入口の読む順番を外す・問いの文の読む欄と両立しない字と面に残る分を挙げない断り〔改訂 a〕。重さと文書の一覧と観点の数と読み手と生成区間は不変）", version: v0.18}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-27, stamp: "発効（f2-648 notes 2026-09-27 12:50 JST・対話面 R-8・構造の直し A → C → B の承認〔天井は判断の記録の題と状態だけを読む・読む欄から運用の規則を外す〕・判断の記録 ADR-30 と要件書 第 1.49 版と同じ承認）", verbatim: 承認する, version: v0.18}
+
+# 所見の重さ。refute に挙げた重さの所見だけ、別の文脈の AI が中立に反証する（ADR-8 決定 (3)）。反証が「まだ分からない」なら所見は残す。重さの基準は各観点の問いの文が持つ（v0.2）
+weights:
+  values: [止める, 直す, 参考]
+  refute: [止める]
+
+# 読む文書の閉じた一覧（所見の場所の doc と、観点の reads の doc はここに解く）。file は設計文書の置き場からの相対
+documents:
+  - {id: constitution, file: constitution.yaml, note: 憲法。rules と語彙は付録}
+  - {id: rules, file: rules.yaml, note: 規則の表。先頭の schema の節は生成区間で、正本は実装の定数である（行 R-n・D-n は人が書く）。生成区間への所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: vocabulary, file: vocabulary.yaml, note: 語彙。末尾の schema の節は生成区間で、正本は実装の定数である（便 77 で着地）。生成区間への所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: srs, file: srs.yaml, note: 要件書。末尾の schema の節は生成区間で、正本は実装の定数である（便 77 で着地）。生成区間への所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: index, file: index.yaml, note: 入口。schema の節は生成区間で、正本は実装の定数である（便 76 で着地）。生成区間への所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: intake, file: intake.yaml, note: 相談窓口。末尾の schema の節は生成区間で、正本は実装の定数である（便 77 で着地）。生成区間への所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: adr, file: adr/, note: 判断の記録。1 本ずつ。置き場の欄の決まりの file（schema）の決まりの部分は生成区間で、正本は実装の定数である。そこへの所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: design-note, file: design-note/, note: 設計ノート。1 本ずつ。置き場の欄の決まりの file（schema）の決まりの部分は生成区間で、正本は実装の定数である。そこへの所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: ceiling, file: ceiling.yaml, note: この正本。末尾の schema の節は生成区間で、正本は実装の定数である。生成区間への所見の直す先は実装の側（便）で、file を手で直さない}
+  - {id: graph, file: graph.yaml, note: 索引の欄の決まり。節点と辺の種類と型の閉じた一覧を持つ。索引の中身そのものはこの file に置かない（毎回 folio graph --print が正本から組み直す導出物）。末尾の schema の節は生成区間で、正本は実装の定数である。生成区間への所見の直す先は実装の側（便）で、file を手で直さない}
+
+# 観点 4 つ（文書の型に依らない・順も固定・ADR-8 決定 (1)）。reads = その観点で読む文書と欄（欄の名は正本の欄の名・機械の層）。問いの文は重さの基準と床の領分を含む（v0.2・ADR-10）
+viewpoints:
+  - id: fidelity
+    name: 忠実さ
+    reader: 元の文と平易文の両方を読み、意味の差だけを拾う編集者
+    question: 人が書いた自由文（やさしく言うと・平易文・平易な説明）は、元の文（規範文・要件の文）の意味を保っているか。義務を足していないか、落としていないか。専門語の日本語の言い換えは語彙の正本の同じ語を指しているか。平易文が引く規則の表の値は表の値と同じか。図の根拠が指す先は、図の中身と合っているか。判断の記録の欄の決まりが「機械では弁別できない」とする改番（本文も変えたうえでの番号の付け替え）が起きていないか＝床は削除と新設として通すので数えない（判断の記録 ADR-8 決定 (1)① の 4 つ目・欄の決まりの限界の注）。重さ = 止める（言い換えが義務・要件・決定を変える）・直す（落としや足しはあるが義務は変わらない）・参考（提案）。参照 id の解決・欄の非空・件数は床の領分なので挙げない。判定できない箇所は「まだ分からない」と書く。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。
+    reads:
+      - {doc: constitution, fields: [articles.plain, articles.statements.text]}
+      - {doc: rules, fields: [thresholds]}
+      - {doc: vocabulary, fields: [terms, field_terms]}
+      - {doc: srs, fields: [requirements.plain, requirements.shall, acceptance.plain, acceptance.title, figures.refs, nonfunctional, scope_m1, scope_m3]}
+      - {doc: intake, fields: [questions]}
+      - {doc: adr, fields: [title, status]}
+      - {doc: design-note, fields: [sections, figures.refs]}
+  - id: readability
+    name: 読みやすさ
+    reader: この道具を初めて見る非エンジニア
+    question: 入口から歩いて「何が決まりで・何ができたら完成か」を、専門の言葉を知らなくても頑張れば読めるか。迷子になる導線、意味の取れない見出し、説明の無い専門語（語彙の正本に無い語・在るが面から引けない語）、読み手を想定していない章を挙げる。図の凡例の言語や数えの日本語の崩れは言葉の問題なのでこの観点で挙げる。重さ = 止める（非エンジニアが読み進められない = 導線が切れる・要旨が取れない）・直す（読めるが引っかかる）・参考（提案）。「止める」と言う前に、案内された先の面に説明や凡例が在るかを面で確かめる。見た目の崩れ（幅・色・重なり）は床の領分なので挙げない。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。
+    reads:
+      - {doc: index, fields: [audience, shelf, intake]}
+      - {doc: constitution, fields: [articles.title, articles.plain, precedence, sources]}
+      - {doc: rules, fields: [thresholds]}
+      - {doc: vocabulary, fields: [terms]}
+      - {doc: srs, fields: [goals, scope, scope_m3, requirements.title, requirements.plain, nonfunctional, constraints, acceptance, figures]}
+      - {doc: intake, fields: [questions]}
+      - {doc: adr, fields: [title, status]}
+      - {doc: design-note, fields: [sections]}
+  - id: coherence
+    name: 文書どうしの整合
+    reader: 10 種の文書を横に並べて矛盾を探す審査役
+    question: 憲法・規則の表・要件書・判断の記録・設計ノート・相談窓口・天井の正本・語彙・入口・索引の欄の決まりの間に、意味の矛盾・同じことの二重の記述・範囲の越境（要件書が決定を書く等）・参照 id は解けているが指す意味が違う箇所は無いか。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。重さ = 止める（2 つの文書が両立しない義務や決定を持つ = どちらかが誤り。条が名指す置き場を越えた記述〔台帳に規則・型付きデータに裁定 等〕もここ）・直す（二重の記述・条に反しない越境・意味のずれ・両立はする）・参考（提案）。床が数える一致（参照 id の解決・欄の非空・番号・件数）は挙げない。
+    reads:
+      - {doc: constitution, fields: [articles, precedence]}
+      - {doc: rules, fields: [thresholds]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints, scope, scope_m1, scope_m3]}
+      - {doc: adr, fields: [title, status]}
+      - {doc: design-note, fields: [sections]}
+      - {doc: intake, fields: [targets, questions]}
+      - {doc: ceiling, fields: [documents, viewpoints]}
+      - {doc: vocabulary, fields: [terms, field_terms]}
+      - {doc: index, fields: [shelf, intake]}
+      - {doc: graph, fields: [schema.node_kinds, schema.edge_types, schema.edge_fields]}
+  - id: reality
+    name: 実態との整合
+    reader: 設計文書と版管理の中身を突き合わせる実装者
+    question: 設計文書が言うこと（要件・非機能要件・契約表の行）と、版管理の中の実装（code）・契約表の導出物・台帳の着地の記録の間に、意味の食い違いは無いか。実装が無い要件、着地したのに文書が古いままの箇所を挙げる。憲法の条の機構の注と規則の表の行の注が言う実装の状態（未実装である・数える口が無い・判定は「まだ分からない」）が、版管理の中の実装と合うかも見る（日付を添えた記述なので古くなりうる）。重さ = 止める（文書が実態と逆のことを約束している）・直す（古い・欠けている記述）・参考（提案）。床が数える一致（参照 id の解決・着地の印・欄の一致）は挙げない。規則の表の開発規律の行（discipline）と判断の記録の本文は、面に載っていても所見に挙げない（判断の記録 ADR-30 決定 (4)(7)）。
+    reads:
+      - {doc: constitution, fields: [articles.mechanism, articles.statements.text]}
+      - {doc: rules, fields: [thresholds]}
+      - {doc: srs, fields: [requirements, nonfunctional, acceptance, constraints]}
+      - {doc: adr, fields: [title, status]}
+      - {doc: design-note, fields: [sections]}
+
+# 決まりの部分（生成区間）。観点ごとの 3 値・観点と読む文書の閉じた id・所見と起動の記録の欄・束の中身と要約値の規則・反証の束と結果の欄と規則の文。何にするかの裁定の正本は設計文書（要件書 FR5・判断の記録 ADR-8）で、機械が執行する規則の正本は実装の定数（判断の記録 ADR-11 決定 (3)(イ)(ウ)(オ)）。直すときは実装の側を便で直す。憲法の schema の節（file が正本）とは向きが逆である（規則の表の schema の節は同じ向き = 生成区間・判断の記録 ADR-11 決定 (4)②）
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  top_level: [meta, weights, documents, viewpoints, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。meta・weights・documents・viewpoints は人が書き、schema は生成区間
+  verdicts: {values: [合格, 不合格, まだ分からない]}
+  verdicts_note: 観点ごとの 3 値（順も固定）。1 つでも「まだ分からない」なら天井は合格にならない。何にするかの裁定の正本は要件書 FR5 と判断の記録 ADR-8 決定 (4)
+  viewpoints: [fidelity, readability, coherence, reality]
+  viewpoints_note: 観点の閉じた id の列（順も固定）。viewpoints の行はこの id に 1 つずつ要る。何にするかの裁定の正本は判断の記録 ADR-8 決定 (1)。観点を増やさないことは憲法 N-5
+  documents: [constitution, rules, vocabulary, srs, index, intake, ceiling, adr, design-note, graph]
+  documents_note: 読む文書の閉じた id の集合（順は問わない）。documents の行はこの id に 1 つずつ要る。所見の場所の doc と観点の reads の doc はこの行に解く
+  finding:
+    required: [id, viewpoint, place, weight, evidence]
+    optional: [refute, note]
+    place: {required: [doc, at]}
+    refute: {values: [支持, 退けた, まだ分からない]}
+  finding_note: 所見 1 件の欄の決まり。place は documents の id と、欄か節か行の id。evidence は正本の逐語の引用（床が実在を照合する）。weight の値域と反証に回す重さは人が書く weights の節が持つ
+  record: {required: [model, effort, at, read, bundle]}
+  record_note: 起動の記録の欄（観点ごとに 1 つ・合格の観点にも必須）。1 つでも欠けるか bundle の要約値が束と合わなければ、床がその観点を「まだ分からない」に落とす（判断の記録 ADR-8 決定 (3)）
+  bundle:
+    contents: [sources, faces, question, finding, reads]
+    digest: sha256-files-1
+    skeleton: [meta, id, title, status, date, schema]
+  bundle_note: 材料の束の中身（観点ごとに 1 つの置き場）と要約値の規則。要約値は束の file を path の byte 順に並べ、中身を連結した sha256（rules 行 R-15 の写しの要約値と同じ規則）。skeleton は sources の写しで常に残す最上位の節の閉じた一覧（観点が読むと宣言した欄に関わらず残す＝どの版の何を読んでいるかを決める欄）
+  refute:
+    contents: [finding.yaml, question.yaml, reads.yaml, schema.yaml, sources.txt]
+    result_required: [id, refute, model, effort, at, bundle]
+    rule: 所見を出した文脈から独立して中立に検証する。根拠が正本に逐語で在り、主張が正本の文から裏付けられれば 支持。根拠が無い、または主張が正本の文と両立しないと裏付けられれば 退けた。材料だけでは決められなければ まだ分からない（所見は残る）。
+  refute_note: 反証の束の中身（名の byte 順）・反証役が書く結果の file の欄（全部空でない文）・反証役へ渡す規則の文（逐語）
+# folio:schema:end

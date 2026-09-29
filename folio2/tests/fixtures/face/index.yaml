@@ -1,0 +1,61 @@
+# folio face の凍結 fixture（便 16・P-10.1）— 入口の正本の最小形。手書き・design-intent/ の写しではない。
+# 棚は表の id を全部持つ（legend 4・documents 4・annexes 2・relations 4）。読む順番は 1 行・行き先 2 つ（憲法の章と要件書の図）。
+# audience の text に escape の要る字「&」「<b>」を含む。
+
+meta:
+  id: fixture-index
+  title: 見本の入口
+  version: v0.1
+  status: draft
+  generated: 2026-09-03
+
+audience:
+  label: 誰のための見本か
+  short: 持ち主と AI
+  text: 持ち主 & AI が <b>同じ</b> ページを読む。
+
+shelf:
+  title: 見本の文書
+  explain: 見本の棚の説明。
+  legend:
+    - {id: readable, text: 読める}
+    - {id: absent, text: まだ無い}
+    - {id: binds, text: 矢印}
+    - {id: inside, text: 点線}
+  documents:
+    - {id: constitution, type: 憲法, use: 譲らない線。, absent: null}
+    - {id: srs, type: 要件書, use: やること。, absent: null}
+    - {id: design-note, type: 設計ノート, use: 組み立て方。, absent: 後で書く}
+    - {id: adr, type: 判断の記録, use: 戻せない判断の記録。, absent: まだ無い判断}
+  annexes:
+    - {id: vocabulary, type: 語彙, inside: constitution}
+    - {id: rules, type: 数値の表, inside: constitution}
+  relations:
+    - {id: binds, from: constitution, to: srs, label: 縛る, hint: 憲法が要件書を決める}
+    - {id: before-build, from: srs, to: design-note, label: 実装の前に, hint: 要件書の後に書く}
+    - {id: inside, from: constitution, to: vocabulary, label: 中にある, hint: 憲法の中の節}
+    - {id: amends, from: adr, to: constitution, label: 憲法を改訂する, hint: 記録と承認が先}
+
+lanes:
+  title: 見本の読み方
+  lead: 目的別に読む。
+  rows:
+    - id: first
+      mark: 初
+      who: はじめて読む人
+      why: 何のためかをつかむ
+      minutes: 5
+      stops:
+        - {doc: constitution, at: s0, label: 目指すこと}
+        - {doc: srs, at: fig-rail, label: 段の図}
+
+intake:
+  title: 見本の相談窓口
+  lead: 最初に相談する。
+  heading: AI に頼む
+  command: folio intake
+  text: 質問が出る。
+  steps:
+    - 質問
+    - 支度表
+  note: 補足の文。

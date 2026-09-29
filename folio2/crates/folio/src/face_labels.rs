@@ -1,0 +1,747 @@
+//! 面の共有の名札（便 87・docs/design/delivery-87.md §1 (a)）。憲法の値域の型（`constitution_enums`）への網羅の
+//! 場合分けで持つ名札と、値域に依らない名札の表を持つ。便 87 で `face.rs` から移したもので、字は 1 字も変えていない。
+//! 公開の名は `face.rs` から丸ごと再輸出されるので、呼び出し側は `crate::face::…` のまま名指せる。
+//! 入口の棚の閉じた一覧（`Shelf` と表 4 つ）は便 109 で `shelf.rs` へ降ろした（ADR-15・層 1 読む）。
+
+use crate::constitution_enums as ce;
+use crate::cursor::{R, X};
+use crate::rules;
+
+// ── 名札（β・憲法の値域の名札は導出した型への網羅の場合分け・便 50）──
+// 憲法の値域（`constitution_enums`・組み立て時に憲法の正本から導出）の名札は、型の値の全部を並べた場合分けで持ち、
+// その他を受ける枝を置かない = 憲法の側で値が足されても消えても組み立てが通らない（ADR-11 決定 (4)②）。
+// 値域の値の字面（must-not・ask-first など）を鍵にした表は持たない。
+
+/// 段の名札。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tier {
+    pub name: &'static str,
+    pub en: &'static str,
+    pub class: &'static str,
+    pub color: &'static str,
+    pub meaning: &'static str,
+    /// 外すのに要るもの（字面）
+    pub remove: &'static str,
+    /// 外すのに要るもの（§6 への xref を含む HTML）
+    pub remove_html: &'static str,
+}
+
+/// 段 → 名札。
+pub fn tier_label(t: ce::Tier) -> Tier {
+    match t {
+        ce::Tier::Always => Tier {
+            name: "いつも守る",
+            en: "Always",
+            class: "tier-always",
+            color: "ok",
+            meaning: "道具も AI も、毎回これに従う",
+            remove: "憲法の改訂（§6: 判断の記録 + 持ち主の承認）",
+            remove_html: "憲法の改訂（<a class=\"xref\" href=\"#s6\">§6</a>: 判断の記録 + 持ち主の承認）",
+        },
+        ce::Tier::AskFirst => Tier {
+            name: "確認してから変える",
+            en: "Ask-first",
+            class: "tier-askfirst",
+            color: "warn",
+            meaning: "やってよいが、実行前に持ち主へ確認する",
+            remove: "その場の持ち主の確認",
+            remove_html: "その場の持ち主の確認",
+        },
+        ce::Tier::Never => Tier {
+            name: "絶対にやらない",
+            en: "Never",
+            class: "tier-never",
+            color: "bad",
+            meaning: "確認があってもやらない",
+            remove: "憲法の改訂（確認では解けない）",
+            remove_html: "<a class=\"xref\" href=\"#s6\">憲法の改訂</a>（確認では解けない）",
+        },
+    }
+}
+
+/// 段の表引き（値域に無い値は Err）。
+pub fn tier_of(key: &str) -> R<Tier> {
+    ce::Tier::from_name(key)
+        .map(tier_label)
+        .ok_or_else(|| format!("段 の表に無い値「{key}」"))
+}
+
+/// 強度 → 規範の語。
+pub fn strength_label(s: ce::Strength) -> &'static str {
+    match s {
+        ce::Strength::Must => "MUST",
+        ce::Strength::MustNot => "MUST NOT",
+        ce::Strength::Should => "SHOULD",
+    }
+}
+
+/// 強度 → 意味（要件書の凡例）。
+pub fn strength_meaning(s: ce::Strength) -> &'static str {
+    match s {
+        ce::Strength::Must => "必ず守る",
+        ce::Strength::MustNot => "決してしない",
+        ce::Strength::Should => "強い推奨（外すなら理由が要る）",
+    }
+}
+
+/// 強度 → 色の class（prio）。
+pub fn strength_prio(s: ce::Strength) -> &'static str {
+    match s {
+        ce::Strength::Must | ce::Strength::MustNot => "must",
+        ce::Strength::Should => "should",
+    }
+}
+
+/// 型（EARS の pattern）→ 名札。
+pub fn pattern_label(p: ce::Pattern) -> &'static str {
+    match p {
+        ce::Pattern::Ubiquitous => "つねに",
+        ce::Pattern::Event => "〜のとき",
+        ce::Pattern::State => "〜のあいだ",
+        ce::Pattern::Unwanted => "〜になったら",
+        ce::Pattern::Optional => "〜ならば",
+    }
+}
+
+/// 縛る相手 → 名札。
+pub fn binds_label(b: ce::Binds) -> &'static str {
+    match b {
+        ce::Binds::Tool => "道具",
+        ce::Binds::Practice => "作法",
+        ce::Binds::Both => "両方",
+    }
+}
+
+/// 機構の種別 → 名札。
+pub fn mechanism_kind_label(k: ce::MechanismKind) -> &'static str {
+    match k {
+        ce::MechanismKind::Reject => "機械が拒む",
+        ce::MechanismKind::BuildCheck => "生成時の検査",
+        ce::MechanismKind::HumanReview => "人が目で確かめる",
+        ce::MechanismKind::None => "なし",
+    }
+}
+
+/// 機構の live → 名札（now でない 4 値は 1 つの名札・「まだ分からない」の字は使わない・ADR-23 決定 (4)・便 132）。
+pub fn mechanism_live_label(l: ce::MechanismLive) -> &'static str {
+    match l {
+        ce::MechanismLive::Now => "いま動く",
+        ce::MechanismLive::M0
+        | ce::MechanismLive::Delivery0
+        | ce::MechanismLive::M1
+        | ce::MechanismLive::Adr => "機構がまだ無い",
+    }
+}
+
+/// 機構の live → 意味（now でない 4 値は床が判定しないことと憲法が書く実在の予定を正本の字のまま残す・便 132・141）。
+pub fn mechanism_live_meaning(l: ce::MechanismLive) -> &'static str {
+    match l {
+        ce::MechanismLive::Now => "今の folio に在る",
+        ce::MechanismLive::M0 => "床は判定しない・憲法が書く実在の予定は M0",
+        ce::MechanismLive::Delivery0 => "床は判定しない・憲法が書く実在の予定は delivery-0",
+        ce::MechanismLive::M1 => "床は判定しない・憲法が書く実在の予定は M1",
+        ce::MechanismLive::Adr => "床は判定しない・憲法が書く実在の予定は adr",
+    }
+}
+
+/// stage → 名札。
+pub fn stage_label(s: ce::Stage) -> &'static str {
+    match s {
+        ce::Stage::InLoop => "編集時",
+        ce::Stage::Post => "事後",
+    }
+}
+
+/// polarity → 名札。
+pub fn polarity_label(p: ce::Polarity) -> &'static str {
+    match p {
+        ce::Polarity::FailOpen => "開く",
+        ce::Polarity::FailClosed => "閉じる",
+    }
+}
+
+/// 根拠の種別 → 名札。
+pub fn rationale_kind_label(k: ce::RationaleKind) -> &'static str {
+    match k {
+        ce::RationaleKind::V1Incident => "v1 の実害",
+        ce::RationaleKind::Scribe2Article => "scribe2 の条",
+        ce::RationaleKind::Folio2Ruling => "持ち主の裁定",
+    }
+}
+
+/// 撤退条件の種別 → 名札（憲法の面・判断の記録の面の名札は `face_adr.rs`）。
+pub fn retreat_kind_label(k: ce::RetreatKind) -> &'static str {
+    match k {
+        ce::RetreatKind::Spike => "試して測る",
+        ce::RetreatKind::Measure => "測る",
+        ce::RetreatKind::Ruling => "持ち主に問う",
+    }
+}
+
+/// rules 行の種別 → 名札（便 54・値域は `rules::RuleKind`・網羅の場合分けで値が足されても消えても組み立てが通らない）。
+pub fn rule_kind_label(k: rules::RuleKind) -> &'static str {
+    match k {
+        rules::RuleKind::Deny => "測って落とす",
+        rules::RuleKind::BuildCheck => "生成時の検査",
+        rules::RuleKind::Detect => "記録のみ",
+        rules::RuleKind::HumanReview => "人が守る作法",
+    }
+}
+
+/// rules 行の状態 → state の chip の class（便 54・値域は `rules::RuleStatus`）。
+pub fn rule_status_class(s: rules::RuleStatus) -> &'static str {
+    match s {
+        rules::RuleStatus::Provisional => "state warn",
+        rules::RuleStatus::Frozen => "state ok",
+        rules::RuleStatus::Undecided => "state",
+    }
+}
+
+// ── 名札の表（β・値域に依らない表・表に無い値は導出できない）──
+
+pub const DOC_STATUS: &[(&str, &str)] = &[
+    ("effective", "発効・拘束力あり"),
+    ("draft", "未承認・拘束力なし"),
+];
+/// 確かめ方の 1 語の名札（test+inspection は 2 つを「 + 」で繋ぐ・関数 method_label）。
+pub const METHOD: &[(&str, &str)] = &[
+    ("test", "実際に動かして確かめる（Test）"),
+    ("inspection", "目で見て確かめる（Inspection）"),
+];
+/// 図の色（class は tone-<値>・凡例の sw は sw <値>）。
+pub const TONE: &[(&str, &str)] = &[
+    ("ok", "tone-ok"),
+    ("bad", "tone-bad"),
+    ("neutral", "tone-neutral"),
+    ("warn", "tone-warn"),
+];
+
+/// 入口の状態の名札。
+pub const INDEX_STATUS: &[(&str, &str)] = &[("draft", "下書き・拘束力なし"), ("effective", "発効")];
+
+// ── 版の立場（便 138・delivery-138.md §1 (b) の 1）──
+// 要件書の欄 meta の version・status・effective_version から、効いている版と版の欄の立場を 1 つの口で決める。
+// 新しいか古いかは比べない（字が違えば Pending）。
+
+/// 版の欄が効いている版より先に進んでいるときの札。
+pub const PENDING: &str = "起草・承認待ち";
+/// 発効なのに効いている版の欄が無いときの札（P-4.2）。
+pub const UNKNOWN_EFFECTIVE: &str = "効く版はまだ分からない";
+
+/// 版の立場。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Standing {
+    /// 状態が draft（効いている版は読まない）。
+    Draft,
+    /// 効いている版 = 版の欄。
+    Effective,
+    /// 効いている版（escape 済み）≠ 版の欄。
+    Pending(String),
+    /// 発効だが効いている版の欄が無い。
+    Unknown,
+}
+
+/// 欄 meta の版の立場。状態が文書の状態の表に無い・effective_version が scalar でないなら Err。
+pub fn standing(m: &X<'_>) -> R<Standing> {
+    let status = m.f("status")?;
+    status.lookup(DOC_STATUS, "文書の状態")?;
+    if status.v.as_str() != Some("effective") {
+        return Ok(Standing::Draft);
+    }
+    Ok(match m.g("effective_version")? {
+        None => Standing::Unknown,
+        Some(ev) => {
+            let ev = ev.text()?;
+            if ev == m.f("version")?.text()? {
+                Standing::Effective
+            } else {
+                Standing::Pending(crate::cursor::esc(&ev))
+            }
+        }
+    })
+}
+
+impl Standing {
+    /// 鮮度の札の版と名札（`version`・`label` は escape 済み）。
+    pub fn stamp(&self, version: &str, label: &str) -> (String, String) {
+        match self {
+            Standing::Pending(ev) => (ev.clone(), format!("{label}・{version} は{PENDING}")),
+            Standing::Unknown => (version.to_string(), UNKNOWN_EFFECTIVE.to_string()),
+            Standing::Draft | Standing::Effective => (version.to_string(), label.to_string()),
+        }
+    }
+
+    /// 表紙の状態（`state` は今の字）。
+    pub fn cover(&self, version: &str, state: String) -> String {
+        match self {
+            Standing::Pending(ev) => format!("{ev} が{state}・{version} は{PENDING}"),
+            Standing::Unknown => format!("{state}・{UNKNOWN_EFFECTIVE}"),
+            Standing::Draft | Standing::Effective => state,
+        }
+    }
+
+    /// 承認欄のリードの名札。
+    pub fn lead(&self, version: &str, label: &str) -> String {
+        match self {
+            Standing::Pending(_) => format!("{label}（{version} は{PENDING}）"),
+            Standing::Unknown => format!("{label}（{UNKNOWN_EFFECTIVE}）"),
+            Standing::Draft | Standing::Effective => label.to_string(),
+        }
+    }
+
+    /// 入口の棚のカードの更新の行に添える字。
+    pub fn card(&self) -> String {
+        match self {
+            Standing::Pending(ev) => format!("（{PENDING}・発効は {ev}）"),
+            Standing::Unknown => format!("（{UNKNOWN_EFFECTIVE}）"),
+            Standing::Draft | Standing::Effective => String::new(),
+        }
+    }
+}
+
+// ── 表紙の日付（便 145・delivery-145.md §1 (b) の 1）──
+// 要件書の承認の日付は承認欄の最後の 承認 か 席の裁定 の行（表紙の状態・入口のカード・鮮度の札・版の札が同じ口から取る）。
+
+/// 表紙の日付に読む承認欄の役（便 193）: 持ち主の承認と、規則の表の行 D-17 の席の裁定（席の裁定で発効した版の日付）。
+pub const DATED_ROLES: [&str; 2] = ["承認", "席の裁定"];
+
+/// 欄 meta の承認欄の最後の 承認 か 席の裁定 の行（`DATED_ROLES`）の日付（escape 済み）。draft か承認欄かその行が無ければ None
+/// （入口の承認欄は床が数えないので、無ければ生成日に落とす・便 146）。
+pub fn last_approval(m: &X<'_>) -> R<Option<String>> {
+    if standing(m)? == Standing::Draft {
+        return Ok(None);
+    }
+    let Some(rows) = m.g("approval")? else {
+        return Ok(None);
+    };
+    let mut when = None;
+    for row in rows.seq()? {
+        if row.f("role")?.v.as_str().is_some_and(|r| DATED_ROLES.contains(&r)) {
+            when = Some(row.ef("when")?);
+        }
+    }
+    Ok(when)
+}
+
+/// 面の日付の（名・日付）。承認の日付が在れば（承認・その日付）・無ければ（生成・`fallback` の日付）。名の値域は
+/// この 2 つだけ。承認の日付が在るときは `fallback` を呼ばない（便 146）。
+pub fn named(
+    approved: Option<String>,
+    fallback: impl FnOnce() -> R<String>,
+) -> R<(&'static str, String)> {
+    Ok(match approved {
+        Some(date) => ("承認", date),
+        None => ("生成", fallback()?),
+    })
+}
+
+/// 表紙の日付の（名・日付）。承認の日付が在れば（承認・その日付）・無ければ（生成・meta.generated）。
+pub fn dated(m: &X<'_>, approved: Option<String>) -> R<(&'static str, String)> {
+    named(approved, || m.ef("generated"))
+}
+
+/// 承認欄が 1 つの表（判断の記録）の承認の日付（escape 済み）。状態が `unread`（承認を読まない状態）に
+/// 在るか、承認欄 approval が無ければ None。状態の欄が無ければ Err（便 146）。
+pub fn approval_date(x: &X<'_>, unread: &[&str]) -> R<Option<String>> {
+    let status = x.f("status")?.text()?;
+    if unread.contains(&status.as_str()) {
+        return Ok(None);
+    }
+    x.g("approval")?.map(|ap| ap.ef("date")).transpose()
+}
+
+// ── 型ごとの面の日付と入口の棚の 更新（便 147・delivery-147.md §1 (b) の 1・2）──
+// 判断の記録と設計ノートの面の鮮度の札・足の行と、入口の棚のカードが同じ口と同じ一覧を読む（P-6.3）。
+
+/// 判断の記録で承認欄を読まない状態（提案中）。
+pub const ADR_UNREAD: &[&str] = &["proposed"];
+/// 設計ノートで承認欄を読まない状態（draft と見本）。
+pub const NOTE_UNREAD: &[&str] = &["draft", "example"];
+
+/// 判断の記録の面の（名・日付）: 承認欄の日付（提案中は読まない）・無ければ（生成・記録の欄 date）（便 146）。
+pub fn adr_dated(a: &X<'_>) -> R<(&'static str, String)> {
+    named(approval_date(a, ADR_UNREAD)?, || a.ef("date"))
+}
+
+/// 設計ノートの承認欄の項（床の row_list と同じく項の一覧・便 163）。無いか null なら空・一覧でなければ Err
+/// （表 1 つは床も まだ分からない）・表でない項も Err（黙って飛ばさない）。
+pub fn note_approvals<'a>(meta: &X<'a>) -> R<Vec<X<'a>>> {
+    let Some(ap) = meta.g("approval")? else {
+        return Ok(Vec::new());
+    };
+    let rows = ap.seq()?;
+    for row in &rows {
+        row.pairs()?;
+    }
+    Ok(rows)
+}
+
+/// 設計ノートの承認の日付（escape 済み）: 最後の項の日付（便 163）。状態が draft か見本なら読まない（None）・
+/// 承認欄が無いか空なら None。状態の欄が無ければ Err。
+pub fn note_approval_date(meta: &X<'_>) -> R<Option<String>> {
+    let status = meta.f("status")?.text()?;
+    if NOTE_UNREAD.contains(&status.as_str()) {
+        return Ok(None);
+    }
+    note_approvals(meta)?
+        .last()
+        .map(|row| row.ef("date"))
+        .transpose()
+}
+
+/// 設計ノートの面の（名・日付）: 承認欄の最後の項の日付（draft と見本は読まない）・無ければ（生成・meta.generated）
+/// （便 146・163）。
+pub fn note_dated(meta: &X<'_>) -> R<(&'static str, String)> {
+    named(note_approval_date(meta)?, || meta.ef("generated"))
+}
+
+/// 入口の棚のカードの 更新 の日付。定め = **その型の文書の面が鮮度の札に出す日付（効いた日）のうち最も新しいもの**。
+/// 型ごとに、憲法 = 今の版の承認の日付（draft は生成日・便 144）／要件書 = 承認欄の最後の 承認 か 席の裁定 の行（無ければ
+/// 生成日・便 145・193）／判断の記録 = 各記録の `adr_dated` の最大／設計ノート = 各設計ノートの `note_dated` の最大。
+/// 日付の列（escape 済み）の最大を返し、1 つも無ければ空の字。日付は正本の字のまま比べる（便 147）。
+pub fn shelf_updated<'a>(dates: impl IntoIterator<Item = &'a str>) -> String {
+    dates.into_iter().max().unwrap_or_default().to_string()
+}
+
+/// 読む順番の行き先（stops の at）→ その面の anchor か。憲法は s0〜s8・要件書は s1〜s8 と 3 つの図・
+/// 判断の記録は `ADR-<1 以上の数>`（記録の面は 1 本 1 枚なので行き先は記録の id そのもの・便 66）。
+pub fn stop_anchor(doc: &str, at: &str) -> R<()> {
+    let chapter = |from: u8| matches!(at.as_bytes(), [b's', d] if (b'0' + from..=b'8').contains(d));
+    let record = || match at.strip_prefix("ADR-") {
+        Some(n) => n.bytes().all(|b| b.is_ascii_digit()) && n.parse::<u64>().is_ok_and(|n| n >= 1),
+        None => false,
+    };
+    let ok = match doc {
+        "constitution" => chapter(0),
+        "srs" => chapter(1) || matches!(at, "fig-context" | "fig-rail" | "fig-verdicts"),
+        "adr" => record(),
+        _ => false,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(format!(
+            "行き先「{doc}#{at}」はその面の節の id（判断の記録は記録の id）に無い"
+        ))
+    }
+}
+
+/// 確かめ方（verify の method）の名札。表に無い値は Err。
+pub fn method_label(x: &X<'_>) -> R<String> {
+    if x.v.as_str() == Some("test+inspection") {
+        return Ok(METHOD
+            .iter()
+            .map(|(_, l)| *l)
+            .collect::<Vec<_>>()
+            .join(" + "));
+    }
+    Ok(x.lookup(METHOD, "確かめ方")?.to_string())
+}
+
+#[cfg(test)]
+mod face_labels_tests {
+    use super::*;
+    use crate::yaml;
+
+    fn standing_of(meta: &str) -> R<Standing> {
+        let v = yaml::parse_typed(meta).unwrap();
+        standing(&X::root(&v, "meta"))
+    }
+
+    #[test]
+    fn f138_standing_reads_status_version_and_effective_version() {
+        // 凍結の針（delivery-138.md §1 (b) の 1 の字を手で写した）
+        assert_eq!(PENDING, "起草・承認待ち");
+        assert_eq!(UNKNOWN_EFFECTIVE, "効く版はまだ分からない");
+        let s = |m: &str| standing_of(m).unwrap();
+        assert_eq!(
+            s("{version: v0.3, status: effective, effective_version: v0.3}"),
+            Standing::Effective
+        );
+        assert_eq!(
+            s("{version: v0.4, status: effective, effective_version: v0.3}"),
+            Standing::Pending("v0.3".to_string())
+        );
+        assert_eq!(s("{version: v0.3, status: effective}"), Standing::Unknown);
+        assert_eq!(
+            s("{version: v0.4, status: draft, effective_version: v0.3}"),
+            Standing::Draft
+        );
+        assert_eq!(s("{version: v0.4, status: draft}"), Standing::Draft);
+        // 効いている版は escape する
+        assert_eq!(
+            s("{version: v0.4, status: effective, effective_version: \"<v0.3>\"}"),
+            Standing::Pending("&lt;v0.3&gt;".to_string())
+        );
+        // 表の外の状態と一覧の effective_version は導出できない
+        let e = standing_of("{version: v0.3, status: retired, effective_version: v0.3}").unwrap_err();
+        assert_eq!(e, "meta.status: 文書の状態 の表に無い値「retired」");
+        assert!(
+            standing_of("{version: v0.3, status: effective, effective_version: [v0.3]}").is_err()
+        );
+        // 札の字（§1 (b) の 2・3 の表）
+        let p = Standing::Pending("v1.41".to_string());
+        assert_eq!(
+            p.stamp("v1.42", "発効・拘束力あり"),
+            (
+                "v1.41".to_string(),
+                "発効・拘束力あり・v1.42 は起草・承認待ち".to_string()
+            )
+        );
+        assert_eq!(
+            p.cover("v1.42", "発効・拘束力あり（承認 2026-09-25）".to_string()),
+            "v1.41 が発効・拘束力あり（承認 2026-09-25）・v1.42 は起草・承認待ち"
+        );
+        assert_eq!(
+            p.lead("v1.42", "発効・拘束力あり"),
+            "発効・拘束力あり（v1.42 は起草・承認待ち）"
+        );
+        assert_eq!(p.card(), "（起草・承認待ち・発効は v1.41）");
+        let u = Standing::Unknown;
+        assert_eq!(
+            u.stamp("v0.3", "発効・拘束力あり"),
+            ("v0.3".to_string(), "効く版はまだ分からない".to_string())
+        );
+        assert_eq!(
+            u.cover("v0.3", "発効・拘束力あり（承認 2026-09-05）".to_string()),
+            "発効・拘束力あり（承認 2026-09-05）・効く版はまだ分からない"
+        );
+        assert_eq!(
+            u.lead("v0.3", "発効・拘束力あり"),
+            "発効・拘束力あり（効く版はまだ分からない）"
+        );
+        assert_eq!(u.card(), "（効く版はまだ分からない）");
+        for k in [Standing::Effective, Standing::Draft] {
+            assert_eq!(
+                k.stamp("v0.3", "発効・拘束力あり"),
+                ("v0.3".to_string(), "発効・拘束力あり".to_string())
+            );
+            assert_eq!(k.cover("v0.3", "x".to_string()), "x");
+            assert_eq!(k.lead("v0.3", "x"), "x");
+            assert_eq!(k.card(), "");
+        }
+    }
+
+    #[test]
+    fn f145_last_approval_and_dated_read_the_approval_rows() {
+        // 行の並び 作成・承認・承認・作成（delivery-145.md §1 (c) の 1）
+        let rows = "approval: [{role: 作成, when: 2026-09-01}, {role: 承認, when: 2026-09-03}, \
+                    {role: 承認, when: \"2026-09-<05>\"}, {role: 作成, when: 2026-09-07}]";
+        let read = |head: &str, rows: &str| {
+            let v = yaml::parse_typed(&format!("{{{head}, generated: 2026-09-01, {rows}}}")).unwrap();
+            let m = X::root(&v, "meta");
+            let last = last_approval(&m);
+            let d = last.clone().and_then(|a| dated(&m, a));
+            (last, d)
+        };
+        let approved = (
+            Ok(Some("2026-09-&lt;05&gt;".to_string())),
+            Ok(("承認", "2026-09-&lt;05&gt;".to_string())),
+        );
+        for head in [
+            "version: v0.3, status: effective, effective_version: v0.3",
+            "version: v0.4, status: effective, effective_version: v0.3",
+            "version: v0.3, status: effective",
+        ] {
+            assert_eq!(read(head, rows), approved, "{head}");
+        }
+        let generated = (Ok(None), Ok(("生成", "2026-09-01".to_string())));
+        let none = "approval: [{role: 作成, when: 2026-09-01}, {role: レビュー, when: 2026-09-02}]";
+        assert_eq!(
+            read("version: v0.3, status: effective, effective_version: v0.3", none),
+            generated
+        );
+        assert_eq!(read("version: v0.3, status: effective", "approval: []"), generated);
+        for head in [
+            "version: v0.3, status: draft, effective_version: v0.3",
+            "version: v0.4, status: draft",
+        ] {
+            assert_eq!(read(head, rows), generated, "{head}");
+        }
+        // 生成日も escape する
+        let v = yaml::parse_typed("{version: v0.3, status: draft, generated: \"<g>\"}").unwrap();
+        assert_eq!(
+            dated(&X::root(&v, "meta"), None),
+            Ok(("生成", "&lt;g&gt;".to_string()))
+        );
+        // 表の外の状態は導出できない
+        let e = read("version: v0.3, status: retired, effective_version: v0.3", rows).0;
+        assert_eq!(e, Err("meta.status: 文書の状態 の表に無い値「retired」".to_string()));
+    }
+
+    /// 便 193（delivery-193.md §1 (c)・台帳 f2-648.229・行 D-17）: 承認欄の最後の 承認 か 席の裁定 の行を読む（行の順・日付の大小でない）。
+    #[test]
+    fn f193_last_approval_reads_the_seat_ruling_rows() {
+        assert_eq!(DATED_ROLES, ["承認", "席の裁定"]);
+        let read = |rows: &str| {
+            let v = yaml::parse_typed(&format!(
+                "{{version: v0.3, status: effective, generated: 2026-09-01, approval: [{rows}]}}"
+            ))
+            .unwrap();
+            last_approval(&X::root(&v, "meta"))
+        };
+        let got = |d: &str| Ok(Some(d.to_string()));
+        assert_eq!(read("{role: 承認, when: 2026-09-03}, {role: 席の裁定, when: \"2026-09-<05>\"}"), got("2026-09-&lt;05&gt;"));
+        assert_eq!(read("{role: 席の裁定, when: 2026-09-05}, {role: 承認, when: 2026-09-04}"), got("2026-09-04"));
+        assert_eq!(read("{role: 席の裁定, when: 2026-09-05}, {role: 作成, when: 2026-09-07}, {role: レビュー, when: 2026-09-08}"), got("2026-09-05"));
+        assert_eq!(read("{role: 作成, when: 2026-09-07}, {role: 席の裁定の案, when: 2026-09-08}"), Ok(None));
+        // draft は席の裁定の行も読まない
+        let v = yaml::parse_typed("{version: v0.3, status: draft, generated: 2026-09-01, approval: [{role: 席の裁定, when: 2026-09-05}]}").unwrap();
+        assert_eq!(last_approval(&X::root(&v, "meta")), Ok(None));
+    }
+
+    #[test]
+    fn f146_named_and_approval_date_pick_the_approval() {
+        // named: 承認の日付が在れば読み手を呼ばない（delivery-146.md §1 (c) の 1）
+        let unread = || -> R<String> { panic!("承認の日付が在るのに代わりの日付を読んだ") };
+        assert_eq!(
+            named(Some("2026-09-08".to_string()), unread),
+            Ok(("承認", "2026-09-08".to_string()))
+        );
+        assert_eq!(
+            named(None, || Ok("2026-09-06".to_string())),
+            Ok(("生成", "2026-09-06".to_string()))
+        );
+        assert_eq!(named(None, || Err("読めない".to_string())), Err("読めない".to_string()));
+        // approval_date: 承認欄が 1 つの表（判断の記録・設計ノートは note_dated が項の一覧で読む）
+        let date = |doc: &str, skip: &[&str]| {
+            let v = yaml::parse_typed(doc).unwrap();
+            approval_date(&X::root(&v, "a"), skip)
+        };
+        let adr: &[&str] = &["proposed"];
+        let note: &[&str] = &["draft", "example"];
+        let ap = "approval: {date: \"2026-09-<08>\", who: 持ち主}";
+        let got = Ok(Some("2026-09-&lt;08&gt;".to_string()));
+        for (doc, skip) in [
+            (format!("{{status: accepted, {ap}}}"), adr),
+            (format!("{{status: retired, {ap}}}"), adr),
+            (format!("{{status: effective, {ap}}}"), note),
+            (format!("{{status: retired, {ap}}}"), note),
+        ] {
+            assert_eq!(date(&doc, skip), got, "{doc}");
+        }
+        for (doc, skip) in [
+            (format!("{{status: proposed, {ap}}}"), adr),
+            (format!("{{status: draft, {ap}}}"), note),
+            (format!("{{status: example, {ap}}}"), note),
+            ("{status: accepted}".to_string(), adr),
+            ("{status: retired, approval: null}".to_string(), adr),
+            ("{status: effective}".to_string(), note),
+        ] {
+            assert_eq!(date(&doc, skip), Ok(None), "{doc}");
+        }
+        assert_eq!(date(&format!("{{{ap}}}"), adr), Err("a: 欄 status が無い".to_string()));
+        // 承認欄の無い発効の meta: last_approval は None・dated は（生成・生成日）
+        let v = yaml::parse_typed("{version: v0.5, status: effective, generated: 2026-09-03}").unwrap();
+        let m = X::root(&v, "meta");
+        assert_eq!(last_approval(&m), Ok(None));
+        assert_eq!(dated(&m, None), Ok(("生成", "2026-09-03".to_string())));
+    }
+
+    #[test]
+    fn f147_type_dates_and_shelf_updated() {
+        // 凍結の針（delivery-147.md §1 (b) の 2 の字を手で写した）
+        assert_eq!(ADR_UNREAD, &["proposed"]);
+        assert_eq!(NOTE_UNREAD, &["draft", "example"]);
+        let ap = "approval: {date: \"2026-09-<10>\", who: 持ち主}";
+        let approved = Ok(("承認", "2026-09-&lt;10&gt;".to_string()));
+        // adr_dated: 発効と廃止は承認欄・提案中と承認欄の無い記録は記録の日付
+        let adr = |doc: &str| {
+            let v = yaml::parse_typed(doc).unwrap();
+            adr_dated(&X::root(&v, "a"))
+        };
+        let recorded = Ok(("生成", "2026-09-&lt;07&gt;".to_string()));
+        let date = "date: \"2026-09-<07>\"";
+        for st in ["accepted", "retired"] {
+            assert_eq!(adr(&format!("{{status: {st}, {date}, {ap}}}")), approved, "{st}");
+            assert_eq!(adr(&format!("{{status: {st}, {date}}}")), recorded, "{st}");
+        }
+        assert_eq!(adr(&format!("{{status: proposed, {date}, {ap}}}")), recorded);
+        assert_eq!(adr(&format!("{{status: proposed, {date}}}")), recorded);
+        // note_dated: 発効は承認欄・draft と見本と承認欄の無い発効は生成日
+        let note = |doc: &str| {
+            let v = yaml::parse_typed(doc).unwrap();
+            note_dated(&X::root(&v, "meta"))
+        };
+        let generated = Ok(("生成", "2026-09-&lt;07&gt;".to_string()));
+        let made = "generated: \"2026-09-<07>\"";
+        let ap = "approval: [{date: \"2026-09-<10>\", who: 持ち主}]";
+        assert_eq!(note(&format!("{{status: effective, {made}, {ap}}}")), approved);
+        assert_eq!(note(&format!("{{status: effective, {made}}}")), generated);
+        for st in ["draft", "example"] {
+            assert_eq!(note(&format!("{{status: {st}, {made}, {ap}}}")), generated, "{st}");
+        }
+        // shelf_updated: 最大・1 つだけならそれ・空の列は空の字
+        assert_eq!(
+            shelf_updated(["2026-09-08", "2026-09-11", "2026-09-09"]),
+            "2026-09-11"
+        );
+        assert_eq!(shelf_updated(["2026-09-08"]), "2026-09-08");
+        assert_eq!(shelf_updated(std::iter::empty::<&str>()), "");
+    }
+
+    #[test]
+    fn f163_note_dated_reads_the_last_item_of_the_list() {
+        // 設計ノートの承認欄は項の一覧（床の row_list と同じ・delivery-163.md §1 (c) の 3）
+        let note = |doc: &str| {
+            let v = yaml::parse_typed(doc).unwrap();
+            note_dated(&X::root(&v, "meta"))
+        };
+        let made = "generated: 2026-09-01";
+        let generated = Ok(("生成", "2026-09-01".to_string()));
+        // 発効と廃止の 2 項の一覧 → 最後の項の日付
+        let two = "approval: [{date: 2026-09-05, who: 持ち主}, {date: \"2026-09-<09>\", who: 持ち主}]";
+        for st in ["effective", "retired"] {
+            assert_eq!(
+                note(&format!("{{status: {st}, {made}, {two}}}")),
+                Ok(("承認", "2026-09-&lt;09&gt;".to_string())),
+                "{st}"
+            );
+        }
+        // 後の項が前の項より古くても最後の項（最大の日付でない）
+        let older = "approval: [{date: 2026-09-23, who: 持ち主}, {date: 2026-09-21, who: 持ち主}]";
+        assert_eq!(
+            note(&format!("{{status: effective, {made}, {older}}}")),
+            Ok(("承認", "2026-09-21".to_string()))
+        );
+        // draft と見本は読まない・承認欄が無い・null・空の一覧は生成日
+        for st in ["draft", "example"] {
+            assert_eq!(note(&format!("{{status: {st}, {made}, {two}}}")), generated, "{st}");
+        }
+        for ap in ["", ", approval: null", ", approval: []"] {
+            assert_eq!(note(&format!("{{status: effective, {made}{ap}}}")), generated, "{ap}");
+        }
+        // 表 1 つは一覧でない（床も まだ分からない）
+        assert_eq!(
+            note(&format!("{{status: effective, {made}, approval: {{date: 2026-09-05, who: 持ち主}}}}")),
+            Err("meta.approval: 一覧でない".to_string())
+        );
+    }
+
+    #[test]
+    fn f141_live_meanings_name_the_plan_and_keep_the_value() {
+        // 凍結の針（delivery-141.md §1 (b) の 1 の字を手で写した）
+        let plan = "床は判定しない・憲法が書く実在の予定は ";
+        assert_eq!(ce::MechanismLive::ALL.len(), 5);
+        for l in ce::MechanismLive::ALL {
+            let meaning = mechanism_live_meaning(l);
+            if l == ce::MechanismLive::Now {
+                assert_eq!(meaning, "今の folio に在る");
+            } else {
+                assert_eq!(meaning, format!("{plan}{}", l.name()), "{}", l.name());
+                assert_eq!(mechanism_live_label(l), "機構がまだ無い");
+            }
+            assert!(!meaning.contains('段'), "{meaning}");
+            assert!(!mechanism_live_label(l).contains('段'));
+        }
+        // 4 値の字を 1 つずつ（値の字は正本の live のまま）
+        for (l, v) in [
+            (ce::MechanismLive::M0, "M0"),
+            (ce::MechanismLive::Delivery0, "delivery-0"),
+            (ce::MechanismLive::M1, "M1"),
+            (ce::MechanismLive::Adr, "adr"),
+        ] {
+            assert_eq!(mechanism_live_meaning(l), format!("{plan}{v}"));
+        }
+    }
+}

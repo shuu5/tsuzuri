@@ -1,0 +1,30 @@
+# folio face の凍結 fixture（便 14・P-10.1）— rules の正本の最小形。手書き・design-intent/ の写しではない。
+# 閾値行 1（値は文字列）と開発規律行 1。
+
+schema:
+  kind_meaning:
+    deny: 機械が測って、超過なら落とす
+    human-review: 人が守る作法
+
+thresholds:
+  - id: R-1
+    article: P-1
+    what: AI へ常時渡す説明文の合計
+    value: "2,000 字 以下"
+    kind: deny
+    status: 仮
+    ruling: 裁定 F-4
+    ruled_at: 2026-09-03
+    stage: post
+    population: folio2 が所有する係だけ
+    note: 測り方を凍結してから再計測
+
+discipline:
+  - id: D-1
+    article: A-1
+    what: 並列の中の AI は決めた範囲で使う
+    kind: human-review
+    status: 凍結
+    ruling: 裁定 F-5
+    ruled_at: 2026-09-04
+    note: planner の実測

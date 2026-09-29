@@ -1,0 +1,40 @@
+# 便 120 の凍結の対（手書き・最小）。器（scribe2）の導出 file contracts/schema.toml の最小の写しで、
+# verify と done の 3 行組は器の `scribe2 contracts schema` の出力の字のまま（要否 conditional）。
+# ほかの 5 行は契約表の行に要る required の欄だけ。写しの根の contracts/schema.toml と差し替えて使う。
+# 対の相手は同じ dir の need-conditional.yaml（設計ノートの置き場へ置く）。
+schema = 1
+
+[[field]]
+name = "id"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "title"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "req"
+need = "required"
+shape = "list"
+
+[[field]]
+name = "section"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "verify"
+need = "conditional"
+shape = "list"
+
+[[field]]
+name = "size"
+need = "required"
+shape = "text"
+
+[[field]]
+name = "done"
+need = "conditional"
+shape = "text"

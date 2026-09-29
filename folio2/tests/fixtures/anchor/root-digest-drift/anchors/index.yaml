@@ -1,0 +1,6 @@
+# folio check の歯の fixture（anchors/・crates/folio/tests/anchor.rs）。索引 1 項（根 v1.0・digest は anchor と同じ値＝床の定数 root_digest とは違う）。
+kind: constitution-anchor-index
+entries:
+- version: v1.0
+  previous: null
+  digest: 85cbd21b680e0b8d3d2c134f11f8a03926929717a8ab172bc1679106da99a9fe

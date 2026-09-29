@@ -1,0 +1,9 @@
+schema:
+  top_level: [meta, audience, shelf, lanes, intake, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。meta・audience・shelf・lanes・intake は人が書き、schema は生成区間
+  shelf:
+    documents: [constitution, srs, design-note, adr]
+    annexes: [vocabulary, rules]
+    relations: [binds, before-build, inside, amends]
+    legend: [readable, absent, binds, inside]
+  shelf_note: 棚の閉じた id の集合（documents = 文書・annexes = 付録・relations = 文書どうしの関係・legend = 凡例）。棚の行はこの id に 1 つずつ要る。行の中身は人が書き、置き場の class や面の file 名のような見た目の値は面の生成器が持つ（P-2.3）。何にするかの裁定の正本は判断の記録 ADR-5 決定 (2) と入口の正本の承認欄

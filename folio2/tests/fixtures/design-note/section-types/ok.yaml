@@ -1,0 +1,20 @@
+# AC7 の通る側（凍結 fixture・要件書 AC7 の red_test）。設計ノートの置き場へ `ok.yaml` として置く。
+# 節の型は閉じた一覧（design-note/schema.yaml の schema.section.type_enum）の中だけ＝違反 0 で通る。
+meta:
+  id: ok
+  title: 一覧内の節の型だけを持つ設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-18
+  profile: design-note
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: 節の型が閉じた一覧の中だけなら生成が通ることを見せる。
+  - n: 2
+    type: parts-table
+    title: 部品
+    rows:
+      - {id: only, name: 見本の部品, role: 何もしない（fixture のための 1 行）}

@@ -1,0 +1,31 @@
+# AC10 の通る側（凍結 fixture・要件書 AC10 の red_test）。設計ノートの置き場へ `clean.yaml` として置く。
+# 型 prose の節は、記述の文と、参照 id を持ち数と単位を持たない印付きの文 1 つと、母集団から落ちる行
+# （行頭が縦線の表の行・code fence の内側・行頭が `<!--` の注釈の行）の印付きの文だけを持つ＝散文の門の違反 0。
+# 3 行目の「枝の当て先」の文は式の枝の歯が変異を当てる先（この fixture のままでは記述の文）。
+# 契約表の節は、契約 id `clean#a` を参照 id として解くための行 1 本（欄は器の導出 file の必須欄だけ）。
+meta:
+  id: clean
+  title: 散文の門を通る設計ノート
+  version: v0.1
+  status: example
+  generated: 2026-09-18
+  profile: design-note
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      散文の門は記述の文を数えない。
+      枝の当て先（この文は記述の文）。
+      生成器は検査を通らなかった図を書き出してはならない（FR12）。
+      | 表の行 | ここに書き出してはならないと書いても数えない |
+      ```
+      検査は 30 秒 のうちに完了しなければならない。
+      ```
+      <!-- 注釈の行に書き出してはならないと書いても数えない -->
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - {id: a, title: 散文の門を掛ける, req: [FR12], section: "1", verify: [cargo nextest run -p folio --test prose prose], size: S, done: 印を持つ文だけが数えられる}

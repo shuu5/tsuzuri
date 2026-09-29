@@ -1,0 +1,60 @@
+# folio2 相談窓口（intake）の正本（v0.1・発効・planner 席）
+# 位置: 判断の記録 ADR-6 決定 (1)〜(3)。質問・推奨回答・回答から文書の集合への写像・支度表の欄の決まりを持つ。
+# 状態: 発効（ADR-6 の発効と同時・持ち主の承認 2026-09-18「承認する」・逐語は f2-648.31 notes と meta.approval）。第 0.1 版のまま一括 5（2026-09-21・問い q4 の文）と一括 19（2026-09-25・問い q3 の理由と行き先の行 adr の注）で字を直し、承認は各一括の承認で運んだ。その 2 つの承認は一括 20 で承認欄に記帳した（天井の 33 周目 整合 F-2）。版は上げない＝版の欄の値は命令 folio intake が支度表の版へ写し、凍結 anchor（tests/fixtures/intake/）と folio2 自身の支度表の正本が第 0.1 版の字を持つので、版を上げるなら支度表の側の直しと一緒に運ぶ（一括 20 の仕分け）。床（folio check）に入れるのは別の便（ADR-6 決定 (5)）。数と日付はここに書かない（P-6.3）。
+# 回答の受け方（ADR-6 決定 (4)）: 命令 folio intake は質問と推奨回答を対話面の散文で出し、回答は旗（answers）で渡す YAML の file から読む。file が無ければ全項目を推奨回答で進め、別枠に出す（FR2）。
+
+meta:
+  id: folio2-intake
+  title: 相談窓口（intake）
+  version: v0.1
+  status: effective
+  generated: 2026-09-18
+  approval:
+    - {role: 作成, who: planner 席（AI・fable 5.1）, when: 2026-09-18, stamp: 起草（ADR-6・持ち主の裁定 2026-09-18「承認するし質問も全て推奨で承認する」）}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-18, stamp: "発効（f2-648.31 notes 2026-09-18 11:4x JST・対話面 R-8・ADR-6 の発効と同時）", verbatim: 承認する, version: v0.1}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-21, stamp: "問い q4 の文の直し（天井の 11 周目の文書どうしの整合・一括 5・f2-648 notes 2026-09-21 08:59 JST・対話面 R-8・判断の記録 ADR-6 の注に記録。版は上げず、一括 20 で承認欄に記帳した）", verbatim: 問い１−４は推奨で進めて, version: v0.1}
+    - {role: 承認, who: 持ち主（shuu5）, when: 2026-09-25, stamp: "問い q3 の理由と行き先の行 adr の注の直し（天井の 32 周目 整合 F-5・一括 19 の問 2 の 5・f2-648 notes 2026-09-25 07:03 JST・対話面 R-8・判断の記録 ADR-6 の注に記録。版は上げず、一括 20 で承認欄に記帳した）", verbatim: すべて承認する, version: v0.1}
+
+# 回答の値域と既定（推奨回答 = 各質問の recommend）
+answers:
+  values: [はい, いいえ]
+  default: recommend
+
+# 写像の行き先の閉じた一覧（入口の棚の文書 4 つ + 注入）
+targets:
+  - {id: constitution, type: 憲法, with: [vocabulary, rules], note: 付録の語彙と rules は憲法の中}
+  - {id: srs, type: 要件書, with: []}
+  - {id: adr, type: 判断の記録, with: [], note: 最初は判断の記録が無いか、骨格が書いた 1 本だけの棚}
+  - {id: design-note, type: 設計ノート, with: [], note: 実装の直前に書く＝「まだ無い」の棚に置く}
+  - {id: inject, type: 憲法の注入（CLAUDE.md の生成区間）, with: []}
+
+# 質問 5 つ（どれも はい／いいえ・推奨回答は はい）。yes の行き先 = はい のとき持つもの・no の行き先 = いいえ のとき持つもの
+questions:
+  - {id: q1, ask: 何があっても守る線（憲法）を決めておきますか, recommend: はい, why: 守る線が無いと、道具も AI も「止まる基準」を持てない, yes: [constitution], no: []}
+  - {id: q2, ask: 「できた」の線（要件書）を先に書きますか, recommend: はい, why: 何ができたら完成かを先に書かないと、作ったものを測れない, yes: [srs], no: []}
+  - {id: q3, ask: 戻せない判断を 1 本ずつ記録に残しますか, recommend: はい, why: 後から「なぜそうしたか」を辿れる。最初は判断の記録が無いか、骨格の命令（folio init）が書いた 1 本（欄の決まりを採る判断・提案中）だけの棚を置く, yes: [adr], no: []}
+  - {id: q4, ask: 作り方（設計ノート）を持ちますか（書くのは実装の直前）, recommend: はい, why: 早く書くと実装と食い違う。棚には「まだ無い」と出す, yes: [design-note], no: []}
+  - {id: q5, ask: 憲法を AI の手元（CLAUDE.md）へ写しますか, recommend: はい, why: 写しておくと AI が毎回の作業で憲法を読む, yes: [inject], no: []}
+
+# 支度表（1 枚）の欄の決まり。正本は設計文書の置き場の intake-sheet.yaml（支度表の便で置く）
+sheet:
+  file: intake-sheet.yaml
+  title: 支度表
+  explain: 相談の結果として出る「何を持つか」の表。持つ文書と、答えなかったので推奨で進めた項目を別枠に出す。
+  sections:
+    - {id: meta, text: 版・生成日・状態（下書き／承認済み）}
+    - {id: documents, text: 持つ文書（行き先の id・型・どの質問から決まったか）}
+    - {id: recommended, text: 推奨で進めた項目（質問の id・文・推奨回答）＝答えの無かった質問だけ。別枠（FR2）}
+    - {id: answers, text: 受け取った回答（質問の id・値）}
+    - {id: approval, text: 持ち主の承認（逐語・日付）。承認するのはここ 1 回だけ}
+
+# 決まりの部分（生成区間）。最上位の節の閉じた一覧。正本は実装の型付きの定数（crates/folio/src/intake.rs）で、ここはその人が読む写し。手で直さず folio schema --write が書く（判断の記録 ADR-11 決定 (3)(イ)・(4)⑤・憲法 P-5.6）。ほかの節は人が書く
+# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）
+schema:
+  top_level: [meta, answers, targets, questions, sheet, schema]
+  top_level_note: 最上位の節の閉じた一覧（ほかの節は床が落とす）。meta と answers と targets と questions と sheet は人が書き、schema は生成区間
+  answers: {values_count: 2, branches: [yes, no], default_fixed: recommend}
+  answers_note: 回答の値の読み方。値の言葉そのものは人が書く answers.values が正本で、命令 folio intake は実行のたびにそれを読む。values の 1 つ目の値の回答は質問の行の branches の 1 つ目の欄（yes）の行き先を、2 つ目の値の回答は 2 つ目の欄（no）の行き先を選ぶ。values の数が values_count と違えば、支度表を書く口（folio intake --write）は 1 byte も書かずに「まだ分からない」で断る（床の folio check は values の数を数えない）。answers.default は values の値か、固定の値 default_fixed（答えの無い質問を各質問の推奨回答で進める）。values_count・branches・default_fixed の正本は実装の型付きの定数（crates/folio/src/intake.rs）で、この節はその写しである（P-5.6・行 D-11・判断の記録 ADR-11 決定 (3)(ア) と (4)⑥）
+  targets: {fixed: [inject]}
+  targets_note: 行き先の id の値域に足す固定の値。targets の行の id は入口の棚の文書の id か、この一覧の値（inject = 憲法を AI の手元の CLAUDE.md へ写す注入・棚には無い）。正本は実装の型付きの定数（crates/folio/src/intake.rs）で、この節はその写しである（P-5.6・行 D-11）
+# folio:schema:end

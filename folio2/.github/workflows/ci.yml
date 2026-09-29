@@ -1,0 +1,21 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain（rust-toolchain.toml）
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: taiki-e/install-action@nextest
+      # 図の道具（vendor/archify・rules 行 R-15）の実行環境。歯が node を子の処理で呼ぶ（便 30・ADR-4）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: cargo nextest run --workspace --no-tests=fail --no-fail-fast
+      - run: cargo clippy --workspace --all-targets -- -D warnings

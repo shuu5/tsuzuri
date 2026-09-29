@@ -1,0 +1,376 @@
+{
+  "version": "v0.1 2026-09-16 (hand-baked mock v4 + ADR-4 figure types)",
+  "note": "部品目録（parts catalog）の写し。将来は emitter の部品 enum から生成する。data-component の値域と、面ごとの variant を宣言する。 2026-09-16（ADR-4・R-5 = 8 型）: figure_type_enum に図の道具（archify）の 5 型を足し、図の本体（SVG）の意味を表す class を figure_body_classes に載せた。棚（doc-shelf・入口の一覧）は shelf_type_enum に分けた＝figure_type_enum の要素数 8 が R-5 の値と一致する（既存 3 型 = pipeline-rail / context-band / state-strip）。 2026-09-19（便 36・f2-648.51）: glossary-links は退役（要件書の面の章 08 を憲法の面の章 07 と同じ形にし、glossary-term-table の faces を [constitution, srs] にした・版管理の履歴に残るので可逆・N-1.2）。 2026-09-19（便 40・f2-648.56）: 便 40 で ceiling-stamp を足した（ADR-8）——天井の結果（観点ごとの 3 値と日付・束の要約値の先頭 8 字）を 5 面の site-bar に freshness-stamp の直後に出す部品。 2026-09-21（便 68・P-2.4）: 密度 profile の閉じた一覧 profile_enum を載せた（値は設計ノートの床の定数から移した・1 つ）。",
+  "components": {
+    "freshness-stamp": {
+      "role": "chrome",
+      "faces": [
+        "index",
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ]
+    },
+    "ceiling-stamp": {
+      "role": "chrome",
+      "faces": [
+        "index",
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ]
+    },
+    "hub-cover": {
+      "role": "cover",
+      "faces": [
+        "index"
+      ]
+    },
+    "doc-cover-band": {
+      "role": "cover",
+      "faces": [
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ]
+    },
+    "approval-block": {
+      "role": "cover",
+      "faces": [
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ]
+    },
+    "figure-panel": {
+      "role": "diagram-shell",
+      "faces": [
+        "index",
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ],
+      "requires": [
+        "figcaption",
+        ".ver",
+        "data-role=diagram"
+      ]
+    },
+    "doc-shelf": {
+      "role": "index+diagram",
+      "faces": [
+        "index"
+      ]
+    },
+    "shelf-card": {
+      "role": "index",
+      "faces": [
+        "index"
+      ]
+    },
+    "shelf-link": {
+      "role": "index",
+      "faces": [
+        "index"
+      ]
+    },
+    "status-line": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "intake-line": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "intake-callout": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "reader-lane": {
+      "role": "hub",
+      "faces": [
+        "index"
+      ]
+    },
+    "lane-chip": {
+      "role": "wayfinding",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "chapter-deck-band": {
+      "role": "chapter",
+      "faces": [
+        "index",
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ],
+      "density": [
+        "full",
+        "slim"
+      ]
+    },
+    "section-lead-callout": {
+      "role": "body",
+      "faces": [
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ]
+    },
+    "rtm-grid": {
+      "role": "body",
+      "faces": [
+        "srs"
+      ]
+    },
+    "glossary-term-table": {
+      "role": "body",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "ac-state-chip": {
+      "role": "body",
+      "faces": [
+        "srs"
+      ]
+    },
+    "item-row": {
+      "role": "item",
+      "faces": [
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ],
+      "slots": [
+        "ir-head",
+        "norm",
+        "plain",
+        "meta",
+        "history?",
+        "machine?"
+      ]
+    },
+    "principle-amendment-history": {
+      "role": "item",
+      "faces": [
+        "constitution"
+      ]
+    },
+    "pipeline-rail": {
+      "role": "diagram",
+      "faces": [
+        "constitution",
+        "srs"
+      ],
+      "max_nodes": 7
+    },
+    "rail-node": {
+      "role": "diagram",
+      "faces": [
+        "constitution",
+        "srs"
+      ]
+    },
+    "context-band": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ],
+      "max_per_band": 4
+    },
+    "band-node": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ]
+    },
+    "state-strip": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ],
+      "max_nodes": 4
+    },
+    "state-node": {
+      "role": "diagram",
+      "faces": [
+        "srs"
+      ]
+    },
+    "stepper": {
+      "role": "body",
+      "faces": [
+        "constitution"
+      ]
+    },
+    "amendment-example": {
+      "role": "body",
+      "faces": [
+        "constitution"
+      ]
+    },
+    "font-size-control": {
+      "role": "chrome",
+      "faces": [
+        "index",
+        "constitution",
+        "srs",
+        "adr",
+        "note"
+      ]
+    }
+  },
+  "audience_values": [
+    "machine"
+  ],
+  "audience_sites": [
+    "details.machine",
+    "footer provenance"
+  ],
+  "style_props_allowed": [
+    "--rail-n",
+    "--band-n",
+    "--state-n",
+    "--shelf-n"
+  ],
+  "nowrap_allowlist": [
+    ".site-bar nav a",
+    "[data-component=\"freshness-stamp\"]",
+    "[data-component=\"ceiling-stamp\"]",
+    ".site-bar .here",
+    ".vh",
+    ".fig-req .no",
+    ".hint-body",
+    ".fs-btn"
+  ],
+  "figure_type_enum": [
+    "pipeline-rail",
+    "context-band",
+    "state-strip",
+    "archify-architecture",
+    "archify-workflow",
+    "archify-sequence",
+    "archify-dataflow",
+    "archify-lifecycle"
+  ],
+  "shelf_type_enum": [
+    "doc-shelf"
+  ],
+  "profile_enum": [
+    "design-note"
+  ],
+  "figure_body_classes": {
+    "source": "ADR-4 / R-5 / R-15。図の道具（archify 2.16.0）の出力から図の本体（SVG）だけを抜いたときに残る意味 class。実測 = 報告 2026-09-15-archify/samples/ja-round4.svg（構成図・showcase・行内の様式 0・色の直書き 0）+ 道具の 5 型の見本 11 本と folio2 の見本 3 枚の出力（2026-09-19・39 語で閉じる・足した 6 語 = c-region / c-security-group / t-frontend / t-external / t-cloud / t-database）。色・字の大きさ・線の太さは folio の design token をこれらの class に掛けて定義する（P-2.3）",
+    "type_ids": {
+      "archify-architecture": "構成図（architecture）",
+      "archify-workflow": "手順図（workflow）",
+      "archify-sequence": "順序図（sequence）",
+      "archify-dataflow": "流れ図（dataflow）",
+      "archify-lifecycle": "状態図（lifecycle）"
+    },
+    "node_kind": [
+      "c-backend",
+      "c-cloud",
+      "c-database",
+      "c-external",
+      "c-frontend",
+      "c-messagebus",
+      "c-security",
+      "c-lane",
+      "c-grid",
+      "c-mask",
+      "c-region",
+      "c-security-group"
+    ],
+    "edge_kind": [
+      "a-default",
+      "a-emphasis",
+      "a-dashed",
+      "a-security"
+    ],
+    "arrowhead": [
+      "m-default",
+      "m-emphasis",
+      "m-dashed",
+      "m-security"
+    ],
+    "text_role": [
+      "t-primary",
+      "t-muted",
+      "t-dim",
+      "t-backend",
+      "t-messagebus",
+      "t-security",
+      "t-frontend",
+      "t-external",
+      "t-cloud",
+      "t-database"
+    ],
+    "sigil": [
+      "semantic-sigil",
+      "sigil-fill",
+      "s-backend",
+      "s-cloud",
+      "s-database",
+      "s-external",
+      "s-frontend",
+      "s-messagebus",
+      "s-security"
+    ],
+    "semantic_attrs": [
+      "data-node-id",
+      "data-node-kind",
+      "data-node-label",
+      "data-node-sublabel",
+      "data-node-context",
+      "data-edge-from",
+      "data-edge-to",
+      "data-edge-key",
+      "data-edge-label",
+      "data-quality-profile",
+      "data-legend-*",
+      "data-detail",
+      "data-detail-anchor",
+      "data-composition-points"
+    ],
+    "note": "class は 4 群（箱 c-* / 線 a-* / 矢じり m-* / 文字 t-*）+ 印（s-* / sigil）。data-node-* / data-edge-* は folio 自身の閲覧の部品（強調・経路の追跡）が読む材料（ADR-4 決定 (3)）。この一覧が道具の版上げで変わったら凍結 anchor が落ちる（R-15）"
+  },
+  "micro_parts": {
+    "hint": "説明の小窓（label+checkbox+hint-body・ホバー/タップ・右端/下端で反転・入れ子可・狭幅は画面下のシート・JS 無効は CSS anchor positioning で反転）",
+    "note": "details.note 補足（畳み）",
+    "meta-chips": "item-row の根拠/関係/撤退条件/確かめ方 chip 行",
+    "legend-line": "凡例の 1 行（hint 内に本体）",
+    "zoom-btn/zoom-close": "図の拡大 2 状態",
+    "shelf-minimap": "≤680px の棚ミニ地図",
+    "shelf-here": "入口=現在地 chip",
+    "fs-btn": "文字の大きさ（Aa・押すたびに 標準→大→特大→標準・localStorage に記憶・JS 無効では出さない）",
+    "sc-hit": "棚カードの全面リンク（実アンカー・aria-hidden・カード内の他リンクは z-index で上）",
+    "hint-close": "小窓の「閉じる ✕」（狭幅シートでだけ表示・JS が差し込む）",
+    "hint.term": "用語の小窓（点線語をホバー / タップで定義 + 用語集リンク・印刷では出さない）",
+    "hint.tier": "段バッジの小窓（外すのに要るもの + §1 リンク・印刷では出さない）"
+  },
+  "rules": {
+    "hint-container": "小窓（.hint）を置く容器は overflow:visible（overflow:hidden の容器は小窓を切る）。装飾は clip でなく要素側で閉じ込める（章帯の透かしは .num 自身の max-height / 表の角丸は角セルの border-radius / card の色帯は ::before の border-radius）",
+    "font-size-units": "font-size は rem（root 基準）・文字を入れる箱の高さも rem。px の font-size は装飾（章帯の透かし .num）だけに許す。文字サイズ切替は html[data-fs] で root の font-size を変える",
+    "print": "印刷は全展開（小窓・details）。幅の media query は印刷で効かないので、縦積みが要る部品（棚）は @media print にも同じ規則を置く。名札（根拠: 等）は紙に残す・つづき / ? / 用語 / 段は出さない"
+  }
+}

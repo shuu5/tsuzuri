@@ -1,0 +1,8 @@
+# folio2 の vessel 宣言（器 scribe2 が便を起こすときに読む・scribe2 pipe/declaration.rs）。値は器の上限（rules 行 runner.allowed_commands）の内側。
+# 置いた便 = f2-648.10（便 0 の受け皿・持ち主の裁定 2026-09-17）。要件面 = 要件書の正本 design-intent/srs.yaml（器の口 s2-07l.467 が shall: / when: を直に読む・2026-09-21 から。それまでの読み物 readable.html は design-intent/preview/retired/ へ退役・持ち主の裁定 2026-09-21 08:47 JST「退役して」）。
+schema = 1
+allowed-commands = ["cargo", "git"]
+common-verify = ["cargo nextest run --workspace --no-tests=fail --no-fail-fast", "cargo clippy --workspace --all-targets -- -D warnings"]
+requirements = "design-intent/srs.yaml"
+# 入口の flip（TDD の RED の検査）は測らないと名乗る（scribe2 s2-07l.554・ADR-0054・pipeline.md §54）。folio2 は xtask を持たず、器の新 binary は cargo の行を持つ宣言にこの key か flip の行のどちらかを求める（2026-09-23・持ち主の指示で最新 binary へ移行）。
+entrance-flip = "unmeasured"

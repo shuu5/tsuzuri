@@ -1,0 +1,14 @@
+verdict: 合格
+record:
+  model: opus
+  effort: high
+  at: 2026-09-19T05:00:00Z
+  read: [constitution, srs, adr, design-note]
+  bundle: sha256-files-1 23ac7bd276cd04ce9559b1e4ec68ed57c4b140872ef411163467cd102ed21f36
+findings:
+  - id: F-1
+    viewpoint: fidelity
+    place: {doc: srs, at: requirements.FR2.plain}
+    weight: 直す
+    evidence: 合格・不合格・まだ分からない のどれかを出します。
+    note: 規範文の 3 値のうち「まだ分からない」を平易文が落としている。

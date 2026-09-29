@@ -1,0 +1,14 @@
+# 封の歯（tests/seal.rs・便 170）が土台の写しへ足す新しい発効した判断の記録の最小の手書き。
+id: ADR-11
+title: 封の歯のための新しい判断
+status: accepted
+date: 2026-09-27
+context: 封の一覧に行の無い発効した判断の記録を足す場合を作る。
+decision: 封の一覧の末尾に行を足す。
+options:
+  - {id: a, name: 足す, text: 封の一覧の末尾に行を足す。, verdict: adopted, reason: 在る行を変えずに済む。}
+  - {id: b, name: 足さない, text: 封の一覧をそのままにする。, verdict: rejected, reason: 発効した記録が封の外に残る。}
+basis: [A-2]
+retreat: {kind: ruling, condition: 持ち主が取り消したら元へ戻す。}
+plain: 封の一覧に新しい行を足します。
+approval: {who: 持ち主, date: 2026-09-27, ruling: f2-648.254 notes 2026-09-27, verbatim: 承認する, surface: R-8}

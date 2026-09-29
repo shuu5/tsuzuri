@@ -1,0 +1,46 @@
+# 凍結 anchor（便 122・P-10.1・手書き）: この版の folio を組み立てた憲法の値域 10 鍵（block の形・1 行 1 値・鍵は file の順）。
+# 組み立ての script からも床からも独立。crates/folio/tests/constitution_range.rs が各行を 4 字下げて写しの値域の節の中身と差し替える。
+# folio2 の憲法の値域を変える改訂（値を足す・外す・名を変える・並べ替える）は同じ便でこの file を直す。
+tier:
+  - always
+  - ask-first
+  - never
+binds:
+  - tool
+  - practice
+  - both
+pattern:
+  - ubiquitous
+  - event
+  - state
+  - unwanted
+  - optional
+strength:
+  - must
+  - must-not
+  - should
+rationale_kind:
+  - v1-incident
+  - scribe2-article
+  - folio2-ruling
+mechanism_kind:
+  - reject
+  - build-check
+  - human-review
+  - none
+mechanism_live:
+  - now
+  - M0
+  - delivery-0
+  - M1
+  - adr
+retreat_kind:
+  - spike
+  - measure
+  - ruling
+stage:
+  - in-loop
+  - post
+polarity:
+  - fail-open
+  - fail-closed

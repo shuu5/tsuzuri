@@ -1,0 +1,34 @@
+# folio check の歯の fixture（anchors/・crates/folio/tests/anchor.rs）。この fixture の憲法 v1.0 の凍結 anchor（写し・発効の承認の写し・承認一覧・digest は自分自身の正規化の sha256）。
+kind: constitution-anchor
+digest_algo: sha256-json-1
+version: v1.0
+previous: null
+projection:
+  scope: [schema, precedence, articles]
+  article_fields: [id, title, tier, binds, statements]
+  statement_fields: [id, text, pattern, strength]
+meta_approval: {who: 持ち主, date: 2026-09-17, ruling: f2-1 発効承認, verbatim: 承認する, surface: R-8}
+approvals:
+  - {adr: null, who: 持ち主, date: 2026-09-17, ruling: f2-1 発効承認, verbatim: 承認する, surface: R-8}
+content:
+  schema:
+    top_level: [schema, meta, precedence, articles]
+    enums: {retreat_kind: [spike, measure, ruling]}
+    amendment_scope: [schema, precedence, articles]
+  precedence:
+    text: 条どうしが衝突したら揃いを選ぶ。
+    plain: 迷ったら揃っている方を選びます。
+  articles:
+    - id: P-1
+      title: 判断する道具を作らない
+      tier: always
+      binds: null
+      statements:
+        - {id: P-1.1, text: folio は文書を生成する。, pattern: ubiquitous, strength: must}
+    - id: P-2
+      title: 床は数える
+      tier: ask-first
+      binds: null
+      statements:
+        - {id: P-2.1, text: 説明文は行 R-3 の上限に収める。, pattern: ubiquitous, strength: must}
+digest: 85cbd21b680e0b8d3d2c134f11f8a03926929717a8ab172bc1679106da99a9fe
