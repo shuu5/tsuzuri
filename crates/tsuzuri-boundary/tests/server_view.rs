@@ -231,8 +231,8 @@ fn server_view_graph_view_matches_core() {
     assert!(view.unread.is_empty(), "{:?}", view.unread);
     assert_eq!(
         place.folio_calls(),
-        2,
-        "眺めの口 1 回に設計の道具 2 回（索引と要約）"
+        3,
+        "眺めの口 1 回に設計の道具 3 回（索引と要約と裁定の書き出し）"
     );
 }
 

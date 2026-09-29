@@ -1,11 +1,12 @@
 //! tz graph（行 k-graph・要件 FR2・FR3・FR17）: 導出グラフを組み直して出す。書かない。
 //! - 旗なし — GraphDoc の電文を標準出力に 1 行
 //! - --check — 不変条件の 12 本を 3 値で数え、違反の行と要約の行を標準出力、まだ分からないの行を標準エラー
+//!   （g-7 が folio の裁定 id の文法の外の id の裁定だけのためにまだ分からないなら、理由にその数を書く・行 c-g3g7）
 //! - --design — 設計の索引だけを読み、設計の節点と辺に絞った GraphDoc の電文（folio の graph の吸収・ADR-8 決定 (3)）
 //!
 //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
 //! 読めない出所が無ければ 0、在れば 2。使い方の誤りは 1。組みは口 /api/graph と同じ `Sources::gather` と
-//! `board::graph` の 2 つの呼び。
+//! `board::built` と `board::doc` の呼び。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -155,14 +156,18 @@ pub fn run(rest: &[&str]) -> u8 {
             args.repo.display()
         ));
     }
-    let doc = match args.mode {
+    let (doc, outside) = match args.mode {
         Mode::Doc | Mode::Check => {
             let sources = Sources {
                 ledger: Source::new(&args.repo, &args.bd),
                 design: Design::new(&args.repo, &args.folio),
                 runs: Runs::new(args.state_dir.as_deref()),
             };
-            board::graph(&sources.gather(true, true))
+            let g = board::built(&sources.gather(true, true));
+            (
+                board::doc(&g, &graph::check(&g)),
+                graph::check::outside_rulings(&g),
+            )
         }
         Mode::Design => {
             let design = Design::new(&args.repo, &args.folio);
@@ -171,7 +176,7 @@ pub fn run(rest: &[&str]) -> u8 {
                 summary: design.summary().unwrap_or_default(),
                 ..Texts::default()
             };
-            design_view(&board::graph(&texts))
+            (design_view(&board::graph(&texts)), None)
         }
     };
     if !doc.unread.is_empty() {
@@ -179,7 +184,7 @@ pub fn run(rest: &[&str]) -> u8 {
         eprintln!("# 読めない出所: {}", names.join("・"));
     }
     match args.mode {
-        Mode::Check => check(&doc.invariants),
+        Mode::Check => check(&doc.invariants, outside),
         Mode::Doc | Mode::Design => match wire::encode(&doc) {
             Ok(text) => {
                 println!("{text}");
@@ -194,7 +199,8 @@ pub fn run(rest: &[&str]) -> u8 {
 }
 
 /// 違反の行と要約の行を標準出力、まだ分からないの行を標準エラーに出し、3 値の終了 code を返す。
-fn check(invariants: &[InvariantCheck]) -> u8 {
+/// `outside` は g-7 が文法の外の id の裁定だけのためにまだ分からないときのその数（`check::outside_rulings`）。
+fn check(invariants: &[InvariantCheck], outside: Option<usize>) -> u8 {
     let (mut violations, mut unknowns) = (0, 0);
     for inv in invariants {
         match inv.verdict {
@@ -213,10 +219,12 @@ fn check(invariants: &[InvariantCheck]) -> u8 {
             }
             Verdict::Unknown => {
                 unknowns += 1;
-                let why = if UNMEASURED.contains(&inv.id.as_str()) {
-                    "測る機構がまだ無い"
-                } else {
-                    "読めない出所が在る"
+                let why = match outside {
+                    _ if UNMEASURED.contains(&inv.id.as_str()) => "測る機構がまだ無い".to_string(),
+                    Some(n) if inv.id == "g-7" => {
+                        format!("folio の裁定 id の文法の外の id の裁定 {n}")
+                    }
+                    _ => "読めない出所が在る".to_string(),
                 };
                 eprintln!("# まだ分からない: [{}] {why}", inv.id);
             }

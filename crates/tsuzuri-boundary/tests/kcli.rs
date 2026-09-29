@@ -211,6 +211,7 @@ fn texts(ledger: &str) -> Texts {
         ledger: ledger.to_string(),
         events: EVENTS.to_string(),
         summary: String::new(),
+        rulings: String::new(),
     }
 }
 

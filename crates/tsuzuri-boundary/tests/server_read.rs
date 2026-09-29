@@ -395,13 +395,16 @@ fn server_read_four_routes_match_core() {
         "{design} {beads} {runs}"
     );
     // 3 つの出所が読めているので、材料の在る 9 本は「まだ分からない」でない。
+    // 偽の設計の道具の裁定の書き出しは索引の字なので読めず、g-3 と g-7 も「まだ分からない」。
     let unknown: Vec<&str> = doc
         .invariants
         .iter()
         .filter(|i| i.verdict == Verdict::Unknown)
         .map(|i| i.id.as_str())
         .collect();
-    assert_eq!(unknown, graph::check::UNMEASURED.to_vec());
+    assert_eq!(unknown, vec!["g-3", "g-7", "g-9"]);
+    assert_eq!(graph::check::RULED, ["g-3", "g-7"]);
+    assert_eq!(graph::check::UNMEASURED, ["g-9"]);
 }
 
 #[test]
@@ -413,8 +416,8 @@ fn server_read_folio_argv_and_cwd() {
     let calls = place.folio_calls();
     assert_eq!(
         calls.len(),
-        2,
-        "グラフの口 1 回に設計の道具 2 回（索引と要約）: {calls:?}"
+        3,
+        "グラフの口 1 回に設計の道具 3 回（索引と要約と裁定の書き出し）: {calls:?}"
     );
     let dir = place.repo.join(DESIGN_DIR).display().to_string();
     let repo = format!(
@@ -427,6 +430,9 @@ fn server_read_folio_argv_and_cwd() {
     assert_eq!(
         argv,
         [
+            &["check", "--emit-rulings", "--dir", dir.as_str()]
+                .map(str::to_string)
+                .to_vec(),
             &["graph", "--print", "--dir", dir.as_str()].map(str::to_string).to_vec(),
             &["graph", "--print", "--summary", "--dir", dir.as_str()]
                 .map(str::to_string)
@@ -439,12 +445,12 @@ fn server_read_folio_argv_and_cwd() {
     }
     // 口は要求のたびに組み直す（設計の道具を撃ち直す）。
     graph_doc(addr);
-    assert_eq!(place.folio_calls().len(), 4);
+    assert_eq!(place.folio_calls().len(), 6);
     // 板と指標と次の一手は設計の索引も要約も使わない。
     pipeline(addr);
     metrics(addr);
     next(addr);
-    assert_eq!(place.folio_calls().len(), 4);
+    assert_eq!(place.folio_calls().len(), 6);
     assert_eq!(FOLIO, "folio", "program の名の既定");
 }
 

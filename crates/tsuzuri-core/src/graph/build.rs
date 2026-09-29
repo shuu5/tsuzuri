@@ -3,7 +3,7 @@
 //! （飛ばした節点の行の id を端に持つ辺の行も組まずに数える）。bead の種類は epic・memo・問い・契約の順に決める。
 //! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
 //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
-//! ruled_by の辺は組まない（索引に裁定の欄が無い）。
+//! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
 //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）から写す（行は無し）。
 //! 設計の節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
 
@@ -15,7 +15,7 @@ use serde_json::Value;
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
 use tsuzuri_contract::ledger::{MEMO_LABEL, QUESTION_LABEL};
 
-use super::{BeadAttr, Graph, Inputs, PolicyAttr, RunAttr, Source};
+use super::{BeadAttr, Graph, Inputs, PolicyAttr, RulingRow, RunAttr, Source};
 use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
 
 /// 設計の索引の節点の種類の数（`NodeKind::ALL` の先頭の 12 = 設計文書の 11 種と設計ノートの行）。
@@ -124,6 +124,77 @@ pub fn add_summary(g: &mut Graph, summary: &str) -> bool {
             node.eng = row.eng.clone();
         }
     }
+    true
+}
+
+/// 裁定の書き出しの字（1 行 1 つの JSON の object）を読む（行 c-g3g7）。
+/// 字が空か、JSON の object として読めないか `RulingRow` の形に合わない行が 1 つでも在れば None。空の行は読み捨てる。
+pub fn read_rulings(text: &str) -> Option<Vec<RulingRow>> {
+    if text.trim().is_empty() {
+        return None;
+    }
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| {
+            serde_json::from_str::<Value>(l)
+                .ok()
+                .filter(Value::is_object)
+                .and_then(|v| serde_json::from_value::<RulingRow>(v).ok())
+        })
+        .collect()
+}
+
+/// 設計ノートの承認欄の裁定の欄の道か（`meta.approval[` と数字と `].ruling`）。
+fn note_approval(field: &str) -> bool {
+    field
+        .strip_prefix("meta.approval[")
+        .and_then(|rest| rest.strip_suffix("].ruling"))
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))
+}
+
+/// 裁定の書き出しの字を節点へ結び、ruled_by の辺を組む（行 c-g3g7）。
+/// 読めなければ g を変えずに偽を返す。読めたら上から順に、node が在れば id が node で file が同じ字の節点 1 つへ、
+/// node が無く設計ノートの承認欄の行なら file が同じ字の設計ノートの行の節点の全部へ結び、ほかの行は結ばない。
+/// 辺は節点の id の順・行の順に、先の在る行（`Graph::holds`）だけ、節点から `RulingRow::target` へ build の辺の後に足す
+/// （同じ組は 1 本）。結んだ表を `Graph::rulings` に置いて真を返す。
+pub fn add_rulings(g: &mut Graph, text: &str) -> bool {
+    let Some(rows) = read_rulings(text) else {
+        return false;
+    };
+    let mut joined: BTreeMap<String, Vec<RulingRow>> = BTreeMap::new();
+    for row in rows {
+        let file = Some(row.file.as_str());
+        let ids: Vec<String> = match &row.node {
+            Some(id) => g
+                .nodes
+                .iter()
+                .find(|n| n.id == *id && n.file.as_deref() == file)
+                .map(|n| n.id.clone())
+                .into_iter()
+                .collect(),
+            None if note_approval(&row.field) => g
+                .nodes
+                .iter()
+                .filter(|n| n.kind == NodeKind::NoteRow && n.file.as_deref() == file)
+                .map(|n| n.id.clone())
+                .collect(),
+            None => Vec::new(),
+        };
+        for id in ids {
+            joined.entry(id).or_default().push(row.clone());
+        }
+    }
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+    let mut ruled: Vec<GraphEdge> = Vec::new();
+    for (id, rows) in &joined {
+        for row in rows.iter().filter(|r| g.holds(r)) {
+            if seen.insert((id.clone(), row.target().to_string())) {
+                ruled.push(edge(id, row.target(), EdgeType::RuledBy));
+            }
+        }
+    }
+    g.edges.extend(ruled);
+    g.rulings = Some(joined);
     true
 }
 

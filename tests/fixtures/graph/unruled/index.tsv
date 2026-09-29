@@ -1,0 +1,9 @@
+# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字）と辺（1 行 = 端 / 端 / 型）・タブ区切り
+FR1	要件	srs.yaml	00000001	見本の要件
+P-1	条	constitution.yaml	00000002	見本の条
+ADR-7	判断の記録	adr/ADR-7.yaml	00000003	見本の判断の記録 7
+ADR-8	判断の記録	adr/ADR-8.yaml	00000004	見本の判断の記録 8
+R-1	規則行	rules.yaml	00000005	見本の規則行
+nw#a	設計ノートの行	design-note/nw.yaml	00000006	便 a — 見本の行
+nw#b	設計ノートの行	design-note/nw.yaml	00000007	便 b — 見本の行
+FR1	ADR-7	adrs

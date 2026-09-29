@@ -45,6 +45,8 @@ pub struct Texts {
     pub events: String,
     /// 設計の索引の要約（節点ごとの行と概要・行 c-summary-wire）。
     pub summary: String,
+    /// 設計の道具の裁定の書き出し（folio check --emit-rulings の行・行 c-g3g7）。
+    pub rulings: String,
 }
 
 impl Texts {
@@ -59,7 +61,7 @@ impl Texts {
 }
 
 impl Sources {
-    /// 台帳の字と、要るときだけ設計の索引とその要約と event log の字を集める
+    /// 台帳の字と、要るときだけ設計の索引とその要約と裁定の書き出しと event log の字を集める
     /// （子 process は並べて撃つので、待ちは 1 本分の上限まで）。
     pub fn gather(&self, design: bool, events: bool) -> Texts {
         self.gather_held(design, events).0
@@ -70,15 +72,18 @@ impl Sources {
         thread::scope(|s| {
             let index = design.then(|| s.spawn(|| self.design.text()));
             let summary = design.then(|| s.spawn(|| self.design.summary()));
+            let rulings = design.then(|| s.spawn(|| self.design.rulings()));
             let ledger = self.ledger.got();
             let events = if events { self.runs.text() } else { None };
             let index = index.and_then(|h| h.join().ok().flatten());
             let summary = summary.and_then(|h| h.join().ok().flatten());
+            let rulings = rulings.and_then(|h| h.join().ok().flatten());
             let texts = Texts {
                 design: index.unwrap_or_default(),
                 ledger: ledger.text.unwrap_or_default(),
                 events: events.unwrap_or_default(),
                 summary: summary.unwrap_or_default(),
+                rulings: rulings.unwrap_or_default(),
             };
             (texts, ledger.stale)
         })
@@ -106,9 +111,12 @@ pub fn next_seat(texts: &Texts, card: &SeatCard, now: EpochSecs) -> NextStep {
 }
 
 /// 導出グラフを組み、要約を節点に写す（要約が読めなければ節点の行と概要は無しのまま・行 c-summary-wire）。
-fn built(texts: &Texts) -> Graph {
+/// 裁定の書き出しを節点へ結んで ruled_by の辺を組む（読めなければ結んだ表は無しのまま・行 c-g3g7）。
+/// tz graph --check も同じ組みを使う。
+pub fn built(texts: &Texts) -> Graph {
     let mut g = graph::build(&texts.inputs());
     graph::build::add_summary(&mut g, &texts.summary);
+    graph::build::add_rulings(&mut g, &texts.rulings);
     g
 }
 

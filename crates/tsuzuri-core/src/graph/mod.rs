@@ -3,6 +3,7 @@
 //! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返し（`around`）、グラフの面の眺めを返す（`view`・便 c-view）。
 //! 眺めは節点を組の箱へ畳み、開く列で 1 段ずつ開く（`fold`・`view_open`・行 c-graph-fold）。
 //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
+//! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ（行 c-g3g7）。
 
 pub mod around;
 pub mod build;
@@ -12,7 +13,7 @@ pub mod view;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, GraphSource, NodeKind};
 
 pub use around::around;
@@ -109,6 +110,41 @@ pub struct RunAttr {
     pub unanswered: usize,
 }
 
+/// 裁定の書き出しの行の形（閉じた 3・folio の字）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RulingForm {
+    /// 器の問いの印の付いた裁定 id（台帳の notes の裁定の節点の id）。
+    Question,
+    /// notes の日時の付いた裁定 id（節点の id にならない）。
+    NotesTime,
+    /// 台帳の id と同じ字。
+    Bead,
+}
+
+/// 裁定の書き出しの 1 行（folio check --emit-rulings・欄 line は読み捨てる）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RulingRow {
+    pub ruling: String,
+    pub form: RulingForm,
+    pub bead: String,
+    /// 承認の字を持つ節点の id（設計ノートの承認欄・判断の表の行・承認欄の stamp の行では無し）。
+    pub node: Option<String>,
+    pub file: String,
+    /// 承認の字の欄の道（例 `meta.approval[0].ruling`）。
+    pub field: String,
+}
+
+impl RulingRow {
+    /// ruled_by の辺の先（問いの形は裁定 id・ほかは台帳の id）。
+    pub fn target(&self) -> &str {
+        match self.form {
+            RulingForm::Question => &self.ruling,
+            RulingForm::NotesTime | RulingForm::Bead => &self.bead,
+        }
+    }
+}
+
 /// 方針の属性（範囲）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PolicyAttr {
@@ -141,12 +177,25 @@ pub struct Graph {
     pub runs: BTreeMap<String, RunAttr>,
     /// 方針の id ごとの属性。
     pub policies: BTreeMap<String, PolicyAttr>,
+    /// 節点の id ごとの結んだ裁定の書き出しの行（`build::add_rulings` が置く・読めなければ無し）。
+    pub rulings: Option<BTreeMap<String, Vec<RulingRow>>>,
 }
 
 impl Graph {
     /// 出所を読めたか。
     pub fn is_read(&self, source: Source) -> bool {
         !self.unread.contains(&source)
+    }
+
+    /// 裁定の書き出しの行の先が在るか（問いの形は同じ id の裁定の節点・ほかは台帳の bead）。
+    pub fn holds(&self, row: &RulingRow) -> bool {
+        match row.form {
+            RulingForm::Question => self
+                .nodes
+                .iter()
+                .any(|n| n.kind == NodeKind::Ruling && n.id == row.ruling),
+            RulingForm::NotesTime | RulingForm::Bead => self.beads.contains_key(&row.bead),
+        }
     }
 
     /// 「まだ分からない」の節点の種類（読めない出所の種類の全部）。

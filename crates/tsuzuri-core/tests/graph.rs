@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
 use tsuzuri_core::graph::build::DESIGN_EDGE_TYPES;
-use tsuzuri_core::graph::check::{INVARIANTS, UNMEASURED};
+use tsuzuri_core::graph::check::{INVARIANTS, RULED, UNMEASURED};
 use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check};
 
 fn root() -> PathBuf {
@@ -205,18 +205,21 @@ fn graph_violations_match_fixture() {
         let mut want_sorted: Vec<&str> = want.clone();
         want_sorted.sort_by_key(|id| INVARIANTS.iter().position(|x| x == id));
         assert_eq!(got, want_sorted, "{name}: 違反と名指された不変条件");
-        for id in UNMEASURED {
+        for id in UNMEASURED.iter().chain(&RULED) {
             assert_eq!(verdict_of(&g, id), Verdict::Unknown, "{name}: {id}");
         }
         hit.extend(got);
     }
-    for id in INVARIANTS.iter().filter(|id| !UNMEASURED.contains(id)) {
+    for id in INVARIANTS
+        .iter()
+        .filter(|id| !UNMEASURED.contains(id) && !RULED.contains(id))
+    {
         assert!(hit.contains(id), "{id} を違反にする組が無い");
     }
     assert_eq!(
-        INVARIANTS.len() - UNMEASURED.len(),
+        INVARIANTS.len() - UNMEASURED.len() - RULED.len(),
         9,
-        "この便で数えるのは 9 本"
+        "3 つの入力だけで数えるのは 9 本"
     );
 }
 

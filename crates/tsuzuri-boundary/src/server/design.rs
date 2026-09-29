@@ -5,6 +5,8 @@
 //! 同じ `Design` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 //! 要約の読み（行 c-summary-wire）は `<program> graph --print --summary --dir <repo>/design-intent` を同じ形で撃ち、
 //! 索引の読みとは別の場で合流する。--summary を知らない folio では要約だけが読めない（索引は読める）。
+//! 裁定の書き出しの読み（行 c-g3g7）は `<program> check --emit-rulings --dir <repo>/design-intent` を同じ形で撃ち、
+//! 別の場で合流する。rc が 0 でない書き出しは全数でない（床がまだ分からないか不合格）ので読めない（None）。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -25,6 +27,9 @@ pub const FOLIO_ARGS: [&str; 3] = ["graph", "--print", "--dir"];
 /// 要約の読みに渡す引数の頭（この後に設計文書の dir の path が続く・行 c-summary-wire）。
 pub const SUMMARY_ARGS: [&str; 4] = ["graph", "--print", "--summary", "--dir"];
 
+/// 裁定の書き出しの読みに渡す引数の頭（この後に設計文書の dir の path が続く・行 c-g3g7）。
+pub const RULINGS_ARGS: [&str; 3] = ["check", "--emit-rulings", "--dir"];
+
 /// 設計の道具が返すまでの上限（要件 NFR2 の上限・台帳の読みと同じ）。越えれば止めて読めない。
 pub const FOLIO_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -39,6 +44,7 @@ pub struct Design {
     pub folio: OsString,
     shared: Coalesce<String>,
     summary_shared: Coalesce<String>,
+    rulings_shared: Coalesce<String>,
 }
 
 impl PartialEq for Design {
@@ -56,6 +62,7 @@ impl Design {
             folio: folio.into(),
             shared: Coalesce::new(),
             summary_shared: Coalesce::new(),
+            rulings_shared: Coalesce::new(),
         }
     }
 
@@ -92,6 +99,22 @@ impl Design {
     pub fn summary(&self) -> Option<String> {
         self.summary_shared.share(FOLIO_WAIT, || {
             let out = capture(&self.folio, self.summary_args(), &self.repo, FOLIO_TIMEOUT)?;
+            String::from_utf8(out).ok()
+        })
+    }
+
+    /// 裁定の書き出しの読みに渡す引数の列（行 c-g3g7）。
+    pub fn rulings_args(&self) -> Vec<OsString> {
+        let mut args: Vec<OsString> = RULINGS_ARGS.iter().map(OsString::from).collect();
+        args.push(self.dir().into_os_string());
+        args
+    }
+
+    /// 設計の道具を裁定の書き出しの引数で撃ち、標準出力の字を返す（rc が 0 でなければ読めず None・行 c-g3g7）。
+    /// 索引と要約の読みとは別の場で合流し、合流した呼び出しは `FOLIO_WAIT` まで待つ。
+    pub fn rulings(&self) -> Option<String> {
+        self.rulings_shared.share(FOLIO_WAIT, || {
+            let out = capture(&self.folio, self.rulings_args(), &self.repo, FOLIO_TIMEOUT)?;
             String::from_utf8(out).ok()
         })
     }

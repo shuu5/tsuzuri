@@ -1,6 +1,8 @@
 //! 不変条件の 12 本を 3 値（合格・違反・まだ分からない）で数える。
-//! この便で数えるのは 9 本。g-3・g-7・g-9 は材料が 3 つの入力に無いので、つねに「まだ分からない」。
+//! 数えるのは 11 本。g-3・g-7 は裁定の書き出しを結んだ表（`Graph::rulings`・行 c-g3g7）から数え、表が無ければ
+//! 「まだ分からない」。g-9 は材料が 3 つの入力に無いので、つねに「まだ分からない」。
 //! 要る出所が読めなければ「まだ分からない」で、合格にしない。違反は名指す id を持つ。
+//! g-7 は宙に浮いた裁定のうち id が folio の裁定 id の文法の外の裁定を数えず、それだけが在れば「まだ分からない」。
 //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,11 +37,11 @@ type Rule = fn(&Graph) -> Verdict;
 const RULES: [(&str, Rule); 12] = [
     ("g-1", g1_edge_ends),
     ("g-2", g2_one_pointer),
-    ("g-3", unmeasured),
+    ("g-3", g3_ruled),
     ("g-4", g4_touches),
     ("g-5", g5_reaches_root),
     ("g-6", g6_no_loop),
-    ("g-7", unmeasured),
+    ("g-7", g7_bound),
     ("g-8", g8_memo_or_contract),
     ("g-9", unmeasured),
     ("g-10", g10_disjoint_ids),
@@ -52,8 +54,11 @@ pub const INVARIANTS: [&str; 12] = [
     "g-1", "g-2", "g-3", "g-4", "g-5", "g-6", "g-7", "g-8", "g-9", "g-10", "g-11", "g-12",
 ];
 
-/// つねに「まだ分からない」を返す 3 本（材料が 3 つの入力に無い）。
-pub const UNMEASURED: [&str; 3] = ["g-3", "g-7", "g-9"];
+/// つねに「まだ分からない」を返す 1 本（材料が 3 つの入力に無い）。
+pub const UNMEASURED: [&str; 1] = ["g-9"];
+
+/// 裁定の書き出しを結んだ表から数える 2 本（表が無ければ「まだ分からない」・行 c-g3g7）。
+pub const RULED: [&str; 2] = ["g-3", "g-7"];
 
 /// 12 本を数える（id の順）。
 pub fn check(g: &Graph) -> Vec<Invariant> {
@@ -79,6 +84,193 @@ fn judge(g: &Graph, needs: &[Source], bad: BTreeSet<String>) -> Verdict {
 
 fn unmeasured(_: &Graph) -> Verdict {
     Verdict::Unknown
+}
+
+/// bead の id の族（最初の「.」の前の字）。
+fn family(bead: &str) -> &str {
+    bead.split('.').next().unwrap_or(bead)
+}
+
+/// g-3 発効した記録（判断の記録・規則行ほか結んだ節点）の裁定の字の先が台帳に在る。
+/// 先の無い行のうち族が台帳に在る行の節点を名指す。名指す節点が無く、族が台帳のどの bead とも違う行
+/// （外の台帳）が在れば「まだ分からない」。
+fn g3_ruled(g: &Graph) -> Verdict {
+    let Some(rulings) = &g.rulings else {
+        return Verdict::Unknown;
+    };
+    if !g.is_read(Source::Design) || !g.is_read(Source::Ledger) {
+        return Verdict::Unknown;
+    }
+    let families: BTreeSet<&str> = g.beads.keys().map(|id| family(id)).collect();
+    let mut bad: BTreeSet<String> = BTreeSet::new();
+    let mut foreign = false;
+    for (id, rows) in rulings {
+        for row in rows.iter().filter(|r| !g.holds(r)) {
+            if families.contains(family(&row.bead)) {
+                bad.insert(id.clone());
+            } else {
+                foreign = true;
+            }
+        }
+    }
+    if !bad.is_empty() {
+        Verdict::Violation(bad.into_iter().collect())
+    } else if foreign {
+        Verdict::Unknown
+    } else {
+        Verdict::Pass
+    }
+}
+
+/// 宙に浮いた裁定（answers の辺の元でも ruled_by の辺の先でもない裁定の節点）の id を、
+/// folio の裁定 id の文法の内の組と外の組に分ける。
+fn unbound(g: &Graph) -> (BTreeSet<String>, BTreeSet<String>) {
+    let answers: BTreeSet<&str> = pairs(g, EdgeType::Answers)
+        .into_iter()
+        .map(|(from, _)| from)
+        .collect();
+    let ruled: BTreeSet<&str> = pairs(g, EdgeType::RuledBy)
+        .into_iter()
+        .map(|(_, to)| to)
+        .collect();
+    g.nodes
+        .iter()
+        .filter(|n| n.kind == NodeKind::Ruling)
+        .filter(|n| !answers.contains(n.id.as_str()) && !ruled.contains(n.id.as_str()))
+        .map(|n| n.id.clone())
+        .partition(|id| in_ruling_grammar(id))
+}
+
+/// g-7 裁定は問い（answers）か発効した記録（ruled_by）のどちらかに結ばれる。
+/// 文法の外の id の宙に浮いた裁定は数えず、それが在れば合格にしない。
+fn g7_bound(g: &Graph) -> Verdict {
+    if g.rulings.is_none() {
+        return Verdict::Unknown;
+    }
+    let (inside, outside) = unbound(g);
+    match judge(g, &[Source::Design, Source::Ledger], inside) {
+        Verdict::Pass if !outside.is_empty() => Verdict::Unknown,
+        v => v,
+    }
+}
+
+/// g-7 が文法の外の id の宙に浮いた裁定だけのために「まだ分からない」のとき、その数（ほかは None）。
+pub fn outside_rulings(g: &Graph) -> Option<usize> {
+    if g.rulings.is_none() || !g.is_read(Source::Design) || !g.is_read(Source::Ledger) {
+        return None;
+    }
+    let (inside, outside) = unbound(g);
+    (inside.is_empty() && !outside.is_empty()).then_some(outside.len())
+}
+
+/// 字の走査の位置（`in_ruling_grammar` の道具）。
+#[derive(Clone, Copy)]
+struct Scan<'a> {
+    b: &'a [u8],
+    i: usize,
+}
+
+impl Scan<'_> {
+    /// 字 s が続けば進んで真。
+    fn lit(&mut self, s: &str) -> bool {
+        let ok = self.b[self.i..].starts_with(s.as_bytes());
+        if ok {
+            self.i += s.len();
+        }
+        ok
+    }
+
+    /// f に合う字がちょうど n 続けば進んで真。
+    fn take(&mut self, n: usize, f: fn(u8) -> bool) -> bool {
+        let ok = self.b.len() >= self.i + n && self.b[self.i..self.i + n].iter().all(|c| f(*c));
+        if ok {
+            self.i += n;
+        }
+        ok
+    }
+
+    /// f に合う字を続く限り進み、その数を返す。
+    fn many(&mut self, f: fn(u8) -> bool) -> usize {
+        let n = self.b[self.i..].iter().take_while(|c| f(**c)).count();
+        self.i += n;
+        n
+    }
+
+    /// 試しに進め、合えば進んだ位置を残す（合わなければ戻す）。
+    fn attempt(&mut self, f: impl FnOnce(&mut Self) -> bool) -> bool {
+        let mut t = *self;
+        let ok = f(&mut t);
+        if ok {
+            *self = t;
+        }
+        ok
+    }
+
+    fn end(&self) -> bool {
+        self.i == self.b.len()
+    }
+}
+
+fn digit(c: u8) -> bool {
+    c.is_ascii_digit()
+}
+
+fn lower(c: u8) -> bool {
+    c.is_ascii_lowercase()
+}
+
+fn word(c: u8) -> bool {
+    lower(c) || digit(c)
+}
+
+/// 分の 1 の位（数字か x）。
+fn minute_one(c: u8) -> bool {
+    digit(c) || c == b'x'
+}
+
+/// 字の全部が folio の裁定 id の文法（folio の ruling.rs の写し・書き出しに出る形）に合うか。
+/// 台帳の id（英小字 1・数字 1・「-」・英小字か数字の並び・「.数字」の段を何段でも）に、器の問いの印
+/// （「:」年月日 8 桁「T」時分 4 桁「Z-」連番）か notes の日時（「 notes」に「 年-月-日」か「 時:分」か両方・
+/// 分の 1 の位は x でもよい・任意の「 JST」）が続くか、どちらも続かない形。
+pub fn in_ruling_grammar(id: &str) -> bool {
+    let mut s = Scan {
+        b: id.as_bytes(),
+        i: 0,
+    };
+    if !(s.take(1, lower) && s.take(1, digit) && s.lit("-") && s.many(word) > 0) {
+        return false;
+    }
+    while s.attempt(|s| s.lit(".") && s.many(digit) > 0) {}
+    if s.end() {
+        return true;
+    }
+    let question = s.attempt(|s| {
+        s.lit(":")
+            && s.take(8, digit)
+            && s.lit("T")
+            && s.take(4, digit)
+            && s.lit("Z-")
+            && s.many(digit) > 0
+    });
+    if question {
+        return s.end();
+    }
+    if !s.lit(" notes") {
+        return false;
+    }
+    let date = s.attempt(|s| {
+        s.lit(" ")
+            && s.take(4, digit)
+            && s.lit("-")
+            && s.take(2, digit)
+            && s.lit("-")
+            && s.take(2, digit)
+    });
+    let time = s.attempt(|s| {
+        s.lit(" ") && s.take(2, digit) && s.lit(":") && s.take(1, digit) && s.take(1, minute_one)
+    });
+    s.attempt(|s| s.lit(" JST"));
+    (date || time) && s.end()
 }
 
 /// g-1 組んだ辺の両端の節点が実在する。片端の無い辺が在り、読めない出所が在れば「まだ分からない」。

@@ -1,0 +1,14 @@
+{"ruling":"q7-fx.1","form":"bead","bead":"q7-fx.1","node":null,"file":"design-note/nw.yaml","line":5,"field":"meta.approval[0].ruling"}
+{"ruling":"q7-fx.3:20260928T0300Z-1","form":"question","bead":"q7-fx.3","node":null,"file":"design-note/nw.yaml","line":5,"field":"meta.approval[0].ruling"}
+{"ruling":"q7-fx.4","form":"bead","bead":"q7-fx.4","node":"ADR-7","file":"adr/ADR-7.yaml","line":9,"field":"approval.ruling"}
+{"ruling":"q7-fx.4:20260928T0100Z-1","form":"question","bead":"q7-fx.4","node":"ADR-7","file":"adr/ADR-7.yaml","line":9,"field":"approval.ruling"}
+{"ruling":"q7-fx.1 notes 2026-09-28 10:0x JST","form":"notes-time","bead":"q7-fx.1","node":"ADR-8","file":"adr/ADR-8.yaml","line":9,"field":"approval.ruling"}
+{"ruling":"q7-fx.1","form":"bead","bead":"q7-fx.1","node":"P-1","file":"constitution.yaml","line":14,"field":"articles[0].amended_by[0].ruling"}
+{"ruling":"q7-fx.5","form":"bead","bead":"q7-fx.5","node":"R-1","file":"rules.yaml","line":7,"field":"rules[0].ruling"}
+{"ruling":"q7-fx.5:20260928T0200Z-1","form":"question","bead":"q7-fx.5","node":"R-1","file":"rules.yaml","line":7,"field":"rules[0].ruling"}
+{"ruling":"q7-fx.1","form":"bead","bead":"q7-fx.1","node":null,"file":"design-note/nw.yaml","line":8,"field":"meta.approval[1].ruling"}
+{"ruling":"q7-fx.1","form":"bead","bead":"q7-fx.1","node":null,"file":"constitution.yaml","line":4,"field":"meta.approval.ruling"}
+{"ruling":"q7-fx.6:20260928T0400Z-1","form":"question","bead":"q7-fx.6","node":null,"file":"design-note/nw.yaml","line":40,"field":"sections[3].rows[0].ruling"}
+{"ruling":"q7-fx.1","form":"bead","bead":"q7-fx.1","node":null,"file":"srs.yaml","line":3,"field":"meta.approval[0].stamp"}
+{"ruling":"q7-fx.4","form":"bead","bead":"q7-fx.4","node":"ADR-9","file":"adr/ADR-9.yaml","line":9,"field":"approval.ruling"}
+{"ruling":"q7-fx.4","form":"bead","bead":"q7-fx.4","node":"ADR-7","file":"adr/ADR-70.yaml","line":9,"field":"approval.ruling"}
