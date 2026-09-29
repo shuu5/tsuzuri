@@ -858,6 +858,12 @@ details.panel.mvp[open] > summary { margin-bottom: var(--s3); }
 details.panel.mvp > summary .hd { margin: 0; }
 .stgrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s2); min-width: 0; overflow-wrap: anywhere; }
 .stgrow select { min-height: var(--hit); max-width: 100%; }
+.stgscroll { max-width: 100%; overflow-x: auto; margin-top: var(--s2); }
+.stgtbl { border-collapse: collapse; width: 100%; }
+.stgtbl th, .stgtbl td { text-align: left; vertical-align: middle; padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.stgtbl th { font-size: var(--fs-1); color: var(--ink-3); font-weight: 600; }
+.stgtbl .chip, .stgtbl .btn { white-space: normal; overflow-wrap: anywhere; }
+.stgtbl .stgrow { margin-top: 0; }
 .pgrp > header .pchip.grp { font-weight: 700; }
 @media (max-width: 760px) {
   .hgrid { grid-template-columns: minmax(0, 1fr); }

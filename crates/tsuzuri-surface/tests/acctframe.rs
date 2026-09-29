@@ -9,7 +9,7 @@ use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::{
     self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, ledger, need_count, notices, projects,
-    session, stuck_count, tab_href, tab_links, windows,
+    session, stage, stuck_count, tab_href, tab_links, windows,
 };
 use tsuzuri_surface::frame::{Mode, PageId, STACK};
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
@@ -195,7 +195,7 @@ fn acctframe_blocks_per_tab_and_module() {
         vec![
             (STACK, vec!["notices"]),
             (HGRID, vec!["nxall", "winsp"]),
-            (STACK, vec!["groups", "allowance", "moves"])
+            (STACK, vec!["groups", "allowance", "moves", "stage"])
         ]
     );
     assert_eq!(HGRID, "hgrid");
@@ -216,6 +216,13 @@ fn acctframe_blocks_per_tab_and_module() {
         (home::GROUPS, "groups", "group", "gtop", "home"),
         (home::ALLOWANCE, "allowance", "allowance", "panel", "home"),
         (home::MOVES, "moves", "moves", "panel fold mvp", "home"),
+        (
+            stage::BLOCK,
+            "stage",
+            "stage_target",
+            "panel fold mvp",
+            "stage",
+        ),
         (session::BLOCK, "sessions", "sessions", "panel", "session"),
         (ledger::BLOCK, "ledger", "ledger_state", "panel", "ledger"),
         (projects::BLOCK, "ptab", "dashboards", "panel", "projects"),
@@ -254,6 +261,7 @@ fn acctframe_blocks_per_tab_and_module() {
             "notices.rs",
             "projects.rs",
             "session.rs",
+            "stage.rs",
             "windows.rs"
         ]
     );

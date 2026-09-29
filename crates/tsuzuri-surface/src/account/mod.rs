@@ -30,6 +30,7 @@ pub mod ledger;
 pub mod notices;
 pub mod projects;
 pub mod session;
+pub mod stage;
 pub mod windows;
 
 #[cfg(target_arch = "wasm32")]
@@ -264,7 +265,7 @@ pub fn page(tab: Tab) -> TabPage {
             },
             Row {
                 class: STACK,
-                blocks: vec![home::GROUPS, home::ALLOWANCE, home::MOVES],
+                blocks: vec![home::GROUPS, home::ALLOWANCE, home::MOVES, stage::BLOCK],
             },
         ],
         Tab::Session => vec![Row {

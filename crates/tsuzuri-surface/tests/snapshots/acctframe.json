@@ -29,7 +29,8 @@
           "blocks": [
             {"id": "groups", "heading": "group", "class": "gtop"},
             {"id": "allowance", "heading": "allowance", "class": "panel"},
-            {"id": "moves", "heading": "moves", "class": "panel fold mvp"}
+            {"id": "moves", "heading": "moves", "class": "panel fold mvp"},
+            {"id": "stage", "heading": "stage_target", "class": "panel fold mvp"}
           ]
         }
       ]
