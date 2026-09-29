@@ -5,9 +5,10 @@
 - 出所: tsuzuri の設計席の求め（2026-09-29・持ち込みの前の 3 本目の直し F3）。tsuzuri の持ち主が 2026-09-29T11:32Z に「folio の外の部品 encoding_rs（ライセンスに BSD-3-Clause が要る）を持ち込みの前に外す」を選んだ。**この知らせは folio2 の承認ではない**（P-12.1）。
 - **受付の前提（順）**: 外の部品を減らすことへの folio2 の持ち主の承認（A-3.1・行 R-8 の対話面）を、逐語と日付で台帳の notes に記帳した**後で**便を受け付ける。
   - 承認: 逐語「推奨で良い」・日付 2026-09-29 21:33 JST・台帳の notes の所 = f2-648 notes【2026-09-29 21:33 JST 持ち主の承認（対話面 R-8）】（席の問いの推奨は「はい」・台帳 f2-648.275.15）
-- 置き場: この文書は folio2 の設計ノート。契約表は末尾の区間。審査の材料は行 `hg` が指す §1 だけ。write-set 3 本（manifest 1・解いた依存の一覧 1・新しい歯の file 1）・新しい dir は無い・src は無い。
-- 門: **0（通す）**。本流の binary で `folio ceiling --gate --dir design-intent --write-set crates/folio/Cargo.toml Cargo.lock +crates/folio/tests/deps.rs` の答えは「通す（設計文書の正本を書き換えない便）」。
-- 前の便: **base = 本流 0c910db**（起草の時点）。受付の前に本流は b99daea（便 211 の契約 6b4ba70 と着地 b99daea・serve.rs と tests/serve.rs）へ進んだが、write-set の 3 本・workspace の Cargo.toml・Cargo.lock は 0c910db と b99daea で byte で同じ＝数え直しは要らない（検証役が b99daea に差分を当てて衝突 0・組み立ての後の Cargo.lock は見本と byte で同じ・verify 3 行 緑を確かめた）。数は base と見本の写しの実測（参考値・行 D-13）。組み直す手順は控え `~/.local/share/folio2/handoff-2026-09-28/f3-scripts/`（chain.sh・run.sh・mut.py・count.sh・tree.sh）。便 211（行 hf）の契約の取り込みとは file が重ならない（§1 (g)）。
+- 置き場: この文書は folio2 の設計ノート。契約表は末尾の区間。審査の材料は行 `hg` が指す §1 だけ。write-set 4 本（manifest 1・解いた依存の一覧 1・新しい歯の file 1・verify の 2 行目が撃つ既存の歯の file 1〔本文は変えない〕）・新しい dir は無い・src は無い。
+- **改訂 b（2026-09-29 21:5x・席）**: 器の契約の審査（run f2-648.275.15-20260929T125234Z）が teeth-outside-write-set で FAIL（verify の 2 行目 `--test floor_cases` の歯の file が write-set に無い）。write-set に `crates/folio/tests/floor_cases.rs`（本文は変えない）を足した。見本・歯・verify・done・数は変えない。
+- 門: **0（通す）**。本流の binary で `folio ceiling --gate --dir design-intent --write-set crates/folio/Cargo.toml Cargo.lock +crates/folio/tests/deps.rs crates/folio/tests/floor_cases.rs` の答えは「通す（設計文書の正本を書き換えない便）」。
+- 前の便: **base = 本流 0c910db**（起草の時点）。受付の前に本流は b99daea（便 211 の契約 6b4ba70 と着地 b99daea・serve.rs と tests/serve.rs）と ba8cf06（本便の契約）へ進んだが、write-set の 4 本・workspace の Cargo.toml・Cargo.lock は 0c910db と b99daea で byte で同じ＝数え直しは要らない（検証役が b99daea に差分を当てて衝突 0・組み立ての後の Cargo.lock は見本と byte で同じ・verify 3 行 緑を確かめた）。数は base と見本の写しの実測（参考値・行 D-13）。組み直す手順は控え `~/.local/share/folio2/handoff-2026-09-28/f3-scripts/`（chain.sh・run.sh・mut.py・count.sh・tree.sh）。便 211（行 hf）の契約の取り込みとは file が重ならない（§1 (g)）。
 - 見本: origin の枝 `impl/d212`（**8b24827**・親 0c910db・1 commit）。`git diff 0c910db 8b24827` が便の全体の差分（3 file）。作業者は**受付の時点の本流にこの差分を当てる**（write-set の file を見本の file の中身へ置き換えない）。`Cargo.lock` は見本の file で置き換えず、manifest を直した後に cargo に解き直させる（受付までに本流の `Cargo.lock` が動いていれば、その変化を消さないため）。
 
 ## 1. 設計
@@ -60,7 +61,7 @@
 
 ### (f) 大きさ・余地・verify と done
 
-1. **write-set 3 本**: `crates/folio/Cargo.toml`・`Cargo.lock`（縮む・印 `-`）・`crates/folio/tests/deps.rs`（新規・印 `+`）。差分は +105 −75・8,194 byte（参考値）。
+1. **write-set 4 本**: `crates/folio/Cargo.toml`・`Cargo.lock`（縮む・印 `-`）・`crates/folio/tests/deps.rs`（新規・印 `+`）・`crates/folio/tests/floor_cases.rs`（**本文は変えない**。verify の 2 行目 `--test floor_cases` が撃つ歯の file で、器の契約の審査は verify の `--test` が指す歯の file が write-set に在ることを求めるため入れる〔改訂 b〕）。差分は +105 −75・8,194 byte（参考値）。
 2. **余地**: write-set に `crates/folio/src/` の file が無い＝余地を数える file は 0 本。
 3. **size は S**（src の変更なし・manifest 4 行と歯 103 行）。
 4. **verify は 3 行**で、done の塊と 1 対 1: `--locked --test deps f212_`（本便の歯 2 本・`--locked` で `Cargo.lock` が manifest と揃っていないと cargo が撃つ前に断る）・`--locked --test floor_cases`（凍結 fixture の 134 の組を YAML で読み書きして folio check に掛ける歯の file・12 本・YAML の読み書きが同じことの確かめ）・clippy。見本では 3 行とも rc 0（2・12 本と 0 警告）。base では歯の file tests/deps.rs が無いので f212_ の行は cargo が歯の file を見つけられず終了コード 101、ほかは緑（12 本と 0 警告）（控えの verify.sh・logs/verify-*.log）。
@@ -68,7 +69,7 @@
 ### (g) 受付・並行の便・運ばないもの
 
 1. **受付の順**: §0 の受付の前提のとおり、持ち主の承認の記帳の後。
-2. **並行の枝との重なり**（2026-09-29 20:4x の origin の枝・読むだけ）: 本流に取り込まれていない枝で、write-set の 3 本（と workspace の Cargo.toml）を書く枝は無い。便 211（行 hf・serve.rs と tests/serve.rs）とも重ならない。便 211 の歯（追跡される file の tailnet の住所の字）に、本便の 3 本は当たらない。受付の時点で本流が 0c910db と違い、`Cargo.lock` が変わっていれば、cargo に解き直させて (b) 2. の「消すだけ」を数え直す。
+2. **並行の枝との重なり**（2026-09-29 20:4x の origin の枝・読むだけ）: 本流に取り込まれていない枝で、write-set の 3 本（と workspace の Cargo.toml）を書く枝は無い（改訂 b で足した floor_cases.rs は本便が本文を変えないので重なりに数えない）。便 211（行 hf・serve.rs と tests/serve.rs）とも重ならない。便 211 の歯（追跡される file の tailnet の住所の字）に、本便の 3 本は当たらない。受付の時点で本流が 0c910db と違い、`Cargo.lock` が変わっていれば、cargo に解き直させて (b) 2. の「消すだけ」を数え直す。
 3. 本便の後に yaml-rust2 の既定の機能を戻す・encoding_rs を足す変更は、workspace の nextest で落ちる（A-3.1 の確認を経た変更なら、同じ便で歯を直す）。
 4. 運ばないもの: 行 R-6 の値・使ってよい条件の一覧（どちらも持ち主の裁定の要る行）・foldhash（Zlib）を外すこと（yaml-rust2 の必須の依存）・ほかの部品の版の更新。
 
@@ -107,7 +108,7 @@ id = "hg"
 title = "folio の外の部品を減らす（条 A-3.1・持ち主の承認の記帳が受付の前提）。crates/folio/Cargo.toml の yaml-rust2 を [dependencies] と [build-dependencies] の 2 か所とも版 0.10 と default-features = false を持つ 1 行の形にし、Cargo.lock を cargo に解き直させて、既定の機能 encoding だけが引いていた encoding_rs と、それだけが引いていた 8 本（cfg-if・core_detect・multiversion・multiversion-macros・multiversion_no_op・rustversion・scopeguard・simdutf8）を消す（消すだけ・ほかの版は変えない・外の部品 35 から 26 本）。folio が使う読み書きの口（YamlLoader・parser・scanner・YamlEmitter）は機能 encoding に依らないので振る舞いは同じ。新しい tests/deps.rs に f212_ の歯 2 本（2 か所の既定の機能が外れていること・Cargo.lock に encoding_rs が無いこと）を足す"
 req = ["FR5", "FR7"]
 section = "1"
-write-set = ["crates/folio/Cargo.toml", "-Cargo.lock", "+crates/folio/tests/deps.rs"]
+write-set = ["crates/folio/Cargo.toml", "-Cargo.lock", "+crates/folio/tests/deps.rs", "crates/folio/tests/floor_cases.rs"]
 verify = ["cargo nextest run -p folio --locked --test deps f212_", "cargo nextest run -p folio --locked --test floor_cases", "cargo clippy --workspace --all-targets -- -D warnings"]
 size = "S"
 done = "tests/deps.rs の f212_ の歯 2 本（crates/folio/Cargo.toml の yaml-rust2 の 2 か所が既定の機能を外していること・Cargo.lock に encoding_rs が無いこと）が --locked で緑（Cargo.lock が manifest と揃っている）、凍結 fixture の 134 の組を回す歯の file（tests/floor_cases.rs の全部）が --locked で緑、clippy が 0 警告で、workspace の nextest が全部緑で CI が通り、Cargo.lock の差分は消すだけ（package 9 本と yaml-rust2 の依存の encoding_rs の 1 行）で、着地の後の main で folio check --dir design-intent が合格（違反 0・まだ分からない 0）・folio schema --dir design-intent --check が一致・folio inject --check と folio derive --dir design-intent --out ../contracts --check が 0 を返し、folio build の出力は着地の直前の main と byte で同じ"
