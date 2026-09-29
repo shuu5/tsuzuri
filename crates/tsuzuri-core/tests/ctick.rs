@@ -56,7 +56,55 @@ fn at_of(c: &Case, tick_last: Option<&str>) -> Option<u64> {
     build(c, &texts).tick_at
 }
 
-/// (3) 組 run の card は fixture の期待と同じで、tick の語を替えると tick だけがその語になる。
+/// 組 run の doctor の tick の語を替え、tick status の字を `edit` で替えて組む。
+fn with_tick(c: &Case, word: &str, edit: impl Fn(&str) -> Option<String>) -> SeatCard {
+    let mut texts = c.texts.clone();
+    texts.doctor = texts
+        .doctor
+        .as_deref()
+        .map(|d| d.replace("tick=healthy", &format!("tick={word}")));
+    texts.tick_status = texts.tick_status.as_deref().and_then(edit);
+    build(c, &texts)
+}
+
+/// 組 run の tick status の席 proj-1:0.1 の行の last・age・healthy の欄（fixture の字）。
+const TICK_OWN: &str = "last=1790510390 age=10 healthy=yes";
+
+/// (3b) 欄 tick は doctor の語が 4 つの語の時だけ tick status の席の行の healthy と last に従う。
+#[test]
+fn ctick_word_follows_tick_status() {
+    let c = run();
+    assert!(c.texts.tick_status.as_deref().unwrap().contains(TICK_OWN));
+    let tick_of = |word: &str, own: &str| {
+        with_tick(&c, word, |t| Some(t.replace(TICK_OWN, own))).tick
+    };
+    let dash = "last=- age=- healthy=no";
+    // healthy=no と時刻の last: doctor の語が何でも古い。
+    for w in ["healthy", "stale", "absent", "unreadable"] {
+        let got = tick_of(w, "last=1790510000 age=400 healthy=no");
+        assert_eq!(got, Reading::Known(TickHealth::Stale), "{w}");
+    }
+    // healthy=no と last=-: absent と unreadable だけその語、ほかは Unknown。
+    assert_eq!(tick_of("absent", dash), Reading::Known(TickHealth::Absent));
+    assert_eq!(
+        tick_of("unreadable", dash),
+        Reading::Known(TickHealth::Unreadable)
+    );
+    assert_eq!(tick_of("healthy", dash), Reading::Unknown);
+    assert_eq!(tick_of("stale", dash), Reading::Unknown);
+    // 欄 healthy の無い行は doctor の語。
+    for t in TickHealth::ALL {
+        let got = tick_of(t.as_str(), "last=1790510390 age=10");
+        assert_eq!(got, Reading::Known(t), "{}", t.as_str());
+    }
+    // doctor の語が 4 つのほか（no-rule:missing）は tick status が何でも Unknown。
+    for own in [TICK_OWN, "last=1790510000 age=400 healthy=no", dash] {
+        assert_eq!(tick_of("no-rule:missing", own), Reading::Unknown, "{own}");
+    }
+}
+
+/// (3) 組 run の card は fixture の期待と同じで、tick status が healthy=yes なら doctor の語を替えても tick は健全。
+/// tick status の行が無い字では tick は doctor の語の写し。
 #[test]
 fn ctick_card_copies_word_and_ts() {
     let c = run();
@@ -67,12 +115,11 @@ fn ctick_card_copies_word_and_ts() {
     assert_eq!(full.tick, Reading::Known(TickHealth::Healthy));
     assert_eq!(full.tick_at, Some(1_790_510_390));
     for t in TickHealth::ALL {
-        let got = with_doctor(&c, |d| {
-            d.replace("tick=healthy", &format!("tick={}", t.as_str()))
-        });
-        let mut want = full.clone();
-        want.tick = Reading::Known(t);
-        assert_eq!(got, want, "{}", t.as_str());
+        let got = with_tick(&c, t.as_str(), |s| Some(s.to_string()));
+        assert_eq!(got, full, "healthy=yes の組は {}", t.as_str());
+        let bare = with_tick(&c, t.as_str(), |_| None);
+        let msg = format!("tick status の行が無い {}", t.as_str());
+        assert_eq!(bare.tick, Reading::Known(t), "{msg}");
     }
 }
 
@@ -162,7 +209,7 @@ const FILES: [&str; 3] = [
     "crates/tsuzuri-surface/tests/ctickface.rs",
 ];
 
-/// (15) 3 つの file の歯の名は 12 本とも ctick_ で始まり、残りの字は filter の語を含まない。
+/// (15) 3 つの file の歯の名は 13 本とも ctick_ で始まり、残りの字は filter の語を含まない。
 #[test]
 fn ctick_own_names_clean() {
     for w in FILTER {
@@ -190,5 +237,5 @@ fn ctick_own_names_clean() {
             n += 1;
         }
     }
-    assert_eq!(n, 12);
+    assert_eq!(n, 13);
 }

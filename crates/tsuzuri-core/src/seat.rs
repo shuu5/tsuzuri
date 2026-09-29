@@ -339,6 +339,30 @@ fn tick_health(value: Option<&str>) -> Reading<TickHealth> {
         .map_or(Reading::Unknown, Reading::Known)
 }
 
+/// 席の card の欄 tick の語。doctor の語が 4 つの語のどれかで読める時だけ、tick status の席の行の
+/// 欄 healthy と last で決める（yes は健全・no で last が時刻なら古い・no で last が `-` なら
+/// doctor の語が absent か unreadable の時だけその語でほかは「まだ分からない」）。
+/// tick status の行か欄 healthy が無い時と healthy が yes・no のほかの時は doctor の語のまま。
+fn tick_word(doctor: Option<&str>, tick: Option<&str>) -> Reading<TickHealth> {
+    let word = tick_health(doctor);
+    let Reading::Known(w) = word else {
+        return word;
+    };
+    let healthy = tick.and_then(|l| field(l, "healthy"));
+    match healthy {
+        Some("yes") => Reading::Known(TickHealth::Healthy),
+        Some("no") => match tick.and_then(|l| field(l, "last")) {
+            Some("-") => match w {
+                TickHealth::Absent | TickHealth::Unreadable => word,
+                _ => Reading::Unknown,
+            },
+            Some(v) if digits::<u64>(v).is_some() => Reading::Known(TickHealth::Stale),
+            _ => word,
+        },
+        _ => word,
+    }
+}
+
 /// 器の時刻の字 `YYYY-MM-DDTHH:MM:SSZ`（ほかの形は None）。
 fn stamp(t: &str) -> Option<EpochSecs> {
     (t.len() == 20 && t.ends_with('Z')).then(|| epoch_secs(t)).flatten()
@@ -536,7 +560,7 @@ pub fn card(target: &str, anchor: Option<&str>, texts: &SeatTexts, now: EpochSec
         heartbeat: tick.map_or(Reading::Unknown, |l| {
             flag(field(l, "heartbeat"), "on", "off")
         }),
-        tick: tick_health(seat.and_then(|l| field(l, "tick"))),
+        tick: tick_word(seat.and_then(|l| field(l, "tick")), tick),
         tick_at,
         reopens: reopens(tick_value("reopens")),
         move_to: copied(tick_value("move"), account_name),
