@@ -325,6 +325,8 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
             if flag == Flag::EmitRulings {
                 rulings = ruling::emit(dir, &sites);
             }
+            // 規則の表の行の裁定の時刻（便 204）。決定の欄と同じ歩き手の出力を数える
+            check_times(&sites, &mut report);
             // 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ数える。行 R-17 が無くて数えなかったら知らせる（便 156）
             if let Some(records) = adr_records.as_ref() {
                 let mark = report.mark();
@@ -487,6 +489,30 @@ fn check_rulings(sites: &[ruling::Site], name: Option<&str>, report: &mut Report
                 format!("{at} が字でない（一覧か表）＝台帳 id を切り出せない"),
             ),
             None | Some(Node::Null) => report.violation(KIND, format!("{at} が無い＝台帳 id が無い")),
+        }
+    }
+}
+
+/// 規則の表の行の裁定の時刻（便 204・条 P-17.1）。決定の欄の歩き手（`ruling::sites`）が行を添えた欄ごとに、裁定の欄が骨格の印の
+/// 行（裁定の前・`check_rulings` が まだ分からない にする）を除いて、欄 ruled_at が無い・空・字でない（一覧・表）・形
+/// （`rules::TIME_FORMAT`）の違うを違反にする。時刻が骨格の印（未記入）でも違反（時刻の無い裁定）。暦に在る日かと、裁定 id の
+/// 日時との一致は見ない。
+fn check_times(sites: &[ruling::Site], report: &mut Report) {
+    const KIND: &str = "裁定 id";
+    for site in sites {
+        let Some(row) = site.row else { continue };
+        if site.skeleton() && matches!(site.value, Some(Node::Scalar(s)) if adr::unfilled(s)) {
+            continue;
+        }
+        let at = format!("{}: 行 {} の {}", site.file, site.node.unwrap_or("?"), rules::ROW_TIME);
+        match row.get(rules::ROW_TIME) {
+            Some(Node::Scalar(s)) if rules::is_time(s) => {}
+            Some(Node::Scalar(s)) => report.violation(
+                KIND,
+                format!("{at}「{s}」が裁定の時刻の形でない（年-月-日か UTC の分・形は rules.yaml の ruled_at_format）"),
+            ),
+            Some(Node::Seq(_) | Node::Map(_)) => report.violation(KIND, format!("{at} が字でない（一覧か表）＝裁定の時刻が無い")),
+            None | Some(Node::Null) => report.violation(KIND, format!("{at} が無い＝裁定の時刻が無い")),
         }
     }
 }
@@ -908,7 +934,7 @@ fn check_rules(root: &Node, report: &mut Report) {
         }
     }
     duplicate_ids(FILE, all, report);
-    for v in rules::key_violations(root) {
+    for v in rules::key_violations(root).into_iter().chain(rules::kind_violations(root)) {
         report.violation("schema", format!("{FILE}: {v}"));
     }
 }

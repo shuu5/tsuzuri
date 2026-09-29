@@ -3,6 +3,8 @@
 //! folio check を撃つ。版管理は作らない（土台の写しの床は器の導出 file と版管理の 2 つが まだ分からない）＝歯は種別 裁定 id の
 //! 違反の行と、未記入 の まだ分からない の行を数える。数の 55 と内訳は独立の実装（起草の記録の fields.py）の数。
 //! 便 182（docs/design/delivery-182.md §1 (c)）の歯 f182_ は、判断の記録の欄の決まりの生成区間の文法と一覧の写しを見る。
+//! 便 204（docs/design/delivery-204.md §1 (c)）の歯 f204_ は、規則の表の行の裁定の時刻（ruled_at）の在ることと形と、閾値の行の
+//! 種別（human-review を置けない）を見る。期待の字は歯の中の手書き。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -246,4 +248,98 @@ fn f182_a_copy_that_drops_a_list_drifts() {
         let v: Vec<&str> = text.lines().filter(|l| l.starts_with('[')).collect();
         assert_eq!(v, [format!("[adr] adr/schema.yaml {key} が床の定数と違う（欄の決まりの閾値・値域・置き場は床の定数の写し＝data 側で動かせない・N-3.1）")], "{key}");
     }
+}
+
+/// 便 204 の歯の手書きの字: 裁定の時刻の違反の末尾。
+const NO_TIME: &str = "が無い＝裁定の時刻が無い";
+const BAD_TIME: &str = "が裁定の時刻の形でない（年-月-日か UTC の分・形は rules.yaml の ruled_at_format）";
+
+impl Work {
+    /// 素の check の標準出力のうち `prefix` で始まる行。
+    fn lines(&self, prefix: &str) -> Vec<String> {
+        let out = Command::new(env!("CARGO_BIN_EXE_folio")).args(["check", "--dir"]).arg(&self.0).output().unwrap();
+        let text = String::from_utf8(out.stdout).unwrap();
+        text.lines().filter(|l| l.starts_with(prefix)).map(str::to_string).collect()
+    }
+}
+
+/// 歯 8（便 204）: 閾値の行と開発規律の行の 1 行から裁定の時刻の欄を外すと、種別 裁定 id の違反がちょうど 1 つ出る（面の床の
+/// 手前で数える）。
+#[test]
+fn f204_a_rules_row_without_a_time_is_one_violation() {
+    for (marker, id) in [("{id: R-10,", "R-10"), ("{id: D-8,", "D-8")] {
+        let w = Work::new("f204-none");
+        w.set("rules.yaml", marker, "ruled_at", None);
+        assert!(w.read("rules.yaml").lines().any(|l| l.contains(marker) && !l.contains("ruled_at")), "{id}");
+        assert_eq!(w.check().0, [format!("[裁定 id] rules.yaml: 行 {id} の ruled_at {NO_TIME}")], "{id}");
+    }
+}
+
+/// 歯 9（便 204）: 裁定の時刻の形の違う字（区切りが「/」・空の字・JST の時刻付き・時が 1 桁・秒付き・Z の無い分）と、字でない
+/// 値（一覧・表・null）は、どれも違反がちょうど 1 つ。
+#[test]
+fn f204_a_time_out_of_form_is_one_violation() {
+    let (file, marker, _) = R10;
+    let bad = [
+        ("\"2026/09/12\"", "「2026/09/12」"),
+        ("\"\"", "「」"),
+        ("\"2026-09-12 20:25 JST\"", "「2026-09-12 20:25 JST」"),
+        ("\"2026-09-12T1:25Z\"", "「2026-09-12T1:25Z」"),
+        ("\"2026-09-12T11:25:00Z\"", "「2026-09-12T11:25:00Z」"),
+        ("\"2026-09-12T11:25\"", "「2026-09-12T11:25」"),
+    ];
+    for (value, shown) in bad {
+        let w = Work::new("f204-form");
+        w.set(file, marker, "ruled_at", Some(value));
+        assert_eq!(w.check().0, [format!("[裁定 id] rules.yaml: 行 R-10 の ruled_at{shown}{BAD_TIME}")], "{value}");
+    }
+    let listed = "が字でない（一覧か表）＝裁定の時刻が無い";
+    for (value, want) in [("[2026-09-12]", listed), ("{at: 2026-09-12}", listed), ("null", NO_TIME)] {
+        let w = Work::new("f204-shape");
+        w.set(file, marker, "ruled_at", Some(value));
+        assert_eq!(w.check().0, [format!("[裁定 id] rules.yaml: 行 R-10 の ruled_at {want}")], "{value}");
+    }
+}
+
+/// 歯 10（便 204）: 年-月-日と UTC の分（tsuzuri の規則の表の形）は違反 0。骨格の印（未記入）は、裁定の欄も骨格の印なら
+/// 数えず（裁定の欄の まだ分からない だけ）、裁定の欄が埋まっていれば違反。
+#[test]
+fn f204_the_two_forms_pass_and_the_mark_waits_only_with_the_ruling() {
+    let (file, marker, key) = R10;
+    for value in ["2026-09-28", "\"2026-09-24T22:39Z\""] {
+        let w = Work::new("f204-ok");
+        w.set(file, marker, "ruled_at", Some(value));
+        assert!(w.check().0.is_empty(), "{value}");
+    }
+    let base = Work::new("f204-base").check();
+    let w = Work::new("f204-both");
+    w.set(file, marker, key, Some("未記入"));
+    w.set(file, marker, "ruled_at", Some("未記入"));
+    let (v, p) = w.check();
+    assert!(v.is_empty(), "{v:?}");
+    assert_eq!(p.len(), base.1.len() + 1, "{p:?}");
+    assert!(p.contains(&format!("# まだ分からない: rules.yaml: 行 R-10 の ruling {MARK}")), "{p:?}");
+    let w = Work::new("f204-half");
+    w.set(file, marker, "ruled_at", Some("未記入"));
+    let (v, p) = w.check();
+    assert_eq!(v, [format!("[裁定 id] rules.yaml: 行 R-10 の ruled_at「未記入」{BAD_TIME}")]);
+    assert_eq!(p, base.1);
+}
+
+/// 歯 11（便 204）: 閾値の行の種別を human-review にすると種別 schema の違反がちょうど 1 つ出て、開発規律の行の human-review と
+/// 閾値の行のほかの 3 つの種別は違反 0。
+#[test]
+fn f204_a_threshold_row_of_human_review_is_one_violation() {
+    let w = Work::new("f204-kind");
+    w.set("rules.yaml", "{id: R-10,", "kind", Some("human-review"));
+    assert_eq!(
+        w.lines("["),
+        ["[schema] rules.yaml: 行 R-10 の kind「human-review」は閾値の行に置けない（kind_map_to_constitution の左辺に無い＝開発規律の行の作法）"]
+    );
+    for kind in ["deny", "build-check", "detect"] {
+        let w = Work::new("f204-kind-ok");
+        w.set("rules.yaml", "{id: R-10,", "kind", Some(kind));
+        assert!(w.lines("[").is_empty(), "{kind}");
+    }
+    assert!(Work::new("f204-d").read("rules.yaml").lines().any(|l| l.contains("{id: D-8,") && l.contains("kind: human-review")));
 }

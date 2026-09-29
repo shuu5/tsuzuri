@@ -6,6 +6,8 @@
 //! 裁定 id の在否を見る（`has_ruling`）。正規表現は使わない（字の走査・文法の字は ASCII だけ）。
 //! 文法の字面 `PATTERN`・形の種類・決定の欄の閉じた一覧 `FIELDS`・骨格の欄・数えない役は、判断の記録の欄の決まり
 //! （adr/schema.yaml）の生成区間に写る（便 182・`floor_adr.rs` の FLOOR）。
+//! 規則の表の行の欄には歩き手が行を添え（`Site::row`・便 204）、床（`check.rs` の `check_times`）が同じ歩き手の出力で裁定の時刻
+//! （`rules.rs` の `ROW_TIME` と `is_time`）を数える。
 
 use std::collections::HashMap;
 use std::fs;
@@ -190,6 +192,8 @@ pub(crate) struct Site<'a> {
     pub(crate) path: String,
     pub(crate) node: Option<&'a str>,
     pub(crate) value: Option<&'a Node>,
+    /// 欄を持つ規則の表の行（便 204・床が裁定の時刻の欄 `rules::ROW_TIME` を引く・ほかの欄は None）。
+    pub(crate) row: Option<&'a Node>,
 }
 
 impl Site<'_> {
@@ -219,10 +223,11 @@ fn file_of(field: &str) -> &str {
 }
 
 /// 決定の欄を一覧の順に全部拾う（ADR-31 決定 (1)）。欄を持つ入れ物（承認欄の表・行・承認欄の行）が在れば、欄が無くても
-/// 1 つに数える（値 None）。入れ物が表でない・一覧でない形は拾わない（各 file の形の床が数える）。
+/// 1 つに数える（値 None）。入れ物が表でない・一覧でない形は拾わない（各 file の形の床が数える）。規則の表の行の欄には
+/// 行を添える（便 204・裁定の時刻）。
 pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
     let mut out = Vec::new();
-    let mut push = |field: &'static str, file: &str, at: String, path: String, node: Option<&'a str>, value: Option<&'a Node>| {
+    let mut push = |field: &'static str, file: &str, at: String, path: String, node: Option<&'a str>, value: Option<&'a Node>, row: Option<&'a Node>| {
         out.push(Site {
             field,
             file: file.to_string(),
@@ -230,37 +235,38 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
             path,
             node,
             value,
+            row,
         });
     };
     let c = tree.constitution;
     if let Some(ap) = c.get("meta").and_then(|m| m.get("approval")).filter(|a| a.as_map().is_some()) {
         let path = "meta.approval.ruling";
-        push(ENACTMENT, file_of(ENACTMENT), path.into(), path.into(), None, ap.get("ruling"));
+        push(ENACTMENT, file_of(ENACTMENT), path.into(), path.into(), None, ap.get("ruling"), None);
     }
     for (a, article) in rows(c.get("articles")) {
         let id = article.get("id").and_then(Node::as_str);
         for (n, (k, am)) in rows(article.get("amended_by")).enumerate() {
             let at = format!("条 {} の amended_by[{n}].ruling", id.unwrap_or("?"));
-            push(AMENDMENT, file_of(AMENDMENT), at, format!("articles[{a}].amended_by[{k}].ruling"), id, am.get("ruling"));
+            push(AMENDMENT, file_of(AMENDMENT), at, format!("articles[{a}].amended_by[{k}].ruling"), id, am.get("ruling"), None);
         }
     }
     for (field, section) in [(THRESHOLD, "thresholds"), (DISCIPLINE, "discipline")] {
         for (k, row) in rows(tree.rules.get(section)) {
             let id = row.get("id").and_then(Node::as_str);
             let at = format!("行 {} の ruling", id.unwrap_or("?"));
-            push(field, file_of(field), at, format!("{section}[{k}].ruling"), id, row.get("ruling"));
+            push(field, file_of(field), at, format!("{section}[{k}].ruling"), id, row.get("ruling"), Some(row));
         }
     }
     for (id, record) in tree.records {
         if let Some(ap) = record.get("approval").filter(|a| a.as_map().is_some()) {
             let path = "approval.ruling";
-            push(RECORD, &format!("adr/{id}.yaml"), path.into(), path.into(), Some(id), ap.get("ruling"));
+            push(RECORD, &format!("adr/{id}.yaml"), path.into(), path.into(), Some(id), ap.get("ruling"), None);
         }
     }
     for (file, root) in &tree.notes {
         for (n, row) in approval_rows(root) {
             let path = format!("meta.approval[{n}].ruling");
-            push(NOTE, file, path.clone(), path, None, row.get("ruling"));
+            push(NOTE, file, path.clone(), path, None, row.get("ruling"), None);
         }
     }
     for (file, root) in &tree.notes {
@@ -271,7 +277,7 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
             for (k, row) in rows(section.get("rows")) {
                 let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
                 let path = format!("sections[{s}].rows[{k}].ruling");
-                push(TABLE, file, format!("§{n} の行 {id} の ruling"), path, None, row.get("ruling"));
+                push(TABLE, file, format!("§{n} の行 {id} の ruling"), path, None, row.get("ruling"), None);
             }
         }
     }
@@ -281,7 +287,7 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
             let role = row.get("role").and_then(Node::as_str);
             if !role.is_some_and(|r| SKIP_ROLES.contains(&r)) {
                 let path = format!("meta.approval[{n}].stamp");
-                push(field, file_of(field), path.clone(), path, None, row.get("stamp"));
+                push(field, file_of(field), path.clone(), path, None, row.get("stamp"), None);
             }
         }
     }
