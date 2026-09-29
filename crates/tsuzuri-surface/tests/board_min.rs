@@ -67,6 +67,8 @@ fn board_min_ledger_outside_epic_goes_last() {
     let mut stray = rows[0].clone();
     stray.id = "zz.1".to_string().try_into().expect("id");
     stray.kind = "task".to_string();
+    // 写しの label intake:question も外して epic の外の契約の行にする（種類は node_kind の読み）。
+    stray.labels.clear();
     rows.push(stray);
     let mut second = rows[2].clone();
     second.id = "am".to_string().try_into().expect("id");

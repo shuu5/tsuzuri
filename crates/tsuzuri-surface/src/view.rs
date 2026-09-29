@@ -19,12 +19,6 @@ use crate::frame::BRAND;
 use crate::project::{ask, ledger, map, next, nodearound, pipeline, seat};
 use crate::vocab::{label, vocab};
 
-/// 問いの bead の種類。
-pub const QUESTION_KIND: &str = "question";
-
-/// epic の bead の種類。
-pub const EPIC_KIND: &str = "epic";
-
 /// 読み直しの合図の event の名（台帳の変化と、器の event の記録か設計文書か席か account の変化・便 g-parts）。
 /// 字は契約の型の crate の定数から引き、面の code に直に書かない。合図は種類（`changed_kinds`）を読む口だけを読み直す。
 pub const RELOAD_EVENTS: [&str; 2] = [LEDGER_CHANGED_EVENT, BOARD_CHANGED_EVENT];
@@ -247,11 +241,12 @@ pub fn board(rows: &[LedgerRow]) -> Board {
     }
 }
 
-/// 問いの一覧: open の question を古い順（更新時刻の昇順・同じ時刻は id の順）。
+/// 問いの一覧: open の問いを古い順（更新時刻の昇順・同じ時刻は id の順）。
+/// 種類は地図の節点と同じ読み（`LedgerRow::node_kind`）で決める（行 g-ledger-group-kind）。
 pub fn questions(rows: &[LedgerRow]) -> Vec<LedgerRow> {
     let mut out: Vec<LedgerRow> = rows
         .iter()
-        .filter(|r| r.kind == QUESTION_KIND && r.status == "open")
+        .filter(|r| r.node_kind() == NodeKind::Question && r.status == "open")
         .cloned()
         .collect();
     out.sort_by(|a, b| {
@@ -262,11 +257,15 @@ pub fn questions(rows: &[LedgerRow]) -> Vec<LedgerRow> {
     out
 }
 
-/// 台帳の一覧: epic ごとの組（epic の id の順）に、その下の bead を task・memo・その他の順で並べる。
+/// 台帳の一覧: epic ごとの組（epic の id の順）に、その下の bead を契約・memo の順で並べる。
+/// 種類は地図の節点と同じ読み（`LedgerRow::node_kind`）で決める（行 g-ledger-group-kind）。
 /// 親は id の階層（`a.1` の親は `a`）で決め、いちばん近い epic の祖先の下に置く。
-/// epic の祖先の無い bead は最後の組（epic が None）に入る。question は問いの一覧が持つので入れない。
+/// epic の祖先の無い bead は最後の組（epic が None）に入る。問いは問いの一覧が持つので入れない。
 pub fn ledger_groups(rows: &[LedgerRow]) -> Vec<EpicGroup> {
-    let mut epics: Vec<&LedgerRow> = rows.iter().filter(|r| r.kind == EPIC_KIND).collect();
+    let mut epics: Vec<&LedgerRow> = rows
+        .iter()
+        .filter(|r| r.node_kind() == NodeKind::Epic)
+        .collect();
     epics.sort_by(|a, b| id_order(a.id.as_str(), b.id.as_str()));
     let mut groups: Vec<EpicGroup> = epics
         .iter()
@@ -278,7 +277,7 @@ pub fn ledger_groups(rows: &[LedgerRow]) -> Vec<EpicGroup> {
     let mut outside = Vec::new();
     for row in rows
         .iter()
-        .filter(|r| r.kind != EPIC_KIND && r.kind != QUESTION_KIND)
+        .filter(|r| !matches!(r.node_kind(), NodeKind::Epic | NodeKind::Question))
     {
         let home =
             ancestors(row.id.as_str()).find_map(|a| epics.iter().position(|e| e.id.as_str() == a));
@@ -309,19 +308,20 @@ fn parent(id: &str) -> Option<&str> {
     id.rsplit_once('.').map(|(p, _)| p)
 }
 
-/// epic の下の順: task・memo・その他、同じ種類の中は id の順。
+/// epic の下の順: 契約・memo・その他（種類は `LedgerRow::node_kind`）、同じ種類の中は id の順。
 fn sort_children(children: &mut [LedgerRow]) {
     children.sort_by(|a, b| {
-        kind_rank(&a.kind)
-            .cmp(&kind_rank(&b.kind))
+        kind_rank(a.node_kind())
+            .cmp(&kind_rank(b.node_kind()))
             .then_with(|| id_order(a.id.as_str(), b.id.as_str()))
     });
 }
 
-fn kind_rank(kind: &str) -> u8 {
+/// 並べの位（契約は 0・memo は 1・ほかは 2）。組の下には契約と memo しか来ないが、枝の多い NodeKind に備えて残す。
+fn kind_rank(kind: NodeKind) -> u8 {
     match kind {
-        "task" => 0,
-        "memo" => 1,
+        NodeKind::Task => 0,
+        NodeKind::Memo => 1,
         _ => 2,
     }
 }

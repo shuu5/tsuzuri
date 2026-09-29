@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use tsuzuri_boundary::server::ledger as server_ledger;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow};
+use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ledger::{
     self, CLOSED, EMPTY, FOLDS, Group, LAYOUT, NO_OPEN, Part, Tier, listed,
@@ -34,6 +34,20 @@ fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
     }
 }
 
+/// 本物の台帳（bd）の形: 欄 kind の字 memo と question の行を issue_type task と label にする（ほかはそのまま）。
+fn real(row: LedgerRow) -> LedgerRow {
+    let label = match row.kind.as_str() {
+        "memo" => MEMO_LABEL,
+        "question" => QUESTION_LABEL,
+        _ => return row,
+    };
+    LedgerRow {
+        kind: "task".to_string(),
+        labels: vec![label.to_string()],
+        ..row
+    }
+}
+
 fn screen_of(rows: Vec<LedgerRow>) -> Screen {
     let body = wire::encode(&LedgerList {
         rows: Reading::Known(rows),
@@ -42,7 +56,7 @@ fn screen_of(rows: Vec<LedgerRow>) -> Screen {
     Screen::initial().after_read(&Fetched::Body(body), 100)
 }
 
-/// 節の台帳 LH（15 行）。
+/// 節の台帳 LH（15 行・memo と問いは fn real で本物の台帳の形にする）。
 fn lh() -> Vec<LedgerRow> {
     [
         ("ea", "epic", "open"),
@@ -62,7 +76,7 @@ fn lh() -> Vec<LedgerRow> {
         ("qq.1", "question", "open"),
     ]
     .into_iter()
-    .map(|(id, kind, status)| row(id, kind, status))
+    .map(|(id, kind, status)| real(row(id, kind, status)))
     .collect()
 }
 
