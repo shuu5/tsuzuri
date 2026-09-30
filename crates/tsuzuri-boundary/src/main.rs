@@ -28,6 +28,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use tsuzuri_boundary::out::emit_err;
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_boundary::stage::notify;
 use tsuzuri_core::account::project_name;
@@ -73,7 +74,7 @@ fn main() -> ExitCode {
 }
 
 fn usage(what: &str) -> u8 {
-    eprintln!("tz: {what}\n{USAGE}");
+    emit_err(&format!("tz: {what}\n{USAGE}"));
     FAIL
 }
 
@@ -187,13 +188,13 @@ fn serve(rest: &[&str]) -> u8 {
     let server = match Server::bind(&config) {
         Ok(server) => server,
         Err(e) => {
-            eprintln!("tz surface serve: 起動を断る: {e}");
+            emit_err(&format!("tz surface serve: 起動を断る: {e}"));
             return FAIL;
         }
     };
     match server.local_addr() {
-        Ok(addr) => eprintln!("tz surface serve: http://{addr}/"),
-        Err(e) => eprintln!("tz surface serve: 口の住所が読めない: {e}"),
+        Ok(addr) => emit_err(&format!("tz surface serve: http://{addr}/")),
+        Err(e) => emit_err(&format!("tz surface serve: 口の住所が読めない: {e}")),
     }
     server.run()
 }

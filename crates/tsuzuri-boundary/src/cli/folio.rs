@@ -9,6 +9,7 @@ use std::ffi::OsString;
 use std::io::Write;
 
 use super::graph;
+use crate::out::emit_err;
 use crate::server::design::FOLIO;
 
 /// 口の名（要件 FR17 の字の順）。
@@ -67,11 +68,11 @@ pub fn graph(rest: &[&str]) -> u8 {
         .find(|name| GRAPH_FLAGS.contains(name));
     match mixed {
         Some(flag) => {
-            eprintln!(
+            emit_err(&format!(
                 "tz graph: 索引の旗（{}）と {flag} は混ぜない\n{}\n{INDEX_USAGE}",
                 INDEX_FLAGS.join("・"),
                 graph::USAGE
-            );
+            ));
             1
         }
         None => run("graph", rest),

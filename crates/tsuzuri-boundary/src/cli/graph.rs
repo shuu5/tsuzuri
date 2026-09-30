@@ -29,6 +29,7 @@ use tsuzuri_contract::graph::{
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::{self, Outside, build, build::DESIGN_EDGE_TYPES, check::UNMEASURED};
 
+use crate::out::{emit, emit_err};
 use crate::server::board::{self, Floors, Sources, Texts};
 use crate::server::design::Design;
 use crate::server::ledger::{BD, Source};
@@ -263,17 +264,17 @@ pub fn run(rest: &[&str]) -> u8 {
     };
     if !doc.unread.is_empty() {
         let names: Vec<&str> = doc.unread.iter().map(|s| source_name(*s)).collect();
-        eprintln!("# 読めない出所: {}", names.join("・"));
+        emit_err(&format!("# 読めない出所: {}", names.join("・")));
     }
     match args.mode {
         Mode::Check => check(&doc.invariants, outside, heads, &floors),
         Mode::Doc | Mode::Design => match wire::encode(&doc) {
             Ok(text) => {
-                println!("{text}");
+                emit(&text);
                 if doc.unread.is_empty() { 0 } else { UNKNOWN }
             }
             Err(e) => {
-                eprintln!("tz graph: 電文にできない: {e}");
+                emit_err(&format!("tz graph: 電文にできない: {e}"));
                 UNKNOWN
             }
         },
@@ -315,12 +316,12 @@ fn check(
                     .iter()
                     .find(|(id, _)| *id == inv.id)
                     .map_or("", |(_, next)| next);
-                println!(
+                emit(&format!(
                     "[{}] 違反 {}（{}） next={next}",
                     inv.id,
                     inv.violations,
                     inv.ids.join("・")
-                );
+                ));
             }
             Verdict::Unknown => {
                 unknowns += 1;
@@ -334,22 +335,22 @@ fn check(
                     }
                     _ => "読めない出所が在る".to_string(),
                 };
-                eprintln!("# まだ分からない: [{}] {why}", inv.id);
+                emit_err(&format!("# まだ分からない: [{}] {why}", inv.id));
             }
             Verdict::Pass => {}
         }
     }
     match &floors.bare {
-        Reading::Known(ids) => println!("{}", bare_line(ids)),
-        Reading::Unknown => eprintln!("# まだ分からない: {BARE_UNKNOWN}"),
+        Reading::Known(ids) => emit(&bare_line(ids)),
+        Reading::Unknown => emit_err(&format!("# まだ分からない: {BARE_UNKNOWN}")),
     }
     match &floors.unfielded {
-        Reading::Known(pairs) => println!("{}", unfielded_line(pairs)),
-        Reading::Unknown => eprintln!("# まだ分からない: {UNFIELDED_UNKNOWN}"),
+        Reading::Known(pairs) => emit(&unfielded_line(pairs)),
+        Reading::Unknown => emit_err(&format!("# まだ分からない: {UNFIELDED_UNKNOWN}")),
     }
     match &floors.landed {
-        Reading::Known(docs) => println!("{}", landed_line(docs)),
-        Reading::Unknown => eprintln!("# まだ分からない: {LANDED_UNKNOWN}"),
+        Reading::Known(docs) => emit(&landed_line(docs)),
+        Reading::Unknown => emit_err(&format!("# まだ分からない: {LANDED_UNKNOWN}")),
     }
     let verdict = overall(invariants);
     let word = match verdict {
@@ -357,7 +358,9 @@ fn check(
         Verdict::Violation => "不合格",
         Verdict::Unknown => "まだ分からない",
     };
-    println!("tz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）");
+    emit(&format!(
+        "tz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）"
+    ));
     exit_code(verdict)
 }
 
@@ -370,7 +373,7 @@ fn source_name(s: GraphSource) -> &'static str {
 }
 
 fn usage(what: &str) -> u8 {
-    eprintln!("tz graph: {what}\n{USAGE}");
+    emit_err(&format!("tz graph: {what}\n{USAGE}"));
     FAIL
 }
 

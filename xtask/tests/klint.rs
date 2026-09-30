@@ -31,7 +31,7 @@ const MAP: [(&str, &str, &str, &str); 18] = [
 ];
 
 /// 今の表の lint（表に足す行がこの一覧も直す）。
-const ENABLED: [&str; 12] = [
+const ENABLED: [&str; 14] = [
     "unused_must_use",
     "unsafe_code",
     "unwrap_used",
@@ -42,6 +42,8 @@ const ENABLED: [&str; 12] = [
     "unreachable",
     "exit",
     "dbg_macro",
+    "print_stdout",
+    "print_stderr",
     "allow_attributes",
     "allow_attributes_without_reason",
 ];
@@ -358,6 +360,91 @@ fn klint_test_roots_cfg_test() {
     assert!(seen >= 1, "見た file が無い");
 }
 
+/// 出力の手の在りか（file・関数・lint）: 直接の print の macro はこの 4 つの関数の中だけに在る（行 k-lint-print）。
+const HANDS: [(&str, &str, &str); 4] = [
+    ("crates/tsuzuri-boundary/src/out.rs", "emit", "print_stdout"),
+    ("crates/tsuzuri-boundary/src/out.rs", "emit_err", "print_stderr"),
+    ("crates/tsuzuri-surface/src/main.rs", "emit_err", "print_stderr"),
+    ("xtask/src/main.rs", "emit_err", "print_stderr"),
+];
+
+/// dir の下の字 .rs で終わる file（path の順・下の dir も）。
+fn rs_files(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let entries = std::fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("{} を読む: {e}", dir.display()));
+    for entry in entries {
+        let path = entry.expect("dir の項目").path();
+        if path.is_dir() {
+            out.extend(rs_files(&path));
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn klint_print_hands() {
+    let root = repo_root();
+    let out_mark = concat!("println", "!(");
+    let err_mark = concat!("eprintln", "!(");
+    let mut have: Vec<(String, &str)> = Vec::new();
+    for member in members() {
+        for path in rs_files(&root.join(&member).join("src")) {
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
+            let rel = path
+                .strip_prefix(&root)
+                .expect("根の下の path")
+                .to_string_lossy()
+                .into_owned();
+            let errs = text.matches(err_mark).count();
+            let outs = text.matches(out_mark).count() - errs;
+            have.extend((0..outs).map(|_| (rel.clone(), "print_stdout")));
+            have.extend((0..errs).map(|_| (rel.clone(), "print_stderr")));
+        }
+    }
+    have.sort();
+    let mut want: Vec<(String, &str)> = HANDS
+        .iter()
+        .map(|(file, _, lint)| ((*file).to_string(), *lint))
+        .collect();
+    want.sort();
+    assert_eq!(have, want);
+
+    // 各関数の直前の 4 行は、理由を持つ expect の属性（#[expect( ・lint の行・reason = の行・)] ）。
+    for (file, name, lint) in HANDS {
+        let text = read(file);
+        let lines: Vec<&str> = text.lines().collect();
+        let head = format!("fn {name}(line");
+        let at: Vec<usize> = (0..lines.len())
+            .filter(|&i| {
+                let l = lines[i].trim();
+                l.strip_prefix("pub ").unwrap_or(l).starts_with(&head)
+            })
+            .collect();
+        assert_eq!(at.len(), 1, "{file} の {head} が {} 行", at.len());
+        assert!(at[0] >= 4, "{file} の {head} の前が 4 行に足りない");
+        let attr: Vec<&str> = lines[at[0] - 4..at[0]].iter().map(|l| l.trim()).collect();
+        let shape = [
+            "#[expect(".to_string(),
+            format!("clippy::{lint},"),
+            "reason = ".to_string(),
+            ")]".to_string(),
+        ];
+        for (i, expect) in shape.iter().enumerate() {
+            let ok = if i == 2 {
+                attr[i].starts_with(expect.as_str())
+            } else {
+                attr[i] == expect
+            };
+            assert!(ok, "{file} の {head} の直前の 4 行が属性でない: {attr:?}");
+        }
+    }
+}
+
 #[test]
 fn klint_own_names_clean() {
     let text = read("xtask/tests/klint.rs");
@@ -371,7 +458,7 @@ fn klint_own_names_clean() {
         names.push(after[..end].trim().to_string());
         rest = &after[end..];
     }
-    assert_eq!(names.len(), 7, "{names:?}");
+    assert_eq!(names.len(), 8, "{names:?}");
 
     let list = read("xtask/tests/filter-words.txt");
     let words: Vec<&str> = body(&list).collect();

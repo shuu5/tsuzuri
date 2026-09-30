@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::emit_err;
 use tsuzuri_boundary::audit;
 use tsuzuri_boundary::stage::relay::{CHROME, Eyes};
 use tsuzuri_boundary::stage::tunnel;
@@ -62,20 +63,20 @@ pub fn run(args: &[String], root: &Path) -> i32 {
     let flags = match flags(args, root) {
         Ok(flags) => flags,
         Err(e) => {
-            eprintln!("xtask accept: {e}\n{USAGE}");
+            emit_err(&format!("xtask accept: {e}\n{USAGE}"));
             return 2;
         }
     };
     match sweep(&flags, root) {
         Ok(total) => {
-            eprintln!(
+            emit_err(&format!(
                 "xtask accept: 違反 計 {total}（report は {}）",
                 flags.out.display()
-            );
+            ));
             i32::from(total > 0)
         }
         Err(e) => {
-            eprintln!("xtask accept: {e}");
+            emit_err(&format!("xtask accept: {e}"));
             2
         }
     }

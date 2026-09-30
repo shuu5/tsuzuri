@@ -23,6 +23,7 @@ use tsuzuri_contract::wire;
 use tsuzuri_core::gate;
 
 use crate::acct::{self, GIT};
+use crate::out::emit_err;
 use crate::server::events::NUDGE_PATH;
 use crate::server::proc;
 use crate::stage::json;
@@ -160,12 +161,12 @@ pub fn run(rest: &[&str]) -> u8 {
     let repo = match parse(rest) {
         Ok(repo) => repo,
         Err(e) => {
-            eprintln!("tz hook question-signal: {e}\n{USAGE}");
+            emit_err(&format!("tz hook question-signal: {e}\n{USAGE}"));
             return FAIL;
         }
     };
     if let Err(e) = signal(&repo, OsStr::new(GIT), OsStr::new(TAILNET), &payload) {
-        eprintln!("tz hook question-signal: {e}");
+        emit_err(&format!("tz hook question-signal: {e}"));
     }
     0
 }

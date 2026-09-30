@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use tsuzuri_core::gate::{self, Gate, Why};
 use tsuzuri_core::graph::{Graph, Inputs, build};
 
+use crate::out::emit_err;
 use crate::server::design::Design;
 use crate::server::ledger::{BD, Source};
 
@@ -111,7 +112,7 @@ pub fn run(rest: &[&str]) -> u8 {
 
 /// 引数の誤り: 問いの起票だけを deny の args で断り（rc 0）、ほかの呼び出しは止めない誤りの rc 1。子 process は撃たない。
 fn refuse(payload: &str, what: &str) -> u8 {
-    eprintln!("tz hook question-gate: {what}\n{USAGE}");
+    emit_err(&format!("tz hook question-gate: {what}\n{USAGE}"));
     if gate::drafts(payload).is_empty() {
         return FAIL;
     }
@@ -129,6 +130,6 @@ fn refuse(payload: &str, what: &str) -> u8 {
 fn write_line(text: &str) {
     let mut out = std::io::stdout().lock();
     if let Err(e) = writeln!(out, "{text}").and_then(|()| out.flush()) {
-        eprintln!("tz hook question-gate: 答えを書けない: {e}");
+        emit_err(&format!("tz hook question-gate: 答えを書けない: {e}"));
     }
 }

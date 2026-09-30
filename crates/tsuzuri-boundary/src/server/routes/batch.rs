@@ -3,6 +3,7 @@
 use tsuzuri_contract::surface::BatchRequest;
 use tsuzuri_contract::wire;
 
+use crate::out::emit_err;
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
 use crate::server::ruling::refusal_line;
@@ -40,10 +41,12 @@ fn post_batch(req: &Request, shared: &Shared) -> Response {
     };
     if response.status != 200 {
         let questions: Vec<_> = body.items.iter().map(|i| &i.question).collect();
-        eprintln!(
-            "{}",
-            refusal_line(batch::PATH, response.status, &response.body, &questions)
-        );
+        emit_err(&refusal_line(
+            batch::PATH,
+            response.status,
+            &response.body,
+            &questions,
+        ));
     }
     response
 }

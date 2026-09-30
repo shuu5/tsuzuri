@@ -39,6 +39,7 @@ use tsuzuri_core::question::open_questions;
 use super::events;
 use super::ledger::{Source, capture, parse_bd};
 use super::proc::run;
+use crate::out::emit_err;
 
 /// 口の path。
 pub const PATH: &str = "/api/ruling";
@@ -308,7 +309,7 @@ pub fn reread(ledger: &Source) -> Option<String> {
             std::thread::sleep(RETRY_STEP);
         }
     }
-    eprintln!("{}", unread_line(&words));
+    emit_err(&unread_line(&words));
     None
 }
 
@@ -382,10 +383,10 @@ pub fn deliver(
             line: mark_line(&p.ruling, Route::Deliver, &minute),
         };
         if !write(writer, &mark) {
-            eprintln!(
+            emit_err(&format!(
                 "tz surface serve: 印を置けない: 裁定 {}（問い {}）は停止の hook が返す",
                 p.ruling, p.question
-            );
+            ));
         }
     }
     Round::Taken
@@ -411,17 +412,17 @@ pub fn redeliver(
             return;
         };
         if last.as_deref() != Some(word.as_str()) {
-            eprintln!(
+            emit_err(&format!(
                 "tz surface serve: {NOT_TAKEN}: {id}・席 {}・器 {word}",
                 d.target
-            );
+            ));
             last = Some(word);
         }
         if start.elapsed() + pace.step > pace.span {
-            eprintln!(
+            emit_err(&format!(
                 "tz surface serve: {GAVE_UP}: {id}・席 {}・{rounds} 回",
                 d.target
-            );
+            ));
             return;
         }
         std::thread::sleep(pace.step);

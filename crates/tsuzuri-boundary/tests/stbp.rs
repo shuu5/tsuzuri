@@ -206,7 +206,7 @@ fn stbp_wiring() {
     for line in [
         "let read = url::ports(&text, &call.git, &call.repo, TIMEOUT);",
         "if !script.is_empty() {",
-        "println!(\"project {name} の board の port が読めない（その board の頁の上の断りは広げない）\");",
+        "emit(&format!(\"project {name} の board の port が読めない（その board の頁の上の断りは広げない）\"));",
         "if on_boards(command, &page, board, ports) {",
         "shoot(&mut session, command, out.as_deref(), board, ports)",
     ] {

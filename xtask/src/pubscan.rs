@@ -9,6 +9,8 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::emit_err;
+
 /// 基準の commit（判断の記録 ADR-18 と計画の判断の表 d44 を足した commit・公開を記した commit）。これより後の commit を見る。
 pub const BASE: &str = "244d0e2c0f208f18b31f25731b68ca429600894e";
 
@@ -268,31 +270,36 @@ pub fn run(root: &Path) -> i32 {
         Some(Ok(list)) => list,
         None => None,
         Some(Err(e)) => {
-            eprintln!("xtask pub-scan: 一覧: {e}");
+            emit_err(&format!("xtask pub-scan: 一覧: {e}"));
             return 1;
         }
     };
     let words = match list {
         Some(words) => {
-            eprintln!("xtask pub-scan: 一覧の語 {} 語", words.len());
+            emit_err(&format!("xtask pub-scan: 一覧の語 {} 語", words.len()));
             words
         }
         None => {
-            eprintln!("xtask pub-scan: 一覧の file が無いので形だけを見る");
+            emit_err("xtask pub-scan: 一覧の file が無いので形だけを見る");
             Vec::new()
         }
     };
     let hits = match scan(root, BASE, &words) {
         Ok(hits) => hits,
         Err(e) => {
-            eprintln!("xtask pub-scan: 走査できない: {e}");
+            emit_err(&format!("xtask pub-scan: 走査できない: {e}"));
             return 1;
         }
     };
     for hit in &hits {
-        eprintln!("xtask pub-scan: {}:{}: {}", hit.place, hit.line, hit.kind.label());
+        emit_err(&format!(
+            "xtask pub-scan: {}:{}: {}",
+            hit.place,
+            hit.line,
+            hit.kind.label()
+        ));
     }
-    eprintln!("xtask pub-scan: 当たり {}", hits.len());
+    emit_err(&format!("xtask pub-scan: 当たり {}", hits.len()));
     i32::from(!hits.is_empty())
 }
 

@@ -53,13 +53,22 @@ fn main() -> ExitCode {
         Some("pub-scan") if args.len() == 1 => exit_code(pubscan::run(&workspace_root())),
         Some("accept") => exit_code(accept::run(&args[1..], &workspace_root())),
         _ => {
-            eprintln!(
+            emit_err(&format!(
                 "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}",
                 accept::USAGE
-            );
+            ));
             ExitCode::from(2)
         }
     }
+}
+
+/// xtask の出力の手（行 k-lint-print）: 標準エラーへ 1 行を書く（字の後に改行）。xtask が書くのはこの関数だけ。
+#[expect(
+    clippy::print_stderr,
+    reason = "xtask の標準エラーをこの 1 関数に閉じるための例外"
+)]
+fn emit_err(line: &str) {
+    eprintln!("{line}");
 }
 
 fn exit_code(rc: i32) -> ExitCode {
@@ -111,51 +120,56 @@ fn check(root: &Path) -> i32 {
         Ok(s) => match partition(s) {
             Some(p) => Some(p),
             None => {
-                eprintln!("xtask check: {PARTITION_ENV} は count:K/N（1 ≤ K ≤ N）の字だけ: {s:?}");
+                emit_err(&format!(
+                    "xtask check: {PARTITION_ENV} は count:K/N（1 ≤ K ≤ N）の字だけ: {s:?}"
+                ));
                 return 2;
             }
         },
         Err(std::env::VarError::NotPresent) => None,
         Err(e) => {
-            eprintln!("xtask check: {PARTITION_ENV} を読めない: {e}");
+            emit_err(&format!("xtask check: {PARTITION_ENV} を読めない: {e}"));
             return 2;
         }
     };
-    eprintln!("xtask check: pub-scan");
+    emit_err("xtask check: pub-scan");
     let rc = pubscan::run(root);
     if rc != 0 {
-        eprintln!("xtask check: 落ちた段 pub-scan (rc {rc})");
+        emit_err(&format!("xtask check: 落ちた段 pub-scan (rc {rc})"));
         return rc;
     }
-    eprintln!("xtask check: size");
+    emit_err("xtask check: size");
     match size::measure(root) {
-        Ok(facts) => eprintln!("xtask check: size {facts}"),
+        Ok(facts) => emit_err(&format!("xtask check: size {facts}")),
         Err(e) => {
-            eprintln!("xtask check: size: {e}");
-            eprintln!("xtask check: 落ちた段 size (rc 1)");
+            emit_err(&format!("xtask check: size: {e}"));
+            emit_err("xtask check: 落ちた段 size (rc 1)");
             return 1;
         }
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     for step in CHECK_STEPS {
         let args = step_args(step, part);
-        eprintln!("xtask check: cargo {}", args.join(" "));
+        emit_err(&format!("xtask check: cargo {}", args.join(" ")));
         let status = Command::new(&cargo).args(&args).current_dir(root).status();
         let rc = match status {
             Ok(s) if s.success() => continue,
             Ok(s) => s.code().unwrap_or(1),
             Err(e) => {
-                eprintln!("xtask check: cargo を起動できない: {e}");
+                emit_err(&format!("xtask check: cargo を起動できない: {e}"));
                 1
             }
         };
-        eprintln!("xtask check: 落ちた段 cargo {} (rc {rc})", args.join(" "));
+        emit_err(&format!(
+            "xtask check: 落ちた段 cargo {} (rc {rc})",
+            args.join(" ")
+        ));
         return rc;
     }
-    eprintln!("xtask check: surface-build");
+    emit_err("xtask check: surface-build");
     let rc = surface_build(root);
     if rc != 0 {
-        eprintln!("xtask check: 落ちた段 surface-build (rc {rc})");
+        emit_err(&format!("xtask check: 落ちた段 surface-build (rc {rc})"));
     }
     rc
 }
@@ -164,7 +178,7 @@ fn check(root: &Path) -> i32 {
 /// 揃っていれば gzip の写しを書く（書けなければ 1）。
 fn surface_build(root: &Path) -> i32 {
     let dir = root.join(SURFACE_DIR);
-    eprintln!("xtask surface-build: trunk build ({SURFACE_DIR})");
+    emit_err(&format!("xtask surface-build: trunk build ({SURFACE_DIR})"));
     let rc = match Command::new("trunk")
         .arg("build")
         .current_dir(&dir)
@@ -173,7 +187,7 @@ fn surface_build(root: &Path) -> i32 {
         Ok(s) if s.success() => 0,
         Ok(s) => s.code().unwrap_or(1),
         Err(e) => {
-            eprintln!("xtask surface-build: trunk を起動できない: {e}");
+            emit_err(&format!("xtask surface-build: trunk を起動できない: {e}"));
             1
         }
     };
@@ -184,19 +198,22 @@ fn surface_build(root: &Path) -> i32 {
     match dist_missing(&dist) {
         None => match gz::write_copies(&dist) {
             Ok(copies) => {
-                eprintln!(
+                emit_err(&format!(
                     "xtask surface-build: gzip の写しを {} 個書いた",
                     copies.len()
-                );
+                ));
                 0
             }
             Err(e) => {
-                eprintln!("xtask surface-build: gzip の写し: {e}");
+                emit_err(&format!("xtask surface-build: gzip の写し: {e}"));
                 1
             }
         },
         Some(what) => {
-            eprintln!("xtask surface-build: {} に {what} が無い", dist.display());
+            emit_err(&format!(
+                "xtask surface-build: {} に {what} が無い",
+                dist.display()
+            ));
             1
         }
     }

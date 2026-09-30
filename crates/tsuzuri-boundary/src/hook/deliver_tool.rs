@@ -29,6 +29,7 @@ use tsuzuri_core::delivery::{
 };
 
 use crate::acct::{self, GIT};
+use crate::out::emit_err;
 use crate::server::events::now;
 use crate::server::ledger::{Source, capture};
 use crate::server::proc;
@@ -121,10 +122,10 @@ pub fn mark(args: &Args, named: &[Said], now: EpochSecs, budget: Duration) -> us
     for s in named {
         let left = budget.saturating_sub(start.elapsed());
         if left.is_zero() {
-            eprintln!(
+            emit_err(&format!(
                 "tz hook deliver-tool: 時間の上限で印を置かない: 裁定 {}",
                 s.ruling
-            );
+            ));
             continue;
         }
         let write = LedgerWrite::AppendNotes {
@@ -134,7 +135,10 @@ pub fn mark(args: &Args, named: &[Said], now: EpochSecs, budget: Duration) -> us
         if capture(&args.bdw, write.argv(), &args.repo, left.min(WRITE_TIMEOUT)).is_some() {
             done += 1;
         } else {
-            eprintln!("tz hook deliver-tool: 印の書きが落ちた: 裁定 {}", s.ruling);
+            emit_err(&format!(
+                "tz hook deliver-tool: 印の書きが落ちた: 裁定 {}",
+                s.ruling
+            ));
         }
     }
     done
@@ -167,11 +171,11 @@ pub fn run(rest: &[&str]) -> u8 {
         Ok(Reading::Known(ids)) if ids.is_empty() => return 0,
         Ok(Reading::Known(_)) => {}
         Ok(Reading::Unknown) => {
-            eprintln!("tz hook deliver-tool: board が台帳を読めていない（印の無い裁定を判じない）");
+            emit_err("tz hook deliver-tool: board が台帳を読めていない（印の無い裁定を判じない）");
             return 0;
         }
         Err(e) => {
-            eprintln!("tz hook deliver-tool: {e}");
+            emit_err(&format!("tz hook deliver-tool: {e}"));
             return 0;
         }
     }
@@ -181,7 +185,7 @@ pub fn run(rest: &[&str]) -> u8 {
     {
         Some(Reading::Known(said)) => said,
         _ => {
-            eprintln!("tz hook deliver-tool: 台帳が読めない（逐語を写せない）");
+            emit_err("tz hook deliver-tool: 台帳が読めない（逐語を写せない）");
             return 0;
         }
     };
@@ -190,7 +194,9 @@ pub fn run(rest: &[&str]) -> u8 {
     };
     let mut out = std::io::stdout().lock();
     if let Err(e) = writeln!(out, "{answer}").and_then(|()| out.flush()) {
-        eprintln!("tz hook deliver-tool: 答えを書けない（印を置かない）: {e}");
+        emit_err(&format!(
+            "tz hook deliver-tool: 答えを書けない（印を置かない）: {e}"
+        ));
         return 0;
     }
     drop(out);
@@ -199,6 +205,6 @@ pub fn run(rest: &[&str]) -> u8 {
 }
 
 fn usage(what: &str) -> u8 {
-    eprintln!("tz hook deliver-tool: {what}\n{USAGE}");
+    emit_err(&format!("tz hook deliver-tool: {what}\n{USAGE}"));
     FAIL
 }

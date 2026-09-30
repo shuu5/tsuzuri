@@ -68,6 +68,7 @@ use tsuzuri_contract::surface::{ChangeKind, Refusal, RefusalResponse};
 use tsuzuri_contract::wire;
 
 use crate::acct::Acct;
+use crate::out::emit_err;
 use crate::stage::notify;
 use crate::stagecall::Caller;
 
@@ -315,7 +316,7 @@ impl Server {
                     let shared = Arc::clone(&self.shared);
                     thread::spawn(move || handle(stream, &shared));
                 }
-                Err(e) => eprintln!("tz surface serve: accept: {e}"),
+                Err(e) => emit_err(&format!("tz surface serve: accept: {e}")),
             }
         }
     }
@@ -388,10 +389,12 @@ fn refusal(reason: Refusal) -> Response {
 /// （`questions` は要求の問いの id・行 e-ask-own-only）。
 fn read_only(path: &str, questions: &[&BeadId]) -> Response {
     let response = Response::text(403, ruling::READ_ONLY);
-    eprintln!(
-        "{}",
-        ruling::refusal_line(path, response.status, &response.body, questions)
-    );
+    emit_err(&ruling::refusal_line(
+        path,
+        response.status,
+        &response.body,
+        questions,
+    ));
     response
 }
 

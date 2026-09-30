@@ -38,6 +38,8 @@ unimplemented = "deny"
 unreachable = "deny"
 exit = "deny"
 dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
 allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
 

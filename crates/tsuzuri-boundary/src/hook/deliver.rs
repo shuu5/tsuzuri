@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_core::delivery::{context, pointed, said};
 
+use crate::out::emit_err;
 use crate::server::ledger::{BD, Source};
 
 pub const USAGE: &str = "usage: tz hook deliver --repo <dir> [--bd <program>]";
@@ -87,22 +88,26 @@ pub fn run(rest: &[&str]) -> u8 {
     let answer = match found {
         Some(Reading::Known(found)) => context(&found),
         _ => {
-            eprintln!("tz hook deliver: 台帳が読めない（逐語を写せない）: 裁定 {named}");
+            emit_err(&format!(
+                "tz hook deliver: 台帳が読めない（逐語を写せない）: 裁定 {named}"
+            ));
             return 0;
         }
     };
     let Some(answer) = answer else {
-        eprintln!("tz hook deliver: 台帳に名指された裁定の行が無い: 裁定 {named}");
+        emit_err(&format!(
+            "tz hook deliver: 台帳に名指された裁定の行が無い: 裁定 {named}"
+        ));
         return 0;
     };
     let mut out = std::io::stdout().lock();
     if let Err(e) = writeln!(out, "{answer}").and_then(|()| out.flush()) {
-        eprintln!("tz hook deliver: 答えを書けない: {e}");
+        emit_err(&format!("tz hook deliver: 答えを書けない: {e}"));
     }
     0
 }
 
 fn usage(what: &str) -> u8 {
-    eprintln!("tz hook deliver: {what}\n{USAGE}");
+    emit_err(&format!("tz hook deliver: {what}\n{USAGE}"));
     FAIL
 }

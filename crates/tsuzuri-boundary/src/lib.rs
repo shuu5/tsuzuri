@@ -9,12 +9,14 @@
 //! 行 f-gate で問いの起票の門（`hook::question_gate`・tz hook question-gate）を置く。
 //! 行 j-count で受入 12 条の数え（`audit`・測りの事実から条ごとの違反の数と report の行）を置く。
 //! 行 e-stage-target で表示先の設定と窓を開く頼みの受付（`stagecall`・tz の口を撃つだけ）を置く。
+//! 行 k-lint-print で出力の手（`out`・標準出力と標準エラーへ書く 2 つの関数）を置く。
 
 pub mod acct;
 pub mod accthb;
 pub mod audit;
 pub mod cli;
 pub mod hook;
+pub mod out;
 pub mod server;
 pub mod stage;
 pub mod stagecall;

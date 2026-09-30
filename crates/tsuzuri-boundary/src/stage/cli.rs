@@ -45,6 +45,7 @@ use super::terminal::{self, Terminal};
 use super::tunnel::{self, Tunnel, Window};
 use super::url::{self, Board};
 use crate::acct;
+use crate::out::{emit, emit_err};
 use crate::server::proc;
 
 /// 使い方の行（命令の撃ちと、表示先の設定の口と、知らせの口）。
@@ -532,11 +533,11 @@ fn setting(call: &TargetCall) -> Result<(), String> {
             if call.setting == Setting::Json {
                 let message = doc(&targets, &own, &projects, &names);
                 let line = wire::encode(&message).map_err(|e| format!("電文を組めない: {e}"))?;
-                println!("{line}");
+                emit(&line);
                 return Ok(());
             }
             for line in show(&targets, &projects, &names) {
-                println!("{line}");
+                emit(&line);
             }
             return Ok(());
         }
@@ -562,7 +563,7 @@ fn setting(call: &TargetCall) -> Result<(), String> {
         }
     };
     target::save(&path, &targets)?;
-    println!("{line}");
+    emit(&line);
     Ok(())
 }
 
@@ -679,7 +680,7 @@ fn remember(base: &Path, terminal: &str, project: Option<&str>, resource: &str) 
         return;
     };
     if let Err(e) = memo::put(&file, project, resource) {
-        println!("{e}（撃ちは止めない・次の撃ちは board の頁で窓を選ぶ）");
+        emit(&format!("{e}（撃ちは止めない・次の撃ちは board の頁で窓を選ぶ）"));
     }
 }
 
@@ -733,7 +734,7 @@ fn word(command: &Command) -> &'static str {
 
 /// 使い方の誤り（標準エラーに書いて FAIL）。
 fn usage(what: &str) -> u8 {
-    eprintln!("tz stage: {what}\n{USAGE}");
+    emit_err(&format!("tz stage: {what}\n{USAGE}"));
     FAIL
 }
 
@@ -753,7 +754,7 @@ pub fn run(args: &[&str]) -> u8 {
         return match setting(&call) {
             Ok(()) => 0,
             Err(e) => {
-                println!("{e}");
+                emit(&e);
                 FAIL
             }
         };
@@ -779,18 +780,18 @@ pub fn run(args: &[&str]) -> u8 {
     let board = match url::board(&call.tailnet, &call.git, &call.repo, TIMEOUT) {
         Ok(board) => board,
         Err(e) => {
-            println!("{e}");
+            emit(&e);
             return FAIL;
         }
     };
     let rc = match stage(&call, &script, &board) {
         Ok(()) => 0,
         Err(e) => {
-            println!("{e}");
+            emit(&e);
             FAIL
         }
     };
-    println!("{}", url::line(&board.url));
+    emit(&url::line(&board.url));
     rc
 }
 
@@ -807,7 +808,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
     if !script.is_empty() {
         let read = url::ports(&text, &call.git, &call.repo, TIMEOUT);
         for name in &read.unread {
-            println!("project {name} の board の port が読めない（その board の頁の上の断りは広げない）");
+            emit(&format!("project {name} の board の port が読めない（その board の頁の上の断りは広げない）"));
         }
         ports = read.ports;
     }
@@ -828,9 +829,9 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
                 }
                 Aim::Unset => {
                     let (_eyes, session) = Eyes::open(&call.chrome, &base, &board.url, TIMEOUT)?;
-                    println!(
+                    emit(&format!(
                         "表示先の設定に project {own} の値も既定も無いので席の目（この server の headless の Chrome）に落ちた・持ち主へは board の URL を渡し、表示先は board の問いで持ち主に問う"
-                    );
+                    ));
                     return drive(session, script, board, &ports);
                 }
             }
@@ -855,9 +856,9 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
             Window::Page { resource, launched } => {
                 if launched && let Some(path) = config.as_deref() {
                     target::mark(path, &name, now())?;
-                    println!(
+                    emit(&format!(
                         "端末 {name} に初めて表示面の窓を起こし、表示先の設定に印を書いた（持ち主が閉じた後は起こし直さない）"
-                    );
+                    ));
                 }
                 remember(&base, &name, own.as_deref(), &resource);
                 drop(held);
@@ -872,7 +873,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
             line,
         } => {
             drop(held);
-            println!("{line}");
+            emit(&line);
             drive(session, script, board, &ports)
         }
     }
@@ -884,25 +885,25 @@ fn tell(call: &NotifyCall) -> u8 {
     let board = match url::board(&call.tailnet, &call.git, &call.repo, TIMEOUT) {
         Ok(board) => board,
         Err(e) => {
-            println!("{e}");
+            emit(&e);
             return FAIL;
         }
     };
     let recorded = match record(call, &board) {
         Ok(()) => true,
         Err(e) => {
-            println!("{e}");
+            emit(&e);
             false
         }
     };
     let sent = match reach_out(call, &board) {
         Ok(sent) => sent,
         Err(e) => {
-            println!("{e}");
+            emit(&e);
             false
         }
     };
-    println!("{}", url::line(&board.url));
+    emit(&url::line(&board.url));
     if recorded && sent { 0 } else { FAIL }
 }
 
@@ -940,9 +941,9 @@ fn reach_out(call: &NotifyCall, board: &Board) -> Result<bool, String> {
             match aim(None, &own, &target::load(&path)?, &terminal::names(&text))? {
                 Aim::Named(name) | Aim::Chosen { name, .. } => name,
                 Aim::Unset => {
-                    println!(
+                    emit(&format!(
                         "表示先の設定に project {own} の値も既定も無いので端末に知らせを出さない（持ち主へは board の URL を渡し、表示先は tz stage target set で決める）"
-                    );
+                    ));
                     return Ok(false);
                 }
             }
@@ -950,7 +951,7 @@ fn reach_out(call: &NotifyCall, board: &Board) -> Result<bool, String> {
     };
     let terminal = terminal::lookup(&text, &name)?;
     let outcome = notify::send(&call.ssh, &terminal, &call.title, &board.url, TIMEOUT)?;
-    println!("{}", notify::line(&name, &outcome));
+    emit(&notify::line(&name, &outcome));
     Ok(outcome == Outcome::Sent)
 }
 
@@ -1018,12 +1019,12 @@ fn open(
         }
         Window::Absent(line) => return Err(line),
     };
-    println!("{line}");
+    emit(&line);
     remember(base, name, own, &resource);
     if shown && target::mark(&config, name, now())? {
-        println!(
+        emit(&format!(
             "表示先の設定に端末 {name} の印を書いた（持ち主が閉じた後は --to を省いた撃ちで起こし直さない）"
-        );
+        ));
     }
     Ok(())
 }
@@ -1079,7 +1080,11 @@ fn shoot(
             let path = out.ok_or_else(|| "写真の書き先が無い".to_string())?;
             fs::write(path, &bytes)
                 .map_err(|e| format!("写真を {} に書けない: {e}", path.display()))?;
-            println!("済み screenshot {} {} byte", path.display(), bytes.len());
+            emit(&format!(
+                "済み screenshot {} {} byte",
+                path.display(),
+                bytes.len()
+            ));
         }
         Command::Dom => {
             let text = result
@@ -1087,8 +1092,8 @@ fn shoot(
                 .and_then(|r| json::member(r, "value"))
                 .and_then(json::unquote)
                 .ok_or_else(|| "応答の result の result の value が字でない".to_string())?;
-            println!("{text}");
-            println!("済み dom");
+            emit(&text);
+            emit("済み dom");
         }
         Command::Console => {
             for event in &session.events()[from..] {
@@ -1097,12 +1102,12 @@ fn shoot(
                     method.as_deref(),
                     Some("Runtime.consoleAPICalled" | "Log.entryAdded")
                 ) {
-                    println!("{event}");
+                    emit(event);
                 }
             }
-            println!("済み console");
+            emit("済み console");
         }
-        _ => println!("済み {verb}"),
+        _ => emit(&format!("済み {verb}")),
     }
     Ok(())
 }

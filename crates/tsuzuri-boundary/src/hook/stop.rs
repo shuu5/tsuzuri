@@ -21,6 +21,7 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BDW, LedgerWrite};
 use tsuzuri_core::delivery::{Pending, Route, block, mark_line, stop_active, undelivered};
 
+use crate::out::emit_err;
 use crate::server::events::now;
 use crate::server::ledger::{BD, Source, capture};
 use crate::server::ruling::{WRITE_TIMEOUT, minute};
@@ -82,10 +83,10 @@ pub fn mark(args: &Args, pending: &[Pending], now: EpochSecs, budget: Duration) 
     for p in pending {
         let left = budget.saturating_sub(start.elapsed());
         if left.is_zero() {
-            eprintln!(
+            emit_err(&format!(
                 "tz hook stop: 時間の上限で印を置かない: 裁定 {}",
                 p.ruling
-            );
+            ));
             continue;
         }
         let write = LedgerWrite::AppendNotes {
@@ -95,7 +96,7 @@ pub fn mark(args: &Args, pending: &[Pending], now: EpochSecs, budget: Duration) 
         if capture(&args.bdw, write.argv(), &args.repo, left.min(WRITE_TIMEOUT)).is_some() {
             done += 1;
         } else {
-            eprintln!("tz hook stop: 印の書きが落ちた: 裁定 {}", p.ruling);
+            emit_err(&format!("tz hook stop: 印の書きが落ちた: 裁定 {}", p.ruling));
         }
     }
     done
@@ -131,7 +132,7 @@ pub fn run(rest: &[&str]) -> u8 {
     {
         Some(Reading::Known(pending)) => pending,
         _ => {
-            eprintln!("tz hook stop: 台帳が読めない（未配達の裁定を拾えない）");
+            emit_err("tz hook stop: 台帳が読めない（未配達の裁定を拾えない）");
             return 0;
         }
     };
@@ -140,7 +141,7 @@ pub fn run(rest: &[&str]) -> u8 {
     };
     let mut out = std::io::stdout().lock();
     if let Err(e) = writeln!(out, "{answer}").and_then(|()| out.flush()) {
-        eprintln!("tz hook stop: 答えを書けない（印を置かない）: {e}");
+        emit_err(&format!("tz hook stop: 答えを書けない（印を置かない）: {e}"));
         return 0;
     }
     drop(out);
@@ -149,6 +150,6 @@ pub fn run(rest: &[&str]) -> u8 {
 }
 
 fn usage(what: &str) -> u8 {
-    eprintln!("tz hook stop: {what}\n{USAGE}");
+    emit_err(&format!("tz hook stop: {what}\n{USAGE}"));
     FAIL
 }

@@ -3,6 +3,7 @@
 use tsuzuri_contract::surface::{REVOKE_PATH, RevokeRequest};
 use tsuzuri_contract::wire;
 
+use crate::out::emit_err;
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
 use crate::server::ruling::{self, Revoked};
@@ -37,10 +38,12 @@ fn post_revoke(req: &Request, shared: &Shared) -> Response {
         Revoked::ReopenFailed(id) => Response::text(502, &format!("ledger-reopen {id}")),
     };
     if response.status != 200 {
-        eprintln!(
-            "{}",
-            ruling::refusal_line(REVOKE_PATH, response.status, &response.body, &[&body.question])
-        );
+        emit_err(&ruling::refusal_line(
+            REVOKE_PATH,
+            response.status,
+            &response.body,
+            &[&body.question],
+        ));
     }
     response
 }

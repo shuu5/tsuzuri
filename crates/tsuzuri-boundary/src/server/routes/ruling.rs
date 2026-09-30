@@ -3,6 +3,7 @@
 use tsuzuri_contract::surface::RulingRequest;
 use tsuzuri_contract::wire;
 
+use crate::out::emit_err;
 use crate::server::http::{Request, Response};
 use crate::server::route::{Entry, Key, Match};
 use crate::server::ruling::{self, Outcome};
@@ -37,10 +38,12 @@ fn post_ruling(req: &Request, shared: &Shared) -> Response {
         Outcome::CloseFailed(id) => Response::text(502, &format!("ledger-close {id}")),
     };
     if response.status != 200 {
-        eprintln!(
-            "{}",
-            ruling::refusal_line(ruling::PATH, response.status, &response.body, &[&body.question])
-        );
+        emit_err(&ruling::refusal_line(
+            ruling::PATH,
+            response.status,
+            &response.body,
+            &[&body.question],
+        ));
     }
     response
 }
