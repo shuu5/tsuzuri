@@ -532,25 +532,46 @@ mod dom {
         .into_any()
     }
 
+    /// 台帳が測れていない行（判定と値の欄は測れていないの印と空の字）。
+    fn unknown_row(class: String, project: impl IntoView) -> AnyView {
+        view! {
+            <div class=class>
+                <div class="c-j">{state_icon(UNKNOWN)}<span>{label(UNKNOWN_KEY)}</span></div>
+                {project}
+                <div class="c-n c-task muted">{NONE}</div>
+                <div class="c-n c-rate muted">{NONE}</div>
+                <div class="c-n c-un muted">{NONE}</div>
+                <div class="rowmore"></div>
+            </div>
+        }
+        .into_any()
+    }
+
+    /// 値の 3 つの欄（open の task と 24 時間の純増減・率の棒・参照の無い file の数）。
+    fn value_cells(cells: &Cells) -> impl IntoView + use<> {
+        view! {
+            <div class=cells.task_class.clone()>
+                <b class="num">{cells.task}</b>
+                {net_view(&cells.net24)}
+            </div>
+            <div class=cells.rate_class.clone()>
+                <span class="rbar" aria-hidden="true"><i style=format!("width:{}%", cells.rate_pct)></i></span>
+                <span class="num">{cells.rate.clone()}</span>
+            </div>
+            <div class=cells.un_class.clone()>
+                <b class="num">{cells.unref.text()}</b>
+                {cells.unref.partial().then(|| state_icon(UNKNOWN))}
+            </div>
+        }
+    }
+
     fn row_view(row: LedRow, opened: Opened, expert: Signal<bool>) -> AnyView {
         let name = row.name.clone();
         let card = row.card;
         let project = view! { <div class="c-p" tabindex="0" use:attach=card><span data-t="">{name.clone()}</span></div> };
         let cells = match row.cells {
             Reading::Known(c) => c,
-            Reading::Unknown => {
-                return view! {
-                    <div class=row.class>
-                        <div class="c-j">{state_icon(UNKNOWN)}<span>{label(UNKNOWN_KEY)}</span></div>
-                        {project}
-                        <div class="c-n c-task muted">{NONE}</div>
-                        <div class="c-n c-rate muted">{NONE}</div>
-                        <div class="c-n c-un muted">{NONE}</div>
-                        <div class="rowmore"></div>
-                    </div>
-                }
-                .into_any();
-            }
+            Reading::Unknown => return unknown_row(row.class, project),
         };
         let is_open = {
             let key = name.clone();
@@ -588,18 +609,7 @@ mod dom {
             <div class=class>
                 <div class="c-j">{judge_view(cells.judge)}</div>
                 {project}
-                <div class=cells.task_class.clone()>
-                    <b class="num">{cells.task}</b>
-                    {net_view(&cells.net24)}
-                </div>
-                <div class=cells.rate_class.clone()>
-                    <span class="rbar" aria-hidden="true"><i style=format!("width:{}%", cells.rate_pct)></i></span>
-                    <span class="num">{cells.rate.clone()}</span>
-                </div>
-                <div class=cells.un_class.clone()>
-                    <b class="num">{cells.unref.text()}</b>
-                    {cells.unref.partial().then(|| state_icon(UNKNOWN))}
-                </div>
+                {value_cells(&cells)}
                 <button type="button" class="rowmore" aria-expanded=expanded aria-label=label("p_more") on:click=toggle>
                     <span class="rm-t">{label("p_more")}</span>" "<span class="rm-a">{arrow}</span>
                 </button>

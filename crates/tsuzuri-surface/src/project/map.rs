@@ -80,6 +80,22 @@ mod dom {
     use crate::vocab::label;
     use crate::widgets::help::h1;
 
+    /// 札の上の key（左右の矢印で次か前の札へ移り、その札に focus を移す）。
+    fn tab_key(search: RwSignal<String>, e: &ev::KeyboardEvent) {
+        let now = search.with_untracked(|s| View::from_query(s));
+        let Some(next) = tab_step(now, &e.key()) else {
+            return;
+        };
+        e.prevent_default();
+        navigate(search, |s| with_view(s, next), true);
+        let el = document()
+            .get_element_by_id(&format!("tab-{}", next.name()))
+            .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok());
+        if let Some(el) = el {
+            let _ = el.focus();
+        }
+    }
+
     pub fn view() -> AnyView {
         let fetched = crate::net::read(PATH);
         let parsed = Memo::new(move |_| fetched.with(doc));
@@ -93,20 +109,7 @@ mod dom {
                     .map(|d| view! { <span class="chip num">{d.nodes.len()}</span> })
             })
         };
-        let step = move |e: ev::KeyboardEvent| {
-            let now = search.with_untracked(|s| View::from_query(s));
-            let Some(next) = tab_step(now, &e.key()) else {
-                return;
-            };
-            e.prevent_default();
-            navigate(search, |s| with_view(s, next), true);
-            let el = document()
-                .get_element_by_id(&format!("tab-{}", next.name()))
-                .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok());
-            if let Some(el) = el {
-                let _ = el.focus();
-            }
-        };
+        let step = move |e: ev::KeyboardEvent| tab_key(search, &e);
         let tabs = View::ALL
             .into_iter()
             .map(|v| {

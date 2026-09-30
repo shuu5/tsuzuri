@@ -231,7 +231,7 @@ fn cadl_dom_wiring() {
     let dom = after(&ledger_text, "mod dom {");
     for want in [
         "let graph = crate::net::read(map::PATH);",
-        "tier_view(*tier, parts, &m, screen, unref, graph)",
+        "tier_view(*tier, parts, &m, screen, Reads { unref, graph })",
         "Memo::new(move |_| graph.with(|g| epic_cards(&epics, g)))",
         "epic_view(e, c.get(&e.id).cloned())",
         "use crate::widgets::hover::attach_some;",

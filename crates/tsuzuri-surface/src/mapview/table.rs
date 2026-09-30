@@ -114,6 +114,27 @@ mod dom {
     use crate::vocab::label;
     use crate::widgets::help::{expert_tip, h2};
 
+    /// 表の行（行の見出しと、組の在る升だけ押せる数の button）。
+    fn matrix_rows(m: &super::Matrix, search: RwSignal<String>) -> impl IntoView + use<> {
+        m.kinds
+            .iter()
+            .map(|a| {
+                let cells = m
+                    .kinds
+                    .iter()
+                    .map(|b| match m.cell(*a, *b) {
+                        Some(c) => view! {
+                            <td use:expert_tip=c.types_text()>{pair_button(c, search, "")}</td>
+                        }
+                        .into_any(),
+                        None => view! { <td></td> }.into_any(),
+                    })
+                    .collect_view();
+                view! { <tr><th>{kind_head(*a)}</th>{cells}</tr> }
+            })
+            .collect_view()
+    }
+
     pub fn view(doc: &GraphDoc, search: RwSignal<String>) -> AnyView {
         let m = matrix(doc);
         let unread = unread_reasons(doc)
@@ -133,24 +154,7 @@ mod dom {
             .iter()
             .map(|k| view! { <th>{kind_head(*k)}</th> })
             .collect_view();
-        let rows = m
-            .kinds
-            .iter()
-            .map(|a| {
-                let cells = m
-                    .kinds
-                    .iter()
-                    .map(|b| match m.cell(*a, *b) {
-                        Some(c) => view! {
-                            <td use:expert_tip=c.types_text()>{pair_button(c, search, "")}</td>
-                        }
-                        .into_any(),
-                        None => view! { <td></td> }.into_any(),
-                    })
-                    .collect_view();
-                view! { <tr><th>{kind_head(*a)}</th>{cells}</tr> }
-            })
-            .collect_view();
+        let rows = matrix_rows(&m, search);
         let list = m
             .cells
             .iter()

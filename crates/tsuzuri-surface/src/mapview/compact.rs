@@ -406,6 +406,43 @@ mod dom {
         .into_any()
     }
 
+    /// 節の札の並び（節ごとに札と下の規範の link・節の無い札は後ろ）。
+    fn articles_view(
+        articles: Vec<super::Article>,
+        loose: &[Tag],
+        band: Band,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
+        let arts = articles
+            .into_iter()
+            .map(|a| {
+                let class = format!("art7 {}", band.class_name());
+                let kids = a
+                    .norms
+                    .into_iter()
+                    .zip(a.norm_cards)
+                    .map(|(id, card)| {
+                        let href = {
+                            let id = id.clone();
+                            move || frame::node_href(&id, mode())
+                        };
+                        view! { <a href=href use:attach=card>{id}</a> }
+                    })
+                    .collect_view();
+                let tag_id = a.tag.id.clone();
+                let href = move || frame::node_href(&tag_id, mode());
+                view! {
+                    <div class=class>
+                        <a href=href use:attach=a.tag.card.clone()>{tag_head(&a.tag)}</a>
+                        <div class="kids">{kids}</div>
+                    </div>
+                }
+            })
+            .collect_view();
+        let loose = loose.iter().map(|t| tag_view(t, mode)).collect_view();
+        view! { <div class="cards7">{arts}{loose}</div> }.into_any()
+    }
+
     fn cards_view(
         cards: Cards,
         band: Band,
@@ -427,36 +464,7 @@ mod dom {
                 let tags = tags.iter().map(|t| tag_view(t, mode)).collect_view();
                 view! { <div class="cards7">{tags}</div> }.into_any()
             }
-            Cards::Articles { articles, loose } => {
-                let arts = articles
-                    .into_iter()
-                    .map(|a| {
-                        let class = format!("art7 {}", band.class_name());
-                        let kids = a
-                            .norms
-                            .into_iter()
-                            .zip(a.norm_cards)
-                            .map(|(id, card)| {
-                                let href = {
-                                    let id = id.clone();
-                                    move || frame::node_href(&id, mode())
-                                };
-                                view! { <a href=href use:attach=card>{id}</a> }
-                            })
-                            .collect_view();
-                        let tag_id = a.tag.id.clone();
-                        let href = move || frame::node_href(&tag_id, mode());
-                        view! {
-                            <div class=class>
-                                <a href=href use:attach=a.tag.card.clone()>{tag_head(&a.tag)}</a>
-                                <div class="kids">{kids}</div>
-                            </div>
-                        }
-                    })
-                    .collect_view();
-                let loose = loose.iter().map(|t| tag_view(t, mode)).collect_view();
-                view! { <div class="cards7">{arts}{loose}</div> }.into_any()
-            }
+            Cards::Articles { articles, loose } => articles_view(articles, &loose, band, mode),
             Cards::Lanes(lanes) => {
                 let shape = format!("shape {} fill", band.class_name());
                 let lanes = lanes

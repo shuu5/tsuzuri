@@ -274,25 +274,13 @@ fn top(
             .into_any(),
             "nav" => {
                 let questions = net::read(ask::PATH);
-                let open = move || match questions.with(ask::count) {
-                    Reading::Known(n) => Some(n),
-                    Reading::Unknown => None,
-                };
+                let open = move || open_count(questions);
                 let links = frame::nav_links(page.get_untracked())
                     .into_iter()
                     .map(|l| {
-                        let badge = move || {
-                            let n = if l.badge.is_empty() { None } else { open() };
-                            frame::badge(n)
-                                .map(|n| view! { <span class=l.badge>{n}</span> })
-                        };
+                        let badge = move || nav_badge(l.badge, open);
                         // 今の頁だけ on（nav_links の class）。
-                        let class = move || {
-                            frame::nav_links(page.get())
-                                .into_iter()
-                                .find(|c| c.page == l.page)
-                                .map_or("", |c| c.class)
-                        };
+                        let class = move || nav_class(page.get(), l.page);
                         view! {
                             <a href=move || frame::href(l.page, mode.get()) class=class on:click=move |e| switch(e, l.page, page, subject, mode) data-v=l.key data-term=l.key>
                                 <span inner_html=l.page.def().icon></span>
@@ -323,25 +311,50 @@ fn top(
                 let pill = move || shown.get().then(seatpill::view);
                 view! { <span class=part.class title=title>{at}</span>{fresh::pulse()}{fresh::mark()}{pill} }.into_any()
             }
-            _ => {
-                let choices = Mode::ALL
-                    .into_iter()
-                    .map(|m| {
-                        let pressed = move || (mode.get() == m).to_string();
-                        let pick = move |_| {
-                            mode.set(m);
-                            keep_mode_in_url(m);
-                        };
-                        view! { <button type="button" data-mode=m.key() aria-pressed=pressed on:click=pick>{label(m.key())}</button> }
-                    })
-                    .collect_view();
-                view! { <div class=part.class role="group" aria-label=label(part.key) data-term=part.key>{choices}</div> }
-                    .into_any()
-            }
+            _ => mode_seg(part, mode),
         })
         .collect_view();
     // 閉じられない窓の注記は header の直後（行 g-back-note）。
     view! { <header class="top">{back}{parts}</header>{move || note.get().map(back_note)} }
+}
+
+/// 開いた問いの数（読めていなければ None）。
+fn open_count(questions: ReadSignal<crate::view::Fetched>) -> Option<usize> {
+    match questions.with(ask::count) {
+        Reading::Known(n) => Some(n),
+        Reading::Unknown => None,
+    }
+}
+
+/// nav の 1 項の数の札（札の class が空の項は数を読まない）。
+fn nav_badge(badge: &'static str, open: impl Fn() -> Option<usize>) -> Option<impl IntoView> {
+    let n = if badge.is_empty() { None } else { open() };
+    frame::badge(n).map(|n| view! { <span class=badge>{n}</span> })
+}
+
+/// nav の 1 項の class（今の頁だけ on）。
+fn nav_class(now: PageId, page: PageId) -> &'static str {
+    frame::nav_links(now)
+        .into_iter()
+        .find(|c| c.page == page)
+        .map_or("", |c| c.class)
+}
+
+/// mode の切り替えの段（押すと mode を替え、URL にも残す）。
+fn mode_seg(part: &frame::HeaderPart, mode: RwSignal<Mode>) -> AnyView {
+    let choices = Mode::ALL
+        .into_iter()
+        .map(|m| {
+            let pressed = move || (mode.get() == m).to_string();
+            let pick = move |_| {
+                mode.set(m);
+                keep_mode_in_url(m);
+            };
+            view! { <button type="button" data-mode=m.key() aria-pressed=pressed on:click=pick>{label(m.key())}</button> }
+        })
+        .collect_view();
+    view! { <div class=part.class role="group" aria-label=label(part.key) data-term=part.key>{choices}</div> }
+        .into_any()
 }
 
 /// 閉じられない窓の注記（見本の ui.js の backToBoard の `#winnote`・本番は id で引かないので id を付けない）。

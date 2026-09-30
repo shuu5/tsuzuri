@@ -136,22 +136,7 @@ fn top(
                         };
                         let current = move || (tab.get() == l.tab).then_some("page");
                         // 押しは頁を読み直さず履歴に積む（新しい窓や tab で開く押しは browser の既定のまま・見本の setTab）。
-                        let press = move |e: ev::MouseEvent| {
-                            if e.ctrl_key() || e.meta_key() || e.shift_key() {
-                                return;
-                            }
-                            e.prevent_default();
-                            let url = tab_url(&search(), l.tab);
-                            if let Ok(history) = window().history() {
-                                let _ = history.push_state_with_url(
-                                    &web_sys::wasm_bindgen::JsValue::NULL,
-                                    "",
-                                    Some(&url),
-                                );
-                            }
-                            query.set(url);
-                            window().scroll_to_with_x_and_y(0.0, 0.0);
-                        };
+                        let press = move |e: ev::MouseEvent| tab_press(&e, query, l.tab);
                         view! {
                             <a href=move || tab_href(l.tab, mode.get()) class=class aria-current=current on:click=press data-tab=l.tab.id() data-v=l.key data-term=l.key>
                                 <span inner_html=tab_icon(l.tab)></span>
@@ -171,24 +156,45 @@ fn top(
                 }
                 .into_any()
             }
-            _ => {
-                let choices = Mode::ALL
-                    .into_iter()
-                    .map(|m| {
-                        let pressed = move || (mode.get() == m).to_string();
-                        let pick = move |_| {
-                            mode.set(m);
-                            keep_mode_in_url(m);
-                        };
-                        view! { <button type="button" data-mode=m.key() aria-pressed=pressed on:click=pick>{label(m.key())}</button> }
-                    })
-                    .collect_view();
-                view! { <div class=part.class role="group" aria-label=label(part.key) data-term=part.key>{choices}</div> }
-                    .into_any()
-            }
+            _ => mode_seg(part, mode),
         })
         .collect_view();
     view! { <header class=TOP>{parts}</header> }
+}
+
+/// tab の link の押し（修飾 key の無い押しだけを履歴に積み、tab を替えて上端へ戻す）。
+fn tab_press(e: &ev::MouseEvent, query: RwSignal<String>, tab: Tab) {
+    if e.ctrl_key() || e.meta_key() || e.shift_key() {
+        return;
+    }
+    e.prevent_default();
+    let url = tab_url(&search(), tab);
+    if let Ok(history) = window().history() {
+        let _ = history.push_state_with_url(
+            &web_sys::wasm_bindgen::JsValue::NULL,
+            "",
+            Some(&url),
+        );
+    }
+    query.set(url);
+    window().scroll_to_with_x_and_y(0.0, 0.0);
+}
+
+/// mode の切り替えの段（押すと mode を替え、URL にも残す）。
+fn mode_seg(part: &super::HeaderPart, mode: RwSignal<Mode>) -> AnyView {
+    let choices = Mode::ALL
+        .into_iter()
+        .map(|m| {
+            let pressed = move || (mode.get() == m).to_string();
+            let pick = move |_| {
+                mode.set(m);
+                keep_mode_in_url(m);
+            };
+            view! { <button type="button" data-mode=m.key() aria-pressed=pressed on:click=pick>{label(m.key())}</button> }
+        })
+        .collect_view();
+    view! { <div class=part.class role="group" aria-label=label(part.key) data-term=part.key>{choices}</div> }
+        .into_any()
 }
 
 /// 最終の記録の chip（最後に読めた時刻・読みの落ちた口が在ればその最も古い値・行 g-fresh・

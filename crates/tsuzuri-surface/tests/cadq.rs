@@ -202,7 +202,7 @@ fn cadq_dom_wiring() {
         "nodes.with(|m| m.get(&key).cloned())",
         "use crate::widgets::hover::{self, attach_some};",
         "struct Live {",
-        "card_view(c, d, Live { nb, node }, on, tick, current, places)",
+        "card_view(c, d, Live { nb, node }, on, Shared { tick, mode: current, places })",
     ] {
         assert!(dom.contains(want), "ask.rs の mod dom に {want} が無い");
     }

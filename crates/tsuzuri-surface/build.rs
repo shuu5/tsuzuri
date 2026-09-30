@@ -181,6 +181,13 @@ fn generate(dir: &Path, names: &[String]) -> Result<String, String> {
     writeln!(s, "        }}").map_err(w)?;
     writeln!(s, "    }}").map_err(w)?;
     writeln!(s).map_err(w)?;
+    module_lookups(&mut s, names)?;
+    Ok(s)
+}
+
+/// Module の path・畳みの鍵・中身の描きの match を書き、impl を閉じる。
+fn module_lookups(s: &mut String, names: &[String]) -> Result<(), String> {
+    let w = |e: std::fmt::Error| e.to_string();
     for (func, item, doc) in [
         ("paths", "PATHS", "口の path"),
         ("folds", "FOLDS", "畳める段の開き閉じの鍵の形"),
@@ -205,5 +212,5 @@ fn generate(dir: &Path, names: &[String]) -> Result<String, String> {
     writeln!(s, "        }}").map_err(w)?;
     writeln!(s, "    }}").map_err(w)?;
     writeln!(s, "}}").map_err(w)?;
-    Ok(s)
+    Ok(())
 }

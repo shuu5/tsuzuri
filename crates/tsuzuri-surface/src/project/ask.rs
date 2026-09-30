@@ -787,7 +787,7 @@ mod dom {
                         let key = id.clone();
                         let nb = Memo::new(move |_| cards.with(|v| target_number(v, &id)).unwrap_or(0));
                         let node = Memo::new(move |_| nodes.with(|m| m.get(&key).cloned()));
-                        card_view(c, d, Live { nb, node }, on, tick, current, places)
+                        card_view(c, d, Live { nb, node }, on, Shared { tick, mode: current, places })
                     }/>
                 }
                 .into_any()
@@ -809,22 +809,20 @@ mod dom {
         view! { {line} }.into_any()
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-surface-src が直してこの属性を外す"
-    )]
-    fn card_view(
+    fn card_view<T, M>(
         card: Card,
         d: Draft,
         live: Live,
         target: bool,
-        tick: impl Fn() -> u64 + Copy + Send + Sync + 'static,
-        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
-        places: Embeds,
-    ) -> AnyView {
+        shared: Shared<T, M>,
+    ) -> AnyView
+    where
+        T: Fn() -> u64 + Copy + Send + Sync + 'static,
+        M: Fn() -> Mode + Copy + Send + Sync + 'static,
+    {
         let parts = LAYOUT
             .iter()
-            .map(|slot| part_view(*slot, &card, &d, live, tick, mode, places))
+            .map(|slot| part_view(*slot, &card, &d, live, shared))
             .collect_view();
         view! {
             <article class=card_class(target) id=move || anchor(live.nb.get()) data-q=card.id.to_string()>{parts}</article>
@@ -832,19 +830,26 @@ mod dom {
         .into_any()
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-surface-src が直してこの属性を外す"
-    )]
-    fn part_view(
+    /// 一覧の card がみな共にする値（経過の時計・link の mode・つながりの図の置き場）。
+    #[derive(Clone, Copy)]
+    struct Shared<T, M> {
+        tick: T,
+        mode: M,
+        places: Embeds,
+    }
+
+    fn part_view<T, M>(
         slot: Slot,
         card: &Card,
         d: &Draft,
         live: Live,
-        tick: impl Fn() -> u64 + Copy + Send + Sync + 'static,
-        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
-        places: Embeds,
-    ) -> AnyView {
+        shared: Shared<T, M>,
+    ) -> AnyView
+    where
+        T: Fn() -> u64 + Copy + Send + Sync + 'static,
+        M: Fn() -> Mode + Copy + Send + Sync + 'static,
+    {
+        let Shared { tick, mode, places } = shared;
         match slot.part {
             Part::Head => {
                 let a1 = card.a1.then(|| {
@@ -876,22 +881,7 @@ mod dom {
                 }
                 .into_any()
             }
-            Part::Summary => {
-                let lines = card
-                    .summary
-                    .iter()
-                    .map(|l| {
-                        let icon = if l.eng { CODE } else { PERSON };
-                        view! {
-                            <div class=l.class data-term=l.key>
-                                <span inner_html=icon></span>
-                                <span data-t="">{l.text.clone()}</span>
-                            </div>
-                        }
-                    })
-                    .collect_view();
-                view! { <div class=slot.class>{lines}</div> }.into_any()
-            }
+            Part::Summary => summary_view(slot, card),
             Part::Reason => {
                 let key = slot.key.unwrap_or_default();
                 view! {
@@ -915,31 +905,52 @@ mod dom {
             Part::Answer => answer_view(slot, card.clone(), d.clone()),
             // ほかの project の card はつながりの段を出さない（その project の地図を読まない）。
             Part::Around if card.project.is_some() => ().into_any(),
-            Part::Around => {
-                let key = slot.key.unwrap_or_default();
-                let initial = slot.open.unwrap_or(false);
-                let (open, record) = fold(format!("ask:around:{}", card.id), move || initial);
-                // つながりは開いたときに組む（段が開いた event で口を読み始め、開き閉じは記録へ書き戻す）。
-                let center = card.id.to_string();
-                let toggle = move |ev: web_sys::Event| {
-                    if event_target::<web_sys::Element>(&ev).has_attribute("open") {
-                        places.open(&center);
-                    }
-                    record(ev);
-                };
-                view! {
-                    <details class=slot.class prop:open=open on:toggle=toggle>
-                        <summary>
-                            <span data-term=key>{label(key)}</span>
-                            <span class="chip num" data-term="touches"><span inner_html=LINK></span>{label("touches")}" "{card.touches.len()}</span>
-                            <span class="chip num" data-term="blocking"><span inner_html=STOP></span>{label("blocking")}" "{card.blocking.len()}</span>
-                        </summary>
-                        <div class="nb-body">{places.view(card.id.to_string())}</div>
-                    </details>
-                }
-                .into_any()
-            }
+            Part::Around => around_view(slot, card, places),
         }
+    }
+
+    /// 要約の行（人の字と作りの字の印・字）。
+    fn summary_view(slot: Slot, card: &Card) -> AnyView {
+        let lines = card
+            .summary
+            .iter()
+            .map(|l| {
+                let icon = if l.eng { CODE } else { PERSON };
+                view! {
+                    <div class=l.class data-term=l.key>
+                        <span inner_html=icon></span>
+                        <span data-t="">{l.text.clone()}</span>
+                    </div>
+                }
+            })
+            .collect_view();
+        view! { <div class=slot.class>{lines}</div> }.into_any()
+    }
+
+    /// つながりの段（開いたときに図の口を読み始め、開き閉じを記録へ書き戻す）。
+    fn around_view(slot: Slot, card: &Card, places: Embeds) -> AnyView {
+        let key = slot.key.unwrap_or_default();
+        let initial = slot.open.unwrap_or(false);
+        let (open, record) = fold(format!("ask:around:{}", card.id), move || initial);
+        // つながりは開いたときに組む（段が開いた event で口を読み始め、開き閉じは記録へ書き戻す）。
+        let center = card.id.to_string();
+        let toggle = move |ev: web_sys::Event| {
+            if event_target::<web_sys::Element>(&ev).has_attribute("open") {
+                places.open(&center);
+            }
+            record(ev);
+        };
+        view! {
+            <details class=slot.class prop:open=open on:toggle=toggle>
+                <summary>
+                    <span data-term=key>{label(key)}</span>
+                    <span class="chip num" data-term="touches"><span inner_html=LINK></span>{label("touches")}" "{card.touches.len()}</span>
+                    <span class="chip num" data-term="blocking"><span inner_html=STOP></span>{label("blocking")}" "{card.blocking.len()}</span>
+                </summary>
+                <div class="nb-body">{places.view(card.id.to_string())}</div>
+            </details>
+        }
+        .into_any()
     }
 
     /// 答えの欄（字の欄と送る button）と、送った後の 1 行。200 の後は欄を閉じる。
@@ -959,43 +970,7 @@ mod dom {
         };
         let form = {
             let d = d.clone();
-            move || {
-                open().then(|| {
-                    let (text, sending) = (d.text.clone(), d.sending.clone());
-                    let busy = sending.clone();
-                    let send = move || send_text(busy.get(), &label("ruling"));
-                    let disabled = move || !can_send(&text.get(), sending.get());
-                    let value = {
-                        let text = d.text.clone();
-                        move || text.get()
-                    };
-                    let input = {
-                        let text = d.text.clone();
-                        move |ev: ev::Event| text.set(event_target_value(&ev))
-                    };
-                    let keydown = {
-                        let (card, d) = (card.clone(), d.clone());
-                        move |ev: ev::KeyboardEvent| {
-                            let composing = ev.is_composing() || ev.key_code() == 229;
-                            let action = key_action(composing, ev.ctrl_key() || ev.meta_key(), &ev.key());
-                            if action == KeyAction::Send {
-                                ev.prevent_default();
-                                submit(&card, &d);
-                            }
-                        }
-                    };
-                    let click = {
-                        let (card, d) = (card.clone(), d.clone());
-                        move |_: ev::MouseEvent| submit(&card, &d)
-                    };
-                    view! {
-                        <div class=slot.class>
-                            <textarea rows="2" aria-label=label(key) placeholder=label(key) prop:value=value on:input=input on:keydown=keydown></textarea>
-                            <button type="button" class="btn primary send" disabled=disabled on:click=click>{send}</button>
-                        </div>
-                    }
-                })
-            }
+            move || open().then(|| form_view(slot, key, &card, &d))
         };
         let note = {
             let outcome = d.outcome.clone();
@@ -1007,6 +982,43 @@ mod dom {
             }
         };
         view! { {form}{chat}{note} }.into_any()
+    }
+
+    /// 答えの字の欄と送る button（Ctrl か ⌘ と Enter でも送る）。
+    fn form_view(slot: Slot, key: &'static str, card: &Card, d: &Draft) -> impl IntoView + use<> {
+        let (text, sending) = (d.text.clone(), d.sending.clone());
+        let busy = sending.clone();
+        let send = move || send_text(busy.get(), &label("ruling"));
+        let disabled = move || !can_send(&text.get(), sending.get());
+        let value = {
+            let text = d.text.clone();
+            move || text.get()
+        };
+        let input = {
+            let text = d.text.clone();
+            move |ev: ev::Event| text.set(event_target_value(&ev))
+        };
+        let keydown = {
+            let (card, d) = (card.clone(), d.clone());
+            move |ev: ev::KeyboardEvent| {
+                let composing = ev.is_composing() || ev.key_code() == 229;
+                let action = key_action(composing, ev.ctrl_key() || ev.meta_key(), &ev.key());
+                if action == KeyAction::Send {
+                    ev.prevent_default();
+                    submit(&card, &d);
+                }
+            }
+        };
+        let click = {
+            let (card, d) = (card.clone(), d.clone());
+            move |_: ev::MouseEvent| submit(&card, &d)
+        };
+        view! {
+            <div class=slot.class>
+                <textarea rows="2" aria-label=label(key) placeholder=label(key) prop:value=value on:input=input on:keydown=keydown></textarea>
+                <button type="button" class="btn primary send" disabled=disabled on:click=click>{send}</button>
+            </div>
+        }
     }
 
     /// 答えを送る（押せないときは何もしない）。応答で card の状態を決め、200 と 409 は一覧を読み直す。

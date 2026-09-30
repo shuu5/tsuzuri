@@ -97,26 +97,12 @@ fn lane_key(kind: NodeKind) -> (Band, Option<NodeKind>) {
     (band, (band == Band::Beads).then_some(kind))
 }
 
-/// 近傍の配置（升 = 帯と行と列・升の中は電文の rows の順・見本の svgAround と同じ決め方）。
-pub fn layout(doc: &AroundDoc) -> Layout {
-    let cols: Vec<i8> = COLS
-        .into_iter()
-        .filter(|c| *c == 0 || doc.rows.iter().any(|r| r.col == *c))
-        .collect();
-    let n = count(cols.len()).max(1);
-    let col_w = (SPAN / n).clamp(COL_MIN, COL_MAX);
-    let box_w = col_w - 2 * INSET;
-    let chars = usize::try_from(box_w.saturating_sub(16) * 2 / 25).unwrap_or(0);
-    let width = LABEL_W + n * col_w;
-
-    let mut cells: BTreeMap<(Band, Option<NodeKind>, i8), Vec<&str>> = BTreeMap::new();
-    for r in &doc.rows {
-        let (band, lane) = lane_key(r.node.kind);
-        cells
-            .entry((band, lane, r.col))
-            .or_default()
-            .push(r.node.id.as_str());
-    }
+/// 帯と beads の行を上から積む（行の上端を lane_tops に書き、帯の行と積んだ下端を返す）。
+fn stack_bands(
+    doc: &AroundDoc,
+    cells: &BTreeMap<(Band, Option<NodeKind>, i8), Vec<&str>>,
+    lane_tops: &mut BTreeMap<(Band, Option<NodeKind>), u32>,
+) -> (Vec<BandRow>, u32) {
     let most = |band: Band, lane: Option<NodeKind>| {
         cells
             .iter()
@@ -127,7 +113,6 @@ pub fn layout(doc: &AroundDoc) -> Layout {
     };
 
     let mut bands = Vec::new();
-    let mut lane_tops: BTreeMap<(Band, Option<NodeKind>), u32> = BTreeMap::new();
     let mut y = HEAD;
     for band in Band::ALL {
         if !doc.rows.iter().any(|r| band_of(r.node.kind) == band) {
@@ -159,6 +144,31 @@ pub fn layout(doc: &AroundDoc) -> Layout {
             lanes,
         });
     }
+    (bands, y)
+}
+
+/// 近傍の配置（升 = 帯と行と列・升の中は電文の rows の順・見本の svgAround と同じ決め方）。
+pub fn layout(doc: &AroundDoc) -> Layout {
+    let cols: Vec<i8> = COLS
+        .into_iter()
+        .filter(|c| *c == 0 || doc.rows.iter().any(|r| r.col == *c))
+        .collect();
+    let n = count(cols.len()).max(1);
+    let col_w = (SPAN / n).clamp(COL_MIN, COL_MAX);
+    let box_w = col_w - 2 * INSET;
+    let chars = usize::try_from(box_w.saturating_sub(16) * 2 / 25).unwrap_or(0);
+    let width = LABEL_W + n * col_w;
+
+    let mut cells: BTreeMap<(Band, Option<NodeKind>, i8), Vec<&str>> = BTreeMap::new();
+    for r in &doc.rows {
+        let (band, lane) = lane_key(r.node.kind);
+        cells
+            .entry((band, lane, r.col))
+            .or_default()
+            .push(r.node.id.as_str());
+    }
+    let mut lane_tops: BTreeMap<(Band, Option<NodeKind>), u32> = BTreeMap::new();
+    let (bands, y) = stack_bands(doc, &cells, &mut lane_tops);
 
     let mut boxes = BTreeMap::new();
     for ((band, lane, col), ids) in &cells {
@@ -352,6 +362,38 @@ pub fn svg(doc: &AroundDoc, layout: &Layout) -> String {
             esc(&label(key))
         );
     }
+    bands_svg(&mut s, layout);
+    for (i, (row, via, t)) in linked(doc).enumerate() {
+        let Some(((x1, y1), (x2, y2))) = line_ends(layout, via, &row.node.id) else {
+            continue;
+        };
+        let e = edge_of(row, via, t);
+        let _ = write!(
+            s,
+            r#"<g class="e" data-i="{i}" data-u="{}" data-d="{}">{}</g>"#,
+            esc(&e.to),
+            esc(&e.from),
+            line_svg(line_style(t), &curve(x1, y1, x2, y2), (x2, y2))
+        );
+    }
+    for r in &doc.rows {
+        if let Some(p) = layout.pos(&r.node.id) {
+            s.push_str(&node_box(
+                &view_node(r),
+                p,
+                layout.box_w,
+                layout.chars,
+                r.col == 0,
+            ));
+        }
+    }
+    s.push_str("</svg>");
+    s
+}
+
+/// 帯の地と名・beads の行の区切りと名を図に書く。
+fn bands_svg(s: &mut String, layout: &Layout) {
+    let w = layout.width;
     for (i, row) in layout.bands.iter().enumerate() {
         let color = band_var(row.band);
         let _ = write!(
@@ -395,32 +437,6 @@ pub fn svg(doc: &AroundDoc, layout: &Layout) -> String {
             };
         }
     }
-    for (i, (row, via, t)) in linked(doc).enumerate() {
-        let Some(((x1, y1), (x2, y2))) = line_ends(layout, via, &row.node.id) else {
-            continue;
-        };
-        let e = edge_of(row, via, t);
-        let _ = write!(
-            s,
-            r#"<g class="e" data-i="{i}" data-u="{}" data-d="{}">{}</g>"#,
-            esc(&e.to),
-            esc(&e.from),
-            line_svg(line_style(t), &curve(x1, y1, x2, y2), (x2, y2))
-        );
-    }
-    for r in &doc.rows {
-        if let Some(p) = layout.pos(&r.node.id) {
-            s.push_str(&node_box(
-                &view_node(r),
-                p,
-                layout.box_w,
-                layout.chars,
-                r.col == 0,
-            ));
-        }
-    }
-    s.push_str("</svg>");
-    s
 }
 
 /// 狭い幅の一覧の 1 行（印・id・題 36 字・右に辺の型の字・入れ子の行）。

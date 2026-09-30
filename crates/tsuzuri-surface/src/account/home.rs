@@ -1030,6 +1030,28 @@ mod dom {
         view! { <section class=block.class id=block.id>{body}</section> }.into_any()
     }
 
+    /// 窓ごとの使った割合の chip（閾値を越えた窓は hot）。
+    fn pw_chips(pressure: Vec<super::Pw>) -> impl IntoView {
+        pressure
+            .into_iter()
+            .map(|p| {
+                let class = if p.hot { "pw hot" } else { "pw" };
+                view! { <span class=class data-term=p.window tabindex="0"><span class="wl">{p.short}</span><b class="num">{p.used}</b><span class="cap num">{p.cap}</span></span> }
+            })
+            .collect_view()
+    }
+
+    /// 候補の account の行（次に移る先は next の class）。
+    fn cand_items(candidates: Vec<String>, next: Option<String>) -> impl IntoView {
+        candidates
+            .into_iter()
+            .map(|c| {
+                let class = if next.as_deref() == Some(c.as_str()) { "next" } else { "" };
+                view! { <li class=class><span class="mono">{c}</span></li> }
+            })
+            .collect_view()
+    }
+
     fn group_card(g: GroupView, mode: Option<RwSignal<Mode>>) -> AnyView {
         // 経験者は詳しくを初めから開く（見本の gmore の open）。
         let expert = mode.is_some_and(|m| shows_internal(m.get_untracked()));
@@ -1045,14 +1067,7 @@ mod dom {
         } else {
             view! { <span class="sub">{g.since}</span> }.into_any()
         };
-        let pws = g
-            .pressure
-            .into_iter()
-            .map(|p| {
-                let class = if p.hot { "pw hot" } else { "pw" };
-                view! { <span class=class data-term=p.window tabindex="0"><span class="wl">{p.short}</span><b class="num">{p.used}</b><span class="cap num">{p.cap}</span></span> }
-            })
-            .collect_view();
+        let pws = pw_chips(g.pressure);
         let refused = g.refused.map(|r| {
             view! { <span class="why">{format!("GroupMoveRefused {r}")}</span> }
         });
@@ -1064,14 +1079,7 @@ mod dom {
             })
             .collect_view();
         let next = g.next_account.clone();
-        let cands = g
-            .candidates
-            .into_iter()
-            .map(|c| {
-                let class = if next.as_deref() == Some(c.as_str()) { "next" } else { "" };
-                view! { <li class=class><span class="mono">{c}</span></li> }
-            })
-            .collect_view();
+        let cands = cand_items(g.candidates, next);
         let data = g.name.clone();
         view! {
             <section class="gcard" data-group=data>

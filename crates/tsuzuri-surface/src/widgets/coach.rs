@@ -240,31 +240,36 @@ mod dom {
             }
         });
         on_cleanup(move || esc.remove());
-        let body = move || {
-            shown.get().map(|s| {
-                let text = STEPS.get(s.step).map_or("", |st| st.text);
-                let marks = dots(s.step)
-                    .into_iter()
-                    .map(|on| view! { <i class=if on { "on" } else { "" }></i> })
-                    .collect_view();
-                let ring_at = format!(
-                    "left:{}px;top:{}px;width:{}px;height:{}px",
-                    s.ring.left, s.ring.top, s.ring.width, s.ring.height
-                );
-                let box_at = format!("left:{}px;top:{}px", s.at.0, s.at.1);
-                view! {
-                    <div class="coach-ring" style=ring_at></div>
-                    <div class="coach" role="dialog" aria-label=LABEL style=box_at>
-                        <div>{text}</div>
-                        <div class="ft">
-                            <span class="dots">{marks}</span>
-                            <button type="button" on:click=skip>{SKIP}</button>
-                            <button type="button" on:click=next>{next_text(s.step)}</button>
-                        </div>
-                    </div>
-                }
-            })
-        };
+        let body = move || shown.get().map(|s| coach_view(s, skip, next));
         body.into_any()
+    }
+
+    /// 案内の輪と箱の中身（段の字・段の点・閉じると次の button）。
+    fn coach_view(
+        s: Shown,
+        skip: impl Fn(ev::MouseEvent) + Copy + 'static,
+        next: impl Fn(ev::MouseEvent) + Copy + 'static,
+    ) -> impl IntoView {
+        let text = STEPS.get(s.step).map_or("", |st| st.text);
+        let marks = dots(s.step)
+            .into_iter()
+            .map(|on| view! { <i class=if on { "on" } else { "" }></i> })
+            .collect_view();
+        let ring_at = format!(
+            "left:{}px;top:{}px;width:{}px;height:{}px",
+            s.ring.left, s.ring.top, s.ring.width, s.ring.height
+        );
+        let box_at = format!("left:{}px;top:{}px", s.at.0, s.at.1);
+        view! {
+            <div class="coach-ring" style=ring_at></div>
+            <div class="coach" role="dialog" aria-label=LABEL style=box_at>
+                <div>{text}</div>
+                <div class="ft">
+                    <span class="dots">{marks}</span>
+                    <button type="button" on:click=skip>{SKIP}</button>
+                    <button type="button" on:click=next>{next_text(s.step)}</button>
+                </div>
+            </div>
+        }
     }
 }

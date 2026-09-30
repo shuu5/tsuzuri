@@ -522,7 +522,6 @@ mod dom {
         let picture = svg(&doc, &lay);
         let gv = as_view(&doc);
         let cards = view_cards(&gv.nodes);
-        let hc = delegate();
         let lg = legend(&gv);
         let sides = chain(&doc);
         let count = count_line(&doc);
@@ -549,6 +548,28 @@ mod dom {
             pin.set(None);
         }
         let gz = NodeRef::<Div>::new();
+        pin_watch(pin, model, gz);
+        let bar = move || pin.get().map(|id| bar_view(id, pin, model, mode));
+        let expert_row = move || {
+            shows_internal(mode())
+                .then(|| view! { <div class="small muted mono">{line.clone()}</div> })
+        };
+        view! {
+            <div class="nb-wrap" data-origin=doc.center.clone()>
+                {controls(search, up, down)}
+                {legend_view(lg)}
+                {graph_div(picture, gz, pin, model, mode)}
+                <div class="pinbar" aria-live="polite">{bar}</div>
+                {chain_view(sides, &cards, mode)}
+                <div class="cutline num" tabindex="0" data-term="cut">{count}</div>
+                {expert_row}
+            </div>
+        }
+        .into_any()
+    }
+
+    /// 固定の光らせを図に塗り直し、Escape で固定を外す。
+    fn pin_watch(pin: RwSignal<Option<String>>, model: StoredValue<Model>, gz: NodeRef<Div>) {
         Effect::new(move |_| {
             let p = pin.get();
             if gz.get().is_some() {
@@ -561,7 +582,17 @@ mod dom {
             }
         });
         on_cleanup(move || escape.remove());
+    }
 
+    /// 図の置き場（指と focus で光らせ、押して固定し、2 回押すと節点の頁へ）。
+    fn graph_div(
+        picture: String,
+        gz: NodeRef<Div>,
+        pin: RwSignal<Option<String>>,
+        model: StoredValue<Model>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> impl IntoView {
+        let hc = delegate();
         let hover = move |target: Option<web_sys::EventTarget>| {
             if pin.with_untracked(Option::is_some) {
                 return;
@@ -604,27 +635,41 @@ mod dom {
                 let _ = window().location().set_href(&frame::node_href(&k, mode()));
             }
         };
+        view! {
+            <div class="nb-graph" node_ref=gz inner_html=picture
+                on:mouseover=over on:mouseout=out
+                on:focusin=move |ev| hover(ev.target()) on:click=click on:dblclick=open></div>
+        }
+    }
+
+    /// 固定の帯（固定した節点・上流と下流の数と深さ・節点の頁への link・固定を外す button）。
+    fn bar_view(
+        id: String,
+        pin: RwSignal<Option<String>>,
+        model: StoredValue<Model>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> impl IntoView {
         let unpin =
             move |_| pin.set(pin.with_untracked(|p| pin_next(p.as_deref(), &PinAction::Unpin)));
-        let bar = move || {
-            pin.get().map(|id| {
-                let b = model.with_value(|m| m.highlight(&id).bar());
-                let counts = format!(
-                    " · {} {} · {} {} · {}",
-                    label("nb_up"),
-                    b.basis,
-                    label("nb_down"),
-                    b.impact,
-                    b.depth
-                );
-                let href = frame::node_href(&b.id, mode());
-                view! {
-                    <span class="pinned">{label("pinned")}" "<b class="mono">{b.id}</b>{counts}</span>
-                    <a class="btn sm" href=href>{label("open_node")}" ›"</a>
-                    <button type="button" class="btn sm" on:click=unpin>{label("unpin")}</button>
-                }
-            })
-        };
+        let b = model.with_value(|m| m.highlight(&id).bar());
+        let counts = format!(
+            " · {} {} · {} {} · {}",
+            label("nb_up"),
+            b.basis,
+            label("nb_down"),
+            b.impact,
+            b.depth
+        );
+        let href = frame::node_href(&b.id, mode());
+        view! {
+            <span class="pinned">{label("pinned")}" "<b class="mono">{b.id}</b>{counts}</span>
+            <a class="btn sm" href=href>{label("open_node")}" ›"</a>
+            <button type="button" class="btn sm" on:click=unpin>{label("unpin")}</button>
+        }
+    }
+
+    /// 図の上の操作の列（上流と下流の開き閉じ・段数の k の選び）。
+    fn controls(search: RwSignal<String>, up: SideButton, down: SideButton) -> impl IntoView {
         let side_button = move |b: SideButton| {
             let pick =
                 move |_| navigate(search, |s| with_fold(s, toggle(fold_of(s), b.side)), false);
@@ -643,36 +688,21 @@ mod dom {
                 view! { <button type="button" aria-pressed=pressed on:click=pick>{n}</button> }
             })
             .collect_view();
-        let expert_row = move || {
-            shows_internal(mode())
-                .then(|| view! { <div class="small muted mono">{line.clone()}</div> })
-        };
         view! {
-            <div class="nb-wrap" data-origin=doc.center.clone()>
-                <div class="nbctl">
-                    <span class="sides">
-                        {side_button(up)}
-                        <span class="arr" aria-hidden="true">"←"</span>
-                        <b class="self">{label("nb_self")}</b>
-                        <span class="arr" aria-hidden="true">"→"</span>
-                        {side_button(down)}
-                    </span>
-                    <span class="kseg">
-                        {hs("nb_k")}
-                        <span class="seg" role="group" aria-label=label("nb_k")>{ks}</span>
-                    </span>
-                </div>
-                {legend_view(lg)}
-                <div class="nb-graph" node_ref=gz inner_html=picture
-                    on:mouseover=over on:mouseout=out
-                    on:focusin=move |ev| hover(ev.target()) on:click=click on:dblclick=open></div>
-                <div class="pinbar" aria-live="polite">{bar}</div>
-                {chain_view(sides, &cards, mode)}
-                <div class="cutline num" tabindex="0" data-term="cut">{count}</div>
-                {expert_row}
+            <div class="nbctl">
+                <span class="sides">
+                    {side_button(up)}
+                    <span class="arr" aria-hidden="true">"←"</span>
+                    <b class="self">{label("nb_self")}</b>
+                    <span class="arr" aria-hidden="true">"→"</span>
+                    {side_button(down)}
+                </span>
+                <span class="kseg">
+                    {hs("nb_k")}
+                    <span class="seg" role="group" aria-label=label("nb_k")>{ks}</span>
+                </span>
             </div>
         }
-        .into_any()
     }
 
     /// 凡例（形と色と縁と hover の見方・図に出ている帯・図に出ている辺の型・グラフの面と同じ部品）。

@@ -476,6 +476,37 @@ mod dom {
         view! { <ul class="nl">{items}</ul> }.into_any()
     }
 
+    /// 注釈の箱の中身（見出し・行・詳しく・経験者だけの内部の段）。
+    fn note_view(n: &super::Note, expert: bool) -> AnyView {
+        let head = (!n.head.is_empty())
+            .then(|| view! { <div class="n1">{inline_view(&n.head)}</div> });
+        let items = (!n.items.is_empty()).then(|| lines_view(&n.items));
+        let more = (!n.more.is_empty()).then(|| {
+            view! {
+                <details class="more" open=expert>
+                    <summary>{format!("{} ▸", label("p_more"))}</summary>
+                    {lines_view(&n.more)}
+                </details>
+            }
+        });
+        let internal = (expert && !n.internal.is_empty()).then(|| {
+            let rows = n
+                .internal
+                .iter()
+                .map(|l| view! { <div>{inline_view(l)}</div> })
+                .collect_view();
+            view! { <div class="int">{rows}</div> }
+        });
+        view! {
+            <div class="tl"><b>{n.label.clone()}</b></div>
+            {head}
+            {items}
+            {more}
+            {internal}
+        }
+        .into_any()
+    }
+
     /// 注釈の箱（body に 1 つ・Esc と外を押すと閉じる）。
     #[component]
     pub fn TipLayer() -> impl IntoView {
@@ -520,33 +551,7 @@ mod dom {
             // 出すときの幅で置き換える（出た後に幅を替えても出ている注釈は替えない・見本と同じ）。
             let n = note_in(open.key, &window().location().search().unwrap_or_default())?;
             let expert = shows_internal(c.mode.get());
-            let head = (!n.head.is_empty())
-                .then(|| view! { <div class="n1">{inline_view(&n.head)}</div> });
-            let items = (!n.items.is_empty()).then(|| lines_view(&n.items));
-            let more = (!n.more.is_empty()).then(|| {
-                view! {
-                    <details class="more" open=expert>
-                        <summary>{format!("{} ▸", label("p_more"))}</summary>
-                        {lines_view(&n.more)}
-                    </details>
-                }
-            });
-            let internal = (expert && !n.internal.is_empty()).then(|| {
-                let rows = n
-                    .internal
-                    .iter()
-                    .map(|l| view! { <div>{inline_view(l)}</div> })
-                    .collect_view();
-                view! { <div class="int">{rows}</div> }
-            });
-            Some(view! {
-                <div class="tl"><b>{n.label.clone()}</b></div>
-                {head}
-                {items}
-                {more}
-                {internal}
-            }
-            .into_any())
+            Some(note_view(&n, expert))
         };
         view! {
             <div class=class role="tooltip" id="tip" style=style on:click=|ev: ev::MouseEvent| ev.stop_propagation()>

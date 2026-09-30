@@ -147,40 +147,13 @@ fn lanes_of(band: Band) -> Vec<Option<NodeKind>> {
     }
 }
 
-/// 眺めの配置（升 = 帯と行と段・升の中は id の自然な順・見本の graph と同じ決め方）。
-pub fn layout(view: &GraphView) -> Layout {
-    let mut cells: BTreeMap<(Band, Option<NodeKind>, u32), Vec<&str>> = BTreeMap::new();
-    for n in &view.nodes {
-        let (band, lane) = lane_key(n.node.kind);
-        cells
-            .entry((band, lane, n.rank))
-            .or_default()
-            .push(n.node.id.as_str());
-    }
-    for ids in cells.values_mut() {
-        ids.sort_by(|a, b| natural_cmp(a, b));
-    }
-
-    let ranks: BTreeSet<u32> = view.nodes.iter().map(|n| n.rank).collect();
-    let mut columns = Vec::new();
-    let mut x = LABEL_W;
-    for rank in ranks {
-        let cols = cells
-            .iter()
-            .filter(|((_, _, r), _)| *r == rank)
-            .map(|(_, ids)| count(ids.len()).div_ceil(PER_COL))
-            .max()
-            .unwrap_or(1)
-            .max(1);
-        columns.push(Column { rank, x, cols });
-        x += cols * COL_W + RANK_GAP;
-    }
-    let width = columns.last().map_or(LABEL_W + NODE_W + COL_GAP, |c| {
-        c.x + c.cols * COL_W + COL_GAP
-    });
-
+/// 帯と beads の行を上から積む（行の上端を lane_tops に書き、帯の行と積んだ下端を返す）。
+fn stack_bands(
+    view: &GraphView,
+    cells: &BTreeMap<(Band, Option<NodeKind>, u32), Vec<&str>>,
+    lane_tops: &mut BTreeMap<(Band, Option<NodeKind>), u32>,
+) -> (Vec<BandRow>, u32) {
     let mut bands = Vec::new();
-    let mut lane_tops: BTreeMap<(Band, Option<NodeKind>), u32> = BTreeMap::new();
     let mut y = TOP;
     for band in Band::ALL {
         let top = y;
@@ -219,6 +192,43 @@ pub fn layout(view: &GraphView) -> Layout {
             lanes,
         });
     }
+    (bands, y)
+}
+
+/// 眺めの配置（升 = 帯と行と段・升の中は id の自然な順・見本の graph と同じ決め方）。
+pub fn layout(view: &GraphView) -> Layout {
+    let mut cells: BTreeMap<(Band, Option<NodeKind>, u32), Vec<&str>> = BTreeMap::new();
+    for n in &view.nodes {
+        let (band, lane) = lane_key(n.node.kind);
+        cells
+            .entry((band, lane, n.rank))
+            .or_default()
+            .push(n.node.id.as_str());
+    }
+    for ids in cells.values_mut() {
+        ids.sort_by(|a, b| natural_cmp(a, b));
+    }
+
+    let ranks: BTreeSet<u32> = view.nodes.iter().map(|n| n.rank).collect();
+    let mut columns = Vec::new();
+    let mut x = LABEL_W;
+    for rank in ranks {
+        let cols = cells
+            .iter()
+            .filter(|((_, _, r), _)| *r == rank)
+            .map(|(_, ids)| count(ids.len()).div_ceil(PER_COL))
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        columns.push(Column { rank, x, cols });
+        x += cols * COL_W + RANK_GAP;
+    }
+    let width = columns.last().map_or(LABEL_W + NODE_W + COL_GAP, |c| {
+        c.x + c.cols * COL_W + COL_GAP
+    });
+
+    let mut lane_tops: BTreeMap<(Band, Option<NodeKind>), u32> = BTreeMap::new();
+    let (bands, y) = stack_bands(view, &cells, &mut lane_tops);
 
     let mut boxes = BTreeMap::new();
     for ((band, lane, rank), ids) in &cells {
@@ -440,6 +450,26 @@ pub fn kids_badge(n: &ViewNode) -> Option<String> {
     (n.kids > 0).then(|| format!("{} {}", label("children"), n.kids))
 }
 
+/// 箱の頭の記号（丸か四角・開いた問いは中を抜いて縁を止まりの色に）。
+fn head_mark(band: Band, open_q: bool, lc: &str, cx: f64, cy: f64) -> String {
+    let (fill, stroke) = if open_q {
+        ("none".to_string(), "var(--s-stop)".to_string())
+    } else {
+        (lc.to_string(), lc.to_string())
+    };
+    if round_mark(band) {
+        format!(
+            r#"<circle cx="{cx}" cy="{cy}" r="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>"#
+        )
+    } else {
+        format!(
+            r#"<rect x="{}" y="{}" width="10" height="10" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>"#,
+            cx - 5.0,
+            cy - 5.0
+        )
+    }
+}
+
 /// 1 つの節点の箱（囲みは角の丸い四角 1 種・頭の記号・1 行目は id の全部・2 行目は題 12 字・子の数の札）。
 /// 箱の字は link にしない（2 回押すか、focus の在るときの Enter と Space で節点の頁へ移る）。
 pub fn node_svg(n: &ViewNode, p: Pos) -> String {
@@ -450,22 +480,7 @@ pub fn node_svg(n: &ViewNode, p: Pos) -> String {
     let (x, y) = (f64::from(p.x), f64::from(p.y));
     let (w, h) = (f64::from(NODE_W), f64::from(NODE_H));
     let (cx, cy) = (x + 11.0, y + 13.0);
-    let (fill, stroke) = if open_q {
-        ("none".to_string(), "var(--s-stop)".to_string())
-    } else {
-        (lc.clone(), lc.clone())
-    };
-    let mark = if round_mark(band) {
-        format!(
-            r#"<circle cx="{cx}" cy="{cy}" r="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>"#
-        )
-    } else {
-        format!(
-            r#"<rect x="{}" y="{}" width="10" height="10" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>"#,
-            cx - 5.0,
-            cy - 5.0
-        )
-    };
+    let mark = head_mark(band, open_q, &lc, cx, cy);
     let (edge, ew) = border(open_q, false);
     let badge = kids_badge(n);
     let id_max = if badge.is_some() {
@@ -550,11 +565,35 @@ pub fn zero_text(band: Band) -> String {
 
 /// 図の全部（帯の地・行の区切り・測れていないと 0 の字・線・箱）。拡大と移動は `vp` の transform、帯の名は `blabs` に置く。
 pub fn svg(view: &GraphView, layout: &Layout) -> String {
-    let w = layout.width;
     let mut s = format!(
         r#"<svg class="hlsvg" role="group" aria-label="{}"><g id="vp">"#,
         esc(&label("view_graph"))
     );
+    bands_svg(&mut s, view, layout);
+    for (i, e) in view.edges.iter().enumerate() {
+        let Some(((x1, y1), (x2, y2))) = line_ends(layout, e) else {
+            continue;
+        };
+        let _ = write!(
+            s,
+            r#"<g class="e" data-i="{i}" data-u="{}" data-d="{}">{}</g>"#,
+            esc(&e.to),
+            esc(&e.from),
+            line_svg(line_style(e.edge_type), &curve(x1, y1, x2, y2), (x2, y2))
+        );
+    }
+    for n in &view.nodes {
+        if let Some(p) = layout.pos(&n.node.id) {
+            s.push_str(&node_svg(n, p));
+        }
+    }
+    s.push_str(r#"</g><g id="blabs"></g></svg>"#);
+    s
+}
+
+/// 帯の地・行の区切り・測れていないと 0 の字を図に書く。
+fn bands_svg(s: &mut String, view: &GraphView, layout: &Layout) {
+    let w = layout.width;
     for (i, row) in layout.bands.iter().enumerate() {
         let _ = write!(
             s,
@@ -598,30 +637,10 @@ pub fn svg(view: &GraphView, layout: &Layout) -> String {
             BandFill::Nodes(_) => {}
         }
     }
-    for (i, e) in view.edges.iter().enumerate() {
-        let Some(((x1, y1), (x2, y2))) = line_ends(layout, e) else {
-            continue;
-        };
-        let _ = write!(
-            s,
-            r#"<g class="e" data-i="{i}" data-u="{}" data-d="{}">{}</g>"#,
-            esc(&e.to),
-            esc(&e.from),
-            line_svg(line_style(e.edge_type), &curve(x1, y1, x2, y2), (x2, y2))
-        );
-    }
-    for n in &view.nodes {
-        if let Some(p) = layout.pos(&n.node.id) {
-            s.push_str(&node_svg(n, p));
-        }
-    }
-    s.push_str(r#"</g><g id="blabs"></g></svg>"#);
-    s
 }
 
 /// 帯の名の欄（図の左端に固定・拡大と移動に合わせて縦の位置と高さだけを変える・見本の initZoom の labels）。
 pub fn band_labels(layout: &Layout, z: Zoom, box_h: f64) -> String {
-    let lw = f64::from(LABEL_W);
     let mut s =
         format!(r#"<rect x="0" y="0" width="{LABEL_W}" height="{box_h:.1}" fill="var(--panel)"/>"#);
     for row in &layout.bands {
@@ -656,39 +675,45 @@ pub fn band_labels(layout: &Layout, z: Zoom, box_h: f64) -> String {
             );
         }
         s.push_str("</g>");
-        for (i, lane) in row.lanes.iter().enumerate() {
-            let y0 = z.ty + f64::from(lane.top) * z.s;
-            let h = f64::from(lane.height) * z.s;
-            if y0 > box_h || y0 + h < 0.0 || h < 11.0 {
-                continue;
-            }
-            if i > 0 {
-                let _ = write!(
-                    s,
-                    r#"<line class="lane-sep" x1="0" x2="{LABEL_W}" y1="{y0:.1}" y2="{y0:.1}"/>"#
-                );
-            }
-            let word = label(kind_key(lane.kind));
-            if lane.count == 0 {
-                let _ = write!(
-                    s,
-                    r#"<text class="lane-lab zero" x="{}" y="{:.1}" text-anchor="end">{} 0</text>"#,
-                    lw - 8.0,
-                    y0 + h / 2.0 + 4.0,
-                    esc(&word)
-                );
-            } else {
-                let _ = write!(
-                    s,
-                    r#"<text class="lane-lab" x="{}" y="{:.1}" text-anchor="end">{}</text>"#,
-                    lw - 8.0,
-                    y0 + (h - 3.0).min(30.0),
-                    esc(&word)
-                );
-            }
-        }
+        lane_labels(&mut s, row, z, box_h);
     }
     s
+}
+
+/// beads の帯の行の区切りと行の名（見えない行と低すぎる行は書かない）。
+fn lane_labels(s: &mut String, row: &BandRow, z: Zoom, box_h: f64) {
+    let lw = f64::from(LABEL_W);
+    for (i, lane) in row.lanes.iter().enumerate() {
+        let y0 = z.ty + f64::from(lane.top) * z.s;
+        let h = f64::from(lane.height) * z.s;
+        if y0 > box_h || y0 + h < 0.0 || h < 11.0 {
+            continue;
+        }
+        if i > 0 {
+            let _ = write!(
+                s,
+                r#"<line class="lane-sep" x1="0" x2="{LABEL_W}" y1="{y0:.1}" y2="{y0:.1}"/>"#
+            );
+        }
+        let word = label(kind_key(lane.kind));
+        if lane.count == 0 {
+            let _ = write!(
+                s,
+                r#"<text class="lane-lab zero" x="{}" y="{:.1}" text-anchor="end">{} 0</text>"#,
+                lw - 8.0,
+                y0 + h / 2.0 + 4.0,
+                esc(&word)
+            );
+        } else {
+            let _ = write!(
+                s,
+                r#"<text class="lane-lab" x="{}" y="{:.1}" text-anchor="end">{}</text>"#,
+                lw - 8.0,
+                y0 + (h - 3.0).min(30.0),
+                esc(&word)
+            );
+        }
+    }
 }
 
 /// 凡例の 1 行目の形の見本（四角 = file に書かれた行・丸 = 台帳と走行）。

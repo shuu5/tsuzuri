@@ -958,7 +958,7 @@ mod dom {
         let body = move || match got() {
             Body::Filled(m) => LAYOUT
                 .iter()
-                .map(|(tier, parts)| tier_view(*tier, parts, &m, screen, unref, graph))
+                .map(|(tier, parts)| tier_view(*tier, parts, &m, screen, Reads { unref, graph }))
                 .collect_view()
                 .into_any(),
             Body::Unmeasured(reason) | Body::Empty(reason) => LAYOUT
@@ -990,18 +990,14 @@ mod dom {
     }
 
     /// 1 つの段（表の項を順に）。
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-surface-src が直してこの属性を外す"
-    )]
     fn tier_view(
         tier: Tier,
         parts: &[Part],
         m: &Metrics,
         screen: RwSignal<Screen>,
-        unref: ReadSignal<Fetched>,
-        graph: ReadSignal<Fetched>,
+        reads: Reads,
     ) -> AnyView {
+        let Reads { unref, graph } = reads;
         match tier {
             Tier::Top => {
                 let boxes = parts.iter().map(|p| box_view(*p, m)).collect_view();
@@ -1051,6 +1047,13 @@ mod dom {
                 .collect_view()
                 .into_any(),
         }
+    }
+
+    /// 段の項が読む口（参照の無い file とグラフ）。
+    #[derive(Clone, Copy)]
+    struct Reads {
+        unref: ReadSignal<Fetched>,
+        graph: ReadSignal<Fetched>,
     }
 
     /// 上段と memo の段の箱（札と大きい数）。

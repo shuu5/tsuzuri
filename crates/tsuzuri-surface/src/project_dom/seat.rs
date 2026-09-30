@@ -175,6 +175,27 @@ fn top_view(top: Top, states: States) -> AnyView {
     .into_any()
 }
 
+/// 選んだ幅の帯の図（読めていない所は測れていないの印）。
+fn strip_body(strips: &[Strip], now: Span) -> AnyView {
+    let Some(strip) = strips.iter().find(|s| s.span == now) else {
+        return unknown();
+    };
+    match (&strip.rects, &strip.marks) {
+        (Reading::Known(r), Reading::Known(m)) => {
+            view! { <div inner_html=strip_svg(r, m)></div> }.into_any()
+        }
+        (Reading::Known(r), Reading::Unknown) => view! {
+            <div inner_html=strip_svg(r, &[])></div>
+            <div class="small muted">{unknown()}</div>
+        }
+        .into_any(),
+        (Reading::Unknown, _) => view! {
+            <div class="small muted">{unknown()}<span>{label("st_unknown")}</span></div>
+        }
+        .into_any(),
+    }
+}
+
 fn strip_view(strips: Vec<Strip>, span: RwSignal<Span>) -> AnyView {
     let buttons = Span::ALL
         .into_iter()
@@ -213,23 +234,7 @@ fn strip_view(strips: Vec<Strip>, span: RwSignal<Span>) -> AnyView {
         .collect_view();
     let svg = move || {
         let now = span.get();
-        let Some(strip) = strips.iter().find(|s| s.span == now) else {
-            return unknown();
-        };
-        match (&strip.rects, &strip.marks) {
-            (Reading::Known(r), Reading::Known(m)) => {
-                view! { <div inner_html=strip_svg(r, m)></div> }.into_any()
-            }
-            (Reading::Known(r), Reading::Unknown) => view! {
-                <div inner_html=strip_svg(r, &[])></div>
-                <div class="small muted">{unknown()}</div>
-            }
-            .into_any(),
-            (Reading::Unknown, _) => view! {
-                <div class="small muted">{unknown()}<span>{label("st_unknown")}</span></div>
-            }
-            .into_any(),
-        }
+        strip_body(&strips, now)
     };
     view! {
         <div class="strip">

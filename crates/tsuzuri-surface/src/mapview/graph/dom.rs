@@ -72,6 +72,31 @@ struct Press {
     moved: bool,
 }
 
+/// 図の置き場と固定と近傍の値と拡大と移動（図の上の押しが共にする）。
+#[derive(Clone, Copy)]
+struct Stage {
+    gz: NodeRef<Div>,
+    pin: RwSignal<Option<String>>,
+    model: StoredValue<Model>,
+    zoom: StoredValue<Option<Zoom>>,
+    s0: StoredValue<f64>,
+}
+
+impl Stage {
+    /// 今の拡大と移動（まだ無ければ初めの倍率）。
+    fn current(self) -> Zoom {
+        self.zoom
+            .get_value()
+            .unwrap_or_else(|| Zoom::initial(self.s0.get_value()))
+    }
+
+    /// 拡大と移動を覚えて図に当てる。
+    fn apply(self, z: Zoom) {
+        self.zoom.set_value(Some(z));
+        place(self.gz, self.model, z);
+    }
+}
+
 /// グラフの面（口の読みの 3 値・読めた眺めの図）。固定と拡大は読み直しの後も保つ。
 /// 口の path は開いた箱の列から組み、箱を押すと path が変わって読み直す（その間は最後に読めた眺めを出す）。
 pub fn view(search: RwSignal<String>) -> AnyView {
@@ -212,7 +237,45 @@ fn panel(
         degree,
         cards: cards.clone(),
     });
-    let hc = delegate();
+    drop_lost_pin(pin, model);
+    let st = Stage {
+        gz: NodeRef::<Div>::new(),
+        pin,
+        model,
+        zoom,
+        s0: StoredValue::new(1.0_f64),
+    };
+    fit_effect(st);
+    pin_watch(st);
+
+    // 箱の開き閉じ（頁の列を変え、変われば口の path を置き直して読み直す・固定は動かさない）。
+    let toggle = move |id: String, fold: BoxFold| {
+        if let Some(p) = OPEN.with_borrow_mut(|o| o.toggle(&id, fold).then(|| o.path())) {
+            path.set(p);
+        }
+    };
+    let reset = move |_| st.apply(Zoom::initial(st.s0.get_value()));
+    let bar = move || pin.get().map(|id| bar_view(id, pin, model, mode));
+    view! {
+        <div class="gpanel">
+            <header>{h2("lines")}</header>
+            {legend_view(lg)}
+            <div class="gtools">
+                <button type="button" class="btn sm" on:click=reset>{label("zoom_reset")}</button>
+                <span class="small muted" data-term="zoom_hint" tabindex="0">{label("zoom_hint")}</span>
+            </div>
+            {gwrap_view(picture, st, mode, toggle)}
+            <div class="pinbar" aria-live="polite">{bar}</div>
+            {chain_view(bands, &cards, mode, toggle)}
+            <div class="cutline num" tabindex="0" data-term="cut" use:expert_tip=line>{count}</div>
+            {refused}
+        </div>
+    }
+    .into_any()
+}
+
+/// 固定した節点が近傍の値に無ければ固定を外す。
+fn drop_lost_pin(pin: RwSignal<Option<String>>, model: StoredValue<Model>) {
     // 読み直しで固定した節点が図から消えたら固定を外す。
     if pin.with_untracked(|p| {
         p.as_ref()
@@ -220,19 +283,11 @@ fn panel(
     }) {
         pin.set(None);
     }
-    let gz = NodeRef::<Div>::new();
-    let s0 = StoredValue::new(1.0_f64);
-    let press = StoredValue::new(None::<Press>);
-    let drag_done = StoredValue::new(false);
-    let current = move || {
-        zoom.get_value()
-            .unwrap_or_else(|| Zoom::initial(s0.get_value()))
-    };
-    let apply = move |z: Zoom| {
-        zoom.set_value(Some(z));
-        place(gz, model, z);
-    };
+}
 
+/// 図の箱の高さと初めの倍率を幅から決め、図を置き直す。
+fn fit_effect(st: Stage) {
+    let Stage { gz, pin, model, s0, .. } = st;
     Effect::new(move |_| {
         let Some(el) = gz.get() else {
             return;
@@ -241,10 +296,15 @@ fn panel(
         let s = initial_scale(f64::from(el.client_width()), width);
         s0.set_value(s);
         let _ = el.set_attribute("style", &format!("height:{}px", box_height(height, s)));
-        apply(current());
+        st.apply(st.current());
         let p = pin.get_untracked();
         paint(gz, model, p.as_deref(), p.as_deref());
     });
+}
+
+/// 固定の光らせを図に塗り直し、Escape で固定を外す。
+fn pin_watch(st: Stage) {
+    let Stage { gz, pin, model, .. } = st;
     Effect::new(move |_| {
         let p = pin.get();
         paint(gz, model, p.as_deref(), p.as_deref());
@@ -255,25 +315,20 @@ fn panel(
         }
     });
     on_cleanup(move || escape.remove());
+}
 
-    // 箱の開き閉じ（頁の列を変え、変われば口の path を置き直して読み直す・固定は動かさない）。
-    let toggle = move |id: String, fold: BoxFold| {
-        if let Some(p) = OPEN.with_borrow_mut(|o| o.toggle(&id, fold).then(|| o.path())) {
-            path.set(p);
-        }
-    };
-    let fold_of = move |id: &str| model.with_value(|m| m.node(id).map(|n| n.fold));
-    let press_fold = move |target: Option<web_sys::EventTarget>| {
-        let Some(id) = fold_target(target) else {
-            return false;
-        };
-        if let Some(fold) = fold_of(&id) {
-            toggle(id, fold);
-        }
-        true
-    };
-    let group = move |id: &str| model.with_value(|m| m.node(id).is_some_and(|n| n.group));
-
+/// 図の枠（節点の指と押しと key・拡大と移動の輪と drag）。
+fn gwrap_view(
+    picture: String,
+    st: Stage,
+    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    toggle: impl Fn(String, BoxFold) + Copy + 'static,
+) -> impl IntoView {
+    let Stage { gz, pin, model, .. } = st;
+    let press = StoredValue::new(None::<Press>);
+    let drag_done = StoredValue::new(false);
+    let press_fold = fold_press(model, toggle);
+    let hc = delegate();
     let hover =move |target: Option<web_sys::EventTarget>| {
         if pin.with_untracked(Option::is_some) {
             return;
@@ -313,6 +368,47 @@ fn panel(
         }
         pin.set(pin.with_untracked(|p| pin_next(p.as_deref(), &PinAction::Press(k))));
     };
+    let (open, key) = open_events(model, press_fold, mode);
+    let wheel = wheel_of(st);
+    let (down, moved, up) = drag_events(st, press, drag_done);
+    view! {
+        <div class="gwrap">
+            <div class="gzoom" node_ref=gz inner_html=picture
+                on:wheel=wheel on:pointerdown=down on:pointermove=moved on:pointerup=up on:pointercancel=up
+                on:mouseover=over on:mouseout=out
+                on:focusin=move |ev| hover(ev.target()) on:click=click on:dblclick=open
+                on:keydown=key></div>
+        </div>
+    }
+}
+
+/// 開き閉じの印の押し（印の上なら箱を開き閉じして true）。
+fn fold_press(
+    model: StoredValue<Model>,
+    toggle: impl Fn(String, BoxFold) + Copy + 'static,
+) -> impl Fn(Option<web_sys::EventTarget>) -> bool + Copy + 'static {
+    let fold_of = move |id: &str| model.with_value(|m| m.node(id).map(|n| n.fold));
+    move |target: Option<web_sys::EventTarget>| {
+        let Some(id) = fold_target(target) else {
+            return false;
+        };
+        if let Some(fold) = fold_of(&id) {
+            toggle(id, fold);
+        }
+        true
+    }
+}
+
+/// 節点の頁へ移る押し（2 回押すと、focus の在る節点の Enter と Space）。
+fn open_events(
+    model: StoredValue<Model>,
+    press_fold: impl Fn(Option<web_sys::EventTarget>) -> bool + Copy + 'static,
+    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+) -> (
+    impl Fn(ev::MouseEvent) + 'static,
+    impl Fn(ev::KeyboardEvent) + 'static,
+) {
+    let group = move |id: &str| model.with_value(|m| m.node(id).is_some_and(|n| n.group));
     // 2 回押すとその節点の頁へ（見本の dblclick・開き閉じの印と組の箱には頁が無い）。
     let open = move |ev: ev::MouseEvent| {
         if fold_target(ev.target()).is_some() {
@@ -337,9 +433,14 @@ fn panel(
         }
         let _ = window().location().set_href(&frame::node_href(&k, mode()));
     };
-    let wheel = move |ev: ev::WheelEvent| {
+    (open, key)
+}
+
+/// 輪の拡大と縮小（指の下の点を動かさない）。
+fn wheel_of(st: Stage) -> impl Fn(ev::WheelEvent) + Copy + 'static {
+    move |ev: ev::WheelEvent| {
         ev.prevent_default();
-        let Some(el) = gz.get_untracked() else {
+        let Some(el) = st.gz.get_untracked() else {
             return;
         };
         let r = el.get_bounding_client_rect();
@@ -347,8 +448,20 @@ fn panel(
             f64::from(ev.client_x()) - r.left(),
             f64::from(ev.client_y()) - r.top(),
         );
-        apply(current().wheel(cx, cy, ev.delta_y()));
-    };
+        st.apply(st.current().wheel(cx, cy, ev.delta_y()));
+    }
+}
+
+/// drag の移動の受け取り（押し・動き・離し）。
+fn drag_events(
+    st: Stage,
+    press: StoredValue<Option<Press>>,
+    drag_done: StoredValue<bool>,
+) -> (
+    impl Fn(ev::PointerEvent) + Copy + 'static,
+    impl Fn(ev::PointerEvent) + Copy + 'static,
+    impl Fn(ev::PointerEvent) + Copy + 'static,
+) {
     let down = move |ev: ev::PointerEvent| {
         if ev.button() != 0 || !ev.is_primary() {
             return;
@@ -356,7 +469,7 @@ fn panel(
         press.set_value(Some(Press {
             x: f64::from(ev.client_x()),
             y: f64::from(ev.client_y()),
-            base: current(),
+            base: st.current(),
             moved: false,
         }));
     };
@@ -372,12 +485,12 @@ fn panel(
             p.moved = true;
             press.set_value(Some(p));
             drag_done.set_value(true);
-            if let Some(el) = gz.get_untracked() {
+            if let Some(el) = st.gz.get_untracked() {
                 let _ = el.set_pointer_capture(ev.pointer_id());
             }
         }
         if p.moved {
-            apply(p.base.drag(dx, dy));
+            st.apply(p.base.drag(dx, dy));
         }
     };
     // drag の後の離しは押したと数えない（click の後に印を戻す）。
@@ -387,50 +500,33 @@ fn panel(
             set_timeout(move || drag_done.set_value(false), Duration::ZERO);
         }
     };
-    let reset = move |_| apply(Zoom::initial(s0.get_value()));
+    (down, moved, up)
+}
+
+/// 固定の帯（固定した節点・上流と下流の数と深さ・節点の頁への link・固定を外す button）。
+fn bar_view(
+    id: String,
+    pin: RwSignal<Option<String>>,
+    model: StoredValue<Model>,
+    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+) -> impl IntoView {
     let unpin =
         move |_| pin.set(pin.with_untracked(|p| pin_next(p.as_deref(), &PinAction::Unpin)));
-    let bar = move || {
-        pin.get().map(|id| {
-            let b = model.with_value(|m| m.highlight(&id).bar());
-            let counts = format!(
-                " · {} {} · {} {} · {}",
-                label("nb_up"),
-                b.basis,
-                label("nb_down"),
-                b.impact,
-                b.depth
-            );
-            let href = frame::node_href(&b.id, mode());
-            view! {
-                <span class="pinned">{label("pinned")}" "<b class="mono">{b.id}</b>{counts}</span>
-                <a class="btn sm" href=href>{label("open_node")}" ›"</a>
-                <button type="button" class="btn sm" on:click=unpin>{label("unpin")}</button>
-            }
-        })
-    };
+    let b = model.with_value(|m| m.highlight(&id).bar());
+    let counts = format!(
+        " · {} {} · {} {} · {}",
+        label("nb_up"),
+        b.basis,
+        label("nb_down"),
+        b.impact,
+        b.depth
+    );
+    let href = frame::node_href(&b.id, mode());
     view! {
-        <div class="gpanel">
-            <header>{h2("lines")}</header>
-            {legend_view(lg)}
-            <div class="gtools">
-                <button type="button" class="btn sm" on:click=reset>{label("zoom_reset")}</button>
-                <span class="small muted" data-term="zoom_hint" tabindex="0">{label("zoom_hint")}</span>
-            </div>
-            <div class="gwrap">
-                <div class="gzoom" node_ref=gz inner_html=picture
-                    on:wheel=wheel on:pointerdown=down on:pointermove=moved on:pointerup=up on:pointercancel=up
-                    on:mouseover=over on:mouseout=out
-                    on:focusin=move |ev| hover(ev.target()) on:click=click on:dblclick=open
-                    on:keydown=key></div>
-            </div>
-            <div class="pinbar" aria-live="polite">{bar}</div>
-            {chain_view(bands, &cards, mode, toggle)}
-            <div class="cutline num" tabindex="0" data-term="cut" use:expert_tip=line>{count}</div>
-            {refused}
-        </div>
+        <span class="pinned">{label("pinned")}" "<b class="mono">{b.id}</b>{counts}</span>
+        <a class="btn sm" href=href>{label("open_node")}" ›"</a>
+        <button type="button" class="btn sm" on:click=unpin>{label("unpin")}</button>
     }
-    .into_any()
 }
 
 /// 凡例（形と色と縁と hover の見方・図に出ている帯・図に出ている辺の型）。

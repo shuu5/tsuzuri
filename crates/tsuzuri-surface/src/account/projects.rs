@@ -727,6 +727,38 @@ pub(super) fn positions<T>(items: &[T], f: impl Fn(&T) -> bool) -> Vec<usize> {
         .collect()
 }
 
+/// group の並べの見出しと行の位置（group の順・最後に group の無い行）。
+fn group_heads(doc: &AccountDoc) -> Vec<(Option<GroupHead>, Vec<usize>)> {
+    let ps = &doc.projects;
+    let mut out: Vec<(Option<GroupHead>, Vec<usize>)> = group_order(doc)
+        .into_iter()
+        .map(|name| {
+            let idx = positions(ps, |p| p.group.as_ref() == Some(&name));
+            let park = is_park(doc, &name);
+            let head = GroupHead {
+                current: if park {
+                    Some(NONE_MARK.to_string())
+                } else {
+                    current(doc, &name).map(str::to_string)
+                },
+                group: Some(name),
+                park,
+            };
+            (Some(head), idx)
+        })
+        .collect();
+    let none = positions(ps, |p| p.group.is_none());
+    out.push((
+        Some(GroupHead {
+            group: None,
+            current: None,
+            park: false,
+        }),
+        none,
+    ));
+    out
+}
+
 /// 電文を表に組む（同じ値は電文の projects の順・group の並べは行の無い見出しを出さない）。
 pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
     let ps = &doc.projects;
@@ -747,35 +779,7 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
             idx.sort_by_key(|&i| ps.get(i).map(unref_rank));
             vec![(None, idx)]
         }
-        PSort::Group => {
-            let mut out: Vec<(Option<GroupHead>, Vec<usize>)> = group_order(doc)
-                .into_iter()
-                .map(|name| {
-                    let idx = positions(ps, |p| p.group.as_ref() == Some(&name));
-                    let park = is_park(doc, &name);
-                    let head = GroupHead {
-                        current: if park {
-                            Some(NONE_MARK.to_string())
-                        } else {
-                            current(doc, &name).map(str::to_string)
-                        },
-                        group: Some(name),
-                        park,
-                    };
-                    (Some(head), idx)
-                })
-                .collect();
-            let none = positions(ps, |p| p.group.is_none());
-            out.push((
-                Some(GroupHead {
-                    group: None,
-                    current: None,
-                    park: false,
-                }),
-                none,
-            ));
-            out
-        }
+        PSort::Group => group_heads(doc),
     };
     let groups = heads
         .into_iter()
@@ -990,6 +994,73 @@ mod dom {
         .into_any()
     }
 
+    /// 2 段目の置き場（描いた後と窓の幅が変わった後に line を幅へ収める）。
+    fn fit_node(line: String) -> NodeRef<Span> {
+        // 2 段目は描いた後と窓の幅が変わった後に幅へ収める（見本の fitLines）。
+        let l2 = NodeRef::<Span>::new();
+        let fit = move || {
+            if let Some(el) = l2.get_untracked() {
+                fit_line(&el, &line);
+            }
+        };
+        request_animation_frame(fit.clone());
+        let resize = window_event_listener(ev::resize, move |_| fit());
+        on_cleanup(move || resize.remove());
+        l2
+    }
+
+    /// 行が開いているか（記録の無い行は mode の初めの値）。
+    fn open_state(
+        key: String,
+        opened: Opened,
+        expert: Signal<bool>,
+    ) -> impl Fn() -> bool + Clone + Send + Sync + 'static {
+        move || {
+            opened
+                .with(|m| m.get(&key).copied())
+                .unwrap_or_else(|| expert.get())
+        }
+    }
+
+    /// 行の class（開いている行は open を足す）。
+    fn open_class(
+        base: String,
+        is_open: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> impl Fn() -> String + Send + Sync + 'static {
+        move || {
+            if is_open() {
+                format!("{base} open")
+            } else {
+                base.clone()
+            }
+        }
+    }
+
+    /// 開く欄（窓を開く button か、まだ開けない印）。
+    fn open_cell(open: Open, name: &str) -> AnyView {
+        let key = open.key();
+        match open {
+            Open::New(url) => {
+                let project = name.to_string();
+                let click = move |_| windows::open(&project, &url);
+                view! {
+                    <button type="button" class="btn" on:click=click>
+                        <span class="lg">{label(key)}</span>
+                        <span class="sh">"↗"</span>
+                    </button>
+                }
+                .into_any()
+            }
+            Open::NotYet => view! {
+                <span class=NOT_YET_CLASS title=label(key)>
+                    <span class="lg">{label(key)}</span>
+                    <span class="sh">{NONE_MARK}</span>
+                </span>
+            }
+            .into_any(),
+        }
+    }
+
     fn row_view(row: ProjLine, opened: Opened, expert: Signal<bool>) -> AnyView {
         let need_word = match row.need.lead {
             Some(_) => format!("({}) {}", &row.need.key[3..], label(row.need.key)),
@@ -997,39 +1068,11 @@ mod dom {
         };
         let need_icon = row.need.lead.is_none().then(|| state_icon(UNKNOWN));
         let more = more_view(&row);
-        // 2 段目は描いた後と窓の幅が変わった後に幅へ収める（見本の fitLines）。
-        let l2 = NodeRef::<Span>::new();
-        let fit = {
-            let line = row.need.line.clone().unwrap_or_default();
-            move || {
-                if let Some(el) = l2.get_untracked() {
-                    fit_line(&el, &line);
-                }
-            }
-        };
-        request_animation_frame(fit.clone());
-        let resize = window_event_listener(ev::resize, move |_| fit());
-        on_cleanup(move || resize.remove());
+        let l2 = fit_node(row.need.line.clone().unwrap_or_default());
         // 記録の無い行は mode の初めの値（見本の isOpen）。
         let name = row.name.clone();
-        let is_open = {
-            let key = name.clone();
-            move || {
-                opened
-                    .with(|m| m.get(&key).copied())
-                    .unwrap_or_else(|| expert.get())
-            }
-        };
-        let class = {
-            let (base, is_open) = (row.class.clone(), is_open.clone());
-            move || {
-                if is_open() {
-                    format!("{base} open")
-                } else {
-                    base.clone()
-                }
-            }
-        };
+        let is_open = open_state(name.clone(), opened, expert);
+        let class = open_class(row.class.clone(), is_open.clone());
         let expanded = {
             let is_open = is_open.clone();
             move || is_open().to_string()
@@ -1048,27 +1091,7 @@ mod dom {
                 m.insert(name.clone(), !now);
             });
         };
-        let key = row.open.key();
-        let open = match row.open {
-            Open::New(url) => {
-                let project = row.name.clone();
-                let click = move |_| windows::open(&project, &url);
-                view! {
-                    <button type="button" class="btn" on:click=click>
-                        <span class="lg">{label(key)}</span>
-                        <span class="sh">"↗"</span>
-                    </button>
-                }
-                .into_any()
-            }
-            Open::NotYet => view! {
-                <span class=NOT_YET_CLASS title=label(key)>
-                    <span class="lg">{label(key)}</span>
-                    <span class="sh">{NONE_MARK}</span>
-                </span>
-            }
-            .into_any(),
-        };
+        let open = open_cell(row.open, &row.name);
         view! {
             <div class=class aria-expanded=expanded on:click=toggle>
                 <div class=C_PN>
