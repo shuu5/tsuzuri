@@ -9,23 +9,6 @@
 //! 便 168（ADR-27 決定 (1)）から図の道具の写し `vendor/archify/` の全 file を path の byte 順に焼いた列も `OUT_DIR` に書く
 //! （置き場の親に写しが無いときに撃つ道具・焼く元は repo の写し 1 つ・P-6.3）。
 //! 人は型の一覧を書かない。導出できない部品目録・憲法は組み立てを失敗させる（黙って空の一覧にしない）。
-#![forbid(unsafe_code)]
-#![deny(
-    unused_must_use,
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    clippy::todo,
-    clippy::unimplemented,
-    clippy::unreachable,
-    clippy::exit,
-    clippy::indexing_slicing,
-    clippy::dbg_macro,
-    clippy::print_stdout,
-    clippy::print_stderr,
-    clippy::allow_attributes,
-    clippy::allow_attributes_without_reason
-)]
 
 use std::collections::HashSet;
 use std::env;

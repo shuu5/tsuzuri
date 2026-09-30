@@ -1,6 +1,6 @@
 //! 行 k-lint-folio-tests と k-lint-folio-deny の歯（接頭辞 klintf_）: 持ち込んだ folio の歯の根が #![cfg(test)] を置くこと・
-//! folio の 2 つの根が lint の属性を置くこと・allow の属性を置かないこと。
-//! 行 k-lint-folio-idx-b からは、根の一覧 DENY が添字（clippy::indexing_slicing）も持つ。
+//! folio の 2 つの根が lint の属性を置かず workspace の lint の表が覆うこと・allow の属性を置かないこと。
+//! 行 k-lint-folio-roots が 2 つの根の lint の一覧を消し、表が一覧 COVER の 15 の lint を持つことを見る形にした。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
@@ -56,23 +56,24 @@ const FILTER_WORDS: &str = concat!(
     "urpanel_ uword_ vocab_ wsteady_ wstrip_",
 );
 
-/// 2 つの根の頭に置く deny の lint（この順）。規則の行 R-10 の全部と条 P-24.3 の 2 つで、除外の表の R-10 の行を
-/// 消した後も表がまだ持たない lint のために残す。
-const DENY: [&str; 14] = [
-    "unused_must_use",
-    "clippy::unwrap_used",
-    "clippy::expect_used",
-    "clippy::panic",
-    "clippy::todo",
-    "clippy::unimplemented",
-    "clippy::unreachable",
-    "clippy::exit",
-    "clippy::indexing_slicing",
-    "clippy::dbg_macro",
-    "clippy::print_stdout",
-    "clippy::print_stderr",
-    "clippy::allow_attributes",
-    "clippy::allow_attributes_without_reason",
+/// 2 つの根の頭の一覧が持っていた lint（lint・表・level）。規則の行 R-10 の 13 と条 P-24.3 の 2 つで、
+/// 行 k-lint-folio-roots が根の一覧を消した後は根の Cargo.toml の workspace の lint の表が持つ。
+const COVER: [(&str, &str, &str); 15] = [
+    ("unused_must_use", "workspace.lints.rust", "deny"),
+    ("unsafe_code", "workspace.lints.rust", "forbid"),
+    ("unwrap_used", "workspace.lints.clippy", "deny"),
+    ("expect_used", "workspace.lints.clippy", "deny"),
+    ("panic", "workspace.lints.clippy", "deny"),
+    ("todo", "workspace.lints.clippy", "deny"),
+    ("unimplemented", "workspace.lints.clippy", "deny"),
+    ("unreachable", "workspace.lints.clippy", "deny"),
+    ("exit", "workspace.lints.clippy", "deny"),
+    ("indexing_slicing", "workspace.lints.clippy", "deny"),
+    ("dbg_macro", "workspace.lints.clippy", "deny"),
+    ("print_stdout", "workspace.lints.clippy", "deny"),
+    ("print_stderr", "workspace.lints.clippy", "deny"),
+    ("allow_attributes", "workspace.lints.clippy", "deny"),
+    ("allow_attributes_without_reason", "workspace.lints.clippy", "deny"),
 ];
 
 fn repo_root() -> PathBuf {
@@ -103,6 +104,22 @@ fn folio_test_roots() -> Vec<PathBuf> {
     }
     roots.sort();
     roots
+}
+
+/// 見出し `[name]` の次の行から次の見出しの前までの、井桁で始まる行と空の行を除いた行（trim・見出しが無ければ空）。
+fn section(text: &str, name: &str) -> Vec<String> {
+    let head = format!("[{name}]");
+    let mut out = Vec::new();
+    let mut inside = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            inside = t == head;
+        } else if inside && !t.is_empty() && !t.starts_with('#') {
+            out.push(t.to_string());
+        }
+    }
+    out
 }
 
 /// dir の下（下の dir も辿る）の字 .rs で終わる file。
@@ -140,28 +157,26 @@ fn klintf_test_roots_cfg_test() {
 
 #[test]
 fn klintf_src_roots_lint_attrs() {
-    let mut want: Vec<String> = vec!["#![forbid(unsafe_code)]".to_string(), "#![deny(".to_string()];
-    let last = DENY.len() - 1;
-    for (i, lint) in DENY.iter().enumerate() {
-        want.push(if i == last { format!("    {lint}") } else { format!("    {lint},") });
-    }
-    want.push(")]".to_string());
     // binary の根 src/main.rs は行 k-tz-tests で folio2/retired/ へ退役した（folio の binary は無い）。
     for rel in ["src/lib.rs", "build.rs"] {
         let path = folio_dir().join(rel);
         let text =
             fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
-        let lines: Vec<&str> = text.lines().collect();
-        let head = lines.iter().take_while(|l| l.starts_with("//!")).count();
-        let got: Vec<&str> = lines.iter().skip(head).take(want.len()).copied().collect();
-        assert_eq!(
-            got,
-            want.iter().map(String::as_str).collect::<Vec<_>>(),
-            "{} の頭の //! の続きの直後が lint の属性でない",
-            path.display()
-        );
-        let count = lines.iter().filter(|l| l.contains("#![deny(")).count();
-        assert_eq!(count, 1, "{} の #![deny( が {count} 行", path.display());
+        for attr in ["#![forbid(", "#![deny(", "#![warn("] {
+            assert!(!text.contains(attr), "{} が {attr} を含む", path.display());
+        }
+    }
+    let manifest_path = folio_dir().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)
+        .unwrap_or_else(|e| panic!("{} を読む: {e}", manifest_path.display()));
+    assert_eq!(section(&manifest, "lints"), vec!["workspace = true"], "folio の manifest の節 lints");
+    let root_path = repo_root().join("Cargo.toml");
+    let root = fs::read_to_string(&root_path)
+        .unwrap_or_else(|e| panic!("{} を読む: {e}", root_path.display()));
+    for (lint, table, level) in COVER {
+        let want = format!("{lint} = \"{level}\"");
+        let rows = section(&root, table);
+        assert!(rows.contains(&want), "根の Cargo.toml の節 {table} に {want} の行が無い");
     }
 }
 
