@@ -1,5 +1,6 @@
-//! folio v2 の命令の入口（lib の入口・行 k-tz-entry）。便 0・便 1 の `folio check` と便 2 の `folio inject`・便 45 の
-//! `folio schema` ほかを持つ。引数の列（頭は命令の名）と標準出力・標準エラーの書き先を受け、終了 code を返す。
+//! folio v2 の命令の入口（lib の入口・行 k-tz-entry）。便 0・便 1 の `folio check` と便 45 の
+//! `folio schema` ほかを持つ。口 inject と serve は行 k-tz-drop で退役させた（`folio2/retired/` の下）。
+//! 引数の列（頭は命令の名）と標準出力・標準エラーの書き先を受け、終了 code を返す。
 //! binary の `main.rs` も tz の口も同じ入口を撃つ。
 
 use std::io::Write;
@@ -9,9 +10,9 @@ use clap::{ArgGroup, Parser, Subcommand};
 
 use crate::{
     bundle, ceiling_src, derive, face, figure, findings, floor_note, freeze, gate, graph, hello,
-    init, inject, mentions, parts,
+    init, mentions, parts,
     phase::{After, Flag},
-    polarity, proposed, rules, schema, serve, sheet, site, stamp,
+    polarity, proposed, rules, schema, sheet, site, stamp,
     verdict::Verdict,
 };
 
@@ -60,25 +61,6 @@ enum Command {
         /// 止める仕掛けの一覧（極性一覧）を 1 仕掛け 1 行（名 · 段 · 極性 · 出所）と集計の 1 行で標準出力へ書く（正本が読めなければ まだ分からない 2）
         #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs", "emit_rulings", "proposed"])]
         polarity: bool,
-    },
-    /// 憲法の前文と規範文を CLAUDE.md の生成区間へ書く（--write）・検査する（--check）・出す（--print）
-    #[command(group(ArgGroup::new("mode").required(true).args(["write", "check", "print"])))]
-    Inject {
-        /// 正本の置き場（constitution.yaml と rules.yaml だけを読む）
-        #[arg(long, default_value = "design-intent")]
-        dir: PathBuf,
-        /// CLAUDE.md の path
-        #[arg(long, default_value = "CLAUDE.md")]
-        claude_md: PathBuf,
-        /// 区間の中身を導出で置き換えて書く（差が無ければ書かない・CLAUDE.md が無ければ区間だけの file を作り、marker が 1 本も無ければ末尾に区間を足す）
-        #[arg(long)]
-        write: bool,
-        /// 区間と導出の byte 一致・区間の外の規範語の行（folio2 の置き場だけ・外の置き場は数えない 1 行を出す）を検査する
-        #[arg(long)]
-        check: bool,
-        /// 導出した本文を標準出力へ書く
-        #[arg(long)]
-        print: bool,
     },
     /// 部品目録から組み立て時に導出した一覧を出す（--print）・面の class と部品の名札と行内の様式を部品目録と突き合わせる（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["check", "print"])))]
@@ -273,18 +255,6 @@ enum Command {
         /// 骨格を書く置き場（既定なし・相対なら撃った場所からの相対）
         #[arg(long)]
         dir: PathBuf,
-    },
-    /// 配信先を同じ端末の中（loopback）か tailnet の中だけで見せる（bind 先がそのどちらでもなければ起動を拒む）
-    Serve {
-        /// 配信先（folio build の --out）
-        #[arg(long)]
-        dir: PathBuf,
-        /// bind 先の IPv4（既定なし = tailnet の住所を自分で解く）
-        #[arg(long)]
-        host: Option<String>,
-        /// bind 先の port（既定 0 = 空きを OS が選ぶ）
-        #[arg(long, default_value_t = 0)]
-        port: u16,
     },
 }
 
@@ -484,29 +454,6 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
                 say!(out, "{line}");
             }
             code(verdict)
-        }
-        Command::Inject {
-            dir,
-            claude_md,
-            write,
-            check,
-            print: _,
-        } => {
-            let mode = if write {
-                inject::Mode::Write
-            } else if check {
-                inject::Mode::Check
-            } else {
-                inject::Mode::Print
-            };
-            let outcome = inject::run(&dir, &claude_md, mode);
-            if let Some(body) = &outcome.stdout {
-                let _ = out.write_all(body.as_bytes());
-            }
-            for msg in &outcome.messages {
-                say!(err, "folio inject: {msg}");
-            }
-            code(outcome.verdict)
         }
         Command::Parts {
             dir,
@@ -753,10 +700,6 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
                 say!(err, "folio init: {line}");
             }
             code(outcome.verdict)
-        }
-        Command::Serve { dir, host, port } => {
-            let verdict = serve::run(&dir, host.as_deref(), port);
-            code(verdict)
         }
     }
 }

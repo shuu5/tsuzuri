@@ -7,8 +7,9 @@ use std::path::PathBuf;
 const FOLIO2: &str = "folio2";
 const RETIRED: &str = "folio2/retired";
 
-/// 移した 11 の対（元・先）。元は folio2/ の下の元の path・先は folio2/retired/ の下。
-const MOVED: [(&str, &str); 11] = [
+/// 移した 15 の対（元・先）。元は folio2/ の下の元の path・先は folio2/retired/ の下。
+/// 後ろの 4 対は行 k-tz-drop（folio の口 inject と serve の退役）。
+const MOVED: [(&str, &str); 15] = [
     ("folio2/CLAUDE.md", "folio2/retired/claude-md.txt"),
     (
         "folio2/.beads/.gitignore",
@@ -35,6 +36,22 @@ const MOVED: [(&str, &str); 11] = [
         "folio2/retired/rust-toolchain.txt",
     ),
     ("folio2/scripts/bdw", "folio2/retired/scripts/bdw"),
+    (
+        "folio2/crates/folio/src/inject.rs",
+        "folio2/retired/crates/folio/src/inject.rs",
+    ),
+    (
+        "folio2/crates/folio/src/serve.rs",
+        "folio2/retired/crates/folio/src/serve.rs",
+    ),
+    (
+        "folio2/crates/folio/tests/inject.rs",
+        "folio2/retired/crates/folio/tests/inject.rs",
+    ),
+    (
+        "folio2/crates/folio/tests/serve.rs",
+        "folio2/retired/crates/folio/tests/serve.rs",
+    ),
 ];
 
 /// 道具が名で探す名。
@@ -109,7 +126,7 @@ fn f2ret_files_moved_to_retired() {
     entries(RETIRED, &mut all);
     let files: BTreeSet<&str> = all.iter().map(String::as_str).filter(|p| is_file(p)).collect();
     let want: BTreeSet<&str> = MOVED.iter().map(|(_, to)| *to).collect();
-    assert_eq!(files, want, "{RETIRED} の下の file は移した 11 本だけ");
+    assert_eq!(files, want, "{RETIRED} の下の file は移した 15 本だけ");
 }
 
 #[test]

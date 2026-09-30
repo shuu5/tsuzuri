@@ -738,11 +738,12 @@ fn retired_render_help_does_not_list_render() {
 
 /// 憲法 P-1 の機構: 公開する命令（subcommand）の一覧は閉じた一覧と全数で一致し、採否を決める口はその一覧に無い。
 /// 一覧を足すときはこの歯と憲法 P-1 の機構の注を同じ便で直す（P-1.2・天井の 12 周目の実態 F-1）。
+/// 口 inject と serve は行 k-tz-drop で退役させた（`folio2/retired/` の下）。
 #[test]
 fn p1_commands_closed_list() {
-    const CLOSED: [&str; 14] = [
-        "check", "inject", "parts", "face", "figure", "build", "derive", "intake", "hello", "ceiling",
-        "schema", "graph", "init", "serve",
+    const CLOSED: [&str; 12] = [
+        "check", "parts", "face", "figure", "build", "derive", "intake", "hello", "ceiling", "schema",
+        "graph", "init",
     ];
     let out = Command::new(env!("CARGO_BIN_EXE_folio"))
         .arg("--help")

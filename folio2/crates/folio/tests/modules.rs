@@ -55,7 +55,6 @@ const LAYERS: &[(&str, u8)] = &[
     ("freeze", 3),
     ("graph", 3),
     ("init", 3),
-    ("inject", 3),
     ("proposed", 3),
     ("schema", 3),
     ("sheet", 3),
@@ -76,7 +75,6 @@ const LAYERS: &[(&str, u8)] = &[
     ("hello", 5),
     ("lib", 5),
     ("main", 5),
-    ("serve", 5),
     ("site", 5),
 ];
 
