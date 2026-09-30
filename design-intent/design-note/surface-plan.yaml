@@ -394,6 +394,7 @@ sections:
       - {id: k-lint-folio, doc: surface-wave24a}
       - {id: k-tz-tests, doc: surface-wave24a}
       - {id: m-doctor-hold, doc: surface-wave24a}
+      - {id: k-size-folio, doc: surface-wave24a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
