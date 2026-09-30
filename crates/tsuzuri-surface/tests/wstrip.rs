@@ -45,6 +45,8 @@ fn wstrip_release_profile_keys() {
         "workspace",
         "workspace.package",
         "workspace.dependencies",
+        "workspace.lints.clippy",
+        "workspace.lints.rust",
         "profile.release",
     ];
     want.sort_unstable();

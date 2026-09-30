@@ -1,0 +1,9 @@
+# 行 k-lint-base: 規則の行 R-4 の関数の粒度（行 60・複雑度 15）を lint の閾値に写し、歯の範囲の例外（規則の行 R-10 の 5 つの書き方・条 P-24.3 の後半）を宣言する。
+# 引数の閾値は置かない（too_many_arguments を表に足す行が置く）。clippy は member の dir から上へ最初の clippy.toml を読むので、member の dir と根までの間に別の file を置かない（xtask の歯 klint_ が見る）。
+too-many-lines-threshold = 60
+cognitive-complexity-threshold = 15
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-print-in-tests = true

@@ -22,6 +22,18 @@ license = "MIT OR Apache-2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# 行 k-lint-base: 規則の行 R-10 の書き方（条 P-24.1）を workspace の lint の表で deny にする。表は違反が 0 になった lint から順に足し、直す行と表に足す行は同じ行にする（xtask の歯 klint_ が表と一覧 ENABLED を照らす）。
+# 段の並び: この行（違反 0 の 5 つ）→ 歯の根の cfg(test)（k-lint-tests-face・k-lint-tests）→ print・expect・添字・引数・関数の粒度の直しと表の足し（後の行）。
+# 持ち込んだ folio は除外の表 carry-exclusions.toml の R-10 の行が在る間は表を継がず（manifest に [lints] を置かない）、行 k-lint-folio が除外を消して継がせる。
+[workspace.lints.rust]
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+todo = "deny"
+unimplemented = "deny"
+exit = "deny"
+dbg_macro = "deny"
+
 # 行 g-strip: release の profile の strip で面の wasm の関数の名の表（name の節）を抜く。
 # opt-level と lto は組みの時間を測ってから別に決める。
 [profile.release]

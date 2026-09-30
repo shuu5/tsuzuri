@@ -46,3 +46,6 @@ web-sys = { version = "0.3", features = [
 # 歯は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で fixture を読む。
 [dev-dependencies]
 tsuzuri-boundary = { path = "../tsuzuri-boundary" }
+
+[lints]
+workspace = true
