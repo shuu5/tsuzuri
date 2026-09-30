@@ -384,6 +384,9 @@ sections:
       - {id: k-lint-tests-face, doc: surface-wave24a}
       - {id: k-lint-tests, doc: surface-wave24a}
       - {id: m-big-copies, doc: surface-wave24a}
+      - {id: k-lint-folio-tests, doc: surface-wave24a}
+      - {id: k-tz-drop, doc: surface-wave24a}
+      - {id: k-tz-self, doc: surface-wave24a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
