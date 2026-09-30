@@ -70,10 +70,14 @@ impl Vocab {
     }
 }
 
-/// 面の crate に写した語彙（最初に引いたときに 1 度だけ読む）。
+/// 面の crate に写した語彙（最初に引いたときに 1 度だけ読む・読めなければ空の語彙で、見出しは語彙表に無いの字）。
 pub fn vocab() -> &'static Vocab {
     static VOCAB: OnceLock<Vocab> = OnceLock::new();
-    VOCAB.get_or_init(|| Vocab::parse(SOURCE).expect("面の crate の vocab.json が読める"))
+    VOCAB.get_or_init(|| {
+        Vocab::parse(SOURCE).unwrap_or_else(|_| Vocab {
+            terms: BTreeMap::new(),
+        })
+    })
 }
 
 /// 鍵の見出しの語。

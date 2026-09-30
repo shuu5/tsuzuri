@@ -1,7 +1,7 @@
 //! 表示先の設定と窓を開く頼みの受付の歯（行 e-stage-target・接頭辞 dstg_・要件 FR16・判断の記録 ADR-15 の決定 (2)(6)）。
 //! 偽の tz は sh の script で、受けた argv を 1 行と、環境の CLAUDECODE の値（無ければ字 none）を seat= の 1 行で記録に足し、
-//! cwd を別の記録に足し、印の file rc が在れば rc 1・無ければ置いた字を出す。server は同じ process の thread で
-//! Server::bind_with（偽の bd と器と git）で立て、窓の口の歯だけは tz の binary を環境 CLAUDECODE=1 と --tz で子 process として立てる。
+//! cwd を別の記録に足し、印の file rc が在れば rc 1・無ければ置いた字を出す。server は tz の binary を環境 CLAUDECODE=1 と
+//! 偽の bd と器と --tz で子 process として立てる（歯の process の環境は書き替えない）。
 //! host の面は fixture tests/fixtures/stage/terminals.toml に群の宣言（anchor は場の proj-a と proj-b の dir）を足した字。
 #![cfg(test)]
 
@@ -11,10 +11,8 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, Command as Process, Stdio};
-use std::thread;
 use std::time::Duration;
 
-use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_boundary::stage::cli::{self, Setting, parse_target};
 use tsuzuri_boundary::stage::target::{self, Targets as Setup};
 use tsuzuri_boundary::stagecall::{
@@ -75,13 +73,6 @@ fn src(rel: &str) -> String {
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-/// 環境変数 CLAUDECODE を 1 に置く（席の中の撃ちの印・子の環境から除かれることを見る）。
-/// nextest は歯ごとに process を分け、この呼びは server の thread を起こす前にだけ撃つ。
-fn seat_mark() {
-    // SAFETY: server の thread と子 process を起こす前の、この歯の process の中の 1 回の書き。
-    unsafe { std::env::set_var("CLAUDECODE", "1") };
-}
-
 /// 歯ごとの作業場（repo は proj-a・other は proj-b・state は host の面と群の宣言）。
 struct Place {
     root: PathBuf,
@@ -130,7 +121,6 @@ impl Place {
                 .replace("ROOT", &root),
         );
         script(&place.program("bd"), "echo '[]'");
-        script(&place.program("git"), "exit 1");
         place.reply(REPLY_LINE);
         place
     }
@@ -149,24 +139,47 @@ impl Place {
         fs::write(self.root.join("rc"), "").expect("印");
     }
 
-    /// server を立てる（seat の印を置き、偽の tz と器と bd と git で bind_with・`state_dir` が偽なら --state-dir の無い server）。
-    fn serve(&self, state_dir: bool) -> SocketAddr {
-        seat_mark();
-        let config = Config {
-            bd: self.program("bd").into(),
-            state_dir: state_dir.then(|| self.state.clone()),
-            scribe2: self.program("scribe2").into(),
-            tz: self.program("tz").into(),
-            ..Config::new(
-                self.repo.clone(),
-                "127.0.0.1:0".parse().expect("bind 先"),
-                self.files.clone(),
-            )
+    /// server を tz の binary の子 process で立てる（環境 CLAUDECODE=1 の席の印を子にだけ渡し、偽の tz と器と bd・
+    /// `state_dir` が偽なら --state-dir の無い server）。返りの Served を落とすと止める。
+    fn serve(&self, state_dir: bool) -> (Served, SocketAddr) {
+        let mut cmd = Process::new(env!("CARGO_BIN_EXE_tz"));
+        cmd.args(["surface", "serve", "--repo"])
+            .arg(&self.repo)
+            .args(["--bind", "127.0.0.1:0", "--files"])
+            .arg(&self.files)
+            .arg("--bd")
+            .arg(self.program("bd"));
+        if state_dir {
+            cmd.arg("--state-dir").arg(&self.state);
+        }
+        let mut child = cmd
+            .arg("--scribe2")
+            .arg(self.program("scribe2"))
+            .arg("--tz")
+            .arg(self.program("tz"))
+            .env("CLAUDECODE", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("tz surface serve");
+        let mut stderr = BufReader::new(child.stderr.take().expect("標準エラー"));
+        let mut addr = None;
+        for _ in 0..20 {
+            let mut line = String::new();
+            if stderr.read_line(&mut line).expect("標準エラー") == 0 {
+                break;
+            }
+            if let Some(rest) = line.trim().strip_prefix("tz surface serve: http://") {
+                addr = rest.trim_end_matches('/').parse::<SocketAddr>().ok();
+                break;
+            }
+        }
+        let served = Served {
+            child,
+            _stderr: stderr,
         };
-        let server = Server::bind_with(&config, self.program("git").as_os_str()).expect("起動");
-        let addr = server.local_addr().expect("口の住所");
-        thread::spawn(move || server.run());
-        addr
+        (served, addr.expect("口の住所の行"))
     }
 
     /// 偽の tz の記録の行（1 回に argv の行と seat= の行）。
@@ -512,7 +525,7 @@ fn dstg_show_json_reads_setting() {
 #[test]
 fn dstg_route_reads_via_tz() {
     let place = Place::new("route-reads");
-    let addr = place.serve(false);
+    let (_served, addr) = place.serve(false);
     place.reply(&format!("{WIRE}\n"));
     let reply = send(addr, "GET", PATH, "", "");
     assert_eq!(code(&reply), (200, WIRE));
@@ -540,7 +553,7 @@ fn dstg_route_reads_via_tz() {
 #[test]
 fn dstg_own_post_order() {
     let place = Place::new("own-post");
-    let addr = place.serve(false);
+    let (_served, addr) = place.serve(false);
     let port = addr.port();
     let set = r#"{"to":"term-b"}"#;
 
@@ -596,7 +609,7 @@ fn dstg_own_post_order() {
 #[test]
 fn dstg_all_post_scope() {
     let place = Place::new("all-post");
-    let addr = place.serve(true);
+    let (_served, addr) = place.serve(true);
     let port = addr.port();
 
     let reply = send(
@@ -652,7 +665,7 @@ fn dstg_all_post_scope() {
     }
 
     // state dir の無い server は --repo の project だけを受ける。
-    let bare = place.serve(false);
+    let (_bare_served, bare) = place.serve(false);
     place.clear();
     let reply = post(bare, ALL_PATH, r#"{"project":{"project":"proj-b","to":"term-b"}}"#);
     assert_eq!(code(&reply), (404, NO_PROJECT));
@@ -678,42 +691,7 @@ impl Drop for Served {
 #[test]
 fn dstg_open_drops_seat_mark() {
     let place = Place::new("open");
-    let mut child = Process::new(env!("CARGO_BIN_EXE_tz"))
-        .args(["surface", "serve", "--repo"])
-        .arg(&place.repo)
-        .args(["--bind", "127.0.0.1:0", "--files"])
-        .arg(&place.files)
-        .arg("--bd")
-        .arg(place.program("bd"))
-        .arg("--state-dir")
-        .arg(&place.state)
-        .arg("--scribe2")
-        .arg(place.program("scribe2"))
-        .arg("--tz")
-        .arg(place.program("tz"))
-        .env("CLAUDECODE", "1")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("tz surface serve");
-    let mut stderr = BufReader::new(child.stderr.take().expect("標準エラー"));
-    let mut addr = None;
-    for _ in 0..20 {
-        let mut line = String::new();
-        if stderr.read_line(&mut line).expect("標準エラー") == 0 {
-            break;
-        }
-        if let Some(rest) = line.trim().strip_prefix("tz surface serve: http://") {
-            addr = rest.trim_end_matches('/').parse::<SocketAddr>().ok();
-            break;
-        }
-    }
-    let served = Served {
-        child,
-        _stderr: stderr,
-    };
-    let addr = addr.expect("口の住所の行");
+    let (served, addr) = place.serve(true);
     let port = addr.port();
 
     let reply = send(
@@ -761,7 +739,7 @@ fn dstg_open_drops_seat_mark() {
 #[test]
 fn dstg_post_needs_origin() {
     let place = Place::new("needs-origin");
-    let addr = place.serve(true);
+    let (_served, addr) = place.serve(true);
     place.reply(&format!("{WIRE}\n"));
     let reply = send(addr, "GET", PATH, "", "");
     assert_eq!(code(&reply), (200, WIRE), "頭 Origin の無い GET は通る");

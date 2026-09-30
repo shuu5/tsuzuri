@@ -31,14 +31,19 @@ const MAP: [(&str, &str, &str, &str); 18] = [
 ];
 
 /// 今の表の lint（表に足す行がこの一覧も直す）。
-const ENABLED: [&str; 7] = [
+const ENABLED: [&str; 12] = [
     "unused_must_use",
+    "unsafe_code",
     "unwrap_used",
+    "expect_used",
     "panic",
     "todo",
     "unimplemented",
+    "unreachable",
     "exit",
     "dbg_macro",
+    "allow_attributes",
+    "allow_attributes_without_reason",
 ];
 
 fn repo_root() -> PathBuf {

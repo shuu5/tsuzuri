@@ -442,6 +442,7 @@ pub struct Seat {
 
 impl Seat {
     /// 選んだ幅の稼働の記録。
+    #[expect(clippy::expect_used, reason = "3 つの幅の記録を持つ")]
     pub fn strip(&self, span: Span) -> &Strip {
         self.strips
             .iter()

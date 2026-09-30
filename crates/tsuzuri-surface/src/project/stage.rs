@@ -196,20 +196,20 @@ impl Own {
     }
 }
 
-/// 置く・戻すの要求の本文（Some が置く名・None が上書きを外す）。
+/// 置く・戻すの要求の本文（Some が置く名・None が上書きを外す・電文の字にできなければ空の本文で、server が断る）。
 pub fn own_body(to: Option<&str>) -> String {
     wire::encode(&OwnTarget {
         to: to.map(str::to_string),
     })
-    .expect("名か null だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
-/// 窓を開く要求の本文（None が --repo の project）。
+/// 窓を開く要求の本文（None が --repo の project・電文の字にできなければ空の本文）。
 pub fn open_body(project: Option<&str>) -> String {
     wire::encode(&OpenRequest {
         project: project.map(str::to_string),
     })
-    .expect("名か null だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
 /// 送った後の 1 行。

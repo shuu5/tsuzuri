@@ -172,7 +172,7 @@ pub fn request_body(chosen: &[&Row], verbatim: &str) -> String {
         items,
         verbatim: verbatim.to_string(),
     })
-    .expect("字の欄だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
 /// 502 で残った 1 行（問いの id・送った行の題〔無ければ問いの id の字〕・閉じていない行の裁定の id）。

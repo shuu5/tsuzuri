@@ -197,7 +197,7 @@ impl Place {
                 "tick" => t.tick_status = None,
                 "doctor" => t.doctor = None,
                 "usage" => t.usage = None,
-                _ => unreachable!(),
+                other => panic!("知らない出力の名: {other}"),
             }
         }
         if group_of(&t).is_none() {

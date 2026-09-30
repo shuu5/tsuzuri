@@ -272,6 +272,7 @@ pub const JUDGES: [Judge; 5] = [
 ];
 
 /// 判定の写し（表から引く）。
+#[expect(clippy::expect_used, reason = "判定の表は 5 値の全部を持つ")]
 pub fn judge(value: LedgerJudge) -> Judge {
     *JUDGES
         .iter()
@@ -337,6 +338,7 @@ pub const UNREF_KINDS: [(UnreflectedKind, &str); 3] = [
 ];
 
 /// 未反映の種類の名（表から引く）。
+#[expect(clippy::expect_used, reason = "種類の表は 3 つの全部を持つ")]
 pub fn kind_name(kind: UnreflectedKind) -> &'static str {
     UNREF_KINDS
         .iter()
@@ -832,6 +834,7 @@ pub struct UnrefList {
 }
 
 /// 次の 1 手の語の鍵（表から引く）。
+#[expect(clippy::expect_used, reason = "次の 1 手の表は 3 つの全部を持つ")]
 fn next_key(kind: UnreflectedKind) -> &'static str {
     UNREF_NEXT
         .iter()

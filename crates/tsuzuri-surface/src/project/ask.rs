@@ -451,14 +451,14 @@ pub fn key_action(composing: bool, ctrl_or_meta: bool, key: &str) -> KeyAction {
     }
 }
 
-/// 要求の本文（見た版の要約値は card の digest の字のまま・逐語は答えの欄の字のまま）。
+/// 要求の本文（見た版の要約値は card の digest の字のまま・逐語は答えの欄の字のまま・電文の字にできなければ空の本文で、server が断る）。
 pub fn request_body(card: &Card, verbatim: &str) -> String {
     wire::encode(&RulingRequest {
         question: card.id.clone(),
         seen_digest: card.digest.clone(),
         verbatim: verbatim.to_string(),
     })
-    .expect("字の欄だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
 /// 送った後の card の状態。

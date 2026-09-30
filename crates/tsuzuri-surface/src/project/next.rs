@@ -80,6 +80,7 @@ pub const ANSWER_LINK: &str = "答える ›";
 pub const GAPS_LINK: &str = "orchestrator に任せる（見るだけ） ›";
 
 /// 種類の語の鍵（表から引く）。
+#[expect(clippy::expect_used, reason = "7 種の表は種類の全部を持つ")]
 pub fn key(kind: NextMove) -> &'static str {
     KEYS.iter()
         .find(|(k, _)| *k == kind)

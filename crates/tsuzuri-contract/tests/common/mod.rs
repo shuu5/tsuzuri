@@ -2,7 +2,7 @@
 //! 見本の値は持たない（見本は群の file に在る）。snapshot の読み比べと往復と閉じた列の語の数えをここに 1 つだけ置く。
 //! 群の binary はどれも共通の手の一部だけを使うので、使わない手を咎めない。
 
-#![allow(dead_code)]
+#![expect(dead_code, reason = "群の歯の binary はどれも共通の手の一部だけを使う")]
 
 use std::collections::BTreeSet;
 use std::fmt::Debug;

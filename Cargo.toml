@@ -27,14 +27,19 @@ serde_json = "1"
 # 持ち込んだ folio は除外の表 carry-exclusions.toml の R-10 の行が在る間は表を継がず（manifest に [lints] を置かない）、行 k-lint-folio が除外を消して継がせる。
 [workspace.lints.rust]
 unused_must_use = "deny"
+unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
+expect_used = "deny"
 panic = "deny"
 todo = "deny"
 unimplemented = "deny"
+unreachable = "deny"
 exit = "deny"
 dbg_macro = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
 
 # 行 g-strip: release の profile の strip で面の wasm の関数の名の表（name の節）を抜く。
 # opt-level と lto は組みの時間を測ってから別に決める。

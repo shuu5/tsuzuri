@@ -66,11 +66,12 @@ fn exit_code(rc: i32) -> ExitCode {
     ExitCode::from(u8::try_from(rc).unwrap_or(1))
 }
 
+/// workspace の根（xtask の manifest の dir の親・親の無い path なら字 .. を足した path）。
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest
         .parent()
-        .expect("xtask は workspace の root の直下に在る")
-        .to_path_buf()
+        .map_or_else(|| manifest.join(".."), Path::to_path_buf)
 }
 
 /// 歯の段を分ける変数（CI の matrix が job ごとに `count:K/N` を渡す）。無ければ歯の全部を撃つ。

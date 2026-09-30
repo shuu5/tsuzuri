@@ -493,7 +493,7 @@ fn server_acct_doc_matches_core() {
             assert!(matches!(r.runs, Reading::Known(_)), "{p}: {:?}", r.runs);
         }
         let Reading::Known(seat) = &row(&got, "proj-a").seat else {
-            unreachable!()
+            panic!("proj-a の席が読めない: {:?}", row(&got, "proj-a").seat)
         };
         assert_eq!(seat.state, SeatState::Run, "orchestrator の席の記録を読む");
         // 終わる時刻は器の合図の健康の行の grace_left=1200 に今を足した時刻（欄の無い席の行は無し）。

@@ -173,14 +173,14 @@ pub fn item_path(question: &BeadId) -> String {
     format!("{ITEM_PATH}{question}")
 }
 
-/// 取り消しの要求の本文（逐語は理由の欄の字のまま）。
+/// 取り消しの要求の本文（逐語は理由の欄の字のまま・電文の字にできなければ空の本文で、server が断る）。
 pub fn revoke_body(t: &Revoke, verbatim: &str) -> String {
     wire::encode(&RevokeRequest {
         question: t.question.clone(),
         ruling: t.ruling.clone(),
         verbatim: verbatim.to_string(),
     })
-    .expect("字の欄だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
 /// 取り消しの欄を出すか（問いの 1 本の引きの電文で、その決定を取り消せるときだけ）。

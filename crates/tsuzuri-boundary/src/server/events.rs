@@ -226,21 +226,22 @@ impl Hub {
             .is_some_and(|tx| tx.send(()).is_ok())
     }
 
-    /// 台帳の変化を全員に送る（切れた受け手は外す）。
+    /// 台帳の変化を全員に送る（切れた受け手は外す・電文の字にできなければ送らない）。
     pub fn ledger_changed(&self, at: u64) {
-        let data = wire::encode(&LedgerChanged { at }).expect("LedgerChanged は JSON になる");
-        self.send(LEDGER_CHANGED_EVENT, &data);
+        if let Ok(data) = wire::encode(&LedgerChanged { at }) {
+            self.send(LEDGER_CHANGED_EVENT, &data);
+        }
     }
 
     /// 板の変化（器の event log か設計文書か席か account か台帳の形の行）を、動いた種類を載せて全員に送る
-    /// （切れた受け手は外す）。
+    /// （切れた受け手は外す・電文の字にできなければ送らない）。
     pub fn board_changed(&self, kinds: &[ChangeKind], at: u64) {
-        let data = wire::encode(&BoardChanged {
+        if let Ok(data) = wire::encode(&BoardChanged {
             at,
             kinds: kinds.to_vec(),
-        })
-        .expect("BoardChanged は JSON になる");
-        self.send(BOARD_CHANGED_EVENT, &data);
+        }) {
+            self.send(BOARD_CHANGED_EVENT, &data);
+        }
     }
 
     /// event の名と data の字で frame を組んで全員に送る。

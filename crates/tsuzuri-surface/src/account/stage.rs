@@ -93,19 +93,18 @@ pub fn picked(line: &Line, names: &[String]) -> Option<String> {
         .or_else(|| names.first().cloned())
 }
 
-/// 一括で置く要求の本文。
+/// 一括で置く要求の本文（電文の字にできなければ空の本文で、server が断る）。
 pub fn all_body(to: &str) -> String {
-    wire::encode(&Targets::All { to: to.to_string() })
-        .expect("名だけの要求は電文の字にできる")
+    wire::encode(&Targets::All { to: to.to_string() }).unwrap_or_default()
 }
 
-/// project ごとに置く（Some）か上書きを外す（None）要求の本文。
+/// project ごとに置く（Some）か上書きを外す（None）要求の本文（電文の字にできなければ空の本文）。
 pub fn project_body(project: &str, to: Option<&str>) -> String {
     wire::encode(&Targets::Project {
         project: project.to_string(),
         to: to.map(str::to_string),
     })
-    .expect("名か null だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
 #[cfg(target_arch = "wasm32")]

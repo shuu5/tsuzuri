@@ -566,7 +566,7 @@ fn epolq_create_argv_words() {
         ..
     } = bare
     else {
-        unreachable!()
+        panic!("子を足す書きでない: {bare:?}")
     };
     let doc = LedgerWrite::CreateChild {
         parent,
@@ -626,7 +626,7 @@ fn epolq_create_form() {
     assert_eq!(text.lines().nth(1), Some("技術 = 範囲 = fx-p.2"));
     assert_eq!(labels(&one)[1], "policy-scope:fx-p.2");
     let LedgerWrite::CreateChild { title, .. } = &one else {
-        unreachable!()
+        panic!("子を足す書きでない: {one:?}")
     };
     assert_eq!(title, "方針（範囲 = fx-p.2）");
 

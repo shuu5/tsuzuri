@@ -139,6 +139,7 @@ pub const KINDS: [KindRow; 20] = [
 /// 種類の語の鍵の頭。
 pub const KIND_KEY_PREFIX: &str = "k:";
 
+#[expect(clippy::expect_used, reason = "種類の表は種類の 20 個の全部を持つ")]
 fn row(kind: NodeKind) -> &'static KindRow {
     KINDS
         .iter()

@@ -150,6 +150,7 @@ impl Lane {
 }
 
 /// 列の見せ方（4 列の表から引く）。
+#[expect(clippy::expect_used, reason = "4 列の表は列の全部を持つ")]
 pub fn lane(column: PipelineColumn) -> Lane {
     LANES
         .into_iter()
@@ -298,6 +299,7 @@ pub fn landed_today(card: &PipelineCard, now: EpochSecs) -> bool {
 }
 
 /// 着地の後の CI の読みの語の辞書の鍵。
+#[expect(clippy::expect_used, reason = "鍵の表は読みの全部を持つ")]
 pub fn ci_key(ci: Ci) -> &'static str {
     CI_KEYS
         .into_iter()

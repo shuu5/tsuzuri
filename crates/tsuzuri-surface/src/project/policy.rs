@@ -52,13 +52,13 @@ pub fn can_send(text: &str, sending: bool) -> bool {
     ask::can_send(text, sending)
 }
 
-/// 要求の本文（scope は ALL_SCOPE の字 all・逐語は欄の字のまま）。
+/// 要求の本文（scope は ALL_SCOPE の字 all・逐語は欄の字のまま・電文の字にできなければ空の本文で、server が断る）。
 pub fn request_body(verbatim: &str) -> String {
     wire::encode(&PolicyRequest {
         scope: ALL_SCOPE.to_string(),
         verbatim: verbatim.to_string(),
     })
-    .expect("字の欄だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
 /// 送った後の block の状態。

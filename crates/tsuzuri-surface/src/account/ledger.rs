@@ -133,7 +133,7 @@ pub fn without_param(search: &str, key: &str) -> String {
     format!("?{}", parts.join("&"))
 }
 
-/// 判定の位（JUDGES の表の順 = 悪い順・台帳が Unknown は台帳なしと同じ位）。
+/// 判定の位（JUDGES の表の順 = 悪い順・台帳が Unknown は台帳なしと同じ位・表に無い判定は後ろ）。
 pub fn rank(ledger: &Reading<LedgerStats>) -> usize {
     let value = match ledger {
         Reading::Known(s) => s.judge,
@@ -142,7 +142,7 @@ pub fn rank(ledger: &Reading<LedgerStats>) -> usize {
     JUDGES
         .iter()
         .position(|j| j.judge == value)
-        .expect("判定の表は 5 値の全部を持つ")
+        .unwrap_or(JUDGES.len())
 }
 
 /// 行の電文の projects の中の位置の並び（どの並べも同じ値は電文の projects の順）。

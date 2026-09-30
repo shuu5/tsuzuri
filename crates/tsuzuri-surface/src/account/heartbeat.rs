@@ -75,13 +75,13 @@ pub fn command(to: Heartbeat, target: &str) -> String {
     format!("scribe2 seat heartbeat {} --target {target}", word(to))
 }
 
-/// 要求の本文（project と向きだけ）。
+/// 要求の本文（project と向きだけ・電文の字にできなければ空の本文で、server が断る）。
 pub fn request_body(project: &str, to: Heartbeat) -> String {
     wire::encode(&HeartbeatRequest {
         project: project.to_string(),
         to,
     })
-    .expect("字と閉じた値だけの要求は電文の字にできる")
+    .unwrap_or_default()
 }
 
 /// project の今の heartbeat（電文の projects の同じ名の行の席の card・行か card か heartbeat が読めなければ測れていない）。
@@ -170,12 +170,11 @@ pub enum Dest {
 }
 
 impl Dest {
-    /// 送りの本文（Account は project と向き・Seat は向きだけ）。
+    /// 送りの本文（Account は project と向き・Seat は向きだけ・電文の字にできなければ空の本文）。
     pub fn body(self, t: &Toggle) -> String {
         match self {
             Dest::Account => t.request_body(),
-            Dest::Seat => wire::encode(&SeatHeartbeatRequest { to: t.to })
-                .expect("閉じた値だけの要求は電文の字にできる"),
+            Dest::Seat => wire::encode(&SeatHeartbeatRequest { to: t.to }).unwrap_or_default(),
         }
     }
 }

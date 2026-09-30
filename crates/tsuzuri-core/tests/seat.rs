@@ -451,7 +451,7 @@ fn seatcard_unread_text_touches_only_its_fields() {
                 want.moves = Reading::Unknown;
                 want.refused = Reading::Unknown;
             }
-            _ => unreachable!(),
+            other => panic!("知らない欄の名: {other}"),
         }
         assert_eq!(got, want, "{what} が無い");
     }

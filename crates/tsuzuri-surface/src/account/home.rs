@@ -116,7 +116,7 @@ fn rank(next: &Reading<NextStep>) -> usize {
         Reading::Known(s) => NextMove::ALL
             .iter()
             .position(|k| *k == s.lead)
-            .expect("lead は 7 種のどれか"),
+            .unwrap_or(NextMove::ALL.len()),
         Reading::Unknown => NextMove::ALL.len(),
     }
 }
