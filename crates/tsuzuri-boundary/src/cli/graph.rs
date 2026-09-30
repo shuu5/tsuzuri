@@ -248,18 +248,8 @@ pub fn run(rest: &[&str]) -> u8 {
             )
         }
         Mode::Design => {
-            let design = Design::new(&args.repo, &args.folio);
-            let texts = Texts {
-                design: design.text().unwrap_or_default(),
-                summary: design.summary().unwrap_or_default(),
-                ..Texts::default()
-            };
-            let floors = Floors {
-                bare: Reading::Unknown,
-                unfielded: Reading::Unknown,
-                landed: Reading::Unknown,
-            };
-            (design_view(&board::graph(&texts)), None, None, floors)
+            let (doc, floors) = design_doc(&args);
+            (doc, None, None, floors)
         }
     };
     if !doc.unread.is_empty() {
@@ -279,6 +269,22 @@ pub fn run(rest: &[&str]) -> u8 {
             }
         },
     }
+}
+
+/// --design の読みの電文と床（設計の字だけを読み、床は全部まだ分からない）。
+fn design_doc(args: &Args) -> (GraphDoc, Floors) {
+    let design = Design::new(&args.repo, &args.folio);
+    let texts = Texts {
+        design: design.text().unwrap_or_default(),
+        summary: design.summary().unwrap_or_default(),
+        ..Texts::default()
+    };
+    let floors = Floors {
+        bare: Reading::Unknown,
+        unfielded: Reading::Unknown,
+        landed: Reading::Unknown,
+    };
+    (design_view(&board::graph(&texts)), floors)
 }
 
 /// --project の置き場ごとに読み取りの bd を 1 本ずつ並べて撃ち、外の台帳の読みを置き場の順に返す

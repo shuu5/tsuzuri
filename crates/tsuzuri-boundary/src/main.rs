@@ -128,6 +128,23 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             return Err(format!("{name} が 2 度ある"));
         }
     }
+    build(
+        [repo, bind, files],
+        [bd, state_dir, folio, bdw, seat, scribe2, tz],
+        read_only,
+        projects,
+    )
+}
+
+/// 読んだ引数から server の設定を組む（3 つの引数の欠けと省ける引数の空の値と bind 先の形を断る）。
+fn build(
+    required: [Option<&str>; 3],
+    optional: [Option<&str>; 7],
+    read_only: bool,
+    projects: Vec<PathBuf>,
+) -> Result<Config, String> {
+    let [repo, bind, files] = required;
+    let [bd, state_dir, folio, bdw, seat, scribe2, tz] = optional;
     let (Some(repo), Some(bind), Some(files)) = (repo, bind, files) else {
         return Err("--repo と --bind と --files の 3 つが要る".into());
     };

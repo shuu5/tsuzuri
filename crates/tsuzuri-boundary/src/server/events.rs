@@ -199,7 +199,12 @@ impl Hub {
         };
         thread::spawn(move || {
             let _held: Sender<()> = tx;
-            watch(&weak, &wake, state, mark, read, timing.poll, ledger_reread(timing));
+            let link = Link {
+                hub: &weak,
+                wake: &wake,
+                poll: timing.poll,
+            };
+            watch(link, state, mark, read, ledger_reread(timing));
         });
     }
 
@@ -351,21 +356,29 @@ where
         last,
         listening: false,
     };
-    thread::spawn(move || watch(&weak, &wake, state, mark, read, poll, reread));
+    thread::spawn(move || {
+        let link = Link {
+            hub: &weak,
+            wake: &wake,
+            poll,
+        };
+        watch(link, state, mark, read, reread)
+    });
     hub
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-boundary-src が直してこの属性を外す"
-)]
+/// 周期の読みの thread が見る Hub への弱い参照と合図の受け口と待ちの上限。
+struct Link<'a> {
+    hub: &'a Weak<Hub>,
+    wake: &'a Receiver<()>,
+    poll: Duration,
+}
+
 fn watch<K: PartialEq, R: PartialEq>(
-    hub: &Weak<Hub>,
-    wake: &Receiver<()>,
+    Link { hub, wake, poll }: Link<'_>,
     mut state: Watch<K, R>,
     mut mark: impl FnMut() -> K,
     mut read: impl FnMut() -> R,
-    poll: Duration,
     reread: impl Fn(&K, &R) -> Duration,
 ) {
     loop {

@@ -178,12 +178,15 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
         return Outcome::CloseFailed(id);
     }
     if let Some(d) = writer.delivery.clone() {
-        let (writer, ledger, ruling) = (writer.clone(), ledger.clone(), id.clone());
-        let pending = vec![Pending {
-            question: req.question.clone(),
-            ruling: id.clone(),
-        }];
-        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &ruling, &pending, PACE));
+        let (writer, ledger) = (writer.clone(), ledger.clone());
+        let parcel = Parcel {
+            id: id.clone(),
+            pending: vec![Pending {
+                question: req.question.clone(),
+                ruling: id.clone(),
+            }],
+        };
+        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &parcel, PACE));
     }
     Outcome::Recorded(RulingResponse {
         ruling: id,
@@ -231,7 +234,12 @@ pub fn revoke(req: &RevokeRequest, ledger: &Source, writer: &Writer, now: EpochS
         let Ok(id) = RulingId::new(pending) else {
             return Revoked::IdShape;
         };
-        return reopen(req, ledger, writer, id, now, true);
+        let done = RevokeResponse {
+            ruling: id,
+            recorded_at: now,
+            reopened_only: true,
+        };
+        return reopen(req, ledger, writer, done);
     }
     let Ok(id) = next_id(&req.question, &item.notes, &minute(now)) else {
         return Revoked::IdShape;
@@ -243,21 +251,24 @@ pub fn revoke(req: &RevokeRequest, ledger: &Source, writer: &Writer, now: EpochS
     if !write(writer, &append) {
         return Revoked::AppendFailed;
     }
-    reopen(req, ledger, writer, id, now, false)
+    let done = RevokeResponse {
+        ruling: id,
+        recorded_at: now,
+        reopened_only: false,
+    };
+    reopen(req, ledger, writer, done)
 }
 
 /// 問いを開き直し、配達の先が在れば別の thread で取り消しの行を撃ち直しつきで配達する（`id` は取り消しの行の id・待たない）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-boundary-src が直してこの属性を外す"
-)]
 fn reopen(
     req: &RevokeRequest,
     ledger: &Source,
     writer: &Writer,
-    id: RulingId,
-    now: EpochSecs,
-    reopened_only: bool,
+    RevokeResponse {
+        ruling: id,
+        recorded_at: now,
+        reopened_only,
+    }: RevokeResponse,
 ) -> Revoked {
     let w = LedgerWrite::ReopenItem {
         id: req.question.clone(),
@@ -267,12 +278,15 @@ fn reopen(
         return Revoked::ReopenFailed(id);
     }
     if let Some(d) = writer.delivery.clone() {
-        let (writer, ledger, ruling) = (writer.clone(), ledger.clone(), id.clone());
-        let pending = vec![Pending {
-            question: req.question.clone(),
-            ruling: id.clone(),
-        }];
-        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &ruling, &pending, PACE));
+        let (writer, ledger) = (writer.clone(), ledger.clone());
+        let parcel = Parcel {
+            id: id.clone(),
+            pending: vec![Pending {
+                question: req.question.clone(),
+                ruling: id.clone(),
+            }],
+        };
+        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &parcel, PACE));
     }
     Revoked::Recorded(RevokeResponse {
         ruling: id,
@@ -396,21 +410,18 @@ pub fn deliver(
     Round::Taken
 }
 
+/// 撃ち直す配達の荷（裁定か取り消しか束の id と、配達する問いと裁定の組の列）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Parcel {
+    pub id: RulingId,
+    pub pending: Vec<Pending>,
+}
+
 /// `deliver` を Marked か Taken まで撃ち直す（周ごとに台帳を読み直す）。
 /// NotTaken なら、最初の周と字が前の周と違う周だけ標準エラーに 1 行を書き、最初の周から `pace.span` を越えない間は
 /// `pace.step` を空けて次の周を撃つ。次の周が上限を越えるなら `GAVE_UP` の 1 行を書いて終える。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-boundary-src が直してこの属性を外す"
-)]
-pub fn redeliver(
-    d: &Delivery,
-    writer: &Writer,
-    ledger: &Source,
-    id: &RulingId,
-    pending: &[Pending],
-    pace: Pace,
-) {
+pub fn redeliver(d: &Delivery, writer: &Writer, ledger: &Source, parcel: &Parcel, pace: Pace) {
+    let Parcel { id, pending } = parcel;
     let start = Instant::now();
     let mut last: Option<String> = None;
     let mut rounds: u32 = 0;

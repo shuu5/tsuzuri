@@ -179,26 +179,7 @@ fn env_pairs(v: &str) -> Option<Vec<(String, String)>> {
 
 /// 引いた行を検めて端末にする（ほかの行の形は見ない）。
 fn check(name: &str, row: &[&str]) -> Result<Terminal, String> {
-    let mut seen: Vec<(&str, &str)> = Vec::new();
-    for line in row.iter().copied() {
-        let Some((key, value)) = entry(line) else {
-            return Err(refuse(name, line, "は = の無い行"));
-        };
-        if !KEYS.contains(&key) {
-            return Err(refuse(name, key, "は端末の行の欄でない（器の閉じた集合の外・欄を足さない）"));
-        }
-        if seen.iter().any(|(k, _)| *k == key) {
-            return Err(refuse(name, key, "が 2 度在る"));
-        }
-        if !ENV_KEYS.contains(&key) && !matches!(quoted(value), Some(s) if !s.is_empty()) {
-            return Err(refuse(
-                name,
-                key,
-                &format!("の値 {value} は引用符 1 組で囲んだ空でない字でない"),
-            ));
-        }
-        seen.push((key, value));
-    }
+    let seen = fields(name, row)?;
     let get = |key: &str| seen.iter().find(|(k, _)| *k == key).map(|(_, v)| *v);
     let text = |key: &str| get(key).and_then(quoted).map(str::to_string);
     let need = |key: &str| text(key).ok_or_else(|| refuse(name, key, "が無い"));
@@ -212,17 +193,7 @@ fn check(name: &str, row: &[&str]) -> Result<Terminal, String> {
             &format!("の値 {ssh} は空白を含むか - で始まる（ssh の旗と読まれる）"),
         ));
     }
-    let os = Os::ALL
-        .into_iter()
-        .find(|o| o.word() == os_word)
-        .ok_or_else(|| {
-            let words: Vec<&str> = Os::ALL.iter().map(|o| o.word()).collect();
-            refuse(
-                name,
-                "os",
-                &format!("の値 {os_word} は {} のどれでもない", words.join("・")),
-            )
-        })?;
+    let os = os_of(name, &os_word)?;
     if get("display").is_some() && get("display-env").is_some() {
         return Err(refuse(
             name,
@@ -267,6 +238,46 @@ fn check(name: &str, row: &[&str]) -> Result<Terminal, String> {
         profile_dir,
         display_env,
     })
+}
+
+/// 引いた行を (欄, 値) の列にする（= の無い行・閉じた集合の外の欄・2 度の欄・引用符の外れた値は Err）。
+fn fields<'a>(name: &str, row: &[&'a str]) -> Result<Vec<(&'a str, &'a str)>, String> {
+    let mut seen: Vec<(&str, &str)> = Vec::new();
+    for line in row.iter().copied() {
+        let Some((key, value)) = entry(line) else {
+            return Err(refuse(name, line, "は = の無い行"));
+        };
+        if !KEYS.contains(&key) {
+            return Err(refuse(name, key, "は端末の行の欄でない（器の閉じた集合の外・欄を足さない）"));
+        }
+        if seen.iter().any(|(k, _)| *k == key) {
+            return Err(refuse(name, key, "が 2 度在る"));
+        }
+        if !ENV_KEYS.contains(&key) && !matches!(quoted(value), Some(s) if !s.is_empty()) {
+            return Err(refuse(
+                name,
+                key,
+                &format!("の値 {value} は引用符 1 組で囲んだ空でない字でない"),
+            ));
+        }
+        seen.push((key, value));
+    }
+    Ok(seen)
+}
+
+/// 欄 os の値を OS にする（どの OS の語でもなければ Err）。
+fn os_of(name: &str, os_word: &str) -> Result<Os, String> {
+    Os::ALL
+        .into_iter()
+        .find(|o| o.word() == os_word)
+        .ok_or_else(|| {
+            let words: Vec<&str> = Os::ALL.iter().map(|o| o.word()).collect();
+            refuse(
+                name,
+                "os",
+                &format!("の値 {os_word} は {} のどれでもない", words.join("・")),
+            )
+        })
 }
 
 /// state dir の下の `FACE` を UTF-8 の字として読む（中身は検めない・読めなければ path の字を含む Err）。

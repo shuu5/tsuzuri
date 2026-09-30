@@ -193,24 +193,7 @@ impl Server {
     /// account board の読みは自分の repo と --project の置き場の anchor の台帳を見張りの Source で読み、
     /// 印が見張りの最後の読みの前と同じ間は bd を撃たない（行 a-lean・行 e-ledger-lazy）。
     pub fn bind_with(config: &Config, git: &OsStr) -> Result<Server, StartError> {
-        if !bind_allowed(config.bind.ip()) {
-            return Err(StartError::BindRefused(config.bind));
-        }
-        if !config.repo.is_dir() {
-            return Err(StartError::NotDir {
-                what: "repo ",
-                path: config.repo.clone(),
-            });
-        }
-        let files = config
-            .files
-            .canonicalize()
-            .ok()
-            .filter(|p| p.is_dir())
-            .ok_or_else(|| StartError::NotDir {
-                what: "面の file ",
-                path: config.files.clone(),
-            })?;
+        let files = Server::checked_files(config)?;
         let listener = TcpListener::bind(config.bind).map_err(StartError::Io)?;
         let form = match (&config.seat, &config.state_dir) {
             (Some(_), Some(state_dir)) => Some(Form::new(&config.scribe2, state_dir, &config.repo)),
@@ -231,56 +214,18 @@ impl Server {
             &config.repo,
             held.clone(),
         );
-        let (design, runs) = (sources.design.clone(), sources.runs.clone());
         let seat_marks = seats.marks();
         let others = Others::new(&config.projects, &config.bd);
-        let acct = config.state_dir.as_ref().map(|state_dir| {
-            Arc::new(
-                Acct::new(
-                    config.scribe2.clone(),
-                    git,
-                    config.bd.clone(),
-                    state_dir.clone(),
-                    config.repo.clone(),
-                )
-                .with_own(sources.ledger.clone())
-                .with_watched(others.sources())
-                .with_held(held.clone()),
-            )
-        });
+        let acct = Server::acct_of(config, git, &sources, &others, &held);
         let acct_marks = Arc::new(Mutex::new(Vec::new()));
         let held_marks = Arc::clone(&acct_marks);
         let notify_dir = config.notify.clone();
-        let kinded = |kind: ChangeKind, files: Vec<PathBuf>| -> Vec<(ChangeKind, PathBuf)> {
-            files.into_iter().map(|f| (kind, f)).collect()
-        };
-        let hub = Hub::start(sources.ledger.clone(), move || {
-            let mut marks = kinded(ChangeKind::Runs, runs.marks());
-            marks.extend(kinded(ChangeKind::Design, design.marks()));
-            marks.extend(kinded(ChangeKind::Seat, seat_marks.clone()));
-            marks.extend(kinded(ChangeKind::Account, lock(&held_marks).clone()));
-            // 知らせの記録の file（dir が無いか読めなければ足さない・行 i-11）。
-            let notices = notify_dir.as_deref().map(notify::files).and_then(Result::ok);
-            marks.extend(kinded(ChangeKind::Notice, notices.unwrap_or_default()));
-            marks
-        });
+        let hub = Server::start_hub(&sources, seat_marks, held_marks, notify_dir);
         if let Some(form) = &form {
             form.notify(&hub);
         }
         others.watch(&hub);
-        let delivery = match (&config.seat, &config.state_dir) {
-            (Some(target), Some(state_dir)) => Some(Delivery {
-                program: config.scribe2.clone(),
-                state_dir: state_dir.clone(),
-                target: target.clone(),
-            }),
-            _ => None,
-        };
-        let writer = Writer {
-            repo: config.repo.clone(),
-            bdw: config.bdw.clone(),
-            delivery,
-        };
+        let writer = Server::writer_of(config);
         Ok(Server {
             listener,
             shared: Arc::new(Shared {
@@ -302,6 +247,92 @@ impl Server {
                 },
             }),
         })
+    }
+
+    /// bind 先と repo と面の file の置き場を確かめ、面の file の置き場の正しい path を返す。
+    fn checked_files(config: &Config) -> Result<PathBuf, StartError> {
+        if !bind_allowed(config.bind.ip()) {
+            return Err(StartError::BindRefused(config.bind));
+        }
+        if !config.repo.is_dir() {
+            return Err(StartError::NotDir {
+                what: "repo ",
+                path: config.repo.clone(),
+            });
+        }
+        config
+            .files
+            .canonicalize()
+            .ok()
+            .filter(|p| p.is_dir())
+            .ok_or_else(|| StartError::NotDir {
+                what: "面の file ",
+                path: config.files.clone(),
+            })
+    }
+
+    /// state dir が在るときだけ account board の読みを作る（自分と --project の台帳は見張りの Source で読む）。
+    fn acct_of(
+        config: &Config,
+        git: &OsStr,
+        sources: &Sources,
+        others: &Others,
+        held: &Held,
+    ) -> Option<Arc<Acct>> {
+        config.state_dir.as_ref().map(|state_dir| {
+            Arc::new(
+                Acct::new(
+                    config.scribe2.clone(),
+                    git,
+                    config.bd.clone(),
+                    state_dir.clone(),
+                    config.repo.clone(),
+                )
+                .with_own(sources.ledger.clone())
+                .with_watched(others.sources())
+                .with_held(held.clone()),
+            )
+        })
+    }
+
+    /// 台帳の周期の読みと板の印（走行・設計・席・account・知らせ）の見張りを始める。
+    fn start_hub(
+        sources: &Sources,
+        seat_marks: Vec<PathBuf>,
+        held_marks: Arc<Mutex<Vec<PathBuf>>>,
+        notify_dir: Option<PathBuf>,
+    ) -> Arc<Hub> {
+        let (design, runs) = (sources.design.clone(), sources.runs.clone());
+        let kinded = |kind: ChangeKind, files: Vec<PathBuf>| -> Vec<(ChangeKind, PathBuf)> {
+            files.into_iter().map(|f| (kind, f)).collect()
+        };
+        Hub::start(sources.ledger.clone(), move || {
+            let mut marks = kinded(ChangeKind::Runs, runs.marks());
+            marks.extend(kinded(ChangeKind::Design, design.marks()));
+            marks.extend(kinded(ChangeKind::Seat, seat_marks.clone()));
+            marks.extend(kinded(ChangeKind::Account, lock(&held_marks).clone()));
+            // 知らせの記録の file（dir が無いか読めなければ足さない・行 i-11）。
+            let notices = notify_dir.as_deref().map(notify::files).and_then(Result::ok);
+            marks.extend(kinded(ChangeKind::Notice, notices.unwrap_or_default()));
+            marks
+        })
+    }
+
+    /// 裁定の書きの持ち物（席の target と state dir の両方が在るときだけ配達の先を持つ）。
+    fn writer_of(config: &Config) -> Writer {
+        let delivery = match (&config.seat, &config.state_dir) {
+            (Some(target), Some(state_dir)) => Some(Delivery {
+                program: config.scribe2.clone(),
+                state_dir: state_dir.clone(),
+                target: target.clone(),
+            }),
+            _ => None,
+        };
+        Writer {
+            repo: config.repo.clone(),
+            bdw: config.bdw.clone(),
+            delivery,
+        }
     }
 
     pub fn local_addr(&self) -> io::Result<SocketAddr> {

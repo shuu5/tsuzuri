@@ -25,11 +25,12 @@ use tsuzuri_contract::surface::{
     BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, Refusal, RulingId,
 };
 use tsuzuri_core::delivery::Pending;
-use tsuzuri_core::question::open_questions;
+use tsuzuri_core::question::{OpenQuestion, open_questions};
 
 use super::ledger::{Source, capture};
 use super::ruling::{
-    LINE_PREFIX, PACE, WRITE_TIMEOUT, Writer, escape, minute, next_id, reason, redeliver, reread,
+    LINE_PREFIX, PACE, Parcel, WRITE_TIMEOUT, Writer, escape, minute, next_id, reason, redeliver,
+    reread,
 };
 
 /// 口の path。
@@ -88,27 +89,13 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
     let Some(text) = reread(ledger) else {
         return Outcome::LedgerUnknown;
     };
-    let Reading::Known(mut questions) = open_questions(&text) else {
+    let Reading::Known(questions) = open_questions(&text) else {
         return Outcome::LedgerUnknown;
     };
-    let mut rows = Vec::with_capacity(req.items.len());
-    for (item, verbatim) in req.items.iter().zip(verbatims) {
-        let Some(at) = questions.iter().position(|q| q.card.id == item.question) else {
-            return Outcome::Refused(Refusal::UnknownQuestion);
-        };
-        let question = questions.swap_remove(at);
-        if question.card.a1 {
-            return Outcome::Refused(Refusal::A1InBatch);
-        }
-        if question.card.digest != item.seen_digest {
-            return Outcome::Refused(Refusal::StaleVersion);
-        }
-        rows.push(Row {
-            question: &item.question,
-            verbatim,
-            notes: question.notes,
-        });
-    }
+    let rows = match rows_of(req, verbatims, questions) {
+        Ok(rows) => rows,
+        Err(refusal) => return Outcome::Refused(refusal),
+    };
     let minute = minute(now);
     let Ok(batch) = next_batch_id(&text, &minute) else {
         return Outcome::IdShape;
@@ -120,15 +107,72 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
     else {
         return Outcome::IdShape;
     };
+    let (items, failed) = write_rows(writer, &rows, &ids, &batch);
+    if failed {
+        return Outcome::WriteFailed(BatchResponse { batch, items });
+    }
+    if let Some(d) = writer.delivery.clone() {
+        let pending: Vec<Pending> = rows
+            .iter()
+            .zip(ids)
+            .map(|(row, ruling)| Pending {
+                question: row.question.clone(),
+                ruling,
+            })
+            .collect();
+        let (writer, ledger) = (writer.clone(), ledger.clone());
+        let parcel = Parcel {
+            id: batch.clone(),
+            pending,
+        };
+        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &parcel, PACE));
+    }
+    Outcome::Recorded(BatchResponse { batch, items })
+}
+
+/// 行を要求の順に確かめて書く前の行の列を組む（最初に当たった行の断りの理由を返す）。
+fn rows_of<'a>(
+    req: &'a BatchRequest,
+    verbatims: Vec<&'a str>,
+    mut questions: Vec<OpenQuestion>,
+) -> Result<Vec<Row<'a>>, Refusal> {
+    let mut rows = Vec::with_capacity(req.items.len());
+    for (item, verbatim) in req.items.iter().zip(verbatims) {
+        let Some(at) = questions.iter().position(|q| q.card.id == item.question) else {
+            return Err(Refusal::UnknownQuestion);
+        };
+        let question = questions.swap_remove(at);
+        if question.card.a1 {
+            return Err(Refusal::A1InBatch);
+        }
+        if question.card.digest != item.seen_digest {
+            return Err(Refusal::StaleVersion);
+        }
+        rows.push(Row {
+            question: &item.question,
+            verbatim,
+            notes: question.notes,
+        });
+    }
+    Ok(rows)
+}
+
+/// 要求の順に行ごとに追記して閉じ、行ごとの結果と落ちたかを返す（落ちた行より後の行は撃たずに Unwritten）。
+fn write_rows(
+    writer: &Writer,
+    rows: &[Row<'_>],
+    ids: &[RulingId],
+    batch: &RulingId,
+) -> (Vec<BatchItemResult>, bool) {
     let mut items = Vec::with_capacity(rows.len());
     let mut failed = false;
-    for (row, id) in rows.iter().zip(&ids) {
+    for (row, id) in rows.iter().zip(ids) {
         let outcome = if failed {
             ItemOutcome::Unwritten
         } else {
             let append = LedgerWrite::AppendNotes {
                 id: row.question.clone(),
-                line: line(id, row.question, &batch, row.verbatim),
+                line: line(id, row.question, batch, row.verbatim),
             };
             let close = LedgerWrite::CloseItem {
                 id: row.question.clone(),
@@ -149,22 +193,7 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
             outcome,
         });
     }
-    if failed {
-        return Outcome::WriteFailed(BatchResponse { batch, items });
-    }
-    if let Some(d) = writer.delivery.clone() {
-        let pending: Vec<Pending> = rows
-            .iter()
-            .zip(ids)
-            .map(|(row, ruling)| Pending {
-                question: row.question.clone(),
-                ruling,
-            })
-            .collect();
-        let (writer, ledger, batch) = (writer.clone(), ledger.clone(), batch.clone());
-        std::thread::spawn(move || redeliver(&d, &writer, &ledger, &batch, &pending, PACE));
-    }
-    Outcome::Recorded(BatchResponse { batch, items })
+    (items, failed)
 }
 
 /// bdw を 1 回撃つ（rc 0 で上限の内に返せば true）。

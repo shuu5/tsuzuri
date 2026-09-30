@@ -120,46 +120,13 @@ pub fn steps(command: &Command) -> Vec<Step> {
             height,
             scale,
             mobile,
-        } => vec![
-            call(
-                "Emulation.setDeviceMetricsOverride",
-                &[
-                    ("width", Int(i64::from(*width))),
-                    ("height", Int(i64::from(*height))),
-                    ("deviceScaleFactor", Int(i64::from(*scale))),
-                    ("mobile", Bool(*mobile)),
-                ],
-            ),
-            call("Emulation.setTouchEmulationEnabled", &[("enabled", Bool(*mobile))]),
-        ],
+        } => viewport(*width, *height, *scale, *mobile),
         Command::Reload => vec![
             call("Page.enable", &[]),
             call("Page.reload", &[]),
             Step::Await(LOAD_EVENT),
         ],
-        Command::Click { x, y } => {
-            let (x, y) = (Int(i64::from(*x)), Int(i64::from(*y)));
-            let press = |kind| {
-                call(
-                    "Input.dispatchMouseEvent",
-                    &[
-                        ("type", Text(kind)),
-                        ("x", x),
-                        ("y", y),
-                        ("button", Text("left")),
-                        ("clickCount", Int(1)),
-                    ],
-                )
-            };
-            vec![
-                call(
-                    "Input.dispatchMouseEvent",
-                    &[("type", Text("mouseMoved")), ("x", x), ("y", y)],
-                ),
-                press("mousePressed"),
-                press("mouseReleased"),
-            ]
-        }
+        Command::Click { x, y } => click(*x, *y),
         Command::Type { text } => vec![call("Input.insertText", &[("text", Text(text))])],
         Command::Key { key } => ["keyDown", "keyUp"]
             .into_iter()
@@ -191,6 +158,49 @@ pub fn steps(command: &Command) -> Vec<Step> {
         )],
         Command::Console => vec![call("Runtime.enable", &[]), call("Log.enable", &[])],
     }
+}
+
+/// 窓の大きさの命令の歩（大きさと倍率と mobile の印を写し、touch の真似を mobile の印に合わせる）。
+fn viewport(width: u32, height: u32, scale: u32, mobile: bool) -> Vec<Step> {
+    use Value::{Bool, Int};
+    vec![
+        call(
+            "Emulation.setDeviceMetricsOverride",
+            &[
+                ("width", Int(i64::from(width))),
+                ("height", Int(i64::from(height))),
+                ("deviceScaleFactor", Int(i64::from(scale))),
+                ("mobile", Bool(mobile)),
+            ],
+        ),
+        call("Emulation.setTouchEmulationEnabled", &[("enabled", Bool(mobile))]),
+    ]
+}
+
+/// click の命令の歩（点へ動かし、左の button を押して離す）。
+fn click(x: u32, y: u32) -> Vec<Step> {
+    use Value::{Int, Text};
+    let (x, y) = (Int(i64::from(x)), Int(i64::from(y)));
+    let press = |kind| {
+        call(
+            "Input.dispatchMouseEvent",
+            &[
+                ("type", Text(kind)),
+                ("x", x),
+                ("y", y),
+                ("button", Text("left")),
+                ("clickCount", Int(1)),
+            ],
+        )
+    };
+    vec![
+        call(
+            "Input.dispatchMouseEvent",
+            &[("type", Text("mouseMoved")), ("x", x), ("y", y)],
+        ),
+        press("mousePressed"),
+        press("mouseReleased"),
+    ]
 }
 
 /// CDP の 1 つの message の字（鍵 id・method・params の順・空白を挟まない）。

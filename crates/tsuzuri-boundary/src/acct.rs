@@ -105,6 +105,9 @@ type Stamp = Option<(SystemTime, u64)>;
 /// 読んだ event log の印と字。
 type Logged = (Stamp, Option<Arc<str>>);
 
+/// state dir ごとの器の出力の字（tick status と doctor）。
+type DirOutputs = Vec<(Option<String>, Option<String>)>;
+
 /// account board の読みの出所（器・git・bd の program と、引数の state dir と cwd）と、持ち回しの字。
 #[derive(Debug)]
 pub struct Acct {
@@ -409,7 +412,56 @@ impl Acct {
         let host_toml = read(&self.state_dir.join(HOST_TOML));
         let anchors = anchors(host_toml.as_deref());
         let held = self.held_gits(&anchors);
-        let (dirs, boards, usage, caps, doctor) = thread::scope(|s| {
+        let ((dirs, boards), usage, caps, doctor) = self.gather_first(&anchors, held);
+        let mut unique: Vec<&PathBuf> = Vec::new();
+        for dir in dirs.iter().flatten() {
+            if !unique.contains(&dir) {
+                unique.push(dir);
+            }
+        }
+        let (outputs, ledgers) = self.gather_second(&anchors, &dirs, &unique, &doctor);
+        let mut texts = Texts::default();
+        for (anchor, board) in anchors.iter().zip(boards) {
+            if let Some(board) = board {
+                texts.boards.insert(anchor.clone(), board);
+            }
+        }
+        self.gather_seat_logs(&mut texts, &unique, &outputs);
+        let mut read_logs =
+            self.gather_projects(&mut texts, &anchors, &dirs, (&unique, &outputs, ledgers));
+        if let Some(groups) = self.groups_dir() {
+            if let Some(toml) = host_toml.as_deref() {
+                texts.marks.extend(
+                    declaration(toml)
+                        .groups
+                        .iter()
+                        .map(|g| groups.join(format!("{}.{RECORD_KIND}", g.name))),
+                );
+            }
+            texts.host.records = files(&groups);
+            texts.host.history = files(&groups.join(HISTORY_DIR));
+        }
+        texts.host.host_toml = host_toml;
+        texts.host.usage = usage;
+        texts.host.doctor = doctor;
+        texts.host.caps = caps;
+        let log = events_log(&self.state_dir);
+        texts.host.events = self.log(&log);
+        read_logs.push(log);
+        self.logs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|path, _| read_logs.contains(path));
+        texts
+    }
+
+    /// 1 段目を並べて撃ち、git の読みの字と usage と閾値の行と引数の state dir の doctor を返す。
+    fn gather_first(
+        &self,
+        anchors: &[String],
+        held: Option<GitTexts>,
+    ) -> (GitTexts, Option<String>, BTreeMap<String, String>, Option<String>) {
+        thread::scope(|s| {
             let git = held.is_none().then(|| {
                 let dirs: Vec<_> = anchors
                     .iter()
@@ -438,28 +490,31 @@ impl Acct {
                             .collect(),
                     );
                     *self.gits.lock().unwrap_or_else(|e| e.into_inner()) =
-                        Some((Instant::now(), anchors.clone(), texts.clone()));
+                        Some((Instant::now(), anchors.to_vec(), texts.clone()));
                     texts
                 }
                 None => held.unwrap_or_default(),
             };
             (
-                dirs,
-                boards,
+                (dirs, boards),
                 usage.join().ok().flatten(),
                 caps.into_iter()
                     .filter_map(|(rule, h)| Some((rule.to_string(), h.join().ok().flatten()?)))
                     .collect::<BTreeMap<_, _>>(),
                 doctor,
             )
-        });
-        let mut unique: Vec<&PathBuf> = Vec::new();
-        for dir in dirs.iter().flatten() {
-            if !unique.contains(&dir) {
-                unique.push(dir);
-            }
-        }
-        let (outputs, ledgers) = thread::scope(|s| {
+        })
+    }
+
+    /// 2 段目を並べて撃ち、state dir ごとの tick status と doctor の字と、anchor ごとの台帳の読みを返す。
+    fn gather_second(
+        &self,
+        anchors: &[String],
+        dirs: &[Option<PathBuf>],
+        unique: &[&PathBuf],
+        doctor: &Option<String>,
+    ) -> (DirOutputs, Vec<Option<Got>>) {
+        thread::scope(|s| {
             let outputs: Vec<_> = unique
                 .iter()
                 .map(|dir| {
@@ -471,7 +526,7 @@ impl Acct {
                 .collect();
             let ledgers: Vec<_> = anchors
                 .iter()
-                .zip(&dirs)
+                .zip(dirs)
                 .map(|(a, dir)| dir.as_ref().map(|_| s.spawn(move || self.ledger_got(a))))
                 .collect();
             (
@@ -491,18 +546,12 @@ impl Acct {
                     .map(|l| l.and_then(|l| l.join().ok()))
                     .collect::<Vec<_>>(),
             )
-        });
-        let output = |dir: &PathBuf| {
-            let i = unique.iter().position(|d| *d == dir)?;
-            outputs.get(i)
-        };
-        let mut texts = Texts::default();
-        for (anchor, board) in anchors.iter().zip(boards) {
-            if let Some(board) = board {
-                texts.boards.insert(anchor.clone(), board);
-            }
-        }
-        for (dir, (_, seat_doctor)) in unique.iter().zip(&outputs) {
+        })
+    }
+
+    /// state dir ごとの event log の印と、休止中の席の状態の記録を置く。
+    fn gather_seat_logs(&self, texts: &mut Texts, unique: &[&PathBuf], outputs: &DirOutputs) {
+        for (dir, (_, seat_doctor)) in unique.iter().zip(outputs) {
             texts.marks.push(events_log(dir));
             // 休止中の席の材料（登録の行の全部の席の状態の記録・同じ席は最初の state dir の字・印にしない・行 c-dormant）。
             for target in seat_doctor.as_deref().map(seat_targets).unwrap_or_default() {
@@ -522,8 +571,22 @@ impl Acct {
                 }
             }
         }
+    }
+
+    /// anchor ごとの project の字と席の doctor の字を置き、読んだ event log の path の列を返す。
+    fn gather_projects(
+        &self,
+        texts: &mut Texts,
+        anchors: &[String],
+        dirs: &[Option<PathBuf>],
+        (unique, outputs, ledgers): (&[&PathBuf], &DirOutputs, Vec<Option<Got>>),
+    ) -> Vec<PathBuf> {
+        let output = |dir: &PathBuf| {
+            let i = unique.iter().position(|d| *d == dir)?;
+            outputs.get(i)
+        };
         let mut read_logs: Vec<PathBuf> = Vec::new();
-        for ((anchor, dir), got) in anchors.iter().zip(&dirs).zip(ledgers) {
+        for ((anchor, dir), got) in anchors.iter().zip(dirs).zip(ledgers) {
             let ledger = got.and_then(|got| {
                 if let Some(at) = got.stale {
                     texts.stale = Some(texts.stale.map_or(at, |s| s.min(at)));
@@ -537,18 +600,7 @@ impl Acct {
                     .insert(anchor.clone(), ProjectTexts::default());
                 continue;
             };
-            let seat_dir = seat_doctor
-                .as_deref()
-                .and_then(|d| orchestrator_target(d, anchor))
-                .and_then(|target| {
-                    Seat {
-                        program: self.scribe2.clone(),
-                        state_dir: dir.clone(),
-                        target: target.to_string(),
-                        cwd: self.cwd.clone(),
-                    }
-                    .seat_dir()
-                });
+            let seat_dir = self.orchestrator_dir(seat_doctor.as_deref(), anchor, dir);
             if let Some(d) = &seat_dir {
                 texts.marks.extend([
                     d.join(STATE_LOG),
@@ -576,30 +628,27 @@ impl Acct {
                 texts.host.seat_doctors.insert(anchor.clone(), d.clone());
             }
         }
-        if let Some(groups) = self.groups_dir() {
-            if let Some(toml) = host_toml.as_deref() {
-                texts.marks.extend(
-                    declaration(toml)
-                        .groups
-                        .iter()
-                        .map(|g| groups.join(format!("{}.{RECORD_KIND}", g.name))),
-                );
-            }
-            texts.host.records = files(&groups);
-            texts.host.history = files(&groups.join(HISTORY_DIR));
-        }
-        texts.host.host_toml = host_toml;
-        texts.host.usage = usage;
-        texts.host.doctor = doctor;
-        texts.host.caps = caps;
-        let log = events_log(&self.state_dir);
-        texts.host.events = self.log(&log);
-        read_logs.push(log);
-        self.logs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .retain(|path, _| read_logs.contains(path));
-        texts
+        read_logs
+    }
+
+    /// 席の doctor の字から anchor の orchestrator の席の dir を引く（引けなければ None）。
+    fn orchestrator_dir(
+        &self,
+        seat_doctor: Option<&str>,
+        anchor: &str,
+        dir: &Path,
+    ) -> Option<PathBuf> {
+        seat_doctor
+            .and_then(|d| orchestrator_target(d, anchor))
+            .and_then(|target| {
+                Seat {
+                    program: self.scribe2.clone(),
+                    state_dir: dir.to_path_buf(),
+                    target: target.to_string(),
+                    cwd: self.cwd.clone(),
+                }
+                .seat_dir()
+            })
     }
 
     /// event log の字（印が前の読みの前に取った印と同じなら file を読まず前の Arc を返し、

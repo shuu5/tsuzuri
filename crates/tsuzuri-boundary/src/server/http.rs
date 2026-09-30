@@ -139,14 +139,7 @@ pub fn no_bytes(e: &io::Error) -> bool {
 /// 最初の 1 byte が届く前に閉じたか読みが終わった接続は `no_bytes` が真の誤り。
 pub fn read_request(stream: impl Read) -> io::Result<Request> {
     let mut reader = BufReader::new(stream);
-    loop {
-        match reader.fill_buf() {
-            Ok([]) => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, NoBytes)),
-            Ok(_) => break,
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            Err(e) => return Err(io::Error::new(e.kind(), NoBytes)),
-        }
-    }
+    first_byte(&mut reader)?;
     let mut head = 0usize;
     let mut line = String::new();
     let mut next_line = |reader: &mut BufReader<_>, line: &mut String| -> io::Result<()> {
@@ -197,6 +190,25 @@ pub fn read_request(stream: impl Read) -> io::Result<Request> {
             request.accept_encoding = Some(v.to_string());
         }
     }
+    read_body(reader, &mut request)?;
+    Ok(request)
+}
+
+/// 最初の 1 byte が届くまで待つ（届く前に閉じたか読みが終わった接続は `NoBytes` の誤り）。
+fn first_byte(reader: &mut BufReader<impl Read>) -> io::Result<()> {
+    loop {
+        match reader.fill_buf() {
+            Ok([]) => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, NoBytes)),
+            Ok(_) => break,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(io::Error::new(e.kind(), NoBytes)),
+        }
+    }
+    Ok(())
+}
+
+/// Content-Length の本文を `BODY_MAX` まで持ち、越える本文は `BODY_DRAIN_MAX` まで読み捨てる（本文が切れていれば誤り）。
+fn read_body(reader: BufReader<impl Read>, request: &mut Request) -> io::Result<()> {
     let length = request.content_length;
     if length <= BODY_MAX {
         reader.take(length).read_to_end(&mut request.body)?;
@@ -206,7 +218,7 @@ pub fn read_request(stream: impl Read) -> io::Result<Request> {
     } else if length <= BODY_DRAIN_MAX {
         io::copy(&mut reader.take(length), &mut io::sink())?;
     }
-    Ok(request)
+    Ok(())
 }
 
 fn bad(what: &str) -> io::Error {

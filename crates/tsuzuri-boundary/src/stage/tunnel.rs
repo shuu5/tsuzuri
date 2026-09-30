@@ -227,6 +227,12 @@ impl Tunnel {
                 )));
             }
         }
+        self.launch_window(board, remembered)
+    }
+
+    /// 起動の引数を 1 回撃ち、上限の内に board の頁が一覧に出るまで待つ（起こし直さない）。
+    fn launch_window(&self, board: &Board, remembered: Option<&str>) -> Result<Window, String> {
+        let name = &self.terminal.name;
         let argv = launch::launch_argv(&self.terminal, &board.url)?;
         if proc::capture(&self.ssh, &argv, &self.dir, self.timeout).is_none() {
             return Err(format!(

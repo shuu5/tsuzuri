@@ -203,14 +203,16 @@ pub enum Reach {
     },
 }
 
+/// 撃つ program の組（端末へ tunnel を引く ssh と席の目の Chrome）。
+#[derive(Debug, Clone, Copy)]
+pub struct Programs<'a> {
+    pub ssh: &'a OsStr,
+    pub chrome: &'a OsStr,
+}
+
 /// 端末へ tunnel を引き、届かなければ席の目の Chrome に落ちる（端末の browser を操作しない）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-boundary-src が直してこの属性を外す"
-)]
 pub fn reach(
-    ssh: &OsStr,
-    chrome: &OsStr,
+    Programs { ssh, chrome }: Programs<'_>,
     terminal: &Terminal,
     base: &Path,
     url: &str,

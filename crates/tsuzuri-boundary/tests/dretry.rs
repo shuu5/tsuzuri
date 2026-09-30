@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::server::ledger::Source;
-use tsuzuri_boundary::server::ruling::{self, Delivery, Pace, Round, Writer};
+use tsuzuri_boundary::server::ruling::{self, Delivery, Pace, Parcel, Round, Writer};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::RulingId;
 use tsuzuri_core::delivery::{Pending, Route, mark_line};
@@ -151,12 +151,15 @@ impl Place {
     }
 
     fn redeliver(&self, pace: Pace) {
+        let parcel = Parcel {
+            id: ruling_id(),
+            pending: pending(),
+        };
         ruling::redeliver(
             &self.delivery(),
             &self.writer(),
             &self.source(),
-            &ruling_id(),
-            &pending(),
+            &parcel,
             pace,
         );
     }

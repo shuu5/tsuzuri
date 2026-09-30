@@ -20,7 +20,7 @@ use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::launch;
 use tsuzuri_boundary::stage::pipe::Pipe;
 use tsuzuri_boundary::stage::relay::{
-    self, ATTACH, CHROME, Eyes, PIPE_SCRIPT, Reach, SHELL, TARGETS,
+    self, ATTACH, CHROME, Eyes, PIPE_SCRIPT, Programs, Reach, SHELL, TARGETS,
 };
 use tsuzuri_boundary::stage::terminal::{self, Terminal};
 use tsuzuri_boundary::stage::tunnel::Tunnel;
@@ -506,7 +506,7 @@ fn seen(reach: &Reach) -> &str {
 type Opened = Result<(Eyes, Session), String>;
 
 /// reach の型。
-type ReachFn = fn(&OsStr, &OsStr, &Terminal, &Path, &str, Duration) -> Result<Reach, String>;
+type ReachFn = fn(Programs<'_>, &Terminal, &Path, &str, Duration) -> Result<Reach, String>;
 
 /// board の型。
 type BoardFn = fn(&OsStr, &OsStr, &Path, Duration) -> Result<Board, String>;
@@ -731,9 +731,12 @@ fn relay_falls_back_when_unreachable() {
     let field = Field::new("fall", Ssh::Fail);
     let server = serve(&field, Page::First);
     let b = term("term-b");
+    let programs = Programs {
+        ssh: field.ssh.as_os_str(),
+        chrome: field.chrome.as_os_str(),
+    };
     let reached = relay::reach(
-        field.ssh.as_os_str(),
-        field.chrome.as_os_str(),
+        programs,
         &b,
         &env::temp_dir(),
         URL,
@@ -775,9 +778,12 @@ fn relay_falls_back_when_unreachable() {
 fn relay_reachable_stays_on_terminal() {
     let field = Field::new("stay", Ssh::Sleep);
     let a = term("term-a");
+    let programs = Programs {
+        ssh: field.ssh.as_os_str(),
+        chrome: field.chrome.as_os_str(),
+    };
     let reached = relay::reach(
-        field.ssh.as_os_str(),
-        field.chrome.as_os_str(),
+        programs,
         &a,
         &env::temp_dir(),
         URL,
