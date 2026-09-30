@@ -12,6 +12,7 @@
 //! 設定の端末の名が層 A（器の host の面の [[device]]）に無ければ名指して断り、既定へ落とさない。
 //! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
 //! show --json は show と同じ読みを電文の 1 行で出す（board の server が行を割らずに読む・行 e-stage-target）。
+//! 席の自分の board の頁でない board の頁（account board の頁とほかの project の board の頁）の上では、見せる操作も含めてどの命令も撃たず断る（行 i-stage-guard）。
 //! click・入力・key の断りは url の ports のほかの board（群の宣言の anchor ごとの project board）にも広げ、
 //! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない・行 i-board-ports）。
 //! tz stage notify は窓を起こさず表示先の端末へ知らせだけを出し、project の最新の知らせの記録を書く（行 i-10）。
@@ -798,7 +799,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
     }
     let text = face_text(&call.repo, &call.scribe2, &call.git)?;
     let mut ports = Vec::new();
-    if script.iter().any(|(command, _)| guarded(command)) {
+    if !script.is_empty() {
         let read = url::ports(&text, &call.git, &call.repo, TIMEOUT);
         for name in &read.unread {
             println!("project {name} の board の port が読めない（その board の頁の上の断りは広げない）");
@@ -985,7 +986,16 @@ fn open(call: &Call, terminal: &Terminal, base: &Path, board: &Board) -> Result<
         Window::Page { launched: true, .. } => {
             (format!("端末 {name} に表示面の窓を起こした"), true)
         }
-        Window::Page { .. } => (format!("端末 {name} の表示面の窓は在る（起こさない）"), false),
+        Window::Page { resource, .. } => match tunnel.page_url(&resource) {
+            Some(page) if !board.shows(&page) => (
+                format!(
+                    "端末 {name} の表示面の窓は在るが、頁 {page} は board {} の頁でない（窓を起こさず・頁も足さない）",
+                    board.url
+                ),
+                false,
+            ),
+            _ => (format!("端末 {name} の表示面の窓は在る（起こさない）"), false),
+        },
         Window::Absent(_) => {
             new_page(&tunnel, &board.url)?;
             match tunnel.window(&board.url, false)? {
@@ -1055,7 +1065,8 @@ fn drive(
     done.and(closed)
 }
 
-/// 1 つの命令を撃って出力の行を書く（自分の board と ports の board の頁の上の click・入力・key は撃たずに断る）。
+/// 1 つの命令を撃って出力の行を書く（どの命令の前にも頁の URL を読み、自分の board の頁でない board の頁の上ではどの命令も、
+/// 自分の board の頁の上の click・入力・key も撃たずに断る・行 i-stage-guard）。
 fn shoot(
     session: &mut Session,
     command: &Command,
@@ -1064,13 +1075,16 @@ fn shoot(
     ports: &[u16],
 ) -> Result<(), String> {
     let verb = word(command);
-    if guarded(command) {
-        let page = session.url()?;
-        if on_boards(command, &page, board, ports) {
-            return Err(format!(
-                "board の頁 {page} の上では {verb} を断る（判断の記録 ADR-15 の決定 (7)・board は見せるだけ）"
-            ));
-        }
+    let page = session.url()?;
+    if board.foreign(&page, ports) {
+        return Err(format!(
+            "頁 {page} は自分の project board でない board の頁なので {verb} を断る（判断の記録 ADR-15 の決定 (7)・席の自分の board の頁のほかでは見せる操作も撃たない）"
+        ));
+    }
+    if on_boards(command, &page, board, ports) {
+        return Err(format!(
+            "board の頁 {page} の上では {verb} を断る（判断の記録 ADR-15 の決定 (7)・board は見せるだけ）"
+        ));
     }
     let from = session.events().len();
     let replies = session.run(command)?;

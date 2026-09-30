@@ -140,3 +140,16 @@ pub fn page_resource(list: &str) -> Option<String> {
         (kind == "page" && path.starts_with("/devtools/page/")).then(|| path.to_string())
     })
 }
+
+/// /json/list の本文の、websocket の path が path の項の URL（項が無いか url が字でなければ None・行 i-stage-guard）。
+pub fn page_url(list: &str, path: &str) -> Option<String> {
+    json::items(list)?.into_iter().find_map(|item| {
+        let socket = json::member(item, "webSocketDebuggerUrl").and_then(json::unquote)?;
+        let rest = socket.strip_prefix("ws://")?;
+        let found = &rest[rest.find('/')?..];
+        if found != path {
+            return None;
+        }
+        json::member(item, "url").and_then(json::unquote)
+    })
+}

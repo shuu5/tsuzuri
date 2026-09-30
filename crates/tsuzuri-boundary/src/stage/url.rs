@@ -6,6 +6,7 @@
 //! Self の TailscaleIPs の住所・127.0.0.1・localhost）でもよい頁（席の決め・i-4 と i-5 の起草の問い Q1）。
 //! 守りは群の宣言の anchor ごとの project board の port のほかの board にも広げ（行 i-board-ports）、
 //! その host の形は自分の board と同じ列（同じ host の board だけ・ほかの host の同じ port は断らない）。
+//! 席の自分の board の頁は shows だけで、account board の頁とほかの project の board の頁は foreign（行 i-stage-guard）。
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
@@ -26,6 +27,9 @@ pub const STATUS_ARGS: [&str; 2] = ["status", "--json"];
 
 /// この host の loopback の形（自分の board の host の列の末）。
 pub const LOOPBACK: [&str; 2] = ["127.0.0.1", "localhost"];
+
+/// account board の頁の query の組（字 # の前の query にこの組が在る頁は account board の頁・行 i-stage-guard）。
+pub const ACCOUNT_QUERY: &str = "board=account";
 
 /// status の Self の DNSName（末の点を 1 つ除いて ASCII の小文字・点で分けた段がどれも空でなく英数字と - だけの時だけ）。
 pub fn self_name(status: &str) -> Option<String> {
@@ -74,6 +78,14 @@ pub fn board_url(host: &str, port: u16) -> String {
     format!("http://{host}:{port}/")
 }
 
+/// 頁の URL の字 # の前の query の組に ACCOUNT_QUERY が在るか（字 # の後は読まない）。
+pub fn account_page(page: &str) -> bool {
+    let before = page.split('#').next().unwrap_or(page);
+    before
+        .split_once('?')
+        .is_some_and(|(_, query)| query.split('&').any(|pair| pair == ACCOUNT_QUERY))
+}
+
 /// 自分の board（渡す URL・この host の形の列・boardport）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
@@ -86,6 +98,16 @@ impl Board {
     /// 頁の URL が自分の board か（port が自分の port で、host がこの host のどれかの形・scheme は http か https）。
     pub fn holds(&self, page: &str) -> bool {
         parts(page).is_some_and(|(_, host, port)| port == self.port && self.hosts.contains(&host))
+    }
+
+    /// 頁の URL が席の自分の board の頁か（自分の board で、account board の頁でない）。
+    pub fn shows(&self, page: &str) -> bool {
+        self.holds(page) && !account_page(page)
+    }
+
+    /// 頁の URL が席の自分の board の頁でない board の頁か（自分の board か ports の board で、shows でない・行 i-stage-guard）。
+    pub fn foreign(&self, page: &str, ports: &[u16]) -> bool {
+        self.holds_any(page, ports) && !self.shows(page)
     }
 
     /// 頁の URL が自分の board かほかの board か（port が自分の port か ports のどれかで、host がこの host のどれかの形）。

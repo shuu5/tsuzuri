@@ -141,10 +141,11 @@ const MADE: [&str; 7] = [
     "GET /json/list",
 ];
 
-/// 節の席の目の method の 14。
-const EYES_METHODS: [&str; 14] = [
+/// 節の席の目の method の 18（どの命令の前にも頁の URL を読む）。
+const EYES_METHODS: [&str; 18] = [
     "Target.getTargets",
     "Target.attachToTarget",
+    "Page.getNavigationHistory",
     "Page.enable",
     "Page.navigate",
     "Page.getNavigationHistory",
@@ -153,11 +154,26 @@ const EYES_METHODS: [&str; 14] = [
     "Input.dispatchMouseEvent",
     "Page.getNavigationHistory",
     "Input.insertText",
+    "Page.getNavigationHistory",
     "Page.captureScreenshot",
+    "Page.getNavigationHistory",
     "Runtime.evaluate",
+    "Page.getNavigationHistory",
     "Runtime.enable",
     "Log.enable",
 ];
+
+/// 節の account board の頁（自分の board の port の上で query の組に board=account を持つ）。
+const ACCOUNT: &str = "http://srv-a.tailnet.invalid:4801/?board=account";
+
+/// 偽の端末の Chrome の /json/list の本文（頁はほかの project の board）。
+const LIST_OTHER: &str = r#"[ {
+   "id": "P1",
+   "type": "page",
+   "url": "http://srv-a.tailnet.invalid:4802/",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P1"
+} ]
+"#;
 
 /// 命令と写真の書き先の組。
 type Line = (Command, Option<PathBuf>);
@@ -1226,7 +1242,9 @@ fn stcli_board_refused() {
         [
             "Target.getTargets",
             "Target.attachToTarget",
+            "Page.getNavigationHistory",
             "Input.dispatchMouseEvent",
+            "Page.getNavigationHistory",
             "Page.enable",
             "Page.navigate",
             "Page.getNavigationHistory",
@@ -1257,9 +1275,129 @@ fn stcli_open_reuses_window() {
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
     assert_eq!(out, ["端末 term-a の表示面の窓は在る（起こさない）", LINE]);
-    assert_eq!(far.stop(), ["GET /json/version", "GET /json/list"]);
+    assert_eq!(
+        far.stop(),
+        ["GET /json/version", "GET /json/list", "GET /json/list"]
+    );
     assert_eq!(field.records("ssh").len(), 1);
     assert_eq!(mode(&field.user().join("tzst-term-a.lock")), 0o600);
+}
+
+#[test]
+fn stcli_open_names_page() {
+    let field = Field::new("named", Ssh::Sleep);
+    fs::write(&field.on, "").expect("印の file");
+    let far = Far::start(&field, LIST_OTHER);
+    let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
+    assert_eq!(rc, 0, "{out:?}");
+    assert_eq!(out.len(), 2, "{out:?}");
+    for word in [
+        "端末 term-a",
+        "頁 http://srv-a.tailnet.invalid:4802/ は board http://srv-a.tailnet.invalid:4801/ の頁でない",
+        "窓を起こさず",
+    ] {
+        assert!(out[0].contains(word), "{word}: {}", out[0]);
+    }
+    assert_eq!(out[1], LINE);
+    assert_eq!(
+        far.stop(),
+        ["GET /json/version", "GET /json/list", "GET /json/list"]
+    );
+    assert_eq!(field.records("ssh").len(), 1);
+}
+
+#[test]
+fn stcli_foreign_refused() {
+    let field = Field::new("foreign", Ssh::Fail);
+    let server = serve(&field);
+    let input = format!(
+        "[\"navigate\",\"--url\",\"{ACCOUNT}\"]\n[\"reload\"]\n[\"dom\"]\n"
+    );
+    let (rc, out) = field.tz(&["run", "--to", "term-b"], &input, false);
+    assert_eq!(rc, 1, "{out:?}");
+    assert_eq!(out.len(), 4, "{out:?}");
+    assert_eq!(out[1], "済み navigate");
+    for word in [ACCOUNT, "自分の project board でない board の頁", "を断る"] {
+        assert!(out[2].contains(word), "{word}: {}", out[2]);
+    }
+    assert_eq!(out[3], LINE);
+    let got = server.join().expect("偽の席の目の Chrome");
+    assert_eq!(
+        methods(&got),
+        [
+            "Target.getTargets",
+            "Target.attachToTarget",
+            "Page.getNavigationHistory",
+            "Page.enable",
+            "Page.navigate",
+            "Page.getNavigationHistory",
+        ]
+    );
+
+    let next = format!(r#"["navigate","--url","{NEXT}"]"#);
+    let verbs = [
+        ("foreignscroll", r#"["scroll","--x","1","--y","2","--dy","5"]"#),
+        ("foreignapp", next.as_str()),
+        ("foreigndom", r#"["dom"]"#),
+    ];
+    for (name, verb) in verbs {
+        let field = Field::new(name, Ssh::Fail);
+        let server = serve(&field);
+        let input = format!("[\"navigate\",\"--url\",\"{ACCOUNT}\"]\n{verb}\n[\"dom\"]\n");
+        let (rc, out) = field.tz(&["run", "--to", "term-b"], &input, false);
+        assert_eq!(rc, 1, "{name}: {out:?}");
+        assert_eq!(out.len(), 4, "{name}: {out:?}");
+        assert!(out[2].contains(ACCOUNT) && out[2].contains("を断る"), "{}", out[2]);
+        let got = server.join().expect("偽の席の目の Chrome");
+        assert_eq!(methods(&got).len(), 6, "{name}: {got:?}");
+    }
+}
+
+#[test]
+fn stcli_foreign_tables() {
+    let foreign: fn(&Board, &str, &[u16]) -> bool = Board::foreign;
+    let shows: fn(&Board, &str) -> bool = Board::shows;
+    let account_page: fn(&str) -> bool = url::account_page;
+    let account_query: &str = url::ACCOUNT_QUERY;
+    assert_eq!(account_query, "board=account");
+    let own = own();
+    let ports: &[u16] = &[4802];
+    let table: [(&str, bool); 12] = [
+        ("http://srv-a.tailnet.invalid:4801/", false),
+        ("http://192.0.2.7:4801/x", false),
+        (NEXT, false),
+        ("about:blank", false),
+        ("http://srv-a.tailnet.invalid:4801/#board=account", false),
+        ("http://srv-a.tailnet.invalid:4801/?board=accounts", false),
+        ("http://other.tailnet.invalid:4802/", false),
+        ("http://srv-a.tailnet.invalid:4801/?board=account", true),
+        ("http://127.0.0.1:4801/?x=1&board=account", true),
+        ("http://srv-a.tailnet.invalid:4802/", true),
+        ("http://srv-a:4802/p?board=account", true),
+        ("http://srv-a.tailnet.invalid:4809/", false),
+    ];
+    for (page, want) in table {
+        assert_eq!(foreign(&own, page, ports), want, "foreign {page}");
+    }
+    assert!(!foreign(&own, "http://srv-a.tailnet.invalid:4802/", &[]));
+    assert!(foreign(&own, "http://srv-a.tailnet.invalid:4801/?board=account", &[]));
+    assert!(shows(&own, "http://srv-a.tailnet.invalid:4801/x"));
+    assert!(!shows(&own, "http://srv-a.tailnet.invalid:4801/?board=account"));
+    assert!(!shows(&own, "http://srv-a.tailnet.invalid:4802/"));
+    assert!(account_page("http://x/?a=1&board=account#f"));
+    assert!(!account_page("http://x/#f?board=account"));
+    assert!(!account_page("http://x/?board=account2"));
+
+    let list = format!(
+        "[ {}, {} ]",
+        r#"{"type":"page","url":"http://a/","webSocketDebuggerUrl":"ws://localhost/devtools/page/P1"}"#,
+        r#"{"type":"page","url":"http://b/","webSocketDebuggerUrl":"ws://localhost/devtools/page/P2"}"#
+    );
+    let page_url: fn(&str, &str) -> Option<String> = launch::page_url;
+    assert_eq!(page_url(&list, "/devtools/page/P2").as_deref(), Some("http://b/"));
+    assert_eq!(page_url(&list, "/devtools/page/P1").as_deref(), Some("http://a/"));
+    assert_eq!(page_url(&list, "/devtools/page/P3"), None);
+    assert_eq!(page_url("{}", "/devtools/page/P1"), None);
 }
 
 #[test]
@@ -1530,7 +1668,7 @@ fn stcli_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 21, "歯の数");
+    assert_eq!(names.len(), 24, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("stcli_")

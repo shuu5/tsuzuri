@@ -231,6 +231,13 @@ impl Tunnel {
         self.get("/json/version")
     }
 
+    /// 頁の target の今の URL（/json/list の本文の、websocket の path が resource の項の url・読めなければ None・行 i-stage-guard）。
+    pub fn page_url(&self, resource: &str) -> Option<String> {
+        self.get("/json/list")
+            .as_deref()
+            .and_then(|list| launch::page_url(list, resource))
+    }
+
     /// socket の先の Chrome の HTTP の口へ GET を撃ち、状態 200 で長さの在る本文を返す（ほかは None）。
     /// 相手が閉じるのを待たない（Chrome の HTTP の口は応答の後も接続を保ちうる）。
     fn get(&self, path: &str) -> Option<String> {
