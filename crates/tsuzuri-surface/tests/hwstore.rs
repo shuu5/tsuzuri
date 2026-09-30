@@ -1,6 +1,7 @@
 //! 行 h-win-store の歯（接頭辞 hwstore_）: account board の窓の一覧を browser の保存に残す（要件 FR1・持ち主の裁定 t3-hub.52.16）。
 //! 保存の字と戻し・生きている handle の重ね・開いたはずの窓の移り方と語・閉じの知らせの字と送り手は host の純粋な関数で撃ち、
 //! 保存と event と知らせを撃つ所の配線は source の字で見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

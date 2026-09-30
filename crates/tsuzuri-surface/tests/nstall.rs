@@ -1,6 +1,7 @@
 //! 次の一手の判じなかったなしの箱の歯（行 c-next-stall・接頭辞 nstall_）。
 //! lead がなしで電文のなしの結果が判じなかったなら、大きい箱は測れていないの箱（`UNJUDGED_KEY`・`UNJUDGED_LINE`）。
 //! 面は判じない: 電文の結果を写すだけ。fixture: tests/fixtures/surface/next-step.json。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

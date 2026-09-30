@@ -1,6 +1,7 @@
 //! 行 g-dn-group の歯: 地図の圧縮の面の design-note の帯を、ノートごとの見出し（ノートの名の自然な順）の下に
 //! ノートの行の札（行の番号の順・番号の無い行は後に id の自然な順）を並べる組に分けること。
 //! 組の値は host で組み、DOM は wasm の target のときだけなので、compact.rs の字で見出しの組み方を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

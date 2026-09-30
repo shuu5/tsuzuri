@@ -1,5 +1,6 @@
 //! 便 g-map-keys の歯: 地図の頁の tab の上の矢印の key で移る面（端は反対の端へ回る・ほかの key は無し）・
 //! DOM の keydown の受け取りの字（wasm の target のときだけなので src の字で見る）・この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

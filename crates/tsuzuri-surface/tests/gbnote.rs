@@ -1,5 +1,6 @@
 //! 行 g-back-note の歯（接頭辞 gbnote_）: 戻るで窓を探した結果と閉じられない窓の注記の字（frame の back_how と back_note）・
 //! board の戻るの字の並び・開いた窓の一覧の閉じの印（着地済みの account の windows）・この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

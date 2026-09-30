@@ -1,5 +1,6 @@
 //! 決定の頁の取り消しの歯（接頭辞 rvk_・設計ノート surface-wave12d 行 e-revoke・要件 FR7）。
 //! 近傍の電文と問いの 1 本の引きの電文は歯の中で組む。DOM の歯は src/project/node.rs の字 `mod dom {` の後の字を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

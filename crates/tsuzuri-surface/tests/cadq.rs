@@ -1,6 +1,7 @@
 //! 行 g-card-adopt-b の歯: 問いの頁の問いの card の題・これまでの決定の段の行の題と決定の link に付ける節点の card の値と、
 //! DOM の付け方の字・外した要素の出した card を閉じる後始末の決まりと呼ぶ所の字。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

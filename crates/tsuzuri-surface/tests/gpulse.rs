@@ -1,5 +1,6 @@
 //! 行 g-pulse の歯: 読みの脈（fresh の Pulse）の決め方と、net が読みの途中の口を数える字と 2 つの board が脈を置く字の並び。
 //! 1 つでも口が読みの途中なら上端の帯の最終の記録の横に短い脈を出し、読み終えてから PULSE_MS まで残す（要件 NFR2）。
+#![cfg(test)]
 
 use std::fmt::Debug;
 use std::path::PathBuf;

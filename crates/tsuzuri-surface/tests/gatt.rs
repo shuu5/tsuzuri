@@ -1,6 +1,7 @@
 //! 行 g-attach-acct の歯: Option の card の directive の口 attach_some を hover.rs の 1 つに寄せ、
 //! account board の projects.rs と home.rs は私的な写しを持たずに hover の口を use で引く。
 //! DOM は wasm の target のときだけなので、file の字で見る。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

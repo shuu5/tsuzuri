@@ -1,5 +1,6 @@
 //! 行 g-mode-store の歯: mode を browser の保存に残す（見本の store と initMode・持ち主の裁定 t3-hub.52.16・要件 FR1）。
 //! 決め方は host の純粋な関数 mode_start で撃ち、保存と URL を撃つ所の配線は source の字で見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

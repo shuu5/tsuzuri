@@ -1,5 +1,6 @@
 //! 行 h-acct-order の歯: account board の口座の行と群の候補を名の自然な順にし、退役の口座を除く（裁定 t3-hub.53.14）。
 //! 並べは電文を読む 1 か所（account の doc）で arrange を通し、doc を通して組む block はどれも同じ並びを受ける。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

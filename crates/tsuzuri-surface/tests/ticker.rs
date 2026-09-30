@@ -1,6 +1,7 @@
 //! 便 g-tick の歯: 1 秒の時計（net の ticker）と、session の表の経過の字と退避までの残り秒を今で組み直す関数。
 //! net の ticker と DOM の書き直しは wasm の target のときだけなので、字の歯で見る（組めることは xtask の surface-build）。
 //! fixture は着地済みの tests/fixtures/account/acct-doc.json（読むだけ）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

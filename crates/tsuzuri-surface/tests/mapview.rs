@@ -3,6 +3,7 @@
 //! 着地済みの外形と依存・使う class と語の鍵が在る。
 //! 圧縮の面の条と規則行と、一覧の面の id の並べ替えは id の自然な順（便 g-graph が直した）。
 //! 近傍の歯は節点の頁の歯（nodepage.rs・便 g-node が近傍の測れていないの歯を消した）。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

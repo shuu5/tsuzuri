@@ -1,5 +1,6 @@
 //! 行 g-graph-fold の歯（面）: 開いた箱の列と口の path・組の箱と開き閉じの印の SVG・狭い幅の一覧の組の行・
 //! 組の箱の card・開けなかった行・語の辞書の 4 つの鍵・DOM の配線の字と外の依存・歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

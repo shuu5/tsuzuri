@@ -2,6 +2,7 @@
 //! session の幅の押しは置き換えのまま（見本の setSpan）で、戻ると進むは board の popstate が block を組み直す。
 //! session の止まった run の段の doc は見本の runStopped の写しと言い、値は変えない。
 //! DOM は wasm の target のときだけなので src の字を読む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

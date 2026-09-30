@@ -1,4 +1,5 @@
 //! 便 h-acct-spark の歯: HOME の口座 × 窓の 7 列（7 日の線の svg と測った時刻）・見出しと列の幅・語の辞書の 7 日。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

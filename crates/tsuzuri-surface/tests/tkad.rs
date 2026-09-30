@@ -2,6 +2,7 @@
 //! net の 1 秒の時計（ticker）で書き直すこと、問いの chip の経験者だけの注釈（投稿の時刻）。
 //! 字と経過の値は host で組み、DOM は wasm の target のときだけなので、src の file の字で付け方を見る
 //! （DOM が組めることは xtask の surface-build）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

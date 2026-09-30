@@ -1,6 +1,7 @@
 //! 行 g-link-graph の歯: グラフの面の節点から節点の頁へ移る道（固定の帯の link・2 回押す・Enter と Space・
 //! 狭い幅の一覧の行の link）と、wasm の target のときだけの DOM を src/mapview/graph/dom.rs へ移した形。
 //! DOM と事件の受け取りは host では撃てないので、host の関数の値と src の字を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

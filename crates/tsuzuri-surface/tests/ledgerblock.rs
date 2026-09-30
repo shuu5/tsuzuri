@@ -1,5 +1,6 @@
 //! 便 g-ledger の歯: 上段の 4 数と純減の字・判定の 5 値の表・burndown の座標・未反映の数と分からない種類・
 //! 年齢の字・配置の表・測れていないと台帳の一覧・着地済みの外形と依存。
+#![cfg(test)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;

@@ -1,5 +1,6 @@
 //! 行 h-cards-home の歯: account board の HOME の口座の名の欄と移動の行の hover の card、
 //! 群の枠の限度で止まった session の数と詳しくの段（記録の数・出所・doctor の群の行）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

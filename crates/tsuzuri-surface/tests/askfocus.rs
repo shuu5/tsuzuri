@@ -1,6 +1,7 @@
 //! 便 g-ask-focus の歯: URL の `?id=` で名指された問いを読む・card の id と class・名指しの card の番号・
 //! これまでの決定の段が名指しの項で開くか・問いの頁の 2 つの module の DOM の字（題の link と寄せる振る舞い）・
 //! この file の歯の名が着地済みの行の filter の語を含まない。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

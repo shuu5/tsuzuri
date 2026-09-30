@@ -1,6 +1,7 @@
 //! 行 h-acct-split の歯: account の projects の表の hover の card を新しい module の account の cards へ移す。
 //! 移した item は cards の path だけに在り、使う側の src の file は cards から use する。
 //! card の値は着地済みの歯（hcproj・hcnx・hcsess・hcled・hacols・hnunk）が cards の path で見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -2,6 +2,7 @@
 //! 詳しくの今の口座と印（区画は比べない）・account board の各 project の表の区画の行と群の順の見出しと card・
 //! HOME の次の一手の行の小字・語の辞書の鍵 park・DOM の字の配線・この file の歯の名。
 //! 区画かの判じは、project board は席の card の群の行の欄 park、account board は電文の欄 parks だけで、名 Tier9 を見ない。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -2,6 +2,7 @@
 //! 面は描く今で at と最後の区間の終わりを伸ばして描く（今が at より前なら at のまま）。猶予の残り秒は終わる時刻から引く。
 //! DOM は wasm の target のときだけなので、今の渡し方は src の file の字で見る。
 //! fixture: tests/fixtures/surface/seat-card.json と tests/fixtures/account/acct-doc.json（読むだけ）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

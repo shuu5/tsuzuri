@@ -1,6 +1,7 @@
 //! 行 g-map-tree の歯: 地図の 6 つの面と URL・木の面の語彙の予算・親子の辺の型の表・fixture の設計の木と台帳の木・
 //! 項の値と開き閉じの鍵・木の親子にしない辺・読めない出所と空の電文・DOM の字（wasm の target のときだけなので src の字で見る）・
 //! この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

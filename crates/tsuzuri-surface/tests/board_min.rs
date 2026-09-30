@@ -3,6 +3,7 @@
 //! 一覧の口と同じ電文（LedgerList）にしてから画面の状態へ渡す。
 //! 件数は block の module（ask・ledger）が数える（便 g-frame で見出しの字を vocab へ移した）。
 //! 問いの block（ask）は便 g-ask で口 /api/questions の電文を読むので、問いの件数は台帳の画面の状態から数える。
+#![cfg(test)]
 
 use std::path::Path;
 

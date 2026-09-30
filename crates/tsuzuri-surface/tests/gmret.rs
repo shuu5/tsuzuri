@@ -1,6 +1,7 @@
 //! 行 g-map-retired の歯（面）: 廃止した設計ノートを圧縮の面の design-note の帯の箱と設計の木で畳んだ段に束ねること・
 //! 欄 retired の無い電文は何も畳まず理由を返すこと・DOM の字（wasm の target のときだけなので src の字で見る）・
 //! この file の歯の名。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

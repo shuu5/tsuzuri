@@ -1,5 +1,6 @@
 //! 席からの知らせの block の歯（接頭辞 ntc_・行 i-11 の完了の条件 (5)〜(8)）。
 //! project board の block notice は自分の project の 1 つを、account board の block notices は全部を同じ電文から読む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

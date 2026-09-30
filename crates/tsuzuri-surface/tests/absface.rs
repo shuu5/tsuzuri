@@ -1,6 +1,7 @@
 //! 行 c-abs-time の歯（面・接頭辞 abst_・要件 NFR2）: 札の経過と memo と未反映の年齢は、電文の時刻（段を決めた時刻・
 //! 作った時刻）を面の今から引いて出す。CI の語と今日の着地も今で決める。DOM は wasm の target のときだけなので、
 //! 1 秒の時計と今の渡し方は src の file の字で見る。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -1,6 +1,7 @@
 //! 行 c-unref-now の歯（接頭辞 unow_・要件 FR13）: 未反映の代用を外した後、3 種とも「まだ分からない」の
 //! project は account board の未反映の欄で数えず（字「―」）、未反映の一覧の理由の字は台帳の読みでなく
 //! 器の局面の出力の無さを言う。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

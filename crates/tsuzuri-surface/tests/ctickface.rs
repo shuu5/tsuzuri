@@ -1,6 +1,7 @@
 //! 行 c-seat-tick の歯（面）: project board の block「orchestrator と口座」の上段の tick の欄に、器の tick の語の
 //! 印と class と語と最後の tick からの経過を出す字と、詳しくの doctor の行の tick の語。
 //! fixture: tests/fixtures/surface/seat-card.json（鍵 tick と tick_at が無いので、どの組も tick は Unknown）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

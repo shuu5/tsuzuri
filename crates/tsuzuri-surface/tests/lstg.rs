@@ -1,5 +1,6 @@
 //! 行 c-ledger-stage の歯: 台帳の一覧の下の項に、pipeline の板の札と同じ読み（`stages`）の段の記号と字を出す。
 //! 札と台帳の行は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-l）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

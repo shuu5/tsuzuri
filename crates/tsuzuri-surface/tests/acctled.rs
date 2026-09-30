@@ -1,5 +1,6 @@
 //! 便 h-led の歯: account board の台帳の処理状況の表・並べ方と query・並べの決まり・行の字・
 //! 列の最大と最小の印・台帳が Unknown の行・詳しくの段の開き閉じは URL と画面の外の保存に書かない。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

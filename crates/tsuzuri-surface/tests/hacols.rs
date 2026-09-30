@@ -1,5 +1,6 @@
 //! 行 h-acct-cols の歯: account board の各 project の表の決定待ちと未反映の欄の数・並べ unref・
 //! 群の card の閾値の行・台帳の表の未反映の欄と、DOM の部分の字。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

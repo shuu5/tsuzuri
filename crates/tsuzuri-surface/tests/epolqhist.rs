@@ -1,5 +1,6 @@
 //! 行 e-policy-q の面の歯（接頭辞 epolq_）: block「これまでの決定」は方針の問い（範囲の札の label を持つ）を
 //! 出さず数えない（要件 FR8）。方針の問いの label は境界の policy の `create_write` の書きの labels を使う。
+#![cfg(test)]
 
 use tsuzuri_boundary::server::policy;
 use tsuzuri_contract::board::Reading;

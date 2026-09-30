@@ -1,6 +1,7 @@
 //! 行 g-seat-split の歯: project board の block「orchestrator と口座」の seat.rs から、wasm の target のときだけの
 //! DOM を src/project_dom/seat.rs へ移し、seat.rs を host の部分と path の属性で読む mod dom の宣言だけにした形と、
 //! この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

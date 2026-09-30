@@ -1,5 +1,6 @@
 //! 便 h-proj-more の歯: 各 project の表の行の詳しくの段（台帳の項・sparkline・session・口座の履歴・狭い幅で隠れる 4 列の値）と
 //! 行の開閉・2 段目を … で切る fit_cut と、DOM の部分の字（描きの fn の本体の在る無し）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

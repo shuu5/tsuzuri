@@ -1,6 +1,7 @@
 //! 行 g-seat-thr の歯: project board の席の block の下段の窓の行の棒に閾値の線を、行の右に閾値の印（┆<閾値>）を出す。
 //! 値は口 /api/account の電文の caps（器の rules 行の写し）から窓の名の等しい行を写す（account board の cap_of と同じ読み）。
 //! 電文・窓の行・値が読めなければ線を引かず ┆? を出し、値が 100 を越えれば線は 100 で止めて字は値のまま出す。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

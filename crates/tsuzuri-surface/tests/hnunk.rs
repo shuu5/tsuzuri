@@ -1,6 +1,7 @@
 //! 行 h-next-unknown の歯: account board の HOME の次の一手の行と各 project の表の要対応の欄は、
 //! なしを判じなかった電文（lead がなしで、なしの結果が判じなかった）を読めない project と同じ測れていないの字と後ろの順にする。
 //! fixture は tests/fixtures/account/acct-doc.json（読むだけ）。電文 U と M は proj-a の行の写しから組む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

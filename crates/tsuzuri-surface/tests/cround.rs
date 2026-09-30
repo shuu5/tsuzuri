@@ -1,6 +1,7 @@
 //! 行 g-card-around の歯: hover の委ねの判定（over_shows と leaves）・節点と状態の字から組む card（card_for）と
 //! 眺めの節点の id ごとの card（view_cards）・近傍の図と一覧が引く card の鍵。
 //! card の値は host で組み、委ねの口と近傍の図の DOM は wasm の target のときだけなので、2 つの file の字で付け方を見る。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

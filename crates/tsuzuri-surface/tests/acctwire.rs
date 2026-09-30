@@ -1,4 +1,5 @@
 //! project board の「戻る」の歯（接頭辞 acctwire_・行 h-wire の完了の条件 (5)〜(7)）。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

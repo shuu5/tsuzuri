@@ -1,5 +1,6 @@
 //! 便 h-sess の歯: session の表の並べ方（query の sort）・束の見出し・fixture の 4 行の順・稼働の記録・
 //! orchestrator の行の合図（tick の健康・heartbeat・退避までの残り秒・移動待ち）・席なしの行・読めないときは測れていない。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,6 +1,7 @@
 //! ほかの project の問いを問いの頁の一覧に混ぜる面の歯（接頭辞 mqface_・設計ノート surface-wave22c 行 e-multi-ask）。
 //! 自分の問いは見本の surface/question-list.json（qa.2 の投稿の時刻 1790488800・qa.10 は 1790494200）で、qa.2 の card の
 //! id と時刻を替えた fx-oth.2（1790490000）と fx-oth.4（1790494200）を札 proj-x の組に、Unknown を札 proj-y の組にする。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

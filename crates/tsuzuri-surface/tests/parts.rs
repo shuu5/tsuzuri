@@ -2,6 +2,7 @@
 //! paths とグラフの口で互いに違う（行 hs-derived で block ごとの定数から導く形にした）・
 //! 読み直しの合図の event の名は契約の型の crate の定数から引く・hover の card の置き場と猶予と行の切り方・
 //! 定数が rules の file の行 R-20 と行 R-19 の字と同じ。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

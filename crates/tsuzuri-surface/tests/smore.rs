@@ -1,5 +1,6 @@
 //! 行 g-seat-more の歯: project board の block「orchestrator と口座」の詳しくの段に置く
 //! 出所の 1 行と doctor の席の行（経験者向けの 1 行の字数に畳む）と、詳しくの初めの開きを mode から取る字。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -1,5 +1,6 @@
 //! 束の書きが途中で落ちた 502 の出し方の歯（接頭辞 bhalf_・設計ノート surface-wave12e の行 e-batch-partial）:
 //! 残った行を送った行の題で名指す・閉じていない行は括弧で包んだ字を足す・送る所は送った行を応答と一緒に読む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 行 g-card-graph の歯: 地図のグラフの面の眺めの節点の card（view_cards）の鍵と値・図の data-key と一覧の行の id が鍵に在ること・
 //! 図の委ねと一覧の題の a が card を出す字。DOM は wasm の target のときだけなので、graph/dom.rs の字で付け方を見る。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

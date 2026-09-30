@@ -1,5 +1,6 @@
 //! 行 h-dormant の歯: account board の header の休止中の chip と card（見本の account/index.html の dormant:all の枝）と、
 //! board が chip を最終の記録の chip の直後・読みの脈の前に置く字の並び（拠る要件 FR12・持ち主の裁定 t3-hub.53.10）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

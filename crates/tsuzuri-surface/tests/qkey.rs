@@ -1,5 +1,6 @@
 //! 行 g-keyed の歯: 問いの card とまとめて承認の行の鍵（番号を除いた中身）・block の形と列の読み・
 //! 行の番号の読み直し・2 つの block の DOM の鍵つきの一覧の字の並び。
+#![cfg(test)]
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

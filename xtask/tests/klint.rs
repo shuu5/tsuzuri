@@ -37,6 +37,9 @@ const ENABLED: [&str; 5] = [
     "dbg_macro",
 ];
 
+/// 歯の file の根に #![cfg(test)] を置く member（根からの相対）。行 k-lint-tests が他の member を足す。
+const SWEPT: [&str; 1] = ["crates/tsuzuri-surface"];
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -294,6 +297,56 @@ fn klint_members_follow_carry_table() {
     }
 }
 
+/// member の tests/ の直下の .rs と tests/<dir>/main.rs（path の順）。
+fn test_roots(member: &str) -> Vec<PathBuf> {
+    let dir = repo_root().join(member).join("tests");
+    let mut roots = Vec::new();
+    let entries = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("{} を読む: {e}", dir.display()));
+    for entry in entries {
+        let path = entry.expect("tests の項目").path();
+        if path.is_dir() {
+            let main = path.join("main.rs");
+            if main.is_file() {
+                roots.push(main);
+            }
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            roots.push(path);
+        }
+    }
+    roots.sort();
+    roots
+}
+
+#[test]
+fn klint_test_roots_cfg_test() {
+    let members = members();
+    let excluded = excluded_r10();
+    let mut seen = 0;
+    for member in SWEPT {
+        assert!(members.iter().any(|m| m == member), "{member} が members に無い");
+        if excluded.iter().any(|e| e == member) {
+            continue;
+        }
+        for path in test_roots(member) {
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
+            let lines: Vec<&str> = text.lines().collect();
+            let head = lines.iter().take_while(|l| l.starts_with("//!")).count();
+            assert_eq!(
+                lines.get(head).copied(),
+                Some("#![cfg(test)]"),
+                "{} の頭の //! の続きの直後が #![cfg(test)] でない",
+                path.display()
+            );
+            let count = lines.iter().filter(|l| l.trim() == "#![cfg(test)]").count();
+            assert_eq!(count, 1, "{} の #![cfg(test)] が {count} 行", path.display());
+            seen += 1;
+        }
+    }
+    assert!(seen >= 1, "見た file が無い");
+}
+
 #[test]
 fn klint_own_names_clean() {
     let text = read("xtask/tests/klint.rs");
@@ -307,7 +360,7 @@ fn klint_own_names_clean() {
         names.push(after[..end].trim().to_string());
         rest = &after[end..];
     }
-    assert_eq!(names.len(), 6, "{names:?}");
+    assert_eq!(names.len(), 7, "{names:?}");
 
     let list = read("xtask/tests/filter-words.txt");
     let words: Vec<&str> = body(&list).collect();

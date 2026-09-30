@@ -1,5 +1,6 @@
 //! 便 h-board-url の面の歯（接頭辞 bport_）: 電文の board は port だけ・開く URL の host の後ろの字・
 //! 頁の location の protocol と hostname から URL を組む字・DOM の open の字の順。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

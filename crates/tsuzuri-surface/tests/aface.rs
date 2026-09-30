@@ -1,5 +1,6 @@
 //! 読むだけの server の面の歯（接頭辞 aface_・設計ノート surface-wave19h 行 e-ask-own-only）。
 //! 答えを受けるかの読みと語は host で試し、DOM は wasm の target のときだけなので、file の字で付け方を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

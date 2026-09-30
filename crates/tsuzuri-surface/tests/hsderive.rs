@@ -1,6 +1,7 @@
 //! 行 hs-derived の歯（接頭辞 hsderive_・判断の記録 ADR-13）: block の module の口の path と畳める段の鍵の形は
 //! module ごとの定数 PATHS と FOLDS・Module の paths と folds はその定数を返す・kit の fold_keys は Module の ALL の順に
 //! folds をつないだ列・写しの snapshot は消した。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

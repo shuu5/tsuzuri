@@ -1,5 +1,6 @@
 //! 便 g-steady の歯: 読みの後の決め方（置く・置かない・読み直す）・知らせが切れたときは決め方を通さない・
 //! 畳める段の開き閉じの記録（鍵ごとに 1 つの値）・project の下の details の要素は全部記録から読んで toggle で書き戻す。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

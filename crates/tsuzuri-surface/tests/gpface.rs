@@ -1,6 +1,7 @@
 //! 行 g-policy-face の歯: 全体への指示の block は server の書きの断り（no-root・ledger-create・ledger-append・
 //! policy-id-shape・ledger-close）を持ち主の語の 1 行にし、読めない本文はほかの断りと同じ字にする・
 //! 契約の方針の id の形は問いの形だけにする・自分の歯の名は verify の filter の語を含まない。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

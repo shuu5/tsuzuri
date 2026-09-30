@@ -1,6 +1,7 @@
 //! 便 h-proj の歯: 各 project の表の 9 列の見出し・並べ方（query の psort）・need と group と judge と unref の並び・
 //! 群の見出し・run の 4 列・accounts の印・開くの欄・決定待ちと未反映の数（台帳が Unknown は None）・
 //! 読めないときは測れていない。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

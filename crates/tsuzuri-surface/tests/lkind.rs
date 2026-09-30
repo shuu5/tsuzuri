@@ -1,5 +1,6 @@
 //! 行 g-ledger-kind の歯: 台帳の一覧の項の種類の語と状態の語と印の赤を、地図の節点の種類と同じ読み
 //! （契約の crate の `bead_kind`）にする。台帳の行は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-k）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

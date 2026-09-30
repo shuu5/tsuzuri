@@ -2,6 +2,7 @@
 //! 関わる所の数と重なりの数・束を送る button の判定・束の要求の本文・束の応答の出し方・指示の本文の範囲はつねに all・
 //! 指示を送る button の判定と応答の出し方・鍵の判定・口の path・測れていない・画面の外の保存の口の名が code に無い・
 //! 足す外の依存は 0 本。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

@@ -1,5 +1,6 @@
 //! 行 g-closed-mark の歯（面）: 台帳で閉じた（着地せず）の札の表の印（Kcard の closed・kcard_view の ✕ と段の字）・
 //! fixture の札の値・mod dom の字・歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 便 g-seat の歯: fixture の 5 組の状態の記号と語と「から」・稼働の記録の 3 つの幅の矩形と縦線・幅の query・
 //! 窓ごとの割合・状態の帯・口座の履歴・「まだ分からない」の欄だけ測れていない・口が読めない・着地済みの外形と依存。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -2,6 +2,7 @@
 //! 名の進め方と題の字は view の純粋な関数を host で撃つ。board.rs と index.html と自分の file の字は
 //! CARGO_MANIFEST_DIR から読む（題の span の中身と set_title の呼びは wasm の target のときだけ組む）。
 //! 行 g-title の後は board.rs の頁の題を doc_title で置く（board_title は index.html の題の字として残る）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

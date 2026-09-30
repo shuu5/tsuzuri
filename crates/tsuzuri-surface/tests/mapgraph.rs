@@ -1,6 +1,7 @@
 //! 便 g-graph の歯: グラフの面の配置（例のグラフ・9 個の升・節点の無い眺め）・線の形と道の字・子の数の札・
 //! 拡大と移動の値と transform の字・光らせ方（hlCompute）・固定の移り方（hlPin）・狭い幅の一覧・数の行・
 //! 読めなかった出所の帯と 0 の帯・口の読みの 3 値・凡例に出す帯と型・全部の箱の id・口の path・外の依存。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

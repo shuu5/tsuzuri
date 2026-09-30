@@ -1,5 +1,6 @@
 //! 便 g-ask-around の歯: 問いの card のつながりの段に近傍の図を埋め込む（中心の id を引数で受ける口の path・
 //! 開くまで空の path・見つからないも理由の 1 行・通信の module は空の path を読まない・nodearound と ask の字）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

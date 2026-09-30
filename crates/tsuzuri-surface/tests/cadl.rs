@@ -1,6 +1,7 @@
 //! 行 g-card-adopt-c の歯: 台帳の block の epic の進みの行と一覧の項・抜けの検査の頁の名指しの項に付ける節点の card の値と、
 //! DOM の付け方の字（kit の一覧の 1 項が card を受け、呼ぶ所が card を渡す）。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

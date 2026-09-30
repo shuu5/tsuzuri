@@ -6,6 +6,7 @@
 //! 便 g-batch で問いの頁を 2 列にし（右の列は side stack で batch と policy）、module は 13 になった。
 //! 行 h-wire で header の HEADER の前に「戻る」の部品 BACK を足した（snapshot の header の先頭の 1 行）。
 //! 行 g-node-timeline で節点の頁の around の後に run の時間軸の block timeline を足した。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

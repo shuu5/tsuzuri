@@ -1,5 +1,6 @@
 //! 行 g-strip の歯: workspace の release の profile の strip（面の wasm の関数の名の表を抜く）と、
 //! trunk が cargo の release の profile で面の wasm を組むこと（Trunk.toml と index.html）と、この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

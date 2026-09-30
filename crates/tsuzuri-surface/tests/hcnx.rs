@@ -1,5 +1,6 @@
 //! 便 h-cards-nx の歯: account board の HOME の次の一手の行と群の枠の project の chip の hover の card
 //! （見本の `__tz_card` の nx と gproj の枝）と、DOM の部分の字。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

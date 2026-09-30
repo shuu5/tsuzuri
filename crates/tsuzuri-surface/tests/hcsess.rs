@@ -1,5 +1,6 @@
 //! 便 h-cards-sess の歯: session の表の session の欄の hover の card（見本の seat・run・proj の枝と鍵の選び方）と、
 //! DOM の部分の字。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

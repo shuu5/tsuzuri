@@ -1,6 +1,7 @@
 //! 区画の席の状態の帯の歯（面・行 c-park-acct・接頭辞 pkac_）: 群の行が区画の行の写し（欄 park が true・
 //! 今の口座 -）の席の card は、移動待ちの行と次の移り先の行を出さず、限度・猶予の内・逼迫の行は今のまま。
 //! fixture: tests/fixtures/surface/seat-card.json（読むだけ）。群の行は歯の中で区画の行の写しに替える。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

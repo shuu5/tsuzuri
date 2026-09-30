@@ -1,5 +1,6 @@
 //! 行 g-pipe-misfit の歯（接頭辞 gfix_）: pipeline の板の 4 列の下の要修正の行（見本の案 A）の札の値・
 //! 出さない入力・語と崩れの字と札の先・「?」の注釈の字数・stylesheet の規則・DOM の字・この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

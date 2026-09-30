@@ -1,6 +1,7 @@
 //! 行 g-link-map の歯: 地図の圧縮の面の札と一覧の面の行の題が節点の頁への link になる。
 //! link の字は frame の node_href が組み、節点の頁は同じ id と mode で開く（fixture の全部の id で見る）。
 //! DOM は wasm の target のときだけなので、2 つの file の字の在る無しで a の要素と href を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

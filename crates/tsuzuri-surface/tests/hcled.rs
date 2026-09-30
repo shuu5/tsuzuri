@@ -1,5 +1,6 @@
 //! 便 h-cards-led の歯: account board の台帳の処理状況の表の project の欄の hover の card（見本の ledCard）と、
 //! DOM の部分の字と、この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

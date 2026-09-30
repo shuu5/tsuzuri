@@ -1,4 +1,5 @@
 //! 行 g-pipe-fold の歯: 開いた列の畳む button（出す列・URL の col から外す字・button の字・DOM の字）と歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

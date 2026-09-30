@@ -1,6 +1,7 @@
 //! 頁の題を project の名と頁の語にする面の歯（接頭辞 ptitle_・設計ノート surface-wave5a 行 g-title の完了の条件）。
 //! 題の字と節点の題の進め方は view と節点の module の純粋な関数を host で撃つ。board.rs と node.rs と
 //! 自分の file の字は CARGO_MANIFEST_DIR から読む（題を置く効果は wasm の target のときだけ組む）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

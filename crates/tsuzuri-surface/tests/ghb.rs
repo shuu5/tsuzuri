@@ -1,5 +1,6 @@
 //! 行 g-seat-hb の歯: project board の席の block の停止の切り替え（席の card からの切り替え・Top の欄・
 //! 送り先の口と本文・DOM の繋ぎの字）と、この file の歯の名。fixture は tests/fixtures/surface/seat-card.json（読むだけ）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -1,5 +1,6 @@
 //! 行 h-thr-home の歯: account board の HOME の閾値の印・逼迫の強調・断りの理由・移動の段の知らせの行を
 //! 電文の caps と notices から描く（面は使った割合と閾値を比べない・R-22）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

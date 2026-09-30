@@ -1,5 +1,6 @@
 //! 行 g-next-act の歯: 次の一手の大きい箱の、種類ごとの次の手の頁への link（href と字・mode・開く窓）・
 //! href の読み直し・Big の対象の id・DOM が link を組む字・link の字と見出しの語・歯の名。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

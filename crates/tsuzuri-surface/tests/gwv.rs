@@ -1,5 +1,6 @@
 //! 行 g-wins-vocab の歯: 語彙の鍵 open_windows の内部の名の字を、開いた窓の一覧を browser の保存
 //! （account の windows の WINS_KEY）に残す今の形と計画の決め d4 に揃えること、見本の語彙と同じ字であること。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

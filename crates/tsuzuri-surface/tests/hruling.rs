@@ -1,5 +1,6 @@
 //! 便 g-hist-ruling の歯: 段の行の右に、その問いに答えた決定の頁への link（字は決定の時刻）を置く。
 //! グラフの口の answers の辺から問いごとの決定・段の行への添え・link の字の形・view の字の形・歯の名。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

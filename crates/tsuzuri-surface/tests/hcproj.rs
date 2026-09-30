@@ -1,5 +1,6 @@
 //! 便 h-cards-proj の歯: 各 project の表の行の 5 つの欄（要対応・台帳・run の数・orchestrator・口座）と
 //! 群の見出しの chip の hover の card（見本の nx・ledCard・pcnt・seatCard・gproj・group の枝）と、DOM の部分の字。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

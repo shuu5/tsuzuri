@@ -1,5 +1,6 @@
 //! 行 g-next-acct-origin の歯（接頭辞 nxorg_）: 次の一手の link の押しの手（next の Jump と jump・窓の名の window_of）・
 //! next.rs の mod dom の押しの字の並び・この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

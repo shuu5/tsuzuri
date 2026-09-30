@@ -1,5 +1,6 @@
 //! 便 h-hb の歯: session の表の orchestrator の行の停止の切り替え（button の字・確かめの段の字・要求の本文・
 //! 応答の出し方・送る間の状態の移り方）。fixture は便 b-acct の tests/fixtures/account/acct-doc.json（読むだけ）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

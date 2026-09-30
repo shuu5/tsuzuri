@@ -1,6 +1,7 @@
 //! 行 c-seat-group の歯: project board の席の block の群の chip の card（見本の pa:group）は、
 //! 口 /api/account の群の枠（GroupCard）を名で選んで写す（一致は電文の matches のまま・記録が在る時だけいつから）。
 //! 電文が読めない・群の枠が無い時は測れていないの card。DOM は口 /api/account を 1 度読み、指を置いた時に card を組む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

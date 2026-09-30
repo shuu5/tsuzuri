@@ -1,5 +1,6 @@
 //! 行 c-pipe-ci の歯（面）: 札の欄 ci（中核が判じた着地の後の CI の読み）を札の語と印と列に出す。
 //! 札は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-cm）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

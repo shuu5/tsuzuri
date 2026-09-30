@@ -1,5 +1,6 @@
 //! 便 g-node-timeline の歯（接頭辞 ntime_）: 節点の頁の 3 つ目の block「run の時間軸」の枠と口の path・走行の id の bead・
 //! 中心の行から読む走行・段の chip と色・経験者の行・中身の 3 値・語の鍵と stylesheet・DOM の結び・自分の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 行 g-next-rows の歯: 次の一手の一覧の行の対象の id・当たった行の次の手の link・当たった質問の行の経過・
 //! DOM が link と経過を組む字・歯の名。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

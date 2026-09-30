@@ -1,5 +1,6 @@
 //! 行 h-acct-rest の歯: account board の各 project の表の決定待ちの 2 段目（束の承認の件数）・
 //! 未反映の 2 段目（種類ごとの件数と見出し）・未反映の列の見出しの和（Σ）・台帳の表の未反映の列の最大と最小の印と、DOM の部分の字。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

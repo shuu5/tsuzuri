@@ -1,6 +1,7 @@
 //! 行 hs-blocks の歯: block の列を組み立ての script が src/project の dir から生成し（列挙 Module）、
 //! 共通の部品を kit へ移し、board の描き分けを生成した列の 1 つの関数にし、台帳の block は画面の状態を context で受ける。
 //! block_view と ledger の view の本文は wasm の target のときだけなので字を読んで見る（DOM は surface-build で組めることで見る）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 行 i-stage-all の歯（接頭辞 tgall_）: account board の block「表示先」（HOME の最後の段）の
 //! 表の行・要求の本文・置き場・読みと送りが知らせの鎖に乗らないこと。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 行 g-unref-dash の歯（接頭辞 udash_・要件 FR13）: project board の台帳の block の未反映の数は、3 種とも分からなければ
 //! account board の表と同じ数えない字 ― にし、1 種か 2 種が分からなければ数に測れていないの印を添える。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

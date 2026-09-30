@@ -1,6 +1,7 @@
 //! 行 g-nav の歯（接頭辞 pgsw_）: 頁の link の押しは文書を読み直さずに URL を積んで頁を切り替える。
 //! 押しの決め（frame の switch_url）は host で撃ち、DOM と履歴を撃つ所（board.rs と nodearound.rs・wasm の target の
 //! ときだけ組む）の配線は CARGO_MANIFEST_DIR から読んだ fn の本文の字で見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,6 +1,7 @@
 //! 行 g-tip-expert の歯: 語の鍵を持たない要素の経験者だけの注釈（見本の `data-tip-expert`・help の expert_note）・
 //! まとめて承認の重なりの chip の字（batch の OVERLAP_TIP）・抜けの検査の各行の見出しの字（gaps の summary_tip）・
 //! 注釈の層と 2 つの block の DOM の字の並び。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

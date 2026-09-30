@@ -1,5 +1,6 @@
 //! 便 h-look の歯: account board の頁の題・群の枠の段は見出しを持たない・群の card の使った割合の見出しの語。
 //! DOM は wasm の target のときだけなので、mount と groups_view は src の字を読んで見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

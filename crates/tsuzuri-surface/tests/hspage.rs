@@ -1,6 +1,7 @@
 //! 行 hs-pages の歯（接頭辞 hspage_・判断の記録 ADR-13）: 頁は src/pages の下に 1 頁 1 file・列挙 PageId は
 //! 組み立ての script が生成・snapshot は頁ごとの file と header の file・
 //! nav は頁の定義の数の順・href と from_query の往復・frame.rs と board.rs に頁の変種の名が無い。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

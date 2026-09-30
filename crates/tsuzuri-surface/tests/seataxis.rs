@@ -1,5 +1,6 @@
 //! 行 g-seat-axis の歯: 稼働の記録の幅ごとの目盛の時刻（span_ticks・Strip の ticks）と、帯の色と縦線の凡例
 //! （LEGEND・sample_svg）と、mod dom がそれを描く字と、段の class が stylesheet に在ることと、この file の歯の名。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

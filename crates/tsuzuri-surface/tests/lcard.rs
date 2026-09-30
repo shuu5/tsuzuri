@@ -1,5 +1,6 @@
 //! 行 g-ledger-card の歯: burndown の図の hover の card（題・純減と closed/日・open の始めと終わり・出所と時点・
 //! 1 日おきの詳しく）・Metrics が card を運ぶこと・DOM の字（lmid の card と epic の題の link）・語の鍵・歯の名。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

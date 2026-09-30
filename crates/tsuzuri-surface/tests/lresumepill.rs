@@ -1,6 +1,7 @@
 //! 行 c-limit-resume の歯（面・接頭辞 lresume_）: header の席の pill の限度の再開の時刻と、席の card の ↻ の行・
 //! seatpill の字・3 つの file の歯の名。fixture は tests/fixtures/surface/seat-card.json（読むだけ）で、
 //! 欄 reopens は歯の中で置いて電文にする。時刻の字は hmd を撃った値と比べる。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

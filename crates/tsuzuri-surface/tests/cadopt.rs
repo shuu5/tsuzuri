@@ -1,6 +1,7 @@
 //! 行 g-card-adopt-a の歯: pipeline の札の値の行と詳しく（見本の cardContent の data-run の枝）・札の hover を節点の card に替える値・
 //! 次の一手の質問の大きい箱の題（問いの節点の card）・DOM の付け方の字。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、2 つの file の字で付け方を見る。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

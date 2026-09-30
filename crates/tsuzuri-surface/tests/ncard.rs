@@ -1,6 +1,7 @@
 //! 行 g-card-node の歯: 電文の節点 1 つから組む hover の card（widgets の nodecard）と、
 //! 地図の圧縮の面の札・条の札・規範文の子と一覧の面の行の題がその card を持ち、a の要素に付けること。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、3 つの file の字で付け方を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

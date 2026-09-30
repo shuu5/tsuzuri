@@ -1,6 +1,7 @@
 //! 行 g-map-tips の歯: 地図の面の 0 件の SRS と pipeline の帯の card（見本の srs0 と run0）と、
 //! グラフの数の行と表の行列の数の cell の経験者だけの注釈（見本の data-tip-expert）。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、3 つの file の字で付け方を見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 便 c-q-blocking の歯（面）: 問いの card の止めている task の数の chip（card は電文の列を写す・
 //! つながりの段の見出しで関わる所の chip の後・見本の IC.stop の図と語の辞書・歯の名）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

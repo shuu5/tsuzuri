@@ -1,5 +1,6 @@
 //! 便 h-home の歯: HOME の 4 段（次の一手の並び・群の枠・口座 × 窓・移動）の並べと字と class・
 //! 段ごとの測れていない・移動の畳み・出さない物・語の辞書と stylesheet と依存。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

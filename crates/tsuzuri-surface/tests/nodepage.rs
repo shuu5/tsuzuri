@@ -1,6 +1,7 @@
 //! 便 g-node の歯: 節点の頁の枠（nav に出さない）・口の path と URL の query の読み書き・畳みの移り方・
 //! fixture の近傍の図の配置と線の端・頭と概要・畳みの button の数・数の行・狭い幅の一覧・頁の 4 つの状態・
 //! id の無い URL は口を読まない・全部の節点に id が出る・語の鍵・fixture の大きさ・足す外の依存は 0 本。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 行 i-stage-own の歯（接頭辞 tgown_）: home の右の列の block「表示先」（project board・自分の project だけ）の
 //! 置き場と畳める段・読みの応答から中身・自分の行と字・要求の本文・送った後の 1 行・読みが知らせの鎖に乗らないこと。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

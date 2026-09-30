@@ -1,6 +1,7 @@
 //! 行 g-seatpill の歯（接頭辞 gpill_）: header の席の pill の部品（frame の SEAT と seat_shown と snapshot の行）・
 //! pill の状態と応答なしの経過・席の card の字・board と pill の DOM の字の並び・この file の歯の名。
 //! fixture は tests/fixtures/surface/seat-card.json（読むだけ）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

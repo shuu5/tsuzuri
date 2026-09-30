@@ -1,5 +1,6 @@
 //! 行 c-pipe-closed の歯（面）: 台帳で閉じた bead の着地しなかった札（段 Landed・段の理由の頭が `CLOSED_TAG`）の
 //! 見分け・段の字・hover の詳しく・Landed の列の今日の札・中核の字の写し・歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

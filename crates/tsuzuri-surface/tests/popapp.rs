@@ -2,6 +2,7 @@
 //! （frame の window_features・Press の plain・board の standalone と open_named と plain_click・
 //! 3 か所の開きと知らせの題の link の押しの受け手・manifest の feature・この file の歯の名）。
 //! wasm の DOM の手は host で撃てないので、字の並びで見る。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

@@ -2,6 +2,7 @@
 //! 電文の鍵と、project board の席の block の状態の帯の猶予の内・移り先の無い断り・逼迫の行と、
 //! 詳しくの写しの行（器の鍵の名・`-` と `?`）。残り秒は終わる時刻から card の at を引いた値（行 c-abs-seat）。
 //! fixture: tests/fixtures/surface/seat-card.json（読むだけ・4 つの鍵を持たない）。器の欄は歯の中で組む。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

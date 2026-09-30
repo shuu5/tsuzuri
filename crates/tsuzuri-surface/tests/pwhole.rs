@@ -1,5 +1,6 @@
 //! 行 g-policy-all の歯: 全体への指示の block は範囲の切り替えと問いの選びを持たず、指示の本文の範囲はつねに all・
 //! 字の欄と送る button は問いの一覧を読まずに 1 度だけ組む・自分の歯の名は着地済みの verify の filter の語を含まない。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

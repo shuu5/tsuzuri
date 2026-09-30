@@ -1,5 +1,6 @@
 //! 行 g-ledger-home の歯: HOME の台帳の一覧は閉じた bead を出さない（持ち主の裁定 t3-hub.52.31）・
 //! 閉じた epic の頭は閉じていない下の項が在るときだけ残す・残る組が 0 なら NO_OPEN・件数と指標は閉じた行も数えたまま。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

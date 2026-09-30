@@ -1,5 +1,6 @@
 //! 行 h-sess-axis の歯: account board の session の表の稼働の記録の見出しの欄と目盛の段
 //! （C_HH・SAXIS・SAXIS_M・axis_labels と mod dom の axis_view）と、段の class が stylesheet に在ることと、この file の歯の名。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

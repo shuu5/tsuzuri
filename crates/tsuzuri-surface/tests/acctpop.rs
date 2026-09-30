@@ -1,5 +1,6 @@
 //! 便 h-popstate の歯: account board の tab の押しは頁を読み直さず tab_url の URL を履歴に積み、戻ると進むで tab と mode を戻す。
 //! board.rs は wasm の target のときだけなので src の字を読んで見る（DOM は xtask の surface-build で組めることで見る）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

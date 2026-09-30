@@ -1,5 +1,6 @@
 //! 便 g-next の歯: fixture の 4 組の大きく出す 1 つ・残りの一覧の順と字・なしの箱・測れていない・
 //! 7 種と語の鍵の 1 か所の表・電文の lead を写すだけ・着地済みの外形と依存。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -1,6 +1,7 @@
 //! 行 g-top-fit の歯: 上端の帯は幅 1000 以下で 2 段の狭い形・1001 以上で 1 行の形。
 //! 横 scroll そのものは browser でしか測れないので、幅を名指して、その幅で効く塊
 //! （max-width の値がその幅以上）の規則の字を見る。
+#![cfg(test)]
 
 const BAND: [&str; 7] = [
     ".top { gap: var(--s2); padding: 0 var(--s3); height: auto; min-height: 56px; flex-wrap: wrap; padding-top: var(--s1); padding-bottom: var(--s1); }",

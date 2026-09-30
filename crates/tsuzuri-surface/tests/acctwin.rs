@@ -1,5 +1,6 @@
 //! 便 h-win の歯: 窓の名・開く URL・窓の一覧の移り方・button の字・保存の口の字が無い・
 //! 窓の名を付ける所と開く手順（wasm の枝の字）・Cargo.toml と語の辞書と stylesheet を触らない。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 //! 行 g-help-sym の歯: 注釈の記号の見本（gi・nxm・thr・tk・band）を実物と同じ class の字にする（help の sym_html）・
 //! 語 history の注釈の置き換えの字（`{SPAN}` と `{TICK}`）を URL の query の幅の字に替える（help の note_in）。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

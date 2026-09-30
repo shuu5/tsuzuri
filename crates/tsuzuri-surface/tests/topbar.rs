@@ -1,5 +1,6 @@
 //! 便 g-top-fix の歯: header の最終の記録の短い時刻（見本の hmd と同じ決め方・字は日本時間・行 g-jst）。
 //! header の DOM は wasm の target のときだけ組むので、ここでは字を決める純粋な関数だけを pin する。
+#![cfg(test)]
 
 use tsuzuri_surface::frame::HEADER;
 use tsuzuri_surface::view::clock_short;

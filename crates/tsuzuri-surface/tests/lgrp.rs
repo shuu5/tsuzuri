@@ -1,5 +1,6 @@
 //! 行 g-ledger-group-kind の歯: 問いの一覧と台帳の一覧の組と並べは、欄 kind の字でなく地図の節点と同じ種類の読み
 //! （LedgerRow の node_kind・issue_type と label intake:question・intake:memo）で決まる。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

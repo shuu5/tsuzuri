@@ -1,5 +1,6 @@
 //! 行 g-help-fig の歯: 注釈の図の記号 `{fig:名}` を見本の figSVG と同じ並びの SVG の字にする（widgets の fig）・
 //! 図の記号だけの行を help の fig_of で見分け、DOM の lines_view が li（class figli）に図を描く。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

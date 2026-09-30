@@ -1,6 +1,7 @@
 //! 行 g-kind-label の歯（要件 FR13 と NFR1）: 未反映の種類の見出し（語の辞書の鍵 unref: と種類の名の label）は
 //! 面の ledger の module の 1 か所に在り、account board と project board が同じ語（memo・裁定・要望）で出す。
 //! project board の DOM は wasm の target のときだけなので、ledger.rs の字で見る。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

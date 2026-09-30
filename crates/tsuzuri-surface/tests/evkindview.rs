@@ -1,5 +1,6 @@
 //! 合図の種類で読み直す口を決める歯（接頭辞 evkind_・計画 surface-plan の行 c-ev-kind の完了の条件 (5)〜(8)）。
 //! 口の path の字は面の block の module の定数と契約の定数から引く。
+#![cfg(test)]
 
 use std::fs;
 use std::path::Path;

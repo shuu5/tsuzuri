@@ -1,5 +1,6 @@
 //! 便 h-frame の歯: account board の入口の振り分け・3 つの tab と URL・header と tab の枠の snapshot・
 //! block ごとに 1 つの module・数の印・読めないときは測れていない・口の path は契約の型の定数・保存の口の字が無い。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

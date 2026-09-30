@@ -1,5 +1,6 @@
 //! 便 h-led-spark の歯: account board の台帳の表の詳しくの段の 14 日の sparkline
 //! （見本の ledMore の `mi sp` と ledger.js の spark14）。字は project の ledger の module の spark と spark_svg で組む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -1,6 +1,7 @@
 //! 行 g-unref-panel の歯（接頭辞 urpanel_・要件 FR13 と NFR2）: 台帳の block の未反映の段は口 /api/unreflected の電文を
 //! 行の順と数のまま一覧にし（20 件まで・超える分は残りの数の 1 行）、分からない種類と読めない口を「測れていない」と出す。
 //! DOM は host で撃てないので、ledger.rs の字と xtask の surface-build で組めることで見る。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

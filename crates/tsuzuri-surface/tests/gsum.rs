@@ -1,5 +1,6 @@
 //! 行 g-summary の歯: 電文の節点の概要（plain・eng）と行の番号を、節点の card と一覧の行の要約の欄と
 //! 節点の頁の頭と 2 面の概要の箱に写し、見本の字数で切る。値は host で組み、DOM は 2 つの file の字で見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

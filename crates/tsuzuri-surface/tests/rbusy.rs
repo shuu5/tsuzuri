@@ -1,5 +1,6 @@
 //! 行 g-ruling-busy の歯: 問いの頁の送る button は送っている間に字を替え、server の台帳の断り
 //! （503 ledger-unknown・502 ledger-append・502 ledger-close）は理由と次の手の字にし、断りの 1 行は目立つ class と role で出す。
+#![cfg(test)]
 
 use tsuzuri_contract::surface::RulingId;
 use tsuzuri_surface::project::ask::{self, Outcome};

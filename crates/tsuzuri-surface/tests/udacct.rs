@@ -1,5 +1,6 @@
 //! 行 g-unref-dash-acct の歯（接頭辞 udacct_・要件 FR13）: account board の台帳の tab の未反映の数は、3 種とも分からない行なら
 //! 数えない字 ― にして測れていないの印を添えず未反映の列の最大と最小に数えず、1 種か 2 種が分からなければ今の数と印のまま出す。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

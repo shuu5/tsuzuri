@@ -1,6 +1,7 @@
 //! 行 g-coach の歯（接頭辞 gcoach_）: 初心者の mode の home の頁の最初の案内（見本 mock v3 の ui.js の coach mark）。
 //! 済み印は browser の保存に残し（持ち主の裁定 t3-hub.52.16・要件 FR1）、query の coach=1 で出し直す。
 //! 始めの決め・段の飛ばし・button の字と点・輪と箱の置き場は host の純粋な関数で撃ち、DOM と保存を撃つ所の配線は source の字で見る。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

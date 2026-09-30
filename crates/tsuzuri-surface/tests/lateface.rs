@@ -1,5 +1,6 @@
 //! 席に届いていない裁定の 1 行の歯（接頭辞 lateface_・設計ノート surface-wave23b 行 f-undelivered・要件 FR9）。
 //! 純粋な関数は host で撃ち、DOM は wasm の target でしか組めないので src の字の mod dom 以降を読む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

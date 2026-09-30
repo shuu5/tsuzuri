@@ -1,4 +1,5 @@
 //! 行 g-link-kcard の歯: 板の札は契約 bead と同じ id の節点の頁への link（hover の card は残す）・歯の名の置き場。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

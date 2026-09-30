@@ -1,6 +1,7 @@
 //! 行 g-link-items の歯: 電文の節点から一覧の 1 項を引く node_item・抜けの検査の頁の名指しの found・
 //! 一覧の 1 項の題を節点の頁への link にする item_view の字・gaps の mod dom が found を item_view で描く字・
 //! この file の歯の名。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
