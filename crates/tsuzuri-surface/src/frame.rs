@@ -336,11 +336,28 @@ pub struct Press {
     pub alt: bool,
 }
 
+impl Press {
+    /// 左の button（番号 0）で、修飾の鍵（ctrl・meta・shift・alt）のどれも無い押し（新しい窓や tab・保存の押しでない）。
+    pub fn plain(self) -> bool {
+        self.button == 0 && !(self.ctrl || self.meta || self.shift || self.alt)
+    }
+}
+
+/// app の窓（display-mode が standalone）かを問う media query。
+pub const STANDALONE_QUERY: &str = "(display-mode: standalone)";
+
+/// window.open の features で app の窓を開く語（普通の tab の頁から渡すと普通の popup になるので app の窓の中の時だけ渡す）。
+pub const POPUP: &str = "popup";
+
+/// 名前つきの窓を開く時の features: app の窓の中なら `POPUP`・ほかは空の字。
+pub fn window_features(standalone: bool) -> &'static str {
+    if standalone { POPUP } else { "" }
+}
+
 /// 頁の link の押しで文書を読み直さずに積む URL（左の button を修飾の鍵なしで押し、今の頁と違う頁へ
 /// 行くときだけ `href` の字・ほかは None で browser の既定のまま＝新しい窓や tab・保存・同じ頁の読み直し）。
 pub fn switch_url(now: PageId, to: PageId, mode: Mode, press: Press) -> Option<String> {
-    let plain = press.button == 0 && !(press.ctrl || press.meta || press.shift || press.alt);
-    (plain && now != to).then(|| href(to, mode))
+    (press.plain() && now != to).then(|| href(to, mode))
 }
 
 /// 節点の頁への link（節点の id は `%XX` にする・mode を URL に残す）。

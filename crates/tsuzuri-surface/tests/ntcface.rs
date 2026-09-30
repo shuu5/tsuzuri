@@ -191,7 +191,8 @@ fn ntc_blocks_placed() {
     assert_eq!(ChangeKind::ALL.last(), Some(&ChangeKind::Notice));
 }
 
-/// (8) 2 つの block は窓を前に出す・起こす・保存する・書く字を持たず、account の link は project の窓の名を使う。
+/// (8) 2 つの block は窓を前に出す・起こす・保存する・書く字を持たず、account の link は project の窓の名を使う
+/// （link の窓を用意するのは board の open_named だけ）。
 #[test]
 fn ntc_blocks_raise_nothing() {
     let own = read("src/project/notice.rs");

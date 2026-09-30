@@ -373,7 +373,7 @@ mod dom {
         let win = match live {
             Some(w) => w,
             None => {
-                let Ok(Some(w)) = window().open_with_url_and_target("", &win_name(project)) else {
+                let Ok(Some(w)) = crate::board::open_named("", &win_name(project)) else {
                     return;
                 };
                 if w.location().href().is_ok_and(|href| href == BLANK) {

@@ -274,7 +274,7 @@ fn acctwin_no_storage_and_wasm_wiring() {
     let src = read("src/account/windows.rs");
     for part in [
         "pub fn open(project: &str, url: &str)",
-        "open_with_url_and_target(\"\", &win_name(project))",
+        "open_named(\"\", &win_name(project))",
         "\"about:blank\"",
         "set_href(url)",
         "focus()",

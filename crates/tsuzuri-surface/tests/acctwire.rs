@@ -63,7 +63,7 @@ fn acctwire_back_steps() {
     let board = read("src/board.rs");
     for word in [
         "frame::back_steps(",
-        "open_with_url_and_target(\"\", ACCOUNT_WIN)",
+        "open_named(\"\", ACCOUNT_WIN)",
         "BackStep::CloseSelf",
         "me.close()",
         "class=BACK_WRAP",

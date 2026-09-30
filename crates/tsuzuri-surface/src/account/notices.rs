@@ -2,6 +2,7 @@
 //! project board の block「席からの知らせ」と同じ口と同じ電文を読み（`crate::project::notice`）、project ごとの最新の 1 つを
 //! 電文の順（新しい順）に並べ、記録の読めない project の名を最後の 1 行に出す。
 //! 題の link はその project の名前つきの窓で開く（windows の `win_name`・前に出す命令は撃たない）。
+//! app の窓の中の左の押しは、board の open_named で窓を先に用意して app の窓にする（行 g-popup-app）。
 
 use crate::frame::Block;
 use crate::project::Body;
@@ -59,6 +60,7 @@ pub fn view() -> leptos::prelude::AnyView {
 /// 各 project の席からの知らせの DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use leptos::ev;
     use leptos::prelude::*;
 
     use super::{BLOCK, PATH, Rows, content, unread_line};
@@ -82,11 +84,21 @@ mod dom {
         view! { <ul class="items">{lines}{unread}</ul> }.into_any()
     }
 
+    /// 題の link の押しの受け手: app の窓の中で新しい窓や tab・保存でない左の押しの時だけ、その project の
+    /// 名前つきの窓を board の open_named で先に用意し、link の既定の遷移をその窓に向ける（ほかは既定のまま）。
+    fn named_window(e: ev::MouseEvent, project: &str) {
+        if !crate::board::plain_click(&e) || !crate::board::standalone() {
+            return;
+        }
+        let _ = crate::board::open_named("", &win_name(project));
+    }
+
     /// 1 行（project の名・題〔link の先が在ればその project の窓で開く a・無ければ字だけ〕・時刻）。
     fn line_view(l: Line) -> AnyView {
         let title = match l.href {
             Some(href) => {
-                view! { <a class="ttl" href=href target=win_name(&l.project)>{l.title}</a> }.into_any()
+                let project = l.project.clone();
+                view! { <a class="ttl" href=href target=win_name(&l.project) on:click=move |e| named_window(e, &project)>{l.title}</a> }.into_any()
             }
             None => view! { <span class="ttl">{l.title}</span> }.into_any(),
         };

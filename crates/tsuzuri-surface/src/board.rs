@@ -70,6 +70,29 @@ fn press(e: &ev::MouseEvent) -> Press {
     }
 }
 
+/// 頁が app の窓の中か（display-mode の media query だけで見る・読めなければ普通の browser と見る）。
+pub fn standalone() -> bool {
+    window()
+        .match_media(frame::STANDALONE_QUERY)
+        .ok()
+        .flatten()
+        .is_some_and(|q| q.matches())
+}
+
+/// 名前つきの窓を開く（面の名前つきの窓はここだけが開く）: app の窓の中なら app の窓で、ほかは features なし。
+/// 名で在る窓が返る時は features は効かない。
+pub fn open_named(
+    url: &str,
+    name: &str,
+) -> Result<Option<web_sys::Window>, web_sys::wasm_bindgen::JsValue> {
+    window().open_with_url_and_target_and_features(url, name, frame::window_features(standalone()))
+}
+
+/// 頁の link の押しが、新しい窓や tab・保存でない左の押しか（frame の Press の plain）。
+pub fn plain_click(e: &ev::MouseEvent) -> bool {
+    press(e).plain()
+}
+
 /// 頁を替える（同じ頁なら何もしない）。前の枠の signal は片付くので、節点の頁の読みと頁の題の語を捨ててから替える。
 fn go(page: RwSignal<PageId>, subject: RwSignal<PageSubject>, next: PageId) {
     if page.get_untracked() == next {
@@ -156,10 +179,7 @@ fn App() -> impl IntoView {
 /// close が効かない窓（script が開いた窓でない）は、待ちの後に探した結果を `note` に置く。
 fn back_to_board(note: RwSignal<Option<BackHow>>) {
     let me = window();
-    let win = me
-        .open_with_url_and_target("", ACCOUNT_WIN)
-        .ok()
-        .flatten();
+    let win = open_named("", ACCOUNT_WIN).ok().flatten();
     let href = win.as_ref().and_then(|w| w.location().href().ok());
     let how = frame::back_how(win.is_some(), href.as_deref());
     for step in frame::back_steps(how == BackHow::Front) {

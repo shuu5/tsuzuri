@@ -264,7 +264,7 @@ fn nxorg_dom_wiring() {
             "let Some(name) = win else {",
             "if e.ctrl_key() || e.meta_key() || e.shift_key() {",
             "return;",
-            "let found = window().open_with_url_and_target(\"\", name).ok().flatten();",
+            "let found = crate::board::open_named(\"\", name).ok().flatten();",
             "let href = found.as_ref().and_then(|w| w.location().href().ok());",
             "if jump(found.is_some(), href.as_deref()) == Jump::Front {",
             "e.prevent_default();",
