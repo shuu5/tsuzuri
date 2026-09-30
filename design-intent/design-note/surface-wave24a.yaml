@@ -1,0 +1,25 @@
+# 設計ノート surface-wave24a — （発効 2026-09-30・持ち主の裁定 t3-hub.56:20260927T2259Z-1〔計画 surface-plan の承認〕を継ぐ・行の拠り = 計画 surface-plan の 6 節〔folio の持ち込みの後の行〕と判断の記録 ADR-23 の撤退の条件と持ち主の求め 2026-09-30〔folio2 の統合と tz 化を並列を上げて進める〕）第 24 波 a。要件は srs.yaml。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave24a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave24a.toml#<行 id>。
+meta:
+  id: surface-wave24a
+  title: 第 24 波 a — folio の口を tz の subcommand にする（tz 化）と、持ち込んだ folio への規則の当てと、面の server の軽さとメモリの直し
+  version: v0.1
+  status: effective
+  generated: 2026-09-30
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+  note: ノート surface-wave23b（32 行の全部が着地・規則の行 R-32 の上限）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-09-30）は目的と空の契約表だけを置いた（行は起草の後に足す）。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      持ち込んだ folio を tsuzuri の 1 つの binary tz の下に入れ（要件 FR17・受入 AC14・判断の記録 ADR-8・計画だけの行 k-parity を割った行）、持ち込んだ code に tsuzuri の規則（R-4・R-10）を当て、持ち込んだ木の中の床を見張る。あわせて、面の server の軽さ（規則の行 R-34・判断の記録 ADR-23 の撤退の条件）とメモリ（RSS）の直しの行を置く。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows: []
+
+figures: []
