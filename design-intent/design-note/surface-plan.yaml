@@ -403,6 +403,8 @@ sections:
       - {id: k-lint-folio-roots, doc: surface-wave24a}
       - {id: r4-args-mark, doc: surface-wave24a}
       - {id: r4-core-src, doc: surface-wave24a}
+      - {id: r4-boundary-src, doc: surface-wave24a}
+      - {id: r4-surface-src, doc: surface-wave24a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
