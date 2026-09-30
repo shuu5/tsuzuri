@@ -16,10 +16,10 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use yaml_rust2::YamlLoader;
+use folio::yaml_rust2::YamlLoader;
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn fixture(name: &str) -> PathBuf {
@@ -71,7 +71,7 @@ fn copy_tree(src: &Path, dst: &Path) {
 }
 
 fn folio_intake(dir: &Path, answers: Option<&Path>, mode: &str) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("intake").arg("--dir").arg(dir);
     if let Some(path) = answers {
         cmd.arg("--answers").arg(path);
@@ -302,12 +302,12 @@ fn sheet_write_needs_the_parent_dir_of_the_output() {
 #[test]
 fn sheet_needs_exactly_one_of_print_and_write() {
     let dir = work("flags");
-    let both = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let both = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["intake", "--print", "--write"])
         .output()
         .expect("folio を起動できない");
     assert_eq!(both.status.code(), Some(2), "{}", show(&both));
-    let neither = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let neither = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["intake", "--dir"])
         .arg(&*dir)
         .output()
@@ -426,7 +426,7 @@ fn f197_region(file: &str) -> String {
 }
 
 /// 字の一覧（一覧でない・字でない項は落とす）。
-fn f197_strs(y: &yaml_rust2::Yaml) -> Vec<String> {
+fn f197_strs(y: &folio::yaml_rust2::Yaml) -> Vec<String> {
     y.as_vec()
         .map(|v| v.iter().filter_map(|x| x.as_str()).map(str::to_string).collect())
         .unwrap_or_default()

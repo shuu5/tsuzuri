@@ -29,7 +29,7 @@ const FORBIDDEN: [&str; 3] = ["folio2", "f2-", ">f2<"];
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -74,7 +74,7 @@ fn git(cwd: &Path, args: &[&str]) {
 }
 
 fn folio(args: &[&str], dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(args)
         .arg("--dir")
         .arg(dir)

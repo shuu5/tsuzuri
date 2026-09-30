@@ -6,11 +6,7 @@
 //! fixture の digest は歯の中では計算しない（file に書いた値＝凍結）。
 #![cfg(test)]
 
-#[path = "../src/sha256.rs"]
-mod sha256;
-#[expect(dead_code, reason = "取り込んだ src/yaml.rs の item を全部は使わない")]
-#[path = "../src/yaml.rs"]
-mod yaml;
+use folio::{sha256, yaml};
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,11 +16,11 @@ use std::process::{Command, Output};
 const ROOT_DIGEST: &str = "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("check")
         .arg("--dir")
         .arg(dir)

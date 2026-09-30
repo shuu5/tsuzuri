@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -170,7 +170,7 @@ impl Drop for Work {
 }
 
 fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("check")
         .arg("--dir")
         .arg(dir)
@@ -661,7 +661,7 @@ fn r11_rules_note_says_the_floor_counts_it_again() {
 }
 
 fn folio_help(subcommand: &str) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg(subcommand)
         .arg("--help")
         .output()
@@ -707,31 +707,38 @@ fn check_srs_figure_with_an_unknown_field_fails() {
     assert_srs_figure_violation(&w, &["未知の欄", "extra"]);
 }
 
+/// folio の lib の入口 folio::entry::run を歯の process の中で撃つ（頭の命令の名は folio・書き先は Vec）。
+/// 命令の一覧（folio --help）と知らない命令の断りは tz の binary に無く、入口が持つ（行 k-tz-tests・tsuzuri の設計ノート
+/// surface-wave24a）。終了 code と標準出力と標準エラーの字を返す。
+fn entry(args: &[&str]) -> (u8, String, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let rc = folio::entry::run(args.iter().copied(), &mut out, &mut err);
+    (
+        rc,
+        String::from_utf8(out).expect("標準出力は UTF-8"),
+        String::from_utf8(err).expect("標準エラーは UTF-8"),
+    )
+}
+
+/// folio --help の標準出力（入口が 0 を返す）。
+fn entry_help() -> String {
+    let (rc, out, err) = entry(&["folio", "--help"]);
+    assert_eq!(rc, 0, "{err}");
+    out
+}
+
 /// 退役した命令 folio render は使い方の誤り（終了 2）で止まり、標準エラーに render の字を出す。
 #[test]
 fn retired_render_subcommand_is_unrecognized() {
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
-        .args(["render", "--check"])
-        .output()
-        .expect("folio を起動できない");
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(2), "{err}");
+    let (rc, _, err) = entry(&["folio", "render", "--check"]);
+    assert_eq!(rc, 2, "{err}");
     assert!(err.contains("render"), "{err}");
 }
 
 /// folio --help の命令の一覧に render が無く、build は在る。
 #[test]
 fn retired_render_help_does_not_list_render() {
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
-        .arg("--help")
-        .output()
-        .expect("folio を起動できない");
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let help = stdout(&out);
+    let help = entry_help();
     assert!(!help.lines().any(|l| l.starts_with("  render")), "{help}");
     assert!(help.lines().any(|l| l.starts_with("  build")), "{help}");
 }
@@ -739,18 +746,14 @@ fn retired_render_help_does_not_list_render() {
 /// 憲法 P-1 の機構: 公開する命令（subcommand）の一覧は閉じた一覧と全数で一致し、採否を決める口はその一覧に無い。
 /// 一覧を足すときはこの歯と憲法 P-1 の機構の注を同じ便で直す（P-1.2・天井の 12 周目の実態 F-1）。
 /// 口 inject と serve は行 k-tz-drop で退役させた（`folio2/retired/` の下）。
+/// 行 k-tz-tests（tsuzuri の設計ノート surface-wave24a）からは一覧を folio の lib の入口で読む（tz の binary の --help は tz の口の一覧）。
 #[test]
 fn p1_commands_closed_list() {
     const CLOSED: [&str; 12] = [
         "check", "parts", "face", "figure", "build", "derive", "intake", "hello", "ceiling", "schema",
         "graph", "init",
     ];
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
-        .arg("--help")
-        .output()
-        .expect("folio を起動できない");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let help = stdout(&out);
+    let help = entry_help();
     let body = help.split("Commands:").nth(1).expect("Commands: の節が無い");
     let body = body.split("\n\n").next().unwrap_or(body);
     let listed: Vec<&str> = body
@@ -873,8 +876,8 @@ const F90_FR19_ADRS: &str = "\n    adrs: [ADR-5]\n";
 
 /// 写しの YAML の木を歩き、鍵 adrs を持つ表の（持ち主の id, adrs の値）を出てきた順に集める。
 /// 持ち主の id が無い表（要件の行でない所）に adrs が在れば歯が落ちる。
-fn f90_adrs_rows(node: &yaml_rust2::Yaml, out: &mut Vec<(String, yaml_rust2::Yaml)>) {
-    use yaml_rust2::Yaml;
+fn f90_adrs_rows(node: &folio::yaml_rust2::Yaml, out: &mut Vec<(String, folio::yaml_rust2::Yaml)>) {
+    use folio::yaml_rust2::Yaml;
     match node {
         Yaml::Hash(h) => {
             if let Some(adrs) = h.get(&Yaml::String("adrs".into())) {
@@ -909,7 +912,7 @@ fn f90_the_real_srs_carries_the_adrs_field() {
     // 歯が見るのは性質＝欄を持つ行が 1 つ以上在り、各行の値が一覧で、各項が判断の記録の id の形で、
     // その正本 adr/<id>.yaml が写しに実在すること。
     let text = fs::read_to_string(w.srs()).unwrap();
-    let doc = yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
+    let doc = folio::yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
     let mut rows = Vec::new();
     f90_adrs_rows(&doc, &mut rows);
     assert!(!rows.is_empty(), "実の要件書に adrs を持つ行が 1 つも無い");
@@ -1239,13 +1242,13 @@ fn f93_deleting_the_rule_row_is_not_a_silent_escape() {
         let (file, path) = f93_located(l);
         let text = fs::read_to_string(w.dir().join(&file))
             .unwrap_or_else(|e| panic!("違反が指す file {file} が写しに無い（{e}）: {l}"));
-        let doc = yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
+        let doc = folio::yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
         let node = f93_node(&doc, &path).unwrap_or_else(|| panic!("違反が指す所 {path} が {file} に無い: {l}"));
         assert!(f93_text(node).contains("R-17"), "違反が指す所の値が R-17 を名指さない: {l}");
     }
     // 憲法の条の関係の欄（relations.rules・型付き）が R-17 を名指す項は、写しの憲法から数えた数と同じだけ違反になる。
     let constitution = fs::read_to_string(w.constitution()).unwrap();
-    let constitution = yaml_rust2::YamlLoader::load_from_str(&constitution).unwrap().remove(0);
+    let constitution = folio::yaml_rust2::YamlLoader::load_from_str(&constitution).unwrap().remove(0);
     let named = constitution["articles"]
         .as_vec()
         .expect("憲法の articles が一覧でない")
@@ -1276,12 +1279,12 @@ fn f93_located(line: &str) -> (String, String) {
 }
 
 /// YAML の木で道筋 `a.b[3].c` の先の節（無ければ None）。
-fn f93_node<'a>(doc: &'a yaml_rust2::Yaml, path: &str) -> Option<&'a yaml_rust2::Yaml> {
+fn f93_node<'a>(doc: &'a folio::yaml_rust2::Yaml, path: &str) -> Option<&'a folio::yaml_rust2::Yaml> {
     let mut node = doc;
     for seg in path.split('.') {
         let (key, mut rest) = seg.split_once('[').map_or((seg, ""), |(k, r)| (k, r));
         if !key.is_empty() {
-            node = node.as_hash()?.get(&yaml_rust2::Yaml::String(key.into()))?;
+            node = node.as_hash()?.get(&folio::yaml_rust2::Yaml::String(key.into()))?;
         }
         while !rest.is_empty() {
             let (idx, after) = rest.split_once(']')?;
@@ -1293,12 +1296,12 @@ fn f93_node<'a>(doc: &'a yaml_rust2::Yaml, path: &str) -> Option<&'a yaml_rust2:
 }
 
 /// 節の字面（字ならそのまま・それ以外は YAML に書き出す）。
-fn f93_text(node: &yaml_rust2::Yaml) -> String {
+fn f93_text(node: &folio::yaml_rust2::Yaml) -> String {
     if let Some(s) = node.as_str() {
         return s.to_string();
     }
     let mut out = String::new();
-    yaml_rust2::YamlEmitter::new(&mut out).dump(node).unwrap();
+    folio::yaml_rust2::YamlEmitter::new(&mut out).dump(node).unwrap();
     out
 }
 
@@ -1317,7 +1320,7 @@ fn f117_region_top_level(text: &str) -> Vec<String> {
     let begin = text.find("# folio:schema:begin").expect("生成区間の begin が無い");
     let end = text.find("# folio:schema:end").expect("生成区間の end が無い");
     let region = &text[begin..end];
-    let doc = yaml_rust2::YamlLoader::load_from_str(region).unwrap().remove(0);
+    let doc = folio::yaml_rust2::YamlLoader::load_from_str(region).unwrap().remove(0);
     doc["schema"]["top_level"]
         .as_vec()
         .expect("生成区間の top_level が一覧でない")
@@ -1393,7 +1396,7 @@ fn f117_the_real_region_lists_scope_m3_after_scope_m1() {
     );
     let at = listed.iter().position(|k| k == "scope_m1").expect("一覧に scope_m1 が無い");
     assert_eq!(listed.get(at + 1).map(String::as_str), Some("scope_m3"), "{listed:?}");
-    let doc = yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
+    let doc = folio::yaml_rust2::YamlLoader::load_from_str(&text).unwrap().remove(0);
     let real: Vec<String> = doc
         .as_hash()
         .expect("要件書の最上位が表でない")
@@ -1412,7 +1415,7 @@ fn f117_the_real_region_lists_scope_m3_after_scope_m1() {
 const F136_KIND: &str = "[索引の節点] ";
 
 fn f136_graph_print(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["graph", "--print", "--dir"])
         .arg(dir)
         .output()

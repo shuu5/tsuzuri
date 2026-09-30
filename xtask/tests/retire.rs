@@ -1,4 +1,6 @@
 //! 持ち込んだ folio2/ の下の、道具が名で探す file の退役（行 t-carry-retire・判断の記録 ADR-18 の決定 (6)・要件 NFR3）。
+//! 行 k-tz-tests（設計ノート surface-wave24a）からは、folio の binary の退役（src/main.rs を folio2/retired/ へ移し、folio の歯の
+//! file を folio の manifest と境界の manifest の [[test]] のどちらか 1 つだけが名指す）も見る。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で木を見る。
 #![cfg(test)]
 
@@ -8,9 +10,14 @@ use std::path::PathBuf;
 const FOLIO2: &str = "folio2";
 const RETIRED: &str = "folio2/retired";
 
-/// 移した 15 の対（元・先）。元は folio2/ の下の元の path・先は folio2/retired/ の下。
-/// 後ろの 4 対は行 k-tz-drop（folio の口 inject と serve の退役）。
-const MOVED: [(&str, &str); 15] = [
+/// 持ち込んだ folio の crate の置き場と、tz の binary を持つ境界の crate の manifest（行 k-tz-tests）。
+const FOLIO: &str = "folio2/crates/folio";
+const BOUNDARY_MANIFEST: &str = "crates/tsuzuri-boundary/Cargo.toml";
+
+/// 移した 16 の対（元・先）。元は folio2/ の下の元の path・先は folio2/retired/ の下。
+/// 12〜15 番目の 4 対は行 k-tz-drop（folio の口 inject と serve の退役）。
+/// 最後の 1 対（16 番目）は行 k-tz-tests（folio の src/main.rs の退役）。
+const MOVED: [(&str, &str); 16] = [
     ("folio2/CLAUDE.md", "folio2/retired/claude-md.txt"),
     (
         "folio2/.beads/.gitignore",
@@ -52,6 +59,10 @@ const MOVED: [(&str, &str); 15] = [
     (
         "folio2/crates/folio/tests/serve.rs",
         "folio2/retired/crates/folio/tests/serve.rs",
+    ),
+    (
+        "folio2/crates/folio/src/main.rs",
+        "folio2/retired/crates/folio/src/main.rs",
     ),
 ];
 
@@ -117,6 +128,39 @@ fn exists(rel: &str) -> bool {
     std::fs::symlink_metadata(repo_root().join(rel)).is_ok()
 }
 
+/// manifest（repo の根からの相対）の表 [[test]] ごとの欄 name と path の値（無い欄は空の字）。
+fn test_tables(manifest: &str) -> Vec<(String, String)> {
+    let text = std::fs::read_to_string(repo_root().join(manifest))
+        .unwrap_or_else(|e| panic!("{manifest} を読む: {e}"));
+    let mut tables: Vec<(String, String)> = Vec::new();
+    let mut in_test = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_test = line == "[[test]]";
+            if in_test {
+                tables.push((String::new(), String::new()));
+            }
+            continue;
+        }
+        if !in_test || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim().trim_matches('"').to_string();
+        if let Some(last) = tables.last_mut() {
+            match key.trim() {
+                "name" => last.0 = value,
+                "path" => last.1 = value,
+                _ => {}
+            }
+        }
+    }
+    tables
+}
+
 #[test]
 fn f2ret_files_moved_to_retired() {
     for (from, to) in MOVED {
@@ -127,7 +171,7 @@ fn f2ret_files_moved_to_retired() {
     entries(RETIRED, &mut all);
     let files: BTreeSet<&str> = all.iter().map(String::as_str).filter(|p| is_file(p)).collect();
     let want: BTreeSet<&str> = MOVED.iter().map(|(_, to)| *to).collect();
-    assert_eq!(files, want, "{RETIRED} の下の file は移した 15 本だけ");
+    assert_eq!(files, want, "{RETIRED} の下の file は移した 16 本だけ");
 }
 
 #[test]
@@ -147,6 +191,49 @@ fn f2ret_no_tool_names_under_folio2() {
         .filter(|p| !KEPT.contains(p))
         .collect();
     assert!(found.is_empty(), "道具が名で探す名の項目が残る: {found:?}");
+}
+
+#[test]
+fn f2ret_folio_binary_retired() {
+    assert!(!exists(&format!("{FOLIO}/src/main.rs")), "src/main.rs が在る");
+    assert!(!exists(&format!("{FOLIO}/src/bin")), "src/bin が在る");
+    let manifest = std::fs::read_to_string(repo_root().join(FOLIO).join("Cargo.toml"))
+        .expect("folio の manifest を読む");
+    let lines: Vec<&str> = manifest.lines().map(str::trim).collect();
+    assert!(!lines.contains(&"[[bin]]"), "folio の manifest に [[bin]] が在る");
+    assert!(lines.contains(&"autotests = false"), "folio の manifest に autotests = false が無い");
+}
+
+#[test]
+fn f2ret_folio_tests_named_once() {
+    let tests_dir = repo_root().join(FOLIO).join("tests");
+    let mut files: BTreeSet<String> = BTreeSet::new();
+    for entry in std::fs::read_dir(&tests_dir).expect("folio の tests/ を読む") {
+        let path = entry.expect("tests/ の項目").path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".rs")) {
+            files.insert(name.to_string());
+        }
+    }
+    let folio_tables = test_tables(&format!("{FOLIO}/Cargo.toml"));
+    assert!(folio_tables.iter().all(|(_, path)| path.is_empty()), "folio の表に path が在る");
+    let folio: BTreeSet<String> = folio_tables.into_iter().map(|(name, _)| name).collect();
+    let boundary_tables = test_tables(BOUNDARY_MANIFEST);
+    for (name, path) in &boundary_tables {
+        assert_eq!(path, &format!("../../{FOLIO}/tests/{name}.rs"), "{name} の path");
+    }
+    let boundary: BTreeSet<String> = boundary_tables.into_iter().map(|(name, _)| name).collect();
+    assert!(folio.is_disjoint(&boundary), "2 つの manifest が同じ歯を名指す");
+    let named: BTreeSet<String> = folio.union(&boundary).cloned().collect();
+    assert_eq!(files, named, "tests/ の file と 2 つの manifest の表の名の和");
+    let mut with_tz: BTreeSet<String> = BTreeSet::new();
+    for name in &files {
+        let text = std::fs::read_to_string(tests_dir.join(format!("{name}.rs"))).expect("歯の file を読む");
+        assert!(!text.contains("CARGO_BIN_EXE_folio"), "{name} が folio の binary を撃つ");
+        if text.contains("CARGO_BIN_EXE_tz") {
+            with_tz.insert(name.clone());
+        }
+    }
+    assert_eq!(with_tz, boundary, "tz の binary を撃つ file と境界の manifest の表");
 }
 
 /// 起草の時の main 58c1da55 の契約表の verify の最後の字（この行の語を除く）。
@@ -484,7 +571,7 @@ fn f2ret_own_names_clean() {
             &rest[..rest.find('(').expect("fn の名の後に (")]
         })
         .collect();
-    assert_eq!(names.len(), 3, "{names:?}");
+    assert_eq!(names.len(), 5, "{names:?}");
     for name in names {
         let rest = name
             .strip_prefix("f2ret_")

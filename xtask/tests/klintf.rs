@@ -1,5 +1,5 @@
 //! 行 k-lint-folio-tests と k-lint-folio-deny の歯（接頭辞 klintf_）: 持ち込んだ folio の歯の根が #![cfg(test)] を置くこと・
-//! folio の 3 つの根が lint の属性を置くこと・allow の属性を置かないこと。
+//! folio の 2 つの根が lint の属性を置くこと・allow の属性を置かないこと。
 //! 行 k-lint-folio-idx-b からは、根の一覧 DENY が添字（clippy::indexing_slicing）も持つ。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
@@ -56,7 +56,7 @@ const FILTER_WORDS: &str = concat!(
     "urpanel_ uword_ vocab_ wsteady_ wstrip_",
 );
 
-/// 3 つの根の頭に置く deny の lint（この順）。規則の行 R-10 の全部と条 P-24.3 の 2 つで、除外の表の R-10 の行を
+/// 2 つの根の頭に置く deny の lint（この順）。規則の行 R-10 の全部と条 P-24.3 の 2 つで、除外の表の R-10 の行を
 /// 消した後も表がまだ持たない lint のために残す。
 const DENY: [&str; 14] = [
     "unused_must_use",
@@ -146,7 +146,8 @@ fn klintf_src_roots_lint_attrs() {
         want.push(if i == last { format!("    {lint}") } else { format!("    {lint},") });
     }
     want.push(")]".to_string());
-    for rel in ["src/lib.rs", "src/main.rs", "build.rs"] {
+    // binary の根 src/main.rs は行 k-tz-tests で folio2/retired/ へ退役した（folio の binary は無い）。
+    for rel in ["src/lib.rs", "build.rs"] {
         let path = folio_dir().join(rel);
         let text =
             fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));

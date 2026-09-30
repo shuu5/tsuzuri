@@ -27,7 +27,7 @@ const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const KIND: &str = "設計ノートの行";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -80,7 +80,7 @@ impl Drop for Work {
 }
 
 fn folio(args: &[&str], dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(args)
         .arg("--dir")
         .arg(dir)
@@ -334,7 +334,7 @@ fn f185_a_row_id_twice_in_one_note_is_inconclusive() {
         assert!(out.stdout.is_empty(), "{args:?}: 表が出た");
         assert!(err.contains("まだ分からない") && err.contains("wave#p") && err.contains("2 度"), "{args:?}: {err}");
     }
-    let hello = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let hello = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["hello", "--dir"])
         .arg(work.dir())
         .arg("--state")
@@ -432,7 +432,7 @@ fn f208_an_outside_place_has_the_same_shape() {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     let dir = root.join("design-intent");
-    let init = Command::new(env!("CARGO_BIN_EXE_folio")).args(["init", "--dir"]).arg(&dir).output().unwrap();
+    let init = Command::new(env!("CARGO_BIN_EXE_tz")).args(["init", "--dir"]).arg(&dir).output().unwrap();
     assert_eq!(init.status.code(), Some(0), "{}", String::from_utf8_lossy(&init.stderr));
     fs::write(dir.join("design-note/wave-file.yaml"), WAVE).unwrap();
     let text = passed(folio(&["graph", "--print", "--summary"], &dir));

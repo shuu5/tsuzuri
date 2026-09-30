@@ -10,13 +10,22 @@ use std::process::Command;
 
 /// `folio <args> --help` の標準出力。
 fn help(args: &[&str]) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(args)
         .arg("--help")
         .output()
         .expect("folio を起動できない");
     assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
     String::from_utf8(out.stdout).unwrap()
+}
+
+/// 命令の一覧（folio --help）の標準出力。一覧は tz の binary に無いので、folio の lib の入口 folio::entry::run を歯の
+/// process の中で撃つ（頭の命令の名は folio・書き先は Vec・行 k-tz-tests）。
+fn top_help() -> String {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let rc = folio::entry::run(["folio", "--help"], &mut out, &mut err);
+    assert_eq!(rc, 0, "{}", String::from_utf8_lossy(&err));
+    String::from_utf8(out).unwrap()
 }
 
 /// 説明の 1 行目。
@@ -59,7 +68,7 @@ fn f192_derive_help_names_from_root() {
 #[test]
 fn f192_the_command_list_carries_the_same_texts() {
     // 命令の一覧（folio --help）の行も同じ字（古い字が残らない）
-    let top = help(&[]);
+    let top = top_help();
     for old in ["見本 3 面", "本便で生成器を持つのは", "design-intent の正本 7 file の形を検査し", "tailnet の内側だけで見せる"] {
         assert!(!top.contains(old), "古い字「{old}」が残る: {top}");
     }

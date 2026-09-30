@@ -25,7 +25,7 @@ const NO_GIT: &str = "版管理（git）が無いか読めない";
 const NESTED: &str = "design-intent 自体が版管理の根";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -122,7 +122,7 @@ impl Work {
     }
 
     fn check(&self) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(&self.dir)
@@ -132,7 +132,7 @@ impl Work {
 
     fn face(&self) -> Output {
         fs::create_dir_all(self.root.join("out")).unwrap();
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["face", "--face", "note", "--id", "derive-anchor", "--dir"])
             .arg(&self.dir)
             .arg("--out")

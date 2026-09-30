@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn fixture() -> PathBuf {
@@ -97,7 +97,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
 }
 
 fn folio_build(dir: &Path, out: &Path, mode: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("build")
         .arg("--dir")
         .arg(dir)
@@ -310,7 +310,7 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
         .all(|id| site.join(format!("note-{id}.html")).is_file());
     let last = format!("ADR-{last_id}");
     let last_note = notes.last().cloned().expect("設計ノートが 1 本も無い");
-    let mut pages = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut pages = Command::new(env!("CARGO_BIN_EXE_tz"));
     pages
         .arg("parts")
         .arg("--check")
@@ -335,7 +335,7 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
     ]
     .iter()
     .map(|(face, name)| {
-        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("face")
             .arg("--face")
             .arg(face)
@@ -351,7 +351,7 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
     .collect();
     faces.push((
         "adr",
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("face")
             .arg("--face")
             .arg("adr")
@@ -368,7 +368,7 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
     for id in &notes {
         faces.push((
             "note",
-            Command::new(env!("CARGO_BIN_EXE_folio"))
+            Command::new(env!("CARGO_BIN_EXE_tz"))
                 .arg("face")
                 .arg("--face")
                 .arg("note")
@@ -622,7 +622,7 @@ fn add_prose_violation(td: &Path, dir: &Path) {
 }
 
 fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("check")
         .arg("--dir")
         .arg(dir)

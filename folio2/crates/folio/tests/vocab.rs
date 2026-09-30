@@ -10,11 +10,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("check")
         .arg("--dir")
         .arg(dir)
@@ -77,7 +77,7 @@ fn f203_places_not_abroad_show_the_ids_even_without_the_rows() {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let dir = root.join("design-intent");
-        let init = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let init = Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("init")
             .arg("--dir")
             .arg(&dir)

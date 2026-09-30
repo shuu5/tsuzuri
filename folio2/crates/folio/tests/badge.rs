@@ -18,7 +18,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use yaml_rust2::YamlLoader;
+use folio::yaml_rust2::YamlLoader;
 
 /// 天井の正本の観点（id・名）。正本の順。
 const VIEWPOINTS: [(&str, &str); 4] = [
@@ -46,7 +46,7 @@ const HINT_BODY_OPEN: &str = "<span class=\"hint-body\">";
 const MARK: &str = "preview/ceiling-stamp.yaml";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 /// 面の凍結 fixture（正本・様式・期待の面 7 本・天井の正本 ceiling.yaml）。
@@ -80,7 +80,7 @@ fn copy_tree(from: &Path, to: &Path) {
 
 /// 組み立てた binary を子の処理で撃つ。
 fn folio(args: &[&dyn AsRef<std::ffi::OsStr>]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     for a in args {
         cmd.arg(a.as_ref());
     }
@@ -315,7 +315,7 @@ fn real_copy(td: &Path, mark: &str) -> PathBuf {
 
 /// `folio face --face <face> [--id <id>] --dir <dir> --out <out> --write` の出力。
 fn run_face(face: &str, id: Option<&str>, dir: &Path, out: &Path) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("face").arg("--face").arg(face);
     if let Some(id) = id {
         cmd.arg("--id").arg(id);
@@ -333,7 +333,7 @@ fn write_face(face: &str, id: Option<&str>, dir: &Path, out: &Path) -> String {
 
 /// `folio build --dir <dir> --out <out> <mode>`。
 fn build(dir: &Path, out: &Path, mode: &str) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("build").arg("--dir").arg(dir).arg("--out").arg(out);
     cmd.arg(mode).output().expect("folio を起動できない")
 }
@@ -551,7 +551,7 @@ fn badge_parts_catalog_lists_the_stamp_and_the_five_faces_pass_parts_check() {
     let dir = real_copy(&td, &mark_with(["合格", "合格", "合格", "合格"]));
     let site = td.join("site");
     let write = build(&dir, &site, "--write");
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("parts").arg("--check").arg("--dir").arg(&dir);
     for (face, name) in ["index", "constitution", "srs", "adr", "note"]
         .iter()

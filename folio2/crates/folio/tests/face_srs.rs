@@ -18,10 +18,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn design_intent() -> PathBuf {
@@ -69,7 +69,7 @@ fn real_srs(case: &str) -> String {
     copy_dir(&design_intent(), &work);
     copy_dir(&vendor(), &td.join("vendor/archify"));
     let out = td.join("srs.html");
-    let run = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let run = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("face")
         .arg("--face")
         .arg("srs")
@@ -240,7 +240,7 @@ fn f81_approval_history_is_folded() {
 
 /// `folio face --face <face> --dir <dir> --out <out> --write` の結果と面の本文。
 fn write_face(face: &str, dir: &Path, out: &Path) -> (Output, String) {
-    let run = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let run = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("face")
         .arg("--face")
         .arg(face)

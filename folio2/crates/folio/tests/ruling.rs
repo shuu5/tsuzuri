@@ -35,13 +35,13 @@ impl Work {
     fn new(case: &str) -> Work {
         let root = std::env::temp_dir().join(format!("folio-ruling-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(FLOOR_BASE), &root);
+        copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2").join(FLOOR_BASE), &root);
         Work(root)
     }
 
     /// 素の check の、種別 裁定 id の違反の行（標準出力）と、まだ分からない の行（標準エラー）。
     fn check(&self) -> (Vec<String>, Vec<String>) {
-        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["check", "--dir"])
             .arg(&self.0)
             .output()
@@ -225,7 +225,7 @@ const GRAMMAR: &str = r"(?<![0-9A-Za-z_.-])[a-z][0-9]-[0-9a-z]+(\.[0-9]+)*(:[0-9
 /// 歯 6（便 182）: folio2 の正本と床の土台の欄の決まりが、文法の字面と 4 欄を手書きの字のとおりに持つ。
 #[test]
 fn f182_the_region_holds_the_grammar_and_the_lists() {
-    let real = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent/adr/schema.yaml")).unwrap();
+    let real = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2/design-intent/adr/schema.yaml")).unwrap();
     let copy = Work::new("region").read("adr/schema.yaml");
     for (text, pattern) in [(&real, format!("  ruling_pattern: {GRAMMAR}\n")), (&copy, format!("  ruling_pattern: '{GRAMMAR}'\n"))] {
         assert!(text.contains(&pattern) && text.contains(LISTS), "{pattern}");
@@ -244,7 +244,7 @@ fn f182_a_copy_that_drops_a_list_drifts() {
         let t = w.read("adr/schema.yaml");
         assert_eq!(t.matches(from).count(), 1, "{from}");
         fs::write(w.0.join("adr/schema.yaml"), t.replacen(from, to, 1)).unwrap();
-        let out = Command::new(env!("CARGO_BIN_EXE_folio")).args(["check", "--dir"]).arg(&w.0).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_tz")).args(["check", "--dir"]).arg(&w.0).output().unwrap();
         let text = String::from_utf8(out.stdout).unwrap();
         let v: Vec<&str> = text.lines().filter(|l| l.starts_with('[')).collect();
         assert_eq!(v, [format!("[adr] adr/schema.yaml {key} が床の定数と違う（欄の決まりの閾値・値域・置き場は床の定数の写し＝data 側で動かせない・N-3.1）")], "{key}");
@@ -258,7 +258,7 @@ const BAD_TIME: &str = "が裁定の時刻の形でない（年-月-日か UTC �
 impl Work {
     /// 素の check の標準出力のうち `prefix` で始まる行。
     fn lines(&self, prefix: &str) -> Vec<String> {
-        let out = Command::new(env!("CARGO_BIN_EXE_folio")).args(["check", "--dir"]).arg(&self.0).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_tz")).args(["check", "--dir"]).arg(&self.0).output().unwrap();
         let text = String::from_utf8(out.stdout).unwrap();
         text.lines().filter(|l| l.starts_with(prefix)).map(str::to_string).collect()
     }

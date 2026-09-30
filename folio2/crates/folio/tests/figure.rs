@@ -16,10 +16,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 /// 設計ノートの正本の写しの置き場（便 28 の fixture）。
@@ -117,7 +117,7 @@ fn folio_figure_env(
     mode: &str,
     path_env: Option<&Path>,
 ) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("figure")
         .arg("--doc")
         .arg(doc)
@@ -538,7 +538,7 @@ fn anchor_drift_makes_the_note_face_unknown() {
     .unwrap();
     drift_tool(&td);
     let out = td.join("note-full.html");
-    let run = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let run = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("face")
         .arg("--face")
         .arg("note")
@@ -860,7 +860,7 @@ fn skeleton_with_a_figure(case: &str) -> (PathBuf, PathBuf, PathBuf) {
     fs::create_dir_all(td.join("tmp")).unwrap();
     git(&root, &["init", "-q"]);
     let place = root.join("design-intent");
-    let init = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let init = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("init")
         .arg("--dir")
         .arg(&place)
@@ -884,7 +884,7 @@ fn skeleton_with_a_figure(case: &str) -> (PathBuf, PathBuf, PathBuf) {
 
 /// `folio build --dir <place> --out <td>/site <mode>` を TMPDIR = <td>/tmp で撃つ。shim を渡すと PATH の先頭に置く。
 fn build_in(td: &Path, place: &Path, mode: &str, shim: Option<&Path>) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("build")
         .arg("--dir")
         .arg(place)

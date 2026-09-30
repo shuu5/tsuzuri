@@ -14,11 +14,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("check")
         .arg("--dir")
         .arg(dir)
@@ -117,7 +117,7 @@ fn f203_abroad_proposed_link_lines_name_the_check() {
     let srs = fs::read_to_string(dir.join("srs.yaml")).unwrap();
     let text = srs.replacen("    plain: 書類を作ります。\n", "    plain: 書類を作ります（ADR-99）。\n", 1);
     assert_ne!(srs, text, "置き換える字が無い（前提が崩れた）");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["check", "--dir"])
         .arg(&dir)
         .args(["--proposed", "srs.yaml"])

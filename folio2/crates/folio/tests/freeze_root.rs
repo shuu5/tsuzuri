@@ -40,7 +40,7 @@ const APPROVAL_AT: &str =
     "[anchor] constitution-v1.0.yaml（凍結で書く承認一覧・憲法 meta.approval の写し）: ";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -148,7 +148,7 @@ impl Drop for Work {
 }
 
 fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(head)
         .arg(dir)
         .args(tail)

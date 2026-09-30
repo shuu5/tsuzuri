@@ -29,7 +29,7 @@ const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const BEFORE_208: (usize, usize, &str) = (194, 115_579, "78eab543a65fa0cc38c0e4b5f465705a8d0b411edb4ba8e5e0273050cdc0ac35");
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -78,7 +78,7 @@ impl Drop for Work {
 }
 
 fn graph(dir: &Path, flags: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("graph")
         .args(flags)
         .arg("--dir")

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn fixture() -> PathBuf {
@@ -68,7 +68,7 @@ fn git(cwd: &Path, args: &[&str]) {
 }
 
 fn folio(args: &[&str], place: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(args)
         .arg("--dir")
         .arg(place)
@@ -404,7 +404,7 @@ fn f165_prose_amendment_keeps_the_examples_and_changes() {
     let before = fs::read_to_string(&path).unwrap();
     fs::write(&path, replace_section(&before, "amendment", &prose_amendment())).unwrap();
     let out = td.join("constitution.html");
-    let run = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let run = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["face", "--face", "constitution", "--dir"])
         .arg(&work)
         .arg("--out")

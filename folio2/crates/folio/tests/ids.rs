@@ -14,7 +14,7 @@ const FR1_SUM: &str = "01391bf27709cf47e6424f5b3f4e363a877c2d1fcc069f6da753b1fab
 const BASE_IDS: &str = "anchors/ids-v1.8.yaml";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -98,7 +98,7 @@ impl Work {
     }
 
     fn check(&self, flags: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(self.dir())

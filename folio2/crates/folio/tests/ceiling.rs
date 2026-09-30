@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -104,7 +104,7 @@ impl Work {
     }
 
     fn check(&self) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(self.root.join("design-intent"))
@@ -581,7 +581,7 @@ fn f102_find_ceilings(dir: &Path, out: &mut Vec<PathBuf>) {
 #[test]
 fn f102_the_ceiling_reads_every_file_with_a_generated_region() {
     let dir = repo_root().join("design-intent");
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["schema", "--check", "--dir"])
         .arg(&dir)
         .output()

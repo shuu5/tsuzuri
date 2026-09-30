@@ -73,7 +73,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 /// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
 const CEILING_REGION_LINES: usize = 27;
@@ -144,7 +144,7 @@ const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない�
 const END: &str = "# folio:schema:end";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -327,7 +327,7 @@ fn mutate_file(path: &Path, from: &str, to: &str) {
 }
 
 fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(head)
         .arg(dir)
         .args(tail)

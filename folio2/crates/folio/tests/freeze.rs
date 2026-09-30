@@ -15,7 +15,7 @@ const NEW_TITLE: &str = "判断する道具を作らない（改訂）";
 const RULING: &str = "f2-648.19 notes 2026-09-17（合成した改訂の承認）";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -103,7 +103,7 @@ impl Work {
     }
 
     fn check(&self, flags: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(self.dir())

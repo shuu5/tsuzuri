@@ -5,11 +5,7 @@
 //! 便 170: folio を撃つ前ごとに写しの判断の記録の封の一覧を組み直す（`reseal`・この fixture は封を測らない）。
 #![cfg(test)]
 
-#[path = "../src/sha256.rs"]
-mod sha256;
-#[path = "../src/yaml.rs"]
-#[expect(dead_code, reason = "取り込んだ src/yaml.rs の item を全部は使わない")]
-mod yaml;
+use folio::{sha256, yaml};
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,7 +16,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use yaml::Value;
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 // ── 型付きの木の小道具 ──
@@ -369,7 +365,7 @@ fn reseal(dir: &Path) -> Result<(), String> {
 fn folio(dir: &Path, flags: &[&str], env: &[(&str, PathBuf)]) -> Result<Run, String> {
     reseal(dir)?;
     let out = io(
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(dir)

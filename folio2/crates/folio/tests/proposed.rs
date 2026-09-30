@@ -68,7 +68,7 @@ impl Work {
     fn new(case: &str) -> Work {
         let root = std::env::temp_dir().join(format!("folio-proposed-teeth-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2");
         let place = root.join("repo");
         copy_tree(&repo.join(FLOOR_BASE), &place.join("design-intent"));
         fs::create_dir_all(place.join("contracts")).unwrap();
@@ -90,7 +90,7 @@ impl Work {
 
     /// 口の一時の作業場所の置き場（子の環境の TMPDIR）を `tmp` にして撃つ。
     fn folio_in(&self, args: &[&str], stdin: &[u8], tmp: &Path) -> Run {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["check", "--dir"])
             .arg(self.dir())
             .args(args)

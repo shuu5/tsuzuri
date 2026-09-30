@@ -21,7 +21,7 @@ const ADR11_SUPERSEDES_SUM: &str = "68b74190d773205be9aebb05db9417d30ea23c1c27c6
 const ADR11_JSON: &str = "{\"approval\":{\"date\":\"2026-09-27\",\"ruling\":\"f2-648.254 notes 2026-09-27\",\"surface\":\"R-8\",\"verbatim\":\"承認する\",\"who\":\"持ち主\"},\"basis\":[\"A-2\"],\"context\":\"封の一覧に行の無い発効した判断の記録を足す場合を作る。\",\"date\":\"2026-09-27\",\"decision\":\"封の一覧の末尾に行を足す。\",\"id\":\"ADR-11\",\"options\":[{\"id\":\"a\",\"name\":\"足す\",\"reason\":\"在る行を変えずに済む。\",\"text\":\"封の一覧の末尾に行を足す。\",\"verdict\":\"adopted\"},{\"id\":\"b\",\"name\":\"足さない\",\"reason\":\"発効した記録が封の外に残る。\",\"text\":\"封の一覧をそのままにする。\",\"verdict\":\"rejected\"}],\"plain\":\"封の一覧に新しい行を足します。\",\"retreat\":{\"condition\":\"持ち主が取り消したら元へ戻す。\",\"kind\":\"ruling\"},{SUPERSEDES}\"title\":\"封の歯のための新しい判断\"}";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -92,7 +92,7 @@ impl Work {
     }
 
     fn check(&self, flags: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(self.dir())

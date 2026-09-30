@@ -1,5 +1,7 @@
-//! folio v2 の lib。区切りの宣言はここに置き、crate の外へ公開するのは命令の入口 `entry` の 1 つだけ（ほかは crate の中）。
-//! tz の口が同じ入口を撃つ（行 k-tz-entry・要件 FR17）。
+//! folio v2 の lib。区切りの宣言はここに置き、crate の外へ公開する口は命令の入口 `entry` の 1 つだけ（ほかは crate の中・歯だけが使う 3 つを除く）。
+//! tz の口が同じ入口を撃つ（行 k-tz-entry・要件 FR17）。folio の binary は無い（行 k-tz-tests・src/main.rs は folio2/retired/ へ退役）。
+//! 歯だけが使う 3 つ（YAML の読み手の yaml_rust2 と、区切り sha256 と yaml）を doc に出さずに公開する（tz の binary を撃つ
+//! 境界の package の歯が、外の依存を足さずに読む・行 k-tz-tests）。
 //! 下の lint の一覧は規則の行 R-10 の lint の全部と条 P-24.3 の 2 つを持ち、除外の表の R-10 の行を消して manifest の [lints] を
 //! workspace = true にした後も、表がまだ持たない lint のために残す（行 k-lint-folio の後も成り立つ字）。
 #![forbid(unsafe_code)]
@@ -21,6 +23,8 @@
 )]
 
 pub mod entry;
+#[doc(hidden)]
+pub use yaml_rust2;
 
 mod adr;
 mod anchor;
@@ -72,11 +76,13 @@ mod rules;
 mod ruling;
 mod schema;
 mod seal;
-mod sha256;
+#[doc(hidden)]
+pub mod sha256;
 mod sheet;
 mod shelf;
 mod site;
 mod stamp;
 mod verdict;
 mod vocab;
-mod yaml;
+#[doc(hidden)]
+pub mod yaml;

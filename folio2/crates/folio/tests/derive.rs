@@ -25,7 +25,7 @@ const ANCHOR_TOML: &str = "tests/fixtures/design-note/derive-anchor.toml";
 const OUT_NAME: &str = "derive-anchor.toml";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -110,7 +110,7 @@ impl Drop for Work {
 }
 
 fn derive_at(dir: &Path, out: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("derive")
         .args(args)
         .arg("--dir")
@@ -337,7 +337,7 @@ fn f119_derive_does_not_need_the_face_generator_or_the_style_files() {
         "meta:\n  id: big\n  title: 章の上限を超える設計ノート\n  version: v0.1\n  status: example\n  generated: 2026-09-24\n  profile: design-note\n\nsections:\n{sections}  - n: 14\n    type: contract-table\n    title: 契約表\n    rows:\n      - {{id: a, title: 13 節目の便, req: [FR11], section: \"13\", verify: [cargo nextest run -p folio --test derive f119_], size: S, done: 導出できる}}\n"
     );
     fs::write(w.dir().join("design-note/big.yaml"), big).unwrap();
-    let face = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let face = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["face", "--face", "note", "--id", "big", "--write", "--dir"])
         .arg(w.dir())
         .arg("--out")
@@ -503,7 +503,7 @@ fn nested(case: &str, git: bool) -> (Work, PathBuf) {
 
 /// `<root>/docs` を今の dir にして `folio derive --dir di --out <out> <args>` を撃つ（今の dir に依らないことも見る）。
 fn derive_in_docs(w: &Work, out: &str, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("derive")
         .args(args)
         .args(["--dir", "di", "--out", out])

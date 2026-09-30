@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -142,7 +142,7 @@ impl Work {
     }
 
     fn check(&self) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(self.dir())
@@ -966,7 +966,7 @@ fn f179_floor_counts_chapters_with_the_same_cap_and_words_as_the_face() {
     assert_single_violation(&w.check(), "note", &[words]);
     // 面の生成器も同じ写しで同じ字を出して止まる（同じ関数・書かない）
     let out = w.root.join("note-example.html");
-    let face = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let face = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["face", "--face", "note", "--id", "example", "--dir"])
         .arg(w.dir())
         .arg("--out")
@@ -1054,7 +1054,7 @@ impl Work {
 
     /// 編集時の口（`rel` に `text` を書こうとしている・置き場は書かない）。
     fn propose(&self, rel: &str, text: &str) -> Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["check", "--dir"])
             .arg(self.dir())
             .args(["--proposed", rel])

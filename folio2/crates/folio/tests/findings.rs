@@ -17,7 +17,7 @@ use std::process::{Command, Output, Stdio};
 const VIEWPOINTS: [&str; 4] = ["fidelity", "readability", "coherence", "reality"];
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 /// 便 38 の凍結 fixture（source/ = 欠陥を 1 つ仕込んだ最小の正本・faces/ = 面の写しの見本）。
@@ -111,7 +111,7 @@ fn real_copy(td: &Path) -> PathBuf {
 
 /// `folio ceiling --dir <dir> --faces <faces> --out <out> <flags…>`。
 fn folio_ceiling(dir: &Path, faces: &Path, out: &Path, flags: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("ceiling")
         .arg("--dir")
         .arg(dir)
@@ -126,7 +126,7 @@ fn folio_ceiling(dir: &Path, faces: &Path, out: &Path, flags: &[&str]) -> Output
 
 /// `folio ceiling --dir <dir> --out <out> <flags…>`（`--faces` なし・便 42 の `--refute` の形）。
 fn folio_ceiling_no_faces(dir: &Path, out: &Path, flags: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("ceiling")
         .arg("--dir")
         .arg(dir)
@@ -809,7 +809,7 @@ fn findings_check_passes_on_the_real_source_with_empty_findings() {
     let td = temp_dir("real");
     let dir = real_copy(&td);
     let site = td.join("site");
-    let build = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let build = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("build")
         .arg("--dir")
         .arg(&dir)
@@ -1182,7 +1182,7 @@ fn findings_refute_on_the_real_source_builds_a_bundle_the_check_reads() {
     let td = temp_dir("refute-real");
     let dir = real_copy(&td);
     let site = td.join("site");
-    let build = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let build = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("build")
         .arg("--dir")
         .arg(&dir)

@@ -5,11 +5,7 @@
 //! 歯の中に字で持つ書く file 11 本の閉じた一覧 `FILES`。括弧の落としと id の形は歯の側で自前に書く（init.rs の関数を呼ばない）。
 #![cfg(test)]
 
-#[path = "../src/sha256.rs"]
-mod sha256;
-#[path = "../src/yaml.rs"]
-#[expect(dead_code, reason = "取り込んだ src/yaml.rs の item を全部は使わない")]
-mod yaml;
+use folio::{sha256, yaml};
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -52,7 +48,7 @@ const REFUSE: [&str; 11] = [
 const OWN: [&str; 6] = ["ADR-1", "P-1", "P-1.1", "R-2", "R-8", "R-16"];
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn folio2() -> PathBuf {
@@ -88,7 +84,7 @@ fn git(cwd: &Path, args: &[&str]) {
 }
 
 fn folio(args: &[&str], place: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(args)
         .arg("--dir")
         .arg(place)
@@ -141,7 +137,7 @@ impl Work {
     }
 
     fn hello(&self) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("hello")
             .arg("--dir")
             .arg(self.place())
@@ -580,7 +576,7 @@ fn f125_forbidden_words_stay_out_of_the_skeleton() {
                 .collect::<Vec<_>>()
         })
         .collect();
-    let init_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/init.rs")).unwrap();
+    let init_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2/crates/folio/src/init.rs")).unwrap();
     for word in &forbidden {
         assert!(
             approval_lines.iter().any(|l| l.contains(word)),

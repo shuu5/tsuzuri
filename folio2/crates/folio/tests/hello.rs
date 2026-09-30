@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn folio_hello(dir: &Path, state: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("hello")
         .arg("--dir")
         .arg(dir)
@@ -122,7 +122,7 @@ fn hello_unprepared_greets_and_marks() {
 
 /// 凍結した土台の写しの正本の置き場（便 96）。
 fn floor_base() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/floor_base/design-intent")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2/tests/fixtures/floor_base/design-intent")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {

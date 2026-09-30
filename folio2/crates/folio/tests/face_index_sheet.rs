@@ -13,10 +13,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn fixture() -> PathBuf {
@@ -52,7 +52,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
 }
 
 fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("face")
         .arg("--face")
         .arg(face)
@@ -194,7 +194,7 @@ fn index_from(case: &str, work: &Path, td: &Path) -> (PathBuf, String) {
 }
 
 fn parts_check(pages: &[String]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("parts")
         .arg("--check")
         .arg("--dir")
@@ -487,7 +487,7 @@ fn real_round_trip(case: &str, answers: Option<PathBuf>) -> (PathBuf, PathBuf, S
     // 実の正本の支度表（持ち主の裁定 2026-09-18「aで」）は写しから外し、1 周は支度表なしから始める
     let n = load_yaml("intake.yaml");
     let _ = fs::remove_file(work.join(text(&n["sheet"], "file")));
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("intake").arg("--dir").arg(&work);
     if let Some(path) = &answers {
         cmd.arg("--answers").arg(path);

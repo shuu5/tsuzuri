@@ -16,7 +16,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 /// 閉じた一覧の写し（正本は crates/folio/src/graph.rs の NODE_KINDS / EDGE_TYPES・歯は crate の中を読めない）。
 const NODE_KINDS: [&str; 12] = [
@@ -59,7 +59,7 @@ const NODES_HEAD: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 �
 const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -164,7 +164,7 @@ impl Drop for Work {
 }
 
 fn graph(dir: &Path, flag: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["graph", flag, "--dir"])
         .arg(dir)
         .output()

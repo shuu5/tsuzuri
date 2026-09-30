@@ -66,7 +66,7 @@ const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない�
 const END: &str = "# folio:schema:end";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -224,7 +224,7 @@ fn mutate_file(path: &Path, from: &str, to: &str) {
 }
 
 fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(head)
         .arg(dir)
         .args(tail)

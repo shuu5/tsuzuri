@@ -21,3 +21,237 @@ tsuzuri-core = { path = "../tsuzuri-core" }
 
 [lints]
 workspace = true
+
+# 持ち込んだ folio の歯（行 k-tz-tests）: file は folio2/crates/folio/tests/ に置いたまま、tz の binary を撃つ境界の歯にする
+# （cargo は歯に同じ package の binary だけを渡す）。YAML の読み手は folio の lib の folio::yaml_rust2 を使う（外の依存を足さない）。
+[[test]]
+name = "adr"
+path = "../../folio2/crates/folio/tests/adr.rs"
+
+[[test]]
+name = "anchor"
+path = "../../folio2/crates/folio/tests/anchor.rs"
+
+[[test]]
+name = "badge"
+path = "../../folio2/crates/folio/tests/badge.rs"
+
+[[test]]
+name = "bundle"
+path = "../../folio2/crates/folio/tests/bundle.rs"
+
+[[test]]
+name = "ceiling"
+path = "../../folio2/crates/folio/tests/ceiling.rs"
+
+[[test]]
+name = "check"
+path = "../../folio2/crates/folio/tests/check.rs"
+
+[[test]]
+name = "constitution_range"
+path = "../../folio2/crates/folio/tests/constitution_range.rs"
+
+[[test]]
+name = "derive"
+path = "../../folio2/crates/folio/tests/derive.rs"
+
+[[test]]
+name = "emit_rulings"
+path = "../../folio2/crates/folio/tests/emit_rulings.rs"
+
+[[test]]
+name = "entrance"
+path = "../../folio2/crates/folio/tests/entrance.rs"
+
+[[test]]
+name = "face"
+path = "../../folio2/crates/folio/tests/face.rs"
+
+[[test]]
+name = "face_adr"
+path = "../../folio2/crates/folio/tests/face_adr.rs"
+
+[[test]]
+name = "face_constitution"
+path = "../../folio2/crates/folio/tests/face_constitution.rs"
+
+[[test]]
+name = "face_index"
+path = "../../folio2/crates/folio/tests/face_index.rs"
+
+[[test]]
+name = "face_index_sheet"
+path = "../../folio2/crates/folio/tests/face_index_sheet.rs"
+
+[[test]]
+name = "face_index_shelf"
+path = "../../folio2/crates/folio/tests/face_index_shelf.rs"
+
+[[test]]
+name = "face_note"
+path = "../../folio2/crates/folio/tests/face_note.rs"
+
+[[test]]
+name = "face_srs"
+path = "../../folio2/crates/folio/tests/face_srs.rs"
+
+[[test]]
+name = "face_srs_adrs"
+path = "../../folio2/crates/folio/tests/face_srs_adrs.rs"
+
+[[test]]
+name = "face_srs_body"
+path = "../../folio2/crates/folio/tests/face_srs_body.rs"
+
+[[test]]
+name = "face_srs_figure"
+path = "../../folio2/crates/folio/tests/face_srs_figure.rs"
+
+[[test]]
+name = "figure"
+path = "../../folio2/crates/folio/tests/figure.rs"
+
+[[test]]
+name = "findings"
+path = "../../folio2/crates/folio/tests/findings.rs"
+
+[[test]]
+name = "floor_cases"
+path = "../../folio2/crates/folio/tests/floor_cases.rs"
+
+[[test]]
+name = "floor_faces"
+path = "../../folio2/crates/folio/tests/floor_faces.rs"
+
+[[test]]
+name = "freeze"
+path = "../../folio2/crates/folio/tests/freeze.rs"
+
+[[test]]
+name = "freeze_root"
+path = "../../folio2/crates/folio/tests/freeze_root.rs"
+
+[[test]]
+name = "gate"
+path = "../../folio2/crates/folio/tests/gate.rs"
+
+[[test]]
+name = "gitcheck"
+path = "../../folio2/crates/folio/tests/gitcheck.rs"
+
+[[test]]
+name = "graph"
+path = "../../folio2/crates/folio/tests/graph.rs"
+
+[[test]]
+name = "graph_notes"
+path = "../../folio2/crates/folio/tests/graph_notes.rs"
+
+[[test]]
+name = "graph_summary"
+path = "../../folio2/crates/folio/tests/graph_summary.rs"
+
+[[test]]
+name = "hello"
+path = "../../folio2/crates/folio/tests/hello.rs"
+
+[[test]]
+name = "help"
+path = "../../folio2/crates/folio/tests/help.rs"
+
+[[test]]
+name = "ids"
+path = "../../folio2/crates/folio/tests/ids.rs"
+
+[[test]]
+name = "init"
+path = "../../folio2/crates/folio/tests/init.rs"
+
+[[test]]
+name = "intake"
+path = "../../folio2/crates/folio/tests/intake.rs"
+
+[[test]]
+name = "link"
+path = "../../folio2/crates/folio/tests/link.rs"
+
+[[test]]
+name = "mechanism_live"
+path = "../../folio2/crates/folio/tests/mechanism_live.rs"
+
+[[test]]
+name = "note"
+path = "../../folio2/crates/folio/tests/note.rs"
+
+[[test]]
+name = "outside_faces"
+path = "../../folio2/crates/folio/tests/outside_faces.rs"
+
+[[test]]
+name = "parts"
+path = "../../folio2/crates/folio/tests/parts.rs"
+
+[[test]]
+name = "place_name"
+path = "../../folio2/crates/folio/tests/place_name.rs"
+
+[[test]]
+name = "plan"
+path = "../../folio2/crates/folio/tests/plan.rs"
+
+[[test]]
+name = "polarity"
+path = "../../folio2/crates/folio/tests/polarity.rs"
+
+[[test]]
+name = "proposed"
+path = "../../folio2/crates/folio/tests/proposed.rs"
+
+[[test]]
+name = "prose"
+path = "../../folio2/crates/folio/tests/prose.rs"
+
+[[test]]
+name = "refs"
+path = "../../folio2/crates/folio/tests/refs.rs"
+
+[[test]]
+name = "resolve"
+path = "../../folio2/crates/folio/tests/resolve.rs"
+
+[[test]]
+name = "ruling"
+path = "../../folio2/crates/folio/tests/ruling.rs"
+
+[[test]]
+name = "schema"
+path = "../../folio2/crates/folio/tests/schema.rs"
+
+[[test]]
+name = "schema_docs"
+path = "../../folio2/crates/folio/tests/schema_docs.rs"
+
+[[test]]
+name = "seal"
+path = "../../folio2/crates/folio/tests/seal.rs"
+
+[[test]]
+name = "sheet"
+path = "../../folio2/crates/folio/tests/sheet.rs"
+
+[[test]]
+name = "site"
+path = "../../folio2/crates/folio/tests/site.rs"
+
+[[test]]
+name = "stamp"
+path = "../../folio2/crates/folio/tests/stamp.rs"
+
+[[test]]
+name = "unknown_fields"
+path = "../../folio2/crates/folio/tests/unknown_fields.rs"
+
+[[test]]
+name = "vocab"
+path = "../../folio2/crates/folio/tests/vocab.rs"

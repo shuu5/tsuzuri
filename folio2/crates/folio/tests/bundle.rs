@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 /// 凍結 fixture の置き場（source/ = 欠陥を 1 つ仕込んだ最小の正本・faces/ = 面の写しの見本 7 本）。
@@ -64,7 +64,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf, PathBuf) {
 
 /// `folio ceiling --dir <dir> --faces <faces> --out <out> --write`。
 fn folio_ceiling(dir: &Path, faces: &Path, out: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("ceiling")
         .arg("--dir")
         .arg(dir)
@@ -776,7 +776,7 @@ fn real_bundle(case: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     git(&td, &["add", "-A"]);
     git(&td, &["commit", "-q", "-m", "fixture"]);
     let site = td.join("site");
-    let build = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let build = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("build")
         .arg("--dir")
         .arg(&dir)

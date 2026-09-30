@@ -10,7 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const REAL: &str = "design-intent";
@@ -61,7 +61,7 @@ impl Work {
     fn new(case: &str, src: &str) -> Work {
         let root = std::env::temp_dir().join(format!("folio-emit-rulings-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2");
         copy_tree(&repo.join(src), &root.join("design-intent"));
         fs::create_dir_all(root.join("contracts")).unwrap();
         fs::copy(repo.join("contracts/schema.toml"), root.join("contracts/schema.toml")).unwrap();
@@ -76,7 +76,7 @@ impl Work {
     }
 
     fn run(&self, flags: &[&str]) -> Run {
-        let o = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let o = Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["check", "--dir"])
             .arg(self.dir())
             .args(flags)

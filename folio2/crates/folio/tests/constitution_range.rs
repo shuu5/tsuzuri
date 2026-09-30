@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -102,7 +102,7 @@ impl Work {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         git(&root, &["init", "-q"]);
-        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("init")
             .arg("--dir")
             .arg(root.join("design-intent"))
@@ -182,7 +182,7 @@ impl Work {
     }
 
     fn check(&self) -> Run {
-        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(self.root.join("design-intent"))

@@ -14,10 +14,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn fixture() -> PathBuf {
@@ -53,7 +53,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
 }
 
 fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("face")
         .arg("--face")
         .arg(face)
@@ -302,7 +302,7 @@ fn real_index(case: &str) -> (PathBuf, PathBuf, String) {
 }
 
 fn parts_check(pages: &[String]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("parts")
         .arg("--check")
         .arg("--dir")

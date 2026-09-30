@@ -78,7 +78,7 @@ fn copy_tree(src: &Path, dst: &Path) {
 }
 
 fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 /// 写しの一時 dir（歯の終わりに消す）。
@@ -117,7 +117,7 @@ impl Work {
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(args)
             .arg("--dir")
             .arg(self.0.join("design-intent"))
@@ -143,7 +143,7 @@ impl Work {
 
     /// 編集時の口（便 199）: `rel` に `text` を書こうとしているときの終了と、止める行と つながりの行（接頭辞を外した字）。
     fn propose(&self, rel: &str, text: &str) -> (i32, Vec<String>, Vec<String>) {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["check", "--proposed", rel, "--dir"])
             .arg(self.0.join("design-intent"))
             .stdin(Stdio::piped())

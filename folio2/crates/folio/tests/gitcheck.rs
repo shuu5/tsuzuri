@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -72,7 +72,7 @@ fn copy_fixture(case: &str, fixture: &str, commit: bool) -> PathBuf {
 
 /// 床を撃つ（写しは残す）。
 fn run_check(td: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("check")
         .arg("--dir")
         .arg(td.join("design-intent"))
@@ -463,7 +463,7 @@ fn f190_rev_list_failure_is_unknown() {
     fs::set_permissions(&fake, fs::Permissions::from_mode(0o755)).unwrap();
     let mut paths = vec![bin];
     paths.extend(std::env::split_paths(&path));
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("check")
         .arg("--dir")
         .arg(td.join("design-intent"))

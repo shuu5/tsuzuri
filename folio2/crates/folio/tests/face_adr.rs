@@ -18,10 +18,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn fixture() -> PathBuf {
@@ -79,7 +79,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
 
 /// `folio face --face <face> [--id <id>] --dir <dir> --out <out> <mode>`。
 fn folio_face(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: &str) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("face").arg("--face").arg(face);
     if let Some(id) = id {
         cmd.arg("--id").arg(id);
@@ -389,7 +389,7 @@ fn face_adr_on_the_real_sources_passes_parts_check() {
             "{id}: figure-panel の数が figures の数と違う"
         );
         assert_eq!(svg_bodies(&html), figures, "{id}: 図の本体の数");
-        let check = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let check = Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("parts")
             .arg("--check")
             .arg("--dir")
@@ -944,7 +944,7 @@ fn face_adr_unknown_when_the_figure_tool_is_absent() {
 #[test]
 fn face_adr_parts_check_fails_on_the_red_fixture() {
     let page = fixture().join("adr/extra-class.html");
-    let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("parts")
         .arg("--check")
         .arg("--dir")
@@ -966,7 +966,7 @@ fn face_adr_parts_check_fails_on_the_red_fixture() {
 #[test]
 fn face_adr_mode_is_exactly_one() {
     for args in [&["--check", "--write"][..], &[][..]] {
-        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("face")
             .arg("--face")
             .arg("adr")

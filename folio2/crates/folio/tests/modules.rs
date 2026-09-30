@@ -74,7 +74,6 @@ const LAYERS: &[(&str, u8)] = &[
     ("entry", 5),
     ("hello", 5),
     ("lib", 5),
-    ("main", 5),
     ("site", 5),
 ];
 
@@ -296,7 +295,6 @@ fn p106_layers_cover_every_module() {
 
     let mut modules = declared();
     modules.insert("lib".to_string());
-    modules.insert("main".to_string());
     let miss = gaps("層が無い", &modules, "宣言が無い", &table);
     assert!(miss.is_empty(), "入口の区切りの宣言と表が食い違う: {miss:?}");
 

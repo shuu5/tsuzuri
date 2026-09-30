@@ -40,7 +40,7 @@ fn git(cwd: &Path, args: &[&str]) {
 }
 
 fn folio(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(args)
         .output()
         .expect("folio を起動できない")

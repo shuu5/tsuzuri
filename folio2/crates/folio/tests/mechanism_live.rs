@@ -34,7 +34,7 @@ const IN_LOOP_OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の
 const IN_LOOP_OFF_ABROAD: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外）";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -140,7 +140,7 @@ impl Drop for Work {
 }
 
 fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(head)
         .arg("--dir")
         .arg(dir)
@@ -493,7 +493,7 @@ fn f203_abroad_labels_and_unknowns_name_no_folio2_number() {
     // 編集時の口: 発効にした ADR-1 の中身を渡すと、同じ名札の違反と封の まだ分からない が新しく出る
     let s = Work::skeleton("f203-proposed");
     let accepted = fs::read_to_string(w.dir().join("adr/ADR-1.yaml")).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["check", "--dir"])
         .arg(s.dir())
         .args(["--proposed", "adr/ADR-1.yaml"])

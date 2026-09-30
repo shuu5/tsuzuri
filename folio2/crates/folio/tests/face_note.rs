@@ -13,10 +13,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use yaml_rust2::{Yaml, YamlLoader};
+use folio::yaml_rust2::{Yaml, YamlLoader};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn fixture() -> PathBuf {
@@ -80,7 +80,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
 
 /// `folio face --face <face> [--id <id>] --dir <dir> --out <out> <mode>`。
 fn folio_face(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: &str) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("face").arg("--face").arg(face);
     if let Some(id) = id {
         cmd.arg("--id").arg(id);
@@ -297,7 +297,7 @@ fn neighbor_note_links_follow_the_shelf_order() {
 fn face_note_on_the_real_source_passes_parts_check() {
     let td = temp_dir("parts");
     let (out, _) = real_face(&td);
-    let check = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let check = Command::new(env!("CARGO_BIN_EXE_tz"))
         .arg("parts")
         .arg("--check")
         .arg("--dir")
@@ -1004,7 +1004,7 @@ fn f179_face_is_unknown_when_the_keyed_row_is_missing_doubled_or_malformed() {
 #[test]
 fn face_note_mode_is_exactly_one() {
     for args in [&["--check", "--write"][..], &[][..]] {
-        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("face")
             .arg("--face")
             .arg("note")
@@ -1235,7 +1235,7 @@ fn f184_the_three_plan_types_are_drawn_with_their_fields() {
     ] {
         assert!(html.contains(want), "「{want}」が無い");
     }
-    let check = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let check = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["parts", "--check", "--dir"])
         .arg(design_intent())
         .arg("--page")

@@ -31,7 +31,7 @@ const SAME_READS: &str = concat!(
 );
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn bundle_fixture() -> PathBuf {
@@ -69,7 +69,7 @@ fn copy_tree(from: &Path, to: &Path) {
 
 /// `folio ceiling --dir <dir> [--faces <faces>] --out <out> <flags…>`。
 fn folio_ceiling(dir: &Path, faces: Option<&Path>, out: &Path, flags: &[&str]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_folio"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("ceiling").arg("--dir").arg(dir);
     if let Some(f) = faces {
         cmd.arg("--faces").arg(f);
@@ -408,7 +408,7 @@ fn canonical_or_unknown(dir: &Path) -> Option<String> {
 
 /// `folio ceiling --dir src --gate --write-set <paths…>`（今の dir = 周の一時 dir）。
 fn folio_gate(round: &Round, write_set: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .current_dir(&round.td)
         .args(["ceiling", "--dir", "src", "--gate", "--write-set"])
         .args(write_set)

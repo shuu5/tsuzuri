@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn temp_dir(case: &str) -> PathBuf {
@@ -63,7 +63,7 @@ fn git(cwd: &Path, args: &[&str]) {
 }
 
 fn folio(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_folio"))
+    Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(args)
         .output()
         .expect("folio を起動できない")
@@ -673,7 +673,7 @@ fn f187_the_floor_does_not_run_the_figure_tool() {
     std::os::unix::fs::symlink(&real_git, empty.join("git")).unwrap();
     assert!(!empty.join("node").exists());
     let run = |dir: &Path| {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .env("PATH", &empty)
             .args(["check", "--dir", dir.to_str().unwrap()])
             .output()

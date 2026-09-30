@@ -41,7 +41,7 @@ const SKELETON_RELATIONS: &str = "relations: {rules: [R-2, R-8, R-16]}";
 const SHORT_ABROAD: &str = "[polarity] 極性一覧の編集時（in-loop）の仕掛けが 0 本で、行 R-9 の下限 1 本以上を割る";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn copy_tree(src: &Path, dst: &Path) {
@@ -112,7 +112,7 @@ impl Work {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         git(&root, &["init", "-q"]);
-        let out = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["init", "--dir"])
             .arg(root.join("design-intent"))
             .output()
@@ -134,7 +134,7 @@ impl Work {
 
     /// 編集時の口（--proposed）に置き場の中の `rel` の書いた後の中身を渡す。
     fn proposed(&self, rel: &str, content: &str) -> Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
             .args(["check", "--dir"])
             .arg(self.root.join("design-intent"))
             .args(["--proposed", rel])
@@ -148,7 +148,7 @@ impl Work {
     }
 
     fn check(&self, flags: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .arg("check")
             .arg("--dir")
             .arg(self.root.join("design-intent"))
@@ -334,7 +334,7 @@ fn f200_no_bound_row_prints_one_line_and_does_not_count() {
     assert!(violations(&out).is_empty() && unknowns(&out).is_empty(), "{}", show(&out));
     // 口（--proposed）は同じ床の関数を撃つが、知らせの行は素の床だけが出す
     let rules = fs::read_to_string(w.root.join("design-intent/rules.yaml")).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_folio"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["check", "--dir"])
         .arg(w.root.join("design-intent"))
         .args(["--proposed", "rules.yaml"])
@@ -436,7 +436,7 @@ fn f202_abroad_place_names_no_folio2_article() {
     assert!(p18(&listed).is_empty(), "{}", show(&listed));
 
     // 説明の字（置き場に依らない）も folio2 の便の番号と条の番号を持たない
-    let help = Command::new(env!("CARGO_BIN_EXE_folio")).args(["check", "--help"]).output().expect("folio を起動できない");
+    let help = Command::new(env!("CARGO_BIN_EXE_tz")).args(["check", "--help"]).output().expect("folio を起動できない");
     let help = String::from_utf8_lossy(&help.stdout).to_string();
     assert!(help.contains("（正本が読めなければ まだ分からない 2）"), "{help}");
     assert!(!help.contains("便 200"), "{help}");

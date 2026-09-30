@@ -41,7 +41,7 @@ const READ_FILES: [&str; 6] = [
 ];
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
 }
 
 fn findings_fixture(name: &str) -> String {
@@ -229,7 +229,7 @@ impl Repo {
 
     /// `folio ceiling --gate --dir design-intent --write-set <paths…>`（今の dir = 一時 dir）。
     fn gate(&self, write_set: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .current_dir(&self.td)
             .args(["ceiling", "--gate", "--dir", "design-intent", "--write-set"])
             .args(write_set)
@@ -239,7 +239,7 @@ impl Repo {
 
     /// `folio ceiling --gate --dir <dir> --write-set <paths…>`（今の dir = `cwd`・便 142）。
     fn gate_at(&self, cwd: &Path, dir: &Path, write_set: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_folio"))
+        Command::new(env!("CARGO_BIN_EXE_tz"))
             .current_dir(cwd)
             .args(["ceiling", "--gate", "--dir"])
             .arg(dir)
