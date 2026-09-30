@@ -89,7 +89,13 @@ fn gins_pretool_bash_entry() {
     assert_eq!(keys(&hooks), ["hooks"]);
     assert_eq!(
         keys(&hooks["hooks"]),
-        ["PostToolUse", "PreToolUse", "Stop", "UserPromptSubmit"]
+        [
+            "PostToolBatch",
+            "PostToolUse",
+            "PreToolUse",
+            "Stop",
+            "UserPromptSubmit"
+        ]
     );
     let entry = only(&hooks["hooks"]["PreToolUse"]);
     assert_eq!(keys(entry), ["hooks", "matcher"]);

@@ -30,6 +30,8 @@ pub enum Route {
     Deliver,
     /// 停止の hook が答えを出した後に置く。
     Stop,
+    /// tool の呼びの組の後の hook が答えを出した後に置く（行 f-deliver-tool）。
+    Tool,
 }
 
 impl Route {
@@ -38,6 +40,7 @@ impl Route {
         match self {
             Route::Deliver => "配達の口",
             Route::Stop => "停止",
+            Route::Tool => "tool の呼び",
         }
     }
 }
@@ -223,10 +226,68 @@ pub fn said(ledger: &str, ids: &[RulingId]) -> Reading<Vec<Said>> {
     Reading::Known(out)
 }
 
+/// tool の呼びの組の後の hook の入力の鍵 `hook_event_name` の字（行 f-deliver-tool）。
+pub const TOOL_EVENT: &str = "PostToolBatch";
+
+/// 下請けの agent の中の呼びと本体の呼びを分ける hook の入力の最上位の鍵（在れば本体の呼びでない）。
+pub const AGENT_KEYS: [&str; 2] = ["agent_id", "agent_type"];
+
+/// hook の入力が席の本体の呼びか（JSON の object で、最上位に `AGENT_KEYS` のどの鍵も無い時だけ真・入れ子の鍵は見ない）。
+pub fn main_thread(payload: &str) -> bool {
+    match serde_json::from_str::<Value>(payload) {
+        Ok(Value::Object(input)) => !AGENT_KEYS.iter().any(|key| input.contains_key(*key)),
+        _ => false,
+    }
+}
+
+/// 印の無い裁定（`undelivered` の組）の逐語を `undelivered` の順に 1 度ずつ返す（逐語の欄の無い行は出さない）。
+/// 字が読めなければ Unknown。
+pub fn unmarked(ledger: &str) -> Reading<Vec<Said>> {
+    let Reading::Known(pending) = undelivered(ledger) else {
+        return Reading::Unknown;
+    };
+    let ids: Vec<RulingId> = pending.iter().map(|p| p.ruling.clone()).collect();
+    let Reading::Known(found) = said(ledger, &ids) else {
+        return Reading::Unknown;
+    };
+    Reading::Known(
+        pending
+            .iter()
+            .filter_map(|p| {
+                found
+                    .iter()
+                    .find(|s| s.question == p.question && s.ruling == p.ruling)
+                    .cloned()
+            })
+            .collect(),
+    )
+}
+
+/// 前から逐語の字数の合計が `CONTEXT_CAP` 以下の間の数（文脈が逐語を写す裁定の数）。
+fn copied(said: &[Said]) -> usize {
+    let mut total = 0;
+    said.iter()
+        .take_while(|s| {
+            total += s.verbatim.chars().count();
+            total <= CONTEXT_CAP
+        })
+        .count()
+}
+
+/// 答えが名指す裁定の数（逐語を写す裁定と、上限で写さない最初の裁定）。
+pub fn named(said: &[Said]) -> usize {
+    (copied(said) + 1).min(said.len())
+}
+
 /// UserPromptSubmit の hook の答え（鍵 hookSpecificOutput の下の hookEventName と additionalContext・空なら None）。
+pub fn context(said: &[Said]) -> Option<String> {
+    context_for(said, "UserPromptSubmit")
+}
+
+/// `context` の hookEventName を `event` の字にした答え。
 /// 文脈は見出しの行と、裁定ごとの行「裁定 <id>（問い <問いの id>）の逐語:」と逐語を改行でつなぐ（事実の形の字）。
 /// 写した逐語の字数の合計が `CONTEXT_CAP` を越える裁定からは逐語を写さず、在りかの 1 行で終える。
-pub fn context(said: &[Said]) -> Option<String> {
+pub fn context_for(said: &[Said], event: &str) -> Option<String> {
     if said.is_empty() {
         return None;
     }
@@ -234,16 +295,10 @@ pub fn context(said: &[Said]) -> Option<String> {
         "席に届いた持ち主の裁定の逐語（{} 件・台帳の問いの notes の裁定の行の写し）:",
         said.len()
     )];
-    let mut total = 0;
-    let mut copied = 0;
-    for s in said {
-        total += s.verbatim.chars().count();
-        if total > CONTEXT_CAP {
-            break;
-        }
+    let copied = copied(said);
+    for s in &said[..copied] {
         lines.push(format!("裁定 {}（問い {}）の逐語:", s.ruling, s.question));
         lines.push(s.verbatim.clone());
-        copied += 1;
     }
     if let Some(first) = said.get(copied) {
         lines.push(format!(
@@ -256,7 +311,7 @@ pub fn context(said: &[Said]) -> Option<String> {
     let mut inner = Map::new();
     inner.insert(
         "hookEventName".to_string(),
-        Value::String("UserPromptSubmit".to_string()),
+        Value::String(event.to_string()),
     );
     inner.insert(
         "additionalContext".to_string(),
