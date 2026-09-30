@@ -390,6 +390,8 @@ sections:
       - {id: k-size-base, doc: surface-wave24a}
       - {id: k-lint-folio-deny, doc: surface-wave24a}
       - {id: k-lint-folio-idx-a, doc: surface-wave24a}
+      - {id: k-lint-folio-idx-b, doc: surface-wave24a}
+      - {id: k-lint-folio, doc: surface-wave24a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
