@@ -4,10 +4,12 @@
 //! accept は受入 12 条を全画面 × 2 幅 × 2 mode で測り report を書く（行 j-runner・入口は accept の module）。
 //! surface-build は dist が揃えば wasm・js・css の file ごとに隣へ gzip の写し（名に .gz）を書く（行 g-gz・gz の module）。
 //! pub-scan は追跡される file の字と基準の commit より後の commit に tailnet の住所・名と一覧の語を探す（行 t-pub-scan・pubscan の module）。
+//! check の size の段は 1 module の行数・中核の本体の総行数・歯と本体の行数比を規則の行 R-4 の上限と比べる（行 k-size-base・size の module）。
 
 mod accept;
 mod gz;
 mod pubscan;
+mod size;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -100,6 +102,7 @@ fn step_args(step: &[&str], partition: Option<&str>) -> Vec<String> {
 
 /// 公開の走査を撃ち、段を順に撃ち、最初に落ちた段の rc を返す（全部通れば 0）。
 /// 走査が落ちれば後の build・歯・clippy・面の組み立てを撃たない。
+/// 走査の後、cargo の段の前に大きさの数え（size）を撃ち、上限を越えれば違反を出して rc 1 を返し、後の段を撃たない。
 /// 変数 PARTITION_ENV が在れば nextest の段だけを分け、読めない字なら段を撃たずに rc 2 を返す。
 fn check(root: &Path) -> i32 {
     let raw = std::env::var(PARTITION_ENV);
@@ -122,6 +125,15 @@ fn check(root: &Path) -> i32 {
     if rc != 0 {
         eprintln!("xtask check: 落ちた段 pub-scan (rc {rc})");
         return rc;
+    }
+    eprintln!("xtask check: size");
+    match size::measure(root) {
+        Ok(facts) => eprintln!("xtask check: size {facts}"),
+        Err(e) => {
+            eprintln!("xtask check: size: {e}");
+            eprintln!("xtask check: 落ちた段 size (rc 1)");
+            return 1;
+        }
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     for step in CHECK_STEPS {
