@@ -20,6 +20,9 @@
 //! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
 //! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
 //! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
+//! tz <口の名> [旗]（口の名は check・schema・derive・ceiling・init・parts・face・figure・build・intake・hello の 11・
+//! folio の同じ名の口と引数・出力・rc が同じ・行 k-tz-entry）。索引の旗（--print・--digest・--summary）を持つ tz graph も
+//! folio の graph の口へ渡す。
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -49,6 +52,9 @@ fn main() -> ExitCode {
         .as_slice()
     {
         ["surface", "serve", rest @ ..] => serve(rest),
+        ["graph", rest @ ..] if tsuzuri_boundary::cli::folio::is_index(rest) => {
+            tsuzuri_boundary::cli::folio::graph(rest)
+        }
         ["graph", rest @ ..] => tsuzuri_boundary::cli::graph::run(rest),
         ["hook", "stop", rest @ ..] => tsuzuri_boundary::hook::stop::run(rest),
         ["hook", "deliver", rest @ ..] => tsuzuri_boundary::hook::deliver::run(rest),
@@ -58,6 +64,9 @@ fn main() -> ExitCode {
             tsuzuri_boundary::hook::question_signal::run(rest)
         }
         ["stage", rest @ ..] => tsuzuri_boundary::stage::cli::run(rest),
+        [name, rest @ ..] if tsuzuri_boundary::cli::folio::NAMES.contains(name) => {
+            tsuzuri_boundary::cli::folio::run(name, rest)
+        }
         _ => usage("subcommand"),
     };
     ExitCode::from(rc)

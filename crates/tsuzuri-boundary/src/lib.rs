@@ -3,6 +3,7 @@
 //! 便 e-acct で account board の読み（`acct`）を置く（口の登録は便 h-wire）。
 //! 便 e-acct-hb で停止の切り替えの受付（`accthb`）を置く（口の登録は便 h-wire）。
 //! 行 k-graph で tz の口の graph（`cli::graph`・導出グラフと不変条件を端末で撃つ）を置く。
+//! 行 k-tz-entry で tz の口の folio の 11 subcommand と索引の形の graph（`cli::folio`・folio の lib の入口を撃つ）を置く。
 //! 行 f-stop で席の停止の hook（`hook::stop`・tz hook stop）を置く。
 //! 行 i-1 で表示面の module（`stage`・端末の一覧の読み `stage::terminal`）を置く。
 //! 行 f-gate で問いの起票の門（`hook::question_gate`・tz hook question-gate）を置く。

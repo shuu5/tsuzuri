@@ -213,7 +213,7 @@ fn iclose_handle_wiring_text() {
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .map(|l| l.split('=').next().unwrap_or("").trim())
         .collect();
-    assert_eq!(deps, ["tsuzuri-contract", "tsuzuri-core"]);
+    assert_eq!(deps, ["folio", "tsuzuri-contract", "tsuzuri-core"]);
 }
 
 /// 着地済みの行の verify の filter の語と、後の行の接頭辞（新しい歯の名はこのどれも含まない）。

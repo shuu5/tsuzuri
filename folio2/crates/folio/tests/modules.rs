@@ -5,7 +5,7 @@
 //!
 //! 走査の式（設計ノート docs/design/module-map-2026-09-23.md の冒頭）: 注釈（`//` と `/* */`）と字面（文字列・素の
 //! 文字列・1 文字）を剥がしてから、`crate::<区切り名>` と `use crate::{a, b}` の括り書きを解いて相異なる名を取る。
-//! 区切りを宣言する入口 `main.rs` だけは接頭辞の無い `<区切り名>::` も数える。自分自身は数えない。
+//! 区切りを宣言する `lib.rs` だけは接頭辞の無い `<区切り名>::` も数える。自分自身は数えない。
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -71,7 +71,9 @@ const LAYERS: &[(&str, u8)] = &[
     ("face_srs_items", 4),
     ("face_srs_rtm", 4),
     ("figure", 4),
+    ("entry", 5),
     ("hello", 5),
+    ("lib", 5),
     ("main", 5),
     ("serve", 5),
     ("site", 5),
@@ -187,7 +189,7 @@ fn strip(src: &str) -> String {
 }
 
 /// 剥がした本文から名指す区切りの名を取る。`crate::<名>` と `crate::{a, b::{…}}` の括り書きの頭の名。
-/// `bare` のとき（入口 `main.rs`）は接頭辞の無い `<名>::` も数える。`modules` に無い名は数えない。
+/// `bare` のとき（`lib.rs`）は接頭辞の無い `<名>::` も数える。`modules` に無い名は数えない。
 fn named(code: &str, bare: bool, modules: &BTreeSet<&str>) -> BTreeSet<String> {
     let c: Vec<char> = code.chars().collect();
     let mut names = BTreeSet::new();
@@ -251,9 +253,9 @@ fn named(code: &str, bare: bool, modules: &BTreeSet<&str>) -> BTreeSet<String> {
     names
 }
 
-/// 入口 `main.rs` の区切りの宣言（`mod <名>;`）の集合。
+/// `lib.rs` の区切りの宣言（`mod <名>;`と`pub mod <名>;`）の集合。
 fn declared() -> BTreeSet<String> {
-    strip(&read("main"))
+    strip(&read("lib"))
         .lines()
         .filter_map(|l| {
             let l = l.trim();
@@ -294,6 +296,7 @@ fn p106_layers_cover_every_module() {
     assert_eq!(table.len(), LAYERS.len(), "層の割り当ての表に同じ名の行が 2 つある");
 
     let mut modules = declared();
+    modules.insert("lib".to_string());
     modules.insert("main".to_string());
     let miss = gaps("層が無い", &modules, "宣言が無い", &table);
     assert!(miss.is_empty(), "入口の区切りの宣言と表が食い違う: {miss:?}");
@@ -308,7 +311,7 @@ fn p106_edges_point_down() {
     let mut upward = BTreeSet::new();
     for from in &modules {
         let code = strip(&read(from));
-        for to in named(&code, *from == "main", &modules) {
+        for to in named(&code, *from == "lib", &modules) {
             if to != *from && layer_of(from) < layer_of(&to) {
                 upward.insert(format!("{from} と {to} の対"));
             }

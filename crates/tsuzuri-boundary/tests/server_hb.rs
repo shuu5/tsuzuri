@@ -542,6 +542,6 @@ fn server_hb_no_new_dependencies() {
     };
     assert_eq!(
         deps("tsuzuri-boundary"),
-        ["tsuzuri-contract", "tsuzuri-core"]
+        ["folio", "tsuzuri-contract", "tsuzuri-core"]
     );
 }

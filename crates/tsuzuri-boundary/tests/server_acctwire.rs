@@ -496,5 +496,5 @@ fn acctwire_no_new_dependencies() {
             names.push(name.strip_suffix(".workspace").unwrap_or(name).to_string());
         }
     }
-    assert_eq!(names, ["tsuzuri-contract", "tsuzuri-core"]);
+    assert_eq!(names, ["folio", "tsuzuri-contract", "tsuzuri-core"]);
 }

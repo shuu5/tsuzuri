@@ -833,7 +833,7 @@ fn server_ask_no_new_dependencies() {
     };
     assert_eq!(
         deps("tsuzuri-boundary"),
-        ["tsuzuri-contract", "tsuzuri-core"]
+        ["folio", "tsuzuri-contract", "tsuzuri-core"]
     );
     assert_eq!(
         deps("tsuzuri-core"),

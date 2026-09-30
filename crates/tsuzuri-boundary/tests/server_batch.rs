@@ -887,7 +887,7 @@ fn server_batch_fixture_shape_and_no_new_dependencies() {
             names.push(name.trim().to_string());
         }
     }
-    assert_eq!(names, ["tsuzuri-contract", "tsuzuri-core"]);
+    assert_eq!(names, ["folio", "tsuzuri-contract", "tsuzuri-core"]);
     // 束の定型行の形（裁定の定型行の頭のまま・束 = を挟む）。
     let id = RulingId::new("fx-b.2:20260927T1034Z-1").expect("id");
     let b = RulingId::new("batch:20260927T1034Z-1").expect("id");

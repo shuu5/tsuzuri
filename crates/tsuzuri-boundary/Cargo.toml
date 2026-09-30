@@ -12,7 +12,10 @@ path = "src/main.rs"
 
 # 外の依存は足さない（標準 library だけで書く・xtask の歯 skeleton_ が直接依存の名を測る）。
 # 中核の crate は workspace の中の crate（便 e-read・グラフと指標と次の一手と板の関数）。
+# folio は workspace の member（行 k-join-folio）。folio の入口を lib として撃つ（行 k-tz-entry・folio の clap と yaml-rust2 が
+# tz の binary に入る・面の crate は境界を開発の依存でだけ持つので wasm の組みに folio は入らない）。
 [dependencies]
+folio = { path = "../../folio2/crates/folio" }
 tsuzuri-contract = { path = "../tsuzuri-contract" }
 tsuzuri-core = { path = "../tsuzuri-core" }
 
