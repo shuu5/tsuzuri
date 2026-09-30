@@ -3,6 +3,7 @@
 //! 欄 refused と pressure は doctor の同じ名の群の行の欄 `refused=` と
 //! `pressure=` の写し（器の `-` は Known(None)・読めない字と欄の無い行は Unknown・残りを計算しない）。
 //! fixture: tests/fixtures/seat/seat-inputs.json（読むだけ）。器の §20 の形の欄は歯の中で組む。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

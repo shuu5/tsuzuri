@@ -2,6 +2,7 @@
 //! 印は metadata.json が名指す store の manifest の字と manifest が名指す file の長さで、
 //! bd の読みで動く更新時刻と journal.idx は見ない（行 e-mark-meta）。
 //! 作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
+#![cfg(test)]
 
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Read, Write};

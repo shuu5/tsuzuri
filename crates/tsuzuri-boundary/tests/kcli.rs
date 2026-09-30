@@ -1,6 +1,7 @@
 //! tz graph の歯（接頭辞 kcli_・設計ノート surface-wave4 行 k-graph の完了の条件）。
 //! 偽の bd（台帳の字の file を返す script）と偽の設計の道具（索引の字の file を返す script）を歯ごとの
 //! 作業場に置き、event log の字を作業場の state dir に置いて、tz の binary を撃つ。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

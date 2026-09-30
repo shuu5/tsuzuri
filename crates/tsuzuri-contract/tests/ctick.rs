@@ -1,5 +1,6 @@
 //! 行 c-seat-tick の歯（契約）: 器の管理 tick の健康の閉じた 4 語と、席の card の欄 tick と tick_at。
 //! 語の列は 4 語なので snapshot の file を足さず、歯の中の字で pin する。
+#![cfg(test)]
 
 use serde_json::Value;
 use tsuzuri_contract::board::Reading;

@@ -1,5 +1,6 @@
 //! 口座の 7 日の線の歯（接頭辞 cspk_・設計ノート surface-wave15b 行 c-acct-spark の完了の条件）。
 //! log の行は器の AllowanceMeasured の行の形（共通の欄と account・window・endpoint・used_pct・任意の model）で組む。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 

@@ -1,5 +1,6 @@
 //! bead の走行の時間軸の歯（接頭辞 runsdoc_・設計ノート surface-wave3b 行 e-runs の完了の条件）。
 //! fixture: tests/fixtures/graph/real/events.jsonl（器の実物の写し・読むだけ）。短い字の組は歯の中に書く。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

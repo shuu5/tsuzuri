@@ -2,6 +2,7 @@
 //! fixture: tests/fixtures/seat/seat-inputs.json（組の名 → 7 つの字と期待の card）と、
 //! tests/fixtures/pipeline/next.json（着地済みの次の一手の組）。
 //! 組の席の名と今の時刻は期待の card の target と at から取る。anchor は server と同じく doctor の席の行から取る。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

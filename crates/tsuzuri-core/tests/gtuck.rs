@@ -1,6 +1,7 @@
 //! グラフの眺めを組の箱で畳む歯（行 c-graph-fold・接頭辞 gtuck_）: 電文の既定・例のグラフの段・
 //! 古い開きの畳み直し・帯の畳み直し・断りと捨てる id・塊の id・実物の見本の不変の値・開く列の字・純さ・自分の名。
 //! グラフは歯の中で直に組む（実物の見本だけ fixture の字を build に渡す）。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

@@ -1,5 +1,6 @@
 //! 行 c-pipe-ci の歯（中核）: 着地の後の器の終端の RunDone の detail の語を CI の読みに畳み、札の段と欄 ci に重ねる。
 //! 台帳と event log は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-ci）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

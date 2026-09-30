@@ -1,6 +1,7 @@
 //! 行 c-pipe-unmapped の歯（中核）: 器の RunStage の段 Failed と Stopped を板の段 Failed と Stopped にし、
 //! 段の理由は detail の字にする。detail が `RETIRED` の RunStage（器が worktree を畳んだ記帳）は段を決めない。
 //! 節の組は歯の中で組む（fixture の file は使わない）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

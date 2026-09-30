@@ -2,6 +2,7 @@
 //! fixture: tests/fixtures/seat/seat-inputs.json（組の名 → 7 つの字と期待の card）と
 //! tests/fixtures/account/acct-inputs.json（host の側の字）。どちらも読むだけ。
 //! 器の §20 の形の席の行（reopens= と move= と grace_left= を末に足した行）は歯の中で組む。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

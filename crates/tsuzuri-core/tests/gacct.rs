@@ -2,6 +2,7 @@
 //! 口座で grace_until が時刻のときだけその時刻の写し（器の残り秒に組んだ今を足した値・0 は今そのもの・行 c-abs-seat）。
 //! 中核と境界の account の読みは猶予の rules 行と合図の file を読まず、語の辞書の鍵 move_grace の説明は器の字に直す。
 //! fixture: tests/fixtures/account/acct-inputs.json（読むだけ）。器の §20 の形の欄は歯の中で組む。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

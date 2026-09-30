@@ -1,6 +1,7 @@
 //! 窓ごとの逼迫の閾値と群の逼迫の知らせと移動の断りの歯（設計ノート surface-wave7 便 c-acct-thr・接頭辞 athr_）。
 //! 閾値は器の rules 行の出力の字を、知らせと断りは器の event log の行を写すだけで、tsuzuri は判じない。
 //! fixture: tests/fixtures/account/acct-doc.json（読むだけ）。event log の字は歯の中で組む。今は 2026-09-27T12:00:00Z。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

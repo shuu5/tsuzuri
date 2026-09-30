@@ -1,5 +1,6 @@
 //! 種類の読めない節点の行の数を電文に出す歯（行 c-dn-unknown・要件 FR2）。
 //! 口 /api/graph の電文と tz graph --design の眺めは、飛ばした節点の行の数を skipped の design_nodes に持つ。
+#![cfg(test)]
 
 use tsuzuri_boundary::cli::graph::design_view;
 use tsuzuri_boundary::server::board::{Texts, graph};

@@ -1,6 +1,7 @@
 //! 台帳の読みの出所の歯（接頭辞 server_src_・設計ノート surface-base 便 e-src の完了の条件）。
 //! 偽の bd（shell の script）を歯ごとの一時の dir に置き、server は同じ process の thread で
 //! 127.0.0.1 の空き port に立てる。偽の bd は撃たれるたびに引数・cwd・標準入力を calls/ の下に残す。
+#![cfg(test)]
 
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};

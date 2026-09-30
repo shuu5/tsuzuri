@@ -1,5 +1,6 @@
 //! グラフの眺めと近傍の歯（便 c-view・接頭辞 gview_）: 辺の向き・id の自然な順・次数・眺め・近傍。
 //! 例のグラフは歯の中で直に組む（13 節点・16 辺）。hub-619.json は便 c の着地済みの fixture を読むだけ。
+#![cfg(test)]
 
 use std::cmp::Ordering;
 use std::collections::BTreeSet;

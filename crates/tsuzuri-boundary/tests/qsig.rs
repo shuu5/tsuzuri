@@ -2,6 +2,7 @@
 //! 入力の読みと送り先の列は関数を直に撃つ。送りは作業場（CARGO_TARGET_TMPDIR の下の qsig）に置く sh の script を
 //! 偽の git と偽の tailnet の道具にし、127.0.0.1 の空き port の受け手の thread か実物の server に向ける。
 //! status の住所は文書用の住所（どこにも届かない）だけを書く。hooks.json は stage の json で読む（serde_json を使わない）。
+#![cfg(test)]
 
 use std::ffi::OsStr;
 use std::fs;

@@ -3,6 +3,7 @@
 //! fixture を返し、在れば作業場の振る舞いに従う script）を歯ごとの作業場に置き、event log の fixture を
 //! 作業場の state dir に写す。server は同じ process の thread で 127.0.0.1 の空き port に立て、tz は binary を撃つ。
 //! 値は口の本文の字と、中核の関数の値を電文にした字で比べる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

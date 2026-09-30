@@ -3,6 +3,7 @@
 //! 契約の crate の tests の dir の下の全部の .rs と .json の file が持たないことを見る。
 //! 見張りは器より厳しく、語の途中から始まる台帳の接頭辞の形も数える。
 //! この file の見本の字は LEDGER から組み、file の字に台帳の接頭辞の裁定 id の形を持たない。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

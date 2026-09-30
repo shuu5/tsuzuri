@@ -1,6 +1,7 @@
 //! 行 c-pipe-queue の歯（中核）: 走行を 1 つも持たない open の契約は、acceptance に器の読める設計 pointer の行を持つ
 //! task の bead だけを Blocked か Queued の札にする（読みは器の列の受付と同じ）。
 //! 節の組は歯の中で組む（fixture の file は pqueue_fixture_runless だけが読む）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

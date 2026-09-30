@@ -2,6 +2,7 @@
 //! （時点・最後の区間の終わり・24 時間の窓の始まり・退避までの残り秒）を持たず、材料が変わらない読み直しでは同じ字になる。
 //! 時点は材料の時刻（状態の記録の最後の読めた行と合図の最後の判定の ts の大きい方）・退避は終わる時刻。
 //! fixture: tests/fixtures/seat/seat-inputs.json と tests/fixtures/account/acct-inputs.json・acct-doc.json（読むだけ）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

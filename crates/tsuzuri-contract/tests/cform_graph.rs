@@ -2,6 +2,7 @@
 //! snapshot は tests/snapshots の群の名の json（graph.json）で、字の比べは標準 library だけで行う。
 //! 共通の手は tests/common/mod.rs に 1 つだけ在る。
 //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+#![cfg(test)]
 
 mod common;
 

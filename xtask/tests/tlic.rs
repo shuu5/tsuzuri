@@ -1,5 +1,6 @@
 //! 許しの file と manifest の許しの欄（行 t-license・裁定 t3-hub.67.6:20260929T0117Z-1・要件 NFR3）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

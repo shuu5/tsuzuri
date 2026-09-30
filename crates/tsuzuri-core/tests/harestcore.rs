@@ -1,5 +1,6 @@
 //! 行 h-acct-rest の中核の歯: 台帳の指標の未反映の種類ごとの件数（unreflected_kinds）と、
 //! LedgerStats を持つ fixture の値が同じ定義（件数の和が未反映の数・種類は閉じた一覧の順）に揃うこと。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

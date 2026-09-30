@@ -3,6 +3,7 @@
 //! 方針の問いは境界の server の policy が書く形（create_write の題・本文・labels と line の notes）で台帳に足す。
 //! 境界の歯は JSON を読まないので、台帳と metadata と hook の入力の字を歯の中で字として組み、tz の標準出力の字を、
 //! 同じ字から中核の関数で組んだ値の字と比べる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::Write;

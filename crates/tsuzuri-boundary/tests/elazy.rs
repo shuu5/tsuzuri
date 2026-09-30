@@ -1,5 +1,6 @@
 //! 見張りの Source の口の読みが印の遅れを見て読む歯（接頭辞 elazy_・設計ノート surface-wave23b 行 e-ledger-lazy の完了の条件）。
 //! 偽の bd は撃たれるたびに記録の file に 1 行を足して字 [] を出す script。作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
+#![cfg(test)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

@@ -1,6 +1,7 @@
 //! 面の file の応答の頭 Cache-Control の歯（接頭辞 ecache_・設計ノート surface-wave11b 行 e-cache の完了の条件）。
 //! 名に hash を持つ file は 1 年持たせ（`files::IMMUTABLE`）、index.html とほかの file は毎回確かめさせる（`files::NO_CACHE`）。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立て、要求は素の TCP で撃つ。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

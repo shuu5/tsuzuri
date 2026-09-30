@@ -1,5 +1,6 @@
 //! account board の host の側の部分の歯（便 e-acct-host・接頭辞 acctcore_）。
 //! fixture: tests/fixtures/account/acct-inputs.json（host の側の字と、期待の口座の列・群の枠の列・移動の列）。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

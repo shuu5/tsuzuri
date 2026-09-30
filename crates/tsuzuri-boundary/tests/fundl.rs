@@ -1,6 +1,7 @@
 //! 席に届いていない裁定の口の歯（接頭辞 fundl_・設計ノート surface-wave23b 行 f-undelivered・要件 FR9）。
 //! 台帳は歯の中で組み（逐語は作った字）、偽の bd が作業場の out.json を出し、server を同じ process の thread で立てて
 //! 口 GET /api/unreceived を撃つ。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

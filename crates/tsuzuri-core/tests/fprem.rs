@@ -1,6 +1,7 @@
 //! 問いの起票の門の方針の検査の歯（設計ノート surface-wave13b 行 f-premises・要件 FR8・接頭辞 fprem_）。
 //! fixture: tests/fixtures/guard/question-4/ の index.tsv と ledger.json。台帳は ledger.json の配列に歯の中で
 //! bead を足した字で、グラフは index.tsv と台帳と空の event log の字で組む。方針の id は fx の接頭辞の問いの形。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::Path;

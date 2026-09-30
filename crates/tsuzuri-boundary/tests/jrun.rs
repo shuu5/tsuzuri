@@ -1,6 +1,7 @@
 //! 受入 12 条の runner の歯（行 j-runner・接頭辞 jrun_）。
 //! 頁の口は歯の中の偽の頁（撃った命令と測りと URL の読みを順に記録し、決まった事実の字と event を返す）で撃ち、
 //! 本物の Chrome を起こさない。事実の字は行 j-count の fixture の clean.json と vocab.json を使う。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -2,6 +2,7 @@
 //! 偽の bd は撃たれるたびに記録の file に 1 行を足し、作業場に slow の file が在れば 1 秒眠り、
 //! down の file が在れば rc 1、無ければ置いた字の file を出す script。
 //! 作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作り、server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};

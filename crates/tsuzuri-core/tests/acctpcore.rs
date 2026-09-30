@@ -1,6 +1,7 @@
 //! account board の project の側の部分と組み立ての歯（便 e-acct-proj・接頭辞 acctpcore_）。
 //! fixture: tests/fixtures/account/acct-inputs.json（host の側の字）・acct-doc.json（組み立ての部分）。どちらも読むだけ。
 //! project の側の字（event log・状態の記録・台帳・合図の健康の行の器の欄）は歯の中で組む。今は 2026-09-27T12:00:00Z。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

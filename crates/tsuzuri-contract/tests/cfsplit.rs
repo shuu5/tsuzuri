@@ -3,6 +3,7 @@
 //! 鍵の和は割る前の snapshot の鍵を、群の file の歯の名は割る前の歯の名を含む（床・足す行は一覧を直さず・消すか名を替える行だけが直す）。
 //! 共通の手は tests/common/mod.rs に 1 度ずつだけ在り、tests の下の file はどれも受付の行数の上限以下。
 //! 割る前の歯と snapshot の path の字は repo の crates と xtask の code に残らない（この file 自身は数えない）。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

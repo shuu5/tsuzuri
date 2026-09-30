@@ -1,5 +1,6 @@
 //! 持ち込む code への規則の除外の表 carry-exclusions.toml（行 t-carry-ex・判断の記録 ADR-18 の決定 (5)・ADR-19 の決定 (2)・要件 NFR3）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

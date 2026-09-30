@@ -1,6 +1,7 @@
 //! 1 byte も送らない接続を黙って閉じる歯（接頭辞 iclose_・設計ノート surface-wave10b 行 e-idle-close の完了の条件）。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立て、要求は素の TCP で撃つ。
 //! 10 秒の読みの時間切れは待たない（時間切れの道は読み手の WouldBlock と TimedOut と mod.rs の字で見る）。
+#![cfg(test)]
 
 use std::collections::VecDeque;
 use std::fs;

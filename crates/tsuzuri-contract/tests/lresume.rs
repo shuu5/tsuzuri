@@ -1,4 +1,5 @@
 //! 行 c-limit-resume の歯（契約）: 限度の再開の時刻の閉じた 4 つの値と、席の card の欄 reopens。
+#![cfg(test)]
 
 use serde_json::{Value, json};
 use tsuzuri_contract::board::Reading;

@@ -1,5 +1,6 @@
 //! 行 c-seat-tick の歯（中核）: 席の card の欄 tick（doctor の席の行の tick の語）と tick_at（合図の最後の判定の ts）。
 //! fixture: tests/fixtures/seat/seat-inputs.json の組 run（組の席の名と今の時刻は期待の card の target と at）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

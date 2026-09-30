@@ -1,5 +1,6 @@
 //! 設計ノートの行の辺の型 req と depends の歯（行 c-dn-edges・要件 FR2）。
 //! folio の索引の設計ノートの行の欄 req と depends の辺の行を、型 Req（行 → 要件）と Depends（行 → 行）の辺に組む。
+#![cfg(test)]
 
 use std::path::Path;
 

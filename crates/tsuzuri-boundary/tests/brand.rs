@@ -1,6 +1,7 @@
 //! header の題の project の名の口の歯（接頭辞 brand_・設計ノート surface-wave3b 行 g-brand の完了の条件）。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立て、GET を素の TCP で撃つ。
 //! 3 つの crate の src と自分の file の字は CARGO_MANIFEST_DIR から読む。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

@@ -1,6 +1,7 @@
 //! 配達の hook の中核の歯（行 f-deliver・接頭辞 fdlv_）。
 //! 台帳は歯の中で組む（問い fx-d.1〜fx-d.6）。hooks.json は workspace の根の plugin/hooks/hooks.json を読む。
 //! 境界の tests/fdlv.rs の歯の名もこの file が数える（fdlv_own_names_clean）。
+#![cfg(test)]
 
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;

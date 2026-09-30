@@ -1,6 +1,7 @@
 //! 知らせの種類の歯（接頭辞 evkind_・計画 surface-plan の行 c-ev-kind の完了の条件 (1)〜(4)）。
 //! board-changed の data は契約の BoardChanged で、欄 kinds に印の動いた種類を載せる。
 //! 印の file は作業場の put の dir に書いてから移すので、見張りから書きかけは見えない。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

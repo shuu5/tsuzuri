@@ -3,6 +3,7 @@
 //! （語ごとに NUL で終える・本文の改行を語の中に保つ）と cwd を記録の置き場に書き、落とさない回で
 //! 最初の引数が `create` なら `<log>/<名>.created` の字（無ければ `fx-p.7` と改行）を出す script。
 //! 受付は `policy::accept` を受付の時刻 `NOW` で直に撃つ（口の本文を見る歯だけが server を立てる）。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

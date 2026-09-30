@@ -1,6 +1,7 @@
 //! 不変条件 g-3・g-7 の境界の歯（接頭辞 g3g7_・行 c-g3g7）: 設計の道具の裁定の書き出しの読みと、
 //! 口の電文と tz graph --check。偽の bd（台帳の字の file を返す script）と偽の設計の道具（引数に --emit-rulings が
 //! 在れば書き出しの字・--summary が在れば rc 1・ほかは索引の字を返す script）を歯ごとの作業場に置いて撃つ。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

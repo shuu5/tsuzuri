@@ -2,6 +2,7 @@
 //! 端末は fixture の tests/fixtures/stage/terminals.toml を偽の state dir の host.toml に写して引く（名も宛先も path も偽物）。
 //! 偽の ssh・器・git・tailnet の道具・席の目の Chrome は sh の script で argv を記録し、席の目の Chrome の pipe の相手と
 //! 端末の Chrome は歯の中の thread で話す（本物の ssh と Chrome と tailnet の道具と器を撃たず網に出ない）。
+#![cfg(test)]
 
 use std::env;
 use std::ffi::{OsStr, OsString};

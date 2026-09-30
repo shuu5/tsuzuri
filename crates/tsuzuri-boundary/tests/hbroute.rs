@@ -1,6 +1,7 @@
 //! 口を 1 口 1 file に割り、口の列を組み立ての script が dir から生成する歯
 //! （接頭辞 hbroute_・設計ノート surface-hub 行 hb-route の完了の条件・判断の記録 ADR-13）。
 //! dir と mod.rs と build.rs と測りの記録は CARGO_MANIFEST_DIR から、生成の字は OUT_DIR から読む。
+#![cfg(test)]
 
 use std::fs;
 use std::path::Path;

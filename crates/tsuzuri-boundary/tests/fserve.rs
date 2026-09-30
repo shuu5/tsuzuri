@@ -2,6 +2,7 @@
 //! 偽の bd は作業場の out.json を標準出力へ出す script（無ければ rc 1）、
 //! 偽の bdw と偽の器は撃たれた回ごとの argv と cwd を記録の置き場（repo と state dir の外）に書く script。
 //! 裁定の受付の `deliver` を直に呼ぶ歯と、tz を撃って束の口へ送る歯を持つ。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

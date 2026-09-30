@@ -2,6 +2,7 @@
 //! 偽の器は、受けた argv を記録の置き場（repo と state dir の外）に 1 行ずつ足し、argv の頭に応じて
 //! 作業場の out-<出力> の字を標準出力へ出す script（file が無ければ rc 1・slow-<出力> が在れば 8 秒眠る）。
 //! 字は fixture の seat-inputs.json の組から置く。server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

@@ -3,6 +3,7 @@
 //! 偽の器は回ごとの argv を記録し、作業場の scribe2.fails の数の回までは作業場の on-fail を sh で撃ってから
 //! 標準エラーに 3 行（前の行・断りの 1 行・空の行）を書いて rc 1 で終わる script。
 //! 裁定の受付の `deliver` と `redeliver` を直に呼ぶ。
+#![cfg(test)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

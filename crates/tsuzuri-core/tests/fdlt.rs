@@ -1,6 +1,7 @@
 //! tool の呼びの組の後の配達の hook の中核の歯（行 f-deliver-tool・接頭辞 fdlt_）。
 //! 台帳は歯の中で組む（問い fx-t.1〜fx-t.8）。hooks.json は workspace の根の plugin/hooks/hooks.json を読む。
 //! 境界の tests/fdlt.rs の歯の名もこの file が数える（fdlt_own_names_clean）。
+#![cfg(test)]
 
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;

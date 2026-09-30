@@ -5,6 +5,7 @@
 //! 3 つ目の argv の行の id）で、git は -C の次の path の最後の区切りで、bd は cwd の最後の区切りで字を選ぶ。
 //! anchor は作業場の work の下の dir（proj-a ほか）で、字の中の path は実行の時に組む（行 D-4）。
 //! 接頭辞 alean_ の歯は、集め直しの git の読みの持ち回しと、台帳の印を見て bd を撃たない読みを見る（行 a-lean）。
+#![cfg(test)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};

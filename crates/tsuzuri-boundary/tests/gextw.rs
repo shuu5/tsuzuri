@@ -4,6 +4,7 @@
 //! 偽の設計の道具（引数に --emit-rulings が在れば書き出しの字・--summary が在れば rc 1・ほかは索引の字を返す）を置く。
 //! 書き出しは fixture の書き出しに、族 s9-far を引く ADR-8 の行（bead の形で s9-far.2）を足した字。
 //! 歯の名の検査は tsuzuri-core の tests/gext.rs が持つ。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

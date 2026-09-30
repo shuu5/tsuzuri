@@ -5,6 +5,7 @@
 //! 偽の bdw と偽の器は回ごとに argv を記録し、argv を書き終えたら回ごとの done の file を置く script で、
 //! 偽の器は門の file gate を 9 秒まで待ってから終わりの印 scribe2.end を置く。
 //! log の歯だけ tz を撃つ（127.0.0.1 の空き port・tz を止めてから標準 error を読む）。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

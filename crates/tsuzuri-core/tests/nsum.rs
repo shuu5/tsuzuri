@@ -1,6 +1,7 @@
 //! 節点の行と 2 つの概要の歯（行 c-summary-design・要件 FR15）。
 //! 契約の型の節点に欄 line・plain・eng が在り、中核の `add_summary` が folio の要約の字（JSON Lines）から写す。
 //! build は 3 つの欄を組まない（無し）。節の字は歯の中で組み、workspace の根の fixture は読むだけで書かない。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

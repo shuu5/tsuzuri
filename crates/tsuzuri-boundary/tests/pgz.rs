@@ -1,5 +1,6 @@
 //! 面の file の gzip の写しの配りの歯（接頭辞 pgz_・設計ノート surface-wave19d 行 g-gz の完了の条件）。
 //! 写しの在る file には頭 Vary を足し、要求の Accept-Encoding が gzip を受ければ写しの中身を頭 Content-Encoding と返す。
+#![cfg(test)]
 
 use std::fs;
 use std::os::unix::fs::symlink;

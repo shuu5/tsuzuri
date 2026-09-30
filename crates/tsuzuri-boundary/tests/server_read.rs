@@ -2,6 +2,7 @@
 //! 偽の bd（bead 8 本の fixture を返す script）と偽の設計の道具（実物の索引の fixture を返す script）を
 //! 歯ごとの一時の dir に置き、event log の fixture を一時の state dir に写す。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fmt::Debug;
 use std::fs;

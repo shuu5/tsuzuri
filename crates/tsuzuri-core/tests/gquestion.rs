@@ -1,6 +1,7 @@
 //! 走行の答えの無い問いと g-12 の歯（便 c-g12）: questions-4.json・runs-5.json。
 //! 器の問いは台帳の bead でなく event log の中に在る。n 番目の問いは走行の n 番目の QuestionRaised で、
 //! 次の QuestionRaised の直前までに同じ走行の QuestionAnswered が在れば答えが在る。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

@@ -1,5 +1,6 @@
 //! 便 c-q-blocking の歯（中核）: 問いの card の止めている task の列（電文の鍵と既定・台帳の種類 blocks の依存から写す・
 //! 契約の型の snapshot の字・歯の名）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

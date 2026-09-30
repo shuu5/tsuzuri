@@ -1,6 +1,7 @@
 //! tool の呼びの組の後の配達の hook の境界の歯（行 f-deliver-tool・接頭辞 fdlt_）。
 //! 偽の git・tailnet の道具・bd・bdw は作業場の sh の script（撃たれた引数を記録する）で、tz は作業場を PATH の頭に足して撃つ。
 //! board は同じ process の thread で立てた読むだけの server か 127.0.0.1 の受け手で、偽の git が port を出す（tailnet の道具は落ちる）。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

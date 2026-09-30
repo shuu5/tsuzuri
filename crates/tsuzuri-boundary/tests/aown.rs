@@ -3,6 +3,7 @@
 //! 偽の bd は撃たれた回を bd.count に数えて見本を出す script。偽の bdw と偽の器は撃たれた回を数え、
 //! 回ごとに argv を記録する script。
 //! (1) は server を同じ process の thread で立て、(2) は tz を撃つ（127.0.0.1 の空き port・tz を止めてから標準 error を読む）。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

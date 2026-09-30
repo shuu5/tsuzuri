@@ -1,6 +1,7 @@
 //! CDP の口の歯（行 i-3・接頭辞 stage_cdp_）。
 //! 偽の server と偽の Chrome は歯の中の thread で、temp_dir の下の短い名の unix socket で待ち受け、歯の終わりに消す。
 //! 偽の側は自分の小さな frame の読み書き（mask を解く読みと mask の無い書き）を持ち、握手の応答の鍵だけ crate の accept で組む。
+#![cfg(test)]
 
 use std::env;
 use std::fs;

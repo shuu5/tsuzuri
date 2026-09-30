@@ -3,6 +3,7 @@
 //! proj-x の台帳は歯の中の 2 行（open の問い fx-oth.2 と closed の問い fx-oth.1）で、proj-y は台帳の file を持たない。
 //! 偽の bd は撃たれた cwd の ledger.json を出す script（無ければ rc が 0 でない）で、偽の bdw は撃たれた回を数える。
 //! (1)〜(4) は server を同じ process の thread で立て、(5) は tz を撃つ。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{ErrorKind, Read, Write};

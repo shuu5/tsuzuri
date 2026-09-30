@@ -2,6 +2,7 @@
 //! build は bead の description の行頭「概要 = 」「技術 = 」の行を plain と eng に写し、
 //! 中核の check の `unsummarized` が要約の無い節点を数えて名指す。節の字は歯の中で組み、
 //! workspace の根の fixture は読むだけで書かない。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

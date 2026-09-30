@@ -3,6 +3,7 @@
 //! cwd を別の記録に足し、印の file rc が在れば rc 1・無ければ置いた字を出す。server は同じ process の thread で
 //! Server::bind_with（偽の bd と器と git）で立て、窓の口の歯だけは tz の binary を環境 CLAUDECODE=1 と --tz で子 process として立てる。
 //! host の面は fixture tests/fixtures/stage/terminals.toml に群の宣言（anchor は場の proj-a と proj-b の dir）を足した字。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

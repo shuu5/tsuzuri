@@ -1,6 +1,7 @@
 //! 最後に読めた台帳の字の持ち回しの歯（接頭辞 rhold_・設計ノート surface-wave9 行 e-hold の完了の条件）。
 //! 偽の bd は歯ごとの作業場の sh の script で、落とす印の file（down）が在れば何も出さずに rc 1、
 //! 無ければ置いた字の file（out.json）を cat する（眠らない）。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

@@ -1,5 +1,6 @@
 //! 行 e-sess-closed の歯（中核）: account board の session の表は、台帳で今閉じている bead の run の行を出さない。
 //! 節の組は歯の中で組む（fixture の file は使わない）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

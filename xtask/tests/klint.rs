@@ -1,6 +1,7 @@
 //! 行 k-lint-base の歯: 規則の行 R-10 の書き方を workspace の lint の表で deny にする機構（条 P-24.1）と、
 //! 規則の行 R-4 の関数の粒度の値を写した clippy.toml と、member の manifest が表を継ぐこと（持ち込んだ folio は除外の表が外す）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -29,16 +30,15 @@ const MAP: [(&str, &str, &str, &str); 18] = [
 ];
 
 /// 今の表の lint（表に足す行がこの一覧も直す）。
-const ENABLED: [&str; 5] = [
+const ENABLED: [&str; 7] = [
     "unused_must_use",
+    "unwrap_used",
+    "panic",
     "todo",
     "unimplemented",
     "exit",
     "dbg_macro",
 ];
-
-/// 歯の file の根に #![cfg(test)] を置く member（根からの相対）。行 k-lint-tests が他の member を足す。
-const SWEPT: [&str; 1] = ["crates/tsuzuri-surface"];
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -323,9 +323,8 @@ fn klint_test_roots_cfg_test() {
     let members = members();
     let excluded = excluded_r10();
     let mut seen = 0;
-    for member in SWEPT {
-        assert!(members.iter().any(|m| m == member), "{member} が members に無い");
-        if excluded.iter().any(|e| e == member) {
+    for member in &members {
+        if excluded.contains(member) {
             continue;
         }
         for path in test_roots(member) {

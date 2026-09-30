@@ -3,6 +3,7 @@
 //! 偽の bdw と偽の器は受けた argv を記録の置き場（repo と state dir の外）に 1 行ずつ書く script。
 //! 見た版の要約値は GET /api/questions の応答の card の digest から取る。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

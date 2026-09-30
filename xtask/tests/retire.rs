@@ -1,5 +1,6 @@
 //! 持ち込んだ folio2/ の下の、道具が名で探す file の退役（行 t-carry-retire・判断の記録 ADR-18 の決定 (6)・要件 NFR3）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で木を見る。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

@@ -1,6 +1,7 @@
 //! 行 c-dormant の歯（中核）: account board の休止中の席は、器の登録の行の席のうち、状態の記録の最後の読めた行から
 //! 規則の行 R-28 の境（`DORMANT_S`）を越えた席で、session の表から休止中の orchestrator の行を外す。
 //! 節の組は歯の中で組む（fixture の file は使わない）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

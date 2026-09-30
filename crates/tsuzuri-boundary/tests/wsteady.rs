@@ -1,6 +1,7 @@
 //! 板の印の見張りの揺れの歯（接頭辞 wsteady_・計画 surface-plan の行 e-watch-steady の完了の条件）。
 //! Hub::watch_board に呼びの回を数える board の関数を渡し、周の進みを呼びの回で数える。
 //! 印の file は作業場の外の隣の dir に書いてから移すので、見張りから書きかけは見えない。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

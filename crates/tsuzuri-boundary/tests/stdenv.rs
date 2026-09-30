@@ -1,6 +1,7 @@
 //! 画面を開く env の欄 display-env の読みの歯（行 i-1b・接頭辞 denv_）。
 //! 直した本文は、fixture の字にちょうど 1 つ在る字（term-b の display-env の行か、term-a の display の行）を
 //! 字の置き換えで直して組む。
+#![cfg(test)]
 
 use std::fs;
 use std::path::Path;

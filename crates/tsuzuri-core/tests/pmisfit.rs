@@ -1,6 +1,7 @@
 //! 行 c-pipe-misfit の歯（中核と電文）: 板は器の doctor の台帳の形の行を写した形の崩れた open の bead の一覧を持つ
 //! （tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)）。
 //! 節の組は歯の中で組む（fixture の file は使わない）。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

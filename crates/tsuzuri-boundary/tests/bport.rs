@@ -2,6 +2,7 @@
 //! 偽の git は受けた argv を記録の置き場に 1 行ずつ足し、-C の次の path の最後の区切り（末尾の「/」を除く）と
 //! 鍵（argv の 5 つ目）の組で作業場の git の下の file を選んで出す script（file が無ければ rc 1）。
 //! 偽の器は argv を問わず rc 1 で終わり、bd の program は無い path。字の中の path は実行の時に組む（行 D-4）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

@@ -2,6 +2,7 @@
 //! server を立てず、束の受付 `batch::accept` を受付の時刻 1790570490（2026-09-28T04:41:30Z）で直に撃つ。
 //! 偽の bd は作業場の out.json を標準出力へ出す script、偽の bdw と偽の器は受けた argv を記録の置き場に書き、
 //! `<log>/<名>.fail` の回なら rc 1 で終わる script。台帳は歯の中で組む（fixture の file は使わない）。
+#![cfg(test)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

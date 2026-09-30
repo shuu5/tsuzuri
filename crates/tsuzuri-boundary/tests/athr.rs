@@ -3,6 +3,7 @@
 //! `usage` を作業場の out の下から出す（slow の下に同じ名の印が在れば 8 秒眠る・file が無ければ rc 1・ほかの頭は rc 1）。
 //! 偽の git は -C の次の path の最後の区切りと鍵の組で作業場の git の下の file を出す（file が無ければ rc 1）。
 //! 字の中の path は実行の時に組む（行 D-4）。今は 2026-09-27T12:00:00Z。
+#![cfg(test)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

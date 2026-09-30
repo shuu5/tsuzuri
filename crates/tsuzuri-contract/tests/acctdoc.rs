@@ -1,5 +1,6 @@
 //! account board の電文の歯（接頭辞 acctdoc_・設計ノート surface-base 便 b-acct）。
 //! fixture は tests/fixtures/account/acct-doc.json（口座 3・群 2・project 3・移動 2・session 4）。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

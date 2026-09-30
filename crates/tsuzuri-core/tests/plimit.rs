@@ -1,6 +1,7 @@
 //! pipeline の session の限度の印の歯（行 c-limit-pipe・接頭辞 plimit_）。
 //! 器が run を上限で止めた印（RunStage の段 RateLimited）だけを写して行の state を Limit にし、
 //! 残量の字（使用量・窓・閾値）は読まないことを見る。入力の字は歯の中で組む（fixture の file は置かない）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -1,6 +1,7 @@
 //! 受け手が 0 人の間は印の動かない読み直しをしない歯（接頭辞 lidle_・設計ノート surface-wave12f 行 e-idle の完了の条件）。
 //! 作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。server の歯の偽の bd は撃たれるたびに記録の file に 1 行を足して
 //! 字 [] を出す script で、server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

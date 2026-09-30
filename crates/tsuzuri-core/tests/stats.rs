@@ -2,6 +2,7 @@
 //! fixture: tests/fixtures/ledger の judge.json・stats-30.json、tests/fixtures/pipeline の pipeline.json・next.json。
 //! fixture の ledger は bd の出力の形の配列（JSON にして渡す）、events は字か 1 行 1 件の行の配列（改行で繋ぐ）。
 //! 閾値と次の一手の順は、規則の行 R-18・R-24 の value の字の全体と比べる（rules の file は読むだけ・行の字を探す）。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

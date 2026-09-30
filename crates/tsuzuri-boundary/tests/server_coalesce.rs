@@ -4,6 +4,7 @@
 //! 作業場に fail の file が在る間、偽の bd は眠った後に何も出さず rc 1 で落ちる。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立て、同時の要求は thread を並べて撃つ。
 //! 変化の見張りの周期の読み（起動の後 5 秒ごと）と重ならないよう、数える歯は起動の直後に撃ち終える。
+#![cfg(test)]
 
 use std::fmt::Debug;
 use std::fs;

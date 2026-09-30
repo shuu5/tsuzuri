@@ -1,6 +1,7 @@
 //! 問いの一覧の歯（便 e-ask・接頭辞 question_）。
 //! fixture: tests/fixtures/surface/question-2.json（bd の一覧の形・open の問い 2 本と closed の問い 1 本）。
 //! 要約値は契約の型の読み（`BdLine`）から組んだ `LedgerItem::digest` の値と比べる。
+#![cfg(test)]
 
 use std::path::Path;
 

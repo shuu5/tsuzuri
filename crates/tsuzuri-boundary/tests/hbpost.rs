@@ -1,6 +1,7 @@
 //! POST の 4 つの口を routes の下の file に移す歯
 //! （接頭辞 hbpost_・設計ノート surface-hub 行 hb-post の完了の条件・判断の記録 ADR-13）。
 //! mod.rs と自分の file は CARGO_MANIFEST_DIR から読む。
+#![cfg(test)]
 
 use std::fs;
 use std::path::Path;

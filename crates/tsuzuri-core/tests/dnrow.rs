@@ -1,5 +1,6 @@
 //! 設計ノートの行の節点と design の辺の歯（行 c-dn-rows・要件 FR2）。
 //! folio の索引の種類の語「設計ノートの行」の行を節点にし、台帳の pointer の行が指す行の節点へ design の辺を組む。
+#![cfg(test)]
 
 use std::path::Path;
 

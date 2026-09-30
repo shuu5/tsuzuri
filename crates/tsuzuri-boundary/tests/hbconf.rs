@@ -1,6 +1,7 @@
 //! 起動の引数を `Config::new` と残りの欄の埋めで組む歯（接頭辞 hbconf_・設計ノート surface-hub 行 hb-config の完了の条件）。
 //! 欄の歯は `Config::new` の値の欄を 1 つずつ比べ、Config を struct の字で組まない（欄が増えても歯を直さずに済む）。
 //! 定義の置き場と、main.rs と 9 つの歯の file の組み方は src と tests の字を読んで見る。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

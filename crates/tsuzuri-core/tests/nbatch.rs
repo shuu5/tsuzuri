@@ -1,6 +1,7 @@
 //! 次の一手の束の承認の歯（行 c-next-batch・接頭辞 nbatch_）。
 //! 束の承認は、問いの一覧（`open_questions`）の A-1 の印の無い問いが `BATCH_MIN` 本以上なら当たる。
 //! 台帳の字は bd の一覧の形の配列を json の macro で組む。fixture: tests/fixtures/pipeline/next.json。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

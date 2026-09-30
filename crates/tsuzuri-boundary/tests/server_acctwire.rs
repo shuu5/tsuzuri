@@ -4,6 +4,7 @@
 //! 器の `seat heartbeat` は何も出さずに rc 0 で返る。
 //! 引数の state dir は state-h で、anchor proj-a の state dir は git が返す state-a（行 D-4: path は実行の時に組む）。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

@@ -1,6 +1,7 @@
 //! 席の停止の hook の plugin の登録の歯（行 f-stop・接頭辞 fstop_）。
 //! workspace の根の plugin の 2 つの file（.claude-plugin/plugin.json と hooks/hooks.json）を JSON として読む
 //! （境界の crate は serde_json に直に依存しないので、この歯は中核の crate に置く）。
+#![cfg(test)]
 
 use std::path::Path;
 

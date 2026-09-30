@@ -1,6 +1,7 @@
 //! 受入 12 条の数えの歯（行 j-count・接頭辞 jcount_）。
 //! fixture は tests/fixtures/surface/accept-12/ の、違反 0 の clean.json と、clean.json に 1 件だけ仕込んだ
 //! 12 の file と、english と rephrase に同じ鍵 pipeline を持つ小さな vocab.json。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

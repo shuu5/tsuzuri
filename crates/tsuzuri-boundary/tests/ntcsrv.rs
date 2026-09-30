@@ -1,5 +1,6 @@
 //! 席の「見て」の知らせの記録を読む server の歯（接頭辞 ntc_・行 i-11 の完了の条件 (1)〜(4)）。
 //! 記録は tz stage notify と同じ `notify::save` で書き、口 GET /api/notices と変化の知らせ（SSE）を本物の server で撃つ。
+#![cfg(test)]
 
 use std::ffi::OsStr;
 use std::fs;

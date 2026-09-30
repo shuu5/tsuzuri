@@ -1,5 +1,6 @@
 //! 行 g-map-retired の歯（境界）: 廃止した設計ノートの文書 id を中核の関数で挙げ、電文の欄 retired に写すこと・
 //! この file の歯の名。設計の索引と要約の字を直に渡し、子 process も file も使わない。
+#![cfg(test)]
 
 use std::path::Path;
 

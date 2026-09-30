@@ -1,6 +1,7 @@
 //! 端末の一覧の読みの歯（行 i-1・接頭辞 stage_term_）。
 //! fixture は偽の端末の 2 行（term-a と term-b）を持つ host の面の字で、直した本文は fixture の字の中の
 //! 最初の一致（term-a の行）を字の置き換えで直して組む。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

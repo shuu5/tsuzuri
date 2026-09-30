@@ -2,6 +2,7 @@
 //! server を立てず、`Source` の読みと `ruling::reread` を直に撃つ。
 //! 偽の bd は撃たれた回を数え、場ごとに script に書いた秒だけ寝てから out.json（fixture の写し）を出す script で、
 //! 落ちる場の偽の bd は標準エラーに 1 行 `database is locked` を書いて rc 1 で終わる。
+#![cfg(test)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

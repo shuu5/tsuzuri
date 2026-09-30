@@ -2,6 +2,7 @@
 //! fixture の file は 3 つの入力（design_index・ledger・events）を持つ。
 //! design_index と events は字か行の配列（配列は 1 行ずつ改行で繋ぐ・object の行は JSON にする）、
 //! ledger は字か bd の出力の形の配列（配列は JSON にする）。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

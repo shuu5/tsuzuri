@@ -2,6 +2,7 @@
 //! 契約の型の節点に欄 updated（UTC の epoch 秒）が在り、中核の build が bead は台帳の updated_at から、
 //! 走行は event log の読める ts の最後の値から読む。設計の索引の節点と notes の定型行から導く節点は無し。
 //! 節の字は歯の中で組む。
+#![cfg(test)]
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{GraphNode, NodeKind};

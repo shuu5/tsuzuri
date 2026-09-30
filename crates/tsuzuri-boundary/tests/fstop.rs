@@ -2,6 +2,7 @@
 //! 偽の bd は受けた引数を記録の置き場に 1 行ずつ足してから作業場の out.json（既定は fixture の ledger.json）を出す script、
 //! 偽の bdw は撃たれた回ごとの argv と cwd を記録の置き場に書く script（server_ask.rs の recorder と同じ形）。
 //! tz は作業場の根（偽の bd と偽の bdw の在る dir）を PATH の頭に足して撃つ。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

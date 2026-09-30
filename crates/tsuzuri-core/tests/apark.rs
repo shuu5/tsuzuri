@@ -1,6 +1,7 @@
 //! 区画の行を群の枠の列と口座の占有に数えない歯（行 c-acct-park・接頭辞 apark_）。
 //! fixture: tests/fixtures/account/acct-inputs.json（host の側の字と、期待の口座の列・群の枠の列）。
 //! 区画の宣言と doctor の区画の行は fixture に足さず、歯の中で字に足す。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

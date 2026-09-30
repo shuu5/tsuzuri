@@ -4,6 +4,7 @@
 //! 器の 2026-09-29 の出力の形（doctor の Tier1 の行と group=Tier9 kind=park の区画の行と席の行・seat tick status の
 //! 欄 heartbeat_by= を持つ行・kind の key を持たない host.toml の区画の宣言）を歯の中で字に組む。口座と anchor と
 //! target は架空の名。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

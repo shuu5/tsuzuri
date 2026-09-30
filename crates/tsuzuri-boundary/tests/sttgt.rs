@@ -2,6 +2,7 @@
 //! 設定の fixture は tests/fixtures/stage/stage-target.toml（名は偽物）で、host の面は tests/fixtures/stage/terminals.toml に
 //! 群の宣言を足した字。偽の器・git・tailnet の道具は sh の script で、ssh と席の目の Chrome は無い path を渡す
 //! （本物の ssh と Chrome と tailnet の道具と器を撃たず網に出ない）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::env;

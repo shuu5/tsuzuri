@@ -2,6 +2,7 @@
 //! 偽の bd は作業場の out.json を標準出力へ出す script（無ければ rc 1）、
 //! 偽の bdw と偽の器は撃たれた回ごとの argv と cwd を記録の置き場（repo と state dir の外）に書き、決めた回で rc 1 にする script。
 //! 台帳の字は歯の中で組む bd の出力の形の JSON の配列。server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

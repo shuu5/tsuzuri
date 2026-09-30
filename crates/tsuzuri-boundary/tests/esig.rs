@@ -1,6 +1,7 @@
 //! 問いの合図で台帳の見張りの周期の待ちを終わらせる歯（接頭辞 esig_・設計ノート surface-wave21d 行 e-signal の完了の条件・
 //! 要件 NFR2・規則の行 R-21）。作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。server の歯の偽の bd は撃たれるたびに
 //! 記録の file に 1 行を足してから台帳の file を cat する script で、server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

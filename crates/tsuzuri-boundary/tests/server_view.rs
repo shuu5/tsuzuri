@@ -3,6 +3,7 @@
 //! 返す script）を歯ごとの一時の dir に置き、event log の fixture を一時の state dir に写す。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立てる。
 //! 値は口の本文の字と、中核の関数の値を電文にした字で比べる（読み直して比べない）。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

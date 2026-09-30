@@ -1,5 +1,6 @@
 //! ほかの project の board の守りの歯（行 i-board-ports・接頭辞 stbp_）。
 //! 群の宣言は test の中の字で、偽の git は sh の script（argv を file に足す・本物の git と tailnet の道具を撃たない）。
+#![cfg(test)]
 
 use std::ffi::OsStr;
 use std::fs;

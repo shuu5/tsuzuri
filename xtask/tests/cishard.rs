@@ -1,6 +1,7 @@
 //! CI の歯の分け方（行 t-ci-shard）: ci.yml の job check の matrix が 1 から N の全部を持ち、env の N が列の数と同じで、
 //! 変数の名は ci.yml と xtask の const にだけ在る（器の common-verify は変数を持たず歯の全部を撃つ）。
 //! 外の依存を使わず、ci.yml の行を字で読む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

@@ -2,6 +2,7 @@
 //! 偽の bd は受けた引数を記録の置き場に 1 行足してから作業場の ledger.json（fixture の写し）を出す script、
 //! 偽の設計の道具は同じく引数を記録してから作業場の index.tsv を出す script（写しを消せば rc 1 で落ちる）。
 //! 境界の歯は JSON を読まないので、tz の標準出力の字を、同じ字から中核の関数で組んだ値の字と比べる。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

@@ -1,5 +1,6 @@
 //! 行 c-pipe-closed の歯（中核）: 台帳で閉じた bead の走行の札は閉じた（着地せず）として段 Landed に置き、
 //! account board の run の 4 列も同じ読み替えで数える。節の組は歯の中で組む（fixture の file は使わない）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -1,6 +1,7 @@
 //! 問いの起票の門の hook の plugin の登録の歯（行 f-gate-install・接頭辞 gins_）。
 //! workspace の根の plugin/hooks/hooks.json を JSON として読み、PreToolUse の command を sh で撃つ
 //! （境界の crate は serde_json に直に依存しないので、この歯は中核の crate に置く）。
+#![cfg(test)]
 
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;

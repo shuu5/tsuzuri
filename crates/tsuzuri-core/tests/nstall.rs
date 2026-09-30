@@ -2,6 +2,7 @@
 //! 止まっている走行は Questioned の札を数えない（質問の側）。なしは、ほかの種類のどれも当たらず、
 //! `NO_INPUT` に無い種類のどれかを判じなかったなら判じなかった（要件 NFR2）。
 //! fixture: tests/fixtures/pipeline/next.json と tests/fixtures/seat/seat-inputs.json。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 

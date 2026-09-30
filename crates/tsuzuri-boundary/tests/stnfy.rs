@@ -2,6 +2,7 @@
 //! host の面は tests/fixtures/stage/terminals.toml に macos の term-m と windows の term-w の行を足した字（名も宛先も path も偽物）。
 //! 偽の器・git・tailnet の道具・ssh は sh の script で、偽の ssh は argv を記して最後の引数を環境を空にした sh で撃ち、
 //! その PATH は場の far の dir だけ（歯が置く偽の notify-send と env の symlink）。本物の ssh と notify-send と器を撃たず網に出ない。
+#![cfg(test)]
 
 use std::ffi::{OsStr, OsString};
 use std::fmt::Debug;

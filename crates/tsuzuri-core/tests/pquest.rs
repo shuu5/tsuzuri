@@ -1,6 +1,7 @@
 //! 行 c-pipe-questioned の歯（中核）: 器の RunStage の段 Questioned を板の段 Questioned に置き、
 //! 問いの後に器が RunStopped で止めた走行は段を変えず、段の理由を `QUESTION_STOPPED` と about の字にする。
 //! 節の組は歯の中で組む（fixture の file は pquest_fixture_card だけが読む）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

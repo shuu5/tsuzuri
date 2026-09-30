@@ -1,6 +1,7 @@
 //! bead の走行の時間軸の口の歯（接頭辞 runsdoc_・設計ノート surface-wave3b 行 e-runs の完了の条件）。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立て、GET を素の TCP で撃つ。
 //! fixture の tests/fixtures/graph/real/events.jsonl（読むだけ）を state dir の fleet/events.jsonl に写す。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

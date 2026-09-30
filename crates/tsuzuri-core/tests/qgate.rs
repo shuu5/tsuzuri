@@ -1,6 +1,7 @@
 //! 問いの起票の門の歯（行 f-gate・要件 FR4・受入 AC6・接頭辞 qgate_）。
 //! fixture: tests/fixtures/guard/question-4/ の index.tsv（設計の索引の形）・ledger.json（bd の一覧の形）・
 //! cases.json（4 つの組）。グラフは index.tsv と ledger.json と空の event log の字で組む。
+#![cfg(test)]
 
 use std::path::Path;
 

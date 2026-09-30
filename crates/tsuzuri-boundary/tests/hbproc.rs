@@ -1,6 +1,7 @@
 //! 子 process を撃つ部品と時刻の読みを台帳の読みから割る歯（接頭辞 hbproc_・設計ノート surface-hub 行 hb-proc の完了の条件）。
 //! 歯は `proc` と `clock` を直に呼び、`ledger` の再公開の名でも呼んで同じ値かを比べる。
 //! 定義の置き場は src の字を読んで見る。
+#![cfg(test)]
 
 use std::ffi::OsStr;
 use std::fs;

@@ -1,6 +1,7 @@
 //! 本文で名指した id のうち欄にも辺にも無い対を数える床の歯（行 c-g9・不変条件 g-9・要件 FR3）。
 //! 中核の `mentioned_ids` が folio の id の文法で字から id を拾い、`unfielded_mentions` が設計の節点の要約の字から
 //! 対を数える。g-9 の判定は detect の間は変えない（つねに「まだ分からない」）。節の字は歯の中で組む。
+#![cfg(test)]
 
 use serde_json::json;
 use tsuzuri_contract::board::Reading;

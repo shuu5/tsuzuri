@@ -2,6 +2,7 @@
 //! 偽の bd は作業場の out.json（既定は fixture の question-2.json）を標準出力へ出す script、
 //! 偽の bdw と偽の器は受けた argv を記録の置き場（repo と state dir の外）に 1 行ずつ書く script。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立てる（標準 error を見る歯だけ tz を撃つ）。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

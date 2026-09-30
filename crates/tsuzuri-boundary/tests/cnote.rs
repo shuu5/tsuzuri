@@ -1,6 +1,7 @@
 //! 全部の行が着地した設計ノートの歯（接頭辞 cnote_・設計ノート surface-wave20b 行 c-note-stale・要件 FR3）。
 //! 偽の bd（台帳の字の file を返す script）と偽の設計の道具（どの引数にも索引の字の file を返す script・要約と
 //! 裁定の書き出しは読めない）を歯ごとの作業場に置き、event log の字を作業場の state dir に置いて、tz graph --check を撃つ。
+#![cfg(test)]
 
 use std::ffi::OsString;
 use std::fs;

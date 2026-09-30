@@ -1,6 +1,7 @@
 //! 依存の監査の歯（行 k-deny・条 P-26.5）: 根の deny.toml の節と鍵が閉じていること、licenses の allow が規則の行 R-2 の
 //! 値の許可一覧の写しであること、ci.yml の job deny が全面の 1 行を撃つこと、この file の歯の名が filter の語と重ならないこと。
 //! 外の依存を使わず、repo の根からの相対の path で file の字を読む。
+#![cfg(test)]
 
 use std::path::PathBuf;
 

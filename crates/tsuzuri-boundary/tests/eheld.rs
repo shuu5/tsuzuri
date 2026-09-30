@@ -1,5 +1,6 @@
 //! 外の読みの持ち回しの表と folio の読みの歯（接頭辞 eheld_・設計ノート surface-wave23b 行 e-held-design の完了の条件）。
 //! 偽の folio は歯ごとの作業場の sh の script で、受けた引数を log に 1 行足して字を返す（眠らない）。
+#![cfg(test)]
 
 use std::cell::Cell;
 use std::ffi::OsString;

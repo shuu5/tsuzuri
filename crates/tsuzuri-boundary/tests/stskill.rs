@@ -1,6 +1,7 @@
 //! 表示先の設定の手引きの skill の歯（行 i-9・接頭辞 stskill_・要件 FR16・判断の記録 ADR-15 の決定 (2)）。
 //! plugin/skills/stage-setup/SKILL.md を読むだけで、端末も器も撃たず網に出ない。
 //! 囲みの命令は境界の parse_target で読み、層 A の欄の名は境界の KEYS と突き合わせる。
+#![cfg(test)]
 
 use std::fs;
 use std::path::Path;

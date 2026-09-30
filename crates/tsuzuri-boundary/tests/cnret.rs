@@ -2,6 +2,7 @@
 //! 偽の bd（台帳の字の file を返す script）と偽の設計の道具（3 つ目の引数が --summary なら要約の字の file、
 //! ほかは索引の字の file を返す script）を歯ごとの作業場に置き、event log の字を作業場の state dir に置いて、
 //! tz graph --check を撃つ。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;

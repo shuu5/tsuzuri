@@ -1,6 +1,7 @@
 //! 最小の server の歯（接頭辞 server_min_・設計ノート surface-base 便 e-min の完了の条件）。
 //! server は同じ process の thread で 127.0.0.1 の空き port に立て、要求は素の TCP で撃つ。
 //! 台帳は偽の bd（作業場の out.json を返す shell の script・便 e-src）が返す。
+#![cfg(test)]
 
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Read, Write};

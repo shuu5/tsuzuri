@@ -1,5 +1,6 @@
 //! 不変条件 g-3・g-7 の歯（接頭辞 g3g7_・行 c-g3g7）: 裁定の書き出し（folio check --emit-rulings の行）を節点へ結び、
 //! ruled_by の辺を組み、g-3 と g-7 を 3 値で数える。fixture は tests/fixtures/graph/unruled/ の 4 つの file。
+#![cfg(test)]
 
 use std::path::Path;
 

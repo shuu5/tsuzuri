@@ -1,6 +1,7 @@
 //! 配達済みの印と未配達の裁定の歯（行 f-mark・接頭辞 fmark_）。
 //! fixture: tests/fixtures/stop/ledger.json（bd の一覧の形・bead 8 本）と ledger-done.json（その 3 本）。
 //! 行 f-stop と行 f-mark-serve の歯も同じ 2 つの fixture を読む。
+#![cfg(test)]
 
 use std::path::Path;
 

@@ -5,6 +5,7 @@
 //! rc・crash の下に同じ名の印が在れば、rc 3 で返る・自分を KILL で落とす。
 //! git は -C の次の path の最後の区切りで字を選ぶ。anchor は作業場の work と other の下の dir で、
 //! 字の中の path は実行の時に組む（行 D-4）。server は同じ process の thread で 127.0.0.1 の空き port に立てる。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{Read, Write};

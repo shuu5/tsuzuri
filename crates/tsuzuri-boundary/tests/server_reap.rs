@@ -1,6 +1,7 @@
 //! 時間切れの子 process を孫まで止める歯（接頭辞 server_reap_・設計ノート surface-base 便 e-reap の完了の条件）。
 //! 歯は temp の置き場に一意の名の dir を作り、sh の script を書いて撃つ。
 //! 孫が生きているかは /proc の下の pid の stat で見る（無いか、状態の字が Z なら止まった）。
+#![cfg(test)]
 
 use std::ffi::OsStr;
 use std::fs;
