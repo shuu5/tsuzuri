@@ -21,6 +21,7 @@ use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::launch::{self, PORT, WINDOW_SIZE};
 use tsuzuri_boundary::stage::terminal::{self, Os, Terminal};
 use tsuzuri_boundary::stage::tunnel::{self, SOCKET, Tunnel, Window};
+use tsuzuri_boundary::stage::url::Board;
 
 /// contracts の verify の filter の語のうち、ほかの語を部分の字として含まない最小の語（この行の接頭辞 launch_ は並べない）。
 const FILTER_WORDS: &str = concat!(
@@ -133,6 +134,77 @@ const NO_PAGE: &str = r#"[ {
 } ]
 "#;
 
+/// 偽の Chrome の頁の一覧（頁は 4 つ。P1 は account board の頁・P2 はほかの port の頁・P3 は開発中の app の頁・P4 は board の頁）。
+const LIST_MANY: &str = r#"[ {
+   "id": "S1",
+   "type": "service_worker",
+   "url": "http://127.0.0.1:4173/",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/S1"
+}, {
+   "id": "P1",
+   "type": "page",
+   "url": "http://127.0.0.1:4173/?board=account#x",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P1"
+}, {
+   "id": "P2",
+   "type": "page",
+   "url": "http://127.0.0.1:4802/",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P2"
+}, {
+   "id": "P3",
+   "type": "page",
+   "url": "http://127.0.0.1:8080/app",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P3"
+}, {
+   "id": "P4",
+   "type": "page",
+   "url": "http://localhost:4173/board?x=1#board=account",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P4"
+} ]
+"#;
+
+/// 偽の Chrome の頁の一覧（ほかの board の頁と account board の頁だけ）。
+const LIST_OTHER: &str = r#"[ {
+   "id": "P1",
+   "type": "page",
+   "url": "http://127.0.0.1:4173/?board=account",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P1"
+}, {
+   "id": "P2",
+   "type": "page",
+   "url": "http://127.0.0.1:4802/",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P2"
+} ]
+"#;
+
+/// 窓を足した後の偽の Chrome の頁の一覧（LIST_OTHER の後ろに board の頁）。
+const LIST_ADDED: &str = r#"[ {
+   "id": "P1",
+   "type": "page",
+   "url": "http://127.0.0.1:4173/?board=account",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P1"
+}, {
+   "id": "P2",
+   "type": "page",
+   "url": "http://127.0.0.1:4802/",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P2"
+}, {
+   "id": "P5",
+   "type": "page",
+   "url": "http://127.0.0.1:4173/?a=1&b=2",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P5"
+} ]
+"#;
+
+/// 節の board（URL は URL・host は 127.0.0.1 と localhost・port は 4173）。
+fn board() -> Board {
+    Board {
+        url: URL.to_string(),
+        hosts: strings(&["127.0.0.1", "localhost"]),
+        port: 4173,
+    }
+}
+
 fn fixture() -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/stage/terminals.toml");
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
@@ -194,15 +266,17 @@ enum Reach {
     Fail,
 }
 
-/// 偽の場（記録の置き場の dir・偽の ssh・印の file）。
+/// 偽の場（記録の置き場の dir・偽の ssh・印の file・窓を足した印の file）。
 struct Field {
     records: PathBuf,
     ssh: PathBuf,
     mark: PathBuf,
+    added: PathBuf,
 }
 
 impl Field {
-    /// 窓を起こす回の偽の ssh は raise が真なら印の file を置く。marked が真なら印の file を始めから置く。
+    /// 窓を起こす回の偽の ssh は raise が真なら印の file を置き、いつも窓を足した印の file を置く。
+    /// marked が真なら印の file を始めから置く。
     fn new(name: &str, reach: Reach, raise: bool, marked: bool) -> Field {
         let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
             .join("stlaunch")
@@ -211,6 +285,7 @@ impl Field {
         let records = root.join("records");
         fs::create_dir_all(&records).expect("記録の置き場");
         let mark = root.join("mark");
+        let added = root.join("added");
         if marked {
             fs::write(&mark, "").expect("印の file");
         }
@@ -224,13 +299,19 @@ impl Field {
             String::new()
         };
         let script = format!(
-            "#!/bin/sh\nrec='{}'\nn=$(( $(cat \"$rec/count\" 2>/dev/null || echo 0) + 1 ))\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"$rec/$n.args\"\nprintf '%s' \"$n\" > \"$rec/count\"\nif [ \"$1\" = -N ]; then\n  {tunnel}\nfi\n{raise}\nexit 0\n",
-            records.display()
+            "#!/bin/sh\nrec='{}'\nn=$(( $(cat \"$rec/count\" 2>/dev/null || echo 0) + 1 ))\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"$rec/$n.args\"\nprintf '%s' \"$n\" > \"$rec/count\"\nif [ \"$1\" = -N ]; then\n  {tunnel}\nfi\n{raise}\n: > '{}'\nexit 0\n",
+            records.display(),
+            added.display()
         );
         let ssh = root.join("ssh");
         fs::write(&ssh, script).expect("偽の ssh");
         fs::set_permissions(&ssh, fs::Permissions::from_mode(0o755)).expect("偽の ssh の権限");
-        Field { records, ssh, mark }
+        Field {
+            records,
+            ssh,
+            mark,
+            added,
+        }
     }
 
     /// 偽の ssh の argv の記録（count が want になるまで 5 秒まで待つ）。
@@ -264,19 +345,30 @@ struct Chrome {
     thread: JoinHandle<Vec<String>>,
 }
 
+/// 偽の Chrome の頁の一覧（窓を足した印の file が在れば after・無ければ before）。
+#[derive(Clone, Copy)]
+struct Lists {
+    before: &'static str,
+    after: &'static str,
+}
+
 impl Chrome {
-    fn start(socket: &Path, mark: &Path, list: &'static str) -> Chrome {
+    fn start(socket: &Path, mark: &Path, added: &Path, lists: Lists) -> Chrome {
         let listener =
             UnixListener::bind(socket).unwrap_or_else(|e| panic!("{}: {e}", socket.display()));
         listener.set_nonblocking(true).expect("待ち受けを止めない形に");
         let stop = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&stop);
         let mark = mark.to_path_buf();
+        let added = added.to_path_buf();
         let thread = thread::spawn(move || {
             let mut got = Vec::new();
             while !flag.load(Ordering::SeqCst) {
                 match listener.accept() {
-                    Ok((stream, _)) => serve(stream, &mark, list, &mut got),
+                    Ok((stream, _)) => {
+                        let list = if added.exists() { lists.after } else { lists.before };
+                        serve(stream, &mark, list, &mut got);
+                    }
                     Err(e) if e.kind() == ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(10));
                     }
@@ -366,9 +458,17 @@ struct Scene {
 
 impl Scene {
     fn open(field: &Field, name: &str, list: &'static str, timeout: Duration) -> Scene {
+        let lists = Lists {
+            before: list,
+            after: list,
+        };
+        Scene::open_lists(field, name, lists, timeout)
+    }
+
+    fn open_lists(field: &Field, name: &str, lists: Lists, timeout: Duration) -> Scene {
         let terminal = term(name);
         let dir = tunnel::socket_dir(&env::temp_dir()).expect("socket_dir");
-        let chrome = Chrome::start(&dir.join(SOCKET), &field.mark, list);
+        let chrome = Chrome::start(&dir.join(SOCKET), &field.mark, &field.added, lists);
         let tunnel = Tunnel::open(field.ssh.as_os_str(), &terminal, &dir, timeout).expect("open");
         assert_eq!(tunnel.socket(), dir.join(SOCKET));
         let first = field.records(1);
@@ -422,9 +522,11 @@ fn launch_shape_and_consts() {
     let socket_dir: fn(&Path) -> Result<PathBuf, String> = tunnel::socket_dir;
     let open: fn(&OsStr, &Terminal, &Path, Duration) -> Result<Tunnel, String> = Tunnel::open;
     let socket: for<'a> fn(&'a Tunnel) -> &'a Path = Tunnel::socket;
-    let window: fn(&Tunnel, &str, bool) -> Result<Window, String> = Tunnel::window;
+    let window: fn(&Tunnel, &Board, Option<&str>, bool) -> Result<Window, String> = Tunnel::window;
+    let board_page: fn(&str, &Board) -> Option<String> = launch::board_page;
+    let pick: fn(&str, Option<&str>, &Board) -> Option<String> = launch::pick;
     let _ = (quote, launch_env, chrome_argv, launch_argv, tunnel_argv, page_resource);
-    let _ = (items, socket_dir, open, socket, window);
+    let _ = (items, socket_dir, open, socket, window, board_page, pick);
     debug::<Tunnel>();
     let windows = [
         Window::Page {
@@ -647,6 +749,26 @@ fn launch_page_from_list() {
     for (list, want) in lists {
         assert_eq!(launch::page_resource(list).as_deref(), want, "{list}");
     }
+    let own = board();
+    let boards: [(&str, Option<&str>); 8] = [
+        (LIST, Some("/devtools/page/P1")),
+        (LIST_MANY, Some("/devtools/page/P4")),
+        (LIST_OTHER, None),
+        (NO_PAGE, None),
+        ("[]", None),
+        ("{}", None),
+        (
+            r#"[{"type":"page","url":"http://127.0.0.1:4173/","webSocketDebuggerUrl":"ws://localhost/devtools/browser/B1"}]"#,
+            None,
+        ),
+        (
+            r#"[{"type":"page","url":"http://127.0.0.1:4173/?a=1&board=account"},{"type":"page","url":"http://localhost:4173/x","webSocketDebuggerUrl":"ws://localhost/devtools/page/P7"}]"#,
+            Some("/devtools/page/P7"),
+        ),
+    ];
+    for (list, want) in boards {
+        assert_eq!(launch::board_page(list, &own).as_deref(), want, "{list}");
+    }
     let arrays: [(&str, Option<Vec<&str>>); 9] = [
         (
             r#" [ 1 , {"a":[2,3]} , "x" , [4] , true ] "#,
@@ -671,7 +793,7 @@ fn launch_running_chrome_reused() {
     let field = Field::new("running", Reach::Sleep, true, true);
     let scene = Scene::open(&field, "term-a", LIST, Duration::from_secs(5));
     assert_eq!(
-        scene.tunnel.window(URL, true),
+        scene.tunnel.window(&board(), None, true),
         Ok(Window::Page {
             resource: "/devtools/page/P1".to_string(),
             launched: false,
@@ -683,10 +805,63 @@ fn launch_running_chrome_reused() {
 }
 
 #[test]
+fn launch_memo_page_reused() {
+    let field = Field::new("memo", Reach::Sleep, true, true);
+    let scene = Scene::open(&field, "term-a", LIST_MANY, Duration::from_secs(5));
+    let own = board();
+    let page = |resource: &str| {
+        Ok(Window::Page {
+            resource: resource.to_string(),
+            launched: false,
+        })
+    };
+    assert_eq!(launch::pick(LIST_MANY, None, &own).as_deref(), Some("/devtools/page/P4"));
+    assert_eq!(
+        launch::pick(LIST_MANY, Some("/devtools/page/P3"), &own).as_deref(),
+        Some("/devtools/page/P3")
+    );
+    assert_eq!(
+        launch::pick(LIST_MANY, Some("/devtools/page/S1"), &own).as_deref(),
+        Some("/devtools/page/P4")
+    );
+    assert_eq!(
+        launch::pick(LIST_MANY, Some("/devtools/page/P9"), &own).as_deref(),
+        Some("/devtools/page/P4")
+    );
+    assert_eq!(launch::pick(LIST_OTHER, Some("/devtools/page/P9"), &own), None);
+    // 覚えた頁が開発中の app の頁でも、may_open が偽でも、その頁を起こさずに使う。
+    for may_open in [false, true] {
+        assert_eq!(
+            scene.tunnel.window(&own, Some("/devtools/page/P3"), may_open),
+            page("/devtools/page/P3"),
+            "{may_open}"
+        );
+    }
+    assert_eq!(scene.tunnel.window(&own, None, false), page("/devtools/page/P4"));
+    // 頁でない項の path を覚えていても選ばない。
+    assert_eq!(
+        scene.tunnel.window(&own, Some("/devtools/page/S1"), false),
+        page("/devtools/page/P4")
+    );
+    let want = [launch::tunnel_argv(&scene.terminal, scene.tunnel.socket())];
+    assert_eq!(field.records(1), want);
+    assert_eq!(scene.finish().len(), 8);
+
+    // 覚えた path が一覧に無く board の頁も無ければ、board の URL を含む Absent。
+    let field = Field::new("memo-none", Reach::Sleep, true, true);
+    let scene = Scene::open(&field, "term-a", LIST_OTHER, Duration::from_secs(5));
+    match scene.tunnel.window(&own, Some("/devtools/page/P9"), false) {
+        Ok(Window::Absent(line)) => assert!(line.contains(URL), "{line}"),
+        other => panic!("Absent でない: {other:?}"),
+    }
+    scene.finish();
+}
+
+#[test]
 fn launch_closed_stays_closed() {
     let field = Field::new("closed", Reach::Sleep, true, false);
     let scene = Scene::open(&field, "term-a", LIST, Duration::from_secs(5));
-    match scene.tunnel.window(URL, false) {
+    match scene.tunnel.window(&board(), None, false) {
         Ok(Window::Absent(line)) => {
             assert!(line.contains("term-a") && line.contains("tz stage open"), "{line}");
         }
@@ -706,7 +881,7 @@ fn launch_raise_once_when_asked() {
         let field = Field::new(&format!("raise-{name}"), Reach::Sleep, true, false);
         let scene = Scene::open(&field, name, LIST, Duration::from_secs(5));
         assert_eq!(
-            scene.tunnel.window(URL, true),
+            scene.tunnel.window(&board(), None, true),
             Ok(Window::Page {
                 resource: "/devtools/page/P1".to_string(),
                 launched: true,
@@ -731,7 +906,10 @@ fn launch_no_second_raise() {
     let field = Field::new("once", Reach::Sleep, false, false);
     let scene = Scene::open(&field, "term-a", LIST, Duration::from_secs(2));
     let start = Instant::now();
-    let err = scene.tunnel.window(URL, true).expect_err("起こした Chrome が答えなければ Err");
+    let err = scene
+        .tunnel
+        .window(&board(), None, true)
+        .expect_err("起こした Chrome が答えなければ Err");
     assert!(start.elapsed() < Duration::from_secs(10), "{:?}", start.elapsed());
     assert!(err.contains("term-a"), "{err}");
     let want = vec![
@@ -747,25 +925,70 @@ fn launch_no_second_raise() {
 
 #[test]
 fn launch_no_page_no_new_window() {
-    let field = Field::new("nopage", Reach::Sleep, true, true);
-    let scene = Scene::open(&field, "term-a", NO_PAGE, Duration::from_secs(5));
-    for may_open in [true, false] {
-        match scene.tunnel.window(URL, may_open) {
-            Ok(Window::Absent(line)) => assert!(line.contains("term-a"), "{may_open}: {line}"),
-            other => panic!("{may_open}: Absent でない: {other:?}"),
+    for (name, list) in [("nopage", NO_PAGE), ("otherpage", LIST_OTHER)] {
+        let field = Field::new(name, Reach::Sleep, true, true);
+        let scene = Scene::open(&field, "term-a", list, Duration::from_secs(5));
+        for hint in [None, Some("/devtools/page/S1"), Some("/devtools/page/P9")] {
+            match scene.tunnel.window(&board(), hint, false) {
+                Ok(Window::Absent(line)) => {
+                    assert!(line.contains("term-a") && line.contains(URL), "{name}: {line}");
+                    assert!(line.contains("ほかの board の窓は使わない"), "{name}: {line}");
+                }
+                other => panic!("{name}: Absent でない: {other:?}"),
+            }
+        }
+        let want = [launch::tunnel_argv(&scene.terminal, scene.tunnel.socket())];
+        assert_eq!(field.records(1), want, "{name}");
+        assert!(!field.added.exists(), "{name}: 起動の引数が撃たれた");
+        let got = scene.finish();
+        assert_eq!(got.len(), 6, "{name}: {got:?}");
+        for pair in got.chunks(2) {
+            assert_eq!(pair, ["GET /json/version", "GET /json/list"], "{name}");
         }
     }
-    let want = [launch::tunnel_argv(&scene.terminal, scene.tunnel.socket())];
-    assert_eq!(field.records(1), want);
+}
+
+#[test]
+fn launch_other_board_adds_window() {
+    let field = Field::new("adds", Reach::Sleep, false, true);
+    let lists = Lists {
+        before: LIST_OTHER,
+        after: LIST_ADDED,
+    };
+    let scene = Scene::open_lists(&field, "term-a", lists, Duration::from_secs(5));
     assert_eq!(
-        scene.finish(),
-        [
-            "GET /json/version",
-            "GET /json/list",
-            "GET /json/version",
-            "GET /json/list",
-        ]
+        scene.tunnel.window(&board(), Some("/devtools/page/P9"), true),
+        Ok(Window::Page {
+            resource: "/devtools/page/P5".to_string(),
+            launched: true,
+        })
     );
+    let want = vec![
+        launch::tunnel_argv(&scene.terminal, scene.tunnel.socket()),
+        launch::launch_argv(&scene.terminal, URL).expect("launch_argv"),
+    ];
+    assert_eq!(field.records(2), want);
+    let got = scene.finish();
+    assert!(got.len() >= 3, "{got:?}");
+    assert_eq!(got[..2], ["GET /json/version", "GET /json/list"]);
+    assert!(got[2..].iter().all(|l| l == "GET /json/list"), "{got:?}");
+
+    // 覚えた頁が在れば、頼まれても窓を足さない。
+    let field = Field::new("adds-memo", Reach::Sleep, false, true);
+    let lists = Lists {
+        before: LIST_ADDED,
+        after: LIST_ADDED,
+    };
+    let scene = Scene::open_lists(&field, "term-a", lists, Duration::from_secs(5));
+    assert_eq!(
+        scene.tunnel.window(&board(), Some("/devtools/page/P2"), true),
+        Ok(Window::Page {
+            resource: "/devtools/page/P2".to_string(),
+            launched: false,
+        })
+    );
+    assert_eq!(field.records(1).len(), 1);
+    scene.finish();
 }
 
 #[test]
@@ -845,7 +1068,7 @@ fn launch_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 16, "歯の数");
+    assert_eq!(names.len(), 18, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("launch_")

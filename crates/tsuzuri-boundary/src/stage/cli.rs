@@ -2,8 +2,10 @@
 //! 席は端末の一覧の名で命令し、命令ごとに決まった旗だけを受ける（端末の値を上書きする旗は持たず、撃つ program の
 //! 差し替えの旗だけを持つ・条 N-3）。board の頁の上では見せるだけにし、click・入力・key を撃つ前に断る。
 //! 窓を起こすのは持ち主の tz stage open だけで、席の中（環境変数 CLAUDECODE が 1）の open は断る（計画の 3 節の席の決め）。
-//! open は端末ごとの錠を持って撃ち、同時の撃ちで窓を 2 つにしない。動いている Chrome に頁が無い時だけ、
-//! 持ち主の頼みとして頁の target を 1 つ作る（NEW_PAGE・この口の 1 回だけ）。窓を前に出す・動かす語は持たない。
+//! open は端末ごとの錠を持って撃ち、同時の撃ちで窓を 2 つにしない。窓は board ごとに 1 つで、覚えた頁か board の頁が
+//! 動いている Chrome に無い時だけ、持ち主の頼みとして起動の引数を 1 回撃つ（動いている Chrome が app の窓を足す・行 i-board-win）。
+//! 窓の頁の path は端末ごとの file に project の名で覚え（`memo`）、選びの前に読み、窓を見つけるか起こした後に書く。
+//! 窓を前に出す・動かす・頁を作る語は持たない。
 //! host の面は器の rules validate --state-dir が rc 0 で返った後にだけ読み、自分の anchor の state dir の host.toml だけを読む。
 //! 標準出力の最後の行は、board の URL を組めた後のどの終わり方でも url の line（持ち主へ渡す URL）。
 //! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く（行 i-7）。
@@ -33,15 +35,15 @@ use tsuzuri_contract::wire;
 use tsuzuri_core::account::host::declaration;
 use tsuzuri_core::account::project_name;
 
-use super::cdp::{self, Command, Session};
+use super::cdp::{Command, Session};
 use super::json;
+use super::memo;
 use super::notify::{self, NotifyCall, Outcome, Record};
 use super::relay::{self, Eyes, Reach};
 use super::target::{self, Targets};
 use super::terminal::{self, Terminal};
 use super::tunnel::{self, Tunnel, Window};
 use super::url::{self, Board};
-use super::ws::Socket;
 use crate::acct;
 use crate::server::proc;
 
@@ -62,9 +64,6 @@ pub const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// ほかの tz stage open の錠を待つ上限。
 pub const LOCK_WAIT: Duration = Duration::from_secs(30);
-
-/// 動いている Chrome に頁の target を 1 つ作る method（持ち主の tz stage open の頼みの時だけ撃つ）。
-pub const NEW_PAGE: &str = "Target.createTarget";
 
 /// 不合格（断り・使い方の誤り・命令の誤り）。
 const FAIL: u8 = 1;
@@ -669,13 +668,19 @@ pub fn lock(base: &Path, name: &str, wait: Duration) -> Result<File, String> {
     }
 }
 
-/// /json/version の本文の browser の target の websocket の path（/devtools/browser/ で始まる時だけ）。
-pub fn browser_resource(version: &str) -> Option<String> {
-    let url = json::member(version, "webSocketDebuggerUrl").and_then(json::unquote)?;
-    let rest = url.strip_prefix("ws://")?;
-    let path = &rest[rest.find('/')?..];
-    path.starts_with("/devtools/browser/")
-        .then(|| path.to_string())
+/// 端末ごとの覚えから、この project の窓の頁の path を引く（project か端末の名が覚えに書けない形か、file が無ければ None）。
+fn recall(base: &Path, terminal: &str, project: Option<&str>) -> Option<String> {
+    memo::recall(&memo::path(base, terminal)?, project?)
+}
+
+/// 見つけた窓の頁の path を覚える（覚えに書けなくても撃ちは止めず、1 行を出す）。
+fn remember(base: &Path, terminal: &str, project: Option<&str>, resource: &str) {
+    let (Some(file), Some(project)) = (memo::path(base, terminal), project) else {
+        return;
+    };
+    if let Err(e) = memo::put(&file, project, resource) {
+        println!("{e}（撃ちは止めない・次の撃ちは board の頁で窓を選ぶ）");
+    }
 }
 
 /// 字 = の詰めの付いた標準の base64 を byte に戻す（形の外れた字は None）。
@@ -832,9 +837,11 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
         }
     };
     let terminal = terminal::lookup(&text, &name)?;
+    let own = project(&call.repo).ok();
     if call.verb == Verb::Open {
-        return open(call, &terminal, &base, board);
+        return open(call, &terminal, &base, board, own.as_deref());
     }
+    let hint = recall(&base, &name, own.as_deref());
     let held = match (first, config.as_deref()) {
         (true, Some(_)) => Some(lock(&base, &name, LOCK_WAIT)?),
         _ => None,
@@ -844,7 +851,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
         _ => false,
     };
     match relay::reach(&call.ssh, &call.chrome, &terminal, &base, &board.url, TIMEOUT)? {
-        Reach::Terminal(tunnel) => match tunnel.window(&board.url, first)? {
+        Reach::Terminal(tunnel) => match tunnel.window(board, hint.as_deref(), first)? {
             Window::Page { resource, launched } => {
                 if launched && let Some(path) = config.as_deref() {
                     target::mark(path, &name, now())?;
@@ -852,6 +859,7 @@ fn stage(call: &Call, script: &[(Command, Option<PathBuf>)], board: &Board) -> R
                         "端末 {name} に初めて表示面の窓を起こし、表示先の設定に印を書いた（持ち主が閉じた後は起こし直さない）"
                     );
                 }
+                remember(&base, &name, own.as_deref(), &resource);
                 drop(held);
                 let session = Session::open(tunnel.socket(), &resource, TIMEOUT)?;
                 drive(session, script, board, &ports)
@@ -972,82 +980,52 @@ fn face_text(repo: &Path, scribe2: &OsStr, git: &OsStr) -> Result<String, String
     terminal::read_face(&repo.join(&state))
 }
 
-/// 持ち主が窓を開く（端末ごとの錠を持ったまま、窓を 1 回だけ起こすか、頁の無い Chrome に頁を 1 つ作る）。
-/// 窓を起こすか頁を作った時は錠の中で表示先の設定に端末の印を書く（印が在れば書かない）。
+/// 持ち主が窓を開く（端末ごとの錠を持ったまま、覚えた頁か board の頁を使うか、無ければ起動の引数を 1 回だけ撃つ）。
+/// 窓を起こした時は錠の中で表示先の設定に端末の印を書く（印が在れば書かない）。見つけた窓の頁は端末ごとの覚えに書く。
 /// 設定の path が決まらないか設定が読めなければ ssh を撃つ前に断る。
-fn open(call: &Call, terminal: &Terminal, base: &Path, board: &Board) -> Result<(), String> {
+fn open(
+    call: &Call,
+    terminal: &Terminal,
+    base: &Path,
+    board: &Board,
+    own: Option<&str>,
+) -> Result<(), String> {
     let name = &terminal.name;
     let _held = lock(base, name, LOCK_WAIT)?;
     let config = config_path(call.config.as_deref())?;
     target::load(&config)?;
     let dir = tunnel::socket_dir(base)?;
     let tunnel = Tunnel::open(&call.ssh, terminal, &dir, TIMEOUT)?;
-    let (line, shown) = match tunnel.window(&board.url, true)? {
-        Window::Page { launched: true, .. } => {
-            (format!("端末 {name} に表示面の窓を起こした"), true)
+    let hint = recall(base, name, own);
+    let (resource, line, shown) = match tunnel.window(board, hint.as_deref(), true)? {
+        Window::Page {
+            resource,
+            launched: true,
+        } => {
+            let line = format!("端末 {name} に board {} の表示面の窓を起こした", board.url);
+            (resource, line, true)
         }
-        Window::Page { resource, .. } => match tunnel.page_url(&resource) {
-            Some(page) if !board.shows(&page) => (
-                format!(
-                    "端末 {name} の表示面の窓は在るが、頁 {page} は board {} の頁でない（窓を起こさず・頁も足さない）",
-                    board.url
-                ),
-                false,
-            ),
-            _ => (format!("端末 {name} の表示面の窓は在る（起こさない）"), false),
-        },
-        Window::Absent(_) => {
-            new_page(&tunnel, &board.url)?;
-            match tunnel.window(&board.url, false)? {
-                Window::Page { .. } => (
-                    format!("端末 {name} の表示面の Chrome に頁の窓を 1 つ開いた"),
-                    true,
-                ),
-                Window::Absent(line) => return Err(line),
-            }
+        Window::Page { resource, .. } => {
+            let named = match tunnel.page_url(&resource) {
+                Some(page) if !board.shows(&page) => format!("・頁は {page}"),
+                _ => String::new(),
+            };
+            let line = format!(
+                "端末 {name} の board {} の表示面の窓は在る（起こさない{named}）",
+                board.url
+            );
+            (resource, line, false)
         }
+        Window::Absent(line) => return Err(line),
     };
     println!("{line}");
+    remember(base, name, own, &resource);
     if shown && target::mark(&config, name, now())? {
         println!(
             "表示先の設定に端末 {name} の印を書いた（持ち主が閉じた後は --to を省いた撃ちで起こし直さない）"
         );
     }
     Ok(())
-}
-
-/// 動いている Chrome の browser の target に繋ぎ、頁の target を 1 つ作る message を 1 度だけ送って応答を待つ。
-fn new_page(tunnel: &Tunnel, url: &str) -> Result<(), String> {
-    let resource = tunnel
-        .version()
-        .as_deref()
-        .and_then(browser_resource)
-        .ok_or_else(|| "端末の Chrome の /json/version に browser の target の path が無い".to_string())?;
-    let mut socket = Socket::connect(tunnel.socket(), &resource, TIMEOUT)?;
-    let params = format!("{{\"url\":{}}}", json::escape(url));
-    socket
-        .send(&cdp::message(1, NEW_PAGE, &params))
-        .map_err(|e| format!("{NEW_PAGE}: {e}"))?;
-    let deadline = Instant::now() + TIMEOUT;
-    loop {
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Err(format!("{NEW_PAGE}: 時間切れ"));
-        }
-        socket.wait(left)?;
-        let text = socket
-            .recv()
-            .map_err(|e| format!("{NEW_PAGE}: {e}"))?
-            .ok_or_else(|| format!("{NEW_PAGE}: 相手が閉じた"))?;
-        if json::member(&text, "id") != Some("1") {
-            continue;
-        }
-        if let Some(error) = json::member(&text, "error") {
-            return Err(format!("{NEW_PAGE}: {error}"));
-        }
-        break;
-    }
-    socket.close()
 }
 
 /// 命令を順に撃ち（どの命令の Err でもその後の命令を撃たない）、終わりに Session を閉じる。

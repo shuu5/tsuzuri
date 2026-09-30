@@ -19,15 +19,15 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::stage::cdp::Command;
 use tsuzuri_boundary::stage::cli::{
-    self, Call, LOCK_WAIT, NEW_PAGE, SEAT_ENV, TIMEOUT, USAGE, VALIDATE_ARGS, Verb,
+    self, Call, LOCK_WAIT, SEAT_ENV, TIMEOUT, USAGE, VALIDATE_ARGS, Verb,
 };
 use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::launch;
+use tsuzuri_boundary::stage::memo;
 use tsuzuri_boundary::stage::target::{self, Targets};
 use tsuzuri_boundary::stage::terminal::{self, Terminal};
 use tsuzuri_boundary::stage::tunnel::{self, Tunnel};
 use tsuzuri_boundary::stage::url::{self, Board};
-use tsuzuri_boundary::stage::ws;
 use tsuzuri_contract::stage::StageTargets;
 use tsuzuri_contract::wire;
 
@@ -54,6 +54,13 @@ const BOARD_URL: &str = "http://srv-a.tailnet.invalid:4801/";
 
 /// 節の URL の行。
 const LINE: &str = "board の URL http://srv-a.tailnet.invalid:4801/";
+
+/// 節の term-a の窓が在る時の行（起こさない）。
+const LIVE_A: &str =
+    "端末 term-a の board http://srv-a.tailnet.invalid:4801/ の表示面の窓は在る（起こさない）";
+
+/// 節の term-a に窓を起こした時の行。
+const RAISED_A: &str = "端末 term-a に board http://srv-a.tailnet.invalid:4801/ の表示面の窓を起こした";
 
 /// 節の term-a の印の行。
 const MARKED_A: &str =
@@ -130,17 +137,6 @@ const NO_PAGE: &str = r#"[ {
 } ]
 "#;
 
-/// 節の頁を作る 7 つの字。
-const MADE: [&str; 7] = [
-    "GET /json/version",
-    "GET /json/list",
-    "GET /json/version",
-    "GET /devtools/browser/B1",
-    r#"{"id":1,"method":"Target.createTarget","params":{"url":"http://srv-a.tailnet.invalid:4801/"}}"#,
-    "GET /json/version",
-    "GET /json/list",
-];
-
 /// 節の席の目の method の 18（どの命令の前にも頁の URL を読む）。
 const EYES_METHODS: [&str; 18] = [
     "Target.getTargets",
@@ -172,6 +168,32 @@ const LIST_OTHER: &str = r#"[ {
    "type": "page",
    "url": "http://srv-a.tailnet.invalid:4802/",
    "webSocketDebuggerUrl": "ws://localhost/devtools/page/P1"
+} ]
+"#;
+
+/// 節の開発中の app の頁（自分の board の port と違う port の頁）。
+const APP: &str = "http://127.0.0.1:4173/app";
+
+/// 偽の端末の Chrome の /json/list の本文（頁は開発中の app の頁だけ）。
+const LIST_APP: &str = r#"[ {
+   "id": "P1",
+   "type": "page",
+   "url": "http://127.0.0.1:4173/app",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P1"
+} ]
+"#;
+
+/// 偽の端末の Chrome の /json/list の本文（頁は account board の頁とほかの project の board の頁）。
+const LIST_FOREIGN: &str = r#"[ {
+   "id": "P1",
+   "type": "page",
+   "url": "http://srv-a.tailnet.invalid:4801/?board=account",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P1"
+}, {
+   "id": "P2",
+   "type": "page",
+   "url": "http://srv-a.tailnet.invalid:4802/",
+   "webSocketDebuggerUrl": "ws://localhost/devtools/page/P2"
 } ]
 "#;
 
@@ -280,6 +302,7 @@ struct Field {
     tmp: PathBuf,
     socket: PathBuf,
     on: PathBuf,
+    launched: PathBuf,
     broken: PathBuf,
     config: PathBuf,
 }
@@ -313,6 +336,7 @@ impl Field {
         fs::create_dir_all(&tmp).expect("場の一時の dir");
         let socket = tmp.join("far.sock");
         let on = root.join("on");
+        let launched = root.join("launched");
         let broken = root.join("broken");
         let config = root.join("cfg").join(target::FILE);
         let tunnel = match ssh {
@@ -326,8 +350,9 @@ impl Field {
             &root,
             "ssh",
             &format!(
-                "if [ \"$1\" = -N ]; then\n  {tunnel}\nfi\n: > '{}'\nexit 0\n",
-                on.display()
+                "if [ \"$1\" = -N ]; then\n  {tunnel}\nfi\n: > '{}'\n: > '{}'\nexit 0\n",
+                on.display(),
+                launched.display()
             ),
         );
         let scribe2 = fake(
@@ -368,6 +393,7 @@ impl Field {
             tmp,
             socket,
             on,
+            launched,
             broken,
             config,
         }
@@ -568,18 +594,26 @@ struct Far {
 
 impl Far {
     fn start(field: &Field, list: &'static str) -> Far {
+        Far::start_after(field, list, list)
+    }
+
+    /// 頁の一覧は、窓を起こす回の偽の ssh が撃たれるまでは before・撃たれた後は after。
+    fn start_after(field: &Field, before: &'static str, after: &'static str) -> Far {
         let listener = UnixListener::bind(&field.socket)
             .unwrap_or_else(|e| panic!("{}: {e}", field.socket.display()));
         listener.set_nonblocking(true).expect("待ち受けを止めない形に");
         let stop = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&stop);
         let on = field.on.clone();
+        let launched = field.launched.clone();
         let thread = thread::spawn(move || {
             let mut got = Vec::new();
-            let mut list = list;
             while !flag.load(Ordering::SeqCst) {
                 match listener.accept() {
-                    Ok((stream, _)) => answer(stream, &on, &mut list, &mut got),
+                    Ok((stream, _)) => {
+                        let list = if launched.exists() { after } else { before };
+                        answer(stream, &on, list, &mut got);
+                    }
                     Err(e) if e.kind() == ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(10));
                     }
@@ -598,9 +632,8 @@ impl Far {
     }
 }
 
-/// 1 つの接続（印の file が無ければ何も書かずに閉じる・在れば /json/version と /json/list に答え、
-/// browser の target の websocket では id 1 の応答を返してその後の /json/list を LIST にする）。
-fn answer(mut stream: UnixStream, on: &Path, list: &mut &'static str, got: &mut Vec<String>) {
+/// 1 つの接続（印の file が無ければ何も書かずに閉じる・在れば /json/version と /json/list に答える）。
+fn answer(mut stream: UnixStream, on: &Path, list: &str, got: &mut Vec<String>) {
     stream.set_nonblocking(false).expect("読みを待つ形に");
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
@@ -625,38 +658,7 @@ fn answer(mut stream: UnixStream, on: &Path, list: &mut &'static str, got: &mut 
     }
     let body = match line {
         "GET /json/version" => VERSION,
-        "GET /json/list" => *list,
-        "GET /devtools/browser/B1" => {
-            let key = head
-                .split("\r\n")
-                .filter_map(|l| l.split_once(':'))
-                .find(|(n, _)| n.trim().eq_ignore_ascii_case("Sec-WebSocket-Key"))
-                .map(|(_, v)| v.trim().to_string())
-                .expect("Sec-WebSocket-Key");
-            let reply = format!(
-                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
-                ws::accept(&key)
-            );
-            stream.write_all(reply.as_bytes()).expect("握手の応答");
-            let Some((1, payload)) = frame(&mut stream) else {
-                got.push("字の frame が無い".to_string());
-                return;
-            };
-            let text = String::from_utf8(payload).expect("字の frame");
-            got.push(text.clone());
-            if text.contains(NEW_PAGE) {
-                *list = LIST;
-            }
-            let id = json::member(&text, "id").unwrap_or("0");
-            let reply = format!(r#"{{"id":{id},"result":{{"targetId":"P2"}}}}"#);
-            let mut out = vec![0x81, reply.len() as u8];
-            out.extend_from_slice(reply.as_bytes());
-            stream.write_all(&out).expect("応答の frame");
-            if matches!(frame(&mut stream), Some((8, _))) {
-                let _ = stream.write_all(&[0x88, 2, 0x03, 0xe8]);
-            }
-            return;
-        }
+        "GET /json/list" => list,
         _ => return,
     };
     let head = format!(
@@ -668,33 +670,6 @@ fn answer(mut stream: UnixStream, on: &Path, list: &mut &'static str, got: &mut 
     }
     let mut rest = [0u8; 64];
     while matches!(stream.read(&mut rest), Ok(n) if n > 0) {}
-}
-
-/// client の mask つきの 1 つの frame（opcode と mask を解いた payload）。
-fn frame(stream: &mut UnixStream) -> Option<(u8, Vec<u8>)> {
-    let mut head = [0u8; 2];
-    stream.read_exact(&mut head).ok()?;
-    let len = match head[1] & 0x7f {
-        126 => {
-            let mut b = [0u8; 2];
-            stream.read_exact(&mut b).ok()?;
-            usize::from(u16::from_be_bytes(b))
-        }
-        127 => {
-            let mut b = [0u8; 8];
-            stream.read_exact(&mut b).ok()?;
-            usize::try_from(u64::from_be_bytes(b)).ok()?
-        }
-        n => usize::from(n),
-    };
-    let mut key = [0u8; 4];
-    stream.read_exact(&mut key).ok()?;
-    let mut payload = vec![0u8; len];
-    stream.read_exact(&mut payload).ok()?;
-    for (i, b) in payload.iter_mut().enumerate() {
-        *b ^= key[i % 4];
-    }
-    Some((head[0] & 0x0f, payload))
 }
 
 /// Verb の変種の名（wildcard の腕を持たない・変種が足されると組めない）。
@@ -723,9 +698,6 @@ fn stcli_shape_and_consts() {
     assert_eq!(timeout, Duration::from_secs(10));
     let wait: Duration = LOCK_WAIT;
     assert_eq!(wait, Duration::from_secs(30));
-    let new_page: &str = NEW_PAGE;
-    assert_eq!(new_page, "Target.createTarget");
-
     let run: fn(&[&str]) -> u8 = cli::run;
     let parse: fn(&[&str]) -> Result<Call, String> = cli::parse;
     let one_fn: OneFn = cli::one;
@@ -733,10 +705,9 @@ fn stcli_shape_and_consts() {
     let seat_refusal: fn(Option<&OsStr>) -> Option<String> = cli::seat_refusal;
     let on_board: fn(&Command, &str, &Board) -> bool = cli::on_board;
     let lock: fn(&Path, &str, Duration) -> Result<File, String> = cli::lock;
-    let browser_resource: fn(&str) -> Option<String> = cli::browser_resource;
     let user_dir: fn(&Path) -> Result<PathBuf, String> = tunnel::user_dir;
     let version: fn(&Tunnel) -> Option<String> = Tunnel::version;
-    let _ = (run, parse, one_fn, lines, seat_refusal, on_board, lock, browser_resource);
+    let _ = (run, parse, one_fn, lines, seat_refusal, on_board, lock);
     let _ = (user_dir, version);
     debug::<Verb>();
     debug::<Call>();
@@ -1036,16 +1007,6 @@ fn stcli_guard_tables() {
     for (command, page, want) in table {
         assert_eq!(cli::on_board(command, page, &own), want, "{command:?} {page}");
     }
-
-    assert_eq!(
-        cli::browser_resource(VERSION).as_deref(),
-        Some("/devtools/browser/B1")
-    );
-    assert_eq!(
-        cli::browser_resource(r#"{"webSocketDebuggerUrl":"ws://localhost/devtools/page/P1"}"#),
-        None
-    );
-    assert_eq!(cli::browser_resource("{}"), None);
 }
 
 #[test]
@@ -1274,36 +1235,42 @@ fn stcli_open_reuses_window() {
     let far = Far::start(&field, LIST);
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out, ["端末 term-a の表示面の窓は在る（起こさない）", LINE]);
+    assert_eq!(out, [LIVE_A, LINE]);
     assert_eq!(
         far.stop(),
         ["GET /json/version", "GET /json/list", "GET /json/list"]
     );
     assert_eq!(field.records("ssh").len(), 1);
     assert_eq!(mode(&field.user().join("tzst-term-a.lock")), 0o600);
+    let file = memo::path(&field.user(), "term-a").expect("覚えの path");
+    let text = fs::read_to_string(&file).expect("窓の覚え");
+    assert_eq!(text, "repo\t/devtools/page/P1\n");
+    assert_eq!(mode(&file), 0o600);
 }
 
 #[test]
 fn stcli_open_names_page() {
     let field = Field::new("named", Ssh::Sleep);
     fs::write(&field.on, "").expect("印の file");
-    let far = Far::start(&field, LIST_OTHER);
+    let base = tunnel::user_dir(&field.tmp).expect("user_dir");
+    let file = memo::path(&base, "term-a").expect("覚えの path");
+    fs::write(&file, "repo\t/devtools/page/P1\n").expect("窓の覚え");
+    let far = Far::start(&field, LIST_APP);
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out.len(), 2, "{out:?}");
-    for word in [
-        "端末 term-a",
-        "頁 http://srv-a.tailnet.invalid:4802/ は board http://srv-a.tailnet.invalid:4801/ の頁でない",
-        "窓を起こさず",
-    ] {
-        assert!(out[0].contains(word), "{word}: {}", out[0]);
-    }
-    assert_eq!(out[1], LINE);
+    let named = format!(
+        "端末 term-a の board {BOARD_URL} の表示面の窓は在る（起こさない・頁は {APP}）"
+    );
+    assert_eq!(out, [named.as_str(), LINE]);
     assert_eq!(
         far.stop(),
         ["GET /json/version", "GET /json/list", "GET /json/list"]
     );
     assert_eq!(field.records("ssh").len(), 1);
+    assert_eq!(
+        fs::read_to_string(&file).expect("窓の覚え"),
+        "repo\t/devtools/page/P1\n"
+    );
 }
 
 #[test]
@@ -1406,7 +1373,7 @@ fn stcli_open_raises_once() {
     let far = Far::start(&field, LIST);
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out, ["端末 term-a に表示面の窓を起こした", MARKED_A, LINE]);
+    assert_eq!(out, [RAISED_A, MARKED_A, LINE]);
     let ssh = field.records("ssh");
     assert_eq!(ssh.len(), 2, "{ssh:?}");
     assert_eq!(
@@ -1421,19 +1388,119 @@ fn stcli_open_raises_once() {
 
 #[test]
 fn stcli_open_makes_one_page() {
-    let field = Field::new("page", Ssh::Sleep);
+    for (name, before) in [("page", NO_PAGE), ("pageother", LIST_OTHER), ("pageforeign", LIST_FOREIGN)] {
+        let field = Field::new(name, Ssh::Sleep);
+        fs::write(&field.on, "").expect("印の file");
+        let far = Far::start_after(&field, before, LIST);
+        let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
+        assert_eq!(rc, 0, "{name}: {out:?}");
+        assert_eq!(out, [RAISED_A, MARKED_A, LINE], "{name}");
+        assert_eq!(
+            far.stop(),
+            ["GET /json/version", "GET /json/list", "GET /json/list"],
+            "{name}"
+        );
+        let ssh = field.records("ssh");
+        assert_eq!(ssh.len(), 2, "{name}: {ssh:?}");
+        assert_eq!(
+            ssh[1],
+            launch::launch_argv(&term("term-a"), BOARD_URL).expect("launch_argv"),
+            "{name}"
+        );
+        let file = memo::path(&field.user(), "term-a").expect("覚えの path");
+        assert_eq!(
+            fs::read_to_string(&file).expect("窓の覚え"),
+            "repo\t/devtools/page/P1\n",
+            "{name}"
+        );
+        assert_eq!(mode(&file), 0o600, "{name}");
+    }
+}
+
+#[test]
+fn stcli_other_board_untouched() {
+    let field = Field::new("untouched", Ssh::Sleep);
     fs::write(&field.on, "").expect("印の file");
-    let far = Far::start(&field, NO_PAGE);
-    let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
-    assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(
-        out,
-        ["端末 term-a の表示面の Chrome に頁の窓を 1 つ開いた", MARKED_A, LINE]
-    );
-    let got = far.stop();
-    assert_eq!(got, MADE);
-    assert_eq!(got.iter().filter(|l| l.contains(NEW_PAGE)).count(), 1);
+    let far = Far::start(&field, LIST_FOREIGN);
+    let (rc, out) = field.tz(&["reload", "--to", "term-a"], "", false);
+    assert_eq!(rc, 1, "{out:?}");
+    assert_eq!(out.len(), 2, "{out:?}");
+    for word in ["端末 term-a", BOARD_URL, "ほかの board の窓は使わない"] {
+        assert!(out[0].contains(word), "{word}: {}", out[0]);
+    }
+    assert_eq!(out[1], LINE);
+    assert_eq!(far.stop(), ["GET /json/version", "GET /json/list"]);
     assert_eq!(field.records("ssh").len(), 1);
+    assert!(!field.launched.exists(), "起動の引数が撃たれた");
+    let file = memo::path(&field.user(), "term-a").expect("覚えの path");
+    assert!(!file.exists(), "窓の覚えが在る");
+}
+
+#[test]
+fn stcli_memo_round_trip() {
+    let a = "/devtools/page/A";
+    let b = "/devtools/page/B";
+    let entries = vec![("p".to_string(), a.to_string()), ("q".to_string(), b.to_string())];
+    let text = memo::render(&entries);
+    assert_eq!(text, format!("p\t{a}\nq\t{b}\n"));
+    assert_eq!(memo::read(&text), entries);
+    assert_eq!(memo::get(&entries, "q"), Some(b));
+    assert_eq!(memo::get(&entries, "r"), None);
+    let messy = format!(
+        "p\t{a}\nno tab {a}\n\t{a}\nx\t/devtools/browser/B1\nx\ty\tz\nx\t\nq\t{b}\np\t{b}\n\n"
+    );
+    assert_eq!(
+        memo::read(&messy),
+        [("q".to_string(), b.to_string()), ("p".to_string(), b.to_string())]
+    );
+    assert_eq!(memo::read(""), []);
+
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("stcli").join("memo");
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).expect("歯の dir");
+    assert_eq!(memo::path(&root, "term-a"), Some(root.join("tzst-term-a.win")));
+    for bad in ["", ".x", "a/b", "a b"] {
+        assert_eq!(memo::path(&root, bad), None, "{bad:?}");
+    }
+    let file = root.join("tzst-term-a.win");
+    assert_eq!(memo::recall(&file, "p"), None);
+    assert_eq!(memo::put(&file, "p", a), Ok(true));
+    assert_eq!(mode(&file), 0o600);
+    assert_eq!(fs::read_to_string(&file).expect("覚えの字"), format!("p\t{a}\n"));
+    let before = fs::metadata(&file).expect("覚えの file").modified().expect("時刻");
+    assert_eq!(memo::put(&file, "p", a), Ok(false));
+    assert_eq!(fs::metadata(&file).expect("覚えの file").modified().expect("時刻"), before);
+    assert_eq!(memo::put(&file, "q", b), Ok(true));
+    assert_eq!(memo::put(&file, "p", b), Ok(true));
+    assert_eq!(
+        fs::read_to_string(&file).expect("覚えの字"),
+        format!("q\t{b}\np\t{b}\n")
+    );
+    assert_eq!(memo::recall(&file, "p").as_deref(), Some(b));
+    assert_eq!(memo::recall(&file, "r"), None);
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).expect("権限を緩める");
+    assert_eq!(memo::put(&file, "r", a), Ok(true));
+    assert_eq!(mode(&file), 0o600);
+
+    let text = fs::read_to_string(&file).expect("覚えの字");
+    for (project, page) in [
+        ("", a),
+        ("a\tb", a),
+        ("a\nb", a),
+        ("p", "/devtools/browser/B1"),
+        ("p", "/devtools/page/"),
+        ("p", "/devtools/page/a b"),
+        ("p", "x"),
+        ("p", "/devtools/page/A\tB"),
+    ] {
+        assert!(memo::put(&file, project, page).is_err(), "{project:?} {page:?}");
+    }
+    assert_eq!(fs::read_to_string(&file).expect("覚えの字"), text);
+    let names: Vec<String> = fs::read_dir(&root)
+        .expect("歯の dir")
+        .map(|e| e.expect("要素").file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["tzst-term-a.win"]);
 }
 
 #[test]
@@ -1444,7 +1511,7 @@ fn stcli_open_marks_shown() {
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     let after = epoch();
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out, ["端末 term-a に表示面の窓を起こした", MARKED_A, LINE]);
+    assert_eq!(out, [RAISED_A, MARKED_A, LINE]);
     let shown = field.shown();
     assert_eq!(shown.len(), 1, "{shown:?}");
     assert_eq!(shown[0].0, "term-a");
@@ -1456,7 +1523,7 @@ fn stcli_open_marks_shown() {
 
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out, ["端末 term-a の表示面の窓は在る（起こさない）", LINE]);
+    assert_eq!(out, [LIVE_A, LINE]);
     assert_eq!(field.shown(), shown);
     far.stop();
 
@@ -1489,7 +1556,7 @@ fn stcli_open_keeps_old_mark() {
     let far = Far::start(&field, LIST);
     let (rc, out) = field.tz(&["open", "--to", "term-a"], "", false);
     assert_eq!(rc, 0, "{out:?}");
-    assert_eq!(out, ["端末 term-a に表示面の窓を起こした", LINE]);
+    assert_eq!(out, [RAISED_A, LINE]);
     far.stop();
     assert_eq!(field.shown(), [("term-a".to_string(), 7)]);
 }
@@ -1548,7 +1615,7 @@ fn stcli_open_waits_for_lock() {
     });
     assert_eq!(rc, 0, "{out:?}");
     assert!(took > Duration::from_secs(1), "{took:?}");
-    assert_eq!(out, ["端末 term-a の表示面の窓は在る（起こさない）", LINE]);
+    assert_eq!(out, [LIVE_A, LINE]);
     far.stop();
 }
 
@@ -1597,7 +1664,9 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 #[test]
 fn stcli_source_guards() {
     let cli_text = src("cli.rs");
-    assert_eq!(cli_text.matches("Target.createTarget").count(), 1);
+    for word in ["createTarget", "NEW_PAGE", "fn browser_resource", "fn new_page"] {
+        assert!(!cli_text.contains(word), "cli.rs が {word} を含む");
+    }
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut files = Vec::new();
     for name in [
@@ -1613,12 +1682,7 @@ fn stcli_source_guards() {
         .into_iter()
         .filter(|p| fs::read_to_string(p).is_ok_and(|t| t.contains("createTarget")))
         .collect();
-    let cli_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/stage/cli.rs");
-    assert_eq!(holders.len(), 1, "{holders:?}");
-    assert_eq!(
-        fs::canonicalize(&holders[0]).expect("持つ file"),
-        fs::canonicalize(&cli_path).expect("cli.rs")
-    );
+    assert!(holders.is_empty(), "{holders:?}");
     for word in [
         "bringToFront",
         "activateTarget",
@@ -1645,6 +1709,7 @@ fn stcli_source_guards() {
         assert!(!src(file).contains("CLAUDECODE"), "{file} が CLAUDECODE を含む");
     }
     assert_eq!(src("mod.rs").matches("pub mod cli;").count(), 1);
+    assert_eq!(src("mod.rs").matches("pub mod memo;").count(), 1);
     assert_eq!(
         src("tunnel.rs")
             .matches("pub fn version(&self) -> Option<String>")
@@ -1668,7 +1733,7 @@ fn stcli_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 24, "歯の数");
+    assert_eq!(names.len(), 26, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("stcli_")

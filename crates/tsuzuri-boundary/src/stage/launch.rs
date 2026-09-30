@@ -1,4 +1,4 @@
-//! 端末の Chrome を起こす引数と tunnel の引数（行 i-2・要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-15 の決定 (4) と (6)）。
+//! 端末の Chrome を起こす引数と tunnel の引数と窓の頁の選び（行 i-2・行 i-board-win・要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-15 の決定 (4)・ADR-24 の決定 (2)）。
 //! 純粋な関数だけを持ち、file も子の process も環境変数も触らない（撃つのは `tunnel`）。
 //! 起動の引数は端末の行の os の値でだけ組み分け、host の名を見ない（条 N-7）。profile の dir は層 A の行の字のままで、
 //! code に既定の dir を持たない（持ち主の裁定 t3-hub.59.2）。窓の位置の旗を持たない（置き場は持ち主に任せる・t3-hub.59.5）。
@@ -7,6 +7,7 @@ use std::path::Path;
 
 use super::json;
 use super::terminal::{Os, Terminal};
+use super::url::Board;
 
 /// 端末の 127.0.0.1 だけで待つ remote debugging の port（表示面の専用の profile の Chrome だけが使う・端末ごとの値でない）。
 pub const PORT: u16 = 9224;
@@ -129,16 +130,50 @@ pub fn tunnel_argv(terminal: &Terminal, socket: &Path) -> Vec<String> {
     argv
 }
 
-/// /json/list の本文の最初の頁の target の websocket の path（1 つの端末の窓は 1 つを使い回すので URL で選ばない）。
-/// 頁の無い本文・配列でない本文は None。
+/// /json/list の本文の最初の頁の target の websocket の path（URL を見ない・頁の無い本文・配列でない本文は None）。
 pub fn page_resource(list: &str) -> Option<String> {
-    json::items(list)?.into_iter().find_map(|item| {
-        let kind = json::member(item, "type").and_then(json::unquote)?;
-        let url = json::member(item, "webSocketDebuggerUrl").and_then(json::unquote)?;
-        let rest = url.strip_prefix("ws://")?;
-        let path = &rest[rest.find('/')?..];
-        (kind == "page" && path.starts_with("/devtools/page/")).then(|| path.to_string())
-    })
+    json::items(list)?
+        .into_iter()
+        .find_map(page_item)
+        .map(|(path, _)| path)
+}
+
+/// /json/list の項が頁の target なら、websocket の path と URL（url が字でなければ空の字）。
+fn page_item(item: &str) -> Option<(String, String)> {
+    let kind = json::member(item, "type").and_then(json::unquote)?;
+    let socket = json::member(item, "webSocketDebuggerUrl").and_then(json::unquote)?;
+    let rest = socket.strip_prefix("ws://")?;
+    let path = &rest[rest.find('/')?..];
+    if kind != "page" || !path.starts_with("/devtools/page/") {
+        return None;
+    }
+    let url = json::member(item, "url")
+        .and_then(json::unquote)
+        .unwrap_or_default();
+    Some((path.to_string(), url))
+}
+
+/// /json/list の本文の頁のうち、URL が board の shows の頁（自分の board で account board の頁でない）の最初の項の
+/// websocket の path（行 i-board-win・頁の無い本文・配列でない本文は None）。
+pub fn board_page(list: &str, board: &Board) -> Option<String> {
+    json::items(list)?
+        .into_iter()
+        .filter_map(page_item)
+        .find_map(|(path, url)| board.shows(&url).then_some(path))
+}
+
+/// 窓の頁を選ぶ（覚えた path の頁が一覧に在ればその path を URL によらず・無ければ board_page の頁・行 i-board-win）。
+/// 頁でない項の path を覚えていても選ばない。
+pub fn pick(list: &str, remembered: Option<&str>, board: &Board) -> Option<String> {
+    if let Some(path) = remembered
+        && json::items(list)?
+            .into_iter()
+            .filter_map(page_item)
+            .any(|(found, _)| found == path)
+    {
+        return Some(path.to_string());
+    }
+    board_page(list, board)
 }
 
 /// /json/list の本文の、websocket の path が path の項の URL（項が無いか url が字でなければ None・行 i-stage-guard）。

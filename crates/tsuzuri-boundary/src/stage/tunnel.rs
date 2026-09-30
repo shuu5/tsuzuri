@@ -1,9 +1,10 @@
-//! tunnel と窓を 1 回だけ起こすこと（行 i-2・要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-15 の決定 (6)）。
+//! tunnel と窓の頁の選びと窓を 1 回だけ起こすこと（行 i-2・行 i-board-win・要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-24 の決定 (2) と (4)）。
 //! 端末の Chrome の remote debugging の口を、この server の 0700 の dir の中の unix socket へ ssh の -L で引く
 //! （見積りの T3・127.0.0.1 の TCP の転送だとほかの口座の process も持ち主の Chrome を操れる）。
 //! tz の 1 回の撃ちごとに繋いで閉じ、常駐しない（見積りの T1・drop で ssh を止めて dir を消す・Chrome は端末に残る）。
 //! 撃つ HTTP の GET は /json/version と /json/list だけで、窓を前に出す・動かす・足す口を撃たない
-//! （持ち主の裁定 t3-hub.59.5 と t3-hub.59.7）。窓を起こすのは呼ぶ側が起こしてよいと渡した時の 1 回だけ。
+//! （持ち主の裁定 t3-hub.59.5 と t3-hub.59.7）。窓を起こすのは呼ぶ側が起こしてよいと渡した時の 1 回だけで、
+//! 撃つのは起動の引数だけ（動いている Chrome があればその Chrome が app の窓を足す）。
 
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, DirBuilder, Permissions};
@@ -18,6 +19,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::launch;
 use super::terminal::Terminal;
+use super::url::Board;
 use crate::server::proc;
 
 /// tunnel の socket の名（socket_dir の dir の下）。
@@ -179,12 +181,18 @@ impl Tunnel {
         &self.socket
     }
 
-    /// 端末の窓の頁を見つける。Chrome が答えなければ may_open の時だけ窓を 1 回起こす（起こし直さない）。
-    /// 動いている Chrome に頁が無くても窓を足さず、Absent の 1 行で名指す。
-    pub fn window(&self, url: &str, may_open: bool) -> Result<Window, String> {
+    /// board の窓の頁を見つける（行 i-board-win）。動いている Chrome の頁の一覧に、覚えた path の頁か board の頁が在ればそれを使う。
+    /// 無ければ may_open の時だけ、起動の引数を 1 回撃つ（動いている Chrome があれば、その Chrome が app の窓を足す）。
+    /// 一覧の GET が 1 度落ちたら 1 度だけ撃ち直し、2 度とも落ちれば窓を起こさずに Err（在る窓を無いと見て 2 つ目を起こさない）。
+    pub fn window(
+        &self,
+        board: &Board,
+        remembered: Option<&str>,
+        may_open: bool,
+    ) -> Result<Window, String> {
         let name = &self.terminal.name;
-        let mut launched = false;
-        if self.get("/json/version").is_none() {
+        let mut running = self.get("/json/version").is_some();
+        if !running {
             if !may_open {
                 return Ok(Window::Absent(format!(
                     "端末 {name} に表示面の Chrome の窓が無い（起こしてよいと渡されていないので窓を起こさない・持ち主が閉じた窓は開き直さない・開くのは tz stage open）"
@@ -192,34 +200,55 @@ impl Tunnel {
             }
             // 一時の不通で、動いている Chrome に 2 つ目の窓を起こさないため撃ち直す。
             thread::sleep(POLL);
-            if self.get("/json/version").is_none() {
-                let argv = launch::launch_argv(&self.terminal, url)?;
-                if proc::capture(&self.ssh, &argv, &self.dir, self.timeout).is_none() {
-                    return Err(format!(
-                        "端末 {name} で Chrome の窓を起こせない（端末の setsid と Chrome の場所と画面の env を確かめる）"
-                    ));
-                }
-                launched = true;
+            running = self.get("/json/version").is_some();
+        }
+        if running {
+            let list = self
+                .get("/json/list")
+                .or_else(|| {
+                    thread::sleep(POLL);
+                    self.get("/json/list")
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "端末 {name} の表示面の Chrome の頁の一覧を読めない（在る窓を無いと見て 2 つ目を起こさない）"
+                    )
+                })?;
+            if let Some(resource) = launch::pick(&list, remembered, board) {
+                return Ok(Window::Page {
+                    resource,
+                    launched: false,
+                });
             }
+            if !may_open {
+                return Ok(Window::Absent(format!(
+                    "端末 {name} の表示面の Chrome は動いているが board {} の窓が無い（ほかの board の窓は使わない・窓を足さない・窓を足すのは tz stage open）",
+                    board.url
+                )));
+            }
+        }
+        let argv = launch::launch_argv(&self.terminal, &board.url)?;
+        if proc::capture(&self.ssh, &argv, &self.dir, self.timeout).is_none() {
+            return Err(format!(
+                "端末 {name} で Chrome の窓を起こせない（端末の setsid と Chrome の場所と画面の env を確かめる）"
+            ));
         }
         let deadline = Instant::now() + self.timeout;
         loop {
             let page = self
                 .get("/json/list")
-                .as_deref()
-                .and_then(launch::page_resource);
+                .and_then(|list| launch::pick(&list, remembered, board));
             if let Some(resource) = page {
-                return Ok(Window::Page { resource, launched });
-            }
-            if !launched {
-                return Ok(Window::Absent(format!(
-                    "端末 {name} の表示面の Chrome は動いているが頁の窓が無い（窓を足さない・その Chrome を端末で終えてから tz stage open で開く）"
-                )));
+                return Ok(Window::Page {
+                    resource,
+                    launched: true,
+                });
             }
             if Instant::now() >= deadline {
                 return Err(format!(
-                    "端末 {name} で起こした Chrome が {} 秒の内に頁を答えない（起こし直さない）",
-                    self.timeout.as_secs_f32()
+                    "端末 {name} で起こした Chrome が {} 秒の内に board {} の頁を答えない（起こし直さない）",
+                    self.timeout.as_secs_f32(),
+                    board.url
                 ));
             }
             thread::sleep(POLL);

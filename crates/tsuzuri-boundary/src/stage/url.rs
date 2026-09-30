@@ -7,6 +7,7 @@
 //! 守りは群の宣言の anchor ごとの project board の port のほかの board にも広げ（行 i-board-ports）、
 //! その host の形は自分の board と同じ列（同じ host の board だけ・ほかの host の同じ port は断らない）。
 //! 席の自分の board の頁は shows だけで、account board の頁とほかの project の board の頁は foreign（行 i-stage-guard）。
+//! 端末の窓の頁を選ぶ launch の board_page も shows で引く（行 i-board-win）。
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;

@@ -636,7 +636,7 @@ fn sttgt_source_guards() {
     assert_eq!(src("mod.rs").matches("pub mod target;").count(), 1);
     let cli_text = src("cli.rs");
     for line in [
-        "tunnel.window(&board.url, first)",
+        "tunnel.window(board, hint.as_deref(), first)",
         "target::mark(path, &name, now())",
         "(true, Some(_)) => Some(lock(&base, &name, LOCK_WAIT)?)",
         "!target::load(path)?.shown.contains_key(&name)",
