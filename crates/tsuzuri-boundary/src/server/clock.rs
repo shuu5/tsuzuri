@@ -13,7 +13,9 @@ pub fn epoch_secs(s: &str) -> Option<EpochSecs> {
     };
     let b = s.as_bytes();
     let seps = [(4, b'-'), (7, b'-'), (13, b':'), (16, b':')];
-    if b.len() < 20 || seps.iter().any(|&(i, c)| b[i] != c) || !matches!(b[10], b'T' | b't' | b' ')
+    if b.len() < 20
+        || seps.iter().any(|&(i, c)| b.get(i) != Some(&c))
+        || !matches!(b.get(10), Some(b'T' | b't' | b' '))
     {
         return None;
     }

@@ -125,13 +125,17 @@ pub fn parse(args: &[&str]) -> Result<NotifyCall, String> {
                 *it.next().ok_or_else(|| format!("{arg} の値が無い"))?,
             ),
         };
-        let Some(i) = FLAGS.iter().position(|f| *f == name) else {
+        let Some(slot) = FLAGS
+            .iter()
+            .position(|f| *f == name)
+            .and_then(|i| flags.get_mut(i))
+        else {
             return Err(format!("notify は旗 {name} を受けない"));
         };
         if value.is_empty() {
             return Err(format!("{name} の値が空"));
         }
-        if flags[i].replace(value).is_some() {
+        if slot.replace(value).is_some() {
             return Err(format!("{name} が 2 度ある"));
         }
     }

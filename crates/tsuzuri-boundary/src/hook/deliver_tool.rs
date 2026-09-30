@@ -200,7 +200,12 @@ pub fn run(rest: &[&str]) -> u8 {
         return 0;
     }
     drop(out);
-    mark(&args, &said[..named(&said)], now(), MARK_BUDGET);
+    mark(
+        &args,
+        said.get(..named(&said)).unwrap_or(&said),
+        now(),
+        MARK_BUDGET,
+    );
     0
 }
 

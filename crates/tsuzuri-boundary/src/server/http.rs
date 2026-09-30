@@ -78,8 +78,8 @@ fn unescape(s: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     let hex = |at: usize| bytes.get(at).and_then(|b| (*b as char).to_digit(16));
-    while i < bytes.len() {
-        match (bytes[i], hex(i + 1), hex(i + 2)) {
+    while let Some(&byte) = bytes.get(i) {
+        match (byte, hex(i + 1), hex(i + 2)) {
             (b'+', _, _) => out.push(b' '),
             (b'%', Some(h), Some(l)) => {
                 out.push((h * 16 + l) as u8);

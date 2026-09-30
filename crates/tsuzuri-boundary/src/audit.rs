@@ -224,7 +224,7 @@ fn verbatim_marks(text: &str) -> usize {
     const SHAPE: &[u8] = b"dddd-dd-ddTdd:";
     text.match_indices("user ")
         .filter(|(at, word)| {
-            let rest = &text.as_bytes()[at + word.len()..];
+            let rest = text.as_bytes().get(at + word.len()..).unwrap_or_default();
             rest.len() >= SHAPE.len()
                 && SHAPE.iter().zip(rest).all(|(want, got)| match want {
                     b'd' => got.is_ascii_digit(),

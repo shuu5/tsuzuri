@@ -150,8 +150,8 @@ fn percent_decode(s: &str) -> Option<String> {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' {
+    while let Some(&byte) = bytes.get(i) {
+        if byte == b'%' {
             let hex = s.get(i + 1..i + 3)?;
             if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
                 return None;
@@ -159,7 +159,7 @@ fn percent_decode(s: &str) -> Option<String> {
             out.push(u8::from_str_radix(hex, 16).ok()?);
             i += 3;
         } else {
-            out.push(bytes[i]);
+            out.push(byte);
             i += 1;
         }
     }

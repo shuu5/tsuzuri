@@ -51,7 +51,10 @@ fn main() -> ExitCode {
         Some("check") if args.len() == 1 => exit_code(check(&workspace_root())),
         Some("surface-build") if args.len() == 1 => exit_code(surface_build(&workspace_root())),
         Some("pub-scan") if args.len() == 1 => exit_code(pubscan::run(&workspace_root())),
-        Some("accept") => exit_code(accept::run(&args[1..], &workspace_root())),
+        Some("accept") => exit_code(accept::run(
+            args.get(1..).unwrap_or_default(),
+            &workspace_root(),
+        )),
         _ => {
             emit_err(&format!(
                 "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}",

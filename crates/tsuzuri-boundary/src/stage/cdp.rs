@@ -352,7 +352,7 @@ impl Session {
     /// run の始めから貯めた event に名 name の event が在るまで読み進める（待ちは始めから timeout まで）。
     fn await_event(&mut self, name: &'static str, from: usize) -> Result<(), String> {
         let named = |text: &str| json::member(text, "method").and_then(json::unquote).as_deref() == Some(name);
-        if self.events[from..].iter().any(|e| named(e)) {
+        if self.events.iter().skip(from).any(|e| named(e)) {
             return Ok(());
         }
         let deadline = Instant::now() + self.timeout;

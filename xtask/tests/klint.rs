@@ -31,7 +31,7 @@ const MAP: [(&str, &str, &str, &str); 18] = [
 ];
 
 /// 今の表の lint（表に足す行がこの一覧も直す）。
-const ENABLED: [&str; 14] = [
+const ENABLED: [&str; 15] = [
     "unused_must_use",
     "unsafe_code",
     "unwrap_used",
@@ -41,6 +41,7 @@ const ENABLED: [&str; 14] = [
     "unimplemented",
     "unreachable",
     "exit",
+    "indexing_slicing",
     "dbg_macro",
     "print_stdout",
     "print_stderr",

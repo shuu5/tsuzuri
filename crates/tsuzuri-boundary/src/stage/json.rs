@@ -196,11 +196,13 @@ fn skip_value(b: &[u8], i: usize) -> Option<usize> {
             Some(j)
         }
         _ => {
-            let end = b[i..]
+            let rest = b.get(i..)?;
+            let len = rest
                 .iter()
                 .position(|c| matches!(c, b',' | b'}' | b']' | b' ' | b'\t' | b'\r' | b'\n'))
-                .map_or(b.len(), |p| i + p);
-            let word = &b[i..end];
+                .unwrap_or(rest.len());
+            let end = i + len;
+            let word = rest.get(..len)?;
             let number = word.iter().any(u8::is_ascii_digit)
                 && word
                     .iter()

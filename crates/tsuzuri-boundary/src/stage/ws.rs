@@ -78,7 +78,7 @@ impl Socket {
             if n == 0 {
                 return Err(format!("{place} が握手の応答の前に閉じた"));
             }
-            head.extend_from_slice(&chunk[..n]);
+            head.extend(chunk.iter().take(n));
         };
         let carry = head.split_off(end + 4);
         let text = String::from_utf8_lossy(&head);
@@ -135,7 +135,7 @@ impl Socket {
                 PONG => {}
                 CLOSE => {
                     if !self.closed {
-                        self.write_frame(CLOSE, &payload[..payload.len().min(2)])?;
+                        self.write_frame(CLOSE, payload.get(..2).unwrap_or(&payload))?;
                         self.closed = true;
                     }
                     return Ok(None);
@@ -185,7 +185,7 @@ impl Socket {
         let random = random8();
         let key = [random[0], random[1], random[2], random[3]];
         frame.extend_from_slice(&key);
-        frame.extend(payload.iter().enumerate().map(|(i, b)| b ^ key[i % 4]));
+        frame.extend(payload.iter().zip(key.iter().cycle()).map(|(b, k)| b ^ k));
         self.stream
             .write_all(&frame)
             .map_err(|e| format!("websocket へ書く: {e}"))
@@ -234,10 +234,12 @@ impl Socket {
     /// 持ち越した byte から先に、足りない分を接続から読む。
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), String> {
         let n = buf.len().min(self.carry.len());
-        buf[..n].copy_from_slice(&self.carry[..n]);
-        self.carry.drain(..n);
+        let (first, rest) = buf.split_at_mut(n);
+        for (dst, src) in first.iter_mut().zip(self.carry.drain(..n)) {
+            *dst = src;
+        }
         self.stream
-            .read_exact(&mut buf[n..])
+            .read_exact(rest)
             .map_err(|e| format!("websocket を読む: {e}"))
     }
 }
@@ -255,14 +257,15 @@ fn random8() -> [u8; 8] {
 fn base64(data: &[u8]) -> String {
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
+        let b0 = chunk.first().copied().unwrap_or(0);
         let b1 = chunk.get(1).copied().unwrap_or(0);
         let b2 = chunk.get(2).copied().unwrap_or(0);
-        let n = (u32::from(chunk[0]) << 16) | (u32::from(b1) << 8) | u32::from(b2);
+        let n = (u32::from(b0) << 16) | (u32::from(b1) << 8) | u32::from(b2);
         for (i, shift) in [18u32, 12, 6, 0].into_iter().enumerate() {
-            if i <= chunk.len() {
-                out.push(char::from(BASE64[((n >> shift) & 63) as usize]));
-            } else {
-                out.push('=');
+            let letter = BASE64.get(((n >> shift) & 63) as usize);
+            match letter {
+                Some(&c) if i <= chunk.len() => out.push(char::from(c)),
+                _ => out.push('='),
             }
         }
     }
@@ -285,7 +288,11 @@ fn sha1(data: &[u8]) -> [u8; 20] {
             *slot = u32::from_be_bytes(*word);
         }
         for i in 16..80 {
-            w[i] = (w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]).rotate_left(1);
+            let back = |k: usize| w.get(i - k).copied().unwrap_or(0);
+            let next = (back(3) ^ back(8) ^ back(14) ^ back(16)).rotate_left(1);
+            if let Some(slot) = w.get_mut(i) {
+                *slot = next;
+            }
         }
         let [mut a, mut b, mut c, mut d, mut e] = h;
         for (i, word) in w.iter().enumerate() {

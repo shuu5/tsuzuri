@@ -494,7 +494,7 @@ impl Acct {
         });
         let output = |dir: &PathBuf| {
             let i = unique.iter().position(|d| *d == dir)?;
-            Some(&outputs[i])
+            outputs.get(i)
         };
         let mut texts = Texts::default();
         for (anchor, board) in anchors.iter().zip(boards) {

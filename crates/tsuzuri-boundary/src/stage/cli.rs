@@ -228,9 +228,13 @@ pub fn parse(args: &[&str]) -> Result<Call, String> {
     let mut common: [Option<&str>; 8] = [None; 8];
     let mut own = Vec::new();
     for (name, value) in pairs(rest)? {
-        match COMMON.iter().position(|c| *c == name) {
-            Some(i) => {
-                if common[i].replace(value).is_some() {
+        let slot = COMMON
+            .iter()
+            .position(|c| *c == name)
+            .and_then(|i| common.get_mut(i));
+        match slot {
+            Some(slot) => {
+                if slot.replace(value).is_some() {
                     return Err(format!("{name} が 2 度ある"));
                 }
             }
@@ -400,13 +404,17 @@ pub fn parse_target(args: &[&str]) -> Result<TargetCall, String> {
                 *it.next().ok_or_else(|| format!("{arg} の値が無い"))?,
             ),
         };
-        let Some(i) = FLAGS.iter().position(|f| *f == name) else {
+        let Some(slot) = FLAGS
+            .iter()
+            .position(|f| *f == name)
+            .and_then(|i| flags.get_mut(i))
+        else {
             return Err(format!("target は旗 {name} を受けない"));
         };
         if value.is_empty() {
             return Err(format!("{name} の値が空"));
         }
-        if flags[i].replace(value).is_some() {
+        if slot.replace(value).is_some() {
             return Err(format!("{name} が 2 度ある"));
         }
     }
@@ -698,7 +706,7 @@ fn unbase64(text: &str) -> Option<Vec<u8>> {
             return None;
         }
         let mut n: u32 = 0;
-        for &b in &chunk[..4 - pad] {
+        for &b in chunk.iter().take(4 - pad) {
             let v = match b {
                 b'A'..=b'Z' => b - b'A',
                 b'a'..=b'z' => b - b'a' + 26,
@@ -710,7 +718,7 @@ fn unbase64(text: &str) -> Option<Vec<u8>> {
             n = (n << 6) | u32::from(v);
         }
         n <<= 6 * pad as u32;
-        out.extend_from_slice(&n.to_be_bytes()[1..4 - pad]);
+        out.extend(n.to_be_bytes().iter().skip(1).take(3 - pad));
     }
     Some(out)
 }
@@ -1096,7 +1104,7 @@ fn shoot(
             emit("済み dom");
         }
         Command::Console => {
-            for event in &session.events()[from..] {
+            for event in session.events().iter().skip(from) {
                 let method = json::member(event, "method").and_then(json::unquote);
                 if matches!(
                     method.as_deref(),

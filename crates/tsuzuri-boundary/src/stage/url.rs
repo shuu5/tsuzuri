@@ -176,11 +176,11 @@ pub fn board(tailnet: &OsStr, git: &OsStr, repo: &Path, timeout: Duration) -> Re
                 repo.display()
             )
         })?;
-    Ok(Board {
-        url: board_url(&hosts[0], port),
-        hosts,
-        port,
-    })
+    let first = hosts
+        .first()
+        .ok_or_else(|| format!("tailnet の道具 {tool} の status から host が読めない"))?;
+    let url = board_url(first, port);
+    Ok(Board { url, hosts, port })
 }
 
 /// 持ち主へ渡す出力の最後の 1 行。

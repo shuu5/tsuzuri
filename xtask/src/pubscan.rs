@@ -79,7 +79,7 @@ pub(crate) fn find(text: &str, words: &[String]) -> Vec<(usize, Kind)> {
         }
     }
     for (at, _) in text.match_indices(NAME_TAIL) {
-        let before = at.checked_sub(1).map(|j| bytes[j]);
+        let before = at.checked_sub(1).and_then(|j| bytes.get(j).copied());
         let after = bytes.get(at + NAME_TAIL.len()).copied();
         if before.is_some_and(name_char) && !after.is_some_and(name_char) {
             found.push((at, Kind::Name));
@@ -91,7 +91,7 @@ pub(crate) fn find(text: &str, words: &[String]) -> Vec<(usize, Kind)> {
             continue;
         }
         for (at, _) in text.match_indices(word.as_str()) {
-            let before = at.checked_sub(1).map(|j| bytes[j]);
+            let before = at.checked_sub(1).and_then(|j| bytes.get(j).copied());
             let after = bytes.get(at + word.len()).copied();
             if !before.is_some_and(|b| b.is_ascii_alphanumeric())
                 && !after.is_some_and(|b| b.is_ascii_alphanumeric())
@@ -117,7 +117,9 @@ fn name_char(b: u8) -> bool {
 
 /// 範囲そのものを書いた字（後に数字が続かない）が i から始まるか。
 fn range_at(bytes: &[u8], i: usize, range: &str) -> bool {
-    bytes[i..].starts_with(range.as_bytes())
+    bytes
+        .get(i..)
+        .is_some_and(|rest| rest.starts_with(range.as_bytes()))
         && !bytes
             .get(i + range.len())
             .is_some_and(|b| b.is_ascii_digit())
@@ -125,7 +127,8 @@ fn range_at(bytes: &[u8], i: usize, range: &str) -> bool {
 
 /// i から tailnet の IPv4 の住所の形が始まるか。
 fn v4_at(bytes: &[u8], i: usize) -> bool {
-    if i > 0 && (bytes[i - 1].is_ascii_digit() || bytes[i - 1] == b'.') {
+    let prev = i.checked_sub(1).and_then(|j| bytes.get(j));
+    if prev.is_some_and(|b| b.is_ascii_digit() || *b == b'.') {
         return false;
     }
     let mut at = i;
@@ -137,15 +140,18 @@ fn v4_at(bytes: &[u8], i: usize) -> bool {
             }
             at += 1;
         }
-        let digits = bytes[at..]
+        let digits = bytes
             .iter()
+            .skip(at)
             .take_while(|b| b.is_ascii_digit())
             .count();
         if !(1..=3).contains(&digits) {
             return false;
         }
-        *part = bytes[at..at + digits]
+        *part = bytes
             .iter()
+            .skip(at)
+            .take(digits)
             .fold(0, |v, b| v * 10 + u32::from(b - b'0'));
         at += digits;
     }
@@ -160,10 +166,13 @@ fn v4_at(bytes: &[u8], i: usize) -> bool {
 
 /// i から tailnet の IPv6 の住所の形が始まるか。
 fn v6_at(bytes: &[u8], i: usize) -> bool {
-    if i > 0 && (bytes[i - 1].is_ascii_hexdigit() || bytes[i - 1] == b':') {
+    let prev = i.checked_sub(1).and_then(|j| bytes.get(j));
+    if prev.is_some_and(|b| b.is_ascii_hexdigit() || *b == b':') {
         return false;
     }
-    bytes[i..].starts_with(V6_HEAD.as_bytes())
+    bytes
+        .get(i..)
+        .is_some_and(|rest| rest.starts_with(V6_HEAD.as_bytes()))
         && bytes
             .get(i + V6_HEAD.len())
             .is_some_and(|b| b.is_ascii_hexdigit() || *b == b':')
