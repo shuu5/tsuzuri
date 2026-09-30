@@ -637,29 +637,7 @@ pub fn session_lines_with(
     for (d, texts) in with_texts(host, projects) {
         let texts = texts.unwrap_or(&unknown);
         let name = project_name(&d.anchor);
-        match seat(host, &d, texts, now) {
-            Reading::Known(c) if resting.contains(&c.target) => {}
-            Reading::Known(c) => out.push(SessionLine {
-                project: name.clone(),
-                role: SeatRole::Orchestrator,
-                name: c.target,
-                account: c.account,
-                state: c.state,
-                stage: None,
-                since: c.since,
-                spans: c.spans,
-            }),
-            Reading::Unknown => out.push(SessionLine {
-                project: name.clone(),
-                role: SeatRole::Orchestrator,
-                name: String::new(),
-                account: None,
-                state: SeatState::Unknown,
-                stage: None,
-                since: None,
-                spans: Reading::Unknown,
-            }),
-        }
+        out.extend(seat_line(&name, seat(host, &d, texts, now), &resting));
         if !texts.state_dir_known {
             continue;
         }
@@ -675,40 +653,76 @@ pub fn session_lines_with(
             {
                 continue;
             }
-            let last = run.last_stage();
-            let stage = last
-                .and_then(|e| {
-                    stage_of(
-                        text(e, "kind").unwrap_or_default(),
-                        text(e, "stage"),
-                        text(e, "detail").unwrap_or_default(),
-                    )
-                })
-                .map(|(s, _)| s);
-            let limited = last.is_some_and(|e| {
-                text(e, "kind") == Some("RunStage") && text(e, "stage") == Some(RATE_LIMITED)
-            });
-            let stalled = stage
-                .is_some_and(|s| matches!(s, Stage::Questioned | Stage::Failed | Stage::Stopped));
-            out.push(SessionLine {
-                project: name.clone(),
-                role: SeatRole::Pipeline,
-                name: run.id.to_string(),
-                account: run.account(),
-                state: if limited {
-                    SeatState::Limit
-                } else if !stalled && run.seated() {
-                    SeatState::Run
-                } else {
-                    SeatState::Wait
-                },
-                stage,
-                since: last.and_then(event_ts),
-                spans: Reading::Unknown,
-            });
+            out.push(run_line(&name, &run));
         }
     }
     out
+}
+
+/// project の orchestrator の行（席が休止中なら None・席の card が読めなければ席なしの行）。
+fn seat_line(
+    name: &str,
+    seat: Reading<SeatCard>,
+    resting: &BTreeSet<String>,
+) -> Option<SessionLine> {
+    match seat {
+        Reading::Known(c) if resting.contains(&c.target) => None,
+        Reading::Known(c) => Some(SessionLine {
+            project: name.to_string(),
+            role: SeatRole::Orchestrator,
+            name: c.target,
+            account: c.account,
+            state: c.state,
+            stage: None,
+            since: c.since,
+            spans: c.spans,
+        }),
+        Reading::Unknown => Some(SessionLine {
+            project: name.to_string(),
+            role: SeatRole::Orchestrator,
+            name: String::new(),
+            account: None,
+            state: SeatState::Unknown,
+            stage: None,
+            since: None,
+            spans: Reading::Unknown,
+        }),
+    }
+}
+
+/// pipeline の run の行（状態は上限の印なら limit・止まる段でなく席が立っていれば run・ほかは wait）。
+fn run_line(name: &str, run: &Run<'_>) -> SessionLine {
+    let last = run.last_stage();
+    let stage = last
+        .and_then(|e| {
+            stage_of(
+                text(e, "kind").unwrap_or_default(),
+                text(e, "stage"),
+                text(e, "detail").unwrap_or_default(),
+            )
+        })
+        .map(|(s, _)| s);
+    let limited = last.is_some_and(|e| {
+        text(e, "kind") == Some("RunStage") && text(e, "stage") == Some(RATE_LIMITED)
+    });
+    let stalled =
+        stage.is_some_and(|s| matches!(s, Stage::Questioned | Stage::Failed | Stage::Stopped));
+    SessionLine {
+        project: name.to_string(),
+        role: SeatRole::Pipeline,
+        name: run.id.to_string(),
+        account: run.account(),
+        state: if limited {
+            SeatState::Limit
+        } else if !stalled && run.seated() {
+            SeatState::Run
+        } else {
+            SeatState::Wait
+        },
+        stage,
+        since: last.and_then(event_ts),
+        spans: Reading::Unknown,
+    }
 }
 
 /// 電文を組む（休止中の席は空の列・閾値は読んでいない 3 つの窓・知らせは「まだ分からない」・

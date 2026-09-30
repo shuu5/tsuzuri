@@ -11,7 +11,7 @@ use tsuzuri_contract::stats::{
     UnreflectedKind,
 };
 
-use super::{Bead, DAY, read, unreflected};
+use super::{Bead, DAY, Unreflected, read, unreflected};
 
 /// 判定の閾値（規則の行 R-18）。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -142,50 +142,61 @@ fn has_promotion_heading(description: &str) -> bool {
     })
 }
 
-/// 読めた bead から指標を数える。今の時刻より後に作られた bead は数えない（見本と同じ）。
-/// 時点・日ごとの end・memo の作った時刻の中央値は今の時刻をそのまま持たない（年齢と経過は面が今から引く）。
-pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
-    let beads: Vec<Bead> = all
-        .iter()
-        .filter(|b| b.created.is_none_or(|c| c <= now))
-        .cloned()
-        .collect();
-    let t = &THRESHOLDS;
-    let tasks: Vec<&Bead> = beads.iter().filter(|b| b.kind == NodeKind::Task).collect();
-    let open: Vec<&Bead> = tasks.iter().copied().filter(|b| b.is_open(now)).collect();
-    let open_at = |at: EpochSecs| count(tasks.iter().filter(|b| b.open_at(at)));
-    let closed_in =
-        |from: EpochSecs, to: EpochSecs, b: &Bead| b.closed.is_some_and(|x| x > from && x <= to);
-    let ago = |days: u64| now.saturating_sub(days * DAY);
+/// `from` より後から `to` までに閉じたか。
+fn closed_in(from: EpochSecs, to: EpochSecs, b: &Bead) -> bool {
+    b.closed.is_some_and(|x| x > from && x <= to)
+}
 
+/// 時刻 `at` に開いていた task の数。
+fn open_at(tasks: &[&Bead], at: EpochSecs) -> u32 {
+    count(tasks.iter().filter(|b| b.open_at(at)))
+}
+
+/// 開いた task のうち、止まった数・着手できる数・stale の数。
+fn task_counts(open: &[&Bead], beads: &[Bead], now: EpochSecs) -> (u32, u32, u32) {
+    let t = &THRESHOLDS;
     let blocked = count(open.iter().filter(|b| {
-        b.status == "blocked" || (b.status != "in_progress" && b.has_open_blocker(&beads, now))
+        b.status == "blocked" || (b.status != "in_progress" && b.has_open_blocker(beads, now))
     }));
     let ready = count(
         open.iter()
-            .filter(|b| b.status == "open" && !b.has_open_blocker(&beads, now)),
+            .filter(|b| b.status == "open" && !b.has_open_blocker(beads, now)),
     );
     let stale = count(open.iter().filter(|b| {
         b.updated
             .is_some_and(|u| now.saturating_sub(u) >= t.stale_days * DAY)
     }));
-    let open_tasks = count(open.iter());
-    let net_drop_24h = i64::from(open_tasks) - i64::from(open_at(ago(1)));
-    let net_drop_7d = i64::from(open_tasks) - i64::from(open_at(ago(WEEK_DAYS)));
-    let closed_7d = count(tasks.iter().filter(|b| closed_in(ago(WEEK_DAYS), now, b)));
-    let closed_per_day = f64::from(closed_7d) / WEEK_DAYS as f64;
+    (blocked, ready, stale)
+}
+
+/// 種類ごとの開いた数（task の数は受けた値）。
+fn open_counts(beads: &[Bead], now: EpochSecs, open_tasks: u32) -> OpenCounts {
+    let open_of = |kind: NodeKind| count(beads.iter().filter(|b| b.kind == kind && b.is_open(now)));
+    OpenCounts {
+        task: open_tasks,
+        memo: open_of(NodeKind::Memo),
+        question: open_of(NodeKind::Question),
+        epic: open_of(NodeKind::Epic),
+    }
+}
+
+/// lead の窓に閉じた task の、作ってから閉じるまでの日の中央値と 90 分位。
+fn lead_days(tasks: &[&Bead], now: EpochSecs) -> Option<LeadDays> {
+    let from = now.saturating_sub(LEAD_DAYS * DAY);
     let leads: Vec<f64> = tasks
         .iter()
-        .filter(|b| closed_in(ago(LEAD_DAYS), now, b))
+        .filter(|b| closed_in(from, now, b))
         .filter_map(|b| Some(days_between(b.created?, b.closed?)))
         .collect();
-    let lead = percentile(&leads, 0.5)
+    percentile(&leads, 0.5)
         .zip(percentile(&leads, 0.9))
-        .map(|(p50, p90)| LeadDays { p50, p90 });
+        .map(|(p50, p90)| LeadDays { p50, p90 })
+}
 
-    // 14 本は日本の日ごとで、窓は end の 1 日前の秒より後から end まで（今日の本は今の時刻まで）。
+/// 日ごとの本（古い日から今日まで）。
+fn spark_days(tasks: &[&Bead], now: EpochSecs) -> Vec<DayCount> {
     let last = day_end(now);
-    let days = (0..SPARK_DAYS)
+    (0..SPARK_DAYS)
         .rev()
         .map(|i| {
             let end = last.saturating_sub(i * DAY);
@@ -198,13 +209,15 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
                         .filter(|b| b.created.is_some_and(|c| c > from && c <= to)),
                 ),
                 closed: count(tasks.iter().filter(|b| closed_in(from, to, b))),
-                open: open_at(to),
+                open: open_at(tasks, to),
             }
         })
-        .collect();
+        .collect()
+}
 
-    let open_of = |kind: NodeKind| count(beads.iter().filter(|b| b.kind == kind && b.is_open(now)));
-    let epics = beads
+/// 子の task を持つ epic ごとの、閉じた子の数と子の数。
+fn epic_progress(beads: &[Bead], tasks: &[&Bead], now: EpochSecs) -> Vec<EpicProgress> {
+    beads
         .iter()
         .filter(|b| b.kind == NodeKind::Epic)
         .filter_map(|e| {
@@ -219,37 +232,43 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
                 total: count(kids.iter()),
             })
         })
-        .collect();
+        .collect()
+}
 
+/// memo の指標（開いた数・昇格待ちの数・7 日に閉じた数・開いた memo の作った時刻の中央値）。
+fn memo_stats(beads: &[Bead], now: EpochSecs) -> MemoStats {
+    let week = now.saturating_sub(WEEK_DAYS * DAY);
     let memos: Vec<&Bead> = beads.iter().filter(|b| b.kind == NodeKind::Memo).collect();
     let open_memos: Vec<&&Bead> = memos.iter().filter(|b| b.is_open(now)).collect();
     let memo_created: Vec<f64> = open_memos
         .iter()
         .filter_map(|b| Some(b.created? as f64))
         .collect();
-    let memo = MemoStats {
+    MemoStats {
         open: count(open_memos.iter()),
         awaiting_promotion: count(
             open_memos
                 .iter()
                 .filter(|b| has_promotion_heading(&b.description)),
         ),
-        closed_7d: count(memos.iter().filter(|b| closed_in(ago(WEEK_DAYS), now, b))),
+        closed_7d: count(memos.iter().filter(|b| closed_in(week, now, b))),
         created_p50: percentile(&memo_created, 0.5).map(|t| t.floor() as EpochSecs),
-    };
+    }
+}
 
-    // 時点は台帳の最後の記録の時刻（今より後の記録は見ない・今の時刻に依らない）。
-    let at = all
-        .iter()
+/// 台帳の記録の時刻の最後（今より後は見ない・無ければ 0）。
+fn ledger_at(all: &[Bead], now: EpochSecs) -> EpochSecs {
+    all.iter()
         .flat_map(|b| [b.created, b.updated, b.closed])
         .flatten()
         .filter(|&t| t <= now)
         .max()
-        .unwrap_or(0);
+        .unwrap_or(0)
+}
 
-    // 未反映は種類ごとの件数を 1 度だけ数え、数はその和。
-    let list = unreflected::not_yet();
-    let unreflected_kinds: Vec<UnreflectedCount> = UnreflectedKind::ALL
+/// 読めた種類ごとの未反映の件数（種類の順）。
+fn unreflected_counts(list: &Unreflected) -> Vec<UnreflectedCount> {
+    UnreflectedKind::ALL
         .iter()
         .filter_map(|&kind| match list.get(kind) {
             Reading::Known(items) => Some(UnreflectedCount {
@@ -258,7 +277,40 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
             }),
             Reading::Unknown => None,
         })
+        .collect()
+}
+
+/// 読めた bead から指標を数える。今の時刻より後に作られた bead は数えない（見本と同じ）。
+/// 時点・日ごとの end・memo の作った時刻の中央値は今の時刻をそのまま持たない（年齢と経過は面が今から引く）。
+pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
+    let beads: Vec<Bead> = all
+        .iter()
+        .filter(|b| b.created.is_none_or(|c| c <= now))
+        .cloned()
         .collect();
+    let tasks: Vec<&Bead> = beads.iter().filter(|b| b.kind == NodeKind::Task).collect();
+    let open: Vec<&Bead> = tasks.iter().copied().filter(|b| b.is_open(now)).collect();
+    let ago = |days: u64| now.saturating_sub(days * DAY);
+
+    let (blocked, ready, stale) = task_counts(&open, &beads, now);
+    let open_tasks = count(open.iter());
+    let net_drop_24h = i64::from(open_tasks) - i64::from(open_at(&tasks, ago(1)));
+    let net_drop_7d = i64::from(open_tasks) - i64::from(open_at(&tasks, ago(WEEK_DAYS)));
+    let closed_7d = count(tasks.iter().filter(|b| closed_in(ago(WEEK_DAYS), now, b)));
+    let closed_per_day = f64::from(closed_7d) / WEEK_DAYS as f64;
+    let lead = lead_days(&tasks, now);
+
+    // 14 本は日本の日ごとで、窓は end の 1 日前の秒より後から end まで（今日の本は今の時刻まで）。
+    let days = spark_days(&tasks, now);
+    let epics = epic_progress(&beads, &tasks, now);
+    let memo = memo_stats(&beads, now);
+
+    // 時点は台帳の最後の記録の時刻（今より後の記録は見ない・今の時刻に依らない）。
+    let at = ledger_at(all, now);
+
+    // 未反映は種類ごとの件数を 1 度だけ数え、数はその和。
+    let list = unreflected::not_yet();
+    let unreflected_kinds = unreflected_counts(&list);
     let unreflected = unreflected_kinds.iter().map(|k| k.count).sum();
 
     LedgerStats {
@@ -269,12 +321,7 @@ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
             net_drop_7d,
             closed_per_day,
         })),
-        open: OpenCounts {
-            task: open_tasks,
-            memo: open_of(NodeKind::Memo),
-            question: open_of(NodeKind::Question),
-            epic: open_of(NodeKind::Epic),
-        },
+        open: open_counts(&beads, now, open_tasks),
         blocked,
         ready,
         stale,

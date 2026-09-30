@@ -425,6 +425,77 @@ fn policy_scope(line: &str) -> String {
         .to_string()
 }
 
+/// bead の notes の定型行の節点を足し（同じ種類と id は 1 度だけ・方針は範囲の属性も）、問いの bead の裁定の行から
+/// answers の辺を組む。
+fn add_typed(
+    g: &mut Graph,
+    derived: &mut BTreeSet<(NodeKind, String)>,
+    kind: NodeKind,
+    bead: &str,
+    notes: Option<&str>,
+) {
+    for (line_kind, id, line) in typed_lines(notes.unwrap_or_default()) {
+        if derived.insert((line_kind, id.clone())) {
+            g.nodes.push(GraphNode {
+                id: id.clone(),
+                kind: line_kind,
+                file: None,
+                digest: None,
+                title: title36(line),
+                line: None,
+                plain: None,
+                eng: None,
+                updated: None,
+            });
+            if line_kind == NodeKind::Policy {
+                g.policies.insert(
+                    id.clone(),
+                    PolicyAttr {
+                        scope: policy_scope(line),
+                    },
+                );
+            }
+        }
+        if line_kind == NodeKind::Ruling && kind == NodeKind::Question {
+            g.edges.push(edge(&id, bead, EdgeType::Answers));
+        }
+    }
+}
+
+/// 問いの bead の touches と premises の辺と、memo の bead の source の辺を組む。
+fn add_meta_edges(
+    g: &mut Graph,
+    kind: NodeKind,
+    bead: &str,
+    metadata: &Value,
+    touches: &[String],
+) {
+    if kind == NodeKind::Question {
+        for to in touches {
+            g.edges.push(edge(bead, to, EdgeType::Touches));
+        }
+        for to in metadata_ids(metadata, PREMISES_KEY) {
+            g.edges.push(edge(bead, &to, EdgeType::Premises));
+        }
+    }
+    if kind == NodeKind::Memo {
+        for to in metadata_ids(metadata, "source") {
+            g.edges.push(edge(bead, &to, EdgeType::Source));
+        }
+    }
+}
+
+/// 受入の条件の字の pointer の行（行末の CR を除いた字）。
+fn pointer_lines(acceptance: Option<&str>) -> Vec<String> {
+    acceptance
+        .unwrap_or_default()
+        .lines()
+        .map(|l| l.trim_end_matches('\r'))
+        .filter(|l| l.starts_with(POINTER_PREFIX))
+        .map(str::to_string)
+        .collect()
+}
+
 /// 台帳の bead から節点と辺を組む。design の辺は pointer の行が指す設計ノートの行の節点が在るときだけ組む。
 /// 方針の属性（範囲）は同じ方針の id の最初の行から読む。
 fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
@@ -456,55 +527,10 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
                 None => g.skipped.ledger_edges += 1,
             }
         }
-        for (line_kind, id, line) in typed_lines(bead.notes.as_deref().unwrap_or_default()) {
-            if derived.insert((line_kind, id.clone())) {
-                g.nodes.push(GraphNode {
-                    id: id.clone(),
-                    kind: line_kind,
-                    file: None,
-                    digest: None,
-                    title: title36(line),
-                    line: None,
-                    plain: None,
-                    eng: None,
-                    updated: None,
-                });
-                if line_kind == NodeKind::Policy {
-                    g.policies.insert(
-                        id.clone(),
-                        PolicyAttr {
-                            scope: policy_scope(line),
-                        },
-                    );
-                }
-            }
-            if line_kind == NodeKind::Ruling && kind == NodeKind::Question {
-                g.edges.push(edge(&id, &bead.id, EdgeType::Answers));
-            }
-        }
+        add_typed(g, &mut derived, kind, &bead.id, bead.notes.as_deref());
         let touches = metadata_ids(&bead.metadata, "touches");
-        if kind == NodeKind::Question {
-            for to in &touches {
-                g.edges.push(edge(&bead.id, to, EdgeType::Touches));
-            }
-            for to in metadata_ids(&bead.metadata, PREMISES_KEY) {
-                g.edges.push(edge(&bead.id, &to, EdgeType::Premises));
-            }
-        }
-        if kind == NodeKind::Memo {
-            for to in metadata_ids(&bead.metadata, "source") {
-                g.edges.push(edge(&bead.id, &to, EdgeType::Source));
-            }
-        }
-        let pointers = bead
-            .acceptance_criteria
-            .as_deref()
-            .unwrap_or_default()
-            .lines()
-            .map(|l| l.trim_end_matches('\r'))
-            .filter(|l| l.starts_with(POINTER_PREFIX))
-            .map(str::to_string)
-            .collect::<Vec<_>>();
+        add_meta_edges(g, kind, &bead.id, &bead.metadata, &touches);
+        let pointers = pointer_lines(bead.acceptance_criteria.as_deref());
         let mut pointed: BTreeSet<String> = BTreeSet::new();
         for row in pointers.iter().filter_map(|p| pointer_row(p)) {
             if rows.contains(&row) && pointed.insert(row.clone()) {
@@ -606,6 +632,22 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
             attr.unanswered -= 1;
         }
     }
+    push_runs(g, order, &mut attrs, &times);
+    let runs = &g.runs;
+    let raised: Vec<GraphEdge> = raised
+        .into_iter()
+        .filter(|e| runs.contains_key(&e.from))
+        .collect();
+    g.edges.extend(raised);
+}
+
+/// 作った順の走行の節点と run_of の辺を足し、走行の属性を置く。
+fn push_runs(
+    g: &mut Graph,
+    order: Vec<String>,
+    attrs: &mut BTreeMap<String, RunAttr>,
+    times: &BTreeMap<String, EpochSecs>,
+) {
     for run in order {
         g.nodes.push(GraphNode {
             id: run.clone(),
@@ -624,12 +666,6 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
         let attr = attrs.remove(&run).unwrap_or_default();
         g.runs.insert(run, attr);
     }
-    let runs = &g.runs;
-    let raised: Vec<GraphEdge> = raised
-        .into_iter()
-        .filter(|e| runs.contains_key(&e.from))
-        .collect();
-    g.edges.extend(raised);
 }
 
 #[cfg(test)]

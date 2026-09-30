@@ -9,7 +9,7 @@ use tsuzuri_contract::graph::{
 };
 
 use super::Graph;
-use super::fold::Tree;
+use super::fold::{Opening, Tree, TreeBox};
 
 /// 見える箱の数の上限（見本の値・規則の行にはまだ無い）。
 pub const VIEW_CAP: usize = 40;
@@ -22,19 +22,68 @@ pub fn view(g: &Graph) -> GraphView {
     view_open(g, &[])
 }
 
+/// 箱の id ごとの、辺でつながる見える箱の id。
+type Next<'g> = BTreeMap<&'g str, BTreeSet<&'g str>>;
+
 /// 開く列を受けたグラフの眺め（列の決まりは `fold` の `Tree::open`）。
 pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
     let tree = Tree::new(g);
     let st = tree.open(open);
-    let index = g.index();
     let degree = g.degrees();
     let id_of = |b: usize| tree.boxes.get(b).map_or("", |bx| bx.id.as_str());
 
-    // 節点ごとの見える箱と、箱ごとの子の数（自分の箱を持たない節点の数）。
+    let (vis, kids, boxed) = visible(&tree, &st);
+    let (edges, next) = merged(g, &tree, &vis);
+
+    // 段（D から U へたどる最も長い道の辺の数・たどっている途中へ戻れば 0 と数える）。
+    let mut shown = tree.shown(&st);
+    let rank = ranks(&tree, &shown, &edges);
+
+    shown.sort_by(|a, b| tree.order(*a, *b));
+    let nodes: Vec<ViewNode> = shown
+        .iter()
+        .filter_map(|b| {
+            let bx = tree.boxes.get(*b)?;
+            let id = bx.id.as_str();
+            let (node, status, deg) = match bx.node {
+                Some(n) => (n.clone(), g.status(n), degree.get(id).copied().unwrap_or(0)),
+                None => (group_node(bx), None, next.get(id).map_or(0, BTreeSet::len)),
+            };
+            Some(ViewNode {
+                node,
+                status,
+                rank: count(rank.get(id).copied().unwrap_or(0)),
+                kids: count(kids.get(b).copied().unwrap_or(0)),
+                degree: count(deg),
+                group: bx.node.is_none(),
+                fold: fold_of(bx, &st, *b),
+            })
+        })
+        .collect();
+    let folded: usize = kids.values().sum();
+    let total = g.nodes.len();
+    GraphView {
+        shown: count(nodes.len()),
+        nodes,
+        edges: view_edges(edges),
+        folded: count(folded),
+        cut: count(total.saturating_sub(boxed + folded)),
+        total: count(total),
+        unread: g.unread_wire(),
+        open: st.asked.iter().map(|b| id_of(*b).to_string()).collect(),
+        refused: st.refused,
+    }
+}
+
+/// 節点ごとの見える箱と、箱ごとの子の数（自分の箱を持たない節点の数）と、自分の箱が見える節点の数。
+fn visible<'g>(
+    tree: &Tree<'g>,
+    st: &Opening,
+) -> (BTreeMap<&'g str, usize>, BTreeMap<usize, usize>, usize) {
     let vis: BTreeMap<&str, usize> = tree
         .home
         .iter()
-        .map(|(id, b)| (*id, tree.visible_of(*b, &st)))
+        .map(|(id, b)| (*id, tree.visible_of(*b, st)))
         .collect();
     let mut kids: BTreeMap<usize, usize> = BTreeMap::new();
     let mut boxed = 0;
@@ -50,10 +99,19 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
             *kids.entry(*b).or_default() += 1;
         }
     }
+    (vis, kids, boxed)
+}
 
-    // 辺のまとめ（D → U・同じ箱の辺は捨てる）。
+/// 辺のまとめ（D → U・同じ箱の辺は捨てる・D と U と型の順）と、箱ごとの隣の箱。
+fn merged<'t>(
+    g: &Graph,
+    tree: &'t Tree<'_>,
+    vis: &BTreeMap<&str, usize>,
+) -> (Vec<(EdgeKey<'t>, usize)>, Next<'t>) {
+    let index = g.index();
+    let id_of = |b: usize| tree.boxes.get(b).map_or("", |bx| bx.id.as_str());
     let mut merged: BTreeMap<EdgeKey, usize> = BTreeMap::new();
-    let mut next: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut next: Next = BTreeMap::new();
     for e in &g.edges {
         let (Some(a), Some(b)) = (index.get(e.from.as_str()), index.get(e.to.as_str())) else {
             continue;
@@ -79,11 +137,18 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
             .then_with(|| natural_cmp(u1, u2))
             .then_with(|| t1.cmp(t2))
     });
+    (edges, next)
+}
 
-    // 段（D から U へたどる最も長い道の辺の数・たどっている途中へ戻れば 0 と数える）。
-    let mut shown = tree.shown(&st);
+/// 箱の段の表（`order` の順に決める）。
+fn ranks<'t>(
+    tree: &'t Tree<'_>,
+    shown: &[usize],
+    edges: &[(EdgeKey<'t>, usize)],
+) -> BTreeMap<&'t str, usize> {
+    let id_of = |b: usize| tree.boxes.get(b).map_or("", |bx| bx.id.as_str());
     let mut outs: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    for ((d, u, _), _) in &edges {
+    for ((d, u, _), _) in edges {
         outs.entry(d).or_default().push(u);
     }
     let mut order: Vec<&str> = shown.iter().map(|b| id_of(*b)).collect();
@@ -93,70 +158,46 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
     for id in &order {
         rank_of(id, &outs, &mut rank, &mut visiting);
     }
+    rank
+}
 
-    shown.sort_by(|a, b| tree.order(*a, *b));
-    let nodes: Vec<ViewNode> = shown
-        .iter()
-        .filter_map(|b| {
-            let bx = tree.boxes.get(*b)?;
-            let id = bx.id.as_str();
-            let fold = if bx.children.is_empty() {
-                BoxFold::Leaf
-            } else if st.is_open(*b) {
-                BoxFold::Open
-            } else {
-                BoxFold::Folded
-            };
-            let (node, status, deg) = match bx.node {
-                Some(n) => (n.clone(), g.status(n), degree.get(id).copied().unwrap_or(0)),
-                None => (
-                    GraphNode {
-                        id: bx.id.clone(),
-                        kind: bx.kind,
-                        file: None,
-                        digest: None,
-                        title: bx.title.clone(),
-                        line: None,
-                        plain: None,
-                        eng: None,
-                        updated: None,
-                    },
-                    None,
-                    next.get(id).map_or(0, BTreeSet::len),
-                ),
-            };
-            Some(ViewNode {
-                node,
-                status,
-                rank: count(rank.get(id).copied().unwrap_or(0)),
-                kids: count(kids.get(b).copied().unwrap_or(0)),
-                degree: count(deg),
-                group: bx.node.is_none(),
-                fold,
-            })
-        })
-        .collect();
-    let folded: usize = kids.values().sum();
-    let total = g.nodes.len();
-    GraphView {
-        shown: count(nodes.len()),
-        nodes,
-        edges: edges
-            .into_iter()
-            .map(|((d, u, t), n)| ViewEdge {
-                from: d.to_string(),
-                to: u.to_string(),
-                edge_type: t,
-                count: count(n),
-            })
-            .collect(),
-        folded: count(folded),
-        cut: count(total.saturating_sub(boxed + folded)),
-        total: count(total),
-        unread: g.unread_wire(),
-        open: st.asked.iter().map(|b| id_of(*b).to_string()).collect(),
-        refused: st.refused,
+/// 組の箱の節点（id と種類と題だけ）。
+fn group_node(bx: &TreeBox<'_>) -> GraphNode {
+    GraphNode {
+        id: bx.id.clone(),
+        kind: bx.kind,
+        file: None,
+        digest: None,
+        title: bx.title.clone(),
+        line: None,
+        plain: None,
+        eng: None,
+        updated: None,
     }
+}
+
+/// 箱 `b` の畳み（子が無ければ葉）。
+fn fold_of(bx: &TreeBox<'_>, st: &Opening, b: usize) -> BoxFold {
+    if bx.children.is_empty() {
+        BoxFold::Leaf
+    } else if st.is_open(b) {
+        BoxFold::Open
+    } else {
+        BoxFold::Folded
+    }
+}
+
+/// まとめた辺の電文の列。
+fn view_edges(edges: Vec<(EdgeKey<'_>, usize)>) -> Vec<ViewEdge> {
+    edges
+        .into_iter()
+        .map(|((d, u, t), n)| ViewEdge {
+            from: d.to_string(),
+            to: u.to_string(),
+            edge_type: t,
+            count: count(n),
+        })
+        .collect()
 }
 
 /// 箱の段（一度決めた段は決め直さない）。

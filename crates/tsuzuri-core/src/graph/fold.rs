@@ -139,6 +139,21 @@ pub(super) struct TreeBox<'g> {
     pub children: Vec<usize>,
 }
 
+impl<'g> TreeBox<'g> {
+    /// 節点も親も子も持たない、帯でない箱。
+    fn named(id: String, kind: NodeKind, title: String) -> TreeBox<'g> {
+        TreeBox {
+            id,
+            kind,
+            title,
+            node: None,
+            band: false,
+            parent: None,
+            children: Vec::new(),
+        }
+    }
+}
+
 /// 組の木。
 #[derive(Debug, Clone)]
 pub(super) struct Tree<'g> {
@@ -167,118 +182,158 @@ impl Opening {
     }
 }
 
+/// 節点の id と辺の型ごとの、最初に読んだ辺の先。
+type First<'g> = BTreeMap<(&'g str, EdgeType), &'g str>;
+
+/// 受入の id ごとの、その受入が検査する要件（req と nfr）の id。
+type Checks<'g> = BTreeMap<&'g str, Vec<&'g str>>;
+
+/// 辺を 1 度読み、型ごとの最初の先と、受入ごとの検査する要件を組む。
+fn links<'g>(g: &'g Graph, index: &BTreeMap<&'g str, &'g GraphNode>) -> (First<'g>, Checks<'g>) {
+    use NodeKind::*;
+    let mut first: First<'g> = BTreeMap::new();
+    let mut checks: Checks<'g> = BTreeMap::new();
+    let spec = |k: NodeKind| matches!(k, Req | Nfr);
+    for e in &g.edges {
+        let (Some(a), Some(b)) = (index.get(e.from.as_str()), index.get(e.to.as_str())) else {
+            continue;
+        };
+        let (from, to) = (a.id.as_str(), b.id.as_str());
+        first.entry((from, e.edge_type)).or_insert(to);
+        match e.edge_type {
+            EdgeType::VerifyAc if spec(a.kind) => checks.entry(to).or_default().push(from),
+            EdgeType::Verifies if spec(b.kind) => checks.entry(from).or_default().push(to),
+            _ => {}
+        }
+    }
+    (first, checks)
+}
+
+/// 畳み先（question → parent-child の先・ruling → answers の先）をたどった先（輪なら None）。
+fn host<'g>(
+    id: &'g str,
+    index: &BTreeMap<&'g str, &'g GraphNode>,
+    first: &First<'g>,
+) -> Option<&'g str> {
+    let fold_to = |id: &'g str| {
+        let t = match index.get(id)?.kind {
+            NodeKind::Question => EdgeType::ParentChild,
+            NodeKind::Ruling => EdgeType::Answers,
+            _ => return None,
+        };
+        first.get(&(id, t)).copied()
+    };
+    let mut seen = BTreeSet::from([id]);
+    let mut cur = id;
+    while let Some(next) = fold_to(cur) {
+        if !seen.insert(next) {
+            return None;
+        }
+        cur = next;
+    }
+    Some(cur)
+}
+
+/// 節点の親（畳み先に隠さない問いと裁定は台帳のほかの組）。
+fn up_of<'g>(
+    id: &'g str,
+    n: &'g GraphNode,
+    index: &BTreeMap<&'g str, &'g GraphNode>,
+    first: &First<'g>,
+    checks: &Checks<'g>,
+) -> Up<'g> {
+    use NodeKind::*;
+    match n.kind {
+        Question | Ruling => loose(n.kind),
+        Article => Up::Group(format!("~art:{}", series(id)), Article),
+        Norm => match article_of(id, index) {
+            Some(a) => Up::Node(a),
+            None => Up::Group(format!("~art:{}", series(id)), Article),
+        },
+        Rule => Up::Group("~rule".into(), Rule),
+        Adr => Up::Group("~adr".into(), Adr),
+        Ac => checks
+            .get(id)
+            .and_then(|c| c.iter().copied().min_by(|a, b| natural_cmp(a, b)))
+            .map_or_else(|| Up::Group("~srs:ac".into(), Ac), Up::Node),
+        Goal | Req | Nfr | Constraint | Actor | Output => {
+            Up::Group(format!("~srs:{}", word(n.kind)), n.kind)
+        }
+        NoteRow => {
+            let note = id.split_once('#').map_or(id, |(d, _)| d);
+            Up::Group(format!("~note:{note}"), NoteRow)
+        }
+        Epic => Up::Band,
+        Task | Memo | Run => {
+            let t = if n.kind == Run {
+                EdgeType::RunOf
+            } else {
+                EdgeType::ParentChild
+            };
+            first
+                .get(&(id, t))
+                .copied()
+                .filter(|p| {
+                    index
+                        .get(p)
+                        .is_some_and(|n| matches!(n.kind, Epic | Task | Memo))
+                })
+                .map_or_else(|| loose(n.kind), Up::Node)
+        }
+        Receipt | Policy => loose(n.kind),
+    }
+}
+
+/// 親の節点をたどると輪になるか。
+fn cycles<'g>(id: &'g str, ups: &BTreeMap<&'g str, Up<'g>>) -> bool {
+    let mut seen = BTreeSet::from([id]);
+    let mut cur = id;
+    while let Some(Up::Node(p)) = ups.get(cur) {
+        if !seen.insert(*p) {
+            return true;
+        }
+        cur = p;
+    }
+    false
+}
+
+/// 節点ごとの親と、畳み先の節点の箱に畳む問いと裁定（id と畳み先）。
+fn ups_of<'g>(
+    index: &BTreeMap<&'g str, &'g GraphNode>,
+    first: &First<'g>,
+    checks: &Checks<'g>,
+) -> (BTreeMap<&'g str, Up<'g>>, BTreeMap<&'g str, &'g str>) {
+    let mut ups: BTreeMap<&'g str, Up<'g>> = BTreeMap::new();
+    let mut hidden: BTreeMap<&'g str, &'g str> = BTreeMap::new();
+    for (&id, &n) in index {
+        if matches!(n.kind, NodeKind::Question | NodeKind::Ruling)
+            && let Some(h) = host(id, index, first).filter(|h| *h != id)
+        {
+            hidden.insert(id, h);
+            continue;
+        }
+        ups.insert(id, up_of(id, n, index, first, checks));
+    }
+    // 親をたどって帯に着かない（輪になる）節点は台帳のほかの組へ。
+    let stray: Vec<&'g str> = ups
+        .keys()
+        .copied()
+        .filter(|id| cycles(id, &ups))
+        .collect();
+    for id in stray {
+        if let Some(n) = index.get(id) {
+            ups.insert(id, loose(n.kind));
+        }
+    }
+    (ups, hidden)
+}
+
 impl<'g> Tree<'g> {
     /// 節点を組の木に入れる。
     pub fn new(g: &'g Graph) -> Tree<'g> {
-        use NodeKind::*;
         let index = g.index();
-        let mut first: BTreeMap<(&'g str, EdgeType), &'g str> = BTreeMap::new();
-        let mut checks: BTreeMap<&'g str, Vec<&'g str>> = BTreeMap::new();
-        let spec = |k: NodeKind| matches!(k, Req | Nfr);
-        for e in &g.edges {
-            let (Some(a), Some(b)) = (index.get(e.from.as_str()), index.get(e.to.as_str())) else {
-                continue;
-            };
-            let (from, to) = (a.id.as_str(), b.id.as_str());
-            first.entry((from, e.edge_type)).or_insert(to);
-            match e.edge_type {
-                EdgeType::VerifyAc if spec(a.kind) => checks.entry(to).or_default().push(from),
-                EdgeType::Verifies if spec(b.kind) => checks.entry(from).or_default().push(to),
-                _ => {}
-            }
-        }
-        // 畳み先（question → parent-child の先・ruling → answers の先）をたどった先（輪なら None）。
-        let fold_to = |id: &'g str| {
-            let t = match index.get(id)?.kind {
-                Question => EdgeType::ParentChild,
-                Ruling => EdgeType::Answers,
-                _ => return None,
-            };
-            first.get(&(id, t)).copied()
-        };
-        let host = |id: &'g str| {
-            let mut seen = BTreeSet::from([id]);
-            let mut cur = id;
-            while let Some(next) = fold_to(cur) {
-                if !seen.insert(next) {
-                    return None;
-                }
-                cur = next;
-            }
-            Some(cur)
-        };
-
-        let mut ups: BTreeMap<&'g str, Up<'g>> = BTreeMap::new();
-        let mut hidden: BTreeMap<&'g str, &'g str> = BTreeMap::new();
-        for (&id, n) in &index {
-            let up = match n.kind {
-                Question | Ruling => match host(id) {
-                    Some(h) if h != id => {
-                        hidden.insert(id, h);
-                        continue;
-                    }
-                    _ => loose(n.kind),
-                },
-                Article => Up::Group(format!("~art:{}", series(id)), Article),
-                Norm => match article_of(id, &index) {
-                    Some(a) => Up::Node(a),
-                    None => Up::Group(format!("~art:{}", series(id)), Article),
-                },
-                Rule => Up::Group("~rule".into(), Rule),
-                Adr => Up::Group("~adr".into(), Adr),
-                Ac => checks
-                    .get(id)
-                    .and_then(|c| c.iter().copied().min_by(|a, b| natural_cmp(a, b)))
-                    .map_or_else(|| Up::Group("~srs:ac".into(), Ac), Up::Node),
-                Goal | Req | Nfr | Constraint | Actor | Output => {
-                    Up::Group(format!("~srs:{}", word(n.kind)), n.kind)
-                }
-                NoteRow => {
-                    let note = id.split_once('#').map_or(id, |(d, _)| d);
-                    Up::Group(format!("~note:{note}"), NoteRow)
-                }
-                Epic => Up::Band,
-                Task | Memo | Run => {
-                    let t = if n.kind == Run {
-                        EdgeType::RunOf
-                    } else {
-                        EdgeType::ParentChild
-                    };
-                    first
-                        .get(&(id, t))
-                        .copied()
-                        .filter(|p| {
-                            index
-                                .get(p)
-                                .is_some_and(|n| matches!(n.kind, Epic | Task | Memo))
-                        })
-                        .map_or_else(|| loose(n.kind), Up::Node)
-                }
-                Receipt | Policy => loose(n.kind),
-            };
-            ups.insert(id, up);
-        }
-        // 親をたどって帯に着かない（輪になる）節点は台帳のほかの組へ。
-        let stray: Vec<&'g str> = ups
-            .keys()
-            .copied()
-            .filter(|id| {
-                let mut seen = BTreeSet::from([*id]);
-                let mut cur = *id;
-                while let Some(Up::Node(p)) = ups.get(cur) {
-                    if !seen.insert(*p) {
-                        return true;
-                    }
-                    cur = p;
-                }
-                false
-            })
-            .collect();
-        for id in stray {
-            if let Some(n) = index.get(id) {
-                ups.insert(id, loose(n.kind));
-            }
-        }
+        let (first, checks) = links(g, &index);
+        let (ups, hidden) = ups_of(&index, &first, &checks);
 
         let mut t = Tree {
             boxes: Vec::new(),
@@ -286,41 +341,7 @@ impl<'g> Tree<'g> {
             home: BTreeMap::new(),
             by_id: BTreeMap::new(),
         };
-        for &id in ups.keys() {
-            let Some(&n) = index.get(id) else {
-                continue;
-            };
-            let b = t.push(n.id.clone(), n.kind, n.title.clone(), Some(n), false, None);
-            t.home.insert(id, b);
-        }
-        let mut bands: BTreeMap<Band, usize> = BTreeMap::new();
-        let mut groups: BTreeMap<String, usize> = BTreeMap::new();
-        for (id, up) in &ups {
-            let parent = match up {
-                Up::Node(p) => t.home.get(p).copied(),
-                Up::Band => index
-                    .get(id)
-                    .map(|n| t.band(&mut bands, Band::of(n.kind))),
-                Up::Group(gid, kind) => Some(match groups.get(gid) {
-                    Some(b) => *b,
-                    None => {
-                        let band = t.band(&mut bands, Band::of(*kind));
-                        let b = t.push(gid.clone(), *kind, gid.clone(), None, false, Some(band));
-                        groups.insert(gid.clone(), b);
-                        b
-                    }
-                }),
-            };
-            let (Some(parent), Some(&me)) = (parent, t.home.get(id)) else {
-                continue;
-            };
-            if let Some(bx) = t.boxes.get_mut(me) {
-                bx.parent = Some(parent);
-            }
-            if let Some(bx) = t.boxes.get_mut(parent) {
-                bx.children.push(me);
-            }
-        }
+        let bands = t.place(&index, &ups);
         for (id, h) in hidden {
             let Some(&b) = t.home.get(h) else {
                 continue;
@@ -328,59 +349,94 @@ impl<'g> Tree<'g> {
             t.home.insert(id, b);
         }
         t.bands = bands.into_values().collect();
-
-        // 子を種類の順・自然な順に並べ、帯の箱でない箱の子が CHUNK を越えれば塊に区切る。
-        let made = t.boxes.len();
-        for b in 0..made {
-            let Some(mut kids) = t
-                .boxes
-                .get_mut(b)
-                .map(|bx| std::mem::take(&mut bx.children))
-            else {
-                continue;
-            };
-            kids.sort_by(|x, y| t.order(*x, *y));
-            let owner = t
-                .boxes
-                .get(b)
-                .filter(|bx| !bx.band && kids.len() > CHUNK)
-                .map(|bx| bx.id.clone());
-            if let Some(owner) = owner {
-                kids = t.chunk(&owner, b, &kids, 0);
-            }
-            if let Some(bx) = t.boxes.get_mut(b) {
-                bx.children = kids;
-            }
-        }
+        t.arrange();
         for (i, b) in t.boxes.iter().enumerate() {
             t.by_id.entry(b.id.clone()).or_insert(i);
         }
         t
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-core-src が直してこの属性を外す"
-    )]
-    fn push(
+    /// 節点の箱を親の箱（節点の箱・組の箱・帯の箱・組と帯の箱は無ければ作る）の子にし、帯の箱の表を返す。
+    fn place(
         &mut self,
-        id: String,
-        kind: NodeKind,
-        title: String,
-        node: Option<&'g GraphNode>,
-        band: bool,
-        parent: Option<usize>,
-    ) -> usize {
+        index: &BTreeMap<&'g str, &'g GraphNode>,
+        ups: &BTreeMap<&'g str, Up<'g>>,
+    ) -> BTreeMap<Band, usize> {
+        for &id in ups.keys() {
+            let Some(&n) = index.get(id) else {
+                continue;
+            };
+            let b = self.push(TreeBox {
+                node: Some(n),
+                ..TreeBox::named(n.id.clone(), n.kind, n.title.clone())
+            });
+            self.home.insert(id, b);
+        }
+        let mut bands: BTreeMap<Band, usize> = BTreeMap::new();
+        let mut groups: BTreeMap<String, usize> = BTreeMap::new();
+        for (id, up) in ups {
+            let parent = match up {
+                Up::Node(p) => self.home.get(p).copied(),
+                Up::Band => index
+                    .get(id)
+                    .map(|n| self.band(&mut bands, Band::of(n.kind))),
+                Up::Group(gid, kind) => Some(match groups.get(gid) {
+                    Some(b) => *b,
+                    None => {
+                        let band = self.band(&mut bands, Band::of(*kind));
+                        let b = self.push(TreeBox {
+                            parent: Some(band),
+                            ..TreeBox::named(gid.clone(), *kind, gid.clone())
+                        });
+                        groups.insert(gid.clone(), b);
+                        b
+                    }
+                }),
+            };
+            let (Some(parent), Some(&me)) = (parent, self.home.get(id)) else {
+                continue;
+            };
+            if let Some(bx) = self.boxes.get_mut(me) {
+                bx.parent = Some(parent);
+            }
+            if let Some(bx) = self.boxes.get_mut(parent) {
+                bx.children.push(me);
+            }
+        }
+        bands
+    }
+
+    /// 子を種類の順・自然な順に並べ、帯の箱でない箱の子が CHUNK を越えれば塊に区切る。
+    fn arrange(&mut self) {
+        let made = self.boxes.len();
+        for b in 0..made {
+            let Some(mut kids) = self
+                .boxes
+                .get_mut(b)
+                .map(|bx| std::mem::take(&mut bx.children))
+            else {
+                continue;
+            };
+            kids.sort_by(|x, y| self.order(*x, *y));
+            let owner = self
+                .boxes
+                .get(b)
+                .filter(|bx| !bx.band && kids.len() > CHUNK)
+                .map(|bx| bx.id.clone());
+            if let Some(owner) = owner {
+                kids = self.chunk(&owner, b, &kids, 0);
+            }
+            if let Some(bx) = self.boxes.get_mut(b) {
+                bx.children = kids;
+            }
+        }
+    }
+
+    /// 箱を足し、親が在れば親の子の末に置く（足した箱の番号を返す）。
+    fn push(&mut self, bx: TreeBox<'g>) -> usize {
         let b = self.boxes.len();
-        self.boxes.push(TreeBox {
-            id,
-            kind,
-            title,
-            node,
-            band,
-            parent,
-            children: Vec::new(),
-        });
+        let parent = bx.parent;
+        self.boxes.push(bx);
         if let Some(p) = parent.and_then(|p| self.boxes.get_mut(p)) {
             p.children.push(b);
         }
@@ -401,7 +457,10 @@ impl<'g> Tree<'g> {
             return *b;
         }
         let name = band.name();
-        let b = self.push(format!("~b:{name}"), band.head(), name.into(), None, true, None);
+        let b = self.push(TreeBox {
+            band: true,
+            ..TreeBox::named(format!("~b:{name}"), band.head(), name.into())
+        });
         bands.insert(band, b);
         b
     }
@@ -433,7 +492,7 @@ impl<'g> Tree<'g> {
             let id = format!("{owner}~{}-{}", at + 1, at + piece.len());
             let title = format!("{} … {}", head.id, last.id);
             let kind = head.kind;
-            let c = self.push(id, kind, title, None, false, None);
+            let c = self.push(TreeBox::named(id, kind, title));
             let kids = self.chunk(owner, c, piece, at);
             if let Some(bx) = self.boxes.get_mut(c) {
                 bx.parent = Some(parent);

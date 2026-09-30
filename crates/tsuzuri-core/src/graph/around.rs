@@ -183,6 +183,16 @@ impl<'g> Walk<'g> {
         (shown, cut)
     }
 
+    /// 畳まずに歩いて出す行のうち、根拠の側（列が負）と影響の側（列が正）の数。
+    fn sides(&self) -> (usize, usize) {
+        let full = self.walk(Fold::None);
+        let (rows, _) = self.select(&full);
+        (
+            rows.iter().filter(|id| full.col(id) < 0).count(),
+            rows.iter().filter(|id| full.col(id) > 0).count(),
+        )
+    }
+
     /// 節点の種類の順・同じなら id の自然な順。
     fn order(&self, a: &str, b: &str) -> std::cmp::Ordering {
         let kind = |id: &str| self.index.get(id).map(|n| &n.kind);
@@ -206,14 +216,7 @@ pub fn around(g: &Graph, center: &str, steps: u8, fold: Fold) -> Option<AroundDo
             .cmp(&walked.col(b))
             .then_with(|| walk.order(a, b))
     });
-    let (basis, impact) = {
-        let full = walk.walk(Fold::None);
-        let (rows, _) = walk.select(&full);
-        (
-            rows.iter().filter(|id| full.col(id) < 0).count(),
-            rows.iter().filter(|id| full.col(id) > 0).count(),
-        )
-    };
+    let (basis, impact) = walk.sides();
     let cut_hub: usize = walked
         .hubs
         .iter()

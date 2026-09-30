@@ -365,6 +365,55 @@ fn deny(why: Why, ids: Vec<String>, digest: Option<String>) -> Gate {
     Gate::Deny { why, ids, digest }
 }
 
+/// 読めていない出所の名（設計と台帳だけ）。
+fn unread_sources(graph: &Graph) -> Vec<String> {
+    // 走行の出所は読まない（走行の節点は 4 種の外で、走行の辺は設計の節点の次数に入らない）。
+    graph
+        .unread
+        .iter()
+        .filter_map(|s| match s {
+            Source::Design => Some("design".to_string()),
+            Source::Ledger => Some("ledger".to_string()),
+            Source::Runs => None,
+        })
+        .collect()
+}
+
+/// 前提の方針の欄の答え（方針でない id を名指すか、範囲の及ぶ方針を名指し漏らせば通さない・どちらも無ければ None）。
+fn premises_gate(graph: &Graph, touches: &[String], object: &Map<String, Value>) -> Option<Gate> {
+    // 方針は問いの中身を変えうるので、処分と要約値より先に読ませる。
+    let premises = metadata_ids(&Value::Object(object.clone()), PREMISES_KEY);
+    let not_policy: Vec<String> = premises
+        .iter()
+        .filter(|id| !graph.policies.contains_key(*id))
+        .cloned()
+        .collect();
+    if !not_policy.is_empty() {
+        return Some(deny(Why::NotPolicy, sorted(not_policy), None));
+    }
+    let unnamed: Vec<String> = due_policies(graph, touches)
+        .into_iter()
+        .filter(|id| !premises.contains(id))
+        .collect();
+    if !unnamed.is_empty() {
+        return Some(deny(Why::Premises, unnamed, None));
+    }
+    None
+}
+
+/// 処分した id（touches と、関わらない理由の欄の空でない理由を持つ id）。
+fn disposed_of(touches: &[String], object: &Map<String, Value>) -> BTreeSet<String> {
+    let mut disposed: BTreeSet<String> = touches.iter().cloned().collect();
+    if let Some(Value::Object(nr)) = object.get(NOT_RELEVANT) {
+        disposed.extend(
+            nr.iter()
+                .filter(|(_, v)| v.as_str().is_some_and(|s| !s.trim().is_empty()))
+                .map(|(k, _)| k.clone()),
+        );
+    }
+    disposed
+}
+
 /// 1 つの下書きを判じる。
 fn judge_one(draft: &Draft, graph: &Graph) -> Gate {
     let object = match &draft.metadata {
@@ -378,16 +427,7 @@ fn judge_one(draft: &Draft, graph: &Graph) -> Gate {
     if touches.is_empty() {
         return deny(Why::NoTouches, Vec::new(), None);
     }
-    // 走行の出所は読まない（走行の節点は 4 種の外で、走行の辺は設計の節点の次数に入らない）。
-    let unread: Vec<String> = graph
-        .unread
-        .iter()
-        .filter_map(|s| match s {
-            Source::Design => Some("design".to_string()),
-            Source::Ledger => Some("ledger".to_string()),
-            Source::Runs => None,
-        })
-        .collect();
+    let unread = unread_sources(graph);
     if !unread.is_empty() {
         return Gate::Unknown {
             why: Why::Unread,
@@ -403,32 +443,11 @@ fn judge_one(draft: &Draft, graph: &Graph) -> Gate {
     if !missing.is_empty() {
         return deny(Why::UnknownId, sorted(missing), None);
     }
-    // 方針は問いの中身を変えうるので、処分と要約値より先に読ませる。
-    let premises = metadata_ids(&Value::Object(object.clone()), PREMISES_KEY);
-    let not_policy: Vec<String> = premises
-        .iter()
-        .filter(|id| !graph.policies.contains_key(*id))
-        .cloned()
-        .collect();
-    if !not_policy.is_empty() {
-        return deny(Why::NotPolicy, sorted(not_policy), None);
-    }
-    let unnamed: Vec<String> = due_policies(graph, &touches)
-        .into_iter()
-        .filter(|id| !premises.contains(id))
-        .collect();
-    if !unnamed.is_empty() {
-        return deny(Why::Premises, unnamed, None);
+    if let Some(gate) = premises_gate(graph, &touches, &object) {
+        return gate;
     }
     let required = needs(graph, &touches);
-    let mut disposed: BTreeSet<String> = touches.iter().cloned().collect();
-    if let Some(Value::Object(nr)) = object.get(NOT_RELEVANT) {
-        disposed.extend(
-            nr.iter()
-                .filter(|(_, v)| v.as_str().is_some_and(|s| !s.trim().is_empty()))
-                .map(|(k, _)| k.clone()),
-        );
-    }
+    let disposed = disposed_of(&touches, &object);
     let undisposed: Vec<String> = required
         .iter()
         .filter(|id| !disposed.contains(*id))

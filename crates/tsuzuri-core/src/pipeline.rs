@@ -356,6 +356,69 @@ pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: E
             unmapped: 0,
         };
     };
+    let Tracked { runs, per_bead, order } = track(events);
+
+    let mut cards = Vec::new();
+    let mut unmapped = 0;
+    for bead in &order {
+        let Some(entry) = per_bead.get(bead) else {
+            continue;
+        };
+        let Some(state) = runs.get(entry.latest.as_str()) else {
+            continue;
+        };
+        let Ok(contract) = BeadId::new(bead.as_str()) else {
+            continue;
+        };
+        let Some(last) = state.last else {
+            continue;
+        };
+        let mapped = mapped_stage(last, state.stopped);
+        let reading = match mapped {
+            Some((Stage::Landed, _)) => ci_reading(&state.rows),
+            _ => None,
+        };
+        let closed = closed_bead(beads, bead, now);
+        let Some((stage, reason)) = (match (mapped, closed) {
+            (Some((Stage::Landed, reason)), _) => Some((Stage::Landed, reason)),
+            (_, Some(b)) => Some((Stage::Landed, Some(closed_reason(b)))),
+            (mapped, None) => mapped,
+        }) else {
+            unmapped += 1;
+            continue;
+        };
+        let (stage, reason, ci) = with_ci(stage, reason, reading, closed.is_some());
+        cards.push(PipelineCard {
+            contract,
+            runs: entry.runs,
+            stage,
+            reason,
+            account: state.account.clone(),
+            since: text(last, "ts").and_then(epoch_secs),
+            ci,
+        });
+    }
+
+    queued_cards(beads, &per_bead, now, &mut cards);
+
+    Board {
+        board: PipelineBoard {
+            cards: Reading::Known(cards),
+            misfits: Reading::Unknown,
+        },
+        unmapped,
+    }
+}
+
+/// event log の走行の読み（走行ごとの読みと、bead ごとの走行と、走行の在る bead の出た順）。
+struct Tracked<'a> {
+    runs: BTreeMap<&'a str, RunState<'a>>,
+    per_bead: BTreeMap<String, BeadRuns>,
+    order: Vec<String>,
+}
+
+/// event log の値を順に読んで走行を組む（走行は欄 run を持つ RunCreated の最初の 1 件で作る）。
+fn track(events: &[Value]) -> Tracked<'_> {
     let mut runs: BTreeMap<&str, RunState> = BTreeMap::new();
     let mut per_bead: BTreeMap<String, BeadRuns> = BTreeMap::new();
     let mut order: Vec<String> = Vec::new();
@@ -395,61 +458,43 @@ pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: E
             state.stopped = true;
         }
     }
-
-    let mut cards = Vec::new();
-    let mut unmapped = 0;
-    for bead in &order {
-        let Some(entry) = per_bead.get(bead) else {
-            continue;
-        };
-        let Some(state) = runs.get(entry.latest.as_str()) else {
-            continue;
-        };
-        let Ok(contract) = BeadId::new(bead.as_str()) else {
-            continue;
-        };
-        let Some(last) = state.last else {
-            continue;
-        };
-        let mapped = match stage_of(
-            text(last, "kind").unwrap_or_default(),
-            text(last, "stage"),
-            text(last, "detail").unwrap_or_default(),
-        ) {
-            Some((Stage::Questioned, _)) if state.stopped => {
-                Some((Stage::Questioned, Some(question_stopped(last))))
-            }
-            mapped => mapped,
-        };
-        let reading = match mapped {
-            Some((Stage::Landed, _)) => ci_reading(&state.rows),
-            _ => None,
-        };
-        let closed = beads
-            .unwrap_or_default()
-            .iter()
-            .find(|b| &b.id == bead)
-            .filter(|b| !b.is_open(now));
-        let Some((stage, reason)) = (match (mapped, closed) {
-            (Some((Stage::Landed, reason)), _) => Some((Stage::Landed, reason)),
-            (_, Some(b)) => Some((Stage::Landed, Some(closed_reason(b)))),
-            (mapped, None) => mapped,
-        }) else {
-            unmapped += 1;
-            continue;
-        };
-        let (stage, reason, ci) = with_ci(stage, reason, reading, closed.is_some());
-        cards.push(PipelineCard {
-            contract,
-            runs: entry.runs,
-            stage,
-            reason,
-            account: state.account.clone(),
-            since: text(last, "ts").and_then(epoch_secs),
-            ci,
-        });
+    Tracked {
+        runs,
+        per_bead,
+        order,
     }
+}
 
+/// 走行の段を決めた最後の event の段と理由（問いの後に止めた走行は止めた理由）。
+fn mapped_stage(last: &Value, stopped: bool) -> Option<(Stage, Option<String>)> {
+    match stage_of(
+        text(last, "kind").unwrap_or_default(),
+        text(last, "stage"),
+        text(last, "detail").unwrap_or_default(),
+    ) {
+        Some((Stage::Questioned, _)) if stopped => {
+            Some((Stage::Questioned, Some(question_stopped(last))))
+        }
+        mapped => mapped,
+    }
+}
+
+/// 台帳の bead `id` が今閉じていればその bead（台帳が読めなければ None）。
+fn closed_bead<'b>(beads: Option<&'b [Bead]>, id: &str, now: EpochSecs) -> Option<&'b Bead> {
+    beads
+        .unwrap_or_default()
+        .iter()
+        .find(|b| b.id == id)
+        .filter(|b| !b.is_open(now))
+}
+
+/// 走行の無い開いた task のうち配れる契約の札（開いた blocker が在れば Blocked・無ければ Queued）を足す。
+fn queued_cards(
+    beads: Option<&[Bead]>,
+    per_bead: &BTreeMap<String, BeadRuns>,
+    now: EpochSecs,
+    cards: &mut Vec<PipelineCard>,
+) {
     for b in beads.unwrap_or_default() {
         if b.kind != NodeKind::Task
             || !b.is_open(now)
@@ -475,14 +520,6 @@ pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: E
             since: None,
             ci: None,
         });
-    }
-
-    Board {
-        board: PipelineBoard {
-            cards: Reading::Known(cards),
-            misfits: Reading::Unknown,
-        },
-        unmapped,
     }
 }
 
@@ -555,30 +592,34 @@ pub fn runs_of(events: &str, bead: &BeadId) -> RunsDoc {
             });
         }
         if kind == "RunCost" {
-            let cost = &mut line.cost;
-            cost.events += 1;
-            cost.turns += count(event, "turns");
-            cost.wall_ms += count(event, "wall_ms");
-            for tok in text(event, "usage").unwrap_or_default().split(',') {
-                let Some((key, value)) = tok.split_once(':') else {
-                    continue;
-                };
-                let Ok(n) = value.parse::<u64>() else {
-                    continue;
-                };
-                match key {
-                    "in" => cost.tokens_in += n,
-                    "out" => cost.tokens_out += n,
-                    "cache_read" => cost.cache_read += n,
-                    "cache_create" => cost.cache_create += n,
-                    _ => {}
-                }
-            }
+            add_cost(&mut line.cost, event);
         }
     }
     RunsDoc {
         bead: bead.clone(),
         runs: Reading::Known(lines),
+    }
+}
+
+/// RunCost の event 1 件の費用を足す（usage の字は鍵と字 : と数を字 , で並べた札の列・知らない鍵と数でない札は読み捨てる）。
+fn add_cost(cost: &mut RunCost, event: &Value) {
+    cost.events += 1;
+    cost.turns += count(event, "turns");
+    cost.wall_ms += count(event, "wall_ms");
+    for tok in text(event, "usage").unwrap_or_default().split(',') {
+        let Some((key, value)) = tok.split_once(':') else {
+            continue;
+        };
+        let Ok(n) = value.parse::<u64>() else {
+            continue;
+        };
+        match key {
+            "in" => cost.tokens_in += n,
+            "out" => cost.tokens_out += n,
+            "cache_read" => cost.cache_read += n,
+            "cache_create" => cost.cache_create += n,
+            _ => {}
+        }
     }
 }
 
