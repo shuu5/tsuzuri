@@ -371,6 +371,7 @@ sections:
       - {id: f-deliver-tool, doc: surface-wave23b}
       - {id: e-held-marks, doc: surface-wave23b}
       - {id: t-carry-retire, doc: surface-wave23b}
+      - {id: t-ci-shard, doc: surface-wave23b}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
