@@ -242,18 +242,23 @@ pub(crate) fn count_viewpoint(
         }
     };
     let refutes = sheet.as_ref().map_or_else(Vec::new, |s| s.refutes.clone());
-    if !reasons.is_empty() {
-        return Counted {
-            verdict: Verdict::Unknown,
-            reasons,
-            findings,
-            stops,
-            digest: digest8,
-            refutes,
-            waiting: false,
-        };
-    }
-    let sheet = sheet.expect("理由が無ければ所見 file は読めている");
+    let sheet = match sheet {
+        Some(sheet) if reasons.is_empty() => sheet,
+        other => {
+            if other.is_none() && reasons.is_empty() {
+                reasons.push("所見 file を読めていない".to_string());
+            }
+            return Counted {
+                verdict: Verdict::Unknown,
+                reasons,
+                findings,
+                stops,
+                digest: digest8,
+                refutes,
+                waiting: false,
+            };
+        }
+    };
 
     // 7. 止める の反証（理由がこれだけで所見 file の verdict が まだ分からない でなければ反証待ち・便 169）
     for id in &sheet.unrefuted {
@@ -428,7 +433,10 @@ fn count_sheet(
         refuted_stops: Vec::new(),
         refutes: Vec::new(),
     };
-    let entries = root.as_map().expect("最上位は表と読んである");
+    let Some(entries) = root.as_map() else {
+        sheet.reasons.push("所見 file の最上位が欄の表でない".to_string());
+        return sheet;
+    };
     for (key, _) in entries {
         if !FINDINGS_TOP_LEVEL.contains(&key.as_str()) {
             sheet.reasons.push(format!("未知の欄「{key}」"));
@@ -743,7 +751,11 @@ fn count_result(dir: &Path, id: &str, rules: &Rules, why: &mut Vec<String>) -> O
             return None;
         }
     };
-    for (key, _) in root.as_map().expect("最上位は表と読んである") {
+    let Some(entries) = root.as_map() else {
+        why.push(format!("{RESULT_FILE}: 最上位が欄の表でない"));
+        return None;
+    };
+    for (key, _) in entries {
         if !RESULT_REQUIRED.contains(&key.as_str()) {
             why.push(format!("未知の欄「{key}」"));
         }

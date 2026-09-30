@@ -5,7 +5,7 @@
 //! 便 128（delivery-128.md §1 (c) 歯 6）: 純粋な関数 `constitution_fields`（憲法の 5 部位の欄の一覧）の Ok と Err の 4 つの形。
 #![cfg(test)]
 
-#[allow(dead_code)]
+#[expect(dead_code, reason = "取り込んだ build.rs の fn main と導出の fn の一部は使わない")]
 #[path = "../build.rs"]
 mod build;
 

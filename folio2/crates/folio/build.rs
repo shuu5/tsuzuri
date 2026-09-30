@@ -9,6 +9,22 @@
 //! 便 168（ADR-27 決定 (1)）から図の道具の写し `vendor/archify/` の全 file を path の byte 順に焼いた列も `OUT_DIR` に書く
 //! （置き場の親に写しが無いときに撃つ道具・焼く元は repo の写し 1 つ・P-6.3）。
 //! 人は型の一覧を書かない。導出できない部品目録・憲法は組み立てを失敗させる（黙って空の一覧にしない）。
+#![forbid(unsafe_code)]
+#![deny(
+    unused_must_use,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::unreachable,
+    clippy::exit,
+    clippy::dbg_macro,
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::allow_attributes,
+    clippy::allow_attributes_without_reason
+)]
 
 use std::collections::HashSet;
 use std::env;
@@ -22,47 +38,36 @@ const CATALOG: &str = "../../design-intent/preview/parts.json";
 /// 憲法の正本の path（crate から見た相対）。
 const CONSTITUTION: &str = "../../design-intent/constitution.yaml";
 
-fn main() {
-    let manifest = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
-    let out_dir = env::var("OUT_DIR").expect("OUT_DIR");
+fn main() -> Result<(), String> {
+    let manifest = env::var("CARGO_MANIFEST_DIR").map_err(|e| format!("CARGO_MANIFEST_DIR: {e}"))?;
+    let out_dir = env::var("OUT_DIR").map_err(|e| format!("OUT_DIR: {e}"))?;
     let out_dir = Path::new(&out_dir);
 
     let path = Path::new(&manifest).join(CATALOG);
     println!("cargo:rerun-if-changed={}", path.display());
-    let source = match derive(&path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("部品目録 {} から導出できない: {e}", path.display());
-            std::process::exit(1);
-        }
-    };
-    fs::write(out_dir.join("parts_catalog.rs"), source).expect("OUT_DIR へ書けない");
+    let source =
+        derive(&path).map_err(|e| format!("部品目録 {} から導出できない: {e}", path.display()))?;
+    write_out(out_dir, "parts_catalog.rs", source)?;
 
     let path = Path::new(&manifest).join(CONSTITUTION);
     println!("cargo:rerun-if-changed={}", path.display());
     let source = fs::read_to_string(&path)
         .map_err(|e| format!("読めない（{e}）"))
-        .and_then(|text| Ok(constitution_enums(&text)? + &constitution_fields(&text)?));
-    let source = match source {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("憲法の正本 {} から導出できない: {e}", path.display());
-            std::process::exit(1);
-        }
-    };
-    fs::write(out_dir.join("constitution_enums.rs"), source).expect("OUT_DIR へ書けない");
+        .and_then(|text| Ok(constitution_enums(&text)? + &constitution_fields(&text)?))
+        .map_err(|e| format!("憲法の正本 {} から導出できない: {e}", path.display()))?;
+    write_out(out_dir, "constitution_enums.rs", source)?;
 
     // 図の道具の写し（便 168）: dir を名指すので中の file の変更・足す・消すで走り直す
     let path = Path::new(&manifest).join(TOOL);
     println!("cargo:rerun-if-changed={}", path.display());
-    let source = match tool_files(&path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("図の道具の写し {} を焼けない: {e}", path.display());
-            std::process::exit(1);
-        }
-    };
-    fs::write(out_dir.join("archify_files.rs"), source).expect("OUT_DIR へ書けない");
+    let source = tool_files(&path)
+        .map_err(|e| format!("図の道具の写し {} を焼けない: {e}", path.display()))?;
+    write_out(out_dir, "archify_files.rs", source)
+}
+
+/// `OUT_DIR` へ 1 file 書く。書けなければ Err（cargo が組み立ての失敗として字を出す）。
+fn write_out(out_dir: &Path, name: &str, source: String) -> Result<(), String> {
+    fs::write(out_dir.join(name), source).map_err(|e| format!("OUT_DIR へ {name} を書けない: {e}"))
 }
 
 /// 図の道具の写しの path（crate から見た相対・rules 行 R-15 の写し）。

@@ -350,12 +350,9 @@ fn build_counted(
     let mut notes_absent = String::new();
     let mut absent = 0;
     for (doc, tops) in &declared {
-        let file = &ceiling
-            .documents
-            .iter()
-            .find(|(id, _)| id == doc)
-            .expect("reads の doc は load で documents に解いてある")
-            .1;
+        let Some((_, file)) = ceiling.documents.iter().find(|(id, _)| id == doc) else {
+            return Err(format!("reads の doc {doc} が documents に無い"));
+        };
         let mut copied = Files::new();
         copy_sources(dir, file, &mut copied)?;
         let mut present: Vec<String> = Vec::new();

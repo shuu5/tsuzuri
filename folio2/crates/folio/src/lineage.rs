@@ -473,7 +473,10 @@ fn structural_diff(
 
 /// 列の区間 1 つ（前の anchor → 版 `ver` の写し）の差分を、その版を名指す発効した判断の amends と 1:1 に消し込む。
 /// 余りも不足も落とす。`c` は現行の憲法（amended_by を引く）。比べられたら差分を返す（便 9 の凍結が使う）。
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "関数の粒度は規則の行 R-4 の除外の表が持つ（行 k-size-folio が直す）"
+)]
 pub(crate) fn verify_pair(
     prev_doc: &Value,
     cur_content: &Value,

@@ -4,7 +4,10 @@
 //! 本便で使うのは RetreatKind（判断の記録の床）と Strength（注入）の 2 つ。残りは面の生成器の表（便 50）が使う。
 //! 便 128 から同じ file に、憲法の schema の 5 部位の欄の一覧（`<部位>_REQUIRED`・`<部位>_FIELDS`・`FIELDS`）も在る（床の未知の欄）。
 
-#![allow(dead_code)]
+#![cfg_attr(
+    not(test),
+    expect(dead_code, reason = "導出した一覧のうち面の生成器の表だけが使う定数がある")
+)]
 
 include!(concat!(env!("OUT_DIR"), "/constitution_enums.rs"));
 

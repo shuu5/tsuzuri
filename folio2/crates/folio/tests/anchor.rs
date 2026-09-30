@@ -6,10 +6,9 @@
 //! fixture の digest は歯の中では計算しない（file に書いた値＝凍結）。
 #![cfg(test)]
 
-#[allow(dead_code)]
 #[path = "../src/sha256.rs"]
 mod sha256;
-#[allow(dead_code)]
+#[expect(dead_code, reason = "取り込んだ src/yaml.rs の item を全部は使わない")]
 #[path = "../src/yaml.rs"]
 mod yaml;
 

@@ -6,7 +6,7 @@
 //! 上限か図の型の名札を変えた写しで --check が「まだ分からない」。
 #![cfg(test)]
 
-#[allow(dead_code)]
+#[expect(dead_code, reason = "取り込んだ build.rs の fn main と導出の fn の一部は使わない")]
 #[path = "../build.rs"]
 mod build;
 

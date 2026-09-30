@@ -6,10 +6,9 @@
 #![cfg(test)]
 
 #[path = "../src/sha256.rs"]
-#[allow(dead_code)]
 mod sha256;
 #[path = "../src/yaml.rs"]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "取り込んだ src/yaml.rs の item を全部は使わない")]
 mod yaml;
 
 use std::fs;

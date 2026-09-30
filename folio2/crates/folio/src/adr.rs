@@ -43,7 +43,10 @@ pub(crate) fn floor_val(path: &[&str]) -> Option<&'static str> {
 
 /// 床の定数の数を欄の道で読む（同上）。道が数に着かなければ None。
 /// 便 7 の検査は数型を読まない（読み口として置く）。
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "読み口として置き、読むのは単体の歯だけ")
+)]
 pub(crate) fn floor_num(path: &[&str]) -> Option<usize> {
     match floor_at(path) {
         Some(Floor::Num(n)) => Some(*n),
@@ -874,7 +877,7 @@ mod tests {
     #[test]
     fn floor_notes_are_outside_the_diff() {
         let Floor::Map(fields) = &FLOOR else {
-            unreachable!()
+            panic!("FLOOR は表")
         };
         let notes = fields.iter().filter(|(k, _)| k.ends_with("_note")).count();
         assert_eq!(notes, 25);

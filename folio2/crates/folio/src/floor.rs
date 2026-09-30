@@ -612,7 +612,10 @@ fn block_item(item: &Floor, indent: usize, name: Option<&str>, note: bool, out: 
 /// 床の定数 → 生成区間の本文（決定的）。「schema:」の行 + 規則で組んだ本体・各行の末尾は改行 1 つ。
 /// 置き場の名を持たない口＝名で行を選ぶ表は空の表（`derive_for` の名なしと同じ字）。
 /// 命令の口（`schema.rs`）は名つきの導出を呼ぶので、この口を読むのは各床の単体の歯だけ。
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "この口を読むのは各床の単体の歯だけ")
+)]
 pub fn derive(floor: &Floor) -> String {
     derive_for(floor, None)
 }

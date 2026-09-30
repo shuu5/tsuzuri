@@ -8,7 +8,10 @@
 //! （file の側で節を足して通す口を塞ぐ・N-3.1）。実の file の生成区間と命令 `folio schema` の対象に足すのは後続の段
 //! （便 53）。行の欄の定数は床（`check.rs` の `check_rules`）も読む（便 128・未知の欄）。未使用の警告はこの file だけ黙らせる。
 
-#![allow(dead_code)]
+#![cfg_attr(
+    not(test),
+    expect(dead_code, reason = "実の file の生成区間に足すのは後続の段で、今は使わない定数がある")
+)]
 
 use std::path::Path;
 

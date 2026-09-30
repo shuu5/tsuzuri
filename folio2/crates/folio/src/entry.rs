@@ -614,7 +614,10 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
                 say!(out, "{}", outcome.stdout);
                 return code(outcome.verdict);
             }
-            let path = path.expect("--gate の外では clap が --out を要る");
+            let Some(path) = path else {
+                say!(err, "folio ceiling: --gate の外では --out が要る");
+                return 2;
+            };
             if stamp {
                 let outcome = stamp::run(&dir, &path);
                 say!(out, "{}", outcome.stdout);

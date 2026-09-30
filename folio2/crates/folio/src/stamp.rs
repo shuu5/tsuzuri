@@ -327,7 +327,7 @@ pub struct Mark {
     pub id: String,
     pub verdict: String,
     /// 観点の at（名札の日付は top-level の at を使うので読むだけ・読めなければ Err）
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "読めるかだけ見て値は使わない")]
     pub at: String,
     pub bundle: String,
 }
