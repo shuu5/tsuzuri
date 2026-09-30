@@ -296,7 +296,7 @@ pub fn context_for(said: &[Said], event: &str) -> Option<String> {
         said.len()
     )];
     let copied = copied(said);
-    for s in &said[..copied] {
+    for s in said.iter().take(copied) {
         lines.push(format!("裁定 {}（問い {}）の逐語:", s.ruling, s.question));
         lines.push(s.verbatim.clone());
     }

@@ -121,7 +121,8 @@ fn percentile(values: &[f64], p: f64) -> Option<f64> {
     let last = s.len().checked_sub(1)?;
     let i = last as f64 * p;
     let (lo, hi) = (i.floor() as usize, i.ceil() as usize);
-    Some(s[lo] + (s[hi] - s[lo]) * (i - lo as f64))
+    let (below, above) = (*s.get(lo)?, *s.get(hi)?);
+    Some(below + (above - below) * (i - lo as f64))
 }
 
 /// 秒の差を日にする（負の差も見本と同じに負の日にする）。

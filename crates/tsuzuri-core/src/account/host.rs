@@ -398,7 +398,10 @@ fn sparks(log: &str, now: EpochSecs) -> BTreeMap<String, Spark> {
         if age >= SPARK_SPAN_S {
             continue;
         }
-        let slot = steps[window].entry(age / SPARK_STEP_S).or_insert(point);
+        let Some(steps) = steps.get_mut(window) else {
+            continue;
+        };
+        let slot = steps.entry(age / SPARK_STEP_S).or_insert(point);
         if slot.at <= point.at {
             *slot = point;
         }

@@ -356,7 +356,10 @@ fn runs(events: &[Value], now: EpochSecs) -> Vec<Run<'_>> {
 
 /// run の bead（欄 bead か run の id の前半）。
 fn bead_of<'a>(run: &Run<'a>) -> Option<&'a str> {
-    text(run.events[0], "bead").or_else(|| run_bead(run.id))
+    run.events
+        .first()
+        .and_then(|e| text(e, "bead"))
+        .or_else(|| run_bead(run.id))
 }
 
 /// 台帳で今閉じている bead の id（台帳の字が無いか読めなければ空・台帳に無い bead は入らない）。

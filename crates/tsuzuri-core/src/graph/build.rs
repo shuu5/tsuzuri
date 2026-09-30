@@ -542,11 +542,10 @@ pub(crate) fn read_events(text: &str) -> Option<Vec<Value>> {
 /// run の id の前半（時刻の前の字）。後半が器の時刻の形（`20260927T071348Z`）でなければ None。
 pub fn run_bead(run: &str) -> Option<&str> {
     let (bead, at) = run.rsplit_once('-')?;
-    let b = at.as_bytes();
-    let stamp = b.len() == 16
-        && b[8] == b'T'
-        && b[15] == b'Z'
-        && b[..8].iter().chain(&b[9..15]).all(u8::is_ascii_digit);
+    let stamp = at.as_bytes().split_first_chunk::<8>().is_some_and(|(date, rest)| {
+        matches!(rest, [b'T', time @ .., b'Z']
+            if time.len() == 6 && date.iter().chain(time).all(u8::is_ascii_digit))
+    });
     (stamp && !bead.is_empty()).then_some(bead)
 }
 

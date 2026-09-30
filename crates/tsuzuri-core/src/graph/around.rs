@@ -87,7 +87,8 @@ impl<'g> Walk<'g> {
         }
         for list in incident.values_mut() {
             list.sort_by(|(x, _), (y, _)| {
-                (&word[&x.edge_type], &x.from, &x.to).cmp(&(&word[&y.edge_type], &y.from, &y.to))
+                (word.get(&x.edge_type), &x.from, &x.to)
+                    .cmp(&(word.get(&y.edge_type), &y.from, &y.to))
             });
         }
         Walk {
@@ -166,7 +167,9 @@ impl<'g> Walk<'g> {
                 .collect();
             ids.sort_by(|a, b| self.order(a, b));
             for (i, id) in ids.into_iter().enumerate() {
-                let r = &w.reached[id];
+                let Some(r) = w.reached.get(id) else {
+                    continue;
+                };
                 if i < AROUND_PER_COL
                     && shown.len() < AROUND_CAP
                     && (r.hop == 1 || shown.contains(&r.via))
@@ -182,10 +185,8 @@ impl<'g> Walk<'g> {
 
     /// 節点の種類の順・同じなら id の自然な順。
     fn order(&self, a: &str, b: &str) -> std::cmp::Ordering {
-        self.index[a]
-            .kind
-            .cmp(&self.index[b].kind)
-            .then_with(|| natural_cmp(a, b))
+        let kind = |id: &str| self.index.get(id).map(|n| &n.kind);
+        kind(a).cmp(&kind(b)).then_with(|| natural_cmp(a, b))
     }
 }
 
@@ -221,17 +222,17 @@ pub fn around(g: &Graph, center: &str, steps: u8, fold: Fold) -> Option<AroundDo
 
     let rows: Vec<AroundRow> = shown
         .iter()
-        .map(|id| {
-            let n = walk.index[id];
+        .filter_map(|id| {
+            let n = walk.index.get(id)?;
             let r = walked.reached.get(id);
-            AroundRow {
-                node: n.clone(),
+            Some(AroundRow {
+                node: (*n).clone(),
                 status: g.status(n),
                 col: walked.col(id),
                 via: r.map(|r| r.via.to_string()),
                 edge_type: r.map(|r| r.edge_type),
                 degree: count(walk.degree(id)),
-            }
+            })
         })
         .collect();
     Some(AroundDoc {

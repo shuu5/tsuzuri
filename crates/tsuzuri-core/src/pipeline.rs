@@ -399,8 +399,12 @@ pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: E
     let mut cards = Vec::new();
     let mut unmapped = 0;
     for bead in &order {
-        let entry = &per_bead[bead];
-        let state = &runs[entry.latest.as_str()];
+        let Some(entry) = per_bead.get(bead) else {
+            continue;
+        };
+        let Some(state) = runs.get(entry.latest.as_str()) else {
+            continue;
+        };
         let Ok(contract) = BeadId::new(bead.as_str()) else {
             continue;
         };
@@ -534,7 +538,9 @@ pub fn runs_of(events: &str, bead: &BeadId) -> RunsDoc {
         let Some(&Some(at)) = seen.get(run) else {
             continue;
         };
-        let line = &mut lines[at];
+        let Some(line) = lines.get_mut(at) else {
+            continue;
+        };
         if let Some(account) = detail_account(event) {
             line.account = Some(account);
         }

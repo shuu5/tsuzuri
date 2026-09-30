@@ -28,7 +28,7 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
     let st = tree.open(open);
     let index = g.index();
     let degree = g.degrees();
-    let id_of = |b: usize| tree.boxes[b].id.as_str();
+    let id_of = |b: usize| tree.boxes.get(b).map_or("", |bx| bx.id.as_str());
 
     // 節点ごとの見える箱と、箱ごとの子の数（自分の箱を持たない節点の数）。
     let vis: BTreeMap<&str, usize> = tree
@@ -39,7 +39,12 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
     let mut kids: BTreeMap<usize, usize> = BTreeMap::new();
     let mut boxed = 0;
     for (id, b) in &vis {
-        if tree.boxes[*b].node.is_some_and(|n| n.id == *id) {
+        if tree
+            .boxes
+            .get(*b)
+            .and_then(|bx| bx.node)
+            .is_some_and(|n| n.id == *id)
+        {
             boxed += 1;
         } else {
             *kids.entry(*b).or_default() += 1;
@@ -57,7 +62,9 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
             EdgeEnd::From => (a.id.as_str(), b.id.as_str()),
             EdgeEnd::To => (b.id.as_str(), a.id.as_str()),
         };
-        let (u, d) = (vis[up], vis[down]);
+        let (Some(&u), Some(&d)) = (vis.get(up), vis.get(down)) else {
+            continue;
+        };
         if u == d {
             continue;
         }
@@ -87,14 +94,11 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
         rank_of(id, &outs, &mut rank, &mut visiting);
     }
 
-    shown.sort_by(|a, b| {
-        let (x, y) = (&tree.boxes[*a], &tree.boxes[*b]);
-        x.kind.cmp(&y.kind).then_with(|| natural_cmp(&x.id, &y.id))
-    });
+    shown.sort_by(|a, b| tree.order(*a, *b));
     let nodes: Vec<ViewNode> = shown
         .iter()
-        .map(|b| {
-            let bx = &tree.boxes[*b];
+        .filter_map(|b| {
+            let bx = tree.boxes.get(*b)?;
             let id = bx.id.as_str();
             let fold = if bx.children.is_empty() {
                 BoxFold::Leaf
@@ -121,7 +125,7 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
                     next.get(id).map_or(0, BTreeSet::len),
                 ),
             };
-            ViewNode {
+            Some(ViewNode {
                 node,
                 status,
                 rank: count(rank.get(id).copied().unwrap_or(0)),
@@ -129,7 +133,7 @@ pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
                 degree: count(deg),
                 group: bx.node.is_none(),
                 fold,
-            }
+            })
         })
         .collect();
     let folded: usize = kids.values().sum();

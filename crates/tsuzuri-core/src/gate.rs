@@ -259,9 +259,8 @@ pub fn drafts(payload: &str) -> Vec<Draft> {
         .into_iter()
         .filter_map(|seg| {
             let start = seg.iter().position(|w| !is_assignment(w))?;
-            let head = &seg[start];
+            let (head, rest) = seg.get(start..)?.split_first()?;
             let program = head.rsplit('/').next().unwrap_or(head);
-            let rest = &seg[start + 1..];
             let question = PROGRAMS.contains(&program)
                 && rest.iter().any(|w| w == CREATE)
                 && label_values(rest)

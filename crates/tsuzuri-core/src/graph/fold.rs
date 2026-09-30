@@ -189,7 +189,7 @@ impl<'g> Tree<'g> {
         }
         // 畳み先（question → parent-child の先・ruling → answers の先）をたどった先（輪なら None）。
         let fold_to = |id: &'g str| {
-            let t = match index[id].kind {
+            let t = match index.get(id)?.kind {
                 Question => EdgeType::ParentChild,
                 Ruling => EdgeType::Answers,
                 _ => return None,
@@ -247,7 +247,11 @@ impl<'g> Tree<'g> {
                     first
                         .get(&(id, t))
                         .copied()
-                        .filter(|p| matches!(index[p].kind, Epic | Task | Memo))
+                        .filter(|p| {
+                            index
+                                .get(p)
+                                .is_some_and(|n| matches!(n.kind, Epic | Task | Memo))
+                        })
                         .map_or_else(|| loose(n.kind), Up::Node)
                 }
                 Receipt | Policy => loose(n.kind),
@@ -271,7 +275,9 @@ impl<'g> Tree<'g> {
             })
             .collect();
         for id in stray {
-            ups.insert(id, loose(index[id].kind));
+            if let Some(n) = index.get(id) {
+                ups.insert(id, loose(n.kind));
+            }
         }
 
         let mut t = Tree {
@@ -281,7 +287,9 @@ impl<'g> Tree<'g> {
             by_id: BTreeMap::new(),
         };
         for &id in ups.keys() {
-            let n = index[id];
+            let Some(&n) = index.get(id) else {
+                continue;
+            };
             let b = t.push(n.id.clone(), n.kind, n.title.clone(), Some(n), false, None);
             t.home.insert(id, b);
         }
@@ -289,9 +297,11 @@ impl<'g> Tree<'g> {
         let mut groups: BTreeMap<String, usize> = BTreeMap::new();
         for (id, up) in &ups {
             let parent = match up {
-                Up::Node(p) => t.home[p],
-                Up::Band => t.band(&mut bands, Band::of(index[id].kind)),
-                Up::Group(gid, kind) => match groups.get(gid) {
+                Up::Node(p) => t.home.get(p).copied(),
+                Up::Band => index
+                    .get(id)
+                    .map(|n| t.band(&mut bands, Band::of(n.kind))),
+                Up::Group(gid, kind) => Some(match groups.get(gid) {
                     Some(b) => *b,
                     None => {
                         let band = t.band(&mut bands, Band::of(*kind));
@@ -299,14 +309,22 @@ impl<'g> Tree<'g> {
                         groups.insert(gid.clone(), b);
                         b
                     }
-                },
+                }),
             };
-            let me = t.home[id];
-            t.boxes[me].parent = Some(parent);
-            t.boxes[parent].children.push(me);
+            let (Some(parent), Some(&me)) = (parent, t.home.get(id)) else {
+                continue;
+            };
+            if let Some(bx) = t.boxes.get_mut(me) {
+                bx.parent = Some(parent);
+            }
+            if let Some(bx) = t.boxes.get_mut(parent) {
+                bx.children.push(me);
+            }
         }
         for (id, h) in hidden {
-            let b = t.home[h];
+            let Some(&b) = t.home.get(h) else {
+                continue;
+            };
             t.home.insert(id, b);
         }
         t.bands = bands.into_values().collect();
@@ -314,16 +332,25 @@ impl<'g> Tree<'g> {
         // 子を種類の順・自然な順に並べ、帯の箱でない箱の子が CHUNK を越えれば塊に区切る。
         let made = t.boxes.len();
         for b in 0..made {
-            let mut kids = std::mem::take(&mut t.boxes[b].children);
-            kids.sort_by(|x, y| {
-                let (x, y) = (&t.boxes[*x], &t.boxes[*y]);
-                x.kind.cmp(&y.kind).then_with(|| natural_cmp(&x.id, &y.id))
-            });
-            if !t.boxes[b].band && kids.len() > CHUNK {
-                let owner = t.boxes[b].id.clone();
+            let Some(mut kids) = t
+                .boxes
+                .get_mut(b)
+                .map(|bx| std::mem::take(&mut bx.children))
+            else {
+                continue;
+            };
+            kids.sort_by(|x, y| t.order(*x, *y));
+            let owner = t
+                .boxes
+                .get(b)
+                .filter(|bx| !bx.band && kids.len() > CHUNK)
+                .map(|bx| bx.id.clone());
+            if let Some(owner) = owner {
                 kids = t.chunk(&owner, b, &kids, 0);
             }
-            t.boxes[b].children = kids;
+            if let Some(bx) = t.boxes.get_mut(b) {
+                bx.children = kids;
+            }
         }
         for (i, b) in t.boxes.iter().enumerate() {
             t.by_id.entry(b.id.clone()).or_insert(i);
@@ -350,10 +377,18 @@ impl<'g> Tree<'g> {
             parent,
             children: Vec::new(),
         });
-        if let Some(p) = parent {
-            self.boxes[p].children.push(b);
+        if let Some(p) = parent.and_then(|p| self.boxes.get_mut(p)) {
+            p.children.push(b);
         }
         b
+    }
+
+    /// 箱 `x` と `y` の並び（種類の順・自然な順・無い箱は番号の順）。
+    pub(super) fn order(&self, x: usize, y: usize) -> std::cmp::Ordering {
+        match (self.boxes.get(x), self.boxes.get(y)) {
+            (Some(a), Some(b)) => a.kind.cmp(&b.kind).then_with(|| natural_cmp(&a.id, &b.id)),
+            _ => x.cmp(&y),
+        }
     }
 
     /// 帯の箱（無ければ作る）。
@@ -372,7 +407,9 @@ impl<'g> Tree<'g> {
     fn chunk(&mut self, owner: &str, parent: usize, items: &[usize], offset: usize) -> Vec<usize> {
         if items.len() <= CHUNK {
             for c in items {
-                self.boxes[*c].parent = Some(parent);
+                if let Some(bx) = self.boxes.get_mut(*c) {
+                    bx.parent = Some(parent);
+                }
             }
             return items.to_vec();
         }
@@ -383,14 +420,21 @@ impl<'g> Tree<'g> {
         let mut out = Vec::new();
         for (i, piece) in items.chunks(width).enumerate() {
             let at = offset + i * width;
-            let (head, last) = (&self.boxes[piece[0]], &self.boxes[piece[piece.len() - 1]]);
+            let (Some(head), Some(last)) = (
+                piece.first().and_then(|h| self.boxes.get(*h)),
+                piece.last().and_then(|l| self.boxes.get(*l)),
+            ) else {
+                continue;
+            };
             let id = format!("{owner}~{}-{}", at + 1, at + piece.len());
             let title = format!("{} … {}", head.id, last.id);
             let kind = head.kind;
             let c = self.push(id, kind, title, None, false, None);
-            self.boxes[c].parent = Some(parent);
             let kids = self.chunk(owner, c, piece, at);
-            self.boxes[c].children = kids;
+            if let Some(bx) = self.boxes.get_mut(c) {
+                bx.parent = Some(parent);
+                bx.children = kids;
+            }
             out.push(c);
         }
         out
@@ -398,15 +442,19 @@ impl<'g> Tree<'g> {
 
     /// 親をたどる（自分を含まない）。
     fn ancestors(&self, b: usize) -> impl Iterator<Item = usize> + '_ {
-        std::iter::successors(self.boxes[b].parent, |p| self.boxes[*p].parent)
+        let parent_of = move |b: usize| self.boxes.get(b).and_then(|x| x.parent);
+        std::iter::successors(parent_of(b), move |p| parent_of(*p))
     }
 
     /// 見える箱の数（開いた帯の箱は数えず、ほかは開いていても 1）。
     fn size(&self, b: usize, st: &Opening) -> usize {
+        let Some(bx) = self.boxes.get(b) else {
+            return 0;
+        };
         let open = st.is_open(b);
-        let own = usize::from(!(open && self.boxes[b].band));
+        let own = usize::from(!(open && bx.band));
         let inner: usize = if open {
-            self.boxes[b].children.iter().map(|c| self.size(*c, st)).sum()
+            bx.children.iter().map(|c| self.size(*c, st)).sum()
         } else {
             0
         };
@@ -464,7 +512,9 @@ impl<'g> Tree<'g> {
             let Some(&b) = self.by_id.get(s.as_str()) else {
                 continue;
             };
-            let bx = &self.boxes[b];
+            let Some(bx) = self.boxes.get(b) else {
+                continue;
+            };
             if bx.children.is_empty() || !seen.insert(s) {
                 continue;
             }
@@ -488,12 +538,15 @@ impl<'g> Tree<'g> {
         let mut out = Vec::new();
         let mut stack: Vec<usize> = self.bands.iter().rev().copied().collect();
         while let Some(b) = stack.pop() {
+            let Some(bx) = self.boxes.get(b) else {
+                continue;
+            };
             let open = st.is_open(b);
-            if !(open && self.boxes[b].band) {
+            if !(open && bx.band) {
                 out.push(b);
             }
             if open {
-                stack.extend(self.boxes[b].children.iter().rev().copied());
+                stack.extend(bx.children.iter().rev().copied());
             }
         }
         out

@@ -225,7 +225,10 @@ struct Scan<'a> {
 impl Scan<'_> {
     /// 字 s が続けば進んで真。
     fn lit(&mut self, s: &str) -> bool {
-        let ok = self.b[self.i..].starts_with(s.as_bytes());
+        let ok = self
+            .b
+            .get(self.i..)
+            .is_some_and(|rest| rest.starts_with(s.as_bytes()));
         if ok {
             self.i += s.len();
         }
@@ -234,7 +237,10 @@ impl Scan<'_> {
 
     /// f に合う字がちょうど n 続けば進んで真。
     fn take(&mut self, n: usize, f: fn(u8) -> bool) -> bool {
-        let ok = self.b.len() >= self.i + n && self.b[self.i..self.i + n].iter().all(|c| f(*c));
+        let ok = self
+            .b
+            .get(self.i..self.i + n)
+            .is_some_and(|run| run.iter().all(|c| f(*c)));
         if ok {
             self.i += n;
         }
@@ -243,7 +249,8 @@ impl Scan<'_> {
 
     /// f に合う字を続く限り進み、その数を返す。
     fn many(&mut self, f: fn(u8) -> bool) -> usize {
-        let n = self.b[self.i..].iter().take_while(|c| f(**c)).count();
+        let rest = self.b.get(self.i..).unwrap_or_default();
+        let n = rest.iter().take_while(|c| f(**c)).count();
         self.i += n;
         n
     }
@@ -549,7 +556,8 @@ const SRS_PREFIXES: [&str; 5] = ["FR", "NFR", "AC", "CON", "GOAL"];
 /// 「.」と数字の並びは後ろが空けば枝番まで、空かなければ枝番を外した形）・要件書の id（`SRS_PREFIXES` の頭と
 /// 数字の並び）・規則行（R か D の 1 字と「-」と数字の並び）。
 fn id_end(b: &[u8], start: usize) -> Option<usize> {
-    if start > 0 && (b[start - 1].is_ascii_alphanumeric() || b[start - 1] == b'-') {
+    let before = start.checked_sub(1).and_then(|p| b.get(p));
+    if before.is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'-') {
         return None;
     }
     let open = |i: usize| b.get(i).is_none_or(|c| !c.is_ascii_alphanumeric());
