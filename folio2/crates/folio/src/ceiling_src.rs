@@ -2,6 +2,7 @@
 //! §1 (b)・ADR-15・層 1 読む）。読み手・組み直し・要約値・面の名の形・結果の型は `bundle.rs` から、閉じた一覧 8 本は
 //! `ceiling.rs` から、印の file 名は `stamp.rs` から字を変えずに降ろした（移した注の中の file 名は移す前の置き場を指す）。
 //! 読むのは束を組む命令（`bundle.rs`）・天井の床（`ceiling.rs`）・所見の検査（`findings.rs`）・門（`gate.rs`）・印・索引・面・入口。
+#![deny(clippy::indexing_slicing)]
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -332,17 +333,15 @@ fn build_counted(
     // doc ごとの読む最上位の節（宣言の順・重複なし）
     let mut declared: Vec<(&str, Vec<&str>)> = Vec::new();
     for (doc, fields) in &vp.reads {
-        let at = match declared.iter().position(|(d, _)| d == doc) {
-            Some(at) => at,
-            None => {
-                declared.push((doc, Vec::new()));
-                declared.len() - 1
-            }
-        };
-        for field in fields {
-            let top = field.split('.').next().unwrap_or(field);
-            if !declared[at].1.contains(&top) {
-                declared[at].1.push(top);
+        if !declared.iter().any(|(d, _)| d == doc) {
+            declared.push((doc, Vec::new()));
+        }
+        if let Some((_, tops)) = declared.iter_mut().find(|(d, _)| d == doc) {
+            for field in fields {
+                let top = field.split('.').next().unwrap_or(field);
+                if !tops.contains(&top) {
+                    tops.push(top);
+                }
             }
         }
     }
@@ -441,54 +440,51 @@ fn cut_sections(text: &str, tops: &[&str]) -> Cut {
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
     let names: Vec<Option<&str>> = lines.iter().map(|l| section_name(l)).collect();
     // 行の持ち主の節の番号（None = file の頭）
-    let mut owner: Vec<Option<usize>> = vec![None; lines.len()];
+    let mut owner: Vec<Option<usize>> = Vec::with_capacity(lines.len());
     let mut sections: Vec<String> = Vec::new();
-    let mut i = 0;
-    while i < lines.len() {
-        if let Some(name) = names[i] {
-            sections.push(name.to_string());
-            owner[i] = Some(sections.len() - 1);
-            i += 1;
-            continue;
-        }
-        let cur = sections.len().checked_sub(1);
-        if cur.is_some() && is_trivia(lines[i]) {
-            // 注釈と空行の連なりは直後の節へ寄せ、直後が節でなければ直前の節へ（規則 3）
-            let mut j = i;
-            while j < lines.len() && is_trivia(lines[j]) {
-                j += 1;
+    // 節の後に続く注釈と空行の連なりの数（連なりは直前の節が持っておき、次の節の頭なら次の節へ寄せる・規則 3）
+    let mut trivia = 0;
+    for (line, name) in lines.iter().zip(&names) {
+        if let Some(name) = name {
+            let next = sections.len();
+            if next > 0 {
+                for o in owner.iter_mut().rev().take(trivia) {
+                    *o = Some(next);
+                }
             }
-            let to = if j < lines.len() && names[j].is_some() {
-                Some(sections.len())
-            } else {
-                cur
-            };
-            owner[i..j].fill(to);
-            i = j;
-            continue;
+            sections.push(name.to_string());
+            owner.push(Some(next));
+            trivia = 0;
+        } else {
+            owner.push(sections.len().checked_sub(1));
+            trivia = if is_trivia(line) { trivia + 1 } else { 0 };
         }
-        owner[i] = cur;
-        i += 1;
     }
     let keep: Vec<bool> = sections
         .iter()
         .map(|s| tops.contains(&s.as_str()) || BUNDLE_SKELETON.contains(&s.as_str()))
         .collect();
+    let kept_section = |s: usize| keep.get(s).copied().unwrap_or(false);
     // 生成区間は中の節と一緒に 1 つの塊（規則 4）
     let begin = lines.iter().position(|l| l.starts_with(REGION_BEGIN));
     let end = lines.iter().position(|l| l.starts_with(REGION_END));
     let region = match (begin, end) {
         (Some(b), Some(e)) if b < e => {
-            let live = (b..=e).any(|k| names[k].is_some() && owner[k].is_some_and(|s| keep[s]));
+            let live = names
+                .iter()
+                .zip(&owner)
+                .skip(b)
+                .take(e + 1 - b)
+                .any(|(n, o)| n.is_some() && o.is_some_and(kept_section));
             Some((b, e, live))
         }
         _ => None,
     };
     let mut kept = String::new();
-    for (k, line) in lines.iter().enumerate() {
+    for (k, (line, o)) in lines.iter().zip(&owner).enumerate() {
         let live = match region {
             Some((b, e, live)) if (b..=e).contains(&k) => live,
-            _ => owner[k].is_none_or(|s| keep.get(s).copied().unwrap_or(false)),
+            _ => o.is_none_or(kept_section),
         };
         if live {
             kept.push_str(line);

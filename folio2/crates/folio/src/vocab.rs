@@ -2,6 +2,7 @@
 //! day-1 の床（scripts/check_draft.py の vocab）と同じ式。正規表現は使わず文字の走査で判定する。
 //! 判断の記録（adr/）の本文と凍結 anchor は R-9 の母集団に入れない。判断の記録の本文は便 6 の `link.rs` が
 //! 同じ切り出し・既知の集合・免除（`known_words`・`unknown_words`）で数える（種別は adr）。
+#![deny(clippy::indexing_slicing)]
 
 use std::collections::{BTreeSet, HashSet};
 
@@ -167,26 +168,19 @@ fn population(
 
 /// (b) 英字の語。ASCII の英字で始まり、英字・数字・「-」・「.」が続く限り伸ばし、末尾の「-」「.」を落とす。
 pub fn words(text: &str) -> Vec<String> {
-    let chars: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        if !chars[i].is_ascii_alphabetic() {
-            i += 1;
+    let mut chars = text.chars().peekable();
+    while let Some(first) = chars.next() {
+        if !first.is_ascii_alphabetic() {
             continue;
         }
-        let mut end = i + 1;
-        while end < chars.len()
-            && (chars[end].is_ascii_alphanumeric() || matches!(chars[end], '-' | '.'))
+        let mut word = String::from(first);
+        while let Some(c) =
+            chars.next_if(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.'))
         {
-            end += 1;
+            word.push(c);
         }
-        let mut last = end;
-        while matches!(chars[last - 1], '-' | '.') {
-            last -= 1;
-        }
-        out.push(chars[i..last].iter().collect());
-        i = end;
+        out.push(word.trim_end_matches(['-', '.']).to_string());
     }
     out
 }
@@ -215,20 +209,25 @@ fn is_id_shape(w: &str) -> bool {
 
 /// 台帳 id の形（例 f2-648.14）。
 fn is_ledger_id(w: &str) -> bool {
-    let b = w.as_bytes();
-    if b.len() < 4 || !b[0].is_ascii_lowercase() || !b[1].is_ascii_digit() || b[2] != b'-' {
+    let [first, second, dash, _, ..] = w.as_bytes() else {
+        return false;
+    };
+    if !first.is_ascii_lowercase() || !second.is_ascii_digit() || *dash != b'-' {
         return false;
     }
+    let Some(rest) = w.get(3..) else {
+        return false;
+    };
     let lower_or_digit = |s: &str| {
         !s.is_empty()
             && s.bytes()
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
     };
-    match w[3..].split_once('.') {
+    match rest.split_once('.') {
         Some((head, tail)) => {
             lower_or_digit(head) && !tail.is_empty() && tail.bytes().all(|c| c.is_ascii_digit())
         }
-        None => lower_or_digit(&w[3..]),
+        None => lower_or_digit(rest),
     }
 }
 
@@ -239,21 +238,27 @@ fn is_japanese(c: char) -> bool {
 /// (d)(iii) 「日本語（原語）」の形の括弧の中身。日本語の文字から「（」「）」を跨がずに続く「（」から次の「）」まで。
 fn glosses(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
-    let bracket = |from: usize| (from..chars.len()).find(|&j| matches!(chars[j], '（' | '）'));
     let mut out = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        if is_japanese(chars[i])
-            && let Some(open) = bracket(i + 1).filter(|&j| chars[j] == '（')
-            && let Some(close) = bracket(open + 1).filter(|&k| chars[k] == '）')
+    let mut rest = chars.as_slice();
+    while let Some((c, tail)) = rest.split_first() {
+        rest = tail;
+        if is_japanese(*c)
+            && let Some((_, '（', inner_from)) = next_bracket(tail)
+            && let Some((inner, '）', after)) = next_bracket(inner_from)
         {
-            out.push(chars[open + 1..close].iter().collect());
-            i = close + 1;
-            continue;
+            out.push(inner.iter().collect());
+            rest = after;
         }
-        i += 1;
     }
     out
+}
+
+/// rest の最初の括弧（「（」か「）」）で割る（その前・括弧・その後）。括弧が無ければ None。
+fn next_bracket(rest: &[char]) -> Option<(&[char], char, &[char])> {
+    let at = rest.iter().position(|c| matches!(c, '（' | '）'))?;
+    let (before, from) = rest.split_at_checked(at)?;
+    let (bracket, after) = from.split_first()?;
+    Some((before, *bracket, after))
 }
 
 #[cfg(test)]

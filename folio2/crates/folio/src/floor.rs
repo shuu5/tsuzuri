@@ -18,6 +18,7 @@
 //!    前の文を指す語で始まれば、語が文の主なら（`POINTERS`）文も続けて落とし、抜いても文が立つ語なら（`POINTER_ADVERBS`）語だけを
 //!    落とし、同じ括弧の中で台帳の id の項を落としたら「持ち主の裁定」の項も落とす。
 //!    folio2 の置き場と名の無い口は定数の字のまま（folio2 の生成区間は変わらない）。突き合わせ（`floor_diff_for`）も同じ規則で比べる。
+#![deny(clippy::indexing_slicing)]
 
 use std::borrow::Cow;
 
@@ -65,24 +66,30 @@ pub(crate) fn abroad(name: Option<&str>) -> bool {
 /// FR / NFR / AC / CON に続く数・P- / N- / A- に数（. と数が続いてもよい）・R- / D- に数。
 pub(crate) fn ids_in(text: &str) -> Vec<String> {
     let c: Vec<char> = text.chars().collect();
-    let digits = |from: usize| c[from..].iter().take_while(|x| x.is_ascii_digit()).count();
+    let digits = |from: usize| {
+        c.iter()
+            .skip(from)
+            .take_while(|x| x.is_ascii_digit())
+            .count()
+    };
+    let span = |from: usize, len: usize| -> String { c.iter().skip(from).take(len).collect() };
     let mut out = Vec::new();
     let mut i = 0;
-    while i < c.len() {
-        if i > 0 && c[i - 1].is_ascii_alphabetic() {
+    while let Some(&cur) = c.get(i) {
+        if i > 0 && c.get(i - 1).is_some_and(|x| x.is_ascii_alphabetic()) {
             i += 1;
             continue;
         }
-        let rest: String = c[i..c.len().min(i + 4)].iter().collect();
+        let rest = span(i, 4);
         let mut found: Option<(usize, String)> = None;
         if rest.starts_with("ADR-") && digits(i + 4) > 0 {
             let n = digits(i + 4);
-            found = Some((4 + n, c[i..i + 4 + n].iter().collect()));
-        } else if c[i] == '便' {
-            let sp = c[i + 1..].iter().take_while(|x| **x == ' ').count();
+            found = Some((4 + n, span(i, 4 + n)));
+        } else if cur == '便' {
+            let sp = c.iter().skip(i + 1).take_while(|x| **x == ' ').count();
             let n = digits(i + 1 + sp);
             if n > 0 {
-                let num: String = c[i + 1 + sp..i + 1 + sp + n].iter().collect();
+                let num = span(i + 1 + sp, n);
                 found = Some((1 + sp + n, format!("便{num}")));
             }
         } else if let Some(p) = ["NFR", "CON", "FR", "AC"]
@@ -91,17 +98,17 @@ pub(crate) fn ids_in(text: &str) -> Vec<String> {
         {
             let len = p.chars().count();
             let n = digits(i + len);
-            found = Some((len + n, c[i..i + len + n].iter().collect()));
-        } else if matches!(c[i], 'P' | 'N' | 'A' | 'R' | 'D')
+            found = Some((len + n, span(i, len + n)));
+        } else if matches!(cur, 'P' | 'N' | 'A' | 'R' | 'D')
             && c.get(i + 1) == Some(&'-')
             && digits(i + 2) > 0
         {
             let mut len = 2 + digits(i + 2);
-            if matches!(c[i], 'P' | 'N' | 'A') && c.get(i + len) == Some(&'.') && digits(i + len + 1) > 0
+            if matches!(cur, 'P' | 'N' | 'A') && c.get(i + len) == Some(&'.') && digits(i + len + 1) > 0
             {
                 len += 1 + digits(i + len + 1);
             }
-            found = Some((len, c[i..i + len].iter().collect()));
+            found = Some((len, span(i, len)));
         }
         match found {
             Some((len, id)) => {
@@ -178,15 +185,17 @@ fn split_after(c: &[char], sep: char) -> Vec<String> {
 fn drop_marked_items(c: &[char]) -> String {
     let mut out = String::new();
     let mut i = 0;
-    while i < c.len() {
-        if c[i] == '（' {
+    while let Some(&ch) = c.get(i) {
+        if ch == '（' {
             let mut depth = 0;
-            let close = (i..c.len()).find(|&j| {
-                depth += i32::from(c[j] == '（') - i32::from(c[j] == '）');
-                depth == 0
+            let close = c.iter().enumerate().skip(i).find_map(|(j, &x)| {
+                depth += i32::from(x == '（') - i32::from(x == '）');
+                (depth == 0).then_some(j)
             });
             if let Some(j) = close {
-                let inner: Vec<char> = drop_marked_items(&c[i + 1..j]).chars().collect();
+                let inner: Vec<char> = drop_marked_items(c.get(i + 1..j).unwrap_or_default())
+                    .chars()
+                    .collect();
                 let sentences = split_after(&inner, '。');
                 let kept: String = if sentences.len() > 1 {
                     sentences.into_iter().filter(|s| !marked(s)).collect()
@@ -212,7 +221,7 @@ fn drop_marked_items(c: &[char]) -> String {
                 continue;
             }
         }
-        out.push(c[i]);
+        out.push(ch);
         i += 1;
     }
     out
@@ -599,7 +608,9 @@ fn block_item(item: &Floor, indent: usize, name: Option<&str>, note: bool, out: 
             }
             let first = out.len();
             block_map(sub, indent + 2, name, note, out);
-            out[first].replace_range(indent..indent + 2, "- ");
+            if let Some(head) = out.get_mut(first) {
+                head.replace_range(indent..indent + 2, "- ");
+            }
         }
         Floor::Val(v) => out.push(format!(
             "{pad}- {}",
@@ -623,10 +634,13 @@ pub fn derive(floor: &Floor) -> String {
 /// 名つきの導出（便 121・ADR-16 決定 (2)(ア)・便 174）。`name` は置き場の憲法の名（meta.id）で、名で行を選ぶ表はその行だけを
 /// 写し、外の置き場（`HOME` でない名）は規則 7 の字で書く。
 pub fn derive_for(floor: &Floor, name: Option<&str>) -> String {
-    let mut lines = vec!["schema:".to_string()];
+    let mut lines = Vec::new();
     match floor {
-        Floor::Map(fields) => block_map(fields, 2, name, false, &mut lines),
-        other => lines[0] = format!("schema: {}", flow(other, name, false)),
+        Floor::Map(fields) => {
+            lines.push("schema:".to_string());
+            block_map(fields, 2, name, false, &mut lines);
+        }
+        other => lines.push(format!("schema: {}", flow(other, name, false))),
     }
     lines.iter().map(|l| format!("{l}\n")).collect()
 }

@@ -9,6 +9,7 @@
 //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
 //! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
 //! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
+#![deny(clippy::indexing_slicing)]
 
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use std::fs;
@@ -234,28 +235,33 @@ const ENG_FIELDS: [&str; 4] = ["shall", "text", "what", "decision"];
 const NOTE_DIR: &str = "design-note";
 
 /// 要件書の 7 節・行の種類・題の欄。
-const SRS_SECTIONS: [(&str, usize, &str); 7] = [
-    ("goals", 3, "title"),
-    ("actors", 8, "name"),
-    ("outputs", 9, "name"),
-    ("requirements", 4, "title"),
-    ("nonfunctional", 5, "title"),
-    ("acceptance", 6, "title"),
-    ("constraints", 7, "title"),
+const SRS_SECTIONS: [(&str, &str, &str); 7] = [
+    ("goals", NODE_KINDS[3], "title"),
+    ("actors", NODE_KINDS[8], "name"),
+    ("outputs", NODE_KINDS[9], "name"),
+    ("requirements", NODE_KINDS[4], "title"),
+    ("nonfunctional", NODE_KINDS[5], "title"),
+    ("acceptance", NODE_KINDS[6], "title"),
+    ("constraints", NODE_KINDS[7], "title"),
 ];
 
 /// 要件書の行の型付きの欄と辺の型（verify.ac は別に読む）。
-const SRS_FIELDS: [(&str, usize); 6] = [
-    ("basis", 8),
-    ("goals", 9),
-    ("rules", 10),
-    ("adrs", 11),
-    ("figures", 14),
-    ("verifies", 13),
+const SRS_FIELDS: [(&str, &str); 6] = [
+    ("basis", EDGE_TYPES[8]),
+    ("goals", EDGE_TYPES[9]),
+    ("rules", EDGE_TYPES[10]),
+    ("adrs", EDGE_TYPES[11]),
+    ("figures", EDGE_TYPES[14]),
+    ("verifies", EDGE_TYPES[13]),
 ];
 
 /// 憲法の relations の 4 名前空間と辺の型。
-const RELATIONS: [(&str, usize); 4] = [("articles", 1), ("reqs", 2), ("rules", 3), ("sections", 4)];
+const RELATIONS: [(&str, &str); 4] = [
+    ("articles", EDGE_TYPES[1]),
+    ("reqs", EDGE_TYPES[2]),
+    ("rules", EDGE_TYPES[3]),
+    ("sections", EDGE_TYPES[4]),
+];
 
 /// 欄が指した参照の 3 つ組（端・端・型）。
 type Ref = (String, String, &'static str);
@@ -276,10 +282,10 @@ struct Index {
 }
 
 impl Index {
-    fn node(&mut self, id: &str, kind: usize, file: &str, title: Option<&Node>) {
+    fn node(&mut self, id: &str, kind: &'static str, file: &str, title: Option<&Node>) {
         let title = fold(title.and_then(Node::as_str).unwrap_or_default());
         if let Entry::Vacant(e) = self.nodes.entry(id.to_string()) {
-            e.insert((NODE_KINDS[kind], file.to_string(), title));
+            e.insert((kind, file.to_string(), title));
         } else {
             self.twice.insert(id.to_string());
         }
@@ -300,12 +306,12 @@ impl Index {
         }
     }
 
-    fn edge(&mut self, from: &str, to: &str, ty: usize) {
-        self.refs.insert((from.to_string(), to.to_string(), EDGE_TYPES[ty]));
+    fn edge(&mut self, from: &str, to: &str, ty: &'static str) {
+        self.refs.insert((from.to_string(), to.to_string(), ty));
     }
 
     /// 欄の値から id を取って辺を足す。
-    fn field(&mut self, from: &str, value: Option<&Node>, ty: usize) {
+    fn field(&mut self, from: &str, value: Option<&Node>, ty: &'static str) {
         for to in value.map(ids).unwrap_or_default() {
             self.edge(from, to, ty);
         }
@@ -454,15 +460,15 @@ fn constitution(index: &mut Index, root: &Node) {
         let Some(aid) = id_of(article) else {
             continue;
         };
-        index.node(aid, 0, file, article.get("title"));
+        index.node(aid, NODE_KINDS[0], file, article.get("title"));
         let first = section(article, "statements").iter().find(|st| id_of(st).is_some());
         index.texts(aid, article, first.and_then(eng));
         for st in section(article, "statements") {
             if let Some(sid) = id_of(st) {
-                index.node(sid, 1, file, st.get("text"));
+                index.node(sid, NODE_KINDS[1], file, st.get("text"));
                 index.texts(sid, st, eng(st));
-                index.edge(aid, sid, 0);
-                index.edge(sid, aid, 0);
+                index.edge(aid, sid, EDGE_TYPES[0]);
+                index.edge(sid, aid, EDGE_TYPES[0]);
             }
         }
         if let Some(rel) = article.get("relations") {
@@ -470,7 +476,7 @@ fn constitution(index: &mut Index, root: &Node) {
                 index.field(aid, rel.get(key), ty);
             }
         }
-        index.field(aid, article.get("amended_by"), 5);
+        index.field(aid, article.get("amended_by"), EDGE_TYPES[5]);
     }
 }
 
@@ -481,10 +487,10 @@ fn rules(index: &mut Index, root: &Node) {
             let Some(rid) = id_of(row) else {
                 continue;
             };
-            index.node(rid, 2, "rules.yaml", row.get("what"));
+            index.node(rid, NODE_KINDS[2], "rules.yaml", row.get("what"));
             index.texts(rid, row, eng(row));
-            index.field(rid, row.get("article"), 6);
-            index.field(rid, row.get("refs"), 7);
+            index.field(rid, row.get("article"), EDGE_TYPES[6]);
+            index.field(rid, row.get("refs"), EDGE_TYPES[7]);
         }
     }
 }
@@ -498,12 +504,12 @@ fn srs(index: &mut Index, root: &Node) {
             };
             index.node(id, kind, "srs.yaml", row.get(title));
             // 受入基準（種類 6）は 4 つの欄を持たないので、技術の要約は題の全文（表の 36 字で切らない字）
-            let text = if kind == 6 { row.get(title).and_then(Node::as_str) } else { eng(row) };
+            let text = if kind == NODE_KINDS[6] { row.get(title).and_then(Node::as_str) } else { eng(row) };
             index.texts(id, row, text);
             for (key, ty) in SRS_FIELDS {
                 index.field(id, row.get(key), ty);
             }
-            index.field(id, row.get("verify").and_then(|v| v.get("ac")), 12);
+            index.field(id, row.get("verify").and_then(|v| v.get("ac")), EDGE_TYPES[12]);
         }
     }
 }
@@ -517,19 +523,19 @@ fn adr(index: &mut Index, dir: &Path) -> Result<(), String> {
             continue;
         };
         let file = format!("adr/{name}");
-        index.node(id, 10, &file, root.get("title"));
+        index.node(id, NODE_KINDS[10], &file, root.get("title"));
         index.texts(id, &root, eng(&root));
         index.state(id, root.get("status"));
-        index.field(id, root.get("basis"), 8);
-        index.field(id, root.get("produced"), 15);
-        index.field(id, root.get("figures"), 14);
+        index.field(id, root.get("basis"), EDGE_TYPES[8]);
+        index.field(id, root.get("produced"), EDGE_TYPES[15]);
+        index.field(id, root.get("figures"), EDGE_TYPES[14]);
         for item in section(&root, "amends") {
             if let Some(target) = item.get("target").and_then(Node::as_str) {
                 let head = target
                     .split(|c: char| c.is_whitespace() || matches!(c, '.' | '（' | '('))
                     .next()
                     .unwrap_or_default();
-                index.edge(id, head, 16);
+                index.edge(id, head, EDGE_TYPES[16]);
             }
         }
     }
@@ -572,12 +578,12 @@ fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
                 .get("section")
                 .and_then(Node::as_str)
                 .and_then(|n| sections.iter().find(|s| s.get("n").and_then(Node::as_str) == Some(n)));
-            index.node(&id, 11, &file, head.and_then(|s| s.get("title")));
+            index.node(&id, NODE_KINDS[11], &file, head.and_then(|s| s.get("title")));
             index.texts(&id, row, row.get("title").and_then(Node::as_str));
             index.state(&id, status);
-            index.field(&id, row.get("req"), 17);
+            index.field(&id, row.get("req"), EDGE_TYPES[17]);
             for to in row.get("depends").map(ids).unwrap_or_default() {
-                index.edge(&id, &format!("{meta}#{to}"), 18);
+                index.edge(&id, &format!("{meta}#{to}"), EDGE_TYPES[18]);
             }
         }
     }
@@ -678,21 +684,24 @@ fn head_id(line: &str, depth: usize) -> Option<(&str, bool)> {
 
 /// 頭の行 `i` の block の終わり（含まない）。流れの形の頭は 1 行だけ。
 fn block_end(lines: &[&str], i: usize, depth: usize, flow: bool) -> usize {
-    let mut j = i + 1;
-    while !flow && j < lines.len() && (is_blank(lines[j]) || indent_of(lines[j]) > depth) {
-        j += 1;
+    if flow {
+        return i + 1;
     }
-    j
+    let deeper = lines
+        .iter()
+        .skip(i + 1)
+        .take_while(|l| is_blank(l) || indent_of(l) > depth);
+    i + 1 + deeper.count()
 }
 
 /// 二重引用符の開き `i` から、閉じの次の位置（逆斜線は次の 1 字を逃がす）。
-fn skip_quoted(b: &[u8], mut i: usize) -> usize {
-    i += 1;
-    while i < b.len() {
-        match b[i] {
-            b'\\' => i += 2,
-            b'"' => return i + 1,
-            _ => i += 1,
+fn skip_quoted(b: &[u8], i: usize) -> usize {
+    let mut j = i + 1;
+    while let Some(&c) = b.get(j) {
+        match c {
+            b'\\' => j += 2,
+            b'"' => return j + 1,
+            _ => j += 1,
         }
     }
     b.len()
@@ -702,24 +711,27 @@ fn skip_quoted(b: &[u8], mut i: usize) -> usize {
 fn drop_pairs(line: &str, names: &[&str]) -> String {
     let mut line = line.to_string();
     let mut i = 0;
-    while i < line.len() {
+    while let Some(&head) = line.as_bytes().get(i) {
         let b = line.as_bytes();
-        if b[i] == b'"' {
+        if head == b'"' {
             i = skip_quoted(b, i);
             continue;
         }
-        let opened = i > 0 && b[i - 1] == b'{';
-        let comma = i > 1 && &b[i - 2..i] == b", ";
+        let opened = i > 0 && b.get(i - 1) == Some(&b'{');
+        let comma = i > 1 && b.get(i - 2..i).is_some_and(|w| w == b", ");
+        let here = b.get(i..).unwrap_or_default();
         let name = names.iter().find(|n| {
-            (opened || comma) && b[i..].starts_with(n.as_bytes()) && b[i + n.len()..].starts_with(b": ")
+            (opened || comma)
+                && here.starts_with(n.as_bytes())
+                && here.get(n.len()..).is_some_and(|r| r.starts_with(b": "))
         });
         let Some(name) = name else {
             i += 1;
             continue;
         };
         let (mut j, mut depth) = (i + name.len() + 2, 0usize);
-        while j < b.len() {
-            match b[j] {
+        while let Some(&c) = b.get(j) {
+            match c {
                 b'"' => {
                     j = skip_quoted(b, j);
                     continue;
@@ -733,7 +745,7 @@ fn drop_pairs(line: &str, names: &[&str]) -> String {
             j += 1;
         }
         let (start, mut end) = if comma { (i - 2, j) } else { (i, j) };
-        if !comma && b[end..].starts_with(b", ") {
+        if !comma && b.get(end..).is_some_and(|r| r.starts_with(b", ")) {
             end += 2;
         }
         line.replace_range(start..end, "");
@@ -770,8 +782,7 @@ impl Scan {
             let fields = EDGE_FIELDS.iter().find(|(f, _)| *f == name).map_or(&[][..], |(_, f)| *f);
             let sections = node_sections(name);
             let (mut section, mut i) = (false, 0);
-            while i < lines.len() {
-                let line = lines[i];
+            while let Some(&line) = lines.get(i) {
                 if !is_blank(line) && indent_of(line) == 0 {
                     section = field_key(line).is_some_and(|k| sections.contains(&k));
                 }
@@ -783,7 +794,8 @@ impl Scan {
                 let mut kept = vec![i];
                 let mut k = i + 1;
                 while k < end {
-                    match head_id(lines[k], 6).filter(|_| name == "constitution.yaml") {
+                    let sub = lines.get(k).and_then(|l| head_id(l, 6));
+                    match sub.filter(|_| name == "constitution.yaml") {
                         Some((sub, sub_flow)) => {
                             let sub_end = block_end(&lines, k, 6, sub_flow);
                             self.cut(&lines, &mut owned, (k..sub_end).collect(), 8, fields, sub)?;
@@ -812,22 +824,25 @@ impl Scan {
             return Ok(());
         };
         let (mut part, mut i) = (None, 0);
-        while i < lines.len() {
-            if !is_blank(lines[i]) && indent_of(lines[i]) == 0 {
-                part = field_key(lines[i]);
+        while let Some(&line) = lines.get(i) {
+            if !is_blank(line) && indent_of(line) == 0 {
+                part = field_key(line);
             }
-            if part != Some("sections") || !lines[i].starts_with("  - ") {
+            if part != Some("sections") || !line.starts_with("  - ") {
                 i += 1;
                 continue;
             }
             let end = block_end(lines, i, 2, false);
-            let at4 = |k: usize| if k == i { Some(&lines[k][4..]) } else { lines[k].strip_prefix("    ") };
+            let at4 = |k: usize| {
+                let l = lines.get(k)?;
+                if k == i { l.get(4..) } else { l.strip_prefix("    ") }
+            };
             let field = |k: usize, key: &str| at4(k).filter(|s| !s.starts_with(' ')).and_then(field_key) == Some(key);
             let table = (i..end).any(|k| at4(k).is_some_and(|s| s.trim_end() == format!("type: {CONTRACT_TABLE}")));
             if let Some(r) = (i..end).find(|k| table && field(*k, "rows")) {
                 let (mut k, rows_end) = (r + 1, block_end(lines, r, 4, false).min(end));
                 while k < rows_end {
-                    let Some(rest) = lines[k].strip_prefix("      - ") else {
+                    let Some(rest) = lines.get(k).and_then(|l| l.strip_prefix("      - ")) else {
                         k += 1;
                         continue;
                     };
@@ -837,7 +852,7 @@ impl Scan {
                         true => flow_value(rest, "id").map(|id| (id, k)),
                         false => (k..row_end).find_map(|j| {
                             let pad = if j == k { "      - id: " } else { "        id: " };
-                            lines[j].strip_prefix(pad).map(|id| (id.trim(), j))
+                            lines.get(j)?.strip_prefix(pad).map(|id| (id.trim(), j))
                         }),
                     };
                     if let Some((rid, at)) = found {
@@ -858,22 +873,21 @@ impl Scan {
     fn cut(
         &mut self, lines: &[&str], owned: &mut [bool], mut idx: Vec<usize>, depth: usize, fields: &[&str], id: &str,
     ) -> Result<(), String> {
-        while idx.last().is_some_and(|n| is_blank(lines[*n])) {
-            idx.pop();
-        }
+        while idx.pop_if(|n| lines.get(*n).is_some_and(|l| is_blank(l))).is_some() {}
         let whole: Vec<&str> = fields.iter().copied().filter(|f| !f.contains('.')).collect();
         let mut body: Vec<(usize, String)> = Vec::new();
-        let mut k = 0;
-        while k < idx.len() {
-            let line = lines[idx[k]];
-            owned[idx[k]] = true;
-            k += 1;
+        let mut rest = idx.into_iter().peekable();
+        while let Some(n) = rest.next() {
+            let Some(&line) = lines.get(n) else {
+                continue;
+            };
+            mark(owned, n, true);
             let key = field_key(line);
             if !is_blank(line) && indent_of(line) == depth && key.is_some_and(|k| whole.contains(&k)) {
                 // 辺の欄の行と、その後の空行・より深い続きの行（block の末尾の空行は先に落としてある）
-                while k < idx.len() && (is_blank(lines[idx[k]]) || indent_of(lines[idx[k]]) > depth) {
-                    owned[idx[k]] = true;
-                    k += 1;
+                let deeper = |m: &usize| lines.get(*m).is_some_and(|l| is_blank(l) || indent_of(l) > depth);
+                while let Some(m) = rest.next_if(deeper) {
+                    mark(owned, m, true);
                 }
                 continue;
             }
@@ -890,10 +904,10 @@ impl Scan {
             } else {
                 line.to_string()
             };
-            body.push((idx[k - 1], text));
+            body.push((n, text));
         }
-        while body.last().is_some_and(|(_, l)| is_blank(l)) {
-            owned[body.pop().map_or(0, |(n, _)| n)] = false;
+        while let Some((n, _)) = body.pop_if(|(_, l)| is_blank(l)) {
+            mark(owned, n, false);
         }
         let text: String = body.into_iter().map(|(_, l)| l).collect();
         let digest = sha256::hex(text.as_bytes())[..8].to_string();
@@ -919,19 +933,29 @@ impl Scan {
     }
 }
 
+/// 行の番号 `at` の持ち主の印を書く（範囲の外は何もしない）。
+fn mark(owned: &mut [bool], at: usize, value: bool) {
+    if let Some(o) = owned.get_mut(at) {
+        *o = value;
+    }
+}
+
 /// 流れの形の行の表の一番上の段の欄 `name` の値（頭は `{` か `, ` の直後・二重引用符の中は跳ばす・便 185）。
 fn flow_value<'a>(line: &'a str, name: &str) -> Option<&'a str> {
     let (b, key) = (line.as_bytes(), format!("{name}: "));
     let (mut i, mut depth) = (0, 0usize);
-    while i < b.len() {
-        match b[i] {
+    while let Some(&c) = b.get(i) {
+        match c {
             b'"' => {
                 i = skip_quoted(b, i);
                 continue;
             }
             b'[' | b'{' => depth += 1,
             b']' | b'}' => depth = depth.saturating_sub(1),
-            _ if depth == 1 && (b[i - 1] == b'{' || b[..i].ends_with(b", ")) && b[i..].starts_with(key.as_bytes()) => {
+            _ if depth == 1
+                && (i > 0 && b.get(i - 1) == Some(&b'{') || b.get(..i).is_some_and(|h| h.ends_with(b", ")))
+                && b.get(i..).is_some_and(|r| r.starts_with(key.as_bytes())) =>
+            {
                 let rest = &line[i + key.len()..];
                 return Some(rest[..rest.find([',', '}']).unwrap_or(rest.len())].trim());
             }
@@ -946,7 +970,9 @@ fn flow_value<'a>(line: &'a str, name: &str) -> Option<&'a str> {
 fn meta_id<'a>(lines: &[&'a str]) -> Option<&'a str> {
     let at = lines.iter().position(|l| field_key(l) == Some("meta") && indent_of(l) == 0)?;
     let end = block_end(lines, at, 0, false);
-    lines[at + 1..end]
+    lines
+        .get(at + 1..end)
+        .unwrap_or_default()
         .iter()
         .find_map(|l| l.strip_prefix("  id: "))
         .map(str::trim)

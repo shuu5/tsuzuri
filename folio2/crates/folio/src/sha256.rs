@@ -1,5 +1,6 @@
 //! SHA-256（FIPS 180-4）の手書き（便 7・docs/design/delivery-7.md §1 (d)）。外部 crate を足さない（A-3.1）。
 //! 凍結 anchor の digest（day-1 の床の `hashlib.sha256(…).hexdigest()`）を同じ byte 列で作る。
+#![deny(clippy::indexing_slicing)]
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -16,28 +17,38 @@ const H0: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
-fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
+/// block の語の列 W（64 語）。直前の 16 語の窓を回して 16 語目から先を組む。
+fn schedule(block: &[u8; 64]) -> [u32; 64] {
+    let mut win = [0u32; 16];
+    for (slot, word) in win.iter_mut().zip(block.as_chunks::<4>().0) {
+        *slot = u32::from_be_bytes(*word);
+    }
     let mut w = [0u32; 64];
-    for (i, word) in block.as_chunks::<4>().0.iter().enumerate() {
-        w[i] = u32::from_be_bytes(*word);
+    for (slot, v) in w.iter_mut().zip(win) {
+        *slot = v;
     }
-    for i in 16..64 {
-        let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-        let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-        w[i] = w[i - 16]
-            .wrapping_add(s0)
-            .wrapping_add(w[i - 7])
-            .wrapping_add(s1);
+    for slot in w.iter_mut().skip(16) {
+        let [w16, w15, _, _, _, _, _, _, _, w7, _, _, _, _, w2, _] = win;
+        let s0 = w15.rotate_right(7) ^ w15.rotate_right(18) ^ (w15 >> 3);
+        let s1 = w2.rotate_right(17) ^ w2.rotate_right(19) ^ (w2 >> 10);
+        let next = w16.wrapping_add(s0).wrapping_add(w7).wrapping_add(s1);
+        win.rotate_left(1);
+        win[15] = next;
+        *slot = next;
     }
+    w
+}
+
+fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
     let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = *state;
-    for i in 0..64 {
+    for (k, w) in K.iter().zip(schedule(block)) {
         let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
         let ch = (e & f) ^ (!e & g);
         let t1 = h
             .wrapping_add(s1)
             .wrapping_add(ch)
-            .wrapping_add(K[i])
-            .wrapping_add(w[i]);
+            .wrapping_add(*k)
+            .wrapping_add(w);
         let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
         let maj = (a & b) ^ (a & c) ^ (b & c);
         let t2 = s0.wrapping_add(maj);
@@ -62,13 +73,20 @@ pub fn digest(data: &[u8]) -> [u8; 32] {
     for block in blocks {
         compress(&mut state, block);
     }
-    let mut tail = [0u8; 128];
-    tail[..rest.len()].copy_from_slice(rest);
-    tail[rest.len()] = 0x80;
     let len = if rest.len() < 56 { 64 } else { 128 };
     let bits = (data.len() as u64).wrapping_mul(8);
-    tail[len - 8..len].copy_from_slice(&bits.to_be_bytes());
-    for block in tail[..len].as_chunks::<64>().0 {
+    let padded = rest
+        .iter()
+        .copied()
+        .chain(std::iter::once(0x80))
+        .chain(std::iter::repeat(0))
+        .take(len - 8)
+        .chain(bits.to_be_bytes());
+    let mut tail = [0u8; 128];
+    for (slot, byte) in tail.iter_mut().zip(padded) {
+        *slot = byte;
+    }
+    for block in tail.as_chunks::<64>().0.iter().take(len / 64) {
         compress(&mut state, block);
     }
     let mut out = [0u8; 32];

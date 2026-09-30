@@ -7,6 +7,7 @@
 //! 閉じた一覧そのものの取り込みは `catalog.rs`（便 108・ADR-15・層 1 読む）へ降ろした。
 //! 焼いた正本（便 153・ADR-27 決定 (2)）: 置き場に部品目録か様式が無いときだけ、組み立て時に焼いた folio2 の字で埋める。
 //! 「無い」は `absent`（file が見つからないときだけ）で判定し、在るのに読めない file は今までどおり まだ分からない。
+#![deny(clippy::indexing_slicing)]
 
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -370,18 +371,25 @@ fn find_ignore_case(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
         .map(|p| p + from)
 }
 
+/// from から、述語に合う字が続く限りの終わりの位置（b の外なら from のまま）。
+fn run_end(b: &[u8], from: usize, pred: impl Fn(u8) -> bool) -> usize {
+    from + b
+        .get(from..)
+        .map_or(0, |rest| rest.iter().take_while(|c| pred(**c)).count())
+}
+
 /// 面の全部の開始タグを出た順に読む。注釈（<!-- から -->）と script 要素・style 要素の中身は読み飛ばす。
 /// 閉じない注釈・閉じないタグ・閉じない引用符・閉じない script / style 要素は Err。
 fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
     let b = text.as_bytes();
     let mut tags = Vec::new();
     let mut i = 0;
-    while i < b.len() {
-        if b[i] != b'<' {
+    while let Some(&c) = b.get(i) {
+        if c != b'<' {
             i += 1;
             continue;
         }
-        if b[i..].starts_with(b"<!--") {
+        if b.get(i..).is_some_and(|rest| rest.starts_with(b"<!--")) {
             i = find(b, b"-->", i + 4).ok_or("閉じない注釈")? + 3;
             continue;
         }
@@ -390,16 +398,11 @@ fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
             continue;
         }
         let start = i + 1;
-        i = start;
-        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'-') {
-            i += 1;
-        }
+        i = run_end(b, start, |c| c.is_ascii_alphanumeric() || c == b'-');
         let name = text[start..i].to_ascii_lowercase();
         let mut attrs = Vec::new();
         loop {
-            while i < b.len() && b[i].is_ascii_whitespace() {
-                i += 1;
-            }
+            i = run_end(b, i, |c| c.is_ascii_whitespace());
             match b.get(i) {
                 None => return Err(format!("閉じないタグ <{name}>")),
                 Some(b'>') => {
@@ -413,26 +416,19 @@ fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
                 Some(_) => {}
             }
             let ns = i;
-            while i < b.len() && !b[i].is_ascii_whitespace() && !matches!(b[i], b'=' | b'>' | b'/')
-            {
-                i += 1;
-            }
+            i = run_end(b, i, |c| {
+                !c.is_ascii_whitespace() && !matches!(c, b'=' | b'>' | b'/')
+            });
             if i == ns {
                 return Err(format!("読めないタグ <{name}>（属性の名が無い）"));
             }
             let aname = text[ns..i].to_ascii_lowercase();
-            let mut j = i;
-            while j < b.len() && b[j].is_ascii_whitespace() {
-                j += 1;
-            }
+            let j = run_end(b, i, |c| c.is_ascii_whitespace());
             if b.get(j) != Some(&b'=') {
                 attrs.push((aname, AttrValue::Bare));
                 continue;
             }
-            i = j + 1;
-            while i < b.len() && b[i].is_ascii_whitespace() {
-                i += 1;
-            }
+            i = run_end(b, j + 1, |c| c.is_ascii_whitespace());
             match b.get(i) {
                 Some(&q) if q == b'"' || q == b'\'' => {
                     let vs = i + 1;
@@ -442,9 +438,7 @@ fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
                     i = ve + 1;
                 }
                 _ => {
-                    while i < b.len() && !b[i].is_ascii_whitespace() && b[i] != b'>' {
-                        i += 1;
-                    }
+                    i = run_end(b, i, |c| !c.is_ascii_whitespace() && c != b'>');
                     attrs.push((aname, AttrValue::Unquoted));
                 }
             }
@@ -469,8 +463,8 @@ fn css_classes(text: &str) -> Result<HashSet<String>, String> {
     let b = text.as_bytes();
     let mut set = HashSet::new();
     let mut i = 0;
-    while i < b.len() {
-        match b[i] {
+    while let Some(&c) = b.get(i) {
+        match c {
             b'/' if b.get(i + 1) == Some(&b'*') => {
                 i = find(b, b"*/", i + 2).ok_or("閉じない注釈")? + 2;
             }
@@ -497,12 +491,7 @@ fn css_classes(text: &str) -> Result<HashSet<String>, String> {
                     _ => false,
                 };
                 if head {
-                    let mut j = s;
-                    while j < b.len()
-                        && (b[j].is_ascii_alphanumeric() || matches!(b[j], b'_' | b'-'))
-                    {
-                        j += 1;
-                    }
+                    let j = run_end(b, s, |c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'));
                     set.insert(text[s..j].to_string());
                     i = j;
                 } else {

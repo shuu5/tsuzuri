@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// 契約表の verify の filter の語（起草の時の main db4ea60e の 340 語・空白で区切る）。
+/// 契約表の verify の filter の語（起草の時の main 19ff39fa の 340 語・空白で区切る）。
 const FILTER_WORDS: &str = concat!(
     "aaround_ aaround_src_ask_fold_embeds abss_ abst_ accept_ acchold_ account_ acctcore_ ",
     "acctcore_pure_and_no_new_dependencies acctdoc_ acctframe_ accthb_ accthome_ acctled_ acctlook_ ",
@@ -71,6 +71,19 @@ const DENY: [&str; 13] = [
     "clippy::allow_attributes",
     "clippy::allow_attributes_without_reason",
 ];
+
+/// 添字を直し終えて module の属性を置いた file（folio の crate の置き場からの相対・行 k-lint-folio-idx-b が外す）。
+const IDX_DONE: [&str; 6] = [
+    "src/graph.rs",
+    "src/floor.rs",
+    "src/sha256.rs",
+    "src/parts.rs",
+    "src/vocab.rs",
+    "src/ceiling_src.rs",
+];
+
+/// IDX_DONE の file の頭の //! の続きの直後に置く module の属性の行。
+const IDX_DENY: &str = "#![deny(clippy::indexing_slicing)]";
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -178,6 +191,30 @@ fn klintf_no_allow_attrs() {
 }
 
 #[test]
+fn klintf_idx_module_deny() {
+    for rel in IDX_DONE {
+        let path = folio_dir().join(rel);
+        let text =
+            fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
+        let lines: Vec<&str> = text.lines().collect();
+        assert!(
+            lines.first().is_some_and(|l| l.starts_with("//!")),
+            "{} の頭の行が //! で始まらない",
+            path.display()
+        );
+        let head = lines.iter().take_while(|l| l.starts_with("//!")).count();
+        assert_eq!(
+            lines.get(head).copied(),
+            Some(IDX_DENY),
+            "{} の頭の //! の続きの直後が {IDX_DENY} でない",
+            path.display()
+        );
+        let count = text.matches("clippy::indexing_slicing").count();
+        assert_eq!(count, 1, "{} の clippy::indexing_slicing が {count} 個", path.display());
+    }
+}
+
+#[test]
 fn klintf_own_names_clean() {
     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
     assert_eq!(words.len(), 340, "filter の語の数");
@@ -192,7 +229,7 @@ fn klintf_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 4, "歯の数");
+    assert_eq!(names.len(), 5, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("klintf_")
