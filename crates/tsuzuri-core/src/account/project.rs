@@ -10,6 +10,7 @@
 //! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認・行 c-dormant）。
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -24,10 +25,11 @@ use tsuzuri_contract::surface::SeatRole;
 use super::host::{self, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
 use super::{field, project_name, same_path, value};
 use crate::graph::build::{read_events, run_bead};
-use crate::ledger::stats::stats;
-use crate::ledger::{DAY, epoch_secs, read};
-use crate::next_step::next_step_seat;
+use crate::ledger::stats::stats_of;
+use crate::ledger::{Bead, DAY, epoch_secs, read};
+use crate::next_step::judge_with;
 use crate::pipeline::{ACCOUNT_TAG, FAILED_VERDICTS, stage_of};
+use crate::question::{OpenQuestion, open_questions};
 use crate::seat::{SeatTexts, card};
 
 /// 生きている run の境（最後の event からの秒・見本の acct.js の runAlive）。
@@ -76,6 +78,48 @@ pub struct ProjectTexts {
     pub events: Option<String>,
     /// 台帳の一覧。
     pub ledger: Option<String>,
+}
+
+/// project の台帳の字と event log の字を読み解いた値（台帳の bead の列・event log の値の列・open の問いの読み）。
+/// 字が同じなら値も同じなので、要求をまたいで持ち回してよい（行 c-acct-parse）。
+#[derive(Debug, Clone)]
+pub struct Parsed {
+    /// 台帳の bead の列（台帳の字が無いか読めなければ None）。
+    pub(crate) beads: Option<Vec<Bead>>,
+    /// event log の値の列（字が無いか読めなければ None）。
+    pub(crate) events: Option<Vec<Value>>,
+    /// open の問いの読み（台帳の字が無いか読めなければ「まだ分からない」）。
+    pub(crate) questions: Reading<Vec<OpenQuestion>>,
+}
+
+impl Parsed {
+    /// project の字から読み解く（時刻は要らない）。
+    pub fn of(texts: &ProjectTexts) -> Parsed {
+        let ledger = texts.ledger.as_deref();
+        Parsed {
+            beads: ledger.and_then(read),
+            events: texts.events.as_deref().and_then(read_events),
+            questions: ledger.map_or(Reading::Unknown, open_questions),
+        }
+    }
+}
+
+/// anchor → 読み解いた値の表（`Parsed::of` の値・anchor は `ProjectTexts` の表の鍵と同じ）。
+pub type ParsedMap = BTreeMap<String, Arc<Parsed>>;
+
+/// 字の表の全部の project を読み解いた表。
+pub fn parse_all(projects: &BTreeMap<String, ProjectTexts>) -> ParsedMap {
+    projects
+        .iter()
+        .map(|(a, t)| (a.clone(), Arc::new(Parsed::of(t))))
+        .collect()
+}
+
+/// project の読み解いた値（表に無ければ字から読み解く）。
+fn parsed_of(parsed: &ParsedMap, anchor: &str, texts: &ProjectTexts) -> Arc<Parsed> {
+    by_anchor(parsed, anchor)
+        .cloned()
+        .unwrap_or_else(|| Arc::new(Parsed::of(texts)))
 }
 
 /// 宣言の順の project（anchor の path と群の名）。
@@ -314,13 +358,12 @@ fn bead_of<'a>(run: &Run<'a>) -> Option<&'a str> {
 }
 
 /// 台帳で今閉じている bead の id（台帳の字が無いか読めなければ空・台帳に無い bead は入らない）。
-fn closed_beads(ledger: Option<&str>, now: EpochSecs) -> BTreeSet<String> {
-    ledger
-        .and_then(read)
+fn closed_beads(beads: Option<&[Bead]>, now: EpochSecs) -> BTreeSet<String> {
+    beads
         .unwrap_or_default()
-        .into_iter()
+        .iter()
         .filter(|b| !b.is_open(now))
-        .map(|b| b.id)
+        .map(|b| b.id.clone())
         .collect()
 }
 
@@ -338,11 +381,24 @@ pub fn run_counts_of(
     ledger: Option<&str>,
     now: EpochSecs,
 ) -> Reading<RunCounts> {
-    let Some(events) = events.and_then(read_events) else {
+    counts_with(
+        events.and_then(read_events).as_deref(),
+        ledger.and_then(read).as_deref(),
+        now,
+    )
+}
+
+/// `run_counts_of` の決まりで、読み解いた値（event log の値・台帳の bead）から数える。
+fn counts_with(
+    events: Option<&[Value]>,
+    beads: Option<&[Bead]>,
+    now: EpochSecs,
+) -> Reading<RunCounts> {
+    let Some(events) = events else {
         return Reading::Unknown;
     };
-    let closed = closed_beads(ledger, now);
-    let all = runs(&events, now);
+    let closed = closed_beads(beads, now);
+    let all = runs(events, now);
     let mut latest: BTreeMap<&str, &Run> = BTreeMap::new();
     for run in &all {
         if let Some(bead) = bead_of(run) {
@@ -403,6 +459,17 @@ pub fn project_rows(
     projects: &BTreeMap<String, ProjectTexts>,
     now: EpochSecs,
 ) -> Vec<ProjectRow> {
+    project_rows_with(host, projects, &parse_all(projects), now)
+}
+
+/// `project_rows` と同じ列を、字の表と project ごとの読み解いた値（`Parsed::of`）から組む
+/// （台帳の指標・次の一手・run の 4 列は読み解いた値から数え、字は読み直さない）。
+pub fn project_rows_with(
+    host: &HostTexts,
+    projects: &BTreeMap<String, ProjectTexts>,
+    parsed: &ParsedMap,
+    now: EpochSecs,
+) -> Vec<ProjectRow> {
     let unknown = ProjectTexts::default();
     with_texts(host, projects)
         .into_iter()
@@ -423,16 +490,23 @@ pub fn project_rows(
                 };
             }
             let seat = seat(host, &d, texts, now);
-            let (ledger, next) = match texts.ledger.as_deref() {
-                Some(ledger) => {
+            let parsed = parsed_of(parsed, &d.anchor, texts);
+            let beads = parsed.beads.as_deref();
+            let (ledger, next) = match texts.ledger {
+                Some(_) => {
                     let card = match &seat {
                         Reading::Known(c) => Some(c),
                         Reading::Unknown => None,
                     };
-                    let events = texts.events.as_deref().unwrap_or_default();
                     (
-                        stats(ledger, now),
-                        Reading::Known(next_step_seat(ledger, events, now, card)),
+                        stats_of(beads, now),
+                        Reading::Known(judge_with(
+                            beads,
+                            parsed.events.as_deref(),
+                            &parsed.questions,
+                            now,
+                            card,
+                        )),
                     )
                 }
                 None => (Reading::Unknown, Reading::Unknown),
@@ -443,7 +517,7 @@ pub fn project_rows(
                 group: Some(d.group),
                 state_dir_known: true,
                 seat,
-                runs: run_counts_of(texts.events.as_deref(), texts.ledger.as_deref(), now),
+                runs: counts_with(parsed.events.as_deref(), beads, now),
                 ledger,
                 next,
                 board: None,
@@ -539,6 +613,16 @@ pub fn session_lines(
     projects: &BTreeMap<String, ProjectTexts>,
     now: EpochSecs,
 ) -> Vec<SessionLine> {
+    session_lines_with(host, projects, &parse_all(projects), now)
+}
+
+/// `session_lines` と同じ列を、字の表と project ごとの読み解いた値（`Parsed::of`）から組む。
+pub fn session_lines_with(
+    host: &HostTexts,
+    projects: &BTreeMap<String, ProjectTexts>,
+    parsed: &ParsedMap,
+    now: EpochSecs,
+) -> Vec<SessionLine> {
     let unknown = ProjectTexts::default();
     let resting: BTreeSet<String> = dormant(host, projects, now)
         .into_iter()
@@ -574,11 +658,12 @@ pub fn session_lines(
         if !texts.state_dir_known {
             continue;
         }
-        let Some(events) = texts.events.as_deref().and_then(read_events) else {
+        let parsed = parsed_of(parsed, &d.anchor, texts);
+        let Some(events) = parsed.events.as_deref() else {
             continue;
         };
-        let closed = closed_beads(texts.ledger.as_deref(), now);
-        for run in runs(&events, now) {
+        let closed = closed_beads(parsed.beads.as_deref(), now);
+        for run in runs(events, now) {
             if run.ended()
                 || !run.alive(now)
                 || bead_of(&run).is_some_and(|b| closed.contains(b))
@@ -652,12 +737,22 @@ pub fn doc(
     projects: &BTreeMap<String, ProjectTexts>,
     now: EpochSecs,
 ) -> AccountDoc {
+    doc_with(host, projects, &parse_all(projects), now)
+}
+
+/// `doc` と同じ電文を、字の表と project ごとの読み解いた値（`Parsed::of`）から組む（読み解いた値は字から読み直さない）。
+pub fn doc_with(
+    host: &HostTexts,
+    projects: &BTreeMap<String, ProjectTexts>,
+    parsed: &ParsedMap,
+    now: EpochSecs,
+) -> AccountDoc {
     let mut doc = assemble(
         host::accounts_at(host, now),
         host::groups(host),
         host::moves(host),
-        project_rows(host, projects, now),
-        session_lines(host, projects, now),
+        project_rows_with(host, projects, parsed, now),
+        session_lines_with(host, projects, parsed, now),
     );
     let logs: Vec<&str> = with_texts(host, projects)
         .into_iter()

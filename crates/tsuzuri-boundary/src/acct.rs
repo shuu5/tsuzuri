@@ -18,6 +18,8 @@
 //! state dir の全部の席の dir の入力の印に event log を足した印（`vessel_marks`）で持ち、rules get は印の無い鍵で `SLOW_HOLD` 持つ。
 //! file の読みは要求ごと。`marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める（行 e-acct-hbmark）。
 //! 集めのあいだは錠（`gate`）で次の要求を待たせる。
+//! 台帳と event log の字の読み解き（`Parsed`）は anchor ごとに、読み解いた時の 2 つの字と値を持ち、
+//! 字が同じ間は前の値を使う（`parsed`・行 c-acct-parse）。
 //! git の読み（state dir と board の port）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
 //! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
 //! 読めなかった読みは印が同じでも `FAILED_HOLD` の間は撃ち直さない。
@@ -28,14 +30,14 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_core::account::host::{CAP_ROWS, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
-use tsuzuri_core::account::project::{self, ProjectTexts};
+use tsuzuri_core::account::project::{self, Parsed, ParsedMap, ProjectTexts};
 use tsuzuri_core::account::project_name;
 
 use crate::server::held::{FAILED_HOLD, Held};
@@ -94,6 +96,9 @@ type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>);
 /// git の読みを取った時刻と、読んだ宣言の anchor の列と、git の読みの字（一度も読んでいなければ None）。
 type Gits = Option<(Instant, Vec<String>, GitTexts)>;
 
+/// 読み解いた時の台帳の字と event log の字と、その読み解いた値。
+type Kept = (Option<String>, Option<String>, Arc<Parsed>);
+
 /// account board の読みの出所（器・git・bd の program と、引数の state dir と cwd）と、持ち回しの字。
 #[derive(Debug)]
 pub struct Acct {
@@ -114,6 +119,8 @@ pub struct Acct {
     seen: Mutex<BTreeMap<String, (Mark, Got, Instant)>>,
     /// 持ち回しの git の読み。
     gits: Mutex<Gits>,
+    /// anchor の字 → 読み解いた時の台帳と event log の字と、その読み解いた値（字が同じ間は使い回す・行 c-acct-parse）。
+    parsed: Mutex<BTreeMap<String, Kept>>,
     /// git の読みの持ち回しの時間。
     git_hold: Duration,
     /// 自分の repo の台帳の読みの出所（server の見張りの Source・無ければ None）。
@@ -142,6 +149,7 @@ impl Acct {
             ledgers: Mutex::new(BTreeMap::new()),
             seen: Mutex::new(BTreeMap::new()),
             gits: Mutex::new(None),
+            parsed: Mutex::new(BTreeMap::new()),
             git_hold: GIT_HOLD,
             own: None,
             watched: Vec::new(),
@@ -221,7 +229,8 @@ impl Acct {
     /// （どれも読めれば None・行 e-hold）。
     pub fn doc_read(&self, now: EpochSecs) -> (AccountDoc, Option<Instant>) {
         let texts = self.texts();
-        let mut doc = project::doc(&texts.host, &texts.projects, now);
+        let parsed = self.parsed_all(&texts.projects);
+        let mut doc = project::doc_with(&texts.host, &texts.projects, &parsed, now);
         let declared = anchors(texts.host.host_toml.as_deref());
         for (row, anchor) in doc.projects.iter_mut().zip(&declared) {
             if row.name == project_name(anchor) {
@@ -229,6 +238,37 @@ impl Acct {
             }
         }
         (doc, texts.stale)
+    }
+
+    /// anchor の読み解いた値（台帳の字と event log の字が前に読み解いた時と同じなら前の値・
+    /// どちらかが違えば読み解き直して置く・行 c-acct-parse）。
+    pub fn parsed(&self, anchor: &str, texts: &ProjectTexts) -> Arc<Parsed> {
+        let mut kept = self.parsed.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((ledger, events, value)) = kept.get(anchor)
+            && *ledger == texts.ledger
+            && *events == texts.events
+        {
+            return value.clone();
+        }
+        let value = Arc::new(Parsed::of(texts));
+        kept.insert(
+            anchor.to_string(),
+            (texts.ledger.clone(), texts.events.clone(), value.clone()),
+        );
+        value
+    }
+
+    /// 字の表の全部の anchor の読み解いた値（表に無い anchor の持ち回しは捨てる）。
+    fn parsed_all(&self, projects: &BTreeMap<String, ProjectTexts>) -> ParsedMap {
+        let out: ParsedMap = projects
+            .iter()
+            .map(|(anchor, texts)| (anchor.clone(), self.parsed(anchor, texts)))
+            .collect();
+        self.parsed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|anchor, _| projects.contains_key(anchor));
+        out
     }
 
     /// anchor の台帳の読みの出所（`own` か `watched` の Source の repo と同じ dir ならその clone・

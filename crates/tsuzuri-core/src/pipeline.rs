@@ -342,7 +342,12 @@ pub fn board_with_doctor(
 
 /// 読めた bead（None は台帳が読めない）と event log の字から板を組む。
 pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) -> Board {
-    let Some(events) = read_events(events) else {
+    of_parsed(beads, read_events(events).as_deref(), now)
+}
+
+/// 読んだ bead（None は台帳が読めない）と読んだ event log の値（None は event log が読めない）から板を組む。
+pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: EpochSecs) -> Board {
+    let Some(events) = events else {
         return Board {
             board: PipelineBoard {
                 cards: Reading::Unknown,
@@ -354,7 +359,7 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
     let mut runs: BTreeMap<&str, RunState> = BTreeMap::new();
     let mut per_bead: BTreeMap<String, BeadRuns> = BTreeMap::new();
     let mut order: Vec<String> = Vec::new();
-    for event in &events {
+    for event in events {
         let kind = text(event, "kind").unwrap_or_default();
         let Some(run) = text(event, "run") else {
             continue;

@@ -99,8 +99,13 @@ pub fn judge_of(stats: &Reading<LedgerStats>) -> LedgerJudge {
 
 /// 台帳の一覧の字と今の時刻から指標を数える（字が読めなければ「まだ分からない」）。
 pub fn stats(ledger: &str, now: EpochSecs) -> Reading<LedgerStats> {
-    match read(ledger) {
-        Some(beads) => Reading::Known(of_beads(&beads, now)),
+    stats_of(read(ledger).as_deref(), now)
+}
+
+/// 読んだ bead（None は台帳が読めない）と今の時刻から指標を数える（None なら「まだ分からない」）。
+pub(crate) fn stats_of(beads: Option<&[Bead]>, now: EpochSecs) -> Reading<LedgerStats> {
+    match beads {
+        Some(beads) => Reading::Known(of_beads(beads, now)),
         None => Reading::Unknown,
     }
 }

@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::json;
@@ -15,7 +16,8 @@ use tsuzuri_contract::seat::{SeatCard, SeatState};
 use tsuzuri_contract::surface::SeatRole;
 use tsuzuri_core::account::host::{CAP_ROWS, HostTexts};
 use tsuzuri_core::account::project::{
-    ProjectTexts, assemble, doc, project_rows, run_counts, session_lines,
+    Parsed, ParsedMap, ProjectTexts, assemble, doc, doc_with, project_rows, run_counts,
+    session_lines,
 };
 use tsuzuri_core::ledger::stats::stats;
 use tsuzuri_core::next_step::next_step_seat;
@@ -525,4 +527,30 @@ fn acctpcore_doc_host_parts_from_inputs() {
     );
     assert!(d.projects.is_empty() && d.sessions.is_empty());
     assert!(!known(i.moves).is_empty());
+}
+
+/// project ごとの `Parsed::of` の値の表。
+fn parsed_of(ps: &BTreeMap<String, ProjectTexts>) -> ParsedMap {
+    ps.iter()
+        .map(|(a, t)| (a.clone(), Arc::new(Parsed::of(t))))
+        .collect()
+}
+
+#[test]
+fn acctpcore_doc_with_parsed_equals_doc() {
+    let i = inputs();
+    let ps = projects();
+    let parsed = parsed_of(&ps);
+    for now in [NOW, NOW + 3600] {
+        assert_eq!(
+            doc_with(&i.texts, &ps, &parsed, now),
+            doc(&i.texts, &ps, now)
+        );
+    }
+    // 1 つめの project の event log を None にした字では、読み直した値で doc と同じ電文、前の字の値のままでは違う電文。
+    let mut none = ps.clone();
+    none.get_mut("/work/proj-a").expect("proj-a").events = None;
+    let want = doc(&i.texts, &none, NOW);
+    assert_eq!(doc_with(&i.texts, &none, &parsed_of(&none), NOW), want);
+    assert_ne!(doc_with(&i.texts, &none, &parsed, NOW), want);
 }

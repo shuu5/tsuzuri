@@ -650,7 +650,7 @@ fn notice_at(n: &GroupNotice) -> EpochSecs {
 }
 
 /// 群の逼迫の知らせと移動の断りの列（渡した event log の順に、log の中は行の順に読み、at の新しい順・
-/// 同じ at は群の宣言の順・それも同じなら読んだ順）。宣言に無い群の行・欄の欠けた行・ほかの種類の行・
+/// 同じ at は群の宣言の順・それも同じなら読んだ順）。逼迫と断りの event の名を含まない行は JSON として読まない。宣言に無い群の行・欄の欠けた行・ほかの種類の行・
 /// JSON でない行は読まず、全部の欄が同じ行は 1 度だけ。群の宣言の字が無いか log の字が無ければ「まだ分からない」。
 pub fn notices(texts: &HostTexts, logs: &[&str]) -> Reading<Vec<GroupNotice>> {
     let Some(host) = texts.host_toml.as_deref() else {
@@ -666,6 +666,10 @@ pub fn notices(texts: &HostTexts, logs: &[&str]) -> Reading<Vec<GroupNotice>> {
         .collect();
     let mut rows: Vec<(usize, GroupNotice)> = Vec::new();
     for line in logs.iter().flat_map(|log| log.lines()) {
+        // 逼迫と断りの event の名を含まない行は JSON として読まない。
+        if !line.contains(PRESSURE_EVENT) && !line.contains(REFUSED_EVENT) {
+            continue;
+        }
         let Ok(event) = serde_json::from_str::<Value>(line) else {
             continue;
         };

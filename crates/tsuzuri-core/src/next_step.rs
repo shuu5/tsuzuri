@@ -8,6 +8,7 @@
 //! 行 c-next-batch は束の承認を台帳の字から判じる。束の受付と束の block と同じ一覧（`open_questions`）の
 //! A-1 の印の無い問いが `BATCH_MIN` 本以上なら当たる（要件 FR7: A-1 の問いは束に入れない）。
 
+use serde_json::Value;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{NextMove, Reading, Stage};
 use tsuzuri_contract::graph::NodeKind;
@@ -15,9 +16,10 @@ use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::seat::{SeatCard, SeatState};
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 
+use crate::graph::build::read_events;
 use crate::ledger::{Bead, read};
 use crate::pipeline;
-use crate::question::open_questions;
+use crate::question::{OpenQuestion, open_questions};
 
 /// 止まっている走行の段（行 c-next-stall）。Questioned は質問の側で数えない
 /// （見本の stoppedRuns と語の辞書の nx_c と同じ）。
@@ -39,9 +41,9 @@ struct Found {
 
 /// 止まっている走行: 段が Failed か Stopped の札で、その bead が open のもの
 /// （対象はいちばん古い札 = 段を決めた時刻のいちばん早い札の bead・時刻の無い札は後）。event log か台帳が読めなければ判じない。
-fn stalled_run(beads: Option<&[Bead]>, events: &str, now: EpochSecs) -> Option<Found> {
+fn stalled_run(beads: Option<&[Bead]>, events: Option<&[Value]>, now: EpochSecs) -> Option<Found> {
     let beads = beads?;
-    let Reading::Known(cards) = pipeline::of_inputs(Some(beads), events, now).board.cards else {
+    let Reading::Known(cards) = pipeline::of_parsed(Some(beads), events, now).board.cards else {
         return None;
     };
     let stalled: Vec<_> = cards
@@ -79,8 +81,8 @@ fn question(beads: Option<&[Bead]>, now: EpochSecs) -> Option<Found> {
 
 /// 束の承認: A-1 の印の無い open の問いが `BATCH_MIN` 本以上なら、その本数（対象は無し）。
 /// 問いの一覧が読めなければ判じない。
-fn batch(ledger: &str) -> Option<Found> {
-    let Reading::Known(qs) = open_questions(ledger) else {
+fn batch(questions: &Reading<Vec<OpenQuestion>>) -> Option<Found> {
+    let Reading::Known(qs) = questions else {
         return None;
     };
     let n = qs.iter().filter(|q| !q.card.a1).count();
@@ -154,15 +156,30 @@ pub fn next_step_seat(
 }
 
 fn judge(ledger: &str, events: &str, now: EpochSecs, seat: Option<&SeatCard>) -> NextStep {
-    let beads = read(ledger);
-    let beads = beads.as_deref();
+    judge_with(
+        read(ledger).as_deref(),
+        read_events(events).as_deref(),
+        &open_questions(ledger),
+        now,
+        seat,
+    )
+}
+
+/// 読み解いた値（bead・event log の値・open の問いの読み）から次の一手を判じる（`judge` と同じ決まり）。
+pub(crate) fn judge_with(
+    beads: Option<&[Bead]>,
+    events: Option<&[Value]>,
+    questions: &Reading<Vec<OpenQuestion>>,
+    now: EpochSecs,
+    seat: Option<&SeatCard>,
+) -> NextStep {
     let mut checks: Vec<NextCheck> = NextMove::ALL
         .into_iter()
         .filter(|&m| m != NextMove::Nothing)
         .map(|m| {
             let found = match m {
                 NextMove::StalledRun => stalled_run(beads, events, now),
-                NextMove::BatchApproval => batch(ledger),
+                NextMove::BatchApproval => batch(questions),
                 NextMove::Question => question(beads, now),
                 NextMove::LimitOrMove | NextMove::Unresponsive => seat_found(m, seat),
                 _ => None,

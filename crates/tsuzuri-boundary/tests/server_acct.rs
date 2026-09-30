@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -1330,4 +1331,38 @@ fn acchold_marks_keep_last_gather() {
         assert_eq!(acct.marks(), first, "最後の集めの印の一覧");
     }
     assert_eq!(shots(), after_doc, "marks は器と bd を撃たない");
+}
+
+#[test]
+fn alean_parsed_follows_texts() {
+    let acct = Acct::new("scribe2", "git", "bd", "/nonexistent/state", "/nonexistent");
+    let texts = ProjectTexts {
+        state_dir_known: true,
+        events: Some(
+            "{\"kind\":\"RunCreated\",\"run\":\"b-1-20260927T090000Z\",\"ts\":\"2026-09-27T09:00:00Z\"}\n"
+                .into(),
+        ),
+        ledger: Some(
+            "[{\"id\":\"b-1\",\"title\":\"t\",\"issue_type\":\"task\",\"status\":\"open\"}]".into(),
+        ),
+        ..ProjectTexts::default()
+    };
+    let first = acct.parsed("/work/proj-a", &texts);
+    assert!(
+        Arc::ptr_eq(&first, &acct.parsed("/work/proj-a", &texts)),
+        "同じ字は同じ値"
+    );
+    let events = ProjectTexts {
+        events: Some(String::new()),
+        ..texts.clone()
+    };
+    let second = acct.parsed("/work/proj-a", &events);
+    assert!(!Arc::ptr_eq(&first, &second), "event log の字を替えた呼び");
+    let ledger = ProjectTexts {
+        ledger: Some("[]".into()),
+        ..events
+    };
+    let third = acct.parsed("/work/proj-a", &ledger);
+    assert!(!Arc::ptr_eq(&second, &third), "台帳の字だけを替えた呼び");
+    assert!(Arc::ptr_eq(&third, &acct.parsed("/work/proj-a", &ledger)));
 }
