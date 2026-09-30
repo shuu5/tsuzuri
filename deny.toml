@@ -1,0 +1,36 @@
+# 依存の監査の設定（条 P-26.5・判断の記録 ADR-21 の決定 (7)・行 k-deny）。
+# 範囲は規則の行 R-2 の population（tsuzuri の repo が組み立てる crate の依存の全部: 通常・build・dev の依存・全部の target・持ち込んだ folio を含む）。
+# licenses の allow は規則の行 R-2 の値の許可一覧の写しで、xtask の歯 kdeny_ が R-2 の字と照らす。
+# skip と ignore の列は歯 kdeny_ の閉じた一覧と同じで、足すには歯も直す。CI は効かなくなった entry を落とす。
+
+[advisories]
+version = 2
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste の保守の終わりの知らせ。面の Leptos の部品が引く。判断の記録 ADR-3 の決定 (3) の例外の行（裁定 id = user 2026-09-24T22:07Z）で、版上げのたびに見直す" },
+    { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 の保守の終わりの知らせ。面の Leptos の部品が引く。判断の記録 ADR-3 の決定 (3) の例外の行（裁定 id = user 2026-09-24T22:07Z）で、版上げのたびに見直す" },
+]
+
+[bans]
+multiple-versions = "deny"
+skip = [
+    { crate = "convert_case@0.6.0", reason = "面の Leptos の設定の部品 config が 0.6 を引く（Leptos の macro は 0.11）。Leptos の版上げで消える" },
+    { crate = "syn@2.0.119", reason = "面の Leptos の macro が 2 を引く（serde_derive・folio の clap_derive・Leptos は 3）。Leptos の版上げで消える" },
+    { crate = "thiserror@1.0.69", reason = "面の Leptos の gloo-net が 1 を引く（Leptos は 2）。Leptos の版上げで消える" },
+    { crate = "thiserror-impl@1.0.69", reason = "thiserror 1.0.69 の derive の部品。gloo-net の側の 1 と対で消える" },
+]
+
+[licenses]
+include-dev = true
+include-build = true
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "BSL-1.0",
+    "Zlib",
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -37,3 +37,15 @@ jobs:
         with:
           node-version: 20
       - run: cargo run -q -p xtask -- check
+
+  # 依存の監査（条 P-26.5・行 k-deny）: 重複した版・脆弱性の知らせ・使ってよい条件・出所を、根の deny.toml で全面に撃つ。
+  # 2 つの -D は、効かなくなった skip と ignore を落とし、版上げのたびに一覧の見直しを強いる。
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659  # v1.17.0
+      - uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6  # v2.87.7
+        with:
+          tool: cargo-deny@0.20.2
+      - run: cargo deny check -D unmatched-skip -D advisory-not-detected
