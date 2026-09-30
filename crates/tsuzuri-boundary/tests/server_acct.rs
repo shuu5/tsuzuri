@@ -1190,8 +1190,36 @@ fn alean_own_ledger_shared() {
     alean_mark(&place, "proj-a");
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first);
-    assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
+    assert_eq!(
+        place.calls("bd"),
+        ["proj-a", "proj-a", "proj-b", "proj-e"],
+        "印の動いた proj-a は口の読みで読み直す"
+    );
     assert_eq!(first, place.acct().doc(NOW), "with_own の無い読みと同じ電文");
+}
+
+#[test]
+fn alean_watched_ledger_shared() {
+    let place = Place::new("alean-watched", false);
+    let other = Source::new(place.anchor("proj-e"), place.program("bd")).watched();
+    other.read();
+    assert_eq!(place.calls("bd"), ["proj-e"], "見張りの読み");
+    let acct = place.acct().with_watched(vec![other]);
+    let first = acct.doc(NOW);
+    assert_eq!(
+        place.calls("bd"),
+        ["proj-a", "proj-b", "proj-e"],
+        "proj-e は見張りの読みを分け合う"
+    );
+    assert_eq!(first, place.acct().doc(NOW), "with_watched の無い読みと同じ電文");
+    let module = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/server/mod.rs"))
+        .expect("mod.rs");
+    let code = module
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .filter(|l| l.contains(".with_watched(others.sources())"))
+        .count();
+    assert_eq!(code, 1, "server が見張りの Source を渡す");
 }
 
 #[test]

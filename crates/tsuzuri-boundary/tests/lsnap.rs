@@ -449,7 +449,20 @@ fn lsnap_routes_wait_for_read() {
     let place = Place::new("wait");
     let noms = place.store();
     let addr = place.serve();
+    // 知らせの受け手を付ける（受け手が 0 人の間は見張りは印が動いても読まない・受け手が付いた周に 1 回読む）。
+    let start = place.calls();
+    let mut events = TcpStream::connect(addr).expect("知らせの接続");
+    events
+        .write_all(b"GET /api/surface/events HTTP/1.1\r\nHost: x\r\n\r\n")
+        .expect("知らせの要求");
+    let until = Instant::now() + Duration::from_secs(3);
+    while place.calls() == start {
+        assert!(Instant::now() < until, "受け手が付いた周の読みが始まらない");
+        thread::sleep(Duration::from_millis(5));
+    }
+    thread::sleep(Duration::from_millis(1200));
     let base = place.calls();
+    assert_eq!(base, start + 1, "受け手が付いた周の読みは 1 回");
     place.flag("slow", true);
     place.bd_returns(&one());
     OpenOptions::new()
@@ -472,7 +485,8 @@ fn lsnap_routes_wait_for_read() {
         took >= Duration::from_millis(500) && took < Duration::from_millis(2500),
         "{took:?}"
     );
-    assert_eq!(place.calls(), base + 1, "起動の後の bd の回");
+    assert_eq!(place.calls(), base + 1, "口は見張りの読みを待つ");
+    drop(events);
 }
 
 #[test]

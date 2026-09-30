@@ -15,8 +15,9 @@
 //! 載せる（答えは受けず、答えの口はその問いを自分の台帳に無い問いとして断る・`others`・行 e-multi-ask）。
 //! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
 //! 同じ時に届いた要求は、設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
-//! 台帳の GET の口は bd を撃たず、起動で作る 1 つの `Source`（`Source::watched`）とその clone が変化の見張りの
-//! 最後の読みの字を返し、見張りが読みの途中ならその終わりを待って同じ字を返す（行 e-snap）。見張りの読みが落ちたときは
+//! 台帳の GET の口は、起動で作る 1 つの `Source`（`Source::watched`）とその clone の印が見張りの最後の読みの前と同じ間は
+//! bd を撃たず、見張りの最後の読みの字を返し、見張りが読みの途中ならその終わりを待って同じ字を返す（行 e-snap）。
+//! 印が違えば（受け手が 0 人の間に印が動いた後）口が自分で読む（行 e-ledger-lazy）。見張りの読みが落ちたときは
 //! 最後に読めた字を `ledger::READ_HOLD`（60 秒）まで返し、その応答の頭（`READ_AGE_HEADER`）に最後に読めた時からの秒を
 //! 付ける（行 e-hold）。裁定の受付は合流せず、新しい子 process で読み直す。
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
@@ -188,7 +189,8 @@ impl Server {
 
     /// `bind` と同じで、account board の読みが撃つ git の program を受ける。
     /// state dir が在るときだけ account board の読みを作る（器は口 /api/account の要求まで撃たない）。
-    /// account board の読みは自分の repo の anchor の台帳を見張りの Source で読み、bd を撃たない（行 a-lean）。
+    /// account board の読みは自分の repo と --project の置き場の anchor の台帳を見張りの Source で読み、
+    /// 印が見張りの最後の読みの前と同じ間は bd を撃たない（行 a-lean・行 e-ledger-lazy）。
     pub fn bind_with(config: &Config, git: &OsStr) -> Result<Server, StartError> {
         if !bind_allowed(config.bind.ip()) {
             return Err(StartError::BindRefused(config.bind));
@@ -230,6 +232,7 @@ impl Server {
         );
         let (design, runs) = (sources.design.clone(), sources.runs.clone());
         let seat_marks = seats.marks();
+        let others = Others::new(&config.projects, &config.bd);
         let acct = config.state_dir.as_ref().map(|state_dir| {
             Arc::new(
                 Acct::new(
@@ -240,6 +243,7 @@ impl Server {
                     config.repo.clone(),
                 )
                 .with_own(sources.ledger.clone())
+                .with_watched(others.sources())
                 .with_held(held.clone()),
             )
         });
@@ -262,7 +266,6 @@ impl Server {
         if let Some(form) = &form {
             form.notify(&hub);
         }
-        let others = Others::new(&config.projects, &config.bd);
         others.watch(&hub);
         let delivery = match (&config.seat, &config.state_dir) {
             (Some(target), Some(state_dir)) => Some(Delivery {

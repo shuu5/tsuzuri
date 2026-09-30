@@ -231,24 +231,19 @@ fn lidle_watch_idle_then_attach() {
     // 受け手 0 人の間は印が動かなければ読み直さない。
     thread::sleep(Duration::from_millis(500));
     assert_eq!(n(), 1, "受け手 0 人で印が動かないのに読む");
-    // 印が動けば受け手 0 人でも読む。
+    // 印が動いても受け手 0 人の間は読まない。
     append_line(&mark);
-    assert!(
-        wait(Instant::now() + Duration::from_secs(1), || n() >= 2),
-        "印が動いて 1 秒以内に読まない: {}",
-        n()
-    );
-    thread::sleep(Duration::from_millis(300));
-    assert_eq!(n(), 2, "印の読みの後に受け手 0 人で読み直す");
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(n(), 1, "印が動いて受け手 0 人で読む");
     // 受け手が付いた周で 1 回読み、その後は読み直しの間隔ごとに読む。
     let rx = hub.subscribe();
     assert!(
-        wait(Instant::now() + Duration::from_millis(300), || n() >= 3),
+        wait(Instant::now() + Duration::from_millis(300), || n() >= 2),
         "受け手が付いて 300 ミリ秒以内に読まない: {}",
         n()
     );
     assert!(
-        wait(Instant::now() + Duration::from_millis(600), || n() >= 5),
+        wait(Instant::now() + Duration::from_millis(600), || n() >= 4),
         "受け手が居る間に読み直さない: {}",
         n()
     );
@@ -310,10 +305,18 @@ fn lidle_live_reads_on_attach() {
     // 受け手 0 人で store の無い印の間は、5 秒の読み直しをしない。
     thread::sleep(Duration::from_secs(6));
     assert_eq!(calls(&root), 1, "受け手 0 人で読み直す");
-    // 印が動けば受け手 0 人でも読む。
+    // 印が動いても受け手 0 人の間は見張りは読まない。
     append_line(&issues);
     thread::sleep(Duration::from_millis(1500));
-    assert_eq!(calls(&root), 2, "印が動いた後の読み");
+    assert_eq!(calls(&root), 1, "印が動いて受け手 0 人で読む");
+    // 口 /api/ledger の要求が印の遅れを見て 1 回読む。
+    let mut r = TcpStream::connect(addr).expect("接続");
+    r.write_all(b"GET /api/ledger HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .expect("要求");
+    let mut body = String::new();
+    r.read_to_string(&mut body).expect("応答");
+    assert!(body.starts_with("HTTP/1.1 200"), "{body}");
+    assert_eq!(calls(&root), 2, "口の読み");
     // 知らせの口を開くと、受け手が付いた周で 1 回読む。
     let mut s = TcpStream::connect(addr).expect("接続");
     s.write_all(
@@ -327,6 +330,13 @@ fn lidle_live_reads_on_attach() {
     assert!(got > 0, "頭の字が無い");
     thread::sleep(Duration::from_millis(1500));
     assert_eq!(calls(&root), 3, "受け手が付いた周の読み");
+    let mut again = TcpStream::connect(addr).expect("接続");
+    again
+        .write_all(b"GET /api/ledger HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .expect("要求");
+    let mut rest = String::new();
+    again.read_to_string(&mut rest).expect("応答");
+    assert_eq!(calls(&root), 3, "印が同じなら口は撃たない");
     drop(s);
     let _ = fs::remove_dir_all(&root);
 }

@@ -21,7 +21,8 @@
 //! git の読み（state dir と board の port）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
 //! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
 //! 読めなかった読みは印が同じでも `FAILED_HOLD` の間は撃ち直さない。
-//! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を分け合い、bd を撃たない。
+//! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を、`--project` の置き場の anchor の台帳は
+//! `with_watched` の Source を分け合い、印が見張りの最後の読みの前と同じ間は bd を撃たない（違えば `Source::got` が自分で読む）。
 //! 口の登録と変化の知らせへの印の足しは、つなぐ行 h-wire が行う。
 
 use std::collections::BTreeMap;
@@ -117,6 +118,8 @@ pub struct Acct {
     git_hold: Duration,
     /// 自分の repo の台帳の読みの出所（server の見張りの Source・無ければ None）。
     own: Option<Source>,
+    /// ほかの project の台帳の見張りの Source（server の `Others` の Source・行 e-ledger-lazy）。
+    watched: Vec<Source>,
 }
 
 impl Acct {
@@ -141,6 +144,16 @@ impl Acct {
             gits: Mutex::new(None),
             git_hold: GIT_HOLD,
             own: None,
+            watched: Vec::new(),
+        }
+    }
+
+    /// ほかの project の台帳を `sources`（`Source::repo` が anchor と同じ dir の見張りの Source）で読む Acct
+    /// （印が見張りの最後の読みの前と同じ間は bd を撃たずに分け合う）。
+    pub fn with_watched(self, sources: impl IntoIterator<Item = Source>) -> Acct {
+        Acct {
+            watched: sources.into_iter().collect(),
+            ..self
         }
     }
 
@@ -218,15 +231,16 @@ impl Acct {
         (doc, texts.stale)
     }
 
-    /// anchor の台帳の読みの出所（`own` の repo と同じ dir ならその clone・表に在ればその clone・
-    /// 無ければ作って表に置く）。
+    /// anchor の台帳の読みの出所（`own` か `watched` の Source の repo と同じ dir ならその clone・
+    /// 表に在ればその clone・無ければ作って表に置く）。
     fn ledger(&self, anchor: &str) -> Source {
-        if let Some(own) = self
+        if let Some(shared) = self
             .own
-            .as_ref()
-            .filter(|own| same_dir(&own.repo.to_string_lossy(), anchor))
+            .iter()
+            .chain(&self.watched)
+            .find(|s| same_dir(&s.repo.to_string_lossy(), anchor))
         {
-            return own.clone();
+            return shared.clone();
         }
         let mut ledgers = self.ledgers.lock().unwrap_or_else(|e| e.into_inner());
         ledgers

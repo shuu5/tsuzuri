@@ -2,7 +2,8 @@
 //! 札は置き場の dir の名（`tsuzuri_core::account::project_name`・account board の project の名と同じ読み）で、
 //! 台帳は読み取りの bd（`ledger::BD_ARGS`・--bd と同じ program）だけで撃つ。見張りは server の Hub に足し
 //! （`Hub::watch_ledger_into`）、印が動いた周と知らせの接続が居る間の読み直しの周だけ読み、open の問いの card が
-//! 前と変わった周だけ ledger-changed を送る。口の読みは bd を撃たず、見張りの最後の読みの字を返す（`Source::watched`）。
+//! 前と変わった周だけ ledger-changed を送る。口の読みは、印が見張りの最後の読みの前と同じなら bd を撃たず
+//! その字を返し、違えば自分で読む（`Source::watched`・行 e-ledger-lazy）。
 //! 答えは受けない（札の組の answerable は偽・ほかの repo の台帳へ書かない）。
 //! 導出グラフの口 /api/graph も同じ最後の読みの字を、要求のたびに `outside` で読んで g-3 に渡す（行 c-g3-extern）。
 
@@ -37,6 +38,11 @@ impl Others {
         }
     }
 
+    /// 組ごとの見張りの Source（引数の順・account board が同じ置き場の anchor の台帳を分け合う・行 e-ledger-lazy）。
+    pub(super) fn sources(&self) -> Vec<Source> {
+        self.projects.iter().map(|(_, s)| s.clone()).collect()
+    }
+
     /// 組ごとに台帳の見張りを Hub に足す（最初の印と読みは戻る前に取る）。
     pub(super) fn watch(&self, hub: &Arc<Hub>) {
         for (_, source) in &self.projects {
@@ -65,8 +71,8 @@ impl Others {
             .collect()
     }
 
-    /// 組ごとの台帳の読み（引数の順・見張りの最後の読みの字を `build::outside` で読む・
-    /// 字が無いか読めなければ None・bd は撃たない・行 c-g3-extern）。
+    /// 組ごとの台帳の読み（引数の順・`Source::got` の字を `build::outside` で読む・
+    /// 字が無いか読めなければ None・bd は印が見張りの最後の読みの前と違う時だけ撃つ・行 c-g3-extern）。
     pub(super) fn outside(&self) -> Vec<Option<Outside>> {
         self.projects
             .iter()

@@ -1,10 +1,10 @@
 //! 変化の知らせ（口 GET /api/surface/events・SSE・便 e-src）。
 //! 変化の印（ledger の `Mark`: store の manifest の字と manifest が名指す file の長さ・store が無ければ jsonl の 2 file の
 //! 更新時刻と長さ）を 500 ミリ秒ごとに見て、動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
-//! 印の取りこぼしを拾うために、印が動かなくても、store の印で前の読みが読めていれば 60 秒ごと、ほかは 5 秒ごとに
+//! 印の取りこぼしを拾うために、印が動かなくても、store の印で前の読みが読めていれば 600 秒ごと、ほかは 5 秒ごとに
 //! 読み直す（jsonl の印は器の素の bd close で動かないことがある・行 e-marks）。
-//! 受け手（`Subscription`）が 0 人の間は印の動かない読み直しをせず（印は見続け、動けば読む）、
-//! 0 人から 1 人以上になった周で 1 回読む（行 e-idle）。
+//! 受け手（`Subscription`）が 0 人の間は、印が動いても読まず印も置かず（口の読みが印の遅れを見て自分で読む・
+//! 行 e-ledger-lazy）、0 人から 1 人以上になった周で 1 回読む（行 e-idle）。
 //! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
 //! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
 //! 動いたら board-changed を周に 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
@@ -44,7 +44,7 @@ pub const POLL: Duration = Duration::from_millis(500);
 pub const REREAD: Duration = Duration::from_secs(5);
 
 /// 台帳の store の印で見るとき、前の読みが読めていれば印が動かなくても読み直す間隔（安全の網）。
-pub const STORE_REREAD: Duration = Duration::from_secs(60);
+pub const STORE_REREAD: Duration = Duration::from_secs(600);
 
 /// 周期の読みの間隔。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -373,12 +373,17 @@ fn watch<K: PartialEq, R: PartialEq>(
         let Some(listening) = hub.upgrade().map(|h| h.listeners() > 0) else {
             return;
         };
+        // 受け手が 0 人の間は印が動いても読まず、見た印も置かない（次に付いた周に 1 回読む）。
+        if !listening {
+            state.listening = false;
+            continue;
+        }
         // 印は読みの前に取る（読みの途中の変化は次の周で拾う）。
         let current = mark();
-        // 受け手が 0 人から 1 人以上になった周は 1 回読む。0 人の間は印が動いたときだけ読む。
-        let attached = listening && !state.listening;
-        state.listening = listening;
-        let due = listening && state.read_at.elapsed() >= reread(&current, &state.last);
+        // 受け手が 0 人から 1 人以上になった周は 1 回読む。
+        let attached = !state.listening;
+        state.listening = true;
+        let due = state.read_at.elapsed() >= reread(&current, &state.last);
         if current == state.seen && !attached && !due {
             continue;
         }

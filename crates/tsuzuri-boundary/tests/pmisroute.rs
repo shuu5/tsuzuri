@@ -190,15 +190,22 @@ impl Place {
             .unwrap_or_default()
     }
 
-    /// 台帳の印（issues.jsonl）を動かし、見張りの読み（偽の bd の回が増える）を待つ。
-    fn move_mark(&self) {
-        let before = self.bd_calls();
+    /// 台帳の印（issues.jsonl）を動かす（読みは待たない）。
+    fn shift_mark(&self) {
         let n = self.moves.get() + 1;
         self.moves.set(n);
         let tmp = self.root.join("put/issues.jsonl");
         fs::write(&tmp, "1".repeat(n + 1)).expect("移す前の印");
         fs::rename(&tmp, self.repo.join(".beads/issues.jsonl")).expect("印を移す");
-        until("見張りの読み", || self.bd_calls() > before);
+    }
+
+    /// 台帳の印を動かし、口 /api/ledger を読んで読み（偽の bd の回が増える）を待つ
+    /// （知らせの受け手が居ない間は見張りは読まず、口の読みが印の遅れを見て読む）。
+    fn move_mark(&self, addr: SocketAddr) {
+        let before = self.bd_calls();
+        self.shift_mark();
+        assert_eq!(get(addr, "/api/ledger").0, 200);
+        until("口の読み", || self.bd_calls() > before);
     }
 
     fn config(&self, seat: bool, state_dir: bool) -> Config {
@@ -478,7 +485,7 @@ fn pmisfit_route_reads_kept_form() {
     assert_eq!(place.bd_calls(), 1, "起動の読み");
 
     // 口の要求の前は、見張りの読みの周でも器を撃たない。
-    place.move_mark();
+    place.move_mark(addr);
     thread::sleep(Duration::from_millis(300));
     assert!(place.argv().is_empty(), "口の要求の前に撃つ");
 
@@ -488,8 +495,8 @@ fn pmisfit_route_reads_kept_form() {
     assert!(place.argv().is_empty(), "口が撃つ");
 
     // その後の見張りの読みの周に撃ち、口は持った字から写す。
-    place.move_mark();
-    until("見張りの周の撃ち", || place.argv().len() == 1);
+    place.move_mark(addr);
+    until("口の読みの周の撃ち", || place.argv().len() == 1);
     let state = place.state.display();
     assert_eq!(
         place.argv(),
@@ -514,7 +521,7 @@ fn pmisfit_route_reads_kept_form() {
     place.sleep(Some("2"));
     let now = renamed();
     place.ledger_returns(&now);
-    place.move_mark();
+    place.move_mark(addr);
     until("今の台帳の字", || {
         get(addr, "/api/ledger").1.contains("t b.1 new")
     });
@@ -537,10 +544,10 @@ fn pmisfit_route_reads_kept_form() {
 
     // 落ちた周は Unknown、置き直した周は戻る。
     place.doctor_fails();
-    place.move_mark();
+    place.move_mark(addr);
     board_until(addr, "落ちた周の Unknown", |m| *m == Reading::Unknown);
     place.doctor_returns(&doctor);
-    place.move_mark();
+    place.move_mark(addr);
     let back = board_until(addr, "戻った一覧", |m| *m == after.misfits);
     assert_eq!(back.misfits, after.misfits);
 }
@@ -585,7 +592,7 @@ fn pmisfit_route_without_seat_or_line() {
         let place = Place::new(name);
         let addr = place.serve(seat, state_dir);
         assert_eq!(pipeline(addr).misfits, Reading::Unknown, "{name}");
-        place.move_mark();
+        place.move_mark(addr);
         thread::sleep(Duration::from_millis(300));
         assert!(place.argv().is_empty(), "{name} が撃つ: {:?}", place.argv());
         assert_eq!(pipeline(addr).misfits, Reading::Unknown, "{name}");
@@ -595,8 +602,39 @@ fn pmisfit_route_without_seat_or_line() {
     place.doctor_returns(&format!("{SEAT_LINE}\n"));
     let addr = place.serve(true, true);
     assert_eq!(pipeline(addr).misfits, Reading::Unknown);
-    place.move_mark();
-    until("見張りの周の撃ち", || place.argv().len() == 1);
+    place.move_mark(addr);
+    until("口の読みの周の撃ち", || place.argv().len() == 1);
     thread::sleep(Duration::from_millis(300));
     assert_eq!(pipeline(addr).misfits, Reading::Unknown);
+}
+
+/// (10) 知らせの口を開いたままの server では、口を読まずに台帳の印を動かすと見張りの読みの周に器が撃たれ、
+/// 一覧は Known・器の撃ちを落とした周は Unknown・置き直した周は戻る。
+#[test]
+fn pmisfit_watch_kicks_form_while_listening() {
+    let place = Place::new("listen");
+    let addr = place.serve(true, true);
+    let mut s = TcpStream::connect(addr).expect("接続");
+    s.set_read_timeout(Some(WAIT)).expect("timeout");
+    s.write_all(b"GET /api/surface/events HTTP/1.1\r\nHost: x\r\n\r\n")
+        .expect("要求を書く");
+    // 受け手の付いた周の読みが 1 回撃つ。
+    until("受け手の付いた周の撃ち", || place.argv().len() == 1);
+    let done = board_until(addr, "Known の一覧", |m| matches!(m, Reading::Known(_)));
+    assert_eq!(done.misfits, want());
+    let state = place.state.display();
+    let line = format!("doctor --state-dir {state} --repo .");
+    assert_eq!(place.argv(), [line.as_str()]);
+    // 口を読まずに印を動かす（見張りの読みが撃つ）。
+    place.shift_mark();
+    until("見張りの周の撃ち", || place.argv().len() == 2);
+    assert_eq!(pipeline(addr).misfits, want());
+    // 落ちた周は Unknown、置き直した周は戻る。
+    place.doctor_fails();
+    place.shift_mark();
+    board_until(addr, "落ちた周の Unknown", |m| *m == Reading::Unknown);
+    place.doctor_returns(&doctor());
+    place.shift_mark();
+    board_until(addr, "戻った一覧", |m| *m == want());
+    drop(s);
 }

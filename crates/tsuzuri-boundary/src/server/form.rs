@@ -34,7 +34,7 @@ pub const FORM_ARGS: [&str; 1] = ["doctor"];
 pub const REPO_ARGS: [&str; 2] = ["--repo", "."];
 
 /// 撃ちの上限。doctor --state-dir と --repo . の組を測った最長 15.76 秒（2026-09-28）の約 2 倍で、
-/// 器の中の台帳の読みの上限（seat.ledger_timeout_s の 60 秒）と `events::STORE_REREAD`（60 秒）の半分。
+/// 器の中の台帳の読みの上限（seat.ledger_timeout_s の 60 秒）の半分。
 pub const FORM_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// 器の出力のうち頭が `FORM_PREFIX` の行だけを改行でつないだ字（無ければ空の字）。

@@ -467,15 +467,15 @@ fn server_coalesce_ruling_reads_alone() {
         verbatim: "はい".to_string(),
     })
     .expect("要求の電文");
-    // 印を動かし、見張りの読みが走り始める（偽の bd が記録の行を足す）まで待つ。
+    // 印を動かす（知らせの受け手が居ない間は見張りは読まず、口の読みが印の遅れを見て読む）。
     place.touch();
-    let until = Instant::now() + Duration::from_secs(2);
-    while place.bd_calls() == before && Instant::now() < until {
-        thread::sleep(Duration::from_millis(5));
-    }
     let (listed, ruled, during) = thread::scope(|s| {
-        // 口は走っている見張りの読みの終わりを待つ（bd を撃たない）。
         let listed = s.spawn(|| get(addr, "/api/ledger"));
+        // 口の読みが走り始める（偽の bd が記録の行を足す）まで待つ。
+        let until = Instant::now() + Duration::from_secs(2);
+        while place.bd_calls() == before && Instant::now() < until {
+            thread::sleep(Duration::from_millis(5));
+        }
         let during = place.bd_calls() - before;
         let ruled = request(
             addr,

@@ -7,8 +7,9 @@
 //! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
 //! 読めた字（`parse_bd` か中核の台帳の読みが Known の字）は最後に読めた字として持ち、次の読みが落ちたときだけ
 //! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
-//! `watched` の Source の `got` と `text` は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、
-//! 読みが走っていればその終わりを待って同じ結果を返す（行 e-snap）。
+//! `watched` の Source の `got` と `text` は、最後に始めた合流の読みの前に取った印（`read_mark`）が今の印と同じなら
+//! bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、読みが走っていればその終わりを待って同じ結果を返す
+//! （行 e-snap）。印が違えば見張りを待たず自分で読み、`form` が在れば台帳の形の行の撃ちへ渡す（行 e-ledger-lazy）。
 //! `with_form` の Source の `read` は、読んだ台帳の字（読めなければ None）で器の doctor の台帳の形の行の撃ち
 //! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ・行 c-pipe-misfit・行 c-misfit-pair）。
 
@@ -92,7 +93,9 @@ pub struct Source {
     hold: Duration,
     /// 最後に終えた合流の読みの結果（読めた字か None・一度も終えていなければ外の None・行 e-snap）。
     latest: Arc<Mutex<Option<Option<String>>>>,
-    /// 真なら `got` と `text` は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返す。
+    /// 最後に始めた合流の読みの前に取った印（一度も始めていなければ None・行 e-ledger-lazy）。
+    read_mark: Arc<Mutex<Option<Mark>>>,
+    /// 真なら `got` と `text` は、印が `read_mark` と同じ間は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返す。
     watched: bool,
     /// 見張りの読みの後に撃つ器の doctor の台帳の形の行（行 c-pipe-misfit）。
     form: Option<Form>,
@@ -124,6 +127,7 @@ impl Source {
             last: Arc::new(Mutex::new((None, Instant::now()))),
             hold: READ_HOLD,
             latest: Arc::new(Mutex::new(None)),
+            read_mark: Arc::new(Mutex::new(None)),
             watched: false,
             form: None,
         }
@@ -222,14 +226,23 @@ impl Source {
 
     /// 合流の読みを撃ち、読めれば読めた字と stale の None、落ちれば最後に読めた時刻と、
     /// その時刻から上限より短い間だけ最後に読めた字を返す（行 e-hold）。
-    /// `watched` の Source は bd を撃たず、走っている読みが在ればその終わりを `BD_WAIT` まで待った結果、
-    /// 無ければ最後に終えた読みの結果を使う（一度も終えていなければ読む・行 e-snap）。
+    /// `watched` の Source は、今の印が最後に始めた読みの前の印と違えば見張りを待たず自分で読み（`form` が在れば
+    /// 読んだ字で撃ちを起こす）、同じなら bd を撃たず、走っている読みが在ればその終わりを `BD_WAIT` まで待った結果、
+    /// 無ければ最後に終えた読みの結果を使う（一度も終えていなければ読む・行 e-snap・行 e-ledger-lazy）。
     pub fn got(&self) -> Got {
         let text = if self.watched {
-            self.shared
-                .join(BD_WAIT)
-                .or_else(|| lock(&self.latest).clone())
-                .unwrap_or_else(|| self.fresh())
+            if self.behind() {
+                let text = self.fresh();
+                if let Some(form) = &self.form {
+                    form.kick(text.clone());
+                }
+                text
+            } else {
+                self.shared
+                    .join(BD_WAIT)
+                    .or_else(|| lock(&self.latest).clone())
+                    .unwrap_or_else(|| self.fresh())
+            }
         } else {
             self.fresh()
         };
@@ -247,12 +260,19 @@ impl Source {
         }
     }
 
+    /// 今の印が最後に始めた合流の読みの前に取った印と違うか（一度も始めていなければ偽）。
+    fn behind(&self) -> bool {
+        let was = lock(&self.read_mark).clone();
+        was.is_some_and(|was| was != self.mark())
+    }
+
     /// 合流の読み（走っている読みが在れば新しく撃たず、その終わりを `BD_WAIT` まで待って同じ結果・便 e-coalesce）。
     /// 起動できない・rc が 0 でない・UTF-8 でない・`BD_TIMEOUT` を越える・`parse_bd` も中核の台帳の読みも
     /// Unknown の字、のどれでも None。読みを始めた呼びが、読めた字と時刻を最後に読めた字に置き、
-    /// 結果を最後に終えた読みの結果（`latest`）に置く。
+    /// 結果を最後に終えた読みの結果（`latest`）に置く。始める前に取った印を `read_mark` に置く。
     fn fresh(&self) -> Option<String> {
         self.shared.share(BD_WAIT, || {
+            *lock(&self.read_mark) = Some(self.mark());
             let text = self.text_alone().filter(|t| readable(t));
             if let Some(text) = &text {
                 *lock(&self.last) = (Some(text.clone()), Instant::now());

@@ -224,7 +224,7 @@ fn read_like(noms: &Path) {
 
 #[test]
 fn lstore_values_and_dirs() {
-    assert_eq!(STORE_REREAD, Duration::from_secs(60));
+    assert_eq!(STORE_REREAD, Duration::from_secs(600));
     assert_eq!(POLL, Duration::from_millis(500));
     assert_eq!(REREAD, Duration::from_secs(5));
     assert_eq!(
