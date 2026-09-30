@@ -109,6 +109,10 @@ fn folio_figure(doc: &str, id: &str, dir: &Path, out: &Path, mode: &str) -> Outp
 }
 
 /// 環境変数 PATH を差し替えられる形（道具の実行環境の不在を測る）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+)]
 fn folio_figure_env(
     doc: &str,
     id: &str,

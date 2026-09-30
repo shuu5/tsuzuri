@@ -627,6 +627,10 @@ pub(crate) fn band(o: &mut Vec<String>, ctx: &Ctx<'_>, n: usize, lead: Option<&s
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 pub(crate) fn figure_open(
     o: &mut Vec<String>,
     ctx: &Ctx<'_>,

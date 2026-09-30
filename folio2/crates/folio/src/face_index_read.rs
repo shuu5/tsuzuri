@@ -421,6 +421,10 @@ fn srs_card(s: &X<'_>) -> R<Readable> {
 }
 
 /// `c` = 憲法の正本と版を上げた発効した判断の行（`face_constitution_read::amendments`）の組。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 pub(crate) fn context(
     i: &X<'_>,
     (c, rows): (&X<'_>, &[Amend]),

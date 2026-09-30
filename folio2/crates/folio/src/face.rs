@@ -474,6 +474,10 @@ impl Frame {
     /// 組み立て済み・床の名札 freshness-stamp の直後に部品 ceiling-stamp として置く・便 40）。鮮度の札の日付は
     /// （名・日付）の組（名は `named` の 承認 か 生成・便 145・146）。題は（置き場の名・題）の組で、題の頭に「<名> — 」を
     /// 付け、site-bar の名札は名が有るときだけ出す（名は `adr::name_of`・便 154）。
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+    )]
     pub fn head_dated(
         &self,
         o: &mut Vec<String>,
@@ -554,6 +558,10 @@ impl Frame {
     }
 
     /// 章の帯（section）。`n` は章の番号・`lead` は組み立て済みの HTML。
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+    )]
     pub fn band(&self, o: &mut Vec<String>, n: usize, name: &str, h2: &str, lead: Option<&str>) {
         let Some(&(class, svg)) = n.checked_sub(self.first).and_then(|k| self.bands.get(k)) else {
             return;
@@ -597,6 +605,10 @@ impl Frame {
     }
 
     /// `foot` と同じ・doc-locator の行の末尾（入口へ戻る の後）に組み立て済みの `aside` を差し込む（便 74）。
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+    )]
     pub fn foot_aside(
         &self,
         o: &mut Vec<String>,
@@ -732,6 +744,10 @@ pub fn figure_body<'a>(dir: &Path, fig: &X<'a>) -> R<Figure<'a>> {
 
 /// 図の枠 1 つ（figure-panel の開始タグ〜figcaption〜終了タグ・凡例は無し）。`i` は図の番号（1 から）・`caption` は
 /// escape 済み・`refs` は根拠の id ごとの組み立て済みのリンク（空なら「根拠:」以降を出さない）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 pub fn figure_panel(
     o: &mut Vec<String>,
     f: &Frame,

@@ -31,6 +31,10 @@ pub(crate) const RELATION_NAMESPACES: [&str; 4] = ["reqs", "rules", "articles", 
 pub(crate) const SRS_ID_PREFIXES: [&str; 5] = ["FR", "NFR", "AC", "CON", "GOAL"];
 
 /// (a)(b)(c) を掛ける。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 pub fn check_refs(
     constitution: &Node,
     rules: &Node,

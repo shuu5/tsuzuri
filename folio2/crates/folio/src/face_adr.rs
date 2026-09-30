@@ -520,6 +520,10 @@ fn entries<'a>(a: &X<'a>, key: &str) -> R<Vec<X<'a>>> {
 
 // ── 骨格 ──
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn head(
     o: &mut Vec<String>,
     place: Option<&str>,
@@ -546,6 +550,10 @@ fn meta_span(k: &str, v: &str) -> String {
     format!("<span class=\"m\"><span class=\"k\">{k}</span><span class=\"v\">{v}</span></span>")
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn cover(
     o: &mut Vec<String>,
     place: Option<&str>,
@@ -823,6 +831,10 @@ fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &C
 /// 図の道具で描いたものをそのまま埋める（escape しない・道具の出力は変えない）。
 /// figcaption の根拠は refs の各 id を `id_link` で（無いか空なら「根拠:」以降を出さない）。
 /// 図が 1 枚でも導出できなければ Err（面全体が「まだ分からない」・前の面は残る）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn figures_chapter(
     o: &mut Vec<String>,
     f: &Frame,
@@ -876,6 +888,10 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, st: &Status) -> R
 }
 
 /// 脚（`chip` = 用語集への札・doc-locator の行の末尾・便 74）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts, chip: &str) -> R<()> {
     let date = a.ef("date")?;
     let basis = a

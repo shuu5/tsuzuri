@@ -234,6 +234,10 @@ impl<'a> Walk<'a> {
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+    )]
     fn entry(&mut self, file: &str, key: &str, value: &'a Node, row: Option<&'a str>, index: &HashMap<String, Kind>) {
         if PROVENANCE.contains(&key) {
             return;

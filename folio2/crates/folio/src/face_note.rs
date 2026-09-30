@@ -600,6 +600,10 @@ fn quoted_pair(line: &str) -> Option<(String, String)> {
 
 // ── 骨格 ──
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn head(
     o: &mut Vec<String>,
     place: Option<&str>,
@@ -626,6 +630,10 @@ fn meta_span(k: &str, v: &str) -> String {
     format!("<span class=\"m\"><span class=\"k\">{k}</span><span class=\"v\">{v}</span></span>")
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn cover(
     o: &mut Vec<String>,
     place: Option<&str>,
@@ -1020,6 +1028,10 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, st: &Status) -
 }
 
 /// 脚（`chip` = 用語集への札・doc-locator の行の末尾・便 74）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts, chip: &str) -> R<()> {
     let (dated, date) = face::note_dated(meta)?;
     let version = meta.ef("version")?;

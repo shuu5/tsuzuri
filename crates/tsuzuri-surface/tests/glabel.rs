@@ -26,6 +26,10 @@ fn fixture() -> GraphView {
         .expect("graph-view.json が眺めの電文として読める")
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+)]
 fn boxed(id: &str, kind: NodeKind, title: &str, group: bool, fold: BoxFold, kids: u32) -> ViewNode {
     ViewNode {
         node: GraphNode {

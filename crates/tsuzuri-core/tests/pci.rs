@@ -123,6 +123,10 @@ fn events() -> String {
     out.join("\n")
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+)]
 fn card(
     n: u32,
     runs: u32,

@@ -808,6 +808,10 @@ fn structural_diff(
 }
 
 /// (f) anchor の file 1 本。列に載せられる形なら返す。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn check_file(
     dir: &Path,
     name: &str,

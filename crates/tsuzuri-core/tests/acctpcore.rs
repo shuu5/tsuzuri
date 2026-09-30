@@ -216,6 +216,10 @@ fn projects() -> BTreeMap<String, ProjectTexts> {
 }
 
 /// 着地済みの席の card の関数に、その project の state dir の字を渡した値。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+)]
 fn seat_card(
     host: &HostTexts,
     anchor: &str,

@@ -224,11 +224,16 @@ fn klint_clippy_conf_copies_rule_r4() {
     let r4 = rule_value("R-4");
     let lines = r4_number(&r4, "関数").expect("R-4 の関数の行");
     let complexity = r4_number(&r4, "複雑度").expect("R-4 の複雑度");
+    let arguments = r4_number(&r4, "引数").expect("R-4 の引数");
     let mut want: Vec<(String, String)> = vec![
         ("too-many-lines-threshold".to_string(), lines.to_string()),
         (
             "cognitive-complexity-threshold".to_string(),
             complexity.to_string(),
+        ),
+        (
+            "too-many-arguments-threshold".to_string(),
+            arguments.to_string(),
         ),
     ];
     for key in [

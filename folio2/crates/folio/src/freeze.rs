@@ -44,6 +44,10 @@ fn ver_key(v: &str) -> Vec<(usize, String)> {
 
 /// 旗の後始末。便 8 までの全検査の後に呼ぶ（`state` は列の結果・読めずに止まったなら None・`ids` は便 88 の id の一覧・
 /// `seals` は便 170 の判断の記録の封）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 pub fn after(
     dir: &Path,
     flag: Flag,

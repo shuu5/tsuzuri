@@ -809,6 +809,10 @@ mod dom {
         view! { {line} }.into_any()
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-surface-src が直してこの属性を外す"
+    )]
     fn card_view(
         card: Card,
         d: Draft,
@@ -828,6 +832,10 @@ mod dom {
         .into_any()
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-surface-src が直してこの属性を外す"
+    )]
     fn part_view(
         slot: Slot,
         card: &Card,

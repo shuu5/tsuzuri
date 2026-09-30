@@ -22,6 +22,10 @@ const ANCHOR_PREFIX: &str = "constitution-";
 const ANCHOR_SUFFIX: &str = ".yaml";
 
 /// (a)〜(g) を掛ける。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 pub fn check_link(
     dir: &Path,
     constitution: &Node,
@@ -310,6 +314,10 @@ pub(crate) fn adr_end(chars: &[char], i: usize) -> Option<usize> {
 
 /// (d) 判断の記録の id の参照（正本 4 file は A-2・判断の記録と欄の決まりの plain は adr）と、
 /// 判断の記録の中の内部 3 空間の id の解決（adr）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn references(
     constitution: &Node,
     rules: &Node,

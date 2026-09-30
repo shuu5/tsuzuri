@@ -417,6 +417,10 @@ struct Sheet {
 
 /// `results` = 止める の所見ごとに反証役の result.yaml も読む（`--check`・便 42 §1 (d)）。`--refute` は所見 file の欄の
 /// 決まりだけを数える（result.yaml は在るかどうかだけ見る）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn count_sheet(
     vp_dir: &Path,
     root: &Node,
@@ -568,6 +572,10 @@ fn count_read(node: &Node, reads: Option<&BTreeSet<String>>, reasons: &mut Vec<S
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn count_findings(
     vp_dir: &Path,
     findings: &Node,
@@ -1044,6 +1052,10 @@ fn plan_refutes(
 
 /// 反証の束の 5 つ + digest.txt（§1 (c)）。`question` = 観点の束の question.yaml（6 行）・`reads` = 観点の束の
 /// reads.yaml の byte・`parent_digest` = 観点の束の digest.txt の byte（sources.txt）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn refute_files(
     t: &Target,
     vp: &Viewpoint,

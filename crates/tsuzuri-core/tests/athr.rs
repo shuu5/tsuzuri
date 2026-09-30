@@ -87,6 +87,10 @@ fn l4() -> String {
     log(&[ev("11:58", PRESSURE, Some("acct-1"), "group=Tier1 window=5h used=99 cap=85 sent=1")])
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+)]
 fn pressure(at: u64, group: &str, account: &str, window: &str, used: u64, cap: u64, sent: u64) -> GroupNotice {
     GroupNotice::Pressure {
         at,

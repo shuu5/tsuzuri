@@ -247,6 +247,10 @@ pub fn revoke(req: &RevokeRequest, ledger: &Source, writer: &Writer, now: EpochS
 }
 
 /// 問いを開き直し、配達の先が在れば別の thread で取り消しの行を撃ち直しつきで配達する（`id` は取り消しの行の id・待たない）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-boundary-src が直してこの属性を外す"
+)]
 fn reopen(
     req: &RevokeRequest,
     ledger: &Source,
@@ -395,6 +399,10 @@ pub fn deliver(
 /// `deliver` を Marked か Taken まで撃ち直す（周ごとに台帳を読み直す）。
 /// NotTaken なら、最初の周と字が前の周と違う周だけ標準エラーに 1 行を書き、最初の周から `pace.span` を越えない間は
 /// `pace.step` を空けて次の周を撃つ。次の周が上限を越えるなら `GAVE_UP` の 1 行を書いて終える。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-boundary-src が直してこの属性を外す"
+)]
 pub fn redeliver(
     d: &Delivery,
     writer: &Writer,

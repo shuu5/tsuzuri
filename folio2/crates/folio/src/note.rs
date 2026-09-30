@@ -68,6 +68,10 @@ pub(crate) struct Field {
 
 /// (a) `<dir>/design-note/` の欄の決まりの写しと設計ノートを検査し、読めた設計ノートを返す（決定の欄の床が承認欄を読む・便 181）。
 /// dir が無い = 設計ノート 0 本（違反でも「まだ分からない」でもない）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 pub fn check_note(
     dir: &Path,
     constitution: &Node,
@@ -505,6 +509,10 @@ struct Targets<'a> {
 
 // ── (c) 設計ノート 1 本 ──
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn check_one(
     note: &NoteDoc,
     targets: &Targets<'_>,
@@ -804,6 +812,10 @@ fn check_section(
 }
 
 /// 部品・口・欄・歯の表の行（行の欄の集合と値域・参照 id）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn check_table_rows(
     file: &str,
     at: &str,
@@ -873,6 +885,10 @@ fn plan_shapes(file: &str, rat: &str, ty: &str, row: &Node, report: &mut Report)
 }
 
 /// 契約表の行（欄は器の導出 file が決める・id と参照は folio2 が持つ）。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn check_contract_rows(
     file: &str,
     at: &str,
@@ -1016,6 +1032,10 @@ fn field<'a>(node: &'a Node, key: &str) -> Option<&'a str> {
 }
 
 /// 一覧の欄の各要素が既知の id に解けるか。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+)]
 fn resolve_ids(
     file: &str,
     at: &str,

@@ -355,6 +355,10 @@ where
     hub
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-boundary-src が直してこの属性を外す"
+)]
 fn watch<K: PartialEq, R: PartialEq>(
     hub: &Weak<Hub>,
     wake: &Receiver<()>,

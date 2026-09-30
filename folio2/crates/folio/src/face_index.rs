@@ -500,6 +500,10 @@ fn intake_line(o: &mut Vec<String>, i: &X<'_>) -> R<()> {
 }
 
 /// slim の帯（読む順番・相談窓口・支度表）。字面はすべて escape 済み。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
+)]
 fn band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, title: &str, lead: &str) {
     o.push(format!(
         "<section id=\"s{n}\" {} class=\"{class} slim\">",

@@ -869,6 +869,10 @@ impl Scan {
 
     /// 節点 1 つ: 行の番号の列 `idx`（入れ子を除いた block）から辺の欄（字下げ `depth` の行・より深い続きの行・
     /// 流れの形の対）と末尾の空行を落とし、残りを連結した byte の sha256 の先頭 8 字を要約値にする。
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+    )]
     fn cut(
         &mut self, lines: &[&str], owned: &mut [bool], mut idx: Vec<usize>, depth: usize, fields: &[&str], id: &str,
     ) -> Result<(), String> {

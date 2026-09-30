@@ -33,6 +33,10 @@ fn fixture() -> AccountDoc {
 }
 
 /// card の 4 行と詳しくを比べる。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+)]
 fn check(card: &Card, title: &str, kind: &str, value: &str, src: &str, more: &[&str]) {
     assert_eq!(card.title, title);
     assert_eq!(card.kind, kind, "{title} の種類");
