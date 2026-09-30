@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.19 版（2026-09-30）: 判断の記録 ADR-24（持ち主の裁定 t3-hub.59.27〔裁定 id = t3-hub.59.27:20260930T0215Z-1〕）を写した（要件 FR16 の窓を board ごとに 1 つにし、席はその board の窓だけを操作し、窓を足す手を動いている Chrome へ渡す起動の引数だけにし、撃たない命令の新しい窓を起こす命令を頁の target を作る CDP の命令と読み替えた）。
 # 第 0.18 版（2026-09-29）: 非機能要件 NFR4（面の server の軽さ）を足した（判断の記録 ADR-23・持ち主の裁定 t3-hub.52.133〔裁定 id = t3-hub.52.133:20260929T2152Z-1〕と t3-hub.52.134〔裁定 id = t3-hub.52.134:20260929T2152Z-1・案 D〕・値は規則の行 R-34）。
 # 第 0.17 版（2026-09-29）: 要件 FR12 と受入 AC11 の退避までの残り秒の字を、群の記録の時刻から数える式から、器（scribe2）の seat tick status の欄 grace_left= の写しに直した（器の式は移動の合図の時刻 + 猶予 − 今・規則の行 R-22 の「器が欄 grace_left を出したらその字を写す」のとおり・器の欄は器の行 x で着地済み・行 c-grace-acct の器の審査の指摘・席の直し）。
 # 第 0.16 版（2026-09-29）: 要件 FR13 と受入 AC12 の未反映を、器（scribe2）の局面の出力が席の手番とする 3 つ（処置の待ちか形の崩れの memo・未仕分けの発話・裁定の反映待ち）に替えた（持ち主の裁定 t3-hub.63.1〔裁定 id = t3-hub.63.1:20260929T0031Z-1〕の案 A・器の要件 v0.29 と ADR-0087〜0089 の整理に揃える・要望は独立の種類にしない・tsuzuri は自分で判じない）。
@@ -6,7 +7,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.18
+  version: v0.19
   status: draft
   generated: 2026-09-28
   approval:
@@ -262,13 +263,13 @@ requirements:
     pattern: event
     strength: must
     when: 席が持ち主に面を見せるとき
-    shall: 席は端末の一覧（器の宣言の行・名・ssh の宛先・Chrome の場所・画面の環境・入力の環境・専用の profile・OS）から端末の名で命令し、ssh 経由で Chrome を専用の profile の app mode で起こし、CDP を tunnel で引いて navigate・viewport・reload・click・入力・key・scroll・待ちと、screenshot・DOM・console を行う。どの project をどの端末に出すかは版管理に載らない表示先の設定（全体の既定と project ごとの上書き・値は端末の一覧に在る名だけ）で持ち、tz の口で変え、2 つの board の設定の画面もその口を通る。窓を起こすのは表示先の端末に初めて見せる時と、持ち主が tz の口か board の button で頼んだ時だけで（持ち主が閉じた窓は開き直さない）、窓を前に出す命令と窓を動かす命令と新しい窓を起こす命令は撃たず、持ち主へは知らせだけを出す。board の頁の上では click・入力・key を断る。ssh で届かない端末には board の URL を渡すだけにし、席は server 側の headless Chrome を自分の目にする。
-    plain: 席があなたの PC の browser を開いて画面を出し、操作して見せます。どの project をどの PC に出すかは設定でいつでも変えられます。窓を開くのは最初の 1 回とあなたが頼んだ時だけで、勝手に前に出さず、あなたが閉じた窓も開き直さず、知らせだけを出します。board の上では見せるだけです。ssh の届かない端末（スマホなど）には見る URL を渡します。
+    shall: 席は端末の一覧（器の宣言の行・名・ssh の宛先・Chrome の場所・画面の環境・入力の環境・専用の profile・OS）から端末の名で命令し、ssh 経由で Chrome を専用の profile の app mode で起こし、CDP を tunnel で引いて navigate・viewport・reload・click・入力・key・scroll・待ちと、screenshot・DOM・console を行う。どの project をどの端末に出すかは版管理に載らない表示先の設定（全体の既定と project ごとの上書き・値は端末の一覧に在る名だけ）で持ち、tz の口で変え、2 つの board の設定の画面もその口を通る。窓は board ごとに 1 つで、席はその board の窓だけを操作する。窓を起こすのは、表示先の端末に初めて見せる時（その端末の最初の board の窓）と、持ち主が tz の口か board の button で頼んだ時だけで（持ち主が閉じた窓は開き直さない）、窓を足す手は動いている Chrome へ渡す起動の引数だけとし、窓を前に出す命令と窓を動かす命令と頁の target を作る CDP の命令は撃たず、持ち主へは知らせだけを出す。board の頁の上では click・入力・key を断る。ssh で届かない端末には board の URL を渡すだけにし、席は server 側の headless Chrome を自分の目にする。
+    plain: 席があなたの PC の browser を開いて画面を出し、操作して見せます。どの project をどの PC に出すかは設定でいつでも変えられます。窓は board ごとに 1 つで、席が自分で開くのはその PC に最初に見せる 1 回だけ、ほかの board の窓はあなたが頼んだ時だけ開き、勝手に前に出さず、あなたが閉じた窓も開き直さず、知らせだけを出します。board の上では見せるだけです。ssh の届かない端末（スマホなど）には見る URL を渡します。
     basis: [N-5, N-6, N-7]
     verify: {method: test, how: 偽の ssh と偽の Chrome で起動の引数（profile・app mode・入力の環境）と CDP の命令の列を snapshot で見て、窓を前に出す命令と board の頁の上の入力の命令が無いことと、届かない端末で URL の行が出ることを見る, ac: [AC13]}
     goals: [GOAL4]
     figures: []
-    adrs: [ADR-5, ADR-7, ADR-15]
+    adrs: [ADR-5, ADR-7, ADR-15, ADR-24]
   - id: FR17
     title: 人が打つ binary は tz の 1 つ
     pattern: ubiquitous

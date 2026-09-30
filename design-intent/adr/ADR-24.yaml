@@ -1,0 +1,56 @@
+# 判断の記録 ADR-24 — 表示面の窓を board ごとに 1 つにする（発効 2026-09-30・持ち主の裁定 t3-hub.59.27:20260930T0215Z-1・記帳先 = tsuzuri の台帳の問い t3-hub.59.27 の notes）
+# 判断の記録 ADR-15 の決定 (6) の字のうち、決定 (1) が名指す字だけを置き換える（部分の置き換え・ADR-15 のほかの決定と、決定 (6) のほかの字は効いたまま）。ADR-15 は封の一覧で本文が凍っているので本文は変えない（前例 ADR-15 と ADR-22）。
+# 持ち主の実物の報告と席の調べは台帳 t3-hub.59 の notes（2026-09-30）。Chrome の振る舞いの確かめは起草の作業場の w35a の notes（Xvfb の中の Chrome 148）と検証役 qv35 の見つけ。
+id: ADR-24
+title: 表示面の窓は表示先の PC と board の組ごとに 1 つとし、席はその board の窓だけを選んで操作し、窓を足す手は動いている Chrome へ渡す起動の引数の 1 つだけにする
+status: accepted
+date: 2026-09-30
+context: |
+  判断の記録 ADR-15 の決定 (6) は、席が窓を起こすのを表示先の PC に初めて見せる時の 1 回だけとし、その後の頁の替えを同じ窓の中で行い、初めて見せたかを PC ごとの印で持ち、新しい窓を起こす命令を撃たないと決めた。決定 (1) は、どの project をどの PC に出すかを project ごとに選べるとした。
+  持ち主は 2026-09-30 に、最初の PC で、tsuzuri の project board は menu の無い窓（app mode）で開けたが、そこから開いた account board は普通の Chrome の窓で開き、表示先を同じ PC にした scribe2 の board は開けなかったと報せた。
+  席の調べ（code の読み）。窓を選ぶ所は、PC の Chrome の頁の一覧の先頭の頁（最後に使われた頁）を URL を見ずに使う。持ち主の tz stage open は、頁が 1 つでも在れば「窓は在る（起こさない）」で終わる。席の命令も同じ先頭の頁に当たるので、ほかの project の席が、持ち主の最後に使った board の窓を移しうる（この穴は行 i-stage-guard が、この記録を待たずに塞ぐ）。決定 (1) と決定 (6) は、同じ PC に 2 つの project を出した時に噛み合わない。
+  Chrome の振る舞い（この server の Xvfb の中の Chrome 148・席の確かめ）。動いている Chrome に同じ profile で起動の引数（app mode の URL）を渡すと、渡した process（その都度の実行の単位）はすぐ終わり、動いている Chrome が app の窓を 1 つ足す（その時に、別に Chrome の更新の案内の窓も出た。この server の Chrome が古いためと見る）。2 度目の remote debugging の番号の口（port）の引数は効かない。同じ URL を 2 度渡すと窓が 2 つになる。頁の target の id は navigate で変わらない。頁の target を作る CDP の命令は、app の窓でなく普通の Chrome の窓の tab を開く。頁を全部閉じると Chrome の process は終わる。足した窓の環境は動いている Chrome のもので、渡した環境は効かない（ADR-7 の決定 (14) と同じ）。
+  席は窓の数を持ち主に問い（t3-hub.59.27）、持ち主は案 B を選んだ。
+decision: |
+  (1) ADR-15 の決定 (6) の字のうち、次の 2 つだけをこの記録の決定に置き換える。(ア)「その後の頁の替え・reload・scroll は同じ窓の中で行う」の「同じ窓」を、決定 (2) の「その board の窓」と読む。(イ)「新しい窓を起こす命令は撃たず、歯で断る」を、決定 (4) に置き換える。決定 (6) のほかの字（窓を前に出さず動かさない・窓を起こすのは表示先の PC に初めて見せる時の 1 回だけ・初めて見せたかは PC ごとの印・持ち主が閉じた後は起こし直さず知らせと URL だけを出す・開き直すのは持ち主の tz の口か board の button の頼みの時だけ・見てほしい時は知らせだけ・Windows とほかの種類の PC は後で決める）と、ADR-15 のほかの決定は効いたままとする。
+  (2) 表示面の窓は、表示先の PC と project board の組ごとに 1 つとする。席の命令と持ち主の tz stage open は、PC の Chrome の頁の一覧から、その board の窓だけを選ぶ。その board の窓とは、窓を見つけるか起こした時に覚えた頁の target の id の頁（席が開発中の app の頁へ移した後も同じ窓）か、覚えが無ければ、番号の口（port）がその board の番号の口で、host がこの host の形のどれかで、account board の頁でない頁である。ほかの board の窓と account board の窓は選ばない。
+  (3) 席が自分で窓を起こすのは、ADR-15 の決定 (6) のとおり、その PC に初めて見せる時の 1 回だけとする（その PC の最初の board の窓）。その PC の 2 つ目からの board の窓は、持ち主が tz の口か board の button で頼んだ時だけ起こす。
+  (4) 窓を起こす手は、PC で専用の profile の Chrome を app mode の起動の引数で撃つ 1 つだけとする。Chrome が動いていれば、同じ引数が動いている Chrome に窓を足させる。撃つ前に頁の一覧でその board の窓が無いことを見て、端末ごとの錠の中で撃つ（窓を 2 つにしない）。頁の target を作る CDP の命令（Target.createTarget）と、窓を前に出す命令・窓を動かす命令は撃たず、歯で断る。
+  (5) account board の窓は、席が起こさず、選ばない。account board から持ち主が開いた project board の窓は、席は起こさないが、その board の窓として選んで使い、重ねて起こさない。その開き方（app の窓で開くか）は面の行で決める（問い Q2）。
+options:
+  - id: a
+    name: board ごとに窓を 1 つにし、席が自分で起こすのも board ごとの初めての見せにする
+    text: 決定 (1) から (5) のの字。
+    verdict: rejected
+    reason: 今の PC では、前の PC ごとの印を全部の board の印とみなすので、B と動きが同じになる。PC を足した時には、board ごとの窓が今見ている仮想の机を割って出て 入力の先（focus）を取る。PC を足す時に問い直せる。行が 1 本多い（印の形を変える行 i-board-mark）。
+  - id: b
+    name: board ごとに窓を 1 つにし、席が自分で起こすのは PC ごとに最初の 1 つだけにする
+    text: 決定 (1) から (5)。
+    verdict: adopted
+    reason: project ごとの表示先（ADR-15 の決定 (1)）と噛み合い、ほかの project の席が持ち主の見ている窓を移さない。印の形を変えずに済み、行が 1 本少ない。持ち主が選んだ（t3-hub.59.27）。
+  - id: c
+    name: PC 1 台に窓 1 つのまま、ほかの board はその窓の頁を替えて見せる
+    text: ADR-15 の決定 (6) のまま。
+    verdict: rejected
+    reason: 2 つの project が 1 つの窓を取り合い、片方の見せがもう片方の見ている頁を消す。持ち主は同じ PC に 2 つの board を出す設定をした。
+  - id: d
+    name: 頁の target を CDP の命令で作る
+    text: 動いている Chrome に、頁の target を作る CDP の命令（Target.createTarget）で頁を足す（今の tz stage open の形）。
+    verdict: rejected
+    reason: 足した頁は app の窓でなく普通の Chrome の窓の tab に開く（席の確かめ）。
+basis: [P-12, N-3, N-5, N-7, ADR-5, ADR-7, ADR-15]
+retreat:
+  kind: measure
+  condition: 数えるのは tsuzuri の設計の席で、台帳 t3-hub.59 の notes に 1 件ごとに記帳する。(1) 持ち主が、2 つ目からの board の窓を自分で開くのが手間だと 1 度でも言うか、PC を足すことになったら、案 A（席が自分で起こすのを board ごとにする）を問い直す。(2) 持ち主の PC の Chrome で、起動の引数が動いている Chrome に窓を足さない（新しい process が残る・窓が出ない）か、足した窓のほかに既に在る窓が前に出るか別の仮想の机から今の机へ移ることが 1 度でも分かったら、窓を起こす手（決定 (4)）を問い直す。
+plain: |
+  席があなたの PC に board を見せる時の窓の数を決め直します。
+  これまでは PC 1 台に窓 1 つだったので、tsuzuri の窓が開いている間は scribe2 の窓が開きませんでした。これからは board ごとに窓を 1 つにし、席は自分の board の窓だけを動かします。ほかの board の窓には触れません。
+  席が自分で窓を開くのは、これまでどおり、その PC に初めて見せる時の 1 回だけです。2 つ目からの board の窓は、あなたが tz の命令か board の「窓を開く」button で開きます。あなたが閉じた窓は開き直さず、知らせと URL だけを出します。
+  窓は、PC で動いている Chrome に「この board を menu の無い窓で開いて」と渡して開きます。窓を前に出したり動かしたりはしません。
+approval:
+  who: 持ち主
+  date: 2026-09-30
+  ruling: t3-hub.59.27（裁定 id = t3-hub.59.27:20260930T0215Z-1・board の質問の頁・notes に逐語）
+  verbatim: どちらも推奨でよい
+  surface: R-8
+note: 同じ commit で、判断の記録の封（anchors/adr-seals.yaml）に ADR-24 の行を足し（folio check --freeze-adrs）、要件書の FR16 の字（窓の数と窓を起こす時・新しい窓を起こす命令の読み）と adrs と版を上げ、計画 surface-plan の表示面の段落（4 節の傘 i の続き）と 2 節の i-2 の席の決め (1) を直す。ADR-15 の本文は封で凍っているので変えず、決定 (6) の置き換えはこの記録の決定 (1) だけが持つ。逐語は t3-hub.59.27 の notes。
