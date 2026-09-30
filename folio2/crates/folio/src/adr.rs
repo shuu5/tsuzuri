@@ -801,8 +801,8 @@ fn digits(s: &str) -> bool {
 pub(crate) fn is_date(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 10
-        && b[4] == b'-'
-        && b[7] == b'-'
+        && b.get(4) == Some(&b'-')
+        && b.get(7) == Some(&b'-')
         && digits(&s[..4])
         && digits(&s[5..7])
         && digits(&s[8..])

@@ -179,9 +179,9 @@ impl Counts {
     fn section_line(&self) -> String {
         let parts = TYPES
             .iter()
-            .enumerate()
-            .filter(|(i, _)| self.by_type[*i] > 0)
-            .map(|(i, (_, label))| format!("{label} {}", self.by_type[i]))
+            .zip(self.by_type)
+            .filter(|(_, n)| *n > 0)
+            .map(|((_, label), n)| format!("{label} {n}"))
             .collect::<Vec<_>>();
         format!("{} 節（{}）", self.sections, parts.join("・"))
     }
@@ -274,7 +274,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         current: 3,
         first: 1,
         // 7 章目からは帯の組を繰り返す（Frame の bands は 'static なので 1 面に 1 本だけ leak する・source と同じ）
-        bands: Box::leak((0..chapters).map(|i| BANDS[i % BANDS.len()]).collect()),
+        bands: Box::leak(BANDS.iter().cycle().take(chapters).copied().collect()),
         prev,
         next,
         parts: &PARTS,
@@ -394,7 +394,9 @@ fn counts(secs: &[Sec<'_>], figures: usize) -> R<Counts> {
             .iter()
             .position(|(k, _)| *k == s.key)
             .unwrap_or_default();
-        by_type[i] += 1;
+        if let Some(n) = by_type.get_mut(i) {
+            *n += 1;
+        }
         if s.key == CONTRACT_TABLE {
             rows += s.x.f("rows")?.seq()?.len();
         }
@@ -711,11 +713,11 @@ fn section_chapter(
 fn prose(o: &mut Vec<String>, body: &str) {
     for para in paragraphs(body) {
         let marks = face_adr::item_marks(&para);
-        if marks.len() < 2 {
+        let [(first, _), _, ..] = marks.as_slice() else {
             o.push(format!("<p>{para}</p>"));
             continue;
-        }
-        let intro = para[..marks[0].0].trim();
+        };
+        let intro = para[..*first].trim();
         if !intro.is_empty() {
             o.push(format!("<p class=\"intro\">{intro}</p>"));
         }

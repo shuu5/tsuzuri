@@ -67,7 +67,12 @@ impl Form {
     pub(crate) const NAMES: [&'static str; 3] = ["question", "notes-time", "bead"];
 
     pub(crate) fn name(self) -> &'static str {
-        Self::NAMES[self as usize]
+        let [question, notes_time, bead] = Self::NAMES;
+        match self {
+            Self::Question => question,
+            Self::NotesTime => notes_time,
+            Self::Bead => bead,
+        }
     }
 }
 
@@ -118,13 +123,14 @@ fn joins(c: u8) -> bool {
 
 /// `i` から続く字の終わり（`f` に当たる字の並び）。
 fn run(b: &[u8], i: usize, f: impl Fn(u8) -> bool) -> usize {
-    b[i.min(b.len())..].iter().take_while(|&&c| f(c)).count() + i.min(b.len())
+    let from = i.min(b.len());
+    b.iter().skip(from).take_while(|&&c| f(c)).count() + from
 }
 
 /// `i` からちょうど `n` 字の数字なら、その終わり。
 fn digits(b: &[u8], i: usize, n: usize) -> Option<usize> {
     let end = i.checked_add(n)?;
-    (end <= b.len() && b[i..end].iter().all(u8::is_ascii_digit)).then_some(end)
+    b.get(i..end)?.iter().all(u8::is_ascii_digit).then_some(end)
 }
 
 /// `i` が字 `lit` で始まれば、その終わり。
@@ -134,11 +140,13 @@ fn lit(b: &[u8], i: usize, lit: &str) -> Option<usize> {
 
 /// 語頭の台帳の id の終わり。
 fn bead_end(b: &[u8], i: usize) -> Option<usize> {
-    if i > 0 && joins(b[i - 1]) {
+    if i.checked_sub(1).and_then(|p| b.get(p)).is_some_and(|c| joins(*c)) {
         return None;
     }
-    let head = b.get(i..i + 3)?;
-    if !(head[0].is_ascii_lowercase() && head[1].is_ascii_digit() && head[2] == b'-') {
+    let [first, second, third] = b.get(i..i + 3)? else {
+        return None;
+    };
+    if !(first.is_ascii_lowercase() && second.is_ascii_digit() && *third == b'-') {
         return None;
     }
     let mut end = run(b, i + 3, |c| c.is_ascii_lowercase() || c.is_ascii_digit());

@@ -271,25 +271,26 @@ fn drop_foreign_parens(line: &str) -> String {
     let c: Vec<char> = line.chars().collect();
     let mut out = String::new();
     let mut i = 0;
-    while i < c.len() {
-        if c[i] == '（' {
+    while let Some(&ch) = c.get(i) {
+        if ch == '（' {
             let mut depth = 0;
-            let mut j = i;
-            while j < c.len() {
-                match c[j] {
-                    '（' => depth += 1,
+            let close = c
+                .iter()
+                .enumerate()
+                .skip(i)
+                .find_map(|(j, &x)| match x {
+                    '（' => {
+                        depth += 1;
+                        None
+                    }
                     '）' => {
                         depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
+                        (depth == 0).then_some(j)
                     }
-                    _ => {}
-                }
-                j += 1;
-            }
-            if j < c.len() {
-                let group: String = c[i..=j].iter().collect();
+                    _ => None,
+                });
+            if let Some(j) = close {
+                let group: String = c.iter().skip(i).take(j + 1 - i).collect();
                 if !has_foreign_id(&group) {
                     out.push_str(&group);
                 }
@@ -297,7 +298,7 @@ fn drop_foreign_parens(line: &str) -> String {
                 continue;
             }
         }
-        out.push(c[i]);
+        out.push(ch);
         i += 1;
     }
     out

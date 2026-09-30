@@ -200,20 +200,22 @@ fn format_same(doc: &Value) -> bool {
 /// `rev-list --parents --exclude=refs/stash --all --not HEAD` の行（commit と親）から、取り込んでいない枝の commit
 /// （HEAD から辿れず、祖先に HEAD の祖先を持つもの）を返す。祖先に HEAD の祖先を持たない根の無い枝の commit は入れない（ADR-34）。
 fn aside(text: &str) -> BTreeSet<String> {
-    let rows: Vec<Vec<&str>> = text
+    let rows: Vec<(&str, Vec<&str>)> = text
         .lines()
-        .map(|l| l.split_whitespace().collect::<Vec<_>>())
-        .filter(|r| !r.is_empty())
+        .filter_map(|l| {
+            let mut words = l.split_whitespace();
+            words.next().map(|commit| (commit, words.collect()))
+        })
         .collect();
-    let outside: BTreeSet<&str> = rows.iter().map(|r| r[0]).collect();
+    let outside: BTreeSet<&str> = rows.iter().map(|(commit, _)| *commit).collect();
     let mut children: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     let mut todo: Vec<&str> = Vec::new();
-    for r in &rows {
-        for p in &r[1..] {
+    for (commit, parents) in &rows {
+        for p in parents {
             if outside.contains(p) {
-                children.entry(*p).or_default().push(r[0]);
+                children.entry(*p).or_default().push(*commit);
             } else {
-                todo.push(r[0]);
+                todo.push(*commit);
             }
         }
     }

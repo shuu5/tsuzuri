@@ -209,7 +209,7 @@ pub fn scan_ids(text: &str) -> Vec<String> {
     while i < chars.len() {
         match id_end(&chars, i) {
             Some(end) => {
-                out.push(chars[i..end].iter().collect());
+                out.push(chars.iter().skip(i).take(end - i).collect());
                 i = end;
             }
             None => i += 1,
@@ -234,14 +234,15 @@ fn starts_with_at(chars: &[char], start: usize, prefix: &str) -> bool {
 
 /// `start` から参照 id が始まるなら、その終わりの位置。
 pub(crate) fn id_end(chars: &[char], start: usize) -> Option<usize> {
-    if start > 0 {
-        let prev = chars[start - 1];
-        if prev.is_ascii_alphanumeric() || prev == '-' {
-            return None;
-        }
+    let after_word = start
+        .checked_sub(1)
+        .and_then(|p| chars.get(p))
+        .is_some_and(|prev| prev.is_ascii_alphanumeric() || *prev == '-');
+    if after_word {
+        return None;
     }
     let free = |end: usize| chars.get(end).is_none_or(|c| !c.is_ascii_alphanumeric());
-    let head = chars[start];
+    let head = *chars.get(start)?;
     // 条 id（枝番「.数字」付きも）。枝番まで含めて後ろが空かなければ、枝番を外した形を試す（正規表現の後戻りと同じ）。
     if matches!(head, 'P' | 'A' | 'N') && chars.get(start + 1) == Some(&'-') {
         let n = digits_from(chars, start + 2);
@@ -283,17 +284,21 @@ fn rule_ids_in_text(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
     let is_word = |c: &char| c.is_alphanumeric() || *c == '_';
     let mut out = Vec::new();
-    for start in 0..chars.len() {
-        if !matches!(chars[start], 'R' | 'D') || chars.get(start + 1) != Some(&'-') {
+    for (start, c) in chars.iter().enumerate() {
+        if !matches!(c, 'R' | 'D') || chars.get(start + 1) != Some(&'-') {
             continue;
         }
-        if start > 0 && is_word(&chars[start - 1]) {
+        if start
+            .checked_sub(1)
+            .and_then(|p| chars.get(p))
+            .is_some_and(is_word)
+        {
             continue;
         }
         let n = digits_from(&chars, start + 2);
         let end = start + 2 + n;
         if n > 0 && !chars.get(end).is_some_and(is_word) {
-            out.push(chars[start..end].iter().collect());
+            out.push(chars.iter().skip(start).take(end - start).collect());
         }
     }
     out

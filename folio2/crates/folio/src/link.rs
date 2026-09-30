@@ -272,7 +272,7 @@ pub(crate) fn scan_adr_ids(text: &str) -> Vec<String> {
     while i < chars.len() {
         match adr_end(&chars, i) {
             Some(end) => {
-                out.push(chars[i..end].iter().collect());
+                out.push(chars.iter().skip(i).take(end - i).collect());
                 i = end;
             }
             None => i += 1,
@@ -284,7 +284,10 @@ pub(crate) fn scan_adr_ids(text: &str) -> Vec<String> {
 /// `i` から判断の記録の id が始まるなら、その終わりの位置（scan_adr_ids と面のリンクの口が共有する）。
 pub(crate) fn adr_end(chars: &[char], i: usize) -> Option<usize> {
     let head: Vec<char> = "ADR-".chars().collect();
-    let free_before = i == 0 || !(chars[i - 1].is_ascii_alphanumeric() || chars[i - 1] == '-');
+    let free_before = i
+        .checked_sub(1)
+        .and_then(|p| chars.get(p))
+        .is_none_or(|c| !(c.is_ascii_alphanumeric() || *c == '-'));
     if free_before
         && chars.get(i..i + head.len()) == Some(&head[..])
         && chars
@@ -293,8 +296,9 @@ pub(crate) fn adr_end(chars: &[char], i: usize) -> Option<usize> {
     {
         let start = i + head.len();
         let end = start
-            + chars[start..]
+            + chars
                 .iter()
+                .skip(start)
                 .take_while(|c| c.is_ascii_digit())
                 .count();
         if chars.get(end).is_none_or(|c| !c.is_ascii_alphanumeric()) {

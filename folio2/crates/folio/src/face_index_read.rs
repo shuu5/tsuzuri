@@ -261,10 +261,14 @@ pub fn records(dir: &Path) -> R<Vec<Record>> {
         });
     }
     out.sort_by_key(|r| r.num);
-    if let Some(w) = out.windows(2).find(|w| w[0].num == w[1].num) {
+    if let Some((a, b)) = out
+        .iter()
+        .zip(out.iter().skip(1))
+        .find(|(a, b)| a.num == b.num)
+    {
         return Err(format!(
             "判断の記録の番号 {} が 2 本以上（{}・{}）",
-            w[0].num, w[0].id, w[1].id
+            a.num, a.id, b.id
         ));
     }
     Ok(out)

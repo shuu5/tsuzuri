@@ -96,7 +96,9 @@ fn frame(figures: bool) -> Frame {
         favicon: "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235f45a6'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E要%3C/text%3E%3C/svg%3E\">",
         current: 2,
         first: 1,
-        bands: &BANDS[..CHAPTERS.len() + usize::from(figures)],
+        bands: BANDS
+            .get(..CHAPTERS.len() + usize::from(figures))
+            .unwrap_or(&[]),
         prev: face::link("constitution.html", "憲法"),
         next: face::link("index.html", "入口"),
         parts: &PARTS,
@@ -606,8 +608,10 @@ fn chapter_h2(ctx: &Ctx<'_>, n: usize) -> String {
 }
 
 fn toc(o: &mut Vec<String>, ctx: &Ctx<'_>) {
-    let mut heads = (1..=CHAPTERS.len())
-        .map(|n| (CHAPTERS[n - 1].to_string(), chapter_h2(ctx, n)))
+    let mut heads = CHAPTERS
+        .iter()
+        .zip(1..)
+        .map(|(name, n)| ((*name).to_string(), chapter_h2(ctx, n)))
         .collect::<Vec<_>>();
     // 図の章は 1 枚以上のときだけ（図なしの面は便 33 までと byte 不変）
     let n = ctx.figures.len();
@@ -618,8 +622,9 @@ fn toc(o: &mut Vec<String>, ctx: &Ctx<'_>) {
 }
 
 pub(crate) fn band(o: &mut Vec<String>, ctx: &Ctx<'_>, n: usize, lead: Option<&str>) {
-    ctx.frame
-        .band(o, n, CHAPTERS[n - 1], &chapter_h2(ctx, n), lead);
+    if let Some(name) = n.checked_sub(1).and_then(|i| CHAPTERS.get(i)) {
+        ctx.frame.band(o, n, name, &chapter_h2(ctx, n), lead);
+    }
 }
 
 pub(crate) fn figure_open(

@@ -1,6 +1,5 @@
 //! SHA-256（FIPS 180-4）の手書き（便 7・docs/design/delivery-7.md §1 (d)）。外部 crate を足さない（A-3.1）。
 //! 凍結 anchor の digest（day-1 の床の `hashlib.sha256(…).hexdigest()`）を同じ byte 列で作る。
-#![deny(clippy::indexing_slicing)]
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,

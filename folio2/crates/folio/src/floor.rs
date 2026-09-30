@@ -18,7 +18,6 @@
 //!    前の文を指す語で始まれば、語が文の主なら（`POINTERS`）文も続けて落とし、抜いても文が立つ語なら（`POINTER_ADVERBS`）語だけを
 //!    落とし、同じ括弧の中で台帳の id の項を落としたら「持ち主の裁定」の項も落とす。
 //!    folio2 の置き場と名の無い口は定数の字のまま（folio2 の生成区間は変わらない）。突き合わせ（`floor_diff_for`）も同じ規則で比べる。
-#![deny(clippy::indexing_slicing)]
 
 use std::borrow::Cow;
 

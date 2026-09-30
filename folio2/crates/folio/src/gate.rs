@@ -135,7 +135,10 @@ pub(crate) fn run(dir: &Path, write_set: &[String]) -> Outcome {
             if names_the_place(&root, p) {
                 return (Vec::new(), true);
             }
-            (parts(p)[root.len()..].to_vec(), p.ends_with('/'))
+            (
+                parts(p).into_iter().skip(root.len()).collect(),
+                p.ends_with('/'),
+            )
         })
         .collect();
     let hit = |s: &&StampStop| items.iter().any(|(rel, slash)| covers(dir, rel, *slash, &s.file));
@@ -164,7 +167,7 @@ pub(crate) fn run(dir: &Path, write_set: &[String]) -> Outcome {
 /// 同じ file・場所が dir 形でその下に在る・write-set の項目が dir（末尾が / か `--dir` の下の dir）で場所がその下に在る。
 fn covers(dir: &Path, rel: &[&str], slash: bool, file: &str) -> bool {
     let place = parts(file);
-    let under = |long: &[&str], short: &[&str]| long.len() >= short.len() && long[..short.len()] == *short;
+    let under = |long: &[&str], short: &[&str]| long.starts_with(short);
     if rel == place.as_slice() || (file.ends_with('/') && under(rel, &place)) {
         return true;
     }
@@ -216,7 +219,10 @@ fn other_root(root: &[String], path: &str) -> bool {
     let under = |base: &[String]| {
         parts.len() > base.len() && parts.iter().zip(base).all(|(a, b)| *a == b)
     };
-    !under(root) && (1..root.len()).any(|k| under(&root[k..]))
+    !under(root)
+        && (1..root.len())
+            .filter_map(|k| root.get(k..))
+            .any(under)
 }
 
 /// `--dir` が設計文書の置き場か（便 150 §1 (b) の 1）: 直下に印 PLACE_MARK が file として在る（中身は読まない）。
@@ -231,8 +237,7 @@ fn is_design_source(root: &[String], path: &str) -> bool {
     if parts.len() <= root.len() || parts.iter().zip(root).any(|(a, b)| *a != b) {
         return false;
     }
-    let rest = &parts[root.len()..];
-    rest[0] != "preview" && !parts.contains(&"retired")
+    parts.get(root.len()).is_some_and(|first| *first != "preview") && !parts.contains(&"retired")
 }
 
 /// 置き場そのものか置き場を下に持つ dir を名指すか（便 178 §1 (b) の 1）: 要素の列（頭の `./`・末尾の `/` は落ちる）が

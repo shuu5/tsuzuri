@@ -124,14 +124,15 @@ pub(crate) fn read_typed(path: &Path, file: &str, report: &mut Report) -> Option
         }
     };
     match yaml::parse(&text) {
-        Ok(doc) if !doc.duplicates.is_empty() => {
-            report.unknown(format!(
-                "{file}: parse できない: 同じ表にキー「{}」を 2 度書いている",
-                doc.duplicates[0].key
-            ));
-            return None;
+        Ok(doc) => {
+            if let Some(dup) = doc.duplicates.first() {
+                report.unknown(format!(
+                    "{file}: parse できない: 同じ表にキー「{}」を 2 度書いている",
+                    dup.key
+                ));
+                return None;
+            }
         }
-        Ok(_) => {}
         Err(e) => {
             report.unknown(format!("{file}: parse できない: {e}"));
             return None;
@@ -515,7 +516,10 @@ pub fn check_anchor(
                 continue;
             }
             let vs = py_str(e.get("version"));
-            let expect_prev = (n > 0).then(|| py_str(entries[n - 1].get("version")));
+            let expect_prev = n
+                .checked_sub(1)
+                .and_then(|p| entries.get(p))
+                .map(|prev| py_str(prev.get("version")));
             if n == 0 && vs != first_ver {
                 report.violation(
                     "anchor",
@@ -652,7 +656,10 @@ pub fn check_anchor(
 
     // 列の全区間（便 8 (b)）: 隣り合う anchor の差分は、その版を名指す発効した判断の記録と 1:1
     for pair in chain_versions.windows(2) {
-        if let (Some(pa), Some(ca)) = (find(&pair[0]), find(&pair[1])) {
+        let [prev_ver, cur_ver] = pair else {
+            continue;
+        };
+        if let (Some(pa), Some(ca)) = (find(prev_ver), find(cur_ver)) {
             lineage::verify_pair(
                 &pa.doc,
                 ca.doc.get("content").unwrap_or(&Value::Null),

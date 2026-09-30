@@ -168,7 +168,7 @@ fn chapter_name(ctx: &Ctx<'_>, i: usize) -> &'static str {
     match i {
         0 => "北極星",
         1 => "読み方",
-        2..=4 => ctx.tiers[i - 2].1.name,
+        2..=4 => ctx.tiers.get(i - 2).map_or("", |t| t.1.name),
         5 => "数値の表（rules）",
         6 => "改訂",
         7 => "用語集",
@@ -298,7 +298,12 @@ fn chapter_h2(ctx: &Ctx<'_>, i: usize, c: &X<'_>, r: &X<'_>) -> R<String> {
     Ok(match i {
         0 => "何のために・誰のために・何をあきらめるか".to_string(),
         1 => format!("{} 段の意味 — {}", ctx.tiers.len(), tier_names(ctx)),
-        2..=4 => count_word(tier_count(ctx, &ctx.tiers[i - 2].0), "原則"),
+        2..=4 => count_word(
+            ctx.tiers
+                .get(i - 2)
+                .map_or(0, |t| tier_count(ctx, &t.0)),
+            "原則",
+        ),
         5 => format!(
             "数値と作法の表 — 閾値行 {}・開発規律行 {}",
             r.f("thresholds")?.seq()?.len(),

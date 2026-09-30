@@ -90,11 +90,11 @@ pub const TIME_FORMAT: &str = r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}Z)?$";
 /// 裁定の時刻の形か（`TIME_FORMAT`・便 204）。年-月-日は判断の記録の日付と同じ `adr::is_date`、UTC の分はその後ろに「T」時 2 桁
 /// 「:」分 2 桁「Z」。暦に在る日かは見ない。
 pub fn is_time(s: &str) -> bool {
-    let Some(date) = s.get(..10) else {
+    let Some((date, rest)) = s.split_at_checked(10) else {
         return false;
     };
     crate::adr::is_date(date)
-        && match &s.as_bytes()[10..] {
+        && match rest.as_bytes() {
             [] => true,
             [b'T', h1, h2, b':', m1, m2, b'Z'] => [h1, h2, m1, m2].iter().all(|c| c.is_ascii_digit()),
             _ => false,

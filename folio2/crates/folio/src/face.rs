@@ -162,6 +162,12 @@ pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) ->
     let chars: Vec<char> = html.chars().collect();
     let at = |i: usize, s: &str| s.chars().enumerate().all(|(k, c)| chars.get(i + k) == Some(&c));
     let find = |from: usize, s: &str| (from..chars.len()).find(|&j| at(j, s));
+    // `at` 番目から `back` 字前の字
+    let before = |at: usize, back: usize| {
+        at.checked_sub(back)
+            .and_then(|p| chars.get(p))
+            .copied()
+    };
     let mut out = String::with_capacity(html.len());
     // 触らない要素（a・head・script・svg）の深さ
     let mut shut = 0usize;
@@ -170,12 +176,11 @@ pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) ->
         let start = i;
         if at(i, "<!--") {
             i = find(i + 4, "-->").map_or(chars.len(), |j| j + 3);
-        } else if chars[i] == '<' {
+        } else if chars.get(i) == Some(&'<') {
             // タグの終わり（引用符の中の「>」は数えない）
             let mut quote = None;
             i += 1;
-            while i < chars.len() {
-                let c = chars[i];
+            while let Some(&c) = chars.get(i) {
                 i += 1;
                 match quote {
                     Some(q) if c == q => quote = None,
@@ -186,15 +191,19 @@ pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) ->
                 }
             }
             let close = chars.get(start + 1) == Some(&'/');
-            let name: String = chars[start + 1 + usize::from(close)..i]
+            let name_from = start + 1 + usize::from(close);
+            let name: String = chars
                 .iter()
+                .skip(name_from)
+                .take(i.saturating_sub(name_from))
                 .take_while(|c| c.is_ascii_alphanumeric())
                 .collect::<String>()
                 .to_ascii_lowercase();
-            if matches!(name.as_str(), "a" | "head" | "script" | "svg") && chars[i - 1] == '>' {
+            if matches!(name.as_str(), "a" | "head" | "script" | "svg") && before(i, 1) == Some('>')
+            {
                 if close {
                     shut = shut.saturating_sub(1);
-                } else if chars[i - 2] != '/' {
+                } else if before(i, 2) != Some('/') {
                     shut += 1;
                     // script の中身は字でもタグでもない（閉じタグの前まで写す）
                     if name == "script" {
@@ -206,7 +215,7 @@ pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) ->
             && let Some(end) = crate::link::adr_end(&chars, i)
                 .or_else(|| all.then(|| crate::refs::id_end(&chars, i)).flatten())
         {
-            let id: String = chars[i..end].iter().collect();
+            let id: String = chars.iter().skip(i).take(end - i).collect();
             match href(&id) {
                 Some(h) => out.push_str(&format!("<a class=\"xref\" href=\"{h}\">{id}</a>")),
                 None => out.push_str(&id),
@@ -216,7 +225,7 @@ pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) ->
         } else {
             i += 1;
         }
-        out.extend(&chars[start..i]);
+        out.extend(chars.iter().skip(start).take(i - start));
     }
     out
 }
@@ -546,7 +555,9 @@ impl Frame {
 
     /// 章の帯（section）。`n` は章の番号・`lead` は組み立て済みの HTML。
     pub fn band(&self, o: &mut Vec<String>, n: usize, name: &str, h2: &str, lead: Option<&str>) {
-        let (class, svg) = self.bands[n - self.first];
+        let Some(&(class, svg)) = n.checked_sub(self.first).and_then(|k| self.bands.get(k)) else {
+            return;
+        };
         o.push(format!(
             "<section id=\"s{n}\" {} class=\"{class}\"><span class=\"num\">{n:02}</span>",
             self.dc(Component::ChapterDeckBand)

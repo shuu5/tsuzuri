@@ -540,8 +540,8 @@ fn error_field(stdout: &str) -> Option<&str> {
 fn string_end(value: &str) -> Option<usize> {
     let bytes = value.as_bytes();
     let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
+    while let Some(&c) = bytes.get(i) {
+        match c {
             b'\\' => i += 2,
             b'"' => return Some(i),
             _ => i += 1,

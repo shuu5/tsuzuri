@@ -19,6 +19,7 @@
     clippy::unimplemented,
     clippy::unreachable,
     clippy::exit,
+    clippy::indexing_slicing,
     clippy::dbg_macro,
     clippy::print_stdout,
     clippy::print_stderr,

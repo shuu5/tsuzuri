@@ -2,7 +2,6 @@
 //! day-1 の床（scripts/check_draft.py の vocab）と同じ式。正規表現は使わず文字の走査で判定する。
 //! 判断の記録（adr/）の本文と凍結 anchor は R-9 の母集団に入れない。判断の記録の本文は便 6 の `link.rs` が
 //! 同じ切り出し・既知の集合・免除（`known_words`・`unknown_words`）で数える（種別は adr）。
-#![deny(clippy::indexing_slicing)]
 
 use std::collections::{BTreeSet, HashSet};
 

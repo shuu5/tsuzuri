@@ -293,7 +293,7 @@ pub(crate) fn build(cur: &Current) -> Result<String, String> {
         .map(|r| {
             Value::Map(vec![
                 (s("id"), s(&r.id)),
-                (s("section"), s(SECTIONS[r.section].0)),
+                (s("section"), s(SECTIONS.get(r.section).map_or("", |sec| sec.0))),
                 (s("sum"), s(&r.sum)),
             ])
         })

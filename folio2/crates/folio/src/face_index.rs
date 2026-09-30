@@ -243,15 +243,16 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
     for (n, d) in ctx.docs.iter().enumerate() {
         if d.id == "adr" {
             o.push("<div class=\"shelf-adr\">".to_string());
-            let up = &ctx.relations[3];
-            o.push(format!(
-                "<span {} class=\"{}\"><span class=\"arrow\"></span><span class=\"lbl\">{} → {} {}</span></span>",
-                dc(Component::ShelfLink),
-                up.class,
-                up.from_ty,
-                up.label,
-                hint_q(&up.hint)
-            ));
+            if let Some(up) = ctx.relations.get(3) {
+                o.push(format!(
+                    "<span {} class=\"{}\"><span class=\"arrow\"></span><span class=\"lbl\">{} → {} {}</span></span>",
+                    dc(Component::ShelfLink),
+                    up.class,
+                    up.from_ty,
+                    up.label,
+                    hint_q(&up.hint)
+                ));
+            }
             // 棚の置き場（div の shelf-adr）は grid の外なので、card 自身の class だけが「読める」側で変わる
             let class = if ctx.adr.is_empty() {
                 "is-absent"
@@ -290,8 +291,9 @@ fn adr_rows(o: &mut Vec<String>, adr: &[Record]) {
         })
         .collect::<Vec<_>>()
         .join("・");
-    let first = &adr[0];
-    let last = &adr[adr.len() - 1];
+    let (Some(first), Some(last)) = (adr.first(), adr.last()) else {
+        return;
+    };
     o.push(format!(
         "<p class=\"sc-row\"><span class=\"state ok\">● {} 本</span><span>{}〜{}（{kinds}）</span></p>",
         adr.len(),
@@ -402,7 +404,9 @@ fn shelf_card(o: &mut Vec<String>, ctx: &Ctx, d: &Doc, class: &str) {
 
 /// n 番目の文書の後の関係（shelf-c の後 = binds・shelf-s の後 = before-build・shelf-d の後 = inside）。
 fn shelf_link(o: &mut Vec<String>, ctx: &Ctx, n: usize) {
-    let rel = &ctx.relations[n];
+    let Some(rel) = ctx.relations.get(n) else {
+        return;
+    };
     let chips = if n == 2 {
         let chips = ctx
             .annexes

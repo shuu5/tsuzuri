@@ -7,7 +7,6 @@
 //! 閉じた一覧そのものの取り込みは `catalog.rs`（便 108・ADR-15・層 1 読む）へ降ろした。
 //! 焼いた正本（便 153・ADR-27 決定 (2)）: 置き場に部品目録か様式が無いときだけ、組み立て時に焼いた folio2 の字で埋める。
 //! 「無い」は `absent`（file が見つからないときだけ）で判定し、在るのに読めない file は今までどおり まだ分からない。
-#![deny(clippy::indexing_slicing)]
 
 use std::borrow::Cow;
 use std::collections::HashSet;

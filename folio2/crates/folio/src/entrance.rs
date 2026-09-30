@@ -22,11 +22,16 @@ pub const INDEX_TOP_LEVEL: [&str; 6] = ["meta", "audience", "shelf", "lanes", "i
 /// 表の鍵の列（id だけ）を組み立て時に取り出す。長さは表の長さと同じでなければ組み立てが通らない。
 const fn ids<T: Copy, const N: usize>(table: &'static [(&'static str, T)]) -> [&'static str; N] {
     assert!(table.len() == N);
-    let mut out = [table[0].0; N];
-    let mut i = 1;
-    while i < N {
-        out[i] = table[i].0;
-        i += 1;
+    let Some((head, _)) = table.split_first() else {
+        return [""; N];
+    };
+    let mut out = [head.0; N];
+    let mut dst = out.as_mut_slice();
+    let mut src = table;
+    while let (Some((d, d_rest)), Some((s, s_rest))) = (dst.split_first_mut(), src.split_first()) {
+        *d = s.0;
+        dst = d_rest;
+        src = s_rest;
     }
     out
 }

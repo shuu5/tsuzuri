@@ -2,7 +2,6 @@
 //! §1 (b)・ADR-15・層 1 読む）。読み手・組み直し・要約値・面の名の形・結果の型は `bundle.rs` から、閉じた一覧 8 本は
 //! `ceiling.rs` から、印の file 名は `stamp.rs` から字を変えずに降ろした（移した注の中の file 名は移す前の置き場を指す）。
 //! 読むのは束を組む命令（`bundle.rs`）・天井の床（`ceiling.rs`）・所見の検査（`findings.rs`）・門（`gate.rs`）・印・索引・面・入口。
-#![deny(clippy::indexing_slicing)]
 
 use std::collections::BTreeMap;
 use std::fs;

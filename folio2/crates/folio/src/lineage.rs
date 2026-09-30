@@ -57,8 +57,15 @@ impl Json<'_> {
         }
     }
 
+    /// 位置から先の byte が `word` で始まるか（範囲の外は false）。
+    fn ahead(&self, word: &str) -> bool {
+        self.b
+            .get(self.i..)
+            .is_some_and(|rest| rest.starts_with(word.as_bytes()))
+    }
+
     fn lit(&mut self, word: &str) -> bool {
-        if self.b[self.i..].starts_with(word.as_bytes()) {
+        if self.ahead(word) {
             self.i += word.len();
             true
         } else {
@@ -94,7 +101,7 @@ impl Json<'_> {
             Some(b'"') => self.string(),
             Some(b'[') => self.array(depth),
             Some(b'{') => self.object(depth),
-            Some(b'-') if self.b[self.i..].starts_with(b"-Infinity") => self.lit("-Infinity"),
+            Some(b'-') if self.ahead("-Infinity") =>self.lit("-Infinity"),
             Some(b'-' | b'0'..=b'9') => self.number(),
             _ => false,
         }

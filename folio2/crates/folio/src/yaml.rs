@@ -409,8 +409,8 @@ fn resolve_plain(s: &str) -> Option<Value> {
 fn is_date(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 10
-        && b[4] == b'-'
-        && b[7] == b'-'
+        && b.get(4) == Some(&b'-')
+        && b.get(7) == Some(&b'-')
         && all_digits(&s[..4])
         && all_digits(&s[5..7])
         && all_digits(&s[8..])
@@ -466,7 +466,9 @@ fn pyyaml_typed(s: &str) -> bool {
     let (mantissa, exp_ok) = match body.find(['e', 'E']) {
         Some(i) => {
             let e = &body[i + 1..];
-            let ok = e.len() >= 2 && matches!(e.as_bytes()[0], b'-' | b'+') && all_digits(&e[1..]);
+            let ok = e.len() >= 2
+                && matches!(e.as_bytes().first(), Some(b'-' | b'+'))
+                && all_digits(&e[1..]);
             (&body[..i], ok)
         }
         None => (body, true),
@@ -476,7 +478,7 @@ fn pyyaml_typed(s: &str) -> bool {
         let int_ok = if int.is_empty() {
             s == body && frac.as_bytes().first().is_some_and(u8::is_ascii_digit)
         } else {
-            int.as_bytes()[0].is_ascii_digit() && int.bytes().all(dig_)
+            int.as_bytes().first().is_some_and(u8::is_ascii_digit) && int.bytes().all(dig_)
         };
         if int_ok && frac_ok {
             return true;
@@ -513,8 +515,9 @@ fn is_timestamp_with_time(s: &str) -> bool {
     let b = s.as_bytes();
     let mut i = 0;
     let digits_at = |i: &mut usize, min: usize, max: usize| {
-        let n = b[*i..]
+        let n = b
             .iter()
+            .skip(*i)
             .take(max)
             .take_while(|c| c.is_ascii_digit())
             .count();
@@ -538,8 +541,9 @@ fn is_timestamp_with_time(s: &str) -> bool {
         return false;
     }
     if !byte_at(&mut i, b"Tt") {
-        let n = b[i..]
+        let n = b
             .iter()
+            .skip(i)
             .take_while(|c| matches!(c, b' ' | b'\t'))
             .count();
         if n == 0 {
@@ -556,10 +560,11 @@ fn is_timestamp_with_time(s: &str) -> bool {
         return false;
     }
     if byte_at(&mut i, b".") {
-        i += b[i..].iter().take_while(|c| c.is_ascii_digit()).count();
+        i += b.iter().skip(i).take_while(|c| c.is_ascii_digit()).count();
     }
-    i += b[i..]
+    i += b
         .iter()
+        .skip(i)
         .take_while(|c| matches!(c, b' ' | b'\t'))
         .count();
     if i == b.len() {

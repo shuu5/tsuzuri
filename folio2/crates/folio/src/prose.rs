@@ -274,11 +274,11 @@ fn digits(s: &str) -> usize {
 
 /// 先頭の `[a-z][a-z0-9-]*` の長さ（英小文字で始まらなければ None）。
 fn lower_id(s: &str) -> Option<usize> {
-    let b = s.as_bytes();
-    if !b.first().is_some_and(u8::is_ascii_lowercase) {
+    let (first, rest) = s.as_bytes().split_first()?;
+    if !first.is_ascii_lowercase() {
         return None;
     }
-    let tail = b[1..]
+    let tail = rest
         .iter()
         .take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || **c == b'-')
         .count();
@@ -293,13 +293,17 @@ fn number_with_unit(sentence: &str, spans: &[(usize, usize)], gate: &Gate) -> bo
     let inside = |p: usize| spans.iter().any(|(a, b)| p >= *a && p < *b);
     let b = sentence.as_bytes();
     let mut i = 0;
-    while i < b.len() {
-        if !b[i].is_ascii_digit() || inside(i) || (i > 0 && b[i - 1].is_ascii_digit()) {
+    while let Some(&cur) = b.get(i) {
+        let after_digit = i
+            .checked_sub(1)
+            .and_then(|p| b.get(p))
+            .is_some_and(u8::is_ascii_digit);
+        if !cur.is_ascii_digit() || inside(i) || after_digit {
             i += 1;
             continue;
         }
         let mut end = i;
-        while end < b.len() && b[end].is_ascii_digit() {
+        while b.get(end).is_some_and(u8::is_ascii_digit) {
             end += 1;
         }
         let mut at = end;

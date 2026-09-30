@@ -105,7 +105,7 @@ fn frame(chapters: usize, dir: &Path, id: &str) -> R<Frame> {
         favicon: FAVICON,
         current: 3,
         first: 1,
-        bands: &BANDS[..chapters],
+        bands: BANDS.get(..chapters).unwrap_or(&[]),
         prev,
         next,
         parts: &PARTS,
@@ -613,7 +613,10 @@ fn toc(f: &Frame, o: &mut Vec<String>, figures: usize) {
 }
 
 fn band(o: &mut Vec<String>, f: &Frame, n: usize) {
-    f.band(o, n, CHAPTERS[n - 1], H2[n - 1], None);
+    let at = n.checked_sub(1);
+    if let Some((name, h2)) = at.and_then(|i| CHAPTERS.get(i).zip(H2.get(i))) {
+        f.band(o, n, name, h2, None);
+    }
 }
 
 // ── 章 ──
@@ -629,11 +632,11 @@ pub(crate) fn item_marks(body: &str) -> Vec<(usize, usize)> {
     let mut marks = Vec::new();
     let mut want = 1u32;
     let mut i = 0;
-    while i < b.len() {
+    while let Some(&c) = b.get(i) {
         // 半角の開き括弧 + ASCII の数字 1 つ以上 + 半角の閉じ括弧 + 半角空白 1 つ
-        if b[i] == b'(' {
+        if c == b'(' {
             let mut j = i + 1;
-            while j < b.len() && b[j].is_ascii_digit() {
+            while b.get(j).is_some_and(u8::is_ascii_digit) {
                 j += 1;
             }
             if j > i + 1 && b.get(j) == Some(&b')') && b.get(j + 1) == Some(&b' ') {
@@ -661,10 +664,8 @@ fn prose_chapter(o: &mut Vec<String>, f: &Frame, n: usize, body: &str) {
     band(o, f, n);
     o.push("<div class=\"chapbody\">".to_string());
     let marks = item_marks(body);
-    if marks.len() < 2 {
-        o.push(format!("<p>{}</p>", strong(body)));
-    } else {
-        let intro = body[..marks[0].0].trim();
+    if let [(first, _), _, ..] = marks.as_slice() {
+        let intro = body[..*first].trim();
         if !intro.is_empty() {
             o.push(format!("<p class=\"intro\">{}</p>", strong(intro)));
         }
@@ -674,6 +675,8 @@ fn prose_chapter(o: &mut Vec<String>, f: &Frame, n: usize, body: &str) {
             o.push(format!("<li>{}</li>", strong(body[*end..stop].trim())));
         }
         o.push("</ol>".to_string());
+    } else {
+        o.push(format!("<p>{}</p>", strong(body)));
     }
     o.push("</div>".to_string());
 }
@@ -724,21 +727,23 @@ fn basis_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &Ct
         } else {
             String::new()
         };
-        groups[t.group].push(format!("<li>{}{title}</li>", link_text(&t, id)));
+        if let Some(g) = groups.get_mut(t.group) {
+            g.push(format!("<li>{}{title}</li>", link_text(&t, id)));
+        }
     }
     o.push(format!(
         "<div {} style=\"--band-n:{}\">",
         f.dc(Component::SectionLeadCallout),
         groups.iter().filter(|g| !g.is_empty()).count()
     ));
-    for (k, g) in groups.iter().enumerate() {
+    for (g, label) in groups.iter().zip(BASIS_GROUPS.iter()) {
         if g.is_empty() {
             continue;
         }
         o.push(card(
             "card",
             None,
-            &format!("{}（{}）", BASIS_GROUPS[k], g.len()),
+            &format!("{label}（{}）", g.len()),
             &format!("<ul class=\"basis\">\n{}\n</ul>", g.join("\n")),
         ));
     }
