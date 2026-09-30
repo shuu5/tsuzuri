@@ -11,3 +11,6 @@ yaml-rust2 = { version = "0.12", default-features = false }
 
 [build-dependencies]
 yaml-rust2 = { version = "0.12", default-features = false }
+
+[lints]
+workspace = true

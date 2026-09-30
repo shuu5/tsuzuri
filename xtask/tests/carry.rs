@@ -174,11 +174,8 @@ fn cexcl_table_rows() {
         .iter()
         .map(|r| (r.rule.as_str(), r.removed_by.as_str()))
         .collect();
-    assert_eq!(
-        got,
-        [("R-4", "k-size-folio"), ("R-10", "k-lint-folio")]
-    );
-    for (row, scope) in rows.iter().zip([SCOPE_R4, SCOPE_R10]) {
+    assert_eq!(got, [("R-4", "k-size-folio")]);
+    for (row, scope) in rows.iter().zip([SCOPE_R4]) {
         assert_eq!(row.path, FOLIO_PATH, "{row:?}");
         assert_eq!(row.ruling, RULING, "{row:?}");
         assert_eq!(row.scope, scope, "{row:?}");

@@ -7,10 +7,3 @@ path = "folio2/crates/folio/"
 scope = "大きさの上限（1 module の行数・関数の粒度・歯と source の行数比）"
 ruling = "t3-hub.67.4:20260929T0058Z-1"
 removed_by = "k-size-folio"
-
-[[exclusion]]
-rule = "R-10"
-path = "folio2/crates/folio/"
-scope = "lint で deny にする書き方（unwrap・expect・panic・直接の print ほか）"
-ruling = "t3-hub.67.4:20260929T0058Z-1"
-removed_by = "k-lint-folio"

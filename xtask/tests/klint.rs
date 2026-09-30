@@ -1,5 +1,6 @@
 //! 行 k-lint-base の歯: 規則の行 R-10 の書き方を workspace の lint の表で deny にする機構（条 P-24.1）と、
-//! 規則の行 R-4 の関数の粒度の値を写した clippy.toml と、member の manifest が表を継ぐこと（持ち込んだ folio は除外の表が外す）。
+//! 規則の行 R-4 の関数の粒度の値を写した clippy.toml と、member の manifest が表を継ぐこと（除外の表の R-10 の行が名指す member は継がず、
+//! 行 k-lint-folio が folio の R-10 の行を消して継がせた・R-4 の行の間は表に R-4 の lint を置かない）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
@@ -139,8 +140,8 @@ fn r4_number(value: &str, word: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-/// 除外の表 carry-exclusions.toml の規則 R-10 の行の path（末尾の字 / を除く）。
-fn excluded_r10() -> Vec<String> {
+/// 除外の表 carry-exclusions.toml の規則 `id` の行の path（末尾の字 / を除く）。
+fn excluded_paths(id: &str) -> Vec<String> {
     let text = read("carry-exclusions.toml");
     let mut rows: Vec<(String, String)> = Vec::new();
     for line in body(&text) {
@@ -157,7 +158,7 @@ fn excluded_r10() -> Vec<String> {
         }
     }
     rows.into_iter()
-        .filter(|(rule, _)| rule == "R-10")
+        .filter(|(rule, _)| rule == id)
         .map(|(_, path)| path.trim_end_matches('/').to_string())
         .collect()
 }
@@ -280,10 +281,16 @@ fn klint_r4_number_reads_value() {
 fn klint_members_follow_carry_table() {
     let members = members();
     assert_eq!(members.len(), 6, "{members:?}");
-    let excluded = excluded_r10();
-    assert!(!excluded.is_empty(), "除外の表に R-10 の行が無い");
+    let excluded = excluded_paths("R-10");
     for path in &excluded {
         assert!(members.contains(path), "{path} が members に無い");
+    }
+    // R-4 の行が member を名指す間は、表に R-4 の lint を置かない（除外の表と食い違う）。
+    if excluded_paths("R-4").iter().any(|p| members.contains(p)) {
+        for name in ENABLED {
+            let basis = MAP.iter().find(|m| m.0 == name).map(|m| m.3);
+            assert_ne!(basis, Some("R-4"), "R-4 の行の間に ENABLED が {name} を持つ");
+        }
     }
     for member in &members {
         let text = read(&format!("{member}/Cargo.toml"));
@@ -321,7 +328,7 @@ fn test_roots(member: &str) -> Vec<PathBuf> {
 #[test]
 fn klint_test_roots_cfg_test() {
     let members = members();
-    let excluded = excluded_r10();
+    let excluded = excluded_paths("R-10");
     let mut seen = 0;
     for member in &members {
         if excluded.contains(member) {
