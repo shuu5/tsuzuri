@@ -23,7 +23,6 @@ const KEYS: [&str; 5] = ["rule", "path", "scope", "ruling", "removed_by"];
 
 const RULING: &str = "t3-hub.67.4:20260929T0058Z-1";
 const FOLIO_PATH: &str = "folio2/crates/folio/";
-const SCOPE_R4: &str = "大きさの上限（1 module の行数・関数の粒度・歯と source の行数比）";
 const SCOPE_R10: &str = "lint で deny にする書き方（unwrap・expect・panic・直接の print ほか）";
 
 fn repo_root() -> PathBuf {
@@ -170,16 +169,7 @@ fn accepts(text: &str) -> Result<(), String> {
 #[test]
 fn cexcl_table_rows() {
     let rows = parse_table(&read(TABLE)).expect("表の読み");
-    let got: Vec<(&str, &str)> = rows
-        .iter()
-        .map(|r| (r.rule.as_str(), r.removed_by.as_str()))
-        .collect();
-    assert_eq!(got, [("R-4", "k-size-folio")]);
-    for (row, scope) in rows.iter().zip([SCOPE_R4]) {
-        assert_eq!(row.path, FOLIO_PATH, "{row:?}");
-        assert_eq!(row.ruling, RULING, "{row:?}");
-        assert_eq!(row.scope, scope, "{row:?}");
-    }
+    assert!(rows.is_empty(), "表の行の列は空: {rows:?}");
     judge_rows(&rows).expect("表の行の列は repo の木の確かめを通る");
 }
 

@@ -393,6 +393,7 @@ wsteady_ wstrip_
                 "crates/tsuzuri-core",
                 "crates/tsuzuri-boundary",
                 "crates/tsuzuri-surface",
+                "folio2/crates/folio",
                 "xtask"
             ]
         );

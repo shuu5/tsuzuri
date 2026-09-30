@@ -709,7 +709,7 @@ fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Re
 /// 節 1 つ（番号・型・型ごとの行）。
 #[expect(
     clippy::too_many_arguments,
-    reason = "関数の粒度は規則の行 R-4 の除外の表が持つ（行 k-size-folio が直す）"
+    reason = "引数は規則の行 R-4 の 5 以下を越え、too_many_arguments を workspace の lint の表に足す後の行が直す"
 )]
 fn check_section(
     file: &str,

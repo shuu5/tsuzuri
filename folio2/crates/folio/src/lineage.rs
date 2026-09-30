@@ -482,7 +482,7 @@ fn structural_diff(
 /// 余りも不足も落とす。`c` は現行の憲法（amended_by を引く）。比べられたら差分を返す（便 9 の凍結が使う）。
 #[expect(
     clippy::too_many_arguments,
-    reason = "関数の粒度は規則の行 R-4 の除外の表が持つ（行 k-size-folio が直す）"
+    reason = "引数は規則の行 R-4 の 5 以下を越え、too_many_arguments を workspace の lint の表に足す後の行が直す"
 )]
 pub(crate) fn verify_pair(
     prev_doc: &Value,
