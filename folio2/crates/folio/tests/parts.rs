@@ -4,6 +4,7 @@
 //! 便 52（delivery-52.md §1 (d) 3・4）: build.rs を path で取り込み、純粋な関数 `parts_catalog`（部品目録の文字列 →
 //! 導出した Rust の source か理由の文）を直に呼ぶ = 実の部品目録で Ok・変異 3 つがそれぞれ Err。実行時の一致 = 部品目録の
 //! 上限か図の型の名札を変えた写しで --check が「まだ分からない」。
+#![cfg(test)]
 
 #[allow(dead_code)]
 #[path = "../build.rs"]

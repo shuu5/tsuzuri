@@ -11,6 +11,7 @@
 //!   列 0 の `- `・生成区間
 //!
 //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

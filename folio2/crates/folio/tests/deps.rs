@@ -2,6 +2,7 @@
 //! yaml-rust2 の既定の機能 encoding（字の符号を見分けて読む口 YamlDecoder だけが使う）を外し、
 //! その機能だけが引いていた外の部品 encoding_rs を置き場の解いた依存の一覧（Cargo.lock）から無くす。
 //! 外の部品を増やす・減らすときの確認は条 A-3.1 が持つ（ここは減らした後の形を数えるだけ）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

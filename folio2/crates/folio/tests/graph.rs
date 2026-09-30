@@ -8,6 +8,7 @@
 //!
 //! 便 195（行 gp）: f195_ 1. 実の graph.yaml の生成区間の末尾 4 欄（ids・ids_note・mentions・mentions_note）の型付きの値が期待の字と順
 //! のまま（鍵の過不足も落とす）・2 つの注が正本の定数の置き場を名指す。
+#![cfg(test)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;

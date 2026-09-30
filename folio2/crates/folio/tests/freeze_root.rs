@@ -17,6 +17,7 @@
 //!
 //! 便 174（docs/design/delivery-174.md §1 (e)）: 名を folio2 の外の名に替えた写しは、設計ノートの欄の決まりの写しも外の置き場の
 //! 形に揃える（`abroad_note`・列の根の表を空にする `empty_table` と同じ扱い）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

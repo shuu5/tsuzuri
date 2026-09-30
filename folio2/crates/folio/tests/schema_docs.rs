@@ -66,6 +66,7 @@
 //! 便 197（delivery-197.md §1 (b)(d)）: 相談窓口の生成区間に回答の値の読み方と行き先の固定の値の写し 4 行（F77_REGIONS の intake.yaml を、
 //! 前の anchor に 4 行を手で足した写しを sha256sum で測り直した 7 行・1644 byte と要約値に）。規則の表の除外の 2 行の字（RULES_REGION_* を 3512 byte と要約値に）。
 //! 便 196: 要件書の生成区間の末尾に id の一覧の anchor の定数の写し ids_anchor の 7 行と注 1 行（F77_REGIONS の srs.yaml を測り直した値に）。
+#![cfg(test)]
 
 use std::fs;
 use std::io::Write;

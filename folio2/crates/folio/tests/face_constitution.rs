@@ -4,6 +4,7 @@
 //! - 便 135: 本文の判断の記録の番号は正本の在る番号だけ adr-n.html へのリンク（逐語を比べる歯は包みを外して比べる）
 //!
 //! 実の置き場 design-intent/ と図の道具 vendor/archify/ を一時 dir へ写して面を書く（版管理の下の面は書き換えない）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

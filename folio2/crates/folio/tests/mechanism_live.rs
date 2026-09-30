@@ -13,6 +13,7 @@
 //! 便 203（docs/design/delivery-203.md §1 (c)）: 骨格では、違反の名札（素の床・編集時の口・folio parts）が folio2 の id を名指さず
 //! 検査の名になり（置き場が同じ id の条か行を持っても同じ）、まだ分からない の行から folio2 の番号の片が落ちる。同じ中身で名だけ
 //! folio2 にした写しは今の字（f203_ の 1 本）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

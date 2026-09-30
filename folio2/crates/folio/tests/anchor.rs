@@ -4,6 +4,7 @@
 //! 加えて main の `design-intent/anchors/constitution-v1.0.yaml` を型付きの読みと正規化で sha256 に掛け、
 //! file の digest 欄と床の定数 root_digest に一致することを見る（凍結 anchor が生成側からも検査側からも独立した物差し・P-10.1）。
 //! fixture の digest は歯の中では計算しない（file に書いた値＝凍結）。
+#![cfg(test)]
 
 #[allow(dead_code)]
 #[path = "../src/sha256.rs"]

@@ -3,6 +3,7 @@
 //! 器の導出 file を写しの根に置き、git init と 1 commit を行う（tests/freeze.rs の Work と同じ作り）。
 //! (1) FR の行を消す → 1・P-7／(2) FR の番号だけを替える → 1・P-7.1／(3) FR を足すだけ → 0／(4) ids- の anchor を外す → 2／
 //! (5) (4) で --freeze-ids → 0・commit して素の床 → 0・二度目は断り／(6) 実の anchor の id 53 本と FR1 の要約値の凍結 literal。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

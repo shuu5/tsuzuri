@@ -8,6 +8,7 @@
 //!
 //! 便 211（docs/design/delivery-211.md §1 (c)）: 版管理の追跡される file に tailnet の範囲の IPv4 の住所の字が 1 つも無い。
 //! 判定は外の利用者の公開の走査と同じ形をこの file の中で独立に書き、住所の字はこの file でも部品の数から組む。
+#![cfg(test)]
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

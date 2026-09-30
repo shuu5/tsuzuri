@@ -2,6 +2,7 @@
 //! 器の行数の式で face.rs が上限の内に収まり、移した定義が新しい module に在って face.rs に無く、
 //! face.rs が新しい module を丸ごと再輸出する行を 1 本だけ持つことを見る。振る舞いの不変は既存の歯が見る。
 //! 便 109（docs/design/delivery-109.md §1 (e) の 2・ADR-15 決定 (5)）で、棚の一覧の 3 本の置き場の見張りだけを shelf.rs へ直した。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

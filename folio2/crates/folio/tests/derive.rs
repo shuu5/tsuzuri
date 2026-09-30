@@ -14,6 +14,7 @@
 //! 7. 便 120（docs/design/delivery-120.md §1 (d) の 4）: 凍結の対 need-conditional.yaml と need-conditional-schema.toml
 //!    （verify と done が要否 conditional）から導出した行 a は verify と done を持ち、行 b は持たない（行の値のまま写す）。
 //!    導出物に要否の字は写さず、--check が 0。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

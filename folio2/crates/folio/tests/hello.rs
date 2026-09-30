@@ -2,6 +2,7 @@
 //! 3 状態の行数・1 回きり・印を書けない・1 行の中身・判定の順と印の名を見る。
 //! `--state` は必ず一時 dir（持ち主の印の置き場を触らない）。
 //! 便 125（docs/design/delivery-125.md §1 (f)）: 未整備の 1 行の行き先を相談窓口の命令から骨格の命令 folio init に替えた。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -14,6 +14,7 @@
 //! 便 177（docs/design/delivery-177.md §1 (c) の 1）: 8. 同じ 3 つの置き場の生成区間は、印が持たなくなった節点の表と残差を言わない。
 //!
 //! 版管理の下の file は書き換えない（`--dir` の写しと `--out` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

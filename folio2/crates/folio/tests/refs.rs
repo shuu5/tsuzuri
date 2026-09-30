@@ -1,6 +1,7 @@
 //! `folio check` の参照 id・逆参照・件数の歯（便 1・docs/design/delivery-1.md §1）。
 //! tests/fixtures/refs/ の 3 組（解決に要る欄だけの最小の手書き 4 file に変異 1 つ）で 不合格 1。
 //! 各組の違反はちょうど 1 件で、その種類と file まで見る（別の理由で落ちた組を緑にしない）。
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

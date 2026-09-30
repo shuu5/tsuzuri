@@ -5,6 +5,7 @@
 //! 3. 判断の記録の id の形でない項は床と同じく面を止める。
 //!
 //! 版管理の下の file は書き換えない（置き場と配信先は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

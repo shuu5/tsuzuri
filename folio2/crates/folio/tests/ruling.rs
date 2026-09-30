@@ -5,6 +5,7 @@
 //! 便 182（docs/design/delivery-182.md §1 (c)）の歯 f182_ は、判断の記録の欄の決まりの生成区間の文法と一覧の写しを見る。
 //! 便 204（docs/design/delivery-204.md §1 (c)）の歯 f204_ は、規則の表の行の裁定の時刻（ruled_at）の在ることと形と、閾値の行の
 //! 種別（human-review を置けない）を見る。期待の字は歯の中の手書き。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

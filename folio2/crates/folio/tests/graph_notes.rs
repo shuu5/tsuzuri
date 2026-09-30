@@ -15,6 +15,7 @@
 //! 8. 便 208（docs/design/delivery-208.md §1 (c)・判断の記録 ADR-35 決定 (2)・要件 FR31）: --summary の設計ノートの行の
 //!    status はノートの meta.status の字そのまま（draft・effective・retired・example）で、状態の欄が無いか字でなければ null。
 //! 9. 外の置き場（骨格 folio init に外の利用者の形のノートを足した写し）でも同じ形: 判断の記録と設計ノートの行だけが字を持つ。
+#![cfg(test)]
 
 use std::fs;
 use std::io::Write;

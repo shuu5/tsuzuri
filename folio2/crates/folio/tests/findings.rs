@@ -6,6 +6,7 @@
 //!   result.yaml の読み 3 通り・違反 6 種・2 つの結果・旗 3 通り・実の正本
 //!
 //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

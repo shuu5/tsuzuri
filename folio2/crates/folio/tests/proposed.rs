@@ -2,6 +2,7 @@
 //! 土台は凍結した写し（tests/fixtures/floor_base/design-intent/）を一時 dir の `repo/design-intent/` に、器の導出 file を
 //! `repo/contracts/` に作って git の 1 commit にしたもの（素の床は合格 0）。口の一時の作業場所は版管理の外の `tmp/` に作らせる。口が止めた行は、同じ中身を書いた置き場の素の床にも
 //! 同じ字で在ること（条 P-15.2・編集時の判定 ⊆ 事後の判定）を、同じ写しで撃ち比べて見る。期待の行は歯の側の手書き。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

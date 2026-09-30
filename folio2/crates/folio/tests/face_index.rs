@@ -8,6 +8,7 @@
 //! docs/design/delivery-105.md §1 (b)）。歯の file どうしは互いに use できないので、helper は各 file に写しを持つ
 //! （写しは字を変えない・この file の歯が呼ぶものだけ）。
 //! 版管理の `design-intent/preview/` と `design-intent/` の正本は書き換えない（`--out` と写しは必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

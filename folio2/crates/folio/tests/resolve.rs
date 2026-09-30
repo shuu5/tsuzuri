@@ -11,6 +11,7 @@
 //! 5. 置き場そのものが版管理の根なら置き場の下を読み親を読まない（床は照合の違反と読めないの両方・面は書かない）。
 //! 6. 版管理の根は repo の根（folio2 の 1 つ上）で、根の design-intent の親。folio2/design-intent の版管理の根も repo の根。
 //! 7. 5 file の生成区間の注 top_level_note は条 id N-3 を名指さない。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

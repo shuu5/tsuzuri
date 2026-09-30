@@ -5,6 +5,7 @@
 //! 置き場の schema 節と生成区間は読まない。
 //! 土台は design-intent の写し（git の 1 commit・tests/constitution_range.rs の Work と同じ形）で、写しの字面に変異を当てて
 //! `folio check` を撃つ。歯は標準出力の違反の行（`[` で始まる行）を全部数える。変異で足す欄の値は id の形を含まない字にする。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -1,6 +1,7 @@
 //! `folio check` の版管理（git）との照合の歯（便 8・docs/design/delivery-8.md §1）。
 //! fixture は増やさず、tests/fixtures/anchor/ の組を一時 dir の `design-intent/` に写し、
 //! 版管理の根はその 1 つ上（写しの design-intent 自体を根にしない）に作る。
+#![cfg(test)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

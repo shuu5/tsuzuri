@@ -31,7 +31,7 @@
 //! （1 の定数を 25693 byte、8 の定数を 16806 byte と新しい要約値に）。歯 f130_ の 2 本が古い字の不在と新しい字の在ることを見る。
 //!
 //! 便 89（docs/design/delivery-89.md §1）: 残る 6 本の正本（天井の正本・規則の表・入口の正本・要件書・語彙・相談窓口）の側の歯は tests/schema_docs.rs へ移した（字は 1 字も変えていない）。
-
+#![cfg(test)]
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};

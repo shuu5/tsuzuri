@@ -6,6 +6,7 @@
 //! tests/fixtures/schema/ceiling-region.txt の中身）を足した写しが通る・生成区間のずれは違反 1 件。
 //! 締め（便 48・docs/design/delivery-48.md §1 (d)5）: schema の節が無ければ種別 ceiling の違反ちょうど 1 件・旧 4 節の名の節は未知の節で落ちる。
 //! 便 102（docs/design/delivery-102.md §1 (g)1・2）: 生成区間を持つ file が読む文書の行に全部覆われる・ceiling.yaml の写しが全部そろう。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

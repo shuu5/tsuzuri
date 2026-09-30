@@ -3,6 +3,7 @@
 //! （利用者の形・版管理の外の「まだ分からない」を混ぜない）。印の置き場（hello の --state）も一時 dir の下。
 //! 凍結 anchor（P-10.1）は 2 つで、どちらも生成器から独立した手書き: 禁止字の一覧 tests/fixtures/schema/init-forbidden.txt と、
 //! 歯の中に字で持つ書く file 11 本の閉じた一覧 `FILES`。括弧の落としと id の形は歯の側で自前に書く（init.rs の関数を呼ばない）。
+#![cfg(test)]
 
 #[path = "../src/sha256.rs"]
 #[allow(dead_code)]

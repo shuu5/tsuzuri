@@ -4,6 +4,7 @@
 //! 2. folio check は正本 7 file の形だけでなく、判断の記録・設計ノート・凍結 anchor・索引の欄の決まり・参照 id・索引と面が組めるか（面は便 187）を数える。
 //! 3. folio serve は同じ端末の中（loopback）か tailnet の中（条 N-6.1 の第 1.2 版の字）。
 //! 4. folio derive の --from-root の説明が在る。
+#![cfg(test)]
 
 use std::process::Command;
 

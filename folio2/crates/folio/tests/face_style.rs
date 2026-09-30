@@ -8,6 +8,7 @@
 //!
 //! 写しは position・inset・z-index・display の勝ち負けだけを見る（inset は字だけ・top などの個別の辺は見ない）。
 //! 凍結の面（tests/fixtures/face/）と正本の様式（design-intent/preview/folio.css）は読むだけで書き換えない。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

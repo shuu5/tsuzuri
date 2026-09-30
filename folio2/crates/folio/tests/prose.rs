@@ -4,6 +4,7 @@
 //! `folio check --dir` を回す。
 //! 凍結 anchor は要件書 AC10 の red_test が名指す `tests/fixtures/prose-gate/` の 2 本（手書き）。
 //! 式の枝は `clean.yaml` の写しの散文 1 行（「枝の当て先」の文）に変異を 1 つ当てて数える。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

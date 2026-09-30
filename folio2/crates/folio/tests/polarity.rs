@@ -9,6 +9,7 @@
 //! 便 202（docs/design/delivery-202.md §1 (c)）: 外の置き場の最小の写し（骨格 `folio init`・名は folio2 の置き場の名でない）では、
 //! 素の床の知らせ・下限を割った違反の字（素の床と編集時の口）・`--polarity` の出力に folio2 の条の番号（P-18・P-18.4）が無く、
 //! 土台（folio2 の置き場の名）では今の字のまま（f202_ の 1 本）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

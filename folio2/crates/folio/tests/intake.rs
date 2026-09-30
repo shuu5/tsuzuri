@@ -2,6 +2,7 @@
 //! fixture は増やさず、歯の中で design-intent の写し全部を一時 dir に作り git init と 1 commit を行い
 //! （版管理の無い写しは別の理由で「まだ分からない」になる）、intake.yaml に変異を 1 つ当てて `folio check --dir` を回す。
 //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる（重複 id の歯だけ 2）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -7,6 +7,7 @@
 //! 便 157（docs/design/delivery-157.md §1 (c)）: 床は部分集合でなく集合で等しいかを数え、狭めた鍵も「まだ分からない」1 件
 //! （外した値を組み立てた版の順に名指す・広げた字の直後）。外の置き場の段は `folio init` の骨格を git の 1 commit にした写し。
 //! 便 203（docs/design/delivery-203.md §1 (c)）: 外の置き場の値域の「まだ分からない」の字は、要件の id（FR25）の片を落とす。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

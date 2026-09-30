@@ -3,6 +3,7 @@
 //! 実の正本で Ok・鍵の数だけ型が出る（数は file から数える）・変異 5 つがそれぞれ Err で文に鍵の名が入る。
 //! 便 50（delivery-50.md §1 (d)(e) 4）: 定数 ENUMS（鍵の名と NAMES の対の列）が鍵の数だけ対を持つ。
 //! 便 128（delivery-128.md §1 (c) 歯 6）: 純粋な関数 `constitution_fields`（憲法の 5 部位の欄の一覧）の Ok と Err の 4 つの形。
+#![cfg(test)]
 
 #[allow(dead_code)]
 #[path = "../build.rs"]

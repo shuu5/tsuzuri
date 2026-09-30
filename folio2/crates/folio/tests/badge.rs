@@ -10,6 +10,7 @@
 //! 凍結 fixture の更新は生成器の出力を写す形になるので、(c) の字面の逐語（1・2）を独立の物差しとして置く（P-10.2）。
 //! 印の欄 sources は、歯の側の独立の物差し `fresh_sources`（yaml-rust2 と sha256sum・folio の code を呼ばない）で測る。
 //! 版管理の下の file は書き換えない（`--out` と印は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

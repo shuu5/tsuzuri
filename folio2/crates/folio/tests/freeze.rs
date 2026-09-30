@@ -4,6 +4,7 @@
 //! (3) 変異なしで `--freeze-anchor` → 1・「新しくない」・anchors/ は不変／(4) 合成した改訂で `--freeze-anchor` → 0・v1.1 の anchor と索引の追記・続けて旗なし → 0／
 //! (5) (4) の amends の new_text を 1 字違えて `--freeze-anchor` → 1・「凍結しない」・v1.1 の anchor は作られない。
 //! 便 170: 合成した改訂の判断の記録は土台に無い新しい ADR-11 で足し、(4) は `--freeze-anchor` の後に `--freeze-adrs` で封を足す。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

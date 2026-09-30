@@ -18,6 +18,7 @@
 //! 仮の値のまま置く（門は読まない＝便 175 の前に書いた印〔trigger・rest・nodes を持つ〕も同じ答えで読む見張り）。
 //!
 //! 版管理の下の file は書き換えない（`--dir` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

@@ -11,6 +11,7 @@
 //!   （docs/design/delivery-135.md §1 (c)）
 //!
 //! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::collections::BTreeSet;
 use std::fs;

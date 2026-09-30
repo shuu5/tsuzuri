@@ -3,6 +3,7 @@
 //! mutate の段を順に当てて folio を回し、終了コード・出力の語・file の有無・違反件数を照合する。fixture は読むだけで書かない。
 //! 1 本の歯が全 case を回し、落ちた case を名指す。型付きの読み書きと digest は src の yaml.rs / sha256.rs を取り込んで使う。
 //! 便 170: folio を撃つ前ごとに写しの判断の記録の封の一覧を組み直す（`reseal`・この fixture は封を測らない）。
+#![cfg(test)]
 
 #[path = "../src/sha256.rs"]
 #[allow(dead_code)]

@@ -5,6 +5,7 @@
 //! 書き、字を当てて commit し、素の check（骨格と同じ床 = 違反 0・まだ分からない 6〔便 181 で骨格の決定の欄 4 つ〕）と build --write を撃つ。
 //! 字の amendment の改訂の例と版ごとの変更点は面の凍結 fixture（tests/fixtures/face/）の写しで測る。
 //! 版管理の下の正本と面は書き換えない（写しと配信先は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

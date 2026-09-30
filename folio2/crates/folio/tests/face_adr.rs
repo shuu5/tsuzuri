@@ -12,6 +12,7 @@
 //!   閉じない印と空の対は生のまま・実の正本の全本で strong の数と逐語と順・生の印 0・ADR-24 の決定 (1) の実例
 //!
 //! 版管理の下の面は書き換えない（`--out` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

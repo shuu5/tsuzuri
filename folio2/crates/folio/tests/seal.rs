@@ -3,6 +3,7 @@
 //! 土台は凍結した写し（tests/fixtures/floor_base/design-intent/・封の一覧 10 行）の写し全部を一時 dir に作り git init と 1 commit を行う。
 //! 新しい発効した記録は最小の手書き tests/fixtures/adr/seal-ADR-11.yaml で、その要約値（outside の欄を除く記録の木の json の
 //! sha256）は歯が字で持つ。(7) だけは folio2 自身の design-intent/ の写し。
+#![cfg(test)]
 
 use std::fs;
 use std::io::Write;

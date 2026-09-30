@@ -8,6 +8,7 @@
 //!
 //! 凍結 fixture（tests/fixtures/face/）の写しは正本が揃っていない（adr/schema.yaml 等が無い）ので床は「まだ分からない」
 //! ＝ `--write` は書いて 2。版管理の `design-intent/preview/` は書き換えない（`--out` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

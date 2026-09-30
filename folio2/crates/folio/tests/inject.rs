@@ -1,6 +1,7 @@
 //! `folio inject` の歯（便 2・docs/design/delivery-2.md §1）。
 //! 正本と今の CLAUDE.md で --check 合格、tests/fixtures/inject/ の 5 組で §1 の期待の終了コード、drift の写しで --write の往復、
 //! 正本の写しに変異を 1 つ当てる 6 入力（終了コードを便 2 の §1 の値で pin する・script は呼ばない・docs/design/delivery-3.md §1 (a)）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

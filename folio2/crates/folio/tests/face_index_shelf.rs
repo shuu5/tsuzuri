@@ -8,6 +8,7 @@
 //! `face_index.rs`、節「支度表」の歯は `face_index_sheet.rs` に在る。歯の file どうしは互いに use できないので、
 //! helper は `face_index.rs` の写しを持つ（写しは字を変えない・この file の歯が呼ぶものだけ）。
 //! 版管理の `design-intent/` の正本は書き換えない（`--out` と写しは必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

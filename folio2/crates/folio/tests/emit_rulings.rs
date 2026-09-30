@@ -3,6 +3,7 @@
 //! 器の導出 file を写しの根の `contracts/` に作って git の 1 commit にし、字を足すか変えて `folio check --emit-rulings` と
 //! 素の `folio check` を撃つ（土台の写しの素の床は合格 0）。期待の行は歯の側の手書きで、土台の数（欄 55・行 67）と行の番号と
 //! 欄の道は独立の実装（起草の記録の count-186.py）の数。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

@@ -11,6 +11,7 @@
 //! 落とした・便 99 の 3 本を f177_ の 1 本に置き換えた）。
 //!
 //! 版管理の下の file は書き換えない（`--dir` と `--out` は必ず一時 dir の中）。
+#![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::fs;

@@ -9,6 +9,7 @@
 //!   同乗（台帳 f2-648.227）: 実の rules.yaml の生成区間の除外は人の作業の時間と AI の費用だけ（歯を置く file を増やさないためここに置く）
 //!
 //! 入力は版管理の `design-intent/` を丸ごと一時 dir へ写したもの（支度表は写しの中にだけ生まれる）。
+#![cfg(test)]
 
 use std::fs;
 use std::ops::Deref;
