@@ -29,7 +29,7 @@ use tsuzuri_core::question::open_questions;
 
 use super::ledger::{Source, capture};
 use super::ruling::{
-    LINE_PREFIX, PACE, WRITE_TIMEOUT, Writer, escape, minute, next_id, redeliver, reread,
+    LINE_PREFIX, PACE, WRITE_TIMEOUT, Writer, escape, minute, next_id, reason, redeliver, reread,
 };
 
 /// 口の path。
@@ -132,7 +132,7 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
             };
             let close = LedgerWrite::CloseItem {
                 id: row.question.clone(),
-                reason: format!("裁定 {id}{ID_END}束 {batch}"),
+                reason: reason(id, Some(&format!("束 {batch}"))),
             };
             if !write(writer, &append) {
                 failed = true;

@@ -52,6 +52,12 @@ pub const LINE_PREFIX: &str = "裁定 id = ";
 /// 定型行の id の終わりの字。
 const ID_END: char = '・';
 
+/// close と開き直しの理由の頭（器の close の理由の読み手が裁定と読む頭・2 語目に裁定 id を置く）。
+pub const REASON_HEAD: &str = "裁定";
+
+/// 方針の閉じの理由の 2 語目の頭（器の読み手が裁定 id の形として受ける `policy:<字>`）。
+pub const POLICY_MARK: &str = "policy:";
+
 /// bdw の 1 回の書きが返すまでの上限。越えれば止めて落ちた扱い。
 /// bdw が機械で共通の錠を待つ上限の既定 60 秒に書きそのものの 60 秒を足した長さ
 /// （bdw は錠を待ちきれなければ書かずに落ちるので、書きの途中で止めない・行 e-ruling-retry）。
@@ -165,7 +171,7 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
     }
     let close = LedgerWrite::CloseItem {
         id: req.question.clone(),
-        reason: format!("裁定 {id}"),
+        reason: reason(&id, None),
     };
     if !write(writer, &close) {
         return Outcome::CloseFailed(id);
@@ -250,7 +256,7 @@ fn reopen(
 ) -> Revoked {
     let w = LedgerWrite::ReopenItem {
         id: req.question.clone(),
-        reason: format!("裁定 {id}{ID_END}{REVOKES}{}", req.ruling),
+        reason: reason(&id, Some(&format!("{REVOKES}{}", req.ruling))),
     };
     if !write(writer, &w) {
         return Revoked::ReopenFailed(id);
@@ -268,6 +274,20 @@ fn reopen(
         recorded_at: now,
         reopened_only,
     })
+}
+
+/// close と開き直しの理由（`裁定 <id>`・続きが在れば半角の空白 1 つを挟んで `裁定 <id> <続き>`）。
+/// 器の読み手は空白で割った 2 語目だけを裁定 id と読み、続きは読まない（台帳を人が読む時の手がかり）。
+pub fn reason(id: &RulingId, tail: Option<&str>) -> String {
+    match tail {
+        Some(tail) => format!("{REASON_HEAD} {id} {tail}"),
+        None => format!("{REASON_HEAD} {id}"),
+    }
+}
+
+/// 方針の問いの閉じの理由（`裁定 policy:<方針の id>`・方針は承認に数えない印を 2 語目の頭に置く）。
+pub fn policy_reason(id: &RulingId) -> String {
+    format!("{REASON_HEAD} {POLICY_MARK}{id}")
 }
 
 /// bdw を 1 回撃つ（rc 0 で上限の内に返せば true）。

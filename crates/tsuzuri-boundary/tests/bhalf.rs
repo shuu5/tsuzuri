@@ -356,7 +356,7 @@ fn row_argvs(q: &str, ruling: &RulingId, batch_id: &RulingId) -> [Vec<String>; 2
         .argv(),
         LedgerWrite::CloseItem {
             id: bead(q),
-            reason: format!("裁定 {ruling}・束 {batch_id}"),
+            reason: format!("裁定 {ruling} 束 {batch_id}"),
         }
         .argv(),
     ]

@@ -273,7 +273,7 @@ fn request(question: &str, ruling: &str, verbatim: &str) -> RevokeRequest {
 fn reopen_argv(question: &str, id: &str, revokes: &str) -> Vec<String> {
     LedgerWrite::ReopenItem {
         id: bead(question),
-        reason: format!("裁定 {id}・取り消す = {revokes}"),
+        reason: format!("裁定 {id} 取り消す = {revokes}"),
     }
     .argv()
 }

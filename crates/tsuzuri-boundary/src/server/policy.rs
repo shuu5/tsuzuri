@@ -24,7 +24,7 @@ use tsuzuri_core::question::{
 };
 
 use super::ledger::{Source, capture, parse_bd};
-use super::ruling::{WRITE_TIMEOUT, Writer, escape, minute};
+use super::ruling::{WRITE_TIMEOUT, Writer, escape, minute, policy_reason};
 
 /// 口の path。
 pub const PATH: &str = "/api/policy";
@@ -111,7 +111,7 @@ pub fn accept(req: &PolicyRequest, ledger: &Source, writer: &Writer, now: EpochS
     }
     let close = LedgerWrite::CloseItem {
         id: question,
-        reason: format!("{TITLE} {id}"),
+        reason: policy_reason(&id),
     };
     if !write(writer, &close) {
         return Outcome::CloseFailed(id);

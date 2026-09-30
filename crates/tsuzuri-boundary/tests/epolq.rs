@@ -460,7 +460,7 @@ fn three(scope: &str, verbatim: &str) -> Vec<Vec<String>> {
         .argv(),
         LedgerWrite::CloseItem {
             id: id(CREATED),
-            reason: format!("方針 {POLICY_ID}"),
+            reason: format!("裁定 policy:{POLICY_ID}"),
         }
         .argv(),
     ]
@@ -670,7 +670,7 @@ fn epolq_all_writes_three() {
         argvs[1][2],
         format!("--append-notes=方針 id = {POLICY_ID}・範囲 = all・逐語 = 全体に急がない\\n2 行目")
     );
-    assert_eq!(argvs[2][2], format!("--reason=方針 {POLICY_ID}"));
+    assert_eq!(argvs[2][2], format!("--reason=裁定 policy:{POLICY_ID}"));
     assert!(
         argvs[0][7].contains('\n'),
         "本文の改行は語の中: {:?}",

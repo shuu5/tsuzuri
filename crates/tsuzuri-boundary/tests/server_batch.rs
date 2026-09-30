@@ -383,7 +383,7 @@ fn row_argvs(
         .argv(),
         LedgerWrite::CloseItem {
             id: bead(question),
-            reason: format!("裁定 {ruling}・束 {batch}"),
+            reason: format!("裁定 {ruling} 束 {batch}"),
         }
         .argv(),
     ]
