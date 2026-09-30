@@ -12,6 +12,7 @@
 //! （全部か無しか・FR15）。
 //! 状態の閉じた一覧 `STATUS` と文書 id の形 `is_doc_id` は便 109 で `shelf.rs` へ降ろした（ADR-15・層 1 読む）。
 //! 器の導出 file の置き場は便 123 から床の読み手と同じ式 `note::external_path`（版管理の根・無ければ置き場の親）で解く。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;
@@ -164,6 +165,16 @@ struct Status {
     example: bool,
 }
 
+/// head・表紙・脚が読む設計ノートの材料（meta・文書 id・状態）。
+struct Doc<'a> {
+    /// 正本の meta
+    meta: X<'a>,
+    /// 文書 id（--id）
+    id: &'a str,
+    /// 状態の名札と状態の行
+    st: Status,
+}
+
 /// 正本から数えた数（γ）。
 struct Counts {
     sections: usize,
@@ -219,12 +230,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     )?;
 
     let meta = d.f("meta")?;
-    let file_id = meta.f("id")?.id()?;
-    if file_id != id {
-        return Err(format!(
-            "{name}: 欄 meta.id「{file_id}」が --id「{id}」と違う"
-        ));
-    }
+    check_file_id(&meta, &name, id)?;
 
     let secs = sections(&d)?;
     let figs = match d.g("figures")? {
@@ -256,6 +262,41 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     let st = status(&meta, &env)?;
     let counts = counts(&secs, figs.len())?;
     let stamp = face::ceiling_stamp(dir)?;
+    let frame = frame(dir, id, name, chapters)?;
+
+    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+    let place = adr::name_of(dir);
+
+    let doc = Doc { meta, id, st };
+    let mut o: Vec<String> = Vec::new();
+    head(&mut o, place.as_deref(), &frame, &doc, &stamp)?;
+    cover(&mut o, place.as_deref(), &frame, &doc, &counts)?;
+    toc(&frame, &mut o, &secs, figs.len());
+    for s in &secs {
+        section_chapter(&mut o, &frame, s, &secs, &env)?;
+    }
+    if !figs.is_empty() {
+        figures_chapter(&mut o, &frame, secs.len() + 1, &figs, &env)?;
+    }
+    approval_chapter(&mut o, &frame, &doc.meta, &doc.st)?;
+    let chip = face::glossary_chip(dir)?;
+    foot(&mut o, &frame, &doc, &counts, &chip)?;
+    Ok(format!("{}\n", o.join("\n")))
+}
+
+/// 欄 meta.id が --id と同じか（違えば Err）。
+fn check_file_id(meta: &X<'_>, name: &str, id: &str) -> R<()> {
+    let file_id = meta.f("id")?.id()?;
+    if file_id != id {
+        return Err(format!(
+            "{name}: 欄 meta.id「{file_id}」が --id「{id}」と違う"
+        ));
+    }
+    Ok(())
+}
+
+/// 設計ノートの面の枠（prevnext は入口の棚と同じ順の隣・帯の組は章の数だけ繰り返す）。
+fn frame(dir: &Path, id: &str, name: String, chapters: usize) -> R<Frame> {
     // prevnext は入口の棚と同じ順（id の字の順）で隣の設計ノート・両端は入口（便 65）
     let notes = face_index_read::notes(dir)?;
     let links: Vec<(String, String)> = notes.iter().map(face_index_read::Note::link).collect();
@@ -279,24 +320,7 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
         next,
         parts: &PARTS,
     };
-
-    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
-    let place = adr::name_of(dir);
-
-    let mut o: Vec<String> = Vec::new();
-    head(&mut o, place.as_deref(), &frame, &meta, id, &st, &stamp)?;
-    cover(&mut o, place.as_deref(), &frame, &meta, id, &st, &counts)?;
-    toc(&frame, &mut o, &secs, figs.len());
-    for s in &secs {
-        section_chapter(&mut o, &frame, s, &secs, &env)?;
-    }
-    if !figs.is_empty() {
-        figures_chapter(&mut o, &frame, secs.len() + 1, &figs, &env)?;
-    }
-    approval_chapter(&mut o, &frame, &meta, &st)?;
-    let chip = face::glossary_chip(dir)?;
-    foot(&mut o, &frame, &meta, id, &counts, &chip)?;
-    Ok(format!("{}\n", o.join("\n")))
+    Ok(frame)
 }
 
 // ── 読みと解き ──
@@ -475,6 +499,11 @@ fn resolve(env: &Env<'_>, id: &str) -> R<Option<String>> {
             _ => Err(bad()),
         };
     }
+    resolve_rest(env, id, bad)
+}
+
+/// `resolve` の続き（rules 行・要件・判断の記録の 3 形）。どれでもない id は Err。
+fn resolve_rest(env: &Env<'_>, id: &str, bad: impl Fn() -> String) -> R<Option<String>> {
     if let Some(rest) = ["R-", "D-"].iter().find_map(|p| id.strip_prefix(p)) {
         return if digits(rest) {
             Ok(env
@@ -600,17 +629,11 @@ fn quoted_pair(line: &str) -> Option<(String, String)> {
 
 // ── 骨格 ──
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
 fn head(
     o: &mut Vec<String>,
     place: Option<&str>,
     f: &Frame,
-    meta: &X<'_>,
-    id: &str,
-    st: &Status,
+    Doc { meta, id, st }: &Doc<'_>,
     stamp: &str,
 ) -> R<()> {
     // 鮮度の札・版の札・足の行の（名・日付）は入口のカードと同じ口（便 146・147）
@@ -618,9 +641,11 @@ fn head(
     f.head_dated(
         o,
         (place, &format!("設計ノート {id}（{}）", st.label)),
-        (dated, &date),
-        &format!("{id} {}", meta.ef("version")?),
-        st.label,
+        face::Fresh(
+            (dated, &date),
+            &format!("{id} {}", meta.ef("version")?),
+            st.label,
+        ),
         stamp,
     );
     Ok(())
@@ -630,17 +655,11 @@ fn meta_span(k: &str, v: &str) -> String {
     format!("<span class=\"m\"><span class=\"k\">{k}</span><span class=\"v\">{v}</span></span>")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
 fn cover(
     o: &mut Vec<String>,
     place: Option<&str>,
     f: &Frame,
-    meta: &X<'_>,
-    id: &str,
-    st: &Status,
+    Doc { meta, id, st }: &Doc<'_>,
     n: &Counts,
 ) -> R<()> {
     o.push(format!("<header {}>", f.dc(Component::DocCoverBand)));
@@ -700,7 +719,12 @@ fn section_chapter(
     secs: &[Sec<'_>],
     env: &Env<'_>,
 ) -> R<()> {
-    f.band(o, s.idx, s.label, &format!("§{} {}", s.n, s.title), None);
+    f.band(
+        o,
+        s.idx,
+        s.label,
+        face::Heading(&format!("§{} {}", s.n, s.title), None),
+    );
     o.push("<div class=\"chapbody\">".to_string());
     if s.key == CONTRACT_TABLE {
         o.push(SIZE_LEGEND.to_string());
@@ -812,23 +836,7 @@ fn table_chapter(
                 push_ref_chip(&mut r.chips, &row, env)?;
                 push_note_chip(&mut r.chips, &row)?;
             }
-            "ports-table" => {
-                r.rt = row.ef("name")?;
-                r.norm = Some(format!(
-                    "<span class=\"ew\">入力</span> {} <span class=\"ew\">出力</span> {}",
-                    row.ef("input")?,
-                    row.ef("output")?
-                ));
-                let refuses = row.f("refuses")?;
-                let body = if refuses.v.as_str() == Some(REFUSES_NONE) {
-                    "断らない".to_string()
-                } else {
-                    refuses.e()?
-                };
-                r.plain = Some(("断る", body));
-                push_ref_chip(&mut r.chips, &row, env)?;
-                push_note_chip(&mut r.chips, &row)?;
-            }
+            "ports-table" => ports_row(&mut r, row, env)?,
             "fields-table" => {
                 r.rt = row.ef("name")?;
                 r.badges.push(pill(row.f("need")?.lookup(NEED, "要否")?));
@@ -853,27 +861,7 @@ fn table_chapter(
                 let doc = row.f("doc")?.id()?;
                 r.rt = format!("<a class=\"xref\" href=\"note-{0}.html\">{0}</a>", esc(doc));
             }
-            "row-plan" => {
-                r.rt = row.ef("what")?;
-                if let Some(size) = row.g("size")? {
-                    r.badges.push(pill(&size.e()?));
-                }
-                for (key, label, code) in [("depends", "依存", false), ("files", "書く file", true)] {
-                    let Some(list) = row.g(key)? else { continue };
-                    let items = list
-                        .seq()?
-                        .iter()
-                        .map(|q| Ok(if code { format!("<code>{}</code>", q.e()?) } else { q.e()? }))
-                        .collect::<R<Vec<_>>>()?;
-                    if !items.is_empty() {
-                        r.chips.push(hint(label, &items.join(if code { "<br>" } else { "・" })));
-                    }
-                }
-                if let Some(ruling) = row.g("ruling")? {
-                    r.chips.push(hint("拠る", &ruling.e()?));
-                }
-                push_note_chip(&mut r.chips, &row)?;
-            }
+            "row-plan" => plan_row(&mut r, row)?,
             "decision-table" => {
                 r.rt = row.ef("text")?;
                 r.plain = Some(("裁定", row.ef("ruling")?));
@@ -882,6 +870,50 @@ fn table_chapter(
         }
         push_row(o, f, &r);
     }
+    Ok(())
+}
+
+/// 口の表の行（入力と出力・断る・根拠と注の小窓）。
+fn ports_row(r: &mut Row, row: X<'_>, env: &Env<'_>) -> R<()> {
+    r.rt = row.ef("name")?;
+    r.norm = Some(format!(
+        "<span class=\"ew\">入力</span> {} <span class=\"ew\">出力</span> {}",
+        row.ef("input")?,
+        row.ef("output")?
+    ));
+    let refuses = row.f("refuses")?;
+    let body = if refuses.v.as_str() == Some(REFUSES_NONE) {
+        "断らない".to_string()
+    } else {
+        refuses.e()?
+    };
+    r.plain = Some(("断る", body));
+    push_ref_chip(&mut r.chips, &row, env)?;
+    push_note_chip(&mut r.chips, &row)?;
+    Ok(())
+}
+
+/// 計画だけの行（大きさ・依存・書く file・拠る裁定・注の小窓）。
+fn plan_row(r: &mut Row, row: X<'_>) -> R<()> {
+    r.rt = row.ef("what")?;
+    if let Some(size) = row.g("size")? {
+        r.badges.push(pill(&size.e()?));
+    }
+    for (key, label, code) in [("depends", "依存", false), ("files", "書く file", true)] {
+        let Some(list) = row.g(key)? else { continue };
+        let items = list
+            .seq()?
+            .iter()
+            .map(|q| Ok(if code { format!("<code>{}</code>", q.e()?) } else { q.e()? }))
+            .collect::<R<Vec<_>>>()?;
+        if !items.is_empty() {
+            r.chips.push(hint(label, &items.join(if code { "<br>" } else { "・" })));
+        }
+    }
+    if let Some(ruling) = row.g("ruling")? {
+        r.chips.push(hint("拠る", &ruling.e()?));
+    }
+    push_note_chip(&mut r.chips, &row)?;
     Ok(())
 }
 
@@ -985,7 +1017,12 @@ fn figures_chapter(
     figs: &[X<'_>],
     env: &Env<'_>,
 ) -> R<()> {
-    f.band(o, idx, "図", &format!("図 {} 枚", figs.len()), None);
+    f.band(
+        o,
+        idx,
+        "図",
+        face::Heading(&format!("図 {} 枚", figs.len()), None),
+    );
     o.push("<div class=\"chapbody\">".to_string());
     for (i, fig) in figs.iter().enumerate() {
         let drawn = face::figure_body(env.dir, fig)?;
@@ -994,7 +1031,7 @@ fn figures_chapter(
             Some(rs) => id_links(env, &rs)?,
             None => Vec::new(),
         };
-        face::figure_panel(o, f, i + 1, &drawn, &caption, &refs);
+        face::figure_panel(o, f, i + 1, &drawn, face::Caption(&caption, &refs));
     }
     o.push("</div>".to_string());
     Ok(())
@@ -1028,11 +1065,13 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, st: &Status) -
 }
 
 /// 脚（`chip` = 用語集への札・doc-locator の行の末尾・便 74）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
-fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts, chip: &str) -> R<()> {
+fn foot(
+    o: &mut Vec<String>,
+    f: &Frame,
+    Doc { meta, id, .. }: &Doc<'_>,
+    n: &Counts,
+    chip: &str,
+) -> R<()> {
     let (dated, date) = face::note_dated(meta)?;
     let version = meta.ef("version")?;
     let dl = format!(
@@ -1042,6 +1081,11 @@ fn foot(o: &mut Vec<String>, f: &Frame, meta: &X<'_>, id: &str, n: &Counts, chip
         n.sections,
         n.figures
     );
-    f.foot_aside(o, &format!("{id} {version}"), (dated, &date), &dl, chip);
+    f.foot_aside(
+        o,
+        &format!("{id} {version}"),
+        (dated, &date),
+        face::Foot(&dl, chip),
+    );
     Ok(())
 }

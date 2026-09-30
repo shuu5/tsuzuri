@@ -15,6 +15,7 @@
 //! 強調の印（便 149・docs/design/delivery-149.md §1 (b)）: 散文の 6 つの欄（context と decision は列挙で分けた後の
 //! 断片ごと・案の text と reason・帰結の各行・注）は、escape の後に左から順に対になった印 STRONG_MARK を strong の
 //! 要素に写す（閉じない印と中身が空の対は生のまま）。題・平易文・逐語の引用などほかの欄は写さない。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;
@@ -255,8 +256,9 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     let place = adr::name_of(dir);
 
     let mut o: Vec<String> = Vec::new();
-    head(&mut o, place.as_deref(), &f, &a, id, &st, &stamp)?;
-    cover(&mut o, place.as_deref(), &f, &a, id, &st, &counts)?;
+    let doc = Doc { a: &a, id, st: &st };
+    head(&mut o, place.as_deref(), &f, &doc, &stamp)?;
+    cover(&mut o, place.as_deref(), &f, &doc, &counts)?;
     toc(&f, &mut o, figs.len());
     prose_chapter(&mut o, &f, 1, &a.ef("context")?);
     prose_chapter(&mut o, &f, 2, &a.ef("decision")?);
@@ -264,10 +266,10 @@ pub fn derive(dir: &Path, id: &str) -> R<String> {
     basis_chapter(&mut o, &f, &a, dir, &ctx)?;
     amends_chapter(&mut o, &f, &a, dir, &ctx)?;
     if !figs.is_empty() {
-        figures_chapter(&mut o, &f, CHAPTERS.len() + 1, &figs, dir, &ctx)?;
+        figures_chapter(&mut o, &f, &figs, dir, &ctx)?;
     }
     approval_chapter(&mut o, &f, &a, &st)?;
-    foot(&mut o, &f, &a, id, &counts, &face::glossary_chip(dir)?)?;
+    foot(&mut o, &f, &doc, &counts, &face::glossary_chip(dir)?)?;
     Ok(format!("{}\n", o.join("\n")))
 }
 
@@ -409,6 +411,17 @@ fn resolve(dir: &Path, ctx: &Ctx, id: &str) -> R<Target> {
             _ => Err(bad()),
         };
     }
+    resolve_rest(dir, ctx, id, found, bad)
+}
+
+/// `resolve` の続き（rules 行・要件・判断の記録の 3 形）。どれでもない id は Err。
+fn resolve_rest(
+    dir: &Path,
+    ctx: &Ctx,
+    id: &str,
+    found: impl Fn(&[(String, String)], usize, String) -> Target,
+    bad: impl Fn() -> String,
+) -> R<Target> {
     if let Some(rest) = ["R-", "D-"].iter().find_map(|p| id.strip_prefix(p)) {
         return if digits(rest) {
             Ok(found(
@@ -520,17 +533,21 @@ fn entries<'a>(a: &X<'a>, key: &str) -> R<Vec<X<'a>>> {
 
 // ── 骨格 ──
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
+/// head・表紙・脚が読む判断の記録の材料（正本の根・id・状態）。
+struct Doc<'a> {
+    /// 判断の記録の正本の根
+    a: &'a X<'a>,
+    /// 判断の記録の id（--id）
+    id: &'a str,
+    /// 状態の名札と状態の行
+    st: &'a Status,
+}
+
 fn head(
     o: &mut Vec<String>,
     place: Option<&str>,
     f: &Frame,
-    a: &X<'_>,
-    id: &str,
-    st: &Status,
+    &Doc { a, id, st }: &Doc<'_>,
     stamp: &str,
 ) -> R<()> {
     // 鮮度の札と足の行の（名・日付）は入口のカードと同じ口（便 146・147）
@@ -538,9 +555,7 @@ fn head(
     f.head_dated(
         o,
         (place, &format!("判断の記録 {id}（{}）", st.label)),
-        (dated, &date),
-        id,
-        st.label,
+        face::Fresh((dated, &date), id, st.label),
         stamp,
     );
     Ok(())
@@ -550,17 +565,11 @@ fn meta_span(k: &str, v: &str) -> String {
     format!("<span class=\"m\"><span class=\"k\">{k}</span><span class=\"v\">{v}</span></span>")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
 fn cover(
     o: &mut Vec<String>,
     place: Option<&str>,
     f: &Frame,
-    a: &X<'_>,
-    id: &str,
-    st: &Status,
+    &Doc { a, id, st }: &Doc<'_>,
     n: &Counts,
 ) -> R<()> {
     o.push(format!("<header {}>", f.dc(Component::DocCoverBand)));
@@ -623,7 +632,7 @@ fn toc(f: &Frame, o: &mut Vec<String>, figures: usize) {
 fn band(o: &mut Vec<String>, f: &Frame, n: usize) {
     let at = n.checked_sub(1);
     if let Some((name, h2)) = at.and_then(|i| CHAPTERS.get(i).zip(H2.get(i))) {
-        f.band(o, n, name, h2, None);
+        f.band(o, n, name, face::Heading(h2, None));
     }
 }
 
@@ -831,24 +840,13 @@ fn amends_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, dir: &Path, ctx: &C
 /// 図の道具で描いたものをそのまま埋める（escape しない・道具の出力は変えない）。
 /// figcaption の根拠は refs の各 id を `id_link` で（無いか空なら「根拠:」以降を出さない）。
 /// 図が 1 枚でも導出できなければ Err（面全体が「まだ分からない」・前の面は残る）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
-fn figures_chapter(
-    o: &mut Vec<String>,
-    f: &Frame,
-    n: usize,
-    figs: &[X<'_>],
-    dir: &Path,
-    ctx: &Ctx,
-) -> R<()> {
+fn figures_chapter(o: &mut Vec<String>, f: &Frame, figs: &[X<'_>], dir: &Path, ctx: &Ctx) -> R<()> {
+    let n = CHAPTERS.len() + 1;
     f.band(
         o,
         n,
         FIGURES_CHAPTER,
-        &format!("{FIGURES_CHAPTER} {} 枚", figs.len()),
-        None,
+        face::Heading(&format!("{FIGURES_CHAPTER} {} 枚", figs.len()), None),
     );
     o.push("<div class=\"chapbody\">".to_string());
     for (i, fig) in figs.iter().enumerate() {
@@ -862,7 +860,7 @@ fn figures_chapter(
                 .collect::<R<Vec<_>>>()?,
             None => Vec::new(),
         };
-        face::figure_panel(o, f, i + 1, &drawn, &caption, &refs);
+        face::figure_panel(o, f, i + 1, &drawn, face::Caption(&caption, &refs));
     }
     o.push("</div>".to_string());
     Ok(())
@@ -888,11 +886,13 @@ fn approval_chapter(o: &mut Vec<String>, f: &Frame, a: &X<'_>, st: &Status) -> R
 }
 
 /// 脚（`chip` = 用語集への札・doc-locator の行の末尾・便 74）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
-fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts, chip: &str) -> R<()> {
+fn foot(
+    o: &mut Vec<String>,
+    f: &Frame,
+    &Doc { a, id, .. }: &Doc<'_>,
+    n: &Counts,
+    chip: &str,
+) -> R<()> {
     let date = a.ef("date")?;
     let basis = a
         .f("basis")?
@@ -911,7 +911,7 @@ fn foot(o: &mut Vec<String>, f: &Frame, a: &X<'_>, id: &str, n: &Counts, chip: &
         dl.push_str(&format!("<dt>figures</dt><dd>{}</dd>", n.figures));
     }
     let (dated, stamp) = face::adr_dated(a)?;
-    f.foot_aside(o, id, (dated, &stamp), &dl, chip);
+    f.foot_aside(o, id, (dated, &stamp), face::Foot(&dl, chip));
     Ok(())
 }
 

@@ -14,6 +14,7 @@
 //! 直後に部品 ceiling-stamp を置く。字は `ceiling_stamp` の 1 つで組む（面ごとに組み直さない）ので 5 面で同じになる。
 //! 出所は天井の印 preview/ceiling-stamp.yaml の 1 つ（便 83・P-6.3）で、印が無ければ 4 観点とも「まだ分からない」（未実施）を出す（P-4.2）。
 //! 印の正本の要約値が今の正本と違えば「印の後に変わった所はまだ読まれていない」を添える（便 127・ADR-18 決定 (6)・P-3.3）。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;
@@ -93,6 +94,11 @@ pub fn run(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: Mode) -> 
         Ok(h) => h,
         Err(e) => return Outcome::unknown(e),
     };
+    settle(mode, out_path, html)
+}
+
+/// 導出した面を出力先に書く（`--write`）か、出力先の面と照らす（`--check`）。
+fn settle(mode: Mode, out_path: std::path::PathBuf, html: String) -> Outcome {
     let size = html.len();
     match mode {
         Mode::Check => {
@@ -177,19 +183,7 @@ pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) ->
         if at(i, "<!--") {
             i = find(i + 4, "-->").map_or(chars.len(), |j| j + 3);
         } else if chars.get(i) == Some(&'<') {
-            // タグの終わり（引用符の中の「>」は数えない）
-            let mut quote = None;
-            i += 1;
-            while let Some(&c) = chars.get(i) {
-                i += 1;
-                match quote {
-                    Some(q) if c == q => quote = None,
-                    Some(_) => {}
-                    None if c == '"' || c == '\'' => quote = Some(c),
-                    None if c == '>' => break,
-                    None => {}
-                }
-            }
+            i = tag_end(&chars, i);
             let close = chars.get(start + 1) == Some(&'/');
             let name_from = start + 1 + usize::from(close);
             let name: String = chars
@@ -228,6 +222,23 @@ pub fn link_ids(html: &str, all: bool, href: impl Fn(&str) -> Option<String>) ->
         out.extend(chars.iter().skip(start).take(i - start));
     }
     out
+}
+
+/// `i` の「<」から始まるタグの終わりの次の位置（引用符の中の「>」は数えない・閉じなければ字の終わり）。
+fn tag_end(chars: &[char], mut i: usize) -> usize {
+    let mut quote = None;
+    i += 1;
+    while let Some(&c) = chars.get(i) {
+        i += 1;
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None if c == '"' || c == '\'' => quote = Some(c),
+            None if c == '>' => break,
+            None => {}
+        }
+    }
+    i
 }
 
 /// 最初の「 — 」（前後に半角空白 1 つずつの全角ダッシュ）で前と後に割る（無ければ全体と None）。
@@ -474,17 +485,11 @@ impl Frame {
     /// 組み立て済み・床の名札 freshness-stamp の直後に部品 ceiling-stamp として置く・便 40）。鮮度の札の日付は
     /// （名・日付）の組（名は `named` の 承認 か 生成・便 145・146）。題は（置き場の名・題）の組で、題の頭に「<名> — 」を
     /// 付け、site-bar の名札は名が有るときだけ出す（名は `adr::name_of`・便 154）。
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-    )]
     pub fn head_dated(
         &self,
         o: &mut Vec<String>,
         (place, title): (Option<&str>, &str),
-        (dated, date): (&str, &str),
-        version: &str,
-        status: &str,
+        Fresh((dated, date), version, status): Fresh<'_>,
         ceiling: &str,
     ) {
         o.push("<!DOCTYPE html>".to_string());
@@ -558,11 +563,7 @@ impl Frame {
     }
 
     /// 章の帯（section）。`n` は章の番号・`lead` は組み立て済みの HTML。
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-    )]
-    pub fn band(&self, o: &mut Vec<String>, n: usize, name: &str, h2: &str, lead: Option<&str>) {
+    pub fn band(&self, o: &mut Vec<String>, n: usize, name: &str, Heading(h2, lead): Heading<'_>) {
         let Some(&(class, svg)) = n.checked_sub(self.first).and_then(|k| self.bands.get(k)) else {
             return;
         };
@@ -601,21 +602,16 @@ impl Frame {
     /// prevnext・foot（ft-plain と機械のための面）・doc-locator・body と html の閉じ。`dl` は組み立て済みの HTML。
     /// 足の行の日付は鮮度の札と同じ（名・日付）の組（便 146）。
     pub fn foot(&self, o: &mut Vec<String>, version: &str, dated: (&str, &str), dl: &str) {
-        self.foot_aside(o, version, dated, dl, "");
+        self.foot_aside(o, version, dated, Foot(dl, ""));
     }
 
     /// `foot` と同じ・doc-locator の行の末尾（入口へ戻る の後）に組み立て済みの `aside` を差し込む（便 74）。
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-    )]
     pub fn foot_aside(
         &self,
         o: &mut Vec<String>,
         version: &str,
         (dated, date): (&str, &str),
-        dl: &str,
-        aside: &str,
+        Foot(dl, aside): Foot<'_>,
     ) {
         o.push(format!(
             "<nav class=\"prevnext\"><a href=\"{}\"><span class=\"k\">前</span>{}</a><a href=\"{}\"><span class=\"k\">次</span>{}</a></nav>",
@@ -639,6 +635,32 @@ impl Frame {
         o.push("</html>".to_string());
     }
 }
+
+/// 鮮度の札の字（`Frame::head_dated` に渡す・値は escape 済み）。
+pub struct Fresh<'a>(
+    /// （名・日付）の組（名は `named` の 承認 か 生成）
+    pub (&'a str, &'a str),
+    /// 版
+    pub &'a str,
+    /// 状態の名札
+    pub &'a str,
+);
+
+/// 章の帯の見出し（`Frame::band` に渡す）。
+pub struct Heading<'a>(
+    /// h2 の字面
+    pub &'a str,
+    /// 組み立て済みの lead の HTML（無ければ lead の段落を出さない）
+    pub Option<&'a str>,
+);
+
+/// 脚に差し込む組み立て済みの HTML（`Frame::foot_aside` に渡す）。
+pub struct Foot<'a>(
+    /// 機械のための面の dl の中身
+    pub &'a str,
+    /// doc-locator の行の末尾（入口へ戻る の後）
+    pub &'a str,
+);
 
 /// 用語集への札 1 枚（入口の面の棚の札と同じ字面・語の数は語彙の正本の terms から・章と単位は ANNEXES から・便 74）。
 pub fn glossary_chip(dir: &Path) -> R<String> {
@@ -742,19 +764,22 @@ pub fn figure_body<'a>(dir: &Path, fig: &X<'a>) -> R<Figure<'a>> {
     Ok(Figure { id, body, label })
 }
 
+/// 図の枠の題と根拠（`figure_panel` に渡す）。
+pub struct Caption<'a>(
+    /// 図の題（escape 済み）
+    pub &'a str,
+    /// 根拠の id ごとの組み立て済みのリンク
+    pub &'a [String],
+);
+
 /// 図の枠 1 つ（figure-panel の開始タグ〜figcaption〜終了タグ・凡例は無し）。`i` は図の番号（1 から）・`caption` は
 /// escape 済み・`refs` は根拠の id ごとの組み立て済みのリンク（空なら「根拠:」以降を出さない）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
 pub fn figure_panel(
     o: &mut Vec<String>,
     f: &Frame,
     i: usize,
     fig: &Figure<'_>,
-    caption: &str,
-    refs: &[String],
+    Caption(caption, refs): Caption<'_>,
 ) {
     let fn_ = format!("図 {i}");
     o.push(format!(
@@ -804,7 +829,8 @@ mod face_tests {
         all.iter().map(|v| (name(*v), label(*v))).collect()
     }
 
-    /// 凍結の針（P-10.1・便 50 §1 (e) 1）: 11 枚の文字列の名札を、便 50 の前の表の字面と順で固定する。
+    /// 凍結の針（P-10.1・便 50 §1 (e) 1）: 11 枚の文字列の名札のうち強度・型・縛る相手・機構の種別を、便 50 の前の表の
+    /// 字面と順で固定する（残りは次の針）。
     #[test]
     fn face_labels_are_frozen_needles_for_the_string_tables() {
         assert_eq!(
@@ -854,6 +880,12 @@ mod face_tests {
                 ("none", "なし")
             ]
         );
+    }
+
+    /// 凍結の針の続き: 文字列の名札のうち機構の live・段階・極性・根拠の種別・撤退条件の種別を、同じ前の表の字面と順で
+    /// 固定する。
+    #[test]
+    fn face_labels_are_frozen_needles_for_the_live_stage_and_kind_tables() {
         assert_eq!(
             pairs(
                 &ce::MechanismLive::ALL,

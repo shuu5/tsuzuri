@@ -8,6 +8,7 @@
 //! 図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか）。図が無い面は便 33 までと byte 不変。
 //! 章 03〜06（機能要件・非機能要件・受入基準・制約）の生成は便 100 で `face_srs_items.rs` へ移した（字は 1 字も
 //! 変えていない）。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 
@@ -357,20 +358,7 @@ fn context<'a>(s: &X<'a>, c: &X<'a>, r: &X<'a>) -> R<Ctx<'a>> {
     }
     let rail_what = rail.iter().map(|st| (st.n, st.what.clone())).collect();
 
-    let verdicts = match s.g("verdicts")? {
-        Some(vx) => {
-            let rows = vx.seq()?;
-            if rows.len() > MAX_STATE_NODES {
-                return Err(format!(
-                    "{}: 答えが {} で上限 {MAX_STATE_NODES}（部品目録の state-strip の max_nodes）を超える",
-                    vx.at,
-                    rows.len()
-                ));
-            }
-            Some(rows)
-        }
-        None => None,
-    };
+    let verdicts = read_verdicts(s)?;
     // 任意の図の節（便 34）。無い・null は 0 枚
     let figures = s
         .g("figures")?
@@ -390,6 +378,25 @@ fn context<'a>(s: &X<'a>, c: &X<'a>, r: &X<'a>) -> R<Ctx<'a>> {
         frame: frame(!figures.is_empty()),
         figures,
     })
+}
+
+/// 答えの節の行（節が無ければ None・部品目録の上限を超えれば Err）。
+fn read_verdicts<'a>(s: &X<'a>) -> R<Option<Vec<X<'a>>>> {
+    let verdicts = match s.g("verdicts")? {
+        Some(vx) => {
+            let rows = vx.seq()?;
+            if rows.len() > MAX_STATE_NODES {
+                return Err(format!(
+                    "{}: 答えが {} で上限 {MAX_STATE_NODES}（部品目録の state-strip の max_nodes）を超える",
+                    vx.at,
+                    rows.len()
+                ));
+            }
+            Some(rows)
+        }
+        None => None,
+    };
+    Ok(verdicts)
 }
 
 fn is_effective(m: &X<'_>) -> R<bool> {
@@ -497,9 +504,7 @@ fn head(
     ctx.frame.head_dated(
         o,
         (name, &format!("要件書（{version}）")),
-        (dated, &date),
-        &shown,
-        &label,
+        face::Fresh((dated, &date), &shown, &label),
         stamp,
     );
     Ok(())
@@ -623,21 +628,26 @@ fn toc(o: &mut Vec<String>, ctx: &Ctx<'_>) {
 
 pub(crate) fn band(o: &mut Vec<String>, ctx: &Ctx<'_>, n: usize, lead: Option<&str>) {
     if let Some(name) = n.checked_sub(1).and_then(|i| CHAPTERS.get(i)) {
-        ctx.frame.band(o, n, name, &chapter_h2(ctx, n), lead);
+        ctx.frame
+            .band(o, n, name, face::Heading(&chapter_h2(ctx, n), lead));
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
+/// 図の枠の題の字（`figure_open` に渡す）。
+pub(crate) struct FigTitle<'a>(
+    /// 図の番号の字（図 N）
+    pub(crate) &'a str,
+    /// 図の題
+    pub(crate) &'a str,
+    /// 組み立て済みの凡例の HTML（無ければ凡例の小窓を出さない）
+    pub(crate) Option<&'a str>,
+);
+
 pub(crate) fn figure_open(
     o: &mut Vec<String>,
     ctx: &Ctx<'_>,
     id: &str,
-    fn_: &str,
-    title: &str,
-    legend: Option<&str>,
+    FigTitle(fn_, title, legend): FigTitle<'_>,
 ) {
     o.push(format!(
         "<figure {} data-role=\"diagram\" id=\"{id}\">",
@@ -759,7 +769,25 @@ fn scope_chapter(
 
     band(o, ctx, 2, None);
     o.push("<div class=\"chapbody\">".to_string());
-    figure_open(o, ctx, "fig-context", "図 1", "誰が使い、何が出るか", None);
+    figure_open(
+        o,
+        ctx,
+        "fig-context",
+        FigTitle("図 1", "誰が使い、何が出るか", None),
+    );
+    context_band(o, ctx, inputs, tools, outputs)?;
+    figure_close(o, "図 1", m)?;
+    scope_cards(o, ctx, dir, s)
+}
+
+/// 図 1 の帯（部品 context-band・入れる側・道具・出る側の 3 列）。
+fn context_band(
+    o: &mut Vec<String>,
+    ctx: &Ctx<'_>,
+    inputs: Vec<&X<'_>>,
+    tools: Vec<&X<'_>>,
+    outputs: Vec<X<'_>>,
+) -> R<()> {
     o.push(format!(
         "<div {} style=\"--band-n:3\">",
         ctx.frame.dc(Component::ContextBand)
@@ -799,8 +827,11 @@ fn scope_chapter(
     }
     o.push("</div>".to_string());
     o.push("</div>".to_string());
-    figure_close(o, "図 1", m)?;
+    Ok(())
+}
 
+/// 段の範囲の節ごとの「作る / 作らない」の塊と章の閉じ。
+fn scope_cards(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, s: &X<'_>) -> R<()> {
     // 段の範囲の節（鍵・名札）はどれも任意の節で、在る節だけ塊を出す（便 118 の scope_m3・便 165 で scope と scope_m1 も）。
     // 1 つも無ければ小見出しも出さない。
     let mut scopes = Vec::new();
@@ -861,8 +892,7 @@ fn figures_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
         o,
         CHAPTERS.len() + 1,
         FIGURES_CHAPTER,
-        &format!("{FIGURES_CHAPTER} {} 枚", ctx.figures.len()),
-        None,
+        face::Heading(&format!("{FIGURES_CHAPTER} {} 枚", ctx.figures.len()), None),
     );
     o.push("<div class=\"chapbody\">".to_string());
     for (n, fig) in (own_figures(ctx) + 1..).zip(&ctx.figures) {
@@ -876,7 +906,7 @@ fn figures_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path) -> R<()> {
                 .collect::<R<Vec<_>>>()?,
             None => Vec::new(),
         };
-        face::figure_panel(o, &ctx.frame, n, &drawn, &caption, &refs);
+        face::figure_panel(o, &ctx.frame, n, &drawn, face::Caption(&caption, &refs));
     }
     o.push("</div>".to_string());
     Ok(())

@@ -1,6 +1,7 @@
 //! 要件書の面の章 07・08 の生成（便 35 で `face_srs.rs` から分けた）。章 07 は要件と根拠の対応（rtm-grid）・
 //! 章 08 は用語集（glossary-term-table・便 36 で憲法の面の章 07 と同じ形にした・語の行は `face.rs` の共有の口）。
 //! 文脈（`Ctx`）と共有の口（band・xref・hint 等）は `face_srs.rs` のもの。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use crate::catalog::Component;
 use crate::cursor::{R, X};
@@ -34,6 +35,15 @@ pub(crate) fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
             .collect::<String>()
     ));
     o.push("<tbody>".to_string());
+    rtm_rows(o, ctx, heads)?;
+    o.push("</tbody>".to_string());
+    o.push("</table></div>".to_string());
+    o.push("</div>".to_string());
+    Ok(())
+}
+
+/// 対応の表の行（要件ごとに ゴールの列・受入基準・図の参照）。
+fn rtm_rows(o: &mut Vec<String>, ctx: &Ctx<'_>, heads: Vec<String>) -> R<()> {
     for it in ctx.fr.iter().chain(&ctx.nfr) {
         let x = &it.x;
         let goals = x
@@ -92,9 +102,6 @@ pub(crate) fn rtm_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
         row.push_str(&format!("<td data-k=\"図\">{figs}</td></tr>"));
         o.push(row);
     }
-    o.push("</tbody>".to_string());
-    o.push("</table></div>".to_string());
-    o.push("</div>".to_string());
     Ok(())
 }
 

@@ -15,6 +15,7 @@
 //! 各設計ノートの面へのリンク）を出す（便 29・delivery-29.md §1 (a)）——面は 1 本につき 1 枚
 //! （`note-<文書 id>.html`・便 28 の生成器）。入口の正本 `index.yaml` は改訂しない（ADR-7 帰結・棚の行の読み方だけが変わる）。
 //! 読み手（正本を読んで面の文脈を組む側・部品の一覧と枠・読みと数え・支度表の読み）は便 115 で `face_index_read.rs`（層 4）へ降ろした。面の口と HTML を書く側はここに残す。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 
@@ -26,8 +27,8 @@ use crate::face_constitution_read::amendments;
 #[cfg(test)]
 use crate::face_index_read::PARTS;
 use crate::face_index_read::{
-    ADR_STATUS, Ctx, Doc, FRAME, INTAKE, NOTE_DIR, Note, Record, SheetBody, SheetHead, context,
-    exact, notes, records, sheet_body, sheet_head,
+    ADR_STATUS, Ctx, Doc, FRAME, INTAKE, NOTE_DIR, Note, Record, SheetBody, SheetHead, Sources,
+    context, exact, notes, records, sheet_body, sheet_head,
 };
 use crate::shelf::{self, SHELF_DOCS, SHELF_LEGEND};
 use crate::yaml::Value;
@@ -93,7 +94,17 @@ pub fn derive(dir: &Path) -> R<String> {
 
     // 憲法のカードの更新の日付は今の版の承認の日付（便 144・憲法の面と同じ口）
     let rows = amendments(dir)?;
-    let ctx = context(&i, (&c, &rows), &s, &v, &r, adr, notes)?;
+    let ctx = context(
+        &i,
+        Sources {
+            c: (&c, &rows),
+            s: &s,
+            v: &v,
+            r: &r,
+        },
+        adr,
+        notes,
+    )?;
     let sheet = sheet_head(&n)?;
     let filled = sheet_body(dir, &n, &sheet, &ctx.annex_types)?;
     let m = i.f("meta")?;
@@ -130,9 +141,7 @@ fn head(o: &mut Vec<String>, name: Option<&str>, m: &X<'_>, stamp: &str) -> R<()
     FRAME.head_dated(
         o,
         (name, &format!("設計文書の入口（{version}）")),
-        (dated, &date),
-        &version,
-        status,
+        face::Fresh((dated, &date), &version, status),
         stamp,
     );
     // 入口は番号付きの章を持たないので、site-bar の here は「文書の一覧」
@@ -234,6 +243,18 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
     ));
     o.push(minimap);
 
+    shelf_grid(o, ctx);
+    o.push(format!(
+        "<figcaption><span class=\"ver\">棚 · {} {} · index.yaml</span></figcaption>",
+        m.ef("version")?,
+        dated(m)?.1
+    ));
+    o.push("</figure>".to_string());
+    Ok(())
+}
+
+/// 棚の格子（部品 doc-shelf・置き場の順に card と棚の矢印）。
+fn shelf_grid(o: &mut Vec<String>, ctx: &Ctx) {
     let shelf_n = ctx.readable().count() + 1;
     o.push(format!(
         "<div {} class=\"shelf-grid\" style=\"--shelf-n:{shelf_n}\">",
@@ -272,13 +293,6 @@ fn shelf(o: &mut Vec<String>, ctx: &Ctx, i: &X<'_>, m: &X<'_>) -> R<()> {
         }
     }
     o.push("</div>".to_string());
-    o.push(format!(
-        "<figcaption><span class=\"ver\">棚 · {} {} · index.yaml</span></figcaption>",
-        m.ef("version")?,
-        dated(m)?.1
-    ));
-    o.push("</figure>".to_string());
-    Ok(())
 }
 
 /// 判断の記録の card の 2 行（記録が 1 本以上のとき）。1 行目は本数と要約・2 行目は更新と各記録の面へのリンク。
@@ -499,12 +513,18 @@ fn intake_line(o: &mut Vec<String>, i: &X<'_>) -> R<()> {
     Ok(())
 }
 
+/// slim の帯の字（`band` に渡す・どれも escape 済み）。
+struct Slim<'a>(
+    /// kicker の字
+    &'a str,
+    /// h2 の字
+    &'a str,
+    /// lead の段落の字
+    &'a str,
+);
+
 /// slim の帯（読む順番・相談窓口・支度表）。字面はすべて escape 済み。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
-fn band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, title: &str, lead: &str) {
+fn band(o: &mut Vec<String>, n: usize, class: &str, Slim(kicker, title, lead): Slim<'_>) {
     o.push(format!(
         "<section id=\"s{n}\" {} class=\"{class} slim\">",
         dc(Component::ChapterDeckBand)
@@ -517,7 +537,7 @@ fn band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, title: &str, l
 
 /// 欄 title と lead を持つ節の slim の帯。
 fn slim_band(o: &mut Vec<String>, n: usize, class: &str, kicker: &str, x: &X<'_>) -> R<()> {
-    band(o, n, class, kicker, &x.ef("title")?, &x.ef("lead")?);
+    band(o, n, class, Slim(kicker, &x.ef("title")?, &x.ef("lead")?));
     Ok(())
 }
 
@@ -620,15 +640,26 @@ fn sheet_section(
         o,
         3,
         "band-4",
-        SHEET_KICKER,
-        &esc(&head.title),
-        &esc(&head.explain),
+        Slim(SHEET_KICKER, &esc(&head.title), &esc(&head.explain)),
     );
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<section {} aria-label=\"{SHEET_KICKER}\">",
         dc(Component::StatusLine)
     ));
+    sheet_lines(o, i, head, body)?;
+    o.push("</section>".to_string());
+    o.push("</div>".to_string());
+    Ok(())
+}
+
+/// 支度表の行（在れば文書・勧め・承認・出所の行・無ければ「まだ無い」の 1 行）。
+fn sheet_lines(
+    o: &mut Vec<String>,
+    i: &X<'_>,
+    head: &SheetHead,
+    body: Option<&SheetBody>,
+) -> R<()> {
     match body {
         Some(b) => {
             let documents = if b.documents.is_empty() {
@@ -679,8 +710,6 @@ fn sheet_section(
             ),
         ),
     }
-    o.push("</section>".to_string());
-    o.push("</div>".to_string());
     Ok(())
 }
 

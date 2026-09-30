@@ -2,6 +2,7 @@
 //! 部品の一覧と枠・置き場の定数と判断の記録の状態の表・読んだ中身と文脈の型とその method・読みと数え・支度表の読みを字を変えずに降ろした。
 //! 面の口 `derive` と HTML を書く側と名札の表は `face_index.rs` に残る。面の口と字面の逃がしを呼ぶので層 1 には置かない。見え方は
 //! 書く側と使う側が名指すものだけを広げた。移した注の中の file 名（`render.rs` など）は移す前の置き場から見た字のまま。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;
@@ -420,47 +421,33 @@ fn srs_card(s: &X<'_>) -> R<Readable> {
     })
 }
 
+/// 入口の文脈を組むのに読むほかの正本（`context` に渡す）。
+pub(crate) struct Sources<'a> {
+    /// 憲法の正本と版を上げた発効した判断の行（`face_constitution_read::amendments`）の組
+    pub(crate) c: (&'a X<'a>, &'a [Amend]),
+    /// 要件書の正本
+    pub(crate) s: &'a X<'a>,
+    /// 語彙の正本
+    pub(crate) v: &'a X<'a>,
+    /// rules の正本
+    pub(crate) r: &'a X<'a>,
+}
+
 /// `c` = 憲法の正本と版を上げた発効した判断の行（`face_constitution_read::amendments`）の組。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
 pub(crate) fn context(
     i: &X<'_>,
-    (c, rows): (&X<'_>, &[Amend]),
-    s: &X<'_>,
-    v: &X<'_>,
-    r: &X<'_>,
+    Sources {
+        c: (c, rows),
+        s,
+        v,
+        r,
+    }: Sources<'_>,
     adr: Vec<Record>,
     notes: Vec<Note>,
 ) -> R<Ctx> {
     let sh = i.f("shelf")?;
 
-    let mut docs = Vec::new();
-    for (id, shelf, row) in exact(&sh.f("documents")?, SHELF_DOCS, "文書")? {
-        let absent_x = row.f("absent")?;
-        let absent = match absent_x.v {
-            Value::Null => None,
-            Value::Str(_) => Some(absent_x.e()?),
-            _ => return Err(format!("{}: null か文字列でない", absent_x.at)),
-        };
-        let readable = match id {
-            "constitution" => Some(constitution_card(c, rows)?),
-            "srs" => Some(srs_card(s)?),
-            _ => None,
-        };
-        if shelf.face.is_none() && absent.is_none() {
-            return Err(format!("{}: 面が無い文書に absent の文が無い", absent_x.at));
-        }
-        docs.push(Doc {
-            id,
-            shelf,
-            ty: row.ef("type")?,
-            use_: row.ef("use")?,
-            absent,
-            readable,
-        });
-    }
+    let docs = shelf_docs(&sh, (c, rows), s)?;
     let doc_ids: Vec<&str> = docs.iter().map(|d| d.id).collect();
 
     let terms = v.f("terms")?.seq()?.len();
@@ -513,6 +500,36 @@ pub(crate) fn context(
     }
     ctx.relations = relations;
     Ok(ctx)
+}
+
+/// 棚の文書の行（`index.yaml` の shelf.documents を表の id と過不足なく・読める面の札は正本から数える）。
+fn shelf_docs(sh: &X<'_>, (c, rows): (&X<'_>, &[Amend]), s: &X<'_>) -> R<Vec<Doc>> {
+    let mut docs = Vec::new();
+    for (id, shelf, row) in exact(&sh.f("documents")?, SHELF_DOCS, "文書")? {
+        let absent_x = row.f("absent")?;
+        let absent = match absent_x.v {
+            Value::Null => None,
+            Value::Str(_) => Some(absent_x.e()?),
+            _ => return Err(format!("{}: null か文字列でない", absent_x.at)),
+        };
+        let readable = match id {
+            "constitution" => Some(constitution_card(c, rows)?),
+            "srs" => Some(srs_card(s)?),
+            _ => None,
+        };
+        if shelf.face.is_none() && absent.is_none() {
+            return Err(format!("{}: 面が無い文書に absent の文が無い", absent_x.at));
+        }
+        docs.push(Doc {
+            id,
+            shelf,
+            ty: row.ef("type")?,
+            use_: row.ef("use")?,
+            absent,
+            readable,
+        });
+    }
+    Ok(docs)
 }
 
 // ── 相談窓口の正本と支度表 ──

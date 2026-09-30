@@ -1,6 +1,7 @@
 //! 要件書の面の章 03〜06（機能要件・非機能要件・受入基準・制約）の生成（便 100・docs/design/delivery-100.md §1 (b)）。
 //! 便 100 で `face_srs.rs` から 1 字も変えずに移した。文脈（`Ctx`）と共有の口（`band`・`figure_open`・`figure_close`・
 //! `fig_req`・`article_link`・`xref`・`slots`）は `face_srs.rs` のもの。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 
@@ -13,7 +14,7 @@ use crate::face::{
     strength_label, strength_meaning, strength_prio,
 };
 use crate::face_srs::{
-    Ctx, Item, article_link, band, fig_req, figure_close, figure_open, slots, xref,
+    Ctx, FigTitle, Item, article_link, band, fig_req, figure_close, figure_open, slots, xref,
 };
 
 /// 凡例の 1 行（言葉 = 強度と型の名札・確かめ方 = 確かめ方の名札）。強度と型は導出した型の ALL の順（= 憲法の値域の file の順）。
@@ -52,14 +53,31 @@ pub(crate) fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, m: &X<'
         o,
         ctx,
         "fig-rail",
-        "図 2",
-        &format!("folio が 1 回で通す {count} 段 — 各段を決めている要件"),
-        Some(legend),
+        FigTitle(
+            "図 2",
+            &format!("folio が 1 回で通す {count} 段 — 各段を決めている要件"),
+            Some(legend),
+        ),
     );
     o.push(format!(
         "<ol {} style=\"--rail-n:{count}\">",
         ctx.frame.dc(Component::PipelineRail)
     ));
+    rail_cols(o, ctx)?;
+    o.push("</ol>".to_string());
+    figure_close(o, "図 2", m)?;
+
+    o.push("<div class=\"stack\">".to_string());
+    for it in &ctx.fr {
+        item_row(o, ctx, dir, it, false)?;
+    }
+    o.push("</div>".to_string());
+
+    verdicts_figure(o, ctx, m)
+}
+
+/// 図 2 のレールの列（段ごとに担当の側の枠へ・定める要件が無い段は根拠の条を添える）。
+fn rail_cols(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
     for st in &ctx.rail {
         let x = &st.x;
         let nt = match x.g("note")? {
@@ -108,15 +126,11 @@ pub(crate) fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, m: &X<'
         o.push(upper);
         o.push(format!("{lower}</li>"));
     }
-    o.push("</ol>".to_string());
-    figure_close(o, "図 2", m)?;
+    Ok(())
+}
 
-    o.push("<div class=\"stack\">".to_string());
-    for it in &ctx.fr {
-        item_row(o, ctx, dir, it, false)?;
-    }
-    o.push("</div>".to_string());
-
+/// 図 3（verdicts の節が在るときだけ・答えごとに状態の札）と章の閉じ。
+fn verdicts_figure(o: &mut Vec<String>, ctx: &Ctx<'_>, m: &X<'_>) -> R<()> {
     // 図 3（verdicts の節が在るときだけ）
     if let Some(verdicts) = &ctx.verdicts {
         let mut legend = String::new();
@@ -140,12 +154,14 @@ pub(crate) fn fr_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, m: &X<'
             o,
             ctx,
             "fig-verdicts",
-            "図 3",
-            &format!(
-                "検査の答えは {} つ — どういうときにその答えになるか",
-                verdicts.len()
+            FigTitle(
+                "図 3",
+                &format!(
+                    "検査の答えは {} つ — どういうときにその答えになるか",
+                    verdicts.len()
+                ),
+                Some(&format!("<div class=\"fig-legend\">{legend}</div>")),
             ),
-            Some(&format!("<div class=\"fig-legend\">{legend}</div>")),
         );
         o.push(format!(
             "<ul {} style=\"--state-n:{}\">",
@@ -208,6 +224,27 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, it: &Item<'_>, nfr: 
         x.ef("plain")?
     ));
 
+    let method = item_chips(o, ctx, dir, x)?;
+
+    // 機械のための面（正本の値のまま）
+    let mut dl = format!(
+        "<dt>pattern</dt><dd>{}</dd><dt>strength</dt><dd>{}</dd><dt>when</dt><dd>{when}</dd><dt>verify</dt><dd>{}</dd>",
+        pattern.e()?,
+        strength.e()?,
+        method.e()?
+    );
+    if let Some(ms) = &milestone {
+        dl.push_str(&format!("<dt>milestone</dt><dd>{}</dd>", ms.e()?));
+    }
+    o.push(format!(
+        "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl>{dl}</dl></details>"
+    ));
+    o.push("</article>".to_string());
+    Ok(())
+}
+
+/// 要件の小窓（確かめ方・根拠・注）と図の参照の行を足し、確かめ方の欄 method を返す。
+fn item_chips<'a>(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, x: &X<'a>) -> R<X<'a>> {
     // 小窓（確かめ方・根拠・注）と図の参照
     let verify = x.f("verify")?;
     let method = verify.f("method")?;
@@ -229,6 +266,26 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, it: &Item<'_>, nfr: 
         how.push_str(&format!("（{}）", acs.join("・")));
     }
     let mut chips = vec![hint("確かめ方", &how)];
+    let basis = basis_links(ctx, dir, x)?;
+    if !basis.is_empty() {
+        chips.push(hint("根拠", &basis.join("・")));
+    }
+    if let Some(note) = x.g("note")? {
+        chips.push(hint("注", &note.e()?));
+    }
+    for f in x.f("figures")?.seq()? {
+        let w = ctx.fig(&f)?;
+        chips.push(match w.href {
+            Some(h) => format!("<a class=\"rq-where\" href=\"{h}\">{}</a>", w.long),
+            None => w.long,
+        });
+    }
+    o.push(format!("<p class=\"meta-chips\">{}</p>", chips.concat()));
+    Ok(method)
+}
+
+/// 要件の根拠のリンク（ゴール・憲法の条・rules 行・判断の記録の順）。
+fn basis_links(ctx: &Ctx<'_>, dir: &Path, x: &X<'_>) -> R<Vec<String>> {
     let mut basis = Vec::new();
     for q in x.f("goals")?.seq()? {
         let g = ctx.goal(&q)?;
@@ -265,36 +322,7 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, dir: &Path, it: &Item<'_>, nfr: 
             });
         }
     }
-    if !basis.is_empty() {
-        chips.push(hint("根拠", &basis.join("・")));
-    }
-    if let Some(note) = x.g("note")? {
-        chips.push(hint("注", &note.e()?));
-    }
-    for f in x.f("figures")?.seq()? {
-        let w = ctx.fig(&f)?;
-        chips.push(match w.href {
-            Some(h) => format!("<a class=\"rq-where\" href=\"{h}\">{}</a>", w.long),
-            None => w.long,
-        });
-    }
-    o.push(format!("<p class=\"meta-chips\">{}</p>", chips.concat()));
-
-    // 機械のための面（正本の値のまま）
-    let mut dl = format!(
-        "<dt>pattern</dt><dd>{}</dd><dt>strength</dt><dd>{}</dd><dt>when</dt><dd>{when}</dd><dt>verify</dt><dd>{}</dd>",
-        pattern.e()?,
-        strength.e()?,
-        method.e()?
-    );
-    if let Some(ms) = &milestone {
-        dl.push_str(&format!("<dt>milestone</dt><dd>{}</dd>", ms.e()?));
-    }
-    o.push(format!(
-        "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl>{dl}</dl></details>"
-    ));
-    o.push("</article>".to_string());
-    Ok(())
+    Ok(basis)
 }
 
 /// 受入基準の章の凡例の 1 行（札「まだ分からない」が何を言うか・便 64）。部品と class は §3 の凡例（`legend_line`）と同じ。

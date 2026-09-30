@@ -5,6 +5,7 @@
 //! 面に依らない口（head と site-bar・章の帯・card・toc・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ（便 15）。
 //! 読み手（正本を読んで面の文脈と節の中身を組む側・条と文脈と改訂の段の型・読みと検査・欠番・関係の欄・改訂の段の読み）は
 //! 便 116 で `face_constitution_read.rs`（層 4）へ降ろした。面の口と HTML を書く側と名札と数の口はここに残す。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 use std::sync::LazyLock;
@@ -119,7 +120,8 @@ pub fn derive(dir: &Path) -> R<String> {
 
     let mut o: Vec<String> = Vec::new();
     head(&mut o, name.as_deref(), &m, &ap, &stamp)?;
-    cover(&mut o, name.as_deref(), &ctx, &c, &m, &ap)?;
+    cover(&mut o, name.as_deref(), &ctx, &c)?;
+    cover_state(&mut o, &m, &ap)?;
     toc(&mut o, &ctx, &c, &r)?;
     north_star(&mut o, &c)?;
     reading(&mut o, &ctx, &v)?;
@@ -199,26 +201,13 @@ fn head(
     FRAME.head_dated(
         o,
         (name, &format!("憲法（不変原則・{version}）")),
-        (dated, &date),
-        &shown,
-        &label,
+        face::Fresh((dated, &date), &shown, &label),
         stamp,
     );
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-a が直してこの属性を外す"
-)]
-fn cover(
-    o: &mut Vec<String>,
-    name: Option<&str>,
-    ctx: &Ctx<'_>,
-    c: &X<'_>,
-    m: &X<'_>,
-    ap: &Approved,
-) -> R<()> {
+fn cover(o: &mut Vec<String>, name: Option<&str>, ctx: &Ctx<'_>, c: &X<'_>) -> R<()> {
     let ns = c.f("north_star")?;
     let total = ctx.arts.len();
     o.push(format!("<header {}>", dc(Component::DocCoverBand)));
@@ -264,6 +253,11 @@ fn cover(
     o.push(format!(
         "<span class=\"m\"><span class=\"k\">内訳</span><span class=\"v\">{breakdown}</span></span>"
     ));
+    Ok(())
+}
+
+/// 表紙の後半（版の札・状態の行・header の閉じ）。`cover` の直後に呼ぶ。
+fn cover_state(o: &mut Vec<String>, m: &X<'_>, ap: &Approved) -> R<()> {
     o.push(format!(
         "<span class=\"m\"><span class=\"k\">版</span><span class=\"v\">{} / {}</span></span>",
         m.ef("version")?,
@@ -344,8 +338,7 @@ fn north_star(o: &mut Vec<String>, c: &X<'_>) -> R<()> {
         o,
         0,
         "北極星",
-        "何のために・誰のために・何をあきらめるか",
-        Some(&lead),
+        face::Heading("何のために・誰のために・何をあきらめるか", Some(&lead)),
     );
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
@@ -391,7 +384,7 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
         }
     }
     let h2 = format!("{} 段の意味 — {}", ctx.tiers.len(), tier_names(ctx));
-    FRAME.band(o, 1, "読み方", &h2, lead.as_deref());
+    FRAME.band(o, 1, "読み方", face::Heading(&h2, lead.as_deref()));
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<div {} style=\"--band-n:{}\">",
@@ -425,7 +418,7 @@ fn reading(o: &mut Vec<String>, ctx: &Ctx<'_>, v: &X<'_>) -> R<()> {
 
 fn tier_chapter(o: &mut Vec<String>, ctx: &Ctx<'_>, i: usize, key: &str, tier: &Tier) -> R<()> {
     let h2 = count_word(tier_count(ctx, key), "原則");
-    FRAME.band(o, i + 2, tier.name, &h2, Some(tier.meaning));
+    FRAME.band(o, i + 2, tier.name, face::Heading(&h2, Some(tier.meaning)));
     o.push("<div class=\"chapbody\">".to_string());
     // 札の凡例は 3 つの段の章の最初の 1 か所だけ（同じ札が続く章で繰り返さない・便 63）
     if i == 0 {
@@ -482,7 +475,28 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
         a.ef("plain")?
     ));
 
-    // 小窓（根拠・関係・撤退条件・機構）
+    let machine = item_chips(o, ctx, a)?;
+
+    amend_history(o, a)?;
+
+    // 機械のための面（正本の値のまま）
+    let mut dl = format!(
+        "<dt>binds</dt><dd>{}</dd><dt>mechanism</dt><dd>{machine}</dd><dt>patterns</dt><dd>{}</dd>",
+        binds.e()?,
+        patterns.join(" · ")
+    );
+    if let Some(note) = a.g("note")? {
+        dl.push_str(&format!("<dt>note</dt><dd>{}</dd>", note.e()?));
+    }
+    o.push(format!(
+        "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl>{dl}</dl></details>"
+    ));
+    o.push("</article>".to_string());
+    Ok(())
+}
+
+/// 条の小窓（根拠・関係・撤退条件・機構）の行を足し、機械のための面の mechanism の字を返す。
+fn item_chips(o: &mut Vec<String>, ctx: &Ctx<'_>, a: &X<'_>) -> R<String> {
     let mut chips = vec![hint("根拠", &rationale(&a.f("rationale")?)?)];
     if let Some(rel) = a.g("relations")? {
         let links = relations(ctx, &rel)?;
@@ -533,8 +547,11 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
     }
     chips.push(hint("機構", &human));
     o.push(format!("<p class=\"meta-chips\">{}</p>", chips.concat()));
+    Ok(machine)
+}
 
-    // 改訂来歴
+/// 条の改訂来歴（置換の元と受けた改訂・どちらも無ければ何も足さない）。
+fn amend_history(o: &mut Vec<String>, a: &X<'_>) -> R<()> {
     let supersedes = a.g("supersedes_v1")?;
     let amended = match a.g("amended_by")? {
         Some(x) => x.seq()?,
@@ -569,20 +586,6 @@ fn item_row(o: &mut Vec<String>, ctx: &Ctx<'_>, art: &Art<'_>) -> R<()> {
             dc(Component::PrincipleAmendmentHistory)
         ));
     }
-
-    // 機械のための面（正本の値のまま）
-    let mut dl = format!(
-        "<dt>binds</dt><dd>{}</dd><dt>mechanism</dt><dd>{machine}</dd><dt>patterns</dt><dd>{}</dd>",
-        binds.e()?,
-        patterns.join(" · ")
-    );
-    if let Some(note) = a.g("note")? {
-        dl.push_str(&format!("<dt>note</dt><dd>{}</dd>", note.e()?));
-    }
-    o.push(format!(
-        "<details class=\"machine\" data-audience=\"machine\"><summary>機械のための面</summary><dl>{dl}</dl></details>"
-    ));
-    o.push("</article>".to_string());
     Ok(())
 }
 
@@ -598,8 +601,7 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
         o,
         5,
         "数値の表（rules）",
-        &h2,
-        Some(&c.ef("rules_pointer")?),
+        face::Heading(&h2, Some(&c.ef("rules_pointer")?)),
     );
     o.push("<div class=\"chapbody\">".to_string());
     o.push("<div class=\"legend-line\"><span>状態: </span><span><span class=\"state ok\">凍結</span> = 値は動かさない（変えるなら裁定が要る）／<span class=\"state warn\">仮</span> = 値は入っているが確定前／<span class=\"state\">未定</span> = まだ値が無い</span></div>".to_string());
@@ -622,6 +624,37 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
         "<div class=\"legend-line\"><span>種別: </span><span>{kinds}</span></div>"
     ));
 
+    thresholds_table(o, thresholds)?;
+
+    o.push("<div class=\"tbl-wrap\"><table class=\"tbl\">".to_string());
+    o.push(
+        "<thead><tr><th>id</th><th>作法</th><th>種別</th><th>裁定</th><th>状態</th></tr></thead>"
+            .to_string(),
+    );
+    o.push("<tbody>".to_string());
+    for x in &discipline {
+        let note = match x.g("note")? {
+            Some(n) => format!(" {}", hint("注", &n.e()?)),
+            None => String::new(),
+        };
+        o.push(format!(
+            "<tr id=\"{}\"><td class=\"id\" data-k=\"id\">{}</td><td data-k=\"作法\">{}{note}</td><td data-k=\"種別\">{}</td><td data-k=\"裁定\">{}</td><td data-k=\"状態\">{}</td></tr>",
+            anchor(x.f("id")?.id()?),
+            x.f("id")?.id()?,
+            what_with_xref(x)?,
+            rule_kind_label(x.f("kind")?.parse(rules::RuleKind::from_name, "rules 行の種別")?),
+            ruling(x)?,
+            state_chip(x)?
+        ));
+    }
+    o.push("</tbody>".to_string());
+    o.push("</table></div>".to_string());
+    o.push("</div>".to_string());
+    Ok(())
+}
+
+/// 閾値行の表（行ごとに注・母集団・写す範囲・根拠・同じ種類の小窓）。
+fn thresholds_table(o: &mut Vec<String>, thresholds: Vec<X<'_>>) -> R<()> {
     o.push("<div class=\"tbl-wrap\"><table class=\"tbl\">".to_string());
     o.push("<thead><tr><th>id</th><th>何の数値か</th><th>値</th><th>種別</th><th>裁定</th><th>状態</th></tr></thead>".to_string());
     o.push("<tbody>".to_string());
@@ -653,31 +686,6 @@ fn rules_chapter(o: &mut Vec<String>, c: &X<'_>, r: &X<'_>) -> R<()> {
     }
     o.push("</tbody>".to_string());
     o.push("</table></div>".to_string());
-
-    o.push("<div class=\"tbl-wrap\"><table class=\"tbl\">".to_string());
-    o.push(
-        "<thead><tr><th>id</th><th>作法</th><th>種別</th><th>裁定</th><th>状態</th></tr></thead>"
-            .to_string(),
-    );
-    o.push("<tbody>".to_string());
-    for x in &discipline {
-        let note = match x.g("note")? {
-            Some(n) => format!(" {}", hint("注", &n.e()?)),
-            None => String::new(),
-        };
-        o.push(format!(
-            "<tr id=\"{}\"><td class=\"id\" data-k=\"id\">{}</td><td data-k=\"作法\">{}{note}</td><td data-k=\"種別\">{}</td><td data-k=\"裁定\">{}</td><td data-k=\"状態\">{}</td></tr>",
-            anchor(x.f("id")?.id()?),
-            x.f("id")?.id()?,
-            what_with_xref(x)?,
-            rule_kind_label(x.f("kind")?.parse(rules::RuleKind::from_name, "rules 行の種別")?),
-            ruling(x)?,
-            state_chip(x)?
-        ));
-    }
-    o.push("</tbody>".to_string());
-    o.push("</table></div>".to_string());
-    o.push("</div>".to_string());
     Ok(())
 }
 
@@ -806,7 +814,7 @@ fn amendment_chapter(
     match prose(&am) {
         // 字なら章の本文に行ごとに逐語（空白だけの行を除く）・図 1 と段の一覧は出さない（便 165）
         Some(text) => {
-            FRAME.band(o, 6, "改訂", AMEND_H2, None);
+            FRAME.band(o, 6, "改訂", face::Heading(AMEND_H2, None));
             o.push("<div class=\"chapbody\">".to_string());
             for line in text.lines().filter(|l| !l.trim().is_empty()) {
                 o.push(format!("<p>{}</p>", esc(line)));
@@ -815,7 +823,34 @@ fn amendment_chapter(
         None => amendment_flow(o, ctx, &am, m, ap)?,
     }
 
-    // 改訂の例（supersedes_v1 を持つ条・amended_by の項ごと・正本の順）
+    amendment_examples(o, ctx)?;
+
+    // 版ごとの変更点（meta のキーのうち changes_from_ で始まるものを文字列の昇順に）
+    let mut changes: Vec<(&str, X<'_>)> = m
+        .pairs()?
+        .into_iter()
+        .filter(|(k, _)| k.starts_with("changes_from_"))
+        .collect();
+    changes.sort_by(|a, b| a.0.cmp(b.0));
+    for (key, x) in &changes {
+        let items = x.seq()?;
+        let lis = items
+            .iter()
+            .map(|i| Ok(format!("<li>{}</li>", i.e()?)))
+            .collect::<R<Vec<_>>>()?
+            .concat();
+        o.push(format!(
+            "<details class=\"note\"><summary>{} からの変更（{} 件）</summary><div><ul>{lis}</ul></div></details>",
+            esc(&key["changes_from_".len()..].replace('_', ".")),
+            items.len()
+        ));
+    }
+    o.push("</div>".to_string());
+    Ok(())
+}
+
+/// 改訂の例の塊（部品 amendment-example）を条ごとに足す（置換の元と受けた改訂の項ごと・正本の順）。
+fn amendment_examples(o: &mut Vec<String>, ctx: &Ctx<'_>) -> R<()> {
     for art in &ctx.arts {
         let a = &art.x;
         if let Some(sv) = a.g("supersedes_v1")? {
@@ -872,28 +907,6 @@ fn amendment_chapter(
             }
         }
     }
-
-    // 版ごとの変更点（meta のキーのうち changes_from_ で始まるものを文字列の昇順に）
-    let mut changes: Vec<(&str, X<'_>)> = m
-        .pairs()?
-        .into_iter()
-        .filter(|(k, _)| k.starts_with("changes_from_"))
-        .collect();
-    changes.sort_by(|a, b| a.0.cmp(b.0));
-    for (key, x) in &changes {
-        let items = x.seq()?;
-        let lis = items
-            .iter()
-            .map(|i| Ok(format!("<li>{}</li>", i.e()?)))
-            .collect::<R<Vec<_>>>()?
-            .concat();
-        o.push(format!(
-            "<details class=\"note\"><summary>{} からの変更（{} 件）</summary><div><ul>{lis}</ul></div></details>",
-            esc(&key["changes_from_".len()..].replace('_', ".")),
-            items.len()
-        ));
-    }
-    o.push("</div>".to_string());
     Ok(())
 }
 
@@ -921,7 +934,12 @@ fn amendment_flow(
     let count = steps.len();
 
     let h2 = format!("{AMEND_H2} — {count} 段");
-    FRAME.band(o, 6, "改訂", &h2, Some(&am.ef("declaration")?));
+    FRAME.band(
+        o,
+        6,
+        "改訂",
+        face::Heading(&h2, Some(&am.ef("declaration")?)),
+    );
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<figure {} data-role=\"diagram\" id=\"fig-amend-flow\">",
@@ -936,6 +954,18 @@ fn amendment_flow(
         "<ol {} style=\"--rail-n:{count}\">",
         dc(Component::PipelineRail)
     ));
+    amend_rail(o, steps, effective, m, ap)?;
+    Ok(())
+}
+
+/// 図 1 のレールの列（段ごとに担当の側の枠へ）・figcaption・段の一覧（stepper）。
+fn amend_rail(
+    o: &mut Vec<String>,
+    steps: Vec<Step<'_>>,
+    effective: Step<'_>,
+    m: &X<'_>,
+    ap: &Approved,
+) -> R<()> {
     for s in &steps {
         let nt = match &s.tail {
             Some(t) => format!("{} {}", s.head, hint_q(t)),
@@ -1000,8 +1030,10 @@ fn glossary_chapter(o: &mut Vec<String>, c: &X<'_>, v: &X<'_>) -> R<()> {
         o,
         7,
         "用語集",
-        "本文に出てくる専門語のやさしい説明",
-        Some(&c.ef("glossary_pointer")?),
+        face::Heading(
+            "本文に出てくる専門語のやさしい説明",
+            Some(&c.ef("glossary_pointer")?),
+        ),
     );
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!("<div {}>", dc(Component::GlossaryTermTable)));
@@ -1016,7 +1048,12 @@ fn glossary_chapter(o: &mut Vec<String>, c: &X<'_>, v: &X<'_>) -> R<()> {
 
 fn sources_chapter(o: &mut Vec<String>, c: &X<'_>) -> R<()> {
     let sources = c.f("sources")?.seq()?;
-    FRAME.band(o, 8, "出所", "この憲法はどこから来たか", None);
+    FRAME.band(
+        o,
+        8,
+        "出所",
+        face::Heading("この憲法はどこから来たか", None),
+    );
     o.push("<div class=\"chapbody\">".to_string());
     o.push(format!(
         "<div {} style=\"--band-n:{}\">",
