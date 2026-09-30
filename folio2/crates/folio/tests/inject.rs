@@ -10,6 +10,11 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// folio2 の憲法の前文と規範文の写しの生成区間を持つ file（Claude Code が読む名 CLAUDE.md から退役させた先）。
+fn canonical_md() -> PathBuf {
+    repo_root().join("retired/claude-md.txt")
+}
+
 fn fixture(name: &str) -> PathBuf {
     repo_root().join("tests/fixtures/inject").join(name)
 }
@@ -60,11 +65,7 @@ fn fixture_check(name: &str, expected: i32) {
 #[test]
 fn inject_canonical_claude_md_passes() {
     let root = repo_root();
-    let out = folio_inject(
-        &root.join("design-intent"),
-        &root.join("CLAUDE.md"),
-        "--check",
-    );
+    let out = folio_inject(&root.join("design-intent"), &canonical_md(), "--check");
     assert_eq!(code(&out, "folio inject"), 0, "{}", stderr(&out));
 }
 
@@ -169,7 +170,7 @@ fn pinned(case: &str, mode: &str, expected: i32, mutate: impl FnOnce(&Path)) -> 
     for name in ["constitution.yaml", "rules.yaml"] {
         fs::copy(root.join("design-intent").join(name), td.join(name)).unwrap();
     }
-    fs::copy(root.join("CLAUDE.md"), td.join("CLAUDE.md")).unwrap();
+    fs::copy(canonical_md(), td.join("CLAUDE.md")).unwrap();
     mutate(&td);
     let md = td.join("CLAUDE.md");
     let folio = folio_inject(&td, &md, mode);
@@ -373,7 +374,7 @@ fn f159_write_puts_the_region_where_there_is_none() {
 
     // folio2 の写しへの --write は CLAUDE.md を変えない。
     let (write, md) = pinned("f159-folio2", "--write", 0, |_| {});
-    assert_eq!(md, fs::read(repo_root().join("CLAUDE.md")).unwrap());
+    assert_eq!(md, fs::read(canonical_md()).unwrap());
     assert!(stderr(&write).contains("差が無い"), "{}", stderr(&write));
 }
 
