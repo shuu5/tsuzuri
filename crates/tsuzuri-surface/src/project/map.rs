@@ -57,7 +57,7 @@ pub fn tab_step(now: View, key: &str) -> Option<View> {
         "ArrowLeft" => (i + n - 1) % n,
         _ => return None,
     };
-    Some(View::ALL[j])
+    View::ALL.get(j).copied()
 }
 
 /// 見出しは頁の題（h1）にする（見本の map.html と同じ）。

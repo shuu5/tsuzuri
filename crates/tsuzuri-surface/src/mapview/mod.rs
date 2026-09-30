@@ -247,13 +247,13 @@ pub fn decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
-    while i < bytes.len() {
-        let hex = (bytes[i] == b'%')
+    while let Some(&c) = bytes.get(i) {
+        let hex = (c == b'%')
             .then(|| bytes.get(i + 1..i + 3))
             .flatten()
             .and_then(|h| std::str::from_utf8(h).ok())
             .and_then(|h| u8::from_str_radix(h, 16).ok());
-        match (hex, bytes[i]) {
+        match (hex, c) {
             (Some(b), _) => {
                 out.push(b);
                 i += 3;

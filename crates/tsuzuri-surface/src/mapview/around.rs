@@ -55,7 +55,10 @@ fn count(n: usize) -> u32 {
 
 /// 列の見出しの語の鍵（-3 から 3 の外は None）。
 pub fn col_key(col: i8) -> Option<&'static str> {
-    COLS.iter().position(|c| *c == col).map(|i| COL_KEYS[i])
+    COLS.iter()
+        .zip(COL_KEYS)
+        .find(|(c, _)| **c == col)
+        .map(|(_, key)| key)
 }
 
 /// 近傍の図の配置（列・列の幅・箱の幅・題の字数・図の幅と高さ・帯・箱の左上）。

@@ -604,9 +604,9 @@ pub struct More {
     pub hist: Option<usize>,
 }
 
-/// 電文の projects の i 行目の詳しくの段。
+/// 電文の projects の i 行目の詳しくの段（i が行の外なら `NO_PROJECT` の段）。
 pub fn more(doc: &AccountDoc, index: usize) -> More {
-    let p = &doc.projects[index];
+    let p = doc.projects.get(index).unwrap_or(&NO_PROJECT);
     let ledger = match &p.ledger {
         Reading::Known(s) => {
             let net7 = net(s.net_drop_7d);
@@ -717,6 +717,16 @@ pub fn group_order(doc: &AccountDoc) -> Vec<String> {
     out
 }
 
+/// 列のうち f に合う項の位置（列の順）。
+pub(super) fn positions<T>(items: &[T], f: impl Fn(&T) -> bool) -> Vec<usize> {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, x)| f(x))
+        .map(|(i, _)| i)
+        .collect()
+}
+
 /// 電文を表に組む（同じ値は電文の projects の順・group の並べは行の無い見出しを出さない）。
 pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
     let ps = &doc.projects;
@@ -724,26 +734,24 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
     let heads: Vec<(Option<GroupHead>, Vec<usize>)> = match sort {
         PSort::Need => {
             let mut idx: Vec<usize> = all().collect();
-            idx.sort_by_key(|&i| need_rank(&ps[i]));
+            idx.sort_by_key(|&i| ps.get(i).map(need_rank));
             vec![(None, idx)]
         }
         PSort::Judge => {
             let mut idx: Vec<usize> = all().collect();
-            idx.sort_by_key(|&i| judge_rank(&ps[i]));
+            idx.sort_by_key(|&i| ps.get(i).map(judge_rank));
             vec![(None, idx)]
         }
         PSort::Unref => {
             let mut idx: Vec<usize> = all().collect();
-            idx.sort_by_key(|&i| unref_rank(&ps[i]));
+            idx.sort_by_key(|&i| ps.get(i).map(unref_rank));
             vec![(None, idx)]
         }
         PSort::Group => {
             let mut out: Vec<(Option<GroupHead>, Vec<usize>)> = group_order(doc)
                 .into_iter()
                 .map(|name| {
-                    let idx = all()
-                        .filter(|&i| ps[i].group.as_ref() == Some(&name))
-                        .collect();
+                    let idx = positions(ps, |p| p.group.as_ref() == Some(&name));
                     let park = is_park(doc, &name);
                     let head = GroupHead {
                         current: if park {
@@ -757,7 +765,7 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
                     (Some(head), idx)
                 })
                 .collect();
-            let none = all().filter(|&i| ps[i].group.is_none()).collect();
+            let none = positions(ps, |p| p.group.is_none());
             out.push((
                 Some(GroupHead {
                     group: None,
@@ -788,9 +796,22 @@ pub fn table(doc: &AccountDoc, sort: PSort, mode: Mode) -> Table {
     }
 }
 
-/// 電文の projects の i 行目を表の行にする。
+/// 行の外の位置の project（名も group も無く、席と台帳は測れていない）。
+static NO_PROJECT: ProjectRow = ProjectRow {
+    name: String::new(),
+    group: None,
+    state_dir_known: false,
+    seat: Reading::Unknown,
+    move_until: None,
+    runs: Reading::Unknown,
+    ledger: Reading::Unknown,
+    next: Reading::Unknown,
+    board: None,
+};
+
+/// 電文の projects の i 行目を表の行にする（i が行の外なら `NO_PROJECT` の行）。
 pub fn row(doc: &AccountDoc, index: usize, mode: Mode) -> ProjLine {
-    let p = &doc.projects[index];
+    let p = doc.projects.get(index).unwrap_or(&NO_PROJECT);
     let need = need(p);
     ProjLine {
         index,

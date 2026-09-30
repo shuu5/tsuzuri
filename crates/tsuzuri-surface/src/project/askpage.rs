@@ -171,14 +171,17 @@ pub fn ruling_text(id: &str) -> String {
         return id.to_string();
     };
     let b = tail.as_bytes();
-    let digits = |r: std::ops::Range<usize>| b[r].iter().all(u8::is_ascii_digit);
+    let digits = |r: std::ops::Range<usize>| {
+        b.get(r)
+            .is_some_and(|s| s.iter().all(u8::is_ascii_digit))
+    };
     let server = !head.is_empty()
         && b.len() >= 16
         && digits(0..8)
-        && b[8] == b'T'
+        && b.get(8) == Some(&b'T')
         && digits(9..13)
-        && b[13] == b'Z'
-        && b[14] == b'-'
+        && b.get(13) == Some(&b'Z')
+        && b.get(14) == Some(&b'-')
         && digits(15..b.len());
     if server {
         let num = |s: &str| s.parse::<u64>().unwrap_or(0);

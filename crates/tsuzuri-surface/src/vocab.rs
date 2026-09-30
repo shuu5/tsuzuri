@@ -281,7 +281,12 @@ mod json {
             {
                 self.at += 1;
             }
-            let text: String = self.chars[start..self.at].iter().collect();
+            let text: String = self
+                .chars
+                .get(start..self.at)
+                .unwrap_or_default()
+                .iter()
+                .collect();
             text.parse::<f64>()
                 .map(Value::Number)
                 .map_err(|_| format!("{start} 字目の {text:?} は数でない"))

@@ -150,12 +150,12 @@ pub fn rank(ledger: &Reading<LedgerStats>) -> usize {
 /// backlog は open の task が多い順。net と backlog は台帳が Unknown の project を末尾に置く。
 pub fn order(projects: &[ProjectRow], sort: Sort) -> Vec<usize> {
     let mut idx: Vec<usize> = (0..projects.len()).collect();
-    let known = |i: usize| match &projects[i].ledger {
-        Reading::Known(s) => Some(s),
-        Reading::Unknown => None,
+    let known = |i: usize| match projects.get(i).map(|p| &p.ledger) {
+        Some(Reading::Known(s)) => Some(s),
+        _ => None,
     };
     match sort {
-        Sort::Judge => idx.sort_by_key(|&i| rank(&projects[i].ledger)),
+        Sort::Judge => idx.sort_by_key(|&i| projects.get(i).map(|p| rank(&p.ledger))),
         Sort::Project => {}
         Sort::Net => idx.sort_by_key(|&i| match known(i) {
             Some(s) => (false, s.net_drop_7d, s.net_drop_24h),
@@ -369,8 +369,8 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> LedTable {
     let rate_max = rates.iter().copied().fold(0.0, f64::max);
     let rows = order(&doc.projects, sort)
         .into_iter()
-        .map(|i| {
-            let p = &doc.projects[i];
+        .filter_map(|i| doc.projects.get(i).map(|p| (i, p)))
+        .map(|(i, p)| {
             let cells = match &p.ledger {
                 Reading::Known(s) => Reading::Known(Cells {
                     judge: judge(s.judge),

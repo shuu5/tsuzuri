@@ -44,10 +44,9 @@ pub fn note(key: &str) -> Option<Note> {
 /// 語から注釈を組む（見本の noteParts と同じ分け方）。
 pub fn note_of(term: &Term) -> Note {
     let lines: Vec<&str> = term.note.split('\n').collect();
-    let (main, more) = match lines.iter().position(|l| *l == "▸") {
-        Some(i) => (&lines[..i], &lines[i + 1..]),
-        None => (&lines[..], &[][..]),
-    };
+    let mut parts = lines.splitn(2, |l| *l == "▸");
+    let main = parts.next().unwrap_or_default();
+    let more = parts.next().unwrap_or_default();
     let item_lines = |ls: &[&str]| -> Vec<Line> {
         ls.iter()
             .filter(|l| !l.is_empty())

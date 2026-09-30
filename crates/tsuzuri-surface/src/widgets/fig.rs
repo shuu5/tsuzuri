@@ -240,7 +240,10 @@ pub fn svg(name: &str) -> Option<String> {
         "<defs><marker id=\"fa-{name}\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0L8 4L0 8z\" fill=\"var(--ink-3)\"/></marker></defs>"
     ));
     for l in f.edges {
-        let (x1, y1, x2, y2) = ends(&f.boxes[l.from], &f.boxes[l.to]);
+        let (Some(from), Some(to)) = (f.boxes.get(l.from), f.boxes.get(l.to)) else {
+            continue;
+        };
+        let (x1, y1, x2, y2) = ends(from, to);
         let dash = if l.dash {
             " stroke-dasharray=\"3 3\""
         } else {

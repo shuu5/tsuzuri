@@ -579,7 +579,8 @@ pub fn target_number(cards: &[Card], id: &str) -> Option<usize> {
 pub fn minute_end(id: &str) -> Option<EpochSecs> {
     let (_, tail) = id.rsplit_once(':')?;
     let bytes = tail.as_bytes();
-    let (stamp, count) = (bytes.get(..14)?, bytes.get(14..)?.strip_prefix(b"-")?);
+    let stamp: &[u8; 14] = bytes.get(..14)?.try_into().ok()?;
+    let count = bytes.get(14..)?.strip_prefix(b"-")?;
     if count.is_empty() || !count.iter().all(u8::is_ascii_digit) || stamp[8] != b'T' || stamp[13] != b'Z' {
         return None;
     }

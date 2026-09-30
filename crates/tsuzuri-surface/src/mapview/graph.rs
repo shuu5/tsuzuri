@@ -385,7 +385,7 @@ pub fn esc(s: &str) -> String {
 pub fn cut(s: &str, n: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
     if chars.len() > n {
-        let mut out: String = chars[..n.saturating_sub(1)].iter().collect();
+        let mut out: String = chars.iter().take(n.saturating_sub(1)).collect();
         out.push('…');
         out
     } else {

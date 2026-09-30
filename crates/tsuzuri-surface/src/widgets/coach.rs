@@ -67,7 +67,12 @@ pub fn starts(mode: Mode, saved: Option<&str>, search: &str) -> bool {
 
 /// 段 `from` から先で要素の在る最初の段（見本の drawCoach の要素の無い段の飛ばし・無ければ None）。
 pub fn first_found(from: usize, found: impl Fn(&str) -> bool) -> Option<usize> {
-    (from..STEPS.len()).find(|&i| found(STEPS[i].sel))
+    STEPS
+        .iter()
+        .enumerate()
+        .skip(from)
+        .find(|(_, step)| found(step.sel))
+        .map(|(i, _)| i)
 }
 
 /// 進む button の字（最後の段は分かった・ほかは次へ）。

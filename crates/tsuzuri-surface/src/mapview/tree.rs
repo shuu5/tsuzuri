@@ -189,13 +189,18 @@ impl<'a> Graph<'a> {
             let (Some(&f), Some(&t)) = (at.get(e.from.as_str()), at.get(e.to.as_str())) else {
                 continue;
             };
-            let (parent, child) = match parent_end(e.edge_type, nodes[f].kind, nodes[t].kind) {
+            let (Some(from), Some(to)) = (nodes.get(f), nodes.get(t)) else {
+                continue;
+            };
+            let (parent, child) = match parent_end(e.edge_type, from.kind, to.kind) {
                 Some(EdgeEnd::From) => (f, t),
                 Some(EdgeEnd::To) => (t, f),
                 None => continue,
             };
-            kids[parent].insert(child);
-            has_parent[child] = true;
+            if let Some(set) = kids.get_mut(parent) {
+                set.insert(child);
+            }
+            mark(&mut has_parent, child, true);
         }
         Self {
             nodes,
@@ -208,30 +213,43 @@ impl<'a> Graph<'a> {
     fn roots(&self, doc: &GraphDoc) -> Vec<(usize, Branch)> {
         let mut placed = vec![false; self.nodes.len()];
         let mut path = vec![false; self.nodes.len()];
-        let mut roots: Vec<(usize, Branch)> = (0..self.nodes.len())
-            .filter(|&i| !self.has_parent[i])
-            .map(|i| (i, self.branch(doc, i, &mut path, &mut placed)))
+        let mut roots: Vec<(usize, Branch)> = self
+            .has_parent
+            .iter()
+            .enumerate()
+            .filter(|(_, has)| !**has)
+            .filter_map(|(i, _)| Some((i, self.branch(doc, i, &mut path, &mut placed)?)))
             .collect();
         while let Some(i) = placed.iter().position(|p| !p) {
-            roots.push((i, self.branch(doc, i, &mut path, &mut placed)));
+            let Some(b) = self.branch(doc, i, &mut path, &mut placed) else {
+                break;
+            };
+            roots.push((i, b));
         }
         roots.sort_by_key(|(i, _)| *i);
         roots
     }
 
-    /// 節点 i の項（たどっている道の上の節点は子にしない）。
-    fn branch(&self, doc: &GraphDoc, i: usize, path: &mut [bool], placed: &mut [bool]) -> Branch {
-        placed[i] = true;
-        path[i] = true;
+    /// 節点 i の項（たどっている道の上の節点は子にしない・i が節点の外なら None）。
+    fn branch(
+        &self,
+        doc: &GraphDoc,
+        i: usize,
+        path: &mut [bool],
+        placed: &mut [bool],
+    ) -> Option<Branch> {
+        let node = *self.nodes.get(i)?;
+        let below = self.kids.get(i)?;
+        mark(placed, i, true);
+        mark(path, i, true);
         let mut kids = Vec::new();
-        for &k in &self.kids[i] {
-            if !path[k] {
-                kids.push(self.branch(doc, k, path, placed));
+        for &k in below {
+            if !path.get(k).copied().unwrap_or(false) {
+                kids.extend(self.branch(doc, k, path, placed));
             }
         }
-        path[i] = false;
-        let node = self.nodes[i];
-        Branch {
+        mark(path, i, false);
+        Some(Branch {
             head: Head::Node(Item {
                 shape: shape_class(doc, node),
                 alert: open_question(doc, node),
@@ -242,7 +260,14 @@ impl<'a> Graph<'a> {
             }),
             open: !kids.is_empty() && !is_closed(state(doc, node)),
             kids,
-        }
+        })
+    }
+}
+
+/// 印の列の i 番目を to にする（列の外は何もしない）。
+fn mark(marks: &mut [bool], i: usize, to: bool) {
+    if let Some(m) = marks.get_mut(i) {
+        *m = to;
     }
 }
 
@@ -265,7 +290,7 @@ pub fn forest(doc: &GraphDoc, tree: Tree) -> Forest {
                 let count = g.nodes.iter().filter(|n| band_of(n.kind) == band).count();
                 let mine: Vec<Branch> = roots
                     .iter()
-                    .filter(|(i, _)| band_of(g.nodes[*i].kind) == band)
+                    .filter(|(i, _)| g.nodes.get(*i).is_some_and(|n| band_of(n.kind) == band))
                     .map(|(_, b)| b.clone())
                     .collect();
                 let kids = if band == Band::DesignNote {

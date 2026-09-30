@@ -15,6 +15,7 @@ use tsuzuri_contract::surface::SeatRole;
 
 use super::cards::orch_card;
 use super::heartbeat::{Toggle, toggle};
+use super::projects::positions;
 use crate::frame::{self, Block};
 use crate::project::pipeline::age;
 use crate::project::seat::{OK, Sign, Span, hmd, rects, span_ticks, state_value, strip_svg, top};
@@ -357,48 +358,40 @@ pub fn table(doc: &AccountDoc, sort: Sort) -> Table {
         Sort::Project => project_heads(doc)
             .into_iter()
             .map(|(name, group)| {
-                let mut idx: Vec<usize> = all().filter(|&i| lines[i].project == name).collect();
-                idx.sort_by(|&a, &b| {
-                    (lines[a].role, &lines[a].name).cmp(&(lines[b].role, &lines[b].name))
-                });
+                let mut idx = positions(lines, |l| l.project == name);
+                idx.sort_by_key(|&i| lines.get(i).map(|l| (l.role, &l.name)));
                 (Some(Head::Project { name, group }), idx)
             })
             .collect(),
         Sort::Account => {
             let by_project = |mut idx: Vec<usize>| {
-                idx.sort_by(|&a, &b| {
-                    (lines[a].role, &lines[a].project).cmp(&(lines[b].role, &lines[b].project))
-                });
+                idx.sort_by_key(|&i| lines.get(i).map(|l| (l.role, &l.project)));
                 idx
             };
             let mut out: Vec<(Option<Head>, Vec<usize>)> = account_heads(doc)
                 .into_iter()
                 .map(|(label, occupant)| {
-                    let idx = by_project(
-                        all()
-                            .filter(|&i| lines[i].account.as_ref() == Some(&label))
-                            .collect(),
-                    );
+                    let idx = by_project(positions(lines, |l| {
+                        l.account.as_ref() == Some(&label)
+                    }));
                     (Some(Head::Account { label, occupant }), idx)
                 })
                 .collect();
-            let none = by_project(all().filter(|&i| lines[i].account.is_none()).collect());
+            let none = by_project(positions(lines, |l| l.account.is_none()));
             out.push((Some(Head::NoAccount), none));
             out
         }
         Sort::Stage => BANDS
             .into_iter()
             .map(|key| {
-                let mut idx: Vec<usize> = all()
-                    .filter(|&i| band_key(rank(&lines[i])) == key)
-                    .collect();
-                idx.sort_by_key(|&i| (rank(&lines[i]), since_key(&lines[i])));
+                let mut idx = positions(lines, |l| band_key(rank(l)) == key);
+                idx.sort_by_key(|&i| lines.get(i).map(|l| (rank(l), since_key(l))));
                 (Some(Head::Band(key)), idx)
             })
             .collect(),
         Sort::Elapsed => {
             let mut idx: Vec<usize> = all().collect();
-            idx.sort_by_key(|&i| since_key(&lines[i]));
+            idx.sort_by_key(|&i| lines.get(i).map(since_key));
             vec![(None, idx)]
         }
     };
@@ -459,9 +452,21 @@ fn project_of<'a>(doc: &'a AccountDoc, name: &str) -> Option<&'a ProjectRow> {
     doc.projects.iter().find(|p| p.name == name)
 }
 
-/// 電文の sessions の i 行目を表の行にする。
+/// 行の外の位置の行（名も口座も無い orchestrator の行・状態は測れていない）。
+static NO_LINE: SessionLine = SessionLine {
+    project: String::new(),
+    role: SeatRole::Orchestrator,
+    name: String::new(),
+    account: None,
+    state: SeatState::Unknown,
+    stage: None,
+    since: None,
+    spans: Reading::Unknown,
+};
+
+/// 電文の sessions の i 行目を表の行にする（i が行の外なら `NO_LINE` の行）。
 pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
-    let line = &doc.sessions[index];
+    let line = doc.sessions.get(index).unwrap_or(&NO_LINE);
     let orchestrator = line.role == SeatRole::Orchestrator;
     SessRow {
         index,
@@ -612,7 +617,7 @@ pub fn proj_card(doc: &AccountDoc, name: &str) -> Card {
 
 /// 電文の sessions の i 行目の session の欄の card（run の行は run・席の読める orchestrator の行は席・ほかは project）。
 pub fn sess_card(doc: &AccountDoc, index: usize) -> Card {
-    let line = &doc.sessions[index];
+    let line = doc.sessions.get(index).unwrap_or(&NO_LINE);
     if line.role == SeatRole::Pipeline {
         return run_card(line, doc.at);
     }

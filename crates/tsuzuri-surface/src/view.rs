@@ -283,8 +283,8 @@ pub fn ledger_groups(rows: &[LedgerRow]) -> Vec<EpicGroup> {
     {
         let home =
             ancestors(row.id.as_str()).find_map(|a| epics.iter().position(|e| e.id.as_str() == a));
-        match home {
-            Some(i) => groups[i].children.push(row.clone()),
+        match home.and_then(|i| groups.get_mut(i)) {
+            Some(group) => group.children.push(row.clone()),
             None => outside.push(row.clone()),
         }
     }

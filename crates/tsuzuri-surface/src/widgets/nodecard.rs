@@ -82,8 +82,8 @@ pub fn fold_rows(s: &str) -> Vec<String> {
 pub fn short_path(path: &str) -> String {
     let head = path.split_once('・').map_or(path, |(head, _)| head);
     let parts: Vec<&str> = head.split('/').collect();
-    if parts.len() >= 3 {
-        format!("{ELLIPSIS}/{}", parts[parts.len() - 2..].join("/"))
+    if let [_, .., a, b] = parts.as_slice() {
+        format!("{ELLIPSIS}/{a}/{b}")
     } else {
         head.to_string()
     }

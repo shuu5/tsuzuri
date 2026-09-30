@@ -424,8 +424,11 @@ pub fn read_path(path: Signal<String>) -> ReadSignal<(Fetched, Option<u16>)> {
 /// 片付いていた口は見ていない間に呼びが来ていれば読む・知らせの接続がまだ無ければ張る）。
 pub fn read(path: &'static str) -> ReadSignal<Fetched> {
     let (slot, signal, go) = READS.with_borrow_mut(|reads| {
-        if let Some(slot) = reads.iter().position(|(p, _, _)| *p == path) {
-            let (_, signal, flight) = &mut reads[slot];
+        if let Some((slot, (_, signal, flight))) = reads
+            .iter_mut()
+            .enumerate()
+            .find(|(_, (p, _, _))| *p == path)
+        {
             return (slot, signal.clone(), flight.attach());
         }
         let signal = ArcRwSignal::new(Fetched::NotRead);

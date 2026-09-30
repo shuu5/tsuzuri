@@ -233,7 +233,7 @@ impl Column {
         if open {
             &self.cards
         } else {
-            &self.cards[..self.cards.len().min(SHOW)]
+            self.cards.get(..SHOW).unwrap_or(&self.cards)
         }
     }
 
