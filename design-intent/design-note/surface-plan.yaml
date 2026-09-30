@@ -397,6 +397,8 @@ sections:
       - {id: k-size-folio, doc: surface-wave24a}
       - {id: k-lint-rest, doc: surface-wave24a}
       - {id: k-lint-print, doc: surface-wave24a}
+      - {id: k-lint-idx-core, doc: surface-wave24a}
+      - {id: k-lint-idx-surface, doc: surface-wave24a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
