@@ -7,6 +7,17 @@
 pub mod host;
 pub mod project;
 
+use std::sync::Arc;
+
+use serde::{Deserialize, Deserializer};
+
+/// 字か null の JSON の値を、共有の字の `Option<Arc<str>>` に読む（`serde` の rc の機能は使わない）。
+pub(crate) fn shared_text<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Arc<str>>, D::Error> {
+    Ok(Option::<String>::deserialize(deserializer)?.map(Arc::from))
+}
+
 /// 行の `鍵=値` の欄（空白で区切った字のうち `=` を持つもの）。
 pub(crate) fn fields(line: &str) -> impl Iterator<Item = (&str, &str)> {
     line.split_whitespace().filter_map(|t| t.split_once('='))

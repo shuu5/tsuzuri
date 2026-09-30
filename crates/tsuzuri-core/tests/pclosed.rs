@@ -399,8 +399,8 @@ fn texts(ledger: Option<String>) -> BTreeMap<String, ProjectTexts> {
         "/w/p".to_string(),
         ProjectTexts {
             state_dir_known: true,
-            events: Some(events()),
-            ledger,
+            events: Some(events().into()),
+            ledger: ledger.map(Into::into),
             ..ProjectTexts::default()
         },
     )])

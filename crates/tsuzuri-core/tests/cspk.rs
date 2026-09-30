@@ -60,7 +60,7 @@ fn log(lines: &[String]) -> String {
 
 fn texts(events: Option<String>) -> HostTexts {
     HostTexts {
-        events,
+        events: events.map(Into::into),
         ..HostTexts::default()
     }
 }
@@ -200,10 +200,13 @@ fn cspk_accounts_at_fills_only_spark() {
             "doctor: state dir ok\naccount=acct-1 retired=no\naccount=acct-2 retired=no\naccount=acct-3 retired=yes\n"
                 .to_string(),
         ),
-        events: Some(log(&[
-            measured("acct-1", "five_hour", 600, 42),
-            measured("acct-3", "seven_day", 90_000, 70),
-        ])),
+        events: Some(
+            log(&[
+                measured("acct-1", "five_hour", 600, 42),
+                measured("acct-3", "seven_day", 90_000, 70),
+            ])
+            .into(),
+        ),
         ..HostTexts::default()
     };
     let Reading::Known(plain) = accounts(&host) else {

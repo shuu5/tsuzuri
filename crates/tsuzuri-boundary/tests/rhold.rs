@@ -268,7 +268,7 @@ fn rhold_source_holds_then_gives_up() {
     assert_eq!(
         good,
         Got {
-            text: Some(fixture()),
+            text: Some(fixture().into()),
             stale: None
         }
     );
@@ -278,7 +278,7 @@ fn rhold_source_holds_then_gives_up() {
     assert_eq!(held.text, good.text);
     let at = held.stale.expect("落ちた読みの時刻");
     assert!(before <= at && at <= after, "{at:?} not in {before:?}..={after:?}");
-    assert_eq!(source.text(), good.text);
+    assert_eq!(source.text().as_deref(), good.text.as_deref());
     assert_eq!(source.read(), Reading::Unknown);
     // 上限を 2 秒越えれば字は無い（時刻は同じ）。
     sleep_until(after, PAST);
@@ -295,7 +295,7 @@ fn rhold_source_holds_then_gives_up() {
     assert_eq!(
         source.got(),
         Got {
-            text: Some(fixture()),
+            text: Some(fixture().into()),
             stale: None
         }
     );
@@ -338,7 +338,7 @@ fn rhold_unparsed_is_a_failure() {
     assert_eq!(
         good,
         Got {
-            text: Some(BARE.to_string()),
+            text: Some(BARE.into()),
             stale: None
         }
     );

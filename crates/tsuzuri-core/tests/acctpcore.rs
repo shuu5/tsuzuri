@@ -183,8 +183,8 @@ fn proj_a() -> ProjectTexts {
                 .into(),
         ),
         tick_last: None,
-        events: Some(events()),
-        ledger: Some(ledger()),
+        events: Some(events().into()),
+        ledger: Some(ledger().into()),
     }
 }
 

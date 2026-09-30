@@ -86,13 +86,13 @@ pub enum Mark {
 pub struct Source {
     pub repo: PathBuf,
     pub bd: OsString,
-    shared: Coalesce<String>,
+    shared: Coalesce<Arc<str>>,
     /// 最後に読めた字と読んだ時刻（一度も読めていなければ字は None で、時刻は `new` を呼んだ時刻）。
-    last: Arc<Mutex<(Option<String>, Instant)>>,
+    last: Arc<Mutex<(Option<Arc<str>>, Instant)>>,
     /// 持ち回しの上限。
     hold: Duration,
     /// 最後に終えた合流の読みの結果（読めた字か None・一度も終えていなければ外の None・行 e-snap）。
-    latest: Arc<Mutex<Option<Option<String>>>>,
+    latest: Arc<Mutex<Option<Option<Arc<str>>>>>,
     /// 最後に始めた合流の読みの前に取った印（一度も始めていなければ None・行 e-ledger-lazy）。
     read_mark: Arc<Mutex<Option<Mark>>>,
     /// 真なら `got` と `text` は、印が `read_mark` と同じ間は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返す。
@@ -105,7 +105,8 @@ pub struct Source {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Got {
     /// 読めた字か、落ちたときは上限の内の最後に読めた字（越えたか一度も読めていなければ None）。
-    pub text: Option<String>,
+    /// 合流の読みの結果と最後に読めた字と最後に終えた読みの結果と同じ確保を分け合う。
+    pub text: Option<Arc<str>>,
     /// 読めれば None、落ちれば最後に読めた時刻（一度も読めていなければ `Source::new` の時刻）。
     pub stale: Option<Instant>,
 }
@@ -214,14 +215,14 @@ impl Source {
     pub fn read(&self) -> Reading<Vec<LedgerItem>> {
         let text = self.fresh();
         if let Some(form) = &self.form {
-            form.kick(text.clone());
+            form.kick(text.as_deref().map(str::to_string));
         }
         text.map_or(Reading::Unknown, |text| parse_bd(&text))
     }
 
     /// bd を撃ち、読めた字を返す（導出グラフと指標の入力・便 e-read）。落ちれば上限の内の最後に読めた字（`got`）。
     pub fn text(&self) -> Option<String> {
-        self.got().text
+        self.got().text.as_deref().map(str::to_string)
     }
 
     /// 合流の読みを撃ち、読めれば読めた字と stale の None、落ちれば最後に読めた時刻と、
@@ -234,7 +235,7 @@ impl Source {
             if self.behind() {
                 let text = self.fresh();
                 if let Some(form) = &self.form {
-                    form.kick(text.clone());
+                    form.kick(text.as_deref().map(str::to_string));
                 }
                 text
             } else {
@@ -270,10 +271,13 @@ impl Source {
     /// 起動できない・rc が 0 でない・UTF-8 でない・`BD_TIMEOUT` を越える・`parse_bd` も中核の台帳の読みも
     /// Unknown の字、のどれでも None。読みを始めた呼びが、読めた字と時刻を最後に読めた字に置き、
     /// 結果を最後に終えた読みの結果（`latest`）に置く。始める前に取った印を `read_mark` に置く。
-    fn fresh(&self) -> Option<String> {
+    fn fresh(&self) -> Option<Arc<str>> {
         self.shared.share(BD_WAIT, || {
             *lock(&self.read_mark) = Some(self.mark());
-            let text = self.text_alone().filter(|t| readable(t));
+            let text = self
+                .text_alone()
+                .filter(|t| readable(t))
+                .map(Arc::<str>::from);
             if let Some(text) = &text {
                 *lock(&self.last) = (Some(text.clone()), Instant::now());
             }

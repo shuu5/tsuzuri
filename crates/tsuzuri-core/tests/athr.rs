@@ -301,7 +301,7 @@ fn athr_notices_copy_events() {
 fn project_map() -> BTreeMap<String, ProjectTexts> {
     let p = |known: bool, events: String| ProjectTexts {
         state_dir_known: known,
-        events: Some(events),
+        events: Some(events.into()),
         ..ProjectTexts::default()
     };
     BTreeMap::from([

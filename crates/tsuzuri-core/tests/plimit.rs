@@ -174,7 +174,7 @@ fn proj_a() -> ProjectTexts {
     ProjectTexts {
         state_dir_known: true,
         state_log: Some("{\"state\":\"busy\",\"ts\":1790505060}\n".into()),
-        events: Some(events()),
+        events: Some(events().into()),
         ..ProjectTexts::default()
     }
 }

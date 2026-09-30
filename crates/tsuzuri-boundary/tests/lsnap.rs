@@ -369,14 +369,14 @@ fn lsnap_watched_source_reads_once() {
     assert_eq!(
         source.got(),
         Got {
-            text: Some(fixture()),
+            text: Some(fixture().into()),
             stale: None
         }
     );
     assert_eq!(place.calls(), 1);
     // 字を替えても、読まなければ最後に終えた読みの字（bd を撃たない）。
     place.bd_returns(&one());
-    assert_eq!(source.got().text, Some(fixture()));
+    assert_eq!(source.got().text, Some(fixture().into()));
     assert_eq!(source.text(), Some(fixture()));
     assert_eq!(place.calls(), 1);
     // 見張りの読みの後は、その字。
@@ -387,7 +387,7 @@ fn lsnap_watched_source_reads_once() {
     assert_eq!(
         source.got(),
         Got {
-            text: Some(one()),
+            text: Some(one().into()),
             stale: None
         }
     );
@@ -397,7 +397,7 @@ fn lsnap_watched_source_reads_once() {
     let before = Instant::now();
     assert_eq!(source.read(), Reading::Unknown);
     let held = source.got();
-    assert_eq!(held.text, Some(one()));
+    assert_eq!(held.text, Some(one().into()));
     let at = held.stale.expect("落ちた読みの時刻");
     assert!(at <= before, "{at:?} は落とす前の時刻 {before:?} より後");
     assert_eq!(place.calls(), 3);

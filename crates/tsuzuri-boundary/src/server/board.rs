@@ -82,7 +82,7 @@ impl Sources {
             let rulings = rulings.and_then(|h| h.join().ok().flatten());
             let texts = Texts {
                 design: index.unwrap_or_default(),
-                ledger: ledger.text.unwrap_or_default(),
+                ledger: ledger.text.as_deref().map(str::to_string).unwrap_or_default(),
                 events: events.unwrap_or_default(),
                 summary: summary.unwrap_or_default(),
                 rulings: rulings.unwrap_or_default(),

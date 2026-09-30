@@ -16,7 +16,9 @@
 //! 器の出力は持ち回しの表（`Held`・行 e-held-acct と e-held-marks・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。
 //! usage と tick status と doctor は席の card の読みと同じ `read_held` で読み（鍵も印も同じ・同じ state dir の器の 3 つの出力は
 //! 表の持ち分を分け合う）、rules get は印の無い鍵で `SLOW_HOLD` 持つ。
-//! file の読みは要求ごと。`marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める（行 e-acct-hbmark）。
+//! file の読みは要求ごと（state dir ごとの event log だけは、更新時刻と長さの印が前の読みの前に取った印と同じなら
+//! 読まず前の字の Arc を返し、その集めで読まなかった state dir の字は集めの終わりに放す・`log`・行 m-big-copies）。
+//! `marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める（行 e-acct-hbmark）。
 //! 集めのあいだは錠（`gate`）で次の要求を待たせる。
 //! 台帳と event log の字の読み解き（`Parsed`）は anchor ごとに、読み解いた時の 2 つの字と値を持ち、
 //! 字が同じ間は前の値を使う（`parsed`・行 c-acct-parse）。
@@ -32,7 +34,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
@@ -40,6 +42,7 @@ use tsuzuri_core::account::host::{CAP_ROWS, HostTexts, ORCHESTRATOR, RECORD_KIND
 use tsuzuri_core::account::project::{self, Parsed, ParsedMap, ProjectTexts};
 use tsuzuri_core::account::project_name;
 
+use crate::server::events::stamp;
 use crate::server::held::{FAILED_HOLD, Held};
 use crate::server::ledger::{Got, Mark, Source, capture};
 use crate::server::runs::EVENTS_LOG;
@@ -94,7 +97,13 @@ type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>);
 type Gits = Option<(Instant, Vec<String>, GitTexts)>;
 
 /// 読み解いた時の台帳の字と event log の字と、その読み解いた値。
-type Kept = (Option<String>, Option<String>, Arc<Parsed>);
+type Kept = (Option<Arc<str>>, Option<Arc<str>>, Arc<Parsed>);
+
+/// event log の更新時刻と長さ（読む前に取る印・server の events の `stamp`）。
+type Stamp = Option<(SystemTime, u64)>;
+
+/// 読んだ event log の印と字。
+type Logged = (Stamp, Option<Arc<str>>);
 
 /// account board の読みの出所（器・git・bd の program と、引数の state dir と cwd）と、持ち回しの字。
 #[derive(Debug)]
@@ -118,6 +127,9 @@ pub struct Acct {
     gits: Mutex<Gits>,
     /// anchor の字 → 読み解いた時の台帳と event log の字と、その読み解いた値（字が同じ間は使い回す・行 c-acct-parse）。
     parsed: Mutex<BTreeMap<String, Kept>>,
+    /// event log の path → 読む前に取った印と読んだ字（印が同じ間は file を読まず同じ確保を返す・
+    /// 集めの終わりに、その集めで読まなかった path は放す・行 m-big-copies）。
+    logs: Mutex<BTreeMap<PathBuf, Logged>>,
     /// git の読みの持ち回しの時間。
     git_hold: Duration,
     /// 自分の repo の台帳の読みの出所（server の見張りの Source・無ければ None）。
@@ -147,6 +159,7 @@ impl Acct {
             seen: Mutex::new(BTreeMap::new()),
             gits: Mutex::new(None),
             parsed: Mutex::new(BTreeMap::new()),
+            logs: Mutex::new(BTreeMap::new()),
             git_hold: GIT_HOLD,
             own: None,
             watched: Vec::new(),
@@ -509,6 +522,7 @@ impl Acct {
                 }
             }
         }
+        let mut read_logs: Vec<PathBuf> = Vec::new();
         for ((anchor, dir), got) in anchors.iter().zip(&dirs).zip(ledgers) {
             let ledger = got.and_then(|got| {
                 if let Some(at) = got.stale {
@@ -544,6 +558,9 @@ impl Acct {
                 ]);
             }
             let in_seat = |name: &str| seat_dir.as_ref().and_then(|d| read(&d.join(name)));
+            let log = events_log(dir);
+            let events = self.log(&log);
+            read_logs.push(log);
             texts.projects.insert(
                 anchor.clone(),
                 ProjectTexts {
@@ -551,7 +568,7 @@ impl Acct {
                     tick_status: tick.clone(),
                     state_log: in_seat(STATE_LOG),
                     tick_last: in_seat(TICK_LAST),
-                    events: read(&events_log(dir)),
+                    events,
                     ledger,
                 },
             );
@@ -575,8 +592,36 @@ impl Acct {
         texts.host.usage = usage;
         texts.host.doctor = doctor;
         texts.host.caps = caps;
-        texts.host.events = read(&events_log(&self.state_dir));
+        let log = events_log(&self.state_dir);
+        texts.host.events = self.log(&log);
+        read_logs.push(log);
+        self.logs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|path, _| read_logs.contains(path));
         texts
+    }
+
+    /// event log の字（印が前の読みの前に取った印と同じなら file を読まず前の Arc を返し、
+    /// 違えば読み直して置く・印は読む前に取る・行 m-big-copies）。
+    fn log(&self, path: &Path) -> Option<Arc<str>> {
+        let mark = stamp(path);
+        if mark.is_some()
+            && let Some((was, text)) = self
+                .logs
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(path)
+            && *was == mark
+        {
+            return text.clone();
+        }
+        let text = read(path).map(Arc::<str>::from);
+        self.logs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(path.to_path_buf(), (mark, text.clone()));
+        text
     }
 }
 

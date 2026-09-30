@@ -11,6 +11,7 @@
 //! 点にする（行 c-acct-spark）。log の字が無ければ線は「まだ分からない」で、最後に測った時刻の古さは判じない。
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -92,7 +93,8 @@ pub struct HostTexts {
     #[serde(default)]
     pub seat_logs: BTreeMap<String, String>,
     /// 引数の state dir の event log（`<state dir>/fleet/events.jsonl`）の字（口座の線の材料・行 c-acct-spark）。
-    pub events: Option<String>,
+    #[serde(default, deserialize_with = "super::shared_text")]
+    pub events: Option<Arc<str>>,
 }
 
 /// 群の宣言の 1 つの群（配列の欄が無ければ空の列・読めなければ None）。

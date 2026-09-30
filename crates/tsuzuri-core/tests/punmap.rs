@@ -228,7 +228,7 @@ fn punmap_session_line_failed() {
         "/w/p".to_string(),
         ProjectTexts {
             state_dir_known: true,
-            events: Some(events),
+            events: Some(events.into()),
             ..ProjectTexts::default()
         },
     )]);

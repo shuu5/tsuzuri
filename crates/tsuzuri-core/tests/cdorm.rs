@@ -112,7 +112,7 @@ fn projects(a_known: bool) -> BTreeMap<String, ProjectTexts> {
                 "seat tick status: target=p-a:0.1 last=1790467199 age=43201 healthy=no heartbeat=off step=5 next=1790510405\n"
                     .to_string(),
             ),
-            events: Some(events()),
+            events: Some(events().into()),
             ..ProjectTexts::default()
         }
     } else {

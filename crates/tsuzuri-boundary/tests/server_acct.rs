@@ -363,7 +363,7 @@ impl Place {
                 .map(|(n, t)| (n.to_string(), t.to_string()))
                 .collect(),
             // 口座の線の材料は引数の state dir の event log（行 c-acct-spark）。
-            events: self.file(&self.host_state().join("fleet/events.jsonl")),
+            events: self.file(&self.host_state().join("fleet/events.jsonl")).map(Into::into),
             ..HostTexts::default()
         };
         // 偽の器は rules の頭に行の id の出力の字を出す。
@@ -427,8 +427,8 @@ impl Place {
                     tick_status: out(&format!("tick-{state}")),
                     state_log: in_seat("state.jsonl"),
                     tick_last: in_seat("tick-last"),
-                    events: self.file(&dir.join("fleet/events.jsonl")),
-                    ledger: self.file(&self.root.join("bd").join(p)),
+                    events: self.file(&dir.join("fleet/events.jsonl")).map(Into::into),
+                    ledger: self.file(&self.root.join("bd").join(p)).map(Into::into),
                 },
             );
             if let Some(doctor) = doctor {
@@ -1353,7 +1353,7 @@ fn alean_parsed_follows_texts() {
         "同じ字は同じ値"
     );
     let events = ProjectTexts {
-        events: Some(String::new()),
+        events: Some(String::new().into()),
         ..texts.clone()
     };
     let second = acct.parsed("/work/proj-a", &events);

@@ -75,9 +75,11 @@ pub struct ProjectTexts {
     /// 席の合図の最後の判定（`tick-last`）。
     pub tick_last: Option<String>,
     /// 器の event log。
-    pub events: Option<String>,
+    #[serde(default, deserialize_with = "super::shared_text")]
+    pub events: Option<Arc<str>>,
     /// 台帳の一覧。
-    pub ledger: Option<String>,
+    #[serde(default, deserialize_with = "super::shared_text")]
+    pub ledger: Option<Arc<str>>,
 }
 
 /// project の台帳の字と event log の字を読み解いた値（台帳の bead の列・event log の値の列・open の問いの読み）。
