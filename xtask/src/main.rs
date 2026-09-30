@@ -71,9 +71,52 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// 歯の段を分ける変数（CI の matrix が job ごとに `count:K/N` を渡す）。無ければ歯の全部を撃つ。
+const PARTITION_ENV: &str = "TSUZURI_CHECK_PARTITION";
+
+/// nextest の `--partition` に渡してよい字は `count:K/N`（K と N は 1 以上の十進で K ≤ N）だけ。
+fn partition(s: &str) -> Option<&str> {
+    let (k, n) = s.strip_prefix("count:")?.split_once('/')?;
+    let decimal = |t: &str| {
+        (!t.is_empty() && t.bytes().all(|b| b.is_ascii_digit()))
+            .then(|| t.parse::<u64>().ok())
+            .flatten()
+            .filter(|v| *v >= 1)
+    };
+    (decimal(k)? <= decimal(n)?).then_some(s)
+}
+
+/// 段の引数。頭の語が nextest の段にだけ、partition が在れば `--partition` と字を足す。
+fn step_args(step: &[&str], partition: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> = step.iter().map(|a| (*a).to_string()).collect();
+    if let Some(p) = partition
+        && step.first() == Some(&"nextest")
+    {
+        args.push("--partition".to_string());
+        args.push(p.to_string());
+    }
+    args
+}
+
 /// 公開の走査を撃ち、段を順に撃ち、最初に落ちた段の rc を返す（全部通れば 0）。
 /// 走査が落ちれば後の build・歯・clippy・面の組み立てを撃たない。
+/// 変数 PARTITION_ENV が在れば nextest の段だけを分け、読めない字なら段を撃たずに rc 2 を返す。
 fn check(root: &Path) -> i32 {
+    let raw = std::env::var(PARTITION_ENV);
+    let part = match &raw {
+        Ok(s) => match partition(s) {
+            Some(p) => Some(p),
+            None => {
+                eprintln!("xtask check: {PARTITION_ENV} は count:K/N（1 ≤ K ≤ N）の字だけ: {s:?}");
+                return 2;
+            }
+        },
+        Err(std::env::VarError::NotPresent) => None,
+        Err(e) => {
+            eprintln!("xtask check: {PARTITION_ENV} を読めない: {e}");
+            return 2;
+        }
+    };
     eprintln!("xtask check: pub-scan");
     let rc = pubscan::run(root);
     if rc != 0 {
@@ -82,8 +125,9 @@ fn check(root: &Path) -> i32 {
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     for step in CHECK_STEPS {
-        eprintln!("xtask check: cargo {}", step.join(" "));
-        let status = Command::new(&cargo).args(*step).current_dir(root).status();
+        let args = step_args(step, part);
+        eprintln!("xtask check: cargo {}", args.join(" "));
+        let status = Command::new(&cargo).args(&args).current_dir(root).status();
         let rc = match status {
             Ok(s) if s.success() => continue,
             Ok(s) => s.code().unwrap_or(1),
@@ -92,7 +136,7 @@ fn check(root: &Path) -> i32 {
                 1
             }
         };
-        eprintln!("xtask check: 落ちた段 cargo {} (rc {rc})", step.join(" "));
+        eprintln!("xtask check: 落ちた段 cargo {} (rc {rc})", args.join(" "));
         return rc;
     }
     eprintln!("xtask check: surface-build");
@@ -307,7 +351,54 @@ mod tests {
     use super::read::{
         dependency_names, lock_packages, member_names, section_keys, string_array, string_value,
     };
-    use super::{SURFACE_DIR, workspace_root};
+    use super::{CHECK_STEPS, SURFACE_DIR, partition, step_args, workspace_root};
+
+    /// partition は nextest の count の形だけを通し、通した字はそのまま返す。
+    #[test]
+    fn cishard_partition_reads_count_only() {
+        for ok in ["count:1/8", "count:8/8", "count:1/2", "count:2/2"] {
+            assert_eq!(partition(ok), Some(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "count:0/8",
+            "count:9/8",
+            "count:1/0",
+            "hash:1/2",
+            "slice:1/2",
+            "count:1",
+            "count:a/2",
+            "count:+1/2",
+            "count: 1/2",
+            "count:1/ 2",
+            "count:1/2 ",
+            " count:1/2",
+            "COUNT:1/2",
+        ] {
+            assert_eq!(partition(bad), None, "{bad:?}");
+        }
+    }
+
+    /// --partition を持つ段は nextest の 1 段だけ。ほかの段と partition が無い時は段の字のまま。
+    #[test]
+    fn cishard_partition_only_on_nextest() {
+        let mut with = 0;
+        for step in CHECK_STEPS {
+            let plain: Vec<String> = step.iter().map(|a| (*a).to_string()).collect();
+            assert_eq!(step_args(step, None), plain, "{step:?}");
+            let args = step_args(step, Some("count:3/8"));
+            if step.first() == Some(&"nextest") {
+                let mut want = plain;
+                want.extend(["--partition".to_string(), "count:3/8".to_string()]);
+                assert_eq!(args, want);
+                with += 1;
+            } else {
+                assert_eq!(args, plain, "{step:?}");
+                assert!(!args.iter().any(|a| a == "--partition"), "{step:?}");
+            }
+        }
+        assert_eq!(with, 1);
+    }
 
     const MEMBERS: [&str; 5] = [
         "tsuzuri-contract",
