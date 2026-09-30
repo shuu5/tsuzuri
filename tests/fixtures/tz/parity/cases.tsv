@@ -1,0 +1,26 @@
+# tz の口と folio の入口の一致の case（行 k-tz-parity・受入 AC14）。1 行 1 case・タブ区切りの 4 列:
+# 口の名 / case の名 / 期待の終了 code / 引数の字（空白で割る・{F} は folio の置き場 folio2 の path・{T} は撃つ側ごとの空の作業場の path）。
+# 材料は folio の歯の材料（folio2/design-intent と folio2/tests/fixtures）だけ。
+check	pass	0	check --dir {F}/design-intent
+check	dup-key	1	check --dir {F}/tests/fixtures/check/dup-key
+check	missing-file	2	check --dir {F}/tests/fixtures/check/missing-file
+check	polarity	0	check --polarity --dir {F}/design-intent
+check	unknown-flag	2	check --no-such-flag
+schema	check	0	schema --check --dir {F}/design-intent
+derive	write	0	derive --write --dir {F}/design-intent --out {T}/derived
+derive	check-no-dir	2	derive --check --dir {T}/none --out {T}/derived
+ceiling	gate-not-top	2	ceiling --gate --write-set x --dir {F}/design-intent
+ceiling	check-no-faces	2	ceiling --check --dir {F}/design-intent --out {T}/bundle
+init	write	0	init --dir {T}/new
+parts	print	0	parts --print --dir {F}/design-intent
+parts	check-no-dir	2	parts --check --dir {T}/none
+face	write-index	0	face --face index --write --dir {F}/design-intent --out {T}/index.html
+face	check-no-out	2	face --face index --check --dir {F}/design-intent --out {T}/none/index.html
+figure	no-doc	2	figure --check --doc no-such-doc --id no-such-fig --dir {F}/design-intent --out {T}/fig.svg
+build	check-no-out	2	build --check --dir {F}/tests/fixtures/face --out {T}/site
+intake	print	0	intake --print --dir {F}/design-intent
+hello	no-dir	0	hello --dir {F}/no-such-dir --state {T}/state
+hello	design-intent	0	hello --dir {F}/design-intent --state {T}/state
+graph	print	0	graph --print --dir {F}/design-intent
+graph	digest	0	graph --digest --dir {F}/design-intent
+graph	print-summary	0	graph --print --summary --dir {F}/design-intent
