@@ -16,8 +16,8 @@ use tsuzuri_boundary::acct::Acct;
 use tsuzuri_boundary::server::design::{DESIGN_HOLD, Design};
 use tsuzuri_boundary::server::held::{FAILED_HOLD, Held};
 use tsuzuri_boundary::server::seat::{
-    DOCTOR_ARGS, HOLD, Seat, Seats, SLOW_HOLD, TICK_ARGS, USAGE_ARGS, ceiling, input_marks,
-    read_held,
+    DOCTOR_ARGS, DOCTOR_HOLD, HOLD, Seat, Seats, SLOW_HOLD, TICK_ARGS, USAGE_ARGS, ceiling,
+    input_marks, read_held,
 };
 
 /// 書いてから名を移す（撃たれている script を書きかけで見せない）。
@@ -291,7 +291,7 @@ fn eheld_vessel_marks_by_head() {
     assert_eq!(HOLD, Duration::from_secs(5));
     assert_eq!(SLOW_HOLD, Duration::from_secs(30));
     assert_eq!(ceiling(&TICK_ARGS), HOLD);
-    assert_eq!(ceiling(&DOCTOR_ARGS), SLOW_HOLD);
+    assert_eq!(ceiling(&DOCTOR_ARGS), DOCTOR_HOLD);
     assert_eq!(ceiling(&USAGE_ARGS), SLOW_HOLD);
 
     let place = Place::new("vessel-marks");

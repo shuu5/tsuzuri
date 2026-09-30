@@ -14,7 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tsuzuri_boundary::acct::{HEARTBEAT_OFF, HEARTBEAT_ON};
-use tsuzuri_boundary::server::seat::{self, HOLD, SLOW_HOLD, Seat};
+use tsuzuri_boundary::server::seat::{self, DOCTOR_HOLD, HOLD, SLOW_HOLD, Seat};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
@@ -504,7 +504,7 @@ fn server_seat_holds_outputs_five_seconds() {
     assert_eq!(calls.len(), 4, "5 秒の後の読みは tick status だけ撃ち直す: {calls:?}");
     assert_eq!(count(&calls, heads[0]), 2, "{}", heads[0]);
     for head in &heads[1..] {
-        assert_eq!(count(&calls, head), 1, "doctor と usage は {SLOW_HOLD:?} 持つ: {head}");
+        assert_eq!(count(&calls, head), 1, "doctor は {DOCTOR_HOLD:?}・usage は {SLOW_HOLD:?} 持つ: {head}");
     }
 }
 

@@ -714,7 +714,7 @@ fn server_acct_holds_five_seconds() {
     }
     thread::sleep(HOLD + Duration::from_millis(300));
     acct.doc(NOW);
-    // 5 秒の後は tick status だけを撃ち直す（doctor と usage と rules get は SLOW_HOLD の間持つ・行 e-held-acct）。
+    // 5 秒の後は tick status だけを撃ち直す（doctor は DOCTOR_HOLD の間・usage と rules get は SLOW_HOLD の間持つ・行 e-held-acct）。
     let mut want = once.0.clone();
     want.extend(once.0.iter().filter(|c| c.starts_with("seat tick status")).cloned());
     want.sort();
