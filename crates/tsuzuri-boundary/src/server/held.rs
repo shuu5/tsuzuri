@@ -3,6 +3,8 @@
 //! 同じ鍵の次の読みは、印が撃つ前と同じで上限の内なら読みの関数を撃たずに持っていた字を返し、
 //! 印が動いたか上限を過ぎていれば読みの関数を撃ち直す。読めなかった読み（None）は上限と `FAILED_HOLD` の短い方だけ持つ
 //! （持たないと読めない子を要求ごとに撃ち直す）。走っている撃ちへの合流は読みの関数の内側（`Coalesce`）に残す。
+//! 同じ鍵の読みは 1 本ずつ（行 e-held-marks・決定 (1)）: 鍵ごとの順番の錠（`turns`）を持ち、撃っている間に来た同じ鍵の読みは
+//! その終わりを待たせてから印を取って比べる。別の鍵の読みは待たない。
 //! 表の clone は同じ表を分け合う。読みの関数を撃つ間は表の錠を持たない。
 
 use std::collections::HashMap;
@@ -37,6 +39,8 @@ struct Row {
 #[derive(Clone, Default)]
 pub struct Held {
     rows: Arc<Mutex<HashMap<Key, Row>>>,
+    /// 鍵ごとの順番の錠（読みの関数を撃つ間、同じ鍵の次の読みを待たせる）。
+    turns: Arc<Mutex<HashMap<Key, Arc<Mutex<()>>>>>,
 }
 
 impl fmt::Debug for Held {
@@ -50,7 +54,7 @@ impl Held {
         Held::default()
     }
 
-    /// 鍵の読みを返す。印の file が撃った前と同じで、撃ってから `ceiling`（読めなかった読みは `FAILED_HOLD` とのうち短い方）
+    /// 鍵の読みを返す（同じ鍵の読みは 1 本ずつ・撃っている間に来た読みはその終わりを待って印を取る）。印の file が撃った前と同じで、撃ってから `ceiling`（読めなかった読みは `FAILED_HOLD` とのうち短い方）
     /// の内なら、`read` を撃たず持っていた字を返す。ほかは `read` を撃って、その結果を撃つ前に取った印と組で持つ。
     pub fn get(
         &self,
@@ -59,6 +63,8 @@ impl Held {
         ceiling: Duration,
         read: impl FnOnce() -> Option<String>,
     ) -> Option<String> {
+        let turn = lock(&self.turns).entry(key.to_vec()).or_default().clone();
+        let _turn = lock(&turn);
         let stamps: Stamps = marks.iter().map(|m| (m.clone(), stamp(m))).collect();
         if let Some(row) = lock(&self.rows).get(key) {
             let limit = match row.text {

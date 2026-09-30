@@ -6,8 +6,10 @@ use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Barrier;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::acct::Acct;
 use tsuzuri_boundary::server::design::{DESIGN_HOLD, Design};
@@ -363,16 +365,182 @@ fn eheld_acct_shares_usage() {
     let seats_h = seats(&held);
     seats_h.card(1);
     assert_eq!(place.calls().len(), 3, "{:?}", place.calls());
-    // 同じ表を受けた Acct は usage を撃たない（rules get の 3 本と state dir の doctor が増える）。
+    // 同じ表を受けた Acct は usage も doctor も撃たない（増えるのは rules get の 3 本だけ）。
     acct(&held).doc(1);
     let calls = place.calls();
-    assert_eq!(calls.len(), 7, "{calls:?}");
-    assert!(calls[3..].iter().all(|c| !c.starts_with("fleet usage")), "{calls:?}");
+    assert_eq!(calls.len(), 6, "{calls:?}");
+    assert!(calls[3..].iter().all(|c| c.starts_with("rules get")), "{calls:?}");
     seats_h.card(1);
-    assert_eq!(place.calls().len(), 7, "{:?}", place.calls());
+    assert_eq!(place.calls().len(), 6, "{:?}", place.calls());
     // 新しい表を受けた Acct は usage も撃つ。
     acct(&Held::new()).doc(1);
     let calls = place.calls();
-    assert_eq!(calls.len(), 12, "{calls:?}");
-    assert_eq!(calls[7..].iter().filter(|c| c.starts_with("fleet usage")).count(), 1, "{calls:?}");
+    assert_eq!(calls.len(), 11, "{calls:?}");
+    assert_eq!(calls[6..].iter().filter(|c| c.starts_with("fleet usage")).count(), 1, "{calls:?}");
+}
+
+/// 撃ちの引数の行のうち `head` で始まるものの数。
+fn count(calls: &[String], head: &str) -> usize {
+    calls.iter().filter(|c| c.starts_with(head)).count()
+}
+
+const DOCTOR_CALL: &str = "doctor --state-dir";
+const USAGE_CALL: &str = "fleet usage --show --state-dir";
+const TICK_CALL: &str = "seat tick status --state-dir";
+
+#[test]
+fn eheld_marks_by_adr_list() {
+    let place = Place::new("marks-adr");
+    let mut seat = seat_in(&place, "adr");
+    let state = seat.state_dir.clone();
+    let seats = state.join("seat");
+    for name in ["proj-2_0.1", "proj-1_0.1"] {
+        fs::create_dir_all(seats.join(name)).expect("席の dir");
+    }
+    fs::write(seats.join("orchestrator.launch"), "x").expect("dir でない file");
+    let groups = seat.groups_dir().expect("群の記録の dir");
+    fs::create_dir_all(&groups).expect("群の記録の dir を作る");
+    for name in ["g-1.refused", "g-1.account", "g-1.judged", "lock"] {
+        fs::write(groups.join(name), "x").expect("群の記録");
+    }
+    let usage = vec![state.join("host.toml"), state.join("fleet/events.jsonl")];
+    let dirs = [seats.join("proj-1_0.1"), seats.join("proj-2_0.1")];
+    let mut tick = usage.clone();
+    tick.push(seats.clone());
+    for d in &dirs {
+        for n in ["tick-last", "pointer-ladder", "heartbeat-off", "heartbeat-on", "move-signal", "account"] {
+            tick.push(d.join(n));
+        }
+    }
+    let mut doctor = usage.clone();
+    doctor.push(seats.clone());
+    for d in &dirs {
+        for n in ["heartbeat-off", "heartbeat-on", "account"] {
+            doctor.push(d.join(n));
+        }
+    }
+    for list in [&mut tick, &mut doctor] {
+        list.push(groups.join("g-1.account"));
+        list.push(groups.join("g-1.refused"));
+    }
+    for target in ["proj-1:0.1", "", "proj-2:0.1", "proj-9:0.1"] {
+        seat.target = target.to_string();
+        assert_eq!(input_marks(&seat, &USAGE_ARGS), usage, "{target}");
+        assert_eq!(input_marks(&seat, &TICK_ARGS), tick, "{target}");
+        assert_eq!(input_marks(&seat, &DOCTOR_ARGS), doctor, "{target}");
+        assert!(input_marks(&seat, &["other"]).is_empty());
+    }
+}
+
+#[test]
+fn eheld_marks_card_follows_events() {
+    let place = Place::new("marks-events");
+    let seat = seat_in(&place, "ev");
+    let state = seat.state_dir.clone();
+    let seats = state.join("seat");
+    let other = seats.join("proj-2_0.1");
+    fs::create_dir_all(&other).expect("ほかの席の dir");
+    let started = Instant::now();
+    let seats_h = Seats::new(
+        &place.folio().into(),
+        Some(&state),
+        Some(TARGET),
+        &place.root,
+        Held::new(),
+    );
+    // 読んで、続けて読んでも撃たない（before は今までの撃ちの数）。
+    let read = |what: &str, doctor: usize, usage: usize, tick: usize, before: &[String]| {
+        seats_h.card(1);
+        let calls = place.calls();
+        let new = &calls[before.len()..];
+        assert_eq!(
+            (count(new, DOCTOR_CALL), count(new, USAGE_CALL), count(new, TICK_CALL)),
+            (doctor, usage, tick),
+            "{what}: {new:?}"
+        );
+        seats_h.card(1);
+        assert_eq!(place.calls().len(), calls.len(), "{what}: 続けて読んでも撃たない");
+        calls
+    };
+    let mut calls = read("最初", 1, 1, 1, &[]);
+    fs::create_dir_all(state.join("fleet")).expect("fleet の dir");
+    fs::write(state.join("fleet/events.jsonl"), "1\n").expect("event log");
+    calls = read("event log", 1, 1, 1, &calls);
+    fs::write(state.join("fleet/events.jsonl"), "1\n22\n").expect("event log");
+    calls = read("event log の書き", 1, 1, 1, &calls);
+    fs::write(other.join("heartbeat-off"), "").expect("停止の記録");
+    calls = read("ほかの席の heartbeat-off", 1, 0, 1, &calls);
+    for name in ["tick-last", "pointer-ladder", "move-signal"] {
+        fs::write(other.join(name), "x").expect("ほかの席の記録");
+        calls = read(name, 0, 0, 1, &calls);
+    }
+    fs::write(state.join("host.toml"), "").expect("host.toml");
+    calls = read("host.toml", 1, 1, 1, &calls);
+    fs::create_dir_all(seats.join("proj-3_0.1")).expect("席の dir を足す");
+    read("seat の dir", 1, 0, 1, &calls);
+    assert!(started.elapsed() < HOLD, "HOLD の内に終える: {:?}", started.elapsed());
+}
+
+#[test]
+fn eheld_marks_one_read_per_key() {
+    let held = Held::new();
+    let shots = AtomicUsize::new(0);
+    let gate = Barrier::new(4);
+    let started = Instant::now();
+    let got: Vec<Option<String>> = thread::scope(|s| {
+        let handles: Vec<_> = ["a", "a", "b", "c"]
+            .into_iter()
+            .map(|name| {
+                let (held, shots, gate) = (&held, &shots, &gate);
+                s.spawn(move || {
+                    gate.wait();
+                    let key: Vec<OsString> = vec![name.into()];
+                    held.get(&key, &[], Duration::from_secs(30), || {
+                        shots.fetch_add(1, Ordering::SeqCst);
+                        thread::sleep(Duration::from_millis(300));
+                        Some(name.to_string())
+                    })
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().expect("thread")).collect()
+    });
+    assert_eq!(shots.load(Ordering::SeqCst), 3);
+    let want: Vec<Option<String>> = ["a", "a", "b", "c"].iter().map(|n| Some(n.to_string())).collect();
+    assert_eq!(got, want);
+    assert!(started.elapsed() < Duration::from_millis(850), "{:?}", started.elapsed());
+}
+
+#[test]
+fn eheld_marks_card_and_acct_in_flight() {
+    let place = Place::new("marks-flight");
+    put(
+        &place.folio(),
+        &format!(
+            "#!/bin/sh\necho \"$@\" >> '{}'\nsleep 0.3\necho ok\n",
+            place.log().display()
+        ),
+        0o755,
+    );
+    let seat = seat_in(&place, "fl");
+    let held = Held::new();
+    let seats = Seats::new(
+        &place.folio().into(),
+        Some(&seat.state_dir),
+        Some(TARGET),
+        &place.root,
+        held.clone(),
+    );
+    let folio = place.folio();
+    let acct = Acct::new(&folio, &folio, &folio, &seat.state_dir, &place.root).with_held(held);
+    thread::scope(|s| {
+        s.spawn(|| seats.card(1));
+        s.spawn(|| acct.doc(1));
+    });
+    let calls = place.calls();
+    assert_eq!(calls.len(), 6, "{calls:?}");
+    assert_eq!(count(&calls, DOCTOR_CALL), 1, "{calls:?}");
+    assert_eq!(count(&calls, USAGE_CALL), 1, "{calls:?}");
+    assert_eq!(count(&calls, TICK_CALL), 1, "{calls:?}");
+    assert_eq!(count(&calls, "rules get"), 3, "{calls:?}");
 }

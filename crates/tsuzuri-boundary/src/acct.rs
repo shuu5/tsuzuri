@@ -13,9 +13,9 @@
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）と、口座の線の材料の
 //! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
 //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。
-//! 器の出力は持ち回しの表（`Held`・行 e-held-acct・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。usage は席の card の読みと
-//! 同じ `read_held` で読み（鍵も印も同じ）、tick status と doctor は席の card の読みの鍵の末に字 `ACCT_KEY` を足した鍵と、
-//! state dir の全部の席の dir の入力の印に event log を足した印（`vessel_marks`）で持ち、rules get は印の無い鍵で `SLOW_HOLD` 持つ。
+//! 器の出力は持ち回しの表（`Held`・行 e-held-acct と e-held-marks・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。
+//! usage と tick status と doctor は席の card の読みと同じ `read_held` で読み（鍵も印も同じ・同じ state dir の器の 3 つの出力は
+//! 表の持ち分を分け合う）、rules get は印の無い鍵で `SLOW_HOLD` 持つ。
 //! file の読みは要求ごと。`marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める（行 e-acct-hbmark）。
 //! 集めのあいだは錠（`gate`）で次の要求を待たせる。
 //! 台帳と event log の字の読み解き（`Parsed`）は anchor ごとに、読み解いた時の 2 つの字と値を持ち、
@@ -45,7 +45,7 @@ use crate::server::ledger::{Got, Mark, Source, capture};
 use crate::server::runs::EVENTS_LOG;
 use crate::server::seat::{
     DOCTOR_ARGS, GROUPS_DIR, HOST_TOML, SCRIBE2_TIMEOUT, SLOW_HOLD, STATE_LOG, Seat, TICK_ARGS,
-    TICK_LAST, USAGE_ARGS, ceiling, input_marks, read_held,
+    TICK_LAST, USAGE_ARGS, read_held,
 };
 
 /// 既定の git の program の名。
@@ -86,9 +86,6 @@ struct Texts {
     /// 台帳の読みが落ちた project の最後に読めた時刻のうち最も古い値（どれも読めれば None・行 e-hold）。
     stale: Option<Instant>,
 }
-
-/// tick status と doctor の持ち回しの鍵の末に足す字（席の card の読みと鍵と印を分ける）。
-pub const ACCT_KEY: &str = "acct";
 
 /// git の読みの字（宣言の anchor の順に、state dir と board の port の字）。
 type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>);
@@ -356,18 +353,9 @@ impl Acct {
         }
     }
 
-    /// 器の tick status か doctor の出力を表を通して読む（鍵は席の card の読みの鍵の末に `ACCT_KEY` を足した列・
-    /// 印は `vessel_marks`）。
+    /// 器の出力（usage・tick status・doctor）を表を通して読む（席の card の読みと同じ `read_held`・鍵も印も同じ）。
     fn held_out(&self, head: &[&str], dir: &Path) -> Option<String> {
-        let seat = self.vessel(dir);
-        let mut key = vec![seat.program.clone()];
-        key.extend(seat.argv(head));
-        key.push(seat.cwd.clone().into_os_string());
-        key.push(ACCT_KEY.into());
-        self.held
-            .get(&key, &vessel_marks(&seat, head), ceiling(head), || {
-                self.shoot_in(head, dir)
-            })
+        read_held(&self.held, &self.vessel(dir), head)
     }
 
     /// 窓ごとの逼迫の閾値の出力を表を通して読む（印の無い鍵で `SLOW_HOLD` の間持つ）。
@@ -378,14 +366,6 @@ impl Acct {
         self.held.get(&key, &[], SLOW_HOLD, || {
             self.shoot(CAP_ARGS.into_iter().chain([rule]))
         })
-    }
-
-    /// 器に `head` の後に `--state-dir <dir>` を付けて撃つ。
-    fn shoot_in(&self, head: &[&str], dir: &Path) -> Option<String> {
-        let mut args: Vec<&OsStr> = head.iter().map(OsStr::new).collect();
-        args.push(OsStr::new("--state-dir"));
-        args.push(dir.as_os_str());
-        self.shoot(args)
     }
 
     fn shoot<I, S>(&self, args: I) -> Option<String>
@@ -429,7 +409,7 @@ impl Acct {
                 (dirs, boards)
             });
             let usage =
-                s.spawn(|| read_held(&self.held, &self.vessel(&self.state_dir), &USAGE_ARGS));
+                s.spawn(|| self.held_out(&USAGE_ARGS, &self.state_dir));
             let caps: Vec<_> = CAP_ROWS
                 .iter()
                 .map(|&(_, rule)| (rule, s.spawn(move || self.held_rule(rule))))
@@ -598,30 +578,6 @@ impl Acct {
         texts.host.events = read(&events_log(&self.state_dir));
         texts
     }
-}
-
-/// state dir の tick status か doctor の入力の印（state dir の seat の下の全部の席の dir ごとの `input_marks` の和
-/// （群の記録の .account と .refused を含む）に、その state dir の event log を足す・path の順・重ねない）。
-fn vessel_marks(seat: &Seat, head: &[&str]) -> Vec<PathBuf> {
-    let as_target = |target: &str| Seat {
-        target: target.to_string(),
-        ..seat.clone()
-    };
-    let mut out = input_marks(&as_target(""), head);
-    let dirs = std::fs::read_dir(seat.state_dir.join("seat"))
-        .map(|entries| entries.flatten().collect::<Vec<_>>())
-        .unwrap_or_default();
-    for entry in dirs {
-        if let (Ok(t), Some(name)) = (entry.file_type(), entry.file_name().to_str())
-            && t.is_dir()
-        {
-            out.extend(input_marks(&as_target(name), head));
-        }
-    }
-    out.push(events_log(&seat.state_dir));
-    out.sort();
-    out.dedup();
-    out
 }
 
 fn read(path: &Path) -> Option<String> {

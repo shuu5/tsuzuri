@@ -5,8 +5,8 @@
 //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでもその出力は読めない（None）。
 //! 読む file は `<state dir>/seat/<席の dir>/state.jsonl`・同じ dir の `tick-last`・`<state dir>/host.toml`・
 //! 群の記録（`<state dir の親>/scribe2-host/groups/<群の名>.account` と `history/<群の名>.account.*`）。
-//! 3 つの出力は持ち回しの表（`Held`・行 e-held-seat・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
-//! 入力の印（`input_marks`）が撃つ前と同じで上限（`ceiling`）の内なら撃たない。tick status は `HOLD`（5 秒）、
+//! 3 つの出力は持ち回しの表（`Held`・行 e-held-seat と e-held-marks・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
+//! 入力の印（`input_marks`・席の target に依らない）が撃つ前と同じで上限（`ceiling`）の内なら撃たない。tick status は `HOLD`（5 秒）、
 //! doctor と usage は `SLOW_HOLD`（30 秒）。file の読みは持ち回さず要求のたびに読む。
 //! heartbeat-off と heartbeat-on は読まず印にだけ使う（合図の値は tick status の席の行の欄 heartbeat= の字で読む）。
 //! 席の target か state dir が無ければ器を撃たず、読む欄が全部「まだ分からない」の card を返す。
@@ -52,6 +52,24 @@ pub const STATE_LOG: &str = "state.jsonl";
 pub const TICK_LAST: &str = "tick-last";
 pub const ACCOUNT: &str = "account";
 
+/// 席の dir の親の dir の名（state dir の下）。
+pub const SEAT_DIR: &str = "seat";
+
+/// 席の dir の合図の梯子の記録と席の移動の合図の file（tick status の印にだけ使う）。
+pub const POINTER_LADDER: &str = "pointer-ladder";
+pub const MOVE_SIGNAL: &str = "move-signal";
+
+/// 席の dir ごとに印にする file（tick status は合図の時計と梯子と移動の合図まで・doctor は停止と明示の on と account だけ）。
+pub const TICK_SEAT_MARKS: [&str; 6] = [
+    TICK_LAST,
+    POINTER_LADDER,
+    HEARTBEAT_OFF,
+    HEARTBEAT_ON,
+    MOVE_SIGNAL,
+    ACCOUNT,
+];
+pub const DOCTOR_SEAT_MARKS: [&str; 3] = [HEARTBEAT_OFF, HEARTBEAT_ON, ACCOUNT];
+
 /// 群の記録の dir の下で器が読む file の名の終わり（lock と .judged は器が書くが読まない）。
 pub const GROUP_READ_SUFFIXES: [&str; 2] = [".account", ".refused"];
 
@@ -87,7 +105,7 @@ impl Seat {
     /// 席の dir（席の名の「:」を「_」に替えた字・path の区切りにならない名なら None）。
     pub fn seat_dir(&self) -> Option<PathBuf> {
         let name = self.target.replace(':', "_");
-        plain(&name).then(|| self.state_dir.join("seat").join(name))
+        plain(&name).then(|| self.state_dir.join(SEAT_DIR).join(name))
     }
 
     /// 変化の印の file（状態の記録と合図の最後の判定と停止の記録と明示の on の記録）。
@@ -198,27 +216,42 @@ pub fn ceiling(head: &[&str]) -> Duration {
     }
 }
 
-/// 器の頭ごとの入力の印の file（器の CLI が読む file だけ・知らない頭は空）。
-/// 残量は host.toml と fleet/events.jsonl。doctor は席の dir の heartbeat-off・heartbeat-on・account と、群の記録の dir の
-/// .account と .refused。tick status は doctor の印に tick-last を足す（tick-last は合図の時計が 15 秒ごとに書き替えるので
-/// doctor には入れない）。
+/// 器の頭ごとの入力の印の file（器の CLI が読む file だけ・知らない頭は空・席の target には依らない）。
+/// 残量は host.toml と fleet/events.jsonl。tick status と doctor はそれに、state dir の下の seat の dir そのものと、
+/// その下の全部の席の dir（名の順・dir でない file は除く）ごとの記録（tick status は `TICK_SEAT_MARKS`・doctor は
+/// `DOCTOR_SEAT_MARKS`）と、群の記録の dir の .account と .refused の file（名の順）を足す（判断の記録 ADR-23 の決定 (2)）。
+/// tick-last は合図の時計が 15 秒ごとに書き替えるので doctor には入れない。
 pub fn input_marks(seat: &Seat, head: &[&str]) -> Vec<PathBuf> {
-    if head == USAGE_ARGS {
-        let events = EVENTS_LOG
-            .iter()
-            .fold(seat.state_dir.clone(), |p, s| p.join(s));
-        return vec![seat.state_dir.join(HOST_TOML), events];
-    }
-    let tick = head == TICK_ARGS;
-    if !tick && head != DOCTOR_ARGS {
+    let names: &[&str] = if head == USAGE_ARGS {
+        &[]
+    } else if head == TICK_ARGS {
+        &TICK_SEAT_MARKS
+    } else if head == DOCTOR_ARGS {
+        &DOCTOR_SEAT_MARKS
+    } else {
         return Vec::new();
+    };
+    let events = EVENTS_LOG
+        .iter()
+        .fold(seat.state_dir.clone(), |p, s| p.join(s));
+    let mut out = vec![seat.state_dir.join(HOST_TOML), events];
+    if head == USAGE_ARGS {
+        return out;
     }
-    let mut out = Vec::new();
-    if let Some(dir) = seat.seat_dir() {
-        if tick {
-            out.push(dir.join(TICK_LAST));
-        }
-        out.extend([HEARTBEAT_OFF, HEARTBEAT_ON, ACCOUNT].map(|n| dir.join(n)));
+    let seats = seat.state_dir.join(SEAT_DIR);
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(&seats)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                .map(|e| e.path())
+                .collect()
+        })
+        .unwrap_or_default();
+    dirs.sort();
+    out.push(seats);
+    for dir in dirs {
+        out.extend(names.iter().map(|n| dir.join(n)));
     }
     if let Some(groups) = seat.groups_dir() {
         let mut files: Vec<PathBuf> = std::fs::read_dir(groups)
