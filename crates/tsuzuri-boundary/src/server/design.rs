@@ -18,7 +18,8 @@ use super::coalesce::{Coalesce, GRACE};
 use super::held::{Held, git_marks, walk};
 use super::ledger::capture;
 
-/// 既定の program の名（引数 --folio で替える）。
+/// server の Config::new の既定の program の名と、撃っている tz 自身の path が読めない時の名
+/// （引数 --folio を省いた既定は `cli::folio::program`・行 k-tz-self）。
 pub const FOLIO: &str = "folio";
 
 /// 設計文書の dir（repo の置き場の下）。

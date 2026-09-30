@@ -3,10 +3,13 @@
 //! folio の lib の入口 `folio::entry::run` を命令の名 tz で撃つだけ。inject と serve は持たない。
 //! 索引の旗（`INDEX_FLAGS`）を 1 つでも持つ tz graph は folio の graph の口へ渡し（吸収・決定 (3)）、持たない tz graph は
 //! 今の口（`cli::graph`）のまま。2 つを混ぜた引数は使い方の誤り 1。
+//! 設計の索引の読みに撃つ program の既定は撃っている tz 自身（`program`・行 k-tz-self）。
 
+use std::ffi::OsString;
 use std::io::Write;
 
 use super::graph;
+use crate::server::design::FOLIO;
 
 /// 口の名（要件 FR17 の字の順）。
 pub const NAMES: [&str; 11] = [
@@ -39,6 +42,16 @@ pub fn run(name: &str, rest: &[&str]) -> u8 {
     let rc = ::folio::entry::run(args, &mut out, &mut err);
     let _ = out.flush();
     rc
+}
+
+/// 設計の索引の読みに撃つ program（--folio の値があればそのまま・省けば撃っている tz 自身の binary・
+/// 自身の path が読めなければ名 `FOLIO`）。tz は索引の旗の tz graph と口 check を folio と同じ引数の字で受ける。
+pub fn program(value: Option<&str>) -> OsString {
+    match (value, std::env::current_exe()) {
+        (Some(value), _) => value.into(),
+        (None, Ok(exe)) => exe.into(),
+        (None, Err(_)) => FOLIO.into(),
+    }
 }
 
 /// 索引の旗を 1 つでも持つか（旗は値を取らないので字の一致で見る）。

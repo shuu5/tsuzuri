@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use tsuzuri_core::gate::{self, Gate, Why};
 use tsuzuri_core::graph::{Graph, Inputs, build};
 
-use crate::server::design::{Design, FOLIO};
+use crate::server::design::Design;
 use crate::server::ledger::{BD, Source};
 
 pub const USAGE: &str =
@@ -59,7 +59,7 @@ pub fn parse(rest: &[&str]) -> Result<Args, String> {
     Ok(Args {
         repo: PathBuf::from(repo),
         bd: bd.unwrap_or(BD).into(),
-        folio: folio.unwrap_or(FOLIO).into(),
+        folio: crate::cli::folio::program(folio),
     })
 }
 

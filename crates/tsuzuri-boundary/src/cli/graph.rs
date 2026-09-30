@@ -18,6 +18,7 @@
 //! 外の台帳の読みを g-3 に渡す（--design は読まない・行 c-g3-extern）。
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::thread;
 
@@ -29,7 +30,7 @@ use tsuzuri_contract::wire;
 use tsuzuri_core::graph::{self, Outside, build, build::DESIGN_EDGE_TYPES, check::UNMEASURED};
 
 use crate::server::board::{self, Floors, Sources, Texts};
-use crate::server::design::{Design, FOLIO};
+use crate::server::design::Design;
 use crate::server::ledger::{BD, Source};
 use crate::server::runs::Runs;
 
@@ -151,7 +152,7 @@ struct Args {
     mode: Mode,
     repo: PathBuf,
     bd: String,
-    folio: String,
+    folio: OsString,
     state_dir: Option<PathBuf>,
     /// ほかの project の置き場（引数の順・何度でも）。
     projects: Vec<PathBuf>,
@@ -430,7 +431,7 @@ fn parse(rest: &[&str]) -> Result<Args, String> {
         mode,
         repo: PathBuf::from(repo.unwrap_or(".")),
         bd: bd.unwrap_or(BD).to_string(),
-        folio: folio.unwrap_or(FOLIO).to_string(),
+        folio: super::folio::program(folio),
         state_dir: state_dir.map(|d| Path::new(d).to_path_buf()),
         projects,
     })

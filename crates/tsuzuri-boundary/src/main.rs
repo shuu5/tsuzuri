@@ -3,7 +3,7 @@
 //! bind 先は loopback か tailnet の住所だけ（条 N-6）。tailnet の住所はこの引数で受ける（行 D-4）。
 //! --bd は台帳の読みに撃つ program（既定 bd・便 e-src）。
 //! --state-dir は器の state dir（省けば走行の出所は読めない）・--folio は設計の索引の読みに撃つ program
-//! （既定 folio）（便 e-read）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
+//! （省けば server 自身の binary・行 k-tz-self）（便 e-read）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
 //! --bdw は台帳の書きに撃つ program（既定 bdw）・--seat は裁定を配達する席の target（--state-dir と両方が
 //! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）（便 e-ask）。
 //! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
@@ -156,7 +156,6 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
     // 省いた program は Config::new の既定の値のまま。
     for (slot, value) in [
         (&mut config.bd, bd),
-        (&mut config.folio, folio),
         (&mut config.bdw, bdw),
         (&mut config.scribe2, scribe2),
     ] {
@@ -164,6 +163,8 @@ fn parse(rest: &[&str]) -> Result<Config, String> {
             *slot = value.into();
         }
     }
+    // --folio を省けば server 自身の binary（tz は索引の旗の tz graph と口 check を folio と同じ引数の字で受ける・行 k-tz-self）。
+    config.folio = tsuzuri_boundary::cli::folio::program(folio);
     // --tz を省けば server 自身の binary（起きている server の PATH に tz は無いことが在る・行 e-stage-target）。
     match (tz, std::env::current_exe()) {
         (Some(value), _) => config.tz = value.into(),

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 use tsuzuri_boundary::hook::question_gate::{self, Args, USAGE};
-use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO, FOLIO_ARGS};
+use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_ARGS};
 use tsuzuri_boundary::server::ledger::{BD, BD_ARGS};
 use tsuzuri_core::gate::{self, Gate, Why};
 use tsuzuri_core::graph::{Graph, Inputs, Source, build};
@@ -369,7 +369,7 @@ fn qgate_parse_args() {
         Ok(Args {
             repo: PathBuf::from("/r"),
             bd: OsString::from(BD),
-            folio: OsString::from(FOLIO),
+            folio: tsuzuri_boundary::cli::folio::program(None),
         })
     );
     let want = Ok(Args {
