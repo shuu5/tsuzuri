@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-yaml-rust2 = { version = "0.10", default-features = false }
+yaml-rust2 = { version = "0.12", default-features = false }
 
 [build-dependencies]
-yaml-rust2 = { version = "0.10", default-features = false }
+yaml-rust2 = { version = "0.12", default-features = false }

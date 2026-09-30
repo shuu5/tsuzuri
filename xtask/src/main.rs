@@ -400,19 +400,21 @@ mod tests {
         assert_eq!(with, 1);
     }
 
-    const MEMBERS: [&str; 5] = [
+    const MEMBERS: [&str; 6] = [
         "tsuzuri-contract",
         "tsuzuri-core",
         "tsuzuri-boundary",
         "tsuzuri-surface",
+        "folio",
         "xtask",
     ];
 
     /// crate ごとの直接依存の名の一覧（member の dir と、依存の全部の節（target ごとの節も）の名・名の順）。
     /// 外の部品は便ごとに足した名だけ: serde（便 a）・serde_json（便 b・中核は便 c）・Leptos の一式（便 g-min・規則の行 R-25）・
-    /// miniz_oxide（行 g-gz・xtask だけ・裁定 t3-hub.52.40:20260928T0156Z-1）。
+    /// miniz_oxide（行 g-gz・xtask だけ・裁定 t3-hub.52.40:20260928T0156Z-1）・
+    /// clap と yaml-rust2（行 k-join-folio・持ち込んだ folio だけ・判断の記録 ADR-21 の承認）。
     /// 名を足す便はこの一覧を直す。一覧に無い名が manifest に在れば落ちる。
-    const DIRECT_DEPS: [(&str, &[&str]); 5] = [
+    const DIRECT_DEPS: [(&str, &[&str]); 6] = [
         ("crates/tsuzuri-contract", &["serde", "serde_json"]),
         (
             "crates/tsuzuri-core",
@@ -432,6 +434,7 @@ mod tests {
                 "web-sys",
             ],
         ),
+        ("folio2/crates/folio", &["clap", "yaml-rust2"]),
         ("xtask", &["miniz_oxide", "tsuzuri-boundary"]),
     ];
 
@@ -439,7 +442,7 @@ mod tests {
     const SURFACE_DIRECT_MAX: usize = 8;
 
     #[test]
-    fn skeleton_workspace_has_five_members() {
+    fn skeleton_workspace_has_six_members() {
         let mut names = member_names(&workspace_root());
         names.sort();
         let mut want = MEMBERS.map(str::to_string).to_vec();

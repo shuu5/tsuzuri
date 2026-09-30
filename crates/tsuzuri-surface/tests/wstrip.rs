@@ -41,6 +41,7 @@ fn wstrip_release_profile_keys() {
     let mut heads: Vec<&str> = text.lines().filter_map(heading).collect();
     heads.sort_unstable();
     let mut want = vec![
+        "profile.dev.package.folio",
         "workspace",
         "workspace.package",
         "workspace.dependencies",
@@ -56,6 +57,9 @@ fn wstrip_release_profile_keys() {
     let quoted: Vec<&str> = value.splitn(3, '"').collect();
     assert_eq!(quoted.len(), 3, "strip の値に引用符が 2 つ無い: {value}");
     assert_eq!(quoted[1], "symbols");
+
+    // 行 k-join-folio: folio の crate だけを最適化して組む段は opt-level = 2 の 1 行だけ。
+    assert_eq!(section(&text, "profile.dev.package.folio"), ["opt-level = 2"]);
 }
 
 #[test]

@@ -14,10 +14,3 @@ path = "folio2/crates/folio/"
 scope = "lint で deny にする書き方（unwrap・expect・panic・直接の print ほか）"
 ruling = "t3-hub.67.4:20260929T0058Z-1"
 removed_by = "k-lint-folio"
-
-[[exclusion]]
-rule = "R-2"
-path = "folio2/crates/folio/"
-scope = "持ち込みの 1 回で足す依存（folio2/Cargo.lock の 26 本）の、1 PR 1 本と増分 check の実測だけ"
-ruling = "t3-hub.67.4:20260929T0058Z-1"
-removed_by = "k-join-folio"

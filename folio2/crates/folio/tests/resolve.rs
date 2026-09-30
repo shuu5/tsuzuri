@@ -9,7 +9,7 @@
 //! 3. 版管理の根に写しが無ければ、親に在っても床と面は読めない（2）・面は書かない。
 //! 4. 版管理の無い写しは置き場の親を読む（床の まだ分からない は版管理の不在だけ・面 0）。
 //! 5. 置き場そのものが版管理の根なら置き場の下を読み親を読まない（床は照合の違反と読めないの両方・面は書かない）。
-//! 6. folio2 の版管理の根は design-intent の親。
+//! 6. 版管理の根は repo の根（folio2 の 1 つ上）で、根の design-intent の親。folio2/design-intent の版管理の根も repo の根。
 //! 7. 5 file の生成区間の注 top_level_note は条 id N-3 を名指さない。
 
 use std::fs;
@@ -249,24 +249,27 @@ fn f123_when_the_place_is_the_root_it_reads_under_the_place_not_the_parent() {
     assert!(w.out().is_file(), "面を書いていない");
 }
 
-// ── 6. folio2 の版管理の根は design-intent の親 ──
+// ── 6. 版管理の根は repo の根（folio2 の 1 つ上）で、根の design-intent の親 ──
+
+/// dir で撃った git rev-parse --show-toplevel（正規化した path）。
+fn toplevel(dir: &Path) -> PathBuf {
+    let out = git(dir, &["rev-parse", "--show-toplevel"]);
+    let top = String::from_utf8_lossy(&out.stdout).trim_end_matches(['\n', '\r']).to_string();
+    fs::canonicalize(top).unwrap()
+}
 
 #[test]
-fn f123_folio2_version_root_is_the_parent_of_design_intent() {
-    let out = git(
-        &repo_root().join("design-intent"),
-        &["rev-parse", "--show-toplevel"],
+fn f123_tsuzuri_version_root_is_the_parent_of_design_intent() {
+    let root = fs::canonicalize(repo_root().join("..")).unwrap();
+    let place = root.join("design-intent");
+    let top = toplevel(&place);
+    assert_eq!(top, root, "版管理の根が repo の根でない");
+    assert_eq!(top, place.parent().unwrap(), "版管理の根が design-intent の親でない");
+    assert_eq!(
+        toplevel(&repo_root().join("design-intent")),
+        root,
+        "folio2/design-intent の版管理の根が repo の根でない"
     );
-    let top = String::from_utf8_lossy(&out.stdout).trim_end_matches(['\n', '\r']).to_string();
-    let top = fs::canonicalize(top).unwrap();
-    let want = fs::canonicalize(repo_root()).unwrap();
-    assert_eq!(top, want, "版管理の根が design-intent の親でない");
-    let parent = fs::canonicalize(repo_root().join("design-intent"))
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    assert_eq!(top, parent);
 }
 
 // ── 7. 5 file の生成区間の注は条 id を名指さない ──

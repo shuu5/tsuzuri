@@ -78,7 +78,8 @@ fn f212_manifest_turns_off_yaml_rust2_default_features() {
 
 #[test]
 fn f212_lockfile_resolves_no_encoding_rs() {
-    let packages = lock_packages(&read(&repo_root().join("Cargo.lock")));
+    // 行 k-join-folio: folio は tsuzuri の根の workspace の member なので、錠は folio2/ の 1 つ上の repo の根の Cargo.lock。
+    let packages = lock_packages(&read(&repo_root().join("../Cargo.lock")));
     // 一覧が読めていない場合を合格にしない（P-4.1）。
     let names: Vec<&str> = packages.iter().map(|(name, _)| name.as_str()).collect();
     assert!(names.contains(&"folio"), "Cargo.lock に folio が無い: {names:?}");

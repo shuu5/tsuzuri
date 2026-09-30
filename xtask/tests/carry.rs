@@ -11,7 +11,9 @@ const ADRS: [&str; 2] = [
     "design-intent/adr/ADR-18.yaml",
     "design-intent/adr/ADR-19.yaml",
 ];
-const LOCK: &str = "folio2/Cargo.lock";
+const LOCK: &str = "Cargo.lock";
+/// 根の直下の dir のうち、持ち込んだ木の根の閉じた一覧（scribe2 の持ち込みの段が足す）。
+const CARRIED: [&str; 1] = ["folio2"];
 
 /// 欄 rule の閉じた一覧。
 const RULES: [&str; 4] = ["R-4", "R-10", "R-2", "N-3"];
@@ -22,8 +24,6 @@ const RULING: &str = "t3-hub.67.4:20260929T0058Z-1";
 const FOLIO_PATH: &str = "folio2/crates/folio/";
 const SCOPE_R4: &str = "大きさの上限（1 module の行数・関数の粒度・歯と source の行数比）";
 const SCOPE_R10: &str = "lint で deny にする書き方（unwrap・expect・panic・直接の print ほか）";
-const SCOPE_R2: &str =
-    "持ち込みの 1 回で足す依存（folio2/Cargo.lock の 26 本）の、1 PR 1 本と増分 check の実測だけ";
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -99,7 +99,7 @@ fn parse_table(text: &str) -> Result<Vec<Row>, String> {
         .collect()
 }
 
-/// path は字 / で終わり、節 .. と . を持たない dir で、根の直下の dir の Cargo.toml が行 [workspace] を持つ。
+/// path は字 / で終わり、節 .. と . を持たない dir で、根の直下の dir が持ち込んだ木の根の一覧 CARRIED のどれか。
 fn judge_path(path: &str) -> Result<(), String> {
     let Some(body) = path.strip_suffix('/') else {
         return Err(format!("path {path} が字 / で終わらない"));
@@ -111,18 +111,11 @@ fn judge_path(path: &str) -> Result<(), String> {
     {
         return Err(format!("path {path} が空の節・. ・.. を持つ"));
     }
-    let root = repo_root();
-    if !root.join(body).is_dir() {
+    if !repo_root().join(body).is_dir() {
         return Err(format!("path {path} は木の dir でない"));
     }
-    let manifest = root.join(parts[0]).join("Cargo.toml");
-    let text = std::fs::read_to_string(&manifest)
-        .map_err(|e| format!("{} を読む: {e}", manifest.display()))?;
-    if !text.lines().any(|l| l.trim() == "[workspace]") {
-        return Err(format!(
-            "{}/Cargo.toml が行 [workspace] を持たない",
-            parts[0]
-        ));
+    if !CARRIED.contains(&parts[0]) {
+        return Err(format!("{} は持ち込んだ木の根の一覧に無い", parts[0]));
     }
     Ok(())
 }
@@ -182,13 +175,9 @@ fn cexcl_table_rows() {
         .collect();
     assert_eq!(
         got,
-        [
-            ("R-4", "k-size-folio"),
-            ("R-10", "k-lint-folio"),
-            ("R-2", "k-join-folio"),
-        ]
+        [("R-4", "k-size-folio"), ("R-10", "k-lint-folio")]
     );
-    for (row, scope) in rows.iter().zip([SCOPE_R4, SCOPE_R10, SCOPE_R2]) {
+    for (row, scope) in rows.iter().zip([SCOPE_R4, SCOPE_R10]) {
         assert_eq!(row.path, FOLIO_PATH, "{row:?}");
         assert_eq!(row.ruling, RULING, "{row:?}");
         assert_eq!(row.scope, scope, "{row:?}");
@@ -298,20 +287,6 @@ fn lock_packages(text: &str) -> Vec<Package> {
     packages
 }
 
-/// 表の R-2 の行の scope の字「folio2/Cargo.lock の N 本」の N。
-fn scope_lock_count(scope: &str) -> usize {
-    let after = scope
-        .split_once("folio2/Cargo.lock の ")
-        .unwrap_or_else(|| panic!("scope に「folio2/Cargo.lock の N 本」: {scope}"))
-        .1;
-    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
-    assert!(
-        after[digits.len()..].trim_start().starts_with('本'),
-        "{scope}"
-    );
-    digits.parse().expect("本数")
-}
-
 #[test]
 fn cexcl_lock_drops_encoding() {
     let packages = lock_packages(&read(LOCK));
@@ -320,19 +295,37 @@ fn cexcl_lock_drops_encoding() {
         packages.iter().all(|p| p.name != "encoding_rs"),
         "encoding_rs が錠に在る"
     );
-    let outside: Vec<&Package> = packages.iter().filter(|p| p.name != "folio").collect();
-    assert_eq!(outside.len(), 26, "folio を除く名の数");
     let folio: Vec<&Package> = packages.iter().filter(|p| p.name == "folio").collect();
     assert_eq!(folio.len(), 1, "folio の塊");
     let mut deps = folio[0].dependencies.clone();
     deps.sort();
     assert_eq!(deps, ["clap", "yaml-rust2"], "folio の dependencies");
     let rows = parse_table(&read(TABLE)).expect("表の読み");
-    let r2 = rows
-        .iter()
-        .find(|r| r.rule == "R-2")
-        .expect("表の R-2 の行");
-    assert_eq!(scope_lock_count(&r2.scope), outside.len(), "表の本数の字");
+    assert!(rows.iter().all(|r| r.rule != "R-2"), "表に R-2 の行が在る");
+}
+
+#[test]
+fn cexcl_folio_joins_root() {
+    let members: Vec<String> = read("Cargo.toml")
+        .lines()
+        .skip_while(|l| l.trim() != "members = [")
+        .skip(1)
+        .take_while(|l| l.trim() != "]")
+        .map(|l| l.trim().trim_end_matches(',').trim_matches('"').to_string())
+        .collect();
+    assert!(
+        members.iter().any(|m| m == "folio2/crates/folio"),
+        "根の members に folio が無い: {members:?}"
+    );
+    for gone in ["folio2/Cargo.toml", "folio2/Cargo.lock"] {
+        assert!(!repo_root().join(gone).exists(), "{gone} が在る");
+    }
+    assert!(
+        read("folio2/crates/folio/Cargo.toml")
+            .lines()
+            .all(|l| l.trim() != "[workspace]"),
+        "folio の manifest が行 [workspace] を持つ"
+    );
 }
 
 /// 起草の時の main 821ed79 の契約表の verify の最後の字（この行の語を除く）。
@@ -646,7 +639,7 @@ fn cexcl_own_names_clean() {
             &rest[..rest.find('(').expect("fn の名の後に (")]
         })
         .collect();
-    assert_eq!(names.len(), 4, "{names:?}");
+    assert_eq!(names.len(), 5, "{names:?}");
     for name in names {
         let rest = name
             .strip_prefix("cexcl_")

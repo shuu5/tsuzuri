@@ -32,4 +32,8 @@ jobs:
         with:
           # trunk は面の crate の組み立て（xtask の surface-build）が呼ぶ
           tool: cargo-nextest,trunk
+      # folio の図の口の歯は子の処理で node を起こす（どの partition にも入りうるので job ごとに入れる）
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: 20
       - run: cargo run -q -p xtask -- check
