@@ -3,13 +3,13 @@
 meta:
   id: surface-wave24a
   title: 第 24 波 a — folio の口を tz の subcommand にする（tz 化）と、持ち込んだ folio への規則の当てと、面の server の軽さとメモリの直し、問いを閉じる理由の裁定 id を器の close の理由の読み手が読める形にする
-  version: v0.4
+  version: v0.5
   status: effective
   generated: 2026-09-30
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: ノート surface-wave23b（32 行の全部が着地・規則の行 R-32 の上限）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-09-30）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-09-30）は、1 行目 e-reason-id（境界の crate の server・S・depends は空）と 3 節を足した（起草 w46a の字を、席が main ea06f7a3 に当てた）。計画だけの行ではないので規則の行 R-33 は書かない。第 0.3 版（2026-09-30）は、2 行目 k-tz-entry（folio の lib の入口と tz の 11 の口と索引の graph・M）と 3 行目 k-tz-parity（口ごとの tz と folio の一致の歯・受入 AC14・S）と 4 節と 5 節を足した。計画 surface-plan の 9 節の計画だけの行 k-parity を割った行で、残りの行（folio の歯の tz への移しと binary の退役・inject と serve の退役・索引の読みの既定）は後に足す。起草 w42a が main 922314b0 の写しで試作し、変異を当てて歯が落ちることを見た。 第 0.4 版（2026-09-30）は、2 行目 k-tz-entry の depends を空にし 4 節の流す順の字を直した（1 行目 e-reason-id との重なりは、tz 化を先に進めるため k-tz-entry を先に流し e-reason-id を後にする・e-reason-id の depends は、その行の直しの版で置く）。
+  note: ノート surface-wave23b（32 行の全部が着地・規則の行 R-32 の上限）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-09-30）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-09-30）は、1 行目 e-reason-id（境界の crate の server・S・depends は空）と 3 節を足した（起草 w46a の字を、席が main ea06f7a3 に当てた）。計画だけの行ではないので規則の行 R-33 は書かない。第 0.3 版（2026-09-30）は、2 行目 k-tz-entry（folio の lib の入口と tz の 11 の口と索引の graph・M）と 3 行目 k-tz-parity（口ごとの tz と folio の一致の歯・受入 AC14・S）と 4 節と 5 節を足した。計画 surface-plan の 9 節の計画だけの行 k-parity を割った行で、残りの行（folio の歯の tz への移しと binary の退役・inject と serve の退役・索引の読みの既定）は後に足す。起草 w42a が main 922314b0 の写しで試作し、変異を当てて歯が落ちることを見た。 第 0.4 版（2026-09-30）は、2 行目 k-tz-entry の depends を空にし 4 節の流す順の字を直した（1 行目 e-reason-id との重なりは、tz 化を先に進めるため k-tz-entry を先に流し e-reason-id を後にする・e-reason-id の depends は、その行の直しの版で置く）。 第 0.5 版（2026-09-30）は、4〜6 行目（k-lint-base〔根の Cargo.toml の workspace の lint の表と clippy.toml と member の manifest と xtask の歯 klint・M〕・k-lint-tests-face〔面の crate の統合の歯の crate の根の cfg(test) の属性・M・depends は k-lint-base〕・k-lint-tests〔残りの根と表の unwrap_used と panic・M・depends は k-lint-tests-face〕）と 6〜8 節を足した。持ち込んだ folio に規則の行 R-10 と R-4 を当てる段（計画 surface-plan の 6 節の後の行 k-lint-folio と k-size-folio の前）で、tsuzuri の全体に規則の行 R-10 の lint の機構を置く最初の 3 行。規則の行 R-4 の数えの段の行は、R-4 の数える範囲の持ち主の答えの後に置く。計画だけの行ではないので規則の行 R-33 は書かない。起草 w43a が main 4ad0b18f の写しで試作し、main 214118b4 に当てた。
 
 sections:
   - n: 1
@@ -51,6 +51,33 @@ sections:
         size: S
         done: (1) fixture tests/fixtures/tz/parity/cases.tsv の行のうち井桁で始まる行と空の行を除いた行は、どれもタブで割って 4 列（口の名・case の名・期待の終了 code・引数の字）で、口の名は境界の cli の folio の NAMES の 11 と graph の全部を持ち、どの行も引数の字の頭の語が口の名で、graph の行は INDEX_FLAGS の 3 つの旗のどれも持ち、期待の終了 code は 0・1・2 のどれも在り、口の名と case の名の組は 1 度だけ（歯 tzpar_cases_cover_every_mouth） (2) 口の名が check・schema・derive・ceiling の case ごとに、引数の字の {F} を持ち込んだ folio の置き場 folio2 の path に、{T} を撃つ側ごとの空の作業場の path に替えて空白で割った列を、tz の binary と folio の lib の入口 folio::entry::run（頭の命令の名は folio・書き先は Vec）に渡すと、入口の終了 code は case の期待の code と同じで、tz の rc はそれと同じで、tz の標準出力と標準エラーの字（5 節の Usage の名の替えと、作業場の path を字 {T} に戻す替えの後）は入口の字（作業場の path を字 {T} に戻した後）と同じで、撃った後の 2 つの作業場の下の file の相対の path と byte の表が同じ（歯 tzpar_floor_mouths_match） (3) 口の名が parts・face・figure・build の case ごとに、(2) と同じ比べが全部成り立つ（歯 tzpar_face_mouths_match） (4) 口の名が init・intake・hello の case ごとに、(2) と同じ比べが全部成り立つ（歯 tzpar_start_mouths_match） (5) 口の名が graph の case ごとに、(2) と同じ比べが全部成り立つ（歯 tzpar_index_views_match） (6) 歯の file crates/tsuzuri-boundary/tests/tzpar.rs の test の fn は 6 つで、名はどれも tzpar_ で始まり、名から tzpar_ を除いた字は起草の時の main 4ad0b18f の契約表の verify の最後の字 325 語のどれも含まない（歯 tzpar_own_names_clean）
         depends: ["k-tz-entry"]
+      - id: k-lint-base
+        title: 規則の行 R-10 の lint の機構を置く（根の Cargo.toml の workspace の lint の表に tsuzuri の crate で違反が 0 の 5 つ〔unused_must_use・todo・unimplemented・exit・dbg_macro〕を deny で置き、tsuzuri の 5 つの member が表を継ぎ、持ち込んだ folio は除外の表の R-10 の行の間は継がない・根の clippy.toml に規則の行 R-4 の関数の行と複雑度の閾値と歯の範囲の例外 5 つを置く・xtask の新しい歯 klint と filter の語の写しの file・面の歯 wstrip の見出しの一覧）
+        req: ["NFR3"]
+        section: "6"
+        write-set: ["Cargo.toml", "+clippy.toml", "crates/tsuzuri-contract/Cargo.toml", "crates/tsuzuri-core/Cargo.toml", "crates/tsuzuri-boundary/Cargo.toml", "crates/tsuzuri-surface/Cargo.toml", "xtask/Cargo.toml", "crates/tsuzuri-surface/tests/wstrip.rs", "+xtask/tests/klint.rs", "+xtask/tests/filter-words.txt"]
+        verify: ["cargo nextest run -p xtask --test klint --no-tests=fail klint_", "cargo nextest run -p tsuzuri-surface --test wstrip --no-tests=fail wstrip_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: '(1) repo の根の Cargo.toml の字 [workspace.lints で始まる行は [workspace.lints.rust] と [workspace.lints.clippy] のこの順の 2 つで、表の鍵と値は rust が unused_must_use の deny、clippy が todo・unimplemented・exit・dbg_macro の deny のこの順で、歯の file の一覧 ENABLED の 5 つの lint を一覧 MAP の表と level で並べた列と同じで、ENABLED の lint はどれも MAP の中（歯 klint_workspace_table） (2) 一覧 MAP の 18 の lint の拠りの語のうち字 P- と R- で始まらない語の集合は、design-intent/rules.yaml の行 R-10 の value の字を字 ・ で割った 12 の語（unwrap・expect・panic・todo・unimplemented・unreachable・process の exit・slice の添字・debug の macro（dbg）・直接の stdout と stderr の print・使わない must-use の値・unsafe（forbid））と同じ（歯 klint_r10_words_match_rule） (3) 根の clippy.toml の注と空の行を除いた行の鍵と値は、too-many-lines-threshold が行 R-4 の value の字 関数 の後の数（60）・cognitive-complexity-threshold が字 複雑度 の後の数（15）・allow-unwrap-in-tests・allow-expect-in-tests・allow-panic-in-tests・allow-indexing-slicing-in-tests・allow-print-in-tests が true のこの順の 7 つだけで、根に .clippy.toml が無く、根の members の各 dir とその上の根までの dir に clippy.toml も .clippy.toml も無い（歯 klint_clippy_conf_copies_rule_r4） (4) R-4 の数の読みは value の字の語の後の空白の次の十進（字 , は飛ばす）で、字 1 module 1,500 行 以下・関数 60 行 以下と複雑度 15 以下と引数 5 以下 から 関数 60・複雑度 15・引数 5・module 1500 を読み、数の無い語と 2 度在る語は読まない（歯 klint_r4_number_reads_value） (5) 根の members の 6 つの dir の manifest のうち、除外の表 carry-exclusions.toml の規則 R-10 の行の path が名指す folio2/crates/folio は字 [lints で始まる行を持たず、ほかの 5 つは字 [lints で始まる行が [lints] の 1 つだけでその節は workspace = true の 1 行だけ（歯 klint_members_follow_carry_table） (6) 面の歯で、根の Cargo.toml の表の見出しは名の順に profile.dev.package.folio・profile.release・workspace・workspace.dependencies・workspace.lints.clippy・workspace.lints.rust・workspace.package の 7 つ（歯 wstrip_release_profile_keys） (7) 歯の file xtask/tests/klint.rs の test の fn は 6 つで、名はどれも klint_ で始まり、名から klint_ を除いた字は xtask/tests/filter-words.txt の字 # で始まる行と空の行を除いた 325 語（起草の時の main 4ad0b18f の契約表の verify の最後の字）のどれも含まない（歯 klint_own_names_clean）'
+        depends: []
+      - id: k-lint-tests-face
+        title: '面の crate の統合の歯の crate の根 139 の頭の //! の行の直後に行 #![cfg(test)] を置き（根の clippy.toml の歯の範囲の例外が #[test] の外の手にも効く・条 P-24.3）、xtask の歯 klint_test_roots_cfg_test を一覧 SWEPT〔面の crate の 1 つ〕で置く（面の crate の tests/ と xtask の歯 klint だけ）'
+        req: ["NFR3"]
+        section: "7"
+        write-set: ["crates/tsuzuri-surface/tests/", "xtask/tests/klint.rs"]
+        verify: ["cargo nextest run -p xtask --test klint --no-tests=fail klint_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: '(1) 根の members のうち、歯の file の一覧 SWEPT（crates/tsuzuri-surface の 1 つ）に在り除外の表の R-10 の行が名指さない member の、tests/ の直下の字 .rs で終わる file と tests/<dir>/main.rs は、頭の字 //! で始まる行の続きの直後の行が #![cfg(test)] で、行 #![cfg(test)] を 1 つだけ持ち、見た file は 1 つ以上（歯 klint_test_roots_cfg_test） (2) 歯の file xtask/tests/klint.rs の test の fn は 7 つで、名はどれも klint_ で始まり、名から klint_ を除いた字は xtask/tests/filter-words.txt の 325 語のどれも含まない（歯 klint_own_names_clean）'
+        depends: ["k-lint-base"]
+      - id: k-lint-tests
+        title: '契約・中核・境界の crate と xtask の統合の歯の crate の根 139 に行 #![cfg(test)] を置き、workspace の lint の表に unwrap_used と panic を deny で足し、歯 klint_test_roots_cfg_test が除外の表の R-10 の行が名指さない全部の member を見る（根の Cargo.toml・3 つの crate の tests/・xtask の 6 つの歯の file だけ）'
+        req: ["NFR3"]
+        section: "8"
+        write-set: ["Cargo.toml", "crates/tsuzuri-contract/tests/", "crates/tsuzuri-core/tests/", "crates/tsuzuri-boundary/tests/", "xtask/tests/carry.rs", "xtask/tests/cishard.rs", "xtask/tests/deny.rs", "xtask/tests/retire.rs", "xtask/tests/tlic.rs", "xtask/tests/klint.rs"]
+        verify: ["cargo nextest run -p xtask --test klint --no-tests=fail klint_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: '(1) repo の根の Cargo.toml の表の鍵と値は、rust が unused_must_use の deny、clippy が unwrap_used・panic・todo・unimplemented・exit・dbg_macro の deny のこの順で、歯の file の一覧 ENABLED の 7 つの lint を一覧 MAP の表と level で並べた列と同じ（歯 klint_workspace_table） (2) 根の members のうち除外の表の R-10 の行が名指さない 5 つの member（crates/tsuzuri-contract・crates/tsuzuri-core・crates/tsuzuri-boundary・crates/tsuzuri-surface・xtask）の、tests/ の直下の字 .rs で終わる file と tests/<dir>/main.rs は、頭の字 //! で始まる行の続きの直後の行が #![cfg(test)] で、行 #![cfg(test)] を 1 つだけ持ち、見た file は 1 つ以上（歯 klint_test_roots_cfg_test） (3) 歯の file xtask/tests/klint.rs の test の fn は 7 つで、名はどれも klint_ で始まり、名から klint_ を除いた字は xtask/tests/filter-words.txt の 325 語のどれも含まない（歯 klint_own_names_clean）'
+        depends: ["k-lint-tests-face"]
   - n: 3
     type: prose
     title: 行 e-reason-id — 問いを閉じる理由の裁定 id の後ろを半角の空白で区切る
@@ -130,5 +157,74 @@ sections:
       流す時と順。depends は同じノートの行 k-tz-entry（入口 folio::entry::run と NAMES と tz の口を使う）。書く file は行 k-tz-entry と重ならない。新しい歯の file tests/tzpar.rs の頭の説明の直後に #![cfg(test)] を置く（行 k-tz-entry の節と同じ）。
 
       範囲の外。席の道具の切り替えの前の、道具の pin（外の固定の folio）と tz の口の出力の byte の比べ（判断の記録 ADR-18 の決定 (2)・席の手）。check --proposed の byte の一致。
+  - n: 6
+    type: prose
+    title: 行 k-lint-base — 規則の行 R-10 の lint の機構を置き、R-10 と R-4 を tsuzuri と持ち込んだ folio に当てる段を並べる
+    body: |
+      在りかの main は 214118b4。起草 w43a が main 4ad0b18f の写しで試作した（この行が書く file は 4ad0b18f から 214118b4 まで変わっていない）。書く file は write-set の 10（根の Cargo.toml と新しい clippy.toml・tsuzuri の 5 つの member の manifest・面の歯 wstrip.rs・xtask の新しい歯の file klint.rs と filter の語の写しの file filter-words.txt）。
+
+      なぜ。条 P-24.1 は規則の行 R-10 の書き方を workspace の lint で deny にすると言い、条 P-22.1 は規則の行 R-4 の上限を CI が実測して落とすと言う。どちらも機構は M1（まだ無い）で、tsuzuri は R-10 の lint も R-4 の数えも置いていない（行 k-join-folio の 30 節）。持ち込んだ folio への 2 つの規則は除外の表 carry-exclusions.toml の R-4 と R-10 の行（裁定 t3-hub.67.4:20260929T0058Z-1）で外していて、外す行は k-size-folio と k-lint-folio（計画 surface-plan の 6 節）。表の行を消すには、先に tsuzuri の全体に機構が要る。
+
+      今の数（main 4ad0b18f・clippy 1.98.1・器の clippy.toml と同じ閾値と歯の範囲の例外・R-10 と R-4 の関数の粒度の lint を警告で撃ち、字の位置で重ねない数・起草 w43a の measure.sh と count-lints2.py）。全部で 4,759。tsuzuri の 5 つの member（契約・中核・境界・面の crate と xtask）の歯でない code は、R-10 が 266（slice の添字 160・直接の stderr 63・直接の stdout 32・expect 11）、関数の粒度が 47（行 38・引数 5・複雑度 1 と build.rs の行 3）。統合の歯の file は、R-10 が 2,182（expect 1,490・panic 553・添字 128・unwrap 5・unreachable 5・unsafe 1）、関数の粒度が 283（複雑度 146・行 124・引数 13）。持ち込んだ folio の歯でない code は R-10 が 280・関数の粒度が 115（起草 w33a の見積りと同じ）、歯の file は R-10 が 1,491・関数の粒度が 63。unused_must_use・todo・unimplemented・exit・dbg_macro は全部の member で 0。R-4 の関数の粒度でない 3 つ（1 module の行数・core の総行数・歯と source の比）は、器の xtask の数え方（crate の src の中だけ）なら今の木で上限の内。
+
+      段の並び（起草の決め）。R-10 の lint は、tsuzuri の 5 つの member で違反が 0 になった lint から順に、根の 1 つの表 [workspace.lints] に deny（unsafe_code と R-4 の 3 つは forbid）で足す。直す行と表に足す行は同じ行にする。持ち込んだ folio は、除外の表に R-10 の行が在る間は表を継がない（歯が表の行を読んで member ごとに見る・表に読み手ができる）。順は、(1) この行（違反 0 の 5 つ・clippy.toml・歯）→ (2) k-lint-tests-face と (3) k-lint-tests（統合の歯の crate の根に #![cfg(test)] を置き unwrap_used と panic を足す）→ 後の行（起草していない）: 直接の print を 1 つの出力の手（理由つきの expect の属性・器の境界の main の emit と同じ形）に寄せ expect と unreachable と unsafe と allow の属性を直して print_stdout・print_stderr・expect_used・unreachable・unsafe_code・allow_attributes・allow_attributes_without_reason を足す行（約 110 か所・M）、slice の添字を直して indexing_slicing を足す行（中核 66・面 52・境界と xtask 42・M の 2〜3 行）、引数を 5 以下にして clippy.toml に引数の閾値を足し too_many_arguments を足す行（18・folio の 32 は folio の dir の clippy.toml で既定のままにする）、関数の行と複雑度を直して too_many_lines と cognitive_complexity を足す行（165 と 147・歯の関数が多い・群ごとに 6〜10 行）。tsuzuri の表が全部そろった後に、folio の R-10 の直し（統合の歯の根 65 の #![cfg(test)]・添字 208・print 61 ほか・3〜4 行）の最後の行 k-lint-folio が除外の表の R-10 の行を消して folio に表を継がせ（R-4 の lint を除いた写し）、folio の関数の粒度の直し（178・6〜8 行）の最後の行 k-size-folio が R-4 の行を消す。R-4 の関数の粒度でない 3 つを xtask の check で数える段は後の行で、R-4 の数える範囲（1 module と歯と source の比に tests/ の下を入れるか）の持ち主の答えの後に置く。その段も除外の表の R-4 の行を読んで folio を数えず、行が消えると数える。
+
+      今の数を上限にして片方向に下げる形（ratchet）を採らない理由。(a) 数の上限は、今の違反をその数まで許す新しい仕組みで、条 N-3.1 の例外の仕組みに近く（条 P-25.4 が歯に禁じる落ちたままの台帳と同じ形）、R-4 の上限を 0 から今の数へ緩めるので条 P-22.3 の A-2 と持ち主の裁定が要る。(b) 器の便は design-intent/ を書かない見込み（器の path の種別の宣言で design-intent/ は設計意図・今までの契約の行の write-set に design-intent/ の下は無い）なので、規則の表に値を置く条 P-28 の R-31〜R-33 の運びでは、直す便と同じ commit で値を下げられず、席の後の commit まで緩みが残る。(c) lint ごとの数を数える段は clippy の JSON の読みと 2 度目の clippy を要り、CI の時間（規則の行 R-5 の 5 分の近く）を延ばす。代価は、表に入る前の lint の違反が直すまでの間に増えうること（今の M1 のまま）と、表に足す行の着地の前に別の行が同じ lint の違反を足すとその行が門で落ちること（直しの行は小さく、着地の main で数え直す）。
+
+      条 N-3.1 との関係。この段の並びは例外の仕組みを足さない。表に入った lint は全部の tsuzuri の member に deny で効き、無効化の旗も今回だけの口も無い。表に入っていない lint は、条 P-24 と P-22 の機構がまだ無い M1 の残りで、この行が足す例外ではない。持ち込んだ folio の外しは、持ち主の承認済みの除外の表の行で、歯がその行を読むだけで行を足さない。歯の範囲の例外は条 P-24.3 の後半のとおり lint の設定（clippy.toml の 5 つ）で宣言し、code の例外は条 P-24.3 の前半のとおり理由を持つ expect の属性だけにする（allow の属性を禁じる lint は後の行が足す）。
+
+      形（表）。根の Cargo.toml の [workspace.dependencies] の後に [workspace.lints.rust]（unused_must_use を deny）と [workspace.lints.clippy]（todo・unimplemented・exit・dbg_macro を deny）を足し、注の 3 行に拠りと段の並びと folio の外しを書く。tsuzuri の 5 つの member の manifest に [lints] と workspace = true を足す。folio の manifest は変えない。
+
+      形（clippy.toml）。根に置く。鍵は too-many-lines-threshold（60）・cognitive-complexity-threshold（15・どちらも R-4 の値の写し）と、allow-unwrap-in-tests・allow-expect-in-tests・allow-panic-in-tests・allow-indexing-slicing-in-tests・allow-print-in-tests（歯の範囲の例外・R-10 の 5 つの書き方）。引数の閾値は置かない。too_many_arguments は clippy の既定で効く lint で、閾値 5 を置くと今の違反 50（tsuzuri 18・folio 32）で xtask の check の clippy が落ちるため、直す行が足す。器の clippy.toml の allow-useless-vec-in-tests は R-10 の書き方でなく既定の lint を歯で緩めるので置かない。clippy は member の dir から上へ最初の clippy.toml を読むので、member の dir と根までの間に別の file を置かない（歯で見る）。
+
+      形（歯）。xtask/tests/klint.rs は外の依存を使わず repo の根からの相対の path で字を読む。一覧 MAP は表に置いてよい 18 の lint（R-10 の 13・条 P-24.3 の 2・R-4 の 3）と表と level と拠りの語を持ち、R-10 の語の集合を rules の file の行 R-10 の value と照らす。一覧 ENABLED は今の表の lint で、表に足す行がこの一覧も直す（xtask の骨組みの歯の直接依存の一覧と同じ運び）。filter の語は起草の時の main の 325 語を file xtask/tests/filter-words.txt に 1 行 1 語で写し、この行の歯が読む（後の行の歯も読んでよい）。面の歯 wstrip_release_profile_keys の見出しの閉じた一覧に workspace.lints.clippy と workspace.lints.rust を足す（歯の名とほかの字は変えない）。
+
+      今の字（main 4ad0b18f）。根の Cargo.toml の見出しは workspace・workspace.package・workspace.dependencies・profile.release・profile.dev.package.folio の 5 つで、[workspace.lints] と clippy.toml は無い。どの member の manifest も [lints] を持たない。lint の属性は、folio の src の #![allow(dead_code)] 3 つと #[allow(…)] 4 つ・契約の歯の tests/common/mod.rs の #![allow(dead_code)]・folio の歯の 5 つの file の #[allow(dead_code)] 8 つ。xtask の check の clippy の段は clippy --workspace --all-targets -- -D warnings と面の wasm の 1 段で、manifest の [lints] を読む（CHECK_STEPS は変えない）。
+
+      試作と噛み。main 4ad0b18f の写しに当てた木で、歯 klint_ の 6 本と wstrip_ の 3 本が緑、clippy の 2 段が緑。この行と次の 2 行を積んだ木で xtask の check（分けない全部）は rc 0。書く file は write-set の 10 で閉じる（試作の diff 21,817 byte）。変異（表から dbg_macro を外す・todo を warn にする・表 rustdoc を足す・関数の閾値を 70 にする・useless-vec の例外を足す・中核の dir に clippy.toml を置く・folio に表を継がせる・xtask の継ぎを外す・R-10 の語を替える・R-4 の数を最初の 1 つで読む・歯の名に filter の語 graph_・面の歯の見出しから lint の表を外す・契約の crate の src に todo を置いて clippy を撃つ）で、done の各歯と clippy の段が落ちた（起草 w43a の bite.py と results-lint3.json）。
+
+      filter の語。接頭辞 klint_ は main 4ad0b18f の 325 語のどれとも部分の字として重ならず、今の木の歯の名に字 klint_ を持つものは無い。wstrip_ は着地済みの語。
+
+      流す時と順。depends は空。行 k-lint-tests-face がこの行の後（depends）。R-4 の数えの段の後の行も filter の語の file を読むのでこの行の後。この行の後、tsuzuri の member に todo・unimplemented・exit・dbg_macro の書き方と使わない must-use の値を足す行は clippy の段で落ちる（今どの行も使っていない）。
+
+      範囲の外。表に足していない lint の違反の直し（後の行）。R-4 の 1 module・core の総行数・歯と source の比の数え（後の行・R-4 の範囲の持ち主の答えの後）。folio の lint（k-lint-folio）。器の core と境界の crate の上限（規則の行 R-4 と R-29 が名指す器の行・器の code は tsuzuri に無い）。条 P-24.4 と P-24.5（型の柵・審査が見る）。憲法の条 P-22 と P-24 の機構の欄 live の M1 は、最後の行の着地の後に席が直す。
+
+  - n: 7
+    type: prose
+    title: '行 k-lint-tests-face — 面の crate の統合の歯の crate の根に #![cfg(test)] を置く'
+    body: |
+      在りかの main は 214118b4 に同じノートの行 k-lint-base を当てた木。起草 w43a が main 4ad0b18f の写しで試作した。書く file は面の crate の tests/ の直下の 139 の .rs と、xtask の歯の file klint.rs。
+
+      なぜ。根の clippy.toml の歯の範囲の例外（allow-unwrap-in-tests ほか 5 つ）は、#[test] の関数と cfg(test) の中にだけ効き、統合の歯の file の #[test] の外の手（fixture を組む関数など）には効かない。そこで R-10 の unwrap・expect・panic・添字・print は歯の file で 2,182 か所に当たる（行 k-lint-base の節）。器（scribe2）は手ごとに理由つきの #[expect] を 310 置いたが、tsuzuri の歯の file は 279 あり手が多い。統合の歯の crate は cfg(test) の時だけ組まれるので、crate の根の頭に #![cfg(test)] を置いても組まれる code は変わらず、clippy は crate の全部を cfg(test) の中と読み、歯の範囲の例外が手にも効く（写しの歯の file 1 つで 46 か所が 0 になり、全部の根に置くと tsuzuri の歯の R-10 は 2,182 から unreachable 5 と unsafe 1 の 6 になった）。歯の範囲の例外は lint の設定（clippy.toml）が宣言し（条 P-24.3 の後半）、#![cfg(test)] はその file が歯であることを書くだけで lint を黙らせる属性ではない。
+
+      割り方。全部の根の差分は 177,025 byte で審査の上限（150,000 byte）を越えるので、面の crate の 139（この行・87,767 byte）と、残りの 139 と表の足し（行 k-lint-tests・91,493 byte）に割る。この行は表を変えない。
+
+      形。各 file の頭の字 //! で始まる行の続きの直後に #![cfg(test)] の 1 行を足す（起草 w43a の add-cfg-test.py・既に持つ file は触らない）。xtask の歯の file に歯 klint_test_roots_cfg_test と一覧 SWEPT（crates/tsuzuri-surface の 1 つ）を足す。歯は根の members のうち SWEPT に在り除外の表の R-10 の行が名指さない member の tests/ の直下の .rs と tests/<dir>/main.rs を見て、頭の //! の行の続きの直後の行が #![cfg(test)] でその行が 1 つだけであることを見る。write-set は面の crate の tests/ を dir の形（字 / で終わる項目）で書く（139 の file を並べない・tests/snapshots と fixtures は書かない）。
+
+      今の字（main 4ad0b18f）。面の crate の tests/ の直下の .rs は 139 で、どれも #![cfg(test)] を持たない。harness を切った歯（[[test]] の harness = false）は workspace に無い（cfg(test) が立たない歯の crate は無い）。
+
+      試作と噛み。行 k-lint-base の上に当てた木で、歯 klint_ の 7 本が緑（統合の歯の crate は cfg(test) の時だけ組まれるので、歯の本数は変わらない見込み・3 行を積んだ木の歯は 2,936 本）。3 行を積んだ木で xtask の check は rc 0。書く file は write-set の中で閉じる。変異（歯の根から #![cfg(test)] を外す・2 度書く・SWEPT を空にする・歯の名に filter の語 lstore_）で、done の各歯が落ちた。
+
+      流す時と順。depends は k-lint-base（歯の file klint.rs を足す行）。行 k-lint-tests がこの行の後。この行の着地の後に面の crate へ歯の file を足す行は、頭に #![cfg(test)] を置く（歯が名指して落とす）。起草済みで着地の前の行が面の歯の file を足すなら、その行の起草者に 1 行の足しを頼む。
+
+      範囲の外。表への lint の足し（行 k-lint-tests）。folio の歯の file（k-lint-folio）。
+
+  - n: 8
+    type: prose
+    title: '行 k-lint-tests — 残りの統合の歯の crate の根に #![cfg(test)] を置き、表に unwrap_used と panic を足す'
+    body: |
+      在りかの main は 214118b4 に同じノートの行 k-lint-base と k-lint-tests-face を当てた木。起草 w43a が main 4ad0b18f の写しで試作した。書く file は根の Cargo.toml と、契約・中核・境界の crate の tests/ の直下の .rs（11・49・74）と、xtask の tests/ の 6 つの歯の file（頭の行を足すのは 5 つ・klint.rs は歯の直し）。
+
+      なぜ。行 k-lint-tests-face の節のとおり。この行で tsuzuri の 5 つの member の統合の歯の crate の根の全部（279）が #![cfg(test)] を持ち、歯の file の unwrap と panic が 0 になる。歯でない code の unwrap と panic は今 0 なので、表に unwrap_used と panic を deny で足す。
+
+      形。各 file の頭の //! の行の続きの直後に #![cfg(test)] を足す。xtask の新しい歯の file klint.rs は行 k-lint-base で既に持つ。根の Cargo.toml の [workspace.lints.clippy] の頭に unwrap_used と panic を deny で足し、歯の一覧 ENABLED を 7 つにする。歯 klint_test_roots_cfg_test の一覧 SWEPT を消し、除外の表の R-10 の行が名指さない全部の member を見る。write-set は 3 つの crate の tests/ を dir の形で、xtask の 6 つの file を名で書く。
+
+      今の字（main 4ad0b18f に前の 2 行を当てた木）。表は unused_must_use・todo・unimplemented・exit・dbg_macro。契約の歯の tests/common/mod.rs は歯の crate の根でない module で、根の #![cfg(test)] が覆う（この行では書かない）。
+
+      試作と噛み。前の 2 行の上に当てた木で、歯 klint_ の 7 本が緑、clippy の 2 段が緑、3 行を積んだ木で xtask の check は rc 0。試作の diff は 91,493 byte。変異（境界の歯の根から #![cfg(test)] を外す・中核の歯の根の #![cfg(test)] を use の行の後へ動かす・表から unwrap_used を外す・ENABLED から panic を外す・境界の歯の根から #![cfg(test)] を外して clippy を撃つ）で、done の各歯と clippy の段が落ちた。
+
+      流す時と順。depends は k-lint-tests-face。同じノートの行 e-reason-id は境界の crate の tests/ に新しい歯の file rsid.rs を足し、server_batch.rs と bhalf.rs を書く。e-reason-id が先に着地すれば、この行はその根にも #![cfg(test)] を足す（done は着地の時の木の全部の根を見る・write-set の dir の形がその file を覆う）。この行が先なら、e-reason-id の新しい file の頭に #![cfg(test)] が要る。この行の着地の後に tsuzuri の member へ歯の file を足す行は頭に #![cfg(test)] を置き、歯でない code に unwrap と panic を書く行は clippy の段で落ちる（起草済みで着地の前の行が在れば、席が起草者に知らせる）。
+
+      範囲の外。歯の file の unreachable 5 と unsafe 1 と契約の歯の allow の属性（print の行が直す）。folio の歯の file。
 
 figures: []
