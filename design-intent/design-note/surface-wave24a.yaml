@@ -2,14 +2,14 @@
 # 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave24a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave24a.toml#<行 id>。
 meta:
   id: surface-wave24a
-  title: 第 24 波 a — folio の口を tz の subcommand にする（tz 化）と、持ち込んだ folio への規則の当てと、面の server の軽さとメモリの直し
-  version: v0.1
+  title: 第 24 波 a — folio の口を tz の subcommand にする（tz 化）と、持ち込んだ folio への規則の当てと、面の server の軽さとメモリの直し、問いを閉じる理由の裁定 id を器の close の理由の読み手が読める形にする
+  version: v0.2
   status: effective
   generated: 2026-09-30
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: ノート surface-wave23b（32 行の全部が着地・規則の行 R-32 の上限）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-09-30）は目的と空の契約表だけを置いた（行は起草の後に足す）。
+  note: ノート surface-wave23b（32 行の全部が着地・規則の行 R-32 の上限）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-09-30）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-09-30）は、1 行目 e-reason-id（境界の crate の server・S・depends は空）と 3 節を足した（起草 w46a の字を、席が main ea06f7a3 に当てた）。計画だけの行ではないので規則の行 R-33 は書かない。
 
 sections:
   - n: 1
@@ -17,9 +17,46 @@ sections:
     title: 目的
     body: |
       持ち込んだ folio を tsuzuri の 1 つの binary tz の下に入れ（要件 FR17・受入 AC14・判断の記録 ADR-8・計画だけの行 k-parity を割った行）、持ち込んだ code に tsuzuri の規則（R-4・R-10）を当て、持ち込んだ木の中の床を見張る。あわせて、面の server の軽さ（規則の行 R-34・判断の記録 ADR-23 の撤退の条件）とメモリ（RSS）の直しの行を置く。
+
+      1 行目 e-reason-id（境界の crate の server の ruling と batch・歯 rsid）は、面の server が問いを閉じる理由と開き直す理由を、裁定 id の後ろを半角の空白 1 つで区切る形（裁定 <id> 束 <束の id>・裁定 <id> 取り消す = <前の id>）にする。器の close の理由の読み手は空白で割った 2 語目だけを裁定 id と読むので、今の形（id の直後に字 ・）では裁定 id が値の形の外に落ちる（器の席の答え 2026-09-30）。器の局面の出力の切り替えより前に着地させる。
   - n: 2
     type: contract-table
     title: 契約表
-    rows: []
+    rows:
+      - id: e-reason-id
+        title: 面の server が問いを閉じる理由と開き直す理由を、裁定 id の後ろを半角の空白 1 つで区切る 裁定 <id> 束 <束の id> と 裁定 <id> 取り消す = <前の id> の形にし、器の close の理由の読み手が 2 語目を裁定 id と読めるようにする（境界の crate の server の ruling と batch だけ）
+        req: ["FR6", "FR7"]
+        section: "3"
+        write-set: ["crates/tsuzuri-boundary/src/server/ruling.rs", "crates/tsuzuri-boundary/src/server/batch.rs", "+crates/tsuzuri-boundary/tests/rsid.rs", "crates/tsuzuri-boundary/tests/server_batch.rs", "crates/tsuzuri-boundary/tests/bhalf.rs", "crates/tsuzuri-boundary/tests/rvk.rs", "=crates/tsuzuri-boundary/tests/server_ask.rs", "=crates/tsuzuri-boundary/tests/eretry.rs", "=crates/tsuzuri-boundary/tests/dretry.rs", "=crates/tsuzuri-boundary/tests/fserve.rs", "=crates/tsuzuri-boundary/tests/aown.rs", "=crates/tsuzuri-boundary/tests/areread.rs"]
+        verify: ["cargo nextest run -p tsuzuri-boundary --test rsid --no-tests=fail rsid_", "cargo nextest run -p tsuzuri-boundary --test server_batch --no-tests=fail server_batch_", "cargo nextest run -p tsuzuri-boundary --test bhalf --no-tests=fail bhalf_", "cargo nextest run -p tsuzuri-boundary --test rvk --no-tests=fail rvk_", "cargo nextest run -p tsuzuri-boundary --test server_ask --no-tests=fail server_ask_", "cargo nextest run -p tsuzuri-boundary --test eretry --no-tests=fail eretry_", "cargo nextest run -p tsuzuri-boundary --test dretry --no-tests=fail dretry_", "cargo nextest run -p tsuzuri-boundary --test fserve --no-tests=fail fserve_", "cargo nextest run -p tsuzuri-boundary --test aown --no-tests=fail aown_", "cargo nextest run -p tsuzuri-boundary --test areread --no-tests=fail areread_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) 境界の server の ruling の pub const REASON_HEAD は字 裁定 で、pub fn reason は、続きが None なら 裁定 fx-r.1:20260928T0441Z-1 を、続きが 束 batch:20260928T0441Z-1 なら 裁定 fx-r.1:20260928T0441Z-1 束 batch:20260928T0441Z-1 を、id fx-r.1:20260928T0441Z-2 で続きが 取り消す = fx-r.1:20260928T0441Z-1 なら 裁定 fx-r.1:20260928T0441Z-2 取り消す = fx-r.1:20260928T0441Z-1 を返し、3 つとも空白で割った 1 語目が 裁定 で 2 語目が渡した裁定 id そのもの。前の束と取り消しの形（id の直後に字 ・）は、2 語目が字 ・ を含み、どちらの id とも違う（歯 rsid_reason_forms） (2) 偽の bd と偽の bdw（配達の先は無し）で、受付の時刻 1790570490 に、1 問の裁定の受付 ruling の pub fn accept は Recorded（裁定 id fx-r.1:20260928T0441Z-1）を返して bdw を 2 回撃ち、2 回目の argv は close・fx-r.1・--reason=裁定 fx-r.1:20260928T0441Z-1 の 3 語。束の受付 batch の pub fn accept（問い fx-r.2 と fx-r.3）は束の id batch:20260928T0441Z-1 で bdw を 4 回撃ち、行ごとの結果は Written（裁定 id は <問い>:20260928T0441Z-1）で、行ごとの 2 回目の argv は close・問いの id・--reason=裁定 <行の裁定 id> 束 batch:20260928T0441Z-1 の 3 語。どの理由も空白で割った 2 語目が行の裁定 id（歯 rsid_writes_split_id） (3) 閉じた問い fx-r.4（close_reason は前の形 裁定 fx-r.4:20260928T0100Z-1・束 batch:20260928T0100Z-1）と fx-r.5（新しい形 裁定 fx-r.5:20260928T0100Z-1 束 batch:20260928T0100Z-1）のどちらでも、その裁定の取り消し ruling の pub fn revoke は Recorded（id は <問い>:20260928T0441Z-1・reopened_only は偽）を返し、bdw の 2 回目の argv は reopen・問いの id・--reason=裁定 <新しい id> 取り消す = <前の id> の 3 語で、理由の 2 語目は新しい id（歯 rsid_old_form_revokes） (4) ruling.rs は字 reason(&id, を 2 度、batch.rs は字 reason(id, を 1 度持ち、2 つの file のどちらも字 {id}{ID_END}束 と字 {id}{ID_END}{REVOKES} を持たない（歯 rsid_src_text）。rsid.rs の歯の名は 5 本とも rsid_ で始まり、filter の語（main 4ad0b18f の contracts の verify の filter の語を畳んだ 247 語）のどれも部分の字として含まない（歯 rsid_own_names_clean） (5) 書き換えた着地済みの歯が通る（server_batch の fn row_argvs と bhalf の fn row_argvs が束の close の理由を 裁定 <行の裁定 id> 束 <束の id> で、rvk の fn reopen_argv が開き直しの理由を 裁定 <id> 取り消す = <前の id> で組む・server_batch_writes_rows_in_order・server_batch_write_failure_is_502_with_done_rows・bhalf_step_k_of_n・bhalf_resend_rest・rvk_writes_line_then_reopens・rvk_retry_reopens_only）。置き場だけの = の歯の全部も通る（xtask の check）
+        depends: []
+
+  - n: 3
+    type: prose
+    title: 行 e-reason-id — 問いを閉じる理由の裁定 id の後ろを半角の空白で区切る
+    body: |
+      在りかの main は ea06f7a3（起草の main 4ad0b18f から、この行が書く file を確かめてから当てる）。書く file は境界の crate の server の ruling.rs と batch.rs と、新しい歯の file の rsid.rs と、着地済みの歯の file の server_batch.rs・bhalf.rs・rvk.rs（期待の argv の字だけ）。
+
+      なぜ。器（scribe2）の席の答え（2026-09-30T05:1xZ）。器の close の理由の読み手（器の main 09197b21 の ledger/close_reason.rs の pub fn read）は、前後の空白を除き Unicode の空白で割った 1 語目を 9 つの頭と照らし、頭が 裁定 なら 2 語目だけを裁定 id の形（問い id の形 <問い id>:<年月日 T 時分 Z>-<n>・batch: の形・policy: の形）で読み、3 語目から後は読まない。tsuzuri の束の受付（batch.rs の fn accept）は問いを 裁定 <id>・束 <束の id> で閉じ、取り消し（ruling.rs の fn reopen）は問いを 裁定 <id>・取り消す = <前の id> で開き直す。空白で割ると 2 語目は id と字 ・ と次の語の頭をつないだ字になり、問い id の形の裁定 id は値の形の外に落ちる（数の欄が 1・束 のような字になる）。器が局面の出力（lifecycle.json・器の束 E の W4）へ切り替えた後に、tsuzuri が閉じた問いが misfit と判じられないように、器の読み手を変えずに解ける形へ直す（器の勧めの形）。
+
+      形。ruling.rs に pub const REASON_HEAD（字 裁定）と pub fn reason（裁定 id と続きの字の Option を受け、続きが無ければ 裁定 <id>、在れば 裁定 <id> <続き>・区切りは半角の空白 1 つ）を置き、1 問の裁定の close（fn accept）・取り消しの開き直し（fn reopen・続きは 取り消す = <前の id>）・束の close（batch.rs の fn accept・続きは 束 <束の id>）の 3 か所の理由をこの fn で組む。新しく書く理由は 裁定 <id>・裁定 <id> 束 <束の id>・裁定 <id> 取り消す = <前の id> の 3 形で、1 問の形の字は今と同じ。続きの字（束 の語と束の id・取り消す = と前の id）は今のまま残す（器の読み手は読まないが、台帳を人が読む時の手がかり）。notes の定型行（裁定 id = <id>・問い = … の形と、その欄の終わりの字 ・）は変えない。
+
+      前の形の読み。tsuzuri の中で close の理由を読むのは、中核の graph の check の fn landed（頭が landed か 着地 の理由だけを着地と読む）と、中核の pipeline の fn closed_reason（閉じた契約 bead の札の段の理由の字・空白の続きを 1 つに畳んだ頭の字）の 2 つだけで、どちらも裁定 id を引かない。効いている裁定と取り消しの判じ（契約の crate の surface の pub fn latest_ruling・pending_reopen・revocable）と配達（中核の delivery）と導出グラフの裁定の節点は、問いの notes の定型行だけを読み、close の理由を読まない。そのため、前の形で閉じた台帳の行（起草の時の台帳の export の写し .beads/issues.jsonl で、閉じた問いの理由は束の形 47 本・1 問の形 32 本）も今どおり読め、取り消しも同じに受ける（歯 rsid_old_form_revokes）。台帳の前の行は書き換えない。
+
+      今の字（main 4ad0b18f）。ruling.rs の fn accept は理由を format! の字 裁定 {id} で、fn reopen は format! の字 裁定 {id}{ID_END}{REVOKES}{} と req.ruling で、batch.rs の fn accept は format! の字 裁定 {id}{ID_END}束 {batch} で組む（ID_END はどちらの file も字 ・ の const）。着地済みの歯は、server_batch の fn row_argvs が 裁定 {ruling}・束 {batch} を、bhalf の fn row_argvs が 裁定 {ruling}・束 {batch_id} を、rvk の fn reopen_argv が 裁定 {id}・取り消す = {revokes} を期待の argv に組み、この行で字 ・ を半角の空白に書き換える。rvk の rvk_reopen_argv_and_wire と契約の crate の cform_ledger と snapshot の ledger.json は、LedgerWrite の argv と電文の形を字の見本で見るだけで server の理由を見ないので、前の形の見本のまま変えない。1 問の close を見る server_ask と eretry の期待の字 裁定 {id} は変わらない（server_ask_ruling_writes_twice と eretry_read_retries_then_writes は、1 問の理由の字が変わる変異で落ちる）。server_batch の fn row_argvs を使う歯のうち server_batch_id_counts_up_in_same_minute と server_batch_own_verbatim_or_batch_verbatim は notes の追記の argv だけを比べ、close の理由を見ない。着地済みの歯 dretry_spawns_use_pace と fserve_words_and_deliver は ruling.rs と batch.rs の字を読むが、この行の字（reason と REASON_HEAD）は数えない。
+
+      器の読み手での確かめ。器の main 3908279b（close の理由の読み手と、それが引く is_bead_id と epoch_of は 09197b21 から変わっていない）の close_reason.rs を起草の場の外の一時の crate に写し、台帳の接頭辞 t3 で掛けた。新しい 3 形（裁定 t3-hub.59.28:20260930T0215Z-1・同じ id に 束 batch:20260930T0215Z-1 を続けた形・別の id に 取り消す = <前の id> を続けた形）は Form::Ruling でそれぞれの id を返し、前の束と取り消しの形は Defect::Value(Head::Ruling) を返した。写した読み手の in-file の歯 7 本も緑。器の file は書いていない。
+
+      決めた幅（起草の決め）。(a) 区切りは器の勧めの半角の空白 1 つ（器の読み手は全角の空白でも割るが、勧めの字に揃える）。(b) 理由を組むのは ruling.rs の 1 fn に寄せ、batch.rs はそれを呼ぶ（束の close の理由の頭と区切りを 2 か所に書かない）。(c) 方針の受付（policy.rs の fn accept）が方針の問いを閉じる理由 方針 <id> は、器の 9 つの頭の外（器の読み手は Defect::UnknownHead）だが、器の席の答えが名指しておらず、頭を 裁定 にすると方針を承認として数えない決まり（要件 FR8）と食い違いうるので、この行では変えない（範囲の外）。
+
+      試作と噛み（起草 w46a）。main 4ad0b18f の写しにこの行を当てた木で撃った。書く file は write-set の書く file の 6 で閉じる（試作の diff 23,578 byte・足し 417 行・消し 10 行・src の増えは ruling.rs が 13 行・batch.rs が 0 行）。xtask の check は rc 0（歯 2,934 本）。変異 8（理由の区切りを字 ・ にする・束の close を前の字の形に戻す・取り消しの開き直しを前の字の形に戻す・続きの無い理由の末に空白を足す・理由の頭を別の字にする・束の close が束の id を落とす・1 問の close が理由を自前で組む・歯の file に filter の語を含む歯を足す）で、done の各歯が少なくとも 1 つの変異で落ちた。
+
+      filter の語。新しい接頭辞 rsid_ は、main 4ad0b18f の contracts の verify の filter の語（322 語・畳んで 247 語）のどれとも部分の字として重ならず、どの filter の語も rsid_ を含まない。
+
+      流す時と順。depends は空。器の局面の出力の切り替え（器の束 E の W4）より前に着地させる。この行の後に同じ ruling.rs か batch.rs を書く行は、この行の着地の後に当て直す。
+
+      範囲の外。方針の問いを閉じる理由（policy.rs の 方針 <id>・器の席に頭を照らしてから別の行で決める）。台帳に在る前の形の理由の書き換え。器の読み手の変更。notes の定型行の形。
 
 figures: []

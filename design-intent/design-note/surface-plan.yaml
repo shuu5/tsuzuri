@@ -377,6 +377,7 @@ sections:
       - {id: i-stage-guard, doc: surface-wave23b}
       - {id: i-board-win, doc: surface-wave23b}
       - {id: g-popup-app, doc: surface-wave23b}
+      - {id: e-reason-id, doc: surface-wave24a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
