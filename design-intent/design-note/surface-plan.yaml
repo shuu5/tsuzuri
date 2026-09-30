@@ -374,6 +374,7 @@ sections:
       - {id: t-ci-shard, doc: surface-wave23b}
       - {id: k-join-folio, doc: surface-wave23b}
       - {id: k-deny, doc: surface-wave23b}
+      - {id: i-stage-guard, doc: surface-wave23b}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
