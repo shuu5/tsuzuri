@@ -93,9 +93,16 @@ impl Sources {
 }
 
 /// pipeline の板（札は集めた台帳の字と event log の字から組み、event log が読めなければ「まだ分からない」・
+/// 札の段は器の局面の出力 `cases` も受けて中核の `board_with_cases` が決める・行 c-case-columns・
 /// 形の崩れの一覧は持った組から写し、組が無ければ「まだ分からない」）。
-pub fn pipeline(texts: &Texts, kept: Option<&Kept>, now: EpochSecs) -> PipelineBoard {
-    let mut board = tsuzuri_core::pipeline::board(&texts.ledger, &texts.events, now).board;
+pub fn pipeline(
+    texts: &Texts,
+    kept: Option<&Kept>,
+    cases: &tsuzuri_contract::case::CaseDoc,
+    now: EpochSecs,
+) -> PipelineBoard {
+    let mut board =
+        tsuzuri_core::pipeline::board_with_cases(&texts.ledger, &texts.events, cases, now).board;
     board.misfits = form::misfits(kept, now);
     board
 }

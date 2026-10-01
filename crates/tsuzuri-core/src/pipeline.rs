@@ -21,6 +21,11 @@
 //! 段と理由のままで ci は None。閉じていない bead（台帳が読めないときと台帳に無い bead も）の読みが `CI_STALLS` に在れば
 //! その段にし、段の理由は器の終端の detail の字のまま。ほかは段と理由のままで ci はその読み。Blocked と Queued の札の ci は None。
 //! 札の since は段を決めた最後の event の ts の時刻で、今を引かない（板の電文は今の時刻に依らない・経過は面が今から引く）。
+//! 器の RunStage の段 Blocked（承認待ち・器の局面 run-blocked）は段 Blocked の札にし、段の理由は detail の字にする。
+//! 走行の無い札の段は、器の局面の出力が読めてその契約の部品の局面が `QUEUED_PHASE` の時はその部品で決める
+//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
+//! 出力が読めないか部品が無いか局面が違う札は、開いた blocker が在れば Blocked・無ければ Queued で、理由と since は None
+//! （`queued_cards`）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,6 +34,7 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{
     Ci, Misfit, MisfitBead, PipelineBoard, PipelineCard, Reading, Stage,
 };
+use tsuzuri_contract::case::{CaseDoc, CasePart};
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::runs::{
@@ -104,6 +110,15 @@ pub struct Board {
     pub unmapped: u32,
 }
 
+/// 局面の出力の契約の部品の種類の字。
+pub const CONTRACT_PART: &str = "contract";
+
+/// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2）。
+pub const QUEUED_PHASE: &str = "contract-queued";
+
+/// 列の待ちの理由のうち相手を待つ語（板の Blocked の列・ほかの語は Queued の列・判断の記録 ADR-27 の決定 (6)）。
+pub const PARTNER_REASONS: [&str; 3] = ["dependency", "overlap", "reserved"];
+
 /// 器の event から板の段と段の理由（閉じた表・None は表に無い段）。
 /// kind は event の種類、stage は RunStage の段の名、detail は event の detail の字。
 pub fn stage_of(kind: &str, stage: Option<&str>, detail: &str) -> Option<(Stage, Option<String>)> {
@@ -118,6 +133,12 @@ pub fn stage_of(kind: &str, stage: Option<&str>, detail: &str) -> Option<(Stage,
         ("RunStage", Some("Gated")) => Stage::Gated,
         ("RunStage", Some("Reviewed")) if detail.starts_with(PASSED_VERDICT) => Stage::Running,
         ("RunStage", Some("Spawned" | "Implemented")) => Stage::Running,
+        ("RunStage", Some("Blocked")) => {
+            return Some((
+                Stage::Blocked,
+                (!detail.is_empty()).then(|| detail.to_string()),
+            ));
+        }
         ("RunStage", Some(s @ ("Failed" | "Stopped"))) => {
             let to = if s == "Failed" {
                 Stage::Failed
@@ -348,6 +369,22 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
     of_parsed(beads, read_events(events).as_deref(), now)
 }
 
+/// `board` と同じ板の走行の無い札の段と理由と since を、局面の出力 `cases` が読めれば、局面が `QUEUED_PHASE` の
+/// 契約の部品で決める（`queued_of`・部品が無いか局面が違う札は台帳の blocks の割りのまま・行 c-case-columns）。
+pub fn board_with_cases(ledger: &str, events: &str, cases: &CaseDoc, now: EpochSecs) -> Board {
+    let mut b = board(ledger, events, now);
+    if let (Reading::Known(cards), Reading::Known(parts)) = (&mut b.board.cards, &cases.parts) {
+        for card in cards.iter_mut().filter(|c| c.runs == 0) {
+            if let Some(part) = queued_part(parts, card.contract.as_str()) {
+                card.stage = queued_of(part.reason.as_deref());
+                card.reason.clone_from(&part.reason);
+                card.since = part.since;
+            }
+        }
+    }
+    b
+}
+
 /// 読んだ bead（None は台帳が読めない）と読んだ event log の値（None は event log が読めない）から板を組む。
 pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: EpochSecs) -> Board {
     let Some(events) = events else {
@@ -523,6 +560,22 @@ fn queued_cards(
             since: None,
             ci: None,
         });
+    }
+}
+
+/// 契約 `id` の部品のうち局面が `QUEUED_PHASE` のもの（部品は種類と id の組で 1 つ）。
+fn queued_part<'p>(parts: &'p [CasePart], id: &str) -> Option<&'p CasePart> {
+    parts
+        .iter()
+        .find(|p| p.part == CONTRACT_PART && p.id == id)
+        .filter(|p| p.phase == QUEUED_PHASE)
+}
+
+/// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・ほかの語と理由の無い部品は Queued）。
+pub fn queued_of(reason: Option<&str>) -> Stage {
+    match reason {
+        Some(word) if PARTNER_REASONS.contains(&word) => Stage::Blocked,
+        _ => Stage::Queued,
     }
 }
 
