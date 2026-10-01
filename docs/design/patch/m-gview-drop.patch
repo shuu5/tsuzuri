@@ -1,0 +1,2170 @@
+diff --git a/crates/tsuzuri-boundary/src/server/board.rs b/crates/tsuzuri-boundary/src/server/board.rs
+index a8e4eb456f52f4efb80738476acc1f7aec7ca51f..a6ec9ce2795e9f10199100a0e1a6053318084efa 100644
+--- a/crates/tsuzuri-boundary/src/server/board.rs
++++ b/crates/tsuzuri-boundary/src/server/board.rs
+@@ -4,7 +4,6 @@
+ //! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から・行 c-unref-lc）
+ //! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
+ //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
+-//! - GET /api/graph/view — 地図のグラフの眺め（GraphView・便 e-view）
+ //! - GET /api/around — 節点の近傍（AroundDoc・便 e-view）
+ //! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む・行 c-unref-lc）
+ //!
+@@ -18,8 +17,8 @@ use std::time::Instant;
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineBoard, Reading};
+ use tsuzuri_contract::graph::{
+-    AroundDoc, BeadAttr, Fold, GraphDoc, GraphSource, GraphView, InvariantCheck, RunAttr,
+-    SkippedEdges, Verdict,
++    AroundDoc, BeadAttr, Fold, GraphDoc, GraphSource, InvariantCheck, RunAttr, SkippedEdges,
++    Verdict,
+ };
+ use tsuzuri_contract::seat::SeatCard;
+ use tsuzuri_contract::stats::{LedgerStats, NextStep, UnreflectedList, UnreflectedRow};
+@@ -195,16 +194,6 @@ pub fn graph_outside(texts: &Texts, outside: Vec<Option<Outside>>) -> GraphDoc {
+     doc(&g, &invariants, &texts.summary)
+ }
+ 
+-/// 地図のグラフの眺め（導出グラフを組んで眺めの関数に渡す・便 e-view）。
+-pub fn view(texts: &Texts) -> GraphView {
+-    graph::view(&built(texts))
+-}
+-
+-/// 開く列を受けた地図のグラフの眺め（行 c-graph-fold）。
+-pub fn view_open(texts: &Texts, open: &[String]) -> GraphView {
+-    graph::view_open(&built(texts), open)
+-}
+-
+ /// 節点の近傍（中心の節点が無いか、段数が幅の外なら None・便 e-view）。
+ pub fn around(texts: &Texts, center: &str, steps: u8, fold: Fold) -> Option<AroundDoc> {
+     graph::around(&built(texts), center, steps, fold)
+diff --git a/crates/tsuzuri-boundary/src/server/routes/graphview.rs b/crates/tsuzuri-boundary/src/server/routes/graphview.rs
+deleted file mode 100644
+index 46be27d4d495ffbe9517328e5e2bdbb08906560f..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-boundary/src/server/routes/graphview.rs
++++ /dev/null
+@@ -1,27 +0,0 @@
+-//! GET /api/graph/view?open= — 地図のグラフの眺め（GraphView・便 e-view・開く列は行 c-graph-fold）。
+-
+-use tsuzuri_contract::wire;
+-use tsuzuri_core::graph::fold::open_list;
+-
+-use crate::server::http::{Request, Response};
+-use crate::server::route::{Entry, Key, Match};
+-use crate::server::{Shared, aged, board, json};
+-
+-pub(in crate::server) const ROUTE: Entry = Entry {
+-    key: Key {
+-        method: "GET",
+-        path: Match::Exact("/api/graph/view"),
+-    },
+-    handle: view,
+-};
+-
+-/// 眺め（query の open を字 , で分けた列を開く・無ければ空の列）。
+-fn view(req: &Request, shared: &Shared) -> Response {
+-    let open = req.query("open").map(|s| open_list(&s)).unwrap_or_default();
+-    let sources = &shared.sources;
+-    let (texts, stale) = sources.gather_held(true, true);
+-    aged(
+-        json(200, wire::encode(&board::view_open(&texts, &open))),
+-        stale,
+-    )
+-}
+diff --git a/crates/tsuzuri-boundary/tests/g3g7w.rs b/crates/tsuzuri-boundary/tests/g3g7w.rs
+index d4a03cfef521f41e2e45905dca7228d3c0225720..2b55aa532bd5810d3781d40a61d3f047373894fb 100644
+--- a/crates/tsuzuri-boundary/tests/g3g7w.rs
++++ b/crates/tsuzuri-boundary/tests/g3g7w.rs
+@@ -245,7 +245,7 @@ fn g3g7_failed_floor_is_unknown() {
+ }
+ 
+ #[test]
+-fn g3g7_doc_and_view_carry_edges() {
++fn g3g7_doc_carries_edges() {
+     let (index, ledger, events, rulings) = (
+         read("index.tsv"),
+         read("ledger.json"),
+@@ -284,8 +284,6 @@ fn g3g7_doc_and_view_carry_edges() {
+     for id in ["g-3", "g-7"] {
+         assert_eq!(verdict(&doc, id), Verdict::Pass, "{id}");
+     }
+-    let view = board::view(&texts);
+-    assert!(view.edges.iter().any(|e| e.edge_type == EdgeType::RuledBy));
+ 
+     let empty = Texts {
+         rulings: String::new(),
+@@ -293,12 +291,6 @@ fn g3g7_doc_and_view_carry_edges() {
+     };
+     let doc = board::graph(&empty);
+     assert_eq!(ruled(&doc.edges), 0);
+-    assert!(
+-        board::view(&empty)
+-            .edges
+-            .iter()
+-            .all(|e| e.edge_type != EdgeType::RuledBy)
+-    );
+     for id in ["g-3", "g-7"] {
+         assert_eq!(verdict(&doc, id), Verdict::Unknown, "{id}");
+     }
+diff --git a/crates/tsuzuri-boundary/tests/hbroute.rs b/crates/tsuzuri-boundary/tests/hbroute.rs
+index b26f474125a2a1941218d3921e2139334ba3bc05..6c6498e6c1f66191fe989f92bff40031bb669c92 100644
+--- a/crates/tsuzuri-boundary/tests/hbroute.rs
++++ b/crates/tsuzuri-boundary/tests/hbroute.rs
+@@ -112,7 +112,7 @@ fn hbroute_all_names_follow_dir() {
+ }
+ 
+ #[test]
+-fn hbroute_keys_cover_twelve_gets() {
++fn hbroute_keys_cover_eleven_gets() {
+     let keys: Vec<Key> = Route::ALL.iter().map(|r| r.key()).collect();
+     let wanted = [
+         Match::Exact("/api/ledger"),
+@@ -122,7 +122,6 @@ fn hbroute_keys_cover_twelve_gets() {
+         Match::Exact("/api/seat"),
+         Match::Exact("/api/account"),
+         Match::Exact("/api/graph"),
+-        Match::Exact("/api/graph/view"),
+         Match::Exact("/api/around"),
+         Match::Exact("/api/unreflected"),
+         Match::Exact("/api/questions"),
+@@ -135,6 +134,11 @@ fn hbroute_keys_cover_twelve_gets() {
+         };
+         assert!(keys.contains(&key), "口の鍵 {key:?} が無い");
+     }
++    let gone = Match::Exact("/api/graph/view");
++    assert!(
++        keys.iter().all(|k| k.path != gone),
++        "地図の眺めの口 {gone:?} が残る"
++    );
+ }
+ 
+ #[test]
+diff --git a/crates/tsuzuri-boundary/tests/lsnap.rs b/crates/tsuzuri-boundary/tests/lsnap.rs
+index b02a8867b916a9b37e9970d682108c4778604482..fb69e97f182b0b05839b962fa85207587aaf648b 100644
+--- a/crates/tsuzuri-boundary/tests/lsnap.rs
++++ b/crates/tsuzuri-boundary/tests/lsnap.rs
+@@ -161,8 +161,8 @@ const FILTERS: &[&str] = &[
+     "lidle_",
+ ];
+ 
+-/// 台帳を読む 10 の GET の口。
+-const ROUTES: [&str; 10] = [
++/// 台帳を読む 9 の GET の口。
++const ROUTES: [&str; 9] = [
+     "/api/ledger",
+     "/api/ledger/fx-hub.3",
+     "/api/metrics",
+@@ -170,7 +170,6 @@ const ROUTES: [&str; 10] = [
+     "/api/pipeline",
+     "/api/next",
+     "/api/graph",
+-    "/api/graph/view",
+     "/api/around?id=fx-hub.3",
+     "/api/unreflected",
+ ];
+@@ -427,8 +426,8 @@ fn lsnap_routes_call_no_bd() {
+         assert_eq!(reply.0, 200, "{route}: {}", reply.1);
+         before.push(reply.1);
+     }
+-    assert_eq!(place.calls(), 1, "順に撃った 10 の口");
+-    // 印を動かさずに字を替え、10 の口を同時に撃つ。
++    assert_eq!(place.calls(), 1, "順に撃った 9 の口");
++    // 印を動かさずに字を替え、9 の口を同時に撃つ。
+     place.bd_returns(&one());
+     let replies: Vec<(u16, String)> = thread::scope(|s| {
+         let handles: Vec<_> = ROUTES
+@@ -446,7 +445,7 @@ fn lsnap_routes_call_no_bd() {
+             assert_eq!(&reply.1, was, "{route}");
+         }
+     }
+-    assert_eq!(place.calls(), 1, "同時に撃った 10 の口");
++    assert_eq!(place.calls(), 1, "同時に撃った 9 の口");
+     assert_eq!(rows(&get(addr, "/api/ledger")), Some(8));
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/tests/nsumw.rs b/crates/tsuzuri-boundary/tests/nsumw.rs
+index fb577288c504ff9f014b70beb25430698d99db47..3a21b4eaa1f5235482fefb8a8505be068a25f48b 100644
+--- a/crates/tsuzuri-boundary/tests/nsumw.rs
++++ b/crates/tsuzuri-boundary/tests/nsumw.rs
+@@ -378,9 +378,6 @@ fn nsumw_routes_carry_fields() {
+         "A-1 は file が違う"
+     );
+ 
+-    let body = get(addr, "/api/graph/view");
+-    assert_eq!(body, encoded!(graph::view(&g)), "眺めの電文の字");
+-
+     let body = get(addr, "/api/around?id=R-25");
+     let want = graph::around(&g, "R-25", 2, Fold::None).expect("中心の節点");
+     assert_eq!(body, encoded!(want), "近傍の電文の字");
+diff --git a/crates/tsuzuri-boundary/tests/rhold.rs b/crates/tsuzuri-boundary/tests/rhold.rs
+index 4c44fe35297f37ff045b76d494180ce19fd48089..dc0f878c3baea212f87d95bcebd416e734aa9129 100644
+--- a/crates/tsuzuri-boundary/tests/rhold.rs
++++ b/crates/tsuzuri-boundary/tests/rhold.rs
+@@ -400,8 +400,8 @@ fn get(addr: SocketAddr, path: &str) -> Reply {
+     }
+ }
+ 
+-/// 台帳を読む 10 の GET の口。
+-const ROUTES: [&str; 10] = [
++/// 台帳を読む 9 の GET の口。
++const ROUTES: [&str; 9] = [
+     "/api/ledger",
+     "/api/ledger/fx-hub.3",
+     "/api/metrics",
+@@ -409,7 +409,6 @@ const ROUTES: [&str; 10] = [
+     "/api/pipeline",
+     "/api/next",
+     "/api/graph",
+-    "/api/graph/view",
+     "/api/around?id=fx-hub.3",
+     "/api/unreflected",
+ ];
+@@ -548,7 +547,6 @@ fn rhold_wiring_text() {
+         "pipeline",
+         "next",
+         "graph",
+-        "graphview",
+         "around",
+         "unreflected",
+         "account",
+diff --git a/crates/tsuzuri-boundary/tests/server_coalesce.rs b/crates/tsuzuri-boundary/tests/server_coalesce.rs
+index 390b04a0c8ea6d0403a6932d5c3fb9658c920b97..ff56a7fc969c29f792242e7dcae5f94cb2ea3f57 100644
+--- a/crates/tsuzuri-boundary/tests/server_coalesce.rs
++++ b/crates/tsuzuri-boundary/tests/server_coalesce.rs
+@@ -20,7 +20,7 @@ use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_TIMEOUT, FOLIO_WAIT};
+ use tsuzuri_boundary::server::ledger::{BD_TIMEOUT, BD_WAIT};
+ use tsuzuri_boundary::server::{Config, Server, ruling};
+ use tsuzuri_contract::board::{PipelineBoard, Reading};
+-use tsuzuri_contract::graph::{GraphDoc, GraphSource, GraphView};
++use tsuzuri_contract::graph::{AroundDoc, GraphDoc, GraphSource};
+ use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerList};
+ use tsuzuri_contract::stats::{LedgerStats, NextStep};
+ use tsuzuri_contract::surface::RulingRequest;
+@@ -335,7 +335,7 @@ fn server_coalesce_graph_routes_share_one_folio() {
+         place.summary_calls(),
+         place.rulings_calls(),
+     );
+-    let paths = ["/api/graph", "/api/graph", "/api/graph/view"].map(str::to_string);
++    let paths = ["/api/graph", "/api/graph", "/api/around?id=R-25"].map(str::to_string);
+     let replies = get_all(addr, &paths);
+     let shot = place.folio_calls() - before;
+     let summary_shot = place.summary_calls() - before_summary;
+@@ -346,9 +346,9 @@ fn server_coalesce_graph_routes_share_one_folio() {
+         .zip(&paths)
+         .map(|(r, path)| {
+             assert_eq!(r.status, 200, "{path}: {}", r.body);
+-            if path == "/api/graph/view" {
+-                let view: GraphView = decode!(r.body);
+-                view.unread
++            if path.starts_with("/api/around") {
++                let around: AroundDoc = decode!(r.body);
++                around.unread
+             } else {
+                 let doc: GraphDoc = decode!(r.body);
+                 doc.unread
+diff --git a/crates/tsuzuri-boundary/tests/server_view.rs b/crates/tsuzuri-boundary/tests/server_view.rs
+index 8565b4614fa8940a3c88efa071e01bd7dab22a39..31d94bea22b9df1f5566c904fdf486c54592e6fd 100644
+--- a/crates/tsuzuri-boundary/tests/server_view.rs
++++ b/crates/tsuzuri-boundary/tests/server_view.rs
+@@ -16,7 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
+ use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_TIMEOUT};
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::graph::{BoxFold, Fold, GraphSource, GraphView};
++use tsuzuri_contract::graph::{Fold, GraphDoc, GraphSource};
+ use tsuzuri_contract::stats::{UnreflectedList, UnreflectedRow};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::graph::{self, Graph, Inputs};
+@@ -220,22 +220,16 @@ fn wire_list(u: &Unreflected) -> UnreflectedList {
+     }
+ }
+ 
++/// 地図の眺めの口は消えた（GET は面の file の配布へ落ちて 404・設計の道具を撃たない・行 m-gview-drop）。
+ #[test]
+-fn server_view_graph_view_matches_core() {
+-    let place = Place::new("view", Bd::Ok);
++fn server_view_graph_view_gone() {
++    let place = Place::new("gone", Bd::Ok);
+     let addr = place.serve();
+-    let (body, _, _) = get(addr, "/api/graph/view");
+-    let want = graph::view(&built(&read_fixture(LEDGER)));
+-    assert!(want.unread.is_empty(), "{:?}", want.unread);
+-    assert!(!want.nodes.is_empty());
+-    assert_eq!(body, encoded!(want), "眺めの電文の字");
+-    let view: GraphView = decode!(body);
+-    assert!(view.unread.is_empty(), "{:?}", view.unread);
+-    assert_eq!(
+-        place.folio_calls(),
+-        3,
+-        "眺めの口 1 回に設計の道具 3 回（索引と要約と裁定の書き出し）"
+-    );
++    for path in ["/api/graph/view", "/api/graph/view?open=~rule"] {
++        let (status, _, body) = get_raw(addr, path);
++        assert_eq!(status, 404, "{path}: {body}");
++    }
++    assert_eq!(place.folio_calls(), 0, "消えた口で設計の道具を撃つ");
+ }
+ 
+ #[test]
+@@ -333,46 +327,15 @@ fn server_view_bd_fails_unknown() {
+         (Reading::Unknown, Reading::Unknown, Reading::Unknown),
+         "{body}"
+     );
+-    let (body, _, _) = get(addr, "/api/graph/view");
+-    let view: GraphView = decode!(body);
+-    assert_eq!(view.unread, vec![GraphSource::Ledger], "{body}");
+-    assert_eq!(body, encoded!(graph::view(&built(""))), "眺めの電文の字");
++    let (body, _, _) = get(addr, "/api/graph");
++    let doc: GraphDoc = decode!(body);
++    assert_eq!(doc.unread, vec![GraphSource::Ledger], "{body}");
+     // 台帳が読めなくても設計の索引の節点の近傍は返す。
+     let body = get(addr, "/api/around?id=R-25").0;
+     let want = graph::around(&built(""), CENTER, 2, Fold::None).expect("中心の節点");
+     assert_eq!(body, encoded!(want));
+ }
+ 
+-/// id の字 : と # と空白を %XX にする（query に置く字）。
+-fn pct(id: &str) -> String {
+-    id.replace(':', "%3A")
+-        .replace('#', "%23")
+-        .replace(' ', "%20")
+-}
+-
+-/// 口の query の open は字 , で分けて眺めに渡す（行 c-graph-fold）。
+-#[test]
+-fn gtuck_route_open_query() {
+-    let place = Place::new("tuck", Bd::Ok);
+-    let addr = place.serve();
+-    let g = built(&read_fixture(LEDGER));
+-    let base = graph::view(&g);
+-    let id = base
+-        .nodes
+-        .iter()
+-        .find(|n| n.fold == BoxFold::Folded)
+-        .map(|n| n.node.id.clone())
+-        .expect("畳んだ箱");
+-    let body = get(addr, &format!("/api/graph/view?open={}", pct(&id))).0;
+-    let asks = vec![id.clone()];
+-    assert_eq!(body, encoded!(graph::view_open(&g, &asks)), "{id}");
+-    let view: GraphView = decode!(body);
+-    assert_eq!(view.open, asks);
+-    for path in ["/api/graph/view?open=no-such", "/api/graph/view"] {
+-        assert_eq!(get(addr, path).0, encoded!(base), "{path}");
+-    }
+-}
+-
+ /// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
+ fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+     let mut out = Vec::new();
+@@ -392,11 +355,7 @@ fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+     out
+ }
+ 
+-const ROUTES: [&str; 3] = [
+-    "/api/graph/view",
+-    "/api/around?id=R-25&k=3&fold=none",
+-    "/api/unreflected",
+-];
++const ROUTES: [&str; 2] = ["/api/around?id=R-25&k=3&fold=none", "/api/unreflected"];
+ 
+ #[test]
+ fn server_view_routes_write_nothing() {
+diff --git a/crates/tsuzuri-core/src/graph/around.rs b/crates/tsuzuri-core/src/graph/around.rs
+index 80e83286f6dfd845cd6ad7408a67a246050161f9..f01718e2f44475075b5c3ad5946acddbf536cf3f 100644
+--- a/crates/tsuzuri-core/src/graph/around.rs
++++ b/crates/tsuzuri-core/src/graph/around.rs
+@@ -11,7 +11,6 @@ use tsuzuri_contract::graph::{
+ };
+ 
+ use super::Graph;
+-use super::view::count;
+ 
+ /// 既定の段数（各側・規則の行 R-20「近傍は各 2 段」）。
+ pub const AROUND_STEPS: u8 = 2;
+@@ -260,3 +259,8 @@ pub fn around(g: &Graph, center: &str, steps: u8, fold: Fold) -> Option<AroundDo
+         unread: g.unread_wire(),
+     })
+ }
++
++/// 数を電文の幅へ（溢れたら上限に留める）。
++fn count(n: usize) -> u32 {
++    u32::try_from(n).unwrap_or(u32::MAX)
++}
+diff --git a/crates/tsuzuri-core/src/graph/fold.rs b/crates/tsuzuri-core/src/graph/fold.rs
+deleted file mode 100644
+index c6faaa9dde4adb2603828889f1dce6854e67a70d..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-core/src/graph/fold.rs
++++ /dev/null
+@@ -1,626 +0,0 @@
+-//! グラフの眺めの組の木と開き（行 c-graph-fold・裁定 t3-hub.52.53）。
+-//! 節点を帯 → 組 → 節点の木に入れ、どの節点も見えている箱のどれかに畳む（上限で切って落とさない）。
+-//! 開く列は、初めから開いている帯の後に求めの順に見て、見える箱が上限を越えれば古く開いた箱から畳み直す。
+-
+-use std::collections::{BTreeMap, BTreeSet};
+-
+-use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind, natural_cmp};
+-
+-use super::Graph;
+-use super::view::VIEW_CAP;
+-
+-/// 箱の子を区切る塊の幅（塊の数が越えれば塊をさらにこの幅ずつまとめる）。
+-pub const CHUNK: usize = 12;
+-
+-/// 口の query の open の字を開く列にする（字 , で分けて空の項を捨てる・前後の空白は切らない）。
+-pub fn open_list(s: &str) -> Vec<String> {
+-    s.split(',')
+-        .filter(|p| !p.is_empty())
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+-/// 節点の種類の帯（面の帯と同じ 7 つ・順も同じ）。
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+-enum Band {
+-    Constitution,
+-    Rules,
+-    Adr,
+-    Srs,
+-    DesignNote,
+-    Beads,
+-    Pipeline,
+-}
+-
+-impl Band {
+-    fn name(self) -> &'static str {
+-        match self {
+-            Band::Constitution => "constitution",
+-            Band::Rules => "rules",
+-            Band::Adr => "ADR",
+-            Band::Srs => "SRS",
+-            Band::DesignNote => "design-note",
+-            Band::Beads => "beads",
+-            Band::Pipeline => "pipeline",
+-        }
+-    }
+-
+-    /// 帯の順の先頭の種類（帯の箱の種類）。
+-    fn head(self) -> NodeKind {
+-        match self {
+-            Band::Constitution => NodeKind::Article,
+-            Band::Rules => NodeKind::Rule,
+-            Band::Adr => NodeKind::Adr,
+-            Band::Srs => NodeKind::Goal,
+-            Band::DesignNote => NodeKind::NoteRow,
+-            Band::Beads => NodeKind::Epic,
+-            Band::Pipeline => NodeKind::Run,
+-        }
+-    }
+-
+-    fn of(kind: NodeKind) -> Band {
+-        use NodeKind::*;
+-        match kind {
+-            Article | Norm => Band::Constitution,
+-            Rule => Band::Rules,
+-            Adr => Band::Adr,
+-            Goal | Req | Nfr | Ac | Constraint | Actor | Output => Band::Srs,
+-            NoteRow => Band::DesignNote,
+-            Epic | Task | Memo | Question | Ruling | Receipt | Policy => Band::Beads,
+-            Run => Band::Pipeline,
+-        }
+-    }
+-}
+-
+-/// 組の id に使う種類の英字（要件書と台帳の種類だけ）。
+-fn word(kind: NodeKind) -> &'static str {
+-    use NodeKind::*;
+-    match kind {
+-        Goal => "goal",
+-        Req => "req",
+-        Nfr => "nfr",
+-        Ac => "ac",
+-        Constraint => "constraint",
+-        Actor => "actor",
+-        Output => "output",
+-        Task => "task",
+-        Memo => "memo",
+-        Question => "question",
+-        Ruling => "ruling",
+-        Receipt => "receipt",
+-        Policy => "policy",
+-        _ => "",
+-    }
+-}
+-
+-/// 木の親（節点・組の id と種類・帯）。組と帯の帯は種類から決まる。
+-enum Up<'g> {
+-    Node(&'g str),
+-    Group(String, NodeKind),
+-    Band,
+-}
+-
+-/// 台帳のほかの組と ~run（親の無い・親をたどって帯に着かない節点の置き場）。
+-fn loose<'g>(kind: NodeKind) -> Up<'g> {
+-    match kind {
+-        NodeKind::Run => Up::Group("~run".into(), kind),
+-        _ => Up::Group(format!("~led:{}", word(kind)), kind),
+-    }
+-}
+-
+-/// 条の系（id の頭の ASCII の英字の並び・無ければ _）。
+-fn series(id: &str) -> &str {
+-    let end = id
+-        .bytes()
+-        .position(|c| !c.is_ascii_alphabetic())
+-        .unwrap_or(id.len());
+-    if end == 0 { "_" } else { &id[..end] }
+-}
+-
+-/// 規範文を畳む条（id が 条の id と字 . と数字の並び）。
+-fn article_of<'g>(id: &'g str, index: &BTreeMap<&'g str, &'g GraphNode>) -> Option<&'g str> {
+-    id.rsplit_once('.')
+-        .filter(|(_, tail)| !tail.is_empty() && tail.bytes().all(|c| c.is_ascii_digit()))
+-        .map(|(head, _)| head)
+-        .filter(|head| index.get(head).is_some_and(|a| a.kind == NodeKind::Article))
+-}
+-
+-/// 組の木の箱（帯の箱・組の箱・塊・節点の箱）。
+-#[derive(Debug, Clone)]
+-pub(super) struct TreeBox<'g> {
+-    pub id: String,
+-    pub kind: NodeKind,
+-    pub title: String,
+-    /// 節点の箱なら節点。
+-    pub node: Option<&'g GraphNode>,
+-    pub band: bool,
+-    pub parent: Option<usize>,
+-    /// 種類の順・id の自然な順（CHUNK を越えれば塊）。
+-    pub children: Vec<usize>,
+-}
+-
+-impl<'g> TreeBox<'g> {
+-    /// 節点も親も子も持たない、帯でない箱。
+-    fn named(id: String, kind: NodeKind, title: String) -> TreeBox<'g> {
+-        TreeBox {
+-            id,
+-            kind,
+-            title,
+-            node: None,
+-            band: false,
+-            parent: None,
+-            children: Vec::new(),
+-        }
+-    }
+-}
+-
+-/// 組の木。
+-#[derive(Debug, Clone)]
+-pub(super) struct Tree<'g> {
+-    pub boxes: Vec<TreeBox<'g>>,
+-    /// 帯の箱（帯の順）。
+-    bands: Vec<usize>,
+-    /// 節点の id ごとの箱（自分の箱・問いと裁定は畳み先の箱）。
+-    pub home: BTreeMap<&'g str, usize>,
+-    by_id: BTreeMap<String, usize>,
+-}
+-
+-/// 開きの状態。
+-#[derive(Debug, Clone, Default)]
+-pub(super) struct Opening {
+-    /// 初めから開いている帯（帯の順）。
+-    initial: Vec<usize>,
+-    /// 求めで開いた箱（開いた順）。
+-    pub asked: Vec<usize>,
+-    /// 開かなかった id（求めの順）。
+-    pub refused: Vec<String>,
+-}
+-
+-impl Opening {
+-    pub fn is_open(&self, b: usize) -> bool {
+-        self.initial.contains(&b) || self.asked.contains(&b)
+-    }
+-}
+-
+-/// 節点の id と辺の型ごとの、最初に読んだ辺の先。
+-type First<'g> = BTreeMap<(&'g str, EdgeType), &'g str>;
+-
+-/// 受入の id ごとの、その受入が検査する要件（req と nfr）の id。
+-type Checks<'g> = BTreeMap<&'g str, Vec<&'g str>>;
+-
+-/// 辺を 1 度読み、型ごとの最初の先と、受入ごとの検査する要件を組む。
+-fn links<'g>(g: &'g Graph, index: &BTreeMap<&'g str, &'g GraphNode>) -> (First<'g>, Checks<'g>) {
+-    use NodeKind::*;
+-    let mut first: First<'g> = BTreeMap::new();
+-    let mut checks: Checks<'g> = BTreeMap::new();
+-    let spec = |k: NodeKind| matches!(k, Req | Nfr);
+-    for e in &g.edges {
+-        let (Some(a), Some(b)) = (index.get(e.from.as_str()), index.get(e.to.as_str())) else {
+-            continue;
+-        };
+-        let (from, to) = (a.id.as_str(), b.id.as_str());
+-        first.entry((from, e.edge_type)).or_insert(to);
+-        match e.edge_type {
+-            EdgeType::VerifyAc if spec(a.kind) => checks.entry(to).or_default().push(from),
+-            EdgeType::Verifies if spec(b.kind) => checks.entry(from).or_default().push(to),
+-            _ => {}
+-        }
+-    }
+-    (first, checks)
+-}
+-
+-/// 畳み先（question → parent-child の先・ruling → answers の先）をたどった先（輪なら None）。
+-fn host<'g>(
+-    id: &'g str,
+-    index: &BTreeMap<&'g str, &'g GraphNode>,
+-    first: &First<'g>,
+-) -> Option<&'g str> {
+-    let fold_to = |id: &'g str| {
+-        let t = match index.get(id)?.kind {
+-            NodeKind::Question => EdgeType::ParentChild,
+-            NodeKind::Ruling => EdgeType::Answers,
+-            _ => return None,
+-        };
+-        first.get(&(id, t)).copied()
+-    };
+-    let mut seen = BTreeSet::from([id]);
+-    let mut cur = id;
+-    while let Some(next) = fold_to(cur) {
+-        if !seen.insert(next) {
+-            return None;
+-        }
+-        cur = next;
+-    }
+-    Some(cur)
+-}
+-
+-/// 節点の親（畳み先に隠さない問いと裁定は台帳のほかの組）。
+-fn up_of<'g>(
+-    id: &'g str,
+-    n: &'g GraphNode,
+-    index: &BTreeMap<&'g str, &'g GraphNode>,
+-    first: &First<'g>,
+-    checks: &Checks<'g>,
+-) -> Up<'g> {
+-    use NodeKind::*;
+-    match n.kind {
+-        Question | Ruling => loose(n.kind),
+-        Article => Up::Group(format!("~art:{}", series(id)), Article),
+-        Norm => match article_of(id, index) {
+-            Some(a) => Up::Node(a),
+-            None => Up::Group(format!("~art:{}", series(id)), Article),
+-        },
+-        Rule => Up::Group("~rule".into(), Rule),
+-        Adr => Up::Group("~adr".into(), Adr),
+-        Ac => checks
+-            .get(id)
+-            .and_then(|c| c.iter().copied().min_by(|a, b| natural_cmp(a, b)))
+-            .map_or_else(|| Up::Group("~srs:ac".into(), Ac), Up::Node),
+-        Goal | Req | Nfr | Constraint | Actor | Output => {
+-            Up::Group(format!("~srs:{}", word(n.kind)), n.kind)
+-        }
+-        NoteRow => {
+-            let note = id.split_once('#').map_or(id, |(d, _)| d);
+-            Up::Group(format!("~note:{note}"), NoteRow)
+-        }
+-        Epic => Up::Band,
+-        Task | Memo | Run => {
+-            let t = if n.kind == Run {
+-                EdgeType::RunOf
+-            } else {
+-                EdgeType::ParentChild
+-            };
+-            first
+-                .get(&(id, t))
+-                .copied()
+-                .filter(|p| {
+-                    index
+-                        .get(p)
+-                        .is_some_and(|n| matches!(n.kind, Epic | Task | Memo))
+-                })
+-                .map_or_else(|| loose(n.kind), Up::Node)
+-        }
+-        Receipt | Policy => loose(n.kind),
+-    }
+-}
+-
+-/// 親の節点をたどると輪になるか。
+-fn cycles<'g>(id: &'g str, ups: &BTreeMap<&'g str, Up<'g>>) -> bool {
+-    let mut seen = BTreeSet::from([id]);
+-    let mut cur = id;
+-    while let Some(Up::Node(p)) = ups.get(cur) {
+-        if !seen.insert(*p) {
+-            return true;
+-        }
+-        cur = p;
+-    }
+-    false
+-}
+-
+-/// 節点ごとの親と、畳み先の節点の箱に畳む問いと裁定（id と畳み先）。
+-fn ups_of<'g>(
+-    index: &BTreeMap<&'g str, &'g GraphNode>,
+-    first: &First<'g>,
+-    checks: &Checks<'g>,
+-) -> (BTreeMap<&'g str, Up<'g>>, BTreeMap<&'g str, &'g str>) {
+-    let mut ups: BTreeMap<&'g str, Up<'g>> = BTreeMap::new();
+-    let mut hidden: BTreeMap<&'g str, &'g str> = BTreeMap::new();
+-    for (&id, &n) in index {
+-        if matches!(n.kind, NodeKind::Question | NodeKind::Ruling)
+-            && let Some(h) = host(id, index, first).filter(|h| *h != id)
+-        {
+-            hidden.insert(id, h);
+-            continue;
+-        }
+-        ups.insert(id, up_of(id, n, index, first, checks));
+-    }
+-    // 親をたどって帯に着かない（輪になる）節点は台帳のほかの組へ。
+-    let stray: Vec<&'g str> = ups
+-        .keys()
+-        .copied()
+-        .filter(|id| cycles(id, &ups))
+-        .collect();
+-    for id in stray {
+-        if let Some(n) = index.get(id) {
+-            ups.insert(id, loose(n.kind));
+-        }
+-    }
+-    (ups, hidden)
+-}
+-
+-impl<'g> Tree<'g> {
+-    /// 節点を組の木に入れる。
+-    pub fn new(g: &'g Graph) -> Tree<'g> {
+-        let index = g.index();
+-        let (first, checks) = links(g, &index);
+-        let (ups, hidden) = ups_of(&index, &first, &checks);
+-
+-        let mut t = Tree {
+-            boxes: Vec::new(),
+-            bands: Vec::new(),
+-            home: BTreeMap::new(),
+-            by_id: BTreeMap::new(),
+-        };
+-        let bands = t.place(&index, &ups);
+-        for (id, h) in hidden {
+-            let Some(&b) = t.home.get(h) else {
+-                continue;
+-            };
+-            t.home.insert(id, b);
+-        }
+-        t.bands = bands.into_values().collect();
+-        t.arrange();
+-        for (i, b) in t.boxes.iter().enumerate() {
+-            t.by_id.entry(b.id.clone()).or_insert(i);
+-        }
+-        t
+-    }
+-
+-    /// 節点の箱を親の箱（節点の箱・組の箱・帯の箱・組と帯の箱は無ければ作る）の子にし、帯の箱の表を返す。
+-    fn place(
+-        &mut self,
+-        index: &BTreeMap<&'g str, &'g GraphNode>,
+-        ups: &BTreeMap<&'g str, Up<'g>>,
+-    ) -> BTreeMap<Band, usize> {
+-        for &id in ups.keys() {
+-            let Some(&n) = index.get(id) else {
+-                continue;
+-            };
+-            let b = self.push(TreeBox {
+-                node: Some(n),
+-                ..TreeBox::named(n.id.clone(), n.kind, n.title.clone())
+-            });
+-            self.home.insert(id, b);
+-        }
+-        let mut bands: BTreeMap<Band, usize> = BTreeMap::new();
+-        let mut groups: BTreeMap<String, usize> = BTreeMap::new();
+-        for (id, up) in ups {
+-            let parent = match up {
+-                Up::Node(p) => self.home.get(p).copied(),
+-                Up::Band => index
+-                    .get(id)
+-                    .map(|n| self.band(&mut bands, Band::of(n.kind))),
+-                Up::Group(gid, kind) => Some(match groups.get(gid) {
+-                    Some(b) => *b,
+-                    None => {
+-                        let band = self.band(&mut bands, Band::of(*kind));
+-                        let b = self.push(TreeBox {
+-                            parent: Some(band),
+-                            ..TreeBox::named(gid.clone(), *kind, gid.clone())
+-                        });
+-                        groups.insert(gid.clone(), b);
+-                        b
+-                    }
+-                }),
+-            };
+-            let (Some(parent), Some(&me)) = (parent, self.home.get(id)) else {
+-                continue;
+-            };
+-            if let Some(bx) = self.boxes.get_mut(me) {
+-                bx.parent = Some(parent);
+-            }
+-            if let Some(bx) = self.boxes.get_mut(parent) {
+-                bx.children.push(me);
+-            }
+-        }
+-        bands
+-    }
+-
+-    /// 子を種類の順・自然な順に並べ、帯の箱でない箱の子が CHUNK を越えれば塊に区切る。
+-    fn arrange(&mut self) {
+-        let made = self.boxes.len();
+-        for b in 0..made {
+-            let Some(mut kids) = self
+-                .boxes
+-                .get_mut(b)
+-                .map(|bx| std::mem::take(&mut bx.children))
+-            else {
+-                continue;
+-            };
+-            kids.sort_by(|x, y| self.order(*x, *y));
+-            let owner = self
+-                .boxes
+-                .get(b)
+-                .filter(|bx| !bx.band && kids.len() > CHUNK)
+-                .map(|bx| bx.id.clone());
+-            if let Some(owner) = owner {
+-                kids = self.chunk(&owner, b, &kids, 0);
+-            }
+-            if let Some(bx) = self.boxes.get_mut(b) {
+-                bx.children = kids;
+-            }
+-        }
+-    }
+-
+-    /// 箱を足し、親が在れば親の子の末に置く（足した箱の番号を返す）。
+-    fn push(&mut self, bx: TreeBox<'g>) -> usize {
+-        let b = self.boxes.len();
+-        let parent = bx.parent;
+-        self.boxes.push(bx);
+-        if let Some(p) = parent.and_then(|p| self.boxes.get_mut(p)) {
+-            p.children.push(b);
+-        }
+-        b
+-    }
+-
+-    /// 箱 `x` と `y` の並び（種類の順・自然な順・無い箱は番号の順）。
+-    pub(super) fn order(&self, x: usize, y: usize) -> std::cmp::Ordering {
+-        match (self.boxes.get(x), self.boxes.get(y)) {
+-            (Some(a), Some(b)) => a.kind.cmp(&b.kind).then_with(|| natural_cmp(&a.id, &b.id)),
+-            _ => x.cmp(&y),
+-        }
+-    }
+-
+-    /// 帯の箱（無ければ作る）。
+-    fn band(&mut self, bands: &mut BTreeMap<Band, usize>, band: Band) -> usize {
+-        if let Some(b) = bands.get(&band) {
+-            return *b;
+-        }
+-        let name = band.name();
+-        let b = self.push(TreeBox {
+-            band: true,
+-            ..TreeBox::named(format!("~b:{name}"), band.head(), name.into())
+-        });
+-        bands.insert(band, b);
+-        b
+-    }
+-
+-    /// 箱 `owner` の子の `items`（子の列の `offset` 番目から）を塊に区切る。
+-    /// 塊の数が CHUNK を越えれば幅を CHUNK の冪にし、塊の中をまた区切る。
+-    fn chunk(&mut self, owner: &str, parent: usize, items: &[usize], offset: usize) -> Vec<usize> {
+-        if items.len() <= CHUNK {
+-            for c in items {
+-                if let Some(bx) = self.boxes.get_mut(*c) {
+-                    bx.parent = Some(parent);
+-                }
+-            }
+-            return items.to_vec();
+-        }
+-        let mut width = CHUNK;
+-        while items.len().div_ceil(width) > CHUNK {
+-            width *= CHUNK;
+-        }
+-        let mut out = Vec::new();
+-        for (i, piece) in items.chunks(width).enumerate() {
+-            let at = offset + i * width;
+-            let (Some(head), Some(last)) = (
+-                piece.first().and_then(|h| self.boxes.get(*h)),
+-                piece.last().and_then(|l| self.boxes.get(*l)),
+-            ) else {
+-                continue;
+-            };
+-            let id = format!("{owner}~{}-{}", at + 1, at + piece.len());
+-            let title = format!("{} … {}", head.id, last.id);
+-            let kind = head.kind;
+-            let c = self.push(TreeBox::named(id, kind, title));
+-            let kids = self.chunk(owner, c, piece, at);
+-            if let Some(bx) = self.boxes.get_mut(c) {
+-                bx.parent = Some(parent);
+-                bx.children = kids;
+-            }
+-            out.push(c);
+-        }
+-        out
+-    }
+-
+-    /// 親をたどる（自分を含まない）。
+-    fn ancestors(&self, b: usize) -> impl Iterator<Item = usize> + '_ {
+-        let parent_of = move |b: usize| self.boxes.get(b).and_then(|x| x.parent);
+-        std::iter::successors(parent_of(b), move |p| parent_of(*p))
+-    }
+-
+-    /// 見える箱の数（開いた帯の箱は数えず、ほかは開いていても 1）。
+-    fn size(&self, b: usize, st: &Opening) -> usize {
+-        let Some(bx) = self.boxes.get(b) else {
+-            return 0;
+-        };
+-        let open = st.is_open(b);
+-        let own = usize::from(!(open && bx.band));
+-        let inner: usize = if open {
+-            bx.children.iter().map(|c| self.size(*c, st)).sum()
+-        } else {
+-            0
+-        };
+-        own + inner
+-    }
+-
+-    fn count(&self, st: &Opening) -> usize {
+-        self.bands.iter().map(|b| self.size(*b, st)).sum()
+-    }
+-
+-    /// 箱とその子孫の開きを外す。
+-    fn close(&self, st: &mut Opening, b: usize) {
+-        let keep = |x: &usize| *x != b && !self.ancestors(*x).any(|a| a == b);
+-        st.initial.retain(keep);
+-        st.asked.retain(keep);
+-    }
+-
+-    /// 箱 `b` を開いた状態が上限に収まるよう、`b` とその先祖を除いて、求めで開いた箱の古い順、
+-    /// 次に初めから開いている帯の順に畳み直す（収まらなければ None）。
+-    fn fit(&self, mut st: Opening, b: usize) -> Option<Opening> {
+-        if self.count(&st) <= VIEW_CAP {
+-            return Some(st);
+-        }
+-        let keep: BTreeSet<usize> = std::iter::once(b).chain(self.ancestors(b)).collect();
+-        let order: Vec<usize> = st
+-            .asked
+-            .iter()
+-            .chain(&st.initial)
+-            .copied()
+-            .filter(|c| !keep.contains(c))
+-            .collect();
+-        for c in order {
+-            if st.is_open(c) {
+-                self.close(&mut st, c);
+-                if self.count(&st) <= VIEW_CAP {
+-                    return Some(st);
+-                }
+-            }
+-        }
+-        None
+-    }
+-
+-    /// 初めに帯を帯の順に開き、次に求めの列を順に開く。
+-    pub fn open(&self, asks: &[String]) -> Opening {
+-        let mut st = Opening::default();
+-        for &b in &self.bands {
+-            let mut next = st.clone();
+-            next.initial.push(b);
+-            if let Some(fit) = self.fit(next, b) {
+-                st = fit;
+-            }
+-        }
+-        let mut seen: BTreeSet<&str> = BTreeSet::new();
+-        for s in asks {
+-            let Some(&b) = self.by_id.get(s.as_str()) else {
+-                continue;
+-            };
+-            let Some(bx) = self.boxes.get(b) else {
+-                continue;
+-            };
+-            if bx.children.is_empty() || !seen.insert(s) {
+-                continue;
+-            }
+-            if !self.ancestors(b).all(|a| st.is_open(a)) || (!bx.band && st.is_open(b)) {
+-                continue;
+-            }
+-            let mut next = st.clone();
+-            next.initial.retain(|x| *x != b);
+-            next.asked.retain(|x| *x != b);
+-            next.asked.push(b);
+-            match self.fit(next, b) {
+-                Some(fit) => st = fit,
+-                None => st.refused.push(s.clone()),
+-            }
+-        }
+-        st
+-    }
+-
+-    /// 見える箱（開いた帯の箱を除く・木の順）。
+-    pub fn shown(&self, st: &Opening) -> Vec<usize> {
+-        let mut out = Vec::new();
+-        let mut stack: Vec<usize> = self.bands.iter().rev().copied().collect();
+-        while let Some(b) = stack.pop() {
+-            let Some(bx) = self.boxes.get(b) else {
+-                continue;
+-            };
+-            let open = st.is_open(b);
+-            if !(open && bx.band) {
+-                out.push(b);
+-            }
+-            if open {
+-                stack.extend(bx.children.iter().rev().copied());
+-            }
+-        }
+-        out
+-    }
+-
+-    /// 箱 `b` の見える箱（自分か、根からたどって最初の開いていない先祖）。
+-    pub fn visible_of(&self, b: usize, st: &Opening) -> usize {
+-        let mut path: Vec<usize> = std::iter::once(b).chain(self.ancestors(b)).collect();
+-        path.reverse();
+-        path.into_iter()
+-            .find(|p| *p == b || !st.is_open(*p))
+-            .unwrap_or(b)
+-    }
+-}
+diff --git a/crates/tsuzuri-core/src/graph/mod.rs b/crates/tsuzuri-core/src/graph/mod.rs
+index e09f7ae6be997c421a08afbeb8a857a3979a8e3d..1231480e0a850c4459974df39dcc274824a27c6e 100644
+--- a/crates/tsuzuri-core/src/graph/mod.rs
++++ b/crates/tsuzuri-core/src/graph/mod.rs
+@@ -1,7 +1,6 @@
+ //! 導出グラフ（設計ノート surface-base 便 c・判断の記録 ADR-7 決定 (2)）。
+ //! 設計の索引・台帳の一覧・器の event log の 3 つの字から、1 つのグラフを毎回組み直す（`build`）。
+-//! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返し（`around`）、グラフの面の眺めを返す（`view`・便 c-view）。
+-//! 眺めは節点を組の箱へ畳み、開く列で 1 段ずつ開く（`fold`・`view_open`・行 c-graph-fold）。
++//! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返す（`around`）。
+ //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
+ //! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ（行 c-g3g7）。
+ //! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる（行 c-g3-extern）。
+@@ -9,8 +8,6 @@
+ pub mod around;
+ pub mod build;
+ pub mod check;
+-pub mod fold;
+-pub mod view;
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+@@ -20,7 +17,6 @@ use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, GraphSource, NodeK
+ pub use around::around;
+ pub use build::build;
+ pub use check::{Invariant, Verdict, check};
+-pub use view::{view, view_open};
+ 
+ /// 組む材料の 3 つの字。
+ #[derive(Debug, Clone, Copy)]
+diff --git a/crates/tsuzuri-core/src/graph/view.rs b/crates/tsuzuri-core/src/graph/view.rs
+deleted file mode 100644
+index 5116aa09bdaa9cdb1c396cca8cc41ea3a2ca91f1..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-core/src/graph/view.rs
++++ /dev/null
+@@ -1,228 +0,0 @@
+-//! グラフの眺め: 節点を組の木（`fold`）の見えている箱へ畳み、辺を根拠の側へ向けて箱へまとめ、
+-//! 根拠の側からの段を決める（見本 map.html の graphModel を裁定 t3-hub.52.53 が改めた形・行 c-graph-fold）。
+-//! 画面は値を写して座標を決めるだけにする。
+-
+-use std::collections::{BTreeMap, BTreeSet};
+-
+-use tsuzuri_contract::graph::{
+-    BoxFold, EdgeEnd, EdgeType, GraphNode, GraphView, ViewEdge, ViewNode, basis_end, natural_cmp,
+-};
+-
+-use super::Graph;
+-use super::fold::{Opening, Tree, TreeBox};
+-
+-/// 見える箱の数の上限（見本の値・規則の行にはまだ無い）。
+-pub const VIEW_CAP: usize = 40;
+-
+-/// まとめた辺の鍵（D・U・型）。
+-type EdgeKey<'g> = (&'g str, &'g str, EdgeType);
+-
+-/// グラフの眺め（開く列が空・初めから開いている帯だけ）。
+-pub fn view(g: &Graph) -> GraphView {
+-    view_open(g, &[])
+-}
+-
+-/// 箱の id ごとの、辺でつながる見える箱の id。
+-type Next<'g> = BTreeMap<&'g str, BTreeSet<&'g str>>;
+-
+-/// 開く列を受けたグラフの眺め（列の決まりは `fold` の `Tree::open`）。
+-pub fn view_open(g: &Graph, open: &[String]) -> GraphView {
+-    let tree = Tree::new(g);
+-    let st = tree.open(open);
+-    let degree = g.degrees();
+-    let id_of = |b: usize| tree.boxes.get(b).map_or("", |bx| bx.id.as_str());
+-
+-    let (vis, kids, boxed) = visible(&tree, &st);
+-    let (edges, next) = merged(g, &tree, &vis);
+-
+-    // 段（D から U へたどる最も長い道の辺の数・たどっている途中へ戻れば 0 と数える）。
+-    let mut shown = tree.shown(&st);
+-    let rank = ranks(&tree, &shown, &edges);
+-
+-    shown.sort_by(|a, b| tree.order(*a, *b));
+-    let nodes: Vec<ViewNode> = shown
+-        .iter()
+-        .filter_map(|b| {
+-            let bx = tree.boxes.get(*b)?;
+-            let id = bx.id.as_str();
+-            let (node, status, deg) = match bx.node {
+-                Some(n) => (n.clone(), g.status(n), degree.get(id).copied().unwrap_or(0)),
+-                None => (group_node(bx), None, next.get(id).map_or(0, BTreeSet::len)),
+-            };
+-            Some(ViewNode {
+-                node,
+-                status,
+-                rank: count(rank.get(id).copied().unwrap_or(0)),
+-                kids: count(kids.get(b).copied().unwrap_or(0)),
+-                degree: count(deg),
+-                group: bx.node.is_none(),
+-                fold: fold_of(bx, &st, *b),
+-            })
+-        })
+-        .collect();
+-    let folded: usize = kids.values().sum();
+-    let total = g.nodes.len();
+-    GraphView {
+-        shown: count(nodes.len()),
+-        nodes,
+-        edges: view_edges(edges),
+-        folded: count(folded),
+-        cut: count(total.saturating_sub(boxed + folded)),
+-        total: count(total),
+-        unread: g.unread_wire(),
+-        open: st.asked.iter().map(|b| id_of(*b).to_string()).collect(),
+-        refused: st.refused,
+-    }
+-}
+-
+-/// 節点ごとの見える箱と、箱ごとの子の数（自分の箱を持たない節点の数）と、自分の箱が見える節点の数。
+-fn visible<'g>(
+-    tree: &Tree<'g>,
+-    st: &Opening,
+-) -> (BTreeMap<&'g str, usize>, BTreeMap<usize, usize>, usize) {
+-    let vis: BTreeMap<&str, usize> = tree
+-        .home
+-        .iter()
+-        .map(|(id, b)| (*id, tree.visible_of(*b, st)))
+-        .collect();
+-    let mut kids: BTreeMap<usize, usize> = BTreeMap::new();
+-    let mut boxed = 0;
+-    for (id, b) in &vis {
+-        if tree
+-            .boxes
+-            .get(*b)
+-            .and_then(|bx| bx.node)
+-            .is_some_and(|n| n.id == *id)
+-        {
+-            boxed += 1;
+-        } else {
+-            *kids.entry(*b).or_default() += 1;
+-        }
+-    }
+-    (vis, kids, boxed)
+-}
+-
+-/// 辺のまとめ（D → U・同じ箱の辺は捨てる・D と U と型の順）と、箱ごとの隣の箱。
+-fn merged<'t>(
+-    g: &Graph,
+-    tree: &'t Tree<'_>,
+-    vis: &BTreeMap<&str, usize>,
+-) -> (Vec<(EdgeKey<'t>, usize)>, Next<'t>) {
+-    let index = g.index();
+-    let id_of = |b: usize| tree.boxes.get(b).map_or("", |bx| bx.id.as_str());
+-    let mut merged: BTreeMap<EdgeKey, usize> = BTreeMap::new();
+-    let mut next: Next = BTreeMap::new();
+-    for e in &g.edges {
+-        let (Some(a), Some(b)) = (index.get(e.from.as_str()), index.get(e.to.as_str())) else {
+-            continue;
+-        };
+-        let (up, down) = match basis_end(e.edge_type, a.kind, b.kind) {
+-            EdgeEnd::From => (a.id.as_str(), b.id.as_str()),
+-            EdgeEnd::To => (b.id.as_str(), a.id.as_str()),
+-        };
+-        let (Some(&u), Some(&d)) = (vis.get(up), vis.get(down)) else {
+-            continue;
+-        };
+-        if u == d {
+-            continue;
+-        }
+-        let (u, d) = (id_of(u), id_of(d));
+-        *merged.entry((d, u, e.edge_type)).or_default() += 1;
+-        next.entry(u).or_default().insert(d);
+-        next.entry(d).or_default().insert(u);
+-    }
+-    let mut edges: Vec<(EdgeKey, usize)> = merged.into_iter().collect();
+-    edges.sort_by(|((d1, u1, t1), _), ((d2, u2, t2), _)| {
+-        natural_cmp(d1, d2)
+-            .then_with(|| natural_cmp(u1, u2))
+-            .then_with(|| t1.cmp(t2))
+-    });
+-    (edges, next)
+-}
+-
+-/// 箱の段の表（`order` の順に決める）。
+-fn ranks<'t>(
+-    tree: &'t Tree<'_>,
+-    shown: &[usize],
+-    edges: &[(EdgeKey<'t>, usize)],
+-) -> BTreeMap<&'t str, usize> {
+-    let id_of = |b: usize| tree.boxes.get(b).map_or("", |bx| bx.id.as_str());
+-    let mut outs: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+-    for ((d, u, _), _) in edges {
+-        outs.entry(d).or_default().push(u);
+-    }
+-    let mut order: Vec<&str> = shown.iter().map(|b| id_of(*b)).collect();
+-    order.sort_by(|a, b| natural_cmp(a, b));
+-    let mut rank: BTreeMap<&str, usize> = BTreeMap::new();
+-    let mut visiting: BTreeSet<&str> = BTreeSet::new();
+-    for id in &order {
+-        rank_of(id, &outs, &mut rank, &mut visiting);
+-    }
+-    rank
+-}
+-
+-/// 組の箱の節点（id と種類と題だけ）。
+-fn group_node(bx: &TreeBox<'_>) -> GraphNode {
+-    GraphNode {
+-        id: bx.id.clone(),
+-        kind: bx.kind,
+-        file: None,
+-        digest: None,
+-        title: bx.title.clone(),
+-        line: None,
+-        plain: None,
+-        eng: None,
+-        updated: None,
+-    }
+-}
+-
+-/// 箱 `b` の畳み（子が無ければ葉）。
+-fn fold_of(bx: &TreeBox<'_>, st: &Opening, b: usize) -> BoxFold {
+-    if bx.children.is_empty() {
+-        BoxFold::Leaf
+-    } else if st.is_open(b) {
+-        BoxFold::Open
+-    } else {
+-        BoxFold::Folded
+-    }
+-}
+-
+-/// まとめた辺の電文の列。
+-fn view_edges(edges: Vec<(EdgeKey<'_>, usize)>) -> Vec<ViewEdge> {
+-    edges
+-        .into_iter()
+-        .map(|((d, u, t), n)| ViewEdge {
+-            from: d.to_string(),
+-            to: u.to_string(),
+-            edge_type: t,
+-            count: count(n),
+-        })
+-        .collect()
+-}
+-
+-/// 箱の段（一度決めた段は決め直さない）。
+-fn rank_of<'g>(
+-    id: &'g str,
+-    outs: &BTreeMap<&'g str, Vec<&'g str>>,
+-    rank: &mut BTreeMap<&'g str, usize>,
+-    visiting: &mut BTreeSet<&'g str>,
+-) -> usize {
+-    if let Some(r) = rank.get(id) {
+-        return *r;
+-    }
+-    if !visiting.insert(id) {
+-        return 0;
+-    }
+-    let mut r = 0;
+-    for to in outs.get(id).into_iter().flatten() {
+-        r = r.max(rank_of(to, outs, rank, visiting) + 1);
+-    }
+-    visiting.remove(id);
+-    rank.insert(id, r);
+-    r
+-}
+-
+-/// 数を電文の幅へ（溢れたら上限に留める）。
+-pub(super) fn count(n: usize) -> u32 {
+-    u32::try_from(n).unwrap_or(u32::MAX)
+-}
+diff --git a/crates/tsuzuri-core/tests/dnedge.rs b/crates/tsuzuri-core/tests/dnedge.rs
+index 1ee46654df7e50b29ed4331b99d2f3f3283df063..2006ada85c59b5cfd3c69c8ca8d002626c2e82de 100644
+--- a/crates/tsuzuri-core/tests/dnedge.rs
++++ b/crates/tsuzuri-core/tests/dnedge.rs
+@@ -8,7 +8,7 @@ use serde_json::json;
+ use tsuzuri_contract::graph::{AroundDoc, EdgeType, Fold};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::graph::build::DESIGN_EDGE_TYPES;
+-use tsuzuri_core::graph::{Graph, Inputs, Verdict, around, build, check, view};
++use tsuzuri_core::graph::{Graph, Inputs, Verdict, around, build, check};
+ 
+ /// 節の索引（節点 5・辺 6・型は req と depends）。
+ const IDX: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）
+@@ -143,35 +143,8 @@ fn dnedge_index_builds() {
+ }
+ 
+ #[test]
+-fn dnedge_view_and_around() {
++fn dnedge_around_rows() {
+     let g = g();
+-    let v = view(&g);
+-    let edges: Vec<(&str, &str, EdgeType, u32)> = v
+-        .edges
+-        .iter()
+-        .filter(|e| matches!(e.edge_type, EdgeType::Req | EdgeType::Depends))
+-        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
+-        .collect();
+-    assert_eq!(
+-        edges,
+-        vec![
+-            ("~note:ex", "~srs:req", EdgeType::Req, 3),
+-            ("~note:ey", "~note:ex", EdgeType::Depends, 1),
+-            ("~note:ey", "~srs:req", EdgeType::Req, 1),
+-        ]
+-    );
+-    let rank = |id: &str| {
+-        v.nodes
+-            .iter()
+-            .find(|n| n.node.id == id)
+-            .map(|n| n.rank)
+-            .unwrap_or_else(|| panic!("{id} の箱が無い"))
+-    };
+-    assert_eq!(
+-        [rank("~srs:req"), rank("~note:ex"), rank("~note:ey")],
+-        [0, 1, 2]
+-    );
+-
+     let doc: AroundDoc = around(&g, "ex#b", 1, Fold::None).expect("ex#b の近傍");
+     let rows: Vec<(&str, i8, Option<EdgeType>)> = doc
+         .rows
+diff --git a/crates/tsuzuri-core/tests/dnrow.rs b/crates/tsuzuri-core/tests/dnrow.rs
+index 6f7fb032a160cdfac4fb646918ef13d005555c22..b4aa0eac7db4c0833c1abe8c17c1f05cf5ece16d 100644
+--- a/crates/tsuzuri-core/tests/dnrow.rs
++++ b/crates/tsuzuri-core/tests/dnrow.rs
+@@ -7,7 +7,7 @@ use std::path::Path;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind};
+ use tsuzuri_core::graph::build::{DESIGN_KINDS, NOTE_ROW_KIND, add_summary};
+-use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check, view};
++use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check};
+ 
+ /// folio の索引の形の 13 行（節点 5・辺 5）。
+ const IDX: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）
+@@ -331,27 +331,6 @@ fn dnrow_summary_fills_rows() {
+     }
+ }
+ 
+-#[test]
+-fn dnrow_view_band() {
+-    let v = view(&g());
+-    assert_eq!(v.total, 10);
+-    assert_eq!(v.cut, 0);
+-    let boxes: Vec<(&str, u32)> = v
+-        .nodes
+-        .iter()
+-        .filter(|n| n.node.kind == NodeKind::NoteRow)
+-        .map(|n| (n.node.id.as_str(), n.kids))
+-        .collect();
+-    assert_eq!(boxes, vec![("~note:nx", 2), ("~note:ny", 1)]);
+-    let edges: Vec<(&str, &str, u32)> = v
+-        .edges
+-        .iter()
+-        .filter(|e| e.edge_type == EdgeType::Design)
+-        .map(|e| (e.from.as_str(), e.to.as_str(), e.count))
+-        .collect();
+-    assert_eq!(edges, vec![("dn", "~note:nx", 2), ("dn", "~note:ny", 1)]);
+-}
+-
+ /// 計画と contracts の verify の filter の語（ほかの語を部分の字として含まない語に畳んだ語と後の行の接頭辞）。
+ const FILTER_WORDS: [&str; 140] = [
+     "aaround_", "accept_", "account_", "acctcore_", "acctdoc_", "accthb_", "accthome_",
+diff --git a/crates/tsuzuri-core/tests/gtuck.rs b/crates/tsuzuri-core/tests/gtuck.rs
+deleted file mode 100644
+index 4c1e09b867f4ec29b237e4d91445b2d8d8b8aef1..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-core/tests/gtuck.rs
++++ /dev/null
+@@ -1,623 +0,0 @@
+-//! グラフの眺めを組の箱で畳む歯（行 c-graph-fold・接頭辞 gtuck_）: 電文の既定・例のグラフの段・
+-//! 古い開きの畳み直し・帯の畳み直し・断りと捨てる id・塊の id・実物の見本の不変の値・開く列の字・純さ・自分の名。
+-//! グラフは歯の中で直に組む（実物の見本だけ fixture の字を build に渡す）。
+-#![cfg(test)]
+-
+-use std::collections::BTreeSet;
+-use std::path::{Path, PathBuf};
+-
+-use tsuzuri_contract::graph::{
+-    BoxFold, EdgeType, GraphEdge, GraphNode, GraphView, NodeKind, ViewNode,
+-};
+-use tsuzuri_contract::wire;
+-use tsuzuri_core::graph::fold::{CHUNK, open_list};
+-use tsuzuri_core::graph::view::VIEW_CAP;
+-use tsuzuri_core::graph::{BeadAttr, Graph, Inputs, RunAttr, build, view, view_open};
+-
+-const RULING: &str = "e.2:20260927T0000Z-1";
+-const RUN: &str = "e.1-20260927T000000Z";
+-
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn node(id: &str, kind: NodeKind) -> GraphNode {
+-    GraphNode {
+-        id: id.into(),
+-        kind,
+-        file: None,
+-        digest: None,
+-        title: id.into(),
+-        line: None,
+-        plain: None,
+-        eng: None,
+-        updated: None,
+-    }
+-}
+-
+-fn edge(from: &str, to: &str, edge_type: EdgeType) -> GraphEdge {
+-    GraphEdge {
+-        from: from.into(),
+-        to: to.into(),
+-        edge_type,
+-    }
+-}
+-
+-fn bead(kind: NodeKind, status: &str) -> BeadAttr {
+-    BeadAttr {
+-        kind,
+-        status: status.into(),
+-        labels: vec![],
+-        pointers: vec![],
+-        touches: vec![],
+-    }
+-}
+-
+-fn ids(list: &[&str]) -> Vec<String> {
+-    list.iter().map(|s| s.to_string()).collect()
+-}
+-
+-/// 例のグラフ（13 節点・16 辺・歯の file gview.rs と同じ）。
+-fn example() -> Graph {
+-    use EdgeType::*;
+-    let nodes = vec![
+-        node("P-1", NodeKind::Article),
+-        node("P-1.1", NodeKind::Norm),
+-        node("P-1.2", NodeKind::Norm),
+-        node("R-1", NodeKind::Rule),
+-        node("FR1", NodeKind::Req),
+-        node("AC1", NodeKind::Ac),
+-        node("ACT1", NodeKind::Actor),
+-        node("ADR-1", NodeKind::Adr),
+-        node("e", NodeKind::Epic),
+-        node("e.1", NodeKind::Task),
+-        node("e.2", NodeKind::Question),
+-        node(RULING, NodeKind::Ruling),
+-        node(RUN, NodeKind::Run),
+-    ];
+-    let edges = vec![
+-        edge("P-1", "P-1.1", InArticle),
+-        edge("P-1.1", "P-1", InArticle),
+-        edge("P-1", "P-1.2", InArticle),
+-        edge("P-1.2", "P-1", InArticle),
+-        edge("R-1", "P-1", ArticleRef),
+-        edge("P-1", "R-1", RelationsRules),
+-        edge("FR1", "P-1", Basis),
+-        edge("ADR-1", "P-1", Basis),
+-        edge("FR1", "AC1", VerifyAc),
+-        edge("AC1", "FR1", Verifies),
+-        edge("FR1", "ADR-1", Adrs),
+-        edge("e.1", "e", ParentChild),
+-        edge("e.2", "e", ParentChild),
+-        edge(RULING, "e.2", Answers),
+-        edge(RUN, "e.1", RunOf),
+-        edge("e.2", "FR1", Touches),
+-    ];
+-    Graph {
+-        nodes,
+-        edges,
+-        beads: [
+-            ("e".to_string(), bead(NodeKind::Epic, "open")),
+-            ("e.1".to_string(), bead(NodeKind::Task, "in_progress")),
+-            ("e.2".to_string(), bead(NodeKind::Question, "closed")),
+-        ]
+-        .into(),
+-        runs: [(
+-            RUN.to_string(),
+-            RunAttr {
+-                stage: Some("Landed".into()),
+-                account: None,
+-                unanswered: 0,
+-            },
+-        )]
+-        .into(),
+-        ..Graph::default()
+-    }
+-}
+-
+-/// epic `epic` と、その子の task `<epic>.1`〜`<epic>.<n>` を足す。
+-fn add_epic(g: &mut Graph, epic: &str, n: usize) {
+-    g.nodes.push(node(epic, NodeKind::Epic));
+-    for i in 1..=n {
+-        let task = format!("{epic}.{i}");
+-        g.nodes.push(node(&task, NodeKind::Task));
+-        g.edges.push(edge(&task, epic, EdgeType::ParentChild));
+-    }
+-}
+-
+-/// 子 619 の epic の見本（h と task h.1〜h.619 と条 A-1 と h.1 の走行 1 つ）。
+-fn hub() -> Graph {
+-    let mut g = Graph {
+-        nodes: vec![node("A-1", NodeKind::Article)],
+-        ..Graph::default()
+-    };
+-    add_epic(&mut g, "h", 619);
+-    g.nodes.push(node("h.1-r1", NodeKind::Run));
+-    g.edges.push(edge("h.1-r1", "h.1", EdgeType::RunOf));
+-    g
+-}
+-
+-/// 眺めの箱の (id・畳み・子の数)。
+-fn boxes(v: &GraphView) -> Vec<(&str, BoxFold, u32)> {
+-    v.nodes
+-        .iter()
+-        .map(|n| (n.node.id.as_str(), n.fold, n.kids))
+-        .collect()
+-}
+-
+-fn find<'v>(v: &'v GraphView, id: &str) -> &'v ViewNode {
+-    v.nodes
+-        .iter()
+-        .find(|n| n.node.id == id)
+-        .unwrap_or_else(|| panic!("箱 {id} が無い: {:?}", boxes(v)))
+-}
+-
+-#[test]
+-fn gtuck_wire_defaults() {
+-    let node = r#"{"node":{"id":"x","kind":"条","file":null,"digest":null,"title":"x"},"status":null,"rank":0,"kids":0,"degree":0}"#;
+-    let n: ViewNode = wire::decode(node).expect("欄 group と fold の無い節点の字");
+-    assert_eq!((n.group, n.fold), (false, BoxFold::Leaf));
+-    let text = format!(
+-        r#"{{"nodes":[{node}],"edges":[],"shown":1,"folded":0,"cut":0,"total":1,"unread":[]}}"#
+-    );
+-    let v: GraphView = wire::decode(&text).expect("欄 open と refused の無い眺めの字");
+-    assert!(v.open.is_empty() && v.refused.is_empty());
+-    assert_eq!(BoxFold::default(), BoxFold::Leaf);
+-    let words: Vec<String> = BoxFold::ALL
+-        .iter()
+-        .map(|f| wire::encode(f).expect("語"))
+-        .collect();
+-    assert_eq!(words, ["\"leaf\"", "\"folded\"", "\"open\""]);
+-}
+-
+-#[test]
+-fn gtuck_levels_example() {
+-    let asks = ids(&[
+-        "~art:P",
+-        "P-1",
+-        "~srs:req",
+-        "FR1",
+-        "e",
+-        "e.1",
+-        "~rule",
+-        "~adr",
+-        "~srs:actor",
+-    ]);
+-    let v = view_open(&example(), &asks);
+-    levels_nodes(&v);
+-    use EdgeType::*;
+-    let edges: Vec<(&str, &str, EdgeType, u32)> = v
+-        .edges
+-        .iter()
+-        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
+-        .collect();
+-    assert_eq!(
+-        edges,
+-        vec![
+-            ("AC1", "FR1", VerifyAc, 1),
+-            ("AC1", "FR1", Verifies, 1),
+-            ("ADR-1", "P-1", Basis, 1),
+-            ("FR1", "ADR-1", Adrs, 1),
+-            ("FR1", "P-1", Basis, 1),
+-            ("P-1.1", "P-1", InArticle, 2),
+-            ("P-1.2", "P-1", InArticle, 2),
+-            ("R-1", "P-1", RelationsRules, 1),
+-            ("R-1", "P-1", ArticleRef, 1),
+-            ("e", "FR1", Touches, 1),
+-            ("e.1", "e", ParentChild, 1),
+-            (RUN, "e.1", RunOf, 1),
+-        ]
+-    );
+-    assert_eq!((v.shown, v.folded, v.cut, v.total), (16, 2, 0, 13));
+-    assert_eq!(v.open, asks);
+-    assert!(v.refused.is_empty());
+-}
+-
+-/// 例のグラフの段の眺めの箱の (id・段・子の数・次数・畳み) を見る。
+-fn levels_nodes(v: &GraphView) {
+-    use BoxFold::*;
+-    let got: Vec<(&str, u32, u32, u32, BoxFold)> = v
+-        .nodes
+-        .iter()
+-        .map(|n| (n.node.id.as_str(), n.rank, n.kids, n.degree, n.fold))
+-        .collect();
+-    assert_eq!(
+-        got,
+-        vec![
+-            ("P-1", 0, 0, 5, Open),
+-            ("~art:P", 0, 0, 0, Open),
+-            ("P-1.1", 1, 0, 1, Leaf),
+-            ("P-1.2", 1, 0, 1, Leaf),
+-            ("R-1", 1, 0, 1, Leaf),
+-            ("~rule", 0, 0, 0, Open),
+-            ("FR1", 2, 0, 4, Open),
+-            ("~srs:req", 0, 0, 0, Open),
+-            ("AC1", 3, 0, 1, Leaf),
+-            ("ACT1", 0, 0, 0, Leaf),
+-            ("~srs:actor", 0, 0, 0, Open),
+-            ("ADR-1", 1, 0, 2, Leaf),
+-            ("~adr", 0, 0, 0, Open),
+-            ("e", 3, 2, 2, Open),
+-            ("e.1", 4, 0, 2, Open),
+-            (RUN, 5, 0, 1, Leaf),
+-        ]
+-    );
+-}
+-
+-#[test]
+-fn gtuck_refold_oldest() {
+-    let mut g = Graph::default();
+-    for i in 1..=30 {
+-        g.nodes.push(node(&format!("R-{i}"), NodeKind::Rule));
+-        g.nodes.push(node(&format!("ADR-{i}"), NodeKind::Adr));
+-        g.nodes.push(node(&format!("FR{i}"), NodeKind::Req));
+-    }
+-    let asks = ids(&[
+-        "~rule",
+-        "~rule~1-12",
+-        "~adr",
+-        "~adr~1-12",
+-        "~srs:req",
+-        "~srs:req~1-12",
+-    ]);
+-    let v = view_open(&g, &asks);
+-    assert_eq!(
+-        v.open,
+-        ids(&["~adr", "~adr~1-12", "~srs:req", "~srs:req~1-12"])
+-    );
+-    let rule = find(&v, "~rule");
+-    assert_eq!((rule.fold, rule.kids), (BoxFold::Folded, 30));
+-    assert_eq!(v.shown, 33);
+-    assert!(v.refused.is_empty());
+-}
+-
+-#[test]
+-fn gtuck_bands_make_room() {
+-    let mut g = Graph::default();
+-    for (id, kind) in [
+-        ("A-1", NodeKind::Article),
+-        ("N-1", NodeKind::Article),
+-        ("P-1", NodeKind::Article),
+-        ("G-1", NodeKind::Goal),
+-        ("FR1", NodeKind::Req),
+-        ("NFR1", NodeKind::Nfr),
+-        ("AC1", NodeKind::Ac),
+-        ("CON1", NodeKind::Constraint),
+-        ("ACT1", NodeKind::Actor),
+-        ("OUT1", NodeKind::Output),
+-    ] {
+-        g.nodes.push(node(id, kind));
+-    }
+-    add_epic(&mut g, "E", 144);
+-    for i in 1..=12 {
+-        let run = format!("E.1-r{i}");
+-        g.nodes.push(node(&run, NodeKind::Run));
+-        g.edges.push(edge(&run, "E.1", EdgeType::RunOf));
+-    }
+-    assert_eq!(g.nodes.len(), 167);
+-
+-    let first = view(&g);
+-    let shown: Vec<&str> = first.nodes.iter().map(|n| n.node.id.as_str()).collect();
+-    assert_eq!(
+-        shown,
+-        vec![
+-            "~art:A",
+-            "~art:N",
+-            "~art:P",
+-            "~srs:goal",
+-            "~srs:req",
+-            "~srs:nfr",
+-            "~srs:ac",
+-            "~srs:constraint",
+-            "~srs:actor",
+-            "~srs:output",
+-            "E",
+-        ]
+-    );
+-
+-    let mut asks = ids(&["E", "E~1-12", "E.1"]);
+-    let v = view_open(&g, &asks);
+-    assert_eq!(v.open, asks);
+-    assert_eq!(v.shown, 39);
+-    for (band, kids) in [("~b:constitution", 3), ("~b:SRS", 7)] {
+-        let b = find(&v, band);
+-        assert_eq!((b.group, b.fold, b.kids), (true, BoxFold::Folded, kids), "{band}");
+-    }
+-    assert!(v.shown as usize <= VIEW_CAP);
+-
+-    asks.push("~b:SRS".into());
+-    let v = view_open(&g, &asks);
+-    assert_eq!(v.open, ids(&["~b:SRS"]));
+-    assert_eq!(v.shown, 9);
+-    let e = find(&v, "E");
+-    assert_eq!((e.fold, e.kids), (BoxFold::Folded, 156));
+-    assert_eq!(find(&v, "~b:constitution").fold, BoxFold::Folded);
+-    assert!(v.refused.is_empty());
+-}
+-
+-#[test]
+-fn gtuck_refuse_and_ignore() {
+-    let mut g = Graph::default();
+-    for i in 2..=30 {
+-        g.nodes.push(node(&format!("X{i}"), NodeKind::Epic));
+-    }
+-    add_epic(&mut g, "X1", 144);
+-    let v = view_open(&g, &ids(&["X1", "X2", "no-such", "X1"]));
+-    assert_eq!(v.refused, ids(&["X1"]));
+-    assert!(v.open.is_empty());
+-    assert_eq!(boxes(&v), boxes(&view(&g)));
+-    assert!(v.shown as usize <= VIEW_CAP);
+-
+-    let v = view_open(&hub(), &ids(&["h~1-12", "h.1", "A-1", "", "~b:nope"]));
+-    assert!(v.open.is_empty() && v.refused.is_empty());
+-    assert_eq!(v.shown, 2);
+-}
+-
+-#[test]
+-fn gtuck_chunk_ids() {
+-    let v = view_open(&hub(), &ids(&["h", "h~577-619"]));
+-    let shown: Vec<&str> = v.nodes.iter().map(|n| n.node.id.as_str()).collect();
+-    assert_eq!(
+-        shown,
+-        vec![
+-            "~art:A",
+-            "h",
+-            "h~1-144",
+-            "h~145-288",
+-            "h~289-432",
+-            "h~433-576",
+-            "h~577-588",
+-            "h~577-619",
+-            "h~589-600",
+-            "h~601-612",
+-            "h~613-619",
+-        ]
+-    );
+-    assert_eq!(find(&v, "h~1-144").kids, 145);
+-    assert_eq!(find(&v, "h~577-588").kids, 12);
+-    assert_eq!(find(&v, "h~613-619").kids, 7);
+-    assert_eq!(find(&v, "h~577-588").node.title, "h.577 … h.588");
+-    assert!(
+-        v.edges
+-            .iter()
+-            .all(|e| e.edge_type == EdgeType::ParentChild && e.to == "h")
+-    );
+-    let counts: Vec<u32> = v.edges.iter().map(|e| e.count).collect();
+-    let mut sorted = counts.clone();
+-    sorted.sort_unstable();
+-    assert_eq!(sorted, vec![7, 12, 12, 12, 144, 144, 144, 144], "{counts:?}");
+-    assert_eq!(v.open, ids(&["h", "h~577-619"]));
+-}
+-
+-/// 眺めの不変の値（落とさない・上限・箱の id・数の和・辺の両端）。
+-fn assert_whole(v: &GraphView, what: &str) {
+-    assert_eq!(v.cut, 0, "{what}");
+-    assert!(v.shown as usize <= VIEW_CAP, "{what}: {}", v.shown);
+-    assert_eq!(v.shown as usize, v.nodes.len(), "{what}");
+-    let names: BTreeSet<&str> = v.nodes.iter().map(|n| n.node.id.as_str()).collect();
+-    assert_eq!(names.len(), v.nodes.len(), "{what}: 箱の id が重なる");
+-    let leaves = v.nodes.iter().filter(|n| !n.group).count() as u32;
+-    assert_eq!(leaves + v.folded, v.total, "{what}");
+-    for e in &v.edges {
+-        assert!(
+-            names.contains(e.from.as_str()) && names.contains(e.to.as_str()),
+-            "{what}: {e:?}"
+-        );
+-        assert_ne!(e.from, e.to, "{what}");
+-    }
+-}
+-
+-#[test]
+-fn gtuck_real_every_node_boxed() {
+-    let g = build(&Inputs {
+-        design_index: &read("tests/fixtures/graph/real/design-index.tsv"),
+-        ledger: &read("tests/fixtures/ledger/bd-list-8.json"),
+-        events: &read("tests/fixtures/graph/real/events.jsonl"),
+-    });
+-    let first = view(&g);
+-    assert!(first.shown <= 20, "{}", first.shown);
+-    assert_whole(&first, "最初の図");
+-    let folded: Vec<&str> = first
+-        .nodes
+-        .iter()
+-        .filter(|n| n.fold == BoxFold::Folded)
+-        .map(|n| n.node.id.as_str())
+-        .collect();
+-    assert!(!folded.is_empty());
+-    for id in folded {
+-        let v = view_open(&g, &ids(&[id]));
+-        assert_whole(&v, id);
+-        assert_eq!(v.open, ids(&[id]), "{id}");
+-        assert!(v.refused.is_empty(), "{id}");
+-    }
+-}
+-
+-#[test]
+-fn gtuck_open_list_split() {
+-    assert_eq!(open_list("a,,b"), ids(&["a", "b"]));
+-    assert!(open_list("").is_empty());
+-    assert!(open_list(",,").is_empty());
+-    assert_eq!(open_list(" a , b"), ids(&[" a ", " b"]));
+-    assert_eq!(open_list("~art:P,e.1"), ids(&["~art:P", "e.1"]));
+-    assert_eq!(CHUNK, 12);
+-    assert_eq!(VIEW_CAP, 40);
+-}
+-
+-#[test]
+-fn gtuck_pure_text() {
+-    for rel in [
+-        "crates/tsuzuri-core/src/graph/fold.rs",
+-        "crates/tsuzuri-core/src/graph/view.rs",
+-    ] {
+-        let text = read(rel);
+-        for word in ["std::fs", "std::process", "SystemTime"] {
+-            assert!(!text.contains(word), "{rel} に {word}");
+-        }
+-    }
+-    let manifest = read("crates/tsuzuri-core/Cargo.toml");
+-    let mut names = Vec::new();
+-    let mut inside = false;
+-    for line in manifest.lines().map(str::trim) {
+-        if line.starts_with('[') {
+-            inside = line == "[dependencies]";
+-            continue;
+-        }
+-        if inside
+-            && !line.is_empty()
+-            && !line.starts_with('#')
+-            && let Some((name, _)) = line.split_once(['=', '.'])
+-        {
+-            names.push(name.trim().to_string());
+-        }
+-    }
+-    assert_eq!(names, ids(&["serde", "serde_json", "tsuzuri-contract"]));
+-}
+-
+-/// 着地済みの行と流れている行の verify の filter の語（接頭辞 gtuck_ は並べない）。
+-const FILTER_WORDS: &[&str] = &[
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hbconf_",
+-    "hbpost_",
+-    "hbproc_",
+-    "hbroute_",
+-    "hook_",
+-    "hsblock_",
+-    "hsderive_",
+-    "hspage_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "mlink_",
+-    "gnav_",
+-    "mkeys_",
+-    "klink_",
+-    "ilink_",
+-    "afocus_",
+-    "nxact_",
+-    "urpanel_",
+-    "saxis_",
+-    "ticker_",
+-    "hfig_",
+-    "pmore_",
+-    "lspark_",
+-    "apop_",
+-    "brand_",
+-    "runsdoc_",
+-    "nbatch_",
+-    "kcli_",
+-    "qgate_",
+-    "nsum_",
+-    "hcard_",
+-    "ntime_",
+-    "ptitle_",
+-    "ncard_",
+-    "hsym_",
+-    "smore_",
+-    "lcard_",
+-    "aaround_",
+-    "hruling_",
+-    "sxaxis_",
+-    "plimit_",
+-    "bport_",
+-    "fstop_",
+-    "nsumw_",
+-    "fmark_",
+-    "fserve_",
+-    "cadopt_",
+-    "tipx_",
+-    "hcsess_",
+-    "hcproj_",
+-    "sesplit_",
+-    "mstore_",
+-    "athr_",
+-    "qblock_",
+-    "wsteady_",
+-    "gsum_",
+-    "nstall_",
+-    "pfold_",
+-    "uword_",
+-    "cround_",
+-    "cgdom_",
+-    "csled_",
+-    "lhome_",
+-    "shb_",
+-    "ghb_",
+-    "nact_",
+-    "aord_",
+-    "mtree_",
+-    "rhold_",
+-    "wstrip_",
+-    "flight_",
+-    "qkey_",
+-    "pwhole_",
+-    "stage_term_",
+-    "stage_cdp_",
+-    "pclosed_",
+-    "btuck_",
+-];
+-
+-#[test]
+-fn gtuck_own_names_clean() {
+-    let text = read("crates/tsuzuri-core/tests/gtuck.rs");
+-    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+-    let names: Vec<&str> = lines
+-        .windows(2)
+-        .filter(|w| w[0] == "#[test]")
+-        .map(|w| {
+-            w[1].strip_prefix("fn ")
+-                .and_then(|rest| rest.split_once('('))
+-                .map(|(name, _)| name)
+-                .unwrap_or_else(|| panic!("test の属性の次が fn でない: {}", w[1]))
+-        })
+-        .collect();
+-    assert!(names.len() >= 10, "{names:?}");
+-    for name in names {
+-        let rest = name
+-            .strip_prefix("gtuck_")
+-            .unwrap_or_else(|| panic!("{name} が gtuck_ で始まらない"));
+-        for word in FILTER_WORDS {
+-            assert!(!rest.contains(word), "{name} が {word} を含む");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-core/tests/gview.rs b/crates/tsuzuri-core/tests/gview.rs
+index ae8e64ccab14c8911132cae9cb67902c1d1deef1..8dd99f7572c4a37a6ed9e6af0c88d3773e6680fc 100644
+--- a/crates/tsuzuri-core/tests/gview.rs
++++ b/crates/tsuzuri-core/tests/gview.rs
+@@ -1,4 +1,4 @@
+-//! グラフの眺めと近傍の歯（便 c-view・接頭辞 gview_）: 辺の向き・id の自然な順・次数・眺め・近傍。
++//! 近傍の歯（便 c-view・接頭辞 gview_）: 辺の向き・id の自然な順・次数・近傍。
+ //! 例のグラフは歯の中で直に組む（13 節点・16 辺）。hub-619.json は便 c の着地済みの fixture を読むだけ。
+ #![cfg(test)]
+ 
+@@ -8,12 +8,10 @@ use std::path::{Path, PathBuf};
+ 
+ use serde_json::Value;
+ use tsuzuri_contract::graph::{
+-    AroundDoc, BoxFold, EdgeEnd, EdgeType, Fold, GraphEdge, GraphNode, GraphView, NodeKind,
+-    basis_end, natural_cmp,
++    AroundDoc, EdgeEnd, EdgeType, Fold, GraphEdge, GraphNode, NodeKind, basis_end, natural_cmp,
+ };
+ use tsuzuri_core::graph::around::{AROUND_STEPS, HUB_DEGREE};
+-use tsuzuri_core::graph::view::VIEW_CAP;
+-use tsuzuri_core::graph::{BeadAttr, Graph, Inputs, RunAttr, around, build, view, view_open};
++use tsuzuri_core::graph::{BeadAttr, Graph, Inputs, RunAttr, around, build};
+ 
+ const RULING: &str = "e.2:20260927T0000Z-1";
+ const RUN: &str = "e.1-20260927T000000Z";
+@@ -150,22 +148,6 @@ fn example() -> Graph {
+     }
+ }
+ 
+-/// 眺めの節点の (id・段・子の数・次数)。
+-fn view_nodes(v: &GraphView) -> Vec<(&str, u32, u32, u32)> {
+-    v.nodes
+-        .iter()
+-        .map(|n| (n.node.id.as_str(), n.rank, n.kids, n.degree))
+-        .collect()
+-}
+-
+-/// 眺めの辺の (from・to・型・本数)。
+-fn view_edges(v: &GraphView) -> Vec<(&str, &str, EdgeType, u32)> {
+-    v.edges
+-        .iter()
+-        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
+-        .collect()
+-}
+-
+ /// 近傍の行の (id・列・1 つ前の節点・辺の型)。
+ fn around_rows(a: &AroundDoc) -> Vec<(&str, i8, Option<&str>, Option<EdgeType>)> {
+     a.rows
+@@ -249,113 +231,6 @@ fn gview_degree_counts_neighbours() {
+     assert_eq!(loose.degrees(), d, "自分へ戻る辺と端の無い辺は数えない");
+ }
+ 
+-#[test]
+-fn gview_example_view() {
+-    let v = view(&example());
+-    assert_eq!(
+-        view_nodes(&v),
+-        vec![
+-            ("~art:P", 0, 3, 3),
+-            ("~rule", 1, 1, 1),
+-            ("~srs:req", 2, 2, 3),
+-            ("~srs:actor", 0, 1, 0),
+-            ("~adr", 1, 1, 2),
+-            ("e", 3, 4, 2),
+-        ]
+-    );
+-    let groups: Vec<bool> = v.nodes.iter().map(|n| n.group).collect();
+-    assert_eq!(groups, vec![true, true, true, true, true, false]);
+-    assert!(v.nodes.iter().all(|n| n.fold == BoxFold::Folded));
+-    use EdgeType::*;
+-    assert_eq!(
+-        view_edges(&v),
+-        vec![
+-            ("e", "~srs:req", Touches, 1),
+-            ("~adr", "~art:P", Basis, 1),
+-            ("~rule", "~art:P", RelationsRules, 1),
+-            ("~rule", "~art:P", ArticleRef, 1),
+-            ("~srs:req", "~adr", Adrs, 1),
+-            ("~srs:req", "~art:P", Basis, 1),
+-        ]
+-    );
+-    assert_eq!((v.shown, v.folded, v.cut, v.total), (6, 12, 0, 13));
+-    let status: Vec<Option<&str>> = v.nodes.iter().map(|n| n.status.as_deref()).collect();
+-    assert_eq!(status, vec![None, None, None, None, None, Some("open")]);
+-    assert!(v.open.is_empty() && v.refused.is_empty());
+-    assert!(v.unread.is_empty());
+-}
+-
+-#[test]
+-fn gview_hub_619_view_is_capped() {
+-    let g = hub_619();
+-    let v = view(&g);
+-    assert_eq!(view_nodes(&v), vec![("~art:A", 0, 1, 0), ("h", 0, 620, 619)]);
+-    assert!(v.nodes[0].group && !v.nodes[1].group);
+-    assert!(v.edges.is_empty());
+-    assert_eq!((v.shown, v.folded, v.cut, v.total), (2, 621, 0, 622));
+-
+-    let v = view_open(&g, &["h".to_string()]);
+-    let boxes: Vec<(&str, BoxFold)> = v
+-        .nodes
+-        .iter()
+-        .map(|n| (n.node.id.as_str(), n.fold))
+-        .collect();
+-    assert_eq!(
+-        boxes,
+-        vec![
+-            ("~art:A", BoxFold::Folded),
+-            ("h", BoxFold::Open),
+-            ("h~1-144", BoxFold::Folded),
+-            ("h~145-288", BoxFold::Folded),
+-            ("h~289-432", BoxFold::Folded),
+-            ("h~433-576", BoxFold::Folded),
+-            ("h~577-619", BoxFold::Folded),
+-        ]
+-    );
+-    use EdgeType::ParentChild;
+-    assert_eq!(
+-        view_edges(&v),
+-        vec![
+-            ("h~1-144", "h", ParentChild, 144),
+-            ("h~145-288", "h", ParentChild, 144),
+-            ("h~289-432", "h", ParentChild, 144),
+-            ("h~433-576", "h", ParentChild, 144),
+-            ("h~577-619", "h", ParentChild, 43),
+-        ]
+-    );
+-    assert_eq!((v.shown, v.folded, v.cut, v.total), (7, 621, 0, 622));
+-    assert!(v.shown as usize <= VIEW_CAP);
+-    let shown: BTreeSet<&str> = v.nodes.iter().map(|n| n.node.id.as_str()).collect();
+-    assert!(
+-        v.edges
+-            .iter()
+-            .all(|e| shown.contains(e.from.as_str()) && shown.contains(e.to.as_str()))
+-    );
+-}
+-
+-#[test]
+-fn gview_cycle_view_returns() {
+-    let g = Graph {
+-        nodes: vec![
+-            node("A-1", NodeKind::Article),
+-            node("A-2", NodeKind::Article),
+-        ],
+-        edges: vec![
+-            edge("A-1", "A-2", EdgeType::RelationsArticles),
+-            edge("A-2", "A-1", EdgeType::RelationsArticles),
+-        ],
+-        ..Graph::default()
+-    };
+-    let v = view_open(&g, &["~art:A".to_string()]);
+-    assert_eq!(v.edges.len(), 2);
+-    let ranks: Vec<(&str, u32)> = v
+-        .nodes
+-        .iter()
+-        .map(|n| (n.node.id.as_str(), n.rank))
+-        .collect();
+-    assert_eq!(ranks, vec![("A-1", 2), ("A-2", 1), ("~art:A", 0)]);
+-}
+-
+ #[test]
+ fn gview_example_around_each_fold() {
+     use EdgeType::*;

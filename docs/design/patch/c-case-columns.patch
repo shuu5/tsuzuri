@@ -1,0 +1,525 @@
+diff --git a/crates/tsuzuri-boundary/src/server/board.rs b/crates/tsuzuri-boundary/src/server/board.rs
+index d0712fb4dd25d6f7f02310277e9c2400fe84f30c..435de5a152e48a95b63c59b7cad8122031391de7 100644
+--- a/crates/tsuzuri-boundary/src/server/board.rs
++++ b/crates/tsuzuri-boundary/src/server/board.rs
+@@ -93,9 +93,16 @@ impl Sources {
+ }
+ 
+ /// pipeline の板（札は集めた台帳の字と event log の字から組み、event log が読めなければ「まだ分からない」・
++/// 札の段は器の局面の出力 `cases` も受けて中核の `board_with_cases` が決める・行 c-case-columns・
+ /// 形の崩れの一覧は持った組から写し、組が無ければ「まだ分からない」）。
+-pub fn pipeline(texts: &Texts, kept: Option<&Kept>, now: EpochSecs) -> PipelineBoard {
+-    let mut board = tsuzuri_core::pipeline::board(&texts.ledger, &texts.events, now).board;
++pub fn pipeline(
++    texts: &Texts,
++    kept: Option<&Kept>,
++    cases: &tsuzuri_contract::case::CaseDoc,
++    now: EpochSecs,
++) -> PipelineBoard {
++    let mut board =
++        tsuzuri_core::pipeline::board_with_cases(&texts.ledger, &texts.events, cases, now).board;
+     board.misfits = form::misfits(kept, now);
+     board
+ }
+diff --git a/crates/tsuzuri-boundary/src/server/routes/pipeline.rs b/crates/tsuzuri-boundary/src/server/routes/pipeline.rs
+index 1aa3d7532e519883531819cc6edb48996a5816e0..a0f9d48ee8ecc11131284c10177498a54f8361aa 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/pipeline.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/pipeline.rs
+@@ -2,8 +2,10 @@
+ //! 最初の要求が器の doctor の台帳の形の行の撃ちを許し（`Form::arm`・知らせの接続も許す）、口は持った組を読むだけで器を撃たない。
+ //! 札は集めた今の台帳の字から組み、形の崩れの一覧は見張りの読みの周の台帳の字と撃ちを終えた台帳の形の行の組から写す
+ //! （行 c-pipe-misfit・行 c-misfit-pair）。
++//! 札の段は、state dir の器の局面の出力を要求のたびに読んで中核の `board_with_cases` が決める（`cases_of`・行 c-case-columns）。
+ 
+ use tsuzuri_contract::wire;
++use tsuzuri_core::case::cases_of;
+ 
+ use crate::server::http::{Request, Response};
+ use crate::server::route::{Entry, Key, Match};
+@@ -24,10 +26,17 @@ fn pipeline(_: &Request, shared: &Shared) -> Response {
+         form.arm();
+         form.kept()
+     });
++    let (out, marks) = shared.cases.texts();
++    let cases = cases_of(&out, marks.as_deref());
+     aged(
+         json(
+             200,
+-            wire::encode(&board::pipeline(&texts, kept.as_ref(), events::now())),
++            wire::encode(&board::pipeline(
++                &texts,
++                kept.as_ref(),
++                &cases,
++                events::now(),
++            )),
+         ),
+         stale,
+     )
+diff --git a/crates/tsuzuri-boundary/tests/bvqsrv.rs b/crates/tsuzuri-boundary/tests/bvqsrv.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2956ca636e4a567935556a7dc3a1d563922289b0
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/bvqsrv.rs
+@@ -0,0 +1,162 @@
++//! 行 c-case-columns の歯（境界・接頭辞 bvqsrv_）: 口 GET /api/pipeline が state dir の器の局面の出力を要求のたびに読み、
++//! 走行の無い札の段と理由と since を契約の部品で決める（読めなければ台帳の blocks の割り）。
++//! server は同じ process の thread で 127.0.0.1 の空き port に立て、GET を素の TCP で撃つ。台帳は偽の bd が返す字。
++#![cfg(test)]
++
++use std::fs;
++use std::io::{Read, Write};
++use std::net::{SocketAddr, TcpStream};
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::thread;
++use std::time::Duration;
++
++use tsuzuri_boundary::server::{Config, Server};
++use tsuzuri_contract::board::{PipelineBoard, Reading, Stage};
++use tsuzuri_contract::wire;
++
++/// 部品の since（2026-09-27T11:30:00Z の epoch 秒）。
++const SINCE_SECS: u64 = 1_790_508_600;
++
++/// 配れる open の task の字（acceptance に設計 pointer の行・blocker を選ぶ）。
++fn task(id: &str, blocker: Option<&str>) -> String {
++    let deps = blocker.map_or(String::new(), |on| {
++        format!(r#","dependencies":[{{"issue_id":"{id}","depends_on_id":"{on}","type":"blocks"}}]"#)
++    });
++    format!(
++        r#"{{"id":"{id}","title":"t {id}","status":"open","issue_type":"task","acceptance_criteria":"design = contracts/x.toml#{id}"{deps}}}"#
++    )
++}
++
++/// 節の局面の出力（qs.1 は dependency・qs.2 は host-busy・qs.3 の部品は無い）。
++fn lifecycle() -> String {
++    let part = |id: &str, reason: &str| {
++        format!(
++            r#"{{"part":"contract","id":"{id}","phase":"contract-queued","turn":"vessel","since":"2026-09-27T11:30:00Z","reason":"{reason}","closed":false,"overdue":null,"links":{{"on":[]}}}}"#
++        )
++    };
++    format!(
++        r#"{{"version":1,"generated_at":"2026-09-27T11:59:00Z","parts":[{},{}]}}"#,
++        part("qs.1", "dependency"),
++        part("qs.2", "host-busy")
++    )
++}
++
++/// 歯ごとの作業場（repo・面の file の置き場・state dir・偽の bd）。
++struct Place {
++    root: PathBuf,
++}
++
++impl Place {
++    fn new(name: &str) -> Place {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("bvqsrv")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        for dir in [
++            root.join("repo/.beads"),
++            root.join("files"),
++            root.join("state/fleet"),
++        ] {
++            fs::create_dir_all(dir).expect("置き場");
++        }
++        fs::write(root.join("files/index.html"), "tz").expect("index.html");
++        let ledger = [
++            task("qs.1", None),
++            task("qs.2", Some("qs.3")),
++            task("qs.3", None),
++        ];
++        fs::write(root.join("ledger.json"), format!("[{}]", ledger.join(","))).expect("台帳の字");
++        let run = r#"{"schema":1,"ts":"2026-09-27T11:00:00Z","kind":"RunCreated","run":"qs.9-20260927T110000Z","bead":"qs.9","stage":"Intake"}"#;
++        fs::write(root.join("state/fleet/events.jsonl"), format!("{run}\n")).expect("event log");
++        let bd = root.join("bd");
++        let body = format!(
++            "#!/bin/sh\nexec cat '{}'\n",
++            root.join("ledger.json").display()
++        );
++        fs::write(&bd, body).expect("偽の bd");
++        fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).expect("偽の bd の権限");
++        Place { root }
++    }
++
++    /// state dir の fleet の下に局面の出力を置く。
++    fn put_lifecycle(&self) {
++        fs::write(self.root.join("state/fleet/lifecycle.json"), lifecycle()).expect("局面の出力");
++    }
++
++    fn serve(&self) -> SocketAddr {
++        let config = Config {
++            bd: self.root.join("bd").into(),
++            state_dir: Some(self.root.join("state")),
++            ..Config::new(
++                self.root.join("repo"),
++                "127.0.0.1:0".parse().expect("bind 先"),
++                self.root.join("files"),
++            )
++        };
++        let server = Server::bind(&config).expect("起動");
++        let addr = server.local_addr().expect("口の住所");
++        thread::spawn(move || server.run());
++        addr
++    }
++}
++
++/// GET /api/pipeline を 1 つ撃ち、板を読む（200 でなければ落ちる）。
++fn pipeline(addr: SocketAddr) -> PipelineBoard {
++    let mut s = TcpStream::connect(addr).expect("接続");
++    s.set_read_timeout(Some(Duration::from_secs(20)))
++        .expect("timeout");
++    s.write_all(format!("GET /api/pipeline HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
++        .expect("要求を書く");
++    let mut out = Vec::new();
++    s.read_to_end(&mut out).expect("応答を読む");
++    let text = String::from_utf8(out).expect("応答の字");
++    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
++    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
++    wire::decode(body).expect("板の電文の形")
++}
++
++/// 札の段と理由と since（札が無ければ落ちる）。
++fn row(b: &PipelineBoard, id: &str) -> (Stage, Option<String>, Option<u64>) {
++    let Reading::Known(cards) = &b.cards else {
++        panic!("札が Unknown");
++    };
++    let c = cards
++        .iter()
++        .find(|c| c.contract.as_str() == id)
++        .unwrap_or_else(|| panic!("{id} の札が無い"));
++    (c.stage, c.reason.clone(), c.since)
++}
++
++#[test]
++fn bvqsrv_columns_from_lifecycle() {
++    let place = Place::new("cased");
++    place.put_lifecycle();
++    let b = pipeline(place.serve());
++    assert_eq!(
++        row(&b, "qs.1"),
++        (Stage::Blocked, Some("dependency".into()), Some(SINCE_SECS))
++    );
++    assert_eq!(
++        row(&b, "qs.2"),
++        (Stage::Queued, Some("host-busy".into()), Some(SINCE_SECS))
++    );
++    assert_eq!(row(&b, "qs.3"), (Stage::Queued, None, None), "部品の無い札");
++}
++
++#[test]
++fn bvqsrv_unreadable_falls_back_then_reads() {
++    let place = Place::new("fallback");
++    let addr = place.serve();
++    let b = pipeline(addr);
++    assert_eq!(row(&b, "qs.1"), (Stage::Queued, None, None));
++    assert_eq!(
++        row(&b, "qs.2"),
++        (Stage::Blocked, None, None),
++        "台帳の blocks"
++    );
++    place.put_lifecycle();
++    let b = pipeline(addr);
++    assert_eq!(row(&b, "qs.1").0, Stage::Blocked, "要求のたびに読む");
++    assert_eq!(row(&b, "qs.2").0, Stage::Queued);
++}
+diff --git a/crates/tsuzuri-core/src/pipeline.rs b/crates/tsuzuri-core/src/pipeline.rs
+index c34a7cd4f07c00c658546b5fb8c26eed9f97d8d9..1a43a9b9886c396fd86c4c207e37c14270b9c958 100644
+--- a/crates/tsuzuri-core/src/pipeline.rs
++++ b/crates/tsuzuri-core/src/pipeline.rs
+@@ -21,6 +21,11 @@
+ //! 段と理由のままで ci は None。閉じていない bead（台帳が読めないときと台帳に無い bead も）の読みが `CI_STALLS` に在れば
+ //! その段にし、段の理由は器の終端の detail の字のまま。ほかは段と理由のままで ci はその読み。Blocked と Queued の札の ci は None。
+ //! 札の since は段を決めた最後の event の ts の時刻で、今を引かない（板の電文は今の時刻に依らない・経過は面が今から引く）。
++//! 器の RunStage の段 Blocked（承認待ち・器の局面 run-blocked）は段 Blocked の札にし、段の理由は detail の字にする。
++//! 走行の無い札の段は、器の局面の出力が読めてその契約の部品の局面が `QUEUED_PHASE` の時はその部品で決める
++//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
++//! 出力が読めないか部品が無いか局面が違う札は、開いた blocker が在れば Blocked・無ければ Queued で、理由と since は None
++//! （`queued_cards`）。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+@@ -29,6 +34,7 @@ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{
+     Ci, Misfit, MisfitBead, PipelineBoard, PipelineCard, Reading, Stage,
+ };
++use tsuzuri_contract::case::{CaseDoc, CasePart};
+ use tsuzuri_contract::graph::NodeKind;
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::runs::{
+@@ -104,6 +110,15 @@ pub struct Board {
+     pub unmapped: u32,
+ }
+ 
++/// 局面の出力の契約の部品の種類の字。
++pub const CONTRACT_PART: &str = "contract";
++
++/// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2）。
++pub const QUEUED_PHASE: &str = "contract-queued";
++
++/// 列の待ちの理由のうち相手を待つ語（板の Blocked の列・ほかの語は Queued の列・判断の記録 ADR-27 の決定 (6)）。
++pub const PARTNER_REASONS: [&str; 3] = ["dependency", "overlap", "reserved"];
++
+ /// 器の event から板の段と段の理由（閉じた表・None は表に無い段）。
+ /// kind は event の種類、stage は RunStage の段の名、detail は event の detail の字。
+ pub fn stage_of(kind: &str, stage: Option<&str>, detail: &str) -> Option<(Stage, Option<String>)> {
+@@ -118,6 +133,12 @@ pub fn stage_of(kind: &str, stage: Option<&str>, detail: &str) -> Option<(Stage,
+         ("RunStage", Some("Gated")) => Stage::Gated,
+         ("RunStage", Some("Reviewed")) if detail.starts_with(PASSED_VERDICT) => Stage::Running,
+         ("RunStage", Some("Spawned" | "Implemented")) => Stage::Running,
++        ("RunStage", Some("Blocked")) => {
++            return Some((
++                Stage::Blocked,
++                (!detail.is_empty()).then(|| detail.to_string()),
++            ));
++        }
+         ("RunStage", Some(s @ ("Failed" | "Stopped"))) => {
+             let to = if s == "Failed" {
+                 Stage::Failed
+@@ -348,6 +369,22 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
+     of_parsed(beads, read_events(events).as_deref(), now)
+ }
+ 
++/// `board` と同じ板の走行の無い札の段と理由と since を、局面の出力 `cases` が読めれば、局面が `QUEUED_PHASE` の
++/// 契約の部品で決める（`queued_of`・部品が無いか局面が違う札は台帳の blocks の割りのまま・行 c-case-columns）。
++pub fn board_with_cases(ledger: &str, events: &str, cases: &CaseDoc, now: EpochSecs) -> Board {
++    let mut b = board(ledger, events, now);
++    if let (Reading::Known(cards), Reading::Known(parts)) = (&mut b.board.cards, &cases.parts) {
++        for card in cards.iter_mut().filter(|c| c.runs == 0) {
++            if let Some(part) = queued_part(parts, card.contract.as_str()) {
++                card.stage = queued_of(part.reason.as_deref());
++                card.reason.clone_from(&part.reason);
++                card.since = part.since;
++            }
++        }
++    }
++    b
++}
++
+ /// 読んだ bead（None は台帳が読めない）と読んだ event log の値（None は event log が読めない）から板を組む。
+ pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: EpochSecs) -> Board {
+     let Some(events) = events else {
+@@ -526,6 +563,22 @@ fn queued_cards(
+     }
+ }
+ 
++/// 契約 `id` の部品のうち局面が `QUEUED_PHASE` のもの（部品は種類と id の組で 1 つ）。
++fn queued_part<'p>(parts: &'p [CasePart], id: &str) -> Option<&'p CasePart> {
++    parts
++        .iter()
++        .find(|p| p.part == CONTRACT_PART && p.id == id)
++        .filter(|p| p.phase == QUEUED_PHASE)
++}
++
++/// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・ほかの語と理由の無い部品は Queued）。
++pub fn queued_of(reason: Option<&str>) -> Stage {
++    match reason {
++        Some(word) if PARTNER_REASONS.contains(&word) => Stage::Blocked,
++        _ => Stage::Queued,
++    }
++}
++
+ /// detail を `,` と空白で切った札のうち `tag` で始まる最初の札の残り（空なら None）。
+ fn detail_tag(detail: &str, tag: &str) -> Option<String> {
+     detail
+diff --git a/crates/tsuzuri-core/tests/bvqcol.rs b/crates/tsuzuri-core/tests/bvqcol.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9fa1d8fb9f3b40eb2d050691c7dffeebc32d7cb7
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/bvqcol.rs
+@@ -0,0 +1,195 @@
++//! 行 c-case-columns の歯（中核・接頭辞 bvqcol_）: 走行の無い札の段を、器の局面の出力が読める時は契約の部品で決める
++//! （局面 contract-queued の理由が dependency・overlap・reserved なら Blocked・ほかは Queued・since と理由は部品の字）。
++//! 読めないか部品が無いか局面が違う札は台帳の blocks の割りのまま。器の RunStage の段 Blocked は段 Blocked の札。
++//! 節の組は歯の中で組む（台帳の一覧と局面の出力の字）。
++#![cfg(test)]
++
++use serde_json::{Value, json};
++use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading, Stage};
++use tsuzuri_contract::case::CaseDoc;
++use tsuzuri_core::case::cases_of;
++use tsuzuri_core::pipeline::{
++    Board, PARTNER_REASONS, QUEUED_PHASE, board, board_with_cases, queued_of,
++};
++
++/// 節の今（2026-09-27T12:00:00Z）。
++const NOW: u64 = 1_790_510_400;
++
++/// 部品の since の字（2026-09-27T11:30:00Z）と epoch 秒。
++const SINCE: &str = "2026-09-27T11:30:00Z";
++const SINCE_SECS: u64 = NOW - 1800;
++
++/// 配れる open の task（acceptance に設計 pointer の行）。
++fn task(id: &str) -> Value {
++    json!({"id": id, "title": format!("t {id}"), "status": "open", "issue_type": "task",
++        "acceptance_criteria": format!("design = contracts/x.toml#{id}")})
++}
++
++/// 節の台帳（qc.1〜qc.11・qc.6 と qc.8 は開いた qc.9 を blocks で待つ）。
++fn ledger() -> String {
++    let mut beads: Vec<Value> = (1..=11).map(|n| task(&format!("qc.{n}"))).collect();
++    for at in [5, 7] {
++        let id = format!("qc.{}", at + 1);
++        beads[at]["dependencies"] =
++            json!([{"issue_id": id, "depends_on_id": "qc.9", "type": "blocks"}]);
++    }
++    Value::Array(beads).to_string()
++}
++
++/// 契約の部品 1 つ（局面と理由と since を選ぶ）。
++fn part(id: &str, phase: &str, reason: Option<&str>, since: Option<&str>) -> Value {
++    json!({"part": "contract", "id": id, "phase": phase, "turn": "vessel", "since": since,
++        "reason": reason, "closed": false, "overdue": null, "links": {"on": []}})
++}
++
++/// 節の局面の出力（qc.8 と qc.11 の部品は無い・qc.9 は局面が違う）。
++fn lifecycle() -> String {
++    let q = QUEUED_PHASE;
++    json!({"version": 1, "generated_at": "2026-09-27T11:59:00Z", "parts": [
++        part("qc.1", q, Some("dependency"), Some(SINCE)),
++        part("qc.2", q, Some("overlap"), Some(SINCE)),
++        part("qc.3", q, Some("reserved"), Some(SINCE)),
++        part("qc.4", q, Some("host-busy"), Some(SINCE)),
++        part("qc.5", q, Some("hold"), None),
++        part("qc.6", q, Some("unreflected-ruling"), Some(SINCE)),
++        part("qc.7", q, Some("new-word"), Some(SINCE)),
++        part("qc.9", "contract-closed", None, Some(SINCE)),
++        part("qc.10", q, None, Some(SINCE)),
++    ]})
++    .to_string()
++}
++
++/// 節の event log（qc.11 の走行 1 つ・器の承認待ちの段 Blocked で終わる）。
++fn events() -> String {
++    let run = "qc.11-20260927T110000Z";
++    [
++        json!({"schema": 1, "ts": "2026-09-27T11:00:00Z", "kind": "RunCreated", "run": run, "bead": "qc.11", "stage": "Intake"}),
++        json!({"schema": 1, "ts": "2026-09-27T11:10:00Z", "kind": "RunStage", "run": run, "bead": "qc.11", "stage": "Blocked", "detail": "C9"}),
++    ]
++    .iter()
++    .map(Value::to_string)
++    .collect::<Vec<_>>()
++    .join("\n")
++}
++
++fn cased(cases: &CaseDoc) -> Board {
++    board_with_cases(&ledger(), &events(), cases, NOW)
++}
++
++fn known() -> CaseDoc {
++    cases_of(&lifecycle(), None)
++}
++
++fn card<'b>(b: &'b Board, id: &str) -> &'b PipelineCard {
++    let Reading::Known(cards) = &b.board.cards else {
++        panic!("札が Unknown");
++    };
++    cards
++        .iter()
++        .find(|c| c.contract.as_str() == id)
++        .unwrap_or_else(|| panic!("{id} の札が無い"))
++}
++
++/// 札の段と理由と since。
++fn row(b: &Board, id: &str) -> (Stage, Option<String>, Option<u64>) {
++    let c = card(b, id);
++    (c.stage, c.reason.clone(), c.since)
++}
++
++#[test]
++fn bvqcol_dependency_overlap_reserved_blocked() {
++    assert_eq!(PARTNER_REASONS, ["dependency", "overlap", "reserved"]);
++    let b = cased(&known());
++    for (id, word) in [
++        ("qc.1", "dependency"),
++        ("qc.2", "overlap"),
++        ("qc.3", "reserved"),
++    ] {
++        assert_eq!(
++            row(&b, id),
++            (Stage::Blocked, Some(word.to_string()), Some(SINCE_SECS)),
++            "{id}"
++        );
++        assert_eq!(card(&b, id).stage.column(), PipelineColumn::Blocked);
++    }
++}
++
++#[test]
++fn bvqcol_other_reasons_queued() {
++    let b = cased(&known());
++    for (id, word) in [
++        ("qc.4", "host-busy"),
++        ("qc.6", "unreflected-ruling"),
++        ("qc.7", "new-word"),
++    ] {
++        assert_eq!(
++            row(&b, id),
++            (Stage::Queued, Some(word.to_string()), Some(SINCE_SECS)),
++            "{id}"
++        );
++    }
++    assert_eq!(row(&b, "qc.10"), (Stage::Queued, None, Some(SINCE_SECS)));
++    assert_eq!(queued_of(None), Stage::Queued);
++    assert_eq!(queued_of(Some("settled")), Stage::Queued);
++    assert_eq!(queued_of(Some("overlap")), Stage::Blocked);
++}
++
++#[test]
++fn bvqcol_since_and_reason_from_case() {
++    let b = cased(&known());
++    assert_eq!(QUEUED_PHASE, "contract-queued");
++    assert_eq!(card(&b, "qc.1").since, Some(SINCE_SECS));
++    assert_eq!(card(&b, "qc.1").reason.as_deref(), Some("dependency"));
++    assert_eq!(
++        row(&b, "qc.5"),
++        (Stage::Queued, Some("hold".to_string()), None),
++        "since の無い部品"
++    );
++    let c = card(&b, "qc.4");
++    assert_eq!((c.runs, c.account.as_deref(), c.ci), (0, None, None));
++}
++
++#[test]
++fn bvqcol_fallback_ledger_blocks_when_unknown() {
++    let unknown = cases_of("", None);
++    assert_eq!(unknown.parts, Reading::Unknown);
++    let fell = cased(&unknown);
++    assert_eq!(
++        fell,
++        board(&ledger(), &events(), NOW),
++        "読めない出力は今の板"
++    );
++    for n in 1..=10 {
++        let id = format!("qc.{n}");
++        let want = if n == 6 || n == 8 {
++            Stage::Blocked
++        } else {
++            Stage::Queued
++        };
++        assert_eq!(row(&fell, &id), (want, None, None), "{id}");
++    }
++    let b = cased(&known());
++    assert_eq!(
++        row(&b, "qc.8"),
++        (Stage::Blocked, None, None),
++        "部品の無い札"
++    );
++    assert_eq!(
++        row(&b, "qc.9"),
++        (Stage::Queued, None, None),
++        "局面の違う部品"
++    );
++}
++
++#[test]
++fn bvqcol_run_blocked_stage() {
++    for b in [cased(&known()), board(&ledger(), &events(), NOW)] {
++        let c = card(&b, "qc.11");
++        assert_eq!(
++            (c.runs, c.stage, c.reason.as_deref()),
++            (1, Stage::Blocked, Some("C9"))
++        );
++        assert_eq!(c.stage.column(), PipelineColumn::Blocked);
++        assert_eq!(b.unmapped, 0);
++    }
++}

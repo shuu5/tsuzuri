@@ -1,0 +1,3175 @@
+diff --git a/crates/tsuzuri-surface/src/mapview/band.rs b/crates/tsuzuri-surface/src/mapview/band.rs
+index 6b04ea19750fbbb9f10c224ace8c5d5a66fad157..52e045db230e56131b11f9062ec87482aba6dfed 100644
+--- a/crates/tsuzuri-surface/src/mapview/band.rs
++++ b/crates/tsuzuri-surface/src/mapview/band.rs
+@@ -178,12 +178,3 @@ pub const BEADS_LANES: [NodeKind; 7] = [
+     NodeKind::Receipt,
+     NodeKind::Policy,
+ ];
+-
+-/// 出所が読めなかったときの帯の理由の 1 行。
+-pub fn unread_reason(source: GraphSource) -> &'static str {
+-    match source {
+-        GraphSource::Design => "設計の索引が読めず、この帯の節点がまだ分からない",
+-        GraphSource::Ledger => "台帳が読めず、この帯の節点がまだ分からない",
+-        GraphSource::Runs => "器の event の記録が読めず、この帯の節点がまだ分からない",
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/src/mapview/graph.rs b/crates/tsuzuri-surface/src/mapview/graph.rs
+index d93c31c02a26846e573198b9f8f4463b6da58414..d320dbcdf3b71827d406bc5fc8745f75b35bd12c 100644
+--- a/crates/tsuzuri-surface/src/mapview/graph.rs
++++ b/crates/tsuzuri-surface/src/mapview/graph.rs
+@@ -1,73 +1,21 @@
+-//! グラフの面（見本の map.html の graph と initZoom・ui.js の nodeBox・edgeSVG・legendHTML・hlCompute・hlPin・便 g-graph）。
+-//! 選ぶ・畳む・数える・段を決めるのは中核の crate が済ませた眺めの電文（口 /api/graph/view の GraphView）で、
+-//! ここは電文の値を写して座標を決めるだけ（節点を選ぶ分岐と数え直しを書かない）。
+-//! 配置・線の道と形・拡大の値・光らせ方・固定の移り方・狭い幅の一覧・数の行・凡例は純粋な関数にして host で試し、
+-//! DOM と事件の受け取りは wasm の target のときだけ組み立てる。
+-
+-use std::collections::{BTreeMap, BTreeSet};
++//! グラフの面の部品（見本の ui.js の nodeBox・edgeSVG・legendHTML・hlCompute・hlPin・便 g-graph）のうち、
++//! 近傍の図（around）と節点の頁の近傍（project の nodearound）と節点の card が引く物を置く。
++//! 選ぶ・畳む・数える・段を決めるのは中核の crate が済ませた電文（契約の型の GraphView）で、
++//! ここは電文の値を写すだけ（節点を選ぶ分岐と数え直しを書かない）。
++//! 線の道と形・箱の縁・光らせ方・固定の移り方・凡例は純粋な関数にして host で試す。
++//! グラフの面の DOM と、面だけの配置・拡大・狭い幅の一覧・数の行・眺めの口の読みは行 m-map-graph で消した。
++
++use std::collections::BTreeMap;
+ use std::fmt::Write;
+ 
+-use tsuzuri_contract::graph::{
+-    BoxFold, EdgeType, GraphView, NodeKind, ViewEdge, ViewNode, natural_cmp, title36,
+-};
+-use tsuzuri_contract::wire;
++use tsuzuri_contract::graph::{EdgeType, GraphView, NodeKind, ViewEdge, ViewNode};
+ 
+ use super::around::edge_name;
+-use super::band::{BEADS_LANES, Band, band_of, kind_key, unread_reason};
+-use super::is_open;
+-use crate::project::{NO_CONTENT, NOT_READ};
+-use crate::view::Fetched;
+-use crate::vocab::{label, vocab};
+-
+-/// 読みの口（server の便 e-view が足す）。
+-pub const PATH: &str = "/api/graph/view";
+-
+-/// 口が読めないときの理由。
+-pub const REASON: &str =
+-    "グラフの眺めを組む口が読めない（server にまだ無い・届かない・知らせが切れた）";
+-
+-/// 口の本文を眺めの電文に読む（まだ読んでいない・読めない・電文の型として読めないは理由）。
+-pub fn doc(fetched: &Fetched) -> Result<GraphView, &'static str> {
+-    match fetched {
+-        Fetched::NotRead => Err(NOT_READ),
+-        Fetched::Failed => Err(REASON),
+-        Fetched::Body(text) => wire::decode::<GraphView>(text).map_err(|_| NO_CONTENT),
+-    }
+-}
++use super::band::{Band, band_of};
++use crate::vocab::vocab;
+ 
+-/// 節点の箱の幅。
+-pub const NODE_W: u32 = 176;
+ /// 節点の箱の高さ。
+ pub const NODE_H: u32 = 40;
+-/// 段の間。
+-pub const RANK_GAP: u32 = 36;
+-/// 箱の縦の間。
+-pub const BOX_GAP: u32 = 6;
+-/// 1 列の箱の数。
+-pub const PER_COL: u32 = 8;
+-/// 帯の名の幅（図の左端）。
+-pub const LABEL_W: u32 = 116;
+-/// 上の余白。
+-pub const TOP: u32 = 8;
+-/// 行の余白。
+-pub const PAD: u32 = 10;
+-/// 列の間。
+-pub const COL_GAP: u32 = 8;
+-/// 節点の無い帯の高さ。
+-pub const EMPTY_BAND_H: u32 = 44;
+-/// 節点の無い beads の行の高さ。
+-pub const EMPTY_LANE_H: u32 = 28;
+-/// 図の下の余白。
+-pub const BOTTOM: u32 = 4;
+-
+-/// 1 列の幅（箱と列の間）。
+-const COL_W: u32 = NODE_W + COL_GAP;
+-/// 1 つの箱の縦の送り（箱と箱の縦の間）。
+-const ROW_H: u32 = NODE_H + BOX_GAP;
+-
+-fn count(n: usize) -> u32 {
+-    u32::try_from(n).unwrap_or(u32::MAX)
+-}
+ 
+ /// 箱の左上。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+@@ -76,14 +24,6 @@ pub struct Pos {
+     pub y: u32,
+ }
+ 
+-/// 1 つの段の列（段・左端の x・列の数）。
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub struct Column {
+-    pub rank: u32,
+-    pub x: u32,
+-    pub cols: u32,
+-}
+-
+ /// beads の帯の種類の 1 行（上端・高さ・升のうち最も多い節点の数（8 まで））。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub struct Lane {
+@@ -102,163 +42,6 @@ pub struct BandRow {
+     pub lanes: Vec<Lane>,
+ }
+ 
+-/// 図の配置（幅・高さ・段の列・7 つの帯・箱の左上）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct Layout {
+-    pub width: u32,
+-    pub height: u32,
+-    pub columns: Vec<Column>,
+-    pub bands: Vec<BandRow>,
+-    pub boxes: BTreeMap<String, Pos>,
+-}
+-
+-impl Layout {
+-    pub fn band(&self, band: Band) -> Option<&BandRow> {
+-        self.bands.iter().find(|b| b.band == band)
+-    }
+-
+-    pub fn lane(&self, kind: NodeKind) -> Option<&Lane> {
+-        self.bands
+-            .iter()
+-            .flat_map(|b| &b.lanes)
+-            .find(|l| l.kind == kind)
+-    }
+-
+-    pub fn column(&self, rank: u32) -> Option<&Column> {
+-        self.columns.iter().find(|c| c.rank == rank)
+-    }
+-
+-    pub fn pos(&self, id: &str) -> Option<Pos> {
+-        self.boxes.get(id).copied()
+-    }
+-}
+-
+-/// 節点の帯と行（beads の帯は種類の行・ほかの帯は 1 行）。
+-fn lane_key(kind: NodeKind) -> (Band, Option<NodeKind>) {
+-    let band = band_of(kind);
+-    (band, (band == Band::Beads).then_some(kind))
+-}
+-
+-fn lanes_of(band: Band) -> Vec<Option<NodeKind>> {
+-    if band == Band::Beads {
+-        BEADS_LANES.into_iter().map(Some).collect()
+-    } else {
+-        vec![None]
+-    }
+-}
+-
+-/// 帯と beads の行を上から積む（行の上端を lane_tops に書き、帯の行と積んだ下端を返す）。
+-fn stack_bands(
+-    view: &GraphView,
+-    cells: &BTreeMap<(Band, Option<NodeKind>, u32), Vec<&str>>,
+-    lane_tops: &mut BTreeMap<(Band, Option<NodeKind>), u32>,
+-) -> (Vec<BandRow>, u32) {
+-    let mut bands = Vec::new();
+-    let mut y = TOP;
+-    for band in Band::ALL {
+-        let top = y;
+-        let mut lanes = Vec::new();
+-        if view.nodes.iter().any(|n| band_of(n.node.kind) == band) {
+-            for lane in lanes_of(band) {
+-                let most = cells
+-                    .iter()
+-                    .filter(|((b, l, _), _)| *b == band && *l == lane)
+-                    .map(|(_, ids)| count(ids.len()).min(PER_COL))
+-                    .max()
+-                    .unwrap_or(0);
+-                let height = if band == Band::Beads && most == 0 {
+-                    EMPTY_LANE_H
+-                } else {
+-                    most.max(1) * ROW_H + 2 * PAD
+-                };
+-                lane_tops.insert((band, lane), y);
+-                if let Some(kind) = lane {
+-                    lanes.push(Lane {
+-                        kind,
+-                        top: y,
+-                        height,
+-                        count: most,
+-                    });
+-                }
+-                y += height;
+-            }
+-        } else {
+-            y += EMPTY_BAND_H;
+-        }
+-        bands.push(BandRow {
+-            band,
+-            top,
+-            height: y - top,
+-            lanes,
+-        });
+-    }
+-    (bands, y)
+-}
+-
+-/// 眺めの配置（升 = 帯と行と段・升の中は id の自然な順・見本の graph と同じ決め方）。
+-pub fn layout(view: &GraphView) -> Layout {
+-    let mut cells: BTreeMap<(Band, Option<NodeKind>, u32), Vec<&str>> = BTreeMap::new();
+-    for n in &view.nodes {
+-        let (band, lane) = lane_key(n.node.kind);
+-        cells
+-            .entry((band, lane, n.rank))
+-            .or_default()
+-            .push(n.node.id.as_str());
+-    }
+-    for ids in cells.values_mut() {
+-        ids.sort_by(|a, b| natural_cmp(a, b));
+-    }
+-
+-    let ranks: BTreeSet<u32> = view.nodes.iter().map(|n| n.rank).collect();
+-    let mut columns = Vec::new();
+-    let mut x = LABEL_W;
+-    for rank in ranks {
+-        let cols = cells
+-            .iter()
+-            .filter(|((_, _, r), _)| *r == rank)
+-            .map(|(_, ids)| count(ids.len()).div_ceil(PER_COL))
+-            .max()
+-            .unwrap_or(1)
+-            .max(1);
+-        columns.push(Column { rank, x, cols });
+-        x += cols * COL_W + RANK_GAP;
+-    }
+-    let width = columns.last().map_or(LABEL_W + NODE_W + COL_GAP, |c| {
+-        c.x + c.cols * COL_W + COL_GAP
+-    });
+-
+-    let mut lane_tops: BTreeMap<(Band, Option<NodeKind>), u32> = BTreeMap::new();
+-    let (bands, y) = stack_bands(view, &cells, &mut lane_tops);
+-
+-    let mut boxes = BTreeMap::new();
+-    for ((band, lane, rank), ids) in &cells {
+-        let (Some(col), Some(top)) = (
+-            columns.iter().find(|c| c.rank == *rank),
+-            lane_tops.get(&(*band, *lane)),
+-        ) else {
+-            continue;
+-        };
+-        for (i, id) in ids.iter().enumerate() {
+-            let i = count(i);
+-            boxes.insert(
+-                (*id).to_string(),
+-                Pos {
+-                    x: col.x + i / PER_COL * COL_W,
+-                    y: top + PAD + i % PER_COL * ROW_H,
+-                },
+-            );
+-        }
+-    }
+-
+-    Layout {
+-        width,
+-        height: y + BOTTOM,
+-        columns,
+-        bands,
+-        boxes,
+-    }
+-}
+-
+ /// 線の形（閉じた 4・見本の STYLE_OF）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+ pub enum LineStyle {
+@@ -335,22 +118,6 @@ pub fn straight(x1: f64, y1: f64, x2: f64, y2: f64) -> String {
+     format!("M{x1} {y1} L {x2} {y2}")
+ }
+ 
+-/// 線の両端（from の箱の左の辺の中点・to の箱の右の辺の中点・どちらかの箱が無ければ None）。
+-pub fn line_ends(layout: &Layout, edge: &ViewEdge) -> Option<((f64, f64), (f64, f64))> {
+-    let a = layout.pos(&edge.from)?;
+-    let b = layout.pos(&edge.to)?;
+-    Some((
+-        (f64::from(a.x), f64::from(a.y + NODE_H / 2)),
+-        (f64::from(b.x + NODE_W), f64::from(b.y + NODE_H / 2)),
+-    ))
+-}
+-
+-/// 辺の線の道の字。
+-pub fn edge_path(layout: &Layout, edge: &ViewEdge) -> Option<String> {
+-    let ((x1, y1), (x2, y2)) = line_ends(layout, edge)?;
+-    Some(curve(x1, y1, x2, y2))
+-}
+-
+ /// 線の SVG（道と、矢印の形なら to の端の三角）。
+ pub fn line_svg(style: LineStyle, d: &str, (x2, y2): (f64, f64)) -> String {
+     let mut s = format!(r#"<path d="{d}" fill="none" {}/>"#, style.stroke());
+@@ -403,14 +170,6 @@ pub fn cut(s: &str, n: usize) -> String {
+     }
+ }
+ 
+-/// 箱の 2 行目の題の字数。
+-pub const BOX_TITLE_CHARS: usize = 12;
+-
+-/// 帯の色（CSS の変数）。
+-fn band_var(band: Band) -> String {
+-    format!("var(--{})", band.class_name())
+-}
+-
+ /// 頭の記号が丸か（台帳と走行の帯・file に書かれた行は四角）。
+ pub fn round_mark(band: Band) -> bool {
+     matches!(band, Band::Beads | Band::Pipeline)
+@@ -445,277 +204,6 @@ pub fn border(open_q: bool, pinned: bool) -> (&'static str, u32) {
+     (stroke, width)
+ }
+ 
+-/// 子の数の札の字（子を持つ節点だけ・語の鍵 children の字と数）。
+-pub fn kids_badge(n: &ViewNode) -> Option<String> {
+-    (n.kids > 0).then(|| format!("{} {}", label("children"), n.kids))
+-}
+-
+-/// 箱の頭の記号（丸か四角・開いた問いは中を抜いて縁を止まりの色に）。
+-fn head_mark(band: Band, open_q: bool, lc: &str, cx: f64, cy: f64) -> String {
+-    let (fill, stroke) = if open_q {
+-        ("none".to_string(), "var(--s-stop)".to_string())
+-    } else {
+-        (lc.to_string(), lc.to_string())
+-    };
+-    if round_mark(band) {
+-        format!(
+-            r#"<circle cx="{cx}" cy="{cy}" r="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>"#
+-        )
+-    } else {
+-        format!(
+-            r#"<rect x="{}" y="{}" width="10" height="10" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>"#,
+-            cx - 5.0,
+-            cy - 5.0
+-        )
+-    }
+-}
+-
+-/// 1 つの節点の箱（囲みは角の丸い四角 1 種・頭の記号・1 行目は id の全部・2 行目は題 12 字・子の数の札）。
+-/// 箱の字は link にしない（2 回押すか、focus の在るときの Enter と Space で節点の頁へ移る）。
+-pub fn node_svg(n: &ViewNode, p: Pos) -> String {
+-    let band = band_of(n.node.kind);
+-    let lc = band_var(band);
+-    let open_q = open_question(n);
+-    let faded = closed(n);
+-    let (x, y) = (f64::from(p.x), f64::from(p.y));
+-    let (w, h) = (f64::from(NODE_W), f64::from(NODE_H));
+-    let (cx, cy) = (x + 11.0, y + 13.0);
+-    let mark = head_mark(band, open_q, &lc, cx, cy);
+-    let (edge, ew) = border(open_q, false);
+-    let badge = kids_badge(n);
+-    let id_max = if badge.is_some() {
+-        w - 26.0 - 50.0
+-    } else {
+-        w - 26.0
+-    };
+-    let id_len = id_max.min(f64::from(count(n.node.id.chars().count())) * 6.4);
+-    let id_fill = if faded {
+-        "var(--ink-3)".to_string()
+-    } else {
+-        lc
+-    };
+-    let title_fill = if faded { "var(--ink-3)" } else { "var(--ink)" };
+-    // 組の箱は 1 行目に題・2 行目に種類の語と組の語・縁は点線（id を字にしない）。
+-    let (aria, head, second) = if n.group {
+-        fold::group_lines(n, x, y, id_max, &id_fill)
+-    } else {
+-        (
+-            format!("{} {} {}", n.node.id, label(kind_key(n.node.kind)), n.node.title),
+-            format!(
+-                r#"<text x="{}" y="{}" font-size="10.5" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="{id_fill}" textLength="{id_len:.1}" lengthAdjust="spacingAndGlyphs">{}</text>"#,
+-                x + 21.0,
+-                y + 16.5,
+-                esc(&n.node.id)
+-            ),
+-            cut(&title36(&n.node.title), BOX_TITLE_CHARS),
+-        )
+-    };
+-    let dash = if n.group { r#" stroke-dasharray="4 2""# } else { "" };
+-    let toggle = fold::mark_svg(n, p).unwrap_or_default();
+-    let badge = badge.map_or_else(String::new, |b| {
+-        format!(
+-            r#"<rect x="{}" y="{}" width="42" height="16" rx="8" fill="var(--panel-2)" stroke="var(--line-2)"/><text x="{}" y="{}" font-size="10" font-weight="700" text-anchor="middle" fill="var(--ink-2)">{}</text>"#,
+-            x + w - 46.0,
+-            y + 4.0,
+-            x + w - 25.0,
+-            y + 15.5,
+-            esc(&b)
+-        )
+-    });
+-    format!(
+-        r#"<g class="node" data-key="{key}" tabindex="0" aria-label="{aria}"><rect class="hit" x="{x}" y="{y}" width="{w}" height="{h}" rx="4" fill="var(--panel)" stroke="{edge}" stroke-width="{ew}"{dash}/>{mark}{head}<text x="{}" y="{}" font-size="12" fill="{title_fill}" data-t="">{title}</text>{badge}{toggle}</g>"#,
+-        x + 8.0,
+-        y + 32.0,
+-        key = esc(&n.node.id),
+-        aria = esc(&aria),
+-        title = esc(&second),
+-    )
+-}
+-
+-/// 帯の中身（読めなかった出所・読めて節点が無い・節点の数）。
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum BandFill {
+-    /// 電文の unread が名指す出所の帯（理由の 1 行）。
+-    Unread(&'static str),
+-    /// 読めて節点が無い。
+-    Zero,
+-    Nodes(usize),
+-}
+-
+-/// 帯の中身（読めなかった出所の帯は節点の数より先に測れていない）。
+-pub fn band_fill(view: &GraphView, band: Band) -> BandFill {
+-    if view.unread.contains(&band.source()) {
+-        return BandFill::Unread(unread_reason(band.source()));
+-    }
+-    match view
+-        .nodes
+-        .iter()
+-        .filter(|n| band_of(n.node.kind) == band)
+-        .count()
+-    {
+-        0 => BandFill::Zero,
+-        n => BandFill::Nodes(n),
+-    }
+-}
+-
+-/// 読めて節点の無い帯の字（帯の語と 0・見本の「run 0」の形）。
+-pub fn zero_text(band: Band) -> String {
+-    format!("{} 0", label(band.key()))
+-}
+-
+-/// 図の全部（帯の地・行の区切り・測れていないと 0 の字・線・箱）。拡大と移動は `vp` の transform、帯の名は `blabs` に置く。
+-pub fn svg(view: &GraphView, layout: &Layout) -> String {
+-    let mut s = format!(
+-        r#"<svg class="hlsvg" role="group" aria-label="{}"><g id="vp">"#,
+-        esc(&label("view_graph"))
+-    );
+-    bands_svg(&mut s, view, layout);
+-    for (i, e) in view.edges.iter().enumerate() {
+-        let Some(((x1, y1), (x2, y2))) = line_ends(layout, e) else {
+-            continue;
+-        };
+-        let _ = write!(
+-            s,
+-            r#"<g class="e" data-i="{i}" data-u="{}" data-d="{}">{}</g>"#,
+-            esc(&e.to),
+-            esc(&e.from),
+-            line_svg(line_style(e.edge_type), &curve(x1, y1, x2, y2), (x2, y2))
+-        );
+-    }
+-    for n in &view.nodes {
+-        if let Some(p) = layout.pos(&n.node.id) {
+-            s.push_str(&node_svg(n, p));
+-        }
+-    }
+-    s.push_str(r#"</g><g id="blabs"></g></svg>"#);
+-    s
+-}
+-
+-/// 帯の地・行の区切り・測れていないと 0 の字を図に書く。
+-fn bands_svg(s: &mut String, view: &GraphView, layout: &Layout) {
+-    let w = layout.width;
+-    for (i, row) in layout.bands.iter().enumerate() {
+-        let _ = write!(
+-            s,
+-            r#"<rect x="-4000" y="{}" width="{}" height="{}" fill="{}" fill-opacity="{}"/>"#,
+-            row.top,
+-            w + 8000,
+-            row.height,
+-            band_var(row.band),
+-            if i % 2 == 1 { ".05" } else { ".09" }
+-        );
+-        for lane in row.lanes.iter().skip(1) {
+-            let _ = write!(
+-                s,
+-                r#"<line class="lane-sep" x1="-4000" x2="{}" y1="{}" y2="{}"/>"#,
+-                w + 4000,
+-                lane.top,
+-                lane.top
+-            );
+-        }
+-        match band_fill(view, row.band) {
+-            BandFill::Unread(reason) => {
+-                let _ = write!(
+-                    s,
+-                    r#"<circle cx="{}" cy="{}" r="5" fill="none" stroke="var(--st-unknown)" stroke-width="2" stroke-dasharray="2 2"/><text x="{}" y="{}" font-size="12" fill="var(--ink-3)">{} · {}</text>"#,
+-                    LABEL_W + 6,
+-                    row.top + 23,
+-                    LABEL_W + 16,
+-                    row.top + 27,
+-                    esc(&label("st_unknown")),
+-                    esc(reason)
+-                );
+-            }
+-            BandFill::Zero => {
+-                let _ = write!(
+-                    s,
+-                    r#"<text x="{LABEL_W}" y="{}" font-size="12" fill="var(--ink-3)">{}</text>"#,
+-                    row.top + 27,
+-                    esc(&zero_text(row.band))
+-                );
+-            }
+-            BandFill::Nodes(_) => {}
+-        }
+-    }
+-}
+-
+-/// 帯の名の欄（図の左端に固定・拡大と移動に合わせて縦の位置と高さだけを変える・見本の initZoom の labels）。
+-pub fn band_labels(layout: &Layout, z: Zoom, box_h: f64) -> String {
+-    let mut s =
+-        format!(r#"<rect x="0" y="0" width="{LABEL_W}" height="{box_h:.1}" fill="var(--panel)"/>"#);
+-    for row in &layout.bands {
+-        let b = row.band;
+-        let y0 = z.ty + f64::from(row.top) * z.s;
+-        let h = f64::from(row.height) * z.s;
+-        if y0 > box_h || y0 + h < 0.0 {
+-            continue;
+-        }
+-        let ty = (y0.max(0.0) + 17.0).min(y0 + h - 4.0);
+-        let color = band_var(b);
+-        let _ = write!(
+-            s,
+-            r#"<g class="blab" data-band="{}" data-term="{}"><rect x="0" y="{y0:.1}" width="{LABEL_W}" height="{h:.1}" fill="{color}" fill-opacity=".14"/><rect x="{}" y="{y0:.1}" width="3" height="{h:.1}" fill="{color}"/>"#,
+-            esc(b.name()),
+-            esc(b.key()),
+-            LABEL_W - 3
+-        );
+-        if h >= 18.0 {
+-            let _ = write!(
+-                s,
+-                r#"<text x="8" y="{ty:.1}" font-size="13" font-weight="750" fill="{color}">{}</text>"#,
+-                esc(b.name())
+-            );
+-        }
+-        if b != Band::Beads && h >= 44.0 && ty + 14.0 < y0 + h - 2.0 {
+-            let _ = write!(
+-                s,
+-                r#"<text x="8" y="{:.1}" font-size="9" fill="var(--ink-3)" font-family="ui-monospace,monospace">{}</text>"#,
+-                ty + 14.0,
+-                esc(&cut(&b.path().replace("design-intent/", "di/"), 14))
+-            );
+-        }
+-        s.push_str("</g>");
+-        lane_labels(&mut s, row, z, box_h);
+-    }
+-    s
+-}
+-
+-/// beads の帯の行の区切りと行の名（見えない行と低すぎる行は書かない）。
+-fn lane_labels(s: &mut String, row: &BandRow, z: Zoom, box_h: f64) {
+-    let lw = f64::from(LABEL_W);
+-    for (i, lane) in row.lanes.iter().enumerate() {
+-        let y0 = z.ty + f64::from(lane.top) * z.s;
+-        let h = f64::from(lane.height) * z.s;
+-        if y0 > box_h || y0 + h < 0.0 || h < 11.0 {
+-            continue;
+-        }
+-        if i > 0 {
+-            let _ = write!(
+-                s,
+-                r#"<line class="lane-sep" x1="0" x2="{LABEL_W}" y1="{y0:.1}" y2="{y0:.1}"/>"#
+-            );
+-        }
+-        let word = label(kind_key(lane.kind));
+-        if lane.count == 0 {
+-            let _ = write!(
+-                s,
+-                r#"<text class="lane-lab zero" x="{}" y="{:.1}" text-anchor="end">{} 0</text>"#,
+-                lw - 8.0,
+-                y0 + h / 2.0 + 4.0,
+-                esc(&word)
+-            );
+-        } else {
+-            let _ = write!(
+-                s,
+-                r#"<text class="lane-lab" x="{}" y="{:.1}" text-anchor="end">{}</text>"#,
+-                lw - 8.0,
+-                y0 + (h - 3.0).min(30.0),
+-                esc(&word)
+-            );
+-        }
+-    }
+-}
+-
+ /// 凡例の 1 行目の形の見本（四角 = file に書かれた行・丸 = 台帳と走行）。
+ pub const LEGEND_SHAPES: &str = r#"<svg viewBox="0 0 14 14" class="lk" aria-hidden="true"><rect x="2" y="2" width="10" height="10" rx="1" fill="var(--ink-2)"/></svg><svg viewBox="0 0 14 14" class="lk" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="var(--ink-2)"/></svg>"#;
+ 
+@@ -751,89 +239,6 @@ pub fn edge_term(t: EdgeType) -> Option<String> {
+     vocab().term(&key).map(|_| key)
+ }
+ 
+-/// 狭い幅の一覧の 1 行（印・id・題 36 字・子の数）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct ChainRow {
+-    pub id: String,
+-    pub title: String,
+-    pub shape: String,
+-    pub alert: bool,
+-    pub kids: Option<u32>,
+-    /// 組の箱の行か（題だけを出す）。
+-    pub group: bool,
+-    pub fold: BoxFold,
+-}
+-
+-/// 狭い幅の一覧の 1 つの帯。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct ChainBand {
+-    pub band: Band,
+-    pub rows: Vec<ChainRow>,
+-}
+-
+-/// 狭い幅の一覧（節点の在る帯だけ・帯の順・帯の中は段の小さい順・同じなら id の自然な順）。
+-pub fn chain(view: &GraphView) -> Vec<ChainBand> {
+-    Band::ALL
+-        .into_iter()
+-        .filter_map(|band| {
+-            let mut nodes: Vec<&ViewNode> = view
+-                .nodes
+-                .iter()
+-                .filter(|n| band_of(n.node.kind) == band)
+-                .collect();
+-            if nodes.is_empty() {
+-                return None;
+-            }
+-            nodes.sort_by(|a, b| {
+-                a.rank
+-                    .cmp(&b.rank)
+-                    .then_with(|| natural_cmp(&a.node.id, &b.node.id))
+-            });
+-            let rows = nodes
+-                .into_iter()
+-                .map(|n| {
+-                    let alert = open_question(n);
+-                    let open = alert || is_open(n.status.as_deref());
+-                    ChainRow {
+-                        id: n.node.id.clone(),
+-                        title: title36(&fold::plain_title(n)),
+-                        shape: format!(
+-                            "shape {}{}",
+-                            band.class_name(),
+-                            if open { "" } else { " fill" }
+-                        ),
+-                        alert,
+-                        kids: (n.kids > 0).then_some(n.kids),
+-                        group: n.group,
+-                        fold: n.fold,
+-                    }
+-                })
+-                .collect();
+-            Some(ChainBand { band, rows })
+-        })
+-        .collect()
+-}
+-
+-/// 数の行（「shown / total ・ 子 folded ・ ✂ cut」・電文の欄の値をそのまま）。
+-pub fn count_line(view: &GraphView) -> String {
+-    format!(
+-        "{} / {} ・ {} {} ・ ✂ {}",
+-        view.shown,
+-        view.total,
+-        label("children"),
+-        view.folded,
+-        view.cut
+-    )
+-}
+-
+-/// 数の行の経験者だけの注釈の 1 行（見本の data-tip-expert）。
+-pub fn expert_line(view: &GraphView) -> String {
+-    format!(
+-        "shown={} folded={} cut={} total={}",
+-        view.shown, view.folded, view.cut, view.total
+-    )
+-}
+-
+ /// 次数がこれを超える節点は光らせるが、そこから先へは広げない（見本の HL_HUB）。
+ pub const HUB_DEGREE: u32 = 8;
+ /// 光る節点（中心を除く）の上限（規則の行 R-20 の値）。
+@@ -1009,111 +414,5 @@ pub fn pin_next(now: Option<&str>, action: &PinAction) -> Option<String> {
+     }
+ }
+ 
+-/// 倍率の下限。
+-pub const ZOOM_MIN: f64 = 0.2;
+-/// 倍率の上限。
+-pub const ZOOM_MAX: f64 = 4.0;
+-/// wheel の縦の量に掛ける値（倍率は e のこの積の乗を掛ける）。
+-pub const WHEEL_RATE: f64 = -0.0015;
+-/// 箱の高さの下限と上限。
+-pub const BOX_MIN_H: f64 = 360.0;
+-pub const BOX_MAX_H: f64 = 720.0;
+-/// drag と数える pointer の動いた量（これを超えたら drag・離しは押したと数えない）。
+-pub const DRAG_SLOP: f64 = 4.0;
+-
+-/// 拡大と移動（倍率・横の移動・縦の移動）。
+-#[derive(Debug, Clone, Copy, PartialEq)]
+-pub struct Zoom {
+-    pub s: f64,
+-    pub tx: f64,
+-    pub ty: f64,
+-}
+-
+-/// 最初の倍率（箱の幅から帯の名の幅を引いた値を、図の幅から帯の名の幅を引いた値で割る・1 より大きくしない）。
+-/// 箱の幅が測れていない（帯の名の幅以下）ときは 1。
+-pub fn initial_scale(box_w: f64, width: u32) -> f64 {
+-    let lw = f64::from(LABEL_W);
+-    let s = ((box_w - lw) / (f64::from(width) - lw)).min(1.0);
+-    if s > 0.0 { s } else { 1.0 }
+-}
+-
+-/// 箱の高さ（図の高さに最初の倍率を掛けて 8 を足し、360 から 720 に収めて整数に丸める）。
+-pub fn box_height(height: u32, s0: f64) -> f64 {
+-    (f64::from(height) * s0 + 8.0)
+-        .clamp(BOX_MIN_H, BOX_MAX_H)
+-        .round()
+-}
+-
+-/// drag と数えるか。
+-pub fn dragged(dx: f64, dy: f64) -> bool {
+-    dx.hypot(dy) > DRAG_SLOP
+-}
+-
+-impl Zoom {
+-    /// 最初（移動 0）。
+-    pub fn initial(s: f64) -> Self {
+-        Self {
+-            s,
+-            tx: 0.0,
+-            ty: 0.0,
+-        }
+-    }
+-
+-    /// 箱の点 (cx, cy) の下の図の点。
+-    pub fn to_graph(self, cx: f64, cy: f64) -> (f64, f64) {
+-        let lw = f64::from(LABEL_W);
+-        ((cx - lw - self.tx) / self.s + lw, (cy - self.ty) / self.s)
+-    }
+-
+-    /// 倍率を変える（0.2 から 4 に収め、箱の点 (cx, cy) の下の図の点を動かさない）。
+-    pub fn at(self, cx: f64, cy: f64, s: f64) -> Self {
+-        let lw = f64::from(LABEL_W);
+-        let ns = s.clamp(ZOOM_MIN, ZOOM_MAX);
+-        let x = (cx - lw - self.tx) / self.s;
+-        let y = (cy - self.ty) / self.s;
+-        Self {
+-            s: ns,
+-            tx: cx - lw - x * ns,
+-            ty: cy - y * ns,
+-        }
+-    }
+-
+-    /// wheel（倍率に e の（縦の量 × −0.0015）乗を掛ける）。
+-    pub fn wheel(self, cx: f64, cy: f64, delta_y: f64) -> Self {
+-        self.at(cx, cy, self.s * (delta_y * WHEEL_RATE).exp())
+-    }
+-
+-    /// drag（移動の量に pointer の動いた量を足す）。
+-    pub fn drag(self, dx: f64, dy: f64) -> Self {
+-        Self {
+-            s: self.s,
+-            tx: self.tx + dx,
+-            ty: self.ty + dy,
+-        }
+-    }
+-
+-    /// 図の transform の字。
+-    pub fn transform(self) -> String {
+-        format!(
+-            "translate({:.2} {:.2}) scale({:.4}) translate(-{LABEL_W} 0)",
+-            f64::from(LABEL_W) + self.tx,
+-            self.ty,
+-            self.s
+-        )
+-    }
+-}
+-
+-/// focus の在る節点でその節点の頁へ移る key か（見本の ui.js の Enter と Space・KeyboardEvent の key の値）。
+-pub fn opens_node(key: &str) -> bool {
+-    matches!(key, "Enter" | " ")
+-}
+-
+-/// 組の箱の開き閉じ（開いた箱の列・口の path・右下の印・開けなかった行・src/mapview/graph/fold.rs）。
++/// 組の箱の題と開き閉じの語の鍵（節点の card が引く・src/mapview/graph/fold.rs）。
+ pub mod fold;
+-
+-#[cfg(target_arch = "wasm32")]
+-pub use dom::view;
+-
+-/// グラフの面の DOM と事件の受け取り（wasm の target のときだけ・src/mapview/graph/dom.rs）。
+-#[cfg(target_arch = "wasm32")]
+-mod dom;
+diff --git a/crates/tsuzuri-surface/src/mapview/graph/dom.rs b/crates/tsuzuri-surface/src/mapview/graph/dom.rs
+deleted file mode 100644
+index ac1a825bf09cac15f2f21f99322ab781f41857f8..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/src/mapview/graph/dom.rs
++++ /dev/null
+@@ -1,628 +0,0 @@
+-use std::cell::RefCell;
+-use std::collections::BTreeMap;
+-use std::time::Duration;
+-
+-use leptos::ev;
+-use leptos::html::Div;
+-use leptos::prelude::*;
+-use tsuzuri_contract::graph::{BoxFold, GraphView, ViewNode};
+-use web_sys::wasm_bindgen::JsCast;
+-
+-use super::fold::{LEGEND_GROUP, OpenList, fold_key, refused_line};
+-use super::{
+-    ChainBand, Highlight, LEGEND_BORDERS, LEGEND_HOVER, LEGEND_SHAPES, Layout, Legend, PinAction,
+-    Side, Zoom, band_labels, border, box_height, chain, count_line, degrees, doc, dragged,
+-    edge_term, expert_line, highlight, initial_scale, layout, legend, legend_line, open_question,
+-    opens_node, pin_next, svg,
+-};
+-use crate::view::Fetched;
+-use crate::frame::{self, Mode};
+-use crate::mapview::around::edge_name;
+-use crate::mapview::band::Band;
+-use crate::mapview::band_chip;
+-use crate::project::{ALERT_STYLE, unmeasured};
+-use crate::vocab::label;
+-use crate::widgets::help::{HelpCtx, expert_tip, h2};
+-use crate::widgets::hover::{Card, attach, delegate, leaves};
+-use crate::widgets::nodecard::view_cards;
+-
+-/// 1 つの眺めの値（事件の受け取りが引く）。
+-struct Model {
+-    view: GraphView,
+-    layout: Layout,
+-    degree: BTreeMap<String, u32>,
+-    /// 節点の id ごとの card（図の委ねが引く）。
+-    cards: BTreeMap<String, Card>,
+-}
+-
+-impl Model {
+-    fn highlight(&self, center: &str) -> Highlight {
+-        highlight(&self.view.edges, &self.degree, center)
+-    }
+-
+-    fn open_q(&self, id: &str) -> bool {
+-        self.view
+-            .nodes
+-            .iter()
+-            .any(|n| n.node.id == id && open_question(n))
+-    }
+-
+-    fn has(&self, id: &str) -> bool {
+-        self.view.nodes.iter().any(|n| n.node.id == id)
+-    }
+-
+-    fn node(&self, id: &str) -> Option<&ViewNode> {
+-        self.view.nodes.iter().find(|n| n.node.id == id)
+-    }
+-}
+-
+-thread_local! {
+-    /// 開いた箱の id の列（頁の間だけ・URL にも画面の外の保存にも書かない・地図の中身の読み直しで消えない）。
+-    static OPEN: RefCell<OpenList> = RefCell::new(OpenList::default());
+-    /// 最後に読めた眺め（開き閉じの後の読み直しの間に出し続ける）。
+-    static LAST: RefCell<Option<GraphView>> = const { RefCell::new(None) };
+-}
+-
+-/// 押した点（drag の始まり）。
+-#[derive(Debug, Clone, Copy)]
+-struct Press {
+-    x: f64,
+-    y: f64,
+-    base: Zoom,
+-    moved: bool,
+-}
+-
+-/// 図の置き場と固定と近傍の値と拡大と移動（図の上の押しが共にする）。
+-#[derive(Clone, Copy)]
+-struct Stage {
+-    gz: NodeRef<Div>,
+-    pin: RwSignal<Option<String>>,
+-    model: StoredValue<Model>,
+-    zoom: StoredValue<Option<Zoom>>,
+-    s0: StoredValue<f64>,
+-}
+-
+-impl Stage {
+-    /// 今の拡大と移動（まだ無ければ初めの倍率）。
+-    fn current(self) -> Zoom {
+-        self.zoom
+-            .get_value()
+-            .unwrap_or_else(|| Zoom::initial(self.s0.get_value()))
+-    }
+-
+-    /// 拡大と移動を覚えて図に当てる。
+-    fn apply(self, z: Zoom) {
+-        self.zoom.set_value(Some(z));
+-        place(self.gz, self.model, z);
+-    }
+-}
+-
+-/// グラフの面（口の読みの 3 値・読めた眺めの図）。固定と拡大は読み直しの後も保つ。
+-/// 口の path は開いた箱の列から組み、箱を押すと path が変わって読み直す（その間は最後に読めた眺めを出す）。
+-pub fn view(search: RwSignal<String>) -> AnyView {
+-    let path = RwSignal::new(OPEN.with_borrow(OpenList::path));
+-    let fetched = crate::net::read_path(Signal::derive(move || path.get()));
+-    let ctx = use_context::<HelpCtx>();
+-    // 今の mode（context が無ければ URL から・節点の頁の link に mode を残す）。
+-    let mode = move || match ctx {
+-        Some(c) => c.mode.get(),
+-        None => search.with(|s| Mode::from_query(s)),
+-    };
+-    let pin = RwSignal::new(None::<String>);
+-    let zoom = StoredValue::new(None::<Zoom>);
+-    let content = move || {
+-        let got = fetched.with(|(f, _)| match doc(f) {
+-            Ok(v) => {
+-                OPEN.with_borrow_mut(|o| o.adopt(&v.open));
+-                LAST.set(Some(v.clone()));
+-                Ok(v)
+-            }
+-            Err(reason) if matches!(f, Fetched::NotRead) => {
+-                LAST.with_borrow(Clone::clone).ok_or(reason)
+-            }
+-            Err(reason) => Err(reason),
+-        });
+-        match got {
+-            Err(reason) => unmeasured(reason),
+-            Ok(v) => panel(v, pin, zoom, mode, path),
+-        }
+-    };
+-    view! { {content} }.into_any()
+-}
+-
+-/// event の的の節点の id（節点の箱の中でなければ None）。
+-fn node_key(target: Option<web_sys::EventTarget>) -> Option<String> {
+-    let el: web_sys::Element = target?.dyn_into().ok()?;
+-    el.closest("g.node")
+-        .ok()
+-        .flatten()?
+-        .get_attribute("data-key")
+-}
+-
+-/// event の的の開き閉じの印の箱の id（印の中でなければ None）。
+-fn fold_target(target: Option<web_sys::EventTarget>) -> Option<String> {
+-    let el: web_sys::Element = target?.dyn_into().ok()?;
+-    el.closest("g.fold")
+-        .ok()
+-        .flatten()?
+-        .get_attribute("data-fold")
+-}
+-
+-/// 図に拡大と移動を置き、帯の名を描き直す。
+-fn place(gz: NodeRef<Div>, model: StoredValue<Model>, z: Zoom) {
+-    let Some(el) = gz.get_untracked() else {
+-        return;
+-    };
+-    if let Ok(Some(vp)) = el.query_selector("#vp") {
+-        let _ = vp.set_attribute("transform", &z.transform());
+-    }
+-    let box_h = f64::from(el.client_height());
+-    if let Ok(Some(labels)) = el.query_selector("#blabs") {
+-        labels.set_inner_html(&model.with_value(|m| band_labels(&m.layout, z, box_h)));
+-    }
+-}
+-
+-/// 光らせる（`center` が None なら消す）・固定した節点は太い縁。
+-fn paint(
+-    gz: NodeRef<Div>,
+-    model: StoredValue<Model>,
+-    center: Option<&str>,
+-    pinned: Option<&str>,
+-) {
+-    let Some(el) = gz.get_untracked() else {
+-        return;
+-    };
+-    let Some(picture) = el.first_element_child() else {
+-        return;
+-    };
+-    let lit = center.map(|c| model.with_value(|m| m.highlight(c)));
+-    let _ = picture
+-        .class_list()
+-        .toggle_with_force("hl-on", lit.is_some());
+-    let nodes = picture.get_elements_by_class_name("node");
+-    for i in 0..nodes.length() {
+-        let Some(n) = nodes.item(i) else {
+-            continue;
+-        };
+-        let key = n.get_attribute("data-key").unwrap_or_default();
+-        let side = lit.as_ref().and_then(|h| h.side.get(&key).copied());
+-        let list = n.class_list();
+-        let _ = list.toggle_with_force("lit", side.is_some());
+-        for s in Side::ALL {
+-            let _ = list.toggle_with_force(s.class(), side == Some(s));
+-        }
+-        if let Ok(Some(hit)) = n.query_selector("rect.hit") {
+-            let open_q = model.with_value(|m| m.open_q(&key));
+-            let (stroke, width) = border(open_q, pinned == Some(key.as_str()));
+-            let _ = hit.set_attribute("stroke", stroke);
+-            let _ = hit.set_attribute("stroke-width", &width.to_string());
+-        }
+-    }
+-    let edges = picture.get_elements_by_class_name("e");
+-    for i in 0..edges.length() {
+-        let Some(e) = edges.item(i) else {
+-            continue;
+-        };
+-        let index = e
+-            .get_attribute("data-i")
+-            .and_then(|s| s.parse::<usize>().ok());
+-        let on = lit
+-            .as_ref()
+-            .zip(index)
+-            .is_some_and(|(h, i)| h.lit.contains(&i));
+-        let _ = e.class_list().toggle_with_force("lit", on);
+-    }
+-}
+-
+-fn panel(
+-    v: GraphView,
+-    pin: RwSignal<Option<String>>,
+-    zoom: StoredValue<Option<Zoom>>,
+-    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-    path: RwSignal<String>,
+-) -> AnyView {
+-    let lay = layout(&v);
+-    let picture = svg(&v, &lay);
+-    let lg = legend(&v);
+-    let bands = chain(&v);
+-    let count = count_line(&v);
+-    let refused = refused_line(&v)
+-        .map(|r| view! { <div class="small muted" role="status">{r}</div> });
+-    let line = expert_line(&v);
+-    let degree = degrees(&v);
+-    let cards = view_cards(&v.nodes);
+-    let model = StoredValue::new(Model {
+-        view: v,
+-        layout: lay,
+-        degree,
+-        cards: cards.clone(),
+-    });
+-    drop_lost_pin(pin, model);
+-    let st = Stage {
+-        gz: NodeRef::<Div>::new(),
+-        pin,
+-        model,
+-        zoom,
+-        s0: StoredValue::new(1.0_f64),
+-    };
+-    fit_effect(st);
+-    pin_watch(st);
+-
+-    // 箱の開き閉じ（頁の列を変え、変われば口の path を置き直して読み直す・固定は動かさない）。
+-    let toggle = move |id: String, fold: BoxFold| {
+-        if let Some(p) = OPEN.with_borrow_mut(|o| o.toggle(&id, fold).then(|| o.path())) {
+-            path.set(p);
+-        }
+-    };
+-    let reset = move |_| st.apply(Zoom::initial(st.s0.get_value()));
+-    let bar = move || pin.get().map(|id| bar_view(id, pin, model, mode));
+-    view! {
+-        <div class="gpanel">
+-            <header>{h2("lines")}</header>
+-            {legend_view(lg)}
+-            <div class="gtools">
+-                <button type="button" class="btn sm" on:click=reset>{label("zoom_reset")}</button>
+-                <span class="small muted" data-term="zoom_hint" tabindex="0">{label("zoom_hint")}</span>
+-            </div>
+-            {gwrap_view(picture, st, mode, toggle)}
+-            <div class="pinbar" aria-live="polite">{bar}</div>
+-            {chain_view(bands, &cards, mode, toggle)}
+-            <div class="cutline num" tabindex="0" data-term="cut" use:expert_tip=line>{count}</div>
+-            {refused}
+-        </div>
+-    }
+-    .into_any()
+-}
+-
+-/// 固定した節点が近傍の値に無ければ固定を外す。
+-fn drop_lost_pin(pin: RwSignal<Option<String>>, model: StoredValue<Model>) {
+-    // 読み直しで固定した節点が図から消えたら固定を外す。
+-    if pin.with_untracked(|p| {
+-        p.as_ref()
+-            .is_some_and(|id| !model.with_value(|m| m.has(id)))
+-    }) {
+-        pin.set(None);
+-    }
+-}
+-
+-/// 図の箱の高さと初めの倍率を幅から決め、図を置き直す。
+-fn fit_effect(st: Stage) {
+-    let Stage { gz, pin, model, s0, .. } = st;
+-    Effect::new(move |_| {
+-        let Some(el) = gz.get() else {
+-            return;
+-        };
+-        let (width, height) = model.with_value(|m| (m.layout.width, m.layout.height));
+-        let s = initial_scale(f64::from(el.client_width()), width);
+-        s0.set_value(s);
+-        let _ = el.set_attribute("style", &format!("height:{}px", box_height(height, s)));
+-        st.apply(st.current());
+-        let p = pin.get_untracked();
+-        paint(gz, model, p.as_deref(), p.as_deref());
+-    });
+-}
+-
+-/// 固定の光らせを図に塗り直し、Escape で固定を外す。
+-fn pin_watch(st: Stage) {
+-    let Stage { gz, pin, model, .. } = st;
+-    Effect::new(move |_| {
+-        let p = pin.get();
+-        paint(gz, model, p.as_deref(), p.as_deref());
+-    });
+-    let escape = window_event_listener(ev::keydown, move |ev| {
+-        if ev.key() == "Escape" && pin.with_untracked(Option::is_some) {
+-            pin.set(pin_next(None, &PinAction::Escape));
+-        }
+-    });
+-    on_cleanup(move || escape.remove());
+-}
+-
+-/// 図の枠（節点の指と押しと key・拡大と移動の輪と drag）。
+-fn gwrap_view(
+-    picture: String,
+-    st: Stage,
+-    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-    toggle: impl Fn(String, BoxFold) + Copy + 'static,
+-) -> impl IntoView {
+-    let Stage { gz, pin, model, .. } = st;
+-    let press = StoredValue::new(None::<Press>);
+-    let drag_done = StoredValue::new(false);
+-    let press_fold = fold_press(model, toggle);
+-    let hc = delegate();
+-    let hover =move |target: Option<web_sys::EventTarget>| {
+-        if pin.with_untracked(Option::is_some) {
+-            return;
+-        }
+-        if let Some(k) = node_key(target) {
+-            paint(gz, model, Some(&k), None);
+-        }
+-    };
+-    // 図の節点の card（固定の間も出す・同じ節点の中の移りでは出し直さない）。
+-    let over = move |ev: ev::MouseEvent| {
+-        let card = node_key(ev.target()).and_then(|k| model.with_value(|m| m.cards.get(&k).cloned()));
+-        if let Some(card) = card {
+-            hc.show(&ev, card);
+-        }
+-        hover(ev.target());
+-    };
+-    let out = move |ev: ev::MouseEvent| {
+-        if leaves(
+-            node_key(ev.target()).as_deref(),
+-            node_key(ev.related_target()).as_deref(),
+-        ) {
+-            hc.leave(&ev);
+-        }
+-        if pin.with_untracked(Option::is_some) || node_key(ev.target()).is_none() {
+-            return;
+-        }
+-        if node_key(ev.related_target()).is_none() {
+-            paint(gz, model, None, None);
+-        }
+-    };
+-    let click = move |ev: ev::MouseEvent| {
+-        let Some(k) = node_key(ev.target()) else {
+-            return;
+-        };
+-        if drag_done.get_value() || press_fold(ev.target()) {
+-            return;
+-        }
+-        pin.set(pin.with_untracked(|p| pin_next(p.as_deref(), &PinAction::Press(k))));
+-    };
+-    let (open, key) = open_events(model, press_fold, mode);
+-    let wheel = wheel_of(st);
+-    let (down, moved, up) = drag_events(st, press, drag_done);
+-    view! {
+-        <div class="gwrap">
+-            <div class="gzoom" node_ref=gz inner_html=picture
+-                on:wheel=wheel on:pointerdown=down on:pointermove=moved on:pointerup=up on:pointercancel=up
+-                on:mouseover=over on:mouseout=out
+-                on:focusin=move |ev| hover(ev.target()) on:click=click on:dblclick=open
+-                on:keydown=key></div>
+-        </div>
+-    }
+-}
+-
+-/// 開き閉じの印の押し（印の上なら箱を開き閉じして true）。
+-fn fold_press(
+-    model: StoredValue<Model>,
+-    toggle: impl Fn(String, BoxFold) + Copy + 'static,
+-) -> impl Fn(Option<web_sys::EventTarget>) -> bool + Copy + 'static {
+-    let fold_of = move |id: &str| model.with_value(|m| m.node(id).map(|n| n.fold));
+-    move |target: Option<web_sys::EventTarget>| {
+-        let Some(id) = fold_target(target) else {
+-            return false;
+-        };
+-        if let Some(fold) = fold_of(&id) {
+-            toggle(id, fold);
+-        }
+-        true
+-    }
+-}
+-
+-/// 節点の頁へ移る押し（2 回押すと、focus の在る節点の Enter と Space）。
+-fn open_events(
+-    model: StoredValue<Model>,
+-    press_fold: impl Fn(Option<web_sys::EventTarget>) -> bool + Copy + 'static,
+-    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-) -> (
+-    impl Fn(ev::MouseEvent) + 'static,
+-    impl Fn(ev::KeyboardEvent) + 'static,
+-) {
+-    let group = move |id: &str| model.with_value(|m| m.node(id).is_some_and(|n| n.group));
+-    // 2 回押すとその節点の頁へ（見本の dblclick・開き閉じの印と組の箱には頁が無い）。
+-    let open = move |ev: ev::MouseEvent| {
+-        if fold_target(ev.target()).is_some() {
+-            return;
+-        }
+-        if let Some(k) = node_key(ev.target()).filter(|k| !group(k)) {
+-            let _ = window().location().set_href(&frame::node_href(&k, mode()));
+-        }
+-    };
+-    // focus の在る節点で Enter と Space を押すとその節点の頁へ（Space の scroll を止める）。
+-    // 開き閉じの印の上では箱を開き閉じし、組の箱では頁へ移らない。
+-    let key = move |ev: ev::KeyboardEvent| {
+-        if !opens_node(&ev.key()) {
+-            return;
+-        }
+-        let Some(k) = node_key(ev.target()) else {
+-            return;
+-        };
+-        ev.prevent_default();
+-        if press_fold(ev.target()) || group(&k) {
+-            return;
+-        }
+-        let _ = window().location().set_href(&frame::node_href(&k, mode()));
+-    };
+-    (open, key)
+-}
+-
+-/// 輪の拡大と縮小（指の下の点を動かさない）。
+-fn wheel_of(st: Stage) -> impl Fn(ev::WheelEvent) + Copy + 'static {
+-    move |ev: ev::WheelEvent| {
+-        ev.prevent_default();
+-        let Some(el) = st.gz.get_untracked() else {
+-            return;
+-        };
+-        let r = el.get_bounding_client_rect();
+-        let (cx, cy) = (
+-            f64::from(ev.client_x()) - r.left(),
+-            f64::from(ev.client_y()) - r.top(),
+-        );
+-        st.apply(st.current().wheel(cx, cy, ev.delta_y()));
+-    }
+-}
+-
+-/// drag の移動の受け取り（押し・動き・離し）。
+-fn drag_events(
+-    st: Stage,
+-    press: StoredValue<Option<Press>>,
+-    drag_done: StoredValue<bool>,
+-) -> (
+-    impl Fn(ev::PointerEvent) + Copy + 'static,
+-    impl Fn(ev::PointerEvent) + Copy + 'static,
+-    impl Fn(ev::PointerEvent) + Copy + 'static,
+-) {
+-    let down = move |ev: ev::PointerEvent| {
+-        if ev.button() != 0 || !ev.is_primary() {
+-            return;
+-        }
+-        press.set_value(Some(Press {
+-            x: f64::from(ev.client_x()),
+-            y: f64::from(ev.client_y()),
+-            base: st.current(),
+-            moved: false,
+-        }));
+-    };
+-    let moved = move |ev: ev::PointerEvent| {
+-        let Some(mut p) = press.get_value() else {
+-            return;
+-        };
+-        let (dx, dy) = (
+-            f64::from(ev.client_x()) - p.x,
+-            f64::from(ev.client_y()) - p.y,
+-        );
+-        if !p.moved && dragged(dx, dy) {
+-            p.moved = true;
+-            press.set_value(Some(p));
+-            drag_done.set_value(true);
+-            if let Some(el) = st.gz.get_untracked() {
+-                let _ = el.set_pointer_capture(ev.pointer_id());
+-            }
+-        }
+-        if p.moved {
+-            st.apply(p.base.drag(dx, dy));
+-        }
+-    };
+-    // drag の後の離しは押したと数えない（click の後に印を戻す）。
+-    let up = move |_: ev::PointerEvent| {
+-        press.set_value(None);
+-        if drag_done.get_value() {
+-            set_timeout(move || drag_done.set_value(false), Duration::ZERO);
+-        }
+-    };
+-    (down, moved, up)
+-}
+-
+-/// 固定の帯（固定した節点・上流と下流の数と深さ・節点の頁への link・固定を外す button）。
+-fn bar_view(
+-    id: String,
+-    pin: RwSignal<Option<String>>,
+-    model: StoredValue<Model>,
+-    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-) -> impl IntoView {
+-    let unpin =
+-        move |_| pin.set(pin.with_untracked(|p| pin_next(p.as_deref(), &PinAction::Unpin)));
+-    let b = model.with_value(|m| m.highlight(&id).bar());
+-    let counts = format!(
+-        " · {} {} · {} {} · {}",
+-        label("nb_up"),
+-        b.basis,
+-        label("nb_down"),
+-        b.impact,
+-        b.depth
+-    );
+-    let href = frame::node_href(&b.id, mode());
+-    view! {
+-        <span class="pinned">{label("pinned")}" "<b class="mono">{b.id}</b>{counts}</span>
+-        <a class="btn sm" href=href>{label("open_node")}" ›"</a>
+-        <button type="button" class="btn sm" on:click=unpin>{label("unpin")}</button>
+-    }
+-}
+-
+-/// 凡例（形と色と縁と hover の見方・図に出ている帯・図に出ている辺の型）。
+-fn legend_view(lg: Legend) -> AnyView {
+-    let swatches = Band::ALL
+-        .into_iter()
+-        .map(|b| view! { <i style=format!("background:var(--{})", b.class_name())></i> })
+-        .collect_view();
+-    let bands = lg
+-        .bands
+-        .into_iter()
+-        .map(|b| {
+-            view! {
+-                <span data-term=b.key() tabindex="0">
+-                    <span class=format!("shape {} fill", b.class_name()) aria-hidden="true"></span>
+-                    <b>{label(b.key())}</b><code class="path">{b.path()}</code>
+-                </span>
+-            }
+-        })
+-        .collect_view();
+-    let types = (!lg.types.is_empty()).then(|| {
+-        let items = lg
+-            .types
+-            .into_iter()
+-            .map(|t| {
+-                view! {
+-                    <span data-term=edge_term(t) tabindex="0">
+-                        <span inner_html=legend_line(t)></span><code>{edge_name(t)}</code>
+-                    </span>
+-                }
+-            })
+-            .collect_view();
+-        view! { <div class="legend">{items}</div> }
+-    });
+-    view! {
+-        <div class="legend lkey">
+-            <span data-term="gf_group" tabindex="0"><span inner_html=LEGEND_GROUP></span>{label("gf_group")}</span>
+-            <span data-term="lg_shape" tabindex="0"><span inner_html=LEGEND_SHAPES></span>{label("lg_shape")}</span>
+-            <span data-term="lg_color" tabindex="0"><span class="sw7">{swatches}</span>{label("lg_color")}</span>
+-            <span data-term="lg_border" tabindex="0"><span inner_html=LEGEND_BORDERS></span>{label("lg_border")}</span>
+-            <span data-term="lg_hover" tabindex="0"><span inner_html=LEGEND_HOVER></span>{label("lg_hover")}</span>
+-        </div>
+-        <div class="legend">{bands}</div>
+-        {types}
+-    }
+-    .into_any()
+-}
+-
+-/// 狭い幅の一覧（帯の chip の小見出しと行の一覧・行の id と題は節点の頁への link で節点の card を持つ）。
+-/// 組の箱の行は題だけ（頁が無いので link にしない）で、開き閉じできる行は図と同じ開き閉じの button を持つ。
+-fn chain_view(
+-    bands: Vec<ChainBand>,
+-    cards: &BTreeMap<String, Card>,
+-    mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-    toggle: impl Fn(String, BoxFold) + Copy + Send + Sync + 'static,
+-) -> AnyView {
+-    let parts = bands
+-        .into_iter()
+-        .map(|b| {
+-            let rows = b
+-                .rows
+-                .into_iter()
+-                .map(|r| {
+-                    let style = if r.alert { ALERT_STYLE } else { "" };
+-                    let kids = r.kids.map(|k| {
+-                        view! { <span class="aside">{format!("{} {k}", label("children"))}</span> }
+-                    });
+-                    let card = cards.get(&r.id).cloned().unwrap_or_default();
+-                    let id = r.id.clone();
+-                    let href = move || frame::node_href(&id, mode());
+-                    let (fid, fold) = (r.id.clone(), r.fold);
+-                    let button = fold_key(fold).map(|k| {
+-                        view! {
+-                            <button type="button" class="btn sm" on:click=move |_| toggle(fid.clone(), fold)>{label(k)}</button>
+-                        }
+-                    });
+-                    let head = if r.group {
+-                        view! { <b class="ttl" use:attach=card><span data-t="">{r.title}</span></b> }.into_any()
+-                    } else {
+-                        view! {
+-                            <a class="ttl" href=href use:attach=card><span class="nid">{r.id}</span>" "<span data-t="">{r.title}</span></a>
+-                        }
+-                        .into_any()
+-                    };
+-                    view! {
+-                        <li>
+-                            <span class=r.shape style=style aria-hidden="true"></span>
+-                            {head}
+-                            {kids}
+-                            {button}
+-                        </li>
+-                    }
+-                })
+-                .collect_view();
+-            view! { <div class="subh">{band_chip(b.band)}</div><ul class="items">{rows}</ul> }
+-        })
+-        .collect_view();
+-    view! { <div class="nb-chain">{parts}</div> }.into_any()
+-}
+diff --git a/crates/tsuzuri-surface/src/mapview/graph/fold.rs b/crates/tsuzuri-surface/src/mapview/graph/fold.rs
+index 743da46bdfe3e6542da55089b20b4fc0ec8ef99c..8a50a6c20b60007e8fecaeff7e4c3e5f9692402d 100644
+--- a/crates/tsuzuri-surface/src/mapview/graph/fold.rs
++++ b/crates/tsuzuri-surface/src/mapview/graph/fold.rs
+@@ -1,54 +1,13 @@
+ //! グラフの組の箱の開き閉じ（行 g-graph-fold・host でも組む）。
+-//! 開いた箱の id の列（開いた順）と口の query の path・箱の右下の開き閉じの印・組の箱の 1 行目・開けなかった id の行。
+-//! 選ぶ・畳む・上限で畳み直すのは中核の crate が済ませ、ここは電文の group・fold・open・refused を写すだけ。
++//! 箱の開き閉じの語の鍵と、組の箱の持ち主に読める題（節点の card が引く）。
++//! 選ぶ・畳む・上限で畳み直すのは中核の crate が済ませ、ここは電文の group・fold を写すだけ。
++//! 開いた箱の列と口の path・右下の印・組の箱の 1 行目・開けなかった id の行は行 m-map-graph で消した。
+ 
+-use tsuzuri_contract::graph::{BoxFold, GraphView, NodeKind, ViewNode, title36};
++use tsuzuri_contract::graph::{BoxFold, NodeKind, ViewNode};
+ 
+-use super::{NODE_H, NODE_W, PATH, Pos, cut, esc};
+-use crate::mapview::band::{band_of, kind_key, kind_name};
+-use crate::mapview::encode;
++use crate::mapview::band::{band_of, kind_name};
+ use crate::vocab::label;
+ 
+-/// 開いた箱の id の列（開いた順・頁の間だけ持つ）。
+-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+-pub struct OpenList {
+-    ids: Vec<String>,
+-}
+-
+-impl OpenList {
+-    pub fn ids(&self) -> &[String] {
+-        &self.ids
+-    }
+-
+-    /// 箱を押した（Folded は列の末へ移す・Open は列から外す・Leaf は変えない・列を変えたときは真）。
+-    pub fn toggle(&mut self, id: &str, fold: BoxFold) -> bool {
+-        let before = self.ids.clone();
+-        match fold {
+-            BoxFold::Leaf => return false,
+-            BoxFold::Folded => {
+-                self.ids.retain(|x| x != id);
+-                self.ids.push(id.to_string());
+-            }
+-            BoxFold::Open => self.ids.retain(|x| x != id),
+-        }
+-        self.ids != before
+-    }
+-
+-    /// 列を server の列に合わせる（畳み直された id と開けなかった id が外れる）。
+-    pub fn adopt(&mut self, ids: &[String]) {
+-        self.ids = ids.to_vec();
+-    }
+-
+-    /// 口の path（列が空なら PATH・在れば query の open に各 id を encode して字 , でつなぐ）。
+-    pub fn path(&self) -> String {
+-        if self.ids.is_empty() {
+-            return PATH.to_string();
+-        }
+-        let open: Vec<String> = self.ids.iter().map(|id| encode(id)).collect();
+-        format!("{PATH}?open={}", open.join(","))
+-    }
+-}
+-
+ /// 箱の開き閉じの語の鍵（Folded は開く・Open は畳み直す・Leaf は無し）。
+ pub fn fold_key(fold: BoxFold) -> Option<&'static str> {
+     match fold {
+@@ -58,23 +17,6 @@ pub fn fold_key(fold: BoxFold) -> Option<&'static str> {
+     }
+ }
+ 
+-/// 箱の右下の開き閉じの印（Leaf は None・Folded は ▸・Open は ▾・押すと開き閉じする button）。
+-pub fn mark_svg(n: &ViewNode, p: Pos) -> Option<String> {
+-    let key = fold_key(n.fold)?;
+-    let glyph = if n.fold == BoxFold::Open { "▾" } else { "▸" };
+-    let (x, y) = (f64::from(p.x + NODE_W) - 17.0, f64::from(p.y + NODE_H) - 15.0);
+-    Some(format!(
+-        r#"<g class="fold" data-fold="{id}" role="button" tabindex="0" aria-label="{aria}"><rect x="{x}" y="{y}" width="13" height="12" rx="2" fill="var(--panel-2)" stroke="var(--line-2)"/><text x="{}" y="{}" font-size="10" text-anchor="middle" fill="var(--ink-2)">{glyph}</text></g>"#,
+-        x + 6.5,
+-        y + 9.5,
+-        id = esc(&n.node.id),
+-        aria = esc(&label(key)),
+-    ))
+-}
+-
+-/// 組の箱の 1 行目の字数。
+-pub const GROUP_TITLE_CHARS: usize = 20;
+-
+ /// 箱の持ち主に読める題（組でない箱は電文の題・組の箱は id と種類から組み、~ の id を字にしない・行 g-graph-label）。
+ pub fn plain_title(n: &ViewNode) -> String {
+     if n.group {
+@@ -110,42 +52,3 @@ fn group_title(id: &str, kind: NodeKind) -> Option<String> {
+         kind_name(kind).to_string()
+     })
+ }
+-
+-/// 組の箱の 1 行目（題・id を字にしない）と 2 行目（種類の語 · 組）と aria-label の字。
+-pub fn group_lines(n: &ViewNode, x: f64, y: f64, max: f64, fill: &str) -> (String, String, String) {
+-    let plain = plain_title(n);
+-    let title = cut(&title36(&plain), GROUP_TITLE_CHARS);
+-    let est: f64 = title
+-        .chars()
+-        .map(|c| if c.is_ascii() { 6.4 } else { 11.0 })
+-        .sum();
+-    let kind = label(kind_key(n.node.kind));
+-    let group = label("gf_group");
+-    let head = format!(
+-        r#"<text x="{}" y="{}" font-size="11" font-weight="700" fill="{fill}" textLength="{:.1}" lengthAdjust="spacingAndGlyphs">{}</text>"#,
+-        x + 21.0,
+-        y + 16.5,
+-        max.min(est),
+-        esc(&title)
+-    );
+-    let aria = format!("{plain} {kind} {group}");
+-    (aria, head, format!("{kind} · {group}"))
+-}
+-
+-/// 開けなかった id の行（眺めの refused が空なら None・同じ id の組の箱が在れば題・無ければ id のまま）。
+-pub fn refused_line(view: &GraphView) -> Option<String> {
+-    let names: Vec<String> = view
+-        .refused
+-        .iter()
+-        .map(|id| {
+-            view.nodes
+-                .iter()
+-                .find(|n| n.group && n.node.id == *id)
+-                .map_or_else(|| id.clone(), plain_title)
+-        })
+-        .collect();
+-    (!names.is_empty()).then(|| format!("{} {}", label("gf_refused"), names.join("・")))
+-}
+-
+-/// 凡例の 1 行目の組の見本（点線の縁と ▸）。
+-pub const LEGEND_GROUP: &str = r#"<svg viewBox="0 0 30 16" class="lk wide" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="13" rx="4" fill="var(--panel)" stroke="var(--line-2)" stroke-dasharray="4 2"/><text x="22" y="12" font-size="10" text-anchor="middle" fill="var(--ink-2)">▸</text></svg>"#;
+diff --git a/crates/tsuzuri-surface/src/mapview/mod.rs b/crates/tsuzuri-surface/src/mapview/mod.rs
+index 066801dad311e3aea057656f6a533e926ef39539..eb1d9c99e800c004e2e9821b63d63a2678d91183 100644
+--- a/crates/tsuzuri-surface/src/mapview/mod.rs
++++ b/crates/tsuzuri-surface/src/mapview/mod.rs
+@@ -1,7 +1,7 @@
+ //! 地図の面の部品（便 g-map・見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは行 m-map-page で消した。
+ //! 電文（契約の型の GraphDoc）の読みは kit の下の map（crate::project::map の path）が持ち、ここの関数は読めた電文だけを受ける。
+-//! 帯と種類の対応は band・グラフの面と近傍は graph と around。
+-//! 圧縮の面と一覧の面は行 m-map-compact で、表の面と 2 つの木の面は行 m-map-tree で消した。
++//! 帯と種類の対応は band・近傍の図は around・近傍と節点の card が引くグラフの部品は graph。
++//! 圧縮の面と一覧の面は行 m-map-compact で、表の面と 2 つの木の面は行 m-map-tree で、グラフの面の DOM は行 m-map-graph で消した。
+ //! 並べ方と絞りと数え方と URL の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ pub mod around;
+diff --git a/crates/tsuzuri-surface/tests/btuck.rs b/crates/tsuzuri-surface/tests/btuck.rs
+index eeca2dbbeaf485cb830990bb7945aee279cea4d1..8b13a27dca58adc12cc58173e7a3dd35ef28c0a5 100644
+--- a/crates/tsuzuri-surface/tests/btuck.rs
++++ b/crates/tsuzuri-surface/tests/btuck.rs
+@@ -1,5 +1,6 @@
+-//! 行 g-graph-fold の歯（面）: 開いた箱の列と口の path・組の箱と開き閉じの印の SVG・狭い幅の一覧の組の行・
+-//! 組の箱の card・開けなかった行・語の辞書の 4 つの鍵・DOM の配線の字と外の依存・歯の名。
++//! 行 g-graph-fold の歯（面）: 組の箱の card・語の辞書の 3 つの鍵・graph.rs の mod の行と外の依存・歯の名。
++//! 開いた箱の列と口の path・組の箱と開き閉じの印の SVG・狭い幅の一覧の組の行・開けなかった行・DOM の配線の字の歯は
++//! 行 m-map-graph で消した。
+ #![cfg(test)]
+ 
+ use std::path::PathBuf;
+@@ -7,9 +8,6 @@ use std::path::PathBuf;
+ use tsuzuri_contract::graph::{BoxFold, GraphNode, GraphView, NodeKind, ViewNode};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::mapview::band::{band_of, kind_key};
+-use tsuzuri_surface::mapview::encode;
+-use tsuzuri_surface::mapview::graph::fold::{OpenList, mark_svg, refused_line};
+-use tsuzuri_surface::mapview::graph::{PATH, Pos, chain, layout, node_svg, svg};
+ use tsuzuri_surface::widgets::nodecard::{NO_GIST, card_for, group_card, view_cards};
+ use tsuzuri_surface::vocab::{label, vocab};
+ 
+@@ -73,162 +71,6 @@ fn mixed() -> GraphView {
+     v
+ }
+ 
+-const AT: Pos = Pos { x: 200, y: 40 };
+-
+-/// 字の `start` から後で最初に出る `end` までの区間（`end` を含む・どちらかが無ければ落ちる）。
+-fn span<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
+-    let from = text
+-        .find(start)
+-        .unwrap_or_else(|| panic!("字 {start} が無い"));
+-    let rest = &text[from..];
+-    let to = rest.find(end).unwrap_or_else(|| panic!("字 {start} の後に字 {end} が無い"));
+-    &rest[..to + end.len()]
+-}
+-
+-/// (1) 開いた箱の列の toggle・adopt・path。
+-#[test]
+-fn btuck_open_list() {
+-    let mut o = OpenList::default();
+-    assert!(o.ids().is_empty());
+-    assert_eq!(o.path(), PATH);
+-
+-    assert!(o.toggle("~rule", BoxFold::Folded));
+-    assert!(o.toggle("~art:P", BoxFold::Folded));
+-    assert_eq!(o.ids(), ["~rule", "~art:P"]);
+-    assert_eq!(o.path(), "/api/graph/view?open=~rule,~art%3AP");
+-    assert_eq!(o.path(), format!("{PATH}?open={},{}", encode("~rule"), encode("~art:P")));
+-
+-    // 同じ id の Folded は外してから末へ移す（末に在れば列は変わらない）。
+-    assert!(o.toggle("~rule", BoxFold::Folded));
+-    assert_eq!(o.ids(), ["~art:P", "~rule"]);
+-    assert!(!o.toggle("~rule", BoxFold::Folded));
+-    assert_eq!(o.ids(), ["~art:P", "~rule"]);
+-
+-    // Leaf は列を変えない。
+-    assert!(!o.toggle("x", BoxFold::Leaf));
+-    assert!(!o.toggle("~rule", BoxFold::Leaf));
+-    assert_eq!(o.ids(), ["~art:P", "~rule"]);
+-    drop_and_adopt(o);
+-}
+-
+-/// Open は列から外し、字 , を含む id は %2C になり、adopt は列を置き換える。
+-fn drop_and_adopt(mut o: OpenList) {
+-    // Open は列から外す（無ければ変えない）。
+-    assert!(o.toggle("~art:P", BoxFold::Open));
+-    assert_eq!(o.ids(), ["~rule"]);
+-    assert!(!o.toggle("~art:P", BoxFold::Open));
+-    assert_eq!(o.path(), "/api/graph/view?open=~rule");
+-
+-    // 字 , を含む id は %2C になる。
+-    assert!(o.toggle("a,b", BoxFold::Folded));
+-    assert_eq!(o.path(), "/api/graph/view?open=~rule,a%2Cb");
+-
+-    o.adopt(&["p".to_string(), "t3-hub.52~1-12".to_string()]);
+-    assert_eq!(o.ids(), ["p", "t3-hub.52~1-12"]);
+-    assert_eq!(o.path(), "/api/graph/view?open=p,t3-hub.52~1-12");
+-    o.adopt(&[]);
+-    assert!(o.ids().is_empty());
+-    assert_eq!(o.path(), PATH);
+-    assert_eq!(o, OpenList::default());
+-}
+-
+-/// (2) 組の箱の SVG（題・種類と組の語・点線の縁・印）と開き閉じの印・fixture の図は印を持たない。
+-#[test]
+-fn btuck_group_box_svg() {
+-    let group = label("gf_group");
+-    let unfold = label("gf_unfold");
+-    let refold = label("gf_fold");
+-
+-    let rule = node_svg(&rule_box(), AT);
+-    let kind = label(kind_key(NodeKind::Rule));
+-    assert!(rule.starts_with("<g class=\"node\" data-key=\"~rule\""), "{rule}");
+-    assert!(rule.contains(&format!("aria-label=\"規則行 {kind} {group}\"")), "{rule}");
+-    assert!(rule.contains(">規則行</text>"), "{rule}");
+-    assert!(rule.contains(&format!(">{kind} · {group}</text>")), "{rule}");
+-    assert!(!rule.contains(">~rule<"), "組の箱の id を字にした: {rule}");
+-    let hit = span(&rule, "<rect class=\"hit\"", "/>");
+-    assert!(hit.contains("stroke-dasharray=\"4 2\""), "{hit}");
+-    assert!(rule.contains(&format!("{} 27", label("children"))), "子の数の札");
+-    assert_eq!(rule.matches("class=\"fold\"").count(), 1);
+-    let mark = span(&rule, "<g class=\"fold\"", "</g>");
+-    for want in [
+-        "data-fold=\"~rule\"".to_string(),
+-        "role=\"button\"".to_string(),
+-        "tabindex=\"0\"".to_string(),
+-        format!("aria-label=\"{unfold}\""),
+-        "▸".to_string(),
+-    ] {
+-        assert!(mark.contains(&want), "印に {want} が無い: {mark}");
+-    }
+-    assert!(!mark.contains("data-key"), "{mark}");
+-    assert!(!mark.contains("class=\"node\""), "{mark}");
+-    assert!(rule.ends_with(&format!("{mark}</g>")), "印は箱の末");
+-    assert_eq!(mark_svg(&rule_box(), AT).as_deref(), Some(mark));
+-    art_svg(group, refold);
+-}
+-
+-/// 開いた組の箱の SVG（題・種類と組の語・畳み直す印）。
+-fn art_svg(group: String, refold: String) {
+-    let art = node_svg(&art_box(), AT);
+-    let kind = label(kind_key(NodeKind::Article));
+-    assert!(art.contains(">条 P</text>"), "{art}");
+-    assert!(art.contains(&format!(">{kind} · {group}</text>")), "{art}");
+-    assert!(!art.contains(">~art:P<"), "{art}");
+-    let mark = span(&art, "<g class=\"fold\"", "</g>");
+-    assert!(mark.contains("data-fold=\"~art:P\""), "{mark}");
+-    assert!(mark.contains(&format!("aria-label=\"{refold}\"")), "{mark}");
+-    assert!(mark.contains('▾') && !mark.contains('▸'), "{mark}");
+-    plain_svgs();
+-}
+-
+-/// 組でない畳んだ箱と Leaf の SVG・fixture の図と足した眺めの図の印の数。
+-fn plain_svgs() {
+-    // 組でない畳んだ箱は id の字を持ち、縁は点線でなく、印を 1 つ持つ。
+-    let epic = node_svg(&epic_box(), AT);
+-    assert!(epic.contains(">t3-hub.52</text>"), "{epic}");
+-    assert!(!epic.contains("stroke-dasharray"), "{epic}");
+-    assert_eq!(epic.matches("data-fold=\"t3-hub.52\"").count(), 1);
+-
+-    // Leaf は印を持たない・fixture の図は字 data-fold を持たず data-key は 8 つ。
+-    let leaf = boxed("R-9", NodeKind::Rule, "規則", (false, BoxFold::Leaf, 0));
+-    assert_eq!(mark_svg(&leaf, AT), None);
+-    assert!(!node_svg(&leaf, AT).contains("data-fold"));
+-    let v = fixture();
+-    assert!(v.nodes.iter().all(|n| !n.group && n.fold == BoxFold::Leaf));
+-    let picture = svg(&v, &layout(&v));
+-    assert!(!picture.contains("data-fold"));
+-    assert_eq!(picture.matches("data-key=\"").count(), 8);
+-    let v = mixed();
+-    let picture = svg(&v, &layout(&v));
+-    assert_eq!(picture.matches("data-key=\"").count(), 11);
+-    assert_eq!(picture.matches("data-fold=\"").count(), 3);
+-}
+-
+-/// (3) 狭い幅の一覧の行は組と開き閉じの欄を持ち、組の行の題は箱の題。
+-#[test]
+-fn btuck_chain_group_rows() {
+-    let rows: Vec<_> = chain(&fixture())
+-        .into_iter()
+-        .flat_map(|b| b.rows)
+-        .collect();
+-    assert_eq!(rows.len(), 8);
+-    assert!(rows.iter().all(|r| !r.group && r.fold == BoxFold::Leaf));
+-
+-    let rows: Vec<_> = chain(&mixed())
+-        .into_iter()
+-        .flat_map(|b| b.rows)
+-        .collect();
+-    assert_eq!(rows.len(), 11);
+-    let find = |id: &str| rows.iter().find(|r| r.id == id).expect(id);
+-    let r = find("~rule");
+-    assert_eq!((r.group, r.fold, r.title.as_str(), r.kids), (true, BoxFold::Folded, "規則行", Some(27)));
+-    let r = find("~art:P");
+-    assert_eq!((r.group, r.fold, r.title.as_str()), (true, BoxFold::Open, "条 P"));
+-    let r = find("t3-hub.52");
+-    assert_eq!((r.group, r.fold, r.title.as_str()), (false, BoxFold::Folded, "面の epic"));
+-    assert_eq!(rows.iter().filter(|r| r.group).count(), 2);
+-}
+-
+ /// (4) 組の箱の card と view_cards の使い分け。
+ #[test]
+ fn btuck_group_card() {
+@@ -288,32 +130,13 @@ fn art_card_and_views() {
+     );
+ }
+ 
+-/// (5) 開けなかった id の行。
+-#[test]
+-fn btuck_refused_line() {
+-    let mut v = fixture();
+-    assert!(v.refused.is_empty());
+-    assert_eq!(refused_line(&v), None);
+-    v.refused = vec!["~rule".to_string()];
+-    assert_eq!(
+-        refused_line(&v),
+-        Some(format!("{} ~rule", label("gf_refused")))
+-    );
+-    v.refused = vec!["~rule".to_string(), "~art:P".to_string(), "~b:SRS".to_string()];
+-    assert_eq!(
+-        refused_line(&v),
+-        Some(format!("{} ~rule・~art:P・~b:SRS", label("gf_refused")))
+-    );
+-}
+-
+-/// (6) 語の辞書の 4 つの鍵（見出しの語・注釈の記号と 1 行目の字数）と変えない鍵。
++/// (6) 語の辞書の 3 つの鍵（見出しの語・注釈の記号と 1 行目の字数）と変えない鍵（開けなかった行の鍵は行 m-map-graph で外した）。
+ #[test]
+ fn btuck_vocab_keys() {
+     for (key, want) in [
+         ("gf_group", "組"),
+         ("gf_unfold", "1 段開く"),
+         ("gf_fold", "畳み直す"),
+-        ("gf_refused", "開けなかった"),
+     ] {
+         let t = vocab()
+             .term(key)
+@@ -334,13 +157,8 @@ fn btuck_vocab_keys() {
+         group.lines().collect::<Vec<_>>(),
+         ["同じ種類の節点を 1 つの箱に畳んだもの", "→ 右下の印を押すと 1 段開く"]
+     );
+-    assert_eq!(
+-        vocab().term("gf_refused").expect("gf_refused").note,
+-        "見える箱が 40 を越えるので開かなかった"
+-    );
+     assert_eq!(label("children"), "子");
+     assert_eq!(label("cut"), "表示した数");
+-    assert_eq!(label("view_graph"), "グラフ");
+ }
+ 
+ /// Cargo.toml の表の中の鍵の名（`名 = …` の行の名・注釈の行は除く）。
+@@ -360,23 +178,9 @@ fn table_names(manifest: &str, table: &str) -> Vec<String> {
+     names
+ }
+ 
+-/// (7) DOM の配線の字・graph.rs の mod の行・fold.rs に口の字が無い・(8) 外の依存は足さない。
++/// (7) graph.rs の mod の行・fold.rs に口の字が無い・(8) 外の依存は足さない（DOM の配線の字は行 m-map-graph で消した）。
+ #[test]
+ fn btuck_dom_wiring_text() {
+-    let dom = read("src/mapview/graph/dom.rs");
+-    for want in [
+-        "crate::net::read_path(",
+-        "OpenList",
+-        ".toggle(",
+-        ".adopt(",
+-        ".path()",
+-        "refused_line(",
+-        "closest(\"g.fold\")",
+-    ] {
+-        assert!(dom.contains(want), "graph/dom.rs に {want} が無い");
+-    }
+-    assert!(!dom.contains("crate::net::read(PATH)"));
+-
+     let host = read("src/mapview/graph.rs");
+     assert!(
+         host.lines().any(|l| l.starts_with("pub mod fold;")),
+@@ -533,7 +337,7 @@ fn btuck_own_names_clean() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert!(names.len() >= 8, "歯の数 {}", names.len());
++    assert!(names.len() >= 4, "歯の数 {}", names.len());
+     for name in names {
+         let rest = name
+             .strip_prefix("btuck_")
+diff --git a/crates/tsuzuri-surface/tests/bvgdom.rs b/crates/tsuzuri-surface/tests/bvgdom.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..72c20e0adcc584efdd296d7a235494727207c750
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvgdom.rs
+@@ -0,0 +1,140 @@
++//! 行 m-map-graph の歯（接頭辞 bvgdom_・判断の記録 ADR-27）: 地図のグラフの面の DOM の file とその歯の file が無く、
++//! 面の src が眺めの口の字を持たず、グラフの module には近傍の図と節点の頁と節点の card が引く項だけが残る。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++
++fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// src の下の .rs の file の全部（path の順）。
++fn sources() -> Vec<(PathBuf, String)> {
++    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
++        for entry in std::fs::read_dir(dir).expect("src を読む").flatten() {
++            let p = entry.path();
++            if p.is_dir() {
++                walk(&p, out);
++            } else if p.extension().is_some_and(|x| x == "rs") {
++                out.push(p);
++            }
++        }
++    }
++    let mut paths = Vec::new();
++    walk(&crate_dir().join("src"), &mut paths);
++    paths.sort();
++    paths
++        .into_iter()
++        .map(|p| {
++            let text = std::fs::read_to_string(&p).expect("src の file");
++            (p, text)
++        })
++        .collect()
++}
++
++/// file の頭の段の pub の項の名（行の頭が `pub const`・`pub fn`・`pub struct`・`pub enum`・`pub mod` の行・file の順）。
++fn pub_items(rel: &str) -> Vec<String> {
++    read(rel)
++        .lines()
++        .filter_map(|l| {
++            [
++                "pub const ",
++                "pub fn ",
++                "pub struct ",
++                "pub enum ",
++                "pub mod ",
++            ]
++            .iter()
++            .find_map(|head| l.strip_prefix(head))
++        })
++        .map(|rest| {
++            rest.chars()
++                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
++                .collect()
++        })
++        .collect()
++}
++
++/// (1) グラフの面の DOM の file とその歯の file が無く、graph.rs は DOM の module を宣言も再公開もしない。
++#[test]
++fn bvgdom_file_gone() {
++    for rel in [
++        "src/mapview/graph/dom.rs",
++        "tests/graphnav.rs",
++        "tests/mtips.rs",
++    ] {
++        assert!(!crate_dir().join(rel).exists(), "{rel} が在る");
++    }
++    let host = read("src/mapview/graph.rs");
++    for word in ["mod dom", "dom::view"] {
++        assert!(!host.contains(word), "graph.rs に {word} が在る");
++    }
++}
++
++/// (2) 面の src のどの file も眺めの口の字を持たず、graph.rs は口の読み（PATH・REASON・doc）を持たない。
++#[test]
++fn bvgdom_no_view_path() {
++    for (path, text) in sources() {
++        assert!(
++            !text.contains("/api/graph/view"),
++            "{} に /api/graph/view が在る",
++            path.display()
++        );
++    }
++    let host = read("src/mapview/graph.rs");
++    for word in ["pub const PATH", "pub const REASON", "pub fn doc("] {
++        assert!(!host.contains(word), "graph.rs に {word} が在る");
++    }
++}
++
++/// (3) graph.rs の pub の項は近傍の図と節点の頁と節点の card が引く 33 の名だけ・fold.rs は 2 つの名だけ・
++/// band.rs は読めなかった出所の帯の理由の関数を持たない。
++#[test]
++fn bvgdom_items_exact() {
++    let want = [
++        "NODE_H",
++        "Pos",
++        "Lane",
++        "BandRow",
++        "LineStyle",
++        "line_style",
++        "curve",
++        "straight",
++        "line_svg",
++        "legend_line",
++        "esc",
++        "cut",
++        "round_mark",
++        "open_question",
++        "closed",
++        "border",
++        "LEGEND_SHAPES",
++        "LEGEND_BORDERS",
++        "LEGEND_HOVER",
++        "Legend",
++        "legend",
++        "edge_term",
++        "HUB_DEGREE",
++        "LIT_MAX",
++        "DEPTH",
++        "Side",
++        "Highlight",
++        "degrees",
++        "highlight",
++        "PinBar",
++        "PinAction",
++        "pin_next",
++        "fold",
++    ];
++    assert_eq!(want.len(), 33);
++    assert_eq!(pub_items("src/mapview/graph.rs"), want);
++    assert_eq!(
++        pub_items("src/mapview/graph/fold.rs"),
++        ["fold_key", "plain_title"]
++    );
++    assert!(!read("src/mapview/band.rs").contains("fn unread_reason("));
++}
+diff --git a/crates/tsuzuri-surface/tests/cgdom.rs b/crates/tsuzuri-surface/tests/cgdom.rs
+index 48a1f248085df9b8401702d97eae7dee9de9ec05..fd732c3cfabe32cd146873f6ab57b1c50188a5f4 100644
+--- a/crates/tsuzuri-surface/tests/cgdom.rs
++++ b/crates/tsuzuri-surface/tests/cgdom.rs
+@@ -1,5 +1,5 @@
+-//! 行 g-card-graph の歯: 地図のグラフの面の眺めの節点の card（view_cards）の鍵と値・図の data-key と一覧の行の id が鍵に在ること・
+-//! 図の委ねと一覧の題の a が card を出す字。DOM は wasm の target のときだけなので、graph/dom.rs の字で付け方を見る。
++//! 行 g-card-graph の歯: 眺めの節点の card（view_cards）の鍵と値。
++//! グラフの面の図の data-key と一覧の行の id が鍵に在ることと、DOM の付け方の字の歯は行 m-map-graph で消した。
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+@@ -7,7 +7,6 @@ use std::path::PathBuf;
+ 
+ use tsuzuri_contract::graph::GraphView;
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::mapview::graph::{chain, layout, svg};
+ use tsuzuri_surface::widgets::nodecard::{card_for, view_cards};
+ 
+ fn crate_dir() -> PathBuf {
+@@ -24,19 +23,7 @@ fn fixture() -> GraphView {
+         .expect("graph-view.json が眺めの電文として読める")
+ }
+ 
+-/// 字の `start` から後で最初に出る `end` の前までの区間（どちらかが無ければ落ちる）。
+-fn span<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
+-    let from = text
+-        .find(start)
+-        .unwrap_or_else(|| panic!("字 {start} が無い"));
+-    let rest = &text[from..];
+-    let to = rest[start.len()..]
+-        .find(end)
+-        .unwrap_or_else(|| panic!("字 {start} の後に字 {end} が無い"));
+-    &rest[..start.len() + to]
+-}
+-
+-/// (1) 眺めの節点の card の鍵は 8 つの節点の id で、値は card_for の値・図の data-key と一覧の行の id はどれも鍵に在る。
++/// (1) 眺めの節点の card の鍵は 8 つの節点の id で、値は card_for の値。
+ #[test]
+ fn cgdom_view_cards_cover() {
+     let v = fixture();
+@@ -68,64 +55,6 @@ fn cgdom_view_cards_cover() {
+         assert_eq!(c.title, title, "{id} の題");
+         assert_eq!(c.kind, kind, "{id} の種類");
+     }
+-
+-    // 図の data-key の値と一覧の行の id は、どれも鍵に在る。
+-    let picture = svg(&v, &layout(&v));
+-    let marker = "data-key=\"";
+-    let data_keys: Vec<&str> = picture
+-        .match_indices(marker)
+-        .map(|(i, _)| {
+-            let rest = &picture[i + marker.len()..];
+-            &rest[..rest.find('"').expect("data-key の値の閉じ引用符")]
+-        })
+-        .collect();
+-    assert_eq!(data_keys.len(), 8, "{data_keys:?}");
+-    for k in data_keys {
+-        assert!(cards.contains_key(k), "図の data-key {k} が鍵に無い");
+-    }
+-    let mut listed = 0;
+-    for band in chain(&v) {
+-        for r in &band.rows {
+-            assert!(cards.contains_key(&r.id), "一覧の {} が鍵に無い", r.id);
+-            listed += 1;
+-        }
+-    }
+-    assert!(listed > 0);
+-}
+-
+-/// (2) 図の委ねが固定の有無によらず節点の card を出し、節点を出ると猶予に入り、一覧の題の a が card を持つ字。
+-#[test]
+-fn cgdom_wiring_text() {
+-    let dom = read("src/mapview/graph/dom.rs");
+-    for want in [
+-        "view_cards(&v.nodes)",
+-        "delegate()",
+-        ".get(&r.id)",
+-        "on:mouseover=over on:mouseout=out",
+-        "on:focusin=move |ev| hover(ev.target())",
+-    ] {
+-        assert!(dom.contains(want), "graph/dom.rs に {want} が無い");
+-    }
+-    assert!(!dom.contains("on:mouseover=move |ev| hover(ev.target())"));
+-    let over = span(&dom, "let over = move |ev", "let out = move |ev");
+-    for want in ["cards.get(", ".show(&ev, card)", "hover(ev.target())"] {
+-        assert!(over.contains(want), "over に {want} が無い");
+-    }
+-    assert!(!over.contains("pin."), "over が固定を見る");
+-    let out = span(&dom, "let out = move |ev", "let click = move |ev");
+-    assert!(out.contains(".leave(&ev)"));
+-    let at_leaves = out.find("leaves(").expect("out に leaves( が在る");
+-    let at_pin = out
+-        .find("pin.with_untracked(")
+-        .expect("out に pin.with_untracked( が在る");
+-    assert!(at_leaves < at_pin, "out の leaves( が固定の見張りより後");
+-    let open = "<a class=\"ttl\"";
+-    assert_eq!(dom.matches(open).count(), 1);
+-    let tag = span(&dom, open, ">");
+-    assert_eq!(
+-        format!("{tag}>"),
+-        "<a class=\"ttl\" href=href use:attach=card>"
+-    );
+ }
+ 
+ /// 着地済みの歯の名の filter の語（106 語・この file の接頭辞は並べない）。
+@@ -255,7 +184,7 @@ fn cgdom_names_clean() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert!(names.len() >= 3, "歯の数 {}", names.len());
++    assert!(names.len() >= 2, "歯の数 {}", names.len());
+     for name in names {
+         assert!(name.starts_with("cgdom_"), "{name} が cgdom_ で始まらない");
+         for word in FILTERS {
+diff --git a/crates/tsuzuri-surface/tests/evkindview.rs b/crates/tsuzuri-surface/tests/evkindview.rs
+index 5c2d0ac7b2cc604e4b78afcb8bb80fc21551a6df..a44483af82425581b7ce96d16524d4ce086f0610 100644
+--- a/crates/tsuzuri-surface/tests/evkindview.rs
++++ b/crates/tsuzuri-surface/tests/evkindview.rs
+@@ -8,7 +8,6 @@ use std::path::Path;
+ use tsuzuri_contract::ledger::{ITEM_PATH, LEDGER_CHANGED_EVENT};
+ use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, ChangeKind};
+ use tsuzuri_contract::{account, project, runs};
+-use tsuzuri_surface::mapview::graph;
+ use tsuzuri_surface::project::{ask, ledger, map, next, nodearound, pipeline, seat};
+ use tsuzuri_surface::view::{changed_kinds, path_kinds, reloads};
+ 
+@@ -33,8 +32,8 @@ fn function<'a>(text: &'a str, name: &str) -> &'a str {
+     &rest[..end]
+ }
+ 
+-/// 面が読む口の 14 の path（query を付けて読む口は読む形の query を付けた字）。
+-fn paths() -> [String; 14] {
++/// 面が読む口の 13 の path（query を付けて読む口は読む形の query を付けた字・グラフの眺めの口は行 m-map-graph で外した）。
++fn paths() -> [String; 13] {
+     [
+         seat::PATH.to_string(),
+         next::PATH.to_string(),
+@@ -45,7 +44,6 @@ fn paths() -> [String; 14] {
+         ask::PATH.to_string(),
+         pipeline::PATH.to_string(),
+         map::PATH.to_string(),
+-        format!("{}?open=fx-a", graph::PATH),
+         format!("{}?id=fx-a.1&k=1&fold=", nodearound::PATH),
+         format!("{}?bead=fx-a.1", runs::PATH),
+         account::PATH.to_string(),
+@@ -55,7 +53,7 @@ fn paths() -> [String; 14] {
+ 
+ #[test]
+ fn evkind_path_kinds_table() {
+-    let want: [&[ChangeKind]; 14] = [
++    let want: [&[ChangeKind]; 13] = [
+         &[Seat],
+         &[Ledger, Runs, Seat],
+         &[Ledger],
+@@ -66,7 +64,6 @@ fn evkind_path_kinds_table() {
+         &[Ledger, Runs],
+         &[Ledger, Runs, Design],
+         &[Ledger, Runs, Design],
+-        &[Ledger, Runs, Design],
+         &[Runs],
+         &[Account, Ledger],
+         &[],
+diff --git a/crates/tsuzuri-surface/tests/glabel.rs b/crates/tsuzuri-surface/tests/glabel.rs
+index 9a92f577eb3bd6640f9baf8cb692ef4d2b564a69..669fc2ed504519da40c4b9a30e78a8e0a74a4eb0 100644
+--- a/crates/tsuzuri-surface/tests/glabel.rs
++++ b/crates/tsuzuri-surface/tests/glabel.rs
+@@ -1,5 +1,5 @@
+-//! 行 g-graph-label の歯（面）: 組の箱の題を id と種類から組み、組の箱と塊の箱と一覧の組の行と組の箱の card と
+-//! 開けなかった行で ~ の id を字にしない・組でない箱の字は変えない・歯の名。
++//! 行 g-graph-label の歯（面）: 組の箱の題を id と種類から組み、組の箱の card で ~ の id を字にしない・
++//! 組でない箱の字は変えない・歯の名。組の箱と塊の箱の SVG と一覧の組の行と開けなかった行の歯は行 m-map-graph で消した。
+ #![cfg(test)]
+ 
+ use std::path::PathBuf;
+@@ -7,8 +7,7 @@ use std::path::PathBuf;
+ use tsuzuri_contract::graph::{BoxFold, GraphNode, GraphView, NodeKind, ViewNode};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::mapview::band::{band_of, kind_key};
+-use tsuzuri_surface::mapview::graph::fold::{GROUP_TITLE_CHARS, plain_title, refused_line};
+-use tsuzuri_surface::mapview::graph::{Pos, chain, node_svg};
++use tsuzuri_surface::mapview::graph::fold::plain_title;
+ use tsuzuri_surface::widgets::nodecard::{card_for, group_card, view_cards};
+ use tsuzuri_surface::vocab::label;
+ 
+@@ -89,28 +88,6 @@ fn hub_chunk() -> ViewNode {
+     chunk("t3-hub.52~1-12", NodeKind::Task, "t3-hub.52.1", "t3-hub.52.12", 12)
+ }
+ 
+-const AT: Pos = Pos { x: 200, y: 40 };
+-
+-/// 属性 data-key と data-fold の値を除いた字。
+-fn without_keys(svg: &str) -> String {
+-    let mut out = String::new();
+-    let mut rest = svg;
+-    loop {
+-        let hit = ["data-key=\"", "data-fold=\""]
+-            .iter()
+-            .filter_map(|a| rest.find(a).map(|i| (i, a.len())))
+-            .min();
+-        let Some((i, len)) = hit else {
+-            out.push_str(rest);
+-            return out;
+-        };
+-        out.push_str(&rest[..i + len]);
+-        rest = &rest[i + len..];
+-        let end = rest.find('"').expect("属性の値の閉じの引用符");
+-        rest = &rest[end..];
+-    }
+-}
+-
+ /// (1) 組の箱の題は id と種類から組み、組でない箱は電文の題。
+ #[test]
+ fn glabel_plain_titles() {
+@@ -148,72 +125,6 @@ fn glabel_plain_titles() {
+     assert_eq!(plain_title(&odd), "題 x");
+ }
+ 
+-/// (2) 組の箱と塊の箱の 1 行目と aria-label は題で、~ の id を字にしない・組でない箱は id の字。
+-#[test]
+-fn glabel_box_first_line() {
+-    assert_eq!(GROUP_TITLE_CHARS, 20);
+-    let group_word = label("gf_group");
+-
+-    let art = node_svg(&art_a(), AT);
+-    let kind = label(kind_key(NodeKind::Article));
+-    assert!(art.contains(">条 A</text>"), "{art}");
+-    assert!(art.contains(&format!("aria-label=\"条 A {kind} {group_word}\"")), "{art}");
+-    assert!(!art.contains(">~art:A<"), "{art}");
+-
+-    let hub = node_svg(&hub_chunk(), AT);
+-    assert!(hub.contains(">t3-hub.52 の 1〜12</text>"), "{hub}");
+-    assert!(!hub.contains('…'), "{hub}");
+-
+-    let deep = chunk(
+-        "t3-hub.52.13.2~1-12",
+-        NodeKind::Task,
+-        "t3-hub.52.13.2.1",
+-        "t3-hub.52.13.2.12",
+-        12,
+-    );
+-    let deep_svg = node_svg(&deep, AT);
+-    let head = "t3-hub.52.13.2 の 1〜…";
+-    assert_eq!(head.chars().count(), GROUP_TITLE_CHARS);
+-    assert!(deep_svg.contains(&format!(">{head}</text>")), "{deep_svg}");
+-
+-    for n in [
+-        art_a(),
+-        ruling_box(),
+-        hub_chunk(),
+-        deep,
+-        group("~rule", NodeKind::Rule, 27),
+-        group("~note:surface-wave10a", NodeKind::NoteRow, 5),
+-        boxed("~b:SRS", NodeKind::Goal, "SRS", (true, BoxFold::Open, 30)),
+-        chunk("~led:ruling~13-24", NodeKind::Ruling, "r-13", "r-24", 12),
+-        chunk("~art:P~1-12", NodeKind::Article, "P-1", "P-12", 12),
+-    ] {
+-        let s = node_svg(&n, AT);
+-        assert!(!without_keys(&s).contains('~'), "{}: {s}", n.node.id);
+-    }
+-
+-    let epic = node_svg(&epic_box(), AT);
+-    assert!(epic.contains(">t3-hub.52</text>"), "{epic}");
+-}
+-
+-/// (3) 一覧の組の行の題は箱の題・fixture の行は変わらない。
+-#[test]
+-fn glabel_chain_titles() {
+-    let base: Vec<_> = chain(&fixture()).into_iter().flat_map(|b| b.rows).collect();
+-    let mut v = fixture();
+-    v.nodes.extend([art_a(), ruling_box(), hub_chunk()]);
+-    let rows: Vec<_> = chain(&v).into_iter().flat_map(|b| b.rows).collect();
+-    assert_eq!(rows.len(), 11);
+-    let find = |id: &str| rows.iter().find(|r| r.id == id).expect(id);
+-    assert_eq!(find("~art:A").title, "条 A");
+-    assert_eq!(find("~led:ruling").title, "裁定");
+-    assert_eq!(find("t3-hub.52~1-12").title, "t3-hub.52 の 1〜12");
+-    assert_eq!(rows.iter().filter(|r| r.group).count(), 3);
+-    assert_eq!(base.len(), 8);
+-    for r in &base {
+-        assert_eq!(find(&r.id), r, "{}", r.id);
+-    }
+-}
+-
+ /// (4) 組の箱の card の題は箱の題で、ほかの欄は今のまま・4 行は ~ を持たない。
+ #[test]
+ fn glabel_card_titles() {
+@@ -254,25 +165,6 @@ fn glabel_card_titles() {
+     assert_eq!(cards["~art:A"].title, "条 A");
+ }
+ 
+-/// (5) 開けなかった行は、同じ id の組の箱が在れば題・無ければ id のまま。
+-#[test]
+-fn glabel_refused_titles() {
+-    let mut v = fixture();
+-    assert_eq!(refused_line(&v), None);
+-    v.nodes.push(ruling_box());
+-    assert_eq!(refused_line(&v), None);
+-    v.refused = vec!["~led:ruling".to_string(), "x".to_string()];
+-    assert_eq!(
+-        refused_line(&v),
+-        Some(format!("{} 裁定・x", label("gf_refused")))
+-    );
+-    v.refused = vec!["~rule".to_string()];
+-    assert_eq!(
+-        refused_line(&v),
+-        Some(format!("{} ~rule", label("gf_refused")))
+-    );
+-}
+-
+ /// 着地済みの行の verify の filter の語と、後の行の接頭辞。
+ const FILTERS: &[&str] = &[
+     "aaround_", "accept_", "account_", "acctcore_", "acctdoc_", "accthb_", "accthome_", "acctled_",
+@@ -291,7 +183,7 @@ const FILTERS: &[&str] = &[
+     "uword_", "wstrip_", "iclose_",
+ ];
+ 
+-/// (7) この file の歯の名はどれも glabel_ で始まり、残りの字は filter の語を含まない（6 本以上）。
++/// (7) この file の歯の名はどれも glabel_ で始まり、残りの字は filter の語を含まない（3 本以上）。
+ #[test]
+ fn glabel_own_names_clean() {
+     let text = read("tests/glabel.rs");
+@@ -308,7 +200,7 @@ fn glabel_own_names_clean() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert!(names.len() >= 6, "歯の数 {}", names.len());
++    assert!(names.len() >= 3, "歯の数 {}", names.len());
+     for name in names {
+         let rest = name
+             .strip_prefix("glabel_")
+diff --git a/crates/tsuzuri-surface/tests/graphnav.rs b/crates/tsuzuri-surface/tests/graphnav.rs
+deleted file mode 100644
+index c0c0c09b8adfc9af76c168d88cf88409bd3edb3a..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/graphnav.rs
++++ /dev/null
+@@ -1,209 +0,0 @@
+-//! 行 g-link-graph の歯: グラフの面の節点から節点の頁へ移る道（固定の帯の link・2 回押す・Enter と Space・
+-//! 狭い幅の一覧の行の link）と、wasm の target のときだけの DOM を src/mapview/graph/dom.rs へ移した形。
+-//! DOM と事件の受け取りは host では撃てないので、host の関数の値と src の字を見る。
+-#![cfg(test)]
+-
+-use std::path::PathBuf;
+-
+-use tsuzuri_contract::graph::GraphView;
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::frame::{self, Mode, PageId};
+-use tsuzuri_surface::mapview::graph::opens_node;
+-use tsuzuri_surface::project::nodearound::id_of;
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-const HOST: &str = "src/mapview/graph.rs";
+-const DOM: &str = "src/mapview/graph/dom.rs";
+-
+-/// 着地済みの行とこの波の行の verify の filter の語（歯の名に部分の字として含めない）。
+-const FILTERS: [&str; 66] = [
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hbconf_",
+-    "hbpost_",
+-    "hbproc_",
+-    "hbroute_",
+-    "hook_",
+-    "hsblock_",
+-    "hsderive_",
+-    "hspage_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "mlink_",
+-    "gnav_",
+-    "mkeys_",
+-    "klink_",
+-    "ilink_",
+-    "afocus_",
+-    "nxact_",
+-    "urpanel_",
+-    "saxis_",
+-    "ticker_",
+-    "hfig_",
+-    "pmore_",
+-    "lspark_",
+-    "apop_",
+-    "brand_",
+-    "runsdoc_",
+-    "nbatch_",
+-];
+-
+-/// Enter と空白 1 字（Space の key の値）でだけ節点の頁へ移る（見本の ui.js の 1086 行）。
+-#[test]
+-fn gnav_enter_space_decide() {
+-    assert!(opens_node("Enter"));
+-    assert!(opens_node(" "));
+-    for key in [
+-        "Escape",
+-        "Tab",
+-        "ArrowRight",
+-        "",
+-        "enter",
+-        "Spacebar",
+-        "a",
+-        "  ",
+-    ] {
+-        assert!(!opens_node(key), "{key:?}");
+-    }
+-}
+-
+-/// 例のグラフの全部の節点の id と 2 つの mode で、節点の頁への link は同じ id と mode の節点の頁を開く。
+-#[test]
+-fn gnav_hrefs_open_same_id() {
+-    let doc: GraphView = wire::decode(&read("../../tests/fixtures/surface/graph-view.json"))
+-        .expect("fixture が眺めの電文として読める");
+-    assert!(!doc.nodes.is_empty(), "例のグラフに節点が在る");
+-    for n in &doc.nodes {
+-        let id = n.node.id.as_str();
+-        for mode in Mode::ALL {
+-            let href = frame::node_href(id, mode);
+-            assert_eq!(PageId::from_query(&href), PageId::Node, "{href}");
+-            assert_eq!(id_of(&href).as_deref(), Some(id), "{href}");
+-            assert_eq!(Mode::from_query(&href), mode, "{href}");
+-        }
+-    }
+-}
+-
+-/// DOM の file は節点の頁へ移る道（固定の帯の link・2 回押す・Enter と Space）を組む。
+-#[test]
+-fn gnav_dom_wires_open() {
+-    let text = read(DOM);
+-    for want in [
+-        "node_href(",
+-        "opens_node(",
+-        "on:dblclick=",
+-        "on:keydown=",
+-        "<a class=\"btn sm\" href=",
+-        "label(\"open_node\"",
+-    ] {
+-        assert!(text.contains(want), "{DOM} に {want} が在る");
+-    }
+-}
+-
+-/// 狭い幅の一覧の行の題は節点の頁への link で、「まだ無い」「後の便」の字は残らない。
+-#[test]
+-fn gnav_chain_rows_are_anchors() {
+-    let text = format!("{}{}", read(HOST), read(DOM));
+-    assert!(text.contains("<a class=\"ttl\" href="));
+-    for gone in [
+-        "<span class=\"ttl\">",
+-        "節点の頁はまだ無い",
+-        "節点の頁は後の便",
+-    ] {
+-        assert!(!text.contains(gone), "{gone} が無い");
+-    }
+-}
+-
+-/// DOM の中身は graph/dom.rs に在り、graph.rs は属性の行の次に mod dom の宣言の行だけを持つ。
+-#[test]
+-fn gnav_dom_moved_out() {
+-    let host = read(HOST);
+-    assert!(!host.contains("mod dom {"), "inline の mod dom が無い");
+-    let lines: Vec<&str> = host.split('\n').collect();
+-    let at = lines
+-        .iter()
+-        .position(|l| l.trim() == "mod dom;")
+-        .expect("mod dom の宣言の行が在る");
+-    assert!(at > 0);
+-    assert_eq!(lines[at - 1].trim(), "#[cfg(target_arch = \"wasm32\")]");
+-    assert!(lines.len() <= 1150, "graph.rs の行の数 {}", lines.len());
+-    assert!(read(DOM).contains("pub fn view("), "{DOM} に pub fn view が在る");
+-}
+-
+-/// この file の歯の名はどれも gnav_ で始まり、残りの字は verify の filter の語を含まない。
+-#[test]
+-fn gnav_names_stay_apart() {
+-    let text = read("tests/graphnav.rs");
+-    let lines: Vec<&str> = text.lines().collect();
+-    let mut names = Vec::new();
+-    for (i, l) in lines.iter().enumerate() {
+-        if l.trim() != "#[test]" {
+-            continue;
+-        }
+-        let decl = lines[i + 1..]
+-            .iter()
+-            .find(|l| l.trim_start().starts_with("fn "))
+-            .expect("test の属性の後に fn が在る");
+-        let name = decl
+-            .trim_start()
+-            .trim_start_matches("fn ")
+-            .split('(')
+-            .next()
+-            .unwrap_or_default()
+-            .to_string();
+-        names.push(name);
+-    }
+-    assert!(names.len() >= 5, "{names:?}");
+-    for name in &names {
+-        let rest = name
+-            .strip_prefix("gnav_")
+-            .unwrap_or_else(|| panic!("{name} は gnav_ で始まる"));
+-        for word in FILTERS {
+-            assert!(!rest.contains(word), "{name} は {word} を含まない");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/mapgraph.rs b/crates/tsuzuri-surface/tests/mapgraph.rs
+index b54bd26c1192c63de2d1467383be642d3d28005d..4652dfdbab7fa58c2d26b575755d43ea25c05a87 100644
+--- a/crates/tsuzuri-surface/tests/mapgraph.rs
++++ b/crates/tsuzuri-surface/tests/mapgraph.rs
+@@ -1,25 +1,21 @@
+-//! 便 g-graph の歯: グラフの面の配置（例のグラフ・9 個の升・節点の無い眺め）・線の形と道の字・子の数の札・
+-//! 拡大と移動の値と transform の字・光らせ方（hlCompute）・固定の移り方（hlPin）・狭い幅の一覧・数の行・
+-//! 読めなかった出所の帯と 0 の帯・口の読みの 3 値・凡例に出す帯と型・全部の箱の id・口の path・外の依存。
++//! 便 g-graph の歯: 線の形の表・箱の縁と薄い字・光らせ方（hlCompute）・固定の移り方（hlPin）・凡例に出す帯と型。
++//! グラフの面の配置・線の道の字・子の数の札・拡大と移動・狭い幅の一覧・数の行・読めなかった出所の帯と 0 の帯・
++//! 口の読みの 3 値・全部の箱の id・口の path と外の依存の歯は行 m-map-graph で消した（近傍の図の歯は nodepage.rs）。
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
+ use tsuzuri_contract::graph::{
+-    BoxFold, EdgeType, GraphNode, GraphSource, GraphView, NodeKind, ViewEdge, ViewNode,
++    BoxFold, EdgeType, GraphNode, GraphView, NodeKind, ViewEdge, ViewNode,
+ };
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::mapview::band::{BEADS_LANES, Band, unread_reason};
++use tsuzuri_surface::mapview::band::Band;
+ use tsuzuri_surface::mapview::graph::{
+-    self, BandFill, LineStyle, PATH, PinAction, Pos, REASON, Side, Zoom, band_fill, border,
+-    box_height, chain, count_line, curve, degrees, doc, edge_path, edge_term, expert_line,
+-    highlight, initial_scale, kids_badge, layout, legend, line_style, node_svg, pin_next, svg,
+-    zero_text,
++    self, LineStyle, PinAction, Side, border, degrees, edge_term, highlight, legend, line_style,
++    pin_next,
+ };
+-use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
+-use tsuzuri_surface::view::Fetched;
+-use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::vocab::vocab;
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -122,152 +118,6 @@ fn mapgraph_fixture_is_small_and_reads() {
+     }
+ }
+ 
+-/// (1) 例のグラフの配置は節の表と一致する。
+-#[test]
+-fn mapgraph_fixture_layout_matches_table() {
+-    let v = fixture();
+-    let l = layout(&v);
+-    assert_eq!((l.width, l.height), (1408, 658));
+-    let xs: Vec<(u32, u32, u32)> = l.columns.iter().map(|c| (c.rank, c.x, c.cols)).collect();
+-    assert_eq!(
+-        xs,
+-        vec![
+-            (0, 116, 1),
+-            (1, 336, 1),
+-            (2, 556, 1),
+-            (3, 776, 1),
+-            (4, 996, 1),
+-            (5, 1216, 1)
+-        ]
+-    );
+-    let bands: Vec<(Band, u32, u32)> = l.bands.iter().map(|b| (b.band, b.top, b.height)).collect();
+-    assert_eq!(
+-        bands,
+-        vec![
+-            (Band::Constitution, 8, 66),
+-            (Band::Rules, 74, 66),
+-            (Band::Adr, 140, 66),
+-            (Band::Srs, 206, 66),
+-            (Band::DesignNote, 272, 44),
+-            (Band::Beads, 316, 272),
+-            (Band::Pipeline, 588, 66),
+-        ]
+-    );
+-    beads_lanes_and_boxes(l);
+-}
+-
+-/// beads の帯の小さな帯と、ほかの帯は小さな帯を持たない・箱の位置。
+-fn beads_lanes_and_boxes(l: graph::Layout) {
+-    let lanes: Vec<(NodeKind, u32, u32)> = l
+-        .band(Band::Beads)
+-        .expect("beads の帯")
+-        .lanes
+-        .iter()
+-        .map(|x| (x.kind, x.top, x.height))
+-        .collect();
+-    assert_eq!(
+-        lanes,
+-        vec![
+-            (NodeKind::Epic, 316, 66),
+-            (NodeKind::Task, 382, 66),
+-            (NodeKind::Memo, 448, 28),
+-            (NodeKind::Question, 476, 28),
+-            (NodeKind::Ruling, 504, 28),
+-            (NodeKind::Receipt, 532, 28),
+-            (NodeKind::Policy, 560, 28),
+-        ]
+-    );
+-    assert_eq!(
+-        lanes.iter().map(|x| x.0).collect::<Vec<_>>(),
+-        BEADS_LANES.to_vec()
+-    );
+-    for band in Band::ALL {
+-        if band != Band::Beads {
+-            assert!(l.band(band).expect("帯").lanes.is_empty(), "{band:?}");
+-        }
+-    }
+-    let boxes: [(&str, u32, u32); 8] = [
+-        ("P-1", 116, 18),
+-        ("R-1", 336, 84),
+-        ("ADR-1", 336, 150),
+-        ("FR1", 556, 216),
+-        ("AC1", 776, 216),
+-        ("e", 776, 326),
+-        ("e.1", 996, 392),
+-        (RUN, 1216, 598),
+-    ];
+-    for (id, x, y) in boxes {
+-        assert_eq!(l.pos(id), Some(Pos { x, y }), "{id} の箱");
+-    }
+-    assert_eq!(l.boxes.len(), 8);
+-}
+-
+-/// (2) 1 つの升に 9 個: 9 個目は 2 列目の先頭・その段は 2 列ぶん・次の段は 184 右へずれる。
+-#[test]
+-fn mapgraph_nine_in_one_cell_wrap_to_second_column() {
+-    let mut nodes: Vec<ViewNode> = (1..=9)
+-        .map(|i| node(&format!("FR{i}"), NodeKind::Req, 0, 1))
+-        .collect();
+-    nodes.push(node("AC1", NodeKind::Ac, 1, 1));
+-    let one = layout(&view_of(
+-        vec![
+-            node("FR1", NodeKind::Req, 0, 1),
+-            node("AC1", NodeKind::Ac, 1, 1),
+-        ],
+-        vec![],
+-    ));
+-    let l = layout(&view_of(nodes, vec![]));
+-    let first = l.pos("FR1").expect("FR1");
+-    let ninth = l.pos("FR9").expect("FR9");
+-    assert_eq!(
+-        first,
+-        Pos {
+-            x: 116,
+-            y: 8 + 44 * 3 + 10
+-        }
+-    );
+-    assert_eq!(
+-        ninth,
+-        Pos {
+-            x: first.x + 184,
+-            y: first.y
+-        }
+-    );
+-    // 升の中は id の自然な順（FR2 は FR1 の下）。
+-    assert_eq!(
+-        l.pos("FR2"),
+-        Some(Pos {
+-            x: 116,
+-            y: first.y + 46
+-        })
+-    );
+-    assert_eq!(
+-        l.pos("FR8"),
+-        Some(Pos {
+-            x: 116,
+-            y: first.y + 7 * 46
+-        })
+-    );
+-    assert_eq!(l.column(0).map(|c| c.cols), Some(2));
+-    let next = l.column(1).expect("段 1").x;
+-    assert_eq!(next, one.column(1).expect("段 1").x + 184);
+-    assert_eq!(next, 116 + 2 * 184 + 36);
+-    assert_eq!(l.width, next + 184 + 8);
+-    // 行の高さは 8 個まで（8 × 46 + 20）。
+-    assert_eq!(l.band(Band::Srs).map(|b| b.height), Some(8 * 46 + 20));
+-}
+-
+-/// (3) 節点が 1 つも無い眺め: 7 つの帯は全部 44・幅 300・高さ 320。
+-#[test]
+-fn mapgraph_empty_view_layout() {
+-    let l = layout(&view_of(vec![], vec![]));
+-    assert!(l.bands.iter().all(|b| b.height == 44 && b.lanes.is_empty()));
+-    assert_eq!(l.bands.len(), 7);
+-    assert_eq!((l.width, l.height), (300, 320));
+-    assert!(l.columns.is_empty());
+-    assert!(l.boxes.is_empty());
+-}
+-
+ /// (4) 線の形は辺の型から決まる閉じた表。
+ #[test]
+ fn mapgraph_line_style_table() {
+@@ -316,63 +166,6 @@ fn mapgraph_line_style_table() {
+     );
+ }
+ 
+-/// (5) 線の道の字（FR1 から P-1 の辺）。
+-#[test]
+-fn mapgraph_edge_path_text() {
+-    let v = fixture();
+-    let l = layout(&v);
+-    let e = v
+-        .edges
+-        .iter()
+-        .find(|e| e.from == "FR1" && e.to == "P-1")
+-        .expect("FR1 → P-1");
+-    assert_eq!(
+-        edge_path(&l, e).as_deref(),
+-        Some("M556 236 C 424 236, 424 38, 292 38")
+-    );
+-    assert_eq!(curve(1.0, 2.0, 4.0, 6.0), "M1 2 C 2.5 2, 2.5 6, 4 6");
+-    // 全部の辺が図の道を持つ（両端の箱が在る）。
+-    assert!(v.edges.iter().all(|e| edge_path(&l, e).is_some()));
+-    let picture = svg(&v, &l);
+-    assert!(picture.contains(r#"d="M556 236 C 424 236, 424 38, 292 38""#));
+-    assert_eq!(picture.matches(r#"<g class="e""#).count(), 10);
+-}
+-
+-/// (6) 子を持つ節点だけが子の数の札を持つ・(16) 全部の箱に id が出る。
+-#[test]
+-fn mapgraph_kids_badge_and_ids_in_every_box() {
+-    let v = fixture();
+-    let l = layout(&v);
+-    let children = label("children");
+-    for n in &v.nodes {
+-        let badge = kids_badge(n);
+-        match n.node.id.as_str() {
+-            "P-1" | "e" => assert_eq!(badge, Some(format!("{children} 2")), "{}", n.node.id),
+-            _ => assert_eq!(badge, None, "{}", n.node.id),
+-        }
+-        let p = l.pos(&n.node.id).expect("箱");
+-        let s = node_svg(n, p);
+-        assert!(
+-            s.contains(&format!(">{}</text>", n.node.id)),
+-            "{} の箱に id が無い",
+-            n.node.id
+-        );
+-        assert_eq!(s.contains(&format!("{children} ")), badge.is_some());
+-        // 箱は link にしない。
+-        assert!(!s.contains("href") && !s.contains(r#"role="link""#));
+-    }
+-    let picture = svg(&v, &l);
+-    assert_eq!(picture.matches(r#"<g class="node""#).count(), 8);
+-    for n in &v.nodes {
+-        assert!(picture.contains(&format!(r#"data-key="{}""#, n.node.id)));
+-    }
+-    // 形は 2 種（file に書かれた行は四角・台帳と走行は丸）。
+-    let p1 = node_svg(&v.nodes[0], l.pos("P-1").expect("P-1"));
+-    assert!(!p1.contains("<circle"));
+-    let run = v.nodes.iter().find(|n| n.node.id == RUN).expect("走行");
+-    assert!(node_svg(run, l.pos(RUN).expect("走行")).contains("<circle"));
+-}
+-
+ /// 縁: open の問いは止まりの色・固定は太い縁・閉じた bead は薄い字。
+ #[test]
+ fn mapgraph_node_border_and_faded() {
+@@ -382,110 +175,15 @@ fn mapgraph_node_border_and_faded() {
+     assert_eq!(border(true, true), ("var(--s-stop)", 3));
+     let mut q = node("q", NodeKind::Question, 0, 1);
+     q.status = Some("open".to_string());
+-    let s = node_svg(&q, Pos { x: 116, y: 18 });
+-    assert!(s.contains(r#"fill="none" stroke="var(--s-stop)""#));
+-    assert!(s.contains(r#"stroke="var(--s-stop)" stroke-width="2""#));
++    assert!(graph::open_question(&q));
+     let mut c = node("c", NodeKind::Task, 0, 1);
+     c.status = Some("closed".to_string());
+     assert!(graph::closed(&c));
+-    assert!(node_svg(&c, Pos { x: 116, y: 18 }).contains(r#"fill="var(--ink-3)" data-t="""#));
+     let mut r = node("r", NodeKind::Rule, 0, 1);
+     r.status = Some("closed".to_string());
+     assert!(!graph::closed(&r));
+ }
+ 
+-/// (7) 拡大と移動の値と transform の字。
+-#[test]
+-fn mapgraph_zoom_values() {
+-    let s0 = initial_scale(1000.0, 1408);
+-    assert!((s0 - 884.0 / 1292.0).abs() < 1e-12);
+-    assert_eq!((s0 * 10000.0).round() / 10000.0, 0.6842);
+-    assert_eq!(box_height(658, s0), 458.0);
+-    assert_eq!(initial_scale(2000.0, 1408), 1.0);
+-    assert_eq!(box_height(100, 1.0), 360.0);
+-    assert_eq!(box_height(2000, 1.0), 720.0);
+-    assert_eq!(
+-        Zoom {
+-            s: 0.5,
+-            tx: 10.0,
+-            ty: -4.0
+-        }
+-        .transform(),
+-        "translate(126.00 -4.00) scale(0.5000) translate(-116 0)"
+-    );
+-    assert_eq!(
+-        Zoom::initial(s0).transform(),
+-        "translate(116.00 0.00) scale(0.6842) translate(-116 0)"
+-    );
+-
+-    wheel_and_drag(s0);
+-}
+-
+-/// wheel の倍率と収め・drag の移動と元に戻す。
+-fn wheel_and_drag(s0: f64) {
+-    // wheel: 倍率は e の（縦の量 × −0.0015）乗を掛け、pointer の下の点は動かない。
+-    let z = Zoom {
+-        s: s0,
+-        tx: 30.0,
+-        ty: -12.0,
+-    };
+-    let (cx, cy) = (400.0, 200.0);
+-    let before = z.to_graph(cx, cy);
+-    let w = z.wheel(cx, cy, -100.0);
+-    assert!((w.s - s0 * 0.15_f64.exp()).abs() < 1e-12);
+-    let after = w.to_graph(cx, cy);
+-    assert!((before.0 - after.0).abs() < 1e-9 && (before.1 - after.1).abs() < 1e-9);
+-    // 0.2 から 4 に収まる（収めても pointer の下の点は動かない）。
+-    let big = z.wheel(cx, cy, -100_000.0);
+-    assert_eq!(big.s, 4.0);
+-    let small = z.wheel(cx, cy, 100_000.0);
+-    assert_eq!(small.s, 0.2);
+-    for zz in [big, small] {
+-        let p = zz.to_graph(cx, cy);
+-        assert!((p.0 - before.0).abs() < 1e-9 && (p.1 - before.1).abs() < 1e-9);
+-    }
+-    // drag は移動の量に足す・元に戻すは最初の倍率と移動 0。
+-    assert_eq!(
+-        z.drag(5.0, -3.0),
+-        Zoom {
+-            s: s0,
+-            tx: 35.0,
+-            ty: -15.0
+-        }
+-    );
+-    assert_eq!(
+-        Zoom::initial(s0),
+-        Zoom {
+-            s: s0,
+-            tx: 0.0,
+-            ty: 0.0
+-        }
+-    );
+-    assert!(!graph::dragged(3.0, 0.0));
+-    assert!(!graph::dragged(0.0, 4.0));
+-    assert!(graph::dragged(3.0, 3.0));
+-    band_labels_follow_zoom();
+-}
+-
+-/// 帯の名の欄の縦の位置と高さは拡大に合わせて変わる。
+-fn band_labels_follow_zoom() {
+-    // 帯の名は左端の欄に・拡大に合わせて縦の位置と高さだけが変わる。
+-    let l = layout(&fixture());
+-    let labels = graph::band_labels(&l, Zoom::initial(0.5), 458.0);
+-    assert!(labels.contains(r#"<g class="blab" data-band="rules""#));
+-    assert!(labels.contains(r#"y="37.0" width="116" height="33.0""#));
+-    let moved = graph::band_labels(
+-        &l,
+-        Zoom {
+-            s: 0.5,
+-            tx: 50.0,
+-            ty: 10.0,
+-        },
+-        458.0,
+-    );
+-    assert!(moved.contains(r#"y="47.0" width="116" height="33.0""#));
+-}
+-
+ fn fr1() -> graph::Highlight {
+     let v = fixture();
+     highlight(&v.edges, &degrees(&v), "FR1")
+@@ -606,104 +304,6 @@ fn mapgraph_pin_transitions_and_bar() {
+     assert_eq!(pin_next(None, &PinAction::Escape), None);
+ }
+ 
+-/// (10) 狭い幅の一覧。
+-#[test]
+-fn mapgraph_narrow_chain_order() {
+-    let mut v = fixture();
+-    v.nodes.push(node("FR10", NodeKind::Req, 2, 1));
+-    v.nodes.push(node("FR2", NodeKind::Req, 2, 1));
+-    v.nodes.push(node("G-1", NodeKind::Goal, 1, 1));
+-    let c = chain(&v);
+-    let bands: Vec<Band> = c.iter().map(|b| b.band).collect();
+-    assert_eq!(
+-        bands,
+-        vec![
+-            Band::Constitution,
+-            Band::Rules,
+-            Band::Adr,
+-            Band::Srs,
+-            Band::Beads,
+-            Band::Pipeline
+-        ]
+-    );
+-    let srs: Vec<&str> = c[3].rows.iter().map(|r| r.id.as_str()).collect();
+-    assert_eq!(srs, vec!["G-1", "FR1", "FR2", "FR10", "AC1"]);
+-    let beads: Vec<(&str, Option<u32>)> =
+-        c[4].rows.iter().map(|r| (r.id.as_str(), r.kids)).collect();
+-    assert_eq!(beads, vec![("e", Some(2)), ("e.1", None)]);
+-    assert_eq!(c[0].rows[0].kids, Some(2));
+-    assert_eq!(c[4].rows[0].shape, "shape band-beads");
+-    assert_eq!(c[0].rows[0].shape, "shape band-constitution fill");
+-    assert_eq!(c[0].rows[0].title, "根拠の条");
+-}
+-
+-/// (11) 数の行と経験者向けの 1 行。
+-#[test]
+-fn mapgraph_count_lines() {
+-    let v = fixture();
+-    assert_eq!(
+-        count_line(&v),
+-        format!("8 / 13 ・ {} 4 ・ ✂ 1", label("children"))
+-    );
+-    assert_eq!(count_line(&v), "8 / 13 ・ 子 4 ・ ✂ 1");
+-    let line = expert_line(&v);
+-    assert_eq!(line, "shown=8 folded=4 cut=1 total=13");
+-    assert!(line.chars().count() <= 60);
+-}
+-
+-/// (12) 読めなかった出所の帯は測れていない・読めて節点の無い帯は 0。
+-#[test]
+-fn mapgraph_unread_band_and_zero_band() {
+-    let mut v = fixture();
+-    assert_eq!(band_fill(&v, Band::DesignNote), BandFill::Zero);
+-    assert_eq!(band_fill(&v, Band::Pipeline), BandFill::Nodes(1));
+-    assert_eq!(
+-        zero_text(Band::DesignNote),
+-        format!("{} 0", label("b:design-note"))
+-    );
+-    let l = layout(&v);
+-    assert!(svg(&v, &l).contains(&format!(">{}</text>", zero_text(Band::DesignNote))));
+-
+-    v.nodes.retain(|n| n.node.kind != NodeKind::Run);
+-    v.unread = vec![GraphSource::Runs];
+-    let reason = unread_reason(GraphSource::Runs);
+-    assert_eq!(band_fill(&v, Band::Pipeline), BandFill::Unread(reason));
+-    let picture = svg(&v, &layout(&v));
+-    assert!(picture.contains(reason));
+-    assert!(picture.contains(&label("st_unknown")));
+-    assert!(!picture.contains(&zero_text(Band::Pipeline)));
+-
+-    v.unread = vec![GraphSource::Design];
+-    for b in &Band::ALL[..5] {
+-        assert_eq!(
+-            band_fill(&v, *b),
+-            BandFill::Unread(unread_reason(GraphSource::Design))
+-        );
+-    }
+-    assert_eq!(band_fill(&v, Band::Beads), BandFill::Nodes(2));
+-    v.unread = vec![GraphSource::Ledger];
+-    assert_eq!(
+-        band_fill(&v, Band::Beads),
+-        BandFill::Unread(unread_reason(GraphSource::Ledger))
+-    );
+-}
+-
+-/// (13) 口が読めない・まだ読んでいない・本文が電文の型として読めないは、面の全体が測れていない。
+-#[test]
+-fn mapgraph_read_three_values() {
+-    assert_eq!(doc(&Fetched::NotRead), Err(NOT_READ));
+-    assert_eq!(doc(&Fetched::Failed), Err(REASON));
+-    for text in ["{}", "not json", "[]", r#"{"nodes": []}"#] {
+-        assert_eq!(
+-            doc(&Fetched::Body(text.to_string())),
+-            Err(NO_CONTENT),
+-            "{text}"
+-        );
+-    }
+-    assert_eq!(doc(&Fetched::Body(fixture_text())), Ok(fixture()));
+-    assert!(!REASON.trim().is_empty() && !REASON.contains('\n'));
+-}
+-
+ /// (14) 凡例は図に出ている帯（6 つ）と辺の型（9 つ）だけ。
+ #[test]
+ fn mapgraph_legend_bands_and_types() {
+@@ -748,9 +348,6 @@ fn mapgraph_legend_bands_and_types() {
+     }
+     assert_eq!(legend(&view_of(vec![], vec![])).bands, Vec::<Band>::new());
+     for key in [
+-        "lines",
+-        "zoom_reset",
+-        "zoom_hint",
+         "children",
+         "cut",
+         "pinned",
+@@ -761,35 +358,8 @@ fn mapgraph_legend_bands_and_types() {
+         "lg_color",
+         "lg_border",
+         "lg_hover",
+-        "view_graph",
+         "st_unknown",
+     ] {
+         assert!(vocab().term(key).is_some(), "鍵 {key} が vocab に無い");
+     }
+ }
+-
+-/// (17) 口の path・(18) 外の依存は足さない。
+-#[test]
+-fn mapgraph_path_and_no_new_dependency() {
+-    assert_eq!(PATH, "/api/graph/view");
+-    let text = read("src/mapview/graph.rs");
+-    assert_eq!(text.matches("\"/api/graph/view\"").count(), 1);
+-    let manifest = read("Cargo.toml");
+-    let mut inside = false;
+-    let mut deps = Vec::new();
+-    for line in manifest.lines().map(str::trim) {
+-        if line.starts_with('[') {
+-            inside = line == "[dependencies]";
+-        } else if inside
+-            && !line.starts_with('#')
+-            && let Some((k, _)) = line.split_once('=')
+-        {
+-            deps.push(k.trim().to_string());
+-        }
+-    }
+-    assert_eq!(deps, vec!["tsuzuri-contract".to_string()]);
+-    // 画面の code に節点を選ぶ分岐と数え直しを書かない（電文の数の欄をそのまま出す）。
+-    for word in [".len() as", "retain(", "shown =", "total ="] {
+-        assert!(!text.contains(word), "グラフの module に {word} が在る");
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/mapview.rs b/crates/tsuzuri-surface/tests/mapview.rs
+index 8ccf2923c98abc47768f48ce71c3f5006a39b3e7..69ec799ee867b121fc13bafc7755f7c72c7ae3ee 100644
+--- a/crates/tsuzuri-surface/tests/mapview.rs
++++ b/crates/tsuzuri-surface/tests/mapview.rs
+@@ -242,7 +242,7 @@ fn stylesheet_classes() -> BTreeSet<String> {
+     out
+ }
+ 
+-/// 地図の頁が使う class は stylesheet に在り、語の鍵は vocab に在る。
++/// 地図の部品が使う class は stylesheet に在り、語の鍵は vocab に在る（グラフの面の DOM は行 m-map-graph で消した）。
+ #[test]
+ fn mapview_classes_and_keys_exist() {
+     let mut used = BTreeSet::new();
+@@ -255,7 +255,6 @@ fn mapview_classes_and_keys_exist() {
+         "src/mapview/mod.rs",
+         "src/mapview/band.rs",
+         "src/mapview/graph.rs",
+-        "src/mapview/graph/dom.rs",
+         "src/mapview/around.rs",
+     ];
+     for f in files {
+@@ -282,7 +281,7 @@ fn doc_classes(mut add: impl FnMut(&str)) {
+ /// 使う class は stylesheet に在り、語の鍵は vocab に在る。
+ fn used_in_css(used: BTreeSet<String>) {
+     let css = stylesheet_classes();
+-    for c in ["subh", "items", "nid", "ttl", "path", "shape"] {
++    for c in ["node", "hit", "lk", "shape"] {
+         assert!(used.contains(c), "地図の頁が class {c} を使わない");
+     }
+     let missing: Vec<&String> = used.iter().filter(|c| !css.contains(*c)).collect();
+diff --git a/crates/tsuzuri-surface/tests/mtips.rs b/crates/tsuzuri-surface/tests/mtips.rs
+deleted file mode 100644
+index 35fc0afdb7251eba3c85142dddec94abfe08171c..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/mtips.rs
++++ /dev/null
+@@ -1,23 +0,0 @@
+-//! 行 g-map-tips の歯: グラフの数の行の経験者だけの注釈（見本の data-tip-expert）。
+-//! 圧縮の面の 0 件の帯の card は行 m-map-compact で、表の行列の数の cell は行 m-map-tree で消した。
+-//! DOM は wasm の target のときだけなので、file の字で付け方を見る。
+-#![cfg(test)]
+-
+-use std::path::PathBuf;
+-
+-fn read(rel: &str) -> String {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-#[test]
+-fn mtips_dom_text() {
+-    let graph = read("src/mapview/graph/dom.rs");
+-    assert!(graph.contains(
+-        "<div class=\"cutline num\" tabindex=\"0\" data-term=\"cut\" use:expert_tip=line>{count}</div>"
+-    ));
+-    assert!(graph.contains("let line = expert_line(&v);"));
+-    for w in ["expert_row", "shows_internal"] {
+-        assert!(!graph.contains(w), "graph/dom.rs に {w} が在る");
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/parts.rs b/crates/tsuzuri-surface/tests/parts.rs
+index e88874475b71915e70e45c10a3c049c01220d053..9603de38b7f3874fba87c29beb478a35c61d8802 100644
+--- a/crates/tsuzuri-surface/tests/parts.rs
++++ b/crates/tsuzuri-surface/tests/parts.rs
+@@ -12,7 +12,6 @@ use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList};
+ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::mapview::graph;
+ use tsuzuri_surface::project::{
+     Body, Module, NO_CONTENT, NOT_READ, ask, askpage, ledger, map, next, pipeline, seat,
+ };
+@@ -138,8 +137,8 @@ fn unread_lists(empty: String) {
+     }
+ }
+ 
+-/// 口の path は block の module の paths の全部とグラフの module の口と kit の map の口で、互いに違う（数と字は持たない・
+-/// 値は歯 hsderive_ と mapgraph_ が見る・行 hs-derived・kit の map は行 m-map-page）。
++/// 口の path は block の module の paths の全部と kit の map の口で、互いに違う（数と字は持たない・
++/// 値は歯 hsderive_ が見る・行 hs-derived・kit の map は行 m-map-page・グラフの眺めの口は行 m-map-graph で消した）。
+ #[test]
+ fn parts_paths_distinct_in_block_modules() {
+     let owned: Vec<(Module, &str)> = Module::ALL
+@@ -147,7 +146,6 @@ fn parts_paths_distinct_in_block_modules() {
+         .flat_map(|m| m.paths().iter().map(move |p| (m, *p)))
+         .collect();
+     let mut paths: Vec<&str> = owned.iter().map(|(_, p)| *p).collect();
+-    paths.push(graph::PATH);
+     paths.push(map::PATH);
+     let mut sorted = paths.clone();
+     sorted.sort_unstable();
+@@ -155,8 +153,7 @@ fn parts_paths_distinct_in_block_modules() {
+     assert_eq!(sorted.len(), paths.len(), "口の path が重なる: {paths:?}");
+ 
+     // src の `"/api/…"` の字: block の口はその path を paths に持つ module の file に 1 度だけ・
+-    // グラフの口の字は mapview の下のグラフの module の file に 1 度だけ・グラフの電文の口の字は kit の下の map の
+-    // file に 1 度だけ・ほかは変化の知らせの口だけ。
++    // グラフの電文の口の字は kit の下の map の file に 1 度だけ・ほかは変化の知らせの口だけ。
+     let mut found: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+     for (path, text) in sources() {
+         let mut rest = text.as_str();
+@@ -178,13 +175,6 @@ fn parts_paths_distinct_in_block_modules() {
+             .join(format!("{}.rs", m.name()));
+         assert_eq!(at[0], file, "{p} が {} の module に無い: {at:?}", m.name());
+     }
+-    let at = found.remove(graph::PATH).unwrap_or_default();
+-    assert_eq!(
+-        at,
+-        vec![crate_dir().join("src/mapview/graph.rs")],
+-        "{} の字がグラフの module に 1 度だけでない",
+-        graph::PATH
+-    );
+     let at = found.remove(map::PATH).unwrap_or_default();
+     assert_eq!(
+         at,
