@@ -200,6 +200,17 @@ fn forms() -> Vec<Box<dyn Form>> {
                 },
             ],
         ),
+    ]
+    .into_iter()
+    .chain(doc_forms())
+    .chain(view_forms())
+    .chain(around_forms())
+    .collect()
+}
+
+/// graph の群の型の見本の続き（不変条件の判定と graph の文書の型）。
+fn doc_forms() -> Vec<Box<dyn Form>> {
+    vec![
         form("graph::Verdict", Verdict::ALL.to_vec()),
         form("graph::InvariantCheck", invariant_checks()),
         form(
@@ -255,27 +266,15 @@ fn forms() -> Vec<Box<dyn Form>> {
                     retired: None,
                 },
                 // どの出所も読めない。
-                GraphDoc {
-                    nodes: vec![],
-                    edges: vec![],
-                    unread: GraphSource::ALL.to_vec(),
-                    beads: Default::default(),
-                    runs: Default::default(),
-                    invariants: vec![InvariantCheck {
-                        id: "g-1".into(),
-                        verdict: Verdict::Unknown,
-                        violations: 0,
-                        ids: vec![],
-                    }],
-                    skipped: SkippedEdges {
-                        design: 0,
-                        ledger: 0,
-                        design_nodes: 0,
-                    },
-                    retired: None,
-                },
+                unread_doc(),
             ],
         ),
+    ]
+}
+
+/// graph の群の型の見本の続き（表示の graph の型）。
+fn view_forms() -> Vec<Box<dyn Form>> {
+    vec![
         form("graph::EdgeEnd", EdgeEnd::ALL.to_vec()),
         form("graph::ViewNode", view_nodes()),
         form("graph::ViewEdge", vec![view_edge()]),
@@ -307,6 +306,12 @@ fn forms() -> Vec<Box<dyn Form>> {
                 },
             ],
         ),
+    ]
+}
+
+/// graph の群の型の見本の後半（畳みと近傍の型）。
+fn around_forms() -> Vec<Box<dyn Form>> {
+    vec![
         form("graph::BoxFold", BoxFold::ALL.to_vec()),
         form("graph::Fold", Fold::ALL.to_vec()),
         form("graph::AroundRow", around_rows()),
@@ -346,6 +351,29 @@ fn forms() -> Vec<Box<dyn Form>> {
             ],
         ),
     ]
+}
+
+/// どの出所も読めない graph の文書の見本。
+fn unread_doc() -> GraphDoc {
+    GraphDoc {
+        nodes: vec![],
+        edges: vec![],
+        unread: GraphSource::ALL.to_vec(),
+        beads: Default::default(),
+        runs: Default::default(),
+        invariants: vec![InvariantCheck {
+            id: "g-1".into(),
+            verdict: Verdict::Unknown,
+            violations: 0,
+            ids: vec![],
+        }],
+        skipped: SkippedEdges {
+            design: 0,
+            ledger: 0,
+            design_nodes: 0,
+        },
+        retired: None,
+    }
 }
 
 #[test]

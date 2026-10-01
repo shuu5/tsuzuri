@@ -132,6 +132,15 @@ fn forms() -> Vec<Box<dyn Form>> {
         ),
         form("ledger::LedgerChanged", vec![LedgerChanged { at: AT }]),
         form("ledger::LedgerWrite", ledger_writes()),
+    ]
+    .into_iter()
+    .chain(question_forms())
+    .collect()
+}
+
+/// ledger の群の型の見本の後半（module question の型）。
+fn question_forms() -> Vec<Box<dyn Form>> {
+    vec![
         // question
         form(
             "question::QuestionCard",
@@ -390,6 +399,11 @@ fn contract_form_ledger_item_digest() {
         ..ledger_item()
     };
     assert_eq!(other_row.digest(), digest);
+    digest_changes(digest);
+}
+
+/// 1 字を変えた item の digest が元の値とも互いにも違う 16 進の小文字 16 字であることを見る。
+fn digest_changes(digest: String) {
     // どの欄の 1 字が変わっても値が変わる（区切りの位置が動くだけでも変わる）。
     let changed = [
         LedgerItem {

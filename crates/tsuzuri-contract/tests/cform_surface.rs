@@ -79,6 +79,17 @@ fn forms() -> Vec<Box<dyn Form>> {
                 undelivered: vec![ruling("fx-c.5:20260926T1437Z-1")],
             }],
         ),
+    ]
+    .into_iter()
+    .chain(event_forms())
+    .chain(batch_forms())
+    .chain(policy_forms(refusals))
+    .collect()
+}
+
+/// surface の群の型の見本の続き（事象と問いの督促と裁定の要求と応答の型）。
+fn event_forms() -> Vec<Box<dyn Form>> {
+    vec![
         form(
             "surface::SurfaceEvent",
             vec![
@@ -125,6 +136,12 @@ fn forms() -> Vec<Box<dyn Form>> {
                 recorded_at: AT,
             }],
         ),
+    ]
+}
+
+/// surface の群の型の見本の続き（まとめての裁定の型）。
+fn batch_forms() -> Vec<Box<dyn Form>> {
+    vec![
         form(
             "surface::BatchRequest",
             vec![BatchRequest {
@@ -177,6 +194,12 @@ fn forms() -> Vec<Box<dyn Form>> {
                 ],
             }],
         ),
+    ]
+}
+
+/// surface の群の型の見本の後半（方針と断りと板の変化の型・断りの列は `refusals`）。
+fn policy_forms(refusals: Vec<Refusal>) -> Vec<Box<dyn Form>> {
+    vec![
         form(
             "surface::PolicyRequest",
             vec![PolicyRequest {

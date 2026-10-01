@@ -166,6 +166,11 @@ fn acctdoc_unknown_only_where_marked() {
     );
     assert_eq!(doc.projects[1].move_until, Some(doc.at + 1101));
 
+    unknown_each_part(&value, doc);
+}
+
+/// fixture の部分を 1 つずつ Unknown にして読み、その部分だけが変わることを見る。
+fn unknown_each_part(value: &Value, doc: AccountDoc) {
     // 部分を 1 つずつ Unknown にすると、その部分だけが変わる。
     type Part = (&'static str, Option<usize>, fn(&mut AccountDoc));
     let parts: [Part; 7] = [
@@ -284,6 +289,11 @@ fn acctdoc_fixture_names_and_size() {
         }
     }
     names.extend(doc.sessions.iter().filter_map(|s| s.account.clone()));
+    assert_names_and_text(names, &text);
+}
+
+/// 口座の名が acct- の 3 つだけで、fixture の字に host の名と住所と home の path が無いことを見る。
+fn assert_names_and_text(names: Vec<String>, text: &str) {
     assert!(names.len() > 20, "口座の名を拾えていない {names:?}");
     for n in &names {
         assert!(n.starts_with("acct-"), "acct- で始まらない口座の名 {n}");

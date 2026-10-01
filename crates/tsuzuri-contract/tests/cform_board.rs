@@ -85,6 +85,15 @@ fn forms() -> Vec<Box<dyn Form>> {
         ),
         form("board::NextMove", NextMove::ALL.to_vec()),
         form("board::LedgerJudge", LedgerJudge::ALL.to_vec()),
+    ]
+    .into_iter()
+    .chain(account_forms())
+    .collect()
+}
+
+/// board の群の型の見本の後半（口座の板の型）。
+fn account_forms() -> Vec<Box<dyn Form>> {
+    vec![
         form(
             "board::AccountBoard",
             vec![AccountBoard {

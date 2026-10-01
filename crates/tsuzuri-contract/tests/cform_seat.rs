@@ -100,30 +100,19 @@ fn forms() -> Vec<Box<dyn Form>> {
             ],
         ),
         form("seat::Pressure", vec![pressure()]),
+    ]
+    .into_iter()
+    .chain(card_forms())
+    .collect()
+}
+
+/// seat の群の型の見本の後半（席の card の型）。
+fn card_forms() -> Vec<Box<dyn Form>> {
+    vec![
         form(
             "seat::SeatCard",
             vec![
-                SeatCard {
-                    at: AT,
-                    target: "t3:orchestrator".into(),
-                    state: SeatState::Wait,
-                    since: Some(AT - 3_600),
-                    tick_healthy: Reading::Known(true),
-                    heartbeat: Reading::Known(false),
-                    tick: Reading::Known(TickHealth::Healthy),
-                    tick_at: Some(AT - 20),
-                    reopens: Reopens::At(AT + 3_600),
-                    account: Some("acct-4".into()),
-                    model: Some("opus".into()),
-                    group: Reading::Known(group_row()),
-                    usage: Reading::Known(quota_used()),
-                    spans: Reading::Known(seat_spans()),
-                    moves: Reading::Known(account_moves()),
-                    move_to: Reading::Known(Some("acct-5".into())),
-                    grace_until: Reading::Known(Some(AT + 120)),
-                    refused: Reading::Known(Some(AT - 600)),
-                    pressure: Reading::Known(Some(pressure())),
-                },
+                seat_card(),
                 // 器が移さない・断りも逼迫も無い席。
                 SeatCard {
                     at: AT,
@@ -171,6 +160,31 @@ fn forms() -> Vec<Box<dyn Form>> {
             ],
         ),
     ]
+}
+
+/// 器が移す・断りも逼迫も在る席の card の見本。
+fn seat_card() -> SeatCard {
+    SeatCard {
+        at: AT,
+        target: "t3:orchestrator".into(),
+        state: SeatState::Wait,
+        since: Some(AT - 3_600),
+        tick_healthy: Reading::Known(true),
+        heartbeat: Reading::Known(false),
+        tick: Reading::Known(TickHealth::Healthy),
+        tick_at: Some(AT - 20),
+        reopens: Reopens::At(AT + 3_600),
+        account: Some("acct-4".into()),
+        model: Some("opus".into()),
+        group: Reading::Known(group_row()),
+        usage: Reading::Known(quota_used()),
+        spans: Reading::Known(seat_spans()),
+        moves: Reading::Known(account_moves()),
+        move_to: Reading::Known(Some("acct-5".into())),
+        grace_until: Reading::Known(Some(AT + 120)),
+        refused: Reading::Known(Some(AT - 600)),
+        pressure: Reading::Known(Some(pressure())),
+    }
 }
 
 #[test]
