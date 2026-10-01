@@ -184,6 +184,11 @@ fn fstop_plugin_stop_entry() {
     assert_eq!(command.matches(PROJECT_DIR).count(), 2, "{command}");
     assert_eq!(command.matches(&quoted).count(), 2, "{command}");
 
+    no_absolute_paths(plugin, hooks);
+}
+
+/// plugin.json と hooks.json の字の値に絶対の path の語が無い。
+fn no_absolute_paths(plugin: Value, hooks: Value) {
     for (name, doc) in [("plugin.json", &plugin), ("hooks.json", &hooks)] {
         let mut all = Vec::new();
         strings(doc, &mut all);

@@ -286,6 +286,11 @@ fn sgrace_copies_refused_and_pressure() {
             Reading::Unknown,
         ),
     ];
+    copies_each(forms);
+}
+
+/// 4 つの組と、群の名が引けない組と doctor の無い組で、10 の字の形の読みを card に写す。
+fn copies_each(forms: [(&str, Refused, Pressed); 10]) {
     for name in SETS {
         let c = case(name);
         assert_eq!(c.card.refused, Reading::Known(None), "組 {name} の期待");

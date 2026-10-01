@@ -273,6 +273,11 @@ fn seatcard_group_from_declaration_and_doctor() {
         panic!("群が Unknown");
     };
     assert!(g.remaining.is_empty());
+    group_unknown(&c);
+}
+
+/// 群の宣言や doctor の字が群を引けなければ、群は「まだ分からない」。
+fn group_unknown(c: &Case) {
     // 群の宣言の字が無い・1 行に収まらない配列の群しか含まない・doctor に群の行が無い・doctor が無い。
     let multi = "[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-1\",\n  \"/srv/host-1/proj-0\"]\n";
     assert_eq!(group_name(multi, "/srv/host-1/proj-1"), None);
@@ -394,6 +399,11 @@ fn seatcard_moves_oldest_first() {
 fn seatcard_unread_text_touches_only_its_fields() {
     let c = case("run");
     let full = built(&c);
+    unread_each(&c, &full);
+}
+
+/// 字を 1 つずつ無くした card は、その字の欄だけが変わる。
+fn unread_each(c: &Case, full: &SeatCard) {
     type Edit = fn(&mut SeatTexts);
     let edits: [(&str, Edit); 6] = [
         ("tick_status", |t| t.tick_status = None),
@@ -625,6 +635,11 @@ fn seatcard_fixture_names_and_size() {
             }
         }
     }
+    fixture_names(accounts, hosts);
+}
+
+/// 口座の名はどれも acct- で、host の名はどれも host- で始まる（どちらの列も空でない）。
+fn fixture_names(accounts: Vec<String>, hosts: Vec<String>) {
     assert!(!accounts.is_empty() && !hosts.is_empty());
     for a in &accounts {
         assert!(a.starts_with("acct-"), "口座の名 {a}");

@@ -90,18 +90,12 @@ fn g1() -> Graph {
 }
 
 /// 要約の 1 行（鍵は id・kind・file・line・title・plain・eng の順）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn sum_line(
     id: &str,
     kind: &str,
-    file: &str,
-    line: u32,
+    (file, line): (&str, u32),
     title: &str,
-    plain: Option<&str>,
-    eng: Option<&str>,
+    (plain, eng): (Option<&str>, Option<&str>),
 ) -> String {
     format!(
         "{{\"id\":{},\"kind\":{},\"file\":{},\"line\":{line},\"title\":{},\"plain\":{},\"eng\":{}}}",
@@ -120,13 +114,17 @@ fn sum1() -> String {
         sum_line(
             "FR1",
             "要件",
-            "srs.yaml",
-            2,
+            ("srs.yaml", 2),
             "面は 2 つ",
-            Some("画面は 2 つです。"),
-            None,
+            (Some("画面は 2 つです。"), None),
         ),
-        sum_line("q-1", "question", "x.yaml", 5, "x", Some("上書き"), Some("上書き")),
+        sum_line(
+            "q-1",
+            "question",
+            ("x.yaml", 5),
+            "x",
+            (Some("上書き"), Some("上書き")),
+        ),
     ]
     .join("\n")
 }
@@ -140,20 +138,16 @@ fn sum2() -> String {
         sum_line(
             "FR1",
             "要件",
-            "srs.yaml",
-            2,
+            ("srs.yaml", 2),
             "面は 2 つ",
-            Some("画面は 2 つです。"),
-            None,
+            (Some("画面は 2 つです。"), None),
         ),
         sum_line(
             "FR2",
             "要件",
-            "srs.yaml",
-            9,
+            ("srs.yaml", 9),
             "地図の面",
-            None,
-            Some("地図は 4 面とする"),
+            (None, Some("地図は 4 面とする")),
         ),
     ]
     .join("\n")

@@ -497,6 +497,11 @@ fn fdlt_tool_answer_and_named() {
         }
     }
 
+    tool_mark_line();
+}
+
+/// tool の呼びの経路の語と、その経路の配達の印の行の字。
+fn tool_mark_line() {
     assert_eq!(Route::Tool.word(), "tool の呼び");
     assert_eq!(
         mark_line(&rid(T1), Route::Tool, "20260930T0102Z"),

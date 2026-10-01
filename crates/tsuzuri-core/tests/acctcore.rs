@@ -376,6 +376,11 @@ fn acctcore_unread_texts_touch_only_their_parts() {
     assert_eq!(accounts(&no_host), Reading::Unknown);
     assert_eq!(groups(&no_host), Reading::Unknown);
     assert_eq!(moves(&no_host), Reading::Unknown);
+    unread_seat(&full, t);
+}
+
+/// anchor の doctor の字と記録が無い時の口座・移動・群の列。
+fn unread_seat(full: &Inputs, t: &HostTexts) {
     // anchor の doctor の字と記録が無ければ、その部分だけが替わる。
     let mut no_seat = t.clone();
     no_seat.seat_doctors.clear();

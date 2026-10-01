@@ -216,14 +216,9 @@ fn projects() -> BTreeMap<String, ProjectTexts> {
 }
 
 /// 着地済みの席の card の関数に、その project の state dir の字を渡した値。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn seat_card(
     host: &HostTexts,
-    anchor: &str,
-    target: &str,
+    (anchor, target): (&str, &str),
     p: &ProjectTexts,
     records: &[&str],
     now: u64,
@@ -246,7 +241,13 @@ fn card_a(host: &HostTexts, now: u64) -> SeatCard {
         host.history["main.account.20260926T080000Z.1"].as_str(),
         host.history["main.account.20260927T100000Z.1"].as_str(),
     ];
-    seat_card(host, "/work/proj-a", "proj-a:0.1", &proj_a(), &records, now)
+    seat_card(
+        host,
+        ("/work/proj-a", "proj-a:0.1"),
+        &proj_a(),
+        &records,
+        now,
+    )
 }
 
 fn card_b(host: &HostTexts, now: u64) -> SeatCard {
@@ -254,7 +255,13 @@ fn card_b(host: &HostTexts, now: u64) -> SeatCard {
         host.history["aux.account.20260925T000000Z.1"].as_str(),
         host.history["aux.account.20260927T100000Z.1"].as_str(),
     ];
-    seat_card(host, "/work/proj-b", "proj-b:0.1", &proj_b(), &records, now)
+    seat_card(
+        host,
+        ("/work/proj-b", "proj-b:0.1"),
+        &proj_b(),
+        &records,
+        now,
+    )
 }
 
 fn counts(wait: u32, run: u32, stop: u32, land: u32) -> RunCounts {
@@ -328,6 +335,11 @@ fn acctpcore_project_rows_seat_runs_and_order() {
             None
         )
     );
+    rows_without_parts(host);
+}
+
+/// 席の行・表の anchor・群の宣言の無い字から組んだ project の列。
+fn rows_without_parts(host: HostTexts) {
     // 席の行が無ければ席は Unknown（ほかの部分は組む）。
     let mut no_seat = host.clone();
     no_seat.seat_doctors.remove("/work/proj-a");

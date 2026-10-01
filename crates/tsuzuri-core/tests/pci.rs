@@ -123,17 +123,11 @@ fn events() -> String {
     out.join("\n")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn card(
     n: u32,
     runs: u32,
-    stage: Stage,
-    reason: Option<&str>,
-    account: &str,
-    elapsed: u64,
+    (stage, reason): (Stage, Option<&str>),
+    (account, elapsed): (&str, u64),
     ci: Option<Ci>,
 ) -> PipelineCard {
     PipelineCard {
@@ -158,57 +152,47 @@ fn cards(b: &Board) -> &[PipelineCard] {
 fn want_with_ledger() -> Vec<PipelineCard> {
     use Stage::*;
     vec![
-        card(1, 1, Landed, None, "acct-1", 3510, Some(Ci::Waiting)),
-        card(2, 1, Landed, None, "acct-1", 3440, Some(Ci::Success)),
-        card(3, 1, Landed, None, "acct-1", 3370, Some(Ci::Success)),
+        card(1, 1, (Landed, None), ("acct-1", 3510), Some(Ci::Waiting)),
+        card(2, 1, (Landed, None), ("acct-1", 3440), Some(Ci::Success)),
+        card(3, 1, (Landed, None), ("acct-1", 3370), Some(Ci::Success)),
         card(
             4,
             1,
-            Failed,
-            Some("terminal:ci:failure"),
-            "acct-1",
-            3310,
+            (Failed, Some("terminal:ci:failure")),
+            ("acct-1", 3310),
             Some(Ci::Failure),
         ),
         card(
             5,
             1,
-            Stopped,
-            Some("terminal:ci:unmeasurable"),
-            "acct-1",
-            3260,
+            (Stopped, Some("terminal:ci:unmeasurable")),
+            ("acct-1", 3260),
             Some(Ci::Unmeasurable),
         ),
-        card(6, 1, Landed, None, "acct-1", 3210, None),
-        card(7, 1, Landed, None, "acct-1", 3160, None),
-        card(8, 1, Landed, None, "acct-1", 3070, Some(Ci::Waiting)),
-        card(9, 1, Landed, None, "acct-1", 3020, Some(Ci::Failure)),
+        card(6, 1, (Landed, None), ("acct-1", 3210), None),
+        card(7, 1, (Landed, None), ("acct-1", 3160), None),
+        card(8, 1, (Landed, None), ("acct-1", 3070), Some(Ci::Waiting)),
+        card(9, 1, (Landed, None), ("acct-1", 3020), Some(Ci::Failure)),
         card(
             10,
             1,
-            Failed,
-            Some("terminal:push:failed:git"),
-            "acct-1",
-            2970,
+            (Failed, Some("terminal:push:failed:git")),
+            ("acct-1", 2970),
             Some(Ci::PushFailed),
         ),
-        card(11, 2, Running, None, "acct-2", 1790, None),
+        card(11, 2, (Running, None), ("acct-2", 1790), None),
         card(
             12,
             1,
-            Failed,
-            Some("terminal:close:failed:rc=1 x"),
-            "acct-1",
-            2830,
+            (Failed, Some("terminal:close:failed:rc=1 x")),
+            ("acct-1", 2830),
             Some(Ci::CloseFailed),
         ),
         card(
             13,
             1,
-            Stopped,
-            Some("terminal:unreadable"),
-            "acct-1",
-            2790,
+            (Stopped, Some("terminal:unreadable")),
+            ("acct-1", 2790),
             Some(Ci::Unreadable),
         ),
     ]

@@ -188,6 +188,37 @@ fn gtuck_levels_example() {
         "~srs:actor",
     ]);
     let v = view_open(&example(), &asks);
+    levels_nodes(&v);
+    use EdgeType::*;
+    let edges: Vec<(&str, &str, EdgeType, u32)> = v
+        .edges
+        .iter()
+        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
+        .collect();
+    assert_eq!(
+        edges,
+        vec![
+            ("AC1", "FR1", VerifyAc, 1),
+            ("AC1", "FR1", Verifies, 1),
+            ("ADR-1", "P-1", Basis, 1),
+            ("FR1", "ADR-1", Adrs, 1),
+            ("FR1", "P-1", Basis, 1),
+            ("P-1.1", "P-1", InArticle, 2),
+            ("P-1.2", "P-1", InArticle, 2),
+            ("R-1", "P-1", RelationsRules, 1),
+            ("R-1", "P-1", ArticleRef, 1),
+            ("e", "FR1", Touches, 1),
+            ("e.1", "e", ParentChild, 1),
+            (RUN, "e.1", RunOf, 1),
+        ]
+    );
+    assert_eq!((v.shown, v.folded, v.cut, v.total), (16, 2, 0, 13));
+    assert_eq!(v.open, asks);
+    assert!(v.refused.is_empty());
+}
+
+/// 例のグラフの段の眺めの箱の (id・段・子の数・次数・畳み) を見る。
+fn levels_nodes(v: &GraphView) {
     use BoxFold::*;
     let got: Vec<(&str, u32, u32, u32, BoxFold)> = v
         .nodes
@@ -215,32 +246,6 @@ fn gtuck_levels_example() {
             (RUN, 5, 0, 1, Leaf),
         ]
     );
-    use EdgeType::*;
-    let edges: Vec<(&str, &str, EdgeType, u32)> = v
-        .edges
-        .iter()
-        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
-        .collect();
-    assert_eq!(
-        edges,
-        vec![
-            ("AC1", "FR1", VerifyAc, 1),
-            ("AC1", "FR1", Verifies, 1),
-            ("ADR-1", "P-1", Basis, 1),
-            ("FR1", "ADR-1", Adrs, 1),
-            ("FR1", "P-1", Basis, 1),
-            ("P-1.1", "P-1", InArticle, 2),
-            ("P-1.2", "P-1", InArticle, 2),
-            ("R-1", "P-1", RelationsRules, 1),
-            ("R-1", "P-1", ArticleRef, 1),
-            ("e", "FR1", Touches, 1),
-            ("e.1", "e", ParentChild, 1),
-            (RUN, "e.1", RunOf, 1),
-        ]
-    );
-    assert_eq!((v.shown, v.folded, v.cut, v.total), (16, 2, 0, 13));
-    assert_eq!(v.open, asks);
-    assert!(v.refused.is_empty());
 }
 
 #[test]

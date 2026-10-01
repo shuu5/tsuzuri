@@ -87,11 +87,13 @@ fn l4() -> String {
     log(&[ev("11:58", PRESSURE, Some("acct-1"), "group=Tier1 window=5h used=99 cap=85 sent=1")])
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
-fn pressure(at: u64, group: &str, account: &str, window: &str, used: u64, cap: u64, sent: u64) -> GroupNotice {
+fn pressure(
+    at: u64,
+    group: &str,
+    account: &str,
+    window: &str,
+    (used, cap, sent): (u64, u64, u64),
+) -> GroupNotice {
     GroupNotice::Pressure {
         at,
         group: group.into(),
@@ -116,11 +118,17 @@ fn refused(at: u64, group: &str, account: &str, reason: &str) -> GroupNotice {
 fn table() -> Vec<GroupNotice> {
     vec![
         refused(1_790_510_100, "Tier1", "acct-1", "no-candidate"),
-        pressure(1_790_509_200, "Tier1", "acct-1", "seven_day_model", 97, 95, 2),
+        pressure(
+            1_790_509_200,
+            "Tier1",
+            "acct-1",
+            "seven_day_model",
+            (97, 95, 2),
+        ),
         refused(1_790_509_200, "Tier2", "acct-3", "no-candidate"),
-        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 90, 85, 1),
-        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 91, 85, 1),
-        pressure(1_790_508_000, "Tier2", "acct-1", "seven_day", 96, 95, 1),
+        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (90, 85, 1)),
+        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (91, 85, 1)),
+        pressure(1_790_508_000, "Tier2", "acct-1", "seven_day", (96, 95, 1)),
     ]
 }
 
@@ -200,11 +208,16 @@ fn athr_wire_shape_pinned() {
         doc.notices,
         Reading::Known(vec![
             refused(1_790_509_800, "Tier2", "acct-2", "no-candidate"),
-            pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 100, 85, 1),
+            pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (100, 85, 1)),
         ])
     );
+    notice_keys_and_kinds();
+}
+
+/// 知らせの行の鍵の順と kind の値・閉じた 2 つの種類・Unknown の閾値の電文。
+fn notice_keys_and_kinds() {
     // 知らせの行の鍵の順と kind の値。
-    let n_p = pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 90, 85, 1);
+    let n_p = pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (90, 85, 1));
     let n_r = refused(1_790_509_200, "Tier2", "acct-3", "no-candidate");
     for (n, keys, kind) in [
         (

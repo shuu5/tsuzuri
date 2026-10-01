@@ -94,20 +94,7 @@ fn events() -> String {
         ),
         created("06:00", "cs.3-20260927T060000Z"),
         stage("06:30", "cs.3-20260927T060000Z", "Gated", Some("verdict:PASS")),
-        ev(
-            "2026-09-26T18:00:00Z",
-            "RunCreated",
-            "cs.4-20260926T180000Z",
-            Some("Intake"),
-            None,
-        ),
-        ev(
-            "2026-09-26T18:05:00Z",
-            "QuestionRaised",
-            "cs.4-20260926T180000Z",
-            None,
-            None,
-        ),
+        events_cs4(),
         created("09:00", "cs.5-20260927T090000Z"),
         stage("09:10", "cs.5-20260927T090000Z", "Gated", Some("verdict:FAIL")),
         created("10:00", "cs.5-20260927T100000Z"),
@@ -140,15 +127,31 @@ fn events() -> String {
     .join("\n")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
+/// 節の event log の cs.4 の 2 行（前の日の RunCreated と QuestionRaised）。
+fn events_cs4() -> String {
+    [
+        ev(
+            "2026-09-26T18:00:00Z",
+            "RunCreated",
+            "cs.4-20260926T180000Z",
+            Some("Intake"),
+            None,
+        ),
+        ev(
+            "2026-09-26T18:05:00Z",
+            "QuestionRaised",
+            "cs.4-20260926T180000Z",
+            None,
+            None,
+        ),
+    ]
+    .join("\n")
+}
+
 fn card(
     id: &str,
     runs: u32,
-    stage: Stage,
-    reason: Option<&str>,
+    (stage, reason): (Stage, Option<&str>),
     account: Option<&str>,
     elapsed: Option<u64>,
 ) -> PipelineCard {
@@ -173,21 +176,19 @@ fn cards(b: &Board) -> &[PipelineCard] {
 /// 台帳が読めるときも読めないときも同じ札（cs.5・cs.6・cs.7・cs.8）。
 fn shared() -> [PipelineCard; 4] {
     [
-        card("cs.5", 2, Stage::Landed, None, None, Some(5400)),
+        card("cs.5", 2, (Stage::Landed, None), None, Some(5400)),
         card(
             "cs.6",
             1,
-            Stage::Failed,
-            Some("verdict:FAIL,account:acct-2"),
+            (Stage::Failed, Some("verdict:FAIL,account:acct-2")),
             Some("acct-2"),
             Some(12000),
         ),
-        card("cs.7", 1, Stage::Running, None, None, Some(1800)),
+        card("cs.7", 1, (Stage::Running, None), None, Some(1800)),
         card(
             "cs.8",
             1,
-            Stage::Failed,
-            Some("verdict:INCONCLUSIVE"),
+            (Stage::Failed, Some("verdict:INCONCLUSIVE")),
             None,
             Some(16140),
         ),
@@ -202,21 +203,31 @@ fn pclosed_board_settles_closed_beads() {
     let b = board(&ledger(), &events(), NOW);
     let [cs5, cs6, cs7, cs8] = shared();
     let want = vec![
-        card("cs.1", 1, Stage::Landed, Some(CS1_HEAD), None, Some(14280)),
+        card(
+            "cs.1",
+            1,
+            (Stage::Landed, Some(CS1_HEAD)),
+            None,
+            Some(14280),
+        ),
         card(
             "cs.2",
             1,
-            Stage::Landed,
-            Some("closed:superseded by cs.6"),
+            (Stage::Landed, Some("closed:superseded by cs.6")),
             Some("acct-1"),
             Some(17940),
         ),
-        card("cs.3", 1, Stage::Landed, Some("closed:"), None, Some(19800)),
+        card(
+            "cs.3",
+            1,
+            (Stage::Landed, Some("closed:")),
+            None,
+            Some(19800),
+        ),
         card(
             "cs.4",
             1,
-            Stage::Landed,
-            Some("closed:withdrawn"),
+            (Stage::Landed, Some("closed:withdrawn")),
             None,
             Some(64500),
         ),
@@ -224,8 +235,14 @@ fn pclosed_board_settles_closed_beads() {
         cs6,
         cs7,
         cs8,
-        card("cs.9", 1, Stage::Landed, Some("closed:x"), None, Some(24600)),
-        card("cs.12", 0, Stage::Queued, None, None, None),
+        card(
+            "cs.9",
+            1,
+            (Stage::Landed, Some("closed:x")),
+            None,
+            Some(24600),
+        ),
+        card("cs.12", 0, (Stage::Queued, None), None, None),
     ];
     assert_eq!(cards(&b), want.as_slice());
     assert_eq!(b.unmapped, 0);
@@ -305,14 +322,19 @@ fn pclosed_board_without_ledger() {
         card(
             "cs.1",
             1,
-            Stage::Failed,
-            Some("verdict:FAIL kind:other"),
+            (Stage::Failed, Some("verdict:FAIL kind:other")),
             None,
             Some(14280),
         ),
-        card("cs.2", 1, Stage::Running, None, Some("acct-1"), Some(17940)),
-        card("cs.3", 1, Stage::Gated, None, None, Some(19800)),
-        card("cs.4", 1, Stage::Questioned, None, None, Some(64500)),
+        card(
+            "cs.2",
+            1,
+            (Stage::Running, None),
+            Some("acct-1"),
+            Some(17940),
+        ),
+        card("cs.3", 1, (Stage::Gated, None), None, Some(19800)),
+        card("cs.4", 1, (Stage::Questioned, None), None, Some(64500)),
         cs5,
         cs6,
         cs7,

@@ -184,6 +184,11 @@ fn g3g7_join_follows_the_rules() {
         );
     }
 
+    unexported_node_not_joined();
+}
+
+/// 書き出しに無い節点を足して結んでも、結んだ表の鍵は替わらない。
+fn unexported_node_not_joined() {
     let mut g = built(&index(), &ledger(), &events());
     let mut copy: GraphNode = g.node("nw#a").expect("nw#a").clone();
     copy.id = "nw-x".to_string();
@@ -303,6 +308,11 @@ fn g3g7_unbound_ruling_is_named() {
     assert_eq!(outside_rulings(&g), Some(1));
     assert_eq!(verdict_of(&g, "g-3"), Verdict::Pass);
 
+    only_outside_id();
+}
+
+/// 文法の外の id の裁定の行だけを持つ memo の台帳のグラフの g-7 と文法の外の数。
+fn only_outside_id() {
     let g = joined(&index(), &only(), &rulings());
     assert_eq!(verdict_of(&g, "g-7"), Verdict::Unknown);
     assert_eq!(outside_rulings(&g), Some(1));
@@ -356,6 +366,11 @@ fn g3g7_unread_material_is_unknown() {
     assert_eq!(rest(&g).len(), 10);
     assert_eq!(rest(&g), rest(&plain));
 
+    empty_index_joined();
+}
+
+/// 空の索引に書き出しを結んだグラフ（表は空・g-3 と g-7 は Unknown）。
+fn empty_index_joined() {
     let g = joined("", &ledger(), &rulings());
     assert_eq!(g.rulings, Some(Default::default()));
     assert_eq!(g.unread, vec![Source::Design]);
@@ -381,6 +396,11 @@ fn g3g7_forms_and_consts() {
     assert_eq!(rows[0].target(), "q7-fx.1");
     assert_eq!(rows[0].node, None);
 
+    fixture_holds_rows(rows);
+}
+
+/// fixture のグラフは書き出しの行を全部持ち、替えた行は持たない。
+fn fixture_holds_rows(rows: Vec<tsuzuri_core::graph::RulingRow>) {
     let g = fixture();
     for (n, row) in rows.iter().enumerate() {
         assert!(g.holds(row), "{n}: {row:?}");

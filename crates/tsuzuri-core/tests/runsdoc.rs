@@ -167,6 +167,13 @@ fn runsdoc_hub2_three_runs() {
         }
     );
 
+    hub2_second(lines);
+
+    hub2_third(lines);
+}
+
+/// 走行 t3-hub.2 の 2 つ目（段 5 つ・口座 acct-1）。
+fn hub2_second(lines: &[RunLine]) {
     let second = &lines[1];
     assert_eq!(second.started_at, Some(1790493470));
     assert_eq!(second.account.as_deref(), Some("acct-1"));
@@ -197,7 +204,10 @@ fn runsdoc_hub2_three_runs() {
             cache_create: 43725,
         }
     );
+}
 
+/// 走行 t3-hub.2 の 3 つ目（段 7 つ・着地まで）。
+fn hub2_third(lines: &[RunLine]) {
     let third = &lines[2];
     assert_eq!(third.started_at, Some(1790493699));
     assert_eq!(third.account.as_deref(), Some("acct-1"));

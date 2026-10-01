@@ -315,6 +315,11 @@ fn qgate_fixture_four_cases() {
             assert!(!ids.iter().any(|i| i == hidden), "{name} が {hidden} を名指す");
         }
     }
+    four_each(g);
+}
+
+/// 4 つの組を名で 1 つずつ引いて判じる。
+fn four_each(g: Graph) {
     let one = case("one-undisposed");
     let d = BUNDLE_DIGEST(&g, &case_touches(&one));
     assert_eq!(
@@ -435,6 +440,11 @@ fn qgate_reasons_in_order() {
         deny(Why::NoTouches, &[], None)
     );
 
+    reasons_rest(g, d);
+}
+
+/// 処分にならない値・digest の鍵・字 1 つの touches・1 つの command の 2 つの下書きの理由。
+fn reasons_rest(g: Graph, d: String) {
     // 処分にならない not-relevant の値。
     for v in [json!(""), json!("  "), json!(1)] {
         let mut m = base(&g);
@@ -619,62 +629,67 @@ fn qgate_output_shape() {
     let digest = "0123456789abcdef";
     for why in Why::ALL {
         for ids in [Vec::new(), strings(&["ADR-2", "R-1"])] {
-            for d in [None, Some(digest.to_string())] {
-                let gates = [
-                    (
-                        "問いの起票の門は止める（",
-                        Gate::Deny {
-                            why,
-                            ids: ids.clone(),
-                            digest: d.clone(),
-                        },
-                    ),
-                    (
-                        "問いの起票の門は まだ分からない（",
-                        Gate::Unknown {
-                            why,
-                            ids: ids.clone(),
-                            digest: d.clone(),
-                        },
-                    ),
-                ];
-                for (head, gate) in gates {
-                    let text = OUTPUT(&gate).unwrap_or_else(|| panic!("{gate:?} の答え"));
-                    let v: Value = serde_json::from_str(&text).expect("答えは JSON");
-                    let o = v.as_object().expect("object");
-                    assert_eq!(o.keys().collect::<Vec<_>>(), ["hookSpecificOutput"]);
-                    let inner = o["hookSpecificOutput"].as_object().expect("object");
-                    let mut keys: Vec<&str> = inner.keys().map(String::as_str).collect();
-                    keys.sort_unstable();
-                    assert_eq!(
-                        keys,
-                        ["hookEventName", "permissionDecision", "permissionDecisionReason"]
-                    );
-                    assert_eq!(inner["hookEventName"], "PreToolUse");
-                    assert_eq!(inner["permissionDecision"], "deny");
-                    let reason = inner["permissionDecisionReason"].as_str().expect("字");
-                    let mut want = format!("{head}{}）", why.word());
-                    if !ids.is_empty() {
-                        want.push_str(" id =");
-                        for id in &ids {
-                            want.push(' ');
-                            want.push_str(id);
-                        }
-                    }
-                    if let Some(d) = &d {
-                        want.push_str(" 要約値 = ");
-                        want.push_str(d);
-                    }
-                    want.push_str(" 次の一手 = ");
-                    let rest = reason
-                        .strip_prefix(want.as_str())
-                        .unwrap_or_else(|| panic!("{reason} は {want} で始まらない"));
-                    assert!(!rest.is_empty(), "{reason}");
-                    assert!(!rest.contains("id =") && !rest.contains("要約値 ="), "{reason}");
-                    if ids.is_empty() {
-                        assert!(!reason.contains("id ="), "{reason}");
-                    }
+            output_cases(why, ids, digest);
+        }
+    }
+}
+
+/// 1 つの理由と id の列の、digest の有る無しの 2 つの門の答えの形を見る。
+fn output_cases(why: Why, ids: Vec<String>, digest: &str) {
+    for d in [None, Some(digest.to_string())] {
+        let gates = [
+            (
+                "問いの起票の門は止める（",
+                Gate::Deny {
+                    why,
+                    ids: ids.clone(),
+                    digest: d.clone(),
+                },
+            ),
+            (
+                "問いの起票の門は まだ分からない（",
+                Gate::Unknown {
+                    why,
+                    ids: ids.clone(),
+                    digest: d.clone(),
+                },
+            ),
+        ];
+        for (head, gate) in gates {
+            let text = OUTPUT(&gate).unwrap_or_else(|| panic!("{gate:?} の答え"));
+            let v: Value = serde_json::from_str(&text).expect("答えは JSON");
+            let o = v.as_object().expect("object");
+            assert_eq!(o.keys().collect::<Vec<_>>(), ["hookSpecificOutput"]);
+            let inner = o["hookSpecificOutput"].as_object().expect("object");
+            let mut keys: Vec<&str> = inner.keys().map(String::as_str).collect();
+            keys.sort_unstable();
+            assert_eq!(
+                keys,
+                ["hookEventName", "permissionDecision", "permissionDecisionReason"]
+            );
+            assert_eq!(inner["hookEventName"], "PreToolUse");
+            assert_eq!(inner["permissionDecision"], "deny");
+            let reason = inner["permissionDecisionReason"].as_str().expect("字");
+            let mut want = format!("{head}{}）", why.word());
+            if !ids.is_empty() {
+                want.push_str(" id =");
+                for id in &ids {
+                    want.push(' ');
+                    want.push_str(id);
                 }
+            }
+            if let Some(d) = &d {
+                want.push_str(" 要約値 = ");
+                want.push_str(d);
+            }
+            want.push_str(" 次の一手 = ");
+            let rest = reason
+                .strip_prefix(want.as_str())
+                .unwrap_or_else(|| panic!("{reason} は {want} で始まらない"));
+            assert!(!rest.is_empty(), "{reason}");
+            assert!(!rest.contains("id =") && !rest.contains("要約値 ="), "{reason}");
+            if ids.is_empty() {
+                assert!(!reason.contains("id ="), "{reason}");
             }
         }
     }

@@ -163,6 +163,11 @@ fn dnrow_kind_words() {
         vec![pair("dn.1", "nx#a"), pair("dn.2", "nx#b")]
     );
 
+    empty_index_graph();
+}
+
+/// 空の索引と台帳と event log のグラフ（設計ノートの行の出所が読めない）。
+fn empty_index_graph() {
     let g = graph_of("", &led(), EV);
     assert_eq!(g.unread, vec![Source::Design], "空の索引");
     assert!(g.unknown_kinds().contains(&NodeKind::NoteRow), "空の索引");

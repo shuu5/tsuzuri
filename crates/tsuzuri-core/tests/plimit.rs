@@ -222,81 +222,7 @@ fn plimit_const_names_vessel_word() {
 #[test]
 fn plimit_marks_on_both_times() {
     let host = host_with(Some(USAGE_B));
-    let cases = [
-        (
-            AT_1125,
-            vec![
-                pl(
-                    "pl-5-20260927T090000Z",
-                    Some("acct-1"),
-                    SeatState::Limit,
-                    None,
-                    hm(10, 30),
-                ),
-                pl(
-                    "pl-1-20260927T110000Z",
-                    Some("acct-1"),
-                    SeatState::Run,
-                    Some(Stage::Running),
-                    hm(11, 1),
-                ),
-                pl(
-                    "pl-2-20260927T111000Z",
-                    Some("acct-2"),
-                    SeatState::Limit,
-                    None,
-                    hm(11, 20),
-                ),
-                pl(
-                    "pl-3-20260927T112000Z",
-                    None,
-                    SeatState::Wait,
-                    Some(Stage::Running),
-                    hm(11, 21),
-                ),
-                pl(
-                    "pl-4-20260927T112500Z",
-                    None,
-                    SeatState::Wait,
-                    Some(Stage::Running),
-                    hm(11, 25),
-                ),
-            ],
-        ),
-        (
-            AT_1200,
-            vec![
-                pl(
-                    "pl-1-20260927T110000Z",
-                    Some("acct-1"),
-                    SeatState::Limit,
-                    None,
-                    hm(11, 40),
-                ),
-                pl(
-                    "pl-2-20260927T111000Z",
-                    Some("acct-1"),
-                    SeatState::Run,
-                    Some(Stage::Running),
-                    hm(11, 30),
-                ),
-                pl(
-                    "pl-3-20260927T112000Z",
-                    None,
-                    SeatState::Wait,
-                    Some(Stage::Running),
-                    hm(11, 21),
-                ),
-                pl(
-                    "pl-6-20260927T114500Z",
-                    Some("acct-2"),
-                    SeatState::Limit,
-                    None,
-                    hm(11, 50),
-                ),
-            ],
-        ),
-    ];
+    let cases = [(AT_1125, pipes_1125()), (AT_1200, pipes_1200())];
     assert_eq!(AT_1125, 1_790_508_300);
     assert_eq!(AT_1200, 1_790_510_400);
     for (now, pipes) in cases {
@@ -321,6 +247,81 @@ fn plimit_marks_on_both_times() {
         want.extend(pipes);
         assert_eq!(session_lines(&host, &projects(), now), want, "今 {now}");
     }
+}
+
+/// 今 11:25 の pipeline の行（5 行）。
+fn pipes_1125() -> Vec<SessionLine> {
+    vec![
+        pl(
+            "pl-5-20260927T090000Z",
+            Some("acct-1"),
+            SeatState::Limit,
+            None,
+            hm(10, 30),
+        ),
+        pl(
+            "pl-1-20260927T110000Z",
+            Some("acct-1"),
+            SeatState::Run,
+            Some(Stage::Running),
+            hm(11, 1),
+        ),
+        pl(
+            "pl-2-20260927T111000Z",
+            Some("acct-2"),
+            SeatState::Limit,
+            None,
+            hm(11, 20),
+        ),
+        pl(
+            "pl-3-20260927T112000Z",
+            None,
+            SeatState::Wait,
+            Some(Stage::Running),
+            hm(11, 21),
+        ),
+        pl(
+            "pl-4-20260927T112500Z",
+            None,
+            SeatState::Wait,
+            Some(Stage::Running),
+            hm(11, 25),
+        ),
+    ]
+}
+
+/// 今 12:00 の pipeline の行（4 行）。
+fn pipes_1200() -> Vec<SessionLine> {
+    vec![
+        pl(
+            "pl-1-20260927T110000Z",
+            Some("acct-1"),
+            SeatState::Limit,
+            None,
+            hm(11, 40),
+        ),
+        pl(
+            "pl-2-20260927T111000Z",
+            Some("acct-1"),
+            SeatState::Run,
+            Some(Stage::Running),
+            hm(11, 30),
+        ),
+        pl(
+            "pl-3-20260927T112000Z",
+            None,
+            SeatState::Wait,
+            Some(Stage::Running),
+            hm(11, 21),
+        ),
+        pl(
+            "pl-6-20260927T114500Z",
+            Some("acct-2"),
+            SeatState::Limit,
+            None,
+            hm(11, 50),
+        ),
+    ]
 }
 
 #[test]

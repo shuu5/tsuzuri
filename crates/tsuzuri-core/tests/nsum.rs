@@ -50,18 +50,12 @@ const LED: &str =
     r#"[{"id":"t-1","title":"台帳の行","issue_type":"task","status":"open"}]"#;
 
 /// 要約の 1 行（鍵は id・kind・file・line・title・plain・eng の順）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn sum_line(
     id: &str,
     kind: &str,
-    file: &str,
-    line: u32,
+    (file, line): (&str, u32),
     title: &str,
-    plain: Option<&str>,
-    eng: Option<&str>,
+    (plain, eng): (Option<&str>, Option<&str>),
 ) -> String {
     format!(
         "{{\"id\":{},\"kind\":{},\"file\":{},\"line\":{line},\"title\":{},\"plain\":{},\"eng\":{}}}",
@@ -80,49 +74,45 @@ fn sum() -> String {
         sum_line(
             "FR1",
             "要件",
-            "srs.yaml",
-            2,
+            ("srs.yaml", 2),
             "面は 2 つ",
-            Some("画面は 2 つです。"),
-            Some("面は 2 つとする。"),
+            (Some("画面は 2 つです。"), Some("面は 2 つとする。")),
         ),
         sum_line(
             "ADR-90",
             "判断の記録",
-            "adr/ADR-90.yaml",
-            3,
+            ("adr/ADR-90.yaml", 3),
             "見本",
-            Some("一つ目です。\n二つ目です。"),
-            Some("一つ目を決める。"),
+            (Some("一つ目です。\n二つ目です。"), Some("一つ目を決める。")),
         ),
-        sum_line("owner", "登場人物", "srs.yaml", 37, "持ち主", None, None),
+        sum_line(
+            "owner",
+            "登場人物",
+            ("srs.yaml", 37),
+            "持ち主",
+            (None, None),
+        ),
         String::new(),
         sum_line(
             "A-9",
             "条",
-            "rules.yaml",
-            7,
+            ("rules.yaml", 7),
             "file の違う行",
-            Some("違う file です。"),
-            None,
+            (Some("違う file です。"), None),
         ),
         sum_line(
             "t-1",
             "要件",
-            "srs.yaml",
-            9,
+            ("srs.yaml", 9),
             "台帳の行",
-            Some("台帳です。"),
-            Some("台帳。"),
+            (Some("台帳です。"), Some("台帳。")),
         ),
         sum_line(
             "X-1",
             "要件",
-            "srs.yaml",
-            11,
+            ("srs.yaml", 11),
             "無い節点",
-            Some("無いです。"),
-            Some("無い。"),
+            (Some("無いです。"), Some("無い。")),
         ),
     ]
     .join("\n")

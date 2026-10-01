@@ -145,6 +145,11 @@ fn pkac_doc_names_park() {
     // 宣言の Tier9 に同じ名の区画の行が無ければ、名 Tier8 の区画の行だけでは区画にならない。
     let t = all(&[park_row("Tier8", Some("park"))]);
     assert_eq!(parks(&t), Vec::<String>::new());
+    parks_empty(map);
+}
+
+/// doctor か host.toml の字が無い 3 つの組は区画が空で、電文に鍵 parks を置かない。
+fn parks_empty(map: BTreeMap<String, tsuzuri_core::account::project::ProjectTexts>) {
     // doctor か host.toml の字が無ければ空。
     for t in [
         host(None, Some(HOST_TOML)),

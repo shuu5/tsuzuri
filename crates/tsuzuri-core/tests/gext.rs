@@ -366,6 +366,11 @@ fn gext_outside_reads_ids() {
     assert_eq!(plain.families, set(&["s9-far"]));
     assert!(plain.rulings.is_empty());
 
+    ruling_forms_held(got);
+}
+
+/// 外の台帳の読みが持つ裁定の行と持たない行（定型行・問いと notes の日時と bead の形）。
+fn ruling_forms_held(got: Outside) {
     // 受けと方針の定型行は裁定の id に数えない・問いの形と notes の日時の形と bead の形の先の分け。
     let g = placed(&read("ledger.json"), &plus_far(&read("rulings.jsonl")), vec![]);
     let rows = &g.rulings.as_ref().expect("結んだ表");
@@ -415,6 +420,11 @@ fn gext_rows_follow_outside() {
         assert_eq!(outside_heads(&g), None, "{node}");
     }
 
+    unconfirmed_and_gone(ledger, rulings);
+}
+
+/// 外の台帳で確かめられない組と、族 s7-gone を引く行を足した書き出しの g-3 と先。
+fn unconfirmed_and_gone(ledger: String, rulings: String) {
     // 読めない組・字 [] の組・族の違う組だけでは確かめられない。
     let near = FAR.replace("s9-far", "s8-near");
     let others = [

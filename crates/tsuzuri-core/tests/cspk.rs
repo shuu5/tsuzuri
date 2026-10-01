@@ -243,6 +243,11 @@ fn cspk_accounts_at_fills_only_spark() {
         doc(&host, &BTreeMap::new(), NOW).accounts,
         Reading::Known(filled)
     );
+    unread_log_and_toml(host);
+}
+
+/// event log の字か口座の宣言の字の無い時の、線を足した口座の列。
+fn unread_log_and_toml(host: HostTexts) {
     let no_log = HostTexts {
         events: None,
         ..host.clone()
