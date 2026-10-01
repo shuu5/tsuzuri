@@ -1,0 +1,742 @@
+diff --git a/crates/tsuzuri-surface/src/board.rs b/crates/tsuzuri-surface/src/board.rs
+index 8903182f8590596d93f4e561ebf98e4233f8de7a..4862dcee9c988f39a3bc091083133c5b8cbfa4a8 100644
+--- a/crates/tsuzuri-surface/src/board.rs
++++ b/crates/tsuzuri-surface/src/board.rs
+@@ -21,6 +21,7 @@ use tsuzuri_contract::project::PATH as PROJECT_PATH;
+ use crate::account::windows::{ACCOUNT_WIN, closed_message};
+ use crate::frame::{self, BACK, BACK_WRAP, BackHow, BackStep, Block, HEADER, Mode, PageId, Press};
+ use crate::fresh::{self, Fresh};
++use crate::ledgerlist::SelCtx;
+ use crate::net;
+ use crate::project::{self, Module, ask, ledger};
+ use crate::seatpill;
+@@ -143,6 +144,8 @@ fn App() -> impl IntoView {
+     });
+     provide_context(HoverCtx::default());
+     provide_context(PopCtx::default());
++    // 選んだ epic の組（一覧と板が読む・行 g-select）。
++    provide_context(SelCtx::default());
+     // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は net の古さの最後に読めた時刻）。
+     let fetched = net::read(ledger::PATH);
+     let screen = RwSignal::new(Screen::initial());
+diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
+index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f1283ea46 100644
+--- a/crates/tsuzuri-surface/src/ledgerlist.rs
++++ b/crates/tsuzuri-surface/src/ledgerlist.rs
+@@ -7,6 +7,8 @@
+ //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の図を出す（行 g-list-head）。絞りが効いている間は合う行の在る組だけを開いて出す。
+ //! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
+ //! （語は台帳の block の辞書の関数・知らない語と読めない間は「まだ分からない」・行 g-unref-lc）。
++//! 組の頭の名を押すと epic を選び（もう 1 度押すと解く）、板のその組でない札を薄くし、行を押すと吹き出しを開き、吹き出しの
++//! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
+ //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use std::collections::BTreeMap;
+@@ -445,26 +447,84 @@ pub fn unref_head(s: &LedgerStats) -> (String, String) {
+     (text, title)
+ }
+ 
++/// bead の組の鍵（一覧の組と同じ読み: id の階層のいちばん近い epic の祖先の id・epic の祖先が無ければ `OUTSIDE_KEY`）。
++pub fn key_of(id: &str, rows: &[LedgerRow]) -> String {
++    let epics: Vec<&LedgerRow> = rows
++        .iter()
++        .filter(|r| r.node_kind() == NodeKind::Epic)
++        .collect();
++    home(id, &epics)
++        .map_or(OUTSIDE_KEY, |e| e.id.as_str())
++        .to_string()
++}
++
++/// 押した後の選んだ epic の組の鍵（押した鍵が空か今と同じなら解いて None・ほかは押した鍵・見本の setEpic）。
++pub fn pick(now: Option<&str>, key: &str) -> Option<String> {
++    (!key.is_empty() && now != Some(key)).then(|| key.to_string())
++}
++
++/// 札を薄くするか（epic の組を選んでいて、札の組の鍵がそれと違う・見本の applyMarks の dim）。
++pub fn dim(sel: Option<&str>, key: &str) -> bool {
++    sel.is_some_and(|s| s != key)
++}
++
++/// 印を付けるか（開いている bead の id か選んだ組の鍵が印の鍵と同じ・札と行の輪は bead の id・組の頭の esel は組の鍵）。
++pub fn ring(shown: Option<&str>, key: &str) -> bool {
++    shown == Some(key)
++}
++
++/// 組の頭に輪の印を付けるか（吹き出しの開いている bead が組の open の行のどれか・見本の applyMarks の gh）。
++pub fn head_ring(g: &Lgroup, shown: Option<&str>) -> bool {
++    shown.is_some_and(|s| g.rows.iter().any(|r| r.id == s))
++}
++
+ #[cfg(target_arch = "wasm32")]
+ pub use dom::view;
+ 
++#[cfg(target_arch = "wasm32")]
++pub use dom::SelCtx;
++
+ /// 一覧の DOM（wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
++    use leptos::ev;
+     use leptos::prelude::*;
+ 
++    use tsuzuri_contract::board::Reading;
+     use tsuzuri_contract::case;
+ 
+     use super::{
+         FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT, content, filtered,
+-        filtering, kind_tag, kpi, unref_head, with_phases,
++        filtering, head_ring, key_of, kind_tag, kpi, pick, ring, unref_head, with_phases,
+     };
+     use crate::frame::{Mode, node_href};
+     use crate::kit::Folds;
+     use crate::project::ledger::stats;
+     use crate::project::{Body, ledger, pipeline, unmeasured};
++    use crate::view::read_rows;
+     use crate::vocab::label;
+     use crate::widgets::help::HelpCtx;
++    use crate::widgets::pop::{PopCtx, Via};
++
++    /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
++    /// 選んだ bead は吹き出しの開いている bead（`PopCtx::shown`）で、ここには持たない。
++    #[derive(Clone, Copy)]
++    pub struct SelCtx {
++        pub epic: RwSignal<Option<String>>,
++    }
++
++    impl Default for SelCtx {
++        fn default() -> Self {
++            Self {
++                epic: RwSignal::new(None),
++            }
++        }
++    }
++
++    /// 吹き出しの開いている bead の id（吹き出しの層が無ければ None）。
++    fn shown() -> Option<String> {
++        use_context::<PopCtx>().and_then(PopCtx::shown)
++    }
+ 
+     /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ）。
+     pub fn view() -> AnyView {
+@@ -475,6 +535,20 @@ mod dom {
+         let folds = RwSignal::new(Folds::default());
+         let kind = RwSignal::new(Kind::All);
+         let query = RwSignal::new(String::new());
++        // 選んだ epic の組と吹き出しの開いた bead の組は、開き閉じの記録に開くと書く（見本の setEpic と ensureListed）。
++        let sel = use_context::<SelCtx>();
++        Effect::new(move |_| {
++            let epic = sel.and_then(|s| s.epic.get());
++            let bead = shown().and_then(|id| {
++                rows.with_untracked(|l| match read_rows(l) {
++                    Reading::Known(r) => Some(key_of(&id, &r)),
++                    Reading::Unknown => None,
++                })
++            });
++            for key in [epic, bead].into_iter().flatten() {
++                folds.update(|f| f.set(&key, true));
++            }
++        });
+         let list = move || {
+             let got =
+                 rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
+@@ -559,6 +633,16 @@ mod dom {
+         } else {
+             "ll-gh empty"
+         };
++        // 選んだ epic の組の頭は esel・吹き出しの開いている bead の組の頭は輪（行 g-select）。
++        let sel = use_context::<SelCtx>();
++        let esel = {
++            let key = g.key.clone();
++            move || sel.is_some_and(|s| s.epic.with(|e| ring(e.as_deref(), &key)))
++        };
++        let ringed = {
++            let g = g.clone();
++            move || head_ring(&g, shown().as_deref())
++        };
+         let rows = g.rows.clone();
+         let body = move || {
+             is_open().then(|| {
+@@ -571,7 +655,7 @@ mod dom {
+         };
+         view! {
+             <div class="ll-grp" data-gid=g.key.clone()>
+-                <div class=head_class>
++                <div class=head_class class:esel=esel class:ring=ringed>
+                     <button class="ll-tog" type="button" aria-label="開閉" on:click=toggle>{mark}</button>
+                     {head_view(&g)}
+                 </div>
+@@ -602,8 +686,18 @@ mod dom {
+             .epic
+             .clone()
+             .map(|id| view! { <span class="ll-gid mono">{id}</span> });
++        // epic の組の名は押すと epic を選ぶ・もう 1 度押すと解く（epic の外の組は選べない・行 g-select）。
++        let name = match (&g.epic, use_context::<SelCtx>()) {
++            (Some(_), Some(sel)) => {
++                let key = g.key.clone();
++                let choose = move |_| sel.epic.update(|e| *e = pick(e.as_deref(), &key));
++                view! { <button type="button" class="ll-gname" on:click=choose>{g.name.clone()}</button> }
++                    .into_any()
++            }
++            _ => view! { <span class="ll-gname">{g.name.clone()}</span> }.into_any(),
++        };
+         view! {
+-            <span class="ll-gname">{g.name.clone()}</span>
++            {name}
+             {gid}
+             {prog}
+             <span class="ll-sdots">{dots}</span>
+@@ -624,10 +718,30 @@ mod dom {
+             };
+             node_href(&id, mode)
+         };
++        // 行を押すと吹き出しを開き・もう 1 度押すと閉じ、吹き出しの開いている行は輪（行 g-select）。
++        let pop = use_context::<PopCtx>();
++        let press = {
++            let id = r.id.clone();
++            move |_| {
++                if let Some(p) = pop {
++                    p.press(&id, Via::Row);
++                }
++            }
++        };
++        let ringed = {
++            let id = r.id.clone();
++            move || ring(shown().as_deref(), &id)
++        };
++        // 短い題の link の普通の押しは頁を移らず行の押しに任せる（新しい窓や tab で開く押しは link のまま）。
++        let stay = |e: ev::MouseEvent| {
++            if crate::board::plain_click(&e) {
++                e.prevent_default();
++            }
++        };
+         view! {
+-            <div class="ll-row" data-id=r.id.clone()>
++            <div class="ll-row" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press>
+                 <span class=class>{tag}</span>
+-                <a class="ll-ls" href=href title=r.title.clone()>{r.short.clone()}</a>
++                <a class="ll-ls" href=href on:click=stay title=r.title.clone()>{r.short.clone()}</a>
+                 {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}
+                 <span class="ll-rt">{r.right.clone()}</span>
+             </div>
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 2ea791101f20c7e952e508d6aa881301853a79b7..be62dcc639b47c88a3ed449c2e34ad7a032aa90d 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -13,6 +13,8 @@
+ //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
+ //! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
+ //! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards）。
++//! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
++//! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
+ 
+ use std::collections::BTreeMap;
+ 
+@@ -22,8 +24,10 @@ use tsuzuri_contract::graph::{GraphDoc, title36};
+ use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
+ use tsuzuri_contract::wire;
+ 
++use super::ledger::OUTSIDE;
+ use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
+ use crate::frame::{self, Block};
++use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
+ use crate::mapview::graph::cut;
+ use crate::view::{Fetched, id_order, read_rows};
+ use crate::vocab::label;
+@@ -656,6 +660,70 @@ pub fn misfit_cards(fetched: &Fetched) -> Vec<MisfitCard> {
+     }
+ }
+ 
++/// すべての epic の chip の字（押すと選びを解く）。
++pub const ALL_EPICS: &str = "すべて";
++
++/// 見出しの epic の chip の 1 つ（組の鍵・名・板に出ている札の数・すべての chip の鍵は空）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Chip {
++    pub key: String,
++    pub name: String,
++    pub n: usize,
++}
++
++/// 板の札の組の鍵（札の bead の id から一覧の組と同じ読み・台帳が読めなければ空の表）。
++pub fn card_keys(
++    cards: &[PipelineCard],
++    rows: &Reading<Vec<LedgerRow>>,
++) -> BTreeMap<String, String> {
++    let Reading::Known(rows) = rows else {
++        return BTreeMap::new();
++    };
++    cards
++        .iter()
++        .map(|c| (c.contract.to_string(), key_of(c.contract.as_str(), rows)))
++        .collect()
++}
++
++/// 見出しの epic の chip（頭はすべての chip で数は板に出ている札の全部、続けて板に出ている札を持つ組を札の多い順〔同じ数は
++/// 鍵の id の順〕に・名は一覧の組の頭と同じ epic の短い題〔epic の外の組は `OUTSIDE`・台帳に無い epic は鍵のまま〕・見本の renderEchips）。
++pub fn chips(
++    cols: &[Column],
++    keys: &BTreeMap<String, String>,
++    rows: &[LedgerRow],
++    facts: &BTreeMap<String, BeadFact>,
++) -> Vec<Chip> {
++    let mut count: BTreeMap<&str, usize> = BTreeMap::new();
++    let all: Vec<&Kcard> = cols.iter().flat_map(|c| c.cards.iter()).collect();
++    for card in &all {
++        let key = keys.get(&card.id).map_or(OUTSIDE_KEY, String::as_str);
++        *count.entry(key).or_default() += 1;
++    }
++    let name = |key: &str| {
++        if key == OUTSIDE_KEY {
++            return OUTSIDE.to_string();
++        }
++        rows.iter()
++            .find(|r| r.id.as_str() == key)
++            .map_or_else(|| key.to_string(), |r| short_of(r, facts))
++    };
++    let mut groups: Vec<Chip> = count
++        .into_iter()
++        .map(|(key, n)| Chip {
++            key: key.to_string(),
++            name: name(key),
++            n,
++        })
++        .collect();
++    groups.sort_by(|a, b| b.n.cmp(&a.n).then_with(|| id_order(&a.key, &b.key)));
++    let head = Chip {
++        key: String::new(),
++        name: ALL_EPICS.to_string(),
++        n: all.len(),
++    };
++    std::iter::once(head).chain(groups).collect()
++}
++
+ /// 要修正の札を押した先（bead と同じ id の節点の頁・pipeline の札の `card_href` と同じ先）。
+ pub fn misfit_href(card: &MisfitCard, mode: frame::Mode) -> String {
+     frame::node_href(&card.id, mode)
+@@ -676,12 +744,15 @@ mod dom {
+     use tsuzuri_contract::EpochSecs;
+     use tsuzuri_contract::board::PipelineColumn;
+ 
++    use std::collections::BTreeMap;
++
+     use super::{
+-        BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard, PATH,
+-        age_at, ci_key, ci_style, columns, content, misfit_cards, misfit_href,
+-        open_columns, with_closed, with_lines, with_open,
++        BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard,
++        PATH, age_at, card_keys, chips, ci_key, ci_style, columns, content, misfit_cards,
++        misfit_href, open_columns, with_closed, with_lines, with_open,
+     };
+     use crate::frame::Mode;
++    use crate::ledgerlist::{SelCtx, dim, facts, pick, ring};
+     use tsuzuri_contract::case::PATH as CASES_PATH;
+ 
+     use crate::project::{Body, ledger, section, state_icon, unmeasured};
+@@ -690,6 +761,7 @@ mod dom {
+     use crate::widgets::help::{HelpCtx, hs};
+     use crate::widgets::keyline::key_line;
+     use crate::widgets::pop::{BEADS_PATH, PopCtx, Src, Via, known, read_facts, read_parts};
++    use tsuzuri_contract::board::Reading;
+ 
+     /// 回数の印（見本の IC.redo）。
+     const REDO: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>"#;
+@@ -757,6 +829,7 @@ mod dom {
+             let parts = cases.with(read_parts);
+             let ledger_rows = rows.with(read_rows);
+             let cards = pipe.with(|p| super::cards(p).unwrap_or_default());
++            let keys = StoredValue::new(card_keys(&cards, &ledger_rows));
+             let src = Src {
+                 facts: known(&facts),
+                 rows: known(&ledger_rows),
+@@ -768,15 +841,74 @@ mod dom {
+                 Body::Unmeasured(reason) => unmeasured(reason),
+                 Body::Empty(key) => view! {
+                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
+-                    {board_view(columns(&[], &[], now), open, mode, clock)}
++                    {board_view(columns(&[], &[], now), open, mode, clock, keys)}
+                 }
+                 .into_any(),
+-                Body::Filled(cols) => board_view(cols, open, mode, clock),
++                Body::Filled(cols) => board_view(cols, open, mode, clock, keys),
+             };
+             let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));
+             view! { {board}{fix} }.into_any()
+         };
+-        section(BLOCK, ().into_any(), body.into_any())
++        // 見出しの epic の chip（押すと epic を選び・すべての chip か同じ chip で解く・行 g-select）。
++        let sel = use_context::<SelCtx>();
++        let head = move || {
++            let sel = sel?;
++            let Body::Filled(cols) = pipe.with(|p| rows.with(|l| content(p, l, crate::net::now())))
++            else {
++                return None;
++            };
++            // 台帳が読めない間は組が分からないので chip を出さない。
++            let ledger_rows = rows.with(read_rows);
++            let Reading::Known(list) = &ledger_rows else {
++                return None;
++            };
++            let keys = card_keys(
++                &pipe.with(|p| super::cards(p).unwrap_or_default()),
++                &ledger_rows,
++            );
++            let all = beads.with(|b| chips(&cols, &keys, list, &facts(b)));
++            Some(chips_view(all, sel))
++        };
++        section(BLOCK, head.into_any(), body.into_any())
++    }
++
++    /// 見出しの epic の chip の並び（選んでいる組の chip は on・何も選んでいない間はすべての chip が on）。
++    fn chips_view(all: Vec<super::Chip>, sel: SelCtx) -> AnyView {
++        let items = all
++            .into_iter()
++            .map(|c| {
++                let on = {
++                    let key = c.key.clone();
++                    move || {
++                        sel.epic
++                            .with(|e| e.as_deref().map_or(key.is_empty(), |s| s == key))
++                    }
++                };
++                let key = c.key;
++                let choose = move |_| sel.epic.update(|e| *e = pick(e.as_deref(), &key));
++                view! {
++                    <button type="button" class="pchip" class:on=on on:click=choose>
++                        {c.name}<b class="num">{c.n}</b>
++                    </button>
++                }
++            })
++            .collect_view();
++        view! { <div class="pchips" role="group">{items}</div> }.into_any()
++    }
++
++    /// 札の選びの包み（選んだ epic の組でない札は薄く・吹き出しの開いている札は輪・行 g-select）。
++    fn pick_view(
++        card: &Kcard,
++        keys: StoredValue<BTreeMap<String, String>>,
++        inner: AnyView,
++    ) -> AnyView {
++        let sel = use_context::<SelCtx>();
++        let pop = use_context::<PopCtx>();
++        let key = keys.with_value(|k| k.get(&card.id).cloned().unwrap_or_default());
++        let dimmed = move || sel.is_some_and(|s| s.epic.with(|e| dim(e.as_deref(), &key)));
++        let id = card.id.clone();
++        let ringed = move || ring(pop.and_then(PopCtx::shown).as_deref(), &id);
++        view! { <div class="kpick" class:dim=dimmed class:ring=ringed>{inner}</div> }.into_any()
+     }
+ 
+     /// 5 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
+@@ -812,10 +944,11 @@ mod dom {
+         open: RwSignal<Vec<PipelineColumn>>,
+         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+         clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
++        keys: StoredValue<BTreeMap<String, String>>,
+     ) -> AnyView {
+         let cols = cols
+             .into_iter()
+-            .map(|c| column_view(c, open, mode, clock))
++            .map(|c| column_view(c, open, mode, clock, keys))
+             .collect_view();
+         view! { <div class="board">{cols}</div> }.into_any()
+     }
+@@ -825,6 +958,7 @@ mod dom {
+         open: RwSignal<Vec<PipelineColumn>>,
+         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+         clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
++        keys: StoredValue<BTreeMap<String, String>>,
+     ) -> AnyView {
+         let column = col.lane.column;
+         let is_open = move || open.with(|o| o.contains(&column));
+@@ -837,7 +971,7 @@ mod dom {
+             shown
+                 .shown(is_open())
+                 .iter()
+-                .map(|c| kcard_view(c, mode(), clock))
++                .map(|c| pick_view(c, keys, kcard_view(c, mode(), clock)))
+                 .collect_view()
+         };
+         let more = move || {
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 95b029fef2cea3095a7ac9e3e0367abd5fef5ca9..ef56f222d4788129c62bc1e02866057595af6dfe 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -1288,3 +1288,20 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+ /* 台帳 open の一覧の局面と手番（行 g-unref-lc）: memo と問いの行の平易な字・見出しの未反映の数 */
+ .ll-ph { flex: none; font-size: 11px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+ .ll-unref { flex: none; font-size: 11.5px; color: var(--st-limit); white-space: nowrap; }
++/* 選びの印（行 g-select・見本 board-v2 の .ech・.card.dim・.card.ring・.gh.esel・.gh.ring・.lrow.ring）: epic の chip と薄い札と輪 */
++.pchips { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; margin-left: var(--s2); }
++.pchip { display: flex; align-items: center; gap: 5px; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; font: inherit; font-size: 12px; white-space: nowrap; background: var(--panel); color: inherit; cursor: pointer; }
++.pchip b { font-weight: 600; color: var(--ink-3); }
++.pchip.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
++.pchip.on b { color: var(--line-2); }
++.kpick { display: block; min-width: 0; transition: opacity .15s; }
++.kpick.dim { opacity: .3; }
++.kpick.ring > .kcard { box-shadow: 0 0 0 2px var(--ink); }
++.kpick.dim.ring { opacity: 1; }
++button.ll-gname { font: inherit; font-weight: 700; font-size: 13px; color: inherit; background: none; border: 0; border-radius: 5px; padding: 1px 4px; cursor: pointer; text-align: left; }
++button.ll-gname:hover { background: var(--panel-2); }
++.ll-gh.esel { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-radius: 6px; }
++.ll-gh.ring { box-shadow: inset 0 0 0 2px var(--ink); border-radius: 6px; }
++.ll-row { cursor: pointer; border-radius: 6px; }
++.ll-row:hover { background: var(--panel-2); }
++.ll-row.ring { background: color-mix(in srgb, var(--st-limit) 8%, var(--panel)); box-shadow: inset 0 0 0 2px var(--ink); }
+diff --git a/crates/tsuzuri-surface/tests/bvsel.rs b/crates/tsuzuri-surface/tests/bvsel.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2adbdcfd9243e6b2c47837f0008291465324905
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvsel.rs
+@@ -0,0 +1,253 @@
++//! 行 g-select の歯（接頭辞 bvsel_）: 一覧の組の頭の名と板の見出しの epic の chip で epic を選ぶと、選んだ組でない札を薄くし、
++//! 札か一覧の行を押して吹き出しを開くと、その札と行と組の頭に輪の印を付ける（判断の記録 ADR-27 の決定 (8)・見本 board-v2 の
++//! setEpic と applyMarks と renderEchips）。台帳の行と札と bead の事実は歯の中で組む（bead の id の接頭辞は fx-s）。
++#![cfg(test)]
++
++use std::collections::BTreeMap;
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
++use tsuzuri_contract::ledger::{BeadFact, BeadId, LedgerRow};
++use tsuzuri_surface::ledgerlist::{
++    Lgroup, OUTSIDE_KEY, dim, groups, head_ring, key_of, pick, ring,
++};
++use tsuzuri_surface::project::ledger::OUTSIDE;
++use tsuzuri_surface::project::pipeline::{ALL_EPICS, Chip, card_keys, chips, columns};
++
++/// 板と一覧を組む今。
++const NOW: u64 = 1_790_510_400;
++
++fn read(rel: &str) -> String {
++    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
++    LedgerRow {
++        id: BeadId::new(id).expect("id"),
++        kind: kind.to_string(),
++        title: format!("{id} の題"),
++        status: status.to_string(),
++        updated_at: NOW - 600,
++        parent: None,
++        labels: Vec::new(),
++    }
++}
++
++fn card(id: &str, stage: Stage, since: u64) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new(id).expect("id"),
++        runs: 1,
++        stage,
++        reason: None,
++        account: None,
++        since: Some(since),
++        ci: None,
++    }
++}
++
++fn fact(id: &str, short: &str) -> BeadFact {
++    BeadFact {
++        id: BeadId::new(id).expect("id"),
++        created_at: Some(NOW - 3_600),
++        short: short.to_string(),
++        short_set: true,
++        summary: String::new(),
++        blocks: Vec::new(),
++    }
++}
++
++/// 台帳: epic s1（便 3）と入れ子の epic s1.7（便 1）・epic s2（便 2）・台帳に無い epic の下の便 s9.1・epic の外の便 s0。
++fn rows() -> Vec<LedgerRow> {
++    vec![
++        row("fx-s1", "epic", "open"),
++        row("fx-s1.1", "task", "open"),
++        row("fx-s1.2", "task", "open"),
++        row("fx-s1.3", "task", "closed"),
++        row("fx-s1.7", "epic", "open"),
++        row("fx-s1.7.1", "task", "open"),
++        row("fx-s2", "epic", "open"),
++        row("fx-s2.1", "task", "open"),
++        row("fx-s2.2", "task", "open"),
++        row("fx-s0", "task", "open"),
++    ]
++}
++
++/// 札: s1 の 2 枚（1 枚は 12 時間より前の着地で板に出ない）・s1.7 の 1 枚・s2 の 2 枚・epic の外の 1 枚。
++fn cards() -> Vec<PipelineCard> {
++    vec![
++        card("fx-s1.1", Stage::Running, NOW - 60),
++        card("fx-s1.3", Stage::Landed, NOW - 50_000),
++        card("fx-s1.7.1", Stage::Queued, NOW - 120),
++        card("fx-s2.1", Stage::Blocked, NOW - 300),
++        card("fx-s2.2", Stage::Failed, NOW - 400),
++        card("fx-s0", Stage::Queued, NOW - 500),
++    ]
++}
++
++fn facts() -> BTreeMap<String, BeadFact> {
++    [
++        fact("fx-s1", "組 s1"),
++        fact("fx-s1.7", "組 s1.7"),
++        fact("fx-s2", "組 s2"),
++    ]
++    .into_iter()
++    .map(|f| (f.id.to_string(), f))
++    .collect()
++}
++
++/// bead の組の鍵は一覧の組と同じ読み（いちばん近い epic の祖先・入れ子の epic は内の epic・epic の祖先が無ければ epic の外）。
++#[test]
++fn bvsel_key_of_matches_groups() {
++    let rows = rows();
++    assert_eq!(key_of("fx-s1.1", &rows), "fx-s1");
++    assert_eq!(key_of("fx-s1.7.1", &rows), "fx-s1.7");
++    assert_eq!(key_of("fx-s1.7", &rows), "fx-s1");
++    assert_eq!(key_of("fx-s0", &rows), OUTSIDE_KEY);
++    assert_eq!(key_of("fx-s9.1", &rows), OUTSIDE_KEY);
++    let gs = groups(&rows, &cards(), &facts(), NOW);
++    let mut seen = 0;
++    for g in &gs {
++        for r in &g.rows {
++            assert_eq!(key_of(&r.id, &rows), g.key, "{} の組", r.id);
++            seen += 1;
++        }
++    }
++    assert_eq!(seen, 6, "open の行の全部を照らした");
++}
++
++/// 押した後の選びは、空の鍵か今と同じ鍵で解き、ほかは押した鍵。
++#[test]
++fn bvsel_pick_toggles() {
++    assert_eq!(pick(None, "fx-s1").as_deref(), Some("fx-s1"));
++    assert_eq!(pick(Some("fx-s1"), "fx-s1"), None);
++    assert_eq!(pick(Some("fx-s1"), "fx-s2").as_deref(), Some("fx-s2"));
++    assert_eq!(pick(Some("fx-s1"), ""), None);
++    assert_eq!(pick(None, ""), None);
++}
++
++/// 札は epic を選んでいて組の鍵が違う時だけ薄く、輪は開いている bead の id と同じ時だけ・組の頭の輪は開いている bead が組の open の行。
++#[test]
++fn bvsel_dim_and_ring() {
++    assert!(!dim(None, "fx-s1"));
++    assert!(!dim(Some("fx-s1"), "fx-s1"));
++    assert!(dim(Some("fx-s1"), "fx-s2"));
++    assert!(dim(Some("fx-s1"), OUTSIDE_KEY));
++    assert!(dim(Some("fx-s1"), ""));
++    assert!(!ring(None, "fx-s1.1"));
++    assert!(ring(Some("fx-s1.1"), "fx-s1.1"));
++    assert!(!ring(Some("fx-s1.1"), "fx-s1.2"));
++    let rows = rows();
++    let gs = groups(&rows, &cards(), &facts(), NOW);
++    let g1: &Lgroup = gs.iter().find(|g| g.key == "fx-s1").expect("組 s1");
++    assert!(head_ring(g1, Some("fx-s1.2")));
++    assert!(head_ring(g1, Some("fx-s1.1")));
++    assert!(
++        !head_ring(g1, Some("fx-s1.3")),
++        "閉じた行は組の open の行でない"
++    );
++    assert!(!head_ring(g1, Some("fx-s2.1")));
++    assert!(!head_ring(g1, None));
++}
++
++/// 見出しの chip は、すべての chip（数は板に出ている札の全部）の後に、札を持つ組を札の多い順（同じ数は鍵の順）に並べ、
++/// 名は epic の短い題（epic の外は OUTSIDE）・台帳が読めなければ札は全部 epic の外。
++#[test]
++fn bvsel_chips_by_count() {
++    let rows = rows();
++    let cards = cards();
++    let cols = columns(&cards, &rows, NOW);
++    let keys = card_keys(&cards, &Reading::Known(rows.clone()));
++    assert_eq!(keys.get("fx-s1.7.1").map(String::as_str), Some("fx-s1.7"));
++    let got = chips(&cols, &keys, &rows, &facts());
++    let want = vec![
++        Chip {
++            key: String::new(),
++            name: ALL_EPICS.to_string(),
++            n: 5,
++        },
++        Chip {
++            key: "fx-s2".to_string(),
++            name: "組 s2".to_string(),
++            n: 2,
++        },
++        Chip {
++            key: OUTSIDE_KEY.to_string(),
++            name: OUTSIDE.to_string(),
++            n: 1,
++        },
++        Chip {
++            key: "fx-s1".to_string(),
++            name: "組 s1".to_string(),
++            n: 1,
++        },
++        Chip {
++            key: "fx-s1.7".to_string(),
++            name: "組 s1.7".to_string(),
++            n: 1,
++        },
++    ];
++    assert_eq!(got, want);
++    let unknown = card_keys(&cards, &Reading::Unknown);
++    assert!(unknown.is_empty());
++    let got = chips(&cols, &unknown, &[], &BTreeMap::new());
++    assert_eq!(got.len(), 2);
++    assert_eq!(got[1].key, OUTSIDE_KEY);
++    assert_eq!(got[1].n, 5);
++    let no_epic_row = chips(&cols, &keys, &rows[1..], &facts());
++    assert!(
++        no_epic_row
++            .iter()
++            .any(|c| c.key == "fx-s1" && c.name == "fx-s1")
++    );
++}
++
++/// 一覧の行は吹き出しの口の印を持ち押すと吹き出しを開き、組の頭の名は epic を選び、選んだ組と開いた bead の組を開く。
++/// 板は見出しに epic の chip を置き、札を選びの包みに入れる。App は選びの状態を context に置き、class は stylesheet に在る。
++#[test]
++fn bvsel_dom_wiring_text() {
++    let list = read("src/ledgerlist.rs");
++    let ldom = &list[list.find("mod dom {").expect("mod dom")..];
++    for want in [
++        "<div class=\"ll-row\" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press>",
++        "p.press(&id, Via::Row);",
++        "<a class=\"ll-ls\" href=href on:click=stay title=r.title.clone()>",
++        "if crate::board::plain_click(&e) {",
++        "sel.epic.update(|e| *e = pick(e.as_deref(), &key))",
++        "<div class=head_class class:esel=esel class:ring=ringed>",
++        "folds.update(|f| f.set(&key, true));",
++        "move || head_ring(&g, shown().as_deref())",
++    ] {
++        assert!(ldom.contains(want), "ledgerlist の DOM に {want} が無い");
++    }
++    let pipe = read("src/project/pipeline.rs");
++    let pdom = &pipe[pipe.find("mod dom {").expect("mod dom")..];
++    for want in [
++        "section(BLOCK, head.into_any(), body.into_any())",
++        "let Reading::Known(list) = &ledger_rows else {",
++        "let all = beads.with(|b| chips(&cols, &keys, list, &facts(b)));",
++        "sel.epic.update(|e| *e = pick(e.as_deref(), &key))",
++        "pick_view(c, keys, kcard_view(c, mode(), clock))",
++        "<div class=\"kpick\" class:dim=dimmed class:ring=ringed>{inner}</div>",
++        "s.epic.with(|e| dim(e.as_deref(), &key))",
++    ] {
++        assert!(pdom.contains(want), "pipeline の DOM に {want} が無い");
++    }
++    let board = read("src/board.rs");
++    assert!(board.contains("provide_context(SelCtx::default());"));
++    let css = read("style.css");
++    for rule in [
++        ".pchips {",
++        ".pchip {",
++        ".pchip.on {",
++        ".kpick.dim { opacity: .3; }",
++        ".kpick.ring > .kcard {",
++        ".kpick.dim.ring { opacity: 1; }",
++        "button.ll-gname {",
++        ".ll-gh.esel {",
++        ".ll-gh.ring {",
++        ".ll-row.ring {",
++    ] {
++        assert!(css.contains(rule), "stylesheet に {rule} が無い");
++    }
++}

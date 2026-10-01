@@ -445,6 +445,12 @@ sections:
       - {id: g-list-groups, doc: surface-wave26b}
       - {id: g-list-head, doc: surface-wave26b}
       - {id: g-unref-lc, doc: surface-wave26b}
+      - {id: g-select, doc: surface-wave26b}
+      - {id: g-one-screen-a, doc: surface-wave26b}
+      - {id: g-one-screen-b, doc: surface-wave26b}
+      - {id: g-layout, doc: surface-wave26b}
+      - {id: g-ledger-trim, doc: surface-wave26b}
+      - {id: g-list-sweep, doc: surface-wave26b}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}

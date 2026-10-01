@@ -1,0 +1,1386 @@
+diff --git a/crates/tsuzuri-surface/src/kit.rs b/crates/tsuzuri-surface/src/kit.rs
+index 932533f747f342f050717fed77ecc369eed6fd42..42917f7e16251a6e72bf1060d87832dcab59abcd 100644
+--- a/crates/tsuzuri-surface/src/kit.rs
++++ b/crates/tsuzuri-surface/src/kit.rs
+@@ -58,21 +58,8 @@ pub struct Item {
+     pub alert: bool,
+     pub id: String,
+     pub title: String,
+-    /// 状態の印と語と種類（`○ 未着手 · task`・`◷ 答え待ち · question`）か、板の段の字と種類（`Running · task`）。
++    /// 状態の印と語と種類（`○ 未着手 · task`・`◷ 答え待ち · question`）。
+     pub aside: String,
+-    /// 板の段（在れば右の字の前に段の記号を出す）。
+-    pub stage: Option<Staged>,
+-}
+-
+-/// 一覧の項に出す板の段（行 c-ledger-stage）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct Staged {
+-    /// 札の状態の記号の値（None は取り込みの印）。
+-    pub state: Option<&'static str>,
+-    /// 台帳で閉じた（着地せず）の札か。
+-    pub closed: bool,
+-    /// 札の段の字と札の meta の CI の語。
+-    pub word: String,
+ }
+ 
+ /// 印の色の上書き（open の問い）。
+@@ -94,20 +81,6 @@ pub fn item(row: &LedgerRow) -> Item {
+         id: row.id.to_string(),
+         title: row.title.clone(),
+         aside: format!("{} {} · {}", mark.glyph, mark.word, kind_word(row)),
+-        stage: None,
+-    }
+-}
+-
+-/// 台帳の行を板の段つきの 1 項にする（段が在れば右の字を段の字と種類にし、段の写しを置く・無ければ `item` のまま）。
+-pub fn staged_item(row: &LedgerRow, stage: Option<&Staged>) -> Item {
+-    let base = item(row);
+-    match stage {
+-        Some(s) => Item {
+-            aside: format!("{} · {}", s.word, kind_word(row)),
+-            stage: Some(s.clone()),
+-            ..base
+-        },
+-        None => base,
+     }
+ }
+ 
+@@ -121,7 +94,6 @@ pub fn node_item(doc: &GraphDoc, id: &str) -> Option<Item> {
+         id: node.id.clone(),
+         title: node.title.clone(),
+         aside: String::new(),
+-        stage: None,
+     })
+ }
+ 
+@@ -207,7 +179,6 @@ mod dom {
+ 
+     use super::{ALERT_STYLE, Body, Folds, Item, UNKNOWN, state_class, state_key};
+     use crate::frame::{Block, Mode, node_href};
+-    use crate::project::pipeline::stage_sym;
+     use crate::vocab::label;
+     use crate::widgets::help::{HelpCtx, h2};
+     use crate::widgets::hover::{Card, attach_some};
+@@ -307,15 +278,11 @@ mod dom {
+         let mode = mode_of();
+         let id = item.id.clone();
+         let href = move || node_href(&id, mode());
+-        let sym = item
+-            .stage
+-            .as_ref()
+-            .map(|s| view! { {stage_sym(s.closed, s.state)}" " });
+         view! {
+             <li>
+                 {lead}
+                 <a class="ttl" href=href use:attach_some=card><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
+-                <span class="aside">{sym}{item.aside.clone()}</span>
++                <span class="aside">{item.aside.clone()}</span>
+             </li>
+         }
+         .into_any()
+diff --git a/crates/tsuzuri-surface/src/project/ledger.rs b/crates/tsuzuri-surface/src/project/ledger.rs
+index 49cf998b943554c1c6cf06d7bea22058b2f8b84d..c6667369d58944a9002e38d2f2821b99eb5bc629 100644
+--- a/crates/tsuzuri-surface/src/project/ledger.rs
++++ b/crates/tsuzuri-surface/src/project/ledger.rs
+@@ -6,30 +6,24 @@
+ //! ここは写すだけ（数え直しと判定の分岐を持たない）。一覧の見出しの図（burndown の座標と svg と card）と純減の字も
+ //! この file の関数で、sparkline と判定の表は account board も引く。
+ //! 一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
+-//! 前の一覧の組の純粋な関数（`body`・`staged_body`・`group_cards`・閉じた bead を出さない・行 g-ledger-home と c-ledger-stage）は
+-//! 件数と歯のために残し、DOM は描かない。
+ //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
+ //! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す（行 g-unref-lc）。
+ //! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
+ //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+-use std::collections::BTreeMap;
+-
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{LedgerJudge, Reading};
+-use tsuzuri_contract::ledger::LedgerRow;
+ use tsuzuri_contract::stats::{
+     DayCount, LedgerStats, UnreflectedKind, UnreflectedList, UnreflectedRow,
+ };
+ use tsuzuri_contract::wire;
+ 
+ use super::seat::hm;
+-use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, Staged, item, staged_item};
++use super::{Body, NO_CONTENT, NOT_READ};
+ use crate::frame::Block;
+-use crate::view::{Fetched, Screen, clock};
++use crate::view::{Fetched, clock};
+ use crate::vocab::{label, vocab};
+ use crate::widgets::hover::Card;
+-use crate::widgets::nodecard::card_of;
+ 
+ pub const BLOCK: Block = Block {
+     id: "ledger",
+@@ -68,11 +62,6 @@ pub const CLOSED: &str = "closed";
+ /// 台帳に行は在るが、閉じていない行が 1 つも無いときの 1 行（EMPTY と分ける）。
+ pub const NO_OPEN: &str = "閉じていない bead は無い";
+ 
+-/// 一覧に出す行か（状態が CLOSED の行は出さない・全件は地図の方で見る）。
+-pub fn listed(row: &LedgerRow) -> bool {
+-    row.status != CLOSED
+-}
+-
+ /// epic の外の組の見出しの字（epic の項の代わり）。
+ pub const OUTSIDE: &str = "epic の外";
+ 
+@@ -90,13 +79,6 @@ pub const BURN_H: f64 = 72.0;
+ pub const SPARK_W: f64 = 120.0;
+ pub const SPARK_H: f64 = 24.0;
+ 
+-/// 一覧の 1 組（epic の項・その下の項）。epic の外の組は `head` が None。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct Group {
+-    pub head: Option<Item>,
+-    pub children: Vec<Item>,
+-}
+-
+ /// 判定の 1 語の写し（記号・class・語の鍵）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub struct Judge {
+@@ -427,25 +409,6 @@ pub fn spark_svg(spark: &Spark) -> String {
+     )
+ }
+ 
+-/// 一覧の組の項の節点の card（組ごとに epic の項と下の項・電文に在る id だけ・行 g-card-adopt-c）。
+-pub fn group_cards(groups: &[Group], graph: &Fetched) -> BTreeMap<String, Card> {
+-    cards_of(
+-        groups
+-            .iter()
+-            .flat_map(|g| g.head.iter().chain(&g.children).map(|i| i.id.as_str())),
+-        graph,
+-    )
+-}
+-
+-/// id の列のうち電文の節点に在るものの card（id の字の鍵）。
+-fn cards_of<'a>(ids: impl Iterator<Item = &'a str>, graph: &Fetched) -> BTreeMap<String, Card> {
+-    let Ok(doc) = super::map::doc(graph) else {
+-        return BTreeMap::new();
+-    };
+-    ids.filter_map(|id| card_of(&doc, id).map(|c| (id.to_string(), c)))
+-        .collect()
+-}
+-
+ /// 指標の口の本文を電文に読む（本文は読めた指標か「まだ分からない」・まだ読んでいない・読めない・
+ /// 台帳が読めない・電文が読めないは理由）。
+ pub fn stats(fetched: &Fetched) -> Result<LedgerStats, &'static str> {
+@@ -508,60 +471,6 @@ pub fn burn_card(s: &LedgerStats) -> Card {
+     }
+ }
+ 
+-/// 台帳の件数（epic も数える・測れていなければ Unknown）。
+-pub fn count(screen: &Screen) -> Reading<usize> {
+-    match &screen.board {
+-        Reading::Known(b) => Reading::Known(
+-            b.groups
+-                .iter()
+-                .map(|g| g.children.len() + usize::from(g.epic.is_some()))
+-                .sum(),
+-        ),
+-        Reading::Unknown => Reading::Unknown,
+-    }
+-}
+-
+-/// 一覧の中身（閉じた行は出さない・閉じた epic の頭は、閉じていない下の項が在るときだけ残す・行 g-ledger-home）。
+-/// 板の段は持たない（`staged_body` に空の段を渡した値）。
+-pub fn body(screen: &Screen) -> Body<Vec<Group>> {
+-    staged_body(screen, &BTreeMap::new())
+-}
+-
+-/// 板の段つきの一覧の中身（`body` と同じ組で、下の項は bead の id の段が在れば段の字と記号を出す・epic の頭は段を出さない）。
+-pub fn staged_body(screen: &Screen, stages: &BTreeMap<String, Staged>) -> Body<Vec<Group>> {
+-    match &screen.board {
+-        Reading::Unknown => Body::Unmeasured(LEDGER_UNREAD),
+-        Reading::Known(b) if b.groups.is_empty() => Body::Empty(EMPTY),
+-        Reading::Known(b) => {
+-            let groups: Vec<Group> = b
+-                .groups
+-                .iter()
+-                .filter_map(|g| {
+-                    let children: Vec<Item> = g
+-                        .children
+-                        .iter()
+-                        .filter(|r| listed(r))
+-                        .map(|r| staged_item(r, stages.get(r.id.as_str())))
+-                        .collect();
+-                    let keep = match &g.epic {
+-                        Some(epic) => listed(epic) || !children.is_empty(),
+-                        None => !children.is_empty(),
+-                    };
+-                    keep.then(|| Group {
+-                        head: g.epic.as_ref().map(item),
+-                        children,
+-                    })
+-                })
+-                .collect();
+-            if groups.is_empty() {
+-                Body::Empty(NO_OPEN)
+-            } else {
+-                Body::Filled(groups)
+-            }
+-        }
+-    }
+-}
+-
+ /// 未反映の段は最初は開く（見本の id unref の details）。
+ pub const UNREF_OPEN: bool = true;
+ 
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 11e72eac904ffe0c46939aac88d120924e5931f5..46e6efc1bd936914d1295bd7fedd70f95c47ceb5 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -7,7 +7,6 @@
+ //! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は着地の時刻を問わず Landed の列に出し、
+ //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
+ //! 語は語の辞書の `CI_KEYS` の鍵から引く。
+-//! 台帳の一覧の項に出す段は札と同じ読みから `stages` 1 つで組む（行 c-ledger-stage のつなぎ）。
+ //! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
+ //! `age_at` から書き直し、CI の語と直近の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
+ //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
+@@ -25,7 +24,7 @@ use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
+ use tsuzuri_contract::wire;
+ 
+ use super::ledger::OUTSIDE;
+-use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
++use super::{Body, NO_CONTENT, NOT_READ, map};
+ use crate::frame::{self, Block};
+ use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
+ use crate::mapview::graph::cut;
+@@ -517,31 +516,6 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+     }
+ }
+ 
+-/// 台帳の一覧の項に出す板の段（札の bead の id の字の鍵・記号と閉じたかは札の読みの `kcard` の値・字は `stage_word` に
+-/// 札の meta の CI の語を ` · ` で足した字）。口が読めない・札がまだ分からない・電文が読めない間は空。
+-/// 器の局面の出力を読む後の行 c-ledger-lc はこの 1 つを替える。CI の語は今 now で決める。
+-pub fn stages(fetched: &Fetched, now: EpochSecs) -> BTreeMap<String, Staged> {
+-    let Ok(cards) = cards(fetched) else {
+-        return BTreeMap::new();
+-    };
+-    cards
+-        .iter()
+-        .map(|c| {
+-            let k = kcard(c, &[], now);
+-            let word = match k.ci {
+-                Some(ci) => format!("{} · {}", stage_word(c), label(ci_key(ci))),
+-                None => stage_word(c),
+-            };
+-            let staged = Staged {
+-                state: k.state,
+-                closed: k.closed,
+-                word,
+-            };
+-            (k.id, staged)
+-        })
+-        .collect()
+-}
+-
+ /// 節点の card を札に付ける値（見本の cardContent の data-run の枝: 題と種類と帯と状態は節点から、
+ /// 値と出所と詳しくは走行から）。札の id の節点が電文に無ければ札の hover のまま。
+ pub fn node_hover(doc: &GraphDoc, card: &Kcard) -> Card {
+diff --git a/crates/tsuzuri-surface/tests/board_min.rs b/crates/tsuzuri-surface/tests/board_min.rs
+index d2480f83eadd6ee1839f282a65a4fa3e0005dc93..0c010c2a5e578bc4d97adda2132a522848cf2995 100644
+--- a/crates/tsuzuri-surface/tests/board_min.rs
++++ b/crates/tsuzuri-surface/tests/board_min.rs
+@@ -1,7 +1,7 @@
+ //! 便 g-min の歯: 並べ方（bead 8 本の fixture）・測れていないの判定・状態の印・時刻の字。
+ //! fixture は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で読み、
+ //! 一覧の口と同じ電文（LedgerList）にしてから画面の状態へ渡す。
+-//! 件数は block の module（ask・ledger）が数える（便 g-frame で見出しの字を vocab へ移した）。
++//! 件数は block の module ask が数える（便 g-frame で見出しの字を vocab へ移した・台帳の件数の関数は行 g-list-sweep で外した）。
+ //! 問いの block（ask）は便 g-ask で口 /api/questions の電文を読むので、問いの件数は台帳の画面の状態から数える。
+ #![cfg(test)]
+ 
+@@ -11,7 +11,7 @@ use tsuzuri_boundary::server::ledger;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::{self, ask};
++use tsuzuri_surface::project::ask;
+ use tsuzuri_surface::view::{self, Board, Fetched, Screen, clock, id_order, mark};
+ 
+ /// 画面の状態の問いの件数（測れていなければ Unknown）。
+@@ -91,7 +91,6 @@ fn board_min_screen_reads_known_ledger() {
+     assert_eq!(screen.board, Reading::Known(view::board(&rows)));
+     assert_eq!(screen.updated_at, Some(1_790_495_000));
+     assert_eq!(questions(&screen), Reading::Known(2));
+-    assert_eq!(project::ledger::count(&screen), Reading::Known(5));
+ }
+ 
+ #[test]
+@@ -118,7 +117,6 @@ fn board_min_unmeasured_is_not_zero() {
+         assert_eq!(questions(&screen), Reading::Unknown);
+         // 問いの block も同じ読みを 0 件でなく測れていないと数える。
+         assert_eq!(ask::count(&fetched), Reading::Unknown);
+-        assert_eq!(project::ledger::count(&screen), Reading::Unknown);
+         // 最終更新は最後に読めた時刻のまま（読めなかった時刻に進めない）。
+         assert_eq!(screen.updated_at, Some(20));
+     }
+diff --git a/crates/tsuzuri-surface/tests/bvsweep.rs b/crates/tsuzuri-surface/tests/bvsweep.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e623a5975dba1678df5b40d9fa1b82cdd0b860f0
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvsweep.rs
+@@ -0,0 +1,170 @@
++//! 行 g-list-sweep の歯（接頭辞 bvsweep_・判断の記録 ADR-27 決定 (8)・要件 FR13）: 前の台帳の一覧の組と件数の関数と、
++//! 一覧の項に出していた板の段（型 Staged・段つきの項・pipeline の stages・項の段の記号）を src から消した。
++//! 一覧の 1 項 Item は 5 つの欄（印・赤・id・題・右の字）だけで、kit の item_view は右の字の前に段の記号を出さない。
++//! DOM は host で撃てないので、src の字で見る。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++
++use tsuzuri_contract::ledger::{BeadId, LedgerRow, QUESTION_LABEL};
++use tsuzuri_surface::project::{Item, item};
++
++fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// src の下の .rs の file の相対の path と字（path の順）。
++fn sources() -> Vec<(String, String)> {
++    fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, String)>) {
++        let entries = std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{dir:?} を読む: {e}"));
++        for entry in entries {
++            let path = entry.expect("dir の項").path();
++            if path.is_dir() {
++                walk(&path, root, out);
++            } else if path.extension().is_some_and(|e| e == "rs") {
++                let rel = path
++                    .strip_prefix(root)
++                    .expect("src の下")
++                    .to_string_lossy()
++                    .replace('\\', "/");
++                let text = std::fs::read_to_string(&path).expect(".rs を読む");
++                out.push((rel, text));
++            }
++        }
++    }
++    let root = crate_dir().join("src");
++    let mut out = Vec::new();
++    walk(&root, &root, &mut out);
++    out.sort();
++    out
++}
++
++/// (2) 前の一覧の組と件数の関数・段の型と段つきの項・pipeline の stages は src のどこにも無い。
++#[test]
++fn bvsweep_old_list_fns_gone() {
++    let ledger = read("src/project/ledger.rs");
++    for gone in [
++        "pub struct Group",
++        "pub fn count(",
++        "pub fn body(",
++        "pub fn staged_body(",
++        "pub fn group_cards(",
++        "fn cards_of(",
++        "pub fn listed(",
++        "Screen",
++        "card_of",
++        "LEDGER_UNREAD",
++    ] {
++        assert!(
++            !ledger.contains(gone),
++            "src/project/ledger.rs に {gone} が在る"
++        );
++    }
++    let uses: Vec<&str> = ledger
++        .lines()
++        .filter(|l| l.starts_with("use super::{"))
++        .collect();
++    assert_eq!(uses, ["use super::{Body, NO_CONTENT, NOT_READ};"]);
++
++    let kit = read("src/kit.rs");
++    for gone in [
++        "pub struct Staged",
++        "pub fn staged_item(",
++        "pub stage:",
++        "stage: None",
++        "stage_sym",
++    ] {
++        assert!(!kit.contains(gone), "src/kit.rs に {gone} が在る");
++    }
++
++    let pipeline = read("src/project/pipeline.rs");
++    for gone in ["pub fn stages(", "`stages`", "c-ledger-stage"] {
++        assert!(
++            !pipeline.contains(gone),
++            "src/project/pipeline.rs に {gone} が在る"
++        );
++    }
++
++    for (rel, text) in sources() {
++        for word in ["Staged", "staged_item", "staged_body", "group_cards"] {
++            assert!(!text.contains(word), "src/{rel} に {word} が在る");
++        }
++    }
++}
++
++/// 台帳の 1 行（題は「題」・時刻は 0・親は無し）。
++fn row(id: &str, kind: &str, status: &str, labels: &[&str]) -> LedgerRow {
++    LedgerRow {
++        id: BeadId::new(id).expect("id"),
++        kind: kind.to_string(),
++        title: "題".to_string(),
++        status: status.to_string(),
++        updated_at: 0,
++        parent: None,
++        labels: labels.iter().map(|l| l.to_string()).collect(),
++    }
++}
++
++/// (3) Item は 5 つの欄で、台帳の行の項の右の字は状態の印と語と種類のまま。item_view は右の字だけを描く。
++#[test]
++fn bvsweep_item_has_five_fields() {
++    let want = |shape: &str, alert: bool, id: &str, aside: &str| Item {
++        shape: shape.to_string(),
++        alert,
++        id: id.to_string(),
++        title: "題".to_string(),
++        aside: aside.to_string(),
++    };
++    for (r, w) in [
++        (
++            row("fx-w.1", "task", "open", &[]),
++            want("shape band-beads", false, "fx-w.1", "○ 未着手 · task"),
++        ),
++        (
++            row("fx-w.2", "task", "open", &[QUESTION_LABEL]),
++            want("shape band-beads", true, "fx-w.2", "◷ 答え待ち · question"),
++        ),
++        (
++            row("fx-w.3", "task", "closed", &[]),
++            want("shape band-beads fill", false, "fx-w.3", "● 閉じた · task"),
++        ),
++        (
++            row("fx-w", "epic", "in_progress", &[]),
++            want("shape band-beads", false, "fx-w", "◐ 作業中 · epic"),
++        ),
++    ] {
++        assert_eq!(item(&r), w, "{}", r.id);
++    }
++
++    let kit = read("src/kit.rs");
++    let at = kit.find("pub struct Item {").expect("Item の宣言");
++    let decl = &kit[at..at + kit[at..].find("\n}\n").expect("Item の宣言の終わり")];
++    let fields: Vec<&str> = decl
++        .lines()
++        .filter_map(|l| l.strip_prefix("    pub "))
++        .collect();
++    assert_eq!(
++        fields,
++        [
++            "shape: String,",
++            "alert: bool,",
++            "id: String,",
++            "title: String,",
++            "aside: String,"
++        ]
++    );
++
++    let dom = &kit[kit.find("mod dom {").expect("mod dom の字")..];
++    assert_eq!(
++        dom.matches(r#"<span class="aside">{item.aside.clone()}</span>"#)
++            .count(),
++        1
++    );
++    for gone in ["let sym", "{sym}"] {
++        assert!(!dom.contains(gone), "kit.rs の mod dom に {gone} が在る");
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/cadl.rs b/crates/tsuzuri-surface/tests/cadl.rs
+index 857af3a6754b6645ae41a589534c24cab20c71b2..94f4c821b60c1384b53b106f6b2f2ffba450a266 100644
+--- a/crates/tsuzuri-surface/tests/cadl.rs
++++ b/crates/tsuzuri-surface/tests/cadl.rs
+@@ -1,4 +1,5 @@
+-//! 行 g-card-adopt-c の歯: 台帳の block の一覧の項・抜けの検査の頁の名指しの項に付ける節点の card の値と、
++//! 行 g-card-adopt-c の歯: 抜けの検査の頁の名指しの項に付ける節点の card の値と（台帳の一覧の組の card の関数は
++//! 行 g-list-sweep で歯ごと外した）、
+ //! DOM の付け方の字（kit の一覧の 1 項が card を受け、呼ぶ所が card を渡す）。
+ //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
+ #![cfg(test)]
+@@ -7,8 +8,7 @@ use std::path::PathBuf;
+ 
+ use tsuzuri_contract::graph::{BeadAttr, GraphDoc, GraphNode, InvariantCheck, NodeKind};
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::ledger::{self, Group};
+-use tsuzuri_surface::project::{Body, Item, gaps, node_item};
++use tsuzuri_surface::project::{Body, gaps, node_item};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::widgets::nodecard::card_of;
+ 
+@@ -20,67 +20,6 @@ fn read(rel: &str) -> String {
+     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+ 
+-fn graph_text() -> String {
+-    read("../../tests/fixtures/surface/graph-doc.json")
+-}
+-
+-fn graph_doc() -> GraphDoc {
+-    wire::decode(&graph_text()).expect("fixture の電文が読める")
+-}
+-
+-/// 電文にならない読み（まだ読んでいない・読めない・字 {} の本文）。
+-fn unread() -> [Fetched; 3] {
+-    [
+-        Fetched::NotRead,
+-        Fetched::Failed,
+-        Fetched::Body("{}".to_string()),
+-    ]
+-}
+-
+-/// (2) 一覧の組の項の節点の card は、epic の項と下の項の id のうち電文に在るものだけを card_of の値で持つ。
+-#[test]
+-fn cadl_group_cards_rules() {
+-    let doc = graph_doc();
+-    let graph = Fetched::Body(graph_text());
+-    let item = |id: &str| node_item(&doc, id).unwrap_or_else(|| panic!("{id} の項"));
+-    let stray = Item {
+-        shape: "shape band-beads".to_string(),
+-        alert: false,
+-        id: "zz.9".to_string(),
+-        title: "電文に無い項".to_string(),
+-        aside: String::new(),
+-        stage: None,
+-    };
+-    let groups = vec![
+-        Group {
+-            head: Some(item("t3")),
+-            children: vec![item("t3.q10"), stray.clone()],
+-        },
+-        Group {
+-            head: None,
+-            children: vec![item("t3.q2")],
+-        },
+-    ];
+-
+-    let got = ledger::group_cards(&groups, &graph);
+-    let keys: Vec<&str> = got.keys().map(String::as_str).collect();
+-    assert_eq!(keys, vec!["t3", "t3.q10", "t3.q2"]);
+-    for id in keys {
+-        assert_eq!(Some(&got[id]), card_of(&doc, id).as_ref(), "{id}");
+-    }
+-    assert_eq!(got["t3.q2"].title, "閉じた問い");
+-
+-    let lone = vec![Group {
+-        head: None,
+-        children: vec![stray],
+-    }];
+-    assert!(ledger::group_cards(&lone, &graph).is_empty());
+-    assert!(ledger::group_cards(&[], &graph).is_empty());
+-    for g in unread() {
+-        assert!(ledger::group_cards(&groups, &g).is_empty(), "{g:?}");
+-    }
+-}
+-
+ /// fixture の判定の電文の g-2 の名指しを fx-g.9 と fx-g.15 に替え、`node` なら節点 fx-g.9 を足した本文。
+ fn verdicts(node: bool) -> Fetched {
+     let mut doc: GraphDoc = wire::decode(&read("../../tests/fixtures/surface/invariants.json"))
+@@ -384,7 +323,7 @@ fn cadl_names_stay_apart() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert!(names.len() >= 4, "歯の数 {}", names.len());
++    assert!(names.len() >= 3, "歯の数 {}", names.len());
+     for name in names {
+         let rest = name
+             .strip_prefix("cadl_")
+diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/frame.rs
+index 8fe8c2b23015896b4b811724375bf0b0eafdafd2..87239ee6793e2ea359a54c762d19413d22885725 100644
+--- a/crates/tsuzuri-surface/tests/frame.rs
++++ b/crates/tsuzuri-surface/tests/frame.rs
+@@ -14,14 +14,14 @@ use std::path::{Path, PathBuf};
+ use tsuzuri_boundary::server::ledger as server_ledger;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::AroundDoc;
+-use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
++use tsuzuri_contract::ledger::LedgerRow;
+ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
+ use tsuzuri_surface::project::{
+-    self, Body, Module, STATES, ask, gaps, ledger, legend, next, node, pipeline, seat, state_class,
++    self, Body, Module, STATES, ask, gaps, legend, next, node, pipeline, seat, state_class,
+ };
+-use tsuzuri_surface::view::{Fetched, Screen};
++use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ use tsuzuri_surface::widgets::help::{self, Inline, Line};
+ use tsuzuri_surface::widgets::hover::{Card, card_class};
+@@ -47,14 +47,6 @@ fn all_pages() -> Vec<Page> {
+     PageId::ALL.into_iter().map(frame::page).collect()
+ }
+ 
+-fn known_screen() -> Screen {
+-    let body = wire::encode(&LedgerList {
+-        rows: Reading::Known(fixture_rows()),
+-    })
+-    .expect("電文");
+-    Screen::initial().after_read(&Fetched::Body(body), 100)
+-}
+-
+ /// src の下の .rs の file の全部（path の順）。
+ fn sources() -> Vec<(PathBuf, String)> {
+     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+@@ -316,7 +308,7 @@ fn frame_classes_are_in_stylesheet() {
+     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
+ }
+ 
+-/// data の口がまだ無い 3 つは測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
++/// data の口がまだ無い 3 つは測れていない（理由の 1 行つき）・問いの一覧と凡例は中身を出す。
+ #[test]
+ fn frame_blocks_without_data_are_unmeasured() {
+     for fetched in [
+@@ -338,7 +330,6 @@ fn frame_blocks_without_data_are_unmeasured() {
+         }
+     }
+ 
+-    let screen = known_screen();
+     let cards = Fetched::Body(read("../../tests/fixtures/surface/question-list.json"));
+     let Body::Filled(questions) = ask::body(&cards) else {
+         panic!("問いの一覧が中身を出さない");
+@@ -348,30 +339,15 @@ fn frame_blocks_without_data_are_unmeasured() {
+         .map(|q| (q.number, q.id.as_str()))
+         .collect();
+     assert_eq!(ids, vec![(1, "qa.2"), (2, "qa.10")]);
+-    let Body::Filled(groups) = ledger::body(&screen) else {
+-        panic!("台帳の一覧が中身を出さない");
+-    };
+-    assert_eq!(groups.len(), 1);
+-    assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("bm"));
+-    let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
+-    // 閉じた bm.3 は一覧に出さない（行 g-ledger-home）。
+-    assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
+     assert_eq!(legend::states().len(), 5);
+     assert_eq!(legend::marks().len(), 5);
+-    lost_and_empty(screen);
++    lost_and_empty();
+ }
+ 
+ /// 読めない一覧は測れていない・0 件の一覧は 0 件を見る。
+-fn lost_and_empty(screen: Screen) {
++fn lost_and_empty() {
+     // 読めない一覧は 0 件でなく測れていない・0 件は 0 件。
+-    let lost = screen.after_lost();
+     assert!(matches!(ask::body(&Fetched::Failed), Body::Unmeasured(r) if !r.is_empty()));
+-    assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
+-    let empty_body = wire::encode(&LedgerList {
+-        rows: Reading::Known(vec![]),
+-    })
+-    .expect("電文");
+-    let empty = Screen::initial().after_read(&Fetched::Body(empty_body), 1);
+     let no_cards = wire::encode(&QuestionList {
+         cards: Reading::Known(vec![]),
+         answerable: true,
+@@ -381,7 +357,6 @@ fn lost_and_empty(screen: Screen) {
+         ask::body(&Fetched::Body(no_cards)),
+         Body::Empty(_)
+     ));
+-    assert!(matches!(ledger::body(&empty), Body::Empty(_)));
+ }
+ 
+ /// 印は閉じていれば塗り、open の問いは赤（見本の nodeShape と同じ）。
+diff --git a/crates/tsuzuri-surface/tests/itemlink.rs b/crates/tsuzuri-surface/tests/itemlink.rs
+index 25aa3057300dd8a32657f5c47aa6576fd6c9871a..d856fbb7aaf18273b2a04286a19bf75357323309 100644
+--- a/crates/tsuzuri-surface/tests/itemlink.rs
++++ b/crates/tsuzuri-surface/tests/itemlink.rs
+@@ -78,7 +78,6 @@ fn want(shape: &str, alert: bool, id: &str, title: &str) -> Item {
+         id: id.to_string(),
+         title: title.to_string(),
+         aside: String::new(),
+-        stage: None,
+     }
+ }
+ 
+diff --git a/crates/tsuzuri-surface/tests/ledgerblock.rs b/crates/tsuzuri-surface/tests/ledgerblock.rs
+index 8b9bc72790c7aa4e65592a0664e0cda23405236d..3167602c528a962c6d805f4b6d851313a6529428 100644
+--- a/crates/tsuzuri-surface/tests/ledgerblock.rs
++++ b/crates/tsuzuri-surface/tests/ledgerblock.rs
+@@ -1,21 +1,20 @@
+ //! 便 g-ledger の歯: 純減の字・判定の 5 値の表・burndown の座標・未反映の種類の名・年齢の字・
+-//! 測れていないと台帳の一覧・着地済みの外形と依存（指標の段の上段と配置の表は行 g-ledger-trim で外した）。
++//! 測れていない・着地済みの外形と依存（指標の段の上段と配置の表は行 g-ledger-trim で外し、前の一覧の件数と中身の歯は
++//! 行 g-list-sweep で外した）。
+ #![cfg(test)]
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ use std::path::PathBuf;
+ 
+-use tsuzuri_boundary::server::ledger as server_ledger;
+ use tsuzuri_contract::board::{LedgerJudge, Reading};
+-use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+ use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::project::ledger::{
+     self, BURN_H, BURN_W, JUDGES, NONE, UNREF_KINDS, age, burn_svg, burndown, fixed1, judge,
+     kind_name, net, points, spark, spark_svg, stats,
+ };
+-use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
+-use tsuzuri_surface::view::{Fetched, Screen};
++use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
++use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+ fn crate_dir() -> PathBuf {
+@@ -47,22 +46,6 @@ fn body_of(name: &str) -> Fetched {
+     wrap(&set(name))
+ }
+ 
+-fn ledger_rows() -> Vec<LedgerRow> {
+-    let text = read("../../tests/fixtures/ledger/board-8.jsonl");
+-    let Reading::Known(items) = server_ledger::parse(&text) else {
+-        panic!("fixture が server の読みで Unknown");
+-    };
+-    items.into_iter().map(|i| i.row).collect()
+-}
+-
+-fn known_screen() -> Screen {
+-    let body = wire::encode(&LedgerList {
+-        rows: Reading::Known(ledger_rows()),
+-    })
+-    .expect("電文");
+-    Screen::initial().after_read(&Fetched::Body(body), 100)
+-}
+-
+ /// 純減の値ごとの矢印と字と class・小数 1 桁の丸め。
+ fn net_rows_and_rate() {
+     for (value, arrow, text, class) in [
+@@ -267,10 +250,9 @@ fn ledgerblock_classes_in_stylesheet() {
+     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
+ }
+ 
+-/// (7) 口が読めない・まだ読んでいない・電文が読めないは測れていない（0 でなく理由の 1 行）・台帳の一覧は今と同じ。
++/// (7) 口が読めない・まだ読んでいない・電文が読めないは測れていない（0 でなく理由の 1 行）。
+ #[test]
+ fn ledgerblock_unmeasured_and_list_unchanged() {
+-    let screen = known_screen();
+     for (fetched, want) in [
+         (Fetched::NotRead, NOT_READ),
+         (Fetched::Failed, ledger::METRICS_REASON),
+@@ -285,24 +267,6 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
+         assert!(!want.trim().is_empty() && !want.contains('\n'));
+     }
+     assert_eq!(stats(&body_of("filled")), Ok(set("filled")));
+-
+-    list_unchanged(screen);
+-}
+-
+-/// 台帳の一覧は今と同じ・口を失えば数と一覧は測れていない。
+-fn list_unchanged(screen: Screen) {
+-    assert_eq!(ledger::count(&screen), Reading::Known(5));
+-    let Body::Filled(groups) = ledger::body(&screen) else {
+-        panic!("台帳の一覧が中身を出さない");
+-    };
+-    assert_eq!(groups.len(), 1);
+-    assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("bm"));
+-    let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
+-    // 閉じた bm.3 は一覧に出さない（行 g-ledger-home）。
+-    assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
+-    let lost = screen.after_lost();
+-    assert_eq!(ledger::count(&lost), Reading::Unknown);
+-    assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
+ }
+ 
+ /// (9) 実物の口の本文の写し（Reading で包んだ指標）は読めて、open の task の数は写しの known の下の数。
+@@ -348,7 +312,7 @@ fn ledgerblock_unknown_body_reason() {
+     }
+ }
+ 
+-/// (8) 着地済みの外形（BLOCK・口の path・一覧の body と count）と、足す外の依存は 0 本。
++/// (8) 着地済みの外形（BLOCK・口の path）と、足す外の依存は 0 本。
+ #[test]
+ fn ledgerblock_landed_shape_and_no_new_deps() {
+     assert_eq!(ledger::BLOCK.id, "ledger");
+@@ -356,8 +320,6 @@ fn ledgerblock_landed_shape_and_no_new_deps() {
+     assert_eq!(ledger::BLOCK.class, "panel");
+     assert_eq!(ledger::PATH, "/api/ledger");
+     assert_eq!(ledger::METRICS_PATH, "/api/metrics");
+-    let _count: fn(&Screen) -> Reading<usize> = ledger::count;
+-    let _body: fn(&Screen) -> Body<Vec<ledger::Group>> = ledger::body;
+ 
+     let manifest = read("Cargo.toml");
+     let mut names = Vec::new();
+diff --git a/crates/tsuzuri-surface/tests/lgrp.rs b/crates/tsuzuri-surface/tests/lgrp.rs
+index 3a5cf7bf006a6b9cf8aaba0a1638bb4f6a15b013..6b193c3d9468a90f8e9f08e258c96e9b125c5a9e 100644
+--- a/crates/tsuzuri-surface/tests/lgrp.rs
++++ b/crates/tsuzuri-surface/tests/lgrp.rs
+@@ -7,8 +7,6 @@ use std::path::PathBuf;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::Body;
+-use tsuzuri_surface::project::ledger;
+ use tsuzuri_surface::view::{self, Fetched, Screen};
+ 
+ fn crate_dir() -> PathBuf {
+@@ -100,7 +98,7 @@ fn lgrp_groups_follow_node_kind() {
+     assert_eq!(ids(&groups[2].children), vec!["fx-z.3", "fx-z.2"]);
+ }
+ 
+-/// (3) 本物の台帳の形の電文を読んだ画面: 問いの一覧は open の問いだけ・件数と一覧の中身は問いを数えない。
++/// (3) 本物の台帳の形の電文を読んだ画面: 問いの一覧は open の問いだけ（台帳の件数と一覧の中身の関数は行 g-list-sweep で外した）。
+ #[test]
+ fn lgrp_screen_real_ledger() {
+     let body = wire::encode(&LedgerList {
+@@ -112,14 +110,6 @@ fn lgrp_screen_real_ledger() {
+         panic!("画面の台帳が読めていない");
+     };
+     assert_eq!(ids(&board.questions), vec!["fx-s.3"]);
+-    assert_eq!(ledger::count(&screen), Reading::Known(4));
+-    let Body::Filled(groups) = ledger::body(&screen) else {
+-        panic!("台帳の一覧が中身を出さない");
+-    };
+-    assert_eq!(groups.len(), 1);
+-    assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("fx-s"));
+-    let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
+-    assert_eq!(kids, vec!["fx-s.1", "fx-s.2"]);
+ }
+ 
+ /// main b5c24c8 の contracts の verify の filter の語 272 を、ほかの語を部分の字として含まない語に畳んだ語。
+diff --git a/crates/tsuzuri-surface/tests/lhome.rs b/crates/tsuzuri-surface/tests/lhome.rs
+index 8838b6f120e3a16195a6149a1bf233fd45e656fa..dfa9754a36ff5b1a59a01b985fdc6f07bc3f01ea 100644
+--- a/crates/tsuzuri-surface/tests/lhome.rs
++++ b/crates/tsuzuri-surface/tests/lhome.rs
+@@ -1,18 +1,11 @@
+-//! 行 g-ledger-home の歯: HOME の台帳の一覧は閉じた bead を出さない（持ち主の裁定 t3-hub.52.31）・
+-//! 閉じた epic の頭は閉じていない下の項が在るときだけ残す・残る組が 0 なら NO_OPEN・件数と指標は閉じた行も数えたまま。
++//! 行 g-ledger-home の歯: 一覧に出さない状態の字と、閉じていない行が無いときの 1 行と、台帳の block の DOM の字。
++//! 閉じた bead を出さない一覧（持ち主の裁定 t3-hub.52.31）は module ledgerlist が描き、歯 bvlist が見る。
++//! 前の一覧の組と件数の関数（`listed`・`body`・`count`）の歯は行 g-list-sweep で外した。
+ #![cfg(test)]
+ 
+ use std::path::PathBuf;
+ 
+-use tsuzuri_boundary::server::ledger as server_ledger;
+-use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::ledger::{
+-    self, CLOSED, EMPTY, FOLDS, Group, NO_OPEN, listed,
+-};
+-use tsuzuri_surface::project::{Body, LEDGER_UNREAD, item};
+-use tsuzuri_surface::view::{Fetched, Screen};
++use tsuzuri_surface::project::ledger::{CLOSED, EMPTY, FOLDS, NO_OPEN};
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -22,164 +15,14 @@ fn read(rel: &str) -> String {
+     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+ 
+-/// 台帳の 1 行（題は「題」・時刻は 0・親と labels は無し）。
+-fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
+-    LedgerRow {
+-        id: BeadId::new(id).expect("id"),
+-        kind: kind.to_string(),
+-        title: "題".to_string(),
+-        status: status.to_string(),
+-        updated_at: 0,
+-        parent: None,
+-        labels: vec![],
+-    }
+-}
+-
+-/// 本物の台帳（bd）の形: 欄 kind の字 memo と question の行を issue_type task と label にする（ほかはそのまま）。
+-fn real(row: LedgerRow) -> LedgerRow {
+-    let label = match row.kind.as_str() {
+-        "memo" => MEMO_LABEL,
+-        "question" => QUESTION_LABEL,
+-        _ => return row,
+-    };
+-    LedgerRow {
+-        kind: "task".to_string(),
+-        labels: vec![label.to_string()],
+-        ..row
+-    }
+-}
+-
+-fn screen_of(rows: Vec<LedgerRow>) -> Screen {
+-    let body = wire::encode(&LedgerList {
+-        rows: Reading::Known(rows),
+-    })
+-    .expect("電文");
+-    Screen::initial().after_read(&Fetched::Body(body), 100)
+-}
+-
+-/// 節の台帳 LH（15 行・memo と問いは fn real で本物の台帳の形にする）。
+-fn lh() -> Vec<LedgerRow> {
+-    [
+-        ("ea", "epic", "open"),
+-        ("ea.1", "task", "open"),
+-        ("ea.2", "task", "closed"),
+-        ("ea.3", "memo", "in_progress"),
+-        ("eb", "epic", "in_progress"),
+-        ("eb.1", "task", "closed"),
+-        ("ec", "epic", "closed"),
+-        ("ec.1", "task", "closed"),
+-        ("ec.2", "memo", "closed"),
+-        ("ed", "epic", "closed"),
+-        ("ed.1", "task", "blocked"),
+-        ("ed.2", "task", "closed"),
+-        ("z.1", "task", "closed"),
+-        ("z.2", "memo", "open"),
+-        ("qq.1", "question", "open"),
+-    ]
+-    .into_iter()
+-    .map(|(id, kind, status)| real(row(id, kind, status)))
+-    .collect()
+-}
+-
+-/// 節の台帳 LH2（3 行とも閉じた行）。
+-fn lh2() -> Vec<LedgerRow> {
+-    vec![
+-        row("ec", "epic", "closed"),
+-        row("ec.1", "task", "closed"),
+-        row("z.1", "task", "closed"),
+-    ]
+-}
+-
+-/// (1) listed は状態が closed の行だけ偽。
++/// (5) 一覧に出さない状態の字と閉じていない行が無いときの 1 行は今のまま・畳みは今のまま・block の中身は module ledgerlist の
++/// view を描き（行 g-list-groups）、見出しの件数の chip は無い（配置の表と件数の chip は行 g-ledger-trim で外した）。
+ #[test]
+-fn lhome_listed_hides_closed() {
++fn lhome_list_draws_body() {
+     assert_eq!(CLOSED, "closed");
+     assert_eq!(NO_OPEN, "閉じていない bead は無い");
+-    assert!(!listed(&row("a.1", "task", CLOSED)));
+-    for status in ["open", "in_progress", "blocked", "deferred", ""] {
+-        assert!(listed(&row("a.1", "task", status)), "{status:?} が出ない");
+-    }
+-}
+-
+-/// (2) 節の台帳 LH の body は節の表 T の 4 つの組。
+-#[test]
+-fn lhome_groups_rules() {
+-    let rows = lh();
+-    let by = |id: &str| item(rows.iter().find(|r| r.id.as_str() == id).expect("LH の行"));
+-    let want = vec![
+-        Group {
+-            head: Some(by("ea")),
+-            children: vec![by("ea.1"), by("ea.3")],
+-        },
+-        Group {
+-            head: Some(by("eb")),
+-            children: vec![],
+-        },
+-        Group {
+-            head: Some(by("ed")),
+-            children: vec![by("ed.1")],
+-        },
+-        Group {
+-            head: None,
+-            children: vec![by("z.2")],
+-        },
+-    ];
+-    let screen = screen_of(rows.clone());
+-    assert_eq!(ledger::body(&screen), Body::Filled(want));
+-    // 閉じた epic ed の頭は塗った印（閉じていない ea の頭は塗らない）。
+-    assert!(by("ed").shape.contains("fill"));
+-    assert!(!by("ea").shape.contains("fill"));
+-}
+-
+-/// (3) fixture board-8 の body は閉じた bm.3 を出さず、画面の台帳の一覧と count は今のまま。
+-#[test]
+-fn lhome_fixture_hides_closed() {
+-    let text = read("../../tests/fixtures/ledger/board-8.jsonl");
+-    let Reading::Known(items) = server_ledger::parse(&text) else {
+-        panic!("fixture が server の読みで Unknown");
+-    };
+-    let screen = screen_of(items.into_iter().map(|i| i.row).collect());
+-    let Body::Filled(groups) = ledger::body(&screen) else {
+-        panic!("台帳の一覧が中身を出さない");
+-    };
+-    assert_eq!(groups.len(), 1);
+-    assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("bm"));
+-    let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
+-    assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
+-
+-    let Reading::Known(board) = &screen.board else {
+-        panic!("画面の台帳が読めていない");
+-    };
+-    let bm = board
+-        .groups
+-        .iter()
+-        .find(|g| g.epic.as_ref().is_some_and(|e| e.id.as_str() == "bm"))
+-        .expect("bm の組");
+-    let all: Vec<&str> = bm.children.iter().map(|r| r.id.as_str()).collect();
+-    assert_eq!(all, vec!["bm.1", "bm.3", "bm.10", "bm.2"]);
+-    assert_eq!(ledger::count(&screen), Reading::Known(5));
+-}
+-
+-/// (4) 閉じた行だけの台帳は NO_OPEN・行の無い台帳は EMPTY・読めない台帳は測れていない・count は閉じた行も数える。
+-#[test]
+-fn lhome_empty_and_count() {
+-    let closed = screen_of(lh2());
+-    assert_eq!(ledger::body(&closed), Body::Empty(NO_OPEN));
+     assert_ne!(NO_OPEN, EMPTY);
+     assert!(!NO_OPEN.trim().is_empty() && !NO_OPEN.contains('\n'));
+-    assert_eq!(ledger::count(&closed), Reading::Known(3));
+-    assert_eq!(ledger::count(&screen_of(lh())), Reading::Known(14));
+-    assert_eq!(ledger::body(&screen_of(vec![])), Body::Empty(EMPTY));
+-    assert_eq!(
+-        ledger::body(&Screen::initial()),
+-        Body::Unmeasured(LEDGER_UNREAD)
+-    );
+-}
+-
+-/// (5) 畳みは今のまま・block の中身は module ledgerlist の view を描き（行 g-list-groups）、見出しの件数の chip は無い
+-/// （配置の表と件数の chip は行 g-ledger-trim で外した）。
+-#[test]
+-fn lhome_list_draws_body() {
+     assert_eq!(FOLDS, &["ledger:unref"]);
+ 
+     let src = read("src/project/ledger.rs");
+@@ -226,7 +69,7 @@ fn lhome_own_names_clean() {
+             .unwrap_or_else(|| panic!("属性の次が fn でない: {next}"));
+         names.push(name.to_string());
+     }
+-    assert_eq!(names.len(), 6, "{names:?}");
++    assert_eq!(names.len(), 2, "{names:?}");
+     for name in &names {
+         let rest = name
+             .strip_prefix("lhome_")
+diff --git a/crates/tsuzuri-surface/tests/lkind.rs b/crates/tsuzuri-surface/tests/lkind.rs
+index 2f2bcaeb8506ff8519cc50c8bef09acd5527151e..4318b12cfcfb3494b1972e151921103b72d54a32 100644
+--- a/crates/tsuzuri-surface/tests/lkind.rs
++++ b/crates/tsuzuri-surface/tests/lkind.rs
+@@ -6,7 +6,7 @@ use std::path::PathBuf;
+ 
+ use tsuzuri_contract::graph::NodeKind;
+ use tsuzuri_contract::ledger::{BeadId, LedgerRow, MEMO_LABEL, QUESTION_LABEL, bead_kind};
+-use tsuzuri_surface::project::{Staged, item, kind_word, staged_item};
++use tsuzuri_surface::project::{item, kind_word};
+ use tsuzuri_surface::view::{MEMO_OPEN_KEY, mark, row_mark};
+ use tsuzuri_surface::vocab::vocab;
+ 
+@@ -68,7 +68,7 @@ fn lkind_row_mark() {
+     }
+ }
+ 
+-/// (4) 項の右の字と赤と種類の語は地図の節点と同じ読み（段の在る項は段の字と種類の語）。
++/// (4) 項の右の字と赤と種類の語は地図の節点と同じ読み（段の在る項は行 g-list-sweep で外した）。
+ #[test]
+ fn lkind_items() {
+     let question = row("fx-k.1", "task", "open", &[QUESTION_LABEL]);
+@@ -91,15 +91,6 @@ fn lkind_items() {
+     assert!(item(&question).alert);
+     assert!(!item(&memo).alert);
+     assert!(!item(&closed_q).alert);
+-
+-    let run = Staged {
+-        state: Some("run"),
+-        closed: false,
+-        word: "Running".to_string(),
+-    };
+-    let staged = staged_item(&memo, Some(&run));
+-    assert_eq!(staged.aside, "Running · memo");
+-    assert_eq!(staged.stage, Some(run));
+ }
+ 
+ /// verify の filter の語（main の 264 語を畳んだ 190 語と同じノートのもう 1 つの行の接頭辞・191 語）。
+diff --git a/crates/tsuzuri-surface/tests/lstg.rs b/crates/tsuzuri-surface/tests/lstg.rs
+index c6be9bc65d9ac5eb3a05702026c10bf9c9a98db1..81703f8274b2e5f0be5bd2a91b5820273b93f2e8 100644
+--- a/crates/tsuzuri-surface/tests/lstg.rs
++++ b/crates/tsuzuri-surface/tests/lstg.rs
+@@ -1,17 +1,14 @@
+-//! 行 c-ledger-stage の歯: 台帳の一覧の下の項に、pipeline の板の札と同じ読み（`stages`）の段の記号と字を出す。
+-//! 札と台帳の行は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-l）。
++//! 行 c-ledger-stage の歯: pipeline の板の札の段の字（`stage_word`）と、札の段の記号を描く所の字。
++//! 台帳の一覧の項に出す段（`stages` と段つきの項）は行 g-list-sweep で歯ごと外した。
++//! 札は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-l）。
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+ use std::path::{Path, PathBuf};
+ 
+-use tsuzuri_contract::board::{Ci, PipelineBoard, PipelineCard, Reading, Stage};
+-use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL};
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::ledger::{Group, body, staged_body};
+-use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, kcard, stage_word, stages};
+-use tsuzuri_surface::project::{Body, Item, Staged, item, staged_item};
+-use tsuzuri_surface::view::{Fetched, Screen};
++use tsuzuri_contract::board::{Ci, PipelineCard, Stage};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, kcard, stage_word};
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -63,58 +60,6 @@ fn ls() -> Vec<PipelineCard> {
+     ]
+ }
+ 
+-fn board_text(cards: Reading<Vec<PipelineCard>>) -> String {
+-    wire::encode(&PipelineBoard {
+-        cards,
+-        misfits: Reading::Unknown,
+-    })
+-    .expect("板の電文")
+-}
+-
+-fn staged(state: Option<&'static str>, closed: bool, word: &str) -> Staged {
+-    Staged {
+-        state,
+-        closed,
+-        word: word.to_string(),
+-    }
+-}
+-
+-/// 台帳の 1 行（題は「題」・時刻は 0・親と labels は無し）。
+-fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
+-    LedgerRow {
+-        id: BeadId::new(id).expect("id"),
+-        kind: kind.to_string(),
+-        title: "題".to_string(),
+-        status: status.to_string(),
+-        updated_at: 0,
+-        parent: None,
+-        labels: vec![],
+-    }
+-}
+-
+-/// 節の台帳 LR（6 行・zz.3 は issue_type task と label intake:memo の open の行）。
+-fn lr() -> Vec<LedgerRow> {
+-    vec![
+-        row("fx-l", "epic", "open"),
+-        row("fx-l.1", "task", "open"),
+-        row("fx-l.4", "task", "in_progress"),
+-        row("fx-l.7", "task", "closed"),
+-        row("fx-l.9", "task", "open"),
+-        LedgerRow {
+-            labels: vec![MEMO_LABEL.to_string()],
+-            ..row("zz.3", "task", "open")
+-        },
+-    ]
+-}
+-
+-fn screen_of(rows: Vec<LedgerRow>) -> Screen {
+-    let text = wire::encode(&LedgerList {
+-        rows: Reading::Known(rows),
+-    })
+-    .expect("電文");
+-    Screen::initial().after_read(&Fetched::Body(text), 100)
+-}
+-
+ /// (1) 札の段の字は閉じた札なら CLOSED_STAGE・ほかは段の名で、札の hover の kind と同じ字。
+ #[test]
+ fn lstg_word_rules() {
+@@ -138,110 +83,6 @@ fn lstg_word_rules() {
+     }
+ }
+ 
+-/// (2) 板の電文から組んだ段は札ごとに札の読みの記号と閉じたかと、段の字に CI の語を足した字。
+-#[test]
+-fn lstg_stages_from_board() {
+-    let cards = ls();
+-    let got = stages(&Fetched::Body(board_text(Reading::Known(cards.clone()))), NOW);
+-    let want: BTreeMap<String, Staged> = [
+-        ("fx-l.1", staged(Some("run"), false, "Running")),
+-        ("fx-l.2", staged(Some("wait"), false, "Queued")),
+-        ("fx-l.3", staged(Some("wait"), false, "Failed")),
+-        ("fx-l.4", staged(Some("run"), false, "Landed · CI 中")),
+-        ("fx-l.5", staged(None, false, "Landed · CI 成功")),
+-        ("fx-l.6", staged(None, false, "Landed")),
+-        ("fx-l.7", staged(None, true, "閉じた（着地せず）")),
+-        ("fx-l.8", staged(Some("wait"), false, "Failed")),
+-    ]
+-    .into_iter()
+-    .map(|(id, s)| (id.to_string(), s))
+-    .collect();
+-    assert_eq!(got, want);
+-    for c in &cards {
+-        let k = kcard(c, &[], NOW);
+-        let s = &got[c.contract.as_str()];
+-        assert_eq!(s.state, k.state, "{}", c.contract);
+-        assert_eq!(s.closed, k.closed, "{}", c.contract);
+-    }
+-
+-    for fetched in [
+-        Fetched::NotRead,
+-        Fetched::Failed,
+-        Fetched::Body("{}".to_string()),
+-        Fetched::Body(board_text(Reading::Unknown)),
+-        Fetched::Body(board_text(Reading::Known(vec![]))),
+-    ] {
+-        assert!(stages(&fetched, NOW).is_empty(), "{fetched:?}");
+-    }
+-}
+-
+-/// (3) 段の在る項は右の字を段の字と種類にし、無い項と epic の頭は bd の状態の語のまま。
+-#[test]
+-fn lstg_list_items() {
+-    let rows = lr();
+-    let by = |id: &str| rows.iter().find(|r| r.id.as_str() == id).expect("LR の行");
+-    let run = staged(Some("run"), false, "Running");
+-
+-    let one = staged_item(by("fx-l.1"), Some(&run));
+-    assert_eq!(
+-        one,
+-        Item {
+-            shape: "shape band-beads".to_string(),
+-            alert: false,
+-            id: "fx-l.1".to_string(),
+-            title: "題".to_string(),
+-            aside: "Running · task".to_string(),
+-            stage: Some(run.clone()),
+-        }
+-    );
+-    let nine = staged_item(by("fx-l.9"), None);
+-    assert_eq!(nine, item(by("fx-l.9")));
+-    assert_eq!(nine.aside, "○ 未着手 · task");
+-    assert_eq!(nine.stage, None);
+-
+-    let board = stages(&Fetched::Body(board_text(Reading::Known(ls()))), NOW);
+-    let mut with_epic = board.clone();
+-    with_epic.insert("fx-l".to_string(), run.clone());
+-    let screen = screen_of(rows.clone());
+-    assert_eq!(
+-        staged_body(&screen, &with_epic),
+-        Body::Filled(vec![
+-            Group {
+-                head: Some(item(by("fx-l"))),
+-                children: vec![
+-                    staged_item(by("fx-l.1"), board.get("fx-l.1")),
+-                    staged_item(by("fx-l.4"), board.get("fx-l.4")),
+-                    item(by("fx-l.9")),
+-                ],
+-            },
+-            Group {
+-                head: None,
+-                children: vec![item(by("zz.3"))],
+-            },
+-        ])
+-    );
+-
+-    let Body::Filled(groups) = staged_body(&screen, &board) else {
+-        panic!("一覧が Filled でない");
+-    };
+-    let asides: Vec<&str> = groups
+-        .iter()
+-        .flat_map(|g| g.head.iter().chain(g.children.iter()))
+-        .map(|i| i.aside.as_str())
+-        .collect();
+-    assert_eq!(
+-        asides,
+-        [
+-            "○ 未着手 · epic",
+-            "Running · task",
+-            "Landed · CI 中 · task",
+-            "○ 未着手 · task",
+-            "? まだ分からない · memo",
+-        ]
+-    );
+-    assert_eq!(body(&screen), staged_body(&screen, &BTreeMap::new()));
+-}
+-
+ /// 字 `mod dom {` より後の `start` から、次の 4 つの空白と閉じ波括弧だけの行までの字。
+ fn dom_fn<'a>(src: &'a str, start: &str) -> &'a str {
+     let at = src.find("mod dom {").expect("mod dom の字");
+@@ -291,20 +132,9 @@ fn places(files: &[(String, String)], needle: &str) -> BTreeMap<String, usize> {
+         .collect()
+ }
+ 
+-/// (4) 項は札と同じ段の記号を出す（台帳の一覧の DOM は行 g-list-groups で module ledgerlist へ移った）。
++/// (4) 札の段の記号は pipeline の stage_sym の 1 か所で描く（一覧の項の段の記号は行 g-list-sweep で外した）。
+ #[test]
+ fn lstg_dom_wiring() {
+-    let kit = read("src/kit.rs");
+-    let item_view = dom_fn(&kit, "pub fn item_view(");
+-    assert!(
+-        item_view.contains("stage_sym(s.closed, s.state)"),
+-        "{item_view}"
+-    );
+-    assert!(
+-        item_view.contains(r#"<span class="aside">{sym}{item.aside.clone()}</span>"#),
+-        "{item_view}"
+-    );
+-
+     let pipeline = read("src/project/pipeline.rs");
+     let kcard_view = dom_fn(&pipeline, "fn kcard_view(");
+     assert!(
+@@ -315,21 +145,12 @@ fn lstg_dom_wiring() {
+     assert_eq!(pipeline.matches("inner_html=CROSS").count(), 1);
+     assert_eq!(pipeline.matches("inner_html=CHECK").count(), 1);
+ 
+-    let files = sources();
+-    let only = |rel: &str| BTreeMap::from([(rel.to_string(), 1)]);
+-    for (needle, rel) in [
+-        (
+-            "pub fn stage_sym(closed: bool, state: Option<&'static str>) -> AnyView {",
+-            "project/pipeline.rs",
+-        ),
+-        ("pub fn stages(", "project/pipeline.rs"),
+-        (
+-            "staged_item(r, stages.get(r.id.as_str()))",
+-            "project/ledger.rs",
+-        ),
+-    ] {
+-        assert_eq!(places(&files, needle), only(rel), "{needle}");
+-    }
++    let needle = "pub fn stage_sym(closed: bool, state: Option<&'static str>) -> AnyView {";
++    assert_eq!(
++        places(&sources(), needle),
++        BTreeMap::from([("project/pipeline.rs".to_string(), 1)]),
++        "{needle}"
++    );
+ }
+ 
+ /// verify の filter の語（main の 164 語に畳んだ語と後の行 g-gz の接頭辞・165 語）。
+@@ -501,7 +322,7 @@ const FILTERS: [&str; 165] = [
+     "pgz_",
+ ];
+ 
+-/// (6) この file の歯の名は 5 つで、どれも lstg_ で始まり、先頭の lstg_ を除いた字は filter の語を含まない。
++/// (6) この file の歯の名は 3 つで、どれも lstg_ で始まり、先頭の lstg_ を除いた字は filter の語を含まない。
+ #[test]
+ fn lstg_names_stay_apart() {
+     let text = read("tests/lstg.rs");
+@@ -518,7 +339,7 @@ fn lstg_names_stay_apart() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert_eq!(names.len(), 5, "{names:?}");
++    assert_eq!(names.len(), 3, "{names:?}");
+     for name in names {
+         let rest = name
+             .strip_prefix("lstg_")
+diff --git a/crates/tsuzuri-surface/tests/parts.rs b/crates/tsuzuri-surface/tests/parts.rs
+index d804a6c43bde4ebb4a4b7cf4df39d48a4f982395..f93570c4f163f977492a0048affd2d702f3387b0 100644
+--- a/crates/tsuzuri-surface/tests/parts.rs
++++ b/crates/tsuzuri-surface/tests/parts.rs
+@@ -13,7 +13,7 @@ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::project::{
+-    Body, Module, NO_CONTENT, NOT_READ, ask, askpage, ledger, map, next, pipeline, seat,
++    Body, Module, NO_CONTENT, NOT_READ, ask, askpage, map, next, pipeline, seat,
+ };
+ use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS, Screen};
+ use tsuzuri_surface::widgets::hover::{
+@@ -120,7 +120,7 @@ fn parts_ledger_lists_read_three_values() {
+     unread_lists(empty);
+ }
+ 
+-/// 読めないとまだ読んでいない読みでの 3 つの一覧の本文と画面。
++/// 読めないとまだ読んでいない読みでの 2 つの一覧の本文と画面。
+ fn unread_lists(empty: String) {
+     let known = Screen::initial().after_read(&Fetched::Body(empty), 5);
+     for fetched in [Fetched::NotRead, Fetched::Failed] {
+@@ -129,7 +129,6 @@ fn unread_lists(empty: String) {
+         for screen in [Screen::initial(), known.clone()] {
+             let s = screen.after_read(&fetched, 9);
+             assert_eq!(s.board, Reading::Unknown, "{fetched:?}");
+-            assert!(matches!(ledger::body(&s), Body::Unmeasured(r) if !r.is_empty()));
+             // 最終更新は読めた時刻のまま（読めない読みで進めない）。
+             assert_eq!(s.updated_at, screen.updated_at);
+         }

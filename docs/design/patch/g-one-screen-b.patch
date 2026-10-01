@@ -1,0 +1,256 @@
+diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
+index f8a4b5e4a1121d53071b7597e1ebb393acb0f82b..1d786937847c8eb060b4511b0a3de40a9036c3c4 100644
+--- a/crates/tsuzuri-surface/src/askwin.rs
++++ b/crates/tsuzuri-surface/src/askwin.rs
+@@ -2,7 +2,7 @@
+ //! この project の問いを 1 問ずつ出し、答えを送って記録されると次の問いへ進み、全部に答えると閉じる。
+ //! 題の横の点で問いを選べ、「あとで」は後ろの答えていない問いへ移る。1 問の card と答えの口と記帳は今の質問の block と同じ
+ //! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示。
+-//! 今の質問の頁は替えない（頁を外すのは 1 枚の画面への切り替えの行）。
++//! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`・行 g-one-screen-b）。
+ //! 問いの選び方と局面と点の class は純粋な関数にして host で試し、窓の DOM（`frame`）は wasm の target のときだけ組む。
+ 
+ use std::collections::BTreeSet;
+@@ -100,7 +100,7 @@ pub fn dot_class(id: &str, cur: Option<&str>, answered: &BTreeSet<String>) -> &'
+ }
+ 
+ #[cfg(target_arch = "wasm32")]
+-pub use dom::frame;
++pub use dom::{AskFocus, frame};
+ 
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
+@@ -166,7 +166,9 @@ mod dom {
+         let fetched = crate::net::read(ask::PATH);
+         let cards = Memo::new(move |_| fetched.with(ask::listed));
+         let ids = Memo::new(move |_| cards.with(|v| own_ids(v)));
+-        let picked = RwSignal::new(None::<String>);
++        // 窓を開いた link が問いの id を持てば、その問いから出す（行 g-one-screen-b）。
++        let first = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());
++        let picked = RwSignal::new(first);
+         let answered = RwSignal::new(BTreeSet::<String>::new());
+         let cur = Memo::new(move |_| {
+             ids.with(|i| {
+@@ -280,6 +282,10 @@ mod dom {
+         walk.into_any()
+     }
+ 
++    /// 質問の窓を開いた link の問いの id（App が context に置く・窓を開く前に置く・行 g-one-screen-b）。
++    #[derive(Clone, Copy)]
++    pub struct AskFocus(pub RwSignal<Option<String>>);
++
+     /// 質問の窓（帯の窓の層が開く・`ctx` は全部に答えた後に閉じるための窓の積み）。
+     pub fn frame(ctx: WinCtx<Win>) -> Frame {
+         let w = walk();
+diff --git a/crates/tsuzuri-surface/src/board.rs b/crates/tsuzuri-surface/src/board.rs
+index ad39eb875859b01b3964466311341a9d18eaee62..711ae4a3d25a9f1b8be3639d370359eded6a48c1 100644
+--- a/crates/tsuzuri-surface/src/board.rs
++++ b/crates/tsuzuri-surface/src/board.rs
+@@ -3,6 +3,8 @@
+ //! 1 枚の画面（行 g-one-screen-a・判断の記録 ADR-27 決定 (3)(4)(5)）: 頁の上は帯（topbar の view）だけで、tab と頁の切り替えは
+ //! 持たない。home の頁は台帳 open の一覧と pipeline の 2 つの面で、帯の印が開く窓の層（widgets の modal の layer・中身は wins の
+ //! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁（便 g-node）は query の page=node で開く（文書を読み直す）。
++//! 窓を開く link（query の win・topbar の `win_of_href`）は、home の頁では普通の押しで頁を読み直さずに窓を開き、問いの id を
++//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。
+ //! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。札と一覧の行の吹き出しの層も頁に 1 つ置く（行 g-pop）。
+ //! 帯の戻る口（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
+ //! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
+@@ -15,8 +17,10 @@ use std::time::Duration;
+ use leptos::ev;
+ use leptos::prelude::*;
+ use tsuzuri_contract::project::PATH as PROJECT_PATH;
++use web_sys::wasm_bindgen::JsCast;
+ 
+ use crate::account::windows::{ACCOUNT_WIN, closed_message};
++use crate::askwin::AskFocus;
+ use crate::frame::{self, BackHow, BackStep, Block, HEADER, Mode, PageId, Press};
+ use crate::fresh::{self, Fresh};
+ use crate::ledgerlist::SelCtx;
+@@ -24,13 +28,13 @@ use crate::net;
+ use crate::project::{self, Module, ledger};
+ use crate::seatpill;
+ use crate::store;
+-use crate::topbar::{self, Bar, Win};
++use crate::topbar::{self, Bar, Win, win_of_href};
+ use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
+ use crate::vocab::label;
+ use crate::widgets::coach::CoachLayer;
+ use crate::widgets::help::{HelpCtx, TipLayer, term};
+ use crate::widgets::hover::{CardLayer, HoverCtx};
+-use crate::widgets::modal::{WinCtx, layer};
++use crate::widgets::modal::{SCRIM, WinCtx, layer};
+ use crate::widgets::pop::{PopCtx, PopLayer};
+ use crate::wins;
+ 
+@@ -115,10 +119,19 @@ fn App() -> impl IntoView {
+     // 帯の印が開く窓の積み（窓を開くと吹き出しを閉じる・見本の openModal の closePop）。
+     let win = WinCtx::<Win>::default();
+     provide_context(win);
++    // 質問の窓を開いた link の問いの id（行 g-one-screen-b）。
++    let focus = AskFocus(RwSignal::new(None));
++    provide_context(focus);
+     // URL の query の win が名指す窓は頁を開いた時に開く（消した質問の頁と抜けの検査の頁への link の替わり）。
+-    if let Some(w) = Win::from_query(&query) {
++    if let Some((w, id)) = win_of_href(&query) {
++        focus.0.set(id);
+         win.open(w, false);
+     }
++    // home の頁では、窓を開く link の普通の押しは頁を読み直さずにその窓を開く（窓の中の link は前の窓に戻る口を持つ）。
++    if page == PageId::Home {
++        let links = window_event_listener(ev::click, move |e| open_link(&e, win, focus));
++        on_cleanup(move || links.remove());
++    }
+     Effect::new(move |_| {
+         if win.top().is_some()
+             && let Some(p) = pop
+@@ -149,6 +162,30 @@ fn App() -> impl IntoView {
+     }
+ }
+ 
++/// 押した要素の在る link が窓を開く link で、普通の押しなら、既定の遷移を止めて窓を開く（行 g-one-screen-b）。
++fn open_link(e: &ev::MouseEvent, win: WinCtx<Win>, focus: AskFocus) {
++    let Some(el) = e
++        .target()
++        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
++    else {
++        return;
++    };
++    let Some(link) = el.closest("a[href]").ok().flatten() else {
++        return;
++    };
++    let href = link.get_attribute("href").unwrap_or_default();
++    let Some((w, id)) = win_of_href(&href) else {
++        return;
++    };
++    if !plain_click(e) {
++        return;
++    }
++    e.prevent_default();
++    let from_win = el.closest(&format!("#{}", SCRIM)).ok().flatten().is_some();
++    focus.0.set(id);
++    win.open(w, from_win);
++}
++
+ /// account board へ戻る: 空の URL と窓の名 tz-account で開き、about:blank なら窓が無かった
+ /// （frame の `back_steps` の段のとおり、前面へか新しく開くかの後に自分の窓を閉じる）。
+ /// href が読めない窓（別の origin の account board）は在った窓と見る（行 g-back-note）。
+diff --git a/crates/tsuzuri-surface/src/topbar.rs b/crates/tsuzuri-surface/src/topbar.rs
+index edaee0c99d542cd4ff93a172b39a8d7815d6e33b..534d2fbfce58c879aa17aac1c72014f7a4dc2df5 100644
+--- a/crates/tsuzuri-surface/src/topbar.rs
++++ b/crates/tsuzuri-surface/src/topbar.rs
+@@ -74,6 +74,16 @@ pub fn win_href(win: Win, mode: Mode) -> String {
+     )
+ }
+ 
++/// link の href が窓を開く link なら、その窓と問いの id（query の id・空と無い時は None）。窓を開く link でなければ None。
++/// href は `?` から始まる query か、`?` を含む URL（`?` より前は見ない・井桁から後は見ない・行 g-one-screen-b）。
++pub fn win_of_href(href: &str) -> Option<(Win, Option<String>)> {
++    let (_, query) = href.split_once('?')?;
++    let query = query.split('#').next().unwrap_or_default();
++    let search = format!("?{query}");
++    let win = Win::from_query(&search)?;
++    Some((win, crate::project::ask::focus(&search)))
++}
++
+ /// 帯の id（見本の `#bar`・頁に 1 つ）。
+ pub const BAR: &str = "bar";
+ 
+diff --git a/crates/tsuzuri-surface/tests/bvnav.rs b/crates/tsuzuri-surface/tests/bvnav.rs
+index 7d36fabd5ed86608d3782e3cfb4e29bd082ad856..b0dd58f93be81cec3edf0594ab6f3eaf9e4893e6 100644
+--- a/crates/tsuzuri-surface/tests/bvnav.rs
++++ b/crates/tsuzuri-surface/tests/bvnav.rs
+@@ -112,7 +112,7 @@ fn bvnav_one_screen_wiring_text() {
+         "{top(page, subject, mode, win)}",
+         "<main class=\"page\">{page_view(page)}</main>",
+         "{layer(win, move |w| wins::draw(w, win))}",
+-        "if let Some(w) = Win::from_query(&query) {",
++        "if let Some((w, id)) = win_of_href(&query) {",
+         "win.open(w, false);",
+         "if win.top().is_some()",
+         "p.close();",
+diff --git a/crates/tsuzuri-surface/tests/bvopen.rs b/crates/tsuzuri-surface/tests/bvopen.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..de34fe1d387aef554c311a6b2d48c57e213b3514
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvopen.rs
+@@ -0,0 +1,80 @@
++//! 行 g-one-screen-b の歯（接頭辞 bvopen_）: 窓を開く link（home の頁の URL の query の win）は、home の頁では普通の押しで
++//! 頁を読み直さずにその窓を開き、問いの id を持てば質問の窓をその問いから出す（判断の記録 ADR-27 決定 (4)）。
++//! link の読みは topbar の純粋な関数を host で撃ち、DOM の配線は CARGO_MANIFEST_DIR から読んだ字で見る。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::project::node::answer_href;
++use tsuzuri_surface::topbar::{Win, win_href, win_of_href};
++use tsuzuri_surface::widgets::pop::{NEXT_KEYS, next_href};
++
++fn read(rel: &str) -> String {
++    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// 窓を開く link は窓と問いの id に読み戻り（id の %XX は戻す）、`?` より前と井桁から後は見ず、win の無い link と
++/// 知らない窓の名と `?` の無い字は None・空の id は None。
++#[test]
++fn bvopen_win_of_href() {
++    for mode in Mode::ALL {
++        for w in Win::ALL {
++            assert_eq!(win_of_href(&win_href(w, mode)), Some((w, None)));
++        }
++        assert_eq!(
++            win_of_href(&answer_href("e.2:x", mode)),
++            Some((Win::Ask, Some("e.2:x".to_string())))
++        );
++        assert_eq!(
++            win_of_href(&next_href(NEXT_KEYS[0], "t-1", mode)),
++            Some((Win::Ask, None))
++        );
++        assert_eq!(win_of_href(&next_href(NEXT_KEYS[1], "t-1", mode)), None);
++    }
++    assert_eq!(
++        win_of_href("http://127.0.0.1:8120/?mode=expert&win=gaps#x"),
++        Some((Win::Gaps, None))
++    );
++    assert_eq!(
++        win_of_href("?win=ask&id=#q"),
++        Some((Win::Ask, None)),
++        "空の id"
++    );
++    assert_eq!(win_of_href("?page=node&id=FR1&mode=expert"), None);
++    assert_eq!(win_of_href("?win=bogus"), None);
++    assert_eq!(win_of_href("win=ask"), None);
++    assert_eq!(win_of_href("#win=ask"), None);
++}
++
++/// App は問いの id の context を置き、URL の窓を問いの id と一緒に開き、home の頁だけで link の押しを聞く。
++/// 押しは窓を開く link の普通の押しだけ既定の遷移を止め、窓の中の link は前の窓に戻る口を持つ。質問の窓は id の問いから出す。
++#[test]
++fn bvopen_wiring_text() {
++    let board = read("src/board.rs");
++    for want in [
++        "let focus = AskFocus(RwSignal::new(None));",
++        "provide_context(focus);",
++        "if let Some((w, id)) = win_of_href(&query) {",
++        "focus.0.set(id);",
++        "if page == PageId::Home {",
++        "window_event_listener(ev::click, move |e| open_link(&e, win, focus))",
++        "let Some(link) = el.closest(\"a[href]\").ok().flatten() else {",
++        "let Some((w, id)) = win_of_href(&href) else {",
++        "if !plain_click(e) {",
++        "e.prevent_default();",
++        "let from_win = el.closest(&format!(\"#{}\", SCRIM)).ok().flatten().is_some();",
++        "win.open(w, from_win);",
++    ] {
++        assert!(board.contains(want), "board.rs に {want} が無い");
++    }
++    let ask = read("src/askwin.rs");
++    for want in [
++        "pub struct AskFocus(pub RwSignal<Option<String>>);",
++        "let first = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());",
++        "let picked = RwSignal::new(first);",
++    ] {
++        assert!(ask.contains(want), "askwin.rs に {want} が無い");
++    }
++}

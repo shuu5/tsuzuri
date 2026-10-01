@@ -1,0 +1,485 @@
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index 928d605d7852c839c53410f82a357ff479690a88..d3fcb643ecf0f02205a60504befe55dfdb9e37b6 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -24,6 +24,8 @@ pub mod project;
+ pub mod seatpill;
+ /// browser の保存（mode などの便利の写し・決め方は host でも組む・行 g-mode-store）。
+ pub mod store;
++/// 幅の 3 段とスマホの段の tile（tile の組みと開く段は host でも組む・DOM は pipeline の block の DOM・行 g-layout）。
++pub mod tiles;
+ /// 上の固定の帯（帯の中身の字と並びは host でも組む・DOM は wasm の target だけ・行 g-topbar）。
+ pub mod topbar;
+ pub mod view;
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index be62dcc639b47c88a3ed449c2e34ad7a032aa90d..11e72eac904ffe0c46939aac88d120924e5931f5 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -753,6 +753,7 @@ mod dom {
+     };
+     use crate::frame::Mode;
+     use crate::ledgerlist::{SelCtx, dim, facts, pick, ring};
++    use crate::tiles::{open_of, press, tiles};
+     use tsuzuri_contract::case::PATH as CASES_PATH;
+ 
+     use crate::project::{Body, ledger, section, state_icon, unmeasured};
+@@ -815,6 +816,8 @@ mod dom {
+         let beads = crate::net::read(BEADS_PATH);
+         let cases = crate::net::read(CASES_PATH);
+         let open = RwSignal::new(open_columns(&search()));
++        // スマホの段の tile を押した記録（押すまでは None で、開く段は札の在る一番急ぐ段・行 g-layout）。
++        let picked = RwSignal::new(None);
+         let ctx = use_context::<HelpCtx>();
+         let mode = move || match ctx {
+             Some(c) => c.mode.get(),
+@@ -844,7 +847,7 @@ mod dom {
+                     {board_view(columns(&[], &[], now), open, mode, clock, keys)}
+                 }
+                 .into_any(),
+-                Body::Filled(cols) => board_view(cols, open, mode, clock, keys),
++                Body::Filled(cols) => with_tiles(cols, open, mode, clock, (keys, picked)),
+             };
+             let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));
+             view! { {board}{fix} }.into_any()
+@@ -953,6 +956,67 @@ mod dom {
+         view! { <div class="board">{cols}</div> }.into_any()
+     }
+ 
++    /// 板とスマホの段の tile（`marks` は札の組の鍵と tile を押した記録・行 g-layout）。
++    fn with_tiles(
++        cols: Vec<Column>,
++        open: RwSignal<Vec<PipelineColumn>>,
++        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
++        clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
++        marks: (Keys, RwSignal<Option<Option<PipelineColumn>>>),
++    ) -> AnyView {
++        let (keys, picked) = marks;
++        let tiles = tiles_view(cols.clone(), mode, clock, keys, picked);
++        view! { {board_view(cols, open, mode, clock, keys)}{tiles} }.into_any()
++    }
++
++    /// 札の組の鍵の表（札の bead の id から一覧の組の鍵）。
++    type Keys = StoredValue<BTreeMap<String, String>>;
++
++    /// スマホの段の tile と開いた段の札の並び（幅 600 px 以下だけ stylesheet が出す・行 g-layout・見本の mpipe）。
++    fn tiles_view(
++        cols: Vec<Column>,
++        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
++        clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
++        keys: StoredValue<BTreeMap<String, String>>,
++        picked: RwSignal<Option<Option<PipelineColumn>>>,
++    ) -> AnyView {
++        let cols = StoredValue::new(cols);
++        let open = move || cols.with_value(|c| open_of(picked.get(), c));
++        let row = move || {
++            let now = open();
++            cols.with_value(|c| tiles(c, now, clock()))
++                .into_iter()
++                .map(|t| {
++                    let column = t.lane.column;
++                    let class = format!("ptile c-{}{}", t.lane.name, if t.open { " on" } else { "" });
++                    let warn = t.warn.then(|| view! { <span class="ptwarn">"⚠"</span> });
++                    view! {
++                        <button type="button" class=class aria-expanded=t.open.to_string() on:click=move |_| picked.set(Some(press(now, column)))>
++                            <span class="pt1"><b class="num">{t.n}</b>{warn}</span>
++                            <small>{label(t.lane.key)}</small>
++                        </button>
++                    }
++                })
++                .collect_view()
++        };
++        let list = move || {
++            let now = open()?;
++            let col = cols.with_value(|c| c.iter().find(|c| c.lane.column == now).cloned())?;
++            let cards = col
++                .cards
++                .iter()
++                .map(|c| pick_view(c, keys, kcard_view(c, mode(), clock)))
++                .collect_view();
++            Some(view! {
++                <div class="ptlist">
++                    <div class="ptlh">{hs(col.lane.key)}</div>
++                    {cards}
++                </div>
++            })
++        };
++        view! { <div class="ptiles"><div class="ptrow">{row}</div>{list}</div> }.into_any()
++    }
++
+     fn column_view(
+         col: Column,
+         open: RwSignal<Vec<PipelineColumn>>,
+diff --git a/crates/tsuzuri-surface/src/tiles.rs b/crates/tsuzuri-surface/src/tiles.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c822ca34baf67a925279dfd34d0a04f98156ca44
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/tiles.rs
+@@ -0,0 +1,78 @@
++//! 幅の 3 段とスマホの段の tile（行 g-layout・判断の記録 ADR-27 決定 (5)・規則の行 R-35・見本 board-v2 の applyLayout と
++//! renderPipe の mpipe と openTile）: 幅 1200 px 以上は横並び（左に一覧・右に pipeline）、601〜1199 px は縦積み（上に pipeline の
++//! 5 列・下に一覧・pipeline の面の中だけを横に scroll させて 5 列を保つ）、600 px 以下はスマホの形（頁は縦に scroll し、
++//! pipeline は 5 つの段の tile と開いた段の札の並び）。並べ方は stylesheet の media の規則が決め、境の値はここの定数と同じ字。
++//! tile は段ごとの札の数と色を出し、既定で開くのは札の在る段のうち一番急ぐ段（止まり → Blocked → Queued → Running / Gated →
++//! 着地）。tile を押すとその段を開き、開いている段を押すと畳む。tile の組みと開く段は純粋な関数にして host で試し、DOM は
++//! pipeline の block の DOM が描く（札は板と同じ部品）。
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::PipelineColumn;
++
++use crate::project::pipeline::{Column, Lane};
++use crate::widgets::keyline::QUEUED_WARN_S;
++
++/// 横並びの幅の下限（px・規則の行 R-35）。
++pub const WIDE_MIN_PX: u32 = 1200;
++
++/// 縦積みの幅の下限と上限（px・規則の行 R-35）。
++pub const STACK_MIN_PX: u32 = 601;
++pub const STACK_MAX_PX: u32 = 1199;
++
++/// スマホの形の幅の上限（px・規則の行 R-35・窓の枠の全画面の上限と同じ）。
++pub const PHONE_MAX_PX: u32 = crate::widgets::modal::FULL_MAX_PX;
++
++/// 縦積みの板の 1 列の幅の下限（px・狭い時は pipeline の面の中だけを横に scroll させて 5 列を保つ・見本の minmax(112px,1fr)）。
++pub const STACK_COL_MIN_PX: u32 = 112;
++
++/// 急ぐ段の順（止まり → Blocked → Queued → Running / Gated → 着地・見本の URGENT）。
++pub const URGENT: [PipelineColumn; 5] = [
++    PipelineColumn::QuestionedFailedStopped,
++    PipelineColumn::Blocked,
++    PipelineColumn::Queued,
++    PipelineColumn::RunningGated,
++    PipelineColumn::Landed,
++];
++
++/// 段の tile の 1 つ（列・札の数・開いているか・Queued の札に注意の札が在るか）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Tile {
++    pub lane: Lane,
++    pub n: usize,
++    pub open: bool,
++    pub warn: bool,
++}
++
++/// 既定で開く段（札の在る段のうち `URGENT` の順で最初の段・札が 1 枚も無ければ None）。
++pub fn default_open(cols: &[Column]) -> Option<PipelineColumn> {
++    URGENT.into_iter().find(|c| {
++        cols.iter()
++            .any(|col| col.lane.column == *c && !col.cards.is_empty())
++    })
++}
++
++/// 開く段（tile を押した記録が在ればその値〔None は全部畳む〕・押していなければ既定）。
++pub fn open_of(pressed: Option<Option<PipelineColumn>>, cols: &[Column]) -> Option<PipelineColumn> {
++    pressed.unwrap_or_else(|| default_open(cols))
++}
++
++/// tile を押した後に開く段（開いている段を押すと畳んで None・ほかはその段・見本の act.tile）。
++pub fn press(open: Option<PipelineColumn>, tile: PipelineColumn) -> Option<PipelineColumn> {
++    (open != Some(tile)).then_some(tile)
++}
++
++/// 5 つの tile（板の列の順・数は列の札の全部・Queued の tile は列に在る長さが `QUEUED_WARN_S` を越えた札が在れば注意）。
++pub fn tiles(cols: &[Column], open: Option<PipelineColumn>, now: EpochSecs) -> Vec<Tile> {
++    cols.iter()
++        .map(|c| Tile {
++            lane: c.lane,
++            n: c.cards.len(),
++            open: open == Some(c.lane.column),
++            warn: c.lane.column == PipelineColumn::Queued
++                && c.cards.iter().any(|k| {
++                    k.since
++                        .is_some_and(|s| now.saturating_sub(s) > QUEUED_WARN_S)
++                }),
++        })
++        .collect()
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index c8a84ff613996c6ca79d8ba93ec218183c6b0b45..31cb65363118d2c893d46f5f2235ef2be32038c3 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -1308,8 +1308,35 @@ button.ll-gname:hover { background: var(--panel-2); }
+ /* 1 枚の画面（行 g-one-screen-a・見本 board-v2 の body の padding-top と main と .panel）: 帯の下の全部の高さを 2 つの面に使い、面の中だけが scroll する */
+ body:has(#bar) { padding-top: 52px; }
+ .page:has(> .one) { max-width: none; margin: 0; padding: 0; }
+-.one { display: grid; grid-template-columns: max(420px, min(36%, calc(100% - 906px))) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 10px; height: calc(100vh - 52px); padding: 10px 12px 24px; }
++.one { display: grid; gap: 10px; height: calc(100vh - 52px); padding: 10px 12px 24px; }
+ .one > .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+ .one > .pane > .panel { flex: 1 1 auto; min-height: 0; overflow: auto; }
+ .freshw { position: fixed; right: 12px; bottom: 3px; z-index: 20; display: flex; align-items: center; gap: var(--s1); font-size: 11px; color: var(--ink-3); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+ @media (max-width: 760px) { body:has(#bar) { padding-top: 96px; } .one { height: calc(100vh - 96px); } }
++/* 幅の 3 段（行 g-layout・規則の行 R-35・見本 board-v2 の main.lay-side・main.lay-stack・600 以下）: 1200 以上は横並び・601〜1199 は縦積み・600 以下はスマホの形 */
++@media (min-width: 1200px) {
++  .one { grid-template-columns: max(420px, min(36%, calc(100% - 906px))) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
++}
++@media (min-width: 601px) and (max-width: 1199px) {
++  .one { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 45%) minmax(0, 1fr); gap: 6px; padding: 6px 6px 22px; }
++  .one > .pane:has(#pipe) { order: -1; }
++  #pipe .board { grid-template-columns: repeat(5, minmax(112px, 1fr)); overflow-x: auto; }
++}
++@media (max-width: 600px) {
++  .one { display: flex; flex-direction: column; height: auto; gap: 8px; padding: 8px; }
++  .one > .pane:has(#pipe) { order: -1; }
++  .one > .pane > .panel { flex: none; overflow: visible; }
++  #pipe .board { display: none; }
++  #pipe .ptiles { display: block; }
++}
++/* スマホの段の tile（行 g-layout・見本 board-v2 の .mt・.tile・.mlist）: 5 つの段の数と色・開いた段の札の並び */
++.ptiles { display: none; }
++.ptrow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding: 0 0 8px; }
++.ptile { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 56px; border: 1px solid var(--line); border-top: 4px solid var(--sc, var(--s-wait)); border-radius: 8px; background: var(--panel); color: var(--sc, var(--s-wait)); font: inherit; cursor: pointer; padding: 2px; }
++.ptile.c-block, .ptile.c-queue { --sc: var(--s-wait); } .ptile.c-run { --sc: var(--s-run); } .ptile.c-stop { --sc: var(--s-stop); } .ptile.c-land { --sc: var(--s-land); }
++.ptile .pt1 b { font-size: 17px; color: var(--ink); }
++.ptile small { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
++.ptile.on { background: color-mix(in srgb, var(--sc) 10%, var(--panel)); border-color: var(--sc); box-shadow: 0 0 0 1px var(--sc); }
++.ptwarn { color: var(--st-limit); margin-left: 2px; }
++.ptlist { display: flex; flex-direction: column; gap: 6px; }
++.ptlh { font-size: 12px; font-weight: 700; padding: 2px 2px 0; }
+diff --git a/crates/tsuzuri-surface/tests/bvlay.rs b/crates/tsuzuri-surface/tests/bvlay.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..30ef150a799bff93a77a0e53ac8fbdca53902c24
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvlay.rs
+@@ -0,0 +1,243 @@
++//! 行 g-layout の歯（接頭辞 bvlay_）: 幅の 3 段（1200 px 以上は横並び・601〜1199 px は縦積み・600 px 以下はスマホの形・
++//! 規則の行 R-35）とスマホの段の tile（既定で開くのは札の在る段のうち一番急ぐ段・判断の記録 ADR-27 決定 (5)）。
++//! 境の値は tiles の定数と stylesheet の media の字と規則の行の字を照らし、tile の組みは host で撃つ（bead の id の接頭辞は fx-l）。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Stage};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_surface::project::pipeline::columns;
++use tsuzuri_surface::tiles::{
++    PHONE_MAX_PX, STACK_COL_MIN_PX, STACK_MAX_PX, STACK_MIN_PX, URGENT, WIDE_MIN_PX, default_open,
++    open_of, press, tiles,
++};
++use tsuzuri_surface::widgets::keyline::QUEUED_WARN_S;
++
++/// 板を組む今。
++const NOW: u64 = 1_790_510_400;
++
++fn read(rel: &str) -> String {
++    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn card(id: &str, stage: Stage, since: u64) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new(id).expect("id"),
++        runs: 1,
++        stage,
++        reason: None,
++        account: None,
++        since: Some(since),
++        ci: None,
++    }
++}
++
++/// stylesheet の中の `head` で始まる media の塊（次の行頭の閉じ括弧まで）。
++fn block<'a>(css: &'a str, head: &str) -> &'a str {
++    let at = css
++        .find(head)
++        .unwrap_or_else(|| panic!("stylesheet に {head} が無い"));
++    let rest = &css[at..];
++    let end = rest.find("\n}\n").expect("塊の閉じ");
++    &rest[..end]
++}
++
++/// 境の値は 1200・601・1199・600 で、規則の行 R-35 の字と同じ・stylesheet の 3 つの media の境も同じ字。
++#[test]
++fn bvlay_breakpoints_are_rule_r35() {
++    assert_eq!(
++        (WIDE_MIN_PX, STACK_MIN_PX, STACK_MAX_PX, PHONE_MAX_PX),
++        (1200, 601, 1199, 600)
++    );
++    assert_eq!(STACK_MIN_PX, PHONE_MAX_PX + 1);
++    assert_eq!(STACK_MAX_PX, WIDE_MIN_PX - 1);
++    let rules = read("../../design-intent/rules.yaml");
++    let row = rules
++        .lines()
++        .find(|l| l.contains("id: R-35,"))
++        .expect("規則の行 R-35 が在る");
++    for want in [
++        format!("窓の幅 {WIDE_MIN_PX} px 以上は横並び"),
++        format!("{STACK_MIN_PX} px 以上 {STACK_MAX_PX} px 以下は縦積み"),
++        format!("・{PHONE_MAX_PX} px 以下はスマホの形"),
++        "段の tile".to_string(),
++    ] {
++        assert!(row.contains(&want), "R-35 に {want} が無い: {row}");
++    }
++    let css = read("style.css");
++    let wide = block(&css, &format!("@media (min-width: {WIDE_MIN_PX}px) {{"));
++    assert!(wide.contains(".one { grid-template-columns: "), "{wide}");
++    let stack = block(
++        &css,
++        &format!("@media (min-width: {STACK_MIN_PX}px) and (max-width: {STACK_MAX_PX}px) {{"),
++    );
++    assert!(
++        stack.contains("grid-template-rows: minmax(0, 45%) minmax(0, 1fr);"),
++        "{stack}"
++    );
++    assert!(
++        stack.contains(".one > .pane:has(#pipe) { order: -1; }"),
++        "{stack}"
++    );
++    assert!(
++        css.contains(&format!(
++            "@media (max-width: {PHONE_MAX_PX}px) {{\n  .one {{"
++        )),
++        "スマホの形の塊"
++    );
++}
++
++/// 縦積みの板は 5 列を保ち、狭い時は pipeline の面の中の板だけを横に scroll させる（列の幅の下限 112 px）。
++#[test]
++fn bvlay_stack_board_scrolls_x() {
++    assert_eq!(STACK_COL_MIN_PX, 112);
++    let css = read("style.css");
++    let stack = block(
++        &css,
++        &format!("@media (min-width: {STACK_MIN_PX}px) and (max-width: {STACK_MAX_PX}px) {{"),
++    );
++    let want = format!(
++        "#pipe .board {{ grid-template-columns: repeat(5, minmax({STACK_COL_MIN_PX}px, 1fr)); overflow-x: auto; }}"
++    );
++    assert!(stack.contains(&want), "{stack}");
++    assert!(!stack.contains("overflow-x: hidden"), "{stack}");
++}
++
++/// スマホの形は頁を縦に scroll させ（面の高さを決めない）、板を隠して段の tile を出し、pipeline を一覧の上に置く。
++#[test]
++fn bvlay_phone_tiles_shown() {
++    let css = read("style.css");
++    let phone = &css[css
++        .find(&format!(
++            "@media (max-width: {PHONE_MAX_PX}px) {{\n  .one {{"
++        ))
++        .expect("スマホの形の塊")..];
++    let phone = &phone[..phone.find("\n}\n").expect("塊の閉じ")];
++    for want in [
++        ".one { display: flex; flex-direction: column; height: auto;",
++        ".one > .pane:has(#pipe) { order: -1; }",
++        ".one > .pane > .panel { flex: none; overflow: visible; }",
++        "#pipe .board { display: none; }",
++        "#pipe .ptiles { display: block; }",
++    ] {
++        assert!(phone.contains(want), "スマホの形の塊に {want} が無い");
++    }
++    for rule in [
++        ".ptiles { display: none; }",
++        ".ptrow {",
++        ".ptile {",
++        ".ptile.on {",
++        ".ptlist {",
++    ] {
++        assert!(css.contains(rule), "stylesheet に {rule} が無い");
++    }
++}
++
++/// 札: 段ごとに 1 枚（走り・Queued・Blocked・Failed・着地の順）。
++fn fixture() -> [PipelineCard; 5] {
++    [
++        card("fx-l.1", Stage::Running, NOW - 60),
++        card("fx-l.2", Stage::Queued, NOW - 120),
++        card("fx-l.3", Stage::Blocked, NOW - 300),
++        card("fx-l.4", Stage::Failed, NOW - 400),
++        card("fx-l.5", Stage::Landed, NOW - 500),
++    ]
++}
++
++/// 既定で開く段は札の在る段のうち止まり → Blocked → Queued → Running / Gated → 着地の順で最初の段（札が無ければ None）・
++/// tile を押した記録が在ればその値・開いている段を押すと畳む。
++#[test]
++fn bvlay_tile_opens_most_urgent() {
++    assert_eq!(
++        URGENT,
++        [
++            PipelineColumn::QuestionedFailedStopped,
++            PipelineColumn::Blocked,
++            PipelineColumn::Queued,
++            PipelineColumn::RunningGated,
++            PipelineColumn::Landed,
++        ]
++    );
++    let all = fixture();
++    let open = |n: usize| default_open(&columns(&all[..n], &[], NOW));
++    assert_eq!(open(5), Some(PipelineColumn::QuestionedFailedStopped));
++    assert_eq!(open(3), Some(PipelineColumn::Blocked));
++    assert_eq!(open(2), Some(PipelineColumn::Queued));
++    assert_eq!(open(1), Some(PipelineColumn::RunningGated));
++    assert_eq!(
++        default_open(&columns(&all[4..], &[], NOW)),
++        Some(PipelineColumn::Landed)
++    );
++    assert_eq!(default_open(&columns(&[], &[], NOW)), None);
++    let cols = columns(&all, &[], NOW);
++    assert_eq!(
++        open_of(None, &cols),
++        Some(PipelineColumn::QuestionedFailedStopped)
++    );
++    assert_eq!(open_of(Some(None), &cols), None);
++    assert_eq!(
++        open_of(Some(Some(PipelineColumn::Landed)), &cols),
++        Some(PipelineColumn::Landed)
++    );
++    assert_eq!(
++        press(Some(PipelineColumn::Queued), PipelineColumn::Queued),
++        None
++    );
++    assert_eq!(
++        press(Some(PipelineColumn::Queued), PipelineColumn::Landed),
++        Some(PipelineColumn::Landed)
++    );
++    assert_eq!(
++        press(None, PipelineColumn::Blocked),
++        Some(PipelineColumn::Blocked)
++    );
++}
++
++/// tile は板の列の順の 5 つで、数は列の札の全部・開いている段だけ開き、Queued の tile は列に在る長さが 30 分を越えた札で注意。
++#[test]
++fn bvlay_tile_counts_and_warn() {
++    let all = fixture();
++    let cols = columns(&all, &[], NOW);
++    let ts = tiles(&cols, Some(PipelineColumn::Blocked), NOW);
++    let got: Vec<(PipelineColumn, usize, bool, bool)> = ts
++        .iter()
++        .map(|t| (t.lane.column, t.n, t.open, t.warn))
++        .collect();
++    assert_eq!(
++        got,
++        vec![
++            (PipelineColumn::Blocked, 1, true, false),
++            (PipelineColumn::Queued, 1, false, false),
++            (PipelineColumn::RunningGated, 1, false, false),
++            (PipelineColumn::QuestionedFailedStopped, 1, false, false),
++            (PipelineColumn::Landed, 1, false, false),
++        ]
++    );
++    let late = [card("fx-l.6", Stage::Queued, NOW - QUEUED_WARN_S - 1)];
++    let ts = tiles(&columns(&late, &[], NOW), None, NOW);
++    assert!(ts[1].warn);
++    let edge = [card("fx-l.7", Stage::Queued, NOW - QUEUED_WARN_S)];
++    assert!(!tiles(&columns(&edge, &[], NOW), None, NOW)[1].warn);
++}
++
++/// 板の block は tile を押した記録を頁の一生の間持ち、札の在る板の後に段の tile と開いた段の札（板と同じ部品）を描く。
++#[test]
++fn bvlay_dom_wiring_text() {
++    let src = read("src/project/pipeline.rs");
++    let dom = &src[src.find("mod dom {").expect("mod dom")..];
++    for want in [
++        "let picked = RwSignal::new(None);",
++        "Body::Filled(cols) => with_tiles(cols, open, mode, clock, (keys, picked)),",
++        "view! { {board_view(cols, open, mode, clock, keys)}{tiles} }.into_any()",
++        "let open = move || cols.with_value(|c| open_of(picked.get(), c));",
++        "on:click=move |_| picked.set(Some(press(now, column)))",
++        ".map(|c| pick_view(c, keys, kcard_view(c, mode(), clock)))",
++        "<div class=\"ptiles\"><div class=\"ptrow\">{row}</div>{list}</div>",
++    ] {
++        assert!(dom.contains(want), "pipeline の DOM に {want} が無い");
++    }
++    let lib = read("src/lib.rs");
++    assert!(lib.contains("pub mod tiles;"));
++}
