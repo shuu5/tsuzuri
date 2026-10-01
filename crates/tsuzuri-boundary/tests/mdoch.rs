@@ -1,4 +1,4 @@
-//! doctor の持ち回しの上限を 60 秒にする歯（行 m-doctor-hold・接頭辞 mdoch_・判断の記録 ADR-26 の決定 (2)）。
+//! doctor の持ち回しの上限の歯（行 m-doctor-hold が 60 秒にし、行 m-doctor-30 が判断の記録 ADR-26 の撤退の条件 (1) で 30 秒に戻した・接頭辞 mdoch_）。
 //! 頭ごとの上限の値と、境界の src の配線の字と、歯の名の重なりの無さを見る（撃ちの数は数えない）。
 #![cfg(test)]
 
@@ -89,7 +89,7 @@ fn count(text: &str, needle: &str) -> usize {
 
 #[test]
 fn mdoch_holds_by_head() {
-    assert_eq!(DOCTOR_HOLD, Duration::from_secs(60));
+    assert_eq!(DOCTOR_HOLD, Duration::from_secs(30));
     assert_eq!(SLOW_HOLD, Duration::from_secs(30));
     assert_eq!(HOLD, Duration::from_secs(5));
     assert_eq!(ceiling(&DOCTOR_ARGS), DOCTOR_HOLD);

@@ -7,7 +7,7 @@
 //! 群の記録（`<state dir の親>/scribe2-host/groups/<群の名>.account` と `history/<群の名>.account.*`）。
 //! 3 つの出力は持ち回しの表（`Held`・行 e-held-seat と e-held-marks・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
 //! 入力の印（`input_marks`・席の target に依らない）が撃つ前と同じで上限（`ceiling`）の内なら撃たない。tick status は `HOLD`（5 秒）、
-//! doctor は `DOCTOR_HOLD`（60 秒）・usage は `SLOW_HOLD`（30 秒）。file の読みは持ち回さず要求のたびに読む。
+//! doctor は `DOCTOR_HOLD`（30 秒）・usage は `SLOW_HOLD`（30 秒）。file の読みは持ち回さず要求のたびに読む。
 //! heartbeat-off と heartbeat-on は読まず印にだけ使う（合図の値は tick status の席の行の欄 heartbeat= の字で読む）。
 //! 席の target か state dir が無ければ器を撃たず、読む欄が全部「まだ分からない」の card を返す。
 
@@ -48,7 +48,8 @@ pub const HOLD: Duration = Duration::from_secs(5);
 pub const SLOW_HOLD: Duration = Duration::from_secs(30);
 
 /// doctor の出力を持ち回す長さ（入力の印が動けば、この中でも撃ち直す）。
-pub const DOCTOR_HOLD: Duration = Duration::from_secs(60);
+/// 判断の記録 ADR-26 の決定 (2) で 60 秒にし、撤退の条件 (1) で 30 秒に戻した（残量の `SLOW_HOLD` と別の定数のまま）。
+pub const DOCTOR_HOLD: Duration = Duration::from_secs(30);
 
 /// 席の dir の file（状態の記録と合図の最後の判定と器の account の記録）。
 pub const STATE_LOG: &str = "state.jsonl";
