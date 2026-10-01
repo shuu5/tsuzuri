@@ -255,7 +255,11 @@ fn bhalf_outcome_names_left() {
     );
     assert!(got.keeps_text());
     assert!(got.reloads());
+    other_replies(rows, body);
+}
 
+/// 送った行に無い id・書いたの 1 行だけの 502・送った行に依らない 200 の値。
+fn other_replies(rows: Vec<Row>, body: String) {
     // 送った行に無い id は問いの id の字。
     let only = batch::outcome(Some((502, &body)), &rows[..1]);
     assert_eq!(

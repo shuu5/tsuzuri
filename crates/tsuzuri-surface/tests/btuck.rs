@@ -28,17 +28,11 @@ fn fixture() -> GraphView {
         .expect("graph-view.json が眺めの電文として読める")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn boxed(
     id: &str,
     kind: NodeKind,
     title: &str,
-    group: bool,
-    fold: BoxFold,
-    kids: u32,
+    (group, fold, kids): (bool, BoxFold, u32),
 ) -> ViewNode {
     ViewNode {
         node: GraphNode {
@@ -62,15 +56,15 @@ fn boxed(
 }
 
 fn rule_box() -> ViewNode {
-    boxed("~rule", NodeKind::Rule, "規則行", true, BoxFold::Folded, 27)
+    boxed("~rule", NodeKind::Rule, "規則行", (true, BoxFold::Folded, 27))
 }
 
 fn art_box() -> ViewNode {
-    boxed("~art:P", NodeKind::Article, "条 P", true, BoxFold::Open, 3)
+    boxed("~art:P", NodeKind::Article, "条 P", (true, BoxFold::Open, 3))
 }
 
 fn epic_box() -> ViewNode {
-    boxed("t3-hub.52", NodeKind::Epic, "面の epic", false, BoxFold::Folded, 12)
+    boxed("t3-hub.52", NodeKind::Epic, "面の epic", (false, BoxFold::Folded, 12))
 }
 
 /// fixture の 8 節点に組の箱 2 つと畳んだ epic を足した眺め。
@@ -115,7 +109,11 @@ fn btuck_open_list() {
     assert!(!o.toggle("x", BoxFold::Leaf));
     assert!(!o.toggle("~rule", BoxFold::Leaf));
     assert_eq!(o.ids(), ["~art:P", "~rule"]);
+    drop_and_adopt(o);
+}
 
+/// Open は列から外し、字 , を含む id は %2C になり、adopt は列を置き換える。
+fn drop_and_adopt(mut o: OpenList) {
     // Open は列から外す（無ければ変えない）。
     assert!(o.toggle("~art:P", BoxFold::Open));
     assert_eq!(o.ids(), ["~rule"]);
@@ -167,7 +165,11 @@ fn btuck_group_box_svg() {
     assert!(!mark.contains("class=\"node\""), "{mark}");
     assert!(rule.ends_with(&format!("{mark}</g>")), "印は箱の末");
     assert_eq!(mark_svg(&rule_box(), AT).as_deref(), Some(mark));
+    art_svg(group, refold);
+}
 
+/// 開いた組の箱の SVG（題・種類と組の語・畳み直す印）。
+fn art_svg(group: String, refold: String) {
     let art = node_svg(&art_box(), AT);
     let kind = label(kind_key(NodeKind::Article));
     assert!(art.contains(">条 P</text>"), "{art}");
@@ -177,7 +179,11 @@ fn btuck_group_box_svg() {
     assert!(mark.contains("data-fold=\"~art:P\""), "{mark}");
     assert!(mark.contains(&format!("aria-label=\"{refold}\"")), "{mark}");
     assert!(mark.contains('▾') && !mark.contains('▸'), "{mark}");
+    plain_svgs();
+}
 
+/// 組でない畳んだ箱と Leaf の SVG・fixture の図と足した眺めの図の印の数。
+fn plain_svgs() {
     // 組でない畳んだ箱は id の字を持ち、縁は点線でなく、印を 1 つ持つ。
     let epic = node_svg(&epic_box(), AT);
     assert!(epic.contains(">t3-hub.52</text>"), "{epic}");
@@ -185,7 +191,7 @@ fn btuck_group_box_svg() {
     assert_eq!(epic.matches("data-fold=\"t3-hub.52\"").count(), 1);
 
     // Leaf は印を持たない・fixture の図は字 data-fold を持たず data-key は 8 つ。
-    let leaf = boxed("R-9", NodeKind::Rule, "規則", false, BoxFold::Leaf, 0);
+    let leaf = boxed("R-9", NodeKind::Rule, "規則", (false, BoxFold::Leaf, 0));
     assert_eq!(mark_svg(&leaf, AT), None);
     assert!(!node_svg(&leaf, AT).contains("data-fold"));
     let v = fixture();
@@ -245,7 +251,11 @@ fn btuck_group_card() {
         assert!(!row.contains("~rule"), "{row}");
         assert!(!row.contains(NO_GIST), "{row}");
     }
+    art_card_and_views();
+}
 
+/// 開いた組の箱の card と、view_cards の組の箱と組でない箱の使い分け。
+fn art_card_and_views() {
     let c = group_card(&art_box());
     assert_eq!(c.title, "条 P");
     assert_eq!(

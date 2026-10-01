@@ -129,6 +129,11 @@ fn acctframe_tabs_and_links() {
     ] {
         assert_eq!(Tab::from_query(q), Tab::Home, "{q}");
     }
+    hrefs_and_links();
+}
+
+/// link の href は board と tab と mode を持ち、今の tab の link だけが on。
+fn hrefs_and_links() {
     assert_eq!(
         tab_href(Tab::Home, Mode::Beginner),
         "?board=account&tab=home&mode=beginner"
@@ -245,7 +250,11 @@ fn acctframe_blocks_per_tab_and_module() {
         home::BLOCKS.map(|b| b.id),
         ["nxall", "groups", "allowance", "moves"]
     );
+    files_and_pure_mod();
+}
 
+/// account の下の file の並びと、枠の値（mod.rs）の純粋な部分が DOM を持たないこと。
+fn files_and_pure_mod() {
     let files: Vec<String> = account_sources()
         .iter()
         .map(|(p, _)| file_name(p))
@@ -380,7 +389,11 @@ fn acctframe_badges_rules() {
         assert_eq!(badge(Tab::Home, &more), Some(want.to_string()));
         assert_eq!(badge(Tab::Projects, &more), Some("!".to_string()));
     }
+    stuck_and_empty(base);
+}
 
+/// session の数の印と、project も session も無いときの印。
+fn stuck_and_empty(base: AccountDoc) {
     // session の数は状態が limit か silent の行だけ。
     for (state, counted) in [
         (SeatState::Run, false),

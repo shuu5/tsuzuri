@@ -243,7 +243,11 @@ fn cadopt_columns_take_node_cards() {
         }
     }
     assert_eq!(swapped, 2);
+    unread_keeps(cols);
+}
 
+/// グラフの口が読めない・中身の無い値は受けた値のまま。
+fn unread_keeps(cols: Vec<Column>) {
     for graph in [
         Fetched::NotRead,
         Fetched::Failed,
@@ -304,7 +308,11 @@ fn cadopt_big_title_rules() {
     ] {
         assert_eq!(big_title(&big, &graph), None, "{:?}", big.kind);
     }
+    other_bigs(graph, q);
+}
 
+/// 組の大きい箱は題を持たず、電文が読めなければ質問の大きい箱も題を持たない。
+fn other_bigs(graph: Fetched, q: Big) {
     let sets = next_sets();
     for name in ["question", "nothing"] {
         let step = sets

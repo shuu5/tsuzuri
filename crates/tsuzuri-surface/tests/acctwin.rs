@@ -198,7 +198,11 @@ fn acctwin_button_text_and_row_words() {
     assert_eq!(NOT_YET_KEY, "not_yet");
     assert!(vocab().term(NOT_YET_KEY).is_some());
     assert!(vocab().term(windows::BLOCK.heading).is_some());
+    list_words();
+}
 
+/// 一覧の状態から引く button の字と、行の語と印と class と stylesheet の字。
+fn list_words() {
     // 一覧の button の字は一覧の状態から引く。
     let list = after_close(&after_open(&[], "proj-a").0, "proj-a");
     let (list, _) = after_open(&list, "proj-b");

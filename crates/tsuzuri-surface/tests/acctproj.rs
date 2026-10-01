@@ -143,6 +143,11 @@ fn acctproj_need_order() {
     }
     assert_eq!(need_rank(&doc.projects[0]), 4);
     assert_eq!(need_rank(&doc.projects[1]), NextMove::ALL.len());
+    rank_sev_and_classes(doc);
+}
+
+/// lead の 7 種の位・重さの字・Unknown を先に置いた並び・行の class の重さ。
+fn rank_sev_and_classes(doc: AccountDoc) {
     for (i, k) in NextMove::ALL.iter().enumerate() {
         let mut p = doc.projects[0].clone();
         if let Reading::Known(s) = &mut p.next {
@@ -252,7 +257,11 @@ fn acctproj_judge_and_unref_order() {
     assert_eq!(names(&doc, PSort::Unref), vec!["proj-a", "proj-b", "proj-c"]);
     assert_eq!(names(&doc2, PSort::Unref), vec!["proj-a", "proj-b", "proj-c"]);
     assert_eq!(table(&doc2, PSort::Unref, Mode::Beginner).order(), vec![2, 0, 1]);
+    ledger_cells(doc);
+}
 
+/// 台帳の欄の判定と task の数と 24 時間の差（台帳が Unknown は None）。
+fn ledger_cells(doc: AccountDoc) {
     // 台帳の欄は判定と、読めれば task の数。
     let t = table(&doc, PSort::Need, Mode::Beginner);
     let a = &t.groups[0].rows[0].led;
@@ -404,6 +413,11 @@ fn acctproj_wait_unref_dash_and_orch() {
         assert_eq!(r.wait, None, "{}", r.name);
         assert_eq!(r.unref, None, "{}", r.name);
     }
+    orch_cells(doc);
+}
+
+/// orchestrator の欄は席の card の状態と tick と heartbeat の合図。
+fn orch_cells(doc: AccountDoc) {
     let a = orch(&doc.projects[0]);
     assert_eq!(a.state, "run");
     assert_eq!(a.tick, Reading::Known(OK));
@@ -483,7 +497,11 @@ fn acctproj_vocab_style_and_deps() {
             .unwrap_or_else(|| panic!("鍵 {key} が vocab に無い"));
         assert!(!term.label.is_empty(), "鍵 {key} の語が空");
     }
+    classes_and_deps();
+}
 
+/// class は stylesheet に在り、面の crate の直接の依存は契約の型の crate だけ。
+fn classes_and_deps() {
     let css = read("style.css");
     let mut classes: Vec<String> = vec![
         projects::PTAB,

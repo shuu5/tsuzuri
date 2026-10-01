@@ -197,7 +197,11 @@ fn cround_around_cards() {
     assert_eq!(twice["e.2"].kind, "question · beads · open");
 
     assert!(view_cards(&[]).is_empty());
+    drawn_keys(doc, cards);
+}
 
+/// 図の data-key の値と一覧の行と入れ子の行の id が card の鍵に在る。
+fn drawn_keys(doc: AroundDoc, cards: std::collections::BTreeMap<String, Card>) {
     // 図の data-key の値と一覧の行と入れ子の行の id は、どれも鍵に在る。
     let picture = svg(&doc, &layout(&doc));
     let marker = "data-key=\"";
@@ -251,7 +255,11 @@ fn cround_dom_text() {
     for want in ["CardLayer", "Delegate", "HoverCtx", "attach", "delegate"] {
         assert!(reexport.contains(want), "hover.rs の再出しに {want} が無い");
     }
+    around_dom_text();
+}
 
+/// 近傍の図の委ねと一覧の題の a が card を出す字（nodearound.rs の DOM の部分）。
+fn around_dom_text() {
     let around = read("src/project/nodearound.rs");
     let dom = dom_part(&around);
     for want in [

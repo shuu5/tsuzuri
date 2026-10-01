@@ -115,7 +115,11 @@ fn abss_acct_drawn_at_now() {
     }
     assert!(lines > 0);
     assert_eq!(account::drawn(doc.clone(), EARLIER), doc);
+    grace_and_dormant(d);
+}
 
+/// 退避の残り秒は終わる時刻から引き、休止中の card の月日は描く今の日で決める。
+fn grace_and_dormant(d: AccountDoc) {
     let b = d.projects.iter().find(|p| p.name == "proj-b").expect("proj-b");
     assert_eq!(b.move_until, Some(1_790_511_501));
     let card = orch_card(&d, b).expect("proj-b は席を持つ");

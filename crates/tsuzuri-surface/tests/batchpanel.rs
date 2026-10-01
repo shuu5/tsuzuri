@@ -360,7 +360,11 @@ fn batchpanel_batch_outcome() {
     assert!(partial.line().ends_with(&format!("{} 1", batch::WRITTEN)));
     assert!(partial.keeps_text());
     assert!(partial.reloads());
+    refused_batches();
+}
 
+/// 束のほかの 4xx と 5xx・読めない 502・届かない・読めない 200 は理由の字で、読み直さない。
+fn refused_batches() {
     let a1 = wire::encode(&RefusalResponse {
         reason: Refusal::A1InBatch,
     })
@@ -435,7 +439,11 @@ fn batchpanel_policy_send_and_outcome() {
     assert_eq!(policy::NOT_CURRENT, "範囲が今の問いでない");
     assert!(scope.keeps_text());
     assert!(scope.reloads());
+    policy_refusals();
+}
 
+/// 指示の 409・ほかの 4xx と 5xx・届かない・読めない 200 の出し方（束と同じ）。
+fn policy_refusals() {
     // ほかは束と同じ。
     let stale = policy::outcome(Some((409, "")));
     assert_eq!(stale, policy::Outcome::Stale);

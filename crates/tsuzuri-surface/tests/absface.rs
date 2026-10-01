@@ -52,7 +52,11 @@ fn abst_card_from_since() {
     // 同じ札を 1 時間後に組めば経過の字だけが進む。
     let later = kcard(&card(Stage::Running, Some(NOW - 125), None), &[], NOW + 3_600);
     assert_eq!(later.age, "1h");
+    ci_and_landed();
+}
 
+/// CI の語は今までの経過で、今日の着地は since の日本の日で決まる。
+fn ci_and_landed() {
     let ok = |since: u64, now: u64| ci_shown(&card(Stage::Landed, Some(since), Some(Ci::Success)), now);
     assert_eq!(ok(NOW - CI_MARK_S, NOW), Some(Ci::Success));
     assert_eq!(ok(NOW - CI_MARK_S - 1, NOW), None);

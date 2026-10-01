@@ -72,7 +72,11 @@ fn acctsess_sort_from_query_and_written_back() {
     ] {
         assert_eq!(sort_of(q), want, "{q}");
     }
+    written_back_and_removed();
+}
 
+/// 書く関数は project のときに sort を消してほかの鍵を残し、消す関数は同じ鍵を全部消す。
+fn written_back_and_removed() {
     let q = "?board=account&tab=session&mode=expert";
     assert_eq!(
         with_sort(q, Sort::Stage),
@@ -128,7 +132,11 @@ fn acctsess_orders_on_fixture() {
     assert_eq!(order(&doc, Sort::Account), vec![1, 3, 2, 4]);
     assert_eq!(order(&doc, Sort::Stage), vec![3, 1, 2, 4]);
     assert_eq!(order(&doc, Sort::Elapsed), vec![1, 2, 3, 4]);
+    heads_and_sort(doc);
+}
 
+/// 並べ方ごとの見出しと行の数・表の並べ方と電文の at。
+fn heads_and_sort(doc: AccountDoc) {
     let heads = |sort: Sort| -> Vec<(Option<Head>, usize)> {
         table(&doc, sort)
             .groups
@@ -213,7 +221,12 @@ fn acctsess_group_rules() {
             group: None
         })
     );
+    heads_by_account(&base);
+    ranks_by_stage(base);
+}
 
+/// account の並べの見出しは電文の accounts の順で、accounts が読めなくても行を落とさない。
+fn heads_by_account(base: &AccountDoc) {
     // account: 電文の accounts の順・占有の無い口座は None（free_for_pipeline）・中は orchestrator が先で project の名の順。
     let mut d = base.clone();
     d.sessions[0].account = Some("acct-2".to_string());
@@ -259,7 +272,10 @@ fn acctsess_group_rules() {
             occupant: Reading::Unknown
         })
     );
+}
 
+/// stage の位を見る行を組む関数を作り、位と束と stage・elapsed の並びを見る。
+fn ranks_by_stage(base: AccountDoc) {
     // stage: 位の決まり。
     let line = |state: SeatState, role: SeatRole, stage: Option<Stage>| {
         let mut l = base.sessions[1].clone();
@@ -272,6 +288,14 @@ fn acctsess_group_rules() {
         STALLED_STAGES,
         [Stage::Questioned, Stage::Failed, Stage::Stopped]
     );
+    rank_per_stage(&line);
+    band_and_elapsed_order(&base, &line);
+}
+
+/// 段と状態ごとの位（止まった run は 2・orchestrator の行は段を見ない）と束の語の鍵。
+fn rank_per_stage(
+    line: &impl Fn(SeatState, SeatRole, Option<Stage>) -> tsuzuri_contract::account::SessionLine,
+) {
     for stage in Stage::ALL {
         let stalled = STALLED_STAGES.contains(&stage);
         for state in [SeatState::Run, SeatState::Wait, SeatState::Unknown] {
@@ -322,7 +346,13 @@ fn acctsess_group_rules() {
         ]
     );
     assert_eq!(BANDS, ["stopped_group", "moving_group", "no_record"]);
+}
 
+/// stage の束の中の並びと elapsed の並び・行が 0 の電文は見出しも束も出さない。
+fn band_and_elapsed_order(
+    base: &AccountDoc,
+    line: &impl Fn(SeatState, SeatRole, Option<Stage>) -> tsuzuri_contract::account::SessionLine,
+) {
     // stage: 束の中は位の順・同じ位は since の古い順（since の無い行は末尾）・同じ値は電文の順。
     let mut d = base.clone();
     let at = |since: Option<u64>, mut l: tsuzuri_contract::account::SessionLine| {
@@ -391,7 +421,11 @@ fn acctsess_strip_from_seat_module() {
         with_span("?board=account&sort=stage", Span::H3),
         "?board=account&sort=stage&span=3h"
     );
+    strip_rows_and_elapsed(doc);
+}
 
+/// 行ごとの稼働の記録と、窓の右端の電文の at と、経過の字。
+fn strip_rows_and_elapsed(doc: AccountDoc) {
     let t = table(&doc, Sort::Project);
     let rows: Vec<_> = t.groups.iter().flat_map(|g| g.rows.iter()).collect();
     for span in Span::ALL {
@@ -458,7 +492,16 @@ fn acctsess_signals_on_fixture() {
     let m = b.moving.expect("残り秒");
     assert_eq!((m.class(), m.key()), ("mvgrace", "move_grace"));
     assert_eq!(grace_text(1101), "1101 秒");
+    proj_c_pipeline_and_values(rows, a, pipe, c);
+}
 
+/// proj-c と pipeline の行の合図と、行の class・役の語の鍵・状態・口座。
+fn proj_c_pipeline_and_values(
+    rows: Vec<&session::SessRow>,
+    a: &session::SessRow,
+    pipe: &session::SessRow,
+    c: &session::SessRow,
+) {
     let sc = c.signs.as_ref().expect("proj-c の合図");
     assert_eq!(sc.tick, Reading::Unknown);
     assert_eq!(sc.heartbeat, Reading::Unknown);
@@ -627,7 +670,11 @@ fn acctsess_vocab_style_and_deps() {
             .unwrap_or_else(|| panic!("鍵 {key} が vocab に無い"));
         assert!(!term.label.is_empty(), "鍵 {key} の語が空");
     }
+    classes_stalled_and_deps();
+}
 
+/// class は stylesheet に在り、中核の止まった段の字を見て、依存を足さない。
+fn classes_stalled_and_deps() {
     let css = read("style.css");
     for class in [
         session::SESS,

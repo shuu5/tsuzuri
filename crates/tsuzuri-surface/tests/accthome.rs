@@ -99,6 +99,11 @@ fn accthome_next_all_on_fixture() {
         assert!(row.marks.iter().all(|m| m.class == "nxm na"), "{row:?}");
         assert_eq!(row.class, "nxrow dim");
     }
+    marks_in_kind_order(a);
+}
+
+/// 印の種は MARK_KINDS の順で、なし の種を持たない。
+fn marks_in_kind_order(a: &NxRow) {
     let kinds: Vec<NextMove> = a.marks.iter().map(|m| m.kind).collect();
     assert_eq!(kinds, MARK_KINDS.to_vec());
     assert_eq!(MARK_KINDS.to_vec(), NextMove::ALL[..6].to_vec());
@@ -160,7 +165,15 @@ fn accthome_next_all_order_rule() {
     );
     // 並べは電文の projects を変えない。
     assert_eq!(doc.projects[0].name, "u1");
+    all_leads_in_order(base, template, doc);
+}
 
+/// 全部の種を逆順に置いても NextMove::ALL の順に並び、project が無ければ 0 件の字。
+fn all_leads_in_order(
+    base: AccountDoc,
+    template: tsuzuri_contract::account::ProjectRow,
+    mut doc: AccountDoc,
+) {
     // 7 種の順は NextMove::ALL の順（全部の種を 1 つずつ逆順に置いても ALL の順に並ぶ）。
     doc.projects = NextMove::ALL
         .iter()
@@ -273,7 +286,11 @@ fn accthome_groups_on_fixture() {
     assert_eq!(t1.candidates, vec!["acct-1", "acct-2"]);
     assert_eq!(t1.next_account.as_deref(), Some("acct-2"));
     assert_eq!(t1.next, "acct-2");
+    second_group(groups);
+}
 
+/// 2 つ目の群は記録なし・前の口座なし・移り先なしの字を持つ。
+fn second_group(groups: Vec<GroupView>) {
     let t2 = &groups[1];
     assert_eq!(t2.account, "acct-2");
     assert!(!t2.recorded);
@@ -336,7 +353,11 @@ fn accthome_groups_rules() {
         g[0].row.account = "acct-2".to_string();
     }
     assert_eq!(used(&d, 0), vec!["100%", "81%", "12%"]);
+    record_since_and_empty(base);
+}
 
+/// 記録なしの群・いつからの月日・群が無いときの 0 件の字。
+fn record_since_and_empty(base: AccountDoc) {
     // 記録なしの群は since が在っても記録なしの字・前の口座は在れば出す。
     let mut d = base.clone();
     if let Reading::Known(g) = &mut d.groups {
@@ -555,7 +576,11 @@ fn accthome_unmeasured_per_block() {
     assert!(matches!(h.groups, Body::Filled(_)));
     assert!(matches!(h.accounts, Body::Filled(_)));
     assert!(matches!(h.moves, Body::Filled(_)));
+    unknown_groups_accounts();
+}
 
+/// 群の列か口座の列が Unknown なら、その段だけ測れていない。
+fn unknown_groups_accounts() {
     let base = fixture();
     let mut d = base.clone();
     d.groups = Reading::Unknown;
@@ -572,7 +597,11 @@ fn accthome_unmeasured_per_block() {
     assert!(matches!(h.groups, Body::Filled(_)));
     assert!(matches!(h.next, Body::Filled(_)));
     assert!(matches!(h.moves, Body::Filled(_)));
+    unknown_moves_and_all(base);
+}
 
+/// 移動の列が Unknown・3 つの列が Unknown のときの段ごとの測れていない。
+fn unknown_moves_and_all(base: AccountDoc) {
     let mut d = base.clone();
     d.moves = Reading::Unknown;
     let h = home::home(&d);
@@ -590,7 +619,11 @@ fn accthome_unmeasured_per_block() {
     assert_eq!(h.accounts, Body::Unmeasured(ACCOUNTS_UNREAD));
     assert_eq!(h.moves, Body::Unmeasured(MOVES_UNREAD));
     assert!(matches!(h.next, Body::Filled(_)));
+    reasons_apart();
+}
 
+/// 測れていないの理由と 0 件の字は 1 行で、互いに重ならない。
+fn reasons_apart() {
     // 理由は 1 行で重ならず、0 件の字とも重ならない。
     let lines = [
         NOT_READ,
@@ -670,7 +703,11 @@ fn accthome_vocab_css_deps_and_frame() {
     for r in filled(fixture_home().next) {
         assert!(vocab().term(r.key).is_some(), "{}", r.key);
     }
+    classes_deps_and_frame();
+}
 
+/// class は stylesheet に在り、外の依存を足さず、着地済みの枠は変えない。
+fn classes_deps_and_frame() {
     let css = read("style.css");
     let mut classes: Vec<&str> = vec![
         "nxm on", "nxm off", "nxm na", "nxrow dim", "occ grp", "occ free", "gi ok", "gi ng",

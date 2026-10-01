@@ -66,6 +66,11 @@ fn askcard_page_frame_and_nav() {
         frame::href(PageId::Ask, frame::Mode::Beginner),
         "?page=ask&mode=beginner"
     );
+    header_links();
+}
+
+/// header の link の語の順と数の印・snapshot・on の class。
+fn header_links() {
     let links = frame::nav_links(PageId::Ask);
     let words: Vec<String> = links.iter().map(|l| vocab().label(l.key)).collect();
     assert!(
@@ -184,7 +189,11 @@ fn askcard_fixture_cards_text() {
     );
     assert_eq!(first.recommend, "1 問に 1 つの欄にする");
     assert_eq!(first.digest, "0123456789abcdef");
+    second_card(&cards, first);
+}
 
+/// 2 本目の card の字（題は 36 字で切る・概要の無い card は要約なし）と、置かれてからの経過。
+fn second_card(cards: &[ask::Card], first: &ask::Card) {
     let second = &cards[1];
     assert_eq!(second.number, 2);
     assert_eq!(second.id.as_str(), "qa.10");
@@ -208,7 +217,11 @@ fn askcard_fixture_cards_text() {
     assert_eq!(second.reason, "見本では閉じている");
     assert_eq!(second.recommend, "");
     assert_eq!(second.digest, "fedcba9876543210");
+    card_ages(first);
+}
 
+/// 1 本目の card の置かれた時刻からの経過の字。
+fn card_ages(first: &ask::Card) {
     // 置かれてからの経過（見本の durMs）。
     assert_eq!(ask::age(1_790_488_800 + 59 * 60, first.posted_at), "59m");
     assert_eq!(ask::age(1_790_488_800 + 2 * 3600, first.posted_at), "2h");
@@ -348,7 +361,11 @@ fn askcard_outcome_from_reply() {
     assert!(conflict.keeps_text());
     assert!(conflict.answer_open());
     assert!(conflict.reloads());
+    refused_replies();
+}
 
+/// 400・404・503・届かない・読めない 200 は理由の字で、断りの理由は 6 値とも空でない字。
+fn refused_replies() {
     let empty = wire::encode(&RefusalResponse {
         reason: Refusal::EmptyVerbatim,
     })
@@ -439,7 +456,11 @@ fn askcard_empty_is_not_unmeasured() {
     );
     assert_eq!(askpage::body(&empty_rows), Body::Empty(askpage::EMPTY));
     assert_eq!(askpage::count(&empty_rows), Reading::Known(0));
+    unmeasured_reads();
+}
 
+/// まだ読んでいない・読めない・電文が読めない・まだ分からないは card も決定も測れていない。
+fn unmeasured_reads() {
     let unknown_cards = Fetched::Body(
         wire::encode(&QuestionList {
             cards: Reading::Unknown,

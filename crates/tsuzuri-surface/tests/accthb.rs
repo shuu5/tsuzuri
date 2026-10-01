@@ -90,7 +90,11 @@ fn accthb_button_on_fixture() {
         assert_eq!(opposite(opposite(h)), h);
     }
     assert_eq!(BUTTON, "btn hbbtn");
+    rows_share_toggles(doc, got);
+}
 
+/// 表の行と session の行は fixture の切り替えをそのまま持つ。
+fn rows_share_toggles(doc: AccountDoc, got: Vec<Option<Toggle>>) {
     // 表の行も同じ切り替えを持つ（並べ方に依らない）。
     for sort in [Sort::Project, Sort::Account, Sort::Stage, Sort::Elapsed] {
         let t = table(&doc, sort);
@@ -225,7 +229,7 @@ type Case = (Heartbeat, Option<(u16, &'static str)>, &'static str, bool);
 #[test]
 fn accthb_reply_lines() {
     let ok = r#"{"target":"proj-a-orch","to":"off"}"#;
-    let cases: [Case; 13] = [
+    let cases: Vec<Case> = vec![
         (Heartbeat::Off, Some((200, ok)), "止めた", true),
         (
             Heartbeat::On,
@@ -275,6 +279,13 @@ fn accthb_reply_lines() {
             "口が断った（404）",
             false,
         ),
+    ];
+    reply_rest(ok, cases);
+}
+
+/// 残りの断りの組を足して出す字と読み直しを照らし、決まった応答の型と字の定数を見る。
+fn reply_rest(ok: &str, mut cases: Vec<Case>) {
+    cases.extend([
         (
             Heartbeat::Off,
             Some((400, "no-seat")),
@@ -289,7 +300,7 @@ fn accthb_reply_lines() {
         ),
         (Heartbeat::On, Some((500, "")), "口が断った（500）", false),
         (Heartbeat::Off, None, "口に届かない", false),
-    ];
+    ]);
     for (to, reply, line, reloads) in cases {
         let o = outcome(to, reply);
         assert_eq!(o.line(), line, "{to:?} {reply:?}");
@@ -377,7 +388,11 @@ fn accthb_send_states() {
         assert_eq!(step(&sending, e.clone()), sending, "{e:?}");
     }
     assert!(!starts(&sending, &step(&sending, Event::Fire)));
+    after_reply(sending);
+}
 
+/// 応答で段を閉じて字を出し、応答の後も開き直して撃てる。
+fn after_reply(sending: RowState) {
     let done = step(&sending, Event::Reply(Outcome::Done(Heartbeat::Off)));
     assert_eq!(
         done,

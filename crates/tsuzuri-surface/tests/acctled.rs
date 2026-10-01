@@ -117,7 +117,11 @@ fn acctled_sort_from_query_and_write() {
     ] {
         assert_eq!(sort_of(q), Sort::Judge, "{q}");
     }
+    write_and_round_trip();
+}
 
+/// 書く関数は judge のとき lsort を消し、ほかの鍵を増やさず、読みと書きが往復する。
+fn write_and_round_trip() {
     let base = "?board=account&tab=session&mode=expert";
     assert_eq!(with_sort(base, Sort::Judge), base);
     assert_eq!(
@@ -251,7 +255,12 @@ fn acctled_rows_on_fixture() {
     assert_eq!(a.marks(), [None, None, None]);
     assert_eq!(c.task_class, "c-n c-task");
     assert_eq!(c.rate_class, "c-n c-rate");
+    unknown_rows_and_no_lead(t);
+    unmeasured_and_empty(doc);
+}
 
+/// 台帳が Unknown の行は st_unknown と「―」で、lead が無ければ「―」。
+fn unknown_rows_and_no_lead(t: ledger::LedTable) {
     for (row, name) in t.rows[1..].iter().zip(["proj-b", "proj-c"]) {
         assert_eq!(row.name, name);
         assert_eq!(row.cells, Reading::Unknown);
@@ -268,7 +277,10 @@ fn acctled_rows_on_fixture() {
     no_lead.lead = None;
     let d = doc_of(vec![("x", Reading::Known(no_lead))]);
     assert_eq!(table(&d, Sort::Judge).rows[0].more()[4].1, NONE);
+}
 
+/// 読めない・まだ読んでいない・電文が読めないは測れていない・projects が空は 0 件・枠の body は変えない。
+fn unmeasured_and_empty(doc: AccountDoc) {
     // 読めない・まだ読んでいない・電文が読めないは測れていない、projects が空は 0 件。
     assert_eq!(
         ledger::content(&Fetched::NotRead, Sort::Judge),
@@ -314,7 +326,11 @@ fn acctled_extremes_marks() {
     assert_eq!(mark(Some(e), 5.0), None);
     assert_eq!(mark(None, 9.0), None);
     assert_eq!((HI, LO), ("hi", "lo"));
+    marks_on_table();
+}
 
+/// 表の列の印は Known の値の行だけで決まり、並べを変えても同じ行に付く。
+fn marks_on_table() {
     let doc = doc_of(vec![
         ("a", Reading::Known(stats(LedgerJudge::OnTrack, 9, 0, 0, 0.9))),
         ("u", Reading::Unknown),
