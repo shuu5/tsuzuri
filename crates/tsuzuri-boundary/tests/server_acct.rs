@@ -263,6 +263,11 @@ impl Place {
             self.out(&format!("rules-{rule}"), text);
         }
         self.out(&format!("rules-{}", GRACE_RULE.0), GRACE_RULE.1);
+        self.lay_state();
+    }
+
+    /// git と台帳の字と、state dir の下の席と event log と群の記録の字を置く。
+    fn lay_state(&mut self) {
         // git は state dir の path の前後に空白を付けて返す（除いて使う）。
         let (sa, sb) = (self.state("state-a"), self.state("state-b"));
         self.put(
@@ -382,6 +387,17 @@ impl Place {
                 dirs.push(state);
             }
         }
+        self.seats_and_projects(drop, out, host, dirs)
+    }
+
+    /// 席の状態の記録と project ごとの字を足して、読みが集めたはずの字を組み終える。
+    fn seats_and_projects(
+        &self,
+        drop: &[&str],
+        out: impl Fn(&str) -> Option<String>,
+        mut host: HostTexts,
+        dirs: Vec<&str>,
+    ) -> (HostTexts, BTreeMap<String, ProjectTexts>) {
         for state in dirs {
             let Some(doctor) = out(&format!("doctor-{state}")) else {
                 continue;
@@ -499,40 +515,45 @@ fn server_acct_doc_matches_core() {
         // 終わる時刻は器の合図の健康の行の grace_left=1200 に今を足した時刻（欄の無い席の行は無し）。
         assert_eq!(row(&got, "proj-a").move_until, Some(NOW + 1200));
         assert_eq!(row(&got, "proj-e").move_until, None);
-        // git が落ちるか空を返す project は state dir なしの行。
-        for p in ["proj-c", "proj-d"] {
-            let r = row(&got, p);
-            assert!(!r.state_dir_known, "{p}");
-            assert_eq!(
-                (&r.seat, &r.runs, &r.ledger, &r.next),
-                (
-                    &Reading::Unknown,
-                    &Reading::Unknown,
-                    &Reading::Unknown,
-                    &Reading::Unknown
-                ),
-                "{p}"
-            );
-        }
-        // 台帳が読めない project は台帳と次の一手が Unknown。
-        let b = row(&got, "proj-b");
-        assert_eq!((&b.ledger, &b.next), (&Reading::Unknown, &Reading::Unknown));
-        for p in ["proj-a", "proj-e"] {
-            let r = row(&got, p);
-            assert!(matches!(r.ledger, Reading::Known(_)), "{p}");
-            assert!(matches!(r.next, Reading::Known(_)), "{p}");
-        }
-        assert!(matches!(got.accounts, Reading::Known(_)));
-        assert!(matches!(got.groups, Reading::Known(_)));
-        let Reading::Known(moves) = &got.moves else {
-            panic!("移動が Unknown");
-        };
+        unknown_rows(got);
+    }
+}
+
+/// git が落ちるか空の project と台帳が読めない project の行と、口座と群と移動の読みを見る。
+fn unknown_rows(got: AccountDoc) {
+    // git が落ちるか空を返す project は state dir なしの行。
+    for p in ["proj-c", "proj-d"] {
+        let r = row(&got, p);
+        assert!(!r.state_dir_known, "{p}");
         assert_eq!(
-            moves.len(),
-            3,
-            "今の記録と history の account の記録: {moves:?}"
+            (&r.seat, &r.runs, &r.ledger, &r.next),
+            (
+                &Reading::Unknown,
+                &Reading::Unknown,
+                &Reading::Unknown,
+                &Reading::Unknown
+            ),
+            "{p}"
         );
     }
+    // 台帳が読めない project は台帳と次の一手が Unknown。
+    let b = row(&got, "proj-b");
+    assert_eq!((&b.ledger, &b.next), (&Reading::Unknown, &Reading::Unknown));
+    for p in ["proj-a", "proj-e"] {
+        let r = row(&got, p);
+        assert!(matches!(r.ledger, Reading::Known(_)), "{p}");
+        assert!(matches!(r.next, Reading::Known(_)), "{p}");
+    }
+    assert!(matches!(got.accounts, Reading::Known(_)));
+    assert!(matches!(got.groups, Reading::Known(_)));
+    let Reading::Known(moves) = &got.moves else {
+        panic!("移動が Unknown");
+    };
+    assert_eq!(
+        moves.len(),
+        3,
+        "今の記録と history の account の記録: {moves:?}"
+    );
 }
 
 #[test]
@@ -994,6 +1015,11 @@ fn cspk_acct_reads_host_log() {
         ]
     );
     assert_eq!(got, place.core_doc(&[]));
+    host_log_unmarked(acct, host_log, b_log);
+}
+
+/// 引数の state dir の log は印にせず、anchor の state dir の log は印にする。
+fn host_log_unmarked(acct: Acct, host_log: PathBuf, b_log: PathBuf) {
     let marks = acct.marks();
     assert!(!marks.contains(&host_log), "引数の state dir の log は印にしない");
     assert!(marks.contains(&b_log));

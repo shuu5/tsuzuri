@@ -280,15 +280,7 @@ impl Field {
         let _ = fs::remove_dir_all(&root);
         let records = root.join("records");
         fs::create_dir_all(&records).expect("記録の置き場");
-        let input = root.join("in.fifo");
-        let output = root.join("out.fifo");
-        for fifo in [&input, &output] {
-            let made = Process::new("mkfifo")
-                .arg(fifo)
-                .status()
-                .expect("mkfifo を撃つ");
-            assert!(made.success(), "mkfifo {}", fifo.display());
-        }
+        let (input, output) = Self::fifos(&root);
         let status = root.join("status");
         fs::write(&status, STATUS).expect("場の status");
         let port = root.join("port");
@@ -337,6 +329,20 @@ impl Field {
             port,
             mark,
         }
+    }
+
+    /// 場の 2 つの FIFO（in.fifo と out.fifo）を作る。
+    fn fifos(root: &Path) -> (PathBuf, PathBuf) {
+        let input = root.join("in.fifo");
+        let output = root.join("out.fifo");
+        for fifo in [&input, &output] {
+            let made = Process::new("mkfifo")
+                .arg(fifo)
+                .status()
+                .expect("mkfifo を撃つ");
+            assert!(made.success(), "mkfifo {}", fifo.display());
+        }
+        (input, output)
     }
 
     /// 偽の program の argv の記録（撃たれた順）。
@@ -400,63 +406,9 @@ fn serve(field: &Field, page: Page) -> JoinHandle<Vec<String>> {
                 }
                 _ => break,
             }
-            let text = String::from_utf8(buf).expect("字の message");
-            got.push(text.clone());
-            let id = json::member(&text, "id").expect("鍵 id").to_string();
-            let method = json::member(&text, "method")
-                .and_then(json::unquote)
-                .expect("鍵 method");
-            let session = json::member(&text, "sessionId").map(str::to_string);
-            let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
-            let replies = match method.as_str() {
-                "Target.getTargets" => {
-                    asks += 1;
-                    let shown = match page {
-                        Page::First => true,
-                        Page::Second => asks >= 2,
-                        Page::Never => false,
-                    };
-                    let mut infos = vec![
-                        r#"{"targetId":"W1","type":"service_worker","url":"chrome-extension://x/bg.js"}"#
-                            .to_string(),
-                    ];
-                    if shown {
-                        infos.push(format!(
-                            r#"{{"targetId":"T1","type":"page","url":{}}}"#,
-                            json::escape(&now)
-                        ));
-                    }
-                    vec![format!(
-                        r#"{{"id":{id},"result":{{"targetInfos":[{}]}}}}"#,
-                        infos.join(",")
-                    )]
-                }
-                "Target.attachToTarget" => vec![
-                    r#"{"method":"Target.attachedToTarget","params":{"sessionId":"S1","targetInfo":{"targetId":"T1","type":"page"},"waitingForDebugger":false}}"#
-                        .to_string(),
-                    format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#),
-                ],
-                "Page.navigate" => {
-                    now = json::member(&text, "params")
-                        .and_then(|p| json::member(p, "url"))
-                        .and_then(json::unquote)
-                        .expect("移り先の url");
-                    vec![ok, LOAD.to_string()]
-                }
-                "Page.captureScreenshot" => {
-                    vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
-                }
-                "Runtime.evaluate" => vec![format!(
-                    r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
-                    json::escape(DOM)
-                )],
-                "Runtime.enable" => vec![CONSOLE.to_string(), ok],
-                "Page.getNavigationHistory" => vec![format!(
-                    r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
-                    json::escape(&now)
-                )],
-                _ => vec![ok],
-            };
+            let (replies, session, next, count) = respond(buf, &mut got, now, asks, page);
+            now = next;
+            asks = count;
             for reply in replies {
                 let reply = match &session {
                     Some(s) => format!("{{\"sessionId\":{s},{}", &reply[1..]),
@@ -471,6 +423,74 @@ fn serve(field: &Field, page: Page) -> JoinHandle<Vec<String>> {
         }
         got
     })
+}
+
+/// 受けた 1 つの message を記し、返す message の列と session と今の頁と頁の一覧を問われた回数を返す。
+fn respond(
+    buf: Vec<u8>,
+    got: &mut Vec<String>,
+    mut now: String,
+    mut asks: i32,
+    page: Page,
+) -> (Vec<String>, Option<String>, String, i32) {
+    let text = String::from_utf8(buf).expect("字の message");
+    got.push(text.clone());
+    let id = json::member(&text, "id").expect("鍵 id").to_string();
+    let method = json::member(&text, "method")
+        .and_then(json::unquote)
+        .expect("鍵 method");
+    let session = json::member(&text, "sessionId").map(str::to_string);
+    let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
+    let replies = match method.as_str() {
+        "Target.getTargets" => {
+            asks += 1;
+            let shown = match page {
+                Page::First => true,
+                Page::Second => asks >= 2,
+                Page::Never => false,
+            };
+            let mut infos = vec![
+                r#"{"targetId":"W1","type":"service_worker","url":"chrome-extension://x/bg.js"}"#
+                    .to_string(),
+            ];
+            if shown {
+                infos.push(format!(
+                    r#"{{"targetId":"T1","type":"page","url":{}}}"#,
+                    json::escape(&now)
+                ));
+            }
+            vec![format!(
+                r#"{{"id":{id},"result":{{"targetInfos":[{}]}}}}"#,
+                infos.join(",")
+            )]
+        }
+        "Target.attachToTarget" => vec![
+            r#"{"method":"Target.attachedToTarget","params":{"sessionId":"S1","targetInfo":{"targetId":"T1","type":"page"},"waitingForDebugger":false}}"#
+                .to_string(),
+            format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#),
+        ],
+        "Page.navigate" => {
+            now = json::member(&text, "params")
+                .and_then(|p| json::member(p, "url"))
+                .and_then(json::unquote)
+                .expect("移り先の url");
+            vec![ok, LOAD.to_string()]
+        }
+        "Page.captureScreenshot" => {
+            vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
+        }
+        "Runtime.evaluate" => vec![format!(
+            r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
+            json::escape(DOM)
+        )],
+        "Runtime.enable" => vec![CONSOLE.to_string(), ok],
+        "Page.getNavigationHistory" => vec![format!(
+            r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
+            json::escape(&now)
+        )],
+        _ => vec![ok],
+    };
+    (replies, session, now, asks)
 }
 
 /// 受けた message の method の列。

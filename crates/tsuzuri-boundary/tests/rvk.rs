@@ -539,7 +539,11 @@ fn rvk_latest_and_revocable_table() {
             "{notes:?} {question} {ruling}"
         );
     }
+    revocable_rows(t);
+}
 
+/// 取り消せる問いの真と偽の表と、裁定の行の頭の字の一致を見る。
+fn revocable_rows(t: Table) {
     let truthy = [
         (item("closed", true, &[&t.a, &t.b]), B),
         (item("closed", true, &[&t.a, &t.b, &t.r]), B),
@@ -814,7 +818,17 @@ fn rvk_retry_reopens_only() {
     );
     assert_eq!(place.calls("bdw").len(), 1);
     assert!(place.calls("scribe2").is_empty(), "落ちた書きの後に配達する");
+    stale_and_http(tooth, (old, id), lines, ledger, req);
+}
 
+/// 撃ち直しが古い版で断られる台帳と、口の server での開き直しだけの撃ち直しを見る。
+fn stale_and_http(
+    tooth: &str,
+    (old, id): (&str, &str),
+    lines: [String; 2],
+    ledger: String,
+    req: RevokeRequest,
+) {
     // 答え直した後・問いの欄が違う・open の台帳は 409 で何も撃たない。
     let answered = [
         lines[0].clone(),
@@ -920,6 +934,17 @@ fn rvk_http_guard_and_reply() {
         assert_eq!(refused(&reply), want, "{req:?}");
     }
     assert!(place.calls("bdw").is_empty(), "守りと断りで偽の bdw を撃つ");
+    written_and_failed(tooth, ledger, good, place, addr);
+}
+
+/// 書けた時の応答と、書きが落ちた時・台帳が読めない時の応答を見る。
+fn written_and_failed(
+    tooth: &str,
+    ledger: String,
+    good: RevokeRequest,
+    place: Place,
+    addr: SocketAddr,
+) {
     // 書いた。
     let reply = post(addr, &good);
     assert_eq!(reply.status, 200, "{}", reply.body);

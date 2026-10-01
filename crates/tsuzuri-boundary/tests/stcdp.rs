@@ -788,6 +788,11 @@ fn stage_cdp_json_helpers() {
     assert_eq!(json::member("[1]", "id"), None);
     assert_eq!(json::member("7", "id"), None);
 
+    unquote_cases();
+}
+
+/// json::unquote が逃がしの字を戻し、引用符の無い字と壊れた逃がしを断ることを見る。
+fn unquote_cases() {
     assert_eq!(
         json::unquote(r#""a\u00e9\ud83d\ude00\"\\\/\n""#).as_deref(),
         Some("a\u{e9}\u{1F600}\"\\/\n")
@@ -858,6 +863,11 @@ fn stage_cdp_steps_table() {
         vec![call("Runtime.evaluate", DOM_PARAMS)],
         vec![call("Runtime.enable", "{}"), call("Log.enable", "{}")],
     ];
+    steps_match_table(want);
+}
+
+/// 台本の命令ごとの段が表のとおりで、CDP の電文の字が決まりの形であることを見る。
+fn steps_match_table(want: [Vec<Step>; 11]) {
     for (command, want) in script().iter().zip(want) {
         assert_eq!(cdp::steps(command), want, "{command:?}");
     }

@@ -522,7 +522,7 @@ fn server_batch_refusals_write_nothing() {
     let addr = place.serve();
     let (d2, d3, d4) = (digest(addr, Q2), digest(addr, Q3), digest(addr, A1));
     let stale = "0000000000000000";
-    for (items, verbatim, want) in [
+    let rows = vec![
         // A-1 の印を持つ問いを含む束。
         (
             vec![item(Q2, &d2, None), item(A1, &d4, Some("個別"))],
@@ -560,6 +560,19 @@ fn server_batch_refusals_write_nothing() {
             "",
             Refusal::EmptyVerbatim,
         ),
+    ];
+    refuse_rows(place, addr, rows, (d2, d3, d4), stale);
+}
+
+/// 断る行が 2 つ在る束を表に足して撃ち、表の外の断りと断りで書かないことを見る。
+fn refuse_rows(
+    place: Place,
+    addr: SocketAddr,
+    rows: Vec<(Vec<BatchItem>, &str, Refusal)>,
+    (d2, d3, d4): (String, String, String),
+    stale: &str,
+) {
+    for (items, verbatim, want) in rows.into_iter().chain([
         // 断る行が 2 つ在れば、要求の順で先の行の理由。
         (
             vec![item(MISSING, &d2, None), item(A1, &d4, None)],
@@ -586,7 +599,7 @@ fn server_batch_refusals_write_nothing() {
             "はい",
             Refusal::StaleVersion,
         ),
-    ] {
+    ]) {
         let label = format!("{items:?} {verbatim:?}");
         let reply = post_batch(addr, items, verbatim);
         assert_eq!(reply.status, want.http_status(), "{label}: {}", reply.body);
@@ -810,6 +823,11 @@ fn server_batch_guards_write_nothing() {
     }
     assert!(place.calls("bdw").is_empty(), "守りで偽の bdw を撃つ");
     assert!(place.calls("scribe2").is_empty(), "守りで偽の器を撃つ");
+    guards_pass_same_origin(place, addr, bodies);
+}
+
+/// 同じ Origin の要求は通り、GET でない要求を受けない口と method は 405 であることを見る。
+fn guards_pass_same_origin(place: Place, addr: SocketAddr, bodies: [(&str, String); 2]) {
     // 同じ Origin は通る（束の配達の印を待ってから方針を送る）。
     for (path, body) in &bodies {
         let reply = send(

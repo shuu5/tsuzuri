@@ -314,22 +314,7 @@ impl Field {
             .join("stcli")
             .join(name);
         let _ = fs::remove_dir_all(&root);
-        let records = root.join("records");
-        let repo = root.join("repo");
-        let state = root.join("state");
-        for dir in [&records, &repo, &state] {
-            fs::create_dir_all(dir).expect("場の dir");
-        }
-        fs::write(state.join(terminal::FACE), fixture()).expect("host の面");
-        let input = root.join("in.fifo");
-        let output = root.join("out.fifo");
-        for fifo in [&input, &output] {
-            let made = Process::new("mkfifo")
-                .arg(fifo)
-                .status()
-                .expect("mkfifo を撃つ");
-            assert!(made.success(), "mkfifo {}", fifo.display());
-        }
+        let (records, repo, state, input, output) = Self::dirs(&root);
         let status = root.join("status");
         fs::write(&status, STATUS).expect("場の status");
         let tmp = env::temp_dir().join(format!("stcli-{name}-{}", process::id()));
@@ -361,24 +346,8 @@ impl Field {
             "scribe2",
             &format!("if [ -e '{}' ]; then exit 1; fi\nexit 0\n", broken.display()),
         );
-        let git = fake(
-            &root,
-            "git",
-            &format!(
-                "case \"$5\" in\n  scribe2.statedir) printf '%s\\n' '{}' ;;\n  tsuzuri.boardport) printf '4801\\n' ;;\n  *) exit 1 ;;\nesac\n",
-                state.display()
-            ),
-        );
-        let tailnet = fake(&root, "tailnet", &format!("exec cat '{}'\n", status.display()));
-        let chrome = fake(
-            &root,
-            "chrome",
-            &format!(
-                "cat <&3 > '{}' &\nexec cat '{}' >&4\n",
-                input.display(),
-                output.display()
-            ),
-        );
+        let (git, tailnet, chrome) =
+            Self::local_fakes(root.clone(), &state, &status, &input, &output);
         Field {
             root,
             repo,
@@ -398,6 +367,56 @@ impl Field {
             broken,
             config,
         }
+    }
+
+    /// 場の dir と host の面と 2 つの FIFO を作る。
+    fn dirs(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf, PathBuf) {
+        let records = root.join("records");
+        let repo = root.join("repo");
+        let state = root.join("state");
+        for dir in [&records, &repo, &state] {
+            fs::create_dir_all(dir).expect("場の dir");
+        }
+        fs::write(state.join(terminal::FACE), fixture()).expect("host の面");
+        let input = root.join("in.fifo");
+        let output = root.join("out.fifo");
+        for fifo in [&input, &output] {
+            let made = Process::new("mkfifo")
+                .arg(fifo)
+                .status()
+                .expect("mkfifo を撃つ");
+            assert!(made.success(), "mkfifo {}", fifo.display());
+        }
+        (records, repo, state, input, output)
+    }
+
+    /// 偽の git と tailnet と chrome を置く。
+    fn local_fakes(
+        root: PathBuf,
+        state: &Path,
+        status: &Path,
+        input: &Path,
+        output: &Path,
+    ) -> (PathBuf, PathBuf, PathBuf) {
+        let git = fake(
+            &root,
+            "git",
+            &format!(
+                "case \"$5\" in\n  scribe2.statedir) printf '%s\\n' '{}' ;;\n  tsuzuri.boardport) printf '4801\\n' ;;\n  *) exit 1 ;;\nesac\n",
+                state.display()
+            ),
+        );
+        let tailnet = fake(&root, "tailnet", &format!("exec cat '{}'\n", status.display()));
+        let chrome = fake(
+            &root,
+            "chrome",
+            &format!(
+                "cat <&3 > '{}' &\nexec cat '{}' >&4\n",
+                input.display(),
+                output.display()
+            ),
+        );
+        (git, tailnet, chrome)
     }
 
     /// 偽の program の argv の記録（撃たれた順）。
@@ -523,43 +542,8 @@ fn serve(field: &Field) -> JoinHandle<Vec<String>> {
                 }
                 _ => break,
             }
-            let text = String::from_utf8(buf).expect("字の message");
-            got.push(text.clone());
-            let id = json::member(&text, "id").expect("鍵 id").to_string();
-            let method = json::member(&text, "method")
-                .and_then(json::unquote)
-                .expect("鍵 method");
-            let session = json::member(&text, "sessionId").map(str::to_string);
-            let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
-            let replies = match method.as_str() {
-                "Target.getTargets" => vec![format!(
-                    r#"{{"id":{id},"result":{{"targetInfos":[{{"targetId":"T1","type":"page","url":{}}}]}}}}"#,
-                    json::escape(&now)
-                )],
-                "Target.attachToTarget" => {
-                    vec![format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#)]
-                }
-                "Page.navigate" => {
-                    now = json::member(&text, "params")
-                        .and_then(|p| json::member(p, "url"))
-                        .and_then(json::unquote)
-                        .expect("移り先の url");
-                    vec![ok, LOAD.to_string()]
-                }
-                "Page.captureScreenshot" => {
-                    vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
-                }
-                "Runtime.evaluate" => vec![format!(
-                    r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
-                    json::escape(DOM)
-                )],
-                "Runtime.enable" => vec![CONSOLE.to_string(), ok],
-                "Page.getNavigationHistory" => vec![format!(
-                    r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
-                    json::escape(&now)
-                )],
-                _ => vec![ok],
-            };
+            let (replies, session, next) = respond(buf, &mut got, now);
+            now = next;
             for reply in replies {
                 let reply = match &session {
                     Some(s) => format!("{{\"sessionId\":{s},{}", &reply[1..]),
@@ -574,6 +558,52 @@ fn serve(field: &Field) -> JoinHandle<Vec<String>> {
         }
         got
     })
+}
+
+/// 受けた 1 つの message を記し、返す message の列と session と今の頁を返す。
+fn respond(
+    buf: Vec<u8>,
+    got: &mut Vec<String>,
+    mut now: String,
+) -> (Vec<String>, Option<String>, String) {
+    let text = String::from_utf8(buf).expect("字の message");
+    got.push(text.clone());
+    let id = json::member(&text, "id").expect("鍵 id").to_string();
+    let method = json::member(&text, "method")
+        .and_then(json::unquote)
+        .expect("鍵 method");
+    let session = json::member(&text, "sessionId").map(str::to_string);
+    let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
+    let replies = match method.as_str() {
+        "Target.getTargets" => vec![format!(
+            r#"{{"id":{id},"result":{{"targetInfos":[{{"targetId":"T1","type":"page","url":{}}}]}}}}"#,
+            json::escape(&now)
+        )],
+        "Target.attachToTarget" => {
+            vec![format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#)]
+        }
+        "Page.navigate" => {
+            now = json::member(&text, "params")
+                .and_then(|p| json::member(p, "url"))
+                .and_then(json::unquote)
+                .expect("移り先の url");
+            vec![ok, LOAD.to_string()]
+        }
+        "Page.captureScreenshot" => {
+            vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
+        }
+        "Runtime.evaluate" => vec![format!(
+            r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
+            json::escape(DOM)
+        )],
+        "Runtime.enable" => vec![CONSOLE.to_string(), ok],
+        "Page.getNavigationHistory" => vec![format!(
+            r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
+            json::escape(&now)
+        )],
+        _ => vec![ok],
+    };
+    (replies, session, now)
 }
 
 /// 受けた message の method の列。
@@ -795,6 +825,13 @@ fn stcli_parse_table() {
             vec!["reload", "--to", "term-a"],
             plain(one(Command::Reload), "term-a"),
         ),
+    ];
+    parse_more(table);
+}
+
+/// 読みの表の中ほどの行（click から screenshot まで）を足して続ける。
+fn parse_more(mut table: Vec<(Vec<&str>, Call)>) {
+    let rest: Vec<(Vec<&str>, Call)> = vec![
         (
             vec!["click", "--to", "term-a", "--x", "10", "--y", "20"],
             plain(one(Command::Click { x: 10, y: 20 }), "term-a"),
@@ -841,6 +878,14 @@ fn stcli_parse_table() {
                 "term-a",
             ),
         ),
+    ];
+    table.extend(rest);
+    parse_last(table);
+}
+
+/// 読みの表の残りの行（dom から後）を足して、表の全部を撃つ。
+fn parse_last(mut table: Vec<(Vec<&str>, Call)>) {
+    let rest: Vec<(Vec<&str>, Call)> = vec![
         (
             vec!["dom", "--to", "term-a"],
             plain(one(Command::Dom), "term-a"),
@@ -879,10 +924,15 @@ fn stcli_parse_table() {
             },
         ),
     ];
+    table.extend(rest);
     for (args, want) in table {
         assert_eq!(cli::parse(&args), Ok(want), "{args:?}");
     }
+    parse_refusals();
+}
 
+/// 読みの断りの表（命令と旗と値の形）。
+fn parse_refusals() {
     let refusals: [(&[&str], &str); 19] = [
         (&[], "命令が無い"),
         (&["jump", "--to", "term-a"], "知らない命令 jump"),
@@ -1355,7 +1405,11 @@ fn stcli_foreign_tables() {
     assert!(account_page("http://x/?a=1&board=account#f"));
     assert!(!account_page("http://x/#f?board=account"));
     assert!(!account_page("http://x/?board=account2"));
+    page_url_table();
+}
 
+/// 頁の一覧の字から websocket の path の頁の URL を引く表。
+fn page_url_table() {
     let list = format!(
         "[ {}, {} ]",
         r#"{"type":"page","url":"http://a/","webSocketDebuggerUrl":"ws://localhost/devtools/page/P1"}"#,
@@ -1463,6 +1517,11 @@ fn stcli_memo_round_trip() {
     for bad in ["", ".x", "a/b", "a b"] {
         assert_eq!(memo::path(&root, bad), None, "{bad:?}");
     }
+    memo_puts(root, a, b);
+}
+
+/// 覚えの file へ書く・読む・権限を 0600 に保つ。
+fn memo_puts(root: PathBuf, a: &str, b: &str) {
     let file = root.join("tzst-term-a.win");
     assert_eq!(memo::recall(&file, "p"), None);
     assert_eq!(memo::put(&file, "p", a), Ok(true));
@@ -1482,7 +1541,11 @@ fn stcli_memo_round_trip() {
     fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).expect("権限を緩める");
     assert_eq!(memo::put(&file, "r", a), Ok(true));
     assert_eq!(mode(&file), 0o600);
+    memo_bad_puts(root, file, a);
+}
 
+/// 形の悪い project と頁の覚えは断り、file も dir も替えない。
+fn memo_bad_puts(root: PathBuf, file: PathBuf, a: &str) {
     let text = fs::read_to_string(&file).expect("覚えの字");
     for (project, page) in [
         ("", a),
@@ -1527,7 +1590,11 @@ fn stcli_open_marks_shown() {
     assert_eq!(out, [LIVE_A, LINE]);
     assert_eq!(field.shown(), shown);
     far.stop();
+    reload_without_window(field, shown);
+}
 
+/// 窓の無い端末への reload は断り、印を替えない。
+fn reload_without_window(field: Field, shown: Vec<(String, u64)>) {
     let mut targets = target::load(&field.config).expect("場の表示先の設定");
     targets.default = Some("term-a".to_string());
     target::save(&field.config, &targets).expect("既定を置く");

@@ -206,6 +206,11 @@ impl Field {
         }
         fs::write(state.join(FACE), face()).expect("host の面");
         symlink("/usr/bin/env", far.join("env")).expect("far の env");
+        Self::put_fakes(root, repo, state, far)
+    }
+
+    /// 場の status の字と偽の器・git・tailnet の道具・ssh を置いた場。
+    fn put_fakes(root: PathBuf, repo: PathBuf, state: PathBuf, far: PathBuf) -> Field {
         let status = root.join("status");
         fs::write(&status, STATUS).expect("場の status");
         let broken = root.join("broken");
@@ -386,6 +391,11 @@ fn stnfy_shape_and_consts() {
         save,
     );
 
+    rc_and_line_tables(outcome, line);
+}
+
+/// 器の rc から結果への写しと、結果ごとの報告の行の字を表で見る。
+fn rc_and_line_tables(outcome: fn(i32) -> Outcome, line: fn(&str, &Outcome) -> String) {
     let table: [(i32, Outcome); 5] = [
         (0, Outcome::Sent),
         (127, Outcome::Absent),
@@ -732,6 +742,11 @@ fn stnfy_cli_refusals() {
     assert_eq!(title(&field).as_deref(), Some("v"));
     fs::remove_file(&field.broken).expect("印を消す");
 
+    later_refusals(field, title);
+}
+
+/// 記録の path が決まらない・tailnet の道具が落ちる・題の無い要求の断りと、撃った知らせの数を見る。
+fn later_refusals(field: Field, title: impl Fn(&Field) -> Option<String>) {
     let (rc, out, _) = field.tz_env(&["--to", "term-a", "r"], OsStr::new("rel"), OsStr::new("h"));
     assert_eq!(rc, 1, "{out:?}");
     assert_eq!(

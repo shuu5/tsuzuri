@@ -465,6 +465,11 @@ fn rhold_routes_hold_and_mark() {
             assert!(matches!(stats, Reading::Known(_)), "{}", reply.body);
         }
     }
+    plain_and_up(place, addr);
+}
+
+/// 台帳を読まない口の頭の無さと、戻した後に頭が消えるまでを見る。
+fn plain_and_up(place: Place, addr: SocketAddr) {
     // 台帳を読まない口は頭を付けない。
     let project = get(addr, "/api/project");
     assert_eq!(project.status, 200, "{}", project.body);

@@ -531,6 +531,11 @@ fn shb_own_anchor_by_path() {
     );
     assert!(!off.exists(), "器が停止の記録を消す");
 
+    own_by_other_paths(place, acct);
+}
+
+/// 別の字の path・最後の名が同じ anchor・末尾の「/」の宣言でも、名でなく dir で anchor を引くことを見る。
+fn own_by_other_paths(place: Place, acct: Acct) {
     // 同じ dir を指す別の字の path。
     for repo in [place.proj("proj-a").join("inner").join(".."), place.link()] {
         assert_eq!(

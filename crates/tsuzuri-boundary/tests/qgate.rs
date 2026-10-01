@@ -544,6 +544,11 @@ fn qgate_bad_args_close_drafts_only() {
             folio,
         ]),
     ];
+    deny_bad_args(place, cases);
+}
+
+/// 壊れた引数の組ごとに、起票の呼びは args の拒み・ほかの呼びは rc 1 で、偽の bd と設計の道具を撃たない。
+fn deny_bad_args(place: Place, cases: Vec<Vec<OsString>>) {
     let deny = gate::output(&Gate::Deny {
         why: Why::Args,
         ids: Vec::new(),

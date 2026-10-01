@@ -104,6 +104,11 @@ impl Place {
                  exec cat '{root}/out-'\"$out\""
             ),
         );
+        Self::put_texts(place)
+    }
+
+    /// 組の字（器の出力・state dir の file・群の記録）を作業場に置く。
+    fn put_texts(place: Place) -> Place {
         let t = &place.texts;
         let outputs = [&t.tick_status, &t.doctor, &t.usage];
         for (out, text) in OUTPUTS.iter().zip(outputs) {

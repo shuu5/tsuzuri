@@ -335,7 +335,11 @@ fn sttgt_targets_ops() {
     assert_eq!(t.default.as_deref(), Some("term-b"));
     assert!(t.projects.is_empty());
     assert_eq!(t.shown, fixture.shown);
+    layer_names();
+}
 
+/// 層 A の名の照らしと project の名の形。
+fn layer_names() {
     let layer = strings(&["term-a", "term-b"]);
     assert_eq!(known("term-b", &layer), Ok(()));
     assert_eq!(
@@ -479,7 +483,11 @@ fn sttgt_parse_target_table() {
         let e = err(parse_target(args), &format!("{args:?}"));
         assert!(e.starts_with(head), "{args:?}: {e}");
     }
+    show_lines();
+}
 
+/// 表示先の設定の show の行（上書きと既定と層 A の名）。
+fn show_lines() {
     let fixture = fixture_value();
     assert_eq!(
         show(
@@ -553,7 +561,11 @@ fn sttgt_cli_settings() {
     let refused = err(known("term-x", &strings(&["term-a", "term-b"])), "term-x");
     assert_eq!(out, [refused]);
     assert_eq!(field.written().as_deref(), Some(both.as_str()));
+    clear_and_broken(field);
+}
 
+/// 上書きを外す・全体の既定で上書きを外す・検証の落ちで書かない。
+fn clear_and_broken(field: Field) {
     let (rc, out) = field.tz(&["target", "clear", "--project", "proj-c"]);
     assert_eq!(rc, 0, "{out:?}");
     assert_eq!(out, ["project proj-c の上書きを外した（効く値は既定 term-a）"]);
