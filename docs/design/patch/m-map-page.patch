@@ -1,0 +1,1554 @@
+diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
+index 5c0d2916e4e9474d0ad4d197bd8bbeeb391e9016..24a43d01363dea113cb62ec1a00ccfe4f2d532f0 100644
+--- a/crates/tsuzuri-boundary/src/audit.rs
++++ b/crates/tsuzuri-boundary/src/audit.rs
+@@ -302,24 +302,19 @@ pub const WIDTHS: [u32; 2] = [1280, 390];
+ pub const MODES: [&str; 2] = ["beginner", "expert"];
+ 
+ /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
+-/// project board の頁と地図の 6 つの面と account board の 3 つの tab（節点の頁は sweep が組ごとに足す）。
+-pub const SCREENS: [&str; 12] = [
++/// project board の頁と account board の 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は
++/// 行 m-map-page で消した）。
++pub const SCREENS: [&str; 6] = [
+     "?",
+     "?page=ask&",
+     "?page=gaps&",
+-    "?page=map&view=compact&",
+-    "?page=map&view=list&",
+-    "?page=map&view=graph&",
+-    "?page=map&view=table&",
+-    "?page=map&view=design&",
+-    "?page=map&view=ledger&",
+     "?board=account&tab=home&",
+     "?board=account&tab=session&",
+     "?board=account&tab=projects&",
+ ];
+ 
+-/// 節点の頁に開く最初の節点を採る画面（地図の圧縮の面）。
+-const COMPACT: &str = "?page=map&view=compact&";
++/// 節点の頁に開く最初の節点を採る画面（home・台帳の一覧の番号の札・地図の圧縮の面は行 m-map-page で消した）。
++const FIRST_NODE: &str = "?";
+ 
+ /// 狭い幅（この幅までは高さ 844 の mobile で撃つ・広い幅は高さ 800）。
+ const NARROW: u32 = 390;
+@@ -427,8 +422,8 @@ fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
+     Ok(())
+ }
+ 
+-/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 12 の画面と、
+-/// その組の地図の圧縮の面の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
++/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 6 の画面と、
++/// その組の home の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
+ pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
+     let mut report = head();
+     report.push('\n');
+@@ -446,12 +441,12 @@ pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String,
+             let mut first = None;
+             for screen in SCREENS {
+                 let facts = measure(page, &format!("{board}{screen}mode={mode}"), width, mode)?;
+-                if screen == COMPACT {
++                if screen == FIRST_NODE {
+                     first = facts.nodes.into_iter().next().map(|n| n.id);
+                 }
+             }
+             let id = first.ok_or_else(|| {
+-                format!("{width} {mode}: 地図の圧縮の面に節点が無い（節点の頁を開けない）")
++                format!("{width} {mode}: home の画面に節点が無い（節点の頁を開けない）")
+             })?;
+             let url = format!("{board}?page=node&id={}&mode={mode}", encode(&id));
+             measure(page, &url, width, mode)?;
+diff --git a/crates/tsuzuri-boundary/tests/jrun.rs b/crates/tsuzuri-boundary/tests/jrun.rs
+index 4c9bcba2ca82dc4e5f6be629510259f72a62119e..7bf6a4c354d6a0aa1c0e26561a7291498b231901 100644
+--- a/crates/tsuzuri-boundary/tests/jrun.rs
++++ b/crates/tsuzuri-boundary/tests/jrun.rs
+@@ -153,15 +153,11 @@ fn jrun_screens_cover_surface() {
+         .expect("面の頁の dir を読む")
+         .map(|e| e.expect("dir の項").file_name().to_string_lossy().into_owned())
+         .filter_map(|n| n.strip_suffix(".rs").map(str::to_string))
+-        .filter(|n| !["mod", "home", "map", "node"].contains(&n.as_str()))
++        .filter(|n| !["mod", "home", "node"].contains(&n.as_str()))
+         .collect();
+     pages.sort();
+     assert!(!pages.is_empty(), "頁の file");
+     want.extend(pages.iter().map(|p| format!("?page={p}&")));
+-    let map = fs::read_to_string(src.join("mapview/mod.rs")).expect("mapview/mod.rs を読む");
+-    let views = arms(&map, "pub fn name(self) -> &'static str {");
+-    assert_eq!(views.len(), 6, "{views:?}");
+-    want.extend(views.iter().map(|v| format!("?page=map&view={v}&")));
+     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
+     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
+     assert_eq!(tabs, ["home", "session", "projects"]);
+@@ -169,7 +165,7 @@ fn jrun_screens_cover_surface() {
+     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
+     got.sort();
+     got.dedup();
+-    assert_eq!(got.len(), 12, "SCREENS に重なりが無い");
++    assert_eq!(got.len(), 6, "SCREENS に重なりが無い");
+     want.sort();
+     assert_eq!(got, want);
+ }
+@@ -305,11 +301,11 @@ fn jrun_sweep_all_cases() {
+     const ID: &str = "t3-hub.5_2~#é";
+     let clean = fixture("clean.json");
+     assert_eq!(clean.matches("t3-hub.52").count(), 2, "札の id と字");
+-    let compact = clean.replace("t3-hub.52", ID);
++    let first = clean.replace("t3-hub.52", ID);
+     let vocab = fixture("vocab.json");
+     let measured = move |url: &str| {
+-        if url.contains("view=compact") {
+-            compact.clone()
++        if url.starts_with(&format!("{BOARD}?mode=")) {
++            first.clone()
+         } else {
+             clean.clone()
+         }
+@@ -329,7 +325,7 @@ fn jrun_sweep_all_cases() {
+             urls.extend(group.into_iter().map(|u| (width, mode, u)));
+         }
+     }
+-    assert_eq!(urls.len(), 52);
++    assert_eq!(urls.len(), 28);
+     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
+     assert_eq!(page.navigated(), navigated);
+     let mut want = vec![head()];
+@@ -361,16 +357,16 @@ fn jrun_sweep_all_cases() {
+     sweep_without_nodes(vocab);
+ }
+ 
+-/// 節点の無い圧縮の面では、節点の頁を開かずに止まる。
++/// 節点の無い home では、節点の頁を開かずに止まる。
+ fn sweep_without_nodes(vocab: String) {
+     let clean = fixture("clean.json");
+     let start = clean.find(r#""nodes": ["#).expect("札の列");
+     let end = start + clean[start..].find(']').expect("札の列の閉じ");
+     let bare = format!(r#"{}"nodes": []{}"#, &clean[..start], &clean[end + 1..]);
+     let mut empty = Fake::new(move |_| bare.clone(), |_, _| vec![LOAD.to_string()]);
+-    let err = sweep(&mut empty, BOARD, &vocab).expect_err("節点の無い圧縮の面");
++    let err = sweep(&mut empty, BOARD, &vocab).expect_err("節点の無い home");
+     assert!(err.contains("節点が無い"), "{err}");
+-    assert_eq!(empty.navigated().len(), 12, "節点の頁を開かずに止まる");
++    assert_eq!(empty.navigated().len(), 6, "節点の頁を開かずに止まる");
+ }
+ 
+ #[test]
+diff --git a/crates/tsuzuri-surface/src/kit.rs b/crates/tsuzuri-surface/src/kit.rs
+index 0fd5221285c6e2f0762e466b3d53c97b9b72fdd4..932533f747f342f050717fed77ecc369eed6fd42 100644
+--- a/crates/tsuzuri-surface/src/kit.rs
++++ b/crates/tsuzuri-surface/src/kit.rs
+@@ -11,6 +11,9 @@ use crate::mapview;
+ use crate::view::{self, Fetched};
+ use crate::vocab::label;
+ 
++/// グラフの口（/api/graph）の読み（行 m-map-page で地図の block から移した・crate::project::map の path で使う）。
++pub mod map;
++
+ /// block の中身（測れていない・0 件・中身あり）。0 件と測れていないを分ける（要件 NFR2）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum Body<T> {
+diff --git a/crates/tsuzuri-surface/src/kit/map.rs b/crates/tsuzuri-surface/src/kit/map.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ef5ef71193264c957c31ff976fd6a5d84bf92757
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/kit/map.rs
+@@ -0,0 +1,27 @@
++//! グラフの口（/api/graph）の読み（行 m-map-page で地図の block から移した）: 本文を契約の型の GraphDoc に読む。
++//! 地図の頁は消したが、節点の card（問い・台帳・pipeline・次の一手）と抜けの検査と問いの頁はこの口を読む。
++//! kit の下に置くので block でなく（Module の列に入らない）、project の mod.rs の glob の再公開で crate::project::map の
++//! path のまま使える（読む側の字は替えない）。
++
++use tsuzuri_contract::graph::GraphDoc;
++use tsuzuri_contract::wire;
++
++use super::{NO_CONTENT, NOT_READ};
++use crate::view::Fetched;
++
++/// 読みの口（便 g-parts）。
++pub const PATH: &str = "/api/graph";
++
++/// 口が読めないときの理由。
++pub const REASON: &str =
++    "地図の 7 つの出所を組む口が読めない（server にまだ無い・届かない・知らせが切れた）";
++
++/// 口の本文を電文に読む（まだ読んでいない・読めない・電文の型として読めないは理由）。
++/// 電文が読めない本文の理由は、中身の無い block と同じ（便 g-parts の歯が 3 値の理由を pin する）。
++pub fn doc(fetched: &Fetched) -> Result<GraphDoc, &'static str> {
++    match fetched {
++        Fetched::NotRead => Err(NOT_READ),
++        Fetched::Failed => Err(REASON),
++        Fetched::Body(text) => wire::decode::<GraphDoc>(text).map_err(|_| NO_CONTENT),
++    }
++}
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index f4993d91d2c7cf538b2218909f0b0ca1ef34cef2..ee4ae701e3c7c7c391796292d7dd6cdf259f2584 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -1,7 +1,7 @@
+ //! 面: 画面を持つ側。project board の頁の枠（frame）と block（project の下に 1 つずつ）と部品（widgets）を置く。
+ //! 見た目と頁の枠は見本（docs/design/mock3）に揃える（便 g-frame）: stylesheet は見本の ui.css の写し・語は vocab.json の写し。
+ //! 並べ方と状態の印と測れていないの判定（view）・枠の値（frame）・block の中身の関数は host でも組み立てて試す。
+-//! 地図の頁の面の部品（帯・圧縮・一覧・表・グラフと近傍）は mapview に置く（便 g-map・block の module は project の下の map）。
++//! 地図の面の部品（帯・圧縮・一覧・表・グラフと近傍）は mapview に置く（便 g-map・地図の頁と block は行 m-map-page で消した）。
+ //! DOM（board と各 module の view）と通信（net）は wasm の target のときだけ組み立てる（trunk が xtask の surface-build から呼ばれる）。
+ //! account board（便 h-frame）は account に置く: 入口は URL の query の board が account のときだけ選ぶ（同じ index.html と wasm）。
+ //! block に共通の部品は kit に置く（project が再公開する・行 hs-blocks）。
+diff --git a/crates/tsuzuri-surface/src/mapview/list.rs b/crates/tsuzuri-surface/src/mapview/list.rs
+index f0406cd7a68b4aaccba19a4e2dccddb87540b638..763c0fabbb0eb874514fc783a77ddeb768b6bd24 100644
+--- a/crates/tsuzuri-surface/src/mapview/list.rs
++++ b/crates/tsuzuri-surface/src/mapview/list.rs
+@@ -10,8 +10,7 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
+ use super::band::{Band, band_of, kind_from_name, kind_name};
+ use super::graph::cut;
+ use super::{
+-    VIEW_PARAM, View, kinds_by_id, natural, open_question, param, set_param, shape_class, state,
+-    unread_reasons,
++    kinds_by_id, natural, open_question, param, set_param, shape_class, state, unread_reasons,
+ };
+ use crate::view::{JST, clock};
+ use crate::widgets::hover::Card;
+@@ -108,12 +107,11 @@ pub fn with_choice(search: &str, key: &str, value: &str) -> String {
+     set_param(search, key, Some(value))
+ }
+ 
+-/// 種類の組で絞った後の URL の query（一覧の面へ移り、帯と種類の絞りを外す・None は組の絞りを外す）。
++/// 種類の組で絞った後の URL の query（帯と種類の絞りを外す・None は組の絞りを外す・面の切り替えは行 m-map-page で消した）。
+ pub fn with_pair(search: &str, pair: Option<(NodeKind, NodeKind)>) -> String {
+     match pair {
+         Some((from, to)) => {
+-            let s = set_param(search, VIEW_PARAM, Some(View::List.name()));
+-            let s = set_param(&s, PAIR_PARAM, Some(&pair_value(from, to)));
++            let s = set_param(search, PAIR_PARAM, Some(&pair_value(from, to)));
+             let s = set_param(&s, BAND_PARAM, None);
+             set_param(&s, KIND_PARAM, None)
+         }
+diff --git a/crates/tsuzuri-surface/src/mapview/mod.rs b/crates/tsuzuri-surface/src/mapview/mod.rs
+index 6b746373755ff7948dfefff28718aa916a47bc6d..450ef0e7299d1a9c144e6c3ee252442aa36502e7 100644
+--- a/crates/tsuzuri-surface/src/mapview/mod.rs
++++ b/crates/tsuzuri-surface/src/mapview/mod.rs
+@@ -1,5 +1,5 @@
+-//! 地図の頁の面の部品（便 g-map・見本の map.html）: 6 面の切り替え（圧縮・一覧・グラフ・表・設計の木・台帳の木）と、
+-//! 面に共通の小道具。電文（契約の型の GraphDoc）の読みは地図の module（project の下の map）が持ち、ここの関数は読めた電文だけを受ける。
++//! 地図の面の部品（便 g-map・見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは行 m-map-page で消した。
++//! 電文（契約の型の GraphDoc）の読みは kit の下の map（crate::project::map の path）が持ち、ここの関数は読めた電文だけを受ける。
+ //! 帯と種類の対応は band・圧縮の面は compact・一覧の面は list・表の面は table・グラフの面と近傍は graph と around・
+ //! 2 つの木の面は tree（行 g-map-tree）。
+ //! 並べ方と絞りと数え方と URL の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+@@ -20,70 +20,6 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, GraphSource, NodeKind};
+ 
+ use band::{Band, band_of, unread_reason};
+ 
+-/// 地図の面（閉じた 6・tab の順）。
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+-pub enum View {
+-    Compact,
+-    List,
+-    Graph,
+-    Table,
+-    Design,
+-    Ledger,
+-}
+-
+-impl View {
+-    /// 閉じた一覧（順も固定）。
+-    pub const ALL: [View; 6] = [
+-        View::Compact,
+-        View::List,
+-        View::Graph,
+-        View::Table,
+-        View::Design,
+-        View::Ledger,
+-    ];
+-
+-    /// URL の query の view の値。
+-    pub fn name(self) -> &'static str {
+-        match self {
+-            View::Compact => "compact",
+-            View::List => "list",
+-            View::Graph => "graph",
+-            View::Table => "table",
+-            View::Design => "design",
+-            View::Ledger => "ledger",
+-        }
+-    }
+-
+-    /// tab の語の鍵。
+-    pub fn key(self) -> &'static str {
+-        match self {
+-            View::Compact => "view_compact",
+-            View::List => "view_list",
+-            View::Graph => "view_graph",
+-            View::Table => "view_table",
+-            View::Design => "view_design",
+-            View::Ledger => "view_ledger",
+-        }
+-    }
+-
+-    /// URL の query の view から面を決める（無い・知らない値は圧縮の面）。
+-    pub fn from_query(search: &str) -> Self {
+-        let value = param(search, VIEW_PARAM);
+-        View::ALL
+-            .into_iter()
+-            .find(|v| value.as_deref() == Some(v.name()))
+-            .unwrap_or(View::Compact)
+-    }
+-}
+-
+-/// 今の面を残す URL の query の鍵。
+-pub const VIEW_PARAM: &str = "view";
+-
+-/// 面を切り替えた後の URL の query（ほかの値と順はそのまま）。
+-pub fn with_view(search: &str, view: View) -> String {
+-    set_param(search, VIEW_PARAM, Some(view.name()))
+-}
+-
+ /// 読めなかった出所の理由の行（出所の順・一覧と表の面の頭に出す）。
+ pub fn unread_reasons(doc: &GraphDoc) -> Vec<&'static str> {
+     let mut sources = doc.unread.clone();
+diff --git a/crates/tsuzuri-surface/src/mapview/tree.rs b/crates/tsuzuri-surface/src/mapview/tree.rs
+index b4f3e97284c3a9423ce81109a092de5c8e826a33..20857aec08a324006bbbbea5a98e459a4ad3b207 100644
+--- a/crates/tsuzuri-surface/src/mapview/tree.rs
++++ b/crates/tsuzuri-surface/src/mapview/tree.rs
+@@ -11,7 +11,7 @@ use tsuzuri_contract::graph::{
+ };
+ 
+ use super::band::{Band, band_of, unread_reason};
+-use super::{View, natural, open_question, retired_notes, shape_class, state};
++use super::{natural, open_question, retired_notes, shape_class, state};
+ use crate::kit::Item;
+ 
+ /// 木の面（閉じた 2・tab の順）。
+@@ -25,11 +25,11 @@ impl Tree {
+     /// 閉じた一覧（順も固定）。
+     pub const ALL: [Tree; 2] = [Tree::Design, Tree::Ledger];
+ 
+-    /// 地図の面（面の名と語の鍵は View が持つ）。
+-    pub fn view(self) -> View {
++    /// 木の語の鍵（6 面の切り替えの View は行 m-map-page で消した・鍵の字は同じ）。
++    pub fn key(self) -> &'static str {
+         match self {
+-            Tree::Design => View::Design,
+-            Tree::Ledger => View::Ledger,
++            Tree::Design => "view_design",
++            Tree::Ledger => "view_ledger",
+         }
+     }
+ 
+@@ -412,7 +412,7 @@ mod dom {
+             .flatten()
+             .map(unmeasured);
+         let empty = (f.unread.is_empty() && f.items.is_empty()).then(|| {
+-            view! { <div class="empty"><span>{label(tree.view().key())}</span><b class="num">"0"</b></div> }
++            view! { <div class="empty"><span>{label(tree.key())}</span><b class="num">"0"</b></div> }
+         });
+         let items = f
+             .items
+diff --git a/crates/tsuzuri-surface/src/pages/map.rs b/crates/tsuzuri-surface/src/pages/map.rs
+deleted file mode 100644
+index 26bef92e4a2c6ea18dade0544746512dc110031c..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/src/pages/map.rs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-//! 地図の頁（block は map の 1 つ）。
+-
+-use crate::frame::{Column, PageDef, STACK};
+-use crate::project::map;
+-
+-pub const PAGE: PageDef = PageDef {
+-    heading: "map",
+-    class: STACK,
+-    nav: Some(3),
+-    badge: false,
+-    icon: r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg>"#,
+-    columns,
+-};
+-
+-fn columns() -> Vec<Column> {
+-    vec![Column {
+-        class: STACK,
+-        blocks: vec![map::BLOCK],
+-    }]
+-}
+diff --git a/crates/tsuzuri-surface/src/project/map.rs b/crates/tsuzuri-surface/src/project/map.rs
+deleted file mode 100644
+index e0daf351a7e1a382781e2de89ef0594d7fa2d334..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/src/project/map.rs
++++ /dev/null
+@@ -1,150 +0,0 @@
+-//! 地図の頁（見本の map.html・便 g-map）: 見出しと節点の数・面の切り替えの tab（6 つ）・今の面の中身。
+-//! 口（/api/graph）の本文を契約の型の GraphDoc に読み、面の中身は mapview の下の module が組む。
+-//! グラフの面だけは自分の口（/api/graph/view）を graph の module の中で読む（便 g-graph）。
+-//! 今の面は URL の query の view に残す（無い・知らない値は圧縮の面）。
+-
+-use tsuzuri_contract::graph::GraphDoc;
+-use tsuzuri_contract::wire;
+-
+-use super::{Body, NO_CONTENT, NOT_READ};
+-use crate::frame::Block;
+-use crate::mapview::View;
+-use crate::view::Fetched;
+-
+-pub const BLOCK: Block = Block {
+-    id: "map",
+-    heading: "map",
+-    class: "panel",
+-};
+-
+-/// 読みの口（便 g-parts）。
+-pub const PATH: &str = "/api/graph";
+-
+-/// この file が字を持つ口の path（ほかの module の口を読む所は数えない・行 hs-derived）。
+-pub const PATHS: &[&str] = &[PATH];
+-
+-/// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
+-pub const FOLDS: &[&str] = &[];
+-
+-/// 口が読めないときの理由。
+-pub const REASON: &str =
+-    "地図の 7 つの出所を組む口が読めない（server にまだ無い・届かない・知らせが切れた）";
+-
+-/// 口の本文を電文に読む（まだ読んでいない・読めない・電文の型として読めないは理由）。
+-/// 電文が読めない本文の理由は、中身の無い block と同じ（便 g-parts の歯が 3 値の理由を pin する）。
+-pub fn doc(fetched: &Fetched) -> Result<GraphDoc, &'static str> {
+-    match fetched {
+-        Fetched::NotRead => Err(NOT_READ),
+-        Fetched::Failed => Err(REASON),
+-        Fetched::Body(text) => wire::decode::<GraphDoc>(text).map_err(|_| NO_CONTENT),
+-    }
+-}
+-
+-/// 中身の有無（測れていない・電文あり）。0 件と測れていないは帯ごとに面の中身が分ける。
+-pub fn body(fetched: &Fetched) -> Body<()> {
+-    match doc(fetched) {
+-        Err(reason) => Body::Unmeasured(reason),
+-        Ok(_) => Body::Filled(()),
+-    }
+-}
+-
+-/// tab の上の key で移る面（右の矢印は次・左の矢印は前・端は反対の端へ回る・ほかの key は None・見本の map.html）。
+-pub fn tab_step(now: View, key: &str) -> Option<View> {
+-    let n = View::ALL.len();
+-    let i = View::ALL.iter().position(|v| *v == now)?;
+-    let j = match key {
+-        "ArrowRight" => (i + 1) % n,
+-        "ArrowLeft" => (i + n - 1) % n,
+-        _ => return None,
+-    };
+-    View::ALL.get(j).copied()
+-}
+-
+-/// 見出しは頁の題（h1）にする（見本の map.html と同じ）。
+-#[cfg(target_arch = "wasm32")]
+-pub fn view() -> leptos::prelude::AnyView {
+-    dom::view()
+-}
+-
+-/// 地図の頁の DOM（wasm の target のときだけ）。
+-#[cfg(target_arch = "wasm32")]
+-mod dom {
+-    use leptos::ev;
+-    use leptos::prelude::*;
+-    use web_sys::wasm_bindgen::JsCast;
+-
+-    use super::{BLOCK, PATH, doc, tab_step};
+-    use crate::mapview::tree::{self, Tree};
+-    use crate::mapview::{View, compact, current, graph, list, navigate, table, with_view};
+-    use crate::project::unmeasured;
+-    use crate::vocab::label;
+-    use crate::widgets::help::h1;
+-
+-    /// 札の上の key（左右の矢印で次か前の札へ移り、その札に focus を移す）。
+-    fn tab_key(search: RwSignal<String>, e: &ev::KeyboardEvent) {
+-        let now = search.with_untracked(|s| View::from_query(s));
+-        let Some(next) = tab_step(now, &e.key()) else {
+-            return;
+-        };
+-        e.prevent_default();
+-        navigate(search, |s| with_view(s, next), true);
+-        let el = document()
+-            .get_element_by_id(&format!("tab-{}", next.name()))
+-            .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok());
+-        if let Some(el) = el {
+-            let _ = el.focus();
+-        }
+-    }
+-
+-    pub fn view() -> AnyView {
+-        let fetched = crate::net::read(PATH);
+-        let parsed = Memo::new(move |_| fetched.with(doc));
+-        let search = RwSignal::new(current());
+-        let back = window_event_listener(ev::popstate, move |_| search.set(current()));
+-        on_cleanup(move || back.remove());
+-        let count = move || {
+-            parsed.with(|d| {
+-                d.as_ref()
+-                    .ok()
+-                    .map(|d| view! { <span class="chip num">{d.nodes.len()}</span> })
+-            })
+-        };
+-        let step = move |e: ev::KeyboardEvent| tab_key(search, &e);
+-        let tabs = View::ALL
+-            .into_iter()
+-            .map(|v| {
+-                let on = move || search.with(|s| View::from_query(s) == v);
+-                let pick = move |_| navigate(search, |s| with_view(s, v), true);
+-                view! {
+-                    <button type="button" role="tab" id=format!("tab-{}", v.name()) aria-controls="view" data-view=v.name()
+-                        aria-selected=move || on().to_string() tabindex=move || if on() { "0" } else { "-1" } on:click=pick on:keydown=step>
+-                        <span class="hd" data-v=v.key()><span class="hd-t" data-term=v.key()>{label(v.key())}</span></span>
+-                    </button>
+-                }
+-            })
+-            .collect_view();
+-        let content = move || {
+-            let v = search.with(|s| View::from_query(s));
+-            parsed.with(|d| match d {
+-                Err(reason) => unmeasured(reason),
+-                Ok(d) => match v {
+-                    View::Compact => compact::view(d),
+-                    View::List => list::view(d, search),
+-                    View::Graph => graph::view(search),
+-                    View::Table => table::view(d, search),
+-                    View::Design => tree::view(d, Tree::Design, search),
+-                    View::Ledger => tree::view(d, Tree::Ledger, search),
+-                },
+-            })
+-        };
+-        let labelled = move || format!("tab-{}", search.with(|s| View::from_query(s)).name());
+-        view! {
+-            <section class=BLOCK.class id=BLOCK.id>
+-                <header class="row">{h1(BLOCK.heading)}{count}</header>
+-                <div class="tabs" role="tablist" aria-label=label("views") data-term="views">{tabs}</div>
+-                <div id="view" role="tabpanel" aria-labelledby=labelled>{content}</div>
+-            </section>
+-        }
+-        .into_any()
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/src/project/mod.rs b/crates/tsuzuri-surface/src/project/mod.rs
+index 2bbd5b3ad82dce7eac0860c5e62bcf1098289729..aa79424f20a9f133f7f3b81e809f754386f225d2 100644
+--- a/crates/tsuzuri-surface/src/project/mod.rs
++++ b/crates/tsuzuri-surface/src/project/mod.rs
+@@ -1,4 +1,4 @@
+-//! project board の block（便 g-frame）: 1 つの block（と地図の頁）に 1 つの module。
++//! project board の block（便 g-frame）: 1 つの block に 1 つの module。
+ //! 各 module は枠の値（`BLOCK`）と中身の純粋な関数を持ち、DOM は wasm の target のときだけ組み立てる。
+ //! 問いの頁（便 g-ask）は ask（問いの card の列・口 /api/questions）と askpage（これまでの決定・台帳の一覧の口）の 2 つ。
+ //! 抜けの検査の頁（便 g-gaps）は gaps（不変条件の 12 本の判定・口 /api/graph の定数は map の module の 1 本を使う）。
+diff --git a/crates/tsuzuri-surface/tests/acctframe.rs b/crates/tsuzuri-surface/tests/acctframe.rs
+index 7e6161099b00e27c8d4b21dfae19bbbfa51b3b86..24fc59bc5e4886813ee4008fbf62fd0bb2c3c1fd 100644
+--- a/crates/tsuzuri-surface/tests/acctframe.rs
++++ b/crates/tsuzuri-surface/tests/acctframe.rs
+@@ -87,7 +87,6 @@ fn acctframe_entry_selects_board_account_only() {
+     for (q, page) in [
+         ("", PageId::Home),
+         ("?page=ask", PageId::Ask),
+-        ("?page=map&mode=expert", PageId::Map),
+         ("?board=project&page=gaps", PageId::Gaps),
+         ("?page=node&id=FR1", PageId::Node),
+     ] {
+diff --git a/crates/tsuzuri-surface/tests/acctwire.rs b/crates/tsuzuri-surface/tests/acctwire.rs
+index 547816f972e4c248b4a08d60fef774a930a10450..29c543fb3d3c75ecd9325b0e4c7e68517e0ec1c2 100644
+--- a/crates/tsuzuri-surface/tests/acctwire.rs
++++ b/crates/tsuzuri-surface/tests/acctwire.rs
+@@ -27,7 +27,7 @@ fn acctwire_back_part_before_header() {
+     assert_eq!(BACK_WRAP, "backwrap");
+     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
+     assert_eq!(parts, ["brand", "nav", "updated", "mode"], "HEADER は変わらない");
+-    assert_eq!(frame::nav_keys(), ["home", "questions", "map", "gaps"]);
++    assert_eq!(frame::nav_keys(), ["home", "questions", "gaps"]);
+     let want = read("tests/snapshots/header.json");
+     let got = frame::header_snapshot();
+     assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
+diff --git a/crates/tsuzuri-surface/tests/askcard.rs b/crates/tsuzuri-surface/tests/askcard.rs
+index 099fac414c3872a0535f100a7a2d9cb8e751275a..2b0d9c9741be7059fb22b9222ccf709c4fa34c2e 100644
+--- a/crates/tsuzuri-surface/tests/askcard.rs
++++ b/crates/tsuzuri-surface/tests/askcard.rs
+@@ -50,12 +50,12 @@ fn in_order<S: AsRef<str>>(all: &[S], want: &[&str]) -> bool {
+     want.iter().all(|w| rest.any(|a| a.as_ref() == *w))
+ }
+ 
+-/// 頁の順は home・ask・map・gaps（nav の中の含まれ方と順）、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
+-/// header の link は ホーム・質問・地図・抜けの検査。
++/// 頁の順は home・ask・gaps（nav の中の含まれ方と順）、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
++/// header の link は ホーム・質問・抜けの検査。
+ #[test]
+ fn askcard_page_frame_and_nav() {
+     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
+-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
++    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
+     let page = frame::page(PageId::Ask);
+     assert_eq!(page.columns.len(), 2);
+     let left: Vec<&str> = page.columns[0].blocks.iter().map(|b| b.id).collect();
+@@ -74,13 +74,13 @@ fn header_links() {
+     let links = frame::nav_links(PageId::Ask);
+     let words: Vec<String> = links.iter().map(|l| vocab().label(l.key)).collect();
+     assert!(
+-        in_order(&words, &["ホーム", "質問", "地図", "抜けの検査"]),
++        in_order(&words, &["ホーム", "質問", "抜けの検査"]),
+         "{words:?}"
+     );
+-    // 数の印は問いの頁の link だけ（home・map・gaps の link は空）。
++    // 数の印は問いの頁の link だけ（home・gaps の link は空）。
+     for l in &links {
+         let want = if l.page == PageId::Ask { BADGE } else { "" };
+-        if matches!(l.key, "home" | "questions" | "map" | "gaps") {
++        if matches!(l.key, "home" | "questions" | "gaps") {
+             assert_eq!(l.badge, want, "{}", l.key);
+         }
+     }
+diff --git a/crates/tsuzuri-surface/tests/bvmpage.rs b/crates/tsuzuri-surface/tests/bvmpage.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..56c59d56ccf81fc6d188daec6126ca094f717e9d
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvmpage.rs
+@@ -0,0 +1,109 @@
++//! 行 m-map-page の歯（接頭辞 bvmpage_・判断の記録 ADR-27）: 地図の頁と地図の block と 6 面の切り替え（View）が無く、
++//! グラフの口（/api/graph）の読みは kit の下の map に移って crate::project::map の path のまま使える。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++
++use tsuzuri_surface::frame::{self, Mode, PageId};
++use tsuzuri_surface::project::{Module, map};
++use tsuzuri_surface::view::Fetched;
++
++fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// src の下の .rs の file の全部（path の順）。
++fn sources() -> Vec<(PathBuf, String)> {
++    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
++        for entry in std::fs::read_dir(dir).expect("src を読む").flatten() {
++            let p = entry.path();
++            if p.is_dir() {
++                walk(&p, out);
++            } else if p.extension().is_some_and(|x| x == "rs") {
++                out.push(p);
++            }
++        }
++    }
++    let mut paths = Vec::new();
++    walk(&crate_dir().join("src"), &mut paths);
++    paths.sort();
++    paths
++        .into_iter()
++        .map(|p| {
++            let text = std::fs::read_to_string(&p).expect("src の file");
++            (p, text)
++        })
++        .collect()
++}
++
++/// (1) 頁は ask・gaps・home・node の 4 つで、nav は home・questions・gaps の 3 つ・地図の頁の file と snapshot が無く、
++/// 前の地図の URL は home に落ちる。
++#[test]
++fn bvmpage_no_map_page() {
++    let ids: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
++    assert_eq!(ids, ["ask", "gaps", "home", "node"]);
++    assert_eq!(frame::nav_keys(), ["home", "questions", "gaps"]);
++    for page in frame::pages() {
++        assert!(!page.block_ids().contains(&"map"), "{:?}", page.id);
++    }
++    for mode in Mode::ALL {
++        let q = format!("?page=map&mode={}", mode.key());
++        assert_eq!(PageId::from_query(&q), PageId::Home, "{q}");
++    }
++    for rel in ["src/pages/map.rs", "tests/snapshots/pages/map.json"] {
++        assert!(!crate_dir().join(rel).exists(), "{rel} が在る");
++    }
++    assert!(!read("tests/snapshots/header.json").contains("\"map\""));
++}
++
++/// (2) block の列に地図が無く、グラフの口の読み（PATH・REASON・doc）は kit の下の map に在る。
++#[test]
++fn bvmpage_no_map_block() {
++    let names: Vec<&str> = Module::ALL.iter().map(|m| m.name()).collect();
++    assert!(!names.contains(&"map"), "{names:?}");
++    assert!(!crate_dir().join("src/project/map.rs").exists());
++    assert_eq!(map::PATH, "/api/graph");
++    assert_eq!(map::doc(&Fetched::Failed), Err(map::REASON));
++    let kit = read("src/kit.rs");
++    assert!(
++        kit.contains("\npub mod map;\n"),
++        "kit.rs に pub mod map が無い"
++    );
++    let text = read("src/kit/map.rs");
++    for want in [
++        "pub const PATH: &str = \"/api/graph\";",
++        "pub const REASON: &str =",
++        "pub fn doc(fetched: &Fetched) -> Result<GraphDoc, &'static str> {",
++    ] {
++        assert!(text.contains(want), "kit/map.rs に {want} が無い");
++    }
++    for word in [
++        "pub const BLOCK",
++        "pub const PATHS",
++        "pub const FOLDS",
++        "pub fn body(",
++    ] {
++        assert!(!text.contains(word), "kit/map.rs に {word} が在る");
++    }
++}
++
++/// (3) src に 6 面の切り替え（面の型 View・URL の query の view の鍵・面を切り替える関数・tab の矢印の key）の字が無い。
++#[test]
++fn bvmpage_no_view_param() {
++    for (path, text) in sources() {
++        for word in [
++            "pub enum View",
++            "VIEW_PARAM",
++            "fn with_view(",
++            "mapview::View",
++            "View::",
++            "tab_step",
++        ] {
++            assert!(!text.contains(word), "{} に {word} が在る", path.display());
++        }
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/frame.rs
+index 481870634d3ece0033a5b0740479c0e57aa2ea1a..4bffcd569e4b79807dbc7b54c36b27efad54d512 100644
+--- a/crates/tsuzuri-surface/tests/frame.rs
++++ b/crates/tsuzuri-surface/tests/frame.rs
+@@ -19,8 +19,7 @@ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
+ use tsuzuri_surface::project::{
+-    self, Body, Module, STATES, ask, gaps, ledger, legend, map, next, node, pipeline, seat,
+-    state_class,
++    self, Body, Module, STATES, ask, gaps, ledger, legend, next, node, pipeline, seat, state_class,
+ };
+ use tsuzuri_surface::view::{Fetched, Screen};
+ use tsuzuri_surface::vocab::vocab;
+@@ -121,14 +120,13 @@ fn frame_home_blocks_in_order_and_map_page() {
+             ("side stack", vec!["batch", "policy"])
+         ]
+     );
+-    assert_eq!(frame::page(PageId::Map).block_ids(), vec!["map"]);
+     assert_eq!(frame::page(PageId::Gaps).block_ids(), vec!["gaps"]);
+     assert_eq!(
+         frame::page(PageId::Node).block_ids(),
+         vec!["node", "around", "timeline"]
+     );
+     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
+-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
++    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
+     assert!(!ids.contains(&"node"), "{ids:?}");
+     for id in PageId::ALL {
+         assert_eq!(frame::page(id).id, id);
+@@ -136,7 +134,7 @@ fn frame_home_blocks_in_order_and_map_page() {
+     assert_eq!(PageId::Node.id(), "node");
+     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
+     assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
+-    // header の頁の link は ホーム・質問・地図・抜けの検査 の順（nav の部品の中の鍵と同じ）。
++    // header の頁の link は ホーム・質問・抜けの検査 の順（nav の部品の中の鍵と同じ・地図の頁は行 m-map-page で消した）。
+     let keys: Vec<&str> = frame::nav_links(PageId::Home)
+         .iter()
+         .map(|l| l.key)
+@@ -145,7 +143,7 @@ fn frame_home_blocks_in_order_and_map_page() {
+     let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
+     let words: Vec<&str> = words.iter().map(String::as_str).collect();
+     assert!(
+-        in_order(&words, &["ホーム", "質問", "地図", "抜けの検査"]),
++        in_order(&words, &["ホーム", "質問", "抜けの検査"]),
+         "{words:?}"
+     );
+ }
+@@ -341,7 +339,7 @@ fn frame_classes_are_in_stylesheet() {
+     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
+ }
+ 
+-/// data の口がまだ無い 4 つと ledger の指標の段は測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
++/// data の口がまだ無い 3 つと ledger の指標の段は測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
+ #[test]
+ fn frame_blocks_without_data_are_unmeasured() {
+     for fetched in [
+@@ -353,7 +351,6 @@ fn frame_blocks_without_data_are_unmeasured() {
+             (next::BLOCK.id, next::body(&fetched)),
+             (pipeline::BLOCK.id, pipeline::body(&fetched)),
+             (seat::BLOCK.id, seat::body(&fetched)),
+-            (map::BLOCK.id, map::body(&fetched)),
+             ("ledger の指標", ledger::metrics(&fetched)),
+         ] {
+             match body {
+@@ -478,7 +475,7 @@ fn frame_mode_lives_in_url() {
+     assert_eq!(Mode::from_query("?mode=expert"), Mode::Expert);
+     assert_eq!(Mode::from_query("?page=map&mode=expert"), Mode::Expert);
+     assert_eq!(Mode::from_query("?mode=bogus"), Mode::Beginner);
+-    assert_eq!(PageId::from_query("?page=map&mode=expert"), PageId::Map);
++    assert_eq!(PageId::from_query("?page=map&mode=expert"), PageId::Home);
+     assert_eq!(PageId::from_query("?page=ask"), PageId::Ask);
+     assert_eq!(PageId::from_query("?page=gaps"), PageId::Gaps);
+     assert_eq!(PageId::from_query("?page=bogus"), PageId::Home);
+@@ -525,13 +522,13 @@ fn hrefs_keep_mode() {
+             .all(|l| l.class.is_empty())
+     );
+ 
+-    let links = frame::nav_links(PageId::Map);
++    let links = frame::nav_links(PageId::Gaps);
+     let on: Vec<&str> = links
+         .iter()
+         .filter(|l| l.class == "on")
+         .map(|l| l.key)
+         .collect();
+-    assert_eq!(on, vec!["map"]);
++    assert_eq!(on, vec!["gaps"]);
+ }
+ 
+ /// 「?」の注釈: 1 行目 = 要点・項 = 記号 + 本文・「▸」の後 = 詳しく（見本の noteParts と同じ）。
+diff --git a/crates/tsuzuri-surface/tests/gapspage.rs b/crates/tsuzuri-surface/tests/gapspage.rs
+index d95a9bd2b3dcf73cdc7c994e653cf04e7bee9f27..1c15df0f62964e1c6ea0d23fa205f266747ec71d 100644
+--- a/crates/tsuzuri-surface/tests/gapspage.rs
++++ b/crates/tsuzuri-surface/tests/gapspage.rs
+@@ -47,14 +47,14 @@ fn in_order(all: &[&str], want: &[&str]) -> bool {
+     want.iter().all(|w| rest.any(|a| a == w))
+ }
+ 
+-/// 頁の順は home・ask・map・gaps（nav の中の含まれ方と順）、抜けの検査の頁の block は gaps の 1 つ、
+-/// header の link は home・questions・map・gaps をこの順に含む。
++/// 頁の順は home・ask・gaps（nav の中の含まれ方と順）、抜けの検査の頁の block は gaps の 1 つ、
++/// header の link は home・questions・gaps をこの順に含む。
+ #[test]
+ fn gapspage_page_frame_and_nav() {
+     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
+-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
++    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
+     let all: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
+-    for id in ["home", "ask", "map", "gaps"] {
++    for id in ["home", "ask", "gaps"] {
+         assert!(all.contains(&id), "{all:?}");
+     }
+     let page = frame::page(PageId::Gaps);
+@@ -75,12 +75,12 @@ fn gapspage_page_frame_and_nav() {
+ fn nav_and_snapshot() {
+     let nav_keys = frame::nav_keys();
+     assert!(
+-        in_order(&nav_keys, &["home", "questions", "map", "gaps"]),
++        in_order(&nav_keys, &["home", "questions", "gaps"]),
+         "{nav_keys:?}"
+     );
+     let links = frame::nav_links(PageId::Gaps);
+     let keys: Vec<&str> = links.iter().map(|l| l.key).collect();
+-    assert!(in_order(&keys, &["home", "questions", "map", "gaps"]), "{keys:?}");
++    assert!(in_order(&keys, &["home", "questions", "gaps"]), "{keys:?}");
+     let on: Vec<&str> = links
+         .iter()
+         .filter(|l| l.class == "on")
+diff --git a/crates/tsuzuri-surface/tests/gpill.rs b/crates/tsuzuri-surface/tests/gpill.rs
+index 4f88d4d892d18bbb5d2cfa79ec5c7353e47896a9..2796a5c28c81f27fcf3063b90e2f0ef0f7ad04a8 100644
+--- a/crates/tsuzuri-surface/tests/gpill.rs
++++ b/crates/tsuzuri-surface/tests/gpill.rs
+@@ -102,7 +102,7 @@ fn gpill_part_and_pages() {
+         .map(|p| p.id())
+         .collect();
+     shown.sort_unstable();
+-    assert_eq!(shown, ["ask", "gaps", "map", "node"]);
++    assert_eq!(shown, ["ask", "gaps", "node"]);
+ 
+     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
+     assert_eq!(parts, ["brand", "nav", "updated", "mode"]);
+diff --git a/crates/tsuzuri-surface/tests/hsblock.rs b/crates/tsuzuri-surface/tests/hsblock.rs
+index 4edbd8da1fb6a4eb59b327d34b31b8a5aa1ceec5..a49cb67cca7dff0ad31a9051894991599ce7470c 100644
+--- a/crates/tsuzuri-surface/tests/hsblock.rs
++++ b/crates/tsuzuri-surface/tests/hsblock.rs
+@@ -7,8 +7,8 @@ use std::path::PathBuf;
+ 
+ use tsuzuri_surface::frame::Block;
+ use tsuzuri_surface::project::{
+-    self, Module, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
+-    pipeline, policy, seat,
++    self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, pipeline,
++    policy, seat,
+ };
+ 
+ fn crate_dir() -> PathBuf {
+@@ -39,15 +39,14 @@ fn dir_names() -> Vec<String> {
+     names
+ }
+ 
+-/// 着地済みの 13 の module と、その BLOCK。
+-const LANDED: [(&str, Block); 13] = [
++/// 着地済みの 12 の module と、その BLOCK（地図の block は行 m-map-page で消した）。
++const LANDED: [(&str, Block); 12] = [
+     ("ask", ask::BLOCK),
+     ("askpage", askpage::BLOCK),
+     ("batch", batch::BLOCK),
+     ("gaps", gaps::BLOCK),
+     ("ledger", ledger::BLOCK),
+     ("legend", legend::BLOCK),
+-    ("map", map::BLOCK),
+     ("next", next::BLOCK),
+     ("node", node::BLOCK),
+     ("nodearound", nodearound::BLOCK),
+@@ -85,7 +84,7 @@ fn has_path(text: &str, word: &str) -> bool {
+     })
+ }
+ 
+-/// (1) Module の ALL の名の列は dir の file の名の列と同じで、着地済みの 13 が全部在る（多い分は許す）。
++/// (1) Module の ALL の名の列は dir の file の名の列と同じで、着地済みの 12 が全部在る（多い分は許す）。
+ #[test]
+ fn hsblock_names_follow_dir() {
+     let names: Vec<String> = Module::ALL.iter().map(|m| m.name().to_string()).collect();
+diff --git a/crates/tsuzuri-surface/tests/hsderive.rs b/crates/tsuzuri-surface/tests/hsderive.rs
+index 159a8f7bb95656dd916657cf08ac75e07fa1612c..42a60bfbeae3d062f7a3817d9ff145f2532b5450 100644
+--- a/crates/tsuzuri-surface/tests/hsderive.rs
++++ b/crates/tsuzuri-surface/tests/hsderive.rs
+@@ -6,8 +6,8 @@
+ use std::path::PathBuf;
+ 
+ use tsuzuri_surface::project::{
+-    self, Module, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
+-    notice, pipeline, policy, seat, stage, timeline,
++    self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, notice,
++    pipeline, policy, seat, stage, timeline,
+ };
+ 
+ fn crate_dir() -> PathBuf {
+@@ -29,7 +29,6 @@ const CONSTS: &[Consts] = &[
+     ("gaps", gaps::PATHS, gaps::FOLDS),
+     ("ledger", ledger::PATHS, ledger::FOLDS),
+     ("legend", legend::PATHS, legend::FOLDS),
+-    ("map", map::PATHS, map::FOLDS),
+     ("next", next::PATHS, next::FOLDS),
+     ("node", node::PATHS, node::FOLDS),
+     ("nodearound", nodearound::PATHS, nodearound::FOLDS),
+@@ -59,7 +58,6 @@ fn hsderive_consts_match_note() {
+             &["ledger:more", "ledger:unref"],
+         ),
+         ("legend", &[], &[]),
+-        ("map", &["/api/graph"], &[]),
+         ("next", &["/api/next"], &[]),
+         ("node", &[], &[]),
+         ("nodearound", &["/api/around"], &[]),
+@@ -81,7 +79,6 @@ fn hsderive_consts_match_note() {
+     );
+     for (paths, path) in [
+         (batch::PATHS, batch::PATH),
+-        (map::PATHS, map::PATH),
+         (next::PATHS, next::PATH),
+         (nodearound::PATHS, nodearound::PATH),
+         (notice::PATHS, notice::PATH),
+diff --git a/crates/tsuzuri-surface/tests/hspage.rs b/crates/tsuzuri-surface/tests/hspage.rs
+index 27389276ba1be7af370e68f40345d6184be3d918..881a18548782e9fa29c191a33ceb89b86f623097 100644
+--- a/crates/tsuzuri-surface/tests/hspage.rs
++++ b/crates/tsuzuri-surface/tests/hspage.rs
+@@ -29,17 +29,16 @@ fn dir_names(rel: &str, ext: &str, skip: &str) -> Vec<String> {
+     names
+ }
+ 
+-/// 着地済みの 5 つの頁（変種と id）。
+-const LANDED: [(PageId, &str); 5] = [
++/// 着地済みの 4 つの頁（変種と id・地図の頁は行 m-map-page で消した）。
++const LANDED: [(PageId, &str); 4] = [
+     (PageId::Home, "home"),
+     (PageId::Ask, "ask"),
+-    (PageId::Map, "map"),
+     (PageId::Gaps, "gaps"),
+     (PageId::Node, "node"),
+ ];
+ 
+ /// (1) 生成した PageId の ALL の id の列は src/pages の下の mod.rs でない .rs の file の名（名の順）と同じ・
+-/// 着地済みの 5 つが全部在り、変種の名は Home・Ask・Map・Gaps・Node のまま。
++/// 着地済みの 4 つが全部在り、変種の名は Home・Ask・Gaps・Node のまま。
+ #[test]
+ fn hspage_ids_follow_dir() {
+     let files = dir_names("src/pages", ".rs", "mod.rs");
+@@ -98,7 +97,7 @@ fn hspage_nav_by_number() {
+     assert_eq!(nav.len(), with_nav, "nav の在る頁の全部");
+     let ids: Vec<&str> = nav.iter().map(|p| p.id()).collect();
+     let mut rest = ids.iter();
+-    for want in ["home", "ask", "map", "gaps"] {
++    for want in ["home", "ask", "gaps"] {
+         assert!(rest.any(|id| *id == want), "{want} が順に無い: {ids:?}");
+     }
+     assert!(!nav.contains(&PageId::Node));
+diff --git a/crates/tsuzuri-surface/tests/mapkeys.rs b/crates/tsuzuri-surface/tests/mapkeys.rs
+deleted file mode 100644
+index 89b96acdeb9b66cbe01c958d9bb13d3ccc229c58..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/mapkeys.rs
++++ /dev/null
+@@ -1,171 +0,0 @@
+-//! 便 g-map-keys の歯: 地図の頁の tab の上の矢印の key で移る面（端は反対の端へ回る・ほかの key は無し）・
+-//! DOM の keydown の受け取りの字（wasm の target のときだけなので src の字で見る）・この file の歯の名。
+-#![cfg(test)]
+-
+-use std::path::PathBuf;
+-
+-use tsuzuri_surface::mapview::View;
+-use tsuzuri_surface::project::map::tab_step;
+-
+-fn read(rel: &str) -> String {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-#[test]
+-fn mkeys_arrows_wrap_around() {
+-    use View::{Compact, Design, Graph, Ledger, List, Table};
+-    let right = [
+-        (Compact, List),
+-        (List, Graph),
+-        (Graph, Table),
+-        (Table, Design),
+-        (Design, Ledger),
+-        (Ledger, Compact),
+-    ];
+-    for (now, next) in right {
+-        assert_eq!(tab_step(now, "ArrowRight"), Some(next), "{now:?} の右");
+-    }
+-    let left = [
+-        (Compact, Ledger),
+-        (List, Compact),
+-        (Graph, List),
+-        (Table, Graph),
+-        (Design, Table),
+-        (Ledger, Design),
+-    ];
+-    for (now, prev) in left {
+-        assert_eq!(tab_step(now, "ArrowLeft"), Some(prev), "{now:?} の左");
+-    }
+-    let others = [
+-        "Enter",
+-        " ",
+-        "ArrowUp",
+-        "ArrowDown",
+-        "Tab",
+-        "Home",
+-        "End",
+-        "",
+-        "arrowright",
+-    ];
+-    for now in View::ALL {
+-        for key in others {
+-            assert_eq!(tab_step(now, key), None, "{now:?} で {key:?}");
+-        }
+-    }
+-}
+-
+-#[test]
+-fn mkeys_dom_wires_arrows() {
+-    let text = read("src/project/map.rs");
+-    let at = text.find("mod dom").expect("map.rs に mod dom が在る");
+-    let dom = &text[at..];
+-    for word in ["on:keydown=", "tab_step(", "prevent_default()", ".focus()"] {
+-        assert!(dom.contains(word), "map.rs の mod dom から後に {word} が無い");
+-    }
+-}
+-
+-/// 着地済みの行と、この波の行の verify の filter の語（歯の名が当たると、その行の歯の置き場が増える）。
+-const FILTERS: &[&str] = &[
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hbconf_",
+-    "hbpost_",
+-    "hbproc_",
+-    "hbroute_",
+-    "hook_",
+-    "hsblock_",
+-    "hsderive_",
+-    "hspage_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "mlink_",
+-    "gnav_",
+-    "mkeys_",
+-    "klink_",
+-    "ilink_",
+-    "afocus_",
+-    "nxact_",
+-    "urpanel_",
+-    "saxis_",
+-    "ticker_",
+-    "hfig_",
+-    "pmore_",
+-    "lspark_",
+-    "apop_",
+-    "brand_",
+-    "runsdoc_",
+-    "nbatch_",
+-];
+-
+-/// この file の test の属性の付いた fn の名。
+-fn test_names() -> Vec<String> {
+-    let text = read("tests/mapkeys.rs");
+-    let mut names = Vec::new();
+-    let mut marked = false;
+-    for line in text.lines().map(str::trim) {
+-        if line == "#[test]" {
+-            marked = true;
+-        } else if marked && let Some(rest) = line.strip_prefix("fn ") {
+-            let name: String = rest
+-                .chars()
+-                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+-                .collect();
+-            names.push(name);
+-            marked = false;
+-        }
+-    }
+-    names
+-}
+-
+-#[test]
+-fn mkeys_names_stay_apart() {
+-    assert_eq!(FILTERS.len(), 66);
+-    let names = test_names();
+-    assert!(names.len() >= 3, "歯の名が 3 つ以上: {names:?}");
+-    for name in &names {
+-        let rest = name
+-            .strip_prefix("mkeys_")
+-            .unwrap_or_else(|| panic!("{name} が mkeys_ で始まらない"));
+-        for word in FILTERS {
+-            assert!(!rest.contains(word), "{name} が filter の語 {word} を含む");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/mapview.rs b/crates/tsuzuri-surface/tests/mapview.rs
+index b78bd542f1bf0ca0cbc3214294c0758b0815f3ed..43798d3b508617ca0f49915a4cfbefe8105d229c 100644
+--- a/crates/tsuzuri-surface/tests/mapview.rs
++++ b/crates/tsuzuri-surface/tests/mapview.rs
+@@ -10,7 +10,6 @@ use std::path::PathBuf;
+ 
+ use tsuzuri_contract::graph::{GraphDoc, GraphSource, NodeKind};
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::frame::Block;
+ use tsuzuri_surface::mapview::band::{
+     BEADS_LANES, Band, KINDS, band_of, kind_from_name, kind_key, kind_name, unread_reason,
+ };
+@@ -19,8 +18,8 @@ use tsuzuri_surface::mapview::list::{
+     Listing, NO_STATE, Query, Sort, listing, pair_value, parse_pair, with_choice, with_pair,
+ };
+ use tsuzuri_surface::mapview::table::{Matrix, matrix};
+-use tsuzuri_surface::mapview::{View, decode, encode, natural, param, set_param, with_view};
+-use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ, map};
++use tsuzuri_surface::mapview::{decode, encode, natural, param, set_param};
++use tsuzuri_surface::project::{NO_CONTENT, NOT_READ, map};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+@@ -520,7 +519,6 @@ fn mapview_table_counts_and_pair_filter() {
+ 
+     // cell を押した後の URL で一覧の面が組の両端に絞られる。
+     let url = with_pair("?page=map&view=table&band=rules", Some((Run, Task)));
+-    assert_eq!(View::from_query(&url), View::List);
+     assert_eq!(
+         list_of(&doc, &url),
+         vec!["t3-hub.2", "t3-hub.15", "r-1", "r-3", "r-12"]
+@@ -537,33 +535,9 @@ fn mapview_table_counts_and_pair_filter() {
+     }
+ }
+ 
+-/// (6) 面の切り替えと絞りと並べ替えが URL の query に残り、知らない view の値は圧縮の面。
++/// (6) 絞りと並べ替えが URL の query に残る（面の切り替えの view は行 m-map-page で消した）。
+ #[test]
+ fn mapview_query_keeps_view_and_filters() {
+-    assert_eq!(View::from_query(""), View::Compact);
+-    assert_eq!(View::from_query("?page=map"), View::Compact);
+-    assert_eq!(View::from_query("?view=bogus"), View::Compact);
+-    assert_eq!(View::from_query("?view="), View::Compact);
+-    for v in View::ALL {
+-        let url = with_view("?page=map&mode=expert", v);
+-        assert_eq!(View::from_query(&url), v);
+-        assert_eq!(param(&url, "mode").as_deref(), Some("expert"));
+-        assert_eq!(param(&url, "page").as_deref(), Some("map"));
+-        assert!(
+-            vocab().term(v.key()).is_some(),
+-            "鍵 {} が vocab に無い",
+-            v.key()
+-        );
+-    }
+-    assert_eq!(
+-        with_view("?page=map&mode=expert", View::List),
+-        "?page=map&mode=expert&view=list"
+-    );
+-    assert_eq!(
+-        with_view("?view=list&page=map", View::Table),
+-        "?view=table&page=map"
+-    );
+-
+     search_query_and_choice();
+ }
+ 
+@@ -602,14 +576,14 @@ fn pair_in_query() {
+     assert_eq!(
+         url,
+         format!(
+-            "?page=map&view=list&mode=expert&pair={}",
++            "?page=map&view=table&mode=expert&pair={}",
+             encode("契約|epic")
+         )
+     );
+     let q = Query::from_search(&url);
+     assert_eq!(q.pair, Some((NodeKind::Task, NodeKind::Epic)));
+     assert_eq!((q.band, q.kind), (None, None));
+-    assert_eq!(with_pair(&url, None), "?page=map&view=list&mode=expert");
++    assert_eq!(with_pair(&url, None), "?page=map&view=table&mode=expert");
+     assert_eq!(
+         parse_pair("契約|epic"),
+         Some((NodeKind::Task, NodeKind::Epic))
+@@ -677,29 +651,20 @@ fn mapview_every_tag_and_row_shows_id() {
+     assert!(l.rows.iter().all(|r| !r.id.is_empty()));
+ }
+ 
+-/// (9) 着地済みの外形（BLOCK・口の path・body）と、電文の型として読めない本文は測れていない・外の依存は足さない。
++/// (9) グラフの口の path と読み（地図の block は行 m-map-page で消した）と、電文の型として読めない本文は理由・
++/// 外の依存は足さない。
+ #[test]
+ fn mapview_landed_shape_and_body() {
+-    assert_eq!(
+-        map::BLOCK,
+-        Block {
+-            id: "map",
+-            heading: "map",
+-            class: "panel"
+-        }
+-    );
+     assert_eq!(map::PATH, "/api/graph");
+-    let body: fn(&Fetched) -> Body<()> = map::body;
+-    assert_eq!(body(&Fetched::NotRead), Body::Unmeasured(NOT_READ));
+-    assert_eq!(body(&Fetched::Failed), Body::Unmeasured(map::REASON));
++    assert_eq!(map::doc(&Fetched::NotRead), Err(NOT_READ));
++    assert_eq!(map::doc(&Fetched::Failed), Err(map::REASON));
+     for text in ["{}", "not json", "[]", r#"{"nodes": []}"#] {
+         assert_eq!(
+-            body(&Fetched::Body(text.to_string())),
+-            Body::Unmeasured(NO_CONTENT),
++            map::doc(&Fetched::Body(text.to_string())),
++            Err(NO_CONTENT),
+             "{text}"
+         );
+     }
+-    assert_eq!(body(&Fetched::Body(fixture_text())), Body::Filled(()));
+     assert_eq!(map::doc(&Fetched::Body(fixture_text())), Ok(fixture()));
+ 
+     // 直接依存は着地前と同じ（[dependencies] は契約の型の crate だけ）。
+@@ -756,7 +721,6 @@ fn mapview_classes_and_keys_exist() {
+         }
+     };
+     let files = [
+-        "src/project/map.rs",
+         "src/mapview/mod.rs",
+         "src/mapview/band.rs",
+         "src/mapview/compact.rs",
+@@ -823,9 +787,9 @@ fn doc_classes(mut add: impl FnMut(&str)) {
+ fn used_in_css(used: BTreeSet<String>) {
+     let css = stylesheet_classes();
+     for c in [
+-        "tabs", "band", "art7", "kids", "tag", "tid", "tt", "subh", "cards7", "filters", "items",
+-        "rows", "rowb", "nid", "ttl", "meta", "bchip", "gist", "none", "mx", "mxwrap", "mxlist",
+-        "pair", "pairnote", "path", "bn", "shape", "empty", "open-q",
++        "band", "art7", "kids", "tag", "tid", "tt", "subh", "cards7", "filters", "items", "rows",
++        "rowb", "nid", "ttl", "meta", "bchip", "gist", "none", "mx", "mxwrap", "mxlist", "pair",
++        "pairnote", "path", "bn", "shape", "empty", "open-q",
+     ] {
+         assert!(used.contains(c), "地図の頁が class {c} を使わない");
+     }
+@@ -833,8 +797,6 @@ fn used_in_css(used: BTreeSet<String>) {
+     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
+ 
+     for key in [
+-        "map",
+-        "views",
+         "bands",
+         "matrix",
+         "col_band",
+diff --git a/crates/tsuzuri-surface/tests/mtree.rs b/crates/tsuzuri-surface/tests/mtree.rs
+index 7f17c2c2b48f68384486ca69ee9ce8c8a7fc7b11..5be36f2fc2d401c1f65a933aa3f5f144e78fa066 100644
+--- a/crates/tsuzuri-surface/tests/mtree.rs
++++ b/crates/tsuzuri-surface/tests/mtree.rs
+@@ -14,7 +14,7 @@ use tsuzuri_surface::mapview::band::{Band, unread_reason};
+ use tsuzuri_surface::mapview::tree::{
+     Branch, Forest, Head, ISSUE_KINDS, NESTS, Tree, fold_key, forest, is_closed, parent_end,
+ };
+-use tsuzuri_surface::mapview::{View, open_question, shape_class, with_view};
++use tsuzuri_surface::mapview::{open_question, shape_class};
+ use tsuzuri_surface::vocab::vocab;
+ use tsuzuri_surface::widgets::help::{Inline, note};
+ use tsuzuri_surface::widgets::nodecard::card_of;
+@@ -168,40 +168,10 @@ const LEDGER: &[(usize, &str, bool, usize)] = &[
+ 
+ #[test]
+ fn mtree_views_six_in_url() {
+-    use View::{Compact, Design, Graph, Ledger, List, Table};
+-    assert_eq!(View::ALL, [Compact, List, Graph, Table, Design, Ledger]);
+-    let names: Vec<&str> = View::ALL.iter().map(|v| v.name()).collect();
+-    assert_eq!(
+-        names,
+-        ["compact", "list", "graph", "table", "design", "ledger"]
+-    );
+-    let keys: Vec<&str> = View::ALL.iter().map(|v| v.key()).collect();
+-    assert_eq!(
+-        keys,
+-        [
+-            "view_compact",
+-            "view_list",
+-            "view_graph",
+-            "view_table",
+-            "view_design",
+-            "view_ledger"
+-        ]
+-    );
+-    assert_eq!(View::from_query("?page=map&view=design"), Design);
+-    assert_eq!(View::from_query("?view=ledger"), Ledger);
+-    for s in ["?view=tree", "?view=", ""] {
+-        assert_eq!(View::from_query(s), Compact, "{s:?}");
+-    }
+-    assert_eq!(
+-        with_view("?page=map&mode=expert", Design),
+-        "?page=map&mode=expert&view=design"
+-    );
+-    for v in View::ALL {
+-        assert_eq!(View::from_query(&with_view("?page=map", v)), v, "{v:?}");
+-    }
++    // 6 面の切り替え（View と URL の query の view）は行 m-map-page で消した。木の語の鍵は今の字のまま。
+     assert_eq!(Tree::ALL, [Tree::Design, Tree::Ledger]);
+-    assert_eq!(Tree::Design.view(), Design);
+-    assert_eq!(Tree::Ledger.view(), Ledger);
++    assert_eq!(Tree::Design.key(), "view_design");
++    assert_eq!(Tree::Ledger.key(), "view_ledger");
+     assert_eq!(
+         Tree::Design.bands(),
+         [
+@@ -286,13 +256,13 @@ fn mtree_vocab_budget() {
+         views.internal,
+         "?view=compact|list|graph|table|design|ledger"
+     );
+-    let labels: Vec<String> = View::ALL.iter().map(|x| term(x.key()).label.clone()).collect();
++    let labels: Vec<String> = Tree::ALL.iter().map(|x| term(x.key()).label.clone()).collect();
+     for (i, l) in labels.iter().enumerate() {
+-        assert!(!l.is_empty(), "{:?} の語が空", View::ALL[i]);
++        assert!(!l.is_empty(), "{:?} の語が空", Tree::ALL[i]);
+         assert!(
+             !labels[..i].contains(l),
+             "{:?} の語 {l} が前の面と同じ",
+-            View::ALL[i]
++            Tree::ALL[i]
+         );
+     }
+     key_notes(term);
+@@ -678,13 +648,6 @@ fn mtree_dom_text() {
+         assert!(dom.contains(word), "tree.rs の mod dom から後に {word} が無い");
+     }
+     assert!(!read("src/mapview/tree.rs").contains("use:attach"));
+-    let (_, map) = split_dom("src/project/map.rs");
+-    for word in [
+-        "View::Design => tree::view(d, Tree::Design, search)",
+-        "View::Ledger => tree::view(d, Tree::Ledger, search)",
+-    ] {
+-        assert!(map.contains(word), "map.rs の mod dom から後に {word} が無い");
+-    }
+ }
+ 
+ /// 着地済みの行と、この波の行の verify の filter の語（歯の名が当たると、その行の歯の置き場が増える）。
+diff --git a/crates/tsuzuri-surface/tests/nodepage.rs b/crates/tsuzuri-surface/tests/nodepage.rs
+index 0b3061899cd686a4cec78c732375e2cfb6a539e7..068572db7d8eef1efa1d28b10db4197c651b3306 100644
+--- a/crates/tsuzuri-surface/tests/nodepage.rs
++++ b/crates/tsuzuri-surface/tests/nodepage.rs
+@@ -113,13 +113,13 @@ fn nodepage_frame_and_nav() {
+     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
+     assert_eq!(PageId::from_query("?page=node"), PageId::Node);
+     assert!(PageId::ALL.contains(&PageId::Node));
+-    // nav の頁の一覧と header の link は 4 つをこの順に含み、節点の頁を含まない。
++    // nav の頁の一覧と header の link は 3 つをこの順に含み、節点の頁を含まない（地図の頁は行 m-map-page で消した）。
+     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
+-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
++    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
+     assert!(!ids.contains(&"node"), "{ids:?}");
+     let nav_keys = frame::nav_keys();
+     assert!(
+-        in_order(&nav_keys, &["home", "questions", "map", "gaps"]),
++        in_order(&nav_keys, &["home", "questions", "gaps"]),
+         "{nav_keys:?}"
+     );
+     assert!(!nav_keys.contains(&"nb_self"), "{nav_keys:?}");
+diff --git a/crates/tsuzuri-surface/tests/parts.rs b/crates/tsuzuri-surface/tests/parts.rs
+index d50af81123ef07bae26e50aa5327bbb73fa0720e..e88874475b71915e70e45c10a3c049c01220d053 100644
+--- a/crates/tsuzuri-surface/tests/parts.rs
++++ b/crates/tsuzuri-surface/tests/parts.rs
+@@ -1,4 +1,4 @@
+-//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 5 つの block は測れていない・口の path は block の module の
++//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 4 つの block は測れていない・口の path は block の module の
+ //! paths とグラフの口で互いに違う（行 hs-derived で block ごとの定数から導く形にした）・
+ //! 読み直しの合図の event の名は契約の型の crate の定数から引く・hover の card の置き場と猶予と行の切り方・
+ //! 定数が rules の file の行 R-20 と行 R-19 の字と同じ。
+@@ -65,20 +65,19 @@ fn three() -> [Fetched; 3] {
+     all
+ }
+ 
+-/// 中身の関数がまだ無い 5 つ（block の id・中身の関数・口が読めないときの理由）。
++/// 中身の関数がまだ無い 4 つ（block の id・中身の関数・口が読めないときの理由）。
+ type Pending = (&'static str, fn(&Fetched) -> Body<()>, &'static str);
+ 
+-fn pending_blocks() -> [Pending; 5] {
++fn pending_blocks() -> [Pending; 4] {
+     [
+         (next::BLOCK.id, next::body, next::REASON),
+         (pipeline::BLOCK.id, pipeline::body, pipeline::REASON),
+         (seat::BLOCK.id, seat::body, seat::REASON),
+-        (map::BLOCK.id, map::body, map::REASON),
+         ("ledger の指標", ledger::metrics, ledger::METRICS_REASON),
+     ]
+ }
+ 
+-/// 5 つの block は 3 値のどれを受けても 0 件でなく測れていないと空でない理由の 1 行を返す。
++/// 4 つの block は 3 値のどれを受けても 0 件でなく測れていないと空でない理由の 1 行を返す。
+ #[test]
+ fn parts_pending_blocks_unmeasured_for_all_three() {
+     for (id, body, unread) in pending_blocks() {
+@@ -139,8 +138,8 @@ fn unread_lists(empty: String) {
+     }
+ }
+ 
+-/// 口の path は block の module の paths の全部とグラフの module の口で、互いに違う（数と字は持たない・
+-/// 値は歯 hsderive_ と mapgraph_ が見る・行 hs-derived）。
++/// 口の path は block の module の paths の全部とグラフの module の口と kit の map の口で、互いに違う（数と字は持たない・
++/// 値は歯 hsderive_ と mapgraph_ が見る・行 hs-derived・kit の map は行 m-map-page）。
+ #[test]
+ fn parts_paths_distinct_in_block_modules() {
+     let owned: Vec<(Module, &str)> = Module::ALL
+@@ -149,13 +148,15 @@ fn parts_paths_distinct_in_block_modules() {
+         .collect();
+     let mut paths: Vec<&str> = owned.iter().map(|(_, p)| *p).collect();
+     paths.push(graph::PATH);
++    paths.push(map::PATH);
+     let mut sorted = paths.clone();
+     sorted.sort_unstable();
+     sorted.dedup();
+     assert_eq!(sorted.len(), paths.len(), "口の path が重なる: {paths:?}");
+ 
+     // src の `"/api/…"` の字: block の口はその path を paths に持つ module の file に 1 度だけ・
+-    // グラフの口の字は mapview の下のグラフの module の file に 1 度だけ・ほかは変化の知らせの口だけ。
++    // グラフの口の字は mapview の下のグラフの module の file に 1 度だけ・グラフの電文の口の字は kit の下の map の
++    // file に 1 度だけ・ほかは変化の知らせの口だけ。
+     let mut found: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+     for (path, text) in sources() {
+         let mut rest = text.as_str();
+@@ -184,6 +185,13 @@ fn parts_paths_distinct_in_block_modules() {
+         "{} の字がグラフの module に 1 度だけでない",
+         graph::PATH
+     );
++    let at = found.remove(map::PATH).unwrap_or_default();
++    assert_eq!(
++        at,
++        vec![crate_dir().join("src/kit/map.rs")],
++        "{} の字が kit の map の module に 1 度だけでない",
++        map::PATH
++    );
+     let rest: Vec<&String> = found.keys().collect();
+     assert_eq!(rest, vec!["/api/surface/events"], "block の外の口の字");
+ }
+diff --git a/crates/tsuzuri-surface/tests/pgsw.rs b/crates/tsuzuri-surface/tests/pgsw.rs
+index 4e070ea4dc0adc3262379c474d02e8484c5aecad..f58eeb7b5a77b99e4c4db092a77d4ae5ed96e389 100644
+--- a/crates/tsuzuri-surface/tests/pgsw.rs
++++ b/crates/tsuzuri-surface/tests/pgsw.rs
+@@ -55,7 +55,7 @@ const LEFT: Press = Press {
+ #[test]
+ fn pgsw_plain_left_pushes_href() {
+     assert_eq!(
+-        switch_url(PageId::Map, PageId::Ask, Mode::Beginner, LEFT).as_deref(),
++        switch_url(PageId::Gaps, PageId::Ask, Mode::Beginner, LEFT).as_deref(),
+         Some("?page=ask&mode=beginner")
+     );
+     assert_eq!(
+@@ -95,7 +95,7 @@ fn pgsw_keys_or_button_keep_default() {
+         Press { button: 2, ..LEFT },
+     ];
+     for p in presses {
+-        assert_eq!(switch_url(PageId::Map, PageId::Ask, Mode::Beginner, p), None, "{p:?}");
++        assert_eq!(switch_url(PageId::Gaps, PageId::Ask, Mode::Beginner, p), None, "{p:?}");
+         assert_eq!(switch_url(PageId::Node, PageId::Home, Mode::Beginner, p), None, "{p:?}");
+     }
+ }
+diff --git a/crates/tsuzuri-surface/tests/ptitle.rs b/crates/tsuzuri-surface/tests/ptitle.rs
+index 7d959c19a579e56f35b8e31bd18e7e631e129b7b..3e839527097b60210b07d50d25ca69353de7bfd4 100644
+--- a/crates/tsuzuri-surface/tests/ptitle.rs
++++ b/crates/tsuzuri-surface/tests/ptitle.rs
+@@ -141,7 +141,6 @@ fn ptitle_joins_name_and_word() {
+     assert_eq!(doc_title(None, "home", None), "tsuzuri \u{2014} ホーム");
+     for (key, want) in [
+         ("questions", "proj-kiri \u{2014} 質問"),
+-        ("map", "proj-kiri \u{2014} 地図"),
+         ("gaps", "proj-kiri \u{2014} 抜けの検査"),
+         ("nb_self", "proj-kiri \u{2014} この節点"),
+     ] {
+@@ -177,7 +176,6 @@ fn ptitle_every_page_has_word() {
+     let words = [
+         ("home", "ホーム"),
+         ("ask", "質問"),
+-        ("map", "地図"),
+         ("gaps", "抜けの検査"),
+         ("node", "この節点"),
+     ];
+diff --git a/crates/tsuzuri-surface/tests/snapshots/header.json b/crates/tsuzuri-surface/tests/snapshots/header.json
+index 85c557ce5364d20fca715d8995e0d09494b3ac34..96f9b7c540e304f8b72eda75dfd15022f97ce88f 100644
+--- a/crates/tsuzuri-surface/tests/snapshots/header.json
++++ b/crates/tsuzuri-surface/tests/snapshots/header.json
+@@ -2,7 +2,7 @@
+   "header": [
+     {"part": "back", "key": "acct_back", "class": "upto", "items": []},
+     {"part": "brand", "key": "project", "class": "brand", "items": []},
+-    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["home", "questions", "map", "gaps"]},
++    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["home", "questions", "gaps"]},
+     {"part": "updated", "key": "last_record", "class": "chip num", "items": []},
+     {"part": "seat", "key": "seat", "class": "seatpill", "items": []},
+     {"part": "mode", "key": "mode", "class": "seg", "items": ["beginner", "expert"]}
+diff --git a/crates/tsuzuri-surface/tests/snapshots/pages/map.json b/crates/tsuzuri-surface/tests/snapshots/pages/map.json
+deleted file mode 100644
+index d9cf184c07a6e9d56989fa901541304aa987241a..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/snapshots/pages/map.json
++++ /dev/null
+@@ -1,13 +0,0 @@
+-    {
+-      "id": "map",
+-      "heading": "map",
+-      "class": "stack",
+-      "columns": [
+-        {
+-          "class": "stack",
+-          "blocks": [
+-            {"id": "map", "heading": "map", "class": "panel"}
+-          ]
+-        }
+-      ]
+-    }

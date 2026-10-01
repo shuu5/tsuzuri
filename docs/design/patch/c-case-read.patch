@@ -1,0 +1,1171 @@
+diff --git a/crates/tsuzuri-boundary/src/server/cases.rs b/crates/tsuzuri-boundary/src/server/cases.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0038a7ffe773cd540e45d551a60b22931f415191
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/cases.rs
+@@ -0,0 +1,49 @@
++//! 器の局面の出力の読み（file を 2 つ読むだけ・書かない・行 c-case-read）。
++//! file は `<state dir>/fleet/lifecycle.json`（出力）と同じ dir の `lifecycle.stale`（古さの印・器の case-lifecycle §5.1）。
++//! 器の読み手と同じく古さの印 → 出力の順に読む。state dir を省いたときは、出力は空の字で古さの印は無い。
++//! 出力が無いか読めなければ空の字、古さの印は無ければ None・在って読めなければ空の字（中核の `cases_of` の入力の形）。
++
++use std::io::ErrorKind;
++use std::path::{Path, PathBuf};
++
++/// 局面の出力の file（state dir の下の path の区切りの列）。
++pub const LIFECYCLE_JSON: [&str; 2] = ["fleet", "lifecycle.json"];
++
++/// 古さの印の file（state dir の下の path の区切りの列）。
++pub const LIFECYCLE_STALE: [&str; 2] = ["fleet", "lifecycle.stale"];
++
++/// 局面の出力の読みの出所（state dir を省けばどちらも None）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Cases {
++    pub json: Option<PathBuf>,
++    pub stale: Option<PathBuf>,
++}
++
++impl Cases {
++    pub fn new(state_dir: Option<&Path>) -> Cases {
++        let under = |parts: [&str; 2]| {
++            state_dir.map(|dir| parts.iter().fold(dir.to_path_buf(), |p, s| p.join(s)))
++        };
++        Cases {
++            json: under(LIFECYCLE_JSON),
++            stale: under(LIFECYCLE_STALE),
++        }
++    }
++
++    /// 出力の字（無いか読めなければ空の字）と古さの印の字（無ければ None・在って読めなければ空の字）。
++    pub fn texts(&self) -> (String, Option<String>) {
++        let stale = self
++            .stale
++            .as_ref()
++            .and_then(|path| match std::fs::read_to_string(path) {
++                Ok(text) => Some(text),
++                Err(e) if e.kind() == ErrorKind::NotFound => None,
++                Err(_) => Some(String::new()),
++            });
++        let json = self
++            .json
++            .as_ref()
++            .and_then(|path| std::fs::read_to_string(path).ok());
++        (json.unwrap_or_default(), stale)
++    }
++}
+diff --git a/crates/tsuzuri-boundary/src/server/mod.rs b/crates/tsuzuri-boundary/src/server/mod.rs
+index b26206cc3e71e63cd0539e489e89a7b40565eae3..3bceb66ec8321dabd680952475edc668b6d2e080 100644
+--- a/crates/tsuzuri-boundary/src/server/mod.rs
++++ b/crates/tsuzuri-boundary/src/server/mod.rs
+@@ -25,12 +25,14 @@
+ //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
+ //! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
+ //! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
++//! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`・行 c-case-read）。
+ //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
+ //! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
+ //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
+ 
+ pub mod batch;
+ pub mod board;
++pub mod cases;
+ pub mod clock;
+ pub mod coalesce;
+ mod config;
+@@ -73,6 +75,7 @@ use crate::stage::notify;
+ use crate::stagecall::Caller;
+ 
+ use self::board::Sources;
++use self::cases::Cases;
+ use self::design::Design;
+ use self::events::Hub;
+ use self::form::Form;
+@@ -148,6 +151,8 @@ pub struct Server {
+ 
+ struct Shared {
+     sources: Sources,
++    /// 器の局面の出力の読み（state dir が無ければ出所の無い読み・行 c-case-read）。
++    cases: Cases,
+     files: PathBuf,
+     hub: Arc<Hub>,
+     writer: Writer,
+@@ -230,6 +235,7 @@ impl Server {
+             listener,
+             shared: Arc::new(Shared {
+                 sources,
++                cases: Cases::new(config.state_dir.as_deref()),
+                 files,
+                 hub,
+                 writer,
+diff --git a/crates/tsuzuri-boundary/src/server/routes/cases.rs b/crates/tsuzuri-boundary/src/server/routes/cases.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..668ff3d888238dcbcd97587c0e937ba3881a7eb6
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/routes/cases.rs
+@@ -0,0 +1,24 @@
++//! GET /api/cases — 器の局面の出力（CaseDoc・行 c-case-read）。
++//! 字は state dir の fleet/lifecycle.json と lifecycle.stale だけから読む（台帳の bd も器の CLI も撃たない）。
++
++use tsuzuri_contract::case::PATH;
++use tsuzuri_contract::wire;
++use tsuzuri_core::case::cases_of;
++
++use crate::server::http::{Request, Response};
++use crate::server::route::{Entry, Key, Match};
++use crate::server::{Shared, json};
++
++pub(in crate::server) const ROUTE: Entry = Entry {
++    key: Key {
++        method: "GET",
++        path: Match::Exact(PATH),
++    },
++    handle: cases,
++};
++
++/// 出力か古さの印が無いか読めなければ parts は Unknown（中核の `cases_of`）。
++fn cases(_req: &Request, shared: &Shared) -> Response {
++    let (out, stale) = shared.cases.texts();
++    json(200, wire::encode(&cases_of(&out, stale.as_deref())))
++}
+diff --git a/crates/tsuzuri-boundary/tests/bvcroute.rs b/crates/tsuzuri-boundary/tests/bvcroute.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..aa0073a916357c86302c27d81df1597d3797eddf
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/bvcroute.rs
+@@ -0,0 +1,184 @@
++//! 器の局面の出力の口の歯（接頭辞 bvcroute_・設計ノート surface-wave26a 行 c-case-read の完了の条件）。
++//! server は同じ process の thread で 127.0.0.1 の空き port に立て、GET を素の TCP で撃つ。
++//! fixture の tests/fixtures/case/lifecycle.json と lifecycle.stale（読むだけ）を state dir の fleet の下に写す。
++#![cfg(test)]
++
++use std::fs;
++use std::io::{Read, Write};
++use std::net::{SocketAddr, TcpStream};
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::thread;
++use std::time::Duration;
++
++use tsuzuri_boundary::server::cases::Cases;
++use tsuzuri_boundary::server::route::{Key, Match};
++use tsuzuri_boundary::server::{Config, Route, Server};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::case::{CaseDoc, PATH};
++use tsuzuri_contract::wire;
++use tsuzuri_core::case::cases_of;
++
++fn manifest(rel: &str) -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
++}
++
++fn fixture(name: &str) -> String {
++    let path = manifest("../../tests/fixtures/case").join(name);
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++/// 歯ごとの作業場（repo・面の file の置き場・state dir・偽の bd）。
++struct Place {
++    root: PathBuf,
++}
++
++impl Place {
++    fn new(name: &str) -> Place {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("bvcroute")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        for dir in [
++            root.join("repo/.beads"),
++            root.join("files"),
++            root.join("state/fleet"),
++        ] {
++            fs::create_dir_all(dir).expect("置き場");
++        }
++        fs::write(root.join("files/index.html"), "tz").expect("index.html");
++        let bd = root.join("bd");
++        fs::write(&bd, "#!/bin/sh\necho '[]'\n").expect("偽の bd");
++        fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).expect("偽の bd の権限");
++        Place { root }
++    }
++
++    /// state dir の fleet の下に file を置く。
++    fn put(&self, name: &str, text: &str) {
++        fs::write(self.root.join("state/fleet").join(name), text).expect("fleet の file");
++    }
++
++    /// state dir を置くか選んで server を立て、口の住所を返す。
++    fn serve(&self, with_state: bool) -> SocketAddr {
++        let config = Config {
++            bd: self.root.join("bd").into(),
++            state_dir: with_state.then(|| self.root.join("state")),
++            ..Config::new(
++                self.root.join("repo"),
++                "127.0.0.1:0".parse().expect("bind 先"),
++                self.root.join("files"),
++            )
++        };
++        let server = Server::bind(&config).expect("起動");
++        let addr = server.local_addr().expect("口の住所");
++        thread::spawn(move || server.run());
++        addr
++    }
++}
++
++/// GET を 1 つ撃ち、（状態の code・本文）を返す。
++fn get(addr: SocketAddr, path: &str) -> (u16, String) {
++    let mut s = TcpStream::connect(addr).expect("接続");
++    s.set_read_timeout(Some(Duration::from_secs(20)))
++        .expect("timeout");
++    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
++        .expect("要求を書く");
++    let mut out = Vec::new();
++    s.read_to_end(&mut out).expect("応答を読む");
++    let text = String::from_utf8(out).expect("応答の字");
++    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
++    let status = head
++        .split(' ')
++        .nth(1)
++        .and_then(|c| c.parse().ok())
++        .expect("状態の code");
++    (status, body.to_string())
++}
++
++/// 口の電文を読む（200 でなければ落ちる）。
++fn doc_of(addr: SocketAddr) -> CaseDoc {
++    let (status, body) = get(addr, PATH);
++    assert_eq!(status, 200, "{body}");
++    wire::decode(&body).expect("局面の出力の電文の形")
++}
++
++#[test]
++fn bvcroute_get_matches_core() {
++    let place = Place::new("core");
++    place.put("lifecycle.json", &fixture("lifecycle.json"));
++    place.put("lifecycle.stale", &fixture("lifecycle.stale"));
++    let addr = place.serve(true);
++    let (status, body) = get(addr, PATH);
++    assert_eq!(status, 200, "{body}");
++    let want = cases_of(
++        &fixture("lifecycle.json"),
++        Some(&fixture("lifecycle.stale")),
++    );
++    assert_eq!(body, wire::encode(&want).expect("電文"));
++    let doc: CaseDoc = wire::decode(&body).expect("局面の出力の電文の形");
++    assert!(matches!(&doc.parts, Reading::Known(parts) if parts.len() == 9));
++    assert_eq!(doc.stale, ["ledger-gate"]);
++}
++
++#[test]
++fn bvcroute_no_state_dir_is_unknown() {
++    let place = Place::new("nostate");
++    place.put("lifecycle.json", &fixture("lifecycle.json"));
++    let doc = doc_of(place.serve(false));
++    assert_eq!(doc.parts, Reading::Unknown);
++    assert!(doc.stale.is_empty());
++}
++
++#[test]
++fn bvcroute_absent_files() {
++    let place = Place::new("absent");
++    let addr = place.serve(true);
++    assert_eq!(doc_of(addr).parts, Reading::Unknown, "出力が無い");
++    place.put("lifecycle.json", &fixture("lifecycle.json"));
++    let doc = doc_of(addr);
++    assert!(
++        matches!(&doc.parts, Reading::Known(parts) if parts.len() == 9),
++        "古さの印の file が無くても読む"
++    );
++    assert!(doc.stale.is_empty(), "古さの印の file が無ければ古くない");
++}
++
++#[test]
++fn bvcroute_unreadable_stale_is_unknown() {
++    let place = Place::new("stale");
++    place.put("lifecycle.json", &fixture("lifecycle.json"));
++    place.put("lifecycle.stale", "not json");
++    let addr = place.serve(true);
++    assert_eq!(doc_of(addr).parts, Reading::Unknown, "読めない印の file");
++    let stale = place.root.join("state/fleet/lifecycle.stale");
++    fs::remove_file(&stale).expect("印の file を外す");
++    fs::create_dir(&stale).expect("印の名の dir");
++    assert_eq!(
++        doc_of(addr).parts,
++        Reading::Unknown,
++        "在って読めない印（無いのでない）"
++    );
++}
++
++#[test]
++fn bvcroute_paths_under_state_dir() {
++    let cases = Cases::new(Some(Path::new("/s")));
++    assert_eq!(cases.json, Some(PathBuf::from("/s/fleet/lifecycle.json")));
++    assert_eq!(cases.stale, Some(PathBuf::from("/s/fleet/lifecycle.stale")));
++    assert_eq!(Cases::new(None).texts(), (String::new(), None));
++}
++
++#[test]
++fn bvcroute_route_is_listed() {
++    let route = Route::ALL
++        .iter()
++        .find(|r| r.name() == "cases")
++        .expect("Route の ALL に名 cases の口が無い");
++    assert_eq!(
++        route.key(),
++        Key {
++            method: "GET",
++            path: Match::Exact(PATH),
++        }
++    );
++}
+diff --git a/crates/tsuzuri-contract/src/case.rs b/crates/tsuzuri-contract/src/case.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a402a4b96eb03e1525e366a67b044eb6e72c26b
+--- /dev/null
++++ b/crates/tsuzuri-contract/src/case.rs
+@@ -0,0 +1,43 @@
++//! 器の局面の出力の電文（口 GET /api/cases・設計ノート surface-wave26a 行 c-case-read・判断の記録 ADR-27 の決定 (10)）。
++//! 器の fleet/lifecycle.json の部品の欄のうち面が読む欄だけを写す（欄の正本は器の case-lifecycle §5.2）。
++//! 部品の種類と局面と手番と理由の語は閉じた列で持たず字のまま運び、面が知らない語を「まだ分からない」に倒す。
++
++use serde::{Deserialize, Serialize};
++
++use crate::EpochSecs;
++use crate::board::Reading;
++
++/// 局面の出力の読みの口の path。
++pub const PATH: &str = "/api/cases";
++
++/// 局面の出力（出力か古さの印の file が無いか読めなければ parts は Unknown）。
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct CaseDoc {
++    /// 出力の生成の時刻（parts が Unknown か時刻が読めなければ None）。
++    pub generated_at: Option<EpochSecs>,
++    /// 古さの印の種類の字（古さの印の file の順・印が無ければ空・空でなければ出力は古い）。
++    pub stale: Vec<String>,
++    pub parts: Reading<Vec<CasePart>>,
++}
++
++/// 部品 1 つ（id は種類ごとの形の字のまま・bead id とは限らない）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct CasePart {
++    pub part: String,
++    pub id: String,
++    pub phase: String,
++    pub turn: String,
++    pub since: Option<EpochSecs>,
++    pub reason: Option<String>,
++    pub closed: bool,
++    pub links: CaseLinks,
++}
++
++/// 部品の結びのうち待つ相手の 2 つ（欠けた key は空の列）。
++#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
++pub struct CaseLinks {
++    /// 契約の待ちの理由が dependency・overlap・reserved のときの相手の bead id。
++    pub on: Vec<String>,
++    /// 便の run id。
++    pub runs: Vec<String>,
++}
+diff --git a/crates/tsuzuri-contract/src/lib.rs b/crates/tsuzuri-contract/src/lib.rs
+index 94daea18915ccc80fe1d82dcf1e7d3ac318ae7bd..1a6af2d9516298e1c9d1fe830d5db38feba9b40a 100644
+--- a/crates/tsuzuri-contract/src/lib.rs
++++ b/crates/tsuzuri-contract/src/lib.rs
+@@ -4,6 +4,7 @@
+ 
+ pub mod account;
+ pub mod board;
++pub mod case;
+ pub mod graph;
+ pub mod ledger;
+ pub mod notice;
+diff --git a/crates/tsuzuri-contract/tests/cform_case.rs b/crates/tsuzuri-contract/tests/cform_case.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab6ac0c845b663b0ba499741f00a8cb4e7252a6b
+--- /dev/null
++++ b/crates/tsuzuri-contract/tests/cform_case.rs
+@@ -0,0 +1,88 @@
++//! 契約の型の外形の歯（接頭辞 bvcform_・設計ノート surface-wave26a 行 c-case-read）のうち case の群の型の見本。
++//! snapshot は tests/snapshots の群の名の json（case.json）で、字の比べは標準 library だけで行う。
++//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
++#![cfg(test)]
++
++mod common;
++
++use common::{AT, Form, form};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart, PATH};
++
++/// 依存で待つ契約と、知らない局面の語を持つ便の部品。
++fn parts() -> Vec<CasePart> {
++    vec![
++        CasePart {
++            part: "contract".into(),
++            id: "t3-hub.902".into(),
++            phase: "contract-queued".into(),
++            turn: "vessel".into(),
++            since: Some(AT - 600),
++            reason: Some("dependency".into()),
++            closed: false,
++            links: CaseLinks {
++                on: vec!["t3-hub.903".into()],
++                runs: vec![],
++            },
++        },
++        CasePart {
++            part: "run".into(),
++            id: "t3-hub.905-20261001T120000Z".into(),
++            phase: "run-parked".into(),
++            turn: "user".into(),
++            since: None,
++            reason: None,
++            closed: false,
++            links: CaseLinks::default(),
++        },
++    ]
++}
++
++/// case の群の型の見本（この順が snapshot の file の key の順）。
++fn forms() -> Vec<Box<dyn Form>> {
++    vec![
++        form(
++            "case::CaseDoc",
++            vec![
++                CaseDoc {
++                    generated_at: Some(AT),
++                    stale: vec!["ledger-gate".into()],
++                    parts: Reading::Known(parts()),
++                },
++                // 出力か古さの印が読めない。
++                CaseDoc {
++                    generated_at: None,
++                    stale: vec![],
++                    parts: Reading::Unknown,
++                },
++            ],
++        ),
++        form("case::CasePart", parts()),
++        form(
++            "case::CaseLinks",
++            vec![
++                CaseLinks::default(),
++                CaseLinks {
++                    on: vec!["t3-hub.905".into()],
++                    runs: vec!["t3-hub.905-20261001T120000Z".into()],
++                },
++            ],
++        ),
++    ]
++}
++
++#[test]
++fn bvcform_snapshot_matches() {
++    common::snapshot_matches("case", &forms());
++}
++
++#[test]
++fn bvcform_roundtrip_all() {
++    common::roundtrip_all(&forms());
++}
++
++#[test]
++fn bvcform_path_is_api_cases() {
++    assert_eq!(PATH, "/api/cases");
++}
+diff --git a/crates/tsuzuri-contract/tests/cfsplit.rs b/crates/tsuzuri-contract/tests/cfsplit.rs
+index 11a64fb9580a238893f8077ed0563e9f1c898706..e2997042942585868452d6c673f55bcb4b1fd5e0 100644
+--- a/crates/tsuzuri-contract/tests/cfsplit.rs
++++ b/crates/tsuzuri-contract/tests/cfsplit.rs
+@@ -11,13 +11,14 @@ use std::path::{Path, PathBuf};
+ use serde_json::{Map, Value};
+ 
+ /// 群の名と、群が見本を持つ module の列。
+-const GROUPS: [(&str, &[&str]); 6] = [
++const GROUPS: [(&str, &[&str]); 7] = [
+     ("surface", &["surface"]),
+     ("ledger", &["ledger", "question"]),
+     ("graph", &["graph"]),
+     ("board", &["board"]),
+     ("stats", &["stats"]),
+     ("seat", &["seat"]),
++    ("case", &["case"]),
+ ];
+ 
+ /// 割る前の snapshot（tests/snapshots/contract_form.json）の鍵（割る前の順）。
+diff --git a/crates/tsuzuri-contract/tests/snapshots/case.json b/crates/tsuzuri-contract/tests/snapshots/case.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..4c2ef7f3bd8325357e8864777ba35967900b94ad
+--- /dev/null
++++ b/crates/tsuzuri-contract/tests/snapshots/case.json
+@@ -0,0 +1,91 @@
++{
++  "case::CaseDoc": [
++    {
++      "generated_at": 1790494620,
++      "stale": [
++        "ledger-gate"
++      ],
++      "parts": {
++        "known": [
++          {
++            "part": "contract",
++            "id": "t3-hub.902",
++            "phase": "contract-queued",
++            "turn": "vessel",
++            "since": 1790494020,
++            "reason": "dependency",
++            "closed": false,
++            "links": {
++              "on": [
++                "t3-hub.903"
++              ],
++              "runs": []
++            }
++          },
++          {
++            "part": "run",
++            "id": "t3-hub.905-20261001T120000Z",
++            "phase": "run-parked",
++            "turn": "user",
++            "since": null,
++            "reason": null,
++            "closed": false,
++            "links": {
++              "on": [],
++              "runs": []
++            }
++          }
++        ]
++      }
++    },
++    {
++      "generated_at": null,
++      "stale": [],
++      "parts": "unknown"
++    }
++  ],
++  "case::CasePart": [
++    {
++      "part": "contract",
++      "id": "t3-hub.902",
++      "phase": "contract-queued",
++      "turn": "vessel",
++      "since": 1790494020,
++      "reason": "dependency",
++      "closed": false,
++      "links": {
++        "on": [
++          "t3-hub.903"
++        ],
++        "runs": []
++      }
++    },
++    {
++      "part": "run",
++      "id": "t3-hub.905-20261001T120000Z",
++      "phase": "run-parked",
++      "turn": "user",
++      "since": null,
++      "reason": null,
++      "closed": false,
++      "links": {
++        "on": [],
++        "runs": []
++      }
++    }
++  ],
++  "case::CaseLinks": [
++    {
++      "on": [],
++      "runs": []
++    },
++    {
++      "on": [
++        "t3-hub.905"
++      ],
++      "runs": [
++        "t3-hub.905-20261001T120000Z"
++      ]
++    }
++  ]
++}
+diff --git a/crates/tsuzuri-core/src/case.rs b/crates/tsuzuri-core/src/case.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..844bf782ce5c87f2a14d8d267d818212786d9b30
+--- /dev/null
++++ b/crates/tsuzuri-core/src/case.rs
+@@ -0,0 +1,108 @@
++//! 器の局面の出力の読み（行 c-case-read・判断の記録 ADR-27 の決定 (10)）。
++//! 字は器の fleet/lifecycle.json（出力）と fleet/lifecycle.stale（古さの印）の 2 つ（欄の正本は器の case-lifecycle §5.2）。
++//! 読めない時と古い時は器の読み手（器の fleet/lifecycle_read.rs の read を比べる入力の組を空にして呼んだ形）に合わせる:
++//! 古さの印の file が在って読めない（JSON でない・版が 1 でない・印の列の形が違う・同じ種類の印が 2 つ在る）か、出力が無いか
++//! 読めない（JSON でない・版が 1 でない・部品の列が無い）なら部品は「まだ分からない」。古さの印が 1 つでも在れば古い。
++//! 欄が欠けるか型が違う部品は落とす。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
++//! （器の読み手は知らない語の部品を落とすが、面は知らない語を「まだ分からない」に倒すので落とさない）。
++
++use serde_json::Value;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart};
++
++use crate::ledger::epoch_secs;
++
++/// 出力と古さの印の file の版。
++const VERSION: u64 = 1;
++
++/// 出力の字と古さの印の字から電文を組む。`json` は出力の file の字（無いか読めなければ空の字）、
++/// `stale` は古さの印の file の字（file が無ければ None・在って読めなければ空の字）。
++pub fn cases_of(json: &str, stale: Option<&str>) -> CaseDoc {
++    let unknown = CaseDoc {
++        generated_at: None,
++        stale: Vec::new(),
++        parts: Reading::Unknown,
++    };
++    let marks = match stale.map(stale_kinds) {
++        None => Vec::new(),
++        Some(Some(kinds)) => kinds,
++        Some(None) => return unknown,
++    };
++    let Some(out) = versioned(json) else {
++        return unknown;
++    };
++    let Some(parts) = out.get("parts").and_then(Value::as_array) else {
++        return unknown;
++    };
++    CaseDoc {
++        generated_at: out
++            .get("generated_at")
++            .and_then(Value::as_str)
++            .and_then(epoch_secs),
++        stale: marks,
++        parts: Reading::Known(parts.iter().filter_map(part_of).collect()),
++    }
++}
++
++/// 版が 1 の JSON（JSON でないか版が違えば None）。
++fn versioned(text: &str) -> Option<Value> {
++    let value: Value = serde_json::from_str(text).ok()?;
++    (value.get("version").and_then(Value::as_u64) == Some(VERSION)).then_some(value)
++}
++
++/// 古さの印の種類の字（file の順・形が違うか同じ種類が 2 つ在れば None）。
++fn stale_kinds(text: &str) -> Option<Vec<String>> {
++    let value = versioned(text)?;
++    let kinds: Vec<String> = value
++        .get("marks")?
++        .as_array()?
++        .iter()
++        .map(|mark| mark.get("kind")?.as_str().map(str::to_string))
++        .collect::<Option<_>>()?;
++    let distinct = kinds
++        .iter()
++        .enumerate()
++        .all(|(at, kind)| !kinds.iter().skip(at + 1).any(|other| other == kind));
++    distinct.then_some(kinds)
++}
++
++/// 部品 1 つ（欄が欠けるか型が違えば None・since は読めない時刻なら None）。
++fn part_of(node: &Value) -> Option<CasePart> {
++    let word = |key: &str| node.get(key)?.as_str().map(str::to_string);
++    Some(CasePart {
++        part: word("part")?,
++        id: word("id")?,
++        phase: word("phase")?,
++        turn: word("turn")?,
++        since: optional(node, "since")?.and_then(|at| epoch_secs(&at)),
++        reason: optional(node, "reason")?,
++        closed: node.get("closed")?.as_bool()?,
++        links: links_of(node.get("links")?)?,
++    })
++}
++
++/// 字か null の欄（欠けるか型が違えば None）。
++fn optional(node: &Value, key: &str) -> Option<Option<String>> {
++    match node.get(key)? {
++        Value::Null => Some(None),
++        Value::String(text) => Some(Some(text.clone())),
++        _ => None,
++    }
++}
++
++/// 結びの on と runs（欠けた key は空の列・object でないか在る key が字の列でなければ None）。
++fn links_of(node: &Value) -> Option<CaseLinks> {
++    let ids = |key: &str| match node.get(key) {
++        None => Some(Vec::new()),
++        Some(found) => found
++            .as_array()?
++            .iter()
++            .map(|id| id.as_str().map(str::to_string))
++            .collect(),
++    };
++    node.is_object().then_some(())?;
++    Some(CaseLinks {
++        on: ids("on")?,
++        runs: ids("runs")?,
++    })
++}
+diff --git a/crates/tsuzuri-core/src/lib.rs b/crates/tsuzuri-core/src/lib.rs
+index c4566f07535595b72d37cd5dce48cde81c1cc33d..60a449f465f21ab91f8e0508e807fd7c2d7e256e 100644
+--- a/crates/tsuzuri-core/src/lib.rs
++++ b/crates/tsuzuri-core/src/lib.rs
+@@ -5,9 +5,11 @@
+ //! account board の電文を組む関数（`account`）は便 e-acct-host と e-acct-proj が置く。
+ //! 配達済みの印と未配達の裁定と停止の hook の入出力の JSON（`delivery`）は行 f-mark が置く。
+ //! 問いの起票の門の下書きの読みと判じと答えの JSON（`gate`）は行 f-gate が置く。
++//! 器の局面の出力の読み（`case`）は行 c-case-read が置く。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は引数で受ける）。
+ 
+ pub mod account;
++pub mod case;
+ pub mod delivery;
+ pub mod gate;
+ pub mod graph;
+diff --git a/crates/tsuzuri-core/tests/bvcase.rs b/crates/tsuzuri-core/tests/bvcase.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..eeefabc641c8c0bd07da1eb358a058b4d68eff74
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/bvcase.rs
+@@ -0,0 +1,179 @@
++//! 器の局面の出力の読みの歯（接頭辞 bvcase_・設計ノート surface-wave26a 行 c-case-read の完了の条件）。
++//! fixture: tests/fixtures/case/lifecycle.json と lifecycle.stale（器の実物の形を写した小さな字・読むだけ）。短い字の組は歯の中に書く。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart};
++use tsuzuri_core::case::cases_of;
++
++fn fixture(name: &str) -> String {
++    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/case")
++        .join(name);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++fn ids(list: &[&str]) -> Vec<String> {
++    list.iter().map(|s| s.to_string()).collect()
++}
++
++/// 読めた部品の列（Unknown なら落ちる）。
++fn known(doc: &CaseDoc) -> &[CasePart] {
++    match &doc.parts {
++        Reading::Known(parts) => parts,
++        Reading::Unknown => panic!("部品が読めたはず"),
++    }
++}
++
++/// 部品を id で引く。
++fn by_id<'a>(parts: &'a [CasePart], id: &str) -> &'a CasePart {
++    parts
++        .iter()
++        .find(|p| p.id == id)
++        .unwrap_or_else(|| panic!("部品 {id} が無い"))
++}
++
++#[test]
++fn bvcase_fields_copied_from_fixture() {
++    let doc = cases_of(&fixture("lifecycle.json"), None);
++    assert_eq!(doc.generated_at, Some(1_790_866_402));
++    assert!(doc.stale.is_empty(), "古さの印の file が無ければ古くない");
++    let parts = known(&doc);
++    assert_eq!(parts.len(), 9, "欄の欠けた 1 つを除く 9 つ");
++    assert_eq!(
++        by_id(parts, "t3-hub.902"),
++        &CasePart {
++            part: "contract".into(),
++            id: "t3-hub.902".into(),
++            phase: "contract-queued".into(),
++            turn: "vessel".into(),
++            since: Some(1_790_863_200),
++            reason: Some("dependency".into()),
++            closed: false,
++            links: CaseLinks {
++                on: ids(&["t3-hub.903"]),
++                runs: vec![],
++            },
++        }
++    );
++    let overlap = by_id(parts, "t3-hub.904");
++    assert_eq!(overlap.links.on, ids(&["t3-hub.905"]));
++    assert!(overlap.links.runs.is_empty());
++    let reserved = by_id(parts, "t3-hub.910");
++    assert_eq!(
++        (reserved.reason.as_deref(), &reserved.links.on),
++        (Some("reserved"), &ids(&["t3-hub.909"])),
++        "理由 reserved の相手も結びの on のまま"
++    );
++    let running = by_id(parts, "t3-hub.905");
++    assert_eq!(running.links.runs, ids(&["t3-hub.905-20261001T120000Z"]));
++    let run = by_id(parts, "t3-hub.905-20261001T120000Z");
++    assert_eq!(
++        (run.part.as_str(), run.phase.as_str(), run.turn.as_str()),
++        ("run", "run-blocked", "user")
++    );
++    assert_eq!(run.links, CaseLinks::default(), "欠けた key は空の列");
++    let question = by_id(parts, "t3-hub.901");
++    assert_eq!(
++        (question.closed, question.since, question.reason.as_deref()),
++        (true, Some(1_790_644_171), None)
++    );
++    assert_eq!(by_id(parts, "t3-hub.900").since, None, "null の since");
++}
++
++#[test]
++fn bvcase_unknown_words_kept_as_text() {
++    let doc = cases_of(&fixture("lifecycle.json"), None);
++    let odd = by_id(known(&doc), "t3-hub.907");
++    assert_eq!(
++        (odd.phase.as_str(), odd.turn.as_str(), odd.reason.as_deref()),
++        ("contract-parked", "later", Some("new-reason")),
++        "知らない局面と手番と理由の語も字のまま"
++    );
++    let json = r#"{"version":1,"generated_at":"x","parts":[
++        {"part":"novel","id":"n-1","phase":"novel-open","turn":"none","since":"not-a-time","reason":null,"closed":false,"links":{"on":["a"],"future":[1]}}]}"#;
++    let doc = cases_of(json, None);
++    let part = by_id(known(&doc), "n-1");
++    assert_eq!(part.part, "novel", "知らない種類の部品も落とさない");
++    assert_eq!(part.since, None, "読めない時刻は None");
++    assert_eq!(part.links.on, ids(&["a"]), "知らない結びの key は読まない");
++    assert_eq!(doc.generated_at, None, "読めない生成の時刻は None");
++}
++
++#[test]
++fn bvcase_broken_piece_dropped() {
++    let doc = cases_of(&fixture("lifecycle.json"), None);
++    assert!(
++        known(&doc).iter().all(|p| p.id != "t3-hub.908"),
++        "closed の欠けた部品は落とす"
++    );
++    let head = r#"{"version":1,"generated_at":"2026-10-01T14:53:22Z","parts":["#;
++    let good = r#"{"part":"epic","id":"e-1","phase":"epic-open","turn":"none","since":null,"reason":null,"closed":false,"links":{}}"#;
++    for bad in [
++        r#"{"part":"epic","id":"e-2","phase":"epic-open","turn":"none","since":null,"reason":null,"closed":"no","links":{}}"#,
++        r#"{"part":"epic","id":"e-2","phase":"epic-open","turn":"none","since":null,"reason":null,"closed":false}"#,
++        r#"{"part":"epic","id":"e-2","phase":"epic-open","turn":"none","since":null,"reason":null,"closed":false,"links":{"on":[7]}}"#,
++        r#"{"part":"epic","id":"e-2","phase":"epic-open","turn":"none","reason":null,"closed":false,"links":{}}"#,
++        r#"{"part":"epic","id":"e-2","phase":3,"turn":"none","since":null,"reason":null,"closed":false,"links":{}}"#,
++        r#"{"part":"epic","id":"e-2","phase":"epic-open","turn":"none","since":null,"reason":5,"closed":false,"links":{}}"#,
++    ] {
++        let doc = cases_of(&format!("{head}{good},{bad}]}}"), None);
++        let got: Vec<&str> = known(&doc).iter().map(|p| p.id.as_str()).collect();
++        assert_eq!(got, ["e-1"], "{bad}");
++    }
++}
++
++#[test]
++fn bvcase_unreadable_is_unknown() {
++    let json = fixture("lifecycle.json");
++    let unknown = CaseDoc {
++        generated_at: None,
++        stale: vec![],
++        parts: Reading::Unknown,
++    };
++    for (out, stale, why) in [
++        ("", None, "出力が無い"),
++        ("not json", None, "出力が JSON でない"),
++        (r#"{"version":2,"parts":[]}"#, None, "出力の版が 1 でない"),
++        (r#"{"version":1}"#, None, "部品の列が無い"),
++        (r#"{"version":1,"parts":{}}"#, None, "部品が列でない"),
++        (json.as_str(), Some(""), "古さの印の file を読めない"),
++        (json.as_str(), Some("not json"), "古さの印が JSON でない"),
++        (
++            json.as_str(),
++            Some(r#"{"version":2,"marks":[]}"#),
++            "古さの印の版が 1 でない",
++        ),
++        (json.as_str(), Some(r#"{"version":1}"#), "印の列が無い"),
++        (
++            json.as_str(),
++            Some(r#"{"version":1,"marks":[{"at":"x"}]}"#),
++            "印の種類が無い",
++        ),
++        (
++            json.as_str(),
++            Some(r#"{"version":1,"marks":[{"kind":"merge-gate"},{"kind":"merge-gate"}]}"#),
++            "同じ種類の印が 2 つ",
++        ),
++    ] {
++        assert_eq!(cases_of(out, stale), unknown, "{why}");
++    }
++}
++
++#[test]
++fn bvcase_stale_marks_listed() {
++    let json = fixture("lifecycle.json");
++    let doc = cases_of(&json, Some(&fixture("lifecycle.stale")));
++    assert_eq!(doc.stale, ids(&["ledger-gate"]));
++    assert_eq!(known(&doc).len(), 9, "古くても部品は読む");
++    let none = cases_of(&json, Some(r#"{"version":1,"marks":[]}"#));
++    assert!(none.stale.is_empty(), "0 件の印は古くない");
++    let three = r#"{"version":1,"marks":[{"kind":"unreadable"},{"kind":"merge-gate"},{"kind":"next-gate"}]}"#;
++    assert_eq!(
++        cases_of(&json, Some(three)).stale,
++        ids(&["unreadable", "merge-gate", "next-gate"]),
++        "file の順で・知らない種類も字のまま"
++    );
++}
+diff --git a/tests/fixtures/case/lifecycle.json b/tests/fixtures/case/lifecycle.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..2984328a13b821738e4e371993d9a3f0ca02e994
+--- /dev/null
++++ b/tests/fixtures/case/lifecycle.json
+@@ -0,0 +1,235 @@
++{
++  "version": 1,
++  "generated_at": "2026-10-01T14:53:22Z",
++  "scope": "partial",
++  "full_at": "2026-10-01T14:43:17Z",
++  "interval_s": 15,
++  "closed_window_h": 72,
++  "inputs": {
++    "ledger": {
++      "form": "noms",
++      "root": "0123456789abcdefghijklmnopqrstuv",
++      "gen": "0123456789abcdef",
++      "chunks": 100
++    },
++    "events": {
++      "len": 1000,
++      "head": "2026-09-24T12:29:07Z"
++    },
++    "main": {
++      "ref": "refs/remotes/origin/main",
++      "sha": "0123456789abcdef0123456789abcdef01234567"
++    }
++  },
++  "unmeasured": [
++    {
++      "part": "row",
++      "reason": "table-unreadable"
++    },
++    {
++      "part": "requirement",
++      "reason": "table-unreadable"
++    }
++  ],
++  "phases": [
++    "utterance-open",
++    "utterance-sorted",
++    "question-open",
++    "ruling-unreflected",
++    "question-closed",
++    "memo-promoting",
++    "memo-asking",
++    "memo-actionable",
++    "memo-waiting",
++    "memo-closed",
++    "contract-running",
++    "contract-refused",
++    "contract-queued",
++    "contract-closed",
++    "run-intake",
++    "run-reviewed",
++    "run-review-failed",
++    "run-blocked",
++    "run-implementing",
++    "run-asking",
++    "run-rate-limited",
++    "run-gating",
++    "run-landing",
++    "run-gate-failed",
++    "run-ci-waiting",
++    "run-landed-open",
++    "run-stopped",
++    "run-failed",
++    "row-unbeaded",
++    "row-beaded",
++    "row-landed",
++    "requirement-unrowed",
++    "requirement-rowed",
++    "epic-closable",
++    "epic-open",
++    "epic-closed",
++    "commit-landed",
++    "misfit"
++  ],
++  "owned": {
++    "count": 0,
++    "unset": 0,
++    "unknown": 0,
++    "oldest": null
++  },
++  "parts": [
++    {
++      "part": "question",
++      "id": "t3-hub.901",
++      "phase": "question-closed",
++      "turn": "none",
++      "since": "2026-09-29T01:09:31Z",
++      "reason": null,
++      "closed": true,
++      "overdue": null,
++      "links": {
++        "source": [
++          "t3-hub.900"
++        ]
++      }
++    },
++    {
++      "part": "memo",
++      "id": "t3-hub.900",
++      "phase": "memo-waiting",
++      "turn": "none",
++      "since": null,
++      "reason": null,
++      "closed": false,
++      "overdue": null,
++      "links": {
++        "questions": [
++          "t3-hub.901"
++        ]
++      },
++      "due": "2026-10-08T00:00:00Z",
++      "triggers": [
++        {
++          "form": "期日",
++          "value": "2026-10-08T00:00:00Z",
++          "met": false
++        }
++      ],
++      "keep": false
++    },
++    {
++      "part": "contract",
++      "id": "t3-hub.902",
++      "phase": "contract-queued",
++      "turn": "vessel",
++      "since": "2026-10-01T14:00:00Z",
++      "reason": "dependency",
++      "closed": false,
++      "overdue": null,
++      "links": {
++        "on": [
++          "t3-hub.903"
++        ]
++      },
++      "pointer": "contracts/surface-wave26a.toml#c-case-read"
++    },
++    {
++      "part": "contract",
++      "id": "t3-hub.904",
++      "phase": "contract-queued",
++      "turn": "vessel",
++      "since": "2026-10-01T14:10:00Z",
++      "reason": "overlap",
++      "closed": false,
++      "overdue": null,
++      "links": {
++        "on": [
++          "t3-hub.905"
++        ]
++      },
++      "pointer": null
++    },
++    {
++      "part": "contract",
++      "id": "t3-hub.910",
++      "phase": "contract-queued",
++      "turn": "vessel",
++      "since": "2026-10-01T14:20:00Z",
++      "reason": "reserved",
++      "closed": false,
++      "overdue": null,
++      "links": {
++        "on": [
++          "t3-hub.909"
++        ]
++      },
++      "pointer": "contracts/surface-wave26a.toml#c-ledger-lc"
++    },
++    {
++      "part": "contract",
++      "id": "t3-hub.905",
++      "phase": "contract-running",
++      "turn": "vessel",
++      "since": "2026-10-01T12:00:00Z",
++      "reason": null,
++      "closed": false,
++      "overdue": null,
++      "links": {
++        "runs": [
++          "t3-hub.905-20261001T120000Z"
++        ]
++      },
++      "pointer": "contracts/surface-wave26a.toml#c-case-columns"
++    },
++    {
++      "part": "run",
++      "id": "t3-hub.905-20261001T120000Z",
++      "phase": "run-blocked",
++      "turn": "user",
++      "since": "2026-10-01T12:30:00Z",
++      "reason": "Blocked",
++      "closed": false,
++      "overdue": null,
++      "links": {},
++      "bead": "t3-hub.905"
++    },
++    {
++      "part": "epic",
++      "id": "t3-hub.906",
++      "phase": "epic-open",
++      "turn": "none",
++      "since": null,
++      "reason": null,
++      "closed": false,
++      "overdue": null,
++      "links": {}
++    },
++    {
++      "part": "contract",
++      "id": "t3-hub.907",
++      "phase": "contract-parked",
++      "turn": "later",
++      "since": "2026-10-01T13:00:00Z",
++      "reason": "new-reason",
++      "closed": false,
++      "overdue": null,
++      "links": {
++        "on": [
++          "t3-hub.902"
++        ]
++      },
++      "pointer": null
++    },
++    {
++      "part": "contract",
++      "id": "t3-hub.908",
++      "phase": "contract-queued",
++      "turn": "vessel",
++      "since": null,
++      "reason": "host-busy",
++      "overdue": null,
++      "links": {},
++      "pointer": null
++    }
++  ]
++}
+diff --git a/tests/fixtures/case/lifecycle.stale b/tests/fixtures/case/lifecycle.stale
+new file mode 100644
+index 0000000000000000000000000000000000000000..7725d0582bcfd3629b621d905da5821c4d11b7ac
+--- /dev/null
++++ b/tests/fixtures/case/lifecycle.stale
+@@ -0,0 +1,18 @@
++{
++  "version": 1,
++  "marks": [
++    {
++      "kind": "ledger-gate",
++      "at": "2026-10-01T14:58:05Z",
++      "inputs": {
++        "ledger": {
++          "form": "noms",
++          "root": "vutsrqponmlkjihgfedcba9876543210",
++          "gen": "0123456789abcdef",
++          "chunks": 101
++        }
++      },
++      "reason": null
++    }
++  ]
++}

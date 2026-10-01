@@ -1,0 +1,485 @@
+diff --git a/crates/tsuzuri-contract/src/ledger.rs b/crates/tsuzuri-contract/src/ledger.rs
+index 5481669b6eda73c2e66cbf982ad29f7be5c8d22d..8dfcb5f63d45ee3d3ab97f624e40e8b25739d7d0 100644
+--- a/crates/tsuzuri-contract/src/ledger.rs
++++ b/crates/tsuzuri-contract/src/ledger.rs
+@@ -141,6 +141,29 @@ pub struct LedgerList {
+     pub rows: Reading<Vec<LedgerRow>>,
+ }
+ 
++/// bead の事実の一覧（口 GET /api/beads の出力・行 c-bead-facts）。台帳が読めなければ行は `Unknown`（0 件と区別する）。
++/// 面は台帳の一覧の行と id で結ぶ（一覧の行の型 `LedgerRow` は替えない）。
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct BeadFacts {
++    pub rows: Reading<Vec<BeadFact>>,
++}
++
++/// bead の 1 本の事実（id・起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct BeadFact {
++    pub id: BeadId,
++    /// 起票の時刻（bd の欄 created_at・読めなければ None）。
++    pub created_at: Option<EpochSecs>,
++    /// 短い題（metadata の鍵 short の字・無ければ題から機械で作った字）。
++    pub short: String,
++    /// short が metadata の鍵 short の字か（偽なら題から機械で作った字）。
++    pub short_set: bool,
++    /// 概要（本文の 1 行・Unicode の字で 120 まで）。
++    pub summary: String,
++    /// blocks の相手（依存の type が blocks の先の bead の全部・台帳の順）。
++    pub blocks: Vec<BeadId>,
++}
++
+ /// 台帳の変化の知らせ（SSE の口 events の `ledger-changed` の data・便 e-min）。
+ /// 中身は運ばない。面は受けたら一覧の口を読み直す。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+diff --git a/crates/tsuzuri-contract/tests/cform_ledger.rs b/crates/tsuzuri-contract/tests/cform_ledger.rs
+index 12fb2d85fc21efc3c138d6a544cdad7ba2d8ffef..e334e89331cc4c4bf1f526219976badd06c831fb 100644
+--- a/crates/tsuzuri-contract/tests/cform_ledger.rs
++++ b/crates/tsuzuri-contract/tests/cform_ledger.rs
+@@ -12,8 +12,9 @@ use common::{AT, Form, bead, form};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::NodeKind;
+ use tsuzuri_contract::ledger::{
+-    BDW, BdLine, BeadId, ChildType, Effect, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
+-    MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL, fnv1a64,
++    BDW, BdLine, BeadFact, BeadFacts, BeadId, ChildType, Effect, LedgerChanged, LedgerItem,
++    LedgerList, LedgerRow, LedgerWrite, MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG,
++    QUESTION_LABEL, fnv1a64,
+ };
+ use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionCard, QuestionList};
+ use tsuzuri_contract::surface::RulingId;
+@@ -90,6 +91,18 @@ fn ledger_item() -> LedgerItem {
+     }
+ }
+ 
++/// 短い題を metadata に持ち blocks の相手の在る bead の事実（行 c-bead-facts）。
++fn bead_fact() -> BeadFact {
++    BeadFact {
++        id: bead("t3-hub.5"),
++        created_at: Some(AT),
++        short: "契約の型".into(),
++        short_set: true,
++        summary: "契約の型を足す".into(),
++        blocks: vec![bead("t3-hub.4")],
++    }
++}
++
+ /// 定型行を全部持つ問いの card。
+ fn question_card() -> QuestionCard {
+     QuestionCard {
+@@ -130,6 +143,35 @@ fn forms() -> Vec<Box<dyn Form>> {
+                 },
+             ],
+         ),
++        form(
++            "ledger::BeadFact",
++            vec![
++                bead_fact(),
++                // 起票の時刻が読めず、短い題を題から作り、概要も blocks の相手も無い bead。
++                BeadFact {
++                    id: bead("t3-hub"),
++                    created_at: None,
++                    short: "根".into(),
++                    short_set: false,
++                    summary: String::new(),
++                    blocks: vec![],
++                },
++            ],
++        ),
++        form(
++            "ledger::BeadFacts",
++            vec![
++                BeadFacts {
++                    rows: Reading::Known(vec![bead_fact()]),
++                },
++                BeadFacts {
++                    rows: Reading::Known(vec![]),
++                },
++                BeadFacts {
++                    rows: Reading::Unknown,
++                },
++            ],
++        ),
+         form("ledger::LedgerChanged", vec![LedgerChanged { at: AT }]),
+         form("ledger::LedgerWrite", ledger_writes()),
+     ]
+diff --git a/crates/tsuzuri-contract/tests/snapshots/ledger.json b/crates/tsuzuri-contract/tests/snapshots/ledger.json
+index 88e91afe490bd4b4c0ca330ff98161bd48a211fa..4c3b63bf8f3cc1099e655b803337bffa9bad3fb0 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/ledger.json
++++ b/crates/tsuzuri-contract/tests/snapshots/ledger.json
+@@ -77,6 +77,52 @@
+       "rows": "unknown"
+     }
+   ],
++  "ledger::BeadFact": [
++    {
++      "id": "t3-hub.5",
++      "created_at": 1790494620,
++      "short": "契約の型",
++      "short_set": true,
++      "summary": "契約の型を足す",
++      "blocks": [
++        "t3-hub.4"
++      ]
++    },
++    {
++      "id": "t3-hub",
++      "created_at": null,
++      "short": "根",
++      "short_set": false,
++      "summary": "",
++      "blocks": []
++    }
++  ],
++  "ledger::BeadFacts": [
++    {
++      "rows": {
++        "known": [
++          {
++            "id": "t3-hub.5",
++            "created_at": 1790494620,
++            "short": "契約の型",
++            "short_set": true,
++            "summary": "契約の型を足す",
++            "blocks": [
++              "t3-hub.4"
++            ]
++          }
++        ]
++      }
++    },
++    {
++      "rows": {
++        "known": []
++      }
++    },
++    {
++      "rows": "unknown"
++    }
++  ],
+   "ledger::LedgerChanged": [
+     {
+       "at": 1790494620
+diff --git a/crates/tsuzuri-core/src/ledger/facts.rs b/crates/tsuzuri-core/src/ledger/facts.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..eed8c1191a3f8c9fab94c8306a76908cc0dd448f
+--- /dev/null
++++ b/crates/tsuzuri-core/src/ledger/facts.rs
+@@ -0,0 +1,94 @@
++//! bead の事実の一覧（起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
++//! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）だけで、file も子 process も時計も触らない。
++//! 短い題は metadata の鍵 short の字か、無ければ題から機械で作る。概要は本文の 1 行を Unicode の字で 120 に切る。
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId};
++
++use super::epoch_secs;
++use crate::graph::build::{BdBead, metadata_ids, read_ledger};
++
++/// 短い題を置く metadata の鍵。
++pub const SHORT_KEY: &str = "short";
++
++/// 契約の便の題の頭（後に契約の行 id を置く）。
++pub const ROW_TITLE_PREFIX: &str = "便 ";
++
++/// 題の区切りの字（前の字が短い題）。
++pub const TITLE_DASH: char = '—';
++
++/// 概要を取る見出しの行。
++pub const OBSERVATION_HEADING: &str = "### 観測";
++
++/// 概要の行から外す頭の字。
++pub const SUMMARY_LABEL: &str = "概要 =";
++
++/// 概要の字数の上限（Unicode の字）。
++pub const SUMMARY_MAX: usize = 120;
++
++/// 台帳の字から bead の事実の一覧を組む（字が空か JSON の配列として読めなければ行は `Unknown`）。
++/// bd が消した bead（tombstone）と、id が bead の id の形でない bead は出さない。行は台帳の順。
++pub fn facts(ledger: &str) -> BeadFacts {
++    BeadFacts {
++        rows: read_ledger(ledger).map_or(Reading::Unknown, |beads| {
++            Reading::Known(beads.into_iter().filter_map(fact).collect())
++        }),
++    }
++}
++
++/// bead の 1 本の事実（tombstone か id の形が合わなければ None・blocks の先の id の形が合わなければその先だけ外す）。
++fn fact(bead: BdBead) -> Option<BeadFact> {
++    if bead.status.as_deref() == Some("tombstone") {
++        return None;
++    }
++    let id = BeadId::new(bead.id).ok()?;
++    let set = metadata_ids(&bead.metadata, SHORT_KEY).into_iter().next();
++    let short_set = set.is_some();
++    let blocks = bead
++        .dependencies
++        .unwrap_or_default()
++        .into_iter()
++        .filter(|d| d.dep_type == "blocks")
++        .filter_map(|d| BeadId::new(d.depends_on_id).ok())
++        .collect();
++    Some(BeadFact {
++        id,
++        created_at: bead.created_at.as_deref().and_then(epoch_secs),
++        short: set.unwrap_or_else(|| short_of(bead.title.as_deref().unwrap_or_default())),
++        short_set,
++        summary: summary_of(bead.description.as_deref().unwrap_or_default()),
++        blocks,
++    })
++}
++
++/// 題から機械で作る短い題。題の前後の空白を除き、`ROW_TITLE_PREFIX` で始まれば次の空白までの字（契約の行 id）、
++/// ほかは `TITLE_DASH` の前の字の前後の空白を除いた字（区切りが無ければ題の全体）。作った字が空なら題の全体。
++pub fn short_of(title: &str) -> String {
++    let title = title.trim();
++    let made = match title.strip_prefix(ROW_TITLE_PREFIX) {
++        Some(rest) => rest.split_whitespace().next().unwrap_or_default(),
++        None => title.split(TITLE_DASH).next().unwrap_or_default().trim(),
++    };
++    if made.is_empty() { title } else { made }.to_string()
++}
++
++/// 本文から作る概要。見出しの行 `OBSERVATION_HEADING` が在ればその下の最初の空でない行、無ければ空の行と
++/// 字 # で始まる行を飛ばした最初の行（どれも前後の空白を除く）から、頭の `SUMMARY_LABEL` とその後の空白を外し、
++/// Unicode の字で `SUMMARY_MAX` に切る。行が無ければ空の字。
++pub fn summary_of(description: &str) -> String {
++    let lines: Vec<&str> = description.lines().map(str::trim).collect();
++    let line = match lines.iter().position(|l| *l == OBSERVATION_HEADING) {
++        Some(at) => lines
++            .get(at + 1..)
++            .unwrap_or_default()
++            .iter()
++            .find(|l| !l.is_empty()),
++        None => lines.iter().find(|l| !l.is_empty() && !l.starts_with('#')),
++    };
++    let line = line.copied().unwrap_or_default();
++    line.strip_prefix(SUMMARY_LABEL)
++        .map_or(line, str::trim_start)
++        .chars()
++        .take(SUMMARY_MAX)
++        .collect()
++}
+diff --git a/crates/tsuzuri-core/src/ledger/mod.rs b/crates/tsuzuri-core/src/ledger/mod.rs
+index 5b4e04cfb1ba7544a51072b1847f2d4dc6113d03..b47f4903925e642cd2e9ea6336ed363df356fcb0 100644
+--- a/crates/tsuzuri-core/src/ledger/mod.rs
++++ b/crates/tsuzuri-core/src/ledger/mod.rs
+@@ -1,8 +1,9 @@
+-//! 台帳の指標（`stats`）と未反映の一覧（`unreflected`）（設計ノート surface-base 便 d）。
++//! 台帳の指標（`stats`）と未反映の一覧（`unreflected`）（設計ノート surface-base 便 d）と bead の事実の一覧（`facts`・行 c-bead-facts）。
+ //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）と今の時刻（引数）で、
+ //! どの関数も file も子 process も時計も触らない。字を読んで口に出す側は境界の crate が持つ。
+ //! bead の種類は導出グラフと同じ順（epic・memo・問い・契約）で決め、指標が数える task は契約の bead。
+ 
++pub mod facts;
+ pub mod stats;
+ pub mod unreflected;
+ 
+@@ -11,6 +12,7 @@ use tsuzuri_contract::graph::NodeKind;
+ 
+ use crate::graph::build::{bead_kind, read_ledger};
+ 
++pub use facts::facts;
+ pub use stats::{JudgeInput, THRESHOLDS, Thresholds, judge, judge_of, stats};
+ pub use unreflected::{Unreflected, UnreflectedItem, unreflected};
+ 
+diff --git a/crates/tsuzuri-core/tests/bvfact.rs b/crates/tsuzuri-core/tests/bvfact.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0ce59ff07315c31a6e8e0be0525243543bd5effa
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/bvfact.rs
+@@ -0,0 +1,194 @@
++//! 行 c-bead-facts の歯（中核・接頭辞 bvfact_）: 台帳の字から bead の事実の一覧（起票の時刻・短い題・概要・
++//! blocks の相手）を組む。台帳の字は歯の中で組む（fixture の file は使わない）。
++#![cfg(test)]
++
++use serde_json::{Value, json};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::ledger::{BeadFact, BeadId};
++use tsuzuri_core::ledger::facts;
++use tsuzuri_core::ledger::facts::SUMMARY_MAX;
++
++fn bead(id: &str) -> BeadId {
++    BeadId::new(id).expect("見本の bead id")
++}
++
++/// 題と本文と metadata（無ければ Null）を持つ open の task の 1 本。
++fn line(id: &str, title: &str, description: &str, metadata: Value) -> Value {
++    let mut b = json!({
++        "id": id,
++        "title": title,
++        "description": description,
++        "status": "open",
++        "issue_type": "task",
++        "created_at": "2026-09-27T00:00:00Z",
++    });
++    if !metadata.is_null() {
++        b["metadata"] = metadata;
++    }
++    b
++}
++
++/// 台帳の字から組んだ行（読めなければ落ちる）。
++fn rows(beads: &[Value]) -> Vec<BeadFact> {
++    match facts(&Value::Array(beads.to_vec()).to_string()).rows {
++        Reading::Known(rows) => rows,
++        Reading::Unknown => panic!("読める台帳の字が Unknown"),
++    }
++}
++
++/// 1 本だけの台帳の字から組んだ行。
++fn one(bead: Value) -> BeadFact {
++    let mut got = rows(&[bead]);
++    assert_eq!(got.len(), 1, "{got:?}");
++    got.remove(0)
++}
++
++#[test]
++fn bvfact_short_from_metadata() {
++    let set = one(line(
++        "fx.1",
++        "便 r4-table — 長い題",
++        "",
++        json!({"short": "表の上限", "touches": ["A-1"]}),
++    ));
++    assert_eq!(set.short, "表の上限");
++    assert!(set.short_set, "metadata の鍵 short の字は short_set が真");
++    // metadata が object を JSON にした字でも読む。
++    let text = one(line(
++        "fx.2",
++        "題",
++        "",
++        json!("{\"short\":\"字の metadata\"}"),
++    ));
++    assert_eq!(text.short, "字の metadata");
++    assert!(text.short_set);
++    // 鍵 short が空の字なら機械で作る。
++    let empty = one(line("fx.3", "問い — 色", "", json!({"short": ""})));
++    assert_eq!(empty.short, "問い");
++    assert!(!empty.short_set, "空の short は機械で作る");
++}
++
++#[test]
++fn bvfact_short_fallback_row_id() {
++    let row = one(line(
++        "fx.1",
++        "便 r4-table — 表の上限を直す",
++        "",
++        Value::Null,
++    ));
++    assert_eq!(row.short, "r4-table");
++    assert!(!row.short_set, "題から作った字は short_set が偽");
++    let bare = one(line("fx.2", "便 e-reap", "", Value::Null));
++    assert_eq!(bare.short, "e-reap", "区切りの無い便の題は頭の後の字の全体");
++}
++
++#[test]
++fn bvfact_short_fallback_dash() {
++    let dash = one(line("fx.1", "  問い — 新しい方の問い", "", Value::Null));
++    assert_eq!(dash.short, "問い", "「—」の前の字の前後の空白を除く");
++    assert!(!dash.short_set);
++    let whole = one(line("fx.2", "問い: 色を替えてよいか ", "", Value::Null));
++    assert_eq!(
++        whole.short, "問い: 色を替えてよいか",
++        "「—」が無ければ題の全体"
++    );
++    let lead = one(line("fx.3", "— だけの題", "", Value::Null));
++    assert_eq!(lead.short, "— だけの題", "「—」の前が空なら題の全体");
++}
++
++#[test]
++fn bvfact_summary_from_observation() {
++    let description = "## memo\n### 出所\n出所の行。\n### 観測\n\n  観測の 1 行目。  \n2 行目\n";
++    let row = one(line("fx.1", "題", description, Value::Null));
++    assert_eq!(row.summary, "観測の 1 行目。");
++    // 観測の下の行も頭の「概要 =」を外す。
++    let label = one(line(
++        "fx.2",
++        "題",
++        "前置き\n### 観測\n概要 = 見た事",
++        Value::Null,
++    ));
++    assert_eq!(label.summary, "見た事");
++}
++
++#[test]
++fn bvfact_summary_skips_heading_and_label() {
++    let row = one(line(
++        "fx.1",
++        "題",
++        "\n## 見出し\n\n概要 =   板を 5 列にする\n技術 = 列の型\n",
++        Value::Null,
++    ));
++    assert_eq!(row.summary, "板を 5 列にする");
++    let plain = one(line(
++        "fx.2",
++        "題",
++        "# 頭\n最初の段落の行\n次の行",
++        Value::Null,
++    ));
++    assert_eq!(plain.summary, "最初の段落の行");
++    let none = one(line("fx.3", "題", "# 見出しだけ\n\n", Value::Null));
++    assert_eq!(none.summary, "", "行が無ければ空の字");
++}
++
++#[test]
++fn bvfact_summary_cut_120() {
++    assert_eq!(SUMMARY_MAX, 120);
++    let long = "あ".repeat(SUMMARY_MAX + 5);
++    let row = one(line("fx.1", "題", &format!("概要 = {long}"), Value::Null));
++    assert_eq!(row.summary.chars().count(), SUMMARY_MAX);
++    assert_eq!(row.summary, "あ".repeat(SUMMARY_MAX));
++    let short = "a".repeat(SUMMARY_MAX);
++    assert_eq!(one(line("fx.2", "題", &short, Value::Null)).summary, short);
++}
++
++#[test]
++fn bvfact_blocks_all_targets() {
++    let mut b = line("fx.1", "題", "", Value::Null);
++    b["dependencies"] = json!([
++        {"depends_on_id": "fx", "type": "parent-child"},
++        {"depends_on_id": "fx.3", "type": "blocks"},
++        {"depends_on_id": "fx.2", "type": "blocks"},
++        {"depends_on_id": "fx.9", "type": "relates-to"},
++    ]);
++    assert_eq!(one(b).blocks, vec![bead("fx.3"), bead("fx.2")]);
++    assert!(one(line("fx.4", "題", "", Value::Null)).blocks.is_empty());
++}
++
++#[test]
++fn bvfact_created_epoch() {
++    let row = one(line("fx.1", "題", "", Value::Null));
++    assert_eq!(row.created_at, Some(1_790_467_200));
++    let mut bad = line("fx.2", "題", "", Value::Null);
++    bad["created_at"] = json!("2026-09-27");
++    assert_eq!(one(bad).created_at, None, "読めない時刻は None");
++    let mut gone = line("fx.3", "題", "", Value::Null);
++    gone.as_object_mut().expect("object").remove("created_at");
++    assert_eq!(one(gone).created_at, None, "欄の無い時刻は None");
++}
++
++#[test]
++fn bvfact_unknown_when_unreadable() {
++    assert_eq!(facts("").rows, Reading::Unknown);
++    assert_eq!(facts("{").rows, Reading::Unknown);
++    assert_eq!(facts("{}").rows, Reading::Unknown, "配列でない字");
++    assert_eq!(facts("[]").rows, Reading::Known(vec![]), "0 件は読めた");
++}
++
++#[test]
++fn bvfact_rows_skip_tombstone_keep_order() {
++    let mut gone = line("fx.2", "消えた", "", Value::Null);
++    gone["status"] = json!("tombstone");
++    let got = rows(&[
++        line("fx.3", "題 3", "", Value::Null),
++        gone,
++        line("bad id", "形の合わない id", "", Value::Null),
++        line("fx.1", "題 1", "", Value::Null),
++    ]);
++    let ids: Vec<&str> = got.iter().map(|r| r.id.as_str()).collect();
++    assert_eq!(
++        ids,
++        ["fx.3", "fx.1"],
++        "tombstone と形の合わない id を外し台帳の順"
++    );
++}

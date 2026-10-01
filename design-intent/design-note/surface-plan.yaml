@@ -419,6 +419,15 @@ sections:
       - {id: r4-surface-tests-c, doc: surface-wave25a}
       - {id: r4-table, doc: surface-wave25a}
       - {id: m-doctor-30, doc: surface-wave25a}
+      - {id: m-map-page, doc: surface-wave26a}
+      - {id: m-map-compact, doc: surface-wave26a}
+      - {id: m-more-drop, doc: surface-wave26a}
+      - {id: c-pipe-five, doc: surface-wave26a}
+      - {id: c-landed-12h, doc: surface-wave26a}
+      - {id: c-bead-facts, doc: surface-wave26a}
+      - {id: c-bead-route, doc: surface-wave26a}
+      - {id: c-case-read, doc: surface-wave26a}
+      - {id: c-run-verdict, doc: surface-wave26a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}

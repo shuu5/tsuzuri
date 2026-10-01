@@ -1,0 +1,613 @@
+diff --git a/crates/tsuzuri-contract/src/board.rs b/crates/tsuzuri-contract/src/board.rs
+index 4097d8b9d74061f23f9f0117987071dcb2bc1f99..2ae11efdeb5d07f00a2a9180de23c9ec22e67822 100644
+--- a/crates/tsuzuri-contract/src/board.rs
++++ b/crates/tsuzuri-contract/src/board.rs
+@@ -43,7 +43,8 @@ impl Stage {
+     /// 段が載る pipeline の列。
+     pub fn column(self) -> PipelineColumn {
+         match self {
+-            Stage::Queued | Stage::Blocked => PipelineColumn::QueuedBlocked,
++            Stage::Blocked => PipelineColumn::Blocked,
++            Stage::Queued => PipelineColumn::Queued,
+             Stage::Running | Stage::Gated => PipelineColumn::RunningGated,
+             Stage::Questioned | Stage::Failed | Stage::Stopped => {
+                 PipelineColumn::QuestionedFailedStopped
+@@ -53,11 +54,13 @@ impl Stage {
+     }
+ }
+ 
+-/// pipeline の板の列（閉じた 4）。
++/// pipeline の板の列（閉じた 5・板の順・判断の記録 ADR-27 決定 (6)）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+ pub enum PipelineColumn {
+-    #[serde(rename = "Queued/Blocked")]
+-    QueuedBlocked,
++    #[serde(rename = "Blocked")]
++    Blocked,
++    #[serde(rename = "Queued")]
++    Queued,
+     #[serde(rename = "Running/Gated")]
+     RunningGated,
+     #[serde(rename = "Questioned/Failed/Stopped")]
+diff --git a/crates/tsuzuri-contract/tests/cform_board.rs b/crates/tsuzuri-contract/tests/cform_board.rs
+index ef49d4d1bf665edc2bcd61a4dac228af3475214c..d5306b1d4eebafa5e4e52a6a6d42e0e76da257b6 100644
+--- a/crates/tsuzuri-contract/tests/cform_board.rs
++++ b/crates/tsuzuri-contract/tests/cform_board.rs
+@@ -35,7 +35,8 @@ fn forms() -> Vec<Box<dyn Form>> {
+         form(
+             "board::PipelineColumn",
+             vec![
+-                PipelineColumn::QueuedBlocked,
++                PipelineColumn::Blocked,
++                PipelineColumn::Queued,
+                 PipelineColumn::RunningGated,
+                 PipelineColumn::QuestionedFailedStopped,
+                 PipelineColumn::Landed,
+@@ -168,7 +169,7 @@ fn contract_form_closed_lists() {
+         .iter()
+         .map(|s| serde_json::to_string(&s.column()).expect("列"))
+         .collect();
+-    assert_eq!(columns.len(), 4);
++    assert_eq!(columns.len(), 5);
+     let ci: Vec<String> = Ci::ALL
+         .iter()
+         .map(|c| serde_json::to_string(c).expect("CI の読み"))
+diff --git a/crates/tsuzuri-contract/tests/snapshots/board.json b/crates/tsuzuri-contract/tests/snapshots/board.json
+index 8a0cdce120f3db1f68ce766120c870cdaa5172ba..49370ba79068cf0cb445d260a961a60219cb6077 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/board.json
++++ b/crates/tsuzuri-contract/tests/snapshots/board.json
+@@ -10,7 +10,8 @@
+     "Landed"
+   ],
+   "board::PipelineColumn": [
+-    "Queued/Blocked",
++    "Blocked",
++    "Queued",
+     "Running/Gated",
+     "Questioned/Failed/Stopped",
+     "Landed"
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 03c4fc6f026ca93856eb7def984380e650871fe5..e113e0981cd41c3dfb2eadefba575fc2a6f73f99 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -1,5 +1,6 @@
+-//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 4 列の板・札・「+n」・0 件の帯・hover の card。
+-//! 4 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
++//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯・hover の card。
++//! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)・行 c-pipe-five）。
++//! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
+ //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
+ //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
+ //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+@@ -114,12 +115,18 @@ pub struct Lane {
+     pub state: Option<&'static str>,
+ }
+ 
+-/// 4 列（板の順）。
+-pub const LANES: [Lane; 4] = [
++/// 5 列（板の順・Blocked・Queued・Running / Gated・止まり・着地）。
++pub const LANES: [Lane; 5] = [
+     Lane {
+-        column: PipelineColumn::QueuedBlocked,
+-        name: "wait",
+-        key: "col_wait",
++        column: PipelineColumn::Blocked,
++        name: "block",
++        key: "col_block",
++        state: Some("wait"),
++    },
++    Lane {
++        column: PipelineColumn::Queued,
++        name: "queue",
++        key: "col_queue",
+         state: Some("wait"),
+     },
+     Lane {
+@@ -149,13 +156,13 @@ impl Lane {
+     }
+ }
+ 
+-/// 列の見せ方（4 列の表から引く）。
+-#[expect(clippy::expect_used, reason = "4 列の表は列の全部を持つ")]
++/// 列の見せ方（5 列の表から引く）。
++#[expect(clippy::expect_used, reason = "5 列の表は列の全部を持つ")]
+ pub fn lane(column: PipelineColumn) -> Lane {
+     LANES
+         .into_iter()
+         .find(|l| l.column == column)
+-        .expect("4 列の表は列の全部を持つ")
++        .expect("5 列の表は列の全部を持つ")
+ }
+ 
+ /// 札の meta の 1 つ目（回数か、止まった列では段の理由）。
+@@ -328,7 +335,7 @@ pub fn ci_style(ci: Ci) -> &'static str {
+     }
+ }
+ 
+-/// 板の中身（4 列・Landed の列は今日の着地と CI を待つ札）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
++/// 板の中身（5 列・Landed の列は今日の着地と CI を待つ札）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
+ pub fn content(pipe: &Fetched, ledger: &Fetched, now: EpochSecs) -> Body<Vec<Column>> {
+     match cards(pipe) {
+         Err(reason) => Body::Unmeasured(reason),
+@@ -350,7 +357,7 @@ pub fn title_of(rows: &[LedgerRow], id: &str) -> Option<String> {
+         .map(|r| title36(&r.title))
+ }
+ 
+-/// 札を 4 列に組む（列は板の順・列の中は段を決めた時刻の新しい順・時刻の無い札は後・同じなら bead の id の順）。
++/// 札を 5 列に組む（列は板の順・列の中は段を決めた時刻の新しい順・時刻の無い札は後・同じなら bead の id の順）。
+ /// Landed の列は今日（日本の日）の着地（`landed_today`）と、日を問わず CI を待つ札（欄 ci が Waiting）。
+ pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Vec<Column> {
+     LANES
+@@ -716,7 +723,7 @@ mod dom {
+         section(BLOCK, ().into_any(), body.into_any())
+     }
+ 
+-    /// 4 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
++    /// 5 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
+     fn misfit_view(cards: Vec<MisfitCard>, mode: Mode) -> Option<AnyView> {
+         if cards.is_empty() {
+             return None;
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 3c7574060efac4a6e3b57b5db090fa78c93b7126..727b82c5f2271d33929e5221d76e89b2985e5cfa 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -162,18 +162,19 @@ a.tile:hover { box-shadow: var(--shadow); }
+ /* ---------- kanban（pipeline ダッシュボード） ---------- */
+ .empty { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border: 1px dashed var(--line-2); border-radius: var(--r2); color: var(--ink-2); }
+ .extmark { display: flex; align-items: center; gap: var(--s2); margin: var(--s3) 0 var(--s2); }
+-.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); }
++.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s2); }
+ .col { background: var(--panel-2); border-radius: var(--r2); padding: var(--s2); min-width: 0; }
+ .col > header { display: flex; align-items: center; gap: var(--s2); min-height: 32px; padding: 0 var(--s1); }
+ .col > header .hd { flex: 1 1 auto; min-width: 0; }
+ .col > header .hd-t { overflow-wrap: anywhere; line-height: 1.25; }
+ .col > header .cnt { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink-2); }
+ .col > header .dot { width: 10px; height: 10px; flex: none; }
+-.col.c-wait .dot { background: var(--s-wait); border-radius: 50%; }
++.col.c-block .dot { border: 2px solid var(--s-wait); border-radius: 50%; box-sizing: border-box; }
++.col.c-queue .dot { background: var(--s-wait); border-radius: 50%; }
+ .col.c-run .dot { background: var(--s-run); border-radius: 50%; }
+ .col.c-stop .dot { background: var(--s-stop); border-radius: 2px; }
+ .col.c-land .dot { background: var(--s-land); clip-path: polygon(0 55%, 35% 100%, 100% 10%, 85% 0, 35% 70%, 15% 40%); width: 12px; height: 12px; }
+-.col.c-wait { box-shadow: inset 0 3px 0 var(--s-wait); } .col.c-run { box-shadow: inset 0 3px 0 var(--s-run); }
++.col.c-block, .col.c-queue { box-shadow: inset 0 3px 0 var(--s-wait); } .col.c-run { box-shadow: inset 0 3px 0 var(--s-run); }
+ .col.c-stop { box-shadow: inset 0 3px 0 var(--s-stop); } .col.c-land { box-shadow: inset 0 3px 0 var(--s-land); }
+ .cards { display: flex; flex-direction: column; gap: var(--s2); }
+ .kcard { display: block; min-width: 0; overflow-wrap: anywhere; padding: var(--s2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r2); min-height: 64px; }
+diff --git a/crates/tsuzuri-surface/tests/bvfive.rs b/crates/tsuzuri-surface/tests/bvfive.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a7ee165211de22754de6e5e7a6a04c392e2c604d
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvfive.rs
+@@ -0,0 +1,118 @@
++//! 行 c-pipe-five の歯: pipeline の板の 5 列（Blocked と Queued を分ける・判断の記録 ADR-27 決定 (6)）の順と電文の名と、
++//! Blocked の札と Queued の札が別の列に載ることと、列の見出しの語の鍵と class が語の辞書と stylesheet に在ること。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Stage};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_contract::wire;
++use tsuzuri_surface::project::pipeline::{LANES, columns, lane};
++use tsuzuri_surface::vocab::vocab;
++
++/// 着地済みの pipe_ の歯と同じ今（UTC の日の正午）。
++const NOW: EpochSecs = 1_790_510_400;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn card(id: &str, stage: Stage, elapsed: u64) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new(id).expect("id"),
++        runs: 1,
++        stage,
++        reason: None,
++        account: None,
++        since: Some(NOW - elapsed),
++        ci: None,
++    }
++}
++
++/// (1) 列は閉じた 5 で、板の順は Blocked・Queued・Running / Gated・止まり・着地。電文の名と URL の名も 5 つで、
++/// Blocked と Queued の列の見出しの語の鍵は col_block と col_queue。
++#[test]
++fn bvfive_five_columns_in_order() {
++    let order: Vec<PipelineColumn> = LANES.iter().map(|l| l.column).collect();
++    assert_eq!(
++        order,
++        vec![
++            PipelineColumn::Blocked,
++            PipelineColumn::Queued,
++            PipelineColumn::RunningGated,
++            PipelineColumn::QuestionedFailedStopped,
++            PipelineColumn::Landed,
++        ]
++    );
++    let wire: Vec<String> = order
++        .iter()
++        .map(|c| wire::encode(c).expect("列の電文"))
++        .collect();
++    assert_eq!(
++        wire,
++        [
++            "\"Blocked\"",
++            "\"Queued\"",
++            "\"Running/Gated\"",
++            "\"Questioned/Failed/Stopped\"",
++            "\"Landed\"",
++        ]
++    );
++    let names: Vec<&str> = LANES.iter().map(|l| l.name).collect();
++    assert_eq!(names, ["block", "queue", "run", "stop", "land"]);
++    assert_eq!([LANES[0].key, LANES[1].key], ["col_block", "col_queue"]);
++    assert_eq!(Stage::Blocked.column(), PipelineColumn::Blocked);
++    assert_eq!(Stage::Queued.column(), PipelineColumn::Queued);
++    for stage in Stage::ALL {
++        assert_eq!(lane(stage.column()).column, stage.column(), "{stage:?}");
++    }
++}
++
++/// (2) Blocked の札は 1 列目、Queued の札は 2 列目に載り、同じ列に混ざらない（class は col c-block と col c-queue）。
++#[test]
++fn bvfive_blocked_and_queued_apart() {
++    let cards = [
++        card("bv.1", Stage::Queued, 60),
++        card("bv.2", Stage::Blocked, 120),
++        card("bv.3", Stage::Queued, 30),
++        card("bv.4", Stage::Running, 10),
++    ];
++    let cols = columns(&cards, &[], NOW);
++    assert_eq!(cols.len(), 5);
++    let ids: Vec<Vec<&str>> = cols
++        .iter()
++        .map(|c| c.cards.iter().map(|k| k.id.as_str()).collect())
++        .collect();
++    assert_eq!(
++        ids,
++        vec![vec!["bv.2"], vec!["bv.3", "bv.1"], vec!["bv.4"], vec![], vec![]]
++    );
++    assert_eq!(cols[0].class, "col c-block");
++    assert_eq!(cols[1].class, "col c-queue");
++    // 両方の列の札は待ちの記号。
++    assert_eq!(cols[0].cards[0].state, Some("wait"));
++    assert_eq!(cols[1].cards[0].state, Some("wait"));
++}
++
++/// (3) 見出しの語の鍵 col_block と col_queue は語の辞書に在り、class は stylesheet に在り、板の grid は 5 列。
++/// 口座の板の 4 つの数の語（col_wait）は残る（口座の板の形は変えない・判断の記録 ADR-27 決定 (1)）。
++#[test]
++fn bvfive_column_words_in_vocab() {
++    let v = vocab();
++    assert_eq!(v.term("col_block").map(|t| t.label.as_str()), Some("Blocked"));
++    assert_eq!(v.term("col_queue").map(|t| t.label.as_str()), Some("Queued"));
++    assert_eq!(
++        v.term("col_wait").map(|t| t.label.as_str()),
++        Some("Queued / Blocked")
++    );
++    let css = read("style.css");
++    for rule in [".col.c-block .dot {", ".col.c-queue .dot {", ".col.c-block, .col.c-queue {"] {
++        assert!(css.contains(rule), "stylesheet に {rule} が無い");
++    }
++    assert!(!css.contains(".col.c-wait"), "列の class c-wait が残る");
++    assert!(css.contains(".board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));"));
++    let cards = read("src/account/cards.rs");
++    assert!(cards.contains("[\"col_wait\", \"col_run\", \"col_stop\", \"col_land\"]"));
++}
+diff --git a/crates/tsuzuri-surface/tests/pcimark.rs b/crates/tsuzuri-surface/tests/pcimark.rs
+index 02fd7cf568fd654d9701f82223f2b4bd4664211f..4729d95a6821421b9136397062a7754e39fe7d29 100644
+--- a/crates/tsuzuri-surface/tests/pcimark.rs
++++ b/crates/tsuzuri-surface/tests/pcimark.rs
+@@ -230,6 +230,7 @@ fn pci_columns_keep_waiting() {
+     assert_eq!(
+         ids,
+         [
++            empty.clone(),
+             empty.clone(),
+             empty,
+             vec!["fx-cm.5"],
+diff --git a/crates/tsuzuri-surface/tests/pclosed.rs b/crates/tsuzuri-surface/tests/pclosed.rs
+index b863f293232cf0952bb3b8611b3f1b8d6606de9d..d7d8f8a648db43175ecb05b01be3166046b87682 100644
+--- a/crates/tsuzuri-surface/tests/pclosed.rs
++++ b/crates/tsuzuri-surface/tests/pclosed.rs
+@@ -145,6 +145,7 @@ fn pclosed_land_lane_today_only() {
+     assert_eq!(
+         ids,
+         vec![
++            vec![],
+             vec![],
+             vec![],
+             vec!["px.33"],
+diff --git a/crates/tsuzuri-surface/tests/pfold.rs b/crates/tsuzuri-surface/tests/pfold.rs
+index 24952ebae32ad92bcf57e5c659f6ff2f2acbcb79..a5e290a605aa02c5996956903d202c9010142239 100644
+--- a/crates/tsuzuri-surface/tests/pfold.rs
++++ b/crates/tsuzuri-surface/tests/pfold.rs
+@@ -45,8 +45,8 @@ fn pfold_closable_rules() {
+     assert_eq!(SHOW, 3);
+     let cols = board();
+     let counts: Vec<usize> = cols.iter().map(|c| c.cards.len()).collect();
+-    assert_eq!(counts, vec![2, 2, 3, 4]);
+-    let land = &cols[3];
++    assert_eq!(counts, vec![1, 1, 2, 3, 4]);
++    let land = &cols[4];
+     assert_eq!(land.lane.column, PipelineColumn::Landed);
+     assert_eq!(ids(land, true), vec!["px.12", "px.9", "px.10", "px.8"]);
+     assert!(land.closable(true));
+@@ -55,7 +55,7 @@ fn pfold_closable_rules() {
+     assert_eq!(land.more(true), None);
+     assert_eq!(land.shown(true).len(), 4);
+     assert_eq!(land.shown(false).len(), 3);
+-    for col in &cols[..3] {
++    for col in &cols[..4] {
+         for open in [true, false] {
+             assert!(!col.closable(open), "{} の列 open={open}", col.lane.name);
+             assert_eq!(col.more(open), None);
+@@ -79,11 +79,11 @@ fn plus_or_close(cols: Vec<Column>) {
+ fn pfold_with_closed_rules() {
+     let land = PipelineColumn::Landed;
+     let cases = [
+-        ("?mode=expert&col=wait,land", "?mode=expert&col=wait"),
++        ("?mode=expert&col=queue,land", "?mode=expert&col=queue"),
+         ("?mode=expert&col=land", "?mode=expert"),
+         ("?col=land&page=home", "?page=home"),
+         ("?col=land", "?"),
+-        ("?mode=expert&col=wait", "?mode=expert&col=wait"),
++        ("?mode=expert&col=queue", "?mode=expert&col=queue"),
+         ("?col=bogus,land&page=home", "?page=home"),
+     ];
+     let mut returned = Vec::new();
+@@ -99,7 +99,7 @@ fn pfold_with_closed_rules() {
+         assert_eq!(back, "?mode=expert", "{} の列", lane.name);
+         returned.push(back);
+ 
+-        let rest = with_closed("?mode=expert&col=wait,run,stop,land", lane.column);
++        let rest = with_closed("?mode=expert&col=block,queue,run,stop,land", lane.column);
+         let want: Vec<PipelineColumn> = LANES
+             .into_iter()
+             .map(|l| l.column)
+diff --git a/crates/tsuzuri-surface/tests/pipe.rs b/crates/tsuzuri-surface/tests/pipe.rs
+index 4db33a79a7cfc3ddf13bcc2f4df797023d9729e3..aff38b1e9d3a2c6a007006f5cf870374ae3e2af8 100644
+--- a/crates/tsuzuri-surface/tests/pipe.rs
++++ b/crates/tsuzuri-surface/tests/pipe.rs
+@@ -1,4 +1,4 @@
+-//! 便 g-pipe の歯: 4 列の順と列の中の並び・「+n」と開いた列の query・札の題の引き方・0 件と測れていない・
++//! 便 g-pipe の歯: 5 列の順と列の中の並び・「+n」と開いた列の query・札の題の引き方・0 件と測れていない・
+ //! 経過の字の境・hover の card の 4 行・段から列への対応は契約の型の関数・着地済みの外形と依存。
+ #![cfg(test)]
+ 
+@@ -94,7 +94,7 @@ fn ids(col: &Column, open: bool) -> Vec<&str> {
+     col.shown(open).iter().map(|c| c.id.as_str()).collect()
+ }
+ 
+-/// (1) 4 列の順・class・見出しの語の鍵と、列ごとの札の id の並び（経過の短い順・同じなら id の順・経過の無い札は後）。
++/// (1) 5 列の順・class・見出しの語の鍵と、列ごとの札の id の並び（経過の短い順・同じなら id の順・経過の無い札は後）。
+ #[test]
+ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
+     let cards = fixture_cards();
+@@ -112,7 +112,8 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
+     assert_eq!(
+         lanes,
+         vec![
+-            (PipelineColumn::QueuedBlocked, "col c-wait", "col_wait"),
++            (PipelineColumn::Blocked, "col c-block", "col_block"),
++            (PipelineColumn::Queued, "col c-queue", "col_queue"),
+             (PipelineColumn::RunningGated, "col c-run", "col_run"),
+             (
+                 PipelineColumn::QuestionedFailedStopped,
+@@ -126,7 +127,8 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
+     assert_eq!(
+         all,
+         vec![
+-            vec!["px.2", "px.1"],
++            vec!["px.2"],
++            vec!["px.1"],
+             vec!["px.4", "px.3"],
+             vec!["px.7", "px.5", "px.6"],
+             vec!["px.12", "px.9", "px.10", "px.8"],
+@@ -134,10 +136,13 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
+     );
+     // 見出しの横の数は列の札の全部（Landed の列は今日の着地だけ・経過の無い px.11 は入らない）。
+     let counts: Vec<usize> = cols.iter().map(|c| c.cards.len()).collect();
+-    assert_eq!(counts, vec![2, 2, 3, 4]);
+-    // 状態の記号: 待ち・動いている・止まった（待ちの記号）・取り込み（記号でなく取り込みの印）。
++    assert_eq!(counts, vec![1, 1, 2, 3, 4]);
++    // 状態の記号: 待ち（Blocked と Queued）・動いている・止まった（待ちの記号）・取り込み（記号でなく取り込みの印）。
+     let states: Vec<Option<&str>> = cols.iter().map(|c| c.cards[0].state).collect();
+-    assert_eq!(states, vec![Some("wait"), Some("run"), Some("wait"), None]);
++    assert_eq!(
++        states,
++        vec![Some("wait"), Some("wait"), Some("run"), Some("wait"), None]
++    );
+ }
+ 
+ /// (2) 3 枚を超える列は 3 枚と「+n」・開いた列は全部・開いた列の名は URL の query（鍵 col）に残る。
+@@ -145,13 +150,13 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
+ fn pipe_more_button_and_open_column_in_url() {
+     assert_eq!(SHOW, 3);
+     let cols = filled();
+-    let land = &cols[3];
++    let land = &cols[4];
+     assert_eq!(ids(land, false), vec!["px.12", "px.9", "px.10"]);
+     assert_eq!(land.more(false), Some(1));
+     assert_eq!(ids(land, true).len(), 4);
+     assert_eq!(land.more(true), None);
+     // ちょうど 3 枚の列は「+n」を出さない。
+-    let stop = &cols[2];
++    let stop = &cols[3];
+     assert_eq!(ids(stop, false).len(), 3);
+     assert_eq!(stop.more(false), None);
+     open_in_url(&cols);
+@@ -163,11 +168,11 @@ fn open_in_url(cols: &[Column]) {
+     let url = with_open("?mode=expert", PipelineColumn::Landed);
+     assert_eq!(url, "?mode=expert&col=land");
+     assert_eq!(open_columns(&url), vec![PipelineColumn::Landed]);
+-    let two = with_open(&url, PipelineColumn::QueuedBlocked);
+-    assert_eq!(two, "?mode=expert&col=wait,land");
++    let two = with_open(&url, PipelineColumn::Queued);
++    assert_eq!(two, "?mode=expert&col=queue,land");
+     assert_eq!(
+         open_columns(&two),
+-        vec![PipelineColumn::QueuedBlocked, PipelineColumn::Landed]
++        vec![PipelineColumn::Queued, PipelineColumn::Landed]
+     );
+     assert_eq!(with_open(&two, PipelineColumn::Landed), two);
+     assert_eq!(
+@@ -179,7 +184,7 @@ fn open_in_url(cols: &[Column]) {
+         .iter()
+         .map(|c| open_columns(&two).contains(&c.lane.column))
+         .collect();
+-    assert_eq!(reopened, vec![true, false, false, true]);
++    assert_eq!(reopened, vec![false, true, false, false, true]);
+ }
+ 
+ /// (3) 札の題は台帳の一覧から bead の id で引いて 36 字に切り、引けない札は題を出さず id だけ。
+@@ -230,7 +235,7 @@ fn leads_and_classes(find: impl Fn(&str) -> pipeline::Kcard, rows: Vec<LedgerRow
+     assert_eq!(kcard(&px11(), &rows, NOW).age, NO_AGE);
+ }
+ 
+-/// (4) 読めて 0 枚なら 0 件の帯（run の語と 0）と空の 4 列・まだ分からない・読めない・まだ読んでいないは測れていない。
++/// (4) 読めて 0 枚なら 0 件の帯（run の語と 0）と空の 5 列・まだ分からない・読めない・まだ読んでいないは測れていない。
+ #[test]
+ fn pipe_empty_band_and_unmeasured() {
+     let empty = wire::encode(&PipelineBoard {
+@@ -253,7 +258,6 @@ fn pipe_empty_band_and_unmeasured() {
+     );
+     assert_eq!(vocab().label(RUN_KEY), "run");
+     let blank = columns(&[], &[], NOW);
+-    assert_eq!(blank.len(), 4);
+     assert!(
+         blank
+             .iter()
+@@ -263,7 +267,8 @@ fn pipe_empty_band_and_unmeasured() {
+     assert_eq!(
+         classes,
+         vec![
+-            "col c-wait is-empty",
++            "col c-block is-empty",
++            "col c-queue is-empty",
+             "col c-run is-empty",
+             "col c-stop is-empty",
+             "col c-land is-empty"
+@@ -377,10 +382,10 @@ fn pipe_stage_column_from_contract() {
+         let name = format!("Stage::{stage:?}");
+         assert!(!src.contains(&name), "pipeline.rs に段の名 {name} が在る");
+     }
+-    // 4 列の表は列の全部を 1 度ずつ持つ。
++    // 5 列の表は列の全部を 1 度ずつ持つ。
+     let mut lanes: Vec<PipelineColumn> = LANES.iter().map(|l| l.column).collect();
+     lanes.dedup();
+-    assert_eq!(lanes.len(), 4);
++    assert_eq!(lanes.len(), 5);
+     for stage in Stage::ALL {
+         assert_eq!(pipeline::lane(stage.column()).column, stage.column());
+     }
+@@ -390,7 +395,8 @@ fn pipe_stage_column_from_contract() {
+ #[test]
+ fn pipe_keys_in_vocab_and_classes_in_stylesheet() {
+     for key in [
+-        "col_wait",
++        "col_block",
++        "col_queue",
+         "col_run",
+         "col_stop",
+         "col_land",
+@@ -491,7 +497,7 @@ fn pipe_landed_today_boundaries() {
+     assert!(f(&card("px.1", Stage::Landed, Some(1)), NOW));
+ }
+ 
+-/// 便 g-pipe-today (3)(4): Landed の列は今日の着地だけ・数の字は今日の着地の数・ほかの 3 列は今の時刻に依らない。
++/// 便 g-pipe-today (3)(4): Landed の列は今日の着地だけ・数の字は今日の着地の数・ほかの 4 列は今の時刻に依らない。
+ #[test]
+ fn pipe_landed_column_only_today() {
+     let mut cs = fixture_cards();
+@@ -501,12 +507,12 @@ fn pipe_landed_column_only_today() {
+     let rows = ledger_rows();
+     let cols = columns(&cs, &rows, NOW);
+     assert_eq!(
+-        ids(&cols[3], true),
++        ids(&cols[4], true),
+         vec!["px.12", "px.9", "px.10", "px.8", "px.22"]
+     );
+-    assert_eq!(cols[3].cards.len(), 5, "数の字は今日の着地の数");
++    assert_eq!(cols[4].cards.len(), 5, "数の字は今日の着地の数");
+     assert!(
+-        cols[3]
++        cols[4]
+             .cards
+             .iter()
+             .all(|k| landed_today(cs.iter().find(|c| c.contract.as_str() == k.id).unwrap(), NOW))
+@@ -517,23 +523,24 @@ fn pipe_landed_column_only_today() {
+     };
+     assert_eq!(via, cols);
+ 
+-    // ほかの 3 列の札の入り方と並びは今の時刻に依らない（fixture の並びのまま）。
++    // ほかの 4 列の札の入り方と並びは今の時刻に依らない（fixture の並びのまま）。
+     // 翌日の始まりの 10 秒後に描くと、いちばん新しい 30 秒前の着地も昨日。
+     let later = columns(&cs, &rows, NOW + 86_400 - 75_600 + 10);
+-    let later_ids: Vec<Vec<&str>> = later[..3].iter().map(|c| ids(c, true)).collect();
+-    let others: Vec<Vec<&str>> = cols[..3].iter().map(|c| ids(c, true)).collect();
++    let later_ids: Vec<Vec<&str>> = later[..4].iter().map(|c| ids(c, true)).collect();
++    let others: Vec<Vec<&str>> = cols[..4].iter().map(|c| ids(c, true)).collect();
+     assert_eq!(others, later_ids);
+     assert_eq!(
+         others,
+         vec![
+-            vec!["px.2", "px.1"],
++            vec!["px.2"],
++            vec!["px.1"],
+             vec!["px.4", "px.3"],
+             vec!["px.7", "px.5", "px.6"],
+         ]
+     );
+     // そのときの Landed の列は空。
+-    assert!(later[3].cards.is_empty());
+-    assert_eq!(later[3].class, "col c-land is-empty");
++    assert!(later[4].cards.is_empty());
++    assert_eq!(later[4].class, "col c-land is-empty");
+ }
+ 
+ /// 便 g-pipe-today (5): 今日の着地が 0 本でほかの列に札が在れば、Landed の列は空の列で、板は測れていないにも 0 件にもならない。
+@@ -548,12 +555,12 @@ fn pipe_no_landed_today_is_empty_column() {
+     let Body::Filled(cols) = got else {
+         panic!("板が中身を出さない: {got:?}");
+     };
+-    assert_eq!(cols.len(), 4);
+-    assert_eq!(ids(&cols[0], true), vec!["px.1"]);
+-    assert_eq!(cols[0].class, "col c-wait");
+-    assert!(cols[3].cards.is_empty());
+-    assert_eq!(cols[3].class, "col c-land is-empty");
+-    assert_eq!(cols[3].more(false), None);
++    assert_eq!(cols.len(), 5);
++    assert_eq!(ids(&cols[1], true), vec!["px.1"]);
++    assert_eq!(cols[1].class, "col c-queue");
++    assert!(cols[4].cards.is_empty());
++    assert_eq!(cols[4].class, "col c-land is-empty");
++    assert_eq!(cols[4].more(false), None);
+ }
+ 
+ /// 便 g-pipe-today (6): 描く所は content に描く時の net の now を渡す。
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 0fa672205ac8d356b277ae00bb38e05b6f22bec5..d6a7b6864efbafed9565102a3a737fcdb53065b2 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -40,6 +40,16 @@
+    "note": "順番待ちか承認待ちの run\n・ Queued = 順番待ち\n・ Blocked = 承認待ち",
+    "internal": "Intake / Queued / Blocked / Reviewed(PASS)"
+   },
++  "col_block": {
++   "label": "Blocked",
++   "note": "相手を待っている run\n・ 持ち主の承認か、ほかの便の着地を待つ\n・ 器の Blocked（承認待ち）より広い",
++   "internal": "Blocked・台帳の blocks の相手が開いている Queued"
++  },
++  "col_queue": {
++   "label": "Queued",
++   "note": "順番を待っている run\n・ 相手は待っていない",
++   "internal": "Intake / Queued / Reviewed(PASS)"
++  },
+   "col_run": {
+    "label": "Running / Gated",
+    "note": "動いているか検査中の run\n{st:run} Running = 書いている\n・ Gated = 検査中",
