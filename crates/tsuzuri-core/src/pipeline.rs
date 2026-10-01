@@ -26,6 +26,11 @@
 //! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
 //! 出力が読めないか部品が無いか局面が違う札は、開いた blocker が在れば Blocked・無ければ Queued で、理由と since は None
 //! （`queued_cards`）。
+//! 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の局面で決める（`phase_of`・行 c-ledger-lc）:
+//! 契約の待ち（`QUEUED_PHASE` で理由が `SETTLED` でない・`REFUSED_PHASE`）は部品の理由と since、便の局面は `RUN_PHASES` の段で、
+//! 理由と since は event log の読みが段を持てばその字・持たなければ便の部品の字。表に無い局面の語は「まだ分からない」
+//! （札を作らず unmapped に数える・走行の無い札は台帳の blocks の割り）。契約の部品が無いか `CLOSED_PHASE` か便の部品が
+//! 無ければ event log の段のまま。台帳で閉じた bead の札は今までどおり。CI の読みは段が Landed で event log も Landed の時だけ。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -118,6 +123,50 @@ pub const QUEUED_PHASE: &str = "contract-queued";
 
 /// 列の待ちの理由のうち相手を待つ語（板の Blocked の列・ほかの語は Queued の列・判断の記録 ADR-27 の決定 (6)）。
 pub const PARTNER_REASONS: [&str; 3] = ["dependency", "overlap", "reserved"];
+
+/// 局面の出力の便の部品の種類の字。
+pub const RUN_PART: &str = "run";
+
+/// 契約の局面のうち段を最新の便の部品が持つ語（器の case-lifecycle §3・行 c-ledger-lc）。
+pub const RUNNING_PHASE: &str = "contract-running";
+
+/// 列の待ちの理由のうち手番を最新の便の部品が持つ語（器の case-lifecycle §3）。
+pub const SETTLED: &str = "settled";
+
+/// 契約の受付の断りの局面の語（段は Queued・理由は断りの名）。
+pub const REFUSED_PHASE: &str = "contract-refused";
+
+/// 閉じた契約の局面の語（札の段は event log と台帳の閉じのまま）。
+pub const CLOSED_PHASE: &str = "contract-closed";
+
+/// 便の局面の語から板の段（閉じた 14 語・器の case-lifecycle §2.1 の便の段の写しの語・行 c-ledger-lc）。
+pub const RUN_PHASES: [(&str, Stage); 14] = [
+    ("run-intake", Stage::Running),
+    ("run-reviewed", Stage::Running),
+    ("run-review-failed", Stage::Failed),
+    ("run-blocked", Stage::Blocked),
+    ("run-implementing", Stage::Running),
+    ("run-asking", Stage::Questioned),
+    ("run-rate-limited", Stage::Running),
+    ("run-gating", Stage::Running),
+    ("run-landing", Stage::Gated),
+    ("run-gate-failed", Stage::Failed),
+    ("run-ci-waiting", Stage::Landed),
+    ("run-landed-open", Stage::Landed),
+    ("run-stopped", Stage::Stopped),
+    ("run-failed", Stage::Failed),
+];
+
+/// 局面の出力の部品で決めた札の段（行 c-ledger-lc）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Phased<'p> {
+    /// 契約の待ち（段と契約の部品）。
+    Waiting(Stage, &'p CasePart),
+    /// 便の局面（段と便の部品）。
+    Run(Stage, &'p CasePart),
+    /// 表に無い局面の語（まだ分からない）。
+    Unknown,
+}
 
 /// 器の event から板の段と段の理由（閉じた表・None は表に無い段）。
 /// kind は event の種類、stage は RunStage の段の名、detail は event の detail の字。
@@ -369,24 +418,29 @@ pub(crate) fn of_inputs(beads: Option<&[Bead]>, events: &str, now: EpochSecs) ->
     of_parsed(beads, read_events(events).as_deref(), now)
 }
 
-/// `board` と同じ板の走行の無い札の段と理由と since を、局面の出力 `cases` が読めれば、局面が `QUEUED_PHASE` の
-/// 契約の部品で決める（`queued_of`・部品が無いか局面が違う札は台帳の blocks の割りのまま・行 c-case-columns）。
+/// `board` と同じ板の札の段と理由と since を、局面の出力 `cases` が読めればその部品で決める（`phase_of`・
+/// 部品が無いか局面が違う走行の無い札は台帳の blocks の割りのまま・行 c-case-columns・行 c-ledger-lc）。
 pub fn board_with_cases(ledger: &str, events: &str, cases: &CaseDoc, now: EpochSecs) -> Board {
-    let mut b = board(ledger, events, now);
-    if let (Reading::Known(cards), Reading::Known(parts)) = (&mut b.board.cards, &cases.parts) {
-        for card in cards.iter_mut().filter(|c| c.runs == 0) {
-            if let Some(part) = queued_part(parts, card.contract.as_str()) {
-                card.stage = queued_of(part.reason.as_deref());
-                card.reason.clone_from(&part.reason);
-                card.since = part.since;
-            }
-        }
-    }
-    b
+    let parts = match &cases.parts {
+        Reading::Known(parts) => Some(parts.as_slice()),
+        Reading::Unknown => None,
+    };
+    let beads = read(ledger);
+    of_cases(beads.as_deref(), read_events(events).as_deref(), parts, now)
 }
 
 /// 読んだ bead（None は台帳が読めない）と読んだ event log の値（None は event log が読めない）から板を組む。
 pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: EpochSecs) -> Board {
+    of_cases(beads, events, None, now)
+}
+
+/// `of_parsed` の板を、局面の出力の部品（None は読めない）も受けて組む。
+fn of_cases(
+    beads: Option<&[Bead]>,
+    events: Option<&[Value]>,
+    parts: Option<&[CasePart]>,
+    now: EpochSecs,
+) -> Board {
     let Some(events) = events else {
         return Board {
             board: PipelineBoard {
@@ -401,45 +455,38 @@ pub(crate) fn of_parsed(beads: Option<&[Bead]>, events: Option<&[Value]>, now: E
     let mut cards = Vec::new();
     let mut unmapped = 0;
     for bead in &order {
-        let Some(entry) = per_bead.get(bead) else {
-            continue;
-        };
-        let Some(state) = runs.get(entry.latest.as_str()) else {
-            continue;
-        };
-        let Ok(contract) = BeadId::new(bead.as_str()) else {
-            continue;
-        };
-        let Some(last) = state.last else {
+        let Some((count, state, contract, last)) = latest(&runs, &per_bead, bead) else {
             continue;
         };
         let mapped = mapped_stage(last, state.stopped);
-        let reading = match mapped {
-            Some((Stage::Landed, _)) => ci_reading(&state.rows),
-            _ => None,
-        };
+        let at = text(last, "ts").and_then(epoch_secs);
+        let decided = decide(parts.and_then(|p| phase_of(p, bead)), mapped.clone(), at);
         let closed = closed_bead(beads, bead, now);
-        let Some((stage, reason)) = (match (mapped, closed) {
-            (Some((Stage::Landed, reason)), _) => Some((Stage::Landed, reason)),
-            (_, Some(b)) => Some((Stage::Landed, Some(closed_reason(b)))),
-            (mapped, None) => mapped,
+        let Some((stage, reason, since)) = (match (decided, closed) {
+            (Some((Stage::Landed, reason, since)), _) => Some((Stage::Landed, reason, since)),
+            (_, Some(b)) => Some((Stage::Landed, Some(closed_reason(b)), at)),
+            (decided, None) => decided,
         }) else {
             unmapped += 1;
             continue;
         };
+        let reading = match (stage, mapped) {
+            (Stage::Landed, Some((Stage::Landed, _))) => ci_reading(&state.rows),
+            _ => None,
+        };
         let (stage, reason, ci) = with_ci(stage, reason, reading, closed.is_some());
         cards.push(PipelineCard {
             contract,
-            runs: entry.runs,
+            runs: count,
             stage,
             reason,
             account: state.account.clone(),
-            since: text(last, "ts").and_then(epoch_secs),
+            since,
             ci,
         });
     }
 
-    queued_cards(beads, &per_bead, now, &mut cards);
+    queued_cards(beads, &per_bead, parts, now, &mut cards);
 
     Board {
         board: PipelineBoard {
@@ -505,6 +552,36 @@ fn track(events: &[Value]) -> Tracked<'_> {
     }
 }
 
+/// bead の走行の回数と最新の走行の読みと契約の id と段を決めた最後の event（どれかが無ければ None）。
+fn latest<'b, 'a>(
+    runs: &'b BTreeMap<&'a str, RunState<'a>>,
+    per_bead: &BTreeMap<String, BeadRuns>,
+    bead: &str,
+) -> Option<(u32, &'b RunState<'a>, BeadId, &'a Value)> {
+    let entry = per_bead.get(bead)?;
+    let state = runs.get(entry.latest.as_str())?;
+    let contract = BeadId::new(bead).ok()?;
+    Some((entry.runs, state, contract, state.last?))
+}
+
+/// 走行の在る札の段と理由と since（行 c-ledger-lc）。`phased` が None なら event log の段 `mapped` と時刻 `at`、
+/// 契約の待ちは部品の理由と since、便の局面は event log が段を持てばその理由と `at`・持たなければ便の部品の字、表に無い語は None。
+fn decide(
+    phased: Option<Phased>,
+    mapped: Option<(Stage, Option<String>)>,
+    at: Option<EpochSecs>,
+) -> Option<(Stage, Option<String>, Option<EpochSecs>)> {
+    match (phased, mapped) {
+        (None, mapped) => mapped.map(|(stage, reason)| (stage, reason, at)),
+        (Some(Phased::Unknown), _) => None,
+        (Some(Phased::Waiting(stage, part) | Phased::Run(stage, part)), None)
+        | (Some(Phased::Waiting(stage, part)), Some(_)) => {
+            Some((stage, part.reason.clone(), part.since))
+        }
+        (Some(Phased::Run(stage, _)), Some((_, reason))) => Some((stage, reason, at)),
+    }
+}
+
 /// 走行の段を決めた最後の event の段と理由（問いの後に止めた走行は止めた理由）。
 fn mapped_stage(last: &Value, stopped: bool) -> Option<(Stage, Option<String>)> {
     match stage_of(
@@ -528,10 +605,13 @@ fn closed_bead<'b>(beads: Option<&'b [Bead]>, id: &str, now: EpochSecs) -> Optio
         .filter(|b| !b.is_open(now))
 }
 
-/// 走行の無い開いた task のうち配れる契約の札（開いた blocker が在れば Blocked・無ければ Queued）を足す。
+/// 走行の無い開いた task のうち配れる契約の札を足す。段と理由と since は、局面の出力の部品で決まれば部品から
+/// （`phase_of`・行 c-case-columns・行 c-ledger-lc）、決まらないか表に無い語なら開いた blocker が在れば Blocked・
+/// 無ければ Queued で理由と since は None。
 fn queued_cards(
     beads: Option<&[Bead]>,
     per_bead: &BTreeMap<String, BeadRuns>,
+    parts: Option<&[CasePart]>,
     now: EpochSecs,
     cards: &mut Vec<PipelineCard>,
 ) {
@@ -546,29 +626,49 @@ fn queued_cards(
         let Ok(contract) = BeadId::new(b.id.as_str()) else {
             continue;
         };
-        let blocked = b.has_open_blocker(beads.unwrap_or_default(), now);
+        let (stage, reason, since) = match parts.and_then(|p| phase_of(p, &b.id)) {
+            Some(Phased::Waiting(stage, part) | Phased::Run(stage, part)) => {
+                (stage, part.reason.clone(), part.since)
+            }
+            _ if b.has_open_blocker(beads.unwrap_or_default(), now) => (Stage::Blocked, None, None),
+            _ => (Stage::Queued, None, None),
+        };
         cards.push(PipelineCard {
             contract,
             runs: 0,
-            stage: if blocked {
-                Stage::Blocked
-            } else {
-                Stage::Queued
-            },
-            reason: None,
+            stage,
+            reason,
             account: None,
-            since: None,
+            since,
             ci: None,
         });
     }
 }
 
-/// 契約 `id` の部品のうち局面が `QUEUED_PHASE` のもの（部品は種類と id の組で 1 つ）。
-fn queued_part<'p>(parts: &'p [CasePart], id: &str) -> Option<&'p CasePart> {
-    parts
-        .iter()
-        .find(|p| p.part == CONTRACT_PART && p.id == id)
-        .filter(|p| p.phase == QUEUED_PHASE)
+/// 契約 `id` の部品とその最新の便の部品で決めた段（行 c-ledger-lc）。契約の部品が無いか局面が `CLOSED_PHASE` か、
+/// 段を便の部品が持つ局面（`RUNNING_PHASE` か理由が `SETTLED` の `QUEUED_PHASE`）で結び runs の便の部品が無ければ None。
+pub fn phase_of<'p>(parts: &'p [CasePart], id: &str) -> Option<Phased<'p>> {
+    let find = |kind: &str, id: &str| parts.iter().find(|p| p.part == kind && p.id == id);
+    let contract = find(CONTRACT_PART, id)?;
+    let settled = contract.reason.as_deref() == Some(SETTLED);
+    match contract.phase.as_str() {
+        CLOSED_PHASE => None,
+        QUEUED_PHASE if !settled => Some(Phased::Waiting(
+            queued_of(contract.reason.as_deref()),
+            contract,
+        )),
+        REFUSED_PHASE => Some(Phased::Waiting(Stage::Queued, contract)),
+        RUNNING_PHASE | QUEUED_PHASE => {
+            let run = contract.links.runs.iter().find_map(|r| find(RUN_PART, r))?;
+            Some(
+                RUN_PHASES
+                    .iter()
+                    .find(|(word, _)| *word == run.phase)
+                    .map_or(Phased::Unknown, |&(_, stage)| Phased::Run(stage, run)),
+            )
+        }
+        _ => Some(Phased::Unknown),
+    }
 }
 
 /// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・ほかの語と理由の無い部品は Queued）。
