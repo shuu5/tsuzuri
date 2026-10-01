@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-boundary/src/server/board.rs b/crates/tsuzuri-boundary/src/server/board.rs
-index d0712fb4dd25d6f7f02310277e9c2400fe84f30c..1d1e42b94ec53f47426969a639f67d57423e277f 100644
+index d0712fb4dd25d6f7f02310277e9c2400fe84f30c..dde9b460a8759d03093f946c8c0b63ef415b3f73 100644
 --- a/crates/tsuzuri-boundary/src/server/board.rs
 +++ b/crates/tsuzuri-boundary/src/server/board.rs
 @@ -1,12 +1,12 @@
@@ -49,8 +49,8 @@ index d0712fb4dd25d6f7f02310277e9c2400fe84f30c..1d1e42b94ec53f47426969a639f67d57
 -/// 未反映の一覧（台帳が読めなければ 3 つとも「まだ分からない」・便 e-view）。
 -pub fn unreflected(texts: &Texts, now: EpochSecs) -> UnreflectedList {
 -    list(&tsuzuri_core::ledger::unreflected(&texts.ledger, now))
-+/// 未反映の一覧（局面の出力の字 `json` と古さの印の字 `stale` が無いか読めなければ 3 つとも「まだ分からない」・
-+/// 題は台帳の字から引く・行 c-unref-lc）。
++/// 未反映の一覧（局面の出力の字 `json` が無いか読めないか、古さの印の字 `stale` が在って読めないか、出力の
++/// unmeasured の欄が無いか形が違えば 3 つとも「まだ分からない」・題は台帳の字から引く・行 c-unref-lc）。
 +pub fn unreflected(texts: &Texts, json: &str, stale: Option<&str>) -> UnreflectedList {
 +    list(&tsuzuri_core::ledger::unreflected(&texts.ledger, json, stale))
  }
@@ -561,19 +561,20 @@ index 92f67f188d89e9e733342cfc07f6e524babdd26c..ab3a7d1d04eab2bd1bb98f1fb5fc8591
  /// 時点・日ごとの end・memo の作った時刻の中央値は今の時刻をそのまま持たない（年齢と経過は面が今から引く）。
  pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
 diff --git a/crates/tsuzuri-core/src/ledger/unreflected.rs b/crates/tsuzuri-core/src/ledger/unreflected.rs
-index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef565539d5 100644
+index 87b1e25ac372d19b110cef5ca895356f81d98f61..41fdb2df4b6a020e9dd7d18d00b208127757f992 100644
 --- a/crates/tsuzuri-core/src/ledger/unreflected.rs
 +++ b/crates/tsuzuri-core/src/ledger/unreflected.rs
-@@ -1,13 +1,31 @@
+@@ -1,13 +1,32 @@
 -//! 未反映の一覧（memo・裁定・要望の 3 種・種類ごとに「読めた一覧」か「まだ分からない」）。
 -//! どれが席の手番かは器（scribe2）の局面の出力が決め、tsuzuri は判じない（要件 FR13）。
 -//! 局面の出力を読む行 c-unref-lc までは 3 種とも「まだ分からない」を返す（open の memo を全部
 -//! 未反映と数える代用は外した）。
 +//! 未反映の一覧（memo・裁定・発話の 3 種・種類ごとに「読めた一覧」か「まだ分からない」・行 c-unref-lc）。
 +//! どれが席の手番かは器（scribe2）の局面の出力が決め、tsuzuri は判じない（要件 FR13・要望は種類にしない）。
-+//! 一覧は局面の出力の部品から読む（種類ごとの部品の種類と局面の語は `PHASES` の 1 か所の表）。出力か古さの印が
-+//! 無いか読めなければ 3 種とも、出力の unmeasured が部品の種類を名指すか unmeasured が読めなければその種類を
-+//! 「まだ分からない」にし、古さの印が在れば印の種類を一覧に添える（中核の `case::cases_of` の読み）。
++//! 一覧は局面の出力の部品から読む（種類ごとの部品の種類と局面の語は `PHASES` の 1 か所の表）。出力が無いか
++//! 読めないか、古さの印の file が在って読めないか、出力の unmeasured の欄が無いか形が違えば 3 種とも
++//! 「まだ分からない」で古さの印は空にし、unmeasured が部品の種類を名指せばその種類だけを「まだ分からない」にし、
++//! 古さの印が在れば印の種類を一覧に添える（中核の `case::cases_of` の読み）。
 +//! 題と作った時刻は台帳の字から引く（台帳に無い bead の題は空・発話は題を持たず、作った時刻は id の発話の ts）。
  
  use serde::Serialize;
@@ -600,7 +601,7 @@ index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef
  /// 未反映の 1 件（id・題・作った時刻・作った時刻が読めなければ None）。
  #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
  pub struct UnreflectedItem {
-@@ -16,12 +34,14 @@ pub struct UnreflectedItem {
+@@ -16,12 +35,14 @@ pub struct UnreflectedItem {
      pub created: Option<EpochSecs>,
  }
  
@@ -617,7 +618,7 @@ index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef
  }
  
  impl Unreflected {
-@@ -30,7 +50,7 @@ impl Unreflected {
+@@ -30,7 +51,7 @@ impl Unreflected {
          match kind {
              UnreflectedKind::Memo => &self.memos,
              UnreflectedKind::Ruling => &self.rulings,
@@ -626,7 +627,7 @@ index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef
          }
      }
  
-@@ -43,16 +63,61 @@ impl Unreflected {
+@@ -43,16 +64,66 @@ impl Unreflected {
      }
  }
  
@@ -640,7 +641,9 @@ index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef
 +    let Reading::Known(parts) = doc.parts else {
 +        return not_yet();
 +    };
-+    let unmeasured = unmeasured_parts(json);
++    let Some(unmeasured) = unmeasured_parts(json) else {
++        return not_yet();
++    };
 +    let beads = read(ledger).unwrap_or_default();
 +    let item = |p: &CasePart| {
 +        let bead = beads.iter().find(|b| b.id == p.id);
@@ -653,15 +656,18 @@ index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef
 +            },
 +        }
 +    };
-+    let [memos, rulings, utterances] = PHASES.map(|(_, part, phases)| match &unmeasured {
-+        Some(names) if !names.iter().any(|n| n == part) => Reading::Known(
-+            parts
-+                .iter()
-+                .filter(|p| p.part == part && phases.contains(&p.phase.as_str()))
-+                .map(item)
-+                .collect(),
-+        ),
-+        _ => Reading::Unknown,
++    let [memos, rulings, utterances] = PHASES.map(|(_, part, phases)| {
++        if unmeasured.iter().any(|n| n == part) {
++            Reading::Unknown
++        } else {
++            Reading::Known(
++                parts
++                    .iter()
++                    .filter(|p| p.part == part && phases.contains(&p.phase.as_str()))
++                    .map(item)
++                    .collect(),
++            )
++        }
 +    });
 +    Unreflected {
 +        memos,
@@ -695,10 +701,10 @@ index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef
  }
 diff --git a/crates/tsuzuri-core/tests/bvunref.rs b/crates/tsuzuri-core/tests/bvunref.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..880c9653d60eb18fe1999a82e66e1dfc06394a9f
+index 0000000000000000000000000000000000000000..997448a42d8ed56431204a118b4d141f61b436ae
 --- /dev/null
 +++ b/crates/tsuzuri-core/tests/bvunref.rs
-@@ -0,0 +1,224 @@
+@@ -0,0 +1,226 @@
 +//! 未反映の一覧を局面の出力から読む歯（接頭辞 bvunref_・設計ノート surface-wave26a 行 c-unref-lc の完了の条件）。
 +//! fixture: tests/fixtures/case/unref.json（未反映の 3 種と数えない局面の部品を持つ小さな字）と lifecycle.stale（読むだけ）。
 +#![cfg(test)]
@@ -790,10 +796,12 @@ index 0000000000000000000000000000000000000000..880c9653d60eb18fe1999a82e66e1dfc
 +}
 +
 +/// (4) 出力が無いか読めない（空の字・JSON でない・版が 1 でない・部品の列が無い）か、古さの印の file が読めないか、
-+/// unmeasured の欄が無いか形が違えば、3 種とも「まだ分からない」で古さの印も無い。台帳が読めなくても一覧は出力から読む。
++/// unmeasured の欄が無いか形が違えば、3 種とも「まだ分からない」で古さの印は空（出力が JSON の組は印を 1 つ持つ
++/// 古さの印の file を渡す）。台帳が読めなくても一覧は出力から読む。
 +#[test]
 +fn bvunref_unknown_when_unread() {
 +    let json = fixture("unref.json");
++    let marked = fixture("lifecycle.stale");
 +    let all = UnreflectedKind::ALL.to_vec();
 +    for (name, out, stale) in [
 +        ("空の字", String::new(), None),
@@ -801,23 +809,23 @@ index 0000000000000000000000000000000000000000..880c9653d60eb18fe1999a82e66e1dfc
 +        (
 +            "版 2",
 +            json.replace(r#""version": 1"#, r#""version": 2"#),
-+            None,
++            Some(marked.clone()),
 +        ),
 +        (
 +            "部品の列が無い",
 +            json.replace(r#""parts""#, r#""items""#),
-+            None,
++            Some(marked.clone()),
 +        ),
 +        ("印が読めない", json.clone(), Some(String::new())),
 +        (
 +            "unmeasured が無い",
 +            json.replace(r#""unmeasured""#, r#""skipped""#),
-+            None,
++            Some(marked.clone()),
 +        ),
 +        (
 +            "unmeasured の形",
 +            with_unmeasured(r#"[{"reason":"ledger-prefix"}]"#),
-+            None,
++            Some(marked.clone()),
 +        ),
 +    ] {
 +        let got = unreflected(LEDGER, &out, stale.as_deref());
