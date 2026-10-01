@@ -333,20 +333,15 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
         assert!(html.contains(&want), "制約の text が面に無い: {want}");
     }
 
+    census_counts(html, (&s, &v), fr, nfr, acs);
+}
+
+/// 件数（部品の数・対応表・用語集・章の帯）と、部品の名札と、図 3 の state-strip を見る。
+fn census_counts(html: String, (s, v): (&Yaml, &Yaml), fr: &[Yaml], nfr: &[Yaml], acs: &[Yaml]) {
     // 件数
     let parts = components(&html);
     let parts_of = |name: &str| parts.iter().filter(|p| **p == name).count();
-    assert_eq!(parts_of("item-row"), fr.len() + nfr.len(), "item-row の数");
-    assert_eq!(
-        parts_of("band-node"),
-        seq(&s["actors"], "actors").len() + seq(&s["outputs"], "outputs").len(),
-        "band-node の数"
-    );
-    assert_eq!(
-        parts_of("rail-node"),
-        seq(&s["rail"], "rail").len(),
-        "rail-node の数"
-    );
+    census_nodes(parts_of, fr, nfr, s);
     let rtm = between(&html, "<table class=\"rtm\">", "</tbody>");
     assert_eq!(
         rtm.matches("<tr>").count() - 1,
@@ -355,40 +350,7 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
     );
     // 章 08 は憲法の面の章 07 と同じ形（便 36）: 語の行 = terms の数・目次へ = terms の数・id g-<語の id> が terms の順
     let glossary = between(&html, "data-component=\"glossary-term-table\">", "\n</div>");
-    let terms = seq(&v["terms"], "terms");
-    assert_eq!(
-        glossary.matches("<div class=\"grow\"").count(),
-        terms.len(),
-        "用語の行（div.grow）の数"
-    );
-    assert_eq!(
-        glossary
-            .matches("<a class=\"back\" href=\"#toc\">目次へ</a>")
-            .count(),
-        terms.len(),
-        "用語の行の目次へ（a.back）の数"
-    );
-    let ids = terms
-        .iter()
-        .map(|t| {
-            let needle = format!("<div class=\"grow\" id=\"g-{}\">", text(t, "id"));
-            glossary
-                .find(&needle)
-                .unwrap_or_else(|| panic!("語の行が無い: {needle}"))
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        ids.windows(2).all(|w| w[0] < w[1]),
-        "語の行の id が terms の順でない"
-    );
-    assert_eq!(parts_of("ac-state-chip"), acs.len(), "ac-state-chip の数");
-    // 章の帯は 8 章 + 図の章（正本の figures が 1 枚以上のときだけ・便 34）+ 承認欄
-    let figures = s["figures"].as_vec().map_or(0, Vec::len);
-    assert_eq!(
-        parts_of("chapter-deck-band"),
-        8 + usize::from(figures > 0) + 1,
-        "chapter-deck-band の数"
-    );
+    census_terms(glossary, v, parts_of, acs, s);
 
     // 部品の名札は 18 種の中だけ・lane-chip を含まない
     const ALLOWED: [&str; 18] = [
@@ -441,6 +403,65 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
             assert_eq!(fr5.matches("図 3").count(), 1, "FR5 の「図 3」の字面");
         }
     }
+}
+
+/// item-row・band-node・rail-node の数を正本の行の数と見る。
+fn census_nodes(parts_of: impl Fn(&str) -> usize, fr: &[Yaml], nfr: &[Yaml], s: &Yaml) {
+    assert_eq!(parts_of("item-row"), fr.len() + nfr.len(), "item-row の数");
+    assert_eq!(
+        parts_of("band-node"),
+        seq(&s["actors"], "actors").len() + seq(&s["outputs"], "outputs").len(),
+        "band-node の数"
+    );
+    assert_eq!(
+        parts_of("rail-node"),
+        seq(&s["rail"], "rail").len(),
+        "rail-node の数"
+    );
+}
+
+/// 用語集の語の行（数・目次へ・terms の順）と ac-state-chip と章の帯の数を見る。
+fn census_terms(
+    glossary: &str,
+    v: &Yaml,
+    parts_of: impl Fn(&str) -> usize,
+    acs: &[Yaml],
+    s: &Yaml,
+) {
+    let terms = seq(&v["terms"], "terms");
+    assert_eq!(
+        glossary.matches("<div class=\"grow\"").count(),
+        terms.len(),
+        "用語の行（div.grow）の数"
+    );
+    assert_eq!(
+        glossary
+            .matches("<a class=\"back\" href=\"#toc\">目次へ</a>")
+            .count(),
+        terms.len(),
+        "用語の行の目次へ（a.back）の数"
+    );
+    let ids = terms
+        .iter()
+        .map(|t| {
+            let needle = format!("<div class=\"grow\" id=\"g-{}\">", text(t, "id"));
+            glossary
+                .find(&needle)
+                .unwrap_or_else(|| panic!("語の行が無い: {needle}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        ids.windows(2).all(|w| w[0] < w[1]),
+        "語の行の id が terms の順でない"
+    );
+    assert_eq!(parts_of("ac-state-chip"), acs.len(), "ac-state-chip の数");
+    // 章の帯は 8 章 + 図の章（正本の figures が 1 枚以上のときだけ・便 34）+ 承認欄
+    let figures = s["figures"].as_vec().map_or(0, Vec::len);
+    assert_eq!(
+        parts_of("chapter-deck-band"),
+        8 + usize::from(figures > 0) + 1,
+        "chapter-deck-band の数"
+    );
 }
 
 // ── 要件書の面の用語集（便 36・章 08 は憲法の面の章 07 と同じ形）──

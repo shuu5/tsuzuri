@@ -296,6 +296,11 @@ fn face_census_on_the_real_sources_counts_and_verbatims() {
         "開発規律行の tr の数"
     );
 
+    allowed_parts(parts, &html);
+}
+
+/// 面の部品の名札が許す 15 種の中だけで、lane-chip を含まないことを見る。
+fn allowed_parts(parts: Vec<&str>, html: &str) {
     // 部品の名札は 15 種の中だけ・lane-chip を含まない
     const ALLOWED: [&str; 15] = [
         "freshness-stamp",

@@ -465,6 +465,12 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
     assert_eq!(parts_of("shelf-card"), 4, "shelf-card の数");
     assert_eq!(parts_of("shelf-link"), 4, "shelf-link の数");
     assert_eq!(parts_of("reader-lane"), rows.len(), "reader-lane の数");
+    census_counts(html.clone(), &c, &s, &v, &r);
+    census_parts(parts, &html);
+}
+
+/// 正本の数の字面と、判断の記録の行（id の順のリンクと状態ごとの要約）を見る。
+fn census_counts(html: String, c: &Yaml, s: &Yaml, v: &Yaml, r: &Yaml) {
     let articles = seq(&c["articles"], "articles").len();
     let fr = seq(&s["requirements"], "requirements").len();
     let terms = seq(&v["terms"], "terms").len();
@@ -513,6 +519,11 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
     let summary = format!("{}〜{}（{kinds}）", records[0].0, records[adr - 1].0);
     assert!(card.contains(&summary), "要約が無い: {summary}\n{card}");
 
+    census_notes(html, adr);
+}
+
+/// 設計ノートの行（id の字の順のリンクと状態ごとの要約）と読める面の数を見る。
+fn census_notes(html: String, adr: usize) {
     // 設計ノートの行（便 29）: 設計ノートの数だけ面へのリンクが id の字の順に並び、要約は状態ごとの数
     let notes = real_notes();
     let note_card = note_card(&html);
@@ -550,7 +561,10 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
         (3 + adr + notes.len()).to_string(),
         "読める面の数"
     );
+}
 
+/// 面の部品の名札が許す 13 種の中だけで、layer-line を含まないことを見る。
+fn census_parts(parts: Vec<&str>, html: &str) {
     // 部品の名札は 13 種の中だけ
     const ALLOWED: [&str; 13] = [
         "freshness-stamp",

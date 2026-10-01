@@ -347,10 +347,7 @@ fn face_note_census_on_the_real_source_counts_and_verbatims() {
     assert_eq!(rows, 15, "実の正本の表の節の行の合計");
     assert_eq!(count("data-component=\"item-row\""), rows, "item-row の数");
 
-    // 契約表の行の欄（write-set は無い・空の一覧の depends は hint を出さない・verify は在る）
-    assert!(!html.contains("write-set"), "無い欄の hint が出ている");
-    assert!(!html.contains("depends"), "空の一覧の欄の hint が出ている");
-    assert!(html.contains(">検証</span>"), "検証の hint が無い: {html}");
+    contract_fields(&html);
 
     // 図の章は図ごとの図の枠（便 31）＝便 28 の card と「図の生成はまだ無い」の cd は 0
     assert_eq!(
@@ -376,6 +373,14 @@ fn face_note_census_on_the_real_source_counts_and_verbatims() {
         0,
         "行き先の無い参照が在る: {html}"
     );
+}
+
+/// 契約表の行の欄の hint（無い欄と空の一覧の欄は出さない・検証は出す）を見る。
+fn contract_fields(html: &str) {
+    // 契約表の行の欄（write-set は無い・空の一覧の depends は hint を出さない・verify は在る）
+    assert!(!html.contains("write-set"), "無い欄の hint が出ている");
+    assert!(!html.contains("depends"), "空の一覧の欄の hint が出ている");
+    assert!(html.contains(">検証</span>"), "検証の hint が無い: {html}");
 }
 
 // ── 図の章（便 31）──

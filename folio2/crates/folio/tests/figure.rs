@@ -105,17 +105,12 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
 
 /// `folio figure --doc <doc> --id <id> --dir <dir> --out <out> <mode>`。
 fn folio_figure(doc: &str, id: &str, dir: &Path, out: &Path, mode: &str) -> Output {
-    folio_figure_env(doc, id, dir, out, mode, None)
+    folio_figure_env((doc, id), dir, out, mode, None)
 }
 
 /// 環境変数 PATH を差し替えられる形（道具の実行環境の不在を測る）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn folio_figure_env(
-    doc: &str,
-    id: &str,
+    (doc, id): (&str, &str),
     dir: &Path,
     out: &Path,
     mode: &str,
@@ -391,7 +386,7 @@ fn figure_unknown_when_the_tool_or_node_is_absent() {
     let out = td.join("fig.svg");
     let empty = td.join("empty-path");
     fs::create_dir_all(&empty).unwrap();
-    let no_node = folio_figure_env("full", "fig-anchor", &work, &out, "--write", Some(&empty));
+    let no_node = folio_figure_env(("full", "fig-anchor"), &work, &out, "--write", Some(&empty));
     let wrote_no_node = out.exists();
     fs::remove_file(td.join("vendor/archify/bin/archify.mjs")).unwrap();
     let no_tool = folio_figure("full", "fig-anchor", &work, &out, "--write");

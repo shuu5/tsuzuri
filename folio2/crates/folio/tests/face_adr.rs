@@ -480,24 +480,28 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
             5 + usize::from(figures > 0) + 1,
             "{id}: 章の帯の数"
         );
-
-        // 状態の名札
-        let label = match a["status"].as_str().unwrap() {
-            "proposed" => "提案中・拘束力なし",
-            "accepted" => "発効",
-            "retired" => "廃止",
-            other => panic!("{id}: 状態「{other}」は 3 つのどれでもない"),
-        };
-        let status_line = html
-            .lines()
-            .find(|l| l.contains("class=\"cover-status\""))
-            .unwrap_or_else(|| panic!("{id}: 状態の行が無い"));
-        assert!(
-            status_line.contains(label),
-            "{id}: 状態の行に名札「{label}」が無い: {status_line}"
-        );
+        census_status(&html, &a, &id);
     }
     let _ = fs::remove_dir_all(&td);
+}
+
+/// 表紙の状態の行が status の値の名札を持つことを見る。
+fn census_status(html: &str, a: &Yaml, id: &str) {
+    // 状態の名札
+    let label = match a["status"].as_str().unwrap() {
+        "proposed" => "提案中・拘束力なし",
+        "accepted" => "発効",
+        "retired" => "廃止",
+        other => panic!("{id}: 状態「{other}」は 3 つのどれでもない"),
+    };
+    let status_line = html
+        .lines()
+        .find(|l| l.contains("class=\"cover-status\""))
+        .unwrap_or_else(|| panic!("{id}: 状態の行が無い"));
+    assert!(
+        status_line.contains(label),
+        "{id}: 状態の行に名札「{label}」が無い: {status_line}"
+    );
 }
 
 // ── check の 3 値 ──

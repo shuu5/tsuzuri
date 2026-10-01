@@ -479,6 +479,11 @@ mod face_labels_tests {
         assert!(
             standing_of("{version: v0.3, status: effective, effective_version: [v0.3]}").is_err()
         );
+        standing_labels();
+    }
+
+    /// 札の字（stamp・cover・lead・card）を状態ごとに見る。
+    fn standing_labels() {
         // 札の字（§1 (b) の 2・3 の表）
         let p = Standing::Pending("v1.41".to_string());
         assert_eq!(

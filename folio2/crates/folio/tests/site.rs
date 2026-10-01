@@ -328,6 +328,33 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
             .arg(format!("{face}={}", site.join(name).display()));
     }
     let parts = pages.output().unwrap();
+    let mut faces = site_faces(&site, last, last_id);
+    for id in &notes {
+        faces.push((
+            "note",
+            Command::new(env!("CARGO_BIN_EXE_tz"))
+                .arg("face")
+                .arg("--face")
+                .arg("note")
+                .arg("--id")
+                .arg(id)
+                .arg("--dir")
+                .arg(design_intent())
+                .arg("--out")
+                .arg(site.join(format!("note-{id}.html")))
+                .arg("--check")
+                .output()
+                .unwrap(),
+        ));
+    }
+    let _ = fs::remove_dir_all(&td);
+
+    build_wrote(build, total, all_adr, records);
+    pages_pass(all_notes, &notes, parts, faces);
+}
+
+/// 3 面と最後の判断の記録の面を `face --check` で撃ち、（面の名・出力）の列を返す。
+fn site_faces(site: &Path, last: String, last_id: u32) -> Vec<(&'static str, Output)> {
     let mut faces: Vec<(&str, Output)> = [
         ("index", "index.html"),
         ("constitution", "constitution.html"),
@@ -365,26 +392,11 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
             .output()
             .unwrap(),
     ));
-    for id in &notes {
-        faces.push((
-            "note",
-            Command::new(env!("CARGO_BIN_EXE_tz"))
-                .arg("face")
-                .arg("--face")
-                .arg("note")
-                .arg("--id")
-                .arg(id)
-                .arg("--dir")
-                .arg(design_intent())
-                .arg("--out")
-                .arg(site.join(format!("note-{id}.html")))
-                .arg("--check")
-                .output()
-                .unwrap(),
-        ));
-    }
-    let _ = fs::remove_dir_all(&td);
+    faces
+}
 
+/// build の終了 code と出力の 2 行（床の合格・書いた file の数）と、判断の記録の面がそろうことを見る。
+fn build_wrote(build: Output, total: usize, all_adr: bool, records: usize) {
     assert_eq!(
         code(&build, "folio build（実の正本）"),
         0,
@@ -404,6 +416,10 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
         "{out}"
     );
     assert!(all_adr, "判断の記録の面が {records} 枚そろっていない");
+}
+
+/// 設計ノートの面がそろい、`parts --check` と面ごとの `face --check` が合格することを見る。
+fn pages_pass(all_notes: bool, notes: &[String], parts: Output, faces: Vec<(&str, Output)>) {
     assert!(
         all_notes,
         "設計ノートの面が {} 枚そろっていない",
@@ -841,6 +857,15 @@ fn f163_note_approval_list_builds_one_sign_per_item() {
             .collect();
         format!("  approval:{rows}")
     };
+    approval_list_cases(first, second, list);
+}
+
+/// 写しごとに、承認欄の項の数と順の署名の行・状態の行・鮮度の札が面に出ることを見る。
+fn approval_list_cases(
+    first: (&str, &str),
+    second: (&str, &str),
+    list: impl Fn(&[(&str, &str)]) -> String,
+) {
     // (写しの名, 状態, 項, 状態の行, 日付の名, 日付)
     let cases = [
         (
@@ -990,6 +1015,11 @@ fn f153_build_falls_back_to_the_baked_style_only_when_the_place_has_none() {
     let check = folio_build(&work, &site, "--check");
     assert_eq!(code(&check, "folio build --check"), 0, "{}", stderr(&check));
 
+    unreadable_styles(td, work, preview);
+}
+
+/// 読めない様式（dir・壊れた symlink・途中が file）は 2 で「まだ分からない」とし、配信先を作らないことを見る。
+fn unreadable_styles(td: PathBuf, work: PathBuf, preview: PathBuf) {
     // 3・4. folio.css が dir か壊れた symlink なら 2 で「folio.css: 読めない」・配信先を作らない
     let css = preview.join("folio.css");
     fs::create_dir(&css).unwrap();

@@ -80,52 +80,7 @@ fn parse_html(s: &str) -> Vec<El> {
             j += 1;
         }
         let tag = s[at + 1..j].to_ascii_lowercase();
-        let mut attrs = Vec::new();
-        let mut self_close = false;
-        loop {
-            while j < b.len() && b[j].is_ascii_whitespace() {
-                j += 1;
-            }
-            if j >= b.len() {
-                break;
-            }
-            if b[j] == b'>' {
-                j += 1;
-                break;
-            }
-            if b[j] == b'/' {
-                self_close = true;
-                j += 1;
-                continue;
-            }
-            let n0 = j;
-            while j < b.len() && !b[j].is_ascii_whitespace() && !matches!(b[j], b'=' | b'>' | b'/')
-            {
-                j += 1;
-            }
-            let name = s[n0..j].to_ascii_lowercase();
-            let mut value = String::new();
-            if j < b.len() && b[j] == b'=' {
-                j += 1;
-                if j < b.len() && (b[j] == b'"' || b[j] == b'\'') {
-                    let q = b[j];
-                    let v0 = j + 1;
-                    j = v0;
-                    while j < b.len() && b[j] != q {
-                        j += 1;
-                    }
-                    value = s[v0..j].to_string();
-                    j += 1;
-                } else {
-                    let v0 = j;
-                    while j < b.len() && !b[j].is_ascii_whitespace() && b[j] != b'>' {
-                        j += 1;
-                    }
-                    value = s[v0..j].to_string();
-                }
-            }
-            attrs.push((name, value));
-        }
+        let (attrs, self_close, j) = parse_attrs(s, b, j);
         let idx = els.len();
         els.push(El {
             tag: tag.clone(),
@@ -141,6 +96,57 @@ fn parse_html(s: &str) -> Vec<El> {
         }
     }
     els
+}
+
+/// 開始 tag の名の後から属性を読み、（属性の列・自分で閉じるか・読み終えた位置）を返す。
+fn parse_attrs(s: &str, b: &[u8], mut j: usize) -> (Vec<(String, String)>, bool, usize) {
+    let mut attrs = Vec::new();
+    let mut self_close = false;
+    loop {
+        while j < b.len() && b[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j >= b.len() {
+            break;
+        }
+        if b[j] == b'>' {
+            j += 1;
+            break;
+        }
+        if b[j] == b'/' {
+            self_close = true;
+            j += 1;
+            continue;
+        }
+        let n0 = j;
+        while j < b.len() && !b[j].is_ascii_whitespace() && !matches!(b[j], b'=' | b'>' | b'/')
+        {
+            j += 1;
+        }
+        let name = s[n0..j].to_ascii_lowercase();
+        let mut value = String::new();
+        if j < b.len() && b[j] == b'=' {
+            j += 1;
+            if j < b.len() && (b[j] == b'"' || b[j] == b'\'') {
+                let q = b[j];
+                let v0 = j + 1;
+                j = v0;
+                while j < b.len() && b[j] != q {
+                    j += 1;
+                }
+                value = s[v0..j].to_string();
+                j += 1;
+            } else {
+                let v0 = j;
+                while j < b.len() && !b[j].is_ascii_whitespace() && b[j] != b'>' {
+                    j += 1;
+                }
+                value = s[v0..j].to_string();
+            }
+        }
+        attrs.push((name, value));
+    }
+    (attrs, self_close, j)
 }
 
 fn is_descendant(els: &[El], d: usize, a: usize) -> bool {
@@ -493,65 +499,77 @@ fn parse_selector(s: &str) -> Complex {
             parts.push(Vec::new());
         }
         let cur = parts.last_mut().expect("parts は空でない");
-        match ch {
-            '.' | '#' => {
-                let (name, j) = ident(&c, i + 1);
-                cur.push(if ch == '.' {
-                    Simple::Class(name)
-                } else {
-                    Simple::Id(name)
-                });
-                i = j;
-            }
-            '*' => {
-                cur.push(Simple::Any);
-                i += 1;
-            }
-            '[' => {
-                let e = close_paren(&c, i, '[', ']');
-                cur.push(parse_attr(&c[i + 1..e.min(c.len())].iter().collect::<String>()));
-                i = e + 1;
-            }
-            ':' => {
-                let elem = c.get(i + 1) == Some(&':');
-                let (name, mut j) = ident(&c, if elem { i + 2 } else { i + 1 });
-                let name = name.to_ascii_lowercase();
-                let mut arg = None;
-                if c.get(j) == Some(&'(') {
-                    let e = close_paren(&c, j, '(', ')');
-                    arg = Some(c[j + 1..e.min(c.len())].iter().collect::<String>());
-                    j = e + 1;
-                }
-                if elem || LEGACY_ELEM.contains(&name.as_str()) {
-                    pseudo_element = true;
-                    cur.push(Simple::Elem);
-                } else if let (Some(a), true) = (
-                    &arg,
-                    matches!(name.as_str(), "not" | "is" | "where" | "matches" | "has"),
-                ) {
-                    cur.push(Simple::Func(name, parse_args(a)));
-                } else {
-                    cur.push(Simple::Pseudo(name));
-                }
-                i = j;
-            }
-            _ => {
-                let (name, j) = ident(&c, i);
-                if name.is_empty() {
-                    cur.push(Simple::Opaque);
-                    i += 1;
-                } else {
-                    cur.push(Simple::Type(name.to_ascii_lowercase()));
-                    i = j;
-                }
-            }
-        }
+        (i, pseudo_element) = parse_simple(&c, ch, i, cur, pseudo_element);
     }
     Complex {
         parts,
         combs,
         pseudo_element,
     }
+}
+
+/// 単純な選択子 1 つ（. # * [ : と型の名）を読んで cur へ足し、（次の位置・擬似要素を読んだか）を返す。
+fn parse_simple(
+    c: &[char],
+    ch: char,
+    mut i: usize,
+    cur: &mut Vec<Simple>,
+    mut pseudo_element: bool,
+) -> (usize, bool) {
+    match ch {
+        '.' | '#' => {
+            let (name, j) = ident(c, i + 1);
+            cur.push(if ch == '.' {
+                Simple::Class(name)
+            } else {
+                Simple::Id(name)
+            });
+            i = j;
+        }
+        '*' => {
+            cur.push(Simple::Any);
+            i += 1;
+        }
+        '[' => {
+            let e = close_paren(c, i, '[', ']');
+            cur.push(parse_attr(&c[i + 1..e.min(c.len())].iter().collect::<String>()));
+            i = e + 1;
+        }
+        ':' => {
+            let elem = c.get(i + 1) == Some(&':');
+            let (name, mut j) = ident(c, if elem { i + 2 } else { i + 1 });
+            let name = name.to_ascii_lowercase();
+            let mut arg = None;
+            if c.get(j) == Some(&'(') {
+                let e = close_paren(c, j, '(', ')');
+                arg = Some(c[j + 1..e.min(c.len())].iter().collect::<String>());
+                j = e + 1;
+            }
+            if elem || LEGACY_ELEM.contains(&name.as_str()) {
+                pseudo_element = true;
+                cur.push(Simple::Elem);
+            } else if let (Some(a), true) = (
+                &arg,
+                matches!(name.as_str(), "not" | "is" | "where" | "matches" | "has"),
+            ) {
+                cur.push(Simple::Func(name, parse_args(a)));
+            } else {
+                cur.push(Simple::Pseudo(name));
+            }
+            i = j;
+        }
+        _ => {
+            let (name, j) = ident(c, i);
+            if name.is_empty() {
+                cur.push(Simple::Opaque);
+                i += 1;
+            } else {
+                cur.push(Simple::Type(name.to_ascii_lowercase()));
+                i = j;
+            }
+        }
+    }
+    (i, pseudo_element)
 }
 
 type Spec = (u32, u32, u32);
@@ -909,6 +927,11 @@ fn f143_the_cascade_reader_follows_the_css_order() {
         ),
         ("宣言が無い", ".sc-open{position:relative;z-index:1}", None, None),
     ];
+    cascade_cases(cases);
+}
+
+/// 表の写しごとの (position, z-index) と、兄弟の結合子の扱い（決められないなら Err）を見る。
+fn cascade_cases(cases: [(&str, &str, Option<&str>, Option<&str>); 11]) {
     for (name, css, pos, z) in cases {
         let got = probe(css).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(

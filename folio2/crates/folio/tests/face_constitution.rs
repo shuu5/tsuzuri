@@ -1068,6 +1068,11 @@ fn f144_unknown_when_no_decision_names_the_version() {
     );
     assert_eq!(signs(&html).len(), 2 + rows.len());
 
+    unknown_when_proposed(&rows, version, first);
+}
+
+/// 今の版を名指す判断を提案中に戻した写しで、札が「まだ分からない」になることを見る。
+fn unknown_when_proposed(rows: &[Row], version: String, first: String) {
     // 今の版を名指す判断を提案中に戻した写し
     let (td, work) = real_copy("f144-unknown-proposed");
     let naming: Vec<String> = rows

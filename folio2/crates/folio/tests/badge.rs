@@ -622,6 +622,11 @@ fn badge_faces_without_the_mark_match_the_seven_frozen_fixtures() {
         &write_face("adr", Some("ADR-2"), &work, &td.join("adr-2.html")),
         "expected-site-adr-2.html",
     );
+    frozen_with_sheet(td, work, same);
+}
+
+/// 支度表を置いた写しと ADR-1 も置いた写しの面が凍結の fixture と byte で一致することを見る。
+fn frozen_with_sheet(td: PathBuf, work: PathBuf, same: impl Fn(&str, &str)) {
     // 支度表を置くと便 20 の期待
     fs::copy(
         fixture().join("intake-sheet.yaml"),

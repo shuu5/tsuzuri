@@ -981,6 +981,11 @@ fn f145_srs_cover_dates_follow_the_last_approval() {
             "未承認のため拘束力なし → 持ち主の承認で発効",
         ),
     ];
+    cover_cases(cases);
+}
+
+/// 写しの変異ごとに、鮮度の札・版の札・表紙の状態がちょうど 1 つずつ出ることを見る。
+fn cover_cases<M: FnOnce(String) -> String>(cases: [(&str, M, String, &str, &str); 6]) {
     for (case, mutate, fresh, tag, state) in cases {
         let (run, html, _) = fixture_srs(&format!("f145-{case}"), mutate);
         ok(&run);
