@@ -1,0 +1,1218 @@
+diff --git a/crates/tsuzuri-core/tests/acctcore.rs b/crates/tsuzuri-core/tests/acctcore.rs
+index 971271cf60d3aa5fa4a943490b97402535e80df2..a40e41da74c16f7c419225534149f3f6ed735793 100644
+--- a/crates/tsuzuri-core/tests/acctcore.rs
++++ b/crates/tsuzuri-core/tests/acctcore.rs
+@@ -376,6 +376,11 @@ fn acctcore_unread_texts_touch_only_their_parts() {
+     assert_eq!(accounts(&no_host), Reading::Unknown);
+     assert_eq!(groups(&no_host), Reading::Unknown);
+     assert_eq!(moves(&no_host), Reading::Unknown);
++    unread_seat(&full, t);
++}
++
++/// anchor の doctor の字と記録が無い時の口座・移動・群の列。
++fn unread_seat(full: &Inputs, t: &HostTexts) {
+     // anchor の doctor の字と記録が無ければ、その部分だけが替わる。
+     let mut no_seat = t.clone();
+     no_seat.seat_doctors.clear();
+diff --git a/crates/tsuzuri-core/tests/acctpcore.rs b/crates/tsuzuri-core/tests/acctpcore.rs
+index bbf4d468045f9771b55eb01ae8a7ac691baeb40a..19c257bd076e672fa560d1198b28de6cd2f808dc 100644
+--- a/crates/tsuzuri-core/tests/acctpcore.rs
++++ b/crates/tsuzuri-core/tests/acctpcore.rs
+@@ -216,14 +216,9 @@ fn projects() -> BTreeMap<String, ProjectTexts> {
+ }
+ 
+ /// 着地済みの席の card の関数に、その project の state dir の字を渡した値。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+ fn seat_card(
+     host: &HostTexts,
+-    anchor: &str,
+-    target: &str,
++    (anchor, target): (&str, &str),
+     p: &ProjectTexts,
+     records: &[&str],
+     now: u64,
+@@ -246,7 +241,13 @@ fn card_a(host: &HostTexts, now: u64) -> SeatCard {
+         host.history["main.account.20260926T080000Z.1"].as_str(),
+         host.history["main.account.20260927T100000Z.1"].as_str(),
+     ];
+-    seat_card(host, "/work/proj-a", "proj-a:0.1", &proj_a(), &records, now)
++    seat_card(
++        host,
++        ("/work/proj-a", "proj-a:0.1"),
++        &proj_a(),
++        &records,
++        now,
++    )
+ }
+ 
+ fn card_b(host: &HostTexts, now: u64) -> SeatCard {
+@@ -254,7 +255,13 @@ fn card_b(host: &HostTexts, now: u64) -> SeatCard {
+         host.history["aux.account.20260925T000000Z.1"].as_str(),
+         host.history["aux.account.20260927T100000Z.1"].as_str(),
+     ];
+-    seat_card(host, "/work/proj-b", "proj-b:0.1", &proj_b(), &records, now)
++    seat_card(
++        host,
++        ("/work/proj-b", "proj-b:0.1"),
++        &proj_b(),
++        &records,
++        now,
++    )
+ }
+ 
+ fn counts(wait: u32, run: u32, stop: u32, land: u32) -> RunCounts {
+@@ -328,6 +335,11 @@ fn acctpcore_project_rows_seat_runs_and_order() {
+             None
+         )
+     );
++    rows_without_parts(host);
++}
++
++/// 席の行・表の anchor・群の宣言の無い字から組んだ project の列。
++fn rows_without_parts(host: HostTexts) {
+     // 席の行が無ければ席は Unknown（ほかの部分は組む）。
+     let mut no_seat = host.clone();
+     no_seat.seat_doctors.remove("/work/proj-a");
+diff --git a/crates/tsuzuri-core/tests/athr.rs b/crates/tsuzuri-core/tests/athr.rs
+index c43f25a369f9d0deb726f3dd9d10fea47e00c530..135899a5ffd0baec56737322f2169ddf6b954f4c 100644
+--- a/crates/tsuzuri-core/tests/athr.rs
++++ b/crates/tsuzuri-core/tests/athr.rs
+@@ -87,11 +87,13 @@ fn l4() -> String {
+     log(&[ev("11:58", PRESSURE, Some("acct-1"), "group=Tier1 window=5h used=99 cap=85 sent=1")])
+ }
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+-fn pressure(at: u64, group: &str, account: &str, window: &str, used: u64, cap: u64, sent: u64) -> GroupNotice {
++fn pressure(
++    at: u64,
++    group: &str,
++    account: &str,
++    window: &str,
++    (used, cap, sent): (u64, u64, u64),
++) -> GroupNotice {
+     GroupNotice::Pressure {
+         at,
+         group: group.into(),
+@@ -116,11 +118,17 @@ fn refused(at: u64, group: &str, account: &str, reason: &str) -> GroupNotice {
+ fn table() -> Vec<GroupNotice> {
+     vec![
+         refused(1_790_510_100, "Tier1", "acct-1", "no-candidate"),
+-        pressure(1_790_509_200, "Tier1", "acct-1", "seven_day_model", 97, 95, 2),
++        pressure(
++            1_790_509_200,
++            "Tier1",
++            "acct-1",
++            "seven_day_model",
++            (97, 95, 2),
++        ),
+         refused(1_790_509_200, "Tier2", "acct-3", "no-candidate"),
+-        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 90, 85, 1),
+-        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 91, 85, 1),
+-        pressure(1_790_508_000, "Tier2", "acct-1", "seven_day", 96, 95, 1),
++        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (90, 85, 1)),
++        pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (91, 85, 1)),
++        pressure(1_790_508_000, "Tier2", "acct-1", "seven_day", (96, 95, 1)),
+     ]
+ }
+ 
+@@ -200,11 +208,16 @@ fn athr_wire_shape_pinned() {
+         doc.notices,
+         Reading::Known(vec![
+             refused(1_790_509_800, "Tier2", "acct-2", "no-candidate"),
+-            pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 100, 85, 1),
++            pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (100, 85, 1)),
+         ])
+     );
++    notice_keys_and_kinds();
++}
++
++/// 知らせの行の鍵の順と kind の値・閉じた 2 つの種類・Unknown の閾値の電文。
++fn notice_keys_and_kinds() {
+     // 知らせの行の鍵の順と kind の値。
+-    let n_p = pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", 90, 85, 1);
++    let n_p = pressure(1_790_508_600, "Tier1", "acct-2", "five_hour", (90, 85, 1));
+     let n_r = refused(1_790_509_200, "Tier2", "acct-3", "no-candidate");
+     for (n, keys, kind) in [
+         (
+diff --git a/crates/tsuzuri-core/tests/csled.rs b/crates/tsuzuri-core/tests/csled.rs
+index b4bf9f51c503f37d9322ffcead0cf81fd202921d..c5a47bc9e9decabcebd639d992e3240aba98281f 100644
+--- a/crates/tsuzuri-core/tests/csled.rs
++++ b/crates/tsuzuri-core/tests/csled.rs
+@@ -90,18 +90,12 @@ fn g1() -> Graph {
+ }
+ 
+ /// 要約の 1 行（鍵は id・kind・file・line・title・plain・eng の順）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+ fn sum_line(
+     id: &str,
+     kind: &str,
+-    file: &str,
+-    line: u32,
++    (file, line): (&str, u32),
+     title: &str,
+-    plain: Option<&str>,
+-    eng: Option<&str>,
++    (plain, eng): (Option<&str>, Option<&str>),
+ ) -> String {
+     format!(
+         "{{\"id\":{},\"kind\":{},\"file\":{},\"line\":{line},\"title\":{},\"plain\":{},\"eng\":{}}}",
+@@ -120,13 +114,17 @@ fn sum1() -> String {
+         sum_line(
+             "FR1",
+             "要件",
+-            "srs.yaml",
+-            2,
++            ("srs.yaml", 2),
+             "面は 2 つ",
+-            Some("画面は 2 つです。"),
+-            None,
++            (Some("画面は 2 つです。"), None),
++        ),
++        sum_line(
++            "q-1",
++            "question",
++            ("x.yaml", 5),
++            "x",
++            (Some("上書き"), Some("上書き")),
+         ),
+-        sum_line("q-1", "question", "x.yaml", 5, "x", Some("上書き"), Some("上書き")),
+     ]
+     .join("\n")
+ }
+@@ -140,20 +138,16 @@ fn sum2() -> String {
+         sum_line(
+             "FR1",
+             "要件",
+-            "srs.yaml",
+-            2,
++            ("srs.yaml", 2),
+             "面は 2 つ",
+-            Some("画面は 2 つです。"),
+-            None,
++            (Some("画面は 2 つです。"), None),
+         ),
+         sum_line(
+             "FR2",
+             "要件",
+-            "srs.yaml",
+-            9,
++            ("srs.yaml", 9),
+             "地図の面",
+-            None,
+-            Some("地図は 4 面とする"),
++            (None, Some("地図は 4 面とする")),
+         ),
+     ]
+     .join("\n")
+diff --git a/crates/tsuzuri-core/tests/cspk.rs b/crates/tsuzuri-core/tests/cspk.rs
+index d57758306798110a834fe5e3e2d8ebfc6b6b1398..a6ea80da52be17e3d7c1c7e6ccf93ea7e5f7c90f 100644
+--- a/crates/tsuzuri-core/tests/cspk.rs
++++ b/crates/tsuzuri-core/tests/cspk.rs
+@@ -243,6 +243,11 @@ fn cspk_accounts_at_fills_only_spark() {
+         doc(&host, &BTreeMap::new(), NOW).accounts,
+         Reading::Known(filled)
+     );
++    unread_log_and_toml(host);
++}
++
++/// event log の字か口座の宣言の字の無い時の、線を足した口座の列。
++fn unread_log_and_toml(host: HostTexts) {
+     let no_log = HostTexts {
+         events: None,
+         ..host.clone()
+diff --git a/crates/tsuzuri-core/tests/dnrow.rs b/crates/tsuzuri-core/tests/dnrow.rs
+index 415cbbf0d3bb075359a1694e44d44c7c50b108b7..6f7fb032a160cdfac4fb646918ef13d005555c22 100644
+--- a/crates/tsuzuri-core/tests/dnrow.rs
++++ b/crates/tsuzuri-core/tests/dnrow.rs
+@@ -163,6 +163,11 @@ fn dnrow_kind_words() {
+         vec![pair("dn.1", "nx#a"), pair("dn.2", "nx#b")]
+     );
+ 
++    empty_index_graph();
++}
++
++/// 空の索引と台帳と event log のグラフ（設計ノートの行の出所が読めない）。
++fn empty_index_graph() {
+     let g = graph_of("", &led(), EV);
+     assert_eq!(g.unread, vec![Source::Design], "空の索引");
+     assert!(g.unknown_kinds().contains(&NodeKind::NoteRow), "空の索引");
+diff --git a/crates/tsuzuri-core/tests/fdlt.rs b/crates/tsuzuri-core/tests/fdlt.rs
+index 352f4defc608fb34e1e9c86615f02b65da00af6c..b8260073cd07ca50e4c0f4f666c9fab0efe8b65b 100644
+--- a/crates/tsuzuri-core/tests/fdlt.rs
++++ b/crates/tsuzuri-core/tests/fdlt.rs
+@@ -497,6 +497,11 @@ fn fdlt_tool_answer_and_named() {
+         }
+     }
+ 
++    tool_mark_line();
++}
++
++/// tool の呼びの経路の語と、その経路の配達の印の行の字。
++fn tool_mark_line() {
+     assert_eq!(Route::Tool.word(), "tool の呼び");
+     assert_eq!(
+         mark_line(&rid(T1), Route::Tool, "20260930T0102Z"),
+diff --git a/crates/tsuzuri-core/tests/fstop.rs b/crates/tsuzuri-core/tests/fstop.rs
+index d6f3bcd9378d043a9b31bf1b6f30563c627322ec..2ce60e934c37af5d167bffbf1d045c2726dcf0b8 100644
+--- a/crates/tsuzuri-core/tests/fstop.rs
++++ b/crates/tsuzuri-core/tests/fstop.rs
+@@ -184,6 +184,11 @@ fn fstop_plugin_stop_entry() {
+     assert_eq!(command.matches(PROJECT_DIR).count(), 2, "{command}");
+     assert_eq!(command.matches(&quoted).count(), 2, "{command}");
+ 
++    no_absolute_paths(plugin, hooks);
++}
++
++/// plugin.json と hooks.json の字の値に絶対の path の語が無い。
++fn no_absolute_paths(plugin: Value, hooks: Value) {
+     for (name, doc) in [("plugin.json", &plugin), ("hooks.json", &hooks)] {
+         let mut all = Vec::new();
+         strings(doc, &mut all);
+diff --git a/crates/tsuzuri-core/tests/g3g7.rs b/crates/tsuzuri-core/tests/g3g7.rs
+index eb7e2f88870bdeb8cf7373d8fc6e783f70a7dd06..84f494f6334dcd1bd3aa638235528576a505e699 100644
+--- a/crates/tsuzuri-core/tests/g3g7.rs
++++ b/crates/tsuzuri-core/tests/g3g7.rs
+@@ -184,6 +184,11 @@ fn g3g7_join_follows_the_rules() {
+         );
+     }
+ 
++    unexported_node_not_joined();
++}
++
++/// 書き出しに無い節点を足して結んでも、結んだ表の鍵は替わらない。
++fn unexported_node_not_joined() {
+     let mut g = built(&index(), &ledger(), &events());
+     let mut copy: GraphNode = g.node("nw#a").expect("nw#a").clone();
+     copy.id = "nw-x".to_string();
+@@ -303,6 +308,11 @@ fn g3g7_unbound_ruling_is_named() {
+     assert_eq!(outside_rulings(&g), Some(1));
+     assert_eq!(verdict_of(&g, "g-3"), Verdict::Pass);
+ 
++    only_outside_id();
++}
++
++/// 文法の外の id の裁定の行だけを持つ memo の台帳のグラフの g-7 と文法の外の数。
++fn only_outside_id() {
+     let g = joined(&index(), &only(), &rulings());
+     assert_eq!(verdict_of(&g, "g-7"), Verdict::Unknown);
+     assert_eq!(outside_rulings(&g), Some(1));
+@@ -356,6 +366,11 @@ fn g3g7_unread_material_is_unknown() {
+     assert_eq!(rest(&g).len(), 10);
+     assert_eq!(rest(&g), rest(&plain));
+ 
++    empty_index_joined();
++}
++
++/// 空の索引に書き出しを結んだグラフ（表は空・g-3 と g-7 は Unknown）。
++fn empty_index_joined() {
+     let g = joined("", &ledger(), &rulings());
+     assert_eq!(g.rulings, Some(Default::default()));
+     assert_eq!(g.unread, vec![Source::Design]);
+@@ -381,6 +396,11 @@ fn g3g7_forms_and_consts() {
+     assert_eq!(rows[0].target(), "q7-fx.1");
+     assert_eq!(rows[0].node, None);
+ 
++    fixture_holds_rows(rows);
++}
++
++/// fixture のグラフは書き出しの行を全部持ち、替えた行は持たない。
++fn fixture_holds_rows(rows: Vec<tsuzuri_core::graph::RulingRow>) {
+     let g = fixture();
+     for (n, row) in rows.iter().enumerate() {
+         assert!(g.holds(row), "{n}: {row:?}");
+diff --git a/crates/tsuzuri-core/tests/gext.rs b/crates/tsuzuri-core/tests/gext.rs
+index 0c39da88f8e60d9ca71f4255e97b418f3ebcb107..78d4e0b71effcb030027edd310233744313e787c 100644
+--- a/crates/tsuzuri-core/tests/gext.rs
++++ b/crates/tsuzuri-core/tests/gext.rs
+@@ -366,6 +366,11 @@ fn gext_outside_reads_ids() {
+     assert_eq!(plain.families, set(&["s9-far"]));
+     assert!(plain.rulings.is_empty());
+ 
++    ruling_forms_held(got);
++}
++
++/// 外の台帳の読みが持つ裁定の行と持たない行（定型行・問いと notes の日時と bead の形）。
++fn ruling_forms_held(got: Outside) {
+     // 受けと方針の定型行は裁定の id に数えない・問いの形と notes の日時の形と bead の形の先の分け。
+     let g = placed(&read("ledger.json"), &plus_far(&read("rulings.jsonl")), vec![]);
+     let rows = &g.rulings.as_ref().expect("結んだ表");
+@@ -415,6 +420,11 @@ fn gext_rows_follow_outside() {
+         assert_eq!(outside_heads(&g), None, "{node}");
+     }
+ 
++    unconfirmed_and_gone(ledger, rulings);
++}
++
++/// 外の台帳で確かめられない組と、族 s7-gone を引く行を足した書き出しの g-3 と先。
++fn unconfirmed_and_gone(ledger: String, rulings: String) {
+     // 読めない組・字 [] の組・族の違う組だけでは確かめられない。
+     let near = FAR.replace("s9-far", "s8-near");
+     let others = [
+diff --git a/crates/tsuzuri-core/tests/gtuck.rs b/crates/tsuzuri-core/tests/gtuck.rs
+index 2f1c82261f6911c7fc2820f6e798848bd3d64bbd..4c1e09b867f4ec29b237e4d91445b2d8d8b8aef1 100644
+--- a/crates/tsuzuri-core/tests/gtuck.rs
++++ b/crates/tsuzuri-core/tests/gtuck.rs
+@@ -188,6 +188,37 @@ fn gtuck_levels_example() {
+         "~srs:actor",
+     ]);
+     let v = view_open(&example(), &asks);
++    levels_nodes(&v);
++    use EdgeType::*;
++    let edges: Vec<(&str, &str, EdgeType, u32)> = v
++        .edges
++        .iter()
++        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
++        .collect();
++    assert_eq!(
++        edges,
++        vec![
++            ("AC1", "FR1", VerifyAc, 1),
++            ("AC1", "FR1", Verifies, 1),
++            ("ADR-1", "P-1", Basis, 1),
++            ("FR1", "ADR-1", Adrs, 1),
++            ("FR1", "P-1", Basis, 1),
++            ("P-1.1", "P-1", InArticle, 2),
++            ("P-1.2", "P-1", InArticle, 2),
++            ("R-1", "P-1", RelationsRules, 1),
++            ("R-1", "P-1", ArticleRef, 1),
++            ("e", "FR1", Touches, 1),
++            ("e.1", "e", ParentChild, 1),
++            (RUN, "e.1", RunOf, 1),
++        ]
++    );
++    assert_eq!((v.shown, v.folded, v.cut, v.total), (16, 2, 0, 13));
++    assert_eq!(v.open, asks);
++    assert!(v.refused.is_empty());
++}
++
++/// 例のグラフの段の眺めの箱の (id・段・子の数・次数・畳み) を見る。
++fn levels_nodes(v: &GraphView) {
+     use BoxFold::*;
+     let got: Vec<(&str, u32, u32, u32, BoxFold)> = v
+         .nodes
+@@ -215,32 +246,6 @@ fn gtuck_levels_example() {
+             (RUN, 5, 0, 1, Leaf),
+         ]
+     );
+-    use EdgeType::*;
+-    let edges: Vec<(&str, &str, EdgeType, u32)> = v
+-        .edges
+-        .iter()
+-        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
+-        .collect();
+-    assert_eq!(
+-        edges,
+-        vec![
+-            ("AC1", "FR1", VerifyAc, 1),
+-            ("AC1", "FR1", Verifies, 1),
+-            ("ADR-1", "P-1", Basis, 1),
+-            ("FR1", "ADR-1", Adrs, 1),
+-            ("FR1", "P-1", Basis, 1),
+-            ("P-1.1", "P-1", InArticle, 2),
+-            ("P-1.2", "P-1", InArticle, 2),
+-            ("R-1", "P-1", RelationsRules, 1),
+-            ("R-1", "P-1", ArticleRef, 1),
+-            ("e", "FR1", Touches, 1),
+-            ("e.1", "e", ParentChild, 1),
+-            (RUN, "e.1", RunOf, 1),
+-        ]
+-    );
+-    assert_eq!((v.shown, v.folded, v.cut, v.total), (16, 2, 0, 13));
+-    assert_eq!(v.open, asks);
+-    assert!(v.refused.is_empty());
+ }
+ 
+ #[test]
+diff --git a/crates/tsuzuri-core/tests/nsum.rs b/crates/tsuzuri-core/tests/nsum.rs
+index d1e7fa3c9659efad4a8d0ee256fe7da79e1528b8..67bd00f49df1dbcc204715e66e5d5a9c222689be 100644
+--- a/crates/tsuzuri-core/tests/nsum.rs
++++ b/crates/tsuzuri-core/tests/nsum.rs
+@@ -50,18 +50,12 @@ const LED: &str =
+     r#"[{"id":"t-1","title":"台帳の行","issue_type":"task","status":"open"}]"#;
+ 
+ /// 要約の 1 行（鍵は id・kind・file・line・title・plain・eng の順）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+ fn sum_line(
+     id: &str,
+     kind: &str,
+-    file: &str,
+-    line: u32,
++    (file, line): (&str, u32),
+     title: &str,
+-    plain: Option<&str>,
+-    eng: Option<&str>,
++    (plain, eng): (Option<&str>, Option<&str>),
+ ) -> String {
+     format!(
+         "{{\"id\":{},\"kind\":{},\"file\":{},\"line\":{line},\"title\":{},\"plain\":{},\"eng\":{}}}",
+@@ -80,49 +74,45 @@ fn sum() -> String {
+         sum_line(
+             "FR1",
+             "要件",
+-            "srs.yaml",
+-            2,
++            ("srs.yaml", 2),
+             "面は 2 つ",
+-            Some("画面は 2 つです。"),
+-            Some("面は 2 つとする。"),
++            (Some("画面は 2 つです。"), Some("面は 2 つとする。")),
+         ),
+         sum_line(
+             "ADR-90",
+             "判断の記録",
+-            "adr/ADR-90.yaml",
+-            3,
++            ("adr/ADR-90.yaml", 3),
+             "見本",
+-            Some("一つ目です。\n二つ目です。"),
+-            Some("一つ目を決める。"),
++            (Some("一つ目です。\n二つ目です。"), Some("一つ目を決める。")),
++        ),
++        sum_line(
++            "owner",
++            "登場人物",
++            ("srs.yaml", 37),
++            "持ち主",
++            (None, None),
+         ),
+-        sum_line("owner", "登場人物", "srs.yaml", 37, "持ち主", None, None),
+         String::new(),
+         sum_line(
+             "A-9",
+             "条",
+-            "rules.yaml",
+-            7,
++            ("rules.yaml", 7),
+             "file の違う行",
+-            Some("違う file です。"),
+-            None,
++            (Some("違う file です。"), None),
+         ),
+         sum_line(
+             "t-1",
+             "要件",
+-            "srs.yaml",
+-            9,
++            ("srs.yaml", 9),
+             "台帳の行",
+-            Some("台帳です。"),
+-            Some("台帳。"),
++            (Some("台帳です。"), Some("台帳。")),
+         ),
+         sum_line(
+             "X-1",
+             "要件",
+-            "srs.yaml",
+-            11,
++            ("srs.yaml", 11),
+             "無い節点",
+-            Some("無いです。"),
+-            Some("無い。"),
++            (Some("無いです。"), Some("無い。")),
+         ),
+     ]
+     .join("\n")
+diff --git a/crates/tsuzuri-core/tests/pci.rs b/crates/tsuzuri-core/tests/pci.rs
+index f1ae55c25364e5627880d931631259600f9524a1..e4d5cd37c0dc041c7dff7ac14137b291d2d7a4b4 100644
+--- a/crates/tsuzuri-core/tests/pci.rs
++++ b/crates/tsuzuri-core/tests/pci.rs
+@@ -123,17 +123,11 @@ fn events() -> String {
+     out.join("\n")
+ }
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+ fn card(
+     n: u32,
+     runs: u32,
+-    stage: Stage,
+-    reason: Option<&str>,
+-    account: &str,
+-    elapsed: u64,
++    (stage, reason): (Stage, Option<&str>),
++    (account, elapsed): (&str, u64),
+     ci: Option<Ci>,
+ ) -> PipelineCard {
+     PipelineCard {
+@@ -158,57 +152,47 @@ fn cards(b: &Board) -> &[PipelineCard] {
+ fn want_with_ledger() -> Vec<PipelineCard> {
+     use Stage::*;
+     vec![
+-        card(1, 1, Landed, None, "acct-1", 3510, Some(Ci::Waiting)),
+-        card(2, 1, Landed, None, "acct-1", 3440, Some(Ci::Success)),
+-        card(3, 1, Landed, None, "acct-1", 3370, Some(Ci::Success)),
++        card(1, 1, (Landed, None), ("acct-1", 3510), Some(Ci::Waiting)),
++        card(2, 1, (Landed, None), ("acct-1", 3440), Some(Ci::Success)),
++        card(3, 1, (Landed, None), ("acct-1", 3370), Some(Ci::Success)),
+         card(
+             4,
+             1,
+-            Failed,
+-            Some("terminal:ci:failure"),
+-            "acct-1",
+-            3310,
++            (Failed, Some("terminal:ci:failure")),
++            ("acct-1", 3310),
+             Some(Ci::Failure),
+         ),
+         card(
+             5,
+             1,
+-            Stopped,
+-            Some("terminal:ci:unmeasurable"),
+-            "acct-1",
+-            3260,
++            (Stopped, Some("terminal:ci:unmeasurable")),
++            ("acct-1", 3260),
+             Some(Ci::Unmeasurable),
+         ),
+-        card(6, 1, Landed, None, "acct-1", 3210, None),
+-        card(7, 1, Landed, None, "acct-1", 3160, None),
+-        card(8, 1, Landed, None, "acct-1", 3070, Some(Ci::Waiting)),
+-        card(9, 1, Landed, None, "acct-1", 3020, Some(Ci::Failure)),
++        card(6, 1, (Landed, None), ("acct-1", 3210), None),
++        card(7, 1, (Landed, None), ("acct-1", 3160), None),
++        card(8, 1, (Landed, None), ("acct-1", 3070), Some(Ci::Waiting)),
++        card(9, 1, (Landed, None), ("acct-1", 3020), Some(Ci::Failure)),
+         card(
+             10,
+             1,
+-            Failed,
+-            Some("terminal:push:failed:git"),
+-            "acct-1",
+-            2970,
++            (Failed, Some("terminal:push:failed:git")),
++            ("acct-1", 2970),
+             Some(Ci::PushFailed),
+         ),
+-        card(11, 2, Running, None, "acct-2", 1790, None),
++        card(11, 2, (Running, None), ("acct-2", 1790), None),
+         card(
+             12,
+             1,
+-            Failed,
+-            Some("terminal:close:failed:rc=1 x"),
+-            "acct-1",
+-            2830,
++            (Failed, Some("terminal:close:failed:rc=1 x")),
++            ("acct-1", 2830),
+             Some(Ci::CloseFailed),
+         ),
+         card(
+             13,
+             1,
+-            Stopped,
+-            Some("terminal:unreadable"),
+-            "acct-1",
+-            2790,
++            (Stopped, Some("terminal:unreadable")),
++            ("acct-1", 2790),
+             Some(Ci::Unreadable),
+         ),
+     ]
+diff --git a/crates/tsuzuri-core/tests/pclosed.rs b/crates/tsuzuri-core/tests/pclosed.rs
+index 6f2eda59d093111a4f135add80417da23f679e32..55eeac08956a32a1baec1422020676058a3e80de 100644
+--- a/crates/tsuzuri-core/tests/pclosed.rs
++++ b/crates/tsuzuri-core/tests/pclosed.rs
+@@ -94,20 +94,7 @@ fn events() -> String {
+         ),
+         created("06:00", "cs.3-20260927T060000Z"),
+         stage("06:30", "cs.3-20260927T060000Z", "Gated", Some("verdict:PASS")),
+-        ev(
+-            "2026-09-26T18:00:00Z",
+-            "RunCreated",
+-            "cs.4-20260926T180000Z",
+-            Some("Intake"),
+-            None,
+-        ),
+-        ev(
+-            "2026-09-26T18:05:00Z",
+-            "QuestionRaised",
+-            "cs.4-20260926T180000Z",
+-            None,
+-            None,
+-        ),
++        events_cs4(),
+         created("09:00", "cs.5-20260927T090000Z"),
+         stage("09:10", "cs.5-20260927T090000Z", "Gated", Some("verdict:FAIL")),
+         created("10:00", "cs.5-20260927T100000Z"),
+@@ -140,15 +127,31 @@ fn events() -> String {
+     .join("\n")
+ }
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
++/// 節の event log の cs.4 の 2 行（前の日の RunCreated と QuestionRaised）。
++fn events_cs4() -> String {
++    [
++        ev(
++            "2026-09-26T18:00:00Z",
++            "RunCreated",
++            "cs.4-20260926T180000Z",
++            Some("Intake"),
++            None,
++        ),
++        ev(
++            "2026-09-26T18:05:00Z",
++            "QuestionRaised",
++            "cs.4-20260926T180000Z",
++            None,
++            None,
++        ),
++    ]
++    .join("\n")
++}
++
+ fn card(
+     id: &str,
+     runs: u32,
+-    stage: Stage,
+-    reason: Option<&str>,
++    (stage, reason): (Stage, Option<&str>),
+     account: Option<&str>,
+     elapsed: Option<u64>,
+ ) -> PipelineCard {
+@@ -173,21 +176,19 @@ fn cards(b: &Board) -> &[PipelineCard] {
+ /// 台帳が読めるときも読めないときも同じ札（cs.5・cs.6・cs.7・cs.8）。
+ fn shared() -> [PipelineCard; 4] {
+     [
+-        card("cs.5", 2, Stage::Landed, None, None, Some(5400)),
++        card("cs.5", 2, (Stage::Landed, None), None, Some(5400)),
+         card(
+             "cs.6",
+             1,
+-            Stage::Failed,
+-            Some("verdict:FAIL,account:acct-2"),
++            (Stage::Failed, Some("verdict:FAIL,account:acct-2")),
+             Some("acct-2"),
+             Some(12000),
+         ),
+-        card("cs.7", 1, Stage::Running, None, None, Some(1800)),
++        card("cs.7", 1, (Stage::Running, None), None, Some(1800)),
+         card(
+             "cs.8",
+             1,
+-            Stage::Failed,
+-            Some("verdict:INCONCLUSIVE"),
++            (Stage::Failed, Some("verdict:INCONCLUSIVE")),
+             None,
+             Some(16140),
+         ),
+@@ -202,21 +203,31 @@ fn pclosed_board_settles_closed_beads() {
+     let b = board(&ledger(), &events(), NOW);
+     let [cs5, cs6, cs7, cs8] = shared();
+     let want = vec![
+-        card("cs.1", 1, Stage::Landed, Some(CS1_HEAD), None, Some(14280)),
++        card(
++            "cs.1",
++            1,
++            (Stage::Landed, Some(CS1_HEAD)),
++            None,
++            Some(14280),
++        ),
+         card(
+             "cs.2",
+             1,
+-            Stage::Landed,
+-            Some("closed:superseded by cs.6"),
++            (Stage::Landed, Some("closed:superseded by cs.6")),
+             Some("acct-1"),
+             Some(17940),
+         ),
+-        card("cs.3", 1, Stage::Landed, Some("closed:"), None, Some(19800)),
++        card(
++            "cs.3",
++            1,
++            (Stage::Landed, Some("closed:")),
++            None,
++            Some(19800),
++        ),
+         card(
+             "cs.4",
+             1,
+-            Stage::Landed,
+-            Some("closed:withdrawn"),
++            (Stage::Landed, Some("closed:withdrawn")),
+             None,
+             Some(64500),
+         ),
+@@ -224,8 +235,14 @@ fn pclosed_board_settles_closed_beads() {
+         cs6,
+         cs7,
+         cs8,
+-        card("cs.9", 1, Stage::Landed, Some("closed:x"), None, Some(24600)),
+-        card("cs.12", 0, Stage::Queued, None, None, None),
++        card(
++            "cs.9",
++            1,
++            (Stage::Landed, Some("closed:x")),
++            None,
++            Some(24600),
++        ),
++        card("cs.12", 0, (Stage::Queued, None), None, None),
+     ];
+     assert_eq!(cards(&b), want.as_slice());
+     assert_eq!(b.unmapped, 0);
+@@ -305,14 +322,19 @@ fn pclosed_board_without_ledger() {
+         card(
+             "cs.1",
+             1,
+-            Stage::Failed,
+-            Some("verdict:FAIL kind:other"),
++            (Stage::Failed, Some("verdict:FAIL kind:other")),
+             None,
+             Some(14280),
+         ),
+-        card("cs.2", 1, Stage::Running, None, Some("acct-1"), Some(17940)),
+-        card("cs.3", 1, Stage::Gated, None, None, Some(19800)),
+-        card("cs.4", 1, Stage::Questioned, None, None, Some(64500)),
++        card(
++            "cs.2",
++            1,
++            (Stage::Running, None),
++            Some("acct-1"),
++            Some(17940),
++        ),
++        card("cs.3", 1, (Stage::Gated, None), None, Some(19800)),
++        card("cs.4", 1, (Stage::Questioned, None), None, Some(64500)),
+         cs5,
+         cs6,
+         cs7,
+diff --git a/crates/tsuzuri-core/tests/pkac.rs b/crates/tsuzuri-core/tests/pkac.rs
+index 4c51198416af200621d64ab9f4f03ef673444b7d..1b21923e1ba066341844d6e0803ffcaefd15bb5b 100644
+--- a/crates/tsuzuri-core/tests/pkac.rs
++++ b/crates/tsuzuri-core/tests/pkac.rs
+@@ -145,6 +145,11 @@ fn pkac_doc_names_park() {
+     // 宣言の Tier9 に同じ名の区画の行が無ければ、名 Tier8 の区画の行だけでは区画にならない。
+     let t = all(&[park_row("Tier8", Some("park"))]);
+     assert_eq!(parks(&t), Vec::<String>::new());
++    parks_empty(map);
++}
++
++/// doctor か host.toml の字が無い 3 つの組は区画が空で、電文に鍵 parks を置かない。
++fn parks_empty(map: BTreeMap<String, tsuzuri_core::account::project::ProjectTexts>) {
+     // doctor か host.toml の字が無ければ空。
+     for t in [
+         host(None, Some(HOST_TOML)),
+diff --git a/crates/tsuzuri-core/tests/plimit.rs b/crates/tsuzuri-core/tests/plimit.rs
+index abdd73d634bb701e4332a11dff0f271ea98c432e..7207e0253dffb96f7a0a702757457c9df16842e0 100644
+--- a/crates/tsuzuri-core/tests/plimit.rs
++++ b/crates/tsuzuri-core/tests/plimit.rs
+@@ -222,81 +222,7 @@ fn plimit_const_names_vessel_word() {
+ #[test]
+ fn plimit_marks_on_both_times() {
+     let host = host_with(Some(USAGE_B));
+-    let cases = [
+-        (
+-            AT_1125,
+-            vec![
+-                pl(
+-                    "pl-5-20260927T090000Z",
+-                    Some("acct-1"),
+-                    SeatState::Limit,
+-                    None,
+-                    hm(10, 30),
+-                ),
+-                pl(
+-                    "pl-1-20260927T110000Z",
+-                    Some("acct-1"),
+-                    SeatState::Run,
+-                    Some(Stage::Running),
+-                    hm(11, 1),
+-                ),
+-                pl(
+-                    "pl-2-20260927T111000Z",
+-                    Some("acct-2"),
+-                    SeatState::Limit,
+-                    None,
+-                    hm(11, 20),
+-                ),
+-                pl(
+-                    "pl-3-20260927T112000Z",
+-                    None,
+-                    SeatState::Wait,
+-                    Some(Stage::Running),
+-                    hm(11, 21),
+-                ),
+-                pl(
+-                    "pl-4-20260927T112500Z",
+-                    None,
+-                    SeatState::Wait,
+-                    Some(Stage::Running),
+-                    hm(11, 25),
+-                ),
+-            ],
+-        ),
+-        (
+-            AT_1200,
+-            vec![
+-                pl(
+-                    "pl-1-20260927T110000Z",
+-                    Some("acct-1"),
+-                    SeatState::Limit,
+-                    None,
+-                    hm(11, 40),
+-                ),
+-                pl(
+-                    "pl-2-20260927T111000Z",
+-                    Some("acct-1"),
+-                    SeatState::Run,
+-                    Some(Stage::Running),
+-                    hm(11, 30),
+-                ),
+-                pl(
+-                    "pl-3-20260927T112000Z",
+-                    None,
+-                    SeatState::Wait,
+-                    Some(Stage::Running),
+-                    hm(11, 21),
+-                ),
+-                pl(
+-                    "pl-6-20260927T114500Z",
+-                    Some("acct-2"),
+-                    SeatState::Limit,
+-                    None,
+-                    hm(11, 50),
+-                ),
+-            ],
+-        ),
+-    ];
++    let cases = [(AT_1125, pipes_1125()), (AT_1200, pipes_1200())];
+     assert_eq!(AT_1125, 1_790_508_300);
+     assert_eq!(AT_1200, 1_790_510_400);
+     for (now, pipes) in cases {
+@@ -323,6 +249,81 @@ fn plimit_marks_on_both_times() {
+     }
+ }
+ 
++/// 今 11:25 の pipeline の行（5 行）。
++fn pipes_1125() -> Vec<SessionLine> {
++    vec![
++        pl(
++            "pl-5-20260927T090000Z",
++            Some("acct-1"),
++            SeatState::Limit,
++            None,
++            hm(10, 30),
++        ),
++        pl(
++            "pl-1-20260927T110000Z",
++            Some("acct-1"),
++            SeatState::Run,
++            Some(Stage::Running),
++            hm(11, 1),
++        ),
++        pl(
++            "pl-2-20260927T111000Z",
++            Some("acct-2"),
++            SeatState::Limit,
++            None,
++            hm(11, 20),
++        ),
++        pl(
++            "pl-3-20260927T112000Z",
++            None,
++            SeatState::Wait,
++            Some(Stage::Running),
++            hm(11, 21),
++        ),
++        pl(
++            "pl-4-20260927T112500Z",
++            None,
++            SeatState::Wait,
++            Some(Stage::Running),
++            hm(11, 25),
++        ),
++    ]
++}
++
++/// 今 12:00 の pipeline の行（4 行）。
++fn pipes_1200() -> Vec<SessionLine> {
++    vec![
++        pl(
++            "pl-1-20260927T110000Z",
++            Some("acct-1"),
++            SeatState::Limit,
++            None,
++            hm(11, 40),
++        ),
++        pl(
++            "pl-2-20260927T111000Z",
++            Some("acct-1"),
++            SeatState::Run,
++            Some(Stage::Running),
++            hm(11, 30),
++        ),
++        pl(
++            "pl-3-20260927T112000Z",
++            None,
++            SeatState::Wait,
++            Some(Stage::Running),
++            hm(11, 21),
++        ),
++        pl(
++            "pl-6-20260927T114500Z",
++            Some("acct-2"),
++            SeatState::Limit,
++            None,
++            hm(11, 50),
++        ),
++    ]
++}
++
+ #[test]
+ fn plimit_seat_and_usage_apart() {
+     let b = session_lines(&host_with(Some(USAGE_B)), &projects(), AT_1200);
+diff --git a/crates/tsuzuri-core/tests/qgate.rs b/crates/tsuzuri-core/tests/qgate.rs
+index d585fb2b5698cbb392018638e81e3a2c7ebbde92..1b24950ea3389c77e32fe0a7a5d7f4c1e3d97bae 100644
+--- a/crates/tsuzuri-core/tests/qgate.rs
++++ b/crates/tsuzuri-core/tests/qgate.rs
+@@ -315,6 +315,11 @@ fn qgate_fixture_four_cases() {
+             assert!(!ids.iter().any(|i| i == hidden), "{name} が {hidden} を名指す");
+         }
+     }
++    four_each(g);
++}
++
++/// 4 つの組を名で 1 つずつ引いて判じる。
++fn four_each(g: Graph) {
+     let one = case("one-undisposed");
+     let d = BUNDLE_DIGEST(&g, &case_touches(&one));
+     assert_eq!(
+@@ -435,6 +440,11 @@ fn qgate_reasons_in_order() {
+         deny(Why::NoTouches, &[], None)
+     );
+ 
++    reasons_rest(g, d);
++}
++
++/// 処分にならない値・digest の鍵・字 1 つの touches・1 つの command の 2 つの下書きの理由。
++fn reasons_rest(g: Graph, d: String) {
+     // 処分にならない not-relevant の値。
+     for v in [json!(""), json!("  "), json!(1)] {
+         let mut m = base(&g);
+@@ -619,63 +629,68 @@ fn qgate_output_shape() {
+     let digest = "0123456789abcdef";
+     for why in Why::ALL {
+         for ids in [Vec::new(), strings(&["ADR-2", "R-1"])] {
+-            for d in [None, Some(digest.to_string())] {
+-                let gates = [
+-                    (
+-                        "問いの起票の門は止める（",
+-                        Gate::Deny {
+-                            why,
+-                            ids: ids.clone(),
+-                            digest: d.clone(),
+-                        },
+-                    ),
+-                    (
+-                        "問いの起票の門は まだ分からない（",
+-                        Gate::Unknown {
+-                            why,
+-                            ids: ids.clone(),
+-                            digest: d.clone(),
+-                        },
+-                    ),
+-                ];
+-                for (head, gate) in gates {
+-                    let text = OUTPUT(&gate).unwrap_or_else(|| panic!("{gate:?} の答え"));
+-                    let v: Value = serde_json::from_str(&text).expect("答えは JSON");
+-                    let o = v.as_object().expect("object");
+-                    assert_eq!(o.keys().collect::<Vec<_>>(), ["hookSpecificOutput"]);
+-                    let inner = o["hookSpecificOutput"].as_object().expect("object");
+-                    let mut keys: Vec<&str> = inner.keys().map(String::as_str).collect();
+-                    keys.sort_unstable();
+-                    assert_eq!(
+-                        keys,
+-                        ["hookEventName", "permissionDecision", "permissionDecisionReason"]
+-                    );
+-                    assert_eq!(inner["hookEventName"], "PreToolUse");
+-                    assert_eq!(inner["permissionDecision"], "deny");
+-                    let reason = inner["permissionDecisionReason"].as_str().expect("字");
+-                    let mut want = format!("{head}{}）", why.word());
+-                    if !ids.is_empty() {
+-                        want.push_str(" id =");
+-                        for id in &ids {
+-                            want.push(' ');
+-                            want.push_str(id);
+-                        }
+-                    }
+-                    if let Some(d) = &d {
+-                        want.push_str(" 要約値 = ");
+-                        want.push_str(d);
+-                    }
+-                    want.push_str(" 次の一手 = ");
+-                    let rest = reason
+-                        .strip_prefix(want.as_str())
+-                        .unwrap_or_else(|| panic!("{reason} は {want} で始まらない"));
+-                    assert!(!rest.is_empty(), "{reason}");
+-                    assert!(!rest.contains("id =") && !rest.contains("要約値 ="), "{reason}");
+-                    if ids.is_empty() {
+-                        assert!(!reason.contains("id ="), "{reason}");
+-                    }
++            output_cases(why, ids, digest);
++        }
++    }
++}
++
++/// 1 つの理由と id の列の、digest の有る無しの 2 つの門の答えの形を見る。
++fn output_cases(why: Why, ids: Vec<String>, digest: &str) {
++    for d in [None, Some(digest.to_string())] {
++        let gates = [
++            (
++                "問いの起票の門は止める（",
++                Gate::Deny {
++                    why,
++                    ids: ids.clone(),
++                    digest: d.clone(),
++                },
++            ),
++            (
++                "問いの起票の門は まだ分からない（",
++                Gate::Unknown {
++                    why,
++                    ids: ids.clone(),
++                    digest: d.clone(),
++                },
++            ),
++        ];
++        for (head, gate) in gates {
++            let text = OUTPUT(&gate).unwrap_or_else(|| panic!("{gate:?} の答え"));
++            let v: Value = serde_json::from_str(&text).expect("答えは JSON");
++            let o = v.as_object().expect("object");
++            assert_eq!(o.keys().collect::<Vec<_>>(), ["hookSpecificOutput"]);
++            let inner = o["hookSpecificOutput"].as_object().expect("object");
++            let mut keys: Vec<&str> = inner.keys().map(String::as_str).collect();
++            keys.sort_unstable();
++            assert_eq!(
++                keys,
++                ["hookEventName", "permissionDecision", "permissionDecisionReason"]
++            );
++            assert_eq!(inner["hookEventName"], "PreToolUse");
++            assert_eq!(inner["permissionDecision"], "deny");
++            let reason = inner["permissionDecisionReason"].as_str().expect("字");
++            let mut want = format!("{head}{}）", why.word());
++            if !ids.is_empty() {
++                want.push_str(" id =");
++                for id in &ids {
++                    want.push(' ');
++                    want.push_str(id);
+                 }
+             }
++            if let Some(d) = &d {
++                want.push_str(" 要約値 = ");
++                want.push_str(d);
++            }
++            want.push_str(" 次の一手 = ");
++            let rest = reason
++                .strip_prefix(want.as_str())
++                .unwrap_or_else(|| panic!("{reason} は {want} で始まらない"));
++            assert!(!rest.is_empty(), "{reason}");
++            assert!(!rest.contains("id =") && !rest.contains("要約値 ="), "{reason}");
++            if ids.is_empty() {
++                assert!(!reason.contains("id ="), "{reason}");
++            }
+         }
+     }
+ }
+diff --git a/crates/tsuzuri-core/tests/runsdoc.rs b/crates/tsuzuri-core/tests/runsdoc.rs
+index d1db6321c07d2a7c741516ea00c167b38e04a1ac..ddd3eea008db157ec7c3aefac1f211ffa6100001 100644
+--- a/crates/tsuzuri-core/tests/runsdoc.rs
++++ b/crates/tsuzuri-core/tests/runsdoc.rs
+@@ -167,6 +167,13 @@ fn runsdoc_hub2_three_runs() {
+         }
+     );
+ 
++    hub2_second(lines);
++
++    hub2_third(lines);
++}
++
++/// 走行 t3-hub.2 の 2 つ目（段 5 つ・口座 acct-1）。
++fn hub2_second(lines: &[RunLine]) {
+     let second = &lines[1];
+     assert_eq!(second.started_at, Some(1790493470));
+     assert_eq!(second.account.as_deref(), Some("acct-1"));
+@@ -197,7 +204,10 @@ fn runsdoc_hub2_three_runs() {
+             cache_create: 43725,
+         }
+     );
++}
+ 
++/// 走行 t3-hub.2 の 3 つ目（段 7 つ・着地まで）。
++fn hub2_third(lines: &[RunLine]) {
+     let third = &lines[2];
+     assert_eq!(third.started_at, Some(1790493699));
+     assert_eq!(third.account.as_deref(), Some("acct-1"));
+diff --git a/crates/tsuzuri-core/tests/seat.rs b/crates/tsuzuri-core/tests/seat.rs
+index a8bc8672a2e734682a266bac63d6491ab4000d9f..8b2ec3578f09a9ccf1322791906eb65660740ab2 100644
+--- a/crates/tsuzuri-core/tests/seat.rs
++++ b/crates/tsuzuri-core/tests/seat.rs
+@@ -273,6 +273,11 @@ fn seatcard_group_from_declaration_and_doctor() {
+         panic!("群が Unknown");
+     };
+     assert!(g.remaining.is_empty());
++    group_unknown(&c);
++}
++
++/// 群の宣言や doctor の字が群を引けなければ、群は「まだ分からない」。
++fn group_unknown(c: &Case) {
+     // 群の宣言の字が無い・1 行に収まらない配列の群しか含まない・doctor に群の行が無い・doctor が無い。
+     let multi = "[[account-group]]\nname = \"g-a\"\nanchors = [\"/srv/host-1/proj-1\",\n  \"/srv/host-1/proj-0\"]\n";
+     assert_eq!(group_name(multi, "/srv/host-1/proj-1"), None);
+@@ -394,6 +399,11 @@ fn seatcard_moves_oldest_first() {
+ fn seatcard_unread_text_touches_only_its_fields() {
+     let c = case("run");
+     let full = built(&c);
++    unread_each(&c, &full);
++}
++
++/// 字を 1 つずつ無くした card は、その字の欄だけが変わる。
++fn unread_each(c: &Case, full: &SeatCard) {
+     type Edit = fn(&mut SeatTexts);
+     let edits: [(&str, Edit); 6] = [
+         ("tick_status", |t| t.tick_status = None),
+@@ -625,6 +635,11 @@ fn seatcard_fixture_names_and_size() {
+             }
+         }
+     }
++    fixture_names(accounts, hosts);
++}
++
++/// 口座の名はどれも acct- で、host の名はどれも host- で始まる（どちらの列も空でない）。
++fn fixture_names(accounts: Vec<String>, hosts: Vec<String>) {
+     assert!(!accounts.is_empty() && !hosts.is_empty());
+     for a in &accounts {
+         assert!(a.starts_with("acct-"), "口座の名 {a}");
+diff --git a/crates/tsuzuri-core/tests/sgrace.rs b/crates/tsuzuri-core/tests/sgrace.rs
+index 19640e99ef7821bbe88713ca07ac71c836519887..0685107b6434958e0895105e9b094420c9ea24f8 100644
+--- a/crates/tsuzuri-core/tests/sgrace.rs
++++ b/crates/tsuzuri-core/tests/sgrace.rs
+@@ -286,6 +286,11 @@ fn sgrace_copies_refused_and_pressure() {
+             Reading::Unknown,
+         ),
+     ];
++    copies_each(forms);
++}
++
++/// 4 つの組と、群の名が引けない組と doctor の無い組で、10 の字の形の読みを card に写す。
++fn copies_each(forms: [(&str, Refused, Pressed); 10]) {
+     for name in SETS {
+         let c = case(name);
+         assert_eq!(c.card.refused, Reading::Known(None), "組 {name} の期待");

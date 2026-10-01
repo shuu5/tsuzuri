@@ -1,0 +1,1061 @@
+diff --git a/folio2/crates/folio/tests/constitution_range.rs b/folio2/crates/folio/tests/constitution_range.rs
+index d96c87f194d53068d56d5f74195a48ef2a772b4a..7b2b16fb52ce0e4535b687deb51b1fb71f2f4a54 100644
+--- a/folio2/crates/folio/tests/constitution_range.rs
++++ b/folio2/crates/folio/tests/constitution_range.rs
+@@ -554,6 +554,11 @@ fn f157_narrowed_range_is_pending_and_never_pass() {
+     );
+     assert_ne!(r.code, Some(0), "{}", r.all);
+ 
++    narrowed_retreat_and_skeleton();
++}
++
++/// 撤退条件の種類の狭めと、`folio init` の骨格の置き場での値域の狭めを見る。
++fn narrowed_retreat_and_skeleton() {
+     // ⑤ 撤退条件の種類から measure を外す（判断の記録の床は黙る）
+     let w = Work::new("retreat-narrowed");
+     w.mutate("retreat_kind: [spike, measure, ruling]", "retreat_kind: [spike, ruling]");
+diff --git a/folio2/crates/folio/tests/derive.rs b/folio2/crates/folio/tests/derive.rs
+index f616bf4066ce3ef5a334e84b091499eba105559c..0ea68f27f59ee0dbc2cfe70849a48d3dd9ee150b 100644
+--- a/folio2/crates/folio/tests/derive.rs
++++ b/folio2/crates/folio/tests/derive.rs
+@@ -289,6 +289,11 @@ fn f119_rows_it_cannot_write_are_unknown_and_nothing_is_written() {
+             "要素が文字列でない",
+         ),
+     ];
++    refuse_all(cases);
++}
++
++/// 書けない行の case ごとと、器の導出 file が無い置き場・symlink の設計ノートの置き場を撃ち、2 で何も書かないことを見る。
++fn refuse_all(cases: [(&str, &str, &str, &str); 9]) {
+     for (case, from, to, why) in cases {
+         let w = Work::anchor(&format!("refuse-{case}"));
+         // 名の昇順で先に来る、書ける設計ノート（全部か無しかを見る）
+diff --git a/folio2/crates/folio/tests/emit_rulings.rs b/folio2/crates/folio/tests/emit_rulings.rs
+index e1a8b0f091dd37c9c6f7a335eeb198fff40dc19b..6c81c67a5def37a2a5a3cd1462c8bf09262867bb 100644
+--- a/folio2/crates/folio/tests/emit_rulings.rs
++++ b/folio2/crates/folio/tests/emit_rulings.rs
+@@ -143,11 +143,7 @@ impl Drop for Work {
+ }
+ 
+ /// 手書きの期待の 1 行（欄の順・空白なし）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+-fn line(ruling: &str, form: &str, bead: &str, node: Option<&str>, file: &str, at: usize, field: &str) -> String {
++fn line(ruling: &str, form: &str, bead: &str, node: Option<&str>, (file, at, field): (&str, usize, &str)) -> String {
+     let node = node.map_or("null".to_string(), |n| format!("\"{n}\""));
+     format!("{{\"ruling\":\"{ruling}\",\"form\":\"{form}\",\"bead\":\"{bead}\",\"node\":{node},\"file\":\"{file}\",\"line\":{at},\"field\":\"{field}\"}}")
+ }
+@@ -213,7 +209,7 @@ fn f186_one_field_with_three_forms_gives_three_lines() {
+     w.set("rules.yaml", "{id: R-10,", "ruling", &format!("\"{THREE}\""));
+     let got = w.emit();
+     let r10: Vec<&String> = got.out.iter().filter(|l| l.contains("\"node\":\"R-10\"")).collect();
+-    let at = |ruling, form, bead| line(ruling, form, bead, Some("R-10"), "rules.yaml", 38, "thresholds[9].ruling");
++    let at = |ruling, form, bead| line(ruling, form, bead, Some("R-10"), ("rules.yaml", 38, "thresholds[9].ruling"));
+     assert_eq!(
+         r10,
+         [
+@@ -244,15 +240,15 @@ fn f186_every_line_has_the_seven_fields_and_the_null_node() {
+     w.write("design-note/decide.yaml", note);
+     let got = w.emit();
+     for want in [
+-        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", None, "constitution.yaml", 80, "meta.approval.ruling"),
+-        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("P-1"), "constitution.yaml", 130, "articles[0].amended_by[0].ruling"),
+-        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", Some("D-8"), "rules.yaml", 58, "discipline[7].ruling"),
+-        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("ADR-2"), "adr/ADR-2.yaml", 16, "approval.ruling"),
+-        line("f2-648 notes 2026-09-28 10:29 JST", "notes-time", "f2-648", None, "design-note/decide.yaml", 9, "meta.approval[0].ruling"),
+-        line("t3-hub.57.1:20260927T2357Z-1", "question", "t3-hub.57.1", None, "design-note/decide.yaml", 19, "sections[1].rows[0].ruling"),
+-        line("f2-648.1 notes 20:2x", "notes-time", "f2-648.1", None, "srs.yaml", 22, "meta.approval[2].stamp"),
+-        line("t3-hub.1", "bead", "t3-hub.1", None, "graph.yaml", 4, "meta.approval[1].stamp"),
+-        line("t3-hub.58:20260927T2357Z-1", "question", "t3-hub.58", None, "graph.yaml", 4, "meta.approval[1].stamp"),
++        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", None, ("constitution.yaml", 80, "meta.approval.ruling")),
++        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("P-1"), ("constitution.yaml", 130, "articles[0].amended_by[0].ruling")),
++        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", Some("D-8"), ("rules.yaml", 58, "discipline[7].ruling")),
++        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("ADR-2"), ("adr/ADR-2.yaml", 16, "approval.ruling")),
++        line("f2-648 notes 2026-09-28 10:29 JST", "notes-time", "f2-648", None, ("design-note/decide.yaml", 9, "meta.approval[0].ruling")),
++        line("t3-hub.57.1:20260927T2357Z-1", "question", "t3-hub.57.1", None, ("design-note/decide.yaml", 19, "sections[1].rows[0].ruling")),
++        line("f2-648.1 notes 20:2x", "notes-time", "f2-648.1", None, ("srs.yaml", 22, "meta.approval[2].stamp")),
++        line("t3-hub.1", "bead", "t3-hub.1", None, ("graph.yaml", 4, "meta.approval[1].stamp")),
++        line("t3-hub.58:20260927T2357Z-1", "question", "t3-hub.58", None, ("graph.yaml", 4, "meta.approval[1].stamp")),
+     ] {
+         assert!(got.out.contains(&want), "{want}\n{:#?}", got.out);
+     }
+@@ -323,6 +319,16 @@ fn f186_the_exit_code_is_the_plain_floor_and_stdout_is_json_only() {
+     assert!(emit.err.lines().any(|l| l == summary) && emit.err.lines().any(|l| l.starts_with("# ")), "{}", emit.err);
+     assert!(!plain.out.iter().any(|l| l.starts_with('{')));
+ 
++    other_copies(json);
++
++    for other in ["--emit-amends", "--freeze-anchor", "--freeze-ids", "--freeze-start", "--freeze-adrs"] {
++        let r = base.run(&["--emit-rulings", other]);
++        assert!(r.code != 0 && r.out.is_empty() && r.err.contains("cannot be used with"), "{other}: {}", r.err);
++    }
++}
++
++/// 違反・骨格の印・索引の床だけが落ちる写しと実の置き場の、終了コードと標準出力の行を見る。
++fn other_copies(json: impl Fn(&Run) -> bool) {
+     let w = Work::new("rc-violation", FLOOR_BASE);
+     w.set("rules.yaml", "{id: R-10,", "ruling", "G16=A（受入 (f)）");
+     let (plain, emit) = (w.run(&[]), w.emit());
+@@ -353,11 +359,6 @@ fn f186_the_exit_code_is_the_plain_floor_and_stdout_is_json_only() {
+     let (plain, emit) = (real.run(&[]), real.emit());
+     assert_eq!(plain.code, emit.code);
+     assert!(json(&emit) && !emit.out.is_empty());
+-
+-    for other in ["--emit-amends", "--freeze-anchor", "--freeze-ids", "--freeze-start", "--freeze-adrs"] {
+-        let r = base.run(&["--emit-rulings", other]);
+-        assert!(r.code != 0 && r.out.is_empty() && r.err.contains("cannot be used with"), "{other}: {}", r.err);
+-    }
+ }
+ 
+ /// 決定の欄を持つ file の、語頭の台帳の id の頭の字を全部大字にする（歯の側の別の走査）。
+diff --git a/folio2/crates/folio/tests/findings.rs b/folio2/crates/folio/tests/findings.rs
+index fd08e8011a12ff3a6f1e0a8b5a2423f2f7bfaae8..1f73cc9938631de6eb22a308c580abb20a1506d9 100644
+--- a/folio2/crates/folio/tests/findings.rs
++++ b/folio2/crates/folio/tests/findings.rs
+@@ -1236,6 +1236,11 @@ fn findings_refute_on_the_real_source_builds_a_bundle_the_check_reads() {
+         fs::write(vp_dir.join("findings.yaml"), text).unwrap();
+     }
+ 
++    refute_and_check(td, dir, site, out);
++}
++
++/// 実の正本の写しで反証の束を組み、反証役の結果を置いて --check が 0 になることを見る。
++fn refute_and_check(td: PathBuf, dir: PathBuf, site: PathBuf, out: PathBuf) {
+     let refute = folio_ceiling_no_faces(&dir, &out, &["--refute"]);
+     assert_outcome(&refute, "folio ceiling --refute", 0, &[]);
+     assert!(
+diff --git a/folio2/crates/folio/tests/floor_cases.rs b/folio2/crates/folio/tests/floor_cases.rs
+index e19822c8def269c013cf322a9ccfd52b8568085c..54105612c8be5493836d99e475dcb777b9087886 100644
+--- a/folio2/crates/folio/tests/floor_cases.rs
++++ b/folio2/crates/folio/tests/floor_cases.rs
+@@ -304,6 +304,29 @@ fn reseal(dir: &Path) -> Result<(), String> {
+     let Ok(entries) = fs::read_dir(dir.join("adr")) else {
+         return Ok(());
+     };
++    seal_rows(entries, &mut rows)?;
++    rows.sort();
++    let rows = rows
++        .into_iter()
++        .map(|(_, id, sum)| Value::Map(vec![(s("id"), s(&id)), (s("sum"), s(&sum))]))
++        .collect();
++    let mut tree = Value::Map(vec![
++        (s("kind"), s("adr-seals")),
++        (s("digest_algo"), s("sha256-json-1")),
++        (
++            s("outside"),
++            Value::Seq(vec![s("status"), s("superseded_by")]),
++        ),
++        (s("rows"), Value::Seq(rows)),
++    ]);
++    let digest = digest_of(&tree)?;
++    map_set(&mut tree, "digest", s(&digest))?;
++    let text = yaml::write(&tree, "# floor_cases の封（runner が folio を撃つ前ごとに組み直す）")?;
++    io(fs::write(&path, text), "封の一覧を書けない")
++}
++
++/// adr/ の発効した判断の記録ごとに、封の行（番号・id・要約値）を `rows` に足す。
++fn seal_rows(entries: fs::ReadDir, rows: &mut Vec<(u64, String, String)>) -> Result<(), String> {
+     for entry in entries {
+         let entry = io(entry, "adr/ を読めない")?;
+         let name = entry.file_name().to_string_lossy().into_owned();
+@@ -342,24 +365,7 @@ fn reseal(dir: &Path) -> Result<(), String> {
+         let sum = sha256::hex(yaml::canonical(&Value::Map(body))?.as_bytes());
+         rows.push((n, id.to_string(), sum));
+     }
+-    rows.sort();
+-    let rows = rows
+-        .into_iter()
+-        .map(|(_, id, sum)| Value::Map(vec![(s("id"), s(&id)), (s("sum"), s(&sum))]))
+-        .collect();
+-    let mut tree = Value::Map(vec![
+-        (s("kind"), s("adr-seals")),
+-        (s("digest_algo"), s("sha256-json-1")),
+-        (
+-            s("outside"),
+-            Value::Seq(vec![s("status"), s("superseded_by")]),
+-        ),
+-        (s("rows"), Value::Seq(rows)),
+-    ]);
+-    let digest = digest_of(&tree)?;
+-    map_set(&mut tree, "digest", s(&digest))?;
+-    let text = yaml::write(&tree, "# floor_cases の封（runner が folio を撃つ前ごとに組み直す）")?;
+-    io(fs::write(&path, text), "封の一覧を書けない")
++    Ok(())
+ }
+ 
+ fn folio(dir: &Path, flags: &[&str], env: &[(&str, PathBuf)]) -> Result<Run, String> {
+@@ -434,212 +440,245 @@ impl State<'_> {
+                 dump(&f, &doc)?;
+                 continue;
+             }
+-            if flag(mu, "git_snapshot") || flag(mu, "git_commit") {
+-                if !td.join(".git").exists() {
+-                    gitc(td, &["init", "-q"])?;
+-                }
+-                git_commit(td)?;
+-                continue;
+-            }
+-            if flag(mu, "git_ignore_anchors") {
+-                io(
+-                    fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
+-                    ".gitignore を書けない",
+-                )?;
+-                gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
+-                git_commit(td)?;
+-                continue;
+-            }
+-            if flag(mu, "git_nested") {
+-                gitc(&self.work, &["init", "-q"])?;
+-                git_commit(&self.work)?;
++            if self.apply_git(mu)? {
+                 continue;
+             }
+-            if flag(mu, "git_ignore_anchors_keep_tracked") {
+-                io(
+-                    fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
+-                    ".gitignore を書けない",
+-                )?;
+-                git_commit(td)?;
++            if self.apply_repo(mu)? {
+                 continue;
+             }
+-            if flag(mu, "git_ignore_pattern") {
+-                let pattern = text(mu, "git_ignore_pattern")?;
+-                io(
+-                    fs::write(td.join(".gitignore"), format!("{pattern}\n")),
+-                    ".gitignore を書けない",
+-                )?;
+-                git_commit(td)?;
++            if self.apply_tree(mu)? {
+                 continue;
+             }
+-            if flag(mu, "git_reinit_no_commit") {
+-                io(fs::remove_dir_all(td.join(".git")), ".git を消せない")?;
++            self.apply_file(mu)?;
++        }
++        Ok(())
++    }
++
++    /// git の段（commit・ignore・入れ子の版管理・始め直し・orphan）を当てる。当てたら true。
++    fn apply_git(&self, mu: &Value) -> Result<bool, String> {
++        let td = self.td;
++        if flag(mu, "git_snapshot") || flag(mu, "git_commit") {
++            if !td.join(".git").exists() {
+                 gitc(td, &["init", "-q"])?;
+-                continue;
+             }
+-            if flag(mu, "git_orphan_drop_anchors") {
+-                gitc(td, &["checkout", "-q", "--orphan", "clean"])?;
+-                gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
+-                io(
+-                    fs::remove_dir_all(self.work.join("anchors")),
+-                    "anchors/ を消せない",
+-                )?;
+-                git_commit(td)?;
+-                continue;
+-            }
+-            if flag(mu, "git_shallow_clone") {
+-                let sh = td.join("shallow");
+-                let from = format!("file://{}", td.display());
+-                let to = sh.display().to_string();
+-                git_raw(td, &["clone", "-q", "--depth", "1", &from, &to])?;
+-                self.work = sh.join("design-intent");
+-                continue;
++            git_commit(td)?;
++            return Ok(true);
++        }
++        if flag(mu, "git_ignore_anchors") {
++            io(
++                fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
++                ".gitignore を書けない",
++            )?;
++            gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
++            git_commit(td)?;
++            return Ok(true);
++        }
++        if flag(mu, "git_nested") {
++            gitc(&self.work, &["init", "-q"])?;
++            git_commit(&self.work)?;
++            return Ok(true);
++        }
++        if flag(mu, "git_ignore_anchors_keep_tracked") {
++            io(
++                fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
++                ".gitignore を書けない",
++            )?;
++            git_commit(td)?;
++            return Ok(true);
++        }
++        if flag(mu, "git_ignore_pattern") {
++            let pattern = text(mu, "git_ignore_pattern")?;
++            io(
++                fs::write(td.join(".gitignore"), format!("{pattern}\n")),
++                ".gitignore を書けない",
++            )?;
++            git_commit(td)?;
++            return Ok(true);
++        }
++        if flag(mu, "git_reinit_no_commit") {
++            io(fs::remove_dir_all(td.join(".git")), ".git を消せない")?;
++            gitc(td, &["init", "-q"])?;
++            return Ok(true);
++        }
++        if flag(mu, "git_orphan_drop_anchors") {
++            gitc(td, &["checkout", "-q", "--orphan", "clean"])?;
++            gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
++            io(
++                fs::remove_dir_all(self.work.join("anchors")),
++                "anchors/ を消せない",
++            )?;
++            git_commit(td)?;
++            return Ok(true);
++        }
++        Ok(false)
++    }
++
++    /// 写しの置き場を替える段（浅い clone・空の `GIT_DIR`・別の写しでの凍結）を当てる。当てたら true。
++    fn apply_repo(&mut self, mu: &Value) -> Result<bool, String> {
++        let td = self.td;
++        if flag(mu, "git_shallow_clone") {
++            let sh = td.join("shallow");
++            let from = format!("file://{}", td.display());
++            let to = sh.display().to_string();
++            git_raw(td, &["clone", "-q", "--depth", "1", &from, &to])?;
++            self.work = sh.join("design-intent");
++            return Ok(true);
++        }
++        if flag(mu, "env_git_dir_empty") {
++            let em = td.join("empty-repo");
++            io(fs::create_dir(&em), "empty-repo を作れない")?;
++            gitc(&em, &["init", "-q"])?;
++            self.env = vec![
++                ("GIT_DIR", em.join(".git")),
++                ("GIT_WORK_TREE", td.to_path_buf()),
++            ];
++            return Ok(true);
++        }
++        if flag(mu, "refreeze_in_fresh_repo") {
++            let fr = td.join("fresh");
++            let fresh = fr.join("design-intent");
++            if fresh.exists() {
++                return Err("fresh/design-intent が既に在る".to_string());
+             }
+-            if flag(mu, "env_git_dir_empty") {
+-                let em = td.join("empty-repo");
+-                io(fs::create_dir(&em), "empty-repo を作れない")?;
+-                gitc(&em, &["init", "-q"])?;
+-                self.env = vec![
+-                    ("GIT_DIR", em.join(".git")),
+-                    ("GIT_WORK_TREE", td.to_path_buf()),
+-                ];
+-                continue;
++            copy_tree(&self.work, &fresh)?;
++            copy_external_schema(&fr)?;
++            let _ = fs::remove_dir_all(fresh.join("anchors"));
++            gitc(&fr, &["init", "-q"])?;
++            git_commit(&fr)?;
++            let fz = folio(&fresh, &["--freeze-anchor"], &self.env)?;
++            if fz.code == 0 {
++                self.note += " ／ 別の写しでの凍結が rc 0（列の始め直しが通った）";
+             }
+-            if flag(mu, "refreeze_in_fresh_repo") {
+-                let fr = td.join("fresh");
+-                let fresh = fr.join("design-intent");
+-                if fresh.exists() {
+-                    return Err("fresh/design-intent が既に在る".to_string());
+-                }
+-                copy_tree(&self.work, &fresh)?;
+-                copy_external_schema(&fr)?;
+-                let _ = fs::remove_dir_all(fresh.join("anchors"));
+-                gitc(&fr, &["init", "-q"])?;
+-                git_commit(&fr)?;
+-                let fz = folio(&fresh, &["--freeze-anchor"], &self.env)?;
+-                if fz.code == 0 {
+-                    self.note += " ／ 別の写しでの凍結が rc 0（列の始め直しが通った）";
+-                }
+-                if fresh.join("anchors").is_dir() {
+-                    for entry in io(fs::read_dir(fresh.join("anchors")), "anchors/ を読めない")?
+-                    {
+-                        let entry = io(entry, "anchors/ を読めない")?;
+-                        let name = entry.file_name();
+-                        if name.to_string_lossy().ends_with(".yaml") {
+-                            io(
+-                                fs::copy(entry.path(), self.work.join("anchors").join(&name)),
+-                                "anchor を持ち帰れない",
+-                            )?;
+-                        }
++            if fresh.join("anchors").is_dir() {
++                for entry in io(fs::read_dir(fresh.join("anchors")), "anchors/ を読めない")?
++                {
++                    let entry = io(entry, "anchors/ を読めない")?;
++                    let name = entry.file_name();
++                    if name.to_string_lossy().ends_with(".yaml") {
++                        io(
++                            fs::copy(entry.path(), self.work.join("anchors").join(&name)),
++                            "anchor を持ち帰れない",
++                        )?;
+                     }
+                 }
+-                continue;
+             }
+-            if let Some(af) = mu.get("anchor_forge") {
+-                let f = self.work.join(text(af, "file")?);
+-                let mut doc = load(&f)?;
+-                mutate(
+-                    &mut doc,
+-                    &text(af, "path")?,
+-                    need(af, "value")?.clone(),
+-                    flag(af, "add"),
+-                )?;
+-                let digest = digest_of(&doc)?;
+-                map_set(&mut doc, "digest", Value::Str(digest.clone()))?;
+-                dump(&f, &doc)?;
+-                let ix = self.work.join("anchors/index.yaml");
+-                let mut idx = load(&ix)?;
+-                let version = doc.get("version").unwrap_or(&Value::Null).py_str();
+-                if let Ok(Value::Seq(entries)) = walk(&mut idx, &[Step::Name("entries".into())]) {
+-                    for e in entries.iter_mut() {
+-                        if !matches!(e, Value::Map(_)) {
+-                            return Err("索引の項が表でない".to_string());
+-                        }
+-                        if e.get("version").unwrap_or(&Value::Null).py_str() == version {
+-                            map_set(e, "digest", Value::Str(digest.clone()))?;
+-                        }
++            return Ok(true);
++        }
++        Ok(false)
++    }
++
++    /// anchor の偽造・symlink・dir の削除の段を当てる。当てたら true。
++    fn apply_tree(&self, mu: &Value) -> Result<bool, String> {
++        let td = self.td;
++        if let Some(af) = mu.get("anchor_forge") {
++            let f = self.work.join(text(af, "file")?);
++            let mut doc = load(&f)?;
++            mutate(
++                &mut doc,
++                &text(af, "path")?,
++                need(af, "value")?.clone(),
++                flag(af, "add"),
++            )?;
++            let digest = digest_of(&doc)?;
++            map_set(&mut doc, "digest", Value::Str(digest.clone()))?;
++            dump(&f, &doc)?;
++            let ix = self.work.join("anchors/index.yaml");
++            let mut idx = load(&ix)?;
++            let version = doc.get("version").unwrap_or(&Value::Null).py_str();
++            if let Ok(Value::Seq(entries)) = walk(&mut idx, &[Step::Name("entries".into())]) {
++                for e in entries.iter_mut() {
++                    if !matches!(e, Value::Map(_)) {
++                        return Err("索引の項が表でない".to_string());
++                    }
++                    if e.get("version").unwrap_or(&Value::Null).py_str() == version {
++                        map_set(e, "digest", Value::Str(digest.clone()))?;
+                     }
+                 }
+-                dump(&ix, &idx)?;
+-                continue;
+-            }
+-            if flag(mu, "symlink_dir") || flag(mu, "symlink_file") {
+-                let rel = if flag(mu, "symlink_dir") {
+-                    text(mu, "symlink_dir")?
+-                } else {
+-                    text(mu, "symlink_file")?
+-                };
+-                let src = if rel == "." {
+-                    self.work.clone()
+-                } else {
+-                    self.work.join(&rel)
+-                };
+-                let outside = td.join("outside");
+-                io(fs::create_dir_all(&outside), "outside を作れない")?;
+-                let name = src.file_name().ok_or("symlink の対象に名前が無い")?;
+-                let dst = outside.join(name);
+-                io(fs::rename(&src, &dst), "対象を外へ動かせない")?;
+-                io(std::os::unix::fs::symlink(&dst, &src), "symlink を置けない")?;
+-                continue;
+-            }
+-            if flag(mu, "delete_dir") {
+-                io(
+-                    fs::remove_dir_all(self.work.join(text(mu, "dir")?)),
+-                    "dir を消せない",
+-                )?;
+-                continue;
+-            }
+-            let f = self.work.join(text(mu, "file")?);
+-            if flag(mu, "delete") {
+-                io(fs::remove_file(&f), "file を消せない")?;
+-                continue;
+-            }
+-            if let Some(tree) = mu.get("create") {
+-                if let Some(parent) = f.parent() {
+-                    io(fs::create_dir_all(parent), "親 dir を作れない")?;
+-                }
+-                dump(&f, tree)?;
+-                continue;
+-            }
+-            if let Some(raw) = mu.get("write_text") {
+-                let raw = raw.as_str().ok_or("write_text が文字列でない")?;
+-                if let Some(parent) = f.parent() {
+-                    io(fs::create_dir_all(parent), "親 dir を作れない")?;
+-                }
+-                io(fs::write(&f, raw), "file を書けない")?;
+-                continue;
+             }
+-            let mut doc = load(&f)?;
+-            if let Some(pair) = mu.get("swap") {
+-                let pair = pair.as_seq().ok_or("swap が一覧でない")?;
+-                let (Some(a), Some(b)) = (pair.first(), pair.get(1)) else {
+-                    return Err("swap の要素が 2 つでない".to_string());
+-                };
+-                let (a, b) = (int_of(a)?, int_of(b)?);
+-                let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
+-                    return Err("swap の path が一覧でない".to_string());
+-                };
+-                let (a, b) = (norm_index(a, s.len())?, norm_index(b, s.len())?);
+-                s.swap(a, b);
+-            } else if let Some(key) = mu.get("raw_key") {
+-                let key = key.py_str();
+-                let value = need(mu, "value")?.clone();
+-                map_set(walk(&mut doc, &steps(&text(mu, "path")?)?)?, &key, value)?;
+-            } else if flag(mu, "pop") {
+-                let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
+-                    return Err("pop の path が一覧でない".to_string());
+-                };
+-                s.pop().ok_or("IndexError: 空の一覧から pop")?;
++            dump(&ix, &idx)?;
++            return Ok(true);
++        }
++        if flag(mu, "symlink_dir") || flag(mu, "symlink_file") {
++            let rel = if flag(mu, "symlink_dir") {
++                text(mu, "symlink_dir")?
++            } else {
++                text(mu, "symlink_file")?
++            };
++            let src = if rel == "." {
++                self.work.clone()
+             } else {
+-                mutate(
+-                    &mut doc,
+-                    &text(mu, "path")?,
+-                    need(mu, "value")?.clone(),
+-                    flag(mu, "add"),
+-                )?;
++                self.work.join(&rel)
++            };
++            let outside = td.join("outside");
++            io(fs::create_dir_all(&outside), "outside を作れない")?;
++            let name = src.file_name().ok_or("symlink の対象に名前が無い")?;
++            let dst = outside.join(name);
++            io(fs::rename(&src, &dst), "対象を外へ動かせない")?;
++            io(std::os::unix::fs::symlink(&dst, &src), "symlink を置けない")?;
++            return Ok(true);
++        }
++        if flag(mu, "delete_dir") {
++            io(
++                fs::remove_dir_all(self.work.join(text(mu, "dir")?)),
++                "dir を消せない",
++            )?;
++            return Ok(true);
++        }
++        Ok(false)
++    }
++
++    /// file 1 つの段（削除・新設・字の書き込み・欄の入れ替えと置き換え）を当てる。
++    fn apply_file(&self, mu: &Value) -> Result<(), String> {
++        let f = self.work.join(text(mu, "file")?);
++        if flag(mu, "delete") {
++            io(fs::remove_file(&f), "file を消せない")?;
++            return Ok(());
++        }
++        if let Some(tree) = mu.get("create") {
++            if let Some(parent) = f.parent() {
++                io(fs::create_dir_all(parent), "親 dir を作れない")?;
+             }
+-            dump(&f, &doc)?;
++            dump(&f, tree)?;
++            return Ok(());
++        }
++        if let Some(raw) = mu.get("write_text") {
++            let raw = raw.as_str().ok_or("write_text が文字列でない")?;
++            if let Some(parent) = f.parent() {
++                io(fs::create_dir_all(parent), "親 dir を作れない")?;
++            }
++            io(fs::write(&f, raw), "file を書けない")?;
++            return Ok(());
++        }
++        let mut doc = load(&f)?;
++        if let Some(pair) = mu.get("swap") {
++            let pair = pair.as_seq().ok_or("swap が一覧でない")?;
++            let (Some(a), Some(b)) = (pair.first(), pair.get(1)) else {
++                return Err("swap の要素が 2 つでない".to_string());
++            };
++            let (a, b) = (int_of(a)?, int_of(b)?);
++            let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
++                return Err("swap の path が一覧でない".to_string());
++            };
++            let (a, b) = (norm_index(a, s.len())?, norm_index(b, s.len())?);
++            s.swap(a, b);
++        } else if let Some(key) = mu.get("raw_key") {
++            let key = key.py_str();
++            let value = need(mu, "value")?.clone();
++            map_set(walk(&mut doc, &steps(&text(mu, "path")?)?)?, &key, value)?;
++        } else if flag(mu, "pop") {
++            let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
++                return Err("pop の path が一覧でない".to_string());
++            };
++            s.pop().ok_or("IndexError: 空の一覧から pop")?;
++        } else {
++            mutate(
++                &mut doc,
++                &text(mu, "path")?,
++                need(mu, "value")?.clone(),
++                flag(mu, "add"),
++            )?;
+         }
++        dump(&f, &doc)?;
+         Ok(())
+     }
+ }
+@@ -701,6 +740,17 @@ fn run_case(cs: &Value, td: &Path) -> Option<String> {
+             Err(e) => return Some(format!("FAIL {id}: {e}")),
+         },
+     };
++    judge(cs, &mut st, &pr, expect_rc, (&id, &why))
++}
++
++/// 回した結果を case の期待と照らす。期待どおりなら None、違えば落ちた case の文言。
++fn judge(
++    cs: &Value,
++    st: &mut State<'_>,
++    pr: &Run,
++    expect_rc: i64,
++    (id, why): (&str, &str),
++) -> Option<String> {
+     let all = format!("{}{}", pr.stdout, pr.stderr);
+     let mut ok = i64::from(pr.code) == expect_rc;
+     if let Some(m) = str_field(cs, "expect_msg")
+@@ -794,6 +844,11 @@ fn floor_cases_all_pass_with_folio() {
+         );
+     }
+ 
++    run_all(&cases);
++}
++
++/// case を並列の worker で回し、落ちた case を番号の順に名指す。
++fn run_all(cases: &[&Value]) {
+     let next = AtomicUsize::new(0);
+     let failures: Mutex<Vec<(usize, String)>> = Mutex::new(Vec::new());
+     let workers = std::thread::available_parallelism().map_or(4, |n| n.get().min(8));
+diff --git a/folio2/crates/folio/tests/floor_faces.rs b/folio2/crates/folio/tests/floor_faces.rs
+index e573e0da90ed051db8044fb511cbd00a246018f9..e2407fbdb3600335d766be7e3af30a49f0e9db50 100644
+--- a/folio2/crates/folio/tests/floor_faces.rs
++++ b/folio2/crates/folio/tests/floor_faces.rs
+@@ -557,12 +557,14 @@ fn f187_the_face_stage_runs_after_the_index_and_before_the_freeze() {
+     let _ = fs::remove_dir_all(&td);
+ }
+ 
++/// 面だけが読む file を壊す行（case の名・写しを壊す手・床が言う字）。
++type Case = (&'static str, fn(&Path), &'static str);
++
+ /// 面だけが読む file が読めない（相談窓口の支度表が YAML として読めない・dir・UTF-8 でない・型付きの木に読めない、様式 2 本が
+ /// dir、天井の印が dir・YAML として読めない）は、床のほかの段と同じく まだ分からない 1 件（違反 [面] にしない・P-4.2）。
+ /// build --write も まだ分からない で何も書かない。
+ #[test]
+ fn f187_unreadable_face_files_stay_unknown() {
+-    type Case = (&'static str, fn(&Path), &'static str);
+     let rows: [Case; 8] = [
+         (
+             "intake-syntax",
+@@ -622,6 +624,11 @@ fn f187_unreadable_face_files_stay_unknown() {
+             "# まだ分からない: preview/ceiling-stamp.yaml: parse できない: ",
+         ),
+     ];
++    check_unreadable(rows);
++}
++
++/// 行ごとに写しを壊し、床が まだ分からない 1 件で build --write も何も書かないことを見る。
++fn check_unreadable(rows: [Case; 8]) {
+     for (case, apply, said) in rows {
+         let (td, dir) = place(case);
+         apply(&dir);
+diff --git a/folio2/crates/folio/tests/freeze_root.rs b/folio2/crates/folio/tests/freeze_root.rs
+index 2f41c0e9266d778feee1a6114acfe7cc927052be..462b5cf8f137b06bbd86ac53d3b8092b329c6c5b 100644
+--- a/folio2/crates/folio/tests/freeze_root.rs
++++ b/folio2/crates/folio/tests/freeze_root.rs
+@@ -440,6 +440,11 @@ fn f121_freeze_start_writes_both_and_the_floor_passes() {
+         "書いた id の一覧が土台の凍結済みの file と byte 一致しない"
+     );
+     w.commit();
++    floor_after_start(&w, &base);
++}
++
++/// 始まりの凍結の commit の後の素の床と、--freeze-adrs が封の一覧を書いた後の床の合格を見る。
++fn floor_after_start(w: &Work, base: &Path) {
+     // 便 170: 始まりの凍結は判断の記録の封を書かない＝素の床は封の一覧の不在の「まだ分からない」1 行だけ
+     let out = w.check(&[]);
+     assert_eq!(out.status.code(), Some(2), "{}", show(&out));
+@@ -538,6 +543,11 @@ fn f121_freeze_start_writes_nothing_on_any_finding() {
+     assert!(!w.dir().join("anchors").exists());
+     drop(w);
+ 
++    unlisted_anchor();
++}
++
++/// id の一覧だけが在る置き場の表に無い名で、--freeze-anchor が digest の全桁を出し anchors/ を変えないのを見る。
++fn unlisted_anchor() {
+     // (4) id の一覧だけが在る置き場で同じ名の書き換え → --freeze-anchor も digest の全桁を出す
+     let w = Work::new("unlisted-anchor", FLOOR_BASE, true, |d| {
+         remove(d, &["constitution-v1.0.yaml", "index.yaml"]);
+diff --git a/folio2/crates/folio/tests/graph.rs b/folio2/crates/folio/tests/graph.rs
+index 6b542a35ee704e549f24bce6f1bf21f82787b0f8..aef7f7262ba23030d6f75589f740d9104171a1c7 100644
+--- a/folio2/crates/folio/tests/graph.rs
++++ b/folio2/crates/folio/tests/graph.rs
+@@ -751,6 +751,11 @@ fn f195_the_graph_region_copies_the_id_space_and_the_mention_lists() {
+         assert_eq!(strs(&prefixes[key], key), want, "ids.prefixes.{key}");
+     }
+ 
++    f195_mentions(schema);
++}
++
++/// 生成区間の mentions の欄の鍵と値と、2 つの注が正本の定数の置き場を名指すのを見る。
++fn f195_mentions(schema: &Yaml) {
+     let mentions = &schema["mentions"];
+     let mut want_keys: Vec<&str> = F195_LISTS.iter().map(|(k, _)| *k).collect();
+     want_keys.extend(["srs_kinds", "receives"]);
+diff --git a/folio2/crates/folio/tests/init.rs b/folio2/crates/folio/tests/init.rs
+index baf0ed30515f8160df80402014334636061fcf08..1a23fb90d22406c0a2b2553ddc35716337e53720 100644
+--- a/folio2/crates/folio/tests/init.rs
++++ b/folio2/crates/folio/tests/init.rs
+@@ -466,6 +466,11 @@ fn f125_init_writes_the_skeleton_and_the_floor_passes() {
+         assert!(unknowns.iter().any(|l| l.contains(field)), "{field}: {unknowns:?}");
+     }
+ 
++    skeleton_answers(&w);
++}
++
++/// 骨格の置き場で folio schema --check・folio intake --print・案内の 1 行が答えるのを見る。
++fn skeleton_answers(w: &Work) {
+     let schema = folio(&["schema", "--check"], &w.place());
+     assert_eq!(schema.status.code(), Some(0), "{}", both(&schema));
+ 
+@@ -586,6 +591,11 @@ fn f125_forbidden_words_stay_out_of_the_skeleton() {
+         assert!(!init_rs.contains(word), "init.rs に在る: {word}");
+     }
+ 
++    forbidden_counts(forbidden);
++}
++
++/// 骨格の数える範囲に禁止字が 0 回で、folio2 自身の数える範囲には 1 回以上出るのを見る。
++fn forbidden_counts(forbidden: Vec<&str>) {
+     let w = Work::new("forbidden");
+     w.init_ok();
+     let mut in_folio2 = 0;
+@@ -681,6 +691,12 @@ fn f125_sources_match_folio2() {
+             .all(|r| str_of(r, "id") != "R-17")
+     );
+ 
++    intake_sources(&w);
++    ceiling_sources(&w);
++}
++
++/// 骨格の相談窓口の答え・問い・的・表の欄が folio2 の値に括弧の落としを当てた字と揃うのを見る。
++fn intake_sources(w: &Work) {
+     // 相談窓口
+     let (mi, ti) = (w.typed("intake.yaml"), folio2_typed("intake.yaml"));
+     for key in ["answers", "questions"] {
+@@ -701,7 +717,10 @@ fn f125_sources_match_folio2() {
+     assert_eq!(ms.get("file"), ts.get("file"));
+     assert_eq!(ms.get("title"), ts.get("title"));
+     assert_eq!(ms.get("explain"), ts.get("explain").map(dropped).as_ref());
++}
+ 
++/// 骨格の天井が folio2 と揃い、承認欄が空で欄の決まりを提案中の ADR-1 が決めるのを見る。
++fn ceiling_sources(w: &Work) {
+     // 天井
+     let (mc, tc) = (w.typed("ceiling.yaml"), folio2_typed("ceiling.yaml"));
+     let pairs = |v: &Value| -> Vec<(String, String)> {
+@@ -833,6 +852,11 @@ fn f152_the_skeleton_runs_every_command_without_hand_edits() {
+     );
+     assert_eq!(build_check.status.code(), Some(0), "{}", both(&build_check));
+ 
++    faces_and_parts(&w, place, site);
++}
++
++/// 骨格の置き場で 4 面の命令と配信先の 4 面の部品の検査が答え、置き場に preview/ を作らないのを見る。
++fn faces_and_parts(w: &Work, place: PathBuf, site: PathBuf) {
+     for (face, id) in [
+         ("adr", Some("ADR-1")),
+         ("constitution", None),
+diff --git a/folio2/crates/folio/tests/mechanism_live.rs b/folio2/crates/folio/tests/mechanism_live.rs
+index 075d369c3f2743f2fbb75b8d8812320c2c86ebc1..3bede9e2bc47dd7fb3c2f1c8bc80329376659c9f 100644
+--- a/folio2/crates/folio/tests/mechanism_live.rs
++++ b/folio2/crates/folio/tests/mechanism_live.rs
+@@ -512,6 +512,12 @@ fn f203_abroad_labels_and_unknowns_name_no_folio2_number() {
+     );
+     assert_eq!(article_ids(&proposed), Vec::<String>::new(), "{}", show(&proposed));
+ 
++    retreat_and_parts();
++    index_and_home();
++}
++
++/// 撤退条件を空にした写しと folio parts --check の部品目録に無い class で、名札が検査の名なのを見る。
++fn retreat_and_parts() {
+     // (b) 撤退条件を空にした写し: 名札は検査の名（字の中の P-8.1 は本便の外）
+     let r = Work::skeleton("f203-retreat");
+     edit(&r.dir().join("adr/ADR-1.yaml"), |t| {
+@@ -555,7 +561,10 @@ fn f203_abroad_labels_and_unknowns_name_no_folio2_number() {
+     assert_eq!(parts(), ["[部品目録] index.html: 部品目録に無い class「zz-unknown」"]);
+     add_rows(&p.dir(), "thresholds", &[("R-3", threshold("R-3", "部品目録に無い型の数", "0 件"))]);
+     assert_eq!(parts(), ["[部品目録] index.html: 部品目録に無い class「zz-unknown」"]);
++}
+ 
++/// 凍結 anchor の索引が空か版の file が無い骨格と、名だけ folio2 の置き場の名にした写しの まだ分からない の行を見る。
++fn index_and_home() {
+     // (d) 凍結 anchor の索引の entries が空・索引の版の anchor file が無い骨格: まだ分からない の行は（P-10.3）の片が落ちる
+     let x = Work::skeleton("f203-index");
+     let index = x.dir().join("anchors/index.yaml");
+diff --git a/folio2/crates/folio/tests/modules.rs b/folio2/crates/folio/tests/modules.rs
+index a0a8c30ba07848f69e8178612da0183cac787a08..366e297ab15e12cf7335a18238ebdc3649bce5c7 100644
+--- a/folio2/crates/folio/tests/modules.rs
++++ b/folio2/crates/folio/tests/modules.rs
+@@ -127,63 +127,73 @@ fn strip(src: &str) -> String {
+             out.push(' ');
+             continue;
+         }
+-        let raw_head = c[i] == 'r'
+-            && (i == 0
+-                || !is_ident(c[i - 1])
+-                || (c[i - 1] == 'b' && (i < 2 || !is_ident(c[i - 2]))));
+-        if raw_head {
+-            let mut j = i + 1;
+-            let mut hashes = 0;
+-            while at(j) == Some('#') {
+-                hashes += 1;
+-                j += 1;
+-            }
+-            if at(j) == Some('"') {
+-                j += 1;
+-                while j < c.len() {
+-                    if c[j] == '"' && (1..=hashes).all(|h| at(j + h) == Some('#')) {
+-                        j += 1 + hashes;
+-                        break;
+-                    }
+-                    j += 1;
++        if let Some(j) = literal(&c, i, &mut out) {
++            i = j;
++            continue;
++        }
++        out.push(c[i]);
++        i += 1;
++    }
++    out
++}
++
++/// 字面（素の文字列・文字列・1 文字）の頭なら剥がして空白 1 つを足し、次の位置を返す（頭でなければ None）。
++fn literal(c: &[char], mut i: usize, out: &mut String) -> Option<usize> {
++    let at = |k: usize| c.get(k).copied();
++    let raw_head = c[i] == 'r'
++        && (i == 0
++            || !is_ident(c[i - 1])
++            || (c[i - 1] == 'b' && (i < 2 || !is_ident(c[i - 2]))));
++    if raw_head {
++        let mut j = i + 1;
++        let mut hashes = 0;
++        while at(j) == Some('#') {
++            hashes += 1;
++            j += 1;
++        }
++        if at(j) == Some('"') {
++            j += 1;
++            while j < c.len() {
++                if c[j] == '"' && (1..=hashes).all(|h| at(j + h) == Some('#')) {
++                    j += 1 + hashes;
++                    break;
+                 }
+-                i = j;
+-                out.push(' ');
+-                continue;
++                j += 1;
+             }
++            i = j;
++            out.push(' ');
++            return Some(i);
+         }
+-        if c[i] == '"' {
+-            i += 1;
+-            while i < c.len() && c[i] != '"' {
+-                if c[i] == '\\' {
+-                    i += 1;
+-                }
++    }
++    if c[i] == '"' {
++        i += 1;
++        while i < c.len() && c[i] != '"' {
++            if c[i] == '\\' {
+                 i += 1;
+             }
+             i += 1;
+-            out.push(' ');
+-            continue;
+         }
+-        if c[i] == '\'' {
+-            if at(i + 1) == Some('\\') {
+-                let mut j = i + 3;
+-                while j < c.len() && c[j] != '\'' {
+-                    j += 1;
+-                }
+-                i = j + 1;
+-                out.push(' ');
+-                continue;
+-            }
+-            if at(i + 2) == Some('\'') {
+-                i += 3;
+-                out.push(' ');
+-                continue;
++        i += 1;
++        out.push(' ');
++        return Some(i);
++    }
++    if c[i] == '\'' {
++        if at(i + 1) == Some('\\') {
++            let mut j = i + 3;
++            while j < c.len() && c[j] != '\'' {
++                j += 1;
+             }
++            i = j + 1;
++            out.push(' ');
++            return Some(i);
++        }
++        if at(i + 2) == Some('\'') {
++            i += 3;
++            out.push(' ');
++            return Some(i);
+         }
+-        out.push(c[i]);
+-        i += 1;
+     }
+-    out
++    None
+ }
+ 
+ /// 剥がした本文から名指す区切りの名を取る。`crate::<名>` と `crate::{a, b::{…}}` の括り書きの頭の名。
+@@ -211,31 +221,7 @@ fn named(code: &str, bare: bool, modules: &BTreeSet<&str>) -> BTreeSet<String> {
+                 j += 1;
+             }
+             if c.get(j) == Some(&'{') {
+-                let mut depth = 0;
+-                let mut expect = true;
+-                while j < c.len() {
+-                    match c[j] {
+-                        '{' => depth += 1,
+-                        '}' => {
+-                            depth -= 1;
+-                            if depth == 0 {
+-                                break;
+-                            }
+-                        }
+-                        ',' if depth == 1 => expect = true,
+-                        ch if is_ident(ch) && expect && depth == 1 => {
+-                            let s = j;
+-                            while j < c.len() && is_ident(c[j]) {
+-                                j += 1;
+-                            }
+-                            names.insert(c[s..j].iter().collect::<String>());
+-                            expect = false;
+-                            continue;
+-                        }
+-                        _ => {}
+-                    }
+-                    j += 1;
+-                }
++                braced(&c, j, &mut names);
+             } else {
+                 let s = j;
+                 while j < c.len() && is_ident(c[j]) {
+@@ -251,6 +237,35 @@ fn named(code: &str, bare: bool, modules: &BTreeSet<&str>) -> BTreeSet<String> {
+     names
+ }
+ 
++/// `crate::{a, b::{…}}` の括り書きの頭の名を `names` に足す（`j` は開きの括弧の位置）。
++fn braced(c: &[char], mut j: usize, names: &mut BTreeSet<String>) {
++    let mut depth = 0;
++    let mut expect = true;
++    while j < c.len() {
++        match c[j] {
++            '{' => depth += 1,
++            '}' => {
++                depth -= 1;
++                if depth == 0 {
++                    break;
++                }
++            }
++            ',' if depth == 1 => expect = true,
++            ch if is_ident(ch) && expect && depth == 1 => {
++                let s = j;
++                while j < c.len() && is_ident(c[j]) {
++                    j += 1;
++                }
++                names.insert(c[s..j].iter().collect::<String>());
++                expect = false;
++                continue;
++            }
++            _ => {}
++        }
++        j += 1;
++    }
++}
++
+ /// `lib.rs` の区切りの宣言（`mod <名>;`と`pub mod <名>;`）の集合。
+ fn declared() -> BTreeSet<String> {
+     strip(&read("lib"))
+diff --git a/folio2/crates/folio/tests/polarity.rs b/folio2/crates/folio/tests/polarity.rs
+index be14f05ae7023b6ae6349199cff40f3d6aa0667e..2013512f6da7d0d2deec48e276c9bd047499e8f7 100644
+--- a/folio2/crates/folio/tests/polarity.rs
++++ b/folio2/crates/folio/tests/polarity.rs
+@@ -435,6 +435,11 @@ fn f202_abroad_place_names_no_folio2_article() {
+     assert!(lines(&listed.stdout).contains(&"R-9 · post · fail-closed · 規則の表の閾値の行".to_string()), "{}", show(&listed));
+     assert!(p18(&listed).is_empty(), "{}", show(&listed));
+ 
++    help_and_home();
++}
++
++/// 説明の字が folio2 の番号を持たず、folio2 の置き場（土台の名）は今の字のままなのを見る。
++fn help_and_home() {
+     // 説明の字（置き場に依らない）も folio2 の便の番号と条の番号を持たない
+     let help = Command::new(env!("CARGO_BIN_EXE_tz")).args(["check", "--help"]).output().expect("folio を起動できない");
+     let help = String::from_utf8_lossy(&help.stdout).to_string();
+diff --git a/folio2/crates/folio/tests/schema_docs.rs b/folio2/crates/folio/tests/schema_docs.rs
+index d8856aac8b59ba98f0cafcbe7c223602661745b7..bec618fe15982058decf442c433e717b3cc18592 100644
+--- a/folio2/crates/folio/tests/schema_docs.rs
++++ b/folio2/crates/folio/tests/schema_docs.rs
+@@ -529,6 +529,11 @@ fn schema_check_matches_the_real_rules_file_and_its_frozen_digest() {
+         Ok(hex) => assert_eq!(hex, RULES_REGION_SHA256, "sha256sum で測り直した要約値"),
+         Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
+     }
++    rules_head_and_tail(&w, text);
++}
++
++/// 規則の表の生成区間の前は注釈と空行だけ・後に人が書く行が在り、検査が file を書かないのを見る。
++fn rules_head_and_tail(w: &Work, text: String) {
+     // 生成区間は file の先頭の注釈の次（begin の前は注釈と空行だけ・人が書く行は end の後）
+     let (head, _) = text.split_once(BEGIN).unwrap();
+     assert!(
+diff --git a/folio2/crates/folio/tests/unknown_fields.rs b/folio2/crates/folio/tests/unknown_fields.rs
+index d91783e596409ccaac05fbb00629dbad1ec456af..2700b8ebd08ac460bd7cba7d718fb6da57534177 100644
+--- a/folio2/crates/folio/tests/unknown_fields.rs
++++ b/folio2/crates/folio/tests/unknown_fields.rs
+@@ -280,6 +280,11 @@ fn f128_constitution_unknown_fields_are_violations() {
+         w.check().only(case, &[line]);
+     }
+ 
++    precedence_unknowns();
++}
++
++/// 前文と前文の mechanism に足した未知の欄は、改憲の違反と 2 行になるのを見る。
++fn precedence_unknowns() {
+     let w = Work::new("precedence");
+     w.mutate(
+         CONSTITUTION,

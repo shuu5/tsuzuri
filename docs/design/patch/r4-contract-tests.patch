@@ -1,0 +1,448 @@
+diff --git a/crates/tsuzuri-contract/tests/acctdoc.rs b/crates/tsuzuri-contract/tests/acctdoc.rs
+index 7ad9a3f8a419b13d7f59eaad431a03197c005111..30e492c811bea791ee705c55e8047e047b5b23f6 100644
+--- a/crates/tsuzuri-contract/tests/acctdoc.rs
++++ b/crates/tsuzuri-contract/tests/acctdoc.rs
+@@ -166,6 +166,11 @@ fn acctdoc_unknown_only_where_marked() {
+     );
+     assert_eq!(doc.projects[1].move_until, Some(doc.at + 1101));
+ 
++    unknown_each_part(&value, doc);
++}
++
++/// fixture の部分を 1 つずつ Unknown にして読み、その部分だけが変わることを見る。
++fn unknown_each_part(value: &Value, doc: AccountDoc) {
+     // 部分を 1 つずつ Unknown にすると、その部分だけが変わる。
+     type Part = (&'static str, Option<usize>, fn(&mut AccountDoc));
+     let parts: [Part; 7] = [
+@@ -284,6 +289,11 @@ fn acctdoc_fixture_names_and_size() {
+         }
+     }
+     names.extend(doc.sessions.iter().filter_map(|s| s.account.clone()));
++    assert_names_and_text(names, &text);
++}
++
++/// 口座の名が acct- の 3 つだけで、fixture の字に host の名と住所と home の path が無いことを見る。
++fn assert_names_and_text(names: Vec<String>, text: &str) {
+     assert!(names.len() > 20, "口座の名を拾えていない {names:?}");
+     for n in &names {
+         assert!(n.starts_with("acct-"), "acct- で始まらない口座の名 {n}");
+diff --git a/crates/tsuzuri-contract/tests/cform_board.rs b/crates/tsuzuri-contract/tests/cform_board.rs
+index ef751cfc1b293747d354d0176be5622550e4ecf9..ef49d4d1bf665edc2bcd61a4dac228af3475214c 100644
+--- a/crates/tsuzuri-contract/tests/cform_board.rs
++++ b/crates/tsuzuri-contract/tests/cform_board.rs
+@@ -85,6 +85,15 @@ fn forms() -> Vec<Box<dyn Form>> {
+         ),
+         form("board::NextMove", NextMove::ALL.to_vec()),
+         form("board::LedgerJudge", LedgerJudge::ALL.to_vec()),
++    ]
++    .into_iter()
++    .chain(account_forms())
++    .collect()
++}
++
++/// board の群の型の見本の後半（口座の板の型）。
++fn account_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form(
+             "board::AccountBoard",
+             vec![AccountBoard {
+diff --git a/crates/tsuzuri-contract/tests/cform_graph.rs b/crates/tsuzuri-contract/tests/cform_graph.rs
+index d0dd14c491a8a1edbb7dc791625ea1df8587a4f1..f4fddd6c9ae12fb2d87643622bc3dd31bd125b62 100644
+--- a/crates/tsuzuri-contract/tests/cform_graph.rs
++++ b/crates/tsuzuri-contract/tests/cform_graph.rs
+@@ -200,6 +200,17 @@ fn forms() -> Vec<Box<dyn Form>> {
+                 },
+             ],
+         ),
++    ]
++    .into_iter()
++    .chain(doc_forms())
++    .chain(view_forms())
++    .chain(around_forms())
++    .collect()
++}
++
++/// graph の群の型の見本の続き（不変条件の判定と graph の文書の型）。
++fn doc_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form("graph::Verdict", Verdict::ALL.to_vec()),
+         form("graph::InvariantCheck", invariant_checks()),
+         form(
+@@ -255,27 +266,15 @@ fn forms() -> Vec<Box<dyn Form>> {
+                     retired: None,
+                 },
+                 // どの出所も読めない。
+-                GraphDoc {
+-                    nodes: vec![],
+-                    edges: vec![],
+-                    unread: GraphSource::ALL.to_vec(),
+-                    beads: Default::default(),
+-                    runs: Default::default(),
+-                    invariants: vec![InvariantCheck {
+-                        id: "g-1".into(),
+-                        verdict: Verdict::Unknown,
+-                        violations: 0,
+-                        ids: vec![],
+-                    }],
+-                    skipped: SkippedEdges {
+-                        design: 0,
+-                        ledger: 0,
+-                        design_nodes: 0,
+-                    },
+-                    retired: None,
+-                },
++                unread_doc(),
+             ],
+         ),
++    ]
++}
++
++/// graph の群の型の見本の続き（表示の graph の型）。
++fn view_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form("graph::EdgeEnd", EdgeEnd::ALL.to_vec()),
+         form("graph::ViewNode", view_nodes()),
+         form("graph::ViewEdge", vec![view_edge()]),
+@@ -307,6 +306,12 @@ fn forms() -> Vec<Box<dyn Form>> {
+                 },
+             ],
+         ),
++    ]
++}
++
++/// graph の群の型の見本の後半（畳みと近傍の型）。
++fn around_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form("graph::BoxFold", BoxFold::ALL.to_vec()),
+         form("graph::Fold", Fold::ALL.to_vec()),
+         form("graph::AroundRow", around_rows()),
+@@ -348,6 +353,29 @@ fn forms() -> Vec<Box<dyn Form>> {
+     ]
+ }
+ 
++/// どの出所も読めない graph の文書の見本。
++fn unread_doc() -> GraphDoc {
++    GraphDoc {
++        nodes: vec![],
++        edges: vec![],
++        unread: GraphSource::ALL.to_vec(),
++        beads: Default::default(),
++        runs: Default::default(),
++        invariants: vec![InvariantCheck {
++            id: "g-1".into(),
++            verdict: Verdict::Unknown,
++            violations: 0,
++            ids: vec![],
++        }],
++        skipped: SkippedEdges {
++            design: 0,
++            ledger: 0,
++            design_nodes: 0,
++        },
++        retired: None,
++    }
++}
++
+ #[test]
+ fn contract_form_snapshot_matches() {
+     common::snapshot_matches("graph", &forms());
+diff --git a/crates/tsuzuri-contract/tests/cform_ledger.rs b/crates/tsuzuri-contract/tests/cform_ledger.rs
+index a8ddac14b298f0b6e761bffc44b54f1d9b4bb722..12fb2d85fc21efc3c138d6a544cdad7ba2d8ffef 100644
+--- a/crates/tsuzuri-contract/tests/cform_ledger.rs
++++ b/crates/tsuzuri-contract/tests/cform_ledger.rs
+@@ -132,6 +132,15 @@ fn forms() -> Vec<Box<dyn Form>> {
+         ),
+         form("ledger::LedgerChanged", vec![LedgerChanged { at: AT }]),
+         form("ledger::LedgerWrite", ledger_writes()),
++    ]
++    .into_iter()
++    .chain(question_forms())
++    .collect()
++}
++
++/// ledger の群の型の見本の後半（module question の型）。
++fn question_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         // question
+         form(
+             "question::QuestionCard",
+@@ -390,6 +399,11 @@ fn contract_form_ledger_item_digest() {
+         ..ledger_item()
+     };
+     assert_eq!(other_row.digest(), digest);
++    digest_changes(digest);
++}
++
++/// 1 字を変えた item の digest が元の値とも互いにも違う 16 進の小文字 16 字であることを見る。
++fn digest_changes(digest: String) {
+     // どの欄の 1 字が変わっても値が変わる（区切りの位置が動くだけでも変わる）。
+     let changed = [
+         LedgerItem {
+diff --git a/crates/tsuzuri-contract/tests/cform_seat.rs b/crates/tsuzuri-contract/tests/cform_seat.rs
+index 3d882cbed21587c39bf1383746cea3a17f68fc86..7214165ac298775927e8753846fdd507517f5850 100644
+--- a/crates/tsuzuri-contract/tests/cform_seat.rs
++++ b/crates/tsuzuri-contract/tests/cform_seat.rs
+@@ -100,30 +100,19 @@ fn forms() -> Vec<Box<dyn Form>> {
+             ],
+         ),
+         form("seat::Pressure", vec![pressure()]),
++    ]
++    .into_iter()
++    .chain(card_forms())
++    .collect()
++}
++
++/// seat の群の型の見本の後半（席の card の型）。
++fn card_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form(
+             "seat::SeatCard",
+             vec![
+-                SeatCard {
+-                    at: AT,
+-                    target: "t3:orchestrator".into(),
+-                    state: SeatState::Wait,
+-                    since: Some(AT - 3_600),
+-                    tick_healthy: Reading::Known(true),
+-                    heartbeat: Reading::Known(false),
+-                    tick: Reading::Known(TickHealth::Healthy),
+-                    tick_at: Some(AT - 20),
+-                    reopens: Reopens::At(AT + 3_600),
+-                    account: Some("acct-4".into()),
+-                    model: Some("opus".into()),
+-                    group: Reading::Known(group_row()),
+-                    usage: Reading::Known(quota_used()),
+-                    spans: Reading::Known(seat_spans()),
+-                    moves: Reading::Known(account_moves()),
+-                    move_to: Reading::Known(Some("acct-5".into())),
+-                    grace_until: Reading::Known(Some(AT + 120)),
+-                    refused: Reading::Known(Some(AT - 600)),
+-                    pressure: Reading::Known(Some(pressure())),
+-                },
++                seat_card(),
+                 // 器が移さない・断りも逼迫も無い席。
+                 SeatCard {
+                     at: AT,
+@@ -173,6 +162,31 @@ fn forms() -> Vec<Box<dyn Form>> {
+     ]
+ }
+ 
++/// 器が移す・断りも逼迫も在る席の card の見本。
++fn seat_card() -> SeatCard {
++    SeatCard {
++        at: AT,
++        target: "t3:orchestrator".into(),
++        state: SeatState::Wait,
++        since: Some(AT - 3_600),
++        tick_healthy: Reading::Known(true),
++        heartbeat: Reading::Known(false),
++        tick: Reading::Known(TickHealth::Healthy),
++        tick_at: Some(AT - 20),
++        reopens: Reopens::At(AT + 3_600),
++        account: Some("acct-4".into()),
++        model: Some("opus".into()),
++        group: Reading::Known(group_row()),
++        usage: Reading::Known(quota_used()),
++        spans: Reading::Known(seat_spans()),
++        moves: Reading::Known(account_moves()),
++        move_to: Reading::Known(Some("acct-5".into())),
++        grace_until: Reading::Known(Some(AT + 120)),
++        refused: Reading::Known(Some(AT - 600)),
++        pressure: Reading::Known(Some(pressure())),
++    }
++}
++
+ #[test]
+ fn contract_form_snapshot_matches() {
+     common::snapshot_matches("seat", &forms());
+diff --git a/crates/tsuzuri-contract/tests/cform_stats.rs b/crates/tsuzuri-contract/tests/cform_stats.rs
+index a9194f832280ba58f5484451673c037cb69aa45a..54ee5b1f8a6203c59950c42d7f2e48ee71dc5003 100644
+--- a/crates/tsuzuri-contract/tests/cform_stats.rs
++++ b/crates/tsuzuri-contract/tests/cform_stats.rs
+@@ -36,58 +36,7 @@ fn forms() -> Vec<Box<dyn Form>> {
+         form(
+             "stats::LedgerStats",
+             vec![
+-                LedgerStats {
+-                    at: AT,
+-                    judge: LedgerJudge::PilingUp,
+-                    open: OpenCounts {
+-                        task: 9,
+-                        memo: 3,
+-                        question: 2,
+-                        epic: 2,
+-                    },
+-                    blocked: 3,
+-                    ready: 5,
+-                    stale: 3,
+-                    net_drop_24h: 0,
+-                    net_drop_7d: 2,
+-                    closed_7d: 5,
+-                    closed_per_day: 0.5,
+-                    lead: Some(LeadDays {
+-                        p50: 4.0,
+-                        p90: 11.5,
+-                    }),
+-                    days: vec![
+-                        DayCount {
+-                            end: AT - 86_400,
+-                            created: 1,
+-                            closed: 0,
+-                            open: 9,
+-                        },
+-                        DayCount {
+-                            end: AT,
+-                            created: 1,
+-                            closed: 1,
+-                            open: 9,
+-                        },
+-                    ],
+-                    epics: vec![EpicProgress {
+-                        epic: bead("t3-hub"),
+-                        closed: 6,
+-                        total: 9,
+-                    }],
+-                    memo: MemoStats {
+-                        open: 3,
+-                        awaiting_promotion: 2,
+-                        closed_7d: 1,
+-                        created_p50: Some(AT - 820_800),
+-                    },
+-                    unreflected: 3,
+-                    unreflected_kinds: vec![UnreflectedCount {
+-                        kind: UnreflectedKind::Memo,
+-                        count: 3,
+-                    }],
+-                    unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Request],
+-                },
++                ledger_stats(),
+                 // 閉じた task も memo も無い台帳。
+                 LedgerStats {
+                     at: AT,
+@@ -120,6 +69,15 @@ fn forms() -> Vec<Box<dyn Form>> {
+                 },
+             ],
+         ),
++    ]
++    .into_iter()
++    .chain(step_forms())
++    .collect()
++}
++
++/// stats の群の型の見本の後半（次の一手と未反映の一覧の型）。
++fn step_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form(
+             "stats::NextStep",
+             vec![NextStep {
+@@ -180,6 +138,62 @@ fn forms() -> Vec<Box<dyn Form>> {
+     ]
+ }
+ 
++/// 閉じた task も memo も在る台帳の統計の見本。
++fn ledger_stats() -> LedgerStats {
++    LedgerStats {
++        at: AT,
++        judge: LedgerJudge::PilingUp,
++        open: OpenCounts {
++            task: 9,
++            memo: 3,
++            question: 2,
++            epic: 2,
++        },
++        blocked: 3,
++        ready: 5,
++        stale: 3,
++        net_drop_24h: 0,
++        net_drop_7d: 2,
++        closed_7d: 5,
++        closed_per_day: 0.5,
++        lead: Some(LeadDays {
++            p50: 4.0,
++            p90: 11.5,
++        }),
++        days: vec![
++            DayCount {
++                end: AT - 86_400,
++                created: 1,
++                closed: 0,
++                open: 9,
++            },
++            DayCount {
++                end: AT,
++                created: 1,
++                closed: 1,
++                open: 9,
++            },
++        ],
++        epics: vec![EpicProgress {
++            epic: bead("t3-hub"),
++            closed: 6,
++            total: 9,
++        }],
++        memo: MemoStats {
++            open: 3,
++            awaiting_promotion: 2,
++            closed_7d: 1,
++            created_p50: Some(AT - 820_800),
++        },
++        unreflected: 3,
++        unreflected_kinds: vec![UnreflectedCount {
++            kind: UnreflectedKind::Memo,
++            count: 3,
++        }],
++        unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Request],
++    }
++}
++
+ #[test]
+ fn contract_form_snapshot_matches() {
+     common::snapshot_matches("stats", &forms());
+diff --git a/crates/tsuzuri-contract/tests/cform_surface.rs b/crates/tsuzuri-contract/tests/cform_surface.rs
+index 1da2fa24def3148c162a685280fec76afc00a4c3..c36f6949b1b4cc9205aee6c74db93598e66163f7 100644
+--- a/crates/tsuzuri-contract/tests/cform_surface.rs
++++ b/crates/tsuzuri-contract/tests/cform_surface.rs
+@@ -79,6 +79,17 @@ fn forms() -> Vec<Box<dyn Form>> {
+                 undelivered: vec![ruling("fx-c.5:20260926T1437Z-1")],
+             }],
+         ),
++    ]
++    .into_iter()
++    .chain(event_forms())
++    .chain(batch_forms())
++    .chain(policy_forms(refusals))
++    .collect()
++}
++
++/// surface の群の型の見本の続き（事象と問いの督促と裁定の要求と応答の型）。
++fn event_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form(
+             "surface::SurfaceEvent",
+             vec![
+@@ -125,6 +136,12 @@ fn forms() -> Vec<Box<dyn Form>> {
+                 recorded_at: AT,
+             }],
+         ),
++    ]
++}
++
++/// surface の群の型の見本の続き（まとめての裁定の型）。
++fn batch_forms() -> Vec<Box<dyn Form>> {
++    vec![
+         form(
+             "surface::BatchRequest",
+             vec![BatchRequest {
+@@ -177,6 +194,12 @@ fn forms() -> Vec<Box<dyn Form>> {
+                 ],
+             }],
+         ),
++    ]
++}
++
++/// surface の群の型の見本の後半（方針と断りと板の変化の型・断りの列は `refusals`）。
++fn policy_forms(refusals: Vec<Refusal>) -> Vec<Box<dyn Form>> {
++    vec![
+         form(
+             "surface::PolicyRequest",
+             vec![PolicyRequest {

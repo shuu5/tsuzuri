@@ -1,0 +1,742 @@
+diff --git a/folio2/crates/folio/src/face_labels.rs b/folio2/crates/folio/src/face_labels.rs
+index 49fe53db4bc2cf46a54d90c059869f186fee1d4c..687d46f70556a012b37216477584e7600fffb6ec 100644
+--- a/folio2/crates/folio/src/face_labels.rs
++++ b/folio2/crates/folio/src/face_labels.rs
+@@ -479,6 +479,11 @@ mod face_labels_tests {
+         assert!(
+             standing_of("{version: v0.3, status: effective, effective_version: [v0.3]}").is_err()
+         );
++        standing_labels();
++    }
++
++    /// 札の字（stamp・cover・lead・card）を状態ごとに見る。
++    fn standing_labels() {
+         // 札の字（§1 (b) の 2・3 の表）
+         let p = Standing::Pending("v1.41".to_string());
+         assert_eq!(
+diff --git a/folio2/crates/folio/tests/badge.rs b/folio2/crates/folio/tests/badge.rs
+index d2e1177a7eaba12467caa23507fec73fafc772fa..2c9e6ae4198cb5b72cdaa66b6a1afb71c81497cb 100644
+--- a/folio2/crates/folio/tests/badge.rs
++++ b/folio2/crates/folio/tests/badge.rs
+@@ -622,6 +622,11 @@ fn badge_faces_without_the_mark_match_the_seven_frozen_fixtures() {
+         &write_face("adr", Some("ADR-2"), &work, &td.join("adr-2.html")),
+         "expected-site-adr-2.html",
+     );
++    frozen_with_sheet(td, work, same);
++}
++
++/// 支度表を置いた写しと ADR-1 も置いた写しの面が凍結の fixture と byte で一致することを見る。
++fn frozen_with_sheet(td: PathBuf, work: PathBuf, same: impl Fn(&str, &str)) {
+     // 支度表を置くと便 20 の期待
+     fs::copy(
+         fixture().join("intake-sheet.yaml"),
+diff --git a/folio2/crates/folio/tests/face.rs b/folio2/crates/folio/tests/face.rs
+index de90f10d82c8d6a2f9ddf3ef1037021f412708a5..bbb08b05bcd8b267c40a74d2701fe73d3778f0a4 100644
+--- a/folio2/crates/folio/tests/face.rs
++++ b/folio2/crates/folio/tests/face.rs
+@@ -296,6 +296,11 @@ fn face_census_on_the_real_sources_counts_and_verbatims() {
+         "開発規律行の tr の数"
+     );
+ 
++    allowed_parts(parts, &html);
++}
++
++/// 面の部品の名札が許す 15 種の中だけで、lane-chip を含まないことを見る。
++fn allowed_parts(parts: Vec<&str>, html: &str) {
+     // 部品の名札は 15 種の中だけ・lane-chip を含まない
+     const ALLOWED: [&str; 15] = [
+         "freshness-stamp",
+diff --git a/folio2/crates/folio/tests/face_adr.rs b/folio2/crates/folio/tests/face_adr.rs
+index ca334b1e2ea91c7ec0eb542c3604d46e54c8c96c..b05284afcafc89d8460b4845780a596f55dae865 100644
+--- a/folio2/crates/folio/tests/face_adr.rs
++++ b/folio2/crates/folio/tests/face_adr.rs
+@@ -480,26 +480,30 @@ fn face_adr_census_on_the_real_sources_counts_and_verbatims() {
+             5 + usize::from(figures > 0) + 1,
+             "{id}: 章の帯の数"
+         );
+-
+-        // 状態の名札
+-        let label = match a["status"].as_str().unwrap() {
+-            "proposed" => "提案中・拘束力なし",
+-            "accepted" => "発効",
+-            "retired" => "廃止",
+-            other => panic!("{id}: 状態「{other}」は 3 つのどれでもない"),
+-        };
+-        let status_line = html
+-            .lines()
+-            .find(|l| l.contains("class=\"cover-status\""))
+-            .unwrap_or_else(|| panic!("{id}: 状態の行が無い"));
+-        assert!(
+-            status_line.contains(label),
+-            "{id}: 状態の行に名札「{label}」が無い: {status_line}"
+-        );
++        census_status(&html, &a, &id);
+     }
+     let _ = fs::remove_dir_all(&td);
+ }
+ 
++/// 表紙の状態の行が status の値の名札を持つことを見る。
++fn census_status(html: &str, a: &Yaml, id: &str) {
++    // 状態の名札
++    let label = match a["status"].as_str().unwrap() {
++        "proposed" => "提案中・拘束力なし",
++        "accepted" => "発効",
++        "retired" => "廃止",
++        other => panic!("{id}: 状態「{other}」は 3 つのどれでもない"),
++    };
++    let status_line = html
++        .lines()
++        .find(|l| l.contains("class=\"cover-status\""))
++        .unwrap_or_else(|| panic!("{id}: 状態の行が無い"));
++    assert!(
++        status_line.contains(label),
++        "{id}: 状態の行に名札「{label}」が無い: {status_line}"
++    );
++}
++
+ // ── check の 3 値 ──
+ 
+ #[test]
+diff --git a/folio2/crates/folio/tests/face_constitution.rs b/folio2/crates/folio/tests/face_constitution.rs
+index 1cd16ba78ed188053ce7dfe04b4fde2627e0c813..009c1a53bf69c89228f1521f5e8d6a3ce9e01250 100644
+--- a/folio2/crates/folio/tests/face_constitution.rs
++++ b/folio2/crates/folio/tests/face_constitution.rs
+@@ -1068,6 +1068,11 @@ fn f144_unknown_when_no_decision_names_the_version() {
+     );
+     assert_eq!(signs(&html).len(), 2 + rows.len());
+ 
++    unknown_when_proposed(&rows, version, first);
++}
++
++/// 今の版を名指す判断を提案中に戻した写しで、札が「まだ分からない」になることを見る。
++fn unknown_when_proposed(rows: &[Row], version: String, first: String) {
+     // 今の版を名指す判断を提案中に戻した写し
+     let (td, work) = real_copy("f144-unknown-proposed");
+     let naming: Vec<String> = rows
+diff --git a/folio2/crates/folio/tests/face_index.rs b/folio2/crates/folio/tests/face_index.rs
+index bdbd3db4addb8ce3a69efe83c846f98ef049bb8d..d4d09a62e8bd5efcc3ebf7fb2f349c1ed00d8c32 100644
+--- a/folio2/crates/folio/tests/face_index.rs
++++ b/folio2/crates/folio/tests/face_index.rs
+@@ -465,6 +465,12 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
+     assert_eq!(parts_of("shelf-card"), 4, "shelf-card の数");
+     assert_eq!(parts_of("shelf-link"), 4, "shelf-link の数");
+     assert_eq!(parts_of("reader-lane"), rows.len(), "reader-lane の数");
++    census_counts(html.clone(), &c, &s, &v, &r);
++    census_parts(parts, &html);
++}
++
++/// 正本の数の字面と、判断の記録の行（id の順のリンクと状態ごとの要約）を見る。
++fn census_counts(html: String, c: &Yaml, s: &Yaml, v: &Yaml, r: &Yaml) {
+     let articles = seq(&c["articles"], "articles").len();
+     let fr = seq(&s["requirements"], "requirements").len();
+     let terms = seq(&v["terms"], "terms").len();
+@@ -513,6 +519,11 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
+     let summary = format!("{}〜{}（{kinds}）", records[0].0, records[adr - 1].0);
+     assert!(card.contains(&summary), "要約が無い: {summary}\n{card}");
+ 
++    census_notes(html, adr);
++}
++
++/// 設計ノートの行（id の字の順のリンクと状態ごとの要約）と読める面の数を見る。
++fn census_notes(html: String, adr: usize) {
+     // 設計ノートの行（便 29）: 設計ノートの数だけ面へのリンクが id の字の順に並び、要約は状態ごとの数
+     let notes = real_notes();
+     let note_card = note_card(&html);
+@@ -550,7 +561,10 @@ fn face_index_census_on_the_real_sources_counts_and_verbatims() {
+         (3 + adr + notes.len()).to_string(),
+         "読める面の数"
+     );
++}
+ 
++/// 面の部品の名札が許す 13 種の中だけで、layer-line を含まないことを見る。
++fn census_parts(parts: Vec<&str>, html: &str) {
+     // 部品の名札は 13 種の中だけ
+     const ALLOWED: [&str; 13] = [
+         "freshness-stamp",
+diff --git a/folio2/crates/folio/tests/face_note.rs b/folio2/crates/folio/tests/face_note.rs
+index 6384a0d6f2ca0806c9145600da5d06fea75bb0cf..a762705782e8cf2970139acb81e8fa4198c44731 100644
+--- a/folio2/crates/folio/tests/face_note.rs
++++ b/folio2/crates/folio/tests/face_note.rs
+@@ -347,10 +347,7 @@ fn face_note_census_on_the_real_source_counts_and_verbatims() {
+     assert_eq!(rows, 15, "実の正本の表の節の行の合計");
+     assert_eq!(count("data-component=\"item-row\""), rows, "item-row の数");
+ 
+-    // 契約表の行の欄（write-set は無い・空の一覧の depends は hint を出さない・verify は在る）
+-    assert!(!html.contains("write-set"), "無い欄の hint が出ている");
+-    assert!(!html.contains("depends"), "空の一覧の欄の hint が出ている");
+-    assert!(html.contains(">検証</span>"), "検証の hint が無い: {html}");
++    contract_fields(&html);
+ 
+     // 図の章は図ごとの図の枠（便 31）＝便 28 の card と「図の生成はまだ無い」の cd は 0
+     assert_eq!(
+@@ -378,6 +375,14 @@ fn face_note_census_on_the_real_source_counts_and_verbatims() {
+     );
+ }
+ 
++/// 契約表の行の欄の hint（無い欄と空の一覧の欄は出さない・検証は出す）を見る。
++fn contract_fields(html: &str) {
++    // 契約表の行の欄（write-set は無い・空の一覧の depends は hint を出さない・verify は在る）
++    assert!(!html.contains("write-set"), "無い欄の hint が出ている");
++    assert!(!html.contains("depends"), "空の一覧の欄の hint が出ている");
++    assert!(html.contains(">検証</span>"), "検証の hint が無い: {html}");
++}
++
+ // ── 図の章（便 31）──
+ 
+ /// 部品目録 parts.json（yaml-rust2 で読む・JSON は YAML の流れの表）。
+diff --git a/folio2/crates/folio/tests/face_srs.rs b/folio2/crates/folio/tests/face_srs.rs
+index 34640eb5f3654d8d670391c68856e521586357df..175349a078736ddc7642a874434b52d251ae0087 100644
+--- a/folio2/crates/folio/tests/face_srs.rs
++++ b/folio2/crates/folio/tests/face_srs.rs
+@@ -981,6 +981,11 @@ fn f145_srs_cover_dates_follow_the_last_approval() {
+             "未承認のため拘束力なし → 持ち主の承認で発効",
+         ),
+     ];
++    cover_cases(cases);
++}
++
++/// 写しの変異ごとに、鮮度の札・版の札・表紙の状態がちょうど 1 つずつ出ることを見る。
++fn cover_cases<M: FnOnce(String) -> String>(cases: [(&str, M, String, &str, &str); 6]) {
+     for (case, mutate, fresh, tag, state) in cases {
+         let (run, html, _) = fixture_srs(&format!("f145-{case}"), mutate);
+         ok(&run);
+diff --git a/folio2/crates/folio/tests/face_srs_body.rs b/folio2/crates/folio/tests/face_srs_body.rs
+index d2b6357ff1b15e50a973e19f298994dd8756c072..36dec9b9e18944269330f3f02fe252b458b99626 100644
+--- a/folio2/crates/folio/tests/face_srs_body.rs
++++ b/folio2/crates/folio/tests/face_srs_body.rs
+@@ -333,20 +333,15 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
+         assert!(html.contains(&want), "制約の text が面に無い: {want}");
+     }
+ 
++    census_counts(html, (&s, &v), fr, nfr, acs);
++}
++
++/// 件数（部品の数・対応表・用語集・章の帯）と、部品の名札と、図 3 の state-strip を見る。
++fn census_counts(html: String, (s, v): (&Yaml, &Yaml), fr: &[Yaml], nfr: &[Yaml], acs: &[Yaml]) {
+     // 件数
+     let parts = components(&html);
+     let parts_of = |name: &str| parts.iter().filter(|p| **p == name).count();
+-    assert_eq!(parts_of("item-row"), fr.len() + nfr.len(), "item-row の数");
+-    assert_eq!(
+-        parts_of("band-node"),
+-        seq(&s["actors"], "actors").len() + seq(&s["outputs"], "outputs").len(),
+-        "band-node の数"
+-    );
+-    assert_eq!(
+-        parts_of("rail-node"),
+-        seq(&s["rail"], "rail").len(),
+-        "rail-node の数"
+-    );
++    census_nodes(parts_of, fr, nfr, s);
+     let rtm = between(&html, "<table class=\"rtm\">", "</tbody>");
+     assert_eq!(
+         rtm.matches("<tr>").count() - 1,
+@@ -355,40 +350,7 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
+     );
+     // 章 08 は憲法の面の章 07 と同じ形（便 36）: 語の行 = terms の数・目次へ = terms の数・id g-<語の id> が terms の順
+     let glossary = between(&html, "data-component=\"glossary-term-table\">", "\n</div>");
+-    let terms = seq(&v["terms"], "terms");
+-    assert_eq!(
+-        glossary.matches("<div class=\"grow\"").count(),
+-        terms.len(),
+-        "用語の行（div.grow）の数"
+-    );
+-    assert_eq!(
+-        glossary
+-            .matches("<a class=\"back\" href=\"#toc\">目次へ</a>")
+-            .count(),
+-        terms.len(),
+-        "用語の行の目次へ（a.back）の数"
+-    );
+-    let ids = terms
+-        .iter()
+-        .map(|t| {
+-            let needle = format!("<div class=\"grow\" id=\"g-{}\">", text(t, "id"));
+-            glossary
+-                .find(&needle)
+-                .unwrap_or_else(|| panic!("語の行が無い: {needle}"))
+-        })
+-        .collect::<Vec<_>>();
+-    assert!(
+-        ids.windows(2).all(|w| w[0] < w[1]),
+-        "語の行の id が terms の順でない"
+-    );
+-    assert_eq!(parts_of("ac-state-chip"), acs.len(), "ac-state-chip の数");
+-    // 章の帯は 8 章 + 図の章（正本の figures が 1 枚以上のときだけ・便 34）+ 承認欄
+-    let figures = s["figures"].as_vec().map_or(0, Vec::len);
+-    assert_eq!(
+-        parts_of("chapter-deck-band"),
+-        8 + usize::from(figures > 0) + 1,
+-        "chapter-deck-band の数"
+-    );
++    census_terms(glossary, v, parts_of, acs, s);
+ 
+     // 部品の名札は 18 種の中だけ・lane-chip を含まない
+     const ALLOWED: [&str; 18] = [
+@@ -443,6 +405,65 @@ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
+     }
+ }
+ 
++/// item-row・band-node・rail-node の数を正本の行の数と見る。
++fn census_nodes(parts_of: impl Fn(&str) -> usize, fr: &[Yaml], nfr: &[Yaml], s: &Yaml) {
++    assert_eq!(parts_of("item-row"), fr.len() + nfr.len(), "item-row の数");
++    assert_eq!(
++        parts_of("band-node"),
++        seq(&s["actors"], "actors").len() + seq(&s["outputs"], "outputs").len(),
++        "band-node の数"
++    );
++    assert_eq!(
++        parts_of("rail-node"),
++        seq(&s["rail"], "rail").len(),
++        "rail-node の数"
++    );
++}
++
++/// 用語集の語の行（数・目次へ・terms の順）と ac-state-chip と章の帯の数を見る。
++fn census_terms(
++    glossary: &str,
++    v: &Yaml,
++    parts_of: impl Fn(&str) -> usize,
++    acs: &[Yaml],
++    s: &Yaml,
++) {
++    let terms = seq(&v["terms"], "terms");
++    assert_eq!(
++        glossary.matches("<div class=\"grow\"").count(),
++        terms.len(),
++        "用語の行（div.grow）の数"
++    );
++    assert_eq!(
++        glossary
++            .matches("<a class=\"back\" href=\"#toc\">目次へ</a>")
++            .count(),
++        terms.len(),
++        "用語の行の目次へ（a.back）の数"
++    );
++    let ids = terms
++        .iter()
++        .map(|t| {
++            let needle = format!("<div class=\"grow\" id=\"g-{}\">", text(t, "id"));
++            glossary
++                .find(&needle)
++                .unwrap_or_else(|| panic!("語の行が無い: {needle}"))
++        })
++        .collect::<Vec<_>>();
++    assert!(
++        ids.windows(2).all(|w| w[0] < w[1]),
++        "語の行の id が terms の順でない"
++    );
++    assert_eq!(parts_of("ac-state-chip"), acs.len(), "ac-state-chip の数");
++    // 章の帯は 8 章 + 図の章（正本の figures が 1 枚以上のときだけ・便 34）+ 承認欄
++    let figures = s["figures"].as_vec().map_or(0, Vec::len);
++    assert_eq!(
++        parts_of("chapter-deck-band"),
++        8 + usize::from(figures > 0) + 1,
++        "chapter-deck-band の数"
++    );
++}
++
+ // ── 要件書の面の用語集（便 36・章 08 は憲法の面の章 07 と同じ形）──
+ 
+ #[test]
+diff --git a/folio2/crates/folio/tests/face_style.rs b/folio2/crates/folio/tests/face_style.rs
+index 9fa2ac4d9b0123cdf8988288d8c2689db26a9d78..cf5d75ee0dcffc113767d6f41d026d4545c5cb6e 100644
+--- a/folio2/crates/folio/tests/face_style.rs
++++ b/folio2/crates/folio/tests/face_style.rs
+@@ -80,52 +80,7 @@ fn parse_html(s: &str) -> Vec<El> {
+             j += 1;
+         }
+         let tag = s[at + 1..j].to_ascii_lowercase();
+-        let mut attrs = Vec::new();
+-        let mut self_close = false;
+-        loop {
+-            while j < b.len() && b[j].is_ascii_whitespace() {
+-                j += 1;
+-            }
+-            if j >= b.len() {
+-                break;
+-            }
+-            if b[j] == b'>' {
+-                j += 1;
+-                break;
+-            }
+-            if b[j] == b'/' {
+-                self_close = true;
+-                j += 1;
+-                continue;
+-            }
+-            let n0 = j;
+-            while j < b.len() && !b[j].is_ascii_whitespace() && !matches!(b[j], b'=' | b'>' | b'/')
+-            {
+-                j += 1;
+-            }
+-            let name = s[n0..j].to_ascii_lowercase();
+-            let mut value = String::new();
+-            if j < b.len() && b[j] == b'=' {
+-                j += 1;
+-                if j < b.len() && (b[j] == b'"' || b[j] == b'\'') {
+-                    let q = b[j];
+-                    let v0 = j + 1;
+-                    j = v0;
+-                    while j < b.len() && b[j] != q {
+-                        j += 1;
+-                    }
+-                    value = s[v0..j].to_string();
+-                    j += 1;
+-                } else {
+-                    let v0 = j;
+-                    while j < b.len() && !b[j].is_ascii_whitespace() && b[j] != b'>' {
+-                        j += 1;
+-                    }
+-                    value = s[v0..j].to_string();
+-                }
+-            }
+-            attrs.push((name, value));
+-        }
++        let (attrs, self_close, j) = parse_attrs(s, b, j);
+         let idx = els.len();
+         els.push(El {
+             tag: tag.clone(),
+@@ -143,6 +98,57 @@ fn parse_html(s: &str) -> Vec<El> {
+     els
+ }
+ 
++/// 開始 tag の名の後から属性を読み、（属性の列・自分で閉じるか・読み終えた位置）を返す。
++fn parse_attrs(s: &str, b: &[u8], mut j: usize) -> (Vec<(String, String)>, bool, usize) {
++    let mut attrs = Vec::new();
++    let mut self_close = false;
++    loop {
++        while j < b.len() && b[j].is_ascii_whitespace() {
++            j += 1;
++        }
++        if j >= b.len() {
++            break;
++        }
++        if b[j] == b'>' {
++            j += 1;
++            break;
++        }
++        if b[j] == b'/' {
++            self_close = true;
++            j += 1;
++            continue;
++        }
++        let n0 = j;
++        while j < b.len() && !b[j].is_ascii_whitespace() && !matches!(b[j], b'=' | b'>' | b'/')
++        {
++            j += 1;
++        }
++        let name = s[n0..j].to_ascii_lowercase();
++        let mut value = String::new();
++        if j < b.len() && b[j] == b'=' {
++            j += 1;
++            if j < b.len() && (b[j] == b'"' || b[j] == b'\'') {
++                let q = b[j];
++                let v0 = j + 1;
++                j = v0;
++                while j < b.len() && b[j] != q {
++                    j += 1;
++                }
++                value = s[v0..j].to_string();
++                j += 1;
++            } else {
++                let v0 = j;
++                while j < b.len() && !b[j].is_ascii_whitespace() && b[j] != b'>' {
++                    j += 1;
++                }
++                value = s[v0..j].to_string();
++            }
++        }
++        attrs.push((name, value));
++    }
++    (attrs, self_close, j)
++}
++
+ fn is_descendant(els: &[El], d: usize, a: usize) -> bool {
+     let mut p = els[d].parent;
+     while let Some(k) = p {
+@@ -493,59 +499,7 @@ fn parse_selector(s: &str) -> Complex {
+             parts.push(Vec::new());
+         }
+         let cur = parts.last_mut().expect("parts は空でない");
+-        match ch {
+-            '.' | '#' => {
+-                let (name, j) = ident(&c, i + 1);
+-                cur.push(if ch == '.' {
+-                    Simple::Class(name)
+-                } else {
+-                    Simple::Id(name)
+-                });
+-                i = j;
+-            }
+-            '*' => {
+-                cur.push(Simple::Any);
+-                i += 1;
+-            }
+-            '[' => {
+-                let e = close_paren(&c, i, '[', ']');
+-                cur.push(parse_attr(&c[i + 1..e.min(c.len())].iter().collect::<String>()));
+-                i = e + 1;
+-            }
+-            ':' => {
+-                let elem = c.get(i + 1) == Some(&':');
+-                let (name, mut j) = ident(&c, if elem { i + 2 } else { i + 1 });
+-                let name = name.to_ascii_lowercase();
+-                let mut arg = None;
+-                if c.get(j) == Some(&'(') {
+-                    let e = close_paren(&c, j, '(', ')');
+-                    arg = Some(c[j + 1..e.min(c.len())].iter().collect::<String>());
+-                    j = e + 1;
+-                }
+-                if elem || LEGACY_ELEM.contains(&name.as_str()) {
+-                    pseudo_element = true;
+-                    cur.push(Simple::Elem);
+-                } else if let (Some(a), true) = (
+-                    &arg,
+-                    matches!(name.as_str(), "not" | "is" | "where" | "matches" | "has"),
+-                ) {
+-                    cur.push(Simple::Func(name, parse_args(a)));
+-                } else {
+-                    cur.push(Simple::Pseudo(name));
+-                }
+-                i = j;
+-            }
+-            _ => {
+-                let (name, j) = ident(&c, i);
+-                if name.is_empty() {
+-                    cur.push(Simple::Opaque);
+-                    i += 1;
+-                } else {
+-                    cur.push(Simple::Type(name.to_ascii_lowercase()));
+-                    i = j;
+-                }
+-            }
+-        }
++        (i, pseudo_element) = parse_simple(&c, ch, i, cur, pseudo_element);
+     }
+     Complex {
+         parts,
+@@ -554,6 +508,70 @@ fn parse_selector(s: &str) -> Complex {
+     }
+ }
+ 
++/// 単純な選択子 1 つ（. # * [ : と型の名）を読んで cur へ足し、（次の位置・擬似要素を読んだか）を返す。
++fn parse_simple(
++    c: &[char],
++    ch: char,
++    mut i: usize,
++    cur: &mut Vec<Simple>,
++    mut pseudo_element: bool,
++) -> (usize, bool) {
++    match ch {
++        '.' | '#' => {
++            let (name, j) = ident(c, i + 1);
++            cur.push(if ch == '.' {
++                Simple::Class(name)
++            } else {
++                Simple::Id(name)
++            });
++            i = j;
++        }
++        '*' => {
++            cur.push(Simple::Any);
++            i += 1;
++        }
++        '[' => {
++            let e = close_paren(c, i, '[', ']');
++            cur.push(parse_attr(&c[i + 1..e.min(c.len())].iter().collect::<String>()));
++            i = e + 1;
++        }
++        ':' => {
++            let elem = c.get(i + 1) == Some(&':');
++            let (name, mut j) = ident(c, if elem { i + 2 } else { i + 1 });
++            let name = name.to_ascii_lowercase();
++            let mut arg = None;
++            if c.get(j) == Some(&'(') {
++                let e = close_paren(c, j, '(', ')');
++                arg = Some(c[j + 1..e.min(c.len())].iter().collect::<String>());
++                j = e + 1;
++            }
++            if elem || LEGACY_ELEM.contains(&name.as_str()) {
++                pseudo_element = true;
++                cur.push(Simple::Elem);
++            } else if let (Some(a), true) = (
++                &arg,
++                matches!(name.as_str(), "not" | "is" | "where" | "matches" | "has"),
++            ) {
++                cur.push(Simple::Func(name, parse_args(a)));
++            } else {
++                cur.push(Simple::Pseudo(name));
++            }
++            i = j;
++        }
++        _ => {
++            let (name, j) = ident(c, i);
++            if name.is_empty() {
++                cur.push(Simple::Opaque);
++                i += 1;
++            } else {
++                cur.push(Simple::Type(name.to_ascii_lowercase()));
++                i = j;
++            }
++        }
++    }
++    (i, pseudo_element)
++}
++
+ type Spec = (u32, u32, u32);
+ 
+ fn add(a: Spec, b: Spec) -> Spec {
+@@ -909,6 +927,11 @@ fn f143_the_cascade_reader_follows_the_css_order() {
+         ),
+         ("宣言が無い", ".sc-open{position:relative;z-index:1}", None, None),
+     ];
++    cascade_cases(cases);
++}
++
++/// 表の写しごとの (position, z-index) と、兄弟の結合子の扱い（決められないなら Err）を見る。
++fn cascade_cases(cases: [(&str, &str, Option<&str>, Option<&str>); 11]) {
+     for (name, css, pos, z) in cases {
+         let got = probe(css).unwrap_or_else(|e| panic!("{name}: {e}"));
+         assert_eq!(
+diff --git a/folio2/crates/folio/tests/figure.rs b/folio2/crates/folio/tests/figure.rs
+index cc1ad3acd093583bbb125e8df30ff935172e3ea4..de003dde92b4028fafabbb4872ed6b1e394e1d27 100644
+--- a/folio2/crates/folio/tests/figure.rs
++++ b/folio2/crates/folio/tests/figure.rs
+@@ -105,17 +105,12 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+ 
+ /// `folio figure --doc <doc> --id <id> --dir <dir> --out <out> <mode>`。
+ fn folio_figure(doc: &str, id: &str, dir: &Path, out: &Path, mode: &str) -> Output {
+-    folio_figure_env(doc, id, dir, out, mode, None)
++    folio_figure_env((doc, id), dir, out, mode, None)
+ }
+ 
+ /// 環境変数 PATH を差し替えられる形（道具の実行環境の不在を測る）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+ fn folio_figure_env(
+-    doc: &str,
+-    id: &str,
++    (doc, id): (&str, &str),
+     dir: &Path,
+     out: &Path,
+     mode: &str,
+@@ -391,7 +386,7 @@ fn figure_unknown_when_the_tool_or_node_is_absent() {
+     let out = td.join("fig.svg");
+     let empty = td.join("empty-path");
+     fs::create_dir_all(&empty).unwrap();
+-    let no_node = folio_figure_env("full", "fig-anchor", &work, &out, "--write", Some(&empty));
++    let no_node = folio_figure_env(("full", "fig-anchor"), &work, &out, "--write", Some(&empty));
+     let wrote_no_node = out.exists();
+     fs::remove_file(td.join("vendor/archify/bin/archify.mjs")).unwrap();
+     let no_tool = folio_figure("full", "fig-anchor", &work, &out, "--write");
+diff --git a/folio2/crates/folio/tests/site.rs b/folio2/crates/folio/tests/site.rs
+index 43ae1a4a3527e01b1d44865b91a7e668f5efd872..5cad075d7edee4ea0606fd34c1111ae8f936ed86 100644
+--- a/folio2/crates/folio/tests/site.rs
++++ b/folio2/crates/folio/tests/site.rs
+@@ -328,6 +328,33 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
+             .arg(format!("{face}={}", site.join(name).display()));
+     }
+     let parts = pages.output().unwrap();
++    let mut faces = site_faces(&site, last, last_id);
++    for id in &notes {
++        faces.push((
++            "note",
++            Command::new(env!("CARGO_BIN_EXE_tz"))
++                .arg("face")
++                .arg("--face")
++                .arg("note")
++                .arg("--id")
++                .arg(id)
++                .arg("--dir")
++                .arg(design_intent())
++                .arg("--out")
++                .arg(site.join(format!("note-{id}.html")))
++                .arg("--check")
++                .output()
++                .unwrap(),
++        ));
++    }
++    let _ = fs::remove_dir_all(&td);
++
++    build_wrote(build, total, all_adr, records);
++    pages_pass(all_notes, &notes, parts, faces);
++}
++
++/// 3 面と最後の判断の記録の面を `face --check` で撃ち、（面の名・出力）の列を返す。
++fn site_faces(site: &Path, last: String, last_id: u32) -> Vec<(&'static str, Output)> {
+     let mut faces: Vec<(&str, Output)> = [
+         ("index", "index.html"),
+         ("constitution", "constitution.html"),
+@@ -365,26 +392,11 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
+             .output()
+             .unwrap(),
+     ));
+-    for id in &notes {
+-        faces.push((
+-            "note",
+-            Command::new(env!("CARGO_BIN_EXE_tz"))
+-                .arg("face")
+-                .arg("--face")
+-                .arg("note")
+-                .arg("--id")
+-                .arg(id)
+-                .arg("--dir")
+-                .arg(design_intent())
+-                .arg("--out")
+-                .arg(site.join(format!("note-{id}.html")))
+-                .arg("--check")
+-                .output()
+-                .unwrap(),
+-        ));
+-    }
+-    let _ = fs::remove_dir_all(&td);
++    faces
++}
+ 
++/// build の終了 code と出力の 2 行（床の合格・書いた file の数）と、判断の記録の面がそろうことを見る。
++fn build_wrote(build: Output, total: usize, all_adr: bool, records: usize) {
+     assert_eq!(
+         code(&build, "folio build（実の正本）"),
+         0,
+@@ -404,6 +416,10 @@ fn site_on_the_real_sources_passes_parts_check_and_face_check() {
+         "{out}"
+     );
+     assert!(all_adr, "判断の記録の面が {records} 枚そろっていない");
++}
++
++/// 設計ノートの面がそろい、`parts --check` と面ごとの `face --check` が合格することを見る。
++fn pages_pass(all_notes: bool, notes: &[String], parts: Output, faces: Vec<(&str, Output)>) {
+     assert!(
+         all_notes,
+         "設計ノートの面が {} 枚そろっていない",
+@@ -841,6 +857,15 @@ fn f163_note_approval_list_builds_one_sign_per_item() {
+             .collect();
+         format!("  approval:{rows}")
+     };
++    approval_list_cases(first, second, list);
++}
++
++/// 写しごとに、承認欄の項の数と順の署名の行・状態の行・鮮度の札が面に出ることを見る。
++fn approval_list_cases(
++    first: (&str, &str),
++    second: (&str, &str),
++    list: impl Fn(&[(&str, &str)]) -> String,
++) {
+     // (写しの名, 状態, 項, 状態の行, 日付の名, 日付)
+     let cases = [
+         (
+@@ -990,6 +1015,11 @@ fn f153_build_falls_back_to_the_baked_style_only_when_the_place_has_none() {
+     let check = folio_build(&work, &site, "--check");
+     assert_eq!(code(&check, "folio build --check"), 0, "{}", stderr(&check));
+ 
++    unreadable_styles(td, work, preview);
++}
++
++/// 読めない様式（dir・壊れた symlink・途中が file）は 2 で「まだ分からない」とし、配信先を作らないことを見る。
++fn unreadable_styles(td: PathBuf, work: PathBuf, preview: PathBuf) {
+     // 3・4. folio.css が dir か壊れた symlink なら 2 で「folio.css: 読めない」・配信先を作らない
+     let css = preview.join("folio.css");
+     fs::create_dir(&css).unwrap();
