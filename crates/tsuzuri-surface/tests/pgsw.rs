@@ -55,7 +55,7 @@ const LEFT: Press = Press {
 #[test]
 fn pgsw_plain_left_pushes_href() {
     assert_eq!(
-        switch_url(PageId::Map, PageId::Ask, Mode::Beginner, LEFT).as_deref(),
+        switch_url(PageId::Gaps, PageId::Ask, Mode::Beginner, LEFT).as_deref(),
         Some("?page=ask&mode=beginner")
     );
     assert_eq!(
@@ -95,7 +95,7 @@ fn pgsw_keys_or_button_keep_default() {
         Press { button: 2, ..LEFT },
     ];
     for p in presses {
-        assert_eq!(switch_url(PageId::Map, PageId::Ask, Mode::Beginner, p), None, "{p:?}");
+        assert_eq!(switch_url(PageId::Gaps, PageId::Ask, Mode::Beginner, p), None, "{p:?}");
         assert_eq!(switch_url(PageId::Node, PageId::Home, Mode::Beginner, p), None, "{p:?}");
     }
 }

@@ -1,4 +1,4 @@
-//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 5 つの block は測れていない・口の path は block の module の
+//! 便 g-parts の歯: 読みの結果の 3 値・中身の無い 4 つの block は測れていない・口の path は block の module の
 //! paths とグラフの口で互いに違う（行 hs-derived で block ごとの定数から導く形にした）・
 //! 読み直しの合図の event の名は契約の型の crate の定数から引く・hover の card の置き場と猶予と行の切り方・
 //! 定数が rules の file の行 R-20 と行 R-19 の字と同じ。
@@ -65,20 +65,19 @@ fn three() -> [Fetched; 3] {
     all
 }
 
-/// 中身の関数がまだ無い 5 つ（block の id・中身の関数・口が読めないときの理由）。
+/// 中身の関数がまだ無い 4 つ（block の id・中身の関数・口が読めないときの理由）。
 type Pending = (&'static str, fn(&Fetched) -> Body<()>, &'static str);
 
-fn pending_blocks() -> [Pending; 5] {
+fn pending_blocks() -> [Pending; 4] {
     [
         (next::BLOCK.id, next::body, next::REASON),
         (pipeline::BLOCK.id, pipeline::body, pipeline::REASON),
         (seat::BLOCK.id, seat::body, seat::REASON),
-        (map::BLOCK.id, map::body, map::REASON),
         ("ledger の指標", ledger::metrics, ledger::METRICS_REASON),
     ]
 }
 
-/// 5 つの block は 3 値のどれを受けても 0 件でなく測れていないと空でない理由の 1 行を返す。
+/// 4 つの block は 3 値のどれを受けても 0 件でなく測れていないと空でない理由の 1 行を返す。
 #[test]
 fn parts_pending_blocks_unmeasured_for_all_three() {
     for (id, body, unread) in pending_blocks() {
@@ -139,8 +138,8 @@ fn unread_lists(empty: String) {
     }
 }
 
-/// 口の path は block の module の paths の全部とグラフの module の口で、互いに違う（数と字は持たない・
-/// 値は歯 hsderive_ と mapgraph_ が見る・行 hs-derived）。
+/// 口の path は block の module の paths の全部とグラフの module の口と kit の map の口で、互いに違う（数と字は持たない・
+/// 値は歯 hsderive_ と mapgraph_ が見る・行 hs-derived・kit の map は行 m-map-page）。
 #[test]
 fn parts_paths_distinct_in_block_modules() {
     let owned: Vec<(Module, &str)> = Module::ALL
@@ -149,13 +148,15 @@ fn parts_paths_distinct_in_block_modules() {
         .collect();
     let mut paths: Vec<&str> = owned.iter().map(|(_, p)| *p).collect();
     paths.push(graph::PATH);
+    paths.push(map::PATH);
     let mut sorted = paths.clone();
     sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len(), paths.len(), "口の path が重なる: {paths:?}");
 
     // src の `"/api/…"` の字: block の口はその path を paths に持つ module の file に 1 度だけ・
-    // グラフの口の字は mapview の下のグラフの module の file に 1 度だけ・ほかは変化の知らせの口だけ。
+    // グラフの口の字は mapview の下のグラフの module の file に 1 度だけ・グラフの電文の口の字は kit の下の map の
+    // file に 1 度だけ・ほかは変化の知らせの口だけ。
     let mut found: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     for (path, text) in sources() {
         let mut rest = text.as_str();
@@ -183,6 +184,13 @@ fn parts_paths_distinct_in_block_modules() {
         vec![crate_dir().join("src/mapview/graph.rs")],
         "{} の字がグラフの module に 1 度だけでない",
         graph::PATH
+    );
+    let at = found.remove(map::PATH).unwrap_or_default();
+    assert_eq!(
+        at,
+        vec![crate_dir().join("src/kit/map.rs")],
+        "{} の字が kit の map の module に 1 度だけでない",
+        map::PATH
     );
     let rest: Vec<&String> = found.keys().collect();
     assert_eq!(rest, vec!["/api/surface/events"], "block の外の口の字");

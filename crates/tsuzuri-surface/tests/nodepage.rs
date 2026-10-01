@@ -113,13 +113,13 @@ fn nodepage_frame_and_nav() {
     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
     assert_eq!(PageId::from_query("?page=node"), PageId::Node);
     assert!(PageId::ALL.contains(&PageId::Node));
-    // nav の頁の一覧と header の link は 4 つをこの順に含み、節点の頁を含まない。
+    // nav の頁の一覧と header の link は 3 つをこの順に含み、節点の頁を含まない（地図の頁は行 m-map-page で消した）。
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
     assert!(!ids.contains(&"node"), "{ids:?}");
     let nav_keys = frame::nav_keys();
     assert!(
-        in_order(&nav_keys, &["home", "questions", "map", "gaps"]),
+        in_order(&nav_keys, &["home", "questions", "gaps"]),
         "{nav_keys:?}"
     );
     assert!(!nav_keys.contains(&"nb_self"), "{nav_keys:?}");

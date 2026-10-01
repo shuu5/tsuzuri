@@ -1,4 +1,4 @@
-//! project board の block（便 g-frame）: 1 つの block（と地図の頁）に 1 つの module。
+//! project board の block（便 g-frame）: 1 つの block に 1 つの module。
 //! 各 module は枠の値（`BLOCK`）と中身の純粋な関数を持ち、DOM は wasm の target のときだけ組み立てる。
 //! 問いの頁（便 g-ask）は ask（問いの card の列・口 /api/questions）と askpage（これまでの決定・台帳の一覧の口）の 2 つ。
 //! 抜けの検査の頁（便 g-gaps）は gaps（不変条件の 12 本の判定・口 /api/graph の定数は map の module の 1 本を使う）。

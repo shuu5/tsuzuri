@@ -10,7 +10,6 @@ use std::path::PathBuf;
 
 use tsuzuri_contract::graph::{GraphDoc, GraphSource, NodeKind};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::Block;
 use tsuzuri_surface::mapview::band::{
     BEADS_LANES, Band, KINDS, band_of, kind_from_name, kind_key, kind_name, unread_reason,
 };
@@ -19,8 +18,8 @@ use tsuzuri_surface::mapview::list::{
     Listing, NO_STATE, Query, Sort, listing, pair_value, parse_pair, with_choice, with_pair,
 };
 use tsuzuri_surface::mapview::table::{Matrix, matrix};
-use tsuzuri_surface::mapview::{View, decode, encode, natural, param, set_param, with_view};
-use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ, map};
+use tsuzuri_surface::mapview::{decode, encode, natural, param, set_param};
+use tsuzuri_surface::project::{NO_CONTENT, NOT_READ, map};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 
@@ -520,7 +519,6 @@ fn mapview_table_counts_and_pair_filter() {
 
     // cell を押した後の URL で一覧の面が組の両端に絞られる。
     let url = with_pair("?page=map&view=table&band=rules", Some((Run, Task)));
-    assert_eq!(View::from_query(&url), View::List);
     assert_eq!(
         list_of(&doc, &url),
         vec!["t3-hub.2", "t3-hub.15", "r-1", "r-3", "r-12"]
@@ -537,33 +535,9 @@ fn mapview_table_counts_and_pair_filter() {
     }
 }
 
-/// (6) 面の切り替えと絞りと並べ替えが URL の query に残り、知らない view の値は圧縮の面。
+/// (6) 絞りと並べ替えが URL の query に残る（面の切り替えの view は行 m-map-page で消した）。
 #[test]
 fn mapview_query_keeps_view_and_filters() {
-    assert_eq!(View::from_query(""), View::Compact);
-    assert_eq!(View::from_query("?page=map"), View::Compact);
-    assert_eq!(View::from_query("?view=bogus"), View::Compact);
-    assert_eq!(View::from_query("?view="), View::Compact);
-    for v in View::ALL {
-        let url = with_view("?page=map&mode=expert", v);
-        assert_eq!(View::from_query(&url), v);
-        assert_eq!(param(&url, "mode").as_deref(), Some("expert"));
-        assert_eq!(param(&url, "page").as_deref(), Some("map"));
-        assert!(
-            vocab().term(v.key()).is_some(),
-            "鍵 {} が vocab に無い",
-            v.key()
-        );
-    }
-    assert_eq!(
-        with_view("?page=map&mode=expert", View::List),
-        "?page=map&mode=expert&view=list"
-    );
-    assert_eq!(
-        with_view("?view=list&page=map", View::Table),
-        "?view=table&page=map"
-    );
-
     search_query_and_choice();
 }
 
@@ -602,14 +576,14 @@ fn pair_in_query() {
     assert_eq!(
         url,
         format!(
-            "?page=map&view=list&mode=expert&pair={}",
+            "?page=map&view=table&mode=expert&pair={}",
             encode("契約|epic")
         )
     );
     let q = Query::from_search(&url);
     assert_eq!(q.pair, Some((NodeKind::Task, NodeKind::Epic)));
     assert_eq!((q.band, q.kind), (None, None));
-    assert_eq!(with_pair(&url, None), "?page=map&view=list&mode=expert");
+    assert_eq!(with_pair(&url, None), "?page=map&view=table&mode=expert");
     assert_eq!(
         parse_pair("契約|epic"),
         Some((NodeKind::Task, NodeKind::Epic))
@@ -677,29 +651,20 @@ fn mapview_every_tag_and_row_shows_id() {
     assert!(l.rows.iter().all(|r| !r.id.is_empty()));
 }
 
-/// (9) 着地済みの外形（BLOCK・口の path・body）と、電文の型として読めない本文は測れていない・外の依存は足さない。
+/// (9) グラフの口の path と読み（地図の block は行 m-map-page で消した）と、電文の型として読めない本文は理由・
+/// 外の依存は足さない。
 #[test]
 fn mapview_landed_shape_and_body() {
-    assert_eq!(
-        map::BLOCK,
-        Block {
-            id: "map",
-            heading: "map",
-            class: "panel"
-        }
-    );
     assert_eq!(map::PATH, "/api/graph");
-    let body: fn(&Fetched) -> Body<()> = map::body;
-    assert_eq!(body(&Fetched::NotRead), Body::Unmeasured(NOT_READ));
-    assert_eq!(body(&Fetched::Failed), Body::Unmeasured(map::REASON));
+    assert_eq!(map::doc(&Fetched::NotRead), Err(NOT_READ));
+    assert_eq!(map::doc(&Fetched::Failed), Err(map::REASON));
     for text in ["{}", "not json", "[]", r#"{"nodes": []}"#] {
         assert_eq!(
-            body(&Fetched::Body(text.to_string())),
-            Body::Unmeasured(NO_CONTENT),
+            map::doc(&Fetched::Body(text.to_string())),
+            Err(NO_CONTENT),
             "{text}"
         );
     }
-    assert_eq!(body(&Fetched::Body(fixture_text())), Body::Filled(()));
     assert_eq!(map::doc(&Fetched::Body(fixture_text())), Ok(fixture()));
 
     // 直接依存は着地前と同じ（[dependencies] は契約の型の crate だけ）。
@@ -756,7 +721,6 @@ fn mapview_classes_and_keys_exist() {
         }
     };
     let files = [
-        "src/project/map.rs",
         "src/mapview/mod.rs",
         "src/mapview/band.rs",
         "src/mapview/compact.rs",
@@ -823,9 +787,9 @@ fn doc_classes(mut add: impl FnMut(&str)) {
 fn used_in_css(used: BTreeSet<String>) {
     let css = stylesheet_classes();
     for c in [
-        "tabs", "band", "art7", "kids", "tag", "tid", "tt", "subh", "cards7", "filters", "items",
-        "rows", "rowb", "nid", "ttl", "meta", "bchip", "gist", "none", "mx", "mxwrap", "mxlist",
-        "pair", "pairnote", "path", "bn", "shape", "empty", "open-q",
+        "band", "art7", "kids", "tag", "tid", "tt", "subh", "cards7", "filters", "items", "rows",
+        "rowb", "nid", "ttl", "meta", "bchip", "gist", "none", "mx", "mxwrap", "mxlist", "pair",
+        "pairnote", "path", "bn", "shape", "empty", "open-q",
     ] {
         assert!(used.contains(c), "地図の頁が class {c} を使わない");
     }
@@ -833,8 +797,6 @@ fn used_in_css(used: BTreeSet<String>) {
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
 
     for key in [
-        "map",
-        "views",
         "bands",
         "matrix",
         "col_band",

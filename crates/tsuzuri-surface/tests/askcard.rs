@@ -50,12 +50,12 @@ fn in_order<S: AsRef<str>>(all: &[S], want: &[&str]) -> bool {
     want.iter().all(|w| rest.any(|a| a.as_ref() == *w))
 }
 
-/// 頁の順は home・ask・map・gaps（nav の中の含まれ方と順）、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
-/// header の link は ホーム・質問・地図・抜けの検査。
+/// 頁の順は home・ask・gaps（nav の中の含まれ方と順）、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
+/// header の link は ホーム・質問・抜けの検査。
 #[test]
 fn askcard_page_frame_and_nav() {
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
     let page = frame::page(PageId::Ask);
     assert_eq!(page.columns.len(), 2);
     let left: Vec<&str> = page.columns[0].blocks.iter().map(|b| b.id).collect();
@@ -74,13 +74,13 @@ fn header_links() {
     let links = frame::nav_links(PageId::Ask);
     let words: Vec<String> = links.iter().map(|l| vocab().label(l.key)).collect();
     assert!(
-        in_order(&words, &["ホーム", "質問", "地図", "抜けの検査"]),
+        in_order(&words, &["ホーム", "質問", "抜けの検査"]),
         "{words:?}"
     );
-    // 数の印は問いの頁の link だけ（home・map・gaps の link は空）。
+    // 数の印は問いの頁の link だけ（home・gaps の link は空）。
     for l in &links {
         let want = if l.page == PageId::Ask { BADGE } else { "" };
-        if matches!(l.key, "home" | "questions" | "map" | "gaps") {
+        if matches!(l.key, "home" | "questions" | "gaps") {
             assert_eq!(l.badge, want, "{}", l.key);
         }
     }

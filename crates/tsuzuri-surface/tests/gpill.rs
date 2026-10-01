@@ -102,7 +102,7 @@ fn gpill_part_and_pages() {
         .map(|p| p.id())
         .collect();
     shown.sort_unstable();
-    assert_eq!(shown, ["ask", "gaps", "map", "node"]);
+    assert_eq!(shown, ["ask", "gaps", "node"]);
 
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, ["brand", "nav", "updated", "mode"]);

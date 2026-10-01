@@ -7,8 +7,8 @@ use std::path::PathBuf;
 
 use tsuzuri_surface::frame::Block;
 use tsuzuri_surface::project::{
-    self, Module, ask, askpage, batch, gaps, ledger, legend, map, next, node, nodearound,
-    pipeline, policy, seat,
+    self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, pipeline,
+    policy, seat,
 };
 
 fn crate_dir() -> PathBuf {
@@ -39,15 +39,14 @@ fn dir_names() -> Vec<String> {
     names
 }
 
-/// 着地済みの 13 の module と、その BLOCK。
-const LANDED: [(&str, Block); 13] = [
+/// 着地済みの 12 の module と、その BLOCK（地図の block は行 m-map-page で消した）。
+const LANDED: [(&str, Block); 12] = [
     ("ask", ask::BLOCK),
     ("askpage", askpage::BLOCK),
     ("batch", batch::BLOCK),
     ("gaps", gaps::BLOCK),
     ("ledger", ledger::BLOCK),
     ("legend", legend::BLOCK),
-    ("map", map::BLOCK),
     ("next", next::BLOCK),
     ("node", node::BLOCK),
     ("nodearound", nodearound::BLOCK),
@@ -85,7 +84,7 @@ fn has_path(text: &str, word: &str) -> bool {
     })
 }
 
-/// (1) Module の ALL の名の列は dir の file の名の列と同じで、着地済みの 13 が全部在る（多い分は許す）。
+/// (1) Module の ALL の名の列は dir の file の名の列と同じで、着地済みの 12 が全部在る（多い分は許す）。
 #[test]
 fn hsblock_names_follow_dir() {
     let names: Vec<String> = Module::ALL.iter().map(|m| m.name().to_string()).collect();

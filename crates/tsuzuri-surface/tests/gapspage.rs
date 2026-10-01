@@ -47,14 +47,14 @@ fn in_order(all: &[&str], want: &[&str]) -> bool {
     want.iter().all(|w| rest.any(|a| a == w))
 }
 
-/// 頁の順は home・ask・map・gaps（nav の中の含まれ方と順）、抜けの検査の頁の block は gaps の 1 つ、
-/// header の link は home・questions・map・gaps をこの順に含む。
+/// 頁の順は home・ask・gaps（nav の中の含まれ方と順）、抜けの検査の頁の block は gaps の 1 つ、
+/// header の link は home・questions・gaps をこの順に含む。
 #[test]
 fn gapspage_page_frame_and_nav() {
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
     let all: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
-    for id in ["home", "ask", "map", "gaps"] {
+    for id in ["home", "ask", "gaps"] {
         assert!(all.contains(&id), "{all:?}");
     }
     let page = frame::page(PageId::Gaps);
@@ -75,12 +75,12 @@ fn gapspage_page_frame_and_nav() {
 fn nav_and_snapshot() {
     let nav_keys = frame::nav_keys();
     assert!(
-        in_order(&nav_keys, &["home", "questions", "map", "gaps"]),
+        in_order(&nav_keys, &["home", "questions", "gaps"]),
         "{nav_keys:?}"
     );
     let links = frame::nav_links(PageId::Gaps);
     let keys: Vec<&str> = links.iter().map(|l| l.key).collect();
-    assert!(in_order(&keys, &["home", "questions", "map", "gaps"]), "{keys:?}");
+    assert!(in_order(&keys, &["home", "questions", "gaps"]), "{keys:?}");
     let on: Vec<&str> = links
         .iter()
         .filter(|l| l.class == "on")

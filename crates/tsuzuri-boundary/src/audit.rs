@@ -302,24 +302,19 @@ pub const WIDTHS: [u32; 2] = [1280, 390];
 pub const MODES: [&str; 2] = ["beginner", "expert"];
 
 /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
-/// project board の頁と地図の 6 つの面と account board の 3 つの tab（節点の頁は sweep が組ごとに足す）。
-pub const SCREENS: [&str; 12] = [
+/// project board の頁と account board の 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は
+/// 行 m-map-page で消した）。
+pub const SCREENS: [&str; 6] = [
     "?",
     "?page=ask&",
     "?page=gaps&",
-    "?page=map&view=compact&",
-    "?page=map&view=list&",
-    "?page=map&view=graph&",
-    "?page=map&view=table&",
-    "?page=map&view=design&",
-    "?page=map&view=ledger&",
     "?board=account&tab=home&",
     "?board=account&tab=session&",
     "?board=account&tab=projects&",
 ];
 
-/// 節点の頁に開く最初の節点を採る画面（地図の圧縮の面）。
-const COMPACT: &str = "?page=map&view=compact&";
+/// 節点の頁に開く最初の節点を採る画面（home・台帳の一覧の番号の札・地図の圧縮の面は行 m-map-page で消した）。
+const FIRST_NODE: &str = "?";
 
 /// 狭い幅（この幅までは高さ 844 の mobile で撃つ・広い幅は高さ 800）。
 const NARROW: u32 = 390;
@@ -427,8 +422,8 @@ fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 12 の画面と、
-/// その組の地図の圧縮の面の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
+/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 6 の画面と、
+/// その組の home の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
 pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
     let mut report = head();
     report.push('\n');
@@ -446,12 +441,12 @@ pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, 
             let mut first = None;
             for screen in SCREENS {
                 let facts = measure(page, &format!("{board}{screen}mode={mode}"), width, mode)?;
-                if screen == COMPACT {
+                if screen == FIRST_NODE {
                     first = facts.nodes.into_iter().next().map(|n| n.id);
                 }
             }
             let id = first.ok_or_else(|| {
-                format!("{width} {mode}: 地図の圧縮の面に節点が無い（節点の頁を開けない）")
+                format!("{width} {mode}: home の画面に節点が無い（節点の頁を開けない）")
             })?;
             let url = format!("{board}?page=node&id={}&mode={mode}", encode(&id));
             measure(page, &url, width, mode)?;

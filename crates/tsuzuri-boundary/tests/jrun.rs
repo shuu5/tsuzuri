@@ -153,15 +153,11 @@ fn jrun_screens_cover_surface() {
         .expect("面の頁の dir を読む")
         .map(|e| e.expect("dir の項").file_name().to_string_lossy().into_owned())
         .filter_map(|n| n.strip_suffix(".rs").map(str::to_string))
-        .filter(|n| !["mod", "home", "map", "node"].contains(&n.as_str()))
+        .filter(|n| !["mod", "home", "node"].contains(&n.as_str()))
         .collect();
     pages.sort();
     assert!(!pages.is_empty(), "頁の file");
     want.extend(pages.iter().map(|p| format!("?page={p}&")));
-    let map = fs::read_to_string(src.join("mapview/mod.rs")).expect("mapview/mod.rs を読む");
-    let views = arms(&map, "pub fn name(self) -> &'static str {");
-    assert_eq!(views.len(), 6, "{views:?}");
-    want.extend(views.iter().map(|v| format!("?page=map&view={v}&")));
     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
     assert_eq!(tabs, ["home", "session", "projects"]);
@@ -169,7 +165,7 @@ fn jrun_screens_cover_surface() {
     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
     got.sort();
     got.dedup();
-    assert_eq!(got.len(), 12, "SCREENS に重なりが無い");
+    assert_eq!(got.len(), 6, "SCREENS に重なりが無い");
     want.sort();
     assert_eq!(got, want);
 }
@@ -305,11 +301,11 @@ fn jrun_sweep_all_cases() {
     const ID: &str = "t3-hub.5_2~#é";
     let clean = fixture("clean.json");
     assert_eq!(clean.matches("t3-hub.52").count(), 2, "札の id と字");
-    let compact = clean.replace("t3-hub.52", ID);
+    let first = clean.replace("t3-hub.52", ID);
     let vocab = fixture("vocab.json");
     let measured = move |url: &str| {
-        if url.contains("view=compact") {
-            compact.clone()
+        if url.starts_with(&format!("{BOARD}?mode=")) {
+            first.clone()
         } else {
             clean.clone()
         }
@@ -329,7 +325,7 @@ fn jrun_sweep_all_cases() {
             urls.extend(group.into_iter().map(|u| (width, mode, u)));
         }
     }
-    assert_eq!(urls.len(), 52);
+    assert_eq!(urls.len(), 28);
     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
     assert_eq!(page.navigated(), navigated);
     let mut want = vec![head()];
@@ -361,16 +357,16 @@ fn jrun_sweep_all_cases() {
     sweep_without_nodes(vocab);
 }
 
-/// 節点の無い圧縮の面では、節点の頁を開かずに止まる。
+/// 節点の無い home では、節点の頁を開かずに止まる。
 fn sweep_without_nodes(vocab: String) {
     let clean = fixture("clean.json");
     let start = clean.find(r#""nodes": ["#).expect("札の列");
     let end = start + clean[start..].find(']').expect("札の列の閉じ");
     let bare = format!(r#"{}"nodes": []{}"#, &clean[..start], &clean[end + 1..]);
     let mut empty = Fake::new(move |_| bare.clone(), |_, _| vec![LOAD.to_string()]);
-    let err = sweep(&mut empty, BOARD, &vocab).expect_err("節点の無い圧縮の面");
+    let err = sweep(&mut empty, BOARD, &vocab).expect_err("節点の無い home");
     assert!(err.contains("節点が無い"), "{err}");
-    assert_eq!(empty.navigated().len(), 12, "節点の頁を開かずに止まる");
+    assert_eq!(empty.navigated().len(), 6, "節点の頁を開かずに止まる");
 }
 
 #[test]

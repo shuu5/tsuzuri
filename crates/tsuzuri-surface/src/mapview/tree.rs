@@ -11,7 +11,7 @@ use tsuzuri_contract::graph::{
 };
 
 use super::band::{Band, band_of, unread_reason};
-use super::{View, natural, open_question, retired_notes, shape_class, state};
+use super::{natural, open_question, retired_notes, shape_class, state};
 use crate::kit::Item;
 
 /// 木の面（閉じた 2・tab の順）。
@@ -25,11 +25,11 @@ impl Tree {
     /// 閉じた一覧（順も固定）。
     pub const ALL: [Tree; 2] = [Tree::Design, Tree::Ledger];
 
-    /// 地図の面（面の名と語の鍵は View が持つ）。
-    pub fn view(self) -> View {
+    /// 木の語の鍵（6 面の切り替えの View は行 m-map-page で消した・鍵の字は同じ）。
+    pub fn key(self) -> &'static str {
         match self {
-            Tree::Design => View::Design,
-            Tree::Ledger => View::Ledger,
+            Tree::Design => "view_design",
+            Tree::Ledger => "view_ledger",
         }
     }
 
@@ -412,7 +412,7 @@ mod dom {
             .flatten()
             .map(unmeasured);
         let empty = (f.unread.is_empty() && f.items.is_empty()).then(|| {
-            view! { <div class="empty"><span>{label(tree.view().key())}</span><b class="num">"0"</b></div> }
+            view! { <div class="empty"><span>{label(tree.key())}</span><b class="num">"0"</b></div> }
         });
         let items = f
             .items

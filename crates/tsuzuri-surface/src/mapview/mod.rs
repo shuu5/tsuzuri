@@ -1,5 +1,5 @@
-//! 地図の頁の面の部品（便 g-map・見本の map.html）: 6 面の切り替え（圧縮・一覧・グラフ・表・設計の木・台帳の木）と、
-//! 面に共通の小道具。電文（契約の型の GraphDoc）の読みは地図の module（project の下の map）が持ち、ここの関数は読めた電文だけを受ける。
+//! 地図の面の部品（便 g-map・見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは行 m-map-page で消した。
+//! 電文（契約の型の GraphDoc）の読みは kit の下の map（crate::project::map の path）が持ち、ここの関数は読めた電文だけを受ける。
 //! 帯と種類の対応は band・圧縮の面は compact・一覧の面は list・表の面は table・グラフの面と近傍は graph と around・
 //! 2 つの木の面は tree（行 g-map-tree）。
 //! 並べ方と絞りと数え方と URL の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -19,70 +19,6 @@ use std::fmt::Write;
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, GraphSource, NodeKind};
 
 use band::{Band, band_of, unread_reason};
-
-/// 地図の面（閉じた 6・tab の順）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum View {
-    Compact,
-    List,
-    Graph,
-    Table,
-    Design,
-    Ledger,
-}
-
-impl View {
-    /// 閉じた一覧（順も固定）。
-    pub const ALL: [View; 6] = [
-        View::Compact,
-        View::List,
-        View::Graph,
-        View::Table,
-        View::Design,
-        View::Ledger,
-    ];
-
-    /// URL の query の view の値。
-    pub fn name(self) -> &'static str {
-        match self {
-            View::Compact => "compact",
-            View::List => "list",
-            View::Graph => "graph",
-            View::Table => "table",
-            View::Design => "design",
-            View::Ledger => "ledger",
-        }
-    }
-
-    /// tab の語の鍵。
-    pub fn key(self) -> &'static str {
-        match self {
-            View::Compact => "view_compact",
-            View::List => "view_list",
-            View::Graph => "view_graph",
-            View::Table => "view_table",
-            View::Design => "view_design",
-            View::Ledger => "view_ledger",
-        }
-    }
-
-    /// URL の query の view から面を決める（無い・知らない値は圧縮の面）。
-    pub fn from_query(search: &str) -> Self {
-        let value = param(search, VIEW_PARAM);
-        View::ALL
-            .into_iter()
-            .find(|v| value.as_deref() == Some(v.name()))
-            .unwrap_or(View::Compact)
-    }
-}
-
-/// 今の面を残す URL の query の鍵。
-pub const VIEW_PARAM: &str = "view";
-
-/// 面を切り替えた後の URL の query（ほかの値と順はそのまま）。
-pub fn with_view(search: &str, view: View) -> String {
-    set_param(search, VIEW_PARAM, Some(view.name()))
-}
 
 /// 読めなかった出所の理由の行（出所の順・一覧と表の面の頭に出す）。
 pub fn unread_reasons(doc: &GraphDoc) -> Vec<&'static str> {

@@ -11,6 +11,9 @@ use crate::mapview;
 use crate::view::{self, Fetched};
 use crate::vocab::label;
 
+/// グラフの口（/api/graph）の読み（行 m-map-page で地図の block から移した・crate::project::map の path で使う）。
+pub mod map;
+
 /// block の中身（測れていない・0 件・中身あり）。0 件と測れていないを分ける（要件 NFR2）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Body<T> {

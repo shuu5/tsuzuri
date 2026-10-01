@@ -29,17 +29,16 @@ fn dir_names(rel: &str, ext: &str, skip: &str) -> Vec<String> {
     names
 }
 
-/// 着地済みの 5 つの頁（変種と id）。
-const LANDED: [(PageId, &str); 5] = [
+/// 着地済みの 4 つの頁（変種と id・地図の頁は行 m-map-page で消した）。
+const LANDED: [(PageId, &str); 4] = [
     (PageId::Home, "home"),
     (PageId::Ask, "ask"),
-    (PageId::Map, "map"),
     (PageId::Gaps, "gaps"),
     (PageId::Node, "node"),
 ];
 
 /// (1) 生成した PageId の ALL の id の列は src/pages の下の mod.rs でない .rs の file の名（名の順）と同じ・
-/// 着地済みの 5 つが全部在り、変種の名は Home・Ask・Map・Gaps・Node のまま。
+/// 着地済みの 4 つが全部在り、変種の名は Home・Ask・Gaps・Node のまま。
 #[test]
 fn hspage_ids_follow_dir() {
     let files = dir_names("src/pages", ".rs", "mod.rs");
@@ -98,7 +97,7 @@ fn hspage_nav_by_number() {
     assert_eq!(nav.len(), with_nav, "nav の在る頁の全部");
     let ids: Vec<&str> = nav.iter().map(|p| p.id()).collect();
     let mut rest = ids.iter();
-    for want in ["home", "ask", "map", "gaps"] {
+    for want in ["home", "ask", "gaps"] {
         assert!(rest.any(|id| *id == want), "{want} が順に無い: {ids:?}");
     }
     assert!(!nav.contains(&PageId::Node));

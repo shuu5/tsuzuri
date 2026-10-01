@@ -87,7 +87,6 @@ fn acctframe_entry_selects_board_account_only() {
     for (q, page) in [
         ("", PageId::Home),
         ("?page=ask", PageId::Ask),
-        ("?page=map&mode=expert", PageId::Map),
         ("?board=project&page=gaps", PageId::Gaps),
         ("?page=node&id=FR1", PageId::Node),
     ] {

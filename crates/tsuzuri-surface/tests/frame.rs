@@ -19,8 +19,7 @@ use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
 use tsuzuri_surface::project::{
-    self, Body, Module, STATES, ask, gaps, ledger, legend, map, next, node, pipeline, seat,
-    state_class,
+    self, Body, Module, STATES, ask, gaps, ledger, legend, next, node, pipeline, seat, state_class,
 };
 use tsuzuri_surface::view::{Fetched, Screen};
 use tsuzuri_surface::vocab::vocab;
@@ -121,14 +120,13 @@ fn frame_home_blocks_in_order_and_map_page() {
             ("side stack", vec!["batch", "policy"])
         ]
     );
-    assert_eq!(frame::page(PageId::Map).block_ids(), vec!["map"]);
     assert_eq!(frame::page(PageId::Gaps).block_ids(), vec!["gaps"]);
     assert_eq!(
         frame::page(PageId::Node).block_ids(),
         vec!["node", "around", "timeline"]
     );
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "map", "gaps"]), "{ids:?}");
+    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
     assert!(!ids.contains(&"node"), "{ids:?}");
     for id in PageId::ALL {
         assert_eq!(frame::page(id).id, id);
@@ -136,7 +134,7 @@ fn frame_home_blocks_in_order_and_map_page() {
     assert_eq!(PageId::Node.id(), "node");
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
-    // header の頁の link は ホーム・質問・地図・抜けの検査 の順（nav の部品の中の鍵と同じ）。
+    // header の頁の link は ホーム・質問・抜けの検査 の順（nav の部品の中の鍵と同じ・地図の頁は行 m-map-page で消した）。
     let keys: Vec<&str> = frame::nav_links(PageId::Home)
         .iter()
         .map(|l| l.key)
@@ -145,7 +143,7 @@ fn frame_home_blocks_in_order_and_map_page() {
     let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
     assert!(
-        in_order(&words, &["ホーム", "質問", "地図", "抜けの検査"]),
+        in_order(&words, &["ホーム", "質問", "抜けの検査"]),
         "{words:?}"
     );
 }
@@ -341,7 +339,7 @@ fn frame_classes_are_in_stylesheet() {
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
 }
 
-/// data の口がまだ無い 4 つと ledger の指標の段は測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
+/// data の口がまだ無い 3 つと ledger の指標の段は測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
 #[test]
 fn frame_blocks_without_data_are_unmeasured() {
     for fetched in [
@@ -353,7 +351,6 @@ fn frame_blocks_without_data_are_unmeasured() {
             (next::BLOCK.id, next::body(&fetched)),
             (pipeline::BLOCK.id, pipeline::body(&fetched)),
             (seat::BLOCK.id, seat::body(&fetched)),
-            (map::BLOCK.id, map::body(&fetched)),
             ("ledger の指標", ledger::metrics(&fetched)),
         ] {
             match body {
@@ -478,7 +475,7 @@ fn frame_mode_lives_in_url() {
     assert_eq!(Mode::from_query("?mode=expert"), Mode::Expert);
     assert_eq!(Mode::from_query("?page=map&mode=expert"), Mode::Expert);
     assert_eq!(Mode::from_query("?mode=bogus"), Mode::Beginner);
-    assert_eq!(PageId::from_query("?page=map&mode=expert"), PageId::Map);
+    assert_eq!(PageId::from_query("?page=map&mode=expert"), PageId::Home);
     assert_eq!(PageId::from_query("?page=ask"), PageId::Ask);
     assert_eq!(PageId::from_query("?page=gaps"), PageId::Gaps);
     assert_eq!(PageId::from_query("?page=bogus"), PageId::Home);
@@ -525,13 +522,13 @@ fn hrefs_keep_mode() {
             .all(|l| l.class.is_empty())
     );
 
-    let links = frame::nav_links(PageId::Map);
+    let links = frame::nav_links(PageId::Gaps);
     let on: Vec<&str> = links
         .iter()
         .filter(|l| l.class == "on")
         .map(|l| l.key)
         .collect();
-    assert_eq!(on, vec!["map"]);
+    assert_eq!(on, vec!["gaps"]);
 }
 
 /// 「?」の注釈: 1 行目 = 要点・項 = 記号 + 本文・「▸」の後 = 詳しく（見本の noteParts と同じ）。

@@ -10,8 +10,7 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind, title36};
 use super::band::{Band, band_of, kind_from_name, kind_name};
 use super::graph::cut;
 use super::{
-    VIEW_PARAM, View, kinds_by_id, natural, open_question, param, set_param, shape_class, state,
-    unread_reasons,
+    kinds_by_id, natural, open_question, param, set_param, shape_class, state, unread_reasons,
 };
 use crate::view::{JST, clock};
 use crate::widgets::hover::Card;
@@ -108,12 +107,11 @@ pub fn with_choice(search: &str, key: &str, value: &str) -> String {
     set_param(search, key, Some(value))
 }
 
-/// 種類の組で絞った後の URL の query（一覧の面へ移り、帯と種類の絞りを外す・None は組の絞りを外す）。
+/// 種類の組で絞った後の URL の query（帯と種類の絞りを外す・None は組の絞りを外す・面の切り替えは行 m-map-page で消した）。
 pub fn with_pair(search: &str, pair: Option<(NodeKind, NodeKind)>) -> String {
     match pair {
         Some((from, to)) => {
-            let s = set_param(search, VIEW_PARAM, Some(View::List.name()));
-            let s = set_param(&s, PAIR_PARAM, Some(&pair_value(from, to)));
+            let s = set_param(search, PAIR_PARAM, Some(&pair_value(from, to)));
             let s = set_param(&s, BAND_PARAM, None);
             set_param(&s, KIND_PARAM, None)
         }

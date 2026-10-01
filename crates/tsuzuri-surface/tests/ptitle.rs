@@ -141,7 +141,6 @@ fn ptitle_joins_name_and_word() {
     assert_eq!(doc_title(None, "home", None), "tsuzuri \u{2014} ホーム");
     for (key, want) in [
         ("questions", "proj-kiri \u{2014} 質問"),
-        ("map", "proj-kiri \u{2014} 地図"),
         ("gaps", "proj-kiri \u{2014} 抜けの検査"),
         ("nb_self", "proj-kiri \u{2014} この節点"),
     ] {
@@ -177,7 +176,6 @@ fn ptitle_every_page_has_word() {
     let words = [
         ("home", "ホーム"),
         ("ask", "質問"),
-        ("map", "地図"),
         ("gaps", "抜けの検査"),
         ("node", "この節点"),
     ];

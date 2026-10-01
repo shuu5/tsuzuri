@@ -14,7 +14,7 @@ use tsuzuri_surface::mapview::band::{Band, unread_reason};
 use tsuzuri_surface::mapview::tree::{
     Branch, Forest, Head, ISSUE_KINDS, NESTS, Tree, fold_key, forest, is_closed, parent_end,
 };
-use tsuzuri_surface::mapview::{View, open_question, shape_class, with_view};
+use tsuzuri_surface::mapview::{open_question, shape_class};
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::help::{Inline, note};
 use tsuzuri_surface::widgets::nodecard::card_of;
@@ -168,40 +168,10 @@ const LEDGER: &[(usize, &str, bool, usize)] = &[
 
 #[test]
 fn mtree_views_six_in_url() {
-    use View::{Compact, Design, Graph, Ledger, List, Table};
-    assert_eq!(View::ALL, [Compact, List, Graph, Table, Design, Ledger]);
-    let names: Vec<&str> = View::ALL.iter().map(|v| v.name()).collect();
-    assert_eq!(
-        names,
-        ["compact", "list", "graph", "table", "design", "ledger"]
-    );
-    let keys: Vec<&str> = View::ALL.iter().map(|v| v.key()).collect();
-    assert_eq!(
-        keys,
-        [
-            "view_compact",
-            "view_list",
-            "view_graph",
-            "view_table",
-            "view_design",
-            "view_ledger"
-        ]
-    );
-    assert_eq!(View::from_query("?page=map&view=design"), Design);
-    assert_eq!(View::from_query("?view=ledger"), Ledger);
-    for s in ["?view=tree", "?view=", ""] {
-        assert_eq!(View::from_query(s), Compact, "{s:?}");
-    }
-    assert_eq!(
-        with_view("?page=map&mode=expert", Design),
-        "?page=map&mode=expert&view=design"
-    );
-    for v in View::ALL {
-        assert_eq!(View::from_query(&with_view("?page=map", v)), v, "{v:?}");
-    }
+    // 6 面の切り替え（View と URL の query の view）は行 m-map-page で消した。木の語の鍵は今の字のまま。
     assert_eq!(Tree::ALL, [Tree::Design, Tree::Ledger]);
-    assert_eq!(Tree::Design.view(), Design);
-    assert_eq!(Tree::Ledger.view(), Ledger);
+    assert_eq!(Tree::Design.key(), "view_design");
+    assert_eq!(Tree::Ledger.key(), "view_ledger");
     assert_eq!(
         Tree::Design.bands(),
         [
@@ -286,13 +256,13 @@ fn mtree_vocab_budget() {
         views.internal,
         "?view=compact|list|graph|table|design|ledger"
     );
-    let labels: Vec<String> = View::ALL.iter().map(|x| term(x.key()).label.clone()).collect();
+    let labels: Vec<String> = Tree::ALL.iter().map(|x| term(x.key()).label.clone()).collect();
     for (i, l) in labels.iter().enumerate() {
-        assert!(!l.is_empty(), "{:?} の語が空", View::ALL[i]);
+        assert!(!l.is_empty(), "{:?} の語が空", Tree::ALL[i]);
         assert!(
             !labels[..i].contains(l),
             "{:?} の語 {l} が前の面と同じ",
-            View::ALL[i]
+            Tree::ALL[i]
         );
     }
     key_notes(term);
@@ -678,13 +648,6 @@ fn mtree_dom_text() {
         assert!(dom.contains(word), "tree.rs の mod dom から後に {word} が無い");
     }
     assert!(!read("src/mapview/tree.rs").contains("use:attach"));
-    let (_, map) = split_dom("src/project/map.rs");
-    for word in [
-        "View::Design => tree::view(d, Tree::Design, search)",
-        "View::Ledger => tree::view(d, Tree::Ledger, search)",
-    ] {
-        assert!(map.contains(word), "map.rs の mod dom から後に {word} が無い");
-    }
 }
 
 /// 着地済みの行と、この波の行の verify の filter の語（歯の名が当たると、その行の歯の置き場が増える）。
