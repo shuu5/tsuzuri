@@ -232,6 +232,24 @@ a.tile:hover { box-shadow: var(--shadow); }
 .coach-ring { position: absolute; z-index: 59; border: 2px solid var(--accent); border-radius: var(--r3); pointer-events: none; animation: tz-ring 1.8s ease-out infinite; }
 @keyframes tz-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
 
+/* ---------- 窓（行 g-win-frame・見本 board-v2 の #scrim と .modal・× と外の click と Esc で閉じる・600 px 以下は全画面〔規則の行 R-35〕） ---------- */
+#scrim { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: var(--s3); background: rgba(15,23,42,.45); }
+.modal { display: flex; flex-direction: column; min-width: 0; max-height: calc(100vh - 32px); background: var(--panel); border-radius: var(--r3); box-shadow: 0 24px 64px rgba(0,0,0,.28); }
+.mh { display: flex; align-items: center; gap: 10px; padding: 11px 14px 10px 18px; border-bottom: 1px solid var(--line); }
+.mh h3 { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; gap: 12px; font-size: 15px; }
+.mh .back { flex: none; padding: 1px var(--s2); border: 1px solid var(--line-2); border-radius: 6px; background: none; color: var(--accent); font-size: var(--fs-1); cursor: pointer; }
+.mh .x { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-3); font-size: 17px; line-height: 22px; text-align: center; cursor: pointer; }
+.mh .x:hover { background: var(--panel-2); color: var(--ink); }
+.mb { min-height: 0; overflow: auto; padding: 14px 18px 18px; font-size: 13px; }
+.mb h4 { margin: 14px 0 6px; color: var(--ink-3); font-size: var(--fs-1); font-weight: 600; }
+@media (max-width: 600px) {
+  #scrim { padding: 0; align-items: stretch; justify-content: stretch; }
+  .modal { width: 100% !important; height: 100%; max-height: none; border-radius: 0; }
+  .mb { flex: 1; }
+  .mh .x { width: 40px; height: 40px; line-height: 38px; }
+  .mh .back { min-height: 40px; }
+}
+
 /* ---------- 一覧の型（印 + 題・1 種） ---------- */
 .items { list-style: none; margin: 0; padding: 0; }
 .items > li { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: 0 var(--s2); border-bottom: 1px solid var(--line); }

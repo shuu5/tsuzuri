@@ -1741,6 +1741,16 @@
    "label": "表示先",
    "plain": "この project の窓を出す端末\n・ 上書きなら project 専用の名\n・ 上書きなしなら全体の既定\n・ 窓は押した時だけ開く\n→ 席は開き直さない",
    "internal": "GET /api/stage/target ・ tz stage target show --json\nPOST = tz stage target set / clear --project\nPOST /api/stage/open = tz stage open"
+  },
+  "mclose": {
+   "label": "窓を閉じる",
+   "plain": "窓を閉じる\n・ × を押す\n・ 窓の外を押す\n・ Esc の鍵",
+   "internal": "widgets::modal の closes（行 g-win-frame）\n変換の途中の Esc は閉じない"
+  },
+  "mback": {
+   "label": "戻る",
+   "plain": "前の窓に戻る\n・ 窓の中から開いた窓にだけ出る",
+   "internal": "widgets::modal の Stack の back（見本の topModal）"
   }
  }
 }
