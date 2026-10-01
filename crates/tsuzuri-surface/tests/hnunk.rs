@@ -106,6 +106,11 @@ fn hnunk_home_row_unmeasured() {
     assert_eq!(r.marks, home::marks(&u.next));
     assert_eq!(r.card, nx_card(&u, doc.at));
 
+    nothing_row(doc);
+}
+
+/// 判じたなしの行は今のまま。
+fn nothing_row(doc: AccountDoc) {
     let m = row_m(&doc);
     let g = home::nx_row(&m, doc.at);
     assert_eq!(g.lead, Some(NextMove::Nothing));
@@ -147,6 +152,11 @@ fn hnunk_projects_need_unmeasured() {
     assert_eq!(g.line.as_deref(), Some(NONE_LINE));
     assert_eq!(need_rank(&m), 6);
 
+    need_in_table(fx, u, n);
+}
+
+/// 表の要対応の並べと、なしを判じなかった行の card。
+fn need_in_table(fx: AccountDoc, u: ProjectRow, n: tsuzuri_surface::account::projects::Need) {
     let doc = mixed(&fx);
     let t = table(&doc, PSort::Need, Mode::Beginner);
     assert_eq!(t.groups.len(), 1);

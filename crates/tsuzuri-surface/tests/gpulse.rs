@@ -186,7 +186,13 @@ fn gpulse_own_names_clean() {
         rest = &after[end..];
     }
     assert_eq!(names.len(), 5, "{names:?}");
-    let words = [
+    let words = [words_front(), words_middle(), words_back()].concat();
+    names_avoid(names, &words);
+}
+
+/// 契約表の verify の語の表の前の部分（44 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "aaround_",
         "accept_",
         "account_",
@@ -231,6 +237,12 @@ fn gpulse_own_names_clean() {
         "ghb_",
         "glabel_",
         "gnav_",
+    ]
+}
+
+/// 契約表の verify の語の表の中の部分（44 語）。
+fn words_middle() -> &'static [&'static str] {
+    &[
         "gpill_",
         "graph_",
         "gsum_",
@@ -275,6 +287,12 @@ fn gpulse_own_names_clean() {
         "nodepage_",
         "nstall_",
         "nsum_",
+    ]
+}
+
+/// 契約表の verify の語の表の後の部分（44 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "nsumw_",
         "ntime_",
         "nxact_",
@@ -319,7 +337,11 @@ fn gpulse_own_names_clean() {
         "urpanel_",
         "uword_",
         "wstrip_",
-    ];
+    ]
+}
+
+/// 歯の名の残りの字が契約表の verify の語を含まないことを見る。
+fn names_avoid(names: Vec<String>, words: &[&str]) {
     for name in &names {
         let rest = name
             .strip_prefix("gpulse_")

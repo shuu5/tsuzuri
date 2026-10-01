@@ -120,19 +120,31 @@ fn hcnx_member_cards() {
     assert_eq!(c.value, "Tier1 の今の口座 acct-1");
     assert!(c.more.is_empty());
     assert_eq!(c, gproj_card(&doc, proj("proj-c")));
+    proj_b_card(&doc, t2, proj);
+    members_and_loose(doc, &h, a, t1);
+}
 
+/// 移動待ちの proj-b の chip の card を見る。
+fn proj_b_card<'a>(
+    doc: &AccountDoc,
+    t2: &GroupView,
+    proj: impl Fn(&str) -> &'a tsuzuri_contract::account::ProjectRow,
+) {
     let b = member_card(t2, "proj-b").expect("proj-b の card");
     assert_eq!(b.title, "proj-b-orch");
     assert_eq!(b.kind, "! 移動待ち");
     assert_eq!(b.value, "登録 acct-1 ≠ 群 acct-2");
     assert_eq!(b.more, ["待っている"]);
-    assert_eq!(b, gproj_card(&doc, proj("proj-b")));
+    assert_eq!(b, gproj_card(doc, proj("proj-b")));
+}
 
+/// 群の project の名と印の並びと、電文に行の無い project の chip が card を持たないことを見る。
+fn members_and_loose(doc: AccountDoc, h: &Home, a: Card, t1: &GroupView) {
     // 群の project の名と印は電文の members の順と matches のまま。
     let Reading::Known(cards) = &doc.groups else {
         panic!("fixture の群は Known");
     };
-    for (g, card) in groups(&h).iter().zip(cards) {
+    for (g, card) in groups(h).iter().zip(cards) {
         let want: Vec<&str> = card.members.iter().map(|m| m.project.as_str()).collect();
         let got: Vec<&str> = g.members.iter().map(|m| m.project.as_str()).collect();
         assert_eq!(got, want, "{} の members", g.name);

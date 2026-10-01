@@ -76,7 +76,11 @@ fn gbnote_how_and_note() {
     ] {
         assert_eq!(note_fn(how), format!("{head}{tail}"), "{how:?}");
     }
+    word_and_css();
+}
 
+/// 注記の語の鍵が語の辞書に在り、stylesheet に注記の規則が在ることを見る。
+fn word_and_css() {
     let term = vocab().term(BACK_NOTE_KEY).expect("win_close_hand が語の辞書に在る");
     assert_eq!(term.label, "この窓は手で閉じてください");
     let css = read("style.css");
@@ -187,7 +191,13 @@ fn gbnote_own_names_clean() {
         })
         .collect();
     assert_eq!(names.len(), 4, "{names:?}");
-    let words = [
+    let words = [words_front(), words_middle(), words_back()].concat();
+    names_avoid(names, &words);
+}
+
+/// filter の語の表の前の部分（44 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "aaround_",
         "accept_",
         "account_",
@@ -232,6 +242,12 @@ fn gbnote_own_names_clean() {
         "glabel_",
         "gnav_",
         "gpill_",
+    ]
+}
+
+/// filter の語の表の中の部分（44 語）。
+fn words_middle() -> &'static [&'static str] {
+    &[
         "gpulse_",
         "graph_",
         "gsum_",
@@ -276,6 +292,12 @@ fn gbnote_own_names_clean() {
         "nodepage_",
         "nstall_",
         "nsum_",
+    ]
+}
+
+/// filter の語の表の後の部分（44 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "nsumw_",
         "ntime_",
         "nxact_",
@@ -320,7 +342,11 @@ fn gbnote_own_names_clean() {
         "urpanel_",
         "uword_",
         "wstrip_",
-    ];
+    ]
+}
+
+/// 歯の名の残りの字が filter の語を含まないことを見る。
+fn names_avoid(names: Vec<&str>, words: &[&str]) {
     for name in names {
         let rest = name
             .strip_prefix("gbnote_")

@@ -135,7 +135,11 @@ fn gfix_words_and_href() {
             assert!(!line.contains(&format!("\"{w}\"")), "見出しの語 {w} が在る");
         }
     }
+    card_href();
+}
 
+/// 要修正の札の先は節点の頁の link で、どの mode でも mode を残すことを見る。
+fn card_href() {
     let card = MisfitCard {
         id: "mf.1".to_string(),
         title: "t".to_string(),
@@ -276,7 +280,13 @@ fn gfix_own_names_clean() {
         })
         .collect();
     assert!(names.len() >= 7, "{names:?}");
-    let words = [
+    let words = [words_front(), words_middle(), words_back()].concat();
+    names_avoid(names, &words);
+}
+
+/// filter の語の表の前の部分（47 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "aaround_",
         "accept_",
         "account_",
@@ -324,6 +334,12 @@ fn gfix_own_names_clean() {
         "gnav_",
         "gpill_",
         "gpulse_",
+    ]
+}
+
+/// filter の語の表の中の部分（47 語）。
+fn words_middle() -> &'static [&'static str] {
+    &[
         "graph_",
         "gsum_",
         "gtuck_",
@@ -371,6 +387,12 @@ fn gfix_own_names_clean() {
         "nstall_",
         "nsum_",
         "nsumw_",
+    ]
+}
+
+/// filter の語の表の後の部分（45 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "ntime_",
         "nxact_",
         "parts_",
@@ -416,7 +438,11 @@ fn gfix_own_names_clean() {
         "wstrip_",
         "pgz_",
         "pmisfit_",
-    ];
+    ]
+}
+
+/// 表の語の数と、歯の名の残りの字が filter の語を含まないことを見る。
+fn names_avoid(names: Vec<&str>, words: &[&str]) {
     assert_eq!(words.len(), 139);
     for name in names {
         let rest = name

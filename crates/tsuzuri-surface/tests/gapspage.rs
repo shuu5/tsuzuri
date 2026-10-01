@@ -68,6 +68,11 @@ fn gapspage_page_frame_and_nav() {
         frame::href(PageId::Gaps, Mode::Beginner),
         "?page=gaps&mode=beginner"
     );
+    nav_and_snapshot();
+}
+
+/// header の link の順と抜けの検査の頁の印と語、頁の snapshot を見る。
+fn nav_and_snapshot() {
     let nav_keys = frame::nav_keys();
     assert!(
         in_order(&nav_keys, &["home", "questions", "map", "gaps"]),

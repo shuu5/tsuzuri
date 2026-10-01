@@ -176,6 +176,11 @@ fn lcard_burn_rules() {
     assert!(c.more.is_empty());
     assert_eq!((c.title, c.kind, c.src), (full.title.clone(), full.kind.clone(), full.src.clone()));
 
+    net_drop_arrows(base, full);
+}
+
+/// 純減の矢印は種類の行だけを替え、ほかの欄は変わらない。
+fn net_drop_arrows(base: LedgerStats, full: Card) {
     let mut flat = base.clone();
     flat.net_drop_24h = 0;
     flat.net_drop_7d = 0;

@@ -30,11 +30,7 @@ fn fixture() -> AccountDoc {
 }
 
 /// card の 4 行と詳しくを比べる。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
-fn check(card: &Card, title: &str, kind: &str, value: &str, src: &str, more: &[&str]) {
+fn check(card: &Card, (title, kind): (&str, &str), value: &str, src: &str, more: &[&str]) {
     assert_eq!(card.title, title);
     assert_eq!(card.kind, kind, "{title} の種類");
     assert_eq!(card.value, value, "{title} の値");
@@ -52,8 +48,7 @@ fn hcsess_run_card_rules() {
     let line = &doc.sessions[1];
     check(
         &f(line, doc.at),
-        "proj-a.3-20260927T113000Z",
-        "pipeline · proj-a",
+        ("proj-a.3-20260927T113000Z", "pipeline · proj-a"),
         "Running · 動いている",
         "fleet/events.jsonl · RunStage",
         &["口座 acct-1", "◷ 20:30 JST から"],
@@ -88,16 +83,14 @@ fn hcsess_proj_card_rules() {
     let doc = fixture();
     check(
         &f(&doc, "proj-c"),
-        "proj-c",
-        "project · Tier1",
+        ("proj-c", "project · Tier1"),
         "session 1 · orchestrator 1",
         "proj-c · state dir",
         &["proj-c-orch ?", "まだ無い"],
     );
     check(
         &proj_card(&doc, "proj-a"),
-        "proj-a",
-        "project · Tier1",
+        ("proj-a", "project · Tier1"),
         "session 2 · orchestrator 1",
         "proj-a · state dir",
         &[
@@ -108,8 +101,7 @@ fn hcsess_proj_card_rules() {
     );
     check(
         &proj_card(&doc, "proj-z"),
-        "proj-z",
-        "project · ―",
+        ("proj-z", "project · ―"),
         "session なし",
         "proj-z · state dir",
         &["まだ無い"],
@@ -175,6 +167,11 @@ fn hcsess_rows_carry_cards() {
     unseated.projects[1].seat = Reading::Unknown;
     assert_eq!(sess_card(&unseated, 2), proj_card(&unseated, "proj-b"));
 
+    rows_in_tables(doc);
+}
+
+/// 行ごとの card と、並べ方ごとの表の行の card。
+fn rows_in_tables(doc: AccountDoc) {
     for i in 0..doc.sessions.len() {
         let r: SessRow = row(&doc, i);
         assert_eq!(r.card, sess_card(&doc, i), "位置 {i} の行の card");

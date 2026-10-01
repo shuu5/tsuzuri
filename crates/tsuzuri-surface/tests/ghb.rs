@@ -154,7 +154,11 @@ fn ghb_seat_body_and_path() {
 
     assert_eq!(SEAT_HEARTBEAT_PATH, seathb::PATH);
     assert_eq!(HEARTBEAT_PATH, contract_account::HEARTBEAT_PATH);
+    copy_and_posts();
+}
 
+/// Dest の写しと Debug の字と、heartbeat.rs が 2 つの口へ 1 回ずつ送る字を見る。
+fn copy_and_posts() {
     let (acc, acc_dbg) = copied(Dest::Account);
     let (seat, seat_dbg) = copied(Dest::Seat);
     assert_eq!(acc, Dest::Account);

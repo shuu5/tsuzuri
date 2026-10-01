@@ -210,7 +210,11 @@ fn gpface_refusal_lines() {
         assert_eq!(o.line(), format!("{} fx-p.7", policy::HALF_WRITTEN));
         half.push(o);
     }
+    closed_and_kept(created, half);
+}
 
+/// 閉じる書きだけ落ちた断りの字と、どの断りが本文を残し読み直さないかを見る。
+fn closed_and_kept(created: policy::Outcome, half: Vec<policy::Outcome>) {
     let closed = policy::outcome(Some((502, "ledger-close fx-p.7:20260928T0841Z-1")));
     assert_eq!(
         closed,

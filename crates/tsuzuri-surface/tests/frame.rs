@@ -285,6 +285,12 @@ fn used_classes() -> BTreeSet<String> {
             add(line.class);
         }
     }
+    built_classes(&mut add);
+    out
+}
+
+/// 関数が組む class（mode・状態・抜けの印・項目の形・注釈と card・節点の頁）を足す。
+fn built_classes(add: &mut impl FnMut(&str)) {
     for mode in Mode::ALL {
         add(mode.body_class());
     }
@@ -317,7 +323,6 @@ fn used_classes() -> BTreeSet<String> {
             add(b.class);
         }
     }
-    out
 }
 
 #[test]
@@ -380,7 +385,11 @@ fn frame_blocks_without_data_are_unmeasured() {
     assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
     assert_eq!(legend::states().len(), 5);
     assert_eq!(legend::marks().len(), 5);
+    lost_and_empty(screen);
+}
 
+/// 読めない一覧は測れていない・0 件の一覧は 0 件を見る。
+fn lost_and_empty(screen: Screen) {
     // 読めない一覧は 0 件でなく測れていない・0 件は 0 件。
     let lost = screen.after_lost();
     assert!(matches!(ask::body(&Fetched::Failed), Body::Unmeasured(r) if !r.is_empty()));
@@ -483,6 +492,11 @@ fn frame_mode_lives_in_url() {
         frame::with_param("?mode=beginner&page=map", "mode", "expert"),
         "?mode=expert&page=map"
     );
+    hrefs_keep_mode();
+}
+
+/// 頁の link は mode と頁を残し、節点の頁の link は nav に出ないことを見る。
+fn hrefs_keep_mode() {
     for mode in Mode::ALL {
         for page in PageId::ALL {
             let href = frame::href(page, mode);
@@ -559,7 +573,11 @@ fn frame_help_note_splits_lines() {
         q.internal.last(),
         Some(&vec![Inline::Text("原語: 問い".to_string())])
     );
+    help_parts();
+}
 
+/// 注釈の 1 行と字の読み・tip の class・置き場所・内部の名を出す mode を見る。
+fn help_parts() {
     assert_eq!(
         help::line("{fig:next}").text,
         vec![Inline::Sym("fig:next".to_string())]

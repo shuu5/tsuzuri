@@ -33,11 +33,7 @@ fn fixture() -> AccountDoc {
 }
 
 /// card の 4 行と詳しくを比べる。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
-fn check(card: &Card, title: &str, kind: &str, value: &str, src: &str, more: &[&str]) {
+fn check(card: &Card, (title, kind): (&str, &str), value: &str, src: &str, more: &[&str]) {
     assert_eq!(card.title, title);
     assert_eq!(card.kind, kind, "{title} の種類");
     assert_eq!(card.value, value, "{title} の値");
@@ -71,8 +67,7 @@ fn hcproj_nx_card() {
     assert_eq!(doc.at, 1790510400);
     check(
         &f(&doc.projects[0], doc.at),
-        "proj-a · (e) 質問",
-        "各 project の次の一手 · e",
+        ("proj-a · (e) 質問", "各 project の次の一手 · e"),
         "proj-a.7 · 1 件",
         "中核の next_step_seat · ◷ 21:00 JST",
         &[
@@ -95,14 +90,21 @@ fn hcproj_nx_card() {
     for (i, name) in [(1, "proj-b"), (2, "proj-c")] {
         check(
             &nx_card(&doc.projects[i], doc.at),
-            &format!("{name} · 測れていない"),
-            "各 project の次の一手 · ―",
+            (
+                &format!("{name} · 測れていない"),
+                "各 project の次の一手 · ―",
+            ),
             "―",
             "中核の next_step_seat · ◷ 21:00 JST",
             &unknown_more,
         );
     }
 
+    nx_card_edges(doc, unknown_more);
+}
+
+/// なしだけ当たる行と checks が空の行の card・時刻は at から。
+fn nx_card_edges(doc: AccountDoc, unknown_more: [&str; 6]) {
     // なしだけ当たり・ほかは当たらない・lead はなし。
     let mut nothing = doc.projects[0].clone();
     with_next(&mut nothing, |s| {
@@ -117,8 +119,7 @@ fn hcproj_nx_card() {
     });
     check(
         &nx_card(&nothing, doc.at),
-        "proj-a · (g) 次の一手なし",
-        "各 project の次の一手 · g",
+        ("proj-a · (g) 次の一手なし", "各 project の次の一手 · g"),
         "orchestrator が動いている / 待っている",
         "中核の next_step_seat · ◷ 21:00 JST",
         &[
@@ -154,8 +155,10 @@ fn hcproj_led_card() {
     let doc = fixture();
     check(
         &f(&doc.projects[0]),
-        "proj-a · 台帳の処理状況",
-        "↑+2 24h · ↑+4 7d · closed/日 0.9",
+        (
+            "proj-a · 台帳の処理状況",
+            "↑+2 24h · ↑+4 7d · closed/日 0.9",
+        ),
         "task 9（ready 5 / blocked 3）",
         "bd list --all の bead · 時点 21:00 JST",
         &["memo 3 · stale 1", "question 2 · epic 2", "lead p50 4.0d / p90 12d"],
@@ -163,8 +166,7 @@ fn hcproj_led_card() {
     for (i, name) in [(1, "proj-b"), (2, "proj-c")] {
         check(
             &led_card(&doc.projects[i]),
-            &format!("{name} · 台帳なし"),
-            "台帳の処理状況",
+            (&format!("{name} · 台帳なし"), "台帳の処理状況"),
             "測れていない",
             "bd list --all の bead",
             &[],
@@ -192,8 +194,7 @@ fn hcproj_pcnt_card() {
     let doc = fixture();
     check(
         &f(&doc.projects[0], doc.at),
-        "run の数 · proj-a",
-        "wait 1 · run 2 · stop 0 · land 3",
+        ("run の数 · proj-a", "wait 1 · run 2 · stop 0 · land 3"),
         "あなたの決定待ち 2",
         "fleet/events.jsonl · ◷ 21:00 JST",
         &[
@@ -210,8 +211,7 @@ fn hcproj_pcnt_card() {
     assert_eq!(b.more.last().map(String::as_str), Some(WAIT_NOTE));
     check(
         &pcnt_card(&doc.projects[2], doc.at),
-        "run の数 · proj-c",
-        "測れていない",
+        ("run の数 · proj-c", "測れていない"),
         "あなたの決定待ち ―",
         "fleet/events.jsonl · ◷ 21:00 JST",
         &["state dir か event log が読めない", "― = 質問の台帳を読んでいない"],
@@ -229,16 +229,14 @@ fn hcproj_orch_card() {
     let doc = fixture();
     check(
         &f(&doc, &doc.projects[0]).expect("proj-a は席を持つ"),
-        "proj-a-orch",
-        "動いている · ◷ 19:31 JST から",
+        ("proj-a-orch", "動いている · ◷ 19:31 JST から"),
         "口座 acct-1 · tick healthy · hb on",
         "seat/proj-a-orch/state.jsonl ほか",
         &["model opus"],
     );
     check(
         &orch_card(&doc, &doc.projects[1]).expect("proj-b は席を持つ"),
-        "proj-b-orch",
-        "待っている · ◷ 20:35 JST から",
+        ("proj-b-orch", "待っている · ◷ 20:35 JST から"),
         "口座 acct-1 · tick stale · hb off",
         "seat/proj-b-orch/state.jsonl ほか",
         &["model sonnet", "移動待ち acct-1 → acct-2", "退避までの残り 1101 秒"],
@@ -297,24 +295,21 @@ fn hcproj_gproj_card() {
     let src = "doctor の席の行と群の今の記録";
     check(
         &f(&doc, &doc.projects[0]),
-        "proj-a-orch",
-        "✓ 今の口座で動いている",
+        ("proj-a-orch", "✓ 今の口座で動いている"),
         "登録 acct-1 = 群 acct-1",
         src,
         &["動いている"],
     );
     check(
         &gproj_card(&doc, &doc.projects[1]),
-        "proj-b-orch",
-        "! 移動待ち",
+        ("proj-b-orch", "! 移動待ち"),
         "登録 acct-1 ≠ 群 acct-2",
         src,
         &["待っている"],
     );
     check(
         &gproj_card(&doc, &doc.projects[2]),
-        "proj-c",
-        "session なし",
+        ("proj-c", "session なし"),
         "Tier1 の今の口座 acct-1",
         src,
         &[],
@@ -344,8 +339,7 @@ fn hcproj_grp_card() {
     let doc = fixture();
     check(
         &f(&doc, "Tier1").expect("Tier1 は在る"),
-        "Tier1 · 今の口座 acct-1",
-        "project の群 · 記録 1 件",
+        ("Tier1 · 今の口座 acct-1", "project の群 · 記録 1 件"),
         "◷ 19:00 JST から · ← 前 acct-2",
         "groups/Tier1.account ほか",
         &[
@@ -358,8 +352,7 @@ fn hcproj_grp_card() {
     );
     check(
         &grp_card(&doc, "Tier2").expect("Tier2 は在る"),
-        "Tier2 · 今の口座 acct-2",
-        "project の群 · 記録 1 件",
+        ("Tier2 · 今の口座 acct-2", "project の群 · 記録 1 件"),
         "記録なし · ← 前 ―",
         "groups/Tier2.account ほか",
         &[
@@ -440,6 +433,11 @@ fn hcproj_rows_carry_cards() {
         }
     }
 
+    rows_in_tables(doc);
+}
+
+/// 並べ方ごとの表の行と束の card・群の無い見出しの束。
+fn rows_in_tables(doc: AccountDoc) {
     for sort in PSort::ALL {
         let t = table(&doc, sort, Mode::Beginner);
         let rows: Vec<&ProjLine> = t.groups.iter().flat_map(|g| g.rows.iter()).collect();
@@ -556,6 +554,11 @@ fn hcproj_dom_wiring() {
         assert!(t.contains(attr), "more_view の {class} の tag {t} に {attr} が無い");
     }
 
+    head_chip_and_board(dom);
+}
+
+/// head_view の群の chip と group_view の束の card・board.rs の card の層。
+fn head_chip_and_board(dom: String) {
     let head = fn_body(&dom, "head_view");
     assert!(
         squeeze(&head).starts_with("fnhead_view(head:GroupHead,card:Option<Card>)->AnyView"),

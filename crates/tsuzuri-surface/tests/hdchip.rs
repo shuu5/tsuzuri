@@ -84,6 +84,11 @@ fn hdchip_chip_and_card_follow_mock() {
     assert_eq!(DORMANT_NAME_CHARS, 18);
     assert_eq!(label("dormant"), "休止中の session");
 
+    three_seats_chip_and_card();
+}
+
+/// 3 つの席の chip と card の字・1 つの席なら値は切らない。
+fn three_seats_chip_and_card() {
     let mut doc = fixture();
     assert_eq!(doc.at, 1790510400);
     doc.dormant = vec![

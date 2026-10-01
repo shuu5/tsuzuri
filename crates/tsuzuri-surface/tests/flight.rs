@@ -166,7 +166,12 @@ fn flight_own_names_clean() {
         rest = &after[end..];
     }
     assert_eq!(names.len(), 6, "{names:?}");
-    let words = [
+    names_avoid(names, &[words_front(), words_back()].concat());
+}
+
+/// 着地済みの行の verify の語の表の前半（55 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "accept_",
         "account_",
         "acctcore_",
@@ -222,6 +227,12 @@ fn flight_own_names_clean() {
         "klink_",
         "ilink_",
         "afocus_",
+    ]
+}
+
+/// 着地済みの行の verify の語の表の後半（55 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "nxact_",
         "urpanel_",
         "saxis_",
@@ -277,7 +288,11 @@ fn flight_own_names_clean() {
         "rhold_",
         "qkey_",
         "wstrip_",
-    ];
+    ]
+}
+
+/// 表の語の数と、歯の名の残りの字が着地済みの行の verify の語を含まないことを見る。
+fn names_avoid(names: Vec<String>, words: &[&str]) {
     assert_eq!(words.len(), 110);
     for name in &names {
         let rest = name

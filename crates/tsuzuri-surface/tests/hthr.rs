@@ -52,11 +52,13 @@ fn hots(g: &GroupView) -> Vec<bool> {
     g.pressure.iter().map(|p| p.hot).collect()
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
-fn pressure(at: u64, group: &str, account: &str, window: &str, used: u64, cap: u64) -> GroupNotice {
+fn pressure(
+    at: u64,
+    group: &str,
+    account: &str,
+    window: &str,
+    (used, cap): (u64, u64),
+) -> GroupNotice {
     GroupNotice::Pressure {
         at,
         group: group.to_string(),
@@ -96,12 +98,12 @@ fn caps_k() -> Vec<WindowCap> {
 /// 節の列 M1（口座は acct-9・使った割合が閾値より小さい行も在る）。
 fn notices_m1() -> Vec<GroupNotice> {
     vec![
-        pressure(500, "Tier2", "acct-9", "seven_day_model", 10, 95),
-        pressure(500, "Tier2", "acct-9", "seven_day", 1, 95),
+        pressure(500, "Tier2", "acct-9", "seven_day_model", (10, 95)),
+        pressure(500, "Tier2", "acct-9", "seven_day", (1, 95)),
         refused(500, "Tier2", "acct-9", "x-word"),
-        pressure(400, "Tier1", "acct-9", "seven_day", 99, 95),
+        pressure(400, "Tier1", "acct-9", "seven_day", (99, 95)),
         refused(300, "Tier1", "acct-9", "old-word"),
-        pressure(600, "Tier9", "acct-9", "five_hour", 99, 85),
+        pressure(600, "Tier9", "acct-9", "five_hour", (99, 85)),
     ]
 }
 
@@ -109,12 +111,18 @@ fn notices_m1() -> Vec<GroupNotice> {
 fn notices_m2() -> Vec<GroupNotice> {
     vec![
         refused(100, "Tier1", "acct-9", "old-word"),
-        pressure(200, "Tier1", "acct-9", "five_hour", 50, 85),
+        pressure(200, "Tier1", "acct-9", "five_hour", (50, 85)),
     ]
 }
 
 fn n1() -> GroupNotice {
-    pressure(1_790_510_340, "Tier1", "acct-9", "seven_day_model", 97, 95)
+    pressure(
+        1_790_510_340,
+        "Tier1",
+        "acct-9",
+        "seven_day_model",
+        (97, 95),
+    )
 }
 
 fn n2() -> GroupNotice {
@@ -169,6 +177,11 @@ fn hthr_marks_from_latest_notices() {
     assert_eq!(latest, notices_m1().iter().take(3).collect::<Vec<_>>());
     assert!(latest_notices(&m1.notices, "Tier3").is_empty());
 
+    latest_m2_and_unknown(d);
+}
+
+/// 節の列 M2 と読めない知らせの列の強調と断りの理由。
+fn latest_m2_and_unknown(d: AccountDoc) {
     let mut m2 = d.clone();
     m2.notices = Reading::Known(notices_m2());
     let gs = groups(&m2);
@@ -220,6 +233,11 @@ fn hthr_history_rows() {
     assert!(h.folded.is_empty());
     assert_eq!(h.more, None);
 
+    folded_and_home_moves(d);
+}
+
+/// 9 行の知らせの畳みと、頁の移動の欄の知らせの行・空・読めない。
+fn folded_and_home_moves(d: AccountDoc) {
     let nine: Vec<GroupNotice> = (0..9)
         .map(|i| refused(d.at - 60 * i, "Tier1", "acct-9", "w"))
         .collect();

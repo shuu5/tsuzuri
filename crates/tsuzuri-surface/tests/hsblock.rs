@@ -127,6 +127,11 @@ fn hsblock_kit_holds_shared() {
         code.contains(&r#"include!(concat!(env!("OUT_DIR"), "/project_blocks.rs"));"#),
         "mod.rs に生成した file の include が無い"
     );
+    kit_defs_and_dom();
+}
+
+/// kit.rs が共通の部品の定義を持ち、DOM の部品は wasm の target の mod dom の中で pub use で出す。
+fn kit_defs_and_dom() {
     let kit = read("src/kit.rs");
     for def in [
         "pub enum Body<",
@@ -162,6 +167,11 @@ fn hsblock_kit_holds_shared() {
         ),
         "kit.rs が dom の部品を pub use で出さない"
     );
+    host_parts_via_project();
+}
+
+/// host の部品の値と型を crate::project の path で引く。
+fn host_parts_via_project() {
     // 今までの crate::project の path で host の部品が使える。
     assert_eq!(project::state_key("run"), "st_run");
     assert_eq!(project::state_class("wait"), "st st-wait");

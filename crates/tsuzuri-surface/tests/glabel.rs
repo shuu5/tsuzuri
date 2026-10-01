@@ -26,11 +26,12 @@ fn fixture() -> GraphView {
         .expect("graph-view.json が眺めの電文として読める")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
-fn boxed(id: &str, kind: NodeKind, title: &str, group: bool, fold: BoxFold, kids: u32) -> ViewNode {
+fn boxed(
+    id: &str,
+    kind: NodeKind,
+    title: &str,
+    (group, fold, kids): (bool, BoxFold, u32),
+) -> ViewNode {
     ViewNode {
         node: GraphNode {
             id: id.to_string(),
@@ -54,16 +55,26 @@ fn boxed(id: &str, kind: NodeKind, title: &str, group: bool, fold: BoxFold, kids
 
 /// 電文と同じく題を id と同じ字にした組の箱。
 fn group(id: &str, kind: NodeKind, kids: u32) -> ViewNode {
-    boxed(id, kind, id, true, BoxFold::Folded, kids)
+    boxed(id, kind, id, (true, BoxFold::Folded, kids))
 }
 
 /// 電文と同じく題を覆う先頭と末の id を字 … でつないだ塊。
 fn chunk(id: &str, kind: NodeKind, first: &str, last: &str, kids: u32) -> ViewNode {
-    boxed(id, kind, &format!("{first}…{last}"), true, BoxFold::Folded, kids)
+    boxed(
+        id,
+        kind,
+        &format!("{first}…{last}"),
+        (true, BoxFold::Folded, kids),
+    )
 }
 
 fn epic_box() -> ViewNode {
-    boxed("t3-hub.52", NodeKind::Epic, "面の epic", false, BoxFold::Folded, 12)
+    boxed(
+        "t3-hub.52",
+        NodeKind::Epic,
+        "面の epic",
+        (false, BoxFold::Folded, 12),
+    )
 }
 
 fn art_a() -> ViewNode {
@@ -116,7 +127,7 @@ fn glabel_plain_titles() {
     ] {
         assert_eq!(plain_title(&group(id, kind, 3)), want, "{id}");
     }
-    let band = boxed("~b:SRS", NodeKind::Goal, "SRS", true, BoxFold::Open, 30);
+    let band = boxed("~b:SRS", NodeKind::Goal, "SRS", (true, BoxFold::Open, 30));
     assert_eq!(plain_title(&band), "SRS");
 
     for (id, kind, first, last, want) in [
@@ -130,10 +141,10 @@ fn glabel_plain_titles() {
 
     assert_eq!(plain_title(&epic_box()), "面の epic");
     // 組でない箱は ~ を持つ字でも電文の題のまま。
-    let leaf = boxed("~rule", NodeKind::Rule, "規則", false, BoxFold::Leaf, 0);
+    let leaf = boxed("~rule", NodeKind::Rule, "規則", (false, BoxFold::Leaf, 0));
     assert_eq!(plain_title(&leaf), "規則");
     // ~ で始まらない組の箱は電文の題。
-    let odd = boxed("x", NodeKind::Rule, "題 x", true, BoxFold::Folded, 2);
+    let odd = boxed("x", NodeKind::Rule, "題 x", (true, BoxFold::Folded, 2));
     assert_eq!(plain_title(&odd), "題 x");
 }
 
@@ -172,7 +183,7 @@ fn glabel_box_first_line() {
         deep,
         group("~rule", NodeKind::Rule, 27),
         group("~note:surface-wave10a", NodeKind::NoteRow, 5),
-        boxed("~b:SRS", NodeKind::Goal, "SRS", true, BoxFold::Open, 30),
+        boxed("~b:SRS", NodeKind::Goal, "SRS", (true, BoxFold::Open, 30)),
         chunk("~led:ruling~13-24", NodeKind::Ruling, "r-13", "r-24", 12),
         chunk("~art:P~1-12", NodeKind::Article, "P-1", "P-12", 12),
     ] {

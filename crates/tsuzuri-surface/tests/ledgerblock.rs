@@ -96,6 +96,11 @@ fn ledgerblock_top_four_and_net_text() {
     assert_eq!(e.text(Part::Net24), Some("0".to_string()));
     assert_eq!(e.net24.arrow, "→");
 
+    net_rows_and_rate(m, e);
+}
+
+/// 純減の値ごとの矢印と字と class・主な指標の行の字と小数 1 桁の丸め。
+fn net_rows_and_rate(m: Metrics, e: Metrics) {
     for (value, arrow, text, class) in [
         (-3, "↓", "−3", "net net-down"),
         (2, "↑", "+2", "net net-up"),
@@ -201,6 +206,11 @@ fn ledgerblock_burndown_coordinates() {
     );
     assert!(svg.contains(r#"<polyline class="lb-open" fill="none" points="15.1,10.0 37.4,7.0"#));
 
+    empty_days_and_spark(s);
+}
+
+/// 0 ばかりの日の burndown と、sparkline の座標。
+fn empty_days_and_spark(s: LedgerStats) {
     // 0 ばかりの日でも割り算が落ちない（最大は 1 から）。
     let e = burndown(&set("empty").days, BURN_W, BURN_H);
     assert!(e.bars.iter().all(|r| r.height == 0.0 && r.y == BURN_H));
@@ -273,6 +283,11 @@ fn ledgerblock_age_four_forms() {
     assert_eq!(age(Some(10.0)), "10d");
     assert_eq!(age(Some(12.3)), "12d");
     assert_eq!(age(Some(45.6)), "46d");
+    memo_age_and_lead();
+}
+
+/// 指標の memo の年齢と lead の字・memo の段の残りの 3 数。
+fn memo_age_and_lead() {
     let m = filled("filled", &Screen::initial());
     assert_eq!(m.text(Part::MemoAge), Some("3.4d".to_string()));
     assert_eq!(m.text(Part::Lead), Some("12h".to_string()));
@@ -325,6 +340,11 @@ fn ledgerblock_layout_table() {
         LAYOUT[0].1.iter().map(|p| p.key()).collect::<Vec<_>>(),
         METRICS
     );
+    tiers_and_keys();
+}
+
+/// 項の段・項は 1 度ずつで作業中の数と最古の task は無い・語の鍵は語の辞書に在る。
+fn tiers_and_keys() {
     let tier_of = |part: Part| {
         LAYOUT
             .iter()
@@ -367,6 +387,11 @@ fn ledgerblock_layout_table() {
     {
         assert!(vocab().term(key).is_some(), "鍵 {key} が vocab に無い");
     }
+    epics_and_more_counts();
+}
+
+/// epic の進みと、「詳しく」の中の数。
+fn epics_and_more_counts() {
     // epic の進み: 題は台帳の一覧から id で引き、引けなければ id だけ。
     let m = filled("filled", &known_screen());
     let eps: Vec<(&str, Option<&str>, u32, u32, u32)> = m
@@ -473,6 +498,11 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
     assert_eq!(ledger::metrics(&body_of("filled")), Body::Filled(()));
     assert_eq!(stats(&body_of("filled")), Ok(set("filled")));
 
+    list_unchanged(screen);
+}
+
+/// 台帳の一覧は今と同じ・口を失えば数と一覧は測れていない。
+fn list_unchanged(screen: Screen) {
     assert_eq!(ledger::count(&screen), Reading::Known(5));
     let Body::Filled(groups) = ledger::body(&screen) else {
         panic!("台帳の一覧が中身を出さない");

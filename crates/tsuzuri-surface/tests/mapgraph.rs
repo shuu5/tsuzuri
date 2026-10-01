@@ -153,6 +153,11 @@ fn mapgraph_fixture_layout_matches_table() {
             (Band::Pipeline, 588, 66),
         ]
     );
+    beads_lanes_and_boxes(l);
+}
+
+/// beads の帯の小さな帯と、ほかの帯は小さな帯を持たない・箱の位置。
+fn beads_lanes_and_boxes(l: graph::Layout) {
     let lanes: Vec<(NodeKind, u32, u32)> = l
         .band(Band::Beads)
         .expect("beads の帯")
@@ -413,6 +418,11 @@ fn mapgraph_zoom_values() {
         "translate(116.00 0.00) scale(0.6842) translate(-116 0)"
     );
 
+    wheel_and_drag(s0);
+}
+
+/// wheel の倍率と収め・drag の移動と元に戻す。
+fn wheel_and_drag(s0: f64) {
     // wheel: 倍率は e の（縦の量 × −0.0015）乗を掛け、pointer の下の点は動かない。
     let z = Zoom {
         s: s0,
@@ -454,6 +464,11 @@ fn mapgraph_zoom_values() {
     assert!(!graph::dragged(3.0, 0.0));
     assert!(!graph::dragged(0.0, 4.0));
     assert!(graph::dragged(3.0, 3.0));
+    band_labels_follow_zoom();
+}
+
+/// 帯の名の欄の縦の位置と高さは拡大に合わせて変わる。
+fn band_labels_follow_zoom() {
     // 帯の名は左端の欄に・拡大に合わせて縦の位置と高さだけが変わる。
     let l = layout(&fixture());
     let labels = graph::band_labels(&l, Zoom::initial(0.5), 458.0);
@@ -552,6 +567,11 @@ fn mapgraph_highlight_hub_and_cap() {
     assert_eq!(h.order.len(), 5);
     assert_eq!(h.lit.len(), 5);
 
+    cap_at_twenty();
+}
+
+/// 1 段でも 20 を超えれば着いた順の先頭の 20 個で切る。
+fn cap_at_twenty() {
     // 1 段でも 21 個 → 着いた順の先頭の 20 個で切る。
     let edges: Vec<ViewEdge> = (0..21)
         .map(|i| edge(&format!("d{i}"), "c", EdgeType::Touches))

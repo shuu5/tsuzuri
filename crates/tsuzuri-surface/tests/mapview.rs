@@ -101,6 +101,11 @@ fn mapview_kind_table_is_closed() {
         let hits = Band::ALL.iter().filter(|b| **b == band_of(kind)).count();
         assert_eq!(hits, 1);
     }
+    band_names_and_paths();
+}
+
+/// 帯の名・語の鍵・class の名と、出所の path と出所の種類・beads の種類の行の順。
+fn band_names_and_paths() {
     let names: Vec<&str> = Band::ALL.iter().map(|b| b.name()).collect();
     assert_eq!(
         names,
@@ -213,6 +218,11 @@ fn mapview_compact_bands_and_tags_in_order() {
         ]
     );
 
+    constitution_and_beads(bs);
+}
+
+/// constitution の条の札と規範文・beads の種類の 7 行。
+fn constitution_and_beads(bs: Vec<BandBox>) {
     // constitution: 条の札は id の自然な順・規範文は条の下に自然な順・条の無い規範文は後に札で出す。
     let Cards::Articles { articles, loose } = &bs[0].cards else {
         panic!("constitution が条の札でない: {:?}", bs[0].cards);
@@ -269,6 +279,11 @@ fn mapview_compact_bands_and_tags_in_order() {
         ]
     );
 
+    tag_marks(&bs, lanes);
+}
+
+/// 札の題の字数と、open の問いの赤と、動いている節点の印。
+fn tag_marks(bs: &[BandBox], lanes: &[tsuzuri_surface::mapview::compact::Lane]) {
     // 札: 題は 30 字・open の問いは赤・動いている節点は印を塗らない。
     let Cards::Tags(rules) = &bs[1].cards else {
         panic!("rules が札でない");
@@ -376,6 +391,11 @@ fn mapview_list_filters_and_sorts() {
             "r-12",
         ]
     );
+    state_band_kind_and_pair(doc);
+}
+
+/// 状態の並べ・帯と種類の絞り・種類の組の絞り。
+fn state_band_kind_and_pair(doc: GraphDoc) {
     assert_eq!(
         list_of(&doc, "?view=list&band=beads&sort=state"),
         vec![
@@ -420,6 +440,11 @@ fn mapview_list_filters_and_sorts() {
         vec!["t3-hub.2", "t3-hub.9", "t3-hub.15"]
     );
 
+    state_words_and_kinds(doc);
+}
+
+/// 行の状態の語と題・種類の選択肢。
+fn state_words_and_kinds(doc: GraphDoc) {
     // 状態の語: bead は状態・走行は段・設計文書の節点と段の無い走行は状態なし。
     let all = listing(&doc, &Query::from_search(""));
     let word = |id: &str| {
@@ -539,6 +564,11 @@ fn mapview_query_keeps_view_and_filters() {
         "?view=table&page=map"
     );
 
+    search_query_and_choice();
+}
+
+/// query の絞りと並べの読みと、選択肢の付け外し。
+fn search_query_and_choice() {
     let q = Query::from_search(&format!(
         "?page=map&view=list&band=beads&kind={}&sort=state",
         encode("問い")
@@ -560,6 +590,11 @@ fn mapview_query_keeps_view_and_filters() {
     let s = with_choice(&s, "band", "");
     assert_eq!(s, "?page=map&view=list&sort=state");
 
+    pair_in_query();
+}
+
+/// 種類の組の query と、並べの語の鍵。
+fn pair_in_query() {
     let url = with_pair(
         "?page=map&view=table&band=rules&kind=x&mode=expert",
         Some((NodeKind::Task, NodeKind::Epic)),
@@ -741,6 +776,12 @@ fn mapview_classes_and_keys_exist() {
             rest = &rest[end..];
         }
     }
+    doc_classes(add);
+    used_in_css(used);
+}
+
+/// 例の電文から組む札・行・升・帯の印の class を足す。
+fn doc_classes(mut add: impl FnMut(&str)) {
     let doc = fixture();
     for b in boxes(&doc) {
         add(&b.class());
@@ -776,6 +817,10 @@ fn mapview_classes_and_keys_exist() {
     for b in Band::ALL {
         add(&format!("art7 shape fill {}", b.class_name()));
     }
+}
+
+/// 使う class は stylesheet に在り、語の鍵は vocab に在る。
+fn used_in_css(used: BTreeSet<String>) {
     let css = stylesheet_classes();
     for c in [
         "tabs", "band", "art7", "kids", "tag", "tid", "tt", "subh", "cards7", "filters", "items",

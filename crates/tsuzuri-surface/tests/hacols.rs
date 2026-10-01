@@ -69,7 +69,11 @@ fn hacols_wait_numbers() {
     assert_eq!(wait_class(Some(1)), "num on");
     assert_eq!(wait_class(Some(0)), "num");
     assert_eq!(wait_class(None), "num");
+    run_cards(doc);
+}
 
+/// run の数の card の値の行と、台帳の読めない project の card の WAIT_NOTE を見る。
+fn run_cards(doc: AccountDoc) {
     let a = pcnt_card(&doc.projects[0], doc.at);
     assert_eq!(a.value, "あなたの決定待ち 2");
     assert!(!a.more.iter().any(|l| l == WAIT_NOTE), "{:?}", a.more);
@@ -121,7 +125,11 @@ fn hacols_unref_partial() {
     for r in t.groups.iter().flat_map(|g| g.rows.iter()) {
         assert_eq!(r.unref, unref_of(&doc.projects[r.index]), "{}", r.name);
     }
+    unref_classes(u, none);
+}
 
+/// 未反映の欄の class の字（数が在る・0 件・台帳が読めない）を見る。
+fn unref_classes(u: Unref, none: LedgerStats) {
     assert_eq!(unref_class(Some(&u)), "c-un2 on");
     assert_eq!(unref_class(Some(&unref_count(&none))), "c-un2");
     assert_eq!(unref_class(None), "c-un2");

@@ -211,6 +211,16 @@ fn gpill_card_rows() {
             vec![model("?")],
         ),
     ];
+    card_matches(at, title, src, want);
+}
+
+/// 5 組の席の card の字と行の字数、読めないときの理由の card と口の path を見る。
+fn card_matches(
+    at: EpochSecs,
+    title: &str,
+    src: &str,
+    want: [(&str, String, &str, Vec<String>); 5],
+) {
     for (name, kind, value, more) in want {
         let c = seatpill::card(&body(&card_of(name)), at);
         assert_eq!(
@@ -315,7 +325,13 @@ fn gpill_own_names_clean() {
         })
         .collect();
     assert_eq!(names.len(), 6, "{names:?}");
-    let words = [
+    let words = [words_front(), words_middle(), words_back()].concat();
+    names_avoid(names, &words);
+}
+
+/// filter の語の表の前の部分（44 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "aaround_",
         "accept_",
         "account_",
@@ -360,6 +376,12 @@ fn gpill_own_names_clean() {
         "ghb_",
         "glabel_",
         "gnav_",
+    ]
+}
+
+/// filter の語の表の中の部分（44 語）。
+fn words_middle() -> &'static [&'static str] {
+    &[
         "gpulse_",
         "graph_",
         "gsum_",
@@ -404,6 +426,12 @@ fn gpill_own_names_clean() {
         "nodepage_",
         "nstall_",
         "nsum_",
+    ]
+}
+
+/// filter の語の表の後の部分（44 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "nsumw_",
         "ntime_",
         "nxact_",
@@ -448,7 +476,11 @@ fn gpill_own_names_clean() {
         "urpanel_",
         "uword_",
         "wstrip_",
-    ];
+    ]
+}
+
+/// 歯の名の残りの字が filter の語を含まないことを見る。
+fn names_avoid(names: Vec<&str>, words: &[&str]) {
     for name in names {
         let rest = name
             .strip_prefix("gpill_")

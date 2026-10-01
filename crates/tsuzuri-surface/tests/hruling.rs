@@ -172,7 +172,13 @@ fn hruling_src_row_links() {
 /// この file の歯の名はどれも hruling_ で始まり、残りの字はほかの行の filter の語を含まない。
 #[test]
 fn hruling_own_names_clean() {
-    const WORDS: &[&str] = &[
+    let words = [words_head(), words_tail()].concat();
+    names_clean(&words);
+}
+
+/// ほかの行の filter の語の前半。
+fn words_head() -> &'static [&'static str] {
+    &[
         "accept_",
         "account_",
         "acctcore_",
@@ -212,6 +218,12 @@ fn hruling_own_names_clean() {
         "parts_",
         "pipe_",
         "project_",
+    ]
+}
+
+/// ほかの行の filter の語の後半。
+fn words_tail() -> &'static [&'static str] {
+    &[
         "question_",
         "seatblock_",
         "seatcard_",
@@ -251,8 +263,12 @@ fn hruling_own_names_clean() {
         "sxaxis_",
         "plimit_",
         "bport_",
-    ];
-    assert_eq!(WORDS.len(), 78);
+    ]
+}
+
+/// 語の数と、この file の歯の名が hruling_ で始まり残りの字が語を含まないこと。
+fn names_clean(words: &[&str]) {
+    assert_eq!(words.len(), 78);
     let text = read("tests/hruling.rs");
     let lines: Vec<&str> = text.lines().map(str::trim).collect();
     let mut names = Vec::new();
@@ -272,7 +288,7 @@ fn hruling_own_names_clean() {
         let rest = name
             .strip_prefix("hruling_")
             .unwrap_or_else(|| panic!("{name} が hruling_ で始まらない"));
-        for w in WORDS {
+        for w in words {
             assert!(!rest.contains(w), "{name} が {w} を含む");
         }
     }

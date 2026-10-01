@@ -108,20 +108,25 @@ fn hfig_svg_head_and_counts() {
             dashes,
             "{name} の stroke-dasharray"
         );
-        assert!(
-            s.contains(&format!(
-                "<marker id=\"fa-{name}\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0L8 4L0 8z\" fill=\"var(--ink-3)\"/></marker>"
-            )),
-            "{name} の marker"
-        );
-        for m in attrs(&s, "marker-end") {
-            assert_eq!(m, format!("url(#fa-{name})"));
-        }
-        // 座標は整数の字（小数点が出るのは font-size と stroke-width だけ）。
-        for key in ["x", "y", "width", "height", "d"] {
-            for v in attrs(&s, key) {
-                assert!(!v.contains('.'), "{name} の {key}={v}");
-            }
+        marker_and_coords(s, name);
+    }
+}
+
+/// 図の marker の定義と marker-end の参照・座標は整数の字。
+fn marker_and_coords(s: String, name: &str) {
+    assert!(
+        s.contains(&format!(
+            "<marker id=\"fa-{name}\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0L8 4L0 8z\" fill=\"var(--ink-3)\"/></marker>"
+        )),
+        "{name} の marker"
+    );
+    for m in attrs(&s, "marker-end") {
+        assert_eq!(m, format!("url(#fa-{name})"));
+    }
+    // 座標は整数の字（小数点が出るのは font-size と stroke-width だけ）。
+    for key in ["x", "y", "width", "height", "d"] {
+        for v in attrs(&s, key) {
+            assert!(!v.contains('.'), "{name} の {key}={v}");
         }
     }
 }

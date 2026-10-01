@@ -43,7 +43,11 @@ fn hcled_rows_carry_cards() {
     let t = table(&doc, Sort::Judge);
     assert_eq!(t.names(), vec!["proj-a", "proj-b", "proj-c"]);
     assert_eq!(t.order(), vec![0, 1, 2]);
+    judge_rows(t);
+}
 
+/// 判定の順に並べた表の proj-a の行の card の字と、台帳の無い 2 行の card を見る。
+fn judge_rows(t: tsuzuri_surface::account::ledger::LedTable) {
     let a = &t.rows[0];
     assert!(matches!(a.cells, Reading::Known(_)));
     assert_eq!(a.class, "jrow j-ok");

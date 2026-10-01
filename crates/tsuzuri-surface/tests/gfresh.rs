@@ -78,7 +78,11 @@ fn gfresh_held_then_fresh() {
     assert_eq!(f.age(1020), Some(4));
     assert!(!f.warn(1031), "15 秒ちょうどは出さない");
     assert!(f.warn(1032));
+    other_paths(f);
+}
 
+/// ほかの口の頭が最終の記録を最も古い値にし、頭の無い応答で外れることを見る。
+fn other_paths(mut f: Fresh) {
     f.got("/p/b", 1022, Some(8));
     assert_eq!(f.record(), Some(1014));
     f.got("/p/c", 1025, None);
@@ -148,7 +152,11 @@ fn gfresh_card_rows() {
     assert_eq!(card.value, value(23));
     assert_eq!(card.src, READ_AGE_HEADER);
     assert!(card.more.is_empty());
+    lost_cards(f, card);
+}
 
+/// 切れを足した card と切れだけの card の種類と出所、全部の card の行の字数を見る。
+fn lost_cards(mut f: Fresh, card: tsuzuri_surface::widgets::hover::Card) {
     f.lose(1010);
     let both = f.card(1100).expect("108 秒の card");
     assert_eq!(both.kind, format!("{HELD_WORD}・{LOST_WORD}"));
@@ -281,7 +289,13 @@ fn gfresh_own_names_clean() {
         rest = &after[end..];
     }
     assert!(names.len() >= 8, "{names:?}");
-    let words = [
+    let words = [words_front(), words_middle(), words_back()].concat();
+    names_avoid(names, &words);
+}
+
+/// 着地済みの行の verify の語の表の前の部分（40 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "aaround_",
         "accept_",
         "account_",
@@ -322,6 +336,12 @@ fn gfresh_own_names_clean() {
         "ghb_",
         "glabel_",
         "gnav_",
+    ]
+}
+
+/// 着地済みの行の verify の語の表の中の部分（40 語）。
+fn words_middle() -> &'static [&'static str] {
+    &[
         "graph_",
         "gsum_",
         "gtuck_",
@@ -362,6 +382,12 @@ fn gfresh_own_names_clean() {
         "nodepage_",
         "nstall_",
         "nsum_",
+    ]
+}
+
+/// 着地済みの行の verify の語の表の後の部分（40 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "nsumw_",
         "ntime_",
         "nxact_",
@@ -402,7 +428,11 @@ fn gfresh_own_names_clean() {
         "urpanel_",
         "uword_",
         "wstrip_",
-    ];
+    ]
+}
+
+/// 歯の名の残りの字が着地済みの行の verify の語を含まないことを見る。
+fn names_avoid(names: Vec<String>, words: &[&str]) {
     for name in &names {
         let rest = name
             .strip_prefix("gfresh_")

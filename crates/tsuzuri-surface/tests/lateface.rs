@@ -102,6 +102,11 @@ fn lateface_line() {
     let unread = Fetched::Body(wire::encode(&Reading::<Vec<RulingId>>::Unknown).expect("電文"));
     assert_eq!(unreceived_line(&unread, now), unknown);
     assert_eq!(unreceived_line(&known(&[]), now), None);
+    one_and_two_lines(now);
+}
+
+/// 1 件と 2 件の 1 行は待ちの秒を過ぎた物だけを数える。
+fn one_and_two_lines(now: u64) {
     let one = known(&["fx-u.2:20260929T1001Z-1"]);
     assert_eq!(unreceived_line(&one, now - 1), None);
     assert_eq!(

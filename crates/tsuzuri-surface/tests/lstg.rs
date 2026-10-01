@@ -25,15 +25,10 @@ fn read(rel: &str) -> String {
 const NOW: u64 = 1_790_510_400;
 
 /// 口座 None の札。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn card(
     id: &str,
     runs: u32,
-    stage: Stage,
-    reason: Option<&str>,
+    (stage, reason): (Stage, Option<&str>),
     elapsed: Option<u64>,
     ci: Option<Ci>,
 ) -> PipelineCard {
@@ -51,18 +46,17 @@ fn card(
 /// 節の板 LS（8 枚）。
 fn ls() -> Vec<PipelineCard> {
     vec![
-        card("fx-l.1", 1, Stage::Running, None, Some(40), None),
-        card("fx-l.2", 0, Stage::Queued, None, None, None),
-        card("fx-l.3", 1, Stage::Failed, Some("verdict:FAIL x"), Some(90), None),
-        card("fx-l.4", 1, Stage::Landed, None, Some(120), Some(Ci::Waiting)),
-        card("fx-l.5", 1, Stage::Landed, None, Some(30), Some(Ci::Success)),
-        card("fx-l.6", 1, Stage::Landed, None, Some(30), None),
-        card("fx-l.7", 1, Stage::Landed, Some("closed:gave up"), Some(30), None),
+        card("fx-l.1", 1, (Stage::Running, None), Some(40), None),
+        card("fx-l.2", 0, (Stage::Queued, None), None, None),
+        card("fx-l.3", 1, (Stage::Failed, Some("verdict:FAIL x")), Some(90), None),
+        card("fx-l.4", 1, (Stage::Landed, None), Some(120), Some(Ci::Waiting)),
+        card("fx-l.5", 1, (Stage::Landed, None), Some(30), Some(Ci::Success)),
+        card("fx-l.6", 1, (Stage::Landed, None), Some(30), None),
+        card("fx-l.7", 1, (Stage::Landed, Some("closed:gave up")), Some(30), None),
         card(
             "fx-l.8",
             1,
-            Stage::Failed,
-            Some("terminal:ci:failure"),
+            (Stage::Failed, Some("terminal:ci:failure")),
             Some(30),
             Some(Ci::Failure),
         ),
