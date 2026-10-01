@@ -3,13 +3,14 @@
 meta:
   id: surface-wave26a
   title: 第 26 波 a — project board の作り直し（判断の記録 ADR-27）の第 1 段。地図と口座の履歴と「詳しく」を消し、bead の事実と器の局面の出力を読む口を足し、pipeline の板を Blocked と Queued を分けた 5 列にする
-  version: v0.7
-  status: effective
+  version: v0.8
+  status: retired
   generated: 2026-10-01
   profile: design-note
+  superseded_by: surface-plan
   approval:
     - {who: 持ち主, date: 2026-10-01, ruling: t3-hub.52.160.1（裁定 id = t3-hub.52.160.1:20261001T1423Z-1・席とのチャット・notes に逐語）, verbatim: これでよい すべて推奨で良いので進めて, surface: R-8}
-  note: ノート surface-wave25a（11 行の全部が着地）の続き。承認は判断の記録 ADR-27 の持ち主の裁定（t3-hub.52.160.1:20261001T1423Z-1）。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-10-01）は行 m-map-page・m-map-compact・m-more-drop・c-pipe-five・c-landed-12h・c-bead-facts・c-bead-route・c-case-read・c-run-verdict を足した。 第 0.3 版（2026-10-01）は行 c-unref-lc を足した。 第 0.4 版（2026-10-01）は行 m-more-drop の節の字を直した（器の事前点検が literal-mismatch で見つけた。語 acct_hist は account board と歯 projmore が使い続けるので使わなくなる語でない・語 p_more を使い続ける file に src/account/cards.rs を足した・契約の字と差の file は替えない）。 第 0.5 版（2026-10-01）は行 m-map-tree・m-map-graph・c-case-columns・c-ledger-lc・m-gview-drop を足した。 第 0.5 版では、行 c-unref-lc に growth（src/project/ledger.rs の 10 行・器の受付の事前点検の cap-headroom）を足し、節の c-ledger-lc の字を直した（c-ledger-lc は板の札の段の行で、計画の依存でこの行を名指さない・一覧の項の段は計画の行 g-unref-lc）。 第 0.6 版（2026-10-01）は行 c-unref-lc の差を直した（便 t3-hub.52.170 の gate FAIL・出力の unmeasured が読めない時も古さの印を空にし、歯の空の断言に印の在る組を足した）。done (5) に「古さの印の file に印が在っても空」を足し、節の在りかと形と試作と噛みの字を替えた。 第 0.7 版（2026-10-01）は行 c-ledger-lc の done (3) と (9) と節の在りか・形・試作と噛みの字を直し、差を替えた（便 t3-hub.52.174 の審査 FAIL・台帳で閉じた bead の札は段が Landed なら理由が event log の読みのまま〔行 c-pipe-closed の決まり〕・src は替えず歯に断言を足した）。
+  note: ノート surface-wave25a（11 行の全部が着地）の続き。承認は判断の記録 ADR-27 の持ち主の裁定（t3-hub.52.160.1:20261001T1423Z-1）。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-10-01）は行 m-map-page・m-map-compact・m-more-drop・c-pipe-five・c-landed-12h・c-bead-facts・c-bead-route・c-case-read・c-run-verdict を足した。 第 0.3 版（2026-10-01）は行 c-unref-lc を足した。 第 0.4 版（2026-10-01）は行 m-more-drop の節の字を直した（器の事前点検が literal-mismatch で見つけた。語 acct_hist は account board と歯 projmore が使い続けるので使わなくなる語でない・語 p_more を使い続ける file に src/account/cards.rs を足した・契約の字と差の file は替えない）。 第 0.5 版（2026-10-01）は行 m-map-tree・m-map-graph・c-case-columns・c-ledger-lc・m-gview-drop を足した。 第 0.5 版では、行 c-unref-lc に growth（src/project/ledger.rs の 10 行・器の受付の事前点検の cap-headroom）を足し、節の c-ledger-lc の字を直した（c-ledger-lc は板の札の段の行で、計画の依存でこの行を名指さない・一覧の項の段は計画の行 g-unref-lc）。 第 0.6 版（2026-10-01）は行 c-unref-lc の差を直した（便 t3-hub.52.170 の gate FAIL・出力の unmeasured が読めない時も古さの印を空にし、歯の空の断言に印の在る組を足した）。done (5) に「古さの印の file に印が在っても空」を足し、節の在りかと形と試作と噛みの字を替えた。 第 0.7 版（2026-10-01）は行 c-ledger-lc の done (3) と (9) と節の在りか・形・試作と噛みの字を直し、差を替えた（便 t3-hub.52.174 の審査 FAIL・台帳で閉じた bead の札は段が Landed なら理由が event log の読みのまま〔行 c-pipe-closed の決まり〕・src は替えず歯に断言を足した）。 第 0.8 版（2026-10-01）で廃止した（契約表の 15 行の全部が着地・第 2 段の行はノート surface-wave26b に置く）。
 
 sections:
   - n: 1
