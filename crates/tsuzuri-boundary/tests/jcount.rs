@@ -169,7 +169,11 @@ fn jcount_rule_readings() {
         said.text = format!("{}\n{words}", base.text);
         assert_eq!(count(&said, &vocab), only("verbatim", n), "字 {words}");
     }
+    library_and_nodeid_readings(vocab, base);
+}
 
+/// 読み先の条と節点の id の条の読み。
+fn library_and_nodeid_readings(vocab: String, base: Facts) {
     assert_eq!(base.url, "http://127.0.0.1:4801/?page=pipeline&mode=beginner");
     for (source, n) in [
         ("//cdn.example.com/lib.js", 1),

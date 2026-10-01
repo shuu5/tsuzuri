@@ -217,7 +217,11 @@ fn gext_check_takes_projects() {
     let out = place.check(&[project(&place.gone)]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(unverified(&out), "{}", stderr(&out));
+    check_cut_and_empty(place);
+}
 
+/// 置き場 cut の違反と、空の --project の値。
+fn check_cut_and_empty(place: Place) {
     let out = place.check(&pair(&place.cut));
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(

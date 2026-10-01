@@ -299,6 +299,11 @@ fn lidle_live_reads_on_attach() {
             files.clone(),
         )
     };
+    run_and_count(root, issues, config);
+}
+
+/// 起こした server の偽の bd の読みの数を、受け手 0 人の間と口と知らせの口で見る。
+fn run_and_count(root: PathBuf, issues: PathBuf, config: Config) {
     let server = Server::bind(&config).expect("起動");
     let addr = server.local_addr().expect("口の住所");
     thread::spawn(move || server.run());

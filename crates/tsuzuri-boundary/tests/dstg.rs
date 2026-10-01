@@ -316,6 +316,11 @@ fn dstg_wire_forms() {
         wire::decode::<Targets>(r#"{"all":{"to":"term-a"}}"#).expect("読み"),
         all
     );
+    project_forms_and_refusals();
+}
+
+/// Targets::Project と OpenRequest の字の往復と、読まない字と名でない字の断りを見る。
+fn project_forms_and_refusals() {
     let project = Targets::Project {
         project: "proj-b".to_string(),
         to: None,
@@ -430,7 +435,11 @@ fn dstg_show_json_reads_setting() {
         ]
     );
     assert_eq!(doc.names, strings(&["term-a"]));
+    real_tz_show();
+}
 
+/// 偽の器と偽の git と設定の file を置き、本物の tz の show を撃つ支度をする。
+fn real_tz_show() {
     // 本物の tz（偽の器と偽の git・既定 term-a・上書き proj-b と proj-z・群の anchor は proj-a と proj-b）。
     let place = Place::new("show-json");
     let state = place.root.join("state-a");
@@ -474,6 +483,11 @@ fn dstg_show_json_reads_setting() {
             String::from_utf8(out.stdout).expect("標準出力"),
         )
     };
+    show_runs(run);
+}
+
+/// 本物の tz の show を --json の有り無しで撃ち、電文と今までの行を見る。
+fn show_runs(run: impl Fn(&[&str]) -> (Option<i32>, String)) {
     let (rc, out) = run(&["--json"]);
     assert_eq!(rc, Some(0), "{out}");
     assert_eq!(out.lines().count(), 1, "1 行の標準出力: {out}");
@@ -663,7 +677,11 @@ fn dstg_all_post_scope() {
             "{text}"
         );
     }
+    bare_scope(place);
+}
 
+/// state dir の無い server が --repo の project だけを受けることを見る。
+fn bare_scope(place: Place) {
     // state dir の無い server は --repo の project だけを受ける。
     let (_bare_served, bare) = place.serve(false);
     place.clear();
@@ -806,6 +824,11 @@ fn dstg_wiring_text() {
             assert!(!text.contains("guarded(req,"), "{file} が guarded を通る");
         }
     }
+    entry_and_consts();
+}
+
+/// 入口と設定の配線の字と、撃つ program・引数・待ちの定数を見る。
+fn entry_and_consts() {
     assert_eq!(src("main.rs").matches("std::env::current_exe()").count(), 1);
     assert_eq!(
         src("server/config.rs").matches("stagecall::TZ.into()").count(),

@@ -528,7 +528,11 @@ fn epolq_create_argv_words() {
         pairs.into_iter().collect::<Vec<_>>(),
         [("effect".to_string(), "operation".to_string())]
     );
+    bare_create_argv();
+}
 
+/// 旗の無い子の書きの引数の列と、効き目だけを足した書きの metadata の旗を見る。
+fn bare_create_argv() {
     let bare = LedgerWrite::CreateChild {
         parent: id("fx-p"),
         title: "t".into(),
@@ -615,7 +619,11 @@ fn epolq_create_form() {
             "方針（範囲 = all）",
         ])
     );
+    scope_and_heads(w);
+}
 
+/// 範囲が問いの id の方針と注の字の方針の書きの字と、3 つの書きの 4 つの頭を見る。
+fn scope_and_heads(w: LedgerWrite) {
     let one = policy::create_write(
         &id("fx-p"),
         "fx-p.2",
@@ -945,7 +953,11 @@ fn epolq_derived_reads_both() {
     made.notes = policy::line(&rid(POLICY_ID), "all", TWO_LINES);
     beads.push(made);
     let text = ledger(&beads);
+    derived_from_ledger(text);
+}
 
+/// 台帳の字から組んだ graph の節点と辺、未配達の裁定、開いた問いを見る。
+fn derived_from_ledger(text: String) {
     let mut g = build(&Inputs {
         design_index: "FR8\t要件\tsrs.yaml\t00000000\t方針の欄",
         ledger: &text,

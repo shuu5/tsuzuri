@@ -224,7 +224,11 @@ fn aown_read_only_refuses_without_writes() {
     assert!(cards.iter().any(|c| c.id.as_str() == OPEN), "{cards:?}");
     let reads = place.count("bd");
     assert!(reads >= 1, "偽の bd を撃たない");
+    refuse_then_answer(place, addr, reads);
+}
 
+/// 読むだけの server が 4 つの口を断ることと、読むだけでない server が答えを受けることを見る。
+fn refuse_then_answer(place: Place, addr: SocketAddr, reads: u32) {
     let posts = [
         (ruling::PATH, ruling_request(digest(OPEN))),
         (

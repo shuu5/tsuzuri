@@ -287,7 +287,11 @@ fn eretry_read_retries_then_writes() {
     assert_eq!(got, Outcome::LedgerUnknown);
     assert_eq!(place.bd_count(), 3, "偽の bd は 3 回");
     assert!(place.argvs("bdw").is_empty(), "読めないのに偽の bdw を撃つ");
+    revoke_and_batch_retry(ledger);
+}
 
+/// 取り消しと束も、読みが 2 回落ちた後の 3 回目で記録する。
+fn revoke_and_batch_retry(ledger: String) {
     // 取り消しも 3 回目の読みで記録する。
     let place = Place::new("revoke", &ledger);
     place.bd_fails(2);
@@ -347,7 +351,11 @@ fn eretry_deliver_after_reply() {
         Some(response.ruling.as_str())
     );
     assert_eq!(place.argvs("bdw").len(), 3);
+    deliver_batch_after_reply();
+}
 
+/// 束の配達も、偽の器が門で止まっている間に記録を返し、門を開けた後に印を置く。
+fn deliver_batch_after_reply() {
     // 束の 2 行。
     let ledger = fixture(BATCH);
     let place = Place::new("deliver-batch", &ledger);

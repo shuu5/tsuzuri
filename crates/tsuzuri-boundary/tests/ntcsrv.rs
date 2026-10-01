@@ -191,7 +191,11 @@ fn ntc_dir_files_gather() {
         );
     }
     assert_eq!(EXT, ".json");
+    gather_records();
+}
 
+/// 記録の dir の files と gather が名と中身で記録を選び、読めない dir を Err にするかを見る。
+fn gather_records() {
     let root = place("gather");
     let dir = root.join("notify");
     assert_eq!(notify::files(&dir).expect("無い dir"), Vec::<PathBuf>::new());

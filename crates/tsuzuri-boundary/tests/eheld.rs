@@ -138,6 +138,15 @@ fn eheld_held_marks_and_ceiling() {
 
     // 読めなかった読みは、上限が 60 秒でも FAILED_HOLD の内は撃ち直さず None を返し、過ぎれば撃ち直す。
     assert_eq!(FAILED_HOLD, Duration::from_secs(5));
+    failed_reads(held, marks, read, &shots, mark);
+}
+
+/// 読めなかった読みを FAILED_HOLD の内は撃ち直さず、印が動くか過ぎれば撃ち直すことを見る。
+fn failed_reads<F, R>(held: Held, marks: [PathBuf; 2], read: F, shots: &Cell<i32>, mark: PathBuf)
+where
+    F: Fn(Option<&'static str>) -> R,
+    R: FnOnce() -> Option<String>,
+{
     let long = Duration::from_secs(60);
     let bad: Vec<OsString> = vec!["bad".into()];
     assert_eq!(held.get(&bad, &marks, long, read(None)), None);
@@ -293,7 +302,11 @@ fn eheld_vessel_marks_by_head() {
     assert_eq!(ceiling(&TICK_ARGS), HOLD);
     assert_eq!(ceiling(&DOCTOR_ARGS), DOCTOR_HOLD);
     assert_eq!(ceiling(&USAGE_ARGS), SLOW_HOLD);
+    seat_input_marks();
+}
 
+/// 席の読みの頭ごとの印の file の並び（群の記録の file のうち数える物と数えない物）を見る。
+fn seat_input_marks() {
     let place = Place::new("vessel-marks");
     let seat = seat_in(&place, "m");
     let groups = seat.groups_dir().expect("群の記録の dir");

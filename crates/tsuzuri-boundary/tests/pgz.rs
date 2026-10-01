@@ -111,7 +111,7 @@ fn pgz_respond_picks_copy() {
     let cc = |v: &str| ("Cache-Control", v.to_string());
     let vary = ("Vary", "Accept-Encoding".to_string());
     let ce = ("Content-Encoding", "gzip".to_string());
-    let cases: [Case; 10] = [
+    let cases: Vec<Case> = vec![
         (
             wasm,
             Some("gzip, br"),
@@ -147,6 +147,19 @@ fn pgz_respond_picks_copy() {
             CSS_GZ,
             vec![cc(NO_CACHE), vary.clone(), ce.clone()],
         ),
+    ];
+    respond_rest(root, html, js, cc, cases);
+}
+
+/// 表の残りの要求を足して応答を照らし、無い file と置き場の外の要求と gz_copy を見る。
+fn respond_rest(
+    root: PathBuf,
+    html: &'static str,
+    js: &'static str,
+    cc: impl Fn(&str) -> (&'static str, String),
+    mut cases: Vec<Case>,
+) {
+    cases.extend([
         (
             "/app-0123abcd.js",
             Some("gzip"),
@@ -164,7 +177,7 @@ fn pgz_respond_picks_copy() {
             WASM_GZ,
             vec![cc(IMMUTABLE)],
         ),
-    ];
+    ]);
     for (path, encoding, content_type, body, headers) in cases {
         let resp = get(&root, path, encoding);
         let what = format!("{path} {encoding:?}");

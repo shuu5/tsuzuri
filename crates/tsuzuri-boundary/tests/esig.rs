@@ -104,6 +104,17 @@ fn esig_nudge_ends_the_wait() {
     thread::sleep(QUIET);
     assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
     assert_eq!(n(), 2, "印が動かないのに読む");
+    nudge_after_mark_moves(root, mark, hub, n, rx);
+}
+
+/// 印が動いた後の合図で知らせが 1 件だけ届き、見張りの無い Hub の合図は偽。
+fn nudge_after_mark_moves(
+    root: PathBuf,
+    mark: PathBuf,
+    hub: Arc<Hub>,
+    n: impl Fn() -> usize,
+    rx: tsuzuri_boundary::server::events::Subscription,
+) {
     // 印が動いた後の合図でまた 1 件。
     put(&mark, "333");
     let at = Instant::now();
@@ -249,6 +260,11 @@ fn esig_post_wakes_the_server() {
     assert_eq!(reply, (202, NUDGED.to_string()), "合図の応答");
     let got = next_ledger(&mut s, &mut seen, WITHIN).expect("合図から 200 ミリ秒以内の知らせ");
     assert!(got - at <= WITHIN, "{:?}", got - at);
+    nudge_without_reading(root, addr, s);
+}
+
+/// 印が動かない合図と断る合図は見張りを起こさず、bd を撃たない。
+fn nudge_without_reading(root: PathBuf, addr: SocketAddr, s: TcpStream) {
     // 印が動かなければ、合図を受けても bd を撃たない。
     let before = calls(&root);
     for _ in 0..3 {

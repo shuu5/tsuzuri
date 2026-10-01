@@ -232,7 +232,15 @@ fn evkind_serve_marks_by_kind() {
     let server = Server::bind(&config).expect("起動");
     let addr: SocketAddr = server.local_addr().expect("口の住所");
     thread::spawn(move || server.run());
+    marks_by_kind(root, (tick, log, events, doc), addr);
+}
 
+/// 口の知らせの接続で、印の file ごとにその種類の知らせを 1 件だけ受ける。
+fn marks_by_kind(
+    root: PathBuf,
+    (tick, log, events, doc): (PathBuf, PathBuf, PathBuf, PathBuf),
+    addr: SocketAddr,
+) {
     let mut s = TcpStream::connect(addr).expect("接続");
     s.write_all(format!("GET /api/surface/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
         .expect("要求を書く");

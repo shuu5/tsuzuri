@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tsuzuri_boundary::server::events::Hub;
+use tsuzuri_boundary::server::events::{Hub, Subscription};
 use tsuzuri_boundary::server::form::{
     FORM_ARGS, FORM_TIMEOUT, Form, Kept, REPO_ARGS, form_lines, misfits,
 };
@@ -343,7 +343,11 @@ fn pmisfit_form_kick_rules() {
     assert!(place.argv().is_empty(), "許しの前に撃つ");
     assert_eq!(form.kept(), None);
     assert_eq!(misfits(None, 0), Reading::Unknown);
+    armed_kicks(place, form, state, rx);
+}
 
+/// 許しの後の撃ちと組と知らせを、同じ組の周・台帳の字だけが変わる周・題が変わる周で見る。
+fn armed_kicks(place: Place, form: Form, state: String, rx: Subscription) {
     // 許しの後は 1 度撃ち、組を持ち、知らせを 1 件。
     form.arm();
     assert!(form.armed());
@@ -391,7 +395,11 @@ fn pmisfit_form_kick_rules() {
         form.kept().map(|k| k.ledger) == Some(renamed())
     });
     rx.recv_timeout(WAIT).expect("題を替えた周の知らせ");
+    failed_rounds(place, form, rx);
+}
 
+/// 台帳の読みか器が落ちた周・形の行の無い周・上限を越えた周の組と知らせと、戻った周を見る。
+fn failed_rounds(place: Place, form: Form, rx: Subscription) {
     // 台帳の読みが落ちた周は器を撃たず None で知らせる。
     let shots = place.argv().len();
     form.kick(None);
@@ -511,7 +519,11 @@ fn pmisfit_route_reads_kept_form() {
         got,
         board_with_doctor(LEDGER, EVENT, Some(&doctor), 0).board
     );
+    route_rounds(place, addr, doctor);
+}
 
+/// 撃った後の口の要求と、撃っている間・撃ちを終えた後・落ちた周に口が写す札と一覧を見る。
+fn route_rounds(place: Place, addr: SocketAddr, doctor: String) {
     // 口の要求は器を撃たない。
     for _ in 0..3 {
         assert_eq!(pipeline(addr).misfits, want());

@@ -242,6 +242,11 @@ fn lstore_values_and_dirs() {
     assert_eq!(JOURNAL, "v".repeat(32));
     assert_eq!(METADATA, "metadata.json");
     assert_eq!(TABLE_SUFFIX, ".darc");
+    dirs_and_metadata();
+}
+
+/// metadata.json の字と置き方から store の dir と印を読むかを見る。
+fn dirs_and_metadata() {
     let root = place("dirs");
     let repo = root.join("repo");
     let meta = repo.join(".beads").join(METADATA);
@@ -445,6 +450,11 @@ fn lstore_live_journal_moves() {
         bd: bd.into(),
         ..Config::new(repo.clone(), "127.0.0.1:0".parse().expect("bind 先"), files)
     };
+    serve_and_watch(root, repo, noms, text, config);
+}
+
+/// 起こした server の知らせの口で、読みの見立てと journal の動きへの bd の回と知らせの件を見る。
+fn serve_and_watch(root: PathBuf, repo: PathBuf, noms: PathBuf, text: String, config: Config) {
     let server = Server::bind(&config).expect("起動");
     let addr: SocketAddr = server.local_addr().expect("口の住所");
     thread::spawn(move || server.run());

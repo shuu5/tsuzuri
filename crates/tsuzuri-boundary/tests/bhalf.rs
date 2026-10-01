@@ -543,6 +543,17 @@ fn bhalf_resend_rest() {
             argvs[at]
         );
     }
+    deliver_and_writes(place, b2, argvs, minutes, old);
+}
+
+/// 送り直しの束の配達が 1 度だけで、書きが追記か閉じるだけで前の裁定に触れないことを見る。
+fn deliver_and_writes(
+    place: Place,
+    b2: RulingId,
+    argvs: Vec<Vec<String>>,
+    minutes: [String; 2],
+    old: RulingId,
+) {
     let state = place.state.display().to_string();
     assert_eq!(
         place.argvs("scribe2"),

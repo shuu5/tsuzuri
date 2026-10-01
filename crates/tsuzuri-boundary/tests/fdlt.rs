@@ -564,7 +564,11 @@ fn fdlt_run_quiet_paths() {
     for name in ["git", "bd", "bdw"] {
         assert!(place.calls(name).is_empty(), "worktree で偽の {name} を撃つ");
     }
+    quiet_ledger_paths();
+}
 
+/// 口の空の列・受け手の居ない port・Unknown の台帳・bd の落ち・全部に印の在る台帳の静かな形。
+fn quiet_ledger_paths() {
     // 口が Known の空の列: git だけを 1 回撃つ。
     let place = Place::new("quiet-empty", &marked_ledger());
     place.serve();

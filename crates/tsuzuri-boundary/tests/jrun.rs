@@ -228,6 +228,11 @@ fn jrun_case_order_and_readings() {
     assert_eq!(page.log, want);
     assert_eq!(facts.url, url);
     assert_eq!(facts.errors, ["Uncaught boom"]);
+    switches_and_widths(url, pressed, facts);
+}
+
+/// 押した切り替えの読みと数え、広い幅の case と事実の形の違い。
+fn switches_and_widths(url: String, pressed: String, facts: tsuzuri_boundary::audit::Facts) {
     assert_eq!(
         facts.switches,
         [
@@ -353,7 +358,11 @@ fn jrun_sweep_all_cases() {
         &plus([0; 12], "error", 1),
     );
     assert!(report.lines().any(|l| l == node_line), "{report}");
+    sweep_without_nodes(vocab);
+}
 
+/// 節点の無い圧縮の面では、節点の頁を開かずに止まる。
+fn sweep_without_nodes(vocab: String) {
     let clean = fixture("clean.json");
     let start = clean.find(r#""nodes": ["#).expect("札の列");
     let end = start + clean[start..].find(']').expect("札の列の閉じ");
@@ -392,6 +401,11 @@ fn jrun_measure_expression_text() {
         "{removes:?}"
     );
     assert!(text.contains("getEventListeners"), "hover の受け手の見方");
+    returned_object_keys(text);
+}
+
+/// 測りの式の返す object の鍵の並びと、決まった値の欄。
+fn returned_object_keys(text: String) {
     let start = text.find("return JSON.stringify({").expect("返す object");
     let body = &text[start..];
     let body = &body[..body.find("});").expect("object の閉じ")];

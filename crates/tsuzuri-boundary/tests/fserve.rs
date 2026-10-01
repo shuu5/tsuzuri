@@ -466,7 +466,11 @@ fn fserve_batch_refusal_logs_once() {
     let (status, body) = reply.expect("応答を読めない");
     assert_eq!(status, 200, "{body}");
     let got: BatchResponse = wire::decode(&body).expect("束の応答の形");
+    delivered_once_refused_once(place, rest, got);
+}
 
+/// 束の id での配達が 1 度だけで、受けない行が標準 error に 1 行だけ在る。
+fn delivered_once_refused_once(place: Place, rest: String, got: BatchResponse) {
     assert_eq!(
         place.argvs("scribe2"),
         [deliver_argv(&place, got.batch.as_str())],
