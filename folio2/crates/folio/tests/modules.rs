@@ -127,63 +127,73 @@ fn strip(src: &str) -> String {
             out.push(' ');
             continue;
         }
-        let raw_head = c[i] == 'r'
-            && (i == 0
-                || !is_ident(c[i - 1])
-                || (c[i - 1] == 'b' && (i < 2 || !is_ident(c[i - 2]))));
-        if raw_head {
-            let mut j = i + 1;
-            let mut hashes = 0;
-            while at(j) == Some('#') {
-                hashes += 1;
-                j += 1;
-            }
-            if at(j) == Some('"') {
-                j += 1;
-                while j < c.len() {
-                    if c[j] == '"' && (1..=hashes).all(|h| at(j + h) == Some('#')) {
-                        j += 1 + hashes;
-                        break;
-                    }
-                    j += 1;
-                }
-                i = j;
-                out.push(' ');
-                continue;
-            }
-        }
-        if c[i] == '"' {
-            i += 1;
-            while i < c.len() && c[i] != '"' {
-                if c[i] == '\\' {
-                    i += 1;
-                }
-                i += 1;
-            }
-            i += 1;
-            out.push(' ');
+        if let Some(j) = literal(&c, i, &mut out) {
+            i = j;
             continue;
-        }
-        if c[i] == '\'' {
-            if at(i + 1) == Some('\\') {
-                let mut j = i + 3;
-                while j < c.len() && c[j] != '\'' {
-                    j += 1;
-                }
-                i = j + 1;
-                out.push(' ');
-                continue;
-            }
-            if at(i + 2) == Some('\'') {
-                i += 3;
-                out.push(' ');
-                continue;
-            }
         }
         out.push(c[i]);
         i += 1;
     }
     out
+}
+
+/// 字面（素の文字列・文字列・1 文字）の頭なら剥がして空白 1 つを足し、次の位置を返す（頭でなければ None）。
+fn literal(c: &[char], mut i: usize, out: &mut String) -> Option<usize> {
+    let at = |k: usize| c.get(k).copied();
+    let raw_head = c[i] == 'r'
+        && (i == 0
+            || !is_ident(c[i - 1])
+            || (c[i - 1] == 'b' && (i < 2 || !is_ident(c[i - 2]))));
+    if raw_head {
+        let mut j = i + 1;
+        let mut hashes = 0;
+        while at(j) == Some('#') {
+            hashes += 1;
+            j += 1;
+        }
+        if at(j) == Some('"') {
+            j += 1;
+            while j < c.len() {
+                if c[j] == '"' && (1..=hashes).all(|h| at(j + h) == Some('#')) {
+                    j += 1 + hashes;
+                    break;
+                }
+                j += 1;
+            }
+            i = j;
+            out.push(' ');
+            return Some(i);
+        }
+    }
+    if c[i] == '"' {
+        i += 1;
+        while i < c.len() && c[i] != '"' {
+            if c[i] == '\\' {
+                i += 1;
+            }
+            i += 1;
+        }
+        i += 1;
+        out.push(' ');
+        return Some(i);
+    }
+    if c[i] == '\'' {
+        if at(i + 1) == Some('\\') {
+            let mut j = i + 3;
+            while j < c.len() && c[j] != '\'' {
+                j += 1;
+            }
+            i = j + 1;
+            out.push(' ');
+            return Some(i);
+        }
+        if at(i + 2) == Some('\'') {
+            i += 3;
+            out.push(' ');
+            return Some(i);
+        }
+    }
+    None
 }
 
 /// 剥がした本文から名指す区切りの名を取る。`crate::<名>` と `crate::{a, b::{…}}` の括り書きの頭の名。
@@ -211,31 +221,7 @@ fn named(code: &str, bare: bool, modules: &BTreeSet<&str>) -> BTreeSet<String> {
                 j += 1;
             }
             if c.get(j) == Some(&'{') {
-                let mut depth = 0;
-                let mut expect = true;
-                while j < c.len() {
-                    match c[j] {
-                        '{' => depth += 1,
-                        '}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        ',' if depth == 1 => expect = true,
-                        ch if is_ident(ch) && expect && depth == 1 => {
-                            let s = j;
-                            while j < c.len() && is_ident(c[j]) {
-                                j += 1;
-                            }
-                            names.insert(c[s..j].iter().collect::<String>());
-                            expect = false;
-                            continue;
-                        }
-                        _ => {}
-                    }
-                    j += 1;
-                }
+                braced(&c, j, &mut names);
             } else {
                 let s = j;
                 while j < c.len() && is_ident(c[j]) {
@@ -249,6 +235,35 @@ fn named(code: &str, bare: bool, modules: &BTreeSet<&str>) -> BTreeSet<String> {
     }
     names.retain(|n| modules.contains(n.as_str()));
     names
+}
+
+/// `crate::{a, b::{…}}` の括り書きの頭の名を `names` に足す（`j` は開きの括弧の位置）。
+fn braced(c: &[char], mut j: usize, names: &mut BTreeSet<String>) {
+    let mut depth = 0;
+    let mut expect = true;
+    while j < c.len() {
+        match c[j] {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            ',' if depth == 1 => expect = true,
+            ch if is_ident(ch) && expect && depth == 1 => {
+                let s = j;
+                while j < c.len() && is_ident(c[j]) {
+                    j += 1;
+                }
+                names.insert(c[s..j].iter().collect::<String>());
+                expect = false;
+                continue;
+            }
+            _ => {}
+        }
+        j += 1;
+    }
 }
 
 /// `lib.rs` の区切りの宣言（`mod <名>;`と`pub mod <名>;`）の集合。

@@ -512,6 +512,12 @@ fn f203_abroad_labels_and_unknowns_name_no_folio2_number() {
     );
     assert_eq!(article_ids(&proposed), Vec::<String>::new(), "{}", show(&proposed));
 
+    retreat_and_parts();
+    index_and_home();
+}
+
+/// 撤退条件を空にした写しと folio parts --check の部品目録に無い class で、名札が検査の名なのを見る。
+fn retreat_and_parts() {
     // (b) 撤退条件を空にした写し: 名札は検査の名（字の中の P-8.1 は本便の外）
     let r = Work::skeleton("f203-retreat");
     edit(&r.dir().join("adr/ADR-1.yaml"), |t| {
@@ -555,7 +561,10 @@ fn f203_abroad_labels_and_unknowns_name_no_folio2_number() {
     assert_eq!(parts(), ["[部品目録] index.html: 部品目録に無い class「zz-unknown」"]);
     add_rows(&p.dir(), "thresholds", &[("R-3", threshold("R-3", "部品目録に無い型の数", "0 件"))]);
     assert_eq!(parts(), ["[部品目録] index.html: 部品目録に無い class「zz-unknown」"]);
+}
 
+/// 凍結 anchor の索引が空か版の file が無い骨格と、名だけ folio2 の置き場の名にした写しの まだ分からない の行を見る。
+fn index_and_home() {
     // (d) 凍結 anchor の索引の entries が空・索引の版の anchor file が無い骨格: まだ分からない の行は（P-10.3）の片が落ちる
     let x = Work::skeleton("f203-index");
     let index = x.dir().join("anchors/index.yaml");

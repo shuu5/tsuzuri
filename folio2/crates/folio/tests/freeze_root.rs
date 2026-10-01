@@ -440,6 +440,11 @@ fn f121_freeze_start_writes_both_and_the_floor_passes() {
         "書いた id の一覧が土台の凍結済みの file と byte 一致しない"
     );
     w.commit();
+    floor_after_start(&w, &base);
+}
+
+/// 始まりの凍結の commit の後の素の床と、--freeze-adrs が封の一覧を書いた後の床の合格を見る。
+fn floor_after_start(w: &Work, base: &Path) {
     // 便 170: 始まりの凍結は判断の記録の封を書かない＝素の床は封の一覧の不在の「まだ分からない」1 行だけ
     let out = w.check(&[]);
     assert_eq!(out.status.code(), Some(2), "{}", show(&out));
@@ -538,6 +543,11 @@ fn f121_freeze_start_writes_nothing_on_any_finding() {
     assert!(!w.dir().join("anchors").exists());
     drop(w);
 
+    unlisted_anchor();
+}
+
+/// id の一覧だけが在る置き場の表に無い名で、--freeze-anchor が digest の全桁を出し anchors/ を変えないのを見る。
+fn unlisted_anchor() {
     // (4) id の一覧だけが在る置き場で同じ名の書き換え → --freeze-anchor も digest の全桁を出す
     let w = Work::new("unlisted-anchor", FLOOR_BASE, true, |d| {
         remove(d, &["constitution-v1.0.yaml", "index.yaml"]);

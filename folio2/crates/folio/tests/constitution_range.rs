@@ -554,6 +554,11 @@ fn f157_narrowed_range_is_pending_and_never_pass() {
     );
     assert_ne!(r.code, Some(0), "{}", r.all);
 
+    narrowed_retreat_and_skeleton();
+}
+
+/// 撤退条件の種類の狭めと、`folio init` の骨格の置き場での値域の狭めを見る。
+fn narrowed_retreat_and_skeleton() {
     // ⑤ 撤退条件の種類から measure を外す（判断の記録の床は黙る）
     let w = Work::new("retreat-narrowed");
     w.mutate("retreat_kind: [spike, measure, ruling]", "retreat_kind: [spike, ruling]");

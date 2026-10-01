@@ -304,6 +304,29 @@ fn reseal(dir: &Path) -> Result<(), String> {
     let Ok(entries) = fs::read_dir(dir.join("adr")) else {
         return Ok(());
     };
+    seal_rows(entries, &mut rows)?;
+    rows.sort();
+    let rows = rows
+        .into_iter()
+        .map(|(_, id, sum)| Value::Map(vec![(s("id"), s(&id)), (s("sum"), s(&sum))]))
+        .collect();
+    let mut tree = Value::Map(vec![
+        (s("kind"), s("adr-seals")),
+        (s("digest_algo"), s("sha256-json-1")),
+        (
+            s("outside"),
+            Value::Seq(vec![s("status"), s("superseded_by")]),
+        ),
+        (s("rows"), Value::Seq(rows)),
+    ]);
+    let digest = digest_of(&tree)?;
+    map_set(&mut tree, "digest", s(&digest))?;
+    let text = yaml::write(&tree, "# floor_cases の封（runner が folio を撃つ前ごとに組み直す）")?;
+    io(fs::write(&path, text), "封の一覧を書けない")
+}
+
+/// adr/ の発効した判断の記録ごとに、封の行（番号・id・要約値）を `rows` に足す。
+fn seal_rows(entries: fs::ReadDir, rows: &mut Vec<(u64, String, String)>) -> Result<(), String> {
     for entry in entries {
         let entry = io(entry, "adr/ を読めない")?;
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -342,24 +365,7 @@ fn reseal(dir: &Path) -> Result<(), String> {
         let sum = sha256::hex(yaml::canonical(&Value::Map(body))?.as_bytes());
         rows.push((n, id.to_string(), sum));
     }
-    rows.sort();
-    let rows = rows
-        .into_iter()
-        .map(|(_, id, sum)| Value::Map(vec![(s("id"), s(&id)), (s("sum"), s(&sum))]))
-        .collect();
-    let mut tree = Value::Map(vec![
-        (s("kind"), s("adr-seals")),
-        (s("digest_algo"), s("sha256-json-1")),
-        (
-            s("outside"),
-            Value::Seq(vec![s("status"), s("superseded_by")]),
-        ),
-        (s("rows"), Value::Seq(rows)),
-    ]);
-    let digest = digest_of(&tree)?;
-    map_set(&mut tree, "digest", s(&digest))?;
-    let text = yaml::write(&tree, "# floor_cases の封（runner が folio を撃つ前ごとに組み直す）")?;
-    io(fs::write(&path, text), "封の一覧を書けない")
+    Ok(())
 }
 
 fn folio(dir: &Path, flags: &[&str], env: &[(&str, PathBuf)]) -> Result<Run, String> {
@@ -434,212 +440,245 @@ impl State<'_> {
                 dump(&f, &doc)?;
                 continue;
             }
-            if flag(mu, "git_snapshot") || flag(mu, "git_commit") {
-                if !td.join(".git").exists() {
-                    gitc(td, &["init", "-q"])?;
-                }
-                git_commit(td)?;
+            if self.apply_git(mu)? {
                 continue;
             }
-            if flag(mu, "git_ignore_anchors") {
-                io(
-                    fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
-                    ".gitignore を書けない",
-                )?;
-                gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
-                git_commit(td)?;
+            if self.apply_repo(mu)? {
                 continue;
             }
-            if flag(mu, "git_nested") {
-                gitc(&self.work, &["init", "-q"])?;
-                git_commit(&self.work)?;
+            if self.apply_tree(mu)? {
                 continue;
             }
-            if flag(mu, "git_ignore_anchors_keep_tracked") {
-                io(
-                    fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
-                    ".gitignore を書けない",
-                )?;
-                git_commit(td)?;
-                continue;
-            }
-            if flag(mu, "git_ignore_pattern") {
-                let pattern = text(mu, "git_ignore_pattern")?;
-                io(
-                    fs::write(td.join(".gitignore"), format!("{pattern}\n")),
-                    ".gitignore を書けない",
-                )?;
-                git_commit(td)?;
-                continue;
-            }
-            if flag(mu, "git_reinit_no_commit") {
-                io(fs::remove_dir_all(td.join(".git")), ".git を消せない")?;
-                gitc(td, &["init", "-q"])?;
-                continue;
-            }
-            if flag(mu, "git_orphan_drop_anchors") {
-                gitc(td, &["checkout", "-q", "--orphan", "clean"])?;
-                gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
-                io(
-                    fs::remove_dir_all(self.work.join("anchors")),
-                    "anchors/ を消せない",
-                )?;
-                git_commit(td)?;
-                continue;
-            }
-            if flag(mu, "git_shallow_clone") {
-                let sh = td.join("shallow");
-                let from = format!("file://{}", td.display());
-                let to = sh.display().to_string();
-                git_raw(td, &["clone", "-q", "--depth", "1", &from, &to])?;
-                self.work = sh.join("design-intent");
-                continue;
-            }
-            if flag(mu, "env_git_dir_empty") {
-                let em = td.join("empty-repo");
-                io(fs::create_dir(&em), "empty-repo を作れない")?;
-                gitc(&em, &["init", "-q"])?;
-                self.env = vec![
-                    ("GIT_DIR", em.join(".git")),
-                    ("GIT_WORK_TREE", td.to_path_buf()),
-                ];
-                continue;
-            }
-            if flag(mu, "refreeze_in_fresh_repo") {
-                let fr = td.join("fresh");
-                let fresh = fr.join("design-intent");
-                if fresh.exists() {
-                    return Err("fresh/design-intent が既に在る".to_string());
-                }
-                copy_tree(&self.work, &fresh)?;
-                copy_external_schema(&fr)?;
-                let _ = fs::remove_dir_all(fresh.join("anchors"));
-                gitc(&fr, &["init", "-q"])?;
-                git_commit(&fr)?;
-                let fz = folio(&fresh, &["--freeze-anchor"], &self.env)?;
-                if fz.code == 0 {
-                    self.note += " ／ 別の写しでの凍結が rc 0（列の始め直しが通った）";
-                }
-                if fresh.join("anchors").is_dir() {
-                    for entry in io(fs::read_dir(fresh.join("anchors")), "anchors/ を読めない")?
-                    {
-                        let entry = io(entry, "anchors/ を読めない")?;
-                        let name = entry.file_name();
-                        if name.to_string_lossy().ends_with(".yaml") {
-                            io(
-                                fs::copy(entry.path(), self.work.join("anchors").join(&name)),
-                                "anchor を持ち帰れない",
-                            )?;
-                        }
-                    }
-                }
-                continue;
-            }
-            if let Some(af) = mu.get("anchor_forge") {
-                let f = self.work.join(text(af, "file")?);
-                let mut doc = load(&f)?;
-                mutate(
-                    &mut doc,
-                    &text(af, "path")?,
-                    need(af, "value")?.clone(),
-                    flag(af, "add"),
-                )?;
-                let digest = digest_of(&doc)?;
-                map_set(&mut doc, "digest", Value::Str(digest.clone()))?;
-                dump(&f, &doc)?;
-                let ix = self.work.join("anchors/index.yaml");
-                let mut idx = load(&ix)?;
-                let version = doc.get("version").unwrap_or(&Value::Null).py_str();
-                if let Ok(Value::Seq(entries)) = walk(&mut idx, &[Step::Name("entries".into())]) {
-                    for e in entries.iter_mut() {
-                        if !matches!(e, Value::Map(_)) {
-                            return Err("索引の項が表でない".to_string());
-                        }
-                        if e.get("version").unwrap_or(&Value::Null).py_str() == version {
-                            map_set(e, "digest", Value::Str(digest.clone()))?;
-                        }
-                    }
-                }
-                dump(&ix, &idx)?;
-                continue;
-            }
-            if flag(mu, "symlink_dir") || flag(mu, "symlink_file") {
-                let rel = if flag(mu, "symlink_dir") {
-                    text(mu, "symlink_dir")?
-                } else {
-                    text(mu, "symlink_file")?
-                };
-                let src = if rel == "." {
-                    self.work.clone()
-                } else {
-                    self.work.join(&rel)
-                };
-                let outside = td.join("outside");
-                io(fs::create_dir_all(&outside), "outside を作れない")?;
-                let name = src.file_name().ok_or("symlink の対象に名前が無い")?;
-                let dst = outside.join(name);
-                io(fs::rename(&src, &dst), "対象を外へ動かせない")?;
-                io(std::os::unix::fs::symlink(&dst, &src), "symlink を置けない")?;
-                continue;
-            }
-            if flag(mu, "delete_dir") {
-                io(
-                    fs::remove_dir_all(self.work.join(text(mu, "dir")?)),
-                    "dir を消せない",
-                )?;
-                continue;
-            }
-            let f = self.work.join(text(mu, "file")?);
-            if flag(mu, "delete") {
-                io(fs::remove_file(&f), "file を消せない")?;
-                continue;
-            }
-            if let Some(tree) = mu.get("create") {
-                if let Some(parent) = f.parent() {
-                    io(fs::create_dir_all(parent), "親 dir を作れない")?;
-                }
-                dump(&f, tree)?;
-                continue;
-            }
-            if let Some(raw) = mu.get("write_text") {
-                let raw = raw.as_str().ok_or("write_text が文字列でない")?;
-                if let Some(parent) = f.parent() {
-                    io(fs::create_dir_all(parent), "親 dir を作れない")?;
-                }
-                io(fs::write(&f, raw), "file を書けない")?;
-                continue;
-            }
-            let mut doc = load(&f)?;
-            if let Some(pair) = mu.get("swap") {
-                let pair = pair.as_seq().ok_or("swap が一覧でない")?;
-                let (Some(a), Some(b)) = (pair.first(), pair.get(1)) else {
-                    return Err("swap の要素が 2 つでない".to_string());
-                };
-                let (a, b) = (int_of(a)?, int_of(b)?);
-                let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
-                    return Err("swap の path が一覧でない".to_string());
-                };
-                let (a, b) = (norm_index(a, s.len())?, norm_index(b, s.len())?);
-                s.swap(a, b);
-            } else if let Some(key) = mu.get("raw_key") {
-                let key = key.py_str();
-                let value = need(mu, "value")?.clone();
-                map_set(walk(&mut doc, &steps(&text(mu, "path")?)?)?, &key, value)?;
-            } else if flag(mu, "pop") {
-                let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
-                    return Err("pop の path が一覧でない".to_string());
-                };
-                s.pop().ok_or("IndexError: 空の一覧から pop")?;
-            } else {
-                mutate(
-                    &mut doc,
-                    &text(mu, "path")?,
-                    need(mu, "value")?.clone(),
-                    flag(mu, "add"),
-                )?;
-            }
-            dump(&f, &doc)?;
+            self.apply_file(mu)?;
         }
+        Ok(())
+    }
+
+    /// git の段（commit・ignore・入れ子の版管理・始め直し・orphan）を当てる。当てたら true。
+    fn apply_git(&self, mu: &Value) -> Result<bool, String> {
+        let td = self.td;
+        if flag(mu, "git_snapshot") || flag(mu, "git_commit") {
+            if !td.join(".git").exists() {
+                gitc(td, &["init", "-q"])?;
+            }
+            git_commit(td)?;
+            return Ok(true);
+        }
+        if flag(mu, "git_ignore_anchors") {
+            io(
+                fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
+                ".gitignore を書けない",
+            )?;
+            gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
+            git_commit(td)?;
+            return Ok(true);
+        }
+        if flag(mu, "git_nested") {
+            gitc(&self.work, &["init", "-q"])?;
+            git_commit(&self.work)?;
+            return Ok(true);
+        }
+        if flag(mu, "git_ignore_anchors_keep_tracked") {
+            io(
+                fs::write(td.join(".gitignore"), "design-intent/anchors/\n"),
+                ".gitignore を書けない",
+            )?;
+            git_commit(td)?;
+            return Ok(true);
+        }
+        if flag(mu, "git_ignore_pattern") {
+            let pattern = text(mu, "git_ignore_pattern")?;
+            io(
+                fs::write(td.join(".gitignore"), format!("{pattern}\n")),
+                ".gitignore を書けない",
+            )?;
+            git_commit(td)?;
+            return Ok(true);
+        }
+        if flag(mu, "git_reinit_no_commit") {
+            io(fs::remove_dir_all(td.join(".git")), ".git を消せない")?;
+            gitc(td, &["init", "-q"])?;
+            return Ok(true);
+        }
+        if flag(mu, "git_orphan_drop_anchors") {
+            gitc(td, &["checkout", "-q", "--orphan", "clean"])?;
+            gitc(td, &["rm", "-r", "-q", "--cached", "design-intent/anchors"])?;
+            io(
+                fs::remove_dir_all(self.work.join("anchors")),
+                "anchors/ を消せない",
+            )?;
+            git_commit(td)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// 写しの置き場を替える段（浅い clone・空の `GIT_DIR`・別の写しでの凍結）を当てる。当てたら true。
+    fn apply_repo(&mut self, mu: &Value) -> Result<bool, String> {
+        let td = self.td;
+        if flag(mu, "git_shallow_clone") {
+            let sh = td.join("shallow");
+            let from = format!("file://{}", td.display());
+            let to = sh.display().to_string();
+            git_raw(td, &["clone", "-q", "--depth", "1", &from, &to])?;
+            self.work = sh.join("design-intent");
+            return Ok(true);
+        }
+        if flag(mu, "env_git_dir_empty") {
+            let em = td.join("empty-repo");
+            io(fs::create_dir(&em), "empty-repo を作れない")?;
+            gitc(&em, &["init", "-q"])?;
+            self.env = vec![
+                ("GIT_DIR", em.join(".git")),
+                ("GIT_WORK_TREE", td.to_path_buf()),
+            ];
+            return Ok(true);
+        }
+        if flag(mu, "refreeze_in_fresh_repo") {
+            let fr = td.join("fresh");
+            let fresh = fr.join("design-intent");
+            if fresh.exists() {
+                return Err("fresh/design-intent が既に在る".to_string());
+            }
+            copy_tree(&self.work, &fresh)?;
+            copy_external_schema(&fr)?;
+            let _ = fs::remove_dir_all(fresh.join("anchors"));
+            gitc(&fr, &["init", "-q"])?;
+            git_commit(&fr)?;
+            let fz = folio(&fresh, &["--freeze-anchor"], &self.env)?;
+            if fz.code == 0 {
+                self.note += " ／ 別の写しでの凍結が rc 0（列の始め直しが通った）";
+            }
+            if fresh.join("anchors").is_dir() {
+                for entry in io(fs::read_dir(fresh.join("anchors")), "anchors/ を読めない")?
+                {
+                    let entry = io(entry, "anchors/ を読めない")?;
+                    let name = entry.file_name();
+                    if name.to_string_lossy().ends_with(".yaml") {
+                        io(
+                            fs::copy(entry.path(), self.work.join("anchors").join(&name)),
+                            "anchor を持ち帰れない",
+                        )?;
+                    }
+                }
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// anchor の偽造・symlink・dir の削除の段を当てる。当てたら true。
+    fn apply_tree(&self, mu: &Value) -> Result<bool, String> {
+        let td = self.td;
+        if let Some(af) = mu.get("anchor_forge") {
+            let f = self.work.join(text(af, "file")?);
+            let mut doc = load(&f)?;
+            mutate(
+                &mut doc,
+                &text(af, "path")?,
+                need(af, "value")?.clone(),
+                flag(af, "add"),
+            )?;
+            let digest = digest_of(&doc)?;
+            map_set(&mut doc, "digest", Value::Str(digest.clone()))?;
+            dump(&f, &doc)?;
+            let ix = self.work.join("anchors/index.yaml");
+            let mut idx = load(&ix)?;
+            let version = doc.get("version").unwrap_or(&Value::Null).py_str();
+            if let Ok(Value::Seq(entries)) = walk(&mut idx, &[Step::Name("entries".into())]) {
+                for e in entries.iter_mut() {
+                    if !matches!(e, Value::Map(_)) {
+                        return Err("索引の項が表でない".to_string());
+                    }
+                    if e.get("version").unwrap_or(&Value::Null).py_str() == version {
+                        map_set(e, "digest", Value::Str(digest.clone()))?;
+                    }
+                }
+            }
+            dump(&ix, &idx)?;
+            return Ok(true);
+        }
+        if flag(mu, "symlink_dir") || flag(mu, "symlink_file") {
+            let rel = if flag(mu, "symlink_dir") {
+                text(mu, "symlink_dir")?
+            } else {
+                text(mu, "symlink_file")?
+            };
+            let src = if rel == "." {
+                self.work.clone()
+            } else {
+                self.work.join(&rel)
+            };
+            let outside = td.join("outside");
+            io(fs::create_dir_all(&outside), "outside を作れない")?;
+            let name = src.file_name().ok_or("symlink の対象に名前が無い")?;
+            let dst = outside.join(name);
+            io(fs::rename(&src, &dst), "対象を外へ動かせない")?;
+            io(std::os::unix::fs::symlink(&dst, &src), "symlink を置けない")?;
+            return Ok(true);
+        }
+        if flag(mu, "delete_dir") {
+            io(
+                fs::remove_dir_all(self.work.join(text(mu, "dir")?)),
+                "dir を消せない",
+            )?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// file 1 つの段（削除・新設・字の書き込み・欄の入れ替えと置き換え）を当てる。
+    fn apply_file(&self, mu: &Value) -> Result<(), String> {
+        let f = self.work.join(text(mu, "file")?);
+        if flag(mu, "delete") {
+            io(fs::remove_file(&f), "file を消せない")?;
+            return Ok(());
+        }
+        if let Some(tree) = mu.get("create") {
+            if let Some(parent) = f.parent() {
+                io(fs::create_dir_all(parent), "親 dir を作れない")?;
+            }
+            dump(&f, tree)?;
+            return Ok(());
+        }
+        if let Some(raw) = mu.get("write_text") {
+            let raw = raw.as_str().ok_or("write_text が文字列でない")?;
+            if let Some(parent) = f.parent() {
+                io(fs::create_dir_all(parent), "親 dir を作れない")?;
+            }
+            io(fs::write(&f, raw), "file を書けない")?;
+            return Ok(());
+        }
+        let mut doc = load(&f)?;
+        if let Some(pair) = mu.get("swap") {
+            let pair = pair.as_seq().ok_or("swap が一覧でない")?;
+            let (Some(a), Some(b)) = (pair.first(), pair.get(1)) else {
+                return Err("swap の要素が 2 つでない".to_string());
+            };
+            let (a, b) = (int_of(a)?, int_of(b)?);
+            let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
+                return Err("swap の path が一覧でない".to_string());
+            };
+            let (a, b) = (norm_index(a, s.len())?, norm_index(b, s.len())?);
+            s.swap(a, b);
+        } else if let Some(key) = mu.get("raw_key") {
+            let key = key.py_str();
+            let value = need(mu, "value")?.clone();
+            map_set(walk(&mut doc, &steps(&text(mu, "path")?)?)?, &key, value)?;
+        } else if flag(mu, "pop") {
+            let Value::Seq(s) = walk(&mut doc, &steps(&text(mu, "path")?)?)? else {
+                return Err("pop の path が一覧でない".to_string());
+            };
+            s.pop().ok_or("IndexError: 空の一覧から pop")?;
+        } else {
+            mutate(
+                &mut doc,
+                &text(mu, "path")?,
+                need(mu, "value")?.clone(),
+                flag(mu, "add"),
+            )?;
+        }
+        dump(&f, &doc)?;
         Ok(())
     }
 }
@@ -701,6 +740,17 @@ fn run_case(cs: &Value, td: &Path) -> Option<String> {
             Err(e) => return Some(format!("FAIL {id}: {e}")),
         },
     };
+    judge(cs, &mut st, &pr, expect_rc, (&id, &why))
+}
+
+/// 回した結果を case の期待と照らす。期待どおりなら None、違えば落ちた case の文言。
+fn judge(
+    cs: &Value,
+    st: &mut State<'_>,
+    pr: &Run,
+    expect_rc: i64,
+    (id, why): (&str, &str),
+) -> Option<String> {
     let all = format!("{}{}", pr.stdout, pr.stderr);
     let mut ok = i64::from(pr.code) == expect_rc;
     if let Some(m) = str_field(cs, "expect_msg")
@@ -794,6 +844,11 @@ fn floor_cases_all_pass_with_folio() {
         );
     }
 
+    run_all(&cases);
+}
+
+/// case を並列の worker で回し、落ちた case を番号の順に名指す。
+fn run_all(cases: &[&Value]) {
     let next = AtomicUsize::new(0);
     let failures: Mutex<Vec<(usize, String)>> = Mutex::new(Vec::new());
     let workers = std::thread::available_parallelism().map_or(4, |n| n.get().min(8));

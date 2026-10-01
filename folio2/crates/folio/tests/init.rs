@@ -466,6 +466,11 @@ fn f125_init_writes_the_skeleton_and_the_floor_passes() {
         assert!(unknowns.iter().any(|l| l.contains(field)), "{field}: {unknowns:?}");
     }
 
+    skeleton_answers(&w);
+}
+
+/// 骨格の置き場で folio schema --check・folio intake --print・案内の 1 行が答えるのを見る。
+fn skeleton_answers(w: &Work) {
     let schema = folio(&["schema", "--check"], &w.place());
     assert_eq!(schema.status.code(), Some(0), "{}", both(&schema));
 
@@ -586,6 +591,11 @@ fn f125_forbidden_words_stay_out_of_the_skeleton() {
         assert!(!init_rs.contains(word), "init.rs に在る: {word}");
     }
 
+    forbidden_counts(forbidden);
+}
+
+/// 骨格の数える範囲に禁止字が 0 回で、folio2 自身の数える範囲には 1 回以上出るのを見る。
+fn forbidden_counts(forbidden: Vec<&str>) {
     let w = Work::new("forbidden");
     w.init_ok();
     let mut in_folio2 = 0;
@@ -681,6 +691,12 @@ fn f125_sources_match_folio2() {
             .all(|r| str_of(r, "id") != "R-17")
     );
 
+    intake_sources(&w);
+    ceiling_sources(&w);
+}
+
+/// 骨格の相談窓口の答え・問い・的・表の欄が folio2 の値に括弧の落としを当てた字と揃うのを見る。
+fn intake_sources(w: &Work) {
     // 相談窓口
     let (mi, ti) = (w.typed("intake.yaml"), folio2_typed("intake.yaml"));
     for key in ["answers", "questions"] {
@@ -701,7 +717,10 @@ fn f125_sources_match_folio2() {
     assert_eq!(ms.get("file"), ts.get("file"));
     assert_eq!(ms.get("title"), ts.get("title"));
     assert_eq!(ms.get("explain"), ts.get("explain").map(dropped).as_ref());
+}
 
+/// 骨格の天井が folio2 と揃い、承認欄が空で欄の決まりを提案中の ADR-1 が決めるのを見る。
+fn ceiling_sources(w: &Work) {
     // 天井
     let (mc, tc) = (w.typed("ceiling.yaml"), folio2_typed("ceiling.yaml"));
     let pairs = |v: &Value| -> Vec<(String, String)> {
@@ -833,6 +852,11 @@ fn f152_the_skeleton_runs_every_command_without_hand_edits() {
     );
     assert_eq!(build_check.status.code(), Some(0), "{}", both(&build_check));
 
+    faces_and_parts(&w, place, site);
+}
+
+/// 骨格の置き場で 4 面の命令と配信先の 4 面の部品の検査が答え、置き場に preview/ を作らないのを見る。
+fn faces_and_parts(w: &Work, place: PathBuf, site: PathBuf) {
     for (face, id) in [
         ("adr", Some("ADR-1")),
         ("constitution", None),

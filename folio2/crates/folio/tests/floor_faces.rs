@@ -557,12 +557,14 @@ fn f187_the_face_stage_runs_after_the_index_and_before_the_freeze() {
     let _ = fs::remove_dir_all(&td);
 }
 
+/// 面だけが読む file を壊す行（case の名・写しを壊す手・床が言う字）。
+type Case = (&'static str, fn(&Path), &'static str);
+
 /// 面だけが読む file が読めない（相談窓口の支度表が YAML として読めない・dir・UTF-8 でない・型付きの木に読めない、様式 2 本が
 /// dir、天井の印が dir・YAML として読めない）は、床のほかの段と同じく まだ分からない 1 件（違反 [面] にしない・P-4.2）。
 /// build --write も まだ分からない で何も書かない。
 #[test]
 fn f187_unreadable_face_files_stay_unknown() {
-    type Case = (&'static str, fn(&Path), &'static str);
     let rows: [Case; 8] = [
         (
             "intake-syntax",
@@ -622,6 +624,11 @@ fn f187_unreadable_face_files_stay_unknown() {
             "# まだ分からない: preview/ceiling-stamp.yaml: parse できない: ",
         ),
     ];
+    check_unreadable(rows);
+}
+
+/// 行ごとに写しを壊し、床が まだ分からない 1 件で build --write も何も書かないことを見る。
+fn check_unreadable(rows: [Case; 8]) {
     for (case, apply, said) in rows {
         let (td, dir) = place(case);
         apply(&dir);

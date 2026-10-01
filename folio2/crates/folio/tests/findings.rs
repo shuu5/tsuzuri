@@ -1236,6 +1236,11 @@ fn findings_refute_on_the_real_source_builds_a_bundle_the_check_reads() {
         fs::write(vp_dir.join("findings.yaml"), text).unwrap();
     }
 
+    refute_and_check(td, dir, site, out);
+}
+
+/// 実の正本の写しで反証の束を組み、反証役の結果を置いて --check が 0 になることを見る。
+fn refute_and_check(td: PathBuf, dir: PathBuf, site: PathBuf, out: PathBuf) {
     let refute = folio_ceiling_no_faces(&dir, &out, &["--refute"]);
     assert_outcome(&refute, "folio ceiling --refute", 0, &[]);
     assert!(

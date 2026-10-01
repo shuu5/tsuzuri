@@ -280,6 +280,11 @@ fn f128_constitution_unknown_fields_are_violations() {
         w.check().only(case, &[line]);
     }
 
+    precedence_unknowns();
+}
+
+/// 前文と前文の mechanism に足した未知の欄は、改憲の違反と 2 行になるのを見る。
+fn precedence_unknowns() {
     let w = Work::new("precedence");
     w.mutate(
         CONSTITUTION,

@@ -751,6 +751,11 @@ fn f195_the_graph_region_copies_the_id_space_and_the_mention_lists() {
         assert_eq!(strs(&prefixes[key], key), want, "ids.prefixes.{key}");
     }
 
+    f195_mentions(schema);
+}
+
+/// 生成区間の mentions の欄の鍵と値と、2 つの注が正本の定数の置き場を名指すのを見る。
+fn f195_mentions(schema: &Yaml) {
     let mentions = &schema["mentions"];
     let mut want_keys: Vec<&str> = F195_LISTS.iter().map(|(k, _)| *k).collect();
     want_keys.extend(["srs_kinds", "receives"]);

@@ -289,6 +289,11 @@ fn f119_rows_it_cannot_write_are_unknown_and_nothing_is_written() {
             "要素が文字列でない",
         ),
     ];
+    refuse_all(cases);
+}
+
+/// 書けない行の case ごとと、器の導出 file が無い置き場・symlink の設計ノートの置き場を撃ち、2 で何も書かないことを見る。
+fn refuse_all(cases: [(&str, &str, &str, &str); 9]) {
     for (case, from, to, why) in cases {
         let w = Work::anchor(&format!("refuse-{case}"));
         // 名の昇順で先に来る、書ける設計ノート（全部か無しかを見る）

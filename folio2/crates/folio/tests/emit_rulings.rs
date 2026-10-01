@@ -143,11 +143,7 @@ impl Drop for Work {
 }
 
 /// 手書きの期待の 1 行（欄の順・空白なし）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
-fn line(ruling: &str, form: &str, bead: &str, node: Option<&str>, file: &str, at: usize, field: &str) -> String {
+fn line(ruling: &str, form: &str, bead: &str, node: Option<&str>, (file, at, field): (&str, usize, &str)) -> String {
     let node = node.map_or("null".to_string(), |n| format!("\"{n}\""));
     format!("{{\"ruling\":\"{ruling}\",\"form\":\"{form}\",\"bead\":\"{bead}\",\"node\":{node},\"file\":\"{file}\",\"line\":{at},\"field\":\"{field}\"}}")
 }
@@ -213,7 +209,7 @@ fn f186_one_field_with_three_forms_gives_three_lines() {
     w.set("rules.yaml", "{id: R-10,", "ruling", &format!("\"{THREE}\""));
     let got = w.emit();
     let r10: Vec<&String> = got.out.iter().filter(|l| l.contains("\"node\":\"R-10\"")).collect();
-    let at = |ruling, form, bead| line(ruling, form, bead, Some("R-10"), "rules.yaml", 38, "thresholds[9].ruling");
+    let at = |ruling, form, bead| line(ruling, form, bead, Some("R-10"), ("rules.yaml", 38, "thresholds[9].ruling"));
     assert_eq!(
         r10,
         [
@@ -244,15 +240,15 @@ fn f186_every_line_has_the_seven_fields_and_the_null_node() {
     w.write("design-note/decide.yaml", note);
     let got = w.emit();
     for want in [
-        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", None, "constitution.yaml", 80, "meta.approval.ruling"),
-        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("P-1"), "constitution.yaml", 130, "articles[0].amended_by[0].ruling"),
-        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", Some("D-8"), "rules.yaml", 58, "discipline[7].ruling"),
-        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("ADR-2"), "adr/ADR-2.yaml", 16, "approval.ruling"),
-        line("f2-648 notes 2026-09-28 10:29 JST", "notes-time", "f2-648", None, "design-note/decide.yaml", 9, "meta.approval[0].ruling"),
-        line("t3-hub.57.1:20260927T2357Z-1", "question", "t3-hub.57.1", None, "design-note/decide.yaml", 19, "sections[1].rows[0].ruling"),
-        line("f2-648.1 notes 20:2x", "notes-time", "f2-648.1", None, "srs.yaml", 22, "meta.approval[2].stamp"),
-        line("t3-hub.1", "bead", "t3-hub.1", None, "graph.yaml", 4, "meta.approval[1].stamp"),
-        line("t3-hub.58:20260927T2357Z-1", "question", "t3-hub.58", None, "graph.yaml", 4, "meta.approval[1].stamp"),
+        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", None, ("constitution.yaml", 80, "meta.approval.ruling")),
+        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("P-1"), ("constitution.yaml", 130, "articles[0].amended_by[0].ruling")),
+        line("f2-648.1 notes 2026-09-12 20:2x", "notes-time", "f2-648.1", Some("D-8"), ("rules.yaml", 58, "discipline[7].ruling")),
+        line("f2-648.2 notes 2026-09-13 09:35", "notes-time", "f2-648.2", Some("ADR-2"), ("adr/ADR-2.yaml", 16, "approval.ruling")),
+        line("f2-648 notes 2026-09-28 10:29 JST", "notes-time", "f2-648", None, ("design-note/decide.yaml", 9, "meta.approval[0].ruling")),
+        line("t3-hub.57.1:20260927T2357Z-1", "question", "t3-hub.57.1", None, ("design-note/decide.yaml", 19, "sections[1].rows[0].ruling")),
+        line("f2-648.1 notes 20:2x", "notes-time", "f2-648.1", None, ("srs.yaml", 22, "meta.approval[2].stamp")),
+        line("t3-hub.1", "bead", "t3-hub.1", None, ("graph.yaml", 4, "meta.approval[1].stamp")),
+        line("t3-hub.58:20260927T2357Z-1", "question", "t3-hub.58", None, ("graph.yaml", 4, "meta.approval[1].stamp")),
     ] {
         assert!(got.out.contains(&want), "{want}\n{:#?}", got.out);
     }
@@ -323,6 +319,16 @@ fn f186_the_exit_code_is_the_plain_floor_and_stdout_is_json_only() {
     assert!(emit.err.lines().any(|l| l == summary) && emit.err.lines().any(|l| l.starts_with("# ")), "{}", emit.err);
     assert!(!plain.out.iter().any(|l| l.starts_with('{')));
 
+    other_copies(json);
+
+    for other in ["--emit-amends", "--freeze-anchor", "--freeze-ids", "--freeze-start", "--freeze-adrs"] {
+        let r = base.run(&["--emit-rulings", other]);
+        assert!(r.code != 0 && r.out.is_empty() && r.err.contains("cannot be used with"), "{other}: {}", r.err);
+    }
+}
+
+/// 違反・骨格の印・索引の床だけが落ちる写しと実の置き場の、終了コードと標準出力の行を見る。
+fn other_copies(json: impl Fn(&Run) -> bool) {
     let w = Work::new("rc-violation", FLOOR_BASE);
     w.set("rules.yaml", "{id: R-10,", "ruling", "G16=A（受入 (f)）");
     let (plain, emit) = (w.run(&[]), w.emit());
@@ -353,11 +359,6 @@ fn f186_the_exit_code_is_the_plain_floor_and_stdout_is_json_only() {
     let (plain, emit) = (real.run(&[]), real.emit());
     assert_eq!(plain.code, emit.code);
     assert!(json(&emit) && !emit.out.is_empty());
-
-    for other in ["--emit-amends", "--freeze-anchor", "--freeze-ids", "--freeze-start", "--freeze-adrs"] {
-        let r = base.run(&["--emit-rulings", other]);
-        assert!(r.code != 0 && r.out.is_empty() && r.err.contains("cannot be used with"), "{other}: {}", r.err);
-    }
 }
 
 /// 決定の欄を持つ file の、語頭の台帳の id の頭の字を全部大字にする（歯の側の別の走査）。

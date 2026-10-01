@@ -435,6 +435,11 @@ fn f202_abroad_place_names_no_folio2_article() {
     assert!(lines(&listed.stdout).contains(&"R-9 · post · fail-closed · 規則の表の閾値の行".to_string()), "{}", show(&listed));
     assert!(p18(&listed).is_empty(), "{}", show(&listed));
 
+    help_and_home();
+}
+
+/// 説明の字が folio2 の番号を持たず、folio2 の置き場（土台の名）は今の字のままなのを見る。
+fn help_and_home() {
     // 説明の字（置き場に依らない）も folio2 の便の番号と条の番号を持たない
     let help = Command::new(env!("CARGO_BIN_EXE_tz")).args(["check", "--help"]).output().expect("folio を起動できない");
     let help = String::from_utf8_lossy(&help.stdout).to_string();

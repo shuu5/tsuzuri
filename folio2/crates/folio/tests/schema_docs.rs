@@ -529,6 +529,11 @@ fn schema_check_matches_the_real_rules_file_and_its_frozen_digest() {
         Ok(hex) => assert_eq!(hex, RULES_REGION_SHA256, "sha256sum で測り直した要約値"),
         Err(why) => eprintln!("# まだ分からない: 要約値を測れない: {why}"),
     }
+    rules_head_and_tail(&w, text);
+}
+
+/// 規則の表の生成区間の前は注釈と空行だけ・後に人が書く行が在り、検査が file を書かないのを見る。
+fn rules_head_and_tail(w: &Work, text: String) {
     // 生成区間は file の先頭の注釈の次（begin の前は注釈と空行だけ・人が書く行は end の後）
     let (head, _) = text.split_once(BEGIN).unwrap();
     assert!(
