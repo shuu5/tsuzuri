@@ -334,7 +334,15 @@ fn runsdoc_wire_keys() {
     for line in lines {
         assert_eq!(
             keys(line),
-            set(&["run", "started_at", "account", "steps", "cost"])
+            set(&[
+                "run",
+                "started_at",
+                "account",
+                "steps",
+                "cost",
+                "gate",
+                "review",
+            ])
         );
         assert_eq!(
             keys(&line["cost"]),

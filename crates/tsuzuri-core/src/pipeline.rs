@@ -11,6 +11,7 @@
 //! （閉じた（着地せず）・行 c-pipe-closed）。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
 //! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする（行 c-pipe-questioned）。
 //! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む（行 e-runs）。
+//! 走行ごとの gate と審査の内訳は `with_verdicts` が便の dir の 2 つの file の字から置く（行 c-run-verdict）。
 //! 板は札のほかに形の崩れた open の bead の一覧を持ち、器の doctor の台帳の形の行を `form_ids` で写して題を台帳から引く
 //! （`board_with_doctor`・tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)・行 c-pipe-misfit）。
 //! doctor の字を受けない `board` の一覧は Unknown。
@@ -30,7 +31,9 @@ use tsuzuri_contract::board::{
 };
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_contract::runs::{RunCost, RunLine, RunStep, RunsDoc};
+use tsuzuri_contract::runs::{
+    GateFinding, GateVerdict, ReviewVerdict, RunCost, RunLine, RunStep, RunsDoc,
+};
 
 use crate::graph::build::{POINTER_PREFIX, read_events, run_bead};
 use crate::ledger::{Bead, epoch_secs, read};
@@ -567,6 +570,8 @@ pub fn runs_of(events: &str, bead: &BeadId) -> RunsDoc {
                     account: None,
                     steps: Vec::new(),
                     cost: RunCost::default(),
+                    gate: Reading::Unknown,
+                    review: Reading::Unknown,
                 });
                 lines.len() - 1
             });
@@ -621,6 +626,89 @@ fn add_cost(cost: &mut RunCost, event: &Value) {
             _ => {}
         }
     }
+}
+
+/// 便の dir の判定の file の schema（器の verdict.json と review.json の欄 schema の数）。
+pub const VERDICT_SCHEMA: u64 = 1;
+
+/// 走行の列の各走行に、便の dir の gate の判定と審査の判定を置く（行 c-run-verdict・要件 FR10）。
+/// `gate` と `review` は走行の id から器の verdict.json と review.json の字を返す（無いか読めなければ None）。
+/// 字の無い走行の判定は Unknown。runs が Unknown の doc はそのまま返す。
+pub fn with_verdicts(
+    mut doc: RunsDoc,
+    gate: impl Fn(&str) -> Option<String>,
+    review: impl Fn(&str) -> Option<String>,
+) -> RunsDoc {
+    if let Reading::Known(lines) = &mut doc.runs {
+        for line in lines {
+            line.gate = gate(&line.run).map_or(Reading::Unknown, |body| gate_of(&body));
+            line.review = review(&line.run).map_or(Reading::Unknown, |body| review_of(&body));
+        }
+    }
+    doc
+}
+
+/// 器の verdict.json の字の gate の判定（`judged` が読めたときだけ Known・時刻は欄 ts で、読めなければ None）。
+/// 欄 findings が在れば、字 , で区切った札がどれも空でない観点の語と字 : と数のときだけ Known（欄が無ければ findings は None）。
+pub fn gate_of(body: &str) -> Reading<GateVerdict> {
+    let Some((v, verdict, evidence)) = judged(body) else {
+        return Reading::Unknown;
+    };
+    let findings = match v.get("findings") {
+        None => None,
+        Some(f) => match f.as_str().and_then(findings_of) {
+            Some(list) => Some(list),
+            None => return Reading::Unknown,
+        },
+    };
+    Reading::Known(GateVerdict {
+        verdict,
+        evidence,
+        findings,
+        at: text(&v, "ts").and_then(epoch_secs),
+    })
+}
+
+/// 器の review.json の字の審査の判定（`judged` が読めたときだけ Known）。欄 kind と at は字のときだけ写し、時刻は欄 ts。
+pub fn review_of(body: &str) -> Reading<ReviewVerdict> {
+    let Some((v, verdict, evidence)) = judged(body) else {
+        return Reading::Unknown;
+    };
+    Reading::Known(ReviewVerdict {
+        verdict,
+        evidence,
+        kind: text(&v, "kind").map(str::to_string),
+        place: text(&v, "at").map(str::to_string),
+        at: text(&v, "ts").and_then(epoch_secs),
+    })
+}
+
+/// 判定の file の字の共通の読み: JSON の object で、欄 schema が数 `VERDICT_SCHEMA` で、欄 verdict と evidence が字のときだけ
+/// （値と verdict と evidence）。
+fn judged(body: &str) -> Option<(Value, String, String)> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    if v.get("schema").and_then(Value::as_u64) != Some(VERDICT_SCHEMA) {
+        return None;
+    }
+    let verdict = text(&v, "verdict")?.to_string();
+    let evidence = text(&v, "evidence")?.to_string();
+    Some((v, verdict, evidence))
+}
+
+/// findings の字（観点の語と字 : と件数の札を字 , で並べた列・器の字の順のまま）。崩れた札が 1 つでも在れば None。
+fn findings_of(s: &str) -> Option<Vec<GateFinding>> {
+    s.split(',')
+        .map(|tok| {
+            let (category, count) = tok.split_once(':')?;
+            if category.is_empty() {
+                return None;
+            }
+            Some(GateFinding {
+                category: category.to_string(),
+                count: count.parse().ok()?,
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]

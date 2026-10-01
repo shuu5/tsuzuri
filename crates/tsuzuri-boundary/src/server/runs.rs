@@ -1,23 +1,45 @@
 //! 器の event log の読み（file を 1 つ読むだけ・書かない・便 e-read）。
 //! file は `<state dir>/fleet/events.jsonl`。state dir を省いたとき・file が無いか読めないときは、
 //! 走行の出所は読めない（None）。file は変化の印（更新時刻と長さ）としても見る。
+//! 便の dir（`<state dir>/pipe/<run id>/`）の gate と審査の判定の file も読む（行 c-run-verdict）。
+//! 器はその file を書いた後に段の event を足すので、変化の印は event log だけで足りる。
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// event log の file（state dir の下の path の区切りの列）。
 pub const EVENTS_LOG: [&str; 2] = ["fleet", "events.jsonl"];
 
-/// 走行の読みの出所（event log の file・state dir を省けば None）。
+/// 便の dir の置き場（state dir の下）。
+pub const PIPE_DIR: &str = "pipe";
+
+/// 便の dir の gate の判定の file（器の pipe gate が書く）。
+pub const GATE_FILE: &str = "verdict.json";
+
+/// 便の dir の審査の判定の file（器の pipe review が書く）。
+pub const REVIEW_FILE: &str = "review.json";
+
+/// 走行の読みの出所（event log の file と便の dir の置き場・state dir を省けば None）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Runs {
     pub log: Option<PathBuf>,
+    pub pipe: Option<PathBuf>,
 }
 
 impl Runs {
     pub fn new(state_dir: Option<&Path>) -> Runs {
         Runs {
             log: state_dir.map(|dir| EVENTS_LOG.iter().fold(dir.to_path_buf(), |p, s| p.join(s))),
+            pipe: state_dir.map(|dir| dir.join(PIPE_DIR)),
         }
+    }
+
+    /// 便の dir の file `name` の字（run の id が path の普通の要素 1 つでないか、読めなければ None）。
+    pub fn run_file(&self, run: &str, name: &str) -> Option<String> {
+        let mut parts = Path::new(run).components();
+        let (Some(Component::Normal(_)), None) = (parts.next(), parts.next()) else {
+            return None;
+        };
+        std::fs::read_to_string(self.pipe.as_ref()?.join(run).join(name)).ok()
     }
 
     /// event log の字（読めなければ None）。
