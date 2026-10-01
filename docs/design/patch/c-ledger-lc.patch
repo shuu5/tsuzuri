@@ -286,10 +286,10 @@ index 1a43a9b9886c396fd86c4c207e37c14270b9c958..f7dbf454d4cc5e678b17b2bfdc0331ad
  /// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・ほかの語と理由の無い部品は Queued）。
 diff --git a/crates/tsuzuri-core/tests/bvlc.rs b/crates/tsuzuri-core/tests/bvlc.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..e31e45e7bf2baf3f477359e4550a0136d45abaec
+index 0000000000000000000000000000000000000000..45216dbc1be87d95d4213ca53780f977ff92c523
 --- /dev/null
 +++ b/crates/tsuzuri-core/tests/bvlc.rs
-@@ -0,0 +1,295 @@
+@@ -0,0 +1,319 @@
 +//! 行 c-ledger-lc の歯（中核・接頭辞 bvlc_）: 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の
 +//! 局面で決める（便の局面は閉じた 14 語の表・契約の待ちは部品の理由と since・表に無い語は札を作らず unmapped に数える）。
 +//! 部品が無いか契約が閉じた局面か便の部品が無ければ event log の段のまま。台帳で閉じた bead の札と CI の読みは今までどおり。
@@ -583,5 +583,29 @@ index 0000000000000000000000000000000000000000..e31e45e7bf2baf3f477359e4550a0136
 +        (c.stage, c.ci),
 +        (Stage::Running, None),
 +        "Landed でない段に CI を付けない"
++    );
++    let mut shut: Vec<Value> = serde_json::from_str(&ledger()).expect("台帳の字");
++    for at in [3, 5] {
++        shut[at]["status"] = json!("closed");
++    }
++    let shut = Value::Array(shut).to_string();
++    let log = events(&[
++        ("lc.4", "RunDone", Some("Landed"), "terminal:push:ok"),
++        ("lc.6", "RunDone", Some("Landed"), "terminal:ci:success"),
++    ]);
++    let mut parts = running("lc.6", "run-landed-open");
++    parts.extend(running("lc.4", "run-ci-waiting"));
++    let b = board_with_cases(&shut, &log, &doc(parts), NOW);
++    let c = card(&b, "lc.6").expect("閉じた lc.6 の札");
++    assert_eq!(
++        (c.stage, c.reason.as_deref(), c.ci),
++        (Stage::Landed, None, Some(Ci::Success)),
++        "Landed の段の閉じた札の理由は event log の読みのまま"
++    );
++    let c = card(&b, "lc.4").expect("閉じた lc.4 の札");
++    assert_eq!(
++        (c.stage, c.reason.as_deref(), c.ci),
++        (Stage::Landed, None, None),
++        "閉じた札の CI の読み Waiting は ci None"
 +    );
 +}
