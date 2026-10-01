@@ -1,0 +1,91 @@
+{
+  "case::CaseDoc": [
+    {
+      "generated_at": 1790494620,
+      "stale": [
+        "ledger-gate"
+      ],
+      "parts": {
+        "known": [
+          {
+            "part": "contract",
+            "id": "t3-hub.902",
+            "phase": "contract-queued",
+            "turn": "vessel",
+            "since": 1790494020,
+            "reason": "dependency",
+            "closed": false,
+            "links": {
+              "on": [
+                "t3-hub.903"
+              ],
+              "runs": []
+            }
+          },
+          {
+            "part": "run",
+            "id": "t3-hub.905-20261001T120000Z",
+            "phase": "run-parked",
+            "turn": "user",
+            "since": null,
+            "reason": null,
+            "closed": false,
+            "links": {
+              "on": [],
+              "runs": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "generated_at": null,
+      "stale": [],
+      "parts": "unknown"
+    }
+  ],
+  "case::CasePart": [
+    {
+      "part": "contract",
+      "id": "t3-hub.902",
+      "phase": "contract-queued",
+      "turn": "vessel",
+      "since": 1790494020,
+      "reason": "dependency",
+      "closed": false,
+      "links": {
+        "on": [
+          "t3-hub.903"
+        ],
+        "runs": []
+      }
+    },
+    {
+      "part": "run",
+      "id": "t3-hub.905-20261001T120000Z",
+      "phase": "run-parked",
+      "turn": "user",
+      "since": null,
+      "reason": null,
+      "closed": false,
+      "links": {
+        "on": [],
+        "runs": []
+      }
+    }
+  ],
+  "case::CaseLinks": [
+    {
+      "on": [],
+      "runs": []
+    },
+    {
+      "on": [
+        "t3-hub.905"
+      ],
+      "runs": [
+        "t3-hub.905-20261001T120000Z"
+      ]
+    }
+  ]
+}

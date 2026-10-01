@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-01T14:53:22Z",
+  "scope": "partial",
+  "full_at": "2026-10-01T14:43:17Z",
+  "interval_s": 15,
+  "closed_window_h": 72,
+  "inputs": {
+    "ledger": {
+      "form": "noms",
+      "root": "0123456789abcdefghijklmnopqrstuv",
+      "gen": "0123456789abcdef",
+      "chunks": 100
+    },
+    "events": {
+      "len": 1000,
+      "head": "2026-09-24T12:29:07Z"
+    },
+    "main": {
+      "ref": "refs/remotes/origin/main",
+      "sha": "0123456789abcdef0123456789abcdef01234567"
+    }
+  },
+  "unmeasured": [
+    {
+      "part": "row",
+      "reason": "table-unreadable"
+    },
+    {
+      "part": "requirement",
+      "reason": "table-unreadable"
+    }
+  ],
+  "phases": [
+    "utterance-open",
+    "utterance-sorted",
+    "question-open",
+    "ruling-unreflected",
+    "question-closed",
+    "memo-promoting",
+    "memo-asking",
+    "memo-actionable",
+    "memo-waiting",
+    "memo-closed",
+    "contract-running",
+    "contract-refused",
+    "contract-queued",
+    "contract-closed",
+    "run-intake",
+    "run-reviewed",
+    "run-review-failed",
+    "run-blocked",
+    "run-implementing",
+    "run-asking",
+    "run-rate-limited",
+    "run-gating",
+    "run-landing",
+    "run-gate-failed",
+    "run-ci-waiting",
+    "run-landed-open",
+    "run-stopped",
+    "run-failed",
+    "row-unbeaded",
+    "row-beaded",
+    "row-landed",
+    "requirement-unrowed",
+    "requirement-rowed",
+    "epic-closable",
+    "epic-open",
+    "epic-closed",
+    "commit-landed",
+    "misfit"
+  ],
+  "owned": {
+    "count": 0,
+    "unset": 0,
+    "unknown": 0,
+    "oldest": null
+  },
+  "parts": [
+    {
+      "part": "question",
+      "id": "t3-hub.901",
+      "phase": "question-closed",
+      "turn": "none",
+      "since": "2026-09-29T01:09:31Z",
+      "reason": null,
+      "closed": true,
+      "overdue": null,
+      "links": {
+        "source": [
+          "t3-hub.900"
+        ]
+      }
+    },
+    {
+      "part": "memo",
+      "id": "t3-hub.900",
+      "phase": "memo-waiting",
+      "turn": "none",
+      "since": null,
+      "reason": null,
+      "closed": false,
+      "overdue": null,
+      "links": {
+        "questions": [
+          "t3-hub.901"
+        ]
+      },
+      "due": "2026-10-08T00:00:00Z",
+      "triggers": [
+        {
+          "form": "期日",
+          "value": "2026-10-08T00:00:00Z",
+          "met": false
+        }
+      ],
+      "keep": false
+    },
+    {
+      "part": "contract",
+      "id": "t3-hub.902",
+      "phase": "contract-queued",
+      "turn": "vessel",
+      "since": "2026-10-01T14:00:00Z",
+      "reason": "dependency",
+      "closed": false,
+      "overdue": null,
+      "links": {
+        "on": [
+          "t3-hub.903"
+        ]
+      },
+      "pointer": "contracts/surface-wave26a.toml#c-case-read"
+    },
+    {
+      "part": "contract",
+      "id": "t3-hub.904",
+      "phase": "contract-queued",
+      "turn": "vessel",
+      "since": "2026-10-01T14:10:00Z",
+      "reason": "overlap",
+      "closed": false,
+      "overdue": null,
+      "links": {
+        "on": [
+          "t3-hub.905"
+        ]
+      },
+      "pointer": null
+    },
+    {
+      "part": "contract",
+      "id": "t3-hub.910",
+      "phase": "contract-queued",
+      "turn": "vessel",
+      "since": "2026-10-01T14:20:00Z",
+      "reason": "reserved",
+      "closed": false,
+      "overdue": null,
+      "links": {
+        "on": [
+          "t3-hub.909"
+        ]
+      },
+      "pointer": "contracts/surface-wave26a.toml#c-ledger-lc"
+    },
+    {
+      "part": "contract",
+      "id": "t3-hub.905",
+      "phase": "contract-running",
+      "turn": "vessel",
+      "since": "2026-10-01T12:00:00Z",
+      "reason": null,
+      "closed": false,
+      "overdue": null,
+      "links": {
+        "runs": [
+          "t3-hub.905-20261001T120000Z"
+        ]
+      },
+      "pointer": "contracts/surface-wave26a.toml#c-case-columns"
+    },
+    {
+      "part": "run",
+      "id": "t3-hub.905-20261001T120000Z",
+      "phase": "run-blocked",
+      "turn": "user",
+      "since": "2026-10-01T12:30:00Z",
+      "reason": "Blocked",
+      "closed": false,
+      "overdue": null,
+      "links": {},
+      "bead": "t3-hub.905"
+    },
+    {
+      "part": "epic",
+      "id": "t3-hub.906",
+      "phase": "epic-open",
+      "turn": "none",
+      "since": null,
+      "reason": null,
+      "closed": false,
+      "overdue": null,
+      "links": {}
+    },
+    {
+      "part": "contract",
+      "id": "t3-hub.907",
+      "phase": "contract-parked",
+      "turn": "later",
+      "since": "2026-10-01T13:00:00Z",
+      "reason": "new-reason",
+      "closed": false,
+      "overdue": null,
+      "links": {
+        "on": [
+          "t3-hub.902"
+        ]
+      },
+      "pointer": null
+    },
+    {
+      "part": "contract",
+      "id": "t3-hub.908",
+      "phase": "contract-queued",
+      "turn": "vessel",
+      "since": null,
+      "reason": "host-busy",
+      "overdue": null,
+      "links": {},
+      "pointer": null
+    }
+  ]
+}

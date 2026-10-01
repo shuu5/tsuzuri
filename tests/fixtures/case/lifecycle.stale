@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "marks": [
+    {
+      "kind": "ledger-gate",
+      "at": "2026-10-01T14:58:05Z",
+      "inputs": {
+        "ledger": {
+          "form": "noms",
+          "root": "vutsrqponmlkjihgfedcba9876543210",
+          "gen": "0123456789abcdef",
+          "chunks": 101
+        }
+      },
+      "reason": null
+    }
+  ]
+}

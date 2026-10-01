@@ -25,12 +25,14 @@
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
 //! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
 //! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
+//! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`・行 c-case-read）。
 //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
 //! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
 //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
 
 pub mod batch;
 pub mod board;
+pub mod cases;
 pub mod clock;
 pub mod coalesce;
 mod config;
@@ -73,6 +75,7 @@ use crate::stage::notify;
 use crate::stagecall::Caller;
 
 use self::board::Sources;
+use self::cases::Cases;
 use self::design::Design;
 use self::events::Hub;
 use self::form::Form;
@@ -148,6 +151,8 @@ pub struct Server {
 
 struct Shared {
     sources: Sources,
+    /// 器の局面の出力の読み（state dir が無ければ出所の無い読み・行 c-case-read）。
+    cases: Cases,
     files: PathBuf,
     hub: Arc<Hub>,
     writer: Writer,
@@ -230,6 +235,7 @@ impl Server {
             listener,
             shared: Arc::new(Shared {
                 sources,
+                cases: Cases::new(config.state_dir.as_deref()),
                 files,
                 hub,
                 writer,

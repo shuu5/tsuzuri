@@ -4,6 +4,7 @@
 
 pub mod account;
 pub mod board;
+pub mod case;
 pub mod graph;
 pub mod ledger;
 pub mod notice;

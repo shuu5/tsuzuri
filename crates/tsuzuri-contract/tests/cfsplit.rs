@@ -11,13 +11,14 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value};
 
 /// 群の名と、群が見本を持つ module の列。
-const GROUPS: [(&str, &[&str]); 6] = [
+const GROUPS: [(&str, &[&str]); 7] = [
     ("surface", &["surface"]),
     ("ledger", &["ledger", "question"]),
     ("graph", &["graph"]),
     ("board", &["board"]),
     ("stats", &["stats"]),
     ("seat", &["seat"]),
+    ("case", &["case"]),
 ];
 
 /// 割る前の snapshot（tests/snapshots/contract_form.json）の鍵（割る前の順）。
