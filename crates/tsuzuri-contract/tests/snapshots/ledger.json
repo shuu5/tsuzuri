@@ -77,6 +77,52 @@
       "rows": "unknown"
     }
   ],
+  "ledger::BeadFact": [
+    {
+      "id": "t3-hub.5",
+      "created_at": 1790494620,
+      "short": "契約の型",
+      "short_set": true,
+      "summary": "契約の型を足す",
+      "blocks": [
+        "t3-hub.4"
+      ]
+    },
+    {
+      "id": "t3-hub",
+      "created_at": null,
+      "short": "根",
+      "short_set": false,
+      "summary": "",
+      "blocks": []
+    }
+  ],
+  "ledger::BeadFacts": [
+    {
+      "rows": {
+        "known": [
+          {
+            "id": "t3-hub.5",
+            "created_at": 1790494620,
+            "short": "契約の型",
+            "short_set": true,
+            "summary": "契約の型を足す",
+            "blocks": [
+              "t3-hub.4"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "rows": {
+        "known": []
+      }
+    },
+    {
+      "rows": "unknown"
+    }
+  ],
   "ledger::LedgerChanged": [
     {
       "at": 1790494620

@@ -141,6 +141,29 @@ pub struct LedgerList {
     pub rows: Reading<Vec<LedgerRow>>,
 }
 
+/// bead の事実の一覧（口 GET /api/beads の出力・行 c-bead-facts）。台帳が読めなければ行は `Unknown`（0 件と区別する）。
+/// 面は台帳の一覧の行と id で結ぶ（一覧の行の型 `LedgerRow` は替えない）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BeadFacts {
+    pub rows: Reading<Vec<BeadFact>>,
+}
+
+/// bead の 1 本の事実（id・起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BeadFact {
+    pub id: BeadId,
+    /// 起票の時刻（bd の欄 created_at・読めなければ None）。
+    pub created_at: Option<EpochSecs>,
+    /// 短い題（metadata の鍵 short の字・無ければ題から機械で作った字）。
+    pub short: String,
+    /// short が metadata の鍵 short の字か（偽なら題から機械で作った字）。
+    pub short_set: bool,
+    /// 概要（本文の 1 行・Unicode の字で 120 まで）。
+    pub summary: String,
+    /// blocks の相手（依存の type が blocks の先の bead の全部・台帳の順）。
+    pub blocks: Vec<BeadId>,
+}
+
 /// 台帳の変化の知らせ（SSE の口 events の `ledger-changed` の data・便 e-min）。
 /// 中身は運ばない。面は受けたら一覧の口を読み直す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

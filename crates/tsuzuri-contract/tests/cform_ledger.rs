@@ -12,8 +12,9 @@ use common::{AT, Form, bead, form};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{
-    BDW, BdLine, BeadId, ChildType, Effect, LedgerChanged, LedgerItem, LedgerList, LedgerRow, LedgerWrite,
-    MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG, QUESTION_LABEL, fnv1a64,
+    BDW, BdLine, BeadFact, BeadFacts, BeadId, ChildType, Effect, LedgerChanged, LedgerItem,
+    LedgerList, LedgerRow, LedgerWrite, MEMO_LABEL, NOTES_REPLACE_FLAG, PARENT_FLAG,
+    QUESTION_LABEL, fnv1a64,
 };
 use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionCard, QuestionList};
 use tsuzuri_contract::surface::RulingId;
@@ -90,6 +91,18 @@ fn ledger_item() -> LedgerItem {
     }
 }
 
+/// 短い題を metadata に持ち blocks の相手の在る bead の事実（行 c-bead-facts）。
+fn bead_fact() -> BeadFact {
+    BeadFact {
+        id: bead("t3-hub.5"),
+        created_at: Some(AT),
+        short: "契約の型".into(),
+        short_set: true,
+        summary: "契約の型を足す".into(),
+        blocks: vec![bead("t3-hub.4")],
+    }
+}
+
 /// 定型行を全部持つ問いの card。
 fn question_card() -> QuestionCard {
     QuestionCard {
@@ -126,6 +139,35 @@ fn forms() -> Vec<Box<dyn Form>> {
                     rows: Reading::Known(vec![]),
                 },
                 LedgerList {
+                    rows: Reading::Unknown,
+                },
+            ],
+        ),
+        form(
+            "ledger::BeadFact",
+            vec![
+                bead_fact(),
+                // 起票の時刻が読めず、短い題を題から作り、概要も blocks の相手も無い bead。
+                BeadFact {
+                    id: bead("t3-hub"),
+                    created_at: None,
+                    short: "根".into(),
+                    short_set: false,
+                    summary: String::new(),
+                    blocks: vec![],
+                },
+            ],
+        ),
+        form(
+            "ledger::BeadFacts",
+            vec![
+                BeadFacts {
+                    rows: Reading::Known(vec![bead_fact()]),
+                },
+                BeadFacts {
+                    rows: Reading::Known(vec![]),
+                },
+                BeadFacts {
                     rows: Reading::Unknown,
                 },
             ],
