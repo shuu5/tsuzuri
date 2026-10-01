@@ -1,15 +1,15 @@
-//! 行 g-summary の歯: 電文の節点の概要（plain・eng）と行の番号を、節点の card と一覧の行の要約の欄と
-//! 節点の頁の頭と 2 面の概要の箱に写し、見本の字数で切る。値は host で組み、DOM は 2 つの file の字で見る。
+//! 行 g-summary の歯: 電文の節点の概要（plain・eng）と行の番号を、節点の card と
+//! 節点の頁の頭と 2 面の概要の箱に写し、見本の字数で切る。値は host で組み、DOM は file の字で見る
+//! （一覧の面の行の要約の欄は行 m-map-compact で消した）。
 #![cfg(test)]
 
 use std::path::PathBuf;
 
 use tsuzuri_contract::graph::{AroundDoc, AroundRow, GraphDoc, GraphNode};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::mapview::list::{NO_GIST, Query, listing};
 use tsuzuri_surface::project::node::{self, NO_SRC, NO_SUMMARY, SUMMARY_NONE};
 use tsuzuri_surface::widgets::hover::Card;
-use tsuzuri_surface::widgets::nodecard::{NO_LINE, card_for, gist, node_card};
+use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_LINE, card_for, gist, node_card};
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -35,14 +35,6 @@ fn node_of(doc: &GraphDoc, id: &str) -> GraphNode {
         .iter()
         .find(|n| n.id == id)
         .cloned()
-        .unwrap_or_else(|| panic!("fixture に {id} が無い"))
-}
-
-/// id の節点の可変の参照。
-fn node_mut<'a>(doc: &'a mut GraphDoc, id: &str) -> &'a mut GraphNode {
-    doc.nodes
-        .iter_mut()
-        .find(|n| n.id == id)
         .unwrap_or_else(|| panic!("fixture に {id} が無い"))
 }
 
@@ -228,32 +220,6 @@ fn gsum_card_more_rows() {
     );
 }
 
-/// (5) 一覧の行の要約の欄は概要を 80 字で切った字（無ければ None）で、行の card は node_card の値。
-#[test]
-fn gsum_list_gist_cut() {
-    let mut doc = graph_doc();
-    node_mut(&mut doc, "P-1").plain = Some("a".repeat(100));
-    node_mut(&mut doc, "P-1.1").plain = Some("c".repeat(80));
-    node_mut(&mut doc, "FR14").eng = some("エンジニア向け");
-    let adr = node_mut(&mut doc, "ADR-10");
-    adr.plain = some("");
-    adr.eng = some("E");
-    let rows = listing(&doc, &Query::from_search("")).rows;
-    assert_eq!(rows.len(), doc.nodes.len());
-    for r in &rows {
-        let want = match r.id.as_str() {
-            "P-1" => Some(format!("{}…", "a".repeat(79))),
-            "P-1.1" => Some("c".repeat(80)),
-            "FR14" => some("エンジニア向け"),
-            "ADR-10" => some("E"),
-            _ => None,
-        };
-        assert_eq!(r.gist, want, "{}", r.id);
-        assert_eq!(r.card, node_card(&doc, &node_of(&doc, &r.id)), "{}", r.id);
-    }
-    assert!(rows.iter().any(|r| r.id == "t3-hub.9" && r.gist.is_none()));
-}
-
 /// (6) 概要の 2 つの箱は中心の節点の plain と eng を切らずに写す（無いか空なら要約なし）。
 #[test]
 fn gsum_node_boxes() {
@@ -322,18 +288,9 @@ fn dom_part(text: &str) -> &str {
     &text[at..]
 }
 
-/// (8) 一覧の行の要約の欄と、節点の頁の概要の箱と出所の行の DOM の字。
+/// (8) 節点の頁の概要の箱と出所の行の DOM の字（一覧の面の行の要約の欄は行 m-map-compact で消した）。
 #[test]
 fn gsum_dom_text() {
-    let list = read("src/mapview/list.rs");
-    let dom = dom_part(&list);
-    for want in [
-        r#"<span class="gist" data-t="">"#,
-        r#"<span class="gist none">{NO_GIST}</span>"#,
-        "r.gist",
-    ] {
-        assert!(dom.contains(want), "list.rs の DOM に {want} が無い");
-    }
     let node = read("src/project/node.rs");
     let dom = dom_part(&node);
     for want in [
@@ -476,7 +433,7 @@ fn gsum_own_names_clean() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert!(names.len() >= 9, "歯の数 {}", names.len());
+    assert!(names.len() >= 8, "歯の数 {}", names.len());
     for name in names {
         let rest = name
             .strip_prefix("gsum_")

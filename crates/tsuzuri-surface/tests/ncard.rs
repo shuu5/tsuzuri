@@ -1,14 +1,12 @@
-//! 行 g-card-node の歯: 電文の節点 1 つから組む hover の card（widgets の nodecard）と、
-//! 地図の圧縮の面の札・条の札・規範文の子と一覧の面の行の題がその card を持ち、a の要素に付けること。
-//! card の値は host で組み、DOM は wasm の target のときだけなので、3 つの file の字で付け方を見る。
+//! 行 g-card-node の歯: 電文の節点 1 つから組む hover の card（widgets の nodecard）。
+//! 地図の圧縮の面の札と一覧の面の行の題の card は行 m-map-compact で消した。
+//! card の値は host で組み、DOM は wasm の target のときだけなので、board の字で card の層の置き方を見る。
 #![cfg(test)]
 
 use std::path::PathBuf;
 
 use tsuzuri_contract::graph::GraphDoc;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::mapview::compact::{Cards, Tag, compact};
-use tsuzuri_surface::mapview::list::{Query, listing};
 use tsuzuri_surface::widgets::hover::{Card, ELLIPSIS, ROW_CHARS};
 use tsuzuri_surface::widgets::nodecard::{card_of, node_card, short_path};
 
@@ -214,119 +212,9 @@ fn ncard_card_of_every_node() {
     assert_eq!(card_of(&doc, "t3-hub.99"), None);
 }
 
-fn check_tag(doc: &GraphDoc, t: &Tag) {
-    assert_eq!(Some(t.card.clone()), card_of(doc, &t.id), "札 {}", t.id);
-}
-
-/// (6) 圧縮の面の札・条の札・規範文と一覧の面の行は、その id の card を持つ。
-#[test]
-fn ncard_tags_and_rows_carry_cards() {
-    let base = fixture();
-    let mut changed = base.clone();
-    drop_file(&mut changed, "P-1");
-    changed.beads.remove("t3-hub.9").expect("t3-hub.9 の属性");
-    for doc in [&base, &changed] {
-        let mut seen = 0;
-        let mut norms = 0;
-        for b in compact(doc) {
-            match &b.cards {
-                Cards::Unmeasured(_) | Cards::Empty => {}
-                Cards::Tags(tags) => tags.iter().for_each(|t| check_tag(doc, t)),
-                Cards::Articles { articles, loose } => {
-                    for a in articles {
-                        check_tag(doc, &a.tag);
-                        assert_eq!(a.norm_cards.len(), a.norms.len(), "条 {}", a.tag.id);
-                        for (id, c) in a.norms.iter().zip(&a.norm_cards) {
-                            assert_eq!(Some(c.clone()), card_of(doc, id), "規範文 {id}");
-                            norms += 1;
-                        }
-                    }
-                    loose.iter().for_each(|t| check_tag(doc, t));
-                }
-                Cards::Lanes(lanes) => lanes
-                    .iter()
-                    .flat_map(|l| &l.tags)
-                    .for_each(|t| check_tag(doc, t)),
-                Cards::Notes(notes) => notes
-                    .iter()
-                    .flat_map(|g| &g.tags)
-                    .for_each(|t| check_tag(doc, t)),
-            }
-            seen += b.ids().len();
-        }
-        assert!(seen > 0 && norms > 0, "札 {seen}・規範文 {norms}");
-        for search in ["", "?sort=state"] {
-            let rows = listing(doc, &Query::from_search(search)).rows;
-            assert!(!rows.is_empty(), "{search:?} の行が在る");
-            for r in rows {
-                assert_eq!(Some(r.card.clone()), card_of(doc, &r.id), "行 {}", r.id);
-            }
-        }
-    }
-    let p1 = card_of(&changed, "P-1").expect("P-1 の card");
-    assert_eq!(p1.src, "design-intent/constitution.yaml");
-    let t9 = card_of(&changed, "t3-hub.9").expect("t3-hub.9 の card");
-    assert_eq!(t9.kind, "task · beads · 状態なし");
-}
-
-/// 字「mod dom {」より後の字。
-fn dom_part(text: &str) -> &str {
-    let at = text.find("mod dom {").expect("字 mod dom { が在る");
-    &text[at..]
-}
-
-/// at から始まる tag（次の > まで・> を含む）。
-fn tag_from(text: &str, at: usize) -> &str {
-    let end = text[at..].find('>').expect("tag の閉じ山括弧");
-    &text[at..=at + end]
-}
-
-/// before の字の前の最後の <a から始まる tag。
-fn anchor_before<'a>(text: &'a str, before: &str) -> &'a str {
-    let p = text
-        .find(before)
-        .unwrap_or_else(|| panic!("字 {before} が無い"));
-    let at = text[..p]
-        .rfind("<a")
-        .unwrap_or_else(|| panic!("{before} の前に <a が無い"));
-    tag_from(text, at)
-}
-
-/// start の字で始まる tag。
-fn anchor_at<'a>(text: &'a str, start: &str) -> &'a str {
-    let at = text
-        .find(start)
-        .unwrap_or_else(|| panic!("字 {start} が無い"));
-    tag_from(text, at)
-}
-
 /// (7) 4 つの a の開きの tag の末尾に、それぞれの card を付ける use:attach が在る。
 #[test]
 fn ncard_dom_wiring() {
-    let compact_text = read("src/mapview/compact.rs");
-    let dom = dom_part(&compact_text);
-    for (tag, want) in [
-        (
-            anchor_at(dom, "<a class=t.class.clone()"),
-            "use:attach=t.card.clone()>",
-        ),
-        (
-            anchor_before(dom, "{tag_head(&a.tag)}</a>"),
-            "use:attach=a.tag.card.clone()>",
-        ),
-        (anchor_before(dom, "{id}</a>"), "use:attach=card>"),
-    ] {
-        assert!(tag.ends_with(want), "{tag} が {want} で終わらない");
-    }
-    assert!(dom.contains("zip(a.norm_cards"), "規範文の card を zip で組まない");
-
-    let list_text = read("src/mapview/list.rs");
-    let tag = anchor_at(dom_part(&list_text), "<a class=\"ttl\"");
-    assert!(
-        tag.ends_with("use:attach=r.card.clone()>"),
-        "{tag} が行の card を付けない"
-    );
-
     let board = read("src/board.rs");
     for want in ["provide_context(HoverCtx::default())", "<CardLayer/>"] {
         assert!(board.contains(want), "board.rs に {want} が無い");
@@ -435,7 +323,7 @@ fn ncard_names_stay_apart() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert!(names.len() >= 7, "歯の数 {}", names.len());
+    assert!(names.len() >= 6, "歯の数 {}", names.len());
     for name in names {
         let rest = name
             .strip_prefix("ncard_")

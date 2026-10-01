@@ -1,7 +1,6 @@
-//! 便 g-map の歯: 種類から帯と語の鍵への閉じた表・圧縮の面の帯の順と札の並び・読めない帯と 0 件の帯・
-//! 一覧の面の絞りと並べ替え・表の面の行列の数と cell の組の絞り・URL の query・全部の札と行の id・
-//! 着地済みの外形と依存・使う class と語の鍵が在る。
-//! 圧縮の面の条と規則行と、一覧の面の id の並べ替えは id の自然な順（便 g-graph が直した）。
+//! 便 g-map の歯: 種類から帯と語の鍵への閉じた表・表の面の行列の数と cell の組の query・URL の query・
+//! 着地済みの外形と依存・使う class と語の鍵が在る。id は自然な順（便 g-graph が直した）。
+//! 圧縮の面と一覧の面の歯は行 m-map-compact で消した。
 //! 近傍の歯は節点の頁の歯（nodepage.rs・便 g-node が近傍の測れていないの歯を消した）。
 #![cfg(test)]
 
@@ -11,13 +10,9 @@ use std::path::PathBuf;
 use tsuzuri_contract::graph::{GraphDoc, GraphSource, NodeKind};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::band::{
-    BEADS_LANES, Band, KINDS, band_of, kind_from_name, kind_key, kind_name, unread_reason,
+    BEADS_LANES, Band, KINDS, band_of, kind_from_name, kind_key, kind_name,
 };
-use tsuzuri_surface::mapview::compact::{BandBox, Cards, compact, cut30};
-use tsuzuri_surface::mapview::list::{
-    Listing, NO_STATE, Query, Sort, listing, pair_value, parse_pair, with_choice, with_pair,
-};
-use tsuzuri_surface::mapview::table::{Matrix, matrix};
+use tsuzuri_surface::mapview::table::{Matrix, matrix, pair_value, with_pair};
 use tsuzuri_surface::mapview::{decode, encode, natural, param, set_param};
 use tsuzuri_surface::project::{NO_CONTENT, NOT_READ, map};
 use tsuzuri_surface::view::Fetched;
@@ -37,21 +32,6 @@ fn fixture_text() -> String {
 
 fn fixture() -> GraphDoc {
     wire::decode(&fixture_text()).expect("fixture が電文として読める")
-}
-
-fn boxes(doc: &GraphDoc) -> Vec<BandBox> {
-    compact(doc)
-}
-
-fn rows(l: &Listing) -> Vec<&str> {
-    l.rows.iter().map(|r| r.id.as_str()).collect()
-}
-
-fn list_of(doc: &GraphDoc, search: &str) -> Vec<String> {
-    rows(&listing(doc, &Query::from_search(search)))
-        .into_iter()
-        .map(str::to_string)
-        .collect()
 }
 
 #[test]
@@ -167,313 +147,7 @@ fn band_names_and_paths() {
     assert_eq!(kind_from_name("nope"), None);
 }
 
-/// (2) 圧縮の面の帯の順と、帯ごとの札の id の並び・beads は種類の 7 行。
-#[test]
-fn mapview_compact_bands_and_tags_in_order() {
-    let doc = fixture();
-    let bs = boxes(&doc);
-    let bands: Vec<Band> = bs.iter().map(|b| b.band).collect();
-    assert_eq!(bands, Band::ALL.to_vec());
-    let classes: Vec<String> = bs.iter().map(BandBox::class).collect();
-    assert_eq!(classes[0], "band band-constitution");
-    assert_eq!(classes[2], "band band-adr");
-    assert_eq!(classes[4], "band band-design-note");
-    let ids: Vec<Vec<&str>> = bs.iter().map(BandBox::ids).collect();
-    assert_eq!(
-        ids,
-        vec![
-            vec![
-                "A-2", "A-2.1", "N-1", "N-1.2", "N-1.10", "P-1", "P-1.1", "P-1.2", "P-9.1"
-            ],
-            vec!["D-3", "R-4", "R-25"],
-            vec!["ADR-2", "ADR-7", "ADR-10"],
-            vec!["AC-3", "FR2", "FR14", "G-1", "NFR2"],
-            vec!["surface-board#g-frame", "surface-board#g-map"],
-            vec![
-                "t3",
-                "t3-hub.2",
-                "t3-hub.9",
-                "t3-hub.15",
-                "t3.m1",
-                "t3.q2",
-                "t3.q10",
-                "t3.q2#r",
-                "t3.p"
-            ],
-            vec!["r-1", "r-3", "r-12"],
-        ]
-    );
-    let counts: Vec<Option<usize>> = bs.iter().map(|b| b.count).collect();
-    assert_eq!(
-        counts,
-        vec![
-            Some(9),
-            Some(3),
-            Some(3),
-            Some(5),
-            Some(2),
-            Some(9),
-            Some(3)
-        ]
-    );
-
-    constitution_and_beads(bs);
-}
-
-/// constitution の条の札と規範文・beads の種類の 7 行。
-fn constitution_and_beads(bs: Vec<BandBox>) {
-    // constitution: 条の札は id の自然な順・規範文は条の下に自然な順・条の無い規範文は後に札で出す。
-    let Cards::Articles { articles, loose } = &bs[0].cards else {
-        panic!("constitution が条の札でない: {:?}", bs[0].cards);
-    };
-    let arts: Vec<(&str, Vec<&str>)> = articles
-        .iter()
-        .map(|a| {
-            (
-                a.tag.id.as_str(),
-                a.norms.iter().map(String::as_str).collect(),
-            )
-        })
-        .collect();
-    assert_eq!(
-        arts,
-        vec![
-            ("A-2", vec!["A-2.1"]),
-            ("N-1", vec!["N-1.2", "N-1.10"]),
-            ("P-1", vec!["P-1.1", "P-1.2"]),
-        ]
-    );
-    assert_eq!(
-        loose.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
-        vec!["P-9.1"]
-    );
-
-    // beads: 種類の 7 行（0 件の行も出す）。
-    let Cards::Lanes(lanes) = &bs[5].cards else {
-        panic!("beads が種類の行でない: {:?}", bs[5].cards);
-    };
-    let lane_kinds: Vec<NodeKind> = lanes.iter().map(|l| l.kind).collect();
-    assert_eq!(lane_kinds, BEADS_LANES.to_vec());
-    let lane_ids: Vec<Vec<&str>> = lanes
-        .iter()
-        .map(|l| l.tags.iter().map(|t| t.id.as_str()).collect())
-        .collect();
-    assert_eq!(
-        lane_ids,
-        vec![
-            vec!["t3"],
-            vec!["t3-hub.2", "t3-hub.9", "t3-hub.15"],
-            vec!["t3.m1"],
-            vec!["t3.q2", "t3.q10"],
-            vec!["t3.q2#r"],
-            vec![],
-            vec!["t3.p"],
-        ]
-    );
-    let keys: Vec<&str> = lanes.iter().map(|l| l.key).collect();
-    assert_eq!(
-        keys,
-        vec![
-            "k:epic", "k:契約", "k:memo", "k:問い", "k:裁定", "k:受け", "k:方針"
-        ]
-    );
-
-    tag_marks(&bs, lanes);
-}
-
-/// 札の題の字数と、open の問いの赤と、動いている節点の印。
-fn tag_marks(bs: &[BandBox], lanes: &[tsuzuri_surface::mapview::compact::Lane]) {
-    // 札: 題は 30 字・open の問いは赤・動いている節点は印を塗らない。
-    let Cards::Tags(rules) = &bs[1].cards else {
-        panic!("rules が札でない");
-    };
-    assert_eq!(rules[1].id, "R-4");
-    assert_eq!(rules[1].title, "abcdefghij abcdefghij abcdefgh");
-    assert_eq!(cut30("  a   b  "), "a b");
-    let q10 = &lanes[3].tags[1];
-    assert!(q10.alert);
-    assert_eq!(q10.class, "tag band-beads open-q");
-    assert_eq!(q10.shape, "shape band-beads");
-    let q2 = &lanes[3].tags[0];
-    assert!(!q2.alert);
-    assert_eq!(q2.class, "tag band-beads");
-    assert_eq!(q2.shape, "shape band-beads fill");
-    assert_eq!(rules[0].shape, "shape band-rules fill");
-    assert_eq!(
-        lanes[1].tags[1].shape, "shape band-beads",
-        "in_progress は塗らない"
-    );
-}
-
-/// (3) 読めなかった出所の帯は測れていない（0 件でない）・読めて 0 件の帯は 0 件の帯。
-#[test]
-fn mapview_unread_band_is_unmeasured_and_zero_band_is_empty() {
-    let mut doc = fixture();
-    doc.unread = vec![GraphSource::Runs];
-    let bs = boxes(&doc);
-    assert_eq!(bs[6].count, None);
-    assert_eq!(
-        bs[6].cards,
-        Cards::Unmeasured(unread_reason(GraphSource::Runs))
-    );
-    assert!(bs[..6].iter().all(|b| b.count.is_some()));
-
-    doc.unread = vec![GraphSource::Design];
-    let bs = boxes(&doc);
-    for b in &bs[..5] {
-        assert_eq!(
-            b.cards,
-            Cards::Unmeasured(unread_reason(GraphSource::Design))
-        );
-        assert_eq!(b.count, None);
-    }
-    assert!(matches!(bs[5].cards, Cards::Lanes(_)));
-    let l = listing(&doc, &Query::from_search(""));
-    assert_eq!(l.unread, vec![unread_reason(GraphSource::Design)]);
-
-    doc.unread = vec![GraphSource::Ledger];
-    assert_eq!(
-        boxes(&doc)[5].cards,
-        Cards::Unmeasured(unread_reason(GraphSource::Ledger))
-    );
-
-    let mut zero = fixture();
-    zero.nodes.retain(|n| n.kind != NodeKind::Run);
-    let bs = boxes(&zero);
-    assert_eq!(bs[6].count, Some(0));
-    assert_eq!(bs[6].cards, Cards::Empty);
-    for s in GraphSource::ALL {
-        assert!(!unread_reason(s).trim().is_empty());
-    }
-}
-
-/// (4) 一覧の面の絞り（帯・種類・種類の組）と並べ替え（id・状態）。
-#[test]
-fn mapview_list_filters_and_sorts() {
-    let doc = fixture();
-    assert_eq!(
-        list_of(&doc, "?page=map&view=list"),
-        vec![
-            "A-2",
-            "A-2.1",
-            "N-1",
-            "N-1.2",
-            "N-1.10",
-            "P-1",
-            "P-1.1",
-            "P-1.2",
-            "P-9.1",
-            "D-3",
-            "R-4",
-            "R-25",
-            "ADR-2",
-            "ADR-7",
-            "ADR-10",
-            "AC-3",
-            "FR2",
-            "FR14",
-            "G-1",
-            "NFR2",
-            "surface-board#g-frame",
-            "surface-board#g-map",
-            "t3",
-            "t3-hub.2",
-            "t3-hub.9",
-            "t3-hub.15",
-            "t3.m1",
-            "t3.p",
-            "t3.q2",
-            "t3.q2#r",
-            "t3.q10",
-            "r-1",
-            "r-3",
-            "r-12",
-        ]
-    );
-    state_band_kind_and_pair(doc);
-}
-
-/// 状態の並べ・帯と種類の絞り・種類の組の絞り。
-fn state_band_kind_and_pair(doc: GraphDoc) {
-    assert_eq!(
-        list_of(&doc, "?view=list&band=beads&sort=state"),
-        vec![
-            "t3.q10",
-            "t3",
-            "t3-hub.9",
-            "t3-hub.15",
-            "t3.m1",
-            "t3.p",
-            "t3.q2#r",
-            "t3-hub.2",
-            "t3.q2",
-        ]
-    );
-    assert_eq!(
-        list_of(&doc, "?band=pipeline&sort=state"),
-        vec!["r-12", "r-1", "r-3"]
-    );
-    let kind = format!("?kind={}", encode("要件"));
-    assert_eq!(list_of(&doc, &kind), vec!["FR2", "FR14"]);
-    assert_eq!(list_of(&doc, "?kind=要件"), vec!["FR2", "FR14"]);
-
-    let pair = format!(
-        "?pair={}",
-        encode(&pair_value(NodeKind::Task, NodeKind::Epic))
-    );
-    let l = listing(&doc, &Query::from_search(&pair));
-    assert_eq!(rows(&l), vec!["t3", "t3-hub.2", "t3-hub.9", "t3-hub.15"]);
-    let note = l.pair.expect("組の札");
-    assert_eq!(
-        (note.from, note.to, note.count),
-        (NodeKind::Task, NodeKind::Epic, 4)
-    );
-    let pair_state = format!(
-        "?sort=state&pair={}",
-        encode(&pair_value(NodeKind::Question, NodeKind::Task))
-    );
-    assert_eq!(list_of(&doc, &pair_state), vec!["t3.q10", "t3-hub.15"]);
-    let pair_band = format!("{pair}&kind={}", encode("契約"));
-    assert_eq!(
-        list_of(&doc, &pair_band),
-        vec!["t3-hub.2", "t3-hub.9", "t3-hub.15"]
-    );
-
-    state_words_and_kinds(doc);
-}
-
-/// 行の状態の語と題・種類の選択肢。
-fn state_words_and_kinds(doc: GraphDoc) {
-    // 状態の語: bead は状態・走行は段・設計文書の節点と段の無い走行は状態なし。
-    let all = listing(&doc, &Query::from_search(""));
-    let word = |id: &str| {
-        all.rows
-            .iter()
-            .find(|r| r.id == id)
-            .map(|r| r.state_word().to_string())
-            .expect("行")
-    };
-    assert_eq!(word("t3-hub.9"), "in_progress");
-    assert_eq!(word("r-1"), "Landed");
-    assert_eq!(word("r-12"), NO_STATE);
-    assert_eq!(word("P-1"), NO_STATE);
-    let r4 = all.rows.iter().find(|r| r.id == "R-4").expect("R-4");
-    assert_eq!(r4.title, "abcdefghij abcdefghij abcdefghij abc");
-    assert!(
-        all.rows
-            .iter()
-            .find(|r| r.id == "t3.q10")
-            .is_some_and(|r| r.alert)
-    );
-    // 種類の選択肢は電文に在る種類（契約の型の順）。
-    assert!(!all.kinds.contains(&NodeKind::Receipt));
-    assert_eq!(all.kinds.first(), Some(&NodeKind::Article));
-    assert_eq!(all.kinds.last(), Some(&NodeKind::Run));
-    assert!(all.pair.is_none());
-    assert!(all.unread.is_empty());
-}
-
-/// (5) 表の面の行列の数は fixture の辺から数えた期待と一致し、cell の組で一覧の面が絞られる。
+/// (5) 表の面の行列の数は fixture の辺から数えた期待と一致し、cell の組は URL の query の pair に残る。
 #[test]
 fn mapview_table_counts_and_pair_filter() {
     let doc = fixture();
@@ -517,85 +191,12 @@ fn mapview_table_counts_and_pair_filter() {
     assert_eq!(adr.types_text(), "relations.articles");
     assert_eq!(adr.shape(), "shape band-adr fill");
 
-    // cell を押した後の URL で一覧の面が組の両端に絞られる。
-    let url = with_pair("?page=map&view=table&band=rules", Some((Run, Task)));
-    assert_eq!(
-        list_of(&doc, &url),
-        vec!["t3-hub.2", "t3-hub.15", "r-1", "r-3", "r-12"]
-    );
-    for c in &m.cells {
-        let url = with_pair("", Some((c.from, c.to)));
-        let l = listing(&doc, &Query::from_search(&url));
-        assert!(!l.rows.is_empty());
-        assert!(
-            l.rows.iter().all(|r| r.kind == c.from || r.kind == c.to),
-            "{:?}",
-            (c.from, c.to)
-        );
-    }
-}
-
-/// (6) 絞りと並べ替えが URL の query に残る（面の切り替えの view は行 m-map-page で消した）。
-#[test]
-fn mapview_query_keeps_view_and_filters() {
-    search_query_and_choice();
-}
-
-/// query の絞りと並べの読みと、選択肢の付け外し。
-fn search_query_and_choice() {
-    let q = Query::from_search(&format!(
-        "?page=map&view=list&band=beads&kind={}&sort=state",
-        encode("問い")
-    ));
-    assert_eq!(q.band, Some(Band::Beads));
-    assert_eq!(q.kind, Some(NodeKind::Question));
-    assert_eq!(q.sort, Sort::State);
-    assert_eq!(q.pair, None);
-    let q = Query::from_search("?band=nope&kind=nope&sort=nope&pair=a|b");
-    assert_eq!(
-        (q.band, q.kind, q.sort, q.pair),
-        (None, None, Sort::Id, None)
-    );
-
-    let s = with_choice("?page=map&view=list", "sort", "state");
-    assert_eq!(s, "?page=map&view=list&sort=state");
-    let s = with_choice(&s, "band", "rules");
-    assert_eq!(Query::from_search(&s).band, Some(Band::Rules));
-    let s = with_choice(&s, "band", "");
-    assert_eq!(s, "?page=map&view=list&sort=state");
-
-    pair_in_query();
-}
-
-/// 種類の組の query と、並べの語の鍵。
-fn pair_in_query() {
-    let url = with_pair(
-        "?page=map&view=table&band=rules&kind=x&mode=expert",
-        Some((NodeKind::Task, NodeKind::Epic)),
-    );
-    assert_eq!(
-        url,
-        format!(
-            "?page=map&view=table&mode=expert&pair={}",
-            encode("契約|epic")
-        )
-    );
-    let q = Query::from_search(&url);
-    assert_eq!(q.pair, Some((NodeKind::Task, NodeKind::Epic)));
-    assert_eq!((q.band, q.kind), (None, None));
-    assert_eq!(with_pair(&url, None), "?page=map&view=table&mode=expert");
-    assert_eq!(
-        parse_pair("契約|epic"),
-        Some((NodeKind::Task, NodeKind::Epic))
-    );
-    assert_eq!(parse_pair("契約"), None);
-    for s in Sort::ALL {
-        assert!(
-            vocab().term(s.key()).is_some(),
-            "鍵 {} が vocab に無い",
-            s.key()
-        );
-    }
+    // cell を押した後の URL は組の値を pair に置き、帯と種類の絞りを外す（一覧の面は行 m-map-compact で消した）。
+    let url = with_pair("?page=map&view=table&band=rules&kind=x", Some((Run, Task)));
+    assert_eq!(param(&url, "pair"), Some(pair_value(Run, Task)));
+    assert_eq!((param(&url, "band"), param(&url, "kind")), (None, None));
+    assert_eq!(param(&url, "view").as_deref(), Some("table"));
+    assert_eq!(with_pair(&url, None), "?page=map&view=table");
 }
 
 /// query の値の `%XX` の読み書きと、置き換えと消し。
@@ -632,23 +233,6 @@ fn mapview_natural_order() {
     assert_eq!(natural("b", "a"), Greater);
     assert_eq!(natural("", "a"), Less);
     assert_eq!(natural("a", "a"), Equal);
-}
-
-/// (7) 圧縮と一覧の全部の札と行に節点の id が出る（1 度ずつ）。
-#[test]
-fn mapview_every_tag_and_row_shows_id() {
-    let doc = fixture();
-    let mut want: Vec<&str> = doc.nodes.iter().map(|n| n.id.as_str()).collect();
-    want.sort_unstable();
-    let bs = boxes(&doc);
-    let mut shown: Vec<&str> = bs.iter().flat_map(BandBox::ids).collect();
-    shown.sort_unstable();
-    assert_eq!(shown, want);
-    let l = listing(&doc, &Query::from_search(""));
-    let mut listed = rows(&l);
-    listed.sort_unstable();
-    assert_eq!(listed, want);
-    assert!(l.rows.iter().all(|r| !r.id.is_empty()));
 }
 
 /// (9) グラフの口の path と読み（地図の block は行 m-map-page で消した）と、電文の型として読めない本文は理由・
@@ -723,8 +307,6 @@ fn mapview_classes_and_keys_exist() {
     let files = [
         "src/mapview/mod.rs",
         "src/mapview/band.rs",
-        "src/mapview/compact.rs",
-        "src/mapview/list.rs",
         "src/mapview/table.rs",
         "src/mapview/graph.rs",
         "src/mapview/graph/dom.rs",
@@ -744,42 +326,14 @@ fn mapview_classes_and_keys_exist() {
     used_in_css(used);
 }
 
-/// 例の電文から組む札・行・升・帯の印の class を足す。
+/// 例の電文から組む升・帯の印の class を足す（圧縮の面の札と一覧の面の行は行 m-map-compact で消した）。
 fn doc_classes(mut add: impl FnMut(&str)) {
     let doc = fixture();
-    for b in boxes(&doc) {
-        add(&b.class());
-        match &b.cards {
-            Cards::Tags(tags) => tags.iter().for_each(|t| {
-                add(&t.class);
-                add(&t.shape);
-            }),
-            Cards::Articles { articles, loose } => {
-                for t in articles.iter().map(|a| &a.tag).chain(loose) {
-                    add(&t.class);
-                    add(&t.shape);
-                }
-            }
-            Cards::Lanes(lanes) => lanes.iter().flat_map(|l| &l.tags).for_each(|t| {
-                add(&t.class);
-                add(&t.shape);
-            }),
-            Cards::Notes(notes) => notes.iter().flat_map(|g| &g.tags).for_each(|t| {
-                add(&t.class);
-                add(&t.shape);
-            }),
-            Cards::Unmeasured(_) | Cards::Empty => {}
-        }
-    }
-    for r in &listing(&doc, &Query::from_search("")).rows {
-        add(&r.shape);
-        add(&r.band.chip_class());
-    }
     for c in &matrix(&doc).cells {
         add(&c.shape());
     }
     for b in Band::ALL {
-        add(&format!("art7 shape fill {}", b.class_name()));
+        add(&format!("shape fill {}", b.class_name()));
     }
 }
 
@@ -787,25 +341,14 @@ fn doc_classes(mut add: impl FnMut(&str)) {
 fn used_in_css(used: BTreeSet<String>) {
     let css = stylesheet_classes();
     for c in [
-        "band", "art7", "kids", "tag", "tid", "tt", "subh", "cards7", "filters", "items", "rows",
-        "rowb", "nid", "ttl", "meta", "bchip", "gist", "none", "mx", "mxwrap", "mxlist", "pair",
-        "pairnote", "path", "bn", "shape", "empty", "open-q",
+        "subh", "items", "nid", "ttl", "mx", "mxwrap", "mxlist", "pair", "path", "shape", "empty",
     ] {
         assert!(used.contains(c), "地図の頁が class {c} を使わない");
     }
     let missing: Vec<&String> = used.iter().filter(|c| !css.contains(*c)).collect();
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
 
-    for key in [
-        "bands",
-        "matrix",
-        "col_band",
-        "col_kind",
-        "col_id",
-        "col_state",
-        "sort",
-        "st_unknown",
-    ] {
+    for key in ["matrix", "st_unknown"] {
         assert!(vocab().term(key).is_some(), "鍵 {key} が vocab に無い");
     }
 }

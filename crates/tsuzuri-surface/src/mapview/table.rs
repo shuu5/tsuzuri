@@ -1,13 +1,21 @@
 //! 表の面（見本の map.html の table）: 種類と種類の辺の数の行列（行 = 辺の from の種類・列 = to の種類）。
-//! 辺が 1 本も無い種類は行にも列にも出さない。数の cell を押すと一覧の面へ移り、その種類の組で絞る。
+//! 辺が 1 本も無い種類は行にも列にも出さない。数の cell を押すと URL の query の pair にその種類の組を置く
+//! （一覧の面は行 m-map-compact で消し、組の値と query の書きは一覧の面から字を変えずに移した）。
 //! 幅の狭い画面のための一覧（`.mxlist`）も同じ数を出す。両端のどちらかが節点に無い辺は数えない。
 //! 行列の数の cell は辺の型の名を経験者だけの注釈に持つ（見本の data-tip-expert・行 g-map-tips）。
 
 use tsuzuri_contract::graph::{EdgeType, GraphDoc, NodeKind};
 use tsuzuri_contract::wire;
 
-use super::band::band_of;
-use super::kinds_by_id;
+use super::band::{band_of, kind_name};
+use super::{kinds_by_id, set_param};
+
+/// 帯の絞りを残す URL の query の鍵。
+pub const BAND_PARAM: &str = "band";
+/// 種類の絞りを残す URL の query の鍵。
+pub const KIND_PARAM: &str = "kind";
+/// 種類の組の絞りを残す URL の query の鍵。
+pub const PAIR_PARAM: &str = "pair";
 
 /// 行列の数の在る 1 つの cell（種類の組・辺の数・辺の型）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +105,23 @@ pub fn matrix(doc: &GraphDoc) -> Matrix {
     Matrix { kinds, cells }
 }
 
+/// 種類の組の query の値（`種類|種類`・辺の from の種類が先）。
+pub fn pair_value(from: NodeKind, to: NodeKind) -> String {
+    format!("{}|{}", kind_name(from), kind_name(to))
+}
+
+/// 種類の組で絞った後の URL の query（帯と種類の絞りを外す・None は組の絞りを外す・面の切り替えは行 m-map-page で消した）。
+pub fn with_pair(search: &str, pair: Option<(NodeKind, NodeKind)>) -> String {
+    match pair {
+        Some((from, to)) => {
+            let s = set_param(search, PAIR_PARAM, Some(&pair_value(from, to)));
+            let s = set_param(&s, BAND_PARAM, None);
+            set_param(&s, KIND_PARAM, None)
+        }
+        None => set_param(search, PAIR_PARAM, None),
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;
 
@@ -106,9 +131,8 @@ mod dom {
     use leptos::prelude::*;
     use tsuzuri_contract::graph::{GraphDoc, NodeKind};
 
-    use super::{Cell, matrix};
+    use super::{Cell, matrix, pair_value, with_pair};
     use crate::mapview::band::{band_of, kind_key};
-    use crate::mapview::list::{pair_value, with_pair};
     use crate::mapview::{navigate, unread_reasons};
     use crate::project::unmeasured;
     use crate::vocab::label;
@@ -195,7 +219,7 @@ mod dom {
         .into_any()
     }
 
-    /// 数の button（押すと一覧の面へ移り、その組で絞る）。
+    /// 数の button（押すと URL の query の pair にその組を置く）。
     fn pair_button(c: &Cell, search: RwSignal<String>, class: &'static str) -> AnyView {
         let (from, to) = (c.from, c.to);
         let click = move |_| navigate(search, |s| with_pair(s, Some((from, to))), true);

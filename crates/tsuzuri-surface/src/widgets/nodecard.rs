@@ -12,10 +12,15 @@ use tsuzuri_contract::graph::{GraphDoc, GraphNode, ViewNode};
 use crate::mapview::band::{band_of, kind_key};
 use crate::mapview::graph::cut;
 use crate::mapview::graph::fold::{fold_key, plain_title};
-use crate::mapview::list::{NO_GIST, NO_STATE};
 use crate::mapview::state;
 use crate::vocab::label;
 use crate::widgets::hover::{Card, ELLIPSIS};
+
+/// 状態の無い節点の状態の語。
+pub const NO_STATE: &str = "状態なし";
+
+/// 要約の無い節点の要約の欄の字。
+pub const NO_GIST: &str = "要約なし";
 
 /// file は在るが行の番号が無いときの、出所の全部の字の後ろの字（見本の srcText）。
 pub const NO_LINE: &str = "（行は測れていない）";

@@ -1,4 +1,4 @@
-//! 行 g-map-retired の歯（面）: 廃止した設計ノートを圧縮の面の design-note の帯の箱と設計の木で畳んだ段に束ねること・
+//! 行 g-map-retired の歯（面）: 廃止した設計ノートを設計の木で畳んだ段に束ねること（圧縮の面は行 m-map-compact で消した）・
 //! 欄 retired の無い電文は何も畳まず理由を返すこと・DOM の字（wasm の target のときだけなので src の字で見る）・
 //! この file の歯の名。
 #![cfg(test)]
@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, GraphSource, NodeKind};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::band::Band;
-use tsuzuri_surface::mapview::compact::{BandBox, Cards, NoteGroup, compact};
 use tsuzuri_surface::mapview::tree::{Branch, Head, Tree, fold_key, forest};
 use tsuzuri_surface::mapview::{RETIRED, RETIRED_UNREAD, retired_notes, retired_unread};
 
@@ -63,35 +62,6 @@ fn with_retired(retired: Option<&[&str]>) -> GraphDoc {
     doc
 }
 
-/// design-note の帯の箱。
-fn dn_box(doc: &GraphDoc) -> BandBox {
-    compact(doc)
-        .into_iter()
-        .find(|b| b.band == Band::DesignNote)
-        .expect("design-note の帯の箱")
-}
-
-/// 組の名と札の id。
-fn shape(groups: &[NoteGroup]) -> Vec<(&str, Vec<&str>)> {
-    groups
-        .iter()
-        .map(|g| {
-            (
-                g.note.as_str(),
-                g.tags.iter().map(|t| t.id.as_str()).collect(),
-            )
-        })
-        .collect()
-}
-
-/// 箱の Notes の組。
-fn notes_of(b: &BandBox) -> &[NoteGroup] {
-    match &b.cards {
-        Cards::Notes(groups) => groups,
-        other => panic!("design-note の帯が Notes でない: {other:?}"),
-    }
-}
-
 /// 項の名（帯は band:名:数・設計ノートは note:名:数・廃止の段は retired:数・節点は id）。
 fn name(head: &Head) -> String {
     match head {
@@ -140,39 +110,6 @@ fn dom_part(rel: &str) -> String {
     src[at..].to_string()
 }
 
-/// (4) 圧縮の面: 欄 retired が名指したノートは箱の欄 retired の組に分け、Notes は残りの組。
-#[test]
-fn gmret_compact_shelves_retired() {
-    let doc = with_retired(Some(&["nc", "nb"]));
-    let b = dn_box(&doc);
-    assert_eq!(b.count, Some(6));
-    assert_eq!(
-        shape(notes_of(&b)),
-        vec![("lone", vec!["lone"]), ("na", vec!["na#1", "na#2"])]
-    );
-    assert_eq!(
-        shape(&b.retired),
-        vec![("nb", vec!["nb#1"]), ("nc", vec!["nc#1", "nc#2"])]
-    );
-    assert_eq!(b.ids(), vec!["lone", "na#1", "na#2"]);
-    assert_eq!(retired_unread(&doc), None);
-    let want: BTreeSet<&str> = ["nb", "nc"].into();
-    assert_eq!(retired_notes(&doc), want);
-
-    for retired in [&[][..], &["zz"][..]] {
-        let doc = with_retired(Some(retired));
-        let b = dn_box(&doc);
-        assert_eq!(notes_of(&b).len(), 4, "{retired:?}");
-        assert!(b.retired.is_empty(), "{retired:?}");
-        assert_eq!(b.count, Some(6));
-    }
-    for b in compact(&with_retired(Some(&["nc", "nb"]))) {
-        if b.band != Band::DesignNote {
-            assert!(b.retired.is_empty(), "{:?}", b.band);
-        }
-    }
-}
-
 /// (5) 設計の木: 廃止していないノートの開いた項・井桁の無い項・畳んだ廃止の段（下に畳んだノートの項）の順。
 #[test]
 fn gmret_tree_folds_retired() {
@@ -195,6 +132,9 @@ fn gmret_tree_folds_retired() {
         ])
     );
     assert_eq!(fold_key(&Head::Retired(2)), "tree:retired");
+    assert_eq!(retired_unread(&doc), None);
+    let want: BTreeSet<&str> = ["nb", "nc"].into();
+    assert_eq!(retired_notes(&doc), want);
 
     let mut plain = doc.clone();
     plain.retired = None;
@@ -209,17 +149,6 @@ fn gmret_tree_folds_retired() {
 #[test]
 fn gmret_unread_folds_nothing() {
     let doc = with_retired(None);
-    let b = dn_box(&doc);
-    assert_eq!(
-        shape(notes_of(&b)),
-        vec![
-            ("lone", vec!["lone"]),
-            ("na", vec!["na#1", "na#2"]),
-            ("nb", vec!["nb#1"]),
-            ("nc", vec!["nc#1", "nc#2"]),
-        ]
-    );
-    assert!(b.retired.is_empty());
     assert_eq!(retired_unread(&doc), Some(RETIRED_UNREAD));
     assert_eq!(
         RETIRED_UNREAD,
@@ -252,29 +181,9 @@ fn gmret_unread_folds_nothing() {
     assert_eq!(retired_unread(&with_retired(Some(&["zz"]))), None);
 }
 
-/// (7) DOM の字: 圧縮の面は理由を箱ごとの関数に渡し、design-note の帯の箱にだけ段を置く。設計の木は設計の木の時だけ理由を出し、
-/// 廃止の段の頭に状態の字と数を出す。
+/// (7) DOM の字: 設計の木は設計の木の時だけ理由を出し、廃止の段の頭に状態の字と数を出す（圧縮の面の段は行 m-map-compact で消した）。
 #[test]
 fn gmret_dom_wiring() {
-    let dom = dom_part("src/mapview/compact.rs");
-    for w in [
-        "let reason = retired_unread(doc);",
-        ".map(|b| box_view(b, mode, reason))",
-        "(band == Band::DesignNote).then(|| shelf_view(b.retired, reason, band, mode))",
-        "const RETIRED_FOLD: &str = \"map:retired\";",
-        "let reason = reason.map(unmeasured);",
-        "fold(RETIRED_FOLD.to_string(), || false)",
-        "<details class=\"fold\" prop:open=open on:toggle=toggle>",
-        "<span class=\"mono\">{RETIRED}</span>",
-        "<span class=\"num muted\">{n}</span>",
-        "cards_view(Cards::Notes(retired), band, mode)",
-    ] {
-        assert!(dom.contains(w), "compact.rs の mod dom に {w} が無い");
-    }
-    let cards = dom.find("{cards_view(b.cards, band, mode)}").expect("箱の札");
-    let shelf = dom.find("{shelf}").expect("段の置き場");
-    assert!(cards < shelf, "段の置き場は札の後");
-
     let dom = dom_part("src/mapview/tree.rs");
     for w in [
         "(tree == Tree::Design)",
@@ -528,7 +437,7 @@ fn gmret_names_clean() {
             rest.split('(').next().expect("fn の名")
         })
         .collect();
-    assert_eq!(names.len(), 5, "{names:?}");
+    assert_eq!(names.len(), 4, "{names:?}");
     for name in names {
         let rest = name
             .strip_prefix("gmret_")

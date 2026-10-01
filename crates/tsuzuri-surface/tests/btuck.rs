@@ -10,8 +10,7 @@ use tsuzuri_surface::mapview::band::{band_of, kind_key};
 use tsuzuri_surface::mapview::encode;
 use tsuzuri_surface::mapview::graph::fold::{OpenList, mark_svg, refused_line};
 use tsuzuri_surface::mapview::graph::{PATH, Pos, chain, layout, node_svg, svg};
-use tsuzuri_surface::mapview::list::NO_GIST;
-use tsuzuri_surface::widgets::nodecard::{card_for, group_card, view_cards};
+use tsuzuri_surface::widgets::nodecard::{NO_GIST, card_for, group_card, view_cards};
 use tsuzuri_surface::vocab::{label, vocab};
 
 fn crate_dir() -> PathBuf {
