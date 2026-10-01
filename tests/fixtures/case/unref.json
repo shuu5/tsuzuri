@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-01T12:00:00Z",
+  "scope": "full",
+  "full_at": "2026-10-01T12:00:00Z",
+  "interval_s": 15,
+  "closed_window_h": 72,
+  "unmeasured": [],
+  "owned": { "count": 0, "unset": 0, "unknown": 0, "oldest": null },
+  "parts": [
+    { "part": "memo", "id": "t3-hub.920", "phase": "memo-actionable", "turn": "seat", "since": "2026-10-01T10:00:00Z", "reason": "trigger-met", "closed": false, "overdue": false, "links": {}, "due": null },
+    { "part": "memo", "id": "t3-hub.921", "phase": "misfit", "turn": "seat", "since": "2026-10-01T09:00:00Z", "reason": "close-unresolved", "closed": true, "overdue": null, "links": {}, "due": null },
+    { "part": "memo", "id": "t3-hub.922", "phase": "memo-waiting", "turn": "none", "since": "2026-09-30T08:00:00Z", "reason": null, "closed": false, "overdue": null, "links": {}, "due": "2026-10-03T00:00:00Z" },
+    { "part": "commit", "id": "0123456789abcdef0123456789abcdef01234567", "phase": "misfit", "turn": "seat", "since": "2026-10-01T11:00:00Z", "reason": "commit-no-trailer", "closed": false, "overdue": false, "links": {} },
+    { "part": "question", "id": "t3-hub.930", "phase": "ruling-unreflected", "turn": "seat", "since": "2026-10-01T08:00:00Z", "reason": null, "closed": true, "overdue": false, "links": { "rulings": ["t3-hub.930:20261001T0800Z-1"] } },
+    { "part": "question", "id": "t3-hub.931", "phase": "question-open", "turn": "user", "since": "2026-10-01T07:00:00Z", "reason": null, "closed": false, "overdue": null, "links": {} },
+    { "part": "question", "id": "t3-hub.932", "phase": "question-closed", "turn": "none", "since": "2026-10-01T06:00:00Z", "reason": null, "closed": true, "overdue": null, "links": {} },
+    { "part": "utterance", "id": "2026-10-01T11:22:33.456Z", "phase": "utterance-open", "turn": "seat", "since": "2026-10-01T11:22:33Z", "reason": null, "closed": false, "overdue": false, "links": {}, "session": "s-1", "channel": "chat" },
+    { "part": "utterance", "id": "2026-10-01T11:30:00.000Z", "phase": "utterance-sorted", "turn": "none", "since": "2026-10-01T11:30:00Z", "reason": null, "closed": false, "overdue": null, "links": { "destination": [{ "to": "memo", "id": "t3-hub.920" }] }, "session": "s-1", "channel": "chat" },
+    { "part": "contract", "id": "t3-hub.940", "phase": "contract-refused", "turn": "seat", "since": "2026-10-01T05:00:00Z", "reason": "teeth-outside-write-set", "closed": false, "overdue": null, "links": {}, "pointer": null }
+  ]
+}

@@ -94,7 +94,7 @@ fn hacols_unref_partial() {
         u,
         Unref {
             count: 3,
-            unknown: vec!["ruling", "request"],
+            unknown: vec!["ruling", "utterance"],
         }
     );
     let screen = Screen::initial();
@@ -112,10 +112,10 @@ fn hacols_unref_partial() {
     none.unreflected_unknown = vec![
         UnreflectedKind::Memo,
         UnreflectedKind::Ruling,
-        UnreflectedKind::Request,
+        UnreflectedKind::Utterance,
     ];
     assert_eq!(unref_count(&none), panel(&none, &screen, doc.at).unref);
-    assert_eq!(unref_count(&none).unknown, vec!["memo", "ruling", "request"]);
+    assert_eq!(unref_count(&none).unknown, vec!["memo", "ruling", "utterance"]);
 
     assert_eq!(unref_of(&doc.projects[0]), Some(u.clone()));
     assert_eq!(unref_of(&doc.projects[1]), None);

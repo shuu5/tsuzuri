@@ -13,7 +13,7 @@ use tsuzuri_contract::graph::NodeKind;
 use crate::graph::build::{bead_kind, read_ledger};
 
 pub use facts::facts;
-pub use stats::{JudgeInput, THRESHOLDS, Thresholds, judge, judge_of, stats};
+pub use stats::{JudgeInput, THRESHOLDS, Thresholds, judge, judge_of, stats, with_unreflected};
 pub use unreflected::{Unreflected, UnreflectedItem, unreflected};
 
 /// 1 日の秒。

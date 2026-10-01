@@ -51,7 +51,7 @@ fn unref(count: u32, unknown: &[&'static str]) -> Unref {
 fn udash_text_and_partial() {
     assert_eq!(NONE, "―");
     assert_eq!(NONE, NONE_MARK, "account board の表の字と同じ");
-    let all = ["memo", "ruling", "request"];
+    let all = ["memo", "ruling", "utterance"];
     assert_eq!(all.len(), UnreflectedKind::ALL.len());
     for count in [0, 4] {
         let u = unref(count, &all);
@@ -59,8 +59,8 @@ fn udash_text_and_partial() {
         assert!(!u.partial(), "3 種とも分からない count {count}");
     }
     for (count, unknown, text, partial) in [
-        (0, &["ruling", "request"][..], "0", true),
-        (3, &["ruling", "request"][..], "3", true),
+        (0, &["ruling", "utterance"][..], "0", true),
+        (3, &["ruling", "utterance"][..], "3", true),
         (2, &["memo"][..], "2", true),
         (0, &[][..], "0", false),
         (41, &[][..], "41", false),
@@ -74,10 +74,10 @@ fn udash_text_and_partial() {
 /// (2) 電文から組んだ中身の text は、上段の箱と未反映の段の見出しのどちらも Unref の text の字。
 #[test]
 fn udash_metrics_text() {
-    use UnreflectedKind::{Memo, Request, Ruling};
+    use UnreflectedKind::{Memo, Ruling, Utterance};
     for (count, unknown, want) in [
-        (0, &[Memo, Ruling, Request][..], "―"),
-        (3, &[Ruling, Request][..], "3"),
+        (0, &[Memo, Ruling, Utterance][..], "―"),
+        (3, &[Ruling, Utterance][..], "3"),
         (41, &[][..], "41"),
     ] {
         let m = metrics(count, unknown);

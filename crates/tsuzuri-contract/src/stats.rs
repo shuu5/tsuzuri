@@ -52,22 +52,23 @@ pub struct MemoStats {
     pub created_p50: Option<EpochSecs>,
 }
 
-/// 未反映の種類（閉じた 3）。
+/// 未反映の種類（閉じた 3・器の局面の出力が席の手番とする 3 つ・要望は発端を持つ memo で種類にしない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum UnreflectedKind {
+    /// 局面が処置の待ち（memo-actionable）か形の崩れ（misfit）の memo。
     Memo,
-    /// 処分の宣言の無い裁定。
+    /// 局面が裁定の反映待ち（ruling-unreflected）の問い。
     Ruling,
-    /// 反映されていない要望。
-    Request,
+    /// 局面が未仕分け（utterance-open）の発話。
+    Utterance,
 }
 
 impl UnreflectedKind {
     pub const ALL: [UnreflectedKind; 3] = [
         UnreflectedKind::Memo,
         UnreflectedKind::Ruling,
-        UnreflectedKind::Request,
+        UnreflectedKind::Utterance,
     ];
 }
 
@@ -78,7 +79,7 @@ pub struct UnreflectedCount {
     pub count: u32,
 }
 
-/// 未反映の 1 件（bead の id の字・題・作った時刻・作った時刻が読めなければ None）。
+/// 未反映の 1 件（部品の id の字〔bead id か発話の ts〕・題〔台帳に無ければ空〕・作った時刻・読めなければ None）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnreflectedRow {
     pub id: String,
@@ -86,12 +87,14 @@ pub struct UnreflectedRow {
     pub created: Option<EpochSecs>,
 }
 
-/// 未反映の一覧（種類ごとに、読めた一覧か「まだ分からない」・便 e-view）。
+/// 未反映の一覧（種類ごとに、読めた一覧か「まだ分からない」・便 e-view・行 c-unref-lc）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UnreflectedList {
     pub memos: Reading<Vec<UnreflectedRow>>,
     pub rulings: Reading<Vec<UnreflectedRow>>,
-    pub requests: Reading<Vec<UnreflectedRow>>,
+    pub utterances: Reading<Vec<UnreflectedRow>>,
+    /// 局面の出力の古さの印の種類の字（印が無ければ空・空でなければ一覧は古い）。
+    pub stale: Vec<String>,
 }
 
 /// 台帳の指標（時点・判定・主指標・日ごとの 14 本・epic の進み・memo・未反映）。
@@ -114,7 +117,7 @@ pub struct LedgerStats {
     pub days: Vec<DayCount>,
     pub epics: Vec<EpicProgress>,
     pub memo: MemoStats,
-    /// 未反映の数（読めた種類の数の和・今は memo の数）。
+    /// 未反映の数（読めた種類の数の和）。
     pub unreflected: u32,
     /// 未反映の読めた種類ごとの件数（`UnreflectedKind::ALL` の順・読めない種類は持たない・件数の和が `unreflected`）。
     pub unreflected_kinds: Vec<UnreflectedCount>,

@@ -215,7 +215,8 @@ fn wire_list(u: &Unreflected) -> UnreflectedList {
     UnreflectedList {
         memos: rows(&u.memos),
         rulings: rows(&u.rulings),
-        requests: rows(&u.requests),
+        utterances: rows(&u.utterances),
+        stale: u.stale.clone(),
     }
 }
 
@@ -303,18 +304,20 @@ fn server_view_unreflected_matches_core() {
     let place = Place::new("unreflected", Bd::Ok);
     let addr = place.serve();
     let ledger = read_fixture(LEDGER);
-    let (body, from, to) = get(addr, "/api/unreflected");
+    let (body, _, _) = get(addr, "/api/unreflected");
     let list: UnreflectedList = decode!(body);
-    // 局面の出力を読む行 c-unref-lc までは、台帳が読めても 3 種とも「まだ分からない」。
+    // state dir の局面の出力が無いので、台帳が読めても 3 種とも「まだ分からない」（行 c-unref-lc）。
     assert_eq!(
-        (list.memos, list.rulings, list.requests),
+        (list.memos, list.rulings, list.utterances),
         (Reading::Unknown, Reading::Unknown, Reading::Unknown),
         "{body}"
     );
-    assert!(
-        (from..=to)
-            .any(|t| encoded!(wire_list(&tsuzuri_core::ledger::unreflected(&ledger, t))) == body),
-        "未反映の電文の字が中核の値と違う（{from}..={to}）: {body}"
+    assert_eq!(
+        encoded!(wire_list(&tsuzuri_core::ledger::unreflected(
+            &ledger, "", None
+        ))),
+        body,
+        "未反映の電文の字が中核の値と違う"
     );
     assert_eq!(place.folio_calls(), 0, "未反映の口は設計の道具を撃たない");
 }
@@ -326,7 +329,7 @@ fn server_view_bd_fails_unknown() {
     let (body, _, _) = get(addr, "/api/unreflected");
     let list: UnreflectedList = decode!(body);
     assert_eq!(
-        (list.memos, list.rulings, list.requests),
+        (list.memos, list.rulings, list.utterances),
         (Reading::Unknown, Reading::Unknown, Reading::Unknown),
         "{body}"
     );

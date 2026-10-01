@@ -239,7 +239,7 @@ fn ledgerblock_unreflected_copies_wire() {
     let screen = known_screen();
     let m = filled("filled", &screen);
     assert_eq!(m.unref.count, 3);
-    assert_eq!(m.unref.unknown, vec!["ruling", "request"]);
+    assert_eq!(m.unref.unknown, vec!["ruling", "utterance"]);
     assert_eq!(m.text(Part::UnrefCount), Some("3".to_string()));
     // 台帳の一覧が在っても無くても同じ（面の側で数え直さない）。
     assert_eq!(filled("filled", &Screen::initial()).unref, m.unref);
@@ -256,7 +256,7 @@ fn ledgerblock_unreflected_copies_wire() {
 
     let e = filled("empty", &screen);
     assert_eq!(e.unref.count, 0);
-    assert_eq!(e.unref.unknown, vec!["memo", "ruling", "request"]);
+    assert_eq!(e.unref.unknown, vec!["memo", "ruling", "utterance"]);
     assert_eq!(
         UNREF_KINDS.map(|(k, _)| k),
         UnreflectedKind::ALL,

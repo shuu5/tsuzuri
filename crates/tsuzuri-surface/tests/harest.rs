@@ -127,7 +127,7 @@ fn harest_unref_kinds() {
         unref_break(&a),
         UnrefKinds {
             known: vec![("memo".to_string(), 3)],
-            unknown: vec!["裁定".to_string(), "要望".to_string()],
+            unknown: vec!["裁定".to_string(), "発話".to_string()],
         }
     );
 
@@ -142,7 +142,7 @@ fn harest_unref_kinds() {
             count: 2,
         },
         UnreflectedCount {
-            kind: UnreflectedKind::Request,
+            kind: UnreflectedKind::Utterance,
             count: 1,
         },
     ];
@@ -151,7 +151,7 @@ fn harest_unref_kinds() {
     assert_eq!(
         unref_break(&mixed),
         UnrefKinds {
-            known: vec![("裁定".to_string(), 2), ("要望".to_string(), 1)],
+            known: vec![("裁定".to_string(), 2), ("発話".to_string(), 1)],
             unknown: vec![],
         }
     );
@@ -185,12 +185,12 @@ fn harest_unref_kinds() {
     }
 }
 
-/// (7) 種類の見出しは語の辞書の鍵 unref: と kind_name の字の label（memo は english・裁定と要望は rephrase）。
+/// (7) 種類の見出しは語の辞書の鍵 unref: と kind_name の字の label（memo は english・裁定と発話は rephrase）。
 #[test]
 fn harest_kind_labels() {
     assert_eq!(UNREF_KIND_KEY, "unref:");
     let got: Vec<String> = UnreflectedKind::ALL.into_iter().map(kind_label).collect();
-    assert_eq!(got, vec!["memo", "裁定", "要望"]);
+    assert_eq!(got, vec!["memo", "裁定", "発話"]);
 
     let en_at = SOURCE
         .find("\n \"english\": {")
@@ -206,7 +206,7 @@ fn harest_kind_labels() {
     for (kind, in_english) in [
         (UnreflectedKind::Memo, true),
         (UnreflectedKind::Ruling, false),
-        (UnreflectedKind::Request, false),
+        (UnreflectedKind::Utterance, false),
     ] {
         let key = format!("{UNREF_KIND_KEY}{}", kind_name(kind));
         let entry = format!("\"{key}\": {{");

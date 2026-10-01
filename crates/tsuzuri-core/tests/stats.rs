@@ -174,7 +174,7 @@ fn stats_unreadable_ledger_is_no_ledger() {
         let got = stats(text, 0);
         assert_eq!(got, Reading::Unknown, "{text:?}");
         assert_eq!(judge_of(&got), LedgerJudge::NoLedger);
-        let u = unreflected(text, 0);
+        let u = unreflected(text, "", None);
         assert_eq!(u.unknown(), UnreflectedKind::ALL.to_vec(), "{text:?}");
     }
     // 空の台帳は読めた 0 件（台帳なしでない）。

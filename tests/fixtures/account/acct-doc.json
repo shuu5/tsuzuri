@@ -124,7 +124,7 @@
         "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "created_p50": 1790035200},
         "unreflected": 3,
         "unreflected_kinds": [{"kind": "memo", "count": 3}],
-        "unreflected_unknown": ["ruling", "request"]
+        "unreflected_unknown": ["ruling", "utterance"]
       }},
       "next": {"known": {
         "checks": [

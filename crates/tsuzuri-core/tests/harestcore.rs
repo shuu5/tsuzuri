@@ -71,7 +71,7 @@ fn harest_kinds_from_one_list() {
             UnreflectedKind::ALL.to_vec(),
             "{name}"
         );
-        assert_eq!(unreflected(text, now).memos, Reading::Unknown, "{name}");
+        assert_eq!(unreflected(text, "", None).memos, Reading::Unknown, "{name}");
     }
 
     assert_eq!(stats("{", 1_790_553_600), Reading::Unknown);

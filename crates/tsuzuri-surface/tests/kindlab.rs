@@ -1,5 +1,5 @@
 //! 行 g-kind-label の歯（要件 FR13 と NFR1）: 未反映の種類の見出し（語の辞書の鍵 unref: と種類の名の label）は
-//! 面の ledger の module の 1 か所に在り、account board と project board が同じ語（memo・裁定・要望）で出す。
+//! 面の ledger の module の 1 か所に在り、account board と project board が同じ語（memo・裁定・発話）で出す。
 //! project board の DOM は wasm の target のときだけなので、ledger.rs の字で見る。
 #![cfg(test)]
 
@@ -55,12 +55,12 @@ fn rs_files(dir: &Path, out: &mut Vec<(String, String)>) {
     }
 }
 
-/// (1) 鍵の接頭と 2 つの見出しの関数は面の ledger の module の 1 か所に在り、3 種の見出しは memo・裁定・要望。
+/// (1) 鍵の接頭と 2 つの見出しの関数は面の ledger の module の 1 か所に在り、3 種の見出しは memo・裁定・発話。
 #[test]
 fn kindlab_one_place() {
     assert_eq!(UNREF_KIND_KEY, "unref:");
     let got: Vec<String> = UnreflectedKind::ALL.into_iter().map(kind_label).collect();
-    assert_eq!(got, vec!["memo", "裁定", "要望"]);
+    assert_eq!(got, vec!["memo", "裁定", "発話"]);
     for kind in UnreflectedKind::ALL {
         assert_eq!(name_label(kind_name(kind)), kind_label(kind), "{kind:?}");
     }
@@ -110,7 +110,7 @@ fn kindlab_boards_same_words() {
     let s = stats("filled");
     let acct = unref_break(&s);
     assert_eq!(acct.known, vec![("memo".to_string(), 3)]);
-    assert_eq!(acct.unknown, vec!["裁定", "要望"]);
+    assert_eq!(acct.unknown, vec!["裁定", "発話"]);
     let proj: Vec<String> = panel(&s, &screen, NOW)
         .unref
         .unknown
@@ -121,7 +121,7 @@ fn kindlab_boards_same_words() {
 
     let e = stats("empty");
     let acct = unref_break(&e);
-    assert_eq!(acct.unknown, vec!["memo", "裁定", "要望"]);
+    assert_eq!(acct.unknown, vec!["memo", "裁定", "発話"]);
     let proj: Vec<String> = panel(&e, &screen, NOW)
         .unref
         .unknown
@@ -137,12 +137,13 @@ fn kindlab_boards_same_words() {
         .collect();
     all.unreflected_unknown = Vec::new();
     let heads: Vec<String> = unref_break(&all).known.into_iter().map(|(h, _)| h).collect();
-    assert_eq!(heads, vec!["memo", "裁定", "要望"]);
+    assert_eq!(heads, vec!["memo", "裁定", "発話"]);
 
     let three = UnreflectedList {
         memos: Reading::Known(vec![row("m-1")]),
         rulings: Reading::Known(vec![row("r-1")]),
-        requests: Reading::Known(vec![row("q-1")]),
+        utterances: Reading::Known(vec![row("q-1")]),
+        stale: vec![],
     };
     let rows: Vec<String> = filled(&three)
         .rows
@@ -154,14 +155,15 @@ fn kindlab_boards_same_words() {
     let memo_only = UnreflectedList {
         memos: Reading::Known(vec![row("m-1")]),
         rulings: Reading::Unknown,
-        requests: Reading::Unknown,
+        utterances: Reading::Unknown,
+        stale: vec![],
     };
     let unknown: Vec<String> = filled(&memo_only)
         .unknown
         .iter()
         .map(|k| name_label(k))
         .collect();
-    assert_eq!(unknown, vec!["裁定", "要望"]);
+    assert_eq!(unknown, vec!["裁定", "発話"]);
 }
 
 /// `start` から末尾までの字。

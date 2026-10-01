@@ -109,7 +109,8 @@ fn abst_ages_from_created() {
             row("m-3", None),
         ]),
         rulings: Reading::Known(vec![]),
-        requests: Reading::Known(vec![]),
+        utterances: Reading::Known(vec![]),
+        stale: vec![],
     };
     let fetched = Fetched::Body(wire::encode(&list).expect("電文"));
     let Body::Filled(l) = unref_list(&fetched, NOW) else {

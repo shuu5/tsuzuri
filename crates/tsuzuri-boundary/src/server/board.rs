@@ -1,12 +1,12 @@
 //! 読む側の口（便 e-read）: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
 //! - GET /api/pipeline — pipeline の板（PipelineBoard・札は集めた今の台帳の字から組み、形の崩れは見張りの読みの周の
 //!   台帳の字と器の doctor の台帳の形の行の組から写す・行 c-pipe-misfit・行 c-misfit-pair）
-//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats）
+//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から・行 c-unref-lc）
 //! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
 //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
 //! - GET /api/graph/view — 地図のグラフの眺め（GraphView・便 e-view）
 //! - GET /api/around — 節点の近傍（AroundDoc・便 e-view）
-//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・台帳だけを読む・便 e-view）
+//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む・行 c-unref-lc）
 //!
 //! 字は要求のたびに集める。台帳は bd の読み（`ledger::Source`）が返した字、設計の索引は設計の道具の
 //! 標準出力（`design::Design`）、走行は器の event log の file（`runs::Runs`）。読めない出所は空の字で渡し、
@@ -107,9 +107,21 @@ pub fn pipeline(
     board
 }
 
-/// 台帳の指標（台帳が読めなければ「まだ分からない」）。
-pub fn metrics(texts: &Texts, now: EpochSecs) -> Reading<LedgerStats> {
-    tsuzuri_core::ledger::stats(&texts.ledger, now)
+/// 台帳の指標（台帳が読めなければ「まだ分からない」・未反映の 3 欄は局面の出力の字 `json` と古さの印の字
+/// `stale` から読んだ一覧で数え直す）。
+pub fn metrics(
+    texts: &Texts,
+    json: &str,
+    stale: Option<&str>,
+    now: EpochSecs,
+) -> Reading<LedgerStats> {
+    match tsuzuri_core::ledger::stats(&texts.ledger, now) {
+        Reading::Known(stats) => Reading::Known(tsuzuri_core::ledger::with_unreflected(
+            stats,
+            &tsuzuri_core::ledger::unreflected(&texts.ledger, json, stale),
+        )),
+        Reading::Unknown => Reading::Unknown,
+    }
 }
 
 /// 次の一手。
@@ -198,9 +210,10 @@ pub fn around(texts: &Texts, center: &str, steps: u8, fold: Fold) -> Option<Arou
     graph::around(&built(texts), center, steps, fold)
 }
 
-/// 未反映の一覧（台帳が読めなければ 3 つとも「まだ分からない」・便 e-view）。
-pub fn unreflected(texts: &Texts, now: EpochSecs) -> UnreflectedList {
-    list(&tsuzuri_core::ledger::unreflected(&texts.ledger, now))
+/// 未反映の一覧（局面の出力の字 `json` が無いか読めないか、古さの印の字 `stale` が在って読めないか、出力の
+/// unmeasured の欄が無いか形が違えば 3 つとも「まだ分からない」・題は台帳の字から引く・行 c-unref-lc）。
+pub fn unreflected(texts: &Texts, json: &str, stale: Option<&str>) -> UnreflectedList {
+    list(&tsuzuri_core::ledger::unreflected(&texts.ledger, json, stale))
 }
 
 /// 中核の crate の未反映の一覧を電文に写す。
@@ -221,7 +234,8 @@ pub fn list(u: &Unreflected) -> UnreflectedList {
     UnreflectedList {
         memos: rows(&u.memos),
         rulings: rows(&u.rulings),
-        requests: rows(&u.requests),
+        utterances: rows(&u.utterances),
+        stale: u.stale.clone(),
     }
 }
 

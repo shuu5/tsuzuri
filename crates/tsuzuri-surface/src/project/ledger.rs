@@ -318,7 +318,7 @@ pub fn days_since(at: EpochSecs, now: EpochSecs) -> f64 {
 pub const UNREF_KINDS: [(UnreflectedKind, &str); 3] = [
     (UnreflectedKind::Memo, "memo"),
     (UnreflectedKind::Ruling, "ruling"),
-    (UnreflectedKind::Request, "request"),
+    (UnreflectedKind::Utterance, "utterance"),
 ];
 
 /// 未反映の種類の名（表から引く）。
@@ -796,7 +796,7 @@ pub const UNREF_EMPTY: &str = "未反映のものは無い";
 pub const UNREF_NEXT: [(UnreflectedKind, &str); 3] = [
     (UnreflectedKind::Memo, "nx_promote"),
     (UnreflectedKind::Ruling, "nx_declare"),
-    (UnreflectedKind::Request, "nx_reflect"),
+    (UnreflectedKind::Utterance, "nx_sort"),
 ];
 
 /// 未反映の一覧の 1 行（id・題・種類の名・年齢の字・次の 1 手の語の鍵）。
@@ -855,7 +855,7 @@ pub fn unref_list(fetched: &Fetched, now: EpochSecs) -> Body<UnrefList> {
         let reading = match kind {
             UnreflectedKind::Memo => &list.memos,
             UnreflectedKind::Ruling => &list.rulings,
-            UnreflectedKind::Request => &list.requests,
+            UnreflectedKind::Utterance => &list.utterances,
         };
         match reading {
             Reading::Known(items) => rows.extend(items.iter().map(|r| unref_row(kind, r, now))),

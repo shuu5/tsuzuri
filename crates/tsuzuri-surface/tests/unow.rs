@@ -57,7 +57,8 @@ fn unow_list_reason() {
     let all_unknown = UnreflectedList {
         memos: Reading::Unknown,
         rulings: Reading::Unknown,
-        requests: Reading::Unknown,
+        utterances: Reading::Unknown,
+        stale: vec![],
     };
     let fetched = Fetched::Body(wire::encode(&all_unknown).expect("電文"));
     assert_eq!(unref_list(&fetched, fixture().at), Body::Unmeasured(UNREF_UNKNOWN));

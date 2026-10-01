@@ -73,6 +73,6 @@
     "memo": {"open": 3, "awaiting_promotion": 2, "closed_7d": 1, "created_p50": 1789646400},
     "unreflected": 0,
     "unreflected_kinds": [],
-    "unreflected_unknown": ["memo", "ruling", "request"]
+    "unreflected_unknown": ["memo", "ruling", "utterance"]
   }
 }

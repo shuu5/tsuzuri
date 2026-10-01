@@ -34,7 +34,7 @@
     "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "created_p50": 1791383040},
     "unreflected": 3,
     "unreflected_kinds": [{"kind": "memo", "count": 3}],
-    "unreflected_unknown": ["ruling", "request"]
+    "unreflected_unknown": ["ruling", "utterance"]
   },
   "empty": {
     "at": 1791676800,
@@ -68,6 +68,6 @@
     "memo": {"open": 0, "awaiting_promotion": 0, "closed_7d": 0, "created_p50": null},
     "unreflected": 0,
     "unreflected_kinds": [],
-    "unreflected_unknown": ["memo", "ruling", "request"]
+    "unreflected_unknown": ["memo", "ruling", "utterance"]
   }
 }

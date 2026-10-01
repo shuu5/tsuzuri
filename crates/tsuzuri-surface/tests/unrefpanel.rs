@@ -61,7 +61,8 @@ fn set_a() -> UnreflectedList {
             row("t3-hub.10", "[memo] 時刻の無い控え", None),
         ]),
         rulings: Reading::Unknown,
-        requests: Reading::Unknown,
+        utterances: Reading::Unknown,
+        stale: vec![],
     }
 }
 
@@ -74,7 +75,8 @@ const SET_A_TEXT: &str = r#"{
     ]
   },
   "rulings": "unknown",
-  "requests": "unknown"
+  "utterances": "unknown",
+  "stale": []
 }"#;
 
 /// (2) 組 A と組 C: 行は種類の順に電文の順のまま、年齢の字と次の 1 手の鍵を添える。
@@ -88,13 +90,14 @@ fn urpanel_rows_from_wire() {
         let l = filled(&fetched);
         assert_eq!(l.rows.iter().map(cells).collect::<Vec<_>>(), want_a);
         assert_eq!(l.more, None);
-        assert_eq!(l.unknown, vec!["ruling", "request"]);
+        assert_eq!(l.unknown, vec!["ruling", "utterance"]);
     }
     // 組 C（3 種が Known の 1 行ずつ）。
     let c = UnreflectedList {
         memos: Reading::Known(vec![row("m-1", "memo の 1", Some(3600))]),
         rulings: Reading::Known(vec![row("r-1", "裁定の 1", Some(950_400))]),
-        requests: Reading::Known(vec![row("q-1", "要望の 1", None)]),
+        utterances: Reading::Known(vec![row("q-1", "発話の 1", None)]),
+        stale: vec![],
     };
     let l = filled(&body(&c));
     assert_eq!(
@@ -102,7 +105,7 @@ fn urpanel_rows_from_wire() {
         vec![
             ("m-1", "memo の 1", "memo", "1h", "nx_promote"),
             ("r-1", "裁定の 1", "ruling", "11d", "nx_declare"),
-            ("q-1", "要望の 1", "request", "―", "nx_reflect"),
+            ("q-1", "発話の 1", "utterance", "―", "nx_sort"),
         ]
     );
     assert_eq!(l.more, None);
@@ -118,7 +121,8 @@ fn urpanel_cut_at_twenty() {
     let b = UnreflectedList {
         memos: Reading::Known(memos),
         rulings: Reading::Known(vec![row("r-1", "裁定", None)]),
-        requests: Reading::Unknown,
+        utterances: Reading::Unknown,
+        stale: vec![],
     };
     let l = filled(&body(&b));
     assert_eq!(UNREF_MAX, 20);
@@ -129,7 +133,7 @@ fn urpanel_cut_at_twenty() {
         assert_eq!((r.kind, r.age.as_str(), r.next), ("memo", "1h", "nx_promote"));
     }
     assert_eq!(l.more, Some(6));
-    assert_eq!(l.unknown, vec!["request"]);
+    assert_eq!(l.unknown, vec!["utterance"]);
     // ちょうど 20 行なら more は無い。
     let twenty = UnreflectedList {
         memos: Reading::Known(
@@ -138,7 +142,8 @@ fn urpanel_cut_at_twenty() {
                 .collect(),
         ),
         rulings: Reading::Known(vec![]),
-        requests: Reading::Known(vec![]),
+        utterances: Reading::Known(vec![]),
+        stale: vec![],
     };
     let l = filled(&body(&twenty));
     assert_eq!((l.rows.len(), l.more), (20, None));
@@ -150,7 +155,8 @@ fn urpanel_unknown_kinds_and_reasons() {
     let all_unknown = UnreflectedList {
         memos: Reading::Unknown,
         rulings: Reading::Unknown,
-        requests: Reading::Unknown,
+        utterances: Reading::Unknown,
+        stale: vec![],
     };
     assert_eq!(
         unref_list(&body(&all_unknown), NOW),
@@ -159,7 +165,8 @@ fn urpanel_unknown_kinds_and_reasons() {
     let empty = UnreflectedList {
         memos: Reading::Known(vec![]),
         rulings: Reading::Known(vec![]),
-        requests: Reading::Known(vec![]),
+        utterances: Reading::Known(vec![]),
+        stale: vec![],
     };
     assert_eq!(unref_list(&body(&empty), NOW), Body::Empty(UNREF_EMPTY));
     for (fetched, reason) in [
@@ -227,7 +234,7 @@ fn urpanel_keys_and_classes() {
         "u_next",
         "nx_promote",
         "nx_declare",
-        "nx_reflect",
+        "nx_sort",
         "col_title",
         "gap_unknown",
     ] {

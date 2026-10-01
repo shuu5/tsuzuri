@@ -280,6 +280,14 @@ fn unreflected_counts(list: &Unreflected) -> Vec<UnreflectedCount> {
         .collect()
 }
 
+/// 指標の未反映の 3 欄を一覧から数え直す（種類ごとの件数を 1 度だけ数え、数はその和・行 c-unref-lc）。
+pub fn with_unreflected(mut stats: LedgerStats, list: &Unreflected) -> LedgerStats {
+    stats.unreflected_kinds = unreflected_counts(list);
+    stats.unreflected = stats.unreflected_kinds.iter().map(|k| k.count).sum();
+    stats.unreflected_unknown = list.unknown();
+    stats
+}
+
 /// 読めた bead から指標を数える。今の時刻より後に作られた bead は数えない（見本と同じ）。
 /// 時点・日ごとの end・memo の作った時刻の中央値は今の時刻をそのまま持たない（年齢と経過は面が今から引く）。
 pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {

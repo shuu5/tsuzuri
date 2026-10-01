@@ -408,7 +408,7 @@ fn acctproj_wait_unref_dash_and_orch() {
     assert_eq!(rows[0].wait, Some(2));
     let u = rows[0].unref.as_ref().expect("proj-a の台帳は読める");
     assert_eq!(u.count, 3);
-    assert_eq!(u.unknown, vec!["ruling", "request"]);
+    assert_eq!(u.unknown, vec!["ruling", "utterance"]);
     for r in &rows[1..] {
         assert_eq!(r.wait, None, "{}", r.name);
         assert_eq!(r.unref, None, "{}", r.name);

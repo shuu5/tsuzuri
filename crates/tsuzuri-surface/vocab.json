@@ -1577,10 +1577,10 @@
    "plain": "design-intent に未反映の決定の数\n・ 処分の宣言が無い決定",
    "internal": "未反映の種類 ruling"
   },
-  "unref:request": {
-   "label": "要望",
-   "plain": "design-intent に未反映の要望の数\n・ 反映されていない要望",
-   "internal": "未反映の種類 request"
+  "unref:utterance": {
+   "label": "発話",
+   "plain": "席がまだ仕分けていない発話の数\n・ 器の局面 utterance-open",
+   "internal": "未反映の種類 utterance"
   },
   "nx_promote": {
    "label": "昇格",
@@ -1592,10 +1592,10 @@
    "plain": "あなたの決定の処分を宣言する\n・ どの question に答えたか\n・ どこに効くか",
    "internal": "answers の線を足す"
   },
-  "nx_reflect": {
-   "label": "反映",
-   "plain": "→ 要望を関わる所へ反映する",
-   "internal": "touches の先を更新"
+  "nx_sort": {
+   "label": "仕分け",
+   "plain": "→ 発話を memo か裁定か会話に仕分ける",
+   "internal": "仕分けの event か bind の結びを足す"
   },
   "u_kind": {
    "label": "種類",

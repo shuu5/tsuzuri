@@ -114,27 +114,32 @@ fn step_forms() -> Vec<Box<dyn Form>> {
             }],
         ),
         form("stats::UnreflectedRow", unreflected_rows()),
-        form(
-            "stats::UnreflectedList",
-            vec![
-                UnreflectedList {
-                    memos: Reading::Known(unreflected_rows()),
-                    rulings: Reading::Unknown,
-                    requests: Reading::Unknown,
-                },
-                UnreflectedList {
-                    memos: Reading::Known(vec![]),
-                    rulings: Reading::Known(vec![]),
-                    requests: Reading::Known(vec![]),
-                },
-                // 台帳が読めない。
-                UnreflectedList {
-                    memos: Reading::Unknown,
-                    rulings: Reading::Unknown,
-                    requests: Reading::Unknown,
-                },
-            ],
-        ),
+        form("stats::UnreflectedList", unreflected_lists()),
+    ]
+}
+
+fn unreflected_lists() -> Vec<UnreflectedList> {
+    vec![
+        // 古さの印の在る出力。
+        UnreflectedList {
+            memos: Reading::Known(unreflected_rows()),
+            rulings: Reading::Unknown,
+            utterances: Reading::Unknown,
+            stale: vec!["ledger-gate".to_string()],
+        },
+        UnreflectedList {
+            memos: Reading::Known(vec![]),
+            rulings: Reading::Known(vec![]),
+            utterances: Reading::Known(vec![]),
+            stale: vec![],
+        },
+        // 局面の出力が読めない。
+        UnreflectedList {
+            memos: Reading::Unknown,
+            rulings: Reading::Unknown,
+            utterances: Reading::Unknown,
+            stale: vec![],
+        },
     ]
 }
 
@@ -190,7 +195,7 @@ fn ledger_stats() -> LedgerStats {
             kind: UnreflectedKind::Memo,
             count: 3,
         }],
-        unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Request],
+        unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Utterance],
     }
 }
 
