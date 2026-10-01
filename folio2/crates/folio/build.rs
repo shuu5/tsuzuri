@@ -176,16 +176,21 @@ pub fn constitution_enums(text: &str) -> Result<String, String> {
         .map_err(|e| format!("schema.enums.{key}: {e}"))?;
         keys.push((key, ty));
     }
+    write_enums_table(&mut out, &keys);
+    Ok(out)
+}
+
+/// 鍵の名と NAMES の対の列 ENUMS を `out` へ書く（鍵の名と型の名の対は file の順）。
+fn write_enums_table(out: &mut String, keys: &[(&str, String)]) {
     // 鍵の名と NAMES の対の列（便 50 (d)・面の生成器が読んでいる置き場の値域と組み立てた版のずれを鍵ごとに見る）
     out.push_str(&format!(
         "/// 憲法の値域の鍵の名と NAMES の対（憲法の正本の schema.enums の鍵・file の順）。\npub const ENUMS: [(&str, &[&str]); {}] = [\n",
         keys.len()
     ));
-    for (key, ty) in &keys {
+    for (key, ty) in keys {
         out.push_str(&format!("    ({key:?}, &{ty}::NAMES),\n"));
     }
     out.push_str("];\n");
-    Ok(out)
 }
 
 /// 憲法の欄の一覧を導出する 5 部位（部位の名だけは導出の側が書く・一覧の中身は file から）。
@@ -243,20 +248,31 @@ pub fn constitution_fields(text: &str) -> Result<String, String> {
             }
             closed.push(name.as_str());
         }
-        let konst = part.to_ascii_uppercase();
-        let lits = |names: &[&str]| names.iter().map(|n| format!("{n:?}")).collect::<Vec<_>>().join(", ");
-        let required: Vec<&str> = required.iter().map(String::as_str).collect();
-        out.push_str(&format!(
-            "/// 憲法の {part} の必須の欄（schema.{part}.required・file の順）。\npub const {konst}_REQUIRED: [&str; {}] = [{}];\n",
-            required.len(),
-            lits(&required)
-        ));
-        out.push_str(&format!(
-            "/// 憲法の {part} の欄の閉じた一覧（schema.{part} の required と optional・file の順）。\npub const {konst}_FIELDS: [&str; {}] = [{}];\n",
-            closed.len(),
-            lits(&closed)
-        ));
+        write_part(&mut out, part, &required, &closed);
     }
+    write_fields_table(&mut out);
+    Ok(out)
+}
+
+/// 部位 1 つの必須の欄の列 `<部位>_REQUIRED` と閉じた列 `<部位>_FIELDS` を `out` へ書く。
+fn write_part(out: &mut String, part: &str, required: &[String], closed: &[&str]) {
+    let konst = part.to_ascii_uppercase();
+    let lits = |names: &[&str]| names.iter().map(|n| format!("{n:?}")).collect::<Vec<_>>().join(", ");
+    let required: Vec<&str> = required.iter().map(String::as_str).collect();
+    out.push_str(&format!(
+        "/// 憲法の {part} の必須の欄（schema.{part}.required・file の順）。\npub const {konst}_REQUIRED: [&str; {}] = [{}];\n",
+        required.len(),
+        lits(&required)
+    ));
+    out.push_str(&format!(
+        "/// 憲法の {part} の欄の閉じた一覧（schema.{part} の required と optional・file の順）。\npub const {konst}_FIELDS: [&str; {}] = [{}];\n",
+        closed.len(),
+        lits(closed)
+    ));
+}
+
+/// 部位の名と（required の列・閉じた列）の対の列 FIELDS を `out` へ書く（部位の順）。
+fn write_fields_table(out: &mut String) {
     out.push_str(&format!(
         "/// 憲法の部位の名と（required の列・閉じた列）の対（部位の順）。\npub const FIELDS: [(&str, &[&str], &[&str]); {}] = [\n",
         CONSTITUTION_PARTS.len()
@@ -268,7 +284,6 @@ pub fn constitution_fields(text: &str) -> Result<String, String> {
         ));
     }
     out.push_str("];\n");
-    Ok(out)
 }
 
 /// 憲法の鍵の名を型の名にする（「_」で割り、各片の先頭を大文字にして繋ぐ・retreat_kind は RetreatKind・tier は Tier）。
@@ -359,35 +374,21 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
             limits.push((name, key, n, konst));
         }
     }
+    catalog_source(root, parts, limits)
+}
 
+/// 部品目録の残りの一覧（図の型・棚の型・行内の様式・密度 profile・図の型の名札）を読み、部品と上限と合わせて Rust の source に組む。
+fn catalog_source(
+    root: &Yaml,
+    parts: Vec<(String, Vec<String>)>,
+    limits: Vec<(&str, &str, i64, String)>,
+) -> Result<String, String> {
     let figure_types = string_list(root, "figure_type_enum")?;
     let shelf_types = string_list(root, "shelf_type_enum")?;
     let style_props = string_list(root, "style_props_allowed")?;
     let profiles = string_list(root, "profile_enum")?;
 
-    // 図の型の名札（figure_body_classes.type_ids・file の順・鍵は figure_type_enum に在る）
-    let type_ids = root
-        .as_hash()
-        .and_then(|m| m.get(&Yaml::String("figure_body_classes".to_string())))
-        .and_then(Yaml::as_hash)
-        .and_then(|m| m.get(&Yaml::String("type_ids".to_string())))
-        .and_then(Yaml::as_hash)
-        .ok_or_else(|| "figure_body_classes.type_ids が表でない".to_string())?;
-    let mut labels: Vec<(&str, &str)> = Vec::with_capacity(type_ids.len());
-    for (kind, label) in type_ids.iter() {
-        let kind = kind
-            .as_str()
-            .ok_or_else(|| "figure_body_classes.type_ids の鍵が文字列でない".to_string())?;
-        if !figure_types.iter().any(|t| t == kind) {
-            return Err(format!(
-                "figure_body_classes.type_ids の鍵「{kind}」が figure_type_enum に無い"
-            ));
-        }
-        let label = label
-            .as_str()
-            .ok_or_else(|| format!("figure_body_classes.type_ids.{kind} が文字列でない"))?;
-        labels.push((kind, label));
-    }
+    let labels = figure_labels(root, &figure_types)?;
 
     let mut out = String::new();
     out.push_str("// 組み立て時に build.rs が部品目録（design-intent/preview/parts.json）から導出した。人は書かない。\n");
@@ -436,8 +437,45 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
         "/// 密度 profile の閉じた一覧（部品目録の profile_enum・目録の順）。\npub const PROFILES: &[&str] = &[{}];\n",
         lits.join(", ")
     ));
+    write_limits(&mut out, &limits, &labels);
+    Ok(out)
+}
+
+/// 図の型の名札（figure_body_classes.type_ids）を（型の字面・名札）の対の列にする。鍵が figure_type_enum に無い・値が文字列でない、は Err。
+fn figure_labels<'a>(
+    root: &'a Yaml,
+    figure_types: &[String],
+) -> Result<Vec<(&'a str, &'a str)>, String> {
+    // 図の型の名札（figure_body_classes.type_ids・file の順・鍵は figure_type_enum に在る）
+    let type_ids = root
+        .as_hash()
+        .and_then(|m| m.get(&Yaml::String("figure_body_classes".to_string())))
+        .and_then(Yaml::as_hash)
+        .and_then(|m| m.get(&Yaml::String("type_ids".to_string())))
+        .and_then(Yaml::as_hash)
+        .ok_or_else(|| "figure_body_classes.type_ids が表でない".to_string())?;
+    let mut labels: Vec<(&str, &str)> = Vec::with_capacity(type_ids.len());
+    for (kind, label) in type_ids.iter() {
+        let kind = kind
+            .as_str()
+            .ok_or_else(|| "figure_body_classes.type_ids の鍵が文字列でない".to_string())?;
+        if !figure_types.iter().any(|t| t == kind) {
+            return Err(format!(
+                "figure_body_classes.type_ids の鍵「{kind}」が figure_type_enum に無い"
+            ));
+        }
+        let label = label
+            .as_str()
+            .ok_or_else(|| format!("figure_body_classes.type_ids.{kind} が文字列でない"))?;
+        labels.push((kind, label));
+    }
+    Ok(labels)
+}
+
+/// 部品目録の上限の定数（部品ごとに 1 つ）と対の列 LIMITS、図の型の名札の対の列 FIGURE_TYPE_LABELS を `out` へ書く。
+fn write_limits(out: &mut String, limits: &[(&str, &str, i64, String)], labels: &[(&str, &str)]) {
     // 上限（便 52 (a) 1）: 部品ごとに定数 1 つずつ + （部品の名・欄の名・値）の対の列 LIMITS
-    for (name, key, n, konst) in &limits {
+    for (name, key, n, konst) in limits {
         out.push_str(&format!(
             "/// 部品目録の上限（components.{name}.{key}）。\npub const {konst}: usize = {n};\n"
         ));
@@ -446,7 +484,7 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
         "/// 部品目録の上限の（部品の名・欄の名・値）の対（鍵が max_ で始まる欄・目録の順・実行時の一致に使う）。\npub const LIMITS: [(&str, &str, usize); {}] = [\n",
         limits.len()
     ));
-    for (name, key, _, konst) in &limits {
+    for (name, key, _, konst) in limits {
         out.push_str(&format!("    ({name:?}, {key:?}, {konst}),\n"));
     }
     out.push_str("];\n");
@@ -455,11 +493,10 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
         "/// 図の型の名札（部品目録の figure_body_classes.type_ids・目録の順・型の字面と名札の対）。\npub const FIGURE_TYPE_LABELS: [(&str, &str); {}] = [\n",
         labels.len()
     ));
-    for (kind, label) in &labels {
+    for (kind, label) in labels {
         out.push_str(&format!("    ({kind:?}, {label:?}),\n"));
     }
     out.push_str("];\n");
-    Ok(out)
 }
 
 fn refs(v: &[String]) -> Vec<&str> {

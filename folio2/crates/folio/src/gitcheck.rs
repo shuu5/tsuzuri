@@ -288,6 +288,16 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
         );
         return None;
     }
+    check_head(top, anch, present, report)
+}
+
+/// HEAD が在り・浅い写しで anchor が 0 本でなく・anchors/ が ignore されていないかを見て、履歴の読みへ進む。
+fn check_head(
+    top: PathBuf,
+    anch: PathBuf,
+    present: BTreeSet<String>,
+    report: &mut Report,
+) -> Option<Tracked> {
     match git(&top, &["rev-parse", "--verify", "-q", "HEAD"]) {
         Some(o) if o.ok() => {}
         Some(_) => {
@@ -327,6 +337,17 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
             );
         }
     }
+    read_log(top, anch, present, rel, report)
+}
+
+/// `ls-tree`・`log`・`rev-list` を撃って、履歴の読みと突き合わせへ進む。
+fn read_log(
+    top: PathBuf,
+    anch: PathBuf,
+    present: BTreeSet<String>,
+    rel: String,
+    report: &mut Report,
+) -> Option<Tracked> {
     let (Some(ls), Some(lg), Some(side)) = (
         git(&top, &["ls-tree", "-r", "--name-only", "HEAD", "--", &rel]),
         // 作業の一時置き場（refs/stash）は数えない・取り込みの commit で本流の側の親を落とさない（--full-history・ADR-34）
@@ -366,6 +387,25 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
     }
     let tracked: BTreeSet<String> = ls.text().split_whitespace().map(base_name).collect();
     let aside = aside(&side.text());
+    let (ever, hist) = read_history(&top, &lg, &aside, report)?;
+    let seen = Tracked {
+        tracked,
+        ever,
+        present,
+    };
+    check_anchors(seen, hist, &anch, report)
+}
+
+/// anchor 名ごとの履歴の本文（commit の頭 7 字と本文の列）。
+type History = BTreeMap<String, Vec<(String, Vec<u8>)>>;
+
+/// `log` の行を歩いて、履歴に在った anchor の名（削除を除く）と、追加・変更された anchor の本文を集める。
+fn read_history(
+    top: &Path,
+    lg: &Out,
+    aside: &BTreeSet<String>,
+    report: &mut Report,
+) -> Option<(BTreeSet<String>, History)> {
     let mut ever: BTreeSet<String> = BTreeSet::new();
     // anchor 名 → [(commit の頭 7 字, 本文)]（HEAD の祖先と根の無い枝の履歴で追加・変更された anchor）
     let mut hist: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
@@ -389,7 +429,7 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
         }
         if "AMRC".contains(st) && name.starts_with("constitution-") {
             let spec = format!("{cm}:{path}");
-            let Some(show) = git(&top, &["show", &spec]) else {
+            let Some(show) = git(top, &["show", &spec]) else {
                 report.pending(NO_GIT);
                 return None;
             };
@@ -400,6 +440,21 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
             }
         }
     }
+    Some((ever, hist))
+}
+
+/// 追跡の漏れ・履歴に在って消えた anchor・履歴の同じ形式の anchor との中身の違いを違反にする。
+fn check_anchors(
+    seen: Tracked,
+    hist: History,
+    anch: &Path,
+    report: &mut Report,
+) -> Option<Tracked> {
+    let Tracked {
+        tracked,
+        ever,
+        present,
+    } = seen;
     for name in tracked.difference(&present) {
         report.violation(
             "anchor",

@@ -239,6 +239,16 @@ fn load_records(dir: &Path, adr_dir: &Path, report: &mut Report) -> Vec<(String,
         }
     };
     names.sort();
+    read_records(dir, adr_dir, names, report)
+}
+
+/// `load_records` の続き。名前順の file を 1 本ずつ読み、読めた記録を id と組で返す。
+fn read_records(
+    dir: &Path,
+    adr_dir: &Path,
+    names: Vec<String>,
+    report: &mut Report,
+) -> Vec<(String, Node)> {
     let root = fs::canonicalize(dir).ok();
     let mut records: Vec<(String, Node)> = Vec::new();
     for name in names {
@@ -359,7 +369,11 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
             format!("{id}: 採用の案が {adopted} 件（{OPTIONS_ADOPTED} 件）"),
         );
     }
+    check_grounds(id, d, report);
+}
 
+/// (d) 1 本の判断の記録の撤退条件・根拠・帰結の欄。
+fn check_grounds(id: &str, d: &Node, report: &mut Report) {
     let retreat = d.get("retreat").unwrap_or(&Node::Null);
     if check_keys("P-8", &format!("{id}.retreat"), retreat, &RETREAT, report) {
         if !in_enum(retreat.get("kind"), RETREAT_KIND) {
@@ -418,7 +432,11 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
         }
         Some(_) => report.violation("adr", format!("{id}: {PRODUCED} が一覧でない")),
     }
+    check_amended(id, d, report);
+}
 
+/// (d) 1 本の判断の記録の改訂・承認・grill・図の欄。
+fn check_amended(id: &str, d: &Node, report: &mut Report) {
     let amends: &[Node] = match present(d, "amends") {
         None => &[],
         Some(Node::Seq(items)) => items,
@@ -479,6 +497,11 @@ fn check_figures(id: &str, d: &Node, report: &mut Report) {
             &[]
         }
     };
+    check_figure_entries(id, figures, report);
+}
+
+/// (d) 図の節の 1 図ずつ（欄の集合・id と caption・型・spec・refs・id の一意）。
+fn check_figure_entries(id: &str, figures: &[Node], report: &mut Report) {
     let mut seen: Vec<&str> = Vec::new();
     for f in figures {
         let at = format!("{id}.figures[{}]", show(f.get("id")));
@@ -605,37 +628,46 @@ fn check_between(records: &[(String, Node)], report: &mut Report) {
                 );
             }
         }
-        let status = scalar(d.get("status"));
-        let next = present(d, "superseded_by");
-        if status == Some("retired") && next.is_none() {
+        check_succession(id, d, records, report);
+    }
+    check_chains(records, report);
+}
+
+/// (e) 判断の記録 1 本の後継と置き換えた記録の突き合わせ（retired と superseded_by・双方向）。
+fn check_succession(id: &str, d: &Node, records: &[(String, Node)], report: &mut Report) {
+    let status = scalar(d.get("status"));
+    let next = present(d, "superseded_by");
+    if status == Some("retired") && next.is_none() {
+        report.violation(
+            "adr",
+            format!("{id}: retired なのに superseded_by（後継）が無い（P-7.2）"),
+        );
+    }
+    if let Some(n) = next {
+        if status != Some("retired") {
             report.violation(
                 "adr",
-                format!("{id}: retired なのに superseded_by（後継）が無い（P-7.2）"),
+                format!("{id}: superseded_by を持つのに status が retired でない（P-7.2）"),
             );
         }
-        if let Some(n) = next {
-            if status != Some("retired") {
-                report.violation(
-                    "adr",
-                    format!("{id}: superseded_by を持つのに status が retired でない（P-7.2）"),
-                );
-            }
-            if let Some(nx) = n.as_str().and_then(|n| find(records, n))
-                && scalar(nx.get("supersedes")) != Some(id.as_str())
-            {
-                let msg = format!("{id}: 後継 {} の supersedes に {id} が無い（双方向）", show(Some(n)));
-                one_or_link(report, n.as_str() == Some(id.as_str()), msg);
-            }
-        }
-        if let Some(p) = present(d, "supersedes")
-            && let Some(pv) = p.as_str().and_then(|p| find(records, p))
-            && scalar(pv.get("superseded_by")) != Some(id.as_str())
+        if let Some(nx) = n.as_str().and_then(|n| find(records, n))
+            && scalar(nx.get("supersedes")) != Some(id)
         {
-            let msg = format!("{id}: 置き換えた {} の superseded_by が {id} でない（双方向）", show(Some(p)));
-            one_or_link(report, p.as_str() == Some(id.as_str()), msg);
+            let msg = format!("{id}: 後継 {} の supersedes に {id} が無い（双方向）", show(Some(n)));
+            one_or_link(report, n.as_str() == Some(id), msg);
         }
     }
+    if let Some(p) = present(d, "supersedes")
+        && let Some(pv) = p.as_str().and_then(|p| find(records, p))
+        && scalar(pv.get("superseded_by")) != Some(id)
+    {
+        let msg = format!("{id}: 置き換えた {} の superseded_by が {id} でない（双方向）", show(Some(p)));
+        one_or_link(report, p.as_str() == Some(id), msg);
+    }
+}
 
+/// (e) retired の記録の後継の列（輪・未発効の後継）。
+fn check_chains(records: &[(String, Node)], report: &mut Report) {
     // retired の後継の列は accepted に着く（輪・未発効の後継は落とす）。
     for (id, d) in records {
         if scalar(d.get("status")) != Some("retired") {

@@ -112,6 +112,11 @@ pub fn judge(dir: &Path, rel: &Path, content: &str) -> Result<Judged, String> {
     }
     fs::write(&target, content).map_err(|e| format!("写しへ書けない: {e}"))?;
     let (after, _) = floor(&copy, Flag::None);
+    Ok(compare(&before, &after, &copy, dir))
+}
+
+/// 書く前と後の床の違反と まだ分からない を突き合わせ、後にだけ在るものを口の答えに分ける（`copy` は写し・`dir` は置き場）。
+fn compare(before: &Report, after: &Report, copy: &Path, dir: &Path) -> Judged {
     let shown = |s: &str| s.replace(&copy.display().to_string(), &dir.display().to_string());
     let mut seen: HashMap<&(String, String), usize> = HashMap::new();
     for v in &before.violations {
@@ -149,7 +154,7 @@ pub fn judge(dir: &Path, rel: &Path, content: &str) -> Result<Judged, String> {
             _ => judged.unknowns.push(shown(u)),
         }
     }
-    Ok(judged)
+    judged
 }
 
 /// 書く file の字は置き場からの相対で、置き場の外へ出ない（絶対 path・`..`・空は断る）。

@@ -101,17 +101,24 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
         push_text(&mut body, "audience", audience, &["label", "short", "text"]);
     }
 
+    let document_ids = check_shelf(index, &mut body, report);
+    check_lanes(index, &mut body, &document_ids, report);
+    check_intake_words(index, vocabulary, body, report);
+}
+
+/// 棚の節（legend・documents・annexes・relations）を数え、stops の行き先にする documents の id の集合を返す。
+fn check_shelf(index: &Node, body: &mut vocab::Body, report: &mut Report) -> HashSet<String> {
     // 行き先の集合のうち documents だけのもの（annexes の inside と stops の doc の行き先）
     let mut document_ids = HashSet::new();
     if let Some(shelf) = section(index, "shelf", report) {
         non_empty(FILE, "shelf", shelf, &["title", "explain"], report);
-        push_text(&mut body, "shelf", shelf, &["title", "explain"]);
+        push_text(body, "shelf", shelf, &["title", "explain"]);
 
         let legend = rows(FILE, shelf, "legend", report);
         for row in &legend {
             let at = format!("shelf.legend の行 {}", row_id(row));
             non_empty(FILE, &at, row, &["id", "text"], report);
-            push_text(&mut body, &at, row, &["text"]);
+            push_text(body, &at, row, &["text"]);
         }
         duplicate_ids(FILE, legend, report);
 
@@ -120,13 +127,13 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
             let at = format!("shelf.documents の行 {}", row_id(row));
             non_empty(FILE, &at, row, &["id", "type", "use"], report);
             // absent は null でよい（数えない）・文字列なら語彙の母集団に入れる
-            push_text(&mut body, &at, row, &["type", "use", "absent"]);
+            push_text(body, &at, row, &["type", "use", "absent"]);
         }
         let annexes = rows(FILE, shelf, "annexes", report);
         for row in &annexes {
             let at = format!("shelf.annexes の行 {}", row_id(row));
             non_empty(FILE, &at, row, &["id", "type", "inside"], report);
-            push_text(&mut body, &at, row, &["type"]);
+            push_text(body, &at, row, &["type"]);
         }
         // 棚 = documents と annexes を合わせた 1 つの空間（relations の from と to の行き先）
         let shelf_ids = shelf_id_set(&documents, &annexes);
@@ -149,14 +156,24 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
             );
             resolve(&at, row, "from", &shelf_ids, report);
             resolve(&at, row, "to", &shelf_ids, report);
-            push_text(&mut body, &at, row, &["label", "hint"]);
+            push_text(body, &at, row, &["label", "hint"]);
         }
         duplicate_ids(FILE, relations, report);
     }
 
+    document_ids
+}
+
+/// lanes の節（行・minutes・stops の行き先）を数える。`document_ids` は stops の doc の行き先の集合。
+fn check_lanes(
+    index: &Node,
+    body: &mut vocab::Body,
+    document_ids: &HashSet<String>,
+    report: &mut Report,
+) {
     if let Some(lanes) = section(index, "lanes", report) {
         non_empty(FILE, "lanes", lanes, &["title", "lead"], report);
-        push_text(&mut body, "lanes", lanes, &["title", "lead"]);
+        push_text(body, "lanes", lanes, &["title", "lead"]);
         let lane_rows = rows(FILE, lanes, "rows", report);
         for row in &lane_rows {
             let id = row_id(row);
@@ -168,7 +185,7 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
                 &["id", "mark", "who", "why", "minutes", "stops"],
                 report,
             );
-            push_text(&mut body, &at, row, &["mark", "who", "why"]);
+            push_text(body, &at, row, &["mark", "who", "why"]);
             if row.get("minutes").is_some_and(|m| !m.is_blank()) && !is_minutes(row.get("minutes"))
             {
                 report.violation(
@@ -180,13 +197,16 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
             for (i, stop) in rows(FILE, row, "stops", report).iter().enumerate() {
                 let at = format!("{at} の stops[{i}]");
                 non_empty(FILE, &at, stop, &["doc", "label"], report);
-                resolve(&at, stop, "doc", &document_ids, report);
-                push_text(&mut body, &at, stop, &["label"]);
+                resolve(&at, stop, "doc", document_ids, report);
+                push_text(body, &at, stop, &["label"]);
             }
         }
         duplicate_ids(FILE, lane_rows, report);
     }
+}
 
+/// intake の節を数え、集めた文の英字の語を語彙と突き合わせる。`body` は集めた文の母集団。
+fn check_intake_words(index: &Node, vocabulary: &Node, mut body: vocab::Body, report: &mut Report) {
     if let Some(intake) = section(index, "intake", report) {
         non_empty(
             FILE,

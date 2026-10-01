@@ -106,35 +106,36 @@ fn build(dir: &Path, answers_path: Option<&Path>, mode: Mode) -> R<Outcome> {
                 stderr: None,
             })
         }
-        Mode::Write => {
-            let documents =
-                map_documents(&intake.questions, &answers, &intake.values, &intake.targets)?;
-            // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
-            let name = adr::name_of(dir);
-            let header = format!("# {}", adr::named(name.as_deref(), " ", HEADER));
-            let id = adr::named(name.as_deref(), "-", SHEET_ID);
-            let text = yaml::write(&sheet_value(&intake, &id, &documents, &answers), &header)
-                .map_err(|e| format!("{}: {e}", sheet_path.display()))?;
-            if !sheet_path.parent().is_some_and(Path::is_dir) {
-                return Err(format!("{}: 出力先の親 dir が無い", sheet_path.display()));
-            }
-            fs::write(&sheet_path, &text)
-                .map_err(|e| format!("{}: 書けない: {e}", sheet_path.display()))?;
-            let recommended = answers
-                .iter()
-                .filter(|a| a.source == Source::Recommended)
-                .count();
-            Ok(Outcome {
-                verdict: Verdict::Pass,
-                stdout: vec![format!(
-                    "folio intake: 支度表を書いた（持つ文書 {}・推奨で進めた項目 {recommended}・{}）",
-                    documents.len(),
-                    sheet_path.display()
-                )],
-                stderr: None,
-            })
-        }
+        Mode::Write => write_sheet(dir, &intake, &answers, &sheet_path),
     }
+}
+
+/// 支度表を組んで `<dir>/<sheet.file>` へ書く（`--write`・書く前に止まれば 1 byte も書かない）。
+fn write_sheet(dir: &Path, intake: &Intake, answers: &[Answer], sheet_path: &Path) -> R<Outcome> {
+    let documents = map_documents(&intake.questions, answers, &intake.values, &intake.targets)?;
+    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+    let name = adr::name_of(dir);
+    let header = format!("# {}", adr::named(name.as_deref(), " ", HEADER));
+    let id = adr::named(name.as_deref(), "-", SHEET_ID);
+    let text = yaml::write(&sheet_value(intake, &id, &documents, answers), &header)
+        .map_err(|e| format!("{}: {e}", sheet_path.display()))?;
+    if !sheet_path.parent().is_some_and(Path::is_dir) {
+        return Err(format!("{}: 出力先の親 dir が無い", sheet_path.display()));
+    }
+    fs::write(sheet_path, &text).map_err(|e| format!("{}: 書けない: {e}", sheet_path.display()))?;
+    let recommended = answers
+        .iter()
+        .filter(|a| a.source == Source::Recommended)
+        .count();
+    Ok(Outcome {
+        verdict: Verdict::Pass,
+        stdout: vec![format!(
+            "folio intake: 支度表を書いた（持つ文書 {}・推奨で進めた項目 {recommended}・{}）",
+            documents.len(),
+            sheet_path.display()
+        )],
+        stderr: None,
+    })
 }
 
 // ── 正本の読み ──

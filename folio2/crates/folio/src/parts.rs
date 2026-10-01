@@ -399,6 +399,24 @@ fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
         let start = i + 1;
         i = run_end(b, start, |c| c.is_ascii_alphanumeric() || c == b'-');
         let name = text[start..i].to_ascii_lowercase();
+        let (tag, next) = Scan { text, b }.tag(name, i)?;
+        tags.push(tag);
+        i = next;
+    }
+    Ok(tags)
+}
+
+/// 手書きの走査の対象（面の字とその byte 列）。
+struct Scan<'a> {
+    text: &'a str,
+    b: &'a [u8],
+}
+
+impl Scan<'_> {
+    /// 開始タグの名の後ろ（位置 `i`）から属性を全部読み、script / style 要素なら閉じタグの手前まで読み飛ばす。返りは
+    /// 読んだタグと次の位置。
+    fn tag(&self, name: String, mut i: usize) -> Result<(Tag, usize), String> {
+        let Scan { text, b } = *self;
         let mut attrs = Vec::new();
         loop {
             i = run_end(b, i, |c| c.is_ascii_whitespace());
@@ -448,9 +466,8 @@ fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
                 .ok_or_else(|| format!("閉じない {name} 要素"))?
                 + close.len();
         }
-        tags.push(Tag { name, attrs });
+        Ok((Tag { name, attrs }, i))
     }
-    Ok(tags)
 }
 
 // ── 様式の定義の読み方（手書きの走査）──

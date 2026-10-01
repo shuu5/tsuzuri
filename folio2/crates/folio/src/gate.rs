@@ -126,13 +126,24 @@ pub(crate) fn run(dir: &Path, write_set: &[String]) -> Outcome {
             format!("{UNKNOWN_VIEWPOINTS}: {}", missing.join("・")),
         );
     }
+    stop_verdict(dir, write_set, &root, &stamp, touches)
+}
+
+/// 書き換える file を場所とする 止める が印に在るかで決める（反証の済んでいないものが先・支持されたものが次・無ければ通す）。
+fn stop_verdict(
+    dir: &Path,
+    write_set: &[String],
+    root: &[String],
+    stamp: &Stamp,
+    touches: impl Fn(&str) -> bool,
+) -> Outcome {
     // 書き換える file を場所とする 止める（2 が 1 より先・退けた は見ない）。置き場を名指す項目は空の列の dir（全部の下）
     let items: Vec<(Vec<&str>, bool)> = write_set
         .iter()
         .filter(|p| touches(p))
         .map(|p| {
             let p = p.trim_start_matches(['+', '-', '~']);
-            if names_the_place(&root, p) {
+            if names_the_place(root, p) {
                 return (Vec::new(), true);
             }
             (
@@ -443,7 +454,11 @@ mod gate_tests {
         assert!(!other(".worktrees/x/design-intent/srs.yaml"));
         assert!(!other("crates/folio/src/gate.rs"));
         assert!(!other("design-intent"));
+        f142_a_top_root_is_not_another_root();
+    }
 
+    /// 根が 1 要素 `design-intent` のときの `other_root`（上の歯の続き）。
+    fn f142_a_top_root_is_not_another_root() {
         let top = vec!["design-intent".to_string()];
         let other = |p: &str| other_root(&top, p);
         assert!(!other("design-intent/srs.yaml"));

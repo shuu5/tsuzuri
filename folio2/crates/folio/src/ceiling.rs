@@ -196,6 +196,11 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
         resolve_each("weights", weights, "refute", &values, report);
     }
 
+    check_tables(ceiling, vocabulary, body, report);
+}
+
+/// 読む文書の表と観点の表を数え、集めた文の英字の語を語彙と突き合わせる。`body` は集めた文の母集団。
+fn check_tables(ceiling: &Node, vocabulary: &Node, mut body: vocab::Body, report: &mut Report) {
     // 読む文書の一覧（所見の場所と観点の reads の行き先）
     let documents = table(ceiling, "documents", report);
     let mut doc_ids: HashSet<String> = HashSet::new();

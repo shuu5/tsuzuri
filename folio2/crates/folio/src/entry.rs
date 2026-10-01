@@ -349,352 +349,395 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
             proposed: Some(rel),
             ..
         } => proposed_check(&dir, &rel, out),
-        Command::Check { dir, polarity: true, .. } => match polarity::render(&dir) {
-            Ok(lines) => {
-                lines.iter().for_each(|l| say!(out, "{l}"));
-                0
-            }
-            Err(why) => {
-                why.iter().for_each(|w| say!(out, "{UNKNOWN_HEAD}{w}"));
-                say!(out, "folio check --polarity: まだ分からない（一覧を組めない）");
-                code(Verdict::Unknown)
-            }
-        },
-        Command::Check {
-            dir,
-            emit_amends,
-            freeze_anchor,
-            freeze_ids,
-            freeze_start,
-            freeze_adrs,
-            emit_rulings,
-            proposed: None,
-            polarity: false,
-        } => {
-            let flag = if emit_amends {
-                Flag::EmitAmends
-            } else if freeze_anchor {
-                Flag::FreezeAnchor
-            } else if freeze_ids {
-                Flag::FreezeIds
-            } else if freeze_start {
-                Flag::FreezeStart
-            } else if freeze_adrs {
-                Flag::FreezeAdrs
-            } else if emit_rulings {
-                Flag::EmitRulings
-            } else {
-                Flag::None
-            };
-            // 索引が組めない置き場を合格と言わない（便 136・層 2 の check_dir からは呼ばない）。編集時の口と同じ 1 本（便 198）
-            let (mut report, materials) = proposed::floor(&dir, flag);
-            // 面が組めない置き場を合格と言わない（便 187・編集時の口は面の段を撃たない＝ADR-33 決定 (6)）
-            site::check_faces(&dir, &mut report);
-            // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
-            let after = freeze::after(&dir, flag, &materials, &mut report);
-            if let After::Refused(msg) = &after {
-                say!(err, "folio check: {msg}");
-                return 1;
-            }
-            let labels = rules::Labels::of(&dir);
-            for (kind, msg) in &report.violations {
-                emit(flag, out, err, &format!("[{}] {msg}", labels.shown(kind)));
-            }
-            for msg in report.unknowns.iter().chain(&report.pendings) {
-                say!(err, "# まだ分からない: {msg}");
-            }
-            // 便 207（ADR-35 決定 (1)(オ)）: 数の上限の違反の字は今の数を持たないので、今の数を違反ごとに 1 行
-            for msg in &report.counts {
-                say!(err, "# 今の数: {msg}");
-            }
-            // 便 156（FR5）: 行 R-17 が無くて散文の言及の歯が数えなかったら、判定を変えずに 1 行（機構の行より前）
-            if materials.mentions_off {
-                say!(err, "{}", mentions::OFF);
-            }
-            if materials.in_loop_min_off {
-                say!(err, "{}", polarity::off(&dir));
-            }
-            // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
-            if !materials.not_yet_live.is_empty() {
-                say!(
-                    err,
-                    "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: {}",
-                    materials.not_yet_live.join("・")
-                );
-            }
-            let verdict = report.verdict();
-            emit(
-                flag,
-                out,
-                err,
-                &format!(
-                    "folio check: {verdict}（違反 {}・まだ分からない {}）",
-                    report.violations.len(),
-                    report.unknowns.len() + report.pendings.len()
-                ),
-            );
-            match after {
-                After::Emit(lines) => {
-                    for line in lines {
-                        say!(out, "{line}");
-                    }
-                }
-                After::Freeze(msg) => say!(err, "folio check: {msg}"),
-                After::Nothing | After::Refused(_) => {}
-            }
-            for line in &materials.rulings {
-                say!(out, "{line}");
-            }
-            code(verdict)
+        Command::Check { dir, polarity: true, .. } => polarity_list(&dir, out),
+        Command::Check { dir, emit_amends: true, .. } => {
+            floor_check(Flag::EmitAmends, dir, out, err)
         }
-        Command::Parts {
-            dir,
-            css,
-            pages,
-            check: _,
-            print,
-        } => {
-            if print {
-                let _ = out.write_all(parts::print_catalog().as_bytes());
-                return 0;
-            }
-            let report = parts::check(&dir, css.as_deref(), &pages);
-            let labels = rules::Labels::of(&dir);
-            for (kind, msg) in &report.violations {
-                say!(out, "[{}] {msg}", labels.shown(kind));
-            }
-            for msg in report.unknowns.iter().chain(&report.pendings) {
-                say!(err, "# まだ分からない: {msg}");
-            }
-            let verdict = report.verdict();
-            say!(
-                out,
-                "folio parts: {verdict}（違反 {}・まだ分からない {}）",
-                report.violations.len(),
-                report.unknowns.len() + report.pendings.len()
-            );
-            code(verdict)
+        Command::Check { dir, freeze_anchor: true, .. } => {
+            floor_check(Flag::FreezeAnchor, dir, out, err)
         }
-        Command::Face {
-            face,
-            id,
-            dir,
-            out: path,
-            write,
-            check: _,
-        } => {
-            let mode = if write {
-                face::Mode::Write
-            } else {
-                face::Mode::Check
-            };
-            let outcome = face::run(&face, id.as_deref(), &dir, &path, mode);
-            if let Some(line) = &outcome.stdout {
-                say!(out, "{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "{line}");
-            }
-            code(outcome.verdict)
+        Command::Check { dir, freeze_ids: true, .. } => {
+            floor_check(Flag::FreezeIds, dir, out, err)
         }
-        Command::Figure {
-            doc,
-            id,
-            dir,
-            out: path,
-            write,
-            check: _,
-        } => {
-            let mode = if write {
-                figure::Mode::Write
-            } else {
-                figure::Mode::Check
-            };
-            let outcome = figure::run(&doc, &id, &dir, &path, mode);
-            if let Some(line) = &outcome.stdout {
-                say!(out, "{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "{line}");
-            }
-            code(outcome.verdict)
+        Command::Check { dir, freeze_start: true, .. } => {
+            floor_check(Flag::FreezeStart, dir, out, err)
         }
-        Command::Build {
-            dir,
-            out: path,
-            write,
-            check: _,
-        } => {
-            let mode = if write {
-                site::Mode::Write
-            } else {
-                site::Mode::Check
-            };
-            let outcome = site::run(&dir, &path, mode);
-            if let Some(line) = &outcome.stdout {
-                say!(out, "{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "{line}");
-            }
-            code(outcome.verdict)
+        Command::Check { dir, freeze_adrs: true, .. } => {
+            floor_check(Flag::FreezeAdrs, dir, out, err)
         }
-        Command::Derive {
-            dir,
-            out: path,
-            from_root,
-            write,
-            check: _,
-        } => {
-            let mode = if write {
-                derive::Mode::Write
-            } else {
-                derive::Mode::Check
-            };
-            let outcome = derive::run(&dir, &path, from_root, mode);
-            for line in &outcome.stdout {
-                say!(out, "{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "{line}");
-            }
-            code(outcome.verdict)
+        Command::Check { dir, emit_rulings: true, .. } => {
+            floor_check(Flag::EmitRulings, dir, out, err)
         }
-        Command::Intake {
-            dir,
-            answers,
-            print: _,
-            write,
-        } => {
-            let mode = if write {
-                sheet::Mode::Write
-            } else {
-                sheet::Mode::Print
-            };
-            let outcome = sheet::run(&dir, answers.as_deref(), mode);
-            for line in &outcome.stdout {
-                say!(out, "{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "{line}");
-            }
-            code(outcome.verdict)
+        Command::Check { dir, .. } => floor_check(Flag::None, dir, out, err),
+        Command::Parts { print: true, .. } => parts_print(out),
+        Command::Parts { dir, css, pages, .. } => parts_check(dir, css, pages, out, err),
+        Command::Face { face, id, dir, out: path, write, .. } => {
+            face_cmd(face, id, path, write, Ctx { dir, out, err })
         }
-        Command::Hello { dir, state } => {
-            let outcome = hello::run(&dir, state.as_deref());
-            if let Some(line) = &outcome.stdout {
-                say!(out, "{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "{line}");
-            }
-            code(outcome.verdict)
+        Command::Figure { doc, id, dir, out: path, write, .. } => {
+            figure_cmd(doc, id, path, write, Ctx { dir, out, err })
         }
-        Command::Ceiling {
-            dir,
-            faces,
-            out: path,
-            write,
-            check: _,
-            refute,
-            stamp,
-            gate,
-            write_set,
-        } => {
-            if gate {
-                let outcome = gate::run(&dir, &write_set);
-                say!(out, "{}", outcome.stdout);
-                return code(outcome.verdict);
-            }
-            let Some(path) = path else {
-                say!(err, "folio ceiling: --gate の外では --out が要る");
-                return 2;
-            };
-            if stamp {
-                let outcome = stamp::run(&dir, &path);
-                say!(out, "{}", outcome.stdout);
-                return code(outcome.verdict);
-            }
-            if refute {
-                let outcome = findings::refute(&dir, &path);
-                for line in &outcome.stdout {
-                    say!(out, "{line}");
-                }
-                for line in &outcome.stderr {
-                    say!(err, "{line}");
-                }
-                return code(outcome.verdict);
-            }
-            // --write と --check は配信先が要る（束が古くないかを測る）
-            let Some(faces) = faces else {
-                let outcome = ceiling_src::Outcome::unknown("--faces が要る");
-                if let Some(line) = &outcome.stderr {
-                    say!(err, "{line}");
-                }
-                return code(outcome.verdict);
-            };
-            if write {
-                let outcome = bundle::run(&dir, &faces, &path);
-                if let Some(line) = &outcome.stdout {
-                    say!(out, "{line}");
-                }
-                if let Some(line) = &outcome.stderr {
-                    say!(err, "{line}");
-                }
-                return code(outcome.verdict);
-            }
-            let outcome = findings::run(&dir, &faces, &path);
-            for line in &outcome.stdout {
-                say!(out, "{line}");
-            }
-            for line in &outcome.stderr {
-                say!(err, "{line}");
-            }
-            code(outcome.verdict)
+        Command::Build { dir, out: path, write, .. } => build_cmd(dir, path, write, out, err),
+        Command::Derive { dir, out: path, from_root, write, .. } => {
+            derive_cmd(path, from_root, write, Ctx { dir, out, err })
         }
-        Command::Schema {
-            dir,
-            write,
-            check: _,
-        } => {
-            let mode = if write {
-                schema::Mode::Write
-            } else {
-                schema::Mode::Check
-            };
-            let outcome = schema::run(&dir, mode);
-            for line in &outcome.stdout {
-                say!(out, "{line}");
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "folio schema: {line}");
-            }
-            code(outcome.verdict)
+        Command::Intake { dir, answers, write, .. } => intake_cmd(dir, answers, write, out, err),
+        Command::Hello { dir, state } => hello_cmd(dir, state, out, err),
+        Command::Ceiling { gate: true, dir, write_set, .. } => ceiling_gate(&dir, &write_set, out),
+        Command::Ceiling { dir, faces, out: path, write, refute, stamp, .. } => {
+            ceiling_cmd(CeilingMode { stamp, refute, write }, faces, path, Ctx { dir, out, err })
         }
-        Command::Graph {
-            dir,
-            print: _,
-            digest,
-            summary,
-        } => {
-            let outcome = graph::run(&dir, digest, summary);
-            if let Some(body) = &outcome.stdout {
-                let _ = out.write_all(body.as_bytes());
-            }
-            if let Some(line) = &outcome.stderr {
-                say!(err, "folio graph: {line}");
-            }
-            code(outcome.verdict)
+        Command::Schema { dir, write, .. } => schema_cmd(dir, write, out, err),
+        Command::Graph { dir, digest, summary, .. } => graph_cmd(dir, digest, summary, out, err),
+        Command::Init { dir } => init_cmd(dir, out, err),
+    }
+}
+
+/// 命令 1 つが受ける文脈（正本の置き場と標準出力・標準エラーの書き先）。引数の数を 5 に収めるために束ねる。
+struct Ctx<'a> {
+    /// 正本の置き場（`--dir`）。
+    dir: PathBuf,
+    /// 標準出力の書き先。
+    out: &'a mut dyn Write,
+    /// 標準エラーの書き先。
+    err: &'a mut dyn Write,
+}
+
+/// 天井の命令の動かし方の旗（`--stamp`・`--refute`・`--write`・どれも無ければ `--check`・`--gate` は別に分ける）。
+struct CeilingMode {
+    stamp: bool,
+    refute: bool,
+    write: bool,
+}
+
+/// 止める仕掛けの一覧（`folio check --polarity`）を標準出力へ書く。組めなければ まだ分からない。
+fn polarity_list(dir: &std::path::Path, out: &mut dyn Write) -> u8 {
+    match polarity::render(dir) {
+        Ok(lines) => {
+            lines.iter().for_each(|l| say!(out, "{l}"));
+            0
         }
-        Command::Init { dir } => {
-            let outcome = init::run(&dir);
-            for line in &outcome.stdout {
-                say!(out, "{line}");
-            }
-            for line in &outcome.stderr {
-                say!(err, "folio init: {line}");
-            }
-            code(outcome.verdict)
+        Err(why) => {
+            why.iter().for_each(|w| say!(out, "{UNKNOWN_HEAD}{w}"));
+            say!(out, "folio check --polarity: まだ分からない（一覧を組めない）");
+            code(Verdict::Unknown)
         }
     }
+}
+
+/// 床の口（`folio check` の旗つき・旗なし）。検査と凍結の後始末を 1 度ずつ撃ち、違反・まだ分からない・要約の順に書く。
+fn floor_check(flag: Flag, dir: PathBuf, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    // 索引が組めない置き場を合格と言わない（便 136・層 2 の check_dir からは呼ばない）。編集時の口と同じ 1 本（便 198）
+    let (mut report, materials) = proposed::floor(&dir, flag);
+    // 面が組めない置き場を合格と言わない（便 187・編集時の口は面の段を撃たない＝ADR-33 決定 (6)）
+    site::check_faces(&dir, &mut report);
+    // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
+    let after = freeze::after(&dir, flag, &materials, &mut report);
+    if let After::Refused(msg) = &after {
+        say!(err, "folio check: {msg}");
+        return 1;
+    }
+    let labels = rules::Labels::of(&dir);
+    for (kind, msg) in &report.violations {
+        emit(flag, out, err, &format!("[{}] {msg}", labels.shown(kind)));
+    }
+    for msg in report.unknowns.iter().chain(&report.pendings) {
+        say!(err, "# まだ分からない: {msg}");
+    }
+    // 便 207（ADR-35 決定 (1)(オ)）: 数の上限の違反の字は今の数を持たないので、今の数を違反ごとに 1 行
+    for msg in &report.counts {
+        say!(err, "# 今の数: {msg}");
+    }
+    // 便 156（FR5）: 行 R-17 が無くて散文の言及の歯が数えなかったら、判定を変えずに 1 行（機構の行より前）
+    if materials.mentions_off {
+        say!(err, "{}", mentions::OFF);
+    }
+    if materials.in_loop_min_off {
+        say!(err, "{}", polarity::off(&dir));
+    }
+    // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
+    if !materials.not_yet_live.is_empty() {
+        say!(
+            err,
+            "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: {}",
+            materials.not_yet_live.join("・")
+        );
+    }
+    let verdict = report.verdict();
+    emit(
+        flag,
+        out,
+        err,
+        &format!(
+            "folio check: {verdict}（違反 {}・まだ分からない {}）",
+            report.violations.len(),
+            report.unknowns.len() + report.pendings.len()
+        ),
+    );
+    match after {
+        After::Emit(lines) => {
+            for line in lines {
+                say!(out, "{line}");
+            }
+        }
+        After::Freeze(msg) => say!(err, "folio check: {msg}"),
+        After::Nothing | After::Refused(_) => {}
+    }
+    for line in &materials.rulings {
+        say!(out, "{line}");
+    }
+    code(verdict)
+}
+
+/// `folio parts --print`: 部品目録から導出した一覧を標準出力へ書く。
+fn parts_print(out: &mut dyn Write) -> u8 {
+    let _ = out.write_all(parts::print_catalog().as_bytes());
+    0
+}
+
+/// `folio parts --check`: 面の class・部品の名札・行内の様式を部品目録と突き合わせる。
+fn parts_check(
+    dir: PathBuf,
+    css: Option<PathBuf>,
+    pages: Vec<String>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    let report = parts::check(&dir, css.as_deref(), &pages);
+    let labels = rules::Labels::of(&dir);
+    for (kind, msg) in &report.violations {
+        say!(out, "[{}] {msg}", labels.shown(kind));
+    }
+    for msg in report.unknowns.iter().chain(&report.pendings) {
+        say!(err, "# まだ分からない: {msg}");
+    }
+    let verdict = report.verdict();
+    say!(
+        out,
+        "folio parts: {verdict}（違反 {}・まだ分からない {}）",
+        report.violations.len(),
+        report.unknowns.len() + report.pendings.len()
+    );
+    code(verdict)
+}
+
+/// `folio face`: 正本から 1 面を導出して書く・検査する。
+fn face_cmd(face: String, id: Option<String>, path: PathBuf, write: bool, cx: Ctx<'_>) -> u8 {
+    let Ctx { dir, out, err } = cx;
+    let mode = if write {
+        face::Mode::Write
+    } else {
+        face::Mode::Check
+    };
+    let outcome = face::run(&face, id.as_deref(), &dir, &path, mode);
+    if let Some(line) = &outcome.stdout {
+        say!(out, "{line}");
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "{line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio figure`: 設計ノートの図 1 枚を導出して書く・検査する。
+fn figure_cmd(doc: String, id: String, path: PathBuf, write: bool, cx: Ctx<'_>) -> u8 {
+    let Ctx { dir, out, err } = cx;
+    let mode = if write {
+        figure::Mode::Write
+    } else {
+        figure::Mode::Check
+    };
+    let outcome = figure::run(&doc, &id, &dir, &path, mode);
+    if let Some(line) = &outcome.stdout {
+        say!(out, "{line}");
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "{line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio build`: 面と様式を 1 つの配信先へ書く・検査する。
+fn build_cmd(
+    dir: PathBuf,
+    path: PathBuf,
+    write: bool,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    let mode = if write {
+        site::Mode::Write
+    } else {
+        site::Mode::Check
+    };
+    let outcome = site::run(&dir, &path, mode);
+    if let Some(line) = &outcome.stdout {
+        say!(out, "{line}");
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "{line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio derive`: 契約表から器の形の導出物を置き場へ書く・検査する。
+fn derive_cmd(path: PathBuf, from_root: bool, write: bool, cx: Ctx<'_>) -> u8 {
+    let Ctx { dir, out, err } = cx;
+    let mode = if write {
+        derive::Mode::Write
+    } else {
+        derive::Mode::Check
+    };
+    let outcome = derive::run(&dir, &path, from_root, mode);
+    for line in &outcome.stdout {
+        say!(out, "{line}");
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "{line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio intake`: 相談窓口の答えの無い質問を出す・回答から支度表を書く。
+fn intake_cmd(
+    dir: PathBuf,
+    answers: Option<PathBuf>,
+    write: bool,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    let mode = if write {
+        sheet::Mode::Write
+    } else {
+        sheet::Mode::Print
+    };
+    let outcome = sheet::run(&dir, answers.as_deref(), mode);
+    for line in &outcome.stdout {
+        say!(out, "{line}");
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "{line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio hello`: 設計文書がまだ無いことなどを 1 行で知らせる。
+fn hello_cmd(dir: PathBuf, state: Option<PathBuf>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let outcome = hello::run(&dir, state.as_deref());
+    if let Some(line) = &outcome.stdout {
+        say!(out, "{line}");
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "{line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio ceiling --gate`: 印と便の書き換える file の一覧から門の 3 値を返す。
+fn ceiling_gate(dir: &std::path::Path, write_set: &[String], out: &mut dyn Write) -> u8 {
+    let outcome = gate::run(dir, write_set);
+    say!(out, "{}", outcome.stdout);
+    code(outcome.verdict)
+}
+
+/// `folio ceiling` の `--gate` 以外（`--stamp`・`--refute`・`--write`・`--check`）。
+fn ceiling_cmd(
+    mode: CeilingMode,
+    faces: Option<PathBuf>,
+    path: Option<PathBuf>,
+    cx: Ctx<'_>,
+) -> u8 {
+    let Ctx { dir, out, err } = cx;
+    let Some(path) = path else {
+        say!(err, "folio ceiling: --gate の外では --out が要る");
+        return 2;
+    };
+    if mode.stamp {
+        let outcome = stamp::run(&dir, &path);
+        say!(out, "{}", outcome.stdout);
+        return code(outcome.verdict);
+    }
+    if mode.refute {
+        let outcome = findings::refute(&dir, &path);
+        for line in &outcome.stdout {
+            say!(out, "{line}");
+        }
+        for line in &outcome.stderr {
+            say!(err, "{line}");
+        }
+        return code(outcome.verdict);
+    }
+    // --write と --check は配信先が要る（束が古くないかを測る）
+    let Some(faces) = faces else {
+        let outcome = ceiling_src::Outcome::unknown("--faces が要る");
+        if let Some(line) = &outcome.stderr {
+            say!(err, "{line}");
+        }
+        return code(outcome.verdict);
+    };
+    if mode.write {
+        let outcome = bundle::run(&dir, &faces, &path);
+        if let Some(line) = &outcome.stdout {
+            say!(out, "{line}");
+        }
+        if let Some(line) = &outcome.stderr {
+            say!(err, "{line}");
+        }
+        return code(outcome.verdict);
+    }
+    let outcome = findings::run(&dir, &faces, &path);
+    for line in &outcome.stdout {
+        say!(out, "{line}");
+    }
+    for line in &outcome.stderr {
+        say!(err, "{line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio schema`: 欄の決まりの file の生成区間を床の定数から導出して書く・検査する。
+fn schema_cmd(dir: PathBuf, write: bool, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let mode = if write {
+        schema::Mode::Write
+    } else {
+        schema::Mode::Check
+    };
+    let outcome = schema::run(&dir, mode);
+    for line in &outcome.stdout {
+        say!(out, "{line}");
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "folio schema: {line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio graph`: 設計文書の節点と辺の索引を標準出力へ出す。
+fn graph_cmd(
+    dir: PathBuf,
+    digest: bool,
+    summary: bool,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    let outcome = graph::run(&dir, digest, summary);
+    if let Some(body) = &outcome.stdout {
+        let _ = out.write_all(body.as_bytes());
+    }
+    if let Some(line) = &outcome.stderr {
+        say!(err, "folio graph: {line}");
+    }
+    code(outcome.verdict)
+}
+
+/// `folio init`: 新しい置き場に最初の文書一式を書く。
+fn init_cmd(dir: PathBuf, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let outcome = init::run(&dir);
+    for line in &outcome.stdout {
+        say!(out, "{line}");
+    }
+    for line in &outcome.stderr {
+        say!(err, "folio init: {line}");
+    }
+    code(outcome.verdict)
 }

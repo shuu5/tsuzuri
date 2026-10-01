@@ -673,6 +673,11 @@ pub fn run(dir: &Path) -> Outcome {
         Ok(b) => b,
         Err(e) => return Outcome::stop(Verdict::Unknown, vec![e, "1 byte も書いていない".to_string()]),
     };
+    write_place(dir, &bodies)
+}
+
+/// 置き場の dir と 11 本の file を新規作成で書き、生成区間を埋める。途中で止まれば、書いた file の名を添えて まだ分からない を返す。
+fn write_place(dir: &Path, bodies: &[String]) -> Outcome {
     // (1) 新規作成でだけ書く（生成区間は空の印）
     let mut written: Vec<&str> = Vec::new();
     let dirs = std::iter::once(dir.to_path_buf()).chain(DIRS.iter().map(|sub| dir.join(sub)));
@@ -686,7 +691,7 @@ pub fn run(dir: &Path) -> Outcome {
             return Outcome::stop(Verdict::Unknown, stderr);
         }
     }
-    for (file, body) in FILES.iter().zip(&bodies) {
+    for (file, body) in FILES.iter().zip(bodies) {
         let path = dir.join(file);
         if let Err(e) = create_new(&path, body) {
             let mut stderr = vec![format!("{}: 書けない: {e}", path.display())];

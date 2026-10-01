@@ -132,6 +132,11 @@ pub fn check_intake(intake: &Node, index: &Node, vocabulary: &Node, report: &mut
     }
     duplicate_ids(FILE, questions, report);
 
+    check_sheet_words(intake, vocabulary, body, report);
+}
+
+/// sheet の節を数え、集めた文の英字の語を語彙と突き合わせる。`body` は集めた文の母集団。
+fn check_sheet_words(intake: &Node, vocabulary: &Node, mut body: vocab::Body, report: &mut Report) {
     if let Some(sheet) = section(intake, "sheet", report) {
         non_empty(FILE, "sheet", sheet, &["file", "title", "explain"], report);
         push_text(&mut body, "sheet", sheet, &["title", "explain"]);

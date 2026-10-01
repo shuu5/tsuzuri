@@ -156,41 +156,7 @@ pub(crate) fn check_ids(
     } else {
         Vec::new()
     };
-    // 読めた anchor の ids の和（id → 記録された要約値）
-    let mut baseline: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for name in &names {
-        let file = format!("anchors/{name}");
-        let Some(doc) = anchor::read_typed(&anchors_dir.join(name), &file, report) else {
-            continue;
-        };
-        let Some(ids) = anchor_rows(&doc) else {
-            report.unknown(format!(
-                "{file}: id の一覧の anchor の形（kind {IDS_KIND}・digest_algo・ids の id と sum）でない"
-            ));
-            continue;
-        };
-        let stored = doc.get("digest").and_then(Value::as_str);
-        match anchor::digest_of(&doc) {
-            Ok(d) if stored == Some(d.as_str()) => {}
-            Ok(_) => {
-                report.violation(
-                    "anchor",
-                    format!("{file}: digest が中身と合わない（手で直した anchor・baseline に混ぜない）"),
-                );
-                continue;
-            }
-            Err(e) => {
-                report.unknown(format!("{file}: digest を計算できない（{e}）"));
-                continue;
-            }
-        }
-        for (id, sum) in ids {
-            let sums = baseline.entry(id).or_default();
-            if !sums.contains(&sum) {
-                sums.push(sum);
-            }
-        }
-    }
+    let baseline = read_baseline(&anchors_dir, &names, report);
     // 読めないのではなく測れない（違反が在れば不合格が先に立つ）。始まりの凍結（便 121）も不在を前提にする
     if names.is_empty() && !matches!(flag, Flag::FreezeIds | Flag::FreezeStart) {
         report.pending(
@@ -224,6 +190,50 @@ pub(crate) fn check_ids(
         exists: !names.is_empty(),
         name: adr::name_of(dir),
     }
+}
+
+/// 読めた anchor の ids を id ごとの要約値の列に集める。形の違う anchor・digest の合わない anchor は数えて混ぜない。
+fn read_baseline(
+    anchors_dir: &Path,
+    names: &[String],
+    report: &mut Report,
+) -> BTreeMap<String, Vec<String>> {
+    // 読めた anchor の ids の和（id → 記録された要約値）
+    let mut baseline: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for name in names {
+        let file = format!("anchors/{name}");
+        let Some(doc) = anchor::read_typed(&anchors_dir.join(name), &file, report) else {
+            continue;
+        };
+        let Some(ids) = anchor_rows(&doc) else {
+            report.unknown(format!(
+                "{file}: id の一覧の anchor の形（kind {IDS_KIND}・digest_algo・ids の id と sum）でない"
+            ));
+            continue;
+        };
+        let stored = doc.get("digest").and_then(Value::as_str);
+        match anchor::digest_of(&doc) {
+            Ok(d) if stored == Some(d.as_str()) => {}
+            Ok(_) => {
+                report.violation(
+                    "anchor",
+                    format!("{file}: digest が中身と合わない（手で直した anchor・baseline に混ぜない）"),
+                );
+                continue;
+            }
+            Err(e) => {
+                report.unknown(format!("{file}: digest を計算できない（{e}）"));
+                continue;
+            }
+        }
+        for (id, sum) in ids {
+            let sums = baseline.entry(id).or_default();
+            if !sums.contains(&sum) {
+                sums.push(sum);
+            }
+        }
+    }
+    baseline
 }
 
 /// `--freeze-ids`（§1 (d)）。全検査が 0 違反で「まだ分からない」も無いときだけ書く。

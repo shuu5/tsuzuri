@@ -277,6 +277,24 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
             push(NOTE, file, path.clone(), path, None, row.get("ruling"), None);
         }
     }
+    sites_rest(tree, &mut push);
+    out
+}
+
+/// `sites` の残り: 設計ノートの決定の表の行の ruling と、印の欄（要件書・索引・天井の正本・支度表・索引の欄の決まり）。
+/// `push` は欄を 1 つ足す口（欄の種類・file・at・欄の道・節点・値・規則の表の行）。
+fn sites_rest<'a>(
+    tree: &Tree<'a>,
+    push: &mut impl FnMut(
+        &'static str,
+        &str,
+        String,
+        String,
+        Option<&'a str>,
+        Option<&'a Node>,
+        Option<&'a Node>,
+    ),
+) {
     for (file, root) in &tree.notes {
         let tables = rows(root.get("sections"))
             .filter(|(_, s)| s.get("type").and_then(Node::as_str) == Some(crate::floor_note::DECISION_TABLE));
@@ -299,7 +317,6 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
             }
         }
     }
-    out
 }
 
 /// 一覧の中の表の項と一覧の番号（一覧でなければ 0 個・表でない項は飛ばす・番号は飛ばす前の番号）。

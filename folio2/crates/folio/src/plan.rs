@@ -176,6 +176,11 @@ pub(crate) fn check_plan(nd: &Path, notes: &[NoteDoc], rules: &Node, report: &mu
         }
         Err(e) => report.unknown(format!("{file}: 読めない: {e}")),
     }
+    plan_only_rows(note, &index, &file, report);
+}
+
+/// 計画だけの行の床（`index` は行の索引・`file` は計画のノートの file の字）。
+fn plan_only_rows(note: &NoteDoc, index: &[IndexRow], file: &str, report: &mut Report) {
     // 計画だけの行（一意・索引に無い・依存は索引か計画だけの行に在る）
     let indexed: HashSet<&str> = index.iter().map(|(id, _)| id.as_str()).collect();
     let rows: Vec<&Node> = seq(note.root.get("sections"))

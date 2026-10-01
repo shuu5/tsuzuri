@@ -108,7 +108,7 @@ pub(crate) fn check_seals(
         }
     }
     current.sort_by_key(|(id, _)| id_key(id));
-    let mut seals = Seals {
+    let seals = Seals {
         path,
         anchors_dir,
         rows: Vec::new(),
@@ -134,6 +134,12 @@ pub(crate) fn check_seals(
         }
         return seals;
     }
+    seal_rows(seals, records, flag, report)
+}
+
+/// 封の一覧の読み（kind・形・digest）。読めた行を `compare_rows` で発効した記録と照らす。
+fn seal_rows(seals: Seals, records: &[(String, Node)], flag: Flag, report: &mut Report) -> Seals {
+    let file = format!("anchors/{SEAL_FILE}");
     let Some(doc) = anchor::read_typed(&seals.path, &file, report) else {
         return seals;
     };
@@ -157,6 +163,18 @@ pub(crate) fn check_seals(
             return seals;
         }
     }
+    compare_rows(seals, rows, records, flag, report)
+}
+
+/// 封の一覧の行を照らす（行の重複・本文の変わり・行の欠け・発効した記録の無い行）。
+fn compare_rows(
+    mut seals: Seals,
+    rows: Vec<(String, String)>,
+    records: &[(String, Node)],
+    flag: Flag,
+    report: &mut Report,
+) -> Seals {
+    let file = format!("anchors/{SEAL_FILE}");
     let mut seen: Vec<&str> = Vec::new();
     for (id, _) in &rows {
         if seen.contains(&id.as_str()) {

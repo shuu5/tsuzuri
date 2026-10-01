@@ -353,47 +353,7 @@ pub(crate) fn floor_diff_for(
     out: &mut Vec<String>,
 ) {
     match floor {
-        Floor::Map(fields) => {
-            let Some(entries) = data.as_map() else {
-                out.push(format!(
-                    "{}（欄の表でない）",
-                    if path.is_empty() { "schema" } else { path }
-                ));
-                return;
-            };
-            let mut keys: Vec<&str> = entries
-                .iter()
-                .map(|(k, _)| k.as_str())
-                .chain(
-                    fields
-                        .iter()
-                        .map(|(k, _)| *k)
-                        .filter(|k| !k.ends_with("_note")),
-                )
-                .collect();
-            keys.sort_unstable();
-            keys.dedup();
-            for key in keys {
-                let p = if path.is_empty() {
-                    key.to_string()
-                } else {
-                    format!("{path}.{key}")
-                };
-                // 外の置き場の `Home` の欄は無いのが正しく、在れば未知の欄
-                let field = fields
-                    .iter()
-                    .find(|(k, _)| *k == key)
-                    .filter(|(_, f)| !matches!(f, Floor::Home(_)) || !abroad(name));
-                match (field, data.get(key)) {
-                    (None, None) => {}
-                    (None, Some(_)) => out.push(format!(
-                        "{p}（未知の欄＝機械が読まない欄は *_note で終える）"
-                    )),
-                    (Some(_), None) => out.push(format!("{p}（欠落）")),
-                    (Some((_, f)), Some(d)) => floor_diff_for(d, bare(f), name, &p, out),
-                }
-            }
-        }
+        Floor::Map(fields) => diff_fields(data, fields, name, path, out),
         Floor::Seq(items) => match data.as_seq() {
             Some(seq) if seq.len() == items.len() => {
                 for (i, (d, f)) in seq.iter().zip(items.iter()).enumerate() {
@@ -441,6 +401,55 @@ pub(crate) fn floor_diff_for(
             if data.as_str() != Some(n.to_string().as_str()) {
                 out.push(path.to_string());
             }
+        }
+    }
+}
+
+/// 表の床の突き合わせ（欄の集合は写しと床の和・床の側の `_note` の欄は数えない・名の無い外の置き場の `Home` の欄は未知）。
+fn diff_fields(
+    data: &Node,
+    fields: &[(&str, Floor)],
+    name: Option<&str>,
+    path: &str,
+    out: &mut Vec<String>,
+) {
+    let Some(entries) = data.as_map() else {
+        out.push(format!(
+            "{}（欄の表でない）",
+            if path.is_empty() { "schema" } else { path }
+        ));
+        return;
+    };
+    let mut keys: Vec<&str> = entries
+        .iter()
+        .map(|(k, _)| k.as_str())
+        .chain(
+            fields
+                .iter()
+                .map(|(k, _)| *k)
+                .filter(|k| !k.ends_with("_note")),
+        )
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    for key in keys {
+        let p = if path.is_empty() {
+            key.to_string()
+        } else {
+            format!("{path}.{key}")
+        };
+        // 外の置き場の `Home` の欄は無いのが正しく、在れば未知の欄
+        let field = fields
+            .iter()
+            .find(|(k, _)| *k == key)
+            .filter(|(_, f)| !matches!(f, Floor::Home(_)) || !abroad(name));
+        match (field, data.get(key)) {
+            (None, None) => {}
+            (None, Some(_)) => out.push(format!(
+                "{p}（未知の欄＝機械が読まない欄は *_note で終える）"
+            )),
+            (Some(_), None) => out.push(format!("{p}（欠落）")),
+            (Some((_, f)), Some(d)) => floor_diff_for(d, bare(f), name, &p, out),
         }
     }
 }

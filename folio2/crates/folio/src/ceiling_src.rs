@@ -164,6 +164,11 @@ pub fn load(dir: &Path) -> R<Ceiling> {
             Ok((text_of(row, "id", &at)?, text_of(row, "file", &at)?))
         })
         .collect::<R<Vec<_>>>()?;
+    load_viewpoints(root, documents)
+}
+
+/// 観点の表を読み、決まりと所見の本文を足して天井を組む。`documents` は読んだ documents の各行。
+fn load_viewpoints(root: Node, documents: Vec<(String, String)>) -> R<Ceiling> {
     let mut viewpoints = Vec::new();
     for (i, row) in rows(&root, "viewpoints")?.iter().enumerate() {
         let at = format!("viewpoints[{i}]");
@@ -329,21 +334,7 @@ fn build_counted(
     vp: &Viewpoint,
 ) -> R<Built> {
     let mut files = Files::new();
-    // doc ごとの読む最上位の節（宣言の順・重複なし）
-    let mut declared: Vec<(&str, Vec<&str>)> = Vec::new();
-    for (doc, fields) in &vp.reads {
-        if !declared.iter().any(|(d, _)| d == doc) {
-            declared.push((doc, Vec::new()));
-        }
-        if let Some((_, tops)) = declared.iter_mut().find(|(d, _)| d == doc) {
-            for field in fields {
-                let top = field.split('.').next().unwrap_or(field);
-                if !tops.contains(&top) {
-                    tops.push(top);
-                }
-            }
-        }
-    }
+    let declared = declared_tops(vp);
     let mut dropped: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut notes_absent = String::new();
     let mut absent = 0;
@@ -397,6 +388,26 @@ fn build_counted(
         dropped: dropped.values().map(Vec::len).sum(),
         absent,
     })
+}
+
+/// 観点の reads から、doc ごとの読む最上位の節を集める。
+fn declared_tops(vp: &Viewpoint) -> Vec<(&str, Vec<&str>)> {
+    // doc ごとの読む最上位の節（宣言の順・重複なし）
+    let mut declared: Vec<(&str, Vec<&str>)> = Vec::new();
+    for (doc, fields) in &vp.reads {
+        if !declared.iter().any(|(d, _)| d == doc) {
+            declared.push((doc, Vec::new()));
+        }
+        if let Some((_, tops)) = declared.iter_mut().find(|(d, _)| d == doc) {
+            for field in fields {
+                let top = field.split('.').next().unwrap_or(field);
+                if !tops.contains(&top) {
+                    tops.push(top);
+                }
+            }
+        }
+    }
+    declared
 }
 
 // ── 最上位の節で切る（便 98・docs/design/delivery-98.md §1 (b)） ──
@@ -489,6 +500,11 @@ fn cut_sections(text: &str, tops: &[&str]) -> Cut {
             kept.push_str(line);
         }
     }
+    finish_cut(kept, sections, keep)
+}
+
+/// 残した行・節の名・節ごとの残す印から、落とした節の名を集めて `Cut` に組む。
+fn finish_cut(kept: String, sections: Vec<String>, keep: Vec<bool>) -> Cut {
     let dropped = sections
         .iter()
         .zip(&keep)

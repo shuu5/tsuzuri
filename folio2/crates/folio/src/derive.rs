@@ -347,6 +347,16 @@ fn write_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) -> 
         }
         written += 1;
     }
+    write_summary(out_dir, derived, index, written)
+}
+
+/// --write の結果: 置き場に残る導出元の無い .toml の行と、書いた file の数の行を標準出力に並べる。
+fn write_summary(
+    out_dir: &Path,
+    derived: &[Derived],
+    index: Option<&PlanIndex>,
+    written: usize,
+) -> Outcome {
     let mut stdout = match orphans(out_dir, derived) {
         Ok(lines) => lines,
         Err(e) => return Outcome::unknown(e),

@@ -484,6 +484,11 @@ fn pyyaml_typed(s: &str) -> bool {
             return true;
         }
     }
+    pyyaml_sexagesimal(s, body, dig_)
+}
+
+/// 六十進か、でなければ時刻付きの timestamp か（`pyyaml_typed` の残り）。`body` は符号を除いた字面。
+fn pyyaml_sexagesimal(s: &str, body: &str, dig_: fn(u8) -> bool) -> bool {
     // 六十進（「:」で区切る整数 `[1-9][0-9_]*(:[0-5]?[0-9])+`・浮動小数 `[0-9][0-9_]*(:[0-5]?[0-9])+\.[0-9_]*`）
     if let Some((head, rest)) = body.split_once(':')
         && head.as_bytes().first().is_some_and(u8::is_ascii_digit)
@@ -559,6 +564,16 @@ fn is_timestamp_with_time(s: &str) -> bool {
     if !time {
         return false;
     }
+    timestamp_tail(b, i, digits_at, byte_at)
+}
+
+/// 時刻より後（小数の秒・空白・Z か時差）が字面の終わりまでで収まるか。`i` は時刻の終わりの位置。
+fn timestamp_tail(
+    b: &[u8],
+    mut i: usize,
+    digits_at: impl Fn(&mut usize, usize, usize) -> bool,
+    byte_at: impl Fn(&mut usize, &[u8]) -> bool,
+) -> bool {
     if byte_at(&mut i, b".") {
         i += b.iter().skip(i).take_while(|c| c.is_ascii_digit()).count();
     }
