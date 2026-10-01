@@ -1,0 +1,450 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 019b71c5cec0e75a962c17361033fc9fac6c9d16..c0c236939144df9654b81f45c2fe5a17226a108d 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -43,6 +43,11 @@ print_stdout = "deny"
+ print_stderr = "deny"
+ allow_attributes = "deny"
+ allow_attributes_without_reason = "deny"
++# 行 r4-table: 規則の行 R-4 の関数の粒度（関数の行・複雑度・引数・閾値は根の clippy.toml）を deny にする（条 P-22.1・P-22.2・P-24.3・判断の記録 ADR-25 の決定 (1)）。
++# forbid にしないのは、外の crate の macro（clap の derive・leptos の component）が 3 つを含む allow の属性を出し、forbid の下では組めないから。expect と allow の例外を置かないことは xtask の歯 klint_ が見る。
++too_many_lines = "deny"
++cognitive_complexity = "deny"
++too_many_arguments = "deny"
+ 
+ # 行 g-strip: release の profile の strip で面の wasm の関数の名の表（name の節）を抜く。
+ # opt-level と lto は組みの時間を測ってから別に決める。
+diff --git a/clippy.toml b/clippy.toml
+index 4bed32dc33143d356f6429a098374cb82e10a2fd..85c32294534bcb48b225ba63ffb22ab80aaf655b 100644
+--- a/clippy.toml
++++ b/clippy.toml
+@@ -1,5 +1,5 @@
+ # 行 k-lint-base: 規則の行 R-4 の関数の粒度（行 60・複雑度 15）を lint の閾値に写し、歯の範囲の例外（規則の行 R-10 の 5 つの書き方・条 P-24.3 の後半）を宣言する。
+-# 引数の閾値は行 r4-args-mark が置き、越える関数は直す行を名指す理由を持つ expect の属性で許す（R-4 の行の間）。clippy は member の dir から上へ最初の clippy.toml を読むので、member の dir と根までの間に別の file を置かない（xtask の歯 klint_ が見る）。
++# 引数の閾値は行 r4-args-mark が置き、行 r4-table が根の Cargo.toml の表で 3 つの lint を deny にした（expect と allow の属性で許さない）。clippy は member の dir から上へ最初の clippy.toml を読むので、member の dir と根までの間に別の file を置かない（xtask の歯 klint_ が見る）。
+ too-many-lines-threshold = 60
+ cognitive-complexity-threshold = 15
+ too-many-arguments-threshold = 5
+diff --git a/folio2/crates/folio/src/anchor.rs b/folio2/crates/folio/src/anchor.rs
+index 647930715d9ff3adea586f61c2145746b7a95aa9..652af3aaa2d5b9a3affe8bec84a9df34caead86d 100644
+--- a/folio2/crates/folio/src/anchor.rs
++++ b/folio2/crates/folio/src/anchor.rs
+@@ -4,7 +4,6 @@
+ //! （`lineage.rs`）は便 8 で、ここから呼ぶ。`--freeze-anchor`・`--emit-amends` は便 9。
+ //! 値は型付きの木（`yaml::Value`）で読み、digest は正規化（`yaml::canonical`）の sha256。
+ //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs` / `adr::floor_val`）で読み、値は持ち直さない。正規表現は使わない。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{BTreeMap, BTreeSet, HashSet};
+ use std::fs;
+diff --git a/folio2/crates/folio/src/check.rs b/folio2/crates/folio/src/check.rs
+index c5278654d8dfeaf429a2c441e8fc7d5e7a89670d..2c4506de83e9b2f96f9c2bf2bbb69e1b75c13cfe 100644
+--- a/folio2/crates/folio/src/check.rs
++++ b/folio2/crates/folio/src/check.rs
+@@ -10,7 +10,6 @@
+ //! 承認欄も在れば読む）。
+ //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
+ //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{HashMap, HashSet};
+ use std::fs;
+diff --git a/folio2/crates/folio/src/face.rs b/folio2/crates/folio/src/face.rs
+index 009e31b20059cd4e02e3c655891c33239ca6450e..4b17c6a72556e4f0d716ec8dcd00b09ccfe9405f 100644
+--- a/folio2/crates/folio/src/face.rs
++++ b/folio2/crates/folio/src/face.rs
+@@ -14,7 +14,6 @@
+ //! 直後に部品 ceiling-stamp を置く。字は `ceiling_stamp` の 1 つで組む（面ごとに組み直さない）ので 5 面で同じになる。
+ //! 出所は天井の印 preview/ceiling-stamp.yaml の 1 つ（便 83・P-6.3）で、印が無ければ 4 観点とも「まだ分からない」（未実施）を出す（P-4.2）。
+ //! 印の正本の要約値が今の正本と違えば「印の後に変わった所はまだ読まれていない」を添える（便 127・ADR-18 決定 (6)・P-3.3）。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::fs;
+ use std::path::Path;
+diff --git a/folio2/crates/folio/src/face_adr.rs b/folio2/crates/folio/src/face_adr.rs
+index 6e4ce6a7f0081016bb48479827ab4af773bb5c76..fd611acf782bf7d6f554f6932bc873069c9558e7 100644
+--- a/folio2/crates/folio/src/face_adr.rs
++++ b/folio2/crates/folio/src/face_adr.rs
+@@ -15,7 +15,6 @@
+ //! 強調の印（便 149・docs/design/delivery-149.md §1 (b)）: 散文の 6 つの欄（context と decision は列挙で分けた後の
+ //! 断片ごと・案の text と reason・帰結の各行・注）は、escape の後に左から順に対になった印 STRONG_MARK を strong の
+ //! 要素に写す（閉じない印と中身が空の対は生のまま）。題・平易文・逐語の引用などほかの欄は写さない。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::fs;
+ use std::path::Path;
+diff --git a/folio2/crates/folio/src/face_constitution.rs b/folio2/crates/folio/src/face_constitution.rs
+index 5458090bb5165d4d30c525c2997514759993dfe9..d2398dd96d5234fc69c6658067fd57e2f25a0aff 100644
+--- a/folio2/crates/folio/src/face_constitution.rs
++++ b/folio2/crates/folio/src/face_constitution.rs
+@@ -5,7 +5,6 @@
+ //! 面に依らない口（head と site-bar・章の帯・card・toc・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ（便 15）。
+ //! 読み手（正本を読んで面の文脈と節の中身を組む側・条と文脈と改訂の段の型・読みと検査・欠番・関係の欄・改訂の段の読み）は
+ //! 便 116 で `face_constitution_read.rs`（層 4）へ降ろした。面の口と HTML を書く側と名札と数の口はここに残す。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::path::Path;
+ use std::sync::LazyLock;
+diff --git a/folio2/crates/folio/src/face_index.rs b/folio2/crates/folio/src/face_index.rs
+index a839d7a8f480de572a40833133625b713aa3504b..d7d0b3ef32b286fa8afbd84c63e6856515c506b3 100644
+--- a/folio2/crates/folio/src/face_index.rs
++++ b/folio2/crates/folio/src/face_index.rs
+@@ -15,7 +15,6 @@
+ //! 各設計ノートの面へのリンク）を出す（便 29・delivery-29.md §1 (a)）——面は 1 本につき 1 枚
+ //! （`note-<文書 id>.html`・便 28 の生成器）。入口の正本 `index.yaml` は改訂しない（ADR-7 帰結・棚の行の読み方だけが変わる）。
+ //! 読み手（正本を読んで面の文脈を組む側・部品の一覧と枠・読みと数え・支度表の読み）は便 115 で `face_index_read.rs`（層 4）へ降ろした。面の口と HTML を書く側はここに残す。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::path::Path;
+ 
+diff --git a/folio2/crates/folio/src/face_index_read.rs b/folio2/crates/folio/src/face_index_read.rs
+index 1d2ffc84d196d097582077d3406404f18802bc7f..948e77b5739bfc7db82bc5a4482e2114351c851f 100644
+--- a/folio2/crates/folio/src/face_index_read.rs
++++ b/folio2/crates/folio/src/face_index_read.rs
+@@ -2,7 +2,6 @@
+ //! 部品の一覧と枠・置き場の定数と判断の記録の状態の表・読んだ中身と文脈の型とその method・読みと数え・支度表の読みを字を変えずに降ろした。
+ //! 面の口 `derive` と HTML を書く側と名札の表は `face_index.rs` に残る。面の口と字面の逃がしを呼ぶので層 1 には置かない。見え方は
+ //! 書く側と使う側が名指すものだけを広げた。移した注の中の file 名（`render.rs` など）は移す前の置き場から見た字のまま。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::fs;
+ use std::path::Path;
+diff --git a/folio2/crates/folio/src/face_note.rs b/folio2/crates/folio/src/face_note.rs
+index 752ff6eb46a033076cdcb3f8ebc678a2b6ba9773..858e52eb139279a79ad58c0c47fe09dabd191e57 100644
+--- a/folio2/crates/folio/src/face_note.rs
++++ b/folio2/crates/folio/src/face_note.rs
+@@ -12,7 +12,6 @@
+ //! （全部か無しか・FR15）。
+ //! 状態の閉じた一覧 `STATUS` と文書 id の形 `is_doc_id` は便 109 で `shelf.rs` へ降ろした（ADR-15・層 1 読む）。
+ //! 器の導出 file の置き場は便 123 から床の読み手と同じ式 `note::external_path`（版管理の根・無ければ置き場の親）で解く。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::fs;
+ use std::path::Path;
+diff --git a/folio2/crates/folio/src/face_srs.rs b/folio2/crates/folio/src/face_srs.rs
+index 86ec28b970b92969266264166e5b440d182d408e..6622967eb9ff5e0f07e47c82ac75ab46ace9bdc6 100644
+--- a/folio2/crates/folio/src/face_srs.rs
++++ b/folio2/crates/folio/src/face_srs.rs
+@@ -8,7 +8,6 @@
+ //! 図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか）。図が無い面は便 33 までと byte 不変。
+ //! 章 03〜06（機能要件・非機能要件・受入基準・制約）の生成は便 100 で `face_srs_items.rs` へ移した（字は 1 字も
+ //! 変えていない）。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::path::Path;
+ 
+diff --git a/folio2/crates/folio/src/face_srs_items.rs b/folio2/crates/folio/src/face_srs_items.rs
+index 77448faa4dbadc07f07d0551fe68bc902454cb06..591460ee3d17d0d6f752a5eedb419a75ffe837bd 100644
+--- a/folio2/crates/folio/src/face_srs_items.rs
++++ b/folio2/crates/folio/src/face_srs_items.rs
+@@ -1,7 +1,6 @@
+ //! 要件書の面の章 03〜06（機能要件・非機能要件・受入基準・制約）の生成（便 100・docs/design/delivery-100.md §1 (b)）。
+ //! 便 100 で `face_srs.rs` から 1 字も変えずに移した。文脈（`Ctx`）と共有の口（`band`・`figure_open`・`figure_close`・
+ //! `fig_req`・`article_link`・`xref`・`slots`）は `face_srs.rs` のもの。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::path::Path;
+ 
+diff --git a/folio2/crates/folio/src/face_srs_rtm.rs b/folio2/crates/folio/src/face_srs_rtm.rs
+index 01d79d1c00f1519eb5e128d1a94f803fc2fdf2f8..dd7ed30f2800471e6d1a986b2bc586703850aa28 100644
+--- a/folio2/crates/folio/src/face_srs_rtm.rs
++++ b/folio2/crates/folio/src/face_srs_rtm.rs
+@@ -1,7 +1,6 @@
+ //! 要件書の面の章 07・08 の生成（便 35 で `face_srs.rs` から分けた）。章 07 は要件と根拠の対応（rtm-grid）・
+ //! 章 08 は用語集（glossary-term-table・便 36 で憲法の面の章 07 と同じ形にした・語の行は `face.rs` の共有の口）。
+ //! 文脈（`Ctx`）と共有の口（band・xref・hint 等）は `face_srs.rs` のもの。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use crate::catalog::Component;
+ use crate::cursor::{R, X};
+diff --git a/folio2/crates/folio/src/findings.rs b/folio2/crates/folio/src/findings.rs
+index eeb4c8f93d8f95b6950d18de535761238a2b1aeb..0b74ce5cbba116eb9328a6efe34e238e5cd69192 100644
+--- a/folio2/crates/folio/src/findings.rs
++++ b/folio2/crates/folio/src/findings.rs
+@@ -12,7 +12,6 @@
+ //! `<out>/<観点>/refute/<所見の id>/` へ組む（所見 file は触らない・正本は写さず親の要約値 sources.txt で縛る・全部か無しか）。
+ //! `--check` は同じ dir の result.yaml（反証役が書く）を欄の決まりで読み、その refute の値を所見の反証の結果として規則 7〜10 に渡す。
+ //! 天井の印（便 72・`stamp.rs`）は観点の数え `count_viewpoint`・所見 file の読み `read_findings`・束の歩き `walk` を crate の中から呼ぶ。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::BTreeSet;
+ use std::fs;
+diff --git a/folio2/crates/folio/src/freeze.rs b/folio2/crates/folio/src/freeze.rs
+index d294e4f8c15d1bba9033cc44ec88a1b653e8267a..631296c33b962eb60ec3e3b648a94385e7ef5ae0 100644
+--- a/folio2/crates/folio/src/freeze.rs
++++ b/folio2/crates/folio/src/freeze.rs
+@@ -6,7 +6,6 @@
+ //! 旗・列の結果・旗の後始末の型 3 つと凍結しないときの 1 行は便 111 で `phase.rs` へ降ろした（ADR-15・層 1 読む）。
+ //! 便 121（ADR-16 決定 (2)）: 列の根は憲法の名で列の根の表を引いて照らす（`check_root`）。凍結の木は組む（`build`・`texts`）と
+ //! 書く（`write_chain`）に分け、始まりの凍結 `--freeze-start` が `ids.rs` の組む・書くと合わせて 2 つを同時に書く。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::fs;
+ use std::path::{Path, PathBuf};
+diff --git a/folio2/crates/folio/src/graph.rs b/folio2/crates/folio/src/graph.rs
+index 17ea33eb7d07efb6f203636f2e98a0b3a37009db..29bbafb92441e67d0c52d380cb0a47dd36000f5e 100644
+--- a/folio2/crates/folio/src/graph.rs
++++ b/folio2/crates/folio/src/graph.rs
+@@ -9,7 +9,6 @@
+ //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
+ //! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
+ //! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+ use std::fs;
+diff --git a/folio2/crates/folio/src/lineage.rs b/folio2/crates/folio/src/lineage.rs
+index dd290b2c12b382b1a2a91131f5e3bc312ae7638a..11fcb3d95785d051399b1b9a9ce5f2df7fb2240c 100644
+--- a/folio2/crates/folio/src/lineage.rs
++++ b/folio2/crates/folio/src/lineage.rs
+@@ -2,7 +2,6 @@
+ //! day-1 の床 `scripts/check_draft.py` の diff_targets / structural_diff / verify_pair を同じ式で写す:
+ //! 隣り合う anchor の content を欄単位で比べ、その版を名指す発効した判断の amends と 1 対 1 に消し込む。
+ //! 値は型付きの木（`yaml::Value`）で読み、欄の値の表現は便 7 の正規化（`yaml::canonical`）の字面。正規表現は使わない。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+diff --git a/folio2/crates/folio/src/link.rs b/folio2/crates/folio/src/link.rs
+index 0f9751aa8427e927baa9e7b8ab7bc590199617fb..76552da35a5660cbc87bf8f4033f8176f6a583a4 100644
+--- a/folio2/crates/folio/src/link.rs
++++ b/folio2/crates/folio/src/link.rs
+@@ -5,7 +5,6 @@
+ //! 凍結 anchor の列そのもの（digest の検算・索引・版管理との照合・現行の写しとの一致）は便 7。
+ //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs`）で読み、値は持ち直さない。正規表現は使わない。
+ //! 改訂来歴の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数える。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::HashSet;
+ use std::fs;
+diff --git a/folio2/crates/folio/src/mentions.rs b/folio2/crates/folio/src/mentions.rs
+index f94572d12fe9ebb6830525a02210a7d04b6df04c..2ecdd85480b0e14f29695a314202e85b275e8818 100644
+--- a/folio2/crates/folio/src/mentions.rs
++++ b/folio2/crates/folio/src/mentions.rs
+@@ -7,7 +7,6 @@
+ //! 歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ数えずに判定の外の 1 行 `OFF` を出させ（便 156・FR5）、
+ //! 値が 0 件 でなければ「まだ分からない」（P-4.2）。
+ //! id を拾う口は refs.rs の `scan_ids` と link.rs の `scan_adr_ids`（正規表現は使わない）。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{HashMap, HashSet};
+ use std::fs;
+diff --git a/folio2/crates/folio/src/note.rs b/folio2/crates/folio/src/note.rs
+index 8b61f54cbdd5279280751a01e37aaceea779af75..6fe0f9785107ed018f045e72a07b648467401b66 100644
+--- a/folio2/crates/folio/src/note.rs
++++ b/folio2/crates/folio/src/note.rs
+@@ -13,7 +13,6 @@
+ //! 承認欄の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数え、`check_note` は読めた設計ノートを返す。
+ //! 計画の設計ノートの節の型 3 つ（行の索引・計画だけの行・判断の表）の行の形は便 183 からここが数え、置き場の決まりと計画の床は
+ //! `plan.rs` の `check_plan` が数える（判断の記録 ADR-31 決定 (2)・要件書 FR27）。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::HashSet;
+ use std::fs;
+diff --git a/folio2/crates/folio/src/refs.rs b/folio2/crates/folio/src/refs.rs
+index 4eb256492e9fb6658687df1868b274a49fd5716a..eec3c3c8fcc4b946451ec453e3d0e93b1c60a549 100644
+--- a/folio2/crates/folio/src/refs.rs
++++ b/folio2/crates/folio/src/refs.rs
+@@ -1,7 +1,6 @@
+ //! 参照 id の解決（rules 行 R-4・NFR3 / AC6）と rules 行の逆参照・憲法の件数（便 1・docs/design/delivery-1.md §1）。
+ //! day-1 の床（scripts/check_draft.py の refs / counts）と同じ式。正規表現は使わず文字の走査で判定する。
+ //! 判断の記録の id（ADR-n）は解かない（便 6 の link.rs）。凍結 anchor の列に在った過去の id は解決先に足す（便 7 (j)）。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{HashMap, HashSet};
+ 
+diff --git a/folio2/crates/folio/src/stamp.rs b/folio2/crates/folio/src/stamp.rs
+index b2bd320e57708925a9e3edbe7aaedc1a2ad64343..23cb2ea5b46bcb25f1b97f994a10c94384ae4b48 100644
+--- a/folio2/crates/folio/src/stamp.rs
++++ b/folio2/crates/folio/src/stamp.rs
+@@ -16,7 +16,6 @@
+ //! 観点の行は、まだ分からない の理由が反証の済んでいない 止める だけのとき末尾に欄 `wait: 反証` を足す。印は周の 3 値に依らず書く。
+ //! 便 176（docs/design/delivery-176.md §1 (b)・FR20）: dir 形の文書で at の頭が file 名に解けないときは、置き場の直下の .yaml の
+ //! 最上位の meta.id でも解く（ちょうど 1 file のときだけ・`meta_file`）。
+-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::BTreeSet;
+ use std::fs;
+diff --git a/xtask/tests/klint.rs b/xtask/tests/klint.rs
+index fc3f242590df9d5553b026039147d7b4a4344088..e5c9fc0618541c0af21b9a1e56db8ccdf6d5b49d 100644
+--- a/xtask/tests/klint.rs
++++ b/xtask/tests/klint.rs
+@@ -1,6 +1,6 @@
+ //! 行 k-lint-base の歯: 規則の行 R-10 の書き方を workspace の lint の表で deny にする機構（条 P-24.1）と、
+ //! 規則の行 R-4 の関数の粒度の値を写した clippy.toml と、member の manifest が表を継ぐこと（除外の表の R-10 の行が名指す member は継がず、
+-//! 行 k-lint-folio が folio の R-10 の行を消して継がせた・R-4 の行の間は表に R-4 の lint を置かない）。
++//! 行 k-lint-folio が folio の R-10 の行を消して継がせた・行 r4-table が表に R-4 の 3 つの lint を deny で足し、例外の属性を置かない）。
+ //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+ #![cfg(test)]
+ 
+@@ -25,13 +25,13 @@ const MAP: [(&str, &str, &str, &str); 18] = [
+     ("unsafe_code", "rust", "forbid", "unsafe（forbid）"),
+     ("allow_attributes", "clippy", "deny", "P-24.3"),
+     ("allow_attributes_without_reason", "clippy", "deny", "P-24.3"),
+-    ("too_many_lines", "clippy", "forbid", "R-4"),
+-    ("cognitive_complexity", "clippy", "forbid", "R-4"),
+-    ("too_many_arguments", "clippy", "forbid", "R-4"),
++    ("too_many_lines", "clippy", "deny", "R-4"),
++    ("cognitive_complexity", "clippy", "deny", "R-4"),
++    ("too_many_arguments", "clippy", "deny", "R-4"),
+ ];
+ 
+ /// 今の表の lint（表に足す行がこの一覧も直す）。
+-const ENABLED: [&str; 15] = [
++const ENABLED: [&str; 18] = [
+     "unused_must_use",
+     "unsafe_code",
+     "unwrap_used",
+@@ -47,6 +47,9 @@ const ENABLED: [&str; 15] = [
+     "print_stderr",
+     "allow_attributes",
+     "allow_attributes_without_reason",
++    "too_many_lines",
++    "cognitive_complexity",
++    "too_many_arguments",
+ ];
+ 
+ fn repo_root() -> PathBuf {
+@@ -451,6 +454,43 @@ fn klint_print_hands() {
+     }
+ }
+ 
++/// 規則の行 R-4 の 3 つの lint（一覧 MAP の拠り R-4）と、それを含む clippy の群（complexity・pedantic・restriction）の名を、
++/// 頭に字 clippy と 2 つのコロンを付けた形で、member の dir の下の .rs のどれも持たない（表の deny を属性で下げない・行 r4-table）。
++/// 名を一覧 MAP に data として持つこの歯の file は数えない。
++#[test]
++fn klint_r4_no_attr_exceptions() {
++    let root = repo_root();
++    let own = root.join("xtask/tests/klint.rs");
++    let mut marks: Vec<String> = MAP
++        .iter()
++        .filter(|m| m.3 == "R-4")
++        .map(|m| format!("clippy::{}", m.0))
++        .collect();
++    assert_eq!(marks.len(), 3, "{marks:?}");
++    for group in ["complexity", "pedantic", "restriction"] {
++        marks.push(format!("clippy::{group}"));
++    }
++    let mut seen = 0;
++    for member in members() {
++        for path in rs_files(&root.join(&member)) {
++            if path == own {
++                continue;
++            }
++            let text = std::fs::read_to_string(&path)
++                .unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
++            for mark in &marks {
++                assert!(
++                    !text.contains(mark.as_str()),
++                    "{} が {mark} を含む",
++                    path.display()
++                );
++            }
++            seen += 1;
++        }
++    }
++    assert!(seen >= 6, "見た file が {seen}");
++}
++
+ #[test]
+ fn klint_own_names_clean() {
+     let text = read("xtask/tests/klint.rs");
+@@ -464,7 +504,7 @@ fn klint_own_names_clean() {
+         names.push(after[..end].trim().to_string());
+         rest = &after[end..];
+     }
+-    assert_eq!(names.len(), 8, "{names:?}");
++    assert_eq!(names.len(), 9, "{names:?}");
+ 
+     let list = read("xtask/tests/filter-words.txt");
+     let words: Vec<&str> = body(&list).collect();
+diff --git a/xtask/tests/klintf.rs b/xtask/tests/klintf.rs
+index 28e3d5bef7639c1c43d50d4099a417c694d91617..39bda912566e5aa67e5fb6af8c70098390ff6969 100644
+--- a/xtask/tests/klintf.rs
++++ b/xtask/tests/klintf.rs
+@@ -1,8 +1,6 @@
+ //! 行 k-lint-folio-tests と k-lint-folio-deny の歯（接頭辞 klintf_）: 持ち込んだ folio の歯の根が #![cfg(test)] を置くこと・
+ //! folio の 2 つの根が lint の属性を置かず workspace の lint の表が覆うこと・allow の属性を置かないこと。
+ //! 行 k-lint-folio-roots が 2 つの根の lint の一覧を消し、表が一覧 COVER の 15 の lint を持つことを見る形にした。
+-//! 行 r4-folio-src-a から、規則の行 R-4 の関数の粒度を直した folio の file（一覧 R4_DONE）の頭に、関数の行と
+-//! 複雑度の lint を deny にする module の属性を置くことを見る（R-4 の lint を表に足す行が属性と一覧を消す）。
+ //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+ #![cfg(test)]
+ 
+@@ -78,33 +76,6 @@ const COVER: [(&str, &str, &str); 15] = [
+     ("allow_attributes_without_reason", "workspace.lints.clippy", "deny"),
+ ];
+ 
+-/// 規則の行 R-4 の関数の行と複雑度の lint を deny にする module の属性の行（直した file の頭の //! の続きの直後）。
+-const R4_DENY: &str = "#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]";
+-
+-/// R-4 の関数の粒度を直して頭に R4_DENY を置いた folio の file（crate の dir からの相対）。
+-const R4_DONE: [&str; 20] = [
+-    "src/anchor.rs",
+-    "src/check.rs",
+-    "src/face.rs",
+-    "src/face_adr.rs",
+-    "src/face_constitution.rs",
+-    "src/face_index.rs",
+-    "src/face_index_read.rs",
+-    "src/face_note.rs",
+-    "src/face_srs.rs",
+-    "src/face_srs_items.rs",
+-    "src/face_srs_rtm.rs",
+-    "src/findings.rs",
+-    "src/freeze.rs",
+-    "src/graph.rs",
+-    "src/lineage.rs",
+-    "src/link.rs",
+-    "src/mentions.rs",
+-    "src/note.rs",
+-    "src/refs.rs",
+-    "src/stamp.rs",
+-];
+-
+ fn repo_root() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+         .parent()
+@@ -225,33 +196,6 @@ fn klintf_no_allow_attrs() {
+     }
+ }
+ 
+-#[test]
+-fn klintf_r4_module_deny() {
+-    for rel in R4_DONE {
+-        let path = folio_dir().join(rel);
+-        let text =
+-            fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
+-        let lines: Vec<&str> = text.lines().collect();
+-        let head = lines.iter().take_while(|l| l.starts_with("//!")).count();
+-        assert!(head >= 1, "{} の頭の行が //! で始まらない", path.display());
+-        assert_eq!(
+-            lines.get(head).copied(),
+-            Some(R4_DENY),
+-            "{} の頭の //! の続きの直後が {R4_DENY} でない",
+-            path.display()
+-        );
+-        for lint in ["clippy::too_many_lines", "clippy::cognitive_complexity"] {
+-            let count = text.matches(lint).count();
+-            assert_eq!(count, 1, "{} の {lint} が {count} 件", path.display());
+-        }
+-        assert!(
+-            !text.contains("too_many_arguments"),
+-            "{} が too_many_arguments を含む",
+-            path.display()
+-        );
+-    }
+-}
+-
+ #[test]
+ fn klintf_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+@@ -267,7 +211,7 @@ fn klintf_own_names_clean() {
+             rest.split('(').next().unwrap_or(rest)
+         })
+         .collect();
+-    assert_eq!(names.len(), 5, "歯の数");
++    assert_eq!(names.len(), 4, "歯の数");
+     for name in names {
+         let rest = name
+             .strip_prefix("klintf_")

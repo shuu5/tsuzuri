@@ -417,6 +417,7 @@ sections:
       - {id: r4-surface-tests-a, doc: surface-wave25a}
       - {id: r4-surface-tests-b, doc: surface-wave25a}
       - {id: r4-surface-tests-c, doc: surface-wave25a}
+      - {id: r4-table, doc: surface-wave25a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
