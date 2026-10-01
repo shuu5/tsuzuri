@@ -125,7 +125,11 @@ fn tgown_own_row_and_words() {
         stage::effective_line(None),
         "表示先なし（席の目と URL に落ちる）"
     );
+    names_and_origins();
+}
 
+/// 層 A の一覧の 1 行の字と、出どころの語（既定・上書き）。
+fn names_and_origins() {
     let names = ["term-a".to_string(), "term-b".to_string()];
     assert_eq!(
         stage::names_line(&names),

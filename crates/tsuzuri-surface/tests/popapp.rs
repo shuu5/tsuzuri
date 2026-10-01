@@ -141,7 +141,11 @@ fn popapp_sites_through_helper() {
         assert!(press_fn.contains(word), "press に {word} が無い");
     }
     assert!(body(&board, "pub fn plain_click(").contains("press(e).plain()"));
+    notice_handler();
+}
 
+/// 知らせの題の link の押しの受け手は board の手を通り、窓の焦点や鍵や button を自分で読まない。
+fn notice_handler() {
     // 知らせの題の link の押しの受け手。
     let notices = read("src/account/notices.rs");
     assert_eq!(notices.matches("on:click=move |e| named_window(e, &project)").count(), 1);

@@ -168,6 +168,11 @@ fn saxis_legend_samples() {
         assert!(has_attr(head, "height", "12"), "{svg}");
         assert!(has_attr(head, "aria-hidden", "true"), "{svg}");
     }
+    sample_shapes();
+}
+
+/// 見本の svg の中の rect と line の class と位置の属性、記号でない名の見本は図を持たない。
+fn sample_shapes() {
     let run = sample_svg("run");
     let r = element(&run, "rect");
     assert!(has_attr(r, "class", "sg-run"), "{r}");

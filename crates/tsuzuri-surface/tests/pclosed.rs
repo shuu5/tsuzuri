@@ -22,15 +22,10 @@ fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
-)]
 fn card(
     id: &str,
     runs: u32,
-    stage: Stage,
-    reason: Option<String>,
+    (stage, reason): (Stage, Option<String>),
     account: Option<&str>,
     elapsed: Option<u64>,
 ) -> PipelineCard {
@@ -53,33 +48,32 @@ fn px30() -> PipelineCard {
     card(
         "px.30",
         2,
-        Stage::Landed,
-        tagged(&"a".repeat(40)),
+        (Stage::Landed, tagged(&"a".repeat(40))),
         Some("acct-1"),
         Some(3600),
     )
 }
 
 fn px31() -> PipelineCard {
-    card("px.31", 1, Stage::Landed, tagged("x"), None, Some(60))
+    card("px.31", 1, (Stage::Landed, tagged("x")), None, Some(60))
 }
 
 fn px32() -> PipelineCard {
-    card("px.32", 1, Stage::Landed, None, None, Some(120))
+    card("px.32", 1, (Stage::Landed, None), None, Some(120))
 }
 
 fn px33() -> PipelineCard {
-    card("px.33", 1, Stage::Failed, tagged("x"), None, Some(30))
+    card("px.33", 1, (Stage::Failed, tagged("x")), None, Some(30))
 }
 
 fn px34() -> PipelineCard {
-    card("px.34", 1, Stage::Landed, tagged("y"), None, Some(1_468_800))
+    card("px.34", 1, (Stage::Landed, tagged("y")), None, Some(1_468_800))
 }
 
 /// (7) closed_card は段の列が Landed で段の理由が CLOSED_TAG で始まるときだけ真。
 #[test]
 fn pclosed_closed_card_rule() {
-    let one = |stage, reason: Option<String>| card("px.1", 1, stage, reason, None, None);
+    let one = |stage, reason: Option<String>| card("px.1", 1, (stage, reason), None, None);
     assert!(closed_card(&one(Stage::Landed, tagged("x"))));
     assert!(closed_card(&one(Stage::Landed, tagged(""))));
     assert!(!closed_card(&one(Stage::Landed, None)));
@@ -114,7 +108,11 @@ fn pclosed_kcard_hover_and_lines() {
     assert_eq!(k.lead, Lead::Runs(2));
     assert_eq!(k.state, None);
     assert_eq!(k.class, "kcard");
+    other_cards();
+}
 
+/// px.31 から px.33 の札の hover と値の行。
+fn other_cards() {
     let k = kcard(&px31(), &[], NOW);
     assert_eq!(k.hover.kind, format!("run · {CLOSED_STAGE}"));
     assert_eq!(k.hover.more, vec![format!("{CLOSED_TAG}x")]);

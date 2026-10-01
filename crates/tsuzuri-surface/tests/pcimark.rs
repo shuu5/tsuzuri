@@ -8,6 +8,7 @@ use tsuzuri_contract::board::{Ci, PipelineBoard, PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::Body;
+use tsuzuri_surface::project::pipeline::Kcard;
 use tsuzuri_surface::project::pipeline::{
     CI_KEYS, CI_MARK_S, CI_WAIT_STATE, CLOSED_STAGE, Lead, ci_key, ci_shown, ci_style, content,
     kcard,
@@ -126,7 +127,11 @@ fn pci_kcard_marks() {
     assert_eq!(ok.state, None);
     assert_eq!(ok.ci, Some(Ci::Success));
     assert_eq!(ok.run_line, "↻1 · Landed · CI 成功");
+    late_and_fail(k);
+}
 
+/// CI の時刻切れと失敗と測れずの札。
+fn late_and_fail(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>) -> Kcard) {
     let late = k(Stage::Landed, None, Some(601), Some(Ci::Success));
     assert_eq!(late, k(Stage::Landed, None, Some(601), None));
     assert_eq!(late.ci, None);
@@ -153,7 +158,11 @@ fn pci_kcard_marks() {
     assert_eq!(unmeasured.lead, Lead::Why("CI 測れず".to_string()));
     assert_eq!(unmeasured.run_line, "↻1 · Stopped · CI 測れず");
     assert_eq!(unmeasured.age, "―");
+    stop_reasons(k);
+}
 
+/// 終端の理由ごとの札と、Landed の CI 失敗の札。
+fn stop_reasons(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>) -> Kcard) {
     for (stage, reason, ci, text) in [
         (
             Stage::Failed,

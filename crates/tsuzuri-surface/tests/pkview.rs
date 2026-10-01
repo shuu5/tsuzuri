@@ -150,7 +150,11 @@ fn pkview_acct_rows() {
     assert!(!ra.park);
     assert_eq!(group_word(ra.group.as_deref(), ra.park), "Tier1");
     assert_eq!(group_word(None, false), "");
+    next_and_blank(doc, b);
+}
 
+/// HOME の次の一手の行の小字と口座の欄の card が区画の字になり、parks が空の電文は今の群の字のまま。
+fn next_and_blank(doc: AccountDoc, b: usize) {
     let nx = next_all(&doc);
     let group_of = |name: &str| {
         nx.iter()

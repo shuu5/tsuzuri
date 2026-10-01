@@ -90,7 +90,11 @@ fn sgrace_wire_keys() {
             assert!(t.contains(&format!("\"{key}\":\"unknown\"")), "組 {name} の {key}");
         }
     }
+    known_round_trip();
+}
 
+/// 4 つの欄が値を持つ card と null を持つ card の電文の鍵の字と往復。
+fn known_round_trip() {
     let mut full = grace("run", "acct-5", 120);
     full.refused = Reading::Known(Some(REFUSED_AT));
     full.pressure = Reading::Known(Some(pressure("5h", 92, 85)));

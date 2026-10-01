@@ -180,7 +180,11 @@ fn seatblock_strip_rects_and_marks_per_span() {
     assert!(r24[0].height < r24[4].height);
     assert_eq!(r24[4].height, seat::HEIGHT);
     assert_eq!(r24[4].y + r24[4].height, seat::HEIGHT);
+    window_edge_cut();
+}
 
+/// 窓の右端を越える区間は at で切り、窓の外の口座の移動は縦線を置かない。
+fn window_edge_cut() {
     // 窓の右端は電文の at（右端を越える区間は at で切る・窓の外の移動は線を置かない）。
     let spans = [SeatSpan {
         from: AT - 600,
@@ -277,6 +281,11 @@ fn seatblock_usage_rows_and_bar_classes() {
         rows("silent"),
         vec![(Some("seven_day"), "wrow muted", s("12%"), 12, "", s("0m"))]
     );
+    reset_and_bar_edges();
+}
+
+/// 戻るまでの字と棒の class の境目、100 を超える割合の棒の長さ、知らない窓の名の字。
+fn reset_and_bar_edges() {
     // 戻るまでの字の境目（切り捨て）と、戻る時刻が過ぎた窓。
     for (secs, want) in [
         (0, "0m"),
@@ -473,7 +482,11 @@ fn seatblock_unknown_parts_only_unmeasured() {
         assert_eq!(s.strip(span).rects, Reading::Known(vec![]));
         assert_eq!(s.strip(span).marks, Reading::Unknown);
     }
+    unknown_and_wait();
+}
 
+/// 組 unknown と組 wait も「まだ分からない」の欄だけ測れていなく、読めた欄は出す。
+fn unknown_and_wait() {
     let u = filled("unknown");
     assert_eq!(u.low.account.as_deref(), Some("acct-4"));
     assert_eq!(u.low.usage, Reading::Unknown);
@@ -559,7 +572,11 @@ fn seatblock_keys_in_vocab_and_classes_in_stylesheet() {
     }
     assert_eq!(WINDOWS.to_vec(), keys[11..14].to_vec());
     assert_eq!(seat::BLOCK.heading, "orch_acct");
+    classes_in_stylesheet();
+}
 
+/// 組の中身と block が組む class は全部が stylesheet に在る。
+fn classes_in_stylesheet() {
     let css = read("style.css");
     let has = |name: &str| {
         let dot = format!(".{name}");

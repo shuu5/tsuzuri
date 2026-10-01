@@ -120,6 +120,11 @@ fn parts_ledger_lists_read_three_values() {
         askpage::body(&Fetched::Body(empty.clone())),
         Body::Empty(_)
     ));
+    unread_lists(empty);
+}
+
+/// 読めないとまだ読んでいない読みでの 3 つの一覧の本文と画面。
+fn unread_lists(empty: String) {
     let known = Screen::initial().after_read(&Fetched::Body(empty), 5);
     for fetched in [Fetched::NotRead, Fetched::Failed] {
         assert!(matches!(ask::body(&fetched), Body::Unmeasured(r) if !r.is_empty()));
@@ -303,7 +308,11 @@ fn parts_hover_rows_clip() {
     let mixed: String = "a字".repeat(30);
     assert_eq!(clip(&mixed).chars().count(), ROW_CHARS);
     assert!(clip(&mixed).ends_with(ELLIPSIS));
+    card_rows();
+}
 
+/// card の 4 行の class と字の数。
+fn card_rows() {
     let card = Card {
         title: "題".repeat(50),
         kind: "task".to_string(),

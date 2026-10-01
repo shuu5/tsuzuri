@@ -187,7 +187,12 @@ fn tipx_names_stay_apart() {
         rest = &after[end..];
     }
     assert!(names.len() >= 5, "{names:?}");
-    let words = [
+    names_avoid(names, &[words_front(), words_back()].concat());
+}
+
+/// 先の歯の filter の語の前半（43 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "accept_",
         "account_",
         "acctcore_",
@@ -231,6 +236,12 @@ fn tipx_names_stay_apart() {
         "seatblock_",
         "seatcard_",
         "server_",
+    ]
+}
+
+/// 先の歯の filter の語の後半（49 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "skeleton_",
         "stage_",
         "stats_",
@@ -280,7 +291,11 @@ fn tipx_names_stay_apart() {
         "mstore_",
         "athr_",
         "qblock_",
-    ];
+    ]
+}
+
+/// 歯の名の残りの字が先の歯の filter の語のどれも含まない。
+fn names_avoid(names: Vec<String>, words: &[&str]) {
     assert_eq!(words.len(), 92);
     for name in &names {
         let rest = name

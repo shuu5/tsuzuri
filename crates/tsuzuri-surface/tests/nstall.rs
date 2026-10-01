@@ -91,7 +91,11 @@ fn nstall_unjudged_box() {
         let lead = s.checks.iter().find(|c| c.kind == s.lead);
         assert_eq!(next(&s).big, big(s.lead, lead), "{name}");
     }
+    big_and_label(open);
+}
 
+/// big 自身の箱と、見出しの語と中身の字。
+fn big_and_label(open: NextStep) {
     // big 自身は変えない（なしを判じなかった結果を渡しても今のなしの箱）。
     let unjudged_check = open
         .checks

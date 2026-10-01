@@ -128,6 +128,11 @@ fn nodepage_frame_and_nav() {
         .map(|l| l.key)
         .collect();
     assert_eq!(keys, nav_keys);
+    node_links();
+}
+
+/// 節点の頁への link の字と頁の snapshot。
+fn node_links() {
     // 節点の頁への link の字。
     assert_eq!(
         frame::node_href("FR1", Mode::Expert),
@@ -280,6 +285,11 @@ fn nodepage_fixture_layout() {
         ]
     );
     assert_eq!(lay.lane(NodeKind::Question).map(|l| l.count), Some(1));
+    box_places(lay);
+}
+
+/// fixture の箱の置き場。
+fn box_places(lay: around::Layout) {
     let boxes: Vec<(&str, u32, u32)> =
         ["P-1", "ADR-1", "FR1", "AC1", "e.2", "e.2:20260927T0000Z-1"]
             .into_iter()
@@ -300,7 +310,11 @@ fn nodepage_fixture_layout() {
         ]
     );
     assert_eq!(lay.boxes.len(), 6);
+    col_widths();
+}
 
+/// 列の幅と、同じ升の節点の並びと列の鍵。
+fn col_widths() {
     // 列の幅は 168 から 300 に収める（7 列は 168・1 列は 300）。
     let mut all = doc_of("c", vec![row("c", NodeKind::Req, None, 0, None)]);
     let one = layout(&all);
@@ -390,6 +404,11 @@ fn nodepage_lines_from_via() {
         ]
     );
     assert_eq!(line_style(EdgeType::Basis), LineStyle::Solid);
+    picture_and_light(doc, lay);
+}
+
+/// 図の字と、光らせ方と凡例。
+fn picture_and_light(doc: AroundDoc, lay: around::Layout) {
     let picture = svg(&doc, &lay);
     assert!(picture.contains(r#"d="M413 174 C 403 174, 403 54, 393 54""#));
     assert!(picture.contains(r#"<g class="e" data-i="0" data-u="P-1" data-d="FR1">"#));
@@ -446,7 +465,11 @@ fn nodepage_head() {
     assert!(!h.alert);
     assert_eq!(h.shape, "shape band-srs big fill");
     assert!(vocab().term(h.kind_key).is_some());
+    open_head();
+}
 
+/// open の問いが中心のときの頭。
+fn open_head() {
     // open の問いが中心: 状態の字・出所なし・質問の頁への link。
     let q = doc_of(
         "e.2",
@@ -467,6 +490,11 @@ fn nodepage_head() {
         node::answer_href("e.2", Mode::Expert),
         "?page=ask&id=e.2&mode=expert"
     );
+    other_heads();
+}
+
+/// 閉じた問いと走行と設計文書の節点の頭・題の長さ・中心の無い頭。
+fn other_heads() {
     // 閉じた問い・open の task は link を持たない。
     for (kind, status) in [
         (NodeKind::Question, "closed"),
@@ -651,6 +679,11 @@ fn nodepage_page_state() {
             "{text}"
         );
     }
+    unmeasured_reasons();
+}
+
+/// 読めた本文と各状態の測れていない理由。
+fn unmeasured_reasons() {
     let ok = state(&Fetched::Body(fixture_text()), Some(200));
     assert_eq!(ok, PageState::Doc(fixture()));
     assert_eq!(unmeasured_reason(&ok), None);

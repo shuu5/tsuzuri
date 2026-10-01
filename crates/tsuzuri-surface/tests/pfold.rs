@@ -61,6 +61,11 @@ fn pfold_closable_rules() {
             assert_eq!(col.more(open), None);
         }
     }
+    plus_or_close(cols);
+}
+
+/// どの列も「+n」と畳む button を同時に出さない。
+fn plus_or_close(cols: Vec<Column>) {
     // 「+n」と畳む button は同じ列に同時には出ない。
     for col in &cols {
         for open in [true, false] {

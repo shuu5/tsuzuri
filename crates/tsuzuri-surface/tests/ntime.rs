@@ -192,7 +192,11 @@ fn ntime_request_by_kind() {
         None
     );
     assert_eq!(request(&center(&around_as(NodeKind::Memo, "t3-hub.8"))), None);
+    kept_wants(task);
+}
 
+/// 近傍の読みの状態ごとに保つ値。
+fn kept_wants(task: Want) {
     let task_doc = PageState::Doc(around_as(NodeKind::Task, "t3-hub.2"));
     assert_eq!(kept_want(None, &task_doc), Some(task.clone()));
     let via_state = nodearound::state(
@@ -246,7 +250,11 @@ fn ntime_chips_group_and_colour() {
     assert_eq!(stage_col("Spawned", None), "run");
     assert_eq!(stage_col("Landed", None), "land");
     assert_eq!(stage_col("Weird", None), "wait");
+    chip_groups();
+}
 
+/// 続く同じ段をまとめた chip の並び。
+fn chip_groups() {
     assert_eq!(
         chips(&steps(&[("Intake", None, None), ("Intake", None, None)])),
         vec![chip("Intake", "stg c-wait", Some("stage:Intake"))]

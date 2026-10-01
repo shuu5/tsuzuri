@@ -154,7 +154,11 @@ fn pipe_more_button_and_open_column_in_url() {
     let stop = &cols[2];
     assert_eq!(ids(stop, false).len(), 3);
     assert_eq!(stop.more(false), None);
+    open_in_url(&cols);
+}
 
+/// 開いた列の名は URL の query（鍵 col）に残り、頁を開き直しても開いたまま。
+fn open_in_url(cols: &[Column]) {
     assert_eq!(open_columns(""), vec![]);
     let url = with_open("?mode=expert", PipelineColumn::Landed);
     assert_eq!(url, "?mode=expert&col=land");
@@ -210,7 +214,11 @@ fn pipe_titles_from_ledger_cut_to_36() {
                 .all(|k| k.title.is_none())
         );
     }
+    leads_and_classes(find, rows);
+}
 
+/// 止まった列の札は段の理由・ほかの列の札は回数と、札の class と経過の無い札の経過の字。
+fn leads_and_classes(find: impl Fn(&str) -> pipeline::Kcard, rows: Vec<LedgerRow>) {
     // 止まった列は回数の代わりに段の理由（理由が空なら段の名）・ほかの列は回数。
     assert_eq!(find("px.5").lead, Lead::Why("about:write-set".to_string()));
     assert_eq!(find("px.6").lead, Lead::Why("verify が赤".to_string()));

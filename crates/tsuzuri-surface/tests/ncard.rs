@@ -122,7 +122,11 @@ fn ncard_node_card_on_fixture() {
     assert_eq!(run.src, "…/fleet/events.jsonl");
     assert_eq!(run.more, vec!["<state dir>/fleet/events.jsonl".to_string()]);
     assert_eq!(card(&doc, "r-12").kind, "run · pipeline · 状態なし");
+    long_and_rows(doc);
+}
 
+/// 長い題の切り詰めと、設計ノートの行の card。
+fn long_and_rows(doc: GraphDoc) {
     let long = card(&doc, "R-4");
     assert_eq!(long.title, "abcdefghij abcdefghij abcdefghij abcdefghij");
     let first = &long.rows()[0].1;

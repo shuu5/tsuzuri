@@ -109,7 +109,12 @@ fn ticker_dom_reads_the_clock() {
 /// (7) この file の歯の名は ticker_ で始まり、残りの字は着地済みの行の filter の語を含まない。
 #[test]
 fn ticker_names_avoid_other_filter_words() {
-    const WORDS: [&str; 65] = [
+    names_avoid(&[words_front(), words_back()].concat());
+}
+
+/// 着地済みの行の filter の語の前半（33 語）。
+fn words_front() -> &'static [&'static str] {
+    &[
         "accept_",
         "account_",
         "acctcore_",
@@ -143,6 +148,12 @@ fn ticker_names_avoid_other_filter_words() {
         "hspage_",
         "ledgerblock_",
         "mapgraph_",
+    ]
+}
+
+/// 着地済みの行の filter の語の後半（32 語）。
+fn words_back() -> &'static [&'static str] {
+    &[
         "mapview_",
         "nextstep_",
         "nodepage_",
@@ -175,7 +186,11 @@ fn ticker_names_avoid_other_filter_words() {
         "brand_",
         "runsdoc_",
         "nbatch_",
-    ];
+    ]
+}
+
+/// 歯の名は 6 つで、どれも ticker_ で始まり、残りの字が filter の語のどれも含まない。
+fn names_avoid(words: &[&str]) {
     let text = read("tests/ticker.rs");
     let lines: Vec<&str> = text.lines().map(str::trim).collect();
     let names: Vec<String> = lines
@@ -191,7 +206,7 @@ fn ticker_names_avoid_other_filter_words() {
         let tail = name
             .strip_prefix("ticker_")
             .unwrap_or_else(|| panic!("{name} は ticker_ で始まる"));
-        for word in WORDS {
+        for word in words {
             assert!(!tail.contains(word), "{name} は {word} を含まない");
         }
     }

@@ -212,6 +212,11 @@ fn mtree_views_six_in_url() {
             Band::DesignNote
         ]
     );
+    ledger_bands();
+}
+
+/// 台帳の木の帯と、2 つの木の帯を繋いだ並び。
+fn ledger_bands() {
     assert_eq!(Tree::Ledger.bands(), [Band::Beads, Band::Pipeline]);
     let joined: Vec<Band> = Tree::ALL
         .iter()
@@ -290,6 +295,11 @@ fn mtree_vocab_budget() {
             View::ALL[i]
         );
     }
+    key_notes(term);
+}
+
+/// 3 つの鍵の注釈と語の行の形。
+fn key_notes(term: impl Fn(&str) -> &'static tsuzuri_surface::vocab::Term) {
     for key in ["view_design", "view_ledger", "views"] {
         let n = note(key).unwrap_or_else(|| panic!("{key} の注釈"));
         assert!(text(&n.head).chars().count() <= 40, "{key} の 1 行目");
@@ -426,7 +436,11 @@ fn mtree_ledger_on_fixture() {
     let r1 = item(&f, "r-1");
     assert_eq!(r1.shape, "shape band-pipeline fill");
     assert_eq!(r1.title, "t3-hub.2 の 1 回目");
+    closed_status(doc, f);
+}
 
+/// 閉じた状態の語と、状態を替えた台帳の木の開き閉じ。
+fn closed_status(doc: GraphDoc, f: Forest) {
     for s in ["closed", "rejected", "superseded"] {
         assert!(is_closed(Some(s)), "{s}");
     }
@@ -602,7 +616,11 @@ fn mtree_unread_and_empty() {
         ]
     );
     assert!(f.items.is_empty());
+    empty_doc();
+}
 
+/// 中身の無い電文の 2 つの木。
+fn empty_doc() {
     let mut empty = fixture();
     empty.nodes.clear();
     empty.edges.clear();
