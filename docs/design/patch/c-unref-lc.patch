@@ -1,0 +1,1467 @@
+diff --git a/crates/tsuzuri-boundary/src/server/board.rs b/crates/tsuzuri-boundary/src/server/board.rs
+index d0712fb4dd25d6f7f02310277e9c2400fe84f30c..1d1e42b94ec53f47426969a639f67d57423e277f 100644
+--- a/crates/tsuzuri-boundary/src/server/board.rs
++++ b/crates/tsuzuri-boundary/src/server/board.rs
+@@ -1,12 +1,12 @@
+ //! 読む側の口（便 e-read）: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
+ //! - GET /api/pipeline — pipeline の板（PipelineBoard・札は集めた今の台帳の字から組み、形の崩れは見張りの読みの周の
+ //!   台帳の字と器の doctor の台帳の形の行の組から写す・行 c-pipe-misfit・行 c-misfit-pair）
+-//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats）
++//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から・行 c-unref-lc）
+ //! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
+ //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
+ //! - GET /api/graph/view — 地図のグラフの眺め（GraphView・便 e-view）
+ //! - GET /api/around — 節点の近傍（AroundDoc・便 e-view）
+-//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・台帳だけを読む・便 e-view）
++//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む・行 c-unref-lc）
+ //!
+ //! 字は要求のたびに集める。台帳は bd の読み（`ledger::Source`）が返した字、設計の索引は設計の道具の
+ //! 標準出力（`design::Design`）、走行は器の event log の file（`runs::Runs`）。読めない出所は空の字で渡し、
+@@ -100,9 +100,21 @@ pub fn pipeline(texts: &Texts, kept: Option<&Kept>, now: EpochSecs) -> PipelineB
+     board
+ }
+ 
+-/// 台帳の指標（台帳が読めなければ「まだ分からない」）。
+-pub fn metrics(texts: &Texts, now: EpochSecs) -> Reading<LedgerStats> {
+-    tsuzuri_core::ledger::stats(&texts.ledger, now)
++/// 台帳の指標（台帳が読めなければ「まだ分からない」・未反映の 3 欄は局面の出力の字 `json` と古さの印の字
++/// `stale` から読んだ一覧で数え直す）。
++pub fn metrics(
++    texts: &Texts,
++    json: &str,
++    stale: Option<&str>,
++    now: EpochSecs,
++) -> Reading<LedgerStats> {
++    match tsuzuri_core::ledger::stats(&texts.ledger, now) {
++        Reading::Known(stats) => Reading::Known(tsuzuri_core::ledger::with_unreflected(
++            stats,
++            &tsuzuri_core::ledger::unreflected(&texts.ledger, json, stale),
++        )),
++        Reading::Unknown => Reading::Unknown,
++    }
+ }
+ 
+ /// 次の一手。
+@@ -191,9 +203,10 @@ pub fn around(texts: &Texts, center: &str, steps: u8, fold: Fold) -> Option<Arou
+     graph::around(&built(texts), center, steps, fold)
+ }
+ 
+-/// 未反映の一覧（台帳が読めなければ 3 つとも「まだ分からない」・便 e-view）。
+-pub fn unreflected(texts: &Texts, now: EpochSecs) -> UnreflectedList {
+-    list(&tsuzuri_core::ledger::unreflected(&texts.ledger, now))
++/// 未反映の一覧（局面の出力の字 `json` と古さの印の字 `stale` が無いか読めなければ 3 つとも「まだ分からない」・
++/// 題は台帳の字から引く・行 c-unref-lc）。
++pub fn unreflected(texts: &Texts, json: &str, stale: Option<&str>) -> UnreflectedList {
++    list(&tsuzuri_core::ledger::unreflected(&texts.ledger, json, stale))
+ }
+ 
+ /// 中核の crate の未反映の一覧を電文に写す。
+@@ -214,7 +227,8 @@ pub fn list(u: &Unreflected) -> UnreflectedList {
+     UnreflectedList {
+         memos: rows(&u.memos),
+         rulings: rows(&u.rulings),
+-        requests: rows(&u.requests),
++        utterances: rows(&u.utterances),
++        stale: u.stale.clone(),
+     }
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/routes/metrics.rs b/crates/tsuzuri-boundary/src/server/routes/metrics.rs
+index 46362bc6448ce6a33b6a794860637b82800eaa4a..a9f750e551a9525d11f8592bafb1bb1f4498285f 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/metrics.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/metrics.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/metrics — 台帳の指標（LedgerStats）。
++//! GET /api/metrics — 台帳の指標（LedgerStats・未反映の 3 欄は state dir の局面の出力から読む・行 c-unref-lc）。
+ 
+ use tsuzuri_contract::wire;
+ 
+@@ -17,8 +17,17 @@ pub(in crate::server) const ROUTE: Entry = Entry {
+ fn metrics(_: &Request, shared: &Shared) -> Response {
+     let sources = &shared.sources;
+     let (texts, stale) = sources.gather_held(false, false);
++    let (out, marks) = shared.cases.texts();
+     aged(
+-        json(200, wire::encode(&board::metrics(&texts, events::now()))),
++        json(
++            200,
++            wire::encode(&board::metrics(
++                &texts,
++                &out,
++                marks.as_deref(),
++                events::now(),
++            )),
++        ),
+         stale,
+     )
+ }
+diff --git a/crates/tsuzuri-boundary/src/server/routes/unreflected.rs b/crates/tsuzuri-boundary/src/server/routes/unreflected.rs
+index cfdd4cc052838a114061dad8e0e0ae0eee07aa0a..efeb05171a3a41a77708eab9a6b5fc400dfa9932 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/unreflected.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/unreflected.rs
+@@ -1,10 +1,10 @@
+-//! GET /api/unreflected — 未反映の一覧（UnreflectedList・便 e-view）。
++//! GET /api/unreflected — 未反映の一覧（UnreflectedList・便 e-view・state dir の局面の出力から読む・行 c-unref-lc）。
+ 
+ use tsuzuri_contract::wire;
+ 
+ use crate::server::http::{Request, Response};
+ use crate::server::route::{Entry, Key, Match};
+-use crate::server::{Shared, aged, board, events, json};
++use crate::server::{Shared, aged, board, json};
+ 
+ pub(in crate::server) const ROUTE: Entry = Entry {
+     key: Key {
+@@ -17,10 +17,11 @@ pub(in crate::server) const ROUTE: Entry = Entry {
+ fn unreflected(_: &Request, shared: &Shared) -> Response {
+     let sources = &shared.sources;
+     let (texts, stale) = sources.gather_held(false, false);
++    let (out, marks) = shared.cases.texts();
+     aged(
+         json(
+             200,
+-            wire::encode(&board::unreflected(&texts, events::now())),
++            wire::encode(&board::unreflected(&texts, &out, marks.as_deref())),
+         ),
+         stale,
+     )
+diff --git a/crates/tsuzuri-boundary/tests/bvuroute.rs b/crates/tsuzuri-boundary/tests/bvuroute.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a77549623334b3332c6474866eef2a8324cc2c23
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/bvuroute.rs
+@@ -0,0 +1,157 @@
++//! 未反映の口と指標の口が state dir の局面の出力を読む歯（接頭辞 bvuroute_・設計ノート surface-wave26a 行 c-unref-lc の完了の条件）。
++//! server は同じ process の thread で 127.0.0.1 の空き port に立て、GET を素の TCP で撃つ。
++//! fixture の tests/fixtures/case/unref.json と lifecycle.stale（読むだけ）を state dir の fleet の下に写す。
++#![cfg(test)]
++
++use std::fs;
++use std::io::{Read, Write};
++use std::net::{SocketAddr, TcpStream};
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::thread;
++use std::time::Duration;
++
++use tsuzuri_boundary::server::board::list;
++use tsuzuri_boundary::server::{Config, Server};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::stats::{LedgerStats, UnreflectedCount, UnreflectedKind, UnreflectedList};
++use tsuzuri_contract::wire;
++use tsuzuri_core::ledger::unreflected;
++
++fn fixture(name: &str) -> String {
++    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/case")
++        .join(name);
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++/// 歯ごとの作業場（repo・面の file の置き場・state dir・空の台帳を返す偽の bd）。
++struct Place {
++    root: PathBuf,
++}
++
++impl Place {
++    fn new(name: &str) -> Place {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("bvuroute")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        for dir in [
++            root.join("repo/.beads"),
++            root.join("files"),
++            root.join("state/fleet"),
++        ] {
++            fs::create_dir_all(dir).expect("置き場");
++        }
++        fs::write(root.join("files/index.html"), "tz").expect("index.html");
++        let bd = root.join("bd");
++        fs::write(&bd, "#!/bin/sh\necho '[]'\n").expect("偽の bd");
++        fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).expect("偽の bd の権限");
++        for (to, from) in [
++            ("lifecycle.json", "unref.json"),
++            ("lifecycle.stale", "lifecycle.stale"),
++        ] {
++            fs::write(root.join("state/fleet").join(to), fixture(from)).expect("fleet の file");
++        }
++        Place { root }
++    }
++
++    /// state dir を置くか選んで server を立て、口の住所を返す。
++    fn serve(&self, with_state: bool) -> SocketAddr {
++        let config = Config {
++            bd: self.root.join("bd").into(),
++            state_dir: with_state.then(|| self.root.join("state")),
++            ..Config::new(
++                self.root.join("repo"),
++                "127.0.0.1:0".parse().expect("bind 先"),
++                self.root.join("files"),
++            )
++        };
++        let server = Server::bind(&config).expect("起動");
++        let addr = server.local_addr().expect("口の住所");
++        thread::spawn(move || server.run());
++        addr
++    }
++}
++
++/// GET を 1 つ撃ち、本文を返す（200 でなければ落ちる）。
++fn get(addr: SocketAddr, path: &str) -> String {
++    let mut s = TcpStream::connect(addr).expect("接続");
++    s.set_read_timeout(Some(Duration::from_secs(20)))
++        .expect("timeout");
++    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
++        .expect("要求を書く");
++    let mut out = Vec::new();
++    s.read_to_end(&mut out).expect("応答を読む");
++    let text = String::from_utf8(out).expect("応答の字");
++    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
++    assert!(head.starts_with("HTTP/1.1 200"), "{path}: {head}");
++    body.to_string()
++}
++
++/// (1) 口 /api/unreflected の電文は、state dir の出力と古さの印と台帳の字から中核の unreflected が組む一覧の電文と
++/// 同じ字で、memo 2・裁定 1・発話 1 と古さの印 ledger-gate を持つ。
++#[test]
++fn bvuroute_list_matches_core() {
++    let place = Place::new("list");
++    let body = get(place.serve(true), "/api/unreflected");
++    let want = list(&unreflected(
++        "[]",
++        &fixture("unref.json"),
++        Some(&fixture("lifecycle.stale")),
++    ));
++    assert_eq!(body, wire::encode(&want).expect("電文"));
++    let got: UnreflectedList = wire::decode(&body).expect("未反映の電文の形");
++    let len = |r: &Reading<Vec<_>>| match r {
++        Reading::Known(rows) => Some(rows.len()),
++        Reading::Unknown => None,
++    };
++    assert_eq!(
++        (len(&got.memos), len(&got.rulings), len(&got.utterances)),
++        (Some(2), Some(1), Some(1))
++    );
++    assert_eq!(got.stale, ["ledger-gate"]);
++}
++
++/// (2) 口 /api/metrics の指標の未反映の 3 欄は state dir の出力から数えた件数（memo 2・裁定 1・発話 1・和 4）。
++#[test]
++fn bvuroute_metrics_counts() {
++    let place = Place::new("metrics");
++    let body = get(place.serve(true), "/api/metrics");
++    let Reading::Known(stats) = wire::decode::<Reading<LedgerStats>>(&body).expect("指標の電文")
++    else {
++        panic!("空の台帳は読める: {body}");
++    };
++    let count = |kind, count| UnreflectedCount { kind, count };
++    assert_eq!(
++        stats.unreflected_kinds,
++        vec![
++            count(UnreflectedKind::Memo, 2),
++            count(UnreflectedKind::Ruling, 1),
++            count(UnreflectedKind::Utterance, 1),
++        ]
++    );
++    assert_eq!(stats.unreflected, 4);
++    assert!(stats.unreflected_unknown.is_empty());
++}
++
++/// (3) state dir を省いた server は 2 つの口とも 3 種を「まだ分からない」にし、古さの印を持たず、数は 0。
++#[test]
++fn bvuroute_no_state_dir_unknown() {
++    let place = Place::new("nostate");
++    let addr = place.serve(false);
++    let got: UnreflectedList =
++        wire::decode(&get(addr, "/api/unreflected")).expect("未反映の電文の形");
++    assert_eq!(
++        (got.memos, got.rulings, got.utterances),
++        (Reading::Unknown, Reading::Unknown, Reading::Unknown)
++    );
++    assert!(got.stale.is_empty());
++    let body = get(addr, "/api/metrics");
++    let Reading::Known(stats) = wire::decode::<Reading<LedgerStats>>(&body).expect("指標の電文")
++    else {
++        panic!("空の台帳は読める: {body}");
++    };
++    assert_eq!(stats.unreflected, 0);
++    assert_eq!(stats.unreflected_unknown, UnreflectedKind::ALL.to_vec());
++}
+diff --git a/crates/tsuzuri-boundary/tests/server_view.rs b/crates/tsuzuri-boundary/tests/server_view.rs
+index 3b83588542419c7114418e34215998e9c4daf346..8565b4614fa8940a3c88efa071e01bd7dab22a39 100644
+--- a/crates/tsuzuri-boundary/tests/server_view.rs
++++ b/crates/tsuzuri-boundary/tests/server_view.rs
+@@ -215,7 +215,8 @@ fn wire_list(u: &Unreflected) -> UnreflectedList {
+     UnreflectedList {
+         memos: rows(&u.memos),
+         rulings: rows(&u.rulings),
+-        requests: rows(&u.requests),
++        utterances: rows(&u.utterances),
++        stale: u.stale.clone(),
+     }
+ }
+ 
+@@ -303,18 +304,20 @@ fn server_view_unreflected_matches_core() {
+     let place = Place::new("unreflected", Bd::Ok);
+     let addr = place.serve();
+     let ledger = read_fixture(LEDGER);
+-    let (body, from, to) = get(addr, "/api/unreflected");
++    let (body, _, _) = get(addr, "/api/unreflected");
+     let list: UnreflectedList = decode!(body);
+-    // 局面の出力を読む行 c-unref-lc までは、台帳が読めても 3 種とも「まだ分からない」。
++    // state dir の局面の出力が無いので、台帳が読めても 3 種とも「まだ分からない」（行 c-unref-lc）。
+     assert_eq!(
+-        (list.memos, list.rulings, list.requests),
++        (list.memos, list.rulings, list.utterances),
+         (Reading::Unknown, Reading::Unknown, Reading::Unknown),
+         "{body}"
+     );
+-    assert!(
+-        (from..=to)
+-            .any(|t| encoded!(wire_list(&tsuzuri_core::ledger::unreflected(&ledger, t))) == body),
+-        "未反映の電文の字が中核の値と違う（{from}..={to}）: {body}"
++    assert_eq!(
++        encoded!(wire_list(&tsuzuri_core::ledger::unreflected(
++            &ledger, "", None
++        ))),
++        body,
++        "未反映の電文の字が中核の値と違う"
+     );
+     assert_eq!(place.folio_calls(), 0, "未反映の口は設計の道具を撃たない");
+ }
+@@ -326,7 +329,7 @@ fn server_view_bd_fails_unknown() {
+     let (body, _, _) = get(addr, "/api/unreflected");
+     let list: UnreflectedList = decode!(body);
+     assert_eq!(
+-        (list.memos, list.rulings, list.requests),
++        (list.memos, list.rulings, list.utterances),
+         (Reading::Unknown, Reading::Unknown, Reading::Unknown),
+         "{body}"
+     );
+diff --git a/crates/tsuzuri-contract/src/stats.rs b/crates/tsuzuri-contract/src/stats.rs
+index dcc90bcfbbfc489d9c60467d1011ad842951e1ec..0b56056e334961d81cb625a5549db7bd44e6e572 100644
+--- a/crates/tsuzuri-contract/src/stats.rs
++++ b/crates/tsuzuri-contract/src/stats.rs
+@@ -52,22 +52,23 @@ pub struct MemoStats {
+     pub created_p50: Option<EpochSecs>,
+ }
+ 
+-/// 未反映の種類（閉じた 3）。
++/// 未反映の種類（閉じた 3・器の局面の出力が席の手番とする 3 つ・要望は発端を持つ memo で種類にしない）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+ #[serde(rename_all = "kebab-case")]
+ pub enum UnreflectedKind {
++    /// 局面が処置の待ち（memo-actionable）か形の崩れ（misfit）の memo。
+     Memo,
+-    /// 処分の宣言の無い裁定。
++    /// 局面が裁定の反映待ち（ruling-unreflected）の問い。
+     Ruling,
+-    /// 反映されていない要望。
+-    Request,
++    /// 局面が未仕分け（utterance-open）の発話。
++    Utterance,
+ }
+ 
+ impl UnreflectedKind {
+     pub const ALL: [UnreflectedKind; 3] = [
+         UnreflectedKind::Memo,
+         UnreflectedKind::Ruling,
+-        UnreflectedKind::Request,
++        UnreflectedKind::Utterance,
+     ];
+ }
+ 
+@@ -78,7 +79,7 @@ pub struct UnreflectedCount {
+     pub count: u32,
+ }
+ 
+-/// 未反映の 1 件（bead の id の字・題・作った時刻・作った時刻が読めなければ None）。
++/// 未反映の 1 件（部品の id の字〔bead id か発話の ts〕・題〔台帳に無ければ空〕・作った時刻・読めなければ None）。
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct UnreflectedRow {
+     pub id: String,
+@@ -86,12 +87,14 @@ pub struct UnreflectedRow {
+     pub created: Option<EpochSecs>,
+ }
+ 
+-/// 未反映の一覧（種類ごとに、読めた一覧か「まだ分からない」・便 e-view）。
++/// 未反映の一覧（種類ごとに、読めた一覧か「まだ分からない」・便 e-view・行 c-unref-lc）。
+ #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+ pub struct UnreflectedList {
+     pub memos: Reading<Vec<UnreflectedRow>>,
+     pub rulings: Reading<Vec<UnreflectedRow>>,
+-    pub requests: Reading<Vec<UnreflectedRow>>,
++    pub utterances: Reading<Vec<UnreflectedRow>>,
++    /// 局面の出力の古さの印の種類の字（印が無ければ空・空でなければ一覧は古い）。
++    pub stale: Vec<String>,
+ }
+ 
+ /// 台帳の指標（時点・判定・主指標・日ごとの 14 本・epic の進み・memo・未反映）。
+@@ -114,7 +117,7 @@ pub struct LedgerStats {
+     pub days: Vec<DayCount>,
+     pub epics: Vec<EpicProgress>,
+     pub memo: MemoStats,
+-    /// 未反映の数（読めた種類の数の和・今は memo の数）。
++    /// 未反映の数（読めた種類の数の和）。
+     pub unreflected: u32,
+     /// 未反映の読めた種類ごとの件数（`UnreflectedKind::ALL` の順・読めない種類は持たない・件数の和が `unreflected`）。
+     pub unreflected_kinds: Vec<UnreflectedCount>,
+diff --git a/crates/tsuzuri-contract/tests/cform_stats.rs b/crates/tsuzuri-contract/tests/cform_stats.rs
+index 54ee5b1f8a6203c59950c42d7f2e48ee71dc5003..5162c8be0b2955f8053ce259d3b98c9c61e970db 100644
+--- a/crates/tsuzuri-contract/tests/cform_stats.rs
++++ b/crates/tsuzuri-contract/tests/cform_stats.rs
+@@ -114,27 +114,32 @@ fn step_forms() -> Vec<Box<dyn Form>> {
+             }],
+         ),
+         form("stats::UnreflectedRow", unreflected_rows()),
+-        form(
+-            "stats::UnreflectedList",
+-            vec![
+-                UnreflectedList {
+-                    memos: Reading::Known(unreflected_rows()),
+-                    rulings: Reading::Unknown,
+-                    requests: Reading::Unknown,
+-                },
+-                UnreflectedList {
+-                    memos: Reading::Known(vec![]),
+-                    rulings: Reading::Known(vec![]),
+-                    requests: Reading::Known(vec![]),
+-                },
+-                // 台帳が読めない。
+-                UnreflectedList {
+-                    memos: Reading::Unknown,
+-                    rulings: Reading::Unknown,
+-                    requests: Reading::Unknown,
+-                },
+-            ],
+-        ),
++        form("stats::UnreflectedList", unreflected_lists()),
++    ]
++}
++
++fn unreflected_lists() -> Vec<UnreflectedList> {
++    vec![
++        // 古さの印の在る出力。
++        UnreflectedList {
++            memos: Reading::Known(unreflected_rows()),
++            rulings: Reading::Unknown,
++            utterances: Reading::Unknown,
++            stale: vec!["ledger-gate".to_string()],
++        },
++        UnreflectedList {
++            memos: Reading::Known(vec![]),
++            rulings: Reading::Known(vec![]),
++            utterances: Reading::Known(vec![]),
++            stale: vec![],
++        },
++        // 局面の出力が読めない。
++        UnreflectedList {
++            memos: Reading::Unknown,
++            rulings: Reading::Unknown,
++            utterances: Reading::Unknown,
++            stale: vec![],
++        },
+     ]
+ }
+ 
+@@ -190,7 +195,7 @@ fn ledger_stats() -> LedgerStats {
+             kind: UnreflectedKind::Memo,
+             count: 3,
+         }],
+-        unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Request],
++        unreflected_unknown: vec![UnreflectedKind::Ruling, UnreflectedKind::Utterance],
+     }
+ }
+ 
+diff --git a/crates/tsuzuri-contract/tests/snapshots/stats.json b/crates/tsuzuri-contract/tests/snapshots/stats.json
+index eb589eb21f7fff30291e372637c2c2541838784b..c396534061ba9f714ca19447064ad8e87d3f4ea3 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/stats.json
++++ b/crates/tsuzuri-contract/tests/snapshots/stats.json
+@@ -56,7 +56,7 @@
+       ],
+       "unreflected_unknown": [
+         "ruling",
+-        "request"
++        "utterance"
+       ]
+     },
+     {
+@@ -89,7 +89,7 @@
+       "unreflected_unknown": [
+         "memo",
+         "ruling",
+-        "request"
++        "utterance"
+       ]
+     }
+   ],
+@@ -171,7 +171,10 @@
+         ]
+       },
+       "rulings": "unknown",
+-      "requests": "unknown"
++      "utterances": "unknown",
++      "stale": [
++        "ledger-gate"
++      ]
+     },
+     {
+       "memos": {
+@@ -180,14 +183,16 @@
+       "rulings": {
+         "known": []
+       },
+-      "requests": {
++      "utterances": {
+         "known": []
+-      }
++      },
++      "stale": []
+     },
+     {
+       "memos": "unknown",
+       "rulings": "unknown",
+-      "requests": "unknown"
++      "utterances": "unknown",
++      "stale": []
+     }
+   ]
+ }
+diff --git a/crates/tsuzuri-core/src/ledger/mod.rs b/crates/tsuzuri-core/src/ledger/mod.rs
+index b47f4903925e642cd2e9ea6336ed363df356fcb0..708a6b8470b8697fc19feff4e4618f4bb69f2859 100644
+--- a/crates/tsuzuri-core/src/ledger/mod.rs
++++ b/crates/tsuzuri-core/src/ledger/mod.rs
+@@ -13,7 +13,7 @@ use tsuzuri_contract::graph::NodeKind;
+ use crate::graph::build::{bead_kind, read_ledger};
+ 
+ pub use facts::facts;
+-pub use stats::{JudgeInput, THRESHOLDS, Thresholds, judge, judge_of, stats};
++pub use stats::{JudgeInput, THRESHOLDS, Thresholds, judge, judge_of, stats, with_unreflected};
+ pub use unreflected::{Unreflected, UnreflectedItem, unreflected};
+ 
+ /// 1 日の秒。
+diff --git a/crates/tsuzuri-core/src/ledger/stats.rs b/crates/tsuzuri-core/src/ledger/stats.rs
+index 92f67f188d89e9e733342cfc07f6e524babdd26c..ab3a7d1d04eab2bd1bb98f1fb5fc8591ba8ca4b7 100644
+--- a/crates/tsuzuri-core/src/ledger/stats.rs
++++ b/crates/tsuzuri-core/src/ledger/stats.rs
+@@ -280,6 +280,14 @@ fn unreflected_counts(list: &Unreflected) -> Vec<UnreflectedCount> {
+         .collect()
+ }
+ 
++/// 指標の未反映の 3 欄を一覧から数え直す（種類ごとの件数を 1 度だけ数え、数はその和・行 c-unref-lc）。
++pub fn with_unreflected(mut stats: LedgerStats, list: &Unreflected) -> LedgerStats {
++    stats.unreflected_kinds = unreflected_counts(list);
++    stats.unreflected = stats.unreflected_kinds.iter().map(|k| k.count).sum();
++    stats.unreflected_unknown = list.unknown();
++    stats
++}
++
+ /// 読めた bead から指標を数える。今の時刻より後に作られた bead は数えない（見本と同じ）。
+ /// 時点・日ごとの end・memo の作った時刻の中央値は今の時刻をそのまま持たない（年齢と経過は面が今から引く）。
+ pub(crate) fn of_beads(all: &[Bead], now: EpochSecs) -> LedgerStats {
+diff --git a/crates/tsuzuri-core/src/ledger/unreflected.rs b/crates/tsuzuri-core/src/ledger/unreflected.rs
+index 87b1e25ac372d19b110cef5ca895356f81d98f61..b664139e649eb70c90d83fff16783eef565539d5 100644
+--- a/crates/tsuzuri-core/src/ledger/unreflected.rs
++++ b/crates/tsuzuri-core/src/ledger/unreflected.rs
+@@ -1,13 +1,31 @@
+-//! 未反映の一覧（memo・裁定・要望の 3 種・種類ごとに「読めた一覧」か「まだ分からない」）。
+-//! どれが席の手番かは器（scribe2）の局面の出力が決め、tsuzuri は判じない（要件 FR13）。
+-//! 局面の出力を読む行 c-unref-lc までは 3 種とも「まだ分からない」を返す（open の memo を全部
+-//! 未反映と数える代用は外した）。
++//! 未反映の一覧（memo・裁定・発話の 3 種・種類ごとに「読めた一覧」か「まだ分からない」・行 c-unref-lc）。
++//! どれが席の手番かは器（scribe2）の局面の出力が決め、tsuzuri は判じない（要件 FR13・要望は種類にしない）。
++//! 一覧は局面の出力の部品から読む（種類ごとの部品の種類と局面の語は `PHASES` の 1 か所の表）。出力か古さの印が
++//! 無いか読めなければ 3 種とも、出力の unmeasured が部品の種類を名指すか unmeasured が読めなければその種類を
++//! 「まだ分からない」にし、古さの印が在れば印の種類を一覧に添える（中核の `case::cases_of` の読み）。
++//! 題と作った時刻は台帳の字から引く（台帳に無い bead の題は空・発話は題を持たず、作った時刻は id の発話の ts）。
+ 
+ use serde::Serialize;
++use serde_json::Value;
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::case::CasePart;
+ use tsuzuri_contract::stats::UnreflectedKind;
+ 
++use super::{epoch_secs, read};
++use crate::case::cases_of;
++
++/// 種類ごとの部品の種類と、未反映に数える局面の語（1 か所の表・`UnreflectedKind::ALL` の順）。
++pub const PHASES: [(UnreflectedKind, &str, &[&str]); 3] = [
++    (
++        UnreflectedKind::Memo,
++        "memo",
++        &["memo-actionable", "misfit"],
++    ),
++    (UnreflectedKind::Ruling, "question", &["ruling-unreflected"]),
++    (UnreflectedKind::Utterance, "utterance", &["utterance-open"]),
++];
++
+ /// 未反映の 1 件（id・題・作った時刻・作った時刻が読めなければ None）。
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+ pub struct UnreflectedItem {
+@@ -16,12 +34,14 @@ pub struct UnreflectedItem {
+     pub created: Option<EpochSecs>,
+ }
+ 
+-/// 未反映の一覧（種類ごと）。
++/// 未反映の一覧（種類ごと・古さの印の種類）。
+ #[derive(Debug, Clone, PartialEq, Serialize)]
+ pub struct Unreflected {
+     pub memos: Reading<Vec<UnreflectedItem>>,
+     pub rulings: Reading<Vec<UnreflectedItem>>,
+-    pub requests: Reading<Vec<UnreflectedItem>>,
++    pub utterances: Reading<Vec<UnreflectedItem>>,
++    /// 局面の出力の古さの印の種類（印が無ければ空・空でなければ一覧は古い）。
++    pub stale: Vec<String>,
+ }
+ 
+ impl Unreflected {
+@@ -30,7 +50,7 @@ impl Unreflected {
+         match kind {
+             UnreflectedKind::Memo => &self.memos,
+             UnreflectedKind::Ruling => &self.rulings,
+-            UnreflectedKind::Request => &self.requests,
++            UnreflectedKind::Utterance => &self.utterances,
+         }
+     }
+ 
+@@ -43,16 +63,61 @@ impl Unreflected {
+     }
+ }
+ 
+-/// 未反映の一覧（局面の出力がまだ無いので、台帳の字と時刻を読まず 3 種とも「まだ分からない」）。
+-pub fn unreflected(_ledger: &str, _now: EpochSecs) -> Unreflected {
+-    not_yet()
++/// 未反映の一覧。`json` は局面の出力の字（無いか読めなければ空の字）、`stale` は古さの印の字
++/// （file が無ければ None・在って読めなければ空の字）、`ledger` は台帳の一覧の字（題と作った時刻にだけ使う）。
++pub fn unreflected(ledger: &str, json: &str, stale: Option<&str>) -> Unreflected {
++    let doc = cases_of(json, stale);
++    let Reading::Known(parts) = doc.parts else {
++        return not_yet();
++    };
++    let unmeasured = unmeasured_parts(json);
++    let beads = read(ledger).unwrap_or_default();
++    let item = |p: &CasePart| {
++        let bead = beads.iter().find(|b| b.id == p.id);
++        UnreflectedItem {
++            id: p.id.clone(),
++            title: bead.map(|b| b.title.clone()).unwrap_or_default(),
++            created: match p.part.as_str() {
++                "utterance" => epoch_secs(&p.id),
++                _ => bead.and_then(|b| b.created),
++            },
++        }
++    };
++    let [memos, rulings, utterances] = PHASES.map(|(_, part, phases)| match &unmeasured {
++        Some(names) if !names.iter().any(|n| n == part) => Reading::Known(
++            parts
++                .iter()
++                .filter(|p| p.part == part && phases.contains(&p.phase.as_str()))
++                .map(item)
++                .collect(),
++        ),
++        _ => Reading::Unknown,
++    });
++    Unreflected {
++        memos,
++        rulings,
++        utterances,
++        stale: doc.stale,
++    }
++}
++
++/// 出力の unmeasured が名指す部品の種類（欄が無いか形が違えば None）。
++fn unmeasured_parts(json: &str) -> Option<Vec<String>> {
++    let value: Value = serde_json::from_str(json).ok()?;
++    value
++        .get("unmeasured")?
++        .as_array()?
++        .iter()
++        .map(|u| u.get("part")?.as_str().map(str::to_string))
++        .collect()
+ }
+ 
+-/// 3 種とも「まだ分からない」の一覧。
++/// 3 種とも「まだ分からない」の一覧（古さの印は無し）。
+ pub(crate) fn not_yet() -> Unreflected {
+     Unreflected {
+         memos: Reading::Unknown,
+         rulings: Reading::Unknown,
+-        requests: Reading::Unknown,
++        utterances: Reading::Unknown,
++        stale: Vec::new(),
+     }
+ }
+diff --git a/crates/tsuzuri-core/tests/bvunref.rs b/crates/tsuzuri-core/tests/bvunref.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..880c9653d60eb18fe1999a82e66e1dfc06394a9f
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/bvunref.rs
+@@ -0,0 +1,224 @@
++//! 未反映の一覧を局面の出力から読む歯（接頭辞 bvunref_・設計ノート surface-wave26a 行 c-unref-lc の完了の条件）。
++//! fixture: tests/fixtures/case/unref.json（未反映の 3 種と数えない局面の部品を持つ小さな字）と lifecycle.stale（読むだけ）。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::stats::{UnreflectedCount, UnreflectedKind};
++use tsuzuri_core::ledger::unreflected::PHASES;
++use tsuzuri_core::ledger::{Unreflected, UnreflectedItem, stats, unreflected, with_unreflected};
++
++fn fixture(name: &str) -> String {
++    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/case")
++        .join(name);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++/// 題と作った時刻を引く台帳（memo の t3-hub.920 と問いの t3-hub.930 だけ・t3-hub.921 は台帳に無い）。
++const LEDGER: &str = r#"[
++  {"id":"t3-hub.920","title":"[memo] 処置を待つ控え","status":"open","issue_type":"task","labels":["memo"],"created_at":"2026-09-30T00:00:00Z"},
++  {"id":"t3-hub.930","title":"[問い] 反映を待つ裁定","status":"closed","issue_type":"task","labels":["question"],"created_at":"2026-09-29T00:00:00Z","closed_at":"2026-10-01T08:00:00Z"}
++]"#;
++
++/// 2026-09-30T00:00:00Z・2026-09-29T00:00:00Z・2026-10-01T11:22:33Z の epoch 秒。
++const MEMO_AT: u64 = 1_790_726_400;
++const RULING_AT: u64 = 1_790_640_000;
++const UTTER_AT: u64 = 1_790_853_753;
++
++fn item(id: &str, title: &str, created: Option<u64>) -> UnreflectedItem {
++    UnreflectedItem {
++        id: id.to_string(),
++        title: title.to_string(),
++        created,
++    }
++}
++
++/// fixture の出力と古さの印から読んだ一覧。
++fn read_fixture() -> Unreflected {
++    unreflected(
++        LEDGER,
++        &fixture("unref.json"),
++        Some(&fixture("lifecycle.stale")),
++    )
++}
++
++/// 出力の unmeasured を置き替えた字。
++fn with_unmeasured(value: &str) -> String {
++    fixture("unref.json").replace(
++        r#""unmeasured": [],"#,
++        &format!(r#""unmeasured": {value},"#),
++    )
++}
++
++/// (1) memo は種類 memo の部品のうち局面 memo-actionable と misfit の物だけ（出力の順・memo-waiting と
++/// 種類 commit の misfit は数えない）。題と作った時刻は台帳から引き、台帳に無い bead の題は空で時刻は None。
++#[test]
++fn bvunref_memo_actionable_and_misfit() {
++    assert_eq!(
++        read_fixture().memos,
++        Reading::Known(vec![
++            item("t3-hub.920", "[memo] 処置を待つ控え", Some(MEMO_AT)),
++            item("t3-hub.921", "", None),
++        ])
++    );
++}
++
++/// (2) 裁定は種類 question の部品のうち局面 ruling-unreflected の物だけ（question-open と question-closed は数えない）。
++#[test]
++fn bvunref_ruling_unreflected() {
++    assert_eq!(
++        read_fixture().rulings,
++        Reading::Known(vec![item(
++            "t3-hub.930",
++            "[問い] 反映を待つ裁定",
++            Some(RULING_AT)
++        )])
++    );
++}
++
++/// (3) 発話は種類 utterance の部品のうち局面 utterance-open の物だけ（utterance-sorted は数えない）。
++/// 題は空、作った時刻は id の発話の ts（秒より下の桁を捨てる）。
++#[test]
++fn bvunref_utterance_open() {
++    assert_eq!(
++        read_fixture().utterances,
++        Reading::Known(vec![item("2026-10-01T11:22:33.456Z", "", Some(UTTER_AT))])
++    );
++}
++
++/// (4) 出力が無いか読めない（空の字・JSON でない・版が 1 でない・部品の列が無い）か、古さの印の file が読めないか、
++/// unmeasured の欄が無いか形が違えば、3 種とも「まだ分からない」で古さの印も無い。台帳が読めなくても一覧は出力から読む。
++#[test]
++fn bvunref_unknown_when_unread() {
++    let json = fixture("unref.json");
++    let all = UnreflectedKind::ALL.to_vec();
++    for (name, out, stale) in [
++        ("空の字", String::new(), None),
++        ("JSON でない", "{".to_string(), None),
++        (
++            "版 2",
++            json.replace(r#""version": 1"#, r#""version": 2"#),
++            None,
++        ),
++        (
++            "部品の列が無い",
++            json.replace(r#""parts""#, r#""items""#),
++            None,
++        ),
++        ("印が読めない", json.clone(), Some(String::new())),
++        (
++            "unmeasured が無い",
++            json.replace(r#""unmeasured""#, r#""skipped""#),
++            None,
++        ),
++        (
++            "unmeasured の形",
++            with_unmeasured(r#"[{"reason":"ledger-prefix"}]"#),
++            None,
++        ),
++    ] {
++        let got = unreflected(LEDGER, &out, stale.as_deref());
++        assert_eq!(got.unknown(), all, "{name}");
++        assert!(got.stale.is_empty(), "{name}");
++    }
++    let unread_ledger = unreflected("{", &json, None);
++    assert!(unread_ledger.unknown().is_empty());
++    assert_eq!(
++        unread_ledger.memos,
++        Reading::Known(vec![
++            item("t3-hub.920", "", None),
++            item("t3-hub.921", "", None)
++        ])
++    );
++}
++
++/// (5) unmeasured が名指す部品の種類（question・memo・utterance）の種類だけ「まだ分からない」で、ほかは読めた一覧。
++#[test]
++fn bvunref_unmeasured_kind_unknown() {
++    for (part, kind) in [
++        ("question", UnreflectedKind::Ruling),
++        ("memo", UnreflectedKind::Memo),
++        ("utterance", UnreflectedKind::Utterance),
++    ] {
++        let out = with_unmeasured(&format!(
++            r#"[{{"part":"{part}","reason":"ledger-prefix"}}]"#
++        ));
++        assert_eq!(
++            unreflected(LEDGER, &out, None).unknown(),
++            vec![kind],
++            "{part}"
++        );
++    }
++    let rows = with_unmeasured(r#"[{"part":"row","reason":"table-unreadable"}]"#);
++    assert!(unreflected(LEDGER, &rows, None).unknown().is_empty());
++}
++
++/// (6) 古さの印が在れば印の種類を一覧に添え（一覧は読めたまま）、印の file が無いか印が 0 件なら空。
++#[test]
++fn bvunref_stale_marked() {
++    let got = read_fixture();
++    assert_eq!(got.stale, ["ledger-gate"]);
++    assert!(got.unknown().is_empty());
++    let json = fixture("unref.json");
++    assert!(unreflected(LEDGER, &json, None).stale.is_empty());
++    let none = r#"{"version":1,"marks":[]}"#;
++    assert!(unreflected(LEDGER, &json, Some(none)).stale.is_empty());
++}
++
++/// (7) 指標の未反映の 3 欄は一覧から数え直し（読めた種類ごとの件数・和・分からない種類）、読めなければ 3 種とも分からない。
++#[test]
++fn bvunref_counted_per_kind() {
++    let Reading::Known(base) = stats("[]", UTTER_AT) else {
++        panic!("空の台帳は読める");
++    };
++    let got = with_unreflected(base.clone(), &read_fixture());
++    let count = |kind, count| UnreflectedCount { kind, count };
++    assert_eq!(
++        got.unreflected_kinds,
++        vec![
++            count(UnreflectedKind::Memo, 2),
++            count(UnreflectedKind::Ruling, 1),
++            count(UnreflectedKind::Utterance, 1),
++        ]
++    );
++    assert_eq!(got.unreflected, 4);
++    assert!(got.unreflected_unknown.is_empty());
++    let out = with_unmeasured(r#"[{"part":"question","reason":"unreflected-unreadable"}]"#);
++    let part = with_unreflected(base.clone(), &unreflected(LEDGER, &out, None));
++    assert_eq!(part.unreflected, 3);
++    assert_eq!(part.unreflected_unknown, vec![UnreflectedKind::Ruling]);
++    let none = with_unreflected(base, &unreflected(LEDGER, "", None));
++    assert_eq!((none.unreflected, none.unreflected_kinds.len()), (0, 0));
++    assert_eq!(none.unreflected_unknown, UnreflectedKind::ALL.to_vec());
++}
++
++/// (8) 種類ごとの部品の種類と局面の語の表は 1 か所で、種類の順は UnreflectedKind の ALL の順。
++#[test]
++fn bvunref_phase_table() {
++    let got: Vec<(UnreflectedKind, &str, Vec<&str>)> = PHASES
++        .iter()
++        .map(|(k, p, w)| (*k, *p, w.to_vec()))
++        .collect();
++    assert_eq!(
++        got,
++        vec![
++            (
++                UnreflectedKind::Memo,
++                "memo",
++                vec!["memo-actionable", "misfit"]
++            ),
++            (
++                UnreflectedKind::Ruling,
++                "question",
++                vec!["ruling-unreflected"]
++            ),
++            (
++                UnreflectedKind::Utterance,
++                "utterance",
++                vec!["utterance-open"]
++            ),
++        ]
++    );
++}
+diff --git a/crates/tsuzuri-core/tests/harestcore.rs b/crates/tsuzuri-core/tests/harestcore.rs
+index d6fc67114cf26e7626c633fcb96df1f10e5776d1..ce5513e3912d1af6aa4e4384fffb930e22cbb393 100644
+--- a/crates/tsuzuri-core/tests/harestcore.rs
++++ b/crates/tsuzuri-core/tests/harestcore.rs
+@@ -71,7 +71,7 @@ fn harest_kinds_from_one_list() {
+             UnreflectedKind::ALL.to_vec(),
+             "{name}"
+         );
+-        assert_eq!(unreflected(text, now).memos, Reading::Unknown, "{name}");
++        assert_eq!(unreflected(text, "", None).memos, Reading::Unknown, "{name}");
+     }
+ 
+     assert_eq!(stats("{", 1_790_553_600), Reading::Unknown);
+diff --git a/crates/tsuzuri-core/tests/stats.rs b/crates/tsuzuri-core/tests/stats.rs
+index a00f69e055d94f243a1f15dbba5b133fb4828bf2..69e9f309686731ea599d77dec97bea6ebfd649de 100644
+--- a/crates/tsuzuri-core/tests/stats.rs
++++ b/crates/tsuzuri-core/tests/stats.rs
+@@ -174,7 +174,7 @@ fn stats_unreadable_ledger_is_no_ledger() {
+         let got = stats(text, 0);
+         assert_eq!(got, Reading::Unknown, "{text:?}");
+         assert_eq!(judge_of(&got), LedgerJudge::NoLedger);
+-        let u = unreflected(text, 0);
++        let u = unreflected(text, "", None);
+         assert_eq!(u.unknown(), UnreflectedKind::ALL.to_vec(), "{text:?}");
+     }
+     // 空の台帳は読めた 0 件（台帳なしでない）。
+diff --git a/crates/tsuzuri-surface/src/project/ledger.rs b/crates/tsuzuri-surface/src/project/ledger.rs
+index b33d4f326990eb5da939aaf356ad8065e6e47264..f2c5cfd8ded0cdd96e10eea08f030b5f02fea387 100644
+--- a/crates/tsuzuri-surface/src/project/ledger.rs
++++ b/crates/tsuzuri-surface/src/project/ledger.rs
+@@ -318,7 +318,7 @@ pub fn days_since(at: EpochSecs, now: EpochSecs) -> f64 {
+ pub const UNREF_KINDS: [(UnreflectedKind, &str); 3] = [
+     (UnreflectedKind::Memo, "memo"),
+     (UnreflectedKind::Ruling, "ruling"),
+-    (UnreflectedKind::Request, "request"),
++    (UnreflectedKind::Utterance, "utterance"),
+ ];
+ 
+ /// 未反映の種類の名（表から引く）。
+@@ -796,7 +796,7 @@ pub const UNREF_EMPTY: &str = "未反映のものは無い";
+ pub const UNREF_NEXT: [(UnreflectedKind, &str); 3] = [
+     (UnreflectedKind::Memo, "nx_promote"),
+     (UnreflectedKind::Ruling, "nx_declare"),
+-    (UnreflectedKind::Request, "nx_reflect"),
++    (UnreflectedKind::Utterance, "nx_sort"),
+ ];
+ 
+ /// 未反映の一覧の 1 行（id・題・種類の名・年齢の字・次の 1 手の語の鍵）。
+@@ -855,7 +855,7 @@ pub fn unref_list(fetched: &Fetched, now: EpochSecs) -> Body<UnrefList> {
+         let reading = match kind {
+             UnreflectedKind::Memo => &list.memos,
+             UnreflectedKind::Ruling => &list.rulings,
+-            UnreflectedKind::Request => &list.requests,
++            UnreflectedKind::Utterance => &list.utterances,
+         };
+         match reading {
+             Reading::Known(items) => rows.extend(items.iter().map(|r| unref_row(kind, r, now))),
+diff --git a/crates/tsuzuri-surface/tests/absface.rs b/crates/tsuzuri-surface/tests/absface.rs
+index 43d773fb303385042a70966831e707d84b82be1f..a21a164c42830bbee3414de06f71dae63a5a5040 100644
+--- a/crates/tsuzuri-surface/tests/absface.rs
++++ b/crates/tsuzuri-surface/tests/absface.rs
+@@ -109,7 +109,8 @@ fn abst_ages_from_created() {
+             row("m-3", None),
+         ]),
+         rulings: Reading::Known(vec![]),
+-        requests: Reading::Known(vec![]),
++        utterances: Reading::Known(vec![]),
++        stale: vec![],
+     };
+     let fetched = Fetched::Body(wire::encode(&list).expect("電文"));
+     let Body::Filled(l) = unref_list(&fetched, NOW) else {
+diff --git a/crates/tsuzuri-surface/tests/acctproj.rs b/crates/tsuzuri-surface/tests/acctproj.rs
+index 543760e93f986d0e95128ee3c7ac08da16ad4981..995e3e74e90eeb8f444434dee2772496cc22c83c 100644
+--- a/crates/tsuzuri-surface/tests/acctproj.rs
++++ b/crates/tsuzuri-surface/tests/acctproj.rs
+@@ -408,7 +408,7 @@ fn acctproj_wait_unref_dash_and_orch() {
+     assert_eq!(rows[0].wait, Some(2));
+     let u = rows[0].unref.as_ref().expect("proj-a の台帳は読める");
+     assert_eq!(u.count, 3);
+-    assert_eq!(u.unknown, vec!["ruling", "request"]);
++    assert_eq!(u.unknown, vec!["ruling", "utterance"]);
+     for r in &rows[1..] {
+         assert_eq!(r.wait, None, "{}", r.name);
+         assert_eq!(r.unref, None, "{}", r.name);
+diff --git a/crates/tsuzuri-surface/tests/hacols.rs b/crates/tsuzuri-surface/tests/hacols.rs
+index 9afd678ca527cfc8465c180f58486ee4eaa40a1b..53e1d35b2bfc5995271700798f95c75c7d2429fe 100644
+--- a/crates/tsuzuri-surface/tests/hacols.rs
++++ b/crates/tsuzuri-surface/tests/hacols.rs
+@@ -94,7 +94,7 @@ fn hacols_unref_partial() {
+         u,
+         Unref {
+             count: 3,
+-            unknown: vec!["ruling", "request"],
++            unknown: vec!["ruling", "utterance"],
+         }
+     );
+     let screen = Screen::initial();
+@@ -112,10 +112,10 @@ fn hacols_unref_partial() {
+     none.unreflected_unknown = vec![
+         UnreflectedKind::Memo,
+         UnreflectedKind::Ruling,
+-        UnreflectedKind::Request,
++        UnreflectedKind::Utterance,
+     ];
+     assert_eq!(unref_count(&none), panel(&none, &screen, doc.at).unref);
+-    assert_eq!(unref_count(&none).unknown, vec!["memo", "ruling", "request"]);
++    assert_eq!(unref_count(&none).unknown, vec!["memo", "ruling", "utterance"]);
+ 
+     assert_eq!(unref_of(&doc.projects[0]), Some(u.clone()));
+     assert_eq!(unref_of(&doc.projects[1]), None);
+diff --git a/crates/tsuzuri-surface/tests/harest.rs b/crates/tsuzuri-surface/tests/harest.rs
+index a8acc9176c63201c5714f5c56adf07149f80743e..207c539f2be82c511416ca0f226ca825e4da26b2 100644
+--- a/crates/tsuzuri-surface/tests/harest.rs
++++ b/crates/tsuzuri-surface/tests/harest.rs
+@@ -127,7 +127,7 @@ fn harest_unref_kinds() {
+         unref_break(&a),
+         UnrefKinds {
+             known: vec![("memo".to_string(), 3)],
+-            unknown: vec!["裁定".to_string(), "要望".to_string()],
++            unknown: vec!["裁定".to_string(), "発話".to_string()],
+         }
+     );
+ 
+@@ -142,7 +142,7 @@ fn harest_unref_kinds() {
+             count: 2,
+         },
+         UnreflectedCount {
+-            kind: UnreflectedKind::Request,
++            kind: UnreflectedKind::Utterance,
+             count: 1,
+         },
+     ];
+@@ -151,7 +151,7 @@ fn harest_unref_kinds() {
+     assert_eq!(
+         unref_break(&mixed),
+         UnrefKinds {
+-            known: vec![("裁定".to_string(), 2), ("要望".to_string(), 1)],
++            known: vec![("裁定".to_string(), 2), ("発話".to_string(), 1)],
+             unknown: vec![],
+         }
+     );
+@@ -185,12 +185,12 @@ fn harest_unref_kinds() {
+     }
+ }
+ 
+-/// (7) 種類の見出しは語の辞書の鍵 unref: と kind_name の字の label（memo は english・裁定と要望は rephrase）。
++/// (7) 種類の見出しは語の辞書の鍵 unref: と kind_name の字の label（memo は english・裁定と発話は rephrase）。
+ #[test]
+ fn harest_kind_labels() {
+     assert_eq!(UNREF_KIND_KEY, "unref:");
+     let got: Vec<String> = UnreflectedKind::ALL.into_iter().map(kind_label).collect();
+-    assert_eq!(got, vec!["memo", "裁定", "要望"]);
++    assert_eq!(got, vec!["memo", "裁定", "発話"]);
+ 
+     let en_at = SOURCE
+         .find("\n \"english\": {")
+@@ -206,7 +206,7 @@ fn harest_kind_labels() {
+     for (kind, in_english) in [
+         (UnreflectedKind::Memo, true),
+         (UnreflectedKind::Ruling, false),
+-        (UnreflectedKind::Request, false),
++        (UnreflectedKind::Utterance, false),
+     ] {
+         let key = format!("{UNREF_KIND_KEY}{}", kind_name(kind));
+         let entry = format!("\"{key}\": {{");
+diff --git a/crates/tsuzuri-surface/tests/kindlab.rs b/crates/tsuzuri-surface/tests/kindlab.rs
+index f629e7c8561f5435764761b304cda5d0bfed61ee..18bdb98294a22627fc58fc2a36039d812870cdfe 100644
+--- a/crates/tsuzuri-surface/tests/kindlab.rs
++++ b/crates/tsuzuri-surface/tests/kindlab.rs
+@@ -1,5 +1,5 @@
+ //! 行 g-kind-label の歯（要件 FR13 と NFR1）: 未反映の種類の見出し（語の辞書の鍵 unref: と種類の名の label）は
+-//! 面の ledger の module の 1 か所に在り、account board と project board が同じ語（memo・裁定・要望）で出す。
++//! 面の ledger の module の 1 か所に在り、account board と project board が同じ語（memo・裁定・発話）で出す。
+ //! project board の DOM は wasm の target のときだけなので、ledger.rs の字で見る。
+ #![cfg(test)]
+ 
+@@ -55,12 +55,12 @@ fn rs_files(dir: &Path, out: &mut Vec<(String, String)>) {
+     }
+ }
+ 
+-/// (1) 鍵の接頭と 2 つの見出しの関数は面の ledger の module の 1 か所に在り、3 種の見出しは memo・裁定・要望。
++/// (1) 鍵の接頭と 2 つの見出しの関数は面の ledger の module の 1 か所に在り、3 種の見出しは memo・裁定・発話。
+ #[test]
+ fn kindlab_one_place() {
+     assert_eq!(UNREF_KIND_KEY, "unref:");
+     let got: Vec<String> = UnreflectedKind::ALL.into_iter().map(kind_label).collect();
+-    assert_eq!(got, vec!["memo", "裁定", "要望"]);
++    assert_eq!(got, vec!["memo", "裁定", "発話"]);
+     for kind in UnreflectedKind::ALL {
+         assert_eq!(name_label(kind_name(kind)), kind_label(kind), "{kind:?}");
+     }
+@@ -110,7 +110,7 @@ fn kindlab_boards_same_words() {
+     let s = stats("filled");
+     let acct = unref_break(&s);
+     assert_eq!(acct.known, vec![("memo".to_string(), 3)]);
+-    assert_eq!(acct.unknown, vec!["裁定", "要望"]);
++    assert_eq!(acct.unknown, vec!["裁定", "発話"]);
+     let proj: Vec<String> = panel(&s, &screen, NOW)
+         .unref
+         .unknown
+@@ -121,7 +121,7 @@ fn kindlab_boards_same_words() {
+ 
+     let e = stats("empty");
+     let acct = unref_break(&e);
+-    assert_eq!(acct.unknown, vec!["memo", "裁定", "要望"]);
++    assert_eq!(acct.unknown, vec!["memo", "裁定", "発話"]);
+     let proj: Vec<String> = panel(&e, &screen, NOW)
+         .unref
+         .unknown
+@@ -137,12 +137,13 @@ fn kindlab_boards_same_words() {
+         .collect();
+     all.unreflected_unknown = Vec::new();
+     let heads: Vec<String> = unref_break(&all).known.into_iter().map(|(h, _)| h).collect();
+-    assert_eq!(heads, vec!["memo", "裁定", "要望"]);
++    assert_eq!(heads, vec!["memo", "裁定", "発話"]);
+ 
+     let three = UnreflectedList {
+         memos: Reading::Known(vec![row("m-1")]),
+         rulings: Reading::Known(vec![row("r-1")]),
+-        requests: Reading::Known(vec![row("q-1")]),
++        utterances: Reading::Known(vec![row("q-1")]),
++        stale: vec![],
+     };
+     let rows: Vec<String> = filled(&three)
+         .rows
+@@ -154,14 +155,15 @@ fn kindlab_boards_same_words() {
+     let memo_only = UnreflectedList {
+         memos: Reading::Known(vec![row("m-1")]),
+         rulings: Reading::Unknown,
+-        requests: Reading::Unknown,
++        utterances: Reading::Unknown,
++        stale: vec![],
+     };
+     let unknown: Vec<String> = filled(&memo_only)
+         .unknown
+         .iter()
+         .map(|k| name_label(k))
+         .collect();
+-    assert_eq!(unknown, vec!["裁定", "要望"]);
++    assert_eq!(unknown, vec!["裁定", "発話"]);
+ }
+ 
+ /// `start` から末尾までの字。
+diff --git a/crates/tsuzuri-surface/tests/ledgerblock.rs b/crates/tsuzuri-surface/tests/ledgerblock.rs
+index 4ddafbc80a556692465848066e2f5c021ba73fbd..467316ad4630ebb1ab4edda4d0eadc4900ce976b 100644
+--- a/crates/tsuzuri-surface/tests/ledgerblock.rs
++++ b/crates/tsuzuri-surface/tests/ledgerblock.rs
+@@ -239,7 +239,7 @@ fn ledgerblock_unreflected_copies_wire() {
+     let screen = known_screen();
+     let m = filled("filled", &screen);
+     assert_eq!(m.unref.count, 3);
+-    assert_eq!(m.unref.unknown, vec!["ruling", "request"]);
++    assert_eq!(m.unref.unknown, vec!["ruling", "utterance"]);
+     assert_eq!(m.text(Part::UnrefCount), Some("3".to_string()));
+     // 台帳の一覧が在っても無くても同じ（面の側で数え直さない）。
+     assert_eq!(filled("filled", &Screen::initial()).unref, m.unref);
+@@ -256,7 +256,7 @@ fn ledgerblock_unreflected_copies_wire() {
+ 
+     let e = filled("empty", &screen);
+     assert_eq!(e.unref.count, 0);
+-    assert_eq!(e.unref.unknown, vec!["memo", "ruling", "request"]);
++    assert_eq!(e.unref.unknown, vec!["memo", "ruling", "utterance"]);
+     assert_eq!(
+         UNREF_KINDS.map(|(k, _)| k),
+         UnreflectedKind::ALL,
+diff --git a/crates/tsuzuri-surface/tests/udash.rs b/crates/tsuzuri-surface/tests/udash.rs
+index 22df001ab6db889755095984ebb6cc82bac2cf92..b6ed1214c324974412e1c3ead2811a7e3f0a8ba7 100644
+--- a/crates/tsuzuri-surface/tests/udash.rs
++++ b/crates/tsuzuri-surface/tests/udash.rs
+@@ -51,7 +51,7 @@ fn unref(count: u32, unknown: &[&'static str]) -> Unref {
+ fn udash_text_and_partial() {
+     assert_eq!(NONE, "―");
+     assert_eq!(NONE, NONE_MARK, "account board の表の字と同じ");
+-    let all = ["memo", "ruling", "request"];
++    let all = ["memo", "ruling", "utterance"];
+     assert_eq!(all.len(), UnreflectedKind::ALL.len());
+     for count in [0, 4] {
+         let u = unref(count, &all);
+@@ -59,8 +59,8 @@ fn udash_text_and_partial() {
+         assert!(!u.partial(), "3 種とも分からない count {count}");
+     }
+     for (count, unknown, text, partial) in [
+-        (0, &["ruling", "request"][..], "0", true),
+-        (3, &["ruling", "request"][..], "3", true),
++        (0, &["ruling", "utterance"][..], "0", true),
++        (3, &["ruling", "utterance"][..], "3", true),
+         (2, &["memo"][..], "2", true),
+         (0, &[][..], "0", false),
+         (41, &[][..], "41", false),
+@@ -74,10 +74,10 @@ fn udash_text_and_partial() {
+ /// (2) 電文から組んだ中身の text は、上段の箱と未反映の段の見出しのどちらも Unref の text の字。
+ #[test]
+ fn udash_metrics_text() {
+-    use UnreflectedKind::{Memo, Request, Ruling};
++    use UnreflectedKind::{Memo, Ruling, Utterance};
+     for (count, unknown, want) in [
+-        (0, &[Memo, Ruling, Request][..], "―"),
+-        (3, &[Ruling, Request][..], "3"),
++        (0, &[Memo, Ruling, Utterance][..], "―"),
++        (3, &[Ruling, Utterance][..], "3"),
+         (41, &[][..], "41"),
+     ] {
+         let m = metrics(count, unknown);
+diff --git a/crates/tsuzuri-surface/tests/unow.rs b/crates/tsuzuri-surface/tests/unow.rs
+index d9d09495c5a86627cb8ee42bcba07bbd3c4425d1..a248b4834a8e7ce0cff0f2d1a344ac92b7cea4a2 100644
+--- a/crates/tsuzuri-surface/tests/unow.rs
++++ b/crates/tsuzuri-surface/tests/unow.rs
+@@ -57,7 +57,8 @@ fn unow_list_reason() {
+     let all_unknown = UnreflectedList {
+         memos: Reading::Unknown,
+         rulings: Reading::Unknown,
+-        requests: Reading::Unknown,
++        utterances: Reading::Unknown,
++        stale: vec![],
+     };
+     let fetched = Fetched::Body(wire::encode(&all_unknown).expect("電文"));
+     assert_eq!(unref_list(&fetched, fixture().at), Body::Unmeasured(UNREF_UNKNOWN));
+diff --git a/crates/tsuzuri-surface/tests/unrefpanel.rs b/crates/tsuzuri-surface/tests/unrefpanel.rs
+index 1cd52a4bf4cc724b613f457b213c8cedbca67cd2..1de3d78a4558d7e006dd3d3c67767c89a8563569 100644
+--- a/crates/tsuzuri-surface/tests/unrefpanel.rs
++++ b/crates/tsuzuri-surface/tests/unrefpanel.rs
+@@ -61,7 +61,8 @@ fn set_a() -> UnreflectedList {
+             row("t3-hub.10", "[memo] 時刻の無い控え", None),
+         ]),
+         rulings: Reading::Unknown,
+-        requests: Reading::Unknown,
++        utterances: Reading::Unknown,
++        stale: vec![],
+     }
+ }
+ 
+@@ -74,7 +75,8 @@ const SET_A_TEXT: &str = r#"{
+     ]
+   },
+   "rulings": "unknown",
+-  "requests": "unknown"
++  "utterances": "unknown",
++  "stale": []
+ }"#;
+ 
+ /// (2) 組 A と組 C: 行は種類の順に電文の順のまま、年齢の字と次の 1 手の鍵を添える。
+@@ -88,13 +90,14 @@ fn urpanel_rows_from_wire() {
+         let l = filled(&fetched);
+         assert_eq!(l.rows.iter().map(cells).collect::<Vec<_>>(), want_a);
+         assert_eq!(l.more, None);
+-        assert_eq!(l.unknown, vec!["ruling", "request"]);
++        assert_eq!(l.unknown, vec!["ruling", "utterance"]);
+     }
+     // 組 C（3 種が Known の 1 行ずつ）。
+     let c = UnreflectedList {
+         memos: Reading::Known(vec![row("m-1", "memo の 1", Some(3600))]),
+         rulings: Reading::Known(vec![row("r-1", "裁定の 1", Some(950_400))]),
+-        requests: Reading::Known(vec![row("q-1", "要望の 1", None)]),
++        utterances: Reading::Known(vec![row("q-1", "発話の 1", None)]),
++        stale: vec![],
+     };
+     let l = filled(&body(&c));
+     assert_eq!(
+@@ -102,7 +105,7 @@ fn urpanel_rows_from_wire() {
+         vec![
+             ("m-1", "memo の 1", "memo", "1h", "nx_promote"),
+             ("r-1", "裁定の 1", "ruling", "11d", "nx_declare"),
+-            ("q-1", "要望の 1", "request", "―", "nx_reflect"),
++            ("q-1", "発話の 1", "utterance", "―", "nx_sort"),
+         ]
+     );
+     assert_eq!(l.more, None);
+@@ -118,7 +121,8 @@ fn urpanel_cut_at_twenty() {
+     let b = UnreflectedList {
+         memos: Reading::Known(memos),
+         rulings: Reading::Known(vec![row("r-1", "裁定", None)]),
+-        requests: Reading::Unknown,
++        utterances: Reading::Unknown,
++        stale: vec![],
+     };
+     let l = filled(&body(&b));
+     assert_eq!(UNREF_MAX, 20);
+@@ -129,7 +133,7 @@ fn urpanel_cut_at_twenty() {
+         assert_eq!((r.kind, r.age.as_str(), r.next), ("memo", "1h", "nx_promote"));
+     }
+     assert_eq!(l.more, Some(6));
+-    assert_eq!(l.unknown, vec!["request"]);
++    assert_eq!(l.unknown, vec!["utterance"]);
+     // ちょうど 20 行なら more は無い。
+     let twenty = UnreflectedList {
+         memos: Reading::Known(
+@@ -138,7 +142,8 @@ fn urpanel_cut_at_twenty() {
+                 .collect(),
+         ),
+         rulings: Reading::Known(vec![]),
+-        requests: Reading::Known(vec![]),
++        utterances: Reading::Known(vec![]),
++        stale: vec![],
+     };
+     let l = filled(&body(&twenty));
+     assert_eq!((l.rows.len(), l.more), (20, None));
+@@ -150,7 +155,8 @@ fn urpanel_unknown_kinds_and_reasons() {
+     let all_unknown = UnreflectedList {
+         memos: Reading::Unknown,
+         rulings: Reading::Unknown,
+-        requests: Reading::Unknown,
++        utterances: Reading::Unknown,
++        stale: vec![],
+     };
+     assert_eq!(
+         unref_list(&body(&all_unknown), NOW),
+@@ -159,7 +165,8 @@ fn urpanel_unknown_kinds_and_reasons() {
+     let empty = UnreflectedList {
+         memos: Reading::Known(vec![]),
+         rulings: Reading::Known(vec![]),
+-        requests: Reading::Known(vec![]),
++        utterances: Reading::Known(vec![]),
++        stale: vec![],
+     };
+     assert_eq!(unref_list(&body(&empty), NOW), Body::Empty(UNREF_EMPTY));
+     for (fetched, reason) in [
+@@ -227,7 +234,7 @@ fn urpanel_keys_and_classes() {
+         "u_next",
+         "nx_promote",
+         "nx_declare",
+-        "nx_reflect",
++        "nx_sort",
+         "col_title",
+         "gap_unknown",
+     ] {
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 619ec25e723c13f7bde0f5ab53ae386fbc416309..43ca5b1b5cab64500c6832b3c163a876e56c74d8 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1577,10 +1577,10 @@
+    "plain": "design-intent に未反映の決定の数\n・ 処分の宣言が無い決定",
+    "internal": "未反映の種類 ruling"
+   },
+-  "unref:request": {
+-   "label": "要望",
+-   "plain": "design-intent に未反映の要望の数\n・ 反映されていない要望",
+-   "internal": "未反映の種類 request"
++  "unref:utterance": {
++   "label": "発話",
++   "plain": "席がまだ仕分けていない発話の数\n・ 器の局面 utterance-open",
++   "internal": "未反映の種類 utterance"
+   },
+   "nx_promote": {
+    "label": "昇格",
+@@ -1592,10 +1592,10 @@
+    "plain": "あなたの決定の処分を宣言する\n・ どの question に答えたか\n・ どこに効くか",
+    "internal": "answers の線を足す"
+   },
+-  "nx_reflect": {
+-   "label": "反映",
+-   "plain": "→ 要望を関わる所へ反映する",
+-   "internal": "touches の先を更新"
++  "nx_sort": {
++   "label": "仕分け",
++   "plain": "→ 発話を memo か裁定か会話に仕分ける",
++   "internal": "仕分けの event か bind の結びを足す"
+   },
+   "u_kind": {
+    "label": "種類",
+diff --git a/tests/fixtures/account/acct-doc.json b/tests/fixtures/account/acct-doc.json
+index 0f0ac9008c52330e0d2d8ce37314260559c04f55..4e51fff116c439f611042cced2e894def41e4d82 100644
+--- a/tests/fixtures/account/acct-doc.json
++++ b/tests/fixtures/account/acct-doc.json
+@@ -124,7 +124,7 @@
+         "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "created_p50": 1790035200},
+         "unreflected": 3,
+         "unreflected_kinds": [{"kind": "memo", "count": 3}],
+-        "unreflected_unknown": ["ruling", "request"]
++        "unreflected_unknown": ["ruling", "utterance"]
+       }},
+       "next": {"known": {
+         "checks": [
+diff --git a/tests/fixtures/case/unref.json b/tests/fixtures/case/unref.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d4e1baf998f55e84aa82caee2d0ff40ba1c6c02
+--- /dev/null
++++ b/tests/fixtures/case/unref.json
+@@ -0,0 +1,22 @@
++{
++  "version": 1,
++  "generated_at": "2026-10-01T12:00:00Z",
++  "scope": "full",
++  "full_at": "2026-10-01T12:00:00Z",
++  "interval_s": 15,
++  "closed_window_h": 72,
++  "unmeasured": [],
++  "owned": { "count": 0, "unset": 0, "unknown": 0, "oldest": null },
++  "parts": [
++    { "part": "memo", "id": "t3-hub.920", "phase": "memo-actionable", "turn": "seat", "since": "2026-10-01T10:00:00Z", "reason": "trigger-met", "closed": false, "overdue": false, "links": {}, "due": null },
++    { "part": "memo", "id": "t3-hub.921", "phase": "misfit", "turn": "seat", "since": "2026-10-01T09:00:00Z", "reason": "close-unresolved", "closed": true, "overdue": null, "links": {}, "due": null },
++    { "part": "memo", "id": "t3-hub.922", "phase": "memo-waiting", "turn": "none", "since": "2026-09-30T08:00:00Z", "reason": null, "closed": false, "overdue": null, "links": {}, "due": "2026-10-03T00:00:00Z" },
++    { "part": "commit", "id": "0123456789abcdef0123456789abcdef01234567", "phase": "misfit", "turn": "seat", "since": "2026-10-01T11:00:00Z", "reason": "commit-no-trailer", "closed": false, "overdue": false, "links": {} },
++    { "part": "question", "id": "t3-hub.930", "phase": "ruling-unreflected", "turn": "seat", "since": "2026-10-01T08:00:00Z", "reason": null, "closed": true, "overdue": false, "links": { "rulings": ["t3-hub.930:20261001T0800Z-1"] } },
++    { "part": "question", "id": "t3-hub.931", "phase": "question-open", "turn": "user", "since": "2026-10-01T07:00:00Z", "reason": null, "closed": false, "overdue": null, "links": {} },
++    { "part": "question", "id": "t3-hub.932", "phase": "question-closed", "turn": "none", "since": "2026-10-01T06:00:00Z", "reason": null, "closed": true, "overdue": null, "links": {} },
++    { "part": "utterance", "id": "2026-10-01T11:22:33.456Z", "phase": "utterance-open", "turn": "seat", "since": "2026-10-01T11:22:33Z", "reason": null, "closed": false, "overdue": false, "links": {}, "session": "s-1", "channel": "chat" },
++    { "part": "utterance", "id": "2026-10-01T11:30:00.000Z", "phase": "utterance-sorted", "turn": "none", "since": "2026-10-01T11:30:00Z", "reason": null, "closed": false, "overdue": null, "links": { "destination": [{ "to": "memo", "id": "t3-hub.920" }] }, "session": "s-1", "channel": "chat" },
++    { "part": "contract", "id": "t3-hub.940", "phase": "contract-refused", "turn": "seat", "since": "2026-10-01T05:00:00Z", "reason": "teeth-outside-write-set", "closed": false, "overdue": null, "links": {}, "pointer": null }
++  ]
++}
+diff --git a/tests/fixtures/ledger/stats-30.json b/tests/fixtures/ledger/stats-30.json
+index d53666958b060e39267aa3e4a15a2f5110948144..439b3354fccf6a178e2e187766b95f326fe6c35b 100644
+--- a/tests/fixtures/ledger/stats-30.json
++++ b/tests/fixtures/ledger/stats-30.json
+@@ -73,6 +73,6 @@
+     "memo": {"open": 3, "awaiting_promotion": 2, "closed_7d": 1, "created_p50": 1789646400},
+     "unreflected": 0,
+     "unreflected_kinds": [],
+-    "unreflected_unknown": ["memo", "ruling", "request"]
++    "unreflected_unknown": ["memo", "ruling", "utterance"]
+   }
+ }
+diff --git a/tests/fixtures/surface/ledger-stats.json b/tests/fixtures/surface/ledger-stats.json
+index 163602ef5be61769422cbdd6ef57721a63030d5d..8bfc22e1225acb15c266484747117556c612c407 100644
+--- a/tests/fixtures/surface/ledger-stats.json
++++ b/tests/fixtures/surface/ledger-stats.json
+@@ -34,7 +34,7 @@
+     "memo": {"open": 3, "awaiting_promotion": 1, "closed_7d": 2, "created_p50": 1791383040},
+     "unreflected": 3,
+     "unreflected_kinds": [{"kind": "memo", "count": 3}],
+-    "unreflected_unknown": ["ruling", "request"]
++    "unreflected_unknown": ["ruling", "utterance"]
+   },
+   "empty": {
+     "at": 1791676800,
+@@ -68,6 +68,6 @@
+     "memo": {"open": 0, "awaiting_promotion": 0, "closed_7d": 0, "created_p50": null},
+     "unreflected": 0,
+     "unreflected_kinds": [],
+-    "unreflected_unknown": ["memo", "ruling", "request"]
++    "unreflected_unknown": ["memo", "ruling", "utterance"]
+   }
+ }
+diff --git a/tests/fixtures/surface/metrics-body.json b/tests/fixtures/surface/metrics-body.json
+index 01eeb310fe97bb74766af207a2d786c7670c7e05..36cb58c3cfded293a92f029cc105cc2a96f234ce 100644
+--- a/tests/fixtures/surface/metrics-body.json
++++ b/tests/fixtures/surface/metrics-body.json
+@@ -1 +1 @@
+-{"known":{"at":1790509020,"judge":"piling-up","open":{"task":2,"memo":1,"question":0,"epic":1},"blocked":0,"ready":2,"stale":0,"net_drop_24h":2,"net_drop_7d":2,"closed_7d":19,"closed_per_day":2.7142857142857144,"lead":{"p50":0.02099537037037037,"p90":0.04030787037037036},"days":[{"end":1789385820,"created":0,"closed":0,"open":0},{"end":1789472220,"created":0,"closed":0,"open":0},{"end":1789558620,"created":0,"closed":0,"open":0},{"end":1789645020,"created":0,"closed":0,"open":0},{"end":1789731420,"created":0,"closed":0,"open":0},{"end":1789817820,"created":0,"closed":0,"open":0},{"end":1789904220,"created":0,"closed":0,"open":0},{"end":1789990620,"created":0,"closed":0,"open":0},{"end":1790077020,"created":0,"closed":0,"open":0},{"end":1790163420,"created":0,"closed":0,"open":0},{"end":1790249820,"created":0,"closed":0,"open":0},{"end":1790336220,"created":0,"closed":0,"open":0},{"end":1790422620,"created":0,"closed":0,"open":0},{"end":1790509020,"created":21,"closed":19,"open":2}],"epics":[{"epic":"t3-hub","closed":19,"total":21}],"memo":{"open":1,"awaiting_promotion":1,"closed_7d":0,"created_p50":1790300525},"unreflected":1,"unreflected_kinds":[{"kind":"memo","count":1}],"unreflected_unknown":["ruling","request"]}}
+\ No newline at end of file
++{"known":{"at":1790509020,"judge":"piling-up","open":{"task":2,"memo":1,"question":0,"epic":1},"blocked":0,"ready":2,"stale":0,"net_drop_24h":2,"net_drop_7d":2,"closed_7d":19,"closed_per_day":2.7142857142857144,"lead":{"p50":0.02099537037037037,"p90":0.04030787037037036},"days":[{"end":1789385820,"created":0,"closed":0,"open":0},{"end":1789472220,"created":0,"closed":0,"open":0},{"end":1789558620,"created":0,"closed":0,"open":0},{"end":1789645020,"created":0,"closed":0,"open":0},{"end":1789731420,"created":0,"closed":0,"open":0},{"end":1789817820,"created":0,"closed":0,"open":0},{"end":1789904220,"created":0,"closed":0,"open":0},{"end":1789990620,"created":0,"closed":0,"open":0},{"end":1790077020,"created":0,"closed":0,"open":0},{"end":1790163420,"created":0,"closed":0,"open":0},{"end":1790249820,"created":0,"closed":0,"open":0},{"end":1790336220,"created":0,"closed":0,"open":0},{"end":1790422620,"created":0,"closed":0,"open":0},{"end":1790509020,"created":21,"closed":19,"open":2}],"epics":[{"epic":"t3-hub","closed":19,"total":21}],"memo":{"open":1,"awaiting_promotion":1,"closed_7d":0,"created_p50":1790300525},"unreflected":1,"unreflected_kinds":[{"kind":"memo","count":1}],"unreflected_unknown":["ruling","utterance"]}}
+\ No newline at end of file
