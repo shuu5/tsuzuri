@@ -11,3 +11,7 @@ entrance-flip = "unmeasured"
 # path の種別の宣言（scribe2 ADR-0047・seat-roles.md §24）: 討論の記録と作業記憶は設計文書、design-intent/ は設計意図
 design-intent-paths = ["design-intent/"]
 design-doc-paths = ["docs/design/", "docs/grill/", "docs/handoff/", "docs/consult/"]
+# 入れ子の crate の根（器の任意の key crate-roots・器の設計 contract-source.md の 62 節・器の行 bq と br）。固定の根 crates/ に足すだけで、
+# folio2/crates/ の下の crate を、器の追随の再 gate・着地の後の検出線・受付の上限の余地と歯の導出が crates/ の直下の crate と同じに読む。
+# 器の持ち込みの前に folio2/crates/ だけを足した（持ち主の承認 2026-10-01T06:40Z）。scribe2/crates/ は器の持ち込みの時に足す。
+crate-roots = ["folio2/crates/"]
