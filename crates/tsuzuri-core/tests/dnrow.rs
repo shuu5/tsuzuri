@@ -7,7 +7,7 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind};
 use tsuzuri_core::graph::build::{DESIGN_KINDS, NOTE_ROW_KIND, add_summary};
-use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check, view};
+use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check};
 
 /// folio の索引の形の 13 行（節点 5・辺 5）。
 const IDX: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）
@@ -329,27 +329,6 @@ fn dnrow_summary_fills_rows() {
         let n = g.node(id).expect(id);
         assert_eq!((n.line, &n.plain, &n.eng), (None, &None, &None), "{id}");
     }
-}
-
-#[test]
-fn dnrow_view_band() {
-    let v = view(&g());
-    assert_eq!(v.total, 10);
-    assert_eq!(v.cut, 0);
-    let boxes: Vec<(&str, u32)> = v
-        .nodes
-        .iter()
-        .filter(|n| n.node.kind == NodeKind::NoteRow)
-        .map(|n| (n.node.id.as_str(), n.kids))
-        .collect();
-    assert_eq!(boxes, vec![("~note:nx", 2), ("~note:ny", 1)]);
-    let edges: Vec<(&str, &str, u32)> = v
-        .edges
-        .iter()
-        .filter(|e| e.edge_type == EdgeType::Design)
-        .map(|e| (e.from.as_str(), e.to.as_str(), e.count))
-        .collect();
-    assert_eq!(edges, vec![("dn", "~note:nx", 2), ("dn", "~note:ny", 1)]);
 }
 
 /// 計画と contracts の verify の filter の語（ほかの語を部分の字として含まない語に畳んだ語と後の行の接頭辞）。

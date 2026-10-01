@@ -400,8 +400,8 @@ fn get(addr: SocketAddr, path: &str) -> Reply {
     }
 }
 
-/// 台帳を読む 10 の GET の口。
-const ROUTES: [&str; 10] = [
+/// 台帳を読む 9 の GET の口。
+const ROUTES: [&str; 9] = [
     "/api/ledger",
     "/api/ledger/fx-hub.3",
     "/api/metrics",
@@ -409,7 +409,6 @@ const ROUTES: [&str; 10] = [
     "/api/pipeline",
     "/api/next",
     "/api/graph",
-    "/api/graph/view",
     "/api/around?id=fx-hub.3",
     "/api/unreflected",
 ];
@@ -548,7 +547,6 @@ fn rhold_wiring_text() {
         "pipeline",
         "next",
         "graph",
-        "graphview",
         "around",
         "unreflected",
         "account",

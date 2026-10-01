@@ -245,7 +245,7 @@ fn g3g7_failed_floor_is_unknown() {
 }
 
 #[test]
-fn g3g7_doc_and_view_carry_edges() {
+fn g3g7_doc_carries_edges() {
     let (index, ledger, events, rulings) = (
         read("index.tsv"),
         read("ledger.json"),
@@ -284,8 +284,6 @@ fn g3g7_doc_and_view_carry_edges() {
     for id in ["g-3", "g-7"] {
         assert_eq!(verdict(&doc, id), Verdict::Pass, "{id}");
     }
-    let view = board::view(&texts);
-    assert!(view.edges.iter().any(|e| e.edge_type == EdgeType::RuledBy));
 
     let empty = Texts {
         rulings: String::new(),
@@ -293,12 +291,6 @@ fn g3g7_doc_and_view_carry_edges() {
     };
     let doc = board::graph(&empty);
     assert_eq!(ruled(&doc.edges), 0);
-    assert!(
-        board::view(&empty)
-            .edges
-            .iter()
-            .all(|e| e.edge_type != EdgeType::RuledBy)
-    );
     for id in ["g-3", "g-7"] {
         assert_eq!(verdict(&doc, id), Verdict::Unknown, "{id}");
     }

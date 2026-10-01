@@ -378,9 +378,6 @@ fn nsumw_routes_carry_fields() {
         "A-1 は file が違う"
     );
 
-    let body = get(addr, "/api/graph/view");
-    assert_eq!(body, encoded!(graph::view(&g)), "眺めの電文の字");
-
     let body = get(addr, "/api/around?id=R-25");
     let want = graph::around(&g, "R-25", 2, Fold::None).expect("中心の節点");
     assert_eq!(body, encoded!(want), "近傍の電文の字");

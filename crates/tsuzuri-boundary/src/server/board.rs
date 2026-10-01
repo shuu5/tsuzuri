@@ -4,7 +4,6 @@
 //! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から・行 c-unref-lc）
 //! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
 //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
-//! - GET /api/graph/view — 地図のグラフの眺め（GraphView・便 e-view）
 //! - GET /api/around — 節点の近傍（AroundDoc・便 e-view）
 //! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む・行 c-unref-lc）
 //!
@@ -18,8 +17,8 @@ use std::time::Instant;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, Reading};
 use tsuzuri_contract::graph::{
-    AroundDoc, BeadAttr, Fold, GraphDoc, GraphSource, GraphView, InvariantCheck, RunAttr,
-    SkippedEdges, Verdict,
+    AroundDoc, BeadAttr, Fold, GraphDoc, GraphSource, InvariantCheck, RunAttr, SkippedEdges,
+    Verdict,
 };
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::stats::{LedgerStats, NextStep, UnreflectedList, UnreflectedRow};
@@ -193,16 +192,6 @@ pub fn graph_outside(texts: &Texts, outside: Vec<Option<Outside>>) -> GraphDoc {
     g.outside = outside;
     let invariants = graph::check(&g);
     doc(&g, &invariants, &texts.summary)
-}
-
-/// 地図のグラフの眺め（導出グラフを組んで眺めの関数に渡す・便 e-view）。
-pub fn view(texts: &Texts) -> GraphView {
-    graph::view(&built(texts))
-}
-
-/// 開く列を受けた地図のグラフの眺め（行 c-graph-fold）。
-pub fn view_open(texts: &Texts, open: &[String]) -> GraphView {
-    graph::view_open(&built(texts), open)
 }
 
 /// 節点の近傍（中心の節点が無いか、段数が幅の外なら None・便 e-view）。

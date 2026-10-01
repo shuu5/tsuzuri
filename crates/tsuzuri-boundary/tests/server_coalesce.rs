@@ -20,7 +20,7 @@ use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_TIMEOUT, FOLIO_WAIT};
 use tsuzuri_boundary::server::ledger::{BD_TIMEOUT, BD_WAIT};
 use tsuzuri_boundary::server::{Config, Server, ruling};
 use tsuzuri_contract::board::{PipelineBoard, Reading};
-use tsuzuri_contract::graph::{GraphDoc, GraphSource, GraphView};
+use tsuzuri_contract::graph::{AroundDoc, GraphDoc, GraphSource};
 use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerList};
 use tsuzuri_contract::stats::{LedgerStats, NextStep};
 use tsuzuri_contract::surface::RulingRequest;
@@ -335,7 +335,7 @@ fn server_coalesce_graph_routes_share_one_folio() {
         place.summary_calls(),
         place.rulings_calls(),
     );
-    let paths = ["/api/graph", "/api/graph", "/api/graph/view"].map(str::to_string);
+    let paths = ["/api/graph", "/api/graph", "/api/around?id=R-25"].map(str::to_string);
     let replies = get_all(addr, &paths);
     let shot = place.folio_calls() - before;
     let summary_shot = place.summary_calls() - before_summary;
@@ -346,9 +346,9 @@ fn server_coalesce_graph_routes_share_one_folio() {
         .zip(&paths)
         .map(|(r, path)| {
             assert_eq!(r.status, 200, "{path}: {}", r.body);
-            if path == "/api/graph/view" {
-                let view: GraphView = decode!(r.body);
-                view.unread
+            if path.starts_with("/api/around") {
+                let around: AroundDoc = decode!(r.body);
+                around.unread
             } else {
                 let doc: GraphDoc = decode!(r.body);
                 doc.unread

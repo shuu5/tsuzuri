@@ -112,7 +112,7 @@ fn hbroute_all_names_follow_dir() {
 }
 
 #[test]
-fn hbroute_keys_cover_twelve_gets() {
+fn hbroute_keys_cover_eleven_gets() {
     let keys: Vec<Key> = Route::ALL.iter().map(|r| r.key()).collect();
     let wanted = [
         Match::Exact("/api/ledger"),
@@ -122,7 +122,6 @@ fn hbroute_keys_cover_twelve_gets() {
         Match::Exact("/api/seat"),
         Match::Exact("/api/account"),
         Match::Exact("/api/graph"),
-        Match::Exact("/api/graph/view"),
         Match::Exact("/api/around"),
         Match::Exact("/api/unreflected"),
         Match::Exact("/api/questions"),
@@ -135,6 +134,11 @@ fn hbroute_keys_cover_twelve_gets() {
         };
         assert!(keys.contains(&key), "口の鍵 {key:?} が無い");
     }
+    let gone = Match::Exact("/api/graph/view");
+    assert!(
+        keys.iter().all(|k| k.path != gone),
+        "地図の眺めの口 {gone:?} が残る"
+    );
 }
 
 #[test]

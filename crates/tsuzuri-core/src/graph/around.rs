@@ -11,7 +11,6 @@ use tsuzuri_contract::graph::{
 };
 
 use super::Graph;
-use super::view::count;
 
 /// 既定の段数（各側・規則の行 R-20「近傍は各 2 段」）。
 pub const AROUND_STEPS: u8 = 2;
@@ -259,4 +258,9 @@ pub fn around(g: &Graph, center: &str, steps: u8, fold: Fold) -> Option<AroundDo
             .collect(),
         unread: g.unread_wire(),
     })
+}
+
+/// 数を電文の幅へ（溢れたら上限に留める）。
+fn count(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
 }

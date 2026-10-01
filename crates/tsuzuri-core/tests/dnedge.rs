@@ -8,7 +8,7 @@ use serde_json::json;
 use tsuzuri_contract::graph::{AroundDoc, EdgeType, Fold};
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::build::DESIGN_EDGE_TYPES;
-use tsuzuri_core::graph::{Graph, Inputs, Verdict, around, build, check, view};
+use tsuzuri_core::graph::{Graph, Inputs, Verdict, around, build, check};
 
 /// 節の索引（節点 5・辺 6・型は req と depends）。
 const IDX: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）
@@ -143,35 +143,8 @@ fn dnedge_index_builds() {
 }
 
 #[test]
-fn dnedge_view_and_around() {
+fn dnedge_around_rows() {
     let g = g();
-    let v = view(&g);
-    let edges: Vec<(&str, &str, EdgeType, u32)> = v
-        .edges
-        .iter()
-        .filter(|e| matches!(e.edge_type, EdgeType::Req | EdgeType::Depends))
-        .map(|e| (e.from.as_str(), e.to.as_str(), e.edge_type, e.count))
-        .collect();
-    assert_eq!(
-        edges,
-        vec![
-            ("~note:ex", "~srs:req", EdgeType::Req, 3),
-            ("~note:ey", "~note:ex", EdgeType::Depends, 1),
-            ("~note:ey", "~srs:req", EdgeType::Req, 1),
-        ]
-    );
-    let rank = |id: &str| {
-        v.nodes
-            .iter()
-            .find(|n| n.node.id == id)
-            .map(|n| n.rank)
-            .unwrap_or_else(|| panic!("{id} の箱が無い"))
-    };
-    assert_eq!(
-        [rank("~srs:req"), rank("~note:ex"), rank("~note:ey")],
-        [0, 1, 2]
-    );
-
     let doc: AroundDoc = around(&g, "ex#b", 1, Fold::None).expect("ex#b の近傍");
     let rows: Vec<(&str, i8, Option<EdgeType>)> = doc
         .rows

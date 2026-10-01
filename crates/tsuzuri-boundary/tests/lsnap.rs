@@ -161,8 +161,8 @@ const FILTERS: &[&str] = &[
     "lidle_",
 ];
 
-/// 台帳を読む 10 の GET の口。
-const ROUTES: [&str; 10] = [
+/// 台帳を読む 9 の GET の口。
+const ROUTES: [&str; 9] = [
     "/api/ledger",
     "/api/ledger/fx-hub.3",
     "/api/metrics",
@@ -170,7 +170,6 @@ const ROUTES: [&str; 10] = [
     "/api/pipeline",
     "/api/next",
     "/api/graph",
-    "/api/graph/view",
     "/api/around?id=fx-hub.3",
     "/api/unreflected",
 ];
@@ -427,8 +426,8 @@ fn lsnap_routes_call_no_bd() {
         assert_eq!(reply.0, 200, "{route}: {}", reply.1);
         before.push(reply.1);
     }
-    assert_eq!(place.calls(), 1, "順に撃った 10 の口");
-    // 印を動かさずに字を替え、10 の口を同時に撃つ。
+    assert_eq!(place.calls(), 1, "順に撃った 9 の口");
+    // 印を動かさずに字を替え、9 の口を同時に撃つ。
     place.bd_returns(&one());
     let replies: Vec<(u16, String)> = thread::scope(|s| {
         let handles: Vec<_> = ROUTES
@@ -446,7 +445,7 @@ fn lsnap_routes_call_no_bd() {
             assert_eq!(&reply.1, was, "{route}");
         }
     }
-    assert_eq!(place.calls(), 1, "同時に撃った 10 の口");
+    assert_eq!(place.calls(), 1, "同時に撃った 9 の口");
     assert_eq!(rows(&get(addr, "/api/ledger")), Some(8));
 }
 
