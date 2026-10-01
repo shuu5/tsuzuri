@@ -263,6 +263,7 @@ mod dom {
         request, state, toggle, unmeasured_reason, with_fold, with_k,
     };
     use crate::frame::{self, Mode};
+    use crate::mapview::around::edge_name;
     use crate::mapview::around::{
         ChainItem, ChainSide, as_view, chain, count_line, expert_line, layout, svg,
     };
@@ -271,7 +272,6 @@ mod dom {
         Highlight, LEGEND_BORDERS, LEGEND_HOVER, LEGEND_SHAPES, Legend, PinAction, Side, border,
         degrees, edge_term, highlight, legend, legend_line, open_question, pin_next,
     };
-    use crate::mapview::table::edge_name;
     use crate::mapview::{current, navigate};
     use crate::project::{ALERT_STYLE, section, unmeasured};
     use crate::view::Fetched;

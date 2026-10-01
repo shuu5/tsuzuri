@@ -1,58 +1,19 @@
 //! 地図の面の部品（便 g-map・見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは行 m-map-page で消した。
 //! 電文（契約の型の GraphDoc）の読みは kit の下の map（crate::project::map の path）が持ち、ここの関数は読めた電文だけを受ける。
-//! 帯と種類の対応は band・表の面は table・グラフの面と近傍は graph と around・2 つの木の面は tree（行 g-map-tree）。
-//! 圧縮の面と一覧の面は行 m-map-compact で消した。
+//! 帯と種類の対応は band・グラフの面と近傍は graph と around。
+//! 圧縮の面と一覧の面は行 m-map-compact で、表の面と 2 つの木の面は行 m-map-tree で消した。
 //! 並べ方と絞りと数え方と URL の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 pub mod around;
 pub mod band;
 pub mod graph;
-pub mod table;
-pub mod tree;
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use tsuzuri_contract::graph::{GraphDoc, GraphNode, GraphSource, NodeKind};
+use tsuzuri_contract::graph::{GraphDoc, GraphNode, NodeKind};
 
-use band::{Band, band_of, unread_reason};
-
-/// 読めなかった出所の理由の行（出所の順・表の面の頭に出す）。
-pub fn unread_reasons(doc: &GraphDoc) -> Vec<&'static str> {
-    let mut sources = doc.unread.clone();
-    sources.sort();
-    sources.dedup();
-    sources.into_iter().map(unread_reason).collect()
-}
-
-/// 設計ノートの状態の字のうち廃止を表す字（段の見出しに出す・行 g-map-retired）。
-pub const RETIRED: &str = "retired";
-
-/// 設計ノートの状態の欄が読めないときの理由（廃止したノートも畳まずに出す・行 g-map-retired）。
-pub const RETIRED_UNREAD: &str = "設計ノートの状態の欄が読めない（廃止したノートも畳まずに出す）";
-
-/// 状態が廃止の設計ノートの文書 id（電文の欄 retired・欄が無ければ空）。
-pub fn retired_notes(doc: &GraphDoc) -> BTreeSet<&str> {
-    doc.retired
-        .iter()
-        .flatten()
-        .map(String::as_str)
-        .collect()
-}
-
-/// 設計ノートの状態の欄が読めないときの理由（設計の索引が読めて設計ノートの行が在り、欄 retired が無いときだけ）。
-pub fn retired_unread(doc: &GraphDoc) -> Option<&'static str> {
-    (doc.retired.is_none()
-        && !doc.unread.contains(&GraphSource::Design)
-        && doc.nodes.iter().any(|n| n.kind == NodeKind::NoteRow))
-    .then_some(RETIRED_UNREAD)
-}
-
-/// 節点の id から種類（辺の両端の種類を引く）。
-pub fn kinds_by_id(doc: &GraphDoc) -> BTreeMap<&str, NodeKind> {
-    doc.nodes.iter().map(|n| (n.id.as_str(), n.kind)).collect()
-}
+use band::{Band, band_of};
 
 /// 節点の状態の字（bead は属性の状態・走行は属性の段・設計文書の節点と属性の無い節点は None）。
 pub fn state<'a>(doc: &'a GraphDoc, node: &GraphNode) -> Option<&'a str> {

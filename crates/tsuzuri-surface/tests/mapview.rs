@@ -1,6 +1,6 @@
-//! 便 g-map の歯: 種類から帯と語の鍵への閉じた表・表の面の行列の数と cell の組の query・URL の query・
+//! 便 g-map の歯: 種類から帯と語の鍵への閉じた表・URL の query・
 //! 着地済みの外形と依存・使う class と語の鍵が在る。id は自然な順（便 g-graph が直した）。
-//! 圧縮の面と一覧の面の歯は行 m-map-compact で消した。
+//! 圧縮の面と一覧の面の歯は行 m-map-compact で、表の面の歯は行 m-map-tree で消した。
 //! 近傍の歯は節点の頁の歯（nodepage.rs・便 g-node が近傍の測れていないの歯を消した）。
 #![cfg(test)]
 
@@ -12,7 +12,6 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::band::{
     BEADS_LANES, Band, KINDS, band_of, kind_from_name, kind_key, kind_name,
 };
-use tsuzuri_surface::mapview::table::{Matrix, matrix, pair_value, with_pair};
 use tsuzuri_surface::mapview::{decode, encode, natural, param, set_param};
 use tsuzuri_surface::project::{NO_CONTENT, NOT_READ, map};
 use tsuzuri_surface::view::Fetched;
@@ -147,58 +146,6 @@ fn band_names_and_paths() {
     assert_eq!(kind_from_name("nope"), None);
 }
 
-/// (5) 表の面の行列の数は fixture の辺から数えた期待と一致し、cell の組は URL の query の pair に残る。
-#[test]
-fn mapview_table_counts_and_pair_filter() {
-    let doc = fixture();
-    let m: Matrix = matrix(&doc);
-    use NodeKind::*;
-    assert_eq!(
-        m.kinds,
-        vec![
-            Article, Norm, Rule, Goal, Req, Adr, NoteRow, Epic, Task, Question, Ruling, Run
-        ]
-    );
-    let cells: Vec<(NodeKind, NodeKind, usize)> =
-        m.cells.iter().map(|c| (c.from, c.to, c.count)).collect();
-    assert_eq!(
-        cells,
-        vec![
-            (Norm, Article, 5),
-            (Rule, Article, 2),
-            (Req, Goal, 2),
-            (Adr, Article, 1),
-            (Adr, Rule, 1),
-            (Task, NoteRow, 2),
-            (Task, Epic, 3),
-            (Question, Epic, 1),
-            (Question, Task, 1),
-            (Ruling, Question, 1),
-            (Run, Task, 3),
-        ]
-    );
-    // 数は辺の数（両端の在る辺だけ）と合う。
-    let known: BTreeSet<&str> = doc.nodes.iter().map(|n| n.id.as_str()).collect();
-    let counted = doc
-        .edges
-        .iter()
-        .filter(|e| known.contains(e.from.as_str()) && known.contains(e.to.as_str()))
-        .count();
-    assert_eq!(m.cells.iter().map(|c| c.count).sum::<usize>(), counted);
-    assert_eq!(m.count(Article, Norm), 0);
-    assert_eq!(m.count(Norm, Article), 5);
-    let adr = m.cell(Adr, Article).expect("cell");
-    assert_eq!(adr.types_text(), "relations.articles");
-    assert_eq!(adr.shape(), "shape band-adr fill");
-
-    // cell を押した後の URL は組の値を pair に置き、帯と種類の絞りを外す（一覧の面は行 m-map-compact で消した）。
-    let url = with_pair("?page=map&view=table&band=rules&kind=x", Some((Run, Task)));
-    assert_eq!(param(&url, "pair"), Some(pair_value(Run, Task)));
-    assert_eq!((param(&url, "band"), param(&url, "kind")), (None, None));
-    assert_eq!(param(&url, "view").as_deref(), Some("table"));
-    assert_eq!(with_pair(&url, None), "?page=map&view=table");
-}
-
 /// query の値の `%XX` の読み書きと、置き換えと消し。
 #[test]
 fn mapview_query_codec() {
@@ -307,7 +254,6 @@ fn mapview_classes_and_keys_exist() {
     let files = [
         "src/mapview/mod.rs",
         "src/mapview/band.rs",
-        "src/mapview/table.rs",
         "src/mapview/graph.rs",
         "src/mapview/graph/dom.rs",
         "src/mapview/around.rs",
@@ -326,12 +272,8 @@ fn mapview_classes_and_keys_exist() {
     used_in_css(used);
 }
 
-/// 例の電文から組む升・帯の印の class を足す（圧縮の面の札と一覧の面の行は行 m-map-compact で消した）。
+/// 帯の印の class を足す（圧縮の面の札と一覧の面の行は行 m-map-compact で、表の面の升は行 m-map-tree で消した）。
 fn doc_classes(mut add: impl FnMut(&str)) {
-    let doc = fixture();
-    for c in &matrix(&doc).cells {
-        add(&c.shape());
-    }
     for b in Band::ALL {
         add(&format!("shape fill {}", b.class_name()));
     }
@@ -340,15 +282,14 @@ fn doc_classes(mut add: impl FnMut(&str)) {
 /// 使う class は stylesheet に在り、語の鍵は vocab に在る。
 fn used_in_css(used: BTreeSet<String>) {
     let css = stylesheet_classes();
-    for c in [
-        "subh", "items", "nid", "ttl", "mx", "mxwrap", "mxlist", "pair", "path", "shape", "empty",
-    ] {
+    for c in ["subh", "items", "nid", "ttl", "path", "shape"] {
         assert!(used.contains(c), "地図の頁が class {c} を使わない");
     }
     let missing: Vec<&String> = used.iter().filter(|c| !css.contains(*c)).collect();
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
 
-    for key in ["matrix", "st_unknown"] {
-        assert!(vocab().term(key).is_some(), "鍵 {key} が vocab に無い");
-    }
+    assert!(
+        vocab().term("st_unknown").is_some(),
+        "鍵 st_unknown が vocab に無い"
+    );
 }

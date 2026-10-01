@@ -12,9 +12,9 @@ use tsuzuri_contract::graph::{
 };
 use tsuzuri_contract::wire;
 
+use super::around::edge_name;
 use super::band::{BEADS_LANES, Band, band_of, kind_key, unread_reason};
 use super::is_open;
-use super::table::edge_name;
 use crate::project::{NO_CONTENT, NOT_READ};
 use crate::view::Fetched;
 use crate::vocab::{label, vocab};

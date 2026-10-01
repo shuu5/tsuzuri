@@ -11,6 +11,7 @@ use std::fmt::Write;
 use tsuzuri_contract::graph::{
     AroundDoc, AroundRow, BoxFold, EdgeType, GraphView, NodeKind, ViewEdge, ViewNode, title36,
 };
+use tsuzuri_contract::wire;
 
 use super::band::{BEADS_LANES, Band, band_of, kind_key};
 use super::graph::{
@@ -18,7 +19,6 @@ use super::graph::{
     open_question, round_mark,
 };
 use super::is_open;
-use super::table::edge_name;
 use crate::vocab::label;
 
 /// 列の全部（根拠の側は負・中心は 0・影響の側は正）。
@@ -51,6 +51,13 @@ pub const BOTTOM: u32 = 4;
 
 fn count(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// 辺の型の電文の字（表の面は行 m-map-tree で消し、この関数は表の面から字を変えずに移した）。
+pub fn edge_name(t: EdgeType) -> String {
+    wire::encode(&t)
+        .map(|s| s.trim_matches('"').to_string())
+        .unwrap_or_default()
 }
 
 /// 列の見出しの語の鍵（-3 から 3 の外は None）。

@@ -17,9 +17,9 @@ use super::{
 };
 use crate::view::Fetched;
 use crate::frame::{self, Mode};
+use crate::mapview::around::edge_name;
 use crate::mapview::band::Band;
 use crate::mapview::band_chip;
-use crate::mapview::table::edge_name;
 use crate::project::{ALERT_STYLE, unmeasured};
 use crate::vocab::label;
 use crate::widgets::help::{HelpCtx, expert_tip, h2};
