@@ -178,12 +178,3 @@ pub const BEADS_LANES: [NodeKind; 7] = [
     NodeKind::Receipt,
     NodeKind::Policy,
 ];
-
-/// 出所が読めなかったときの帯の理由の 1 行。
-pub fn unread_reason(source: GraphSource) -> &'static str {
-    match source {
-        GraphSource::Design => "設計の索引が読めず、この帯の節点がまだ分からない",
-        GraphSource::Ledger => "台帳が読めず、この帯の節点がまだ分からない",
-        GraphSource::Runs => "器の event の記録が読めず、この帯の節点がまだ分からない",
-    }
-}

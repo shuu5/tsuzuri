@@ -242,7 +242,7 @@ fn stylesheet_classes() -> BTreeSet<String> {
     out
 }
 
-/// 地図の頁が使う class は stylesheet に在り、語の鍵は vocab に在る。
+/// 地図の部品が使う class は stylesheet に在り、語の鍵は vocab に在る（グラフの面の DOM は行 m-map-graph で消した）。
 #[test]
 fn mapview_classes_and_keys_exist() {
     let mut used = BTreeSet::new();
@@ -255,7 +255,6 @@ fn mapview_classes_and_keys_exist() {
         "src/mapview/mod.rs",
         "src/mapview/band.rs",
         "src/mapview/graph.rs",
-        "src/mapview/graph/dom.rs",
         "src/mapview/around.rs",
     ];
     for f in files {
@@ -282,7 +281,7 @@ fn doc_classes(mut add: impl FnMut(&str)) {
 /// 使う class は stylesheet に在り、語の鍵は vocab に在る。
 fn used_in_css(used: BTreeSet<String>) {
     let css = stylesheet_classes();
-    for c in ["subh", "items", "nid", "ttl", "path", "shape"] {
+    for c in ["node", "hit", "lk", "shape"] {
         assert!(used.contains(c), "地図の頁が class {c} を使わない");
     }
     let missing: Vec<&String> = used.iter().filter(|c| !css.contains(*c)).collect();

@@ -1,5 +1,6 @@
-//! 行 g-graph-fold の歯（面）: 開いた箱の列と口の path・組の箱と開き閉じの印の SVG・狭い幅の一覧の組の行・
-//! 組の箱の card・開けなかった行・語の辞書の 4 つの鍵・DOM の配線の字と外の依存・歯の名。
+//! 行 g-graph-fold の歯（面）: 組の箱の card・語の辞書の 3 つの鍵・graph.rs の mod の行と外の依存・歯の名。
+//! 開いた箱の列と口の path・組の箱と開き閉じの印の SVG・狭い幅の一覧の組の行・開けなかった行・DOM の配線の字の歯は
+//! 行 m-map-graph で消した。
 #![cfg(test)]
 
 use std::path::PathBuf;
@@ -7,9 +8,6 @@ use std::path::PathBuf;
 use tsuzuri_contract::graph::{BoxFold, GraphNode, GraphView, NodeKind, ViewNode};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::band::{band_of, kind_key};
-use tsuzuri_surface::mapview::encode;
-use tsuzuri_surface::mapview::graph::fold::{OpenList, mark_svg, refused_line};
-use tsuzuri_surface::mapview::graph::{PATH, Pos, chain, layout, node_svg, svg};
 use tsuzuri_surface::widgets::nodecard::{NO_GIST, card_for, group_card, view_cards};
 use tsuzuri_surface::vocab::{label, vocab};
 
@@ -73,162 +71,6 @@ fn mixed() -> GraphView {
     v
 }
 
-const AT: Pos = Pos { x: 200, y: 40 };
-
-/// 字の `start` から後で最初に出る `end` までの区間（`end` を含む・どちらかが無ければ落ちる）。
-fn span<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
-    let from = text
-        .find(start)
-        .unwrap_or_else(|| panic!("字 {start} が無い"));
-    let rest = &text[from..];
-    let to = rest.find(end).unwrap_or_else(|| panic!("字 {start} の後に字 {end} が無い"));
-    &rest[..to + end.len()]
-}
-
-/// (1) 開いた箱の列の toggle・adopt・path。
-#[test]
-fn btuck_open_list() {
-    let mut o = OpenList::default();
-    assert!(o.ids().is_empty());
-    assert_eq!(o.path(), PATH);
-
-    assert!(o.toggle("~rule", BoxFold::Folded));
-    assert!(o.toggle("~art:P", BoxFold::Folded));
-    assert_eq!(o.ids(), ["~rule", "~art:P"]);
-    assert_eq!(o.path(), "/api/graph/view?open=~rule,~art%3AP");
-    assert_eq!(o.path(), format!("{PATH}?open={},{}", encode("~rule"), encode("~art:P")));
-
-    // 同じ id の Folded は外してから末へ移す（末に在れば列は変わらない）。
-    assert!(o.toggle("~rule", BoxFold::Folded));
-    assert_eq!(o.ids(), ["~art:P", "~rule"]);
-    assert!(!o.toggle("~rule", BoxFold::Folded));
-    assert_eq!(o.ids(), ["~art:P", "~rule"]);
-
-    // Leaf は列を変えない。
-    assert!(!o.toggle("x", BoxFold::Leaf));
-    assert!(!o.toggle("~rule", BoxFold::Leaf));
-    assert_eq!(o.ids(), ["~art:P", "~rule"]);
-    drop_and_adopt(o);
-}
-
-/// Open は列から外し、字 , を含む id は %2C になり、adopt は列を置き換える。
-fn drop_and_adopt(mut o: OpenList) {
-    // Open は列から外す（無ければ変えない）。
-    assert!(o.toggle("~art:P", BoxFold::Open));
-    assert_eq!(o.ids(), ["~rule"]);
-    assert!(!o.toggle("~art:P", BoxFold::Open));
-    assert_eq!(o.path(), "/api/graph/view?open=~rule");
-
-    // 字 , を含む id は %2C になる。
-    assert!(o.toggle("a,b", BoxFold::Folded));
-    assert_eq!(o.path(), "/api/graph/view?open=~rule,a%2Cb");
-
-    o.adopt(&["p".to_string(), "t3-hub.52~1-12".to_string()]);
-    assert_eq!(o.ids(), ["p", "t3-hub.52~1-12"]);
-    assert_eq!(o.path(), "/api/graph/view?open=p,t3-hub.52~1-12");
-    o.adopt(&[]);
-    assert!(o.ids().is_empty());
-    assert_eq!(o.path(), PATH);
-    assert_eq!(o, OpenList::default());
-}
-
-/// (2) 組の箱の SVG（題・種類と組の語・点線の縁・印）と開き閉じの印・fixture の図は印を持たない。
-#[test]
-fn btuck_group_box_svg() {
-    let group = label("gf_group");
-    let unfold = label("gf_unfold");
-    let refold = label("gf_fold");
-
-    let rule = node_svg(&rule_box(), AT);
-    let kind = label(kind_key(NodeKind::Rule));
-    assert!(rule.starts_with("<g class=\"node\" data-key=\"~rule\""), "{rule}");
-    assert!(rule.contains(&format!("aria-label=\"規則行 {kind} {group}\"")), "{rule}");
-    assert!(rule.contains(">規則行</text>"), "{rule}");
-    assert!(rule.contains(&format!(">{kind} · {group}</text>")), "{rule}");
-    assert!(!rule.contains(">~rule<"), "組の箱の id を字にした: {rule}");
-    let hit = span(&rule, "<rect class=\"hit\"", "/>");
-    assert!(hit.contains("stroke-dasharray=\"4 2\""), "{hit}");
-    assert!(rule.contains(&format!("{} 27", label("children"))), "子の数の札");
-    assert_eq!(rule.matches("class=\"fold\"").count(), 1);
-    let mark = span(&rule, "<g class=\"fold\"", "</g>");
-    for want in [
-        "data-fold=\"~rule\"".to_string(),
-        "role=\"button\"".to_string(),
-        "tabindex=\"0\"".to_string(),
-        format!("aria-label=\"{unfold}\""),
-        "▸".to_string(),
-    ] {
-        assert!(mark.contains(&want), "印に {want} が無い: {mark}");
-    }
-    assert!(!mark.contains("data-key"), "{mark}");
-    assert!(!mark.contains("class=\"node\""), "{mark}");
-    assert!(rule.ends_with(&format!("{mark}</g>")), "印は箱の末");
-    assert_eq!(mark_svg(&rule_box(), AT).as_deref(), Some(mark));
-    art_svg(group, refold);
-}
-
-/// 開いた組の箱の SVG（題・種類と組の語・畳み直す印）。
-fn art_svg(group: String, refold: String) {
-    let art = node_svg(&art_box(), AT);
-    let kind = label(kind_key(NodeKind::Article));
-    assert!(art.contains(">条 P</text>"), "{art}");
-    assert!(art.contains(&format!(">{kind} · {group}</text>")), "{art}");
-    assert!(!art.contains(">~art:P<"), "{art}");
-    let mark = span(&art, "<g class=\"fold\"", "</g>");
-    assert!(mark.contains("data-fold=\"~art:P\""), "{mark}");
-    assert!(mark.contains(&format!("aria-label=\"{refold}\"")), "{mark}");
-    assert!(mark.contains('▾') && !mark.contains('▸'), "{mark}");
-    plain_svgs();
-}
-
-/// 組でない畳んだ箱と Leaf の SVG・fixture の図と足した眺めの図の印の数。
-fn plain_svgs() {
-    // 組でない畳んだ箱は id の字を持ち、縁は点線でなく、印を 1 つ持つ。
-    let epic = node_svg(&epic_box(), AT);
-    assert!(epic.contains(">t3-hub.52</text>"), "{epic}");
-    assert!(!epic.contains("stroke-dasharray"), "{epic}");
-    assert_eq!(epic.matches("data-fold=\"t3-hub.52\"").count(), 1);
-
-    // Leaf は印を持たない・fixture の図は字 data-fold を持たず data-key は 8 つ。
-    let leaf = boxed("R-9", NodeKind::Rule, "規則", (false, BoxFold::Leaf, 0));
-    assert_eq!(mark_svg(&leaf, AT), None);
-    assert!(!node_svg(&leaf, AT).contains("data-fold"));
-    let v = fixture();
-    assert!(v.nodes.iter().all(|n| !n.group && n.fold == BoxFold::Leaf));
-    let picture = svg(&v, &layout(&v));
-    assert!(!picture.contains("data-fold"));
-    assert_eq!(picture.matches("data-key=\"").count(), 8);
-    let v = mixed();
-    let picture = svg(&v, &layout(&v));
-    assert_eq!(picture.matches("data-key=\"").count(), 11);
-    assert_eq!(picture.matches("data-fold=\"").count(), 3);
-}
-
-/// (3) 狭い幅の一覧の行は組と開き閉じの欄を持ち、組の行の題は箱の題。
-#[test]
-fn btuck_chain_group_rows() {
-    let rows: Vec<_> = chain(&fixture())
-        .into_iter()
-        .flat_map(|b| b.rows)
-        .collect();
-    assert_eq!(rows.len(), 8);
-    assert!(rows.iter().all(|r| !r.group && r.fold == BoxFold::Leaf));
-
-    let rows: Vec<_> = chain(&mixed())
-        .into_iter()
-        .flat_map(|b| b.rows)
-        .collect();
-    assert_eq!(rows.len(), 11);
-    let find = |id: &str| rows.iter().find(|r| r.id == id).expect(id);
-    let r = find("~rule");
-    assert_eq!((r.group, r.fold, r.title.as_str(), r.kids), (true, BoxFold::Folded, "規則行", Some(27)));
-    let r = find("~art:P");
-    assert_eq!((r.group, r.fold, r.title.as_str()), (true, BoxFold::Open, "条 P"));
-    let r = find("t3-hub.52");
-    assert_eq!((r.group, r.fold, r.title.as_str()), (false, BoxFold::Folded, "面の epic"));
-    assert_eq!(rows.iter().filter(|r| r.group).count(), 2);
-}
-
 /// (4) 組の箱の card と view_cards の使い分け。
 #[test]
 fn btuck_group_card() {
@@ -288,32 +130,13 @@ fn art_card_and_views() {
     );
 }
 
-/// (5) 開けなかった id の行。
-#[test]
-fn btuck_refused_line() {
-    let mut v = fixture();
-    assert!(v.refused.is_empty());
-    assert_eq!(refused_line(&v), None);
-    v.refused = vec!["~rule".to_string()];
-    assert_eq!(
-        refused_line(&v),
-        Some(format!("{} ~rule", label("gf_refused")))
-    );
-    v.refused = vec!["~rule".to_string(), "~art:P".to_string(), "~b:SRS".to_string()];
-    assert_eq!(
-        refused_line(&v),
-        Some(format!("{} ~rule・~art:P・~b:SRS", label("gf_refused")))
-    );
-}
-
-/// (6) 語の辞書の 4 つの鍵（見出しの語・注釈の記号と 1 行目の字数）と変えない鍵。
+/// (6) 語の辞書の 3 つの鍵（見出しの語・注釈の記号と 1 行目の字数）と変えない鍵（開けなかった行の鍵は行 m-map-graph で外した）。
 #[test]
 fn btuck_vocab_keys() {
     for (key, want) in [
         ("gf_group", "組"),
         ("gf_unfold", "1 段開く"),
         ("gf_fold", "畳み直す"),
-        ("gf_refused", "開けなかった"),
     ] {
         let t = vocab()
             .term(key)
@@ -334,13 +157,8 @@ fn btuck_vocab_keys() {
         group.lines().collect::<Vec<_>>(),
         ["同じ種類の節点を 1 つの箱に畳んだもの", "→ 右下の印を押すと 1 段開く"]
     );
-    assert_eq!(
-        vocab().term("gf_refused").expect("gf_refused").note,
-        "見える箱が 40 を越えるので開かなかった"
-    );
     assert_eq!(label("children"), "子");
     assert_eq!(label("cut"), "表示した数");
-    assert_eq!(label("view_graph"), "グラフ");
 }
 
 /// Cargo.toml の表の中の鍵の名（`名 = …` の行の名・注釈の行は除く）。
@@ -360,23 +178,9 @@ fn table_names(manifest: &str, table: &str) -> Vec<String> {
     names
 }
 
-/// (7) DOM の配線の字・graph.rs の mod の行・fold.rs に口の字が無い・(8) 外の依存は足さない。
+/// (7) graph.rs の mod の行・fold.rs に口の字が無い・(8) 外の依存は足さない（DOM の配線の字は行 m-map-graph で消した）。
 #[test]
 fn btuck_dom_wiring_text() {
-    let dom = read("src/mapview/graph/dom.rs");
-    for want in [
-        "crate::net::read_path(",
-        "OpenList",
-        ".toggle(",
-        ".adopt(",
-        ".path()",
-        "refused_line(",
-        "closest(\"g.fold\")",
-    ] {
-        assert!(dom.contains(want), "graph/dom.rs に {want} が無い");
-    }
-    assert!(!dom.contains("crate::net::read(PATH)"));
-
     let host = read("src/mapview/graph.rs");
     assert!(
         host.lines().any(|l| l.starts_with("pub mod fold;")),
@@ -533,7 +337,7 @@ fn btuck_own_names_clean() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert!(names.len() >= 8, "歯の数 {}", names.len());
+    assert!(names.len() >= 4, "歯の数 {}", names.len());
     for name in names {
         let rest = name
             .strip_prefix("btuck_")

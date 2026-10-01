@@ -8,7 +8,6 @@ use std::path::Path;
 use tsuzuri_contract::ledger::{ITEM_PATH, LEDGER_CHANGED_EVENT};
 use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, ChangeKind};
 use tsuzuri_contract::{account, project, runs};
-use tsuzuri_surface::mapview::graph;
 use tsuzuri_surface::project::{ask, ledger, map, next, nodearound, pipeline, seat};
 use tsuzuri_surface::view::{changed_kinds, path_kinds, reloads};
 
@@ -33,8 +32,8 @@ fn function<'a>(text: &'a str, name: &str) -> &'a str {
     &rest[..end]
 }
 
-/// 面が読む口の 14 の path（query を付けて読む口は読む形の query を付けた字）。
-fn paths() -> [String; 14] {
+/// 面が読む口の 13 の path（query を付けて読む口は読む形の query を付けた字・グラフの眺めの口は行 m-map-graph で外した）。
+fn paths() -> [String; 13] {
     [
         seat::PATH.to_string(),
         next::PATH.to_string(),
@@ -45,7 +44,6 @@ fn paths() -> [String; 14] {
         ask::PATH.to_string(),
         pipeline::PATH.to_string(),
         map::PATH.to_string(),
-        format!("{}?open=fx-a", graph::PATH),
         format!("{}?id=fx-a.1&k=1&fold=", nodearound::PATH),
         format!("{}?bead=fx-a.1", runs::PATH),
         account::PATH.to_string(),
@@ -55,7 +53,7 @@ fn paths() -> [String; 14] {
 
 #[test]
 fn evkind_path_kinds_table() {
-    let want: [&[ChangeKind]; 14] = [
+    let want: [&[ChangeKind]; 13] = [
         &[Seat],
         &[Ledger, Runs, Seat],
         &[Ledger],
@@ -64,7 +62,6 @@ fn evkind_path_kinds_table() {
         &[Ledger],
         &[Ledger],
         &[Ledger, Runs],
-        &[Ledger, Runs, Design],
         &[Ledger, Runs, Design],
         &[Ledger, Runs, Design],
         &[Runs],

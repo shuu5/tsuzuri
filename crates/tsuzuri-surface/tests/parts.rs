@@ -12,7 +12,6 @@ use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList};
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::mapview::graph;
 use tsuzuri_surface::project::{
     Body, Module, NO_CONTENT, NOT_READ, ask, askpage, ledger, map, next, pipeline, seat,
 };
@@ -138,8 +137,8 @@ fn unread_lists(empty: String) {
     }
 }
 
-/// 口の path は block の module の paths の全部とグラフの module の口と kit の map の口で、互いに違う（数と字は持たない・
-/// 値は歯 hsderive_ と mapgraph_ が見る・行 hs-derived・kit の map は行 m-map-page）。
+/// 口の path は block の module の paths の全部と kit の map の口で、互いに違う（数と字は持たない・
+/// 値は歯 hsderive_ が見る・行 hs-derived・kit の map は行 m-map-page・グラフの眺めの口は行 m-map-graph で消した）。
 #[test]
 fn parts_paths_distinct_in_block_modules() {
     let owned: Vec<(Module, &str)> = Module::ALL
@@ -147,7 +146,6 @@ fn parts_paths_distinct_in_block_modules() {
         .flat_map(|m| m.paths().iter().map(move |p| (m, *p)))
         .collect();
     let mut paths: Vec<&str> = owned.iter().map(|(_, p)| *p).collect();
-    paths.push(graph::PATH);
     paths.push(map::PATH);
     let mut sorted = paths.clone();
     sorted.sort_unstable();
@@ -155,8 +153,7 @@ fn parts_paths_distinct_in_block_modules() {
     assert_eq!(sorted.len(), paths.len(), "口の path が重なる: {paths:?}");
 
     // src の `"/api/…"` の字: block の口はその path を paths に持つ module の file に 1 度だけ・
-    // グラフの口の字は mapview の下のグラフの module の file に 1 度だけ・グラフの電文の口の字は kit の下の map の
-    // file に 1 度だけ・ほかは変化の知らせの口だけ。
+    // グラフの電文の口の字は kit の下の map の file に 1 度だけ・ほかは変化の知らせの口だけ。
     let mut found: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     for (path, text) in sources() {
         let mut rest = text.as_str();
@@ -178,13 +175,6 @@ fn parts_paths_distinct_in_block_modules() {
             .join(format!("{}.rs", m.name()));
         assert_eq!(at[0], file, "{p} が {} の module に無い: {at:?}", m.name());
     }
-    let at = found.remove(graph::PATH).unwrap_or_default();
-    assert_eq!(
-        at,
-        vec![crate_dir().join("src/mapview/graph.rs")],
-        "{} の字がグラフの module に 1 度だけでない",
-        graph::PATH
-    );
     let at = found.remove(map::PATH).unwrap_or_default();
     assert_eq!(
         at,
