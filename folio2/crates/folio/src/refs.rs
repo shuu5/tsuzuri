@@ -1,7 +1,6 @@
 //! 参照 id の解決（rules 行 R-4・NFR3 / AC6）と rules 行の逆参照・憲法の件数（便 1・docs/design/delivery-1.md §1）。
 //! day-1 の床（scripts/check_draft.py の refs / counts）と同じ式。正規表現は使わず文字の走査で判定する。
 //! 判断の記録の id（ADR-n）は解かない（便 6 の link.rs）。凍結 anchor の列に在った過去の id は解決先に足す（便 7 (j)）。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{HashMap, HashSet};
 

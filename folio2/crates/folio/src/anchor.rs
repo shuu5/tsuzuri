@@ -4,7 +4,6 @@
 //! （`lineage.rs`）は便 8 で、ここから呼ぶ。`--freeze-anchor`・`--emit-amends` は便 9。
 //! 値は型付きの木（`yaml::Value`）で読み、digest は正規化（`yaml::canonical`）の sha256。
 //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs` / `adr::floor_val`）で読み、値は持ち直さない。正規表現は使わない。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;

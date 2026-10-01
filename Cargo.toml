@@ -43,6 +43,11 @@ print_stdout = "deny"
 print_stderr = "deny"
 allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
+# 行 r4-table: 規則の行 R-4 の関数の粒度（関数の行・複雑度・引数・閾値は根の clippy.toml）を deny にする（条 P-22.1・P-22.2・P-24.3・判断の記録 ADR-25 の決定 (1)）。
+# forbid にしないのは、外の crate の macro（clap の derive・leptos の component）が 3 つを含む allow の属性を出し、forbid の下では組めないから。expect と allow の例外を置かないことは xtask の歯 klint_ が見る。
+too_many_lines = "deny"
+cognitive_complexity = "deny"
+too_many_arguments = "deny"
 
 # 行 g-strip: release の profile の strip で面の wasm の関数の名の表（name の節）を抜く。
 # opt-level と lto は組みの時間を測ってから別に決める。

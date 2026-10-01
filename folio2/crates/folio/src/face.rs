@@ -14,7 +14,6 @@
 //! 直後に部品 ceiling-stamp を置く。字は `ceiling_stamp` の 1 つで組む（面ごとに組み直さない）ので 5 面で同じになる。
 //! 出所は天井の印 preview/ceiling-stamp.yaml の 1 つ（便 83・P-6.3）で、印が無ければ 4 観点とも「まだ分からない」（未実施）を出す（P-4.2）。
 //! 印の正本の要約値が今の正本と違えば「印の後に変わった所はまだ読まれていない」を添える（便 127・ADR-18 決定 (6)・P-3.3）。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;

@@ -6,7 +6,6 @@
 //! 旗・列の結果・旗の後始末の型 3 つと凍結しないときの 1 行は便 111 で `phase.rs` へ降ろした（ADR-15・層 1 読む）。
 //! 便 121（ADR-16 決定 (2)）: 列の根は憲法の名で列の根の表を引いて照らす（`check_root`）。凍結の木は組む（`build`・`texts`）と
 //! 書く（`write_chain`）に分け、始まりの凍結 `--freeze-start` が `ids.rs` の組む・書くと合わせて 2 つを同時に書く。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -5,7 +5,6 @@
 //! 面に依らない口（head と site-bar・章の帯・card・toc・foot・部品の名札）は `face.rs` の `Frame` を呼ぶ（便 15）。
 //! 読み手（正本を読んで面の文脈と節の中身を組む側・条と文脈と改訂の段の型・読みと検査・欠番・関係の欄・改訂の段の読み）は
 //! 便 116 で `face_constitution_read.rs`（層 4）へ降ろした。面の口と HTML を書く側と名札と数の口はここに残す。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 use std::sync::LazyLock;

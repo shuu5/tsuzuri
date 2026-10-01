@@ -10,7 +10,6 @@
 //! 承認欄も在れば読む）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{HashMap, HashSet};
 use std::fs;

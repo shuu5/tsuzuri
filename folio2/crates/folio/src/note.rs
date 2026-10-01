@@ -13,7 +13,6 @@
 //! 承認欄の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数え、`check_note` は読めた設計ノートを返す。
 //! 計画の設計ノートの節の型 3 つ（行の索引・計画だけの行・判断の表）の行の形は便 183 からここが数え、置き場の決まりと計画の床は
 //! `plan.rs` の `check_plan` が数える（判断の記録 ADR-31 決定 (2)・要件書 FR27）。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::HashSet;
 use std::fs;

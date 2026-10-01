@@ -15,7 +15,6 @@
 //! 強調の印（便 149・docs/design/delivery-149.md §1 (b)）: 散文の 6 つの欄（context と decision は列挙で分けた後の
 //! 断片ごと・案の text と reason・帰結の各行・注）は、escape の後に左から順に対になった印 STRONG_MARK を strong の
 //! 要素に写す（閉じない印と中身が空の対は生のまま）。題・平易文・逐語の引用などほかの欄は写さない。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;

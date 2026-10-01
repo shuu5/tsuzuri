@@ -5,7 +5,6 @@
 //! 凍結 anchor の列そのもの（digest の検算・索引・版管理との照合・現行の写しとの一致）は便 7。
 //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs`）で読み、値は持ち直さない。正規表現は使わない。
 //! 改訂来歴の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数える。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::HashSet;
 use std::fs;

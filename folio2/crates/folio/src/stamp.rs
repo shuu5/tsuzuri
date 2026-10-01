@@ -16,7 +16,6 @@
 //! 観点の行は、まだ分からない の理由が反証の済んでいない 止める だけのとき末尾に欄 `wait: 反証` を足す。印は周の 3 値に依らず書く。
 //! 便 176（docs/design/delivery-176.md §1 (b)・FR20）: dir 形の文書で at の頭が file 名に解けないときは、置き場の直下の .yaml の
 //! 最上位の meta.id でも解く（ちょうど 1 file のときだけ・`meta_file`）。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::BTreeSet;
 use std::fs;

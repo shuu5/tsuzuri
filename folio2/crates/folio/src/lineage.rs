@@ -2,7 +2,6 @@
 //! day-1 の床 `scripts/check_draft.py` の diff_targets / structural_diff / verify_pair を同じ式で写す:
 //! 隣り合う anchor の content を欄単位で比べ、その版を名指す発効した判断の amends と 1 対 1 に消し込む。
 //! 値は型付きの木（`yaml::Value`）で読み、欄の値の表現は便 7 の正規化（`yaml::canonical`）の字面。正規表現は使わない。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{BTreeMap, BTreeSet};
 

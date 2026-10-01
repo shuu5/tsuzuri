@@ -1,8 +1,6 @@
 //! 行 k-lint-folio-tests と k-lint-folio-deny の歯（接頭辞 klintf_）: 持ち込んだ folio の歯の根が #![cfg(test)] を置くこと・
 //! folio の 2 つの根が lint の属性を置かず workspace の lint の表が覆うこと・allow の属性を置かないこと。
 //! 行 k-lint-folio-roots が 2 つの根の lint の一覧を消し、表が一覧 COVER の 15 の lint を持つことを見る形にした。
-//! 行 r4-folio-src-a から、規則の行 R-4 の関数の粒度を直した folio の file（一覧 R4_DONE）の頭に、関数の行と
-//! 複雑度の lint を deny にする module の属性を置くことを見る（R-4 の lint を表に足す行が属性と一覧を消す）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
@@ -76,33 +74,6 @@ const COVER: [(&str, &str, &str); 15] = [
     ("print_stderr", "workspace.lints.clippy", "deny"),
     ("allow_attributes", "workspace.lints.clippy", "deny"),
     ("allow_attributes_without_reason", "workspace.lints.clippy", "deny"),
-];
-
-/// 規則の行 R-4 の関数の行と複雑度の lint を deny にする module の属性の行（直した file の頭の //! の続きの直後）。
-const R4_DENY: &str = "#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]";
-
-/// R-4 の関数の粒度を直して頭に R4_DENY を置いた folio の file（crate の dir からの相対）。
-const R4_DONE: [&str; 20] = [
-    "src/anchor.rs",
-    "src/check.rs",
-    "src/face.rs",
-    "src/face_adr.rs",
-    "src/face_constitution.rs",
-    "src/face_index.rs",
-    "src/face_index_read.rs",
-    "src/face_note.rs",
-    "src/face_srs.rs",
-    "src/face_srs_items.rs",
-    "src/face_srs_rtm.rs",
-    "src/findings.rs",
-    "src/freeze.rs",
-    "src/graph.rs",
-    "src/lineage.rs",
-    "src/link.rs",
-    "src/mentions.rs",
-    "src/note.rs",
-    "src/refs.rs",
-    "src/stamp.rs",
 ];
 
 fn repo_root() -> PathBuf {
@@ -226,33 +197,6 @@ fn klintf_no_allow_attrs() {
 }
 
 #[test]
-fn klintf_r4_module_deny() {
-    for rel in R4_DONE {
-        let path = folio_dir().join(rel);
-        let text =
-            fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
-        let lines: Vec<&str> = text.lines().collect();
-        let head = lines.iter().take_while(|l| l.starts_with("//!")).count();
-        assert!(head >= 1, "{} の頭の行が //! で始まらない", path.display());
-        assert_eq!(
-            lines.get(head).copied(),
-            Some(R4_DENY),
-            "{} の頭の //! の続きの直後が {R4_DENY} でない",
-            path.display()
-        );
-        for lint in ["clippy::too_many_lines", "clippy::cognitive_complexity"] {
-            let count = text.matches(lint).count();
-            assert_eq!(count, 1, "{} の {lint} が {count} 件", path.display());
-        }
-        assert!(
-            !text.contains("too_many_arguments"),
-            "{} が too_many_arguments を含む",
-            path.display()
-        );
-    }
-}
-
-#[test]
 fn klintf_own_names_clean() {
     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
     assert_eq!(words.len(), 357, "filter の語の数");
@@ -267,7 +211,7 @@ fn klintf_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 5, "歯の数");
+    assert_eq!(names.len(), 4, "歯の数");
     for name in names {
         let rest = name
             .strip_prefix("klintf_")

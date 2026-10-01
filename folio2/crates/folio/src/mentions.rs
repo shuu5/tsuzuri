@@ -7,7 +7,6 @@
 //! 歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ数えずに判定の外の 1 行 `OFF` を出させ（便 156・FR5）、
 //! 値が 0 件 でなければ「まだ分からない」（P-4.2）。
 //! id を拾う口は refs.rs の `scan_ids` と link.rs の `scan_adr_ids`（正規表現は使わない）。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{HashMap, HashSet};
 use std::fs;

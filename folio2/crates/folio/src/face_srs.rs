@@ -8,7 +8,6 @@
 //! 図が 1 枚でも導出できなければ面全体を導出しない（全部か無しか）。図が無い面は便 33 までと byte 不変。
 //! 章 03〜06（機能要件・非機能要件・受入基準・制約）の生成は便 100 で `face_srs_items.rs` へ移した（字は 1 字も
 //! 変えていない）。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 

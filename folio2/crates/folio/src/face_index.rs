@@ -15,7 +15,6 @@
 //! 各設計ノートの面へのリンク）を出す（便 29・delivery-29.md §1 (a)）——面は 1 本につき 1 枚
 //! （`note-<文書 id>.html`・便 28 の生成器）。入口の正本 `index.yaml` は改訂しない（ADR-7 帰結・棚の行の読み方だけが変わる）。
 //! 読み手（正本を読んで面の文脈を組む側・部品の一覧と枠・読みと数え・支度表の読み）は便 115 で `face_index_read.rs`（層 4）へ降ろした。面の口と HTML を書く側はここに残す。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 

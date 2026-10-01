@@ -1,7 +1,6 @@
 //! 要件書の面の章 03〜06（機能要件・非機能要件・受入基準・制約）の生成（便 100・docs/design/delivery-100.md §1 (b)）。
 //! 便 100 で `face_srs.rs` から 1 字も変えずに移した。文脈（`Ctx`）と共有の口（`band`・`figure_open`・`figure_close`・
 //! `fig_req`・`article_link`・`xref`・`slots`）は `face_srs.rs` のもの。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::path::Path;
 

@@ -9,7 +9,6 @@
 //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
 //! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
 //! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use std::fs;

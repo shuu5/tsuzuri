@@ -12,7 +12,6 @@
 //! `<out>/<観点>/refute/<所見の id>/` へ組む（所見 file は触らない・正本は写さず親の要約値 sources.txt で縛る・全部か無しか）。
 //! `--check` は同じ dir の result.yaml（反証役が書く）を欄の決まりで読み、その refute の値を所見の反証の結果として規則 7〜10 に渡す。
 //! 天井の印（便 72・`stamp.rs`）は観点の数え `count_viewpoint`・所見 file の読み `read_findings`・束の歩き `walk` を crate の中から呼ぶ。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::BTreeSet;
 use std::fs;

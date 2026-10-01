@@ -12,7 +12,6 @@
 //! （全部か無しか・FR15）。
 //! 状態の閉じた一覧 `STATUS` と文書 id の形 `is_doc_id` は便 109 で `shelf.rs` へ降ろした（ADR-15・層 1 読む）。
 //! 器の導出 file の置き場は便 123 から床の読み手と同じ式 `note::external_path`（版管理の根・無ければ置き場の親）で解く。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;

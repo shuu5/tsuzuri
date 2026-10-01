@@ -1,6 +1,6 @@
 //! 行 k-lint-base の歯: 規則の行 R-10 の書き方を workspace の lint の表で deny にする機構（条 P-24.1）と、
 //! 規則の行 R-4 の関数の粒度の値を写した clippy.toml と、member の manifest が表を継ぐこと（除外の表の R-10 の行が名指す member は継がず、
-//! 行 k-lint-folio が folio の R-10 の行を消して継がせた・R-4 の行の間は表に R-4 の lint を置かない）。
+//! 行 k-lint-folio が folio の R-10 の行を消して継がせた・行 r4-table が表に R-4 の 3 つの lint を deny で足し、例外の属性を置かない）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
@@ -25,13 +25,13 @@ const MAP: [(&str, &str, &str, &str); 18] = [
     ("unsafe_code", "rust", "forbid", "unsafe（forbid）"),
     ("allow_attributes", "clippy", "deny", "P-24.3"),
     ("allow_attributes_without_reason", "clippy", "deny", "P-24.3"),
-    ("too_many_lines", "clippy", "forbid", "R-4"),
-    ("cognitive_complexity", "clippy", "forbid", "R-4"),
-    ("too_many_arguments", "clippy", "forbid", "R-4"),
+    ("too_many_lines", "clippy", "deny", "R-4"),
+    ("cognitive_complexity", "clippy", "deny", "R-4"),
+    ("too_many_arguments", "clippy", "deny", "R-4"),
 ];
 
 /// 今の表の lint（表に足す行がこの一覧も直す）。
-const ENABLED: [&str; 15] = [
+const ENABLED: [&str; 18] = [
     "unused_must_use",
     "unsafe_code",
     "unwrap_used",
@@ -47,6 +47,9 @@ const ENABLED: [&str; 15] = [
     "print_stderr",
     "allow_attributes",
     "allow_attributes_without_reason",
+    "too_many_lines",
+    "cognitive_complexity",
+    "too_many_arguments",
 ];
 
 fn repo_root() -> PathBuf {
@@ -451,6 +454,43 @@ fn klint_print_hands() {
     }
 }
 
+/// 規則の行 R-4 の 3 つの lint（一覧 MAP の拠り R-4）と、それを含む clippy の群（complexity・pedantic・restriction）の名を、
+/// 頭に字 clippy と 2 つのコロンを付けた形で、member の dir の下の .rs のどれも持たない（表の deny を属性で下げない・行 r4-table）。
+/// 名を一覧 MAP に data として持つこの歯の file は数えない。
+#[test]
+fn klint_r4_no_attr_exceptions() {
+    let root = repo_root();
+    let own = root.join("xtask/tests/klint.rs");
+    let mut marks: Vec<String> = MAP
+        .iter()
+        .filter(|m| m.3 == "R-4")
+        .map(|m| format!("clippy::{}", m.0))
+        .collect();
+    assert_eq!(marks.len(), 3, "{marks:?}");
+    for group in ["complexity", "pedantic", "restriction"] {
+        marks.push(format!("clippy::{group}"));
+    }
+    let mut seen = 0;
+    for member in members() {
+        for path in rs_files(&root.join(&member)) {
+            if path == own {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
+            for mark in &marks {
+                assert!(
+                    !text.contains(mark.as_str()),
+                    "{} が {mark} を含む",
+                    path.display()
+                );
+            }
+            seen += 1;
+        }
+    }
+    assert!(seen >= 6, "見た file が {seen}");
+}
+
 #[test]
 fn klint_own_names_clean() {
     let text = read("xtask/tests/klint.rs");
@@ -464,7 +504,7 @@ fn klint_own_names_clean() {
         names.push(after[..end].trim().to_string());
         rest = &after[end..];
     }
-    assert_eq!(names.len(), 8, "{names:?}");
+    assert_eq!(names.len(), 9, "{names:?}");
 
     let list = read("xtask/tests/filter-words.txt");
     let words: Vec<&str> = body(&list).collect();

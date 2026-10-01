@@ -2,7 +2,6 @@
 //! 部品の一覧と枠・置き場の定数と判断の記録の状態の表・読んだ中身と文脈の型とその method・読みと数え・支度表の読みを字を変えずに降ろした。
 //! 面の口 `derive` と HTML を書く側と名札の表は `face_index.rs` に残る。面の口と字面の逃がしを呼ぶので層 1 には置かない。見え方は
 //! 書く側と使う側が名指すものだけを広げた。移した注の中の file 名（`render.rs` など）は移す前の置き場から見た字のまま。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::Path;

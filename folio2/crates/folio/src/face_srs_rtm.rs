@@ -1,7 +1,6 @@
 //! 要件書の面の章 07・08 の生成（便 35 で `face_srs.rs` から分けた）。章 07 は要件と根拠の対応（rtm-grid）・
 //! 章 08 は用語集（glossary-term-table・便 36 で憲法の面の章 07 と同じ形にした・語の行は `face.rs` の共有の口）。
 //! 文脈（`Ctx`）と共有の口（band・xref・hint 等）は `face_srs.rs` のもの。
-#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use crate::catalog::Component;
 use crate::cursor::{R, X};
