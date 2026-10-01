@@ -1,0 +1,1923 @@
+diff --git a/folio2/crates/folio/build.rs b/folio2/crates/folio/build.rs
+index 3cba6d0d800784ddd18fd05d1a795e64f50e7782..d6f5e8fa5743dfc332038d8bed5b7c1238f12d54 100644
+--- a/folio2/crates/folio/build.rs
++++ b/folio2/crates/folio/build.rs
+@@ -176,16 +176,21 @@ pub fn constitution_enums(text: &str) -> Result<String, String> {
+         .map_err(|e| format!("schema.enums.{key}: {e}"))?;
+         keys.push((key, ty));
+     }
++    write_enums_table(&mut out, &keys);
++    Ok(out)
++}
++
++/// 鍵の名と NAMES の対の列 ENUMS を `out` へ書く（鍵の名と型の名の対は file の順）。
++fn write_enums_table(out: &mut String, keys: &[(&str, String)]) {
+     // 鍵の名と NAMES の対の列（便 50 (d)・面の生成器が読んでいる置き場の値域と組み立てた版のずれを鍵ごとに見る）
+     out.push_str(&format!(
+         "/// 憲法の値域の鍵の名と NAMES の対（憲法の正本の schema.enums の鍵・file の順）。\npub const ENUMS: [(&str, &[&str]); {}] = [\n",
+         keys.len()
+     ));
+-    for (key, ty) in &keys {
++    for (key, ty) in keys {
+         out.push_str(&format!("    ({key:?}, &{ty}::NAMES),\n"));
+     }
+     out.push_str("];\n");
+-    Ok(out)
+ }
+ 
+ /// 憲法の欄の一覧を導出する 5 部位（部位の名だけは導出の側が書く・一覧の中身は file から）。
+@@ -243,20 +248,31 @@ pub fn constitution_fields(text: &str) -> Result<String, String> {
+             }
+             closed.push(name.as_str());
+         }
+-        let konst = part.to_ascii_uppercase();
+-        let lits = |names: &[&str]| names.iter().map(|n| format!("{n:?}")).collect::<Vec<_>>().join(", ");
+-        let required: Vec<&str> = required.iter().map(String::as_str).collect();
+-        out.push_str(&format!(
+-            "/// 憲法の {part} の必須の欄（schema.{part}.required・file の順）。\npub const {konst}_REQUIRED: [&str; {}] = [{}];\n",
+-            required.len(),
+-            lits(&required)
+-        ));
+-        out.push_str(&format!(
+-            "/// 憲法の {part} の欄の閉じた一覧（schema.{part} の required と optional・file の順）。\npub const {konst}_FIELDS: [&str; {}] = [{}];\n",
+-            closed.len(),
+-            lits(&closed)
+-        ));
++        write_part(&mut out, part, &required, &closed);
+     }
++    write_fields_table(&mut out);
++    Ok(out)
++}
++
++/// 部位 1 つの必須の欄の列 `<部位>_REQUIRED` と閉じた列 `<部位>_FIELDS` を `out` へ書く。
++fn write_part(out: &mut String, part: &str, required: &[String], closed: &[&str]) {
++    let konst = part.to_ascii_uppercase();
++    let lits = |names: &[&str]| names.iter().map(|n| format!("{n:?}")).collect::<Vec<_>>().join(", ");
++    let required: Vec<&str> = required.iter().map(String::as_str).collect();
++    out.push_str(&format!(
++        "/// 憲法の {part} の必須の欄（schema.{part}.required・file の順）。\npub const {konst}_REQUIRED: [&str; {}] = [{}];\n",
++        required.len(),
++        lits(&required)
++    ));
++    out.push_str(&format!(
++        "/// 憲法の {part} の欄の閉じた一覧（schema.{part} の required と optional・file の順）。\npub const {konst}_FIELDS: [&str; {}] = [{}];\n",
++        closed.len(),
++        lits(closed)
++    ));
++}
++
++/// 部位の名と（required の列・閉じた列）の対の列 FIELDS を `out` へ書く（部位の順）。
++fn write_fields_table(out: &mut String) {
+     out.push_str(&format!(
+         "/// 憲法の部位の名と（required の列・閉じた列）の対（部位の順）。\npub const FIELDS: [(&str, &[&str], &[&str]); {}] = [\n",
+         CONSTITUTION_PARTS.len()
+@@ -268,7 +284,6 @@ pub fn constitution_fields(text: &str) -> Result<String, String> {
+         ));
+     }
+     out.push_str("];\n");
+-    Ok(out)
+ }
+ 
+ /// 憲法の鍵の名を型の名にする（「_」で割り、各片の先頭を大文字にして繋ぐ・retreat_kind は RetreatKind・tier は Tier）。
+@@ -359,35 +374,21 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
+             limits.push((name, key, n, konst));
+         }
+     }
++    catalog_source(root, parts, limits)
++}
+ 
++/// 部品目録の残りの一覧（図の型・棚の型・行内の様式・密度 profile・図の型の名札）を読み、部品と上限と合わせて Rust の source に組む。
++fn catalog_source(
++    root: &Yaml,
++    parts: Vec<(String, Vec<String>)>,
++    limits: Vec<(&str, &str, i64, String)>,
++) -> Result<String, String> {
+     let figure_types = string_list(root, "figure_type_enum")?;
+     let shelf_types = string_list(root, "shelf_type_enum")?;
+     let style_props = string_list(root, "style_props_allowed")?;
+     let profiles = string_list(root, "profile_enum")?;
+ 
+-    // 図の型の名札（figure_body_classes.type_ids・file の順・鍵は figure_type_enum に在る）
+-    let type_ids = root
+-        .as_hash()
+-        .and_then(|m| m.get(&Yaml::String("figure_body_classes".to_string())))
+-        .and_then(Yaml::as_hash)
+-        .and_then(|m| m.get(&Yaml::String("type_ids".to_string())))
+-        .and_then(Yaml::as_hash)
+-        .ok_or_else(|| "figure_body_classes.type_ids が表でない".to_string())?;
+-    let mut labels: Vec<(&str, &str)> = Vec::with_capacity(type_ids.len());
+-    for (kind, label) in type_ids.iter() {
+-        let kind = kind
+-            .as_str()
+-            .ok_or_else(|| "figure_body_classes.type_ids の鍵が文字列でない".to_string())?;
+-        if !figure_types.iter().any(|t| t == kind) {
+-            return Err(format!(
+-                "figure_body_classes.type_ids の鍵「{kind}」が figure_type_enum に無い"
+-            ));
+-        }
+-        let label = label
+-            .as_str()
+-            .ok_or_else(|| format!("figure_body_classes.type_ids.{kind} が文字列でない"))?;
+-        labels.push((kind, label));
+-    }
++    let labels = figure_labels(root, &figure_types)?;
+ 
+     let mut out = String::new();
+     out.push_str("// 組み立て時に build.rs が部品目録（design-intent/preview/parts.json）から導出した。人は書かない。\n");
+@@ -436,8 +437,45 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
+         "/// 密度 profile の閉じた一覧（部品目録の profile_enum・目録の順）。\npub const PROFILES: &[&str] = &[{}];\n",
+         lits.join(", ")
+     ));
++    write_limits(&mut out, &limits, &labels);
++    Ok(out)
++}
++
++/// 図の型の名札（figure_body_classes.type_ids）を（型の字面・名札）の対の列にする。鍵が figure_type_enum に無い・値が文字列でない、は Err。
++fn figure_labels<'a>(
++    root: &'a Yaml,
++    figure_types: &[String],
++) -> Result<Vec<(&'a str, &'a str)>, String> {
++    // 図の型の名札（figure_body_classes.type_ids・file の順・鍵は figure_type_enum に在る）
++    let type_ids = root
++        .as_hash()
++        .and_then(|m| m.get(&Yaml::String("figure_body_classes".to_string())))
++        .and_then(Yaml::as_hash)
++        .and_then(|m| m.get(&Yaml::String("type_ids".to_string())))
++        .and_then(Yaml::as_hash)
++        .ok_or_else(|| "figure_body_classes.type_ids が表でない".to_string())?;
++    let mut labels: Vec<(&str, &str)> = Vec::with_capacity(type_ids.len());
++    for (kind, label) in type_ids.iter() {
++        let kind = kind
++            .as_str()
++            .ok_or_else(|| "figure_body_classes.type_ids の鍵が文字列でない".to_string())?;
++        if !figure_types.iter().any(|t| t == kind) {
++            return Err(format!(
++                "figure_body_classes.type_ids の鍵「{kind}」が figure_type_enum に無い"
++            ));
++        }
++        let label = label
++            .as_str()
++            .ok_or_else(|| format!("figure_body_classes.type_ids.{kind} が文字列でない"))?;
++        labels.push((kind, label));
++    }
++    Ok(labels)
++}
++
++/// 部品目録の上限の定数（部品ごとに 1 つ）と対の列 LIMITS、図の型の名札の対の列 FIGURE_TYPE_LABELS を `out` へ書く。
++fn write_limits(out: &mut String, limits: &[(&str, &str, i64, String)], labels: &[(&str, &str)]) {
+     // 上限（便 52 (a) 1）: 部品ごとに定数 1 つずつ + （部品の名・欄の名・値）の対の列 LIMITS
+-    for (name, key, n, konst) in &limits {
++    for (name, key, n, konst) in limits {
+         out.push_str(&format!(
+             "/// 部品目録の上限（components.{name}.{key}）。\npub const {konst}: usize = {n};\n"
+         ));
+@@ -446,7 +484,7 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
+         "/// 部品目録の上限の（部品の名・欄の名・値）の対（鍵が max_ で始まる欄・目録の順・実行時の一致に使う）。\npub const LIMITS: [(&str, &str, usize); {}] = [\n",
+         limits.len()
+     ));
+-    for (name, key, _, konst) in &limits {
++    for (name, key, _, konst) in limits {
+         out.push_str(&format!("    ({name:?}, {key:?}, {konst}),\n"));
+     }
+     out.push_str("];\n");
+@@ -455,11 +493,10 @@ pub fn parts_catalog(text: &str) -> Result<String, String> {
+         "/// 図の型の名札（部品目録の figure_body_classes.type_ids・目録の順・型の字面と名札の対）。\npub const FIGURE_TYPE_LABELS: [(&str, &str); {}] = [\n",
+         labels.len()
+     ));
+-    for (kind, label) in &labels {
++    for (kind, label) in labels {
+         out.push_str(&format!("    ({kind:?}, {label:?}),\n"));
+     }
+     out.push_str("];\n");
+-    Ok(out)
+ }
+ 
+ fn refs(v: &[String]) -> Vec<&str> {
+diff --git a/folio2/crates/folio/src/adr.rs b/folio2/crates/folio/src/adr.rs
+index bda6a3ec041c8592e11cf6d777217a5e5afb8eef..6cd8eddebe2b315267e4a4b5212bd09f9a9adfef 100644
+--- a/folio2/crates/folio/src/adr.rs
++++ b/folio2/crates/folio/src/adr.rs
+@@ -239,6 +239,16 @@ fn load_records(dir: &Path, adr_dir: &Path, report: &mut Report) -> Vec<(String,
+         }
+     };
+     names.sort();
++    read_records(dir, adr_dir, names, report)
++}
++
++/// `load_records` の続き。名前順の file を 1 本ずつ読み、読めた記録を id と組で返す。
++fn read_records(
++    dir: &Path,
++    adr_dir: &Path,
++    names: Vec<String>,
++    report: &mut Report,
++) -> Vec<(String, Node)> {
+     let root = fs::canonicalize(dir).ok();
+     let mut records: Vec<(String, Node)> = Vec::new();
+     for name in names {
+@@ -359,7 +369,11 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
+             format!("{id}: 採用の案が {adopted} 件（{OPTIONS_ADOPTED} 件）"),
+         );
+     }
++    check_grounds(id, d, report);
++}
+ 
++/// (d) 1 本の判断の記録の撤退条件・根拠・帰結の欄。
++fn check_grounds(id: &str, d: &Node, report: &mut Report) {
+     let retreat = d.get("retreat").unwrap_or(&Node::Null);
+     if check_keys("P-8", &format!("{id}.retreat"), retreat, &RETREAT, report) {
+         if !in_enum(retreat.get("kind"), RETREAT_KIND) {
+@@ -418,7 +432,11 @@ fn check_fields(id: &str, d: &Node, report: &mut Report) {
+         }
+         Some(_) => report.violation("adr", format!("{id}: {PRODUCED} が一覧でない")),
+     }
++    check_amended(id, d, report);
++}
+ 
++/// (d) 1 本の判断の記録の改訂・承認・grill・図の欄。
++fn check_amended(id: &str, d: &Node, report: &mut Report) {
+     let amends: &[Node] = match present(d, "amends") {
+         None => &[],
+         Some(Node::Seq(items)) => items,
+@@ -479,6 +497,11 @@ fn check_figures(id: &str, d: &Node, report: &mut Report) {
+             &[]
+         }
+     };
++    check_figure_entries(id, figures, report);
++}
++
++/// (d) 図の節の 1 図ずつ（欄の集合・id と caption・型・spec・refs・id の一意）。
++fn check_figure_entries(id: &str, figures: &[Node], report: &mut Report) {
+     let mut seen: Vec<&str> = Vec::new();
+     for f in figures {
+         let at = format!("{id}.figures[{}]", show(f.get("id")));
+@@ -605,37 +628,46 @@ fn check_between(records: &[(String, Node)], report: &mut Report) {
+                 );
+             }
+         }
+-        let status = scalar(d.get("status"));
+-        let next = present(d, "superseded_by");
+-        if status == Some("retired") && next.is_none() {
++        check_succession(id, d, records, report);
++    }
++    check_chains(records, report);
++}
++
++/// (e) 判断の記録 1 本の後継と置き換えた記録の突き合わせ（retired と superseded_by・双方向）。
++fn check_succession(id: &str, d: &Node, records: &[(String, Node)], report: &mut Report) {
++    let status = scalar(d.get("status"));
++    let next = present(d, "superseded_by");
++    if status == Some("retired") && next.is_none() {
++        report.violation(
++            "adr",
++            format!("{id}: retired なのに superseded_by（後継）が無い（P-7.2）"),
++        );
++    }
++    if let Some(n) = next {
++        if status != Some("retired") {
+             report.violation(
+                 "adr",
+-                format!("{id}: retired なのに superseded_by（後継）が無い（P-7.2）"),
++                format!("{id}: superseded_by を持つのに status が retired でない（P-7.2）"),
+             );
+         }
+-        if let Some(n) = next {
+-            if status != Some("retired") {
+-                report.violation(
+-                    "adr",
+-                    format!("{id}: superseded_by を持つのに status が retired でない（P-7.2）"),
+-                );
+-            }
+-            if let Some(nx) = n.as_str().and_then(|n| find(records, n))
+-                && scalar(nx.get("supersedes")) != Some(id.as_str())
+-            {
+-                let msg = format!("{id}: 後継 {} の supersedes に {id} が無い（双方向）", show(Some(n)));
+-                one_or_link(report, n.as_str() == Some(id.as_str()), msg);
+-            }
+-        }
+-        if let Some(p) = present(d, "supersedes")
+-            && let Some(pv) = p.as_str().and_then(|p| find(records, p))
+-            && scalar(pv.get("superseded_by")) != Some(id.as_str())
++        if let Some(nx) = n.as_str().and_then(|n| find(records, n))
++            && scalar(nx.get("supersedes")) != Some(id)
+         {
+-            let msg = format!("{id}: 置き換えた {} の superseded_by が {id} でない（双方向）", show(Some(p)));
+-            one_or_link(report, p.as_str() == Some(id.as_str()), msg);
++            let msg = format!("{id}: 後継 {} の supersedes に {id} が無い（双方向）", show(Some(n)));
++            one_or_link(report, n.as_str() == Some(id), msg);
+         }
+     }
++    if let Some(p) = present(d, "supersedes")
++        && let Some(pv) = p.as_str().and_then(|p| find(records, p))
++        && scalar(pv.get("superseded_by")) != Some(id)
++    {
++        let msg = format!("{id}: 置き換えた {} の superseded_by が {id} でない（双方向）", show(Some(p)));
++        one_or_link(report, p.as_str() == Some(id), msg);
++    }
++}
+ 
++/// (e) retired の記録の後継の列（輪・未発効の後継）。
++fn check_chains(records: &[(String, Node)], report: &mut Report) {
+     // retired の後継の列は accepted に着く（輪・未発効の後継は落とす）。
+     for (id, d) in records {
+         if scalar(d.get("status")) != Some("retired") {
+diff --git a/folio2/crates/folio/src/ceiling.rs b/folio2/crates/folio/src/ceiling.rs
+index dedbb54dc12d1a989c2633053adc7a55a6da4e0c..a41fef8df209e9305f3b829cb9b79e36c0eed7ba 100644
+--- a/folio2/crates/folio/src/ceiling.rs
++++ b/folio2/crates/folio/src/ceiling.rs
+@@ -196,6 +196,11 @@ pub fn check_ceiling(ceiling: &Node, vocabulary: &Node, report: &mut Report) {
+         resolve_each("weights", weights, "refute", &values, report);
+     }
+ 
++    check_tables(ceiling, vocabulary, body, report);
++}
++
++/// 読む文書の表と観点の表を数え、集めた文の英字の語を語彙と突き合わせる。`body` は集めた文の母集団。
++fn check_tables(ceiling: &Node, vocabulary: &Node, mut body: vocab::Body, report: &mut Report) {
+     // 読む文書の一覧（所見の場所と観点の reads の行き先）
+     let documents = table(ceiling, "documents", report);
+     let mut doc_ids: HashSet<String> = HashSet::new();
+diff --git a/folio2/crates/folio/src/ceiling_src.rs b/folio2/crates/folio/src/ceiling_src.rs
+index aac22a6253fcdddf59b2f1f76197b682658dd485..dd4c05caac19824b8853c20fc6cfb61813823c16 100644
+--- a/folio2/crates/folio/src/ceiling_src.rs
++++ b/folio2/crates/folio/src/ceiling_src.rs
+@@ -164,6 +164,11 @@ pub fn load(dir: &Path) -> R<Ceiling> {
+             Ok((text_of(row, "id", &at)?, text_of(row, "file", &at)?))
+         })
+         .collect::<R<Vec<_>>>()?;
++    load_viewpoints(root, documents)
++}
++
++/// 観点の表を読み、決まりと所見の本文を足して天井を組む。`documents` は読んだ documents の各行。
++fn load_viewpoints(root: Node, documents: Vec<(String, String)>) -> R<Ceiling> {
+     let mut viewpoints = Vec::new();
+     for (i, row) in rows(&root, "viewpoints")?.iter().enumerate() {
+         let at = format!("viewpoints[{i}]");
+@@ -329,21 +334,7 @@ fn build_counted(
+     vp: &Viewpoint,
+ ) -> R<Built> {
+     let mut files = Files::new();
+-    // doc ごとの読む最上位の節（宣言の順・重複なし）
+-    let mut declared: Vec<(&str, Vec<&str>)> = Vec::new();
+-    for (doc, fields) in &vp.reads {
+-        if !declared.iter().any(|(d, _)| d == doc) {
+-            declared.push((doc, Vec::new()));
+-        }
+-        if let Some((_, tops)) = declared.iter_mut().find(|(d, _)| d == doc) {
+-            for field in fields {
+-                let top = field.split('.').next().unwrap_or(field);
+-                if !tops.contains(&top) {
+-                    tops.push(top);
+-                }
+-            }
+-        }
+-    }
++    let declared = declared_tops(vp);
+     let mut dropped: BTreeMap<String, Vec<String>> = BTreeMap::new();
+     let mut notes_absent = String::new();
+     let mut absent = 0;
+@@ -399,6 +390,26 @@ fn build_counted(
+     })
+ }
+ 
++/// 観点の reads から、doc ごとの読む最上位の節を集める。
++fn declared_tops(vp: &Viewpoint) -> Vec<(&str, Vec<&str>)> {
++    // doc ごとの読む最上位の節（宣言の順・重複なし）
++    let mut declared: Vec<(&str, Vec<&str>)> = Vec::new();
++    for (doc, fields) in &vp.reads {
++        if !declared.iter().any(|(d, _)| d == doc) {
++            declared.push((doc, Vec::new()));
++        }
++        if let Some((_, tops)) = declared.iter_mut().find(|(d, _)| d == doc) {
++            for field in fields {
++                let top = field.split('.').next().unwrap_or(field);
++                if !tops.contains(&top) {
++                    tops.push(top);
++                }
++            }
++        }
++    }
++    declared
++}
++
+ // ── 最上位の節で切る（便 98・docs/design/delivery-98.md §1 (b)） ──
+ 
+ // 骨格の閉じた一覧（どの観点の写しにも常に残す最上位の節）は床の定数 `ceiling::BUNDLE_SKELETON`（便 102 で移した・値は不変）。
+@@ -489,6 +500,11 @@ fn cut_sections(text: &str, tops: &[&str]) -> Cut {
+             kept.push_str(line);
+         }
+     }
++    finish_cut(kept, sections, keep)
++}
++
++/// 残した行・節の名・節ごとの残す印から、落とした節の名を集めて `Cut` に組む。
++fn finish_cut(kept: String, sections: Vec<String>, keep: Vec<bool>) -> Cut {
+     let dropped = sections
+         .iter()
+         .zip(&keep)
+diff --git a/folio2/crates/folio/src/derive.rs b/folio2/crates/folio/src/derive.rs
+index f07776b1333848083e2767ed973b3292f30ced09..b94dfc7be762ac07db7b11465b078a2e9cff087e 100644
+--- a/folio2/crates/folio/src/derive.rs
++++ b/folio2/crates/folio/src/derive.rs
+@@ -347,6 +347,16 @@ fn write_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) ->
+         }
+         written += 1;
+     }
++    write_summary(out_dir, derived, index, written)
++}
++
++/// --write の結果: 置き場に残る導出元の無い .toml の行と、書いた file の数の行を標準出力に並べる。
++fn write_summary(
++    out_dir: &Path,
++    derived: &[Derived],
++    index: Option<&PlanIndex>,
++    written: usize,
++) -> Outcome {
+     let mut stdout = match orphans(out_dir, derived) {
+         Ok(lines) => lines,
+         Err(e) => return Outcome::unknown(e),
+diff --git a/folio2/crates/folio/src/entrance.rs b/folio2/crates/folio/src/entrance.rs
+index 2a0609b3691a71a9c8178c82ce98794b57cf02e2..df5714f3594a1875f07a0980242d82fdef575981 100644
+--- a/folio2/crates/folio/src/entrance.rs
++++ b/folio2/crates/folio/src/entrance.rs
+@@ -101,17 +101,24 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
+         push_text(&mut body, "audience", audience, &["label", "short", "text"]);
+     }
+ 
++    let document_ids = check_shelf(index, &mut body, report);
++    check_lanes(index, &mut body, &document_ids, report);
++    check_intake_words(index, vocabulary, body, report);
++}
++
++/// 棚の節（legend・documents・annexes・relations）を数え、stops の行き先にする documents の id の集合を返す。
++fn check_shelf(index: &Node, body: &mut vocab::Body, report: &mut Report) -> HashSet<String> {
+     // 行き先の集合のうち documents だけのもの（annexes の inside と stops の doc の行き先）
+     let mut document_ids = HashSet::new();
+     if let Some(shelf) = section(index, "shelf", report) {
+         non_empty(FILE, "shelf", shelf, &["title", "explain"], report);
+-        push_text(&mut body, "shelf", shelf, &["title", "explain"]);
++        push_text(body, "shelf", shelf, &["title", "explain"]);
+ 
+         let legend = rows(FILE, shelf, "legend", report);
+         for row in &legend {
+             let at = format!("shelf.legend の行 {}", row_id(row));
+             non_empty(FILE, &at, row, &["id", "text"], report);
+-            push_text(&mut body, &at, row, &["text"]);
++            push_text(body, &at, row, &["text"]);
+         }
+         duplicate_ids(FILE, legend, report);
+ 
+@@ -120,13 +127,13 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
+             let at = format!("shelf.documents の行 {}", row_id(row));
+             non_empty(FILE, &at, row, &["id", "type", "use"], report);
+             // absent は null でよい（数えない）・文字列なら語彙の母集団に入れる
+-            push_text(&mut body, &at, row, &["type", "use", "absent"]);
++            push_text(body, &at, row, &["type", "use", "absent"]);
+         }
+         let annexes = rows(FILE, shelf, "annexes", report);
+         for row in &annexes {
+             let at = format!("shelf.annexes の行 {}", row_id(row));
+             non_empty(FILE, &at, row, &["id", "type", "inside"], report);
+-            push_text(&mut body, &at, row, &["type"]);
++            push_text(body, &at, row, &["type"]);
+         }
+         // 棚 = documents と annexes を合わせた 1 つの空間（relations の from と to の行き先）
+         let shelf_ids = shelf_id_set(&documents, &annexes);
+@@ -149,14 +156,24 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
+             );
+             resolve(&at, row, "from", &shelf_ids, report);
+             resolve(&at, row, "to", &shelf_ids, report);
+-            push_text(&mut body, &at, row, &["label", "hint"]);
++            push_text(body, &at, row, &["label", "hint"]);
+         }
+         duplicate_ids(FILE, relations, report);
+     }
+ 
++    document_ids
++}
++
++/// lanes の節（行・minutes・stops の行き先）を数える。`document_ids` は stops の doc の行き先の集合。
++fn check_lanes(
++    index: &Node,
++    body: &mut vocab::Body,
++    document_ids: &HashSet<String>,
++    report: &mut Report,
++) {
+     if let Some(lanes) = section(index, "lanes", report) {
+         non_empty(FILE, "lanes", lanes, &["title", "lead"], report);
+-        push_text(&mut body, "lanes", lanes, &["title", "lead"]);
++        push_text(body, "lanes", lanes, &["title", "lead"]);
+         let lane_rows = rows(FILE, lanes, "rows", report);
+         for row in &lane_rows {
+             let id = row_id(row);
+@@ -168,7 +185,7 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
+                 &["id", "mark", "who", "why", "minutes", "stops"],
+                 report,
+             );
+-            push_text(&mut body, &at, row, &["mark", "who", "why"]);
++            push_text(body, &at, row, &["mark", "who", "why"]);
+             if row.get("minutes").is_some_and(|m| !m.is_blank()) && !is_minutes(row.get("minutes"))
+             {
+                 report.violation(
+@@ -180,13 +197,16 @@ pub fn check_entrance(index: &Node, vocabulary: &Node, report: &mut Report) {
+             for (i, stop) in rows(FILE, row, "stops", report).iter().enumerate() {
+                 let at = format!("{at} の stops[{i}]");
+                 non_empty(FILE, &at, stop, &["doc", "label"], report);
+-                resolve(&at, stop, "doc", &document_ids, report);
+-                push_text(&mut body, &at, stop, &["label"]);
++                resolve(&at, stop, "doc", document_ids, report);
++                push_text(body, &at, stop, &["label"]);
+             }
+         }
+         duplicate_ids(FILE, lane_rows, report);
+     }
++}
+ 
++/// intake の節を数え、集めた文の英字の語を語彙と突き合わせる。`body` は集めた文の母集団。
++fn check_intake_words(index: &Node, vocabulary: &Node, mut body: vocab::Body, report: &mut Report) {
+     if let Some(intake) = section(index, "intake", report) {
+         non_empty(
+             FILE,
+diff --git a/folio2/crates/folio/src/entry.rs b/folio2/crates/folio/src/entry.rs
+index 62e27c2c6f3042c9fbcd9d6be79daf5fa3df585f..19fd99311f0b86b5b4223958e0635b76d6df1ea2 100644
+--- a/folio2/crates/folio/src/entry.rs
++++ b/folio2/crates/folio/src/entry.rs
+@@ -349,352 +349,395 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+             proposed: Some(rel),
+             ..
+         } => proposed_check(&dir, &rel, out),
+-        Command::Check { dir, polarity: true, .. } => match polarity::render(&dir) {
+-            Ok(lines) => {
+-                lines.iter().for_each(|l| say!(out, "{l}"));
+-                0
+-            }
+-            Err(why) => {
+-                why.iter().for_each(|w| say!(out, "{UNKNOWN_HEAD}{w}"));
+-                say!(out, "folio check --polarity: まだ分からない（一覧を組めない）");
+-                code(Verdict::Unknown)
+-            }
+-        },
+-        Command::Check {
+-            dir,
+-            emit_amends,
+-            freeze_anchor,
+-            freeze_ids,
+-            freeze_start,
+-            freeze_adrs,
+-            emit_rulings,
+-            proposed: None,
+-            polarity: false,
+-        } => {
+-            let flag = if emit_amends {
+-                Flag::EmitAmends
+-            } else if freeze_anchor {
+-                Flag::FreezeAnchor
+-            } else if freeze_ids {
+-                Flag::FreezeIds
+-            } else if freeze_start {
+-                Flag::FreezeStart
+-            } else if freeze_adrs {
+-                Flag::FreezeAdrs
+-            } else if emit_rulings {
+-                Flag::EmitRulings
+-            } else {
+-                Flag::None
+-            };
+-            // 索引が組めない置き場を合格と言わない（便 136・層 2 の check_dir からは呼ばない）。編集時の口と同じ 1 本（便 198）
+-            let (mut report, materials) = proposed::floor(&dir, flag);
+-            // 面が組めない置き場を合格と言わない（便 187・編集時の口は面の段を撃たない＝ADR-33 決定 (6)）
+-            site::check_faces(&dir, &mut report);
+-            // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
+-            let after = freeze::after(&dir, flag, &materials, &mut report);
+-            if let After::Refused(msg) = &after {
+-                say!(err, "folio check: {msg}");
+-                return 1;
+-            }
+-            let labels = rules::Labels::of(&dir);
+-            for (kind, msg) in &report.violations {
+-                emit(flag, out, err, &format!("[{}] {msg}", labels.shown(kind)));
+-            }
+-            for msg in report.unknowns.iter().chain(&report.pendings) {
+-                say!(err, "# まだ分からない: {msg}");
+-            }
+-            // 便 207（ADR-35 決定 (1)(オ)）: 数の上限の違反の字は今の数を持たないので、今の数を違反ごとに 1 行
+-            for msg in &report.counts {
+-                say!(err, "# 今の数: {msg}");
+-            }
+-            // 便 156（FR5）: 行 R-17 が無くて散文の言及の歯が数えなかったら、判定を変えずに 1 行（機構の行より前）
+-            if materials.mentions_off {
+-                say!(err, "{}", mentions::OFF);
+-            }
+-            if materials.in_loop_min_off {
+-                say!(err, "{}", polarity::off(&dir));
+-            }
+-            // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
+-            if !materials.not_yet_live.is_empty() {
+-                say!(
+-                    err,
+-                    "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: {}",
+-                    materials.not_yet_live.join("・")
+-                );
+-            }
+-            let verdict = report.verdict();
+-            emit(
+-                flag,
+-                out,
+-                err,
+-                &format!(
+-                    "folio check: {verdict}（違反 {}・まだ分からない {}）",
+-                    report.violations.len(),
+-                    report.unknowns.len() + report.pendings.len()
+-                ),
+-            );
+-            match after {
+-                After::Emit(lines) => {
+-                    for line in lines {
+-                        say!(out, "{line}");
+-                    }
+-                }
+-                After::Freeze(msg) => say!(err, "folio check: {msg}"),
+-                After::Nothing | After::Refused(_) => {}
+-            }
+-            for line in &materials.rulings {
+-                say!(out, "{line}");
+-            }
+-            code(verdict)
++        Command::Check { dir, polarity: true, .. } => polarity_list(&dir, out),
++        Command::Check { dir, emit_amends: true, .. } => {
++            floor_check(Flag::EmitAmends, dir, out, err)
+         }
+-        Command::Parts {
+-            dir,
+-            css,
+-            pages,
+-            check: _,
+-            print,
+-        } => {
+-            if print {
+-                let _ = out.write_all(parts::print_catalog().as_bytes());
+-                return 0;
+-            }
+-            let report = parts::check(&dir, css.as_deref(), &pages);
+-            let labels = rules::Labels::of(&dir);
+-            for (kind, msg) in &report.violations {
+-                say!(out, "[{}] {msg}", labels.shown(kind));
+-            }
+-            for msg in report.unknowns.iter().chain(&report.pendings) {
+-                say!(err, "# まだ分からない: {msg}");
+-            }
+-            let verdict = report.verdict();
+-            say!(
+-                out,
+-                "folio parts: {verdict}（違反 {}・まだ分からない {}）",
+-                report.violations.len(),
+-                report.unknowns.len() + report.pendings.len()
+-            );
+-            code(verdict)
++        Command::Check { dir, freeze_anchor: true, .. } => {
++            floor_check(Flag::FreezeAnchor, dir, out, err)
+         }
+-        Command::Face {
+-            face,
+-            id,
+-            dir,
+-            out: path,
+-            write,
+-            check: _,
+-        } => {
+-            let mode = if write {
+-                face::Mode::Write
+-            } else {
+-                face::Mode::Check
+-            };
+-            let outcome = face::run(&face, id.as_deref(), &dir, &path, mode);
+-            if let Some(line) = &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "{line}");
+-            }
+-            code(outcome.verdict)
++        Command::Check { dir, freeze_ids: true, .. } => {
++            floor_check(Flag::FreezeIds, dir, out, err)
+         }
+-        Command::Figure {
+-            doc,
+-            id,
+-            dir,
+-            out: path,
+-            write,
+-            check: _,
+-        } => {
+-            let mode = if write {
+-                figure::Mode::Write
+-            } else {
+-                figure::Mode::Check
+-            };
+-            let outcome = figure::run(&doc, &id, &dir, &path, mode);
+-            if let Some(line) = &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "{line}");
+-            }
+-            code(outcome.verdict)
++        Command::Check { dir, freeze_start: true, .. } => {
++            floor_check(Flag::FreezeStart, dir, out, err)
+         }
+-        Command::Build {
+-            dir,
+-            out: path,
+-            write,
+-            check: _,
+-        } => {
+-            let mode = if write {
+-                site::Mode::Write
+-            } else {
+-                site::Mode::Check
+-            };
+-            let outcome = site::run(&dir, &path, mode);
+-            if let Some(line) = &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "{line}");
+-            }
+-            code(outcome.verdict)
++        Command::Check { dir, freeze_adrs: true, .. } => {
++            floor_check(Flag::FreezeAdrs, dir, out, err)
+         }
+-        Command::Derive {
+-            dir,
+-            out: path,
+-            from_root,
+-            write,
+-            check: _,
+-        } => {
+-            let mode = if write {
+-                derive::Mode::Write
+-            } else {
+-                derive::Mode::Check
+-            };
+-            let outcome = derive::run(&dir, &path, from_root, mode);
+-            for line in &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "{line}");
+-            }
+-            code(outcome.verdict)
++        Command::Check { dir, emit_rulings: true, .. } => {
++            floor_check(Flag::EmitRulings, dir, out, err)
+         }
+-        Command::Intake {
+-            dir,
+-            answers,
+-            print: _,
+-            write,
+-        } => {
+-            let mode = if write {
+-                sheet::Mode::Write
+-            } else {
+-                sheet::Mode::Print
+-            };
+-            let outcome = sheet::run(&dir, answers.as_deref(), mode);
+-            for line in &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "{line}");
+-            }
+-            code(outcome.verdict)
++        Command::Check { dir, .. } => floor_check(Flag::None, dir, out, err),
++        Command::Parts { print: true, .. } => parts_print(out),
++        Command::Parts { dir, css, pages, .. } => parts_check(dir, css, pages, out, err),
++        Command::Face { face, id, dir, out: path, write, .. } => {
++            face_cmd(face, id, path, write, Ctx { dir, out, err })
+         }
+-        Command::Hello { dir, state } => {
+-            let outcome = hello::run(&dir, state.as_deref());
+-            if let Some(line) = &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "{line}");
+-            }
+-            code(outcome.verdict)
++        Command::Figure { doc, id, dir, out: path, write, .. } => {
++            figure_cmd(doc, id, path, write, Ctx { dir, out, err })
+         }
+-        Command::Ceiling {
+-            dir,
+-            faces,
+-            out: path,
+-            write,
+-            check: _,
+-            refute,
+-            stamp,
+-            gate,
+-            write_set,
+-        } => {
+-            if gate {
+-                let outcome = gate::run(&dir, &write_set);
+-                say!(out, "{}", outcome.stdout);
+-                return code(outcome.verdict);
+-            }
+-            let Some(path) = path else {
+-                say!(err, "folio ceiling: --gate の外では --out が要る");
+-                return 2;
+-            };
+-            if stamp {
+-                let outcome = stamp::run(&dir, &path);
+-                say!(out, "{}", outcome.stdout);
+-                return code(outcome.verdict);
+-            }
+-            if refute {
+-                let outcome = findings::refute(&dir, &path);
+-                for line in &outcome.stdout {
+-                    say!(out, "{line}");
+-                }
+-                for line in &outcome.stderr {
+-                    say!(err, "{line}");
+-                }
+-                return code(outcome.verdict);
+-            }
+-            // --write と --check は配信先が要る（束が古くないかを測る）
+-            let Some(faces) = faces else {
+-                let outcome = ceiling_src::Outcome::unknown("--faces が要る");
+-                if let Some(line) = &outcome.stderr {
+-                    say!(err, "{line}");
+-                }
+-                return code(outcome.verdict);
+-            };
+-            if write {
+-                let outcome = bundle::run(&dir, &faces, &path);
+-                if let Some(line) = &outcome.stdout {
+-                    say!(out, "{line}");
+-                }
+-                if let Some(line) = &outcome.stderr {
+-                    say!(err, "{line}");
+-                }
+-                return code(outcome.verdict);
+-            }
+-            let outcome = findings::run(&dir, &faces, &path);
+-            for line in &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            for line in &outcome.stderr {
+-                say!(err, "{line}");
+-            }
+-            code(outcome.verdict)
++        Command::Build { dir, out: path, write, .. } => build_cmd(dir, path, write, out, err),
++        Command::Derive { dir, out: path, from_root, write, .. } => {
++            derive_cmd(path, from_root, write, Ctx { dir, out, err })
+         }
+-        Command::Schema {
+-            dir,
+-            write,
+-            check: _,
+-        } => {
+-            let mode = if write {
+-                schema::Mode::Write
+-            } else {
+-                schema::Mode::Check
+-            };
+-            let outcome = schema::run(&dir, mode);
+-            for line in &outcome.stdout {
+-                say!(out, "{line}");
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "folio schema: {line}");
+-            }
+-            code(outcome.verdict)
++        Command::Intake { dir, answers, write, .. } => intake_cmd(dir, answers, write, out, err),
++        Command::Hello { dir, state } => hello_cmd(dir, state, out, err),
++        Command::Ceiling { gate: true, dir, write_set, .. } => ceiling_gate(&dir, &write_set, out),
++        Command::Ceiling { dir, faces, out: path, write, refute, stamp, .. } => {
++            ceiling_cmd(CeilingMode { stamp, refute, write }, faces, path, Ctx { dir, out, err })
+         }
+-        Command::Graph {
+-            dir,
+-            print: _,
+-            digest,
+-            summary,
+-        } => {
+-            let outcome = graph::run(&dir, digest, summary);
+-            if let Some(body) = &outcome.stdout {
+-                let _ = out.write_all(body.as_bytes());
+-            }
+-            if let Some(line) = &outcome.stderr {
+-                say!(err, "folio graph: {line}");
+-            }
+-            code(outcome.verdict)
++        Command::Schema { dir, write, .. } => schema_cmd(dir, write, out, err),
++        Command::Graph { dir, digest, summary, .. } => graph_cmd(dir, digest, summary, out, err),
++        Command::Init { dir } => init_cmd(dir, out, err),
++    }
++}
++
++/// 命令 1 つが受ける文脈（正本の置き場と標準出力・標準エラーの書き先）。引数の数を 5 に収めるために束ねる。
++struct Ctx<'a> {
++    /// 正本の置き場（`--dir`）。
++    dir: PathBuf,
++    /// 標準出力の書き先。
++    out: &'a mut dyn Write,
++    /// 標準エラーの書き先。
++    err: &'a mut dyn Write,
++}
++
++/// 天井の命令の動かし方の旗（`--stamp`・`--refute`・`--write`・どれも無ければ `--check`・`--gate` は別に分ける）。
++struct CeilingMode {
++    stamp: bool,
++    refute: bool,
++    write: bool,
++}
++
++/// 止める仕掛けの一覧（`folio check --polarity`）を標準出力へ書く。組めなければ まだ分からない。
++fn polarity_list(dir: &std::path::Path, out: &mut dyn Write) -> u8 {
++    match polarity::render(dir) {
++        Ok(lines) => {
++            lines.iter().for_each(|l| say!(out, "{l}"));
++            0
+         }
+-        Command::Init { dir } => {
+-            let outcome = init::run(&dir);
+-            for line in &outcome.stdout {
++        Err(why) => {
++            why.iter().for_each(|w| say!(out, "{UNKNOWN_HEAD}{w}"));
++            say!(out, "folio check --polarity: まだ分からない（一覧を組めない）");
++            code(Verdict::Unknown)
++        }
++    }
++}
++
++/// 床の口（`folio check` の旗つき・旗なし）。検査と凍結の後始末を 1 度ずつ撃ち、違反・まだ分からない・要約の順に書く。
++fn floor_check(flag: Flag, dir: PathBuf, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
++    // 索引が組めない置き場を合格と言わない（便 136・層 2 の check_dir からは呼ばない）。編集時の口と同じ 1 本（便 198）
++    let (mut report, materials) = proposed::floor(&dir, flag);
++    // 面が組めない置き場を合格と言わない（便 187・編集時の口は面の段を撃たない＝ADR-33 決定 (6)）
++    site::check_faces(&dir, &mut report);
++    // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
++    let after = freeze::after(&dir, flag, &materials, &mut report);
++    if let After::Refused(msg) = &after {
++        say!(err, "folio check: {msg}");
++        return 1;
++    }
++    let labels = rules::Labels::of(&dir);
++    for (kind, msg) in &report.violations {
++        emit(flag, out, err, &format!("[{}] {msg}", labels.shown(kind)));
++    }
++    for msg in report.unknowns.iter().chain(&report.pendings) {
++        say!(err, "# まだ分からない: {msg}");
++    }
++    // 便 207（ADR-35 決定 (1)(オ)）: 数の上限の違反の字は今の数を持たないので、今の数を違反ごとに 1 行
++    for msg in &report.counts {
++        say!(err, "# 今の数: {msg}");
++    }
++    // 便 156（FR5）: 行 R-17 が無くて散文の言及の歯が数えなかったら、判定を変えずに 1 行（機構の行より前）
++    if materials.mentions_off {
++        say!(err, "{}", mentions::OFF);
++    }
++    if materials.in_loop_min_off {
++        say!(err, "{}", polarity::off(&dir));
++    }
++    // 便 131（ADR-23 決定 (3)）: 機構がまだ無い条は判定に数えず、要約の行の直前に 1 行（0 本なら出さない）
++    if !materials.not_yet_live.is_empty() {
++        say!(
++            err,
++            "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: {}",
++            materials.not_yet_live.join("・")
++        );
++    }
++    let verdict = report.verdict();
++    emit(
++        flag,
++        out,
++        err,
++        &format!(
++            "folio check: {verdict}（違反 {}・まだ分からない {}）",
++            report.violations.len(),
++            report.unknowns.len() + report.pendings.len()
++        ),
++    );
++    match after {
++        After::Emit(lines) => {
++            for line in lines {
+                 say!(out, "{line}");
+             }
+-            for line in &outcome.stderr {
+-                say!(err, "folio init: {line}");
+-            }
+-            code(outcome.verdict)
+         }
++        After::Freeze(msg) => say!(err, "folio check: {msg}"),
++        After::Nothing | After::Refused(_) => {}
++    }
++    for line in &materials.rulings {
++        say!(out, "{line}");
++    }
++    code(verdict)
++}
++
++/// `folio parts --print`: 部品目録から導出した一覧を標準出力へ書く。
++fn parts_print(out: &mut dyn Write) -> u8 {
++    let _ = out.write_all(parts::print_catalog().as_bytes());
++    0
++}
++
++/// `folio parts --check`: 面の class・部品の名札・行内の様式を部品目録と突き合わせる。
++fn parts_check(
++    dir: PathBuf,
++    css: Option<PathBuf>,
++    pages: Vec<String>,
++    out: &mut dyn Write,
++    err: &mut dyn Write,
++) -> u8 {
++    let report = parts::check(&dir, css.as_deref(), &pages);
++    let labels = rules::Labels::of(&dir);
++    for (kind, msg) in &report.violations {
++        say!(out, "[{}] {msg}", labels.shown(kind));
++    }
++    for msg in report.unknowns.iter().chain(&report.pendings) {
++        say!(err, "# まだ分からない: {msg}");
++    }
++    let verdict = report.verdict();
++    say!(
++        out,
++        "folio parts: {verdict}（違反 {}・まだ分からない {}）",
++        report.violations.len(),
++        report.unknowns.len() + report.pendings.len()
++    );
++    code(verdict)
++}
++
++/// `folio face`: 正本から 1 面を導出して書く・検査する。
++fn face_cmd(face: String, id: Option<String>, path: PathBuf, write: bool, cx: Ctx<'_>) -> u8 {
++    let Ctx { dir, out, err } = cx;
++    let mode = if write {
++        face::Mode::Write
++    } else {
++        face::Mode::Check
++    };
++    let outcome = face::run(&face, id.as_deref(), &dir, &path, mode);
++    if let Some(line) = &outcome.stdout {
++        say!(out, "{line}");
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "{line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio figure`: 設計ノートの図 1 枚を導出して書く・検査する。
++fn figure_cmd(doc: String, id: String, path: PathBuf, write: bool, cx: Ctx<'_>) -> u8 {
++    let Ctx { dir, out, err } = cx;
++    let mode = if write {
++        figure::Mode::Write
++    } else {
++        figure::Mode::Check
++    };
++    let outcome = figure::run(&doc, &id, &dir, &path, mode);
++    if let Some(line) = &outcome.stdout {
++        say!(out, "{line}");
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "{line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio build`: 面と様式を 1 つの配信先へ書く・検査する。
++fn build_cmd(
++    dir: PathBuf,
++    path: PathBuf,
++    write: bool,
++    out: &mut dyn Write,
++    err: &mut dyn Write,
++) -> u8 {
++    let mode = if write {
++        site::Mode::Write
++    } else {
++        site::Mode::Check
++    };
++    let outcome = site::run(&dir, &path, mode);
++    if let Some(line) = &outcome.stdout {
++        say!(out, "{line}");
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "{line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio derive`: 契約表から器の形の導出物を置き場へ書く・検査する。
++fn derive_cmd(path: PathBuf, from_root: bool, write: bool, cx: Ctx<'_>) -> u8 {
++    let Ctx { dir, out, err } = cx;
++    let mode = if write {
++        derive::Mode::Write
++    } else {
++        derive::Mode::Check
++    };
++    let outcome = derive::run(&dir, &path, from_root, mode);
++    for line in &outcome.stdout {
++        say!(out, "{line}");
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "{line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio intake`: 相談窓口の答えの無い質問を出す・回答から支度表を書く。
++fn intake_cmd(
++    dir: PathBuf,
++    answers: Option<PathBuf>,
++    write: bool,
++    out: &mut dyn Write,
++    err: &mut dyn Write,
++) -> u8 {
++    let mode = if write {
++        sheet::Mode::Write
++    } else {
++        sheet::Mode::Print
++    };
++    let outcome = sheet::run(&dir, answers.as_deref(), mode);
++    for line in &outcome.stdout {
++        say!(out, "{line}");
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "{line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio hello`: 設計文書がまだ無いことなどを 1 行で知らせる。
++fn hello_cmd(dir: PathBuf, state: Option<PathBuf>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
++    let outcome = hello::run(&dir, state.as_deref());
++    if let Some(line) = &outcome.stdout {
++        say!(out, "{line}");
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "{line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio ceiling --gate`: 印と便の書き換える file の一覧から門の 3 値を返す。
++fn ceiling_gate(dir: &std::path::Path, write_set: &[String], out: &mut dyn Write) -> u8 {
++    let outcome = gate::run(dir, write_set);
++    say!(out, "{}", outcome.stdout);
++    code(outcome.verdict)
++}
++
++/// `folio ceiling` の `--gate` 以外（`--stamp`・`--refute`・`--write`・`--check`）。
++fn ceiling_cmd(
++    mode: CeilingMode,
++    faces: Option<PathBuf>,
++    path: Option<PathBuf>,
++    cx: Ctx<'_>,
++) -> u8 {
++    let Ctx { dir, out, err } = cx;
++    let Some(path) = path else {
++        say!(err, "folio ceiling: --gate の外では --out が要る");
++        return 2;
++    };
++    if mode.stamp {
++        let outcome = stamp::run(&dir, &path);
++        say!(out, "{}", outcome.stdout);
++        return code(outcome.verdict);
++    }
++    if mode.refute {
++        let outcome = findings::refute(&dir, &path);
++        for line in &outcome.stdout {
++            say!(out, "{line}");
++        }
++        for line in &outcome.stderr {
++            say!(err, "{line}");
++        }
++        return code(outcome.verdict);
++    }
++    // --write と --check は配信先が要る（束が古くないかを測る）
++    let Some(faces) = faces else {
++        let outcome = ceiling_src::Outcome::unknown("--faces が要る");
++        if let Some(line) = &outcome.stderr {
++            say!(err, "{line}");
++        }
++        return code(outcome.verdict);
++    };
++    if mode.write {
++        let outcome = bundle::run(&dir, &faces, &path);
++        if let Some(line) = &outcome.stdout {
++            say!(out, "{line}");
++        }
++        if let Some(line) = &outcome.stderr {
++            say!(err, "{line}");
++        }
++        return code(outcome.verdict);
++    }
++    let outcome = findings::run(&dir, &faces, &path);
++    for line in &outcome.stdout {
++        say!(out, "{line}");
++    }
++    for line in &outcome.stderr {
++        say!(err, "{line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio schema`: 欄の決まりの file の生成区間を床の定数から導出して書く・検査する。
++fn schema_cmd(dir: PathBuf, write: bool, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
++    let mode = if write {
++        schema::Mode::Write
++    } else {
++        schema::Mode::Check
++    };
++    let outcome = schema::run(&dir, mode);
++    for line in &outcome.stdout {
++        say!(out, "{line}");
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "folio schema: {line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio graph`: 設計文書の節点と辺の索引を標準出力へ出す。
++fn graph_cmd(
++    dir: PathBuf,
++    digest: bool,
++    summary: bool,
++    out: &mut dyn Write,
++    err: &mut dyn Write,
++) -> u8 {
++    let outcome = graph::run(&dir, digest, summary);
++    if let Some(body) = &outcome.stdout {
++        let _ = out.write_all(body.as_bytes());
++    }
++    if let Some(line) = &outcome.stderr {
++        say!(err, "folio graph: {line}");
++    }
++    code(outcome.verdict)
++}
++
++/// `folio init`: 新しい置き場に最初の文書一式を書く。
++fn init_cmd(dir: PathBuf, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
++    let outcome = init::run(&dir);
++    for line in &outcome.stdout {
++        say!(out, "{line}");
++    }
++    for line in &outcome.stderr {
++        say!(err, "folio init: {line}");
+     }
++    code(outcome.verdict)
+ }
+diff --git a/folio2/crates/folio/src/floor.rs b/folio2/crates/folio/src/floor.rs
+index e8c9ea182ff41f7939bdb976ced56b66fdeeab63..0e2d3a944fb7a74e27bccbb362a57d677bdcfad9 100644
+--- a/folio2/crates/folio/src/floor.rs
++++ b/folio2/crates/folio/src/floor.rs
+@@ -353,47 +353,7 @@ pub(crate) fn floor_diff_for(
+     out: &mut Vec<String>,
+ ) {
+     match floor {
+-        Floor::Map(fields) => {
+-            let Some(entries) = data.as_map() else {
+-                out.push(format!(
+-                    "{}（欄の表でない）",
+-                    if path.is_empty() { "schema" } else { path }
+-                ));
+-                return;
+-            };
+-            let mut keys: Vec<&str> = entries
+-                .iter()
+-                .map(|(k, _)| k.as_str())
+-                .chain(
+-                    fields
+-                        .iter()
+-                        .map(|(k, _)| *k)
+-                        .filter(|k| !k.ends_with("_note")),
+-                )
+-                .collect();
+-            keys.sort_unstable();
+-            keys.dedup();
+-            for key in keys {
+-                let p = if path.is_empty() {
+-                    key.to_string()
+-                } else {
+-                    format!("{path}.{key}")
+-                };
+-                // 外の置き場の `Home` の欄は無いのが正しく、在れば未知の欄
+-                let field = fields
+-                    .iter()
+-                    .find(|(k, _)| *k == key)
+-                    .filter(|(_, f)| !matches!(f, Floor::Home(_)) || !abroad(name));
+-                match (field, data.get(key)) {
+-                    (None, None) => {}
+-                    (None, Some(_)) => out.push(format!(
+-                        "{p}（未知の欄＝機械が読まない欄は *_note で終える）"
+-                    )),
+-                    (Some(_), None) => out.push(format!("{p}（欠落）")),
+-                    (Some((_, f)), Some(d)) => floor_diff_for(d, bare(f), name, &p, out),
+-                }
+-            }
+-        }
++        Floor::Map(fields) => diff_fields(data, fields, name, path, out),
+         Floor::Seq(items) => match data.as_seq() {
+             Some(seq) if seq.len() == items.len() => {
+                 for (i, (d, f)) in seq.iter().zip(items.iter()).enumerate() {
+@@ -445,6 +405,55 @@ pub(crate) fn floor_diff_for(
+     }
+ }
+ 
++/// 表の床の突き合わせ（欄の集合は写しと床の和・床の側の `_note` の欄は数えない・名の無い外の置き場の `Home` の欄は未知）。
++fn diff_fields(
++    data: &Node,
++    fields: &[(&str, Floor)],
++    name: Option<&str>,
++    path: &str,
++    out: &mut Vec<String>,
++) {
++    let Some(entries) = data.as_map() else {
++        out.push(format!(
++            "{}（欄の表でない）",
++            if path.is_empty() { "schema" } else { path }
++        ));
++        return;
++    };
++    let mut keys: Vec<&str> = entries
++        .iter()
++        .map(|(k, _)| k.as_str())
++        .chain(
++            fields
++                .iter()
++                .map(|(k, _)| *k)
++                .filter(|k| !k.ends_with("_note")),
++        )
++        .collect();
++    keys.sort_unstable();
++    keys.dedup();
++    for key in keys {
++        let p = if path.is_empty() {
++            key.to_string()
++        } else {
++            format!("{path}.{key}")
++        };
++        // 外の置き場の `Home` の欄は無いのが正しく、在れば未知の欄
++        let field = fields
++            .iter()
++            .find(|(k, _)| *k == key)
++            .filter(|(_, f)| !matches!(f, Floor::Home(_)) || !abroad(name));
++        match (field, data.get(key)) {
++            (None, None) => {}
++            (None, Some(_)) => out.push(format!(
++                "{p}（未知の欄＝機械が読まない欄は *_note で終える）"
++            )),
++            (Some(_), None) => out.push(format!("{p}（欠落）")),
++            (Some((_, f)), Some(d)) => floor_diff_for(d, bare(f), name, &p, out),
++        }
++    }
++}
++
+ // ── 導出（§1 (c)） ──
+ 
+ /// 規則 5: 文字列の字面。裸にできない形のときだけ単引用符で囲む（`flow` = flow の中では読点・括弧も囲む理由）。
+diff --git a/folio2/crates/folio/src/gate.rs b/folio2/crates/folio/src/gate.rs
+index 4221598ed851728a59602fca35ebbd1e132c109d..522f61fe630f1661e58250f48eff4034777bd550 100644
+--- a/folio2/crates/folio/src/gate.rs
++++ b/folio2/crates/folio/src/gate.rs
+@@ -126,13 +126,24 @@ pub(crate) fn run(dir: &Path, write_set: &[String]) -> Outcome {
+             format!("{UNKNOWN_VIEWPOINTS}: {}", missing.join("・")),
+         );
+     }
++    stop_verdict(dir, write_set, &root, &stamp, touches)
++}
++
++/// 書き換える file を場所とする 止める が印に在るかで決める（反証の済んでいないものが先・支持されたものが次・無ければ通す）。
++fn stop_verdict(
++    dir: &Path,
++    write_set: &[String],
++    root: &[String],
++    stamp: &Stamp,
++    touches: impl Fn(&str) -> bool,
++) -> Outcome {
+     // 書き換える file を場所とする 止める（2 が 1 より先・退けた は見ない）。置き場を名指す項目は空の列の dir（全部の下）
+     let items: Vec<(Vec<&str>, bool)> = write_set
+         .iter()
+         .filter(|p| touches(p))
+         .map(|p| {
+             let p = p.trim_start_matches(['+', '-', '~']);
+-            if names_the_place(&root, p) {
++            if names_the_place(root, p) {
+                 return (Vec::new(), true);
+             }
+             (
+@@ -443,7 +454,11 @@ mod gate_tests {
+         assert!(!other(".worktrees/x/design-intent/srs.yaml"));
+         assert!(!other("crates/folio/src/gate.rs"));
+         assert!(!other("design-intent"));
++        f142_a_top_root_is_not_another_root();
++    }
+ 
++    /// 根が 1 要素 `design-intent` のときの `other_root`（上の歯の続き）。
++    fn f142_a_top_root_is_not_another_root() {
+         let top = vec!["design-intent".to_string()];
+         let other = |p: &str| other_root(&top, p);
+         assert!(!other("design-intent/srs.yaml"));
+diff --git a/folio2/crates/folio/src/gitcheck.rs b/folio2/crates/folio/src/gitcheck.rs
+index 10fa8a12b3e3440ee861fee2e8ceb808004bf56f..6e6401493576ba7b89f19e5d0193137d9d09fffd 100644
+--- a/folio2/crates/folio/src/gitcheck.rs
++++ b/folio2/crates/folio/src/gitcheck.rs
+@@ -288,6 +288,16 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
+         );
+         return None;
+     }
++    check_head(top, anch, present, report)
++}
++
++/// HEAD が在り・浅い写しで anchor が 0 本でなく・anchors/ が ignore されていないかを見て、履歴の読みへ進む。
++fn check_head(
++    top: PathBuf,
++    anch: PathBuf,
++    present: BTreeSet<String>,
++    report: &mut Report,
++) -> Option<Tracked> {
+     match git(&top, &["rev-parse", "--verify", "-q", "HEAD"]) {
+         Some(o) if o.ok() => {}
+         Some(_) => {
+@@ -327,6 +337,17 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
+             );
+         }
+     }
++    read_log(top, anch, present, rel, report)
++}
++
++/// `ls-tree`・`log`・`rev-list` を撃って、履歴の読みと突き合わせへ進む。
++fn read_log(
++    top: PathBuf,
++    anch: PathBuf,
++    present: BTreeSet<String>,
++    rel: String,
++    report: &mut Report,
++) -> Option<Tracked> {
+     let (Some(ls), Some(lg), Some(side)) = (
+         git(&top, &["ls-tree", "-r", "--name-only", "HEAD", "--", &rel]),
+         // 作業の一時置き場（refs/stash）は数えない・取り込みの commit で本流の側の親を落とさない（--full-history・ADR-34）
+@@ -366,6 +387,25 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
+     }
+     let tracked: BTreeSet<String> = ls.text().split_whitespace().map(base_name).collect();
+     let aside = aside(&side.text());
++    let (ever, hist) = read_history(&top, &lg, &aside, report)?;
++    let seen = Tracked {
++        tracked,
++        ever,
++        present,
++    };
++    check_anchors(seen, hist, &anch, report)
++}
++
++/// anchor 名ごとの履歴の本文（commit の頭 7 字と本文の列）。
++type History = BTreeMap<String, Vec<(String, Vec<u8>)>>;
++
++/// `log` の行を歩いて、履歴に在った anchor の名（削除を除く）と、追加・変更された anchor の本文を集める。
++fn read_history(
++    top: &Path,
++    lg: &Out,
++    aside: &BTreeSet<String>,
++    report: &mut Report,
++) -> Option<(BTreeSet<String>, History)> {
+     let mut ever: BTreeSet<String> = BTreeSet::new();
+     // anchor 名 → [(commit の頭 7 字, 本文)]（HEAD の祖先と根の無い枝の履歴で追加・変更された anchor）
+     let mut hist: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
+@@ -389,7 +429,7 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
+         }
+         if "AMRC".contains(st) && name.starts_with("constitution-") {
+             let spec = format!("{cm}:{path}");
+-            let Some(show) = git(&top, &["show", &spec]) else {
++            let Some(show) = git(top, &["show", &spec]) else {
+                 report.pending(NO_GIT);
+                 return None;
+             };
+@@ -400,6 +440,21 @@ pub(crate) fn check_git(dir: &Path, report: &mut Report) -> Option<Tracked> {
+             }
+         }
+     }
++    Some((ever, hist))
++}
++
++/// 追跡の漏れ・履歴に在って消えた anchor・履歴の同じ形式の anchor との中身の違いを違反にする。
++fn check_anchors(
++    seen: Tracked,
++    hist: History,
++    anch: &Path,
++    report: &mut Report,
++) -> Option<Tracked> {
++    let Tracked {
++        tracked,
++        ever,
++        present,
++    } = seen;
+     for name in tracked.difference(&present) {
+         report.violation(
+             "anchor",
+diff --git a/folio2/crates/folio/src/ids.rs b/folio2/crates/folio/src/ids.rs
+index acb42f91bc1bea51313d7f6ecd719374fde1cbbb..107f986193a1573a7db9972d3986538f30228383 100644
+--- a/folio2/crates/folio/src/ids.rs
++++ b/folio2/crates/folio/src/ids.rs
+@@ -156,9 +156,51 @@ pub(crate) fn check_ids(
+     } else {
+         Vec::new()
+     };
++    let baseline = read_baseline(&anchors_dir, &names, report);
++    // 読めないのではなく測れない（違反が在れば不合格が先に立つ）。始まりの凍結（便 121）も不在を前提にする
++    if names.is_empty() && !matches!(flag, Flag::FreezeIds | Flag::FreezeStart) {
++        report.pending(
++            "要件・判断・受入基準の id の消失と改番は baseline（anchors/ids-*.yaml）が無いので測れない（folio check --freeze-ids で凍結できる）",
++        );
++    }
++    for (id, sums) in &baseline {
++        if rows.iter().any(|r| &r.id == id) {
++            continue;
++        }
++        match rows.iter().find(|r| sums.contains(&r.sum)) {
++            Some(r) => report.violation(
++                "P-7.1",
++                format!(
++                    "{id} の本文が {} へ付け替えられた（要約値が同じ・id は改番しない＝{id} を戻し、新しい本文には新しい番号を振る）",
++                    r.id
++                ),
++            ),
++            None => report.violation(
++                "P-7",
++                format!(
++                    "{id} が消えた（baseline の anchors/ids-*.yaml に在る・番号は消さず、廃止は状態で表す・P-7.2）"
++                ),
++            ),
++        }
++    }
++    Current {
++        rows,
++        version,
++        anchors_dir,
++        exists: !names.is_empty(),
++        name: adr::name_of(dir),
++    }
++}
++
++/// 読めた anchor の ids を id ごとの要約値の列に集める。形の違う anchor・digest の合わない anchor は数えて混ぜない。
++fn read_baseline(
++    anchors_dir: &Path,
++    names: &[String],
++    report: &mut Report,
++) -> BTreeMap<String, Vec<String>> {
+     // 読めた anchor の ids の和（id → 記録された要約値）
+     let mut baseline: BTreeMap<String, Vec<String>> = BTreeMap::new();
+-    for name in &names {
++    for name in names {
+         let file = format!("anchors/{name}");
+         let Some(doc) = anchor::read_typed(&anchors_dir.join(name), &file, report) else {
+             continue;
+@@ -191,39 +233,7 @@ pub(crate) fn check_ids(
+             }
+         }
+     }
+-    // 読めないのではなく測れない（違反が在れば不合格が先に立つ）。始まりの凍結（便 121）も不在を前提にする
+-    if names.is_empty() && !matches!(flag, Flag::FreezeIds | Flag::FreezeStart) {
+-        report.pending(
+-            "要件・判断・受入基準の id の消失と改番は baseline（anchors/ids-*.yaml）が無いので測れない（folio check --freeze-ids で凍結できる）",
+-        );
+-    }
+-    for (id, sums) in &baseline {
+-        if rows.iter().any(|r| &r.id == id) {
+-            continue;
+-        }
+-        match rows.iter().find(|r| sums.contains(&r.sum)) {
+-            Some(r) => report.violation(
+-                "P-7.1",
+-                format!(
+-                    "{id} の本文が {} へ付け替えられた（要約値が同じ・id は改番しない＝{id} を戻し、新しい本文には新しい番号を振る）",
+-                    r.id
+-                ),
+-            ),
+-            None => report.violation(
+-                "P-7",
+-                format!(
+-                    "{id} が消えた（baseline の anchors/ids-*.yaml に在る・番号は消さず、廃止は状態で表す・P-7.2）"
+-                ),
+-            ),
+-        }
+-    }
+-    Current {
+-        rows,
+-        version,
+-        anchors_dir,
+-        exists: !names.is_empty(),
+-        name: adr::name_of(dir),
+-    }
++    baseline
+ }
+ 
+ /// `--freeze-ids`（§1 (d)）。全検査が 0 違反で「まだ分からない」も無いときだけ書く。
+diff --git a/folio2/crates/folio/src/init.rs b/folio2/crates/folio/src/init.rs
+index 09436c4fcc4485f35781320ac4ea7558f2917550..cfb29bf17fc46f8778208552d7b46f1fd8127243 100644
+--- a/folio2/crates/folio/src/init.rs
++++ b/folio2/crates/folio/src/init.rs
+@@ -673,6 +673,11 @@ pub fn run(dir: &Path) -> Outcome {
+         Ok(b) => b,
+         Err(e) => return Outcome::stop(Verdict::Unknown, vec![e, "1 byte も書いていない".to_string()]),
+     };
++    write_place(dir, &bodies)
++}
++
++/// 置き場の dir と 11 本の file を新規作成で書き、生成区間を埋める。途中で止まれば、書いた file の名を添えて まだ分からない を返す。
++fn write_place(dir: &Path, bodies: &[String]) -> Outcome {
+     // (1) 新規作成でだけ書く（生成区間は空の印）
+     let mut written: Vec<&str> = Vec::new();
+     let dirs = std::iter::once(dir.to_path_buf()).chain(DIRS.iter().map(|sub| dir.join(sub)));
+@@ -686,7 +691,7 @@ pub fn run(dir: &Path) -> Outcome {
+             return Outcome::stop(Verdict::Unknown, stderr);
+         }
+     }
+-    for (file, body) in FILES.iter().zip(&bodies) {
++    for (file, body) in FILES.iter().zip(bodies) {
+         let path = dir.join(file);
+         if let Err(e) = create_new(&path, body) {
+             let mut stderr = vec![format!("{}: 書けない: {e}", path.display())];
+diff --git a/folio2/crates/folio/src/intake.rs b/folio2/crates/folio/src/intake.rs
+index b116328666c88925fbb20dcf92ef28674576a2e5..fb3f5b97c6619d91df2e89dd14bd4440d28e82a8 100644
+--- a/folio2/crates/folio/src/intake.rs
++++ b/folio2/crates/folio/src/intake.rs
+@@ -132,6 +132,11 @@ pub fn check_intake(intake: &Node, index: &Node, vocabulary: &Node, report: &mut
+     }
+     duplicate_ids(FILE, questions, report);
+ 
++    check_sheet_words(intake, vocabulary, body, report);
++}
++
++/// sheet の節を数え、集めた文の英字の語を語彙と突き合わせる。`body` は集めた文の母集団。
++fn check_sheet_words(intake: &Node, vocabulary: &Node, mut body: vocab::Body, report: &mut Report) {
+     if let Some(sheet) = section(intake, "sheet", report) {
+         non_empty(FILE, "sheet", sheet, &["file", "title", "explain"], report);
+         push_text(&mut body, "sheet", sheet, &["title", "explain"]);
+diff --git a/folio2/crates/folio/src/parts.rs b/folio2/crates/folio/src/parts.rs
+index d8c9fbb1439eb34d40fe85221731e1f96a63c025..78212eab08f42e8a43818190e41a82f34cb2fe51 100644
+--- a/folio2/crates/folio/src/parts.rs
++++ b/folio2/crates/folio/src/parts.rs
+@@ -399,6 +399,24 @@ fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
+         let start = i + 1;
+         i = run_end(b, start, |c| c.is_ascii_alphanumeric() || c == b'-');
+         let name = text[start..i].to_ascii_lowercase();
++        let (tag, next) = Scan { text, b }.tag(name, i)?;
++        tags.push(tag);
++        i = next;
++    }
++    Ok(tags)
++}
++
++/// 手書きの走査の対象（面の字とその byte 列）。
++struct Scan<'a> {
++    text: &'a str,
++    b: &'a [u8],
++}
++
++impl Scan<'_> {
++    /// 開始タグの名の後ろ（位置 `i`）から属性を全部読み、script / style 要素なら閉じタグの手前まで読み飛ばす。返りは
++    /// 読んだタグと次の位置。
++    fn tag(&self, name: String, mut i: usize) -> Result<(Tag, usize), String> {
++        let Scan { text, b } = *self;
+         let mut attrs = Vec::new();
+         loop {
+             i = run_end(b, i, |c| c.is_ascii_whitespace());
+@@ -448,9 +466,8 @@ fn scan_tags(text: &str) -> Result<Vec<Tag>, String> {
+                 .ok_or_else(|| format!("閉じない {name} 要素"))?
+                 + close.len();
+         }
+-        tags.push(Tag { name, attrs });
++        Ok((Tag { name, attrs }, i))
+     }
+-    Ok(tags)
+ }
+ 
+ // ── 様式の定義の読み方（手書きの走査）──
+diff --git a/folio2/crates/folio/src/plan.rs b/folio2/crates/folio/src/plan.rs
+index 5ab6472fa4e32b5d6c0dc3e4ff94c69fe3440321..4f6662459040aacaa47186dd06932f699a1efd43 100644
+--- a/folio2/crates/folio/src/plan.rs
++++ b/folio2/crates/folio/src/plan.rs
+@@ -176,6 +176,11 @@ pub(crate) fn check_plan(nd: &Path, notes: &[NoteDoc], rules: &Node, report: &mu
+         }
+         Err(e) => report.unknown(format!("{file}: 読めない: {e}")),
+     }
++    plan_only_rows(note, &index, &file, report);
++}
++
++/// 計画だけの行の床（`index` は行の索引・`file` は計画のノートの file の字）。
++fn plan_only_rows(note: &NoteDoc, index: &[IndexRow], file: &str, report: &mut Report) {
+     // 計画だけの行（一意・索引に無い・依存は索引か計画だけの行に在る）
+     let indexed: HashSet<&str> = index.iter().map(|(id, _)| id.as_str()).collect();
+     let rows: Vec<&Node> = seq(note.root.get("sections"))
+diff --git a/folio2/crates/folio/src/proposed.rs b/folio2/crates/folio/src/proposed.rs
+index 6d6604bbaf123f96f725bbb42ff5ae4f61480830..35a022ff22773bfab46c01f85b56613c96a2578b 100644
+--- a/folio2/crates/folio/src/proposed.rs
++++ b/folio2/crates/folio/src/proposed.rs
+@@ -112,6 +112,11 @@ pub fn judge(dir: &Path, rel: &Path, content: &str) -> Result<Judged, String> {
+     }
+     fs::write(&target, content).map_err(|e| format!("写しへ書けない: {e}"))?;
+     let (after, _) = floor(&copy, Flag::None);
++    Ok(compare(&before, &after, &copy, dir))
++}
++
++/// 書く前と後の床の違反と まだ分からない を突き合わせ、後にだけ在るものを口の答えに分ける（`copy` は写し・`dir` は置き場）。
++fn compare(before: &Report, after: &Report, copy: &Path, dir: &Path) -> Judged {
+     let shown = |s: &str| s.replace(&copy.display().to_string(), &dir.display().to_string());
+     let mut seen: HashMap<&(String, String), usize> = HashMap::new();
+     for v in &before.violations {
+@@ -149,7 +154,7 @@ pub fn judge(dir: &Path, rel: &Path, content: &str) -> Result<Judged, String> {
+             _ => judged.unknowns.push(shown(u)),
+         }
+     }
+-    Ok(judged)
++    judged
+ }
+ 
+ /// 書く file の字は置き場からの相対で、置き場の外へ出ない（絶対 path・`..`・空は断る）。
+diff --git a/folio2/crates/folio/src/ruling.rs b/folio2/crates/folio/src/ruling.rs
+index 249a2dceca808246ef53b45c2ac9f6d5b489ba61..5fd074bfb1af072208c92f868b241c1ec4cf554b 100644
+--- a/folio2/crates/folio/src/ruling.rs
++++ b/folio2/crates/folio/src/ruling.rs
+@@ -277,6 +277,24 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
+             push(NOTE, file, path.clone(), path, None, row.get("ruling"), None);
+         }
+     }
++    sites_rest(tree, &mut push);
++    out
++}
++
++/// `sites` の残り: 設計ノートの決定の表の行の ruling と、印の欄（要件書・索引・天井の正本・支度表・索引の欄の決まり）。
++/// `push` は欄を 1 つ足す口（欄の種類・file・at・欄の道・節点・値・規則の表の行）。
++fn sites_rest<'a>(
++    tree: &Tree<'a>,
++    push: &mut impl FnMut(
++        &'static str,
++        &str,
++        String,
++        String,
++        Option<&'a str>,
++        Option<&'a Node>,
++        Option<&'a Node>,
++    ),
++) {
+     for (file, root) in &tree.notes {
+         let tables = rows(root.get("sections"))
+             .filter(|(_, s)| s.get("type").and_then(Node::as_str) == Some(crate::floor_note::DECISION_TABLE));
+@@ -299,7 +317,6 @@ pub(crate) fn sites<'a>(tree: &Tree<'a>) -> Vec<Site<'a>> {
+             }
+         }
+     }
+-    out
+ }
+ 
+ /// 一覧の中の表の項と一覧の番号（一覧でなければ 0 個・表でない項は飛ばす・番号は飛ばす前の番号）。
+diff --git a/folio2/crates/folio/src/seal.rs b/folio2/crates/folio/src/seal.rs
+index d8f5086924b31a53a4b2c2e5a771f9dac1a1f803..fd1b436efe8b581380e20f66a06927c29bf88fdb 100644
+--- a/folio2/crates/folio/src/seal.rs
++++ b/folio2/crates/folio/src/seal.rs
+@@ -108,7 +108,7 @@ pub(crate) fn check_seals(
+         }
+     }
+     current.sort_by_key(|(id, _)| id_key(id));
+-    let mut seals = Seals {
++    let seals = Seals {
+         path,
+         anchors_dir,
+         rows: Vec::new(),
+@@ -134,6 +134,12 @@ pub(crate) fn check_seals(
+         }
+         return seals;
+     }
++    seal_rows(seals, records, flag, report)
++}
++
++/// 封の一覧の読み（kind・形・digest）。読めた行を `compare_rows` で発効した記録と照らす。
++fn seal_rows(seals: Seals, records: &[(String, Node)], flag: Flag, report: &mut Report) -> Seals {
++    let file = format!("anchors/{SEAL_FILE}");
+     let Some(doc) = anchor::read_typed(&seals.path, &file, report) else {
+         return seals;
+     };
+@@ -157,6 +163,18 @@ pub(crate) fn check_seals(
+             return seals;
+         }
+     }
++    compare_rows(seals, rows, records, flag, report)
++}
++
++/// 封の一覧の行を照らす（行の重複・本文の変わり・行の欠け・発効した記録の無い行）。
++fn compare_rows(
++    mut seals: Seals,
++    rows: Vec<(String, String)>,
++    records: &[(String, Node)],
++    flag: Flag,
++    report: &mut Report,
++) -> Seals {
++    let file = format!("anchors/{SEAL_FILE}");
+     let mut seen: Vec<&str> = Vec::new();
+     for (id, _) in &rows {
+         if seen.contains(&id.as_str()) {
+diff --git a/folio2/crates/folio/src/sheet.rs b/folio2/crates/folio/src/sheet.rs
+index a7b2782c2565cccefdef0c1010f2a4120f8c6d50..ac039294a195c18d2d9997bc2e50cb3642a06ebb 100644
+--- a/folio2/crates/folio/src/sheet.rs
++++ b/folio2/crates/folio/src/sheet.rs
+@@ -106,35 +106,36 @@ fn build(dir: &Path, answers_path: Option<&Path>, mode: Mode) -> R<Outcome> {
+                 stderr: None,
+             })
+         }
+-        Mode::Write => {
+-            let documents =
+-                map_documents(&intake.questions, &answers, &intake.values, &intake.targets)?;
+-            // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
+-            let name = adr::name_of(dir);
+-            let header = format!("# {}", adr::named(name.as_deref(), " ", HEADER));
+-            let id = adr::named(name.as_deref(), "-", SHEET_ID);
+-            let text = yaml::write(&sheet_value(&intake, &id, &documents, &answers), &header)
+-                .map_err(|e| format!("{}: {e}", sheet_path.display()))?;
+-            if !sheet_path.parent().is_some_and(Path::is_dir) {
+-                return Err(format!("{}: 出力先の親 dir が無い", sheet_path.display()));
+-            }
+-            fs::write(&sheet_path, &text)
+-                .map_err(|e| format!("{}: 書けない: {e}", sheet_path.display()))?;
+-            let recommended = answers
+-                .iter()
+-                .filter(|a| a.source == Source::Recommended)
+-                .count();
+-            Ok(Outcome {
+-                verdict: Verdict::Pass,
+-                stdout: vec![format!(
+-                    "folio intake: 支度表を書いた（持つ文書 {}・推奨で進めた項目 {recommended}・{}）",
+-                    documents.len(),
+-                    sheet_path.display()
+-                )],
+-                stderr: None,
+-            })
+-        }
++        Mode::Write => write_sheet(dir, &intake, &answers, &sheet_path),
++    }
++}
++
++/// 支度表を組んで `<dir>/<sheet.file>` へ書く（`--write`・書く前に止まれば 1 byte も書かない）。
++fn write_sheet(dir: &Path, intake: &Intake, answers: &[Answer], sheet_path: &Path) -> R<Outcome> {
++    let documents = map_documents(&intake.questions, answers, &intake.values, &intake.targets)?;
++    // 置き場の名（憲法の meta.id から・導けなければ名を出さない・便 154）
++    let name = adr::name_of(dir);
++    let header = format!("# {}", adr::named(name.as_deref(), " ", HEADER));
++    let id = adr::named(name.as_deref(), "-", SHEET_ID);
++    let text = yaml::write(&sheet_value(intake, &id, &documents, answers), &header)
++        .map_err(|e| format!("{}: {e}", sheet_path.display()))?;
++    if !sheet_path.parent().is_some_and(Path::is_dir) {
++        return Err(format!("{}: 出力先の親 dir が無い", sheet_path.display()));
+     }
++    fs::write(sheet_path, &text).map_err(|e| format!("{}: 書けない: {e}", sheet_path.display()))?;
++    let recommended = answers
++        .iter()
++        .filter(|a| a.source == Source::Recommended)
++        .count();
++    Ok(Outcome {
++        verdict: Verdict::Pass,
++        stdout: vec![format!(
++            "folio intake: 支度表を書いた（持つ文書 {}・推奨で進めた項目 {recommended}・{}）",
++            documents.len(),
++            sheet_path.display()
++        )],
++        stderr: None,
++    })
+ }
+ 
+ // ── 正本の読み ──
+diff --git a/folio2/crates/folio/src/yaml.rs b/folio2/crates/folio/src/yaml.rs
+index c8d5151f82a7f0c46c593c58d0dad7d4159b0b7b..b147377234d480bbb2dcb8d7cb65343126fbfd7b 100644
+--- a/folio2/crates/folio/src/yaml.rs
++++ b/folio2/crates/folio/src/yaml.rs
+@@ -484,6 +484,11 @@ fn pyyaml_typed(s: &str) -> bool {
+             return true;
+         }
+     }
++    pyyaml_sexagesimal(s, body, dig_)
++}
++
++/// 六十進か、でなければ時刻付きの timestamp か（`pyyaml_typed` の残り）。`body` は符号を除いた字面。
++fn pyyaml_sexagesimal(s: &str, body: &str, dig_: fn(u8) -> bool) -> bool {
+     // 六十進（「:」で区切る整数 `[1-9][0-9_]*(:[0-5]?[0-9])+`・浮動小数 `[0-9][0-9_]*(:[0-5]?[0-9])+\.[0-9_]*`）
+     if let Some((head, rest)) = body.split_once(':')
+         && head.as_bytes().first().is_some_and(u8::is_ascii_digit)
+@@ -559,6 +564,16 @@ fn is_timestamp_with_time(s: &str) -> bool {
+     if !time {
+         return false;
+     }
++    timestamp_tail(b, i, digits_at, byte_at)
++}
++
++/// 時刻より後（小数の秒・空白・Z か時差）が字面の終わりまでで収まるか。`i` は時刻の終わりの位置。
++fn timestamp_tail(
++    b: &[u8],
++    mut i: usize,
++    digits_at: impl Fn(&mut usize, usize, usize) -> bool,
++    byte_at: impl Fn(&mut usize, &[u8]) -> bool,
++) -> bool {
+     if byte_at(&mut i, b".") {
+         i += b.iter().skip(i).take_while(|c| c.is_ascii_digit()).count();
+     }
