@@ -1,0 +1,2712 @@
+diff --git a/folio2/crates/folio/src/anchor.rs b/folio2/crates/folio/src/anchor.rs
+index 45591955e4fbf5e5b70c7a1f5cd8579d04547895..647930715d9ff3adea586f61c2145746b7a95aa9 100644
+--- a/folio2/crates/folio/src/anchor.rs
++++ b/folio2/crates/folio/src/anchor.rs
+@@ -4,10 +4,11 @@
+ //! （`lineage.rs`）は便 8 で、ここから呼ぶ。`--freeze-anchor`・`--emit-amends` は便 9。
+ //! 値は型付きの木（`yaml::Value`）で読み、digest は正規化（`yaml::canonical`）の sha256。
+ //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs` / `adr::floor_val`）で読み、値は持ち直さない。正規表現は使わない。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{BTreeMap, BTreeSet, HashSet};
+ use std::fs;
+-use std::path::Path;
++use std::path::{Path, PathBuf};
+ 
+ use crate::adr::{self, Adr};
+ use crate::gitcheck;
+@@ -277,16 +278,7 @@ pub(crate) fn project(c: &Value, scope: &[String]) -> Result<Value, String> {
+             let mut fields = Vec::new();
+             for f in article_fields {
+                 let v = if *f == "statements" {
+-                    let sts: &[Value] = match a.get(f) {
+-                        None | Some(Value::Null) => &[],
+-                        Some(Value::Seq(items)) => items,
+-                        Some(_) => {
+-                            return Err(format!(
+-                                "条 {} の statements が一覧でない",
+-                                py_str(a.get("id"))
+-                            ));
+-                        }
+-                    };
++                    let sts = statements_of(a, f)?;
+                     let mut rows = Vec::new();
+                     for st in sts {
+                         if st.as_map().is_none() {
+@@ -315,6 +307,20 @@ pub(crate) fn project(c: &Value, scope: &[String]) -> Result<Value, String> {
+     Ok(Value::Map(out))
+ }
+ 
++/// (e) 条の規範文の一覧（無い・null は空・一覧でなければ Err）。
++fn statements_of<'a>(a: &'a Value, f: &str) -> Result<&'a [Value], String> {
++    Ok(match a.get(f) {
++        None | Some(Value::Null) => &[],
++        Some(Value::Seq(items)) => items,
++        Some(_) => {
++            return Err(format!(
++                "条 {} の statements が一覧でない",
++                py_str(a.get("id"))
++            ));
++        }
++    })
++}
++
+ /// (e) 印を値として持つ欄（A-2）。
+ fn marks_in(value: &Value, at: &str, marks: &[&str], report: &mut Report) {
+     match value {
+@@ -381,6 +387,53 @@ pub(crate) fn amends_list(d: &Node) -> impl Iterator<Item = &Node> {
+         .filter(|e| e.as_map().is_some())
+ }
+ 
++/// 憲法の現行の読み（`check_anchor` の段の間で受け渡す・`check_file` も読む）。
++struct Cur<'a> {
++    /// 置き場の dir
++    dir: &'a Path,
++    /// 読めた判断の記録
++    adr: &'a Adr,
++    /// (j) の列に在った id
++    history: &'a HashSet<String>,
++    /// 旗
++    flag: Flag,
++    /// 型付きで読んだ憲法
++    c: Value,
++    /// 置き場の名（まだ分からない の行の folio2 の番号の片を外の置き場で落とす・便 203）
++    place: Option<String>,
++    /// 憲法 schema.amendment_scope
++    scope: Vec<String>,
++    /// (e) の現行の写し
++    cur_proj: Value,
++    /// 現行 meta.version の `str(x)`
++    cur_ver: String,
++    /// 憲法 meta.approval（無ければ null）
++    meta_approval: Value,
++    /// 憲法 meta.id（字でなければ None）。列の根の表を引く名（便 121）
++    name: Option<String>,
++}
++
++/// anchors/ の読みと列の検査の結果（段の間で受け渡す）。
++#[derive(Default)]
++struct Chain {
++    /// `<dir>/anchors`
++    anch: PathBuf,
++    /// 読めた索引
++    index: Option<Value>,
++    /// 読めた anchor（file の順）
++    anchors: Vec<Anchor>,
++    /// 列の file が anchors/ に 1 本でも在る
++    chain_exists: bool,
++    /// 版管理の照合の結果
++    git: Option<gitcheck::Tracked>,
++    /// 改訂の記録（amended_by か発効した判断の amends）が在る
++    records_exist: bool,
++    /// 索引の末尾の版
++    newest: Option<String>,
++    /// 索引の表の項の版（索引の順）
++    chain_versions: Vec<String>,
++}
++
+ /// (e)〜(i) を掛ける。`history` は (j) の列に在った id（`history_ids`）。
+ /// `flag` が `--freeze-anchor` か `--freeze-start`（便 121）のときは (i) を掛けず（凍結の前提の検査が替わる・便 9）、
+ /// 列の結果を `freeze.rs` へ返す。列の根は憲法の名で列の根の表を引いて照らす（便 121・`check_root`）。
+@@ -393,8 +446,7 @@ pub fn check_anchor(
+ ) -> Option<State> {
+     let c = read_typed(&dir.join("constitution.yaml"), "constitution.yaml", report)?;
+     // まだ分からない の行の folio2 の番号の片は外の置き場で落とす（便 203）
+-    let name = crate::adr::place_name(dir).ok();
+-    let said = |v: &'static str| crate::floor::said(v, name.as_deref());
++    let place = crate::adr::place_name(dir).ok();
+     let scope = amendment_scope(&c);
+     let cur_proj = match project(&c, &scope) {
+         Ok(p) => p,
+@@ -428,7 +480,25 @@ pub fn check_anchor(
+         .and_then(|m| m.get("id"))
+         .and_then(Value::as_str)
+         .map(str::to_string);
+-    let first_ver = floor(&["anchor", "first_version"]);
++    let cur = Cur {
++        dir,
++        adr,
++        history,
++        flag,
++        c,
++        place,
++        scope,
++        cur_proj,
++        cur_ver,
++        meta_approval,
++        name,
++    };
++    read_chain(cur, report)
++}
++
++/// (f) anchors/ の索引と anchor の file を読む。列に載せた anchor と索引を次の段へ渡す。
++fn read_chain(cur: Cur, report: &mut Report) -> Option<State> {
++    let dir = cur.dir;
+     let anch = dir.join(floor(&["anchor", "dir"]));
+     let index_file = floor(&["anchor", "index_file"]);
+     let root = fs::canonicalize(dir).ok();
+@@ -472,17 +542,31 @@ pub fn check_anchor(
+             let Some(d) = read_typed(&path, &format!("anchors/{file}"), report) else {
+                 continue;
+             };
+-            if let Some(a) = check_file(dir, &file, d, &meta_approval, adr, &anchors, report) {
++            if let Some(a) = check_file(&cur, &file, d, &anchors, report) {
+                 anchors.push(a);
+             }
+         }
+     }
++    let chain = Chain {
++        anch,
++        index,
++        anchors,
++        chain_exists,
++        ..Chain::default()
++    };
++    check_git_records(cur, chain, report)
++}
++
++/// (a) 版管理との照合と、(g) の前提になる改訂の記録の有無。
++fn check_git_records(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State> {
++    let Cur {
++        dir, adr, ref c, ..
++    } = cur;
+     // (a) 版管理との照合（便 8）
+-    let git = gitcheck::check_git(dir, report);
+-    let find = |v: &str| anchors.iter().find(|a| a.version == v);
++    chain.git = gitcheck::check_git(dir, report);
+ 
+     // (g) 列
+-    let records_exist = value_rows(Some(&c), "articles").any(|a| {
++    chain.records_exist = value_rows(Some(c), "articles").any(|a| {
+         a.get("amended_by")
+             .and_then(Value::as_seq)
+             .is_some_and(|s| !s.is_empty())
+@@ -490,6 +574,20 @@ pub fn check_anchor(
+         .records
+         .iter()
+         .any(|(_, d)| is_effective(d) && amends_list(d).next().is_some());
++    check_index(cur, chain, report)
++}
++
++/// (g) 列: 索引の項を 1 つずつ anchor と照らし、索引と anchor の file の食い違いを数える。
++fn check_index(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State> {
++    let Chain {
++        ref index,
++        ref anchors,
++        records_exist,
++        ..
++    } = chain;
++    let Cur { ref place, .. } = cur;
++    let said = |v: &'static str| crate::floor::said(v, place.as_deref());
++    let index_file = floor(&["anchor", "index_file"]);
+     let mut newest: Option<String> = None;
+     let mut chain_versions: Vec<String> = Vec::new();
+     if let Some(ix) = &index {
+@@ -503,68 +601,7 @@ pub fn check_anchor(
+                 said("（まだ分からない・P-10.3）")
+             ));
+         }
+-        for (n, e) in entries.iter().enumerate() {
+-            if e.as_map().is_none()
+-                || ["version", "previous", "digest"]
+-                    .iter()
+-                    .any(|k| e.get(k).is_none())
+-            {
+-                report.violation(
+-                    "anchor",
+-                    format!("{index_file}: entries[{n}] の欄が壊れている"),
+-                );
+-                continue;
+-            }
+-            let vs = py_str(e.get("version"));
+-            let expect_prev = n
+-                .checked_sub(1)
+-                .and_then(|p| entries.get(p))
+-                .map(|prev| py_str(prev.get("version")));
+-            if n == 0 && vs != first_ver {
+-                report.violation(
+-                    "anchor",
+-                    format!("{index_file}: 列の根 {vs} が最初の版 {first_ver}（床の定数）でない"),
+-                );
+-            }
+-            if n == 0 {
+-                check_root(index_file, &vs, name.as_deref(), &py_str(e.get("digest")), report);
+-            }
+-            let prev = (!is_none(e.get("previous"))).then(|| py_str(e.get("previous")));
+-            if prev != expect_prev {
+-                report.violation(
+-                    "anchor",
+-                    format!(
+-                        "{index_file}: entries[{n}]（{vs}）の previous {} が直前の版 {} でない（列の付け替え）",
+-                        py_str(e.get("previous")),
+-                        expect_prev.as_deref().unwrap_or("None")
+-                    ),
+-                );
+-            }
+-            let Some(a) = find(&vs) else {
+-                report.pending(format!(
+-                    "anchor の列が切れている: 索引にある版 {vs} の anchor file が無いか読めない＝差分検査は「まだ分からない」{}。anchors/ は消さない",
+-                    said("（P-10.3）")
+-                ));
+-                continue;
+-            };
+-            if py_str(a.doc.get("digest")) != py_str(e.get("digest")) {
+-                report.violation(
+-                    "anchor",
+-                    format!("{vs}: anchor の digest が索引の記載と違う（差し替えられた）"),
+-                );
+-            }
+-            let a_prev = (!is_none(a.doc.get("previous"))).then(|| py_str(a.doc.get("previous")));
+-            if a_prev != expect_prev {
+-                report.violation(
+-                    "anchor",
+-                    format!(
+-                        "{vs}: anchor の previous {} が索引の列 {} と違う",
+-                        py_str(a.doc.get("previous")),
+-                        expect_prev.as_deref().unwrap_or("None")
+-                    ),
+-                );
+-            }
+-        }
++        check_entries(entries, &cur, anchors, report);
+         chain_versions = entries
+             .iter()
+             .filter(|e| e.as_map().is_some())
+@@ -598,6 +635,109 @@ pub fn check_anchor(
+             "改訂の記録（amended_by か発効した判断の amends）があるのに anchor が 1 本も無い＝anchor が消された（列の始め直しは認めない）",
+         );
+     }
++    chain.newest = newest;
++    chain.chain_versions = chain_versions;
++    check_versions(cur, chain, report)
++}
++
++/// (g) 索引の項ごとの照らし（欄・列の根・previous・anchor の file の有無）。
++fn check_entries(entries: &[Value], cur: &Cur, anchors: &[Anchor], report: &mut Report) {
++    let Cur {
++        ref place,
++        ref name,
++        ..
++    } = *cur;
++    let said = |v: &'static str| crate::floor::said(v, place.as_deref());
++    let index_file = floor(&["anchor", "index_file"]);
++    let first_ver = floor(&["anchor", "first_version"]);
++    let find = |v: &str| anchors.iter().find(|a| a.version == v);
++    for (n, e) in entries.iter().enumerate() {
++        if e.as_map().is_none()
++            || ["version", "previous", "digest"]
++                .iter()
++                .any(|k| e.get(k).is_none())
++        {
++            report.violation(
++                "anchor",
++                format!("{index_file}: entries[{n}] の欄が壊れている"),
++            );
++            continue;
++        }
++        let vs = py_str(e.get("version"));
++        let expect_prev = n
++            .checked_sub(1)
++            .and_then(|p| entries.get(p))
++            .map(|prev| py_str(prev.get("version")));
++        if n == 0 && vs != first_ver {
++            report.violation(
++                "anchor",
++                format!("{index_file}: 列の根 {vs} が最初の版 {first_ver}（床の定数）でない"),
++            );
++        }
++        if n == 0 {
++            check_root(index_file, &vs, name.as_deref(), &py_str(e.get("digest")), report);
++        }
++        let prev = (!is_none(e.get("previous"))).then(|| py_str(e.get("previous")));
++        if prev != expect_prev {
++            report.violation(
++                "anchor",
++                format!(
++                    "{index_file}: entries[{n}]（{vs}）の previous {} が直前の版 {} でない（列の付け替え）",
++                    py_str(e.get("previous")),
++                    expect_prev.as_deref().unwrap_or("None")
++                ),
++            );
++        }
++        let Some(a) = find(&vs) else {
++            report.pending(format!(
++                "anchor の列が切れている: 索引にある版 {vs} の anchor file が無いか読めない＝差分検査は「まだ分からない」{}。anchors/ は消さない",
++                said("（P-10.3）")
++            ));
++            continue;
++        };
++        check_entry_anchor(a, e, &vs, expect_prev, report);
++    }
++}
++
++/// (g) 索引の項と、その版の anchor の digest・previous の照らし。
++fn check_entry_anchor(
++    a: &Anchor,
++    e: &Value,
++    vs: &str,
++    expect_prev: Option<String>,
++    report: &mut Report,
++) {
++    if py_str(a.doc.get("digest")) != py_str(e.get("digest")) {
++        report.violation(
++            "anchor",
++            format!("{vs}: anchor の digest が索引の記載と違う（差し替えられた）"),
++        );
++    }
++    let a_prev = (!is_none(a.doc.get("previous"))).then(|| py_str(a.doc.get("previous")));
++    if a_prev != expect_prev {
++        report.violation(
++            "anchor",
++            format!(
++                "{vs}: anchor の previous {} が索引の列 {} と違う",
++                py_str(a.doc.get("previous")),
++                expect_prev.as_deref().unwrap_or("None")
++            ),
++        );
++    }
++}
++
++/// (a) 版管理に無い anchor と、(h) 発効した判断の記録が名指す版の anchor が列に在るか。
++fn check_versions(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
++    let Cur {
++        adr, ref cur_ver, ..
++    } = cur;
++    let Chain {
++        ref git,
++        ref newest,
++        ref chain_versions,
++        ..
++    } = chain;
++    let first_ver = floor(&["anchor", "first_version"]);
+     if let Some(g) = &git {
+         g.untracked(newest.as_deref(), report);
+     }
+@@ -606,7 +746,7 @@ pub fn check_anchor(
+     let root_ver = chain_versions.first().map_or(first_ver, String::as_str);
+     let mut nameable: HashSet<&str> = chain_versions.iter().skip(1).map(String::as_str).collect();
+     if cur_ver != root_ver {
+-        nameable.insert(&cur_ver);
++        nameable.insert(cur_ver);
+     }
+     for (aid, d) in adr.records.iter().filter(|(_, d)| is_effective(d)) {
+         let versions: BTreeSet<String> =
+@@ -629,8 +769,20 @@ pub fn check_anchor(
+             }
+         }
+     }
++    check_reuse(cur, chain, report)
++}
++
++/// (h) 最新の anchor に無い番号の再利用（P-7.1）。
++fn check_reuse(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
++    let Cur { history, ref c, .. } = cur;
++    let Chain {
++        ref anchors,
++        ref newest,
++        ..
++    } = chain;
++    let find = |v: &str| anchors.iter().find(|a| a.version == v);
+     let newest_anchor = newest.as_deref().and_then(find);
+-    let (cur_articles, cur_statements) = article_ids(Some(&c));
++    let (cur_articles, cur_statements) = article_ids(Some(c));
+     if let (Some(v), Some(na)) = (&newest, newest_anchor) {
+         let (n_articles, n_statements) = article_ids(na.doc.get("content"));
+         let newest_ids: HashSet<&str> = n_articles
+@@ -653,6 +805,18 @@ pub fn check_anchor(
+             );
+         }
+     }
++    check_pairs(cur, chain, report)
++}
++
++/// (h) 列の全区間の差分の照らし。
++fn check_pairs(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
++    let Cur { adr, ref c, .. } = cur;
++    let Chain {
++        ref anchors,
++        ref chain_versions,
++        ..
++    } = chain;
++    let find = |v: &str| anchors.iter().find(|a| a.version == v);
+ 
+     // 列の全区間（便 8 (b)）: 隣り合う anchor の差分は、その版を名指す発効した判断の記録と 1:1
+     for pair in chain_versions.windows(2) {
+@@ -661,34 +825,52 @@ pub fn check_anchor(
+         };
+         if let (Some(pa), Some(ca)) = (find(prev_ver), find(cur_ver)) {
+             lineage::verify_pair(
+-                &pa.doc,
+-                ca.doc.get("content").unwrap_or(&Value::Null),
+-                &str_items(ca.doc.get("projection").and_then(|p| p.get("scope"))),
+-                &ca.version,
++                &lineage::Pair {
++                    prev_doc: &pa.doc,
++                    cur_content: ca.doc.get("content").unwrap_or(&Value::Null),
++                    cur_scope: &str_items(ca.doc.get("projection").and_then(|p| p.get("scope"))),
++                    ver: &ca.version,
++                },
+                 &format!("anchor {}", ca.version),
+-                &c,
++                c,
+                 adr,
+                 report,
+             );
+         }
+     }
++    check_current(cur, chain, report)
++}
++
++/// (i) 現行との一致（`--freeze-anchor` と `--freeze-start` では凍結の前提の検査に替わる）。
++fn check_current(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
++    let Cur {
++        flag,
++        ref c,
++        ref place,
++        ref scope,
++        ref cur_proj,
++        ref cur_ver,
++        ..
++    } = cur;
++    let Chain {
++        ref index,
++        ref anchors,
++        ref anch,
++        ref newest,
++        records_exist,
++        ..
++    } = chain;
++    let said = |v: &'static str| crate::floor::said(v, place.as_deref());
++    let find = |v: &str| anchors.iter().find(|a| a.version == v);
++    let newest_anchor = newest.as_deref().and_then(find);
++    let (cur_articles, cur_statements) = article_ids(Some(c));
+ 
+     // (i) 現行との一致（`--freeze-anchor` と `--freeze-start` では凍結の前提の検査に替わる）
+     if matches!(flag, Flag::FreezeAnchor | Flag::FreezeStart) {
+         // freeze.rs の (c) と始まりの凍結（便 121）が受け持つ。始まりの凍結は書く承認一覧（欄 adr は空・
+         // 憲法 meta.approval の写し 1 項）を凍結の後の床と同じ関数で確かめる（便 155・P-15.2）
+         if matches!(flag, Flag::FreezeStart) {
+-            let mut row = vec![(Value::Str("adr".to_string()), Value::Null)];
+-            for f in adr::floor_strs(&["approval", "required"]) {
+-                let v = meta_approval.get(f).cloned().unwrap_or(Value::Null);
+-                row.push((Value::Str(f.to_string()), v));
+-            }
+-            let at = format!(
+-                "{}（凍結で書く承認一覧・憲法 meta.approval の写し）",
+-                floor(&["anchor", "file_name"]).replace("<version>", &cur_ver)
+-            );
+-            let approvals = Value::Seq(vec![Value::Map(row)]);
+-            check_approvals(dir, &at, Some(&approvals), adr, report);
++            check_start_approvals(&cur, report);
+         }
+     } else if index.is_none() && anchors.is_empty() && !records_exist {
+         report.pending(format!(
+@@ -698,7 +880,7 @@ pub fn check_anchor(
+             said("（P-10.3）")
+         ));
+     } else if let (Some(v), Some(na)) = (&newest, newest_anchor) {
+-        if *v != cur_ver {
++        if *v != *cur_ver {
+             report.violation(
+                 "A-2",
+                 format!(
+@@ -710,7 +892,7 @@ pub fn check_anchor(
+             na.doc
+                 .get("content")
+                 .and_then(|x| canon(x, &na.name, report)),
+-            canon(&cur_proj, "憲法の写し", report),
++            canon(cur_proj, "憲法の写し", report),
+         ) && a != b
+         {
+             report.violation(
+@@ -723,6 +905,55 @@ pub fn check_anchor(
+             );
+         }
+     }
++    finish(cur, chain)
++}
++
++/// (i) 始まりの凍結が書く承認一覧（欄 adr は空・憲法 meta.approval の写し 1 項）の確かめ（便 155・P-15.2）。
++fn check_start_approvals(cur: &Cur, report: &mut Report) {
++    let Cur {
++        dir,
++        adr,
++        ref meta_approval,
++        ref cur_ver,
++        ..
++    } = *cur;
++    let mut row = vec![(Value::Str("adr".to_string()), Value::Null)];
++    for f in adr::floor_strs(&["approval", "required"]) {
++        let v = meta_approval.get(f).cloned().unwrap_or(Value::Null);
++        row.push((Value::Str(f.to_string()), v));
++    }
++    let at = format!(
++        "{}（凍結で書く承認一覧・憲法 meta.approval の写し）",
++        floor(&["anchor", "file_name"]).replace("<version>", cur_ver)
++    );
++    let approvals = Value::Seq(vec![Value::Map(row)]);
++    check_approvals(dir, &at, Some(&approvals), adr, report);
++}
++
++/// 列の結果を `State` に詰めて返す。
++fn finish(cur: Cur, chain: Chain) -> Option<State> {
++    let Cur {
++        c,
++        scope,
++        cur_proj,
++        cur_ver,
++        meta_approval,
++        name,
++        ..
++    } = cur;
++    let Chain {
++        index,
++        anchors,
++        anch,
++        chain_exists,
++        git,
++        records_exist,
++        newest,
++        ..
++    } = chain;
++    let newest_anchor = newest
++        .as_deref()
++        .and_then(|v| anchors.iter().find(|a| a.version == v));
+     let newest_doc = newest_anchor.map(|a| a.doc.clone());
+     Some(State {
+         seen_in_git: git.as_ref().is_some_and(gitcheck::Tracked::seen),
+@@ -808,16 +1039,10 @@ fn structural_diff(
+ }
+ 
+ /// (f) anchor の file 1 本。列に載せられる形なら返す。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+ fn check_file(
+-    dir: &Path,
++    cur: &Cur,
+     name: &str,
+     d: Value,
+-    meta_approval: &Value,
+-    adr: &Adr,
+     seen: &[Anchor],
+     report: &mut Report,
+ ) -> Option<Anchor> {
+@@ -874,6 +1099,17 @@ fn check_file(
+             Err(e) => report.unknown(format!("anchors/{name}: {e}")),
+         }
+     }
++    check_file_projection(cur, name, d, vs, report)
++}
++
++/// (f) anchor の file 1 本の続き: 写しの取り方・範囲・写しの節。
++fn check_file_projection(
++    cur: &Cur,
++    name: &str,
++    d: Value,
++    vs: String,
++    report: &mut Report,
++) -> Option<Anchor> {
+     let empty = Value::Map(Vec::new());
+     let pj = match d.get("projection") {
+         Some(p @ Value::Map(_)) => p,
+@@ -923,13 +1159,28 @@ fn check_file(
+             ),
+         );
+     }
++    check_file_approval(cur, name, d, vs, report)
++}
++
++/// (f) anchor の file 1 本の続き: 発効の承認の写し・approvals。
++fn check_file_approval(
++    cur: &Cur,
++    name: &str,
++    d: Value,
++    vs: String,
++    report: &mut Report,
++) -> Option<Anchor> {
+     if let (Some(a), Some(b)) = (
+         canon(
+             d.get("meta_approval").unwrap_or(&Value::Null),
+             &format!("anchors/{name}"),
+             report,
+         ),
+-        canon(meta_approval, "constitution.yaml meta.approval", report),
++        canon(
++            &cur.meta_approval,
++            "constitution.yaml meta.approval",
++            report,
++        ),
+     ) && a != b
+     {
+         report.violation(
+@@ -939,7 +1190,7 @@ fn check_file(
+             ),
+         );
+     }
+-    check_approvals(dir, name, d.get("approvals"), adr, report);
++    check_approvals(cur.dir, name, d.get("approvals"), cur.adr, report);
+     Some(Anchor {
+         version: vs,
+         doc: d,
+@@ -964,49 +1215,7 @@ fn check_approvals(
+     };
+     let approval_fields = adr::floor_strs(&["approval", "required"]);
+     for (n, ap) in items.iter().enumerate() {
+-        if ap.as_map().is_none()
+-            || !["who", "ruling", "verbatim"]
+-                .iter()
+-                .all(|k| non_empty(ap.get(k)))
+-        {
+-            report.violation(
+-                "anchor",
+-                format!("{name}: approvals[{n}] に who / ruling / verbatim が無い"),
+-            );
+-            continue;
+-        }
+-        if !ruling::has_ruling(&py_str(ap.get("ruling"))) {
+-            report.violation(
+-                "anchor",
+-                format!("{name}: approvals[{n}].ruling に台帳 id が無い"),
+-            );
+-            continue;
+-        }
+-        // 形の決まりを持たない承認者と逐語だけが雛形の印を空と見る（便 158・裁定 id の印は台帳 id の形が落とす）
+-        let marked: Vec<&str> = ["who", "verbatim"]
+-            .into_iter()
+-            .filter(|k| adr::unfilled(&py_str(ap.get(k))))
+-            .collect();
+-        if !marked.is_empty() {
+-            report.violation(
+-                "anchor",
+-                format!(
+-                    "{name}: approvals[{n}] の {} が {}（init の雛形の印・空と同じ）",
+-                    marked.join(" / "),
+-                    adr::UNFILLED
+-                ),
+-            );
+-            continue;
+-        }
+-        let date = py_str(ap.get("date"));
+-        if !adr::is_date(&date) {
+-            report.violation(
+-                "anchor",
+-                format!("{name}: approvals[{n}].date「{date}」が年-月-日でない"),
+-            );
+-            continue;
+-        }
+-        if is_none(ap.get("adr")) {
++        if !approval_shape(name, n, ap, report) {
+             continue;
+         }
+         let aid = py_str(ap.get("adr"));
+@@ -1054,6 +1263,56 @@ fn check_approvals(
+     }
+ }
+ 
++/// (f) approvals の項 1 つの形（空・台帳 id の形・雛形の印・日付・adr の有無）。判断の記録と突き合わせる項だけ true。
++fn approval_shape(name: &str, n: usize, ap: &Value, report: &mut Report) -> bool {
++    if ap.as_map().is_none()
++        || !["who", "ruling", "verbatim"]
++            .iter()
++            .all(|k| non_empty(ap.get(k)))
++    {
++        report.violation(
++            "anchor",
++            format!("{name}: approvals[{n}] に who / ruling / verbatim が無い"),
++        );
++        return false;
++    }
++    if !ruling::has_ruling(&py_str(ap.get("ruling"))) {
++        report.violation(
++            "anchor",
++            format!("{name}: approvals[{n}].ruling に台帳 id が無い"),
++        );
++        return false;
++    }
++    // 形の決まりを持たない承認者と逐語だけが雛形の印を空と見る（便 158・裁定 id の印は台帳 id の形が落とす）
++    let marked: Vec<&str> = ["who", "verbatim"]
++        .into_iter()
++        .filter(|k| adr::unfilled(&py_str(ap.get(k))))
++        .collect();
++    if !marked.is_empty() {
++        report.violation(
++            "anchor",
++            format!(
++                "{name}: approvals[{n}] の {} が {}（init の雛形の印・空と同じ）",
++                marked.join(" / "),
++                adr::UNFILLED
++            ),
++        );
++        return false;
++    }
++    let date = py_str(ap.get("date"));
++    if !adr::is_date(&date) {
++        report.violation(
++            "anchor",
++            format!("{name}: approvals[{n}].date「{date}」が年-月-日でない"),
++        );
++        return false;
++    }
++    if is_none(ap.get("adr")) {
++        return false;
++    }
++    true
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/folio2/crates/folio/src/check.rs b/folio2/crates/folio/src/check.rs
+index 36b7a62356eed34bd5a3e39f70c20212ebdd587f..c5278654d8dfeaf429a2c441e8fc7d5e7a89670d 100644
+--- a/folio2/crates/folio/src/check.rs
++++ b/folio2/crates/folio/src/check.rs
+@@ -10,6 +10,7 @@
+ //! 承認欄も在れば読む）。
+ //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
+ //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{HashMap, HashSet};
+ use std::fs;
+@@ -187,8 +188,21 @@ struct Sources {
+     ceiling: Node,
+ }
+ 
++impl Sources {
++    /// 正本 4 file（憲法・rules・語彙・要件書）の読んだ木。
++    fn canon(&self) -> refs::Canon<'_> {
++        refs::Canon {
++            constitution: &self.constitution,
++            rules: &self.rules,
++            vocabulary: &self.vocabulary,
++            srs: &self.srs,
++        }
++    }
++}
++
+ /// 凍結の後始末の材料（口の検査が残したもの・入口が口を出た直後に後始末へ渡す）。
+ /// 判断の記録が読めなかったときは 3 つとも無い。
++#[derive(Default)]
+ pub struct Materials {
+     /// 凍結 anchor の列の検査が残した列の結果。
+     pub state: Option<State>,
+@@ -231,17 +245,11 @@ pub(crate) fn not_yet_live_articles(root: &Node) -> Vec<String> {
+ /// `dir` の正本 7 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を材料に載せて返す）。
+ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
+     let mut report = Report::default();
+-    let mut state = None;
+-    let mut adr_records = None;
+-    let mut ids_cur = None;
+-    let mut seals = None;
+-    let mut not_yet_live = Vec::new();
+-    let mut mentions_off = false;
+-    let mut in_loop_min_off = false;
+-    let mut rulings = Vec::new();
++    let mut m = Materials::default();
+     match load_all(dir, &mut report) {
+         Some(src) => {
+-            not_yet_live = not_yet_live_articles(&src.constitution);
++            let canon = src.canon();
++            m.not_yet_live = not_yet_live_articles(&src.constitution);
+             let history = anchor::history_ids(dir);
+             // 外の置き場の字は置き場の名で決まる（便 202・便 203）
+             let name = adr::place_name(dir).ok();
+@@ -249,7 +257,12 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
+             check_constitution(&src.constitution, &range, &mut report);
+             check_rules(&src.rules, &mut report);
+             // 極性一覧の編集時（in-loop）の本数の下限（便 200・ADR-33 決定 (5)・条 P-18.4）
+-            in_loop_min_off = polarity::check_floor(&src.constitution, &src.rules, name.as_deref(), &mut report);
++            m.in_loop_min_off = polarity::check_floor(
++                &src.constitution,
++                &src.rules,
++                name.as_deref(),
++                &mut report,
++            );
+             check_vocabulary(&src.vocabulary, &mut report);
+             check_srs(&src.srs, &mut report);
+             entrance::check_entrance(&src.index, &src.vocabulary, &mut report);
+@@ -258,14 +271,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
+             // つながりを数える網（参照 id・語彙・判断の記録との突き合わせ・凍結 anchor の列・散文の言及）の違反は、
+             // 編集時の口が止めない族に数える（便 198・ADR-33 決定 (2)・事後の床の判定は変えない）
+             let mark = report.mark();
+-            refs::check_refs(
+-                &src.constitution,
+-                &src.rules,
+-                &src.vocabulary,
+-                &src.srs,
+-                &history,
+-                &mut report,
+-            );
++            refs::check_refs(canon, &history, &mut report);
+             vocab::check_vocab(
+                 &src.constitution,
+                 &src.rules,
+@@ -276,19 +282,11 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
+             report.links_from(mark);
+             if let Some(records) = adr::check_adr(dir, &mut report) {
+                 let mark = report.mark();
+-                link::check_link(
+-                    dir,
+-                    &src.constitution,
+-                    &src.rules,
+-                    &src.vocabulary,
+-                    &src.srs,
+-                    &records,
+-                    &mut report,
+-                );
+-                state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
++                link::check_link(dir, canon, &records, &mut report);
++                m.state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
+                 report.links_from(mark);
+                 // 要件・判断・受入基準の id の消失と改番（便 88）
+-                ids_cur = Some(ids::check_ids(
++                m.ids = Some(ids::check_ids(
+                     dir,
+                     &src.srs,
+                     &records.records,
+@@ -296,70 +294,83 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
+                     &mut report,
+                 ));
+                 // 発効した判断の記録の本文の封（便 170・ADR-30 決定 (3)）
+-                seals = Some(seal::check_seals(dir, &records.records, flag, &mut report));
+-                adr_records = Some(records);
+-            }
+-            let notes = note::check_note(
+-                dir,
+-                &src.constitution,
+-                &src.rules,
+-                &src.srs,
+-                adr_records.as_ref(),
+-                &mut report,
+-            );
+-            // 決定の欄の裁定 id の形（便 181・ADR-31 決定 (1)）。索引の欄の決まりは 7 本の外なので、在れば読む
+-            let graph = load_graph(dir, &mut report);
+-            let tree = ruling::Tree {
+-                constitution: &src.constitution,
+-                rules: &src.rules,
+-                srs: &src.srs,
+-                index: &src.index,
+-                ceiling: &src.ceiling,
+-                intake: &src.intake,
+-                graph: graph.as_ref(),
+-                records: adr_records.as_ref().map_or(&[], |a| &a.records),
+-                notes: notes.iter().map(|n| (format!("design-note/{}", n.file), &n.root)).collect(),
+-            };
+-            let sites = ruling::sites(&tree);
+-            check_rulings(&sites, name.as_deref(), &mut report);
+-            if flag == Flag::EmitRulings {
+-                rulings = ruling::emit(dir, &sites);
++                m.seals = Some(seal::check_seals(dir, &records.records, flag, &mut report));
++                m.adr = Some(records);
+             }
+-            // 規則の表の行の裁定の時刻（便 204）。決定の欄と同じ歩き手の出力を数える
+-            check_times(&sites, &mut report);
+-            // 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ数える。行 R-17 が無くて数えなかったら知らせる（便 156）
+-            if let Some(records) = adr_records.as_ref() {
+-                let mark = report.mark();
+-                mentions_off = !mentions::check_mentions(
+-                    dir,
+-                    &[
+-                        ("constitution.yaml", &src.constitution),
+-                        ("rules.yaml", &src.rules),
+-                        ("vocabulary.yaml", &src.vocabulary),
+-                        ("srs.yaml", &src.srs),
+-                        ("index.yaml", &src.index),
+-                        ("intake.yaml", &src.intake),
+-                        ("ceiling.yaml", &src.ceiling),
+-                    ],
+-                    records,
+-                    &mut report,
+-                );
+-                report.links_from(mark);
++            let run = Run { dir, flag, name: name.as_deref() };
++            m.rulings = check_notes_rulings(&run, &src, m.adr.as_ref(), &mut report);
++            if let Some(records) = m.adr.as_ref() {
++                m.mentions_off = check_mentions_off(dir, &src, records, &mut report);
+             }
+         }
+         None => debug_assert!(!report.unknowns.is_empty()),
+     }
+-    let materials = Materials {
+-        state,
+-        adr: adr_records,
+-        ids: ids_cur,
+-        seals,
+-        not_yet_live,
+-        mentions_off,
+-        in_loop_min_off,
+-        rulings,
++    (report, m)
++}
++
++/// 検査 1 回の文脈（置き場・旗・外の置き場の名）。
++#[derive(Clone, Copy)]
++struct Run<'a> {
++    /// 検査する置き場（design-intent）。
++    dir: &'a Path,
++    /// 便 9 の旗。
++    flag: Flag,
++    /// 外の置き場の名（憲法の meta.id・読めなければ無い）。
++    name: Option<&'a str>,
++}
++
++/// 設計ノートの検査と、決定の欄の裁定 id の形・規則の表の行の裁定の時刻。`--emit-rulings` のときは標準出力の行を返す（ほかは空）。
++fn check_notes_rulings(
++    run: &Run<'_>,
++    src: &Sources,
++    adr_records: Option<&adr::Adr>,
++    report: &mut Report,
++) -> Vec<String> {
++    let Run { dir, flag, name } = *run;
++    let mut rulings = Vec::new();
++    let notes = note::check_note(dir, src.canon(), adr_records, report);
++    // 決定の欄の裁定 id の形（便 181・ADR-31 決定 (1)）。索引の欄の決まりは 7 本の外なので、在れば読む
++    let graph = load_graph(dir, report);
++    let tree = ruling::Tree {
++        constitution: &src.constitution,
++        rules: &src.rules,
++        srs: &src.srs,
++        index: &src.index,
++        ceiling: &src.ceiling,
++        intake: &src.intake,
++        graph: graph.as_ref(),
++        records: adr_records.map_or(&[], |a| &a.records),
++        notes: notes.iter().map(|n| (format!("design-note/{}", n.file), &n.root)).collect(),
+     };
+-    (report, materials)
++    let sites = ruling::sites(&tree);
++    check_rulings(&sites, name, report);
++    if flag == Flag::EmitRulings {
++        rulings = ruling::emit(dir, &sites);
++    }
++    // 規則の表の行の裁定の時刻（便 204）。決定の欄と同じ歩き手の出力を数える
++    check_times(&sites, report);
++    rulings
++}
++
++/// 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ呼ぶ。行 R-17 が無くて数えなかったら true（便 156）。
++fn check_mentions_off(dir: &Path, src: &Sources, records: &adr::Adr, report: &mut Report) -> bool {
++    let mark = report.mark();
++    let off = !mentions::check_mentions(
++        dir,
++        &[
++            ("constitution.yaml", &src.constitution),
++            ("rules.yaml", &src.rules),
++            ("vocabulary.yaml", &src.vocabulary),
++            ("srs.yaml", &src.srs),
++            ("index.yaml", &src.index),
++            ("intake.yaml", &src.intake),
++            ("ceiling.yaml", &src.ceiling),
++        ],
++        records,
++        report,
++    );
++    report.links_from(mark);
++    off
+ }
+ 
+ /// 置き場そのものの断り（symlink・dir でない）。床と `--polarity` が同じ字で断る（便 200）。
+@@ -667,38 +678,7 @@ fn place_range(root: &Node, name: Option<&str>, report: &mut Report) -> PlaceRan
+                 list.push(v.to_string());
+             }
+         }
+-        match ce::ENUMS.iter().find(|(k, _)| *k == key.as_str()) {
+-            None => report.pending(format!(
+-                "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある{}",
+-                fr25("（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い・FR25）")
+-            )),
+-            Some((_, built)) => {
+-                let outside: Vec<String> = list
+-                    .iter()
+-                    .filter(|v| !built.contains(&v.as_str()))
+-                    .map(|v| format!("「{v}」"))
+-                    .collect();
+-                if !outside.is_empty() {
+-                    report.pending(format!(
+-                        "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い{}）",
+-                        outside.join("・"),
+-                        fr25("・FR25")
+-                    ));
+-                }
+-                let missing: Vec<String> = built
+-                    .iter()
+-                    .filter(|b| !list.iter().any(|v| v == *b))
+-                    .map(|b| format!("「{b}」"))
+-                    .collect();
+-                if !missing.is_empty() {
+-                    report.pending(format!(
+-                        "{FILE}: schema.enums.{key}: 組み立て時の値域に在る値が無い（{}・値域を置き場ごとに狭める口は無い{}）",
+-                        missing.join("・"),
+-                        fr25("・FR25")
+-                    ));
+-                }
+-            }
+-        }
++        built_range(key, &list, name, report);
+         range.insert(key.clone(), list);
+     }
+     for (key, _) in ce::ENUMS {
+@@ -712,6 +692,44 @@ fn place_range(root: &Node, name: Option<&str>, report: &mut Report) -> PlaceRan
+     range
+ }
+ 
++/// 置き場の値域の鍵 1 つの値の列を、組み立てた版の同じ鍵の値と突き合わせる（広げた鍵・広げた値・外した値は「まだ分からない」）。
++fn built_range(key: &str, list: &[String], name: Option<&str>, report: &mut Report) {
++    let fr25 = |v: &'static str| floor::said(v, name);
++    const FILE: &str = "constitution.yaml";
++    match ce::ENUMS.iter().find(|(k, _)| *k == key) {
++        None => report.pending(format!(
++            "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある{}",
++            fr25("（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い・FR25）")
++        )),
++        Some((_, built)) => {
++            let outside: Vec<String> = list
++                .iter()
++                .filter(|v| !built.contains(&v.as_str()))
++                .map(|v| format!("「{v}」"))
++                .collect();
++            if !outside.is_empty() {
++                report.pending(format!(
++                    "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い{}）",
++                    outside.join("・"),
++                    fr25("・FR25")
++                ));
++            }
++            let missing: Vec<String> = built
++                .iter()
++                .filter(|b| !list.iter().any(|v| v == *b))
++                .map(|b| format!("「{b}」"))
++                .collect();
++            if !missing.is_empty() {
++                report.pending(format!(
++                    "{FILE}: schema.enums.{key}: 組み立て時の値域に在る値が無い（{}・値域を置き場ごとに狭める口は無い{}）",
++                    missing.join("・"),
++                    fr25("・FR25")
++                ));
++            }
++        }
++    }
++}
++
+ /// 表の欄のうち閉じた一覧に無いものを、1 つにつき種別 未知の欄 の違反 1 件にする（便 128・N-3.1・例外の口なし）。
+ /// 表でない holder は黙る（形の崩れは `map_holder` が数える）。
+ fn closed_fields(file: &str, at: &str, row: &Node, allowed: &[&str], report: &mut Report) {
+@@ -772,6 +790,12 @@ fn check_constitution(root: &Node, range: &PlaceRange, report: &mut Report) {
+         &["text", "plain"],
+         report,
+     );
++    check_articles(root, range, report);
++}
++
++/// 憲法の条 1 つずつ（id の形・欄の非空・plain・閉じた欄・mechanism・規範文・値域・極性・id の重複）。
++fn check_articles(root: &Node, range: &PlaceRange, report: &mut Report) {
++    const FILE: &str = "constitution.yaml";
+     let articles = rows(FILE, root, "articles", report);
+     for article in &articles {
+         let id = row_id(article);
+diff --git a/folio2/crates/folio/src/entry.rs b/folio2/crates/folio/src/entry.rs
+index 156b1d27d7c14aacd12b5eeb37173a609e4f7154..62e27c2c6f3042c9fbcd9d6be79daf5fa3df585f 100644
+--- a/folio2/crates/folio/src/entry.rs
++++ b/folio2/crates/folio/src/entry.rs
+@@ -391,15 +391,7 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+             // 面が組めない置き場を合格と言わない（便 187・編集時の口は面の段を撃たない＝ADR-33 決定 (6)）
+             site::check_faces(&dir, &mut report);
+             // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
+-            let after = freeze::after(
+-                &dir,
+-                flag,
+-                materials.state.as_ref(),
+-                materials.adr.as_ref(),
+-                materials.ids.as_ref(),
+-                materials.seals.as_ref(),
+-                &mut report,
+-            );
++            let after = freeze::after(&dir, flag, &materials, &mut report);
+             if let After::Refused(msg) = &after {
+                 say!(err, "folio check: {msg}");
+                 return 1;
+diff --git a/folio2/crates/folio/src/findings.rs b/folio2/crates/folio/src/findings.rs
+index 4c4b7c0e8992c607e2631c91f982e6d7ed451dcd..eeb4c8f93d8f95b6950d18de535761238a2b1aeb 100644
+--- a/folio2/crates/folio/src/findings.rs
++++ b/folio2/crates/folio/src/findings.rs
+@@ -12,6 +12,7 @@
+ //! `<out>/<観点>/refute/<所見の id>/` へ組む（所見 file は触らない・正本は写さず親の要約値 sources.txt で縛る・全部か無しか）。
+ //! `--check` は同じ dir の result.yaml（反証役が書く）を欄の決まりで読み、その refute の値を所見の反証の結果として規則 7〜10 に渡す。
+ //! 天井の印（便 72・`stamp.rs`）は観点の数え `count_viewpoint`・所見 file の読み `read_findings`・束の歩き `walk` を crate の中から呼ぶ。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::BTreeSet;
+ use std::fs;
+@@ -195,7 +196,6 @@ pub(crate) fn count_viewpoint(
+     }
+     let digest = fs::read(vp_dir.join(DIGEST_FILE)).unwrap_or_default();
+     let digest = String::from_utf8_lossy(&digest).into_owned();
+-    let digest8 = digest_head(&digest);
+ 
+     // 2. 束が壊れている（置き場の file から測り直す）
+     match measure(&vp_dir) {
+@@ -215,18 +215,30 @@ pub(crate) fn count_viewpoint(
+             Err(e) => reasons.push(e),
+         }
+     }
++    count_found(&vp_dir, ceiling, vp, &digest, reasons)
++}
++
++/// 観点の所見 file を数える（4.〜6.）。数えられなければここまでの理由で まだ分からない を返し、読めれば 7. 以降へ進む。
++fn count_found(
++    vp_dir: &Path,
++    ceiling: &Ceiling,
++    vp: &Viewpoint,
++    digest: &str,
++    mut reasons: Vec<String>,
++) -> Counted {
++    let digest8 = digest_head(digest);
+ 
+     // 4.〜6. 所見 file（止める の所見は反証役の result.yaml も読む・便 42）
+-    let (sheet, findings, stops) = match read_findings(&vp_dir) {
++    let (sheet, findings, stops) = match read_findings(vp_dir) {
+         Ok(Some(root)) => {
+-            let mut sheet = count_sheet(
+-                &vp_dir,
+-                &root,
+-                &ceiling.rules,
++            let cx = Ctx {
++                vp_dir,
++                rules: &ceiling.rules,
+                 vp,
+-                digest.trim_end_matches('\n'),
+-                true,
+-            );
++                digest: digest.trim_end_matches('\n'),
++                results: true,
++            };
++            let mut sheet = count_sheet(&root, &cx);
+             reasons.append(&mut sheet.reasons);
+             // 残る 止める の数 = 反証が未 + 反証が 退けた でないもの
+             let stops = sheet.unrefuted.len() + sheet.remaining_stops.len();
+@@ -259,6 +271,31 @@ pub(crate) fn count_viewpoint(
+             };
+         }
+     };
++    count_verdict(
++        sheet,
++        Counted {
++            verdict: Verdict::Unknown,
++            reasons,
++            findings,
++            stops,
++            digest: digest8,
++            refutes,
++            waiting: false,
++        },
++    )
++}
++
++/// 止める の反証（7.）と file の verdict・残る所見（8.〜10.）から観点の 3 値を決める。`base` = ここまでの数え（理由・所見の数・
++/// 残る 止める の数・要約値の先頭 8 字・反証の行）。
++fn count_verdict(sheet: Sheet, base: Counted) -> Counted {
++    let Counted {
++        mut reasons,
++        findings,
++        stops,
++        digest: digest8,
++        refutes,
++        ..
++    } = base;
+ 
+     // 7. 止める の反証（理由がこれだけで所見 file の verdict が まだ分からない でなければ反証待ち・便 169）
+     for id in &sheet.unrefuted {
+@@ -415,20 +452,29 @@ struct Sheet {
+     refutes: Vec<Refute>,
+ }
+ 
++/// 所見 file を数える文脈。
++struct Ctx<'a> {
++    /// 観点の束の dir
++    vp_dir: &'a Path,
++    /// 欄の決まり
++    rules: &'a Rules,
++    /// 数える観点
++    vp: &'a Viewpoint,
++    /// 束の要約値（digest.txt の字・末尾の改行を除く）
++    digest: &'a str,
++    /// 止める の所見ごとに反証役の result.yaml も読むか
++    results: bool,
++}
++
+ /// `results` = 止める の所見ごとに反証役の result.yaml も読む（`--check`・便 42 §1 (d)）。`--refute` は所見 file の欄の
+ /// 決まりだけを数える（result.yaml は在るかどうかだけ見る）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+-fn count_sheet(
+-    vp_dir: &Path,
+-    root: &Node,
+-    rules: &Rules,
+-    vp: &Viewpoint,
+-    digest: &str,
+-    results: bool,
+-) -> Sheet {
++fn count_sheet(root: &Node, cx: &Ctx<'_>) -> Sheet {
++    let Ctx {
++        vp_dir,
++        rules,
++        digest,
++        ..
++    } = *cx;
+     let mut sheet = Sheet {
+         reasons: Vec::new(),
+         verdict: String::new(),
+@@ -477,15 +523,7 @@ fn count_sheet(
+ 
+     // findings = 所見の一覧
+     if let Some(findings) = root.get("findings") {
+-        count_findings(
+-            vp_dir,
+-            findings,
+-            rules,
+-            vp,
+-            reads.as_ref(),
+-            results,
+-            &mut sheet,
+-        );
++        count_findings(findings, cx, reads.as_ref(), &mut sheet);
+     }
+     sheet
+ }
+@@ -572,19 +610,13 @@ fn count_read(node: &Node, reads: Option<&BTreeSet<String>>, reasons: &mut Vec<S
+     }
+ }
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+ fn count_findings(
+-    vp_dir: &Path,
+     findings: &Node,
+-    rules: &Rules,
+-    vp: &Viewpoint,
++    cx: &Ctx<'_>,
+     reads: Option<&BTreeSet<String>>,
+-    results: bool,
+     sheet: &mut Sheet,
+ ) {
++    let rules = cx.rules;
+     let Some(items) = findings.as_seq() else {
+         sheet.reasons.push("findings が一覧でない".to_string());
+         return;
+@@ -618,13 +650,40 @@ fn count_findings(
+                 sheet.reasons.push(format!("{at}: 未知の欄「{key}」"));
+             }
+         }
++        let row = Row { item, id, at };
++        row.count_required(cx, reads, &mut sources, sheet);
++        row.count_refute(cx, sheet);
++    }
++}
++
++/// 所見 1 件（行の node・id・名札 `所見 <id>`）。
++struct Row<'a> {
++    item: &'a Node,
++    id: String,
++    at: String,
++}
++
++impl Row<'_> {
++    /// 所見の必須の欄を 1 つずつ数える（place・文で在るか・空でないか・viewpoint・weight・evidence）。`sources` は根拠の探し先を
++    /// 最初に要るときだけ読んで持ち越す。
++    fn count_required(
++        &self,
++        cx: &Ctx<'_>,
++        reads: Option<&BTreeSet<String>>,
++        sources: &mut Option<Vec<Vec<u8>>>,
++        sheet: &mut Sheet,
++    ) {
++        let Ctx {
++            vp_dir, rules, vp, ..
++        } = *cx;
++        let Row { item, at, .. } = self;
+         for key in &rules.finding_required {
+             let Some(node) = item.get(key) else {
+                 sheet.reasons.push(format!("{at}: {key} が無い"));
+                 continue;
+             };
+             if key == "place" {
+-                count_place(&at, node, rules, reads, &mut sheet.reasons);
++                count_place(at, node, rules, reads, &mut sheet.reasons);
+                 continue;
+             }
+             let Some(value) = node.as_str() else {
+@@ -655,6 +714,17 @@ fn count_findings(
+                 _ => {}
+             }
+         }
++    }
++
++    /// 所見の refute の欄と反証役の result.yaml（`results` のとき）を読み、止める の所見を反証の有無で振り分ける。
++    fn count_refute(&self, cx: &Ctx<'_>, sheet: &mut Sheet) {
++        let Ctx {
++            vp_dir,
++            rules,
++            results,
++            ..
++        } = *cx;
++        let Row { item, id, at } = self;
+         // refute は在れば値域のどれか・止める の所見は反証を通す
+         let refute = item.get("refute").map(|node| match node.as_str() {
+             Some(v) if rules.refute_values.iter().any(|w| w == v) => Some(v.to_string()),
+@@ -675,7 +745,7 @@ fn count_findings(
+             // 反証役の result.yaml（便 42 §1 (d)）: 正しく読めればその値を所見の反証の結果にする。所見 file の refute の欄と
+             // 両方在れば同じ値だけ可
+             let result = if results && id != "?" {
+-                read_result(vp_dir, &id, rules, &mut sheet.reasons)
++                read_result(vp_dir, id, rules, &mut sheet.reasons)
+             } else {
+                 None
+             };
+@@ -1004,14 +1074,14 @@ fn plan_refutes(
+     }
+     let parent_digest = fs::read_to_string(vp_dir.join(DIGEST_FILE))
+         .map_err(|e| vec![format!("{DIGEST_FILE}: 読めない: {e}")])?;
+-    let sheet = count_sheet(
++    let cx = Ctx {
+         vp_dir,
+-        &root,
+-        &ceiling.rules,
++        rules: &ceiling.rules,
+         vp,
+-        parent_digest.trim_end_matches('\n'),
+-        false,
+-    );
++        digest: parent_digest.trim_end_matches('\n'),
++        results: false,
++    };
++    let sheet = count_sheet(&root, &cx);
+     if !sheet.reasons.is_empty() {
+         return Err(sheet
+             .reasons
+@@ -1022,6 +1092,11 @@ fn plan_refutes(
+     let reads = fs::read(vp_dir.join("reads.yaml"))
+         .map_err(|e| vec![format!("reads.yaml: 読めない: {e}")])?;
+     let question = ceiling_src::question_text(vp);
++    let parent = Parent {
++        question: &question,
++        reads: &reads,
++        parent_digest: &parent_digest,
++    };
+     let mut planned = Vec::new();
+     for item in root.get("findings").and_then(Node::as_seq).unwrap_or(&[]) {
+         let Some(target) = Target::from(item, &ceiling.rules) else {
+@@ -1037,33 +1112,27 @@ fn plan_refutes(
+         if dir.join(RESULT_FILE).exists() || dir.join(RESULT_FILE).is_symlink() {
+             continue;
+         }
+-        let files = refute_files(
+-            &target,
+-            vp,
+-            &question,
+-            &reads,
+-            &parent_digest,
+-            &ceiling.rules,
+-        );
++        let files = refute_files(&target, vp, &parent, &ceiling.rules);
+         planned.push((dir, files));
+     }
+     Ok(planned)
+ }
+ 
++/// 親の観点の束の字。
++struct Parent<'a> {
++    question: &'a str,
++    reads: &'a [u8],
++    parent_digest: &'a str,
++}
++
+ /// 反証の束の 5 つ + digest.txt（§1 (c)）。`question` = 観点の束の question.yaml（6 行）・`reads` = 観点の束の
+ /// reads.yaml の byte・`parent_digest` = 観点の束の digest.txt の byte（sources.txt）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+-fn refute_files(
+-    t: &Target,
+-    vp: &Viewpoint,
+-    question: &str,
+-    reads: &[u8],
+-    parent_digest: &str,
+-    rules: &Rules,
+-) -> Files {
++fn refute_files(t: &Target, vp: &Viewpoint, parent: &Parent<'_>, rules: &Rules) -> Files {
++    let Parent {
++        question,
++        reads,
++        parent_digest,
++    } = *parent;
+     let mut files = Files::new();
+     let mut finding = format!(
+         "id: {}\nviewpoint: {}\nplace: {{doc: {}, at: {}}}\nweight: {}\nevidence: |\n{}",
+diff --git a/folio2/crates/folio/src/freeze.rs b/folio2/crates/folio/src/freeze.rs
+index e0818b1a186ef6e586a41e0bd5f686c9b87c5ccd..d294e4f8c15d1bba9033cc44ec88a1b653e8267a 100644
+--- a/folio2/crates/folio/src/freeze.rs
++++ b/folio2/crates/folio/src/freeze.rs
+@@ -6,12 +6,14 @@
+ //! 旗・列の結果・旗の後始末の型 3 つと凍結しないときの 1 行は便 111 で `phase.rs` へ降ろした（ADR-15・層 1 読む）。
+ //! 便 121（ADR-16 決定 (2)）: 列の根は憲法の名で列の根の表を引いて照らす（`check_root`）。凍結の木は組む（`build`・`texts`）と
+ //! 書く（`write_chain`）に分け、始まりの凍結 `--freeze-start` が `ids.rs` の組む・書くと合わせて 2 つを同時に書く。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ 
+ use crate::adr::{self, Adr};
+ use crate::anchor;
++use crate::check::Materials;
+ use crate::ids;
+ use crate::lineage;
+ use crate::phase::{After, Flag, State, not_frozen_by};
+@@ -44,19 +46,11 @@ fn ver_key(v: &str) -> Vec<(usize, String)> {
+ 
+ /// 旗の後始末。便 8 までの全検査の後に呼ぶ（`state` は列の結果・読めずに止まったなら None・`ids` は便 88 の id の一覧・
+ /// `seals` は便 170 の判断の記録の封）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+-pub fn after(
+-    dir: &Path,
+-    flag: Flag,
+-    state: Option<&State>,
+-    adr: Option<&Adr>,
+-    ids: Option<&ids::Current>,
+-    seals: Option<&seal::Seals>,
+-    report: &mut Report,
+-) -> After {
++pub fn after(dir: &Path, flag: Flag, materials: &Materials, report: &mut Report) -> After {
++    let state = materials.state.as_ref();
++    let adr = materials.adr.as_ref();
++    let ids = materials.ids.as_ref();
++    let seals = materials.seals.as_ref();
+     match (flag, state, adr) {
+         (Flag::None | Flag::EmitRulings, ..) => After::Nothing,
+         (Flag::EmitAmends, Some(st), _) => After::Emit(emit_lines(st, report)),
+@@ -331,10 +325,12 @@ fn freeze(dir: &Path, st: &State, adr: &Adr, report: &mut Report) -> After {
+     ver_adrs.sort_unstable();
+     if let Some((newest, doc)) = newest_doc {
+         let changed = lineage::verify_pair(
+-            doc,
+-            &st.cur_proj,
+-            &st.scope,
+-            cur_ver,
++            &lineage::Pair {
++                prev_doc: doc,
++                cur_content: &st.cur_proj,
++                cur_scope: &st.scope,
++                ver: cur_ver,
++            },
+             "現行",
+             &st.c,
+             adr,
+@@ -358,6 +354,17 @@ fn freeze(dir: &Path, st: &State, adr: &Adr, report: &mut Report) -> After {
+             );
+         }
+     }
++    freeze_write(dir, st, ver_adrs, newest_doc, report)
++}
++
++/// (c) 凍結の後半。凍結する木を組み、0 違反で測れないも無いときだけ anchor と索引を書く。
++fn freeze_write(
++    dir: &Path,
++    st: &State,
++    ver_adrs: Vec<&str>,
++    newest_doc: Option<(&String, &Value)>,
++    report: &mut Report,
++) -> After {
+     // (4) 凍結する木
+     let Some(built) = build(dir, st, &ver_adrs, newest_doc, report) else {
+         return After::Freeze(not_frozen(report));
+@@ -398,6 +405,9 @@ fn freeze(dir: &Path, st: &State, adr: &Adr, report: &mut Report) -> After {
+     ))
+ }
+ 
++/// 始まりの凍結の旗の字（`freeze_start` とその後半 `freeze_start_write` が断りの字に使う）。
++const FLAG: &str = "--freeze-start";
++
+ /// 始まりの凍結 `--freeze-start`（便 121・ADR-16 決定 (2)(イ)・FR24）。憲法の列と id の一覧がどちらも 0 本の置き場で、
+ /// 最初の版の anchor と索引と id の一覧を既存の 2 つの旗と同じ関数で組み、断りを全部見てから同時に書く。
+ /// どちらか 1 本でも在れば何も書かずに断る（終了 1）。数えから外すのは 2 つの不在の「まだ分からない」だけ
+@@ -408,7 +418,6 @@ fn freeze_start(
+     ids: Option<&ids::Current>,
+     report: &mut Report,
+ ) -> After {
+-    const FLAG: &str = "--freeze-start";
+     let chain = state.is_some_and(|st| st.chain_exists);
+     let listed = ids.is_some_and(|cur| cur.exists);
+     if chain || listed {
+@@ -436,6 +445,17 @@ fn freeze_start(
+     if report.verdict() != Verdict::Pass {
+         return After::Freeze(not_frozen_by(report, FLAG));
+     }
++    freeze_start_write(st, cur, built, (ids_name, ids_path), report)
++}
++
++/// 始まりの凍結の後半。3 つの path がどれも無いことを確かめ、anchor と索引と id の一覧を同時に書く。
++fn freeze_start_write(
++    st: &State,
++    cur: &ids::Current,
++    built: Built,
++    (ids_name, ids_path): (String, PathBuf),
++    report: &mut Report,
++) -> After {
+     // 書く前に 3 つの path がどれも無いことを確かめる（上書きしない・N-1.1）
+     let index_file = floor(&["anchor", "index_file"]);
+     let (name, path) = target(st);
+diff --git a/folio2/crates/folio/src/graph.rs b/folio2/crates/folio/src/graph.rs
+index a14ef8812e1ac23d8972d67117ceeba7ca06b706..17ea33eb7d07efb6f203636f2e98a0b3a37009db 100644
+--- a/folio2/crates/folio/src/graph.rs
++++ b/folio2/crates/folio/src/graph.rs
+@@ -9,6 +9,7 @@
+ //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
+ //! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
+ //! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+ use std::fs;
+@@ -760,6 +761,22 @@ struct Scan {
+     lines: BTreeMap<String, usize>,
+ }
+ 
++/// 節点 1 つの切り出しの指定。
++struct Cut<'a> {
++    /// 辺の欄の字下げ
++    depth: usize,
++    /// 辺の欄の一覧
++    fields: &'a [&'a str],
++    /// 節点の id
++    id: &'a str,
++}
++
++impl<'a> Cut<'a> {
++    fn new(depth: usize, fields: &'a [&'a str], id: &'a str) -> Self {
++        Cut { depth, fields, id }
++    }
++}
++
+ impl Scan {
+     /// 正本 1 file を切り分けて節点を足す。返りは残差（本文にも辺の欄にも属さない行を file の順に連結した字）。
+     fn file(&mut self, name: &str, text: &str) -> Result<String, String> {
+@@ -773,7 +790,7 @@ impl Scan {
+                 .filter(|(_, id)| !id.is_empty())
+                 .ok_or_else(|| format!("{name} に id の行が無い"))?;
+             let all: Vec<usize> = (0..lines.len()).collect();
+-            self.cut(&lines, &mut owned, all, 0, EDGE_FIELDS[3].1, id)?;
++            self.cut(&lines, &mut owned, all, Cut::new(0, EDGE_FIELDS[3].1, id))?;
+             self.lines.insert(id.to_string(), at + 1);
+         } else if name.starts_with(NOTE_DIR) {
+             self.note(&lines, &mut owned)?;
+@@ -797,7 +814,12 @@ impl Scan {
+                     match sub.filter(|_| name == "constitution.yaml") {
+                         Some((sub, sub_flow)) => {
+                             let sub_end = block_end(&lines, k, 6, sub_flow);
+-                            self.cut(&lines, &mut owned, (k..sub_end).collect(), 8, fields, sub)?;
++                            self.cut(
++                                &lines,
++                                &mut owned,
++                                (k..sub_end).collect(),
++                                Cut::new(8, fields, sub),
++                            )?;
+                             self.lines.insert(sub.to_string(), k + 1);
+                             k = sub_end;
+                         }
+@@ -807,7 +829,7 @@ impl Scan {
+                         }
+                     }
+                 }
+-                self.cut(&lines, &mut owned, kept, 4, fields, id)?;
++                self.cut(&lines, &mut owned, kept, Cut::new(4, fields, id))?;
+                 self.lines.insert(id.to_string(), i + 1);
+                 i = end;
+             }
+@@ -856,7 +878,12 @@ impl Scan {
+                     };
+                     if let Some((rid, at)) = found {
+                         let id = format!("{meta}#{rid}");
+-                        self.cut(lines, owned, (k..row_end).collect(), 8, EDGE_FIELDS[4].1, &id)?;
++                        self.cut(
++                            lines,
++                            owned,
++                            (k..row_end).collect(),
++                            Cut::new(8, EDGE_FIELDS[4].1, &id),
++                        )?;
+                         self.lines.insert(id, at + 1);
+                     }
+                     k = row_end;
+@@ -869,13 +896,14 @@ impl Scan {
+ 
+     /// 節点 1 つ: 行の番号の列 `idx`（入れ子を除いた block）から辺の欄（字下げ `depth` の行・より深い続きの行・
+     /// 流れの形の対）と末尾の空行を落とし、残りを連結した byte の sha256 の先頭 8 字を要約値にする。
+-    #[expect(
+-        clippy::too_many_arguments,
+-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-    )]
+     fn cut(
+-        &mut self, lines: &[&str], owned: &mut [bool], mut idx: Vec<usize>, depth: usize, fields: &[&str], id: &str,
++        &mut self,
++        lines: &[&str],
++        owned: &mut [bool],
++        mut idx: Vec<usize>,
++        spec: Cut<'_>,
+     ) -> Result<(), String> {
++        let Cut { depth, fields, id } = spec;
+         while idx.pop_if(|n| lines.get(*n).is_some_and(|l| is_blank(l))).is_some() {}
+         let whole: Vec<&str> = fields.iter().copied().filter(|f| !f.contains('.')).collect();
+         let mut body: Vec<(usize, String)> = Vec::new();
+diff --git a/folio2/crates/folio/src/lineage.rs b/folio2/crates/folio/src/lineage.rs
+index 669ced5fcf0b0608960938d9ad5120b5ac1891a9..dd290b2c12b382b1a2a91131f5e3bc312ae7638a 100644
+--- a/folio2/crates/folio/src/lineage.rs
++++ b/folio2/crates/folio/src/lineage.rs
+@@ -2,6 +2,7 @@
+ //! day-1 の床 `scripts/check_draft.py` の diff_targets / structural_diff / verify_pair を同じ式で写す:
+ //! 隣り合う anchor の content を欄単位で比べ、その版を名指す発効した判断の amends と 1 対 1 に消し込む。
+ //! 値は型付きの木（`yaml::Value`）で読み、欄の値の表現は便 7 の正規化（`yaml::canonical`）の字面。正規表現は使わない。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+@@ -478,22 +479,36 @@ fn structural_diff(
+     Ok((changed, lost))
+ }
+ 
++/// 列の区間の名札（前の anchor の版・今の写しの名・消し込む版）。
++struct Span<'a> {
++    pv: &'a str,
++    label: &'a str,
++    ver: &'a str,
++}
++
++/// 列の区間 1 つの比べる 2 つの版（前の anchor の文書・今の写しの content と scope・消し込む版）。
++pub(crate) struct Pair<'a> {
++    pub(crate) prev_doc: &'a Value,
++    pub(crate) cur_content: &'a Value,
++    pub(crate) cur_scope: &'a [String],
++    pub(crate) ver: &'a str,
++}
++
+ /// 列の区間 1 つ（前の anchor → 版 `ver` の写し）の差分を、その版を名指す発効した判断の amends と 1:1 に消し込む。
+ /// 余りも不足も落とす。`c` は現行の憲法（amended_by を引く）。比べられたら差分を返す（便 9 の凍結が使う）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数は規則の行 R-4 の 5 以下を越え、too_many_arguments を workspace の lint の表に足す後の行が直す"
+-)]
+ pub(crate) fn verify_pair(
+-    prev_doc: &Value,
+-    cur_content: &Value,
+-    cur_scope: &[String],
+-    ver: &str,
++    pair: &Pair<'_>,
+     label: &str,
+     c: &Value,
+     adr: &Adr,
+     report: &mut Report,
+ ) -> Option<Changed> {
++    let Pair {
++        prev_doc,
++        cur_content,
++        cur_scope,
++        ver,
++    } = *pair;
+     let pv = prev_doc
+         .get("version")
+         .map_or_else(|| "None".to_string(), Value::py_str);
+@@ -526,6 +541,25 @@ pub(crate) fn verify_pair(
+             recorded.insert(key, (aid.as_str(), e));
+         }
+     }
++    let span = Span {
++        pv: &pv,
++        label,
++        ver,
++    };
++    settle(&changed, &lost, recorded, &span, report);
++    check_amended_by(&changed, c, &ver_adrs, &span, report);
++    Some(changed)
++}
++
++/// 区間の差分と、版 `ver` を名指す amends の 1:1 の消し込み（記録の無い差分も差分の無い記録も落とす）。
++fn settle(
++    changed: &Changed,
++    lost: &BTreeSet<String>,
++    mut recorded: BTreeMap<(String, String), (&str, &Node)>,
++    span: &Span<'_>,
++    report: &mut Report,
++) {
++    let Span { pv, label, ver } = *span;
+     for (t, ch) in changed.iter().filter(|(t, _)| !lost.contains(*t)) {
+         for (k, (p, cv)) in ch {
+             match recorded.remove(&(t.clone(), k.clone())) {
+@@ -567,6 +601,17 @@ pub(crate) fn verify_pair(
+             );
+         }
+     }
++}
++
++/// 変わった条が、その版の判断の記録を指す amended_by を持つか。
++fn check_amended_by(
++    changed: &Changed,
++    c: &Value,
++    ver_adrs: &[&(String, Node)],
++    span: &Span<'_>,
++    report: &mut Report,
++) {
++    let Span { pv, label, ver } = *span;
+     let mut art_by_id: BTreeMap<String, &Value> = BTreeMap::new();
+     for a in anchor::value_rows(Some(c), "articles") {
+         art_by_id.insert(py_id(a), a);
+@@ -596,7 +641,6 @@ pub(crate) fn verify_pair(
+             );
+         }
+     }
+-    Some(changed)
+ }
+ 
+ fn fail_report(e: Fail, pv: &str, label: &str, report: &mut Report) {
+@@ -667,10 +711,12 @@ mod tests {
+         let mut report = Report::default();
+         let cur = typed(cur);
+         verify_pair(
+-            &typed(PREV),
+-            &cur,
+-            &scope(),
+-            "v1.1",
++            &Pair {
++                prev_doc: &typed(PREV),
++                cur_content: &cur,
++                cur_scope: &scope(),
++                ver: "v1.1",
++            },
+             "anchor v1.1",
+             &typed(constitution),
+             &adr_with(amends),
+diff --git a/folio2/crates/folio/src/link.rs b/folio2/crates/folio/src/link.rs
+index 57180a66af998ed1b57d5944cafb9d4b15d79cf6..0f9751aa8427e927baa9e7b8ab7bc590199617fb 100644
+--- a/folio2/crates/folio/src/link.rs
++++ b/folio2/crates/folio/src/link.rs
+@@ -5,6 +5,7 @@
+ //! 凍結 anchor の列そのもの（digest の検算・索引・版管理との照合・現行の写しとの一致）は便 7。
+ //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs`）で読み、値は持ち直さない。正規表現は使わない。
+ //! 改訂来歴の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数える。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::HashSet;
+ use std::fs;
+@@ -12,7 +13,7 @@ use std::path::Path;
+ 
+ use crate::adr::{self, Adr};
+ use crate::floor_adr;
+-use crate::refs;
++use crate::refs::{self, Canon};
+ use crate::verdict::Report;
+ use crate::vocab;
+ use crate::yaml::{self, Node};
+@@ -22,19 +23,8 @@ const ANCHOR_PREFIX: &str = "constitution-";
+ const ANCHOR_SUFFIX: &str = ".yaml";
+ 
+ /// (a)〜(g) を掛ける。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+-pub fn check_link(
+-    dir: &Path,
+-    constitution: &Node,
+-    rules: &Node,
+-    vocabulary: &Node,
+-    srs: &Node,
+-    adr: &Adr,
+-    report: &mut Report,
+-) {
++pub fn check_link(dir: &Path, canon: Canon<'_>, adr: &Adr, report: &mut Report) {
++    let Canon { constitution, rules, vocabulary, srs } = canon;
+     let records = &adr.records;
+     let article_ids: Vec<String> = rows(constitution, "articles")
+         .map(|a| py_str(a.get("id")))
+@@ -47,7 +37,7 @@ pub fn check_link(
+ 
+     let history = history(dir);
+     let known = known_ids(constitution, rules, srs, &history.ids);
+-    references(constitution, rules, vocabulary, srs, adr, &known, report);
++    references(canon, adr, &known, report);
+     amends_targets(records, &article_ids, &scope, &history, report);
+     body_words(vocabulary, adr, report);
+     amended_by(constitution, records, report);
+@@ -314,19 +304,8 @@ pub(crate) fn adr_end(chars: &[char], i: usize) -> Option<usize> {
+ 
+ /// (d) 判断の記録の id の参照（正本 4 file は A-2・判断の記録と欄の決まりの plain は adr）と、
+ /// 判断の記録の中の内部 3 空間の id の解決（adr）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+-fn references(
+-    constitution: &Node,
+-    rules: &Node,
+-    vocabulary: &Node,
+-    srs: &Node,
+-    adr: &Adr,
+-    known: &HashSet<String>,
+-    report: &mut Report,
+-) {
++fn references(canon: Canon<'_>, adr: &Adr, known: &HashSet<String>, report: &mut Report) {
++    let Canon { constitution, rules, vocabulary, srs } = canon;
+     let adr_ids = adr_ids(adr);
+     let sources: [(&str, Vec<(String, &Node)>); 4] = [
+         ("constitution.yaml", population_constitution(constitution)),
+@@ -514,7 +493,6 @@ fn is_effective(d: &Node) -> bool {
+ 
+ /// (g) 憲法の各条の amended_by と判断の記録の amends の双方向。
+ fn amended_by(constitution: &Node, records: &[(String, Node)], report: &mut Report) {
+-    let find = |id: &str| records.iter().find(|(k, _)| k == id).map(|(_, d)| d);
+     let articles: Vec<&Node> = rows(constitution, "articles").collect();
+     for a in &articles {
+         let id = py_str(a.get("id"));
+@@ -527,72 +505,7 @@ fn amended_by(constitution: &Node, records: &[(String, Node)], report: &mut Repo
+             }
+         };
+         for am in entries {
+-            if !adr::check_keys(
+-                "A-2",
+-                &format!("{id}.amended_by"),
+-                am,
+-                &floor_adr::AMENDED_BY_ENTRY,
+-                report,
+-            ) {
+-                continue;
+-            }
+-            for k in ["approved_by", "ruling", "previous_text", "rationale"] {
+-                if !adr::non_empty(am.get(k)) {
+-                    report.violation("N-4", format!("{id}: amended_by.{k} が空"));
+-                }
+-            }
+-            adr::check_date(
+-                "N-4",
+-                &format!("{id}.amended_by.date"),
+-                am.get("date"),
+-                report,
+-            );
+-            let adr_id = py_str(am.get("adr"));
+-            let Some(r) = find(&adr_id) else {
+-                report.violation(
+-                    "N-4",
+-                    format!("{id}: amended_by.adr {adr_id} の判断の記録が実在しない"),
+-                );
+-                continue;
+-            };
+-            if !is_effective(r) {
+-                report.violation(
+-                    "N-4",
+-                    format!(
+-                        "{id}: amended_by.adr {adr_id} が発効していない（status {}・承認欄 {}）",
+-                        adr::show(r.get("status")),
+-                        if matches!(r.get("approval"), Some(Node::Map(_))) {
+-                            "有"
+-                        } else {
+-                            "無"
+-                        }
+-                    ),
+-                );
+-                continue;
+-            }
+-            let who = r.get("approval").and_then(|ap| adr::present(ap, "who"));
+-            if adr::present(am, "approved_by") != who {
+-                report.violation(
+-                    "N-4",
+-                    format!(
+-                        "{id}: amended_by.approved_by「{}」が {adr_id} の承認者「{}」と違う",
+-                        adr::show(am.get("approved_by")),
+-                        adr::show(who)
+-                    ),
+-                );
+-            }
+-            let previous = py_str(am.get("previous_text"));
+-            let matched = amends_list(r)
+-                .filter(|e| adr::present(e, "target") == adr::present(a, "id"))
+-                .any(|e| py_str(e.get("previous_text")) == previous);
+-            if !matched {
+-                report.violation(
+-                    "A-2",
+-                    format!(
+-                        "{id}: amended_by.previous_text が {adr_id} の amends（対象 {id}）のどれとも一致しない"
+-                    ),
+-                );
+-            }
++            amendment(&id, a, am, records, report);
+         }
+     }
+ 
+@@ -632,6 +545,83 @@ fn amended_by(constitution: &Node, records: &[(String, Node)], report: &mut Repo
+     }
+ }
+ 
++/// 条 1 つの amended_by の 1 件（欄の形・日付・判断の記録の実在と発効・承認者・previous_text が amends に在るか）。
++fn amendment(id: &str, a: &Node, am: &Node, records: &[(String, Node)], report: &mut Report) {
++    let find = |id: &str| records.iter().find(|(k, _)| k == id).map(|(_, d)| d);
++    if !adr::check_keys(
++        "A-2",
++        &format!("{id}.amended_by"),
++        am,
++        &floor_adr::AMENDED_BY_ENTRY,
++        report,
++    ) {
++        return;
++    }
++    for k in ["approved_by", "ruling", "previous_text", "rationale"] {
++        if !adr::non_empty(am.get(k)) {
++            report.violation("N-4", format!("{id}: amended_by.{k} が空"));
++        }
++    }
++    adr::check_date(
++        "N-4",
++        &format!("{id}.amended_by.date"),
++        am.get("date"),
++        report,
++    );
++    let adr_id = py_str(am.get("adr"));
++    let Some(r) = find(&adr_id) else {
++        report.violation(
++            "N-4",
++            format!("{id}: amended_by.adr {adr_id} の判断の記録が実在しない"),
++        );
++        return;
++    };
++    amendment_target(id, a, am, r, report);
++}
++
++/// amended_by の 1 件を、先の判断の記録 `r` と突き合わせる（発効・承認者・previous_text が amends に在るか）。
++fn amendment_target(id: &str, a: &Node, am: &Node, r: &Node, report: &mut Report) {
++    let adr_id = py_str(am.get("adr"));
++    if !is_effective(r) {
++        report.violation(
++            "N-4",
++            format!(
++                "{id}: amended_by.adr {adr_id} が発効していない（status {}・承認欄 {}）",
++                adr::show(r.get("status")),
++                if matches!(r.get("approval"), Some(Node::Map(_))) {
++                    "有"
++                } else {
++                    "無"
++                }
++            ),
++        );
++        return;
++    }
++    let who = r.get("approval").and_then(|ap| adr::present(ap, "who"));
++    if adr::present(am, "approved_by") != who {
++        report.violation(
++            "N-4",
++            format!(
++                "{id}: amended_by.approved_by「{}」が {adr_id} の承認者「{}」と違う",
++                adr::show(am.get("approved_by")),
++                adr::show(who)
++            ),
++        );
++    }
++    let previous = py_str(am.get("previous_text"));
++    let matched = amends_list(r)
++        .filter(|e| adr::present(e, "target") == adr::present(a, "id"))
++        .any(|e| py_str(e.get("previous_text")) == previous);
++    if !matched {
++        report.violation(
++            "A-2",
++            format!(
++                "{id}: amended_by.previous_text が {adr_id} の amends（対象 {id}）のどれとも一致しない"
++            ),
++        );
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/folio2/crates/folio/src/mentions.rs b/folio2/crates/folio/src/mentions.rs
+index 78f3b98a163469044bef1244dc8bedb42f1445c7..f94572d12fe9ebb6830525a02210a7d04b6df04c 100644
+--- a/folio2/crates/folio/src/mentions.rs
++++ b/folio2/crates/folio/src/mentions.rs
+@@ -7,6 +7,7 @@
+ //! 歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ数えずに判定の外の 1 行 `OFF` を出させ（便 156・FR5）、
+ //! 値が 0 件 でなければ「まだ分からない」（P-4.2）。
+ //! id を拾う口は refs.rs の `scan_ids` と link.rs の `scan_adr_ids`（正規表現は使わない）。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{HashMap, HashSet};
+ use std::fs;
+@@ -223,22 +224,31 @@ struct Walk<'a> {
+     prose: Vec<(String, String, &'a str)>,
+ }
+ 
++/// 表の欄 1 つ（鍵と値）。
++struct Field<'a> {
++    key: &'a str,
++    value: &'a Node,
++}
++
+ impl<'a> Walk<'a> {
+     fn file(&mut self, file: &str, root: &'a Node, index: &HashMap<String, Kind>) {
+         // 最上位そのものが id を持つ行になるのは判断の記録
+         let row = row_of(root, index);
+         for (key, value) in root.as_map().unwrap_or_default() {
+             if !TOP_SKIPPED.contains(&key.as_str()) {
+-                self.entry(file, key, value, row, index);
++                self.entry(file, Field { key, value }, row, index);
+             }
+         }
+     }
+ 
+-    #[expect(
+-        clippy::too_many_arguments,
+-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-    )]
+-    fn entry(&mut self, file: &str, key: &str, value: &'a Node, row: Option<&'a str>, index: &HashMap<String, Kind>) {
++    fn entry(
++        &mut self,
++        file: &str,
++        field: Field<'a>,
++        row: Option<&'a str>,
++        index: &HashMap<String, Kind>,
++    ) {
++        let Field { key, value } = field;
+         if PROVENANCE.contains(&key) {
+             return;
+         }
+@@ -267,7 +277,7 @@ impl<'a> Walk<'a> {
+             Node::Map(entries) => {
+                 let row = row_of(node, index).or(row);
+                 for (key, value) in entries {
+-                    self.entry(file, key, value, row, index);
++                    self.entry(file, Field { key, value }, row, index);
+                 }
+             }
+         }
+diff --git a/folio2/crates/folio/src/note.rs b/folio2/crates/folio/src/note.rs
+index 0b4bcbedc444fa71fbc295b430b9f3faba146a15..8b61f54cbdd5279280751a01e37aaceea779af75 100644
+--- a/folio2/crates/folio/src/note.rs
++++ b/folio2/crates/folio/src/note.rs
+@@ -13,6 +13,7 @@
+ //! 承認欄の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数え、`check_note` は読めた設計ノートを返す。
+ //! 計画の設計ノートの節の型 3 つ（行の索引・計画だけの行・判断の表）の行の形は便 183 からここが数え、置き場の決まりと計画の床は
+ //! `plan.rs` の `check_plan` が数える（判断の記録 ADR-31 決定 (2)・要件書 FR27）。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::HashSet;
+ use std::fs;
+@@ -36,7 +37,7 @@ use crate::gitcheck;
+ use crate::link;
+ use crate::plan;
+ use crate::prose;
+-use crate::refs;
++use crate::refs::{self, Canon};
+ use crate::rules;
+ use crate::verdict::Report;
+ use crate::yaml::{self, Node};
+@@ -68,18 +69,13 @@ pub(crate) struct Field {
+ 
+ /// (a) `<dir>/design-note/` の欄の決まりの写しと設計ノートを検査し、読めた設計ノートを返す（決定の欄の床が承認欄を読む・便 181）。
+ /// dir が無い = 設計ノート 0 本（違反でも「まだ分からない」でもない）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+ pub fn check_note(
+     dir: &Path,
+-    constitution: &Node,
+-    rules: &Node,
+-    srs: &Node,
++    canon: Canon<'_>,
+     adr: Option<&Adr>,
+     report: &mut Report,
+ ) -> Vec<NoteDoc> {
++    let Canon { constitution, rules, srs, .. } = canon;
+     let nd = dir.join(DIR);
+     if !nd.exists() {
+         // 名札の行が在れば計画のノートが無い＝まだ分からない（設計ノートの置き場が無くても黙らない・便 183）
+@@ -120,16 +116,15 @@ pub fn check_note(
+         requirements: requirement_ids(srs, SUCCESSOR_SECTIONS),
+         adrs: adr.map(link::adr_ids),
+     };
++    let ctx = Ctx {
++        targets: &targets,
++        base: &known,
++        requirements: &requirements,
++        external: external.as_deref(),
++        gate: gate.as_ref(),
++    };
+     for note in &notes {
+-        check_one(
+-            note,
+-            &targets,
+-            &known,
+-            &requirements,
+-            external.as_deref(),
+-            gate.as_ref(),
+-            report,
+-        );
++        check_one(note, ctx, report);
+         let len = |k| note.root.get(k).and_then(Node::as_seq).map_or(0, <[Node]>::len);
+         let file = format!("{DIR}/{}", note.file);
+         let count = chapters(len("sections"), len("figures"));
+@@ -399,8 +394,13 @@ pub(crate) fn load_external(dir: &Path, report: &mut Report) -> Option<Vec<Field
+     if rows.is_empty() {
+         return unreadable(format!("{head} の行が無い"));
+     }
++    external_fields(&rows, &head).map_or_else(unreadable, Some)
++}
++
++/// 器の導出 file の行（名と値の対の列）を欄にする。欄の欠け・知らない need と shape は理由の字を Err で返す。
++fn external_fields(rows: &[Vec<(String, String)>], head: &str) -> Result<Vec<Field>, String> {
+     let mut fields = Vec::with_capacity(rows.len());
+-    for row in &rows {
++    for row in rows {
+         let value = |key: &str| {
+             row.iter()
+                 .find(|(k, _)| k == key)
+@@ -409,20 +409,20 @@ pub(crate) fn load_external(dir: &Path, report: &mut Report) -> Option<Vec<Field
+         };
+         let (Some(name), Some(need), Some(shape)) = (value("name"), value("need"), value("shape"))
+         else {
+-            return unreadable(format!(
++            return Err(format!(
+                 "{head} の行に {} が揃わない",
+                 EXTERNAL_ROW_FIELDS.join("・")
+             ));
+         };
+         if !EXTERNAL_NEED.contains(&need.as_str()) {
+-            return unreadable(format!("欄「{name}」の need「{need}」を知らない"));
++            return Err(format!("欄「{name}」の need「{need}」を知らない"));
+         }
+         if !EXTERNAL_SHAPE.contains(&shape.as_str()) {
+-            return unreadable(format!("欄「{name}」の shape「{shape}」を知らない"));
++            return Err(format!("欄「{name}」の shape「{shape}」を知らない"));
+         }
+         fields.push(Field { name, need, shape });
+     }
+-    Some(fields)
++    Ok(fields)
+ }
+ 
+ /// `名 = "値"` の行（引用符で囲んだ値だけ・正規表現は使わない）。
+@@ -507,21 +507,45 @@ struct Targets<'a> {
+     adrs: Option<HashSet<&'a str>>,
+ }
+ 
++/// 置き場の設計ノート全部の検査が共有して読む母集団（前と後継の先・参照 id・要件書の id・器の導出 file・散文の門）。
++#[derive(Clone, Copy)]
++struct Ctx<'a> {
++    /// 前と後継の先の母集団。
++    targets: &'a Targets<'a>,
++    /// 参照 id の母集団（文書ごとの契約表の行 id を足す前）。
++    base: &'a HashSet<String>,
++    /// 要件書の要件と非機能要件の id。
++    requirements: &'a HashSet<String>,
++    /// 器の導出 file の欄（読めなかった・契約表が無いときは None）。
++    external: Option<&'a [Field]>,
++    /// 散文の門の一覧（rules 行 R-16 が読めなかったときは None）。
++    gate: Option<&'a prose::Gate>,
++}
++
++/// 設計ノート 1 本の中で節の検査が読む範囲（file 名・契約表の行 id を足した参照 id の母集団・prose の節の番号）。
++#[derive(Clone, Copy)]
++struct Scope<'a> {
++    /// 置き場からの相対の file 名（違反の字の頭）。
++    file: &'a str,
++    /// 参照 id の母集団（この文書の契約表の行 id を足した後）。
++    known: &'a HashSet<String>,
++    /// prose の節の番号（契約表の行の section の解決先）。
++    prose_ns: &'a HashSet<&'a str>,
++}
++
++/// 違反の字の頭になる場所（file 名と、file の中の位置）。
++#[derive(Clone, Copy)]
++struct Place<'a> {
++    /// 置き場からの相対の file 名。
++    file: &'a str,
++    /// file の中の位置（節・行・欄）。
++    at: &'a str,
++}
++
+ // ── (c) 設計ノート 1 本 ──
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+-fn check_one(
+-    note: &NoteDoc,
+-    targets: &Targets<'_>,
+-    base: &HashSet<String>,
+-    requirements: &HashSet<String>,
+-    external: Option<&[Field]>,
+-    gate: Option<&prose::Gate>,
+-    report: &mut Report,
+-) {
++fn check_one(note: &NoteDoc, ctx: Ctx<'_>, report: &mut Report) {
++    let Ctx { targets, base, .. } = ctx;
+     let file = format!("{DIR}/{}", note.file);
+     let root = &note.root;
+ 
+@@ -564,14 +588,10 @@ fn check_one(
+     let mut previous: Option<u64> = None;
+     for section in &sections {
+         check_section(
+-            &file,
++            Scope { file: &file, known: &known, prose_ns: &prose_ns },
++            ctx,
+             section,
+             &mut previous,
+-            &known,
+-            requirements,
+-            &prose_ns,
+-            external,
+-            gate,
+             report,
+         );
+     }
+@@ -631,6 +651,18 @@ fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Re
+         report.violation(KIND, format!("{file}: meta.status「{v}」が一覧に無い"));
+     }
+ 
++    check_approval(file, meta, status, report);
++    check_successors(file, note, meta, targets, report);
++    if status == Some(STATUS_RETIRED) && field(meta, "superseded_by").is_none() {
++        report.violation(
++            KIND,
++            format!("{file}: meta: {STATUS_RETIRED} なのに superseded_by（後継）が無い（P-7.2）"),
++        );
++    }
++}
++
++/// meta の承認欄（発効の状態なら要る・見本なら持たない・各行の欄の非空と値域と形）。
++fn check_approval(file: &str, meta: &Node, status: Option<&str>, report: &mut Report) {
+     let approval = row_list(file, "meta の approval", meta, "approval", report);
+     let effective = status.is_some_and(|v| EFFECTIVE_STATUS.contains(&v));
+     if effective && approval.is_empty() {
+@@ -682,7 +714,16 @@ fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Re
+             );
+         }
+     }
++}
+ 
++/// meta の supersedes と superseded_by（先の実在と自分自身を指す字）。
++fn check_successors(
++    file: &str,
++    note: &NoteDoc,
++    meta: &Node,
++    targets: &Targets<'_>,
++    report: &mut Report,
++) {
+     // 別のノートの不在はつながり・自分自身を指す字は 1 つの file の形で止める（便 199）。後継は要件と判断の記録も指せ、
+     // 先の実在だけを数える（先の状態は数えない・便 209・ADR-35 決定 (3)）
+     for key in ["supersedes", "superseded_by"] {
+@@ -706,30 +747,17 @@ fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Re
+             }
+         }
+     }
+-    if status == Some(STATUS_RETIRED) && field(meta, "superseded_by").is_none() {
+-        report.violation(
+-            KIND,
+-            format!("{file}: meta: {STATUS_RETIRED} なのに superseded_by（後継）が無い（P-7.2）"),
+-        );
+-    }
+ }
+ 
+ /// 節 1 つ（番号・型・型ごとの行）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数は規則の行 R-4 の 5 以下を越え、too_many_arguments を workspace の lint の表に足す後の行が直す"
+-)]
+ fn check_section(
+-    file: &str,
++    scope: Scope<'_>,
++    ctx: Ctx<'_>,
+     section: &Node,
+     previous: &mut Option<u64>,
+-    known: &HashSet<String>,
+-    requirements: &HashSet<String>,
+-    prose_ns: &HashSet<&str>,
+-    external: Option<&[Field]>,
+-    gate: Option<&prose::Gate>,
+     report: &mut Report,
+ ) {
++    let Scope { file, .. } = scope;
+     let shown = section.get("n").and_then(Node::as_str).unwrap_or("?");
+     let at = format!("§{shown}");
+     non_empty(file, &at, section, SECTION.required, report);
+@@ -762,6 +790,21 @@ fn check_section(
+         report.violation(KIND, format!("{file}: {at}: 節の型「{ty}」が一覧に無い"));
+         return;
+     }
++    check_section_body(scope, ctx, section, ty, report);
++}
++
++/// 節 1 つの型ごとの欄の有無・散文の門・行の検査（節の型が一覧に在るときだけ）。
++fn check_section_body(
++    scope: Scope<'_>,
++    ctx: Ctx<'_>,
++    section: &Node,
++    ty: &str,
++    report: &mut Report,
++) {
++    let Scope { file, known, prose_ns } = scope;
++    let Ctx { gate, .. } = ctx;
++    let shown = section.get("n").and_then(Node::as_str).unwrap_or("?");
++    let at = format!("§{shown}");
+     for key in if ty == PROSE { NEEDS_BODY } else { NEEDS_ROWS } {
+         if section.get(key).is_none() {
+             report.violation(
+@@ -801,9 +844,9 @@ fn check_section(
+ 
+     let rows = row_list(file, &format!("{at} の rows"), section, "rows", report);
+     if ty == CONTRACT_TABLE {
+-        check_contract_rows(file, &at, &rows, requirements, prose_ns, external, report);
++        check_contract_rows(Place { file, at: &at }, &rows, ctx, prose_ns, report);
+     } else {
+-        check_table_rows(file, &at, ty, &rows, known, report);
++        check_table_rows(Place { file, at: &at }, ty, &rows, known, report);
+     }
+     // 行の索引は文書をまたいで id が重なりうる・計画だけの行の一意は計画の床が数える（便 183）
+     if ty != ROW_INDEX && ty != ROW_PLAN {
+@@ -812,18 +855,14 @@ fn check_section(
+ }
+ 
+ /// 部品・口・欄・歯の表の行（行の欄の集合と値域・参照 id）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+ fn check_table_rows(
+-    file: &str,
+-    at: &str,
++    place: Place<'_>,
+     ty: &str,
+     rows: &[&Node],
+     known: &HashSet<String>,
+     report: &mut Report,
+ ) {
++    let Place { file, at } = place;
+     let keys = match ty {
+         "parts-table" => &PARTS_ROW,
+         "ports-table" => &PORTS_ROW,
+@@ -859,7 +898,7 @@ fn check_table_rows(
+         if matches!(ty, ROW_INDEX | ROW_PLAN | DECISION_TABLE) {
+             plan_shapes(file, &rat, ty, row, report);
+         }
+-        resolve_ids(file, &rat, row, "ref", known, report);
++        resolve_ids(Place { file, at: &rat }, row, "ref", known, report);
+     }
+ }
+ 
+@@ -885,19 +924,15 @@ fn plan_shapes(file: &str, rat: &str, ty: &str, row: &Node, report: &mut Report)
+ }
+ 
+ /// 契約表の行（欄は器の導出 file が決める・id と参照は folio2 が持つ）。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+ fn check_contract_rows(
+-    file: &str,
+-    at: &str,
++    place: Place<'_>,
+     rows: &[&Node],
+-    requirements: &HashSet<String>,
++    ctx: Ctx<'_>,
+     prose_ns: &HashSet<&str>,
+-    external: Option<&[Field]>,
+     report: &mut Report,
+ ) {
++    let Place { file, at } = place;
++    let Ctx { requirements, external, .. } = ctx;
+     let row_ids: HashSet<String> = rows
+         .iter()
+         .map(|row| row_id(row))
+@@ -907,47 +942,7 @@ fn check_contract_rows(
+         let id = row_id(row);
+         let rat = format!("{at} の行 {id}");
+         if let Some(fields) = external {
+-            let required: Vec<&str> = fields
+-                .iter()
+-                .filter(|f| f.need == "required")
+-                .map(|f| f.name.as_str())
+-                .collect();
+-            non_empty(file, &rat, row, &required, report);
+-            for (key, _) in row.as_map().unwrap_or_default() {
+-                if !fields.iter().any(|f| &f.name == key) {
+-                    report.violation(
+-                        KIND,
+-                        format!("{file}: {rat}: 契約表の欄「{key}」が器の導出 file に無い"),
+-                    );
+-                }
+-            }
+-            for f in fields {
+-                let Some(value) = row.get(&f.name) else {
+-                    continue;
+-                };
+-                let ok = match f.shape.as_str() {
+-                    "text" => matches!(value, Node::Null | Node::Scalar(_)),
+-                    _ => match value {
+-                        Node::Null => true,
+-                        Node::Seq(items) => items.iter().all(|x| x.as_str().is_some()),
+-                        _ => false,
+-                    },
+-                };
+-                if !ok {
+-                    report.violation(
+-                        KIND,
+-                        format!(
+-                            "{file}: {rat}: 欄「{}」が {} の形でない",
+-                            f.name,
+-                            if f.shape == "text" {
+-                                "text（文字列）"
+-                            } else {
+-                                "list（文字列の一覧）"
+-                            }
+-                        ),
+-                    );
+-                }
+-            }
++            check_external_row(file, &rat, row, fields, report);
+         }
+         if id != "?" && !is_lower_id(&id) {
+             report.violation(
+@@ -963,8 +958,53 @@ fn check_contract_rows(
+                 format!("{file}: {rat}: section「{v}」が同じ文書の {PROSE} の節の n でない"),
+             );
+         }
+-        resolve_ids(file, &rat, row, "req", requirements, report);
+-        resolve_ids(file, &rat, row, "depends", &row_ids, report);
++        resolve_ids(Place { file, at: &rat }, row, "req", requirements, report);
++        resolve_ids(Place { file, at: &rat }, row, "depends", &row_ids, report);
++    }
++}
++
++/// 契約表の行 1 つの欄を器の導出 file に照らす（必須の欄の非空・導出 file に無い欄・欄ごとの text と list の形）。
++fn check_external_row(file: &str, rat: &str, row: &Node, fields: &[Field], report: &mut Report) {
++    let required: Vec<&str> = fields
++        .iter()
++        .filter(|f| f.need == "required")
++        .map(|f| f.name.as_str())
++        .collect();
++    non_empty(file, rat, row, &required, report);
++    for (key, _) in row.as_map().unwrap_or_default() {
++        if !fields.iter().any(|f| &f.name == key) {
++            report.violation(
++                KIND,
++                format!("{file}: {rat}: 契約表の欄「{key}」が器の導出 file に無い"),
++            );
++        }
++    }
++    for f in fields {
++        let Some(value) = row.get(&f.name) else {
++            continue;
++        };
++        let ok = match f.shape.as_str() {
++            "text" => matches!(value, Node::Null | Node::Scalar(_)),
++            _ => match value {
++                Node::Null => true,
++                Node::Seq(items) => items.iter().all(|x| x.as_str().is_some()),
++                _ => false,
++            },
++        };
++        if !ok {
++            report.violation(
++                KIND,
++                format!(
++                    "{file}: {rat}: 欄「{}」が {} の形でない",
++                    f.name,
++                    if f.shape == "text" {
++                        "text（文字列）"
++                    } else {
++                        "list（文字列の一覧）"
++                    }
++                ),
++            );
++        }
+     }
+ }
+ 
+@@ -988,7 +1028,7 @@ fn check_figures(file: &str, root: &Node, known: &HashSet<String>, report: &mut
+         {
+             report.violation(KIND, format!("{file}: {at}: spec が表でない"));
+         }
+-        resolve_ids(file, &at, entry, "refs", known, report);
++        resolve_ids(Place { file, at: &at }, entry, "refs", known, report);
+     }
+ }
+ 
+@@ -1032,18 +1072,14 @@ fn field<'a>(node: &'a Node, key: &str) -> Option<&'a str> {
+ }
+ 
+ /// 一覧の欄の各要素が既知の id に解けるか。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+ fn resolve_ids(
+-    file: &str,
+-    at: &str,
++    place: Place<'_>,
+     node: &Node,
+     key: &str,
+     known: &HashSet<String>,
+     report: &mut Report,
+ ) {
++    let Place { file, at } = place;
+     match node.get(key) {
+         None | Some(Node::Null) => {}
+         Some(Node::Seq(items)) => {
+diff --git a/folio2/crates/folio/src/refs.rs b/folio2/crates/folio/src/refs.rs
+index 2eac97c7ebfe4cb112a2584a00bb3f2069e55e2b..4eb256492e9fb6658687df1868b274a49fd5716a 100644
+--- a/folio2/crates/folio/src/refs.rs
++++ b/folio2/crates/folio/src/refs.rs
+@@ -1,6 +1,7 @@
+ //! 参照 id の解決（rules 行 R-4・NFR3 / AC6）と rules 行の逆参照・憲法の件数（便 1・docs/design/delivery-1.md §1）。
+ //! day-1 の床（scripts/check_draft.py の refs / counts）と同じ式。正規表現は使わず文字の走査で判定する。
+ //! 判断の記録の id（ADR-n）は解かない（便 6 の link.rs）。凍結 anchor の列に在った過去の id は解決先に足す（便 7 (j)）。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::{HashMap, HashSet};
+ 
+@@ -30,19 +31,22 @@ pub(crate) const RELATION_NAMESPACES: [&str; 4] = ["reqs", "rules", "articles",
+ /// 要件書の id の頭（数字が直に続く）。
+ pub(crate) const SRS_ID_PREFIXES: [&str; 5] = ["FR", "NFR", "AC", "CON", "GOAL"];
+ 
++/// 正本 4 file（憲法・rules・語彙・要件書）の読んだ木（参照 id の解決・判断の記録との突き合わせ・設計ノートの母集団が受ける 4 本）。
++#[derive(Clone, Copy)]
++pub(crate) struct Canon<'a> {
++    /// 憲法。
++    pub(crate) constitution: &'a Node,
++    /// rules。
++    pub(crate) rules: &'a Node,
++    /// 語彙。
++    pub(crate) vocabulary: &'a Node,
++    /// 要件書。
++    pub(crate) srs: &'a Node,
++}
++
+ /// (a)(b)(c) を掛ける。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
+-)]
+-pub fn check_refs(
+-    constitution: &Node,
+-    rules: &Node,
+-    vocabulary: &Node,
+-    srs: &Node,
+-    history: &HashSet<String>,
+-    report: &mut Report,
+-) {
++pub fn check_refs(canon: Canon<'_>, history: &HashSet<String>, report: &mut Report) {
++    let Canon { constitution, rules, vocabulary, srs } = canon;
+     let articles = seq_of_maps("constitution.yaml", constitution, "articles", report);
+     let rule_rows: Vec<&Node> = RULE_SECTIONS
+         .iter()
+@@ -366,6 +370,16 @@ fn reverse(articles: &[&Node], rule_rows: &[&Node], report: &mut Report) {
+         referenced.extend(rules_here.iter().cloned());
+         article_rules.entry(aid).or_default().extend(rules_here);
+     }
++    reverse_rules(rule_rows, &referenced, &article_rules, report);
++}
++
++/// rules 行の側から見た逆参照: どの条からも参照されない行と、行の article の relations.rules に無い行。
++fn reverse_rules(
++    rule_rows: &[&Node],
++    referenced: &HashSet<String>,
++    article_rules: &HashMap<String, HashSet<String>>,
++    report: &mut Report,
++) {
+     for row in rule_rows {
+         let Some(rid) = id_of(row) else { continue };
+         if !referenced.contains(rid) {
+diff --git a/folio2/crates/folio/src/stamp.rs b/folio2/crates/folio/src/stamp.rs
+index a116c05fa81addc81cc74afd6639a8932771beb7..b2bd320e57708925a9e3edbe7aaedc1a2ad64343 100644
+--- a/folio2/crates/folio/src/stamp.rs
++++ b/folio2/crates/folio/src/stamp.rs
+@@ -16,6 +16,7 @@
+ //! 観点の行は、まだ分からない の理由が反証の済んでいない 止める だけのとき末尾に欄 `wait: 反証` を足す。印は周の 3 値に依らず書く。
+ //! 便 176（docs/design/delivery-176.md §1 (b)・FR20）: dir 形の文書で at の頭が file 名に解けないときは、置き場の直下の .yaml の
+ //! 最上位の meta.id でも解く（ちょうど 1 file のときだけ・`meta_file`）。
++#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
+ 
+ use std::collections::BTreeSet;
+ use std::fs;
+@@ -118,7 +119,11 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
+     }
+     let sources = gate::sources_digest(dir, &ceiling)?;
+     let faces = faces_digest(out_dir, &ceiling)?;
++    derive_text(dir, rows, &round, &sources, &faces)
++}
+ 
++/// 印の先頭の欄と観点の行を組み、反証の行と reads の行へ進む。
++fn derive_text(dir: &Path, rows: Vec<Row>, round: &str, sources: &str, faces: &str) -> R<String> {
+     let verdicts: Vec<Verdict> = rows.iter().map(|r| r.counted.verdict).collect();
+     let verdict = if verdicts.contains(&Verdict::Unknown) {
+         Verdict::Unknown
+@@ -141,7 +146,7 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
+     let mut text = format!(
+         "# {}\nround: {}\nat: {}\nverdict: {verdict}\nsources: {sources}\nfaces: {faces}\nviewpoints:\n",
+         adr::named(adr::name_of(dir).as_deref(), " ", HEADER),
+-        plain(&round),
++        plain(round),
+         plain(&at)
+     );
+     for r in &rows {
+@@ -163,9 +168,14 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
+             plain(&r.at)
+         ));
+     }
++    derive_refutes(dir, &rows, text, reads)
++}
++
++/// 止める の所見の全件の行（refutes）と reads の行を足して印の全文にする。
++fn derive_refutes(dir: &Path, rows: &[Row], mut text: String, reads: BTreeSet<&str>) -> R<String> {
+     let documents = gate::documents(dir)?;
+     let mut refutes = Vec::new();
+-    for r in &rows {
++    for r in rows {
+         let mut own: Vec<&Refute> = r.counted.refutes.iter().collect();
+         own.sort_by(|a, b| a.id.as_bytes().cmp(b.id.as_bytes()));
+         for stop in own {
+diff --git a/xtask/tests/klintf.rs b/xtask/tests/klintf.rs
+index a9c6e69ad6f7c090d73254d9bd92ab8675de2201..28e3d5bef7639c1c43d50d4099a417c694d91617 100644
+--- a/xtask/tests/klintf.rs
++++ b/xtask/tests/klintf.rs
+@@ -82,7 +82,9 @@ const COVER: [(&str, &str, &str); 15] = [
+ const R4_DENY: &str = "#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]";
+ 
+ /// R-4 の関数の粒度を直して頭に R4_DENY を置いた folio の file（crate の dir からの相対）。
+-const R4_DONE: [&str; 9] = [
++const R4_DONE: [&str; 20] = [
++    "src/anchor.rs",
++    "src/check.rs",
+     "src/face.rs",
+     "src/face_adr.rs",
+     "src/face_constitution.rs",
+@@ -92,6 +94,15 @@ const R4_DONE: [&str; 9] = [
+     "src/face_srs.rs",
+     "src/face_srs_items.rs",
+     "src/face_srs_rtm.rs",
++    "src/findings.rs",
++    "src/freeze.rs",
++    "src/graph.rs",
++    "src/lineage.rs",
++    "src/link.rs",
++    "src/mentions.rs",
++    "src/note.rs",
++    "src/refs.rs",
++    "src/stamp.rs",
+ ];
+ 
+ fn repo_root() -> PathBuf {
