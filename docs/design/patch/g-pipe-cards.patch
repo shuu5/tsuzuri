@@ -1,0 +1,822 @@
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index e11e5fedfac35e9231983148a0d2b9c54e421b5e..2ea791101f20c7e952e508d6aa881301853a79b7 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -11,13 +11,15 @@
+ //! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
+ //! `age_at` から書き直し、CI の語と直近の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
+ //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
++//! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
++//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards）。
+ 
+ use std::collections::BTreeMap;
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{Ci, Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
+ use tsuzuri_contract::graph::{GraphDoc, title36};
+-use tsuzuri_contract::ledger::LedgerRow;
++use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
+ use tsuzuri_contract::wire;
+ 
+ use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
+@@ -27,6 +29,8 @@ use crate::view::{Fetched, id_order, read_rows};
+ use crate::vocab::label;
+ use crate::widgets::hover::Card;
+ use crate::widgets::nodecard::card_of;
++use crate::widgets::keyline::{LineSrc, line_src};
++use crate::widgets::pop::{self, Src};
+ 
+ pub const BLOCK: Block = Block {
+     id: "pipe",
+@@ -198,8 +202,40 @@ pub struct Kcard {
+     pub closed: bool,
+     /// Landed の列ほかの札の meta に足す着地の後の CI の読み（`ci_shown` の値・止まった列の札は None で、語は lead に出る）。
+     pub ci: Option<Ci>,
++    /// 短い題（bead の事実の short・`with_lines` が置く・置くまでは None・行 g-pipe-cards）。
++    pub short: Option<String>,
++    /// 要の 1 行の材料（`with_lines` が置く・置くまでは None で要の 1 行を出さない）。
++    pub line: Option<LineSrc>,
+ }
+ 
++
++/// 札の短い題（bead の事実の short・事実に無ければ 36 字の題・題も無ければ id）。
++pub fn short_title(facts: &Reading<&[BeadFact]>, card: &Kcard) -> String {
++    let found = match facts {
++        Reading::Known(f) => f.iter().find(|x| x.id.as_str() == card.id),
++        Reading::Unknown => None,
++    };
++    found.map_or_else(
++        || card.title.clone().unwrap_or_else(|| card.id.clone()),
++        |x| x.short.clone(),
++    )
++}
++
++/// 板の全部の札に短い題と要の 1 行の材料を置く（材料の札の電文は材料の札の列から id で引く・中身の無い板は受けた値のまま）。
++pub fn with_lines(body: Body<Vec<Column>>, src: &Src<'_>) -> Body<Vec<Column>> {
++    let Body::Filled(mut cols) = body else {
++        return body;
++    };
++    for card in cols.iter_mut().flat_map(|c| c.cards.iter_mut()) {
++        card.short = Some(short_title(&src.facts, card));
++        card.line = pop::card_of(src.cards, &card.id).map(|c| line_src(c, src));
++    }
++    Body::Filled(cols)
++}
++
++/// 止まった列の札の class。
++const STOP_CLASS: &str = "kcard why-stop";
++
+ /// 値の行に出す理由の字数（見本の cut の 20）。
+ const WHY_CHARS: usize = 20;
+ 
+@@ -466,16 +502,14 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+         lead,
+         age,
+         since: card.since,
+-        class: if lane.stops() {
+-            "kcard why-stop"
+-        } else {
+-            "kcard"
+-        },
++        class: if lane.stops() { STOP_CLASS } else { "kcard" },
+         hover,
+         run_line,
+         run_more,
+         closed,
+         ci: if lane.stops() { None } else { shown },
++        short: None,
++        line: None,
+     }
+ }
+ 
+@@ -644,14 +678,18 @@ mod dom {
+ 
+     use super::{
+         BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard, PATH,
+-        age_at, card_href, ci_key, ci_style, columns, content, misfit_cards, misfit_href,
+-        open_columns, with_closed, with_nodes, with_open,
++        age_at, ci_key, ci_style, columns, content, misfit_cards, misfit_href,
++        open_columns, with_closed, with_lines, with_open,
+     };
+     use crate::frame::Mode;
+-    use crate::project::{Body, ledger, map, section, state_icon, unmeasured};
++    use tsuzuri_contract::case::PATH as CASES_PATH;
++
++    use crate::project::{Body, ledger, section, state_icon, unmeasured};
++    use crate::view::read_rows;
+     use crate::vocab::label;
+     use crate::widgets::help::{HelpCtx, hs};
+-    use crate::widgets::hover::attach;
++    use crate::widgets::keyline::key_line;
++    use crate::widgets::pop::{BEADS_PATH, PopCtx, Src, Via, known, read_facts, read_parts};
+ 
+     /// 回数の印（見本の IC.redo）。
+     const REDO: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>"#;
+@@ -702,7 +740,8 @@ mod dom {
+     pub fn view() -> AnyView {
+         let pipe = crate::net::read(PATH);
+         let rows = crate::net::read(ledger::PATH);
+-        let graph = crate::net::read(map::PATH);
++        let beads = crate::net::read(BEADS_PATH);
++        let cases = crate::net::read(CASES_PATH);
+         let open = RwSignal::new(open_columns(&search()));
+         let ctx = use_context::<HelpCtx>();
+         let mode = move || match ctx {
+@@ -714,7 +753,18 @@ mod dom {
+         let clock = move || tick.get();
+         let body = move || {
+             let now = crate::net::now();
+-            let board = match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {
++            let facts = beads.with(read_facts);
++            let parts = cases.with(read_parts);
++            let ledger_rows = rows.with(read_rows);
++            let cards = pipe.with(|p| super::cards(p).unwrap_or_default());
++            let src = Src {
++                facts: known(&facts),
++                rows: known(&ledger_rows),
++                cards: &cards,
++                parts: known(&parts),
++                graph: None,
++            };
++            let board = match pipe.with(|p| rows.with(|l| with_lines(content(p, l, now), &src))) {
+                 Body::Unmeasured(reason) => unmeasured(reason),
+                 Body::Empty(key) => view! {
+                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
+@@ -819,10 +869,10 @@ mod dom {
+         .into_any()
+     }
+ 
+-    /// 1 枚の札（押すと契約 bead と同じ id の節点の頁へ・指を置くと hover の card）。
++    /// 1 枚の札（押すと吹き出しを開き・もう 1 度押すと閉じる・hover の card は付けない・行 g-pipe-cards）。
+     fn kcard_view(
+         card: &Kcard,
+-        mode: Mode,
++        _mode: Mode,
+         clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
+     ) -> AnyView {
+         let sym = stage_sym(card.closed, card.state);
+@@ -833,9 +883,23 @@ mod dom {
+             .ci
+             .map(|c| view! { <span style=ci_style(c)>{label(ci_key(c))}</span> });
+         let title = card
+-            .title
++            .short
+             .clone()
++            .or_else(|| card.title.clone())
+             .map(|t| view! { <span class="tt" data-t="">{t}</span> });
++        // 要の 1 行は 1 秒の時計で書き直す（材料が無ければ出さない）。
++        let line = card.line.clone().map(|src| {
++            let src = StoredValue::new(src);
++            let now = move || src.with_value(|s| key_line(s, clock()));
++            view! { <div class=move || now().class>{move || now().text}</div> }
++        });
++        let pop = use_context::<PopCtx>();
++        let id = card.id.clone();
++        let press = move |_| {
++            if let Some(p) = pop {
++                p.press(&id, Via::Card);
++            }
++        };
+         let lead = match &card.lead {
+             Lead::Runs(n) => view! { <span><span inner_html=REDO></span>{*n}</span> }.into_any(),
+             Lead::Why(w) => {
+@@ -844,7 +908,7 @@ mod dom {
+             }
+         };
+         view! {
+-            <a class=card.class href=card_href(card, mode) use:attach=card.hover.clone()>
++            <button type="button" class=card.class data-pop-card=card.id.clone() on:click=press>
+                 <div class="t">{sym}{title}</div>
+                 <div class="m">
+                     <span class="kid">{card.id.clone()}</span>
+@@ -853,7 +917,8 @@ mod dom {
+                     {ci}
+                     <span><span inner_html=CLOCK></span><span class="num">{age}</span></span>
+                 </div>
+-            </a>
++                {line}
++            </button>
+         }
+         .into_any()
+     }
+diff --git a/crates/tsuzuri-surface/src/widgets/keyline.rs b/crates/tsuzuri-surface/src/widgets/keyline.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ba1a288c65a48c79591da7cddca2d46f79cd461
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/widgets/keyline.rs
+@@ -0,0 +1,132 @@
++//! pipeline の札の段ごとの要の 1 行（行 g-pipe-cards・判断の記録 ADR-27 決定 (6)・見本 board-v2 の cardLine）:
++//! Blocked は待つ相手と待ちの長さ・Queued は列に在る長さと起票からの経過（列に在る長さが `QUEUED_WARN_S`〔30 分・規則の行 R-37〕を
++//! 越えると注意の印と色・列に入った時刻が無ければ付けない）・Running は回と経過と口座・Gated は gate と経過と口座・Failed と Stopped は
++//! 20 字に切った理由と経過と回・Questioned は問いと経過・着地は着地の時刻と CI の語。待つ相手は吹き出しと同じ読み（`pop::wait_of` と
++//! `pop::wait_on`）。今に依らない材料（`LineSrc`）は板を組む時に置き、字は描く時の今から組む（1 秒の時計で書き直す）。
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
++
++use super::pop::{self, Src, Wait};
++use crate::mapview::graph::cut;
++use crate::project::pipeline::{
++    CLOSED_STAGE, NO_ACCOUNT, NO_AGE, age_at, ci_key, closed_card, stage_word,
++};
++use crate::view::clock_short;
++use crate::vocab::label;
++
++/// Queued の札の注意の秒（列に在る長さが 30 分 を越えたら注意の色と印・規則の行 R-37・判断の記録 ADR-27 決定 (6)）。
++pub const QUEUED_WARN_S: u64 = 1_800;
++
++/// 注意の印（見本の ⚠）。
++pub const WARN_MARK: &str = "⚠";
++
++/// 要の 1 行の語の鍵（待ち・本待ち・列に・起票から・run の問い・着地）。
++pub const LINE_KEYS: [&str; 6] = [
++    "kl_wait",
++    "kl_waits",
++    "kl_queue",
++    "kl_created",
++    "kl_ask",
++    "kl_landed",
++];
++
++/// 要の 1 行の class（ふつう・注意・止まり・問い）。
++pub const LINE_CLASSES: [&str; 4] = ["kl", "kl klwarn", "kl klstop", "kl klask"];
++
++/// 止まりの理由を切る字数（札の値の行と同じ 20）。
++pub const WHY_CHARS: usize = 20;
++
++/// 要の 1 行の材料（札の電文と、今に依らない字: Blocked の頭の字と起票の時刻）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct LineSrc {
++    pub card: PipelineCard,
++    /// Blocked の頭の字（相手が 1 つなら id と待ち・2 つ以上なら数と本待ち・承認待ちは持ち主の承認・分からなければ待ち）。
++    pub wait: Option<String>,
++    pub created: Option<EpochSecs>,
++}
++
++/// 要の 1 行（字と class）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct KeyLine {
++    pub text: String,
++    pub class: &'static str,
++}
++
++/// Queued の注意（段が Queued で列に入った時刻が在り、今から引いた経過が `QUEUED_WARN_S` を越える）。
++pub fn queued_warn(card: &PipelineCard, now: EpochSecs) -> bool {
++    card.stage == Stage::Queued
++        && card
++            .since
++            .is_some_and(|s| now.saturating_sub(s) > QUEUED_WARN_S)
++}
++
++/// 要の 1 行の材料（待つ相手は吹き出しと同じ `pop::wait_of` と `pop::wait_on`・起票は bead の事実）。
++pub fn line_src(card: &PipelineCard, src: &Src<'_>) -> LineSrc {
++    let id = card.contract.as_str();
++    let [wait, waits, ..] = LINE_KEYS;
++    let lead = match (card.stage, pop::wait_of(src, card)) {
++        (Stage::Blocked, Wait::Approval) => Some(label(pop::APPROVAL_KEYS[1])),
++        (Stage::Blocked, Wait::Queue(..)) => Some(match pop::wait_on(src, id).as_deref() {
++            Some([one]) => format!("{one} {}", label(wait)),
++            Some(many) if many.len() > 1 => format!("{} {}", many.len(), label(waits)),
++            _ => label(wait),
++        }),
++        _ => None,
++    };
++    let created = match src.facts {
++        Reading::Known(f) => f
++            .iter()
++            .find(|x| x.id == card.contract)
++            .and_then(|x| x.created_at),
++        Reading::Unknown => None,
++    };
++    LineSrc {
++        card: card.clone(),
++        wait: lead,
++        created,
++    }
++}
++
++/// 段ごとの要の 1 行（閉じた（着地せず）の札は段の字と経過）。経過は今 now から引く。
++pub fn key_line(line: &LineSrc, now: EpochSecs) -> KeyLine {
++    let [wait, _, queue, created, ask, landed] = LINE_KEYS;
++    let [plain, warn, stop, asked] = LINE_CLASSES;
++    let card = &line.card;
++    let age = age_at(card.since, now);
++    let account = card.account.as_deref().unwrap_or(NO_ACCOUNT);
++    let (text, class) = match card.stage {
++        _ if closed_card(card) => (format!("{CLOSED_STAGE} · {age}"), plain),
++        Stage::Blocked => {
++            let lead = line.wait.clone().unwrap_or_else(|| label(wait));
++            (format!("{lead} · {age}"), plain)
++        }
++        Stage::Queued => {
++            let made = age_at(line.created, now);
++            let body = format!("{} {age} · {} {made}", label(queue), label(created));
++            if queued_warn(card, now) {
++                (format!("{WARN_MARK} {body}"), warn)
++            } else {
++                (body, plain)
++            }
++        }
++        Stage::Running => (format!("run {} · {age} · {account}", card.runs), plain),
++        Stage::Gated => (format!("gate · {age} · {account}"), plain),
++        Stage::Failed | Stage::Stopped => {
++            let why = card.reason.clone().unwrap_or_else(|| stage_word(card));
++            let head = cut(&why, WHY_CHARS);
++            (format!("{head} · {age} · run {}", card.runs), stop)
++        }
++        Stage::Questioned => (format!("{} · {age}", label(ask)), asked),
++        Stage::Landed => {
++            let at = card
++                .since
++                .map_or_else(|| NO_AGE.to_string(), |s| clock_short(s, now));
++            let ci = card
++                .ci
++                .map_or_else(|| NO_AGE.to_string(), |c| label(ci_key(c)));
++            (format!("{at} {} · CI {ci}", label(landed)), plain)
++        }
++    };
++    KeyLine { text, class }
++}
+diff --git a/crates/tsuzuri-surface/src/widgets/mod.rs b/crates/tsuzuri-surface/src/widgets/mod.rs
+index b198163dcf263f6d0620dfba61129c826b21cf2c..119d39564ecb8e9c4d9abf9c91bc36e836c2be17 100644
+--- a/crates/tsuzuri-surface/src/widgets/mod.rs
++++ b/crates/tsuzuri-surface/src/widgets/mod.rs
+@@ -4,12 +4,14 @@
+ //! 初心者の mode の home の頁の最初の案内（coach・行 g-coach・決めと置き場は host でも組む）と、
+ //! 帯の印を押すと開く窓の枠（modal・行 g-win-frame・閉じる判定と窓の積みは host でも組む）と、
+ //! 札と一覧の行を押すと開く吹き出し（pop・行 g-pop・欄の組みと置き場と開閉は host でも組む）と、
+-//! 吹き出しの run の段の流れと run の歴（runflow・行 g-pop-flow・host でも組む）。
++//! 吹き出しの run の段の流れと run の歴（runflow・行 g-pop-flow・host でも組む）と、
++//! pipeline の札の段ごとの要の 1 行（keyline・行 g-pipe-cards・host でも組む）。
+ 
+ pub mod coach;
+ pub mod fig;
+ pub mod help;
+ pub mod hover;
++pub mod keyline;
+ pub mod modal;
+ pub mod nodecard;
+ pub mod pop;
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index b3b964ce3cd3d6537d70a4468649f67cd743490d..bbdd96fdef0d4a2f3f43ff7a7057134e9a44e9d6 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -272,6 +272,11 @@ a.tile:hover { box-shadow: var(--shadow); }
+ .kcard .m .why { flex-wrap: wrap; }
+ .kcard .m svg { width: 12px; height: 12px; }
+ .kcard.why-stop .m .why { color: var(--s-stop); font-weight: 600; }
++button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
++.kcard .kl { margin-top: 3px; padding-left: 24px; color: var(--ink-2); font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
++.kcard .kl.klwarn { color: var(--st-limit); font-weight: 600; }
++.kcard .kl.klstop { color: var(--s-stop); }
++.kcard .kl.klask { color: var(--st-limit); }
+ .fixrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2); margin-top: var(--s2); padding: var(--s2); border: 1px dashed var(--s-stop); border-radius: var(--r2); background: color-mix(in srgb, var(--s-stop) 10%, var(--panel)); }
+ .fixrow > header { flex: 0 0 150px; display: flex; align-items: center; min-height: 32px; font-weight: 700; color: var(--ink-2); }
+ .fixcards { flex: 1 1 260px; display: flex; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+diff --git a/crates/tsuzuri-surface/tests/bvcols.rs b/crates/tsuzuri-surface/tests/bvcols.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ba9ef717bf57df164c9cff4e5bc86adb8472d0dd
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvcols.rs
+@@ -0,0 +1,321 @@
++//! 行 g-pipe-cards の歯: pipeline の細い札（判断の記録 ADR-27 決定 (6)(7)・見本 board-v2 の cardHTML と cardLine）の
++//! Queued の注意の秒が規則の行 R-37 の値であることと、段ごとの要の 1 行と、短い題とその代わりと、要の 1 行の材料（待つ相手と起票）と、
++//! 札が押しで吹き出しを開き hover の card を付けない DOM の字。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{Ci, PipelineCard, Reading, Stage};
++use tsuzuri_contract::case::{CaseLinks, CasePart};
++use tsuzuri_contract::ledger::{BeadFact, BeadId, LedgerRow};
++use tsuzuri_surface::project::pipeline::{CLOSED_TAG, kcard, short_title};
++use tsuzuri_surface::view::clock_short;
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::keyline::{
++    KeyLine, LINE_CLASSES, LINE_KEYS, LineSrc, QUEUED_WARN_S, WARN_MARK, key_line, line_src,
++    queued_warn,
++};
++use tsuzuri_surface::widgets::pop::Src;
++
++const NOW: EpochSecs = 1_790_000_000;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn id(s: &str) -> BeadId {
++    BeadId::new(s).unwrap_or_else(|e| panic!("{s}: {e:?}"))
++}
++
++fn card(x: &str, stage: Stage, since: EpochSecs) -> PipelineCard {
++    PipelineCard {
++        contract: id(x),
++        runs: 2,
++        stage,
++        reason: None,
++        account: Some("acct-a".to_string()),
++        since: Some(since),
++        ci: None,
++    }
++}
++
++fn line(wait: Option<&str>, created: Option<EpochSecs>) -> LineSrc {
++    LineSrc {
++        card: card("a", Stage::Running, NOW),
++        wait: wait.map(str::to_string),
++        created,
++    }
++}
++
++/// 札の電文を替えた材料で要の 1 行を組む。
++fn kline(card: &PipelineCard, line: &LineSrc, now: EpochSecs) -> KeyLine {
++    let src = LineSrc {
++        card: card.clone(),
++        ..line.clone()
++    };
++    key_line(&src, now)
++}
++
++fn kl(text: String, class: &'static str) -> KeyLine {
++    KeyLine { text, class }
++}
++
++/// Queued の注意の秒は 1800 で、規則の行 R-37 の value の字の分の数に 60 を掛けた値。越えた時だけ注意（ちょうどは付けない）・
++/// 列に入った時刻が無い札と Queued でない札は付けない。
++#[test]
++fn bvcols_queued_warn_is_rule_r37() {
++    assert_eq!(QUEUED_WARN_S, 1_800);
++    let rules = read("../../design-intent/rules.yaml");
++    let row = rules
++        .lines()
++        .find(|l| l.contains("id: R-37,"))
++        .expect("rules の file に行 R-37 が在る");
++    let mins: u64 = row
++        .split_once(" 分 を越えたら")
++        .and_then(|(head, _)| head.rsplit(' ').next())
++        .and_then(|n| n.parse().ok())
++        .expect("R-37 の分の数");
++    assert_eq!(mins * 60, QUEUED_WARN_S, "{row}");
++    assert!(!queued_warn(&card("a", Stage::Queued, NOW - 1_800), NOW));
++    assert!(queued_warn(&card("a", Stage::Queued, NOW - 1_801), NOW));
++    let mut none = card("a", Stage::Queued, NOW);
++    none.since = None;
++    assert!(!queued_warn(&none, NOW));
++    assert!(!queued_warn(&card("a", Stage::Blocked, NOW - 9_999), NOW));
++}
++
++/// 待つ段の要の 1 行（見本の cardLine）と色の class: Blocked は待つ相手と待ちの長さ・Queued は列に在る長さと起票からの経過
++/// （30 分越えは注意の印と色）。
++#[test]
++fn bvcols_key_line_per_stage() {
++    let [wait, _, queue, created, ..] = LINE_KEYS;
++    let [plain, warn, ..] = LINE_CLASSES;
++    let t = NOW - 600;
++    let one = line(Some("t-5 待ち"), None);
++    assert_eq!(
++        kline(&card("a", Stage::Blocked, t), &one, NOW),
++        kl("t-5 待ち · 10m".to_string(), plain)
++    );
++    assert_eq!(
++        kline(&card("a", Stage::Blocked, t), &line(None, None), NOW),
++        kl(format!("{} · 10m", label(wait)), plain)
++    );
++    let made = line(None, Some(NOW - 7_200));
++    assert_eq!(
++        kline(&card("a", Stage::Queued, t), &made, NOW),
++        kl(
++            format!("{} 10m · {} 2h", label(queue), label(created)),
++            plain
++        )
++    );
++    assert_eq!(
++        kline(
++            &card("a", Stage::Queued, NOW - 1_860),
++            &line(None, None),
++            NOW
++        ),
++        kl(
++            format!("{WARN_MARK} {} 31m · {} ―", label(queue), label(created)),
++            warn
++        )
++    );
++}
++
++/// 走る段と止まりと着地の要の 1 行（見本の cardLine）と色の class・閉じた（着地せず）の札は段の字と経過。
++#[test]
++fn bvcols_key_line_run_stop_land() {
++    let [_, _, _, _, ask, landed] = LINE_KEYS;
++    let [plain, _, stop, asked] = LINE_CLASSES;
++    let t = NOW - 600;
++    let made = line(None, Some(NOW - 7_200));
++    assert_eq!(
++        kline(&card("a", Stage::Running, t), &made, NOW),
++        kl("run 2 · 10m · acct-a".to_string(), plain)
++    );
++    assert_eq!(
++        kline(&card("a", Stage::Gated, t), &made, NOW),
++        kl("gate · 10m · acct-a".to_string(), plain)
++    );
++    let mut failed = card("a", Stage::Failed, t);
++    failed.reason = Some("verify が赤".to_string());
++    assert_eq!(
++        kline(&failed, &made, NOW),
++        kl("verify が赤 · 10m · run 2".to_string(), stop)
++    );
++    assert_eq!(
++        kline(&card("a", Stage::Stopped, t), &made, NOW),
++        kl("Stopped · 10m · run 2".to_string(), stop)
++    );
++    assert_eq!(
++        kline(&card("a", Stage::Questioned, t), &made, NOW),
++        kl(format!("{} · 10m", label(ask)), asked)
++    );
++    let mut land = card("a", Stage::Landed, t);
++    land.ci = Some(Ci::Success);
++    assert_eq!(
++        kline(&land, &made, NOW),
++        kl(
++            format!(
++                "{} {} · CI {}",
++                clock_short(t, NOW),
++                label(landed),
++                label("ci_success")
++            ),
++            plain
++        )
++    );
++    land.reason = Some(format!("{CLOSED_TAG}x"));
++    assert_eq!(
++        kline(&land, &made, NOW).text,
++        "閉じた（着地せず） · 10m".to_string()
++    );
++    for k in LINE_KEYS {
++        assert!(vocab().term(k).is_some(), "{k} が語の辞書に無い");
++    }
++}
++
++/// 短い題は bead の事実の short、事実に無ければ台帳の題を 36 字に切った字、題も無ければ id。
++#[test]
++fn bvcols_short_title_or_fallback() {
++    let c = card("t-1", Stage::Running, NOW);
++    let rows = [LedgerRow {
++        id: id("t-1"),
++        kind: "task".to_string(),
++        title: "題".repeat(40),
++        status: "open".to_string(),
++        updated_at: NOW,
++        parent: None,
++        labels: Vec::new(),
++    }];
++    let k = kcard(&c, &rows, NOW);
++    let fact = BeadFact {
++        id: id("t-1"),
++        created_at: None,
++        short: "短い題".to_string(),
++        short_set: true,
++        summary: String::new(),
++        blocks: Vec::new(),
++    };
++    let facts = [fact];
++    assert_eq!(short_title(&Reading::Known(&facts), &k), "短い題");
++    let title = short_title(&Reading::Unknown, &k);
++    assert_eq!(title, k.title.clone().unwrap_or_default());
++    assert!(title.chars().count() <= 36 && title.starts_with("題題"));
++    assert_eq!(
++        short_title(&Reading::Known(&[]), &kcard(&c, &[], NOW)),
++        "t-1"
++    );
++}
++
++fn part(phase: &str, reason: &str, on: &[&str]) -> CasePart {
++    CasePart {
++        part: "contract".to_string(),
++        id: "t-1".to_string(),
++        phase: phase.to_string(),
++        turn: "vessel".to_string(),
++        since: None,
++        reason: Some(reason.to_string()),
++        closed: false,
++        links: CaseLinks {
++            on: on.iter().map(|s| s.to_string()).collect(),
++            runs: Vec::new(),
++        },
++    }
++}
++
++fn src_of<'a>(facts: &'a [BeadFact], cards: &'a [PipelineCard], parts: &'a [CasePart]) -> Src<'a> {
++    Src {
++        facts: Reading::Known(facts),
++        rows: Reading::Unknown,
++        cards,
++        parts: Reading::Known(parts),
++        graph: None,
++    }
++}
++
++/// 要の 1 行の材料: Blocked の頭は吹き出しと同じ待つ相手（1 つなら id と待ち・2 つ以上なら数と本待ち・承認待ちは持ち主の承認・
++/// 分からなければ待ち）で、ほかの段は無い。起票の時刻は bead の事実から。
++#[test]
++fn bvcols_lines_from_pop_wait() {
++    let cards = [card("t-1", Stage::Blocked, NOW)];
++    let facts = [BeadFact {
++        id: id("t-1"),
++        created_at: Some(NOW - 60),
++        short: "s".to_string(),
++        short_set: false,
++        summary: String::new(),
++        blocks: Vec::new(),
++    }];
++    let one = [part("contract-queued", "dependency", &["t-5"])];
++    let two = [part("contract-queued", "overlap", &["t-5", "t-6"])];
++    let run = [part("contract-running", "run-blocked", &[])];
++    let [wait, waits, ..] = LINE_KEYS;
++    assert_eq!(
++        line_src(&cards[0], &src_of(&facts, &cards, &one)),
++        LineSrc {
++            card: cards[0].clone(),
++            ..line(Some(&format!("t-5 {}", label(wait))), Some(NOW - 60))
++        }
++    );
++    assert_eq!(
++        line_src(&cards[0], &src_of(&facts, &cards, &two)).wait,
++        Some(format!("2 {}", label(waits)))
++    );
++    assert_eq!(
++        line_src(&cards[0], &src_of(&facts, &cards, &run)).wait,
++        Some(label("pw_approval"))
++    );
++    assert_eq!(
++        line_src(&cards[0], &src_of(&facts, &cards, &[])).wait,
++        Some(label(wait))
++    );
++    let q = [card("t-1", Stage::Queued, NOW)];
++    let s = Src {
++        facts: Reading::Unknown,
++        rows: Reading::Unknown,
++        cards: &q,
++        parts: Reading::Unknown,
++        graph: None,
++    };
++    assert_eq!(
++        line_src(&q[0], &s),
++        LineSrc {
++            card: q[0].clone(),
++            wait: None,
++            created: None
++        }
++    );
++}
++
++/// 札は button で吹き出しの口の印を持ち押すと吹き出しを開き、hover の card と節点の頁への href を付けない。
++/// 板の層は bead の事実と局面の出力の口を読んで短い題と要の 1 行の材料を置き、要の 1 行は 1 秒の時計で書き直す。
++#[test]
++fn bvcols_click_not_hover() {
++    let src = read("src/project/pipeline.rs");
++    let dom = &src[src.find("mod dom {").expect("mod dom の字")..];
++    for s in [
++        "<button type=\"button\" class=card.class data-pop-card=card.id.clone() on:click=press>",
++        "p.press(&id, Via::Card);",
++        "crate::net::read(BEADS_PATH)",
++        "crate::net::read(CASES_PATH)",
++        "with_lines(content(p, l, now), &src)",
++        "src.with_value(|s| key_line(s, clock()))",
++    ] {
++        assert!(dom.contains(s), "{s}");
++    }
++    for s in ["use:attach", "card_href(card", "<a class=card.class"] {
++        assert!(!dom.contains(s), "{s} が残る");
++    }
++    let css = read("style.css");
++    for s in [
++        "button.kcard {",
++        ".kcard .kl {",
++        ".kcard .kl.klwarn {",
++        ".kcard .kl.klstop {",
++        ".kcard .kl.klask {",
++    ] {
++        assert!(css.contains(s), "{s}");
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/cadopt.rs b/crates/tsuzuri-surface/tests/cadopt.rs
+index 4c7cd94f1a168d0a5ca4268f89f3489ad4b3869e..7c7aef61e02c6d68d35ce907b2f531b7a744c5f6 100644
+--- a/crates/tsuzuri-surface/tests/cadopt.rs
++++ b/crates/tsuzuri-surface/tests/cadopt.rs
+@@ -345,16 +345,14 @@ fn dom_part(text: &str) -> &str {
+ fn cadopt_dom_wiring() {
+     let pipe = read("src/project/pipeline.rs");
+     let dom = dom_part(&pipe);
+-    for want in [
+-        "with_nodes(content(p, l, now), g)",
+-        "map::PATH",
+-        "use:attach=card.hover.clone()",
+-    ] {
++    // 札は hover の card を外し押すと吹き出しを開く（行 g-pipe-cards）。節点の card の値の組み（with_nodes）は純粋な関数に残る。
++    for want in ["with_nodes(", "map::PATH", "use:attach="] {
+         assert!(
+-            dom.contains(want),
+-            "pipeline.rs の mod dom に {want} が無い"
++            !dom.contains(want),
++            "pipeline.rs の mod dom に {want} が在る"
+         );
+     }
++    assert!(dom.contains("with_lines(content(p, l, now), &src)"));
+ 
+     let next_text = read("src/project/next.rs");
+     let dom = dom_part(&next_text);
+diff --git a/crates/tsuzuri-surface/tests/cmark.rs b/crates/tsuzuri-surface/tests/cmark.rs
+index 8b67cf835ade6cbb80e6500f6a8d5cacfec24149..5d3c4d6f540a1014359f042daeb2393fab140263 100644
+--- a/crates/tsuzuri-surface/tests/cmark.rs
++++ b/crates/tsuzuri-surface/tests/cmark.rs
+@@ -97,8 +97,8 @@ fn cmark_dom_text() {
+         "var(--ink-3)",
+         "CHECK",
+         "var(--s-land)",
+-        "<a class=card.class href=",
+-        "use:attach=card.hover.clone()",
++        "<button type=\"button\" class=card.class data-pop-card=",
++        "on:click=press",
+     ] {
+         assert!(view.contains(s), "kcard_view の後に {s} が無い");
+     }
+diff --git a/crates/tsuzuri-surface/tests/gfix.rs b/crates/tsuzuri-surface/tests/gfix.rs
+index 2a2dc5273884c12260501f9ae25b465724c2753a..7ccbb65918a2dec86bb9225e7b48e97ba3020c41 100644
+--- a/crates/tsuzuri-surface/tests/gfix.rs
++++ b/crates/tsuzuri-surface/tests/gfix.rs
+@@ -233,7 +233,7 @@ fn gfix_dom_wiring() {
+     let view = range("pub fn view() -> AnyView {", "fn board_view(");
+     let mut at = 0;
+     for w in [
+-        "let board = match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {",
++        "let board = match pipe.with(|p| rows.with(|l| with_lines(content(p, l, now), &src))) {",
+         "let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));",
+         "view! { {board}{fix} }.into_any()",
+     ] {
+diff --git a/crates/tsuzuri-surface/tests/kcardlink.rs b/crates/tsuzuri-surface/tests/kcardlink.rs
+index e4f09d9d964041fdbb0527d6532d8a3c1b82d9b7..06bfeef09ad9df95e948972d220cefd1611cfe85 100644
+--- a/crates/tsuzuri-surface/tests/kcardlink.rs
++++ b/crates/tsuzuri-surface/tests/kcardlink.rs
+@@ -113,14 +113,14 @@ fn klink_dom_anchor_keeps_hover() {
+     let src = read("src/project/pipeline.rs");
+     let at = src.find("mod dom").expect("pipeline.rs に mod dom が在る");
+     let dom = &src[at..];
+-    assert!(dom.contains("card_href("), "DOM が card_href を呼ぶ");
++    assert!(dom.contains("p.press(&id, Via::Card)"), "DOM が札の押しで吹き出しを開く");
+     assert!(
+-        dom.contains("<a class=card.class href="),
+-        "札の外側の要素が a で class の次に href"
++        dom.contains("<button type=\"button\" class=card.class data-pop-card="),
++        "札の外側の要素が button で class の次に吹き出しの口の印（行 g-pipe-cards）"
+     );
+     assert!(
+-        dom.contains("use:attach=card.hover.clone()"),
+-        "札に hover の card が付く"
++        !dom.contains("use:attach=card.hover.clone()"),
++        "札に hover の card が付かない（行 g-pipe-cards）"
+     );
+     assert!(
+         !src.contains("<div class=card.class"),
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 09fe1ce1ef8525bc9fcd15f71c94a1cf10d24b91..9ac7416659da92e14b836ef9e1b7fe2f69961ee3 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -2011,6 +2011,36 @@
+    "label": "同じ設計の行の直しを待つ",
+    "plain": "同じ設計から出た行の直しが入るまで待つ",
+    "internal": "WaitReason::Sibling"
++  },
++  "kl_wait": {
++   "label": "待ち",
++   "plain": "札の要の 1 行: 相手を待っている\n・ 相手が 1 つなら相手の id",
++   "internal": "pipeline::key_line（行 g-pipe-cards）"
++  },
++  "kl_waits": {
++   "label": "本待ち",
++   "plain": "札の要の 1 行: 待つ相手の数",
++   "internal": "pop::wait_on の数（2 つ以上）"
++  },
++  "kl_queue": {
++   "label": "列に",
++   "plain": "札の要の 1 行: 列に在る長さ\n・ 30 分を越えると ⚠ と注意の色（規則の行 R-37）",
++   "internal": "PipelineCard の since から今まで\nQUEUED_WARN_S = 1800"
++  },
++  "kl_created": {
++   "label": "起票から",
++   "plain": "札の要の 1 行: 起票からの経過",
++   "internal": "BeadFact の created_at から今まで"
++  },
++  "kl_ask": {
++   "label": "run の問い",
++   "plain": "札の要の 1 行: run が問いで止まっている",
++   "internal": "段 Questioned"
++  },
++  "kl_landed": {
++   "label": "着地",
++   "plain": "札の要の 1 行: 着地の時刻と CI の結果",
++   "internal": "段 Landed の since と ci"
+   }
+  }
+ }
+\ No newline at end of file

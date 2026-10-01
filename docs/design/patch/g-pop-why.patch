@@ -1,0 +1,490 @@
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index 0c122721d9123767a772a467c0f8d4cacda1706f..a0b54640fca798c6f3aaf0f3affccfad330b64ee 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -9,6 +9,8 @@
+ //! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
+ //! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
+ //! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す（行 g-pop-flow）。
++//! Queued の起きない理由と Blocked の待つ理由・相手の便・承認の相手は `with_why` が足す（行 g-pop-why）: 理由の語は器の列の待ちの
++//! 12 語（`REASONS`）を平易な字にした語の辞書の鍵 `qr:<語>` で引き、表に無い語と読めない理由はまだ分からない。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+@@ -87,6 +89,37 @@ pub const NEXT_KEYS: [&str; 2] = ["pnext_ask", "pnext_runs"];
+ /// 設計の pointer の行の頭の字（中核のグラフの BeadAttr の pointers の行の頭）。
+ pub const POINTER_HEAD: &str = "design = ";
+ 
++/// 器の列の待ちの理由の語（器の pipe/dispatch.rs の WAIT_REASONS の 12 語・宣言の順・行 g-pop-why）。
++pub const REASONS: [&str; 12] = [
++    "dependency",
++    "overlap",
++    "admission",
++    "host-busy",
++    "hold",
++    "launched",
++    "settled",
++    "no-design-pointer",
++    "unreflected-ruling",
++    "floor",
++    "reserved",
++    "sibling",
++];
++
++/// 理由の語の辞書の鍵の頭（鍵は頭に理由の語を続けた字）。
++pub const REASON_HEAD: &str = "qr:";
++
++/// 起きない理由・待つ理由・相手の便の欄の語の鍵。
++pub const WHY_KEYS: [&str; 3] = ["pf_why", "pf_wait_why", "pf_wait_runs"];
++
++/// 承認待ちの相手（持ち主）と待つ理由（持ち主の承認）の語の鍵。
++pub const APPROVAL_KEYS: [&str; 2] = ["pw_owner", "pw_approval"];
++
++/// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2・中核の pipeline の QUEUED_PHASE の写し）。
++pub const QUEUED_PHASE: &str = "contract-queued";
++
++/// 局面の出力の契約の段を最新の便の部品が持つ局面の語（札の段が Blocked なら便は承認待ちの run-blocked）。
++pub const RUNNING_PHASE: &str = "contract-running";
++
+ /// 吹き出しを開いた口（見本の S.pop.via）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Via {
+@@ -455,6 +488,96 @@ pub fn pop(id: &str, src: &Src<'_>) -> Pop {
+     }
+ }
+ 
++/// 理由の語の辞書の鍵（語の `:` の後の詳細は外す・`REASONS` に無い語は None）。
++pub fn reason_key(word: &str) -> Option<String> {
++    let w = word.split(':').next().unwrap_or(word);
++    REASONS.contains(&w).then(|| format!("{REASON_HEAD}{w}"))
++}
++
++/// 理由の欄の値（平易な字・理由が無いか表に無い語はまだ分からない）。
++pub fn reason_val(word: Option<&str>) -> Val {
++    word.and_then(reason_key)
++        .map_or(Val::Unknown, |k| Val::Text(label(&k)))
++}
++
++/// 札の待ちの種類。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Wait {
++    /// 列の待ち（理由の語・契約の部品の links.runs）。
++    Queue(Option<String>, Vec<String>),
++    /// 便の承認待ち（器の run-blocked・相手は持ち主）。
++    Approval,
++}
++
++/// 札の待ち: 局面の出力の契約の部品が `QUEUED_PHASE` なら部品の理由と links.runs、`RUNNING_PHASE` で段が Blocked なら承認待ち、
++/// 部品が無いか読めなければ札の理由（読めない間は中核が理由を置かないのでまだ分からない）。
++pub fn wait_of(src: &Src<'_>, card: &PipelineCard) -> Wait {
++    let part = match src.parts {
++        Reading::Known(parts) => contract_part(parts, card.contract.as_str()),
++        Reading::Unknown => None,
++    };
++    match part {
++        Some(p) if p.phase == QUEUED_PHASE => Wait::Queue(p.reason.clone(), p.links.runs.clone()),
++        Some(p) if p.phase == RUNNING_PHASE && card.stage == Stage::Blocked => Wait::Approval,
++        _ => Wait::Queue(card.reason.clone(), Vec::new()),
++    }
++}
++
++/// 欄の値を替える（鍵の欄が無ければ何もしない）。
++fn set_val(facts: &mut [Fact], key: &str, val: Val) {
++    if let Some(f) = facts.iter_mut().find(|f| f.key == key) {
++        f.val = val;
++    }
++}
++
++/// 欄を鍵の後ろに差す（鍵の欄が無ければ末に足す）。
++fn put_after(facts: &mut Vec<Fact>, after: &str, fact: Fact) {
++    let at = facts
++        .iter()
++        .position(|f| f.key == after)
++        .map_or(facts.len(), |i| i + 1);
++    facts.insert(at, fact);
++}
++
++/// 吹き出しに待ちの欄を足す: Queued は列に入った時刻の後に起きない理由。Blocked は待つ相手の後に待つ理由と、
++/// links.runs が在れば相手の便（重なりの相手の run）。承認待ちは待つ相手を持ち主にし、待つ理由を持ち主の承認にする。
++/// ほかの段と札の無い bead は替えない。
++pub fn with_why(mut p: Pop, src: &Src<'_>) -> Pop {
++    let Some(card) = card_of(src.cards, &p.id) else {
++        return p;
++    };
++    let [why, wait_why, wait_runs] = WHY_KEYS;
++    match (card.stage, wait_of(src, card)) {
++        (Stage::Queued, Wait::Queue(reason, _)) => {
++            let val = reason_val(reason.as_deref());
++            put_after(&mut p.facts, STAGE_KEYS[2], Fact { key: why, val });
++        }
++        (Stage::Blocked, Wait::Queue(reason, runs)) => {
++            let val = reason_val(reason.as_deref());
++            put_after(&mut p.facts, STAGE_KEYS[0], Fact { key: wait_why, val });
++            if !runs.is_empty() {
++                let val = Val::Code(runs.join(", "));
++                put_after(
++                    &mut p.facts,
++                    wait_why,
++                    Fact {
++                        key: wait_runs,
++                        val,
++                    },
++                );
++            }
++        }
++        (Stage::Blocked, Wait::Approval) => {
++            let [owner, approval] = APPROVAL_KEYS;
++            set_val(&mut p.facts, STAGE_KEYS[0], Val::Text(label(owner)));
++            let val = Val::Text(label(approval));
++            put_after(&mut p.facts, STAGE_KEYS[0], Fact { key: wait_why, val });
++        }
++        _ => {}
++    }
++    p
++}
++
+ #[cfg(target_arch = "wasm32")]
+ pub use dom::{PopCtx, PopLayer};
+ 
+@@ -475,7 +598,7 @@ mod dom {
+     use super::{
+         BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
+         Val, Via, anchor_selectors, at_text, hit_of, known, next_href, opener_selector, place, pop,
+-        read_facts, read_parts, toggle,
++        read_facts, read_parts, toggle, with_why,
+     };
+     use crate::frame::{Mode, node_href};
+     use crate::project::{ledger, map, pipeline, timeline};
+@@ -770,6 +893,7 @@ mod dom {
+             };
+             let lines = runs.with(|(f, _)| read_runs(f));
+             let p = with_runs(pop(&id, &src), known(&lines));
++            let p = with_why(p, &src);
+             Some(pop_view(ctx, p, mode, crate::net::now()))
+         };
+         let open = move || ctx.open.with(Option::is_some);
+diff --git a/crates/tsuzuri-surface/tests/bvwhy.rs b/crates/tsuzuri-surface/tests/bvwhy.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..814a69ef770f3d0c2a23ebf79aeac83b6cc90396
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvwhy.rs
+@@ -0,0 +1,222 @@
++//! 行 g-pop-why の歯: 吹き出しの Queued の起きない理由と Blocked の待つ理由（器の列の待ちの 12 語を平易な字にした語の辞書）と、
++//! 表に無い理由の語のまだ分からないと、待つ相手（links.on・links.runs・承認待ちは持ち主）と、層が with_why を通す配線の字。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
++use tsuzuri_contract::case::{CaseLinks, CasePart};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::pop::{
++    APPROVAL_KEYS, Fact, Partner, REASON_HEAD, REASONS, STAGE_KEYS, Src, Val, WHY_KEYS, pop,
++    reason_key, reason_val, with_why,
++};
++
++const NOW: EpochSecs = 1_790_000_000;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn card(x: &str, stage: Stage, runs: u32, reason: Option<&str>) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new(x).unwrap_or_else(|e| panic!("{x}: {e:?}")),
++        runs,
++        stage,
++        reason: reason.map(str::to_string),
++        account: None,
++        since: Some(NOW - 60),
++        ci: None,
++    }
++}
++
++fn part(x: &str, phase: &str, reason: Option<&str>, on: &[&str], runs: &[&str]) -> CasePart {
++    CasePart {
++        part: "contract".to_string(),
++        id: x.to_string(),
++        phase: phase.to_string(),
++        turn: "vessel".to_string(),
++        since: Some(NOW - 60),
++        reason: reason.map(str::to_string),
++        closed: false,
++        links: CaseLinks {
++            on: on.iter().map(|s| s.to_string()).collect(),
++            runs: runs.iter().map(|s| s.to_string()).collect(),
++        },
++    }
++}
++
++fn facts(cards: &[PipelineCard], parts: Reading<&[CasePart]>) -> Vec<Fact> {
++    let src = Src {
++        facts: Reading::Unknown,
++        rows: Reading::Unknown,
++        cards,
++        parts,
++        graph: None,
++    };
++    with_why(pop(cards[0].contract.as_str(), &src), &src).facts
++}
++
++fn keys(f: &[Fact]) -> Vec<&'static str> {
++    f.iter().map(|x| x.key).collect()
++}
++
++fn val<'a>(f: &'a [Fact], key: &str) -> &'a Val {
++    &f.iter()
++        .find(|x| x.key == key)
++        .unwrap_or_else(|| panic!("欄 {key} が無い"))
++        .val
++}
++
++/// 理由の語は器の pipe/dispatch.rs の WAIT_REASONS の 12 語（宣言の順）で、語ごとに鍵 qr:<語> の平易な字が語の辞書に在る。
++#[test]
++fn bvwhy_twelve_reason_words_in_vocab() {
++    assert_eq!(
++        REASONS,
++        [
++            "dependency",
++            "overlap",
++            "admission",
++            "host-busy",
++            "hold",
++            "launched",
++            "settled",
++            "no-design-pointer",
++            "unreflected-ruling",
++            "floor",
++            "reserved",
++            "sibling"
++        ]
++    );
++    assert_eq!(REASON_HEAD, "qr:");
++    for w in REASONS {
++        let key = format!("qr:{w}");
++        let t = vocab()
++            .term(&key)
++            .unwrap_or_else(|| panic!("{key} が語の辞書に無い"));
++        assert!(!t.label.is_ascii() && !t.note.is_empty(), "{key}");
++        assert_eq!(reason_key(w).as_deref(), Some(key.as_str()));
++    }
++    for k in WHY_KEYS.into_iter().chain(APPROVAL_KEYS) {
++        assert!(vocab().term(k).is_some(), "{k} が語の辞書に無い");
++    }
++}
++
++/// 理由の語の : の後の詳細は外して引き、表に無い語と理由の無い札はまだ分からない。
++#[test]
++fn bvwhy_unknown_reason_word() {
++    assert_eq!(
++        reason_val(Some("dependency:t-1,t-2")),
++        Val::Text(label("qr:dependency"))
++    );
++    assert_eq!(reason_val(Some("warped")), Val::Unknown);
++    assert_eq!(reason_val(Some("")), Val::Unknown);
++    assert_eq!(reason_val(None), Val::Unknown);
++    let cards = [card("t-1", Stage::Queued, 0, Some("warped"))];
++    let f = facts(&cards, Reading::Unknown);
++    assert_eq!(keys(&f)[5..], [STAGE_KEYS[2], WHY_KEYS[0]]);
++    assert_eq!(*val(&f, WHY_KEYS[0]), Val::Unknown);
++}
++
++/// Queued の起きない理由は局面の出力の契約の部品の理由（無ければ札の理由）を列に入った時刻の後に出す。
++#[test]
++fn bvwhy_queued_why_from_case() {
++    let cards = [card("t-1", Stage::Queued, 0, Some("hold"))];
++    let parts = [part("t-1", "contract-queued", Some("floor"), &[], &[])];
++    let f = facts(&cards, Reading::Known(&parts));
++    assert_eq!(keys(&f)[5..], [STAGE_KEYS[2], WHY_KEYS[0]]);
++    assert_eq!(*val(&f, WHY_KEYS[0]), Val::Text(label("qr:floor")));
++    let f = facts(&cards, Reading::Unknown);
++    assert_eq!(*val(&f, WHY_KEYS[0]), Val::Text(label("qr:hold")));
++}
++
++/// Blocked の待つ相手は links.on の bead・待つ理由は部品の理由・links.runs が在れば相手の便を待つ理由の後に出す。
++/// 予約（reserved）で links.on が空なら相手はまだ分からない。
++#[test]
++fn bvwhy_partners_from_links() {
++    let cards = [card("t-1", Stage::Blocked, 0, None)];
++    let parts = [part(
++        "t-1",
++        "contract-queued",
++        Some("overlap"),
++        &["t-5"],
++        &["t-5-20261001T000000Z"],
++    )];
++    let f = facts(&cards, Reading::Known(&parts));
++    assert_eq!(
++        keys(&f)[5..],
++        [STAGE_KEYS[0], WHY_KEYS[1], WHY_KEYS[2], STAGE_KEYS[1]]
++    );
++    assert_eq!(
++        *val(&f, STAGE_KEYS[0]),
++        Val::Partners(vec![Partner {
++            id: "t-5".to_string(),
++            short: "t-5".to_string(),
++            stage: None
++        }])
++    );
++    assert_eq!(*val(&f, WHY_KEYS[1]), Val::Text(label("qr:overlap")));
++    assert_eq!(
++        *val(&f, WHY_KEYS[2]),
++        Val::Code("t-5-20261001T000000Z".to_string())
++    );
++    let parts = [part("t-1", "contract-queued", Some("reserved"), &[], &[])];
++    let f = facts(&cards, Reading::Known(&parts));
++    assert_eq!(keys(&f)[5..], [STAGE_KEYS[0], WHY_KEYS[1], STAGE_KEYS[1]]);
++    assert_eq!(*val(&f, STAGE_KEYS[0]), Val::Unknown);
++    assert_eq!(*val(&f, WHY_KEYS[1]), Val::Text(label("qr:reserved")));
++    let parts = [part(
++        "t-1",
++        "contract-queued",
++        Some("reserved"),
++        &["t-6"],
++        &[],
++    )];
++    let f = facts(&cards, Reading::Known(&parts));
++    assert!(matches!(val(&f, STAGE_KEYS[0]), Val::Partners(p) if p[0].id == "t-6"));
++}
++
++/// 承認待ち（契約の部品が contract-running で札の段が Blocked）は相手を持ち主・待つ理由を持ち主の承認にする。
++/// 部品が読めない間は承認待ちと決めず、札の理由（語の辞書に無い器の detail の字）はまだ分からない。
++#[test]
++fn bvwhy_approval_partner_is_owner() {
++    let cards = [card("t-1", Stage::Blocked, 2, Some("approval:merge"))];
++    let parts = [part(
++        "t-1",
++        "contract-running",
++        Some("run-blocked"),
++        &[],
++        &[],
++    )];
++    let f = facts(&cards, Reading::Known(&parts));
++    assert_eq!(keys(&f)[5..], [STAGE_KEYS[0], WHY_KEYS[1], STAGE_KEYS[1]]);
++    assert_eq!(*val(&f, STAGE_KEYS[0]), Val::Text(label(APPROVAL_KEYS[0])));
++    assert_eq!(*val(&f, WHY_KEYS[1]), Val::Text(label(APPROVAL_KEYS[1])));
++    let f = facts(&cards, Reading::Unknown);
++    assert_eq!(*val(&f, STAGE_KEYS[0]), Val::Unknown);
++    assert_eq!(*val(&f, WHY_KEYS[1]), Val::Unknown);
++}
++
++/// ほかの段の札は替えない。層は with_runs の後に with_why を通す。
++#[test]
++fn bvwhy_dom_wiring_text() {
++    for stage in [Stage::Running, Stage::Failed, Stage::Landed] {
++        let cards = [card("t-1", stage, 1, Some("dependency"))];
++        let src = Src {
++            facts: Reading::Unknown,
++            rows: Reading::Unknown,
++            cards: &cards,
++            parts: Reading::Unknown,
++            graph: None,
++        };
++        let p = pop("t-1", &src);
++        assert_eq!(with_why(p.clone(), &src), p);
++    }
++    let src = read("src/widgets/pop.rs");
++    assert!(src.contains(
++        "let p = with_runs(pop(&id, &src), known(&lines));\n            let p = with_why(p, &src);"
++    ));
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 6f0b44dcc196b106f8b9137377e76cff0ccce296..09fe1ce1ef8525bc9fcd15f71c94a1cf10d24b91 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1926,6 +1926,91 @@
+    "label": "結び",
+    "plain": "その run の判定\n・ gate の判定\n・ 無ければ審査の判定",
+    "internal": "verdict.json と review.json の verdict"
++  },
++  "pf_why": {
++   "label": "起きない理由",
++   "plain": "列に在るのに run が起きない理由\n・ 器の列の待ちの語を平易な字に",
++   "internal": "局面の出力の contract-queued の reason\n器の pipe/dispatch.rs の WAIT_REASONS の 12 語"
++  },
++  "pf_wait_why": {
++   "label": "待つ理由",
++   "plain": "何を待っているか\n・ 前の便・重なり・予約・承認",
++   "internal": "contract-queued の reason（dependency・overlap・reserved）\nrun-blocked は持ち主の承認"
++  },
++  "pf_wait_runs": {
++   "label": "相手の便",
++   "plain": "同じ file を書いている便",
++   "internal": "局面の出力の links.runs"
++  },
++  "pw_owner": {
++   "label": "持ち主",
++   "plain": "承認するのは持ち主",
++   "internal": "器の run-blocked（手番 user）"
++  },
++  "pw_approval": {
++   "label": "持ち主の承認を待つ",
++   "plain": "run が承認を待って止まっている\n→ 持ち主が承認すると進む",
++   "internal": "器の RunStage Blocked（ApprovalRequested）"
++  },
++  "qr:dependency": {
++   "label": "前の便の着地を待つ",
++   "plain": "依存の相手がまだ閉じていない\n→ 相手が閉じると起きる",
++   "internal": "WaitReason::Dependency（links.on は閉じていない相手）"
++  },
++  "qr:overlap": {
++   "label": "同じ file を書く便を待つ",
++   "plain": "走っている便と書く file が重なる\n→ その便が終わると起きる",
++   "internal": "WaitReason::Overlap（links.runs と links.on）"
++  },
++  "qr:admission": {
++   "label": "受付が断った",
++   "plain": "器の受付が通さなかった\n・ 余地や memory の不足など",
++   "internal": "WaitReason::Admission（局面は contract-refused）"
++  },
++  "qr:host-busy": {
++   "label": "host が混んでいる",
++   "plain": "器の健康の遮断器が待つを返した\n→ 空くと起きる",
++   "internal": "WaitReason::HostBusy"
++  },
++  "qr:hold": {
++   "label": "止めの印が付いている",
++   "plain": "介入の hold で止めている\n→ 印を外すと起きる",
++   "internal": "WaitReason::Hold"
++  },
++  "qr:launched": {
++   "label": "起こした便の受付を待つ",
++   "plain": "列が起こした便がまだ受付に届いていない",
++   "internal": "WaitReason::Launched"
++  },
++  "qr:settled": {
++   "label": "同じ契約の便が終わった",
++   "plain": "同じ契約の字で便が終端に着いた\n→ 契約を直すと列に戻る",
++   "internal": "WaitReason::Settled（手番は最新の便）"
++  },
++  "qr:no-design-pointer": {
++   "label": "設計の行の印が無い",
++   "plain": "acceptance に設計の行の印が無い\n→ 席が印を付けると起きる",
++   "internal": "WaitReason::NoDesignPointer"
++  },
++  "qr:unreflected-ruling": {
++   "label": "決定の反映を待つ",
++   "plain": "まだ設計に反映していない決定を引く\n→ 反映すると起きる",
++   "internal": "WaitReason::UnreflectedRuling"
++  },
++  "qr:floor": {
++   "label": "床の検査が落ちている",
++   "plain": "床の検査が不合格の間は起きない\n→ 床が直ると起きる",
++   "internal": "WaitReason::Floor"
++  },
++  "qr:reserved": {
++   "label": "落ちた便の予約を待つ",
++   "plain": "落ちた便が書く file を予約している\n→ その直しが入ると起きる",
++   "internal": "WaitReason::Reserved（links.on は予約した bead）"
++  },
++  "qr:sibling": {
++   "label": "同じ設計の行の直しを待つ",
++   "plain": "同じ設計から出た行の直しが入るまで待つ",
++   "internal": "WaitReason::Sibling"
+   }
+  }
+ }
+\ No newline at end of file

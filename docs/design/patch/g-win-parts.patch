@@ -1,0 +1,699 @@
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index be7d8f60385fc0427bd7f2d9125611f6a7c8eb26..2b4e11240e7362d2d1acdab81cfa2e65f8111ae5 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -25,6 +25,8 @@ pub mod topbar;
+ pub mod view;
+ pub mod vocab;
+ pub mod widgets;
++/// 帯の印が開く窓の中身（止まった run の並びは host でも組む・窓の DOM は wasm の target だけ・行 g-win-parts）。
++pub mod wins;
+ 
+ #[cfg(target_arch = "wasm32")]
+ pub mod board;
+diff --git a/crates/tsuzuri-surface/src/project/gaps.rs b/crates/tsuzuri-surface/src/project/gaps.rs
+index e234201a815faf8ab58347fcdc0dc4bd04f0e347..90f0da2ef747f0874b204b0bd754e77d45e3072d 100644
+--- a/crates/tsuzuri-surface/src/project/gaps.rs
++++ b/crates/tsuzuri-surface/src/project/gaps.rs
+@@ -240,6 +240,12 @@ pub fn view() -> leptos::prelude::AnyView {
+     dom::view()
+ }
+ 
++/// 抜けの検査の窓の中身（頁の題の無い札と一覧・行 g-win-parts）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner() -> leptos::prelude::AnyView {
++    dom::inner()
++}
++
+ /// 抜けの検査の頁の DOM（wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
+@@ -325,16 +331,21 @@ mod dom {
+     }
+ 
+     pub fn view() -> AnyView {
++        view! {
++            <div class="row">{h1(BLOCK.heading)}</div>
++            {inner()}
++        }
++        .into_any()
++    }
++
++    /// 頁の本文（札と一覧・抜けの検査の窓も使う）。
++    pub fn inner() -> AnyView {
+         let fetched = crate::net::read(map::PATH);
+         let content = move || match fetched.with(body) {
+             Body::Unmeasured(reason) => panel(unmeasured(reason)),
+             Body::Empty(line) => panel(body_view(Body::Empty(line))),
+             Body::Filled(g) => filled(g),
+         };
+-        view! {
+-            <div class="row">{h1(BLOCK.heading)}</div>
+-            {content}
+-        }
+-        .into_any()
++        content.into_any()
+     }
+ }
+diff --git a/crates/tsuzuri-surface/src/project/legend.rs b/crates/tsuzuri-surface/src/project/legend.rs
+index 202de617a3707ae550558f90e7e835c105798b42..ba185b74b7942548894d4792a6c849d6af5eda28 100644
+--- a/crates/tsuzuri-surface/src/project/legend.rs
++++ b/crates/tsuzuri-surface/src/project/legend.rs
+@@ -43,6 +43,14 @@ pub fn marks() -> Vec<Mark> {
+ pub fn view() -> leptos::prelude::AnyView {
+     use leptos::prelude::*;
+ 
++    super::section(BLOCK, ().into_any(), inner())
++}
++
++/// 記号の見方の窓の中身（見出しの無い本文・帯の設定の中の口が開く・行 g-win-parts）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner() -> leptos::prelude::AnyView {
++    use leptos::prelude::*;
++
+     use crate::vocab::label;
+ 
+     let states = states()
+@@ -53,9 +61,9 @@ pub fn view() -> leptos::prelude::AnyView {
+         .into_iter()
+         .map(|m| view! { <span><b>{m.glyph}</b>{m.word}</span> })
+         .collect_view();
+-    let body = view! {
++    view! {
+         <div class="legend5">{states}</div>
+         <div class="lgline">{marks}</div>
+-    };
+-    super::section(BLOCK, ().into_any(), body.into_any())
++    }
++    .into_any()
+ }
+diff --git a/crates/tsuzuri-surface/src/project/notice.rs b/crates/tsuzuri-surface/src/project/notice.rs
+index ff8c14ad44a0f3c98a1a33a3aaad362e232e4aff..514a9794f2bf4c9f67a828cc3cccd5ddc7f33f58 100644
+--- a/crates/tsuzuri-surface/src/project/notice.rs
++++ b/crates/tsuzuri-surface/src/project/notice.rs
+@@ -101,6 +101,12 @@ pub fn view() -> leptos::prelude::AnyView {
+     dom::view()
+ }
+ 
++/// 知らせの窓の中身（見出しの無い本文・行 g-win-parts）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner() -> leptos::prelude::AnyView {
++    dom::inner()
++}
++
+ /// 席からの知らせの DOM（wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
+@@ -110,13 +116,18 @@ mod dom {
+     use crate::project::{Body, body_view, section, unmeasured};
+ 
+     pub fn view() -> AnyView {
++        section(BLOCK, ().into_any(), inner())
++    }
++
++    /// block の本文（見出しの無い中身・知らせの窓も使う）。
++    pub fn inner() -> AnyView {
+         let fetched = crate::net::read(PATH);
+         let body = move || match fetched.with(content) {
+             Body::Unmeasured(reason) => unmeasured(reason),
+             Body::Empty(line) => body_view(Body::Empty(line)),
+             Body::Filled(line) => view! { <ul class="items">{line_view(line)}</ul> }.into_any(),
+         };
+-        section(BLOCK, ().into_any(), body.into_any())
++        body.into_any()
+     }
+ 
+     /// 1 行（題は link の先が在れば同じ tab で開く a・無ければ字だけ・後に時刻）。
+diff --git a/crates/tsuzuri-surface/src/project/seat.rs b/crates/tsuzuri-surface/src/project/seat.rs
+index 417dc9f6018539d8445351fc757cdd28df22427c..c63838eabe445ab2e69b35fd0d4489be76b99b0c 100644
+--- a/crates/tsuzuri-surface/src/project/seat.rs
++++ b/crates/tsuzuri-surface/src/project/seat.rs
+@@ -856,6 +856,15 @@ pub fn view() -> leptos::prelude::AnyView {
+     dom::view()
+ }
+ 
++/// 席と口座の窓の稼働の記録の幅（24 時間だけ・判断の記録 ADR-27 決定 (1)(4)・行 g-win-parts）。
++pub const WIN_SPAN: Span = Span::H24;
++
++/// 席と口座の窓の中身（見出しの無い本文・稼働の記録は `WIN_SPAN` の幅だけ・行 g-win-parts）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner() -> leptos::prelude::AnyView {
++    dom::inner()
++}
++
+ /// block の DOM（wasm の target のときだけ・中身は src/project_dom/seat.rs）。
+ #[cfg(target_arch = "wasm32")]
+ #[path = "../project_dom/seat.rs"]
+diff --git a/crates/tsuzuri-surface/src/project/stage.rs b/crates/tsuzuri-surface/src/project/stage.rs
+index 402d6df31a1d5a4d9ad25a61becfc2fa30a34aaa..3700b063a4a75b8abb05d7d8f47bd853a59de084 100644
+--- a/crates/tsuzuri-surface/src/project/stage.rs
++++ b/crates/tsuzuri-surface/src/project/stage.rs
+@@ -267,6 +267,12 @@ pub fn view() -> leptos::prelude::AnyView {
+     dom::view()
+ }
+ 
++/// 表示先の窓の中身（開いた時に 1 回読む・帯の設定の中の口が開く・行 g-win-parts）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner() -> leptos::prelude::AnyView {
++    dom::inner()
++}
++
+ /// 表示先の DOM（wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
+@@ -348,6 +354,24 @@ mod dom {
+                 load(f);
+             }
+         };
++        view! {
++            <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
++                <summary>{h2(BLOCK.heading)}</summary>
++                {body(f)}
++            </details>
++        }
++        .into_any()
++    }
++
++    /// 窓の中身（作った時に 1 回読む）。
++    pub fn inner() -> AnyView {
++        let f = Face::new();
++        load(f);
++        body(f)
++    }
++
++    /// 読みの中身と送った後の 1 行。
++    fn body(f: Face) -> AnyView {
+         let body = move || match f.read.get() {
+             None => unmeasured(NOT_READ),
+             Some(reply) => match content(reply.as_ref().map(|(s, t)| (*s, t.as_str()))) {
+@@ -357,15 +381,12 @@ mod dom {
+             },
+         };
+         view! {
+-            <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
+-                <summary>{h2(BLOCK.heading)}</summary>
+-                {body}
+-                {move || {
+-                    f.line
+-                        .get()
+-                        .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
+-                }}
+-            </details>
++            {body}
++            {move || {
++                f.line
++                    .get()
++                    .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
++            }}
+         }
+         .into_any()
+     }
+diff --git a/crates/tsuzuri-surface/src/project_dom/seat.rs b/crates/tsuzuri-surface/src/project_dom/seat.rs
+index e6affb83b1b90a97455dd0303639f961508070fa..90fc5cff6f0afbeb8376c345271a13282c8d205b 100644
+--- a/crates/tsuzuri-surface/src/project_dom/seat.rs
++++ b/crates/tsuzuri-surface/src/project_dom/seat.rs
+@@ -6,7 +6,7 @@ use tsuzuri_contract::board::Reading;
+ 
+ use super::{
+     BLOCK, Band, GROUP_CARD, LEGEND, Low, OROW, PATH, Seat, Sign,
+-    Span, Strip, Top, WindowRow, content, group_card, group_head, park_card, sample_svg, seat_caps, span_of,
++    Span, Strip, Top, WIN_SPAN, WindowRow, content, group_card, group_head, park_card, sample_svg, seat_caps, span_of,
+     strip_svg, thr, tick_age, tick_class, tick_mark, with_span,
+ };
+ use crate::view::Fetched;
+@@ -38,18 +38,29 @@ fn pick(span: RwSignal<Span>, to: Span) {
+ }
+ 
+ pub fn view() -> AnyView {
+-    let fetched = crate::net::read(PATH);
+-    // 群の chip の card の電文（account board と同じ口・読み直しは変化の種類の表のまま）。
+-    let group_doc = crate::net::read(crate::account::PATH);
+     let span = RwSignal::new(span_of(&search()));
+     // 停止の切り替えの状態（読みの閉包の外・読み直しで組み直しても応答の字が残る）。
+     let states: States = RwSignal::new(Default::default());
++    section(BLOCK, ().into_any(), body(span, states))
++}
++
++/// 席と口座の窓の中身（見出しの無い本文・稼働の記録は 24 時間の幅・幅の button は窓の stylesheet が出さない・行 g-win-parts）。
++pub fn inner() -> AnyView {
++    let states: States = RwSignal::new(Default::default());
++    body(RwSignal::new(WIN_SPAN), states)
++}
++
++/// block の本文（席の口と群の chip の口を読む）。
++fn body(span: RwSignal<Span>, states: States) -> AnyView {
++    let fetched = crate::net::read(PATH);
++    // 群の chip の card の電文（account board と同じ口・読み直しは変化の種類の表のまま）。
++    let group_doc = crate::net::read(crate::account::PATH);
+     let body = move || match fetched.with(|f| content(f, crate::net::now())) {
+         Body::Unmeasured(reason) => unmeasured(reason),
+         Body::Empty(line) => body_view(Body::Empty(line)),
+         Body::Filled(seat) => seat_view(seat, span, states, group_doc),
+     };
+-    section(BLOCK, ().into_any(), body.into_any())
++    body.into_any()
+ }
+ 
+ /// 測れていないの記号（その欄だけ）。
+diff --git a/crates/tsuzuri-surface/src/wins.rs b/crates/tsuzuri-surface/src/wins.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c625a016fb404b43e085b640798baf3070c2f788
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/wins.rs
+@@ -0,0 +1,160 @@
++//! 帯の印が開く窓の中身（行 g-win-parts・判断の記録 ADR-27 決定 (4)(8)・見本 board-v2 の stalledModal と noticeModal と
++//! seatModal と gapsModal と legendModal と destModal）: 止まった run・知らせ・席と口座・抜けの検査の 4 つの窓と、
++//! 設定（⚙）の中の記号の見方と表示先の窓。
++//! 知らせ・席と口座・抜けの検査・記号の見方・表示先は、今の block の中身の関数（各 module の inner）を窓の中で描く
++//! （頁の block は替えない・頁から block を外すのは 1 枚の画面への切り替えの行）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
++//! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
++//! 質問の窓はこの行では今の質問の block を描く（1 問ずつの形は行 g-ask-win が替える）。
++//! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
++
++use std::cmp::Reverse;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
++
++use crate::frame::{Mode, node_href};
++use crate::project::Body;
++use crate::project::pipeline::{self, age_at, stage_word};
++use crate::topbar::{SEAT_KEY, STALL_KEY, Win};
++use crate::view::{Fetched, id_order, read_rows};
++
++/// 窓の幅（px・見本の各窓の w）と題の語の鍵。
++pub fn frame_of(win: Win) -> (u32, &'static str) {
++    match win {
++        Win::Ask => (760, "ask_open"),
++        Win::Stalled => (720, STALL_KEY),
++        Win::Notices => (600, "notice"),
++        Win::Seat => (760, SEAT_KEY),
++        Win::Gaps => (600, "gaps"),
++        Win::Legend => (560, "status"),
++        Win::Dest => (520, "stage_target"),
++    }
++}
++
++/// 止まった run の窓の 1 枚（bead の id・題の全体・段の字・経過・理由の全文・個別の頁の URL）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Stalled {
++    pub id: String,
++    pub title: Option<String>,
++    pub stage: String,
++    pub age: String,
++    pub reason: Option<String>,
++    pub href: String,
++}
++
++/// 止まった run が無い時の 1 行。
++pub const STALLED_NONE: &str = "止まった run は無い";
++
++/// 止まった run の窓の中身: pipeline の口の札のうち止まりの列（Questioned・Failed・Stopped）を、段を決めた時刻の新しい順
++/// （時刻の無い札は後・同じなら bead の id の順）に並べる。題は台帳の一覧から引いた題の全体（引けなければ None）で、
++/// 経過は今から、個別の頁は今の節点の頁の URL。口が読めなければ測れていない、止まりの札が無ければ空。
++pub fn stalled(pipe: &Fetched, ledger: &Fetched, now: EpochSecs, mode: Mode) -> Body<Vec<Stalled>> {
++    let cards = match pipeline::cards(pipe) {
++        Ok(c) => c,
++        Err(reason) => return Body::Unmeasured(reason),
++    };
++    let rows = match read_rows(ledger) {
++        Reading::Known(rows) => rows,
++        Reading::Unknown => Vec::new(),
++    };
++    let mut stop: Vec<&PipelineCard> = cards
++        .iter()
++        .filter(|c| c.stage.column() == PipelineColumn::QuestionedFailedStopped)
++        .collect();
++    stop.sort_by(|a, b| {
++        let key = |c: &PipelineCard| (c.since.is_none(), Reverse(c.since));
++        key(a)
++            .cmp(&key(b))
++            .then_with(|| id_order(a.contract.as_str(), b.contract.as_str()))
++    });
++    if stop.is_empty() {
++        return Body::Empty(STALLED_NONE);
++    }
++    Body::Filled(
++        stop.into_iter()
++            .map(|c| {
++                let id = c.contract.as_str();
++                Stalled {
++                    id: id.to_string(),
++                    title: rows
++                        .iter()
++                        .find(|r| r.id.as_str() == id)
++                        .map(|r| r.title.clone()),
++                    stage: stage_word(c),
++                    age: age_at(c.since, now),
++                    reason: c.reason.clone(),
++                    href: node_href(id, mode),
++                }
++            })
++            .collect(),
++    )
++}
++
++#[cfg(target_arch = "wasm32")]
++pub use dom::draw;
++
++#[cfg(target_arch = "wasm32")]
++mod dom {
++    use leptos::prelude::*;
++
++    use super::{Stalled, frame_of, stalled};
++    use crate::frame::Mode;
++    use crate::project::{
++        Body, ask, body_view, gaps, ledger, legend, notice, pipeline, seat, stage, unmeasured,
++    };
++    use crate::topbar::Win;
++    use crate::vocab::label;
++    use crate::widgets::modal::Frame;
++
++    /// 今の URL の表示の型。
++    fn mode() -> Mode {
++        Mode::from_query(&window().location().search().unwrap_or_default())
++    }
++
++    fn card_view(c: Stalled) -> AnyView {
++        let head = c.title.clone().unwrap_or_else(|| c.id.clone());
++        let reason = c
++            .reason
++            .map(|r| view! { <div class="stc-r"><b>{label("reason")}</b>" "{r}</div> });
++        view! {
++            <div class="stc">
++                <div class="stc-h"><b>{head}</b><code>{c.id}</code><span class="sc">{format!("{} · {}", c.stage, c.age)}</span></div>
++                {reason}
++                <div class="stc-b"><a class="sm" href=c.href>{label("open_node")}" ›"</a></div>
++            </div>
++        }
++        .into_any()
++    }
++
++    /// 止まった run の窓の本文（pipeline の口と台帳の一覧の口を読む）。
++    fn stalled_view() -> AnyView {
++        let pipe = crate::net::read(pipeline::PATH);
++        let rows = crate::net::read(ledger::PATH);
++        let list =
++            move || match pipe.with(|p| rows.with(|l| stalled(p, l, crate::net::now(), mode()))) {
++                Body::Unmeasured(reason) => unmeasured(reason),
++                Body::Empty(line) => body_view(Body::Empty(line)),
++                Body::Filled(cs) => cs.into_iter().map(card_view).collect_view().into_any(),
++            };
++        list.into_any()
++    }
++
++    /// 窓の名から中身を組む（窓の層 widgets::modal::layer の draw に渡す）。
++    pub fn draw(win: Win) -> Frame {
++        let (width, key) = frame_of(win);
++        let body = match win {
++            Win::Ask => ask::view(),
++            Win::Stalled => stalled_view(),
++            Win::Notices => notice::inner(),
++            Win::Seat => seat::inner(),
++            Win::Gaps => gaps::inner(),
++            Win::Legend => legend::inner(),
++            Win::Dest => stage::inner(),
++        };
++        Frame {
++            width,
++            title: label(key).into_any(),
++            body,
++        }
++    }
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 1952f6cd7c548d9c959076247d4b8311859d72f7..ee3e243d54e4bb74a52807c1e986d5a18c9a68cb 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -335,6 +335,18 @@ a.tile:hover { box-shadow: var(--shadow); }
+   .mh .x { width: 40px; height: 40px; line-height: 38px; }
+   .mh .back { min-height: 40px; }
+ }
++/* 止まった run の窓（行 g-win-parts・見本の .stc・題と段と経過・理由の全文・個別の頁への口） */
++.stc { margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--s-stop); border-radius: var(--r2); }
++.stc-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
++.stc-h b { font-size: var(--fs-2); overflow-wrap: anywhere; }
++.stc-h code { color: var(--ink-3); }
++.stc-h .sc { margin-left: auto; color: var(--s-stop); font-size: var(--fs-1); }
++.stc-r { margin-top: 6px; font-size: 12.5px; overflow-wrap: anywhere; }
++.stc-b { display: flex; gap: 6px; margin-top: var(--s2); }
++.mb .sm { padding: 2px 9px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel); font-size: 11.5px; white-space: nowrap; }
++.mb .sm:hover { background: var(--panel-2); }
++/* 席と口座の窓の稼働の記録は 24 時間の幅だけ（判断の記録 ADR-27 決定 (1)・幅の button は出さない） */
++.mb .spanbar { display: none; }
+ 
+ /* ---------- 一覧の型（印 + 題・1 種） ---------- */
+ .items { list-style: none; margin: 0; padding: 0; }
+diff --git a/crates/tsuzuri-surface/tests/bvwins.rs b/crates/tsuzuri-surface/tests/bvwins.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e07150a203c51fad0e5181076d8789440f65051d
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvwins.rs
+@@ -0,0 +1,232 @@
++//! 行 g-win-parts の歯: 帯の印が開く窓の中身（判断の記録 ADR-27 決定 (4)(8)・見本 board-v2 の各窓）の幅と題の語と、
++//! 止まった run の窓の並び、席と口座の窓の 24 時間の幅、今の block の中身の関数を窓が使う形（各 module の inner）、
++//! 窓の DOM（wasm の枝）の配線の字、止まった run の窓の規則が stylesheet の窓の塊に在ること。
++//! fixture は tests/fixtures/surface/pipeline-board.json（読むだけ）。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::{PipelineBoard, PipelineCard, Reading, Stage};
++use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow};
++use tsuzuri_contract::wire;
++use tsuzuri_surface::frame::{Mode, node_href};
++use tsuzuri_surface::project::Body;
++use tsuzuri_surface::project::pipeline::age_at;
++use tsuzuri_surface::project::seat::{Span, WIN_SPAN};
++use tsuzuri_surface::topbar::Win;
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::wins::{STALLED_NONE, frame_of, stalled};
++
++/// 描く時の今（UTC の日の正午）。
++const NOW: u64 = 1_790_510_400;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn pipe() -> Fetched {
++    Fetched::Body(read("../../tests/fixtures/surface/pipeline-board.json"))
++}
++
++fn ledger(rows: &[(&str, &str)]) -> Fetched {
++    let rows = rows
++        .iter()
++        .map(|(id, title)| LedgerRow {
++            id: BeadId::new(*id).expect("id"),
++            kind: "task".to_string(),
++            title: (*title).to_string(),
++            status: "open".to_string(),
++            updated_at: 1,
++            parent: None,
++            labels: vec![],
++        })
++        .collect();
++    Fetched::Body(
++        wire::encode(&LedgerList {
++            rows: Reading::Known(rows),
++        })
++        .expect("電文"),
++    )
++}
++
++/// 窓の幅と題の語の鍵は見本の各窓の幅（質問 760・止まった run 720・知らせ 600・席と口座 760・抜けの検査 600・
++/// 記号の見方 560・表示先 520）で、題の語は語の辞書に在る。
++#[test]
++fn bvwins_frames_widths_titles() {
++    let want = [
++        (Win::Ask, 760, "ask_open", "答えを待つ質問"),
++        (Win::Stalled, 720, "bar_stall", "止まった run"),
++        (Win::Notices, 600, "notice", "席からの知らせ"),
++        (Win::Seat, 760, "seat_acct", "席と口座"),
++        (Win::Gaps, 600, "gaps", "抜けの検査"),
++        (Win::Legend, 560, "status", "記号の見方"),
++        (Win::Dest, 520, "stage_target", "表示先"),
++    ];
++    for (win, px, key, word) in want {
++        assert_eq!(frame_of(win), (px, key), "{win:?}");
++        assert_eq!(
++            vocab().term(key).map(|t| t.label.as_str()),
++            Some(word),
++            "{key}"
++        );
++    }
++}
++
++/// 止まった run の窓は止まりの列の札だけを新しい順に、題の全体と段と経過と理由と個別の頁の URL で並べる
++/// （台帳が読めなければ題は無い）。
++#[test]
++fn bvwins_stalled_newest_first() {
++    let rows = ledger(&[
++        ("px.5", "問いで止まった題の全体"),
++        ("px.6", "題 6"),
++        ("px.3", "走る"),
++    ]);
++    let Body::Filled(list) = stalled(&pipe(), &rows, NOW, Mode::Expert) else {
++        panic!("止まった run の並び");
++    };
++    let got: Vec<(&str, Option<&str>, &str, Option<&str>)> = list
++        .iter()
++        .map(|s| {
++            (
++                s.id.as_str(),
++                s.title.as_deref(),
++                s.stage.as_str(),
++                s.reason.as_deref(),
++            )
++        })
++        .collect();
++    assert_eq!(
++        got,
++        [
++            ("px.7", None, "Stopped", None),
++            (
++                "px.5",
++                Some("問いで止まった題の全体"),
++                "Questioned",
++                Some("about:write-set")
++            ),
++            ("px.6", Some("題 6"), "Failed", Some("verify が赤")),
++        ]
++    );
++    assert_eq!(list[0].age, age_at(Some(1_790_510_340), NOW));
++    assert_eq!(list[2].age, age_at(Some(1_790_424_000), NOW));
++    assert_eq!(list[1].href, node_href("px.5", Mode::Expert));
++    let Body::Filled(no_titles) = stalled(&pipe(), &Fetched::Failed, NOW, Mode::Beginner) else {
++        panic!("台帳が読めなくても並ぶ");
++    };
++    assert!(no_titles.iter().all(|s| s.title.is_none()));
++}
++
++/// 止まった run の窓は読めない口で測れていない・止まりの札が無ければ空（STALLED_NONE の 1 行）。
++#[test]
++fn bvwins_stalled_unread_or_none() {
++    let rows = ledger(&[]);
++    for f in [
++        Fetched::NotRead,
++        Fetched::Failed,
++        Fetched::Body("{}".to_string()),
++    ] {
++        assert!(matches!(
++            stalled(&f, &rows, NOW, Mode::Beginner),
++            Body::Unmeasured(_)
++        ));
++    }
++    let only_run = PipelineBoard {
++        cards: Reading::Known(vec![PipelineCard {
++            contract: BeadId::new("px.3").expect("id"),
++            runs: 1,
++            stage: Stage::Running,
++            reason: None,
++            account: None,
++            since: Some(NOW),
++            ci: None,
++        }]),
++        misfits: Reading::Known(vec![]),
++    };
++    let f = Fetched::Body(wire::encode(&only_run).expect("電文"));
++    assert!(matches!(stalled(&f, &rows, NOW, Mode::Beginner), Body::Empty(l) if l == STALLED_NONE));
++}
++
++/// 席と口座の窓の稼働の記録は 24 時間の幅だけで、窓の中の幅の button は stylesheet が出さない
++/// （頁の block は今の幅の選びのまま・seat_view は替えない）。
++#[test]
++fn bvwins_seat_window_24h() {
++    assert_eq!(WIN_SPAN, Span::H24);
++    let dom = read("src/project_dom/seat.rs");
++    for needle in [
++        "section(BLOCK, ().into_any(), body(span, states))",
++        "body(RwSignal::new(WIN_SPAN), states)",
++        "Body::Filled(seat) => seat_view(seat, span, states, group_doc),",
++    ] {
++        assert_eq!(dom.matches(needle).count(), 1, "席の DOM の {needle}");
++    }
++    assert!(read("src/project/seat.rs").contains("    dom::inner()\n"));
++    assert!(read("style.css").contains("\n.mb .spanbar { display: none; }\n"));
++}
++
++/// 知らせ・記号の見方・抜けの検査・表示先の block は中身を inner に分け、block の view も inner を描く（頁の形は替えない）。
++#[test]
++fn bvwins_blocks_inner_text() {
++    for (file, view_uses) in [
++        (
++            "src/project/notice.rs",
++            "section(BLOCK, ().into_any(), inner())",
++        ),
++        (
++            "src/project/legend.rs",
++            "super::section(BLOCK, ().into_any(), inner())",
++        ),
++        ("src/project/gaps.rs", "{inner()}"),
++        ("src/project/stage.rs", "{body(f)}"),
++    ] {
++        let src = read(file);
++        assert!(
++            src.contains("pub fn inner() -> leptos::prelude::AnyView {"),
++            "{file} に inner が無い"
++        );
++        assert!(
++            src.contains(view_uses),
++            "{file} の view が {view_uses} を持たない"
++        );
++    }
++    let stage = read("src/project/stage.rs");
++    assert!(stage.contains("        let f = Face::new();\n        load(f);\n        body(f)\n"));
++}
++
++/// 窓の DOM（wasm の枝）の配線の字: 窓の名ごとに中身を組む関数（質問はこの行では今の質問の block）。
++#[test]
++fn bvwins_draw_wiring_text() {
++    let src = read("src/wins.rs");
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    for needle in [
++        "Win::Ask => ask::view(),",
++        "Win::Stalled => stalled_view(),",
++        "Win::Notices => notice::inner(),",
++        "Win::Seat => seat::inner(),",
++        "Win::Gaps => gaps::inner(),",
++        "Win::Legend => legend::inner(),",
++        "Win::Dest => stage::inner(),",
++        "crate::net::read(pipeline::PATH)",
++        "crate::net::read(ledger::PATH)",
++        "<a class=\"sm\" href=c.href>",
++    ] {
++        assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
++    }
++    assert!(read("src/lib.rs").contains("\npub mod wins;\n"));
++}
++
++/// 止まった run の窓の規則は stylesheet の窓の塊（#scrim の規則の後・一覧の型の前）に在る。
++#[test]
++fn bvwins_classes_in_stylesheet() {
++    let css = read("style.css");
++    let win = css.find("#scrim { position: fixed;").expect("窓の規則");
++    let next = css.find("/* ---------- 一覧の型").expect("一覧の型の塊");
++    for rule in [".stc {", ".stc-h {", ".stc-r {", ".stc-b {", ".mb .sm {"] {
++        let i = css
++            .find(rule)
++            .unwrap_or_else(|| panic!("stylesheet に {rule} が無い"));
++        assert!(win < i && i < next, "{rule} は窓の塊の中");
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/tgown.rs b/crates/tsuzuri-surface/tests/tgown.rs
+index fc8cf3671f63dadc10f3d78604c0cc25120515a2..040579796924863c3cf8fa10a2e2ebb799322426 100644
+--- a/crates/tsuzuri-surface/tests/tgown.rs
++++ b/crates/tsuzuri-surface/tests/tgown.rs
+@@ -209,7 +209,9 @@ fn tgown_reads_off_the_chain() {
+     };
+     once("crate::net::get(PATH)", 1);
+     once("crate::net::post(path, body)", 1);
+-    once("load(f);", 2);
++    once("load(f);", 3);
++    // 表示先の窓（行 g-win-parts）は窓を作った時に 1 回だけ読む。
++    once("        let f = Face::new();\n        load(f);\n        body(f)\n", 1);
+     once("            if now {\n                load(f);\n            }", 1);
+     once("            if reread {\n                load(f);\n            }", 1);
+     once("send(f, PATH, own_body(Some(&to)), true)", 1);

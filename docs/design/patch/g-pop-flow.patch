@@ -1,0 +1,792 @@
+diff --git a/crates/tsuzuri-surface/src/widgets/mod.rs b/crates/tsuzuri-surface/src/widgets/mod.rs
+index a8bfe8089fa27680a053eb760b03aacafdc983c3..b198163dcf263f6d0620dfba61129c826b21cf2c 100644
+--- a/crates/tsuzuri-surface/src/widgets/mod.rs
++++ b/crates/tsuzuri-surface/src/widgets/mod.rs
+@@ -3,7 +3,8 @@
+ //! 電文の節点 1 つから組む節点の card（nodecard・行 g-card-node・host でも組む）と、
+ //! 初心者の mode の home の頁の最初の案内（coach・行 g-coach・決めと置き場は host でも組む）と、
+ //! 帯の印を押すと開く窓の枠（modal・行 g-win-frame・閉じる判定と窓の積みは host でも組む）と、
+-//! 札と一覧の行を押すと開く吹き出し（pop・行 g-pop・欄の組みと置き場と開閉は host でも組む）。
++//! 札と一覧の行を押すと開く吹き出し（pop・行 g-pop・欄の組みと置き場と開閉は host でも組む）と、
++//! 吹き出しの run の段の流れと run の歴（runflow・行 g-pop-flow・host でも組む）。
+ 
+ pub mod coach;
+ pub mod fig;
+@@ -12,3 +13,4 @@ pub mod hover;
+ pub mod modal;
+ pub mod nodecard;
+ pub mod pop;
++pub mod runflow;
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4cacda1706f 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -8,6 +8,7 @@
+ //! 板と台帳の一覧とグラフの口（段・題・種類・親・設計の pointer）。幅 600 px 以下（規則の行 R-35）は下からの板（sheet）。
+ //! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
+ //! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
++//! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す（行 g-pop-flow）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+@@ -18,6 +19,7 @@ use tsuzuri_contract::wire;
+ 
+ use super::hover::{Point, Rect, Size};
+ use super::modal::Hit;
++use super::runflow::{Hist, Seg};
+ use crate::frame::{self, Mode, PageId};
+ use crate::mapview::band::kind_key;
+ use crate::project::{pipeline, timeline};
+@@ -188,6 +190,10 @@ pub enum Val {
+     Epic(Partner),
+     /// 待つ相手の一覧（押すと相手の吹き出し）。
+     Partners(Vec<Partner>),
++    /// 段の流れ（流れの段と表に無い段の語・行 g-pop-flow）。
++    Flow(Vec<Seg>, Vec<String>),
++    /// run の歴（行 g-pop-flow）。
++    Hist(Vec<Hist>),
+     /// まだ分からない。
+     Unknown,
+ }
+@@ -463,13 +469,16 @@ mod dom {
+ 
+     use super::super::hover::{Point, Rect, Size};
+     use super::super::modal::{Hit, closes};
++    use super::super::runflow::{
++        Hist, Seg, flow_text, read_runs, seg_secs, unknown_text, with_runs,
++    };
+     use super::{
+         BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
+         Val, Via, anchor_selectors, at_text, hit_of, known, next_href, opener_selector, place, pop,
+         read_facts, read_parts, toggle,
+     };
+     use crate::frame::{Mode, node_href};
+-    use crate::project::{ledger, map, pipeline};
++    use crate::project::{ledger, map, pipeline, timeline};
+     use crate::view::read_rows;
+     use crate::vocab::label;
+     use crate::widgets::help::{HelpCtx, hs};
+@@ -597,6 +606,53 @@ mod dom {
+         .into_any()
+     }
+ 
++    /// 段の流れ（長さの比の帯と字と表に無い段の語・帯の幅は 120 秒を下限にする）。
++    fn flow_view(segs: Vec<Seg>, unknown: Vec<String>, now: u64) -> AnyView {
++        let bars = segs
++            .iter()
++            .map(|s| {
++                let w = seg_secs(s, now).unwrap_or(0).max(120);
++                let class = if s.open { "plive" } else { "" };
++                view! { <span class=class style=format!("flex:{w}")></span> }
++            })
++            .collect_view();
++        let words = unknown.iter().map(|w| unknown_text(w)).collect::<Vec<_>>();
++        let words =
++            (!words.is_empty()).then(|| view! { <div class=CLASSES[8]>{words.join(" · ")}</div> });
++        view! {
++            <div class="ptl">{bars}</div>
++            <div class="ptlt">{flow_text(&segs, now)}</div>
++            {words}
++        }
++        .into_any()
++    }
++
++    /// run の歴の表（回・終わりの段・結び・FAIL を含む結びは止まりの色）。
++    fn hist_view(rows: Vec<Hist>) -> AnyView {
++        let rows = rows
++            .into_iter()
++            .map(|h| {
++                let end = h.end.unwrap_or_else(|| label(UNKNOWN_KEY));
++                let fail = h.verdict.as_deref().is_some_and(|v| v.contains("FAIL"));
++                let verdict = h.verdict.unwrap_or_else(|| pipeline::NO_AGE.to_string());
++                view! {
++                    <tr>
++                        <td>{h.n}</td>
++                        <td>{end}</td>
++                        <td class=if fail { "pfail" } else { "" }>{verdict}</td>
++                    </tr>
++                }
++            })
++            .collect_view();
++        view! {
++            <table class="phist">
++                <tr><th>{label("ph_run")}</th><th>{label("ph_end")}</th><th>{label("ph_verdict")}</th></tr>
++                {rows}
++            </table>
++        }
++        .into_any()
++    }
++
+     fn val_view(ctx: PopCtx, val: Val, now: u64) -> AnyView {
+         match val {
+             Val::Text(t) => view! { <span>{t}</span> }.into_any(),
+@@ -614,6 +670,8 @@ mod dom {
+                     .collect_view();
+                 view! { <div class=CLASSES[6]>{items}</div> }.into_any()
+             }
++            Val::Flow(segs, unknown) => flow_view(segs, unknown, now),
++            Val::Hist(rows) => hist_view(rows),
+             Val::Unknown => view! { <span class=CLASSES[8]>{label(UNKNOWN_KEY)}</span> }.into_any(),
+         }
+     }
+@@ -686,6 +744,13 @@ mod dom {
+         let pipe = crate::net::read(pipeline::PATH);
+         let rows = crate::net::read(ledger::PATH);
+         let graph = crate::net::read(map::PATH);
++        // 走行の読みの口は吹き出しを開いた時に読む（閉じていれば空の path で読まない・行 g-pop-flow）。
++        let runs_path = Signal::derive(move || {
++            ctx.shown()
++                .map(|id| timeline::path(&id))
++                .unwrap_or_default()
++        });
++        let runs = crate::net::read_path(runs_path);
+         listen(ctx);
+         let style = move || ctx.style();
+         let content = move || {
+@@ -703,7 +768,8 @@ mod dom {
+                 parts: known(&parts),
+                 graph: doc.as_ref(),
+             };
+-            let p = pop(&id, &src);
++            let lines = runs.with(|(f, _)| read_runs(f));
++            let p = with_runs(pop(&id, &src), known(&lines));
+             Some(pop_view(ctx, p, mode, crate::net::now()))
+         };
+         let open = move || ctx.open.with(Option::is_some);
+diff --git a/crates/tsuzuri-surface/src/widgets/runflow.rs b/crates/tsuzuri-surface/src/widgets/runflow.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f694c0aaa9a65ac9bb1521e41234b58dc720ca64
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/widgets/runflow.rs
+@@ -0,0 +1,235 @@
++//! 吹き出しの run の段の流れと run の歴（行 g-pop-flow・判断の記録 ADR-27 決定 (7) と (10)・見本 board-v2 の stepsHTML と histTable）:
++//! 吹き出しを開いた時に走行の読みの口（`timeline::path` の `/api/runs?bead=`）を読み、最後の走行の段の流れ（審査・実装・gate の
++//! 始まりと長さ・走っている段は「〜」）と、走行ごとの歴（回・終わりの段・結び）と、着地の commit を吹き出しの欄に足す。
++//! 段の語は器の case-lifecycle.md §2.1 の便の段の写しの 11 値を写した閉じた表（`STAGES`）で読み、表に無い語はまだ分からない。
++//! 審査は Intake から次の段まで・実装は Spawned から次の段まで・gate は Implemented から次の段まで（次の段が無ければ走っている）。
++//! 欄の組みは純粋な関数にして host で試し、読みの口の signal は吹き出しの層（`pop::PopLayer`）が持つ。
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{Reading, Stage};
++use tsuzuri_contract::runs::{RunLine, RunsDoc};
++use tsuzuri_contract::wire;
++
++use super::pop::{Fact, Pop, STAGE_KEYS, UNKNOWN_KEY, Val};
++use crate::project::pipeline;
++use crate::view::Fetched;
++use crate::vocab::label;
++
++/// 流れの段（審査・実装・gate）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Step {
++    Review,
++    Implement,
++    Gate,
++}
++
++impl Step {
++    /// 語の鍵。
++    pub fn key(self) -> &'static str {
++        match self {
++            Step::Review => "fl_review",
++            Step::Implement => "fl_impl",
++            Step::Gate => "fl_gate",
++        }
++    }
++}
++
++/// 器の便の段の 11 値（case-lifecycle.md §2.1 の表の順）と、その段で始まる流れの段（None は始めない）。
++pub const STAGES: [(&str, Option<Step>); 11] = [
++    ("Intake", Some(Step::Review)),
++    ("Reviewed", None),
++    ("Blocked", None),
++    ("Spawned", Some(Step::Implement)),
++    ("Questioned", None),
++    ("RateLimited", None),
++    ("Implemented", Some(Step::Gate)),
++    ("Gated", None),
++    ("Landed", None),
++    ("Stopped", None),
++    ("Failed", None),
++];
++
++/// 段の流れと run の歴と commit の欄の語の鍵。
++pub const FLOW_KEYS: [&str; 3] = ["pf_flow", "pf_hist", "pf_commit"];
++
++/// 着地の event の detail の commit の札の頭（器の RunDone の `sha:<commit> main:<commit>`）。
++pub const SHA_HEAD: &str = "sha:";
++
++/// 吹き出しに出す commit の字数。
++pub const COMMIT_CHARS: usize = 12;
++
++/// 走っている段の長さの後に付ける字（見本の「〜」）。
++pub const OPEN_END: &str = "〜";
++
++/// 段の語が閉じた表に在るか。
++pub fn known_stage(word: &str) -> bool {
++    STAGES.iter().any(|(s, _)| *s == word)
++}
++
++/// 流れの 1 段（始まりと終わりの時刻・次の段の event が無ければ走っている）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct Seg {
++    pub step: Step,
++    pub from: Option<EpochSecs>,
++    pub to: Option<EpochSecs>,
++    pub open: bool,
++}
++
++/// 走行の段の流れ（段の event の順に、流れを始める段から次の段の event までを 1 段にする）と、表に無い段の語。
++pub fn flow(line: &RunLine) -> (Vec<Seg>, Vec<String>) {
++    let mut segs: Vec<Seg> = Vec::new();
++    let mut unknown = Vec::new();
++    for s in &line.steps {
++        if let Some(last) = segs.last_mut().filter(|l| l.open) {
++            last.to = s.at;
++            last.open = false;
++        }
++        match STAGES.iter().find(|(w, _)| *w == s.stage) {
++            Some((_, Some(step))) => segs.push(Seg {
++                step: *step,
++                from: s.at,
++                to: None,
++                open: true,
++            }),
++            Some((_, None)) => {}
++            None => unknown.push(s.stage.clone()),
++        }
++    }
++    (segs, unknown)
++}
++
++/// 段の長さの秒（終わりか、走っている段は今から始まりを引く・時刻が欠ければ None）。
++pub fn seg_secs(s: &Seg, now: EpochSecs) -> Option<u64> {
++    let to = if s.open { Some(now) } else { s.to };
++    Some(to?.saturating_sub(s.from?))
++}
++
++/// 流れの字（「審査 10m → 実装 22m〜」の形・長さが分からなければ「―」）。
++pub fn flow_text(segs: &[Seg], now: EpochSecs) -> String {
++    segs.iter()
++        .map(|s| {
++            let len = seg_secs(s, now).map_or_else(|| pipeline::NO_AGE.to_string(), pipeline::age);
++            let open = if s.open { OPEN_END } else { "" };
++            format!("{} {len}{open}", label(s.step.key()))
++        })
++        .collect::<Vec<_>>()
++        .join(" → ")
++}
++
++/// 走行の歴の 1 行（回・終わりの段の語・結び）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Hist {
++    pub n: usize,
++    pub run: String,
++    /// 最後の段の語（表に無い語と段の無い走行は None＝まだ分からない）。
++    pub end: Option<String>,
++    /// 結び（gate の判定・無ければ審査の判定・無ければ段の審査の結び・どれも無ければ None）。
++    pub verdict: Option<String>,
++}
++
++/// 走行ごとの歴（走行の順・回は 1 から）。
++pub fn history(lines: &[RunLine]) -> Vec<Hist> {
++    lines
++        .iter()
++        .enumerate()
++        .map(|(i, l)| {
++            let end = l
++                .steps
++                .last()
++                .map(|s| s.stage.clone())
++                .filter(|w| known_stage(w));
++            let verdict = match (&l.gate, &l.review) {
++                (Reading::Known(g), _) => Some(g.verdict.clone()),
++                (_, Reading::Known(r)) => Some(r.verdict.clone()),
++                _ => l.steps.iter().rev().find_map(|s| s.verdict.clone()),
++            };
++            Hist {
++                n: i + 1,
++                run: l.run.clone(),
++                end,
++                verdict,
++            }
++        })
++        .collect()
++}
++
++/// 着地の commit（最後の走行の段 Landed の detail の `SHA_HEAD` の札の値の頭 `COMMIT_CHARS` 字）。
++pub fn commit(line: &RunLine) -> Option<String> {
++    line.steps
++        .iter()
++        .filter(|s| s.stage == "Landed")
++        .filter_map(|s| s.detail.as_deref())
++        .flat_map(str::split_whitespace)
++        .find_map(|t| t.strip_prefix(SHA_HEAD))
++        .map(|sha| sha.chars().take(COMMIT_CHARS).collect())
++}
++
++/// 走行の読みの口の本文を走行の列に読む（読めなければ Unknown）。
++pub fn read_runs(fetched: &Fetched) -> Reading<Vec<RunLine>> {
++    match fetched {
++        Fetched::Body(text) => wire::decode::<RunsDoc>(text).map_or(Reading::Unknown, |d| d.runs),
++        Fetched::NotRead | Fetched::Failed => Reading::Unknown,
++    }
++}
++
++/// 欄の値（走行が読めないか走行が無ければまだ分からない）。
++fn val_of(runs: &Reading<&[RunLine]>, f: impl FnOnce(&[RunLine]) -> Option<Val>) -> Val {
++    match runs {
++        Reading::Known(lines) if !lines.is_empty() => f(lines).unwrap_or(Val::Unknown),
++        _ => Val::Unknown,
++    }
++}
++
++/// 欄を鍵の後ろに差す（鍵の欄が無ければ末に足す）。
++fn insert_after(facts: &mut Vec<Fact>, after: &str, fact: Fact) {
++    let at = facts
++        .iter()
++        .position(|f| f.key == after)
++        .map_or(facts.len(), |i| i + 1);
++    facts.insert(at, fact);
++}
++
++/// 吹き出しに走行の欄を足す: Running / Gated は run の回の前に段の流れ・止まりは理由の後に run の歴・着地は着地の時刻の後に commit。
++/// ほかの段と札の無い bead は替えない。
++pub fn with_runs(mut p: Pop, runs: Reading<&[RunLine]>) -> Pop {
++    let Some(stage) = p.stage else {
++        return p;
++    };
++    let [flow_key, hist_key, commit_key] = FLOW_KEYS;
++    match stage {
++        Stage::Running | Stage::Gated => {
++            let val = val_of(&runs, |l| {
++                let (segs, unknown) = flow(l.last()?);
++                Some(Val::Flow(segs, unknown))
++            });
++            let at = p
++                .facts
++                .iter()
++                .position(|f| f.key == STAGE_KEYS[3])
++                .unwrap_or(p.facts.len());
++            p.facts.insert(at, Fact { key: flow_key, val });
++        }
++        Stage::Questioned | Stage::Failed | Stage::Stopped => {
++            let val = val_of(&runs, |l| Some(Val::Hist(history(l))));
++            insert_after(&mut p.facts, STAGE_KEYS[5], Fact { key: hist_key, val });
++        }
++        Stage::Landed => {
++            let val = val_of(&runs, |l| commit(l.last()?).map(Val::Code));
++            insert_after(
++                &mut p.facts,
++                STAGE_KEYS[6],
++                Fact {
++                    key: commit_key,
++                    val,
++                },
++            );
++        }
++        Stage::Blocked | Stage::Queued => {}
++    }
++    p
++}
++
++/// 表に無い段の語の字（まだ分からないの語と語）。
++pub fn unknown_text(word: &str) -> String {
++    format!("{}（{word}）", label(UNKNOWN_KEY))
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 54cefd37b1ffd03ee71545bb04bcde2a935c5be5..b3b964ce3cd3d6537d70a4468649f67cd743490d 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -367,6 +367,14 @@ a.tile:hover { box-shadow: var(--shadow); }
+ .plk:hover { background: var(--panel-2); }
+ .plk small, .pun { color: var(--ink-3); }
+ .pf { display: flex; gap: 12px; padding: 6px 12px 10px; border-top: 1px solid var(--line); font-size: var(--fs-1); }
++.ptl { display: flex; gap: 2px; height: 8px; margin: 3px 0; }
++.ptl span { border-radius: 2px; background: color-mix(in srgb, var(--s-run) 45%, transparent); }
++.ptl span.plive { background: var(--s-run); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 3px, transparent 3px 6px); }
++.ptlt { font-size: 11.5px; }
++.phist { width: 100%; border-collapse: collapse; font-size: 11px; }
++.phist th, .phist td { padding: 1px 5px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
++.phist th { background: var(--panel-2); color: var(--ink-3); font-weight: 500; }
++.phist .pfail { color: var(--s-stop); font-weight: 600; }
+ @media (max-width: 600px) {
+   #popscrim { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(15,23,42,.35); }
+   #pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; z-index: 41; width: 100%; max-height: 70vh; border-radius: 14px 14px 0 0; box-shadow: 0 -10px 30px rgba(15,23,42,.25); visibility: visible !important; }
+diff --git a/crates/tsuzuri-surface/tests/bvstep.rs b/crates/tsuzuri-surface/tests/bvstep.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3fd818d23d6ab8cac2a44185e2b2e6d509014caf
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvstep.rs
+@@ -0,0 +1,314 @@
++//! 行 g-pop-flow の歯: 吹き出しの run の段の流れ（審査・実装・gate の長さと走っている段の「〜」）と run の歴と着地の commit、
++//! 段の語の閉じた表が器の case-lifecycle.md §2.1 の 11 値であることと表に無い語のまだ分からない、
++//! 欄を差す所と、走行の読みの口を吹き出しを開いた時に読む配線の字。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{Reading, Stage};
++use tsuzuri_contract::runs::{GateVerdict, ReviewVerdict, RunCost, RunLine, RunStep};
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::pop::{Fact, Pop, STAGE_KEYS, Val};
++use tsuzuri_surface::widgets::runflow::{
++    COMMIT_CHARS, FLOW_KEYS, Hist, OPEN_END, STAGES, Seg, Step, commit, flow, flow_text, history,
++    known_stage, with_runs,
++};
++
++const T0: EpochSecs = 1_790_000_000;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn step(at: EpochSecs, stage: &str, detail: Option<&str>) -> RunStep {
++    RunStep {
++        at: Some(at),
++        stage: stage.to_string(),
++        detail: detail.map(str::to_string),
++        verdict: None,
++        verdict_kind: None,
++    }
++}
++
++fn line(run: &str, steps: Vec<RunStep>) -> RunLine {
++    RunLine {
++        run: run.to_string(),
++        started_at: steps.first().and_then(|s| s.at),
++        account: None,
++        steps,
++        cost: RunCost::default(),
++        gate: Reading::Unknown,
++        review: Reading::Unknown,
++    }
++}
++
++fn seg(step: Step, from: EpochSecs, to: Option<EpochSecs>) -> Seg {
++    Seg {
++        step,
++        from: Some(from),
++        to,
++        open: to.is_none(),
++    }
++}
++
++/// 段の語の閉じた表は器の便の段の 11 値（case-lifecycle.md §2.1 の表の順）で、流れを始めるのは Intake・Spawned・Implemented だけ。
++#[test]
++fn bvstep_stages_are_vessel_eleven() {
++    let words: Vec<&str> = STAGES.iter().map(|(w, _)| *w).collect();
++    assert_eq!(
++        words,
++        [
++            "Intake",
++            "Reviewed",
++            "Blocked",
++            "Spawned",
++            "Questioned",
++            "RateLimited",
++            "Implemented",
++            "Gated",
++            "Landed",
++            "Stopped",
++            "Failed"
++        ]
++    );
++    let starts: Vec<(&str, Step)> = STAGES
++        .iter()
++        .filter_map(|(w, s)| s.map(|s| (*w, s)))
++        .collect();
++    assert_eq!(
++        starts,
++        [
++            ("Intake", Step::Review),
++            ("Spawned", Step::Implement),
++            ("Implemented", Step::Gate)
++        ]
++    );
++    for k in FLOW_KEYS
++        .into_iter()
++        .chain([Step::Review, Step::Implement, Step::Gate].map(Step::key))
++    {
++        assert!(vocab().term(k).is_some(), "{k} が語の辞書に無い");
++    }
++}
++
++/// 審査は Intake から次の段・実装は Spawned から次の段・gate は Implemented から次の段（長さは分の字で矢印でつなぐ）。
++#[test]
++fn bvstep_flow_three_steps_with_minutes() {
++    let l = line(
++        "b-1-r1",
++        vec![
++            step(T0, "Intake", None),
++            step(T0 + 600, "Reviewed", Some("verdict:PASS")),
++            step(T0 + 660, "Spawned", Some("base:abc,account:a")),
++            step(T0 + 660 + 1_320, "Implemented", None),
++            step(T0 + 660 + 1_320 + 300, "Gated", Some("verdict:PASS")),
++        ],
++    );
++    let (segs, unknown) = flow(&l);
++    assert_eq!(
++        segs,
++        [
++            seg(Step::Review, T0, Some(T0 + 600)),
++            seg(Step::Implement, T0 + 660, Some(T0 + 1_980)),
++            seg(Step::Gate, T0 + 1_980, Some(T0 + 2_280)),
++        ]
++    );
++    assert!(unknown.is_empty());
++    let want = format!(
++        "{} 10m → {} 22m → {} 5m",
++        label("fl_review"),
++        label("fl_impl"),
++        label("fl_gate")
++    );
++    assert_eq!(flow_text(&segs, T0 + 9_999), want);
++}
++
++/// 次の段の event が無い段は走っていて、長さは今から引き、末に「〜」を付ける。
++#[test]
++fn bvstep_running_step_open_end() {
++    let l = line(
++        "b-1-r1",
++        vec![
++            step(T0, "Intake", None),
++            step(T0 + 600, "Reviewed", Some("verdict:PASS")),
++            step(T0 + 660, "Spawned", None),
++        ],
++    );
++    let (segs, _) = flow(&l);
++    assert_eq!(segs.last(), Some(&seg(Step::Implement, T0 + 660, None)));
++    assert_eq!(OPEN_END, "〜");
++    let want = format!("{} 10m → {} 7m〜", label("fl_review"), label("fl_impl"));
++    assert_eq!(flow_text(&segs, T0 + 660 + 420), want);
++}
++
++/// 走行ごとの歴: 回は 1 から・終わりの段は最後の段の語・結びは gate の判定・無ければ審査の判定・無ければ段の審査の結び。
++#[test]
++fn bvstep_history_per_run() {
++    let mut a = line(
++        "b-1-r1",
++        vec![step(T0, "Intake", None), step(T0 + 9, "Reviewed", None)],
++    );
++    a.steps[1].verdict = Some("FAIL".to_string());
++    let mut b = line(
++        "b-1-r2",
++        vec![step(T0, "Intake", None), step(T0 + 9, "Gated", None)],
++    );
++    b.review = Reading::Known(ReviewVerdict {
++        verdict: "PASS".to_string(),
++        evidence: String::new(),
++        kind: None,
++        place: None,
++        at: None,
++    });
++    b.gate = Reading::Known(GateVerdict {
++        verdict: "INCONCLUSIVE".to_string(),
++        evidence: String::new(),
++        findings: None,
++        at: None,
++    });
++    let mut c = line("b-1-r3", vec![step(T0, "Stopped", None)]);
++    c.review = b.review.clone();
++    let d = line("b-1-r4", Vec::new());
++    let h = history(&[a, b, c, d]);
++    let row = |n, run: &str, end: Option<&str>, v: Option<&str>| Hist {
++        n,
++        run: run.to_string(),
++        end: end.map(str::to_string),
++        verdict: v.map(str::to_string),
++    };
++    assert_eq!(
++        h,
++        [
++            row(1, "b-1-r1", Some("Reviewed"), Some("FAIL")),
++            row(2, "b-1-r2", Some("Gated"), Some("INCONCLUSIVE")),
++            row(3, "b-1-r3", Some("Stopped"), Some("PASS")),
++            row(4, "b-1-r4", None, None),
++        ]
++    );
++}
++
++/// 表に無い段の語は流れに入れずまだ分からないとして返し、歴の終わりの段もまだ分からない（None）。
++#[test]
++fn bvstep_unknown_step_word() {
++    assert!(known_stage("RateLimited") && !known_stage("Queued") && !known_stage("Warped"));
++    let l = line(
++        "b-1-r1",
++        vec![step(T0, "Intake", None), step(T0 + 120, "Warped", None)],
++    );
++    let (segs, unknown) = flow(&l);
++    assert_eq!(segs, [seg(Step::Review, T0, Some(T0 + 120))]);
++    assert_eq!(unknown, ["Warped"]);
++    assert_eq!(history(&[l])[0].end, None);
++}
++
++/// 着地の commit は段 Landed の detail の sha: の札の頭 12 字（札が無ければ None）。
++#[test]
++fn bvstep_landed_commit() {
++    let sha = "6d2a7cd5c6efb1b6130534d1c9b6e547700f5cbf";
++    let l = line(
++        "b-1-r1",
++        vec![
++            step(T0, "Gated", Some("verdict:PASS")),
++            step(T0 + 5, "Landed", Some(&format!("sha:{sha} main:{sha}"))),
++            step(T0 + 9, "Landed", Some("terminal:push:origin")),
++        ],
++    );
++    assert_eq!(COMMIT_CHARS, 12);
++    assert_eq!(commit(&l), Some(sha[..12].to_string()));
++    let none = line(
++        "b-1-r2",
++        vec![step(T0, "Landed", Some("terminal:push:origin"))],
++    );
++    assert_eq!(commit(&none), None);
++}
++
++fn base(stage: Stage, keys: &[&'static str]) -> Pop {
++    Pop {
++        id: "b-1".to_string(),
++        short: "b-1".to_string(),
++        title: None,
++        summary: None,
++        stage: Some(stage),
++        facts: keys
++            .iter()
++            .map(|k| Fact {
++                key: k,
++                val: Val::Unknown,
++            })
++            .collect(),
++        next: None,
++    }
++}
++
++fn keys(p: &Pop) -> Vec<&'static str> {
++    p.facts.iter().map(|f| f.key).collect()
++}
++
++/// 欄を差す所: Running / Gated は run の回の前に段の流れ・止まりは理由の後に run の歴・着地は着地の時刻の後に commit。
++/// 走行が読めないか無ければまだ分からない。Blocked と Queued と札の無い bead は替えない。
++#[test]
++fn bvstep_with_runs_places_facts() {
++    let [flow_key, hist_key, commit_key] = FLOW_KEYS;
++    let run = [line(
++        "b-1-r1",
++        vec![
++            step(T0, "Intake", None),
++            step(T0 + 60, "Landed", Some("sha:0123456789abcdef")),
++        ],
++    )];
++    let p = with_runs(
++        base(Stage::Running, &["pf_id", STAGE_KEYS[3], STAGE_KEYS[4]]),
++        Reading::Known(&run),
++    );
++    assert_eq!(keys(&p), ["pf_id", flow_key, STAGE_KEYS[3], STAGE_KEYS[4]]);
++    assert_eq!(
++        p.facts[1].val,
++        Val::Flow(vec![seg(Step::Review, T0, Some(T0 + 60))], Vec::new())
++    );
++    let p = with_runs(
++        base(Stage::Failed, &["pf_id", STAGE_KEYS[5], STAGE_KEYS[3]]),
++        Reading::Known(&run),
++    );
++    assert_eq!(keys(&p), ["pf_id", STAGE_KEYS[5], hist_key, STAGE_KEYS[3]]);
++    let p = with_runs(
++        base(Stage::Landed, &["pf_id", STAGE_KEYS[6], STAGE_KEYS[7]]),
++        Reading::Known(&run),
++    );
++    assert_eq!(
++        keys(&p),
++        ["pf_id", STAGE_KEYS[6], commit_key, STAGE_KEYS[7]]
++    );
++    assert_eq!(p.facts[2].val, Val::Code("0123456789ab".to_string()));
++    for runs in [Reading::Unknown, Reading::Known(&[][..])] {
++        let p = with_runs(base(Stage::Gated, &[STAGE_KEYS[3]]), runs);
++        assert_eq!(p.facts[0].val, Val::Unknown);
++    }
++    for stage in [Stage::Blocked, Stage::Queued] {
++        let before = base(stage, &["pf_id"]);
++        assert_eq!(with_runs(before.clone(), Reading::Known(&run)), before);
++    }
++    let mut lone = base(Stage::Running, &["pf_id"]);
++    lone.stage = None;
++    assert_eq!(with_runs(lone.clone(), Reading::Known(&run)), lone);
++}
++
++/// 吹き出しの層は開いた bead の走行の読みの口を path の signal で読み（閉じていれば空の path で読まない）、欄を with_runs で足す。
++#[test]
++fn bvstep_dom_wiring_text() {
++    let src = read("src/widgets/pop.rs");
++    for s in [
++        ".map(|id| timeline::path(&id))",
++        "crate::net::read_path(runs_path)",
++        "with_runs(pop(&id, &src), known(&lines))",
++        "Val::Flow(segs, unknown) =>",
++        "Val::Hist(rows) =>",
++    ] {
++        assert!(src.contains(s), "{s}");
++    }
++    let css = read("style.css");
++    for c in ["ptl", "ptlt", "plive", "phist", "pfail"] {
++        assert!(css.contains(&format!(".{c} ")), "{c}");
++    }
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index d7ecc63c5d7c447f757e290f16fae97736bb01da..6f0b44dcc196b106f8b9137377e76cff0ccce296 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1881,6 +1881,51 @@
+    "label": "run の記録",
+    "plain": "止まった run の段と審査を見る\n→ 個別の頁の run の時間軸",
+    "internal": "frame::node_href の #timeline"
++  },
++  "pf_flow": {
++   "label": "段の流れ",
++   "plain": "最後の run の段の流れ\n・ 審査 → 実装 → gate\n・ 段ごとの長さ\n・ 走っている段は 〜",
++   "internal": "/api/runs?bead= の RunLine の steps\n段の語は器の case-lifecycle.md §2.1 の 11 値"
++  },
++  "pf_hist": {
++   "label": "run の歴",
++   "plain": "run ごとの結果\n・ 何回目か\n・ 終わった段\n・ 結び（PASS / FAIL など）",
++   "internal": "RunLine の gate と review の verdict\n無ければ段の審査の結び"
++  },
++  "pf_commit": {
++   "label": "commit",
++   "plain": "main に着地した commit",
++   "internal": "RunDone の detail の sha: の札（頭 12 字）"
++  },
++  "fl_review": {
++   "label": "審査",
++   "plain": "契約の審査\n・ 受付から審査の結びまで",
++   "internal": "RunStage の Intake から次の段"
++  },
++  "fl_impl": {
++   "label": "実装",
++   "plain": "実装役が書いている\n・ 起動から実装の終わりまで",
++   "internal": "RunStage の Spawned から次の段"
++  },
++  "fl_gate": {
++   "label": "gate",
++   "plain": "gate の検査\n・ 実装の終わりから判定まで",
++   "internal": "RunStage の Implemented から次の段"
++  },
++  "ph_run": {
++   "label": "回",
++   "plain": "何回目の run か",
++   "internal": "RunLine の並びの順（1 から）"
++  },
++  "ph_end": {
++   "label": "終わりの段",
++   "plain": "その run の最後の段",
++   "internal": "RunLine の steps の最後の stage"
++  },
++  "ph_verdict": {
++   "label": "結び",
++   "plain": "その run の判定\n・ gate の判定\n・ 無ければ審査の判定",
++   "internal": "verdict.json と review.json の verdict"
+   }
+  }
+ }
+\ No newline at end of file

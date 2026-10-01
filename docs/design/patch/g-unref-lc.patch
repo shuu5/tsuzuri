@@ -1,0 +1,621 @@
+diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
+index 5023a43e8ab5a4cdb8c49034052f9d8b363c0c24..b52710fd04c7c8ea04e8be6b035eaaa6212bc998 100644
+--- a/crates/tsuzuri-surface/src/ledgerlist.rs
++++ b/crates/tsuzuri-surface/src/ledgerlist.rs
+@@ -5,19 +5,23 @@
+ //! bead の事実から引く。組の親は id の階層（`a.1` の親は `a`）のいちばん近い epic の祖先で、epic の祖先の無い行は最後の組。
+ //! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
+ //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の図を出す（行 g-list-head）。絞りが効いている間は合う行の在る組だけを開いて出す。
++//! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
++//! （語は台帳の block の辞書の関数・知らない語と読めない間は「まだ分からない」・行 g-unref-lc）。
+ //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use std::collections::BTreeMap;
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
++use tsuzuri_contract::case::CaseDoc;
+ use tsuzuri_contract::graph::NodeKind;
+ use tsuzuri_contract::ledger::{BeadFact, BeadFacts, LedgerRow};
+-use tsuzuri_contract::stats::LedgerStats;
++use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
+ use tsuzuri_contract::wire;
+ 
+ use crate::project::ledger::{
+-    CLOSED, EMPTY, NO_OPEN, OUTSIDE, SPARK_H, SPARK_W, net, spark, spark_svg, stats,
++    CLOSED, EMPTY, NO_OPEN, OUTSIDE, SPARK_H, SPARK_W, TURN_KEY, UNKNOWN_WORD_KEY, Unref,
++    kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, spark, spark_svg, stats,
+ };
+ use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
+ use crate::project::{Body, LEDGER_UNREAD};
+@@ -65,6 +69,8 @@ pub struct Lrow {
+     pub right: String,
+     /// 並べの位（`row_rank`）。
+     pub rank: u8,
++    /// 局面と手番の平易な字（memo と問いの行だけ・`with_phases` が置く・行 g-unref-lc）。
++    pub phase: Option<String>,
+ }
+ 
+ /// 一覧の 1 組（epic の組・epic の外の組は `epic` が None）。
+@@ -164,6 +170,7 @@ fn lrow(
+             stage_word,
+         ),
+         rank: row_rank(row.node_kind(), card),
++        phase: None,
+     }
+ }
+ 
+@@ -365,6 +372,79 @@ pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
+     }
+ }
+ 
++/// 局面の出力の口の本文の memo と問いの部品を id の表（局面の語と手番の語）にする（読めない・まだ読んでいない・
++/// 出力が無いは None）。
++pub fn phases(fetched: &Fetched) -> Option<BTreeMap<String, (String, String)>> {
++    let Fetched::Body(text) = fetched else {
++        return None;
++    };
++    match wire::decode::<CaseDoc>(text) {
++        Ok(CaseDoc {
++            parts: Reading::Known(parts),
++            ..
++        }) => Some(
++            parts
++                .into_iter()
++                .filter(|p| matches!(p.part.as_str(), "memo" | "question"))
++                .map(|p| (p.id, (p.phase, p.turn)))
++                .collect(),
++        ),
++        _ => None,
++    }
++}
++
++/// memo と問いの行に局面と手番の平易な字を置く（表に id が無い・表が読めない行は「まだ分からない」・ほかの行は None のまま）。
++pub fn with_phases(groups: Vec<Lgroup>, cases: &Fetched) -> Vec<Lgroup> {
++    let table = phases(cases);
++    groups
++        .into_iter()
++        .map(|mut g| {
++            for r in &mut g.rows {
++                if matches!(r.kind, NodeKind::Memo | NodeKind::Question) {
++                    let found = table.as_ref().and_then(|t| t.get(&r.id));
++                    r.phase = Some(found.map_or_else(
++                        || label(UNKNOWN_WORD_KEY),
++                        |(phase, turn)| phase_text(phase, turn),
++                    ));
++                }
++            }
++            g
++        })
++        .collect()
++}
++
++/// 見出しの未反映の数の字と title の字（数は台帳の block の未反映の数の字に手番の席の字を添える・title は種類ごとの
++/// 数と局面の平易な字・数の分からない種類は「まだ分からない」）。
++pub fn unref_head(s: &LedgerStats) -> (String, String) {
++    let unref = Unref {
++        count: s.unreflected,
++        unknown: s
++            .unreflected_unknown
++            .iter()
++            .map(|k| kind_name(*k))
++            .collect(),
++    };
++    let text = format!(
++        "{} {} · {}",
++        label("l_unref"),
++        unref.text(),
++        plain_word(TURN_KEY, "seat")
++    );
++    let title = UnreflectedKind::ALL
++        .iter()
++        .map(|k| {
++            let n = s
++                .unreflected_kinds
++                .iter()
++                .find(|c| c.kind == *k)
++                .map_or_else(|| label(UNKNOWN_WORD_KEY), |c| c.count.to_string());
++            format!("{} {n}（{}）", kind_label(*k), kind_phase_text(*k))
++        })
++        .collect::<Vec<_>>()
++        .join(" / ");
++    (text, title)
++}
++
+ #[cfg(target_arch = "wasm32")]
+ pub use dom::view;
+ 
+@@ -373,12 +453,15 @@ pub use dom::view;
+ mod dom {
+     use leptos::prelude::*;
+ 
++    use tsuzuri_contract::case;
++
+     use super::{
+         FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT, content, filtered,
+-        filtering, kind_tag, kpi,
++        filtering, kind_tag, kpi, unref_head, with_phases,
+     };
+     use crate::frame::{Mode, node_href};
+     use crate::kit::Folds;
++    use crate::project::ledger::stats;
+     use crate::project::{Body, ledger, pipeline, unmeasured};
+     use crate::vocab::label;
+     use crate::widgets::help::HelpCtx;
+@@ -388,6 +471,7 @@ mod dom {
+         let rows = crate::net::read(ledger::PATH);
+         let pipe = crate::net::read(pipeline::PATH);
+         let beads = crate::net::read(FACTS_PATH);
++        let cases = crate::net::read(case::PATH);
+         let folds = RwSignal::new(Folds::default());
+         let kind = RwSignal::new(Kind::All);
+         let query = RwSignal::new(String::new());
+@@ -402,7 +486,7 @@ mod dom {
+                 Body::Filled(groups) => {
+                     let (k, q) = (kind.get(), query.get());
+                     let active = filtering(k, &q);
+-                    let shown = filtered(groups, k, &q);
++                    let shown = filtered(cases.with(|c| with_phases(groups, c)), k, &q);
+                     if shown.is_empty() {
+                         view! { <div class="ll-gnone">{NO_MATCH}</div> }.into_any()
+                     } else {
+@@ -424,7 +508,13 @@ mod dom {
+         let kpis = move || {
+             let (text, svg) = metrics.with(kpi);
+             let fig = svg.map(|s| view! { <span class="ll-spark" inner_html=s></span> });
+-            view! { <span class="ll-kchip num">{text}</span>{fig} }
++            let unref =
++                metrics
++                    .with(|m| stats(m).ok().map(|s| unref_head(&s)))
++                    .map(|(t, title)| {
++                        view! { <span class="ll-unref num" title=title>{t}</span> }
++                    });
++            view! { <span class="ll-kchip num">{text}</span>{unref}{fig} }
+         };
+         let seg = KINDS
+             .into_iter()
+@@ -538,6 +628,7 @@ mod dom {
+             <div class="ll-row" data-id=r.id.clone()>
+                 <span class=class>{tag}</span>
+                 <a class="ll-ls" href=href title=r.title.clone()>{r.short.clone()}</a>
++                {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}
+                 <span class="ll-rt">{r.right.clone()}</span>
+             </div>
+         }
+diff --git a/crates/tsuzuri-surface/src/project/ledger.rs b/crates/tsuzuri-surface/src/project/ledger.rs
+index 0087605f90afa911ce07b1dfcb1a7614985fbea3..548a74f48bf772e7aff3e44107e8883f7fa906be 100644
+--- a/crates/tsuzuri-surface/src/project/ledger.rs
++++ b/crates/tsuzuri-surface/src/project/ledger.rs
+@@ -7,6 +7,7 @@
+ //! 前の一覧の組の純粋な関数（`body`・`staged_body`・`group_cards`・閉じた bead を出さない・行 g-ledger-home と c-ledger-stage）は
+ //! 件数と歯のために残し、DOM は描かない。epic の進みの行の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
+ //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
++//! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す（行 g-unref-lc）。
+ //! memo と未反映の年齢は、電文の作った時刻から block を組む時の今までの日数（`days_since`・行 c-abs-time）。
+ //! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
+ //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+@@ -25,7 +26,7 @@ use super::seat::hm;
+ use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, Staged, item, staged_item};
+ use crate::frame::Block;
+ use crate::view::{Fetched, Screen, clock};
+-use crate::vocab::label;
++use crate::vocab::{label, vocab};
+ use crate::widgets::hover::Card;
+ use crate::widgets::nodecard::card_of;
+ 
+@@ -344,6 +345,51 @@ pub fn name_label(name: &str) -> String {
+     label(&format!("{UNREF_KIND_KEY}{name}"))
+ }
+ 
++/// 器の局面の語の語の鍵の接頭（鍵は接頭と局面の語・行 g-unref-lc）。
++pub const PHASE_KEY: &str = "lc:";
++
++/// 器の手番の語の語の鍵の接頭（鍵は接頭と手番の語）。
++pub const TURN_KEY: &str = "turn:";
++
++/// 語の辞書に無い局面と手番の語に出す字の鍵（まだ分からない）。
++pub const UNKNOWN_WORD_KEY: &str = "gap_unknown";
++
++/// 局面か手番の語の平易な字（接頭と語の鍵が語の辞書に在ればその見出し・無ければ「まだ分からない」）。
++pub fn plain_word(prefix: &str, word: &str) -> String {
++    match vocab().term(&format!("{prefix}{word}")) {
++        Some(term) => term.label.clone(),
++        None => label(UNKNOWN_WORD_KEY),
++    }
++}
++
++/// 局面と手番の平易な字（局面の字・中黒の区切り・手番の字）。
++pub fn phase_text(phase: &str, turn: &str) -> String {
++    format!(
++        "{} · {}",
++        plain_word(PHASE_KEY, phase),
++        plain_word(TURN_KEY, turn)
++    )
++}
++
++/// 未反映の種類ごとの器の局面の語（行 c-unref-lc の 3 つ・手番はどれも席）。
++pub const UNREF_PHASES: [(UnreflectedKind, &[&str]); 3] = [
++    (UnreflectedKind::Memo, &["memo-actionable", "misfit"]),
++    (UnreflectedKind::Ruling, &["ruling-unreflected"]),
++    (UnreflectedKind::Utterance, &["utterance-open"]),
++];
++
++/// 未反映の種類の局面の平易な字（局面の字を・でつなぎ、手番の席の字を添える）。
++#[expect(clippy::expect_used, reason = "局面の表は 3 つの全部を持つ")]
++pub fn kind_phase_text(kind: UnreflectedKind) -> String {
++    let phases = UNREF_PHASES
++        .iter()
++        .find(|(k, _)| *k == kind)
++        .map(|(_, p)| *p)
++        .expect("局面の表は 3 つの全部を持つ");
++    let words: Vec<String> = phases.iter().map(|p| plain_word(PHASE_KEY, p)).collect();
++    format!("{} · {}", words.join("・"), plain_word(TURN_KEY, "seat"))
++}
++
+ /// 未反映の数（電文の数そのまま）と、分からない種類の名（測れていないの記号を添えて出す）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Unref {
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 2988aee48cdea51a832ff5fbcc954dbc816d7be8..95b029fef2cea3095a7ac9e3e0367abd5fef5ca9 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -1285,3 +1285,6 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+ .ll-seg button:first-child { border-left: 0; }
+ .ll-seg button.on { background: var(--ink); color: var(--bg); }
+ .ll-q { flex: 1 1 auto; min-width: 80px; max-width: 300px; font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; padding: 2px 8px; height: 24px; }
++/* 台帳 open の一覧の局面と手番（行 g-unref-lc）: memo と問いの行の平易な字・見出しの未反映の数 */
++.ll-ph { flex: none; font-size: 11px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
++.ll-unref { flex: none; font-size: 11.5px; color: var(--st-limit); white-space: nowrap; }
+diff --git a/crates/tsuzuri-surface/tests/bvkpi.rs b/crates/tsuzuri-surface/tests/bvkpi.rs
+index 49b6f61901680717fb5a0fcb6a4d321cadc3c554..ef3c1ce6f2d3a6e4931e9a74d3a4bcf230e679e5 100644
+--- a/crates/tsuzuri-surface/tests/bvkpi.rs
++++ b/crates/tsuzuri-surface/tests/bvkpi.rs
+@@ -185,7 +185,7 @@ fn bvkpi_dom_wiring_text() {
+         "on:click=move |_| kind.set(k)",
+         "on:input=move |ev| query.set(event_target_value(&ev))",
+         "let active = filtering(k, &q);",
+-        "let shown = filtered(groups, k, &q);",
++        "let shown = filtered(cases.with(|c| with_phases(groups, c)), k, &q);",
+         "group_view(g, folds, active)",
+         "move || active || folds.with(|f| f.open(&key, initial))",
+         "{head_line(kind, query)}",
+diff --git a/crates/tsuzuri-surface/tests/bvuphase.rs b/crates/tsuzuri-surface/tests/bvuphase.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd2140049f8d416d
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvuphase.rs
+@@ -0,0 +1,252 @@
++//! 行 g-unref-lc の歯（接頭辞 bvuphase_）: 台帳 open の一覧の memo と問いの行と見出しの未反映の数に、器の局面の出力の
++//! 局面と手番を平易な字で添える（語は台帳の block の辞書の関数・知らない語と読めない間は「まだ分からない」）。
++//! 局面の出力と台帳の行は歯の中で組む（bead の id の接頭辞は fx-u）。指標は fixture tests/fixtures/surface/ledger-stats.json。
++#![cfg(test)]
++
++use std::collections::BTreeMap;
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart};
++use tsuzuri_contract::ledger::{BeadId, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
++use tsuzuri_contract::stats::{LedgerStats, UnreflectedCount, UnreflectedKind};
++use tsuzuri_contract::wire;
++use tsuzuri_surface::ledgerlist::{groups, phases, unref_head, with_phases};
++use tsuzuri_surface::project::ledger::{
++    PHASE_KEY, TURN_KEY, UNREF_PHASES, kind_phase_text, phase_text, plain_word,
++};
++use tsuzuri_surface::view::Fetched;
++
++const NOW: u64 = 1_790_510_400;
++
++fn read(rel: &str) -> String {
++    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn row(id: &str, kind: &str, labels: &[&str]) -> LedgerRow {
++    LedgerRow {
++        id: BeadId::new(id).expect("id"),
++        kind: kind.to_string(),
++        title: format!("{id} の題"),
++        status: "open".to_string(),
++        updated_at: NOW,
++        parent: None,
++        labels: labels.iter().map(|l| (*l).to_string()).collect(),
++    }
++}
++
++fn part(kind: &str, id: &str, phase: &str, turn: &str) -> CasePart {
++    CasePart {
++        part: kind.to_string(),
++        id: id.to_string(),
++        phase: phase.to_string(),
++        turn: turn.to_string(),
++        since: None,
++        reason: None,
++        closed: false,
++        links: CaseLinks::default(),
++    }
++}
++
++fn cases(parts: Reading<Vec<CasePart>>) -> Fetched {
++    let doc = CaseDoc {
++        generated_at: Some(NOW),
++        stale: Vec::new(),
++        parts,
++    };
++    Fetched::Body(wire::encode(&doc).expect("enc"))
++}
++
++/// (2) 局面と手番の平易な字は語の辞書の鍵 lc: と turn: の見出しで、辞書に無い語は「まだ分からない」。
++#[test]
++fn bvuphase_phase_and_turn_words() {
++    assert_eq!((PHASE_KEY, TURN_KEY), ("lc:", "turn:"));
++    let words: Vec<(&str, String)> = [
++        "memo-promoting",
++        "memo-asking",
++        "memo-actionable",
++        "memo-waiting",
++        "question-open",
++        "ruling-unreflected",
++        "utterance-open",
++        "misfit",
++    ]
++    .into_iter()
++    .map(|p| (p, plain_word(PHASE_KEY, p)))
++    .collect();
++    let want = [
++        "昇格の途中",
++        "問いの答え待ち",
++        "処置の待ち",
++        "引き金待ち",
++        "答えの待ち",
++        "反映待ち",
++        "未仕分け",
++        "形の崩れ",
++    ];
++    assert_eq!(
++        words.iter().map(|(_, w)| w.as_str()).collect::<Vec<_>>(),
++        want
++    );
++    let turns: Vec<String> = ["user", "seat", "vessel", "runner", "ci", "none"]
++        .into_iter()
++        .map(|t| plain_word(TURN_KEY, t))
++        .collect();
++    assert_eq!(
++        turns,
++        [
++            "あなたの番",
++            "席の番",
++            "器の番",
++            "実装の番",
++            "CI の番",
++            "誰の番でもない"
++        ]
++    );
++    assert_eq!(phase_text("memo-actionable", "seat"), "処置の待ち · 席の番");
++    assert_eq!(phase_text("memo-closed", "seat"), "まだ分からない · 席の番");
++    assert_eq!(
++        phase_text("question-open", "owner"),
++        "答えの待ち · まだ分からない"
++    );
++}
++
++/// (3) 未反映の 3 種の局面の表（memo は memo-actionable と misfit・裁定は ruling-unreflected・発話は utterance-open）
++/// と、その平易な字（局面の字を・でつなぎ手番の席の字を添える）。
++#[test]
++fn bvuphase_unref_kind_phases() {
++    let table: Vec<(UnreflectedKind, Vec<&str>)> =
++        UNREF_PHASES.iter().map(|(k, p)| (*k, p.to_vec())).collect();
++    assert_eq!(
++        table,
++        [
++            (UnreflectedKind::Memo, vec!["memo-actionable", "misfit"]),
++            (UnreflectedKind::Ruling, vec!["ruling-unreflected"]),
++            (UnreflectedKind::Utterance, vec!["utterance-open"]),
++        ]
++    );
++    assert_eq!(
++        kind_phase_text(UnreflectedKind::Memo),
++        "処置の待ち・形の崩れ · 席の番"
++    );
++    assert_eq!(
++        kind_phase_text(UnreflectedKind::Ruling),
++        "反映待ち · 席の番"
++    );
++    assert_eq!(
++        kind_phase_text(UnreflectedKind::Utterance),
++        "未仕分け · 席の番"
++    );
++}
++
++/// (4) 行の局面: memo と問いの行は局面の出力の memo と question の部品の局面と手番の字・部品が無い行と出力が読めない
++/// 間は「まだ分からない」・便と epic の行は字を持たない・memo と question でない部品の同じ id は使わない。
++#[test]
++fn bvuphase_rows_get_phase() {
++    let rows = vec![
++        row("fx-u1", "epic", &[]),
++        row("fx-u1.1", "task", &[]),
++        row("fx-u1.2", "task", &[MEMO_LABEL]),
++        row("fx-u1.3", "task", &[QUESTION_LABEL]),
++        row("fx-u1.4", "task", &[MEMO_LABEL]),
++        row("fx-u1.5", "task", &[MEMO_LABEL]),
++    ];
++    let gs = groups(&rows, &[], &BTreeMap::new(), NOW);
++    let doc = cases(Reading::Known(vec![
++        part("memo", "fx-u1.2", "memo-actionable", "seat"),
++        part("question", "fx-u1.3", "question-open", "user"),
++        part("contract", "fx-u1.5", "contract-queued", "vessel"),
++        part("contract", "fx-u1.1", "contract-running", "none"),
++    ]));
++    let got: Vec<(String, Option<String>)> = with_phases(gs.clone(), &doc)[0]
++        .rows
++        .iter()
++        .map(|r| (r.id.clone(), r.phase.clone()))
++        .collect();
++    let want = |id: &str, p: Option<&str>| (id.to_string(), p.map(str::to_string));
++    assert_eq!(
++        got,
++        [
++            want("fx-u1.3", Some("答えの待ち · あなたの番")),
++            want("fx-u1.1", None),
++            want("fx-u1.2", Some("処置の待ち · 席の番")),
++            want("fx-u1.4", Some("まだ分からない")),
++            want("fx-u1.5", Some("まだ分からない")),
++        ]
++    );
++    assert!(gs[0].rows.iter().all(|r| r.phase.is_none()));
++    for bad in [
++        Fetched::NotRead,
++        Fetched::Failed,
++        Fetched::Body("{".into()),
++        cases(Reading::Unknown),
++    ] {
++        assert_eq!(phases(&bad), None);
++        let marked = with_phases(gs.clone(), &bad);
++        let memo = marked[0]
++            .rows
++            .iter()
++            .find(|r| r.id == "fx-u1.2")
++            .expect("memo");
++        assert_eq!(memo.phase.as_deref(), Some("まだ分からない"));
++    }
++    let table = phases(&doc).expect("表");
++    assert_eq!(table.len(), 2);
++    assert_eq!(
++        table.get("fx-u1.3"),
++        Some(&("question-open".to_string(), "user".to_string()))
++    );
++}
++
++/// (5) 見出しの未反映の数は未反映の見出しの語と数（3 種とも分からなければ ―）と手番の席の字で、title は種類ごとの
++/// 見出しと数（分からない種類は「まだ分からない」）と局面の平易な字。
++#[test]
++fn bvuphase_unref_head() {
++    let mut sets: BTreeMap<String, LedgerStats> =
++        wire::decode(&read("../../tests/fixtures/surface/ledger-stats.json")).expect("fixture");
++    let mut s = sets.remove("filled").expect("filled");
++    s.unreflected = 4;
++    s.unreflected_kinds = vec![
++        UnreflectedCount {
++            kind: UnreflectedKind::Memo,
++            count: 3,
++        },
++        UnreflectedCount {
++            kind: UnreflectedKind::Ruling,
++            count: 1,
++        },
++    ];
++    s.unreflected_unknown = vec![UnreflectedKind::Utterance];
++    let (text, title) = unref_head(&s);
++    assert_eq!(text, "未反映 4 · 席の番");
++    assert_eq!(
++        title,
++        "memo 3（処置の待ち・形の崩れ · 席の番） / 裁定 1（反映待ち · 席の番） / 発話 まだ分からない（未仕分け · 席の番）"
++    );
++    s.unreflected = 0;
++    s.unreflected_kinds = Vec::new();
++    s.unreflected_unknown = UnreflectedKind::ALL.to_vec();
++    assert_eq!(unref_head(&s).0, "未反映 ― · 席の番");
++}
++
++/// (6) DOM の字: 一覧は局面の出力の口を契約の定数で読んで行に字を置き、行と見出しに出す。class は stylesheet に在る。
++#[test]
++fn bvuphase_dom_wiring_text() {
++    let list = read("src/ledgerlist.rs");
++    let dom = &list[list.find("mod dom {").expect("mod dom")..];
++    for want in [
++        "let cases = crate::net::read(case::PATH);",
++        "cases.with(|c| with_phases(groups, c))",
++        "stats(m).ok().map(|s| unref_head(&s))",
++        "<span class=\"ll-unref num\" title=title>{t}</span>",
++        "<span class=\"ll-ph\">{p}</span>",
++    ] {
++        assert!(dom.contains(want), "ledgerlist の DOM に {want} が無い");
++    }
++    assert!(!list.contains("\"/api/cases\""));
++    let css = read("style.css");
++    for class in [".ll-ph ", ".ll-unref "] {
++        assert!(css.contains(class), "stylesheet に {class} が無い");
++    }
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 9ac7416659da92e14b836ef9e1b7fe2f69961ee3..fc80e29ec98131474b7fc76ed2064f2c676b8abf 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -2041,6 +2041,76 @@
+    "label": "着地",
+    "plain": "札の要の 1 行: 着地の時刻と CI の結果",
+    "internal": "段 Landed の since と ci"
++  },
++  "lc:memo-promoting": {
++   "label": "昇格の途中",
++   "plain": "契約の行か便が開いている memo\n・ または器の自動の close を待つ",
++   "internal": "器の局面 memo-promoting"
++  },
++  "lc:memo-asking": {
++   "label": "問いの答え待ち",
++   "plain": "子の問いが開いている memo",
++   "internal": "器の局面 memo-asking"
++  },
++  "lc:memo-actionable": {
++   "label": "処置の待ち",
++   "plain": "席が昇格か close を決める memo",
++   "internal": "器の局面 memo-actionable"
++  },
++  "lc:memo-waiting": {
++   "label": "引き金待ち",
++   "plain": "器が毎周に引き金を判じる memo\n・ 誰の手も待たない",
++   "internal": "器の局面 memo-waiting"
++  },
++  "lc:question-open": {
++   "label": "答えの待ち",
++   "plain": "あなたの答えを待つ問い",
++   "internal": "器の局面 question-open"
++  },
++  "lc:ruling-unreflected": {
++   "label": "反映待ち",
++   "plain": "閉じた問いの裁定が\ndesign-intent にまだ写っていない",
++   "internal": "器の局面 ruling-unreflected"
++  },
++  "lc:utterance-open": {
++   "label": "未仕分け",
++   "plain": "席がまだ仕分けていない発話",
++   "internal": "器の局面 utterance-open"
++  },
++  "lc:misfit": {
++   "label": "形の崩れ",
++   "plain": "器が局面を決められない部品\n・ 印や参照の形が崩れている",
++   "internal": "器の局面 misfit"
++  },
++  "turn:user": {
++   "label": "あなたの番",
++   "plain": "あなたの答えか承認を待つ",
++   "internal": "器の手番 user"
++  },
++  "turn:seat": {
++   "label": "席の番",
++   "plain": "席の処置を待つ",
++   "internal": "器の手番 seat"
++  },
++  "turn:vessel": {
++   "label": "器の番",
++   "plain": "器（scribe2）が進める",
++   "internal": "器の手番 vessel"
++  },
++  "turn:runner": {
++   "label": "実装の番",
++   "plain": "便の実装役が進める",
++   "internal": "器の手番 runner"
++  },
++  "turn:ci": {
++   "label": "CI の番",
++   "plain": "CI の結果を待つ",
++   "internal": "器の手番 ci"
++  },
++  "turn:none": {
++   "label": "誰の番でもない",
++   "plain": "ほかの部品が手番を持つか\n終わった",
++   "internal": "器の手番 none"
+   }
+  }
+ }
+\ No newline at end of file

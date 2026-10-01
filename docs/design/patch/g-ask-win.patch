@@ -1,0 +1,784 @@
+diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393acb0f82b
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/askwin.rs
+@@ -0,0 +1,294 @@
++//! 質問の窓（行 g-ask-win・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）:
++//! この project の問いを 1 問ずつ出し、答えを送って記録されると次の問いへ進み、全部に答えると閉じる。
++//! 題の横の点で問いを選べ、「あとで」は後ろの答えていない問いへ移る。1 問の card と答えの口と記帳は今の質問の block と同じ
++//! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示。
++//! 今の質問の頁は替えない（頁を外すのは 1 枚の画面への切り替えの行）。
++//! 問いの選び方と局面と点の class は純粋な関数にして host で試し、窓の DOM（`frame`）は wasm の target のときだけ組む。
++
++use std::collections::BTreeSet;
++
++use crate::project::ask::Card;
++use crate::vocab::label;
++
++/// 送って記録されてから次の問いへ移るまでの待ち（ms・「記録した」の 1 行を見せる・見本の qsend の 650）。
++pub const ADVANCE_MS: u64 = 650;
++
++/// 全部に答えてから窓を閉じるまでの待ち（ms・見本の qsend の 1200）。
++pub const DONE_MS: u64 = 1200;
++
++/// 全部に答えた時の字の語の鍵。
++pub const DONE_KEY: &str = "ask_done";
++
++/// 「あとで」の語の鍵。
++pub const LATER_KEY: &str = "ask_later";
++
++/// 窓の下の段（畳んだ段）の語の鍵の順: ほかの project の質問・まとめて承認・全体への指示。
++pub const FOLDS: [&str; 3] = ["ask_others", "batch", "policy"];
++
++/// 窓の局面（この project の問いが無い・1 問ずつ答えている・全部に答えた）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Phase {
++    Empty,
++    Walk,
++    Done,
++}
++
++/// 1 問ずつ出す問い（この project の問いの id・一覧の順・ほかの project の問いは外す）。
++pub fn own_ids(cards: &[Card]) -> Vec<String> {
++    cards
++        .iter()
++        .filter(|c| c.project.is_none())
++        .map(|c| c.id.to_string())
++        .collect()
++}
++
++/// 局面: 答えていない問いが在れば 1 問ずつ、無くて窓で答えた問いが在れば全部答えた、どちらも無ければ問いが無い。
++pub fn phase(ids: &[String], answered: &BTreeSet<String>) -> Phase {
++    if ids.iter().any(|id| !answered.contains(id)) {
++        Phase::Walk
++    } else if answered.is_empty() {
++        Phase::Empty
++    } else {
++        Phase::Done
++    }
++}
++
++/// 今の問い: 選んだ問いが一覧に在り答えていなければそれ、ほかは一覧の頭から最初の答えていない問い
++/// （送った後も頭から探す・見本の qsend の findIndex）。
++pub fn current<'a>(
++    ids: &'a [String],
++    picked: Option<&str>,
++    answered: &BTreeSet<String>,
++) -> Option<&'a str> {
++    let open = |id: &&String| !answered.contains(*id);
++    picked
++        .and_then(|p| ids.iter().filter(open).find(|id| id.as_str() == p))
++        .or_else(|| ids.iter().find(open))
++        .map(String::as_str)
++}
++
++/// あとで: 今の問いの後ろへ巡って最初の答えていない問い（ほかに無ければ None で窓を閉じる・見本の qlater）。
++/// 今の問いが一覧に無ければ一覧の頭から探す。
++pub fn later<'a>(ids: &'a [String], cur: &str, answered: &BTreeSet<String>) -> Option<&'a str> {
++    let n = ids.len();
++    let at = ids.iter().position(|id| id == cur).map_or(n, |i| i + 1);
++    (0..n)
++        .map(|k| (at + k) % n.max(1))
++        .filter_map(|i| ids.get(i))
++        .find(|id| id.as_str() != cur && !answered.contains(*id))
++        .map(String::as_str)
++}
++
++/// 答えていない問いの数。
++pub fn left(ids: &[String], answered: &BTreeSet<String>) -> usize {
++    ids.iter().filter(|id| !answered.contains(*id)).count()
++}
++
++/// 窓の題の字（見本の「答えを待つ質問 <残り>」）。
++pub fn title(left: usize) -> String {
++    format!("{} {left}", label("ask_open"))
++}
++
++/// 題の横の点の class（今の問いは cur・答えた問いは ok・見本の `.qd`）。
++pub fn dot_class(id: &str, cur: Option<&str>, answered: &BTreeSet<String>) -> &'static str {
++    match (cur == Some(id), answered.contains(id)) {
++        (true, true) => "qd cur ok",
++        (true, false) => "qd cur",
++        (false, true) => "qd ok",
++        (false, false) => "qd",
++    }
++}
++
++#[cfg(target_arch = "wasm32")]
++pub use dom::frame;
++
++#[cfg(target_arch = "wasm32")]
++mod dom {
++    use std::collections::BTreeSet;
++    use std::time::Duration;
++
++    use leptos::prelude::*;
++    use tsuzuri_contract::ledger::BeadId;
++
++    use super::{
++        DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, left, own_ids,
++        phase, title,
++    };
++    use crate::project::{Body, ask, batch, body_view, policy};
++    use crate::topbar::Win;
++    use crate::vocab::label;
++    use crate::widgets::modal::{Frame, WinCtx};
++    use crate::wins::frame_of;
++
++    /// 窓の下の段（ほかの project の質問は読むだけ・まとめて承認と全体への指示は block の本文）。
++    fn folds(cards: Memo<Vec<ask::Card>>) -> AnyView {
++        let [others_key, batch_key, policy_key] = FOLDS;
++        let others = move || {
++            cards.with(|v| {
++                v.iter()
++                    .filter_map(|c| {
++                        c.project
++                            .clone()
++                            .map(|p| (p, c.title.clone(), c.id.to_string()))
++                    })
++                    .collect::<Vec<_>>()
++            })
++        };
++        let count = move || others().len();
++        let rows = move || {
++            others()
++                .into_iter()
++                .map(|(p, t, id)| view! { <li><span class="chip">{p}</span><span class="ttl">{t}</span><code>{id}</code></li> })
++                .collect_view()
++        };
++        view! {
++            <div class="folds">
++                <details class="fold"><summary>{move || format!("{} {}", label(others_key), count())}</summary><ul class="items">{rows}</ul></details>
++                <details class="fold"><summary>{label(batch_key)}</summary>{batch::inner()}</details>
++                <details class="fold"><summary>{label(policy_key)}</summary>{policy::inner()}</details>
++            </div>
++        }
++        .into_any()
++    }
++
++    /// 窓の状態（問いの一覧・1 問ずつ出す問い・選んだ問い・窓で答えた問い・今の問い・局面）。
++    #[derive(Clone, Copy)]
++    struct Walk {
++        cards: Memo<Vec<ask::Card>>,
++        ids: Memo<Vec<String>>,
++        picked: RwSignal<Option<String>>,
++        answered: RwSignal<BTreeSet<String>>,
++        cur: Memo<Option<String>>,
++        state: Memo<Phase>,
++    }
++
++    fn walk() -> Walk {
++        let fetched = crate::net::read(ask::PATH);
++        let cards = Memo::new(move |_| fetched.with(ask::listed));
++        let ids = Memo::new(move |_| cards.with(|v| own_ids(v)));
++        let picked = RwSignal::new(None::<String>);
++        let answered = RwSignal::new(BTreeSet::<String>::new());
++        let cur = Memo::new(move |_| {
++            ids.with(|i| {
++                picked.with(|p| answered.with(|a| current(i, p.as_deref(), a).map(str::to_string)))
++            })
++        });
++        let state = Memo::new(move |_| ids.with(|i| answered.with(|a| phase(i, a))));
++        Walk {
++            cards,
++            ids,
++            picked,
++            answered,
++            cur,
++            state,
++        }
++    }
++
++    /// 全部に答えたら少し待って閉じる（待つ間に別の窓へ移ったか、新しい問いが来たら閉じない）。
++    fn close_when_done(ctx: WinCtx<Win>, state: Memo<Phase>) {
++        Effect::new(move |_| {
++            if state.get() == Phase::Done {
++                set_timeout(
++                    move || {
++                        if ctx.top() == Some(Win::Ask) && state.get_untracked() == Phase::Done {
++                            ctx.close();
++                        }
++                    },
++                    Duration::from_millis(DONE_MS),
++                );
++            }
++        });
++    }
++
++    /// 題（残りの数と、押すとその問いを選ぶ点）。
++    fn head(w: Walk) -> AnyView {
++        let Walk {
++            ids,
++            picked,
++            answered,
++            cur,
++            ..
++        } = w;
++        let dots = move || {
++            ids.get()
++                .into_iter()
++                .map(|id| {
++                    let class = {
++                        let id = id.clone();
++                        move || cur.with(|c| answered.with(|a| dot_class(&id, c.as_deref(), a)))
++                    };
++                    let aria = id.clone();
++                    view! { <button type="button" class=class aria-label=aria on:click=move |_| picked.set(Some(id.clone()))></button> }
++                })
++                .collect_view()
++        };
++        view! {
++            {move || title(ids.with(|i| answered.with(|a| left(i, a))))}
++            <span class="qdots">{dots}</span>
++        }
++        .into_any()
++    }
++
++    /// 1 問の段（局面ごと・1 問は質問の block と同じ card・記録された問いは待ってから答えた問いに数える）。
++    fn steps(ctx: WinCtx<Win>, w: Walk) -> AnyView {
++        let Walk {
++            cards,
++            ids,
++            picked,
++            answered,
++            cur,
++            state,
++        } = w;
++        let card = Memo::new(move |_| {
++            cur.with(|c| {
++                c.as_ref()
++                    .and_then(|id| cards.with(|v| v.iter().find(|k| k.id.as_str() == id).cloned()))
++            })
++        });
++        let recorded = Callback::new(move |id: BeadId| {
++            set_timeout(
++                move || {
++                    answered.update(|s| {
++                        s.insert(id.to_string());
++                    })
++                },
++                Duration::from_millis(super::ADVANCE_MS),
++            );
++        });
++        let later_click = move |_| {
++            let next = cur.get_untracked().and_then(|c| {
++                ids.with_untracked(|i| {
++                    answered.with_untracked(|a| later(i, &c, a).map(str::to_string))
++                })
++            });
++            match next {
++                Some(n) => picked.set(Some(n)),
++                None => ctx.close(),
++            }
++        };
++        let walk = move || {
++            match state.get() {
++            Phase::Empty => body_view(Body::Empty(ask::EMPTY)),
++            Phase::Done => view! { <div class="alldone">{label(DONE_KEY)}</div> }.into_any(),
++            Phase::Walk => view! {
++                {ask::one_view(card, recorded)}
++                <div class="qbtns"><button type="button" class="later" on:click=later_click>{label(LATER_KEY)}</button></div>
++            }
++            .into_any(),
++        }
++        };
++        walk.into_any()
++    }
++
++    /// 質問の窓（帯の窓の層が開く・`ctx` は全部に答えた後に閉じるための窓の積み）。
++    pub fn frame(ctx: WinCtx<Win>) -> Frame {
++        let w = walk();
++        close_when_done(ctx, w.state);
++        let (walk, cards) = (steps(ctx, w), w.cards);
++        Frame {
++            width: frame_of(Win::Ask).0,
++            title: head(w),
++            body: view! { {walk}{folds(cards)} }.into_any(),
++        }
++    }
++}
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index 2b4e11240e7362d2d1acdab81cfa2e65f8111ae5..b35b4b14e3adeb04009fd3a4138cbab56b55646f 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -7,6 +7,8 @@
+ //! block に共通の部品は kit に置く（project が再公開する・行 hs-blocks）。
+ 
+ pub mod account;
++/// 質問の窓（1 問ずつの選び方と局面は host でも組む・窓の DOM は wasm の target だけ・行 g-ask-win）。
++pub mod askwin;
+ /// 口ごとの読みの印の決め方（net が使い host でも組む・行 g-reads）。
+ pub mod flight;
+ pub mod frame;
+diff --git a/crates/tsuzuri-surface/src/project/ask.rs b/crates/tsuzuri-surface/src/project/ask.rs
+index 5b370eb9b92ba2a5e8be5f177ef00f63c4f22ca7..e1ef5cd7f5df8b053d3e0ced84ce819fe3e5f116 100644
+--- a/crates/tsuzuri-surface/src/project/ask.rs
++++ b/crates/tsuzuri-surface/src/project/ask.rs
+@@ -645,6 +645,10 @@ pub fn view() -> leptos::prelude::AnyView {
+     dom::view()
+ }
+ 
++/// 質問の窓の 1 問（行 g-ask-win・中身は dom の one_view）。
++#[cfg(target_arch = "wasm32")]
++pub use dom::one_view;
++
+ /// 届いていない裁定の 1 行（一覧の上と次の一手の箱の上に出す・wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ pub fn late_view() -> leptos::prelude::AnyView {
+@@ -797,6 +801,39 @@ mod dom {
+         section(BLOCK, extra.into_any(), content)
+     }
+ 
++    /// 質問の窓の 1 問（行 g-ask-win）: `pick` の card を block と同じ card（つながりの図と答えの欄も同じ）で描き、
++    /// 答えを記録した（200）問いの id を `recorded` に渡す。答えの状態は問いの id ごとに窓の一生の間持つ。
++    pub fn one_view(pick: Memo<Option<Card>>, recorded: Callback<BeadId>) -> AnyView {
++        let fallback = Mode::from_query(&window().location().search().unwrap_or_default());
++        let mode = use_context::<HelpCtx>().map(|c| c.mode);
++        let current = move || mode.map_or(fallback, |m| m.get());
++        let fetched = crate::net::read(PATH);
++        provide_context(CanAnswer(Memo::new(move |_| fetched.with(answerable))));
++        let cards = Memo::new(move |_| fetched.with(listed));
++        let places = embeds();
++        let drafts: Drafts = StoredValue::new(Vec::new());
++        let clock = crate::net::ticker();
++        let tick = move || clock.get();
++        let one = move || {
++            pick.get().map(|c| {
++                let d = draft(drafts, &c.id);
++                let (id, outcome) = (c.id.clone(), d.outcome.clone());
++                Effect::new(move |_| {
++                    if outcome.with(|o| matches!(o, Some(Outcome::Recorded { .. }))) {
++                        recorded.run(id.clone());
++                    }
++                });
++                let key = c.id.to_string();
++                let live = Live {
++                    nb: Memo::new(move |_| cards.with(|v| target_number(v, &key)).unwrap_or(0)),
++                    node: Memo::new(|_| None),
++                };
++                card_view(c, d, live, false, Shared { tick, mode: current, places })
++            })
++        };
++        one.into_any()
++    }
++
+     /// 席に届いていない裁定の 1 行（口を読み、1 秒の時計で書き直す・無いときは何も出さない・行 f-undelivered）。
+     pub fn late_view() -> AnyView {
+         let fetched = crate::net::read(UNRECEIVED_PATH);
+diff --git a/crates/tsuzuri-surface/src/project/batch.rs b/crates/tsuzuri-surface/src/project/batch.rs
+index 7f5354fc1c4d06b82414a787ed6008fdb19b2c86..5875872c814a36536dbd9d023e14e659cc996806 100644
+--- a/crates/tsuzuri-surface/src/project/batch.rs
++++ b/crates/tsuzuri-surface/src/project/batch.rs
+@@ -310,6 +310,12 @@ pub fn view() -> leptos::prelude::AnyView {
+     dom::view()
+ }
+ 
++/// 質問の窓の下の段の中身（見出しの無い本文・行 g-ask-win）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner() -> leptos::prelude::AnyView {
++    dom::inner()
++}
++
+ /// まとめて承認の DOM（wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
+@@ -343,6 +349,11 @@ mod dom {
+     }
+ 
+     pub fn view() -> AnyView {
++        section(BLOCK, ().into_any(), inner())
++    }
++
++    /// block の本文（見出しの無い中身・質問の窓の下の段も使う）。
++    pub fn inner() -> AnyView {
+         let fetched = crate::net::read(ask::PATH);
+         let s = State {
+             off: RwSignal::new(BTreeSet::new()),
+@@ -369,7 +380,7 @@ mod dom {
+                 .get()
+                 .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
+         };
+-        section(BLOCK, ().into_any(), view! { {content}{note} }.into_any())
++        view! { {content}{note} }.into_any()
+     }
+ 
+     fn filled(rows: Memo<Vec<Row>>, s: State) -> AnyView {
+diff --git a/crates/tsuzuri-surface/src/project/policy.rs b/crates/tsuzuri-surface/src/project/policy.rs
+index 7721a30137ef84f1d819eb8591169e886f752c2c..05a75589a4d991fa3bd4f60f6b7f5e4be1f1b9ba 100644
+--- a/crates/tsuzuri-surface/src/project/policy.rs
++++ b/crates/tsuzuri-surface/src/project/policy.rs
+@@ -145,6 +145,12 @@ pub fn view() -> leptos::prelude::AnyView {
+     dom::view()
+ }
+ 
++/// 質問の窓の下の段の中身（見出しの無い本文・行 g-ask-win）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner() -> leptos::prelude::AnyView {
++    dom::inner()
++}
++
+ /// 全体への指示の DOM（wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
+@@ -166,6 +172,11 @@ mod dom {
+     }
+ 
+     pub fn view() -> AnyView {
++        section(BLOCK, ().into_any(), inner())
++    }
++
++    /// block の本文（見出しの無い中身・質問の窓の下の段も使う）。
++    pub fn inner() -> AnyView {
+         let s = State {
+             text: RwSignal::new(String::new()),
+             sending: RwSignal::new(false),
+@@ -176,7 +187,7 @@ mod dom {
+                 .get()
+                 .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
+         };
+-        section(BLOCK, ().into_any(), view! { {form(s)}{note} }.into_any())
++        view! { {form(s)}{note} }.into_any()
+     }
+ 
+     fn form(s: State) -> AnyView {
+diff --git a/crates/tsuzuri-surface/src/wins.rs b/crates/tsuzuri-surface/src/wins.rs
+index c625a016fb404b43e085b640798baf3070c2f788..4ace86478ca7d494338e394691ac7c27ebe109f8 100644
+--- a/crates/tsuzuri-surface/src/wins.rs
++++ b/crates/tsuzuri-surface/src/wins.rs
+@@ -4,7 +4,7 @@
+ //! 知らせ・席と口座・抜けの検査・記号の見方・表示先は、今の block の中身の関数（各 module の inner）を窓の中で描く
+ //! （頁の block は替えない・頁から block を外すのは 1 枚の画面への切り替えの行）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
+ //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
+-//! 質問の窓はこの行では今の質問の block を描く（1 問ずつの形は行 g-ask-win が替える）。
++//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。
+ //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
+ 
+ use std::cmp::Reverse;
+@@ -100,11 +100,11 @@ mod dom {
+     use super::{Stalled, frame_of, stalled};
+     use crate::frame::Mode;
+     use crate::project::{
+-        Body, ask, body_view, gaps, ledger, legend, notice, pipeline, seat, stage, unmeasured,
++        Body, body_view, gaps, ledger, legend, notice, pipeline, seat, stage, unmeasured,
+     };
+     use crate::topbar::Win;
+     use crate::vocab::label;
+-    use crate::widgets::modal::Frame;
++    use crate::widgets::modal::{Frame, WinCtx};
+ 
+     /// 今の URL の表示の型。
+     fn mode() -> Mode {
+@@ -139,11 +139,11 @@ mod dom {
+         list.into_any()
+     }
+ 
+-    /// 窓の名から中身を組む（窓の層 widgets::modal::layer の draw に渡す）。
+-    pub fn draw(win: Win) -> Frame {
++    /// 窓の名から中身を組む（窓の層 widgets::modal::layer の draw に渡す・`ctx` は質問の窓が全部に答えた後に閉じる口）。
++    pub fn draw(win: Win, ctx: WinCtx<Win>) -> Frame {
+         let (width, key) = frame_of(win);
+         let body = match win {
+-            Win::Ask => ask::view(),
++            Win::Ask => return crate::askwin::frame(ctx),
+             Win::Stalled => stalled_view(),
+             Win::Notices => notice::inner(),
+             Win::Seat => seat::inner(),
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index ee3e243d54e4bb74a52807c1e986d5a18c9a68cb..e9dc089d92adf8d0dd8ac5aac7fd78b968c39562 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -386,6 +386,22 @@ details.fold > summary::-webkit-details-marker { display: none; }
+ details.fold > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+ details.fold[open] > summary::before { transform: rotate(45deg); }
+ 
++/* 質問の窓（行 g-ask-win・見本の qModal・題の横の点・全部に答えた・あとで・下の畳んだ段） */
++.qdots { display: flex; gap: 6px; }
++.qdots .qd { width: 11px; height: 11px; padding: 0; border: 2px solid #fdba74; border-radius: 50%; background: var(--panel); cursor: pointer; }
++.qdots .qd.cur { background: #ea580c; border-color: #ea580c; }
++.qdots .qd.ok { background: var(--st-run); border-color: var(--st-run); }
++.alldone { padding: 50px 0; color: var(--st-run); font-size: 20px; font-weight: 700; text-align: center; }
++.qbtns { display: flex; align-items: center; gap: var(--s2); margin-top: 10px; }
++.qbtns .later { padding: 6px 14px; border: 1px solid var(--line-2); border-radius: var(--r2); background: var(--panel); cursor: pointer; }
++.folds { margin-top: var(--s3); padding-top: 6px; border-top: 1px solid var(--line); }
++@media (max-width: 600px) {
++  .qdots { gap: 0; }
++  .qdots .qd { width: 40px; height: 40px; padding: 13px; border: 0; background-clip: content-box; background-color: #fdba74; }
++  .qdots .qd.cur { background-color: #ea580c; }
++  .qdots .qd.ok { background-color: var(--st-run); }
++}
++
+ /* ---------- つながり（図） ---------- */
+ .nb-wrap { margin-top: var(--s2); }
+ .nb-graph { overflow: hidden; }
+diff --git a/crates/tsuzuri-surface/tests/bvaskw.rs b/crates/tsuzuri-surface/tests/bvaskw.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1dd45dd798ad59e4e92c34db9b71700b5ffc525a
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvaskw.rs
+@@ -0,0 +1,218 @@
++//! 行 g-ask-win の歯: 質問の窓（判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）の 1 問ずつの選び方と、
++//! 送った後の次の問いと「あとで」、全部に答えた時の局面と閉じる待ち、題と点の class、下の段の並びと block の本文の分け、
++//! 語の鍵と stylesheet の規則、窓の DOM（wasm の枝）の配線の字。
++//! fixture は tests/fixtures/surface/question-list.json（読むだけ）。
++#![cfg(test)]
++
++use std::collections::BTreeSet;
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionList};
++use tsuzuri_contract::wire;
++use tsuzuri_surface::askwin::{
++    ADVANCE_MS, DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, left,
++    own_ids, phase, title,
++};
++use tsuzuri_surface::project::ask;
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::vocab;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn ids(v: &[&str]) -> Vec<String> {
++    v.iter().map(|s| (*s).to_string()).collect()
++}
++
++fn set(v: &[&str]) -> BTreeSet<String> {
++    v.iter().map(|s| (*s).to_string()).collect()
++}
++
++/// 1 問ずつ: 選んだ問いが一覧に在り答えていなければそれ、ほかは一覧の頭から最初の答えていない問い。
++#[test]
++fn bvaskw_one_at_a_time_in_order() {
++    let all = ids(&["q.1", "q.2", "q.3"]);
++    assert_eq!(current(&all, None, &set(&[])), Some("q.1"));
++    assert_eq!(current(&all, Some("q.3"), &set(&[])), Some("q.3"));
++    assert_eq!(current(&all, Some("q.3"), &set(&["q.3"])), Some("q.1"));
++    assert_eq!(current(&all, Some("q.9"), &set(&["q.1"])), Some("q.2"));
++    assert_eq!(current(&all, None, &set(&["q.1", "q.2", "q.3"])), None);
++    assert_eq!(current(&[], Some("q.1"), &set(&[])), None);
++}
++
++/// 送って記録された問いは 650 ms の後に答えた問いに数え、次は一覧の頭から最初の答えていない問い（今の後ろでなく頭から）。
++#[test]
++fn bvaskw_advance_after_send() {
++    assert_eq!(ADVANCE_MS, 650);
++    let all = ids(&["q.1", "q.2", "q.3"]);
++    // q.2 を選んで答えた後は、q.3 でなく頭の q.1 へ移る。
++    assert_eq!(current(&all, Some("q.2"), &set(&["q.2"])), Some("q.1"));
++    // 一覧を読み直して答えた問いが消えても、残りの頭へ移る。
++    let reloaded = ids(&["q.1", "q.3"]);
++    assert_eq!(
++        current(&reloaded, Some("q.2"), &set(&["q.2", "q.1"])),
++        Some("q.3")
++    );
++    let src = read("src/project/ask.rs");
++    let one = &src[src.find("pub fn one_view(").expect("one_view")..];
++    let one = &one[..one.find("\n    }\n").expect("one_view の終わり")];
++    assert!(
++        one.contains("matches!(o, Some(Outcome::Recorded { .. }))"),
++        "{one}"
++    );
++    assert!(one.contains("recorded.run(id.clone())"), "{one}");
++}
++
++/// あとで: 今の問いの後ろへ巡って最初の答えていない問い・ほかに無ければ None（窓を閉じる）。
++#[test]
++fn bvaskw_later_wraps() {
++    let all = ids(&["q.1", "q.2", "q.3"]);
++    assert_eq!(later(&all, "q.1", &set(&[])), Some("q.2"));
++    assert_eq!(later(&all, "q.3", &set(&[])), Some("q.1"));
++    assert_eq!(later(&all, "q.1", &set(&["q.2"])), Some("q.3"));
++    assert_eq!(later(&all, "q.2", &set(&["q.1", "q.3"])), None);
++    assert_eq!(later(&all, "q.9", &set(&["q.1"])), Some("q.2"));
++    assert_eq!(later(&[], "q.1", &set(&[])), None);
++}
++
++/// 局面: 答えていない問いが在れば Walk・窓で答えた後に残りが無ければ Done（1200 ms の後に閉じる）・初めから無ければ Empty。
++#[test]
++fn bvaskw_close_when_none_left() {
++    assert_eq!(DONE_MS, 1200);
++    let all = ids(&["q.1", "q.2"]);
++    assert_eq!(phase(&all, &set(&[])), Phase::Walk);
++    assert_eq!(phase(&all, &set(&["q.1"])), Phase::Walk);
++    assert_eq!(phase(&all, &set(&["q.1", "q.2"])), Phase::Done);
++    assert_eq!(phase(&[], &set(&["q.1"])), Phase::Done);
++    assert_eq!(phase(&[], &set(&[])), Phase::Empty);
++    let src = read("src/askwin.rs");
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    for needle in [
++        "if state.get() == Phase::Done {",
++        "if ctx.top() == Some(Win::Ask) && state.get_untracked() == Phase::Done {",
++        "Duration::from_millis(DONE_MS)",
++        "None => ctx.close(),",
++    ] {
++        assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
++    }
++}
++
++/// 題は「答えを待つ質問 <残り>」で、点は今の問いが cur・答えた問いが ok。1 問ずつ出すのはこの project の問いだけ。
++#[test]
++fn bvaskw_dots_and_title() {
++    let all = ids(&["q.1", "q.2", "q.3"]);
++    let done = set(&["q.1"]);
++    assert_eq!(left(&all, &done), 2);
++    assert_eq!(title(2), "答えを待つ質問 2");
++    let classes: Vec<&str> = all
++        .iter()
++        .map(|id| dot_class(id, Some("q.2"), &done))
++        .collect();
++    assert_eq!(classes, ["qd ok", "qd cur", "qd"]);
++    assert_eq!(dot_class("q.1", Some("q.1"), &done), "qd cur ok");
++    let own: QuestionList =
++        wire::decode(&read("../../tests/fixtures/surface/question-list.json")).expect("問いの一覧");
++    let Reading::Known(cards) = own.cards.clone() else {
++        panic!("fixture の問い");
++    };
++    let mut other = cards[0].clone();
++    other.id = BeadId::new("ox.1").expect("id");
++    let all = AllQuestions {
++        own,
++        others: vec![ProjectQuestions {
++            project: "other".to_string(),
++            answerable: false,
++            cards: Reading::Known(vec![other]),
++        }],
++    };
++    let listed = ask::listed(&Fetched::Body(wire::encode(&all).expect("電文")));
++    assert_eq!(listed.len(), 3);
++    assert_eq!(own_ids(&listed), ["qa.2", "qa.10"]);
++}
++
++/// 下の段は ほかの project の質問・まとめて承認・全体への指示 の順で、まとめて承認と全体への指示は block の本文（inner）を描き、
++/// 頁の block の view も同じ inner を描く。
++#[test]
++fn bvaskw_batch_policy_below() {
++    assert_eq!(FOLDS, ["ask_others", "batch", "policy"]);
++    let src = read("src/askwin.rs");
++    let folds = &src[src.find("fn folds(").expect("folds")..];
++    let b = folds.find("{batch::inner()}").expect("まとめて承認の段");
++    let p = folds.find("{policy::inner()}").expect("全体への指示の段");
++    let o = folds.find("{rows}").expect("ほかの project の段");
++    assert!(o < b && b < p, "下の段の順");
++    for file in ["src/project/batch.rs", "src/project/policy.rs"] {
++        let text = read(file);
++        assert!(
++            text.contains("pub fn inner() -> leptos::prelude::AnyView {"),
++            "{file}"
++        );
++        assert!(
++            text.contains("section(BLOCK, ().into_any(), inner())"),
++            "{file}"
++        );
++    }
++    assert!(src.contains("body: view! { {walk}{folds(cards)} }.into_any(),"));
++}
++
++/// 語の鍵の語と、質問の窓の規則が stylesheet の質問の塊（つながりの塊の前）に在ること。
++#[test]
++fn bvaskw_words_and_rules() {
++    let v = vocab();
++    for (key, want) in [
++        (DONE_KEY, "全部答えました ✓"),
++        (LATER_KEY, "あとで"),
++        ("ask_others", "ほかの project の質問"),
++        ("ask_open", "答えを待つ質問"),
++        ("batch", "まとめて承認"),
++        ("policy", "全体への指示"),
++    ] {
++        assert_eq!(v.term(key).map(|t| t.label.as_str()), Some(want), "{key}");
++    }
++    let css = read("style.css");
++    let ask = css
++        .find("/* ---------- 質問 ---------- */")
++        .expect("質問の塊");
++    let next = css
++        .find("/* ---------- つながり（図） ---------- */")
++        .expect("つながりの塊");
++    for rule in [
++        ".qdots .qd {",
++        ".qdots .qd.cur {",
++        ".qdots .qd.ok {",
++        ".alldone {",
++        ".qbtns .later {",
++        ".folds {",
++    ] {
++        let i = css
++            .find(rule)
++            .unwrap_or_else(|| panic!("stylesheet に {rule} が無い"));
++        assert!(ask < i && i < next, "{rule} は質問の塊の中");
++    }
++}
++
++/// 窓の DOM（wasm の枝）の配線の字: 帯の窓の Ask は質問の窓を組み、1 問は質問の block と同じ card で描き、
++/// 記録された問いを待ってから答えた問いに数え、点を押すとその問いを選ぶ。
++#[test]
++fn bvaskw_dom_wiring_text() {
++    let wins = read("src/wins.rs");
++    assert!(wins.contains("Win::Ask => return crate::askwin::frame(ctx),"));
++    assert!(wins.contains("pub fn draw(win: Win, ctx: WinCtx<Win>) -> Frame {"));
++    let src = read("src/askwin.rs");
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    for needle in [
++        "crate::net::read(ask::PATH)",
++        "{ask::one_view(card, recorded)}",
++        "Duration::from_millis(super::ADVANCE_MS)",
++        "on:click=move |_| picked.set(Some(id.clone()))",
++        "on:click=later_click",
++        "width: frame_of(Win::Ask).0,",
++    ] {
++        assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
++    }
++    assert!(read("src/lib.rs").contains("\npub mod askwin;\n"));
++}
+diff --git a/crates/tsuzuri-surface/tests/bvwins.rs b/crates/tsuzuri-surface/tests/bvwins.rs
+index e07150a203c51fad0e5181076d8789440f65051d..859ccecf06b4d01988daf145d4a9878e292c1e1f 100644
+--- a/crates/tsuzuri-surface/tests/bvwins.rs
++++ b/crates/tsuzuri-surface/tests/bvwins.rs
+@@ -195,13 +195,13 @@ fn bvwins_blocks_inner_text() {
+     assert!(stage.contains("        let f = Face::new();\n        load(f);\n        body(f)\n"));
+ }
+ 
+-/// 窓の DOM（wasm の枝）の配線の字: 窓の名ごとに中身を組む関数（質問はこの行では今の質問の block）。
++/// 窓の DOM（wasm の枝）の配線の字: 窓の名ごとに中身を組む関数（質問は 1 問ずつの窓・行 g-ask-win）。
+ #[test]
+ fn bvwins_draw_wiring_text() {
+     let src = read("src/wins.rs");
+     let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
+     for needle in [
+-        "Win::Ask => ask::view(),",
++        "Win::Ask => return crate::askwin::frame(ctx),",
+         "Win::Stalled => stalled_view(),",
+         "Win::Notices => notice::inner(),",
+         "Win::Seat => seat::inner(),",
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 20fa890a20391a7df4af5a752e83aff92b7edaae..fee03723eade7924eb14d5e24b880f770accec51 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1776,6 +1776,21 @@
+    "label": "席と口座",
+    "plain": "席の状態と口座の利用枠\n・ 帯は直近 3 時間の動き\n・ 5h と 7d は使った割合\n→ 押すと席と口座の窓",
+    "internal": "GET /api/seat（判断の記録 ADR-27 決定 (3)(4)）"
++  },
++  "ask_done": {
++   "label": "全部答えました ✓",
++   "plain": "答えを待つ質問が無くなった\n→ 少し待つと窓が閉じる",
++   "internal": "askwin の Phase::Done（行 g-ask-win）"
++  },
++  "ask_later": {
++   "label": "あとで",
++   "plain": "この質問を後に回す\n→ 後ろの答えていない質問へ\n・ ほかに無ければ窓を閉じる",
++   "internal": "askwin の later（見本の qlater）"
++  },
++  "ask_others": {
++   "label": "ほかの project の質問",
++   "plain": "ほかの project の答えを待つ質問\n・ ここでは読むだけ\n→ 答えはチャットで",
++   "internal": "GET /api/questions の others"
+   }
+  }
+ }
+\ No newline at end of file

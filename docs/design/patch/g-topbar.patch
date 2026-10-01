@@ -1,0 +1,1043 @@
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index ee4ae701e3c7c7c391796292d7dd6cdf259f2584..be7d8f60385fc0427bd7f2d9125611f6a7c8eb26 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -20,6 +20,8 @@ pub mod project;
+ pub mod seatpill;
+ /// browser の保存（mode などの便利の写し・決め方は host でも組む・行 g-mode-store）。
+ pub mod store;
++/// 上の固定の帯（帯の中身の字と並びは host でも組む・DOM は wasm の target だけ・行 g-topbar）。
++pub mod topbar;
+ pub mod view;
+ pub mod vocab;
+ pub mod widgets;
+diff --git a/crates/tsuzuri-surface/src/topbar.rs b/crates/tsuzuri-surface/src/topbar.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7cc7c64c172af1d5382805bcf7c408fa1da24a3b
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/topbar.rs
+@@ -0,0 +1,524 @@
++//! 上の固定の帯（行 g-topbar・判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar` と renderTodo と renderClock）:
++//! 左に account board へ戻る口と project の名、真ん中に次の一手の pill と、やる事の 3 つの数（質問・止まった run・
++//! 抜けの検査・1 以上の物だけ色）と、席からの最新の知らせの 1 行と件数、右に席と口座（状態・直近 3 時間の細い帯・
++//! 口座と 5 時間と 7 日の窓の使った割合）と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と記号の見方と表示先）。
++//! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は行 g-win-parts と行 g-ask-win が描く。
++//! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
++//! DOM は wasm の target のときだけ組む。帯を頁に置くのは 1 枚の画面への切り替えの行（今の header は替えない）。
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{NextMove, Reading};
++use tsuzuri_contract::graph::{InvariantCheck, Verdict};
++use tsuzuri_contract::stats::{CheckResult, NextStep};
++
++use crate::project::seat::{Span, bar_class, drawn, rects, short, state_value, strip_svg};
++use crate::project::{Body, UNKNOWN, next, notice, state_key};
++use crate::view::{Fetched, hhmm};
++use crate::vocab::label;
++
++/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Win {
++    Ask,
++    Stalled,
++    Notices,
++    Seat,
++    Gaps,
++    Legend,
++    Dest,
++}
++
++/// 帯の id（見本の `#bar`・頁に 1 つ）。
++pub const BAR: &str = "bar";
++
++/// 次の一手の pill の頭の印（見本の `▶`）。
++pub const GO: &str = "▶";
++
++/// 次の一手の pill の class（当たった一手・無い一手か測れていない）。
++pub const PILL_GO: &str = "pill go";
++pub const PILL_NONE: &str = "pill none";
++
++/// 止まった run の数の語の鍵。
++pub const STALL_KEY: &str = "bar_stall";
++
++/// 抜けの検査の数と印の語の鍵。
++pub const GAPS_KEY: &str = "bar_gaps";
++
++/// 直近 3 時間の細い帯の語の鍵。
++pub const RECENT_KEY: &str = "bar_recent";
++
++/// 設定（⚙）の button の語の鍵（aria-label）。
++pub const GEAR_KEY: &str = "bar_gear";
++
++/// 席と口座の印の語の鍵（aria-label・窓の題）。
++pub const SEAT_KEY: &str = "seat_acct";
++
++/// 次の一手の種類が開く窓（質問と束の承認は質問の窓・止まっている走行は止まった run の窓・
++/// 限度と移動と応答なしは席と口座の窓・発効待ちは抜けの検査の窓・なしは開かない）。
++pub fn lead_win(kind: NextMove) -> Option<Win> {
++    match kind {
++        NextMove::Question | NextMove::BatchApproval => Some(Win::Ask),
++        NextMove::StalledRun => Some(Win::Stalled),
++        NextMove::LimitOrMove | NextMove::Unresponsive => Some(Win::Seat),
++        NextMove::AwaitingEffect => Some(Win::Gaps),
++        NextMove::Nothing => None,
++    }
++}
++
++/// 次の一手の pill（class・字・押すと開く窓）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Lead {
++    pub class: &'static str,
++    pub text: String,
++    pub win: Option<Win>,
++}
++
++/// 種類の件数（当たれば件数・当たらなければ 0・判じなかったか電文に無ければ None）。
++fn count_of(step: &NextStep, kind: NextMove) -> Option<u32> {
++    step.checks
++        .iter()
++        .find(|c| c.kind == kind)
++        .and_then(|c| match c.result {
++            CheckResult::Hit => Some(c.count),
++            CheckResult::Miss => Some(0),
++            CheckResult::NotJudged => None,
++        })
++}
++
++/// 次の一手の pill: 電文の lead の種類と件数（質問は「答える」・止まっている走行は「確かめる」の字）。
++/// lead がなしなら次の一手なし、口が読めないかなしを判じなかったなら測れていない（どちらも窓を開かない）。
++pub fn lead(fetched: &Fetched) -> Lead {
++    let none = |key: &str| Lead {
++        class: PILL_NONE,
++        text: label(key),
++        win: None,
++    };
++    let Ok(step) = next::step(fetched) else {
++        return none(next::UNJUDGED_KEY);
++    };
++    if next::unjudged(&step) {
++        return none(next::UNJUDGED_KEY);
++    }
++    if step.lead == NextMove::Nothing {
++        return none(next::key(NextMove::Nothing));
++    }
++    let n = count_of(&step, step.lead).unwrap_or(0);
++    let text = match step.lead {
++        NextMove::Question => format!("{GO} {} {n} 件に答える", label("questions")),
++        NextMove::StalledRun => format!("{GO} {} {n} 件を確かめる", label(STALL_KEY)),
++        kind => format!("{GO} {} {n} 件", label(next::key(kind))),
++    };
++    Lead {
++        class: PILL_GO,
++        text,
++        win: lead_win(step.lead),
++    }
++}
++
++/// やる事の 3 つ（語の鍵・1 以上の時の色の class・開く窓・帯の並びの順）。
++pub const TODOS: [(&str, &str, Win); 3] = [
++    ("questions", "org", Win::Ask),
++    (STALL_KEY, "red", Win::Stalled),
++    (GAPS_KEY, "amb", Win::Gaps),
++];
++
++/// やる事の数の札（数・class・字・押すと開く窓）。数が分からなければ None で字は「?」。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Count {
++    pub key: &'static str,
++    pub n: Option<u32>,
++    pub class: String,
++    pub text: String,
++    pub win: Win,
++}
++
++/// 抜けありの判定の数。
++fn violated(checks: &[InvariantCheck]) -> u32 {
++    let n = checks
++        .iter()
++        .filter(|c| c.verdict == Verdict::Violation)
++        .count();
++    u32::try_from(n).unwrap_or(u32::MAX)
++}
++
++/// やる事の 3 つの数: 質問と止まった run は次の一手の電文の件数、抜けの検査は導出グラフの電文の抜けありの判定の数。
++/// 1 以上の物だけ色の class（`chip org` など）で、0 と分からない物は `chip zero`。
++pub fn counts(next_doc: &Fetched, graph: &Fetched) -> Vec<Count> {
++    let step = next::step(next_doc).ok();
++    let of = |kind| step.as_ref().and_then(|s| count_of(s, kind));
++    let gaps = crate::project::gaps::checks(graph)
++        .ok()
++        .map(|c| violated(&c));
++    let ns = [of(NextMove::Question), of(NextMove::StalledRun), gaps];
++    TODOS
++        .into_iter()
++        .zip(ns)
++        .map(|((key, hot, win), n)| Count {
++            key,
++            n,
++            class: match n {
++                Some(n) if n > 0 => format!("chip {hot}"),
++                _ => "chip zero".to_string(),
++            },
++            text: format!(
++                "{} {}",
++                label(key),
++                n.map_or_else(|| "?".to_string(), |n| n.to_string())
++            ),
++            win,
++        })
++        .collect()
++}
++
++/// 知らせの 1 行（時刻の字・題・この project の知らせの件数）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct NoticeLine {
++    pub when: String,
++    pub title: String,
++    pub count: usize,
++}
++
++/// 席からの最新の知らせ: この project の知らせのうち最新の 1 つと件数（電文はほかの project の分も持つが数えない）。
++/// 口が読めないか自分の記録が読めなければ測れていない、自分の知らせが無ければ空。
++pub fn notice_line(fetched: &Fetched) -> Body<NoticeLine> {
++    let doc = match notice::doc(fetched) {
++        Ok(doc) => doc,
++        Err(reason) => return Body::Unmeasured(reason),
++    };
++    if doc.unread.contains(&doc.project) {
++        return Body::Unmeasured(notice::OWN_UNREAD);
++    }
++    let own: Vec<_> = doc
++        .latest
++        .iter()
++        .filter(|n| n.project == doc.project)
++        .collect();
++    match own.iter().max_by_key(|n| n.at) {
++        Some(n) => Body::Filled(NoticeLine {
++            when: hhmm(n.at),
++            title: n.title.clone(),
++            count: own.len(),
++        }),
++        None => Body::Empty(notice::NONE_LINE),
++    }
++}
++
++/// 口座の窓の 1 つ（短い字・使った割合・棒の長さ・棒の class）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Use {
++    pub short: String,
++    pub used: Option<u8>,
++    pub width: u8,
++    pub class: &'static str,
++}
++
++/// 帯に出す口座の窓（5 時間と 7 日・この順）。
++pub const USE_WINDOWS: [&str; 2] = ["five_hour", "seven_day"];
++
++/// 細い帯の幅（直近 3 時間）。
++pub const STRIP_SPAN: Span = Span::H3;
++
++/// 席と口座の印の中身（状態・語の鍵・から の時刻・tick と heartbeat の字・細い帯の SVG・口座の名・2 つの窓）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct SeatBar {
++    pub state: &'static str,
++    pub key: &'static str,
++    pub since: Option<String>,
++    pub tick: String,
++    pub strip: String,
++    pub account: Option<String>,
++    pub usage: Vec<Use>,
++}
++
++fn yes_no(r: &Reading<bool>, yes: &'static str, no: &'static str) -> &'static str {
++    match r {
++        Reading::Known(true) => yes,
++        Reading::Known(false) => no,
++        Reading::Unknown => "?",
++    }
++}
++
++/// 席と口座の印: 口 /api/seat の電文を描く今で組む（細い帯は直近 3 時間の区間・窓は 5 時間と 7 日）。
++/// 口が読めなければ状態は測れていないで、時刻と口座と割合は無い。
++pub fn seat_bar(fetched: &Fetched, now: EpochSecs) -> SeatBar {
++    let Ok(card) = crate::project::seat::card(fetched) else {
++        return SeatBar {
++            state: UNKNOWN,
++            key: state_key(UNKNOWN),
++            since: None,
++            tick: "tick ? · hb ?".to_string(),
++            strip: strip_svg(&[], &[]),
++            account: None,
++            usage: USE_WINDOWS.iter().map(|w| use_of(w, None)).collect(),
++        };
++    };
++    let c = drawn(card, now);
++    let state = state_value(c.state);
++    let strip = match &c.spans {
++        Reading::Known(s) => strip_svg(&rects(s, c.at, STRIP_SPAN), &[]),
++        Reading::Unknown => strip_svg(&[], &[]),
++    };
++    let used = |w: &str| match &c.usage {
++        Reading::Known(u) => u.iter().find(|q| q.window == w).map(|q| q.used_pct),
++        Reading::Unknown => None,
++    };
++    SeatBar {
++        state,
++        key: state_key(state),
++        since: c.since.map(|t| format!("{}〜", hhmm(t))),
++        tick: format!(
++            "tick {} · hb {}",
++            yes_no(&c.tick_healthy, "✓", "✗"),
++            yes_no(&c.heartbeat, "on", "off")
++        ),
++        strip,
++        account: c.account.clone(),
++        usage: USE_WINDOWS.iter().map(|w| use_of(w, used(w))).collect(),
++    }
++}
++
++/// 窓の 1 つ（棒の長さは 100 で止める・class は席の block の棒と同じ決め）。
++fn use_of(window: &str, used: Option<u8>) -> Use {
++    Use {
++        short: short(window),
++        used,
++        width: used.map_or(0, |u| u.min(100)),
++        class: used.map_or("", bar_class),
++    }
++}
++
++/// 抜けの検査の印（class と字・見本の `.gp`）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct GapsMark {
++    pub class: &'static str,
++    pub text: String,
++}
++
++/// 抜けの検査の印: 抜けありが在れば `gp f`、無くてまだ分からないが在れば `gp u`、どちらも無ければ `gp p`。
++/// 字は「抜け <抜けありの数> · ?<まだ分からないの数>」で、口が読めなければ `gp u` の「抜け ?」。
++pub fn gaps_mark(graph: &Fetched) -> GapsMark {
++    let Ok(checks) = crate::project::gaps::checks(graph) else {
++        return GapsMark {
++            class: "gp u",
++            text: format!("{} ?", label(GAPS_KEY)),
++        };
++    };
++    let fail = violated(&checks);
++    let unknown = checks
++        .iter()
++        .filter(|c| c.verdict == Verdict::Unknown)
++        .count();
++    let class = if fail > 0 {
++        "gp f"
++    } else if unknown > 0 {
++        "gp u"
++    } else {
++        "gp p"
++    };
++    GapsMark {
++        class,
++        text: format!("{} {fail} · ?{unknown}", label(GAPS_KEY)),
++    }
++}
++
++/// 設定（⚙）の中の口（語の鍵と開く窓・見本の `.gm-i` の順）。表示の型の切り替えは口の前に置く。
++pub const GEAR: [(&str, Win); 2] = [("status", Win::Legend), ("stage_target", Win::Dest)];
++
++#[cfg(target_arch = "wasm32")]
++pub use dom::{Bar, view};
++
++#[cfg(target_arch = "wasm32")]
++mod dom {
++    use leptos::ev;
++    use leptos::prelude::*;
++    use web_sys::wasm_bindgen::JsCast;
++
++    use super::{
++        BAR, Count, GEAR, GEAR_KEY, NoticeLine, RECENT_KEY, SEAT_KEY, SeatBar, Use, Win, counts,
++        gaps_mark, lead, notice_line, seat_bar,
++    };
++    use crate::frame::Mode;
++    use crate::project::{Body, map, next, notice, seat, state_icon};
++    use crate::view::hhmm;
++    use crate::vocab::label;
++    use crate::widgets::modal::{Hit, WinCtx, closes};
++
++    /// 知らせの印（見本の IC_MEGA）。
++    const MEGA: &str = r##"<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6.3v3.4h2.2l5.3 3.1V3.2L4.7 6.3zM12 5.8a2.6 2.6 0 010 4.4M4.8 9.8l.9 3.2" fill="none" stroke="#ea580c" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>"##;
++
++    /// 帯が受ける物（窓の積み・表示の型・project の名・account board へ戻る手・表示の型を選んだ時の手）。
++    #[derive(Clone, Copy)]
++    pub struct Bar {
++        pub wins: WinCtx<Win>,
++        pub mode: RwSignal<Mode>,
++        pub name: Signal<String>,
++        pub back: Callback<()>,
++        pub pick: Callback<Mode>,
++    }
++
++    fn count_view(c: Count, wins: WinCtx<Win>) -> AnyView {
++        let win = c.win;
++        view! { <button type="button" class=c.class on:click=move |_| wins.open(win, false)>{c.text}</button> }
++            .into_any()
++    }
++
++    fn notice_view(line: NoticeLine, wins: WinCtx<Win>) -> AnyView {
++        view! {
++            <button type="button" class="notice" aria-label=label("notice") on:click=move |_| wins.open(Win::Notices, false)>
++                <span inner_html=MEGA></span>
++                <time>{line.when}</time>
++                <span class="nt">{line.title}</span>
++                <span class="nc">{line.count}</span>
++            </button>
++        }
++        .into_any()
++    }
++
++    fn use_view(u: Use) -> AnyView {
++        let pct = u.used.map_or_else(|| "?".to_string(), |p| format!("{p}%"));
++        view! {
++            <span class="ub">
++                <em>{u.short}</em>
++                <i><s class=u.class style=format!("width:{}%", u.width)></s></i>
++                <em class="up">{pct}</em>
++            </span>
++        }
++        .into_any()
++    }
++
++    fn seat_view(s: SeatBar, wins: WinCtx<Win>) -> AnyView {
++        let account = s.account.clone().unwrap_or_else(|| "?".to_string());
++        let pct = |i: usize| {
++            s.usage
++                .get(i)
++                .and_then(|u| u.used)
++                .map_or_else(|| "?".to_string(), |p| format!("{p}%"))
++        };
++        let ashort = format!("{account} {}", pct(1));
++        let mshort = format!("5h {} · 7d {}", pct(0), pct(1));
++        let uses = s.usage.into_iter().map(use_view).collect_view();
++        view! {
++            <button type="button" class="seatb" aria-label=label(SEAT_KEY) on:click=move |_| wins.open(Win::Seat, false)>
++                {state_icon(s.state)}
++                <span class="sd">
++                    <span class="s1"><b>{label(s.key)}</b>{s.since}</span>
++                    <span class="s2">{s.tick}</span>
++                </span>
++                <span class="msp"><span class="s2">{label(RECENT_KEY)}</span><span class="spans" inner_html=s.strip></span></span>
++                <span class="acct"><b>{account}</b><span class="ubs">{uses}</span></span>
++                <span class="ashort">{ashort}</span>
++                <span class="mshort">{mshort}</span>
++            </button>
++        }
++        .into_any()
++    }
++
++    /// 設定（⚙）の button と中身（表示の型の 2 つと、記号の見方と表示先の窓の口）。外の click と取り消しの鍵で畳む。
++    fn gear_view(bar: Bar) -> AnyView {
++        let open = RwSignal::new(false);
++        let outside = window_event_listener(ev::click, move |e| {
++            let inside = e
++                .target()
++                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
++                .and_then(|el| el.closest(".gearw").ok().flatten())
++                .is_some();
++            if !inside && closes(Hit::Outside) {
++                open.set(false);
++            }
++        });
++        let keys = window_event_listener(ev::keydown, move |e| {
++            let key = e.key();
++            let hit = Hit::Key {
++                key: &key,
++                composing: e.is_composing(),
++            };
++            if closes(hit) {
++                open.set(false);
++            }
++        });
++        on_cleanup(move || {
++            outside.remove();
++            keys.remove();
++        });
++        let modes = Mode::ALL
++            .into_iter()
++            .map(|m| {
++                let checked = move || bar.mode.get() == m;
++                view! {
++                    <label class="gm-r">
++                        <input type="radio" name="mode" prop:checked=checked on:change=move |_| bar.pick.run(m)/>
++                        {label(m.key())}
++                    </label>
++                }
++            })
++            .collect_view();
++        let items = GEAR
++            .into_iter()
++            .map(|(key, win)| {
++                view! {
++                    <button type="button" class="gm-i" on:click=move |_| { open.set(false); bar.wins.open(win, false); }>
++                        {label(key)}
++                    </button>
++                }
++            })
++            .collect_view();
++        view! {
++            <div class="gearw">
++                <button type="button" class="gearb" aria-label=label(GEAR_KEY) on:click=move |_| open.update(|o| *o = !*o)>"⚙"</button>
++                <div class="gmenu" hidden=move || !open.get()>
++                    <div class="gm-h">{label("mode")}</div>
++                    {modes}
++                    <div class="gm-sep"></div>
++                    {items}
++                </div>
++            </div>
++        }
++        .into_any()
++    }
++
++    /// 帯（頁に 1 つ・見本の `<header id="bar">`）。
++    pub fn view(bar: Bar) -> AnyView {
++        let next_doc = crate::net::read(next::PATH);
++        let notices = crate::net::read(notice::PATH);
++        let seat_doc = crate::net::read(seat::PATH);
++        let graph = crate::net::read(map::PATH);
++        let now = crate::net::ticker();
++        let wins = bar.wins;
++        let pill = move || {
++            let l = next_doc.with(lead);
++            let win = l.win;
++            view! { <button type="button" class=l.class on:click=move |_| if let Some(w) = win { wins.open(w, false) }>{l.text}</button> }
++        };
++        let chips = move || {
++            let cs = next_doc.with(|n| graph.with(|g| counts(n, g)));
++            cs.into_iter().map(|c| count_view(c, wins)).collect_view()
++        };
++        let line = move || match notices.with(notice_line) {
++            Body::Filled(l) => Some(notice_view(l, wins)),
++            Body::Empty(_) | Body::Unmeasured(_) => None,
++        };
++        let seat_part = move || seat_doc.with(|s| seat_view(seat_bar(s, now.get()), wins));
++        let gp = move || {
++            let g = graph.with(gaps_mark);
++            view! { <button type="button" class=g.class on:click=move |_| wins.open(Win::Gaps, false)>{g.text}</button> }
++        };
++        view! {
++            <header id=BAR>
++                <div class="b-left">
++                    <button type="button" class="ab" aria-label=label("acct_back") on:click=move |_| bar.back.run(())>
++                        <span>"↑"</span><span class="abt">" "{label("acct_board")}</span>
++                    </button>
++                    <b class="pname">{move || bar.name.get()}</b>
++                </div>
++                <div class="todo">{pill}{chips}{line}</div>
++                <div class="clock">
++                    {seat_part}
++                    {gp}
++                    <span class="tm">{move || hhmm(now.get())}" "<small>"JST"</small></span>
++                    {gear_view(bar)}
++                </div>
++            </header>
++        }
++        .into_any()
++    }
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 62f6ca1e944d473ad81bd24e63ed91bb800cb576..1952f6cd7c548d9c959076247d4b8311859d72f7 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -79,6 +79,92 @@ h3 { font-size: var(--fs-2); }
+ .seg button { height: 32px; padding: 0 var(--s3); border: 0; border-radius: 999px; background: transparent; cursor: pointer; color: var(--ink-2); font-size: var(--fs-1); font-weight: 600; }
+ .seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+ 
++/* 上の固定の帯（行 g-topbar・見本 board-v2 の #bar・次の一手と 3 つの数と知らせ・席と口座と抜けと時計と ⚙・頁に置くのは 1 枚の画面への切り替えの行） */
++#bar { position: fixed; top: 0; left: 0; right: 0; z-index: 30; height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; }
++#bar button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
++#bar .b-left { display: flex; align-items: center; gap: 10px; flex: none; }
++#bar .ab { padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--ink-2); font-size: 11.5px; }
++#bar .pname { font-size: 16px; letter-spacing: .02em; }
++#bar .todo { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
++#bar .pill { flex: none; padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
++#bar .pill.go { background: #ea580c; color: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
++#bar .pill.go:hover { background: #c2410c; }
++#bar .pill.none { background: var(--panel-2); color: var(--ink-3); font-weight: 500; cursor: default; }
++#bar .chip { flex: none; height: auto; padding: 1px 9px; border: 1px solid; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
++#bar .chip.org { color: #c2410c; border-color: #fdba74; background: #fff7ed; }
++#bar .chip.red { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
++#bar .chip.amb { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
++#bar .chip.zero { color: var(--ink-3); border-color: var(--line); background: var(--panel); font-weight: 500; }
++#bar .notice { flex: 1 1 auto; min-width: 60px; height: 28px; display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--line); border-radius: 0 6px 6px 0; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
++#bar .notice:hover { background: var(--panel-2); }
++#bar .notice time { flex: none; color: var(--ink-3); font-variant-numeric: tabular-nums; }
++#bar .notice .nt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
++#bar .notice .nc { flex: none; padding: 0 6px; border-radius: 8px; background: var(--panel-2); color: var(--ink-2); font-size: 10.5px; font-weight: 600; }
++#bar .ic { display: inline-block; flex: none; width: 1em; height: 1em; vertical-align: -.14em; }
++#bar .clock { flex: none; display: flex; align-items: center; gap: 10px; }
++#bar .seatb { height: 40px; display: flex; align-items: center; gap: 10px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 8px; }
++#bar .seatb:hover { background: var(--panel-2); }
++#bar .sd { display: flex; flex-direction: column; line-height: 1.25; }
++#bar .s1 { display: flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
++#bar .s2 { color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
++#bar .msp { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
++#bar .spans svg { display: block; width: 80px; height: 7px; border-radius: 2px; background: var(--line); }
++#bar .acct { display: flex; align-items: center; gap: 7px; padding-left: 10px; border-left: 1px solid var(--line); }
++#bar .acct b { font-size: 12px; }
++#bar .ubs { display: flex; flex-direction: column; gap: 2px; }
++#bar .ub { display: flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 10px; line-height: 11px; }
++#bar .ub em { width: 14px; font-style: normal; }
++#bar .ub em.up { width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
++#bar .ub i { display: block; width: 40px; height: 5px; overflow: hidden; border-radius: 3px; background: var(--line); }
++#bar .ub s { display: block; height: 100%; background: var(--st-run); text-decoration: none; }
++#bar .ub s.w80 { background: var(--st-limit); }
++#bar .ub s.w100 { background: var(--st-silent); }
++#bar .gp { padding: 2px 9px; border: 1px solid; border-radius: 999px; font-size: 11.5px; white-space: nowrap; }
++#bar .gp.f { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
++#bar .gp.u { color: #92400e; border-color: #fde68a; background: #fffbeb; }
++#bar .gp.p { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
++#bar .tm { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
++#bar .tm small { color: var(--ink-3); font-size: 10px; font-weight: 500; }
++#bar .gearw { position: relative; }
++#bar .gearb { width: 28px; height: 28px; border-radius: 6px; color: var(--ink-2); font-size: 15px; text-align: center; }
++#bar .gearb:hover { background: var(--panel-2); }
++#bar .gmenu { position: absolute; top: 34px; right: 0; z-index: 35; width: 200px; padding: 8px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 10px 30px rgba(15,23,42,.15); }
++#bar .gm-h { margin: 2px 4px 4px; color: var(--ink-3); font-size: 11px; }
++#bar .gm-r { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; font-size: 12.5px; cursor: pointer; }
++#bar .gm-r:hover, #bar .gm-i:hover { background: var(--panel-2); }
++#bar .gm-sep { margin: 6px 0; border-top: 1px solid var(--line); }
++#bar .gm-i { display: block; width: 100%; padding: 5px 6px; border-radius: 6px; font-size: 12.5px; }
++#bar .ashort, #bar .mshort { display: none; font-size: 12px; white-space: nowrap; }
++/* 帯の詰め方（見た目だけ・境の値は規則に持たない）: 1199 以下は口座を短い字に、760 以下は 2 段 */
++@media (max-width: 1500px) { #bar { gap: 9px; padding: 0 10px; } #bar .seatb { gap: 8px; padding: 3px 8px; } #bar .pill { padding: 4px 10px; } }
++@media (max-width: 1199px) {
++  #bar .msp, #bar .acct { display: none; }
++  #bar .ashort { display: inline; }
++  #bar .notice { flex: none; min-width: 0; padding: 0 8px; }
++  #bar .notice time, #bar .notice .nt { display: none; }
++  #bar .todo { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
++  #bar .todo > * { flex: none; }
++}
++@media (max-width: 760px) {
++  #bar { height: 96px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; grid-template-rows: 46px 50px; column-gap: 6px; padding: 0 8px; align-items: center; }
++  #bar .b-left, #bar .clock { display: contents; }
++  #bar .ab { grid-area: 1 / 1; min-width: 40px; padding: 0 10px; text-align: center; }
++  #bar .abt { display: none; }
++  #bar .pname { grid-area: 1 / 2; }
++  #bar .seatb { grid-area: 1 / 3; justify-self: start; min-width: 0; height: 40px; gap: 7px; padding: 0 10px; }
++  #bar .sd, #bar .msp, #bar .acct, #bar .ashort { display: none; }
++  #bar .mshort { display: inline; }
++  #bar .tm { grid-area: 1 / 4; }
++  #bar .tm small { display: none; }
++  #bar .gearw { grid-area: 1 / 5; justify-self: end; }
++  #bar .gearb { width: 40px; height: 40px; }
++  #bar .todo { grid-area: 2 / 1 / 3 / 4; height: 50px; gap: 6px; }
++  #bar .gp { grid-area: 2 / 4 / 3 / 6; justify-self: end; }
++}
++@media (max-width: 600px) {
++  #bar .pill, #bar .chip, #bar .gp, #bar .notice, #bar .gm-r { min-height: 40px; display: inline-flex; align-items: center; }
++}
++
+ /* ---------- 頁の枠 ---------- */
+ .page { max-width: 1280px; margin: 0 auto; padding: var(--s3) var(--s4) var(--s6); }
+ .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r3); padding: var(--s3); }
+diff --git a/crates/tsuzuri-surface/tests/bvbar.rs b/crates/tsuzuri-surface/tests/bvbar.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..11a05f29651c154693df2c96fc720042a5ec83f7
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvbar.rs
+@@ -0,0 +1,360 @@
++//! 行 g-topbar の歯: 上の固定の帯（判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar`）の次の一手の pill と開く窓、
++//! やる事の 3 つの数と色、席からの最新の知らせと件数、席と口座の印（状態・直近 3 時間の細い帯・5 時間と 7 日）、
++//! 抜けの検査の印、語の鍵と stylesheet の規則、帯の DOM（wasm の枝）の配線の字。
++//! fixture は tests/fixtures/surface/next-step.json・seat-card.json・invariants.json（読むだけ）。
++#![cfg(test)]
++
++use std::collections::BTreeMap;
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::NextMove;
++use tsuzuri_contract::notice::{Notice, Notices};
++use tsuzuri_contract::seat::SeatCard;
++use tsuzuri_contract::stats::NextStep;
++use tsuzuri_contract::wire;
++use tsuzuri_surface::project::Body;
++use tsuzuri_surface::topbar::{
++    BAR, GAPS_KEY, GEAR, GEAR_KEY, GO, PILL_GO, PILL_NONE, RECENT_KEY, SEAT_KEY, STALL_KEY,
++    STRIP_SPAN, TODOS, USE_WINDOWS, Win, counts, gaps_mark, lead, lead_win, notice_line, seat_bar,
++};
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::vocab;
++
++/// seat-card.json の at（UTC の日の正午・日本時間の 21 時）。
++const AT: u64 = 1_790_510_400;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn next_body(name: &str) -> Fetched {
++    let mut sets: BTreeMap<String, NextStep> =
++        wire::decode(&read("../../tests/fixtures/surface/next-step.json")).expect("next の組");
++    let s = sets.remove(name).unwrap_or_else(|| panic!("組 {name}"));
++    Fetched::Body(wire::encode(&s).expect("電文"))
++}
++
++fn seat_body(name: &str) -> Fetched {
++    let mut sets: BTreeMap<String, SeatCard> =
++        wire::decode(&read("../../tests/fixtures/surface/seat-card.json")).expect("席の組");
++    let c = sets.remove(name).unwrap_or_else(|| panic!("組 {name}"));
++    Fetched::Body(wire::encode(&c).expect("電文"))
++}
++
++fn graph_body() -> Fetched {
++    Fetched::Body(read("../../tests/fixtures/surface/invariants.json"))
++}
++
++fn unread() -> [Fetched; 3] {
++    [
++        Fetched::NotRead,
++        Fetched::Failed,
++        Fetched::Body("{}".to_string()),
++    ]
++}
++
++/// 次の一手の pill: 電文の lead と件数の字と開く窓、なしと判じなかったと読めない口は窓を開かない。
++#[test]
++fn bvbar_lead_from_next() {
++    assert_eq!(GO, "▶");
++    let l = lead(&next_body("stalled"));
++    assert_eq!(
++        (l.class, l.text.as_str(), l.win),
++        (PILL_GO, "▶ 止まった run 2 件を確かめる", Some(Win::Stalled))
++    );
++    let l = lead(&next_body("question"));
++    assert_eq!(
++        (l.class, l.text.as_str(), l.win),
++        (PILL_GO, "▶ 質問 1 件に答える", Some(Win::Ask))
++    );
++    let l = lead(&next_body("not-judged"));
++    assert_eq!(
++        (l.class, l.text.as_str(), l.win),
++        (PILL_GO, "▶ 束の承認 4 件", Some(Win::Ask))
++    );
++    let l = lead(&next_body("nothing"));
++    assert_eq!(
++        (l.class, l.text.as_str(), l.win),
++        (PILL_NONE, "次の一手なし", None)
++    );
++    for f in unread() {
++        let l = lead(&f);
++        assert_eq!(
++            (l.class, l.text.as_str(), l.win),
++            (PILL_NONE, "測れていない", None),
++            "{f:?}"
++        );
++    }
++    let wins: Vec<Option<Win>> = NextMove::ALL.into_iter().map(lead_win).collect();
++    assert_eq!(
++        wins,
++        [
++            Some(Win::Seat),
++            Some(Win::Seat),
++            Some(Win::Stalled),
++            Some(Win::Ask),
++            Some(Win::Ask),
++            Some(Win::Gaps),
++            None,
++        ]
++    );
++}
++
++/// やる事の 3 つの数は質問・止まった run・抜けの検査の順で、1 以上の物だけ色の class、0 と分からない物は chip zero。
++#[test]
++fn bvbar_three_counts_colored_when_positive() {
++    assert_eq!(
++        TODOS,
++        [
++            ("questions", "org", Win::Ask),
++            (STALL_KEY, "red", Win::Stalled),
++            (GAPS_KEY, "amb", Win::Gaps),
++        ]
++    );
++    let row = |f: &Fetched, g: &Fetched| -> Vec<(String, String, Option<u32>, Win)> {
++        counts(f, g)
++            .into_iter()
++            .map(|c| (c.class, c.text, c.n, c.win))
++            .collect()
++    };
++    let s = |a: &str| a.to_string();
++    assert_eq!(
++        row(&next_body("stalled"), &graph_body()),
++        [
++            (s("chip org"), s("質問 3"), Some(3), Win::Ask),
++            (s("chip red"), s("止まった run 2"), Some(2), Win::Stalled),
++            (s("chip amb"), s("抜け 2"), Some(2), Win::Gaps),
++        ]
++    );
++    assert_eq!(
++        row(&next_body("question"), &Fetched::Failed),
++        [
++            (s("chip org"), s("質問 1"), Some(1), Win::Ask),
++            (s("chip zero"), s("止まった run 0"), Some(0), Win::Stalled),
++            (s("chip zero"), s("抜け ?"), None, Win::Gaps),
++        ]
++    );
++    assert_eq!(
++        row(&next_body("not-judged"), &graph_body())[1],
++        (s("chip zero"), s("止まった run ?"), None, Win::Stalled)
++    );
++    for f in unread() {
++        let r = row(&f, &f);
++        assert!(
++            r.iter().all(|c| c.0 == "chip zero" && c.2.is_none()),
++            "{r:?}"
++        );
++    }
++}
++
++fn notices(project: &str, latest: &[(&str, u64, &str)], unread: &[&str]) -> Fetched {
++    let doc = Notices {
++        at: AT,
++        project: project.to_string(),
++        latest: latest
++            .iter()
++            .map(|(p, at, title)| Notice {
++                at: *at,
++                project: (*p).to_string(),
++                title: (*title).to_string(),
++                url: String::new(),
++            })
++            .collect(),
++        unread: unread.iter().map(|s| (*s).to_string()).collect(),
++    };
++    Fetched::Body(wire::encode(&doc).expect("電文"))
++}
++
++/// 席からの最新の知らせ: この project の最新の 1 つの時刻と題と件数で、ほかの project の知らせは数えない。
++#[test]
++fn bvbar_notice_latest_and_count() {
++    let f = notices(
++        "tsuzuri",
++        &[
++            ("other", AT, "ほかの知らせ"),
++            ("tsuzuri", AT - 3_600, "着地した"),
++        ],
++        &[],
++    );
++    let Body::Filled(l) = notice_line(&f) else {
++        panic!("知らせの 1 行");
++    };
++    assert_eq!(
++        (l.when.as_str(), l.title.as_str(), l.count),
++        ("20:00", "着地した", 1)
++    );
++    let f = notices("tsuzuri", &[("other", AT, "ほかの知らせ")], &[]);
++    assert!(matches!(notice_line(&f), Body::Empty(_)));
++    let f = notices("tsuzuri", &[("tsuzuri", AT, "x")], &["tsuzuri"]);
++    assert!(matches!(notice_line(&f), Body::Unmeasured(_)));
++    for f in unread() {
++        assert!(matches!(notice_line(&f), Body::Unmeasured(_)), "{f:?}");
++    }
++}
++
++/// 席と口座の印の口座の窓は 5 時間と 7 日の 2 つだけ（model の窓は出さない）で、割合と棒の長さと class を写す。
++#[test]
++fn bvbar_usage_two_windows() {
++    assert_eq!(USE_WINDOWS, ["five_hour", "seven_day"]);
++    let b = seat_bar(&seat_body("run"), AT);
++    assert_eq!(b.account.as_deref(), Some("acct-4"));
++    let u: Vec<(&str, Option<u8>, u8, &str)> = b
++        .usage
++        .iter()
++        .map(|u| (u.short.as_str(), u.used, u.width, u.class))
++        .collect();
++    assert_eq!(u, [("5h", Some(42), 42, ""), ("7d", Some(85), 85, "w80")]);
++    let b = seat_bar(&seat_body("limit"), AT);
++    assert_eq!(
++        (b.usage[0].used, b.usage[0].width, b.usage[0].class),
++        (Some(100), 100, "w100")
++    );
++    let b = seat_bar(&seat_body("wait"), AT);
++    assert!(b.usage.iter().all(|u| u.used.is_none() && u.width == 0));
++    let b = seat_bar(&seat_body("silent"), AT);
++    let u: Vec<Option<u8>> = b.usage.iter().map(|u| u.used).collect();
++    assert_eq!(u, [None, Some(12)]);
++}
++
++/// 細い帯は直近 3 時間の区間だけを描く（窓の前の区間は置かず、窓の端で切る）。
++#[test]
++fn bvbar_strip_three_hours() {
++    assert_eq!(STRIP_SPAN.secs(), 10_800);
++    let b = seat_bar(&seat_body("run"), AT);
++    assert_eq!(b.strip.matches("<rect ").count(), 3, "{}", b.strip);
++    assert!(
++        b.strip.contains("<rect class=\"sg-wait\" x=\"0\" "),
++        "{}",
++        b.strip
++    );
++    assert!(b.strip.contains(" width=\"144\" "), "{}", b.strip);
++    assert!(b.strip.contains("class=\"sg-run\""));
++    assert!(!b.strip.contains("sg-limit"), "{}", b.strip);
++    let b = seat_bar(&seat_body("wait"), AT);
++    assert_eq!(b.strip.matches("<rect ").count(), 0);
++    let b = seat_bar(&Fetched::Failed, AT);
++    assert_eq!(b.strip.matches("<rect ").count(), 0);
++}
++
++/// 席と口座の印の状態と から の時刻と tick と heartbeat の字、読めない口は測れていない。
++#[test]
++fn bvbar_seat_state_and_tick() {
++    let b = seat_bar(&seat_body("run"), AT);
++    assert_eq!(
++        (b.state, b.key, b.since.as_deref(), b.tick.as_str()),
++        ("run", "st_run", Some("18:50〜"), "tick ✓ · hb on")
++    );
++    let b = seat_bar(&seat_body("wait"), AT);
++    assert_eq!((b.state, b.tick.as_str()), ("wait", "tick ✗ · hb off"));
++    let b = seat_bar(&seat_body("silent"), AT);
++    assert_eq!(
++        (b.state, b.since.as_deref(), b.tick.as_str()),
++        ("silent", None, "tick ? · hb ?")
++    );
++    for f in unread() {
++        let b = seat_bar(&f, AT);
++        assert_eq!(
++            (b.state, b.key, b.since, b.account),
++            ("unknown", "st_unknown", None, None)
++        );
++    }
++}
++
++/// 抜けの検査の印: 抜けありが在れば gp f・まだ分からないだけなら gp u・どちらも無ければ gp p・読めなければ gp u の ?。
++#[test]
++fn bvbar_gaps_mark() {
++    let g = gaps_mark(&graph_body());
++    assert_eq!((g.class, g.text.as_str()), ("gp f", "抜け 2 · ?3"));
++    let only_unknown =
++        read("../../tests/fixtures/surface/invariants.json").replace("\"violation\"", "\"pass\"");
++    let g = gaps_mark(&Fetched::Body(only_unknown.clone()));
++    assert_eq!((g.class, g.text.as_str()), ("gp u", "抜け 0 · ?3"));
++    let all_pass = only_unknown.replace("\"unknown\"", "\"pass\"");
++    let g = gaps_mark(&Fetched::Body(all_pass));
++    assert_eq!((g.class, g.text.as_str()), ("gp p", "抜け 0 · ?0"));
++    for f in unread() {
++        let g = gaps_mark(&f);
++        assert_eq!((g.class, g.text.as_str()), ("gp u", "抜け ?"), "{f:?}");
++    }
++}
++
++/// 帯の語の鍵の語と、設定の中の口と、帯の規則が stylesheet の上端の帯の塊（頁の枠の前）に在ること。
++#[test]
++fn bvbar_words_and_rules() {
++    let v = vocab();
++    for (key, want) in [
++        (STALL_KEY, "止まった run"),
++        (GAPS_KEY, "抜け"),
++        (RECENT_KEY, "直近 3h"),
++        (GEAR_KEY, "設定"),
++        (SEAT_KEY, "席と口座"),
++        ("questions", "質問"),
++        ("nx_g", "次の一手なし"),
++        ("status", "記号の見方"),
++        ("stage_target", "表示先"),
++    ] {
++        assert_eq!(v.term(key).map(|t| t.label.as_str()), Some(want), "{key}");
++    }
++    assert_eq!(GEAR, [("status", Win::Legend), ("stage_target", Win::Dest)]);
++    assert_eq!(BAR, "bar");
++    let css = read("style.css");
++    let at = css
++        .find("#bar { position: fixed; top: 0;")
++        .expect("帯の規則");
++    let frame = css
++        .find("/* ---------- 頁の枠 ---------- */")
++        .expect("頁の枠");
++    let top = css
++        .find("/* ---------- 上端の帯 ---------- */")
++        .expect("上端の帯");
++    assert!(top < at && at < frame, "帯の規則は上端の帯の塊の末");
++    for rule in [
++        "#bar .pill.go {",
++        "#bar .pill.none {",
++        "#bar .chip.org {",
++        "#bar .chip.red {",
++        "#bar .chip.amb {",
++        "#bar .chip.zero {",
++        "#bar .notice .nc {",
++        "#bar .seatb {",
++        "#bar .ub s.w80 {",
++        "#bar .gp.f {",
++        "#bar .gp.u {",
++        "#bar .gp.p {",
++        "#bar .gmenu {",
++    ] {
++        let i = css
++            .find(rule)
++            .unwrap_or_else(|| panic!("stylesheet に {rule} が無い"));
++        assert!(i < frame, "{rule} は頁の枠の前");
++    }
++}
++
++/// 帯の DOM（wasm の枝）の配線の字: 4 つの口を読み、印を押すと窓を開き、設定は外の click と取り消しの鍵で畳む。
++#[test]
++fn bvbar_dom_wiring_text() {
++    let src = read("src/topbar.rs");
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    for needle in [
++        "crate::net::read(next::PATH)",
++        "crate::net::read(notice::PATH)",
++        "crate::net::read(seat::PATH)",
++        "crate::net::read(map::PATH)",
++        "wins.open(w, false)",
++        "wins.open(win, false)",
++        "wins.open(Win::Notices, false)",
++        "wins.open(Win::Seat, false)",
++        "wins.open(Win::Gaps, false)",
++        "bar.wins.open(win, false)",
++        "el.closest(\".gearw\")",
++        "closes(Hit::Outside)",
++        "composing: e.is_composing()",
++        "bar.pick.run(m)",
++        "bar.back.run(())",
++        "<header id=BAR>",
++    ] {
++        assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
++    }
++    assert!(read("src/lib.rs").contains("\npub mod topbar;\n"));
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 6fe2d9452d05bf61b7c53b42b47741249013e4ee..20fa890a20391a7df4af5a752e83aff92b7edaae 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1751,6 +1751,31 @@
+    "label": "戻る",
+    "plain": "前の窓に戻る\n・ 窓の中から開いた窓にだけ出る",
+    "internal": "widgets::modal の Stack の back（見本の topModal）"
++  },
++  "bar_stall": {
++   "label": "止まった run",
++   "plain": "判断が要る止まった run の数\n・ 1 以上なら赤\n→ 押すと止まった run の窓",
++   "internal": "GET /api/next の stalled-run の件数（行 g-topbar）"
++  },
++  "bar_gaps": {
++   "label": "抜け",
++   "plain": "抜けの検査で抜けありの数\n・ ? の横 = まだ分からない数\n→ 押すと抜けの検査の窓",
++   "internal": "GET /api/graph の invariants の violation と unknown の数"
++  },
++  "bar_recent": {
++   "label": "直近 3h",
++   "plain": "席の直近 3 時間の動き\n・ 緑 = 動いている\n・ 灰 = 待っている",
++   "internal": "GET /api/seat の spans を 3 時間の幅で描く"
++  },
++  "bar_gear": {
++   "label": "設定",
++   "plain": "表示の型と記号の見方と表示先\n→ 押すと小さな一覧が開く",
++   "internal": "見本 board-v2 の gearMenu（行 g-topbar）"
++  },
++  "seat_acct": {
++   "label": "席と口座",
++   "plain": "席の状態と口座の利用枠\n・ 帯は直近 3 時間の動き\n・ 5h と 7d は使った割合\n→ 押すと席と口座の窓",
++   "internal": "GET /api/seat（判断の記録 ADR-27 決定 (3)(4)）"
+   }
+  }
+ }
+\ No newline at end of file
