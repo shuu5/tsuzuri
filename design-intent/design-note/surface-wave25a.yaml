@@ -1,0 +1,25 @@
+# 設計ノート surface-wave25a — （発効 2026-10-01・持ち主の裁定 t3-hub.56:20260927T2259Z-1〔計画 surface-plan の承認〕を継ぐ・行の拠り = 規則の行 R-4 と判断の記録 ADR-25 の決定 (1) と条 P-22.1・P-24.3〔関数の粒度は lint で見て歯にも掛かる〕と席の決め〔台帳 t3-hub.74 の notes〕）第 25 波 a。要件は srs.yaml。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave25a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave25a.toml#<行 id>。
+meta:
+  id: surface-wave25a
+  title: 第 25 波 a — 規則の行 R-4 の関数の粒度を歯（src の外の tests/ と src の cfg(test) の区間）にも当て、根の lint の表に関数の粒度の 3 つの lint を forbid で足す
+  version: v0.1
+  status: effective
+  generated: 2026-10-01
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
+  note: ノート surface-wave24a（31 行の全部が着地）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      規則の行 R-4 の関数の粒度（関数 60 行 以下・複雑度 15 以下・引数 5 以下）を、tsuzuri の member の歯（src の外の tests/ と、src の cfg(test) の区間）にも当てる。本体（src と build.rs）の直しは、ノート surface-wave24a の行 r4-args-mark・r4-core-src・r4-boundary-src・r4-surface-src・r4-folio-src-a・r4-folio-src-b・r4-folio-src-c が済ませた。判断の記録 ADR-25 の決定 (1)（行数の 3 つは src の下だけを数え、関数の粒度はこの決めの外で lint で見る）と条 P-22.1（関数の粒度の上限を CI が実測する deny の門として持つ）と条 P-24.3（lint の例外は理由を持つ expect の属性だけ・歯の範囲の例外は lint の設定で宣言するが、clippy.toml に 3 つの lint の歯の範囲の鍵は無い）のとおり、歯の関数も同じ閾値で縛る。歯の行は crate ごとに違反を関数を割って直し（歯の名の #[test] の fn の名は替えない・着地済みの行の done が名指す）、行 r4-args-mark が歯に置いた expect の属性を外す。最後の行で、根の Cargo.toml の workspace の lint の表に too_many_arguments・too_many_lines・cognitive_complexity を forbid で足し、xtask の歯 klint の一覧を合わせる。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows: []
+
+figures: []
