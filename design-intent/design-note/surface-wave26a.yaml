@@ -1,0 +1,25 @@
+# 設計ノート surface-wave26a — （発効 2026-10-01・持ち主の裁定 t3-hub.52.160.1:20261001T1423Z-1〔判断の記録 ADR-27 の承認〕・行の拠り = 判断の記録 ADR-27 と要件書 第 0.22 版と規則の行 R-35〜R-37）第 26 波 a。要件は srs.yaml。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave26a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave26a.toml#<行 id>。
+meta:
+  id: surface-wave26a
+  title: 第 26 波 a — project board の作り直し（判断の記録 ADR-27）の第 1 段。地図と口座の履歴と「詳しく」を消し、bead の事実と器の局面の出力を読む口を足し、pipeline の板を Blocked と Queued を分けた 5 列にする
+  version: v0.1
+  status: effective
+  generated: 2026-10-01
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-10-01, ruling: t3-hub.52.160.1（裁定 id = t3-hub.52.160.1:20261001T1423Z-1・席とのチャット・notes に逐語）, verbatim: これでよい すべて推奨で良いので進めて, surface: R-8}
+  note: ノート surface-wave25a（11 行の全部が着地）の続き。承認は判断の記録 ADR-27 の持ち主の裁定（t3-hub.52.160.1:20261001T1423Z-1）。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      判断の記録 ADR-27（project board の作り直し）の第 1 段を流す。消す物（地図の 6 面と地図の頁と block・地図だけが読む口 /api/graph/view・口座の履歴と口座の「詳しく」・台帳の「詳しく」・ADR-27 決定 (2)）と、データの足し（bead の起票の時刻・短い題・概要・依存の相手を出す口・器の局面の出力 fleet/lifecycle.json を読む口・run の gate と審査の内訳・ADR-27 決定 (9)(10)）と、pipeline の板の 5 列（Blocked と Queued を分ける・着地の列は規則の行 R-36 の 12 時間・ADR-27 決定 (6)）を置く。上の固定の帯・窓・吹き出し・epic ごとの一覧・幅の 3 段（規則の行 R-35）の面の組み立ては、第 1 段の行の着地の後に第 2 段として行に割る（席の行の計画・台帳 t3-hub.52.160 の notes）。質問の頁と抜けの検査の頁と tab は、窓ができるまで持ち主が board で質問に答えられるよう第 2 段で消す。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows: []
+
+figures: []
