@@ -4,12 +4,13 @@
 //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
 //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
 //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
-//! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は日を問わず Landed の列に出し、
+//! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は着地の時刻を問わず Landed の列に出し、
 //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
 //! 語は語の辞書の `CI_KEYS` の鍵から引く。
 //! 台帳の一覧の項に出す段は札と同じ読みから `stages` 1 つで組む（行 c-ledger-stage のつなぎ）。
 //! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
-//! `age_at` から書き直し、CI の語と今日の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
+//! `age_at` から書き直し、CI の語と直近の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
+//! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
 
 use std::collections::BTreeMap;
 
@@ -22,7 +23,7 @@ use tsuzuri_contract::wire;
 use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
 use crate::frame::{self, Block};
 use crate::mapview::graph::cut;
-use crate::view::{Fetched, id_order, jst, read_rows};
+use crate::view::{Fetched, id_order, read_rows};
 use crate::vocab::label;
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::card_of;
@@ -102,6 +103,9 @@ pub const CI_KEYS: [(Ci, &str); 7] = [
 /// 結果の語を Landed の列ほかの札に出す経過の上限の秒（止まった列と CI を待つ札は上限なし）。
 pub const CI_MARK_S: u64 = 600;
 
+/// 着地の列に出す着地の範囲の秒（今から 12 時間 以内・規則の行 R-36・判断の記録 ADR-27 決定 (6)）。
+pub const LAND_WINDOW_S: u64 = 43_200;
+
 /// CI を待つ札の状態の記号の値（動いている）。
 pub const CI_WAIT_STATE: &str = "run";
 
@@ -144,7 +148,7 @@ pub const LANES: [Lane; 5] = [
     Lane {
         column: PipelineColumn::Landed,
         name: "land",
-        key: "col_land",
+        key: "col_land_12h",
         state: None,
     },
 ];
@@ -299,10 +303,12 @@ pub fn body(fetched: &Fetched) -> Body<()> {
     }
 }
 
-/// 今日（日本の日）の着地か（段が Landed で段を決めた時刻が在り、その日本の日が今の日本の日と同じ）。
-pub fn landed_today(card: &PipelineCard, now: EpochSecs) -> bool {
+/// 直近の着地か（段が Landed で段を決めた時刻が在り、今からその時刻を引いた経過が `LAND_WINDOW_S` 以下・今より後の時刻は経過 0）。
+pub fn landed_recent(card: &PipelineCard, now: EpochSecs) -> bool {
     card.stage.column() == PipelineColumn::Landed
-        && card.since.is_some_and(|at| jst(at).0 == jst(now).0)
+        && card
+            .since
+            .is_some_and(|at| now.saturating_sub(at) <= LAND_WINDOW_S)
 }
 
 /// 着地の後の CI の読みの語の辞書の鍵。
@@ -335,7 +341,7 @@ pub fn ci_style(ci: Ci) -> &'static str {
     }
 }
 
-/// 板の中身（5 列・Landed の列は今日の着地と CI を待つ札）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
+/// 板の中身（5 列・Landed の列は直近の着地と CI を待つ札）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
 pub fn content(pipe: &Fetched, ledger: &Fetched, now: EpochSecs) -> Body<Vec<Column>> {
     match cards(pipe) {
         Err(reason) => Body::Unmeasured(reason),
@@ -358,7 +364,7 @@ pub fn title_of(rows: &[LedgerRow], id: &str) -> Option<String> {
 }
 
 /// 札を 5 列に組む（列は板の順・列の中は段を決めた時刻の新しい順・時刻の無い札は後・同じなら bead の id の順）。
-/// Landed の列は今日（日本の日）の着地（`landed_today`）と、日を問わず CI を待つ札（欄 ci が Waiting）。
+/// Landed の列は直近の着地（`landed_recent`）と、着地の時刻を問わず CI を待つ札（欄 ci が Waiting）。
 pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Vec<Column> {
     LANES
         .into_iter()
@@ -368,7 +374,7 @@ pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Ve
                 .filter(|c| c.stage.column() == lane.column)
                 .filter(|c| {
                     lane.column != PipelineColumn::Landed
-                        || landed_today(c, now)
+                        || landed_recent(c, now)
                         || c.ci == Some(Ci::Waiting)
                 })
                 .collect();

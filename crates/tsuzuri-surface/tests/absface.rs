@@ -1,5 +1,5 @@
 //! 行 c-abs-time の歯（面・接頭辞 abst_・要件 NFR2）: 札の経過と memo と未反映の年齢は、電文の時刻（段を決めた時刻・
-//! 作った時刻）を面の今から引いて出す。CI の語と今日の着地も今で決める。DOM は wasm の target のときだけなので、
+//! 作った時刻）を面の今から引いて出す。CI の語と直近の着地も今で決める。DOM は wasm の target のときだけなので、
 //! 1 秒の時計と今の渡し方は src の file の字で見る。
 #![cfg(test)]
 
@@ -13,7 +13,7 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::ledger::{days_since, panel, unref_list};
 use tsuzuri_surface::project::pipeline::{
-    CI_MARK_S, NO_AGE, age_at, ci_shown, kcard, landed_today,
+    CI_MARK_S, LAND_WINDOW_S, NO_AGE, age_at, ci_shown, kcard, landed_recent,
 };
 use tsuzuri_surface::view::{Fetched, Screen};
 
@@ -37,7 +37,7 @@ fn card(stage: Stage, since: Option<u64>, ci: Option<Ci>) -> PipelineCard {
     }
 }
 
-/// (4) 札の経過は今から since を引いた字（今より後は 0s）・CI の語は今までの経過が CI_MARK_S 以下の間だけ・今日は since の日本の日。
+/// (4) 札の経過は今から since を引いた字（今より後は 0s）・CI の語は今までの経過が CI_MARK_S 以下の間だけ・直近の着地は今までの経過が LAND_WINDOW_S 以下。
 #[test]
 fn abst_card_from_since() {
     assert_eq!(age_at(Some(NOW - 5), NOW), "5s");
@@ -55,7 +55,7 @@ fn abst_card_from_since() {
     ci_and_landed();
 }
 
-/// CI の語は今までの経過で、今日の着地は since の日本の日で決まる。
+/// CI の語も直近の着地も今までの経過で決まる。
 fn ci_and_landed() {
     let ok = |since: u64, now: u64| ci_shown(&card(Stage::Landed, Some(since), Some(Ci::Success)), now);
     assert_eq!(ok(NOW - CI_MARK_S, NOW), Some(Ci::Success));
@@ -63,12 +63,11 @@ fn ci_and_landed() {
     assert_eq!(ok(NOW - 30, NOW + CI_MARK_S), None, "今が進めば語は消える");
     assert_eq!(ok(NOW + 30, NOW), Some(Ci::Success), "今より後の時刻は経過 0");
 
-    let landed = |since: Option<u64>, now: u64| landed_today(&card(Stage::Landed, since, None), now);
-    // NOW は日本時間の 21:00 で、その日の 0 時は NOW - 75_600。
-    assert!(landed(Some(NOW - 75_600), NOW));
-    assert!(!landed(Some(NOW - 75_601), NOW));
-    assert!(landed(Some(NOW - 75_600), NOW + 10_799), "日の終わりの 23:59:59 までは今日");
-    assert!(!landed(Some(NOW - 75_600), NOW + 10_800), "翌日の 0 時からは昨日");
+    let landed = |since: Option<u64>, now: u64| landed_recent(&card(Stage::Landed, since, None), now);
+    assert!(landed(Some(NOW - LAND_WINDOW_S), NOW));
+    assert!(!landed(Some(NOW - LAND_WINDOW_S - 1), NOW));
+    assert!(landed(Some(NOW - 60), NOW + LAND_WINDOW_S - 60), "今が進んでも範囲の内は残る");
+    assert!(!landed(Some(NOW - 60), NOW + LAND_WINDOW_S - 59), "今が進めば列から落ちる");
     assert!(!landed(None, NOW));
 }
 

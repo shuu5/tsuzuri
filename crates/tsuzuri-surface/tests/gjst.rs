@@ -6,10 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use tsuzuri_contract::EpochSecs;
-use tsuzuri_contract::board::{PipelineCard, Stage};
-use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_surface::project::askpage::ruling_text;
-use tsuzuri_surface::project::pipeline::landed_today;
 use tsuzuri_surface::project::seat::{Span, hm, hmd, span_ticks};
 use tsuzuri_surface::view::{JST, JST_OFFSET, clock, clock_short, hhmm, jst};
 use tsuzuri_surface::vocab::vocab;
@@ -62,38 +59,6 @@ fn gjst_short_forms_mark() {
     // UTC では違う日・日本の日が同じ。
     assert_eq!(hmd(1_790_460_300, 1_790_510_400), "07:05 JST");
     assert_eq!(hmd(1_790_521_200, 1_790_607_599), "00:00 JST");
-}
-
-fn landed(since: Option<EpochSecs>) -> PipelineCard {
-    PipelineCard {
-        contract: BeadId::new("fx-j.1").expect("id"),
-        runs: 1,
-        stage: Stage::Landed,
-        reason: None,
-        account: None,
-        since,
-        ci: None,
-    }
-}
-
-/// (4) 今日の着地は、段を決めた時刻（今から経過を引いた時刻）の日本の日が今の日本の日と同じ札。
-#[test]
-fn gjst_landed_on_japan_day() {
-    for (now, elapsed, want) in [
-        (1_790_521_200, Some(0), true),
-        (1_790_521_200, Some(1), false),
-        (1_790_521_199, Some(86_399), true),
-        (1_790_521_199, Some(86_400), false),
-        (1_790_510_400, Some(75_600), true),
-        (1_790_510_400, Some(75_601), false),
-        (1_790_467_200, Some(1), true),
-        (1_790_467_200, Some(32_400), true),
-        (1_790_467_200, Some(32_401), false),
-        (1_790_510_400, None, false),
-    ] {
-        let since = elapsed.map(|e: u64| now - e);
-        assert_eq!(landed_today(&landed(since), now), want, "{now} {elapsed:?}");
-    }
 }
 
 /// (5) 決定の link は id の UTC の時分を日本時間の時分と JST にする（日を越えても時分だけ）。
@@ -359,7 +324,7 @@ const FILTERS: [&str; 143] = [
     "hasplit_",
 ];
 
-/// (18) この file の歯の名はちょうど 9 で gjst_ で始まり、残りの字は filter の語を含まない。
+/// (18) この file の歯の名はちょうど 8 で gjst_ で始まり、残りの字は filter の語を含まない。
 #[test]
 fn gjst_own_names_clean() {
     let src = read("tests/gjst.rs");
@@ -375,7 +340,7 @@ fn gjst_own_names_clean() {
             &rest[..rest.find('(').expect("fn の名の終わり")]
         })
         .collect();
-    assert_eq!(names.len(), 9, "{names:?}");
+    assert_eq!(names.len(), 8, "{names:?}");
     for name in names {
         let rest = name
             .strip_prefix("gjst_")

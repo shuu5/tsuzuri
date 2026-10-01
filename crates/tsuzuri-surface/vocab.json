@@ -65,6 +65,11 @@
    "note": "今日（日本時間）、本線に取り込まれたか、着地せずに閉じた run と、日を問わず CI を待つ run",
    "internal": "Landed・今日\nCI を待つ run は日を問わない"
   },
+  "col_land_12h": {
+   "label": "Landed（12 時間）",
+   "note": "今から 12 時間の内に、本線に取り込まれたか、着地せずに閉じた run と、着地の時刻を問わず CI を待つ run",
+   "internal": "Landed・直近 12 時間（規則の行 R-36）\nCI を待つ run は時刻を問わない"
+  },
   "ci_wait": {
    "label": "CI 中",
    "note": "本線に取り込んだ後で、CI の結果を待っている run\n・ 器が CI を見ている\n・ 結果が出るまで Landed の列に出る",
