@@ -35,7 +35,8 @@ fn forms() -> Vec<Box<dyn Form>> {
         form(
             "board::PipelineColumn",
             vec![
-                PipelineColumn::QueuedBlocked,
+                PipelineColumn::Blocked,
+                PipelineColumn::Queued,
                 PipelineColumn::RunningGated,
                 PipelineColumn::QuestionedFailedStopped,
                 PipelineColumn::Landed,
@@ -168,7 +169,7 @@ fn contract_form_closed_lists() {
         .iter()
         .map(|s| serde_json::to_string(&s.column()).expect("列"))
         .collect();
-    assert_eq!(columns.len(), 4);
+    assert_eq!(columns.len(), 5);
     let ci: Vec<String> = Ci::ALL
         .iter()
         .map(|c| serde_json::to_string(c).expect("CI の読み"))

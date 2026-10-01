@@ -231,6 +231,7 @@ fn pci_columns_keep_waiting() {
         ids,
         [
             empty.clone(),
+            empty.clone(),
             empty,
             vec!["fx-cm.5"],
             vec!["fx-cm.4", "fx-cm.1", "fx-cm.6"],

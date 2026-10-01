@@ -1,5 +1,6 @@
-//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 4 列の板・札・「+n」・0 件の帯・hover の card。
-//! 4 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
+//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯・hover の card。
+//! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)・行 c-pipe-five）。
+//! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
 //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
 //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
 //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -114,12 +115,18 @@ pub struct Lane {
     pub state: Option<&'static str>,
 }
 
-/// 4 列（板の順）。
-pub const LANES: [Lane; 4] = [
+/// 5 列（板の順・Blocked・Queued・Running / Gated・止まり・着地）。
+pub const LANES: [Lane; 5] = [
     Lane {
-        column: PipelineColumn::QueuedBlocked,
-        name: "wait",
-        key: "col_wait",
+        column: PipelineColumn::Blocked,
+        name: "block",
+        key: "col_block",
+        state: Some("wait"),
+    },
+    Lane {
+        column: PipelineColumn::Queued,
+        name: "queue",
+        key: "col_queue",
         state: Some("wait"),
     },
     Lane {
@@ -149,13 +156,13 @@ impl Lane {
     }
 }
 
-/// 列の見せ方（4 列の表から引く）。
-#[expect(clippy::expect_used, reason = "4 列の表は列の全部を持つ")]
+/// 列の見せ方（5 列の表から引く）。
+#[expect(clippy::expect_used, reason = "5 列の表は列の全部を持つ")]
 pub fn lane(column: PipelineColumn) -> Lane {
     LANES
         .into_iter()
         .find(|l| l.column == column)
-        .expect("4 列の表は列の全部を持つ")
+        .expect("5 列の表は列の全部を持つ")
 }
 
 /// 札の meta の 1 つ目（回数か、止まった列では段の理由）。
@@ -328,7 +335,7 @@ pub fn ci_style(ci: Ci) -> &'static str {
     }
 }
 
-/// 板の中身（4 列・Landed の列は今日の着地と CI を待つ札）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
+/// 板の中身（5 列・Landed の列は今日の着地と CI を待つ札）。札の題は台帳の一覧の口の読みから引く（読めなければ全部の札が id だけ）。
 pub fn content(pipe: &Fetched, ledger: &Fetched, now: EpochSecs) -> Body<Vec<Column>> {
     match cards(pipe) {
         Err(reason) => Body::Unmeasured(reason),
@@ -350,7 +357,7 @@ pub fn title_of(rows: &[LedgerRow], id: &str) -> Option<String> {
         .map(|r| title36(&r.title))
 }
 
-/// 札を 4 列に組む（列は板の順・列の中は段を決めた時刻の新しい順・時刻の無い札は後・同じなら bead の id の順）。
+/// 札を 5 列に組む（列は板の順・列の中は段を決めた時刻の新しい順・時刻の無い札は後・同じなら bead の id の順）。
 /// Landed の列は今日（日本の日）の着地（`landed_today`）と、日を問わず CI を待つ札（欄 ci が Waiting）。
 pub fn columns(cards: &[PipelineCard], rows: &[LedgerRow], now: EpochSecs) -> Vec<Column> {
     LANES
@@ -716,7 +723,7 @@ mod dom {
         section(BLOCK, ().into_any(), body.into_any())
     }
 
-    /// 4 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
+    /// 5 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
     fn misfit_view(cards: Vec<MisfitCard>, mode: Mode) -> Option<AnyView> {
         if cards.is_empty() {
             return None;

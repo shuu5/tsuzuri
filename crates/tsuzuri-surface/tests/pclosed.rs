@@ -147,6 +147,7 @@ fn pclosed_land_lane_today_only() {
         vec![
             vec![],
             vec![],
+            vec![],
             vec!["px.33"],
             vec!["px.31", "px.32", "px.30"],
         ]

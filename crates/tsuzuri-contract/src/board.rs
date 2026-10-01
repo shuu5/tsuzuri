@@ -43,7 +43,8 @@ impl Stage {
     /// 段が載る pipeline の列。
     pub fn column(self) -> PipelineColumn {
         match self {
-            Stage::Queued | Stage::Blocked => PipelineColumn::QueuedBlocked,
+            Stage::Blocked => PipelineColumn::Blocked,
+            Stage::Queued => PipelineColumn::Queued,
             Stage::Running | Stage::Gated => PipelineColumn::RunningGated,
             Stage::Questioned | Stage::Failed | Stage::Stopped => {
                 PipelineColumn::QuestionedFailedStopped
@@ -53,11 +54,13 @@ impl Stage {
     }
 }
 
-/// pipeline の板の列（閉じた 4）。
+/// pipeline の板の列（閉じた 5・板の順・判断の記録 ADR-27 決定 (6)）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PipelineColumn {
-    #[serde(rename = "Queued/Blocked")]
-    QueuedBlocked,
+    #[serde(rename = "Blocked")]
+    Blocked,
+    #[serde(rename = "Queued")]
+    Queued,
     #[serde(rename = "Running/Gated")]
     RunningGated,
     #[serde(rename = "Questioned/Failed/Stopped")]

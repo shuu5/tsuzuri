@@ -1,4 +1,4 @@
-//! 便 g-pipe の歯: 4 列の順と列の中の並び・「+n」と開いた列の query・札の題の引き方・0 件と測れていない・
+//! 便 g-pipe の歯: 5 列の順と列の中の並び・「+n」と開いた列の query・札の題の引き方・0 件と測れていない・
 //! 経過の字の境・hover の card の 4 行・段から列への対応は契約の型の関数・着地済みの外形と依存。
 #![cfg(test)]
 
@@ -94,7 +94,7 @@ fn ids(col: &Column, open: bool) -> Vec<&str> {
     col.shown(open).iter().map(|c| c.id.as_str()).collect()
 }
 
-/// (1) 4 列の順・class・見出しの語の鍵と、列ごとの札の id の並び（経過の短い順・同じなら id の順・経過の無い札は後）。
+/// (1) 5 列の順・class・見出しの語の鍵と、列ごとの札の id の並び（経過の短い順・同じなら id の順・経過の無い札は後）。
 #[test]
 fn pipe_columns_order_and_cards_sorted_by_elapsed() {
     let cards = fixture_cards();
@@ -112,7 +112,8 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
     assert_eq!(
         lanes,
         vec![
-            (PipelineColumn::QueuedBlocked, "col c-wait", "col_wait"),
+            (PipelineColumn::Blocked, "col c-block", "col_block"),
+            (PipelineColumn::Queued, "col c-queue", "col_queue"),
             (PipelineColumn::RunningGated, "col c-run", "col_run"),
             (
                 PipelineColumn::QuestionedFailedStopped,
@@ -126,7 +127,8 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
     assert_eq!(
         all,
         vec![
-            vec!["px.2", "px.1"],
+            vec!["px.2"],
+            vec!["px.1"],
             vec!["px.4", "px.3"],
             vec!["px.7", "px.5", "px.6"],
             vec!["px.12", "px.9", "px.10", "px.8"],
@@ -134,10 +136,13 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
     );
     // 見出しの横の数は列の札の全部（Landed の列は今日の着地だけ・経過の無い px.11 は入らない）。
     let counts: Vec<usize> = cols.iter().map(|c| c.cards.len()).collect();
-    assert_eq!(counts, vec![2, 2, 3, 4]);
-    // 状態の記号: 待ち・動いている・止まった（待ちの記号）・取り込み（記号でなく取り込みの印）。
+    assert_eq!(counts, vec![1, 1, 2, 3, 4]);
+    // 状態の記号: 待ち（Blocked と Queued）・動いている・止まった（待ちの記号）・取り込み（記号でなく取り込みの印）。
     let states: Vec<Option<&str>> = cols.iter().map(|c| c.cards[0].state).collect();
-    assert_eq!(states, vec![Some("wait"), Some("run"), Some("wait"), None]);
+    assert_eq!(
+        states,
+        vec![Some("wait"), Some("wait"), Some("run"), Some("wait"), None]
+    );
 }
 
 /// (2) 3 枚を超える列は 3 枚と「+n」・開いた列は全部・開いた列の名は URL の query（鍵 col）に残る。
@@ -145,13 +150,13 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
 fn pipe_more_button_and_open_column_in_url() {
     assert_eq!(SHOW, 3);
     let cols = filled();
-    let land = &cols[3];
+    let land = &cols[4];
     assert_eq!(ids(land, false), vec!["px.12", "px.9", "px.10"]);
     assert_eq!(land.more(false), Some(1));
     assert_eq!(ids(land, true).len(), 4);
     assert_eq!(land.more(true), None);
     // ちょうど 3 枚の列は「+n」を出さない。
-    let stop = &cols[2];
+    let stop = &cols[3];
     assert_eq!(ids(stop, false).len(), 3);
     assert_eq!(stop.more(false), None);
     open_in_url(&cols);
@@ -163,11 +168,11 @@ fn open_in_url(cols: &[Column]) {
     let url = with_open("?mode=expert", PipelineColumn::Landed);
     assert_eq!(url, "?mode=expert&col=land");
     assert_eq!(open_columns(&url), vec![PipelineColumn::Landed]);
-    let two = with_open(&url, PipelineColumn::QueuedBlocked);
-    assert_eq!(two, "?mode=expert&col=wait,land");
+    let two = with_open(&url, PipelineColumn::Queued);
+    assert_eq!(two, "?mode=expert&col=queue,land");
     assert_eq!(
         open_columns(&two),
-        vec![PipelineColumn::QueuedBlocked, PipelineColumn::Landed]
+        vec![PipelineColumn::Queued, PipelineColumn::Landed]
     );
     assert_eq!(with_open(&two, PipelineColumn::Landed), two);
     assert_eq!(
@@ -179,7 +184,7 @@ fn open_in_url(cols: &[Column]) {
         .iter()
         .map(|c| open_columns(&two).contains(&c.lane.column))
         .collect();
-    assert_eq!(reopened, vec![true, false, false, true]);
+    assert_eq!(reopened, vec![false, true, false, false, true]);
 }
 
 /// (3) 札の題は台帳の一覧から bead の id で引いて 36 字に切り、引けない札は題を出さず id だけ。
@@ -230,7 +235,7 @@ fn leads_and_classes(find: impl Fn(&str) -> pipeline::Kcard, rows: Vec<LedgerRow
     assert_eq!(kcard(&px11(), &rows, NOW).age, NO_AGE);
 }
 
-/// (4) 読めて 0 枚なら 0 件の帯（run の語と 0）と空の 4 列・まだ分からない・読めない・まだ読んでいないは測れていない。
+/// (4) 読めて 0 枚なら 0 件の帯（run の語と 0）と空の 5 列・まだ分からない・読めない・まだ読んでいないは測れていない。
 #[test]
 fn pipe_empty_band_and_unmeasured() {
     let empty = wire::encode(&PipelineBoard {
@@ -253,7 +258,6 @@ fn pipe_empty_band_and_unmeasured() {
     );
     assert_eq!(vocab().label(RUN_KEY), "run");
     let blank = columns(&[], &[], NOW);
-    assert_eq!(blank.len(), 4);
     assert!(
         blank
             .iter()
@@ -263,7 +267,8 @@ fn pipe_empty_band_and_unmeasured() {
     assert_eq!(
         classes,
         vec![
-            "col c-wait is-empty",
+            "col c-block is-empty",
+            "col c-queue is-empty",
             "col c-run is-empty",
             "col c-stop is-empty",
             "col c-land is-empty"
@@ -377,10 +382,10 @@ fn pipe_stage_column_from_contract() {
         let name = format!("Stage::{stage:?}");
         assert!(!src.contains(&name), "pipeline.rs に段の名 {name} が在る");
     }
-    // 4 列の表は列の全部を 1 度ずつ持つ。
+    // 5 列の表は列の全部を 1 度ずつ持つ。
     let mut lanes: Vec<PipelineColumn> = LANES.iter().map(|l| l.column).collect();
     lanes.dedup();
-    assert_eq!(lanes.len(), 4);
+    assert_eq!(lanes.len(), 5);
     for stage in Stage::ALL {
         assert_eq!(pipeline::lane(stage.column()).column, stage.column());
     }
@@ -390,7 +395,8 @@ fn pipe_stage_column_from_contract() {
 #[test]
 fn pipe_keys_in_vocab_and_classes_in_stylesheet() {
     for key in [
-        "col_wait",
+        "col_block",
+        "col_queue",
         "col_run",
         "col_stop",
         "col_land",
@@ -491,7 +497,7 @@ fn pipe_landed_today_boundaries() {
     assert!(f(&card("px.1", Stage::Landed, Some(1)), NOW));
 }
 
-/// 便 g-pipe-today (3)(4): Landed の列は今日の着地だけ・数の字は今日の着地の数・ほかの 3 列は今の時刻に依らない。
+/// 便 g-pipe-today (3)(4): Landed の列は今日の着地だけ・数の字は今日の着地の数・ほかの 4 列は今の時刻に依らない。
 #[test]
 fn pipe_landed_column_only_today() {
     let mut cs = fixture_cards();
@@ -501,12 +507,12 @@ fn pipe_landed_column_only_today() {
     let rows = ledger_rows();
     let cols = columns(&cs, &rows, NOW);
     assert_eq!(
-        ids(&cols[3], true),
+        ids(&cols[4], true),
         vec!["px.12", "px.9", "px.10", "px.8", "px.22"]
     );
-    assert_eq!(cols[3].cards.len(), 5, "数の字は今日の着地の数");
+    assert_eq!(cols[4].cards.len(), 5, "数の字は今日の着地の数");
     assert!(
-        cols[3]
+        cols[4]
             .cards
             .iter()
             .all(|k| landed_today(cs.iter().find(|c| c.contract.as_str() == k.id).unwrap(), NOW))
@@ -517,23 +523,24 @@ fn pipe_landed_column_only_today() {
     };
     assert_eq!(via, cols);
 
-    // ほかの 3 列の札の入り方と並びは今の時刻に依らない（fixture の並びのまま）。
+    // ほかの 4 列の札の入り方と並びは今の時刻に依らない（fixture の並びのまま）。
     // 翌日の始まりの 10 秒後に描くと、いちばん新しい 30 秒前の着地も昨日。
     let later = columns(&cs, &rows, NOW + 86_400 - 75_600 + 10);
-    let later_ids: Vec<Vec<&str>> = later[..3].iter().map(|c| ids(c, true)).collect();
-    let others: Vec<Vec<&str>> = cols[..3].iter().map(|c| ids(c, true)).collect();
+    let later_ids: Vec<Vec<&str>> = later[..4].iter().map(|c| ids(c, true)).collect();
+    let others: Vec<Vec<&str>> = cols[..4].iter().map(|c| ids(c, true)).collect();
     assert_eq!(others, later_ids);
     assert_eq!(
         others,
         vec![
-            vec!["px.2", "px.1"],
+            vec!["px.2"],
+            vec!["px.1"],
             vec!["px.4", "px.3"],
             vec!["px.7", "px.5", "px.6"],
         ]
     );
     // そのときの Landed の列は空。
-    assert!(later[3].cards.is_empty());
-    assert_eq!(later[3].class, "col c-land is-empty");
+    assert!(later[4].cards.is_empty());
+    assert_eq!(later[4].class, "col c-land is-empty");
 }
 
 /// 便 g-pipe-today (5): 今日の着地が 0 本でほかの列に札が在れば、Landed の列は空の列で、板は測れていないにも 0 件にもならない。
@@ -548,12 +555,12 @@ fn pipe_no_landed_today_is_empty_column() {
     let Body::Filled(cols) = got else {
         panic!("板が中身を出さない: {got:?}");
     };
-    assert_eq!(cols.len(), 4);
-    assert_eq!(ids(&cols[0], true), vec!["px.1"]);
-    assert_eq!(cols[0].class, "col c-wait");
-    assert!(cols[3].cards.is_empty());
-    assert_eq!(cols[3].class, "col c-land is-empty");
-    assert_eq!(cols[3].more(false), None);
+    assert_eq!(cols.len(), 5);
+    assert_eq!(ids(&cols[1], true), vec!["px.1"]);
+    assert_eq!(cols[1].class, "col c-queue");
+    assert!(cols[4].cards.is_empty());
+    assert_eq!(cols[4].class, "col c-land is-empty");
+    assert_eq!(cols[4].more(false), None);
 }
 
 /// 便 g-pipe-today (6): 描く所は content に描く時の net の now を渡す。

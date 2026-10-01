@@ -45,8 +45,8 @@ fn pfold_closable_rules() {
     assert_eq!(SHOW, 3);
     let cols = board();
     let counts: Vec<usize> = cols.iter().map(|c| c.cards.len()).collect();
-    assert_eq!(counts, vec![2, 2, 3, 4]);
-    let land = &cols[3];
+    assert_eq!(counts, vec![1, 1, 2, 3, 4]);
+    let land = &cols[4];
     assert_eq!(land.lane.column, PipelineColumn::Landed);
     assert_eq!(ids(land, true), vec!["px.12", "px.9", "px.10", "px.8"]);
     assert!(land.closable(true));
@@ -55,7 +55,7 @@ fn pfold_closable_rules() {
     assert_eq!(land.more(true), None);
     assert_eq!(land.shown(true).len(), 4);
     assert_eq!(land.shown(false).len(), 3);
-    for col in &cols[..3] {
+    for col in &cols[..4] {
         for open in [true, false] {
             assert!(!col.closable(open), "{} の列 open={open}", col.lane.name);
             assert_eq!(col.more(open), None);
@@ -79,11 +79,11 @@ fn plus_or_close(cols: Vec<Column>) {
 fn pfold_with_closed_rules() {
     let land = PipelineColumn::Landed;
     let cases = [
-        ("?mode=expert&col=wait,land", "?mode=expert&col=wait"),
+        ("?mode=expert&col=queue,land", "?mode=expert&col=queue"),
         ("?mode=expert&col=land", "?mode=expert"),
         ("?col=land&page=home", "?page=home"),
         ("?col=land", "?"),
-        ("?mode=expert&col=wait", "?mode=expert&col=wait"),
+        ("?mode=expert&col=queue", "?mode=expert&col=queue"),
         ("?col=bogus,land&page=home", "?page=home"),
     ];
     let mut returned = Vec::new();
@@ -99,7 +99,7 @@ fn pfold_with_closed_rules() {
         assert_eq!(back, "?mode=expert", "{} の列", lane.name);
         returned.push(back);
 
-        let rest = with_closed("?mode=expert&col=wait,run,stop,land", lane.column);
+        let rest = with_closed("?mode=expert&col=block,queue,run,stop,land", lane.column);
         let want: Vec<PipelineColumn> = LANES
             .into_iter()
             .map(|l| l.column)

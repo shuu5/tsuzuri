@@ -40,6 +40,16 @@
    "note": "順番待ちか承認待ちの run\n・ Queued = 順番待ち\n・ Blocked = 承認待ち",
    "internal": "Intake / Queued / Blocked / Reviewed(PASS)"
   },
+  "col_block": {
+   "label": "Blocked",
+   "note": "相手を待っている run\n・ 持ち主の承認か、ほかの便の着地を待つ\n・ 器の Blocked（承認待ち）より広い",
+   "internal": "Blocked・台帳の blocks の相手が開いている Queued"
+  },
+  "col_queue": {
+   "label": "Queued",
+   "note": "順番を待っている run\n・ 相手は待っていない",
+   "internal": "Intake / Queued / Reviewed(PASS)"
+  },
   "col_run": {
    "label": "Running / Gated",
    "note": "動いているか検査中の run\n{st:run} Running = 書いている\n・ Gated = 検査中",

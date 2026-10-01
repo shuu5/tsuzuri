@@ -10,7 +10,8 @@
     "Landed"
   ],
   "board::PipelineColumn": [
-    "Queued/Blocked",
+    "Blocked",
+    "Queued",
     "Running/Gated",
     "Questioned/Failed/Stopped",
     "Landed"
