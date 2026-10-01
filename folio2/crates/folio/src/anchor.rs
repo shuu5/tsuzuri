@@ -4,10 +4,11 @@
 //! （`lineage.rs`）は便 8 で、ここから呼ぶ。`--freeze-anchor`・`--emit-amends` は便 9。
 //! 値は型付きの木（`yaml::Value`）で読み、digest は正規化（`yaml::canonical`）の sha256。
 //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs` / `adr::floor_val`）で読み、値は持ち直さない。正規表現は使わない。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::adr::{self, Adr};
 use crate::gitcheck;
@@ -277,16 +278,7 @@ pub(crate) fn project(c: &Value, scope: &[String]) -> Result<Value, String> {
             let mut fields = Vec::new();
             for f in article_fields {
                 let v = if *f == "statements" {
-                    let sts: &[Value] = match a.get(f) {
-                        None | Some(Value::Null) => &[],
-                        Some(Value::Seq(items)) => items,
-                        Some(_) => {
-                            return Err(format!(
-                                "条 {} の statements が一覧でない",
-                                py_str(a.get("id"))
-                            ));
-                        }
-                    };
+                    let sts = statements_of(a, f)?;
                     let mut rows = Vec::new();
                     for st in sts {
                         if st.as_map().is_none() {
@@ -313,6 +305,20 @@ pub(crate) fn project(c: &Value, scope: &[String]) -> Result<Value, String> {
         push(&mut out, "articles", Value::Seq(projected));
     }
     Ok(Value::Map(out))
+}
+
+/// (e) 条の規範文の一覧（無い・null は空・一覧でなければ Err）。
+fn statements_of<'a>(a: &'a Value, f: &str) -> Result<&'a [Value], String> {
+    Ok(match a.get(f) {
+        None | Some(Value::Null) => &[],
+        Some(Value::Seq(items)) => items,
+        Some(_) => {
+            return Err(format!(
+                "条 {} の statements が一覧でない",
+                py_str(a.get("id"))
+            ));
+        }
+    })
 }
 
 /// (e) 印を値として持つ欄（A-2）。
@@ -381,6 +387,53 @@ pub(crate) fn amends_list(d: &Node) -> impl Iterator<Item = &Node> {
         .filter(|e| e.as_map().is_some())
 }
 
+/// 憲法の現行の読み（`check_anchor` の段の間で受け渡す・`check_file` も読む）。
+struct Cur<'a> {
+    /// 置き場の dir
+    dir: &'a Path,
+    /// 読めた判断の記録
+    adr: &'a Adr,
+    /// (j) の列に在った id
+    history: &'a HashSet<String>,
+    /// 旗
+    flag: Flag,
+    /// 型付きで読んだ憲法
+    c: Value,
+    /// 置き場の名（まだ分からない の行の folio2 の番号の片を外の置き場で落とす・便 203）
+    place: Option<String>,
+    /// 憲法 schema.amendment_scope
+    scope: Vec<String>,
+    /// (e) の現行の写し
+    cur_proj: Value,
+    /// 現行 meta.version の `str(x)`
+    cur_ver: String,
+    /// 憲法 meta.approval（無ければ null）
+    meta_approval: Value,
+    /// 憲法 meta.id（字でなければ None）。列の根の表を引く名（便 121）
+    name: Option<String>,
+}
+
+/// anchors/ の読みと列の検査の結果（段の間で受け渡す）。
+#[derive(Default)]
+struct Chain {
+    /// `<dir>/anchors`
+    anch: PathBuf,
+    /// 読めた索引
+    index: Option<Value>,
+    /// 読めた anchor（file の順）
+    anchors: Vec<Anchor>,
+    /// 列の file が anchors/ に 1 本でも在る
+    chain_exists: bool,
+    /// 版管理の照合の結果
+    git: Option<gitcheck::Tracked>,
+    /// 改訂の記録（amended_by か発効した判断の amends）が在る
+    records_exist: bool,
+    /// 索引の末尾の版
+    newest: Option<String>,
+    /// 索引の表の項の版（索引の順）
+    chain_versions: Vec<String>,
+}
+
 /// (e)〜(i) を掛ける。`history` は (j) の列に在った id（`history_ids`）。
 /// `flag` が `--freeze-anchor` か `--freeze-start`（便 121）のときは (i) を掛けず（凍結の前提の検査が替わる・便 9）、
 /// 列の結果を `freeze.rs` へ返す。列の根は憲法の名で列の根の表を引いて照らす（便 121・`check_root`）。
@@ -393,8 +446,7 @@ pub fn check_anchor(
 ) -> Option<State> {
     let c = read_typed(&dir.join("constitution.yaml"), "constitution.yaml", report)?;
     // まだ分からない の行の folio2 の番号の片は外の置き場で落とす（便 203）
-    let name = crate::adr::place_name(dir).ok();
-    let said = |v: &'static str| crate::floor::said(v, name.as_deref());
+    let place = crate::adr::place_name(dir).ok();
     let scope = amendment_scope(&c);
     let cur_proj = match project(&c, &scope) {
         Ok(p) => p,
@@ -428,7 +480,25 @@ pub fn check_anchor(
         .and_then(|m| m.get("id"))
         .and_then(Value::as_str)
         .map(str::to_string);
-    let first_ver = floor(&["anchor", "first_version"]);
+    let cur = Cur {
+        dir,
+        adr,
+        history,
+        flag,
+        c,
+        place,
+        scope,
+        cur_proj,
+        cur_ver,
+        meta_approval,
+        name,
+    };
+    read_chain(cur, report)
+}
+
+/// (f) anchors/ の索引と anchor の file を読む。列に載せた anchor と索引を次の段へ渡す。
+fn read_chain(cur: Cur, report: &mut Report) -> Option<State> {
+    let dir = cur.dir;
     let anch = dir.join(floor(&["anchor", "dir"]));
     let index_file = floor(&["anchor", "index_file"]);
     let root = fs::canonicalize(dir).ok();
@@ -472,17 +542,31 @@ pub fn check_anchor(
             let Some(d) = read_typed(&path, &format!("anchors/{file}"), report) else {
                 continue;
             };
-            if let Some(a) = check_file(dir, &file, d, &meta_approval, adr, &anchors, report) {
+            if let Some(a) = check_file(&cur, &file, d, &anchors, report) {
                 anchors.push(a);
             }
         }
     }
+    let chain = Chain {
+        anch,
+        index,
+        anchors,
+        chain_exists,
+        ..Chain::default()
+    };
+    check_git_records(cur, chain, report)
+}
+
+/// (a) 版管理との照合と、(g) の前提になる改訂の記録の有無。
+fn check_git_records(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State> {
+    let Cur {
+        dir, adr, ref c, ..
+    } = cur;
     // (a) 版管理との照合（便 8）
-    let git = gitcheck::check_git(dir, report);
-    let find = |v: &str| anchors.iter().find(|a| a.version == v);
+    chain.git = gitcheck::check_git(dir, report);
 
     // (g) 列
-    let records_exist = value_rows(Some(&c), "articles").any(|a| {
+    chain.records_exist = value_rows(Some(c), "articles").any(|a| {
         a.get("amended_by")
             .and_then(Value::as_seq)
             .is_some_and(|s| !s.is_empty())
@@ -490,6 +574,20 @@ pub fn check_anchor(
         .records
         .iter()
         .any(|(_, d)| is_effective(d) && amends_list(d).next().is_some());
+    check_index(cur, chain, report)
+}
+
+/// (g) 列: 索引の項を 1 つずつ anchor と照らし、索引と anchor の file の食い違いを数える。
+fn check_index(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State> {
+    let Chain {
+        ref index,
+        ref anchors,
+        records_exist,
+        ..
+    } = chain;
+    let Cur { ref place, .. } = cur;
+    let said = |v: &'static str| crate::floor::said(v, place.as_deref());
+    let index_file = floor(&["anchor", "index_file"]);
     let mut newest: Option<String> = None;
     let mut chain_versions: Vec<String> = Vec::new();
     if let Some(ix) = &index {
@@ -503,68 +601,7 @@ pub fn check_anchor(
                 said("（まだ分からない・P-10.3）")
             ));
         }
-        for (n, e) in entries.iter().enumerate() {
-            if e.as_map().is_none()
-                || ["version", "previous", "digest"]
-                    .iter()
-                    .any(|k| e.get(k).is_none())
-            {
-                report.violation(
-                    "anchor",
-                    format!("{index_file}: entries[{n}] の欄が壊れている"),
-                );
-                continue;
-            }
-            let vs = py_str(e.get("version"));
-            let expect_prev = n
-                .checked_sub(1)
-                .and_then(|p| entries.get(p))
-                .map(|prev| py_str(prev.get("version")));
-            if n == 0 && vs != first_ver {
-                report.violation(
-                    "anchor",
-                    format!("{index_file}: 列の根 {vs} が最初の版 {first_ver}（床の定数）でない"),
-                );
-            }
-            if n == 0 {
-                check_root(index_file, &vs, name.as_deref(), &py_str(e.get("digest")), report);
-            }
-            let prev = (!is_none(e.get("previous"))).then(|| py_str(e.get("previous")));
-            if prev != expect_prev {
-                report.violation(
-                    "anchor",
-                    format!(
-                        "{index_file}: entries[{n}]（{vs}）の previous {} が直前の版 {} でない（列の付け替え）",
-                        py_str(e.get("previous")),
-                        expect_prev.as_deref().unwrap_or("None")
-                    ),
-                );
-            }
-            let Some(a) = find(&vs) else {
-                report.pending(format!(
-                    "anchor の列が切れている: 索引にある版 {vs} の anchor file が無いか読めない＝差分検査は「まだ分からない」{}。anchors/ は消さない",
-                    said("（P-10.3）")
-                ));
-                continue;
-            };
-            if py_str(a.doc.get("digest")) != py_str(e.get("digest")) {
-                report.violation(
-                    "anchor",
-                    format!("{vs}: anchor の digest が索引の記載と違う（差し替えられた）"),
-                );
-            }
-            let a_prev = (!is_none(a.doc.get("previous"))).then(|| py_str(a.doc.get("previous")));
-            if a_prev != expect_prev {
-                report.violation(
-                    "anchor",
-                    format!(
-                        "{vs}: anchor の previous {} が索引の列 {} と違う",
-                        py_str(a.doc.get("previous")),
-                        expect_prev.as_deref().unwrap_or("None")
-                    ),
-                );
-            }
-        }
+        check_entries(entries, &cur, anchors, report);
         chain_versions = entries
             .iter()
             .filter(|e| e.as_map().is_some())
@@ -598,6 +635,109 @@ pub fn check_anchor(
             "改訂の記録（amended_by か発効した判断の amends）があるのに anchor が 1 本も無い＝anchor が消された（列の始め直しは認めない）",
         );
     }
+    chain.newest = newest;
+    chain.chain_versions = chain_versions;
+    check_versions(cur, chain, report)
+}
+
+/// (g) 索引の項ごとの照らし（欄・列の根・previous・anchor の file の有無）。
+fn check_entries(entries: &[Value], cur: &Cur, anchors: &[Anchor], report: &mut Report) {
+    let Cur {
+        ref place,
+        ref name,
+        ..
+    } = *cur;
+    let said = |v: &'static str| crate::floor::said(v, place.as_deref());
+    let index_file = floor(&["anchor", "index_file"]);
+    let first_ver = floor(&["anchor", "first_version"]);
+    let find = |v: &str| anchors.iter().find(|a| a.version == v);
+    for (n, e) in entries.iter().enumerate() {
+        if e.as_map().is_none()
+            || ["version", "previous", "digest"]
+                .iter()
+                .any(|k| e.get(k).is_none())
+        {
+            report.violation(
+                "anchor",
+                format!("{index_file}: entries[{n}] の欄が壊れている"),
+            );
+            continue;
+        }
+        let vs = py_str(e.get("version"));
+        let expect_prev = n
+            .checked_sub(1)
+            .and_then(|p| entries.get(p))
+            .map(|prev| py_str(prev.get("version")));
+        if n == 0 && vs != first_ver {
+            report.violation(
+                "anchor",
+                format!("{index_file}: 列の根 {vs} が最初の版 {first_ver}（床の定数）でない"),
+            );
+        }
+        if n == 0 {
+            check_root(index_file, &vs, name.as_deref(), &py_str(e.get("digest")), report);
+        }
+        let prev = (!is_none(e.get("previous"))).then(|| py_str(e.get("previous")));
+        if prev != expect_prev {
+            report.violation(
+                "anchor",
+                format!(
+                    "{index_file}: entries[{n}]（{vs}）の previous {} が直前の版 {} でない（列の付け替え）",
+                    py_str(e.get("previous")),
+                    expect_prev.as_deref().unwrap_or("None")
+                ),
+            );
+        }
+        let Some(a) = find(&vs) else {
+            report.pending(format!(
+                "anchor の列が切れている: 索引にある版 {vs} の anchor file が無いか読めない＝差分検査は「まだ分からない」{}。anchors/ は消さない",
+                said("（P-10.3）")
+            ));
+            continue;
+        };
+        check_entry_anchor(a, e, &vs, expect_prev, report);
+    }
+}
+
+/// (g) 索引の項と、その版の anchor の digest・previous の照らし。
+fn check_entry_anchor(
+    a: &Anchor,
+    e: &Value,
+    vs: &str,
+    expect_prev: Option<String>,
+    report: &mut Report,
+) {
+    if py_str(a.doc.get("digest")) != py_str(e.get("digest")) {
+        report.violation(
+            "anchor",
+            format!("{vs}: anchor の digest が索引の記載と違う（差し替えられた）"),
+        );
+    }
+    let a_prev = (!is_none(a.doc.get("previous"))).then(|| py_str(a.doc.get("previous")));
+    if a_prev != expect_prev {
+        report.violation(
+            "anchor",
+            format!(
+                "{vs}: anchor の previous {} が索引の列 {} と違う",
+                py_str(a.doc.get("previous")),
+                expect_prev.as_deref().unwrap_or("None")
+            ),
+        );
+    }
+}
+
+/// (a) 版管理に無い anchor と、(h) 発効した判断の記録が名指す版の anchor が列に在るか。
+fn check_versions(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
+    let Cur {
+        adr, ref cur_ver, ..
+    } = cur;
+    let Chain {
+        ref git,
+        ref newest,
+        ref chain_versions,
+        ..
+    } = chain;
+    let first_ver = floor(&["anchor", "first_version"]);
     if let Some(g) = &git {
         g.untracked(newest.as_deref(), report);
     }
@@ -606,7 +746,7 @@ pub fn check_anchor(
     let root_ver = chain_versions.first().map_or(first_ver, String::as_str);
     let mut nameable: HashSet<&str> = chain_versions.iter().skip(1).map(String::as_str).collect();
     if cur_ver != root_ver {
-        nameable.insert(&cur_ver);
+        nameable.insert(cur_ver);
     }
     for (aid, d) in adr.records.iter().filter(|(_, d)| is_effective(d)) {
         let versions: BTreeSet<String> =
@@ -629,8 +769,20 @@ pub fn check_anchor(
             }
         }
     }
+    check_reuse(cur, chain, report)
+}
+
+/// (h) 最新の anchor に無い番号の再利用（P-7.1）。
+fn check_reuse(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
+    let Cur { history, ref c, .. } = cur;
+    let Chain {
+        ref anchors,
+        ref newest,
+        ..
+    } = chain;
+    let find = |v: &str| anchors.iter().find(|a| a.version == v);
     let newest_anchor = newest.as_deref().and_then(find);
-    let (cur_articles, cur_statements) = article_ids(Some(&c));
+    let (cur_articles, cur_statements) = article_ids(Some(c));
     if let (Some(v), Some(na)) = (&newest, newest_anchor) {
         let (n_articles, n_statements) = article_ids(na.doc.get("content"));
         let newest_ids: HashSet<&str> = n_articles
@@ -653,6 +805,18 @@ pub fn check_anchor(
             );
         }
     }
+    check_pairs(cur, chain, report)
+}
+
+/// (h) 列の全区間の差分の照らし。
+fn check_pairs(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
+    let Cur { adr, ref c, .. } = cur;
+    let Chain {
+        ref anchors,
+        ref chain_versions,
+        ..
+    } = chain;
+    let find = |v: &str| anchors.iter().find(|a| a.version == v);
 
     // 列の全区間（便 8 (b)）: 隣り合う anchor の差分は、その版を名指す発効した判断の記録と 1:1
     for pair in chain_versions.windows(2) {
@@ -661,34 +825,52 @@ pub fn check_anchor(
         };
         if let (Some(pa), Some(ca)) = (find(prev_ver), find(cur_ver)) {
             lineage::verify_pair(
-                &pa.doc,
-                ca.doc.get("content").unwrap_or(&Value::Null),
-                &str_items(ca.doc.get("projection").and_then(|p| p.get("scope"))),
-                &ca.version,
+                &lineage::Pair {
+                    prev_doc: &pa.doc,
+                    cur_content: ca.doc.get("content").unwrap_or(&Value::Null),
+                    cur_scope: &str_items(ca.doc.get("projection").and_then(|p| p.get("scope"))),
+                    ver: &ca.version,
+                },
                 &format!("anchor {}", ca.version),
-                &c,
+                c,
                 adr,
                 report,
             );
         }
     }
+    check_current(cur, chain, report)
+}
+
+/// (i) 現行との一致（`--freeze-anchor` と `--freeze-start` では凍結の前提の検査に替わる）。
+fn check_current(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
+    let Cur {
+        flag,
+        ref c,
+        ref place,
+        ref scope,
+        ref cur_proj,
+        ref cur_ver,
+        ..
+    } = cur;
+    let Chain {
+        ref index,
+        ref anchors,
+        ref anch,
+        ref newest,
+        records_exist,
+        ..
+    } = chain;
+    let said = |v: &'static str| crate::floor::said(v, place.as_deref());
+    let find = |v: &str| anchors.iter().find(|a| a.version == v);
+    let newest_anchor = newest.as_deref().and_then(find);
+    let (cur_articles, cur_statements) = article_ids(Some(c));
 
     // (i) 現行との一致（`--freeze-anchor` と `--freeze-start` では凍結の前提の検査に替わる）
     if matches!(flag, Flag::FreezeAnchor | Flag::FreezeStart) {
         // freeze.rs の (c) と始まりの凍結（便 121）が受け持つ。始まりの凍結は書く承認一覧（欄 adr は空・
         // 憲法 meta.approval の写し 1 項）を凍結の後の床と同じ関数で確かめる（便 155・P-15.2）
         if matches!(flag, Flag::FreezeStart) {
-            let mut row = vec![(Value::Str("adr".to_string()), Value::Null)];
-            for f in adr::floor_strs(&["approval", "required"]) {
-                let v = meta_approval.get(f).cloned().unwrap_or(Value::Null);
-                row.push((Value::Str(f.to_string()), v));
-            }
-            let at = format!(
-                "{}（凍結で書く承認一覧・憲法 meta.approval の写し）",
-                floor(&["anchor", "file_name"]).replace("<version>", &cur_ver)
-            );
-            let approvals = Value::Seq(vec![Value::Map(row)]);
-            check_approvals(dir, &at, Some(&approvals), adr, report);
+            check_start_approvals(&cur, report);
         }
     } else if index.is_none() && anchors.is_empty() && !records_exist {
         report.pending(format!(
@@ -698,7 +880,7 @@ pub fn check_anchor(
             said("（P-10.3）")
         ));
     } else if let (Some(v), Some(na)) = (&newest, newest_anchor) {
-        if *v != cur_ver {
+        if *v != *cur_ver {
             report.violation(
                 "A-2",
                 format!(
@@ -710,7 +892,7 @@ pub fn check_anchor(
             na.doc
                 .get("content")
                 .and_then(|x| canon(x, &na.name, report)),
-            canon(&cur_proj, "憲法の写し", report),
+            canon(cur_proj, "憲法の写し", report),
         ) && a != b
         {
             report.violation(
@@ -723,6 +905,55 @@ pub fn check_anchor(
             );
         }
     }
+    finish(cur, chain)
+}
+
+/// (i) 始まりの凍結が書く承認一覧（欄 adr は空・憲法 meta.approval の写し 1 項）の確かめ（便 155・P-15.2）。
+fn check_start_approvals(cur: &Cur, report: &mut Report) {
+    let Cur {
+        dir,
+        adr,
+        ref meta_approval,
+        ref cur_ver,
+        ..
+    } = *cur;
+    let mut row = vec![(Value::Str("adr".to_string()), Value::Null)];
+    for f in adr::floor_strs(&["approval", "required"]) {
+        let v = meta_approval.get(f).cloned().unwrap_or(Value::Null);
+        row.push((Value::Str(f.to_string()), v));
+    }
+    let at = format!(
+        "{}（凍結で書く承認一覧・憲法 meta.approval の写し）",
+        floor(&["anchor", "file_name"]).replace("<version>", cur_ver)
+    );
+    let approvals = Value::Seq(vec![Value::Map(row)]);
+    check_approvals(dir, &at, Some(&approvals), adr, report);
+}
+
+/// 列の結果を `State` に詰めて返す。
+fn finish(cur: Cur, chain: Chain) -> Option<State> {
+    let Cur {
+        c,
+        scope,
+        cur_proj,
+        cur_ver,
+        meta_approval,
+        name,
+        ..
+    } = cur;
+    let Chain {
+        index,
+        anchors,
+        anch,
+        chain_exists,
+        git,
+        records_exist,
+        newest,
+        ..
+    } = chain;
+    let newest_anchor = newest
+        .as_deref()
+        .and_then(|v| anchors.iter().find(|a| a.version == v));
     let newest_doc = newest_anchor.map(|a| a.doc.clone());
     Some(State {
         seen_in_git: git.as_ref().is_some_and(gitcheck::Tracked::seen),
@@ -808,16 +1039,10 @@ fn structural_diff(
 }
 
 /// (f) anchor の file 1 本。列に載せられる形なら返す。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
 fn check_file(
-    dir: &Path,
+    cur: &Cur,
     name: &str,
     d: Value,
-    meta_approval: &Value,
-    adr: &Adr,
     seen: &[Anchor],
     report: &mut Report,
 ) -> Option<Anchor> {
@@ -874,6 +1099,17 @@ fn check_file(
             Err(e) => report.unknown(format!("anchors/{name}: {e}")),
         }
     }
+    check_file_projection(cur, name, d, vs, report)
+}
+
+/// (f) anchor の file 1 本の続き: 写しの取り方・範囲・写しの節。
+fn check_file_projection(
+    cur: &Cur,
+    name: &str,
+    d: Value,
+    vs: String,
+    report: &mut Report,
+) -> Option<Anchor> {
     let empty = Value::Map(Vec::new());
     let pj = match d.get("projection") {
         Some(p @ Value::Map(_)) => p,
@@ -923,13 +1159,28 @@ fn check_file(
             ),
         );
     }
+    check_file_approval(cur, name, d, vs, report)
+}
+
+/// (f) anchor の file 1 本の続き: 発効の承認の写し・approvals。
+fn check_file_approval(
+    cur: &Cur,
+    name: &str,
+    d: Value,
+    vs: String,
+    report: &mut Report,
+) -> Option<Anchor> {
     if let (Some(a), Some(b)) = (
         canon(
             d.get("meta_approval").unwrap_or(&Value::Null),
             &format!("anchors/{name}"),
             report,
         ),
-        canon(meta_approval, "constitution.yaml meta.approval", report),
+        canon(
+            &cur.meta_approval,
+            "constitution.yaml meta.approval",
+            report,
+        ),
     ) && a != b
     {
         report.violation(
@@ -939,7 +1190,7 @@ fn check_file(
             ),
         );
     }
-    check_approvals(dir, name, d.get("approvals"), adr, report);
+    check_approvals(cur.dir, name, d.get("approvals"), cur.adr, report);
     Some(Anchor {
         version: vs,
         doc: d,
@@ -964,49 +1215,7 @@ fn check_approvals(
     };
     let approval_fields = adr::floor_strs(&["approval", "required"]);
     for (n, ap) in items.iter().enumerate() {
-        if ap.as_map().is_none()
-            || !["who", "ruling", "verbatim"]
-                .iter()
-                .all(|k| non_empty(ap.get(k)))
-        {
-            report.violation(
-                "anchor",
-                format!("{name}: approvals[{n}] に who / ruling / verbatim が無い"),
-            );
-            continue;
-        }
-        if !ruling::has_ruling(&py_str(ap.get("ruling"))) {
-            report.violation(
-                "anchor",
-                format!("{name}: approvals[{n}].ruling に台帳 id が無い"),
-            );
-            continue;
-        }
-        // 形の決まりを持たない承認者と逐語だけが雛形の印を空と見る（便 158・裁定 id の印は台帳 id の形が落とす）
-        let marked: Vec<&str> = ["who", "verbatim"]
-            .into_iter()
-            .filter(|k| adr::unfilled(&py_str(ap.get(k))))
-            .collect();
-        if !marked.is_empty() {
-            report.violation(
-                "anchor",
-                format!(
-                    "{name}: approvals[{n}] の {} が {}（init の雛形の印・空と同じ）",
-                    marked.join(" / "),
-                    adr::UNFILLED
-                ),
-            );
-            continue;
-        }
-        let date = py_str(ap.get("date"));
-        if !adr::is_date(&date) {
-            report.violation(
-                "anchor",
-                format!("{name}: approvals[{n}].date「{date}」が年-月-日でない"),
-            );
-            continue;
-        }
-        if is_none(ap.get("adr")) {
+        if !approval_shape(name, n, ap, report) {
             continue;
         }
         let aid = py_str(ap.get("adr"));
@@ -1052,6 +1261,56 @@ fn check_approvals(
             );
         }
     }
+}
+
+/// (f) approvals の項 1 つの形（空・台帳 id の形・雛形の印・日付・adr の有無）。判断の記録と突き合わせる項だけ true。
+fn approval_shape(name: &str, n: usize, ap: &Value, report: &mut Report) -> bool {
+    if ap.as_map().is_none()
+        || !["who", "ruling", "verbatim"]
+            .iter()
+            .all(|k| non_empty(ap.get(k)))
+    {
+        report.violation(
+            "anchor",
+            format!("{name}: approvals[{n}] に who / ruling / verbatim が無い"),
+        );
+        return false;
+    }
+    if !ruling::has_ruling(&py_str(ap.get("ruling"))) {
+        report.violation(
+            "anchor",
+            format!("{name}: approvals[{n}].ruling に台帳 id が無い"),
+        );
+        return false;
+    }
+    // 形の決まりを持たない承認者と逐語だけが雛形の印を空と見る（便 158・裁定 id の印は台帳 id の形が落とす）
+    let marked: Vec<&str> = ["who", "verbatim"]
+        .into_iter()
+        .filter(|k| adr::unfilled(&py_str(ap.get(k))))
+        .collect();
+    if !marked.is_empty() {
+        report.violation(
+            "anchor",
+            format!(
+                "{name}: approvals[{n}] の {} が {}（init の雛形の印・空と同じ）",
+                marked.join(" / "),
+                adr::UNFILLED
+            ),
+        );
+        return false;
+    }
+    let date = py_str(ap.get("date"));
+    if !adr::is_date(&date) {
+        report.violation(
+            "anchor",
+            format!("{name}: approvals[{n}].date「{date}」が年-月-日でない"),
+        );
+        return false;
+    }
+    if is_none(ap.get("adr")) {
+        return false;
+    }
+    true
 }
 
 #[cfg(test)]

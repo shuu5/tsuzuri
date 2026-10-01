@@ -1,6 +1,7 @@
 //! 参照 id の解決（rules 行 R-4・NFR3 / AC6）と rules 行の逆参照・憲法の件数（便 1・docs/design/delivery-1.md §1）。
 //! day-1 の床（scripts/check_draft.py の refs / counts）と同じ式。正規表現は使わず文字の走査で判定する。
 //! 判断の記録の id（ADR-n）は解かない（便 6 の link.rs）。凍結 anchor の列に在った過去の id は解決先に足す（便 7 (j)）。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{HashMap, HashSet};
 
@@ -30,19 +31,22 @@ pub(crate) const RELATION_NAMESPACES: [&str; 4] = ["reqs", "rules", "articles", 
 /// 要件書の id の頭（数字が直に続く）。
 pub(crate) const SRS_ID_PREFIXES: [&str; 5] = ["FR", "NFR", "AC", "CON", "GOAL"];
 
+/// 正本 4 file（憲法・rules・語彙・要件書）の読んだ木（参照 id の解決・判断の記録との突き合わせ・設計ノートの母集団が受ける 4 本）。
+#[derive(Clone, Copy)]
+pub(crate) struct Canon<'a> {
+    /// 憲法。
+    pub(crate) constitution: &'a Node,
+    /// rules。
+    pub(crate) rules: &'a Node,
+    /// 語彙。
+    pub(crate) vocabulary: &'a Node,
+    /// 要件書。
+    pub(crate) srs: &'a Node,
+}
+
 /// (a)(b)(c) を掛ける。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
-pub fn check_refs(
-    constitution: &Node,
-    rules: &Node,
-    vocabulary: &Node,
-    srs: &Node,
-    history: &HashSet<String>,
-    report: &mut Report,
-) {
+pub fn check_refs(canon: Canon<'_>, history: &HashSet<String>, report: &mut Report) {
+    let Canon { constitution, rules, vocabulary, srs } = canon;
     let articles = seq_of_maps("constitution.yaml", constitution, "articles", report);
     let rule_rows: Vec<&Node> = RULE_SECTIONS
         .iter()
@@ -366,6 +370,16 @@ fn reverse(articles: &[&Node], rule_rows: &[&Node], report: &mut Report) {
         referenced.extend(rules_here.iter().cloned());
         article_rules.entry(aid).or_default().extend(rules_here);
     }
+    reverse_rules(rule_rows, &referenced, &article_rules, report);
+}
+
+/// rules 行の側から見た逆参照: どの条からも参照されない行と、行の article の relations.rules に無い行。
+fn reverse_rules(
+    rule_rows: &[&Node],
+    referenced: &HashSet<String>,
+    article_rules: &HashMap<String, HashSet<String>>,
+    report: &mut Report,
+) {
     for row in rule_rows {
         let Some(rid) = id_of(row) else { continue };
         if !referenced.contains(rid) {

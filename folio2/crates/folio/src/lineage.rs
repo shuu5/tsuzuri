@@ -2,6 +2,7 @@
 //! day-1 の床 `scripts/check_draft.py` の diff_targets / structural_diff / verify_pair を同じ式で写す:
 //! 隣り合う anchor の content を欄単位で比べ、その版を名指す発効した判断の amends と 1 対 1 に消し込む。
 //! 値は型付きの木（`yaml::Value`）で読み、欄の値の表現は便 7 の正規化（`yaml::canonical`）の字面。正規表現は使わない。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -478,22 +479,36 @@ fn structural_diff(
     Ok((changed, lost))
 }
 
+/// 列の区間の名札（前の anchor の版・今の写しの名・消し込む版）。
+struct Span<'a> {
+    pv: &'a str,
+    label: &'a str,
+    ver: &'a str,
+}
+
+/// 列の区間 1 つの比べる 2 つの版（前の anchor の文書・今の写しの content と scope・消し込む版）。
+pub(crate) struct Pair<'a> {
+    pub(crate) prev_doc: &'a Value,
+    pub(crate) cur_content: &'a Value,
+    pub(crate) cur_scope: &'a [String],
+    pub(crate) ver: &'a str,
+}
+
 /// 列の区間 1 つ（前の anchor → 版 `ver` の写し）の差分を、その版を名指す発効した判断の amends と 1:1 に消し込む。
 /// 余りも不足も落とす。`c` は現行の憲法（amended_by を引く）。比べられたら差分を返す（便 9 の凍結が使う）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数は規則の行 R-4 の 5 以下を越え、too_many_arguments を workspace の lint の表に足す後の行が直す"
-)]
 pub(crate) fn verify_pair(
-    prev_doc: &Value,
-    cur_content: &Value,
-    cur_scope: &[String],
-    ver: &str,
+    pair: &Pair<'_>,
     label: &str,
     c: &Value,
     adr: &Adr,
     report: &mut Report,
 ) -> Option<Changed> {
+    let Pair {
+        prev_doc,
+        cur_content,
+        cur_scope,
+        ver,
+    } = *pair;
     let pv = prev_doc
         .get("version")
         .map_or_else(|| "None".to_string(), Value::py_str);
@@ -526,6 +541,25 @@ pub(crate) fn verify_pair(
             recorded.insert(key, (aid.as_str(), e));
         }
     }
+    let span = Span {
+        pv: &pv,
+        label,
+        ver,
+    };
+    settle(&changed, &lost, recorded, &span, report);
+    check_amended_by(&changed, c, &ver_adrs, &span, report);
+    Some(changed)
+}
+
+/// 区間の差分と、版 `ver` を名指す amends の 1:1 の消し込み（記録の無い差分も差分の無い記録も落とす）。
+fn settle(
+    changed: &Changed,
+    lost: &BTreeSet<String>,
+    mut recorded: BTreeMap<(String, String), (&str, &Node)>,
+    span: &Span<'_>,
+    report: &mut Report,
+) {
+    let Span { pv, label, ver } = *span;
     for (t, ch) in changed.iter().filter(|(t, _)| !lost.contains(*t)) {
         for (k, (p, cv)) in ch {
             match recorded.remove(&(t.clone(), k.clone())) {
@@ -567,6 +601,17 @@ pub(crate) fn verify_pair(
             );
         }
     }
+}
+
+/// 変わった条が、その版の判断の記録を指す amended_by を持つか。
+fn check_amended_by(
+    changed: &Changed,
+    c: &Value,
+    ver_adrs: &[&(String, Node)],
+    span: &Span<'_>,
+    report: &mut Report,
+) {
+    let Span { pv, label, ver } = *span;
     let mut art_by_id: BTreeMap<String, &Value> = BTreeMap::new();
     for a in anchor::value_rows(Some(c), "articles") {
         art_by_id.insert(py_id(a), a);
@@ -596,7 +641,6 @@ pub(crate) fn verify_pair(
             );
         }
     }
-    Some(changed)
 }
 
 fn fail_report(e: Fail, pv: &str, label: &str, report: &mut Report) {
@@ -667,10 +711,12 @@ mod tests {
         let mut report = Report::default();
         let cur = typed(cur);
         verify_pair(
-            &typed(PREV),
-            &cur,
-            &scope(),
-            "v1.1",
+            &Pair {
+                prev_doc: &typed(PREV),
+                cur_content: &cur,
+                cur_scope: &scope(),
+                ver: "v1.1",
+            },
             "anchor v1.1",
             &typed(constitution),
             &adr_with(amends),

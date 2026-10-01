@@ -9,6 +9,7 @@
 //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
 //! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
 //! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use std::fs;
@@ -760,6 +761,22 @@ struct Scan {
     lines: BTreeMap<String, usize>,
 }
 
+/// 節点 1 つの切り出しの指定。
+struct Cut<'a> {
+    /// 辺の欄の字下げ
+    depth: usize,
+    /// 辺の欄の一覧
+    fields: &'a [&'a str],
+    /// 節点の id
+    id: &'a str,
+}
+
+impl<'a> Cut<'a> {
+    fn new(depth: usize, fields: &'a [&'a str], id: &'a str) -> Self {
+        Cut { depth, fields, id }
+    }
+}
+
 impl Scan {
     /// 正本 1 file を切り分けて節点を足す。返りは残差（本文にも辺の欄にも属さない行を file の順に連結した字）。
     fn file(&mut self, name: &str, text: &str) -> Result<String, String> {
@@ -773,7 +790,7 @@ impl Scan {
                 .filter(|(_, id)| !id.is_empty())
                 .ok_or_else(|| format!("{name} に id の行が無い"))?;
             let all: Vec<usize> = (0..lines.len()).collect();
-            self.cut(&lines, &mut owned, all, 0, EDGE_FIELDS[3].1, id)?;
+            self.cut(&lines, &mut owned, all, Cut::new(0, EDGE_FIELDS[3].1, id))?;
             self.lines.insert(id.to_string(), at + 1);
         } else if name.starts_with(NOTE_DIR) {
             self.note(&lines, &mut owned)?;
@@ -797,7 +814,12 @@ impl Scan {
                     match sub.filter(|_| name == "constitution.yaml") {
                         Some((sub, sub_flow)) => {
                             let sub_end = block_end(&lines, k, 6, sub_flow);
-                            self.cut(&lines, &mut owned, (k..sub_end).collect(), 8, fields, sub)?;
+                            self.cut(
+                                &lines,
+                                &mut owned,
+                                (k..sub_end).collect(),
+                                Cut::new(8, fields, sub),
+                            )?;
                             self.lines.insert(sub.to_string(), k + 1);
                             k = sub_end;
                         }
@@ -807,7 +829,7 @@ impl Scan {
                         }
                     }
                 }
-                self.cut(&lines, &mut owned, kept, 4, fields, id)?;
+                self.cut(&lines, &mut owned, kept, Cut::new(4, fields, id))?;
                 self.lines.insert(id.to_string(), i + 1);
                 i = end;
             }
@@ -856,7 +878,12 @@ impl Scan {
                     };
                     if let Some((rid, at)) = found {
                         let id = format!("{meta}#{rid}");
-                        self.cut(lines, owned, (k..row_end).collect(), 8, EDGE_FIELDS[4].1, &id)?;
+                        self.cut(
+                            lines,
+                            owned,
+                            (k..row_end).collect(),
+                            Cut::new(8, EDGE_FIELDS[4].1, &id),
+                        )?;
                         self.lines.insert(id, at + 1);
                     }
                     k = row_end;
@@ -869,13 +896,14 @@ impl Scan {
 
     /// 節点 1 つ: 行の番号の列 `idx`（入れ子を除いた block）から辺の欄（字下げ `depth` の行・より深い続きの行・
     /// 流れの形の対）と末尾の空行を落とし、残りを連結した byte の sha256 の先頭 8 字を要約値にする。
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-    )]
     fn cut(
-        &mut self, lines: &[&str], owned: &mut [bool], mut idx: Vec<usize>, depth: usize, fields: &[&str], id: &str,
+        &mut self,
+        lines: &[&str],
+        owned: &mut [bool],
+        mut idx: Vec<usize>,
+        spec: Cut<'_>,
     ) -> Result<(), String> {
+        let Cut { depth, fields, id } = spec;
         while idx.pop_if(|n| lines.get(*n).is_some_and(|l| is_blank(l))).is_some() {}
         let whole: Vec<&str> = fields.iter().copied().filter(|f| !f.contains('.')).collect();
         let mut body: Vec<(usize, String)> = Vec::new();

@@ -12,6 +12,7 @@
 //! `<out>/<観点>/refute/<所見の id>/` へ組む（所見 file は触らない・正本は写さず親の要約値 sources.txt で縛る・全部か無しか）。
 //! `--check` は同じ dir の result.yaml（反証役が書く）を欄の決まりで読み、その refute の値を所見の反証の結果として規則 7〜10 に渡す。
 //! 天井の印（便 72・`stamp.rs`）は観点の数え `count_viewpoint`・所見 file の読み `read_findings`・束の歩き `walk` を crate の中から呼ぶ。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -195,7 +196,6 @@ pub(crate) fn count_viewpoint(
     }
     let digest = fs::read(vp_dir.join(DIGEST_FILE)).unwrap_or_default();
     let digest = String::from_utf8_lossy(&digest).into_owned();
-    let digest8 = digest_head(&digest);
 
     // 2. 束が壊れている（置き場の file から測り直す）
     match measure(&vp_dir) {
@@ -215,18 +215,30 @@ pub(crate) fn count_viewpoint(
             Err(e) => reasons.push(e),
         }
     }
+    count_found(&vp_dir, ceiling, vp, &digest, reasons)
+}
+
+/// 観点の所見 file を数える（4.〜6.）。数えられなければここまでの理由で まだ分からない を返し、読めれば 7. 以降へ進む。
+fn count_found(
+    vp_dir: &Path,
+    ceiling: &Ceiling,
+    vp: &Viewpoint,
+    digest: &str,
+    mut reasons: Vec<String>,
+) -> Counted {
+    let digest8 = digest_head(digest);
 
     // 4.〜6. 所見 file（止める の所見は反証役の result.yaml も読む・便 42）
-    let (sheet, findings, stops) = match read_findings(&vp_dir) {
+    let (sheet, findings, stops) = match read_findings(vp_dir) {
         Ok(Some(root)) => {
-            let mut sheet = count_sheet(
-                &vp_dir,
-                &root,
-                &ceiling.rules,
+            let cx = Ctx {
+                vp_dir,
+                rules: &ceiling.rules,
                 vp,
-                digest.trim_end_matches('\n'),
-                true,
-            );
+                digest: digest.trim_end_matches('\n'),
+                results: true,
+            };
+            let mut sheet = count_sheet(&root, &cx);
             reasons.append(&mut sheet.reasons);
             // 残る 止める の数 = 反証が未 + 反証が 退けた でないもの
             let stops = sheet.unrefuted.len() + sheet.remaining_stops.len();
@@ -259,6 +271,31 @@ pub(crate) fn count_viewpoint(
             };
         }
     };
+    count_verdict(
+        sheet,
+        Counted {
+            verdict: Verdict::Unknown,
+            reasons,
+            findings,
+            stops,
+            digest: digest8,
+            refutes,
+            waiting: false,
+        },
+    )
+}
+
+/// 止める の反証（7.）と file の verdict・残る所見（8.〜10.）から観点の 3 値を決める。`base` = ここまでの数え（理由・所見の数・
+/// 残る 止める の数・要約値の先頭 8 字・反証の行）。
+fn count_verdict(sheet: Sheet, base: Counted) -> Counted {
+    let Counted {
+        mut reasons,
+        findings,
+        stops,
+        digest: digest8,
+        refutes,
+        ..
+    } = base;
 
     // 7. 止める の反証（理由がこれだけで所見 file の verdict が まだ分からない でなければ反証待ち・便 169）
     for id in &sheet.unrefuted {
@@ -415,20 +452,29 @@ struct Sheet {
     refutes: Vec<Refute>,
 }
 
+/// 所見 file を数える文脈。
+struct Ctx<'a> {
+    /// 観点の束の dir
+    vp_dir: &'a Path,
+    /// 欄の決まり
+    rules: &'a Rules,
+    /// 数える観点
+    vp: &'a Viewpoint,
+    /// 束の要約値（digest.txt の字・末尾の改行を除く）
+    digest: &'a str,
+    /// 止める の所見ごとに反証役の result.yaml も読むか
+    results: bool,
+}
+
 /// `results` = 止める の所見ごとに反証役の result.yaml も読む（`--check`・便 42 §1 (d)）。`--refute` は所見 file の欄の
 /// 決まりだけを数える（result.yaml は在るかどうかだけ見る）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
-fn count_sheet(
-    vp_dir: &Path,
-    root: &Node,
-    rules: &Rules,
-    vp: &Viewpoint,
-    digest: &str,
-    results: bool,
-) -> Sheet {
+fn count_sheet(root: &Node, cx: &Ctx<'_>) -> Sheet {
+    let Ctx {
+        vp_dir,
+        rules,
+        digest,
+        ..
+    } = *cx;
     let mut sheet = Sheet {
         reasons: Vec::new(),
         verdict: String::new(),
@@ -477,15 +523,7 @@ fn count_sheet(
 
     // findings = 所見の一覧
     if let Some(findings) = root.get("findings") {
-        count_findings(
-            vp_dir,
-            findings,
-            rules,
-            vp,
-            reads.as_ref(),
-            results,
-            &mut sheet,
-        );
+        count_findings(findings, cx, reads.as_ref(), &mut sheet);
     }
     sheet
 }
@@ -572,19 +610,13 @@ fn count_read(node: &Node, reads: Option<&BTreeSet<String>>, reasons: &mut Vec<S
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
 fn count_findings(
-    vp_dir: &Path,
     findings: &Node,
-    rules: &Rules,
-    vp: &Viewpoint,
+    cx: &Ctx<'_>,
     reads: Option<&BTreeSet<String>>,
-    results: bool,
     sheet: &mut Sheet,
 ) {
+    let rules = cx.rules;
     let Some(items) = findings.as_seq() else {
         sheet.reasons.push("findings が一覧でない".to_string());
         return;
@@ -618,13 +650,40 @@ fn count_findings(
                 sheet.reasons.push(format!("{at}: 未知の欄「{key}」"));
             }
         }
+        let row = Row { item, id, at };
+        row.count_required(cx, reads, &mut sources, sheet);
+        row.count_refute(cx, sheet);
+    }
+}
+
+/// 所見 1 件（行の node・id・名札 `所見 <id>`）。
+struct Row<'a> {
+    item: &'a Node,
+    id: String,
+    at: String,
+}
+
+impl Row<'_> {
+    /// 所見の必須の欄を 1 つずつ数える（place・文で在るか・空でないか・viewpoint・weight・evidence）。`sources` は根拠の探し先を
+    /// 最初に要るときだけ読んで持ち越す。
+    fn count_required(
+        &self,
+        cx: &Ctx<'_>,
+        reads: Option<&BTreeSet<String>>,
+        sources: &mut Option<Vec<Vec<u8>>>,
+        sheet: &mut Sheet,
+    ) {
+        let Ctx {
+            vp_dir, rules, vp, ..
+        } = *cx;
+        let Row { item, at, .. } = self;
         for key in &rules.finding_required {
             let Some(node) = item.get(key) else {
                 sheet.reasons.push(format!("{at}: {key} が無い"));
                 continue;
             };
             if key == "place" {
-                count_place(&at, node, rules, reads, &mut sheet.reasons);
+                count_place(at, node, rules, reads, &mut sheet.reasons);
                 continue;
             }
             let Some(value) = node.as_str() else {
@@ -655,6 +714,17 @@ fn count_findings(
                 _ => {}
             }
         }
+    }
+
+    /// 所見の refute の欄と反証役の result.yaml（`results` のとき）を読み、止める の所見を反証の有無で振り分ける。
+    fn count_refute(&self, cx: &Ctx<'_>, sheet: &mut Sheet) {
+        let Ctx {
+            vp_dir,
+            rules,
+            results,
+            ..
+        } = *cx;
+        let Row { item, id, at } = self;
         // refute は在れば値域のどれか・止める の所見は反証を通す
         let refute = item.get("refute").map(|node| match node.as_str() {
             Some(v) if rules.refute_values.iter().any(|w| w == v) => Some(v.to_string()),
@@ -675,7 +745,7 @@ fn count_findings(
             // 反証役の result.yaml（便 42 §1 (d)）: 正しく読めればその値を所見の反証の結果にする。所見 file の refute の欄と
             // 両方在れば同じ値だけ可
             let result = if results && id != "?" {
-                read_result(vp_dir, &id, rules, &mut sheet.reasons)
+                read_result(vp_dir, id, rules, &mut sheet.reasons)
             } else {
                 None
             };
@@ -1004,14 +1074,14 @@ fn plan_refutes(
     }
     let parent_digest = fs::read_to_string(vp_dir.join(DIGEST_FILE))
         .map_err(|e| vec![format!("{DIGEST_FILE}: 読めない: {e}")])?;
-    let sheet = count_sheet(
+    let cx = Ctx {
         vp_dir,
-        &root,
-        &ceiling.rules,
+        rules: &ceiling.rules,
         vp,
-        parent_digest.trim_end_matches('\n'),
-        false,
-    );
+        digest: parent_digest.trim_end_matches('\n'),
+        results: false,
+    };
+    let sheet = count_sheet(&root, &cx);
     if !sheet.reasons.is_empty() {
         return Err(sheet
             .reasons
@@ -1022,6 +1092,11 @@ fn plan_refutes(
     let reads = fs::read(vp_dir.join("reads.yaml"))
         .map_err(|e| vec![format!("reads.yaml: 読めない: {e}")])?;
     let question = ceiling_src::question_text(vp);
+    let parent = Parent {
+        question: &question,
+        reads: &reads,
+        parent_digest: &parent_digest,
+    };
     let mut planned = Vec::new();
     for item in root.get("findings").and_then(Node::as_seq).unwrap_or(&[]) {
         let Some(target) = Target::from(item, &ceiling.rules) else {
@@ -1037,33 +1112,27 @@ fn plan_refutes(
         if dir.join(RESULT_FILE).exists() || dir.join(RESULT_FILE).is_symlink() {
             continue;
         }
-        let files = refute_files(
-            &target,
-            vp,
-            &question,
-            &reads,
-            &parent_digest,
-            &ceiling.rules,
-        );
+        let files = refute_files(&target, vp, &parent, &ceiling.rules);
         planned.push((dir, files));
     }
     Ok(planned)
 }
 
+/// 親の観点の束の字。
+struct Parent<'a> {
+    question: &'a str,
+    reads: &'a [u8],
+    parent_digest: &'a str,
+}
+
 /// 反証の束の 5 つ + digest.txt（§1 (c)）。`question` = 観点の束の question.yaml（6 行）・`reads` = 観点の束の
 /// reads.yaml の byte・`parent_digest` = 観点の束の digest.txt の byte（sources.txt）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
-fn refute_files(
-    t: &Target,
-    vp: &Viewpoint,
-    question: &str,
-    reads: &[u8],
-    parent_digest: &str,
-    rules: &Rules,
-) -> Files {
+fn refute_files(t: &Target, vp: &Viewpoint, parent: &Parent<'_>, rules: &Rules) -> Files {
+    let Parent {
+        question,
+        reads,
+        parent_digest,
+    } = *parent;
     let mut files = Files::new();
     let mut finding = format!(
         "id: {}\nviewpoint: {}\nplace: {{doc: {}, at: {}}}\nweight: {}\nevidence: |\n{}",

@@ -6,12 +6,14 @@
 //! 旗・列の結果・旗の後始末の型 3 つと凍結しないときの 1 行は便 111 で `phase.rs` へ降ろした（ADR-15・層 1 読む）。
 //! 便 121（ADR-16 決定 (2)）: 列の根は憲法の名で列の根の表を引いて照らす（`check_root`）。凍結の木は組む（`build`・`texts`）と
 //! 書く（`write_chain`）に分け、始まりの凍結 `--freeze-start` が `ids.rs` の組む・書くと合わせて 2 つを同時に書く。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::adr::{self, Adr};
 use crate::anchor;
+use crate::check::Materials;
 use crate::ids;
 use crate::lineage;
 use crate::phase::{After, Flag, State, not_frozen_by};
@@ -44,19 +46,11 @@ fn ver_key(v: &str) -> Vec<(usize, String)> {
 
 /// 旗の後始末。便 8 までの全検査の後に呼ぶ（`state` は列の結果・読めずに止まったなら None・`ids` は便 88 の id の一覧・
 /// `seals` は便 170 の判断の記録の封）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
-pub fn after(
-    dir: &Path,
-    flag: Flag,
-    state: Option<&State>,
-    adr: Option<&Adr>,
-    ids: Option<&ids::Current>,
-    seals: Option<&seal::Seals>,
-    report: &mut Report,
-) -> After {
+pub fn after(dir: &Path, flag: Flag, materials: &Materials, report: &mut Report) -> After {
+    let state = materials.state.as_ref();
+    let adr = materials.adr.as_ref();
+    let ids = materials.ids.as_ref();
+    let seals = materials.seals.as_ref();
     match (flag, state, adr) {
         (Flag::None | Flag::EmitRulings, ..) => After::Nothing,
         (Flag::EmitAmends, Some(st), _) => After::Emit(emit_lines(st, report)),
@@ -331,10 +325,12 @@ fn freeze(dir: &Path, st: &State, adr: &Adr, report: &mut Report) -> After {
     ver_adrs.sort_unstable();
     if let Some((newest, doc)) = newest_doc {
         let changed = lineage::verify_pair(
-            doc,
-            &st.cur_proj,
-            &st.scope,
-            cur_ver,
+            &lineage::Pair {
+                prev_doc: doc,
+                cur_content: &st.cur_proj,
+                cur_scope: &st.scope,
+                ver: cur_ver,
+            },
             "現行",
             &st.c,
             adr,
@@ -358,6 +354,17 @@ fn freeze(dir: &Path, st: &State, adr: &Adr, report: &mut Report) -> After {
             );
         }
     }
+    freeze_write(dir, st, ver_adrs, newest_doc, report)
+}
+
+/// (c) 凍結の後半。凍結する木を組み、0 違反で測れないも無いときだけ anchor と索引を書く。
+fn freeze_write(
+    dir: &Path,
+    st: &State,
+    ver_adrs: Vec<&str>,
+    newest_doc: Option<(&String, &Value)>,
+    report: &mut Report,
+) -> After {
     // (4) 凍結する木
     let Some(built) = build(dir, st, &ver_adrs, newest_doc, report) else {
         return After::Freeze(not_frozen(report));
@@ -398,6 +405,9 @@ fn freeze(dir: &Path, st: &State, adr: &Adr, report: &mut Report) -> After {
     ))
 }
 
+/// 始まりの凍結の旗の字（`freeze_start` とその後半 `freeze_start_write` が断りの字に使う）。
+const FLAG: &str = "--freeze-start";
+
 /// 始まりの凍結 `--freeze-start`（便 121・ADR-16 決定 (2)(イ)・FR24）。憲法の列と id の一覧がどちらも 0 本の置き場で、
 /// 最初の版の anchor と索引と id の一覧を既存の 2 つの旗と同じ関数で組み、断りを全部見てから同時に書く。
 /// どちらか 1 本でも在れば何も書かずに断る（終了 1）。数えから外すのは 2 つの不在の「まだ分からない」だけ
@@ -408,7 +418,6 @@ fn freeze_start(
     ids: Option<&ids::Current>,
     report: &mut Report,
 ) -> After {
-    const FLAG: &str = "--freeze-start";
     let chain = state.is_some_and(|st| st.chain_exists);
     let listed = ids.is_some_and(|cur| cur.exists);
     if chain || listed {
@@ -436,6 +445,17 @@ fn freeze_start(
     if report.verdict() != Verdict::Pass {
         return After::Freeze(not_frozen_by(report, FLAG));
     }
+    freeze_start_write(st, cur, built, (ids_name, ids_path), report)
+}
+
+/// 始まりの凍結の後半。3 つの path がどれも無いことを確かめ、anchor と索引と id の一覧を同時に書く。
+fn freeze_start_write(
+    st: &State,
+    cur: &ids::Current,
+    built: Built,
+    (ids_name, ids_path): (String, PathBuf),
+    report: &mut Report,
+) -> After {
     // 書く前に 3 つの path がどれも無いことを確かめる（上書きしない・N-1.1）
     let index_file = floor(&["anchor", "index_file"]);
     let (name, path) = target(st);

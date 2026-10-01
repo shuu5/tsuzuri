@@ -13,6 +13,7 @@
 //! 承認欄の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数え、`check_note` は読めた設計ノートを返す。
 //! 計画の設計ノートの節の型 3 つ（行の索引・計画だけの行・判断の表）の行の形は便 183 からここが数え、置き場の決まりと計画の床は
 //! `plan.rs` の `check_plan` が数える（判断の記録 ADR-31 決定 (2)・要件書 FR27）。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::HashSet;
 use std::fs;
@@ -36,7 +37,7 @@ use crate::gitcheck;
 use crate::link;
 use crate::plan;
 use crate::prose;
-use crate::refs;
+use crate::refs::{self, Canon};
 use crate::rules;
 use crate::verdict::Report;
 use crate::yaml::{self, Node};
@@ -68,18 +69,13 @@ pub(crate) struct Field {
 
 /// (a) `<dir>/design-note/` の欄の決まりの写しと設計ノートを検査し、読めた設計ノートを返す（決定の欄の床が承認欄を読む・便 181）。
 /// dir が無い = 設計ノート 0 本（違反でも「まだ分からない」でもない）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
 pub fn check_note(
     dir: &Path,
-    constitution: &Node,
-    rules: &Node,
-    srs: &Node,
+    canon: Canon<'_>,
     adr: Option<&Adr>,
     report: &mut Report,
 ) -> Vec<NoteDoc> {
+    let Canon { constitution, rules, srs, .. } = canon;
     let nd = dir.join(DIR);
     if !nd.exists() {
         // 名札の行が在れば計画のノートが無い＝まだ分からない（設計ノートの置き場が無くても黙らない・便 183）
@@ -120,16 +116,15 @@ pub fn check_note(
         requirements: requirement_ids(srs, SUCCESSOR_SECTIONS),
         adrs: adr.map(link::adr_ids),
     };
+    let ctx = Ctx {
+        targets: &targets,
+        base: &known,
+        requirements: &requirements,
+        external: external.as_deref(),
+        gate: gate.as_ref(),
+    };
     for note in &notes {
-        check_one(
-            note,
-            &targets,
-            &known,
-            &requirements,
-            external.as_deref(),
-            gate.as_ref(),
-            report,
-        );
+        check_one(note, ctx, report);
         let len = |k| note.root.get(k).and_then(Node::as_seq).map_or(0, <[Node]>::len);
         let file = format!("{DIR}/{}", note.file);
         let count = chapters(len("sections"), len("figures"));
@@ -399,8 +394,13 @@ pub(crate) fn load_external(dir: &Path, report: &mut Report) -> Option<Vec<Field
     if rows.is_empty() {
         return unreadable(format!("{head} の行が無い"));
     }
+    external_fields(&rows, &head).map_or_else(unreadable, Some)
+}
+
+/// 器の導出 file の行（名と値の対の列）を欄にする。欄の欠け・知らない need と shape は理由の字を Err で返す。
+fn external_fields(rows: &[Vec<(String, String)>], head: &str) -> Result<Vec<Field>, String> {
     let mut fields = Vec::with_capacity(rows.len());
-    for row in &rows {
+    for row in rows {
         let value = |key: &str| {
             row.iter()
                 .find(|(k, _)| k == key)
@@ -409,20 +409,20 @@ pub(crate) fn load_external(dir: &Path, report: &mut Report) -> Option<Vec<Field
         };
         let (Some(name), Some(need), Some(shape)) = (value("name"), value("need"), value("shape"))
         else {
-            return unreadable(format!(
+            return Err(format!(
                 "{head} の行に {} が揃わない",
                 EXTERNAL_ROW_FIELDS.join("・")
             ));
         };
         if !EXTERNAL_NEED.contains(&need.as_str()) {
-            return unreadable(format!("欄「{name}」の need「{need}」を知らない"));
+            return Err(format!("欄「{name}」の need「{need}」を知らない"));
         }
         if !EXTERNAL_SHAPE.contains(&shape.as_str()) {
-            return unreadable(format!("欄「{name}」の shape「{shape}」を知らない"));
+            return Err(format!("欄「{name}」の shape「{shape}」を知らない"));
         }
         fields.push(Field { name, need, shape });
     }
-    Some(fields)
+    Ok(fields)
 }
 
 /// `名 = "値"` の行（引用符で囲んだ値だけ・正規表現は使わない）。
@@ -507,21 +507,45 @@ struct Targets<'a> {
     adrs: Option<HashSet<&'a str>>,
 }
 
+/// 置き場の設計ノート全部の検査が共有して読む母集団（前と後継の先・参照 id・要件書の id・器の導出 file・散文の門）。
+#[derive(Clone, Copy)]
+struct Ctx<'a> {
+    /// 前と後継の先の母集団。
+    targets: &'a Targets<'a>,
+    /// 参照 id の母集団（文書ごとの契約表の行 id を足す前）。
+    base: &'a HashSet<String>,
+    /// 要件書の要件と非機能要件の id。
+    requirements: &'a HashSet<String>,
+    /// 器の導出 file の欄（読めなかった・契約表が無いときは None）。
+    external: Option<&'a [Field]>,
+    /// 散文の門の一覧（rules 行 R-16 が読めなかったときは None）。
+    gate: Option<&'a prose::Gate>,
+}
+
+/// 設計ノート 1 本の中で節の検査が読む範囲（file 名・契約表の行 id を足した参照 id の母集団・prose の節の番号）。
+#[derive(Clone, Copy)]
+struct Scope<'a> {
+    /// 置き場からの相対の file 名（違反の字の頭）。
+    file: &'a str,
+    /// 参照 id の母集団（この文書の契約表の行 id を足した後）。
+    known: &'a HashSet<String>,
+    /// prose の節の番号（契約表の行の section の解決先）。
+    prose_ns: &'a HashSet<&'a str>,
+}
+
+/// 違反の字の頭になる場所（file 名と、file の中の位置）。
+#[derive(Clone, Copy)]
+struct Place<'a> {
+    /// 置き場からの相対の file 名。
+    file: &'a str,
+    /// file の中の位置（節・行・欄）。
+    at: &'a str,
+}
+
 // ── (c) 設計ノート 1 本 ──
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
-fn check_one(
-    note: &NoteDoc,
-    targets: &Targets<'_>,
-    base: &HashSet<String>,
-    requirements: &HashSet<String>,
-    external: Option<&[Field]>,
-    gate: Option<&prose::Gate>,
-    report: &mut Report,
-) {
+fn check_one(note: &NoteDoc, ctx: Ctx<'_>, report: &mut Report) {
+    let Ctx { targets, base, .. } = ctx;
     let file = format!("{DIR}/{}", note.file);
     let root = &note.root;
 
@@ -564,14 +588,10 @@ fn check_one(
     let mut previous: Option<u64> = None;
     for section in &sections {
         check_section(
-            &file,
+            Scope { file: &file, known: &known, prose_ns: &prose_ns },
+            ctx,
             section,
             &mut previous,
-            &known,
-            requirements,
-            &prose_ns,
-            external,
-            gate,
             report,
         );
     }
@@ -631,6 +651,18 @@ fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Re
         report.violation(KIND, format!("{file}: meta.status「{v}」が一覧に無い"));
     }
 
+    check_approval(file, meta, status, report);
+    check_successors(file, note, meta, targets, report);
+    if status == Some(STATUS_RETIRED) && field(meta, "superseded_by").is_none() {
+        report.violation(
+            KIND,
+            format!("{file}: meta: {STATUS_RETIRED} なのに superseded_by（後継）が無い（P-7.2）"),
+        );
+    }
+}
+
+/// meta の承認欄（発効の状態なら要る・見本なら持たない・各行の欄の非空と値域と形）。
+fn check_approval(file: &str, meta: &Node, status: Option<&str>, report: &mut Report) {
     let approval = row_list(file, "meta の approval", meta, "approval", report);
     let effective = status.is_some_and(|v| EFFECTIVE_STATUS.contains(&v));
     if effective && approval.is_empty() {
@@ -682,7 +714,16 @@ fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Re
             );
         }
     }
+}
 
+/// meta の supersedes と superseded_by（先の実在と自分自身を指す字）。
+fn check_successors(
+    file: &str,
+    note: &NoteDoc,
+    meta: &Node,
+    targets: &Targets<'_>,
+    report: &mut Report,
+) {
     // 別のノートの不在はつながり・自分自身を指す字は 1 つの file の形で止める（便 199）。後継は要件と判断の記録も指せ、
     // 先の実在だけを数える（先の状態は数えない・便 209・ADR-35 決定 (3)）
     for key in ["supersedes", "superseded_by"] {
@@ -706,30 +747,17 @@ fn check_meta(file: &str, note: &NoteDoc, targets: &Targets<'_>, report: &mut Re
             }
         }
     }
-    if status == Some(STATUS_RETIRED) && field(meta, "superseded_by").is_none() {
-        report.violation(
-            KIND,
-            format!("{file}: meta: {STATUS_RETIRED} なのに superseded_by（後継）が無い（P-7.2）"),
-        );
-    }
 }
 
 /// 節 1 つ（番号・型・型ごとの行）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数は規則の行 R-4 の 5 以下を越え、too_many_arguments を workspace の lint の表に足す後の行が直す"
-)]
 fn check_section(
-    file: &str,
+    scope: Scope<'_>,
+    ctx: Ctx<'_>,
     section: &Node,
     previous: &mut Option<u64>,
-    known: &HashSet<String>,
-    requirements: &HashSet<String>,
-    prose_ns: &HashSet<&str>,
-    external: Option<&[Field]>,
-    gate: Option<&prose::Gate>,
     report: &mut Report,
 ) {
+    let Scope { file, .. } = scope;
     let shown = section.get("n").and_then(Node::as_str).unwrap_or("?");
     let at = format!("§{shown}");
     non_empty(file, &at, section, SECTION.required, report);
@@ -762,6 +790,21 @@ fn check_section(
         report.violation(KIND, format!("{file}: {at}: 節の型「{ty}」が一覧に無い"));
         return;
     }
+    check_section_body(scope, ctx, section, ty, report);
+}
+
+/// 節 1 つの型ごとの欄の有無・散文の門・行の検査（節の型が一覧に在るときだけ）。
+fn check_section_body(
+    scope: Scope<'_>,
+    ctx: Ctx<'_>,
+    section: &Node,
+    ty: &str,
+    report: &mut Report,
+) {
+    let Scope { file, known, prose_ns } = scope;
+    let Ctx { gate, .. } = ctx;
+    let shown = section.get("n").and_then(Node::as_str).unwrap_or("?");
+    let at = format!("§{shown}");
     for key in if ty == PROSE { NEEDS_BODY } else { NEEDS_ROWS } {
         if section.get(key).is_none() {
             report.violation(
@@ -801,9 +844,9 @@ fn check_section(
 
     let rows = row_list(file, &format!("{at} の rows"), section, "rows", report);
     if ty == CONTRACT_TABLE {
-        check_contract_rows(file, &at, &rows, requirements, prose_ns, external, report);
+        check_contract_rows(Place { file, at: &at }, &rows, ctx, prose_ns, report);
     } else {
-        check_table_rows(file, &at, ty, &rows, known, report);
+        check_table_rows(Place { file, at: &at }, ty, &rows, known, report);
     }
     // 行の索引は文書をまたいで id が重なりうる・計画だけの行の一意は計画の床が数える（便 183）
     if ty != ROW_INDEX && ty != ROW_PLAN {
@@ -812,18 +855,14 @@ fn check_section(
 }
 
 /// 部品・口・欄・歯の表の行（行の欄の集合と値域・参照 id）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
 fn check_table_rows(
-    file: &str,
-    at: &str,
+    place: Place<'_>,
     ty: &str,
     rows: &[&Node],
     known: &HashSet<String>,
     report: &mut Report,
 ) {
+    let Place { file, at } = place;
     let keys = match ty {
         "parts-table" => &PARTS_ROW,
         "ports-table" => &PORTS_ROW,
@@ -859,7 +898,7 @@ fn check_table_rows(
         if matches!(ty, ROW_INDEX | ROW_PLAN | DECISION_TABLE) {
             plan_shapes(file, &rat, ty, row, report);
         }
-        resolve_ids(file, &rat, row, "ref", known, report);
+        resolve_ids(Place { file, at: &rat }, row, "ref", known, report);
     }
 }
 
@@ -885,19 +924,15 @@ fn plan_shapes(file: &str, rat: &str, ty: &str, row: &Node, report: &mut Report)
 }
 
 /// 契約表の行（欄は器の導出 file が決める・id と参照は folio2 が持つ）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
 fn check_contract_rows(
-    file: &str,
-    at: &str,
+    place: Place<'_>,
     rows: &[&Node],
-    requirements: &HashSet<String>,
+    ctx: Ctx<'_>,
     prose_ns: &HashSet<&str>,
-    external: Option<&[Field]>,
     report: &mut Report,
 ) {
+    let Place { file, at } = place;
+    let Ctx { requirements, external, .. } = ctx;
     let row_ids: HashSet<String> = rows
         .iter()
         .map(|row| row_id(row))
@@ -907,47 +942,7 @@ fn check_contract_rows(
         let id = row_id(row);
         let rat = format!("{at} の行 {id}");
         if let Some(fields) = external {
-            let required: Vec<&str> = fields
-                .iter()
-                .filter(|f| f.need == "required")
-                .map(|f| f.name.as_str())
-                .collect();
-            non_empty(file, &rat, row, &required, report);
-            for (key, _) in row.as_map().unwrap_or_default() {
-                if !fields.iter().any(|f| &f.name == key) {
-                    report.violation(
-                        KIND,
-                        format!("{file}: {rat}: 契約表の欄「{key}」が器の導出 file に無い"),
-                    );
-                }
-            }
-            for f in fields {
-                let Some(value) = row.get(&f.name) else {
-                    continue;
-                };
-                let ok = match f.shape.as_str() {
-                    "text" => matches!(value, Node::Null | Node::Scalar(_)),
-                    _ => match value {
-                        Node::Null => true,
-                        Node::Seq(items) => items.iter().all(|x| x.as_str().is_some()),
-                        _ => false,
-                    },
-                };
-                if !ok {
-                    report.violation(
-                        KIND,
-                        format!(
-                            "{file}: {rat}: 欄「{}」が {} の形でない",
-                            f.name,
-                            if f.shape == "text" {
-                                "text（文字列）"
-                            } else {
-                                "list（文字列の一覧）"
-                            }
-                        ),
-                    );
-                }
-            }
+            check_external_row(file, &rat, row, fields, report);
         }
         if id != "?" && !is_lower_id(&id) {
             report.violation(
@@ -963,8 +958,53 @@ fn check_contract_rows(
                 format!("{file}: {rat}: section「{v}」が同じ文書の {PROSE} の節の n でない"),
             );
         }
-        resolve_ids(file, &rat, row, "req", requirements, report);
-        resolve_ids(file, &rat, row, "depends", &row_ids, report);
+        resolve_ids(Place { file, at: &rat }, row, "req", requirements, report);
+        resolve_ids(Place { file, at: &rat }, row, "depends", &row_ids, report);
+    }
+}
+
+/// 契約表の行 1 つの欄を器の導出 file に照らす（必須の欄の非空・導出 file に無い欄・欄ごとの text と list の形）。
+fn check_external_row(file: &str, rat: &str, row: &Node, fields: &[Field], report: &mut Report) {
+    let required: Vec<&str> = fields
+        .iter()
+        .filter(|f| f.need == "required")
+        .map(|f| f.name.as_str())
+        .collect();
+    non_empty(file, rat, row, &required, report);
+    for (key, _) in row.as_map().unwrap_or_default() {
+        if !fields.iter().any(|f| &f.name == key) {
+            report.violation(
+                KIND,
+                format!("{file}: {rat}: 契約表の欄「{key}」が器の導出 file に無い"),
+            );
+        }
+    }
+    for f in fields {
+        let Some(value) = row.get(&f.name) else {
+            continue;
+        };
+        let ok = match f.shape.as_str() {
+            "text" => matches!(value, Node::Null | Node::Scalar(_)),
+            _ => match value {
+                Node::Null => true,
+                Node::Seq(items) => items.iter().all(|x| x.as_str().is_some()),
+                _ => false,
+            },
+        };
+        if !ok {
+            report.violation(
+                KIND,
+                format!(
+                    "{file}: {rat}: 欄「{}」が {} の形でない",
+                    f.name,
+                    if f.shape == "text" {
+                        "text（文字列）"
+                    } else {
+                        "list（文字列の一覧）"
+                    }
+                ),
+            );
+        }
     }
 }
 
@@ -988,7 +1028,7 @@ fn check_figures(file: &str, root: &Node, known: &HashSet<String>, report: &mut 
         {
             report.violation(KIND, format!("{file}: {at}: spec が表でない"));
         }
-        resolve_ids(file, &at, entry, "refs", known, report);
+        resolve_ids(Place { file, at: &at }, entry, "refs", known, report);
     }
 }
 
@@ -1032,18 +1072,14 @@ fn field<'a>(node: &'a Node, key: &str) -> Option<&'a str> {
 }
 
 /// 一覧の欄の各要素が既知の id に解けるか。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
 fn resolve_ids(
-    file: &str,
-    at: &str,
+    place: Place<'_>,
     node: &Node,
     key: &str,
     known: &HashSet<String>,
     report: &mut Report,
 ) {
+    let Place { file, at } = place;
     match node.get(key) {
         None | Some(Node::Null) => {}
         Some(Node::Seq(items)) => {

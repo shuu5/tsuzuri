@@ -82,7 +82,9 @@ const COVER: [(&str, &str, &str); 15] = [
 const R4_DENY: &str = "#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]";
 
 /// R-4 の関数の粒度を直して頭に R4_DENY を置いた folio の file（crate の dir からの相対）。
-const R4_DONE: [&str; 9] = [
+const R4_DONE: [&str; 20] = [
+    "src/anchor.rs",
+    "src/check.rs",
     "src/face.rs",
     "src/face_adr.rs",
     "src/face_constitution.rs",
@@ -92,6 +94,15 @@ const R4_DONE: [&str; 9] = [
     "src/face_srs.rs",
     "src/face_srs_items.rs",
     "src/face_srs_rtm.rs",
+    "src/findings.rs",
+    "src/freeze.rs",
+    "src/graph.rs",
+    "src/lineage.rs",
+    "src/link.rs",
+    "src/mentions.rs",
+    "src/note.rs",
+    "src/refs.rs",
+    "src/stamp.rs",
 ];
 
 fn repo_root() -> PathBuf {

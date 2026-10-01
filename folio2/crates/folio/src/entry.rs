@@ -391,15 +391,7 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
             // 面が組めない置き場を合格と言わない（便 187・編集時の口は面の段を撃たない＝ADR-33 決定 (6)）
             site::check_faces(&dir, &mut report);
             // 凍結の後始末は口を出た直後に 1 度だけ（判定の印字より前・後始末が足す違反も判定に入る）
-            let after = freeze::after(
-                &dir,
-                flag,
-                materials.state.as_ref(),
-                materials.adr.as_ref(),
-                materials.ids.as_ref(),
-                materials.seals.as_ref(),
-                &mut report,
-            );
+            let after = freeze::after(&dir, flag, &materials, &mut report);
             if let After::Refused(msg) = &after {
                 say!(err, "folio check: {msg}");
                 return 1;

@@ -5,6 +5,7 @@
 //! 凍結 anchor の列そのもの（digest の検算・索引・版管理との照合・現行の写しとの一致）は便 7。
 //! 床の定数は `adr.rs` の `FLOOR` を読み口（`adr::floor_strs`）で読み、値は持ち直さない。正規表現は使わない。
 //! 改訂来歴の裁定 id の形は便 181 から決定の欄の床（`ruling.rs`・`check.rs` の `check_rulings`）が数える。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::HashSet;
 use std::fs;
@@ -12,7 +13,7 @@ use std::path::Path;
 
 use crate::adr::{self, Adr};
 use crate::floor_adr;
-use crate::refs;
+use crate::refs::{self, Canon};
 use crate::verdict::Report;
 use crate::vocab;
 use crate::yaml::{self, Node};
@@ -22,19 +23,8 @@ const ANCHOR_PREFIX: &str = "constitution-";
 const ANCHOR_SUFFIX: &str = ".yaml";
 
 /// (a)〜(g) を掛ける。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
-pub fn check_link(
-    dir: &Path,
-    constitution: &Node,
-    rules: &Node,
-    vocabulary: &Node,
-    srs: &Node,
-    adr: &Adr,
-    report: &mut Report,
-) {
+pub fn check_link(dir: &Path, canon: Canon<'_>, adr: &Adr, report: &mut Report) {
+    let Canon { constitution, rules, vocabulary, srs } = canon;
     let records = &adr.records;
     let article_ids: Vec<String> = rows(constitution, "articles")
         .map(|a| py_str(a.get("id")))
@@ -47,7 +37,7 @@ pub fn check_link(
 
     let history = history(dir);
     let known = known_ids(constitution, rules, srs, &history.ids);
-    references(constitution, rules, vocabulary, srs, adr, &known, report);
+    references(canon, adr, &known, report);
     amends_targets(records, &article_ids, &scope, &history, report);
     body_words(vocabulary, adr, report);
     amended_by(constitution, records, report);
@@ -314,19 +304,8 @@ pub(crate) fn adr_end(chars: &[char], i: usize) -> Option<usize> {
 
 /// (d) 判断の記録の id の参照（正本 4 file は A-2・判断の記録と欄の決まりの plain は adr）と、
 /// 判断の記録の中の内部 3 空間の id の解決（adr）。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-)]
-fn references(
-    constitution: &Node,
-    rules: &Node,
-    vocabulary: &Node,
-    srs: &Node,
-    adr: &Adr,
-    known: &HashSet<String>,
-    report: &mut Report,
-) {
+fn references(canon: Canon<'_>, adr: &Adr, known: &HashSet<String>, report: &mut Report) {
+    let Canon { constitution, rules, vocabulary, srs } = canon;
     let adr_ids = adr_ids(adr);
     let sources: [(&str, Vec<(String, &Node)>); 4] = [
         ("constitution.yaml", population_constitution(constitution)),
@@ -514,7 +493,6 @@ fn is_effective(d: &Node) -> bool {
 
 /// (g) 憲法の各条の amended_by と判断の記録の amends の双方向。
 fn amended_by(constitution: &Node, records: &[(String, Node)], report: &mut Report) {
-    let find = |id: &str| records.iter().find(|(k, _)| k == id).map(|(_, d)| d);
     let articles: Vec<&Node> = rows(constitution, "articles").collect();
     for a in &articles {
         let id = py_str(a.get("id"));
@@ -527,72 +505,7 @@ fn amended_by(constitution: &Node, records: &[(String, Node)], report: &mut Repo
             }
         };
         for am in entries {
-            if !adr::check_keys(
-                "A-2",
-                &format!("{id}.amended_by"),
-                am,
-                &floor_adr::AMENDED_BY_ENTRY,
-                report,
-            ) {
-                continue;
-            }
-            for k in ["approved_by", "ruling", "previous_text", "rationale"] {
-                if !adr::non_empty(am.get(k)) {
-                    report.violation("N-4", format!("{id}: amended_by.{k} が空"));
-                }
-            }
-            adr::check_date(
-                "N-4",
-                &format!("{id}.amended_by.date"),
-                am.get("date"),
-                report,
-            );
-            let adr_id = py_str(am.get("adr"));
-            let Some(r) = find(&adr_id) else {
-                report.violation(
-                    "N-4",
-                    format!("{id}: amended_by.adr {adr_id} の判断の記録が実在しない"),
-                );
-                continue;
-            };
-            if !is_effective(r) {
-                report.violation(
-                    "N-4",
-                    format!(
-                        "{id}: amended_by.adr {adr_id} が発効していない（status {}・承認欄 {}）",
-                        adr::show(r.get("status")),
-                        if matches!(r.get("approval"), Some(Node::Map(_))) {
-                            "有"
-                        } else {
-                            "無"
-                        }
-                    ),
-                );
-                continue;
-            }
-            let who = r.get("approval").and_then(|ap| adr::present(ap, "who"));
-            if adr::present(am, "approved_by") != who {
-                report.violation(
-                    "N-4",
-                    format!(
-                        "{id}: amended_by.approved_by「{}」が {adr_id} の承認者「{}」と違う",
-                        adr::show(am.get("approved_by")),
-                        adr::show(who)
-                    ),
-                );
-            }
-            let previous = py_str(am.get("previous_text"));
-            let matched = amends_list(r)
-                .filter(|e| adr::present(e, "target") == adr::present(a, "id"))
-                .any(|e| py_str(e.get("previous_text")) == previous);
-            if !matched {
-                report.violation(
-                    "A-2",
-                    format!(
-                        "{id}: amended_by.previous_text が {adr_id} の amends（対象 {id}）のどれとも一致しない"
-                    ),
-                );
-            }
+            amendment(&id, a, am, records, report);
         }
     }
 
@@ -629,6 +542,83 @@ fn amended_by(constitution: &Node, records: &[(String, Node)], report: &mut Repo
                 );
             }
         }
+    }
+}
+
+/// 条 1 つの amended_by の 1 件（欄の形・日付・判断の記録の実在と発効・承認者・previous_text が amends に在るか）。
+fn amendment(id: &str, a: &Node, am: &Node, records: &[(String, Node)], report: &mut Report) {
+    let find = |id: &str| records.iter().find(|(k, _)| k == id).map(|(_, d)| d);
+    if !adr::check_keys(
+        "A-2",
+        &format!("{id}.amended_by"),
+        am,
+        &floor_adr::AMENDED_BY_ENTRY,
+        report,
+    ) {
+        return;
+    }
+    for k in ["approved_by", "ruling", "previous_text", "rationale"] {
+        if !adr::non_empty(am.get(k)) {
+            report.violation("N-4", format!("{id}: amended_by.{k} が空"));
+        }
+    }
+    adr::check_date(
+        "N-4",
+        &format!("{id}.amended_by.date"),
+        am.get("date"),
+        report,
+    );
+    let adr_id = py_str(am.get("adr"));
+    let Some(r) = find(&adr_id) else {
+        report.violation(
+            "N-4",
+            format!("{id}: amended_by.adr {adr_id} の判断の記録が実在しない"),
+        );
+        return;
+    };
+    amendment_target(id, a, am, r, report);
+}
+
+/// amended_by の 1 件を、先の判断の記録 `r` と突き合わせる（発効・承認者・previous_text が amends に在るか）。
+fn amendment_target(id: &str, a: &Node, am: &Node, r: &Node, report: &mut Report) {
+    let adr_id = py_str(am.get("adr"));
+    if !is_effective(r) {
+        report.violation(
+            "N-4",
+            format!(
+                "{id}: amended_by.adr {adr_id} が発効していない（status {}・承認欄 {}）",
+                adr::show(r.get("status")),
+                if matches!(r.get("approval"), Some(Node::Map(_))) {
+                    "有"
+                } else {
+                    "無"
+                }
+            ),
+        );
+        return;
+    }
+    let who = r.get("approval").and_then(|ap| adr::present(ap, "who"));
+    if adr::present(am, "approved_by") != who {
+        report.violation(
+            "N-4",
+            format!(
+                "{id}: amended_by.approved_by「{}」が {adr_id} の承認者「{}」と違う",
+                adr::show(am.get("approved_by")),
+                adr::show(who)
+            ),
+        );
+    }
+    let previous = py_str(am.get("previous_text"));
+    let matched = amends_list(r)
+        .filter(|e| adr::present(e, "target") == adr::present(a, "id"))
+        .any(|e| py_str(e.get("previous_text")) == previous);
+    if !matched {
+        report.violation(
+            "A-2",
+            format!(
+                "{id}: amended_by.previous_text が {adr_id} の amends（対象 {id}）のどれとも一致しない"
+            ),
+        );
     }
 }
 

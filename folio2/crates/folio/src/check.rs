@@ -10,6 +10,7 @@
 //! 承認欄も在れば読む）。
 //! 参照 id・語彙 R-9・判断の記録との突き合わせ・凍結 anchor・読み物の生成は今も憲法・rules・語彙・要件書の 4 本だけを受ける。
 //! 読めない・型が違う・節の決まりが読めない は「まだ分からない」（合格にしない）。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -187,8 +188,21 @@ struct Sources {
     ceiling: Node,
 }
 
+impl Sources {
+    /// 正本 4 file（憲法・rules・語彙・要件書）の読んだ木。
+    fn canon(&self) -> refs::Canon<'_> {
+        refs::Canon {
+            constitution: &self.constitution,
+            rules: &self.rules,
+            vocabulary: &self.vocabulary,
+            srs: &self.srs,
+        }
+    }
+}
+
 /// 凍結の後始末の材料（口の検査が残したもの・入口が口を出た直後に後始末へ渡す）。
 /// 判断の記録が読めなかったときは 3 つとも無い。
+#[derive(Default)]
 pub struct Materials {
     /// 凍結 anchor の列の検査が残した列の結果。
     pub state: Option<State>,
@@ -231,17 +245,11 @@ pub(crate) fn not_yet_live_articles(root: &Node) -> Vec<String> {
 /// `dir` の正本 7 file を検査する。`flag` は便 9 の旗（検査の式は変えず、列の結果を材料に載せて返す）。
 pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
     let mut report = Report::default();
-    let mut state = None;
-    let mut adr_records = None;
-    let mut ids_cur = None;
-    let mut seals = None;
-    let mut not_yet_live = Vec::new();
-    let mut mentions_off = false;
-    let mut in_loop_min_off = false;
-    let mut rulings = Vec::new();
+    let mut m = Materials::default();
     match load_all(dir, &mut report) {
         Some(src) => {
-            not_yet_live = not_yet_live_articles(&src.constitution);
+            let canon = src.canon();
+            m.not_yet_live = not_yet_live_articles(&src.constitution);
             let history = anchor::history_ids(dir);
             // 外の置き場の字は置き場の名で決まる（便 202・便 203）
             let name = adr::place_name(dir).ok();
@@ -249,7 +257,12 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
             check_constitution(&src.constitution, &range, &mut report);
             check_rules(&src.rules, &mut report);
             // 極性一覧の編集時（in-loop）の本数の下限（便 200・ADR-33 決定 (5)・条 P-18.4）
-            in_loop_min_off = polarity::check_floor(&src.constitution, &src.rules, name.as_deref(), &mut report);
+            m.in_loop_min_off = polarity::check_floor(
+                &src.constitution,
+                &src.rules,
+                name.as_deref(),
+                &mut report,
+            );
             check_vocabulary(&src.vocabulary, &mut report);
             check_srs(&src.srs, &mut report);
             entrance::check_entrance(&src.index, &src.vocabulary, &mut report);
@@ -258,14 +271,7 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
             // つながりを数える網（参照 id・語彙・判断の記録との突き合わせ・凍結 anchor の列・散文の言及）の違反は、
             // 編集時の口が止めない族に数える（便 198・ADR-33 決定 (2)・事後の床の判定は変えない）
             let mark = report.mark();
-            refs::check_refs(
-                &src.constitution,
-                &src.rules,
-                &src.vocabulary,
-                &src.srs,
-                &history,
-                &mut report,
-            );
+            refs::check_refs(canon, &history, &mut report);
             vocab::check_vocab(
                 &src.constitution,
                 &src.rules,
@@ -276,19 +282,11 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
             report.links_from(mark);
             if let Some(records) = adr::check_adr(dir, &mut report) {
                 let mark = report.mark();
-                link::check_link(
-                    dir,
-                    &src.constitution,
-                    &src.rules,
-                    &src.vocabulary,
-                    &src.srs,
-                    &records,
-                    &mut report,
-                );
-                state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
+                link::check_link(dir, canon, &records, &mut report);
+                m.state = anchor::check_anchor(dir, &records, &history, flag, &mut report);
                 report.links_from(mark);
                 // 要件・判断・受入基準の id の消失と改番（便 88）
-                ids_cur = Some(ids::check_ids(
+                m.ids = Some(ids::check_ids(
                     dir,
                     &src.srs,
                     &records.records,
@@ -296,70 +294,83 @@ pub fn check_dir(dir: &Path, flag: Flag) -> (Report, Materials) {
                     &mut report,
                 ));
                 // 発効した判断の記録の本文の封（便 170・ADR-30 決定 (3)）
-                seals = Some(seal::check_seals(dir, &records.records, flag, &mut report));
-                adr_records = Some(records);
+                m.seals = Some(seal::check_seals(dir, &records.records, flag, &mut report));
+                m.adr = Some(records);
             }
-            let notes = note::check_note(
-                dir,
-                &src.constitution,
-                &src.rules,
-                &src.srs,
-                adr_records.as_ref(),
-                &mut report,
-            );
-            // 決定の欄の裁定 id の形（便 181・ADR-31 決定 (1)）。索引の欄の決まりは 7 本の外なので、在れば読む
-            let graph = load_graph(dir, &mut report);
-            let tree = ruling::Tree {
-                constitution: &src.constitution,
-                rules: &src.rules,
-                srs: &src.srs,
-                index: &src.index,
-                ceiling: &src.ceiling,
-                intake: &src.intake,
-                graph: graph.as_ref(),
-                records: adr_records.as_ref().map_or(&[], |a| &a.records),
-                notes: notes.iter().map(|n| (format!("design-note/{}", n.file), &n.root)).collect(),
-            };
-            let sites = ruling::sites(&tree);
-            check_rulings(&sites, name.as_deref(), &mut report);
-            if flag == Flag::EmitRulings {
-                rulings = ruling::emit(dir, &sites);
-            }
-            // 規則の表の行の裁定の時刻（便 204）。決定の欄と同じ歩き手の出力を数える
-            check_times(&sites, &mut report);
-            // 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ数える。行 R-17 が無くて数えなかったら知らせる（便 156）
-            if let Some(records) = adr_records.as_ref() {
-                let mark = report.mark();
-                mentions_off = !mentions::check_mentions(
-                    dir,
-                    &[
-                        ("constitution.yaml", &src.constitution),
-                        ("rules.yaml", &src.rules),
-                        ("vocabulary.yaml", &src.vocabulary),
-                        ("srs.yaml", &src.srs),
-                        ("index.yaml", &src.index),
-                        ("intake.yaml", &src.intake),
-                        ("ceiling.yaml", &src.ceiling),
-                    ],
-                    records,
-                    &mut report,
-                );
-                report.links_from(mark);
+            let run = Run { dir, flag, name: name.as_deref() };
+            m.rulings = check_notes_rulings(&run, &src, m.adr.as_ref(), &mut report);
+            if let Some(records) = m.adr.as_ref() {
+                m.mentions_off = check_mentions_off(dir, &src, records, &mut report);
             }
         }
         None => debug_assert!(!report.unknowns.is_empty()),
     }
-    let materials = Materials {
-        state,
-        adr: adr_records,
-        ids: ids_cur,
-        seals,
-        not_yet_live,
-        mentions_off,
-        in_loop_min_off,
-        rulings,
+    (report, m)
+}
+
+/// 検査 1 回の文脈（置き場・旗・外の置き場の名）。
+#[derive(Clone, Copy)]
+struct Run<'a> {
+    /// 検査する置き場（design-intent）。
+    dir: &'a Path,
+    /// 便 9 の旗。
+    flag: Flag,
+    /// 外の置き場の名（憲法の meta.id・読めなければ無い）。
+    name: Option<&'a str>,
+}
+
+/// 設計ノートの検査と、決定の欄の裁定 id の形・規則の表の行の裁定の時刻。`--emit-rulings` のときは標準出力の行を返す（ほかは空）。
+fn check_notes_rulings(
+    run: &Run<'_>,
+    src: &Sources,
+    adr_records: Option<&adr::Adr>,
+    report: &mut Report,
+) -> Vec<String> {
+    let Run { dir, flag, name } = *run;
+    let mut rulings = Vec::new();
+    let notes = note::check_note(dir, src.canon(), adr_records, report);
+    // 決定の欄の裁定 id の形（便 181・ADR-31 決定 (1)）。索引の欄の決まりは 7 本の外なので、在れば読む
+    let graph = load_graph(dir, report);
+    let tree = ruling::Tree {
+        constitution: &src.constitution,
+        rules: &src.rules,
+        srs: &src.srs,
+        index: &src.index,
+        ceiling: &src.ceiling,
+        intake: &src.intake,
+        graph: graph.as_ref(),
+        records: adr_records.map_or(&[], |a| &a.records),
+        notes: notes.iter().map(|n| (format!("design-note/{}", n.file), &n.root)).collect(),
     };
-    (report, materials)
+    let sites = ruling::sites(&tree);
+    check_rulings(&sites, name, report);
+    if flag == Flag::EmitRulings {
+        rulings = ruling::emit(dir, &sites);
+    }
+    // 規則の表の行の裁定の時刻（便 204）。決定の欄と同じ歩き手の出力を数える
+    check_times(&sites, report);
+    rulings
+}
+
+/// 散文の言及の歯 R-17（便 93）。判断の記録を読めたときだけ呼ぶ。行 R-17 が無くて数えなかったら true（便 156）。
+fn check_mentions_off(dir: &Path, src: &Sources, records: &adr::Adr, report: &mut Report) -> bool {
+    let mark = report.mark();
+    let off = !mentions::check_mentions(
+        dir,
+        &[
+            ("constitution.yaml", &src.constitution),
+            ("rules.yaml", &src.rules),
+            ("vocabulary.yaml", &src.vocabulary),
+            ("srs.yaml", &src.srs),
+            ("index.yaml", &src.index),
+            ("intake.yaml", &src.intake),
+            ("ceiling.yaml", &src.ceiling),
+        ],
+        records,
+        report,
+    );
+    report.links_from(mark);
+    off
 }
 
 /// 置き場そのものの断り（symlink・dir でない）。床と `--polarity` が同じ字で断る（便 200）。
@@ -667,38 +678,7 @@ fn place_range(root: &Node, name: Option<&str>, report: &mut Report) -> PlaceRan
                 list.push(v.to_string());
             }
         }
-        match ce::ENUMS.iter().find(|(k, _)| *k == key.as_str()) {
-            None => report.pending(format!(
-                "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある{}",
-                fr25("（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い・FR25）")
-            )),
-            Some((_, built)) => {
-                let outside: Vec<String> = list
-                    .iter()
-                    .filter(|v| !built.contains(&v.as_str()))
-                    .map(|v| format!("「{v}」"))
-                    .collect();
-                if !outside.is_empty() {
-                    report.pending(format!(
-                        "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い{}）",
-                        outside.join("・"),
-                        fr25("・FR25")
-                    ));
-                }
-                let missing: Vec<String> = built
-                    .iter()
-                    .filter(|b| !list.iter().any(|v| v == *b))
-                    .map(|b| format!("「{b}」"))
-                    .collect();
-                if !missing.is_empty() {
-                    report.pending(format!(
-                        "{FILE}: schema.enums.{key}: 組み立て時の値域に在る値が無い（{}・値域を置き場ごとに狭める口は無い{}）",
-                        missing.join("・"),
-                        fr25("・FR25")
-                    ));
-                }
-            }
-        }
+        built_range(key, &list, name, report);
         range.insert(key.clone(), list);
     }
     for (key, _) in ce::ENUMS {
@@ -710,6 +690,44 @@ fn place_range(root: &Node, name: Option<&str>, report: &mut Report) -> PlaceRan
         }
     }
     range
+}
+
+/// 置き場の値域の鍵 1 つの値の列を、組み立てた版の同じ鍵の値と突き合わせる（広げた鍵・広げた値・外した値は「まだ分からない」）。
+fn built_range(key: &str, list: &[String], name: Option<&str>, report: &mut Report) {
+    let fr25 = |v: &'static str| floor::said(v, name);
+    const FILE: &str = "constitution.yaml";
+    match ce::ENUMS.iter().find(|(k, _)| *k == key) {
+        None => report.pending(format!(
+            "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある{}",
+            fr25("（組み立てた版に無い鍵・値域を置き場ごとに広げる口は無い・FR25）")
+        )),
+        Some((_, built)) => {
+            let outside: Vec<String> = list
+                .iter()
+                .filter(|v| !built.contains(&v.as_str()))
+                .map(|v| format!("「{v}」"))
+                .collect();
+            if !outside.is_empty() {
+                report.pending(format!(
+                    "{FILE}: schema.enums.{key}: 組み立て時の値域に無い値がある（{}・値域を置き場ごとに広げる口は無い{}）",
+                    outside.join("・"),
+                    fr25("・FR25")
+                ));
+            }
+            let missing: Vec<String> = built
+                .iter()
+                .filter(|b| !list.iter().any(|v| v == *b))
+                .map(|b| format!("「{b}」"))
+                .collect();
+            if !missing.is_empty() {
+                report.pending(format!(
+                    "{FILE}: schema.enums.{key}: 組み立て時の値域に在る値が無い（{}・値域を置き場ごとに狭める口は無い{}）",
+                    missing.join("・"),
+                    fr25("・FR25")
+                ));
+            }
+        }
+    }
 }
 
 /// 表の欄のうち閉じた一覧に無いものを、1 つにつき種別 未知の欄 の違反 1 件にする（便 128・N-3.1・例外の口なし）。
@@ -772,6 +790,12 @@ fn check_constitution(root: &Node, range: &PlaceRange, report: &mut Report) {
         &["text", "plain"],
         report,
     );
+    check_articles(root, range, report);
+}
+
+/// 憲法の条 1 つずつ（id の形・欄の非空・plain・閉じた欄・mechanism・規範文・値域・極性・id の重複）。
+fn check_articles(root: &Node, range: &PlaceRange, report: &mut Report) {
+    const FILE: &str = "constitution.yaml";
     let articles = rows(FILE, root, "articles", report);
     for article in &articles {
         let id = row_id(article);

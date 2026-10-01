@@ -16,6 +16,7 @@
 //! 観点の行は、まだ分からない の理由が反証の済んでいない 止める だけのとき末尾に欄 `wait: 反証` を足す。印は周の 3 値に依らず書く。
 //! 便 176（docs/design/delivery-176.md §1 (b)・FR20）: dir 形の文書で at の頭が file 名に解けないときは、置き場の直下の .yaml の
 //! 最上位の meta.id でも解く（ちょうど 1 file のときだけ・`meta_file`）。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -118,7 +119,11 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
     }
     let sources = gate::sources_digest(dir, &ceiling)?;
     let faces = faces_digest(out_dir, &ceiling)?;
+    derive_text(dir, rows, &round, &sources, &faces)
+}
 
+/// 印の先頭の欄と観点の行を組み、反証の行と reads の行へ進む。
+fn derive_text(dir: &Path, rows: Vec<Row>, round: &str, sources: &str, faces: &str) -> R<String> {
     let verdicts: Vec<Verdict> = rows.iter().map(|r| r.counted.verdict).collect();
     let verdict = if verdicts.contains(&Verdict::Unknown) {
         Verdict::Unknown
@@ -141,7 +146,7 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
     let mut text = format!(
         "# {}\nround: {}\nat: {}\nverdict: {verdict}\nsources: {sources}\nfaces: {faces}\nviewpoints:\n",
         adr::named(adr::name_of(dir).as_deref(), " ", HEADER),
-        plain(&round),
+        plain(round),
         plain(&at)
     );
     for r in &rows {
@@ -163,9 +168,14 @@ fn derive(dir: &Path, out_dir: &Path) -> R<String> {
             plain(&r.at)
         ));
     }
+    derive_refutes(dir, &rows, text, reads)
+}
+
+/// 止める の所見の全件の行（refutes）と reads の行を足して印の全文にする。
+fn derive_refutes(dir: &Path, rows: &[Row], mut text: String, reads: BTreeSet<&str>) -> R<String> {
     let documents = gate::documents(dir)?;
     let mut refutes = Vec::new();
-    for r in &rows {
+    for r in rows {
         let mut own: Vec<&Refute> = r.counted.refutes.iter().collect();
         own.sort_by(|a, b| a.id.as_bytes().cmp(b.id.as_bytes()));
         for stop in own {

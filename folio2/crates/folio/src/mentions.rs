@@ -7,6 +7,7 @@
 //! 歯の入り口は rules.yaml の行 R-17 そのもので、行が無ければ数えずに判定の外の 1 行 `OFF` を出させ（便 156・FR5）、
 //! 値が 0 件 でなければ「まだ分からない」（P-4.2）。
 //! id を拾う口は refs.rs の `scan_ids` と link.rs の `scan_adr_ids`（正規表現は使わない）。
+#![deny(clippy::too_many_lines, clippy::cognitive_complexity)]
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -223,22 +224,31 @@ struct Walk<'a> {
     prose: Vec<(String, String, &'a str)>,
 }
 
+/// 表の欄 1 つ（鍵と値）。
+struct Field<'a> {
+    key: &'a str,
+    value: &'a Node,
+}
+
 impl<'a> Walk<'a> {
     fn file(&mut self, file: &str, root: &'a Node, index: &HashMap<String, Kind>) {
         // 最上位そのものが id を持つ行になるのは判断の記録
         let row = row_of(root, index);
         for (key, value) in root.as_map().unwrap_or_default() {
             if !TOP_SKIPPED.contains(&key.as_str()) {
-                self.entry(file, key, value, row, index);
+                self.entry(file, Field { key, value }, row, index);
             }
         }
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "引数が規則の行 R-4 の 5 を越える・行 r4-folio-src-b が直してこの属性を外す"
-    )]
-    fn entry(&mut self, file: &str, key: &str, value: &'a Node, row: Option<&'a str>, index: &HashMap<String, Kind>) {
+    fn entry(
+        &mut self,
+        file: &str,
+        field: Field<'a>,
+        row: Option<&'a str>,
+        index: &HashMap<String, Kind>,
+    ) {
+        let Field { key, value } = field;
         if PROVENANCE.contains(&key) {
             return;
         }
@@ -267,7 +277,7 @@ impl<'a> Walk<'a> {
             Node::Map(entries) => {
                 let row = row_of(node, index).or(row);
                 for (key, value) in entries {
-                    self.entry(file, key, value, row, index);
+                    self.entry(file, Field { key, value }, row, index);
                 }
             }
         }
