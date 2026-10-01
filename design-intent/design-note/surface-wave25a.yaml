@@ -3,13 +3,13 @@
 meta:
   id: surface-wave25a
   title: 第 25 波 a — 規則の行 R-4 の関数の粒度を歯（src の外の tests/ と src の cfg(test) の区間）にも当て、根の lint の表に関数の粒度の 3 つの lint を forbid で足す
-  version: v0.1
+  version: v0.2
   status: effective
   generated: 2026-10-01
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-27, ruling: t3-hub.1（裁定 id = t3-hub.56:20260927T2259Z-1・board の質問の頁・notes に逐語）, verbatim: それで良い, surface: R-8}
-  note: ノート surface-wave24a（31 行の全部が着地）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。
+  note: ノート surface-wave24a（31 行の全部が着地）の続き。承認は発効した計画 surface-plan の持ち主の裁定（t3-hub.56:20260927T2259Z-1）を継ぐ。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-10-01）は、1 行目 r4-boundary-tests-a〔境界の crate の歯の 19 file の規則の行 R-4 の関数の粒度の違反 37 を関数を割って直す・M・depends は空〕と 2 行目 r4-boundary-tests-b〔境界の crate の歯の 12 file の違反 35 を直す・M・depends は空〕と 7 節と 8 節を足し、2 行の差の file を docs/design/patch/ に置いた（差の file の形・節は短くし、verify の 1 行目で差の hunk が木に在ることを見る）。規則の行 R-4 の関数の粒度を歯に当てる行のうち境界の crate の分で（席の決め・台帳 t3-hub.74 の notes）、調べ w55a の割りのとおり 2 行に割った。計画だけの行ではないので規則の行 R-33 は書かない。起草 w57b が main ca8bca7b に試作を載せて差を切り、main 36934ac4 に当てた。
 
 sections:
   - n: 1
@@ -20,6 +20,64 @@ sections:
   - n: 2
     type: contract-table
     title: 契約表
-    rows: []
+    rows:
+      - id: r4-boundary-tests-a
+        title: 境界の crate の歯の 19 file（crates/tsuzuri-boundary/tests/ の aown.rs・bhalf.rs・dstg.rs・eheld.rs・epolq.rs・eretry.rs・esig.rs・evkind.rs・fdlt.rs・fserve.rs・gextw.rs・jcount.rs・jrun.rs・lidle.rs・lsnap.rs・lstore.rs・ntcsrv.rs・pgz.rs・pmisroute.rs）の、規則の行 R-4 の関数の粒度を越える 31 の関数の違反 37（関数の行 60 越え 21・複雑度 15 越え 16）を関数を割って直す（19 file だけ・歯の名と数と断言の中身は替えない・根の Cargo.toml の表と clippy.toml と境界の src は書かない）
+        req: ["NFR3"]
+        section: "7"
+        write-set: ["crates/tsuzuri-boundary/tests/aown.rs", "crates/tsuzuri-boundary/tests/bhalf.rs", "crates/tsuzuri-boundary/tests/dstg.rs", "crates/tsuzuri-boundary/tests/eheld.rs", "crates/tsuzuri-boundary/tests/epolq.rs", "crates/tsuzuri-boundary/tests/eretry.rs", "crates/tsuzuri-boundary/tests/esig.rs", "crates/tsuzuri-boundary/tests/evkind.rs", "crates/tsuzuri-boundary/tests/fdlt.rs", "crates/tsuzuri-boundary/tests/fserve.rs", "crates/tsuzuri-boundary/tests/gextw.rs", "crates/tsuzuri-boundary/tests/jcount.rs", "crates/tsuzuri-boundary/tests/jrun.rs", "crates/tsuzuri-boundary/tests/lidle.rs", "crates/tsuzuri-boundary/tests/lsnap.rs", "crates/tsuzuri-boundary/tests/lstore.rs", "crates/tsuzuri-boundary/tests/ntcsrv.rs", "crates/tsuzuri-boundary/tests/pgz.rs", "crates/tsuzuri-boundary/tests/pmisroute.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/r4-boundary-tests-a.patch", "cargo clippy -p tsuzuri-boundary --test aown --test bhalf --test dstg --test eheld --test epolq --test eretry --test esig --test evkind --test fdlt --test fserve --test gextw --test jcount --test jrun --test lidle --test lsnap --test lstore --test ntcsrv --test pgz --test pmisroute --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments", "cargo nextest run -p tsuzuri-boundary --test aown --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test bhalf --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test dstg --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test eheld --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test epolq --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test eretry --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test esig --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test evkind --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test fdlt --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test fserve --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test gextw --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test jcount --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test jrun --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test lidle --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test lsnap --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test lstore --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test ntcsrv --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test pgz --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test pmisroute --no-tests=fail", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/r4-boundary-tests-a.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p tsuzuri-boundary --test aown --test bhalf --test dstg --test eheld --test epolq --test eretry --test esig --test evkind --test fdlt --test fserve --test gextw --test jcount --test jrun --test lidle --test lsnap --test lstore --test ntcsrv --test pgz --test pmisroute --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments が rc 0（名指した 19 の歯の crate の関数と、組みに入る境界の lib と build.rs の関数はどれも、根の clippy.toml の閾値の関数の行 60・複雑度 15・引数 5 を越えない・ほかの歯の crate は撃たない） (3) 境界の歯 tests/aown.rs の aown_ の 2 本と tests/bhalf.rs の bhalf_ の 4 本と tests/dstg.rs の dstg_ の 9 本と tests/eheld.rs の eheld_ の 12 本と tests/epolq.rs の epolq_ の 12 本 が緑 (4) 境界の歯 tests/eretry.rs の eretry_ の 3 本と tests/esig.rs の esig_ の 3 本と tests/evkind.rs の evkind_ の 4 本と tests/fdlt.rs の fdlt_ の 6 本と tests/fserve.rs の fserve_ の 5 本 が緑 (5) 境界の歯 tests/gextw.rs の gext_ の 2 本と tests/jcount.rs の jcount_ の 7 本と tests/jrun.rs の jrun_ の 5 本 が緑 (6) 境界の歯 tests/lidle.rs の lidle_ の 4 本と tests/lsnap.rs の lsnap_ の 5 本と tests/lstore.rs の lstore_ の 5 本と tests/ntcsrv.rs の ntc_ の 4 本と tests/pgz.rs の pgz_ の 3 本と tests/pmisroute.rs の pmisfit_ の 6 本 が緑
+        depends: []
+      - id: r4-boundary-tests-b
+        title: '境界の crate の歯の 12 file（crates/tsuzuri-boundary/tests/ の qgate.rs・rhold.rs・rvk.rs・server_acct.rs・server_batch.rs・server_seat.rs・shb.rs・stcdp.rs・stcli.rs・stnfy.rs・strelay.rs・sttgt.rs）の、規則の行 R-4 の関数の粒度を越える 29 の関数の違反 35（関数の行 60 越え 23・複雑度 15 越え 12・うち #[test] でない手の関数 8）を関数を割って直す（12 file だけ・歯の名と数と断言の中身は替えない・根の Cargo.toml の表と clippy.toml と境界の src は書かない）'
+        req: ["NFR3"]
+        section: "8"
+        write-set: ["crates/tsuzuri-boundary/tests/qgate.rs", "crates/tsuzuri-boundary/tests/rhold.rs", "crates/tsuzuri-boundary/tests/rvk.rs", "crates/tsuzuri-boundary/tests/server_acct.rs", "crates/tsuzuri-boundary/tests/server_batch.rs", "crates/tsuzuri-boundary/tests/server_seat.rs", "crates/tsuzuri-boundary/tests/shb.rs", "crates/tsuzuri-boundary/tests/stcdp.rs", "crates/tsuzuri-boundary/tests/stcli.rs", "crates/tsuzuri-boundary/tests/stnfy.rs", "crates/tsuzuri-boundary/tests/strelay.rs", "crates/tsuzuri-boundary/tests/sttgt.rs", "=crates/tsuzuri-boundary/tests/hbconf.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/r4-boundary-tests-b.patch", "cargo clippy -p tsuzuri-boundary --test qgate --test rhold --test rvk --test server_acct --test server_batch --test server_seat --test shb --test stcdp --test stcli --test stnfy --test strelay --test sttgt --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments", "cargo nextest run -p tsuzuri-boundary --test qgate --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test rhold --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test rvk --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test server_acct --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test server_batch --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test server_seat --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test shb --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test stcdp --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test stcli --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test stnfy --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test strelay --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test sttgt --no-tests=fail", "cargo nextest run -p tsuzuri-boundary --test hbconf --no-tests=fail", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/r4-boundary-tests-b.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p tsuzuri-boundary --test qgate --test rhold --test rvk --test server_acct --test server_batch --test server_seat --test shb --test stcdp --test stcli --test stnfy --test strelay --test sttgt --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments が rc 0（名指した 12 の歯の crate の関数と、組みに入る境界の lib と build.rs の関数はどれも、根の clippy.toml の閾値の関数の行 60・複雑度 15・引数 5 を越えない・ほかの歯の crate は撃たない） (3) 境界の歯 tests/qgate.rs の qgate_ の 7 本と tests/rhold.rs の rhold_ の 8 本と tests/rvk.rs の rvk_ の 11 本 が緑 (4) 境界の歯 tests/server_acct.rs の server_acct_ の 11 本と cdorm_ の 1 本と cspk_ の 1 本と acchold_ の 4 本と alean_ の 6 本と hbon_ の 1 本の 24 本と tests/server_batch.rs の server_batch_ の 9 本と tests/server_seat.rs の server_ の 10 本と hbmark_ の 3 本と hbon_ の 3 本の 16 本と tests/shb.rs の shb_ の 9 本 が緑 (5) 境界の歯 tests/stcdp.rs の stage_cdp_ の 17 本と tests/stcli.rs の stcli_ の 26 本 が緑 (6) 境界の歯 tests/stnfy.rs の stnfy_ の 9 本と tests/strelay.rs の relay_ の 12 本と tests/sttgt.rs の sttgt_ の 10 本 が緑 (7) 境界の歯 tests/hbconf.rs の hbconf_ の 4 本（server_batch.rs と server_seat.rs の fn config の本体の字を読む）が緑
+        depends: []
+
+  - n: 7
+    type: prose
+    title: 行 r4-boundary-tests-a — 境界の crate の歯の 19 file の R-4 の関数の粒度を関数を割って直す（歯の名は替えない）
+    body: |
+      在りかの main は 36934ac4。差の file docs/design/patch/r4-boundary-tests-a.patch は、起草 w57b が main ca8bca7b に行 r4-boundary-tests-a と b の試作を載せた commit（写しの fe9f7c54）から、この行の書く 19 file だけを git diff --no-color --full-index で切った（23,619 byte・19 file・main ca8bca7b で git apply --check が rc 0、試作の木で git apply --reverse --check が rc 0）。書く file は write-set の 19（境界の crate の歯の file）で、差はこの 19 file に閉じる。差の file は main が差の触れる file を動かすと当たらなくなるので、席は置く直前に当たるかを撃ち直す。
+
+      なぜ。規則の行 R-4 の関数の粒度（関数 60 行 以下と複雑度 15 以下と引数 5 以下）を歯にも当てる直しの 1 行（1 節の目的のとおり・判断の記録 ADR-25 の決定 (1) と条 P-22.1 と条 P-24.3・新しい問いは要らない）。境界の crate の歯の違反 72（31 file・引数 0）を 2 行に割り、この行は 19 file を持つ（残りは行 r4-boundary-tests-b）。境界の歯に行 r4-args-mark の expect の属性は無い。今の数（main bec78d34・clippy 0.1.98・根の clippy.toml の閾値で 3 つの lint を -W で撃った・ca8bca7b まで歯の file は動いていない）は、この行の 19 file の違反 37（行 21・複雑度 16・引数 0）・関数 31・file 19。
+
+      形。31 の関数（どれも #[test] の fn）を、関数の本体の最上位の文の切れ目に呼びの行と新しい private な関数の頭を差し込んで割る（足す関数 33・それぞれ頭の直前に /// の doc の行 1 行・移す行は字のまま、その場に残る）。後半が前半の束縛を使う所は引数で渡し、evkind.rs は 4 つの path を元の let と同じ形の tuple の 1 つの引数に束ねる。形を替えた所は、pgz.rs の表 cases を 5 件目の後で 2 つに分けた所（配列を vec! と extend に）と、pmisroute.rs の use の 1 行（足す関数が受信の口を値で受ける型の名 Subscription を足す）だけ。#[test] の行と次の fn の行（歯の名）は替えず、#[test] の fn を足さない（中核の歯が境界の fdlt.rs・gextw.rs・pmisroute.rs の #[test] の次の行から歯の名を読んで数える）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done (1) は verify の 1 行目（git apply --reverse --check）、done (2) は 2 行目（clippy の撃ち）、done (3) から (6) は 3 行目から 21 行目（歯の file ごとの nextest・done の file の順・filter の語は置かない）で測る。verify の最後の行（xtask の check）は workspace の全部の歯と大きさの数えを撃つ（done には名指さない）。clippy の行は cargo clippy -p tsuzuri-boundary に 19 の --test と --no-deps を渡し、名指した歯の crate と組みに入る境界の lib と build.rs だけを撃つ（--tests と --all-targets を使わない・境界の package の [[test]] が組む folio の歯は撃たない）。
+
+      構造の連鎖（grep で全部）。足す関数はどれも歯の crate の中の private な関数で、ほかの file から呼ばれない。境界の src は書かない。中核の歯 fdlt_own_names_clean・gext_names_clean・pmisfit_own_names_clean は歯の名の数と接頭辞を照らし、試作の木で緑（xtask の check が撃つ）。ほかにこの行の file の字を読む着地済みの歯は無い。書く file はどれも tests/ の下で、器の受付の余地の検査（1 file 1,500 行）は crate の src の下だけを見るので当たらず、欄 growth は置かない。
+
+      試作と噛み。試作の木（main ca8bca7b に a と b の試作・写しの fe9f7c54）で、verify の git apply の行と clippy の行が rc 0、歯の file の nextest は本数が前の木と同じで緑、xtask の check（分けない全部）は rc 0（verify の 37 行を 1 本ずつ撃ち全部 rc 0・w/verify2.log）。噛み（main bec78d34 に folio の本体の行 b と c の試作を載せた前の写しで撃った・歯の file の字は同じ・w/bite-a.log）は変異 23 を 1 つずつ当て、どれも名指した歯を落とした（file ごとに最初に足した関数の本体の頭に落ちる断言を 1 行挿す変異 19 は、その歯の file を rc 100 で落とした・境界の fdlt.rs と gextw.rs と pmisroute.rs の #[test] の fn の名の接頭辞を替える変異 3 は中核の名の歯 fdlt・gext・pmisfit を rc 100 で落とした・dstg.rs を割る前の字に戻す変異 1 は clippy の行を rc 101 で落とした）。verify の 1 行目は main ca8bca7b（差を当てる前）で rc 1。
+
+      範囲の外。境界の歯の残り（行 r4-boundary-tests-b）。境界の package の [[test]] が組む folio の歯（このノートの folio の歯の行）。中核と契約と面の歯。根の Cargo.toml の表と一覧 ENABLED と clippy.toml（後の表の行）。境界の src。depends は空（書く file はこのノートのほかの行と重ならない）。境界の歯は持ち込んだ folio に依るので、ノート surface-wave24a の r4-folio-src-b と r4-folio-src-c の着地の後に流す（このノートは 24a の全部の着地の後に置かれる）。
+
+  - n: 8
+    type: prose
+    title: 行 r4-boundary-tests-b — 境界の crate の歯の 12 file の R-4 の関数の粒度を関数を割って直す（歯の名は替えない）
+    body: |
+      在りかの main は 36934ac4。差の file docs/design/patch/r4-boundary-tests-b.patch は、起草 w57b が main ca8bca7b に行 r4-boundary-tests-a と b の試作を載せた commit（写しの fe9f7c54）から、この行の書く 12 file だけを git diff --no-color --full-index で切った（37,601 byte・12 file・main ca8bca7b で git apply --check が rc 0、試作の木で git apply --reverse --check が rc 0）。書く file は write-set の 12（境界の crate の歯の file）で、差はこの 12 file に閉じる（置き場だけの = の tests/hbconf.rs は verify の行が撃つ・書かない）。差の file は main が差の触れる file を動かすと当たらなくなるので、席は置く直前に当たるかを撃ち直す。
+
+      なぜ。規則の行 R-4 の関数の粒度（関数 60 行 以下と複雑度 15 以下と引数 5 以下）を歯にも当てる直しの 1 行（1 節の目的のとおり・判断の記録 ADR-25 の決定 (1) と条 P-22.1 と条 P-24.3・新しい問いは要らない）。境界の crate の歯の違反 72（31 file・引数 0）を 2 行に割り、この行は 12 file を持つ（残りは行 r4-boundary-tests-a）。境界の歯に行 r4-args-mark の expect の属性は無い。今の数（main bec78d34・clippy 0.1.98・根の clippy.toml の閾値で 3 つの lint を -W で撃った・ca8bca7b まで歯の file は動いていない）は、この行の 12 file の違反 35（行 23・複雑度 12・引数 0）・関数 29・file 12。
+
+      形。29 の関数（うち #[test] でない手の関数 8〔server_acct.rs の impl Place の lay と expected・server_seat.rs と stcli.rs と stnfy.rs と strelay.rs の new・stcli.rs と strelay.rs の serve〕）を、関数の本体の最上位の文の切れ目に呼びの行と新しい private な関数の頭を差し込んで割る（足す関数 33・それぞれ頭の直前に /// の doc の行 1 行・impl の中の new と lay と expected は同じ impl の関連の関数に割る）。後半が前半の束縛を使う所は引数で渡し、rvk.rs は (old, id) の組、server_batch.rs は (d2, d3, d4) の組を tuple の 1 つの引数に束ねる。形を替えた所は、server_batch.rs と stcli.rs の表の歯の表を分けた所（server_batch.rs は for の表を vec! と chain に、stcli.rs は 3 つに分けて関数の鎖 parse_more → parse_last → parse_refusals でつなぐ）と、入れ子の中を抜いた 3 つの塊（server_acct.rs の unknown_rows は字下げが 4、stcli.rs と strelay.rs の respond は 8 減る・respond は今の頁などを値で受けて値で返す）だけ。#[test] の行と次の fn の行（歯の名）は替えず、#[test] の fn を足さない。fn config（歯 hbconf が本体の字を読む）は触らない。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done (1) は verify の 1 行目（git apply --reverse --check）、done (2) は 2 行目（clippy の撃ち）、done (3) から (6) は 3 行目から 14 行目（歯の file ごとの nextest・done の file の順・filter の語は置かない）で測る。done (7) は 15 行目（歯 hbconf）で測る。verify の最後の行（xtask の check）は workspace の全部の歯と大きさの数えを撃つ（done には名指さない）。clippy の行は cargo clippy -p tsuzuri-boundary に 12 の --test と --no-deps を渡し、名指した歯の crate と組みに入る境界の lib と build.rs だけを撃つ（--tests と --all-targets を使わない・境界の package の [[test]] が組む folio の歯は撃たない）。
+
+      構造の連鎖（grep で全部）。足す関数はどれも歯の crate の中の private な関数で、ほかの file から呼ばれない。境界の src は書かない。着地済みの歯 tests/hbconf.rs の hbconf_teeth_fill_the_rest_with_new が server_batch.rs と server_seat.rs の fn config の本体の字を読む。ほかにこの行の file の字を読む着地済みの歯は無い。書く file はどれも tests/ の下で、器の受付の余地の検査（1 file 1,500 行）は crate の src の下だけを見るので当たらず、欄 growth は置かない（stcli.rs は前から 1,500 行を越える・1,746 → 1,813）。
+
+      試作と噛み。試作の木（main ca8bca7b に a と b の試作・写しの fe9f7c54）で、verify の git apply の行と clippy の行が rc 0、歯の file の nextest は本数が前の木と同じで緑、xtask の check（分けない全部）は rc 0（verify の 37 行を 1 本ずつ撃ち全部 rc 0・w/verify2.log）。噛み（main bec78d34 に folio の本体の行 b と c の試作を載せた前の写しで撃った・歯の file の字は同じ・w/bite-b.log）は変異 14 を 1 つずつ当て、どれも名指した歯を落とした（file ごとに最初に足した関数の本体の頭に落ちる断言を 1 行挿す変異 12 は、その歯の file を rc 100 で落とした・server_batch.rs の fn config の ..Config::new( の .. の後に空白を入れる変異 1 は歯 hbconf を rc 100 で落とした・stcli.rs を割る前の字に戻す変異 1 は clippy の行を rc 101 で落とした）。verify の 1 行目は main ca8bca7b（差を当てる前）で rc 1。
+
+      範囲の外。境界の歯の残り（行 r4-boundary-tests-a）。境界の package の [[test]] が組む folio の歯（このノートの folio の歯の行）。中核と契約と面の歯。根の Cargo.toml の表と一覧 ENABLED と clippy.toml（後の表の行）。境界の src。depends は空（書く file はこのノートのほかの行と重ならない）。境界の歯は持ち込んだ folio に依るので、ノート surface-wave24a の r4-folio-src-b と r4-folio-src-c の着地の後に流す（このノートは 24a の全部の着地の後に置かれる）。
 
 figures: []

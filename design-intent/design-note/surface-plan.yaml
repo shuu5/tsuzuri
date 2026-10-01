@@ -408,6 +408,8 @@ sections:
       - {id: r4-folio-src-a, doc: surface-wave24a}
       - {id: r4-folio-src-b, doc: surface-wave24a}
       - {id: r4-folio-src-c, doc: surface-wave24a}
+      - {id: r4-boundary-tests-a, doc: surface-wave25a}
+      - {id: r4-boundary-tests-b, doc: surface-wave25a}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}

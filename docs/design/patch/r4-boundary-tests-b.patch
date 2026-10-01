@@ -1,0 +1,889 @@
+diff --git a/crates/tsuzuri-boundary/tests/qgate.rs b/crates/tsuzuri-boundary/tests/qgate.rs
+index 233e82ccf09ae3dd27e2b3b53bd337f0b1f9ee9e..6838fb8d090954712207ef3b2c242a5def245071 100644
+--- a/crates/tsuzuri-boundary/tests/qgate.rs
++++ b/crates/tsuzuri-boundary/tests/qgate.rs
+@@ -544,6 +544,11 @@ fn qgate_bad_args_close_drafts_only() {
+             folio,
+         ]),
+     ];
++    deny_bad_args(place, cases);
++}
++
++/// 壊れた引数の組ごとに、起票の呼びは args の拒み・ほかの呼びは rc 1 で、偽の bd と設計の道具を撃たない。
++fn deny_bad_args(place: Place, cases: Vec<Vec<OsString>>) {
+     let deny = gate::output(&Gate::Deny {
+         why: Why::Args,
+         ids: Vec::new(),
+diff --git a/crates/tsuzuri-boundary/tests/rhold.rs b/crates/tsuzuri-boundary/tests/rhold.rs
+index ccae4f4ff6f41f8ae438c76036f3cd11d38ab209..4c44fe35297f37ff045b76d494180ce19fd48089 100644
+--- a/crates/tsuzuri-boundary/tests/rhold.rs
++++ b/crates/tsuzuri-boundary/tests/rhold.rs
+@@ -465,6 +465,11 @@ fn rhold_routes_hold_and_mark() {
+             assert!(matches!(stats, Reading::Known(_)), "{}", reply.body);
+         }
+     }
++    plain_and_up(place, addr);
++}
++
++/// 台帳を読まない口の頭の無さと、戻した後に頭が消えるまでを見る。
++fn plain_and_up(place: Place, addr: SocketAddr) {
+     // 台帳を読まない口は頭を付けない。
+     let project = get(addr, "/api/project");
+     assert_eq!(project.status, 200, "{}", project.body);
+diff --git a/crates/tsuzuri-boundary/tests/rvk.rs b/crates/tsuzuri-boundary/tests/rvk.rs
+index 6a1901a242c589a3e78072d911e3f802fd6881bd..43c8d9e9b90235051f9ee7987afc7541bd92e108 100644
+--- a/crates/tsuzuri-boundary/tests/rvk.rs
++++ b/crates/tsuzuri-boundary/tests/rvk.rs
+@@ -539,7 +539,11 @@ fn rvk_latest_and_revocable_table() {
+             "{notes:?} {question} {ruling}"
+         );
+     }
++    revocable_rows(t);
++}
+ 
++/// 取り消せる問いの真と偽の表と、裁定の行の頭の字の一致を見る。
++fn revocable_rows(t: Table) {
+     let truthy = [
+         (item("closed", true, &[&t.a, &t.b]), B),
+         (item("closed", true, &[&t.a, &t.b, &t.r]), B),
+@@ -814,7 +818,17 @@ fn rvk_retry_reopens_only() {
+     );
+     assert_eq!(place.calls("bdw").len(), 1);
+     assert!(place.calls("scribe2").is_empty(), "落ちた書きの後に配達する");
++    stale_and_http(tooth, (old, id), lines, ledger, req);
++}
+ 
++/// 撃ち直しが古い版で断られる台帳と、口の server での開き直しだけの撃ち直しを見る。
++fn stale_and_http(
++    tooth: &str,
++    (old, id): (&str, &str),
++    lines: [String; 2],
++    ledger: String,
++    req: RevokeRequest,
++) {
+     // 答え直した後・問いの欄が違う・open の台帳は 409 で何も撃たない。
+     let answered = [
+         lines[0].clone(),
+@@ -920,6 +934,17 @@ fn rvk_http_guard_and_reply() {
+         assert_eq!(refused(&reply), want, "{req:?}");
+     }
+     assert!(place.calls("bdw").is_empty(), "守りと断りで偽の bdw を撃つ");
++    written_and_failed(tooth, ledger, good, place, addr);
++}
++
++/// 書けた時の応答と、書きが落ちた時・台帳が読めない時の応答を見る。
++fn written_and_failed(
++    tooth: &str,
++    ledger: String,
++    good: RevokeRequest,
++    place: Place,
++    addr: SocketAddr,
++) {
+     // 書いた。
+     let reply = post(addr, &good);
+     assert_eq!(reply.status, 200, "{}", reply.body);
+diff --git a/crates/tsuzuri-boundary/tests/server_acct.rs b/crates/tsuzuri-boundary/tests/server_acct.rs
+index 7ae4d393c16ad9fc31a7c5d130d52702b1f5d733..8ee2986981af95591aef7f25b79ae9bc58417530 100644
+--- a/crates/tsuzuri-boundary/tests/server_acct.rs
++++ b/crates/tsuzuri-boundary/tests/server_acct.rs
+@@ -263,6 +263,11 @@ impl Place {
+             self.out(&format!("rules-{rule}"), text);
+         }
+         self.out(&format!("rules-{}", GRACE_RULE.0), GRACE_RULE.1);
++        self.lay_state();
++    }
++
++    /// git と台帳の字と、state dir の下の席と event log と群の記録の字を置く。
++    fn lay_state(&mut self) {
+         // git は state dir の path の前後に空白を付けて返す（除いて使う）。
+         let (sa, sb) = (self.state("state-a"), self.state("state-b"));
+         self.put(
+@@ -382,6 +387,17 @@ impl Place {
+                 dirs.push(state);
+             }
+         }
++        self.seats_and_projects(drop, out, host, dirs)
++    }
++
++    /// 席の状態の記録と project ごとの字を足して、読みが集めたはずの字を組み終える。
++    fn seats_and_projects(
++        &self,
++        drop: &[&str],
++        out: impl Fn(&str) -> Option<String>,
++        mut host: HostTexts,
++        dirs: Vec<&str>,
++    ) -> (HostTexts, BTreeMap<String, ProjectTexts>) {
+         for state in dirs {
+             let Some(doctor) = out(&format!("doctor-{state}")) else {
+                 continue;
+@@ -499,40 +515,45 @@ fn server_acct_doc_matches_core() {
+         // 終わる時刻は器の合図の健康の行の grace_left=1200 に今を足した時刻（欄の無い席の行は無し）。
+         assert_eq!(row(&got, "proj-a").move_until, Some(NOW + 1200));
+         assert_eq!(row(&got, "proj-e").move_until, None);
+-        // git が落ちるか空を返す project は state dir なしの行。
+-        for p in ["proj-c", "proj-d"] {
+-            let r = row(&got, p);
+-            assert!(!r.state_dir_known, "{p}");
+-            assert_eq!(
+-                (&r.seat, &r.runs, &r.ledger, &r.next),
+-                (
+-                    &Reading::Unknown,
+-                    &Reading::Unknown,
+-                    &Reading::Unknown,
+-                    &Reading::Unknown
+-                ),
+-                "{p}"
+-            );
+-        }
+-        // 台帳が読めない project は台帳と次の一手が Unknown。
+-        let b = row(&got, "proj-b");
+-        assert_eq!((&b.ledger, &b.next), (&Reading::Unknown, &Reading::Unknown));
+-        for p in ["proj-a", "proj-e"] {
+-            let r = row(&got, p);
+-            assert!(matches!(r.ledger, Reading::Known(_)), "{p}");
+-            assert!(matches!(r.next, Reading::Known(_)), "{p}");
+-        }
+-        assert!(matches!(got.accounts, Reading::Known(_)));
+-        assert!(matches!(got.groups, Reading::Known(_)));
+-        let Reading::Known(moves) = &got.moves else {
+-            panic!("移動が Unknown");
+-        };
++        unknown_rows(got);
++    }
++}
++
++/// git が落ちるか空の project と台帳が読めない project の行と、口座と群と移動の読みを見る。
++fn unknown_rows(got: AccountDoc) {
++    // git が落ちるか空を返す project は state dir なしの行。
++    for p in ["proj-c", "proj-d"] {
++        let r = row(&got, p);
++        assert!(!r.state_dir_known, "{p}");
+         assert_eq!(
+-            moves.len(),
+-            3,
+-            "今の記録と history の account の記録: {moves:?}"
++            (&r.seat, &r.runs, &r.ledger, &r.next),
++            (
++                &Reading::Unknown,
++                &Reading::Unknown,
++                &Reading::Unknown,
++                &Reading::Unknown
++            ),
++            "{p}"
+         );
+     }
++    // 台帳が読めない project は台帳と次の一手が Unknown。
++    let b = row(&got, "proj-b");
++    assert_eq!((&b.ledger, &b.next), (&Reading::Unknown, &Reading::Unknown));
++    for p in ["proj-a", "proj-e"] {
++        let r = row(&got, p);
++        assert!(matches!(r.ledger, Reading::Known(_)), "{p}");
++        assert!(matches!(r.next, Reading::Known(_)), "{p}");
++    }
++    assert!(matches!(got.accounts, Reading::Known(_)));
++    assert!(matches!(got.groups, Reading::Known(_)));
++    let Reading::Known(moves) = &got.moves else {
++        panic!("移動が Unknown");
++    };
++    assert_eq!(
++        moves.len(),
++        3,
++        "今の記録と history の account の記録: {moves:?}"
++    );
+ }
+ 
+ #[test]
+@@ -994,6 +1015,11 @@ fn cspk_acct_reads_host_log() {
+         ]
+     );
+     assert_eq!(got, place.core_doc(&[]));
++    host_log_unmarked(acct, host_log, b_log);
++}
++
++/// 引数の state dir の log は印にせず、anchor の state dir の log は印にする。
++fn host_log_unmarked(acct: Acct, host_log: PathBuf, b_log: PathBuf) {
+     let marks = acct.marks();
+     assert!(!marks.contains(&host_log), "引数の state dir の log は印にしない");
+     assert!(marks.contains(&b_log));
+diff --git a/crates/tsuzuri-boundary/tests/server_batch.rs b/crates/tsuzuri-boundary/tests/server_batch.rs
+index 3941117466cba943973999c69c38fc95d05f8e84..94d98e9c90769073a7a3f43300541c8ff848891c 100644
+--- a/crates/tsuzuri-boundary/tests/server_batch.rs
++++ b/crates/tsuzuri-boundary/tests/server_batch.rs
+@@ -522,7 +522,7 @@ fn server_batch_refusals_write_nothing() {
+     let addr = place.serve();
+     let (d2, d3, d4) = (digest(addr, Q2), digest(addr, Q3), digest(addr, A1));
+     let stale = "0000000000000000";
+-    for (items, verbatim, want) in [
++    let rows = vec![
+         // A-1 の印を持つ問いを含む束。
+         (
+             vec![item(Q2, &d2, None), item(A1, &d4, Some("個別"))],
+@@ -560,6 +560,19 @@ fn server_batch_refusals_write_nothing() {
+             "",
+             Refusal::EmptyVerbatim,
+         ),
++    ];
++    refuse_rows(place, addr, rows, (d2, d3, d4), stale);
++}
++
++/// 断る行が 2 つ在る束を表に足して撃ち、表の外の断りと断りで書かないことを見る。
++fn refuse_rows(
++    place: Place,
++    addr: SocketAddr,
++    rows: Vec<(Vec<BatchItem>, &str, Refusal)>,
++    (d2, d3, d4): (String, String, String),
++    stale: &str,
++) {
++    for (items, verbatim, want) in rows.into_iter().chain([
+         // 断る行が 2 つ在れば、要求の順で先の行の理由。
+         (
+             vec![item(MISSING, &d2, None), item(A1, &d4, None)],
+@@ -586,7 +599,7 @@ fn server_batch_refusals_write_nothing() {
+             "はい",
+             Refusal::StaleVersion,
+         ),
+-    ] {
++    ]) {
+         let label = format!("{items:?} {verbatim:?}");
+         let reply = post_batch(addr, items, verbatim);
+         assert_eq!(reply.status, want.http_status(), "{label}: {}", reply.body);
+@@ -810,6 +823,11 @@ fn server_batch_guards_write_nothing() {
+     }
+     assert!(place.calls("bdw").is_empty(), "守りで偽の bdw を撃つ");
+     assert!(place.calls("scribe2").is_empty(), "守りで偽の器を撃つ");
++    guards_pass_same_origin(place, addr, bodies);
++}
++
++/// 同じ Origin の要求は通り、GET でない要求を受けない口と method は 405 であることを見る。
++fn guards_pass_same_origin(place: Place, addr: SocketAddr, bodies: [(&str, String); 2]) {
+     // 同じ Origin は通る（束の配達の印を待ってから方針を送る）。
+     for (path, body) in &bodies {
+         let reply = send(
+diff --git a/crates/tsuzuri-boundary/tests/server_seat.rs b/crates/tsuzuri-boundary/tests/server_seat.rs
+index 8e58c818b166ad2e99015899fa4c90c62c030157..c9b80acc2fa90e12129f7f277acb9d73f4c1a4d3 100644
+--- a/crates/tsuzuri-boundary/tests/server_seat.rs
++++ b/crates/tsuzuri-boundary/tests/server_seat.rs
+@@ -104,6 +104,11 @@ impl Place {
+                  exec cat '{root}/out-'\"$out\""
+             ),
+         );
++        Self::put_texts(place)
++    }
++
++    /// 組の字（器の出力・state dir の file・群の記録）を作業場に置く。
++    fn put_texts(place: Place) -> Place {
+         let t = &place.texts;
+         let outputs = [&t.tick_status, &t.doctor, &t.usage];
+         for (out, text) in OUTPUTS.iter().zip(outputs) {
+diff --git a/crates/tsuzuri-boundary/tests/shb.rs b/crates/tsuzuri-boundary/tests/shb.rs
+index 139c336d2904c7845b2d6e6f2cd733630d3a5dab..4003f5279de1e8b2d2a7d6a2d9eaf10200728a43 100644
+--- a/crates/tsuzuri-boundary/tests/shb.rs
++++ b/crates/tsuzuri-boundary/tests/shb.rs
+@@ -531,6 +531,11 @@ fn shb_own_anchor_by_path() {
+     );
+     assert!(!off.exists(), "器が停止の記録を消す");
+ 
++    own_by_other_paths(place, acct);
++}
++
++/// 別の字の path・最後の名が同じ anchor・末尾の「/」の宣言でも、名でなく dir で anchor を引くことを見る。
++fn own_by_other_paths(place: Place, acct: Acct) {
+     // 同じ dir を指す別の字の path。
+     for repo in [place.proj("proj-a").join("inner").join(".."), place.link()] {
+         assert_eq!(
+diff --git a/crates/tsuzuri-boundary/tests/stcdp.rs b/crates/tsuzuri-boundary/tests/stcdp.rs
+index 3215987de7b0e2d0347142400815704109d3a094..1756ebccec12f18458ad1b5435fce47163365104 100644
+--- a/crates/tsuzuri-boundary/tests/stcdp.rs
++++ b/crates/tsuzuri-boundary/tests/stcdp.rs
+@@ -788,6 +788,11 @@ fn stage_cdp_json_helpers() {
+     assert_eq!(json::member("[1]", "id"), None);
+     assert_eq!(json::member("7", "id"), None);
+ 
++    unquote_cases();
++}
++
++/// json::unquote が逃がしの字を戻し、引用符の無い字と壊れた逃がしを断ることを見る。
++fn unquote_cases() {
+     assert_eq!(
+         json::unquote(r#""a\u00e9\ud83d\ude00\"\\\/\n""#).as_deref(),
+         Some("a\u{e9}\u{1F600}\"\\/\n")
+@@ -858,6 +863,11 @@ fn stage_cdp_steps_table() {
+         vec![call("Runtime.evaluate", DOM_PARAMS)],
+         vec![call("Runtime.enable", "{}"), call("Log.enable", "{}")],
+     ];
++    steps_match_table(want);
++}
++
++/// 台本の命令ごとの段が表のとおりで、CDP の電文の字が決まりの形であることを見る。
++fn steps_match_table(want: [Vec<Step>; 11]) {
+     for (command, want) in script().iter().zip(want) {
+         assert_eq!(cdp::steps(command), want, "{command:?}");
+     }
+diff --git a/crates/tsuzuri-boundary/tests/stcli.rs b/crates/tsuzuri-boundary/tests/stcli.rs
+index 75e47589a9b6425f2cb06c13b0aa6700e7594692..0ec0e87cce0eab8c33b6f5f6cbf78230409e3d60 100644
+--- a/crates/tsuzuri-boundary/tests/stcli.rs
++++ b/crates/tsuzuri-boundary/tests/stcli.rs
+@@ -314,22 +314,7 @@ impl Field {
+             .join("stcli")
+             .join(name);
+         let _ = fs::remove_dir_all(&root);
+-        let records = root.join("records");
+-        let repo = root.join("repo");
+-        let state = root.join("state");
+-        for dir in [&records, &repo, &state] {
+-            fs::create_dir_all(dir).expect("場の dir");
+-        }
+-        fs::write(state.join(terminal::FACE), fixture()).expect("host の面");
+-        let input = root.join("in.fifo");
+-        let output = root.join("out.fifo");
+-        for fifo in [&input, &output] {
+-            let made = Process::new("mkfifo")
+-                .arg(fifo)
+-                .status()
+-                .expect("mkfifo を撃つ");
+-            assert!(made.success(), "mkfifo {}", fifo.display());
+-        }
++        let (records, repo, state, input, output) = Self::dirs(&root);
+         let status = root.join("status");
+         fs::write(&status, STATUS).expect("場の status");
+         let tmp = env::temp_dir().join(format!("stcli-{name}-{}", process::id()));
+@@ -361,24 +346,8 @@ impl Field {
+             "scribe2",
+             &format!("if [ -e '{}' ]; then exit 1; fi\nexit 0\n", broken.display()),
+         );
+-        let git = fake(
+-            &root,
+-            "git",
+-            &format!(
+-                "case \"$5\" in\n  scribe2.statedir) printf '%s\\n' '{}' ;;\n  tsuzuri.boardport) printf '4801\\n' ;;\n  *) exit 1 ;;\nesac\n",
+-                state.display()
+-            ),
+-        );
+-        let tailnet = fake(&root, "tailnet", &format!("exec cat '{}'\n", status.display()));
+-        let chrome = fake(
+-            &root,
+-            "chrome",
+-            &format!(
+-                "cat <&3 > '{}' &\nexec cat '{}' >&4\n",
+-                input.display(),
+-                output.display()
+-            ),
+-        );
++        let (git, tailnet, chrome) =
++            Self::local_fakes(root.clone(), &state, &status, &input, &output);
+         Field {
+             root,
+             repo,
+@@ -400,6 +369,56 @@ impl Field {
+         }
+     }
+ 
++    /// 場の dir と host の面と 2 つの FIFO を作る。
++    fn dirs(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf, PathBuf) {
++        let records = root.join("records");
++        let repo = root.join("repo");
++        let state = root.join("state");
++        for dir in [&records, &repo, &state] {
++            fs::create_dir_all(dir).expect("場の dir");
++        }
++        fs::write(state.join(terminal::FACE), fixture()).expect("host の面");
++        let input = root.join("in.fifo");
++        let output = root.join("out.fifo");
++        for fifo in [&input, &output] {
++            let made = Process::new("mkfifo")
++                .arg(fifo)
++                .status()
++                .expect("mkfifo を撃つ");
++            assert!(made.success(), "mkfifo {}", fifo.display());
++        }
++        (records, repo, state, input, output)
++    }
++
++    /// 偽の git と tailnet と chrome を置く。
++    fn local_fakes(
++        root: PathBuf,
++        state: &Path,
++        status: &Path,
++        input: &Path,
++        output: &Path,
++    ) -> (PathBuf, PathBuf, PathBuf) {
++        let git = fake(
++            &root,
++            "git",
++            &format!(
++                "case \"$5\" in\n  scribe2.statedir) printf '%s\\n' '{}' ;;\n  tsuzuri.boardport) printf '4801\\n' ;;\n  *) exit 1 ;;\nesac\n",
++                state.display()
++            ),
++        );
++        let tailnet = fake(&root, "tailnet", &format!("exec cat '{}'\n", status.display()));
++        let chrome = fake(
++            &root,
++            "chrome",
++            &format!(
++                "cat <&3 > '{}' &\nexec cat '{}' >&4\n",
++                input.display(),
++                output.display()
++            ),
++        );
++        (git, tailnet, chrome)
++    }
++
+     /// 偽の program の argv の記録（撃たれた順）。
+     fn records(&self, name: &str) -> Vec<Vec<String>> {
+         let count: usize = fs::read_to_string(self.records.join(format!("{name}.count")))
+@@ -523,43 +542,8 @@ fn serve(field: &Field) -> JoinHandle<Vec<String>> {
+                 }
+                 _ => break,
+             }
+-            let text = String::from_utf8(buf).expect("字の message");
+-            got.push(text.clone());
+-            let id = json::member(&text, "id").expect("鍵 id").to_string();
+-            let method = json::member(&text, "method")
+-                .and_then(json::unquote)
+-                .expect("鍵 method");
+-            let session = json::member(&text, "sessionId").map(str::to_string);
+-            let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
+-            let replies = match method.as_str() {
+-                "Target.getTargets" => vec![format!(
+-                    r#"{{"id":{id},"result":{{"targetInfos":[{{"targetId":"T1","type":"page","url":{}}}]}}}}"#,
+-                    json::escape(&now)
+-                )],
+-                "Target.attachToTarget" => {
+-                    vec![format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#)]
+-                }
+-                "Page.navigate" => {
+-                    now = json::member(&text, "params")
+-                        .and_then(|p| json::member(p, "url"))
+-                        .and_then(json::unquote)
+-                        .expect("移り先の url");
+-                    vec![ok, LOAD.to_string()]
+-                }
+-                "Page.captureScreenshot" => {
+-                    vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
+-                }
+-                "Runtime.evaluate" => vec![format!(
+-                    r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
+-                    json::escape(DOM)
+-                )],
+-                "Runtime.enable" => vec![CONSOLE.to_string(), ok],
+-                "Page.getNavigationHistory" => vec![format!(
+-                    r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
+-                    json::escape(&now)
+-                )],
+-                _ => vec![ok],
+-            };
++            let (replies, session, next) = respond(buf, &mut got, now);
++            now = next;
+             for reply in replies {
+                 let reply = match &session {
+                     Some(s) => format!("{{\"sessionId\":{s},{}", &reply[1..]),
+@@ -576,6 +560,52 @@ fn serve(field: &Field) -> JoinHandle<Vec<String>> {
+     })
+ }
+ 
++/// 受けた 1 つの message を記し、返す message の列と session と今の頁を返す。
++fn respond(
++    buf: Vec<u8>,
++    got: &mut Vec<String>,
++    mut now: String,
++) -> (Vec<String>, Option<String>, String) {
++    let text = String::from_utf8(buf).expect("字の message");
++    got.push(text.clone());
++    let id = json::member(&text, "id").expect("鍵 id").to_string();
++    let method = json::member(&text, "method")
++        .and_then(json::unquote)
++        .expect("鍵 method");
++    let session = json::member(&text, "sessionId").map(str::to_string);
++    let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
++    let replies = match method.as_str() {
++        "Target.getTargets" => vec![format!(
++            r#"{{"id":{id},"result":{{"targetInfos":[{{"targetId":"T1","type":"page","url":{}}}]}}}}"#,
++            json::escape(&now)
++        )],
++        "Target.attachToTarget" => {
++            vec![format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#)]
++        }
++        "Page.navigate" => {
++            now = json::member(&text, "params")
++                .and_then(|p| json::member(p, "url"))
++                .and_then(json::unquote)
++                .expect("移り先の url");
++            vec![ok, LOAD.to_string()]
++        }
++        "Page.captureScreenshot" => {
++            vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
++        }
++        "Runtime.evaluate" => vec![format!(
++            r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
++            json::escape(DOM)
++        )],
++        "Runtime.enable" => vec![CONSOLE.to_string(), ok],
++        "Page.getNavigationHistory" => vec![format!(
++            r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
++            json::escape(&now)
++        )],
++        _ => vec![ok],
++    };
++    (replies, session, now)
++}
++
+ /// 受けた message の method の列。
+ fn methods(got: &[String]) -> Vec<String> {
+     got.iter()
+@@ -795,6 +825,13 @@ fn stcli_parse_table() {
+             vec!["reload", "--to", "term-a"],
+             plain(one(Command::Reload), "term-a"),
+         ),
++    ];
++    parse_more(table);
++}
++
++/// 読みの表の中ほどの行（click から screenshot まで）を足して続ける。
++fn parse_more(mut table: Vec<(Vec<&str>, Call)>) {
++    let rest: Vec<(Vec<&str>, Call)> = vec![
+         (
+             vec!["click", "--to", "term-a", "--x", "10", "--y", "20"],
+             plain(one(Command::Click { x: 10, y: 20 }), "term-a"),
+@@ -841,6 +878,14 @@ fn stcli_parse_table() {
+                 "term-a",
+             ),
+         ),
++    ];
++    table.extend(rest);
++    parse_last(table);
++}
++
++/// 読みの表の残りの行（dom から後）を足して、表の全部を撃つ。
++fn parse_last(mut table: Vec<(Vec<&str>, Call)>) {
++    let rest: Vec<(Vec<&str>, Call)> = vec![
+         (
+             vec!["dom", "--to", "term-a"],
+             plain(one(Command::Dom), "term-a"),
+@@ -879,10 +924,15 @@ fn stcli_parse_table() {
+             },
+         ),
+     ];
++    table.extend(rest);
+     for (args, want) in table {
+         assert_eq!(cli::parse(&args), Ok(want), "{args:?}");
+     }
++    parse_refusals();
++}
+ 
++/// 読みの断りの表（命令と旗と値の形）。
++fn parse_refusals() {
+     let refusals: [(&[&str], &str); 19] = [
+         (&[], "命令が無い"),
+         (&["jump", "--to", "term-a"], "知らない命令 jump"),
+@@ -1355,7 +1405,11 @@ fn stcli_foreign_tables() {
+     assert!(account_page("http://x/?a=1&board=account#f"));
+     assert!(!account_page("http://x/#f?board=account"));
+     assert!(!account_page("http://x/?board=account2"));
++    page_url_table();
++}
+ 
++/// 頁の一覧の字から websocket の path の頁の URL を引く表。
++fn page_url_table() {
+     let list = format!(
+         "[ {}, {} ]",
+         r#"{"type":"page","url":"http://a/","webSocketDebuggerUrl":"ws://localhost/devtools/page/P1"}"#,
+@@ -1463,6 +1517,11 @@ fn stcli_memo_round_trip() {
+     for bad in ["", ".x", "a/b", "a b"] {
+         assert_eq!(memo::path(&root, bad), None, "{bad:?}");
+     }
++    memo_puts(root, a, b);
++}
++
++/// 覚えの file へ書く・読む・権限を 0600 に保つ。
++fn memo_puts(root: PathBuf, a: &str, b: &str) {
+     let file = root.join("tzst-term-a.win");
+     assert_eq!(memo::recall(&file, "p"), None);
+     assert_eq!(memo::put(&file, "p", a), Ok(true));
+@@ -1482,7 +1541,11 @@ fn stcli_memo_round_trip() {
+     fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).expect("権限を緩める");
+     assert_eq!(memo::put(&file, "r", a), Ok(true));
+     assert_eq!(mode(&file), 0o600);
++    memo_bad_puts(root, file, a);
++}
+ 
++/// 形の悪い project と頁の覚えは断り、file も dir も替えない。
++fn memo_bad_puts(root: PathBuf, file: PathBuf, a: &str) {
+     let text = fs::read_to_string(&file).expect("覚えの字");
+     for (project, page) in [
+         ("", a),
+@@ -1527,7 +1590,11 @@ fn stcli_open_marks_shown() {
+     assert_eq!(out, [LIVE_A, LINE]);
+     assert_eq!(field.shown(), shown);
+     far.stop();
++    reload_without_window(field, shown);
++}
+ 
++/// 窓の無い端末への reload は断り、印を替えない。
++fn reload_without_window(field: Field, shown: Vec<(String, u64)>) {
+     let mut targets = target::load(&field.config).expect("場の表示先の設定");
+     targets.default = Some("term-a".to_string());
+     target::save(&field.config, &targets).expect("既定を置く");
+diff --git a/crates/tsuzuri-boundary/tests/stnfy.rs b/crates/tsuzuri-boundary/tests/stnfy.rs
+index 210897db694a26f609c711a2519c31ba4f87dc65..5c88792ef471d48c5c98a7a5276afd00dd781e03 100644
+--- a/crates/tsuzuri-boundary/tests/stnfy.rs
++++ b/crates/tsuzuri-boundary/tests/stnfy.rs
+@@ -206,6 +206,11 @@ impl Field {
+         }
+         fs::write(state.join(FACE), face()).expect("host の面");
+         symlink("/usr/bin/env", far.join("env")).expect("far の env");
++        Self::put_fakes(root, repo, state, far)
++    }
++
++    /// 場の status の字と偽の器・git・tailnet の道具・ssh を置いた場。
++    fn put_fakes(root: PathBuf, repo: PathBuf, state: PathBuf, far: PathBuf) -> Field {
+         let status = root.join("status");
+         fs::write(&status, STATUS).expect("場の status");
+         let broken = root.join("broken");
+@@ -386,6 +391,11 @@ fn stnfy_shape_and_consts() {
+         save,
+     );
+ 
++    rc_and_line_tables(outcome, line);
++}
++
++/// 器の rc から結果への写しと、結果ごとの報告の行の字を表で見る。
++fn rc_and_line_tables(outcome: fn(i32) -> Outcome, line: fn(&str, &Outcome) -> String) {
+     let table: [(i32, Outcome); 5] = [
+         (0, Outcome::Sent),
+         (127, Outcome::Absent),
+@@ -732,6 +742,11 @@ fn stnfy_cli_refusals() {
+     assert_eq!(title(&field).as_deref(), Some("v"));
+     fs::remove_file(&field.broken).expect("印を消す");
+ 
++    later_refusals(field, title);
++}
++
++/// 記録の path が決まらない・tailnet の道具が落ちる・題の無い要求の断りと、撃った知らせの数を見る。
++fn later_refusals(field: Field, title: impl Fn(&Field) -> Option<String>) {
+     let (rc, out, _) = field.tz_env(&["--to", "term-a", "r"], OsStr::new("rel"), OsStr::new("h"));
+     assert_eq!(rc, 1, "{out:?}");
+     assert_eq!(
+diff --git a/crates/tsuzuri-boundary/tests/strelay.rs b/crates/tsuzuri-boundary/tests/strelay.rs
+index fc5e469ce8e53156dad3b5610d4604a076dc5f95..a319ff1676316ed45d75b691870c490059cf1564 100644
+--- a/crates/tsuzuri-boundary/tests/strelay.rs
++++ b/crates/tsuzuri-boundary/tests/strelay.rs
+@@ -280,15 +280,7 @@ impl Field {
+         let _ = fs::remove_dir_all(&root);
+         let records = root.join("records");
+         fs::create_dir_all(&records).expect("記録の置き場");
+-        let input = root.join("in.fifo");
+-        let output = root.join("out.fifo");
+-        for fifo in [&input, &output] {
+-            let made = Process::new("mkfifo")
+-                .arg(fifo)
+-                .status()
+-                .expect("mkfifo を撃つ");
+-            assert!(made.success(), "mkfifo {}", fifo.display());
+-        }
++        let (input, output) = Self::fifos(&root);
+         let status = root.join("status");
+         fs::write(&status, STATUS).expect("場の status");
+         let port = root.join("port");
+@@ -339,6 +331,20 @@ impl Field {
+         }
+     }
+ 
++    /// 場の 2 つの FIFO（in.fifo と out.fifo）を作る。
++    fn fifos(root: &Path) -> (PathBuf, PathBuf) {
++        let input = root.join("in.fifo");
++        let output = root.join("out.fifo");
++        for fifo in [&input, &output] {
++            let made = Process::new("mkfifo")
++                .arg(fifo)
++                .status()
++                .expect("mkfifo を撃つ");
++            assert!(made.success(), "mkfifo {}", fifo.display());
++        }
++        (input, output)
++    }
++
+     /// 偽の program の argv の記録（撃たれた順）。
+     fn records(&self, name: &str) -> Vec<Vec<String>> {
+         let count: usize = fs::read_to_string(self.records.join(format!("{name}.count")))
+@@ -400,63 +406,9 @@ fn serve(field: &Field, page: Page) -> JoinHandle<Vec<String>> {
+                 }
+                 _ => break,
+             }
+-            let text = String::from_utf8(buf).expect("字の message");
+-            got.push(text.clone());
+-            let id = json::member(&text, "id").expect("鍵 id").to_string();
+-            let method = json::member(&text, "method")
+-                .and_then(json::unquote)
+-                .expect("鍵 method");
+-            let session = json::member(&text, "sessionId").map(str::to_string);
+-            let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
+-            let replies = match method.as_str() {
+-                "Target.getTargets" => {
+-                    asks += 1;
+-                    let shown = match page {
+-                        Page::First => true,
+-                        Page::Second => asks >= 2,
+-                        Page::Never => false,
+-                    };
+-                    let mut infos = vec![
+-                        r#"{"targetId":"W1","type":"service_worker","url":"chrome-extension://x/bg.js"}"#
+-                            .to_string(),
+-                    ];
+-                    if shown {
+-                        infos.push(format!(
+-                            r#"{{"targetId":"T1","type":"page","url":{}}}"#,
+-                            json::escape(&now)
+-                        ));
+-                    }
+-                    vec![format!(
+-                        r#"{{"id":{id},"result":{{"targetInfos":[{}]}}}}"#,
+-                        infos.join(",")
+-                    )]
+-                }
+-                "Target.attachToTarget" => vec![
+-                    r#"{"method":"Target.attachedToTarget","params":{"sessionId":"S1","targetInfo":{"targetId":"T1","type":"page"},"waitingForDebugger":false}}"#
+-                        .to_string(),
+-                    format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#),
+-                ],
+-                "Page.navigate" => {
+-                    now = json::member(&text, "params")
+-                        .and_then(|p| json::member(p, "url"))
+-                        .and_then(json::unquote)
+-                        .expect("移り先の url");
+-                    vec![ok, LOAD.to_string()]
+-                }
+-                "Page.captureScreenshot" => {
+-                    vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
+-                }
+-                "Runtime.evaluate" => vec![format!(
+-                    r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
+-                    json::escape(DOM)
+-                )],
+-                "Runtime.enable" => vec![CONSOLE.to_string(), ok],
+-                "Page.getNavigationHistory" => vec![format!(
+-                    r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
+-                    json::escape(&now)
+-                )],
+-                _ => vec![ok],
+-            };
++            let (replies, session, next, count) = respond(buf, &mut got, now, asks, page);
++            now = next;
++            asks = count;
+             for reply in replies {
+                 let reply = match &session {
+                     Some(s) => format!("{{\"sessionId\":{s},{}", &reply[1..]),
+@@ -473,6 +425,74 @@ fn serve(field: &Field, page: Page) -> JoinHandle<Vec<String>> {
+     })
+ }
+ 
++/// 受けた 1 つの message を記し、返す message の列と session と今の頁と頁の一覧を問われた回数を返す。
++fn respond(
++    buf: Vec<u8>,
++    got: &mut Vec<String>,
++    mut now: String,
++    mut asks: i32,
++    page: Page,
++) -> (Vec<String>, Option<String>, String, i32) {
++    let text = String::from_utf8(buf).expect("字の message");
++    got.push(text.clone());
++    let id = json::member(&text, "id").expect("鍵 id").to_string();
++    let method = json::member(&text, "method")
++        .and_then(json::unquote)
++        .expect("鍵 method");
++    let session = json::member(&text, "sessionId").map(str::to_string);
++    let ok = format!(r#"{{"id":{id},"result":{{}}}}"#);
++    let replies = match method.as_str() {
++        "Target.getTargets" => {
++            asks += 1;
++            let shown = match page {
++                Page::First => true,
++                Page::Second => asks >= 2,
++                Page::Never => false,
++            };
++            let mut infos = vec![
++                r#"{"targetId":"W1","type":"service_worker","url":"chrome-extension://x/bg.js"}"#
++                    .to_string(),
++            ];
++            if shown {
++                infos.push(format!(
++                    r#"{{"targetId":"T1","type":"page","url":{}}}"#,
++                    json::escape(&now)
++                ));
++            }
++            vec![format!(
++                r#"{{"id":{id},"result":{{"targetInfos":[{}]}}}}"#,
++                infos.join(",")
++            )]
++        }
++        "Target.attachToTarget" => vec![
++            r#"{"method":"Target.attachedToTarget","params":{"sessionId":"S1","targetInfo":{"targetId":"T1","type":"page"},"waitingForDebugger":false}}"#
++                .to_string(),
++            format!(r#"{{"id":{id},"result":{{"sessionId":"S1"}}}}"#),
++        ],
++        "Page.navigate" => {
++            now = json::member(&text, "params")
++                .and_then(|p| json::member(p, "url"))
++                .and_then(json::unquote)
++                .expect("移り先の url");
++            vec![ok, LOAD.to_string()]
++        }
++        "Page.captureScreenshot" => {
++            vec![format!(r#"{{"id":{id},"result":{{"data":"{PNG}"}}}}"#)]
++        }
++        "Runtime.evaluate" => vec![format!(
++            r#"{{"id":{id},"result":{{"result":{{"type":"string","value":{}}}}}}}"#,
++            json::escape(DOM)
++        )],
++        "Runtime.enable" => vec![CONSOLE.to_string(), ok],
++        "Page.getNavigationHistory" => vec![format!(
++            r#"{{"id":{id},"result":{{"currentIndex":0,"entries":[{{"id":1,"url":{},"title":""}}]}}}}"#,
++            json::escape(&now)
++        )],
++        _ => vec![ok],
++    };
++    (replies, session, now, asks)
++}
++
+ /// 受けた message の method の列。
+ fn methods(got: &[String]) -> Vec<String> {
+     got.iter()
+diff --git a/crates/tsuzuri-boundary/tests/sttgt.rs b/crates/tsuzuri-boundary/tests/sttgt.rs
+index 5b270d017542311509e3971825f35cb2e7f36770..40a96b700c5749963d2b13af8b087eff1afdfa67 100644
+--- a/crates/tsuzuri-boundary/tests/sttgt.rs
++++ b/crates/tsuzuri-boundary/tests/sttgt.rs
+@@ -335,7 +335,11 @@ fn sttgt_targets_ops() {
+     assert_eq!(t.default.as_deref(), Some("term-b"));
+     assert!(t.projects.is_empty());
+     assert_eq!(t.shown, fixture.shown);
++    layer_names();
++}
+ 
++/// 層 A の名の照らしと project の名の形。
++fn layer_names() {
+     let layer = strings(&["term-a", "term-b"]);
+     assert_eq!(known("term-b", &layer), Ok(()));
+     assert_eq!(
+@@ -479,7 +483,11 @@ fn sttgt_parse_target_table() {
+         let e = err(parse_target(args), &format!("{args:?}"));
+         assert!(e.starts_with(head), "{args:?}: {e}");
+     }
++    show_lines();
++}
+ 
++/// 表示先の設定の show の行（上書きと既定と層 A の名）。
++fn show_lines() {
+     let fixture = fixture_value();
+     assert_eq!(
+         show(
+@@ -553,7 +561,11 @@ fn sttgt_cli_settings() {
+     let refused = err(known("term-x", &strings(&["term-a", "term-b"])), "term-x");
+     assert_eq!(out, [refused]);
+     assert_eq!(field.written().as_deref(), Some(both.as_str()));
++    clear_and_broken(field);
++}
+ 
++/// 上書きを外す・全体の既定で上書きを外す・検証の落ちで書かない。
++fn clear_and_broken(field: Field) {
+     let (rc, out) = field.tz(&["target", "clear", "--project", "proj-c"]);
+     assert_eq!(rc, 0, "{out:?}");
+     assert_eq!(out, ["project proj-c の上書きを外した（効く値は既定 term-a）"]);

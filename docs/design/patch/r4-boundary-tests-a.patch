@@ -1,0 +1,527 @@
+diff --git a/crates/tsuzuri-boundary/tests/aown.rs b/crates/tsuzuri-boundary/tests/aown.rs
+index 6e9862c5b1f7635bcfee428524a5f8b000a37e1e..87d7a4624af918c426b88b6218e74f2ba5f8ec26 100644
+--- a/crates/tsuzuri-boundary/tests/aown.rs
++++ b/crates/tsuzuri-boundary/tests/aown.rs
+@@ -224,7 +224,11 @@ fn aown_read_only_refuses_without_writes() {
+     assert!(cards.iter().any(|c| c.id.as_str() == OPEN), "{cards:?}");
+     let reads = place.count("bd");
+     assert!(reads >= 1, "偽の bd を撃たない");
++    refuse_then_answer(place, addr, reads);
++}
+ 
++/// 読むだけの server が 4 つの口を断ることと、読むだけでない server が答えを受けることを見る。
++fn refuse_then_answer(place: Place, addr: SocketAddr, reads: u32) {
+     let posts = [
+         (ruling::PATH, ruling_request(digest(OPEN))),
+         (
+diff --git a/crates/tsuzuri-boundary/tests/bhalf.rs b/crates/tsuzuri-boundary/tests/bhalf.rs
+index e38e847f27ee292baa6edbc41c41662f12156671..38044b58b2a090859c4c7991ba5679043a303a5f 100644
+--- a/crates/tsuzuri-boundary/tests/bhalf.rs
++++ b/crates/tsuzuri-boundary/tests/bhalf.rs
+@@ -543,6 +543,17 @@ fn bhalf_resend_rest() {
+             argvs[at]
+         );
+     }
++    deliver_and_writes(place, b2, argvs, minutes, old);
++}
++
++/// 送り直しの束の配達が 1 度だけで、書きが追記か閉じるだけで前の裁定に触れないことを見る。
++fn deliver_and_writes(
++    place: Place,
++    b2: RulingId,
++    argvs: Vec<Vec<String>>,
++    minutes: [String; 2],
++    old: RulingId,
++) {
+     let state = place.state.display().to_string();
+     assert_eq!(
+         place.argvs("scribe2"),
+diff --git a/crates/tsuzuri-boundary/tests/dstg.rs b/crates/tsuzuri-boundary/tests/dstg.rs
+index cb4c2b4a2f81e771fa5fadea2c2c46528e880ca6..6d605f8febfc1d42752a1a63c5f83b16a2e0b69d 100644
+--- a/crates/tsuzuri-boundary/tests/dstg.rs
++++ b/crates/tsuzuri-boundary/tests/dstg.rs
+@@ -316,6 +316,11 @@ fn dstg_wire_forms() {
+         wire::decode::<Targets>(r#"{"all":{"to":"term-a"}}"#).expect("読み"),
+         all
+     );
++    project_forms_and_refusals();
++}
++
++/// Targets::Project と OpenRequest の字の往復と、読まない字と名でない字の断りを見る。
++fn project_forms_and_refusals() {
+     let project = Targets::Project {
+         project: "proj-b".to_string(),
+         to: None,
+@@ -430,7 +435,11 @@ fn dstg_show_json_reads_setting() {
+         ]
+     );
+     assert_eq!(doc.names, strings(&["term-a"]));
++    real_tz_show();
++}
+ 
++/// 偽の器と偽の git と設定の file を置き、本物の tz の show を撃つ支度をする。
++fn real_tz_show() {
+     // 本物の tz（偽の器と偽の git・既定 term-a・上書き proj-b と proj-z・群の anchor は proj-a と proj-b）。
+     let place = Place::new("show-json");
+     let state = place.root.join("state-a");
+@@ -474,6 +483,11 @@ fn dstg_show_json_reads_setting() {
+             String::from_utf8(out.stdout).expect("標準出力"),
+         )
+     };
++    show_runs(run);
++}
++
++/// 本物の tz の show を --json の有り無しで撃ち、電文と今までの行を見る。
++fn show_runs(run: impl Fn(&[&str]) -> (Option<i32>, String)) {
+     let (rc, out) = run(&["--json"]);
+     assert_eq!(rc, Some(0), "{out}");
+     assert_eq!(out.lines().count(), 1, "1 行の標準出力: {out}");
+@@ -663,7 +677,11 @@ fn dstg_all_post_scope() {
+             "{text}"
+         );
+     }
++    bare_scope(place);
++}
+ 
++/// state dir の無い server が --repo の project だけを受けることを見る。
++fn bare_scope(place: Place) {
+     // state dir の無い server は --repo の project だけを受ける。
+     let (_bare_served, bare) = place.serve(false);
+     place.clear();
+@@ -806,6 +824,11 @@ fn dstg_wiring_text() {
+             assert!(!text.contains("guarded(req,"), "{file} が guarded を通る");
+         }
+     }
++    entry_and_consts();
++}
++
++/// 入口と設定の配線の字と、撃つ program・引数・待ちの定数を見る。
++fn entry_and_consts() {
+     assert_eq!(src("main.rs").matches("std::env::current_exe()").count(), 1);
+     assert_eq!(
+         src("server/config.rs").matches("stagecall::TZ.into()").count(),
+diff --git a/crates/tsuzuri-boundary/tests/eheld.rs b/crates/tsuzuri-boundary/tests/eheld.rs
+index 0953a92a23b2c455d5a3fbc4e0530c4b7c8fc780..77b4e512845af02d0a68d8baaaaad3efc4ae5380 100644
+--- a/crates/tsuzuri-boundary/tests/eheld.rs
++++ b/crates/tsuzuri-boundary/tests/eheld.rs
+@@ -138,6 +138,15 @@ fn eheld_held_marks_and_ceiling() {
+ 
+     // 読めなかった読みは、上限が 60 秒でも FAILED_HOLD の内は撃ち直さず None を返し、過ぎれば撃ち直す。
+     assert_eq!(FAILED_HOLD, Duration::from_secs(5));
++    failed_reads(held, marks, read, &shots, mark);
++}
++
++/// 読めなかった読みを FAILED_HOLD の内は撃ち直さず、印が動くか過ぎれば撃ち直すことを見る。
++fn failed_reads<F, R>(held: Held, marks: [PathBuf; 2], read: F, shots: &Cell<i32>, mark: PathBuf)
++where
++    F: Fn(Option<&'static str>) -> R,
++    R: FnOnce() -> Option<String>,
++{
+     let long = Duration::from_secs(60);
+     let bad: Vec<OsString> = vec!["bad".into()];
+     assert_eq!(held.get(&bad, &marks, long, read(None)), None);
+@@ -293,7 +302,11 @@ fn eheld_vessel_marks_by_head() {
+     assert_eq!(ceiling(&TICK_ARGS), HOLD);
+     assert_eq!(ceiling(&DOCTOR_ARGS), DOCTOR_HOLD);
+     assert_eq!(ceiling(&USAGE_ARGS), SLOW_HOLD);
++    seat_input_marks();
++}
+ 
++/// 席の読みの頭ごとの印の file の並び（群の記録の file のうち数える物と数えない物）を見る。
++fn seat_input_marks() {
+     let place = Place::new("vessel-marks");
+     let seat = seat_in(&place, "m");
+     let groups = seat.groups_dir().expect("群の記録の dir");
+diff --git a/crates/tsuzuri-boundary/tests/epolq.rs b/crates/tsuzuri-boundary/tests/epolq.rs
+index c12c407f0f59fdb9830ad411f0371180a3bde07a..b88b873a2c9902df640396e068582935ab6632ce 100644
+--- a/crates/tsuzuri-boundary/tests/epolq.rs
++++ b/crates/tsuzuri-boundary/tests/epolq.rs
+@@ -528,7 +528,11 @@ fn epolq_create_argv_words() {
+         pairs.into_iter().collect::<Vec<_>>(),
+         [("effect".to_string(), "operation".to_string())]
+     );
++    bare_create_argv();
++}
+ 
++/// 旗の無い子の書きの引数の列と、効き目だけを足した書きの metadata の旗を見る。
++fn bare_create_argv() {
+     let bare = LedgerWrite::CreateChild {
+         parent: id("fx-p"),
+         title: "t".into(),
+@@ -615,7 +619,11 @@ fn epolq_create_form() {
+             "方針（範囲 = all）",
+         ])
+     );
++    scope_and_heads(w);
++}
+ 
++/// 範囲が問いの id の方針と注の字の方針の書きの字と、3 つの書きの 4 つの頭を見る。
++fn scope_and_heads(w: LedgerWrite) {
+     let one = policy::create_write(
+         &id("fx-p"),
+         "fx-p.2",
+@@ -945,7 +953,11 @@ fn epolq_derived_reads_both() {
+     made.notes = policy::line(&rid(POLICY_ID), "all", TWO_LINES);
+     beads.push(made);
+     let text = ledger(&beads);
++    derived_from_ledger(text);
++}
+ 
++/// 台帳の字から組んだ graph の節点と辺、未配達の裁定、開いた問いを見る。
++fn derived_from_ledger(text: String) {
+     let mut g = build(&Inputs {
+         design_index: "FR8\t要件\tsrs.yaml\t00000000\t方針の欄",
+         ledger: &text,
+diff --git a/crates/tsuzuri-boundary/tests/eretry.rs b/crates/tsuzuri-boundary/tests/eretry.rs
+index 0ee87b7a1423405f75b6ca36d6781d564060dd65..ef8daf17b210404fca45e418c4e2a47d580bc381 100644
+--- a/crates/tsuzuri-boundary/tests/eretry.rs
++++ b/crates/tsuzuri-boundary/tests/eretry.rs
+@@ -287,7 +287,11 @@ fn eretry_read_retries_then_writes() {
+     assert_eq!(got, Outcome::LedgerUnknown);
+     assert_eq!(place.bd_count(), 3, "偽の bd は 3 回");
+     assert!(place.argvs("bdw").is_empty(), "読めないのに偽の bdw を撃つ");
++    revoke_and_batch_retry(ledger);
++}
+ 
++/// 取り消しと束も、読みが 2 回落ちた後の 3 回目で記録する。
++fn revoke_and_batch_retry(ledger: String) {
+     // 取り消しも 3 回目の読みで記録する。
+     let place = Place::new("revoke", &ledger);
+     place.bd_fails(2);
+@@ -347,7 +351,11 @@ fn eretry_deliver_after_reply() {
+         Some(response.ruling.as_str())
+     );
+     assert_eq!(place.argvs("bdw").len(), 3);
++    deliver_batch_after_reply();
++}
+ 
++/// 束の配達も、偽の器が門で止まっている間に記録を返し、門を開けた後に印を置く。
++fn deliver_batch_after_reply() {
+     // 束の 2 行。
+     let ledger = fixture(BATCH);
+     let place = Place::new("deliver-batch", &ledger);
+diff --git a/crates/tsuzuri-boundary/tests/esig.rs b/crates/tsuzuri-boundary/tests/esig.rs
+index 2e7e61305125b593b409b5287e94c4d4986aeffe..ab15d83556908007f4670423b945cbce92cff6f3 100644
+--- a/crates/tsuzuri-boundary/tests/esig.rs
++++ b/crates/tsuzuri-boundary/tests/esig.rs
+@@ -104,6 +104,17 @@ fn esig_nudge_ends_the_wait() {
+     thread::sleep(QUIET);
+     assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
+     assert_eq!(n(), 2, "印が動かないのに読む");
++    nudge_after_mark_moves(root, mark, hub, n, rx);
++}
++
++/// 印が動いた後の合図で知らせが 1 件だけ届き、見張りの無い Hub の合図は偽。
++fn nudge_after_mark_moves(
++    root: PathBuf,
++    mark: PathBuf,
++    hub: Arc<Hub>,
++    n: impl Fn() -> usize,
++    rx: tsuzuri_boundary::server::events::Subscription,
++) {
+     // 印が動いた後の合図でまた 1 件。
+     put(&mark, "333");
+     let at = Instant::now();
+@@ -249,6 +260,11 @@ fn esig_post_wakes_the_server() {
+     assert_eq!(reply, (202, NUDGED.to_string()), "合図の応答");
+     let got = next_ledger(&mut s, &mut seen, WITHIN).expect("合図から 200 ミリ秒以内の知らせ");
+     assert!(got - at <= WITHIN, "{:?}", got - at);
++    nudge_without_reading(root, addr, s);
++}
++
++/// 印が動かない合図と断る合図は見張りを起こさず、bd を撃たない。
++fn nudge_without_reading(root: PathBuf, addr: SocketAddr, s: TcpStream) {
+     // 印が動かなければ、合図を受けても bd を撃たない。
+     let before = calls(&root);
+     for _ in 0..3 {
+diff --git a/crates/tsuzuri-boundary/tests/evkind.rs b/crates/tsuzuri-boundary/tests/evkind.rs
+index fb9a8831c5d0157833cb30e05ed5fb4b88d88b15..35c9da703f888473482eb083775d1e2b687591c5 100644
+--- a/crates/tsuzuri-boundary/tests/evkind.rs
++++ b/crates/tsuzuri-boundary/tests/evkind.rs
+@@ -232,7 +232,15 @@ fn evkind_serve_marks_by_kind() {
+     let server = Server::bind(&config).expect("起動");
+     let addr: SocketAddr = server.local_addr().expect("口の住所");
+     thread::spawn(move || server.run());
++    marks_by_kind(root, (tick, log, events, doc), addr);
++}
+ 
++/// 口の知らせの接続で、印の file ごとにその種類の知らせを 1 件だけ受ける。
++fn marks_by_kind(
++    root: PathBuf,
++    (tick, log, events, doc): (PathBuf, PathBuf, PathBuf, PathBuf),
++    addr: SocketAddr,
++) {
+     let mut s = TcpStream::connect(addr).expect("接続");
+     s.write_all(format!("GET /api/surface/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+         .expect("要求を書く");
+diff --git a/crates/tsuzuri-boundary/tests/fdlt.rs b/crates/tsuzuri-boundary/tests/fdlt.rs
+index c0dbc195e319c99267d86ee29d1073d2c0eb0e61..c6d176a17ba0efb4e5f3248a16be2eb31082c24a 100644
+--- a/crates/tsuzuri-boundary/tests/fdlt.rs
++++ b/crates/tsuzuri-boundary/tests/fdlt.rs
+@@ -564,7 +564,11 @@ fn fdlt_run_quiet_paths() {
+     for name in ["git", "bd", "bdw"] {
+         assert!(place.calls(name).is_empty(), "worktree で偽の {name} を撃つ");
+     }
++    quiet_ledger_paths();
++}
+ 
++/// 口の空の列・受け手の居ない port・Unknown の台帳・bd の落ち・全部に印の在る台帳の静かな形。
++fn quiet_ledger_paths() {
+     // 口が Known の空の列: git だけを 1 回撃つ。
+     let place = Place::new("quiet-empty", &marked_ledger());
+     place.serve();
+diff --git a/crates/tsuzuri-boundary/tests/fserve.rs b/crates/tsuzuri-boundary/tests/fserve.rs
+index af664526a582a75045009fe3a040021d48a2dadd..315a55c02dd953ff527c624d3f1059e38bfcec3e 100644
+--- a/crates/tsuzuri-boundary/tests/fserve.rs
++++ b/crates/tsuzuri-boundary/tests/fserve.rs
+@@ -466,7 +466,11 @@ fn fserve_batch_refusal_logs_once() {
+     let (status, body) = reply.expect("応答を読めない");
+     assert_eq!(status, 200, "{body}");
+     let got: BatchResponse = wire::decode(&body).expect("束の応答の形");
++    delivered_once_refused_once(place, rest, got);
++}
+ 
++/// 束の id での配達が 1 度だけで、受けない行が標準 error に 1 行だけ在る。
++fn delivered_once_refused_once(place: Place, rest: String, got: BatchResponse) {
+     assert_eq!(
+         place.argvs("scribe2"),
+         [deliver_argv(&place, got.batch.as_str())],
+diff --git a/crates/tsuzuri-boundary/tests/gextw.rs b/crates/tsuzuri-boundary/tests/gextw.rs
+index 7f26585dcdf71ea9d6f41cf9c4fe0a6b99658822..3fa168e2838a5fb570a51fdc25527f12fb58529a 100644
+--- a/crates/tsuzuri-boundary/tests/gextw.rs
++++ b/crates/tsuzuri-boundary/tests/gextw.rs
+@@ -217,7 +217,11 @@ fn gext_check_takes_projects() {
+     let out = place.check(&[project(&place.gone)]);
+     assert_eq!(out.status.code(), Some(2), "{out:?}");
+     assert!(unverified(&out), "{}", stderr(&out));
++    check_cut_and_empty(place);
++}
+ 
++/// 置き場 cut の違反と、空の --project の値。
++fn check_cut_and_empty(place: Place) {
+     let out = place.check(&pair(&place.cut));
+     assert_eq!(out.status.code(), Some(1), "{out:?}");
+     assert!(
+diff --git a/crates/tsuzuri-boundary/tests/jcount.rs b/crates/tsuzuri-boundary/tests/jcount.rs
+index c9c112e39380814032afc43510cef796338e6225..abec37bfda8432fdafc9b8068b09b49ec2a68a74 100644
+--- a/crates/tsuzuri-boundary/tests/jcount.rs
++++ b/crates/tsuzuri-boundary/tests/jcount.rs
+@@ -169,7 +169,11 @@ fn jcount_rule_readings() {
+         said.text = format!("{}\n{words}", base.text);
+         assert_eq!(count(&said, &vocab), only("verbatim", n), "字 {words}");
+     }
++    library_and_nodeid_readings(vocab, base);
++}
+ 
++/// 読み先の条と節点の id の条の読み。
++fn library_and_nodeid_readings(vocab: String, base: Facts) {
+     assert_eq!(base.url, "http://127.0.0.1:4801/?page=pipeline&mode=beginner");
+     for (source, n) in [
+         ("//cdn.example.com/lib.js", 1),
+diff --git a/crates/tsuzuri-boundary/tests/jrun.rs b/crates/tsuzuri-boundary/tests/jrun.rs
+index fb63149e26f58f5bc1cf96caa5c77050c8dde6ac..4c9bcba2ca82dc4e5f6be629510259f72a62119e 100644
+--- a/crates/tsuzuri-boundary/tests/jrun.rs
++++ b/crates/tsuzuri-boundary/tests/jrun.rs
+@@ -228,6 +228,11 @@ fn jrun_case_order_and_readings() {
+     assert_eq!(page.log, want);
+     assert_eq!(facts.url, url);
+     assert_eq!(facts.errors, ["Uncaught boom"]);
++    switches_and_widths(url, pressed, facts);
++}
++
++/// 押した切り替えの読みと数え、広い幅の case と事実の形の違い。
++fn switches_and_widths(url: String, pressed: String, facts: tsuzuri_boundary::audit::Facts) {
+     assert_eq!(
+         facts.switches,
+         [
+@@ -353,7 +358,11 @@ fn jrun_sweep_all_cases() {
+         &plus([0; 12], "error", 1),
+     );
+     assert!(report.lines().any(|l| l == node_line), "{report}");
++    sweep_without_nodes(vocab);
++}
+ 
++/// 節点の無い圧縮の面では、節点の頁を開かずに止まる。
++fn sweep_without_nodes(vocab: String) {
+     let clean = fixture("clean.json");
+     let start = clean.find(r#""nodes": ["#).expect("札の列");
+     let end = start + clean[start..].find(']').expect("札の列の閉じ");
+@@ -392,6 +401,11 @@ fn jrun_measure_expression_text() {
+         "{removes:?}"
+     );
+     assert!(text.contains("getEventListeners"), "hover の受け手の見方");
++    returned_object_keys(text);
++}
++
++/// 測りの式の返す object の鍵の並びと、決まった値の欄。
++fn returned_object_keys(text: String) {
+     let start = text.find("return JSON.stringify({").expect("返す object");
+     let body = &text[start..];
+     let body = &body[..body.find("});").expect("object の閉じ")];
+diff --git a/crates/tsuzuri-boundary/tests/lidle.rs b/crates/tsuzuri-boundary/tests/lidle.rs
+index 769583de50d94ec5c50a487700a766283cc90ff6..19a09030e8a7bc37041ee58673ac9834dfc3b32f 100644
+--- a/crates/tsuzuri-boundary/tests/lidle.rs
++++ b/crates/tsuzuri-boundary/tests/lidle.rs
+@@ -299,6 +299,11 @@ fn lidle_live_reads_on_attach() {
+             files.clone(),
+         )
+     };
++    run_and_count(root, issues, config);
++}
++
++/// 起こした server の偽の bd の読みの数を、受け手 0 人の間と口と知らせの口で見る。
++fn run_and_count(root: PathBuf, issues: PathBuf, config: Config) {
+     let server = Server::bind(&config).expect("起動");
+     let addr = server.local_addr().expect("口の住所");
+     thread::spawn(move || server.run());
+diff --git a/crates/tsuzuri-boundary/tests/lsnap.rs b/crates/tsuzuri-boundary/tests/lsnap.rs
+index 835e324fdb3b7c33d6e9fce38abfde2a8bf3bf9b..b02a8867b916a9b37e9970d682108c4778604482 100644
+--- a/crates/tsuzuri-boundary/tests/lsnap.rs
++++ b/crates/tsuzuri-boundary/tests/lsnap.rs
+@@ -393,6 +393,11 @@ fn lsnap_watched_source_reads_once() {
+         }
+     );
+     assert_eq!(place.calls(), 2);
++    down_then_alone(place, source);
++}
++
++/// 見張りの読みが落ちた後の字と時刻と、watched でない Source の読みの数を見る。
++fn down_then_alone(place: Place, source: Source) {
+     // 見張りの読みが落ちれば、最後に読めた字と、その時刻。
+     place.flag("down", true);
+     let before = Instant::now();
+diff --git a/crates/tsuzuri-boundary/tests/lstore.rs b/crates/tsuzuri-boundary/tests/lstore.rs
+index 88370656d4fc412275b297a28226f2217a4d9c26..fc8fca1d51dbac45daa5a691828a362215daf854 100644
+--- a/crates/tsuzuri-boundary/tests/lstore.rs
++++ b/crates/tsuzuri-boundary/tests/lstore.rs
+@@ -242,6 +242,11 @@ fn lstore_values_and_dirs() {
+     assert_eq!(JOURNAL, "v".repeat(32));
+     assert_eq!(METADATA, "metadata.json");
+     assert_eq!(TABLE_SUFFIX, ".darc");
++    dirs_and_metadata();
++}
++
++/// metadata.json の字と置き方から store の dir と印を読むかを見る。
++fn dirs_and_metadata() {
+     let root = place("dirs");
+     let repo = root.join("repo");
+     let meta = repo.join(".beads").join(METADATA);
+@@ -445,6 +450,11 @@ fn lstore_live_journal_moves() {
+         bd: bd.into(),
+         ..Config::new(repo.clone(), "127.0.0.1:0".parse().expect("bind 先"), files)
+     };
++    serve_and_watch(root, repo, noms, text, config);
++}
++
++/// 起こした server の知らせの口で、読みの見立てと journal の動きへの bd の回と知らせの件を見る。
++fn serve_and_watch(root: PathBuf, repo: PathBuf, noms: PathBuf, text: String, config: Config) {
+     let server = Server::bind(&config).expect("起動");
+     let addr: SocketAddr = server.local_addr().expect("口の住所");
+     thread::spawn(move || server.run());
+diff --git a/crates/tsuzuri-boundary/tests/ntcsrv.rs b/crates/tsuzuri-boundary/tests/ntcsrv.rs
+index 514bcbeb8b82d4db99b8740036b8aaa366185e41..203c5de118fede473d506174ffd0b8034d1e2798 100644
+--- a/crates/tsuzuri-boundary/tests/ntcsrv.rs
++++ b/crates/tsuzuri-boundary/tests/ntcsrv.rs
+@@ -191,7 +191,11 @@ fn ntc_dir_files_gather() {
+         );
+     }
+     assert_eq!(EXT, ".json");
++    gather_records();
++}
+ 
++/// 記録の dir の files と gather が名と中身で記録を選び、読めない dir を Err にするかを見る。
++fn gather_records() {
+     let root = place("gather");
+     let dir = root.join("notify");
+     assert_eq!(notify::files(&dir).expect("無い dir"), Vec::<PathBuf>::new());
+diff --git a/crates/tsuzuri-boundary/tests/pgz.rs b/crates/tsuzuri-boundary/tests/pgz.rs
+index f77912b6b5d557e9efdc9ebe7d45afb62ddfd26c..92311a10c3add5c5719ffcd47e66cefb92d44902 100644
+--- a/crates/tsuzuri-boundary/tests/pgz.rs
++++ b/crates/tsuzuri-boundary/tests/pgz.rs
+@@ -111,7 +111,7 @@ fn pgz_respond_picks_copy() {
+     let cc = |v: &str| ("Cache-Control", v.to_string());
+     let vary = ("Vary", "Accept-Encoding".to_string());
+     let ce = ("Content-Encoding", "gzip".to_string());
+-    let cases: [Case; 10] = [
++    let cases: Vec<Case> = vec![
+         (
+             wasm,
+             Some("gzip, br"),
+@@ -147,6 +147,19 @@ fn pgz_respond_picks_copy() {
+             CSS_GZ,
+             vec![cc(NO_CACHE), vary.clone(), ce.clone()],
+         ),
++    ];
++    respond_rest(root, html, js, cc, cases);
++}
++
++/// 表の残りの要求を足して応答を照らし、無い file と置き場の外の要求と gz_copy を見る。
++fn respond_rest(
++    root: PathBuf,
++    html: &'static str,
++    js: &'static str,
++    cc: impl Fn(&str) -> (&'static str, String),
++    mut cases: Vec<Case>,
++) {
++    cases.extend([
+         (
+             "/app-0123abcd.js",
+             Some("gzip"),
+@@ -164,7 +177,7 @@ fn pgz_respond_picks_copy() {
+             WASM_GZ,
+             vec![cc(IMMUTABLE)],
+         ),
+-    ];
++    ]);
+     for (path, encoding, content_type, body, headers) in cases {
+         let resp = get(&root, path, encoding);
+         let what = format!("{path} {encoding:?}");
+diff --git a/crates/tsuzuri-boundary/tests/pmisroute.rs b/crates/tsuzuri-boundary/tests/pmisroute.rs
+index 9f06addb538ba131e8b17ba41178605da3761a5c..ea55adb1e684d20d8ee3fd61fde28ff588197f3c 100644
+--- a/crates/tsuzuri-boundary/tests/pmisroute.rs
++++ b/crates/tsuzuri-boundary/tests/pmisroute.rs
+@@ -15,7 +15,7 @@ use std::sync::Arc;
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
+-use tsuzuri_boundary::server::events::Hub;
++use tsuzuri_boundary::server::events::{Hub, Subscription};
+ use tsuzuri_boundary::server::form::{
+     FORM_ARGS, FORM_TIMEOUT, Form, Kept, REPO_ARGS, form_lines, misfits,
+ };
+@@ -343,7 +343,11 @@ fn pmisfit_form_kick_rules() {
+     assert!(place.argv().is_empty(), "許しの前に撃つ");
+     assert_eq!(form.kept(), None);
+     assert_eq!(misfits(None, 0), Reading::Unknown);
++    armed_kicks(place, form, state, rx);
++}
+ 
++/// 許しの後の撃ちと組と知らせを、同じ組の周・台帳の字だけが変わる周・題が変わる周で見る。
++fn armed_kicks(place: Place, form: Form, state: String, rx: Subscription) {
+     // 許しの後は 1 度撃ち、組を持ち、知らせを 1 件。
+     form.arm();
+     assert!(form.armed());
+@@ -391,7 +395,11 @@ fn pmisfit_form_kick_rules() {
+         form.kept().map(|k| k.ledger) == Some(renamed())
+     });
+     rx.recv_timeout(WAIT).expect("題を替えた周の知らせ");
++    failed_rounds(place, form, rx);
++}
+ 
++/// 台帳の読みか器が落ちた周・形の行の無い周・上限を越えた周の組と知らせと、戻った周を見る。
++fn failed_rounds(place: Place, form: Form, rx: Subscription) {
+     // 台帳の読みが落ちた周は器を撃たず None で知らせる。
+     let shots = place.argv().len();
+     form.kick(None);
+@@ -511,7 +519,11 @@ fn pmisfit_route_reads_kept_form() {
+         got,
+         board_with_doctor(LEDGER, EVENT, Some(&doctor), 0).board
+     );
++    route_rounds(place, addr, doctor);
++}
+ 
++/// 撃った後の口の要求と、撃っている間・撃ちを終えた後・落ちた周に口が写す札と一覧を見る。
++fn route_rounds(place: Place, addr: SocketAddr, doctor: String) {
+     // 口の要求は器を撃たない。
+     for _ in 0..3 {
+         assert_eq!(pipeline(addr).misfits, want());
