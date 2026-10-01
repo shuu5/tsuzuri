@@ -1,10 +1,10 @@
-//! block「orchestrator と口座」（見本の `#orch` と index.html の renderSeat・lowHTML・bandHTML・histHTML・
+//! block「orchestrator と口座」（見本の `#orch` と index.html の renderSeat・lowHTML・bandHTML・
 //! ui.js の stripSVG・stIcon・tkhbHTML・acct.js の meter・便 g-seat）。
 //! 中身は口 /api/seat（契約の型の SeatCard）から読む。状態の判定は server が済ませていて、ここは写すだけ。
 //! 電文の中の「まだ分からない」の欄はその欄だけ測れていないの記号にし、読めた欄は出す（要件 NFR2）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 群の chip の card（見本の pa:group）は、同じ server の口 /api/account の群の枠（GroupCard）から写す。
-//! 状態の帯の猶予の内・移り先の無い断り・逼迫の行と、詳しくの写しの行は、電文の器の移動の 4 つの欄
+//! 状態の帯の猶予の内・移り先の無い断り・逼迫の行は、電文の器の移動の 4 つの欄
 //! （move_to・grace_until・refused・pressure）を写すだけで判じない。猶予の残り秒だけは終わる時刻から
 //! 描く card の at を引く。card は描く今で描き直す（`drawn`・at は今と電文の at の大きい方・行 c-abs-seat）。
 //! 窓の行の閾値の線と印は、同じ口 /api/account の電文の caps（器の rules 行の写し）を窓の名で写すだけで判じない。
@@ -17,7 +17,7 @@ use tsuzuri_contract::wire;
 
 use super::{Body, NO_CONTENT, NOT_READ, UNKNOWN, state_class, state_key};
 use crate::account::heartbeat::{Toggle, seat_toggle};
-use crate::account::home::{EXPERT_CHARS, cap_of, wrap_words};
+use crate::account::home::cap_of;
 use crate::frame::{self, Block};
 use crate::view::{Fetched, JST, clock, hhmm, jst};
 use crate::vocab::label;
@@ -36,7 +36,7 @@ pub const PATH: &str = "/api/seat";
 pub const PATHS: &[&str] = &[PATH];
 
 /// この file の畳める段の開き閉じの鍵の形（行 hs-derived）。
-pub const FOLDS: &[&str] = &["seat:hist", "seat:more"];
+pub const FOLDS: &[&str] = &[];
 
 /// 口が読めないときの理由。
 pub const REASON: &str =
@@ -63,9 +63,6 @@ pub const REFUSED_NEXT: &str = "器は移らない（移り先が出るまで今
 
 /// 状態の帯の字: 群の今の口座の逼迫（後に口座と窓と使った割合と閾値が続く）。
 pub const PRESSED: &str = "逼迫:";
-
-/// 「詳しく」の段の字。
-pub const MORE: &str = "詳しく ▸";
 
 /// 上段の class（見本の `.orow`・見本の ui.css にも stylesheet にも規則は無く、上段を見分ける名だけ）。
 pub const OROW: &str = "orow";
@@ -406,27 +403,6 @@ pub struct Band {
     pub l2: Option<String>,
 }
 
-/// 口座の履歴の 1 行。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HistRow {
-    pub at: String,
-    pub from: Option<String>,
-    pub to: String,
-}
-
-/// 「詳しく」の中身（席の名・群の今の口座・登録の口座と同じかの印・doctor の席の行）。
-#[derive(Debug, Clone, PartialEq)]
-pub struct More {
-    pub target: String,
-    pub current: Reading<String>,
-    /// 登録の口座と群の今の口座が同じかの印（区画の席は比べないので None）。
-    pub same: Option<Reading<Sign>>,
-    /// doctor の席の行を経験者向けの 1 行の字数に畳んだ行（見本の gm1 int xo）。
-    pub doctor: Vec<String>,
-    /// 器の移動の 4 つの欄の写しの行を同じ字数に畳んだ行（doctor の行の後に並べる）。
-    pub copied: Vec<String>,
-}
-
 /// block の中身。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Seat {
@@ -435,9 +411,6 @@ pub struct Seat {
     pub strips: Vec<Strip>,
     pub low: Low,
     pub band: Option<Band>,
-    /// 口座の履歴（新しい順）。
-    pub hist: Reading<Vec<HistRow>>,
-    pub more: More,
 }
 
 impl Seat {
@@ -500,8 +473,6 @@ pub fn seat(card: &SeatCard) -> Seat {
         strips: Span::ALL.into_iter().map(|s| strip(card, s)).collect(),
         low: low(card),
         band: band(card),
-        hist: hist(card),
-        more: more(card),
     }
 }
 
@@ -780,69 +751,6 @@ pub fn band(card: &SeatCard) -> Option<Band> {
     (!l1.is_empty()).then_some(Band { l1, l2 })
 }
 
-/// 口座の履歴（新しい順・同じ時刻は電文の順）。
-pub fn hist(card: &SeatCard) -> Reading<Vec<HistRow>> {
-    map(&card.moves, |moves| {
-        let mut sorted: Vec<&AccountMove> = moves.iter().collect();
-        sorted.sort_by_key(|m| std::cmp::Reverse(m.at));
-        sorted
-            .into_iter()
-            .map(|m| HistRow {
-                at: hmd(m.at, card.at),
-                from: m.from.clone(),
-                to: m.to.clone(),
-            })
-            .collect()
-    })
-}
-
-/// 「詳しく」の中身（登録の口座か群が分からなければ印は測れていない）。
-pub fn more(card: &SeatCard) -> More {
-    let same = match (&card.account, &card.group) {
-        (Some(reg), Reading::Known(g)) => Reading::Known(sign(*reg == g.account)),
-        _ => Reading::Unknown,
-    };
-    let park = park_of(card);
-    More {
-        target: card.target.clone(),
-        current: if park {
-            Reading::Known(NO_CURRENT.to_string())
-        } else {
-            map(&card.group, |g| g.account.clone())
-        },
-        same: (!park).then_some(same),
-        doctor: wrap_words(&seat_line(card), EXPERT_CHARS),
-        copied: wrap_words(&copied_line(card), EXPERT_CHARS),
-    }
-}
-
-/// 器の字の写しの 1 つの値の字（在れば `f` の字・器の `-` は `-`・測れていなければ `?`）。
-fn copied_value<T>(r: &Reading<Option<T>>, f: impl FnOnce(&T) -> String) -> String {
-    match r {
-        Reading::Known(Some(v)) => f(v),
-        Reading::Known(None) => "-".to_string(),
-        Reading::Unknown => "?".to_string(),
-    }
-}
-
-/// 器の移動の 4 つの欄の写しの行（器の鍵の名 move・grace_left・refused・pressure の順・断りの時刻は
-/// hmd の字・逼迫は窓:割合/閾値の字）。
-pub fn copied_line(card: &SeatCard) -> String {
-    format!(
-        "move={} grace_left={} refused={} pressure={}",
-        copied_value(&card.move_to, String::clone),
-        copied_value(&card.grace_until, |u| u.saturating_sub(card.at).to_string()),
-        copied_value(&card.refused, |t| hmd(*t, card.at)),
-        copied_value(&card.pressure, |p| format!(
-            "{}:{}/{}",
-            p.window, p.used, p.cap
-        )),
-    )
-}
-
-/// 区画の席の詳しくの今の口座の字（区画は今の口座を持たない）。
-pub const NO_CURRENT: &str = "―";
-
 /// 区画の card の種の字。
 pub const PARK_KIND: &str = "今の口座を持たない";
 
@@ -941,31 +849,6 @@ pub fn group_card(account: &Fetched, name: &str, now: EpochSecs) -> Card {
         src: format!("groups/{name}.account ほか"),
         more,
     }
-}
-
-/// 「詳しく」の出所の字（見本の gm1 src・電文を組む器の出力と file の名）。
-pub const MORE_SRC: &str =
-    "席の dir の state.jsonl と tick-last・器の doctor と seat tick status と fleet usage --show の出力";
-
-/// 器の doctor の席の行の形（見本の doctorSeatLines の欄の順・電文に無い役の欄は置かない・無い値は `?`）。
-pub fn seat_line(card: &SeatCard) -> String {
-    let heartbeat = match card.heartbeat {
-        Reading::Known(true) => "on",
-        Reading::Known(false) => "off",
-        Reading::Unknown => "?",
-    };
-    let tick = match (&card.tick, &card.tick_healthy) {
-        (Reading::Known(w), _) => w.as_str(),
-        (Reading::Unknown, Reading::Known(true)) => "healthy",
-        (Reading::Unknown, Reading::Known(false)) => "stale",
-        (Reading::Unknown, Reading::Unknown) => "?",
-    };
-    format!(
-        "seat: target={} account={} model={} heartbeat={heartbeat} tick={tick}",
-        card.target,
-        card.account.as_deref().unwrap_or("?"),
-        card.model.as_deref().unwrap_or("?"),
-    )
 }
 
 #[cfg(target_arch = "wasm32")]

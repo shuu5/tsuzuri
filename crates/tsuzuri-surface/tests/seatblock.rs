@@ -1,5 +1,5 @@
 //! 便 g-seat の歯: fixture の 5 組の状態の記号と語と「から」・稼働の記録の 3 つの幅の矩形と縦線・幅の query・
-//! 窓ごとの割合・状態の帯・口座の履歴・「まだ分からない」の欄だけ測れていない・口が読めない・着地済みの外形と依存。
+//! 窓ごとの割合・状態の帯・「まだ分からない」の欄だけ測れていない・口が読めない・着地済みの外形と依存。
 #![cfg(test)]
 
 use std::collections::BTreeMap;
@@ -9,7 +9,7 @@ use tsuzuri_contract::board::{GroupRow, Reading};
 use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::seat::{
-    self, Band, HistRow, LIMIT_LINE, MORE, MOVE_WAIT, NEXT_TARGET, NG, OK, Rect, Seat, Span,
+    self, Band, LIMIT_LINE, MOVE_WAIT, NEXT_TARGET, NG, OK, Rect, Seat, Span,
     SHORT, WINDOWS, content, span_of, strip_svg, until, with_span,
 };
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
@@ -426,42 +426,6 @@ fn seatblock_band_only_on_limit_or_move_wait() {
     assert!(LIMIT_LINE.starts_with("限度で止まっている"));
     assert!(MOVE_WAIT.starts_with("移動待ち"));
     assert!(NEXT_TARGET.starts_with("次の移り先"));
-    assert!(MORE.starts_with("詳しく"));
-}
-
-/// (5) 口座の履歴は新しい順で、件数を持つ（日本の日が別の日の移動は月日を前に付ける）。
-#[test]
-fn seatblock_history_newest_first_with_count() {
-    let Reading::Known(rows) = filled("run").hist else {
-        panic!("run の履歴が測れていない");
-    };
-    assert_eq!(
-        rows,
-        vec![
-            HistRow {
-                at: "19:00 JST".to_string(),
-                from: Some("acct-3".to_string()),
-                to: "acct-4".to_string(),
-            },
-            HistRow {
-                at: "07:05 JST".to_string(),
-                from: None,
-                to: "acct-3".to_string(),
-            },
-        ]
-    );
-    assert_eq!(filled("wait").hist, Reading::Known(vec![]));
-    let Reading::Known(limit) = filled("limit").hist else {
-        panic!()
-    };
-    assert_eq!(limit.len(), 1);
-    assert_eq!(limit[0].at, "09-26 17:13 JST");
-    // 電文の順が古い順でも新しい順でも、出すのは新しい順。
-    let mut rev = card("run");
-    if let Reading::Known(m) = &mut rev.moves {
-        m.reverse();
-    }
-    assert_eq!(seat::hist(&rev), filled("run").hist);
 }
 
 /// (6) 「まだ分からない」の欄はその欄だけ測れていない（0 や空で埋めない）・読めた欄は出す。
@@ -472,9 +436,6 @@ fn seatblock_unknown_parts_only_unmeasured() {
     assert_eq!(s.top.heartbeat, Reading::Unknown);
     assert_eq!(s.low.account, None);
     assert_eq!(s.low.group, Reading::Unknown);
-    assert_eq!(s.hist, Reading::Unknown);
-    assert_eq!(s.more.current, Reading::Unknown);
-    assert_eq!(s.more.same, Some(Reading::Unknown));
     // 読めた欄は出す（状態・割合・0 本の区間は 0 本の矩形）。
     assert_eq!(s.top.key, "st_silent");
     assert!(matches!(&s.low.usage, Reading::Known(r) if r.len() == 1));
@@ -490,7 +451,6 @@ fn unknown_and_wait() {
     let u = filled("unknown");
     assert_eq!(u.low.account.as_deref(), Some("acct-4"));
     assert_eq!(u.low.usage, Reading::Unknown);
-    assert_eq!(u.more.target, "tsuzuri-orch");
     for span in Span::ALL {
         assert_eq!(u.strip(span).rects, Reading::Unknown);
     }
@@ -500,9 +460,6 @@ fn unknown_and_wait() {
     assert_eq!(w.strip(Span::H24).rects, Reading::Unknown);
     assert_eq!(w.strip(Span::H24).marks, Reading::Known(vec![]));
     assert_eq!(w.low.group, Reading::Known("tsuzuri-g".to_string()));
-    assert_eq!(w.more.current, Reading::Known("acct-5".to_string()));
-    assert_eq!(w.more.same, Some(Reading::Known(NG)));
-    assert_eq!(filled("run").more.same, Some(Reading::Known(OK)));
 }
 
 /// (7)(8) 口が読めない・まだ読んでいない・電文として読めない本文は、block の全体が測れていないと理由の 1 行。
@@ -543,7 +500,7 @@ fn seatblock_strip_svg_text() {
     assert!(svg.ends_with("</svg>"));
 }
 
-/// 語の鍵（19 個）は語の辞書に在り、組む class は stylesheet に在る。
+/// 語の鍵（18 個）は語の辞書に在り、組む class は stylesheet に在る。
 #[test]
 fn seatblock_keys_in_vocab_and_classes_in_stylesheet() {
     let keys = [
@@ -556,7 +513,6 @@ fn seatblock_keys_in_vocab_and_classes_in_stylesheet() {
         "reg_account",
         "group",
         "current_account",
-        "acct_hist",
         "allowance",
         "five_hour",
         "seven_day",
@@ -570,7 +526,7 @@ fn seatblock_keys_in_vocab_and_classes_in_stylesheet() {
     for k in keys {
         assert!(vocab().term(k).is_some(), "鍵 {k} が vocab に無い");
     }
-    assert_eq!(WINDOWS.to_vec(), keys[11..14].to_vec());
+    assert_eq!(WINDOWS.to_vec(), keys[10..13].to_vec());
     assert_eq!(seat::BLOCK.heading, "orch_acct");
     classes_in_stylesheet();
 }
@@ -607,8 +563,8 @@ fn classes_in_stylesheet() {
     }
     used.extend(
         [
-            "olow", "big", "tkrow", "tkhb", "strip", "usage", "wrow", "meter", "fold", "ahistd",
-            "gmore", "sband", "mk", "mk-acct", "mk-now", "gi", "ok", "ng",
+            "olow", "big", "tkrow", "tkhb", "strip", "usage", "wrow", "meter", "sband", "mk",
+            "mk-acct", "mk-now", "gi", "ok", "ng",
         ]
         .map(str::to_string),
     );

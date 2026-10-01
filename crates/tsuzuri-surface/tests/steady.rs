@@ -127,14 +127,11 @@ fn steady_folds_write_back_keeps_mode_until_owner_toggles() {
     assert!(!f.open(key, false));
 }
 
-/// 鍵の形は着地済みの 6 つを全部含み（{} は id・数と順は見ない）、形に合う字だけを通す。
+/// 鍵の形は着地済みの 3 つを全部含み（{} は id・数と順は見ない）、形に合う字だけを通す（消した席と台帳の詳しくの鍵は通さない）。
 #[test]
 fn steady_fold_key_forms() {
     let forms = tsuzuri_surface::project::fold_keys();
     for want in [
-        "ledger:more",
-        "seat:hist",
-        "seat:more",
         "ask:hist",
         "gaps:{}",
         "ask:around:{}",
@@ -142,9 +139,6 @@ fn steady_fold_key_forms() {
         assert!(forms.contains(&want), "fold_keys に {want} が無い: {forms:?}");
     }
     for ok in [
-        "ledger:more",
-        "seat:hist",
-        "seat:more",
         "ask:hist",
         "gaps:g-1",
         "ask:around:t3-hub.4",
@@ -153,6 +147,9 @@ fn steady_fold_key_forms() {
     }
     for bad in [
         "ledger",
+        "ledger:more",
+        "seat:hist",
+        "seat:more",
         "seat:hist2",
         "gaps:",
         "ask:around:",

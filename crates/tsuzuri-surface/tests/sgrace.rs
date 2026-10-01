@@ -1,6 +1,5 @@
 //! 行 c-seat-grace の歯（面）: 席の card の器の移動の 4 つの欄（move_to・grace_until・refused・pressure）の
-//! 電文の鍵と、project board の席の block の状態の帯の猶予の内・移り先の無い断り・逼迫の行と、
-//! 詳しくの写しの行（器の鍵の名・`-` と `?`）。残り秒は終わる時刻から card の at を引いた値（行 c-abs-seat）。
+//! 電文の鍵と、project board の席の block の状態の帯の猶予の内・移り先の無い断り・逼迫の行。残り秒は終わる時刻から card の at を引いた値（行 c-abs-seat）。
 //! fixture: tests/fixtures/surface/seat-card.json（読むだけ・4 つの鍵を持たない）。器の欄は歯の中で組む。
 #![cfg(test)]
 
@@ -10,10 +9,8 @@ use std::path::PathBuf;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{Pressure, SeatCard};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::account::home::{EXPERT_CHARS, wrap_words};
 use tsuzuri_surface::project::seat::{
-    self, Band, GRACE_NEXT, LIMIT_LINE, MOVE_WAIT, MOVING, NEXT_TARGET, PRESSED, REFUSED_NEXT,
-    copied_line, hmd, more,
+    self, Band, GRACE_NEXT, LIMIT_LINE, MOVE_WAIT, MOVING, NEXT_TARGET, PRESSED, REFUSED_NEXT, hmd,
 };
 use tsuzuri_surface::vocab::label;
 
@@ -249,61 +246,9 @@ fn sgrace_band_refused_pressed() {
 }
 
 #[test]
-fn sgrace_more_copied() {
-    // fixture の 5 組は 4 つとも測れていない。
-    for (name, c) in fixture() {
-        assert_eq!(
-            copied_line(&c),
-            "move=? grace_left=? refused=? pressure=?",
-            "組 {name}"
-        );
-        let m = more(&c);
-        assert_eq!(m.copied, vec![copied_line(&c)], "組 {name}");
-        assert_eq!(seat::seat(&c).more, m, "組 {name}");
-    }
-    let mut none = card("run");
-    none.move_to = Reading::Known(None);
-    none.grace_until = Reading::Known(None);
-    none.refused = Reading::Known(None);
-    none.pressure = Reading::Known(None);
-    assert_eq!(copied_line(&none), "move=- grace_left=- refused=- pressure=-");
-
-    let mut full = grace("run", "acct-5", 120);
-    full.refused = Reading::Known(Some(REFUSED_AT));
-    full.pressure = Reading::Known(Some(pressure("model", 100, 95)));
-    assert_eq!(
-        copied_line(&full),
-        format!(
-            "move=acct-5 grace_left=120 refused={} pressure=model:100/95",
-            hmd(REFUSED_AT, AT)
-        )
-    );
-    // 前の日の断りは行が長くなり、doctor の行と同じ字数に畳む。
-    full.refused = Reading::Known(Some(REFUSED_OLD));
-    let line = copied_line(&full);
-    assert!(line.chars().count() > EXPERT_CHARS, "{line}");
-    let m = more(&full);
-    assert_eq!(m.copied, wrap_words(&line, EXPERT_CHARS));
-    assert!(m.copied.len() > 1);
-    for l in &m.copied {
-        assert!(l.chars().count() <= EXPERT_CHARS, "{l}");
-    }
-    assert_eq!(m.copied.join(" "), line);
-    // doctor の行は着地のまま。
-    assert_eq!(m.doctor, more(&card("run")).doctor);
-}
-
-#[test]
 fn sgrace_dom_text() {
     let dom = read("src/project_dom/seat.rs");
-    let start = dom.find("fn more_view(").expect("more_view が在る");
-    let len = dom[start..].find("\n}").expect("more_view の閉じ");
-    let body = &dom[start..start + len];
-    assert_eq!(body.matches(".chain(more.copied)").count(), 1);
-    let chain = body.find(".chain(more.copied)").expect("chain");
-    assert!(body.find(".doctor").expect("doctor") < chain);
-    assert!(chain < body.find("</details>").expect("</details>"));
-    assert_eq!(dom.matches(".chain(more.copied)").count(), 1);
+    assert!(!dom.contains("more.copied"), "src/project_dom/seat.rs に詳しくの写しの行が在る");
 
     let src = read("src/project/seat.rs");
     for word in ["move_grace_s", "grace_secs", "move-signal", "\"move_grace\""] {
@@ -537,7 +482,7 @@ fn sgrace_own_names_clean() {
             names.push(rest[..rest.find('(').expect("fn の名の後に (")].to_string());
         }
     }
-    assert_eq!(names.len(), 9, "{names:?}");
+    assert_eq!(names.len(), 8, "{names:?}");
     for name in &names {
         let rest = name
             .strip_prefix("sgrace_")

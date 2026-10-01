@@ -55,7 +55,7 @@ fn hsderive_consts_match_note() {
         (
             "ledger",
             &["/api/ledger", "/api/metrics", "/api/unreflected"],
-            &["ledger:more", "ledger:unref"],
+            &["ledger:unref"],
         ),
         ("legend", &[], &[]),
         ("next", &["/api/next"], &[]),
@@ -64,7 +64,7 @@ fn hsderive_consts_match_note() {
         ("notice", &["/api/notices"], &[]),
         ("pipeline", &["/api/pipeline"], &[]),
         ("policy", &["/api/policy"], &[]),
-        ("seat", &["/api/seat"], &["seat:hist", "seat:more"]),
+        ("seat", &["/api/seat"], &[]),
         ("stage", &[], &["stage:block"]),
         ("timeline", &[], &[]),
     ];

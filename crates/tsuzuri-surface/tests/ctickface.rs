@@ -1,5 +1,5 @@
 //! 行 c-seat-tick の歯（面）: project board の block「orchestrator と口座」の上段の tick の欄に、器の tick の語の
-//! 印と class と語と最後の tick からの経過を出す字と、詳しくの doctor の行の tick の語。
+//! 印と class と語と最後の tick からの経過を出す字。
 //! fixture: tests/fixtures/surface/seat-card.json（鍵 tick と tick_at が無いので、どの組も tick は Unknown）。
 #![cfg(test)]
 
@@ -10,7 +10,7 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{SeatCard, TickHealth};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::seat::{
-    BLANK, NG, OK, age_text, seat_line, tick_age, tick_class, tick_mark, top,
+    BLANK, NG, OK, age_text, tick_age, tick_class, tick_mark, top,
 };
 
 fn crate_dir() -> PathBuf {
@@ -109,26 +109,6 @@ fn ctick_age_from_now_or_at() {
     ] {
         let t = top(&with_tick("run", tick.clone(), tick_at));
         assert_eq!(tick_age(&t, at), None, "{tick:?} {tick_at:?}");
-    }
-}
-
-/// (13) 詳しくの doctor の行は語が読めれば語を書き、読めなければ健康の真偽から。
-#[test]
-fn ctick_more_line_word() {
-    for (word, end) in [
-        (TickHealth::Absent, " tick=absent"),
-        (TickHealth::Unreadable, " tick=unreadable"),
-    ] {
-        let l = seat_line(&with_tick("run", Reading::Known(word), None));
-        assert!(l.ends_with(end), "{l}");
-    }
-    for (name, end) in [
-        ("run", " tick=healthy"),
-        ("wait", " tick=stale"),
-        ("silent", " tick=?"),
-    ] {
-        let l = seat_line(&card(name));
-        assert!(l.ends_with(end), "組 {name}: {l}");
     }
 }
 

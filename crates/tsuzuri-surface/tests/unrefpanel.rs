@@ -184,7 +184,6 @@ fn urpanel_consts_paths_folds() {
     assert!(PATHS.contains(&ledger::PATH));
     assert!(PATHS.contains(&ledger::METRICS_PATH));
     assert!(FOLDS.contains(&"ledger:unref"));
-    assert!(FOLDS.contains(&"ledger:more"));
     const { assert!(UNREF_OPEN) };
     assert_eq!(UNREF_MAX, 20);
 }

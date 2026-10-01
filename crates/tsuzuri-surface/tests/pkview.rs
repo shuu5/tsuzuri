@@ -1,5 +1,5 @@
 //! 行 g-park-view の歯: 区画（器の park）を面が群と分けて出す。project board の席の下段の見出しと点線の chip と短い card・
-//! 詳しくの今の口座と印（区画は比べない）・account board の各 project の表の区画の行と群の順の見出しと card・
+//! account board の各 project の表の区画の行と群の順の見出しと card・
 //! HOME の次の一手の行の小字・語の辞書の鍵 park・DOM の字の配線・この file の歯の名。
 //! 区画かの判じは、project board は席の card の群の行の欄 park、account board は電文の欄 parks だけで、名 Tier9 を見ない。
 #![cfg(test)]
@@ -18,7 +18,7 @@ use tsuzuri_surface::account::projects::{
 };
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::seat::{
-    NG, NO_CURRENT, PARK_KIND, PARK_SRC, PARK_VALUE, group_head, low, more, park_card, park_of,
+    PARK_KIND, PARK_SRC, PARK_VALUE, group_head, low, park_card, park_of,
 };
 use tsuzuri_surface::vocab::vocab;
 
@@ -70,27 +70,20 @@ fn index_of(doc: &AccountDoc, name: &str) -> usize {
         .unwrap_or_else(|| panic!("fixture の project {name}"))
 }
 
-/// (1) project board の下段と詳しく: 区画の行の写しなら見出しは park・今の口座は ―・印は比べない。偽なら群のまま。
+/// (1) project board の下段: 区画の行の写しなら見出しは park。偽なら群のまま。
 #[test]
-fn pkview_seat_low_and_more() {
+fn pkview_seat_low() {
     let park = card_with(true);
     assert!(park_of(&park));
     let l = low(&park);
     assert!(l.park);
     assert_eq!(l.group, Reading::Known("Tier9".to_string()));
     assert_eq!(group_head(true), "park");
-    let m = more(&park);
-    assert_eq!(NO_CURRENT, "―");
-    assert_eq!(m.current, Reading::Known(NO_CURRENT.to_string()));
-    assert_eq!(m.same, None);
 
     let group = card_with(false);
     assert!(!park_of(&group));
     assert!(!low(&group).park);
     assert_eq!(group_head(false), "group");
-    let m = more(&group);
-    assert_eq!(m.current, Reading::Known("-".to_string()));
-    assert_eq!(m.same, Some(Reading::Known(NG)));
 }
 
 /// (2) 区画の chip の card は電文に依らない短い説明。
@@ -223,7 +216,6 @@ fn pkview_dom_wiring() {
         "{hs(group_head(low.park))}",
         "{group_chip(low.group, low.park, group_doc)}",
         "park_card(&key)",
-        "{more.same.map(sign_view)}",
     ] {
         once(&seat, part, "src/project_dom/seat.rs");
     }

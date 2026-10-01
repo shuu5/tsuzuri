@@ -1,5 +1,5 @@
 //! block「台帳」（見本の `#ledger` と index.html の ledgerBlock・ledger.js の描き方の関数・便 g-ledger）:
-//! 指標の段（上段の 4 数・主な指標の行・burndown・memo の段・「詳しく」・未反映の数と一覧）と台帳の一覧（便 g-min の中身を見本の class で描き直す）。
+//! 指標の段（上段の 4 数・主な指標の行・burndown・memo の段・未反映の数と一覧）と台帳の一覧（便 g-min の中身を見本の class で描き直す）。
 //! 指標は口 /api/metrics（本文は契約の型の Reading で包んだ LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、ここは写すだけ
 //! （数え直しと判定の分岐を持たない）。段の並びと段ごとの項は配置の表（`LAYOUT`）の値で持ち、DOM は表を上から順にたどる。
 //! 未反映の一覧は口 /api/unreflected（本文は契約の型の UnreflectedList）から読み、電文の行の順と数をそのまま写す（行 g-unref-panel）。
@@ -48,7 +48,7 @@ pub const UNREF_PATH: &str = "/api/unreflected";
 pub const PATHS: &[&str] = &[PATH, METRICS_PATH, UNREF_PATH];
 
 /// この file の畳める段の開き閉じの鍵の形（行 hs-derived）。
-pub const FOLDS: &[&str] = &["ledger:more", "ledger:unref"];
+pub const FOLDS: &[&str] = &["ledger:unref"];
 
 /// 指標の段の上段の語の鍵（見本の 4 数 = open task・memo・未反映・純減 24h）。
 pub const METRICS: [&str; 4] = ["l_task", "l_memo", "l_unref", "l_net24"];
@@ -167,8 +167,6 @@ pub enum Tier {
     Burn,
     /// memo の段（class mpro）。
     Memo,
-    /// 「詳しく」（class gmore）。
-    More,
     /// 未反映の数。
     Unref,
     /// 台帳の一覧。
@@ -182,7 +180,6 @@ impl Tier {
             Tier::Main => "main",
             Tier::Burn => "burn",
             Tier::Memo => "memo",
-            Tier::More => "more",
             Tier::Unref => "unref",
             Tier::List => "list",
         }
@@ -190,7 +187,7 @@ impl Tier {
 }
 
 /// 配置の表（段を上から順に・段ごとの項）。
-pub const LAYOUT: [(Tier, &[Part]); 7] = [
+pub const LAYOUT: [(Tier, &[Part]); 6] = [
     (
         Tier::Top,
         &[Part::Task, Part::Memo, Part::Unref, Part::Net24],
@@ -206,25 +203,12 @@ pub const LAYOUT: [(Tier, &[Part]); 7] = [
             Part::MemoAge,
         ],
     ),
-    (
-        Tier::More,
-        &[
-            Part::Ready,
-            Part::Blocked,
-            Part::Lead,
-            Part::Stale,
-            Part::Spark,
-            Part::Epics,
-            Part::Question,
-            Part::Epic,
-        ],
-    ),
     (Tier::Unref, &[Part::UnrefCount]),
     (Tier::List, &[Part::List]),
 ];
 
 /// 配置の表の値。
-pub fn layout() -> [(Tier, &'static [Part]); 7] {
+pub fn layout() -> [(Tier, &'static [Part]); 6] {
     LAYOUT
 }
 
@@ -935,7 +919,7 @@ mod dom {
     use crate::project::{Body, UNKNOWN, fold, item_view, map, section, state_icon, unmeasured};
     use crate::view::{Fetched, Screen};
     use crate::vocab::label;
-    use crate::widgets::help::{HelpCtx, hs, shows_internal};
+    use crate::widgets::help::{HelpCtx, hs};
     use crate::widgets::hover::attach;
     use crate::widgets::hover::attach_some;
 
@@ -979,7 +963,7 @@ mod dom {
                         view! { <div class="l4">{boxes}</div>{unmeasured(reason)} }.into_any()
                     }
                     Tier::List => list_view(screen, graph),
-                    Tier::Main | Tier::Burn | Tier::Memo | Tier::More | Tier::Unref => {
+                    Tier::Main | Tier::Burn | Tier::Memo | Tier::Unref => {
                         ().into_any()
                     }
                 })
@@ -1015,23 +999,6 @@ mod dom {
             Tier::Memo => {
                 let boxes = parts.iter().map(|p| box_view(*p, m)).collect_view();
                 view! { <div class="mpro" aria-label=label("memo_promo")>{boxes}</div> }.into_any()
-            }
-            Tier::More => {
-                let rows = parts
-                    .iter()
-                    .map(|p| view! { <div class="gm1 num">{line_view(*p, m, graph)}</div> })
-                    .collect_view();
-                // 記録に値が無いときだけ mode から初めの値を取る（持ち主が開き閉じを変えた後は記録の値）。
-                let ctx = use_context::<HelpCtx>();
-                let expert = move || ctx.is_some_and(|c| shows_internal(c.mode.get()));
-                let (open, toggle) = fold("ledger:more".to_string(), expert);
-                view! {
-                    <details class="gmore" prop:open=open on:toggle=toggle>
-                        <summary><span class="rm-t">{label("p_more")}</span>" "<span class="rm-a" aria-hidden="true">"▸"</span></summary>
-                        <div class="gm">{rows}</div>
-                    </details>
-                }
-                .into_any()
             }
             Tier::Unref => parts
                 .iter()
@@ -1081,7 +1048,7 @@ mod dom {
         .into_any()
     }
 
-    /// 札と字の 1 項（主な指標の行・「詳しく」・burndown）。
+    /// 札と字の 1 項（主な指標の行・burndown）。
     fn line_view(part: Part, m: &Metrics, graph: ReadSignal<Fetched>) -> AnyView {
         match part {
             Part::Net7 => view! { <span>{hs(part.key())}" "{net_view(&m.net7)}</span> }.into_any(),

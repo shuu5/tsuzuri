@@ -317,19 +317,6 @@ fn ledgerblock_layout_table() {
         ("main", vec!["l_rate", "l_net7"]),
         ("burn", vec!["l_burn"]),
         ("memo", vec!["m_open", "m_wait", "m_promo7", "m_age"]),
-        (
-            "more",
-            vec![
-                "l_ready",
-                "l_blocked",
-                "l_lead",
-                "l_stale",
-                "l_spark",
-                "l_epics",
-                "l_question",
-                "l_epic",
-            ],
-        ),
         ("unref", vec!["unref"]),
         ("list", vec!["ledger_block"]),
     ];
@@ -355,16 +342,6 @@ fn tiers_and_keys() {
     for p in [Part::Rate, Part::Net7] {
         assert_eq!(tier_of(p), vec![Tier::Main], "{p:?}");
     }
-    for p in [
-        Part::Ready,
-        Part::Blocked,
-        Part::Lead,
-        Part::Stale,
-        Part::Spark,
-        Part::Epics,
-    ] {
-        assert_eq!(tier_of(p), vec![Tier::More], "{p:?}");
-    }
     // 項は 1 度ずつ・作業中の数と最古の task の項は無い。
     let keys: Vec<&str> = LAYOUT
         .iter()
@@ -378,7 +355,7 @@ fn tiers_and_keys() {
         }
     }
     // 項の語の鍵と、段の DOM が使う語の鍵は語の辞書に在る。
-    let extra = ["memo_promo", "p_more", "st_unknown"];
+    let extra = ["memo_promo", "st_unknown"];
     for key in keys
         .iter()
         .copied()
@@ -390,7 +367,7 @@ fn tiers_and_keys() {
     epics_and_more_counts();
 }
 
-/// epic の進みと、「詳しく」の中の数。
+/// epic の進みと、問い・epic・ready・blocked・stale の数。
 fn epics_and_more_counts() {
     // epic の進み: 題は台帳の一覧から id で引き、引けなければ id だけ。
     let m = filled("filled", &known_screen());
@@ -408,7 +385,7 @@ fn epics_and_more_counts() {
     );
     let bare = filled("filled", &Screen::initial());
     assert!(bare.epics.iter().all(|e| e.title.is_none()));
-    // open の問いの数と open の epic の数（「詳しく」の中）。
+    // open の問いの数と open の epic の数。
     assert_eq!(m.text(Part::Question), Some("2".to_string()));
     assert_eq!(m.text(Part::Epic), Some("2".to_string()));
     assert_eq!(m.text(Part::Ready), Some("3".to_string()));
@@ -459,9 +436,6 @@ fn ledgerblock_classes_in_stylesheet() {
         "ls-created",
         "ls-closed",
         "mpro",
-        "gmore",
-        "gm",
-        "gm1",
         "lep",
         "lchips",
         "ep",

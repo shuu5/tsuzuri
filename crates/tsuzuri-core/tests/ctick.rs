@@ -210,7 +210,7 @@ const FILES: [&str; 3] = [
     "crates/tsuzuri-surface/tests/ctickface.rs",
 ];
 
-/// (15) 3 つの file の歯の名は 13 本とも ctick_ で始まり、残りの字は filter の語を含まない。
+/// (15) 3 つの file の歯の名は 12 本とも ctick_ で始まり、残りの字は filter の語を含まない。
 #[test]
 fn ctick_own_names_clean() {
     for w in FILTER {
@@ -238,5 +238,5 @@ fn ctick_own_names_clean() {
             n += 1;
         }
     }
-    assert_eq!(n, 13);
+    assert_eq!(n, 12);
 }

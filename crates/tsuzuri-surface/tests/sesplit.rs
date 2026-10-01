@@ -26,7 +26,6 @@ const HOST: &[(&str, &str)] = &[
     ("const", "LIMIT_LINE"),
     ("const", "MOVE_WAIT"),
     ("const", "NEXT_TARGET"),
-    ("const", "MORE"),
     ("const", "OROW"),
     ("const", "NO_RESET"),
     ("const", "SPAN_KEY"),
@@ -62,8 +61,6 @@ const HOST: &[(&str, &str)] = &[
     ("struct", "WindowRow"),
     ("struct", "Low"),
     ("struct", "Band"),
-    ("struct", "HistRow"),
-    ("struct", "More"),
     ("struct", "Seat"),
     ("fn", "strip"),
     ("fn", "card"),
@@ -86,10 +83,6 @@ const HOST: &[(&str, &str)] = &[
     ("fn", "low"),
     ("fn", "window_row"),
     ("fn", "band"),
-    ("fn", "hist"),
-    ("fn", "more"),
-    ("const", "MORE_SRC"),
-    ("fn", "seat_line"),
     ("fn", "view"),
     ("mod", "dom"),
     ("impl", "Span"),
@@ -97,13 +90,12 @@ const HOST: &[(&str, &str)] = &[
 ];
 
 /// mod dom の中の名の列（base の mod dom の中の宣言を順に）。
-const INNER: [(&str, &str); 17] = [
+const INNER: [(&str, &str); 13] = [
     ("const", "HOURGLASS"),
     ("fn", "search"),
     ("fn", "pick"),
     ("fn", "view"),
     ("fn", "unknown"),
-    ("fn", "text_or_unknown"),
     ("fn", "sign_view"),
     ("fn", "seat_view"),
     ("fn", "band_view"),
@@ -112,9 +104,6 @@ const INNER: [(&str, &str); 17] = [
     ("fn", "strip_view"),
     ("fn", "window_view"),
     ("fn", "low_view"),
-    ("fn", "hist_row"),
-    ("fn", "hist_view"),
-    ("fn", "more_view"),
 ];
 
 const KINDS: [&str; 7] = ["const", "static", "fn", "struct", "enum", "impl", "mod"];
@@ -203,7 +192,7 @@ fn sesplit_dom_file_holds_view() {
 /// (3) seat.rs は mod dom の外の名の列の宣言の行を、種と名ごとに列に在る数以上持つ。
 #[test]
 fn sesplit_host_names_kept() {
-    assert_eq!(HOST.len(), 76);
+    assert_eq!(HOST.len(), 69);
     let seat = read(SEAT);
     let host = decls(&seat, false);
     for want in HOST {
@@ -213,14 +202,14 @@ fn sesplit_host_names_kept() {
     }
 }
 
-/// (4) details の要素と view! は seat.rs に無く、src/project_dom/seat.rs に details が 2 つ以上在る。
+/// (4) details の要素と view! は seat.rs に無く、src/project_dom/seat.rs に view! が在る。
 #[test]
 fn sesplit_details_moved() {
     let seat = read(SEAT);
     assert!(!seat.contains("<details"), "seat.rs に details");
     assert!(!seat.contains("view!"), "seat.rs に view!");
     let dom = read(DOM);
-    assert!(dom.matches("<details").count() >= 2, "{DOM} の details の数");
+    assert!(dom.contains("view!"), "{DOM} に view! が無い");
 }
 
 /// filter の語（着地済みの行の verify の filter の語と、第 3 波から第 8 波の行の接頭辞）。

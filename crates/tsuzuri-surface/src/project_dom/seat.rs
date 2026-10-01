@@ -5,16 +5,16 @@ use tsuzuri_contract::account::WindowCap;
 use tsuzuri_contract::board::Reading;
 
 use super::{
-    BLOCK, Band, GROUP_CARD, HistRow, LEGEND, Low, MORE, MORE_SRC, More, OROW, PATH, Seat, Sign,
+    BLOCK, Band, GROUP_CARD, LEGEND, Low, OROW, PATH, Seat, Sign,
     Span, Strip, Top, WindowRow, content, group_card, group_head, park_card, sample_svg, seat_caps, span_of,
     strip_svg, thr, tick_age, tick_class, tick_mark, with_span,
 };
 use crate::view::Fetched;
 use crate::widgets::hover::delegate;
 use crate::account::heartbeat::{self, Dest, States};
-use crate::project::{Body, UNKNOWN, body_view, fold, section, state_icon, unmeasured};
+use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
 use crate::vocab::label;
-use crate::widgets::help::{HelpCtx, hs, shows_internal, term};
+use crate::widgets::help::{hs, term};
 
 /// 砂時計（限度の記号・見本の IC.hourglass）。
 const HOURGLASS: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 5 6 5 9s-5 4-5 9h10c0-5-5-6-5-9s5-4 5-9" /><path d="M9.5 19h5l-2.5-2.5z" fill="currentColor" stroke="none"/></svg>"#;
@@ -57,13 +57,6 @@ fn unknown() -> AnyView {
     state_icon(UNKNOWN)
 }
 
-fn text_or_unknown(r: Reading<String>) -> AnyView {
-    match r {
-        Reading::Known(t) => t.into_any(),
-        Reading::Unknown => unknown(),
-    }
-}
-
 fn sign_view(r: Reading<Sign>) -> AnyView {
     match r {
         Reading::Known(s) => {
@@ -84,8 +77,6 @@ fn seat_view(
         strips,
         low,
         band,
-        hist,
-        more,
     } = seat;
     view! {
         {band.map(band_view)}
@@ -94,8 +85,6 @@ fn seat_view(
             {strip_view(strips, span)}
         </div>
         {low_view(low, group_doc)}
-        {hist_view(hist)}
-        {more_view(more)}
     }
     .into_any()
 }
@@ -342,69 +331,6 @@ fn low_view(low: Low, group_doc: ReadSignal<Fetched>) -> AnyView {
                 {usage}
             </div>
         </div>
-    }
-    .into_any()
-}
-
-fn hist_row(row: HistRow) -> AnyView {
-    let from = match row.from {
-        Some(f) => f.into_any(),
-        None => unknown(),
-    };
-    view! {
-        <li>
-            <span class="num">{row.at}</span>
-            <span class="w"><span class="mono">{from}" → "{row.to}</span></span>
-        </li>
-    }
-    .into_any()
-}
-
-fn hist_view(hist: Reading<Vec<HistRow>>) -> AnyView {
-    let (count, rows) = match hist {
-        Reading::Known(rows) => (
-            view! { <span class="chip num">{rows.len()}</span> }.into_any(),
-            rows.into_iter().map(hist_row).collect_view().into_any(),
-        ),
-        Reading::Unknown => (unknown(), ().into_any()),
-    };
-    let (open, toggle) = fold("seat:hist".to_string(), || false);
-    view! {
-        <details class="fold ahistd" prop:open=open on:toggle=toggle>
-            <summary><span class="hd-t" data-term="acct_hist">{label("acct_hist")}</span>{count}</summary>
-            <ul class="ahist">{rows}</ul>
-        </details>
-    }
-    .into_any()
-}
-
-fn more_view(more: More) -> AnyView {
-    let ctx = use_context::<HelpCtx>();
-    let expert = move || ctx.is_some_and(|c| shows_internal(c.mode.get()));
-    let (open, toggle) = fold("seat:more".to_string(), expert);
-    // doctor の席の行の後に、器の移動の 4 つの欄の写しの行を同じ code の字で並べる。
-    let doctor = more
-        .doctor
-        .into_iter()
-        .chain(more.copied)
-        .map(|l| view! { <div><code>{l}</code></div> })
-        .collect_view();
-    view! {
-        <details class="gmore" prop:open=open on:toggle=toggle>
-            <summary><span class="rm-t">{MORE}</span></summary>
-            <div class="gm">
-                <div class="gm1">
-                    <span class="mono">{more.target}</span>
-                    <span>
-                        {label("current_account")}" "
-                        <span class="mono">{text_or_unknown(more.current)}</span>" "
-                        {more.same.map(sign_view)}
-                    </span>
-                </div>
-                <div class="gm1 src">{MORE_SRC}</div>
-                <div class="gm1 int xo">{doctor}</div>
-            </div>
-        </details>
     }
     .into_any()
 }

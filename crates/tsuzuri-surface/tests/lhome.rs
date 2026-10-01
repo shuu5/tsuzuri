@@ -179,7 +179,7 @@ fn lhome_empty_and_count() {
 /// (5) 畳みと配置の表は今のまま・一覧の段は body の値を描き、見出しの件数は count を描く。
 #[test]
 fn lhome_list_draws_body() {
-    assert_eq!(FOLDS, &["ledger:more", "ledger:unref"]);
+    assert_eq!(FOLDS, &["ledger:unref"]);
     let (tier, parts) = LAYOUT[LAYOUT.len() - 1];
     assert_eq!(tier, Tier::List);
     assert_eq!(parts, &[Part::List]);
