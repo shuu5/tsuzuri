@@ -1,0 +1,975 @@
+diff --git a/crates/tsuzuri-surface/tests/absface.rs b/crates/tsuzuri-surface/tests/absface.rs
+index 440db801c8910ea62e6d9a5fcd60bb19cc3dd3f7..4446da546e513ebd1b733281eb7c1fcfc8d360a9 100644
+--- a/crates/tsuzuri-surface/tests/absface.rs
++++ b/crates/tsuzuri-surface/tests/absface.rs
+@@ -52,7 +52,11 @@ fn abst_card_from_since() {
+     // 同じ札を 1 時間後に組めば経過の字だけが進む。
+     let later = kcard(&card(Stage::Running, Some(NOW - 125), None), &[], NOW + 3_600);
+     assert_eq!(later.age, "1h");
++    ci_and_landed();
++}
+ 
++/// CI の語は今までの経過で、今日の着地は since の日本の日で決まる。
++fn ci_and_landed() {
+     let ok = |since: u64, now: u64| ci_shown(&card(Stage::Landed, Some(since), Some(Ci::Success)), now);
+     assert_eq!(ok(NOW - CI_MARK_S, NOW), Some(Ci::Success));
+     assert_eq!(ok(NOW - CI_MARK_S - 1, NOW), None);
+diff --git a/crates/tsuzuri-surface/tests/abssface.rs b/crates/tsuzuri-surface/tests/abssface.rs
+index 3d11d96aa06e2cf113d37904909d4df910c65239..ef2957882cd43daec10aa42858e6f39286f3338a 100644
+--- a/crates/tsuzuri-surface/tests/abssface.rs
++++ b/crates/tsuzuri-surface/tests/abssface.rs
+@@ -115,7 +115,11 @@ fn abss_acct_drawn_at_now() {
+     }
+     assert!(lines > 0);
+     assert_eq!(account::drawn(doc.clone(), EARLIER), doc);
++    grace_and_dormant(d);
++}
+ 
++/// 退避の残り秒は終わる時刻から引き、休止中の card の月日は描く今の日で決める。
++fn grace_and_dormant(d: AccountDoc) {
+     let b = d.projects.iter().find(|p| p.name == "proj-b").expect("proj-b");
+     assert_eq!(b.move_until, Some(1_790_511_501));
+     let card = orch_card(&d, b).expect("proj-b は席を持つ");
+diff --git a/crates/tsuzuri-surface/tests/acctframe.rs b/crates/tsuzuri-surface/tests/acctframe.rs
+index f30a7817f597c8e5c3da6c46f2e4e9c2220a8b59..7e6161099b00e27c8d4b21dfae19bbbfa51b3b86 100644
+--- a/crates/tsuzuri-surface/tests/acctframe.rs
++++ b/crates/tsuzuri-surface/tests/acctframe.rs
+@@ -129,6 +129,11 @@ fn acctframe_tabs_and_links() {
+     ] {
+         assert_eq!(Tab::from_query(q), Tab::Home, "{q}");
+     }
++    hrefs_and_links();
++}
++
++/// link の href は board と tab と mode を持ち、今の tab の link だけが on。
++fn hrefs_and_links() {
+     assert_eq!(
+         tab_href(Tab::Home, Mode::Beginner),
+         "?board=account&tab=home&mode=beginner"
+@@ -245,7 +250,11 @@ fn acctframe_blocks_per_tab_and_module() {
+         home::BLOCKS.map(|b| b.id),
+         ["nxall", "groups", "allowance", "moves"]
+     );
++    files_and_pure_mod();
++}
+ 
++/// account の下の file の並びと、枠の値（mod.rs）の純粋な部分が DOM を持たないこと。
++fn files_and_pure_mod() {
+     let files: Vec<String> = account_sources()
+         .iter()
+         .map(|(p, _)| file_name(p))
+@@ -380,7 +389,11 @@ fn acctframe_badges_rules() {
+         assert_eq!(badge(Tab::Home, &more), Some(want.to_string()));
+         assert_eq!(badge(Tab::Projects, &more), Some("!".to_string()));
+     }
++    stuck_and_empty(base);
++}
+ 
++/// session の数の印と、project も session も無いときの印。
++fn stuck_and_empty(base: AccountDoc) {
+     // session の数は状態が limit か silent の行だけ。
+     for (state, counted) in [
+         (SeatState::Run, false),
+diff --git a/crates/tsuzuri-surface/tests/accthb.rs b/crates/tsuzuri-surface/tests/accthb.rs
+index 052d65eb7cade176e8100293d44dbbd04af7d1d2..299754c972c79958d4ee6dcaa1ec7f1738a5d11d 100644
+--- a/crates/tsuzuri-surface/tests/accthb.rs
++++ b/crates/tsuzuri-surface/tests/accthb.rs
+@@ -90,7 +90,11 @@ fn accthb_button_on_fixture() {
+         assert_eq!(opposite(opposite(h)), h);
+     }
+     assert_eq!(BUTTON, "btn hbbtn");
++    rows_share_toggles(doc, got);
++}
+ 
++/// 表の行と session の行は fixture の切り替えをそのまま持つ。
++fn rows_share_toggles(doc: AccountDoc, got: Vec<Option<Toggle>>) {
+     // 表の行も同じ切り替えを持つ（並べ方に依らない）。
+     for sort in [Sort::Project, Sort::Account, Sort::Stage, Sort::Elapsed] {
+         let t = table(&doc, sort);
+@@ -225,7 +229,7 @@ type Case = (Heartbeat, Option<(u16, &'static str)>, &'static str, bool);
+ #[test]
+ fn accthb_reply_lines() {
+     let ok = r#"{"target":"proj-a-orch","to":"off"}"#;
+-    let cases: [Case; 13] = [
++    let cases: Vec<Case> = vec![
+         (Heartbeat::Off, Some((200, ok)), "止めた", true),
+         (
+             Heartbeat::On,
+@@ -275,6 +279,13 @@ fn accthb_reply_lines() {
+             "口が断った（404）",
+             false,
+         ),
++    ];
++    reply_rest(ok, cases);
++}
++
++/// 残りの断りの組を足して出す字と読み直しを照らし、決まった応答の型と字の定数を見る。
++fn reply_rest(ok: &str, mut cases: Vec<Case>) {
++    cases.extend([
+         (
+             Heartbeat::Off,
+             Some((400, "no-seat")),
+@@ -289,7 +300,7 @@ fn accthb_reply_lines() {
+         ),
+         (Heartbeat::On, Some((500, "")), "口が断った（500）", false),
+         (Heartbeat::Off, None, "口に届かない", false),
+-    ];
++    ]);
+     for (to, reply, line, reloads) in cases {
+         let o = outcome(to, reply);
+         assert_eq!(o.line(), line, "{to:?} {reply:?}");
+@@ -377,7 +388,11 @@ fn accthb_send_states() {
+         assert_eq!(step(&sending, e.clone()), sending, "{e:?}");
+     }
+     assert!(!starts(&sending, &step(&sending, Event::Fire)));
++    after_reply(sending);
++}
+ 
++/// 応答で段を閉じて字を出し、応答の後も開き直して撃てる。
++fn after_reply(sending: RowState) {
+     let done = step(&sending, Event::Reply(Outcome::Done(Heartbeat::Off)));
+     assert_eq!(
+         done,
+diff --git a/crates/tsuzuri-surface/tests/accthome.rs b/crates/tsuzuri-surface/tests/accthome.rs
+index 2e51eb506c7054eb806c12f7fbae24b9a0464603..7552d435c99703f8320c60b83dd9dec8a72cdd7a 100644
+--- a/crates/tsuzuri-surface/tests/accthome.rs
++++ b/crates/tsuzuri-surface/tests/accthome.rs
+@@ -99,6 +99,11 @@ fn accthome_next_all_on_fixture() {
+         assert!(row.marks.iter().all(|m| m.class == "nxm na"), "{row:?}");
+         assert_eq!(row.class, "nxrow dim");
+     }
++    marks_in_kind_order(a);
++}
++
++/// 印の種は MARK_KINDS の順で、なし の種を持たない。
++fn marks_in_kind_order(a: &NxRow) {
+     let kinds: Vec<NextMove> = a.marks.iter().map(|m| m.kind).collect();
+     assert_eq!(kinds, MARK_KINDS.to_vec());
+     assert_eq!(MARK_KINDS.to_vec(), NextMove::ALL[..6].to_vec());
+@@ -160,7 +165,15 @@ fn accthome_next_all_order_rule() {
+     );
+     // 並べは電文の projects を変えない。
+     assert_eq!(doc.projects[0].name, "u1");
++    all_leads_in_order(base, template, doc);
++}
+ 
++/// 全部の種を逆順に置いても NextMove::ALL の順に並び、project が無ければ 0 件の字。
++fn all_leads_in_order(
++    base: AccountDoc,
++    template: tsuzuri_contract::account::ProjectRow,
++    mut doc: AccountDoc,
++) {
+     // 7 種の順は NextMove::ALL の順（全部の種を 1 つずつ逆順に置いても ALL の順に並ぶ）。
+     doc.projects = NextMove::ALL
+         .iter()
+@@ -273,7 +286,11 @@ fn accthome_groups_on_fixture() {
+     assert_eq!(t1.candidates, vec!["acct-1", "acct-2"]);
+     assert_eq!(t1.next_account.as_deref(), Some("acct-2"));
+     assert_eq!(t1.next, "acct-2");
++    second_group(groups);
++}
+ 
++/// 2 つ目の群は記録なし・前の口座なし・移り先なしの字を持つ。
++fn second_group(groups: Vec<GroupView>) {
+     let t2 = &groups[1];
+     assert_eq!(t2.account, "acct-2");
+     assert!(!t2.recorded);
+@@ -336,7 +353,11 @@ fn accthome_groups_rules() {
+         g[0].row.account = "acct-2".to_string();
+     }
+     assert_eq!(used(&d, 0), vec!["100%", "81%", "12%"]);
++    record_since_and_empty(base);
++}
+ 
++/// 記録なしの群・いつからの月日・群が無いときの 0 件の字。
++fn record_since_and_empty(base: AccountDoc) {
+     // 記録なしの群は since が在っても記録なしの字・前の口座は在れば出す。
+     let mut d = base.clone();
+     if let Reading::Known(g) = &mut d.groups {
+@@ -555,7 +576,11 @@ fn accthome_unmeasured_per_block() {
+     assert!(matches!(h.groups, Body::Filled(_)));
+     assert!(matches!(h.accounts, Body::Filled(_)));
+     assert!(matches!(h.moves, Body::Filled(_)));
++    unknown_groups_accounts();
++}
+ 
++/// 群の列か口座の列が Unknown なら、その段だけ測れていない。
++fn unknown_groups_accounts() {
+     let base = fixture();
+     let mut d = base.clone();
+     d.groups = Reading::Unknown;
+@@ -572,7 +597,11 @@ fn accthome_unmeasured_per_block() {
+     assert!(matches!(h.groups, Body::Filled(_)));
+     assert!(matches!(h.next, Body::Filled(_)));
+     assert!(matches!(h.moves, Body::Filled(_)));
++    unknown_moves_and_all(base);
++}
+ 
++/// 移動の列が Unknown・3 つの列が Unknown のときの段ごとの測れていない。
++fn unknown_moves_and_all(base: AccountDoc) {
+     let mut d = base.clone();
+     d.moves = Reading::Unknown;
+     let h = home::home(&d);
+@@ -590,7 +619,11 @@ fn accthome_unmeasured_per_block() {
+     assert_eq!(h.accounts, Body::Unmeasured(ACCOUNTS_UNREAD));
+     assert_eq!(h.moves, Body::Unmeasured(MOVES_UNREAD));
+     assert!(matches!(h.next, Body::Filled(_)));
++    reasons_apart();
++}
+ 
++/// 測れていないの理由と 0 件の字は 1 行で、互いに重ならない。
++fn reasons_apart() {
+     // 理由は 1 行で重ならず、0 件の字とも重ならない。
+     let lines = [
+         NOT_READ,
+@@ -670,7 +703,11 @@ fn accthome_vocab_css_deps_and_frame() {
+     for r in filled(fixture_home().next) {
+         assert!(vocab().term(r.key).is_some(), "{}", r.key);
+     }
++    classes_deps_and_frame();
++}
+ 
++/// class は stylesheet に在り、外の依存を足さず、着地済みの枠は変えない。
++fn classes_deps_and_frame() {
+     let css = read("style.css");
+     let mut classes: Vec<&str> = vec![
+         "nxm on", "nxm off", "nxm na", "nxrow dim", "occ grp", "occ free", "gi ok", "gi ng",
+diff --git a/crates/tsuzuri-surface/tests/acctled.rs b/crates/tsuzuri-surface/tests/acctled.rs
+index 9a7fca9fcac6316a0ad6f432b8b380f321b81f83..3609c929ee48cc4cb6b427053088b59052de8e2e 100644
+--- a/crates/tsuzuri-surface/tests/acctled.rs
++++ b/crates/tsuzuri-surface/tests/acctled.rs
+@@ -117,7 +117,11 @@ fn acctled_sort_from_query_and_write() {
+     ] {
+         assert_eq!(sort_of(q), Sort::Judge, "{q}");
+     }
++    write_and_round_trip();
++}
+ 
++/// 書く関数は judge のとき lsort を消し、ほかの鍵を増やさず、読みと書きが往復する。
++fn write_and_round_trip() {
+     let base = "?board=account&tab=session&mode=expert";
+     assert_eq!(with_sort(base, Sort::Judge), base);
+     assert_eq!(
+@@ -251,7 +255,12 @@ fn acctled_rows_on_fixture() {
+     assert_eq!(a.marks(), [None, None, None]);
+     assert_eq!(c.task_class, "c-n c-task");
+     assert_eq!(c.rate_class, "c-n c-rate");
++    unknown_rows_and_no_lead(t);
++    unmeasured_and_empty(doc);
++}
+ 
++/// 台帳が Unknown の行は st_unknown と「―」で、lead が無ければ「―」。
++fn unknown_rows_and_no_lead(t: ledger::LedTable) {
+     for (row, name) in t.rows[1..].iter().zip(["proj-b", "proj-c"]) {
+         assert_eq!(row.name, name);
+         assert_eq!(row.cells, Reading::Unknown);
+@@ -268,7 +277,10 @@ fn acctled_rows_on_fixture() {
+     no_lead.lead = None;
+     let d = doc_of(vec![("x", Reading::Known(no_lead))]);
+     assert_eq!(table(&d, Sort::Judge).rows[0].more()[4].1, NONE);
++}
+ 
++/// 読めない・まだ読んでいない・電文が読めないは測れていない・projects が空は 0 件・枠の body は変えない。
++fn unmeasured_and_empty(doc: AccountDoc) {
+     // 読めない・まだ読んでいない・電文が読めないは測れていない、projects が空は 0 件。
+     assert_eq!(
+         ledger::content(&Fetched::NotRead, Sort::Judge),
+@@ -314,7 +326,11 @@ fn acctled_extremes_marks() {
+     assert_eq!(mark(Some(e), 5.0), None);
+     assert_eq!(mark(None, 9.0), None);
+     assert_eq!((HI, LO), ("hi", "lo"));
++    marks_on_table();
++}
+ 
++/// 表の列の印は Known の値の行だけで決まり、並べを変えても同じ行に付く。
++fn marks_on_table() {
+     let doc = doc_of(vec![
+         ("a", Reading::Known(stats(LedgerJudge::OnTrack, 9, 0, 0, 0.9))),
+         ("u", Reading::Unknown),
+diff --git a/crates/tsuzuri-surface/tests/acctproj.rs b/crates/tsuzuri-surface/tests/acctproj.rs
+index b9a4c04107c3e2bd332d6f89d888e0d91a43100c..543760e93f986d0e95128ee3c7ac08da16ad4981 100644
+--- a/crates/tsuzuri-surface/tests/acctproj.rs
++++ b/crates/tsuzuri-surface/tests/acctproj.rs
+@@ -143,6 +143,11 @@ fn acctproj_need_order() {
+     }
+     assert_eq!(need_rank(&doc.projects[0]), 4);
+     assert_eq!(need_rank(&doc.projects[1]), NextMove::ALL.len());
++    rank_sev_and_classes(doc);
++}
++
++/// lead の 7 種の位・重さの字・Unknown を先に置いた並び・行の class の重さ。
++fn rank_sev_and_classes(doc: AccountDoc) {
+     for (i, k) in NextMove::ALL.iter().enumerate() {
+         let mut p = doc.projects[0].clone();
+         if let Reading::Known(s) = &mut p.next {
+@@ -252,7 +257,11 @@ fn acctproj_judge_and_unref_order() {
+     assert_eq!(names(&doc, PSort::Unref), vec!["proj-a", "proj-b", "proj-c"]);
+     assert_eq!(names(&doc2, PSort::Unref), vec!["proj-a", "proj-b", "proj-c"]);
+     assert_eq!(table(&doc2, PSort::Unref, Mode::Beginner).order(), vec![2, 0, 1]);
++    ledger_cells(doc);
++}
+ 
++/// 台帳の欄の判定と task の数と 24 時間の差（台帳が Unknown は None）。
++fn ledger_cells(doc: AccountDoc) {
+     // 台帳の欄は判定と、読めれば task の数。
+     let t = table(&doc, PSort::Need, Mode::Beginner);
+     let a = &t.groups[0].rows[0].led;
+@@ -404,6 +413,11 @@ fn acctproj_wait_unref_dash_and_orch() {
+         assert_eq!(r.wait, None, "{}", r.name);
+         assert_eq!(r.unref, None, "{}", r.name);
+     }
++    orch_cells(doc);
++}
++
++/// orchestrator の欄は席の card の状態と tick と heartbeat の合図。
++fn orch_cells(doc: AccountDoc) {
+     let a = orch(&doc.projects[0]);
+     assert_eq!(a.state, "run");
+     assert_eq!(a.tick, Reading::Known(OK));
+@@ -483,7 +497,11 @@ fn acctproj_vocab_style_and_deps() {
+             .unwrap_or_else(|| panic!("鍵 {key} が vocab に無い"));
+         assert!(!term.label.is_empty(), "鍵 {key} の語が空");
+     }
++    classes_and_deps();
++}
+ 
++/// class は stylesheet に在り、面の crate の直接の依存は契約の型の crate だけ。
++fn classes_and_deps() {
+     let css = read("style.css");
+     let mut classes: Vec<String> = vec![
+         projects::PTAB,
+diff --git a/crates/tsuzuri-surface/tests/acctsess.rs b/crates/tsuzuri-surface/tests/acctsess.rs
+index 3bc70386bc359d516142f60a83abe2d930fa63e9..2f59f8b9dd81b31b7574dbb500c4a90be304dcfa 100644
+--- a/crates/tsuzuri-surface/tests/acctsess.rs
++++ b/crates/tsuzuri-surface/tests/acctsess.rs
+@@ -72,7 +72,11 @@ fn acctsess_sort_from_query_and_written_back() {
+     ] {
+         assert_eq!(sort_of(q), want, "{q}");
+     }
++    written_back_and_removed();
++}
+ 
++/// 書く関数は project のときに sort を消してほかの鍵を残し、消す関数は同じ鍵を全部消す。
++fn written_back_and_removed() {
+     let q = "?board=account&tab=session&mode=expert";
+     assert_eq!(
+         with_sort(q, Sort::Stage),
+@@ -128,7 +132,11 @@ fn acctsess_orders_on_fixture() {
+     assert_eq!(order(&doc, Sort::Account), vec![1, 3, 2, 4]);
+     assert_eq!(order(&doc, Sort::Stage), vec![3, 1, 2, 4]);
+     assert_eq!(order(&doc, Sort::Elapsed), vec![1, 2, 3, 4]);
++    heads_and_sort(doc);
++}
+ 
++/// 並べ方ごとの見出しと行の数・表の並べ方と電文の at。
++fn heads_and_sort(doc: AccountDoc) {
+     let heads = |sort: Sort| -> Vec<(Option<Head>, usize)> {
+         table(&doc, sort)
+             .groups
+@@ -213,7 +221,12 @@ fn acctsess_group_rules() {
+             group: None
+         })
+     );
++    heads_by_account(&base);
++    ranks_by_stage(base);
++}
+ 
++/// account の並べの見出しは電文の accounts の順で、accounts が読めなくても行を落とさない。
++fn heads_by_account(base: &AccountDoc) {
+     // account: 電文の accounts の順・占有の無い口座は None（free_for_pipeline）・中は orchestrator が先で project の名の順。
+     let mut d = base.clone();
+     d.sessions[0].account = Some("acct-2".to_string());
+@@ -259,7 +272,10 @@ fn acctsess_group_rules() {
+             occupant: Reading::Unknown
+         })
+     );
++}
+ 
++/// stage の位を見る行を組む関数を作り、位と束と stage・elapsed の並びを見る。
++fn ranks_by_stage(base: AccountDoc) {
+     // stage: 位の決まり。
+     let line = |state: SeatState, role: SeatRole, stage: Option<Stage>| {
+         let mut l = base.sessions[1].clone();
+@@ -272,6 +288,14 @@ fn acctsess_group_rules() {
+         STALLED_STAGES,
+         [Stage::Questioned, Stage::Failed, Stage::Stopped]
+     );
++    rank_per_stage(&line);
++    band_and_elapsed_order(&base, &line);
++}
++
++/// 段と状態ごとの位（止まった run は 2・orchestrator の行は段を見ない）と束の語の鍵。
++fn rank_per_stage(
++    line: &impl Fn(SeatState, SeatRole, Option<Stage>) -> tsuzuri_contract::account::SessionLine,
++) {
+     for stage in Stage::ALL {
+         let stalled = STALLED_STAGES.contains(&stage);
+         for state in [SeatState::Run, SeatState::Wait, SeatState::Unknown] {
+@@ -322,7 +346,13 @@ fn acctsess_group_rules() {
+         ]
+     );
+     assert_eq!(BANDS, ["stopped_group", "moving_group", "no_record"]);
++}
+ 
++/// stage の束の中の並びと elapsed の並び・行が 0 の電文は見出しも束も出さない。
++fn band_and_elapsed_order(
++    base: &AccountDoc,
++    line: &impl Fn(SeatState, SeatRole, Option<Stage>) -> tsuzuri_contract::account::SessionLine,
++) {
+     // stage: 束の中は位の順・同じ位は since の古い順（since の無い行は末尾）・同じ値は電文の順。
+     let mut d = base.clone();
+     let at = |since: Option<u64>, mut l: tsuzuri_contract::account::SessionLine| {
+@@ -391,7 +421,11 @@ fn acctsess_strip_from_seat_module() {
+         with_span("?board=account&sort=stage", Span::H3),
+         "?board=account&sort=stage&span=3h"
+     );
++    strip_rows_and_elapsed(doc);
++}
+ 
++/// 行ごとの稼働の記録と、窓の右端の電文の at と、経過の字。
++fn strip_rows_and_elapsed(doc: AccountDoc) {
+     let t = table(&doc, Sort::Project);
+     let rows: Vec<_> = t.groups.iter().flat_map(|g| g.rows.iter()).collect();
+     for span in Span::ALL {
+@@ -458,7 +492,16 @@ fn acctsess_signals_on_fixture() {
+     let m = b.moving.expect("残り秒");
+     assert_eq!((m.class(), m.key()), ("mvgrace", "move_grace"));
+     assert_eq!(grace_text(1101), "1101 秒");
++    proj_c_pipeline_and_values(rows, a, pipe, c);
++}
+ 
++/// proj-c と pipeline の行の合図と、行の class・役の語の鍵・状態・口座。
++fn proj_c_pipeline_and_values(
++    rows: Vec<&session::SessRow>,
++    a: &session::SessRow,
++    pipe: &session::SessRow,
++    c: &session::SessRow,
++) {
+     let sc = c.signs.as_ref().expect("proj-c の合図");
+     assert_eq!(sc.tick, Reading::Unknown);
+     assert_eq!(sc.heartbeat, Reading::Unknown);
+@@ -627,7 +670,11 @@ fn acctsess_vocab_style_and_deps() {
+             .unwrap_or_else(|| panic!("鍵 {key} が vocab に無い"));
+         assert!(!term.label.is_empty(), "鍵 {key} の語が空");
+     }
++    classes_stalled_and_deps();
++}
+ 
++/// class は stylesheet に在り、中核の止まった段の字を見て、依存を足さない。
++fn classes_stalled_and_deps() {
+     let css = read("style.css");
+     for class in [
+         session::SESS,
+diff --git a/crates/tsuzuri-surface/tests/acctwin.rs b/crates/tsuzuri-surface/tests/acctwin.rs
+index 6afdd9647c25022ad95dd477b5e328c095216bc4..eeab771572087f792eca6f89100b94c2562a12c6 100644
+--- a/crates/tsuzuri-surface/tests/acctwin.rs
++++ b/crates/tsuzuri-surface/tests/acctwin.rs
+@@ -198,7 +198,11 @@ fn acctwin_button_text_and_row_words() {
+     assert_eq!(NOT_YET_KEY, "not_yet");
+     assert!(vocab().term(NOT_YET_KEY).is_some());
+     assert!(vocab().term(windows::BLOCK.heading).is_some());
++    list_words();
++}
+ 
++/// 一覧の状態から引く button の字と、行の語と印と class と stylesheet の字。
++fn list_words() {
+     // 一覧の button の字は一覧の状態から引く。
+     let list = after_close(&after_open(&[], "proj-a").0, "proj-a");
+     let (list, _) = after_open(&list, "proj-b");
+diff --git a/crates/tsuzuri-surface/tests/aord.rs b/crates/tsuzuri-surface/tests/aord.rs
+index 8512b35ac37de422a04c7d4929291b7fd95aa7a5..4c4b2f390ba95c76567f4cfe46905de89028b692 100644
+--- a/crates/tsuzuri-surface/tests/aord.rs
++++ b/crates/tsuzuri-surface/tests/aord.rs
+@@ -211,114 +211,121 @@ fn aord_one_place() {
+ /// (7) この file の歯の名は aord_ で始まり、ほかの行の verify の語を部分の字として含まない。
+ #[test]
+ fn aord_names_stay_apart() {
+-    const WORDS: [&str; 106] = [
+-        "accept_",
+-        "account_",
+-        "acctcore_",
+-        "acctdoc_",
+-        "acctframe_",
+-        "accthb_",
+-        "accthome_",
+-        "acctled_",
+-        "acctlook_",
+-        "acctpcore_",
+-        "acctproj_",
+-        "acctsess_",
+-        "acctwin_",
+-        "acctwire_",
+-        "askcard_",
+-        "batchpanel_",
+-        "board_min_",
+-        "contract_form_",
+-        "frame_",
+-        "gapspage_",
+-        "gquestion_",
+-        "graph_",
+-        "gview_",
+-        "hbconf_",
+-        "hbpost_",
+-        "hbproc_",
+-        "hbroute_",
+-        "hook_",
+-        "hsblock_",
+-        "hsderive_",
+-        "hspage_",
+-        "ledgerblock_",
+-        "mapgraph_",
+-        "mapview_",
+-        "nextstep_",
+-        "nodepage_",
+-        "parts_",
+-        "pipe_",
+-        "project_",
+-        "question_",
+-        "seatblock_",
+-        "seatcard_",
+-        "server_",
+-        "skeleton_",
+-        "stage_",
+-        "stats_",
+-        "steady_",
+-        "topbar_",
+-        "tz_",
+-        "mlink_",
+-        "gnav_",
+-        "mkeys_",
+-        "klink_",
+-        "ilink_",
+-        "afocus_",
+-        "nxact_",
+-        "urpanel_",
+-        "saxis_",
+-        "ticker_",
+-        "hfig_",
+-        "pmore_",
+-        "lspark_",
+-        "apop_",
+-        "brand_",
+-        "runsdoc_",
+-        "nbatch_",
+-        "kcli_",
+-        "qgate_",
+-        "nsum_",
+-        "hcard_",
+-        "ntime_",
+-        "ptitle_",
+-        "ncard_",
+-        "hsym_",
+-        "smore_",
+-        "lcard_",
+-        "aaround_",
+-        "hruling_",
+-        "sxaxis_",
+-        "plimit_",
+-        "bport_",
+-        "fstop_",
+-        "nsumw_",
+-        "fmark_",
+-        "fserve_",
+-        "cadopt_",
+-        "tipx_",
+-        "hcsess_",
+-        "hcproj_",
+-        "sesplit_",
+-        "mstore_",
+-        "athr_",
+-        "qblock_",
+-        "wsteady_",
+-        "gsum_",
+-        "nstall_",
+-        "pfold_",
+-        "uword_",
+-        "cround_",
+-        "cgdom_",
+-        "csled_",
+-        "lhome_",
+-        "shb_",
+-        "ghb_",
+-        "nact_",
+-        "mtree_",
+-    ];
++    names_apart();
++}
++
++/// ほかの行の verify の語（この file の歯の名が部分の字として含まない語）。
++const WORDS: [&str; 106] = [
++    "accept_",
++    "account_",
++    "acctcore_",
++    "acctdoc_",
++    "acctframe_",
++    "accthb_",
++    "accthome_",
++    "acctled_",
++    "acctlook_",
++    "acctpcore_",
++    "acctproj_",
++    "acctsess_",
++    "acctwin_",
++    "acctwire_",
++    "askcard_",
++    "batchpanel_",
++    "board_min_",
++    "contract_form_",
++    "frame_",
++    "gapspage_",
++    "gquestion_",
++    "graph_",
++    "gview_",
++    "hbconf_",
++    "hbpost_",
++    "hbproc_",
++    "hbroute_",
++    "hook_",
++    "hsblock_",
++    "hsderive_",
++    "hspage_",
++    "ledgerblock_",
++    "mapgraph_",
++    "mapview_",
++    "nextstep_",
++    "nodepage_",
++    "parts_",
++    "pipe_",
++    "project_",
++    "question_",
++    "seatblock_",
++    "seatcard_",
++    "server_",
++    "skeleton_",
++    "stage_",
++    "stats_",
++    "steady_",
++    "topbar_",
++    "tz_",
++    "mlink_",
++    "gnav_",
++    "mkeys_",
++    "klink_",
++    "ilink_",
++    "afocus_",
++    "nxact_",
++    "urpanel_",
++    "saxis_",
++    "ticker_",
++    "hfig_",
++    "pmore_",
++    "lspark_",
++    "apop_",
++    "brand_",
++    "runsdoc_",
++    "nbatch_",
++    "kcli_",
++    "qgate_",
++    "nsum_",
++    "hcard_",
++    "ntime_",
++    "ptitle_",
++    "ncard_",
++    "hsym_",
++    "smore_",
++    "lcard_",
++    "aaround_",
++    "hruling_",
++    "sxaxis_",
++    "plimit_",
++    "bport_",
++    "fstop_",
++    "nsumw_",
++    "fmark_",
++    "fserve_",
++    "cadopt_",
++    "tipx_",
++    "hcsess_",
++    "hcproj_",
++    "sesplit_",
++    "mstore_",
++    "athr_",
++    "qblock_",
++    "wsteady_",
++    "gsum_",
++    "nstall_",
++    "pfold_",
++    "uword_",
++    "cround_",
++    "cgdom_",
++    "csled_",
++    "lhome_",
++    "shb_",
++    "ghb_",
++    "nact_",
++    "mtree_",
++];
++
++/// この file の #[test] の次の行の fn の名を読み、aord_ の後ろが語を含まないことを見る。
++fn names_apart() {
+     let src = read("tests/aord.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-surface/tests/askcard.rs b/crates/tsuzuri-surface/tests/askcard.rs
+index 0b1432143fa06fb1b9a8a765a9ddf2dde0e8bc66..099fac414c3872a0535f100a7a2d9cb8e751275a 100644
+--- a/crates/tsuzuri-surface/tests/askcard.rs
++++ b/crates/tsuzuri-surface/tests/askcard.rs
+@@ -66,6 +66,11 @@ fn askcard_page_frame_and_nav() {
+         frame::href(PageId::Ask, frame::Mode::Beginner),
+         "?page=ask&mode=beginner"
+     );
++    header_links();
++}
++
++/// header の link の語の順と数の印・snapshot・on の class。
++fn header_links() {
+     let links = frame::nav_links(PageId::Ask);
+     let words: Vec<String> = links.iter().map(|l| vocab().label(l.key)).collect();
+     assert!(
+@@ -184,7 +189,11 @@ fn askcard_fixture_cards_text() {
+     );
+     assert_eq!(first.recommend, "1 問に 1 つの欄にする");
+     assert_eq!(first.digest, "0123456789abcdef");
++    second_card(&cards, first);
++}
+ 
++/// 2 本目の card の字（題は 36 字で切る・概要の無い card は要約なし）と、置かれてからの経過。
++fn second_card(cards: &[ask::Card], first: &ask::Card) {
+     let second = &cards[1];
+     assert_eq!(second.number, 2);
+     assert_eq!(second.id.as_str(), "qa.10");
+@@ -208,7 +217,11 @@ fn askcard_fixture_cards_text() {
+     assert_eq!(second.reason, "見本では閉じている");
+     assert_eq!(second.recommend, "");
+     assert_eq!(second.digest, "fedcba9876543210");
++    card_ages(first);
++}
+ 
++/// 1 本目の card の置かれた時刻からの経過の字。
++fn card_ages(first: &ask::Card) {
+     // 置かれてからの経過（見本の durMs）。
+     assert_eq!(ask::age(1_790_488_800 + 59 * 60, first.posted_at), "59m");
+     assert_eq!(ask::age(1_790_488_800 + 2 * 3600, first.posted_at), "2h");
+@@ -348,7 +361,11 @@ fn askcard_outcome_from_reply() {
+     assert!(conflict.keeps_text());
+     assert!(conflict.answer_open());
+     assert!(conflict.reloads());
++    refused_replies();
++}
+ 
++/// 400・404・503・届かない・読めない 200 は理由の字で、断りの理由は 6 値とも空でない字。
++fn refused_replies() {
+     let empty = wire::encode(&RefusalResponse {
+         reason: Refusal::EmptyVerbatim,
+     })
+@@ -439,7 +456,11 @@ fn askcard_empty_is_not_unmeasured() {
+     );
+     assert_eq!(askpage::body(&empty_rows), Body::Empty(askpage::EMPTY));
+     assert_eq!(askpage::count(&empty_rows), Reading::Known(0));
++    unmeasured_reads();
++}
+ 
++/// まだ読んでいない・読めない・電文が読めない・まだ分からないは card も決定も測れていない。
++fn unmeasured_reads() {
+     let unknown_cards = Fetched::Body(
+         wire::encode(&QuestionList {
+             cards: Reading::Unknown,
+diff --git a/crates/tsuzuri-surface/tests/batchpanel.rs b/crates/tsuzuri-surface/tests/batchpanel.rs
+index 7b7d99960d7e39beafd3d60c984db9d3de28d012..5d8c4bb1cc6b0914abb6241c1c05505a8a424f42 100644
+--- a/crates/tsuzuri-surface/tests/batchpanel.rs
++++ b/crates/tsuzuri-surface/tests/batchpanel.rs
+@@ -360,7 +360,11 @@ fn batchpanel_batch_outcome() {
+     assert!(partial.line().ends_with(&format!("{} 1", batch::WRITTEN)));
+     assert!(partial.keeps_text());
+     assert!(partial.reloads());
++    refused_batches();
++}
+ 
++/// 束のほかの 4xx と 5xx・読めない 502・届かない・読めない 200 は理由の字で、読み直さない。
++fn refused_batches() {
+     let a1 = wire::encode(&RefusalResponse {
+         reason: Refusal::A1InBatch,
+     })
+@@ -435,7 +439,11 @@ fn batchpanel_policy_send_and_outcome() {
+     assert_eq!(policy::NOT_CURRENT, "範囲が今の問いでない");
+     assert!(scope.keeps_text());
+     assert!(scope.reloads());
++    policy_refusals();
++}
+ 
++/// 指示の 409・ほかの 4xx と 5xx・届かない・読めない 200 の出し方（束と同じ）。
++fn policy_refusals() {
+     // ほかは束と同じ。
+     let stale = policy::outcome(Some((409, "")));
+     assert_eq!(stale, policy::Outcome::Stale);
+diff --git a/crates/tsuzuri-surface/tests/bhalfpanel.rs b/crates/tsuzuri-surface/tests/bhalfpanel.rs
+index b2649e40b745f916cb6a97a23ce8a951193a8e5e..a17f90a31eda46f91e74ac0482c6d8fe1d8c4d5a 100644
+--- a/crates/tsuzuri-surface/tests/bhalfpanel.rs
++++ b/crates/tsuzuri-surface/tests/bhalfpanel.rs
+@@ -255,7 +255,11 @@ fn bhalf_outcome_names_left() {
+     );
+     assert!(got.keeps_text());
+     assert!(got.reloads());
++    other_replies(rows, body);
++}
+ 
++/// 送った行に無い id・書いたの 1 行だけの 502・送った行に依らない 200 の値。
++fn other_replies(rows: Vec<Row>, body: String) {
+     // 送った行に無い id は問いの id の字。
+     let only = batch::outcome(Some((502, &body)), &rows[..1]);
+     assert_eq!(
+diff --git a/crates/tsuzuri-surface/tests/btuck.rs b/crates/tsuzuri-surface/tests/btuck.rs
+index 9cc8f123e6a312f3394589234d7673f588dbbd4a..f6013ceae0cf5cf7111cd3df66505f073f12a047 100644
+--- a/crates/tsuzuri-surface/tests/btuck.rs
++++ b/crates/tsuzuri-surface/tests/btuck.rs
+@@ -28,17 +28,11 @@ fn fixture() -> GraphView {
+         .expect("graph-view.json が眺めの電文として読める")
+ }
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+ fn boxed(
+     id: &str,
+     kind: NodeKind,
+     title: &str,
+-    group: bool,
+-    fold: BoxFold,
+-    kids: u32,
++    (group, fold, kids): (bool, BoxFold, u32),
+ ) -> ViewNode {
+     ViewNode {
+         node: GraphNode {
+@@ -62,15 +56,15 @@ fn boxed(
+ }
+ 
+ fn rule_box() -> ViewNode {
+-    boxed("~rule", NodeKind::Rule, "規則行", true, BoxFold::Folded, 27)
++    boxed("~rule", NodeKind::Rule, "規則行", (true, BoxFold::Folded, 27))
+ }
+ 
+ fn art_box() -> ViewNode {
+-    boxed("~art:P", NodeKind::Article, "条 P", true, BoxFold::Open, 3)
++    boxed("~art:P", NodeKind::Article, "条 P", (true, BoxFold::Open, 3))
+ }
+ 
+ fn epic_box() -> ViewNode {
+-    boxed("t3-hub.52", NodeKind::Epic, "面の epic", false, BoxFold::Folded, 12)
++    boxed("t3-hub.52", NodeKind::Epic, "面の epic", (false, BoxFold::Folded, 12))
+ }
+ 
+ /// fixture の 8 節点に組の箱 2 つと畳んだ epic を足した眺め。
+@@ -115,7 +109,11 @@ fn btuck_open_list() {
+     assert!(!o.toggle("x", BoxFold::Leaf));
+     assert!(!o.toggle("~rule", BoxFold::Leaf));
+     assert_eq!(o.ids(), ["~art:P", "~rule"]);
++    drop_and_adopt(o);
++}
+ 
++/// Open は列から外し、字 , を含む id は %2C になり、adopt は列を置き換える。
++fn drop_and_adopt(mut o: OpenList) {
+     // Open は列から外す（無ければ変えない）。
+     assert!(o.toggle("~art:P", BoxFold::Open));
+     assert_eq!(o.ids(), ["~rule"]);
+@@ -167,7 +165,11 @@ fn btuck_group_box_svg() {
+     assert!(!mark.contains("class=\"node\""), "{mark}");
+     assert!(rule.ends_with(&format!("{mark}</g>")), "印は箱の末");
+     assert_eq!(mark_svg(&rule_box(), AT).as_deref(), Some(mark));
++    art_svg(group, refold);
++}
+ 
++/// 開いた組の箱の SVG（題・種類と組の語・畳み直す印）。
++fn art_svg(group: String, refold: String) {
+     let art = node_svg(&art_box(), AT);
+     let kind = label(kind_key(NodeKind::Article));
+     assert!(art.contains(">条 P</text>"), "{art}");
+@@ -177,7 +179,11 @@ fn btuck_group_box_svg() {
+     assert!(mark.contains("data-fold=\"~art:P\""), "{mark}");
+     assert!(mark.contains(&format!("aria-label=\"{refold}\"")), "{mark}");
+     assert!(mark.contains('▾') && !mark.contains('▸'), "{mark}");
++    plain_svgs();
++}
+ 
++/// 組でない畳んだ箱と Leaf の SVG・fixture の図と足した眺めの図の印の数。
++fn plain_svgs() {
+     // 組でない畳んだ箱は id の字を持ち、縁は点線でなく、印を 1 つ持つ。
+     let epic = node_svg(&epic_box(), AT);
+     assert!(epic.contains(">t3-hub.52</text>"), "{epic}");
+@@ -185,7 +191,7 @@ fn btuck_group_box_svg() {
+     assert_eq!(epic.matches("data-fold=\"t3-hub.52\"").count(), 1);
+ 
+     // Leaf は印を持たない・fixture の図は字 data-fold を持たず data-key は 8 つ。
+-    let leaf = boxed("R-9", NodeKind::Rule, "規則", false, BoxFold::Leaf, 0);
++    let leaf = boxed("R-9", NodeKind::Rule, "規則", (false, BoxFold::Leaf, 0));
+     assert_eq!(mark_svg(&leaf, AT), None);
+     assert!(!node_svg(&leaf, AT).contains("data-fold"));
+     let v = fixture();
+@@ -245,7 +251,11 @@ fn btuck_group_card() {
+         assert!(!row.contains("~rule"), "{row}");
+         assert!(!row.contains(NO_GIST), "{row}");
+     }
++    art_card_and_views();
++}
+ 
++/// 開いた組の箱の card と、view_cards の組の箱と組でない箱の使い分け。
++fn art_card_and_views() {
+     let c = group_card(&art_box());
+     assert_eq!(c.title, "条 P");
+     assert_eq!(
+diff --git a/crates/tsuzuri-surface/tests/cadopt.rs b/crates/tsuzuri-surface/tests/cadopt.rs
+index 15320990523c77dd23ffba526eb71c34c58f1052..4c7cd94f1a168d0a5ca4268f89f3489ad4b3869e 100644
+--- a/crates/tsuzuri-surface/tests/cadopt.rs
++++ b/crates/tsuzuri-surface/tests/cadopt.rs
+@@ -243,7 +243,11 @@ fn cadopt_columns_take_node_cards() {
+         }
+     }
+     assert_eq!(swapped, 2);
++    unread_keeps(cols);
++}
+ 
++/// グラフの口が読めない・中身の無い値は受けた値のまま。
++fn unread_keeps(cols: Vec<Column>) {
+     for graph in [
+         Fetched::NotRead,
+         Fetched::Failed,
+@@ -304,7 +308,11 @@ fn cadopt_big_title_rules() {
+     ] {
+         assert_eq!(big_title(&big, &graph), None, "{:?}", big.kind);
+     }
++    other_bigs(graph, q);
++}
+ 
++/// 組の大きい箱は題を持たず、電文が読めなければ質問の大きい箱も題を持たない。
++fn other_bigs(graph: Fetched, q: Big) {
+     let sets = next_sets();
+     for name in ["question", "nothing"] {
+         let step = sets
+diff --git a/crates/tsuzuri-surface/tests/cround.rs b/crates/tsuzuri-surface/tests/cround.rs
+index 19b7b78fd19749b89bc139e3d77908ba3587a841..eedb233b9f1c578585bae058124559fdc41b3731 100644
+--- a/crates/tsuzuri-surface/tests/cround.rs
++++ b/crates/tsuzuri-surface/tests/cround.rs
+@@ -197,7 +197,11 @@ fn cround_around_cards() {
+     assert_eq!(twice["e.2"].kind, "question · beads · open");
+ 
+     assert!(view_cards(&[]).is_empty());
++    drawn_keys(doc, cards);
++}
+ 
++/// 図の data-key の値と一覧の行と入れ子の行の id が card の鍵に在る。
++fn drawn_keys(doc: AroundDoc, cards: std::collections::BTreeMap<String, Card>) {
+     // 図の data-key の値と一覧の行と入れ子の行の id は、どれも鍵に在る。
+     let picture = svg(&doc, &layout(&doc));
+     let marker = "data-key=\"";
+@@ -251,7 +255,11 @@ fn cround_dom_text() {
+     for want in ["CardLayer", "Delegate", "HoverCtx", "attach", "delegate"] {
+         assert!(reexport.contains(want), "hover.rs の再出しに {want} が無い");
+     }
++    around_dom_text();
++}
+ 
++/// 近傍の図の委ねと一覧の題の a が card を出す字（nodearound.rs の DOM の部分）。
++fn around_dom_text() {
+     let around = read("src/project/nodearound.rs");
+     let dom = dom_part(&around);
+     for want in [

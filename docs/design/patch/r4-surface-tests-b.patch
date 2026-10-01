@@ -1,0 +1,1513 @@
+diff --git a/crates/tsuzuri-surface/tests/flight.rs b/crates/tsuzuri-surface/tests/flight.rs
+index 0fe89dbc18881a5f566f6362d6c24c701597067d..ab9e0a3c3dd1f757100708270fc42c61caede70a 100644
+--- a/crates/tsuzuri-surface/tests/flight.rs
++++ b/crates/tsuzuri-surface/tests/flight.rs
+@@ -166,7 +166,12 @@ fn flight_own_names_clean() {
+         rest = &after[end..];
+     }
+     assert_eq!(names.len(), 6, "{names:?}");
+-    let words = [
++    names_avoid(names, &[words_front(), words_back()].concat());
++}
++
++/// 着地済みの行の verify の語の表の前半（55 語）。
++fn words_front() -> &'static [&'static str] {
++    &[
+         "accept_",
+         "account_",
+         "acctcore_",
+@@ -222,6 +227,12 @@ fn flight_own_names_clean() {
+         "klink_",
+         "ilink_",
+         "afocus_",
++    ]
++}
++
++/// 着地済みの行の verify の語の表の後半（55 語）。
++fn words_back() -> &'static [&'static str] {
++    &[
+         "nxact_",
+         "urpanel_",
+         "saxis_",
+@@ -277,7 +288,11 @@ fn flight_own_names_clean() {
+         "rhold_",
+         "qkey_",
+         "wstrip_",
+-    ];
++    ]
++}
++
++/// 表の語の数と、歯の名の残りの字が着地済みの行の verify の語を含まないことを見る。
++fn names_avoid(names: Vec<String>, words: &[&str]) {
+     assert_eq!(words.len(), 110);
+     for name in &names {
+         let rest = name
+diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/frame.rs
+index 1570929c92112629b0b4912f4bd63e44a6f0420c..481870634d3ece0033a5b0740479c0e57aa2ea1a 100644
+--- a/crates/tsuzuri-surface/tests/frame.rs
++++ b/crates/tsuzuri-surface/tests/frame.rs
+@@ -285,6 +285,12 @@ fn used_classes() -> BTreeSet<String> {
+             add(line.class);
+         }
+     }
++    built_classes(&mut add);
++    out
++}
++
++/// 関数が組む class（mode・状態・抜けの印・項目の形・注釈と card・節点の頁）を足す。
++fn built_classes(add: &mut impl FnMut(&str)) {
+     for mode in Mode::ALL {
+         add(mode.body_class());
+     }
+@@ -317,7 +323,6 @@ fn used_classes() -> BTreeSet<String> {
+             add(b.class);
+         }
+     }
+-    out
+ }
+ 
+ #[test]
+@@ -380,7 +385,11 @@ fn frame_blocks_without_data_are_unmeasured() {
+     assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
+     assert_eq!(legend::states().len(), 5);
+     assert_eq!(legend::marks().len(), 5);
++    lost_and_empty(screen);
++}
+ 
++/// 読めない一覧は測れていない・0 件の一覧は 0 件を見る。
++fn lost_and_empty(screen: Screen) {
+     // 読めない一覧は 0 件でなく測れていない・0 件は 0 件。
+     let lost = screen.after_lost();
+     assert!(matches!(ask::body(&Fetched::Failed), Body::Unmeasured(r) if !r.is_empty()));
+@@ -483,6 +492,11 @@ fn frame_mode_lives_in_url() {
+         frame::with_param("?mode=beginner&page=map", "mode", "expert"),
+         "?mode=expert&page=map"
+     );
++    hrefs_keep_mode();
++}
++
++/// 頁の link は mode と頁を残し、節点の頁の link は nav に出ないことを見る。
++fn hrefs_keep_mode() {
+     for mode in Mode::ALL {
+         for page in PageId::ALL {
+             let href = frame::href(page, mode);
+@@ -559,7 +573,11 @@ fn frame_help_note_splits_lines() {
+         q.internal.last(),
+         Some(&vec![Inline::Text("原語: 問い".to_string())])
+     );
++    help_parts();
++}
+ 
++/// 注釈の 1 行と字の読み・tip の class・置き場所・内部の名を出す mode を見る。
++fn help_parts() {
+     assert_eq!(
+         help::line("{fig:next}").text,
+         vec![Inline::Sym("fig:next".to_string())]
+diff --git a/crates/tsuzuri-surface/tests/gapspage.rs b/crates/tsuzuri-surface/tests/gapspage.rs
+index 32ae2a9f0c41eda4bcd70bb181425ddbbe2096e1..d95a9bd2b3dcf73cdc7c994e653cf04e7bee9f27 100644
+--- a/crates/tsuzuri-surface/tests/gapspage.rs
++++ b/crates/tsuzuri-surface/tests/gapspage.rs
+@@ -68,6 +68,11 @@ fn gapspage_page_frame_and_nav() {
+         frame::href(PageId::Gaps, Mode::Beginner),
+         "?page=gaps&mode=beginner"
+     );
++    nav_and_snapshot();
++}
++
++/// header の link の順と抜けの検査の頁の印と語、頁の snapshot を見る。
++fn nav_and_snapshot() {
+     let nav_keys = frame::nav_keys();
+     assert!(
+         in_order(&nav_keys, &["home", "questions", "map", "gaps"]),
+diff --git a/crates/tsuzuri-surface/tests/gbnote.rs b/crates/tsuzuri-surface/tests/gbnote.rs
+index 2b7b8358bc9a790cc74255dcf8b7343bdb405583..235bc9498059781de8785b68beb2890f029671a0 100644
+--- a/crates/tsuzuri-surface/tests/gbnote.rs
++++ b/crates/tsuzuri-surface/tests/gbnote.rs
+@@ -76,7 +76,11 @@ fn gbnote_how_and_note() {
+     ] {
+         assert_eq!(note_fn(how), format!("{head}{tail}"), "{how:?}");
+     }
++    word_and_css();
++}
+ 
++/// 注記の語の鍵が語の辞書に在り、stylesheet に注記の規則が在ることを見る。
++fn word_and_css() {
+     let term = vocab().term(BACK_NOTE_KEY).expect("win_close_hand が語の辞書に在る");
+     assert_eq!(term.label, "この窓は手で閉じてください");
+     let css = read("style.css");
+@@ -187,7 +191,13 @@ fn gbnote_own_names_clean() {
+         })
+         .collect();
+     assert_eq!(names.len(), 4, "{names:?}");
+-    let words = [
++    let words = [words_front(), words_middle(), words_back()].concat();
++    names_avoid(names, &words);
++}
++
++/// filter の語の表の前の部分（44 語）。
++fn words_front() -> &'static [&'static str] {
++    &[
+         "aaround_",
+         "accept_",
+         "account_",
+@@ -232,6 +242,12 @@ fn gbnote_own_names_clean() {
+         "glabel_",
+         "gnav_",
+         "gpill_",
++    ]
++}
++
++/// filter の語の表の中の部分（44 語）。
++fn words_middle() -> &'static [&'static str] {
++    &[
+         "gpulse_",
+         "graph_",
+         "gsum_",
+@@ -276,6 +292,12 @@ fn gbnote_own_names_clean() {
+         "nodepage_",
+         "nstall_",
+         "nsum_",
++    ]
++}
++
++/// filter の語の表の後の部分（44 語）。
++fn words_back() -> &'static [&'static str] {
++    &[
+         "nsumw_",
+         "ntime_",
+         "nxact_",
+@@ -320,7 +342,11 @@ fn gbnote_own_names_clean() {
+         "urpanel_",
+         "uword_",
+         "wstrip_",
+-    ];
++    ]
++}
++
++/// 歯の名の残りの字が filter の語を含まないことを見る。
++fn names_avoid(names: Vec<&str>, words: &[&str]) {
+     for name in names {
+         let rest = name
+             .strip_prefix("gbnote_")
+diff --git a/crates/tsuzuri-surface/tests/gfix.rs b/crates/tsuzuri-surface/tests/gfix.rs
+index b2ecd645bb0953ecd2ee45a2b5ee938c37cf7fa1..2a2dc5273884c12260501f9ae25b465724c2753a 100644
+--- a/crates/tsuzuri-surface/tests/gfix.rs
++++ b/crates/tsuzuri-surface/tests/gfix.rs
+@@ -135,7 +135,11 @@ fn gfix_words_and_href() {
+             assert!(!line.contains(&format!("\"{w}\"")), "見出しの語 {w} が在る");
+         }
+     }
++    card_href();
++}
+ 
++/// 要修正の札の先は節点の頁の link で、どの mode でも mode を残すことを見る。
++fn card_href() {
+     let card = MisfitCard {
+         id: "mf.1".to_string(),
+         title: "t".to_string(),
+@@ -276,7 +280,13 @@ fn gfix_own_names_clean() {
+         })
+         .collect();
+     assert!(names.len() >= 7, "{names:?}");
+-    let words = [
++    let words = [words_front(), words_middle(), words_back()].concat();
++    names_avoid(names, &words);
++}
++
++/// filter の語の表の前の部分（47 語）。
++fn words_front() -> &'static [&'static str] {
++    &[
+         "aaround_",
+         "accept_",
+         "account_",
+@@ -324,6 +334,12 @@ fn gfix_own_names_clean() {
+         "gnav_",
+         "gpill_",
+         "gpulse_",
++    ]
++}
++
++/// filter の語の表の中の部分（47 語）。
++fn words_middle() -> &'static [&'static str] {
++    &[
+         "graph_",
+         "gsum_",
+         "gtuck_",
+@@ -371,6 +387,12 @@ fn gfix_own_names_clean() {
+         "nstall_",
+         "nsum_",
+         "nsumw_",
++    ]
++}
++
++/// filter の語の表の後の部分（45 語）。
++fn words_back() -> &'static [&'static str] {
++    &[
+         "ntime_",
+         "nxact_",
+         "parts_",
+@@ -416,7 +438,11 @@ fn gfix_own_names_clean() {
+         "wstrip_",
+         "pgz_",
+         "pmisfit_",
+-    ];
++    ]
++}
++
++/// 表の語の数と、歯の名の残りの字が filter の語を含まないことを見る。
++fn names_avoid(names: Vec<&str>, words: &[&str]) {
+     assert_eq!(words.len(), 139);
+     for name in names {
+         let rest = name
+diff --git a/crates/tsuzuri-surface/tests/gfresh.rs b/crates/tsuzuri-surface/tests/gfresh.rs
+index b8ce68c147e7e9f067976bb48dde4bc952dea918..18087af4263ea0207bb3f4054f8cc2118301e283 100644
+--- a/crates/tsuzuri-surface/tests/gfresh.rs
++++ b/crates/tsuzuri-surface/tests/gfresh.rs
+@@ -78,7 +78,11 @@ fn gfresh_held_then_fresh() {
+     assert_eq!(f.age(1020), Some(4));
+     assert!(!f.warn(1031), "15 秒ちょうどは出さない");
+     assert!(f.warn(1032));
++    other_paths(f);
++}
+ 
++/// ほかの口の頭が最終の記録を最も古い値にし、頭の無い応答で外れることを見る。
++fn other_paths(mut f: Fresh) {
+     f.got("/p/b", 1022, Some(8));
+     assert_eq!(f.record(), Some(1014));
+     f.got("/p/c", 1025, None);
+@@ -148,7 +152,11 @@ fn gfresh_card_rows() {
+     assert_eq!(card.value, value(23));
+     assert_eq!(card.src, READ_AGE_HEADER);
+     assert!(card.more.is_empty());
++    lost_cards(f, card);
++}
+ 
++/// 切れを足した card と切れだけの card の種類と出所、全部の card の行の字数を見る。
++fn lost_cards(mut f: Fresh, card: tsuzuri_surface::widgets::hover::Card) {
+     f.lose(1010);
+     let both = f.card(1100).expect("108 秒の card");
+     assert_eq!(both.kind, format!("{HELD_WORD}・{LOST_WORD}"));
+@@ -281,7 +289,13 @@ fn gfresh_own_names_clean() {
+         rest = &after[end..];
+     }
+     assert!(names.len() >= 8, "{names:?}");
+-    let words = [
++    let words = [words_front(), words_middle(), words_back()].concat();
++    names_avoid(names, &words);
++}
++
++/// 着地済みの行の verify の語の表の前の部分（40 語）。
++fn words_front() -> &'static [&'static str] {
++    &[
+         "aaround_",
+         "accept_",
+         "account_",
+@@ -322,6 +336,12 @@ fn gfresh_own_names_clean() {
+         "ghb_",
+         "glabel_",
+         "gnav_",
++    ]
++}
++
++/// 着地済みの行の verify の語の表の中の部分（40 語）。
++fn words_middle() -> &'static [&'static str] {
++    &[
+         "graph_",
+         "gsum_",
+         "gtuck_",
+@@ -362,6 +382,12 @@ fn gfresh_own_names_clean() {
+         "nodepage_",
+         "nstall_",
+         "nsum_",
++    ]
++}
++
++/// 着地済みの行の verify の語の表の後の部分（40 語）。
++fn words_back() -> &'static [&'static str] {
++    &[
+         "nsumw_",
+         "ntime_",
+         "nxact_",
+@@ -402,7 +428,11 @@ fn gfresh_own_names_clean() {
+         "urpanel_",
+         "uword_",
+         "wstrip_",
+-    ];
++    ]
++}
++
++/// 歯の名の残りの字が着地済みの行の verify の語を含まないことを見る。
++fn names_avoid(names: Vec<String>, words: &[&str]) {
+     for name in &names {
+         let rest = name
+             .strip_prefix("gfresh_")
+diff --git a/crates/tsuzuri-surface/tests/ghb.rs b/crates/tsuzuri-surface/tests/ghb.rs
+index 80dc2116aad53092fe054927048e09db8cccfcd1..452779233dd27c8a4412332d88bd60791b2e3268 100644
+--- a/crates/tsuzuri-surface/tests/ghb.rs
++++ b/crates/tsuzuri-surface/tests/ghb.rs
+@@ -154,7 +154,11 @@ fn ghb_seat_body_and_path() {
+ 
+     assert_eq!(SEAT_HEARTBEAT_PATH, seathb::PATH);
+     assert_eq!(HEARTBEAT_PATH, contract_account::HEARTBEAT_PATH);
++    copy_and_posts();
++}
+ 
++/// Dest の写しと Debug の字と、heartbeat.rs が 2 つの口へ 1 回ずつ送る字を見る。
++fn copy_and_posts() {
+     let (acc, acc_dbg) = copied(Dest::Account);
+     let (seat, seat_dbg) = copied(Dest::Seat);
+     assert_eq!(acc, Dest::Account);
+diff --git a/crates/tsuzuri-surface/tests/glabel.rs b/crates/tsuzuri-surface/tests/glabel.rs
+index c27c7b8deb30960fcd429fe15c2383dfe10377c4..9a92f577eb3bd6640f9baf8cb692ef4d2b564a69 100644
+--- a/crates/tsuzuri-surface/tests/glabel.rs
++++ b/crates/tsuzuri-surface/tests/glabel.rs
+@@ -26,11 +26,12 @@ fn fixture() -> GraphView {
+         .expect("graph-view.json が眺めの電文として読める")
+ }
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+-fn boxed(id: &str, kind: NodeKind, title: &str, group: bool, fold: BoxFold, kids: u32) -> ViewNode {
++fn boxed(
++    id: &str,
++    kind: NodeKind,
++    title: &str,
++    (group, fold, kids): (bool, BoxFold, u32),
++) -> ViewNode {
+     ViewNode {
+         node: GraphNode {
+             id: id.to_string(),
+@@ -54,16 +55,26 @@ fn boxed(id: &str, kind: NodeKind, title: &str, group: bool, fold: BoxFold, kids
+ 
+ /// 電文と同じく題を id と同じ字にした組の箱。
+ fn group(id: &str, kind: NodeKind, kids: u32) -> ViewNode {
+-    boxed(id, kind, id, true, BoxFold::Folded, kids)
++    boxed(id, kind, id, (true, BoxFold::Folded, kids))
+ }
+ 
+ /// 電文と同じく題を覆う先頭と末の id を字 … でつないだ塊。
+ fn chunk(id: &str, kind: NodeKind, first: &str, last: &str, kids: u32) -> ViewNode {
+-    boxed(id, kind, &format!("{first}…{last}"), true, BoxFold::Folded, kids)
++    boxed(
++        id,
++        kind,
++        &format!("{first}…{last}"),
++        (true, BoxFold::Folded, kids),
++    )
+ }
+ 
+ fn epic_box() -> ViewNode {
+-    boxed("t3-hub.52", NodeKind::Epic, "面の epic", false, BoxFold::Folded, 12)
++    boxed(
++        "t3-hub.52",
++        NodeKind::Epic,
++        "面の epic",
++        (false, BoxFold::Folded, 12),
++    )
+ }
+ 
+ fn art_a() -> ViewNode {
+@@ -116,7 +127,7 @@ fn glabel_plain_titles() {
+     ] {
+         assert_eq!(plain_title(&group(id, kind, 3)), want, "{id}");
+     }
+-    let band = boxed("~b:SRS", NodeKind::Goal, "SRS", true, BoxFold::Open, 30);
++    let band = boxed("~b:SRS", NodeKind::Goal, "SRS", (true, BoxFold::Open, 30));
+     assert_eq!(plain_title(&band), "SRS");
+ 
+     for (id, kind, first, last, want) in [
+@@ -130,10 +141,10 @@ fn glabel_plain_titles() {
+ 
+     assert_eq!(plain_title(&epic_box()), "面の epic");
+     // 組でない箱は ~ を持つ字でも電文の題のまま。
+-    let leaf = boxed("~rule", NodeKind::Rule, "規則", false, BoxFold::Leaf, 0);
++    let leaf = boxed("~rule", NodeKind::Rule, "規則", (false, BoxFold::Leaf, 0));
+     assert_eq!(plain_title(&leaf), "規則");
+     // ~ で始まらない組の箱は電文の題。
+-    let odd = boxed("x", NodeKind::Rule, "題 x", true, BoxFold::Folded, 2);
++    let odd = boxed("x", NodeKind::Rule, "題 x", (true, BoxFold::Folded, 2));
+     assert_eq!(plain_title(&odd), "題 x");
+ }
+ 
+@@ -172,7 +183,7 @@ fn glabel_box_first_line() {
+         deep,
+         group("~rule", NodeKind::Rule, 27),
+         group("~note:surface-wave10a", NodeKind::NoteRow, 5),
+-        boxed("~b:SRS", NodeKind::Goal, "SRS", true, BoxFold::Open, 30),
++        boxed("~b:SRS", NodeKind::Goal, "SRS", (true, BoxFold::Open, 30)),
+         chunk("~led:ruling~13-24", NodeKind::Ruling, "r-13", "r-24", 12),
+         chunk("~art:P~1-12", NodeKind::Article, "P-1", "P-12", 12),
+     ] {
+diff --git a/crates/tsuzuri-surface/tests/gpface.rs b/crates/tsuzuri-surface/tests/gpface.rs
+index c7f1ec4e14349baf8f82fd27e1a1cc952a7de8f3..9a26719a04a48347937b384bc15bed4ad3f3c75b 100644
+--- a/crates/tsuzuri-surface/tests/gpface.rs
++++ b/crates/tsuzuri-surface/tests/gpface.rs
+@@ -210,7 +210,11 @@ fn gpface_refusal_lines() {
+         assert_eq!(o.line(), format!("{} fx-p.7", policy::HALF_WRITTEN));
+         half.push(o);
+     }
++    closed_and_kept(created, half);
++}
+ 
++/// 閉じる書きだけ落ちた断りの字と、どの断りが本文を残し読み直さないかを見る。
++fn closed_and_kept(created: policy::Outcome, half: Vec<policy::Outcome>) {
+     let closed = policy::outcome(Some((502, "ledger-close fx-p.7:20260928T0841Z-1")));
+     assert_eq!(
+         closed,
+diff --git a/crates/tsuzuri-surface/tests/gpill.rs b/crates/tsuzuri-surface/tests/gpill.rs
+index 6748f86d5a39f45543ca9b83bdb18d1b603a2939..4f88d4d892d18bbb5d2cfa79ec5c7353e47896a9 100644
+--- a/crates/tsuzuri-surface/tests/gpill.rs
++++ b/crates/tsuzuri-surface/tests/gpill.rs
+@@ -211,6 +211,16 @@ fn gpill_card_rows() {
+             vec![model("?")],
+         ),
+     ];
++    card_matches(at, title, src, want);
++}
++
++/// 5 組の席の card の字と行の字数、読めないときの理由の card と口の path を見る。
++fn card_matches(
++    at: EpochSecs,
++    title: &str,
++    src: &str,
++    want: [(&str, String, &str, Vec<String>); 5],
++) {
+     for (name, kind, value, more) in want {
+         let c = seatpill::card(&body(&card_of(name)), at);
+         assert_eq!(
+@@ -315,7 +325,13 @@ fn gpill_own_names_clean() {
+         })
+         .collect();
+     assert_eq!(names.len(), 6, "{names:?}");
+-    let words = [
++    let words = [words_front(), words_middle(), words_back()].concat();
++    names_avoid(names, &words);
++}
++
++/// filter の語の表の前の部分（44 語）。
++fn words_front() -> &'static [&'static str] {
++    &[
+         "aaround_",
+         "accept_",
+         "account_",
+@@ -360,6 +376,12 @@ fn gpill_own_names_clean() {
+         "ghb_",
+         "glabel_",
+         "gnav_",
++    ]
++}
++
++/// filter の語の表の中の部分（44 語）。
++fn words_middle() -> &'static [&'static str] {
++    &[
+         "gpulse_",
+         "graph_",
+         "gsum_",
+@@ -404,6 +426,12 @@ fn gpill_own_names_clean() {
+         "nodepage_",
+         "nstall_",
+         "nsum_",
++    ]
++}
++
++/// filter の語の表の後の部分（44 語）。
++fn words_back() -> &'static [&'static str] {
++    &[
+         "nsumw_",
+         "ntime_",
+         "nxact_",
+@@ -448,7 +476,11 @@ fn gpill_own_names_clean() {
+         "urpanel_",
+         "uword_",
+         "wstrip_",
+-    ];
++    ]
++}
++
++/// 歯の名の残りの字が filter の語を含まないことを見る。
++fn names_avoid(names: Vec<&str>, words: &[&str]) {
+     for name in names {
+         let rest = name
+             .strip_prefix("gpill_")
+diff --git a/crates/tsuzuri-surface/tests/gpulse.rs b/crates/tsuzuri-surface/tests/gpulse.rs
+index b7125ceeaf9ba0c2189d30e96def92f2c6b38908..941b95cf31c3273feced5172140cb107ec05dea2 100644
+--- a/crates/tsuzuri-surface/tests/gpulse.rs
++++ b/crates/tsuzuri-surface/tests/gpulse.rs
+@@ -186,7 +186,13 @@ fn gpulse_own_names_clean() {
+         rest = &after[end..];
+     }
+     assert_eq!(names.len(), 5, "{names:?}");
+-    let words = [
++    let words = [words_front(), words_middle(), words_back()].concat();
++    names_avoid(names, &words);
++}
++
++/// 契約表の verify の語の表の前の部分（44 語）。
++fn words_front() -> &'static [&'static str] {
++    &[
+         "aaround_",
+         "accept_",
+         "account_",
+@@ -231,6 +237,12 @@ fn gpulse_own_names_clean() {
+         "ghb_",
+         "glabel_",
+         "gnav_",
++    ]
++}
++
++/// 契約表の verify の語の表の中の部分（44 語）。
++fn words_middle() -> &'static [&'static str] {
++    &[
+         "gpill_",
+         "graph_",
+         "gsum_",
+@@ -275,6 +287,12 @@ fn gpulse_own_names_clean() {
+         "nodepage_",
+         "nstall_",
+         "nsum_",
++    ]
++}
++
++/// 契約表の verify の語の表の後の部分（44 語）。
++fn words_back() -> &'static [&'static str] {
++    &[
+         "nsumw_",
+         "ntime_",
+         "nxact_",
+@@ -319,7 +337,11 @@ fn gpulse_own_names_clean() {
+         "urpanel_",
+         "uword_",
+         "wstrip_",
+-    ];
++    ]
++}
++
++/// 歯の名の残りの字が契約表の verify の語を含まないことを見る。
++fn names_avoid(names: Vec<String>, words: &[&str]) {
+     for name in &names {
+         let rest = name
+             .strip_prefix("gpulse_")
+diff --git a/crates/tsuzuri-surface/tests/hacols.rs b/crates/tsuzuri-surface/tests/hacols.rs
+index d262d3fbb8e96ab39f1a0ed23883b64b9f3c89c0..9afd678ca527cfc8465c180f58486ee4eaa40a1b 100644
+--- a/crates/tsuzuri-surface/tests/hacols.rs
++++ b/crates/tsuzuri-surface/tests/hacols.rs
+@@ -69,7 +69,11 @@ fn hacols_wait_numbers() {
+     assert_eq!(wait_class(Some(1)), "num on");
+     assert_eq!(wait_class(Some(0)), "num");
+     assert_eq!(wait_class(None), "num");
++    run_cards(doc);
++}
+ 
++/// run の数の card の値の行と、台帳の読めない project の card の WAIT_NOTE を見る。
++fn run_cards(doc: AccountDoc) {
+     let a = pcnt_card(&doc.projects[0], doc.at);
+     assert_eq!(a.value, "あなたの決定待ち 2");
+     assert!(!a.more.iter().any(|l| l == WAIT_NOTE), "{:?}", a.more);
+@@ -121,7 +125,11 @@ fn hacols_unref_partial() {
+     for r in t.groups.iter().flat_map(|g| g.rows.iter()) {
+         assert_eq!(r.unref, unref_of(&doc.projects[r.index]), "{}", r.name);
+     }
++    unref_classes(u, none);
++}
+ 
++/// 未反映の欄の class の字（数が在る・0 件・台帳が読めない）を見る。
++fn unref_classes(u: Unref, none: LedgerStats) {
+     assert_eq!(unref_class(Some(&u)), "c-un2 on");
+     assert_eq!(unref_class(Some(&unref_count(&none))), "c-un2");
+     assert_eq!(unref_class(None), "c-un2");
+diff --git a/crates/tsuzuri-surface/tests/hcled.rs b/crates/tsuzuri-surface/tests/hcled.rs
+index 25471f4eb352c55748c2cbc76d0a202a5411156d..67f27c330c0a35fffc3fcbc9781cf179e37c2419 100644
+--- a/crates/tsuzuri-surface/tests/hcled.rs
++++ b/crates/tsuzuri-surface/tests/hcled.rs
+@@ -43,7 +43,11 @@ fn hcled_rows_carry_cards() {
+     let t = table(&doc, Sort::Judge);
+     assert_eq!(t.names(), vec!["proj-a", "proj-b", "proj-c"]);
+     assert_eq!(t.order(), vec![0, 1, 2]);
++    judge_rows(t);
++}
+ 
++/// 判定の順に並べた表の proj-a の行の card の字と、台帳の無い 2 行の card を見る。
++fn judge_rows(t: tsuzuri_surface::account::ledger::LedTable) {
+     let a = &t.rows[0];
+     assert!(matches!(a.cells, Reading::Known(_)));
+     assert_eq!(a.class, "jrow j-ok");
+diff --git a/crates/tsuzuri-surface/tests/hcnx.rs b/crates/tsuzuri-surface/tests/hcnx.rs
+index d4e068061b08a3f5f912a5b3d6f49edd7abc6b02..e6be1bdb83c6feba4268ba287b60c2fd3a1f2d1f 100644
+--- a/crates/tsuzuri-surface/tests/hcnx.rs
++++ b/crates/tsuzuri-surface/tests/hcnx.rs
+@@ -120,19 +120,31 @@ fn hcnx_member_cards() {
+     assert_eq!(c.value, "Tier1 の今の口座 acct-1");
+     assert!(c.more.is_empty());
+     assert_eq!(c, gproj_card(&doc, proj("proj-c")));
++    proj_b_card(&doc, t2, proj);
++    members_and_loose(doc, &h, a, t1);
++}
+ 
++/// 移動待ちの proj-b の chip の card を見る。
++fn proj_b_card<'a>(
++    doc: &AccountDoc,
++    t2: &GroupView,
++    proj: impl Fn(&str) -> &'a tsuzuri_contract::account::ProjectRow,
++) {
+     let b = member_card(t2, "proj-b").expect("proj-b の card");
+     assert_eq!(b.title, "proj-b-orch");
+     assert_eq!(b.kind, "! 移動待ち");
+     assert_eq!(b.value, "登録 acct-1 ≠ 群 acct-2");
+     assert_eq!(b.more, ["待っている"]);
+-    assert_eq!(b, gproj_card(&doc, proj("proj-b")));
++    assert_eq!(b, gproj_card(doc, proj("proj-b")));
++}
+ 
++/// 群の project の名と印の並びと、電文に行の無い project の chip が card を持たないことを見る。
++fn members_and_loose(doc: AccountDoc, h: &Home, a: Card, t1: &GroupView) {
+     // 群の project の名と印は電文の members の順と matches のまま。
+     let Reading::Known(cards) = &doc.groups else {
+         panic!("fixture の群は Known");
+     };
+-    for (g, card) in groups(&h).iter().zip(cards) {
++    for (g, card) in groups(h).iter().zip(cards) {
+         let want: Vec<&str> = card.members.iter().map(|m| m.project.as_str()).collect();
+         let got: Vec<&str> = g.members.iter().map(|m| m.project.as_str()).collect();
+         assert_eq!(got, want, "{} の members", g.name);
+diff --git a/crates/tsuzuri-surface/tests/hcproj.rs b/crates/tsuzuri-surface/tests/hcproj.rs
+index 97d7153cfbd5381a9cc675787fdaae3264187b13..9e45a2a21876bf28d2602a690d175651d441850a 100644
+--- a/crates/tsuzuri-surface/tests/hcproj.rs
++++ b/crates/tsuzuri-surface/tests/hcproj.rs
+@@ -33,11 +33,7 @@ fn fixture() -> AccountDoc {
+ }
+ 
+ /// card の 4 行と詳しくを比べる。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+-fn check(card: &Card, title: &str, kind: &str, value: &str, src: &str, more: &[&str]) {
++fn check(card: &Card, (title, kind): (&str, &str), value: &str, src: &str, more: &[&str]) {
+     assert_eq!(card.title, title);
+     assert_eq!(card.kind, kind, "{title} の種類");
+     assert_eq!(card.value, value, "{title} の値");
+@@ -71,8 +67,7 @@ fn hcproj_nx_card() {
+     assert_eq!(doc.at, 1790510400);
+     check(
+         &f(&doc.projects[0], doc.at),
+-        "proj-a · (e) 質問",
+-        "各 project の次の一手 · e",
++        ("proj-a · (e) 質問", "各 project の次の一手 · e"),
+         "proj-a.7 · 1 件",
+         "中核の next_step_seat · ◷ 21:00 JST",
+         &[
+@@ -95,14 +90,21 @@ fn hcproj_nx_card() {
+     for (i, name) in [(1, "proj-b"), (2, "proj-c")] {
+         check(
+             &nx_card(&doc.projects[i], doc.at),
+-            &format!("{name} · 測れていない"),
+-            "各 project の次の一手 · ―",
++            (
++                &format!("{name} · 測れていない"),
++                "各 project の次の一手 · ―",
++            ),
+             "―",
+             "中核の next_step_seat · ◷ 21:00 JST",
+             &unknown_more,
+         );
+     }
+ 
++    nx_card_edges(doc, unknown_more);
++}
++
++/// なしだけ当たる行と checks が空の行の card・時刻は at から。
++fn nx_card_edges(doc: AccountDoc, unknown_more: [&str; 6]) {
+     // なしだけ当たり・ほかは当たらない・lead はなし。
+     let mut nothing = doc.projects[0].clone();
+     with_next(&mut nothing, |s| {
+@@ -117,8 +119,7 @@ fn hcproj_nx_card() {
+     });
+     check(
+         &nx_card(&nothing, doc.at),
+-        "proj-a · (g) 次の一手なし",
+-        "各 project の次の一手 · g",
++        ("proj-a · (g) 次の一手なし", "各 project の次の一手 · g"),
+         "orchestrator が動いている / 待っている",
+         "中核の next_step_seat · ◷ 21:00 JST",
+         &[
+@@ -154,8 +155,10 @@ fn hcproj_led_card() {
+     let doc = fixture();
+     check(
+         &f(&doc.projects[0]),
+-        "proj-a · 台帳の処理状況",
+-        "↑+2 24h · ↑+4 7d · closed/日 0.9",
++        (
++            "proj-a · 台帳の処理状況",
++            "↑+2 24h · ↑+4 7d · closed/日 0.9",
++        ),
+         "task 9（ready 5 / blocked 3）",
+         "bd list --all の bead · 時点 21:00 JST",
+         &["memo 3 · stale 1", "question 2 · epic 2", "lead p50 4.0d / p90 12d"],
+@@ -163,8 +166,7 @@ fn hcproj_led_card() {
+     for (i, name) in [(1, "proj-b"), (2, "proj-c")] {
+         check(
+             &led_card(&doc.projects[i]),
+-            &format!("{name} · 台帳なし"),
+-            "台帳の処理状況",
++            (&format!("{name} · 台帳なし"), "台帳の処理状況"),
+             "測れていない",
+             "bd list --all の bead",
+             &[],
+@@ -192,8 +194,7 @@ fn hcproj_pcnt_card() {
+     let doc = fixture();
+     check(
+         &f(&doc.projects[0], doc.at),
+-        "run の数 · proj-a",
+-        "wait 1 · run 2 · stop 0 · land 3",
++        ("run の数 · proj-a", "wait 1 · run 2 · stop 0 · land 3"),
+         "あなたの決定待ち 2",
+         "fleet/events.jsonl · ◷ 21:00 JST",
+         &[
+@@ -210,8 +211,7 @@ fn hcproj_pcnt_card() {
+     assert_eq!(b.more.last().map(String::as_str), Some(WAIT_NOTE));
+     check(
+         &pcnt_card(&doc.projects[2], doc.at),
+-        "run の数 · proj-c",
+-        "測れていない",
++        ("run の数 · proj-c", "測れていない"),
+         "あなたの決定待ち ―",
+         "fleet/events.jsonl · ◷ 21:00 JST",
+         &["state dir か event log が読めない", "― = 質問の台帳を読んでいない"],
+@@ -229,16 +229,14 @@ fn hcproj_orch_card() {
+     let doc = fixture();
+     check(
+         &f(&doc, &doc.projects[0]).expect("proj-a は席を持つ"),
+-        "proj-a-orch",
+-        "動いている · ◷ 19:31 JST から",
++        ("proj-a-orch", "動いている · ◷ 19:31 JST から"),
+         "口座 acct-1 · tick healthy · hb on",
+         "seat/proj-a-orch/state.jsonl ほか",
+         &["model opus"],
+     );
+     check(
+         &orch_card(&doc, &doc.projects[1]).expect("proj-b は席を持つ"),
+-        "proj-b-orch",
+-        "待っている · ◷ 20:35 JST から",
++        ("proj-b-orch", "待っている · ◷ 20:35 JST から"),
+         "口座 acct-1 · tick stale · hb off",
+         "seat/proj-b-orch/state.jsonl ほか",
+         &["model sonnet", "移動待ち acct-1 → acct-2", "退避までの残り 1101 秒"],
+@@ -297,24 +295,21 @@ fn hcproj_gproj_card() {
+     let src = "doctor の席の行と群の今の記録";
+     check(
+         &f(&doc, &doc.projects[0]),
+-        "proj-a-orch",
+-        "✓ 今の口座で動いている",
++        ("proj-a-orch", "✓ 今の口座で動いている"),
+         "登録 acct-1 = 群 acct-1",
+         src,
+         &["動いている"],
+     );
+     check(
+         &gproj_card(&doc, &doc.projects[1]),
+-        "proj-b-orch",
+-        "! 移動待ち",
++        ("proj-b-orch", "! 移動待ち"),
+         "登録 acct-1 ≠ 群 acct-2",
+         src,
+         &["待っている"],
+     );
+     check(
+         &gproj_card(&doc, &doc.projects[2]),
+-        "proj-c",
+-        "session なし",
++        ("proj-c", "session なし"),
+         "Tier1 の今の口座 acct-1",
+         src,
+         &[],
+@@ -344,8 +339,7 @@ fn hcproj_grp_card() {
+     let doc = fixture();
+     check(
+         &f(&doc, "Tier1").expect("Tier1 は在る"),
+-        "Tier1 · 今の口座 acct-1",
+-        "project の群 · 記録 1 件",
++        ("Tier1 · 今の口座 acct-1", "project の群 · 記録 1 件"),
+         "◷ 19:00 JST から · ← 前 acct-2",
+         "groups/Tier1.account ほか",
+         &[
+@@ -358,8 +352,7 @@ fn hcproj_grp_card() {
+     );
+     check(
+         &grp_card(&doc, "Tier2").expect("Tier2 は在る"),
+-        "Tier2 · 今の口座 acct-2",
+-        "project の群 · 記録 1 件",
++        ("Tier2 · 今の口座 acct-2", "project の群 · 記録 1 件"),
+         "記録なし · ← 前 ―",
+         "groups/Tier2.account ほか",
+         &[
+@@ -440,6 +433,11 @@ fn hcproj_rows_carry_cards() {
+         }
+     }
+ 
++    rows_in_tables(doc);
++}
++
++/// 並べ方ごとの表の行と束の card・群の無い見出しの束。
++fn rows_in_tables(doc: AccountDoc) {
+     for sort in PSort::ALL {
+         let t = table(&doc, sort, Mode::Beginner);
+         let rows: Vec<&ProjLine> = t.groups.iter().flat_map(|g| g.rows.iter()).collect();
+@@ -556,6 +554,11 @@ fn hcproj_dom_wiring() {
+         assert!(t.contains(attr), "more_view の {class} の tag {t} に {attr} が無い");
+     }
+ 
++    head_chip_and_board(dom);
++}
++
++/// head_view の群の chip と group_view の束の card・board.rs の card の層。
++fn head_chip_and_board(dom: String) {
+     let head = fn_body(&dom, "head_view");
+     assert!(
+         squeeze(&head).starts_with("fnhead_view(head:GroupHead,card:Option<Card>)->AnyView"),
+diff --git a/crates/tsuzuri-surface/tests/hcsess.rs b/crates/tsuzuri-surface/tests/hcsess.rs
+index 215e6c3e8f5fa65e123873767f86f79fa15218bd..f913f5d90d2ae81162dbd2cace335247204067f4 100644
+--- a/crates/tsuzuri-surface/tests/hcsess.rs
++++ b/crates/tsuzuri-surface/tests/hcsess.rs
+@@ -30,11 +30,7 @@ fn fixture() -> AccountDoc {
+ }
+ 
+ /// card の 4 行と詳しくを比べる。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+-fn check(card: &Card, title: &str, kind: &str, value: &str, src: &str, more: &[&str]) {
++fn check(card: &Card, (title, kind): (&str, &str), value: &str, src: &str, more: &[&str]) {
+     assert_eq!(card.title, title);
+     assert_eq!(card.kind, kind, "{title} の種類");
+     assert_eq!(card.value, value, "{title} の値");
+@@ -52,8 +48,7 @@ fn hcsess_run_card_rules() {
+     let line = &doc.sessions[1];
+     check(
+         &f(line, doc.at),
+-        "proj-a.3-20260927T113000Z",
+-        "pipeline · proj-a",
++        ("proj-a.3-20260927T113000Z", "pipeline · proj-a"),
+         "Running · 動いている",
+         "fleet/events.jsonl · RunStage",
+         &["口座 acct-1", "◷ 20:30 JST から"],
+@@ -88,16 +83,14 @@ fn hcsess_proj_card_rules() {
+     let doc = fixture();
+     check(
+         &f(&doc, "proj-c"),
+-        "proj-c",
+-        "project · Tier1",
++        ("proj-c", "project · Tier1"),
+         "session 1 · orchestrator 1",
+         "proj-c · state dir",
+         &["proj-c-orch ?", "まだ無い"],
+     );
+     check(
+         &proj_card(&doc, "proj-a"),
+-        "proj-a",
+-        "project · Tier1",
++        ("proj-a", "project · Tier1"),
+         "session 2 · orchestrator 1",
+         "proj-a · state dir",
+         &[
+@@ -108,8 +101,7 @@ fn hcsess_proj_card_rules() {
+     );
+     check(
+         &proj_card(&doc, "proj-z"),
+-        "proj-z",
+-        "project · ―",
++        ("proj-z", "project · ―"),
+         "session なし",
+         "proj-z · state dir",
+         &["まだ無い"],
+@@ -175,6 +167,11 @@ fn hcsess_rows_carry_cards() {
+     unseated.projects[1].seat = Reading::Unknown;
+     assert_eq!(sess_card(&unseated, 2), proj_card(&unseated, "proj-b"));
+ 
++    rows_in_tables(doc);
++}
++
++/// 行ごとの card と、並べ方ごとの表の行の card。
++fn rows_in_tables(doc: AccountDoc) {
+     for i in 0..doc.sessions.len() {
+         let r: SessRow = row(&doc, i);
+         assert_eq!(r.card, sess_card(&doc, i), "位置 {i} の行の card");
+diff --git a/crates/tsuzuri-surface/tests/hdchip.rs b/crates/tsuzuri-surface/tests/hdchip.rs
+index a0e3b1261d27cf52443fca4ee246b0fc6655eb92..2f907dd41ae27606c20e7d413fcc18b5ceb9b223 100644
+--- a/crates/tsuzuri-surface/tests/hdchip.rs
++++ b/crates/tsuzuri-surface/tests/hdchip.rs
+@@ -84,6 +84,11 @@ fn hdchip_chip_and_card_follow_mock() {
+     assert_eq!(DORMANT_NAME_CHARS, 18);
+     assert_eq!(label("dormant"), "休止中の session");
+ 
++    three_seats_chip_and_card();
++}
++
++/// 3 つの席の chip と card の字・1 つの席なら値は切らない。
++fn three_seats_chip_and_card() {
+     let mut doc = fixture();
+     assert_eq!(doc.at, 1790510400);
+     doc.dormant = vec![
+diff --git a/crates/tsuzuri-surface/tests/helpfig.rs b/crates/tsuzuri-surface/tests/helpfig.rs
+index f405f65d1a1ea1d4a4e66e7ce6f095e6fbb4eed7..3372f2c31c0e45167ec96174764cb334e68d42b8 100644
+--- a/crates/tsuzuri-surface/tests/helpfig.rs
++++ b/crates/tsuzuri-surface/tests/helpfig.rs
+@@ -108,20 +108,25 @@ fn hfig_svg_head_and_counts() {
+             dashes,
+             "{name} の stroke-dasharray"
+         );
+-        assert!(
+-            s.contains(&format!(
+-                "<marker id=\"fa-{name}\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0L8 4L0 8z\" fill=\"var(--ink-3)\"/></marker>"
+-            )),
+-            "{name} の marker"
+-        );
+-        for m in attrs(&s, "marker-end") {
+-            assert_eq!(m, format!("url(#fa-{name})"));
+-        }
+-        // 座標は整数の字（小数点が出るのは font-size と stroke-width だけ）。
+-        for key in ["x", "y", "width", "height", "d"] {
+-            for v in attrs(&s, key) {
+-                assert!(!v.contains('.'), "{name} の {key}={v}");
+-            }
++        marker_and_coords(s, name);
++    }
++}
++
++/// 図の marker の定義と marker-end の参照・座標は整数の字。
++fn marker_and_coords(s: String, name: &str) {
++    assert!(
++        s.contains(&format!(
++            "<marker id=\"fa-{name}\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0L8 4L0 8z\" fill=\"var(--ink-3)\"/></marker>"
++        )),
++        "{name} の marker"
++    );
++    for m in attrs(&s, "marker-end") {
++        assert_eq!(m, format!("url(#fa-{name})"));
++    }
++    // 座標は整数の字（小数点が出るのは font-size と stroke-width だけ）。
++    for key in ["x", "y", "width", "height", "d"] {
++        for v in attrs(&s, key) {
++            assert!(!v.contains('.'), "{name} の {key}={v}");
+         }
+     }
+ }
+diff --git a/crates/tsuzuri-surface/tests/hnunk.rs b/crates/tsuzuri-surface/tests/hnunk.rs
+index b68157dc77d9efdb4004a98ec609aa687aa04a36..d20df325a57453107cafe157c717d79f5f0fda49 100644
+--- a/crates/tsuzuri-surface/tests/hnunk.rs
++++ b/crates/tsuzuri-surface/tests/hnunk.rs
+@@ -106,6 +106,11 @@ fn hnunk_home_row_unmeasured() {
+     assert_eq!(r.marks, home::marks(&u.next));
+     assert_eq!(r.card, nx_card(&u, doc.at));
+ 
++    nothing_row(doc);
++}
++
++/// 判じたなしの行は今のまま。
++fn nothing_row(doc: AccountDoc) {
+     let m = row_m(&doc);
+     let g = home::nx_row(&m, doc.at);
+     assert_eq!(g.lead, Some(NextMove::Nothing));
+@@ -147,6 +152,11 @@ fn hnunk_projects_need_unmeasured() {
+     assert_eq!(g.line.as_deref(), Some(NONE_LINE));
+     assert_eq!(need_rank(&m), 6);
+ 
++    need_in_table(fx, u, n);
++}
++
++/// 表の要対応の並べと、なしを判じなかった行の card。
++fn need_in_table(fx: AccountDoc, u: ProjectRow, n: tsuzuri_surface::account::projects::Need) {
+     let doc = mixed(&fx);
+     let t = table(&doc, PSort::Need, Mode::Beginner);
+     assert_eq!(t.groups.len(), 1);
+diff --git a/crates/tsuzuri-surface/tests/hruling.rs b/crates/tsuzuri-surface/tests/hruling.rs
+index 92b3dec82692fb347ade5f3508203eee74a23f85..5e4e6cb02825fbd08e45dc27bd72b9092a76cd40 100644
+--- a/crates/tsuzuri-surface/tests/hruling.rs
++++ b/crates/tsuzuri-surface/tests/hruling.rs
+@@ -172,7 +172,13 @@ fn hruling_src_row_links() {
+ /// この file の歯の名はどれも hruling_ で始まり、残りの字はほかの行の filter の語を含まない。
+ #[test]
+ fn hruling_own_names_clean() {
+-    const WORDS: &[&str] = &[
++    let words = [words_head(), words_tail()].concat();
++    names_clean(&words);
++}
++
++/// ほかの行の filter の語の前半。
++fn words_head() -> &'static [&'static str] {
++    &[
+         "accept_",
+         "account_",
+         "acctcore_",
+@@ -212,6 +218,12 @@ fn hruling_own_names_clean() {
+         "parts_",
+         "pipe_",
+         "project_",
++    ]
++}
++
++/// ほかの行の filter の語の後半。
++fn words_tail() -> &'static [&'static str] {
++    &[
+         "question_",
+         "seatblock_",
+         "seatcard_",
+@@ -251,8 +263,12 @@ fn hruling_own_names_clean() {
+         "sxaxis_",
+         "plimit_",
+         "bport_",
+-    ];
+-    assert_eq!(WORDS.len(), 78);
++    ]
++}
++
++/// 語の数と、この file の歯の名が hruling_ で始まり残りの字が語を含まないこと。
++fn names_clean(words: &[&str]) {
++    assert_eq!(words.len(), 78);
+     let text = read("tests/hruling.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let mut names = Vec::new();
+@@ -272,7 +288,7 @@ fn hruling_own_names_clean() {
+         let rest = name
+             .strip_prefix("hruling_")
+             .unwrap_or_else(|| panic!("{name} が hruling_ で始まらない"));
+-        for w in WORDS {
++        for w in words {
+             assert!(!rest.contains(w), "{name} が {w} を含む");
+         }
+     }
+diff --git a/crates/tsuzuri-surface/tests/hsblock.rs b/crates/tsuzuri-surface/tests/hsblock.rs
+index 55038671b892cd3495431fa9fe68bccd2c09159c..4edbd8da1fb6a4eb59b327d34b31b8a5aa1ceec5 100644
+--- a/crates/tsuzuri-surface/tests/hsblock.rs
++++ b/crates/tsuzuri-surface/tests/hsblock.rs
+@@ -127,6 +127,11 @@ fn hsblock_kit_holds_shared() {
+         code.contains(&r#"include!(concat!(env!("OUT_DIR"), "/project_blocks.rs"));"#),
+         "mod.rs に生成した file の include が無い"
+     );
++    kit_defs_and_dom();
++}
++
++/// kit.rs が共通の部品の定義を持ち、DOM の部品は wasm の target の mod dom の中で pub use で出す。
++fn kit_defs_and_dom() {
+     let kit = read("src/kit.rs");
+     for def in [
+         "pub enum Body<",
+@@ -162,6 +167,11 @@ fn hsblock_kit_holds_shared() {
+         ),
+         "kit.rs が dom の部品を pub use で出さない"
+     );
++    host_parts_via_project();
++}
++
++/// host の部品の値と型を crate::project の path で引く。
++fn host_parts_via_project() {
+     // 今までの crate::project の path で host の部品が使える。
+     assert_eq!(project::state_key("run"), "st_run");
+     assert_eq!(project::state_class("wait"), "st st-wait");
+diff --git a/crates/tsuzuri-surface/tests/hthr.rs b/crates/tsuzuri-surface/tests/hthr.rs
+index ade79b89a7b6eed033b0cd3c3e5f71ec9cd6b32a..1a5c9c10dc2d99773b0e944b6b4a9e159c6e761f 100644
+--- a/crates/tsuzuri-surface/tests/hthr.rs
++++ b/crates/tsuzuri-surface/tests/hthr.rs
+@@ -52,11 +52,13 @@ fn hots(g: &GroupView) -> Vec<bool> {
+     g.pressure.iter().map(|p| p.hot).collect()
+ }
+ 
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+-fn pressure(at: u64, group: &str, account: &str, window: &str, used: u64, cap: u64) -> GroupNotice {
++fn pressure(
++    at: u64,
++    group: &str,
++    account: &str,
++    window: &str,
++    (used, cap): (u64, u64),
++) -> GroupNotice {
+     GroupNotice::Pressure {
+         at,
+         group: group.to_string(),
+@@ -96,12 +98,12 @@ fn caps_k() -> Vec<WindowCap> {
+ /// 節の列 M1（口座は acct-9・使った割合が閾値より小さい行も在る）。
+ fn notices_m1() -> Vec<GroupNotice> {
+     vec![
+-        pressure(500, "Tier2", "acct-9", "seven_day_model", 10, 95),
+-        pressure(500, "Tier2", "acct-9", "seven_day", 1, 95),
++        pressure(500, "Tier2", "acct-9", "seven_day_model", (10, 95)),
++        pressure(500, "Tier2", "acct-9", "seven_day", (1, 95)),
+         refused(500, "Tier2", "acct-9", "x-word"),
+-        pressure(400, "Tier1", "acct-9", "seven_day", 99, 95),
++        pressure(400, "Tier1", "acct-9", "seven_day", (99, 95)),
+         refused(300, "Tier1", "acct-9", "old-word"),
+-        pressure(600, "Tier9", "acct-9", "five_hour", 99, 85),
++        pressure(600, "Tier9", "acct-9", "five_hour", (99, 85)),
+     ]
+ }
+ 
+@@ -109,12 +111,18 @@ fn notices_m1() -> Vec<GroupNotice> {
+ fn notices_m2() -> Vec<GroupNotice> {
+     vec![
+         refused(100, "Tier1", "acct-9", "old-word"),
+-        pressure(200, "Tier1", "acct-9", "five_hour", 50, 85),
++        pressure(200, "Tier1", "acct-9", "five_hour", (50, 85)),
+     ]
+ }
+ 
+ fn n1() -> GroupNotice {
+-    pressure(1_790_510_340, "Tier1", "acct-9", "seven_day_model", 97, 95)
++    pressure(
++        1_790_510_340,
++        "Tier1",
++        "acct-9",
++        "seven_day_model",
++        (97, 95),
++    )
+ }
+ 
+ fn n2() -> GroupNotice {
+@@ -169,6 +177,11 @@ fn hthr_marks_from_latest_notices() {
+     assert_eq!(latest, notices_m1().iter().take(3).collect::<Vec<_>>());
+     assert!(latest_notices(&m1.notices, "Tier3").is_empty());
+ 
++    latest_m2_and_unknown(d);
++}
++
++/// 節の列 M2 と読めない知らせの列の強調と断りの理由。
++fn latest_m2_and_unknown(d: AccountDoc) {
+     let mut m2 = d.clone();
+     m2.notices = Reading::Known(notices_m2());
+     let gs = groups(&m2);
+@@ -220,6 +233,11 @@ fn hthr_history_rows() {
+     assert!(h.folded.is_empty());
+     assert_eq!(h.more, None);
+ 
++    folded_and_home_moves(d);
++}
++
++/// 9 行の知らせの畳みと、頁の移動の欄の知らせの行・空・読めない。
++fn folded_and_home_moves(d: AccountDoc) {
+     let nine: Vec<GroupNotice> = (0..9)
+         .map(|i| refused(d.at - 60 * i, "Tier1", "acct-9", "w"))
+         .collect();
+diff --git a/crates/tsuzuri-surface/tests/lateface.rs b/crates/tsuzuri-surface/tests/lateface.rs
+index 69c208333cbc2973df61cd66ede32ccd6482af4c..44adbadae17b94cd756a545823c3300b255bf966 100644
+--- a/crates/tsuzuri-surface/tests/lateface.rs
++++ b/crates/tsuzuri-surface/tests/lateface.rs
+@@ -102,6 +102,11 @@ fn lateface_line() {
+     let unread = Fetched::Body(wire::encode(&Reading::<Vec<RulingId>>::Unknown).expect("電文"));
+     assert_eq!(unreceived_line(&unread, now), unknown);
+     assert_eq!(unreceived_line(&known(&[]), now), None);
++    one_and_two_lines(now);
++}
++
++/// 1 件と 2 件の 1 行は待ちの秒を過ぎた物だけを数える。
++fn one_and_two_lines(now: u64) {
+     let one = known(&["fx-u.2:20260929T1001Z-1"]);
+     assert_eq!(unreceived_line(&one, now - 1), None);
+     assert_eq!(
+diff --git a/crates/tsuzuri-surface/tests/lcard.rs b/crates/tsuzuri-surface/tests/lcard.rs
+index 3abd2f1178fd5059d35a60bf54c3e976805e6939..0362ba6491470cf3e191525370960698a6f65e42 100644
+--- a/crates/tsuzuri-surface/tests/lcard.rs
++++ b/crates/tsuzuri-surface/tests/lcard.rs
+@@ -176,6 +176,11 @@ fn lcard_burn_rules() {
+     assert!(c.more.is_empty());
+     assert_eq!((c.title, c.kind, c.src), (full.title.clone(), full.kind.clone(), full.src.clone()));
+ 
++    net_drop_arrows(base, full);
++}
++
++/// 純減の矢印は種類の行だけを替え、ほかの欄は変わらない。
++fn net_drop_arrows(base: LedgerStats, full: Card) {
+     let mut flat = base.clone();
+     flat.net_drop_24h = 0;
+     flat.net_drop_7d = 0;
+diff --git a/crates/tsuzuri-surface/tests/ledgerblock.rs b/crates/tsuzuri-surface/tests/ledgerblock.rs
+index c79315dd4e6eee417c0d3bbe787e54575f3f2ed0..a1cfe30d69ee69e9971c90b35dfde83720e38db2 100644
+--- a/crates/tsuzuri-surface/tests/ledgerblock.rs
++++ b/crates/tsuzuri-surface/tests/ledgerblock.rs
+@@ -96,6 +96,11 @@ fn ledgerblock_top_four_and_net_text() {
+     assert_eq!(e.text(Part::Net24), Some("0".to_string()));
+     assert_eq!(e.net24.arrow, "→");
+ 
++    net_rows_and_rate(m, e);
++}
++
++/// 純減の値ごとの矢印と字と class・主な指標の行の字と小数 1 桁の丸め。
++fn net_rows_and_rate(m: Metrics, e: Metrics) {
+     for (value, arrow, text, class) in [
+         (-3, "↓", "−3", "net net-down"),
+         (2, "↑", "+2", "net net-up"),
+@@ -201,6 +206,11 @@ fn ledgerblock_burndown_coordinates() {
+     );
+     assert!(svg.contains(r#"<polyline class="lb-open" fill="none" points="15.1,10.0 37.4,7.0"#));
+ 
++    empty_days_and_spark(s);
++}
++
++/// 0 ばかりの日の burndown と、sparkline の座標。
++fn empty_days_and_spark(s: LedgerStats) {
+     // 0 ばかりの日でも割り算が落ちない（最大は 1 から）。
+     let e = burndown(&set("empty").days, BURN_W, BURN_H);
+     assert!(e.bars.iter().all(|r| r.height == 0.0 && r.y == BURN_H));
+@@ -273,6 +283,11 @@ fn ledgerblock_age_four_forms() {
+     assert_eq!(age(Some(10.0)), "10d");
+     assert_eq!(age(Some(12.3)), "12d");
+     assert_eq!(age(Some(45.6)), "46d");
++    memo_age_and_lead();
++}
++
++/// 指標の memo の年齢と lead の字・memo の段の残りの 3 数。
++fn memo_age_and_lead() {
+     let m = filled("filled", &Screen::initial());
+     assert_eq!(m.text(Part::MemoAge), Some("3.4d".to_string()));
+     assert_eq!(m.text(Part::Lead), Some("12h".to_string()));
+@@ -325,6 +340,11 @@ fn ledgerblock_layout_table() {
+         LAYOUT[0].1.iter().map(|p| p.key()).collect::<Vec<_>>(),
+         METRICS
+     );
++    tiers_and_keys();
++}
++
++/// 項の段・項は 1 度ずつで作業中の数と最古の task は無い・語の鍵は語の辞書に在る。
++fn tiers_and_keys() {
+     let tier_of = |part: Part| {
+         LAYOUT
+             .iter()
+@@ -367,6 +387,11 @@ fn ledgerblock_layout_table() {
+     {
+         assert!(vocab().term(key).is_some(), "鍵 {key} が vocab に無い");
+     }
++    epics_and_more_counts();
++}
++
++/// epic の進みと、「詳しく」の中の数。
++fn epics_and_more_counts() {
+     // epic の進み: 題は台帳の一覧から id で引き、引けなければ id だけ。
+     let m = filled("filled", &known_screen());
+     let eps: Vec<(&str, Option<&str>, u32, u32, u32)> = m
+@@ -473,6 +498,11 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
+     assert_eq!(ledger::metrics(&body_of("filled")), Body::Filled(()));
+     assert_eq!(stats(&body_of("filled")), Ok(set("filled")));
+ 
++    list_unchanged(screen);
++}
++
++/// 台帳の一覧は今と同じ・口を失えば数と一覧は測れていない。
++fn list_unchanged(screen: Screen) {
+     assert_eq!(ledger::count(&screen), Reading::Known(5));
+     let Body::Filled(groups) = ledger::body(&screen) else {
+         panic!("台帳の一覧が中身を出さない");
+diff --git a/crates/tsuzuri-surface/tests/lstg.rs b/crates/tsuzuri-surface/tests/lstg.rs
+index 6bfe3897d94458801ae0dd73dcc2dfc1ddd01a0e..14d0a2c03ea551f1a516c0fcc51514898ce69c2b 100644
+--- a/crates/tsuzuri-surface/tests/lstg.rs
++++ b/crates/tsuzuri-surface/tests/lstg.rs
+@@ -25,15 +25,10 @@ fn read(rel: &str) -> String {
+ const NOW: u64 = 1_790_510_400;
+ 
+ /// 口座 None の札。
+-#[expect(
+-    clippy::too_many_arguments,
+-    reason = "引数が規則の行 R-4 の 5 を越える・R-4 の歯の行が直してこの属性を外す"
+-)]
+ fn card(
+     id: &str,
+     runs: u32,
+-    stage: Stage,
+-    reason: Option<&str>,
++    (stage, reason): (Stage, Option<&str>),
+     elapsed: Option<u64>,
+     ci: Option<Ci>,
+ ) -> PipelineCard {
+@@ -51,18 +46,17 @@ fn card(
+ /// 節の板 LS（8 枚）。
+ fn ls() -> Vec<PipelineCard> {
+     vec![
+-        card("fx-l.1", 1, Stage::Running, None, Some(40), None),
+-        card("fx-l.2", 0, Stage::Queued, None, None, None),
+-        card("fx-l.3", 1, Stage::Failed, Some("verdict:FAIL x"), Some(90), None),
+-        card("fx-l.4", 1, Stage::Landed, None, Some(120), Some(Ci::Waiting)),
+-        card("fx-l.5", 1, Stage::Landed, None, Some(30), Some(Ci::Success)),
+-        card("fx-l.6", 1, Stage::Landed, None, Some(30), None),
+-        card("fx-l.7", 1, Stage::Landed, Some("closed:gave up"), Some(30), None),
++        card("fx-l.1", 1, (Stage::Running, None), Some(40), None),
++        card("fx-l.2", 0, (Stage::Queued, None), None, None),
++        card("fx-l.3", 1, (Stage::Failed, Some("verdict:FAIL x")), Some(90), None),
++        card("fx-l.4", 1, (Stage::Landed, None), Some(120), Some(Ci::Waiting)),
++        card("fx-l.5", 1, (Stage::Landed, None), Some(30), Some(Ci::Success)),
++        card("fx-l.6", 1, (Stage::Landed, None), Some(30), None),
++        card("fx-l.7", 1, (Stage::Landed, Some("closed:gave up")), Some(30), None),
+         card(
+             "fx-l.8",
+             1,
+-            Stage::Failed,
+-            Some("terminal:ci:failure"),
++            (Stage::Failed, Some("terminal:ci:failure")),
+             Some(30),
+             Some(Ci::Failure),
+         ),
+diff --git a/crates/tsuzuri-surface/tests/mapgraph.rs b/crates/tsuzuri-surface/tests/mapgraph.rs
+index 83d47b5755b0d0435b4cc85db4acdf532b4ad8ca..b54bd26c1192c63de2d1467383be642d3d28005d 100644
+--- a/crates/tsuzuri-surface/tests/mapgraph.rs
++++ b/crates/tsuzuri-surface/tests/mapgraph.rs
+@@ -153,6 +153,11 @@ fn mapgraph_fixture_layout_matches_table() {
+             (Band::Pipeline, 588, 66),
+         ]
+     );
++    beads_lanes_and_boxes(l);
++}
++
++/// beads の帯の小さな帯と、ほかの帯は小さな帯を持たない・箱の位置。
++fn beads_lanes_and_boxes(l: graph::Layout) {
+     let lanes: Vec<(NodeKind, u32, u32)> = l
+         .band(Band::Beads)
+         .expect("beads の帯")
+@@ -413,6 +418,11 @@ fn mapgraph_zoom_values() {
+         "translate(116.00 0.00) scale(0.6842) translate(-116 0)"
+     );
+ 
++    wheel_and_drag(s0);
++}
++
++/// wheel の倍率と収め・drag の移動と元に戻す。
++fn wheel_and_drag(s0: f64) {
+     // wheel: 倍率は e の（縦の量 × −0.0015）乗を掛け、pointer の下の点は動かない。
+     let z = Zoom {
+         s: s0,
+@@ -454,6 +464,11 @@ fn mapgraph_zoom_values() {
+     assert!(!graph::dragged(3.0, 0.0));
+     assert!(!graph::dragged(0.0, 4.0));
+     assert!(graph::dragged(3.0, 3.0));
++    band_labels_follow_zoom();
++}
++
++/// 帯の名の欄の縦の位置と高さは拡大に合わせて変わる。
++fn band_labels_follow_zoom() {
+     // 帯の名は左端の欄に・拡大に合わせて縦の位置と高さだけが変わる。
+     let l = layout(&fixture());
+     let labels = graph::band_labels(&l, Zoom::initial(0.5), 458.0);
+@@ -552,6 +567,11 @@ fn mapgraph_highlight_hub_and_cap() {
+     assert_eq!(h.order.len(), 5);
+     assert_eq!(h.lit.len(), 5);
+ 
++    cap_at_twenty();
++}
++
++/// 1 段でも 20 を超えれば着いた順の先頭の 20 個で切る。
++fn cap_at_twenty() {
+     // 1 段でも 21 個 → 着いた順の先頭の 20 個で切る。
+     let edges: Vec<ViewEdge> = (0..21)
+         .map(|i| edge(&format!("d{i}"), "c", EdgeType::Touches))
+diff --git a/crates/tsuzuri-surface/tests/mapview.rs b/crates/tsuzuri-surface/tests/mapview.rs
+index 09d20c1168307239501d62dd45a2379f9d1128ed..b78bd542f1bf0ca0cbc3214294c0758b0815f3ed 100644
+--- a/crates/tsuzuri-surface/tests/mapview.rs
++++ b/crates/tsuzuri-surface/tests/mapview.rs
+@@ -101,6 +101,11 @@ fn mapview_kind_table_is_closed() {
+         let hits = Band::ALL.iter().filter(|b| **b == band_of(kind)).count();
+         assert_eq!(hits, 1);
+     }
++    band_names_and_paths();
++}
++
++/// 帯の名・語の鍵・class の名と、出所の path と出所の種類・beads の種類の行の順。
++fn band_names_and_paths() {
+     let names: Vec<&str> = Band::ALL.iter().map(|b| b.name()).collect();
+     assert_eq!(
+         names,
+@@ -213,6 +218,11 @@ fn mapview_compact_bands_and_tags_in_order() {
+         ]
+     );
+ 
++    constitution_and_beads(bs);
++}
++
++/// constitution の条の札と規範文・beads の種類の 7 行。
++fn constitution_and_beads(bs: Vec<BandBox>) {
+     // constitution: 条の札は id の自然な順・規範文は条の下に自然な順・条の無い規範文は後に札で出す。
+     let Cards::Articles { articles, loose } = &bs[0].cards else {
+         panic!("constitution が条の札でない: {:?}", bs[0].cards);
+@@ -269,6 +279,11 @@ fn mapview_compact_bands_and_tags_in_order() {
+         ]
+     );
+ 
++    tag_marks(&bs, lanes);
++}
++
++/// 札の題の字数と、open の問いの赤と、動いている節点の印。
++fn tag_marks(bs: &[BandBox], lanes: &[tsuzuri_surface::mapview::compact::Lane]) {
+     // 札: 題は 30 字・open の問いは赤・動いている節点は印を塗らない。
+     let Cards::Tags(rules) = &bs[1].cards else {
+         panic!("rules が札でない");
+@@ -376,6 +391,11 @@ fn mapview_list_filters_and_sorts() {
+             "r-12",
+         ]
+     );
++    state_band_kind_and_pair(doc);
++}
++
++/// 状態の並べ・帯と種類の絞り・種類の組の絞り。
++fn state_band_kind_and_pair(doc: GraphDoc) {
+     assert_eq!(
+         list_of(&doc, "?view=list&band=beads&sort=state"),
+         vec![
+@@ -420,6 +440,11 @@ fn mapview_list_filters_and_sorts() {
+         vec!["t3-hub.2", "t3-hub.9", "t3-hub.15"]
+     );
+ 
++    state_words_and_kinds(doc);
++}
++
++/// 行の状態の語と題・種類の選択肢。
++fn state_words_and_kinds(doc: GraphDoc) {
+     // 状態の語: bead は状態・走行は段・設計文書の節点と段の無い走行は状態なし。
+     let all = listing(&doc, &Query::from_search(""));
+     let word = |id: &str| {
+@@ -539,6 +564,11 @@ fn mapview_query_keeps_view_and_filters() {
+         "?view=table&page=map"
+     );
+ 
++    search_query_and_choice();
++}
++
++/// query の絞りと並べの読みと、選択肢の付け外し。
++fn search_query_and_choice() {
+     let q = Query::from_search(&format!(
+         "?page=map&view=list&band=beads&kind={}&sort=state",
+         encode("問い")
+@@ -560,6 +590,11 @@ fn mapview_query_keeps_view_and_filters() {
+     let s = with_choice(&s, "band", "");
+     assert_eq!(s, "?page=map&view=list&sort=state");
+ 
++    pair_in_query();
++}
++
++/// 種類の組の query と、並べの語の鍵。
++fn pair_in_query() {
+     let url = with_pair(
+         "?page=map&view=table&band=rules&kind=x&mode=expert",
+         Some((NodeKind::Task, NodeKind::Epic)),
+@@ -741,6 +776,12 @@ fn mapview_classes_and_keys_exist() {
+             rest = &rest[end..];
+         }
+     }
++    doc_classes(add);
++    used_in_css(used);
++}
++
++/// 例の電文から組む札・行・升・帯の印の class を足す。
++fn doc_classes(mut add: impl FnMut(&str)) {
+     let doc = fixture();
+     for b in boxes(&doc) {
+         add(&b.class());
+@@ -776,6 +817,10 @@ fn mapview_classes_and_keys_exist() {
+     for b in Band::ALL {
+         add(&format!("art7 shape fill {}", b.class_name()));
+     }
++}
++
++/// 使う class は stylesheet に在り、語の鍵は vocab に在る。
++fn used_in_css(used: BTreeSet<String>) {
+     let css = stylesheet_classes();
+     for c in [
+         "tabs", "band", "art7", "kids", "tag", "tid", "tt", "subh", "cards7", "filters", "items",
