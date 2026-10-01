@@ -267,6 +267,12 @@ pub fn view() -> leptos::prelude::AnyView {
     dom::view()
 }
 
+/// 表示先の窓の中身（開いた時に 1 回読む・帯の設定の中の口が開く・行 g-win-parts）。
+#[cfg(target_arch = "wasm32")]
+pub fn inner() -> leptos::prelude::AnyView {
+    dom::inner()
+}
+
 /// 表示先の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -348,6 +354,24 @@ mod dom {
                 load(f);
             }
         };
+        view! {
+            <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
+                <summary>{h2(BLOCK.heading)}</summary>
+                {body(f)}
+            </details>
+        }
+        .into_any()
+    }
+
+    /// 窓の中身（作った時に 1 回読む）。
+    pub fn inner() -> AnyView {
+        let f = Face::new();
+        load(f);
+        body(f)
+    }
+
+    /// 読みの中身と送った後の 1 行。
+    fn body(f: Face) -> AnyView {
         let body = move || match f.read.get() {
             None => unmeasured(NOT_READ),
             Some(reply) => match content(reply.as_ref().map(|(s, t)| (*s, t.as_str()))) {
@@ -357,15 +381,12 @@ mod dom {
             },
         };
         view! {
-            <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
-                <summary>{h2(BLOCK.heading)}</summary>
-                {body}
-                {move || {
-                    f.line
-                        .get()
-                        .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
-                }}
-            </details>
+            {body}
+            {move || {
+                f.line
+                    .get()
+                    .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
+            }}
         }
         .into_any()
     }

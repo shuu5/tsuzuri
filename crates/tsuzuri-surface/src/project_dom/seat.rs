@@ -6,7 +6,7 @@ use tsuzuri_contract::board::Reading;
 
 use super::{
     BLOCK, Band, GROUP_CARD, LEGEND, Low, OROW, PATH, Seat, Sign,
-    Span, Strip, Top, WindowRow, content, group_card, group_head, park_card, sample_svg, seat_caps, span_of,
+    Span, Strip, Top, WIN_SPAN, WindowRow, content, group_card, group_head, park_card, sample_svg, seat_caps, span_of,
     strip_svg, thr, tick_age, tick_class, tick_mark, with_span,
 };
 use crate::view::Fetched;
@@ -38,18 +38,29 @@ fn pick(span: RwSignal<Span>, to: Span) {
 }
 
 pub fn view() -> AnyView {
-    let fetched = crate::net::read(PATH);
-    // 群の chip の card の電文（account board と同じ口・読み直しは変化の種類の表のまま）。
-    let group_doc = crate::net::read(crate::account::PATH);
     let span = RwSignal::new(span_of(&search()));
     // 停止の切り替えの状態（読みの閉包の外・読み直しで組み直しても応答の字が残る）。
     let states: States = RwSignal::new(Default::default());
+    section(BLOCK, ().into_any(), body(span, states))
+}
+
+/// 席と口座の窓の中身（見出しの無い本文・稼働の記録は 24 時間の幅・幅の button は窓の stylesheet が出さない・行 g-win-parts）。
+pub fn inner() -> AnyView {
+    let states: States = RwSignal::new(Default::default());
+    body(RwSignal::new(WIN_SPAN), states)
+}
+
+/// block の本文（席の口と群の chip の口を読む）。
+fn body(span: RwSignal<Span>, states: States) -> AnyView {
+    let fetched = crate::net::read(PATH);
+    // 群の chip の card の電文（account board と同じ口・読み直しは変化の種類の表のまま）。
+    let group_doc = crate::net::read(crate::account::PATH);
     let body = move || match fetched.with(|f| content(f, crate::net::now())) {
         Body::Unmeasured(reason) => unmeasured(reason),
         Body::Empty(line) => body_view(Body::Empty(line)),
         Body::Filled(seat) => seat_view(seat, span, states, group_doc),
     };
-    section(BLOCK, ().into_any(), body.into_any())
+    body.into_any()
 }
 
 /// 測れていないの記号（その欄だけ）。

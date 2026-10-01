@@ -25,6 +25,8 @@ pub mod topbar;
 pub mod view;
 pub mod vocab;
 pub mod widgets;
+/// 帯の印が開く窓の中身（止まった run の並びは host でも組む・窓の DOM は wasm の target だけ・行 g-win-parts）。
+pub mod wins;
 
 #[cfg(target_arch = "wasm32")]
 pub mod board;

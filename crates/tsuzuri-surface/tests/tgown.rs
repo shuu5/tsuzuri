@@ -209,7 +209,9 @@ fn tgown_reads_off_the_chain() {
     };
     once("crate::net::get(PATH)", 1);
     once("crate::net::post(path, body)", 1);
-    once("load(f);", 2);
+    once("load(f);", 3);
+    // 表示先の窓（行 g-win-parts）は窓を作った時に 1 回だけ読む。
+    once("        let f = Face::new();\n        load(f);\n        body(f)\n", 1);
     once("            if now {\n                load(f);\n            }", 1);
     once("            if reread {\n                load(f);\n            }", 1);
     once("send(f, PATH, own_body(Some(&to)), true)", 1);

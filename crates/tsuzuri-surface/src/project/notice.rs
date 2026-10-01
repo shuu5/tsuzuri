@@ -101,6 +101,12 @@ pub fn view() -> leptos::prelude::AnyView {
     dom::view()
 }
 
+/// 知らせの窓の中身（見出しの無い本文・行 g-win-parts）。
+#[cfg(target_arch = "wasm32")]
+pub fn inner() -> leptos::prelude::AnyView {
+    dom::inner()
+}
+
 /// 席からの知らせの DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -110,13 +116,18 @@ mod dom {
     use crate::project::{Body, body_view, section, unmeasured};
 
     pub fn view() -> AnyView {
+        section(BLOCK, ().into_any(), inner())
+    }
+
+    /// block の本文（見出しの無い中身・知らせの窓も使う）。
+    pub fn inner() -> AnyView {
         let fetched = crate::net::read(PATH);
         let body = move || match fetched.with(content) {
             Body::Unmeasured(reason) => unmeasured(reason),
             Body::Empty(line) => body_view(Body::Empty(line)),
             Body::Filled(line) => view! { <ul class="items">{line_view(line)}</ul> }.into_any(),
         };
-        section(BLOCK, ().into_any(), body.into_any())
+        body.into_any()
     }
 
     /// 1 行（題は link の先が在れば同じ tab で開く a・無ければ字だけ・後に時刻）。

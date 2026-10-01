@@ -335,6 +335,18 @@ a.tile:hover { box-shadow: var(--shadow); }
   .mh .x { width: 40px; height: 40px; line-height: 38px; }
   .mh .back { min-height: 40px; }
 }
+/* 止まった run の窓（行 g-win-parts・見本の .stc・題と段と経過・理由の全文・個別の頁への口） */
+.stc { margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--s-stop); border-radius: var(--r2); }
+.stc-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.stc-h b { font-size: var(--fs-2); overflow-wrap: anywhere; }
+.stc-h code { color: var(--ink-3); }
+.stc-h .sc { margin-left: auto; color: var(--s-stop); font-size: var(--fs-1); }
+.stc-r { margin-top: 6px; font-size: 12.5px; overflow-wrap: anywhere; }
+.stc-b { display: flex; gap: 6px; margin-top: var(--s2); }
+.mb .sm { padding: 2px 9px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel); font-size: 11.5px; white-space: nowrap; }
+.mb .sm:hover { background: var(--panel-2); }
+/* 席と口座の窓の稼働の記録は 24 時間の幅だけ（判断の記録 ADR-27 決定 (1)・幅の button は出さない） */
+.mb .spanbar { display: none; }
 
 /* ---------- 一覧の型（印 + 題・1 種） ---------- */
 .items { list-style: none; margin: 0; padding: 0; }

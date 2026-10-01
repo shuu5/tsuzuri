@@ -43,6 +43,14 @@ pub fn marks() -> Vec<Mark> {
 pub fn view() -> leptos::prelude::AnyView {
     use leptos::prelude::*;
 
+    super::section(BLOCK, ().into_any(), inner())
+}
+
+/// 記号の見方の窓の中身（見出しの無い本文・帯の設定の中の口が開く・行 g-win-parts）。
+#[cfg(target_arch = "wasm32")]
+pub fn inner() -> leptos::prelude::AnyView {
+    use leptos::prelude::*;
+
     use crate::vocab::label;
 
     let states = states()
@@ -53,9 +61,9 @@ pub fn view() -> leptos::prelude::AnyView {
         .into_iter()
         .map(|m| view! { <span><b>{m.glyph}</b>{m.word}</span> })
         .collect_view();
-    let body = view! {
+    view! {
         <div class="legend5">{states}</div>
         <div class="lgline">{marks}</div>
-    };
-    super::section(BLOCK, ().into_any(), body.into_any())
+    }
+    .into_any()
 }

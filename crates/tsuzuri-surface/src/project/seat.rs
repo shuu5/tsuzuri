@@ -856,6 +856,15 @@ pub fn view() -> leptos::prelude::AnyView {
     dom::view()
 }
 
+/// 席と口座の窓の稼働の記録の幅（24 時間だけ・判断の記録 ADR-27 決定 (1)(4)・行 g-win-parts）。
+pub const WIN_SPAN: Span = Span::H24;
+
+/// 席と口座の窓の中身（見出しの無い本文・稼働の記録は `WIN_SPAN` の幅だけ・行 g-win-parts）。
+#[cfg(target_arch = "wasm32")]
+pub fn inner() -> leptos::prelude::AnyView {
+    dom::inner()
+}
+
 /// block の DOM（wasm の target のときだけ・中身は src/project_dom/seat.rs）。
 #[cfg(target_arch = "wasm32")]
 #[path = "../project_dom/seat.rs"]

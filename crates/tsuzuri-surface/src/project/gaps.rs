@@ -240,6 +240,12 @@ pub fn view() -> leptos::prelude::AnyView {
     dom::view()
 }
 
+/// 抜けの検査の窓の中身（頁の題の無い札と一覧・行 g-win-parts）。
+#[cfg(target_arch = "wasm32")]
+pub fn inner() -> leptos::prelude::AnyView {
+    dom::inner()
+}
+
 /// 抜けの検査の頁の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -325,16 +331,21 @@ mod dom {
     }
 
     pub fn view() -> AnyView {
+        view! {
+            <div class="row">{h1(BLOCK.heading)}</div>
+            {inner()}
+        }
+        .into_any()
+    }
+
+    /// 頁の本文（札と一覧・抜けの検査の窓も使う）。
+    pub fn inner() -> AnyView {
         let fetched = crate::net::read(map::PATH);
         let content = move || match fetched.with(body) {
             Body::Unmeasured(reason) => panel(unmeasured(reason)),
             Body::Empty(line) => panel(body_view(Body::Empty(line))),
             Body::Filled(g) => filled(g),
         };
-        view! {
-            <div class="row">{h1(BLOCK.heading)}</div>
-            {content}
-        }
-        .into_any()
+        content.into_any()
     }
 }
