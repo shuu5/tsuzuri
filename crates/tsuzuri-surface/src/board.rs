@@ -3,6 +3,8 @@
 //! 1 枚の画面（行 g-one-screen-a・判断の記録 ADR-27 決定 (3)(4)(5)）: 頁の上は帯（topbar の view）だけで、tab と頁の切り替えは
 //! 持たない。home の頁は台帳 open の一覧と pipeline の 2 つの面で、帯の印が開く窓の層（widgets の modal の layer・中身は wins の
 //! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁（便 g-node）は query の page=node で開く（文書を読み直す）。
+//! 窓を開く link（query の win・topbar の `win_of_href`）は、home の頁では普通の押しで頁を読み直さずに窓を開き、問いの id を
+//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。
 //! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。札と一覧の行の吹き出しの層も頁に 1 つ置く（行 g-pop）。
 //! 帯の戻る口（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
 //! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
@@ -15,8 +17,10 @@ use std::time::Duration;
 use leptos::ev;
 use leptos::prelude::*;
 use tsuzuri_contract::project::PATH as PROJECT_PATH;
+use web_sys::wasm_bindgen::JsCast;
 
 use crate::account::windows::{ACCOUNT_WIN, closed_message};
+use crate::askwin::AskFocus;
 use crate::frame::{self, BackHow, BackStep, Block, HEADER, Mode, PageId, Press};
 use crate::fresh::{self, Fresh};
 use crate::ledgerlist::SelCtx;
@@ -24,13 +28,13 @@ use crate::net;
 use crate::project::{self, Module, ledger};
 use crate::seatpill;
 use crate::store;
-use crate::topbar::{self, Bar, Win};
+use crate::topbar::{self, Bar, Win, win_of_href};
 use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
 use crate::vocab::label;
 use crate::widgets::coach::CoachLayer;
 use crate::widgets::help::{HelpCtx, TipLayer, term};
 use crate::widgets::hover::{CardLayer, HoverCtx};
-use crate::widgets::modal::{WinCtx, layer};
+use crate::widgets::modal::{SCRIM, WinCtx, layer};
 use crate::widgets::pop::{PopCtx, PopLayer};
 use crate::wins;
 
@@ -115,9 +119,18 @@ fn App() -> impl IntoView {
     // 帯の印が開く窓の積み（窓を開くと吹き出しを閉じる・見本の openModal の closePop）。
     let win = WinCtx::<Win>::default();
     provide_context(win);
+    // 質問の窓を開いた link の問いの id（行 g-one-screen-b）。
+    let focus = AskFocus(RwSignal::new(None));
+    provide_context(focus);
     // URL の query の win が名指す窓は頁を開いた時に開く（消した質問の頁と抜けの検査の頁への link の替わり）。
-    if let Some(w) = Win::from_query(&query) {
+    if let Some((w, id)) = win_of_href(&query) {
+        focus.0.set(id);
         win.open(w, false);
+    }
+    // home の頁では、窓を開く link の普通の押しは頁を読み直さずにその窓を開く（窓の中の link は前の窓に戻る口を持つ）。
+    if page == PageId::Home {
+        let links = window_event_listener(ev::click, move |e| open_link(&e, win, focus));
+        on_cleanup(move || links.remove());
     }
     Effect::new(move |_| {
         if win.top().is_some()
@@ -147,6 +160,30 @@ fn App() -> impl IntoView {
         <PopLayer/>
         {(page == PageId::Home).then(|| view! { <CoachLayer/> })}
     }
+}
+
+/// 押した要素の在る link が窓を開く link で、普通の押しなら、既定の遷移を止めて窓を開く（行 g-one-screen-b）。
+fn open_link(e: &ev::MouseEvent, win: WinCtx<Win>, focus: AskFocus) {
+    let Some(el) = e
+        .target()
+        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+    else {
+        return;
+    };
+    let Some(link) = el.closest("a[href]").ok().flatten() else {
+        return;
+    };
+    let href = link.get_attribute("href").unwrap_or_default();
+    let Some((w, id)) = win_of_href(&href) else {
+        return;
+    };
+    if !plain_click(e) {
+        return;
+    }
+    e.prevent_default();
+    let from_win = el.closest(&format!("#{}", SCRIM)).ok().flatten().is_some();
+    focus.0.set(id);
+    win.open(w, from_win);
 }
 
 /// account board へ戻る: 空の URL と窓の名 tz-account で開き、about:blank なら窓が無かった

@@ -2,7 +2,7 @@
 //! この project の問いを 1 問ずつ出し、答えを送って記録されると次の問いへ進み、全部に答えると閉じる。
 //! 題の横の点で問いを選べ、「あとで」は後ろの答えていない問いへ移る。1 問の card と答えの口と記帳は今の質問の block と同じ
 //! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示。
-//! 今の質問の頁は替えない（頁を外すのは 1 枚の画面への切り替えの行）。
+//! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`・行 g-one-screen-b）。
 //! 問いの一覧が読めない時は問いが無いと見せず、本文に「測れていない」と理由を、題の残りの数に「?」を出す。窓の上に席に
 //! 届いていない裁定の 1 行（ask の late_view）を、ほかの project の質問の段に台帳が読めない組の札と 1 行を、前の質問の
 //! block と同じく出す（憲法 P-7.1・P-7.2）。
@@ -152,7 +152,7 @@ pub fn dot_class(id: &str, cur: Option<&str>, answered: &BTreeSet<String>) -> &'
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::frame;
+pub use dom::{AskFocus, frame};
 
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -237,7 +237,9 @@ mod dom {
         let unknown = Memo::new(move |_| fetched.with(ask::unknown_projects));
         let reason = Memo::new(move |_| fetched.with(unread));
         let ids = Memo::new(move |_| cards.with(|v| own_ids(v)));
-        let picked = RwSignal::new(None::<String>);
+        // 窓を開いた link が問いの id を持てば、その問いから出す（行 g-one-screen-b）。
+        let first = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());
+        let picked = RwSignal::new(first);
         let answered = RwSignal::new(BTreeSet::<String>::new());
         let cur = Memo::new(move |_| {
             ids.with(|i| {
@@ -355,6 +357,10 @@ mod dom {
         };
         walk.into_any()
     }
+
+    /// 質問の窓を開いた link の問いの id（App が context に置く・窓を開く前に置く・行 g-one-screen-b）。
+    #[derive(Clone, Copy)]
+    pub struct AskFocus(pub RwSignal<Option<String>>);
 
     /// 質問の窓（帯の窓の層が開く・`ctx` は全部に答えた後に閉じるための窓の積み・本文の頭は席に届いていない裁定の 1 行）。
     pub fn frame(ctx: WinCtx<Win>) -> Frame {

@@ -74,6 +74,16 @@ pub fn win_href(win: Win, mode: Mode) -> String {
     )
 }
 
+/// link の href が窓を開く link なら、その窓と問いの id（query の id・空と無い時は None）。窓を開く link でなければ None。
+/// href は `?` から始まる query か、`?` を含む URL（`?` より前は見ない・井桁から後は見ない・行 g-one-screen-b）。
+pub fn win_of_href(href: &str) -> Option<(Win, Option<String>)> {
+    let (_, query) = href.split_once('?')?;
+    let query = query.split('#').next().unwrap_or_default();
+    let search = format!("?{query}");
+    let win = Win::from_query(&search)?;
+    Some((win, crate::project::ask::focus(&search)))
+}
+
 /// 帯の id（見本の `#bar`・頁に 1 つ）。
 pub const BAR: &str = "bar";
 

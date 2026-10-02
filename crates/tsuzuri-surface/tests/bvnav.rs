@@ -112,7 +112,7 @@ fn bvnav_one_screen_wiring_text() {
         "{top(page, subject, mode, win)}",
         "<main class=\"page\">{page_view(page)}</main>",
         "{layer(win, move |w| wins::draw(w, win))}",
-        "if let Some(w) = Win::from_query(&query) {",
+        "if let Some((w, id)) = win_of_href(&query) {",
         "win.open(w, false);",
         "if win.top().is_some()",
         "p.close();",
