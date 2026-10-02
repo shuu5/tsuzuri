@@ -80,7 +80,7 @@ index 932533f747f342f050717fed77ecc369eed6fd42..42917f7e16251a6e72bf1060d87832dc
          }
          .into_any()
 diff --git a/crates/tsuzuri-surface/src/project/ledger.rs b/crates/tsuzuri-surface/src/project/ledger.rs
-index 49cf998b943554c1c6cf06d7bea22058b2f8b84d..c6667369d58944a9002e38d2f2821b99eb5bc629 100644
+index a4de9e716eb71210595269f0c667783339558d15..825241cdc046d17bce815566de5e3bf2080791b9 100644
 --- a/crates/tsuzuri-surface/src/project/ledger.rs
 +++ b/crates/tsuzuri-surface/src/project/ledger.rs
 @@ -6,30 +6,24 @@
@@ -230,7 +230,7 @@ index 49cf998b943554c1c6cf06d7bea22058b2f8b84d..c6667369d58944a9002e38d2f2821b99
  pub const UNREF_OPEN: bool = true;
  
 diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
-index 11e72eac904ffe0c46939aac88d120924e5931f5..46e6efc1bd936914d1295bd7fedd70f95c47ceb5 100644
+index dc04d9fe31eb6b0980226157bc0f418ada750c7e..343c7f0b44eb4a8856743b15eadd8a2b6f1b196a 100644
 --- a/crates/tsuzuri-surface/src/project/pipeline.rs
 +++ b/crates/tsuzuri-surface/src/project/pipeline.rs
 @@ -7,7 +7,6 @@
@@ -322,10 +322,10 @@ index d2480f83eadd6ee1839f282a65a4fa3e0005dc93..0c010c2a5e578bc4d97adda2132a5228
      }
 diff --git a/crates/tsuzuri-surface/tests/bvsweep.rs b/crates/tsuzuri-surface/tests/bvsweep.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..e623a5975dba1678df5b40d9fa1b82cdd0b860f0
+index 0000000000000000000000000000000000000000..93ec15c9d007659b535b174eac6e0c8a68444f64
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvsweep.rs
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,208 @@
 +//! 行 g-list-sweep の歯（接頭辞 bvsweep_・判断の記録 ADR-27 決定 (8)・要件 FR13）: 前の台帳の一覧の組と件数の関数と、
 +//! 一覧の項に出していた板の段（型 Staged・段つきの項・pipeline の stages・項の段の記号）を src から消した。
 +//! 一覧の 1 項 Item は 5 つの欄（印・赤・id・題・右の字）だけで、kit の item_view は右の字の前に段の記号を出さない。
@@ -392,11 +392,10 @@ index 0000000000000000000000000000000000000000..e623a5975dba1678df5b40d9fa1b82cd
 +            "src/project/ledger.rs に {gone} が在る"
 +        );
 +    }
-+    let uses: Vec<&str> = ledger
-+        .lines()
-+        .filter(|l| l.starts_with("use super::{"))
-+        .collect();
-+    assert_eq!(uses, ["use super::{Body, NO_CONTENT, NOT_READ};"]);
++    assert_eq!(
++        super_uses(&ledger),
++        ["use super::{Body, NO_CONTENT, NOT_READ};"]
++    );
 +
 +    let kit = read("src/kit.rs");
 +    for gone in [
@@ -424,6 +423,27 @@ index 0000000000000000000000000000000000000000..e623a5975dba1678df5b40d9fa1b82cd
 +    }
 +}
 +
++/// file の最上位（字下げ無し）の use の行のうち、module super（src/project の module）の名をじかに引く行。
++/// 見える範囲の印（pub など）の有無を問わず、道の頭は super か crate::project で、その後が波括弧か名 1 つ
++/// （super::seat::hm のような下の module の名は数えない）。
++fn super_uses(text: &str) -> Vec<&str> {
++    text.lines()
++        .filter(|l| {
++            let bare = ["pub(crate) ", "pub(super) ", "pub "]
++                .iter()
++                .find_map(|v| l.strip_prefix(v))
++                .unwrap_or(l);
++            let Some(path) = bare.strip_prefix("use ") else {
++                return false;
++            };
++            ["super::", "crate::project::"]
++                .iter()
++                .filter_map(|p| path.strip_prefix(p))
++                .any(|tail| tail.starts_with('{') || !tail.contains("::"))
++        })
++        .collect()
++}
++
 +/// 台帳の 1 行（題は「題」・時刻は 0・親は無し）。
 +fn row(id: &str, kind: &str, status: &str, labels: &[&str]) -> LedgerRow {
 +    LedgerRow {
@@ -438,6 +458,7 @@ index 0000000000000000000000000000000000000000..e623a5975dba1678df5b40d9fa1b82cd
 +}
 +
 +/// (3) Item は 5 つの欄で、台帳の行の項の右の字は状態の印と語と種類のまま。item_view は右の字だけを描く。
++/// item_view の行は印・題の link・右の字の 3 つをこの順で並べ、右の字の span は行の末に 1 つだけ（差し込みは 4 つ）。
 +#[test]
 +fn bvsweep_item_has_five_fields() {
 +    let want = |shape: &str, alert: bool, id: &str, aside: &str| Item {
@@ -495,6 +516,23 @@ index 0000000000000000000000000000000000000000..e623a5975dba1678df5b40d9fa1b82cd
 +    for gone in ["let sym", "{sym}"] {
 +        assert!(!dom.contains(gone), "kit.rs の mod dom に {gone} が在る");
 +    }
++    item_row_order(dom);
++}
++
++/// (3) item_view の行（li）は印 lead・題の link・右の字の span をこの順で並べ、右の字の span は li の閉じの直前に在り、
++/// li の中の差し込み（波括弧）は印と id と題と右の字の 4 つだけ。
++fn item_row_order(dom: &str) {
++    let at = dom.find("pub fn item_view(").expect("item_view");
++    let view = &dom[at..at + dom[at..].find("\n    }\n").expect("item_view の閉じ")];
++    let li = &view[view.find("<li>").expect("li")..view.find("</li>").expect("li の閉じ")];
++    let aside = r#"<span class="aside">{item.aside.clone()}</span>"#;
++    assert!(
++        li.contains("{lead}\n                <a class=\"ttl\""),
++        "{li}"
++    );
++    assert!(li.trim_end().ends_with(aside), "{li}");
++    assert_eq!(li.matches(aside).count(), 1, "{li}");
++    assert_eq!(li.matches('{').count(), 4, "{li}");
 +}
 diff --git a/crates/tsuzuri-surface/tests/cadl.rs b/crates/tsuzuri-surface/tests/cadl.rs
 index 857af3a6754b6645ae41a589534c24cab20c71b2..94f4c821b60c1384b53b106f6b2f2ffba450a266 100644
