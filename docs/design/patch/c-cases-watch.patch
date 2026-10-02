@@ -159,10 +159,10 @@ index 3bceb66ec8321dabd680952475edc668b6d2e080..6408bf820f450eca2f377fddfddba3dc
      /// 裁定の書きの持ち物（席の target と state dir の両方が在るときだけ配達の先を持つ）。
 diff --git a/crates/tsuzuri-boundary/tests/bvlcw.rs b/crates/tsuzuri-boundary/tests/bvlcw.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..8ce713ffc56e4155e194a888fd6e7ad9ee81f68c
+index 0000000000000000000000000000000000000000..2772018ce4a741c5e25a48b0bde52a9e3114705e
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/bvlcw.rs
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,354 @@
 +//! 行 c-cases-watch の歯（接頭辞 bvlcw_）: 器の局面の出力（state dir の fleet/lifecycle.json と lifecycle.stale）の見張り。
 +//! 面が読む中身（古さの印の種類と部品）が動いた周だけ局面の出力の種類の board-changed を 1 件送り、生成の時刻と入力の
 +//! 印だけが動く書き直しでは送らない。印の file は作業場の put の dir に書いてから移す（器の書き手と同じ置き替え）。
@@ -428,18 +428,81 @@ index 0000000000000000000000000000000000000000..8ce713ffc56e4155e194a888fd6e7ad9
 +    let _ = fs::remove_dir_all(&root);
 +}
 +
-+/// (4) start_hub は局面の出力の読みを Shared と見張りで分け合い、見張りは板の印と同じ間隔で始め、
-+/// 送る種類は局面の出力の種類だけ。
++/// mod.rs の impl の中の関数の字（頭から 4 字下げの閉じの前まで）。
++fn fn_of<'a>(src: &'a str, head: &str) -> &'a str {
++    let at = src
++        .find(head)
++        .unwrap_or_else(|| panic!("mod.rs に {head} が無い"));
++    let rest = &src[at..];
++    &rest[..rest.find("\n    }\n").expect("関数の閉じ")]
++}
++
++/// bind_with は局面の出力の読みを作ってから start_hub に貸して、Shared の欄 cases にはその束縛そのものを移す。
++fn bind_shares_one(modrs: &str) {
++    let bind = fn_of(modrs, "pub fn bind_with(");
++    let make = "let cases = Cases::new(config.state_dir.as_deref());";
++    let pass = "let hub = Server::start_hub(&sources, &cases, seat_marks, held_marks, notify_dir);";
++    let (Some(m), Some(p)) = (bind.find(make), bind.find(pass)) else {
++        panic!("bind_with に {make} と {pass} が無い");
++    };
++    assert!(
++        m < p,
++        "bind_with は局面の出力の読みを作ってから start_hub に渡す"
++    );
++    let shared = &bind[bind
++        .find("shared: Arc::new(Shared {")
++        .expect("Shared の組み")..];
++    let shared = &shared[..shared
++        .find("\n            }),\n")
++        .expect("Shared の組みの閉じ")];
++    let fields: Vec<&str> = shared
++        .lines()
++        .map(str::trim)
++        .filter(|l| l.starts_with("cases"))
++        .collect();
++    assert_eq!(
++        fields,
++        ["cases,"],
++        "Shared の局面の出力の読みは bind の束縛そのもの"
++    );
++}
++
++/// start_hub は局面の出力の読みを借り、板の印の見張りを始めた後に、本文の一番上の段（枝や閉包の中でない
++/// 8 字下げの 1 行）で局面の出力の見張りを始め、見張りを掛けた Hub を返す。
++fn start_hub_watches(modrs: &str) {
++    let hub = fn_of(modrs, "fn start_hub(");
++    assert!(
++        hub.contains("\n        cases: &Cases,\n"),
++        "start_hub は局面の出力の読みを借りる"
++    );
++    let lines: Vec<&str> = hub.lines().collect();
++    let start = lines
++        .iter()
++        .position(|l| l.starts_with("        let hub = Hub::start("));
++    let watch = lines
++        .iter()
++        .position(|l| *l == "        cases.watch(&hub, events::POLL);");
++    let (Some(start), Some(watch)) = (start, watch) else {
++        panic!("start_hub の本文の一番上の段に板の印の見張りと局面の出力の見張りが無い");
++    };
++    assert!(start < watch, "局面の出力の見張りは板の印の見張りの後");
++    assert_eq!(
++        lines.last(),
++        Some(&"        hub"),
++        "start_hub は見張りを掛けた Hub を返す"
++    );
++}
++
++/// (4) bind は局面の出力の読みを 1 つだけ作り、同じ値を start_hub と Shared に渡す。start_hub は見張りを板の印と
++/// 同じ間隔で、その本文の一番上の段で始める（bind や枝の中では始めない）。送る種類は局面の出力の種類だけ。
 +#[test]
 +fn bvlcw_wiring_text() {
 +    let modrs = fs::read_to_string(manifest("src/server/mod.rs")).expect("mod.rs を読む");
-+    for want in [
-+        "let cases = Cases::new(config.state_dir.as_deref());",
-+        "Server::start_hub(&sources, &cases, seat_marks, held_marks, notify_dir);",
-+        "cases.watch(&hub, events::POLL);",
-+    ] {
-+        assert_eq!(modrs.matches(want).count(), 1, "mod.rs の {want}");
++    for (want, n) in [("Cases::new(", 1), ("cases.watch(", 1), ("start_hub(", 2)] {
++        assert_eq!(modrs.matches(want).count(), n, "mod.rs の {want} の数");
 +    }
++    bind_shares_one(&modrs);
++    start_hub_watches(&modrs);
 +    let casesrs = fs::read_to_string(manifest("src/server/cases.rs")).expect("cases.rs を読む");
 +    assert_eq!(
 +        casesrs.matches("board_changed(").count(),
@@ -533,7 +596,7 @@ index c9051e8c71c85ec95419da7ff48028e1152f8ed7..83cad43db3f073ff8585545a43e7fa68
          map::PATH,
          &[ChangeKind::Ledger, ChangeKind::Runs, ChangeKind::Design],
 diff --git a/crates/tsuzuri-surface/tests/bvtrim.rs b/crates/tsuzuri-surface/tests/bvtrim.rs
-index 7c7dedf2838f8c2be65321a86a128d86bf394455..9a8cc049c02bbf1fdd8fc7b94f2ed9c45fb42774 100644
+index 15345029961a146147a9c8160f47c9d302dced98..d1462fba43c916c369165e998557184e05b2c981 100644
 --- a/crates/tsuzuri-surface/tests/bvtrim.rs
 +++ b/crates/tsuzuri-surface/tests/bvtrim.rs
 @@ -1,7 +1,7 @@
@@ -545,7 +608,7 @@ index 7c7dedf2838f8c2be65321a86a128d86bf394455..9a8cc049c02bbf1fdd8fc7b94f2ed9c4
  //! DOM は host で撃てないので、src の字と xtask の surface-build で組めることで見る。
  #![cfg(test)]
  
-@@ -185,16 +185,16 @@ fn unref_case_states() {
+@@ -286,16 +286,16 @@ fn unref_case_states() {
      }
  }
  

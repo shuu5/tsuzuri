@@ -263,7 +263,7 @@ index 4cdf686707936b93db3821e700e4a729974082a8..48389909455419077d2e715e524478e9
      }
      .into_any()
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index cd2a6c11c2cdbaaa157f2267d265514f7c7b71a3..befe4719c4e83121f53d5d3423655aa5781cbbe6 100644
+index 2c5931660c900274f65983f24b8c42b9c8c64b11..94f2ab937237e00782cc97f667fc542cc2fd9aac 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -433,6 +433,7 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
@@ -289,10 +289,10 @@ index a7eba710b6b28adb27ca08d684dbf22e2a743ed5..8b9c2461e8095a6c807ab131c69ab754
  /// 語の鍵の語と、質問の窓の規則が stylesheet の質問の塊（つながりの塊の前）に在ること。
 diff --git a/crates/tsuzuri-surface/tests/bvqhist.rs b/crates/tsuzuri-surface/tests/bvqhist.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..ece5f666a84a65baddcec1c1d0731c486b98cab6
+index 0000000000000000000000000000000000000000..bf9d21232ba737cb8b4e6c7df5bb4f0a31f356c3
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvqhist.rs
-@@ -0,0 +1,245 @@
+@@ -0,0 +1,304 @@
 +//! 行 g-ask-hist の歯（接頭辞 bvqhist_・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal の folds の末）: 質問の窓の下の
 +//! 畳みの末に「これまでの決定 N ›」を置き、答え済みの問いを台帳の更新の時刻の新しい順に、時刻・短い題・答えた決定・
 +//! 問いの id の行で出す。中身は今のこれまでの決定の段の関数（rulings・hist_rows・ruling_text）を使い、2 つ目を書かない。
@@ -481,39 +481,86 @@ index 0000000000000000000000000000000000000000..ece5f666a84a65baddcec1c1d0731c48
 +    assert_eq!(fold_title(Reading::Unknown), "これまでの決定 ›");
 +}
 +
++/// `src` の中の `head` で始まる関数の字（`close` の閉じの行まで）。
++fn fn_of<'a>(src: &'a str, head: &str, close: &str) -> &'a str {
++    let at = src.find(head).unwrap_or_else(|| panic!("{head} が無い"));
++    let rest = &src[at..];
++    &rest[..rest.find(close).unwrap_or_else(|| panic!("{head} の閉じ"))]
++}
++
++/// 質問の窓の frame は窓を開いた link の問いの id を folds に渡し、folds は下の段の div の直下の末（全体への指示の
++/// 畳みの後・ほかの畳みの details の外・後ろは段の終わりまで空白だけ）に askpage の inner をその id のまま描く。
++fn window_folds() {
++    let win = read("src/askwin.rs");
++    let frame = fn_of(&win, "pub fn frame(", "\n    }\n");
++    assert!(
++        frame.contains("let focus = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());")
++    );
++    assert!(frame.contains("{folds(w, focus)}"));
++    let folds = fn_of(
++        &win,
++        "fn folds(w: Walk, focus: Option<String>) -> AnyView {",
++        "\n    }\n",
++    );
++    let div = &folds[folds.find("<div class=\"folds\">").expect("下の段")..];
++    let div = &div[..div.find("</div>").expect("下の段の終わり")];
++    let p = div.find("{policy::inner()}").expect("全体への指示の段");
++    let hist = "{askpage::inner(focus)}";
++    let h = div.find(hist).expect("これまでの決定の段");
++    assert!(p < h, "これまでの決定の段が全体への指示の段の前");
++    let (before, after) = div.split_at(h);
++    assert_eq!(
++        before.matches("<details").count(),
++        before.matches("</details>").count(),
++        "これまでの決定の段がほかの畳みの details の中"
++    );
++    assert!(
++        after[hist.len()..].trim().is_empty(),
++        "これまでの決定の段が下の段の末でない"
++    );
++    assert_eq!(
++        folds.matches("focus").count(),
++        2,
++        "問いの id を inner へそのまま渡さない"
++    );
++}
++
 +/// 質問の窓は下の畳みの末（全体への指示の段の後）に askpage の inner を窓を開いた link の問いの id で描き、
-+/// inner は 3 つの口を読み、行を時刻・短い題・答えた決定・問いの id の順に出し、block の view も inner を描く。
++/// inner は 3 つの口を読んで台帳・グラフ・bead の事実の順で decisions に渡し、見出しを読み直すたびに数え直す閉包で
++/// details の fold を描き、行を時刻・短い題・答えた決定・問いの id の順に出し、block の view も inner を描く。
++/// 字はそれぞれの関数（frame・folds・view・inner・hist_li）の中で照らす。
 +#[test]
 +fn bvqhist_window_fold_wiring_text() {
-+    let win = read("src/askwin.rs");
-+    let folds = &win[win.find("fn folds(").expect("folds")..];
-+    let p = folds.find("{policy::inner()}").expect("全体への指示の段");
-+    let h = folds
-+        .find("{askpage::inner(focus)}")
-+        .expect("これまでの決定の段");
-+    let end = folds.find("</div>").expect("下の段の終わり");
-+    assert!(p < h && h < end, "これまでの決定の段が下の段の末に無い");
-+    assert!(
-+        win.contains("let focus = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());")
-+    );
++    window_folds();
 +    let page = read("src/project/askpage.rs");
-+    assert!(page.contains("pub fn inner(target: Option<String>) -> leptos::prelude::AnyView {"));
-+    let view = &page[page.find("pub fn view(").expect("view")..];
++    let view = fn_of(
++        &page,
++        "pub fn view() -> leptos::prelude::AnyView {",
++        "\n}\n",
++    );
++    assert!(view.contains("inner(super::ask::focus(&search))"));
++    let inner = fn_of(
++        &page,
++        "pub fn inner(target: Option<String>) -> leptos::prelude::AnyView {",
++        "\n}\n",
++    );
 +    for needle in [
-+        "inner(super::ask::focus(&search))",
-+        "crate::net::read(crate::ledgerlist::FACTS_PATH)",
-+        "decisions(l, g, b)",
-+        "fold_title(fetched.with(count))",
++        "let graph = crate::net::read(super::map::PATH);",
++        "let beads = crate::net::read(crate::ledgerlist::FACTS_PATH);",
++        "let fetched = crate::net::read(super::ledger::PATH);",
++        "fetched.with(|l| graph.with(|g| beads.with(|b| decisions(l, g, b))))",
++        "let title = move || fold_title(fetched.with(count));",
 +        "<summary>{title}</summary>",
 +        "let now = crate::net::now();",
++        ".map(|d| hist_li(d, &cards, now, mode))",
 +        "<details class=\"fold\" id=BLOCK.id prop:open=open on:toggle=toggle>",
 +    ] {
 +        assert!(
-+            view.contains(needle),
-+            "askpage.rs の view と inner に {needle} が無い"
++            inner.contains(needle),
++            "askpage.rs の inner に {needle} が無い"
 +        );
 +    }
-+    let li = &view[view.find("fn hist_li(").expect("行の DOM")..];
++    let li = fn_of(&page, "fn hist_li(", "\n}\n");
 +    let order = [
 +        "<time>{clock_short(at, now)}</time>",
 +        "<span class=\"ttl\" title=item.title.clone()>{short}</span>",
@@ -528,7 +575,8 @@ index 0000000000000000000000000000000000000000..ece5f666a84a65baddcec1c1d0731c48
 +    assert!(order.is_sorted(), "行の並びが違う: {order:?}");
 +}
 +
-+/// 行の時刻の規則は stylesheet の質問の窓の塊に在り、縮まず小さい字。
++/// 行の時刻の規則は stylesheet の質問の窓の塊の中で media の塊の外（波括弧の深さ 0）に在り、縮まず小さい字。
++/// 同じ選び手の規則はその 1 つだけ（後の規則や media の中の規則が上書きしない）。
 +#[test]
 +fn bvqhist_time_rule() {
 +    let css = read("style.css");
@@ -537,6 +585,17 @@ index 0000000000000000000000000000000000000000..ece5f666a84a65baddcec1c1d0731c48
 +    let rule = ".folds .items > li > time { flex: none; color: var(--ink-3); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }";
 +    let at = css.find(rule).expect("時刻の規則");
 +    assert!(block < at && at < next, "時刻の規則が質問の窓の塊の外");
++    let head = &css[..at];
++    assert_eq!(
++        head.matches('{').count(),
++        head.matches('}').count(),
++        "時刻の規則が media の塊の中"
++    );
++    assert_eq!(
++        css.matches(".folds .items > li > time").count(),
++        1,
++        "時刻の規則の選び手は 1 つ"
++    );
 +}
 diff --git a/crates/tsuzuri-surface/tests/cadq.rs b/crates/tsuzuri-surface/tests/cadq.rs
 index 354ed154b1fb3caf976041d81a9cb65a80e9d9c1..0c86dea8de93502f38c657b79e0b7740ca1f06f0 100644
