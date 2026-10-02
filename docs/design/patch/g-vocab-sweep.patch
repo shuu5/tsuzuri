@@ -1,0 +1,1505 @@
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 61b41416d84d1d92d8f9ef1826294f24413d2fa1..c8d62c459ef24eb8c66d668b691ea5870317e6c7 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -52,7 +52,6 @@ body { background: var(--bg); color: var(--ink); font: 400 var(--fs-2)/1.5 syste
+ a { color: inherit; text-decoration: none; }
+ button, input, textarea, select { font: inherit; color: inherit; }
+ :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r1); }
+-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+ h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: 0; }
+ h1 { font-size: var(--fs-4); }
+ h2 { font-size: var(--fs-3); }
+@@ -64,7 +63,6 @@ h3 { font-size: var(--fs-2); }
+   background: var(--panel); border-bottom: 1px solid var(--line); }
+ .brand { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 700; font-size: var(--fs-3); }
+ .brand .logo { width: 24px; height: 24px; }
+-.proj { display: inline-flex; align-items: center; gap: var(--s1); height: 32px; padding: 0 var(--s2); border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-1); color: var(--ink-2); }
+ .nav { display: flex; gap: var(--s1); margin-left: var(--s2); }
+ .nav a { display: inline-flex; align-items: center; gap: var(--s2); height: var(--hit); padding: 0 var(--s3); border-radius: var(--r2); color: var(--ink-2); font-weight: 550; }
+ .nav a:hover { background: var(--panel-2); }
+@@ -176,13 +174,11 @@ h3 { font-size: var(--fs-2); }
+ .row { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+ .stack > * + * { margin-top: var(--s3); }
+ .chip { display: inline-flex; align-items: center; gap: var(--s1); height: 24px; padding: 0 var(--s2); border-radius: 999px; background: var(--panel-2); color: var(--ink-2); font-size: var(--fs-1); white-space: nowrap; }
+-.chip.ext { background: transparent; border: 1px dashed var(--line-2); }
+ .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); min-height: var(--hit); padding: 0 var(--s3); border: 1px solid var(--line-2); border-radius: var(--r2); background: var(--panel); cursor: pointer; font-weight: 600; }
+ .btn:hover { background: var(--panel-2); }
+ .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+ .btn.primary:hover { filter: brightness(1.05); }
+ .btn[disabled] { opacity: .45; cursor: not-allowed; }
+-.btn.ghost { border-color: transparent; background: transparent; }
+ 
+ /* ---------- 「?」の印（初心者 mode だけ） ---------- */
+ .q { display: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink-3); font-size: 12px; font-weight: 700; line-height: 18px; text-align: center; cursor: help; padding: 0; }
+@@ -232,7 +228,6 @@ body.mode-beginner .q { display: inline-block; }
+ .gi.unknown { background: transparent; border: 2px dotted var(--g-unknown); color: var(--g-unknown); }
+ 
+ /* ---------- home ---------- */
+-.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); margin-bottom: var(--s3); }
+ .tile { display: flex; flex-direction: column; justify-content: space-between; min-height: 96px; padding: var(--s3); border-radius: var(--r3); border: 1px solid var(--line); background: var(--panel); position: relative; }
+ .tile .n { font-size: var(--fs-5); font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; }
+ .tile .lab { display: flex; align-items: center; gap: var(--s2); color: var(--ink-2); font-weight: 600; }
+@@ -247,7 +242,6 @@ a.tile:hover { box-shadow: var(--shadow); }
+ 
+ /* ---------- kanban（pipeline ダッシュボード） ---------- */
+ .empty { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border: 1px dashed var(--line-2); border-radius: var(--r2); color: var(--ink-2); }
+-.extmark { display: flex; align-items: center; gap: var(--s2); margin: var(--s3) 0 var(--s2); }
+ .board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s2); }
+ .col { background: var(--panel-2); border-radius: var(--r2); padding: var(--s2); min-width: 0; }
+ .col > header { display: flex; align-items: center; gap: var(--s2); min-height: 32px; padding: 0 var(--s1); }
+@@ -288,16 +282,11 @@ button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cur
+ /* ---------- orchestrator の card ---------- */
+ .seatcard .big { display: flex; align-items: center; gap: var(--s3); }
+ .seatcard .state { font-size: var(--fs-4); font-weight: 750; }
+-.seatcard .kv { display: grid; grid-template-columns: auto 1fr; gap: var(--s1) var(--s3); margin-top: var(--s3); font-variant-numeric: tabular-nums; }
+-.seatcard .kv dt { color: var(--ink-3); display: flex; align-items: center; gap: var(--s1); }
+-.seatcard .kv dd { margin: 0; font-weight: 650; }
+ .strip { position: relative; margin-top: var(--s3); }
+ .strip svg { display: block; width: 100%; height: 40px; }
+ .strip input[type=range] { width: 100%; margin: var(--s1) 0 0; accent-color: var(--accent); height: 24px; }
+-.strip .axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+ .legend5 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2) var(--s3); }
+ .legend5 > span { display: flex; align-items: center; gap: var(--s2); min-height: 24px; font-size: var(--fs-1); color: var(--ink-2); }
+-.nextbtn { width: 100%; justify-content: space-between; }
+ 
+ /* ---------- hover card・tooltip ---------- */
+ .hcard { position: fixed; z-index: 100; width: 320px; max-width: calc(100vw - 16px); padding: var(--s3); background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r3); box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s; }
+@@ -305,7 +294,6 @@ button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cur
+ .hcard .k { display: flex; align-items: center; gap: var(--s2); color: var(--ink-2); font-size: var(--fs-1); font-weight: 600; }
+ .hcard .k .sp { flex: 1; }
+ .hcard .ti { margin-top: var(--s2); font-weight: 700; font-size: var(--fs-3); line-height: 1.35; }
+-.hcard .su { margin-top: var(--s1); color: var(--ink-2); }
+ .hcard .id { margin-top: var(--s2); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-3); word-break: break-all; }
+ .tip { position: fixed; z-index: 101; max-width: min(360px, calc(100vw - 16px)); padding: var(--s2) var(--s3); background: #1c2230; color: #fff; border-radius: var(--r2); font-size: var(--fs-1); line-height: 1.5; pointer-events: none; opacity: 0; transition: opacity .12s; }
+ .tip.on { opacity: 1; }
+@@ -421,10 +409,6 @@ textarea { width: 100%; min-height: 64px; padding: var(--s2); border: 1px solid
+ .warn { display: inline-flex; align-items: center; gap: var(--s1); height: 24px; padding: 0 var(--s2); border-radius: var(--r1); background: color-mix(in srgb, var(--st-limit) 16%, transparent); color: var(--st-limit); font-weight: 700; font-size: var(--fs-1); }
+ .warn svg { width: 14px; height: 14px; }
+ .side { position: sticky; top: 72px; }
+-.chk { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); }
+-.chk input { width: 20px; height: 20px; accent-color: var(--accent); }
+-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 120; padding: var(--s2) var(--s3); background: var(--ink); color: var(--bg); border-radius: var(--r2); opacity: 0; transition: opacity .2s; pointer-events: none; }
+-.toast.on { opacity: 1; }
+ details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); }
+ details.fold > summary::-webkit-details-marker { display: none; }
+ details.fold > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+@@ -489,26 +473,16 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
+ .band > header { display: flex; flex-direction: column; gap: var(--s1); }
+ .band > header .n { font-size: var(--fs-5); font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; }
+ .band[class*="band-"] { border-left: 4px solid var(--bc); }
+-.band > header .bn { font-size: var(--fs-3); font-weight: 750; color: var(--bc); }
+ .band > header code.path { font-size: 11px; color: var(--ink-3); word-break: break-all; }
+ .groups { display: flex; flex-wrap: wrap; gap: var(--s3); }
+ .group { min-width: 0; }
+-.group > .gh { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s1); color: var(--ink-2); font-size: var(--fs-1); font-weight: 600; }
+ .dots { display: flex; flex-wrap: wrap; gap: 4px; max-width: 560px; }
+ .dots a { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: var(--r1); }
+ .dots a:hover { background: var(--panel-2); }
+ .art { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r2); }
+-.art .kids { display: flex; flex-wrap: wrap; gap: 2px; max-width: 64px; justify-content: center; }
+-.art .kids a { width: 12px; height: 12px; }
+-.art .kids .shape { width: 7px; height: 7px; border-width: 1.5px; }
+-.bands-empty { color: var(--ink-3); font-size: var(--fs-1); }
+ table.mx { border-collapse: collapse; font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+ table.mx th, table.mx td { border: 1px solid var(--line); padding: 4px 8px; text-align: right; }
+ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
+-.mxwrap { overflow-x: auto; max-width: 100%; }
+-.mxlist { display: none; }
+-.mxlist .pair { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+-.mxlist button { min-width: 40px; min-height: 32px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--panel); color: var(--accent); font-weight: 700; cursor: pointer; }
+ 
+ /* ---------- 抜けの検査 ---------- */
+ .gtiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3); margin-bottom: var(--s3); }
+@@ -536,7 +510,6 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
+ /* ---------- 狭い幅（390） ---------- */
+ @media (max-width: 760px) {
+   .page { padding: var(--s3) var(--s3) var(--s6); }
+-  .tiles { grid-template-columns: 1fr 1fr; gap: var(--s2); }
+   .tile { min-height: 80px; padding: var(--s2) var(--s3); }
+   .home, .ask, .two { grid-template-columns: minmax(0, 1fr); }
+   .board { grid-template-columns: minmax(0, 1fr); }
+@@ -565,18 +538,14 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
+ /* 出所の帯の札・名・path */
+ .bchip { display: inline-flex; align-items: center; gap: var(--s1); height: 22px; padding: 0 var(--s2); border-radius: 999px; border: 1px solid var(--bc); color: var(--bc); font-size: 11px; font-weight: 700; white-space: nowrap; }
+ .bchip i { width: 8px; height: 8px; border-radius: 2px; background: var(--bc); }
+-.hcard .bname { color: var(--bc); font-weight: 750; }
+ .hcard .cid, .cid { margin-top: var(--s1); font: 700 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); word-break: break-all; }
+ .hcard .src, .srcline { display: flex; align-items: flex-start; gap: var(--s1); margin-top: var(--s2); padding-top: var(--s2); border-top: 1px dashed var(--line); font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-3); word-break: break-all; }
+ .hcard .src svg, .srcline svg { flex: none; margin-top: 1px; }
+ .nid, .kid { font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); }
+ .kcard .m .kid { font-size: 11px; color: var(--ink-3); font-weight: 600; }
+-.en { border-bottom: 1px dotted var(--ink-3); cursor: help; }
+ .legend > span b { font-weight: 700; color: var(--ink); }
+ .legend code, .legend code.path { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-3); }
+ .legend code.path { margin-left: 2px; }
+-.upto { display: inline-flex; align-items: center; gap: var(--s1); height: 32px; padding: 0 var(--s2); border: 1px dashed var(--line-2); border-radius: var(--r2); font-size: var(--fs-1); color: var(--ink-2); font-weight: 600; }
+-.upto:hover { background: var(--panel-2); }
+ .top.vessel { border-bottom: 3px solid var(--ink); }
+ 
+ /* 地図の 4 面の切替（tab 列 1 つ） */
+@@ -584,40 +553,13 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
+ .tabs [role=tab] { display: inline-flex; align-items: center; gap: var(--s1); min-height: var(--hit); padding: 0 var(--s3); border: 0; border-radius: var(--r1); background: transparent; color: var(--ink-2); font-weight: 650; cursor: pointer; }
+ .tabs [role=tab][aria-selected=true] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+ /* (a) 圧縮: 帯の中の札（id + 題） */
+-.cards7 { display: flex; flex-wrap: wrap; gap: var(--s2); align-content: flex-start; }
+ .tag { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 200px; padding: 6px var(--s2); border: 1px solid var(--line); border-left: 3px solid var(--bc); border-radius: var(--r2); background: var(--panel); }
+ .tag:hover { border-color: var(--bc); box-shadow: var(--shadow); }
+-.tag .tid { font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--bc); word-break: break-all; }
+ .tag .tt { font-size: 12px; color: var(--ink-2); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+-.tag.open-q { border-color: var(--s-stop); }
+-.art7 { display: inline-flex; flex-direction: column; gap: 4px; width: 188px; padding: 6px var(--s2); border: 1px solid var(--line); border-left: 3px solid var(--bc); border-radius: var(--r2); background: var(--panel); }
+-.art7 > a { display: flex; gap: var(--s1); align-items: baseline; min-width: 0; }
+-.art7 > a .tid { font: 700 12px/1.2 ui-monospace, monospace; color: var(--bc); flex: none; }
+-.art7 > a .tt { font-size: 12px; color: var(--ink-2); white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+-.art7 .kids { display: flex; flex-wrap: wrap; gap: 2px; }
+-.art7 .kids a { font: 600 10px/16px ui-monospace, monospace; padding: 0 4px; border-radius: 3px; background: var(--panel-2); color: var(--ink-2); }
+-.art7 .kids a:hover { background: color-mix(in srgb, var(--bc) 18%, var(--panel)); }
+-.tierh { flex-basis: 100%; font-size: 11px; font-weight: 700; color: var(--ink-3); margin-top: var(--s1); }
+ .subh { flex-basis: 100%; display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-1); color: var(--ink-2); font-weight: 650; margin-top: var(--s1); }
+ /* (b) 一覧 */
+-.filters { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-bottom: var(--s2); }
+-.filters label { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--fs-1); color: var(--ink-2); }
+-.filters select { height: 32px; border: 1px solid var(--line-2); border-radius: var(--r1); background: var(--panel); padding: 0 var(--s1); max-width: 180px; }
+ .items.rows > li { align-items: flex-start; padding: var(--s2); }
+ .items.rows > li > .shape { margin-top: 4px; }
+-.items.rows .rowb { flex: 1; min-width: 0; display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 2px var(--s3); align-items: baseline; }
+-.items.rows .rowb .nid { grid-row: span 2; word-break: break-all; }
+-.items.rows .rowb .ttl { font-weight: 650; min-width: 0; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+-.items.rows .rowb .gist { grid-column: 2; min-width: 0; font-size: var(--fs-1); color: var(--ink-2); white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+-.items.rows .rowb .gist.none { color: var(--ink-3); }
+-.items.rows .rowb .meta { grid-row: span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; color: var(--ink-3); white-space: nowrap; min-width: 0; }
+-.pairnote { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); font-size: var(--fs-1); color: var(--ink-2); }
+-/* (c) グラフ */
+-.gwrap { overflow: hidden; }
+-.gwrap svg { display: block; width: 100%; height: auto; }
+-.gwrap .node { cursor: pointer; }
+-.gwrap .node:focus { outline: none; }
+-.gwrap .node:focus rect.hit, .gwrap .node:hover rect.hit { stroke: var(--focus); stroke-width: 2; }
+ /* (d) 表 */
+ table.mx td button { width: 100%; min-width: 28px; min-height: 28px; border: 0; background: transparent; cursor: pointer; font: inherit; color: var(--accent); font-weight: 700; }
+ table.mx td button:hover { background: var(--panel-2); }
+@@ -627,11 +569,6 @@ table.mx th .bchip { margin-right: 4px; }
+ .gtop { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--s3); margin-bottom: var(--s3); }
+ .gcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r3); padding: var(--s3); }
+ .gcard > header { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
+-.gcard .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+-.kpi { display: flex; flex-direction: column; gap: 2px; padding: var(--s2); border-radius: var(--r2); background: var(--panel-2); min-width: 0; }
+-.kpi .n { font-size: var(--fs-4); font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.1; display: flex; align-items: center; gap: var(--s1); }
+-.kpi .lab { font-size: 11px; color: var(--ink-2); font-weight: 600; }
+-.kpi.hot .n { color: var(--st-limit); }
+ .projs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: var(--s2); }
+ .pchip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 var(--s2); border-radius: 999px; border: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+ .acct-grid { display: grid; grid-template-columns: 80px 156px repeat(3, minmax(0, 1fr)) 150px 76px; gap: 0; }
+@@ -652,7 +589,6 @@ table.mx th .bchip { margin-right: 4px; }
+ .meter .v b { color: var(--ink); }
+ .meter.unmeasured .bar { background: transparent; border: 2px dotted var(--st-unknown); }
+ .spark svg { display: block; width: 150px; height: 32px; }
+-.acct-grid .row-un > div { color: var(--ink-3); }
+ /* project の群の枠（今の口座 1 つ） */
+ .gcard > header { flex-wrap: wrap; }
+ .gcard .gname { font-size: var(--fs-3); }
+@@ -670,12 +606,6 @@ table.mx th .bchip { margin-right: 4px; }
+ .pw .wl { color: var(--ink-3); font: 600 11px ui-monospace, monospace; } .pw .cap { color: var(--ink-3); font-size: 11px; }
+ .pw.hot { background: color-mix(in srgb, var(--st-limit) 18%, transparent); } .pw.hot b { color: var(--st-limit); }
+ .glab { margin-top: var(--s2); font-size: 12px; }
+-.cands { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--s1); font: 500 12px ui-monospace, monospace; color: var(--ink-3); }
+-.cand { padding: 0 4px; border-radius: var(--r1); }
+-.cand.cur { font-weight: 800; color: var(--ink); background: var(--panel-2); outline: 2px solid var(--ink); }
+-.cand.other { text-decoration: line-through; }
+-.cand sup { font: 700 9px system-ui; margin-left: 2px; text-decoration: none; display: inline-block; }
+-.cands .sep { color: var(--line-2); }
+ .pchip { max-width: 100%; }
+ .pchip .gi { width: 16px; height: 16px; font-size: 10px; }
+ .pchip.grp.park { border-style: dashed; border-color: var(--line-2); }
+@@ -699,30 +629,12 @@ table.mx th .bchip { margin-right: 4px; }
+ .mv .what { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--s2); min-width: 0; overflow-wrap: anywhere; }
+ .mv .sub, .sess .sub, .gcard .sub { font-size: 11px; color: var(--ink-3); }
+ .mv .ic { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--panel-2); font-size: 12px; font-weight: 800; }
+-.mv .ic.moved { background: var(--band-beads); color: #fff; } .mv .ic.pending { border: 2px dashed var(--band-beads); background: transparent; color: var(--band-beads); }
++.mv .ic.moved { background: var(--band-beads); color: #fff; }
+ .mv .ic.pressure { background: var(--st-limit); color: #fff; } .mv .ic.refused { background: var(--s-stop); color: #fff; border-radius: 4px; }
+-.atbar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s3); padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r3); background: var(--panel); }
+-.atbar input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+-.atbar .t { font: 700 14px ui-monospace, monospace; min-width: 64px; }
+-.relfig svg { display: block; width: 100%; height: auto; }
+-.plans { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+-.plan { border: 1px solid var(--line); border-radius: var(--r3); background: var(--panel); padding: var(--s3); }
+-.plan.rec { border: 2px solid var(--accent); }
+-.plan ul.items > li { min-height: 32px; }
+-.winlist { margin-top: var(--s2); }
+-.demo { margin-top: var(--s2); padding: var(--s2); border-radius: var(--r2); background: var(--panel-2); }
+-.demo .go { display: flex; gap: var(--s2); flex-wrap: wrap; }
+ 
+ @media (max-width: 760px) {
+-  .upto .lbl { display: none; }
+   .tabs { width: 100%; }
+   .tabs [role=tab] { flex: 1; justify-content: center; padding: 0 var(--s1); }
+-  .items.rows .rowb { grid-template-columns: minmax(0, 1fr); }
+-  .items.rows .rowb .nid, .items.rows .rowb .meta { grid-row: auto; }
+-  .items.rows .rowb .gist { grid-column: 1; white-space: normal; }
+-  .items.rows .rowb .meta { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s2); white-space: normal; }
+-  .gwrap { display: none; }
+-  .art7 { width: 100%; }
+   .tag { max-width: 100%; }
+   .acct-grid { display: block; }
+   .acct-grid > .hrow { display: none; }
+@@ -738,18 +650,11 @@ table.mx th .bchip { margin-right: 4px; }
+   .sortbar { margin-left: 0; }
+   .mv > li { grid-template-columns: 24px 56px minmax(0, 1fr); }
+   .gcur { grid-template-columns: minmax(0, 1fr); }
+-  .mxwrap { display: none; }
+-  .mxlist { display: block; }
+-  .plans { grid-template-columns: minmax(0, 1fr); }
+-  .gcard .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+ }
+ 
+ /* home: tsuzuri の run の tile（4 列の数を記号で・列の名は tooltip） */
+ .tile.runs { grid-column: span 3; }
+-.tile .tri { display: flex; gap: var(--s4); }
+-.tile .tri .col { display: inline-flex; align-items: center; gap: var(--s2); background: transparent; padding: 0; box-shadow: none; }
+-.tile .tri .col .dot { width: 12px; height: 12px; flex: none; }
+-@media (max-width: 760px) { .tile.runs { grid-column: span 1; } .tile .tri { gap: var(--s2); flex-wrap: wrap; } .tile .tri .n { font-size: var(--fs-4); } }
++@media (max-width: 760px) { .tile.runs { grid-column: span 1; } }
+ .nhead .kind { flex-wrap: wrap; }
+ 
+ /* 凡例の 3 行（形・色・縁） */
+@@ -759,14 +664,9 @@ table.mx th .bchip { margin-right: 4px; }
+ .legend svg.lk.wide { width: 30px; height: 16px; }
+ .legend .sw7 { display: inline-flex; gap: 2px; }
+ .legend .sw7 i { width: 8px; height: 12px; border-radius: 1px; }
+-.tag .tid .shape, .art7 .tid .shape { width: 9px; height: 9px; border-width: 1.5px; vertical-align: -1px; }
+ 
+ /* fix1 補正: 経験者だけに出す注記・移動待ちの印（5 値の記号はそのまま・横に小さな枠） */
+-.only-expert { display: none; }
+-body.mode-expert .only-expert { display: inline; }
+ .mvwait { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; border: 1.5px dashed var(--mark-acct); border-radius: var(--r1); color: var(--mark-acct); font-size: 11px; font-weight: 700; white-space: nowrap; cursor: help; }
+-.gcur .meta > span.only-expert { display: none; }
+-body.mode-expert .gcur .meta > span.only-expert { display: flex; }
+ 
+ /* ---------- fix2: 近傍図の両側・段数・hover 強調・地図 (c) の拡大縮小・home の口座の枠 ---------- */
+ .btn.sm { min-height: 32px; padding: 0 var(--s2); font-size: var(--fs-1); }
+@@ -791,38 +691,11 @@ svg.hlsvg g.node.lit-self rect.hit { stroke: var(--ink); stroke-width: 3.5; }
+ .pinbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); min-height: 0; font-size: var(--fs-1); }
+ .pinbar:not(:empty) { margin-top: var(--s2); padding: var(--s1) var(--s2); border: 1px dashed var(--accent); border-radius: var(--r2); }
+ .pinbar .pinned { overflow-wrap: anywhere; }
+-/* 地図 (c): 拡大縮小と移動（帯の名は左端に固定） */
+-.gtools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
+-.gzoom { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r2); background: var(--panel); touch-action: none; cursor: grab; user-select: none; }
+-.gzoom.dragging { cursor: grabbing; }
+-.gzoom svg { display: block; width: 100%; height: 100%; }
+-.gzoom .blab { cursor: help; }
+-@media (max-width: 760px) { .gpanel .gtools, .gpanel .gzoom, .gpanel .pinbar { display: none; } }
+ /* home: この project の口座 */
+-.pacct { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3); }
+-.pacct .blk { min-width: 0; display: flex; flex-direction: column; gap: var(--s2); }
+ #pacct .cur { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); padding: var(--s2) var(--s3); background: var(--panel-2); border-radius: var(--r2); }
+ #pacct .cur .acc { font: 800 var(--fs-5)/1.1 ui-monospace, monospace; }
+ #pacct .cur .meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; min-width: 0; }
+ #pacct .cur .meta > span { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); }
+-.pacct .wrow { display: grid; grid-template-columns: 112px minmax(0, 1fr) 64px; align-items: center; gap: var(--s2); font-size: 12px; }
+-.pacct .wrow .wl { font: 600 11px ui-monospace, monospace; color: var(--ink-3); overflow-wrap: anywhere; }
+-.pacct .wrow .th { font-size: 11px; color: var(--ink-3); text-align: right; }
+-.pacct .spark svg { width: 100%; max-width: 300px; }
+-.pacct .loadl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+-.pacct .loadl li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; overflow-wrap: anywhere; }
+-.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s1); }
+-.steps li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: var(--s2); font-size: 12px; min-height: 28px; }
+-.steps li .sn { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line-2); font: 700 11px system-ui; color: var(--ink-3); }
+-.steps li.done .sn { background: var(--st-run); border-color: var(--st-run); color: #fff; }
+-.steps li.wait .sn { border: 2px dashed var(--mark-acct); color: var(--mark-acct); }
+-.steps li.warn .sn { background: var(--st-limit); border-color: var(--st-limit); color: #fff; }
+-.steps li .tx { min-width: 0; overflow-wrap: anywhere; }
+-.steps li .when { font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+-.ahist { list-style: none; margin: 0; padding: 0; }
+-.ahist li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: var(--s2); align-items: baseline; padding: 2px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+-.ahist li .w { min-width: 0; overflow-wrap: anywhere; }
+-@media (max-width: 760px) { .pacct { grid-template-columns: minmax(0, 1fr); } }
+ /* 質問の card: 概要（2 行）・理由（常に表示） */
+ .qsum { display: flex; flex-direction: column; gap: 2px; margin: var(--s2) 0; font-size: 13px; }
+ .qsum .ln { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--s1); align-items: start; min-width: 0; overflow-wrap: anywhere; }
+@@ -834,14 +707,10 @@ body.mode-beginner .qsum .ln.eng { display: none; }
+ .qcard summary { flex-wrap: wrap; }
+ #pacct .cur { margin-bottom: var(--s3); }
+ /* 候補と次の移り先 */
+-.nextt { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin: var(--s1) 0; font-size: 12px; }
+-.nextt b { font-size: var(--fs-4); }
+-.nextt.none b { color: var(--st-silent); font-family: inherit; }
+ .cands2 { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+ .cands2 li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--s2); min-width: 0; overflow-wrap: anywhere; }
+ .cands2 li .mono { font: 600 12px ui-monospace, monospace; min-width: 52px; }
+ .cands2 li.next .mono { font-weight: 800; outline: 2px solid var(--ink); border-radius: var(--r1); padding: 0 4px; }
+-.cands2 li .kv { color: var(--ink-2); }
+ .cands2 li.ng { color: var(--ink-3); opacity: .72; }
+ .cands2 li .why { display: inline-flex; align-items: center; min-height: 18px; padding: 0 6px; border-radius: var(--r1); background: var(--panel-2); border: 1px solid var(--line); font-size: 11px; }
+ /* 稼働の記録の幅と目盛 */
+@@ -854,27 +723,13 @@ body.mode-beginner .qsum .ln.eng { display: none; }
+ .saxis-m { display: none; }
+ #hstrip svg { display: block; width: 100%; height: 28px; }
+ @media (max-width: 760px) { .saxis-m { display: block; padding: var(--s2) var(--s2) 0; } }
+-/* fix4: account board の project の札 = run の 4 列 + 質問の数 */
+-.pcnt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); font-size: 12px; min-width: 0; }
+-.pcnt .rc4 { display: inline-flex; flex-wrap: wrap; gap: var(--s1) var(--s2); }
+-.pcnt .col { display: inline-flex; align-items: center; gap: 3px; background: transparent; padding: 0; box-shadow: none; min-width: 0; }
+-.pcnt .col .dot { width: 9px; height: 9px; flex: none; }
+-.pcnt .col.z { opacity: .45; }
+-.pcnt .n { font-weight: 700; }
+-.pcnt .qn { display: inline-flex; align-items: center; gap: 3px; color: var(--ink-3); }
+-.pcnt .qn.on { color: var(--accent); }
+ /* fix4: home = 次の一手・pipeline dashboard・orchestrator と口座・記号の見方 の 4 block */
+ .btn.static { cursor: default; }
+ #next .nxbig { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); border-radius: var(--r2); background: var(--panel-2); border-left: 4px solid var(--accent); }
+ #next .nxbig.none { border-left-color: var(--line-2); }
+ #next .nxbig > .hd .hd-t { font-size: var(--fs-3); font-weight: 750; }
+ #next .nxbig .what { min-width: 0; overflow-wrap: anywhere; }
+-#next .nxbig .act { display: flex; flex-wrap: wrap; gap: var(--s2); }
+-#next .nxbig .act .btn { max-width: 100%; }
+-#next .nxlist { list-style: none; margin: var(--s2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px var(--s3); font-size: 12px; }
+-#next .nxlist li { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; min-height: 28px; border-bottom: 1px dashed var(--line); }
+ #next .nxlist li.off { color: var(--ink-3); }
+-#next .nxlist li .v { font-variant-numeric: tabular-nums; }
+ #orch .sband { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--s3); padding: var(--s2) var(--s3); border-radius: var(--r2); border-left: 4px solid var(--st-limit); background: color-mix(in srgb, var(--st-limit) 14%, var(--panel)); font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+ #orch .sband .l1 { font-weight: 700; }
+ #orch .sband .l2 { display: flex; gap: var(--s1); align-items: baseline; color: var(--ink-2); }
+@@ -892,20 +747,11 @@ body.mode-beginner .qsum .ln.eng { display: none; }
+ #orch .wrow .th { font-size: 11px; color: var(--ink-3); text-align: right; }
+ #orch .spark.sm { display: flex; align-items: center; gap: var(--s2); }
+ #orch .spark.sm svg { width: 120px; height: 24px; }
+-#orch .ahistd { margin-top: var(--s2); font-size: 12px; }
+-#orch .ahistd .ahist { margin-top: var(--s1); }
+-.gplist { list-style: none; margin: var(--s1) 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+-.gplist li { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+-.gplist li.me { font-weight: 700; }
+-.gplist .gi { width: 16px; height: 16px; font-size: 10px; }
+ @media (max-width: 760px) { /* 狭い幅: 次の一手 → orchestrator と口座 → pipeline dashboard → 記号の見方 */
+   .home { display: flex; flex-direction: column; align-items: stretch; gap: var(--s3); }
+   .home > .stack { display: contents; }
+   .home #next { order: 1; } .home #orch { order: 2; } .home #pipe { order: 3; } .home #ledger { order: 4; } .home #legend { order: 5; }
+ }
+-/* 予約（他の群の next）: 薄い札 */
+-.cands2 li.resv { color: var(--ink-3); }
+-.cands2 li .resvtag { display: inline-flex; align-items: center; min-height: 18px; padding: 0 6px; border-radius: var(--r1); border: 1px dashed var(--line-2); color: var(--ink-3); font-size: 11px; }
+ /* fix5: 稼働の記録の色・高さ・線 = class だけ（strip と凡例の見本が共有） */
+ .sg-run { fill: var(--st-run); }
+ .sg-wait { fill: var(--st-wait); }
+@@ -914,14 +760,8 @@ body.mode-beginner .qsum .ln.eng { display: none; }
+ .sg-unknown { fill: none; stroke: var(--st-unknown); stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; }
+ .mk { vector-effect: non-scaling-stroke; }
+ .mk-acct { stroke: var(--mark-acct); stroke-width: 3; }
+-.mk-spawn { stroke: var(--ink-2); stroke-width: 1; }
+-.mk-stop { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 2 2; }
+-.mk-tick { stroke: var(--line-2); stroke-width: 1; }
+ .mk-now { stroke: var(--ink); stroke-width: 3; }
+ .ssample { display: inline-block; flex: none; width: 28px; vertical-align: middle; overflow: visible; }
+-.hlg { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+-.hlg-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; }
+-.hlg-int { margin-top: 6px; font: 11px ui-monospace, monospace; opacity: .8; }
+ .sleg { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; font-size: 11px; color: var(--ink-3); margin: 4px 0 2px; }
+ .sleg-i { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: help; }
+ .sleg-i .ssample { width: 28px; height: 12px; }
+@@ -930,48 +770,25 @@ body.mode-beginner .qsum .ln.eng { display: none; }
+ .tkhb { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--s2); font-size: 11px; margin-top: 2px; min-width: 0; }
+ .tkhb .tk, .tkhb .hb { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; cursor: help; }
+ .tkhb .gi { width: 14px; height: 14px; font-size: 9px; }
+-.tkhb .en { color: var(--ink-3); }
+ .tkhb .tk-stale b { color: var(--st-silent); }
+ .tkhb .tk-healthy b { color: var(--st-run); }
+ .tkhb .hb-off b { color: var(--st-limit); }
+ .tkhb .hbbtn { min-height: 24px; padding: 0 8px; font-size: 11px; }
+-.mocktag { display: inline-flex; align-items: center; padding: 0 6px; border-radius: var(--r1); background: color-mix(in srgb, var(--st-limit) 14%, var(--panel)); color: var(--ink-2); font-size: 11px; font-weight: 600; }
+ #orch .tkrow { margin-top: var(--s2); }
+ #orch .tkrow .tkhb { font-size: 12px; }
+-#orch .state .long { font-size: var(--fs-2); font-weight: 600; margin-left: 4px; }
+-dialog.hbdlg { max-width: min(560px, calc(100vw - 32px)); border: 1px solid var(--line-2); border-radius: var(--r3); padding: var(--s4); background: var(--panel); color: var(--ink); }
+-dialog.hbdlg::backdrop { background: rgba(0,0,0,.35); }
+ dialog.hbdlg .cmd { font: 12px/1.5 ui-monospace, monospace; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r2); padding: var(--s2) var(--s3); white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--s2) 0; }
+ .srow .c-stage .tkhb { flex-basis: 100%; width: 100%; }
+ .tkhb .tk, .tkhb .hb { white-space: normal; flex-wrap: wrap; }
+ .srow > .c-stage { flex-wrap: wrap; }
+ @media (max-width: 760px) { .srow.r-orchestrator > .c-stage { grid-column: 1 / -1; } }
+-/* fix6: mock の見本データの印（台帳・要件書には無い） */
+-.tag.smp { border-style: dashed; }
+-.smpn { font-size: 11px; font-weight: 600; color: var(--ink-3); margin-left: 2px; }
+ /* fix6: 台帳の処理状況 */
+-.pled { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-2); min-width: 0; }
+-.pled .pl1 { overflow-wrap: anywhere; }
+-.pled .lk { color: var(--ink-3); }
+ .lspark { display: block; max-width: 100%; }
+ .lspark .ls-closed { stroke: var(--st-run); stroke-width: 1.6; }
+ .lspark .ls-created { stroke: var(--ink-3); stroke-width: 1.2; stroke-dasharray: 3 2; }
+ .net { display: inline-flex; align-items: baseline; gap: 2px; white-space: nowrap; }
+ .net-down { color: var(--st-run); } .net-flat { color: var(--ink-3); } .net-up { color: var(--st-limit); }
+ .net .sub { color: var(--ink-3); font-size: 10px; margin-left: 2px; }
+-.ltab { display: flex; flex-direction: column; font-size: 12px; }
+-.lrow { display: grid; grid-template-columns: minmax(96px, 1.2fr) repeat(12, minmax(0, 1fr)) 124px; align-items: center; border-bottom: 1px solid var(--line); }
+-.lrow.hrow .hd-t { overflow-wrap: normal; word-break: keep-all; }
+-.lrow > div { padding: 6px 4px; min-width: 0; overflow-wrap: anywhere; }
+-.lrow.hrow { font-size: 11px; font-weight: 700; color: var(--ink-3); border-bottom: 2px solid var(--line-2); align-items: end; }
+-.lrow .c-p { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; font-weight: 650; }
+-.lrow.none { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); color: var(--ink-3); }
+-.lrow .c-none { display: flex; align-items: center; gap: 6px; }
+ @media (max-width: 760px) {
+-  .lrow.hrow { display: none; }
+-  .lrow { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 4px 0; }
+-  .lrow .c-p { grid-column: 1 / -1; }
+-  .lrow .c-v::before, .lrow .c-sp::before { content: attr(data-l); display: block; font-size: 10px; color: var(--ink-3); }
+   .lrow .c-sp { grid-column: 1 / -1; }
+ }
+ 
+@@ -979,38 +796,24 @@ dialog.hbdlg .cmd { font: 12px/1.5 ui-monospace, monospace; background: var(--pa
+ #ledger .l4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); }
+ #ledger .l4 > div { display: flex; flex-direction: column; gap: 2px; padding: var(--s2); border-radius: var(--r2); background: var(--panel-2); min-width: 0; }
+ #ledger .l4 .big { font: 750 var(--fs-4)/1.1 system-ui; font-variant-numeric: tabular-nums; }
+-#ledger .l4 .nets { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 11px; }
+-#ledger .lmid { margin-top: var(--s3); }
+ #ledger .lburn { display: block; width: 120px; height: 24px; }
+ #ledger .lburn .lb-closed { fill: var(--st-run); opacity: .55; }
+ #ledger .lburn .lb-open { stroke: var(--band-beads); stroke-width: 2; vector-effect: non-scaling-stroke; }
+-#ledger .lcap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ink-3); }
+ #ledger details.lep { margin-top: var(--s3); }
+ #ledger details.lep > summary { flex-wrap: wrap; }
+ #ledger .lchips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+-#ledger .ep { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 4px var(--s2); align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+-#ledger .ep .bar { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+-#ledger .ep .bar i { display: block; height: 100%; background: var(--st-run); }
+-#ledger .ep .meta { color: var(--ink-3); white-space: nowrap; font-size: 11px; }
+-@media (max-width: 760px) { #ledger .l4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } #ledger .ep { grid-template-columns: minmax(0, 1fr) 80px; } #ledger .ep .meta { grid-column: 1 / -1; } }
+-.lrow.hrow .hd { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
++@media (max-width: 760px) { #ledger .l4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+ /* fix6 追加: memo の契約化・未反映の一覧 */
+ .ulist { display: flex; flex-direction: column; font-size: 12px; }
+ .urow { display: grid; grid-template-columns: minmax(96px, auto) minmax(0, 1fr) 56px 52px 88px; gap: 4px var(--s2); align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+ .urow.hrow { font-size: 11px; font-weight: 700; color: var(--ink-3); }
+-.urow.smp .u-t { color: var(--ink-2); }
+ .urow .u-id { overflow-wrap: anywhere; font-size: 11px; }
+ .urow .u-n { color: var(--st-limit); font-weight: 650; }
+-.mpro { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s3); }
+-.mpro > div { display: flex; flex-direction: column; gap: 2px; padding: var(--s2); border-radius: var(--r2); border: 1px dashed var(--line-2); min-width: 0; }
+-.mpro .big { font: 700 var(--fs-3)/1.1 system-ui; font-variant-numeric: tabular-nums; }
+ .unref-n { color: var(--st-limit); font-weight: 750; }
+ .unref-n.z { color: var(--ink-3); font-weight: 400; opacity: .6; }
+-@media (max-width: 760px) { .urow { grid-template-columns: minmax(0, 1fr) 44px 44px 72px; } .urow .u-t { grid-column: 1 / -1; order: 5; } .mpro { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
++@media (max-width: 760px) { .urow { grid-template-columns: minmax(0, 1fr) 44px 44px 72px; } .urow .u-t { grid-column: 1 / -1; order: 5; } }
+ 
+ /* ---------- 直し 7: account board の 3 tab・各 project の次の一手・開いている窓・戻る（この窓を閉じる） ---------- */
+-.backwrap { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+-button.upto { background: transparent; cursor: pointer; font: inherit; font-size: var(--fs-1); font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+ .winnote { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin: 0 auto var(--s3); max-width: var(--maxw, 1240px); padding: var(--s2) var(--s3); border: 1px solid var(--st-limit); border-radius: var(--r2); background: var(--panel-2); }
+ .hgrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--s3); margin-bottom: var(--s3); align-items: start; }
+ .nxall { display: flex; flex-direction: column; }
+@@ -1026,9 +829,6 @@ button.upto { background: transparent; cursor: pointer; font: inherit; font-size
+ .nxm { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 1; border: 1px solid var(--line-2); color: var(--ink-3); }
+ .nxm.on { background: var(--st-limit); border-color: var(--st-limit); color: #fff; }
+ .nxm.na { border-style: dashed; color: var(--line-2); }
+-.nxi { display: inline-grid; place-items: center; width: 18px; height: 18px; flex: none; color: var(--ink-2); }
+-.nxi svg { width: 16px; height: 16px; }
+-.nxi.stop { color: var(--s-stop); } .nxi.ask { color: var(--accent); } .nxi.ok { color: var(--ink-3); }
+ .btn.static.dis { color: var(--ink-3); border-style: dashed; cursor: default; }
+ .wins > li .btn { flex: none; }
+ .wins > li.w-closed .ttl, .wins > li.w-nohandle .ttl { color: var(--ink-3); }
+@@ -1044,7 +844,6 @@ details.panel.mvp > summary .hd { margin: 0; }
+ .stgtbl th { font-size: var(--fs-1); color: var(--ink-3); font-weight: 600; }
+ .stgtbl .chip, .stgtbl .btn { white-space: normal; overflow-wrap: anywhere; }
+ .stgtbl .stgrow { margin-top: 0; }
+-.pgrp > header .pchip.grp { font-weight: 700; }
+ @media (max-width: 760px) {
+   .hgrid { grid-template-columns: minmax(0, 1fr); }
+   .nxrow { grid-template-columns: minmax(0, 1fr) auto; }
+@@ -1054,10 +853,6 @@ details.panel.mvp > summary .hd { margin: 0; }
+   .nxrow .go .btn { width: 100%; }
+   .nxrow .go .btn.dis { width: auto; min-height: 28px; }
+ }
+-.plan.dropped { opacity: .8; border-style: dashed; }
+-.steps3 { margin: 4px 0 0; padding-left: 1.4em; font-size: var(--fs-1); }
+-.steps3 > li { padding: 2px 0; overflow-wrap: anywhere; }
+-.pgcur { display: inline-flex; align-items: center; gap: 6px; }
+ 
+ /* ===== 直し 8: 注釈と hover card の形（4 行 + 詳しく ▸・記号の見本・手順の図） ===== */
+ .hcard { width: max-content; min-width: 240px; max-width: min(540px, calc(100vw - 16px)); padding: 10px 12px; }
+@@ -1075,13 +870,8 @@ details.more > summary { display: inline-flex; align-items: center; min-height:
+ details.more > summary::-webkit-details-marker { display: none; }
+ details.more[open] > summary { background: var(--panel-2); }
+ .hcard details.more .r2 { margin-top: 3px; font-size: 12px; color: var(--ink-2); display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; overflow-wrap: anywhere; }
+-.hcard details.more .srcf { font: 11px/1.4 ui-monospace, monospace; color: var(--ink-3); flex-wrap: nowrap; align-items: flex-start; word-break: break-all; }
+-.hcard details.more .srcf svg { flex: none; margin-top: 2px; }
+ .hcard .id { margin-top: 3px; }
+-.figw { margin-top: 6px; max-width: 320px; }
+ .gi.sm { width: 14px; height: 14px; font-size: 9px; }
+-.icsm { display: inline-flex; vertical-align: middle; } .icsm svg { width: 12px; height: 12px; }
+-.esmp { flex: none; vertical-align: middle; }
+ .thrs { display: inline-flex; align-items: center; gap: 2px; font: 600 11px ui-monospace, monospace; color: var(--ink-3); }
+ .thrs i { display: inline-block; width: 2px; height: 12px; background: var(--ink-3); }
+ .smpl { display: inline-flex !important; margin: 0 !important; vertical-align: middle; }
+@@ -1109,7 +899,6 @@ svg.fig .fb rect { fill: var(--panel-2); stroke: var(--line-2); stroke-width: 1.
+ svg.fig .fb text { fill: var(--ink); font-weight: 600; }
+ svg.fig .fb-ok rect { stroke: var(--g-ok); stroke-width: 2; }
+ svg.fig .fb-ng rect { stroke: var(--g-ng); stroke-width: 2; stroke-dasharray: 4 3; }
+-svg.fig .fb-nx rect { fill: var(--st-limit); stroke: var(--st-limit); } svg.fig .fb-nx text { fill: #fff; }
+ svg.fig .fb-off rect { fill: none; stroke-dasharray: 3 3; } svg.fig .fb-off text { fill: var(--ink-3); }
+ svg.fig .fb-end rect { stroke: var(--ink); stroke-width: 2; }
+ svg.fig .fb-up rect { stroke: var(--accent); stroke-width: 2; } svg.fig .fb-down rect { stroke: var(--st-limit); stroke-width: 2; } svg.fig .fb-self rect { stroke: var(--ink); stroke-width: 2.5; }
+@@ -1221,17 +1010,6 @@ svg .lane-lab.zero { font-weight: 500; fill: var(--ink-3); }
+ .hsub { font-size: 14px; color: var(--ink-3); margin-left: 4px; white-space: nowrap; }
+ .prow > .c-more { flex-direction: row; justify-content: flex-start; align-items: center; }
+ 
+-/* 直し 9 追加（06:4xZ）: hover card と「?」の置き場 = pointer の右 16 px・くちばし・hover 中の要素に薄い枠 */
+-.hbeak { position: fixed; z-index: 100; width: 12px; height: 12px; left: -99px; top: -99px; background: var(--panel); border: 1px solid var(--line-2); transform: rotate(45deg); pointer-events: none; display: none; }
+-.hbeak.on { display: block; }
+-.hbeak.tipb { z-index: 102; }
+-.hbeak.s-l { border-top-color: transparent; border-right-color: transparent; }
+-.hbeak.s-r { border-bottom-color: transparent; border-left-color: transparent; }
+-.hbeak.s-b { border-bottom-color: transparent; border-right-color: transparent; }
+-.hbeak.s-t { border-top-color: transparent; border-left-color: transparent; }
+-.hv-on:not(g) { outline: 2px solid var(--bc, var(--accent)); outline-offset: 1px; }
+-g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+-
+ /* 直し 10: 中身を全部見せている block の「詳しく ▸」（hover card の代わり・経験者は既定で開く） */
+ .gmore { margin-top: 10px; }
+ .gmore > summary { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--panel); color: var(--ink-2); font-size: 14px; font-weight: 650; cursor: pointer; list-style: none; }
+@@ -1245,13 +1023,8 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+ .gmore .gm1.int code { font: 11px/1.45 ui-monospace, monospace; color: var(--ink-3); background: none; padding: 0; overflow-wrap: anywhere; }
+ .gmore .xo { display: none; } body.mode-expert .gmore .xo { display: flex; }
+ 
+-/* 直し 11: home の台帳の 4 数 = task open・memo・未反映（橙）・純減 24h（矢印 + 数） */
+-#ledger .l4 .l4un.on .big { color: var(--st-limit); }
+-#ledger .l4 .l4net .big .net { display: inline-flex; align-items: baseline; gap: 4px; font: inherit; }
+-#ledger .l4 .l4net .big .net .num { font: inherit; }
+ /* 退避までの残り秒（移動中の席）: 記号 + 秒 */
+ .mvgrace { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border: 1px solid var(--st-limit); border-radius: 999px; color: var(--st-limit); font-size: 13px; font-weight: 700; white-space: nowrap; }
+-.mvgrace .smpn { font-weight: 600; }
+ 
+ /* ===== 面の crate で足した規則（便 g-frame・見本に無い block の並びと隙間だけ） ===== */
+ /* 問いの一覧（#ask）は見本の home に無い block: 狭い幅では次の一手のすぐ後に並べる */
+diff --git a/crates/tsuzuri-surface/tests/bvlex.rs b/crates/tsuzuri-surface/tests/bvlex.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..aeae52d8b965b4f5ca4bd6b3b1ef0cd18a618162
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvlex.rs
+@@ -0,0 +1,346 @@
++//! 行 g-vocab-sweep の歯（接頭辞 bvlex_）: 語の辞書（vocab.json）の鍵の全部と stylesheet（style.css）の選びの class の全部が、
++//! 面の src の字から引かれる（src の字の literal か、この file の一覧の接頭辞で組む所）ことを見る。src は注と char の literal を飛ばして読む。
++#![cfg(test)]
++
++use std::collections::BTreeSet;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_surface::vocab::vocab;
++
++/// 鍵を組む接頭辞（接頭辞と字をつないで語の辞書を引く所: 地図の辺の型・台帳の局面と手番と未反映の種類・吹き出しの待ちの理由）。
++const KEY_PREFIXES: [&str; 5] = ["e:", "lc:", "qr:", "turn:", "unref:"];
++
++/// class を組む接頭辞（接頭辞と値の字をつなぐ所・値の字は src の字の literal に在る）。
++const CLASS_PREFIXES: [&str; 7] = ["c-", "fb-", "h-", "r-", "sd-", "sev-", "st-"];
++
++/// src から引かれないが残す鍵（着地済みの歯 helpfig が字で名指す 2 つ・accthome が字で名指す 1 つ・測れていないを描く語 1 つ）。
++const KEEP_KEYS: [&str; 4] = ["memo_promo", "move_state", "nx_na", "pressure"];
++
++/// src から引かれないが残す class（着地済みの歯 frame が字で名指す l4・まだ分からないの meter・行 g-accept-fix の差の中の行の 2 つ・
++/// 着地済みの歯が stylesheet に求める src の class c-sp・cmd・off の唯一の規則の祖先の 3 つ）。
++const KEEP_CLASSES: [&str; 7] = [
++    "hbdlg",
++    "l4",
++    "lrow",
++    "m-grp",
++    "m-need",
++    "nxlist",
++    "unmeasured",
++];
++
++fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++fn read(path: &Path) -> String {
++    std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
++}
++
++/// dir の下の .rs の file の全部（名の順）。
++fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
++    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
++        .unwrap_or_else(|e| panic!("{} を読む: {e}", dir.display()))
++        .map(|e| e.expect("dir の項").path())
++        .collect();
++    entries.sort();
++    for p in entries {
++        if p.is_dir() {
++            rs_files(&p, out);
++        } else if p.extension().is_some_and(|x| x == "rs") {
++            out.push(p);
++        }
++    }
++}
++
++fn ident(c: char) -> bool {
++    c.is_alphanumeric() || c == '_'
++}
++
++/// 読みの 1 歩（飛ばして次の位置・字の literal の中身の頭と末と次の位置・class:名 の名と次の位置）。
++enum Step {
++    Skip(usize),
++    Lit(usize, usize, usize),
++    Dir(String, usize),
++}
++
++/// 字の literal の中身（"…"・b"…"・r#"…"#）と、literal の外の `class:名` の名（注と char の literal は飛ばす）。
++fn lex(text: &str) -> (Vec<String>, Vec<String>) {
++    let s: Vec<char> = text.chars().collect();
++    let (mut lits, mut dirs) = (Vec::new(), Vec::new());
++    let mut i = 0;
++    while i < s.len() {
++        i = match step(&s, i) {
++            Step::Skip(j) => j,
++            Step::Lit(body, end, j) => {
++                lits.push(s[body..end].iter().collect());
++                j
++            }
++            Step::Dir(name, j) => {
++                dirs.push(name);
++                j
++            }
++        };
++    }
++    (lits, dirs)
++}
++
++fn step(s: &[char], i: usize) -> Step {
++    let after_ident = i > 0 && ident(s[i - 1]);
++    match (s.get(i), s.get(i + 1)) {
++        (Some('/'), Some('/')) => Step::Skip(line_end(s, i)),
++        (Some('/'), Some('*')) => Step::Skip(block_end(s, i)),
++        (Some('\''), _) => Step::Skip(char_end(s, i)),
++        (Some('"'), _) => quoted(s, i + 1),
++        (Some('b'), Some('"')) if !after_ident => quoted(s, i + 2),
++        _ if !after_ident => raw(s, i)
++            .or_else(|| directive(s, i))
++            .unwrap_or(Step::Skip(i + 1)),
++        _ => Step::Skip(i + 1),
++    }
++}
++
++/// 行の注の末（改行の位置）。
++fn line_end(s: &[char], i: usize) -> usize {
++    s[i..]
++        .iter()
++        .position(|c| *c == '\n')
++        .map_or(s.len(), |k| i + k)
++}
++
++/// 塊の注の末の次（入れ子を数える）。
++fn block_end(s: &[char], mut i: usize) -> usize {
++    let mut depth = 0;
++    while i < s.len() {
++        match (s[i], s.get(i + 1)) {
++            ('/', Some('*')) => depth += 1,
++            ('*', Some('/')) => depth -= 1,
++            _ => {
++                i += 1;
++                continue;
++            }
++        }
++        i += 2;
++        if depth == 0 {
++            return i;
++        }
++    }
++    s.len()
++}
++
++/// char の literal（'x'・'\n'・'\u{..}'・'\''）の次の位置。lifetime（'a）は 1 字だけ進む。
++fn char_end(s: &[char], i: usize) -> usize {
++    if s.get(i + 1) == Some(&'\\') {
++        let rest = s.get(i + 3..).unwrap_or_default();
++        rest.iter()
++            .position(|c| *c == '\'')
++            .map_or(s.len(), |k| i + 3 + k + 1)
++    } else if s.get(i + 2) == Some(&'\'') {
++        i + 3
++    } else {
++        i + 1
++    }
++}
++
++/// 引用符の中の字（逆斜線の次の 1 字は飛ばす）。
++fn quoted(s: &[char], body: usize) -> Step {
++    let mut j = body;
++    while j < s.len() && s[j] != '"' {
++        j += if s[j] == '\\' { 2 } else { 1 };
++    }
++    Step::Lit(body, j.min(s.len()), j + 1)
++}
++
++/// raw の字の literal（`r"`・`r#"`・`br"` ほか）。
++fn raw(s: &[char], i: usize) -> Option<Step> {
++    let r = if s.get(i) == Some(&'b') { i + 1 } else { i };
++    if s.get(r) != Some(&'r') {
++        return None;
++    }
++    let hashes = s[r + 1..].iter().take_while(|c| **c == '#').count();
++    let body = r + 1 + hashes + 1;
++    if s.get(body - 1) != Some(&'"') {
++        return None;
++    }
++    let closes = |j: &usize| s[*j] == '"' && (1..=hashes).all(|h| s.get(j + h) == Some(&'#'));
++    let end = (body..s.len()).find(closes).unwrap_or(s.len());
++    Some(Step::Lit(body, end, end + 1 + hashes))
++}
++
++/// literal の外の `class:名`（view! の class の指示）。
++fn directive(s: &[char], i: usize) -> Option<Step> {
++    if !s[i..].starts_with(&['c', 'l', 'a', 's', 's', ':']) {
++        return None;
++    }
++    let name: String = s[i + 6..]
++        .iter()
++        .take_while(|c| c.is_ascii_alphanumeric() || **c == '-' || **c == '_')
++        .collect();
++    let next = i + 6 + name.chars().count();
++    (!name.is_empty()).then_some(Step::Dir(name, next))
++}
++
++/// 面の src の読み（字の literal・literal の中の語・class:名 の名）。
++struct Src {
++    lits: BTreeSet<String>,
++    words: BTreeSet<String>,
++    dirs: BTreeSet<String>,
++}
++
++fn src() -> Src {
++    let mut files = Vec::new();
++    rs_files(&crate_dir().join("src"), &mut files);
++    assert!(files.len() > 50, "src の .rs が少ない: {}", files.len());
++    let (mut lits, mut words, mut dirs) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
++    for f in &files {
++        let (ls, ds) = lex(&read(f));
++        for l in ls {
++            words.extend(
++                l.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
++                    .filter(|w| !w.is_empty())
++                    .map(str::to_string),
++            );
++            lits.insert(l);
++        }
++        dirs.extend(ds);
++    }
++    Src { lits, words, dirs }
++}
++
++/// stylesheet の選びの class の名（注を除いた字の `.名`・名は字か `-` か `_` で始まる）。
++fn css_classes() -> BTreeSet<String> {
++    let css = read(&crate_dir().join("style.css"));
++    let mut text = String::new();
++    let mut rest = css.as_str();
++    while let Some(i) = rest.find("/*") {
++        text.push_str(&rest[..i]);
++        rest = rest[i..].find("*/").map_or("", |j| &rest[i + j + 2..]);
++    }
++    text.push_str(rest);
++    let chars: Vec<char> = text.chars().collect();
++    let mut out = BTreeSet::new();
++    for i in 0..chars.len() {
++        let starts = chars
++            .get(i + 1)
++            .is_some_and(|c| c.is_ascii_alphabetic() || *c == '_' || *c == '-');
++        if chars[i] == '.' && starts {
++            out.insert(
++                chars[i + 1..]
++                    .iter()
++                    .take_while(|c| c.is_ascii_alphanumeric() || **c == '-' || **c == '_')
++                    .collect(),
++            );
++        }
++    }
++    out
++}
++
++fn key_named(src: &Src, key: &str) -> bool {
++    src.lits.contains(key) || KEY_PREFIXES.iter().any(|p| key.starts_with(p))
++}
++
++fn class_named(src: &Src, class: &str) -> bool {
++    src.words.contains(class)
++        || src.dirs.contains(class)
++        || CLASS_PREFIXES.iter().any(|p| {
++            class
++                .strip_prefix(p)
++                .is_some_and(|rest| src.lits.contains(rest))
++        })
++}
++
++/// (2) 語の辞書の鍵の全部が、src の字の literal か鍵の接頭辞で引かれる（残す一覧の 4 つを除く）。
++#[test]
++fn bvlex_keys_named_in_src() {
++    let src = src();
++    let keys: Vec<&str> = vocab().keys().collect();
++    assert!(keys.len() > 300, "語の辞書の鍵が少ない: {}", keys.len());
++    let loose: Vec<&str> = keys
++        .iter()
++        .copied()
++        .filter(|k| !key_named(&src, k) && !KEEP_KEYS.contains(k))
++        .collect();
++    assert!(loose.is_empty(), "src から引かれない鍵: {loose:?}");
++}
++
++/// (3) stylesheet の選びの class の全部が、src の字の literal の語か class:名 か、class の接頭辞と src の literal の字で引かれる（残す一覧の 7 つを除く）。
++#[test]
++fn bvlex_classes_named_in_src() {
++    let src = src();
++    let classes = css_classes();
++    assert!(
++        classes.len() > 400,
++        "stylesheet の class が少ない: {}",
++        classes.len()
++    );
++    let loose: Vec<&String> = classes
++        .iter()
++        .filter(|c| !class_named(&src, c) && !KEEP_CLASSES.contains(&c.as_str()))
++        .collect();
++    assert!(loose.is_empty(), "src から引かれない class: {loose:?}");
++}
++
++/// 字の literal が接頭辞で語を組む所か（接頭辞そのものの字か、語の頭に接頭辞を置き直後に { を開く format の字）。
++fn builds(lit: &str, prefix: &str) -> bool {
++    let word = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':';
++    lit == prefix
++        || lit
++            .match_indices(&format!("{prefix}{{"))
++            .any(|(k, _)| !lit[..k].chars().next_back().is_some_and(word))
++}
++
++/// (4) 接頭辞の一覧の全部が src で組む所を持ち（接頭辞そのものの字の literal か、語の頭に接頭辞を置き直後に { を開く format の字）、
++/// どの接頭辞も鍵か class の 1 つ以上を引く。
++#[test]
++fn bvlex_prefix_sites_in_src() {
++    let src = src();
++    for p in KEY_PREFIXES.iter().chain(&CLASS_PREFIXES) {
++        let site = src.lits.iter().any(|l| builds(l, p));
++        assert!(site, "接頭辞 {p} を組む所が src に無い");
++    }
++    let keys: Vec<&str> = vocab().keys().collect();
++    for p in KEY_PREFIXES {
++        assert!(
++            keys.iter().any(|k| k.starts_with(p)),
++            "接頭辞 {p} の鍵が無い"
++        );
++    }
++    let classes = css_classes();
++    for p in CLASS_PREFIXES {
++        assert!(
++            classes.iter().any(|c| c.starts_with(p)),
++            "接頭辞 {p} の class が無い"
++        );
++    }
++}
++
++/// (5) 残す一覧の名は語の辞書か stylesheet に在り、src からは引かれない（引かれたら一覧から外す）。
++#[test]
++fn bvlex_keep_lists_unnamed() {
++    let src = src();
++    let keys: Vec<&str> = vocab().keys().collect();
++    for k in KEEP_KEYS {
++        assert!(keys.contains(&k), "残す鍵 {k} が語の辞書に無い");
++        assert!(!key_named(&src, k), "残す鍵 {k} は src から引かれる");
++    }
++    let classes = css_classes();
++    for c in KEEP_CLASSES {
++        assert!(classes.contains(c), "残す class {c} が stylesheet に無い");
++        assert!(!class_named(&src, c), "残す class {c} は src から引かれる");
++    }
++}
++
++/// (6) src の読みは注と char の literal を飛ばし、raw の字の literal と class:名 を拾う。組む所の見分けは語の途中の接頭辞を数えない。
++#[test]
++fn bvlex_lexer_reads_literals() {
++    let text = concat!(
++        "let q = '\"'; let e = '\\''; // \"in-line-note\"\n",
++        "/* \"block-note\" /* \"nested\" */ */ fn f<'a>(x: &'a str) {}\n",
++        "let r = r#\"raw \"q\" word\"#; let b = b\"bytes\";\n",
++        "view! { <b class:ring=on class=\"one two\">\"text\"</b> }\n",
++    );
++    let (lits, dirs) = lex(text);
++    assert_eq!(lits, ["raw \"q\" word", "bytes", "one two", "text"]);
++    assert_eq!(dirs, ["ring"]);
++    assert!(builds("col c-{}{empty}", "c-") && builds("r-", "r-"));
++    assert!(!builds("abc-{}", "c-") && !builds("file:{}", "e:"));
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index e22d0a12c1a2d34953b065d7e465ae5cbddcf631..8aa5add71450b7500acb6631d95429c420ee6953 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -135,11 +135,6 @@
+    "note": "pipeline が書き終えた → 次は検査",
+    "internal": "RunStage stage=Implemented"
+   },
+-  "stage:Running": {
+-   "label": "Running",
+-   "note": "Spawned と Implemented の総称",
+-   "internal": "RunStage stage=Running"
+-  },
+   "stage:Questioned": {
+    "label": "Questioned",
+    "note": "pipeline が質問して止まっている",
+@@ -165,46 +160,6 @@
+    "note": "中止した",
+    "internal": "RunStage stage=Stopped"
+   },
+-  "status:open": {
+-   "label": "open",
+-   "note": "開いている = 未完了",
+-   "internal": "status=open"
+-  },
+-  "status:closed": {
+-   "label": "closed",
+-   "note": "閉じた = 完了か却下",
+-   "internal": "status=closed"
+-  },
+-  "status:in_progress": {
+-   "label": "in_progress",
+-   "note": "取りかかり中",
+-   "internal": "status=in_progress"
+-  },
+-  "status:effective": {
+-   "label": "effective",
+-   "note": "発効している",
+-   "internal": "status=effective"
+-  },
+-  "status:accepted": {
+-   "label": "accepted",
+-   "note": "承認されて発効している",
+-   "internal": "status=accepted"
+-  },
+-  "status:proposed": {
+-   "label": "proposed",
+-   "note": "提案中 = まだ発効していない",
+-   "internal": "status=proposed"
+-  },
+-  "verdict:PASS": {
+-   "label": "PASS",
+-   "note": "✓ 合格",
+-   "internal": "verdict=PASS"
+-  },
+-  "verdict:FAIL": {
+-   "label": "FAIL",
+-   "note": "✗ 不合格",
+-   "internal": "verdict=FAIL"
+-  },
+   "b:constitution": {
+    "label": "constitution",
+    "note": "憲法 = いちばん上の決めごと\n・ 条 = P-n / A-n / N-n\n・ 条の文 = P-n.m\n▸\n{ic:file} `design-intent/constitution.yaml`",
+@@ -450,36 +405,16 @@
+    "note": "上位の model（Fable）だけの 7 日の枠\n{thr:95} 閾値 95%",
+    "internal": "AllowanceMeasured window=seven_day_model\nmodel=Fable"
+   },
+-  "Tier": {
+-   "label": "Tier",
+-   "note": "project の群の名\n・ 属する project が決まる\n・ 口座の候補の順も決まる\n→ 群の名",
+-   "internal": "host.toml [[account-group]] name"
+-  },
+   "retired": {
+    "label": "retired",
+    "note": "器がこの口座を外した\n✗ 残量はもう測らない",
+    "internal": "AccountRetired"
+   },
+-  "GroupMovePending": {
+-   "label": "GroupMovePending",
+-   "note": "/exit の後に shell へ戻らなかった席\n・ account = 移り先\n{ic:redo} 器が起こし直しを続ける\n→ 移動の指示",
+-   "internal": "GroupMovePending account=移り先\ndetail=group/anchor/target/reason\nreason=not-a-shell / input-unknown"
+-  },
+-  "GroupMoved": {
+-   "label": "GroupMoved",
+-   "note": "移動の承認\n・ account = 移り先\n・ 記録を書いた後に記す",
+-   "internal": "GroupMoved account=移り先\ndetail = host.toml の群の宣言の行 = 常設の承認\n記録 `groups/<群>.account`"
+-  },
+   "GroupPressureNotified": {
+    "label": "GroupPressureNotified",
+    "note": "逼迫の通知\n・ account = 逼迫した口座\n{thr:85} 使った割合 > 閾値",
+    "internal": "GroupPressureNotified account=逼迫の口座\ndetail=group/window/used/cap\ncap = rules の fleet.group_pressure_*"
+   },
+-  "GroupMoveRefused": {
+-   "label": "GroupMoveRefused",
+-   "note": "移り先なしで移動を断った\n✗ 門を通る候補が無い\n→ 候補と次の移り先",
+-   "internal": "GroupMoveRefused detail=reason（no-candidate）"
+-  },
+   "seat": {
+    "label": "orchestrator",
+    "note": "project の設計と指示を担う session\n→ 質問を出す\n→ task を pipeline へ",
+@@ -538,12 +473,6 @@
+    "internal": "問い（bead・label=問い）",
+    "orig": "問い"
+   },
+-  "map": {
+-   "label": "地図",
+-   "plain": "7 つの出所を番号つきで一望する",
+-   "internal": "俯瞰（7 つの出所の帯・4 面）",
+-   "orig": "俯瞰"
+-  },
+   "gaps": {
+    "label": "抜けの検査",
+    "plain": "つながりの切れ目を機械が数えた結果\n{gi:ok} 合格\n{gi:ng} 抜けあり\n{gi:unknown} まだ分からない",
+@@ -596,22 +525,11 @@
+    "plain": "いまあなたがすると一番進むこと\n{fig:next}\n・ 先頭の 1 つを大きく\n・ 残りは小さく並べる",
+    "internal": "次の 1 手（dialogue-surface）・閉じた一覧 7 種"
+   },
+-  "resume": {
+-   "label": "再開の見込み",
+-   "plain": "↻ 利用枠が戻る時刻",
+-   "internal": "resets_at（AllowanceMeasured）"
+-  },
+   "history": {
+    "label": "稼働の記録",
+    "plain": "直近 {SPAN}の session の状態を帯で見る\n{strip:run} busy = 動いている\n{strip:wait} idle = 待っている\n{strip:silent} 応答なし → 管理 tick\n{strip:limit} 限度で止まっている\n▸\n{strip:unknown} 記録なし = 測れていない\n{strip:acct} 口座の移動\n{strip:spawnstop} pipeline の起動 / 終了\n{strip:now} 見ている時点 = 右端\n{strip:ticks} 目盛 = {TICK}ごと\n← 左端 = {SPAN}前\n◷ つまみ = その時刻へ",
+    "internal": "seat state.jsonl（busy / idle）+ AllowanceMeasured（限度）\n+ 器の生存（途絶）の再生\n縦線 = SeatRegistered の口座の変化 / SeatSpawned / SeatStopped"
+   },
+-  "external": {
+-   "label": "例: 外部の台帳 scribe2 の run",
+-   "plain": "tsuzuri の run が 0 なので兄弟の実データ\n・ 読むだけ",
+-   "internal": "s2（scribe2 の器の event・読むだけ）",
+-   "orig": "便"
+-  },
+   "ask_open": {
+    "label": "答えを待つ質問",
+    "plain": "あなたの答えを待つ質問\n・ 1 問ずつ出る\n・ 送ると次の質問へ\n・ 全部答えると窓が閉じる\n▸\n・ 題の横の数 = 残り\n・ 下の段 = ほかの project と一括の口",
+@@ -685,91 +603,11 @@
+    "internal": "run（run_of）× RunStage",
+    "orig": "走行の時間軸"
+   },
+-  "bands": {
+-   "label": "出所の帯",
+-   "plain": "7 つの帯 = 7 つの正本の file\n↓ 上ほど優先 = 憲法の順\n{band:constitution} 四角 = file の行\n{band:beads} 丸 = 台帳と器\n・ 色 = 帯ごとに 1 色",
+-   "internal": "band（出所の正本・precedence 順）"
+-  },
+-  "lines": {
+-   "label": "線の見方",
+-   "plain": "この眺めに出ている線の型だけ\n{edge:basis} 実線 = 根拠\n{edge:blocks} 太い赤 = 止める\n{edge:parent-child} 点線 = 親子・属す\n{edge:supersedes} 矢印 = 置き換え",
+-   "internal": "辺の型（style は族で決まる・族の名は出さない）"
+-  },
+-  "matrix": {
+-   "label": "数の表",
+-   "plain": "種類 × 種類の線の数\n→ 押すと一覧に絞る",
+-   "internal": "種類 × 種類の辺の数の行列"
+-  },
+-  "view_compact": {
+-   "label": "圧縮",
+-   "plain": "7 つの帯に札を並べる\n・ 札 = 番号と題",
+-   "internal": "view=compact"
+-  },
+-  "view_list": {
+-   "label": "一覧",
+-   "plain": "番号と題と概要の 1 行の表\n・ 帯と種類で絞る\n↕ 並べ替えられる",
+-   "internal": "view=list"
+-  },
+-  "view_graph": {
+-   "label": "グラフ",
+-   "plain": "節点と線の図\n・ 帯で横に並べる\n← 根拠の側を左",
+-   "internal": "view=graph（最長路で列）\nhub は子 n に畳む / 40 まで"
+-  },
+-  "view_table": {
+-   "label": "表",
+-   "plain": "種類 × 種類の線の数\n→ 押すと一覧に絞る",
+-   "internal": "view=table"
+-  },
+-  "view_design": {
+-   "label": "設計の木",
+-   "plain": "設計の文書を入れ子の一覧で見る\n・ 帯 → 条 → 規範文\n・ 要件 → 受入基準\n・ 設計ノート → 行\n→ 押すと項目の頁",
+-   "internal": "view=design\n親子 = in-article、verify.ac、verifies"
+-  },
+-  "view_ledger": {
+-   "label": "台帳の木",
+-   "plain": "台帳の項目を入れ子の一覧で見る\n・ epic → task → run\n・ question → あなたの決定\n・ 閉じた項目は畳んでおく\n→ 押すと項目の頁",
+-   "internal": "view=ledger\n親子 = parent-child、run_of、answers"
+-  },
+-  "views": {
+-   "label": "眺め",
+-   "plain": "同じ中身を 6 つの形で見る\n・ 切り替えは URL に残る",
+-   "internal": "?view=compact|list|graph|table|design|ledger"
+-  },
+-  "col_id": {
+-   "label": "番号",
+-   "plain": "項目の id",
+-   "internal": "id"
+-  },
+   "col_title": {
+    "label": "題",
+    "plain": "36 字までの題",
+    "internal": "title（36 字）"
+   },
+-  "col_gist": {
+-   "label": "概要",
+-   "plain": "非エンジニア向けの 1 行\n・ 無ければエンジニア向け",
+-   "internal": "summaries.json の plain / eng"
+-  },
+-  "col_band": {
+-   "label": "帯",
+-   "plain": "どの正本の file から来たか",
+-   "internal": "band"
+-  },
+-  "col_kind": {
+-   "label": "種類",
+-   "plain": "項目の種類",
+-   "internal": "kind"
+-  },
+-  "col_state": {
+-   "label": "状態",
+-   "plain": "open / closed や発効などの状態",
+-   "internal": "status"
+-  },
+-  "col_updated": {
+-   "label": "更新",
+-   "plain": "最後に変わった時刻\n・ file は最後の commit",
+-   "internal": "updated_at / git log -1"
+-  },
+   "sort": {
+    "label": "並べ替え",
+    "plain": "一覧の順を変える",
+@@ -800,11 +638,6 @@
+    "plain": "開いた組の箱を 1 つの箱に戻す",
+    "internal": "fold = open → ?open= から id を外す"
+   },
+-  "gf_refused": {
+-   "label": "開けなかった",
+-   "plain": "見える箱が 40 を越えるので開かなかった",
+-   "internal": "GraphView.refused"
+-  },
+   "gap_ok": {
+    "label": "合格",
+    "plain": "{gi:ok} 検査を通った",
+@@ -845,11 +678,6 @@
+    "plain": "説明を畳まず型の名も出す\n・「?」の印は出さない",
+    "internal": "mode=expert"
+   },
+-  "external_ledger": {
+-   "label": "外部の台帳 scribe2",
+-   "plain": "兄弟の project の台帳\n✗ ここからは書かない",
+-   "internal": "repo=s2（読むだけ）"
+-  },
+   "nb_up2": {
+    "label": "根拠の根拠",
+    "plain": "← 根拠のさらに元",
+@@ -910,16 +738,6 @@
+    "plain": "強調の固定を外す",
+    "internal": "unpin"
+   },
+-  "zoom_reset": {
+-   "label": "元に戻す",
+-   "plain": "拡大と移動を最初の表示に戻す",
+-   "internal": "transform = 初期値"
+-  },
+-  "zoom_hint": {
+-   "label": "ホイール = 拡大縮小・drag = 移動",
+-   "plain": "図の拡大と移動\n・ ホイール = 拡大縮小\n・ drag = 移動\n・ 2 本指 = touch の拡大\n▸\n← 帯の名は左端に固定",
+-   "internal": "wheel / pointer drag / pinch"
+-  },
+   "answer_here": {
+    "label": "質問の頁で答える",
+    "plain": "→ この question に答える card へ",
+@@ -930,46 +748,16 @@
+    "plain": "この決定を取り消す\n・ 理由をあなたの言葉で書いてから押す\n・ 記録は消えず、取り消しの行が足される\n→ question は未回答に戻り、答え直せる",
+    "internal": "裁定の行（取り消す = 前の id）を notes に足し、bd reopen"
+   },
+-  "proj_acct": {
+-   "label": "この project の口座",
+-   "plain": "tsuzuri の orchestrator の口座を掘る\n→ 全部の口座は account board",
+-   "internal": "SeatRegistered の最新の account（登録 row）× board.json\naccount board と同じ data と判定"
+-  },
+   "reg_account": {
+    "label": "登録の口座",
+    "plain": "orchestrator が今動いている口座\n・ 登録 row が持つ口座",
+    "internal": "SeatRegistered.account（t3:orchestrator）"
+   },
+-  "acct_load": {
+-   "label": "この口座の負荷",
+-   "plain": "この口座を今使っている session\n・ この project の分\n・ ほかの project の数",
+-   "internal": "sessionsAt(t) で acct が一致する行"
+-  },
+-  "others_on": {
+-   "label": "ほかの project の session",
+-   "plain": "同じ口座を使うほかの project の数",
+-   "internal": "sessionsAt(t)・proj ≠ tsuzuri"
+-  },
+   "move_state": {
+    "label": "移動の指示",
+    "plain": "群の口座の移動がどこまで進んだか\n{fig:move}\n① 移動の承認\n② /exit 待ち\n③ 新しい口座で起こし直し",
+    "internal": "GroupMoved\n→ GroupMovePending（shell へ戻らなかった）\n→ SeatRegistered（新しい口座）"
+   },
+-  "step_approve": {
+-   "label": "移動の承認",
+-   "plain": "① 器が群の今の口座を移した\n・ 記録を書いた = GroupMoved\n→ 移動の指示",
+-   "internal": "GroupMoved account=移り先"
+-  },
+-  "step_exit": {
+-   "label": "退避の合図 → /exit 待ち",
+-   "plain": "② 席が shell へ戻るのを待つ\n・ 合図 = /exit\n! 戻らない = 保留が残る\n✗ 合図は event に残らない\n→ 移動の指示",
+-   "internal": "inject（読まない）・GroupMovePending"
+-  },
+-  "step_relaunch": {
+-   "label": "起こし直し",
+-   "plain": "③ 同じ窓で新しい口座に起こし直した\n・ 登録 row の口座が変わる\n→ 移動の指示",
+-   "internal": "SeatRegistered account=移り先"
+-  },
+   "acct_hist": {
+    "label": "口座の履歴",
+    "plain": "口座の変化を新しい順に並べる\n・ 登録 row の口座\n・ 群の記録の移動",
+@@ -995,11 +783,6 @@
+    "plain": "◷ この状態になった時刻",
+    "internal": "since"
+   },
+-  "parent": {
+-   "label": "属する条",
+-   "plain": "この文や rule が属する憲法の条",
+-   "internal": "parent（article）"
+-  },
+   "a1": {
+    "label": "確認が要る操作",
+    "plain": "消す / 出す / 使う 操作の質問\n✗ まとめて承認に入れない\n・ 1 つずつあなたの言葉で",
+@@ -1034,11 +817,6 @@
+    "internal": "方針（原文の名）",
+    "orig": "方針"
+   },
+-  "overview": {
+-   "label": "概況",
+-   "plain": "群ごとの今の口座と止まった数\n・ 占有する口座 1 つ\n・ 群の project\n{st:limit} 限度で止まった数",
+-   "internal": "group の集計（current_of = 記録 > 種）"
+-  },
+   "group": {
+    "label": "project の群",
+    "plain": "1 つの口座を共有する project の組\n・ 占有する口座は 1 つ\n✗ 群どうしで重ならない\n・ orchestrator は全部そこ\n✗ 新しい pipeline は使えない",
+@@ -1065,11 +843,6 @@
+    "plain": "利用枠のうち使った割合",
+    "internal": "used_pct"
+   },
+-  "reset_in": {
+-   "label": "戻るまで",
+-   "plain": "↻ 利用枠が戻るまでの残り",
+-   "internal": "resets_at − 今"
+-  },
+   "measured_at": {
+    "label": "最終計測",
+    "plain": "最後に残量を測れた時刻",
+@@ -1095,16 +868,6 @@
+    "plain": "群の今の口座が移った記録\n・ どの群が\n・ どこから → どこへ\n◷ いつ\n▸\n・ 1 行 = 記録 1 件\n+ 承認 = GroupMoved\n+ 戻らない席 = GroupMovePending",
+    "internal": "`groups/history/<群>.account.<ts>.0`\n+ GroupMoved + 続く GroupMovePending\nGroupPressureNotified / GroupMoveRefused\n<群>.request / .judged / lock は file で event ではない"
+   },
+-  "when": {
+-   "label": "いつ",
+-   "plain": "◷ 起きた時刻",
+-   "internal": "ts"
+-  },
+-  "to_account": {
+-   "label": "どこへ",
+-   "plain": "→ 移した先の口座",
+-   "internal": "account"
+-  },
+   "what": {
+    "label": "何が",
+    "plain": "移動の種類と理由",
+@@ -1120,67 +883,16 @@
+    "plain": "この project の dashboard はまだ無い",
+    "internal": "empty state"
+   },
+-  "at": {
+-   "label": "時点",
+-   "plain": "この画面をいつの状態で見るか\n◷ つまみで 24 時間を遡る",
+-   "internal": "?at=<ms>"
+-  },
+-  "now_btn": {
+-   "label": "今",
+-   "plain": "最新の記録の時刻へ戻す",
+-   "internal": "at=built_at + 経過"
+-  },
+-  "relation": {
+-   "label": "2 つの面の関係",
+-   "plain": "2 つの面の役割と data の流れ\n↑ 上 = account board\n↓ 下 = project の面",
+-   "internal": "relation.html"
+-  },
+-  "jump": {
+-   "label": "飛び方",
+-   "plain": "account board から project への移り方\n✓ 案 2 = 新しい窓\n✗ 案 1 = 採らなかった\n▸\n・ 持ち主の裁定 2026-09-26",
+-   "internal": "案 2 = 名前つき target tz-<project>\nADR-5・ADR-7 に書く / 案 1 = 採らない"
+-  },
+-  "plan1": {
+-   "label": "案 1: 1 つの窓の中で移る（採らなかった案）",
+-   "plain": "同じ窓の中身を dashboard に替える案\n✗ 元の面が見えなくなる\n✗ ADR-5 の窓の形と合わない",
+-   "internal": "location・history（採らない）"
+-  },
+-  "plan2": {
+-   "label": "案 2: 新しい窓で開く（採った案）",
+-   "plain": "project ごとに名前つきの窓を開く\n・ 名前 = tz-<project>\n↑ 在れば前面へ\n▸\n・ 本番 = app mode の別窓\n・ orchestrator が起こす = ADR-5",
+-   "internal": "`window.open('', 'tz-<project>')`\n空なら移す / 在れば focus\n本番は CDP と --app"
+-  },
+   "open_windows": {
+    "label": "開いている窓",
+    "plain": "account board が持つ project の窓の一覧\n↑ 前面へ = 前に出す\n✓ 戻ると閉じた印",
+    "internal": "window.open の handle\nmock は画面の状態と localStorage tz-wins\n本番もその browser の保存 tz-wins に残す\n便利の写しで正本ではない"
+   },
+-  "pros": {
+-   "label": "利点",
+-   "plain": "この案の良い所",
+-   "internal": "pros"
+-  },
+-  "cons": {
+-   "label": "欠点",
+-   "plain": "この案の弱い所",
+-   "internal": "cons"
+-  },
+-  "recommend_seat": {
+-   "label": "orchestrator の推奨",
+-   "plain": "orchestrator が推す案",
+-   "internal": "recommend（席の推奨）",
+-   "orig": "席の推奨"
+-  },
+   "dormant": {
+    "label": "休止中の session",
+    "plain": "12 時間以上動きの無い session\n・ 改名前の席など\n・ 表から外し数だけ",
+    "internal": "seat の最後の state が 12 h より前"
+   },
+-  "jump_limit": {
+-   "label": "限度の時刻へ",
+-   "plain": "{st:limit} 最後に限度だった時刻へ移る",
+-   "internal": "max(t: seatStatus=limit)"
+-  },
+   "last_record": {
+    "label": "最終の記録",
+    "plain": "器の記録を読んだ時刻\n◷ 画面の時計はここから進む",
+@@ -1221,11 +933,6 @@
+    "plain": "{nxm:na:e} この項を判じる data を読んでいない",
+    "internal": "na"
+   },
+-  "state_dir": {
+-   "label": "記録の置き場",
+-   "plain": "この project の器の記録 = state dir",
+-   "internal": "`~/.local/state/scribe2-v2-state-<project>`"
+-  },
+   "lg_shape": {
+    "label": "記号の形: 四角 = file の行・丸 = 台帳と run",
+    "plain": "形は 2 種\n{band:constitution} 四角 = file の行\n{band:beads} 丸 = 動くもの\n▸\n・ 四角 = constitution 〜 design-note\n・ 丸 = epic / task / memo / question\n・ 丸 = あなたの決定 / run",
+@@ -1387,11 +1094,6 @@
+    "plain": "{hb:on} heartbeat を戻す\n・ 器の CLI を撃つ",
+    "internal": "scribe2 seat heartbeat on"
+   },
+-  "mock_not_sent": {
+-   "label": "mock: 器へは送っていない",
+-   "plain": "画面の状態だけ変えた\n✗ 器の CLI は撃たない\n✗ file も書かない",
+-   "internal": "HB_OVR（画面の中だけ）"
+-  },
+   "hb_dlg_lead": {
+    "label": "器の CLI を撃ちます（GUI は file を直接書かない）:",
+    "plain": "",
+@@ -1432,21 +1134,11 @@
+    "plain": "",
+    "internal": "mk-acct"
+   },
+-  "lg_spawnstop": {
+-   "label": "起動 / 終了",
+-   "plain": "",
+-   "internal": "mk-spawn / mk-stop"
+-  },
+   "lg_now": {
+    "label": "時点",
+    "plain": "",
+    "internal": "mk-now"
+   },
+-  "group_name": {
+-   "label": "群の名",
+-   "plain": "群の名は Tier<数字> に決まっている\n↑ 宣言順 = 数字の小さい順\n✗ 違う名は器が断る\n✗ 順が違っても断る\n▸\n・ 断る = host.toml を読む時点\n・ 契約 s2-07l.647",
+-   "internal": "host.toml [[account-group]] name = Tier<n>\n宣言順 = n 昇順（違えば host.toml の読みで断る）\n契約 s2-07l.647"
+-  },
+   "sort_net": {
+    "label": "純減の大きい順",
+    "plain": "{net:down} 7 日で一番減った project を上\n・ 同じなら 24 時間の差\n↓ 台帳の無い project は末尾",
+@@ -1487,26 +1179,11 @@
+    "plain": "控え = memo の数\n・「昇格条件」の欄を持つ\n→ 閉じるより task へ昇格\n・ task と分けて数える",
+    "internal": "label intake:memo ∨ 題が [memo]"
+   },
+-  "l_question": {
+-   "label": "question",
+-   "plain": "open の question の数\n・ 見本を含む\n! 答える列は実だけ",
+-   "internal": "label 問い・status≠closed"
+-  },
+-  "l_epic": {
+-   "label": "epic",
+-   "plain": "open の epic の数",
+-   "internal": "issue_type=epic ∧ status≠closed"
+-  },
+   "l_rate": {
+    "label": "closed/日",
+    "plain": "直近 7 日に閉じた task ÷ 7",
+    "internal": "count(closed_at ∈ t−7d〜t) / 7"
+   },
+-  "l_net24": {
+-   "label": "純減 24h",
+-   "plain": "今の open の数 − 24 時間前の数\n{net:down} 純減\n{net:flat} 横ばい\n{net:up} 純増",
+-   "internal": "open(t) − open(t−24h)\nopen(x) = created ≤ x < closed"
+-  },
+   "l_net7": {
+    "label": "純減 7d",
+    "plain": "今の open の数 − 7 日前の数\n→ 純減 24h と同じ矢印",
+@@ -1522,46 +1199,16 @@
+    "plain": "7 日以上更新の無い open の task",
+    "internal": "now − updated_at ≥ 7d"
+   },
+-  "l_spark": {
+-   "label": "14 日",
+-   "plain": "直近 14 日の日ごとの数\n・ 実線 = closed\n・ 点線 = created",
+-   "internal": "days[14]: created / closed"
+-  },
+   "l_burn": {
+    "label": "burndown",
+    "plain": "直近 14 日の積みの推移\n・ 線 = open の task\n・ 棒 = その日に閉じた数",
+    "internal": "open(day end) の線 + closed/day の棒"
+   },
+-  "l_epics": {
+-   "label": "epic の進み",
+-   "plain": "epic ごとの進み\n・ 帯 = 直下の閉じた割合\n・ open の数\n◷ いちばん古い open",
+-   "internal": "epic の子（parent-child）の closed / 全体"
+-  },
+   "memo_promo": {
+    "label": "memo の契約化",
+    "plain": "memo が移ることを昇格と呼ぶ\n{fig:promo}\n→ task\n→ design-intent の行\n▸\n・ memo = 4 節の控え\n・ 出所 / 観測 / 候補\n・ 昇格条件",
+    "internal": "promoted_to（見本）\n実データは閉じた memo で代える"
+   },
+-  "m_open": {
+-   "label": "open memo",
+-   "plain": "閉じていない memo の数",
+-   "internal": "kind=memo ∧ status≠closed"
+-  },
+-  "m_wait": {
+-   "label": "昇格待ち",
+-   "plain": "昇格条件はあるが昇格先の無い memo\n・ 見出しの有無だけ見る\n✗ 本文は読まない",
+-   "internal": "open memo ∧ 見出し 昇格条件 ∧ promoted_to なし"
+-  },
+-  "m_promo7": {
+-   "label": "昇格 7d",
+-   "plain": "直近 7 日に昇格した memo の数\n・ 見本 = promoted_to の線\n! 実データ = 閉じた memo",
+-   "internal": "memo の closed_at ∈ (t−7d, t]"
+-  },
+-  "m_age": {
+-   "label": "memo の年齢",
+-   "plain": "open の memo の経過の中央値\n・ 中央値 = p50",
+-   "internal": "median(now − created_at | open memo)"
+-  },
+   "unref": {
+    "label": "design-intent に未反映",
+    "plain": "まだ design-intent に写っていないもの\n・ (a) 昇格先の無い memo\n・ (b) 処分の宣言が無い決定\n・ (c) 反映されていない要望\n▸\n= (b) は次の一手の発効待ち\n= 抜けの検査 G7 と同じ関数\n・ (c) = 関わる所が変わっていない",
+@@ -1612,11 +1259,6 @@
+    "plain": "昇格 か 処分を宣言 か 反映",
+    "internal": "nx_promote / nx_declare / nx_reflect"
+   },
+-  "state_now": {
+-   "label": "今の状態",
+-   "plain": "平時は出ない帯\n{thr:85} 逼迫\n{gi:ng} 移動中\n✗ 移り先なし\n{st:limit} 限度",
+-   "internal": "逼迫 = 群の今の口座のどれかの窓 ≥ 閾値\n移動中 = 登録 ≠ 群の今の口座 / GroupMovePending\n移り先なし = GroupMoveRefused"
+-  },
+   "nx_a": {
+    "label": "限度 / 移動",
+    "plain": "口座が限度か移動が止まっている\n✗ 移り先なし → 口座を足す\n{gi:ng} 席が戻らない → 窓を見る\n{st:limit} 限度だけ → reset を待つ\n→ 次の一手",
+@@ -1652,11 +1294,6 @@
+    "plain": "✓ 今あなたがすることは無い\n{st:run} 動いている\n{st:wait} 待っている",
+    "internal": "優先 7: 上の 6 つが全部 0"
+   },
+-  "flow": {
+-   "label": "data の流れ",
+-   "plain": "どの記録がどの面に流れるかの図",
+-   "internal": "data flow"
+-  },
+   "move_grace": {
+    "label": "退避までの残り",
+    "plain": "群が移った席が /exit まで残す秒\n⇥ 合図を受けた席\n・ 猶予 = 器の rules 行の秒\n✗ 新しい subagent は起こさない\n▸\n・ 起点 = 合図の at（器が送った時刻）\n・ 値 = 器の grace_left の写し\n・ 猶予の後に /exit を送る\n・ 契約 s2-07l.652",
